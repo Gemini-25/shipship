@@ -422,10 +422,13 @@ public partial class Hud : Control
         foreach (var m in modes)
         {
             var mode = m;
-            Button(new Rect2(x, card.Position.Y + 6, bw, 28), ViewModes.Name(m), _main.ViewMode == m, mouse, () => _main.ViewMode = mode, 12);
+            var r = new Rect2(x, card.Position.Y + 6, bw, 28);
+            // v12.3 Shift를 누른 채 누르면 겹쳐 보기 (두 번째 보기)
+            Button(r, ViewModes.Name(m), _main.ViewMode == m, mouse, () => { if (Input.IsKeyPressed(Key.Shift) && mode != ViewMode.Normal) _main.SecondaryView = _main.SecondaryView == mode ? null : mode; else _main.ViewMode = mode; }, 12);
+            if (_main.SecondaryView == m && _main.ViewMode != m) Gfx.RoundRect(this, r.Grow(-1), new Color(0, 0, 0, 0), 8, Palette.Warning.WithAlpha(0.7f));
             x += bw + gap;
         }
-        Gfx.Text(this, Fonts.Body, new Vector2(x + 10, card.GetCenter().Y + Gfx.CenterOffset(Fonts.Body, 11)), "V 전환", 11, Palette.TextMuted);
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 10, card.GetCenter().Y + Gfx.CenterOffset(Fonts.Body, 11)), _main.SecondaryView is ViewMode sv ? $"+{ViewModes.Name(sv)}" : "V 전환", 11, _main.SecondaryView != null ? Palette.Warning : Palette.TextMuted);
         return card.End.X;
     }
 
@@ -847,7 +850,8 @@ public partial class Hud : Control
         var extra = MachineExtras(f);
         int invLines = f.Storage?.Contents.Count() ?? 0;
         var history = MachineHistoryLines(f, RightColumnWidth - 36);
-        float height = 70 + (m != null ? 118 + Math.Max(1, m.Faults.Count) * 20 : 0) + extra.Count * 20
+        var parts = m != null ? MachineParts.For(f.Type) : null; // v12.3 분해도
+        float height = 70 + (m != null ? 118 + Math.Max(1, m.Faults.Count) * 20 : 0) + (parts != null ? 36 + parts.Length * 20 : 0) + extra.Count * 20
                        + (f.Storage != null ? 40 + Math.Max(1, invLines) * 20 : 0) + (orders.Count > 0 ? 34 + orders.Count * 20 : 0) + 16
                        + (history.Count > 0 ? 36 + history.Count * 18 : 0);
         height = Mathf.Min(height, maxHeight);
@@ -892,6 +896,7 @@ public partial class Hud : Control
                 Gfx.TextRight(this, Fonts.Body, new Vector2(right, ly + 15), need, 11, Palette.TextMuted);
                 ly += 20;
             }
+            if (parts != null) ly = DrawParts(m, parts, x, right, ly, accent);
         }
 
         foreach (var (label, value) in extra)

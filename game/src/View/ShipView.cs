@@ -605,7 +605,8 @@ public partial class ShipView : Node2D
                 foreach (var c in room.Cells) ci.DrawRect(CellRect(c), new Color(0, 0, 0, room.Powered ? 0.36f : 0.42f));
         PaintJumpers(ci);
 
-        switch (mode)
+        foreach (var vm in new[] { mode, _main.SecondaryView ?? mode }.Distinct()) // v12.3 겹쳐 보기
+        switch (vm)
         {
             case ViewMode.Power: PaintPowerOverlay(ci); break;
             case ViewMode.Air: PaintAirOverlay(ci); break;
@@ -623,6 +624,7 @@ public partial class ShipView : Node2D
         PaintWalls(ci);
         PaintPipes(ci, mode == ViewMode.Pipes); // v9: 벽·바닥 밑을 지나는 관 (배관 보기에서는 굵게)
         PaintNet(ci, mode); // v12.1 배 전체 망 (간선·급수관·덕트)
+        if (_main.SecondaryView is ViewMode sv2 && sv2 != mode) PaintNet(ci, sv2);
         PaintJoints(ci, mode == ViewMode.Structure);
         PaintEvolution(ci);
         if (mode == ViewMode.Trace) PaintTraceMarks(ci);

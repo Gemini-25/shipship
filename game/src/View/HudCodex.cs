@@ -129,4 +129,30 @@ public partial class Hud
         DrawCodex(room.Name, "방", Palette.Room(room.Type), e, links, CodexPast(n => n.RoomId == room.Id && n.Kind != CauseKind.Recovery), y, maxHeight, mouse);
         return true;
     }
+
+    /// <summary>v12.3 분해도: 설비 몸통에서 부품마다 지시선 — 상태 막대와 한 줄 (고장·이상 징후·전선·관·열·교정).</summary>
+    private float DrawParts(Machine m, PartSpec[] parts, float x, float right, float ly, Color accent)
+    {
+        Divider(x, right, ly + 8);
+        SectionTitle(x, ly + 26, "부품 (분해도)");
+        ly += 32;
+        float top = ly + 4, bottom = ly + parts.Length * 20 - 4;
+        // 몸통
+        var body = new Rect2(x, top, 18, bottom - top);
+        Gfx.RoundRect(this, body, accent.WithAlpha(0.18f), 4, accent.WithAlpha(0.6f));
+        for (int i = 0; i < parts.Length; i++)
+        {
+            var st = MachineParts.State(m, parts[i], _world.Tick);
+            float cy = ly + i * 20 + 10;
+            var col = st.Broken ? Palette.Danger : st.Hidden ? Palette.Warning.WithAlpha(0.6f) : st.Health < 0.45f ? Palette.Warning : st.Health < 0.75f ? Palette.Text.WithAlpha(0.8f) : Palette.Good;
+            // 지시선 (부품이 몸통에서 떨어져 나온 듯)
+            DrawLine(new Vector2(body.End.X, cy), new Vector2(x + 30, cy), Palette.PanelBorder.Lightened(0.3f), 1f);
+            DrawCircle(new Vector2(x + 32, cy), 3f, col, true, -1f, true);
+            if (st.Broken || st.Health < 0.45f) DrawCircle(new Vector2(x + 32, cy), 5.5f + Mathf.Sin(_time * 5f + i), col.WithAlpha(0.18f), true, -1f, true);
+            Gfx.Text(this, Fonts.Body, new Vector2(x + 40, cy + 4), parts[i].Name, 12, Palette.TextDim);
+            Gfx.Bar(this, new Rect2(x + 124, cy - 3, 50, 5), st.Health, col);
+            Gfx.TextRight(this, Fonts.Body, new Vector2(right, cy + 4), Fit(st.Text, right - x - 184, 11, Fonts.Body), 11, col);
+        }
+        return ly + parts.Length * 20;
+    }
 }

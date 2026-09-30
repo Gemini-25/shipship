@@ -64,6 +64,8 @@ public partial class Main : Node2D
     public int SpeedIndex { get; private set; }
     public bool Paused { get; private set; }
     public ViewMode ViewMode { get; set; } = ViewMode.Normal;
+    /// <summary>v12.3 겹쳐 보기: 두 번째 보기 (보기 탭을 Shift로 누른다).</summary>
+    public ViewMode? SecondaryView { get; set; }
 
     /// <summary>현재 틱과 다음 틱 사이 어디쯤인지 (0~1). 부드러운 움직임용.</summary>
     public float Alpha { get; private set; } = 1f;
@@ -944,6 +946,9 @@ public partial class Main : Node2D
                     break;
                 case "--view":
                     if (Enum.TryParse<ViewMode>(value, out var vm)) ViewMode = vm;
+                    break;
+                case "--view2":
+                    if (Enum.TryParse<ViewMode>(value, out var vm2)) SecondaryView = vm2;
                     break;
                 case "--speed":
                     SetSpeed(int.Parse(value, CultureInfo.InvariantCulture));
