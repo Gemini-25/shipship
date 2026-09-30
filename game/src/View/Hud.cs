@@ -1151,6 +1151,17 @@ public partial class Hud : Control
             lines.Add(("유독 가스", $"{room.Air.Toxin * 100:0}%" + (src != null ? $" · {src.Body.Label}에서 새는 중" : " · 걷히는 중") + (room.Air.Toxin > 0.2f ? " · 우주복 없이는 위험" : ""),
                 room.Air.Toxin > 0.2f ? Palette.Danger : Palette.Warning));
         }
+        // v12.3 물·습기·분전함·밸브
+        if (room.Flood > 1f || room.Humidity > 0.7f || room.BreakerOff || room.ValveShut)
+        {
+            var parts = new List<string>();
+            if (room.Flood > 1f) parts.Add($"바닥 물 {MoistureSystem.DepthCm(room):0.#}cm ({room.Flood:0}L)" + (room.Powered && MoistureSystem.Depth(room) > 0.12f ? " · 전기가 살아 있다!" : ""));
+            if (room.Humidity > 0.7f) parts.Add($"습도 {room.Humidity * 100:0}%" + (room.Humidity > 0.8f ? " · 결로·부식" : ""));
+            if (room.BreakerOff) parts.Add("분전함 내림 (정전)");
+            if (room.ValveShut) parts.Add("급수 밸브 잠금 (단수)");
+            bool danger = room.Powered && MoistureSystem.Depth(room) > 0.12f;
+            lines.Add(("물·습기", string.Join(" · ", parts), danger ? Palette.Danger : Palette.Warning));
+        }
         // v12.1 배 전체 망: 이 방으로 들어오는 전력 간선·급수관·환기 덕트
         if (!room.Detached && _world.Net.Links.Count > 0)
         {

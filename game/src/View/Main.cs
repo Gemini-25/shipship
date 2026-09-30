@@ -759,6 +759,14 @@ public partial class Main : Node2D
                 case "--codex":
                     Hud.CodexMode = true;
                     break;
+                case "--flood":
+                {
+                    // --flood=Galley:0.5 (방 종류:깊이 0~1)
+                    var bits = value.Split(':');
+                    var room = Sim.Ship.Rooms.FirstOrDefault(r => r.Type.ToString() == bits[0]);
+                    if (room != null) Sim.Moisture.AddWater(room, room.Cells.Count * 20f * (bits.Length > 1 ? float.Parse(bits[1], CultureInfo.InvariantCulture) : 0.5f));
+                    break;
+                }
                 case "--chain":
                     Hud.ToggleChain(); // v12.2 가장 최근 사고의 인과 사슬
                     break;

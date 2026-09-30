@@ -128,6 +128,8 @@ public static partial class Program
         if (args.Contains("--nettest")) return RunNetTest(seed);
         if (args.Contains("--handtrace")) return RunHandoverTrace(seed);
         if (args.Contains("--chaintest")) return RunCauseTest(seed); // v12.2
+        if (args.Contains("--moisturetest")) return RunMoistureTest(seed); // v12.3
+        if (args.Contains("--moisturedebug")) return RunMoistureDebug(seed);
         if (args.FirstOrDefault(a => a.StartsWith("--reopentrace=")) is string rt) return RunReopenTrace(seed, rt.Split('=')[1], Math.Max(1, days));
         if (args.Contains("--crisistrace")) return RunCrisisTrace(seed, args.FirstOrDefault(a => a.StartsWith("--ship="))?[7..] ?? "Mirinae", Math.Max(1, days));
         if (args.Contains("--gate=crisis")) return RunCrisisGate(Math.Max(1, days), seed, args.FirstOrDefault(a => a.StartsWith("--ship="))?[7..] ?? "Mirinae");
@@ -251,6 +253,7 @@ public static partial class Program
         Console.WriteLine($"예방: {world.Precursors}");
         Console.WriteLine($"당직 일지: {world.Watch.Stats}"); // v12.0
         Console.WriteLine($"설비 열·폭발: {world.Volatile.Stats} · 뜨거운 설비 {string.Join(", ", world.Ship.Machines.Where(m => m.Heat > 0.4f).Select(m => $"{m.Name} {m.Heat * 100:0}%"))}"); // v12.2
+        Console.WriteLine($"물·습기·전기: {world.Moisture.Stats} · 가장 습한 방 {world.Ship.Rooms.Max(r => r.Humidity) * 100:0}%"); // v12.3
         if (world.Hazards.RandomCount > 0 || world.Hazards.Count.Any(n => n > 0))
         {
             // v11.2 무작위 사고 (켜져 있을 때): 무엇이 언제 났고, 사람이 다치거나 쓰러졌나

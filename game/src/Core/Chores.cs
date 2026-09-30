@@ -300,6 +300,8 @@ public static partial class WorkPlanners
             WorkKind.WakeCrew => WakeCrew(activity, o, c, w, dist, at, out blocked),
             WorkKind.Rewire => Rewire(activity, o, c, w, dist, at, out blocked),
             WorkKind.RepairNet => RepairNet(activity, o, c, w, dist, at, out blocked),
+            WorkKind.IsolateRoom or WorkKind.BreakerOn or WorkKind.ShutRoomValve or WorkKind.OpenRoomValve => RoomSwitch(activity, o, c, w, dist, at, out blocked),
+            WorkKind.PumpOut => PumpOut(activity, o, c, w, dist, at, out blocked),
             WorkKind.Reline => Reline(activity, o, c, w, dist, at, out blocked),
             WorkKind.UnloadSupply => UnloadSupply(activity, o, c, w, dist, at),
             WorkKind.AnswerSignal => AnswerSignal(activity, o, c, w, dist, at),

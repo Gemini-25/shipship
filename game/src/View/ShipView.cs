@@ -616,6 +616,7 @@ public partial class ShipView : Node2D
             case ViewMode.Pipes: PaintPipeOverlay(ci); break;
         }
 
+        PaintWater(ci); // v12.3 바닥 물·결로·분전함 차단
         PaintSmoke(ci);
         PaintToxin(ci); // v11.2 유독 가스
         PaintWalls(ci);

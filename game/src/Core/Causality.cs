@@ -33,6 +33,8 @@ public enum CauseKind
     Detach,      // 방이 떨어져 나감
     Hazard,      // 그 밖의 사고 (관찰자·무작위 사고)
     Recovery,    // 되돌림
+    Flood,       // v12.3 침수
+    Shock,       // v12.3 감전
 }
 
 public sealed class CauseNode
@@ -278,6 +280,14 @@ public sealed class CauseLog
         _fireCells[c] = node;
     }
 
+    /// <summary>그 방에서 가장 최근의 그 종류 고리 (풀렸어도).</summary>
+    public int RecentNode(int roomId, CauseKind kind)
+    {
+        for (int i = Nodes.Count - 1; i >= 0 && _w.Tick - Nodes[i].Tick < SimTime.Hours(12); i--)
+            if (Nodes[i].Kind == kind && (Nodes[i].RoomId == roomId || kind == CauseKind.Outage && _groups.TryGetValue(i, out var set) && set.Contains(roomId))) return i;
+        return -1;
+    }
+
     public int FireNodeAt(Cell c) => _fireCells.TryGetValue(c, out var n) && _w.Fire.At(c) > 0f ? n : -1;
 
     /// <summary>설비가 고장 났다: 사고 속이거나 핵심 설비일 때만 고리로 (평소의 잔고장은 정비 일감일 뿐).</summary>
@@ -342,6 +352,9 @@ public sealed class CauseLog
                     break;
                 case CauseKind.Suffocation when room == null || room.Air.O2 >= 17f || room.Detached:
                     Resolve(id, "숨 쉴 공기가 돌아왔다", room != null ? $"room:{room.Id}" : null, by: null);
+                    break;
+                case CauseKind.Flood when room == null || MoistureSystem.Depth(room) < 0.04f || room.Detached:
+                    Resolve(id, "물을 다 퍼냈다", room != null ? $"room:{room.Id}" : null);
                     break;
                 case CauseKind.Gas when room == null || (room.Air.CO < 0.15f && room.Air.Toxin < 0.1f):
                     Resolve(id, "가스가 걷혔다", room != null ? $"room:{room.Id}" : null);
@@ -419,6 +432,18 @@ public sealed class CauseLog
                 if (p < 0) p = HitOf(room);
                 if (p < 0) p = RoomState("noair", room);
                 Effect(CauseKind.Gas, $"gas:{room.Id}", $"{room.Name} " + (room.Air.CO >= 0.3f ? "일산화탄소" : "유독 가스"), room, null, p);
+            }
+            // v12.3 침수
+            if (watched && MoistureSystem.Depth(room) > 0.12f && !_open.ContainsKey($"flood:{room.Id}"))
+            {
+                int p = -1;
+                for (int i = Incidents.Count - 1; i >= 0 && p < 0; i--)
+                    if (Incidents[i].Open && Nodes[Incidents[i].Root] is { Kind: CauseKind.Hazard } r0 && r0.RoomId == room.Id) p = r0.Id;
+                if (p < 0) p = HitOf(room);
+                if (p < 0) p = RecentBlowNear(room);
+                if (p < 0) foreach (var (m, _, node) in _faults) if (m.Body.Room == room && Nodes[node].Open) { p = node; break; }
+                string why = p < 0 && room.Humidity > 0.72f ? " — 결로" : p < 0 && MoistureSystem.LeakSource(room) ? " — 설비 관 이음에서 샌다" : "";
+                Effect(CauseKind.Flood, $"flood:{room.Id}", $"{room.Name} 침수 ({MoistureSystem.DepthCm(room):0}cm){why}", room, null, p);
             }
             // 정전 · 단수 · 환기 끊김 (원인 하나에 방 여럿을 묶는다)
             if (!room.Powered && !_roomState.ContainsKey($"dark:{room.Id}")) Join("dark", room, InferDark(room));
@@ -498,6 +523,7 @@ public sealed class CauseLog
     /// <summary>정전의 원인: 끊긴 전력 간선 → 원자로 정지 → 회로 고장 → 배전실이 꺼짐.</summary>
     private int InferDark(Room room)
     {
+        if (room.BreakerOff) { int f = OpenNode($"flood:{room.Id}"); if (f >= 0) return f; }
         if (!room.PowerLinked) { int c = InferCut(room, NetKind.Power); if (c >= 0) return c; }
         if (OpenNode("scram") is int s && s >= 0) return s;
         foreach (var (m, f, node) in _faults)

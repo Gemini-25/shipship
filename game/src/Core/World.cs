@@ -130,6 +130,8 @@ public sealed class World
     public UtilityNet Net { get; }
     /// <summary>v12.2 인과 사슬: 사고가 무엇에서 시작해 무엇으로 번졌고 누가 되돌렸나.</summary>
     public CauseLog Causes { get; }
+    /// <summary>v12.3 물·습기·전기.</summary>
+    public MoistureSystem Moisture { get; }
 
     /// <summary>v12.1 정비 절차 통계.</summary>
     public ProcedureStats Procs { get; } = new();
@@ -203,6 +205,7 @@ public sealed class World
         Volatile = new VolatileSystem(this); // v12.2
         Net = new UtilityNet(this);
         Causes = new CauseLog(this);
+        Moisture = new MoistureSystem(this);
         Piping = new PipeNetwork(this);
         Automation = new AutomationSystem(this);
         Fixtures = new FixturesSystem(this);
@@ -258,6 +261,7 @@ public sealed class World
             Prevention.Update(this, dt);
             Watch.Update(dt); // v12.0 교대·감지기
             Volatile.Update(dt); // v12.2 열·폭발·잔해·역화·일산화탄소·짙은 산소
+            Moisture.Update(dt); // v12.3 물·습기·전기 (누전·감전·결로·기동 전류)
             Volatile.Resume();
             Procedures.Update(this); // v12.1 재조립 불량이 돌아온다
             Causes.Update(); // v12.2 인과 사슬: 번진 상태를 원인에 잇고, 풀린 상태에 복구를 붙인다

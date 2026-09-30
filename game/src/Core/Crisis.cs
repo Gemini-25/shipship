@@ -157,6 +157,12 @@ public static class Crisis
             case WorkKind.SealO2Line: return 0.9f;
             case WorkKind.CleanUp: return 0.1f;
             case WorkKind.WakeCrew: return 0.95f;
+            // v12.3 침수: 물 + 전기는 바로, 핵심 방 분전함은 급히 다시
+            case WorkKind.IsolateRoom: return 1.0f;
+            case WorkKind.PumpOut: return o.Urgency >= 0.7f ? 0.7f : 0.35f;
+            case WorkKind.ShutRoomValve: return 0.7f;
+            case WorkKind.OpenRoomValve: return 0.45f;
+            case WorkKind.BreakerOn: return o.Urgency >= 0.9f ? (s.Power || s.Air ? 1.0f : 0.85f) : 0.45f;
             case WorkKind.RepairNet:
             {
                 var l = w.Net.Links.FirstOrDefault(x => x.Id == o.Circuit);

@@ -111,6 +111,12 @@ public sealed class Room
     public bool WaterLinked { get; set; } = true;
     public bool DuctLinked { get; set; } = true;
 
+    /// <summary>v12.3 바닥에 고인 물 (L) · 습도 0~1 · 방 분전함을 내렸다 · 방 급수 밸브를 잠갔다.</summary>
+    public float Flood { get; set; }
+    public float Humidity { get; set; } = 0.4f;
+    public bool BreakerOff { get; set; }
+    public bool ValveShut { get; set; }
+
     public int Id { get; init; }
     public RoomType Type { get; init; }
     public string Name => NameOverride ?? RoomTypes.Name(Type);

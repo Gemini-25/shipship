@@ -57,6 +57,8 @@ public enum WorkKind
     Rewire, Reline,
     // 배 전체 망
     RepairNet,
+    // v12.3 침수
+    IsolateRoom, BreakerOn, ShutRoomValve, OpenRoomValve, PumpOut,
 }
 
 public static class WorkKinds
@@ -163,6 +165,11 @@ public static class WorkKinds
         WorkKind.WakeCrew => "동료 깨우기",
         WorkKind.Rewire => "설비 전선",
         WorkKind.RepairNet => "망 잇기",
+        WorkKind.IsolateRoom => "분전함 내리기",
+        WorkKind.BreakerOn => "분전함 올리기",
+        WorkKind.ShutRoomValve => "급수 밸브 잠그기",
+        WorkKind.OpenRoomValve => "급수 밸브 열기",
+        WorkKind.PumpOut => "물 퍼내기",
         WorkKind.Reline => "설비 관 이음",
         _ => k.ToString(),
     };
@@ -177,7 +184,7 @@ public static class WorkKinds
         k is WorkKind.SealBreach or WorkKind.OperateDamper or WorkKind.Extinguish or WorkKind.RestartReactor or WorkKind.StartAux
             or WorkKind.Rescue or WorkKind.SealOffRoom or WorkKind.ManualStart or WorkKind.ShedLoad or WorkKind.CrankDoor
             or WorkKind.IsolatePower or WorkKind.IsolatePipes or WorkKind.IsolateVent or WorkKind.WeldBulkhead or WorkKind.Eject
-            or WorkKind.CloseValve or WorkKind.PatchPipe or WorkKind.PilotDrones;
+            or WorkKind.CloseValve or WorkKind.PatchPipe or WorkKind.PilotDrones or WorkKind.IsolateRoom;
 
     /// <summary>원래 설계에 없던 방식으로 버티는 일 (적응).</summary>
     public static bool IsAdaptation(WorkKind k) =>
@@ -359,6 +366,7 @@ public sealed class WorkOrder
         WorkKind.WakeCrew => $"{Target.Crew?.Name ?? "?"} 깨우기",
         WorkKind.Rewire => $"{Target.Label} 전선",
         WorkKind.RepairNet => $"{Target.CurrentRoom?.Name ?? "?"} 간선 잇기",
+        WorkKind.IsolateRoom or WorkKind.BreakerOn or WorkKind.ShutRoomValve or WorkKind.OpenRoomValve or WorkKind.PumpOut => $"{Target.CurrentRoom?.Name ?? "?"} {WorkKinds.Name(Kind)}",
         WorkKind.Reline => $"{Target.Label} 관 이음",
         _ => Kind.ToString(),
     };
@@ -1132,7 +1140,7 @@ public sealed partial class WorkBoard
         bool cookOn = w.Crew.Any(x => x.Role == CrewRole.Cook && !x.Dead && !x.Down && x.Pose != Pose.Sleeping && ChoresActivity.OnShiftStatic(x, w));
         bool hasCook = w.Crew.Any(x => x.Role == CrewRole.Cook && !x.Dead && !x.Down && x.CareBed == null);
         float mealTarget = cookOn ? 4f : hasCook ? 1.5f : 3f;
-        foreach (var stove in ship.FurnitureOf(FurnitureType.Stove).Where(s => !s.Machine!.Stopped && !s.Room.Abandoned && s.Room.WaterLinked)) // 단수면 요리를 못 한다
+        foreach (var stove in ship.FurnitureOf(FurnitureType.Stove).Where(s => !s.Machine!.Stopped && !s.Room.Abandoned && s.Room.WaterLinked && !s.Room.ValveShut)) // 단수면 요리를 못 한다
         {
             if (meals + si * FoodChain.MealsPerBatch >= mealTarget * crewCount || produce < (si + 1) * FoodChain.ProducePerBatch) break;
             float lack = MathF.Min(1f, 1f - meals / (3f * crewCount) + (cookOn ? 0.1f : 0f));
@@ -1168,6 +1176,7 @@ public sealed partial class WorkBoard
         ScanWake(Post); // 위기에 잠든 동료 깨우기
         ScanLinks(Post); // v12.1 설비 전선·관
         ScanNet(Post); // 배 전체 망
+        ScanMoisture(Post); // v12.3 침수·분전함·밸브
         ScanNavigation(Post); // v11.2 항로와 추진
         ScanHazards(Post); // v11.2 사고 뒷정리 (오염된 식사)
         ScanLiving(Post); // v10.11 배급

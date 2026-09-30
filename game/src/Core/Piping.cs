@@ -335,6 +335,7 @@ public sealed class PipeNetwork
     public bool WaterTo(Room room)
     {
         if (!room.WaterLinked && UtilityNet.NeedsWater(room)) return false; // 급수망이 끊겼다 (단수)
+        if (room.ValveShut && UtilityNet.NeedsWater(room)) return false; // v12.3 방 급수 밸브를 잠갔다
         if (WaterMain == null) return true;
         // v10.3: 재배대가 있는 방은 어디든 급수 본관에서 물을 끌어 쓴다 (제2 재배실의 재배대도 본관이 끊기면 마른다)
         if (room.Type != RoomType.Hydroponics && !room.Furniture.Any(f => f.Type == FurnitureType.GrowBed)) return true;
@@ -448,6 +449,7 @@ public sealed class PipeNetwork
                 w.Water.Level -= lost;
                 WaterLost += lost;
             }
+            w.Moisture.AddWater(room, lost); // v12.3 샌 물은 바닥에 고인다
             if (lost > 0.5f && _announced.Add(s.Id))
             {
                 w.RaiseAlert($"{s.Name} {(s.Severed ? "끊어짐" : "누수")} — {(s.IsCoolant ? "냉각수" : "물")}가 샌다 ({s.LeakRate:0}L/시간)",

@@ -442,7 +442,7 @@ public sealed class Machine
             return FaultFactor * Grades.Output(Grade) * (1f - 0.25f * Wear * Wear) * (0.6f + 0.4f * Condition)
                    * (Heat > 0.7f ? MathF.Max(0.5f, 1f - (Heat - 0.7f)) : 1f) * (1f - 0.35f * Fouled) // v12.2 달아오르면·분말을 뒤집어쓰면 덜 낸다
                    * (Line < 0.3f && Procedures.Plumbed(Body.Type) ? 0.3f : 1f) // v12.1 관 이음이 빠지면 물·냉각수가 안 든다
-                   * (Body.Type == FurnitureType.OxygenGenerator && !Body.Room.WaterLinked ? 0.15f : 1f); // 단수면 전해할 물이 없다
+                   * (Body.Type == FurnitureType.OxygenGenerator && (!Body.Room.WaterLinked || Body.Room.ValveShut) ? 0.15f : 1f); // 단수면 전해할 물이 없다
         }
     }
 
