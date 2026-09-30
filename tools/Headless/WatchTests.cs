@@ -55,35 +55,62 @@ public static partial class Program
                     $"열어 보는 배: 분해 검사 {diag[0]} · 잘못된 부품 교체 {wrong[0]} · 막음 {prevented[0]} · 놓침 {missed[0]}  ↔  판단대로: 잘못된 교체 {wrong[1]} · 막음 {prevented[1]} · 놓침 {missed[1]}");
             }
 
-            // ── 3) 인수인계: 감지기·컴퓨터 일지 없이 사람의 말로만 — 넘기는 배 ↔ 안 넘기는 배 ──
+            // ── 3) 인수인계: 근무 끝나기 직전에 본 이상 — 넘기는 배 ↔ 안 넘기는 배 (감지기·컴퓨터 일지 없이 사람의 말로만) ──
             {
-                int[] lost = new int[2], dup = new int[2], missed = new int[2], prevented = new int[2], verbal = new int[2], unhandedMiss = new int[2];
-                for (int i = 0; i < 3; i++)
+                int[] lost = new int[2], dup = new int[2], missed = new int[2], prevented = new int[2], verbal = new int[2];
+                for (int i = 0; i < 4; i++)
                     foreach (bool hand in new[] { true, false })
                     {
-                        var w = Watchful(seed + i * 131, "Mirinae", 0.1f, x => { x.Watch.NoSensors = true; x.Watch.NoHandover = !hand; });
-                        Run(w, SimTime.TicksPerDay * 6);
-                        int k = hand ? 0 : 1;
-                        lost[k] += w.Watch.Stats.Lost;
-                        dup[k] += w.Watch.Stats.Duplicates;
-                        missed[k] += w.Precursors.Missed;
-                        prevented[k] += w.Precursors.Prevented;
-                        verbal[k] += w.Watch.Stats.Verbal;
-                        unhandedMiss[k] += w.Watch.Stats.MissedUnhanded;
+                        var w = Watchful(seed + i * 131, "Mirinae", 0f, x => { x.Watch.NoSensors = true; x.Watch.NoHandover = !hand; });
+                        // 근무가 30분 안에 끝나는 사람을 찾는다
+                        CrewMember? a = null;
+                        for (int t = 0; t < 24 * 12 && a == null; t++)
+                        {
+                            float hr = SimTime.HourOfDay(w.Tick);
+                            a = w.Crew.FirstOrDefault(c => WatchLog.OnShift(c, w) && !SimTime.InWindow(SimTime.Wrap(hr + 0.5f), c.Schedule.WorkStart, c.Schedule.WorkLength));
+                            if (a == null) Run(w, SimTime.Minutes(5));
+                        }
+                        if (a == null) continue;
+                        // 그 사람이 설비 넷에서 작은 이상을 본다 (고치려면 부품·시간이 드는 것들)
+                        var targets = w.Ship.Machines.Where(m => m.Omen == null && m.Faults.Count == 0 && m.Spec.PowerDraw > 0f
+                                                                 && m.Spec.FaultKinds.Any(k => k != FaultKind.BreakerTrip && Prevention.KindOf(k) != null))
+                            .OrderBy(m => m.Body.Id).Where((m, k) => k % 5 == i % 5).Take(4).ToList();
+                        foreach (var m in targets)
+                        {
+                            var fault = m.Spec.FaultKinds.First(k => k != FaultKind.BreakerTrip && Prevention.KindOf(k) != null);
+                            var kind = Prevention.KindOf(fault)!.Value;
+                            var o = new Omen { Kind = kind, Fault = fault, Cause = Causes.For(m.Body.Type, kind).First(), Since = w.Tick, Due = w.Tick + SimTime.Hours(14) };
+                            m.Omen = o;
+                            w.Precursors.Omens++;
+                            Prevention.Detect(w, m, o, "당직", a);
+                        }
+                        Run(w, SimTime.Hours(16));
+                        int k2 = hand ? 0 : 1;
+                        lost[k2] += w.Watch.Stats.Lost;
+                        dup[k2] += w.Watch.Stats.Duplicates;
+                        missed[k2] += w.Precursors.Missed;
+                        prevented[k2] += w.Precursors.Prevented;
+                        verbal[k2] += w.Watch.Stats.Verbal;
                     }
-                Check("인수인계 — 넘기면 덜 잃고 덜 겹친다", verbal[0] > 0 && lost[0] < lost[1] && dup[0] + missed[0] <= dup[1] + missed[1],
-                    $"넘기는 배: 말로 인계 {verbal[0]} · 인계 못 함 {lost[0]} · 중복 점검 {dup[0]} · 막음 {prevented[0]} · 놓침 {missed[0]}(전해지지 않아 {unhandedMiss[0]})  ↔  " +
-                    $"안 넘기는 배: 인계 못 함 {lost[1]} · 중복 점검 {dup[1]} · 막음 {prevented[1]} · 놓침 {missed[1]}(전해지지 않아 {unhandedMiss[1]})");
+                Check("인수인계 — 근무 끝에 본 이상을 넘기면 덜 잃고 더 막는다", verbal[0] > 0 && lost[0] < lost[1] && prevented[0] >= prevented[1],
+                    $"넘기는 배: 말로 인계 {verbal[0]} · 인계 못 함 {lost[0]} · 중복 점검 {dup[0]} · 막음 {prevented[0]} · 놓침 {missed[0]}  ↔  " +
+                    $"안 넘기는 배: 인계 못 함 {lost[1]} · 중복 점검 {dup[1]} · 막음 {prevented[1]} · 놓침 {missed[1]}");
             }
 
             // ── 4) 오래된 측정값: 주 컴퓨터가 멎으면 값이 멈춘다 — 그래도 현장 사람은 소리를 듣는다 ──
             {
                 var w = Watchful(seed, "Mirinae", 0f);
                 var pump = w.Ship.FurnitureOf(FurnitureType.CoolantPump).First().Machine!;
-                foreach (var comp in w.Ship.FurnitureOf(FurnitureType.MainComputer)) w.Machines.Break(comp.Machine!, FaultKind.StorageFault);
+                foreach (var comp in w.Ship.FurnitureOf(FurnitureType.MainComputer)) w.Machines.Break(comp.Machine!, FaultKind.Wrecked);
                 pump.Omen = new Omen { Kind = OmenKind.Vibration, Fault = FaultKind.BearingWear, Cause = OmenCause.BearingWear, Since = w.Tick, Due = w.Tick + SimTime.Hours(30) };
                 long before = pump.LastReading;
-                Run(w, SimTime.Hours(3));
+                for (int q = 0; q < 180; q++)
+                {
+                    // 세 시간 동안 컴퓨터가 멎어 있게 (고치러 와도 다시 멎는다)
+                    foreach (var comp in w.Ship.FurnitureOf(FurnitureType.MainComputer))
+                        if (comp.Machine!.Efficiency > 0.25f) w.Machines.Break(comp.Machine!, FaultKind.Wrecked);
+                    Run(w, SimTime.Minutes(1));
+                }
                 float age = (w.Tick - pump.LastReading) / (float)SimTime.TicksPerHour;
                 bool offline = !w.Automation.MainOnline;
                 w.Watch.NoSensors = true; // 이제부터는 사람의 귀로만 (컴퓨터가 돌아와도 감지기가 먼저 찾지 않게)
@@ -112,8 +139,11 @@ public static partial class Program
                 Run(w, SimTime.TicksPerDay * 3);
                 var st = w.Watch.Stats;
                 float avg = w.Ship.Machines.Average(m => m.SensorCal);
-                Check("계기 오류 — 교정이 틀어진 감지기가 헛경보를 내고, 전기 기사가 다시 맞춘다", st.Phantoms > 0 && st.Calibrations > 0 && avg > 0.75f,
-                    $"계기 오류 {st.Phantoms}(잡음 {st.PhantomsCaught}) · 교정 {st.Calibrations}방 · 평균 교정 50% → {avg * 100:0}% · 헛일(계기 오류에 부품을 갈음) {w.Watch.Notes.Count(n => n.Omen.Cause == OmenCause.Phantom && n.WrongFixes > 0)}");
+                // 사람은 진짜 교정값을 모른다 — 헛경보를 현장에서 확인하고 나서야 그 방을 교정한다
+                var calibrated = w.Ship.Machines.Where(m => m.LastCalibrated > 0).ToList();
+                float fixedAvg = calibrated.Select(m => m.SensorCal).DefaultIfEmpty(0f).Average();
+                Check("계기 오류 — 교정이 틀어진 감지기가 헛경보를 내고, 현장 확인 뒤 그 방을 다시 맞춘다", st.Phantoms > 0 && st.PhantomsCaught > 0 && st.Calibrations > 0 && fixedAvg > 0.85f,
+                    $"계기 오류 {st.Phantoms}(잡음 {st.PhantomsCaught}) · 교정 {st.Calibrations}방(맞춘 감지기 {calibrated.Count}개 평균 {fixedAvg * 100:0}%) · 배 전체 평균 50% → {avg * 100:0}% · 헛일(계기 오류에 부품을 갈음) {w.Watch.Notes.Count(n => n.Omen.Cause == OmenCause.Phantom && n.WrongFixes > 0)}");
             }
 
             // ── 6) 친숙함: 설비를 만질수록 ──

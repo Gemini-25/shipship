@@ -157,6 +157,12 @@ public static class Crisis
             case WorkKind.SealO2Line: return 0.9f;
             case WorkKind.CleanUp: return 0.1f;
             case WorkKind.WakeCrew: return 0.95f;
+            case WorkKind.RepairNet:
+            {
+                var l = w.Net.Links.FirstOrDefault(x => x.Id == o.Circuit);
+                if (l == null || !l.Cut) return 0.3f;
+                return l.Kind switch { NetKind.Power => 1.05f, NetKind.Air => s.Air ? 1f : 0.8f, _ => 0.6f };
+            }
             case WorkKind.Rewire or WorkKind.Reline:
                 if (m == null) return 0.4f;
                 if (PowerChain(m.Body.Type)) return s.Power || s.Cooling ? 1.05f : 0.7f;

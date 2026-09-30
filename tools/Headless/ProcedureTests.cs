@@ -41,10 +41,11 @@ public static partial class Program
             var w = DayOne(seed, "Mirinae");
             var gen = w.Ship.FurnitureOf(FurnitureType.OxygenGenerator).First().Machine!;
             w.Volatile.Blast(gen.Body.UseSpots.First(s => w.Ship.IsOpenFloor(s)), 0.6f, "시험");
-            int cut = w.Ship.Machines.Count(m => m.Feed < 0.6f || m.Line < 0.6f);
+            bool Hurt(Machine m) => m.Feed < 0.5f || m.Line < 0.5f && Procedures.Plumbed(m.Body.Type); // 일감이 붙는 기준과 같게
+            int cut = w.Ship.Machines.Count(Hurt);
             Console.WriteLine("    " + string.Join(", ", w.Ship.Machines.OrderBy(m => (m.Body.Center - gen.Body.Center).LengthSquared()).Take(5).Select(m => $"{m.Name} d={(m.Body.Center - gen.Body.Center).Length():0.0} 전선 {m.Feed * 100:0}% 관 {m.Line * 100:0}%")));
             Run(w, SimTime.Hours(20));
-            int left = w.Ship.Machines.Count(m => m.Feed < 0.6f || m.Line < 0.6f);
+            int left = w.Ship.Machines.Count(Hurt);
             Check("설비 전선·관 — 폭발에 끊기고 다시 잇는다", cut > 0 && left < cut && w.Procs.Rewired + w.Procs.Spliced + w.Procs.Relined > 0,
                 $"끊긴 설비 {cut} → {left} · {w.Procs}");
         }

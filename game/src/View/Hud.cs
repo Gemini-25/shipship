@@ -1143,6 +1143,24 @@ public partial class Hud : Control
             lines.Add(("유독 가스", $"{room.Air.Toxin * 100:0}%" + (src != null ? $" · {src.Body.Label}에서 새는 중" : " · 걷히는 중") + (room.Air.Toxin > 0.2f ? " · 우주복 없이는 위험" : ""),
                 room.Air.Toxin > 0.2f ? Palette.Danger : Palette.Warning));
         }
+        // v12.1 배 전체 망: 이 방으로 들어오는 전력 간선·급수관·환기 덕트
+        if (!room.Detached && _world.Net.Links.Count > 0)
+        {
+            var parts = new List<string>();
+            bool bad = false, warn = false;
+            foreach (var k in new[] { NetKind.Power, NetKind.Water, NetKind.Air })
+            {
+                if (k == NetKind.Water && !UtilityNet.NeedsWater(room)) continue;
+                var mine = _world.Net.Links.Where(l => l.Kind == k && (l.Room == room || l.Door != null && (l.Door.RoomA == room || l.Door.RoomB == room))).ToList();
+                var worst = mine.OrderBy(l => l.Integrity).FirstOrDefault();
+                string name = k switch { NetKind.Power => "전력", NetKind.Water => "급수", _ => "덕트" };
+                if (!UtilityNet.Fed(k, room)) { parts.Add($"{name} 끊김"); bad = true; }
+                else if (worst != null && worst.Integrity < 0.95f) { parts.Add($"{name} {worst.Integrity * 100:0}%" + (worst.Temp ? " 임시" : "")); warn = true; }
+                else if (worst != null && worst.Temp) { parts.Add($"{name} 임시로 이음"); warn = true; }
+                else parts.Add($"{name} 이어짐");
+            }
+            lines.Add(("배선·배관", string.Join(" · ", parts), bad ? Palette.Danger : warn ? Palette.Warning : Palette.TextDim));
+        }
         var walls = ship.Walls.Where(kv => kv.Value.IsHull && Hull.InsideRoom(ship, kv.Key) == room).Select(kv => kv.Value).ToList();
         if (walls.Count > 0)
         {

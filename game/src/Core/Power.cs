@@ -458,7 +458,7 @@ public sealed class PowerGrid
         {
             var r = room;
             // 떨어져 나갔거나 사출 준비로 전력을 끊은 방은 전기가 없다
-            if (!CircuitFed[r.Circuit] || r.Detached || r.PowerCut) { r.Powered = false; continue; }
+            if (!CircuitFed[r.Circuit] || r.Detached || r.PowerCut || !r.PowerLinked) { r.Powered = false; continue; }
             consumers.Add((8, RoomSystemsKw, r.Circuit, on => r.Powered = on));
         }
         float parkedKw = 0f;
@@ -467,7 +467,7 @@ public sealed class PowerGrid
             if (m.Spec.PowerDraw <= 0f) { m.Powered = true; continue; }
             if (m.Parked) { m.Powered = false; parkedKw += m.Demand; continue; } // v9.3 저출력 운영으로 내려 둠
             if (m.Feed < 0.3f) { m.Powered = false; continue; } // v12.1 설비 전선이 끊겼다
-            if (!CircuitFed[m.Body.Room.Circuit] || m.Body.Room.PowerCut) { m.Powered = false; continue; }
+            if (!CircuitFed[m.Body.Room.Circuit] || m.Body.Room.PowerCut || !m.Body.Room.PowerLinked) { m.Powered = false; continue; }
             var mm = m;
             // v9.3 저출력 운영: 재배대·냉장고·조리대·배식기(먹을 것)를 정수기·방 환기와 같은 줄로 올린다 (방 환기가 먼저)
             //    정제기는 사람이 붙어 일하는 동안만 같은 줄로 (금속판·필터를 뽑아야 고칠 수 있다)

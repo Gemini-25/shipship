@@ -680,6 +680,7 @@ public partial class Main : Node2D
     //   --machine=종류     그 종류 첫 설비 선택 (FurnitureType 이름)
     //   --break=종류       그 종류 첫 설비를 고장 낸다 (사고 시험)
     //   --view=모드        Normal / Power / Air / Temperature / Condition / Trace
+    //   --netcut=설비:망   그 설비가 있는 방에서 나가는 망 토막을 끊는다 (Power/Water/Air)
     //   --shot=경로        몇 프레임 뒤 화면을 PNG로 저장하고 종료
     //   --scarcity         부품 바닥 (v5), --history=일:간격 무작위 사고를 겪은 우주선, --seed=N 시드
 
@@ -740,6 +741,18 @@ public partial class Main : Node2D
                     // --break=CoolantPump (첫 대), --break=OxygenGenerator* (그 종류 전부)
                     Player.BreakAll(Sim, value.TrimEnd('*'), value.EndsWith("*"));
                     break;
+                case "--netcut":
+                {
+                    // --netcut=PowerPanel:Power (그 설비가 있는 방에서 나가는 그 망 토막을 모두 끊는다)
+                    var bits = value.Split(':');
+                    var f = Sim.Ship.Furniture.FirstOrDefault(x => x.Type.ToString() == bits[0]);
+                    if (f == null) break;
+                    var kind = bits.Length > 1 && System.Enum.TryParse<NetKind>(bits[1], out var nk) ? nk : NetKind.Power;
+                    Sim.Net.EnsureBuilt();
+                    foreach (var l in Sim.Net.Links.Where(l => l.Kind == kind && l.Door != null && (l.Door.RoomA == f.Room || l.Door.RoomB == f.Room)).Take(3)) Sim.Net.Hurt(l, 1f, "시험");
+                    Sim.Net.Update(0f);
+                    break;
+                }
                 case "--meteor":
                 case "--fire":
                 {

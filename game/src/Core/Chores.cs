@@ -74,7 +74,9 @@ public sealed class ChoresActivity : Activity
             && !SimTime.InWindow(SimTime.HourOfDay(w.Tick) + 1f, c.Schedule.WorkStart, c.Schedule.WorkLength)) score -= 0.15f;
         if (OnShiftStatic(c, w)) score += 0.08f + 0.1f * c.Traits.Diligence;
         else if (!emergency && !allHands && o.Kind is not (WorkKind.Train or WorkKind.Rehab or WorkKind.Handover)) score -= 0.3f; // v11.3 배우기·재활은 비번에 하는 일
-        if (BedtimeStatic(c, w)) score -= emergency || allHands ? 0.1f : 0.5f;
+        // v12.1 인수인계는 몇 분짜리 말 — 성실한 사람일수록 넘기고 나서 쉰다 (자기 전에도)
+        if (o.Kind == WorkKind.Handover) score += 0.18f + 0.22f * c.Traits.Diligence;
+        if (BedtimeStatic(c, w)) score -= emergency || allHands ? 0.1f : o.Kind == WorkKind.Handover ? 0.15f : 0.5f;
 
         score -= distance / 6000f;
         score -= 0.15f * c.Needs.Stress;
@@ -297,6 +299,7 @@ public static partial class WorkPlanners
             WorkKind.SealO2Line => SealO2Line(activity, o, c, w, dist, at, out blocked),
             WorkKind.WakeCrew => WakeCrew(activity, o, c, w, dist, at, out blocked),
             WorkKind.Rewire => Rewire(activity, o, c, w, dist, at, out blocked),
+            WorkKind.RepairNet => RepairNet(activity, o, c, w, dist, at, out blocked),
             WorkKind.Reline => Reline(activity, o, c, w, dist, at, out blocked),
             WorkKind.UnloadSupply => UnloadSupply(activity, o, c, w, dist, at),
             WorkKind.AnswerSignal => AnswerSignal(activity, o, c, w, dist, at),

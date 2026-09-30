@@ -149,6 +149,8 @@ public sealed class FireSystem
                 }
             }
 
+            // 배 전체 망: 불이 지나가는 간선을 태운다 (전선 피복이 가장 약하다)
+            if (w.Rng.Chance(0.5f * dt * 4f)) w.Net.DamageNear(cell, 1.2f, 0.5f * intensity, "불", fire: true);
             // 배선: 불이 그 방 회로의 전선을 태운다
             if (w.Rng.Chance(0.3f * intensity * dt)
                 && ship.FurnitureOf(FurnitureType.PowerPanel).FirstOrDefault()?.Machine is Machine panel

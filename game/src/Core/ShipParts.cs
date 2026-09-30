@@ -106,6 +106,11 @@ public sealed class Room
     /// <summary>v12.2 산소관 누출 (시간당 kPa쯤, 0이면 없음).</summary>
     public float O2Leak { get; set; }
 
+    /// <summary>배 전체 망에서 이 방까지 전력 간선·급수관·환기 덕트가 이어져 있나 (끊기면 정전·단수·환기 끊김).</summary>
+    public bool PowerLinked { get; set; } = true;
+    public bool WaterLinked { get; set; } = true;
+    public bool DuctLinked { get; set; } = true;
+
     public int Id { get; init; }
     public RoomType Type { get; init; }
     public string Name => NameOverride ?? RoomTypes.Name(Type);

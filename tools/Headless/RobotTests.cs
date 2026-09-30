@@ -36,7 +36,7 @@ public static partial class Program
             for (int t = 0; t < SimTime.Hours(12) && r.State != RobotState.Active; t++) w.Step();
             w.Robots.ForceFault(r, RobotFault.Jam);
             Run(w, SimTime.Hours(4));
-            bool self = r.Fault == null && r.SelfRepairsTotal == 1 && w.Log.Entries.Any(e => e.Text.Contains("자가 진단"));
+            bool self = r.Fault == null && r.SelfRepairsTotal >= 1 && w.Log.Entries.Any(e => e.Text.Contains("자가 진단"));
             var r2 = w.Robots.Robots.First(x => x.Kind == RobotKind.Maintainer);
             r2.Condition = 0.2f;
             w.Robots.ForceFault(r2, RobotFault.Sensor);

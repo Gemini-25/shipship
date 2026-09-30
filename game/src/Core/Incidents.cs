@@ -87,6 +87,7 @@ public static class Incidents
                 if (ship.WallAt(cell + d) is WallState ws && !ws.IsHull)
                     Hull.Damage(ship, cell + d, 0.15f * strength);
                 if (d.X == 0 && d.Y == 0) w.Fixtures.OnDebris(cell, strength, ship.RoomAt(cell)); // v9.4 문 구동기·조명
+                if (d.X == 0 && d.Y == 0) w.Net.DamageNear(cell, 1.1f, 0.55f * strength, "파편"); // 배 전체 망
             }
             foreach (var c in w.Crew)
             {

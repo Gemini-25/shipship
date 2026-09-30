@@ -481,6 +481,14 @@ public sealed class WatchLog
             var c = w.Crew[id];
             var left = ToHandOver(c);
             if (left.Count == 0) { Pending.Remove(id); continue; }
+            // 찾아가기 전이라도 식당·복도에서 마주치면 그 자리에서 넘긴다
+            if (c.CanAct && c.IsAwake
+                && w.Crew.FirstOrDefault(x => x != c && x.CanAct && x.IsAwake && !x.Outside && x.Room == c.Room && x.Room != null
+                                              && (OnShift(x) || SimTime.InWindow(SimTime.HourOfDay(w.Tick) + 1f, x.Schedule.WorkStart, 1f))) is CrewMember met)
+            {
+                HandOver(c, met, $"{met.Room!.Name}에서 마주쳐 말로 인계");
+                continue;
+            }
             if (w.Tick - since > SimTime.Hours(2) || !c.CanAct || !c.IsAwake)
             {
                 foreach (var n in left) LoseNote(n, c);
@@ -529,6 +537,9 @@ public sealed class WatchLog
             }
         }
     }
+
+    /// <summary>승무원이 짐작하는 감지기 교정: 마지막 교정 뒤 하루 1.1%쯤 틀어진다고 본다 (태양 폭풍·열로 더 틀어진 건 모른다).</summary>
+    public static float KnownCal(Machine m, World w) => MathF.Max(0.3f, 1f - (w.Tick - m.LastCalibrated) / (float)SimTime.TicksPerDay * 0.011f);
 
     public static bool OnShift(CrewMember c, World w) => c.CanAct && ChoresActivity.OnShiftStatic(c, w);
     private bool OnShift(CrewMember c) => OnShift(c, _w);
@@ -615,7 +626,7 @@ public sealed class WatchLog
             .FirstOrDefault();
 
     /// <summary>찾아가서 말로 넘겼다.</summary>
-    public void HandOver(CrewMember c, CrewMember relief)
+    public void HandOver(CrewMember c, CrewMember relief, string how = "찾아가 말로 인계")
     {
         var w = _w;
         foreach (var n in ToHandOver(c))
@@ -625,7 +636,7 @@ public sealed class WatchLog
             n.Holders[relief.Id] = keepJudgment;
             n.Handovers++;
             Stats.Verbal++;
-            n.Trail.Add($"{SimTime.Clock(w.Tick)} {c.Name} → {relief.Name} 찾아가 말로 인계" + (keepJudgment ? "" : " (관측만)"));
+            n.Trail.Add($"{SimTime.Clock(w.Tick)} {c.Name} → {relief.Name} {how}" + (keepJudgment ? "" : " (관측만)"));
             w.Log.Add(w.Tick, LogKind.Life, $"{relief.Name}을(를) 찾아가 인수인계: {n.Machine.Name} — {n.Observation}", c.Id);
         }
         c.Say(w, "인수인계할 게 있어");
@@ -684,8 +695,9 @@ public sealed partial class WorkBoard
             if (room.Abandoned || room.OffLimits || room.Leaking) continue;
             var ms = room.Furniture.Where(f => f.Machine != null).Select(f => f.Machine!).ToList();
             if (ms.Count == 0) continue;
-            float avg = ms.Average(m => m.SensorCal);
-            float worstVital = ms.Where(m => m.Spec.Critical).Select(m => m.SensorCal).DefaultIfEmpty(1f).Min();
+            // 사람은 진짜 교정값을 모른다: 마지막 교정 뒤 지난 날수로 짐작하고, 계기 오류가 확인되면 그제야 안다
+            float avg = ms.Average(m => WatchLog.KnownCal(m, w));
+            float worstVital = ms.Where(m => m.Spec.Critical).Select(m => WatchLog.KnownCal(m, w)).DefaultIfEmpty(1f).Min();
             bool phantom = ms.Any(m => m.Omen is { Cause: OmenCause.Phantom, Note: { Stage: NoteStage.Confirmed } });
             if (avg >= 0.72f && worstVital >= 0.7f && !phantom) continue;
             post(WorkKind.Calibrate, WorkTarget.OfRoom(room), MathF.Min(0.5f, 0.2f + (0.8f - avg) * 0.8f + (phantom ? 0.2f : 0f)), Skill.Electrical,

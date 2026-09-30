@@ -673,6 +673,7 @@ public sealed class StructureSystem
 
         // v9: 방을 지나던 관은 끊어진다 (사출 준비로 밸브를 잠갔으면 새지 않는다)
         w.Piping.OnDetach(room, isolated: room.PipesCut || controlled);
+        w.Net.OnDetach(room); // 배 전체 망: 그 방을 지나던 간선·관·덕트
 
         // 7) 끊지 못한 것들의 대가
         if (!room.PowerCut)

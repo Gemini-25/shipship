@@ -394,6 +394,8 @@ public sealed class VolatileSystem
             float k = power * (1f - (near.Center - at.Center).Length() / (r + 0.5f));
             if (w.Rng.Chance(0.9f * k)) w.Piping.Damage(seg, 0.5f * k + 0.1f, near, cause);
         }
+        // 배 전체 망: 가까운 간선·급수관·덕트
+        w.Net.DamageNear(at, r, 1.3f * power, cause);
         // 전선: 그 방 회로가 끊긴다
         if (room != null && w.Rng.Chance(0.6f * power) && ship.FurnitureOf(FurnitureType.PowerPanel).FirstOrDefault()?.Machine is Machine panel
             && !panel.Faults.Any(x => x.Circuit == room.Circuit))

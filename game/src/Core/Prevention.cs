@@ -171,7 +171,7 @@ public static class Prevention
         }
     }
 
-    private static void Detect(World w, Machine m, Omen o, string how, CrewMember? by, string? byName = null)
+    public static void Detect(World w, Machine m, Omen o, string how, CrewMember? by, string? byName = null)
     {
         var st = w.Precursors;
         w.Watch.Observe(m, o, how, by, byName); // v12.0 당직 일지 (다시 찾았으면 중복 점검)

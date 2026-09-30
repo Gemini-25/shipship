@@ -620,6 +620,7 @@ public partial class ShipView : Node2D
         PaintToxin(ci); // v11.2 유독 가스
         PaintWalls(ci);
         PaintPipes(ci, mode == ViewMode.Pipes); // v9: 벽·바닥 밑을 지나는 관 (배관 보기에서는 굵게)
+        PaintNet(ci, mode); // v12.1 배 전체 망 (간선·급수관·덕트)
         PaintJoints(ci, mode == ViewMode.Structure);
         PaintEvolution(ci);
         if (mode == ViewMode.Trace) PaintTraceMarks(ci);

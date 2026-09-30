@@ -126,6 +126,9 @@ public sealed class World
     /// <summary>v12.0 당직 일지 · 진단 · 감지기 교정.</summary>
     public WatchLog Watch { get; }
 
+    /// <summary>배 전체 유틸리티 망 (전력 간선·급수관·환기 덕트).</summary>
+    public UtilityNet Net { get; }
+
     /// <summary>v12.1 정비 절차 통계.</summary>
     public ProcedureStats Procs { get; } = new();
 
@@ -196,6 +199,7 @@ public sealed class World
         Comms = new CommsSystem(this);
         Watch = new WatchLog(this); // v12.0
         Volatile = new VolatileSystem(this); // v12.2
+        Net = new UtilityNet(this);
         Piping = new PipeNetwork(this);
         Automation = new AutomationSystem(this);
         Fixtures = new FixturesSystem(this);
@@ -238,6 +242,7 @@ public sealed class World
         if (Tick % SystemInterval == 0)
         {
             const float dt = SystemInterval / (float)SimTime.TicksPerHour;
+            Net.Update(dt); // 배 전체 망: 어느 방까지 전기·물·공기가 닿나
             Piping.Update(dt);
             Automation.Update(dt);
             Power.Update(dt);

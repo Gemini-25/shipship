@@ -42,12 +42,12 @@ public sealed class Atmosphere
     public float ReserveCapacity { get; internal set; } = 26000f;
 
     /// <summary>환기망에 연결된 방 (전기 + 댐퍼 열림).</summary>
-    public static bool Vented(Room r) => r.Powered && r.VentOpen;
+    public static bool Vented(Room r) => r.Powered && r.VentOpen && r.DuctLinked;
 
     public Atmosphere(World world) => _world = world;
 
     /// <summary>환기관 흐름 세기: 팬이 도는 방 1, 전기가 없어 수동으로만 흐르는 방 0.35.</summary>
-    private static float DuctFactor(Room r) => r.Powered ? 1f : 0.35f;
+    private static float DuctFactor(Room r) => !r.DuctLinked ? 0f : r.Powered ? 1f : 0.35f; // 덕트가 끊긴 방은 환기망에서 빠진다
 
     public void Update(float dtHours)
     {

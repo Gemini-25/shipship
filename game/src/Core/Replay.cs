@@ -347,6 +347,7 @@ public static class SaveGame
         // v12.1 설비 전선·관·재조립 불량
         foreach (var m in w.Ship.Machines) { F(m.Feed); F(m.Line); I(m.Spliced ? 1 : 0); I(m.Defect is FaultKind dk ? (int)dk : -1); }
         I(w.UsedParts.Count); I(w.Power.MaintenanceCap ? 1 : 0);
+        foreach (var l in w.Net.Links) { F(l.Integrity); I(l.Temp ? 1 : 0); }
         I(w.Precursors.Prevented); I(w.Precursors.Missed);
         // v11.2 추진
         F(w.Propulsion.Propellant); I((int)w.Propulsion.Zone); I(w.Propulsion.Dodged); I(w.Propulsion.Evasions); F(w.Space.Density);
