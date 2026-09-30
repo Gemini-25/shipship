@@ -54,6 +54,17 @@ public static class NeedsSystem
         if (amount <= 0f) return;
         if (v.Injury < 0.05f || amount > 0.05f) v.InjuryCause = cause;
         v.Injury = MathF.Min(1f, v.Injury + amount);
+        // v11.3 후유증: 절반을 넘게 다치면 무엇인가 남는다 (재활로 절반까지만 준다)
+        if (v.Injury > 0.5f)
+        {
+            float add = MathF.Min(amount, v.Injury - 0.5f) * 0.25f;
+            if (add > 0f)
+            {
+                v.Scar = MathF.Min(0.3f, v.Scar + add);
+                v.ScarFloor = MathF.Max(v.ScarFloor, v.Scar * 0.5f);
+                v.ScarCause ??= cause;
+            }
+        }
     }
 
     public static void Update(CrewMember c, World w)

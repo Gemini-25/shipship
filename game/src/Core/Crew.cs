@@ -108,8 +108,15 @@ public sealed class Vitals
     /// </summary>
     public float Injury { get; set; }
 
-    /// <summary>부상 때문에 체력이 이 이상 오르지 않는다.</summary>
-    public float MaxHealth => 1f - 0.6f * Injury;
+    /// <summary>부상 때문에 체력이 이 이상 오르지 않는다. v11.3: 후유증도 조금.</summary>
+    public float MaxHealth => 1f - 0.6f * Injury - 0.4f * Scar;
+
+    /// <summary>v11.3 후유증 0~0.3: 크게 다친 뒤 남는 것 (최대 체력·손이 조금 둔하다). 재활로 조금씩, 절반까지만 준다.</summary>
+    public float Scar { get; set; }
+    public string? ScarCause { get; set; }
+
+    /// <summary>재활로 줄일 수 있는 바닥 (처음 남은 후유증의 절반).</summary>
+    public float ScarFloor { get; set; }
 
     /// <summary>부상이 어디서 왔는지 (기록용).</summary>
     public string? InjuryCause { get; set; }
@@ -141,6 +148,10 @@ public sealed class CrewStats
     public int MealsCooked;
     public int Chats;
     public int Emergencies;
+    // v11.3 성장
+    public int Lessons;
+    public int Taught;
+    public int RehabSessions;
     public int Rescues;
     public int TimesDown;
     public int Panics;
@@ -182,6 +193,9 @@ public sealed class CrewMember
 
     /// <summary>v11.2: 들고 있는 식사 중 균이 든 것 (나르면 따라가고, 먹으면 앓는다).</summary>
     public int CarryTaint { get; set; }
+
+    /// <summary>v11.3: 마지막으로 재활한 틱.</summary>
+    public long LastRehab { get; set; } = -1_000_000;
 
     /// <summary>v11.2: 탈출 캡슐에서 건져 태운 사람.</summary>
     public bool Rescued { get; init; }

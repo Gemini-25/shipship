@@ -40,8 +40,10 @@ public sealed class ChoresActivity : Activity
     public static float Appeal(CrewMember c, World w, WorkOrder o, DistanceField dist, out int distance)
     {
         distance = -1;
-        if (o.Target.Crew == c) return -1f; // 자기 자신은 치료 못 함
+        if (o.Target.Crew == c && o.Kind != WorkKind.Rehab) return -1f; // 자기 자신은 치료 못 함 (v11.3 재활은 제 몸을 푼다)
         if (o.Kind == WorkKind.Drill && o.Circuit != c.Id) return -1f; // v11.0: 훈련은 제 몫만
+        if (o.Kind == WorkKind.Train && o.Circuit / 10 != c.Id) return -1f; // v11.3: 배우는 사람만
+        if (o.Kind == WorkKind.Rehab && o.Circuit != c.Id) return -1f; // v11.3: 재활은 다친 사람이
         if (DecisionOnly(o.Kind)) return -1f;
         // v8: 선체 밖 일은 드론이 맡을 수 있으면 드론에게 맡긴다 (드론이 없거나 멈췄을 때만 사람이 나간다)
         bool eva = NeedsEvaField(o) && o.Kind != WorkKind.Rescue;
@@ -54,10 +56,14 @@ public sealed class ChoresActivity : Activity
         float skill = c.SkillLevel(o.Skill);
         float fit = 0.55f + 0.45f * skill + (CrewRoles.Owns(c.Role, o) ? 0.15f : 0f);
         float score = o.Urgency * fit;
+        // v11.3: 조리사가 깨어 근무 중이면 부엌은 그 사람 몫 — 다른 사람(재배 담당 포함)은 한 발 물러선다
+        if (o.Kind == WorkKind.Cook && c.Role != CrewRole.Cook
+            && w.Crew.Any(x => x.Role == CrewRole.Cook && !x.Dead && !x.Down && x.Pose != Pose.Sleeping && x.CareBed == null && OnShiftStatic(x, w)))
+            score -= 0.2f;
 
         bool emergency = o.Urgency >= 0.9f;
         if (OnShiftStatic(c, w)) score += 0.08f + 0.1f * c.Traits.Diligence;
-        else if (!emergency) score -= 0.3f;
+        else if (!emergency && o.Kind is not (WorkKind.Train or WorkKind.Rehab)) score -= 0.3f; // v11.3 배우기·재활은 비번에 하는 일
         if (BedtimeStatic(c, w)) score -= emergency ? 0.1f : 0.5f;
 
         score -= distance / 6000f;
@@ -92,7 +98,7 @@ public sealed class ChoresActivity : Activity
         return score;
     }
 
-    private static bool OnShiftStatic(CrewMember c, World w) =>
+    internal static bool OnShiftStatic(CrewMember c, World w) =>
         SimTime.InWindow(SimTime.HourOfDay(w.Tick), c.Schedule.WorkStart, c.Schedule.WorkLength);
 
     private static bool BedtimeStatic(CrewMember c, World w) =>
@@ -263,6 +269,8 @@ public static partial class WorkPlanners
             WorkKind.BuildComputer => BuildComputer(activity, o, c, w, dist, at, out blocked),
             WorkKind.BuildOxygen => BuildOxygen(activity, o, c, w, dist, at, out blocked),
             WorkKind.Distress => SendDistress(activity, o, c, w, dist, at),
+            WorkKind.Train => Train(activity, o, c, w, dist, at, out blocked),
+            WorkKind.Rehab => Rehab(activity, o, c, w, dist, at, out blocked),
             WorkKind.UnloadSupply => UnloadSupply(activity, o, c, w, dist, at),
             WorkKind.AnswerSignal => AnswerSignal(activity, o, c, w, dist, at),
             WorkKind.Upgrade => Upgrade(activity, o, c, w, dist, at, out blocked),
@@ -1788,13 +1796,18 @@ public static partial class WorkPlanners
     {
         blocked = null;
         var room = o.Target.Room!;
+        // 다른 사람이 이미 하나 짰으면 (방이 바뀌어 일감이 둘로 갈렸어도) 더 짜지 않는다 — 전기가 없어 안 도는 건 발생기가 없는 게 아니다
+        static bool HaveOne(World world) => world.Ship.FurnitureOf(FurnitureType.OxygenGenerator).Any(f => !f.Stowed && !f.Room.Detached && !f.Room.Abandoned
+                                                                                                        && !f.Machine!.Has(FaultKind.Wrecked) && !f.Machine.Has(FaultKind.Stripped));
+        if (HaveOne(w)) { blocked = "이미 산소 발생기가 있다"; return null; }
         var cost = new[] { (ItemKind.PowerController, 1), (ItemKind.Cable, 2), (ItemKind.Plate, 2) };
         var toils = FetchAll(c, w, dist, cost);
         if (toils == null) { blocked = $"재료 부족 ({Cost(cost)})"; return null; }
         toils.Add(new GotoToil(at));
-        toils.Add(new WorkToil(2.5f, Skill.Mechanics, room.Center) { Resume = o });
+        toils.Add(new WorkToil(2.5f, Skill.Mechanics, room.Center) { Resume = o, CanContinue = (cm, world) => !HaveOne(world) });
         toils.Add(new DoToil((cm, world) =>
         {
+            if (HaveOne(world)) { world.Board.Close(o); return true; }
             if (Adaptation.BenchCell(world, room) is not Cell spot) return false;
             if (!UseAll(cm, cost)) return false;
             var gen = world.Ship.AddFurniture(FurnitureType.OxygenGenerator, spot);

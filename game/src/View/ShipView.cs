@@ -688,6 +688,7 @@ public partial class ShipView : Node2D
         bool alive = eff > 0.01f;
         if (Modules.IsModule(f.Type)) { PaintModuleLife(ci, f, t); return; } // v10.8
         if (f.Type == FurnitureType.SupplyCache) { PaintSupplyCacheLife(ci, f); return; } // v10.10
+        if (m is { Tier: >= 2 } && f.Type != FurnitureType.ReactorCore) PaintTierLife(ci, f, m, t); // v11.3 단계마다 다른 모양
 
         switch (f.Type)
         {

@@ -438,6 +438,7 @@ public partial class Main : Node2D
                 case Key.B: ToggleTool(IncidentTool.Break); break;
                 case Key.P: ToggleTool(IncidentTool.PipeBurst); break;
                 case Key.J: Hud.ToggleChronicle(); break;
+                case Key.G: Hud.ToggleMinimap(); break;
                 case Key.T: Hud.ToggleTech(); break;
                 case Key.F5: SaveGame(); break;
                 case Key.F9: LoadGame(); break;

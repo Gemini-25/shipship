@@ -38,8 +38,15 @@ public static partial class Program
             float cookAvg = cooks.Count == 0 ? 0f : (float)cooks.Average(c => c.Stats.MealsCooked);
             float botAvg = bots.Count == 0 ? 0f : (float)bots.Average(c => c.Stats.MealsCooked);
             float botHarvest = bots.Count == 0 ? 0f : (float)bots.Average(c => c.Stats.Harvests);
-            Check($"{w.Ship.Name}: 조리사가 부엌을 맡는다", cooks.Count >= 1 && cookAvg > botAvg,
-                $"조리사 {cooks.Count}명 · 사흘에 조리 {total}인분 · 조리사 평균 {cookAvg:0} ↔ 재배 담당 평균 {botAvg:0} (수확 {botHarvest:0.0}번)");
+            // 조리사가 가장 많이 한다 (작은 배의 재배 담당은 "재배·조리" 겸직이라 동률까지는 괜찮다) · 조리사 몫이 전체의 40% 넘게
+            float share = total == 0 ? 0f : cooks.Sum(c => c.Stats.MealsCooked) / (float)total;
+            int topOther = w.Crew.Where(c => c.Role != CrewRole.Cook).Select(c => c.Stats.MealsCooked).DefaultIfEmpty(0).Max();
+            bool ok = cooks.Count >= 1 && cookAvg >= botAvg && cookAvg >= topOther && share >= 0.4f;
+            Check($"{w.Ship.Name}: 조리사가 부엌을 맡는다", ok,
+                $"조리사 {cooks.Count}명 · 사흘에 조리 {total}인분 (조리사 몫 {share * 100:0}%) · 조리사 평균 {cookAvg:0} ↔ 재배 담당 평균 {botAvg:0} (수확 {botHarvest:0.0}번)");
+            if (!ok)
+                foreach (var c in w.Crew.Where(c => c.Stats.MealsCooked > 0))
+                    Console.WriteLine($"      {c.Name} ({CrewRoles.Name(c.Role)}) 조리 {c.Stats.MealsCooked} · 근무 {c.Schedule.WorkStart:0}시부터 {c.Schedule.WorkLength:0}시간 · 조리 솜씨 {c.SkillLevel(Skill.Cooking) * 100:0}%");
         }
 
         // ── 2) 배급: 먹을 것이 이틀치 아래로 떨어지면 회의로 정하고, 배급하는 배가 덜 굶는다 ──

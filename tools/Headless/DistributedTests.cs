@@ -50,6 +50,7 @@ public static partial class Program
             var sums = new Dictionary<bool, List<float>> { [false] = new(), [true] = new() };
             string unit = what switch { RoomType.Workshop => "작업대 있던 시간 %", RoomType.Bridge => "비킴·스침", _ => "최저 산소 kPa" };
             var extra = new Dictionary<bool, List<string>> { [false] = new(), [true] = new() };
+            var self = new HashSet<int>();
             for (int i = 0; i < runs; i++)
             {
                 int s = seed + i * 577;
@@ -59,6 +60,14 @@ public static partial class Program
                     if (dist) Distribute(w);
                     Run(w, SimTime.Hours(2));
                     var room = w.Ship.RoomsOf(what).First(r => !r.Detached);
+                    // 몰아 둔 배가 첫날 스스로 나눠 두었으면 (v11.1 설비 이동 결정) 비교에서 뺀다
+                    bool selfSpread = !dist && what switch
+                    {
+                        RoomType.LifeSupport => w.Ship.FurnitureOf(FurnitureType.OxygenGenerator).Any(f => f.Room != room),
+                        RoomType.Workshop => w.Ship.FurnitureOf(FurnitureType.Workbench).Any(f => f.Room != room),
+                        _ => w.Ship.Furniture.Any(f => f.AuxHelm),
+                    };
+                    if (selfSpread) self.Add(i);
                     float research0 = w.Research;
                     int parts0 = w.Adapt.PartsMade;
                     LoseRoom(w, room);
@@ -78,6 +87,13 @@ public static partial class Program
                             minO2 = MathF.Min(minO2, r.Air.O2);
                     }
                     dodged = w.Propulsion.Dodged; glanced = w.Propulsion.Glanced;
+                    if (Environment.GetEnvironmentVariable("SHIPSIM_GATELOG") == "1")
+                    {
+                        Console.WriteLine($"    [{RoomTypes.Name(what)} · 시드 {s} · {(dist ? "나눠 둔 배" : "몰아 둔 배")}] 산소 발생기: " +
+                                          string.Join(", ", w.Ship.FurnitureOf(FurnitureType.OxygenGenerator).Select(f => $"{f.Room.Name}{(f.Room.Detached ? "(잃음)" : "")} Mk{f.Machine!.Grade} 효율 {f.Machine.Efficiency * 100:0}%")));
+                        foreach (var e in w.History.Events.Where(e => e.Tick > w.Tick - SimTime.Hours(97) && e.Kind is not (HistoryKind.Memory or HistoryKind.Bond)).Take(30))
+                            Console.WriteLine($"      {SimTime.Day(e.Tick)}일 {SimTime.Clock(e.Tick)} {e.Text}");
+                    }
                     metric = what switch
                     {
                         RoomType.Workshop => benchHours / 96f * 100f,
@@ -93,14 +109,17 @@ public static partial class Program
                     });
                 }
             }
-            float plain = sums[false].Average(), spread = sums[true].Average();
+            var keep = Enumerable.Range(0, runs).Where(i => !self.Contains(i)).ToList();
+            if (keep.Count == 0) keep = Enumerable.Range(0, runs).ToList();
+            float plain = keep.Average(i => sums[false][i]), spread = keep.Average(i => sums[true][i]);
             bool ok = spread > plain + MathF.Abs(plain) * 0.01f;
             total++;
             if (ok) wins++;
             Console.WriteLine($"── {RoomTypes.Name(what)}을(를) 잃었다 ({unit}) ──");
             for (int i = 0; i < runs; i++)
-                Console.WriteLine($"  시드 {seed + i * 577,-9} 몰아 둔 배 {sums[false][i],6:0.0} ({extra[false][i]})\n                    나눠 둔 배 {sums[true][i],6:0.0} ({extra[true][i]})");
-            Console.WriteLine($"  평균: 몰아 둔 배 {plain:0.0} ↔ 나눠 둔 배 {spread:0.0} {(ok ? "✔" : "✘")}\n");
+                Console.WriteLine($"  시드 {seed + i * 577,-9} 몰아 둔 배 {sums[false][i],6:0.0} ({extra[false][i]})" + (self.Contains(i) ? " ← 첫날 스스로 나눠 둠 (비교에서 뺌)" : "")
+                                  + $"\n                    나눠 둔 배 {sums[true][i],6:0.0} ({extra[true][i]})");
+            Console.WriteLine($"  평균{(keep.Count < runs ? $"({keep.Count}쌍)" : "")}: 몰아 둔 배 {plain:0.0} ↔ 나눠 둔 배 {spread:0.0} {(ok ? "✔" : "✘")}\n");
         }
         Console.WriteLine(wins == total ? "✔ 게이트 통과 — 나눠 둔 배가 핵심 방을 잃고도 더 버틴다" : $"✘ {total - wins}개 실패");
         return wins == total ? 0 : 1;

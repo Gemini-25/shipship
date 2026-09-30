@@ -50,8 +50,10 @@ public static partial class Program
             bool answered = false;
             for (int t = 0; t < SimTime.TicksPerDay * 2 && w.Comms.Rescued == 0; t++) { w.Step(); answered |= w.Comms.PodEta >= 0; }
             var joined = w.Crew.Where(c => c.Rescued).ToList();
-            Run(w, SimTime.Hours(20));
-            bool treated = joined.Count > 0 && joined.All(c => c.Vitals.TreatedTick > 0 || c.CareBed != null || c.Vitals.Injury < 0.2f);
+            var inj0 = joined.ToDictionary(c => c, c => c.Vitals.Injury);
+            Run(w, SimTime.Hours(30));
+            // 치료받거나(무거운 부상) 재활로(가벼운 부상) 나아졌다
+            bool treated = joined.Count > 0 && joined.All(c => c.Vitals.TreatedTick > 0 || c.Vitals.Injury < inj0[c] - 0.03f);
             bool beds = joined.All(c => c.Bed != null);
             var vote = w.History.Events.FirstOrDefault(e => e.Kind == HistoryKind.Decision && e.Text.Contains("탈출 캡슐"));
             Check("구조 요청 → 건지기로 → 생존자 합류·치료", answered && w.Crew.Count == crew0 + survivors && treated && beds && joined.All(c => !c.Dead),

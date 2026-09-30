@@ -3,21 +3,61 @@ using System.Collections.Generic;
 
 namespace ShipSim.Core;
 
-/// <summary>시드 고정 난수. 같은 시드면 항상 같은 역사가 나온다(버그 재현용).</summary>
+/// <summary>
+/// 시드 고정 난수. 같은 시드면 항상 같은 역사가 나온다(버그 재현용).
+/// v11.3: System.Random(seed)는 선형 생성기라 가까운 시드(시드 + 37·k)끼리 같은 순번의 값이 서로 닮아,
+/// 여러 시드로 평균 내는 시험이 사실상 같은 주사위를 굴렸다 (회피 기동 16번 중 비킴 0). xoshiro128**로 바꾸고 SplitMix64로 씨앗을 펼친다.
+/// 플랫폼·.NET 판에 상관없이 같은 수열이다.
+/// </summary>
 public sealed class Rng
 {
-    private readonly Random _random;
+    private uint _s0, _s1, _s2, _s3;
 
-    public Rng(int seed) => _random = new Random(seed);
+    public Rng(int seed)
+    {
+        ulong z = unchecked((ulong)(long)seed * 0x9E3779B97F4A7C15UL + 0x632BE59BD9B4E019UL);
+        ulong Next()
+        {
+            z = unchecked(z + 0x9E3779B97F4A7C15UL);
+            ulong x = z;
+            x = unchecked((x ^ (x >> 30)) * 0xBF58476D1CE4E5B9UL);
+            x = unchecked((x ^ (x >> 27)) * 0x94D049BB133111EBUL);
+            return x ^ (x >> 31);
+        }
+        ulong a = Next(), b = Next();
+        _s0 = (uint)a; _s1 = (uint)(a >> 32); _s2 = (uint)b; _s3 = (uint)(b >> 32);
+        if ((_s0 | _s1 | _s2 | _s3) == 0) _s0 = 1;
+    }
+
+    private uint NextUInt()
+    {
+        uint result = unchecked(RotL(_s1 * 5u, 7) * 9u);
+        uint t = _s1 << 9;
+        _s2 ^= _s0;
+        _s3 ^= _s1;
+        _s1 ^= _s2;
+        _s0 ^= _s3;
+        _s2 ^= t;
+        _s3 = RotL(_s3, 11);
+        return result;
+    }
+
+    private static uint RotL(uint x, int k) => (x << k) | (x >> (32 - k));
 
     /// <summary>v10.3: 지금까지 뽑은 횟수 (같은 시드에서 같은 횟수면 같은 상태 — 저장 지문에 넣는다).</summary>
     public long Draws { get; private set; }
 
-    public float Float() { Draws++; return (float)_random.NextDouble(); }
+    /// <summary>[0, 1) — 24비트.</summary>
+    public float Float() { Draws++; return (NextUInt() >> 8) * (1f / 16777216f); }
     public float Range(float min, float max) => min + (max - min) * Float();
-    public int Range(int minInclusive, int maxExclusive) { Draws++; return _random.Next(minInclusive, maxExclusive); }
+    public int Range(int minInclusive, int maxExclusive)
+    {
+        Draws++;
+        if (maxExclusive <= minInclusive) return minInclusive;
+        return minInclusive + (int)((ulong)NextUInt() * (ulong)(uint)(maxExclusive - minInclusive) >> 32);
+    }
     public bool Chance(float probability) => Float() < probability;
-    public T Pick<T>(IReadOnlyList<T> items) { Draws++; return items[_random.Next(items.Count)]; }
+    public T Pick<T>(IReadOnlyList<T> items) { Draws++; return items[(int)((ulong)NextUInt() * (ulong)(uint)items.Count >> 32)]; }
 }
 
 /// <summary>Utility AI 점수 곡선.</summary>

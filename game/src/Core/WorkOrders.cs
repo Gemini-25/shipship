@@ -45,6 +45,8 @@ public enum WorkKind
     BuildOxygen,
     // v11.2 외부 교신
     Distress, UnloadSupply, AnswerSignal,
+    // v11.3 승무원 성장
+    Train, Rehab,
 }
 
 public static class WorkKinds
@@ -139,6 +141,8 @@ public static class WorkKinds
         WorkKind.Distress => "조난 신호",
         WorkKind.UnloadSupply => "보급 캡슐 내리기",
         WorkKind.AnswerSignal => "탈출 캡슐 구조",
+        WorkKind.Train => "배우기",
+        WorkKind.Rehab => "재활",
         _ => k.ToString(),
     };
 
@@ -322,6 +326,8 @@ public sealed class WorkOrder
         WorkKind.Distress => "통신실에서 조난 신호",
         WorkKind.UnloadSupply => "보급 캡슐 짐 내리기",
         WorkKind.AnswerSignal => "탈출 캡슐 구조 — 배를 돌린다",
+        WorkKind.Train => $"{Target.Crew?.Name ?? "?"}에게 {Skills.Name((Skill)(Circuit % 10))} 배우기",
+        WorkKind.Rehab => $"{Target.Crew?.Name ?? "?"} 재활 운동",
         _ => Kind.ToString(),
     };
 
@@ -1084,10 +1090,15 @@ public sealed partial class WorkBoard
         int produce = ship.CountStored(ItemKind.Produce);
         // v10.4: 조리대가 여럿이면 모자란 만큼 여럿이 동시에 요리한다 (큰 배)
         int si = 0;
+        // v11.3: 조리사가 근무 중이면 비번 동안 먹을 것까지 미리 해 둔다 (한 사람이 하루 내내 부엌을 지킬 수는 없다)
+        //   조리사가 비번이면 다른 사람은 모자랄 때만 (한 끼 반치 아래) 부엌에 선다
+        bool cookOn = w.Crew.Any(x => x.Role == CrewRole.Cook && !x.Dead && !x.Down && x.Pose != Pose.Sleeping && ChoresActivity.OnShiftStatic(x, w));
+        bool hasCook = w.Crew.Any(x => x.Role == CrewRole.Cook && !x.Dead && !x.Down && x.CareBed == null);
+        float mealTarget = cookOn ? 4f : hasCook ? 1.5f : 3f;
         foreach (var stove in ship.FurnitureOf(FurnitureType.Stove).Where(s => !s.Machine!.Stopped && !s.Room.Abandoned))
         {
-            if (meals + si * FoodChain.MealsPerBatch >= 3 * crewCount || produce < (si + 1) * FoodChain.ProducePerBatch) break;
-            float lack = 1f - meals / (3f * crewCount);
+            if (meals + si * FoodChain.MealsPerBatch >= mealTarget * crewCount || produce < (si + 1) * FoodChain.ProducePerBatch) break;
+            float lack = MathF.Min(1f, 1f - meals / (3f * crewCount) + (cookOn ? 0.1f : 0f));
             Post(WorkKind.Cook, WorkTarget.Of(stove), 0.3f + 0.6f * lack - 0.05f * si, Skill.Cooking, $"식사 {meals}인분 남음");
             si++;
         }
@@ -1118,6 +1129,7 @@ public sealed partial class WorkBoard
         ScanHazards(Post); // v11.2 사고 뒷정리 (오염된 식사)
         ScanLiving(Post); // v10.11 배급
         ScanComms(Post); // v11.2 외부 교신
+        ScanGrowth(Post); // v11.3 배우기 · 재활
 
         // ── 결정 (v7): 사람이 정해야 하는 일은 심의에 올린다 ──
         Council.Review(w, _open.Values.Where(o => seen.Contains(o.Key)).ToList());

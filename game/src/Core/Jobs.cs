@@ -176,7 +176,7 @@ public sealed class WorkToil : Toil
     public override ToilStatus Tick(CrewMember c, World w)
     {
         if (CanContinue != null && !CanContinue(c, w)) return ToilStatus.Failed;
-        float speed = 1f - 0.4f * c.Vitals.Injury;
+        float speed = (1f - 0.4f * c.Vitals.Injury) * (1f - 0.3f * c.Vitals.Scar); // v11.3 후유증
         if (c.Room is Room here && here.Dark && c.Suit == null) speed *= 0.8f; // v9.4 캄캄한 방 (우주복 헬멧 등이면 괜찮다)
         if (c.Needs.Rest < 0.2f) speed *= 0.75f;
         if (c.Needs.Stress > 0.7f) speed *= 0.8f;

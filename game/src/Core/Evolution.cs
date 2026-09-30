@@ -385,6 +385,9 @@ public static class Evolution
             if (!Tech.HasTree(type) || seenTypes.Contains(type) || m.Body.Room.Abandoned || m.Faults.Count > 0 || m.Grade == MachineGrade.Mk1) continue;
             if (Tech.Next(m) is not TechTier next || next.Tier > Tech.Unlocked(w, type)) continue;
             seenTypes.Add(type);
+            // v11.3 전기 여유: 더 먹는 단계는 원자로가 대 줄 수 있을 때만 (미리내호가 LED 재배대를 줄줄이 올려 D 회로를 계속 끊던 것)
+            float extraKw = m.Spec.PowerDraw * Grades.Power(m.Grade) * MathF.Max(0f, next.Power - Tech.Of(m).Power);
+            if (extraKw > 0.05f && !PowerRoom(w, extraKw) && type is not (FurnitureType.ReactorCore or FurnitureType.Battery or FurnitureType.CapacitorBank)) continue;
             var (need, why) = TierNeed(w, type);
             float score = 0.3f + need - 0.1f * (m.Tier - 1);
             yield return new UpgradePlan(UpgradeKind.TierUp, WorkTarget.Of(m.Body), score, m.Spec.Skill,
@@ -393,7 +396,14 @@ public static class Evolution
         }
 
         // ── 모듈 (v10.6): 방에 붙이는 추가 설비 — 이 방이 모자랐던 일이 있으면 ──
-        foreach (var plan in Modules.Candidates(w)) yield return plan;
+        foreach (var plan in Modules.Candidates(w))
+        {
+            // v11.3: 전기를 먹는 모듈도 원자로 여유가 있을 때만 (축전 모듈은 예외 — 전기를 모아 준다)
+            var code = (FurnitureType)plan.Circuit;
+            float kw = MachineSpecs.For(code)?.PowerDraw ?? 0f;
+            if (kw > 0.05f && code != FurnitureType.CapacitorBank && !PowerRoom(w, kw)) continue;
+            yield return plan;
+        }
 
         // ── 비상 물자함 (v10.10): 파공·불을 겪었거나 창고에서 먼 핵심 방 (배 크기에 따라 두셋까지) ──
         if (Logistics.Caches(w) < Math.Max(2, w.Crew.Count(c => !c.Dead) / 3))
@@ -540,6 +550,9 @@ public static class Evolution
     }
 
     /// <summary>v10.5: 이 종류를 먼저 올릴 까닭 (겪은 일·지금 모자란 것).</summary>
+    /// <summary>v11.3: 다 켰을 때의 수요에 kw를 더해도 원자로 정격의 92% 안인가.</summary>
+    internal static bool PowerRoom(World w, float kw) => w.Power.FullDemand + kw <= w.Power.ReactorRated * 0.92f;
+
     private static (float need, string why) TierNeed(World w, FurnitureType t)
     {
         var h = w.History;

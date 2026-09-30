@@ -85,6 +85,9 @@ public sealed class World
     /// <summary>v11.2 사고 종류 (운석우·태양 폭풍·가스·병충해·식중독…)와 무작위 사고.</summary>
     public HazardSystem Hazards { get; }
 
+    /// <summary>v11.3 승무원 성장 (배우기·재활).</summary>
+    public GrowthStats Growth { get; } = new();
+
     /// <summary>v11.2 외부 교신 (조난 신호·보급 캡슐·탈출 캡슐 구조).</summary>
     public CommsSystem Comms { get; }
 

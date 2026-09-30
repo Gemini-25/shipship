@@ -219,7 +219,7 @@ public sealed class PropulsionSystem
         else
         {
             Missed++;
-            w.Log.Add(w.Tick, LogKind.Warning, $"회피 기동 실패 — 늦었다 ({b.ControlBy} · 추력 {b.Thrust * 100:0}%{(powered < 1f ? $" · 엔진 전기 {powered * 100:0}%" : "")})");
+            w.Log.Add(w.Tick, LogKind.Warning, $"회피 기동 실패 — 늦었다 ({b.ControlBy} · 추력 {b.Thrust * 100:0}%{(powered < 1f ? $" · 엔진 전기 {powered * 100:0}%" : "")} · 비킬 확률 {p * 100:0}%)");
         }
     }
 

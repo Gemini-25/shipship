@@ -121,6 +121,7 @@ public static partial class Program
         if (args.Contains("--livingtest")) return RunLivingTest(seed);
         if (args.Contains("--remodeltest")) return RunRemodelTest(seed);
         if (args.Contains("--commstest")) return RunOutsideCommsTest(seed);
+        if (args.Contains("--growthtest")) return RunGrowthTest(seed);
         if (args.FirstOrDefault(a => a.StartsWith("--partition=")) is string pc)
             return RunPartitionCampaign(days, seed, pc.Split('=')[1]);
         if (args.Contains("--gate=partition"))

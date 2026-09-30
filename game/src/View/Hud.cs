@@ -96,6 +96,7 @@ public partial class Hud : Control
         else DrawWorkBoard(y + 10f, room, mouse);
 
         DrawLog();
+        DrawMinimap(); // v11.3
         if (ChronicleOpen) DrawChronicle(mouse);
         else if (TechOpen) DrawTech(mouse);
         DrawHints();
@@ -743,10 +744,15 @@ public partial class Hud : Control
             Row(x, right, by + 132, "우주복 O2", suit.Oxygen / SuitState.TankHours, new Color("#dfe6ee"), $"{suit.Oxygen:0.0}시간", suit.Oxygen < 0.75f);
         else if (v.Injury > 0.01f)
             Row(x, right, by + 132, "부상", v.Injury, Palette.Danger, $"{Pct(v.Injury)} {v.InjuryCause}", v.Injury > 0.3f);
+        else if (v.Scar > 0.01f) // v11.3 후유증
+            Row(x, right, by + 132, "후유증", v.Scar / 0.3f, new Color("#c9a0ff"), $"{Pct(v.Scar)} {v.ScarCause}" + (v.Scar > v.ScarFloor + 0.005f ? " · 재활로 준다" : " · 남는다"), false);
 
         var s = c.Schedule;
+        // v11.3: 배우고 가르친 것 · 재활 · 건져 온 사람
+        string grow = (c.Stats.Lessons > 0 ? $" · 배움 {c.Stats.Lessons}번" : "") + (c.Stats.Taught > 0 ? $" · 가르침 {c.Stats.Taught}번" : "")
+                      + (c.Stats.RehabSessions > 0 ? $" · 재활 {c.Stats.RehabSessions}번" : "") + (c.Rescued ? " · 탈출 캡슐에서 건짐" : "");
         Gfx.Text(this, Fonts.Body, new Vector2(x, by + 172),
-            $"수면 {SimTime.Range(s.SleepStart, s.SleepLength)}   ·   근무 {SimTime.Range(s.WorkStart, s.WorkLength)}", 12, Palette.TextMuted);
+            $"수면 {SimTime.Range(s.SleepStart, s.SleepLength)}   ·   근무 {SimTime.Range(s.WorkStart, s.WorkLength)}" + grow, 12, Palette.TextMuted);
 
         SectionTitle(x, by + 198, "기술");
         float colW = (right - x - 16) / 2f;
@@ -1327,7 +1333,7 @@ public partial class Hud : Control
 
     private void DrawHints()
     {
-        const string hint = "휠 확대 · 우클릭 드래그 · 클릭 선택 · V 보기 · Z X C B P 사고 · J 연대기 · T 기술 · N 사건으로 · [ ] 사고 넘기기 · R 되감기 · F5 저장 · F9 불러오기 · O 설정 · Space 정지 · 1–4 배속";
+        const string hint = "휠 확대 · 우클릭 드래그 · 클릭 선택 · V 보기 · Z X C B P 사고 · J 연대기 · T 기술 · G 지도 · N 사건으로 · [ ] 사고 넘기기 · R 되감기 · F5 저장 · F9 불러오기 · O 설정 · Space 정지 · 1–4 배속";
         Gfx.TextRight(this, Fonts.Body, new Vector2(Screen.X - Margin, Screen.Y - Margin - 2), hint, 12, Palette.TextMuted);
     }
 
