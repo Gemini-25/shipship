@@ -386,6 +386,7 @@ public static partial class WorkPlanners
                 if (status == ToilStatus.Succeeded && (WorkKinds.IsEmergency(o.Kind) || o.Kind is WorkKind.Rescue or WorkKind.Treat
                         || (o.Kind == WorkKind.Repair && o.Urgency >= 0.9f)))
                     world.History.Responded(cm);
+                if (status == ToilStatus.Succeeded) world.Causes.Worked(o, cm); // v12.2 누가 되돌렸나
                 if (status != ToilStatus.Succeeded) world.Board.Release(o, cm);
                 if (status != ToilStatus.Succeeded)
                     World.Trace?.Invoke($"{SimTime.Clock(world.Tick)} {cm.Name} {o.Title} {status} @{cm.Job?.Current?.GetType().Name}");

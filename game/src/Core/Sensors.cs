@@ -21,6 +21,9 @@ public sealed class IncomingMeteor
     public string? EvadeNote { get; set; }
     public long Launched { get; init; }
     public long Arrive { get; init; }
+    /// <summary>v12.2 인과 사슬: 관찰자가 던졌다 / 이 운석을 부른 사고 (운석우).</summary>
+    public bool ByObserver { get; set; }
+    public int CauseNode { get; set; } = -1;
 
     /// <summary>들어올 외벽 칸과 날아오는 방향 (궤적).</summary>
     public Cell Entry { get; init; }
@@ -248,7 +251,9 @@ public sealed class SensorSystem
             if (m.Warned == WarnLevel.Sensor) WarnedBySensor++;
         }
         float lead = m.WarnedAt >= 0 ? (m.Arrive - m.WarnedAt) / (float)SimTime.Minutes(1) : 0f;
-        Incidents.Meteor(_w, m.Target, m.Size, m.Warned, lead);
+        _w.Causes.ObserverNext = m.ByObserver;
+        using (_w.Causes.Because(m.CauseNode)) Incidents.Meteor(_w, m.Target, m.Size, m.Warned, lead);
+        _w.Causes.ObserverNext = false;
         // 부딪힌 방이 새지 않으면 미리 닫았던 격벽을 다시 연다 (새면 감압 잠금이 이어받는다)
         if (m.Room is Room room && !room.Lockdown && !room.Leaking)
             foreach (var d in m.SealedDoors)

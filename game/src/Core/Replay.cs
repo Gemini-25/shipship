@@ -37,6 +37,7 @@ public static class Player
     {
         Record(w, "meteor", $"{target.X} {target.Y} {size.ToString("R", Inv)}");
         var m = w.Sensors.Launch(target, size);
+        if (m != null) m.ByObserver = true; // v12.2 관찰자가 던진 운석
         if (m != null) w.History.NoteCause(w, $"{(size >= 0.7f ? "큰" : "작은")} 운석({m.Room?.Name ?? "선체"})");
         return m;
     }
@@ -44,7 +45,9 @@ public static class Player
     public static bool Fire(World w, Cell cell)
     {
         Record(w, "fire", $"{cell.X} {cell.Y}");
+        w.Causes.ObserverNext = true;
         bool ok = Incidents.Fire(w, cell);
+        w.Causes.ObserverNext = false;
         if (ok) w.History.NoteCause(w, $"화재({w.Ship.RoomAt(cell)?.Name ?? "?"})");
         return ok;
     }
@@ -52,7 +55,8 @@ public static class Player
     public static bool Break(World w, Furniture f)
     {
         Record(w, "break", f.Id.ToString(Inv));
-        bool ok = Incidents.Break(w, f);
+        bool ok;
+        using (w.Causes.Observed()) ok = Incidents.Break(w, f);
         if (ok) w.History.NoteCause(w, $"고장({f.Label})");
         return ok;
     }
@@ -61,7 +65,8 @@ public static class Player
     {
         Record(w, "breaktype", $"{typeName} {(all ? 1 : 0)}" + (kind != null ? $" {kind}" : ""));
         var targets = w.Ship.Furniture.Where(f => f.Type.ToString() == typeName && f.Machine != null).ToList();
-        foreach (var t in all ? targets : targets.Take(1)) w.Machines.Break(t.Machine!, kind);
+        using (w.Causes.Observed())
+            foreach (var t in all ? targets : targets.Take(1)) w.Machines.Break(t.Machine!, kind);
         if (targets.Count > 0) w.History.NoteCause(w, $"고장({targets[0].Name})");
         return targets.Count > 0;
     }
@@ -70,7 +75,12 @@ public static class Player
     public static PipeSegment? PipeBurst(World w, Cell near, float severity)
     {
         Record(w, "pipe", $"{near.X} {near.Y} {severity.ToString("R", Inv)}");
-        var s = w.Piping.Burst(near, severity);
+        PipeSegment? s;
+        int pnode = w.Causes.Root(CauseKind.Hazard, "배관 파손", w.Ship.RoomAt(near), near.Center, observer: true);
+        using (w.Causes.Because(pnode)) s = w.Piping.Burst(near, severity);
+        if (s == null) w.Causes.Discard(pnode);
+        else w.Causes.Until(pnode, () => s.Integrity >= 0.6f, "배관을 고쳤다", $"room:{w.Ship.RoomAt(near)?.Id ?? -1}");
+        if (s != null) w.Causes.Node(pnode).Text = $"배관 파손 — {s.Name}";
         if (s != null) w.History.NoteCause(w, $"배관 파손({s.Name})");
         return s;
     }
@@ -78,7 +88,12 @@ public static class Player
     public static bool Scenario(World w, string name, out Room? focus)
     {
         Record(w, "scenario", name);
-        return Scenarios.Apply(w, name, out focus);
+        // v12.2 인과 사슬: 시나리오 하나가 뿌리
+        int node = w.Causes.Root(CauseKind.Hazard, $"시나리오 — {name}", null, null, observer: true);
+        bool ok;
+        using (w.Causes.Because(node)) ok = Scenarios.Apply(w, name, out focus);
+        if (!ok) w.Causes.Discard(node);
+        return ok;
     }
 
     public static void Scarcity(World w)
@@ -108,6 +123,7 @@ public static class Player
     public static string? Hazard(World w, HazardKind kind, Cell at, int id = -1)
     {
         Record(w, "hazard", $"{kind} {at.X} {at.Y} {id}");
+        w.Causes.ObserverNext = true;
         return Hazards.Apply(w, kind, at, id);
     }
 

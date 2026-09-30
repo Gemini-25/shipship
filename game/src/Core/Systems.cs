@@ -101,6 +101,7 @@ public sealed class MachineSystem
             if (m.Condition < 0.18f && !m.Has(FaultKind.Wrecked))
             {
                 m.Faults.Add(new Fault { Kind = FaultKind.Wrecked, Since = w.Tick, PartOverride = Faults.KeyPart(m.Body.Type) });
+                w.Causes.OnFault(m, m.Faults[^1]);
                 MarkLog.Add(m.Marks, w.Tick, "파손");
                 w.History.Add(w, HistoryKind.Damage, $"{m.Name} 파손 — 통째로 갈아야 한다", m.Body.Room);
                 w.History.Lost($"{m.Name} 파손");
@@ -191,6 +192,7 @@ public sealed class MachineSystem
         var fault = new Fault { Kind = kind, Since = w.Tick, Circuit = circuit, PartOverride = kind == FaultKind.Wrecked ? Faults.KeyPart(m.Body.Type) : null };
         m.Faults.Add(fault);
         m.FaultCount++;
+        w.Causes.OnFault(m, fault); // v12.2 인과 사슬
         m.Condition = MathF.Max(0.2f, m.Condition - 0.03f);
 
         // 역사: 설비의 이력, 회로 단락, 핵심 설비 고장

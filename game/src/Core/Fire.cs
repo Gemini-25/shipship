@@ -45,12 +45,13 @@ public sealed class FireSystem
     public bool IsKnown(Room r) => _knownRooms.Contains(r.Id);
     public int CountIn(Room r) => _fires.Keys.Count(c => _world.Ship.RoomAt(c) == r);
 
-    public bool Ignite(Cell c, float intensity)
+    public bool Ignite(Cell c, float intensity, Cell? from = null)
     {
         var ship = _world.Ship;
         if (ship.Grid.Kind(c) != TileKind.Floor || ship.RoomAt(c) is not Room room) return false;
         if (room.Air.O2 < 12f) return false;
         _fires[c] = MathF.Max(At(c), intensity);
+        _world.Causes.OnIgnite(c, from); // v12.2 인과 사슬: 무엇이 붙였나 (번져 왔으면 그 불)
         return true;
     }
 
@@ -103,6 +104,7 @@ public sealed class FireSystem
             if (intensity <= 0f) { _fires.Remove(cell); continue; }
             intensity = MathF.Min(1f, intensity);
             _fires[cell] = intensity;
+            using var because = w.Causes.Because(w.Causes.FireNodeAt(cell)); // v12.2 이 불이 태운 것은 이 불의 자식
 
             air.O2 = MathF.Max(0f, air.O2 - 400f * intensity * dt / vol);
             air.CO2 += 300f * intensity * dt / vol;
@@ -119,7 +121,7 @@ public sealed class FireSystem
                 var n = cell + d;
                 var door = ship.DoorAt(n);
                 if (door != null && door.Openness > 0.5f) n = n + d;
-                if (!_fires.ContainsKey(n)) Ignite(n, 0.15f);
+                if (!_fires.ContainsKey(n)) Ignite(n, 0.15f, cell);
             }
 
             // 설비 손상 (수명은 영구히 깎인다), 보관함 속 물건이 탄다
@@ -158,6 +160,7 @@ public sealed class FireSystem
             {
                 panel.Faults.Add(new Fault { Kind = FaultKind.ShortCircuit, Since = w.Tick, Circuit = room.Circuit });
                 panel.FaultCount++;
+                w.Causes.OnFault(panel, panel.Faults[^1]);
                 w.History.CircuitFaults++;
                 MarkLog.Add(panel.Marks, w.Tick, $"불이 {PowerGrid.CircuitName(room.Circuit)} 회로를 태웠다");
                 w.RaiseAlert($"불이 배선을 태웠다 — {PowerGrid.CircuitName(room.Circuit)} 회로 단락 ({room.Name})", room, AlertLevel.Warning, shipWide: true);

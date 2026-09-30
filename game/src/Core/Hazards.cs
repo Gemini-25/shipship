@@ -110,6 +110,18 @@ public static class Hazards
     /// </summary>
     public static string? Apply(World w, HazardKind k, Cell at, int id)
     {
+        // v12.2 인과 사슬: 사고 하나가 뿌리 — 이 안에서 생긴 피해는 이 사고의 자식
+        var room = w.Ship.RoomAt(at);
+        int node = w.Causes.Root(CauseKind.Hazard, Name(k), room, at.Center, observer: w.Causes.ConsumeObserver());
+        string? what;
+        using (w.Causes.Because(node)) what = ApplyCore(w, k, at, id);
+        if (what == null) w.Causes.Discard(node);
+        else w.Causes.Node(node).Text = what;
+        return what;
+    }
+
+    private static string? ApplyCore(World w, HazardKind k, Cell at, int id)
+    {
         var sys = w.Hazards;
         string? what = k switch
         {
@@ -184,6 +196,8 @@ public sealed class HazardSystem
 
     // 운석우
     public List<(long tick, Cell target, float size)> Shower { get; } = new();
+    /// <summary>v12.2 인과 사슬: 지금 도는 운석우의 고리.</summary>
+    public int ShowerNode { get; private set; } = -1;
 
     // 태양 폭풍
     public long StormUntil { get; private set; } = -1;
@@ -228,6 +242,7 @@ public sealed class HazardSystem
             Shower.Add((t, Scenarios.OuterTarget(w, room), size));
         }
         Shower.Sort((a, b) => a.tick.CompareTo(b.tick));
+        ShowerNode = w.Causes.Context;
         w.RaiseAlert($"운석우 — 잔해 무리가 다가온다 (30분 동안 {n}개쯤{(big ? " · 큰 것 하나" : "")})", null, AlertLevel.Critical, shipWide: true);
         w.History.Add(w, HistoryKind.Incident, $"운석우가 배를 훑기 시작했다 — 30분 동안 {n}개쯤" + (big ? " (큰 것 하나)" : ""));
         return "운석우";
@@ -280,6 +295,7 @@ public sealed class HazardSystem
             circuits.Remove(c);
             var kind = i == 0 && w.Rng.Chance(0.6f) ? FaultKind.ShortCircuit : FaultKind.BreakerTrip;
             panel.Faults.Add(new Fault { Kind = kind, Since = w.Tick, Circuit = c });
+            w.Causes.OnFault(panel, panel.Faults[^1]);
             panel.FaultCount++;
             w.History.CircuitFaults++;
             MarkLog.Add(panel.Marks, w.Tick, $"전력 서지 — {PowerGrid.CircuitName(c)} 회로 {Faults.Spec(kind).Name}");
@@ -516,7 +532,8 @@ public sealed class HazardSystem
         {
             var (_, target, size) = Shower[0];
             Shower.RemoveAt(0);
-            _w.Sensors.Launch(target, size);
+            var im = _w.Sensors.Launch(target, size);
+            if (im != null) im.CauseNode = ShowerNode; // v12.2 운석우의 한 알
         }
     }
 

@@ -498,6 +498,17 @@ public sealed class StructureSystem
     /// </summary>
     public Fragment Detach(Room room, string cause, bool controlled)
     {
+        // v12.2 인과 사슬: 방이 떨어져 나간 까닭(부서진 연결부를 만든 사고·감압)에 잇는다
+        var cl = _world.Causes;
+        int parent = cl.Context >= 0 ? cl.Context : cl.OpenNode($"leak:{room.Id}") is int lk && lk >= 0 ? lk : cl.OpenNode($"fire:{room.Id}");
+        string text = controlled ? $"{room.Name} 사출 ({cause})" : $"{room.Name} 떨어져 나감 ({cause})";
+        int node = parent >= 0 ? cl.Effect(CauseKind.Detach, "", text, room, room.Center, parent, lasting: false)
+            : cl.Root(CauseKind.Detach, text, room, room.Center, observer: cl.ConsumeObserver());
+        using (cl.Because(node)) return DetachCore(room, cause, controlled);
+    }
+
+    private Fragment DetachCore(Room room, string cause, bool controlled)
+    {
         var w = _world;
         var ship = w.Ship;
         var grid = ship.Grid;
@@ -684,6 +695,7 @@ public sealed class StructureSystem
                 // 뜯긴 전선: 대개 차단기가 먼저 떨어지지만, 때로는 단락 (퓨즈를 갈아야 한다)
                 var kind = w.Rng.Chance(0.4f) ? FaultKind.ShortCircuit : FaultKind.BreakerTrip;
                 panel.Faults.Add(new Fault { Kind = kind, Since = w.Tick, Circuit = room.Circuit });
+                w.Causes.OnFault(panel, panel.Faults[^1]);
                 panel.FaultCount++;
                 w.History.CircuitFaults++;
                 MarkLog.Add(panel.Marks, w.Tick, $"{room.Name} 전선이 뜯기며 {PowerGrid.CircuitName(room.Circuit)} 회로 {Faults.Spec(kind).Name}");

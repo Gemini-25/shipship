@@ -245,6 +245,18 @@ public sealed class VolatileSystem
     /// <summary>설비가 제 방식으로 터진다.</summary>
     public void Blow(Machine m, BlowKind mode, string why)
     {
+        // v12.2 인과 사슬: 설비가 터진 까닭(고장·냉각 끊김·불)에 잇고, 터지며 생긴 피해는 이 폭발의 자식
+        var w = _w;
+        int parent = w.Causes.Context >= 0 ? w.Causes.Context : w.Causes.ParentFor(m);
+        string text = $"{m.Name} {Name(mode)}" + (why.Length > 0 && why != "시험" ? $" ({why})" : "");
+        int node = parent >= 0 ? w.Causes.Effect(CauseKind.Explosion, "", text, m.Body.Room, m.Body.Center, parent, lasting: false)
+            : w.Causes.Root(CauseKind.Explosion, text, m.Body.Room, m.Body.Center, observer: w.Causes.ConsumeObserver());
+        w.Causes.Hit(m.Body.Room, node);
+        using (w.Causes.Because(node)) BlowCore(m, mode, why);
+    }
+
+    private void BlowCore(Machine m, BlowKind mode, string why)
+    {
         var w = _w;
         var f = m.Body;
         var room = f.Room;
@@ -291,7 +303,9 @@ public sealed class VolatileSystem
                 for (int circuit = 0; circuit < PowerGrid.CircuitCount; circuit++)
                     if (!m.Faults.Any(x => x.Circuit == circuit))
                         m.Faults.Add(new Fault { Kind = FaultKind.BreakerTrip, Since = w.Tick, Circuit = circuit });
+                        w.Causes.OnFault(m, m.Faults[^1]);
                 m.Faults.Add(new Fault { Kind = FaultKind.ShortCircuit, Since = w.Tick, Circuit = room.Circuit });
+                w.Causes.OnFault(m, m.Faults[^1]);
                 m.FaultCount++;
                 break;
             case BlowKind.FuelFire:
@@ -343,6 +357,15 @@ public sealed class VolatileSystem
     /// 폭발: 가까울수록 크게 — 벽(선체면 구멍), 문(구동기·잔해가 끼여 안 닫힘), 설비(고장·달아오름 — 연쇄), 관·전선, 사람(파편·화상·넘어짐), 보관함, 불, 잔해.
     /// </summary>
     public void Blast(Cell at, float power, string cause, Machine? source = null)
+    {
+        var cl = _w.Causes;
+        if (cl.Context >= 0) { cl.Hit(_w.Ship.RoomAt(at), cl.Context); BlastCore(at, power, cause, source); return; }
+        int node = cl.Root(CauseKind.Explosion, $"폭발 — {_w.Ship.RoomAt(at)?.Name ?? "선체"}" + (cause.Length > 0 && cause != "시험" ? $" ({cause})" : ""), _w.Ship.RoomAt(at), at.Center, observer: cl.ConsumeObserver());
+        cl.Hit(_w.Ship.RoomAt(at), node);
+        using (cl.Because(node)) BlastCore(at, power, cause, source);
+    }
+
+    private void BlastCore(Cell at, float power, string cause, Machine? source)
     {
         var w = _w;
         var ship = w.Ship;
@@ -401,6 +424,7 @@ public sealed class VolatileSystem
             && !panel.Faults.Any(x => x.Circuit == room.Circuit))
         {
             panel.Faults.Add(new Fault { Kind = FaultKind.ShortCircuit, Since = w.Tick, Circuit = room.Circuit });
+            w.Causes.OnFault(panel, panel.Faults[^1]);
             panel.FaultCount++;
             w.History.CircuitFaults++;
         }

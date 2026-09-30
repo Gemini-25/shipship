@@ -26,6 +26,8 @@ public sealed class NetLink
     public bool Temp { get; set; }             // 임시로 이었다 (평온해지면 제대로)
     public string? Cause { get; set; }
     public bool Cut => Integrity < 0.3f;
+    /// <summary>v12.2 인과 사슬: 이 토막이 끊긴 고리.</summary>
+    public int Node { get; set; } = -1;
 }
 
 public sealed class NetStats
@@ -229,6 +231,7 @@ public sealed class UtilityNet
             MarkLog.Add(l.Room.Marks, _w.Tick, $"{Name(l.Kind)} 끊김 ({cause})");
             _w.Log.Add(_w.Tick, LogKind.Warning, $"{l.Room.Name} {Name(l.Kind)}이(가) 끊겼다 ({cause})");
             _w.Board.RequestScan();
+            _w.Causes.OnCut(l); // v12.2 인과 사슬
         }
     }
 

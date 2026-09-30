@@ -20,6 +20,18 @@ public static class Incidents
     /// </summary>
     public static Impact? Meteor(World w, Cell target, float size, WarnLevel warned = WarnLevel.None, float leadMinutes = 0f)
     {
+        // v12.2 인과 사슬: 이 운석이 뿌리 (운석우의 한 알이면 운석우의 자식) — 이 안에서 생긴 피해는 모두 이 운석의 자식
+        var hit = w.Ship.RoomAt(target) ?? w.Ship.LiveRooms.Where(r => !r.Detached).OrderBy(r => (r.Center - target.Center).LengthSquared()).FirstOrDefault();
+        string text = $"{(size >= 0.7f ? "큰" : size >= 0.4f ? "중간" : "작은")} 운석 충돌 — {hit?.Name ?? "선체"}";
+        int ctx = w.Causes.Context;
+        int node = ctx >= 0 ? w.Causes.Effect(CauseKind.Impact, "", text, hit, target.Center, ctx, lasting: false)
+            : w.Causes.Root(CauseKind.Impact, text, hit, target.Center, observer: w.Causes.ConsumeObserver());
+        w.Causes.Hit(hit, node);
+        using (w.Causes.Because(node)) return MeteorCore(w, target, size, warned, leadMinutes);
+    }
+
+    private static Impact? MeteorCore(World w, Cell target, float size, WarnLevel warned, float leadMinutes)
+    {
         var ship = w.Ship;
         Cell? entry = null;
         float best = float.MaxValue;
@@ -88,6 +100,7 @@ public static class Incidents
                     Hull.Damage(ship, cell + d, 0.15f * strength);
                 if (d.X == 0 && d.Y == 0) w.Fixtures.OnDebris(cell, strength, ship.RoomAt(cell)); // v9.4 문 구동기·조명
                 if (d.X == 0 && d.Y == 0) w.Net.DamageNear(cell, 1.1f, 0.55f * strength, "파편"); // 배 전체 망
+                if (d.X == 0 && d.Y == 0) w.Causes.Hit(ship.RoomAt(cell), w.Causes.Context); // v12.2 파편이 지나간 방
             }
             foreach (var c in w.Crew)
             {
@@ -114,6 +127,7 @@ public static class Incidents
                 var kind = w.Rng.Chance(0.5f) ? FaultKind.ShortCircuit : FaultKind.BreakerTrip;
                 panel.Faults.Add(new Fault { Kind = kind, Since = w.Tick, Circuit = room.Circuit });
                 panel.FaultCount++;
+                w.Causes.OnFault(panel, panel.Faults[^1]);
                 w.History.CircuitFaults++;
                 MarkLog.Add(panel.Marks, w.Tick, $"파편이 {PowerGrid.CircuitName(room.Circuit)} 회로를 끊었다");
                 w.Log.Add(w.Tick, LogKind.Warning, $"파편이 배선을 끊었다 — {PowerGrid.CircuitName(room.Circuit)} 회로 {Faults.Spec(kind).Name}");
