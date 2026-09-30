@@ -77,6 +77,9 @@ public sealed class World
     /// <summary>v10.10 선내 로봇: 운반·정비·재배·방재. 멈추면 그 일은 사람에게 돌아간다.</summary>
     public RobotSystem Robots { get; }
 
+    /// <summary>v11.2 엔진·추진제·항로: 회피 기동, 보통 항로 ↔ 잔해 지대.</summary>
+    public PropulsionSystem Propulsion { get; }
+
     /// <summary>v9 배관망: 냉각 루프(고온관·분기·귀환관·방열판, 냉각수)와 급수관.</summary>
     public PipeNetwork Piping { get; }
 
@@ -162,6 +165,7 @@ public sealed class World
         Structure = new StructureSystem(this);
         Drones = new DroneSystem(this);
         Robots = new RobotSystem(this);
+        Propulsion = new PropulsionSystem(this, 1f);
         Piping = new PipeNetwork(this);
         Automation = new AutomationSystem(this);
         Fixtures = new FixturesSystem(this);
@@ -218,6 +222,7 @@ public sealed class World
             Structure.Update(dt);
             Drones.SystemUpdate(dt);
             Robots.SystemUpdate(dt);
+            Propulsion.SystemUpdate(dt);
             Ledger.Sample(this, dt);
             CheckShip();
             foreach (var c in Crew) Memory.Update(this, c);
@@ -230,6 +235,7 @@ public sealed class World
             Tech.NoteUnlocks(this, before);
         }
         Sensors.Step();
+        Propulsion.Step();
         Board.Update();
         Drones.Step();
         Robots.Step();
@@ -532,6 +538,7 @@ public sealed class World
         world.Air.Reserve = world.Air.ReserveCapacity;
         world.Water.Capacity *= scale;
         world.Water.Level *= scale;
+        world.Propulsion.SetScale(scale);
         StockShip(ship, rng, scale);
 
         var beds = ship.FurnitureOf(FurnitureType.Bed).OrderBy(b => b.MinX).ToList();

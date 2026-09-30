@@ -13,7 +13,12 @@ public sealed class IncomingMeteor
 {
     public int Id { get; init; }
     public Cell Target { get; init; }
-    public float Size { get; init; }
+    /// <summary>크기 (v11.2: 회피 기동으로 스치면 줄어든다).</summary>
+    public float Size { get; set; }
+
+    /// <summary>v11.2 회피 기동을 걸었다 (한 운석에 한 번).</summary>
+    public bool Evaded { get; set; }
+    public string? EvadeNote { get; set; }
     public long Launched { get; init; }
     public long Arrive { get; init; }
 
@@ -204,6 +209,7 @@ public sealed class SensorSystem
             _ => $"{who?.Name ?? "누군가"}: 창밖에 불빛 — 곧 부딪힌다, 충격 대비!",
         };
         _w.RaiseAlert(text, level >= WarnLevel.Manual ? m.Room : null, AlertLevel.Critical, shipWide: true);
+        if (_w.Propulsion.EvasionEnabled) _w.Propulsion.OnWarned(m); // v11.2 엔진으로 비킨다
         if (who != null) MarkLog.Add(who.Memory.Marks, _w.Tick, level == WarnLevel.Manual ? "레이더 화면으로 운석을 먼저 봤다" : "창밖으로 운석을 봤다");
         if (Array?.Machine is Machine sm && level == WarnLevel.Sensor) MarkLog.Add(sm.Marks, _w.Tick, $"{size} 운석을 {mins:0.#}분 전에 잡았다");
         // 경보: 궤적을 읽었으면 그 방 사람은 빠져나가고, 누구든 하던 일을 멈추고 몸을 숙인다

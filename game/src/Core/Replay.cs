@@ -325,6 +325,8 @@ public static class SaveGame
         // v11.0 전조
         foreach (var m in w.Ship.Machines) if (m.Omen is Omen om) { I((int)om.Kind); I(om.Due); I(om.Known ? 1 : 0); }
         I(w.Precursors.Prevented); I(w.Precursors.Missed);
+        // v11.2 추진
+        F(w.Propulsion.Propellant); I((int)w.Propulsion.Zone); I(w.Propulsion.Dodged); I(w.Propulsion.Evasions); F(w.Space.Density);
         return h;
     }
 }

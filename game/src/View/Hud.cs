@@ -301,6 +301,11 @@ public partial class Hud : Control
         if (ledger.Mode != StockMode.Normal)
             chips.Insert(Math.Max(0, chips.Count - 1), ("비축", Logistics.ModeName(ledger.Mode) + (ledger.ModeWhy.Length > 0 ? $" · {ledger.ModeWhy}" : ""),
                 ledger.Mode == StockMode.Extreme ? Palette.Danger : Palette.Warning, null));
+        // v11.2 항로·추진: 잔해 지대이거나, 연소 중이거나, 추진제가 모자랄 때만
+        var prop = _world.Propulsion;
+        if (prop.Zone != ZoneKind.Normal || prop.Burning || prop.Propellant < prop.EvadeCost * 2f)
+            chips.Insert(Math.Max(0, chips.Count - 1), ("항로", $"{PropulsionSystem.ZoneName(prop.Zone)}" + (prop.Burning ? " · 연소" : "") + $" · 추진제 {prop.Propellant / Math.Max(1f, prop.Capacity) * 100:0}%",
+                prop.Burning ? new Color("#ffb070") : prop.Zone == ZoneKind.Debris ? Palette.Warning : Palette.Text, prop.Propellant / Math.Max(1f, prop.Capacity)));
         int omens = ship.Machines.Count(m => m.Omen is { Known: true });
         if (omens > 0) chips.Insert(Math.Max(0, chips.Count - 1), ("전조", $"{omens}건 · 손볼 것", Palette.Warning, null));
         // (재료·채집은 함선 지표 카드에)

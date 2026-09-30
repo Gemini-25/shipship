@@ -708,14 +708,18 @@ public partial class ShipView : Node2D
             }
             case FurnitureType.EngineCore:
             {
-                float power = alive ? 1f : 0f;
+                // v11.2: 엔진은 연소할 때만 불꽃이 크다 (회피 기동·항로 변경). 평소엔 노즐 속 파일럿 불만
+                var prop = _world.Propulsion;
+                bool burn = prop.Burning || prop.CourseBurnVisible;
+                bool standby = m != null && !m.Stopped && (m.Powered || m.Spec.PowerDraw <= 0f);
+                float power = burn && alive ? 1f : standby ? 0.16f : 0f;
                 float x0 = (f.MinX - 1) * T - 8f - NozzleLen; // v10.9: 노즐 끝에서 나온다
                 float y0 = f.MinY * T + 4f, y1 = (f.MaxY + 1) * T - 4f;
                 float yc = (y0 + y1) * 0.5f, h = y1 - y0;
                 float flicker = 0.88f + 0.08f * Mathf.Sin(t * 11f) + 0.04f * Mathf.Sin(t * 23f);
                 if (power > 0f)
                 {
-                    float len = T * 2.3f * flicker * (0.4f + 0.6f * eff);
+                    float len = T * (burn ? 3.4f : 0.5f) * flicker * (0.4f + 0.6f * Mathf.Max(0.3f, prop.Thrust));
                     var plume = new[] { new Vector2(x0, y0), new Vector2(x0, y1), new Vector2(x0 - len, yc + h * 0.12f), new Vector2(x0 - len, yc - h * 0.12f) };
                     ci.DrawPolygon(plume, new[] { accent.WithAlpha(0.5f), accent.WithAlpha(0.5f), accent.WithAlpha(0f), accent.WithAlpha(0f) });
                     float len2 = len * 0.55f;
@@ -723,7 +727,16 @@ public partial class ShipView : Node2D
                     var hotc = new Color(1f, 0.86f, 0.72f);
                     ci.DrawPolygon(core, new[] { hotc.WithAlpha(0.75f), hotc.WithAlpha(0.75f), hotc.WithAlpha(0f), hotc.WithAlpha(0f) });
                 }
-                if (power > 0f) ci.DrawLine(new Vector2(x0, y0 - 2f), new Vector2(x0, y1 + 2f), accent.Lightened(0.3f).WithAlpha(0.6f * flicker), 2f); // 노즐 끝이 달아오른다
+                if (power > 0f) ci.DrawLine(new Vector2(x0, y0 - 2f), new Vector2(x0, y1 + 2f), accent.Lightened(0.3f).WithAlpha((burn ? 0.8f : 0.25f) * flicker), 2f); // 노즐 끝이 달아오른다
+                if (burn)
+                {
+                    // 연소 중: 배 옆구리의 자세 제어 분사 (회피 기동)
+                    for (int k = 0; k < 4; k++)
+                    {
+                        float ph = (t * 3f + k * 0.25f) % 1f;
+                        ci.DrawCircle(new Vector2(x0 - T * 3.4f * ph, yc + (k % 2 == 0 ? -1f : 1f) * h * 0.2f * ph), 3f + 7f * ph, new Color(1f, 0.8f, 0.6f, 0.25f * (1f - ph)), true, -1f, true);
+                    }
+                }
                 ci.DrawRect(new Rect2(r.Position.X + 8, r.Position.Y + 10, 6, r.Size.Y - 20), accent.WithAlpha(power * (0.35f + 0.25f * flicker)));
                 break;
             }

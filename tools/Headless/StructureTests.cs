@@ -22,6 +22,7 @@ public static partial class Program
         {
             if (only > 0 && i + 1 != only) continue;
             var w = World.CreateDefault(seed + i);
+            w.Propulsion.EvasionEnabled = false; // 운석이 맞았을 때의 구조 결과를 잰다
             var rng = new Rng(seed * 31 + i);
             for (int t = 0; t < SimTime.TicksPerDay; t++) w.Step();
             var rooms = w.Ship.Rooms.Where(r => r.DesignJoints > 0).ToList();

@@ -35,6 +35,8 @@ public enum WorkKind
     RepairRobot, FetchRobot, ServiceRobot, CarryWater, StockCache, RemoveJumper, StowCot, Recycle,
     // v11.0 예방과 안전
     PreventiveCheck, SuitCheck, Drill,
+    // v11.2 항로와 추진 (엔진실)
+    RefillPropellant, ChangeCourse,
 }
 
 public static class WorkKinds
@@ -120,6 +122,8 @@ public static class WorkKinds
         WorkKind.PreventiveCheck => "예방 점검",
         WorkKind.SuitCheck => "우주복 점검",
         WorkKind.Drill => "비상 훈련",
+        WorkKind.RefillPropellant => "추진제 보충",
+        WorkKind.ChangeCourse => "항로 변경",
         _ => k.ToString(),
     };
 
@@ -294,6 +298,8 @@ public sealed class WorkOrder
         WorkKind.PreventiveCheck => Target.Kind == TargetKind.Room ? $"{Target.Label} 순찰 점검" : $"{Target.Label} 전조 손보기",
         WorkKind.SuitCheck => $"{Target.Label} 우주복 점검",
         WorkKind.Drill => $"{Target.Label} 비상 훈련",
+        WorkKind.RefillPropellant => "엔진 추진제 보충 (물)",
+        WorkKind.ChangeCourse => $"{PropulsionSystem.ZoneName((ZoneKind)Circuit)}로 항로 변경",
         _ => Kind.ToString(),
     };
 
@@ -1073,6 +1079,7 @@ public sealed partial class WorkBoard
         ScanRobots(Post); // v10.10 선내 로봇 (수리·끌어오기·정비)
         ScanRecovery(Post); // v10.10 자원 회복 (물통·비상 물자·정리)
         ScanPrevention(Post); // v11.0 예방과 안전
+        ScanNavigation(Post); // v11.2 항로와 추진
 
         // ── 결정 (v7): 사람이 정해야 하는 일은 심의에 올린다 ──
         Council.Review(w, _open.Values.Where(o => seen.Contains(o.Key)).ToList());

@@ -56,6 +56,7 @@ public static partial class Program
             for (int k = 0; k < 2; k++)
             {
                 var w = World.CreateDefault(seed + i);
+                w.Propulsion.EvasionEnabled = false; // 운석이 맞았을 때 칸막이의 값을 잰다
                 long start = w.Tick + SimTime.TicksPerDay + SimTime.Hours(offsetH);
                 while (w.Tick < start) w.Step();
                 var room = w.Ship.RoomsOf(type).First();

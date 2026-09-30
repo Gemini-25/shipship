@@ -372,7 +372,7 @@ public sealed class RobotSystem
     /// <summary>로봇이 맡는 작업 목록의 일.</summary>
     public static bool CanDo(RobotKind k, WorkKind w) => k switch
     {
-        RobotKind.Hauler => w is WorkKind.Restock or WorkKind.StockDock or WorkKind.CarryWater or WorkKind.StockCache or WorkKind.StowCot,
+        RobotKind.Hauler => w is WorkKind.Restock or WorkKind.StockDock or WorkKind.CarryWater or WorkKind.StockCache or WorkKind.StowCot or WorkKind.RefillPropellant,
         RobotKind.Maintainer => w is WorkKind.Maintain or WorkKind.FixLights,
         RobotKind.Gardener => w is WorkKind.Tend or WorkKind.Harvest,
         _ => false,
@@ -950,6 +950,33 @@ public sealed class RobotSystem
                         MarkLog.Add(room.Marks, world.Tick, $"{rb.Name}: 마지막 간이침대를 접었다 — 원래 {room.Name}으로");
                     }
                     Done(rb, $"{room.Name}의 빈 간이침대를 접어 창고로 옮겼다");
+                    return true;
+                }));
+                return steps;
+            }
+            case WorkKind.RefillPropellant:
+            {
+                var tap = Logistics.WaterTap(w);
+                var tapSpot = tap?.UseSpots.Where(dist.Reachable).OrderBy(dist.Get).Cast<Cell?>().FirstOrDefault();
+                if (tap == null || tapSpot is not Cell ts) { blocked = "물꼭지에 갈 수 없음"; return null; }
+                float liters = 0f;
+                steps.Add(new RGoto(ts));
+                steps.Add(new RWork(0.06f, null, tap.Center));
+                steps.Add(new RDo((rb, world) =>
+                {
+                    var p = world.Propulsion;
+                    liters = MathF.Min(30f, MathF.Min(p.Capacity - p.Propellant, world.Water.Level - world.Water.Capacity * 0.4f));
+                    if (liters < 1f) return false;
+                    world.Water.Level -= liters;
+                    return true;
+                }));
+                steps.Add(new RGoto(at));
+                steps.Add(new RWork(0.2f, null, o.Target.Center));
+                steps.Add(new RDo((rb, world) =>
+                {
+                    world.Propulsion.Propellant = MathF.Min(world.Propulsion.Capacity, world.Propulsion.Propellant + liters);
+                    world.Board.Close(o);
+                    Done(rb, $"엔진 추진제 탱크에 물 {liters:0}L를 부었다");
                     return true;
                 }));
                 return steps;

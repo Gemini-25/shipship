@@ -16,7 +16,7 @@ public static partial class Program
     private static int RunRobotTest(int seed)
     {
         _fails = 0;
-        Console.WriteLine($"로봇 · 자원 회복 · 예방 점검 (v10.10~v11.0) · 시드 {seed}\n");
+        Console.WriteLine($"로봇 · 자원 회복 · 예방 · 추진 점검 (v10.10~v11.2) · 시드 {seed}\n");
 
         // ── 1) 로봇이 고장 나면 사람이 부품을 들고 가서 고친다 ──
         {
@@ -156,6 +156,58 @@ public static partial class Program
                 }
             Check("전조를 찾은 배는 막고, 못 본 배는 고장 난다", prevented >= 3 && missed >= 3 && faultsBlind > faultsSeen,
                 $"막음 {prevented}/4 · 놓침 {missed}/4 · 펌프 고장 (보는 배 {faultsSeen} ↔ 못 보는 배 {faultsBlind})");
+        }
+
+        // ── 9b) 엔진: 센서가 먼저 본 운석은 회피 기동으로 비키고(스치거나), 엔진이 멎은 배는 그대로 맞는다 ──
+        {
+            int dodged = 0, glanced = 0, attempts = 0, stoppedAttempts = 0, breachOk = 0, breachStopped = 0;
+            for (int k = 0; k < 8; k++)
+                foreach (bool stopped in new[] { false, true })
+                {
+                    var w = DayOne(seed + k * 37, "Mirinae");
+                    if (stopped) foreach (var e in w.Propulsion.Engines) w.Machines.Break(e, FaultKind.Wrecked);
+                    var room = w.Ship.RoomsOf(RoomType.Quarters).First();
+                    Player.Meteor(w, Scenarios.OuterTarget(w, room), 0.9f);
+                    Run(w, SimTime.Minutes(20));
+                    if (stopped) { stoppedAttempts += w.Propulsion.Evasions; breachStopped += w.History.Breaches; }
+                    else { attempts += w.Propulsion.Evasions; dodged += w.Propulsion.Dodged; glanced += w.Propulsion.Glanced; breachOk += w.History.Breaches; }
+                }
+            Check("엔진으로 운석을 비킨다 (엔진이 멎으면 못 비킨다)", attempts >= 6 && dodged + glanced >= 3 && stoppedAttempts == 0 && breachOk < breachStopped,
+                $"회피 {attempts}/8 · 비껴감 {dodged} · 스침 {glanced} · 엔진 멎은 배 회피 {stoppedAttempts} · 파공 {breachOk} ↔ {breachStopped}");
+        }
+
+        // ── 9c) 항로: 원료가 모자라면 잔해 지대로 가고(회의), 거기선 작은 운석이 날아든다. 엔진이 멎으면 빠져나오지 못한다 ──
+        {
+            var w = DayOne(seed, "Mirinae");
+            w.Propulsion.Propellant = w.Propulsion.Capacity;
+            // 원료를 크게 쓰는 배 (날마다 원료·금속판이 바닥난다)
+            for (int d = 0; d < 6 && w.Propulsion.Transfers == 0; d++)
+            {
+                foreach (var k in ItemKinds.RawKinds) Scenarios.LimitStock(w, k, 2);
+                Scenarios.LimitStock(w, ItemKind.Plate, 4);
+                Run(w, SimTime.TicksPerDay);
+            }
+            bool went = w.Propulsion.Transfers >= 1;
+            if (!went)
+            {
+                var cc = w.Board.All.FirstOrDefault(o => o.Kind == WorkKind.ChangeCourse);
+                Console.WriteLine($"    [항로] 원료 {ItemKinds.RawKinds.Sum(k => w.Board.Have(k))} · 금속판 {w.Board.Have(ItemKind.Plate)} · 평화 {Evolution.Peaceful(w)} · 탱크 {w.Air.Reserve / w.Air.ReserveCapacity:0.00} · 실링폼 {w.Board.Have(ItemKind.Sealant)} · 추력 {w.Propulsion.Thrust:0.00} · 추진제 {w.Propulsion.Propellant:0}/{w.Propulsion.TransferCost:0} · 일 {(cc == null ? "없음" : $"{cc.Decision} {cc.Verdict} {cc.Assignee?.Name} 막힘 {cc.BlockedReason}")}");
+            }
+            var w2 = DayOne(seed, "Mirinae");
+            w2.Propulsion.Place(ZoneKind.Debris);
+            foreach (var e in w2.Propulsion.Engines) w2.Machines.Break(e, FaultKind.Wrecked);
+            bool leftWhileDead = false;
+            float deadHours = 0f;
+            for (int t = 0; t < SimTime.Hours(24 * 6); t++)
+            {
+                w2.Step();
+                if (w2.Tick % World.SystemInterval != 0) continue;
+                if (w2.Propulsion.Thrust < 0.5f) deadHours += World.SystemInterval / (float)SimTime.TicksPerHour;
+                if (w2.Propulsion.Zone == ZoneKind.Normal && w2.Propulsion.Thrust < 0.5f && w2.Propulsion.Transfers > 0) leftWhileDead = true;
+            }
+            bool stuck = !leftWhileDead && w2.Propulsion.AmbientHits >= 1;
+            Check("원료가 모자라면 잔해 지대로 · 엔진이 멎은 동안엔 못 나온다", went && stuck,
+                $"항로 변경 {w.Propulsion.Transfers}번 · 지금 {PropulsionSystem.ZoneName(w.Propulsion.Zone)} · 엔진 멎은 배: 멎은 {deadHours:0}시간 동안 날아든 운석 {w2.Propulsion.AmbientHits} · 고친 뒤 {PropulsionSystem.ZoneName(w2.Propulsion.Zone)}");
         }
 
         // ── 10) 로봇·전조·자원 장부가 들어간 배도 저장·불러오기가 같은 역사를 흘린다 ──

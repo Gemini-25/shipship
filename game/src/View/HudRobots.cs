@@ -92,6 +92,15 @@ public partial class Hud
             float days = (_world.Tick - f.Checked) / (float)SimTime.TicksPerDay;
             list.Add(("점검", days < 5f ? $"{days:0.0}일 전" : $"{days:0}일 전 — 밸브가 샐 수 있다"));
         }
+        if (f.Type == FurnitureType.EngineCore)
+        {
+            var p = _world.Propulsion;
+            var (cq, by, _) = p.Control();
+            list.Add(("항로", $"{PropulsionSystem.ZoneName(p.Zone)} · 잔해 밀도 {_world.Space.Density:0.00}" + (p.Zone == ZoneKind.Debris ? $" · 날아든 운석 {p.HitsThisZone}" : "")));
+            list.Add(("추진제", $"{p.Propellant:0}/{p.Capacity:0}kg (물) · 회피 {p.EvadeCost:0}kg · 항로 변경 {p.TransferCost:0}kg"));
+            list.Add(("추력·조종", $"추력 {p.Thrust * 100:0}% · {by} ({cq * 100:0}%)" + (p.Burning ? " · 연소 중" : "")));
+            list.Add(("회피 기동", $"{p.Evasions}번 · 비껴감 {p.Dodged} · 스침 {p.Glanced} · 실패 {p.Missed}"));
+        }
         if (f.Machine?.Omen is Omen o && o.Known)
         {
             float left = (o.Due - _world.Tick) / (float)SimTime.TicksPerHour;

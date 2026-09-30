@@ -25,7 +25,8 @@ public static class Council
             or WorkKind.Jettison or WorkKind.Retrieve or WorkKind.RestoreRoom // v8
             or WorkKind.IsolateMain or WorkKind.LimpMain // v9
             or WorkKind.PlanRepipe // v9.2
-            or WorkKind.Brownout; // v9.3
+            or WorkKind.Brownout // v9.3
+            or WorkKind.ChangeCourse; // v11.2
 
     /// <summary>손대도 되는 일인지 (결정이 필요 없거나, 승인됐다).</summary>
     public static bool Cleared(WorkOrder o) => !Needs(o.Kind) || o.Decision == DecisionState.Approved;
@@ -72,6 +73,11 @@ public static class Council
                 break;
             case WorkKind.Cannibalize:
                 p = o.Urgency;
+                break;
+            case WorkKind.ChangeCourse:
+                // v11.2: 잔해 지대에서 나가자는 안은 맞을수록 쉽게, 들어가자는 안은 원료가 모자랄수록
+                p = (ZoneKind)o.Circuit == ZoneKind.Normal ? 0.6f + 0.15f * w.Propulsion.HitsThisZone
+                    : 0.45f + MathF.Min(0.3f, (12 - ItemKinds.RawKinds.Sum(k => w.Board.Have(k))) * 0.03f);
                 break;
             case WorkKind.Recycle:
                 // v10.10: 되돌릴 값이 없는 뜯긴 설비를 고철로 — 금속판이 모자랄수록 쉽게 통과
@@ -231,6 +237,25 @@ public static class Council
                 if (donor.Machine is Machine dm && c.SkillLevel(dm.Spec.Skill) > 0.6f) terms.Add((-0.1f, "뜯으면 다시는 못 쓴다"));
                 terms.Add((0.1f * t.Calm, "살릴 것부터 살려야 한다"));
                 terms.Add((MathF.Max(0f, pressure - 0.6f), "급한 설비가 멈춰 있다"));
+                break;
+            }
+            case WorkKind.ChangeCourse:
+            {
+                bool intoDebris = (ZoneKind)o.Circuit == ZoneKind.Debris;
+                if (intoDebris)
+                {
+                    terms.Add((0.3f * (t.Bravery - 0.5f), t.Bravery > 0.5f ? "원료를 채워야 한다" : "잔해 속으로 들어가는 건 무섭다"));
+                    if (c.Role is CrewRole.Technician or CrewRole.Engineer) terms.Add((0.15f, "금속판이 바닥나 간다"));
+                    float fear = w.Ship.Rooms.Max(r => c.Memory.FearOf(r));
+                    if (fear > 0.2f) terms.Add((-0.3f * fear, "운석을 또 맞고 싶지 않다"));
+                }
+                else
+                {
+                    terms.Add((0.1f + 0.1f * w.Propulsion.HitsThisZone, $"잔해 지대에서 {w.Propulsion.HitsThisZone}번 맞았다"));
+                    if (c.Role == CrewRole.Technician && ItemKinds.RawKinds.Sum(k => w.Board.Have(k)) < 20) terms.Add((-0.15f, "원료를 조금만 더"));
+                }
+                if (c.Role == CrewRole.Pilot) terms.Add((0.1f, "조종은 내 몫이다"));
+                terms.Add((MathF.Max(0f, pressure - 0.6f), "상황이 그렇다"));
                 break;
             }
             case WorkKind.Recycle:

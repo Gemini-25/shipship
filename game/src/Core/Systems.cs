@@ -187,7 +187,8 @@ public sealed class MachineSystem
             circuit = w.Rng.Pick(free);
         }
 
-        var fault = new Fault { Kind = kind, Since = w.Tick, Circuit = circuit };
+        // 파손은 핵심 부품으로 다시 짠다 (v10.10: 파손을 직접 걸어도 부품이 비지 않게)
+        var fault = new Fault { Kind = kind, Since = w.Tick, Circuit = circuit, PartOverride = kind == FaultKind.Wrecked ? Faults.KeyPart(m.Body.Type) : null };
         m.Faults.Add(fault);
         m.FaultCount++;
         m.Condition = MathF.Max(0.2f, m.Condition - 0.03f);

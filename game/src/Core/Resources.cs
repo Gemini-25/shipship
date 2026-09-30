@@ -93,6 +93,10 @@ public sealed class SpaceEnvironment
 {
     public float Density { get; private set; } = 1f;
 
+    /// <summary>v11.2: 지나는 공간의 평균 밀도 (보통 항로 1, 잔해 지대 1.7) — 밀도는 여기로 천천히 끌려간다.</summary>
+    public float Mean { get; private set; } = 1f;
+    public void SetMean(float mean) => Mean = mean;
+
     public string DensityName => Density < 0.6f ? "희박" : Density < 1.25f ? "보통" : "잔해 많음";
 
     /// <summary>채집되는 원료의 비율 (금속성 먼지가 가장 흔하고, 희귀 소재는 아주 드물다).</summary>
@@ -104,8 +108,8 @@ public sealed class SpaceEnvironment
     public void Update(World w, float dtHours)
     {
         // 평균 1로 돌아가려는 느린 무작위 걸음 (몇 주 단위로 풍부했다가 희박해진다)
-        float step = w.Rng.Range(-0.06f, 0.06f) * MathF.Sqrt(dtHours) + (1f - Density) * 0.01f * dtHours;
-        Density = Math.Clamp(Density + step, 0.3f, 1.8f);
+        float step = w.Rng.Range(-0.06f, 0.06f) * MathF.Sqrt(dtHours) + (Mean - Density) * (Mean > 1f ? 0.08f : 0.01f) * dtHours;
+        Density = Math.Clamp(Density + step, 0.3f, 2.4f);
     }
 }
 

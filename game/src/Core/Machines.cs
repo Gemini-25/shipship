@@ -233,7 +233,8 @@ public static class MachineSpecs
             new[] { FaultKind.MembraneFouling, FaultKind.PumpSeized }),
         new MachineSpec(FurnitureType.GrowBed, 1f, 6, 20f, Skill.Botany, null, 0.5f, false,
             new[] { FaultKind.LightFailure, FaultKind.NutrientClog }),
-        new MachineSpec(FurnitureType.EngineCore, 2f, 2, 20f, Skill.Engineering, ItemKind.Lubricant, 1f, false,
+        // v11.2: 엔진은 연소할 때만 전기를 크게 먹는다 (평소엔 대기 전력 10%) — 회피 기동·항로 변경
+        new MachineSpec(FurnitureType.EngineCore, 8f, 2, 20f, Skill.Engineering, ItemKind.Lubricant, 1f, false,
             new[] { FaultKind.InjectorClog, FaultKind.WiringFault }),
         new MachineSpec(FurnitureType.Stove, 2f, 5, 20f, Skill.Mechanics, null, 0.5f, false,
             new[] { FaultKind.HeatingElement }),

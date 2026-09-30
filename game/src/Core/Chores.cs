@@ -302,6 +302,9 @@ public static partial class WorkPlanners
             WorkKind.PreventiveCheck => PreventiveCheck(activity, o, c, w, dist, at, out blocked),
             WorkKind.SuitCheck => SuitCheck(activity, o, c, w, dist, at, out blocked),
             WorkKind.Drill => Drill(activity, o, c, w, dist, at, out blocked),
+            // v11.2 항로와 추진
+            WorkKind.RefillPropellant => RefillPropellant(activity, o, c, w, dist, at, out blocked),
+            WorkKind.ChangeCourse => ChangeCourse(activity, o, c, w, dist, at, out blocked),
             _ => null,
         };
         if (job != null && suitUp.Count > 0) job.Prepend(suitUp);
