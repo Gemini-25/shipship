@@ -1,0 +1,55 @@
+시나리오 50개 · 각각 72시간 · 시드 20260929
+
+  o2         완전 복구  
+  cooling    완전 복구  
+  breaker    완전 복구  
+  meteor     완전 복구  
+  bigmeteor  완전 복구  
+  powerhit   부분 복구  설비 영구 손상 2대
+  fire       완전 복구  
+  combo      완전 복구  
+  blackout   부분 복구  원자로 제어부 −1(남은 1)
+  injury     완전 복구  
+  downed     완전 복구  
+  chaos      부분 복구  공기 탱크 −46%, 설비 영구 손상 2대, 불탄 물자 4개
+  nosuits    부분 복구  공기 탱크 −57%, 설비 영구 손상 1대, 작물 손실 1
+  nosealant  장기 장애  포기한 구획 3개 (창고·수경재배실·침실), 고장 3건, 임시 침실 (휴게실), 임시 봉합 1곳, 설비 영구 손상 2대, 작물 손실 4
+  keycrew    부분 복구  구급 키트 −4(남은 10)
+  nofuel     완전 복구  
+  overload   장기 장애  포기한 구획 2개 (식당·통신실), 공기 탱크 24%, 임시 봉합 1곳, 구급 키트 −5(남은 9), 설비 영구 손상 2대, 수리재 −26%
+  secondhit  부분 복구  공기 탱크 8%, 설비 영구 손상 4대, 작물 손실 1
+  darkship   완전 복구  
+  nofuses    완전 복구  
+  noparts    완전 복구  
+  lostquarters 장기 장애  포기한 구획 1개 (침실), 임시 침실 (휴게실), 임시 봉합 1곳, 공기 탱크 −41%
+  wreck      완전 복구  
+  noreactorctl 장기 장애  자동화 꺼짐 (주 컴퓨터 멈춤) · 예비 제어기로 격벽·댐퍼만, 절전으로 끈 회로 C·D, Mk.1 임시품 1대 (원자로)
+  nomaterials 장기 장애  핵심 설비 고장 2대, 저출력 운영 중 (설비 14대 내림)
+  lostworkshop 장기 장애  포기한 구획 1개 (정비실), 고장 1건, 임시 정비실 (창고), 임시 봉합 1곳, 설비 영구 손상 2대
+  hanging    부분 복구  설비 영구 손상 1대
+  tearoff    장기 장애  포기한 구획 1개 (함교), 고장 1건, 임시 봉합 1곳, 설비 영구 손상 1대
+  nodrones   부분 복구  공기 탱크 −51%
+  jettisonfire 완전 복구  
+  adrift     장기 장애  포기한 구획 1개 (수경재배실), 작물 손실 4
+  nostructure 부분 복구  약해진 연결부 2, 공기 탱크 −64%
+  jettison   부분 복구  약해진 연결부 1
+  hotleg     완전 복구  
+  hotleak    완전 복구  
+  branch     완전 복구  
+  radiator   부분 복구  공기 탱크 −60%, 설비 영구 손상 2대, 수리재 −27%
+  noplates   완전 복구  
+  coolantleak 완전 복구  
+  watermain  완전 복구  
+  feedline   완전 복구  
+  cpuheat    완전 복구  
+  cpubreach  완전 복구  
+  cpuparts   완전 복구  
+  cpufire    완전 복구  
+  cpupower   완전 복구  
+  doormotor  완전 복구  
+  doorbreach 완전 복구  
+  darkfire   완전 복구  
+  nomotors   부분 복구  임시 구동기 문 2
+
+완전 복구 30 · 부분 복구 12 · 장기 장애 8 · 실패 0
+exit=0 sec=118

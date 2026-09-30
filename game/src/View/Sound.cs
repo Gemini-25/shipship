@@ -10,6 +10,7 @@ namespace ShipSim.View;
 /// v10 소리. 파일 없이 시작할 때 파형을 만들어 쓴다 (22kHz 모노 16비트).
 /// 효과음: 치명 경보(사이렌), 경고(삑삑), 운석 충돌(쿵), 원자로 긴급 정지(내려가는 소리).
 /// 배경음: 원자로·환기 기계음(출력만큼), 공기 새는 소리(새는 방이 있으면), 불 소리(불 칸 수만큼). 일시정지·불러오는 중엔 조용히.
+/// v11.3: 충돌음·새는 소리·불 소리에 자리가 생기고(화면에서 먼 것은 작게, 좌우로), 문·발소리·로봇 구동음 (SoundSpatial.cs).
 /// 시뮬레이션은 소리를 모른다 — 화면처럼 월드를 읽기만 한다.
 /// </summary>
 public partial class SoundSystem : Node
@@ -18,7 +19,8 @@ public partial class SoundSystem : Node
 
     private Main _main = null!;
     private readonly List<AudioStreamPlayer> _pool = new();
-    private AudioStreamPlayer _hum = null!, _hiss = null!, _fire = null!;
+    private AudioStreamPlayer _hum = null!;
+    private AudioStreamPlayer2D _hiss = null!, _fire = null!; // v11.3 가장 가까운 새는 방·불 자리에서
     private AudioStreamWav _siren = null!, _beep = null!, _impact = null!, _scram = null!;
     private long _lastAlert;
     private Impact? _lastImpact;
@@ -33,8 +35,9 @@ public partial class SoundSystem : Node
         _impact = Make(ImpactSound());
         _scram = Make(Scram());
         _hum = Loop(Hum());
-        _hiss = Loop(Noise(2f, 0.22f, high: true, seed: 3));
-        _fire = Loop(FireSound());
+        _hiss = Loop2D(Noise(2f, 0.22f, high: true, seed: 3));
+        _fire = Loop2D(FireSound());
+        InitSpatial();
         for (int i = 0; i < 6; i++)
         {
             var p = new AudioStreamPlayer();
@@ -77,7 +80,9 @@ public partial class SoundSystem : Node
         if (impact != null && !ReferenceEquals(impact, _lastImpact))
         {
             _lastImpact = impact;
-            if (!quiet && Settings.Effects) Play(_impact, -2f + 6f * Math.Clamp(impact.Size - 0.5f, 0f, 1f));
+            // v11.3 맞은 자리에서 (화면 밖이어도 작게는 들린다)
+            var at = impact.Target.Center;
+            if (!quiet && Settings.Effects) Play2D(_impact, at, -2f + 6f * Math.Clamp(impact.Size - 0.5f, 0f, 1f), MathF.Max(0.3f, Gain(at)));
         }
         if (w.History.Scrams != _scrams)
         {
@@ -85,12 +90,15 @@ public partial class SoundSystem : Node
             if (!quiet && Settings.Effects) Play(_scram, -6f);
         }
 
+        ProcessSpatial(w, delta, quiet); // v11.3 문·발소리·로봇
+
         // 배경음
         bool ambient = Settings.Ambience && !quiet && !_main.Paused;
+        PlaceLoops(w);
         var p = w.Power;
         float hum = !ambient ? 0f : p.ReactorOnline ? 0.25f + 0.45f * Math.Clamp(p.Delivered / 45f, 0f, 1f) : p.AuxRunning ? 0.15f : 0.03f;
-        float hiss = !ambient ? 0f : w.Ship.LiveRooms.Any(r => r.Leaking) ? 0.6f : 0f;
-        float fire = !ambient ? 0f : Math.Min(1f, w.Fire.Count / 6f) * 0.8f;
+        float hiss = !ambient ? 0f : w.Ship.LiveRooms.Any(r => r.Leaking) ? 0.6f * _hissGain : 0f;
+        float fire = !ambient ? 0f : Math.Min(1f, w.Fire.Count / 6f) * 0.8f * _fireGain;
         Fade(_hum, hum, delta);
         Fade(_hiss, hiss, delta);
         Fade(_fire, fire, delta);
@@ -111,6 +119,26 @@ public partial class SoundSystem : Node
         if (next <= 0.001f) { if (p.Playing) p.Stop(); return; }
         if (!p.Playing) p.Play();
         p.VolumeDb = Mathf.LinearToDb(next);
+    }
+
+    private static void Fade(AudioStreamPlayer2D p, float target, double delta)
+    {
+        float now = p.Playing ? Mathf.DbToLinear(p.VolumeDb) : 0f;
+        float next = Mathf.MoveToward(now, target, (float)delta * 0.8f);
+        if (next <= 0.001f) { if (p.Playing) p.Stop(); return; }
+        if (!p.Playing) p.Play();
+        p.VolumeDb = Mathf.LinearToDb(next);
+    }
+
+    private AudioStreamPlayer2D Loop2D(float[] samples)
+    {
+        var s = Make(samples);
+        s.LoopMode = AudioStreamWav.LoopModeEnum.Forward;
+        s.LoopBegin = 0;
+        s.LoopEnd = samples.Length;
+        var p = new AudioStreamPlayer2D { Stream = s, VolumeDb = -80f, MaxDistance = 1e7f, Attenuation = 0f, PanningStrength = 0.6f };
+        AddChild(p);
+        return p;
     }
 
     private AudioStreamPlayer Loop(float[] samples)
