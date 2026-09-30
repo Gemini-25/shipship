@@ -316,6 +316,12 @@ public partial class Hud : Control
         var gassed = ship.Rooms.Where(r => r.Air.Toxin > 0.15f).ToList();
         if (gassed.Count > 0)
             chips.Insert(Math.Max(0, chips.Count - 1), ("유독 가스", string.Join("·", gassed.Take(2).Select(r => r.Name)) + (gassed.Count > 2 ? $" 외 {gassed.Count - 2}" : "") + $" · {gassed.Max(r => r.Air.Toxin) * 100:0}%", new Color("#b5e34d"), null));
+        // v11.2 교신: 보급 캡슐 · 구조 요청 · 탈출 캡슐
+        var cms = _world.Comms;
+        if (cms.SupplyDocked) chips.Insert(Math.Max(0, chips.Count - 1), ("보급 캡슐", "에어락에 붙었다 · 짐을 내린다", new Color("#e0b64a"), null));
+        else if (cms.SupplyEta >= 0) chips.Insert(Math.Max(0, chips.Count - 1), ("보급 캡슐", $"{(cms.SupplyEta - _world.Tick) / (float)SimTime.TicksPerHour:0}시간 뒤", new Color("#e0b64a"), null));
+        if (cms.SignalOpen) chips.Insert(0, ("구조 요청", $"생존자 {cms.SignalSurvivors}명 · {(cms.SignalUntil - _world.Tick) / (float)SimTime.TicksPerHour:0}시간 안에", new Color("#f47b7b"), null));
+        else if (cms.PodEta >= 0) chips.Insert(Math.Max(0, chips.Count - 1), ("탈출 캡슐", $"{(cms.PodEta - _world.Tick) / (float)SimTime.TicksPerHour:0.0}시간 뒤 도킹", new Color("#f47b7b"), null));
         // v10.11 배급 · 먹을 것이 사흘치 아래
         float foodDays = FoodPolicy.FoodDays(_world);
         if (_world.Food.Rationing)

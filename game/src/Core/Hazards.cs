@@ -21,7 +21,8 @@ public enum HazardKind
     LightsOut,         // 조명 나감
     WorkAccident,      // 작업 사고 (부상)
     DebrisCloud,       // 잔해 구름에 휩쓸림
-    WaterContamination // 물 오염 (탱크 일부를 버리고 정수기 필터가 막힌다)
+    WaterContamination, // 물 오염 (탱크 일부를 버리고 정수기 필터가 막힌다)
+    RescueSignal,       // v11.2 구조 요청 수신: 탈출 캡슐 (사고라기보다 사건 — 건질지 회의)
 }
 
 /// <summary>사고를 어디에 거는지.</summary>
@@ -48,6 +49,7 @@ public static class Hazards
         new(HazardKind.WorkAccident, "작업 사고", HazardTarget.Crew, 5f, "작업 사고 — 승무원을 클릭: 넘어지거나 손을 다친다 · 의무실에서 치료해야 한다"),
         new(HazardKind.DebrisCloud, "잔해 구름", HazardTarget.Ship, 2f, "잔해 구름 — 배가 잔해 지대로 밀려난다: 작은 운석이 날아들고, 엔진을 태워 빠져나와야 한다"),
         new(HazardKind.WaterContamination, "물 오염", HazardTarget.Ship, 4f, "물 오염 — 탱크 물에 녹 찌꺼기가 섞였다: 물 일부를 버리고 정수기 필터가 막힌다"),
+        new(HazardKind.RescueSignal, "구조 요청", HazardTarget.Ship, 2f, "구조 요청 수신 — 탈출 캡슐의 생존자 1~3명: 하루 안에 회의로 건질지 정한다 (추진제 · 먹을 입 · 통신실이 멀쩡해야 듣는다)"),
     };
 
     public static HazardSpec Spec(HazardKind k) => All[(int)k];
@@ -121,6 +123,7 @@ public static class Hazards
             HazardKind.WorkAccident => sys.Accident(w.Crew.FirstOrDefault(c => c.Id == id)),
             HazardKind.DebrisCloud => sys.Cloud(),
             HazardKind.WaterContamination => sys.Water(),
+            HazardKind.RescueSignal => w.Comms.ReceiveSignal(),
             _ => null,
         };
         if (what == null) return null;

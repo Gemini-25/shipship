@@ -346,6 +346,8 @@ public static class SaveGame
         foreach (var c in w.Crew) { I(c.CarryTaint); I(c.PoisonAt); }
         // v10.11 배급
         I(w.Food.Rationing ? 1 : 0); I(w.Food.Rationings);
+        // v11.2 교신
+        I(w.Comms.DistressAt); I(w.Comms.SupplyEta); I(w.Comms.SupplyDocked ? 1 : 0); I(w.Comms.SignalAt); I(w.Comms.PodEta); I(w.Comms.Rescued); I(w.Crew.Count);
         return h;
     }
 }

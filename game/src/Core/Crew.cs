@@ -183,6 +183,9 @@ public sealed class CrewMember
     /// <summary>v11.2: 들고 있는 식사 중 균이 든 것 (나르면 따라가고, 먹으면 앓는다).</summary>
     public int CarryTaint { get; set; }
 
+    /// <summary>v11.2: 탈출 캡슐에서 건져 태운 사람.</summary>
+    public bool Rescued { get; init; }
+
     /// <summary>v11.2: 균이 든 식사를 먹었다 — 이 틱에 탈이 난다 (-1이면 없음).</summary>
     public long PoisonAt { get; set; } = -1;
     public Furniture? PoisonSource { get; set; }

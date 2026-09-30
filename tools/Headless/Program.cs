@@ -120,6 +120,7 @@ public static partial class Program
         if (args.Contains("--hazardtest")) return RunHazardTest(seed);
         if (args.Contains("--livingtest")) return RunLivingTest(seed);
         if (args.Contains("--remodeltest")) return RunRemodelTest(seed);
+        if (args.Contains("--commstest")) return RunOutsideCommsTest(seed);
         if (args.FirstOrDefault(a => a.StartsWith("--partition=")) is string pc)
             return RunPartitionCampaign(days, seed, pc.Split('=')[1]);
         if (args.Contains("--gate=partition"))
@@ -127,6 +128,8 @@ public static partial class Program
         if (args.Contains("--gate=comms"))
             return RunCommsGate(int.TryParse(args.FirstOrDefault(a => a.StartsWith("--runs="))?.Split('=')[1], out var crn) ? crn : 10, seed);
         if (args.Contains("--gate=recovery")) return RunRecoveryGate(days, seed, shipArg);
+        if (args.Contains("--gate=distributed"))
+            return RunDistributedGate(int.TryParse(args.FirstOrDefault(a => a.StartsWith("--runs="))?.Split('=')[1], out var drn) ? drn : 4, seed);
         if (args.Contains("--gate=structure"))
             return RunStructureGate(int.TryParse(args.FirstOrDefault(a => a.StartsWith("--runs="))?.Split('=')[1], out var rn) ? rn : 20, seed);
         if (args.FirstOrDefault(a => a.StartsWith("--gate")) is string gate)

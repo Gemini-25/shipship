@@ -41,6 +41,10 @@ public enum WorkKind
     DiscardFood,
     // v10.11 대인원 생활
     Ration, EndRation,
+    // v11.1 분산 운영: 산소 발생기를 모두 잃었을 때
+    BuildOxygen,
+    // v11.2 외부 교신
+    Distress, UnloadSupply, AnswerSignal,
 }
 
 public static class WorkKinds
@@ -131,6 +135,10 @@ public static class WorkKinds
         WorkKind.DiscardFood => "상한 식사 버리기",
         WorkKind.Ration => "배급",
         WorkKind.EndRation => "배급 해제",
+        WorkKind.BuildOxygen => "임시 산소 발생기",
+        WorkKind.Distress => "조난 신호",
+        WorkKind.UnloadSupply => "보급 캡슐 내리기",
+        WorkKind.AnswerSignal => "탈출 캡슐 구조",
         _ => k.ToString(),
     };
 
@@ -152,7 +160,7 @@ public static class WorkKinds
             or WorkKind.Cannibalize or WorkKind.RepurposeRoom or WorkKind.InstallSubstitute or WorkKind.BuildWorkshop
             or WorkKind.Jettison or WorkKind.Salvage or WorkKind.InstallTruss or WorkKind.Clamp or WorkKind.RestoreRoom
             or WorkKind.LayBypass or WorkKind.IsolateMain or WorkKind.LimpMain or WorkKind.PilotDrones or WorkKind.BuildComputer
-            or WorkKind.Brownout or WorkKind.RadarWatch or WorkKind.Ration;
+            or WorkKind.Brownout or WorkKind.RadarWatch or WorkKind.Ration or WorkKind.BuildOxygen;
 }
 
 /// <summary>
@@ -310,6 +318,10 @@ public sealed class WorkOrder
         WorkKind.DiscardFood => $"{Target.Label}의 균이 든 식사 버리기",
         WorkKind.Ration => "배급 — 한 끼씩 줄여 먹는다",
         WorkKind.EndRation => "배급을 풀고 제대로 먹는다",
+        WorkKind.BuildOxygen => $"{Target.Label}에 임시 산소 발생기",
+        WorkKind.Distress => "통신실에서 조난 신호",
+        WorkKind.UnloadSupply => "보급 캡슐 짐 내리기",
+        WorkKind.AnswerSignal => "탈출 캡슐 구조 — 배를 돌린다",
         _ => Kind.ToString(),
     };
 
@@ -765,6 +777,16 @@ public sealed partial class WorkBoard
             post(WorkKind.BuildComputer, WorkTarget.OfRoom(ctrl), 0.6f, Skill.Electrical,
                 $"주 컴퓨터를 잃은 지 {(w.Tick - w.Automation.GoneSince) / (float)SimTime.TicksPerHour:0}시간 → 전자재 2 + 케이블 2로 임시 제어 컴퓨터 (Mk.1)");
 
+        // ── v11.1 임시 산소 발생기: 돌아가는 산소 발생기가 하나도 없는 지 한 시간 — 전력 제어기·케이블·금속판으로 Mk.1을 짠다 ──
+        {
+            bool none = !ship.FurnitureOf(FurnitureType.OxygenGenerator).Any(f => !f.Stowed && !f.Room.Detached && !f.Room.Abandoned
+                                                                               && !f.Machine!.Has(FaultKind.Wrecked) && !f.Machine.Has(FaultKind.Stripped));
+            if (none && w.Air.NoGeneratorSince >= 0 && w.Tick - w.Air.NoGeneratorSince > SimTime.Hours(1)
+                && Have(ItemKind.PowerController) >= 1 && Have(ItemKind.Cable) >= 2 && Have(ItemKind.Plate) >= 2 && Adaptation.ComputerTarget(w) is Room o2room)
+                post(WorkKind.BuildOxygen, WorkTarget.OfRoom(o2room), 1.0f, Skill.Mechanics,
+                    $"산소 발생기를 모두 잃은 지 {(w.Tick - w.Air.NoGeneratorSince) / (float)SimTime.TicksPerHour:0}시간 → 전력 제어기 1 + 케이블 2 + 금속판 2로 임시 산소 발생기 (Mk.1)");
+        }
+
         // ── v10.1 레이더 감시: 주 컴퓨터가 꺼져 궤적 계산이 없으면, 센서가 살아 있는 동안 사람이 통신실 화면을 지킨다 ──
         //    (운석이 오면 몇 분 전에라도 방향을 알 수 있다 — 대신 일손 하나가 묶인다)
         if (!w.Automation.MainOnline && w.Sensors.Online && w.Sensors.CommsRoom is Room comms && !comms.Abandoned && !comms.Leaking && !comms.OffLimits
@@ -1095,6 +1117,7 @@ public sealed partial class WorkBoard
         ScanNavigation(Post); // v11.2 항로와 추진
         ScanHazards(Post); // v11.2 사고 뒷정리 (오염된 식사)
         ScanLiving(Post); // v10.11 배급
+        ScanComms(Post); // v11.2 외부 교신
 
         // ── 결정 (v7): 사람이 정해야 하는 일은 심의에 올린다 ──
         Council.Review(w, _open.Values.Where(o => seen.Contains(o.Key)).ToList());

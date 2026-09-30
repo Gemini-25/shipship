@@ -261,6 +261,10 @@ public static partial class WorkPlanners
             WorkKind.ReplacePanel => ReplacePanel(activity, o, c, w, dist, at, out blocked),
             WorkKind.BuildWorkshop => BuildWorkshop(activity, o, c, w, dist, at, out blocked),
             WorkKind.BuildComputer => BuildComputer(activity, o, c, w, dist, at, out blocked),
+            WorkKind.BuildOxygen => BuildOxygen(activity, o, c, w, dist, at, out blocked),
+            WorkKind.Distress => SendDistress(activity, o, c, w, dist, at),
+            WorkKind.UnloadSupply => UnloadSupply(activity, o, c, w, dist, at),
+            WorkKind.AnswerSignal => AnswerSignal(activity, o, c, w, dist, at),
             WorkKind.Upgrade => Upgrade(activity, o, c, w, dist, at, out blocked),
             // v8 외부 작업과 구조
             WorkKind.RepairJoint => RepairJoint(activity, o, c, w, dist, at, out blocked),
@@ -1777,6 +1781,37 @@ public static partial class WorkPlanners
             return true;
         }));
         return Wrap(a, o, c, w, "임시 작업대", toils, $"{room.Name}에 임시 작업대를 짜러 간다");
+    }
+
+    /// <summary>v11.1: 산소 발생기를 모두 잃은 배가 다른 방 한쪽에 임시 산소 발생기를 짠다 (전해조를 손으로 엮은 Mk.1 — 몫이 작다).</summary>
+    private static Job? BuildOxygen(Activity a, WorkOrder o, CrewMember c, World w, DistanceField dist, Cell at, out string? blocked)
+    {
+        blocked = null;
+        var room = o.Target.Room!;
+        var cost = new[] { (ItemKind.PowerController, 1), (ItemKind.Cable, 2), (ItemKind.Plate, 2) };
+        var toils = FetchAll(c, w, dist, cost);
+        if (toils == null) { blocked = $"재료 부족 ({Cost(cost)})"; return null; }
+        toils.Add(new GotoToil(at));
+        toils.Add(new WorkToil(2.5f, Skill.Mechanics, room.Center) { Resume = o });
+        toils.Add(new DoToil((cm, world) =>
+        {
+            if (Adaptation.BenchCell(world, room) is not Cell spot) return false;
+            if (!UseAll(cm, cost)) return false;
+            var gen = world.Ship.AddFurniture(FurnitureType.OxygenGenerator, spot);
+            gen.Machine!.Grade = MachineGrade.Mk1;
+            gen.Machine.Condition = 0.7f;
+            world.Paths.Invalidate();
+            world.Structure.Touch();
+            world.Adapt.Substitutes++;
+            MarkLog.Add(room.Marks, world.Tick, "임시 산소 발생기");
+            MarkLog.Add(gen.Machine.Marks, world.Tick, $"{Ko.IGa(cm.Name)} 전해조를 손으로 엮어 짰다");
+            world.History.Add(world, HistoryKind.Adaptation, $"{Ko.IGa(cm.Name)} {room.Name} 한쪽에 임시 산소 발생기를 짰다 — 몫은 작지만 숨은 쉰다", room, new[] { cm });
+            world.RaiseAlert($"{room.Name}에 임시 산소 발생기 — 몫은 작지만 숨은 쉰다", room, AlertLevel.Notice, shipWide: true);
+            world.Board.Close(o);
+            world.Board.RequestScan();
+            return true;
+        }));
+        return Wrap(a, o, c, w, "임시 산소 발생기", toils, $"{room.Name}에 임시 산소 발생기를 짜러 간다", LogKind.Warning);
     }
 
     /// <summary>v9.2: 주 컴퓨터를 잃은 배가 다른 방 한쪽에 임시 제어 컴퓨터를 짠다 (콘솔 부품을 엮은 Mk.1).</summary>

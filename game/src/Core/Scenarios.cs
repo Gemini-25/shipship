@@ -123,8 +123,11 @@ public static class Scenarios
     public static Cell OuterTarget(World w, Room room)
     {
         var ship = w.Ship;
-        var hull = ship.Walls.Where(kv => kv.Value.IsHull && Hull.InsideRoom(ship, kv.Key) == room).Select(kv => kv.Key).ToList();
-        var wall = hull.OrderBy(c => MathF.Abs(c.Y - room.Center.Y) + MathF.Abs(c.X - room.Center.X) * 0.3f).First();
+        // v11.1: 모서리 외벽(방 칸과 대각으로만 닿는 벽)은 빼고 — 전에는 그런 벽을 고르면 옆 칸을 못 찾아 멈췄다
+        var hull = ship.Walls.Where(kv => kv.Value.IsHull && Hull.InsideRoom(ship, kv.Key) == room
+                                          && Cell.Dirs4.Any(d => ship.RoomAt(kv.Key + d) == room)).Select(kv => kv.Key).ToList();
+        if (hull.Count == 0) return room.Cells.First();
+        var wall = hull.OrderBy(c => MathF.Abs(c.Y - room.Center.Y) + MathF.Abs(c.X - room.Center.X) * 0.3f).ThenBy(c => c.Y).ThenBy(c => c.X).First();
         return Cell.Dirs4.Select(d => wall + d).First(c => ship.RoomAt(c) == room);
     }
 

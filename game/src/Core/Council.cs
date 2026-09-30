@@ -27,7 +27,8 @@ public static partial class Council
             or WorkKind.PlanRepipe // v9.2
             or WorkKind.Brownout // v9.3
             or WorkKind.ChangeCourse // v11.2
-            or WorkKind.Ration; // v10.11
+            or WorkKind.Ration // v10.11
+            or WorkKind.Distress or WorkKind.AnswerSignal; // v11.2
 
     /// <summary>손대도 되는 일인지 (결정이 필요 없거나, 승인됐다).</summary>
     public static bool Cleared(WorkOrder o) => !Needs(o.Kind) || o.Decision == DecisionState.Approved;
@@ -82,6 +83,10 @@ public static partial class Council
                 break;
             case WorkKind.Ration:
                 p = RationPressure(w); // v10.11
+                break;
+            case WorkKind.Distress:
+            case WorkKind.AnswerSignal:
+                p = CommsPressure(w, o); // v11.2
                 break;
             case WorkKind.Recycle:
                 // v10.10: 되돌릴 값이 없는 뜯긴 설비를 고철로 — 금속판이 모자랄수록 쉽게 통과
@@ -385,6 +390,10 @@ public static partial class Council
             }
             case WorkKind.Ration:
                 RationTerms(w, c, terms, pressure); // v10.11
+                break;
+            case WorkKind.Distress:
+            case WorkKind.AnswerSignal:
+                CommsTerms(w, c, o, terms, pressure); // v11.2
                 break;
             case WorkKind.Brownout:
             {

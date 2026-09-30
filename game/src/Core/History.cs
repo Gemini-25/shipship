@@ -181,6 +181,9 @@ public sealed class ShipHistory
     /// <summary>v10.12: 걷은 칸막이 · 옮긴 설비.</summary>
     public int Unpartitions { get; set; }
     public int Relocations { get; set; }
+    /// <summary>v11.1 분산 운영: 보조 작업대 · 예비 조타석.</summary>
+    public int AuxWorkshops { get; set; }
+    public int BackupHelms { get; set; }
     public int FeedersAdded { get; set; }
 
     /// <summary>개조 회의에서 부결된 안 (열쇠 → 다시 꺼낼 수 있는 틱).</summary>

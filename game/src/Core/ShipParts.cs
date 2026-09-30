@@ -412,6 +412,9 @@ public sealed class Furniture
     /// <summary>항해 중에 손본 가구 (제대로 정비한 간이침대, 증설한 배터리).</summary>
     public bool Improved { get; set; }
 
+    /// <summary>v11.1: 함교 밖에 둔 예비 조타석 (함교를 잃어도 여기서 배를 몬다).</summary>
+    public bool AuxHelm { get; set; }
+
     /// <summary>방째로 떨어져 나가 우주선 밖에 있다.</summary>
     public bool Detached => Room.Detached;
 

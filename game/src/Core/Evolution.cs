@@ -23,6 +23,8 @@ public enum UpgradeKind
     SupplyCache,   // v10.10: 파공·불을 겪었거나 창고에서 먼 방에 비상 물자함 (실링폼·구급 키트·소화기를 나눠 둔다)
     RemovePartition, // v10.12: 오래 평화로웠던 방의 칸막이를 걷어 넓은 방으로 (벽 재료를 되찾는다)
     Relocate,      // v10.12: 여러 번 뚫리거나 버렸던 외벽 방의 설비를 안쪽 방으로 옮긴다
+    AuxWorkshop,   // v11.1: 작업대가 한 방에만 있는 배: 안쪽 방에 보조 작업대 (정비실을 잃어도 만들 수 있다)
+    BackupHelm,    // v11.1: 함교가 뚫렸거나 자동화가 꺼졌던 배: 엔진실에 예비 조타석 (함교를 잃어도 배를 몬다)
 }
 
 /// <summary>개조 계획 하나: 무엇을, 왜(겪은 사고), 무엇으로.</summary>
@@ -75,6 +77,8 @@ public static class Evolution
         UpgradeKind.SupplyCache => "비상 물자함",
         UpgradeKind.RemovePartition => "칸막이 철거",
         UpgradeKind.Relocate => "설비 옮기기",
+        UpgradeKind.AuxWorkshop => "보조 작업대",
+        UpgradeKind.BackupHelm => "예비 조타석",
         _ => k.ToString(),
     };
 
@@ -96,6 +100,8 @@ public static class Evolution
         UpgradeKind.SupplyCache => $"{o.Target.Room?.Name ?? "?"}에 비상 물자함",
         UpgradeKind.RemovePartition => $"{o.Target.Room?.SplitFrom?.Name ?? "?"} 칸막이 걷기",
         UpgradeKind.Relocate => $"{o.Target.Label} 안쪽 방으로 옮기기",
+        UpgradeKind.AuxWorkshop => $"{o.Target.Room?.Name ?? "?"}에 보조 작업대",
+        UpgradeKind.BackupHelm => $"{o.Target.Room?.Name ?? "엔진실"}에 예비 조타석",
         _ => "개조",
     };
 
@@ -116,6 +122,8 @@ public static class Evolution
         UpgradeKind.SupplyCache => 1.5f,
         UpgradeKind.RemovePartition => 4f,
         UpgradeKind.Relocate => 3f,
+        UpgradeKind.AuxWorkshop => 4f,
+        UpgradeKind.BackupHelm => 3f,
         _ => 2f,
     };
 
@@ -149,6 +157,8 @@ public static class Evolution
         UpgradeKind.SupplyCache => new[] { (ItemKind.Plate, 1), (ItemKind.Cable, 1) },
         UpgradeKind.RemovePartition => new[] { (ItemKind.Cable, 1) },
         UpgradeKind.Relocate => new[] { (ItemKind.Cable, 2), (ItemKind.Plate, 1) },
+        UpgradeKind.AuxWorkshop => new[] { (ItemKind.Plate, 3), (ItemKind.Cable, 2), (ItemKind.Motor, 1) },
+        UpgradeKind.BackupHelm => new[] { (ItemKind.Electronics, 2), (ItemKind.Cable, 2), (ItemKind.Plate, 1) },
         _ => new[] { (ItemKind.Plate, 2) },
     };
 
@@ -178,6 +188,8 @@ public static class Evolution
         UpgradeKind.SupplyCache => $"{p.Target.Room?.Name ?? "?"} 물자함",
         UpgradeKind.RemovePartition => $"{p.Target.Room?.SplitFrom?.Name ?? "?"} 칸막이 철거",
         UpgradeKind.Relocate => $"{p.Target.Label} 옮기기",
+        UpgradeKind.AuxWorkshop => "보조 작업대",
+        UpgradeKind.BackupHelm => "예비 조타석",
         _ => "침실",
     };
 
@@ -218,6 +230,10 @@ public static class Evolution
         (UpgradeKind.SupplyCache, CrewRole.Medic) => 0.2f,
         (UpgradeKind.Relocate, CrewRole.Technician or CrewRole.Engineer) => 0.25f,
         (UpgradeKind.RemovePartition, CrewRole.Cook or CrewRole.Botanist) => 0.15f,
+        (UpgradeKind.AuxWorkshop, CrewRole.Technician) => 0.3f,
+        (UpgradeKind.AuxWorkshop, CrewRole.Electrician or CrewRole.Engineer) => 0.15f,
+        (UpgradeKind.BackupHelm, CrewRole.Pilot) => 0.35f,
+        (UpgradeKind.BackupHelm, CrewRole.Engineer) => 0.2f,
         _ => 0f,
     };
 
@@ -431,6 +447,20 @@ public static class Evolution
         {
             if (room.Detached || room.OffLimits || Remodel2.Interior(w, room)) continue;
             int hits = h.BreachesByRoom.GetValueOrDefault(room.Id);
+            // v11.1 분산: 산소 발생기가 전부 한 외벽 방에 있고 그 방이 한 번이라도 뚫렸으면 하나를 나눈다
+            bool allO2 = hits >= 1 && room.Furniture.Count(x => x.Type == FurnitureType.OxygenGenerator && !x.Stowed) >= 2
+                         && ship.FurnitureOf(FurnitureType.OxygenGenerator).All(x => x.Room == room);
+            if (allO2)
+            {
+                var gen = room.Furniture.Where(x => x.Type == FurnitureType.OxygenGenerator && !x.Stowed && x.Machine!.Faults.Count == 0).OrderByDescending(x => x.Id).FirstOrDefault();
+                if (gen != null && Remodel2.FindSpot(w, gen) is { } gspot)
+                {
+                    yield return new UpgradePlan(UpgradeKind.Relocate, WorkTarget.Of(gen), 0.55f + 0.15f * MathF.Min(3, hits), Skill.Mechanics,
+                        $"산소 발생기가 모두 {room.Name}에 있다 · 그 방이 {ShipHistory.Times(hits)} 뚫렸다 → {Ko.EulReul(gen.Label)} {Ko.EuRo(gspot.room.Name)} 나눠 둔다 (한 방을 잃어도 숨은 쉰다)",
+                        Cost(UpgradeKind.Relocate, null), 0.25f);
+                    continue;
+                }
+            }
             if (hits < 2 && room.TimesAbandoned == 0) continue;
             var f = room.Furniture.Where(x => !x.Stowed && x.Machine is Machine mm && Remodel2.Movable(x.Type) && mm.Faults.Count == 0)
                 .OrderByDescending(x => x.Machine!.Spec.Critical).ThenBy(x => x.Id).FirstOrDefault();
@@ -440,6 +470,49 @@ public static class Evolution
                 $"{Ko.IGa(room.Name)} {ShipHistory.Times(Math.Max(1, hits))} 뚫렸다" + (room.TimesAbandoned > 0 ? " · 버린 적도 있다" : "")
                 + $" → {Ko.EulReul(f.Label)} 외벽이 없는 {Ko.EuRo(spot.room.Name)} 옮긴다 (케이블 2 + 금속판 1)",
                 Cost(UpgradeKind.Relocate, null), 0.25f);
+        }
+
+        // ── 보조 작업대 (v11.1 분산 운영): 작업대가 한 방에만 있는데 그 방이 뚫렸거나, 임시 정비실을 짜야 했거나, 큰 배 ──
+        {
+            var benches = ship.FurnitureOf(FurnitureType.Workbench).Where(b => !b.Stowed && !b.Room.Detached).ToList();
+            var shopRooms = benches.Select(b => b.Room).Distinct().ToList();
+            if (benches.Count > 0 && shopRooms.Count == 1)
+            {
+                var shop = shopRooms[0];
+                int hits = h.BreachesByRoom.GetValueOrDefault(shop.Id);
+                int crew = w.Crew.Count(c => !c.Dead);
+                bool lesson = hits > 0 || shop.TimesAbandoned > 0 || w.Adapt.Workshops > 0 || crew >= 12;
+                var target = new[] { RoomType.Storage, RoomType.Power, RoomType.Lounge, RoomType.Mess, RoomType.Medbay }
+                    .SelectMany(t => ship.RoomsOf(t)).FirstOrDefault(r => r != shop && !r.Detached && !r.Abandoned && !r.OffLimits && Remodel2.Interior(w, r) && Adaptation.BenchCell(w, r) != null)
+                    ?? new[] { RoomType.Storage, RoomType.Power, RoomType.Lounge, RoomType.Mess }
+                    .SelectMany(t => ship.RoomsOf(t)).FirstOrDefault(r => r != shop && !r.Detached && !r.Abandoned && !r.OffLimits && Adaptation.BenchCell(w, r) != null);
+                if (lesson && target != null && Adaptation.BenchCell(w, target) is Cell bc)
+                {
+                    float score = 0.3f + 0.2f * MathF.Min(3, hits) + (shop.TimesAbandoned > 0 ? 0.3f : 0f) + (w.Adapt.Workshops > 0 ? 0.35f : 0f) + (crew >= 12 ? 0.15f : 0f);
+                    string why = hits > 0 ? $"{Ko.IGa(shop.Name)} {ShipHistory.Times(hits)} 뚫렸다" : w.Adapt.Workshops > 0 ? "정비실을 잃고 임시 작업대를 짜야 했다" : $"{crew}명이 작업대 한 방에 기댄다";
+                    yield return new UpgradePlan(UpgradeKind.AuxWorkshop, WorkTarget.AtCell(bc, target), score, Skill.Mechanics,
+                        $"{why} → {target.Name}에 보조 작업대 (정비실을 잃어도 만들고 연구한다 · 금속판 3 + 케이블 2 + 모터 1)",
+                        Cost(UpgradeKind.AuxWorkshop, null), 0.3f);
+                }
+            }
+        }
+
+        // ── 예비 조타석 (v11.1 분산 운영): 함교가 뚫렸거나 자동화가 꺼졌던 배, 큰 배 — 엔진실(없으면 배전실)에 ──
+        if (!ship.Furniture.Any(f => f.AuxHelm && !f.Stowed) && ship.RoomsOf(RoomType.Bridge).FirstOrDefault() is Room br)
+        {
+            int hits = h.BreachesByRoom.GetValueOrDefault(br.Id);
+            int crew = w.Crew.Count(c => !c.Dead);
+            bool lesson = hits > 0 || br.TimesAbandoned > 0 || w.Automation.Outages > 0 || crew >= 12;
+            var spot = new[] { RoomType.Engine, RoomType.Power, RoomType.Workshop }.SelectMany(t => ship.RoomsOf(t))
+                .Where(r => !r.Detached && !r.Abandoned && !r.OffLimits).Select(r => (room: r, cell: Adaptation.BenchCell(w, r))).FirstOrDefault(x => x.cell != null);
+            if (lesson && spot.room != null && spot.cell is Cell hc)
+            {
+                float score = 0.3f + 0.25f * MathF.Min(3, hits) + (br.TimesAbandoned > 0 ? 0.3f : 0f) + 0.15f * MathF.Min(2, w.Automation.Outages) + (crew >= 12 ? 0.1f : 0f);
+                string why = hits > 0 ? $"함교가 {ShipHistory.Times(hits)} 뚫렸다" : w.Automation.Outages > 0 ? $"자동화가 {ShipHistory.Times(w.Automation.Outages)} 꺼졌다" : $"{crew}명이 함교 하나에 기댄다";
+                yield return new UpgradePlan(UpgradeKind.BackupHelm, WorkTarget.AtCell(hc, spot.room), score, Skill.Electrical,
+                    $"{why} → {spot.room.Name}에 예비 조타석 (함교를 잃어도 회피 기동·항로 변경 · 전자재 2 + 케이블 2 + 금속판 1)",
+                    Cost(UpgradeKind.BackupHelm, null), 0.3f);
+            }
         }
 
         // ── 침실 정비 (v10.1): 처음부터 간이침대에서 자는 사람 (침대가 모자란 배) — 사흘 넘게 ──
@@ -752,6 +825,33 @@ public static class Evolution
                 MarkLog.Add(from.Marks, w.Tick, $"{f.Label}을(를) 안쪽 {Ko.EuRo(spot.room.Name)} 옮겼다");
                 text = $"{Ko.IGa(cm.Name)} {Ko.EulReul(f.Label)} {from.Name}에서 외벽이 없는 {Ko.EuRo(spot.room.Name)} 옮겼다 — 뚫렸던 외벽 방에서 빼냈다";
                 room = spot.room;
+                break;
+            }
+            case UpgradeKind.AuxWorkshop:
+            {
+                if (room == null || Adaptation.BenchCell(w, room) is not Cell spot) return false;
+                var bench = w.Ship.AddFurniture(FurnitureType.Workbench, spot);
+                bench.Improved = true;
+                w.Paths.Invalidate();
+                w.Structure.Touch();
+                h.AuxWorkshops++;
+                MarkLog.Add(room.Marks, w.Tick, $"{cm.Name}: 보조 작업대");
+                MarkLog.Add(bench.Machine!.Marks, w.Tick, $"{cm.Name}: 정비실을 잃을 때를 대비해 짰다");
+                text = $"{Ko.IGa(cm.Name)} {room.Name}에 보조 작업대를 짰다 — 정비실을 잃어도 만들고 연구한다";
+                break;
+            }
+            case UpgradeKind.BackupHelm:
+            {
+                if (room == null || Adaptation.BenchCell(w, room) is not Cell spot) return false;
+                var helm = w.Ship.AddFurniture(FurnitureType.Console, spot);
+                helm.AuxHelm = true;
+                helm.Improved = true;
+                helm.Label = "예비 조타석";
+                w.Paths.Invalidate();
+                w.Structure.Touch();
+                h.BackupHelms++;
+                MarkLog.Add(room.Marks, w.Tick, $"{cm.Name}: 예비 조타석");
+                text = $"{Ko.IGa(cm.Name)} {room.Name}에 예비 조타석을 짰다 — 함교를 잃어도 여기서 배를 몬다";
                 break;
             }
             case UpgradeKind.AddGrowBed:

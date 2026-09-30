@@ -34,6 +34,9 @@ public sealed class Atmosphere
     public float CO2Scrubbed { get; private set; }
     public float O2Capacity { get; private set; }
 
+    /// <summary>v11.1: 돌아가는 산소 발생기가 하나도 없어진 때 (-1이면 있다).</summary>
+    public long NoGeneratorSince { get; private set; } = -1;
+
     /// <summary>공기 탱크 잔량 (kPa·칸). 72칸 방을 한 번 채우는 데 약 7,300.</summary>
     public float Reserve { get; set; } = 26000f;
     public float ReserveCapacity { get; internal set; } = 26000f;
@@ -71,6 +74,9 @@ public sealed class Atmosphere
         float capacity = ship.FurnitureOf(FurnitureType.OxygenGenerator)
             .Sum(f => f.Machine!.Efficiency * f.Machine.Rating) * GeneratorCapacity * (1f + Modules.Bonus(_world, FurnitureType.Scrubber)); // v10.6 세정 모듈
         O2Capacity = capacity;
+        bool anyGen = ship.FurnitureOf(FurnitureType.OxygenGenerator).Any(f => !f.Stowed && !f.Room.Detached && !f.Room.Abandoned && !f.Machine!.Has(FaultKind.Wrecked));
+        if (anyGen) NoGeneratorSince = -1;
+        else if (NoGeneratorSince < 0) NoGeneratorSince = _world.Tick;
         float budget = capacity * dtHours;
         float needO2 = 0f, needCO2 = 0f;
         foreach (var r in ship.Rooms)

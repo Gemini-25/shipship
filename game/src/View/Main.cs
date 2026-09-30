@@ -887,6 +887,10 @@ public partial class Main : Node2D
                     Player.Hazard(Sim, hk, at, hid);
                     break;
                 }
+                case "--airlow":
+                    // v11.2 화면 확인용: 공기 탱크를 그 비율로 (조난 신호 장면) — 기록되지 않는다
+                    Sim.Air.Reserve = Sim.Air.ReserveCapacity * float.Parse(value, CultureInfo.InvariantCulture);
+                    break;
                 case "--hazardmenu":
                     Hud.OpenHazardMenu();
                     break;

@@ -118,12 +118,22 @@ public sealed class PropulsionSystem
         var pilot = _w.Crew.Where(c => Awake(c) && c.Room == bridge).OrderByDescending(c => c.SkillLevel(Skill.Piloting)).FirstOrDefault();
         if (pilot != null && helm) return (0.3f + 0.55f * pilot.SkillLevel(Skill.Piloting), $"{pilot.Name}(손 조종)", pilot);
         var local = _w.Crew.Where(c => Awake(c) && c.Room?.Type == RoomType.Engine).OrderByDescending(c => c.SkillLevel(Skill.Engineering)).FirstOrDefault();
+        // v11.1: 함교 조타를 못 쓰면 예비 조타석 (자동화가 살아 있으면 거기로 자동 조종, 아니면 거기 앉은 사람)
+        if (!helm && AuxHelm is Furniture aux)
+        {
+            if (_w.Automation.MainOnline) return (0.7f, "자동 조종(예비 조타석)", null);
+            var at = _w.Crew.Where(c => Awake(c) && c.Room == aux.Room).OrderByDescending(c => c.SkillLevel(Skill.Piloting)).FirstOrDefault();
+            if (at != null) return (0.25f + 0.5f * at.SkillLevel(Skill.Piloting), $"{at.Name}(예비 조타석)", at);
+        }
         if (local != null) return (0.2f + 0.4f * local.SkillLevel(Skill.Engineering), $"{local.Name}(엔진실 현장 조종)", local);
         return (0f, "조종할 사람이 없다", null);
     }
 
+    /// <summary>v11.1 쓸 수 있는 예비 조타석.</summary>
+    public Furniture? AuxHelm => _w.Ship.Furniture.FirstOrDefault(f => f.AuxHelm && !f.Stowed && !f.Room.Detached && !f.Room.Abandoned && f.Machine is Machine m && m.Efficiency > 0f);
+
     /// <summary>연소를 준비하는 시간 (분): 자동이면 금방, 사람이면 좀 걸린다.</summary>
-    private static float SpinUp(float control, string by) => by == "자동 조종" ? 0.4f : by.Contains("현장") ? 1.6f : 1.1f;
+    private static float SpinUp(float control, string by) => by.StartsWith("자동 조종") ? (by == "자동 조종" ? 0.4f : 0.6f) : by.Contains("현장") ? 1.6f : 1.1f;
 
     public bool Burning => Current != null && _w.Tick >= Current.Ignite && _w.Tick < Current.End;
 
@@ -296,6 +306,7 @@ public sealed partial class WorkBoard
         // 조타: 설 자리가 있는 함교 콘솔 → 조종석(의자) → 엔진실
         var helm = bridge?.Furniture.FirstOrDefault(f => f.Type == FurnitureType.Console && f.Machine is Machine hm && !hm.Stopped && f.UseSpots.Count > 0)
                    ?? bridge?.Furniture.FirstOrDefault(f => f.Type == FurnitureType.Seat && f.UseSpots.Count > 0)
+                   ?? (p.AuxHelm is Furniture ax && ax.UseSpots.Count > 0 ? ax : null) // v11.1 예비 조타석
                    ?? engine;
         // 회의를 통과한 항로 변경은 미루지 않는다 (당직보다 앞)
         bool approved = _open.Values.Any(o => o.Kind == WorkKind.ChangeCourse && o.Decision == DecisionState.Approved);

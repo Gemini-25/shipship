@@ -85,6 +85,9 @@ public sealed class World
     /// <summary>v11.2 사고 종류 (운석우·태양 폭풍·가스·병충해·식중독…)와 무작위 사고.</summary>
     public HazardSystem Hazards { get; }
 
+    /// <summary>v11.2 외부 교신 (조난 신호·보급 캡슐·탈출 캡슐 구조).</summary>
+    public CommsSystem Comms { get; }
+
     /// <summary>v10.11 먹을 것 방침 (배급).</summary>
     public FoodPolicy Food { get; } = new();
 
@@ -175,6 +178,7 @@ public sealed class World
         Robots = new RobotSystem(this);
         Propulsion = new PropulsionSystem(this, 1f);
         Hazards = new HazardSystem(this, seed);
+        Comms = new CommsSystem(this);
         Piping = new PipeNetwork(this);
         Automation = new AutomationSystem(this);
         Fixtures = new FixturesSystem(this);
@@ -234,6 +238,7 @@ public sealed class World
             Propulsion.SystemUpdate(dt);
             Hazards.SystemUpdate(dt);
             Food.Update(this, dt);
+            Comms.SystemUpdate(dt);
             Ledger.Sample(this, dt);
             CheckShip();
             foreach (var c in Crew) Memory.Update(this, c);
@@ -635,6 +640,57 @@ public sealed class World
             Math.Clamp(t.Diligence + rng.Range(-0.2f, 0.2f), 0.2f, 0.95f), rng.Range(0.2f, 0.85f),
             Math.Clamp(t.Bravery + rng.Range(-0.25f, 0.2f), 0.15f, 0.9f), rng.Range(0.85f, 1.2f),
             t.Stations, skills, rng.Range(0.3f, 0.7f));
+    }
+
+    private static readonly string[] SurvivorNames = { "나이안", "도하늘", "류세빈", "마로아", "변지오", "석하율", "엄다린", "제이온", "탁서윤", "하예림" };
+
+    /// <summary>
+    /// v11.2 교신: 탈출 캡슐에서 건진 생존자를 승무원으로 태운다 (다쳐서 온다). 번호는 목록 끝, 역할·성격·솜씨는 기본 여섯 중 하나를 닮게.
+    /// 침대가 없으면 간이침대를 편다.
+    /// </summary>
+    public CrewMember AddSurvivor(Cell at)
+    {
+        int id = Crew.Count;
+        var t = DefaultCrew[Rng.Range(0, DefaultCrew.Length)];
+        int k = Crew.Count(c => c.Rescued);
+        string name = SurvivorNames[k % SurvivorNames.Length] + (k >= SurvivorNames.Length ? $" {k / SurvivorNames.Length + 1}" : "");
+        var skills = t.Skills.Select(v => Math.Clamp(v * Rng.Range(0.6f, 1.0f) + Rng.Range(-0.05f, 0.1f), 0.05f, 0.9f)).ToArray();
+        var c = new CrewMember
+        {
+            Id = id,
+            Name = name,
+            Role = t.Role,
+            Traits = new Personality
+            {
+                Diligence = Math.Clamp(t.Diligence + Rng.Range(-0.2f, 0.2f), 0.2f, 0.95f), Sociability = Rng.Range(0.2f, 0.85f),
+                Bravery = Math.Clamp(t.Bravery + Rng.Range(-0.25f, 0.2f), 0.15f, 0.9f), Appetite = Rng.Range(0.85f, 1.2f), Calm = Rng.Range(0.2f, 0.6f),
+            },
+            Memory = new CrewMemory(Ship.Rooms.Count),
+            Schedule = Schedule.FromBedtime((t.Bedtime + Rng.Range(-3f, 3f) + 24f) % 24f),
+            Stations = t.Stations,
+            SkillLevels = skills,
+            Rescued = true,
+        };
+        c.Needs.Food = Rng.Range(0.15f, 0.35f);
+        c.Needs.Rest = Rng.Range(0.2f, 0.4f);
+        c.Needs.Stress = Rng.Range(0.4f, 0.65f);
+        c.Needs.Social = Rng.Range(0.3f, 0.6f);
+        c.Vitals.Health = Rng.Range(0.5f, 0.8f);
+        NeedsSystem.AddInjury(c.Vitals, Rng.Range(0.2f, 0.45f), "탈출 캡슐");
+        c.Memory.Trauma = Rng.Range(0.1f, 0.25f);
+        c.Position = at.Center;
+        c.PreviousPosition = c.Position;
+        c.Room = Ship.RoomAt(at);
+        foreach (var o in Crew)
+        {
+            c.Affinity[o.Id] = Rng.Range(-0.05f, 0.15f);
+            o.Affinity[c.Id] = Rng.Range(0f, 0.25f); // 건져 준 사람들은 조금 정이 간다
+        }
+        var bed = Ship.FurnitureOf(FurnitureType.Bed).FirstOrDefault(b => b.Owner == null && !b.Room.Abandoned && !b.Room.OffLimits);
+        if (bed == null && StartingCot(Ship, this) is Furniture cot) bed = cot;
+        if (bed != null) { c.Bed = bed; bed.Owner = c; Paths.Invalidate(); }
+        Crew.Add(c);
+        return c;
     }
 
     /// <summary>침대가 모자랄 때 처음부터 놓아 둔 간이침대: 침실 → 휴게실 → 위험하지 않은 방 순서로.</summary>
