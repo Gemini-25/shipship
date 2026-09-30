@@ -122,8 +122,9 @@ public static class Prevention
                 // 감지기: 주 컴퓨터가 돌고 그 방에 전기가 있으면 (열·압력은 잘 잡고, 진동·계기는 덜).
                 // v12.0 교정이 틀어질수록 덜 잡는다 · 계기 오류는 감지기만 낸다 (틀어진 감지기가 보는 헛것)
                 bool logged = o.Note is { Logged: true };
-                float sensor = !logged && !w.Watch.NoSensors && w.Automation.MainOnline && m.Body.Room.Powered
-                    ? (phantom ? 0.5f : o.Kind switch { OmenKind.Heat => 0.22f, OmenKind.Pressure => 0.18f, OmenKind.Drift => 0.12f, _ => 0.05f }) * (0.4f + 0.6f * m.SensorCal) : 0f;
+                float sensor = !logged && !w.Watch.NoSensors && w.Automation.MainOnline && m.Body.Room.Powered && m.Body.Room.DataLinked
+                    ? (phantom ? 0.5f : o.Kind switch { OmenKind.Heat => 0.22f, OmenKind.Pressure => 0.18f, OmenKind.Drift => 0.12f, _ => 0.05f }) * (0.4f + 0.6f * m.SensorCal)
+                      * (!phantom && w.Automation.Level >= 4 ? 1.5f : 1f) : 0f; // v12.5 IV 추론: 전조를 먼저 본다
                 if (sensor > 0f && w.Rng.Chance(sensor * (phantom ? 5f : 0.3f + 0.7f * level) * dt))
                     Detect(w, m, o, "감지기", null);
                 else if (!phantom)

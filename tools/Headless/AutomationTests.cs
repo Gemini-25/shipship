@@ -1,0 +1,117 @@
+using System;
+using System.Linq;
+using ShipSim.Core;
+
+// v12.5 중앙 컴퓨터 등급 · 수동 조종 · 판단 근거 · 예측 · 격벽 카운트다운 · 방침
+public static partial class Program
+{
+    private static int RunAutomationTest(int seed)
+    {
+        _fails = 0;
+        Console.WriteLine($"자동화 점검 (v12.5) · 시드 {seed}\n");
+
+        // 1) 등급
+        {
+            var w = DayOne(seed, "Mirinae");
+            int basic = w.Automation.Level;
+            w.Automation.ExtraLevel = 1; int up = w.Automation.Level; w.Automation.ExtraLevel = 0;
+            foreach (var c in w.Ship.FurnitureOf(FurnitureType.MainComputer)) w.Machines.Break(c.Machine!, FaultKind.Wrecked);
+            Run(w, SimTime.Minutes(2));
+            int down = w.Automation.Level;
+            Check("등급 — 주 컴퓨터는 III, 하나 얹으면 IV, 멎으면 I", basic == 3 && up == 4 && down <= 2, $"기본 {AutomationSystem.LevelName(basic)} · 얹으면 {AutomationSystem.LevelName(up)} · 멎으면 {AutomationSystem.LevelName(down)}");
+        }
+        // 2) 격벽: 사람 우선이면 안에 사람이 있을 때 2분 기다린다 · 배 우선이면 바로
+        {
+            bool[] waited = new bool[2]; bool[] lockedLater = new bool[2];
+            for (int k = 0; k < 2; k++)
+            {
+                var w = DayOne(seed, "Mirinae");
+                w.Automation.ShipFirst = k == 1;
+                var room = w.Ship.RoomsOf(RoomType.Workshop).First();
+                var c = w.Crew.First(x => x.CanAct);
+                var spot = room.Cells.First(w.Ship.IsOpenFloor); c.Position = spot.Center; c.PreviousPosition = c.Position;
+                var wall = w.Ship.Walls.Where(kv => kv.Value.IsHull && Hull.InsideRoom(w.Ship, kv.Key) == room).Select(kv => kv.Key).First();
+                Hull.Damage(w.Ship, wall, 1.2f);
+                Run(w, SimTime.Minutes(1));
+                waited[k] = room.LockPendingUntil >= 0 && !room.Doors.Any(d => d.Locked);
+                Run(w, SimTime.Minutes(4));
+                lockedLater[k] = room.Doors.Where(d => !d.IsExternal && d.Powered).All(d => d.Locked) || room.LockPendingUntil < 0;
+            }
+            Check("격벽 — 사람 우선은 기다리고, 배 우선은 바로 닫는다", waited[0] && lockedLater[0] && !waited[1], $"사람 우선: 기다림 {waited[0]} → 닫힘 {lockedLater[0]} · 배 우선: 기다림 {waited[1]}");
+        }
+        // 3) 관제석: 컴퓨터 혼자면 일찍 끊고 늦게 되돌린다 ↔ 사람이 조종하면 늦게 끊고 빨리 되돌린다 (정전된 총시간)
+        {
+            float[] darkMin = new float[2]; string op = "-";
+            for (int k = 0; k < 2; k++)
+            {
+                var w = DayOne(seed, "Mirinae");
+                for (int t = 0; t < 48 && !w.Crew.Any(c => c.CanAct && c.IsAwake && c.SkillLevel(Skill.Electrical) >= 0.5f && WatchLog.OnShift(c, w)); t++) Run(w, SimTime.Minutes(30));
+                var room = w.Ship.RoomsOf(RoomType.Galley).First();
+                if (k == 1)
+                {
+                    var lounge = w.Ship.RoomsOf(RoomType.Lounge).First();
+                    lounge.BreakerOff = true;
+                    for (int t = 0; t < 30 && w.Automation.Operator == null; t++) Run(w, SimTime.Minutes(2));
+                }
+                w.Moisture.AddWater(room, room.Cells.Count * 20f * 0.18f);
+                for (int i = 0; i < 180; i++)
+                {
+                    Run(w, SimTime.Minutes(1));
+                    if (k == 0) foreach (var o in w.Board.Open.Where(o => o.Kind == WorkKind.ManualControl).ToList()) w.Board.Close(o);
+                    if (!room.Powered) darkMin[k]++;
+                    if (w.Automation.Operator != null) op = w.Automation.Operator.Name;
+                }
+            }
+            Check("관제석 — 사람이 조종하면 물 찬 방의 정전이 짧다", op != "-" && darkMin[1] < darkMin[0],
+                $"컴퓨터 혼자: 정전 {darkMin[0]:0}분 · 관제석({op}): 정전 {darkMin[1]:0}분");
+        }
+        // 4) IV 추론: 판단 근거를 말한다 (III은 말하지 않는다)
+        {
+            int[] reasons = new int[2];
+            for (int k = 0; k < 2; k++)
+            {
+                var w = DayOne(seed, "Mirinae");
+                w.Automation.ExtraLevel = k;
+                foreach (var o in w.Board.Open.Where(o => o.Kind == WorkKind.ManualControl).ToList()) w.Board.Close(o);
+                foreach (var p in w.Ship.FurnitureOf(FurnitureType.CoolantPump)) w.Machines.Break(p.Machine!, FaultKind.PumpSeized);
+                for (int i = 0; i < 20; i++) { Run(w, SimTime.Minutes(3)); foreach (var o in w.Board.Open.Where(o => o.Kind == WorkKind.ManualControl).ToList()) w.Board.Close(o); }
+                reasons[k] = w.Automation.Reasoning.Count;
+                if (k == 1) Console.WriteLine("    " + string.Join("\n    ", w.Automation.Reasoning.Take(3).Select(r => $"{SimTime.Clock(r.tick)} {r.text}")));
+            }
+            Check("IV 추론 — 원인을 짚어 말한다 (III은 조용)", reasons[0] == 0 && reasons[1] > 0, $"III {reasons[0]}줄 · IV {reasons[1]}줄");
+        }
+        // 5) V 지휘: 연쇄 예측
+        {
+            var w = DayOne(seed, "Mirinae");
+            w.Automation.ExtraLevel = 2;
+            foreach (var p in w.Ship.FurnitureOf(FurnitureType.CoolantPump)) w.Machines.Break(p.Machine!, FaultKind.PumpSeized);
+            Run(w, SimTime.Hours(1));
+            var pred = w.Automation.Reasoning.FirstOrDefault(r => r.text.StartsWith("예측"));
+            Check("V 지휘 — 배터리가 언제 바닥나는지 예측한다", pred.text != null, pred.text ?? "(없음)");
+        }
+        // 6) III 조정: 새는 설비의 방 급수 밸브를 원격으로 잠근다
+        {
+            var w = DayOne(seed, "Mirinae");
+            var rec = w.Ship.FurnitureOf(FurnitureType.WaterRecycler).First().Machine!;
+            rec.Line = 0.1f;
+            Run(w, SimTime.Minutes(3));
+            Check("III 조정 — 새는 방 급수 밸브를 원격으로 잠근다", rec.Body.Room.ValveShut, $"{rec.Body.Room.Name} 밸브 {(rec.Body.Room.ValveShut ? "잠김" : "열림")} · 샌 물 {w.Moisture.Stats.Leaked:0.0}L");
+        }
+        // 7) 방침 회의: 늦게 닫아 옆방까지 잃은 일이 쌓이면
+        {
+            var w = DayOne(seed, "Mirinae");
+            w.Automation.LateSeals = 3;
+            Run(w, SimTime.TicksPerDay + SimTime.Hours(1));
+            var dec = w.History.Events.LastOrDefault(e => e.Text.Contains("배 우선"));
+            Check("방침 회의 — 늦게 닫아 잃은 일이 쌓이면 배 우선을 두고 표결한다", dec != null, dec?.Text ?? "(회의 없음)");
+        }
+        // 8) 결정론
+        {
+            uint H() { var w = DayOne(seed, "Mirinae"); w.Automation.ExtraLevel = 2; w.Moisture.AddWater(w.Ship.RoomsOf(RoomType.Galley).First(), 250f); Run(w, SimTime.Hours(8)); return SaveGame.StateHash(w); }
+            uint a = H(), b = H();
+            Check("자동화가 든 배의 결정론", a == b, $"지문 {a:x8} / {b:x8}");
+        }
+        Console.WriteLine(_fails == 0 ? "\n✔ 자동화 점검 모두 통과" : $"\n✘ {_fails}개 실패");
+        return _fails == 0 ? 0 : 1;
+    }
+}

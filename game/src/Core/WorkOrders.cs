@@ -59,6 +59,8 @@ public enum WorkKind
     RepairNet,
     // v12.3 침수
     IsolateRoom, BreakerOn, ShutRoomValve, OpenRoomValve, PumpOut,
+    // v12.5 관제석 수동 조종
+    ManualControl,
 }
 
 public static class WorkKinds
@@ -170,6 +172,7 @@ public static class WorkKinds
         WorkKind.ShutRoomValve => "급수 밸브 잠그기",
         WorkKind.OpenRoomValve => "급수 밸브 열기",
         WorkKind.PumpOut => "물 퍼내기",
+        WorkKind.ManualControl => "수동 조종",
         WorkKind.Reline => "설비 관 이음",
         _ => k.ToString(),
     };
@@ -367,6 +370,7 @@ public sealed class WorkOrder
         WorkKind.Rewire => $"{Target.Label} 전선",
         WorkKind.RepairNet => $"{Target.CurrentRoom?.Name ?? "?"} 간선 잇기",
         WorkKind.IsolateRoom or WorkKind.BreakerOn or WorkKind.ShutRoomValve or WorkKind.OpenRoomValve or WorkKind.PumpOut => $"{Target.CurrentRoom?.Name ?? "?"} {WorkKinds.Name(Kind)}",
+        WorkKind.ManualControl => "관제석 수동 조종",
         WorkKind.Reline => $"{Target.Label} 관 이음",
         _ => Kind.ToString(),
     };
@@ -1177,6 +1181,7 @@ public sealed partial class WorkBoard
         ScanLinks(Post); // v12.1 설비 전선·관
         ScanNet(Post); // 배 전체 망
         ScanMoisture(Post); // v12.3 침수·분전함·밸브
+        ScanManualControl(Post); // v12.5 관제석 수동 조종
         ScanNavigation(Post); // v11.2 항로와 추진
         ScanHazards(Post); // v11.2 사고 뒷정리 (오염된 식사)
         ScanLiving(Post); // v10.11 배급

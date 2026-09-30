@@ -134,11 +134,18 @@ public sealed class MoistureSystem
             using var because = w.Causes.Because(node);
 
             // 컴퓨터는 보수적으로: 물이 찬 방의 분전함을 통째로 내린다 (피해는 막지만 그 방 설비도 다 멈춘다)
-            if (w.Automation.MainOnline && room.DataLinked && _floodSeen.TryGetValue(room.Id, out var seen) && w.Tick - seen > SimTime.Minutes(3))
+            // v12.5 관제석에 사람이 있으면 좁게: 깊거나 물에 선 사람이 있을 때만 내린다 (그 전엔 지켜본다)
+            var op = w.Automation.Operator;
+            bool someoneInWater = w.Crew.Any(c => !c.Dead && c.Room == room && c.Suit == null);
+            if (w.Automation.Level >= 2 && w.Automation.MainOnline && room.DataLinked && _floodSeen.TryGetValue(room.Id, out var seen) && w.Tick - seen > SimTime.Minutes(3)
+                && (op == null || depth > 0.25f || someoneInWater))
             {
-                Isolate(room, null);
+                w.Automation.Reason($"flood:{room.Id}", $"{room.Name} 바닥 물 {DepthCm(room):0}cm · 습도 {room.Humidity * 100:0}% — 누전 위험 · 조치: 분전함 차단" + (op == null ? " (그 방 설비도 멈춘다)" : $" ({op.Name}: 더는 못 기다린다)") + " · 요청: 물 퍼내기, 새는 곳 점검", SimTime.Hours(2));
+                Isolate(room, op);
                 continue;
             }
+            if (op != null && w.Automation.MainOnline && depth <= 0.25f && !someoneInWater)
+                w.Automation.Reason($"floodwatch:{room.Id}", $"{room.Name} 바닥 물 {DepthCm(room):0}cm — 아직 얕다, 전기를 살려 두고 지켜본다 (분전함은 깊어지면)", SimTime.Hours(2));
             // 누전: 그 방 회로가 단락된다
             if (w.Rng.Chance(3f * depth * dt) && ship.FurnitureOf(FurnitureType.PowerPanel).FirstOrDefault()?.Machine is Machine panel && !panel.Faults.Any(f => f.Circuit == room.Circuit))
             {
@@ -176,6 +183,24 @@ public sealed class MoistureSystem
             }
         }
 
+        // v12.5 III 조정: 새는 설비의 방 급수 밸브를 원격으로 잠근다 · 관제석 사람은 오경보로 내린 분전함을 원격으로 되올린다
+        foreach (var room in ship.LiveRooms)
+        {
+            if (room.Detached || !w.Automation.MainOnline || !room.DataLinked) continue;
+            if (w.Automation.Level >= 3 && LeakSource(room) && room.WaterLinked && !room.ValveShut)
+            {
+                room.ValveShut = true;
+                Stats.Valves++;
+                w.Log.Add(w.Tick, LogKind.Ship, $"주 컴퓨터가 {room.Name} 급수 밸브를 원격으로 잠갔다 — 설비 관 이음에서 샌다");
+                w.Automation.Reason($"valve:{room.Id}", $"{room.Name} 급수 유량이 새는 쪽으로 빠진다 — 원격 밸브 잠금 (그 방은 단수) · 요청: 관 이음 고치기");
+            }
+            if (w.Automation.Operator is CrewMember op2 && room.BreakerOff && Depth(room) < 0.05f && w.Fire.CountIn(room) == 0)
+            {
+                w.Automation.Reason($"restore:{room.Id}", $"{room.Name} 바닥이 말랐다 — 분전함 원격으로 다시 올림");
+                Restore(room, op2);
+            }
+        }
+
         // 7) 기동 전류: 방에 전기가 돌아오는 순간 설비가 한꺼번에 켜진다
         foreach (var room in ship.LiveRooms)
         {
@@ -186,7 +211,7 @@ public sealed class MoistureSystem
             if (draw < 4f) continue;
             var (tries, last) = _inrush.TryGetValue(room.Id, out var t) ? t : (0, 0L);
             if (w.Tick - last > SimTime.Hours(1)) tries = 0;
-            float chance = MathF.Min(0.7f, 0.12f + 0.03f * draw) * MathF.Pow(0.5f, tries) * (w.Automation.MainOnline ? 0.4f : 1f); // 컴퓨터는 차례로 켠다
+            float chance = MathF.Min(0.7f, 0.12f + 0.03f * draw) * MathF.Pow(0.5f, tries) * (w.Automation.Operator != null ? 0.2f : w.Automation.Level >= 3 ? 0.4f : 1f); // III부터 컴퓨터가 차례로 켠다, 사람이 조종하면 더 잘
             if (!w.Rng.Chance(chance)) continue;
             if (ship.FurnitureOf(FurnitureType.PowerPanel).FirstOrDefault()?.Machine is not Machine panel || panel.Faults.Any(f => f.Circuit == room.Circuit)) continue;
             _inrush[room.Id] = (tries + 1, w.Tick);

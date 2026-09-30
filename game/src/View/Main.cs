@@ -456,6 +456,7 @@ public partial class Main : Node2D
                 case Key.K: Hud.ToggleChain(); break;
                 case Key.L: ToggleHighlight(); break;
                 case Key.I: Hud.ToggleCodex(); break;
+                case Key.Y: Hud.ToggleControl(); break;
                 case Key.G: Hud.ToggleMinimap(); break;
                 case Key.T: Hud.ToggleTech(); break;
                 case Key.F5: SaveGame(); break;
@@ -766,6 +767,9 @@ public partial class Main : Node2D
                 case "--break":
                     // --break=CoolantPump (첫 대), --break=OxygenGenerator* (그 종류 전부)
                     Player.BreakAll(Sim, value.TrimEnd('*'), value.EndsWith("*"));
+                    break;
+                case "--control":
+                    Hud.ToggleControl();
                     break;
                 case "--codex":
                     Hud.CodexMode = true;

@@ -99,7 +99,8 @@ public partial class Hud : Control
         DrawMinimap(); // v11.3
         DrawIncidentCards(mouse); // v12.2 사고 카드
         if (_world.Causes.Notable().Any()) DrawTimeBar(mouse); // v12.2 시간 막대
-        if (ChainOpen) DrawChain(mouse); // v12.2 인과 사슬
+        if (ControlOpen) DrawControl(mouse); // v12.5 관제 화면
+        else if (ChainOpen) DrawChain(mouse); // v12.2 인과 사슬
         else if (ChronicleOpen) DrawChronicle(mouse);
         else if (TechOpen) DrawTech(mouse);
         DrawHints();

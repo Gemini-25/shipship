@@ -89,6 +89,8 @@ public sealed class HullSystem
     private readonly World _world;
     private readonly Dictionary<int, float> _lastPressure = new();
     private readonly Dictionary<int, long> _released = new();
+    private readonly Dictionary<int, long> _trapped = new(); // v12.5 사람이 남은 채 닫힌 방
+    public Dictionary<int, long> Trapped => _trapped;
     private readonly HashSet<Cell> _breached = new();
 
     public HullSystem(World world) => _world = world;
@@ -160,6 +162,17 @@ public sealed class HullSystem
                 room.Lockdown = true;
                 int locked = 0;
                 bool auto = _world.Automation.DoorsIn(room); // v9.2: 격벽 자동 잠금은 주 컴퓨터가 한다 (v12.3 데이터선이 그 방까지 닿아야)
+                // v12.5 사람 우선: 안에 사람이 있으면 2분 기다린다 (배 우선이면 바로)
+                var inside = _world.Crew.Where(c => !c.Dead && c.Room == room && !c.Outside).ToList();
+                if (auto && inside.Count > 0 && !_world.Automation.ShipFirst)
+                {
+                    room.LockPendingUntil = _world.Tick + SimTime.Minutes(2);
+                    _world.RaiseAlert($"{room.Name} 감압! 안에 {string.Join("·", inside.Select(c => c.Name))} — 격벽 폐쇄 대기 2분 (사람 우선)", room, AlertLevel.Critical, shipWide: true);
+                    _world.Automation.Reason($"lock:{room.Id}", $"{room.Name} 감압 · 안에 {inside.Count}명 — 방침(사람 우선)에 따라 격벽 폐쇄를 2분 늦춘다 · 그동안 옆방 공기도 빠진다", SimTime.Minutes(10));
+                    _world.Board.RequestScan();
+                    continue;
+                }
+                if (auto && inside.Count > 0) _trapped[room.Id] = _world.Tick; // 배 우선: 사람이 안에 있는 채 닫는다
                 foreach (var d in room.Doors)
                 {
                     if (d.IsExternal || !d.Powered || !auto) continue;
@@ -183,6 +196,23 @@ public sealed class HullSystem
                 }
                 _world.Log.Add(_world.Tick, LogKind.Ship, p > 90f ? $"{room.Name} 재가압 완료 · 격벽 해제"
                     : $"{room.Name} 격벽 해제 — 공기 탱크가 비어 {p:0}kPa에서 더 오르지 않는다");
+            }
+            // v12.5 기다리던 격벽: 사람이 다 나왔거나 시간이 다 됐으면 닫는다
+            if (room.LockPendingUntil >= 0)
+            {
+                bool left = !_world.Crew.Any(c => !c.Dead && c.Room == room && !c.Outside);
+                if (left || _world.Tick >= room.LockPendingUntil || !room.Lockdown)
+                {
+                    if (room.Lockdown && !left)
+                    {
+                        _trapped[room.Id] = _world.Tick; // 닫히는 순간 안에 남은 사람 — 한 시간 안에 쓰러지면 센다
+                    }
+                    // 기다리는 사이 옆방까지 빠졌나
+                    if (room.Doors.Any(d => (d.RoomA == room ? d.RoomB : d.RoomA) is Room o && !o.Leaking && o.Air.Pressure < 85f)) _world.Automation.LateSeals++;
+                    room.LockPendingUntil = -1;
+                    if (room.Lockdown) _world.Log.Add(_world.Tick, LogKind.Ship, $"{room.Name} 격벽 폐쇄" + (left ? " — 모두 빠져나왔다" : " — 기다림이 끝났다"));
+                }
+                else continue;
             }
             // 잠긴 방의 문에 전기가 다시 들어오면 마저 닫는다 (손으로 닫지 못한 문)
             if (room.Lockdown && !room.Abandoned && _world.Automation.DoorsIn(room))

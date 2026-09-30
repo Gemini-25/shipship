@@ -159,6 +159,7 @@ public static class Crisis
             case WorkKind.WakeCrew: return 0.95f;
             // v12.3 침수: 물 + 전기는 바로, 핵심 방 분전함은 급히 다시
             case WorkKind.IsolateRoom: return 1.0f;
+            case WorkKind.ManualControl: return 0.8f;
             case WorkKind.PumpOut: return o.Urgency >= 0.7f ? 0.7f : 0.35f;
             case WorkKind.ShutRoomValve: return 0.7f;
             case WorkKind.OpenRoomValve: return 0.45f;

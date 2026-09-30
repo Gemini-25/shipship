@@ -22,7 +22,7 @@ public partial class Hud
     {
         ChainIncident = inc;
         _chainScroll = 0;
-        if (inc != null) { ChronicleOpen = false; TechOpen = false; }
+        if (inc != null) { ChronicleOpen = false; TechOpen = false; ControlOpen = false; }
     }
 
     /// <summary>K: 가장 최근의 큰 사고 사슬을 연다 / 닫는다.</summary>

@@ -30,7 +30,7 @@ public partial class Hud
 
         Gfx.RoundRect(this, new Rect2(x, y + 18, 16, 16), col.WithAlpha(0.3f), 5, col);
         Gfx.Text(this, Fonts.Bold, new Vector2(x + 26, y + 32), r.Name, 17, Palette.Text);
-        Gfx.Text(this, Fonts.Body, new Vector2(x + 26, y + 50), $"{r.Room?.Name ?? "?"} · 충전대 {r.Dock.Room.Name}", 12, Palette.TextMuted);
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 26, y + 50), $"{r.Room?.Name ?? "?"} · 충전대 {r.Dock.Room.Name} · 버릇: {r.Quirk.Name}", 12, Palette.TextMuted);
         var sc = r.Fault != null || r.State is RobotState.Stalled or RobotState.Towed ? Palette.Danger : r.Battery < 0.25f ? Palette.Warning : Palette.Good;
         Gfx.TextRight(this, Fonts.Bold, new Vector2(right, y + 32), RobotStateText(r), 12, sc);
         Divider(x, right, y + 64);

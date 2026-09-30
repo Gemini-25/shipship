@@ -42,6 +42,8 @@ public sealed class Robot
     public int Id { get; init; }
     public RobotKind Kind { get; init; }
     public string Name { get; init; } = "";
+    /// <summary>v12.5 이 한 대의 버릇.</summary>
+    public Quirk Quirk => Quirks.Of(Id, (int)Kind + 10);
     public Furniture Dock { get; init; } = null!;
     public int Slot { get; init; }
 
@@ -566,7 +568,7 @@ public sealed class RobotSystem
     {
         var path = r.Path;
         if (path == null) return true;
-        float budget = Speed(r.Kind) * (r.Fault == null && r.Battery > 0.02f ? 1f : 0.5f);
+        float budget = Speed(r.Kind) * r.Quirk.Speed * (r.Fault == null && r.Battery > 0.02f ? 1f : 0.5f);
         bool repathed = false;
         while (budget > 0f && r.PathIndex < path.Count)
         {

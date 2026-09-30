@@ -13,7 +13,7 @@ namespace ShipSim.Core;
 /// 환기가 끊기면(댐퍼가 걸리거나 닫히거나, 생명유지실이 정전이거나, 함교가 감압되면) 함교가 달아올라 과열 정지한다.
 /// 비상수단: 사람이 손으로 — 격벽을 돌려 닫고, 댐퍼를 열고 닫고, 불은 눈으로 보고, 회로는 사람이 내린다. 개조로 예비 제어기(격벽·댐퍼·경보만).
 /// </summary>
-public sealed class AutomationSystem
+public sealed partial class AutomationSystem
 {
     /// <summary>이 온도를 넘으면 과열 정지할 수 있다 (℃).</summary>
     public const float OverheatC = 38f;
@@ -122,6 +122,7 @@ public sealed class AutomationSystem
             w.Board.RequestScan();
         }
         if (!main) OfflineHours += dt;
+        Think(dt); // v12.5 등급·수동 조종·예측·방침
         bool gone = Gone;
         if (gone && GoneSince < 0) GoneSince = w.Tick;
         else if (!gone) GoneSince = -1;

@@ -118,6 +118,8 @@ public sealed class Room
     public float Humidity { get; set; } = 0.4f;
     public bool BreakerOff { get; set; }
     public bool ValveShut { get; set; }
+    /// <summary>v12.5 사람 우선: 안에 사람이 있어 격벽 폐쇄를 기다린다 (이 틱까지).</summary>
+    public long LockPendingUntil { get; set; } = -1;
 
     public int Id { get; init; }
     public RoomType Type { get; init; }

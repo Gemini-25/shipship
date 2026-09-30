@@ -27,6 +27,8 @@ public sealed class Drone
     public int Id { get; init; }
     public DroneKind Kind { get; init; }
     public string Name { get; init; } = "";
+    /// <summary>v12.5 이 한 대의 버릇.</summary>
+    public Quirk Quirk => Quirks.Of(Id, (int)Kind);
     public Furniture Dock { get; init; } = null!;
     public int Slot { get; init; }
 
@@ -176,22 +178,23 @@ public sealed class DroneSystem
     /// <summary>1틱에 나는 칸 수.</summary>
     public static float Speed(DroneKind k) => k switch
     {
-        DroneKind.Inspect => 0.09f,
-        DroneKind.Repair => 0.07f,
-        DroneKind.Build => 0.06f,
-        _ => 0.06f,
+        // v12.5 드론 개편: 2.5배 빠르게 (사람보다 한참 빠른 손)
+        DroneKind.Inspect => 0.22f,
+        DroneKind.Repair => 0.18f,
+        DroneKind.Build => 0.15f,
+        _ => 0.15f,
     };
 
     /// <summary>끌고 올 때 속도 (시간당 약 8칸).</summary>
-    public const float TowSpeed = 0.0055f;
+    public const float TowSpeed = 0.011f; // v12.5 두 배
 
     /// <summary>시간당 배터리 소모 (날 때).</summary>
     public static float Drain(DroneKind k) => k switch
     {
-        DroneKind.Inspect => 0.25f,
-        DroneKind.Repair => 0.22f,
-        DroneKind.Build => 0.22f,
-        _ => 0.2f,
+        DroneKind.Inspect => 0.2f,
+        DroneKind.Repair => 0.18f,
+        DroneKind.Build => 0.18f,
+        _ => 0.16f,
     };
 
     public static bool CanDo(DroneKind d, WorkKind k) => d switch
@@ -207,13 +210,14 @@ public sealed class DroneSystem
     /// <summary>드론이 그 일을 하는 데 걸리는 시간.</summary>
     public static float WorkHours(WorkKind k) => k switch
     {
-        WorkKind.RepairJoint => 1.0f,
-        WorkKind.RebuildFrame => 1.5f,
-        WorkKind.InstallTruss => 2.0f,
-        WorkKind.Clamp => 0.75f,
-        WorkKind.ReleaseJoint => 0.3f,
-        WorkKind.Retrieve => 0.25f,
-        WorkKind.RepairRadiator => 1.0f,
+        // v12.5 드론 개편: 작업 40% 빠르게
+        WorkKind.RepairJoint => 0.6f,
+        WorkKind.RebuildFrame => 0.9f,
+        WorkKind.InstallTruss => 1.2f,
+        WorkKind.Clamp => 0.45f,
+        WorkKind.ReleaseJoint => 0.2f,
+        WorkKind.Retrieve => 0.15f,
+        WorkKind.RepairRadiator => 0.6f,
         _ => 0.05f,
     };
 
@@ -315,7 +319,7 @@ public sealed class DroneSystem
                 case DroneState.Returning:
                 case DroneState.Towing:
                 {
-                    float speed = d.State == DroneState.Towing ? TowSpeed : Speed(d.Kind);
+                    float speed = (d.State == DroneState.Towing ? TowSpeed : Speed(d.Kind)) * d.Quirk.Speed;
                     float drain = d.State == DroneState.Towing ? 0.3f : Drain(d.Kind);
                     if (d.Fetching != null && d.State == DroneState.Towing) { speed = 0.02f; drain = 0.3f; }
                     d.Battery = MathF.Max(0f, d.Battery - drain * hour);
@@ -329,7 +333,7 @@ public sealed class DroneSystem
                 case DroneState.Working:
                     d.Battery = MathF.Max(0f, d.Battery - Drain(d.Kind) * 0.8f * hour);
                     d.FlightHours += hour;
-                    d.WorkDone += hour;
+                    d.WorkDone += hour * d.Quirk.Work; // v12.5 버릇
                     if (d.WorkDone >= d.WorkNeeded) FinishWork(d);
                     else if (d.Battery <= 0f) Strand(d, "일하다 배터리가 바닥났다");
                     break;

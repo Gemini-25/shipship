@@ -81,7 +81,7 @@ public sealed class Storyteller
         float repair = (MathF.Min(1f, ship.CountStored(ItemKind.Sealant) / 8f) + MathF.Min(1f, ship.CountStored(ItemKind.Plate) / 6f)) * 0.5f;
         int crew = Math.Max(1, w.Crew.Count(c => !c.Dead));
         float able = w.Crew.Count(c => c.CanAct) / (float)crew;
-        float life = (w.Power.BatteryCapacity > 0 ? MathF.Min(1f, w.Power.BatteryCharge) : 0.5f) * 0.25f
+        float life = (w.Power.BatteryCapacity > 0 ? MathF.Min(1f, w.Power.BatteryCharge / w.Power.BatteryCapacity) : 0.5f) * 0.25f
                      + (w.Air.ReserveCapacity > 0 ? w.Air.Reserve / w.Air.ReserveCapacity : 0.5f) * 0.25f
                      + (w.Water.Capacity > 0 ? MathF.Min(1f, w.Water.Level / w.Water.Capacity) : 0.5f) * 0.25f
                      + MathF.Min(1f, ship.CountStored(ItemKind.Meal) / (crew * 6f)) * 0.25f;
