@@ -158,6 +158,11 @@ public static class Remodel
         // 2) 새 방: 떼어 낸 쪽의 칸, 공기, 전기, 용도
         var b = new Room { Id = ship.Rooms.Count, Type = a.Type, NameOverride = $"{a.Name} 안쪽 칸", Partitioned = true };
         a.Partitioned = true;
+        // v10.12: 걷을 때를 위해 기억해 둔다
+        b.SplitFrom = a;
+        b.SplitWall.AddRange(p.Wall.Where(c => c != p.Door));
+        b.SplitSince = w.Tick;
+        b.SplitBreaches = w.History.BreachesByRoom.GetValueOrDefault(a.Id);
         ship.Rooms.Add(b);
         foreach (var c in p.SideB)
         {
@@ -202,6 +207,7 @@ public static class Remodel
         a.Doors.Add(door);
         b.Doors.Add(door);
         ship.AddDoor(door);
+        b.SplitDoor = door;
 
         // 5) 연결부: 떼어 낸 쪽 외벽에 박힌 것은 새 방의 것 (설계 연결부 수도 나눈다)
         var sideA = a.Cells.ToHashSet();
@@ -238,5 +244,226 @@ public static class Remodel
         w.Structure.Touch();
         w.Board.RequestScan();
         return b;
+    }
+}
+
+/// <summary>
+/// v10.12 공간 개조 (되돌리기와 옮기기).
+/// 칸막이 철거: 칸막이로 떼어 냈던 칸을 원래 방에 도로 합친다 — 벽·문이 바닥이 되고, 칸의 가구·문·연결부·밸브·공기·기억이 원래 방으로.
+///   떼어 낸 칸은 번호가 바뀌지 않게 목록에 빈 칸으로 남고(Merged → Detached), 모든 계통이 건너뛴다.
+/// 설비 옮기기: 여러 번 뚫리거나 버렸던 외벽 방의 설비를 외벽이 없는 안쪽 방 빈 자리로 (설비의 이력·마모·단계는 그대로 따라간다).
+/// </summary>
+public static class Remodel2
+{
+    /// <summary>이 칸의 칸막이를 걷을 수 있나.</summary>
+    public static bool CanMerge(World w, Room b)
+    {
+        if (b.Merged || b.SplitFrom is not Room a || a.Merged || b.SplitDoor is not Door d || d.Removed) return false;
+        foreach (var r in new[] { a, b })
+            if (r.Detached || r.Abandoned || r.OffLimits || r.Leaking || r.Lockdown || w.Fire.CountIn(r) > 0 || r.Air.Toxin > 0.1f) return false;
+        // 두 칸의 기압이 비슷해야 (한쪽이 진공이면 벽을 트는 순간 빨려 나간다)
+        if (MathF.Abs(a.Air.Pressure - b.Air.Pressure) > 15f) return false;
+        return b.SplitWall.All(c => w.Ship.WallAt(c) is WallState ws && !ws.IsHull);
+    }
+
+    /// <summary>칸막이를 걷는다: b를 원래 방에 합친다. 합친 방을 돌려준다.</summary>
+    public static Room? Merge(World w, Room b, CrewMember? builder = null)
+    {
+        if (!CanMerge(w, b)) return null;
+        var a = b.SplitFrom!;
+        var ship = w.Ship;
+        var grid = ship.Grid;
+        float va = a.Volume, vb = b.Volume;
+
+        // 1) 벽과 문 → 원래 방의 바닥
+        var opened = new List<Cell>();
+        foreach (var c in b.SplitWall)
+        {
+            ship.RemoveWall(c);
+            grid.SetKind(c, TileKind.Floor);
+            grid.SetRoomId(c, a.Id);
+            a.Include(c);
+            opened.Add(c);
+        }
+        var door = b.SplitDoor!;
+        ship.UnmapDoor(door);
+        door.Removed = true;
+        door.Openness = 0f;
+        door.Locked = false;
+        grid.SetKind(door.Cell, TileKind.Floor);
+        grid.SetRoomId(door.Cell, a.Id);
+        a.Include(door.Cell);
+        opened.Add(door.Cell);
+        a.Doors.Remove(door);
+        b.Doors.Remove(door);
+
+        // 2) 칸 → 원래 방 (공기는 부피대로 섞는다)
+        foreach (var c in b.Cells)
+        {
+            grid.SetRoomId(c, a.Id);
+            a.Include(c);
+        }
+        float total = MathF.Max(1f, va + vb);
+        a.Air.O2 = (a.Air.O2 * va + b.Air.O2 * vb) / total;
+        a.Air.N2 = (a.Air.N2 * va + b.Air.N2 * vb) / total;
+        a.Air.CO2 = (a.Air.CO2 * va + b.Air.CO2 * vb) / total;
+        a.Air.Temperature = (a.Air.Temperature * va + b.Air.Temperature * vb) / total;
+        a.Air.Smoke = (a.Air.Smoke * va + b.Air.Smoke * vb) / total;
+        a.Air.Toxin = (a.Air.Toxin * va + b.Air.Toxin * vb) / total;
+        b.Cells.Clear();
+        b.Air.O2 = 0f; b.Air.N2 = 0f; b.Air.CO2 = 0f; b.Air.Smoke = 0f; b.Air.Toxin = 0f; b.Air.Leak = 0f;
+        b.VentOpen = false;
+        b.Powered = false;
+
+        // 3) 가구: 칸의 것은 원래 방으로, 새로 트인 바닥은 옆 가구의 사용 자리가 된다
+        foreach (var f in b.Furniture.ToList())
+        {
+            f.Room = a;
+            a.Furniture.Add(f);
+        }
+        b.Furniture.Clear();
+        foreach (var f in a.Furniture)
+        {
+            if (f.Stowed || FurnitureTypes.Walkable(f.Type)) continue;
+            foreach (var c in f.Cells)
+                foreach (var dd in Cell.Dirs4)
+                {
+                    var n = c + dd;
+                    if (opened.Contains(n) && ship.IsOpenFloor(n) && !f.UseSpots.Contains(n)) f.UseSpots.Add(n);
+                }
+        }
+
+        // 4) 칸의 다른 문·연결부·밸브
+        foreach (var d in b.Doors.ToList())
+        {
+            if (d.RoomA == b) d.RoomA = a;
+            if (d.RoomB == b) d.RoomB = a;
+            if (!a.Doors.Contains(d)) a.Doors.Add(d);
+        }
+        b.Doors.Clear();
+        foreach (var j in b.Joints.ToList())
+        {
+            j.Room = a;
+            a.Joints.Add(j);
+        }
+        b.Joints.Clear();
+        a.DesignJoints = Math.Max(1, a.Joints.Count(j => !j.Truss));
+        foreach (var seg in w.Piping.Segments)
+            if (seg.ValveRoom == b) seg.ValveRoom = a;
+        foreach (var m in w.Sensors.Incoming)
+            if (m.Room == b) m.Room = a;
+
+        // 5) 방의 상태
+        a.LightsOut |= b.LightsOut;
+        a.Suppression |= b.Suppression;
+        if (a.Purpose == null && b.Purpose != null) a.Purpose = b.Purpose;
+        b.Merged = true;
+        b.Partitioned = false;
+        var h = w.History;
+        h.BreachesByRoom[a.Id] = h.BreachesByRoom.GetValueOrDefault(a.Id) + h.BreachesByRoom.GetValueOrDefault(b.Id);
+        a.UnsplitBreaches = h.BreachesByRoom.GetValueOrDefault(a.Id);
+        a.Partitioned = ship.Rooms.Any(r => r.SplitFrom == a && !r.Merged);
+        ShipBuilder.AssignDamperSpot(ship, a);
+
+        // 6) 사람: 칸에 있던 사람, 무서운 방의 기억 (합친 방은 두 칸 중 더 무서운 쪽만큼)
+        foreach (var c in w.Crew)
+        {
+            if (c.Room == b) c.Room = a;
+            c.Memory.GrowRooms(ship.Rooms.Count);
+            if (c.Memory.Fear[b.Id] > c.Memory.Fear[a.Id])
+            {
+                c.Memory.Fear[a.Id] = c.Memory.Fear[b.Id];
+                c.Memory.FearCause[a.Id] = c.Memory.FearCause[b.Id];
+            }
+            c.Memory.Fear[b.Id] = 0f;
+            // 칸막이 문을 지나던 길은 다시 찾는다
+            if (c.Job != null && c != builder && c.Path != null && c.Path.Skip(c.PathIndex).Any(opened.Contains))
+            {
+                c.EndJob(w, ToilStatus.Interrupted);
+                c.NextThinkTick = w.Tick;
+            }
+        }
+        foreach (var r in w.Robots.Robots)
+            if (r.Room == b) r.Room = a;
+        foreach (var o in w.Board.All)
+            if (o.Target.Room == b) o.Target.Rehome(a);
+
+        w.Paths.Invalidate();
+        w.Structure.Touch();
+        w.Board.RequestScan();
+        return a;
+    }
+
+    // ─────────────────────────────── 설비 옮기기 ───────────────────────────────
+
+    /// <summary>옮길 수 있는 설비 (배관·덕트·굴뚝에 물린 것은 못 옮긴다).</summary>
+    public static bool Movable(FurnitureType t) => t is FurnitureType.OxygenGenerator or FurnitureType.Battery or FurnitureType.Workbench
+        or FurnitureType.MedBed or FurnitureType.Fabricator or FurnitureType.Refinery or FurnitureType.SuitLocker or FurnitureType.Shelf;
+
+    /// <summary>외벽이 없는 방 (운석이 바로 들어오지 않는다).</summary>
+    public static bool Interior(World w, Room r) =>
+        !w.Ship.Walls.Any(kv => kv.Value.IsHull && Hull.InsideRoom(w.Ship, kv.Key) == r);
+
+    /// <summary>그 설비를 놓을 안쪽 방의 빈 자리 (모양 그대로, 길을 막지 않는 곳). 없으면 null.</summary>
+    public static (Room room, List<Cell> cells)? FindSpot(World w, Furniture f)
+    {
+        var ship = w.Ship;
+        int wdt = f.Width, hgt = f.Height;
+        foreach (var room in ship.Rooms.Where(r => !r.Detached && !r.Abandoned && !r.OffLimits && r != f.Room && r.Type != RoomType.Corridor
+                                                   && r.Type is not (RoomType.Airlock or RoomType.Reactor or RoomType.Engine) && Interior(w, r))
+                     .OrderBy(r => r.Type == RoomType.Storage ? 0 : r.Type == RoomType.Workshop ? 1 : 2).ThenBy(r => r.Id))
+        {
+            foreach (var origin in room.Cells.OrderBy(c => c.Y).ThenBy(c => c.X))
+            {
+                var cells = new List<Cell>();
+                for (int dy = 0; dy < hgt; dy++)
+                    for (int dx = 0; dx < wdt; dx++) cells.Add(origin + new Cell(dx, dy));
+                if (!cells.All(c => ship.RoomAt(c) == room && ship.IsOpenFloor(c) && c != room.DamperSpot)) continue;
+                // 벽에 붙고, 둘레에 쓸 자리가 있고, 문 앞·다른 가구의 사용 자리를 막지 않는다
+                bool wall = cells.Any(c => Cell.Dirs4.Any(d => ship.Grid.Kind(c + d) == TileKind.Wall));
+                if (!wall) continue;
+                if (room.Furniture.Any(o => o.UseSpots.Any(cells.Contains))) continue;
+                if (room.Doors.Any(d => cells.Any(c => (c - d.Cell).X * (c - d.Cell).X + (c - d.Cell).Y * (c - d.Cell).Y <= 2))) continue;
+                if (!cells.Any(c => Cell.Dirs4.Any(d => !cells.Contains(c + d) && ship.IsOpenFloor(c + d) && ship.RoomAt(c + d) == room))) continue;
+                if (!cells.All(c => Adaptation.SafeToBlock(w, room, c))) continue;
+                return (room, cells);
+            }
+        }
+        return null;
+    }
+
+    /// <summary>설비를 그 자리로 옮긴다 (가구 번호·설비 이력은 그대로).</summary>
+    public static void Move(World w, Furniture f, Room to, List<Cell> cells)
+    {
+        var ship = w.Ship;
+        var from = f.Room;
+        foreach (var c in f.Cells)
+            if (ship.Grid.FurnitureId(c) == f.Id) ship.Grid.SetFurnitureId(c, -1);
+        from.Furniture.Remove(f);
+        f.Cells.Clear();
+        f.MinX = f.MinY = int.MaxValue;
+        f.MaxX = f.MaxY = int.MinValue;
+        f.UseSpots.Clear();
+        f.ReservedBy = null;
+        f.Room = to;
+        to.Furniture.Add(f);
+        foreach (var c in cells)
+        {
+            ship.Grid.SetFurnitureId(c, f.Id);
+            f.Include(c);
+        }
+        f.Cells.Sort((a, b) => a.Y != b.Y ? a.Y.CompareTo(b.Y) : a.X.CompareTo(b.X));
+        var seen = new HashSet<Cell>();
+        foreach (var c in f.Cells)
+            foreach (var d in Cell.Dirs4)
+            {
+                var n = c + d;
+                if (ship.IsOpenFloor(n) && ship.RoomAt(n) == to && seen.Add(n)) f.UseSpots.Add(n);
+            }
+        foreach (var o in w.Board.All)
+            if (o.Target.Furniture == f) o.Target.Rehome(to);
+        w.Paths.Invalidate();
+        w.Structure.Touch();
+        w.Board.RequestScan();
     }
 }

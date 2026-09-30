@@ -719,6 +719,20 @@ public partial class Main : Node2D
                     if (room != null && Remodel.FindSplit(Sim, room) is Remodel.SplitPlan sp) Remodel.Apply(Sim, sp);
                     break;
                 }
+                case "--merge":
+                {
+                    // --merge=Mess (v10.12 그 방의 칸막이를 곧바로 걷는다 — 화면 확인용)
+                    var inner = Sim.Ship.Rooms.FirstOrDefault(r => !r.Merged && r.SplitFrom?.Type.ToString() == value);
+                    if (inner != null) Remodel2.Merge(Sim, inner);
+                    break;
+                }
+                case "--relocate":
+                {
+                    // --relocate=Power (v10.12 그 방의 옮길 수 있는 설비를 안쪽 방으로 — 화면 확인용)
+                    var f = Sim.Ship.Furniture.FirstOrDefault(x => !x.Stowed && x.Room.Type.ToString() == value && Remodel2.Movable(x.Type) && x.Machine != null);
+                    if (f != null && Remodel2.FindSpot(Sim, f) is { } spot) Remodel2.Move(Sim, f, spot.room, spot.cells);
+                    break;
+                }
                 case "--break":
                     // --break=CoolantPump (첫 대), --break=OxygenGenerator* (그 종류 전부)
                     Player.BreakAll(Sim, value.TrimEnd('*'), value.EndsWith("*"));

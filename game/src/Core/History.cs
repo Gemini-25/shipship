@@ -178,6 +178,9 @@ public sealed class ShipHistory
 
     /// <summary>v10.2: 칸막이로 나눈 방 수.</summary>
     public int Partitions { get; set; }
+    /// <summary>v10.12: 걷은 칸막이 · 옮긴 설비.</summary>
+    public int Unpartitions { get; set; }
+    public int Relocations { get; set; }
     public int FeedersAdded { get; set; }
 
     /// <summary>개조 회의에서 부결된 안 (열쇠 → 다시 꺼낼 수 있는 틱).</summary>

@@ -309,6 +309,24 @@ public static partial class Council
                         terms.Add((-0.3f * t.Sociability, "넓은 방이 좁아진다"));
                     if (c.Stations.Contains(room.Type)) terms.Add((-0.1f, "내 일터가 둘로 갈린다"));
                 }
+                if (kind == UpgradeKind.RemovePartition && room?.SplitFrom is Room outer)
+                {
+                    // v10.12: 넓은 방이 그리운 사람 ↔ 칸막이 덕을 본(또는 그 방이 무서운) 사람
+                    if (outer.Type is RoomType.Mess or RoomType.Lounge or RoomType.Galley && t.Sociability > 0.5f)
+                        terms.Add((0.35f * t.Sociability, "넓은 방으로 돌아가자"));
+                    float f2 = MathF.Max(c.Memory.FearOf(outer), c.Memory.FearOf(room));
+                    if (f2 > 0.05f) terms.Add((-0.5f * f2, "또 통째로 감압된다"));
+                    if (c.Role is CrewRole.Engineer or CrewRole.Technician) terms.Add((-0.12f, "칸막이가 절반을 지켜 줬다"));
+                    if (c.Stations.Contains(outer.Type)) terms.Add((0.12f, "내 일터가 하나로 이어진다"));
+                }
+                if (kind == UpgradeKind.Relocate && o.Target.Furniture is Furniture mf)
+                {
+                    // v10.12: 뚫렸던 방이 무서운 사람은 반기고, 그 방이 일터인 사람은 설비가 빠지는 게 싫다
+                    float f3 = c.Memory.FearOf(mf.Room);
+                    if (f3 > 0.05f) terms.Add((0.4f * f3, $"{mf.Room.Name}은(는) 또 뚫린다"));
+                    if (c.Stations.Contains(mf.Room.Type)) terms.Add((-0.15f, "내 일터에서 설비가 빠진다"));
+                    if (mf.Machine?.Spec.Critical == true) terms.Add((0.15f, "핵심 설비는 안쪽에 둬야 한다"));
+                }
                 if (kind == UpgradeKind.AddGrowBed)
                 {
                     // v10.1: 배고픔과 목마름의 저울질 — 재배대는 먹을 것을 늘리지만 물을 더 먹는다

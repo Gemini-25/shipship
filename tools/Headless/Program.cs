@@ -119,6 +119,7 @@ public static partial class Program
         if (args.Contains("--robottest")) return RunRobotTest(seed);
         if (args.Contains("--hazardtest")) return RunHazardTest(seed);
         if (args.Contains("--livingtest")) return RunLivingTest(seed);
+        if (args.Contains("--remodeltest")) return RunRemodelTest(seed);
         if (args.FirstOrDefault(a => a.StartsWith("--partition=")) is string pc)
             return RunPartitionCampaign(days, seed, pc.Split('=')[1]);
         if (args.Contains("--gate=partition"))

@@ -175,8 +175,22 @@ public sealed class Room
     /// <summary>설계 때의 연결부 수 (하중 기준).</summary>
     public int DesignJoints { get; set; }
 
-    /// <summary>선체에서 떨어져 나갔다 (격자에서 빠지고 조각으로 떠다닌다).</summary>
-    public bool Detached { get; set; }
+    /// <summary>선체에서 떨어져 나갔다 (격자에서 빠지고 조각으로 떠다닌다). v10.12: 칸막이를 걷어 합친 빈 칸도 여기 걸린다 (모든 계통이 건너뛴다).</summary>
+    public bool Detached { get => _detached || Merged; set => _detached = value; }
+    private bool _detached;
+
+    /// <summary>v10.12: 칸막이를 걷어 떼어 냈던 방(<see cref="SplitFrom"/>)에 도로 합쳤다 — 번호가 바뀌지 않게 목록에만 남은 빈 칸.</summary>
+    public bool Merged { get; internal set; }
+
+    /// <summary>v10.12: 칸막이로 떼어 낸 칸이면 원래 방, 칸막이 벽 칸들, 칸막이 문, 세운 때와 그때까지 뚫린 횟수.</summary>
+    public Room? SplitFrom { get; internal set; }
+    public List<Cell> SplitWall { get; } = new();
+    public Door? SplitDoor { get; internal set; }
+    public long SplitSince { get; internal set; }
+    public int SplitBreaches { get; internal set; }
+
+    /// <summary>v10.12: 칸막이를 걷을 때까지 뚫린 횟수 (그 뒤에 또 뚫려야 다시 칸막이를 친다).</summary>
+    public int UnsplitBreaches { get; internal set; }
 
     /// <summary>떨어져 나간 조각 (떨어져 있거나 끌려오는 동안).</summary>
     public Fragment? Fragment { get; set; }

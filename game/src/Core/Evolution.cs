@@ -21,6 +21,8 @@ public enum UpgradeKind
     TierUp,        // v10.5: 연구로 풀린 다음 단계로 설비를 올린다 (원자로 → 개량 핵분열로 → 핵융합로 …)
     Module,        // v10.6: 방에 추가 모듈을 단다 (재배실 LED 등, 냉각 열교환기 …)
     SupplyCache,   // v10.10: 파공·불을 겪었거나 창고에서 먼 방에 비상 물자함 (실링폼·구급 키트·소화기를 나눠 둔다)
+    RemovePartition, // v10.12: 오래 평화로웠던 방의 칸막이를 걷어 넓은 방으로 (벽 재료를 되찾는다)
+    Relocate,      // v10.12: 여러 번 뚫리거나 버렸던 외벽 방의 설비를 안쪽 방으로 옮긴다
 }
 
 /// <summary>개조 계획 하나: 무엇을, 왜(겪은 사고), 무엇으로.</summary>
@@ -71,6 +73,8 @@ public static class Evolution
         UpgradeKind.TierUp => "설비 단계 올리기",
         UpgradeKind.Module => "모듈 설치",
         UpgradeKind.SupplyCache => "비상 물자함",
+        UpgradeKind.RemovePartition => "칸막이 철거",
+        UpgradeKind.Relocate => "설비 옮기기",
         _ => k.ToString(),
     };
 
@@ -90,6 +94,8 @@ public static class Evolution
         UpgradeKind.TierUp => o.Target.Furniture?.Machine is Machine tm && Tech.Next(tm) is TechTier nt ? $"{o.Target.Label} → {nt.Name}" : "설비 단계 올리기",
         UpgradeKind.Module => $"{o.Target.Room?.Name ?? "?"}에 {Modules.Name((FurnitureType)o.Circuit)}",
         UpgradeKind.SupplyCache => $"{o.Target.Room?.Name ?? "?"}에 비상 물자함",
+        UpgradeKind.RemovePartition => $"{o.Target.Room?.SplitFrom?.Name ?? "?"} 칸막이 걷기",
+        UpgradeKind.Relocate => $"{o.Target.Label} 안쪽 방으로 옮기기",
         _ => "개조",
     };
 
@@ -108,6 +114,8 @@ public static class Evolution
         UpgradeKind.TierUp => 5f,
         UpgradeKind.Module => 3f,
         UpgradeKind.SupplyCache => 1.5f,
+        UpgradeKind.RemovePartition => 4f,
+        UpgradeKind.Relocate => 3f,
         _ => 2f,
     };
 
@@ -139,6 +147,8 @@ public static class Evolution
         UpgradeKind.AddGrowBed => new[] { (ItemKind.Plate, 2), (ItemKind.Cable, 2), (ItemKind.Sealant, 1) },
         UpgradeKind.Partition => new[] { (ItemKind.Plate, 4), (ItemKind.Structure, 2), (ItemKind.Cable, 2) },
         UpgradeKind.SupplyCache => new[] { (ItemKind.Plate, 1), (ItemKind.Cable, 1) },
+        UpgradeKind.RemovePartition => new[] { (ItemKind.Cable, 1) },
+        UpgradeKind.Relocate => new[] { (ItemKind.Cable, 2), (ItemKind.Plate, 1) },
         _ => new[] { (ItemKind.Plate, 2) },
     };
 
@@ -166,6 +176,8 @@ public static class Evolution
         UpgradeKind.TierUp => p.Target.Furniture?.Machine is Machine tm && Tech.Next(tm) is TechTier nt ? nt.Name : "단계",
         UpgradeKind.Module => Modules.Name((FurnitureType)p.Circuit),
         UpgradeKind.SupplyCache => $"{p.Target.Room?.Name ?? "?"} 물자함",
+        UpgradeKind.RemovePartition => $"{p.Target.Room?.SplitFrom?.Name ?? "?"} 칸막이 철거",
+        UpgradeKind.Relocate => $"{p.Target.Label} 옮기기",
         _ => "침실",
     };
 
@@ -204,6 +216,8 @@ public static class Evolution
         (UpgradeKind.TierUp or UpgradeKind.Module, CrewRole.Botanist) => 0.15f,
         (UpgradeKind.SupplyCache, CrewRole.Technician) => 0.2f,
         (UpgradeKind.SupplyCache, CrewRole.Medic) => 0.2f,
+        (UpgradeKind.Relocate, CrewRole.Technician or CrewRole.Engineer) => 0.25f,
+        (UpgradeKind.RemovePartition, CrewRole.Cook or CrewRole.Botanist) => 0.15f,
         _ => 0f,
     };
 
@@ -379,7 +393,8 @@ public static class Evolution
         foreach (var room in ship.Rooms)
         {
             if (room.Partitioned || room.Cells.Count < Remodel.MinRoomCells) continue;
-            int breaches = h.BreachesByRoom.GetValueOrDefault(room.Id);
+            int breaches = h.BreachesByRoom.GetValueOrDefault(room.Id) - room.UnsplitBreaches; // v10.12 칸막이를 걷은 뒤로 뚫린 것만
+            if (breaches < 0) breaches = 0;
             if (breaches == 0 && room.TimesAbandoned == 0) continue;
             if (Remodel.FindSplit(w, room) is not Remodel.SplitPlan sp) continue;
             var across = sp.Vertical ? new Cell(1, 0) : new Cell(0, 1);
@@ -388,6 +403,43 @@ public static class Evolution
             yield return new UpgradePlan(UpgradeKind.Partition, WorkTarget.AtCell(stand, room), score, Skill.Mechanics,
                 $"{Ko.IGa(room.Name)} 통째로 감압됐다 {ShipHistory.Times(Math.Max(1, breaches))} ({room.Cells.Count}칸) → 가운데에 칸막이 벽과 격벽 문 (다음엔 절반만 잃는다 · 금속판 4 + 구조재 2 + 케이블 2)",
                 Cost(UpgradeKind.Partition, null), 0.35f);
+        }
+
+        // ── 칸막이 철거 (v10.12): 가른 뒤로 한 번도 뚫리지 않고 오래 평화로웠던 방 — 넓은 방에서 모이던 사람들이 원한다 ──
+        foreach (var inner in ship.Rooms)
+        {
+            if (inner.Merged || inner.SplitFrom is not Room outer || !Remodel2.CanMerge(w, inner)) continue;
+            float days = (w.Tick - inner.SplitSince) / (float)SimTime.TicksPerDay;
+            int since = h.BreachesByRoom.GetValueOrDefault(outer.Id) + h.BreachesByRoom.GetValueOrDefault(inner.Id) - inner.SplitBreaches;
+            if (days < 12f || since > 0 || w.Tick - h.PeaceSince < SimTime.TicksPerDay * 3L) continue;
+            bool social = outer.Type is RoomType.Mess or RoomType.Lounge or RoomType.Galley;
+            var alive = w.Crew.Where(c => !c.Dead).ToList();
+            float sociable = alive.Count == 0 ? 0.5f : alive.Average(c => c.Traits.Sociability);
+            float score = 0.15f + MathF.Min(0.45f, (days - 12f) * 0.02f) + (social ? 0.25f : 0f) + 0.4f * (sociable - 0.5f);
+            if (score < 0.2f) continue;
+            var d = inner.SplitDoor!;
+            var stand = Cell.Dirs4.Select(x => d.Cell + x).FirstOrDefault(c => ship.RoomAt(c) == inner && ship.IsOpenFloor(c));
+            if (stand == default) continue;
+            yield return new UpgradePlan(UpgradeKind.RemovePartition, WorkTarget.AtCell(stand, inner), score, Skill.Mechanics,
+                $"{Ko.EulReul(outer.Name)} 가른 지 {days:0}일 · 그 뒤로 뚫린 적 없다" + (social ? " · 좁아진 방에서 사람들이 흩어졌다" : "")
+                + $" → 칸막이를 걷어 넓은 {Ko.EuRo(outer.Name)} (금속판 3 + 구조재 1을 되찾는다 · 다음 운석에는 다시 통째로)",
+                Cost(UpgradeKind.RemovePartition, null), 0.25f);
+        }
+
+        // ── 설비 옮기기 (v10.12): 여러 번 뚫리거나 버렸던 외벽 방의 설비를 안쪽 방으로 ──
+        foreach (var room in ship.Rooms)
+        {
+            if (room.Detached || room.OffLimits || Remodel2.Interior(w, room)) continue;
+            int hits = h.BreachesByRoom.GetValueOrDefault(room.Id);
+            if (hits < 2 && room.TimesAbandoned == 0) continue;
+            var f = room.Furniture.Where(x => !x.Stowed && x.Machine is Machine mm && Remodel2.Movable(x.Type) && mm.Faults.Count == 0)
+                .OrderByDescending(x => x.Machine!.Spec.Critical).ThenBy(x => x.Id).FirstOrDefault();
+            if (f == null || Remodel2.FindSpot(w, f) is not { } spot) continue;
+            float score = 0.25f + 0.15f * MathF.Min(4, hits) + (room.TimesAbandoned > 0 ? 0.3f : 0f) + (f.Machine!.Spec.Critical ? 0.2f : 0f);
+            yield return new UpgradePlan(UpgradeKind.Relocate, WorkTarget.Of(f), score, Skill.Mechanics,
+                $"{Ko.IGa(room.Name)} {ShipHistory.Times(Math.Max(1, hits))} 뚫렸다" + (room.TimesAbandoned > 0 ? " · 버린 적도 있다" : "")
+                + $" → {Ko.EulReul(f.Label)} 외벽이 없는 {Ko.EuRo(spot.room.Name)} 옮긴다 (케이블 2 + 금속판 1)",
+                Cost(UpgradeKind.Relocate, null), 0.25f);
         }
 
         // ── 침실 정비 (v10.1): 처음부터 간이침대에서 자는 사람 (침대가 모자란 배) — 사흘 넘게 ──
@@ -665,6 +717,41 @@ public static class Evolution
                 MarkLog.Add(room.Marks, w.Tick, $"{cm.Name}: 칸막이 벽과 격벽 문 — {Ko.EulReul(inner.Name)} 떼어 냈다");
                 MarkLog.Add(inner.Marks, w.Tick, $"{cm.Name}: {room.Name}에서 칸막이로 떼어 낸 칸");
                 text = $"{Ko.IGa(cm.Name)} {room.Name} 가운데에 칸막이 벽과 격벽 문을 세웠다 — 이제 {room.Name}({room.Cells.Count}칸)과 {inner.Name}({inner.Cells.Count}칸) (통째로 감압됐던 방)";
+                break;
+            }
+            case UpgradeKind.RemovePartition:
+            {
+                if (room == null || room.SplitFrom is not Room outer) return false;
+                int cells = room.Cells.Count;
+                string innerName = room.Name;
+                if (Remodel2.Merge(w, room, cm) is not Room merged) return false;
+                // 걷어 낸 벽 재료를 선반에
+                foreach (var (k, n) in new[] { (ItemKind.Plate, 3), (ItemKind.Structure, 1) })
+                {
+                    int left = n;
+                    foreach (var box in w.Ship.Containers.Where(b => b.Type == FurnitureType.Shelf))
+                    {
+                        left -= box.Storage!.Add(k, left);
+                        if (left <= 0) break;
+                    }
+                }
+                h.Unpartitions++;
+                MarkLog.Add(merged.Marks, w.Tick, $"{cm.Name}: 칸막이를 걷었다 — {innerName}({cells}칸)을 다시 합쳤다");
+                text = $"{Ko.IGa(cm.Name)} {merged.Name} 칸막이를 걷었다 — 다시 넓은 {Ko.EuRo(merged.Name)}({merged.Cells.Count}칸) · 금속판 3 + 구조재 1을 되찾았다 (다음 운석에는 다시 통째로 감압된다)";
+                room = merged;
+                break;
+            }
+            case UpgradeKind.Relocate:
+            {
+                var f = o.Target.Furniture;
+                if (f == null || f.Stowed || Remodel2.FindSpot(w, f) is not { } spot) return false;
+                var from = f.Room;
+                Remodel2.Move(w, f, spot.room, spot.cells);
+                h.Relocations++;
+                MarkLog.Add(f.Machine?.Marks ?? from.Marks, w.Tick, $"{cm.Name}: {from.Name} → {spot.room.Name}로 옮겼다");
+                MarkLog.Add(from.Marks, w.Tick, $"{f.Label}을(를) 안쪽 {Ko.EuRo(spot.room.Name)} 옮겼다");
+                text = $"{Ko.IGa(cm.Name)} {Ko.EulReul(f.Label)} {from.Name}에서 외벽이 없는 {Ko.EuRo(spot.room.Name)} 옮겼다 — 뚫렸던 외벽 방에서 빼냈다";
+                room = spot.room;
                 break;
             }
             case UpgradeKind.AddGrowBed:

@@ -232,7 +232,7 @@ public sealed record ShipProfile(float Power, float LifeSupport, float Repair, f
         // v8: 연결부 (설계 연결부 수 대비 버티는 힘 — 증설하면 100을 넘는다), 떨어져 나간 방
         var jointed = ship.Rooms.Where(r => !r.Detached && r.DesignJoints > 0).ToList();
         float joints = jointed.Count == 0 ? 1f : jointed.Average(r => MathF.Min(1.4f, StructureSystem.Capacity(r) / r.DesignJoints));
-        int detached = ship.Rooms.Count(r => r.Detached);
+        int detached = ship.Rooms.Count(r => r.Detached && !r.Merged); // v10.12 합친 빈 칸은 잃은 방이 아니다
         float structure = 100f * (0.6f * walls + 0.4f * joints)
                           * (1f - 0.3f * ship.Rooms.Count(r => r.Abandoned && !r.Detached) / (float)nonCorridor)
                           * (1f - 0.6f * detached / (float)nonCorridor);

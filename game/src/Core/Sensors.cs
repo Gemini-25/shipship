@@ -27,7 +27,7 @@ public sealed class IncomingMeteor
     public Vector2 Direction { get; init; }
 
     /// <summary>들어올 방 (센서·사람이 궤적을 읽으면 알 수 있다).</summary>
-    public Room? Room { get; init; }
+    public Room? Room { get; set; }
 
     public WarnLevel Warned { get; set; }
     public long WarnedAt { get; set; } = -1;
