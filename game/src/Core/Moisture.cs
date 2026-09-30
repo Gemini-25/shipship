@@ -303,7 +303,7 @@ public static partial class WorkPlanners
         toils.Add(new WorkToil(0.5f, o.Skill, at.Center) { Resume = o });
         toils.Add(new DoToil((cm, world) =>
         {
-            float take = MathF.Min(room.Flood, 90f + 40f * cm.SkillLevel(Skill.Mechanics));
+            float take = MathF.Min(room.Flood, (90f + 40f * cm.SkillLevel(Skill.Mechanics)) * (world.History.Doctrine.FloodDrill ? 1.5f : 1f));
             room.Flood -= take;
             float back = take * 0.7f;
             world.Water.Level += back;

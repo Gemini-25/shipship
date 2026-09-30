@@ -202,6 +202,12 @@ public sealed class CrewMember
 
     /// <summary>v11.2: 균이 든 식사를 먹었다 — 이 틱에 탈이 난다 (-1이면 없음).</summary>
     public long PoisonAt { get; set; } = -1;
+
+    /// <summary>v12.4 전염병: 걸린 틱(-1이면 없음) · 치료 침대에서 당긴 날수 · 가장 아플 때 · 나아서 면역.</summary>
+    public long InfectedAt { get; set; } = -1;
+    public float CureDays { get; set; }
+    public float DiseasePeak { get; set; }
+    public bool Immune { get; set; }
     public Furniture? PoisonSource { get; set; }
 
     /// <summary>

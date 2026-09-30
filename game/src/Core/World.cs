@@ -132,6 +132,9 @@ public sealed class World
     public CauseLog Causes { get; }
     /// <summary>v12.3 물·습기·전기.</summary>
     public MoistureSystem Moisture { get; }
+    /// <summary>v12.4 전염병 · 이야기꾼.</summary>
+    public DiseaseSystem Disease { get; }
+    public Storyteller Story { get; }
 
     /// <summary>v12.1 정비 절차 통계.</summary>
     public ProcedureStats Procs { get; } = new();
@@ -206,6 +209,8 @@ public sealed class World
         Net = new UtilityNet(this);
         Causes = new CauseLog(this);
         Moisture = new MoistureSystem(this);
+        Disease = new DiseaseSystem(this);
+        Story = new Storyteller(this, seed);
         Piping = new PipeNetwork(this);
         Automation = new AutomationSystem(this);
         Fixtures = new FixturesSystem(this);
@@ -262,6 +267,7 @@ public sealed class World
             Watch.Update(dt); // v12.0 교대·감지기
             Volatile.Update(dt); // v12.2 열·폭발·잔해·역화·일산화탄소·짙은 산소
             Moisture.Update(dt); // v12.3 물·습기·전기 (누전·감전·결로·기동 전류)
+            Disease.Update(dt); // v12.4 전염병
             Volatile.Resume();
             Procedures.Update(this); // v12.1 재조립 불량이 돌아온다
             Causes.Update(); // v12.2 인과 사슬: 번진 상태를 원인에 잇고, 풀린 상태에 복구를 붙인다
@@ -603,7 +609,8 @@ public sealed class World
         world.Water.Capacity *= scale;
         world.Water.Level *= scale;
         world.Propulsion.SetScale(scale);
-        StockShip(ship, rng, scale);
+        StockShip(ship, rng, scale * Storyteller.StockScale); // v12.4 난이도: 시작 물자
+        if (Storyteller.StockScale < 0.99f) TrimStock(ship, Storyteller.StockScale);
 
         var beds = ship.FurnitureOf(FurnitureType.Bed).OrderBy(b => b.MinX).ToList();
         float hour = SimTime.HourOfDay(world.Tick);
@@ -757,6 +764,21 @@ public sealed class World
     }
 
     /// <summary>처음 실린 물자와 설비 상태.</summary>
+    /// <summary>v12.4 어려운 난이도: 수리재·예비 부품·구급 키트를 덜 싣고 떠난다 (회복 여력이 적다).</summary>
+    private static void TrimStock(Ship ship, float scale)
+    {
+        foreach (var kind in new[] { ItemKind.Sealant, ItemKind.Plate, ItemKind.Structure, ItemKind.Cable, ItemKind.Fuse, ItemKind.Filter, ItemKind.Pump,
+                     ItemKind.Bearing, ItemKind.Motor, ItemKind.PowerController, ItemKind.Sensor, ItemKind.Electronics, ItemKind.MedKit, ItemKind.Extinguisher })
+        {
+            int drop = (int)MathF.Round(ship.CountStored(kind) * (1f - scale));
+            foreach (var f in ship.Containers)
+            {
+                if (drop <= 0) break;
+                drop -= f.Storage!.Take(kind, drop);
+            }
+        }
+    }
+
     private static void StockShip(Ship ship, Rng rng, float scale = 1f)
     {
         foreach (var m in ship.Machines)

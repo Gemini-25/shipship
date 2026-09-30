@@ -25,6 +25,8 @@ public enum HazardKind
     RescueSignal,       // v11.2 구조 요청 수신: 탈출 캡슐 (사고라기보다 사건 — 건질지 회의)
     OxygenLeak,         // v12.2 산소관 누출: 방에 산소가 짙어진다 — 불꽃 하나가 불이 된다
     Overheat,           // v12.2 설비 과열: 식히지 않으면 종류마다 다르게 터진다 (열폭주·수소·아크·연료·파열)
+    // v12.4 연쇄를 잘 일으키는 사고
+    CoolantLoss, DuctFire, HydrogenBuildup, ComputerMisjudge, Epidemic, MicroShower, GasTankRupture, FreezerFailure,
 }
 
 /// <summary>사고를 어디에 거는지.</summary>
@@ -54,9 +56,26 @@ public static class Hazards
         new(HazardKind.RescueSignal, "구조 요청", HazardTarget.Ship, 2f, "구조 요청 수신 — 탈출 캡슐의 생존자 1~3명: 하루 안에 회의로 건질지 정한다 (추진제 · 먹을 입 · 통신실이 멀쩡해야 듣는다)"),
         new(HazardKind.OxygenLeak, "산소관 누출", HazardTarget.Room, 3f, "산소관 누출 — 방을 클릭: 공기 탱크의 산소가 그 방으로 샌다 · 산소가 짙어지면 합선·용접 불꽃 하나가 불이 되고 불이 빨리 번진다 · 실링폼으로 막고 환기한다"),
         new(HazardKind.Overheat, "설비 과열", HazardTarget.Machine, 4f, "설비 과열 — 설비를 클릭: 배터리는 열폭주, 산소 발생기는 수소 폭발, 배전반은 아크 섬광, 보조 발전기는 연료 화재, 펌프는 과압 파열 · 먼저 알아채고 내려 식히면 막는다"),
+        // v12.4
+        new(HazardKind.CoolantLoss, "냉각 상실", HazardTarget.Ship, 2f, "냉각 상실 — 냉각 루프 본관이 크게 터진다: 냉각수가 쏟아지고 바닥에 고이고, 원자로가 긴급 정지한다 · 밸브로 격리하고 관을 갈아야 다시 돈다"),
+        new(HazardKind.DuctFire, "덕트 화재", HazardTarget.Room, 3f, "덕트 화재 — 방을 클릭: 덕트 속 먼지·기름때에 불이 붙어 몇 분 뒤 덕트로 이어진 옆방에서도 불이 난다 · 댐퍼를 닫아 두면 막힌다"),
+        new(HazardKind.HydrogenBuildup, "수소 축적", HazardTarget.Ship, 2.5f, "수소 축적 — 산소 발생기 방의 환기 댐퍼가 닫힌 채 걸린다: 수소가 모여 불꽃 하나에 터진다 · 식히고 댐퍼를 고쳐 환기한다"),
+        new(HazardKind.ComputerMisjudge, "컴퓨터 오판단", HazardTarget.Ship, 2.5f, "컴퓨터 오판단 — 틀어진 감지기를 믿고 멀쩡한 핵심 방의 분전함을 내린다 (보수적인 자동화의 대가) · 사람이 가서 확인하고 다시 올린다"),
+        new(HazardKind.Epidemic, "전염병", HazardTarget.Crew, 1.5f, "전염병 — 승무원을 클릭: 열병이 시작된다 · 같은 방에 있으면 옮고(환기가 돌면 덜), 이틀째 가장 아프고, 나흘쯤 낫는다 · 치료 침대에 누우면 빨리 낫고 덜 옮긴다"),
+        new(HazardKind.MicroShower, "미세 운석 소나기", HazardTarget.Ship, 3f, "미세 운석 소나기 — 20분 동안 아주 작은 운석 열 몇 개: 외벽 곳곳에 바늘구멍 · 실링폼이 바닥난다"),
+        new(HazardKind.GasTankRupture, "가스 탱크 파열", HazardTarget.Ship, 1.5f, "가스 탱크 파열 — 생명유지실 고압 탱크: 파편, 공기 탱크 4분의 1을 잃고, 산소가 짙어지거나(불) 질소가 밀어내 숨이 막힌다"),
+        new(HazardKind.FreezerFailure, "냉장고 고장", HazardTarget.Machine, 2.5f, "냉장고 고장 — 냉장고를 클릭: 압축기가 멈춘다 · 여섯 시간 안에 못 고치면 안의 식사가 상한다 (식중독)"),
     };
 
     public static HazardSpec Spec(HazardKind k) => All[(int)k];
+
+    private static string? EpidemicStart(World w, CrewMember c)
+    {
+        w.Disease.Infect(c, null);
+        w.RaiseAlert($"전염병 — {Ko.IGa(c.Name)} 열이 난다 · 같은 방에 있으면 옮는다", c.Room, AlertLevel.Warning, shipWide: true);
+        w.History.Add(w, HistoryKind.Incident, $"전염병 — {Ko.IGa(c.Name)} 처음 앓기 시작했다", c.Room, new[] { c });
+        return $"전염병({c.Name})";
+    }
     public static string Name(HazardKind k) => Spec(k).Name;
 
     /// <summary>폭풍·서지가 건드리는 전자 장비.</summary>
@@ -78,6 +97,7 @@ public static class Hazards
         {
             HazardKind.CropBlight => x.Machine?.Crop != null,
             HazardKind.FoodPoisoning => x.Type is FurnitureType.Fridge or FurnitureType.MealDispenser && x.Storage != null,
+            HazardKind.FreezerFailure => x.Type == FurnitureType.Fridge && x.Machine != null,
             HazardKind.Overheat => x.Machine != null && VolatileSystem.Mode(x.Type) != BlowKind.None,
             _ => x.Machine != null,
         };
@@ -112,7 +132,12 @@ public static class Hazards
     {
         // v12.2 인과 사슬: 사고 하나가 뿌리 — 이 안에서 생긴 피해는 이 사고의 자식
         var room = w.Ship.RoomAt(at);
-        int node = w.Causes.Root(CauseKind.Hazard, Name(k), room, at.Center, observer: w.Causes.ConsumeObserver());
+        // 자리: 사람·로봇에게 건 사고는 그 사람 자리, 배 전체 사고는 자리 없음 (칸 (0,0)은 '고르지 않음')
+        System.Numerics.Vector2? where = at == default ? null : at.Center;
+        if (Spec(k).Target == HazardTarget.Crew && w.Crew.FirstOrDefault(c => c.Id == id) is CrewMember who) { where = who.Position; room = who.Room; }
+        if (Spec(k).Target == HazardTarget.Robot && w.Robots.Robots.FirstOrDefault(r => r.Id == id) is Robot bot) { where = bot.Position; room = w.Ship.RoomAt(Cell.FromPosition(bot.Position)); }
+        if (Spec(k).Target == HazardTarget.Ship) where = null;
+        int node = w.Causes.Root(CauseKind.Hazard, Name(k), room, where, observer: w.Causes.ConsumeObserver());
         string? what;
         using (w.Causes.Because(node)) what = ApplyCore(w, k, at, id);
         if (what == null) w.Causes.Discard(node);
@@ -143,6 +168,14 @@ public static class Hazards
             HazardKind.RescueSignal => w.Comms.ReceiveSignal(),
             HazardKind.OxygenLeak => RoomAt(w, at) is Room ol && !ol.Detached ? O2Leak(w, ol) : null,
             HazardKind.Overheat => MachineAt(w, k, at) is Furniture hf ? Overheat(w, hf) : null,
+            HazardKind.CoolantLoss => sys.CoolantLoss(),
+            HazardKind.DuctFire => sys.DuctFire(RoomAt(w, at)),
+            HazardKind.HydrogenBuildup => sys.HydrogenBuildup(),
+            HazardKind.ComputerMisjudge => sys.ComputerMisjudge(),
+            HazardKind.Epidemic => w.Crew.FirstOrDefault(c => c.Id == id && !c.Dead) is CrewMember pz && pz.InfectedAt < 0 && !pz.Immune ? EpidemicStart(w, pz) : null,
+            HazardKind.MicroShower => sys.MicroShower(),
+            HazardKind.GasTankRupture => sys.GasTankRupture(),
+            HazardKind.FreezerFailure => sys.FreezerFailure(MachineAt(w, k, at)),
             _ => null,
         };
         if (what == null) return null;
@@ -177,7 +210,7 @@ public static class Hazards
 /// v11.2 사고의 시간 흐름: 운석우(몇십 분에 걸쳐), 태양 폭풍(몇 시간), 유독 가스(샌 곳에서 계속 나온다), 병충해(번진다),
 /// 오염된 식사(나르면 따라간다) — 그리고 무작위 사고 (Tuning `incident.days` 평균 간격, 0이면 끔).
 /// </summary>
-public sealed class HazardSystem
+public sealed partial class HazardSystem
 {
     private readonly World _w;
 
@@ -545,7 +578,9 @@ public sealed class HazardSystem
         UpdateGas(dt);
         UpdateBlight(dt);
         UpdateTaint();
-        UpdateRandom();
+        UpdateMore(); // v12.4 덕트를 타는 불 · 상하는 음식
+        if (Storyteller.Persona != StoryPersona.Off) w.Story.Update(); // v12.4 이야기꾼
+        else UpdateRandom();
     }
 
     private void UpdateStorm(float dt)
@@ -734,7 +769,15 @@ public sealed class HazardSystem
         return null;
     }
 
-    private string? RandomOne(string key)
+    /// <summary>v12.4 이야기꾼이 고른 사고를 건다 (room이 있으면 그 방에).</summary>
+    public string? FireStory(string key, Room? room)
+    {
+        var what = RandomOne(key, room);
+        if (what != null) { RandomCount++; LastRandom = Enum.TryParse<HazardKind>(key, out var hk) ? hk : null; LastRandomText = what; }
+        return what;
+    }
+
+    private string? RandomOne(string key, Room? prefer = null)
     {
         var w = _w;
         var rr = RandomRng;
@@ -748,7 +791,7 @@ public sealed class HazardSystem
             {
                 var hullRooms = rooms.Where(r => ship.Walls.Any(kv => kv.Value.IsHull && Hull.InsideRoom(ship, kv.Key) == r)).ToList();
                 if (hullRooms.Count == 0) return null;
-                var room = hullRooms[rr.Range(0, hullRooms.Count)];
+                var room = prefer != null && hullRooms.Contains(prefer) ? prefer : hullRooms[rr.Range(0, hullRooms.Count)];
                 float size = key == "bigmeteor" ? 0.8f + 0.2f * rr.Float() : 0.25f + 0.3f * rr.Float();
                 var m = w.Sensors.Launch(Scenarios.OuterTarget(w, room), size);
                 if (m == null) return null;
@@ -758,7 +801,7 @@ public sealed class HazardSystem
             }
             case "fire":
             {
-                var room = rooms[rr.Range(0, rooms.Count)];
+                var room = prefer != null && rooms.Contains(prefer) ? prefer : rooms[rr.Range(0, rooms.Count)];
                 var floor = room.Cells.Where(ship.IsOpenFloor).ToList();
                 if (floor.Count == 0 || !Incidents.Fire(w, floor[rr.Range(0, floor.Count)])) return null;
                 string what = $"화재({room.Name})";
@@ -793,13 +836,14 @@ public sealed class HazardSystem
         switch (spec.Target)
         {
             case HazardTarget.Room:
-                at = rooms[rr.Range(0, rooms.Count)].Cells[0];
+                at = (prefer != null && rooms.Contains(prefer) ? prefer : rooms[rr.Range(0, rooms.Count)]).Cells[0];
                 break;
             case HazardTarget.Machine:
             {
                 var pool = ship.Furniture.Where(f => !f.Stowed && !f.Room.Detached && Hazards.MachineAt(w, k, f.Cells[0]) == f).ToList();
                 if (pool.Count == 0) return null;
-                at = pool[rr.Range(0, pool.Count)].Cells[0];
+                var pick = prefer != null ? pool.FirstOrDefault(f => f.Room == prefer) : null;
+                at = (pick ?? pool[rr.Range(0, pool.Count)]).Cells[0];
                 break;
             }
             case HazardTarget.Hull:

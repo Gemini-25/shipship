@@ -52,6 +52,7 @@ public static class NeedsSystem
     public static void AddInjury(Vitals v, float amount, string cause)
     {
         if (amount <= 0f) return;
+        amount *= Storyteller.InjuryScale; // v12.4 난이도: 부상 강도
         if (v.Injury < 0.05f || amount > 0.05f) v.InjuryCause = cause;
         v.Injury = MathF.Min(1f, v.Injury + amount);
         // v11.3 후유증: 절반을 넘게 다치면 무엇인가 남는다 (재활로 절반까지만 준다)

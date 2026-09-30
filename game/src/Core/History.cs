@@ -81,6 +81,12 @@ public sealed class Doctrine
     /// <summary>자동화가 꺼진 채 오래 버텼다 → 격벽·댐퍼를 손으로 다루는 법을 익혔다 (v9.2, 수동 조작 40% 빠르게).</summary>
     public bool ManualDrill { get; set; }
 
+    /// <summary>v12.4 바닥에 물이 여러 번 찼다 → 퍼내기를 먼저 익혔다 (1.5배).</summary>
+    public bool FloodDrill { get; set; }
+
+    /// <summary>v12.4 병이 번졌다 → 앓는 사람은 마스크를 쓰고 따로 먹는다 (옮을 확률 절반).</summary>
+    public bool Quarantine { get; set; }
+
     /// <summary>v10.10 비축 방침 (자원 장부가 정한다): 사고 직후엔 쓴 것을 서둘러 채우고, 극한엔 살 길부터.</summary>
     public StockMode Mode { get; set; }
 
@@ -120,6 +126,8 @@ public sealed class Doctrine
         if (FrequentInspection) yield return "매일 외벽 검사";
         if (PipeReserve) yield return "금속판·물 비축";
         if (ManualDrill) yield return "수동 조작 훈련";
+        if (FloodDrill) yield return "침수 대비";
+        if (Quarantine) yield return "격리 수칙";
     }
 }
 
@@ -326,6 +334,16 @@ public sealed class ShipHistory
     private void Learn(World w)
     {
         var d = Doctrine;
+        if (!d.FloodDrill && w.Moisture.Stats.Floods >= 2)
+        {
+            d.FloodDrill = true;
+            Add(w, HistoryKind.Lesson, $"교훈: 바닥에 물이 {Times(w.Moisture.Stats.Floods)} 찼다 — 양동이·손펌프 자리를 정하고 퍼내기를 먼저 익혔다 (1.5배 빨리)", log: true);
+        }
+        if (!d.Quarantine && w.Disease.Stats.Infections >= 3)
+        {
+            d.Quarantine = true;
+            Add(w, HistoryKind.Lesson, $"교훈: 병이 {w.Disease.Stats.Infections}명에게 번졌다 — 앓는 사람은 마스크를 쓰고 따로 먹는다 (옮을 확률 절반)", log: true);
+        }
         if (!d.SealantReserve && Breaches >= 3)
         {
             d.SealantReserve = true;

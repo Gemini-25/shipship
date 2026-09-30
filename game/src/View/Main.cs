@@ -596,6 +596,15 @@ public partial class Main : Node2D
         if (persist) Settings.SaveTuning(); // 다음 항해에도 (명령줄 --random은 이번 항해만)
     }
 
+    /// <summary>v12.4 기록되는 밸런스 수치 하나를 바꾼다 (이야기꾼·난이도 등 — 다음 항해에도).</summary>
+    public void SetTuned(string key, float value)
+    {
+        if (Tuning.Find(key) is not TuningEntry e || MathF.Abs(e.Get() - value) < 1e-4f) return;
+        if (Replaying == null) Player.Tune(Sim, key, value);
+        else Tuning.Apply(key, value);
+        Settings.SaveTuning();
+    }
+
     /// <summary>v11.2: 사고 더 보기의 대상 (화면 미리보기와 클릭이 같은 규칙).</summary>
     public (Cell at, int id, bool ok) HazardAim(Vector2 worldPx)
     {

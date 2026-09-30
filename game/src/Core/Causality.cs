@@ -36,6 +36,7 @@ public enum CauseKind
     Flood,       // v12.3 침수
     Shock,       // v12.3 감전
     NoData,      // v12.3 데이터선 끊김 (감지기·원격 제어)
+    Illness,     // v12.4 전염병 (누가 누구에게 옮겼나)
 }
 
 public sealed class CauseNode

@@ -129,6 +129,8 @@ public static partial class Program
         if (args.Contains("--handtrace")) return RunHandoverTrace(seed);
         if (args.Contains("--chaintest")) return RunCauseTest(seed); // v12.2
         if (args.Contains("--moisturetest")) return RunMoistureTest(seed); // v12.3
+        if (args.Contains("--storytest")) return RunStoryTest(seed); // v12.4
+        if (args.Contains("--balance")) return RunBalance(Math.Max(1, days), seed, int.TryParse(args.FirstOrDefault(a => a.StartsWith("--runs="))?.Split('=')[1], out var brn) ? brn : 3);
         if (args.Contains("--moisturedebug")) return RunMoistureDebug(seed);
         if (args.Contains("--netdebug")) return RunNetDebug(seed);
         if (args.FirstOrDefault(a => a.StartsWith("--reopentrace=")) is string rt) return RunReopenTrace(seed, rt.Split('=')[1], Math.Max(1, days));

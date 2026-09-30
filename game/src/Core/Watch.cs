@@ -508,7 +508,7 @@ public sealed class WatchLog
             m.SensorCal = MathF.Max(0.3f, m.SensorCal - dt / 24f * 0.011f * stormDrift * heat);
             // 작은 이상: 마모와 상관없이 가끔 (풀린 볼트·단자·커넥터·막힘) — 놓치면 고장이 된다
             if (m.Omen == null && m.Faults.Count == 0 && !m.Body.Stowed && !room.Abandoned && !room.OffLimits && !room.Detached && m.Spec.PowerDraw > 0f
-                && w.Rng.Chance(Tuning.AnomalyPerDay / 24f * dt))
+                && w.Rng.Chance(Tuning.AnomalyPerDay * Storyteller.AnomalyScale / 24f * dt))
             {
                 var faults = m.Spec.FaultKinds.Where(k => k != FaultKind.BreakerTrip && Prevention.KindOf(k) != null).ToList();
                 if (faults.Count > 0)

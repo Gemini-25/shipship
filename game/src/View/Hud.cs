@@ -390,7 +390,10 @@ public partial class Hud : Control
         float titleW = Gfx.Width(Fonts.Body, "함선 지표 · 처음 = 100", 10) + 16 + Gfx.Width(Fonts.Bold, mats, 10);
         string evo = EvolutionSummary();
         titleW = Mathf.Max(titleW, Gfx.Width(Fonts.Body, evo, 10));
-        var card = new Rect2(Margin, Margin + 52f + 8f + 40f + 8f, 28 + Mathf.Max(widths.Sum() - 14, titleW), 64f);
+        // v12.4 이야기꾼: 성격·난이도·긴장·여력·다음 사고까지
+        string story = StoryLine();
+        titleW = Mathf.Max(titleW, Gfx.Width(Fonts.Body, story, 10));
+        var card = new Rect2(Margin, Margin + 52f + 8f + 40f + 8f, 28 + Mathf.Max(widths.Sum() - 14, titleW), story.Length > 0 ? 80f : 64f);
         Card(card);
         Gfx.Text(this, Fonts.Body, new Vector2(card.Position.X + 14, card.Position.Y + 16), "함선 지표 · 처음 = 100", 10, Palette.TextMuted);
         Gfx.TextRight(this, Fonts.Bold, new Vector2(card.End.X - 14, card.Position.Y + 16), mats, 10,
@@ -408,9 +411,20 @@ public partial class Hud : Control
         // 진화: 겪은 사고에 따라 고쳐 짠 것과 배운 것 (v7)
         Gfx.Text(this, Fonts.Body, new Vector2(card.Position.X + 14, card.Position.Y + 55), evo, 10,
             evo.StartsWith("개조: 아직") ? Palette.TextMuted : new Color("#5fd4e8"));
+        if (story.Length > 0) Gfx.Text(this, Fonts.Body, new Vector2(card.Position.X + 14, card.Position.Y + 71), story, 10, new Color("#e0a3ff"));
     }
 
     private ShipProfile? _profile;
+
+    private string StoryLine()
+    {
+        var p = Storyteller.Persona;
+        if (p == StoryPersona.Off) return "";
+        var s = _world.Story;
+        float left = s.Next < 0 ? 0f : (s.Next - _world.Tick) / (float)SimTime.TicksPerHour;
+        return $"이야기꾼 {Storyteller.PersonaName(p)} · {Storyteller.LevelName(Storyteller.Level)} · 긴장 {s.Tension():0.00} · 여력 {s.Capacity() * 100:0}% · 다음 {(left > 0 ? $"~{left:0}시간" : "곧")}"
+               + (s.LastWhat.Length > 0 ? $" · 지난번 {s.LastWhat}" : "");
+    }
 
     private float DrawViewModes(Vector2 mouse)
     {

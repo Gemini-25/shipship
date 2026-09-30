@@ -372,6 +372,8 @@ public static class SaveGame
         I(hz.NextRandom); I(hz.RandomRng.Draws); I(hz.RandomCount); I(hz.StormUntil); I(hz.Shower.Count); I(hz.Poisoned);
         foreach (var r in w.Ship.Rooms) F(r.Air.Toxin);
         foreach (var r in w.Ship.Rooms) { F(r.Flood); F(r.Humidity); I(r.BreakerOff ? 1 : 0); I(r.ValveShut ? 1 : 0); } // v12.3
+        foreach (var c in w.Crew) { I((int)(c.InfectedAt % 1000003)); F(c.CureDays); I(c.Immune ? 1 : 0); } // v12.4
+        I(w.Story.Fired);
         foreach (var m in w.Ship.Machines) if (m.Crop is CropState cr) { F(cr.Blight); I(cr.BlightKnown ? 1 : 0); }
         foreach (var f in w.Ship.Containers) { I(f.Storage!.Tainted); I(f.Storage.TaintKnown ? 1 : 0); }
         foreach (var c in w.Crew) { I(c.CarryTaint); I(c.PoisonAt); }
