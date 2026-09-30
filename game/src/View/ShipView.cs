@@ -204,6 +204,7 @@ public partial class ShipView : Node2D
         PaintWallShade(ci);
         PaintCorridorGuides(ci);
         PaintFloorDecor(ci); // v10.9 바닥 격자·배수구·깔개·경고 띠
+        PaintHoloPad(ci); // v11.2 함교 홀로그램 테이블 패드
         PaintWiring(ci); // v10.9 케이블 트레이·분전함·간선
         PaintWallProps(ci); // v10.9 벽에 붙은 계기·사물함·소화기·번호판
         // v10: 가구 그림자 (빛이 왼쪽 위에서)
@@ -625,6 +626,7 @@ public partial class ShipView : Node2D
         PaintVenting(ci);
         PaintFires(ci);
         foreach (var d in ship.Doors) PaintDoor(ci, d);
+        PaintHoloTable(ci); // v11.2 함교 홀로그램
         PaintDampers(ci, mode == ViewMode.Air);
         PaintRoomStates(ci);
 

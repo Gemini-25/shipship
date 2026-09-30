@@ -28,6 +28,8 @@ public sealed class AdaptationLog
     public int JumpersRemoved;
     public int CotsStowed;
     public int Recycled;
+    // v10.11 대인원 생활
+    public int Rationings;
 
     public override string ToString() =>
         $"임시 배선 {Jumpers} · 뜯은 설비 {Stripped} · 용도 바뀐 방 {Repurposed} · 수동 기동 {ManualStarts}(실패 {ManualStartFails}) · 절전 {LoadSheds} · 바이오 연료 {FuelMade} · 급유 {Refuels}";
@@ -82,6 +84,9 @@ public sealed class World
 
     /// <summary>v11.2 사고 종류 (운석우·태양 폭풍·가스·병충해·식중독…)와 무작위 사고.</summary>
     public HazardSystem Hazards { get; }
+
+    /// <summary>v10.11 먹을 것 방침 (배급).</summary>
+    public FoodPolicy Food { get; } = new();
 
     /// <summary>v9 배관망: 냉각 루프(고온관·분기·귀환관·방열판, 냉각수)와 급수관.</summary>
     public PipeNetwork Piping { get; }
@@ -228,6 +233,7 @@ public sealed class World
             Robots.SystemUpdate(dt);
             Propulsion.SystemUpdate(dt);
             Hazards.SystemUpdate(dt);
+            Food.Update(this, dt);
             Ledger.Sample(this, dt);
             CheckShip();
             foreach (var c in Crew) Memory.Update(this, c);
@@ -613,9 +619,14 @@ public sealed class World
     }
 
     /// <summary>v10.1: 기본 여섯 명 뒤의 승무원 — 역할을 돌아가며 잇고, 성격·솜씨·잠드는 시각은 조금씩 다르다.</summary>
+    /// <summary>v10.11: 큰 배의 조리 전담 — 재배 담당 후배를 한 사람 걸러 조리사로 (12명 배에 하나, 20명 하나, 30명 둘).</summary>
+    private static readonly CrewSeed CookSeed = new("", CrewRole.Cook, 22f, 0.7f, 0.65f, 0.4f, 1.1f,
+        new[] { RoomType.Galley, RoomType.Mess }, new[] { .1f, .15f, .3f, .3f, .35f, .9f, .1f }, 0.45f);
+
     private static CrewSeed ExtraSeed(int i, Rng rng)
     {
         var t = DefaultCrew[i % DefaultCrew.Length];
+        if (t.Role == CrewRole.Botanist && (i / DefaultCrew.Length) % 2 == 1) t = CookSeed;
         int k = i - DefaultCrew.Length;
         string name = ExtraNames[k % ExtraNames.Length] + (k >= ExtraNames.Length ? $" {k / ExtraNames.Length + 1}" : "");
         var skills = t.Skills.Select(v => Math.Clamp(v * rng.Range(0.7f, 1.0f) + rng.Range(-0.05f, 0.1f), 0.05f, 0.9f)).ToArray();

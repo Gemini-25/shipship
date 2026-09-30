@@ -81,6 +81,9 @@ public static partial class Program
                 Console.WriteLine($"  시드 {s,-9} {Outcome.Name(outcome.Kind),-5} · 먼저 모자란 것: {order}");
                 Console.WriteLine($"     굶주림 {starving:0}사람·시간 · 못 잠 {sleepless:0}사람·시간 · 물 최저 {minWater * 100:0}% · 산소 최저 {minO2:0.0}kPa · 배터리 최저 {minBattery * 100:0}% · 조리 밀림 {cookBacklog:0}시간 · 쓰러짐 {w.History.Collapses - collapses0} · 공기 탱크 {w.Air.Reserve / w.Air.ReserveCapacity * 100:0}%" +
                                   (w.Robots.Robots.Count > 0 ? $" · 로봇 {w.Robots.Summary}" : ""));
+                // v10.11: 배급과 조리 분담
+                int cooked = w.Crew.Sum(c => c.Stats.MealsCooked), byCooks = w.Crew.Where(c => c.Role == CrewRole.Cook).Sum(c => c.Stats.MealsCooked);
+                Console.WriteLine($"     배급 {w.Food.Rationings}번 · {w.Food.RationHours:0}사람·시간 · 조리 {cooked}인분 (조리사 {w.Crew.Count(c => c.Role == CrewRole.Cook)}명이 {(cooked > 0 ? byCooks * 100 / cooked : 0)}%) · 먹을 것 끝 {FoodPolicy.FoodDays(w):0.0}일치");
                 Console.WriteLine($"     사고: {string.Join(" / ", what)}");
             }
             Console.WriteLine($"  먼저 모자란 것: {string.Join(" · ", firsts[key].OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key} {kv.Value}"))}\n");

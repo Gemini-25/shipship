@@ -79,7 +79,8 @@ public static class NeedsSystem
         bool stuffy = co2 > 1f;
 
         // ── 욕구 ──
-        n.Food -= (asleep ? FoodDecayAsleep : FoodDecayAwake) * c.Traits.Appetite * dt;
+        // v10.11 배급: 한 끼씩 줄여 먹으니 허기가 덜 빠진다 (그만큼 날카로워진다 — 아래)
+        n.Food -= (asleep ? FoodDecayAsleep : FoodDecayAwake) * c.Traits.Appetite * (w.Food.Rationing ? FoodPolicy.RationDecay : 1f) * dt;
 
         float restMul = (hypoxic ? 1.6f : 1f) * (stuffy ? 1.5f : 1f);
         // 침대가 아닌 곳(바닥, 의자)에서 자면 덜 쉰다
@@ -111,6 +112,7 @@ public static class NeedsSystem
         if (air != null && !suited && (air.Temperature < 12f || air.Temperature > 32f)) stress += 0.03f;
         if (air != null && air.Smoke > 0.2f) stress += 0.08f;
         if (air != null && !suited && air.Toxin > 0.1f) stress += 0.1f; // v11.2 매캐한 냄새
+        if (w.Food.Rationing && !asleep) stress += 0.012f * c.Traits.Appetite; // v10.11 배급: 늘 조금 배고프다
         stress += 0.05f * v.Injury; // 아프다
 
         // ── v7 기억: 악몽, 긴장(기저치), 전우 ──

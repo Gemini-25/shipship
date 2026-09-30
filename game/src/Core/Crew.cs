@@ -5,7 +5,7 @@ using System.Numerics;
 
 namespace ShipSim.Core;
 
-public enum CrewRole { Engineer, Medic, Pilot, Technician, Botanist, Electrician }
+public enum CrewRole { Engineer, Medic, Pilot, Technician, Botanist, Electrician, Cook /* v10.11 큰 배의 조리 전담 */ }
 
 public static class CrewRoles
 {
@@ -17,6 +17,7 @@ public static class CrewRoles
         CrewRole.Technician => "정비사",
         CrewRole.Botanist => "재배·조리",
         CrewRole.Electrician => "전기 기사",
+        CrewRole.Cook => "조리사",
         _ => r.ToString(),
     };
 
@@ -27,6 +28,7 @@ public static class CrewRoles
         CrewRole.Technician => o.Skill == Skill.Mechanics || o.Kind is WorkKind.RepairRobot or WorkKind.ServiceRobot or WorkKind.StockCache or WorkKind.SuitCheck or WorkKind.Drill,
         CrewRole.Electrician => o.Skill == Skill.Electrical || o.Kind == WorkKind.ResetBreaker,
         CrewRole.Botanist => o.Kind is WorkKind.Harvest or WorkKind.Tend or WorkKind.Cook or WorkKind.Restock,
+        CrewRole.Cook => o.Kind is WorkKind.Cook or WorkKind.Restock or WorkKind.DiscardFood or WorkKind.Ration or WorkKind.EndRation,
         CrewRole.Medic => o.Skill == Skill.Medicine || o.Kind == WorkKind.Rescue,
         CrewRole.Pilot => o.Skill == Skill.Piloting,
         _ => false,

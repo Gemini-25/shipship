@@ -344,6 +344,8 @@ public static class SaveGame
         foreach (var m in w.Ship.Machines) if (m.Crop is CropState cr) { F(cr.Blight); I(cr.BlightKnown ? 1 : 0); }
         foreach (var f in w.Ship.Containers) { I(f.Storage!.Tainted); I(f.Storage.TaintKnown ? 1 : 0); }
         foreach (var c in w.Crew) { I(c.CarryTaint); I(c.PoisonAt); }
+        // v10.11 배급
+        I(w.Food.Rationing ? 1 : 0); I(w.Food.Rationings);
         return h;
     }
 }

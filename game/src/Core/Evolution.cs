@@ -52,7 +52,8 @@ public static class Evolution
     public static bool WaterShort(World w) => w.Water.Produced - w.Water.Consumed < WaterSystem.BedLitersPerHour * 0.5f;
 
     /// <summary>v10.1: 굶주린 사람·시간 (누적). 식량이 모자랐던 배의 교훈.</summary>
-    public static float StarvedHours(World w) => w.Crew.Sum(c => c.Stats.TicksStarving) / (float)SimTime.TicksPerHour;
+    public static float StarvedHours(World w) => w.Crew.Sum(c => c.Stats.TicksStarving) / (float)SimTime.TicksPerHour
+                                                 + 0.5f * w.Food.RationHours; // v10.11 배급한 시간은 굶주림의 절반으로 친다
 
     public static string Name(UpgradeKind k) => k switch
     {
@@ -196,6 +197,7 @@ public static class Evolution
         (UpgradeKind.BackupController, CrewRole.Electrician or CrewRole.Pilot) => 0.3f,
         (UpgradeKind.BackupController, CrewRole.Engineer) => 0.2f,
         (UpgradeKind.AddGrowBed, CrewRole.Botanist) => 0.4f,
+        (UpgradeKind.AddGrowBed, CrewRole.Cook) => 0.3f,
         (UpgradeKind.AddGrowBed, CrewRole.Medic) => 0.15f,
         (UpgradeKind.Partition, CrewRole.Technician or CrewRole.Engineer) => 0.2f,
         (UpgradeKind.TierUp or UpgradeKind.Module, CrewRole.Engineer or CrewRole.Technician or CrewRole.Electrician) => 0.25f,

@@ -386,6 +386,9 @@ public sealed class HazardSystem
             Hull.Damage(w.Ship, c, c == c0 ? w.Rng.Range(0.5f, 0.62f) : w.Rng.Range(0.25f, 0.4f));
             MarkLog.Add(wall.Marks, w.Tick, "피로 균열");
         }
+        // 가운데 칸은 실금이 뚫려 조금씩 샌다 (보강판이 버텨 덜 상했어도)
+        var core = w.Ship.WallAt(c0)!;
+        if (core.Integrity > 0.3f) Hull.Damage(w.Ship, c0, core.Integrity - w.Rng.Range(0.18f, 0.28f));
         MarkLog.Add(room.Marks, w.Tick, $"외벽 피로 균열 ({cells.Count}칸)");
         w.RaiseAlert($"선체 피로 균열 — {room.Name} 외벽 {cells.Count}칸", room, AlertLevel.Warning, shipWide: true);
         w.History.Add(w, HistoryKind.Incident, $"{room.Name} 외벽이 피로로 갈라졌다 ({cells.Count}칸)", room, at: c0);

@@ -308,6 +308,7 @@ public static partial class WorkPlanners
             WorkKind.RefillPropellant => RefillPropellant(activity, o, c, w, dist, at, out blocked),
             WorkKind.ChangeCourse => ChangeCourse(activity, o, c, w, dist, at, out blocked),
             WorkKind.DiscardFood => DiscardFood(activity, o, c, w, dist, at, out blocked),
+            WorkKind.Ration or WorkKind.EndRation => SetRation(activity, o, c, w, dist, at),
             _ => null,
         };
         if (job != null && suitUp.Count > 0) job.Prepend(suitUp);

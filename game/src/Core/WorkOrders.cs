@@ -39,6 +39,8 @@ public enum WorkKind
     RefillPropellant, ChangeCourse,
     // v11.2 사고 종류
     DiscardFood,
+    // v10.11 대인원 생활
+    Ration, EndRation,
 }
 
 public static class WorkKinds
@@ -127,6 +129,8 @@ public static class WorkKinds
         WorkKind.RefillPropellant => "추진제 보충",
         WorkKind.ChangeCourse => "항로 변경",
         WorkKind.DiscardFood => "상한 식사 버리기",
+        WorkKind.Ration => "배급",
+        WorkKind.EndRation => "배급 해제",
         _ => k.ToString(),
     };
 
@@ -148,7 +152,7 @@ public static class WorkKinds
             or WorkKind.Cannibalize or WorkKind.RepurposeRoom or WorkKind.InstallSubstitute or WorkKind.BuildWorkshop
             or WorkKind.Jettison or WorkKind.Salvage or WorkKind.InstallTruss or WorkKind.Clamp or WorkKind.RestoreRoom
             or WorkKind.LayBypass or WorkKind.IsolateMain or WorkKind.LimpMain or WorkKind.PilotDrones or WorkKind.BuildComputer
-            or WorkKind.Brownout or WorkKind.RadarWatch;
+            or WorkKind.Brownout or WorkKind.RadarWatch or WorkKind.Ration;
 }
 
 /// <summary>
@@ -304,6 +308,8 @@ public sealed class WorkOrder
         WorkKind.RefillPropellant => "엔진 추진제 보충 (물)",
         WorkKind.ChangeCourse => $"{PropulsionSystem.ZoneName((ZoneKind)Circuit)}로 항로 변경",
         WorkKind.DiscardFood => $"{Target.Label}의 균이 든 식사 버리기",
+        WorkKind.Ration => "배급 — 한 끼씩 줄여 먹는다",
+        WorkKind.EndRation => "배급을 풀고 제대로 먹는다",
         _ => Kind.ToString(),
     };
 
@@ -1088,6 +1094,7 @@ public sealed partial class WorkBoard
         ScanPrevention(Post); // v11.0 예방과 안전
         ScanNavigation(Post); // v11.2 항로와 추진
         ScanHazards(Post); // v11.2 사고 뒷정리 (오염된 식사)
+        ScanLiving(Post); // v10.11 배급
 
         // ── 결정 (v7): 사람이 정해야 하는 일은 심의에 올린다 ──
         Council.Review(w, _open.Values.Where(o => seen.Contains(o.Key)).ToList());

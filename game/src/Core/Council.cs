@@ -14,10 +14,10 @@ public enum DecisionState { None, Pending, Approved, Rejected }
 /// - 부결되면 한동안 미뤄지고, 상황이 계속되면 압박이 커져 결국 받아들여진다. 반대했던 사람은 서운함이 남는다.
 /// 이 모든 게 연대기에 남는다 (누가 정했고, 누가 반대했나).
 /// </summary>
-public static class Council
+public static partial class Council
 {
     private static readonly CrewRole[] Chain =
-        { CrewRole.Engineer, CrewRole.Pilot, CrewRole.Technician, CrewRole.Electrician, CrewRole.Medic, CrewRole.Botanist };
+        { CrewRole.Engineer, CrewRole.Pilot, CrewRole.Technician, CrewRole.Electrician, CrewRole.Medic, CrewRole.Botanist, CrewRole.Cook };
 
     public static bool Needs(WorkKind k) =>
         k is WorkKind.SealOffRoom or WorkKind.ReopenRoom or WorkKind.Cannibalize or WorkKind.ShedLoad or WorkKind.RepurposeRoom or WorkKind.Recycle
@@ -26,7 +26,8 @@ public static class Council
             or WorkKind.IsolateMain or WorkKind.LimpMain // v9
             or WorkKind.PlanRepipe // v9.2
             or WorkKind.Brownout // v9.3
-            or WorkKind.ChangeCourse; // v11.2
+            or WorkKind.ChangeCourse // v11.2
+            or WorkKind.Ration; // v10.11
 
     /// <summary>손대도 되는 일인지 (결정이 필요 없거나, 승인됐다).</summary>
     public static bool Cleared(WorkOrder o) => !Needs(o.Kind) || o.Decision == DecisionState.Approved;
@@ -78,6 +79,9 @@ public static class Council
                 // v11.2: 잔해 지대에서 나가자는 안은 맞을수록 쉽게, 들어가자는 안은 원료가 모자랄수록
                 p = (ZoneKind)o.Circuit == ZoneKind.Normal ? 0.6f + 0.15f * w.Propulsion.HitsThisZone
                     : 0.45f + MathF.Min(0.3f, (12 - ItemKinds.RawKinds.Sum(k => w.Board.Have(k))) * 0.03f);
+                break;
+            case WorkKind.Ration:
+                p = RationPressure(w); // v10.11
                 break;
             case WorkKind.Recycle:
                 // v10.10: 되돌릴 값이 없는 뜯긴 설비를 고철로 — 금속판이 모자랄수록 쉽게 통과
@@ -361,6 +365,9 @@ public static class Council
                 terms.Add((MathF.Max(0f, pressure - 0.75f), "새는 게 너무 크다"));
                 break;
             }
+            case WorkKind.Ration:
+                RationTerms(w, c, terms, pressure); // v10.11
+                break;
             case WorkKind.Brownout:
             {
                 bool hungry = w.Ship.FurnitureOf(FurnitureType.GrowBed).Any(f => !f.Room.Abandoned && !f.Machine!.Powered);

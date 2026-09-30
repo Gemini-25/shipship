@@ -316,6 +316,12 @@ public partial class Hud : Control
         var gassed = ship.Rooms.Where(r => r.Air.Toxin > 0.15f).ToList();
         if (gassed.Count > 0)
             chips.Insert(Math.Max(0, chips.Count - 1), ("유독 가스", string.Join("·", gassed.Take(2).Select(r => r.Name)) + (gassed.Count > 2 ? $" 외 {gassed.Count - 2}" : "") + $" · {gassed.Max(r => r.Air.Toxin) * 100:0}%", new Color("#b5e34d"), null));
+        // v10.11 배급 · 먹을 것이 사흘치 아래
+        float foodDays = FoodPolicy.FoodDays(_world);
+        if (_world.Food.Rationing)
+            chips.Insert(Math.Max(0, chips.Count - 1), ("배급", $"먹을 것 {foodDays:0.0}일치 · {(_world.Tick - _world.Food.RationingSince) / (float)SimTime.TicksPerDay:0.0}일째", Palette.Warning, null));
+        else if (foodDays < 3f)
+            chips.Insert(Math.Max(0, chips.Count - 1), ("먹을 것", $"{foodDays:0.0}일치", foodDays < 2f ? Palette.Danger : Palette.Warning, null));
         int blight = ship.Machines.Count(m => m.Crop is { BlightKnown: true });
         if (blight > 0) chips.Insert(Math.Max(0, chips.Count - 1), ("병충해", $"재배대 {blight}곳", Palette.Warning, null));
         int omens = ship.Machines.Count(m => m.Omen is { Known: true });
@@ -659,6 +665,7 @@ public partial class Hud : Control
         CrewRole.Technician => new Color("#e0b64a"),
         CrewRole.Botanist => new Color("#8fd65a"),
         CrewRole.Electrician => new Color("#c0a0ff"),
+        CrewRole.Cook => new Color("#ffc36b"),
         _ => Palette.TextMuted,
     };
 
