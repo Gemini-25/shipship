@@ -297,6 +297,23 @@ public sealed class CrewMember
 
     public CrewStats Stats { get; } = new();
 
+    /// <summary>v12.0 설비 종류마다의 친숙함 0~1: 여러 번 만진 설비는 평소와 다른 소리를 먼저 알아채고, 원인도 잘 짚는다.</summary>
+    public Dictionary<FurnitureType, float> Familiarity { get; } = new();
+
+    public float FamiliarityWith(FurnitureType t) => Familiarity.TryGetValue(t, out var v) ? v : 0f;
+
+    public void Familiarize(FurnitureType t, float amount) => Familiarity[t] = MathF.Min(1f, FamiliarityWith(t) + amount * (1.05f - FamiliarityWith(t)));
+
+    /// <summary>v12.0 짧게 한 말 (화면에 말풍선: 인수인계 등).</summary>
+    public string? Said { get; private set; }
+    public long SaidUntil { get; private set; }
+
+    public void Say(World w, string text)
+    {
+        Said = text;
+        SaidUntil = w.Tick + SimTime.Minutes(4);
+    }
+
     /// <summary>v10.10: 옆에서 거드는 정비 로봇 (긴 손일이 빨라진다).</summary>
     public Robot? Helper { get; internal set; }
 

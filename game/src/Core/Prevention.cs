@@ -28,6 +28,12 @@ public sealed class Omen
     public string? KnownBy { get; set; }
     public long KnownAt { get; set; }
 
+    /// <summary>v12.0 진짜 원인 (같은 기척에도 원인이 여럿 — 열어 봐야 안다). Phantom이면 설비는 멀쩡하고 감지기가 틀렸다.</summary>
+    public OmenCause Cause { get; init; } = OmenCause.LooseMount;
+
+    /// <summary>v12.0 당직 일지의 기록 (누가 보기 전엔 없다).</summary>
+    public ShiftNote? Note { get; set; }
+
     /// <summary>0~1: 얼마나 무르익었나 (기척이 커질수록 알아채기 쉽다).</summary>
     public float Level(long now) => Due <= Since ? 1f : Math.Clamp((now - Since) / (float)(Due - Since), 0f, 1f);
 }
@@ -93,7 +99,10 @@ public static class Prevention
         if (!w.Rng.Chance(Tuning.OmenShare)) return false;
         var fault = w.Rng.Pick(choices);
         float hours = w.Rng.Range(8f, 30f);
-        m.Omen = new Omen { Kind = KindOf(fault)!.Value, Fault = fault, Since = w.Tick, Due = w.Tick + SimTime.Hours(hours) };
+        var kind = KindOf(fault)!.Value;
+        // v12.0 진짜 원인: 같은 기척을 내는 원인 중 하나 (무게대로)
+        var cause = Causes.Weighted(Causes.For(m.Body.Type, kind), w.Rng.Float());
+        m.Omen = new Omen { Kind = kind, Fault = fault, Cause = cause, Since = w.Tick, Due = w.Tick + SimTime.Hours(hours) };
         w.Precursors.Omens++;
         return true;
     }
@@ -107,28 +116,46 @@ public static class Prevention
             if (m.Omen is not Omen o) continue;
             if (m.Body.Room.OffLimits) { m.Omen = null; continue; }
             float level = o.Level(w.Tick);
-            if (!o.Known && !w.PreventionBlind)
+            bool phantom = o.Cause == OmenCause.Phantom;
+            if (!w.PreventionBlind)
             {
-                // 감지기: 주 컴퓨터가 돌고 그 방에 전기가 있으면 (열·압력은 잘 잡고, 진동·계기는 덜)
-                float sensor = w.Automation.MainOnline && m.Body.Room.Powered
-                    ? o.Kind switch { OmenKind.Heat => 0.22f, OmenKind.Pressure => 0.18f, OmenKind.Drift => 0.12f, _ => 0.05f } : 0f;
-                if (sensor > 0f && w.Rng.Chance(sensor * (0.3f + 0.7f * level) * dt))
+                // 감지기: 주 컴퓨터가 돌고 그 방에 전기가 있으면 (열·압력은 잘 잡고, 진동·계기는 덜).
+                // v12.0 교정이 틀어질수록 덜 잡는다 · 계기 오류는 감지기만 낸다 (틀어진 감지기가 보는 헛것)
+                bool logged = o.Note is { Logged: true };
+                float sensor = !logged && !w.Watch.NoSensors && w.Automation.MainOnline && m.Body.Room.Powered
+                    ? (phantom ? 0.5f : o.Kind switch { OmenKind.Heat => 0.22f, OmenKind.Pressure => 0.18f, OmenKind.Drift => 0.12f, _ => 0.05f }) * (0.4f + 0.6f * m.SensorCal) : 0f;
+                if (sensor > 0f && w.Rng.Chance(sensor * (phantom ? 5f : 0.3f + 0.7f * level) * dt))
                     Detect(w, m, o, "감지기", null);
-                else
+                else if (!phantom)
                 {
-                    // 당직: 그 방에서 깨어 일하는 사람의 귀와 코 (솜씨·성실함만큼, 캄캄하면 덜)
+                    // 당직: 그 방에서 깨어 일하는 사람의 귀와 코 (솜씨·성실함만큼, 캄캄하면 덜).
+                    // v12.0 그 설비를 여러 번 만진 사람은 평소와 다른 소리를 먼저 알아챈다 — 진동은 옆방에서도 (친숙함이 깊으면)
                     foreach (var c in w.Crew)
                     {
-                        if (!c.CanAct || !c.IsAwake || c.Room != m.Body.Room) continue;
-                        float p = (0.04f + 0.22f * c.SkillLevel(m.Spec.Skill)) * (0.6f + 0.6f * c.Traits.Diligence) * (0.3f + 0.7f * level);
+                        if (!c.CanAct || !c.IsAwake || c.Room == null) continue;
+                        if (o.Note is ShiftNote seen && w.Watch.Knows(seen, c)) continue;
+                        float fam = c.FamiliarityWith(m.Body.Type);
+                        bool here = c.Room == m.Body.Room;
+                        bool nextDoor = !here && o.Kind == OmenKind.Vibration && fam >= 0.4f && c.Room.Doors.Any(d => d.RoomA == m.Body.Room || d.RoomB == m.Body.Room);
+                        if (!here && !nextDoor) continue;
+                        float p = (0.04f + 0.22f * c.SkillLevel(m.Spec.Skill)) * (0.6f + 0.6f * c.Traits.Diligence) * (0.3f + 0.7f * level) * (1f + 0.8f * fam);
+                        if (nextDoor) p *= 0.35f;
                         if (m.Body.Room.Dark) p *= 0.5f;
-                        if (w.Rng.Chance(p * dt)) { Detect(w, m, o, "당직", c); break; }
+                        if (w.Rng.Chance(p * dt)) { Detect(w, m, o, nextDoor ? "옆방에서 들음" : "당직", c); break; }
                     }
                 }
             }
             if (w.Tick < o.Due) continue;
+            if (phantom)
+            {
+                // 계기 오류는 저절로 걷힌다 (감지기가 제자리로 흘러 돌아왔다) — 그동안 부품을 갈았다면 헛일이었다
+                m.Omen = null;
+                w.Watch.Close(o, broke: false);
+                continue;
+            }
             // 때가 됐다: 손보지 못했으면 고장 난다
             m.Omen = null;
+            w.Watch.Close(o, broke: true);
             st.Missed++;
             MarkLog.Add(m.Marks, w.Tick, o.Known ? $"{Name(o.Kind)}을(를) 알았지만 손보기 전에 고장" : $"{Name(o.Kind)} — 아무도 몰랐다");
             w.Machines.Break(m, o.Fault);
@@ -147,6 +174,8 @@ public static class Prevention
     private static void Detect(World w, Machine m, Omen o, string how, CrewMember? by, string? byName = null)
     {
         var st = w.Precursors;
+        w.Watch.Observe(m, o, how, by, byName); // v12.0 당직 일지 (다시 찾았으면 중복 점검)
+        if (o.Known) { w.Board.RequestScan(); return; }
         o.Known = true;
         o.KnownAt = w.Tick;
         o.KnownBy = byName ?? by?.Name ?? how;
@@ -154,12 +183,16 @@ public static class Prevention
         switch (how)
         {
             case "감지기": st.BySensor++; break;
-            case "당직": st.ByCrew++; break;
+            case "당직" or "옆방에서 들음": st.ByCrew++; break;
             case "로봇": st.ByRobot++; break;
             default: st.ByRounds++; break;
         }
         float hours = (o.Due - w.Tick) / (float)SimTime.TicksPerHour;
-        string who = how switch { "감지기" => "감지기가 잡았다", "당직" => $"{Ko.IGa(by!.Name)} 알아챘다", "로봇" => $"{Ko.IGa(byName ?? "로봇")} 순찰하다 찾았다", _ => $"{Ko.IGa(byName ?? by?.Name ?? "?")} 순찰하다 찾았다" };
+        string who = how switch
+        {
+            "감지기" => "감지기가 잡았다", "당직" => $"{Ko.IGa(by!.Name)} 알아챘다", "옆방에서 들음" => $"{Ko.IGa(by!.Name)} 옆방에서 소리를 듣고 알아챘다",
+            "로봇" => $"{Ko.IGa(byName ?? "로봇")} 순찰하다 찾았다", _ => $"{Ko.IGa(byName ?? by?.Name ?? "?")} 순찰하다 찾았다",
+        };
         MarkLog.Add(m.Marks, w.Tick, $"전조: {Name(o.Kind)} ({who})");
         w.RaiseAlert($"전조 — {m.Name} {Name(o.Kind)} ({who} · 고장까지 {hours:0}시간쯤)", m.Body.Room, AlertLevel.Notice, shipWide: false);
         w.Board.RequestScan();
@@ -172,7 +205,9 @@ public static class Prevention
         if (w.PreventionBlind) return;
         foreach (var f in room.Furniture)
         {
-            if (f.Machine?.Omen is not Omen o || o.Known) continue;
+            if (f.Machine?.Omen is not Omen o || o.Cause == OmenCause.Phantom) continue;
+            // v12.0 이미 알고 있는 것(로봇은 컴퓨터 일지에 올라간 것)은 다시 보지 않는다 — 모르는 사람이 찾으면 중복 점검
+            if (o.Note is ShiftNote seen && (robot ? seen.Logged : by != null && w.Watch.Knows(seen, by))) continue;
             // 로봇은 빠짐없이(열화상·진동 센서), 사람은 솜씨만큼 (기척이 작으면 놓치기도)
             float p = robot ? 0.95f : (0.45f + 0.45f * (by?.SkillLevel(f.Machine.Spec.Skill) ?? 0.5f)) * (0.55f + 0.45f * o.Level(w.Tick));
             if (w.Rng.Chance(p)) Detect(w, f.Machine, o, robot ? "로봇" : "순찰", by, who);
@@ -184,6 +219,7 @@ public static class Prevention
     {
         if (m.Omen is not Omen o) return;
         m.Omen = null;
+        if (o.Note is ShiftNote n) w.Watch.Resolve(n, by, "손봄 — 고장을 막았다"); // v12.0
         w.Precursors.Prevented++;
         m.Wear = MathF.Max(0f, m.Wear - 0.15f);
         MarkLog.Add(m.Marks, w.Tick, $"{by?.Name ?? bot?.Name ?? "?"}: {Name(o.Kind)} 손봄 — 고장을 막았다");
@@ -200,11 +236,14 @@ public sealed partial class WorkBoard
         foreach (var m in w.Ship.Machines)
         {
             if (m.Omen is not Omen o || !o.Known || m.Body.Room.Abandoned || m.Body.Room.OffLimits) continue;
+            // v12.0 누군가 손댈 수 있는 기록만 (컴퓨터 일지로 읽히거나, 아는 사람이 깨어 있다)
+            if (o.Note is not ShiftNote n || !w.Watch.Actionable(n)) continue;
             float left = (o.Due - w.Tick) / (float)SimTime.TicksPerHour;
-            var cost = Prevention.FixCost(o.Kind);
-            string need = cost.Length == 0 ? "재료 없이 다시 맞춘다" : string.Join(" + ", cost.Select(x => $"{ItemKinds.Name(x.kind)} {x.count}"));
+            string state = n.Confirmed is OmenCause done
+                ? $"확인: {Causes.Name(done)}" + (Causes.NeedsParts(done) ? " — " + string.Join(" + ", Causes.Spec(done).Fix.Select(x => $"{ItemKinds.Name(x.kind)} {x.count}")) : " — 부품 없이")
+                : n.Suspect is OmenCause s ? $"관측: {n.Observation} · 판단: {Causes.Name(s)} 의심 ({n.Confidence * 100:0}%)" : $"관측: {n.Observation} · 원인 모름";
             post(WorkKind.PreventiveCheck, WorkTarget.Of(m.Body), 0.45f + 0.4f * o.Level(w.Tick) + (m.Spec.Critical ? 0.15f : 0f), m.Spec.Skill,
-                $"{Prevention.Name(o.Kind)} · {Faults.Spec(o.Fault).Name}까지 {left:0}시간쯤 · {need}");
+                $"{state} · {left:0}시간쯤 남음");
         }
         ScanSafety(post);
         if (w.PreventionBlind) return;

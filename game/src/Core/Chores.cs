@@ -44,6 +44,9 @@ public sealed class ChoresActivity : Activity
         if (o.Kind == WorkKind.Drill && o.Circuit != c.Id) return -1f; // v11.0: 훈련은 제 몫만
         if (o.Kind == WorkKind.Train && o.Circuit / 10 != c.Id) return -1f; // v11.3: 배우는 사람만
         if (o.Kind == WorkKind.Rehab && o.Circuit != c.Id) return -1f; // v11.3: 재활은 다친 사람이
+        if (o.Kind == WorkKind.Handover && o.Circuit != c.Id) return -1f; // v12.0: 인수인계는 기록을 든 사람이
+        // v12.0 전조 손보기는 그 기록을 아는 사람만 (직접 봤거나 · 인계받았거나 · 컴퓨터 일지로 읽었다)
+        if (o.Kind == WorkKind.PreventiveCheck && o.Target.Furniture?.Machine?.Omen?.Note is ShiftNote note && !w.Watch.Knows(note, c)) return -1f;
         if (DecisionOnly(o.Kind)) return -1f;
         // v8: 선체 밖 일은 드론이 맡을 수 있으면 드론에게 맡긴다 (드론이 없거나 멈췄을 때만 사람이 나간다)
         bool eva = NeedsEvaField(o) && o.Kind != WorkKind.Rescue;
@@ -62,9 +65,16 @@ public sealed class ChoresActivity : Activity
             score -= 0.2f;
 
         bool emergency = o.Urgency >= 0.9f;
+        // 위기 판단: 비상·생존 위기에 맞닿은 일(사람·불·전기·공기·사람 있는 방의 구멍)은 앞으로, 딴일은 뒤로.
+        // 비번·취침 시간이어도 불려 나온다 (비상 소집)
+        score += Crisis.Bias(w, o);
+        bool allHands = Crisis.AllHands(w, o);
+        // v12.0 교대 한 시간 전에는 새 점검을 벌이기보다 기록을 넘긴다
+        if (o.Kind == WorkKind.PreventiveCheck && !emergency && OnShiftStatic(c, w)
+            && !SimTime.InWindow(SimTime.HourOfDay(w.Tick) + 1f, c.Schedule.WorkStart, c.Schedule.WorkLength)) score -= 0.15f;
         if (OnShiftStatic(c, w)) score += 0.08f + 0.1f * c.Traits.Diligence;
-        else if (!emergency && o.Kind is not (WorkKind.Train or WorkKind.Rehab)) score -= 0.3f; // v11.3 배우기·재활은 비번에 하는 일
-        if (BedtimeStatic(c, w)) score -= emergency ? 0.1f : 0.5f;
+        else if (!emergency && !allHands && o.Kind is not (WorkKind.Train or WorkKind.Rehab or WorkKind.Handover)) score -= 0.3f; // v11.3 배우기·재활은 비번에 하는 일
+        if (BedtimeStatic(c, w)) score -= emergency || allHands ? 0.1f : 0.5f;
 
         score -= distance / 6000f;
         score -= 0.15f * c.Needs.Stress;
@@ -81,6 +91,9 @@ public sealed class ChoresActivity : Activity
         if (!eva && o.Target.CurrentRoom is Room room)
         {
             float danger = MathF.Max(Atmosphere.Danger(room), room.Leaking ? 0.6f : 0f);
+            // 진공·저압은 우주복을 입고 가면 된다 (쓸 우주복이 있으면 겁을 덜 낸다) — 불은 그대로 무섭다
+            if (danger > 0.2f && (c.Suit is { Oxygen: > 0.5f } || w.Ship.FurnitureOf(FurnitureType.SuitLocker).Any(l => l.Storage!.Count(ItemKind.Suit) > 0 && !l.Room.Leaking)))
+                danger *= 0.35f;
             if (w.Fire.CountIn(room) > 0) danger = MathF.Max(danger, 0.5f);
             if (danger > 0.2f) score -= danger * MathF.Pow(1f - c.Traits.Bravery, 1.5f) * 1.2f;
 
@@ -271,6 +284,8 @@ public static partial class WorkPlanners
             WorkKind.Distress => SendDistress(activity, o, c, w, dist, at),
             WorkKind.Train => Train(activity, o, c, w, dist, at, out blocked),
             WorkKind.Rehab => Rehab(activity, o, c, w, dist, at, out blocked),
+            WorkKind.Calibrate => Calibrate(activity, o, c, w, dist, at, out blocked),
+            WorkKind.Handover => Handover(activity, o, c, w, dist, at, out blocked),
             WorkKind.UnloadSupply => UnloadSupply(activity, o, c, w, dist, at),
             WorkKind.AnswerSignal => AnswerSignal(activity, o, c, w, dist, at),
             WorkKind.Upgrade => Upgrade(activity, o, c, w, dist, at, out blocked),
@@ -537,6 +552,7 @@ public static partial class WorkPlanners
             }
             if (!UseAll(cm, materials)) return false;
             cm.Stats.Repairs++;
+            cm.Familiarize(m.Body.Type, 0.06f); // v12.0 만져 본 설비
             world.Board.Close(o);
             if (fault.Kind == FaultKind.Wrecked)
             {
@@ -624,6 +640,7 @@ public static partial class WorkPlanners
             m.LastServiced = world.Tick;
             m.ServiceCount++;
             cm.Practice(m.Spec.Skill, 0.02f);
+            cm.Familiarize(m.Body.Type, 0.03f); // v12.0
             cm.Stats.Services++;
             world.Board.Close(o);
             return true;

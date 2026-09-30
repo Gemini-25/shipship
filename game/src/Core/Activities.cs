@@ -190,18 +190,20 @@ public sealed class SleepActivity : Activity
         if (FindBed(c, w, dist) is not var (spot, room, how)) return null;
 
         bool fellAsleep = false;
+        // 위기 중 탈진: 두 시간 쪽잠만 (기운이 조금 돌아오면 다시 나간다)
+        bool nap = Crisis.Acting(w);
         var toils = Plans.DropOff(c, w, dist);
         toils.Add(new GotoToil(spot));
-        toils.Add(new WaitToil(SimTime.Hours(12), Pose.Sleeping, minTicks: SimTime.Minutes(30))
+        toils.Add(new WaitToil(SimTime.Hours(nap ? 2 : 12), Pose.Sleeping, minTicks: SimTime.Minutes(30))
         {
             EveryTick = (_, _) => fellAsleep = true,
-            DoneWhen = (cm, world) =>
-                !SimTime.InWindow(SimTime.HourOfDay(world.Tick), cm.Schedule.SleepStart, cm.Schedule.SleepLength)
-                && cm.Needs.Rest > 0.6f,
+            DoneWhen = (cm, world) => nap
+                ? cm.Needs.Rest > 0.35f
+                : !SimTime.InWindow(SimTime.HourOfDay(world.Tick), cm.Schedule.SleepStart, cm.Schedule.SleepLength) && cm.Needs.Rest > 0.6f,
         });
-        return new Job(this, how.Length > 0 ? "쪽잠" : "수면", toils)
+        return new Job(this, nap || how.Length > 0 ? "쪽잠" : "수면", toils)
         {
-            LogText = how.Length > 0 ? $"{how} 잔다" : "잠자리에 든다",
+            LogText = nap ? "비상 중 탈진 — 두 시간만 눈을 붙인다" : how.Length > 0 ? $"{how} 잔다" : "잠자리에 든다",
             TargetRoom = room,
             InterruptMargin = 0.45f,
             OnFinished = (cm, world, _) =>

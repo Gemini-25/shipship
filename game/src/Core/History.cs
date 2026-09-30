@@ -21,6 +21,7 @@ public enum HistoryKind
     Memory,     // 한 사람 안에 남은 것 (공포, 긴장, 침착해짐)
     Milestone,  // 출항, 저장한 날 같은 이정표
     Structure,  // v8: 방이 떨어져 나가고, 사출하고, 되찾고, 다시 붙인 일
+    Maintenance, // v12.0: 당직 일지 — 교대를 건넌 기록, 잘못 짚은 부품, 전해지지 않은 기척
 }
 
 /// <summary>벽·방·설비·사람에 남는 이력 한 줄.</summary>

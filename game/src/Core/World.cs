@@ -123,6 +123,9 @@ public sealed class World
     /// <summary>v11.0 예방: 사고 전조를 몇 번 냈고, 누가 알아챘고, 몇 번 막고 몇 번 놓쳤나.</summary>
     public PreventionStats Precursors { get; } = new();
 
+    /// <summary>v12.0 당직 일지 · 진단 · 감지기 교정.</summary>
+    public WatchLog Watch { get; }
+
     /// <summary>시험용: 전조를 아무도 못 보는 배 (감지기·당직·순찰이 전조를 보지 않는다).</summary>
     public bool PreventionBlind { get; set; }
 
@@ -182,6 +185,7 @@ public sealed class World
         Propulsion = new PropulsionSystem(this, 1f);
         Hazards = new HazardSystem(this, seed);
         Comms = new CommsSystem(this);
+        Watch = new WatchLog(this); // v12.0
         Piping = new PipeNetwork(this);
         Automation = new AutomationSystem(this);
         Fixtures = new FixturesSystem(this);
@@ -234,6 +238,7 @@ public sealed class World
             Water.Update(this, dt);
             Machines.Update(dt);
             Prevention.Update(this, dt);
+            Watch.Update(dt); // v12.0 교대·감지기
             Collection.Update(dt);
             Structure.Update(dt);
             Drones.SystemUpdate(dt);
@@ -532,12 +537,6 @@ public sealed class World
     /// <summary>v10.7: 항해를 시작할 때 기본값과 달랐던 밸런스 수치 (저장 파일 머리에 `tune`으로 남는다).</summary>
     public List<(string key, float value)> StartTuning { get; private set; } = new();
 
-    // v10.1: 기본 여섯 명 뒤에 더 태우는 사람들 (역할은 기본 여섯의 뒤를 잇는 후배, 솜씨는 조금 덜 여물었다)
-    private static readonly string[] ExtraNames =
-    {
-        "정하람", "서지안", "임건우", "조아라", "배시우", "신다온", "권태오", "문소을", "황보람", "차은호",
-    };
-
     /// <param name="crew">0이면 배의 설계 인원.</param>
     /// <param name="shipKey">배 템플릿 (null이면 인원에 맞는 가장 작은 배, 인원도 없으면 미리내호).</param>
     public static World CreateDefault(int seed = 20260929, int crew = 0, string? shipKey = null)
@@ -564,13 +563,15 @@ public sealed class World
         var beds = ship.FurnitureOf(FurnitureType.Bed).OrderBy(b => b.MinX).ToList();
         float hour = SimTime.HourOfDay(world.Tick);
 
+        // v12.0 이름은 시드마다 다르게 (배의 난수와 따로 굴린다)
+        var names = NameGen.ForShip(seed, crewSize);
         for (int i = 0; i < crewSize; i++)
         {
             var s = i < DefaultCrew.Length ? DefaultCrew[i] : ExtraSeed(i, rng);
             var c = new CrewMember
             {
                 Id = i,
-                Name = s.Name,
+                Name = names[i],
                 Role = s.Role,
                 Traits = new Personality
                 {
@@ -635,17 +636,13 @@ public sealed class World
     {
         var t = DefaultCrew[i % DefaultCrew.Length];
         if (t.Role == CrewRole.Botanist && (i / DefaultCrew.Length) % 2 == 1) t = CookSeed;
-        int k = i - DefaultCrew.Length;
-        string name = ExtraNames[k % ExtraNames.Length] + (k >= ExtraNames.Length ? $" {k / ExtraNames.Length + 1}" : "");
         var skills = t.Skills.Select(v => Math.Clamp(v * rng.Range(0.7f, 1.0f) + rng.Range(-0.05f, 0.1f), 0.05f, 0.9f)).ToArray();
         float bed = (t.Bedtime + rng.Range(-3f, 3f) + 24f) % 24f;
-        return new CrewSeed(name, t.Role, bed,
+        return new CrewSeed("", t.Role, bed,
             Math.Clamp(t.Diligence + rng.Range(-0.2f, 0.2f), 0.2f, 0.95f), rng.Range(0.2f, 0.85f),
             Math.Clamp(t.Bravery + rng.Range(-0.25f, 0.2f), 0.15f, 0.9f), rng.Range(0.85f, 1.2f),
             t.Stations, skills, rng.Range(0.3f, 0.7f));
     }
-
-    private static readonly string[] SurvivorNames = { "나이안", "도하늘", "류세빈", "마로아", "변지오", "석하율", "엄다린", "제이온", "탁서윤", "하예림" };
 
     /// <summary>
     /// v11.2 교신: 탈출 캡슐에서 건진 생존자를 승무원으로 태운다 (다쳐서 온다). 번호는 목록 끝, 역할·성격·솜씨는 기본 여섯 중 하나를 닮게.
@@ -656,7 +653,7 @@ public sealed class World
         int id = Crew.Count;
         var t = DefaultCrew[Rng.Range(0, DefaultCrew.Length)];
         int k = Crew.Count(c => c.Rescued);
-        string name = SurvivorNames[k % SurvivorNames.Length] + (k >= SurvivorNames.Length ? $" {k / SurvivorNames.Length + 1}" : "");
+        string name = NameGen.Newcomer(Seed, k, Crew.Select(c => c.Name)); // v12.0
         var skills = t.Skills.Select(v => Math.Clamp(v * Rng.Range(0.6f, 1.0f) + Rng.Range(-0.05f, 0.1f), 0.05f, 0.9f)).ToArray();
         var c = new CrewMember
         {

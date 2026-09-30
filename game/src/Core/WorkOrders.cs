@@ -47,6 +47,8 @@ public enum WorkKind
     Distress, UnloadSupply, AnswerSignal,
     // v11.3 승무원 성장
     Train, Rehab,
+    // v12.0 당직 일지·진단
+    Calibrate, Handover,
 }
 
 public static class WorkKinds
@@ -143,6 +145,8 @@ public static class WorkKinds
         WorkKind.AnswerSignal => "탈출 캡슐 구조",
         WorkKind.Train => "배우기",
         WorkKind.Rehab => "재활",
+        WorkKind.Calibrate => "감지기 교정",
+        WorkKind.Handover => "인수인계",
         _ => k.ToString(),
     };
 
@@ -328,6 +332,8 @@ public sealed class WorkOrder
         WorkKind.AnswerSignal => "탈출 캡슐 구조 — 배를 돌린다",
         WorkKind.Train => $"{Target.Crew?.Name ?? "?"}에게 {Skills.Name((Skill)(Circuit % 10))} 배우기",
         WorkKind.Rehab => $"{Target.Crew?.Name ?? "?"} 재활 운동",
+        WorkKind.Calibrate => $"{Target.Label} 감지기 교정",
+        WorkKind.Handover => $"{Target.Crew?.Name ?? "?"}에게 인수인계",
         _ => Kind.ToString(),
     };
 
@@ -1125,6 +1131,8 @@ public sealed partial class WorkBoard
         ScanRobots(Post); // v10.10 선내 로봇 (수리·끌어오기·정비)
         ScanRecovery(Post); // v10.10 자원 회복 (물통·비상 물자·정리)
         ScanPrevention(Post); // v11.0 예방과 안전
+        ScanCalibration(Post); // v12.0 감지기 교정
+        ScanHandover(Post); // v12.0 찾아가 인수인계
         ScanNavigation(Post); // v11.2 항로와 추진
         ScanHazards(Post); // v11.2 사고 뒷정리 (오염된 식사)
         ScanLiving(Post); // v10.11 배급

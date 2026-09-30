@@ -122,6 +122,9 @@ public static partial class Program
         if (args.Contains("--remodeltest")) return RunRemodelTest(seed);
         if (args.Contains("--commstest")) return RunOutsideCommsTest(seed);
         if (args.Contains("--growthtest")) return RunGrowthTest(seed);
+        if (args.Contains("--watchtest")) return RunWatchTest(seed); // v12.0
+        if (args.Contains("--crisistrace")) return RunCrisisTrace(seed, args.FirstOrDefault(a => a.StartsWith("--ship="))?[7..] ?? "Mirinae", Math.Max(1, days));
+        if (args.Contains("--gate=crisis")) return RunCrisisGate(Math.Max(1, days), seed, args.FirstOrDefault(a => a.StartsWith("--ship="))?[7..] ?? "Mirinae");
         if (args.FirstOrDefault(a => a.StartsWith("--partition=")) is string pc)
             return RunPartitionCampaign(days, seed, pc.Split('=')[1]);
         if (args.Contains("--gate=partition"))
@@ -240,6 +243,7 @@ public static partial class Program
         Console.WriteLine($"고장 누적 {totalFaults}건 · 정비 누적 {ship.Machines.Sum(m => m.ServiceCount)}회 · 남은 작업 {world.Board.OpenCount}");
         PrintRobots(world);
         Console.WriteLine($"예방: {world.Precursors}");
+        Console.WriteLine($"당직 일지: {world.Watch.Stats}"); // v12.0
         if (world.Hazards.RandomCount > 0 || world.Hazards.Count.Any(n => n > 0))
         {
             // v11.2 무작위 사고 (켜져 있을 때): 무엇이 언제 났고, 사람이 다치거나 쓰러졌나

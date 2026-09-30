@@ -38,6 +38,9 @@ public static class Brain
         foreach (var a in Activities)
         {
             var (score, reason) = a.Score(c, w, dist);
+            // 위기 판단: 비상·생존 위기에는 잠·휴식을 미룬다 (탈진 직전이면 쪽잠)
+            float damp = Crisis.Damp(c, w, a, out var note);
+            if (damp < 1f && score > 0f) { score *= damp; if (note != null) reason += $" · {note}"; }
             if (score > 0f) score += w.Rng.Range(-Noise, Noise);
             evals.Add(new Evaluation(a, score < 0f ? 0f : score, reason));
         }
@@ -68,6 +71,9 @@ public static class Brain
             }
             // 손에 익은 일을 절반 넘게 했으면 더 버틴다
             float margin = c.Job.InterruptMargin + (c.Job.Current is WorkToil { Progress: > 0.4f } ? 0.2f : 0f);
+            // 위기에는 쉬던 사람(잠·휴식·수다)이 금방 일어난다
+            if (c.Job.Activity is SleepActivity or RelaxActivity or ChatActivity or WanderActivity or DutyActivity && Crisis.Acting(w))
+                margin = System.MathF.Min(margin, 0.08f);
             // v10.5: 긴 개조·정비 중에도 굶주리면 손을 놓고 먹으러 간다 (급한 일은 예외 — 불 끄던 사람은 버틴다)
             if (!c.Job.Urgent && c.Needs.Hunger > 0.85f && best.Activity is EatActivity) margin = 0f; // v10.10: 0.9 → 0.85 (급한 수리 뒤 끼니를 놓치던 것)
             if (best.Score < current + margin) return;

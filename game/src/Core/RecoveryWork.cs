@@ -310,22 +310,67 @@ public static partial class WorkPlanners
         }
         var f = o.Target.Furniture!;
         var m = f.Machine!;
-        if (m.Omen is not Omen omen) { w.Board.Close(o); return null; }
-        var cost = Prevention.FixCost(omen.Kind);
+        if (m.Omen is not Omen omen || omen.Note is not ShiftNote note) { w.Board.Close(o); return null; }
+        var watch = w.Watch;
+        // v12.0 무엇을 손볼지: 확인된 원인 → 그대로 / 아니면 꼼꼼한 사람은 열어 보고(분해 검사), 급한 사람·시간이 없을 때는 판단대로 갈아 본다
+        var belief = watch.Belief(note, c);
+        float left = (omen.Due - w.Tick) / (float)SimTime.TicksPerHour;
+        OmenCause plan;
+        bool diagnose = false;
+        if (belief is { confirmed: true } b0) plan = b0.cause;
+        else
+        {
+            var guess = belief is { } b ? (b.cause, b.confidence) : watch.Guess(note, c, m, omen, 1 + note.WrongFixes);
+            plan = guess.Item1;
+            float thorough = WatchLog.Thoroughness(c);
+            bool scarce = Causes.NeedsParts(plan) && Causes.Spec(plan).Fix.Any(x => w.Ship.CountStored(x.kind) <= x.count);
+            diagnose = !watch.NoDiagnosis && left > 1f
+                       && (note.WrongFixes > 0 || belief == null && note.Suspect == null || guess.Item2 < 0.5f || thorough > 0.55f || scarce);
+        }
+        if (diagnose)
+        {
+            // 분해 검사: 가서 열어 본다 → 원인을 적는다. 부품이 필요 없는 원인(조이기·영점·커넥터)이면 그 자리에서 손본다.
+            var look = Plans.DropOff(c, w, dist);
+            look.Add(new GotoToil(at));
+            look.Add(new WorkToil(0.3f + (omen.Kind is OmenKind.Vibration or OmenKind.Pressure ? 0.2f : 0f), m.Spec.Skill, f.Center));
+            look.Add(new DoToil((cm, world) =>
+            {
+                if (m.Omen != omen) { world.Board.Close(o); return true; }
+                bool found = world.Watch.Diagnose(note, cm);
+                cm.Practice(m.Spec.Skill, 0.01f);
+                // 부품이 드는 원인이거나 못 찾았으면 여기까지 (부품은 다음에 챙겨 온다)
+                if (!found || Causes.NeedsParts(note.Confirmed!.Value)) { world.Board.Close(o); world.Board.RequestScan(); }
+                return true;
+            }));
+            look.Add(new WorkToil(0.25f, m.Spec.Skill, f.Center) { Resume = o });
+            look.Add(new DoToil((cm, world) =>
+            {
+                if (o.Closed || m.Omen != omen) return true;
+                if (omen.Cause == OmenCause.Phantom) world.Watch.ClearPhantom(note, cm);
+                else Prevention.Fixed(world, m, cm, null);
+                cm.Stats.Services++;
+                world.Board.Close(o);
+                return true;
+            }));
+            return Wrap(a, o, c, w, "분해 검사", look, $"{m.Name} 열어 보기 — {note.Observation}");
+        }
+        var cost = Causes.Spec(plan).Fix;
         var toils = cost.Length > 0 ? FetchAll(c, w, dist, cost) : Plans.DropOff(c, w, dist);
         if (toils == null) { blocked = $"{Cost(cost)} 없음"; return null; }
         toils.Add(new GotoToil(at));
-        toils.Add(new WorkToil(Prevention.FixHours(omen.Kind), m.Spec.Skill, f.Center) { Resume = o });
+        toils.Add(new WorkToil(Causes.Spec(plan).Hours, m.Spec.Skill, f.Center) { Resume = o });
         toils.Add(new DoToil((cm, world) =>
         {
-            if (m.Omen == null) { world.Board.Close(o); return true; }
+            if (m.Omen != omen) { world.Board.Close(o); return true; }
             if (cost.Length > 0 && !UseAll(cm, cost)) return false;
-            Prevention.Fixed(world, m, cm, null);
             cm.Practice(m.Spec.Skill, 0.02f);
             cm.Stats.Services++;
             world.Board.Close(o);
+            if (world.Watch.ApplyFix(note, cm, plan)) Prevention.Fixed(world, m, cm, null);
+            else world.Board.RequestScan();
             return true;
         }));
-        return Wrap(a, o, c, w, "예방 정비", toils, $"{m.Name} {Prevention.Name(omen.Kind)} 손보기 ({o.Detail})");
+        string why = belief is { confirmed: true } ? "확인된 원인" : belief != null ? "받은 판단대로" : "내 판단대로";
+        return Wrap(a, o, c, w, "예방 정비", toils, $"{m.Name} {Causes.Name(plan)} 손보기 ({why})");
     }
 }

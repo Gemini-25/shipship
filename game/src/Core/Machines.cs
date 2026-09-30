@@ -343,6 +343,15 @@ public sealed class Machine
     /// <summary>v11.0 사고 전조 (없으면 null): 몇 시간 뒤 올 고장의 기척.</summary>
     public Omen? Omen { get; set; }
 
+    /// <summary>v12.0 감지기 교정 1~0.3 (틀어질수록 기척을 덜 잡고, 멀쩡한데 경보를 낸다).</summary>
+    public float SensorCal { get; set; } = 1f;
+
+    /// <summary>v12.0 주 컴퓨터가 마지막으로 이 설비를 잰 틱 (컴퓨터가 멎거나 전기가 없으면 멈춘다).</summary>
+    public long LastReading { get; set; }
+
+    /// <summary>v12.0 마지막으로 감지기를 다시 맞춘 틱.</summary>
+    public long LastCalibrated { get; set; }
+
     /// <summary>정품인지 Mk.1 임시품인지.</summary>
     public MachineGrade Grade { get; set; } = MachineGrade.Standard;
 

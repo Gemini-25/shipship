@@ -172,7 +172,7 @@ public static class Player
 public static class SaveGame
 {
     /// <summary>v8: 설계도(드론 거치대)와 구조가 바뀌어 v7 저장(1)은 같은 역사를 되짚을 수 없다.</summary>
-    public const string Header = "shipsim-save 12";
+    public const string Header = "shipsim-save 13";
 
     public static string Write(World w)
     {
@@ -216,8 +216,8 @@ public static class SaveGame
     {
         var lines = text.Replace("\r", "").Split('\n', StringSplitOptions.RemoveEmptyEntries);
         if (lines.Length > 0 && lines[0].Trim() == "shipsim-save 1") throw new FormatException("v7 저장 파일이다 — v8에서 우주선 설계(드론 거치대)와 구조가 바뀌어 다시 돌릴 수 없다");
-        if (lines.Length > 0 && lines[0].Trim() is "shipsim-save 2" or "shipsim-save 3" or "shipsim-save 4" or "shipsim-save 5" or "shipsim-save 6" or "shipsim-save 7" or "shipsim-save 8" or "shipsim-save 9" or "shipsim-save 10" or "shipsim-save 11")
-            throw new FormatException("예전 판의 저장 파일이다 — v9(배관)·v9.2(함교의 주 컴퓨터)·v9.3(저출력 운영)·v10.1(통신실, 날아오는 운석)·v10.2(칸막이로 방을 나눔)·v10.3(지문이 더 많은 상태를 본다)·v10.5(설비 단계·방 모듈·연구)·v10.10(선내 로봇·자원 회복)·v11.2(엔진·항로, 사고 종류)·v11.3(난수기)에서 우주선 설계와 규칙이 바뀌어 같은 역사를 다시 돌릴 수 없다");
+        if (lines.Length > 0 && lines[0].Trim() is "shipsim-save 2" or "shipsim-save 3" or "shipsim-save 4" or "shipsim-save 5" or "shipsim-save 6" or "shipsim-save 7" or "shipsim-save 8" or "shipsim-save 9" or "shipsim-save 10" or "shipsim-save 11" or "shipsim-save 12")
+            throw new FormatException("예전 판의 저장 파일이다 — v9(배관)·v9.2(함교의 주 컴퓨터)·v9.3(저출력 운영)·v10.1(통신실, 날아오는 운석)·v10.2(칸막이로 방을 나눔)·v10.3(지문이 더 많은 상태를 본다)·v10.5(설비 단계·방 모듈·연구)·v10.10(선내 로봇·자원 회복)·v11.2(엔진·항로, 사고 종류)·v11.3(난수기)·v12.0(당직 일지·진단)에서 우주선 설계와 규칙이 바뀌어 같은 역사를 다시 돌릴 수 없다");
         if (lines.Length == 0 || lines[0].Trim() != Header) throw new FormatException("저장 파일이 아니다");
         int seed = 0, crew = 0;
         string? ship = null;
@@ -333,7 +333,11 @@ public static class SaveGame
         // v10.10 선내 로봇
         foreach (var r in w.Robots.Robots) { F(r.Position.X); F(r.Position.Y); F(r.Battery); F(r.Condition); I((int)r.State); I(r.Fault is RobotFault rf ? (int)rf : -1); I(r.JobsDone); }
         // v11.0 전조
-        foreach (var m in w.Ship.Machines) if (m.Omen is Omen om) { I((int)om.Kind); I(om.Due); I(om.Known ? 1 : 0); }
+        foreach (var m in w.Ship.Machines) if (m.Omen is Omen om) { I((int)om.Kind); I(om.Due); I(om.Known ? 1 : 0); I((int)om.Cause); }
+        // v12.0 당직 일지·감지기·친숙함
+        foreach (var n in w.Watch.Notes) { I(n.Id); I((int)n.Stage); I(n.Suspect is OmenCause sc ? (int)sc : -1); I(n.Confirmed is OmenCause cf ? (int)cf : -1); I(n.Logged ? 1 : 0); I(n.Holders.Count); I(n.WrongFixes); }
+        foreach (var m in w.Ship.Machines) { F(m.SensorCal); I(m.LastReading); }
+        foreach (var c in w.Crew) foreach (var (t, v) in c.Familiarity.OrderBy(kv => kv.Key)) { I((int)t); F(v); }
         I(w.Precursors.Prevented); I(w.Precursors.Missed);
         // v11.2 추진
         F(w.Propulsion.Propellant); I((int)w.Propulsion.Zone); I(w.Propulsion.Dodged); I(w.Propulsion.Evasions); F(w.Space.Density);

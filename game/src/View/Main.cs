@@ -169,6 +169,8 @@ public partial class Main : Node2D
             else if (shipArg != null && !OS.GetCmdlineUserArgs().Any(a => a.StartsWith("--crew="))) crew = 0; // --ship만 주면 그 배의 설계 인원
             Settings.LoadTuning(); // v10.7: 새 항해는 tuning.cfg의 수치로 시작한다
             Sim = World.CreateDefault(seed, crew, shipKey);
+            // v12.0: 사망은 기본으로 켜져 있다 (설정에서 끌 수 있다) — 관찰자 기록에 남아 불러오기·되감기도 같다
+            if (Settings.Death && !OS.GetCmdlineUserArgs().Contains("--nodeath")) Core.Player.AllowDeath(Sim, true);
         }
 
         var background = new CanvasLayer { Name = "Background", Layer = -10 };

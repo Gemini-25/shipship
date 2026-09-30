@@ -30,6 +30,9 @@ public static class Settings
     /// <summary>v10.1: 새 항해의 승무원 수 (기본 6명 = 침대 수, 그 위는 간이침대에서 잔다).</summary>
     public static int Crew { get; set; } = ShipSim.Core.World.DefaultCrewSize;
 
+    /// <summary>v12.0: 새 항해에서 승무원이 죽을 수 있다 (기본 켜짐 — 쓰러진 채 체력이 바닥나면). 끄면 쓰러진 채 버틴다.</summary>
+    public static bool Death { get; set; } = true;
+
     /// <summary>v10.7: 새 항해의 배 ("auto"면 인원에 맞는 배).</summary>
     public static string Ship { get; set; } = "auto";
 
@@ -69,6 +72,7 @@ public static class Settings
         StartSpeed = Mathf.Clamp(cfg.GetValue("play", "start_speed", StartSpeed).AsInt32(), 0, 3);
         Crew = Mathf.Clamp(cfg.GetValue("voyage", "crew", Crew).AsInt32(), 1, ShipSim.Core.World.MaxCrew);
         Ship = cfg.GetValue("voyage", "ship", Ship).AsString();
+        Death = cfg.GetValue("voyage", "death", Death).AsBool();
     }
 
     public static void Save()
@@ -82,6 +86,7 @@ public static class Settings
         cfg.SetValue("play", "start_speed", StartSpeed);
         cfg.SetValue("voyage", "crew", Crew);
         cfg.SetValue("voyage", "ship", Ship);
+        cfg.SetValue("voyage", "death", Death);
         cfg.Save(Path);
     }
 }
@@ -154,6 +159,7 @@ public partial class OptionsPanel : PanelContainer
         box.AddChild(ship);
         box.AddChild(crewLabel);
         box.AddChild(crew);
+        box.AddChild(Check("승무원이 죽을 수 있다 (새 항해부터)", Settings.Death, on => Settings.Death = on)); // v12.0
         var voyage = new HBoxContainer();
         voyage.AddThemeConstantOverride("separation", 8);
         var same = new Button { Text = "같은 시드로 새 항해" };
