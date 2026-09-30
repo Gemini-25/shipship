@@ -291,7 +291,7 @@ public sealed class WorkOrder
         WorkKind.RemoveJumper => $"{PowerGrid.CircuitName(Circuit)} 회로 임시 배선 걷기",
         WorkKind.StowCot => $"{Target.Label} 접어 창고로",
         WorkKind.Recycle => $"{Target.Label}에서 {ItemKinds.Name(Product ?? ItemKind.Plate)} 되살리기 (재활용)",
-        WorkKind.PreventiveCheck => $"{Target.Label} 예방 점검 ({Detail})",
+        WorkKind.PreventiveCheck => Target.Kind == TargetKind.Room ? $"{Target.Label} 순찰 점검" : $"{Target.Label} 전조 손보기",
         WorkKind.SuitCheck => $"{Target.Label} 우주복 점검",
         WorkKind.Drill => $"{Target.Label} 비상 훈련",
         _ => Kind.ToString(),

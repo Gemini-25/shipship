@@ -88,6 +88,7 @@ public static partial class Program
         if (args.Contains("--ships")) return RunShips(days, seed);
         if (args.Contains("--bigships")) return RunBigShips(days, seed, args);
         if (args.Contains("--tiers")) return RunTierRecovery(seed, args);
+        if (args.Contains("--docks")) return RunDocks();
         var world = World.CreateDefault(seed, crewArg, shipArg);
         world.CrewCanDie = death;
         world.Log.Capacity = 60000; // 긴 시험의 기록을 끝까지 볼 수 있게
@@ -115,6 +116,7 @@ public static partial class Program
         if (args.Contains("--gate=pipes"))
             return RunPipeGate(int.TryParse(args.FirstOrDefault(a => a.StartsWith("--runs="))?.Split('=')[1], out var prn) ? prn : 20, seed);
         if (args.Contains("--selftest")) return RunSelfTest(seed);
+        if (args.Contains("--robottest")) return RunRobotTest(seed);
         if (args.FirstOrDefault(a => a.StartsWith("--partition=")) is string pc)
             return RunPartitionCampaign(days, seed, pc.Split('=')[1]);
         if (args.Contains("--gate=partition"))

@@ -211,14 +211,18 @@ public sealed partial class WorkBoard
         // 순찰: 방재 로봇이 돌고 있으면 사람은 돌지 않는다 (로봇이 멈추면 사람이 다시 돈다)
         bool robotRounds = w.Robots.Robots.Any(r => r.Kind == RobotKind.Safety && r.Operational);
         if (robotRounds) return;
-        foreach (var room in w.Ship.LiveRooms)
+        // 가장 오래 안 본 방 두 곳씩만 (한꺼번에 올리면 작업 목록이 순찰로 덮인다) — 하루에 한 번 모든 방을 돈다
+        var due = w.Ship.LiveRooms
+            .Where(room => !room.Abandoned && !room.OffLimits && room.Type != RoomType.Corridor && room.Furniture.Any(f => f.Machine != null))
+            .Select(room => (room, since: (w.Tick - w.RoomsInspected.GetValueOrDefault(room.Id, w.StartTickOf)) / (float)SimTime.TicksPerHour))
+            .Where(x => x.since >= 24f)
+            .OrderByDescending(x => x.room.Furniture.Any(f => f.Machine is Machine mm && mm.Spec.Critical) ? x.since + 6f : x.since).ThenBy(x => x.room.Id)
+            .Take(2);
+        foreach (var (room, since) in due)
         {
-            if (room.Abandoned || room.OffLimits || room.Type == RoomType.Corridor || !room.Furniture.Any(f => f.Machine != null)) continue;
-            float since = (w.Tick - w.RoomsInspected.GetValueOrDefault(room.Id, w.StartTickOf)) / (float)SimTime.TicksPerHour;
-            if (since < 24f) continue;
             bool vital = room.Furniture.Any(f => f.Machine is Machine mm && mm.Spec.Critical);
             post(WorkKind.PreventiveCheck, WorkTarget.OfRoom(room), MathF.Min(0.4f, 0.12f + (since - 24f) / 150f + (vital ? 0.06f : 0f)), Skill.Mechanics,
-                $"순찰 점검 · 마지막으로 본 지 {since:0}시간");
+                $"마지막으로 본 지 {since:0}시간" + (vital ? " · 핵심 설비" : ""));
         }
     }
 }

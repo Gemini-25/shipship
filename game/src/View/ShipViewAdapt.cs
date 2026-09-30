@@ -16,7 +16,7 @@ public partial class ShipView
     /// <summary>간이침대 같은 가구가 새로 생기면 정적 레이어를 다시 그린다.</summary>
     private void CheckFurnitureChanged()
     {
-        int n = _world.Ship.Furniture.Count;
+        int n = _world.Ship.Furniture.Count * 1000 + _world.Ship.Furniture.Count(f => f.Stowed); // v10.10: 치운 가구도
         if (n == _furnitureCount) return;
         if (_furnitureCount >= 0) RedrawStatic();
         _furnitureCount = n;

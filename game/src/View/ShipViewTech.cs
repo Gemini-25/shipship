@@ -161,7 +161,7 @@ public partial class ShipView
     {
         foreach (var f in _world.Ship.Furniture)
         {
-            if (f.Room.Detached || f.Machine is not Machine m || m.Tier < 2) continue;
+            if (f.Stowed || f.Room.Detached || f.Machine is not Machine m || m.Tier < 2) continue;
             var col = Hud.TierColor(m.Tier);
             var r = FurnitureRect(f).Grow(-1.5f);
             ci.DrawRect(r, col.WithAlpha(0.45f), false, 1.2f);

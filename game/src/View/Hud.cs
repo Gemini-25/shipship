@@ -88,6 +88,7 @@ public partial class Hud : Control
         float y = DrawRoster(mouse);
         float room = Screen.Y - y - 10f - Margin;
         if (_main.SelectedCrew is CrewMember crew) DrawCrewInspector(crew, y + 10f, mouse);
+        else if (_main.SelectedRobot is Robot robot) DrawRobotInspector(robot, y + 10f, room);
         else if (_main.SelectedFurniture is Furniture f) DrawMachineInspector(f, y + 10f, room);
         else if (_main.SelectedRoom is Room r) DrawRoomInspector(r, y + 10f);
         else DrawWorkBoard(y + 10f, room, mouse);
@@ -262,6 +263,11 @@ public partial class Hud : Control
         int broken = drones.Count(d => d.Faulty || d.Wrecked || d.State is DroneState.Adrift or DroneState.Lost);
         int eva = _world.Crew.Count(c => c.Outside && !c.Dead);
         string droneText = $"드론 {drones.Count - broken}/{drones.Count}" + (outside > 0 ? $" · 출동 {outside}" : "") + (eva > 0 ? $" · EVA {eva}" : "");
+        // v10.10 선내 로봇 (있을 때)
+        var robots = _world.Robots.Robots;
+        int robotsDown = robots.Count(r => r.Fault != null || r.State is RobotState.Stalled or RobotState.Towed or RobotState.Lost);
+        if (robots.Count > 0) droneText += $" · 로봇 {robots.Count - robotsDown}/{robots.Count}";
+        broken += robotsDown;
         chips.Add(("구조", structure.Count > 0 ? string.Join(" · ", structure) + " · " + droneText : "정상 · " + droneText,
             frags.Count > 0 || jett.Count > 0 || stressed.Count > 0 ? Palette.Danger : broken > 0 || unseen > 0 || weak.Count > 0 || docked.Count > 0 ? Palette.Warning : Palette.Text, null));
         // CO2는 짙어질 때만 (자리가 모자라다)
@@ -290,6 +296,13 @@ public partial class Hud : Control
         }
         else if (sens.Array != null && !sens.Tracking)
             chips.Insert(Math.Max(0, chips.Count - 1), ("센서", !sens.Online ? "꺼짐 · 경보는 창밖을 보는 사람뿐" : sens.Operator != null ? "수동 판독 중" : "궤적 계산 없음 · 통신실이 비었다", Palette.Warning, null));
+        // v10.10 비축 방침 (평시가 아닐 때) · v11.0 알아챈 전조
+        var ledger = _world.Ledger;
+        if (ledger.Mode != StockMode.Normal)
+            chips.Insert(Math.Max(0, chips.Count - 1), ("비축", Logistics.ModeName(ledger.Mode) + (ledger.ModeWhy.Length > 0 ? $" · {ledger.ModeWhy}" : ""),
+                ledger.Mode == StockMode.Extreme ? Palette.Danger : Palette.Warning, null));
+        int omens = ship.Machines.Count(m => m.Omen is { Known: true });
+        if (omens > 0) chips.Insert(Math.Max(0, chips.Count - 1), ("전조", $"{omens}건 · 손볼 것", Palette.Warning, null));
         // (재료·채집은 함선 지표 카드에)
 
         const float pad = 16f, gap = 18f;
@@ -300,7 +313,7 @@ public partial class Hud : Control
         float avail = Screen.X - Margin - RightColumnWidth - 12f - x0;
         for (int guard = 0; w > avail && guard < 6; guard++)
         {
-            int i = Enumerable.Range(0, chips.Count).Where(k => chips[k].label is "구조" or "땜질" or "냉각수·노심").OrderByDescending(k => widths[k]).DefaultIfEmpty(-1).First();
+            int i = Enumerable.Range(0, chips.Count).Where(k => chips[k].label is "구조" or "땜질" or "냉각수·노심" or "비축").OrderByDescending(k => widths[k]).DefaultIfEmpty(-1).First();
             if (i < 0) break;
             float target = Mathf.Max(60f, widths[i] - (w - avail));
             var (label, value, color, bar) = chips[i];
@@ -773,6 +786,7 @@ public partial class Hud : Control
     {
         var list = new List<(string, string)>();
         var p = _world.Power;
+        RobotExtras(f, list); // v10.10 충전대·비상 물자함·우주복 점검·전조
         if (f.Type == FurnitureType.DroneDock)
         {
             // v8: 이 거치대의 드론과 자재칸

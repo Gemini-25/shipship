@@ -207,9 +207,9 @@ public partial class ShipView : Node2D
         PaintWiring(ci); // v10.9 케이블 트레이·분전함·간선
         PaintWallProps(ci); // v10.9 벽에 붙은 계기·사물함·소화기·번호판
         // v10: 가구 그림자 (빛이 왼쪽 위에서)
-        foreach (var f in ship.Furniture.Where(f => !f.Room.Detached && !FurnitureTypes.Walkable(f.Type)))
+        foreach (var f in ship.Furniture.Where(f => !f.Stowed && !f.Room.Detached && !FurnitureTypes.Walkable(f.Type)))
             Gfx.RoundRect(ci, new Rect2(FurnitureRect(f).Position + new Vector2(3f, 4f), FurnitureRect(f).Size).Grow(-3f), new Color(0, 0, 0, 0.28f), 6);
-        foreach (var f in ship.Furniture.Where(f => !f.Room.Detached)) PaintFurniture(ci, f);
+        foreach (var f in ship.Furniture.Where(f => !f.Stowed && !f.Room.Detached)) PaintFurniture(ci, f);
     }
 
     /// <summary>v10: 벽 아래 그늘 — 벽과 맞닿은 바닥 칸의 가장자리가 어둡다 (앰비언트 오클루전 흉내).</summary>
@@ -299,6 +299,8 @@ public partial class ShipView : Node2D
 
         switch (f.Type)
         {
+            case FurnitureType.RobotDock: PaintRobotDockBody(ci, f); return; // v10.10
+            case FurnitureType.SupplyCache: PaintSupplyCacheBody(ci, f); return;
             case FurnitureType.Bed:
             {
                 var frame = r.Grow(-3f);
@@ -593,7 +595,7 @@ public partial class ShipView : Node2D
         PaintNavLights(ci); // v10.9 항해등
         PaintRadiators(ci); // v9 선체 밖 방열판
         PaintScorch(ci);
-        foreach (var f in ship.Furniture.Where(f => !f.Room.Detached)) PaintFurnitureLife(ci, f);
+        foreach (var f in ship.Furniture.Where(f => !f.Stowed && !f.Room.Detached)) PaintFurnitureLife(ci, f);
         PaintTierBadges(ci); // v10.8
 
         // 정전된 방은 어둡게 (v9.4: 조명이 나간 방도)
@@ -634,7 +636,7 @@ public partial class ShipView : Node2D
         if (_main.SelectedFurniture is Furniture sf)
             Gfx.RoundRect(ci, FurnitureRect(sf).Grow(2f + Mathf.Sin(_time * 4f)), new Color(1, 1, 1, 0.04f), 7, new Color(1, 1, 1, 0.85f), 2);
 
-        foreach (var f in ship.Furniture.Where(f => !f.Room.Detached))
+        foreach (var f in ship.Furniture.Where(f => !f.Stowed && !f.Room.Detached))
         {
             if (f.Machine is not Machine m) continue;
             if (m.Grade == MachineGrade.Mk1) PaintMk1(ci, f, m);
@@ -645,7 +647,24 @@ public partial class ShipView : Node2D
         }
 
         if (_main.SelectedCrew is CrewMember sel) PaintPath(ci, sel);
+        if (_main.SelectedRobot is Robot sr2 && sr2.State != RobotState.Lost)
+        {
+            var rp = RobotPx(sr2);
+            ci.DrawArc(rp, 14f + Mathf.Sin(_time * 4f), 0f, Mathf.Tau, 32, new Color(1, 1, 1, 0.85f), 1.6f, true);
+            if (sr2.Path is { Count: > 0 } rpath)
+            {
+                var prev = rp;
+                for (int k = sr2.PathIndex; k < rpath.Count; k++)
+                {
+                    var q = CellRect(rpath[k]).GetCenter();
+                    ci.DrawLine(prev, q, RobotColor(sr2.Kind).WithAlpha(0.45f), 1.5f, true);
+                    prev = q;
+                }
+            }
+        }
+        else if (_main.HoveredRobot is Robot hr2) ci.DrawArc(RobotPx(hr2), 13f, 0f, Mathf.Tau, 28, new Color(1, 1, 1, 0.35f), 1.2f, true);
         PaintTethers(ci);
+        PaintRobots(ci); // v10.10 선내 로봇 (사람 밑에)
         // 쓰러진 사람은 밑에, 업힌 사람은 업은 사람 위에
         foreach (var c in _world.Crew.OrderBy(c => c.CarriedBy != null ? 2 : c.Down ? 0 : 1)) PaintCrew(ci, c);
         PaintDrones(ci);
@@ -664,6 +683,7 @@ public partial class ShipView : Node2D
         float eff = m?.Efficiency ?? 1f;
         bool alive = eff > 0.01f;
         if (Modules.IsModule(f.Type)) { PaintModuleLife(ci, f, t); return; } // v10.8
+        if (f.Type == FurnitureType.SupplyCache) { PaintSupplyCacheLife(ci, f); return; } // v10.10
 
         switch (f.Type)
         {
@@ -991,7 +1011,7 @@ public partial class ShipView : Node2D
                     }
             }
         }
-        foreach (var f in _world.Ship.Furniture.Where(f => !f.Room.Detached))
+        foreach (var f in _world.Ship.Furniture.Where(f => !f.Stowed && !f.Room.Detached))
         {
             if (f.Machine is not Machine m || m.Spec.PowerDraw <= 0f) continue;
             var r = FurnitureRect(f);
@@ -1052,7 +1072,7 @@ public partial class ShipView : Node2D
     private void PaintConditionOverlay(CanvasItem ci)
     {
         foreach (var room in _world.Ship.LiveRooms) FillRoom(ci, room, new Color(0, 0, 0, 0.35f));
-        foreach (var f in _world.Ship.Furniture.Where(f => !f.Room.Detached))
+        foreach (var f in _world.Ship.Furniture.Where(f => !f.Stowed && !f.Room.Detached))
         {
             if (f.Machine is not Machine m) continue;
             var r = FurnitureRect(f).Grow(-1f);
@@ -1268,6 +1288,15 @@ public partial class ShipView : Node2D
             .Select(x => x.c)
             .FirstOrDefault();
     }
+
+    /// <summary>v10.10: 클릭한 곳의 로봇 (충전대에 있으면 충전대 칸 가운데).</summary>
+    public Robot? PickRobot(Vector2 worldPx) =>
+        _world.Robots.Robots.Where(r => r.State != RobotState.Lost)
+            .Select(r => (r, d: RobotPx(r).DistanceTo(worldPx)))
+            .Where(x => x.d < 11f)
+            .OrderBy(x => x.d)
+            .Select(x => x.r)
+            .FirstOrDefault();
 
     /// <summary>클릭한 곳의 설비·보관함 (침대·의자·테이블 같은 단순 가구는 제외).</summary>
     public Furniture? PickFurniture(Vector2 worldPx)

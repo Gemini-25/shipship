@@ -59,7 +59,7 @@ public partial class ShipView
         }
 
         // Mk.3 개량형: 청록 딱지와 개량 판
-        foreach (var f in _world.Ship.Furniture.Where(f => !f.Room.Detached))
+        foreach (var f in _world.Ship.Furniture.Where(f => !f.Stowed && !f.Room.Detached))
         {
             if (f.Machine is not { Grade: MachineGrade.Mk3 }) continue;
             var r = FurnitureRect(f).Grow(-2f);
@@ -176,7 +176,7 @@ public partial class ShipView
         }
 
         // 설비의 이력: 고장 횟수 링 (자주 고장 난 설비일수록 짙게), Mk.1을 거친 설비는 노란 점, 뜯긴 적 있는 설비는 회색 점
-        foreach (var f in ship.Furniture.Where(f => !f.Room.Detached))
+        foreach (var f in ship.Furniture.Where(f => !f.Stowed && !f.Room.Detached))
         {
             if (f.Machine is not Machine m) continue;
             var r = FurnitureRect(f);

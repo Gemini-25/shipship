@@ -71,6 +71,10 @@ public partial class Main : Node2D
     public CrewMember? SelectedCrew { get; private set; }
     public Room? SelectedRoom { get; private set; }
     public Furniture? SelectedFurniture { get; private set; }
+
+    /// <summary>v10.10: 고른 선내 로봇.</summary>
+    public Robot? SelectedRobot { get; private set; }
+    public Robot? HoveredRobot { get; private set; }
     public CrewMember? HoveredCrew { get; private set; }
     public Room? HoveredRoom { get; private set; }
     public Furniture? HoveredFurniture { get; private set; }
@@ -360,16 +364,18 @@ public partial class Main : Node2D
             HoveredCrew = null;
             HoveredRoom = null;
             HoveredFurniture = null;
+            HoveredRobot = null;
         }
         else
         {
             var world = GetGlobalMousePosition();
             HoveredCrew = ShipView.PickCrew(world);
-            HoveredFurniture = HoveredCrew == null ? ShipView.PickFurniture(world) : null;
-            HoveredRoom = HoveredCrew == null && HoveredFurniture == null ? Sim.Ship.RoomAt(ShipView.CellAtPx(world)) : null;
+            HoveredRobot = HoveredCrew == null ? ShipView.PickRobot(world) : null;
+            HoveredFurniture = HoveredCrew == null && HoveredRobot == null ? ShipView.PickFurniture(world) : null;
+            HoveredRoom = HoveredCrew == null && HoveredFurniture == null && HoveredRobot == null ? Sim.Ship.RoomAt(ShipView.CellAtPx(world)) : null;
         }
         var cursor = Tool != IncidentTool.None ? Input.CursorShape.Cross
-            : HoveredCrew != null || HoveredFurniture != null ? Input.CursorShape.PointingHand : Input.CursorShape.Arrow;
+            : HoveredCrew != null || HoveredFurniture != null || HoveredRobot != null ? Input.CursorShape.PointingHand : Input.CursorShape.Arrow;
         if (cursor != _cursor)
         {
             _cursor = cursor;
@@ -392,6 +398,7 @@ public partial class Main : Node2D
             var crew = ShipView.PickCrew(world);
             var cell = ShipView.CellAtPx(world);
             if (crew != null) Select(crew);
+            else if (ShipView.PickRobot(world) is Robot robot) SelectRobot(robot);
             else if (ShipView.PickFurniture(world) is Furniture f) SelectFurniture(f);
             else if (Sim.Ship.RoomAt(cell) is Room room) SelectRoom(room);
             else if (Sim.Ship.WallAt(cell) != null) SelectRoom(Hull.InsideRoom(Sim.Ship, cell)); // 벽을 누르면 그 벽의 방
@@ -460,6 +467,7 @@ public partial class Main : Node2D
         SelectedCrew = crew;
         SelectedRoom = null;
         SelectedFurniture = null;
+        SelectedRobot = null;
         if (crew == null) Camera.FollowTarget = null;
     }
 
@@ -468,6 +476,7 @@ public partial class Main : Node2D
         SelectedRoom = room;
         SelectedCrew = null;
         SelectedFurniture = null;
+        SelectedRobot = null;
         Camera.FollowTarget = null;
     }
 
@@ -476,6 +485,16 @@ public partial class Main : Node2D
         SelectedFurniture = f;
         SelectedCrew = null;
         SelectedRoom = null;
+        SelectedRobot = null;
+        Camera.FollowTarget = null;
+    }
+
+    public void SelectRobot(Robot? r)
+    {
+        SelectedRobot = r;
+        SelectedCrew = null;
+        SelectedRoom = null;
+        SelectedFurniture = null;
         Camera.FollowTarget = null;
     }
 
@@ -484,6 +503,7 @@ public partial class Main : Node2D
         SelectedCrew = null;
         SelectedRoom = null;
         SelectedFurniture = null;
+        SelectedRobot = null;
         Camera.FollowTarget = null;
     }
 
@@ -717,6 +737,18 @@ public partial class Main : Node2D
                     {
                         if (day % every == 0) Scenarios.RandomIncident(Sim, rng);
                         for (int i = 0; i < SimTime.TicksPerDay; i++) Sim.Step();
+                    }
+                    break;
+                }
+                case "--robot":
+                {
+                    // 화면 확인용: --robot=번호 → 그 로봇을 고르고 카메라를 옮긴다
+                    int ri = int.Parse(value, CultureInfo.InvariantCulture);
+                    if (ri >= 0 && ri < Sim.Robots.Robots.Count)
+                    {
+                        var rb = Sim.Robots.Robots[ri];
+                        SelectRobot(rb);
+                        Camera.Position = ShipView.ToPx(rb.Position) + new Vector2(Hud.RightColumnWidth * 0.5f, 0f) / Camera.Zoom.X;
                     }
                     break;
                 }

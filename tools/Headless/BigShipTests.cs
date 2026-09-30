@@ -153,6 +153,17 @@ public static partial class Program
 
 public static partial class Program
 {
+    /// <summary>v10.10: 배마다 로봇 충전대가 어디에 놓였나.</summary>
+    private static int RunDocks()
+    {
+        foreach (var t in ShipCatalog.All)
+        {
+            var w = World.CreateDefault(1, 0, t.Key);
+            Console.WriteLine($"{t.Name}: " + string.Join(" · ", w.Robots.Robots.Select(r => $"{r.Name}@{r.Dock.Room.Name}{r.Dock.Cells[0]}")));
+        }
+        return 0;
+    }
+
     /// <summary>v10.10: 로봇마다 한 일·거든 시간·고장·끌려온 횟수.</summary>
     private static void PrintRobots(World w)
     {

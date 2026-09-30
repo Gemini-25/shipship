@@ -388,7 +388,7 @@ public sealed partial class WorkBoard
             if (cot.EmptySince == 0) cot.EmptySince = w.Tick;
             if (cot.Improved || cot.Room.Abandoned || cot.Room.OffLimits) continue;
             if (w.Tick - cot.EmptySince < SimTime.Hours(24)) continue;
-            post(WorkKind.StowCot, WorkTarget.Of(cot), 0.15f, Skill.Mechanics, $"빈 지 {(w.Tick - cot.EmptySince) / (float)SimTime.TicksPerDay:0}일");
+            post(WorkKind.StowCot, WorkTarget.Of(cot), 0.28f, Skill.Mechanics, $"빈 지 {(w.Tick - cot.EmptySince) / (float)SimTime.TicksPerDay:0}일 · 접어 창고로");
         }
 
         // ── 뜯긴 설비 재활용: 되돌릴 값이 없는 적출 설비는 금속판·케이블로 (회의) ──

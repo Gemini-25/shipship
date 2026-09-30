@@ -332,7 +332,7 @@ public sealed class RobotSystem
     /// <summary>로봇이 맡는 작업 목록의 일.</summary>
     public static bool CanDo(RobotKind k, WorkKind w) => k switch
     {
-        RobotKind.Hauler => w is WorkKind.Restock or WorkKind.StockDock or WorkKind.CarryWater or WorkKind.StockCache,
+        RobotKind.Hauler => w is WorkKind.Restock or WorkKind.StockDock or WorkKind.CarryWater or WorkKind.StockCache or WorkKind.StowCot,
         RobotKind.Maintainer => w is WorkKind.Maintain or WorkKind.FixLights,
         RobotKind.Gardener => w is WorkKind.Tend or WorkKind.Harvest,
         _ => false,
@@ -415,7 +415,7 @@ public sealed class RobotSystem
                 Cell? spot = null;
                 foreach (var room in ship.RoomsOf(type).OrderBy(r => r.Id))
                 {
-                    var cells = Adaptation.CotCells(w, room)
+                    var cells = Adaptation.FreeCells(w, room)
                         .Where(c => Cell.Dirs4.Any(d => ship.Grid.Kind(c + d) == TileKind.Wall))           // 벽가에
                         .Where(c => Cell.Dirs4.Any(d => ship.IsOpenFloor(c + d) && ship.RoomAt(c + d) == room)) // 앞에 설 자리
                         .OrderBy(c => c.Y).ThenBy(c => c.X);
@@ -444,7 +444,8 @@ public sealed class RobotSystem
         }
     }
 
-    public static bool DockWorking(Robot r) => r.Dock.Machine is Machine m && m.Powered && !m.Stopped && !r.Dock.Room.Detached;
+    public static bool DockWorking(Robot r) => DockWorking(r.Dock);
+    public static bool DockWorking(Furniture dock) => dock.Machine is Machine m && m.Powered && !m.Stopped && !dock.Room.Detached;
 
     // ─────────────────────────────── 매 틱: 움직임·단계 ───────────────────────────────
 
@@ -855,6 +856,31 @@ public sealed class RobotSystem
                 steps.Add(new RPut(shelf));
                 return steps;
             }
+            case WorkKind.StowCot:
+            {
+                var cot = o.Target.Furniture!;
+                steps.Add(new RGoto(at));
+                steps.Add(new RWork(0.3f, null, cot.Center));
+                steps.Add(new RDo((rb, world) =>
+                {
+                    if (cot.Owner != null || cot.Stowed) { world.Board.Close(o); return true; }
+                    var room = cot.Room;
+                    world.Ship.Stow(cot);
+                    world.Paths.Invalidate();
+                    world.Structure.Touch();
+                    world.Adapt.CotsStowed++;
+                    world.Board.Close(o);
+                    if (!room.Furniture.Any(f => f.Type == FurnitureType.Cot) && room.Purpose != null && room.Purpose.StartsWith("임시 침실"))
+                    {
+                        if (!room.FormerPurposes.Contains("임시 침실")) room.FormerPurposes.Add("임시 침실");
+                        room.Purpose = null;
+                        MarkLog.Add(room.Marks, world.Tick, $"{rb.Name}: 마지막 간이침대를 접었다 — 원래 {room.Name}으로");
+                    }
+                    Done(rb, $"{room.Name}의 빈 간이침대를 접어 창고로 옮겼다");
+                    return true;
+                }));
+                return steps;
+            }
             case WorkKind.CarryWater:
                 return Logistics.RobotCarryWater(this, r, o, at, dist, out blocked);
             case WorkKind.StockCache:
@@ -1076,6 +1102,23 @@ public sealed class RobotSystem
     public Robot? Witness(Room room) =>
         Robots.FirstOrDefault(r => r.Operational && r.State == RobotState.Active && r.Room == room && r.Kind == RobotKind.Safety);
 
+    // ─────────────────────────────── 시험용 ───────────────────────────────
+
+    /// <summary>시험·화면 확인용: 로봇을 고장 낸다.</summary>
+    public void ForceFault(Robot r, RobotFault f) => Break(r, f);
+
+    /// <summary>시험·화면 확인용: 로봇을 그 칸에서 방전된 채 멈춰 세운다.</summary>
+    public void ForceStall(Robot r, Cell at)
+    {
+        DropTask(r);
+        r.Position = at.Center;
+        r.PreviousPosition = r.Position;
+        r.Room = _world.Ship.RoomAt(at);
+        r.Battery = 0f;
+        SetState(r, RobotState.Active);
+        Stall(r, "배터리가 바닥났다 (시험)");
+    }
+
     // ─────────────────────────────── 고장 · 멈춤 · 잃음 ───────────────────────────────
 
     private void Break(Robot r, RobotFault f)
@@ -1144,7 +1187,7 @@ public sealed class RobotSystem
         var f = r.Fault;
         r.Fault = null;
         r.Condition = MathF.Max(r.Condition, makeshift ? 0.45f : 0.85f);
-        MarkLog.Add(r.Marks, w.Tick, $"{by.Name}이(가) {(makeshift ? "임시로 " : "")}고쳤다 ({(f is RobotFault ff ? FaultName(ff) : "")})");
+        MarkLog.Add(r.Marks, w.Tick, $"{Ko.IGa(by.Name)} {(makeshift ? "임시로 " : "")}고쳤다 ({(f is RobotFault ff ? FaultName(ff) : "")})");
         if (r.State == RobotState.Stalled)
         {
             if (r.Battery > 0.08f) { SetState(r, RobotState.Active); GoHome(r, "고쳐져 충전대로"); }
