@@ -109,6 +109,9 @@ public sealed class PowerGrid
 
     /// <summary>v12.2 재기동 지연 (제논 독) 0~1: 긴급 정지 뒤 몇 시간은 출력이 다 오르지 않는다 — 여섯 시간에 걸쳐 걷힌다.</summary>
     public float ReactorPoison { get; private set; }
+
+    /// <summary>v12.1 마지막 냉각 펌프를 고치는 동안 원자로 출력을 절반으로 낮춘다.</summary>
+    public bool MaintenanceCap { get; set; }
     public float ReactorOutput { get; private set; }
     public float ReactorLimit { get; private set; }
     public float ReactorTemperature { get; private set; } = 280f;
@@ -417,7 +420,7 @@ public sealed class PowerGrid
         }
         if (ReactorOnline) ReactorRamp = MathF.Min(1f, ReactorRamp + dtHours / RampHours);
         ReactorPoison = MathF.Max(0f, ReactorPoison - dtHours / 6f);
-        float reactorMax = reactor == null || !ReactorOnline ? 0f : ReactorMaxKw * reactor.Rating * reactor.Efficiency * (1f - 0.55f * ReactorPoison);
+        float reactorMax = reactor == null || !ReactorOnline ? 0f : ReactorMaxKw * reactor.Rating * reactor.Efficiency * (1f - 0.55f * ReactorPoison) * (MaintenanceCap ? 0.5f : 1f);
         float cooling = LowPowerMode ? NaturalCoolingKw + CoolingCapacity : CoolingCapacity * 0.95f;
         float target = MathF.Min(reactorMax, cooling) * ReactorRamp;
         // v9: 자동 제어봉은 한 시간에 60kW만큼만 출력을 내린다 — 냉각이 갑자기 줄면 그동안 넘치는 열이 노심을 데운다
@@ -463,6 +466,7 @@ public sealed class PowerGrid
         {
             if (m.Spec.PowerDraw <= 0f) { m.Powered = true; continue; }
             if (m.Parked) { m.Powered = false; parkedKw += m.Demand; continue; } // v9.3 저출력 운영으로 내려 둠
+            if (m.Feed < 0.3f) { m.Powered = false; continue; } // v12.1 설비 전선이 끊겼다
             if (!CircuitFed[m.Body.Room.Circuit] || m.Body.Room.PowerCut) { m.Powered = false; continue; }
             var mm = m;
             // v9.3 저출력 운영: 재배대·냉장고·조리대·배식기(먹을 것)를 정수기·방 환기와 같은 줄로 올린다 (방 환기가 먼저)

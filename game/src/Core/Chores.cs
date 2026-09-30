@@ -296,6 +296,8 @@ public static partial class WorkPlanners
             WorkKind.BleedRoom => BleedRoom(activity, o, c, w, dist, at, out blocked),
             WorkKind.SealO2Line => SealO2Line(activity, o, c, w, dist, at, out blocked),
             WorkKind.WakeCrew => WakeCrew(activity, o, c, w, dist, at, out blocked),
+            WorkKind.Rewire => Rewire(activity, o, c, w, dist, at, out blocked),
+            WorkKind.Reline => Reline(activity, o, c, w, dist, at, out blocked),
             WorkKind.UnloadSupply => UnloadSupply(activity, o, c, w, dist, at),
             WorkKind.AnswerSignal => AnswerSignal(activity, o, c, w, dist, at),
             WorkKind.Upgrade => Upgrade(activity, o, c, w, dist, at, out blocked),
@@ -529,6 +531,13 @@ public static partial class WorkPlanners
             _ => fault.Spec.RepairHours * (1f - 0.25f * fault.Stage),
         };
         toils.Add(new GotoToil(at));
+        // v12.1 정비 절차 (완전 수리만): 차단·격리·잔압 → 수리 → 시험 운전·재가동
+        var proc = goal == 3 && fault.Circuit < 0 ? Procedures.Plan(w, c, m, o.Urgency >= 0.9f || Crisis.Level(w) >= CrisisLevel.Emergency) : null;
+        if (proc != null)
+        {
+            Procedures.Before(w, c, m, proc, toils, o);
+            if (proc.Steps.Contains(ProcStep.Test)) hours += 0.15f;
+        }
         toils.Add(new WorkToil(hours, m.Spec.Skill, f.Center)
         {
             Resume = goal == 3 ? o : null,
@@ -582,12 +591,15 @@ public static partial class WorkPlanners
             m.Faults.Remove(fault);
             m.Condition = MathF.Min(1f, m.Condition + 0.015f);
             m.Wear = MathF.Min(m.Wear, 0.3f);
-            MarkLog.Add(m.Marks, world.Tick, $"{cm.Name}: {fault.Spec.Name} 수리");
+            if (proc != null) Procedures.After(world, cm, m, proc, fault.Kind); // v12.1
+            MarkLog.Add(m.Marks, world.Tick, $"{cm.Name}: {fault.Spec.Name} 수리" + (proc != null && proc.Skipped.Count > 0 ? $" (생략: {string.Join(",", proc.Skipped.Select(x => ProcPlan.Name(x.step)))})" : ""));
             world.Log.Add(world.Tick, LogKind.Work, $"{m.Name}의 {Ko.EulReul(fault.Spec.Name)} 고쳤다", cm.Id);
             return true;
         }));
         string what = goal switch { 1 => "긴급 우회", 2 => "부분 수리", _ => "수리" };
-        return Wrap(a, o, c, w, what, toils, $"{m.Name} {what}하러 간다 ({fault.Spec.Name})");
+        // 수리를 그만두면 잠가 둔 설비·낮춘 원자로를 되돌린다
+        var job = Wrap(a, o, c, w, what, toils, $"{m.Name} {what}하러 간다 ({fault.Spec.Name})" + (proc != null ? $" — {proc.Summary}" : ""));
+        return job;
     }
 
     // ── 차단기 복구 ──
@@ -1557,6 +1569,7 @@ public static partial class WorkPlanners
         {
             if (donor.Has(FaultKind.Stripped)) return false;
             donor.Faults.Add(new Fault { Kind = FaultKind.Stripped, Since = world.Tick, PartOverride = part });
+            world.UsedParts.Add(part); // v12.1 떼어 온 중고 부품 (검사하지 않고 쓰면 불량이 잦다)
             donor.Condition = MathF.Max(0.2f, donor.Condition - 0.1f);
             donor.Active = false;
             cm.Carrying = new ItemStack(part, 1);

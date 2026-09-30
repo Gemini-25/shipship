@@ -344,6 +344,9 @@ public static class SaveGame
         foreach (var r in w.Ship.Rooms) { F(r.Air.CO); F(r.Backdraft); F(r.O2Leak); }
         F(w.Power.ReactorPoison); I(w.Volatile.Stats.Explosions);
         foreach (var c in w.Crew) I(c.Aboard?.Id ?? -1);
+        // v12.1 설비 전선·관·재조립 불량
+        foreach (var m in w.Ship.Machines) { F(m.Feed); F(m.Line); I(m.Spliced ? 1 : 0); I(m.Defect is FaultKind dk ? (int)dk : -1); }
+        I(w.UsedParts.Count); I(w.Power.MaintenanceCap ? 1 : 0);
         I(w.Precursors.Prevented); I(w.Precursors.Missed);
         // v11.2 추진
         F(w.Propulsion.Propellant); I((int)w.Propulsion.Zone); I(w.Propulsion.Dodged); I(w.Propulsion.Evasions); F(w.Space.Density);

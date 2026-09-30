@@ -376,6 +376,7 @@ public sealed class VolatileSystem
             float k = power * (1f - d / (r + 0.5f));
             m.Condition = MathF.Max(0.02f, m.Condition - 0.45f * k);
             m.Heat += 0.8f * k;
+            Procedures.DamageLinks(w, m, 2.6f * k, 2.1f * k, cause); // v12.1 설비 전선·관
             if (w.Rng.Chance(0.8f * k)) { w.Machines.Break(m); hurtMachines++; }
             if (Mode(f.Type) != BlowKind.None && m.Heat > 0.9f && w.Rng.Chance(0.5f * k))
             {

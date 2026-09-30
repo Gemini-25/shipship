@@ -364,6 +364,23 @@ public sealed class Machine
     /// <summary>v12.2 달아올라 사람이 내려 식히는 중 (식으면 다시 올린다).</summary>
     public bool CoolingDown { get; set; }
 
+    /// <summary>v12.1 이 설비로 가는 전선 0~1 (0.3 아래면 설비가 멀쩡해도 전기가 안 들어간다).</summary>
+    public float Feed { get; set; } = 1f;
+
+    /// <summary>v12.1 이 설비에 달린 관 이음 0~1 (관이 달린 설비만 — 0.3 아래면 물·냉각수가 안 들어간다).</summary>
+    public float Line { get; set; } = 1f;
+
+    /// <summary>v12.1 전선을 임시로 이어 붙였다 (평온해지면 케이블로 다시).</summary>
+    public bool Spliced { get; set; }
+
+    /// <summary>v12.1 정비 절차로 전원을 잠가 둔 중.</summary>
+    public bool LockedOut { get; set; }
+
+    /// <summary>v12.1 재조립 불량 (시험 운전을 건너뛰었다): 이 틱에 같은 고장이 돌아온다.</summary>
+    public FaultKind? Defect { get; set; }
+    public long DefectDue { get; set; }
+    public string? DefectBy { get; set; }
+
     /// <summary>정품인지 Mk.1 임시품인지.</summary>
     public MachineGrade Grade { get; set; } = MachineGrade.Standard;
 
@@ -423,7 +440,8 @@ public sealed class Machine
         {
             if (!Powered && Spec.PowerDraw > 0f) return 0f;
             return FaultFactor * Grades.Output(Grade) * (1f - 0.25f * Wear * Wear) * (0.6f + 0.4f * Condition)
-                   * (Heat > 0.7f ? MathF.Max(0.5f, 1f - (Heat - 0.7f)) : 1f) * (1f - 0.35f * Fouled); // v12.2 달아오르면·분말을 뒤집어쓰면 덜 낸다
+                   * (Heat > 0.7f ? MathF.Max(0.5f, 1f - (Heat - 0.7f)) : 1f) * (1f - 0.35f * Fouled) // v12.2 달아오르면·분말을 뒤집어쓰면 덜 낸다
+                   * (Line < 0.3f && Procedures.Plumbed(Body.Type) ? 0.3f : 1f); // v12.1 관 이음이 빠지면 물·냉각수가 안 든다
         }
     }
 

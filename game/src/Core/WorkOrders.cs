@@ -53,6 +53,8 @@ public enum WorkKind
     CoolDown, ClearRubble, CleanUp, BleedRoom, SealO2Line,
     // 승무원 AI: 위기에 잠든 동료 깨우기
     WakeCrew,
+    // v12.1 설비 전선·관
+    Rewire, Reline,
 }
 
 public static class WorkKinds
@@ -157,6 +159,8 @@ public static class WorkKinds
         WorkKind.BleedRoom => "역화 막기",
         WorkKind.SealO2Line => "산소관 막기",
         WorkKind.WakeCrew => "동료 깨우기",
+        WorkKind.Rewire => "설비 전선",
+        WorkKind.Reline => "설비 관 이음",
         _ => k.ToString(),
     };
 
@@ -350,6 +354,8 @@ public sealed class WorkOrder
         WorkKind.BleedRoom => $"{Target.Label} 역화 막기",
         WorkKind.SealO2Line => $"{Target.Label} 산소관 막기",
         WorkKind.WakeCrew => $"{Target.Crew?.Name ?? "?"} 깨우기",
+        WorkKind.Rewire => $"{Target.Label} 전선",
+        WorkKind.Reline => $"{Target.Label} 관 이음",
         _ => Kind.ToString(),
     };
 
@@ -1156,6 +1162,7 @@ public sealed partial class WorkBoard
         ScanHandover(Post); // v12.0 찾아가 인수인계
         ScanVolatile(Post); // v12.2 식히기·잔해·청소·역화·산소관
         ScanWake(Post); // 위기에 잠든 동료 깨우기
+        ScanLinks(Post); // v12.1 설비 전선·관
         ScanNavigation(Post); // v11.2 항로와 추진
         ScanHazards(Post); // v11.2 사고 뒷정리 (오염된 식사)
         ScanLiving(Post); // v10.11 배급

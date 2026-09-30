@@ -130,6 +130,7 @@ public sealed class FireSystem
                 {
                     m.Condition = MathF.Max(0.02f, m.Condition - 0.15f * intensity * dt);
                     m.Fouled = MathF.Min(1f, m.Fouled + 0.1f * intensity * dt); // v12.2 그을음
+                    if (m.Feed > 0f) Procedures.DamageLinks(w, m, 0.12f * intensity * dt, 0f, "불"); // v12.1 전선 피복이 탄다
                     if (w.Rng.Chance(0.25f * intensity * dt)) w.Machines.Break(m);
                     if (m.Crop is CropState crop && crop.Growth > 0.02f && w.Rng.Chance(0.6f * intensity * dt))
                     {

@@ -126,6 +126,12 @@ public sealed class World
     /// <summary>v12.0 당직 일지 · 진단 · 감지기 교정.</summary>
     public WatchLog Watch { get; }
 
+    /// <summary>v12.1 정비 절차 통계.</summary>
+    public ProcedureStats Procs { get; } = new();
+
+    /// <summary>v12.1 떼어 온 중고 부품 (검사하지 않고 쓰면 재조립 불량이 잦다).</summary>
+    public List<ItemKind> UsedParts { get; } = new();
+
     /// <summary>v12.2 설비 열·압력·폭발·잔해·역화·일산화탄소·짙은 산소.</summary>
     public VolatileSystem Volatile { get; }
 
@@ -245,6 +251,7 @@ public sealed class World
             Watch.Update(dt); // v12.0 교대·감지기
             Volatile.Update(dt); // v12.2 열·폭발·잔해·역화·일산화탄소·짙은 산소
             Volatile.Resume();
+            Procedures.Update(this); // v12.1 재조립 불량이 돌아온다
             Collection.Update(dt);
             Structure.Update(dt);
             Drones.SystemUpdate(dt);

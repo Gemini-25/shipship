@@ -81,6 +81,7 @@ public static class Incidents
                 if (ship.FurnitureAt(cell + d)?.Machine is Machine m && hitMachines.Add(m))
                 {
                     m.Condition = MathF.Max(0.02f, m.Condition - 0.5f * strength);
+                    Procedures.DamageLinks(w, m, 0.7f * strength, 0.6f * strength, "파편"); // v12.1
                     if (w.Rng.Chance(0.7f * strength)) w.Machines.Break(m);
                 }
                 if (ship.WallAt(cell + d) is WallState ws && !ws.IsHull)

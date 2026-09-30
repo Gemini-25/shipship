@@ -157,6 +157,11 @@ public static class Crisis
             case WorkKind.SealO2Line: return 0.9f;
             case WorkKind.CleanUp: return 0.1f;
             case WorkKind.WakeCrew: return 0.95f;
+            case WorkKind.Rewire or WorkKind.Reline:
+                if (m == null) return 0.4f;
+                if (PowerChain(m.Body.Type)) return s.Power || s.Cooling ? 1.05f : 0.7f;
+                if (AirChain(m.Body.Type)) return s.Air ? 1f : 0.7f;
+                return m.Spec.Critical ? 0.6f : 0.3f;
             // 설비 수리: 전기·공기 사슬이면 앞으로, 전기가 없는 방의 설비는 전기가 돌아온 뒤에
             case WorkKind.Repair or WorkKind.InstallSubstitute or WorkKind.Cannibalize:
                 if (m == null) return 0.5f;

@@ -124,6 +124,7 @@ public static partial class Program
         if (args.Contains("--growthtest")) return RunGrowthTest(seed);
         if (args.Contains("--watchtest")) return RunWatchTest(seed); // v12.0
         if (args.Contains("--volatiletest")) return RunVolatileTest(seed); // v12.2
+        if (args.Contains("--proctest")) return RunProcedureTest(seed); // v12.1
         if (args.FirstOrDefault(a => a.StartsWith("--reopentrace=")) is string rt) return RunReopenTrace(seed, rt.Split('=')[1], Math.Max(1, days));
         if (args.Contains("--crisistrace")) return RunCrisisTrace(seed, args.FirstOrDefault(a => a.StartsWith("--ship="))?[7..] ?? "Mirinae", Math.Max(1, days));
         if (args.Contains("--gate=crisis")) return RunCrisisGate(Math.Max(1, days), seed, args.FirstOrDefault(a => a.StartsWith("--ship="))?[7..] ?? "Mirinae");
