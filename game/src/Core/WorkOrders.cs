@@ -1057,7 +1057,7 @@ public sealed partial class WorkBoard
                 continue;
             }
             bool want = Hull.WantVentOpen(w, room);
-            bool autoDamper = room.Powered && !room.DamperJammed && !room.DamperStuck && w.Automation.Dampers;
+            bool autoDamper = room.Powered && !room.DamperJammed && !room.DamperStuck && w.Automation.DampersIn(room);
             if (room.VentOpen == want || autoDamper) continue;
             if (room.DamperJammed && want) continue;
             // 환기망 격리 중: 손으로는 떨어져 나간 방 쪽 댐퍼(환기관이 뚫린 곳)만 닫으러 간다. 격리가 풀리면 다시 연다
@@ -1070,7 +1070,7 @@ public sealed partial class WorkBoard
             bool computerRoom = w.Automation.ComputerBody?.Room == room;
             Post(WorkKind.OperateDamper, WorkTarget.OfRoom(room), want ? (computerRoom ? 1.0f : 0.6f) : 1.15f, Skill.Mechanics,
                 room.DamperStuck ? $"댐퍼 구동기가 걸렸다 — 손으로 {(want ? "연다" : "닫는다")}" + (computerRoom ? $" (주 컴퓨터가 달아오른다 · {room.Air.Temperature:0}℃)" : "")
-                : room.Powered && !w.Automation.Dampers ? $"자동화가 꺼져 댐퍼가 저절로 안 움직인다 — 손으로 {(want ? "연다" : "닫는다")}"
+                : room.Powered && !w.Automation.DampersIn(room) ? $"자동화가 꺼져 댐퍼가 저절로 안 움직인다 — 손으로 {(want ? "연다" : "닫는다")}"
                 : want ? "위험 해소 · 환기하려면 열어야 함"
                 : room.DamperJammed ? "댐퍼가 열에 걸려 안 닫힌다 — 불이 우주선 공기를 빨아들인다"
                 : room.Leaking ? "감압 중인데 전기가 없어 자동으로 안 닫힘" : "화재 중인데 전기가 없어 자동으로 안 닫힘");
@@ -1090,7 +1090,7 @@ public sealed partial class WorkBoard
             if (!room.Lockdown || room.Abandoned) continue;
             foreach (var d in room.Doors)
             {
-                if (d.IsExternal || d.Locked || (d.Powered && w.Automation.Doors)) continue;
+                if (d.IsExternal || d.Locked || (d.Powered && w.Automation.Doors && (d.RoomA?.DataLinked ?? true) && (d.RoomB?.DataLinked ?? true))) continue;
                 var other = d.RoomA == room ? d.RoomB : d.RoomA;
                 Post(WorkKind.CrankDoor, WorkTarget.OfDoor(d), room.Leaking ? 1.15f : 0.9f, Skill.Mechanics,
                     $"{room.Name} 감압 중인데 {(d.Powered ? "자동화가 꺼져" : "전기가 없어")} {(other != null ? other.Name + " 쪽 " : "")}격벽이 안 닫힘"

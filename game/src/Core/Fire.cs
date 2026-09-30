@@ -203,7 +203,7 @@ public sealed class FireSystem
         {
             if (_knownRooms.Contains(room!.Id)) continue;
             var witness = w.Crew.FirstOrDefault(c => c.Room == room && c.IsAwake && c.CanAct);
-            bool detector = room.Powered && w.Automation.Alarms; // v9.2: 감지기 경보는 주 컴퓨터가 돌린다
+            bool detector = room.Powered && w.Automation.AlarmsIn(room); // v9.2: 감지기 경보는 주 컴퓨터가 돌린다
             var bot = detector || witness != null ? null : w.Robots.Witness(room); // v10.10: 순찰하던 방재 로봇이 본다
             if (!detector && witness == null && bot == null) continue;
             _knownRooms.Add(room.Id);

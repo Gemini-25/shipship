@@ -83,6 +83,7 @@ public partial class Hud
             NetLine("전력 간선", room.PowerLinked),
             NetLine("급수관", room.WaterLinked, UtilityNet.NeedsWater(room) || Procedures.Plumbed(f.Type)),
             NetLine("환기 덕트", room.DuctLinked),
+            NetLine("데이터선", room.DataLinked),
         };
         if (f.Machine is Machine m)
         {

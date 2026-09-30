@@ -1167,12 +1167,12 @@ public partial class Hud : Control
         {
             var parts = new List<string>();
             bool bad = false, warn = false;
-            foreach (var k in new[] { NetKind.Power, NetKind.Water, NetKind.Air })
+            foreach (var k in new[] { NetKind.Power, NetKind.Water, NetKind.Air, NetKind.Data })
             {
                 if (k == NetKind.Water && !UtilityNet.NeedsWater(room)) continue;
                 var mine = _world.Net.Links.Where(l => l.Kind == k && (l.Room == room || l.Door != null && (l.Door.RoomA == room || l.Door.RoomB == room))).ToList();
                 var worst = mine.OrderBy(l => l.Integrity).FirstOrDefault();
-                string name = k switch { NetKind.Power => "전력", NetKind.Water => "급수", _ => "덕트" };
+                string name = k switch { NetKind.Power => "전력", NetKind.Water => "급수", NetKind.Data => "데이터", _ => "덕트" };
                 if (!UtilityNet.Fed(k, room)) { parts.Add($"{name} 끊김"); bad = true; }
                 else if (worst != null && worst.Integrity < 0.95f) { parts.Add($"{name} {worst.Integrity * 100:0}%" + (worst.Temp ? " 임시" : "")); warn = true; }
                 else if (worst != null && worst.Temp) { parts.Add($"{name} 임시로 이음"); warn = true; }

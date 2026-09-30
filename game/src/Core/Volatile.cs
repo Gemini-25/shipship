@@ -522,7 +522,7 @@ public sealed class VolatileSystem
         if (air.Pressure < 30f) room.Backdraft = 0f;
         if (room.VentOpen && room.Powered && air.O2 > 15f) room.Backdraft = MathF.Max(0f, room.Backdraft - 0.6f * dt);
         if (room.Backdraft < 0.3f) return;
-        if (!room.BackdraftKnown && (w.Automation.Alarms && room.Powered || w.Crew.Any(c => c.Room != null && c.Room.Doors.Any(d => d.RoomA == room || d.RoomB == room) && c.IsAwake)))
+        if (!room.BackdraftKnown && (w.Automation.AlarmsIn(room) && room.Powered || w.Crew.Any(c => c.Room != null && c.Room.Doors.Any(d => d.RoomA == room || d.RoomB == room) && c.IsAwake)))
         {
             room.BackdraftKnown = true;
             w.RaiseAlert($"{room.Name} 역화 위험 — 뜨겁고 산소가 없다 (식거나 조금씩 환기할 때까지 문을 열지 마라)", room, AlertLevel.Warning, shipWide: true);
@@ -559,7 +559,7 @@ public sealed class VolatileSystem
         if (air.CO <= 0.001f) { air.CO = 0f; _coAlarmed.Remove(room.Id); return; }
         // 걷힘: 팬이 돌면 세정기 쪽으로 빠진다, 아니면 아주 천천히
         air.CO = MathF.Max(0f, air.CO - (room.VentOpen && room.Powered ? 0.8f * (1f + Modules.Bonus(w, FurnitureType.Scrubber)) : 0.04f) * air.CO * dt);
-        if (air.CO > 0.12f && room.Powered && w.Automation.Alarms && _coAlarmed.Add(room.Id))
+        if (air.CO > 0.12f && room.Powered && w.Automation.AlarmsIn(room) && _coAlarmed.Add(room.Id))
         {
             Stats.CoAlarms++;
             room.CoKnown = true;
@@ -589,7 +589,7 @@ public sealed class VolatileSystem
             air.O2 = MathF.Min(70f, air.O2 + amount / MathF.Max(8f, room.Volume));
         }
         if (air.O2 < 25f || air.Pressure < 50f) { room.RichKnown = false; return; }
-        if (!room.RichKnown && room.Powered && w.Automation.Alarms)
+        if (!room.RichKnown && room.Powered && w.Automation.AlarmsIn(room))
         {
             room.RichKnown = true;
             w.RaiseAlert($"{room.Name} 산소 농도 {air.O2 / MathF.Max(1f, air.Pressure) * 100:0}% — 불꽃 조심 (환기·발생기 내리기)", room, AlertLevel.Warning, shipWide: false);

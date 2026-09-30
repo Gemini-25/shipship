@@ -10,21 +10,22 @@ public partial class ShipView
     private static readonly Color NetPower = new("#e8b84a");
     private static readonly Color NetWater = new("#4f9fdc");
     private static readonly Color NetAir = new("#8fcfc4");
+    private static readonly Color NetData = new("#b58cff");
 
-    private static Color NetColor(NetKind k) => k switch { NetKind.Power => NetPower, NetKind.Water => NetWater, _ => NetAir };
+    private static Color NetColor(NetKind k) => k switch { NetKind.Power => NetPower, NetKind.Water => NetWater, NetKind.Data => NetData, _ => NetAir };
 
     private void PaintNet(CanvasItem ci, ViewMode mode)
     {
         var net = _world.Net;
         if (net.Links.Count == 0) return;
-        bool strong = mode is ViewMode.Power or ViewMode.Pipes or ViewMode.Air;
+        bool strong = mode is ViewMode.Power or ViewMode.Pipes or ViewMode.Air or ViewMode.Sensors;
         foreach (var l in net.Links)
         {
             if (l.Room.Detached || l.Cells.Count == 0) continue;
-            bool focus = mode switch { ViewMode.Power => l.Kind == NetKind.Power, ViewMode.Pipes => l.Kind == NetKind.Water, ViewMode.Air => l.Kind == NetKind.Air, _ => false };
+            bool focus = mode switch { ViewMode.Power => l.Kind == NetKind.Power, ViewMode.Pipes => l.Kind == NetKind.Water, ViewMode.Air => l.Kind == NetKind.Air, ViewMode.Sensors => l.Kind == NetKind.Data, _ => false };
             bool hurt = l.Integrity < 0.95f;
             if (!strong && !hurt) continue; // 평소엔 다친 토막만 보인다 (바닥 밑)
-            float lane = l.Kind switch { NetKind.Power => -0.3f, NetKind.Water => 0f, _ => 0.3f } * T;
+            float lane = l.Kind switch { NetKind.Power => -0.3f, NetKind.Data => -0.15f, NetKind.Water => 0f, _ => 0.3f } * T;
             var off = new Vector2(lane, lane * 0.6f);
             var baseCol = NetColor(l.Kind);
             var col = l.Cut ? Palette.Danger : hurt ? baseCol.Lerp(Palette.Warning, 1f - l.Integrity) : baseCol;
@@ -42,7 +43,7 @@ public partial class ShipView
                     ci.DrawLine(pts[i], mid - dir * 4f, col.WithAlpha(a), wdt, true);
                     ci.DrawLine(mid + dir * 4f, pts[i + 1], col.WithAlpha(a), wdt, true);
                     float ph = Mathf.PosMod(_time * 3f + l.Id * 0.37f, 1f);
-                    if (l.Kind == NetKind.Power && ph < 0.35f)
+                    if (l.Kind is NetKind.Power or NetKind.Data && ph < 0.35f)
                         for (int k = 0; k < 3; k++)
                         {
                             float ang = (l.Id * 1.7f + k * 2.1f + _time * 9f) % Mathf.Tau;
@@ -76,7 +77,7 @@ public partial class ShipView
         if (strong)
             foreach (var room in _world.Ship.LiveRooms)
             {
-                var k = mode switch { ViewMode.Power => NetKind.Power, ViewMode.Pipes => NetKind.Water, _ => NetKind.Air };
+                var k = mode switch { ViewMode.Power => NetKind.Power, ViewMode.Pipes => NetKind.Water, ViewMode.Sensors => NetKind.Data, _ => NetKind.Air };
                 if (UtilityNet.Fed(k, room)) continue;
                 if (k == NetKind.Water && !UtilityNet.NeedsWater(room)) continue;
                 FillRoom(ci, room, Palette.Danger.WithAlpha(0.1f));

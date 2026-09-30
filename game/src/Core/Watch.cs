@@ -502,7 +502,7 @@ public sealed class WatchLog
         foreach (var m in w.Ship.Machines)
         {
             var room = m.Body.Room;
-            if (online && room.Powered && !room.Detached && !m.Body.Stowed) m.LastReading = w.Tick;
+            if (online && room.Powered && room.DataLinked && !room.Detached && !m.Body.Stowed) m.LastReading = w.Tick; // v12.3 데이터선이 끊기면 값이 멈춘다
             // 하루 1%쯤 (태양 폭풍 동안 네 배), 뜨거운 방에서 조금 더
             float heat = room.Air.Temperature > 32f ? 1.5f : 1f;
             m.SensorCal = MathF.Max(0.3f, m.SensorCal - dt / 24f * 0.011f * stormDrift * heat);

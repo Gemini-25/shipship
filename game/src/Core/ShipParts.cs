@@ -110,6 +110,8 @@ public sealed class Room
     public bool PowerLinked { get; set; } = true;
     public bool WaterLinked { get; set; } = true;
     public bool DuctLinked { get; set; } = true;
+    /// <summary>v12.3 데이터선: 감지기 값·원격 제어(격벽·댐퍼·경보)가 이 방까지 닿는다.</summary>
+    public bool DataLinked { get; set; } = true;
 
     /// <summary>v12.3 바닥에 고인 물 (L) · 습도 0~1 · 방 분전함을 내렸다 · 방 급수 밸브를 잠갔다.</summary>
     public float Flood { get; set; }

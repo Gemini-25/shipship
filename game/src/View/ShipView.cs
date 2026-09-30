@@ -614,6 +614,7 @@ public partial class ShipView : Node2D
             case ViewMode.Trace: PaintTraceOverlay(ci); break;
             case ViewMode.Structure: PaintStructureOverlay(ci); break;
             case ViewMode.Pipes: PaintPipeOverlay(ci); break;
+            case ViewMode.Sensors: PaintSensorOverlay(ci); break;
         }
 
         PaintWater(ci); // v12.3 바닥 물·결로·분전함 차단

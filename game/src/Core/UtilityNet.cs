@@ -5,7 +5,7 @@ using System.Linq;
 namespace ShipSim.Core;
 
 /// <summary>배 전체를 도는 망의 종류.</summary>
-public enum NetKind { Power, Water, Air }
+public enum NetKind { Power, Water, Air, Data } // v12.3 데이터선: 감지기·컴퓨터·문 제어
 
 /// <summary>
 /// 망의 한 토막: 방 안의 분기점 ↔ 문 앞, 또는 문을 건너 두 방의 문 앞 사이.
@@ -56,7 +56,7 @@ public sealed class UtilityNet
 
     public UtilityNet(World w) => _w = w;
 
-    public static string Name(NetKind k) => k switch { NetKind.Power => "전력 간선", NetKind.Water => "급수관", _ => "환기 덕트" };
+    public static string Name(NetKind k) => k switch { NetKind.Power => "전력 간선", NetKind.Water => "급수관", NetKind.Data => "데이터선", _ => "환기 덕트" };
 
     /// <summary>물을 쓰는 방 (단수가 문제 되는 곳).</summary>
     public static bool NeedsWater(Room r) => r.Type is RoomType.Hydroponics or RoomType.Galley or RoomType.Medbay or RoomType.Quarters or RoomType.LifeSupport
@@ -185,6 +185,7 @@ public sealed class UtilityNet
                     case NetKind.Power: room.PowerLinked = fed; break;
                     case NetKind.Water: room.WaterLinked = fed; break;
                     case NetKind.Air: room.DuctLinked = fed; break;
+                    case NetKind.Data: room.DataLinked = fed; break;
                 }
             }
         }
@@ -198,6 +199,7 @@ public sealed class UtilityNet
         {
             NetKind.Power => ship.FurnitureOf(FurnitureType.PowerPanel).Select(f => f.Room).Distinct().ToList(),
             NetKind.Water => ship.FurnitureOf(FurnitureType.WaterRecycler).Select(f => f.Room).Distinct().ToList(),
+            NetKind.Data => ship.FurnitureOf(FurnitureType.MainComputer).Select(f => f.Room).Distinct().ToList(),
             _ => ship.FurnitureOf(FurnitureType.OxygenGenerator).Select(f => f.Room).Concat(ship.RoomsOf(RoomType.LifeSupport)).Distinct().ToList(),
         };
     }
@@ -215,7 +217,7 @@ public sealed class UtilityNet
             float dist = MathF.Sqrt(best);
             if (dist > radius) continue;
             float k = amount * (1f - dist / (radius + 0.5f));
-            k *= fire ? l.Kind switch { NetKind.Power => 1.3f, NetKind.Air => 0.6f, _ => 0.25f } : l.Kind switch { NetKind.Water => 1.2f, NetKind.Air => 1f, _ => 0.9f };
+            k *= fire ? l.Kind switch { NetKind.Power => 1.3f, NetKind.Data => 1.1f, NetKind.Air => 0.6f, _ => 0.25f } : l.Kind switch { NetKind.Water => 1.2f, NetKind.Air => 1f, _ => 0.9f };
             Hurt(l, k, cause);
         }
     }
@@ -256,7 +258,7 @@ public sealed class UtilityNet
         return after.Where(r => !before.Contains(r)).ToList();
     }
 
-    public static bool Fed(NetKind k, Room r) => k switch { NetKind.Power => r.PowerLinked, NetKind.Water => r.WaterLinked, _ => r.DuctLinked };
+    public static bool Fed(NetKind k, Room r) => k switch { NetKind.Power => r.PowerLinked, NetKind.Water => r.WaterLinked, NetKind.Data => r.DataLinked, _ => r.DuctLinked };
 
     public NetLink? LinkAt(Cell c) => Links.FirstOrDefault(l => l.Cells.Contains(c));
 }
@@ -275,11 +277,11 @@ public sealed partial class WorkBoard
             if (spot == default) spot = l.Cells[l.Cells.Count / 2];
             var down = l.Cut ? net.Downstream(l) : new List<Room>();
             bool vital = down.Any(r => r.Type is RoomType.LifeSupport or RoomType.Reactor or RoomType.Cooling or RoomType.Medbay or RoomType.Bridge or RoomType.Power or RoomType.Hydroponics);
-            float u = l.Cut ? (l.Kind == NetKind.Power ? 0.85f : l.Kind == NetKind.Air ? 0.75f : 0.6f) + (vital ? 0.2f : 0f) + 0.03f * down.Count : l.Temp ? 0.3f : 0.4f;
+            float u = l.Cut ? (l.Kind == NetKind.Power ? 0.85f : l.Kind == NetKind.Air ? 0.75f : l.Kind == NetKind.Data ? 0.55f : 0.6f) + (vital ? 0.2f : 0f) + 0.03f * down.Count : l.Temp ? 0.3f : 0.4f;
             string detail = l.Cut
-                ? $"{UtilityNet.Name(l.Kind)} 끊김 ({l.Cause}) — {(down.Count > 0 ? string.Join("·", down.Select(r => r.Name)) + (l.Kind == NetKind.Power ? " 정전" : l.Kind == NetKind.Water ? " 단수" : " 환기 끊김") : "다른 길로 돈다")}"
+                ? $"{UtilityNet.Name(l.Kind)} 끊김 ({l.Cause}) — {(down.Count > 0 ? string.Join("·", down.Select(r => r.Name)) + (l.Kind == NetKind.Power ? " 정전" : l.Kind == NetKind.Water ? " 단수" : l.Kind == NetKind.Data ? " 감지기·원격 제어 끊김" : " 환기 끊김") : "다른 길로 돈다")}"
                 : l.Temp ? $"임시로 이은 {UtilityNet.Name(l.Kind)} → 제대로 다시" : $"{UtilityNet.Name(l.Kind)} 상함 ({l.Integrity * 100:0}%)";
-            post(WorkKind.RepairNet, WorkTarget.AtCell(spot, l.Room), MathF.Min(1.15f, u), l.Kind == NetKind.Power ? Skill.Electrical : Skill.Mechanics, detail, circuit: l.Id);
+            post(WorkKind.RepairNet, WorkTarget.AtCell(spot, l.Room), MathF.Min(1.15f, u), l.Kind is NetKind.Power or NetKind.Data ? Skill.Electrical : Skill.Mechanics, detail, circuit: l.Id);
         }
     }
 }
@@ -294,7 +296,7 @@ public static partial class WorkPlanners
         if (l == null) { w.Board.Close(o); return null; }
         var item = l.Kind switch
         {
-            NetKind.Power => ItemKind.Cable,
+            NetKind.Power or NetKind.Data => ItemKind.Cable,
             NetKind.Water => w.Ship.CountStored(ItemKind.Sealant) > 0 ? ItemKind.Sealant : ItemKind.Plate,
             _ => ItemKind.Plate,
         };

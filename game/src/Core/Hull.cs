@@ -159,7 +159,7 @@ public sealed class HullSystem
             {
                 room.Lockdown = true;
                 int locked = 0;
-                bool auto = _world.Automation.Doors; // v9.2: 격벽 자동 잠금은 주 컴퓨터가 한다
+                bool auto = _world.Automation.DoorsIn(room); // v9.2: 격벽 자동 잠금은 주 컴퓨터가 한다 (v12.3 데이터선이 그 방까지 닿아야)
                 foreach (var d in room.Doors)
                 {
                     if (d.IsExternal || !d.Powered || !auto) continue;
@@ -167,7 +167,7 @@ public sealed class HullSystem
                     locked++;
                 }
                 bool unlockedAny = room.Doors.Any(d => !d.IsExternal && !d.Locked);
-                _world.RaiseAlert($"{room.Name} 감압! " + (!auto ? "자동화가 꺼져 격벽이 저절로 닫히지 않는다" : unlockedAny ? "일부 격벽이 전기·구동기가 없어 안 닫힘" : "격벽 폐쇄"),
+                _world.RaiseAlert($"{room.Name} 감압! " + (!auto ? (_world.Automation.Doors ? "데이터선이 끊겨 격벽이 저절로 닫히지 않는다" : "자동화가 꺼져 격벽이 저절로 닫히지 않는다") : unlockedAny ? "일부 격벽이 전기·구동기가 없어 안 닫힘" : "격벽 폐쇄"),
                     room, AlertLevel.Critical, shipWide: true);
                 _world.Board.RequestScan();
             }
@@ -185,14 +185,14 @@ public sealed class HullSystem
                     : $"{room.Name} 격벽 해제 — 공기 탱크가 비어 {p:0}kPa에서 더 오르지 않는다");
             }
             // 잠긴 방의 문에 전기가 다시 들어오면 마저 닫는다 (손으로 닫지 못한 문)
-            if (room.Lockdown && !room.Abandoned && _world.Automation.Doors)
+            if (room.Lockdown && !room.Abandoned && _world.Automation.DoorsIn(room))
                 foreach (var d in room.Doors)
                     if (!d.IsExternal && d.Powered && !d.Locked) d.Locked = true;
 
             // 환기 댐퍼: 전기가 있으면 자동, 없으면 그 자리에 멈춘다
             bool want = Hull.WantVentOpen(_world, room);
             if (room.DamperJammed && _world.Fire.CountIn(room) == 0) room.DamperJammed = false; // 식으면 풀린다
-            if (room.VentOpen != want && room.Powered && !room.DamperJammed && !room.DamperStuck && _world.Automation.Dampers)
+            if (room.VentOpen != want && room.Powered && !room.DamperJammed && !room.DamperStuck && _world.Automation.DampersIn(room))
             {
                 room.VentOpen = want;
                 string why = want ? "" : room.Leaking ? " (감압)" : _world.Fire.IsKnown(room) ? " (화재)" : _world.Structure.DuctOpen ? " (환기망 격리)" : "";

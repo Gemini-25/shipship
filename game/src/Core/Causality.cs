@@ -35,6 +35,7 @@ public enum CauseKind
     Recovery,    // 되돌림
     Flood,       // v12.3 침수
     Shock,       // v12.3 감전
+    NoData,      // v12.3 데이터선 끊김 (감지기·원격 제어)
 }
 
 public sealed class CauseNode
@@ -449,6 +450,7 @@ public sealed class CauseLog
             if (!room.Powered && !_roomState.ContainsKey($"dark:{room.Id}")) Join("dark", room, InferDark(room));
             if (!room.WaterLinked && UtilityNet.NeedsWater(room) && !_roomState.ContainsKey($"nowater:{room.Id}")) Join("nowater", room, InferCut(room, NetKind.Water));
             if (!room.DuctLinked && !_roomState.ContainsKey($"noair:{room.Id}")) Join("noair", room, InferCut(room, NetKind.Air));
+            if (!room.DataLinked && !_roomState.ContainsKey($"nodata:{room.Id}")) Join("nodata", room, InferCut(room, NetKind.Data));
         }
 
         // 원자로 긴급 정지
@@ -599,7 +601,7 @@ public sealed class CauseLog
         string gkey = $"{kind}@{parent}";
         if (!_open.TryGetValue(gkey, out var id))
         {
-            var ck = kind == "dark" ? CauseKind.Outage : kind == "nowater" ? CauseKind.NoWater : CauseKind.NoAir;
+            var ck = kind == "dark" ? CauseKind.Outage : kind == "nowater" ? CauseKind.NoWater : kind == "nodata" ? CauseKind.NoData : CauseKind.NoAir;
             id = Effect(ck, gkey, "", room, null, parent);
             _groups[id] = new HashSet<int>();
         }
@@ -611,7 +613,7 @@ public sealed class CauseLog
     private string GroupText(string kind, int id)
     {
         var names = _groups[id].Select(r => _w.Ship.Rooms.FirstOrDefault(x => x.Id == r)?.Name ?? "?").ToList();
-        string what = kind == "dark" ? "정전" : kind == "nowater" ? "단수" : "환기 끊김";
+        string what = kind == "dark" ? "정전" : kind == "nowater" ? "단수" : kind == "nodata" ? "감지기·원격 제어 끊김" : "환기 끊김";
         string list = names.Count <= 3 ? string.Join("·", names) : $"{string.Join("·", names.Take(3))} 외 {names.Count - 3}곳";
         return $"{what} — {list}";
     }
@@ -624,7 +626,7 @@ public sealed class CauseLog
             string kind = key[..colon];
             int roomId = int.Parse(key[(colon + 1)..]);
             var room = _w.Ship.Rooms.FirstOrDefault(r => r.Id == roomId);
-            bool still = room != null && !room.Detached && (kind == "dark" ? !room.Powered : kind == "nowater" ? !room.WaterLinked : !room.DuctLinked);
+            bool still = room != null && !room.Detached && (kind == "dark" ? !room.Powered : kind == "nowater" ? !room.WaterLinked : kind == "nodata" ? !room.DataLinked : !room.DuctLinked);
             if (still && Nodes[id].Open) continue;
             _roomState.Remove(key);
             if (_groups.TryGetValue(id, out var set))
@@ -635,7 +637,7 @@ public sealed class CauseLog
                     var parent = Nodes[id].Parent;
                     string work = parent >= 0 && Nodes[parent].Key.StartsWith("cut:") ? $"link:{Nodes[parent].Key[4..]}"
                         : parent >= 0 && Nodes[parent].Kind == CauseKind.Scram ? "reactor" : "";
-                    Resolve(id, kind == "dark" ? "전기가 다시 들어왔다" : kind == "nowater" ? "물이 다시 들어왔다" : "환기가 다시 돈다", work.Length > 0 ? work : null);
+                    Resolve(id, kind == "dark" ? "전기가 다시 들어왔다" : kind == "nowater" ? "물이 다시 들어왔다" : kind == "nodata" ? "감지기 값이 다시 들어온다" : "환기가 다시 돈다", work.Length > 0 ? work : null);
                 }
             }
         }

@@ -56,6 +56,7 @@ public partial class Hud
         CauseKind.Recovery => new Color("#6fd08c"),
         CauseKind.Flood => new Color("#3f8fe0"),
         CauseKind.Shock => new Color("#d7e85a"),
+        CauseKind.NoData => new Color("#b58cff"),
         _ => new Color("#c0c6d0"),
     };
 
@@ -65,7 +66,7 @@ public partial class Hud
         CauseKind.Suffocation => "산소", CauseKind.Gas => "가스", CauseKind.Cut => "끊김", CauseKind.Outage => "정전",
         CauseKind.NoWater => "단수", CauseKind.NoAir => "환기", CauseKind.Fault => "고장", CauseKind.Stop => "멈춤",
         CauseKind.Scram => "원자로", CauseKind.Casualty => "쓰러짐", CauseKind.Death => "사망", CauseKind.Detach => "분리",
-        CauseKind.Recovery => "복구", CauseKind.Flood => "침수", CauseKind.Shock => "감전", _ => "사고",
+        CauseKind.Recovery => "복구", CauseKind.Flood => "침수", CauseKind.Shock => "감전", CauseKind.NoData => "데이터", _ => "사고",
     };
 
     private static string Dur(float h) => h < 1f ? $"{Mathf.Max(1f, h * 60f):0}분" : h < 48f ? $"{h:0.#}시간" : $"{h / 24f:0.#}일";

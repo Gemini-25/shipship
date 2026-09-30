@@ -14,8 +14,8 @@ public static partial class Program
             var w = DayOne(seed, key);
             var net = w.Net;
             int links = net.Links.Count;
-            bool allFed = w.Ship.LiveRooms.All(r => r.PowerLinked && r.DuctLinked && r.WaterLinked);
-            Check($"{w.Ship.Name}: 평소엔 모든 방이 이어져 있다", links > 0 && allFed, $"토막 {links}개 (전력·급수·덕트 {links / 3}개씩)");
+            bool allFed = w.Ship.LiveRooms.All(r => r.PowerLinked && r.DuctLinked && r.WaterLinked && r.DataLinked);
+            Check($"{w.Ship.Name}: 평소엔 모든 방이 이어져 있다", links > 0 && allFed, $"토막 {links}개 (전력·급수·덕트·데이터 {links / 4}개씩)");
 
             // 배전실에서 나가는 간선을 끊는다 → 그 너머 방이 정전 → 사람이 잇는다
             var power = w.Ship.FurnitureOf(FurnitureType.PowerPanel).First().Room;
@@ -39,6 +39,21 @@ public static partial class Program
             bool dry = !hydro.WaterLinked && !w.Piping.WaterTo(hydro);
             Run(w, SimTime.Hours(10));
             Check("급수관이 끊기면 단수 → 다시 잇는다", dry && hydro.WaterLinked, $"단수 {(dry ? "예" : "아니오")} → 열 시간 뒤 {(hydro.WaterLinked ? "다시 이어짐" : "아직 단수")}");
+        }
+        // 데이터선: 함교에서 나가는 데이터선이 끊기면 그 너머 방의 감지기 값이 멈춘다 → 다시 잇는다
+        {
+            var w = DayOne(seed, "Mirinae");
+            var bridge = w.Ship.FurnitureOf(FurnitureType.MainComputer).First().Room;
+            foreach (var l in w.Net.Links.Where(l => l.Kind == NetKind.Data && (l.Door?.RoomA == bridge || l.Door?.RoomB == bridge))) w.Net.Hurt(l, 1f, "시험");
+            w.Net.Update(0f);
+            var blind = w.Ship.LiveRooms.Where(r => !r.DataLinked).ToList();
+            Run(w, SimTime.Minutes(40));
+            var pump = w.Ship.FurnitureOf(FurnitureType.CoolantPump).First().Machine!;
+            float age = (w.Tick - pump.LastReading) / (float)SimTime.TicksPerHour;
+            bool stale = !pump.Body.Room.DataLinked && age > 0.3f || pump.Body.Room.DataLinked;
+            Run(w, SimTime.Hours(10));
+            Check("데이터선이 끊기면 그 너머 감지기 값이 멈춘다 → 다시 잇는다", blind.Count > 0 && stale && w.Ship.LiveRooms.All(r => r.DataLinked),
+                $"끊긴 방 {blind.Count}곳({string.Join("·", blind.Take(4).Select(r => r.Name))}) · 냉각 펌프 마지막 측정 {age * 60:0}분 전 · 열 시간 뒤 {(w.Ship.LiveRooms.All(r => r.DataLinked) ? "모두 이어짐" : "아직 끊김")}");
         }
         // 결정론
         {

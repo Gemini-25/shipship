@@ -50,6 +50,11 @@ public sealed class AutomationSystem
     public bool Dampers => !Present || MainOnline || BackupActive;
     public bool Alarms => !Present || MainOnline || BackupActive;
     public bool Priority => !Present || MainOnline;
+
+    /// <summary>v12.3 그 방까지 데이터선이 이어져 있어야 자동으로 한다 (끊기면 그 방만 손으로).</summary>
+    public bool DoorsIn(Room r) => Doors && r.DataLinked;
+    public bool DampersIn(Room r) => Dampers && r.DataLinked;
+    public bool AlarmsIn(Room r) => Alarms && r.DataLinked;
     public bool DroneControl => !Present || MainOnline;
     public bool Rods => !Present || MainOnline;
 

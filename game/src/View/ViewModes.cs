@@ -5,7 +5,7 @@ using ShipSim.Core;
 namespace ShipSim.View;
 
 /// <summary>보기 모드. 우주선 위에 시스템 상태를 덧씌운다.</summary>
-public enum ViewMode { Normal, Power, Air, Temperature, Condition, Trace, Structure, Pipes }
+public enum ViewMode { Normal, Power, Air, Temperature, Condition, Trace, Structure, Pipes, Sensors }
 
 public static class ViewModes
 {
@@ -21,6 +21,7 @@ public static class ViewModes
         ViewMode.Trace => "흔적",
         ViewMode.Structure => "구조",
         ViewMode.Pipes => "배관",
+        ViewMode.Sensors => "감지기",
         _ => m.ToString(),
     };
 }

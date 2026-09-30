@@ -167,7 +167,7 @@ public static class Crisis
             {
                 var l = w.Net.Links.FirstOrDefault(x => x.Id == o.Circuit);
                 if (l == null || !l.Cut) return 0.3f;
-                return l.Kind switch { NetKind.Power => 1.05f, NetKind.Air => s.Air ? 1f : 0.8f, _ => 0.6f };
+                return l.Kind switch { NetKind.Power => 1.05f, NetKind.Air => s.Air ? 1f : 0.8f, NetKind.Data => 0.55f, _ => 0.6f };
             }
             case WorkKind.Rewire or WorkKind.Reline:
                 if (m == null) return 0.4f;

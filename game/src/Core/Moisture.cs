@@ -124,7 +124,7 @@ public sealed class MoistureSystem
             if (depth > 0.12f && !_floodSeen.ContainsKey(room.Id)) { _floodSeen[room.Id] = w.Tick; Stats.Floods++; w.RaiseAlert($"{room.Name} 바닥에 물이 찼다 ({DepthCm(room):0}cm)", room, AlertLevel.Warning, shipWide: false); w.Board.RequestScan(); }
             if (depth < 0.04f) { _floodSeen.Remove(room.Id); _noticed.Remove(room.Id); }
             if (depth > 0.08f && !_noticed.Contains(room.Id)
-                && (w.Automation.MainOnline || w.Crew.Any(c => c.CanAct && c.IsAwake && (c.Room == room || c.Room != null && room.Doors.Any(d => d.Openness > 0.3f && (d.RoomA == c.Room || d.RoomB == c.Room))))))
+                && (w.Automation.MainOnline && room.DataLinked || w.Crew.Any(c => c.CanAct && c.IsAwake && (c.Room == room || c.Room != null && room.Doors.Any(d => d.Openness > 0.3f && (d.RoomA == c.Room || d.RoomB == c.Room))))))
             {
                 _noticed.Add(room.Id);
                 w.Board.RequestScan();
@@ -134,7 +134,7 @@ public sealed class MoistureSystem
             using var because = w.Causes.Because(node);
 
             // 컴퓨터는 보수적으로: 물이 찬 방의 분전함을 통째로 내린다 (피해는 막지만 그 방 설비도 다 멈춘다)
-            if (w.Automation.MainOnline && _floodSeen.TryGetValue(room.Id, out var seen) && w.Tick - seen > SimTime.Minutes(3))
+            if (w.Automation.MainOnline && room.DataLinked && _floodSeen.TryGetValue(room.Id, out var seen) && w.Tick - seen > SimTime.Minutes(3))
             {
                 Isolate(room, null);
                 continue;
