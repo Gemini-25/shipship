@@ -16,7 +16,7 @@ public partial class Hud
     public void ToggleTech()
     {
         TechOpen = !TechOpen;
-        if (TechOpen) ChronicleOpen = false;
+        if (TechOpen) { ChronicleOpen = false; OpenChain(null); }
     }
 
     /// <summary>단계 색: I 강철 · II 청동 · III 은 · IV 보라 (배 화면의 설비 배지와 같다).</summary>

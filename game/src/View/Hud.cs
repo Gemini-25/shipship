@@ -47,7 +47,7 @@ public partial class Hud : Control
 
     public override void _GuiInput(InputEvent e)
     {
-        if (e is InputEventMouseButton { Pressed: true } wheel && ScrollChronicle(wheel))
+        if (e is InputEventMouseButton { Pressed: true } wheel && (ScrollChronicle(wheel) || ScrollChain(wheel)))
         {
             AcceptEvent();
             return;
@@ -97,7 +97,9 @@ public partial class Hud : Control
 
         DrawLog();
         DrawMinimap(); // v11.3
-        if (ChronicleOpen) DrawChronicle(mouse);
+        DrawIncidentCards(mouse); // v12.2 사고 카드
+        if (ChainOpen) DrawChain(mouse); // v12.2 인과 사슬
+        else if (ChronicleOpen) DrawChronicle(mouse);
         else if (TechOpen) DrawTech(mouse);
         DrawHints();
         DrawBanners();
@@ -1351,7 +1353,8 @@ public partial class Hud : Control
 
     private void DrawHints()
     {
-        const string hint = "휠 확대 · 우클릭 드래그 · 클릭 선택 · V 보기 · Z X C B P 사고 · J 연대기 · T 기술 · G 지도 · N 사건으로 · [ ] 사고 넘기기 · R 되감기 · F5 저장 · F9 불러오기 · O 설정 · Space 정지 · 1–4 배속";
+        const string hint = "휠 확대 · 우클릭 드래그 · 클릭 선택 · V 보기 · Z X C B P 사고 · K 사슬 · J 연대기 · T 기술 · G 지도 · N 사건으로 · R 되감기 · F5 저장 · O 설정 · Space 정지 · 1–4 배속";
+        if (_world.Causes.Notable().Any(i => i.Open || _world.Tick - i.End < SimTime.Hours(3)) && !ChronicleOpen && !TechOpen) return; // 사고 카드가 그 자리를 쓴다
         Gfx.TextRight(this, Fonts.Body, new Vector2(Screen.X - Margin, Screen.Y - Margin - 2), hint, 12, Palette.TextMuted);
     }
 

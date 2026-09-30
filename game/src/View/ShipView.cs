@@ -629,6 +629,7 @@ public partial class ShipView : Node2D
         foreach (var d in ship.Doors) if (!d.Removed) PaintDoor(ci, d); // v10.12 걷은 칸막이 문 · 떨어져 나간 방의 문은 벽이 됐다
         PaintHoloTable(ci); // v11.2 함교 홀로그램
         PaintComms(ci); // v11.2 보급·탈출 캡슐, 송신 파동
+        PaintCauseChain(ci); // v12.2 고른 사고의 인과 사슬
         PaintDampers(ci, mode == ViewMode.Air);
         PaintRoomStates(ci);
 
