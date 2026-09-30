@@ -18,6 +18,8 @@ public enum TargetKind
     Valve,    // 배관 구간의 격리 밸브
     Pipe,     // 배관 구간의 터진 자리
     Radiator, // 선체 밖 방열판 (밖에서)
+    // v10.10
+    Robot,    // 선내 로봇 (멈춘 자리에서 고치거나 끌어온다)
 }
 
 /// <summary>
@@ -34,7 +36,7 @@ public sealed class WorkTarget
     /// 대상이 있는 방. v10.3: 설비·문·연결부는 그 물건이 지금 속한 방을 따른다 (칸막이로 방이 나뉘면 작업 대상도 새 방을 본다).
     /// 칸·벽 같은 자리는 개조 때 <see cref="Rehome"/>로 옮긴다.
     /// </summary>
-    public Room? Room => Furniture?.Room ?? Joint?.Room ?? (Door != null ? Door.RoomA ?? Door.RoomB : null) ?? _room;
+    public Room? Room => Robot != null ? Robot.Room ?? _room : Furniture?.Room ?? Joint?.Room ?? (Door != null ? Door.RoomA ?? Door.RoomB : null) ?? _room;
     private Room? _room;
 
     /// <summary>v10.3: 개조로 이 자리가 다른 방이 됐다.</summary>
@@ -45,6 +47,7 @@ public sealed class WorkTarget
     public Joint? Joint { get; private init; }
     public Drone? Drone { get; private init; }
     public PipeSegment? Pipe { get; private init; }
+    public Robot? Robot { get; private init; }
 
     private readonly string? _key;
 
@@ -78,6 +81,9 @@ public sealed class WorkTarget
     public static WorkTarget OfFragment(Room room) => new(TargetKind.Fragment, room.DamperSpot, room, key: $"G{room.Id}");
     public static WorkTarget OfDrone(Drone d) => new(TargetKind.Drone, d.Dock.Cells[0], d.Dock.Room, furniture: d.Dock, key: $"Q{d.Id}") { Drone = d };
 
+    // ── v10.10 선내 로봇: 멈춘 자리(충전대에 있으면 충전대 앞) ──
+    public static WorkTarget OfRobot(Robot r) => new(TargetKind.Robot, r.Cell, r.Room, key: $"U{r.Id}") { Robot = r };
+
     // ── v9 배관 ──
     public static WorkTarget OfValve(PipeSegment s) => new(TargetKind.Valve, s.ValveCell, s.ValveRoom, key: $"V{s.Id}") { Pipe = s };
     public static WorkTarget OfPipe(PipeSegment s, Room? room) => new(TargetKind.Pipe, s.LeakAt, room ?? s.ValveRoom, key: $"L{s.Id}") { Pipe = s };
@@ -104,12 +110,14 @@ public sealed class WorkTarget
     {
         TargetKind.Furniture => Furniture!.Center,
         TargetKind.Crew => Crew!.Position,
+        TargetKind.Robot => Robot!.Position,
         _ => Cell.Center,
     };
 
     public string Label => Kind switch
     {
         TargetKind.Drone => Drone!.Name,
+        TargetKind.Robot => Robot!.Name,
         TargetKind.Valve => $"{Pipe!.Name} 밸브",
         TargetKind.Pipe => Pipe!.Name,
         TargetKind.Radiator => $"{Pipe!.Pump?.Label ?? Pipe!.Name} 방열판",
@@ -161,6 +169,13 @@ public sealed class WorkTarget
             }
             case TargetKind.Radiator:
                 return Pipe!.Radiator.Where(c => ship.Grid.Kind(c) == TileKind.Void);
+            case TargetKind.Robot:
+            {
+                var r = Robot!;
+                if (r.State == RobotState.Docked) return r.Dock.UseSpots;
+                var rc = r.Cell;
+                return new[] { rc }.Concat(Cell.Dirs8.Select(d => rc + d)).Where(c => ship.Grid.Kind(c) == TileKind.Floor && ship.IsWalkable(c));
+            }
             default: // 불난 칸: 바로 옆에서
                 return Cell.Dirs8.Select(d => Cell + d).Where(ship.IsWalkable);
         }

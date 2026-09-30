@@ -150,11 +150,30 @@ public sealed class Ship
 
     // 떨어져 나간 방의 가구·설비는 우주선에 없는 것으로 친다 (조각에 실려 있다)
     public IEnumerable<Room> RoomsOf(RoomType type) => Rooms.Where(r => r.Type == type && !r.Detached);
-    public IEnumerable<Furniture> FurnitureOf(FurnitureType type) => Furniture.Where(f => f.Type == type && !f.Room.Detached);
-    public IEnumerable<Machine> Machines => Furniture.Where(f => f.Machine != null && !f.Room.Detached).Select(f => f.Machine!);
+    public IEnumerable<Furniture> FurnitureOf(FurnitureType type) => Furniture.Where(f => f.Type == type && !f.Room.Detached && !f.Stowed);
+    public IEnumerable<Machine> Machines => Furniture.Where(f => f.Machine != null && !f.Room.Detached && !f.Stowed).Select(f => f.Machine!);
+
+    /// <summary>배에 놓여 있는 가구 (치운 것 빼고).</summary>
+    public IEnumerable<Furniture> Placed => Furniture.Where(f => !f.Stowed);
 
     /// <summary>승무원이 쓰는 보관함 (드론 거치대의 자재칸은 드론 몫이라 뺀다).</summary>
-    public IEnumerable<Furniture> Containers => Furniture.Where(f => f.Storage != null && !f.Room.Detached && f.Type != FurnitureType.DroneDock);
+    public IEnumerable<Furniture> Containers => Furniture.Where(f => f.Storage != null && !f.Room.Detached && !f.Stowed && f.Type != FurnitureType.DroneDock);
+
+    /// <summary>
+    /// v10.10: 가구를 치운다 (간이침대를 접어 창고로, 뜯긴 설비를 해체). 번호가 바뀌지 않게 목록에는 남기고, 격자·방에서만 뺀다.
+    /// 길찾기 캐시는 부른 쪽이 다시 만든다.
+    /// </summary>
+    public void Stow(Furniture f)
+    {
+        if (f.Stowed) return;
+        foreach (var c in f.Cells)
+            if (Grid.FurnitureId(c) == f.Id) Grid.SetFurnitureId(c, -1);
+        f.Room.Furniture.Remove(f);
+        f.UseSpots.Clear();
+        f.ReservedBy = null;
+        f.Owner = null;
+        f.Stowed = true;
+    }
 
     /// <summary>우주선 전체에 있는 물건 개수 (보관함만, 손에 든 것 제외).</summary>
     public int CountStored(ItemKind k) => Containers.Sum(f => f.Storage!.Count(k));

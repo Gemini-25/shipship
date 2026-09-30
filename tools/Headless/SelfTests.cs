@@ -173,8 +173,8 @@ public static partial class Program
             while (!runner.Advance(50000) && guard++ < 100) { }
             Check("저장 시점 뒤의 기록 → 불러오기가 100%에서 끝난다", runner.Done && runner.Upcoming == 1, $"반복 {guard} · 앞으로 {runner.Upcoming}건");
             string? why = null;
-            try { SaveGame.Parse("shipsim-save 9\nseed x\n"); } catch (FormatException e) { why = e.Message; }
-            try { if (why == null) new ReplayRunner("shipsim-save 9\nseed 1\ntick 10\ncmd 5 break 999999\n"); }
+            try { SaveGame.Parse(SaveGame.Header + "\nseed x\n"); } catch (FormatException e) { why = e.Message; }
+            try { if (why == null) new ReplayRunner(SaveGame.Header + "\nseed 1\ntick 10\ncmd 5 break 999999\n"); }
             catch (Exception e) when (e is FormatException or ArgumentException) { why = e.Message; }
             Check("망가진 저장 파일은 예외로 까닭을 알린다 (화면은 새 항해로)", why != null, why ?? "");
         }

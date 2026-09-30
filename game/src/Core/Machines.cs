@@ -103,6 +103,7 @@ public static class Faults
         FurnitureType.DroneDock => new[] { ItemKind.Electronics, ItemKind.Cable },
         FurnitureType.MainComputer => new[] { ItemKind.Electronics, ItemKind.Sensor },
         FurnitureType.SensorArray => new[] { ItemKind.Sensor, ItemKind.Electronics, ItemKind.Cable },
+        FurnitureType.RobotDock => new[] { ItemKind.Electronics, ItemKind.Cable },
         _ => Array.Empty<ItemKind>(),
     };
 
@@ -116,7 +117,7 @@ public static class Faults
         FurnitureType.ReactorCore => ItemKind.ReactorControl,
         FurnitureType.Fridge or FurnitureType.AuxGenerator or FurnitureType.Workbench or FurnitureType.Collector
             or FurnitureType.MealDispenser or FurnitureType.EngineCore => ItemKind.Motor,
-        FurnitureType.Console or FurnitureType.MedBed or FurnitureType.DroneDock or FurnitureType.MainComputer => ItemKind.Electronics,
+        FurnitureType.Console or FurnitureType.MedBed or FurnitureType.DroneDock or FurnitureType.MainComputer or FurnitureType.RobotDock => ItemKind.Electronics,
         FurnitureType.SensorArray => ItemKind.Sensor,
         _ => ItemKind.Cable,
     };
@@ -271,6 +272,9 @@ public static class MachineSpecs
         // 장거리 센서 (v10.1): 선체 밖 안테나와 레이더. 궤적 계산은 주 컴퓨터가, 컴퓨터가 없으면 통신실 사람이 화면을 읽는다
         new MachineSpec(FurnitureType.SensorArray, 0.5f, 5, 30f, Skill.Electrical, null, 0.5f, false,
             new[] { FaultKind.AntennaDrift, FaultKind.AntennaDrift, FaultKind.RadarFault, FaultKind.WiringFault }),
+        // v10.10 로봇 충전대: 로봇을 충전할 때만 전기를 먹는다. 멈추면 로봇이 방전돼 사람이 그 일을 떠맡는다
+        new MachineSpec(FurnitureType.RobotDock, 1.2f, 4, 45f, Skill.Electrical, null, 0.4f, false,
+            new[] { FaultKind.ChargerFault, FaultKind.WiringFault }),
     }.ToDictionary(s => s.Type);
 
     public static MachineSpec? For(FurnitureType t) => Table.TryGetValue(t, out var s) ? s : null;
@@ -289,6 +293,9 @@ public sealed class CropState
 
     /// <summary>v9: 물을 못 받은 시간. 오래 가면 말라 죽는다.</summary>
     public float DryHours { get; set; }
+
+    /// <summary>v10.10: 물통으로 부어 준 물이 버티는 시간 (급수 본관이 끊겼을 때).</summary>
+    public float HandWateredHours { get; set; }
 
     public bool Ripe => Growth >= 1f;
 }
@@ -323,6 +330,9 @@ public sealed class Machine
     public int FaultCount { get; set; }
 
     public CropState? Crop { get; set; }
+
+    /// <summary>v11.0 사고 전조 (없으면 null): 몇 시간 뒤 올 고장의 기척.</summary>
+    public Omen? Omen { get; set; }
 
     /// <summary>정품인지 Mk.1 임시품인지.</summary>
     public MachineGrade Grade { get; set; } = MachineGrade.Standard;

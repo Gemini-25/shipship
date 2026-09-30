@@ -86,6 +86,8 @@ public static partial class Program
             Console.WriteLine($"수치 파일: {Tuning.Load(System.IO.File.ReadAllText(tf.Split('=', 2)[1]))}개 적용");
         if (args.Contains("--bench")) return RunBench(days, seed);
         if (args.Contains("--ships")) return RunShips(days, seed);
+        if (args.Contains("--bigships")) return RunBigShips(days, seed, args);
+        if (args.Contains("--tiers")) return RunTierRecovery(seed, args);
         var world = World.CreateDefault(seed, crewArg, shipArg);
         world.CrewCanDie = death;
         world.Log.Capacity = 60000; // 긴 시험의 기록을 끝까지 볼 수 있게
@@ -226,6 +228,9 @@ public static partial class Program
         Console.WriteLine($"\n공기: 최저 O2 {minO2:0.0}kPa, 최고 CO2 {maxCO2:0.00}kPa · 물 최저 {minWater:0}L · 배터리 최저 {minBattery * 100:0}% · 부하 차단 {shedTicks / (float)SimTime.TicksPerHour:0.0}시간");
         int totalFaults = ship.Machines.Sum(m => m.FaultCount);
         Console.WriteLine($"고장 누적 {totalFaults}건 · 정비 누적 {ship.Machines.Sum(m => m.ServiceCount)}회 · 남은 작업 {world.Board.OpenCount}");
+        PrintRobots(world);
+        Console.WriteLine($"예방: {world.Precursors}");
+        PrintLedger(world, days);
         ok &= Check(minO2 > 17f, $"산소 부족 (최저 {minO2:0.0})");
         ok &= Check(maxCO2 < 1.5f, $"CO2 과다 (최고 {maxCO2:0.00})");
         int foodEnd = ship.CountStored(ItemKind.Meal) + ship.CountStored(ItemKind.Produce);

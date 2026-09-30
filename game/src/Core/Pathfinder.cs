@@ -23,7 +23,7 @@ public sealed class DistanceField
 /// 길을 고르는 사람의 성향. "갈 수는 있는데 가고 싶지는 않다"를 표현한다.
 /// 겁 많은 사람은 위험 비용을 크게 느끼고, 급한 일을 맡은 책임감 있는 사람은 덜 느낀다.
 /// </summary>
-public readonly record struct PathProfile(float HazardScale = 1f, bool Suit = false, bool Responder = false, float[]? Fear = null, bool Eva = false)
+public readonly record struct PathProfile(float HazardScale = 1f, bool Suit = false, bool Responder = false, float[]? Fear = null, bool Eva = false, bool Robot = false)
 {
     /// <summary>선체 밖 한 칸을 지나는 추가 비용 (손으로 짚어 가며 느리게).</summary>
     public const int SpaceCost = 14;
@@ -218,7 +218,7 @@ public sealed class Pathfinder
             bool sealedOff = (door.RoomA?.Abandoned ?? false) || (door.RoomB?.Abandoned ?? false);
             if (!leaving && !profile.Suit && (sealedOff || !profile.Responder)) return false;
         }
-        if (!profile.Suit)
+        if (!profile.Suit && !profile.Robot) // v10.10: 로봇은 숨을 쉬지 않는다 (진공도 지나간다 — 잠긴 격벽은 못 연다)
         {
             int r = _room[to];
             if (r >= 0 && r != startRoom && _ship.Rooms[r].Unbreathable) return false;

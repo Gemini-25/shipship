@@ -31,6 +31,10 @@ public enum WorkKind
     RepairDoor, FixLights,
     // v10.1 통신실
     RadarWatch,
+    // v10.10 선내 로봇 · 자원 회복
+    RepairRobot, FetchRobot, ServiceRobot, CarryWater, StockCache, RemoveJumper, StowCot, Recycle,
+    // v11.0 예방과 안전
+    PreventiveCheck, SuitCheck, Drill,
 }
 
 public static class WorkKinds
@@ -105,6 +109,17 @@ public static class WorkKinds
         WorkKind.RepairRadiator => "방열판 수리",
         WorkKind.IsolateMain => "냉각 본관 차단",
         WorkKind.LimpMain => "새는 채로 다시 열기",
+        WorkKind.RepairRobot => "로봇 수리",
+        WorkKind.FetchRobot => "멈춘 로봇 끌어오기",
+        WorkKind.ServiceRobot => "로봇 정비",
+        WorkKind.CarryWater => "물통 나르기",
+        WorkKind.StockCache => "비상 물자 채우기",
+        WorkKind.RemoveJumper => "임시 배선 철거",
+        WorkKind.StowCot => "간이침대 치우기",
+        WorkKind.Recycle => "부품 재활용",
+        WorkKind.PreventiveCheck => "예방 점검",
+        WorkKind.SuitCheck => "우주복 점검",
+        WorkKind.Drill => "비상 훈련",
         _ => k.ToString(),
     };
 
@@ -184,6 +199,9 @@ public sealed class WorkOrder
 
     /// <summary>이 일을 맡은 드론 (v8). 드론이 맡은 일은 승무원 목록에서 빠진다.</summary>
     public Drone? Drone { get; set; }
+
+    /// <summary>v10.10: 이 일을 맡은 선내 로봇. 로봇이 하는 일은 사람이 거들 수만 있다 (정비·재배는 합류해 함께 채운다).</summary>
+    public Robot? Robot { get; set; }
 
     /// <summary>마지막으로 목록을 훑을 때 조건이 여전했던 틱 (드론이 일을 계속할지 판단).</summary>
     public long LastSeen { get; set; }
@@ -265,6 +283,17 @@ public sealed class WorkOrder
         WorkKind.RepairRadiator => $"{Target.Label} 수리",
         WorkKind.IsolateMain => $"{Target.Pipe!.Name} 잠그기 (원자로 정지)",
         WorkKind.LimpMain => $"{Ko.EulReul(Target.Pipe!.Name)} 새는 채로 다시 열기",
+        WorkKind.RepairRobot => $"{Target.Label} 수리",
+        WorkKind.FetchRobot => $"멈춘 {Ko.EulReul(Target.Label)} 충전대로 끌어오기",
+        WorkKind.ServiceRobot => $"{Target.Label} 정비",
+        WorkKind.CarryWater => $"{Target.Label}에 물통으로 물 나르기",
+        WorkKind.StockCache => $"{Target.Label}에 {ItemKinds.Name(Product ?? ItemKind.Sealant)} 채우기 (비상 물자)",
+        WorkKind.RemoveJumper => $"{PowerGrid.CircuitName(Circuit)} 회로 임시 배선 걷기",
+        WorkKind.StowCot => $"{Target.Label} 접어 창고로",
+        WorkKind.Recycle => $"{Target.Label}에서 {ItemKinds.Name(Product ?? ItemKind.Plate)} 되살리기 (재활용)",
+        WorkKind.PreventiveCheck => $"{Target.Label} 예방 점검 ({Detail})",
+        WorkKind.SuitCheck => $"{Target.Label} 우주복 점검",
+        WorkKind.Drill => $"{Target.Label} 비상 훈련",
         _ => Kind.ToString(),
     };
 
@@ -287,11 +316,17 @@ public sealed partial class WorkBoard
     public void RequestScan() => _scanRequested = true;
 
     public IEnumerable<WorkOrder> AvailableTo(CrewMember c) =>
-        _open.Values.Where(o => !o.Closed && (o.Assignee == null || o.Assignee == c) && o.Drone == null && o.BlockedUntil <= _world.Tick && Council.Cleared(o));
+        _open.Values.Where(o => !o.Closed && (o.Assignee == null || o.Assignee == c) && o.Drone == null && (o.Robot == null || RobotSystem.Joinable(o))
+                                && o.BlockedUntil <= _world.Tick && Council.Cleared(o));
 
     /// <summary>드론이 맡을 수 있는 열린 일 (v8).</summary>
     internal IEnumerable<WorkOrder> OpenFor(Drone d) =>
-        _open.Values.Where(o => !o.Closed && o.Assignee == null && o.Drone == null && o.BlockedUntil <= _world.Tick && Council.Cleared(o));
+        _open.Values.Where(o => !o.Closed && o.Assignee == null && o.Drone == null && o.Robot == null && o.BlockedUntil <= _world.Tick && Council.Cleared(o));
+
+    /// <summary>v10.10: 선내 로봇이 맡을 수 있는 열린 일 (사람이 맡지 않은 것).</summary>
+    internal IEnumerable<WorkOrder> OpenForRobot() =>
+        _open.Values.Where(o => !o.Closed && o.Assignee == null && o.Drone == null && o.Robot == null && o.BlockedUntil <= _world.Tick && Council.Cleared(o))
+            .OrderByDescending(o => o.Urgency).ThenBy(o => o.Id);
 
     public IEnumerable<WorkOrder> All => _open.Values;
 
@@ -1035,6 +1070,9 @@ public sealed partial class WorkBoard
         // ── 구조와 외부 작업 (v8): 연결부·골조·드론·사출·되찾기·재연결 ──
         ScanStructure(Post);
         ScanPiping(Post); // v9
+        ScanRobots(Post); // v10.10 선내 로봇 (수리·끌어오기·정비)
+        ScanRecovery(Post); // v10.10 자원 회복 (물통·비상 물자·정리)
+        ScanPrevention(Post); // v11.0 예방과 안전
 
         // ── 결정 (v7): 사람이 정해야 하는 일은 심의에 올린다 ──
         Council.Review(w, _open.Values.Where(o => seen.Contains(o.Key)).ToList());
@@ -1044,7 +1082,7 @@ public sealed partial class WorkBoard
         {
             if (seen.Contains(key)) continue;
             var o = _open[key];
-            if (o.Assignee == null && o.Drone == null) { o.Closed = true; _open.Remove(key); }
+            if (o.Assignee == null && o.Drone == null && o.Robot == null) { o.Closed = true; _open.Remove(key); }
         }
     }
 }

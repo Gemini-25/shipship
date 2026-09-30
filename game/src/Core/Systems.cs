@@ -94,7 +94,8 @@ public sealed class MachineSystem
                     break;
                 }
 
-            if (w.Rng.Float() < m.FaultChancePerHour * dt) Break(m);
+            // v11.0: 닳아서 날 고장의 일부는 먼저 기척(전조)을 낸다 — 누가 알아채면 싸게 막는다
+            if (w.Rng.Float() < m.FaultChancePerHour * dt && !Prevention.Foreshadow(w, m)) Break(m);
 
             // 파손: 운석 파편이나 불에 수명이 바닥난 설비는 고칠 수 없고 통째로 갈아야 한다
             if (m.Condition < 0.18f && !m.Has(FaultKind.Wrecked))
@@ -148,6 +149,8 @@ public sealed class MachineSystem
         crop.Care = MathF.Max(0f, crop.Care - dt / FoodChain.CareDecayHours);
         if (crop.Ripe) return;
         bool water = _world.Water.Level > 1f && _world.Piping.WaterTo(m.Body.Room); // v9: 급수 본관이 끊기면 물이 안 간다
+        // v10.10: 본관이 끊겨도 물통으로 부어 준 물이 남아 있으면 (물은 부을 때 탱크에서 뺐다)
+        if (!water && crop.HandWateredHours > 0f) { water = true; crop.HandWateredHours = MathF.Max(0f, crop.HandWateredHours - dt); }
         crop.DryHours = water ? MathF.Max(0f, crop.DryHours - dt * 2f) : crop.DryHours + dt;
         if (!water && crop.DryHours > 36f && crop.Growth > 0.02f)
         {

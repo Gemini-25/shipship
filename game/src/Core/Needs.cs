@@ -67,7 +67,7 @@ public static class NeedsSystem
 
         // ── 공기 → 혈중 산소 (우주복이면 탱크에서) ──
         bool suited = c.Suit is { Oxygen: > 0f };
-        if (c.Suit != null) c.Suit.Oxygen = MathF.Max(0f, c.Suit.Oxygen - dt);
+        if (c.Suit != null) c.Suit.Oxygen = MathF.Max(0f, c.Suit.Oxygen - dt * c.Suit.Leak);
         // 선체 밖은 진공이다 (v8: EVA, 떨어져 나간 방에서 튕겨 나감)
         bool vacuum = c.Outside;
         float pressure = vacuum ? 0f : air?.Pressure ?? 101f;

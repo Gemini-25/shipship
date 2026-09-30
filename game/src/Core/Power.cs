@@ -148,6 +148,14 @@ public sealed class PowerGrid
     /// <summary>임시 배선. 한번 깔면 흔적으로 남는다.</summary>
     public List<Jumper> Jumpers { get; } = new();
 
+    /// <summary>v10.10: 걷어 낸 임시 배선의 흔적 (흔적 보기에 남는다).</summary>
+    public List<(Cell at, int from, int to, long since, long removed)> RemovedJumpers { get; } = new();
+
+    private readonly long[] _liveSince = new long[4];
+
+    /// <summary>그 회로가 제 힘으로(배전반에서) 다시 살아난 틱.</summary>
+    public long LiveSince(int circuit) => _liveSince[circuit];
+
     /// <summary>냉각 펌프 없이 자연 순환만으로 저출력 운전 중.</summary>
     public bool LowPowerMode { get; private set; }
 
@@ -344,7 +352,11 @@ public sealed class PowerGrid
             _world.Board.RequestScan();
         }
         for (int i = 0; i < CircuitCount; i++)
-            CircuitLive[i] = !panelCut && !panel!.Faults.Any(f => f.Circuit == i);
+        {
+            bool live = !panelCut && !panel!.Faults.Any(f => f.Circuit == i);
+            if (live && !CircuitLive[i]) _liveSince[i] = _world.Tick; // v10.10: 제 힘으로 다시 돈 때 (임시 배선을 걷을 때를 본다)
+            CircuitLive[i] = live;
+        }
         for (int i = 0; i < CircuitCount; i++)
             CircuitFed[i] = !ManualOff[i] && (CircuitLive[i] || FeedingJumper(i) != null);
 

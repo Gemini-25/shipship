@@ -181,8 +181,19 @@ public sealed class WorkToil : Toil
         if (c.Needs.Rest < 0.2f) speed *= 0.75f;
         if (c.Needs.Stress > 0.7f) speed *= 0.8f;
         if (c.Vitals.Oxygen < 0.85f) speed *= 0.8f;
+        // v11.0: 비상 훈련을 받은 사람은 사고 대응 일이 조금 빠르다
+        if (c.Job?.Urgent == true && c.Drilled(w)) speed *= 1.12f;
+        // v10.10: 정비 로봇이 옆에서 거들면 (부품을 잡아 주고 공구를 건넨다) 빨라진다
+        if (c.Helper is Robot helper && helper.Helping == c && (helper.Position - c.Position).LengthSquared() < 2.7f * 2.7f) speed *= 1f + RobotSystem.AssistBonus;
+        if (Resume != null && _needed > 0)
+        {
+            // 로봇과 같은 일을 하면 진척을 함께 쓴다 (누가 먼저 채우든 한 번만 끝난다)
+            if (Resume.Closed) return ToilStatus.Succeeded;
+            Resume.Progress = MathF.Min(1f, Resume.Progress + speed / _needed);
+            _done = Resume.Progress * _needed;
+            return Resume.Progress >= 1f ? ToilStatus.Succeeded : ToilStatus.Running;
+        }
         _done += speed;
-        if (Resume != null && _needed > 0) Resume.Progress = MathF.Min(1f, _done / _needed);
         return _done >= _needed ? ToilStatus.Succeeded : ToilStatus.Running;
     }
 

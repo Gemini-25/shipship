@@ -20,7 +20,7 @@ public static class Council
         { CrewRole.Engineer, CrewRole.Pilot, CrewRole.Technician, CrewRole.Electrician, CrewRole.Medic, CrewRole.Botanist };
 
     public static bool Needs(WorkKind k) =>
-        k is WorkKind.SealOffRoom or WorkKind.ReopenRoom or WorkKind.Cannibalize or WorkKind.ShedLoad or WorkKind.RepurposeRoom
+        k is WorkKind.SealOffRoom or WorkKind.ReopenRoom or WorkKind.Cannibalize or WorkKind.ShedLoad or WorkKind.RepurposeRoom or WorkKind.Recycle
             or WorkKind.BuildWorkshop or WorkKind.Upgrade
             or WorkKind.Jettison or WorkKind.Retrieve or WorkKind.RestoreRoom // v8
             or WorkKind.IsolateMain or WorkKind.LimpMain // v9
@@ -72,6 +72,10 @@ public static class Council
                 break;
             case WorkKind.Cannibalize:
                 p = o.Urgency;
+                break;
+            case WorkKind.Recycle:
+                // v10.10: 되돌릴 값이 없는 뜯긴 설비를 고철로 — 금속판이 모자랄수록 쉽게 통과
+                p = 0.5f + MathF.Min(0.35f, (8 - w.Board.Have(ItemKind.Plate)) * 0.05f);
                 break;
             case WorkKind.RepurposeRoom:
                 p = 0.65f;
@@ -227,6 +231,14 @@ public static class Council
                 if (donor.Machine is Machine dm && c.SkillLevel(dm.Spec.Skill) > 0.6f) terms.Add((-0.1f, "뜯으면 다시는 못 쓴다"));
                 terms.Add((0.1f * t.Calm, "살릴 것부터 살려야 한다"));
                 terms.Add((MathF.Max(0f, pressure - 0.6f), "급한 설비가 멈춰 있다"));
+                break;
+            }
+            case WorkKind.Recycle:
+            {
+                var donor = o.Target.Furniture!;
+                if (Stake(c, donor.Room)) terms.Add((-0.2f, $"{Ko.EunNeun(donor.Label)} 내 근무지에 있던 설비다"));
+                if (c.Role is CrewRole.Technician or CrewRole.Engineer) terms.Add((0.15f, "고철로 두느니 금속판으로"));
+                terms.Add((0.05f + MathF.Max(0f, pressure - 0.6f), $"금속판 {w.Board.Have(ItemKind.Plate)}개"));
                 break;
             }
             case WorkKind.ShedLoad:

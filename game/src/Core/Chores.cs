@@ -41,6 +41,7 @@ public sealed class ChoresActivity : Activity
     {
         distance = -1;
         if (o.Target.Crew == c) return -1f; // 자기 자신은 치료 못 함
+        if (o.Kind == WorkKind.Drill && o.Circuit != c.Id) return -1f; // v11.0: 훈련은 제 몫만
         if (DecisionOnly(o.Kind)) return -1f;
         // v8: 선체 밖 일은 드론이 맡을 수 있으면 드론에게 맡긴다 (드론이 없거나 멈췄을 때만 사람이 나간다)
         bool eva = NeedsEvaField(o) && o.Kind != WorkKind.Rescue;
@@ -62,6 +63,7 @@ public sealed class ChoresActivity : Activity
         score -= distance / 6000f;
         score -= 0.15f * c.Needs.Stress;
         if (o.Assignee == c) score += 0.25f; // 하던 일은 마저 끝내고 싶다 (교대 시간이 돼도 바로 손을 놓지 않음)
+        else if (o.Robot != null) score -= 0.15f; // v10.10: 로봇이 하고 있는 일에 합류 — 더 급한 일이 없을 때만
         if (c.Vitals.Health < 0.5f) score -= 0.3f;
 
         // EVA: 발밑이 우주다. 겁 많은 사람은 꺼리고, 긴장한 사람은 더 꺼린다
@@ -287,6 +289,19 @@ public static partial class WorkPlanners
             WorkKind.LayBypass => LayBypass(activity, o, c, w, dist, at, out blocked),
             WorkKind.RefillCoolant => RefillCoolant(activity, o, c, w, dist, at, out blocked),
             WorkKind.RepairRadiator => RepairRadiator(activity, o, c, w, dist, at, out blocked),
+            // v10.10 선내 로봇 · 자원 회복
+            WorkKind.RepairRobot => RepairRobot(activity, o, c, w, dist, at, out blocked),
+            WorkKind.FetchRobot => FetchRobot(activity, o, c, w, dist, at, out blocked),
+            WorkKind.ServiceRobot => ServiceRobot(activity, o, c, w, dist, at, out blocked),
+            WorkKind.CarryWater => CarryWater(activity, o, c, w, dist, at, out blocked),
+            WorkKind.StockCache => StockCache(activity, o, c, w, dist, at, out blocked),
+            WorkKind.RemoveJumper => RemoveJumper(activity, o, c, w, dist, at, out blocked),
+            WorkKind.StowCot => StowCot(activity, o, c, w, dist, at, out blocked),
+            WorkKind.Recycle => RecycleMachine(activity, o, c, w, dist, at, out blocked),
+            // v11.0 예방과 안전
+            WorkKind.PreventiveCheck => PreventiveCheck(activity, o, c, w, dist, at, out blocked),
+            WorkKind.SuitCheck => SuitCheck(activity, o, c, w, dist, at, out blocked),
+            WorkKind.Drill => Drill(activity, o, c, w, dist, at, out blocked),
             _ => null,
         };
         if (job != null && suitUp.Count > 0) job.Prepend(suitUp);
@@ -403,14 +418,21 @@ public static partial class WorkPlanners
             }));
         }
         toils.Add(new GotoToil(spot));
-        toils.Add(new WaitToil(SimTime.Minutes(reachable ? 4 : 1), Pose.Working, locker.Center));
+        // v11.0: 비상 훈련을 받은 사람은 우주복을 빨리 입는다
+        toils.Add(new WaitToil(SimTime.Minutes(reachable ? (c.Drilled(w) ? 2.5f : 4f) : 1f), Pose.Working, locker.Center));
         toils.Add(new DoToil((cm, world) =>
         {
             cm.Dashing = false;
             if (cm.Suit != null) return true;
             if (locker.Storage!.Take(ItemKind.Suit, 1) == 0) return false;
             cm.Suit = new SuitState();
-            world.Log.Add(world.Tick, LogKind.Work, "우주복을 입었다", cm.Id);
+            // v11.0: 닷새 넘게 점검하지 않은 보관함의 우주복은 밸브가 새기도 한다
+            if (world.Tick - locker.Checked > SimTime.Hours(120) && world.Rng.Chance(0.25f))
+            {
+                cm.Suit.Leak = 1.7f;
+                world.Log.Add(world.Tick, LogKind.Warning, "우주복 밸브가 샌다 — 산소가 빨리 준다 (보관함을 오래 점검하지 않았다)", cm.Id);
+            }
+            else world.Log.Add(world.Tick, LogKind.Work, "우주복을 입었다", cm.Id);
             return true;
         }));
         return true;
@@ -562,9 +584,11 @@ public static partial class WorkPlanners
         else toils = Plans.DropOff(c, w, dist);
 
         toils.Add(new GotoToil(at));
-        toils.Add(new WorkToil(m.Spec.ServiceHours * (full ? 1f : 0.6f), m.Spec.Skill, f.Center));
+        // v10.10: 정비 로봇이 하던 정비에 합류하면 진척을 함께 채운다
+        toils.Add(new WorkToil(m.Spec.ServiceHours * (full ? 1f : 0.6f), m.Spec.Skill, f.Center) { Resume = o });
         toils.Add(new DoToil((cm, world) =>
         {
+            if (o.Closed) return true; // 로봇이 먼저 끝냈다
             float skill = cm.SkillLevel(m.Spec.Skill);
             if (full)
             {
@@ -600,9 +624,10 @@ public static partial class WorkPlanners
 
         var toils = Plans.DropOff(c, w, dist);
         toils.Add(new GotoToil(at));
-        toils.Add(new WorkToil(0.35f, Skill.Botany, bed.Center));
+        toils.Add(new WorkToil(0.35f, Skill.Botany, bed.Center) { Resume = o });
         toils.Add(new DoToil((cm, world) =>
         {
+            if (o.Closed) return true; // 재배 로봇이 먼저 거뒀다
             if (!crop.Ripe) return false;
             float skill = cm.SkillLevel(Skill.Botany);
             int yield = (int)MathF.Round(FoodChain.HarvestYield * FoodChain.BedSize(bed) * (0.85f + 0.3f * skill) * (0.8f + 0.2f * bed.Machine!.Condition));
@@ -626,9 +651,10 @@ public static partial class WorkPlanners
         var crop = bed.Machine!.Crop!;
         var toils = Plans.DropOff(c, w, dist);
         toils.Add(new GotoToil(at));
-        toils.Add(new WorkToil(0.3f, Skill.Botany, bed.Center));
+        toils.Add(new WorkToil(0.3f, Skill.Botany, bed.Center) { Resume = o });
         toils.Add(new DoToil((cm, world) =>
         {
+            if (o.Closed) return true;
             crop.Care = 1f;
             cm.Practice(Skill.Botany, 0.01f);
             world.Board.Close(o);

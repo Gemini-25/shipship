@@ -24,6 +24,10 @@ public sealed class AdaptationLog
     public int Rebuilt;
     public int PanelsReplaced;
     public int Workshops;
+    // v10.10 자원 회복: 사고 뒤 정리
+    public int JumpersRemoved;
+    public int CotsStowed;
+    public int Recycled;
 
     public override string ToString() =>
         $"임시 배선 {Jumpers} · 뜯은 설비 {Stripped} · 용도 바뀐 방 {Repurposed} · 수동 기동 {ManualStarts}(실패 {ManualStartFails}) · 절전 {LoadSheds} · 바이오 연료 {FuelMade} · 급유 {Refuels}";
@@ -70,6 +74,9 @@ public sealed class World
     /// <summary>외부 드론 (v8): 검사·수리·견인·건설.</summary>
     public DroneSystem Drones { get; }
 
+    /// <summary>v10.10 선내 로봇: 운반·정비·재배·방재. 멈추면 그 일은 사람에게 돌아간다.</summary>
+    public RobotSystem Robots { get; }
+
     /// <summary>v9 배관망: 냉각 루프(고온관·분기·귀환관·방열판, 냉각수)와 급수관.</summary>
     public PipeNetwork Piping { get; }
 
@@ -92,6 +99,21 @@ public sealed class World
 
     /// <summary>우주선이 원래 설계와 달라진 횟수들 (적응의 기록).</summary>
     public AdaptationLog Adapt { get; } = new();
+
+    /// <summary>v10.10 자원 장부: 공기·실링폼·냉각수·금속판·물·식량이 하루마다, 사고마다 얼마나 들어오고 나갔나.</summary>
+    public ResourceLedger Ledger { get; } = new();
+
+    /// <summary>v11.0 예방: 사고 전조를 몇 번 냈고, 누가 알아챘고, 몇 번 막고 몇 번 놓쳤나.</summary>
+    public PreventionStats Precursors { get; } = new();
+
+    /// <summary>시험용: 전조를 아무도 못 보는 배 (감지기·당직·순찰이 전조를 보지 않는다).</summary>
+    public bool PreventionBlind { get; set; }
+
+    /// <summary>방마다 마지막으로 순찰한 틱 (로봇이든 사람이든).</summary>
+    public Dictionary<int, long> RoomsInspected { get; } = new();
+
+    /// <summary>항해를 시작한 틱.</summary>
+    public long StartTickOf => History.FoundedTick;
 
     /// <summary>우주선의 역사 (v7): 연대기, 사고 에피소드, 교훈, 개조.</summary>
     public ShipHistory History { get; } = new();
@@ -139,6 +161,7 @@ public sealed class World
         Collection = new CollectionSystem(this);
         Structure = new StructureSystem(this);
         Drones = new DroneSystem(this);
+        Robots = new RobotSystem(this);
         Piping = new PipeNetwork(this);
         Automation = new AutomationSystem(this);
         Fixtures = new FixturesSystem(this);
@@ -190,9 +213,12 @@ public sealed class World
             Fire.Update(dt);
             Water.Update(this, dt);
             Machines.Update(dt);
+            Prevention.Update(this, dt);
             Collection.Update(dt);
             Structure.Update(dt);
             Drones.SystemUpdate(dt);
+            Robots.SystemUpdate(dt);
+            Ledger.Sample(this, dt);
             CheckShip();
             foreach (var c in Crew) Memory.Update(this, c);
         }
@@ -206,6 +232,7 @@ public sealed class World
         Sensors.Step();
         Board.Update();
         Drones.Step();
+        Robots.Step();
 
         foreach (var c in Crew)
         {

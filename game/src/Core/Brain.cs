@@ -69,7 +69,7 @@ public static class Brain
             // 손에 익은 일을 절반 넘게 했으면 더 버틴다
             float margin = c.Job.InterruptMargin + (c.Job.Current is WorkToil { Progress: > 0.4f } ? 0.2f : 0f);
             // v10.5: 긴 개조·정비 중에도 굶주리면 손을 놓고 먹으러 간다 (급한 일은 예외 — 불 끄던 사람은 버틴다)
-            if (!c.Job.Urgent && c.Needs.Hunger > 0.9f && best.Activity is EatActivity) margin = 0f;
+            if (!c.Job.Urgent && c.Needs.Hunger > 0.85f && best.Activity is EatActivity) margin = 0f; // v10.10: 0.9 → 0.85 (급한 수리 뒤 끼니를 놓치던 것)
             if (best.Score < current + margin) return;
 
             var next = best.Activity.Plan(c, w, dist);

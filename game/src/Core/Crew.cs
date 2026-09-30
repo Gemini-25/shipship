@@ -24,7 +24,7 @@ public static class CrewRoles
     public static bool Owns(CrewRole r, WorkOrder o) => r switch
     {
         CrewRole.Engineer => o.Skill == Skill.Engineering || o.Kind == WorkKind.ResetBreaker,
-        CrewRole.Technician => o.Skill == Skill.Mechanics,
+        CrewRole.Technician => o.Skill == Skill.Mechanics || o.Kind is WorkKind.RepairRobot or WorkKind.ServiceRobot or WorkKind.StockCache or WorkKind.SuitCheck or WorkKind.Drill,
         CrewRole.Electrician => o.Skill == Skill.Electrical || o.Kind == WorkKind.ResetBreaker,
         CrewRole.Botanist => o.Kind is WorkKind.Harvest or WorkKind.Tend or WorkKind.Cook or WorkKind.Restock,
         CrewRole.Medic => o.Skill == Skill.Medicine || o.Kind == WorkKind.Rescue,
@@ -120,6 +120,9 @@ public sealed class SuitState
 
     /// <summary>남은 산소 (시간).</summary>
     public float Oxygen { get; set; } = TankHours;
+
+    /// <summary>v11.0: 점검을 오래 안 한 보관함의 우주복 — 밸브가 새서 산소가 더 빨리 준다 (1이면 멀쩡).</summary>
+    public float Leak { get; set; } = 1f;
 }
 
 public sealed class CrewStats
@@ -268,6 +271,14 @@ public sealed class CrewMember
 
     public CrewStats Stats { get; } = new();
 
+    /// <summary>v10.10: 옆에서 거드는 정비 로봇 (긴 손일이 빨라진다).</summary>
+    public Robot? Helper { get; internal set; }
+
+    /// <summary>v11.0: 비상 훈련을 받은 효과가 이때까지 남는다 (우주복을 빨리 입고, 사고 대응이 조금 빠르다).</summary>
+    public long DrilledUntil { get; set; } = -1;
+    public int Drills { get; set; }
+    public bool Drilled(World w) => w.Tick < DrilledUntil;
+
     public string ActivityLabel => Job?.Label ?? "대기";
     public bool IsMoving => Path != null;
     public bool IsAwake => Pose is not (Pose.Sleeping or Pose.Down) && !Dead;
@@ -347,6 +358,7 @@ public sealed class CrewMember
                 }
         }
         Kit.Clear();
+        Helper = null;
         if (Job == null) return;
         var job = Job;
         job.Release(this, world);

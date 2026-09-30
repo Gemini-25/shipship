@@ -80,14 +80,28 @@ public sealed class Doctrine
     /// <summary>자동화가 꺼진 채 오래 버텼다 → 격벽·댐퍼를 손으로 다루는 법을 익혔다 (v9.2, 수동 조작 40% 빠르게).</summary>
     public bool ManualDrill { get; set; }
 
-    public int Target(Recipe r) => r.Product switch
+    /// <summary>v10.10 비축 방침 (자원 장부가 정한다): 사고 직후엔 쓴 것을 서둘러 채우고, 극한엔 살 길부터.</summary>
+    public StockMode Mode { get; set; }
+
+    public int Target(Recipe r)
     {
-        ItemKind.Sealant when SealantReserve => r.Target + 10,
-        ItemKind.Structure => r.Target + (SealantReserve ? 3 : 0) + (StructureReserve ? 4 : 0),
-        ItemKind.Fuel when FuelReserve => r.Target + 2,
-        ItemKind.Plate when PipeReserve => r.Target + 4,
-        _ => r.Target,
-    };
+        int t = r.Product switch
+        {
+            ItemKind.Sealant when SealantReserve => r.Target + 10,
+            ItemKind.Structure => r.Target + (SealantReserve ? 3 : 0) + (StructureReserve ? 4 : 0),
+            ItemKind.Fuel when FuelReserve => r.Target + 2,
+            ItemKind.Plate when PipeReserve => r.Target + 4,
+            _ => r.Target,
+        };
+        bool lifeline = r.Product is ItemKind.Sealant or ItemKind.Plate or ItemKind.Structure;
+        return Mode switch
+        {
+            StockMode.Recovery when lifeline => (int)MathF.Ceiling(t * 1.3f),
+            StockMode.Extreme when lifeline => (int)MathF.Ceiling(t * 1.5f),
+            StockMode.Extreme when r.Product is ItemKind.Fuel or ItemKind.Lubricant => Math.Max(1, t / 2),
+            _ => t,
+        };
+    }
 
     public bool Knows(Recipe r) => r.Lesson switch
     {

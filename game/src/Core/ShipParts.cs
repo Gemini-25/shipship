@@ -265,6 +265,8 @@ public enum FurnitureType
     SensorArray, // 장거리 센서 (통신실, 운석 조기 경보) v10.1
     // v10.6 방 모듈 (개조로 단다)
     LedPanel, HeatExchanger, CapacitorBank, Scrubber, Fabricator,
+    RobotDock, // v10.10 선내 로봇 충전대 (칸마다 로봇 한 대)
+    SupplyCache, // v10.10 비상 물자함 (실링폼·구급 키트·소화기를 창고 밖에 나눠 둔다 — 개조로 단다)
 }
 
 public static class FurnitureTypes
@@ -297,6 +299,7 @@ public static class FurnitureTypes
         'Q' => FurnitureType.DroneDock,
         'I' => FurnitureType.MainComputer,
         'A' => FurnitureType.SensorArray,
+        'J' => FurnitureType.RobotDock,
         _ => null,
     };
 
@@ -333,6 +336,8 @@ public static class FurnitureTypes
         FurnitureType.CapacitorBank => "축전 모듈",
         FurnitureType.Scrubber => "CO₂ 세정 모듈",
         FurnitureType.Fabricator => "정밀 가공 모듈",
+        FurnitureType.RobotDock => "로봇 충전대",
+        FurnitureType.SupplyCache => "비상 물자함",
         _ => t.ToString(),
     };
 
@@ -392,6 +397,15 @@ public sealed class Furniture
 
     /// <summary>방째로 떨어져 나가 우주선 밖에 있다.</summary>
     public bool Detached => Room.Detached;
+
+    /// <summary>v10.10: 치웠다 (접은 간이침대, 해체해 재활용한 설비). 목록에는 남지만(번호가 바뀌지 않게) 배에는 없다.</summary>
+    public bool Stowed { get; internal set; }
+
+    /// <summary>v10.10: 주인 없이 빈 채로 있기 시작한 틱 (간이침대를 치울 때를 본다 — 작업 목록이 훑으며 적는다, 0이면 모름).</summary>
+    public long EmptySince { get; set; }
+
+    /// <summary>v11.0: 마지막으로 점검한 틱 (우주복 보관함: 오래 안 보면 우주복 밸브가 샌다).</summary>
+    public long Checked { get; set; }
 
     public bool IsFreeFor(CrewMember c) => ReservedBy == null || ReservedBy == c;
 

@@ -194,11 +194,12 @@ public sealed class FireSystem
             if (_knownRooms.Contains(room!.Id)) continue;
             var witness = w.Crew.FirstOrDefault(c => c.Room == room && c.IsAwake && c.CanAct);
             bool detector = room.Powered && w.Automation.Alarms; // v9.2: 감지기 경보는 주 컴퓨터가 돌린다
-            if (!detector && witness == null) continue;
+            var bot = detector || witness != null ? null : w.Robots.Witness(room); // v10.10: 순찰하던 방재 로봇이 본다
+            if (!detector && witness == null && bot == null) continue;
             _knownRooms.Add(room.Id);
             _knownSince[room.Id] = w.Tick;
             bool critical = room.Type is RoomType.Reactor or RoomType.Power or RoomType.LifeSupport or RoomType.Cooling;
-            string how = detector ? "화재 감지기 작동" : $"{Ko.IGa(witness!.Name)} 발견" + (room.Powered ? " (경보가 돌지 않았다)" : "");
+            string how = detector ? "화재 감지기 작동" : bot != null ? $"{Ko.IGa(bot.Name)} 발견" : $"{Ko.IGa(witness!.Name)} 발견" + (room.Powered ? " (경보가 돌지 않았다)" : "");
             // 역사: 한 방에 한 번 (진화될 때까지)
             room.Fires++;
             // 우주선은 번진 불을 한 번으로 센다 (한 시간 안에 옆방으로 옮겨 붙은 불)
