@@ -28,6 +28,28 @@ public static partial class Program
             Check("로봇 고장 → 사람이 고친다", fixedIt, $"고장 {(r.Fault is RobotFault f ? RobotSystem.FaultName(f) : "없음")} · 이력 {string.Join(" / ", r.Marks.Select(m => m.Text))}");
         }
 
+        // ── 1b) 가벼운 고장은 충전대로 돌아가 스스로 고치고, 임계점 아래로 닳았으면 사람이 고친다 ──
+        {
+            var w = DayOne(seed, "Hanbit");
+            var r = w.Robots.Robots.First(x => x.Kind == RobotKind.Gardener);
+            // 일하러 나가 있을 때 고장 나야 한다: 나갈 때까지 기다린다
+            for (int t = 0; t < SimTime.Hours(12) && r.State != RobotState.Active; t++) w.Step();
+            w.Robots.ForceFault(r, RobotFault.Jam);
+            Run(w, SimTime.Hours(4));
+            bool self = r.Fault == null && r.SelfRepairsTotal == 1 && w.Log.Entries.Any(e => e.Text.Contains("자가 진단"));
+            var r2 = w.Robots.Robots.First(x => x.Kind == RobotKind.Maintainer);
+            r2.Condition = 0.2f;
+            w.Robots.ForceFault(r2, RobotFault.Sensor);
+            bool posted = false;
+            for (int t = 0; t < SimTime.Hours(14); t++)
+            {
+                w.Step();
+                posted |= w.Board.Open.Any(o => o.Kind == WorkKind.RepairRobot && o.Target.Robot == r2);
+            }
+            Check("가벼운 고장은 스스로, 임계점을 넘으면 사람이", self && posted && r2.Fault == null && r2.SelfRepairsTotal == 0,
+                $"재배 로봇 자가 수리 {r.SelfRepairsTotal} · 닳은 정비 로봇 수리 요청 {(posted ? "올라옴" : "없음")} · 고장 {(r2.Fault is RobotFault f2 ? RobotSystem.FaultName(f2) : "없음")}");
+        }
+
         // ── 2) 방전돼 멈춘 로봇은 사람이 충전대까지 끌고 온다 ──
         {
             var w = DayOne(seed, "Hanbit");

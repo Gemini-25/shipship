@@ -113,7 +113,16 @@ public static class Scenarios
     public static Cell OuterTarget(World w, RoomType type)
     {
         var ship = w.Ship;
-        var room = ship.RoomsOf(type).First();
+        // v10.10: 같은 종류의 방이 여럿이면(여러 층 배의 침실 둘) 외벽에 닿은 방을 고른다
+        var room = ship.RoomsOf(type).FirstOrDefault(r => ship.Walls.Any(kv => kv.Value.IsHull && Hull.InsideRoom(ship, kv.Key) == r))
+                   ?? ship.RoomsOf(type).First();
+        return OuterTarget(w, room);
+    }
+
+    /// <summary>그 방에서 선체 벽에 가장 가까운 바닥 칸.</summary>
+    public static Cell OuterTarget(World w, Room room)
+    {
+        var ship = w.Ship;
         var hull = ship.Walls.Where(kv => kv.Value.IsHull && Hull.InsideRoom(ship, kv.Key) == room).Select(kv => kv.Key).ToList();
         var wall = hull.OrderBy(c => MathF.Abs(c.Y - room.Center.Y) + MathF.Abs(c.X - room.Center.X) * 0.3f).First();
         return Cell.Dirs4.Select(d => wall + d).First(c => ship.RoomAt(c) == room);
@@ -543,7 +552,7 @@ public static class Scenarios
                 var hullRooms = rooms.Where(r => ship.Walls.Any(kv => kv.Value.IsHull && Hull.InsideRoom(ship, kv.Key) == r)).ToList();
                 var room = rng.Pick(hullRooms);
                 float size = rng.Chance(0.4f) ? rng.Range(0.8f, 1f) : rng.Range(0.3f, 0.6f);
-                Player.Meteor(w, OuterTarget(w, room.Type), size);
+                Player.Meteor(w, OuterTarget(w, room), size);
                 parts.Add($"{(size >= 0.7f ? "큰" : "작은")} 운석({room.Name})");
             }
             else if (roll < 0.8f)

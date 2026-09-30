@@ -46,11 +46,14 @@ public partial class Hud
         if (r.Kind == RobotKind.Safety) { Row(x, right, ly + 44, "소화 거품", r.Foam, new Color("#f4f1ec"), Pct(r.Foam), r.Foam < 0.2f); ly += 22; }
         ly += 50;
         string fault = r.Fault is RobotFault f
-            ? $"{RobotSystem.FaultName(f)} — " + (RobotSystem.FaultParts(f).Length == 0 ? "다시 맞추면 된다" : string.Join(" + ", RobotSystem.FaultParts(f).Select(p => $"{ItemKinds.Name(p.kind)} {p.count}")))
-            : "고장 없음";
-        Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 14), fault, 12, r.Fault != null ? Palette.Danger : Palette.TextDim);
+            ? RobotSystem.CanSelfRepair(r)
+                ? $"{RobotSystem.FaultName(f)} — 가벼움 · 충전대에서 스스로 고친다 ({RobotSystem.SelfRepairHours(f) * 60:0}분)"
+                : $"{RobotSystem.FaultName(f)} — 사람이 고쳐야 한다: " + (RobotSystem.WhyNotSelf(r) ?? "") +
+                  (RobotSystem.FaultParts(f).Length == 0 ? "" : " · " + string.Join(" + ", RobotSystem.FaultParts(f).Select(p => $"{ItemKinds.Name(p.kind)} {p.count}")))
+            : $"고장 없음 · 자가 수리 {r.SelfRepairs}/{RobotSystem.SelfRepairLimit} (사람 정비 뒤) · 임계점 상태 {RobotSystem.SelfRepairFloor * 100:0}%";
+        Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 14), fault, 12, r.Fault == null ? Palette.TextDim : RobotSystem.CanSelfRepair(r) ? Palette.Warning : Palette.Danger);
         Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 34),
-            $"한 일 {r.JobsDone}건 · 일한 {r.ActiveHours:0}시간 · 거든 {r.AssistHours:0.0}시간 · 고장 {r.Breakdowns}번 · 끌려옴 {r.Fetched}번", 11, Palette.TextMuted);
+            $"한 일 {r.JobsDone}건 · 일한 {r.ActiveHours:0}시간 · 거든 {r.AssistHours:0.0}시간 · 고장 {r.Breakdowns}번(스스로 {r.SelfRepairsTotal}) · 끌려옴 {r.Fetched}번", 11, Palette.TextMuted);
         string can = r.Kind switch
         {
             RobotKind.Hauler => "맡는 일: 배식기 채우기 · 드론 자재 보급 · 물통 급수 · 비상 물자함",

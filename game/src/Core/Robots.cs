@@ -24,7 +24,13 @@ public enum RobotState
 }
 
 /// <summary>로봇 고장 (고치는 데 드는 부품·시간이 다르다).</summary>
-public enum RobotFault { Drive, Sensor, Controller, Cell, Scorched }
+public enum RobotFault
+{
+    // 가벼운 고장: 충전대로 느리게 돌아가 스스로 진단하고 고친다 (상태가 임계점 위일 때)
+    Sensor, Jam, Overheat,
+    // 심한 고장: 사람이 부품을 들고 와서 고쳐야 한다
+    Drive, Controller, Cell, Scorched,
+}
 
 /// <summary>
 /// 선내 로봇 한 대 (v10.10). 드론이 선체 밖을 돌보듯, 로봇은 선체 안의 반복되는 일을 맡는다.
@@ -87,6 +93,8 @@ public sealed class Robot
     internal long NextDecide { get; set; }
     /// <summary>충전대로 돌아가는 중 (배터리 점검으로 다시 되돌리지 않게).</summary>
     internal bool Homing { get; set; }
+    /// <summary>불 끄러 가는 중 (방재 로봇).</summary>
+    internal bool FightingFire { get; set; }
     internal long NextPatrol { get; set; }
 
     // ── 기록 ──
@@ -95,6 +103,11 @@ public sealed class Robot
     public int JobsDone { get; internal set; }
     public int Breakdowns { get; internal set; }
     public int Fetched { get; internal set; }
+    /// <summary>사람이 정비한 뒤 스스로 고친 횟수 (세 번이 넘으면 사람이 봐야 한다).</summary>
+    public int SelfRepairs { get; internal set; }
+    public int SelfRepairsTotal { get; internal set; }
+    /// <summary>충전대에서 스스로 고치는 진척 (시간).</summary>
+    public float SelfRepairDone { get; internal set; }
     public List<Mark> Marks { get; } = new();
 
     public bool AtDock => State == RobotState.Docked;
@@ -300,8 +313,34 @@ public sealed class RobotSystem
         RobotFault.Controller => "제어기 오류",
         RobotFault.Cell => "배터리 셀 열화",
         RobotFault.Scorched => "열에 그을림",
+        RobotFault.Jam => "바퀴에 이물질 걸림",
+        RobotFault.Overheat => "구동 모터 과열",
         _ => f.ToString(),
     };
+
+    /// <summary>스스로 고칠 수 있는 가벼운 고장.</summary>
+    public static bool Minor(RobotFault f) => f is RobotFault.Sensor or RobotFault.Jam or RobotFault.Overheat;
+
+    /// <summary>이 아래로 닳은 로봇은 가벼운 고장도 스스로 못 고친다 (임계점).</summary>
+    public const float SelfRepairFloor = 0.35f;
+
+    /// <summary>사람 정비 없이 스스로 고칠 수 있는 횟수.</summary>
+    public const int SelfRepairLimit = 3;
+
+    /// <summary>스스로 고치는 데 걸리는 시간 (충전대에서, 전기가 있어야).</summary>
+    public static float SelfRepairHours(RobotFault f) => f switch { RobotFault.Sensor => 0.5f, RobotFault.Jam => 0.3f, RobotFault.Overheat => 0.8f, _ => 1f };
+
+    /// <summary>지금 이 로봇이 이 고장을 스스로 고칠 수 있나 (가벼운 고장 · 임계점 위 · 횟수 안).</summary>
+    public static bool CanSelfRepair(Robot r) =>
+        r.Fault is RobotFault f && Minor(f) && r.Condition >= SelfRepairFloor && r.SelfRepairs < SelfRepairLimit && !r.Dock.Room.Detached;
+
+    /// <summary>스스로 못 고치는 까닭 (고칠 수 있으면 null).</summary>
+    public static string? WhyNotSelf(Robot r) =>
+        r.Fault is not RobotFault f ? null
+        : !Minor(f) ? "심한 고장"
+        : r.Condition < SelfRepairFloor ? $"상태 {r.Condition * 100:0}% — 임계점({SelfRepairFloor * 100:0}%)을 넘었다"
+        : r.SelfRepairs >= SelfRepairLimit ? $"사람 정비 없이 {r.SelfRepairs}번 스스로 고쳤다 — 더는 못 믿는다"
+        : null;
 
     /// <summary>고장을 고치는 데 드는 부품 (없으면 빈 배열 — 다시 맞추기만).</summary>
     public static (ItemKind kind, int count)[] FaultParts(RobotFault f) => f switch
@@ -324,10 +363,11 @@ public sealed class RobotSystem
 
     public static float FaultHours(RobotFault f) => f switch
     {
-        RobotFault.Drive => 1.2f, RobotFault.Sensor => 0.4f, RobotFault.Controller => 0.8f, RobotFault.Cell => 1f, RobotFault.Scorched => 1f, _ => 1f,
+        RobotFault.Drive => 1.2f, RobotFault.Sensor => 0.4f, RobotFault.Controller => 0.8f, RobotFault.Cell => 1f, RobotFault.Scorched => 1f,
+        RobotFault.Jam => 0.25f, RobotFault.Overheat => 0.5f, _ => 1f,
     };
 
-    public static Skill FaultSkill(RobotFault f) => f is RobotFault.Drive or RobotFault.Scorched ? Skill.Mechanics : Skill.Electrical;
+    public static Skill FaultSkill(RobotFault f) => f is RobotFault.Drive or RobotFault.Scorched or RobotFault.Jam or RobotFault.Overheat ? Skill.Mechanics : Skill.Electrical;
 
     /// <summary>로봇이 맡는 작업 목록의 일.</summary>
     public static bool CanDo(RobotKind k, WorkKind w) => k switch
@@ -575,7 +615,18 @@ public sealed class RobotSystem
                         if (r.Kind == RobotKind.Safety && r.Foam < 1f) { r.Foam = MathF.Min(1f, r.Foam + FoamRefillPerHour * eff * dt); charging.Add(r.Dock); }
                     }
                     if (r.Disabled) { r.Doing = "꺼 둠"; break; }
-                    if (r.Fault != null) { r.Doing = $"{FaultName(r.Fault.Value)} — 수리를 기다린다"; break; }
+                    if (r.Fault is RobotFault df)
+                    {
+                        // 가벼운 고장: 충전대에서 스스로 진단·수리 (전기가 있어야)
+                        if (CanSelfRepair(r) && DockWorking(r))
+                        {
+                            r.SelfRepairDone += dt;
+                            r.Doing = $"{FaultName(df)} — 스스로 고치는 중 {Math.Min(99, (int)(r.SelfRepairDone / SelfRepairHours(df) * 100))}%";
+                            if (r.SelfRepairDone >= SelfRepairHours(df)) SelfRepaired(r, df);
+                        }
+                        else r.Doing = $"{FaultName(df)} — 사람이 고쳐야 한다" + (WhyNotSelf(r) is string why ? $" ({why})" : !DockWorking(r) ? " (충전대에 전기가 없어 스스로 못 고친다)" : "");
+                        break;
+                    }
                     if (!DockWorking(r) && r.Battery < 0.3f) { r.Doing = r.Dock.Machine!.Powered ? "충전대 멈춤 — 충전 못 함" : "충전대에 전기가 없다 — 충전 못 함"; break; }
                     if (r.Battery < 0.35f) { r.Doing = $"충전 {r.Battery * 100:0}%"; break; }
                     Decide(r);
@@ -591,6 +642,14 @@ public sealed class RobotSystem
                     r.Battery = MathF.Max(0f, r.Battery - drain * dt);
                     r.ActiveHours += dt;
                     r.Condition = MathF.Max(0f, r.Condition - (working || moving ? 0.008f : 0.002f) * dt);
+                    // 가벼운 고장으로 충전대에 돌아가는 중 (느리게): 길이 막히면 그 자리에 멈춘다
+                    if (r.Fault is RobotFault lf)
+                    {
+                        r.Doing = $"{FaultName(lf)} — 스스로 고치러 충전대로 (느리게)";
+                        if (r.Steps == null) Stall(r, $"{FaultName(lf)} — 충전대로 갈 길이 막혔다");
+                        else if (r.Battery <= 0.001f) Stall(r, "배터리가 바닥났다");
+                        break;
+                    }
                     // 불 곁에서 그을리거나, 닳아서 고장
                     if (w.Fire.AnyWithin(r.Cell, 1.2f) && r.Kind != RobotKind.Safety && w.Rng.Chance(0.6f * dt)) { Break(r, RobotFault.Scorched); break; }
                     if (w.Fire.AnyWithin(r.Cell, 0.8f) && r.Kind == RobotKind.Safety) r.Condition = MathF.Max(0f, r.Condition - 0.05f * dt);
@@ -605,6 +664,16 @@ public sealed class RobotSystem
                     }
                     // 배터리가 모자라면 돌아간다 (돌아갈 만큼 남기고) — 맡은 일이든, 사람을 거들든, 순찰이든
                     if (!r.Homing && r.Steps != null && r.Battery < ReturnCost(r) + 0.05f) { Abort(r, "배터리가 모자라 충전대로 돌아간다"); break; }
+                    // 방재 로봇: 순찰·귀환 중에도 불이 나면 그쪽으로 (거품이 있을 때)
+                    if (r.Kind == RobotKind.Safety && !r.FightingFire && w.Fire.Count > 0 && r.Foam > 0.15f && r.Battery > ReturnCost(r) + 0.15f)
+                    {
+                        var fireDist = w.Paths.Flood(r.Cell, Profile);
+                        var keep = (r.Steps, r.StepIndex, r.Doing, r.Homing);
+                        r.Steps = null;
+                        r.Homing = false;
+                        if (!PlanFire(r, fireDist)) (r.Steps, r.StepIndex, r.Doing, r.Homing) = keep;
+                        break;
+                    }
                     if (r.Steps == null) Decide(r);
                     break;
                 }
@@ -623,7 +692,11 @@ public sealed class RobotSystem
     private RobotFault PickFault(Robot r)
     {
         float x = _world.Rng.Float();
-        return x < 0.35f ? RobotFault.Drive : x < 0.65f ? RobotFault.Sensor : x < 0.85f ? RobotFault.Controller : RobotFault.Cell;
+        // 닳을수록 심한 고장 쪽으로 기운다
+        float minor = 0.6f * (0.4f + 0.6f * r.Condition);
+        if (x < minor) { float y = x / minor; return y < 0.45f ? RobotFault.Sensor : y < 0.72f ? RobotFault.Jam : RobotFault.Overheat; }
+        float z = (x - minor) / (1f - minor);
+        return z < 0.45f ? RobotFault.Drive : z < 0.72f ? RobotFault.Controller : RobotFault.Cell;
     }
 
     /// <summary>충전대까지 돌아가는 데 드는 배터리 (곧은 거리 × 2 — 통로를 돌아가고 문 앞에서 기다린다 — 에 여유).</summary>
@@ -915,6 +988,7 @@ public sealed class RobotSystem
         var w = _world;
         bool wasHome = r.Homing;
         r.Homing = false;
+        r.FightingFire = false;
         if (r.Order is WorkOrder o)
         {
             if (o.Robot == r) o.Robot = null;
@@ -957,6 +1031,7 @@ public sealed class RobotSystem
     public void Abort(Robot r, string? why)
     {
         var w = _world;
+        r.FightingFire = false;
         if (r.Order is WorkOrder o && o.Robot == r) o.Robot = null;
         if (r.Helping is CrewMember h && h.Helper == r) h.Helper = null;
         r.Helping = null;
@@ -1051,6 +1126,7 @@ public sealed class RobotSystem
         }
         if (best is not Cell at) return false;
         FiresFought++;
+        r.FightingFire = true;
         var room0 = w.Ship.RoomAt(at);
         Begin(r, new List<RobotStep>
         {
@@ -1125,9 +1201,19 @@ public sealed class RobotSystem
     {
         var w = _world;
         r.Fault = f;
+        r.SelfRepairDone = 0f;
         r.Breakdowns++;
         Breakdowns++;
         MarkLog.Add(r.Marks, w.Tick, $"{FaultName(f)} ({r.Room?.Name ?? "?"})");
+        if (CanSelfRepair(r))
+        {
+            // 가벼운 고장: 하던 일은 작업 목록에 두고, 느리게 충전대로 돌아가 스스로 고친다
+            w.Log.Add(w.Tick, LogKind.Warning, $"{r.Name} {FaultName(f)} — 스스로 고치러 충전대로 (느리게)" + (r.Order != null ? $" · {r.Order.Title}은 작업 목록으로" : ""));
+            DropTask(r);
+            if (r.State == RobotState.Active) GoHome(r, "자가 수리하러");
+            return;
+        }
+        if (Minor(f)) w.Log.Add(w.Tick, LogKind.Warning, $"{r.Name}: {WhyNotSelf(r)} — 사람이 고쳐야 한다");
         w.Log.Add(w.Tick, LogKind.Warning, $"{r.Name} {FaultName(f)} — {r.Room?.Name ?? "?"}에 멈춰 섰다" + (r.Order != null ? $" (하던 일 {r.Order.Title}은 작업 목록으로)" : ""));
         DropTask(r);
         SetState(r, RobotState.Stalled);
@@ -1180,12 +1266,30 @@ public sealed class RobotSystem
 
     // ─────────────────────────────── 사람이 하는 일 (수리·끌어오기·정비) ───────────────────────────────
 
+    /// <summary>충전대에서 스스로 고쳤다 (조금 닳는다).</summary>
+    private void SelfRepaired(Robot r, RobotFault f)
+    {
+        var w = _world;
+        r.Fault = null;
+        r.SelfRepairDone = 0f;
+        r.SelfRepairs++;
+        r.SelfRepairsTotal++;
+        SelfRepairs++;
+        r.Condition = MathF.Max(0f, r.Condition - 0.02f);
+        MarkLog.Add(r.Marks, w.Tick, $"스스로 고쳤다 ({FaultName(f)} · 사람 정비 뒤 {r.SelfRepairs}번째)");
+        w.Log.Add(w.Tick, LogKind.Work, $"{r.Name}: {FaultName(f)}을(를) 자가 진단으로 고쳤다 ({r.SelfRepairs}/{SelfRepairLimit})");
+    }
+
+    public int SelfRepairs { get; private set; }
+
     /// <summary>사람이 고쳤다.</summary>
     internal void Repaired(Robot r, CrewMember by, bool makeshift)
     {
         var w = _world;
         var f = r.Fault;
         r.Fault = null;
+        r.SelfRepairDone = 0f;
+        if (!makeshift) r.SelfRepairs = 0; // 사람이 제대로 봤다
         r.Condition = MathF.Max(r.Condition, makeshift ? 0.45f : 0.85f);
         MarkLog.Add(r.Marks, w.Tick, $"{Ko.IGa(by.Name)} {(makeshift ? "임시로 " : "")}고쳤다 ({(f is RobotFault ff ? FaultName(ff) : "")})");
         if (r.State == RobotState.Stalled)
@@ -1216,6 +1320,7 @@ public sealed class RobotSystem
     internal void Serviced(Robot r)
     {
         r.Condition = 0.97f;
+        r.SelfRepairs = 0;
         MarkLog.Add(r.Marks, _world.Tick, "정비 (윤활·조임·센서 청소)");
     }
 }

@@ -123,6 +123,7 @@ public static partial class Program
             return RunPartitionGate(int.TryParse(args.FirstOrDefault(a => a.StartsWith("--runs="))?.Split('=')[1], out var prt) ? prt : 12, seed);
         if (args.Contains("--gate=comms"))
             return RunCommsGate(int.TryParse(args.FirstOrDefault(a => a.StartsWith("--runs="))?.Split('=')[1], out var crn) ? crn : 10, seed);
+        if (args.Contains("--gate=recovery")) return RunRecoveryGate(days, seed, shipArg);
         if (args.Contains("--gate=structure"))
             return RunStructureGate(int.TryParse(args.FirstOrDefault(a => a.StartsWith("--runs="))?.Split('=')[1], out var rn) ? rn : 20, seed);
         if (args.FirstOrDefault(a => a.StartsWith("--gate")) is string gate)

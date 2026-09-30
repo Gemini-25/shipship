@@ -19,6 +19,8 @@ public sealed partial class WorkBoard
             if (r.Room is Room room && (room.Abandoned || room.OffLimits)) continue;
             if (r.Fault is RobotFault f)
             {
+                // 가벼운 고장은 로봇이 스스로 고친다 (충전대로 돌아가는 중이거나, 충전대에 전기가 있을 때)
+                if (RobotSystem.CanSelfRepair(r) && (r.State == RobotState.Active || (r.AtDock && RobotSystem.DockWorking(r)))) continue;
                 var parts = RobotSystem.FaultParts(f);
                 bool have = parts.All(x => Have(x.kind) >= x.count);
                 var alt = RobotSystem.MakeshiftParts(f);
@@ -27,7 +29,7 @@ public sealed partial class WorkBoard
                 string need = parts.Length == 0 ? "다시 맞추기만" : have ? string.Join(" + ", parts.Select(x => $"{ItemKinds.Name(x.kind)} {x.count}"))
                     : "임시로 " + string.Join(" + ", alt.Select(x => $"{ItemKinds.Name(x.kind)} {x.count}"));
                 post(WorkKind.RepairRobot, WorkTarget.OfRobot(r), 0.3f + 0.08f * down + (r.Kind == RobotKind.Safety ? 0.05f : 0f), RobotSystem.FaultSkill(f),
-                    $"{RobotSystem.FaultName(f)} · {need}" + (r.AtDock ? "" : $" · {r.Room?.Name ?? "?"}에 멈춤"));
+                    $"{RobotSystem.FaultName(f)} · {need}" + (RobotSystem.WhyNotSelf(r) is string why && RobotSystem.Minor(f) ? $" · {why}" : "") + (r.AtDock ? "" : $" · {r.Room?.Name ?? "?"}에 멈춤"));
                 continue;
             }
             if (r.State == RobotState.Stalled)

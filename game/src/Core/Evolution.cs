@@ -20,6 +20,7 @@ public enum UpgradeKind
     Partition,     // v10.2: 통째로 감압됐던 큰 방: 가운데 칸막이 벽과 격벽 문 (다음엔 절반만 잃는다 — 방 크기 개조)
     TierUp,        // v10.5: 연구로 풀린 다음 단계로 설비를 올린다 (원자로 → 개량 핵분열로 → 핵융합로 …)
     Module,        // v10.6: 방에 추가 모듈을 단다 (재배실 LED 등, 냉각 열교환기 …)
+    SupplyCache,   // v10.10: 파공·불을 겪었거나 창고에서 먼 방에 비상 물자함 (실링폼·구급 키트·소화기를 나눠 둔다)
 }
 
 /// <summary>개조 계획 하나: 무엇을, 왜(겪은 사고), 무엇으로.</summary>
@@ -68,6 +69,7 @@ public static class Evolution
         UpgradeKind.Partition => "칸막이",
         UpgradeKind.TierUp => "설비 단계 올리기",
         UpgradeKind.Module => "모듈 설치",
+        UpgradeKind.SupplyCache => "비상 물자함",
         _ => k.ToString(),
     };
 
@@ -86,6 +88,7 @@ public static class Evolution
         UpgradeKind.Partition => $"{o.Target.Room?.Name ?? "?"} 가운데에 칸막이",
         UpgradeKind.TierUp => o.Target.Furniture?.Machine is Machine tm && Tech.Next(tm) is TechTier nt ? $"{o.Target.Label} → {nt.Name}" : "설비 단계 올리기",
         UpgradeKind.Module => $"{o.Target.Room?.Name ?? "?"}에 {Modules.Name((FurnitureType)o.Circuit)}",
+        UpgradeKind.SupplyCache => $"{o.Target.Room?.Name ?? "?"}에 비상 물자함",
         _ => "개조",
     };
 
@@ -103,6 +106,7 @@ public static class Evolution
         UpgradeKind.Partition => 6f,
         UpgradeKind.TierUp => 5f,
         UpgradeKind.Module => 3f,
+        UpgradeKind.SupplyCache => 1.5f,
         _ => 2f,
     };
 
@@ -133,6 +137,7 @@ public static class Evolution
         UpgradeKind.BackupController => new[] { (ItemKind.Electronics, 3), (ItemKind.Sensor, 1), (ItemKind.Cable, 2) },
         UpgradeKind.AddGrowBed => new[] { (ItemKind.Plate, 2), (ItemKind.Cable, 2), (ItemKind.Sealant, 1) },
         UpgradeKind.Partition => new[] { (ItemKind.Plate, 4), (ItemKind.Structure, 2), (ItemKind.Cable, 2) },
+        UpgradeKind.SupplyCache => new[] { (ItemKind.Plate, 1), (ItemKind.Cable, 1) },
         _ => new[] { (ItemKind.Plate, 2) },
     };
 
@@ -159,6 +164,7 @@ public static class Evolution
         UpgradeKind.Partition => $"{p.Target.Room?.Name ?? "?"} 칸막이",
         UpgradeKind.TierUp => p.Target.Furniture?.Machine is Machine tm && Tech.Next(tm) is TechTier nt ? nt.Name : "단계",
         UpgradeKind.Module => Modules.Name((FurnitureType)p.Circuit),
+        UpgradeKind.SupplyCache => $"{p.Target.Room?.Name ?? "?"} 물자함",
         _ => "침실",
     };
 
@@ -194,6 +200,8 @@ public static class Evolution
         (UpgradeKind.Partition, CrewRole.Technician or CrewRole.Engineer) => 0.2f,
         (UpgradeKind.TierUp or UpgradeKind.Module, CrewRole.Engineer or CrewRole.Technician or CrewRole.Electrician) => 0.25f,
         (UpgradeKind.TierUp or UpgradeKind.Module, CrewRole.Botanist) => 0.15f,
+        (UpgradeKind.SupplyCache, CrewRole.Technician) => 0.2f,
+        (UpgradeKind.SupplyCache, CrewRole.Medic) => 0.2f,
         _ => 0f,
     };
 
@@ -354,6 +362,16 @@ public static class Evolution
 
         // ── 모듈 (v10.6): 방에 붙이는 추가 설비 — 이 방이 모자랐던 일이 있으면 ──
         foreach (var plan in Modules.Candidates(w)) yield return plan;
+
+        // ── 비상 물자함 (v10.10): 파공·불을 겪었거나 창고에서 먼 핵심 방 (배 크기에 따라 두셋까지) ──
+        if (Logistics.Caches(w) < Math.Max(2, w.Crew.Count(c => !c.Dead) / 3))
+            foreach (var (room, score, why) in Logistics.CacheRooms(w).OrderByDescending(x => x.score).Take(3))
+            {
+                if (Modules.Spot(w, room) is not Cell at) continue;
+                yield return new UpgradePlan(UpgradeKind.SupplyCache, WorkTarget.AtCell(at, room), score, Skill.Mechanics,
+                    $"{why} → 실링폼·구급 키트·소화기를 가까이 둔다 (창고까지 가는 시간을 던다 · 금속판 1 + 케이블 1)",
+                    Cost(UpgradeKind.SupplyCache, null), 0f);
+            }
 
         // ── 칸막이 (v10.2, 방 크기 개조): 운석에 통째로 감압됐던 큰 방을 둘로 나눈다 ──
         foreach (var room in ship.Rooms)
@@ -621,6 +639,19 @@ public static class Evolution
                 var code = (FurnitureType)o.Circuit;
                 if (room == null || !Modules.Install(w, room, code, cm, o.Target.Cell)) return false;
                 text = $"{Ko.IGa(cm.Name)} {room.Name}에 {Ko.EulReul(Modules.Name(code))} 달았다 — {Modules.Note(code)}";
+                break;
+            }
+            case UpgradeKind.SupplyCache:
+            {
+                if (room == null) return false;
+                var cell = o.Target.Cell;
+                if (!w.Ship.IsOpenFloor(cell) || !Adaptation.SafeToBlock(w, room, cell))
+                {
+                    if (Modules.Spot(w, room) is not Cell spot) return false;
+                    cell = spot;
+                }
+                Logistics.InstallCache(w, room, cell, cm);
+                text = $"{Ko.IGa(cm.Name)} {room.Name}에 비상 물자함을 달았다 — 실링폼·구급 키트·소화기를 창고 밖에 나눠 둔다";
                 break;
             }
             case UpgradeKind.Partition:

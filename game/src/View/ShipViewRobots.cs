@@ -172,7 +172,8 @@ public partial class ShipView
         ci.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
 
         // 상태 불빛 · 배터리
-        Color led = faulty ? Palette.Danger : dead ? Palette.TextMuted : r.Battery < 0.25f ? Palette.Warning : Palette.Good;
+        bool self = faulty && RobotSystem.CanSelfRepair(r);
+        Color led = self ? Palette.Warning : faulty ? Palette.Danger : dead ? Palette.TextMuted : r.Battery < 0.25f ? Palette.Warning : Palette.Good;
         float blink = faulty || dead ? 0.3f + 0.7f * Mathf.Abs(Mathf.Sin(t * 4f)) : 1f;
         ci.DrawCircle(p, 1.9f, led.WithAlpha(blink), true, -1f, true);
         if (!r.AtDock || r.Battery < 0.99f)
@@ -182,8 +183,16 @@ public partial class ShipView
             ci.DrawRect(new Rect2(bar.Position, new Vector2(bar.Size.X * Mathf.Clamp(r.Battery, 0f, 1f), bar.Size.Y)),
                 (r.Battery < 0.25f ? Palette.Warning : Palette.Good).WithAlpha(0.9f));
         }
-        // 고장: 연기 한 줄기 · 방전: 느낌표
-        if (faulty)
+        // 가벼운 고장: 노란 렌치 (스스로 고친다) · 심한 고장: 연기 한 줄기 · 방전: 느낌표
+        if (self)
+        {
+            var wp = p + new Vector2(0, -14f);
+            ci.DrawLine(wp + new Vector2(-3f, 3f), wp + new Vector2(2f, -2f), Palette.Warning.WithAlpha(blink), 1.6f, true);
+            ci.DrawArc(wp + new Vector2(2.6f, -2.6f), 2.2f, -2.4f, 1.6f, 8, Palette.Warning.WithAlpha(blink), 1.4f, true);
+            if (r.AtDock)
+                ci.DrawArc(p, 12f, -Mathf.Pi / 2f, -Mathf.Pi / 2f + Mathf.Tau * Mathf.Clamp(r.SelfRepairDone / RobotSystem.SelfRepairHours(r.Fault!.Value), 0f, 1f), 24, Palette.Warning.WithAlpha(0.8f), 1.5f, true);
+        }
+        else if (faulty)
             for (int k = 0; k < 3; k++)
             {
                 float ph = (t * 0.6f + k / 3f) % 1f;

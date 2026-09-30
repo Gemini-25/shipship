@@ -61,7 +61,8 @@ public static partial class Program
                     starving += hungry * dt;
                     sleepless += tired * dt;
                     minWater = MathF.Min(minWater, w.Water.Level / MathF.Max(1f, w.Water.Capacity));
-                    foreach (var r in w.Ship.LiveRooms.Where(r => !r.Leaking && !r.Abandoned && alive.Any(c => c.Room == r)))
+                    // 산소 생산이 모자란 것만 (막 뚫렸다 재가압하는 방은 빼고 — 기압이 정상인데 산소가 낮은 방)
+                    foreach (var r in w.Ship.LiveRooms.Where(r => !r.Leaking && !r.Abandoned && r.Air.Pressure > 85f && alive.Any(c => c.Room == r)))
                         minO2 = MathF.Min(minO2, r.Air.O2);
                     minBattery = MathF.Min(minBattery, w.Power.BatteryPercent);
                     if (meals < n / 2 && w.Ship.CountStored(ItemKind.Produce) >= FoodChain.ProducePerBatch) cookBacklog += dt;
@@ -69,7 +70,7 @@ public static partial class Program
                     Mark("식량", food < n * 2 || hungry >= Math.Max(1, n / 4));
                     Mark("조리", cookBacklog > 6f);
                     Mark("물", w.Water.Level < w.Water.Capacity * 0.15f);
-                    Mark("산소", minO2 < 18f);
+                    Mark("산소", minO2 < 18.5f);
                     Mark("전력", w.Power.BatteryPercent < 0.1f && w.Power.ShedCount > 0);
                     Mark("잠자리", tired >= Math.Max(1, n / 4));
                 }
@@ -95,8 +96,10 @@ public static partial class Program
     private static int RunTierRecovery(int seed, string[] args)
     {
         int runs = int.TryParse(args.FirstOrDefault(a => a.StartsWith("--runs="))?.Split('=')[1], out var rn) ? rn : 8;
-        Console.WriteLine($"설비 단계와 회복 · 한빛호 · {runs}쌍 · 사고 뒤 48시간\n");
+        Console.WriteLine($"설비 단계와 회복 · 한빛호 · {runs}쌍 · 냉각 펌프 모두 고착 뒤 48시간, 그 뒤 열흘\n");
         var sum = new Dictionary<string, (float scrams, float off, float recover, float shed, int n)>();
+        var longFaults = new Dictionary<string, int>();
+        var longScrams = new Dictionary<string, int>();
         for (int i = 0; i < runs; i++)
         {
             int s = seed + i * 331;
@@ -114,10 +117,8 @@ public static partial class Program
                 }
                 for (int t = 0; t < SimTime.TicksPerDay; t++) w.Step();
                 int scrams0 = w.History.Scrams;
-                // 같은 사고: 냉각 펌프 절반 고착 + 냉각실 큰 운석 (시드마다 어느 펌프인지 다르다)
-                var rng = new Rng(s ^ 0x71e7);
-                var pumps = w.Ship.FurnitureOf(FurnitureType.CoolantPump).ToList();
-                foreach (var p in pumps.OrderBy(_ => rng.Float()).Take(Math.Max(1, pumps.Count / 2))) Player.Break(w, p);
+                // 같은 사고: 냉각 펌프가 모두 고착 (원자로가 선다) — 짝수 시드는 냉각실 큰 운석까지
+                foreach (var p in w.Ship.FurnitureOf(FurnitureType.CoolantPump).ToList()) w.Machines.Break(p.Machine!, FaultKind.PumpSeized);
                 if (i % 2 == 0) Player.Meteor(w, Scenarios.OuterTarget(w, RoomType.Cooling), 0.9f);
                 float off = 0f, shed = 0f, recover = -1f;
                 long start = w.Tick;
@@ -133,14 +134,22 @@ public static partial class Program
                 }
                 int scrams = w.History.Scrams - scrams0;
                 if (recover < 0f) recover = 48f;
+                // 뒤이은 열흘: 평소 운전 중 원자로 고장·긴급 정지 (핵융합로는 더 자주 선다?)
+                int faults0 = w.Ship.FurnitureOf(FurnitureType.ReactorCore).Sum(f => f.Machine!.FaultCount);
+                int scramsMid = w.History.Scrams;
+                for (int t = 0; t < 10 * SimTime.TicksPerDay; t++) w.Step();
+                int laterFaults = w.Ship.FurnitureOf(FurnitureType.ReactorCore).Sum(f => f.Machine!.FaultCount) - faults0;
+                int laterScrams = w.History.Scrams - scramsMid;
+                longFaults[mode] = longFaults.GetValueOrDefault(mode) + laterFaults;
+                longScrams[mode] = longScrams.GetValueOrDefault(mode) + laterScrams;
                 var cur = sum.GetValueOrDefault(mode);
                 sum[mode] = (cur.scrams + scrams, cur.off + off, cur.recover + recover, cur.shed + shed, cur.n + 1);
-                Console.WriteLine($"  시드 {s,-9} {mode,-4} 긴급 정지 {scrams} · 원자로 꺼짐 {off,4:0.0}시간 · 회복 {recover,4:0.0}시간 · 부하 차단 {shed,4:0.0}시간 · 정격 {w.Power.ReactorRated:0}kW");
+                Console.WriteLine($"  시드 {s,-9} {mode,-4} 긴급 정지 {scrams} · 원자로 꺼짐 {off,4:0.0}시간 · 회복 {recover,4:0.0}시간 · 부하 차단 {shed,4:0.0}시간 · 정격 {w.Power.ReactorRated:0}kW · 뒤이은 열흘 원자로 고장 {laterFaults} · 긴급 정지 {laterScrams}");
             }
         }
         Console.WriteLine();
         foreach (var (mode, v) in sum)
-            Console.WriteLine($"  {mode,-4} 평균: 긴급 정지 {v.scrams / v.n:0.0} · 원자로 꺼짐 {v.off / v.n:0.0}시간 · 회복 {v.recover / v.n:0.0}시간 · 부하 차단 {v.shed / v.n:0.0}시간");
+            Console.WriteLine($"  {mode,-4} 평균: 긴급 정지 {v.scrams / v.n:0.0} · 원자로 꺼짐 {v.off / v.n:0.0}시간 · 회복 {v.recover / v.n:0.0}시간 · 부하 차단 {v.shed / v.n:0.0}시간 · 열흘 원자로 고장 {longFaults.GetValueOrDefault(mode) / (float)v.n:0.0} · 긴급 정지 {longScrams.GetValueOrDefault(mode) / (float)v.n:0.0}");
         return 0;
     }
 
@@ -189,5 +198,99 @@ public static partial class Program
         var a = w.Adapt;
         if (a.JumpersRemoved + a.CotsStowed + a.Recycled > 0)
             Console.WriteLine($"  정리: 임시 배선 걷음 {a.JumpersRemoved} · 간이침대 치움 {a.CotsStowed} · 재활용 {a.Recycled}");
+    }
+}
+
+public static partial class Program
+{
+    /// <summary>
+    /// v10.10 자원 회복 게이트: 같은 사고를 간격을 바꿔 되풀이하고, 자원마다 "사고 한 번에 쓰는 양 ÷ 간격"과 "하루 수입"을 견준다.
+    /// 쓰는 속도가 들어오는 속도를 넘으면 비축이 무너지고, 아니면 사고 사이에 되돌아온다 — 그걸 기록으로 보인다.
+    ///   32 시드 --gate=recovery [--ship=Mirinae]
+    /// </summary>
+    private static int RunRecoveryGate(int days, int seed, string? shipKey)
+    {
+        days = Math.Max(days, 20);
+        string key = shipKey ?? "Mirinae";
+        Console.WriteLine($"자원 회복 게이트 · {ShipCatalog.Find(key)?.Name ?? key} · {days}일 · 시드 {seed}\n");
+        string[] kinds = { "meteor", "fire", "pipe" };
+        int[] gaps = { 2, 4, 8 };
+        string[] watch = { "air", "sealant", "plate", "coolant", "water" };
+        int explained = 0, recovered = 0, collapsed = 0, total = 0;
+        foreach (var kind in kinds)
+        {
+            Console.WriteLine($"── {kind switch { "meteor" => "운석 배", "fire" => "불 배", _ => "배관 배" }} ──");
+            foreach (int gap in gaps)
+            {
+                var w = World.CreateDefault(seed, 0, key);
+                var rng = new Rng(seed ^ (kind.GetHashCode() & 0xffff) ^ gap * 7919);
+                var start = watch.ToDictionary(k => k, k => ResourceLedger.Level(w, k));
+                int incidents = 0;
+                for (int d = 1; d <= days; d++)
+                {
+                    if (d >= 2 && (d - 2) % gap == 0)
+                    {
+                        incidents++;
+                        switch (kind)
+                        {
+                            case "meteor":
+                            {
+                                var rooms = w.Ship.LiveRooms.Where(r => r.Type != RoomType.Corridor && !r.Abandoned && w.Ship.Walls.Any(kv => kv.Value.IsHull && Hull.InsideRoom(w.Ship, kv.Key) == r)).ToList();
+                                Player.Meteor(w, Scenarios.OuterTarget(w, rng.Pick(rooms)), rng.Range(0.7f, 0.95f));
+                                break;
+                            }
+                            case "fire":
+                            {
+                                var rooms = w.Ship.LiveRooms.Where(r => r.Type != RoomType.Corridor && !r.Abandoned && r.Cells.Any(w.Ship.IsOpenFloor)).ToList();
+                                var room = rng.Pick(rooms);
+                                Player.Fire(w, rng.Pick(room.Cells.Where(w.Ship.IsOpenFloor).ToList()));
+                                break;
+                            }
+                            default:
+                            {
+                                var segs = w.Piping.Segments.Where(s => s.IsCoolant).ToList();
+                                if (segs.Count == 0) break;
+                                var seg = rng.Pick(segs);
+                                Player.PipeBurst(w, rng.Pick(seg.Path), rng.Range(0.6f, 1f));
+                                break;
+                            }
+                        }
+                    }
+                    Run(w, SimTime.TicksPerDay);
+                }
+                var l = w.Ledger;
+                var eps = l.Episodes.Where(e => !e.Open).ToList();
+                Console.WriteLine($"  {gap}일마다 {incidents}번 · 결과 {Outcome.Name(Assessment.Assess(w, Snapshot.Take(w)).Kind)} · 비축 방침 {Logistics.ModeName(l.Mode)}");
+                foreach (var k in watch)
+                {
+                    float used = eps.Count == 0 ? 0f : eps.Sum(e => e.Used.GetValueOrDefault(k)) / Math.Max(1, incidents);
+                    var (inPerDay, outPerDay) = l.Average(k, days);
+                    float end = ResourceLedger.Level(w, k);
+                    float s0 = MathF.Max(0.01f, start[k]);
+                    var rec = eps.Where(e => e.Before.GetValueOrDefault(k) - e.Low.GetValueOrDefault(k, e.Before.GetValueOrDefault(k)) > 0.05f * s0).ToList();
+                    var times = rec.Where(e => e.Recovered.ContainsKey(k)).Select(e => (e.Recovered[k] - e.End) / (float)SimTime.TicksPerDay).OrderBy(x => x).ToList();
+                    string back = rec.Count == 0 ? "흔들리지 않음" : $"회복 {times.Count}/{rec.Count}" + (times.Count > 0 ? $" (중앙 {times[times.Count / 2]:0.0}일)" : "");
+                    // 사고가 먹는 속도 (하루치) · 평소 쓰임(개조·제작·정비) ↔ 들어오는 속도
+                    float burn = used / gap;
+                    float incidentTotal = eps.Sum(e => e.Used.GetValueOrDefault(k));
+                    float ordinary = MathF.Max(0f, outPerDay - incidentTotal / days);
+                    float margin = inPerDay - ordinary - burn;
+                    string verdict = end >= 0.9f * s0 ? "회복" : end >= 0.5f * s0 ? "버팀" : "무너짐";
+                    bool predicted = margin < -0.01f * s0 / days ? verdict != "회복" : verdict != "무너짐";
+                    total++;
+                    if (predicted) explained++;
+                    if (verdict == "회복") recovered++;
+                    if (verdict == "무너짐") collapsed++;
+                    if (used < 0.01f && inPerDay < 0.01f) continue;
+                    string unit = ResourceLedger.Unit(k);
+                    Console.WriteLine($"    {ResourceLedger.Name(k),-6} 사고당 −{used,5:0.#}{unit} ÷ {gap}일 = 하루 −{burn,5:0.##} · 평소 −{ordinary,5:0.##} ↔ 수입 +{inPerDay,5:0.##} (남는 {margin,6:+0.##;-0.##}) · {back,-18} · {s0:0.#} → {end:0.#} {verdict}" + (predicted ? "" : " (설명 밖)"));
+                }
+            }
+            Console.WriteLine();
+        }
+        Console.WriteLine($"판정: 회복 {recovered} · 무너짐 {collapsed} · 설명됨 {explained}/{total} (사고당 소비÷간격 + 평소 쓰임이 하루 수입을 넘으면 비축이 되돌아오지 않는다)");
+        bool ok = recovered > 0 && collapsed > 0 && explained >= total * 0.75f;
+        Console.WriteLine(ok ? "✔ 게이트 통과 — 회복하는 조건과 무너지는 조건이 기록으로 갈린다" : "✘ 게이트 미달");
+        return ok ? 0 : 1;
     }
 }
