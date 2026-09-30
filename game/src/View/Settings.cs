@@ -111,14 +111,14 @@ public partial class OptionsPanel : PanelContainer
         box.AddThemeConstantOverride("separation", 10);
         AddChild(box);
 
-        box.AddChild(Title("설정"));
+        box.AddChild(Title($"설정 · ShipSim v{ProjectSettings.GetSetting("application/config/version", "")}")); // v11.3 버전 표기
         box.AddChild(Caption("소리"));
         var vol = new HSlider { MinValue = 0, MaxValue = 100, Step = 5, Value = Settings.Volume * 100, CustomMinimumSize = new Vector2(360, 24) };
         var volLabel = Label($"전체 소리 {Settings.Volume * 100:0}%");
         vol.ValueChanged += v => { Settings.Volume = (float)v / 100f; volLabel.Text = $"전체 소리 {v:0}%"; Changed(); };
         box.AddChild(volLabel);
         box.AddChild(vol);
-        box.AddChild(Check("효과음 (경보·운석·감압·문)", Settings.Effects, on => Settings.Effects = on));
+        box.AddChild(Check("효과음 (경보·운석·감압·문·발소리·로봇)", Settings.Effects, on => Settings.Effects = on));
         box.AddChild(Check("배경음 (기계음·새는 소리·불)", Settings.Ambience, on => Settings.Ambience = on));
         box.AddChild(Caption("관찰"));
         box.AddChild(Check("치명 경보가 울리면 저절로 일시정지", Settings.AutoPauseCritical, on => Settings.AutoPauseCritical = on));

@@ -136,11 +136,14 @@ public static class Tech
                 }
     }
 
-    /// <summary>하루치 연구: 작업대(등급·효율만큼) + 솜씨 좋은(0.6 넘는) 사람. 설정 파일로 바꿀 수 있다.</summary>
+    /// <summary>하루치 연구: 작업대(등급·효율만큼) + 솜씨 좋은(0.6 넘는) 사람. 설정 파일로 바꿀 수 있다.
+    /// v11.3: 하루 9점을 넘는 몫은 45%만 (30인 배가 열흘이면 모든 설계를 풀던 것 — 같은 문제를 여럿이 푸는 셈이다). 4·6인 배는 그대로.</summary>
     public static float ResearchPerHour(World w)
     {
         float benches = w.Ship.FurnitureOf(FurnitureType.Workbench).Where(f => !f.Room.Abandoned).Sum(f => f.Machine!.Efficiency * Of(f.Machine).Output);
         int experts = w.Crew.Count(c => !c.Dead && !c.Down && c.SkillLevels.Max() >= 0.6f);
-        return (benches * Tuning.ResearchPerBenchDay + experts * Tuning.ResearchPerExpertDay + Modules.Bonus(w, FurnitureType.Fabricator)) / 24f;
+        float perDay = benches * Tuning.ResearchPerBenchDay + experts * Tuning.ResearchPerExpertDay + Modules.Bonus(w, FurnitureType.Fabricator);
+        if (perDay > Tuning.ResearchKnee) perDay = Tuning.ResearchKnee + (perDay - Tuning.ResearchKnee) * Tuning.ResearchBeyond;
+        return perDay / 24f;
     }
 }

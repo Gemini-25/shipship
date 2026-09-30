@@ -27,6 +27,10 @@ public static class Tuning
     public static float ResearchPerBenchDay = 3f;
     public static float ResearchPerExpertDay = 0.6f;
 
+    /// <summary>v11.3: 하루 연구가 이만큼을 넘으면 넘는 몫은 <see cref="ResearchBeyond"/>만 — 사람이 는다고 그만큼 빨라지지 않는다.</summary>
+    public static float ResearchKnee = 9f;
+    public static float ResearchBeyond = 0.45f;
+
     /// <summary>v11.0: 닳아서 날 고장 중 전조부터 내는 몫.</summary>
     public static float OmenShare = 0.65f;
 
@@ -44,6 +48,8 @@ public static class Tuning
         E("food.yield", "재배대 한 번 수확량 (채소)", 14f, 1f, 100f, () => FoodChain.HarvestYield, v => FoodChain.HarvestYield = (int)MathF.Round(v)),
         E("research.bench", "작업대 하나가 하루에 쌓는 연구", 3f, 0f, 100f, () => ResearchPerBenchDay, v => ResearchPerBenchDay = v),
         E("research.expert", "솜씨 좋은 사람 하나가 하루에 쌓는 연구", 0.6f, 0f, 20f, () => ResearchPerExpertDay, v => ResearchPerExpertDay = v),
+        E("research.knee", "하루 연구가 이만큼을 넘으면 체감 (큰 배)", 9f, 1f, 100f, () => ResearchKnee, v => ResearchKnee = v),
+        E("research.beyond", "체감 뒤 몫 (0~1)", 0.45f, 0f, 1f, () => ResearchBeyond, v => ResearchBeyond = v),
         E("meteor.approach", "운석이 날아오는 시간 (분)", 6f, 0.5f, 30f, () => SensorSystem.ApproachMinutes, v => SensorSystem.ApproachMinutes = v),
         E("evolution.peace", "개조를 궁리하기 전 평화 (시간)", 12f, 0f, 200f, () => Evolution.PeaceHours, v => Evolution.PeaceHours = v),
         E("evolution.gap", "개조와 개조 사이 (시간)", 16f, 0f, 200f, () => Evolution.GapHours, v => Evolution.GapHours = v),
