@@ -27,7 +27,7 @@ public static partial class Program
             int unpowered = w.Ship.LiveRooms.Count(r => !r.Powered);
             Run(w, SimTime.Hours(8));
             bool back = w.Ship.LiveRooms.All(r => r.PowerLinked);
-            Check($"{w.Ship.Name}: 배전실 간선이 끊기면 그 너머만 정전 → 다시 잇는다", dark.Count > 0 && back,
+            Check($"{w.Ship.Name}: 배전실 간선이 끊기면 그 너머만 정전 (보조 간선이 있으면 반대쪽으로) → 다시 잇는다", (dark.Count > 0 || w.Net.Rings.Count > 0) && back,
                 $"끊긴 뒤 간선 끊긴 방 {dark.Count}곳({string.Join("·", dark.Take(5))}) · 정전 {unpowered} · 여덟 시간 뒤 {(back ? "모두 이어짐" : "아직 끊김")} · {net.Stats}");
         }
         // 급수: 수경재배실로 가는 급수관이 끊기면 단수 → 재배대가 마른다
@@ -54,6 +54,28 @@ public static partial class Program
             Run(w, SimTime.Hours(10));
             Check("데이터선이 끊기면 그 너머 감지기 값이 멈춘다 → 다시 잇는다", blind.Count > 0 && stale && w.Ship.LiveRooms.All(r => r.DataLinked),
                 $"끊긴 방 {blind.Count}곳({string.Join("·", blind.Take(4).Select(r => r.Name))}) · 냉각 펌프 마지막 측정 {age * 60:0}분 전 · 열 시간 뒤 {(w.Ship.LiveRooms.All(r => r.DataLinked) ? "모두 이어짐" : "아직 끊김")}");
+        }
+        // 이중화: 중형 이상 배는 처음부터 보조 간선 — 배전실 문 앞이 다 끊겨도 생명유지실·함교는 전기가 들어온다
+        {
+            var w = DayOne(seed, "Hanbit");
+            var power = w.Ship.FurnitureOf(FurnitureType.PowerPanel).First().Room;
+            foreach (var l in w.Net.Links.Where(l => l.Kind == NetKind.Power && l.Door != null && (l.Door.RoomA == power || l.Door.RoomB == power))) w.Net.Hurt(l, 1f, "시험");
+            w.Net.Update(0f);
+            var life = w.Ship.RoomsOf(RoomType.LifeSupport).First();
+            int dark = w.Ship.LiveRooms.Count(r => !r.PowerLinked);
+            Check("중형 배 — 보조 간선이 있어 배전실 문 앞이 끊겨도 핵심 방은 산다", w.Net.Rings.Count > 0 && life.PowerLinked,
+                $"보조 간선 {w.Net.Rings.Count}줄 · 생명유지실 {(life.PowerLinked ? "전기 있음" : "정전")} · 정전된 방 {dark}곳");
+        }
+        // 작은 배는 겪고 나서 깐다: 간선 정전 → 회의 → 보조 간선 공사
+        {
+            var w = DayOne(seed, "Mirinae");
+            var power = w.Ship.FurnitureOf(FurnitureType.PowerPanel).First().Room;
+            foreach (var l in w.Net.Links.Where(l => l.Kind == NetKind.Power && l.Door != null && (l.Door.RoomA == power || l.Door.RoomB == power))) w.Net.Hurt(l, 1f, "시험");
+            w.Net.Update(0f);
+            int before = w.Net.Rings.Count;
+            Run(w, SimTime.TicksPerDay * 6);
+            Check("작은 배 — 간선 정전을 겪으면 승무원이 보조 간선을 깐다", before == 0 && w.Net.Rings.Count > 0,
+                $"보조 간선 {before} → {w.Net.Rings.Count} · 간선 정전 {w.Net.Stats.Blackouts} · " + string.Join(" / ", w.History.Events.Where(e => e.Text.Contains("보조 간선")).Select(e => e.Text).Take(2)));
         }
         // 결정론
         {

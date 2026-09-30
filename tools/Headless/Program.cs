@@ -130,6 +130,7 @@ public static partial class Program
         if (args.Contains("--chaintest")) return RunCauseTest(seed); // v12.2
         if (args.Contains("--moisturetest")) return RunMoistureTest(seed); // v12.3
         if (args.Contains("--moisturedebug")) return RunMoistureDebug(seed);
+        if (args.Contains("--netdebug")) return RunNetDebug(seed);
         if (args.FirstOrDefault(a => a.StartsWith("--reopentrace=")) is string rt) return RunReopenTrace(seed, rt.Split('=')[1], Math.Max(1, days));
         if (args.Contains("--crisistrace")) return RunCrisisTrace(seed, args.FirstOrDefault(a => a.StartsWith("--ship="))?[7..] ?? "Mirinae", Math.Max(1, days));
         if (args.Contains("--gate=crisis")) return RunCrisisGate(Math.Max(1, days), seed, args.FirstOrDefault(a => a.StartsWith("--ship="))?[7..] ?? "Mirinae");

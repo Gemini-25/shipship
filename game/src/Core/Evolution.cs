@@ -25,6 +25,7 @@ public enum UpgradeKind
     Relocate,      // v10.12: 여러 번 뚫리거나 버렸던 외벽 방의 설비를 안쪽 방으로 옮긴다
     AuxWorkshop,   // v11.1: 작업대가 한 방에만 있는 배: 안쪽 방에 보조 작업대 (정비실을 잃어도 만들 수 있다)
     BackupHelm,    // v11.1: 함교가 뚫렸거나 자동화가 꺼졌던 배: 엔진실에 예비 조타석 (함교를 잃어도 배를 몬다)
+    RingMain,      // v12.3: 간선이 끊겨 정전을 겪은 배: 배전실에서 핵심 방으로 선체 속을 도는 보조 간선
 }
 
 /// <summary>개조 계획 하나: 무엇을, 왜(겪은 사고), 무엇으로.</summary>
@@ -64,6 +65,7 @@ public static class Evolution
         UpgradeKind.ReinforceHull => "외벽 보강",
         UpgradeKind.AddBattery => "배터리 증설",
         UpgradeKind.Feeder => "예비 배선",
+        UpgradeKind.RingMain => "보조 간선",
         UpgradeKind.Mk3 => "Mk.3 개량",
         UpgradeKind.SettleDorm => "침실 정비",
         UpgradeKind.Suppression => "자동 소화 장치",
@@ -110,6 +112,7 @@ public static class Evolution
         UpgradeKind.ReinforceHull => 3f,
         UpgradeKind.AddBattery => 4f,
         UpgradeKind.Feeder => 2f,
+        UpgradeKind.RingMain => 4f,
         UpgradeKind.Mk3 => 5f,
         UpgradeKind.Suppression => 3f,
         UpgradeKind.BraceRoom => 3f,
@@ -147,6 +150,7 @@ public static class Evolution
         UpgradeKind.ReinforceHull => new[] { (ItemKind.Plate, 4), (ItemKind.Structure, 2) },
         UpgradeKind.AddBattery => new[] { (ItemKind.PowerController, 1), (ItemKind.Electronics, 2), (ItemKind.Plate, 2) },
         UpgradeKind.Feeder => new[] { (ItemKind.Cable, 3), (ItemKind.Fuse, 1) },
+        UpgradeKind.RingMain => new[] { (ItemKind.Cable, 4), (ItemKind.Plate, 1) },
         UpgradeKind.Mk3 => new[] { (Faults.KeyPart(f!.Type), 1), (ItemKind.Electronics, 2), (ItemKind.Plate, 1) },
         UpgradeKind.Suppression => new[] { (ItemKind.Pump, 1), (ItemKind.Cable, 2), (ItemKind.Plate, 2) },
         UpgradeKind.BraceRoom => new[] { (ItemKind.Structure, 3), (ItemKind.Plate, 2) },
@@ -176,6 +180,7 @@ public static class Evolution
         UpgradeKind.ReinforceHull => $"{p.Target.Room?.Name ?? "?"} 외벽",
         UpgradeKind.AddBattery => "배터리",
         UpgradeKind.Feeder => "예비 배선",
+        UpgradeKind.RingMain => "보조 간선",
         UpgradeKind.Mk3 => p.Target.Label,
         UpgradeKind.Suppression => $"{p.Target.Room?.Name ?? "?"} 소화 장치",
         UpgradeKind.BraceRoom => $"{p.Target.Room?.Name ?? "?"} 연결부",
@@ -211,7 +216,7 @@ public static class Evolution
 
     public static float Interest(CrewMember c, UpgradeKind k) => (k, c.Role) switch
     {
-        (UpgradeKind.AddBattery or UpgradeKind.Feeder, CrewRole.Electrician) => 0.3f,
+        (UpgradeKind.AddBattery or UpgradeKind.Feeder or UpgradeKind.RingMain, CrewRole.Electrician) => 0.3f,
         (UpgradeKind.Mk3 or UpgradeKind.Feeder or UpgradeKind.AddBattery, CrewRole.Engineer) => 0.2f,
         (UpgradeKind.ReinforceHull or UpgradeKind.Mk3, CrewRole.Technician) => 0.25f,
         (UpgradeKind.SettleDorm, CrewRole.Medic or CrewRole.Botanist) => 0.2f,
@@ -299,6 +304,12 @@ public static class Evolution
                     $"배전반 회로가 {ShipHistory.Times(h.CircuitFaults)} 끊겼다 → {PowerGrid.CircuitName(to)} 회로에 예비 배선 (끊기면 저절로 넘어간다)",
                     Cost(UpgradeKind.Feeder, null), 0.35f, to);
         }
+
+        // ── v12.3 보조 간선: 간선이 끊겨 방 여럿이 한꺼번에 정전된 배 ──
+        if (panel != null && w.Net.Stats.Blackouts >= 1 && w.Net.RingTargets(NetKind.Power).FirstOrDefault() is Room ringTo)
+            yield return new UpgradePlan(UpgradeKind.RingMain, WorkTarget.Of(panel), 0.5f + 0.25f * w.Net.Stats.Blackouts, Skill.Electrical,
+                $"간선이 끊겨 방 여럿이 {ShipHistory.Times(w.Net.Stats.Blackouts)} 한꺼번에 정전됐다 → 배전실에서 {ringTo.Name}(으)로 선체 속을 도는 보조 간선 (한쪽이 끊겨도 반대쪽으로)",
+                Cost(UpgradeKind.RingMain, null), 0.4f);
 
         // ── Mk.3 개량: 자주 고장 난 설비 ──
         foreach (var m in ship.Machines)
@@ -700,6 +711,14 @@ public static class Evolution
                 MarkLog.Add(panel.Machine!.Marks, w.Tick, $"{cm.Name}: {PowerGrid.CircuitName(from)}→{PowerGrid.CircuitName(to)} 예비 배선");
                 h.FeedersAdded++;
                 text = $"{Ko.IGa(cm.Name)} {PowerGrid.CircuitName(to)} 회로에 예비 배선을 깔았다 ({PowerGrid.CircuitName(from)}→{PowerGrid.CircuitName(to)}) — 회로가 {ShipHistory.Times(h.CircuitFaults)} 끊긴 뒤로";
+                break;
+            }
+            case UpgradeKind.RingMain:
+            {
+                if (w.Net.SourceRoom(NetKind.Power) is not Room src || w.Net.RingTargets(NetKind.Power).FirstOrDefault() is not Room to) return false;
+                w.Net.AddRing(NetKind.Power, src, to);
+                MarkLog.Add(o.Target.Furniture!.Machine!.Marks, w.Tick, $"{cm.Name}: {to.Name}(으)로 보조 간선");
+                text = $"{Ko.IGa(cm.Name)} 배전실에서 {to.Name}(으)로 선체 속을 도는 보조 간선을 깔았다 — 간선이 끊겨 {ShipHistory.Times(w.Net.Stats.Blackouts)} 정전된 뒤로";
                 break;
             }
             case UpgradeKind.Mk3:

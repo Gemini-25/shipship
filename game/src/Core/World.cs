@@ -589,6 +589,7 @@ public sealed class World
         var shipObj = ShipBuilder.FromAscii(template.Name, template.Ascii);
         var world = new World(shipObj, seed, startTick: SimTime.Hours(7));
         world.ShipKey = template.Key;
+        world.Net.SeedRings(template.Crew); // v12.3 중형 이상 배는 처음부터 보조 간선
         var rng = world.Rng;
         int crewSize = crew <= 0 ? template.Crew : Math.Clamp(crew, 1, MaxCrew);
         world.StartCrew = crewSize;

@@ -35,7 +35,9 @@ public sealed class NetStats
     public int Cuts;
     public int Repairs;
     public int TempRepairs;
-    public override string ToString() => $"끊김 {Cuts} · 다시 이음 {Repairs}(임시 {TempRepairs})";
+    public int Rings;
+    public int Blackouts; // 간선이 끊겨 방 셋 넘게 정전된 일 (보조 간선을 깔 까닭)
+    public override string ToString() => $"끊김 {Cuts} · 다시 이음 {Repairs}(임시 {TempRepairs}) · 보조 간선 {Rings} · 간선 정전 {Blackouts}";
 }
 
 /// <summary>
@@ -50,8 +52,12 @@ public sealed class UtilityNet
     private string _signature = "";
     private readonly List<(int node, Room room)> _hubs = new();
     private int _nodes;
+    private readonly Dictionary<int, bool> _powerFed = new();
     public List<NetLink> Links { get; } = new();
     public NetStats Stats { get; } = new();
+
+    /// <summary>v12.3 보조 간선(링): 문을 거치지 않고 선체 속을 따라 두 방을 직접 잇는다 (종류, 방, 방).</summary>
+    public List<(NetKind kind, int from, int to)> Rings { get; } = new();
     public int Version { get; private set; }
 
     public UtilityNet(World w) => _w = w;
@@ -66,7 +72,8 @@ public sealed class UtilityNet
 
     private string Signature() =>
         string.Join(",", _w.Ship.Doors.Where(d => !d.Removed && !d.IsExternal && d.RoomA != null && d.RoomB != null).Select(d => $"{d.Id}:{d.RoomA!.Id}-{d.RoomB!.Id}"))
-        + "|" + string.Join(",", _w.Ship.Rooms.Where(r => r.Detached || r.Merged).Select(r => r.Id));
+        + "|" + string.Join(",", _w.Ship.Rooms.Where(r => r.Detached || r.Merged).Select(r => r.Id))
+        + "|R" + string.Join(",", Rings.Select(x => $"{x.kind}{x.from}-{x.to}"));
 
     /// <summary>문·방이 바뀌었으면 망을 다시 짠다 (남아 있는 토막의 상태는 이어받는다).</summary>
     public void EnsureBuilt()
@@ -106,12 +113,68 @@ public sealed class UtilityNet
                 Add(k, $"{k}:{d.Id}:B", sideB, hubOf[b.Id].node, b, d, Route(b, inB.Value, hubOf[b.Id].cell));
             }
         }
+        // v12.3 보조 간선: 선체 속을 따라 곧게 (배전실 문 앞이 끊겨도 반대쪽으로 들어온다)
+        foreach (var (k, from, to) in Rings)
+        {
+            if (!hubOf.TryGetValue(from, out var ha) || !hubOf.TryGetValue(to, out var hb)) continue;
+            var room = ship.Rooms.First(r => r.Id == from);
+            Add(k, $"{k}:ring:{from}-{to}", ha.node, hb.node, room, null, Line(ha.cell, hb.cell));
+        }
         foreach (var l in Links)
-            if (old.TryGetValue(l.Key, out var o)) { l.Integrity = o.Integrity; l.Temp = o.Temp; l.Cause = o.Cause; }
+            if (old.TryGetValue(l.Key, out var o)) { l.Integrity = o.Integrity; l.Temp = o.Temp; l.Cause = o.Cause; l.Node = o.Node; }
         Version++;
 
-        void Add(NetKind k, string key, int na, int nb, Room room, Door door, List<Cell> cells) =>
+        void Add(NetKind k, string key, int na, int nb, Room room, Door? door, List<Cell> cells) =>
             Links.Add(new NetLink { Id = id++, Kind = k, Key = key, NodeA = na, NodeB = nb, Room = room, Door = door, Cells = cells });
+    }
+
+    /// <summary>두 칸 사이 곧은 줄 (보조 간선이 지나는 길 — 벽 속이어도 된다).</summary>
+    private static List<Cell> Line(Cell a, Cell b)
+    {
+        var cells = new List<Cell>();
+        int n = Math.Max(Math.Abs(b.X - a.X), Math.Abs(b.Y - a.Y));
+        for (int i = 0; i <= n; i++)
+        {
+            float t = n == 0 ? 0f : i / (float)n;
+            var c = new Cell((int)MathF.Round(a.X + (b.X - a.X) * t), (int)MathF.Round(a.Y + (b.Y - a.Y) * t));
+            if (cells.Count == 0 || cells[^1] != c) cells.Add(c);
+        }
+        return cells;
+    }
+
+    /// <summary>보조 간선을 깐다 (다음 시스템 틱부터 망이 다시 짜인다).</summary>
+    public bool AddRing(NetKind k, Room from, Room to)
+    {
+        if (from == to || Rings.Any(r => r.kind == k && (r.from == from.Id && r.to == to.Id || r.from == to.Id && r.to == from.Id))) return false;
+        Rings.Add((k, from.Id, to.Id));
+        Stats.Rings++;
+        EnsureBuilt();
+        Update(0f);
+        return true;
+    }
+
+    /// <summary>보조 간선을 받을 핵심 방 (공급원 방에서 먼 순): 생명유지실 → 함교 → 의무실 → 냉각실.</summary>
+    public List<Room> RingTargets(NetKind k)
+    {
+        var src = Sources(k).FirstOrDefault();
+        if (src == null) return new();
+        var have = Rings.Where(r => r.kind == k).SelectMany(r => new[] { r.from, r.to }).ToHashSet();
+        return _w.Ship.LiveRooms.Where(r => r != src && !r.Detached && !have.Contains(r.Id)
+                && r.Type is RoomType.LifeSupport or RoomType.Bridge or RoomType.Medbay or RoomType.Cooling)
+            .OrderBy(r => r.Type switch { RoomType.LifeSupport => 0, RoomType.Bridge => 1, RoomType.Cooling => 2, _ => 3 }).ThenBy(r => r.Id).ToList();
+    }
+
+    public Room? SourceRoom(NetKind k) => Sources(k).FirstOrDefault();
+
+    /// <summary>중형 이상 배는 처음부터 보조 간선이 있다 (전력: 생명유지실·함교·냉각실 · 데이터: 생명유지실).</summary>
+    public void SeedRings(int designCrew)
+    {
+        if (designCrew < 12) return;
+        EnsureBuilt();
+        if (SourceRoom(NetKind.Power) is Room p) foreach (var r in RingTargets(NetKind.Power).Take(designCrew >= 20 ? 3 : 2)) Rings.Add((NetKind.Power, p.Id, r.Id));
+        if (SourceRoom(NetKind.Data) is Room d) foreach (var r in RingTargets(NetKind.Data).Take(1)) Rings.Add((NetKind.Data, d.Id, r.Id));
+        _signature = "";
+        EnsureBuilt();
     }
 
     private Cell? Inside(Door d, Room r)
@@ -153,6 +216,29 @@ public sealed class UtilityNet
     // ─────────────────────────────── 이어진 곳 ───────────────────────────────
 
     /// <summary>시스템 틱: 망을 다시 짜고, 공급원에서 닿는 방을 표시한다.</summary>
+    /// <summary>공급원에서 닿는 분기점들 (assumeFixed 토막은 이어진 셈 치고) — 상태를 바꾸지 않는다.</summary>
+    private HashSet<int> Reach(NetKind k, List<Room> sources, NetLink? assumeFixed = null)
+    {
+        var reach = new HashSet<int>();
+        var q = new Queue<int>();
+        foreach (var r in sources)
+        {
+            var hub = _hubs.FirstOrDefault(h => h.room == r);
+            if (hub.room == null) continue;
+            if (reach.Add(hub.node)) q.Enqueue(hub.node);
+        }
+        var live = Links.Where(l => l.Kind == k && (!l.Cut || l == assumeFixed) && !l.Room.Detached).ToList();
+        var adj = live.ToLookup(l => l.NodeA);
+        var adjB = live.ToLookup(l => l.NodeB);
+        while (q.Count > 0)
+        {
+            int n = q.Dequeue();
+            foreach (var l in adj[n]) if (reach.Add(l.NodeB)) q.Enqueue(l.NodeB);
+            foreach (var l in adjB[n]) if (reach.Add(l.NodeA)) q.Enqueue(l.NodeA);
+        }
+        return reach;
+    }
+
     public void Update(float dt)
     {
         var w = _w;
@@ -161,25 +247,17 @@ public sealed class UtilityNet
         foreach (NetKind k in Enum.GetValues<NetKind>())
         {
             var sources = Sources(k);
-            var reach = new HashSet<int>();
-            var q = new Queue<int>();
-            foreach (var r in sources)
-            {
-                var hub = _hubs.FirstOrDefault(h => h.room == r);
-                if (hub.room == null) continue;
-                if (reach.Add(hub.node)) q.Enqueue(hub.node);
-            }
-            var adj = Links.Where(l => l.Kind == k && !l.Cut && !l.Room.Detached).ToLookup(l => l.NodeA);
-            var adjB = Links.Where(l => l.Kind == k && !l.Cut && !l.Room.Detached).ToLookup(l => l.NodeB);
-            while (q.Count > 0)
-            {
-                int n = q.Dequeue();
-                foreach (var l in adj[n]) if (reach.Add(l.NodeB)) q.Enqueue(l.NodeB);
-                foreach (var l in adjB[n]) if (reach.Add(l.NodeA)) q.Enqueue(l.NodeA);
-            }
+            var reach = Reach(k, sources);
+            int newlyDark = 0;
             foreach (var (node, room) in _hubs)
             {
                 bool fed = reach.Contains(node) || sources.Count == 0; // 공급원이 없는 배(시험용)는 예전처럼
+                if (k == NetKind.Power)
+                {
+                    bool was = !_powerFed.TryGetValue(room.Id, out var pf) || pf;
+                    if (was && !fed) newlyDark++;
+                    _powerFed[room.Id] = fed;
+                }
                 switch (k)
                 {
                     case NetKind.Power: room.PowerLinked = fed; break;
@@ -188,6 +266,7 @@ public sealed class UtilityNet
                     case NetKind.Data: room.DataLinked = fed; break;
                 }
             }
+            if (newlyDark >= 3) Stats.Blackouts++;
         }
     }
 
@@ -248,14 +327,13 @@ public sealed class UtilityNet
     /// <summary>끊긴 토막이 고쳐지면 다시 닿는 방들 (이 토막만 이으면).</summary>
     public List<Room> Downstream(NetLink link)
     {
-        var before = new HashSet<Room>(_hubs.Where(h => Fed(link.Kind, h.room)).Select(h => h.room));
-        float keep = link.Integrity;
-        link.Integrity = 1f;
-        Update(0f);
-        var after = _hubs.Where(h => Fed(link.Kind, h.room)).Select(h => h.room).ToList();
-        link.Integrity = keep;
-        Update(0f);
-        return after.Where(r => !before.Contains(r)).ToList();
+        EnsureBuilt();
+        if (!link.Cut) return new List<Room>();
+        var sources = Sources(link.Kind);
+        if (sources.Count == 0) return new List<Room>();
+        var now = Reach(link.Kind, sources);
+        var fixedReach = Reach(link.Kind, sources, link);
+        return _hubs.Where(h => fixedReach.Contains(h.node) && !now.Contains(h.node)).Select(h => h.room).ToList();
     }
 
     public static bool Fed(NetKind k, Room r) => k switch { NetKind.Power => r.PowerLinked, NetKind.Water => r.WaterLinked, NetKind.Data => r.DataLinked, _ => r.DuctLinked };
