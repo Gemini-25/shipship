@@ -155,6 +155,7 @@ public static partial class Council
             {
                 var r = o.Target.Room!;
                 p = 0.5f + RoomValue(w, r) - 0.35f * StructureSystem.WreckScore(w, r) + (Essential(w, r) != null ? 0.3f : 0f)
+                    + (w.Crew.Any(c => c.Aboard?.Room == r && !c.Dead) ? 0.8f : 0f) // 사람이 타고 있다
                     + (r.Fragment is Fragment f && f.Distance > StructureSystem.LostRange * 0.6f ? 0.1f : 0f);
                 break;
             }
@@ -438,6 +439,8 @@ public static partial class Council
                 if (fear > 0.05f) terms.Add((-0.4f * fear, $"다시 들어가기 싫다 ({c.Memory.FearCause[r.Id]})"));
                 if (r.Jettisons > 0 && o.Kind == WorkKind.Retrieve) terms.Add((-0.15f, "우리가 일부러 떼어 낸 방이다"));
                 if (Essential(w, r) is string need) terms.Add((0.45f + 0.2f * t.Calm, $"{need} 없이는 버틸 수 없다"));
+                if (w.Crew.Where(x => x.Aboard?.Room == r && !x.Dead).ToList() is { Count: > 0 } onboard)
+                    terms.Add((1.0f + (onboard.Any(x => c.AffinityTo(x) > 0.3f) ? 0.3f : 0f), $"{string.Join("·", onboard.Select(x => x.Name))}이(가) 타고 있다"));
                 float wreck = StructureSystem.WreckScore(w, r);
                 if (wreck > 0.4f) terms.Add((-0.3f * wreck * (1.2f - t.Bravery), "너무 망가졌다 — 부품만 뜯자"));
                 if (c.Memory.Trauma > 0.08f) terms.Add((-0.3f * c.Memory.Trauma, "또 떨어져 나갈 것이다"));

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using Godot;
 using ShipSim.Core;
@@ -89,11 +90,20 @@ public partial class ShipView
         float width = focus ? 5f : 3.4f;
         float alpha = focus ? 0.97f : 0.82f;
         float heat = Mathf.Clamp(_world.Power.ReactorOutput / Mathf.Max(1f, _world.Power.ReactorRated), 0f, 1f);
-        foreach (var s in net.Segments)
+        foreach (var s0 in net.Segments)
         {
-            if (s.Path.Count < 2) continue;
+            // v12.2 떨어져 나간 방을 지나던 구간은 없다 — 남은 토막만 그리고, 찢긴 끝을 표시한다
+            foreach (var run in AttachedRuns(s0.Path))
+            {
+                PaintPipeRun(s0, run, run.Count < s0.Path.Count);
+            }
+        }
+
+        void PaintPipeRun(PipeSegment s, List<Cell> path, bool torn)
+        {
+            if (path.Count < 2) return;
             var off = PipeOffset(s);
-            var pts = s.Path.Select(c => CellRect(c).GetCenter() + off).ToArray();
+            var pts = path.Select(c => CellRect(c).GetCenter() + off).ToArray();
             var col = PipeColor(s);
             bool dead = (s.Closed && s.Bypass <= 0f) || s.Severed;
             var body = dead ? col.Darkened(0.55f) : col;
@@ -110,7 +120,7 @@ public partial class ShipView
             {
                 var dir = (pts[i + 1] - pts[i - 1]).Normalized();
                 var perp = new Vector2(-dir.Y, dir.X);
-                if (ship.Grid.Kind(s.Path[i]) == TileKind.Wall)
+                if (ship.Grid.Kind(path[i]) == TileKind.Wall)
                 {
                     var q = pts[i];
                     ci.DrawRect(new Rect2(q - new Vector2(width + 3f, width + 3f), new Vector2(2 * width + 6f, 2 * width + 6f)), new Color("#0a0d12").WithAlpha(alpha));
@@ -191,6 +201,19 @@ public partial class ShipView
                         ci.DrawCircle(q + new Vector2(0f, T * 0.6f * ph * ph), 1.6f, WaterPipe.WithAlpha(0.8f * (1f - ph)), true, -1f, true);
                 }
             }
+            if (torn && path.Count >= 1)
+            {
+                // 찢긴 끝: 너덜한 관 끝과 튀는 물방울
+                var off2 = PipeOffset(s);
+                foreach (var endCell in new[] { path[0], path[^1] })
+                {
+                    if (!Cell.Dirs4.Any(d => ship.RoomAt(endCell + d)?.Detached == true || ship.Grid.Kind(endCell + d) == TileKind.Void)) continue;
+                    var q = CellRect(endCell).GetCenter() + off2;
+                    ci.DrawCircle(q, width * 0.9f, new Color("#1a1f28"), true, -1f, true);
+                    for (int k = 0; k < 4; k++)
+                        ci.DrawLine(q, q + Vector2.FromAngle(k * 1.7f + 0.4f) * (width + 3f), Palette.Danger.WithAlpha(0.7f), 1.2f, true);
+                }
+            }
         }
         // 밸브: 손잡이 바퀴(바퀴살 넷) — 열림 = 초록 표시등, 잠김 = 바퀴가 45° 돌고 붉은 표시등
         foreach (var s in net.Segments)
@@ -244,6 +267,25 @@ public partial class ShipView
             else if (room.Type == RoomType.Hydroponics && !net.WaterTo(room))
                 FillRoom(ci, room, Palette.Warning.WithAlpha(0.14f));
         }
+    }
+
+    /// <summary>떨어져 나간 방의 칸을 뺀, 이어진 토막들.</summary>
+    private List<List<Cell>> AttachedRuns(List<Cell> path)
+    {
+        var ship = _world.Ship;
+        var runs = new List<List<Cell>>();
+        var cur = new List<Cell>();
+        foreach (var c in path)
+        {
+            if (ship.RoomAt(c)?.Detached == true || ship.Grid.Kind(c) == TileKind.Void)
+            {
+                if (cur.Count > 0) { runs.Add(cur); cur = new List<Cell>(); }
+                continue;
+            }
+            cur.Add(c);
+        }
+        if (cur.Count > 0) runs.Add(cur);
+        return runs;
     }
 
     /// <summary>배관 파손 도구 미리보기: 가장 가까운 관을 밝힌다.</summary>

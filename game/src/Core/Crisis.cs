@@ -84,7 +84,17 @@ public static class Crisis
         if (s.Air) s.Reasons.Add("공기 부족");
         if (s.Breaches > 0) s.Reasons.Add($"새는 방 {s.Breaches}");
 
-        int serious = (s.Down > 0 ? 1 : 0) + (s.Fires > 0 ? 1 : 0) + (reactorDown ? 1 : 0) + (s.Air ? 1 : 0) + (s.Breaches > 0 ? 1 : 0) + (s.Cooling ? 1 : 0);
+        // 큰 사고의 흔적: 최근 30분 안의 치명 경보·폭발·충돌, 큰 구멍(사람 없는 방이어도), 사람 있는 방의 유독 가스·일산화탄소, 문을 막은 잔해
+        bool recentCritical = w.Alerts.Any(a => a.Level == AlertLevel.Critical && w.Tick - a.Tick < SimTime.Minutes(30));
+        bool recentBlast = w.Volatile.Blasts.Any(b => w.Tick - b.Tick < SimTime.Hours(1)) || w.Impacts.Any(i => w.Tick - i.Tick < SimTime.Hours(1) && i.Size >= 0.6f);
+        bool bigHole = w.Ship.Walls.Any(kv => kv.Value.IsHull && kv.Value.Breach >= 0.25f && !kv.Value.Patched && Hull.InsideRoom(w.Ship, kv.Key) is Room hr && !hr.Abandoned && !hr.Detached);
+        bool gas = w.Crew.Any(c => !c.Dead && c.Room != null && c.Suit == null && (c.Room.Air.Toxin > 0.15f || c.Room.Air.CO > 0.2f));
+        bool blocked = w.Ship.Doors.Any(d => d.Blocked);
+        if (recentBlast) s.Reasons.Add("폭발·충돌");
+        if (bigHole && s.Breaches == 0) s.Reasons.Add("큰 구멍");
+        if (gas) s.Reasons.Add("유독 가스·일산화탄소");
+        int serious = (s.Down > 0 ? 1 : 0) + (s.Fires > 0 ? 1 : 0) + (reactorDown ? 1 : 0) + (s.Air ? 1 : 0) + (s.Breaches > 0 ? 1 : 0) + (s.Cooling ? 1 : 0)
+                      + (recentBlast ? 1 : 0) + (bigHole ? 1 : 0) + (gas ? 1 : 0) + (blocked ? 1 : 0) + (recentCritical && serious0(s) == 0 ? 1 : 0);
         bool dying = reactorDown && p.BatteryPercent < 0.15f && !p.AuxRunning || s.Air && o2Low < 15f || s.Fires >= 6;
         s.Level = dying || serious >= 3 ? CrisisLevel.Survival
             : serious >= 1 ? CrisisLevel.Emergency
@@ -92,6 +102,8 @@ public static class Crisis
             : CrisisLevel.Calm;
         return s;
     }
+
+    private static int serious0(Snapshot s) => s.Reasons.Count;
 
     /// <summary>전기를 만들고 나르는 설비 (원자로가 돌려면 필요한 것까지).</summary>
     public static bool PowerChain(FurnitureType t) => t is FurnitureType.ReactorCore or FurnitureType.CoolantPump or FurnitureType.PowerPanel or FurnitureType.Battery
@@ -138,6 +150,13 @@ public static class Crisis
             // 구조: 떨어져 나가기 직전이면
             case WorkKind.RepairJoint or WorkKind.Clamp or WorkKind.InstallTruss or WorkKind.RebuildFrame: return o.Urgency >= 0.9f ? 0.8f : 0.3f;
             case WorkKind.InspectHull: return 0.1f;
+            // v12.2 터지기 전에 식힌다 · 문을 막은 잔해 · 역화 · 산소관
+            case WorkKind.CoolDown: return m != null && (m.Heat > 0.9f || m.Vapor > 0.5f) ? 1.1f : 0.85f;
+            case WorkKind.ClearRubble: return o.Urgency >= 0.8f ? 0.85f : o.Urgency >= 0.6f ? 0.6f : 0.3f;
+            case WorkKind.BleedRoom: return 0.75f;
+            case WorkKind.SealO2Line: return 0.9f;
+            case WorkKind.CleanUp: return 0.1f;
+            case WorkKind.WakeCrew: return 0.95f;
             // 설비 수리: 전기·공기 사슬이면 앞으로, 전기가 없는 방의 설비는 전기가 돌아온 뒤에
             case WorkKind.Repair or WorkKind.InstallSubstitute or WorkKind.Cannibalize:
                 if (m == null) return 0.5f;
@@ -202,5 +221,52 @@ public static class Crisis
             default:
                 return 1f;
         }
+    }
+}
+
+public sealed partial class WorkBoard
+{
+    /// <summary>위기 중에 잠든 사람: 곯아떨어져 방송으로 못 깬 사람, 생존 위기인데 아직 자는 사람을 동료가 흔들어 깨운다.</summary>
+    private void ScanWake(Poster post)
+    {
+        var w = _world;
+        var level = Crisis.Level(w);
+        if (Crisis.Disabled || level < CrisisLevel.Emergency) return;
+        foreach (var c in w.Crew)
+        {
+            if (c.Dead || c.Down || c.Pose != Pose.Sleeping) continue;
+            if (!c.DeepAsleep && level < CrisisLevel.Survival) continue;
+            if (c.Needs.Fatigue > 0.97f && level < CrisisLevel.Survival) continue; // 정말 쓰러지기 직전이면 둔다
+            post(WorkKind.WakeCrew, WorkTarget.OfCrew(c), level == CrisisLevel.Survival ? 1.0f : 0.85f, Skill.Medicine,
+                $"{Crisis.Now(w).Top} — {c.Name}이(가) 아직 자고 있다");
+        }
+    }
+}
+
+public static partial class WorkPlanners
+{
+    /// <summary>잠든 동료를 흔들어 깨운다.</summary>
+    private static Job? WakeCrew(Activity a, WorkOrder o, CrewMember c, World w, DistanceField dist, Cell at, out string? blocked)
+    {
+        blocked = null;
+        var sleeper = o.Target.Crew!;
+        var near = Cell.Dirs8.Select(d => sleeper.Cell + d).Where(x => w.Ship.IsWalkable(x) && dist.Reachable(x)).OrderBy(dist.Get).Cast<Cell?>().FirstOrDefault();
+        if (near is not Cell spot) { blocked = "곁에 갈 수 없다"; return null; }
+        var toils = new List<Toil> { new GotoToil(spot), new WaitToil(SimTime.Minutes(1), Pose.Standing, sleeper.Position) };
+        toils.Add(new DoToil((cm, world) =>
+        {
+            world.Board.Close(o);
+            if (sleeper.Pose != Pose.Sleeping) return true;
+            sleeper.DeepAsleep = false;
+            sleeper.EndJob(world, ToilStatus.Interrupted);
+            sleeper.Pose = Pose.Standing;
+            sleeper.Interrupt(world);
+            sleeper.Needs.Stress = MathF.Min(1f, sleeper.Needs.Stress + 0.08f);
+            cm.Say(world, $"{sleeper.Name}, 일어나! {Crisis.Now(world).Top}");
+            sleeper.Say(world, "뭐, 뭐야?!");
+            world.Log.Add(world.Tick, LogKind.Warning, $"{Ko.EulReul(sleeper.Name)} 흔들어 깨웠다 ({Crisis.Now(world).Top})", cm.Id);
+            return true;
+        }));
+        return Wrap(a, o, c, w, "깨우기", toils, $"{Ko.EulReul(sleeper.Name)} 깨우러 간다");
     }
 }

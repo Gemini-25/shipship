@@ -82,6 +82,9 @@ public sealed class RoomAir
     /// <summary>v11.2 유독 가스(냉매) 0~1.5. 0.25를 넘으면 우주복 없이는 못 버틴다.</summary>
     public float Toxin { get; set; }
 
+    /// <summary>v12.2 일산화탄소 0~1 (1이면 치명적) — 보이지도 냄새도 없다.</summary>
+    public float CO { get; set; }
+
     /// <summary>선체 파공으로 우주로 새는 속도 (칸/시간). 기압 × 이 값 / 부피 만큼 빠진다. 0이면 밀폐.</summary>
     public float Leak { get; set; }
 
@@ -90,6 +93,19 @@ public sealed class RoomAir
 
 public sealed class Room
 {
+    /// <summary>v12.2 역화 위험 0~1: 산소가 모자라 꺼진 뜨거운 방에 고인 타다 만 가스.</summary>
+    public float Backdraft { get; set; }
+    public bool BackdraftKnown { get; set; }
+
+    /// <summary>v12.2 일산화탄소 경보가 울렸다 (사람이 안다).</summary>
+    public bool CoKnown { get; set; }
+
+    /// <summary>v12.2 짙은 산소 경보가 울렸다.</summary>
+    public bool RichKnown { get; set; }
+
+    /// <summary>v12.2 산소관 누출 (시간당 kPa쯤, 0이면 없음).</summary>
+    public float O2Leak { get; set; }
+
     public int Id { get; init; }
     public RoomType Type { get; init; }
     public string Name => NameOverride ?? RoomTypes.Name(Type);
@@ -496,9 +512,12 @@ public sealed class Door
         _override = true;
     }
 
+    /// <summary>v12.2 잔해가 끼여 닫히지 않는다 (치우면 풀린다).</summary>
+    public bool Blocked { get; set; }
+
     internal void Update()
     {
-        if (JammedOpen && !Removed)
+        if ((JammedOpen || Blocked) && !Removed)
         {
             Openness = MathF.Min(1f, Openness + 0.05f);
             _requested = false;

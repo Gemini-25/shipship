@@ -126,6 +126,9 @@ public sealed class World
     /// <summary>v12.0 당직 일지 · 진단 · 감지기 교정.</summary>
     public WatchLog Watch { get; }
 
+    /// <summary>v12.2 설비 열·압력·폭발·잔해·역화·일산화탄소·짙은 산소.</summary>
+    public VolatileSystem Volatile { get; }
+
     /// <summary>시험용: 전조를 아무도 못 보는 배 (감지기·당직·순찰이 전조를 보지 않는다).</summary>
     public bool PreventionBlind { get; set; }
 
@@ -186,6 +189,7 @@ public sealed class World
         Hazards = new HazardSystem(this, seed);
         Comms = new CommsSystem(this);
         Watch = new WatchLog(this); // v12.0
+        Volatile = new VolatileSystem(this); // v12.2
         Piping = new PipeNetwork(this);
         Automation = new AutomationSystem(this);
         Fixtures = new FixturesSystem(this);
@@ -239,6 +243,8 @@ public sealed class World
             Machines.Update(dt);
             Prevention.Update(this, dt);
             Watch.Update(dt); // v12.0 교대·감지기
+            Volatile.Update(dt); // v12.2 열·폭발·잔해·역화·일산화탄소·짙은 산소
+            Volatile.Resume();
             Collection.Update(dt);
             Structure.Update(dt);
             Drones.SystemUpdate(dt);
@@ -267,6 +273,19 @@ public sealed class World
 
         foreach (var c in Crew)
         {
+            // 떨어져 나간 조각에 탄 사람: 조각과 함께 움직인다 (우주복 산소로 버틴다 — 되찾아 오기를 기다린다)
+            if (c.Aboard is Fragment fr)
+            {
+                c.PreviousPosition = c.Position;
+                c.Position = StructureSystem.OnFragment(fr, c.AboardAt);
+                c.Room = null;
+                c.Outside = true;
+                if (c.Dead) continue;
+                NeedsSystem.Update(c, this);
+                CheckVitals(c);
+                if (c.CanAct) c.Pose = Pose.Standing;
+                continue;
+            }
             if (c.Dead) continue;
             NeedsSystem.Update(c, this);
             CheckVitals(c);
@@ -438,6 +457,8 @@ public sealed class World
                           (c.Room == room || room.Doors.Any(d => d.RoomA == c.Room || d.RoomB == c.Room));
             bool broadcast = shipWide && (c.IsAwake || level == AlertLevel.Critical);
             if (!nearby && !broadcast) continue;
+            // 곯아떨어진 사람(탈진)은 방송으로는 잘 깨지 않는다 — 누가 가서 흔들어 깨워야 한다
+            if (!c.IsAwake && !nearby && c.Needs.Fatigue > 0.85f && Rng.Chance(0.6f)) { c.DeepAsleep = true; continue; }
             c.Interrupt(this);
             // 위급 경보에 가슴이 철렁한다 (침착한 사람은 덜)
             if (level == AlertLevel.Critical && !c.Dead) c.Needs.Stress = MathF.Min(1f, c.Needs.Stress + 0.04f * (1f - c.Traits.Calm));
@@ -449,6 +470,9 @@ public sealed class World
     {
         if (c.Room == null) return;
         float danger = EvacuateActivity.DangerHere(c, this);
+        // 자다가도: 연기 냄새·숨 막힘·추위·열기에 깬다 (일산화탄소는 모른다 — 그래서 위험하다)
+        if (c.Pose == Pose.Sleeping && (c.Room.Air.Smoke > 0.15f || c.Room.Air.O2 < 16.5f || c.Room.Air.Temperature < 8f || c.Room.Air.Temperature > 40f || c.Room.Air.Toxin > 0.1f))
+            c.Jolt(this);
         if (!c.InHazard && danger > 0.25f)
         {
             c.InHazard = true;

@@ -106,11 +106,14 @@ public sealed class FireSystem
 
             air.O2 = MathF.Max(0f, air.O2 - 400f * intensity * dt / vol);
             air.CO2 += 300f * intensity * dt / vol;
+            // v12.2 산소가 모자란 불은 일산화탄소를 더 낸다
+            air.CO = MathF.Min(1f, air.CO + (o2 < 16f ? 25f : 8f) * intensity * dt / vol);
             air.Smoke = MathF.Min(1f, air.Smoke + 120f * intensity * dt / vol);
             air.Temperature = MathF.Min(95f, air.Temperature + 25f * intensity * dt * 30f / vol);
 
-            // 번짐 (같은 방 옆 칸, 열린 문 너머)
-            if (w.Rng.Chance(4f * intensity * dt))
+            // 번짐 (같은 방 옆 칸, 열린 문 너머) — v12.2 짙은 산소에서는 빨리 번진다
+            float rich = o2 > 21f ? MathF.Pow(o2 / 21f, 1.5f) : 1f;
+            if (w.Rng.Chance(4f * intensity * rich * dt))
             {
                 var d = w.Rng.Pick(Cell.Dirs4);
                 var n = cell + d;
@@ -126,6 +129,7 @@ public sealed class FireSystem
                 if (f?.Machine is Machine m)
                 {
                     m.Condition = MathF.Max(0.02f, m.Condition - 0.15f * intensity * dt);
+                    m.Fouled = MathF.Min(1f, m.Fouled + 0.1f * intensity * dt); // v12.2 그을음
                     if (w.Rng.Chance(0.25f * intensity * dt)) w.Machines.Break(m);
                     if (m.Crop is CropState crop && crop.Growth > 0.02f && w.Rng.Chance(0.6f * intensity * dt))
                     {

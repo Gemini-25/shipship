@@ -49,6 +49,10 @@ public enum WorkKind
     Train, Rehab,
     // v12.0 당직 일지·진단
     Calibrate, Handover,
+    // v12.2 설비 열·폭발·잔해·공기
+    CoolDown, ClearRubble, CleanUp, BleedRoom, SealO2Line,
+    // 승무원 AI: 위기에 잠든 동료 깨우기
+    WakeCrew,
 }
 
 public static class WorkKinds
@@ -147,6 +151,12 @@ public static class WorkKinds
         WorkKind.Rehab => "재활",
         WorkKind.Calibrate => "감지기 교정",
         WorkKind.Handover => "인수인계",
+        WorkKind.CoolDown => "과열 설비 식히기",
+        WorkKind.ClearRubble => "잔해 치우기",
+        WorkKind.CleanUp => "분말·그을음 청소",
+        WorkKind.BleedRoom => "역화 막기",
+        WorkKind.SealO2Line => "산소관 막기",
+        WorkKind.WakeCrew => "동료 깨우기",
         _ => k.ToString(),
     };
 
@@ -334,6 +344,12 @@ public sealed class WorkOrder
         WorkKind.Rehab => $"{Target.Crew?.Name ?? "?"} 재활 운동",
         WorkKind.Calibrate => $"{Target.Label} 감지기 교정",
         WorkKind.Handover => $"{Target.Crew?.Name ?? "?"}에게 인수인계",
+        WorkKind.CoolDown => $"{Target.Label} 식히기",
+        WorkKind.ClearRubble => $"{Target.CurrentRoom?.Name ?? "?"} 잔해 치우기",
+        WorkKind.CleanUp => $"{Target.Label} 분말·그을음 닦기",
+        WorkKind.BleedRoom => $"{Target.Label} 역화 막기",
+        WorkKind.SealO2Line => $"{Target.Label} 산소관 막기",
+        WorkKind.WakeCrew => $"{Target.Crew?.Name ?? "?"} 깨우기",
         _ => Kind.ToString(),
     };
 
@@ -951,6 +967,11 @@ public sealed partial class WorkBoard
                     else if (inside.Restoring || ship.CountStored(ItemKind.Sealant) >= Hull.SealantFor(wall) + 2)
                         Post(WorkKind.SealBreach, t, inside.Restoring ? 0.55f : 0.4f, Skill.Mechanics,
                             (inside.Restoring ? "다시 붙인 방 되살리기" : "포기한 구획 되찾기") + $" · {wall.Stage} · 우주복 필요");
+                    // v12.2 실링폼이 없으면 우주복을 입고 금속판을 덧대 용접한다 (느리지만 영구) — 평시에, 금속판이 남을 때
+                    else if (vital != null || Crisis.Level(w) < CrisisLevel.Emergency && ship.CountStored(ItemKind.Plate) >= 3)
+                        if (ship.CountStored(ItemKind.Plate) >= 2)
+                            Post(WorkKind.SealBreach, t, vital != null ? 0.85f : 0.42f, Skill.Mechanics,
+                                $"포기한 구획 되찾기 — 실링폼이 없어 금속판을 덧대 용접 · {wall.Stage} · 우주복 필요");
                 }
                 else
                     Post(WorkKind.SealBreach, t, big ? 1.25f : 0.95f, Skill.Mechanics,
@@ -1133,6 +1154,8 @@ public sealed partial class WorkBoard
         ScanPrevention(Post); // v11.0 예방과 안전
         ScanCalibration(Post); // v12.0 감지기 교정
         ScanHandover(Post); // v12.0 찾아가 인수인계
+        ScanVolatile(Post); // v12.2 식히기·잔해·청소·역화·산소관
+        ScanWake(Post); // 위기에 잠든 동료 깨우기
         ScanNavigation(Post); // v11.2 항로와 추진
         ScanHazards(Post); // v11.2 사고 뒷정리 (오염된 식사)
         ScanLiving(Post); // v10.11 배급

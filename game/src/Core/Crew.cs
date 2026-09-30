@@ -266,6 +266,13 @@ public sealed class CrewMember
     /// <summary>다른 승무원에 대한 호감 -1~1 (Id로 찾음).</summary>
     public Dictionary<int, float> Affinity { get; } = new();
 
+    /// <summary>몸으로 깬다 (배가 흔들리거나 방이 위험해져서): 자던 사람을 바로 다시 생각하게 한다.</summary>
+    public void Jolt(World w)
+    {
+        DeepAsleep = false;
+        if (Pose == Pose.Sleeping) Interrupt(w);
+    }
+
     /// <summary>지금 이야기 나누는 상대 (화면 표시용).</summary>
     public CrewMember? TalkingTo { get; set; }
 
@@ -303,6 +310,15 @@ public sealed class CrewMember
     public float FamiliarityWith(FurnitureType t) => Familiarity.TryGetValue(t, out var v) ? v : 0f;
 
     public void Familiarize(FurnitureType t, float amount) => Familiarity[t] = MathF.Min(1f, FamiliarityWith(t) + amount * (1.05f - FamiliarityWith(t)));
+
+    /// <summary>떨어져 나간 조각에 탄 채 함께 떠내려가는 중 (null이면 배에 있다). 조각이 돌아오면 함께 돌아온다.</summary>
+    public Fragment? Aboard { get; set; }
+
+    /// <summary>조각에 탈 때의 자리 (조각의 원래 좌표).</summary>
+    public Vector2 AboardAt { get; set; }
+
+    /// <summary>위기에 방송을 듣고도 곯아떨어져 못 깬 사람 (동료가 흔들어 깨운다).</summary>
+    public bool DeepAsleep { get; set; }
 
     /// <summary>v12.0 짧게 한 말 (화면에 말풍선: 인수인계 등).</summary>
     public string? Said { get; private set; }

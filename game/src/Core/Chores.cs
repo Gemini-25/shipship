@@ -217,6 +217,10 @@ public sealed class SprayToil : Toil
         float rate = (10f + 6f * c.SkillLevel(Skill.Mechanics)) * (0.8f + 0.4f * c.Traits.Calm) / SimTime.TicksPerHour;
         if (_panic > 0) { _panic--; rate *= 0.35f; }
         w.Fire.Suppress(aim, 1.5f, rate);
+        // v12.2 소화 분말은 곁의 설비를 뒤덮는다 (닦아야 한다), 좁은 방에서는 공기가 탁해진다
+        foreach (var d in Cell.Dirs8.Append(new Cell(0, 0)))
+            if (w.Ship.FurnitureAt(aim + d)?.Machine is Machine fm) fm.Fouled = MathF.Min(1f, fm.Fouled + 0.9f / SimTime.TicksPerHour * 4f);
+        if (c.Room is Room sprayRoom && sprayRoom.Volume < 30f) sprayRoom.Air.CO2 += 12f / SimTime.TicksPerHour / sprayRoom.Volume;
         // 소화기 한 통은 15분쯤 뿌리면 빈다 (다시 채울 방법은 없다)
         if (_elapsed > SimTime.Minutes(15))
         {
@@ -286,6 +290,12 @@ public static partial class WorkPlanners
             WorkKind.Rehab => Rehab(activity, o, c, w, dist, at, out blocked),
             WorkKind.Calibrate => Calibrate(activity, o, c, w, dist, at, out blocked),
             WorkKind.Handover => Handover(activity, o, c, w, dist, at, out blocked),
+            WorkKind.CoolDown => CoolDown(activity, o, c, w, dist, at, out blocked),
+            WorkKind.ClearRubble => ClearRubble(activity, o, c, w, dist, at, out blocked),
+            WorkKind.CleanUp => CleanUp(activity, o, c, w, dist, at, out blocked),
+            WorkKind.BleedRoom => BleedRoom(activity, o, c, w, dist, at, out blocked),
+            WorkKind.SealO2Line => SealO2Line(activity, o, c, w, dist, at, out blocked),
+            WorkKind.WakeCrew => WakeCrew(activity, o, c, w, dist, at, out blocked),
             WorkKind.UnloadSupply => UnloadSupply(activity, o, c, w, dist, at),
             WorkKind.AnswerSignal => AnswerSignal(activity, o, c, w, dist, at),
             WorkKind.Upgrade => Upgrade(activity, o, c, w, dist, at, out blocked),
@@ -879,6 +889,9 @@ public static partial class WorkPlanners
 
         var toils = Plans.DropOff(c, w, dist);
         if (needSuit && !SuitUp(c, w, dist, toils)) { blocked = "우주복 없음"; return null; }
+        // v12.2 실링폼이 없으면 금속판을 덧대 용접한다 (느리지만 막은 뒤 다시 새지 않는다 — 진공에서도 된다)
+        if (w.Ship.CountStored(ItemKind.Sealant) < sealant && w.Ship.CountStored(ItemKind.Plate) >= 2)
+            return PlateWeld(a, o, c, w, dist, at, toils, wall, room, cell, needSuit, out blocked);
         if (Fetch(c, w, dist, ItemKind.Sealant, sealant, toils) == null) { blocked = "실링폼 없음"; return null; }
         toils.Add(new GotoToil(at));
         toils.Add(new WorkToil(wall.Breach >= 0.25f ? 0.6f : 0.35f, Skill.Mechanics, cell.Center)
@@ -912,6 +925,34 @@ public static partial class WorkPlanners
             return true;
         }));
         return Wrap(a, o, c, w, "파공 봉합", toils, $"{room.Name} 파공을 막으러 간다" + (needSuit ? " (우주복)" : ""));
+    }
+
+    /// <summary>v12.2 금속판 덧대 용접 봉합: 실링폼이 없을 때 (우주복을 입고 한 시간 남짓).</summary>
+    private static Job? PlateWeld(Activity a, WorkOrder o, CrewMember c, World w, DistanceField dist, Cell at, List<Toil> toils,
+        WallState wall, Room room, Cell cell, bool needSuit, out string? blocked)
+    {
+        blocked = null;
+        if (Fetch(c, w, dist, ItemKind.Plate, 2, toils) == null) { blocked = "금속판 없음"; return null; }
+        toils.Add(new GotoToil(at));
+        toils.Add(new WorkToil(1.2f, Skill.Mechanics, cell.Center) { Resume = o, CanContinue = (cm, _) => cm.Carrying?.Kind == ItemKind.Plate });
+        toils.Add(new DoToil((cm, world) =>
+        {
+            Consume(cm, ItemKind.Plate, 2);
+            float skill = cm.SkillLevel(Skill.Mechanics);
+            cm.Practice(Skill.Mechanics, 0.05f);
+            wall.MaxIntegrity = MathF.Max(0.25f, wall.MaxIntegrity - Hull.WeldFatigue(skill));
+            wall.Integrity = MathF.Max(wall.Integrity, wall.MaxIntegrity * (0.8f + 0.12f * skill));
+            wall.Breach = Hull.BreachFromIntegrity(wall.Integrity);
+            wall.Welds++;
+            wall.TotalWelds++;
+            if (wall.Breach > 0f) { wall.Patched = true; wall.PatchQuality = 0.8f + 0.15f * skill; }
+            MarkLog.Add(wall.Marks, world.Tick, $"{cm.Name}: 금속판을 덧대 용접했다");
+            world.History.Add(world, HistoryKind.Response, $"{Ko.IGa(cm.Name)} 실링폼 없이 {room.Name} 파공에 금속판을 덧대 용접했다", room, new[] { cm }, cell);
+            world.Board.Close(o);
+            world.Log.Add(world.Tick, LogKind.Work, $"{room.Name} 파공에 금속판을 덧대 용접했다", cm.Id);
+            return true;
+        }));
+        return Wrap(a, o, c, w, "금속판 용접", toils, $"{room.Name} 파공에 금속판을 덧대러 간다" + (needSuit ? " (우주복)" : ""));
     }
 
     // ── 외벽 수리: 예비 부품(판재)으로 용접 ──

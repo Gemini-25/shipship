@@ -338,6 +338,12 @@ public static class SaveGame
         foreach (var n in w.Watch.Notes) { I(n.Id); I((int)n.Stage); I(n.Suspect is OmenCause sc ? (int)sc : -1); I(n.Confirmed is OmenCause cf ? (int)cf : -1); I(n.Logged ? 1 : 0); I(n.Holders.Count); I(n.WrongFixes); }
         foreach (var m in w.Ship.Machines) { F(m.SensorCal); I(m.LastReading); }
         foreach (var c in w.Crew) foreach (var (t, v) in c.Familiarity.OrderBy(kv => kv.Key)) { I((int)t); F(v); }
+        // v12.2 열·기체·분말·잔해·역화·일산화탄소
+        foreach (var m in w.Ship.Machines) { F(m.Heat); F(m.Vapor); F(m.Fouled); I(m.CoolingDown ? 1 : 0); }
+        foreach (var (cell, v) in w.Ship.Rubble.OrderBy(kv => kv.Key.Y).ThenBy(kv => kv.Key.X)) { I(cell.X); I(cell.Y); F(v); }
+        foreach (var r in w.Ship.Rooms) { F(r.Air.CO); F(r.Backdraft); F(r.O2Leak); }
+        F(w.Power.ReactorPoison); I(w.Volatile.Stats.Explosions);
+        foreach (var c in w.Crew) I(c.Aboard?.Id ?? -1);
         I(w.Precursors.Prevented); I(w.Precursors.Missed);
         // v11.2 추진
         F(w.Propulsion.Propellant); I((int)w.Propulsion.Zone); I(w.Propulsion.Dodged); I(w.Propulsion.Evasions); F(w.Space.Density);

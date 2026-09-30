@@ -132,8 +132,12 @@ public sealed class Ship
     public WallState? WallAt(Cell c) => _walls.TryGetValue(c, out var w) ? w : null;
     public IEnumerable<KeyValuePair<Cell, WallState>> Walls => _walls;
 
+    /// <summary>v12.2 잔해 (칸 → 0~1): 반 넘게 쌓이면 지나갈 수 없다 — 치워야 한다.</summary>
+    public Dictionary<Cell, float> Rubble { get; } = new();
+
     public bool IsWalkable(Cell c)
     {
+        if (Rubble.Count > 0 && Rubble.TryGetValue(c, out var rb) && rb >= 0.5f) return false;
         var kind = Grid.Kind(c);
         if (kind == TileKind.Door)
         {

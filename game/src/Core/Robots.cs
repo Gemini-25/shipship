@@ -51,6 +51,10 @@ public sealed class Robot
     public Cell Cell => Cell.FromPosition(Position);
     public Room? Room { get; internal set; }
 
+    /// <summary>떨어져 나간 조각에 실려 떠내려가는 중.</summary>
+    public Fragment? Aboard { get; set; }
+    public System.Numerics.Vector2 AboardAt { get; set; }
+
     public RobotState State { get; internal set; }
     public long StateSince { get; internal set; }
 
@@ -505,6 +509,7 @@ public sealed class RobotSystem
         foreach (var r in Robots)
         {
             r.PreviousPosition = r.Position;
+            if (r.Aboard is Fragment rf) { r.Position = StructureSystem.OnFragment(rf, r.AboardAt); continue; } // 조각에 실려 간다
             switch (r.State)
             {
                 case RobotState.Docked:
@@ -608,6 +613,7 @@ public sealed class RobotSystem
         foreach (var r in Robots)
         {
             if (r.State == RobotState.Lost) continue;
+            if (r.Aboard != null) continue; // 조각에 실려 떠내려가는 중 (아무것도 못 한다)
             // 방째로 떨어져 나갔다
             if (r.Room is Room here && here.Detached)
             {

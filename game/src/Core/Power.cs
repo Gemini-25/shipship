@@ -106,6 +106,9 @@ public sealed class PowerGrid
 
     public bool ReactorOnline { get; private set; } = true;
     public float ReactorRamp { get; private set; } = 1f;
+
+    /// <summary>v12.2 재기동 지연 (제논 독) 0~1: 긴급 정지 뒤 몇 시간은 출력이 다 오르지 않는다 — 여섯 시간에 걸쳐 걷힌다.</summary>
+    public float ReactorPoison { get; private set; }
     public float ReactorOutput { get; private set; }
     public float ReactorLimit { get; private set; }
     public float ReactorTemperature { get; private set; } = 280f;
@@ -376,6 +379,7 @@ public sealed class PowerGrid
         {
             ReactorOnline = false;
             ReactorRamp = 0f;
+            ReactorPoison = 1f; // v12.2 재기동 지연
             _world.RaiseAlert("원자로 긴급 정지(SCRAM) — 냉각 상실", reactor?.Body.Room, AlertLevel.Critical, shipWide: true);
             _world.History.Scrams++;
             _world.History.Add(_world, HistoryKind.Damage, "원자로 긴급 정지 — 냉각 상실", reactor?.Body.Room);
@@ -387,6 +391,7 @@ public sealed class PowerGrid
             ReactorOnline = false;
             LowPowerMode = false;
             ReactorRamp = 0f;
+            ReactorPoison = 1f; // v12.2 재기동 지연
             if (reactor != null)
             {
                 reactor.Wear = MathF.Min(1f, reactor.Wear + 0.15f);
@@ -403,6 +408,7 @@ public sealed class PowerGrid
             ReactorOnline = false;
             LowPowerMode = false;
             ReactorRamp = 0f;
+            ReactorPoison = 1f; // v12.2 재기동 지연
             if (reactor != null) reactor.Wear = MathF.Min(1f, reactor.Wear + 0.05f);
             _world.RaiseAlert($"원자로 과열 긴급 정지 — 노심 {ReactorTemperature:0}℃", reactor?.Body.Room, AlertLevel.Critical, shipWide: true);
             _world.History.Scrams++;
@@ -410,7 +416,8 @@ public sealed class PowerGrid
             _world.Board.RequestScan();
         }
         if (ReactorOnline) ReactorRamp = MathF.Min(1f, ReactorRamp + dtHours / RampHours);
-        float reactorMax = reactor == null || !ReactorOnline ? 0f : ReactorMaxKw * reactor.Rating * reactor.Efficiency;
+        ReactorPoison = MathF.Max(0f, ReactorPoison - dtHours / 6f);
+        float reactorMax = reactor == null || !ReactorOnline ? 0f : ReactorMaxKw * reactor.Rating * reactor.Efficiency * (1f - 0.55f * ReactorPoison);
         float cooling = LowPowerMode ? NaturalCoolingKw + CoolingCapacity : CoolingCapacity * 0.95f;
         float target = MathF.Min(reactorMax, cooling) * ReactorRamp;
         // v9: 자동 제어봉은 한 시간에 60kW만큼만 출력을 내린다 — 냉각이 갑자기 줄면 그동안 넘치는 열이 노심을 데운다
@@ -435,7 +442,7 @@ public sealed class PowerGrid
         float auxAvailable = AuxRunning && aux != null ? AuxKw * aux.Rating * aux.Efficiency : 0f;
 
         // 4) 배터리
-        BatteryCapacity = ship.FurnitureOf(FurnitureType.Battery)
+        BatteryCapacity = ship.FurnitureOf(FurnitureType.Battery).Where(f => !f.Machine!.Parked) // v12.2 달아올라 떼어 둔 셀은 빠진다
             .Sum(f => BatteryKwh(f) * f.Machine!.FaultFactor * (0.5f + 0.5f * f.Machine.Condition))
             + Modules.Bonus(_world, FurnitureType.CapacitorBank); // v10.6 축전 모듈
         BatteryCharge = MathF.Min(BatteryCharge, BatteryCapacity);

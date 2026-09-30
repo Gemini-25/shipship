@@ -391,6 +391,19 @@ public sealed class StructureSystem
                     w.History.Add(w, HistoryKind.Structure, $"떨어져 나간 {Ko.IGa(f.Room.Name)} 시야 밖으로 떠내려갔다 — 잃었다" +
                                   (aboard.Count > 0 ? $" (거치대에 묶인 드론 {aboard.Count}대와 함께)" : ""), f.Room, log: true);
                     foreach (var d in aboard) w.Drones.LoseWith(d, f);
+                    // 조각에 탄 사람: 사망이 켜져 있으면 함께 잃고, 아니면 마지막 순간 뛰어내려 배 쪽으로 (구조를 기다린다)
+                    foreach (var c in w.Crew.Where(c => c.Aboard == f))
+                    {
+                        c.Aboard = null;
+                        if (w.CrewCanDie && !c.Dead) { c.Vitals.Health = 0f; c.Vitals.InjuryCause = $"{f.Room.Name}과(와) 함께 표류"; }
+                        else
+                        {
+                            c.Position = NearestEdge(w.Ship.Rooms.Where(r => !r.Detached).Select(r => r.Center).OrderBy(p2 => (p2 - c.Position).LengthSquared()).First()).Center;
+                            c.PreviousPosition = c.Position;
+                            w.Log.Add(w.Tick, LogKind.Warning, $"떠내려가는 {f.Room.Name}에서 뛰어내려 배 쪽으로 — 구조를 기다린다", c.Id);
+                        }
+                    }
+                    foreach (var r in w.Robots.Robots.Where(r => r.Aboard == f)) r.Aboard = null;
                     MarkLog.Add(f.Room.Marks, w.Tick, "시야 밖으로 떠내려갔다");
                     w.Board.RequestScan();
                 }
@@ -593,14 +606,33 @@ public sealed class StructureSystem
             j.Strength = 0f; j.Known = 0f;
         }
 
-        // 6) 사람: 안에 있던 사람은 찢어진 가장자리로 내동댕이쳐진다 (우주복이 없으면 진공)
+        // 6) 사람: 안에 있던 사람은 조각에 탄 채 떠내려간다 (우주복이 있거나 쓰러져 있거나 손잡이를 붙잡았다),
+        //    아니면 찢어진 틈으로 배 쪽 가장자리에 내동댕이쳐진다 (우주복이 없으면 진공)
         var flung = new List<CrewMember>();
+        var aboardList = new List<CrewMember>();
         foreach (var c in w.Crew)
         {
-            if (c.CarriedBy != null) continue;
+            if (c.CarriedBy != null || c.Aboard != null) continue;
             if (!floor.Contains(c.Cell) && c.Room != room) continue;
-            var to = NearestEdge(c.Position);
             c.EndJob(w, ToilStatus.Interrupted);
+            bool hold = c.Suit != null || c.Down || c.Dead || w.Rng.Chance(0.4f);
+            if (hold)
+            {
+                c.Aboard = frag;
+                c.AboardAt = c.Position;
+                c.Room = null;
+                c.Path = null;
+                aboardList.Add(c);
+                if (c.Dead) continue;
+                float hit = w.Rng.Range(0.05f, 0.15f) * (c.Suit != null ? 0.5f : 1f);
+                c.Vitals.Health = MathF.Max(0.05f, c.Vitals.Health - hit);
+                NeedsSystem.AddInjury(c.Vitals, hit, "구획 분리");
+                Memory.Frighten(w, c, room, 0.7f, $"{Ko.WaGwa(room.Name)} 함께 떠내려갔다");
+                Memory.Shake(w, c, 0.2f, $"{Ko.WaGwa(room.Name)} 함께 우주로 떠내려갔다");
+                MarkLog.Add(c.Memory.Marks, w.Tick, $"{Ko.WaGwa(room.Name)} 함께 떠내려갔다" + (c.Suit == null ? " (우주복 없이)" : ""));
+                continue;
+            }
+            var to = NearestEdge(c.Position);
             c.Position = to.Center;
             c.PreviousPosition = c.Position;
             c.Room = null;
@@ -630,6 +662,14 @@ public sealed class StructureSystem
             }
         }
         if (dronesAboard > 0) notes.Add($"드론 {dronesAboard}대가 거치대째 함께");
+        if (aboardList.Count > 0) notes.Add($"{string.Join("·", aboardList.Select(c => c.Name))}이(가) 조각에 탄 채 떠내려간다");
+        // 로봇도 조각에 실려 간다
+        foreach (var r in w.Robots.Robots.Where(r => r.Aboard == null && (floor.Contains(Cell.FromPosition(r.Position)) || r.Room == room)))
+        {
+            r.Aboard = frag;
+            r.AboardAt = r.Position;
+            MarkLog.Add(r.Marks, w.Tick, $"{Ko.WaGwa(room.Name)} 함께 떠내려갔다");
+        }
 
         // v9: 방을 지나던 관은 끊어진다 (사출 준비로 밸브를 잠갔으면 새지 않는다)
         w.Piping.OnDetach(room, isolated: room.PipesCut || controlled);
@@ -719,6 +759,14 @@ public sealed class StructureSystem
     }
 
     /// <summary>튕겨 나간 사람이 붙잡는 곳: 우주선 가장자리의 가까운 우주 칸.</summary>
+    /// <summary>조각 위의 한 점이 지금 어디에 있나 (조각의 원래 좌표 → 떠내려간 자리).</summary>
+    public static Vector2 OnFragment(Fragment f, Vector2 local)
+    {
+        var rel = local - f.Room.Center;
+        float cs = MathF.Cos(f.Angle), sn = MathF.Sin(f.Angle);
+        return f.Room.Center + new Vector2(rel.X * cs - rel.Y * sn, rel.X * sn + rel.Y * cs) + f.Offset;
+    }
+
     private Cell NearestEdge(Vector2 p)
     {
         var grid = _world.Ship.Grid;
@@ -803,6 +851,17 @@ public sealed class StructureSystem
                 d.Doing = "대기 (거치대에 전기가 없다)";
                 MarkLog.Add(d.Marks, w.Tick, $"{Ko.WaGwa(room.Name)} 함께 돌아왔다");
             }
+        // 조각에 탔던 사람·로봇이 함께 돌아온다
+        foreach (var c in w.Crew.Where(c => c.Aboard == f))
+        {
+            c.Aboard = null;
+            c.Position = c.AboardAt;
+            c.PreviousPosition = c.Position;
+            c.Room = room;
+            c.Interrupt(w);
+            if (!c.Dead) w.History.Add(w, HistoryKind.Structure, $"{Ko.IGa(c.Name)} {Ko.WaGwa(room.Name)} 함께 돌아왔다", room, new[] { c }, log: true);
+        }
+        foreach (var r in w.Robots.Robots.Where(r => r.Aboard == f)) { r.Aboard = null; r.Position = r.AboardAt; r.PreviousPosition = r.Position; }
         f.State = FragmentState.Lost; // 목록에서 빠진다 (방으로 돌아왔다)
         Fragments.Remove(f);
         Retrieved++;

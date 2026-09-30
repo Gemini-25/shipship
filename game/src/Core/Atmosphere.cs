@@ -57,7 +57,7 @@ public sealed class Atmosphere
         foreach (var r in ship.Rooms)
         {
             if (!r.Detached) continue;
-            r.Air.O2 = 0f; r.Air.N2 = 0f; r.Air.CO2 = 0f; r.Air.Smoke = 0f; r.Air.Toxin = 0f;
+            r.Air.O2 = 0f; r.Air.N2 = 0f; r.Air.CO2 = 0f; r.Air.Smoke = 0f; r.Air.Toxin = 0f; r.Air.CO = 0f;
             r.Air.Temperature = -20f;
         }
 
@@ -120,7 +120,7 @@ public sealed class Atmosphere
 
         // 3) 환기망: 댐퍼가 열린 방끼리 평균 쪽으로 섞인다. 전기가 없는 방은 팬이 안 돌아 느리게(수동 흐름)만.
         //    감압된 방의 댐퍼가 열려 있으면 환기관을 타고 다른 방 공기까지 빨려 나간다 — 그래서 댐퍼를 닫는다.
-        float vol = 0f, o2 = 0f, co2 = 0f, n2 = 0f, smoke = 0f, toxin = 0f;
+        float vol = 0f, o2 = 0f, co2 = 0f, n2 = 0f, smoke = 0f, toxin = 0f, co = 0f;
         foreach (var r in ship.Rooms)
         {
             if (!r.VentOpen) continue;
@@ -128,6 +128,7 @@ public sealed class Atmosphere
             vol += wv; o2 += r.Air.O2 * wv; co2 += r.Air.CO2 * wv; n2 += r.Air.N2 * wv;
             smoke += r.Air.Smoke * wv;
             toxin += r.Air.Toxin * wv;
+            co += r.Air.CO * wv;
         }
         if (vol > 0f)
         {
@@ -141,6 +142,7 @@ public sealed class Atmosphere
                 r.Air.N2 += (n2 / vol - r.Air.N2) * kr;
                 r.Air.Smoke += (smoke / vol - r.Air.Smoke) * kr;
                 r.Air.Toxin += (toxin / vol - r.Air.Toxin) * kr;
+                r.Air.CO += (co / vol - r.Air.CO) * kr;
             }
         }
 
@@ -156,7 +158,7 @@ public sealed class Atmosphere
         {
             if (r.Air.Leak <= 0f) continue;
             float keep = MathF.Exp(-r.Air.Leak * dtHours / r.Volume);
-            r.Air.O2 *= keep; r.Air.N2 *= keep; r.Air.CO2 *= keep; r.Air.Smoke *= keep; r.Air.Toxin *= keep;
+            r.Air.O2 *= keep; r.Air.N2 *= keep; r.Air.CO2 *= keep; r.Air.Smoke *= keep; r.Air.Toxin *= keep; r.Air.CO *= keep;
             r.Air.Temperature += (-20f - r.Air.Temperature) * (1f - keep) * 0.5f;
         }
 
@@ -189,6 +191,7 @@ public sealed class Atmosphere
         f = Flow(a.Air.Temperature, b.Air.Temperature) * 0.3f; a.Air.Temperature -= f / va; b.Air.Temperature += f / vb;
         f = Flow(a.Air.Smoke, b.Air.Smoke); a.Air.Smoke -= f / va; b.Air.Smoke += f / vb;
         f = Flow(a.Air.Toxin, b.Air.Toxin); a.Air.Toxin -= f / va; b.Air.Toxin += f / vb;
+        f = Flow(a.Air.CO, b.Air.CO); a.Air.CO -= f / va; b.Air.CO += f / vb;
     }
 
     private static void UpdateHazard(Room r)
@@ -202,6 +205,8 @@ public sealed class Atmosphere
         if (air.Temperature > 40f || air.Temperature < 5f) cost += 12;
         if (air.Smoke > 0.2f) cost += (int)(air.Smoke * 20f);
         if (air.Toxin > 0.1f) cost += (int)(MathF.Min(1f, air.Toxin) * 30f); // v11.2 유독 가스
+        if (r.CoKnown || air.CO > 0.3f) cost += (int)(MathF.Min(1f, air.CO) * 40f); // v12.2 일산화탄소 (경보가 울렸거나 머리가 아플 만큼)
+        if (r.BackdraftKnown) cost += 60; // v12.2 역화 위험 — 문을 열지 않는다
         if (air.Pressure < 70f) cost += 20;
         if (r.Dark) cost += r.Powered ? 3 : 2; // v9.4: 조명이 나간 방도 꺼린다
         r.HazardCost = cost;
@@ -227,6 +232,8 @@ public sealed class Atmosphere
         d = MathF.Max(d, Curve.Smooth(80f - air.Pressure, 0f, 40f));
         d = MathF.Max(d, air.Smoke);
         d = MathF.Max(d, Curve.Smooth(air.Toxin, 0.1f, 0.6f)); // v11.2 유독 가스 (우주복이면 괜찮다)
+        if (r.CoKnown || air.CO > 0.3f) d = MathF.Max(d, Curve.Smooth(air.CO, 0.08f, 0.5f)); // v12.2 일산화탄소 (알아야 피한다)
+        if (r.BackdraftKnown) d = MathF.Max(d, 0.6f); // v12.2 역화 위험
         return d;
     }
 }

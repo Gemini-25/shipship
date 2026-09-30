@@ -118,6 +118,9 @@ public static class Incidents
             }
         }
 
+        // 배가 흔들린다: 큰 충돌은 온 배가, 작은 것은 그 방·옆방 사람이 잠에서 깬다
+        foreach (var c in w.Crew)
+            if (!c.Dead && (size >= 0.6f || c.Room == room || room != null && c.Room != null && c.Room.Doors.Any(d => d.RoomA == room || d.RoomB == room))) c.Jolt(w);
         var impact = new Impact(w.Tick, e, target, size, dir);
         w.Impacts.Add(impact);
         if (w.Impacts.Count > 12) w.Impacts.RemoveAt(0);

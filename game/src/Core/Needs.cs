@@ -83,6 +83,8 @@ public static class NeedsSystem
         bool vacuum = c.Outside;
         float pressure = vacuum ? 0f : air?.Pressure ?? 101f;
         float targetOx = suited ? 1f : vacuum ? 0f : air == null ? 1f : Curve.Clamp01((air.O2 - 8f) / 9f);
+        // v12.2 일산화탄소는 핏속 산소 자리를 빼앗는다 (모르는 채로 졸리고, 쓰러진다)
+        if (!suited && air != null && air.CO > 0.05f) targetOx *= 1f - 0.85f * MathF.Min(1f, air.CO);
         float oxRate = !suited && pressure < 40f ? 25f : 3f; // 진공에서는 몇 분 만에
         v.Oxygen += (targetOx - v.Oxygen) * MathF.Min(1f, oxRate * dt);
         float co2 = suited ? 0f : air?.CO2 ?? 0f;

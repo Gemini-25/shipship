@@ -352,6 +352,18 @@ public sealed class Machine
     /// <summary>v12.0 마지막으로 감지기를 다시 맞춘 틱.</summary>
     public long LastCalibrated { get; set; }
 
+    /// <summary>v12.2 열·압력 스트레스 0~1.5 (0.3쯤이 평소, 0.9를 넘으면 종류마다 다르게 터질 수 있다).</summary>
+    public float Heat { get; set; }
+
+    /// <summary>v12.2 새어 고인 기체 0~1 (산소 발생기의 수소, 보조 발전기의 연료 증기) — 불꽃 하나면 터진다.</summary>
+    public float Vapor { get; set; }
+
+    /// <summary>v12.2 소화 분말·그을음 0~1 (효율이 떨어지고 전자 장비가 합선된다 — 닦아야 한다).</summary>
+    public float Fouled { get; set; }
+
+    /// <summary>v12.2 달아올라 사람이 내려 식히는 중 (식으면 다시 올린다).</summary>
+    public bool CoolingDown { get; set; }
+
     /// <summary>정품인지 Mk.1 임시품인지.</summary>
     public MachineGrade Grade { get; set; } = MachineGrade.Standard;
 
@@ -410,7 +422,8 @@ public sealed class Machine
         get
         {
             if (!Powered && Spec.PowerDraw > 0f) return 0f;
-            return FaultFactor * Grades.Output(Grade) * (1f - 0.25f * Wear * Wear) * (0.6f + 0.4f * Condition);
+            return FaultFactor * Grades.Output(Grade) * (1f - 0.25f * Wear * Wear) * (0.6f + 0.4f * Condition)
+                   * (Heat > 0.7f ? MathF.Max(0.5f, 1f - (Heat - 0.7f)) : 1f) * (1f - 0.35f * Fouled); // v12.2 달아오르면·분말을 뒤집어쓰면 덜 낸다
         }
     }
 

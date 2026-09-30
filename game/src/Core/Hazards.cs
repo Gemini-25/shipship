@@ -23,6 +23,8 @@ public enum HazardKind
     DebrisCloud,       // 잔해 구름에 휩쓸림
     WaterContamination, // 물 오염 (탱크 일부를 버리고 정수기 필터가 막힌다)
     RescueSignal,       // v11.2 구조 요청 수신: 탈출 캡슐 (사고라기보다 사건 — 건질지 회의)
+    OxygenLeak,         // v12.2 산소관 누출: 방에 산소가 짙어진다 — 불꽃 하나가 불이 된다
+    Overheat,           // v12.2 설비 과열: 식히지 않으면 종류마다 다르게 터진다 (열폭주·수소·아크·연료·파열)
 }
 
 /// <summary>사고를 어디에 거는지.</summary>
@@ -50,6 +52,8 @@ public static class Hazards
         new(HazardKind.DebrisCloud, "잔해 구름", HazardTarget.Ship, 2f, "잔해 구름 — 배가 잔해 지대로 밀려난다: 작은 운석이 날아들고, 엔진을 태워 빠져나와야 한다"),
         new(HazardKind.WaterContamination, "물 오염", HazardTarget.Ship, 4f, "물 오염 — 탱크 물에 녹 찌꺼기가 섞였다: 물 일부를 버리고 정수기 필터가 막힌다"),
         new(HazardKind.RescueSignal, "구조 요청", HazardTarget.Ship, 2f, "구조 요청 수신 — 탈출 캡슐의 생존자 1~3명: 하루 안에 회의로 건질지 정한다 (추진제 · 먹을 입 · 통신실이 멀쩡해야 듣는다)"),
+        new(HazardKind.OxygenLeak, "산소관 누출", HazardTarget.Room, 3f, "산소관 누출 — 방을 클릭: 공기 탱크의 산소가 그 방으로 샌다 · 산소가 짙어지면 합선·용접 불꽃 하나가 불이 되고 불이 빨리 번진다 · 실링폼으로 막고 환기한다"),
+        new(HazardKind.Overheat, "설비 과열", HazardTarget.Machine, 4f, "설비 과열 — 설비를 클릭: 배터리는 열폭주, 산소 발생기는 수소 폭발, 배전반은 아크 섬광, 보조 발전기는 연료 화재, 펌프는 과압 파열 · 먼저 알아채고 내려 식히면 막는다"),
     };
 
     public static HazardSpec Spec(HazardKind k) => All[(int)k];
@@ -74,6 +78,7 @@ public static class Hazards
         {
             HazardKind.CropBlight => x.Machine?.Crop != null,
             HazardKind.FoodPoisoning => x.Type is FurnitureType.Fridge or FurnitureType.MealDispenser && x.Storage != null,
+            HazardKind.Overheat => x.Machine != null && VolatileSystem.Mode(x.Type) != BlowKind.None,
             _ => x.Machine != null,
         };
         if (Fits(f)) return f;
@@ -124,6 +129,8 @@ public static class Hazards
             HazardKind.DebrisCloud => sys.Cloud(),
             HazardKind.WaterContamination => sys.Water(),
             HazardKind.RescueSignal => w.Comms.ReceiveSignal(),
+            HazardKind.OxygenLeak => RoomAt(w, at) is Room ol && !ol.Detached ? O2Leak(w, ol) : null,
+            HazardKind.Overheat => MachineAt(w, k, at) is Furniture hf ? Overheat(w, hf) : null,
             _ => null,
         };
         if (what == null) return null;
@@ -131,6 +138,23 @@ public static class Hazards
         w.History.NoteCause(w, what);
         w.Board.RequestScan();
         return what;
+    }
+
+    private static string O2Leak(World w, Room room)
+    {
+        room.O2Leak = w.Rng.Range(3f, 6f);
+        w.RaiseAlert($"{room.Name} 산소관 누출", room, AlertLevel.Warning, shipWide: false);
+        w.History.Add(w, HistoryKind.Incident, $"{room.Name} 산소관이 샌다 — 방에 산소가 짙어진다", room);
+        return $"{room.Name} 산소관 누출";
+    }
+
+    private static string? Overheat(World w, Furniture f)
+    {
+        var m = f.Machine!;
+        m.Heat = MathF.Max(m.Heat, 0.95f);
+        if (f.Type is FurnitureType.OxygenGenerator or FurnitureType.AuxGenerator) m.Vapor = MathF.Max(m.Vapor, 0.45f);
+        w.History.Add(w, HistoryKind.Incident, $"{m.Name}이(가) 달아오른다 ({VolatileSystem.Name(VolatileSystem.Mode(f.Type))} 위험)", f.Room);
+        return $"{m.Name} 과열";
     }
 
     internal static bool IsElectronic(Furniture f) => Electronics.Contains(f.Type);

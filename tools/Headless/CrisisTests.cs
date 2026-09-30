@@ -103,3 +103,26 @@ public static partial class Program
         return 0;
     }
 }
+
+public static partial class Program
+{
+    /// <summary>봉쇄 구역 추적: 시나리오를 걸고 포기한 방이 다시 열리는지 두 시간마다.</summary>
+    private static int RunReopenTrace(int seed, string scenario, int days)
+    {
+        var w = DayOne(seed, "Mirinae");
+        Scenarios.Apply(w, scenario, out var focus);
+        Console.WriteLine($"봉쇄 구역 추적 · {scenario} · {days}일");
+        for (int h = 0; h <= days * 24; h += 2)
+        {
+            foreach (var r in w.Ship.Rooms.Where(r => r.Abandoned || r == focus))
+            {
+                var orders = w.Board.Open.Where(o => o.Target.CurrentRoom == r || o.Target.Room == r).Select(o => $"{WorkKinds.Name(o.Kind)}({o.Urgency:0.00}{(o.BlockedUntil > w.Tick ? $" 보류:{o.BlockedReason}" : "")}{(o.Assignee != null ? " " + o.Assignee.Name : "")})");
+                Console.WriteLine($"{h,3}h {r.Name}: 포기 {(r.Abandoned ? "예" : "아니오")} · 샘 {(r.Leaking ? "예" : "아니오")} · 기압 {r.Air.Pressure:0} · 탱크 {w.Air.Reserve:0}/필요 {r.Volume * 70f:0} · 잠금 {r.Lockdown} · {string.Join(", ", orders)}");
+            }
+            foreach (var e in w.History.Events.Where(e => e.Tick > w.Tick - SimTime.Hours(2) && e.Kind is HistoryKind.Decision or HistoryKind.Adaptation))
+                Console.WriteLine($"      [{e.Kind}] {e.Text}");
+            Run(w, SimTime.Hours(2));
+        }
+        return 0;
+    }
+}
