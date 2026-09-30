@@ -665,7 +665,7 @@ public sealed class StructureSystem
         room.AbandonedSince = w.Tick;
         room.Lockdown = false;
         room.Powered = false;
-        room.Air.O2 = 0f; room.Air.N2 = 0f; room.Air.CO2 = 0f; room.Air.Smoke = 0f; room.Air.Leak = 0f;
+        room.Air.O2 = 0f; room.Air.N2 = 0f; room.Air.CO2 = 0f; room.Air.Smoke = 0f; room.Air.Toxin = 0f; room.Air.Leak = 0f;
         room.BreachArea = 0f;
         room.Unbreathable = true;
         room.Detachments++;

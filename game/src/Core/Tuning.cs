@@ -48,6 +48,7 @@ public static class Tuning
         E("evolution.peace", "개조를 궁리하기 전 평화 (시간)", 12f, 0f, 200f, () => Evolution.PeaceHours, v => Evolution.PeaceHours = v),
         E("evolution.gap", "개조와 개조 사이 (시간)", 16f, 0f, 200f, () => Evolution.GapHours, v => Evolution.GapHours = v),
         E("omen.share", "닳아서 날 고장 중 전조부터 내는 몫 (0~1)", 0.65f, 0f, 1f, () => OmenShare, v => OmenShare = v),
+        E("incident.days", "무작위 사고 평균 간격 (일, 0이면 끔)", 0f, 0f, 30f, () => HazardSystem.RandomDays, v => HazardSystem.RandomDays = v),
     };
 
     private static TuningEntry E(string key, string label, float def, float min, float max, Func<float> get, Action<float> set) =>

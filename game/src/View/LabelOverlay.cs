@@ -201,6 +201,7 @@ public partial class LabelOverlay : Node2D
         if (room.Leaking) { parts.Add($"감압 {room.Air.Pressure:0}kPa"); color = Palette.Danger; }
         else if (room.Lockdown) parts.Add(room.Air.Pressure < 90f ? $"격벽 폐쇄 · {room.Air.Pressure:0}kPa" : "격벽 폐쇄");
         if (room.Air.Smoke > 0.25f && fires == 0) parts.Add("연기");
+        if (room.Air.Toxin > 0.1f) { parts.Add($"유독 가스 {room.Air.Toxin * 100:0}%"); if (room.Air.Toxin > 0.2f) color = Palette.Danger; } // v11.2
         // v8 구조: 사출 준비, 하중이 몰린 방
         if (room.Jettison is JettisonPlan jp) { parts.Add($"사출 준비 · {JettisonPlan.StageName(jp.Stage)}"); color = Palette.Danger; }
         else if (room.DesignJoints > 0)

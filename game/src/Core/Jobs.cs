@@ -225,6 +225,7 @@ public sealed class TakeToil : Toil
         if (!_partialOk && inv.Count(_kind) < want) return ToilStatus.Failed;
         int got = inv.Take(_kind, want);
         if (got <= 0) return ToilStatus.Failed;
+        c.CarryTaint += inv.LastTainted; // v11.2 균이 든 식사는 손에 따라온다
         int already = c.Carrying?.Count ?? 0;
         c.Carrying = new ItemStack(_kind, already + got);
         return ToilStatus.Succeeded;
@@ -265,6 +266,12 @@ public sealed class PutToil : Toil
     {
         if (c.Carrying is not ItemStack held || _into.Storage == null) return ToilStatus.Succeeded;
         int put = _into.Storage.Add(held.Kind, held.Count);
+        if (held.Kind == ItemKind.Meal && c.CarryTaint > 0)
+        {
+            int t = Math.Min(put, c.CarryTaint);
+            _into.Storage.Taint(t);
+            c.CarryTaint -= t;
+        }
         int left = held.Count - put;
         c.Carrying = left > 0 ? new ItemStack(held.Kind, left) : null;
         return ToilStatus.Succeeded;

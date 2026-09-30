@@ -178,6 +178,13 @@ public sealed class CrewMember
     public Furniture? HomeBed { get; set; }
     public ItemStack? Carrying { get; set; }
 
+    /// <summary>v11.2: 들고 있는 식사 중 균이 든 것 (나르면 따라가고, 먹으면 앓는다).</summary>
+    public int CarryTaint { get; set; }
+
+    /// <summary>v11.2: 균이 든 식사를 먹었다 — 이 틱에 탈이 난다 (-1이면 없음).</summary>
+    public long PoisonAt { get; set; } = -1;
+    public Furniture? PoisonSource { get; set; }
+
     /// <summary>
     /// 공구 가방: 여러 재료가 드는 일(부품 제작, Mk.1 대체품, 패널 교체)의 두 번째 이후 재료.
     /// 손에 든 것(Carrying)은 주재료 하나뿐이라, 나머지는 여기에 담아 다닌다. 일이 끝나면 남은 건 꺼낸 곳에 되돌린다.

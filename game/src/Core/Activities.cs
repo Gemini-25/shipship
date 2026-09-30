@@ -105,10 +105,13 @@ public sealed class EatActivity : Activity
         toils.Add(new GotoToil(spot));
         toils.Add(new WaitToil(SimTime.Minutes(2), Pose.Standing, box.Center));
         toils.Add(new TakeToil(box, kind, 1));
-        toils.Add(new DoToil((cm, _) =>
+        toils.Add(new DoToil((cm, world) =>
         {
             cm.Carrying = null; // 받아 들었으면 바로 먹을 준비
             cm.Stats.Meals++;
+            // v11.2: 균이 든 식사 — 40분쯤 뒤에 탈이 난다 (먹다가 불려 가도)
+            if (cm.CarryTaint > 0 && cm.PoisonAt < 0) { cm.PoisonAt = world.Tick + SimTime.Minutes(40); cm.PoisonSource = box; }
+            cm.CarryTaint = 0;
             return true;
         }));
         if (seat != null) toils.Add(new GotoToil(seat.UseSpots[0]));

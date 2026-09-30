@@ -37,6 +37,8 @@ public enum WorkKind
     PreventiveCheck, SuitCheck, Drill,
     // v11.2 항로와 추진 (엔진실)
     RefillPropellant, ChangeCourse,
+    // v11.2 사고 종류
+    DiscardFood,
 }
 
 public static class WorkKinds
@@ -124,6 +126,7 @@ public static class WorkKinds
         WorkKind.Drill => "비상 훈련",
         WorkKind.RefillPropellant => "추진제 보충",
         WorkKind.ChangeCourse => "항로 변경",
+        WorkKind.DiscardFood => "상한 식사 버리기",
         _ => k.ToString(),
     };
 
@@ -300,6 +303,7 @@ public sealed class WorkOrder
         WorkKind.Drill => $"{Target.Label} 비상 훈련",
         WorkKind.RefillPropellant => "엔진 추진제 보충 (물)",
         WorkKind.ChangeCourse => $"{PropulsionSystem.ZoneName((ZoneKind)Circuit)}로 항로 변경",
+        WorkKind.DiscardFood => $"{Target.Label}의 균이 든 식사 버리기",
         _ => Kind.ToString(),
     };
 
@@ -848,6 +852,7 @@ public sealed partial class WorkBoard
                 if (fault.Circuit == 0) u = 1.05f;
                 // 임시로라도 살려 놓았으면 덜 급하다 (완전 수리는 여유 있을 때)
                 if (fault.Kind == FaultKind.Wrecked) u = m.Spec.Critical ? 1.0f : 0.5f;
+                if (fault.Kind == FaultKind.GasLeak) u = 0.92f; // v11.2 새는 가스는 방 하나를 통째로 못 쓰게 한다
                 if (fault.Stage == 1) u = m.Spec.Critical ? 0.7f : 0.45f;
                 else if (fault.Stage == 2) u = m.Spec.Critical ? 0.5f : 0.35f;
                 var missing = fault.Materials.Where(x => ship.CountStored(x.kind) < x.count).Select(x => ItemKinds.Name(x.kind)).ToList();
@@ -866,6 +871,8 @@ public sealed partial class WorkBoard
             if (m.Crop is CropState crop && !sealedOff)
             {
                 if (crop.Ripe) Post(WorkKind.Harvest, t, 0.5f, Skill.Botany, "다 자람");
+                else if (crop.Blight > 0f && crop.BlightKnown) // v11.2 병충해: 사람이 약을 쳐야 한다
+                    Post(WorkKind.Tend, t, 0.6f + 0.3f * crop.Blight, Skill.Botany, $"병충해 {crop.Blight * 100:0}% · 약을 친다");
                 else if (crop.Care < 0.55f) Post(WorkKind.Tend, t, 0.2f + (0.55f - crop.Care) * 0.8f, Skill.Botany, $"돌봄 {crop.Care * 100:0}%");
             }
         }
@@ -1080,6 +1087,7 @@ public sealed partial class WorkBoard
         ScanRecovery(Post); // v10.10 자원 회복 (물통·비상 물자·정리)
         ScanPrevention(Post); // v11.0 예방과 안전
         ScanNavigation(Post); // v11.2 항로와 추진
+        ScanHazards(Post); // v11.2 사고 뒷정리 (오염된 식사)
 
         // ── 결정 (v7): 사람이 정해야 하는 일은 심의에 올린다 ──
         Council.Review(w, _open.Values.Where(o => seen.Contains(o.Key)).ToList());

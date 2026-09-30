@@ -87,6 +87,9 @@ public partial class Hud
             list.Add(("비상 물자", string.Join(" · ", target.Select(t => $"{ItemKinds.Name(t.kind)} {inv.Count(t.kind)}/{t.count}"))));
             list.Add(("비축 방침", Logistics.ModeName(_world.Ledger.Mode) + (_world.Ledger.ModeWhy.Length > 0 ? $" — {_world.Ledger.ModeWhy}" : "")));
         }
+        // v11.2 균이 든 식사 (관찰자는 안다 — 배가 알아챘는지는 따로)
+        if (f.Storage is Inventory food && food.Tainted > 0)
+            list.Add(("오염", $"식사 {food.Tainted}끼 · " + (food.TaintKnown ? "버리러 온다" : "아무도 모른다")));
         if (f.Type == FurnitureType.SuitLocker)
         {
             float days = (_world.Tick - f.Checked) / (float)SimTime.TicksPerDay;

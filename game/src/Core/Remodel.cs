@@ -166,7 +166,7 @@ public static class Remodel
             b.Include(c);
         }
         a.RecomputeBounds();
-        b.Air.O2 = a.Air.O2; b.Air.N2 = a.Air.N2; b.Air.CO2 = a.Air.CO2; b.Air.Temperature = a.Air.Temperature; b.Air.Smoke = a.Air.Smoke;
+        b.Air.O2 = a.Air.O2; b.Air.N2 = a.Air.N2; b.Air.CO2 = a.Air.CO2; b.Air.Temperature = a.Air.Temperature; b.Air.Smoke = a.Air.Smoke; b.Air.Toxin = a.Air.Toxin;
         b.Circuit = a.Circuit;
         b.Powered = a.Powered;
         b.VentOpen = a.VentOpen;

@@ -616,6 +616,7 @@ public partial class ShipView : Node2D
         }
 
         PaintSmoke(ci);
+        PaintToxin(ci); // v11.2 유독 가스
         PaintWalls(ci);
         PaintPipes(ci, mode == ViewMode.Pipes); // v9: 벽·바닥 밑을 지나는 관 (배관 보기에서는 굵게)
         PaintJoints(ci, mode == ViewMode.Structure);
@@ -888,6 +889,7 @@ public partial class ShipView : Node2D
                     if (crop.Ripe && (k % 2 == 0))
                         ci.DrawCircle(new Vector2(x + sway + 2, y + 1), 2.2f, new Color("#ff8a5c"), true, -1f, true);
                 }
+                PaintBlight(ci, f, crop); // v11.2
                 break;
             }
             case FurnitureType.WaterRecycler:
@@ -920,6 +922,7 @@ public partial class ShipView : Node2D
                 ci.DrawCircle(new Vector2(r.End.X - 8, r.Position.Y + 8), 2f, led.WithAlpha(0.85f), true, -1f, true);
                 float fill = f.Storage!.Total / (float)f.Storage.Capacity;
                 ci.DrawRect(new Rect2(r.Position.X + 6, r.End.Y - 7, (r.Size.X - 12) * fill, 2), Palette.Item(ItemKind.Produce).WithAlpha(0.7f));
+                PaintTaint(ci, f); // v11.2
                 break;
             }
             case FurnitureType.MealDispenser:
@@ -929,6 +932,7 @@ public partial class ShipView : Node2D
                 int meals = f.Storage!.Count(ItemKind.Meal);
                 for (int k = 0; k < System.Math.Min(5, (meals + 3) / 4); k++)
                     ci.DrawRect(new Rect2(r.Position.X + 7 + k * 4, r.Position.Y + 9, 3, 6), Palette.Item(ItemKind.Meal).WithAlpha(0.8f));
+                PaintTaint(ci, f); // v11.2
                 break;
             }
             case FurnitureType.AuxGenerator:

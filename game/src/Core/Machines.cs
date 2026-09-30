@@ -37,6 +37,7 @@ public enum FaultKind
     ChargerFault, // 드론 거치대 충전 회로 (v8)
     Overheat, StorageFault, // 주 컴퓨터 과열 정지, 저장장치 오류 (v9)
     AntennaDrift, RadarFault, // 장거리 센서 안테나 정렬, 레이더 송수신기 (v10.1)
+    GasLeak, // v11.2 냉매(유독 가스) 누출 — 사고로만 난다, 실링폼으로 막는다
 }
 
 /// <summary>고장 종류별 성질. 출력 배율 0이면 완전히 멈춘다.</summary>
@@ -75,6 +76,7 @@ public static class Faults
         new FaultSpec(FaultKind.StorageFault, "저장장치 오류", 0f, ItemKind.Electronics, 2f),
         new FaultSpec(FaultKind.AntennaDrift, "안테나 정렬 틀어짐", 0.35f, null, 1f),
         new FaultSpec(FaultKind.RadarFault, "레이더 송수신기 고장", 0f, ItemKind.Sensor, 2f),
+        new FaultSpec(FaultKind.GasLeak, "냉매 누출", 0.8f, ItemKind.Sealant, 0.75f),
     }.ToDictionary(f => f.Kind);
 
     public static FaultSpec Spec(FaultKind k) => Table[k];
@@ -297,6 +299,12 @@ public sealed class CropState
 
     /// <summary>v10.10: 물통으로 부어 준 물이 버티는 시간 (급수 본관이 끊겼을 때).</summary>
     public float HandWateredHours { get; set; }
+
+    /// <summary>v11.2 병충해 0~1 (1이면 작물이 죽는다). 사람이 약을 쳐야 낫는다.</summary>
+    public float Blight { get; set; }
+
+    /// <summary>병충해를 알아챘는지 (잎에 반점이 번지면).</summary>
+    public bool BlightKnown { get; set; }
 
     public bool Ripe => Growth >= 1f;
 }

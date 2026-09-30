@@ -146,13 +146,38 @@ public sealed class Inventory
     public int Take(ItemKind k, int n)
     {
         int taken = Math.Min(n, Count(k));
+        LastTainted = 0;
         if (taken > 0)
         {
             int left = Count(k) - taken;
             if (left == 0) _items.Remove(k);
             else _items[k] = left;
+            // v11.2: 균이 든 식사는 먼저 만든 묶음이라 먼저 나간다
+            if (k == ItemKind.Meal && Tainted > 0)
+            {
+                LastTainted = Math.Min(Tainted, taken);
+                Tainted -= LastTainted;
+                if (Tainted == 0) TaintKnown = false;
+            }
         }
         return taken;
+    }
+
+    /// <summary>v11.2 균이 든 식사 수 (식사 중 몇 끼).</summary>
+    public int Tainted { get; private set; }
+
+    /// <summary>오염을 알아챘는지 (누가 앓아누우면 같은 묶음을 찾아낸다).</summary>
+    public bool TaintKnown { get; set; }
+
+    /// <summary>방금 꺼낸 것 중 균이 든 식사 수.</summary>
+    public int LastTainted { get; private set; }
+
+    public void Taint(int n) => Tainted = Math.Min(Count(ItemKind.Meal), Tainted + Math.Max(0, n));
+
+    public void ClampTaint()
+    {
+        if (Tainted > Count(ItemKind.Meal)) Tainted = Count(ItemKind.Meal);
+        if (Tainted == 0) TaintKnown = false;
     }
 }
 

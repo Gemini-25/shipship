@@ -54,8 +54,10 @@ public partial class Hud : Control
         }
         if (e is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb)
         {
-            foreach (var (rect, action) in _buttons)
+            // 나중에 그린 것(위에 떠 있는 메뉴)이 먼저 받는다
+            for (int i = _buttons.Count - 1; i >= 0; i--)
             {
+                var (rect, action) = _buttons[i];
                 if (!rect.HasPoint(mb.Position)) continue;
                 action();
                 break;
@@ -98,6 +100,7 @@ public partial class Hud : Control
         else if (TechOpen) DrawTech(mouse);
         DrawHints();
         DrawBanners();
+        if (_hazardMenu) DrawHazardMenu(_hazardMenuAt, mouse); // v11.2 떠 있는 메뉴는 맨 위에
     }
 
     // ─────────────────────────────── 공통 ───────────────────────────────
@@ -306,6 +309,15 @@ public partial class Hud : Control
         if (prop.Zone != ZoneKind.Normal || prop.Burning || prop.Propellant < prop.EvadeCost * 2f)
             chips.Insert(Math.Max(0, chips.Count - 1), ("항로", $"{PropulsionSystem.ZoneName(prop.Zone)}" + (prop.Burning ? " · 연소" : "") + $" · 추진제 {prop.Propellant / Math.Max(1f, prop.Capacity) * 100:0}%",
                 prop.Burning ? new Color("#ffb070") : prop.Zone == ZoneKind.Debris ? Palette.Warning : Palette.Text, prop.Propellant / Math.Max(1f, prop.Capacity)));
+        // v11.2 사고: 태양 폭풍, 가스가 찬 방, 병충해, 무작위 사고가 켜져 있으면
+        var hz = _world.Hazards;
+        if (hz.StormActive)
+            chips.Insert(0, ("태양 폭풍", $"{hz.StormHoursLeft:0.0}시간 · 센서 흐림 · 선외 금지", new Color("#c9a0ff"), null));
+        var gassed = ship.Rooms.Where(r => r.Air.Toxin > 0.15f).ToList();
+        if (gassed.Count > 0)
+            chips.Insert(Math.Max(0, chips.Count - 1), ("유독 가스", string.Join("·", gassed.Take(2).Select(r => r.Name)) + (gassed.Count > 2 ? $" 외 {gassed.Count - 2}" : "") + $" · {gassed.Max(r => r.Air.Toxin) * 100:0}%", new Color("#b5e34d"), null));
+        int blight = ship.Machines.Count(m => m.Crop is { BlightKnown: true });
+        if (blight > 0) chips.Insert(Math.Max(0, chips.Count - 1), ("병충해", $"재배대 {blight}곳", Palette.Warning, null));
         int omens = ship.Machines.Count(m => m.Omen is { Known: true });
         if (omens > 0) chips.Insert(Math.Max(0, chips.Count - 1), ("전조", $"{omens}건 · 손볼 것", Palette.Warning, null));
         // (재료·채집은 함선 지표 카드에)
@@ -404,7 +416,8 @@ public partial class Hud : Control
         var tools = IncidentTools.All;
         const float bw = 74f, gap = 4f;
         float titleW = Gfx.Width(Fonts.Bold, "사고", 11) + 14f;
-        var card = new Rect2(x0, Margin + 52f + 8f, 14 + titleW + tools.Length * (bw + gap) - gap + 14, 40f);
+        const float moreW = 84f;
+        var card = new Rect2(x0, Margin + 52f + 8f, 14 + titleW + tools.Length * (bw + gap) + moreW + 14, 40f);
         Card(card);
         float cy = card.GetCenter().Y;
         Gfx.Text(this, Fonts.Bold, new Vector2(card.Position.X + 14, cy + Gfx.CenterOffset(Fonts.Bold, 11)), "사고", 11, Palette.Danger.WithAlpha(0.8f));
@@ -427,6 +440,117 @@ public partial class Hud : Control
             _buttons.Add((rect, () => _main.ToggleTool(tool)));
             x += bw + gap;
         }
+        // v11.2 사고 더 보기 (15가지) + 무작위 사고
+        {
+            var rect = new Rect2(x, card.Position.Y + 6, moreW, 28);
+            bool active = _hazardMenu || _main.Tool == IncidentTool.Hazard;
+            bool hover = rect.HasPoint(mouse);
+            Gfx.RoundRect(this, rect, active ? Palette.Danger.WithAlpha(0.18f) : hover ? new Color(1, 1, 1, 0.06f) : new Color(1, 1, 1, 0f), 8,
+                active ? Palette.Danger.WithAlpha(0.55f) : null);
+            string label = _main.Tool == IncidentTool.Hazard ? Hazards.Name(_main.ToolHazard) : "더 보기";
+            Gfx.TextCentered(this, Fonts.Bold, rect.GetCenter() + new Vector2(0, Gfx.CenterOffset(Fonts.Bold, 12)), label + (_hazardMenu ? " ▴" : " ▾"), 12,
+                active ? Palette.Danger : hover ? Palette.Text : Palette.TextDim);
+            // 무작위 사고가 켜져 있으면 작은 표시등
+            if (HazardSystem.RandomDays > 0f)
+                DrawCircle(new Vector2(rect.End.X - 6, rect.Position.Y + 6), 3f, Palette.Danger.WithAlpha(0.6f + 0.4f * Mathf.Sin(_time * 3f)), true, -1f, true);
+            _buttons.Add((rect, () => _hazardMenu = !_hazardMenu));
+        }
+        _hazardMenuAt = new Vector2(x0, card.End.Y + 6f);
+    }
+
+    private Vector2 _hazardMenuAt;
+
+    private bool _hazardMenu;
+
+    public void OpenHazardMenu() => _hazardMenu = true;
+
+    /// <summary>열려 있었으면 닫고 true.</summary>
+    public bool CloseHazardMenu()
+    {
+        bool was = _hazardMenu;
+        _hazardMenu = false;
+        return was;
+    }
+
+    private static readonly (float days, string name)[] RandomModes =
+        { (0f, "끔"), (6f, "드물게 · 6일"), (3f, "보통 · 3일"), (1.5f, "잦게 · 하루 반"), (0.5f, "혼돈 · 반나절") };
+
+    private static int RandomModeIndex()
+    {
+        float d = HazardSystem.RandomDays;
+        if (d <= 0f) return 0;
+        int best = 1;
+        for (int i = 1; i < RandomModes.Length; i++)
+            if (Mathf.Abs(RandomModes[i].days - d) < Mathf.Abs(RandomModes[best].days - d)) best = i;
+        return best;
+    }
+
+    /// <summary>v11.2 사고 더 보기: 대상이 있는 사고는 고르고 클릭, 배 전체 사고는 누르면 바로. 맨 위는 무작위 사고 주기.</summary>
+    private void DrawHazardMenu(Vector2 at, Vector2 mouse)
+    {
+        var all = Hazards.All;
+        const int cols = 3;
+        const float bw = 150f, bh = 30f, gap = 6f, pad = 14f;
+        int rows = (all.Length + cols - 1) / cols;
+        var card = new Rect2(at, new Vector2(pad * 2 + cols * bw + (cols - 1) * gap, pad + 26 + 34 + rows * (bh + gap) + 20));
+        Card(card);
+        float x = card.Position.X + pad, y = card.Position.Y + pad;
+        Gfx.Text(this, Fonts.Bold, new Vector2(x, y + 12), "사고 더 보기", 13, Palette.Danger.WithAlpha(0.85f));
+        Gfx.TextRight(this, Fonts.Body, new Vector2(card.End.X - pad, y + 12), "● 배 전체 — 누르면 바로  ○ 대상 — 고른 뒤 클릭", 10, Palette.TextMuted);
+        y += 24;
+        // 무작위 사고 (기록되는 수치: 되감기·불러오기가 같은 때에 같은 사고를 낸다)
+        int mode = RandomModeIndex();
+        Gfx.Text(this, Fonts.Body, new Vector2(x, y + 19), "무작위 사고", 12, Palette.TextDim);
+        float mx = x + 76;
+        for (int i = 0; i < RandomModes.Length; i++)
+        {
+            var (days, name) = RandomModes[i];
+            string label = name.Split(" · ")[0];
+            float w = Gfx.Width(Fonts.Bold, label, 11) + 18;
+            var r = new Rect2(mx, y + 6, w, 22);
+            bool on = i == mode, hover = r.HasPoint(mouse);
+            Gfx.RoundRect(this, r, on ? Palette.Danger.WithAlpha(0.2f) : hover ? new Color(1, 1, 1, 0.06f) : new Color(1, 1, 1, 0.02f), 7, on ? Palette.Danger.WithAlpha(0.6f) : null);
+            Gfx.TextCentered(this, Fonts.Bold, r.GetCenter() + new Vector2(0, Gfx.CenterOffset(Fonts.Bold, 11)), label, 11, on ? Palette.Danger : hover ? Palette.Text : Palette.TextDim);
+            float d = days;
+            _buttons.Add((r, () => _main.SetRandomIncidents(d)));
+            mx += w + 4;
+        }
+        y += 34;
+        for (int i = 0; i < all.Length; i++)
+        {
+            var spec = all[i];
+            var r = new Rect2(x + (i % cols) * (bw + gap), y + (i / cols) * (bh + gap), bw, bh);
+            bool active = _main.Tool == IncidentTool.Hazard && _main.ToolHazard == spec.Kind;
+            bool hover = r.HasPoint(mouse);
+            Gfx.RoundRect(this, r, active ? Palette.Danger.WithAlpha(0.18f) : hover ? new Color(1, 1, 1, 0.07f) : new Color(1, 1, 1, 0.025f), 8,
+                active ? Palette.Danger.WithAlpha(0.6f) : new Color(1, 1, 1, 0.06f));
+            bool ship = spec.Target == HazardTarget.Ship;
+            Gfx.Text(this, Fonts.Body, new Vector2(r.Position.X + 10, r.GetCenter().Y + Gfx.CenterOffset(Fonts.Body, 11)), ship ? "●" : "○", 11,
+                ship ? Palette.Danger.WithAlpha(0.8f) : Palette.TextMuted);
+            Gfx.Text(this, Fonts.Bold, new Vector2(r.Position.X + 26, r.GetCenter().Y + Gfx.CenterOffset(Fonts.Bold, 12)), spec.Name, 12,
+                active ? Palette.Danger : hover ? Palette.Text : Palette.TextDim);
+            int n = _world.Hazards.Count[i];
+            if (n > 0) Gfx.TextRight(this, Fonts.Body, new Vector2(r.End.X - 10, r.GetCenter().Y + Gfx.CenterOffset(Fonts.Body, 10)), $"{n}번", 10, Palette.TextMuted);
+            var kind = spec.Kind;
+            _buttons.Add((r, () =>
+            {
+                _main.PickHazard(kind);
+                if (Hazards.Spec(kind).Target != HazardTarget.Ship) _hazardMenu = false;
+            }));
+            if (hover) _hazardHover = spec.Hint;
+        }
+        string foot = _hazardHover ?? (_world.Hazards.RandomCount > 0 ? $"무작위 사고 {_world.Hazards.RandomCount}번 · 마지막: {_world.Hazards.LastRandomText}" : "무작위 사고는 되감기·불러오기에도 같은 때 같은 사고로 난다 (시드·수치가 같으면)");
+        Gfx.Text(this, Fonts.Body, new Vector2(x, card.End.Y - 12), Clip(foot, card.Size.X - pad * 2, 10), 10, Palette.TextMuted);
+        _hazardHover = null;
+    }
+
+    private string? _hazardHover;
+
+    private static string Clip(string s, float width, int size)
+    {
+        if (Gfx.Width(Fonts.Body, s, size) <= width) return s;
+        while (s.Length > 4 && Gfx.Width(Fonts.Body, s + "…", size) > width) s = s[..^1];
+        return s + "…";
     }
 
     // ─────────────────────────────── 오른쪽: 승무원 목록 ───────────────────────────────
@@ -896,6 +1020,7 @@ public partial class Hud : Control
             case FurnitureType.GrowBed when f.Machine?.Crop is CropState crop:
                 list.Add(("생장", crop.Ripe ? "수확 가능" : Pct(crop.Growth)));
                 list.Add(("돌봄", Pct(crop.Care)));
+                if (crop.Blight > 0f) list.Add(("병충해", $"{Pct(crop.Blight)} · " + (crop.BlightKnown ? "약을 쳐야 한다" : "아무도 모른다")));
                 break;
             case FurnitureType.Stove:
                 list.Add(("조리 중", f.Machine!.Active ? "예" : "아니오"));
@@ -992,6 +1117,13 @@ public partial class Hud : Control
     {
         var lines = new List<(string, string, Color)>();
         var ship = _world.Ship;
+        // v11.2 유독 가스
+        if (room.Air.Toxin > 0.01f)
+        {
+            var src = _world.Hazards.GasSource(room);
+            lines.Add(("유독 가스", $"{room.Air.Toxin * 100:0}%" + (src != null ? $" · {src.Body.Label}에서 새는 중" : " · 걷히는 중") + (room.Air.Toxin > 0.2f ? " · 우주복 없이는 위험" : ""),
+                room.Air.Toxin > 0.2f ? Palette.Danger : Palette.Warning));
+        }
         var walls = ship.Walls.Where(kv => kv.Value.IsHull && Hull.InsideRoom(ship, kv.Key) == room).Select(kv => kv.Value).ToList();
         if (walls.Count > 0)
         {
@@ -1212,7 +1344,7 @@ public partial class Hud : Control
         if (_main.Tool != IncidentTool.None)
         {
             float pulse = 0.7f + 0.3f * Mathf.Sin(_time * 4f);
-            Gfx.Pill(this, Fonts.Bold, new Vector2(cx, y), $"{IncidentTools.Hint(_main.Tool)}  ·  Shift 연속 · Esc 취소", 13,
+            Gfx.Pill(this, Fonts.Bold, new Vector2(cx, y), $"{_main.ToolHint}  ·  Shift 연속 · Esc 취소", 13,
                 Palette.Danger.WithAlpha(pulse), new Color(0.08f, 0.04f, 0.05f, 0.92f), Palette.Danger.WithAlpha(0.45f), 14f, 7f);
             y += 36f;
         }

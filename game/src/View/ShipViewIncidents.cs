@@ -509,6 +509,9 @@ public partial class ShipView
             case IncidentTool.PipeBurst:
                 PaintPipeToolPreview(ci, cell, pulse);
                 break;
+            case IncidentTool.Hazard:
+                PaintHazardPreview(ci, mouse, pulse);
+                break;
         }
     }
 

@@ -81,6 +81,9 @@ public sealed class Robot
     /// <summary>싣고 다니는 것.</summary>
     public ItemStack? Cargo { get; internal set; }
 
+    /// <summary>v11.2: 싣고 있는 식사 중 균이 든 것.</summary>
+    public int CarryTaint { get; set; }
+
     public string Doing { get; internal set; } = "대기";
 
     internal List<RobotStep>? Steps { get; set; }
@@ -165,6 +168,7 @@ internal sealed class RTake : RobotStep
         if (!_partialOk && _from.Storage.Count(_kind) < _count) return ToilStatus.Failed;
         int got = _from.Storage.Take(_kind, _count);
         if (got <= 0) return ToilStatus.Failed;
+        r.CarryTaint += _from.Storage.LastTainted;
         r.Cargo = new ItemStack(_kind, (r.Cargo?.Count ?? 0) + got);
         return ToilStatus.Succeeded;
     }
@@ -179,6 +183,12 @@ internal sealed class RPut : RobotStep
     {
         if (r.Cargo is not ItemStack held || _into.Storage == null) return ToilStatus.Succeeded;
         int put = _into.Storage.Add(held.Kind, held.Count);
+        if (held.Kind == ItemKind.Meal && r.CarryTaint > 0)
+        {
+            int t = Math.Min(put, r.CarryTaint);
+            _into.Storage.Taint(t);
+            r.CarryTaint -= t;
+        }
         r.Cargo = held.Count - put > 0 ? new ItemStack(held.Kind, held.Count - put) : null;
         return ToilStatus.Succeeded;
     }
@@ -745,6 +755,8 @@ public sealed class RobotSystem
             if (!CanDo(r.Kind, o.Kind)) continue;
             // 원자로 정비는 사람 몫 (제어봉·계측을 손보는 기관 일이다)
             if (o.Kind == WorkKind.Maintain && o.Target.Furniture?.Type == FurnitureType.ReactorCore) continue;
+            // v11.2 병충해는 사람 눈과 손으로 (로봇 분무기는 잎 뒷면의 벌레를 못 본다)
+            if (o.Kind == WorkKind.Tend && o.Target.Furniture?.Machine?.Crop is { Blight: > 0f }) continue;
             if (o.Target.CurrentRoom is Room room && (room.Abandoned || room.OffLimits || w.Fire.CountIn(room) > 0)) continue;
             if (Spot(r, o, dist) is not Cell spot) continue;
             float score = o.Urgency - dist.Get(spot) / 9000f;

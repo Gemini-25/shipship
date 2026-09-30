@@ -77,7 +77,8 @@ public static class Hull
     /// 불난 방은 닫아 연기가 번지지 않고 불이 산소를 못 받게 한다.
     /// </summary>
     public static bool WantVentOpen(World w, Room r) =>
-        !r.Leaking && !w.Fire.IsKnown(r) && !r.Abandoned && !r.Detached && !r.VentSealed && !w.Structure.DuctOpen && !w.Sensors.Sealing(r);
+        !r.Leaking && !w.Fire.IsKnown(r) && !r.Abandoned && !r.Detached && !r.VentSealed && !w.Structure.DuctOpen && !w.Sensors.Sealing(r)
+        && w.Hazards.GasSource(r) == null; // v11.2: 가스가 새는 방은 막아 둔다 (막고 나면 열어 세정기로 걸러 낸다)
 
     /// <summary>실제로 새는 넓이 (봉합하면 0).</summary>
     public static float EffectiveBreach(WallState w) => w.Patched ? 0f : w.Breach;

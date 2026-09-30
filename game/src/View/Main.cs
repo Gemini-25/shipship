@@ -7,7 +7,7 @@ using ShipSim.Core;
 namespace ShipSim.View;
 
 /// <summary>관찰자가 일으킬 수 있는 사고. 도구를 고르고 우주선을 클릭하면 그 자리에서 일어난다.</summary>
-public enum IncidentTool { None, SmallMeteor, BigMeteor, HugeMeteor, Fire, Break, PipeBurst }
+public enum IncidentTool { None, SmallMeteor, BigMeteor, HugeMeteor, Fire, Break, PipeBurst, Hazard /* v11.2 사고 더 보기 (ToolHazard) */ }
 
 public static class IncidentTools
 {
@@ -82,6 +82,11 @@ public partial class Main : Node2D
 
     /// <summary>지금 고른 사고 도구 (None이면 평소처럼 선택).</summary>
     public IncidentTool Tool { get; set; } = IncidentTool.None;
+
+    /// <summary>v11.2: Tool이 Hazard일 때 어떤 사고인지.</summary>
+    public HazardKind ToolHazard { get; private set; }
+
+    public string ToolHint => Tool == IncidentTool.Hazard ? Hazards.Spec(ToolHazard).Hint + " · 클릭" : IncidentTools.Hint(Tool);
 
     /// <summary>불러오는 중이면 그 재생기 (같은 시드에서 기록된 사고를 다시 일으키며 저장한 틱까지 빨리 감는다).</summary>
     public ReplayRunner? Replaying { get; private set; }
@@ -239,6 +244,7 @@ public partial class Main : Node2D
 
         UpdateHover();
         _stars.CameraPosition = Camera.Position;
+        _stars.Storm = Sim.Hazards.StormActive ? 1f : 0f;
 
         if (_screenshotFrames > 0 && --_screenshotFrames == 0) TakeScreenshotAndQuit();
     }
@@ -423,7 +429,7 @@ public partial class Main : Node2D
                 case Key.H: FitCamera(); break;
                 case Key.Escape:
                     if (Tool != IncidentTool.None) Tool = IncidentTool.None;
-                    else ClearSelection();
+                    else if (!Hud.CloseHazardMenu()) ClearSelection();
                     break;
                 case Key.Z: ToggleTool(IncidentTool.SmallMeteor); break;
                 case Key.X: ToggleTool(IncidentTool.BigMeteor); break;
@@ -538,6 +544,61 @@ public partial class Main : Node2D
 
     public void ToggleTool(IncidentTool t) => Tool = Tool == t ? IncidentTool.None : t;
 
+    /// <summary>v11.2 사고 더 보기: 배 전체에 거는 사고는 바로, 대상이 있는 사고는 클릭할 곳을 고르게 한다.</summary>
+    public void PickHazard(HazardKind k)
+    {
+        if (Hazards.Spec(k).Target == HazardTarget.Ship)
+        {
+            Tool = IncidentTool.None;
+            if (Replaying != null) return; // 불러오는 동안엔 역사를 바꾸지 않는다
+            if (Player.Hazard(Sim, k, default) == null)
+                Sim.Log.Add(Sim.Tick, LogKind.Ship, $"{Hazards.Name(k)}: 지금은 걸 수 없다" + (k switch
+                {
+                    HazardKind.ReactorTransient => " (원자로가 꺼져 있다)",
+                    HazardKind.ComputerFault => " (주 컴퓨터가 없거나 이미 고장)",
+                    HazardKind.DebrisCloud => " (이미 잔해 지대다)",
+                    HazardKind.WaterContamination => " (정수기가 없거나 물이 거의 없다)",
+                    _ => "",
+                }));
+            return;
+        }
+        if (Tool == IncidentTool.Hazard && ToolHazard == k) { Tool = IncidentTool.None; return; }
+        ToolHazard = k;
+        Tool = IncidentTool.Hazard;
+    }
+
+    /// <summary>v11.2 무작위 사고 주기 (평균 며칠에 한 번, 0이면 끔). 기록되는 수치라 되감기·불러오기가 같은 역사를 흘린다.</summary>
+    public void SetRandomIncidents(float days, bool persist = true)
+    {
+        if (MathF.Abs(HazardSystem.RandomDays - days) < 1e-4f) return;
+        if (Replaying == null) Player.Tune(Sim, "incident.days", days);
+        else Tuning.Apply("incident.days", days);
+        if (persist) Settings.SaveTuning(); // 다음 항해에도 (명령줄 --random은 이번 항해만)
+    }
+
+    /// <summary>v11.2: 사고 더 보기의 대상 (화면 미리보기와 클릭이 같은 규칙).</summary>
+    public (Cell at, int id, bool ok) HazardAim(Vector2 worldPx)
+    {
+        var cell = ShipView.CellAtPx(worldPx);
+        var k = ToolHazard;
+        switch (Hazards.Spec(k).Target)
+        {
+            case HazardTarget.Room:
+                return Hazards.RoomAt(Sim, cell) is Room r && !r.Detached ? (cell, -1, true) : (cell, -1, false);
+            case HazardTarget.Machine:
+                return Hazards.MachineAt(Sim, k, cell) is Furniture f ? (f.Cells[0], -1, true) : (cell, -1, false);
+            case HazardTarget.Hull:
+                return Hazards.HullAt(Sim, cell) is Cell h ? (h, -1, true) : (cell, -1, false);
+            case HazardTarget.Door:
+                return Hazards.DoorAt(Sim, cell) is Door d ? (d.Cell, -1, true) : (cell, -1, false);
+            case HazardTarget.Crew:
+                return ShipView.PickCrew(worldPx) is CrewMember c && !c.Dead ? (cell, c.Id, true) : (cell, -1, false);
+            case HazardTarget.Robot:
+                return ShipView.PickRobot(worldPx) is Robot rb ? (cell, rb.Id, true) : (cell, -1, false);
+        }
+        return (cell, -1, true);
+    }
+
     /// <summary>고른 도구로 그 자리에 사고를 일으킨다. 알맞은 대상이 아니면 false.</summary>
     private bool ApplyTool(Vector2 worldPx)
     {
@@ -570,6 +631,22 @@ public partial class Main : Node2D
             }
             case IncidentTool.PipeBurst:
                 return Player.PipeBurst(Sim, cell, 0.9f) != null;
+            case IncidentTool.Hazard:
+            {
+                var (at, id, ok) = HazardAim(worldPx);
+                if (!ok) return false;
+                if (Player.Hazard(Sim, ToolHazard, at, id) != null) return true;
+                Sim.Log.Add(Sim.Tick, LogKind.Ship, $"{Hazards.Name(ToolHazard)}: 여기에는 걸 수 없다" + (ToolHazard switch
+                {
+                    HazardKind.GasLeak => " (설비가 없는 방)",
+                    HazardKind.FoodPoisoning => " (식사가 없다)",
+                    HazardKind.CropBlight => " (이미 병충해가 있다)",
+                    HazardKind.DoorJam => " (이미 고장 난 문)",
+                    HazardKind.LightsOut => " (이미 캄캄하다)",
+                    _ => "",
+                }));
+                return false;
+            }
         }
         return false;
     }
@@ -758,6 +835,49 @@ public partial class Main : Node2D
                     break;
                 case "--tool":
                     if (Enum.TryParse<IncidentTool>(value, out var tool)) Tool = tool;
+                    break;
+                case "--hazard":
+                {
+                    // v11.2 화면 확인용: --hazard=GasLeak:LifeSupport (방 종류) · --hazard=CropBlight:Hydroponics (그 방 첫 재배대)
+                    //   · --hazard=SolarStorm · --hazard=WorkAccident:0 (승무원 번호) · --hazard=RobotMalfunction:0 (로봇 번호)
+                    var bits = value.Split(':');
+                    if (!Enum.TryParse<HazardKind>(bits[0], out var hk)) break;
+                    Cell at = default;
+                    int hid = -1;
+                    string harg = bits.Length > 1 ? bits[1] : "";
+                    switch (Hazards.Spec(hk).Target)
+                    {
+                        case HazardTarget.Room when Enum.TryParse<RoomType>(harg, out var rt):
+                            at = Sim.Ship.RoomsOf(rt).First().Cells.First(Sim.Ship.IsOpenFloor);
+                            break;
+                        case HazardTarget.Machine:
+                        {
+                            var want = hk == HazardKind.CropBlight ? FurnitureType.GrowBed : FurnitureType.MealDispenser;
+                            var fs = Sim.Ship.FurnitureOf(want).Where(f => Hazards.MachineAt(Sim, hk, f.Cells[0]) == f).ToList();
+                            if (Enum.TryParse<RoomType>(harg, out var mr)) fs = fs.Where(f => f.Room.Type == mr).ToList();
+                            if (fs.Count > 0) at = fs[0].Cells[0];
+                            break;
+                        }
+                        case HazardTarget.Hull when Enum.TryParse<RoomType>(harg, out var hr):
+                            at = Scenarios.OuterTarget(Sim, hr);
+                            break;
+                        case HazardTarget.Door:
+                            at = Sim.Ship.Doors.First(d => !d.IsExternal && d.RoomA != null && d.RoomB != null).Cell;
+                            break;
+                        case HazardTarget.Crew:
+                        case HazardTarget.Robot:
+                            hid = int.TryParse(arg, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) ? n : 0;
+                            if (Hazards.Spec(hk).Target == HazardTarget.Robot && hid < Sim.Robots.Robots.Count) hid = Sim.Robots.Robots[hid].Id;
+                            break;
+                    }
+                    Player.Hazard(Sim, hk, at, hid);
+                    break;
+                }
+                case "--hazardmenu":
+                    Hud.OpenHazardMenu();
+                    break;
+                case "--random":
+                    SetRandomIncidents(float.Parse(value, CultureInfo.InvariantCulture), persist: false);
                     break;
                 case "--view":
                     if (Enum.TryParse<ViewMode>(value, out var vm)) ViewMode = vm;

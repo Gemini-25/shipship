@@ -253,6 +253,16 @@ public sealed class PropulsionSystem
         return true;
     }
 
+    /// <summary>v11.2 잔해 구름: 배가 밀려났다 (연소 없이, 그 공간의 규칙이 곧바로 적용된다).</summary>
+    internal void Drift(ZoneKind z)
+    {
+        Zone = z;
+        ZoneSince = _w.Tick;
+        HitsThisZone = 0;
+        NextAmbient = -1;
+        _w.Space.SetMean(ZoneDensity(z));
+    }
+
     /// <summary>화면·시험용: 곧바로 그 공간으로 (기록되지 않는다).</summary>
     public void Place(ZoneKind z)
     {

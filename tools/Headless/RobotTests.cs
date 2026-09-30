@@ -161,7 +161,8 @@ public static partial class Program
         // ── 9b) 엔진: 센서가 먼저 본 운석은 회피 기동으로 비키고(스치거나), 엔진이 멎은 배는 그대로 맞는다 ──
         {
             int dodged = 0, glanced = 0, attempts = 0, stoppedAttempts = 0, breachOk = 0, breachStopped = 0;
-            for (int k = 0; k < 8; k++)
+            // 확률이라 표본을 넉넉히 (16번): 자동 조종이면 반쯤 비키거나 스친다
+            for (int k = 0; k < 16; k++)
                 foreach (bool stopped in new[] { false, true })
                 {
                     var w = DayOne(seed + k * 37, "Mirinae");
@@ -172,8 +173,8 @@ public static partial class Program
                     if (stopped) { stoppedAttempts += w.Propulsion.Evasions; breachStopped += w.History.Breaches; }
                     else { attempts += w.Propulsion.Evasions; dodged += w.Propulsion.Dodged; glanced += w.Propulsion.Glanced; breachOk += w.History.Breaches; }
                 }
-            Check("엔진으로 운석을 비킨다 (엔진이 멎으면 못 비킨다)", attempts >= 6 && dodged + glanced >= 3 && stoppedAttempts == 0 && breachOk < breachStopped,
-                $"회피 {attempts}/8 · 비껴감 {dodged} · 스침 {glanced} · 엔진 멎은 배 회피 {stoppedAttempts} · 파공 {breachOk} ↔ {breachStopped}");
+            Check("엔진으로 운석을 비킨다 (엔진이 멎으면 못 비킨다)", attempts >= 12 && dodged + glanced >= 4 && stoppedAttempts == 0 && breachOk < breachStopped,
+                $"회피 {attempts}/16 · 비껴감 {dodged} · 스침 {glanced} · 엔진 멎은 배 회피 {stoppedAttempts} · 파공 {breachOk} ↔ {breachStopped}");
         }
 
         // ── 9c) 항로: 원료가 모자라면 잔해 지대로 가고(회의), 거기선 작은 운석이 날아든다. 엔진이 멎으면 빠져나오지 못한다 ──

@@ -169,7 +169,10 @@ public sealed class PowerGrid
         BatteryCharge = BatteryCapacity * 0.8f;
     }
 
-    private Machine? Reactor => _world.Ship.FurnitureOf(FurnitureType.ReactorCore).FirstOrDefault()?.Machine;
+    public Machine? Reactor => _world.Ship.FurnitureOf(FurnitureType.ReactorCore).FirstOrDefault()?.Machine;
+
+    /// <summary>v11.2 원자로 이상: 노심 온도가 갑자기 뛴다 (냉각이 모자라면 과열 정지로 이어진다).</summary>
+    internal void Heat(float celsius) => ReactorTemperature += celsius;
 
     /// <summary>v10.4: 이 배 원자로의 정격 (크기 × 테크 단계).</summary>
     public float ReactorRated => ReactorMaxKw * (Reactor?.Rating ?? 1f);

@@ -68,6 +68,8 @@ public sealed class ChoresActivity : Activity
 
         // EVA: 발밑이 우주다. 겁 많은 사람은 꺼리고, 긴장한 사람은 더 꺼린다
         if (eva) score -= 0.12f + 0.35f * MathF.Pow(1f - c.Traits.Bravery, 1.3f) + 0.3f * c.Memory.Trauma;
+        // v11.2 태양 폭풍: 선체 밖은 방사선 — 급하지 않으면 지나갈 때까지 미룬다
+        if (eva && w.Hazards.StormActive && !emergency) score -= 0.8f;
 
         // 겁 많은 사람은 위험한 방의 일을 꺼린다 (용감한 사람은 거의 개의치 않음)
         if (!eva && o.Target.CurrentRoom is Room room)
@@ -305,6 +307,7 @@ public static partial class WorkPlanners
             // v11.2 항로와 추진
             WorkKind.RefillPropellant => RefillPropellant(activity, o, c, w, dist, at, out blocked),
             WorkKind.ChangeCourse => ChangeCourse(activity, o, c, w, dist, at, out blocked),
+            WorkKind.DiscardFood => DiscardFood(activity, o, c, w, dist, at, out blocked),
             _ => null,
         };
         if (job != null && suitUp.Count > 0) job.Prepend(suitUp);
@@ -313,7 +316,7 @@ public static partial class WorkPlanners
 
     private static bool NeedsSuit(WorkOrder o, CrewMember c, World w, Cell at)
     {
-        if (o.Target.CurrentRoom is Room r && (r.Unbreathable || r.Air.Pressure < 60f)) return true;
+        if (o.Target.CurrentRoom is Room r && (r.Unbreathable || r.Air.Pressure < 60f || r.Air.Toxin > 0.2f)) return true; // v11.2 유독 가스
         if (w.Ship.RoomAt(at) is Room ar && ar.Unbreathable) return true;
         // 우주복 없이 (비상 개방만 하고) 갈 수 있는지
         var profile = new PathProfile(c.PathProfile.HazardScale, false, o.Urgency >= 0.9f);
@@ -652,18 +655,33 @@ public static partial class WorkPlanners
     {
         var bed = o.Target.Furniture!;
         var crop = bed.Machine!.Crop!;
+        bool blight = crop.Blight > 0f && crop.BlightKnown; // v11.2 병충해: 잎을 한 장씩 뒤집어 약을 친다
         var toils = Plans.DropOff(c, w, dist);
         toils.Add(new GotoToil(at));
-        toils.Add(new WorkToil(0.3f, Skill.Botany, bed.Center) { Resume = o });
+        toils.Add(new WorkToil(blight ? 0.9f : 0.3f, Skill.Botany, bed.Center) { Resume = o });
         toils.Add(new DoToil((cm, world) =>
         {
             if (o.Closed) return true;
             crop.Care = 1f;
+            if (crop.Blight > 0f)
+            {
+                float skill = cm.SkillLevel(Skill.Botany);
+                crop.Blight = MathF.Max(0f, crop.Blight - (0.55f + 0.5f * skill));
+                if (crop.Blight <= 0f)
+                {
+                    crop.BlightKnown = false;
+                    world.Hazards.BlightCured++;
+                    MarkLog.Add(bed.Machine!.Marks, world.Tick, $"{cm.Name}: 병충해를 잡았다");
+                    world.History.Add(world, HistoryKind.Response, $"{Ko.IGa(cm.Name)} {bed.Label}의 병충해를 잡았다", bed.Room, new[] { cm }, log: true, crewLog: cm.Id);
+                }
+                else world.Log.Add(world.Tick, LogKind.Work, $"{bed.Label}에 약을 쳤다 — 벌레가 아직 남았다 ({crop.Blight * 100:0}%)", cm.Id);
+                cm.Practice(Skill.Botany, 0.03f);
+            }
             cm.Practice(Skill.Botany, 0.01f);
             world.Board.Close(o);
             return true;
         }));
-        return Wrap(a, o, c, w, "재배", toils, null);
+        return Wrap(a, o, c, w, blight ? "병충해 방제" : "재배", toils, blight ? $"{bed.Label} 병충해 방제" : null);
     }
 
     // ── 조리 ──

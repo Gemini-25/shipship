@@ -16,7 +16,7 @@ public static class Severity
         if (r.Abandoned) return RoomSeverity.Abandoned;
         bool fire = w.Fire.IsKnown(r) && w.Fire.CountIn(r) > 0;
         if (fire || r.Unbreathable) return RoomSeverity.Critical;
-        if (r.Leaking || r.Lockdown || r.Air.Smoke > 0.25f || w.Crew.Any(c => c.Down && !c.Dead && c.CareBed == null && c.CarriedBy == null && c.Room == r))
+        if (r.Leaking || r.Lockdown || r.Air.Smoke > 0.25f || r.Air.Toxin > 0.2f || w.Crew.Any(c => c.Down && !c.Dead && c.CareBed == null && c.CarriedBy == null && c.Room == r))
             return RoomSeverity.Urgent;
         return RoomSeverity.Normal;
     }

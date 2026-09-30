@@ -110,6 +110,7 @@ public static class NeedsSystem
         if (stuffy) stress += 0.04f;
         if (air != null && !suited && (air.Temperature < 12f || air.Temperature > 32f)) stress += 0.03f;
         if (air != null && air.Smoke > 0.2f) stress += 0.08f;
+        if (air != null && !suited && air.Toxin > 0.1f) stress += 0.1f; // v11.2 매캐한 냄새
         stress += 0.05f * v.Injury; // 아프다
 
         // ── v7 기억: 악몽, 긴장(기저치), 전우 ──
@@ -139,6 +140,11 @@ public static class NeedsSystem
             AddInjury(v, 0.3f * dt, "감압");
         }
         if (!suited && air != null && air.Smoke > 0.4f) damage += 0.08f * air.Smoke; // 연기 흡입
+        if (!suited && air != null && air.Toxin > 0.15f)                  // v11.2 유독 가스 흡입 (폐에 남는다)
+        {
+            damage += 0.2f * air.Toxin;
+            AddInjury(v, 0.04f * air.Toxin * dt, "유독 가스");
+        }
 
         // 쓰러진 채 치료 침대에 눕혀졌으면 침대가 돌봐 준다
         bool inCare = c.Down && c.CareBed?.Machine is Machine bed && bed.Efficiency > 0f;

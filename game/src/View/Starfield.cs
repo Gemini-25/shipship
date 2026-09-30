@@ -21,6 +21,10 @@ public partial class Starfield : Node2D
     /// <summary>카메라 월드 위치 (시차용).</summary>
     public Vector2 CameraPosition { get; set; }
 
+    /// <summary>v11.2 태양 폭풍 세기 0~1 (오로라처럼 하늘이 일렁인다).</summary>
+    public float Storm { get; set; }
+    private float _storm;
+
     public override void _Ready()
     {
         var rng = new RandomNumberGenerator { Seed = 1977 };
@@ -62,6 +66,28 @@ public partial class Starfield : Node2D
         {
             DrawNebula(new Vector2(size.X * 0.18f, size.Y * 0.85f), size.X * 0.42f, new Color("#1a2b52"));
             DrawNebula(new Vector2(size.X * 0.82f, size.Y * 0.12f), size.X * 0.32f, new Color("#2a1f4a"));
+        }
+
+        // v11.2 태양 폭풍: 보라·초록 띠가 화면을 가로질러 일렁인다
+        _storm = Mathf.MoveToward(_storm, Storm, 0.02f);
+        if (_storm > 0.01f)
+        {
+            for (int band = 0; band < 3; band++)
+            {
+                var col = band == 1 ? new Color("#6cf0a0") : new Color("#b27cff");
+                float baseY = size.Y * (0.2f + 0.28f * band);
+                const int n = 40;
+                var pts = new Vector2[n * 2];
+                for (int i = 0; i < n; i++)
+                {
+                    float x = size.X * i / (n - 1f);
+                    float y = baseY + Mathf.Sin(x * 0.004f + _time * (0.25f + 0.1f * band) + band * 2f) * 60f + Mathf.Sin(x * 0.011f - _time * 0.4f) * 18f;
+                    float h = 50f + 30f * Mathf.Sin(x * 0.007f + _time * 0.6f + band);
+                    pts[i] = new Vector2(x, y);
+                    pts[n * 2 - 1 - i] = new Vector2(x, y + h);
+                }
+                DrawColoredPolygon(pts, col.WithAlpha(0.11f * _storm));
+            }
         }
 
         foreach (var s in _stars)

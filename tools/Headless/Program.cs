@@ -117,6 +117,7 @@ public static partial class Program
             return RunPipeGate(int.TryParse(args.FirstOrDefault(a => a.StartsWith("--runs="))?.Split('=')[1], out var prn) ? prn : 20, seed);
         if (args.Contains("--selftest")) return RunSelfTest(seed);
         if (args.Contains("--robottest")) return RunRobotTest(seed);
+        if (args.Contains("--hazardtest")) return RunHazardTest(seed);
         if (args.FirstOrDefault(a => a.StartsWith("--partition=")) is string pc)
             return RunPartitionCampaign(days, seed, pc.Split('=')[1]);
         if (args.Contains("--gate=partition"))
@@ -233,6 +234,13 @@ public static partial class Program
         Console.WriteLine($"고장 누적 {totalFaults}건 · 정비 누적 {ship.Machines.Sum(m => m.ServiceCount)}회 · 남은 작업 {world.Board.OpenCount}");
         PrintRobots(world);
         Console.WriteLine($"예방: {world.Precursors}");
+        if (world.Hazards.RandomCount > 0 || world.Hazards.Count.Any(n => n > 0))
+        {
+            // v11.2 무작위 사고 (켜져 있을 때): 무엇이 언제 났고, 사람이 다치거나 쓰러졌나
+            var rnd = world.Log.Entries.Where(e => e.Text.StartsWith("무작위 사고:")).Select(e => $"{SimTime.Day(e.Tick)}일 {e.Text["무작위 사고: ".Length..]}").ToList();
+            Console.WriteLine($"무작위 사고 {world.Hazards.RandomCount}번 (평균 {HazardSystem.RandomDays:0.#}일): {string.Join(" · ", rnd)}");
+            Console.WriteLine($"  식중독 {world.Hazards.Poisoned}명 · 버린 식사 {world.Hazards.FoodDiscarded} · 병충해 잡음 {world.Hazards.BlightCured} · 병충해로 죽은 작물 {world.Hazards.BlightKilled} · 쓰러짐 {world.History.Events.Count(e => e.Kind == HistoryKind.Casualty)} · 사망 {world.Crew.Count(c => c.Dead)}");
+        }
         PrintLedger(world, days);
         ok &= Check(minO2 > 17f, $"산소 부족 (최저 {minO2:0.0})");
         ok &= Check(maxCO2 < 1.5f, $"CO2 과다 (최고 {maxCO2:0.00})");

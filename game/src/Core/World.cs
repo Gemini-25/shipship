@@ -80,6 +80,9 @@ public sealed class World
     /// <summary>v11.2 엔진·추진제·항로: 회피 기동, 보통 항로 ↔ 잔해 지대.</summary>
     public PropulsionSystem Propulsion { get; }
 
+    /// <summary>v11.2 사고 종류 (운석우·태양 폭풍·가스·병충해·식중독…)와 무작위 사고.</summary>
+    public HazardSystem Hazards { get; }
+
     /// <summary>v9 배관망: 냉각 루프(고온관·분기·귀환관·방열판, 냉각수)와 급수관.</summary>
     public PipeNetwork Piping { get; }
 
@@ -166,6 +169,7 @@ public sealed class World
         Drones = new DroneSystem(this);
         Robots = new RobotSystem(this);
         Propulsion = new PropulsionSystem(this, 1f);
+        Hazards = new HazardSystem(this, seed);
         Piping = new PipeNetwork(this);
         Automation = new AutomationSystem(this);
         Fixtures = new FixturesSystem(this);
@@ -223,6 +227,7 @@ public sealed class World
             Drones.SystemUpdate(dt);
             Robots.SystemUpdate(dt);
             Propulsion.SystemUpdate(dt);
+            Hazards.SystemUpdate(dt);
             Ledger.Sample(this, dt);
             CheckShip();
             foreach (var c in Crew) Memory.Update(this, c);
@@ -234,6 +239,7 @@ public sealed class World
             Research += Tech.ResearchPerHour(this) * (SimTime.Minutes(5) / (float)SimTime.TicksPerHour);
             Tech.NoteUnlocks(this, before);
         }
+        Hazards.Step();
         Sensors.Step();
         Propulsion.Step();
         Board.Update();

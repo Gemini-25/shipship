@@ -79,6 +79,9 @@ public sealed class RoomAir
     /// <summary>연기 0~1 (화재가 들어오면 쓰임).</summary>
     public float Smoke { get; set; }
 
+    /// <summary>v11.2 유독 가스(냉매) 0~1.5. 0.25를 넘으면 우주복 없이는 못 버틴다.</summary>
+    public float Toxin { get; set; }
+
     /// <summary>선체 파공으로 우주로 새는 속도 (칸/시간). 기압 × 이 값 / 부피 만큼 빠진다. 0이면 밀폐.</summary>
     public float Leak { get; set; }
 

@@ -104,6 +104,13 @@ public static class Player
         return true;
     }
 
+    /// <summary>v11.2: 사고 목록의 사고를 건다 (칸 또는 승무원·로봇 번호). 걸었으면 무엇을 했는지.</summary>
+    public static string? Hazard(World w, HazardKind kind, Cell at, int id = -1)
+    {
+        Record(w, "hazard", $"{kind} {at.X} {at.Y} {id}");
+        return Hazards.Apply(w, kind, at, id);
+    }
+
     /// <summary>불러올 때: 기록된 일을 그대로 다시 한다 (다시 기록도 된다 → 불러온 뒤 또 저장할 수 있다).</summary>
     public static void Apply(World w, PlayerCommand cmd)
     {
@@ -136,6 +143,9 @@ public static class Player
             case "breaktype":
                 BreakAll(w, a[0], a.Length > 1 && a[1] == "1", a.Length > 2 ? Enum.Parse<FaultKind>(a[2]) : null);
                 break;
+            case "hazard":
+                Hazard(w, Enum.Parse<HazardKind>(a[0]), new Cell(int.Parse(a[1], Inv), int.Parse(a[2], Inv)), a.Length > 3 ? int.Parse(a[3], Inv) : -1);
+                break;
             case "scenario":
                 Scenario(w, cmd.Arg, out _);
                 break;
@@ -162,7 +172,7 @@ public static class Player
 public static class SaveGame
 {
     /// <summary>v8: 설계도(드론 거치대)와 구조가 바뀌어 v7 저장(1)은 같은 역사를 되짚을 수 없다.</summary>
-    public const string Header = "shipsim-save 10";
+    public const string Header = "shipsim-save 11";
 
     public static string Write(World w)
     {
@@ -206,8 +216,8 @@ public static class SaveGame
     {
         var lines = text.Replace("\r", "").Split('\n', StringSplitOptions.RemoveEmptyEntries);
         if (lines.Length > 0 && lines[0].Trim() == "shipsim-save 1") throw new FormatException("v7 저장 파일이다 — v8에서 우주선 설계(드론 거치대)와 구조가 바뀌어 다시 돌릴 수 없다");
-        if (lines.Length > 0 && lines[0].Trim() is "shipsim-save 2" or "shipsim-save 3" or "shipsim-save 4" or "shipsim-save 5" or "shipsim-save 6" or "shipsim-save 7" or "shipsim-save 8" or "shipsim-save 9")
-            throw new FormatException("예전 판의 저장 파일이다 — v9(배관)·v9.2(함교의 주 컴퓨터)·v9.3(저출력 운영)·v10.1(통신실, 날아오는 운석)·v10.2(칸막이로 방을 나눔)·v10.3(지문이 더 많은 상태를 본다)·v10.5(설비 단계·방 모듈·연구)·v10.10(선내 로봇·자원 회복)에서 우주선 설계와 규칙이 바뀌어 같은 역사를 다시 돌릴 수 없다");
+        if (lines.Length > 0 && lines[0].Trim() is "shipsim-save 2" or "shipsim-save 3" or "shipsim-save 4" or "shipsim-save 5" or "shipsim-save 6" or "shipsim-save 7" or "shipsim-save 8" or "shipsim-save 9" or "shipsim-save 10")
+            throw new FormatException("예전 판의 저장 파일이다 — v9(배관)·v9.2(함교의 주 컴퓨터)·v9.3(저출력 운영)·v10.1(통신실, 날아오는 운석)·v10.2(칸막이로 방을 나눔)·v10.3(지문이 더 많은 상태를 본다)·v10.5(설비 단계·방 모듈·연구)·v10.10(선내 로봇·자원 회복)·v11.2(엔진·항로, 사고 종류)에서 우주선 설계와 규칙이 바뀌어 같은 역사를 다시 돌릴 수 없다");
         if (lines.Length == 0 || lines[0].Trim() != Header) throw new FormatException("저장 파일이 아니다");
         int seed = 0, crew = 0;
         string? ship = null;
@@ -327,6 +337,13 @@ public static class SaveGame
         I(w.Precursors.Prevented); I(w.Precursors.Missed);
         // v11.2 추진
         F(w.Propulsion.Propellant); I((int)w.Propulsion.Zone); I(w.Propulsion.Dodged); I(w.Propulsion.Evasions); F(w.Space.Density);
+        // v11.2 사고 종류·무작위 사고
+        var hz = w.Hazards;
+        I(hz.NextRandom); I(hz.RandomRng.Draws); I(hz.RandomCount); I(hz.StormUntil); I(hz.Shower.Count); I(hz.Poisoned);
+        foreach (var r in w.Ship.Rooms) F(r.Air.Toxin);
+        foreach (var m in w.Ship.Machines) if (m.Crop is CropState cr) { F(cr.Blight); I(cr.BlightKnown ? 1 : 0); }
+        foreach (var f in w.Ship.Containers) { I(f.Storage!.Tainted); I(f.Storage.TaintKnown ? 1 : 0); }
+        foreach (var c in w.Crew) { I(c.CarryTaint); I(c.PoisonAt); }
         return h;
     }
 }
@@ -392,6 +409,8 @@ public sealed class ReplayRunner
             "breaktype" => a.Length >= 2 && (a.Length < 3 || Enum.TryParse<FaultKind>(a[2], out _)),
             "scenario" => Scenarios.All.Any(s => s.Name == c.Arg),
             "scarcity" or "death" => true,
+            "hazard" => a.Length >= 3 && Enum.TryParse<HazardKind>(a[0], out _) && int.TryParse(a[1], NumberStyles.Integer, inv, out _)
+                        && int.TryParse(a[2], NumberStyles.Integer, inv, out _) && (a.Length < 4 || int.TryParse(a[3], NumberStyles.Integer, inv, out _)),
             _ => false,
         };
         if (!ok) throw new FormatException($"다시 할 수 없는 기록이다: {c}");

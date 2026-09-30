@@ -123,6 +123,11 @@ public partial class OptionsPanel : PanelContainer
         box.AddChild(Caption("관찰"));
         box.AddChild(Check("치명 경보가 울리면 저절로 일시정지", Settings.AutoPauseCritical, on => Settings.AutoPauseCritical = on));
         box.AddChild(Check("사건 알림 (N: 그곳으로 · [ ] 사건 넘기기 · R 사건 직전으로 되감기)", Settings.EventToasts, on => Settings.EventToasts = on));
+        // v11.2 무작위 사고: 관찰자가 던지지 않아도 배가 사고를 겪는다 (사고 도구의 "더 보기"에서도 바꾼다)
+        _random = new OptionButton { CustomMinimumSize = new Vector2(360, 0) };
+        foreach (var (_, name) in RandomChoices) _random.AddItem($"무작위 사고: {name}");
+        _random.ItemSelected += i => _main.SetRandomIncidents(RandomChoices[i].days);
+        box.AddChild(_random);
         var speed = new OptionButton();
         foreach (var s in Main.Speeds) speed.AddItem($"시작 배속 {s}×");
         speed.Selected = Settings.StartSpeed;
@@ -206,11 +211,21 @@ public partial class OptionsPanel : PanelContainer
         box.AddChild(close);
     }
 
+    private OptionButton _random = null!;
+
+    private static readonly (float days, string name)[] RandomChoices =
+        { (0f, "끔 (관찰자가 던진 것만)"), (6f, "드물게 — 평균 6일에 한 번"), (3f, "보통 — 3일에 한 번"), (1.5f, "잦게 — 하루 반에 한 번"), (0.5f, "혼돈 — 반나절에 한 번") };
+
     public void Toggle()
     {
         Visible = !Visible;
         if (Visible)
         {
+            float d = ShipSim.Core.HazardSystem.RandomDays;
+            int best = 0;
+            for (int i = 1; i < RandomChoices.Length; i++)
+                if (d > 0f && (best == 0 || System.MathF.Abs(RandomChoices[i].days - d) < System.MathF.Abs(RandomChoices[best].days - d))) best = i;
+            _random.Selected = best;
             var vp = GetViewportRect().Size;
             Position = (vp - GetCombinedMinimumSize()) * 0.5f;
         }
