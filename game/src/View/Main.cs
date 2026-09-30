@@ -453,6 +453,7 @@ public partial class Main : Node2D
                 case Key.J: Hud.ToggleChronicle(); break;
                 case Key.K: Hud.ToggleChain(); break;
                 case Key.L: ToggleHighlight(); break;
+                case Key.I: Hud.ToggleCodex(); break;
                 case Key.G: Hud.ToggleMinimap(); break;
                 case Key.T: Hud.ToggleTech(); break;
                 case Key.F5: SaveGame(); break;
@@ -754,6 +755,9 @@ public partial class Main : Node2D
                 case "--break":
                     // --break=CoolantPump (첫 대), --break=OxygenGenerator* (그 종류 전부)
                     Player.BreakAll(Sim, value.TrimEnd('*'), value.EndsWith("*"));
+                    break;
+                case "--codex":
+                    Hud.CodexMode = true;
                     break;
                 case "--chain":
                     Hud.ToggleChain(); // v12.2 가장 최근 사고의 인과 사슬

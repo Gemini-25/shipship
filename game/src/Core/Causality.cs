@@ -167,6 +167,7 @@ public sealed class CauseLog
     {
         if (key.Length > 0 && _open.TryGetValue(key, out var existing)) { Nodes[existing].Repeats++; return existing; }
         if (parent < 0) parent = _ctx;
+        if (parent >= Nodes.Count) parent = -1; // 되감기 등으로 사라진 고리
         if (parent < 0) return Root(kind, text, room, at, key, lasting);
         var n = Make(kind, key, text, room, at, parent, lasting);
         return n.Id;
@@ -293,7 +294,7 @@ public sealed class CauseLog
     {
         var mid = l.Cells.Count > 0 ? l.Cells[l.Cells.Count / 2].Center : l.Room.Center;
         int parent = _ctx;
-        if (parent < 0 && l.Cells.Select(FireNodeAt).FirstOrDefault(x => x >= 0) is int fn && fn >= 0) parent = fn;
+        if (parent < 0) foreach (var c in l.Cells) { int fn = FireNodeAt(c); if (fn >= 0) { parent = fn; break; } }
         l.Node = Effect(CauseKind.Cut, $"cut:{l.Id}", $"{l.Room.Name} {UtilityNet.Name(l.Kind)} 끊김" + (l.Cause != null ? $" ({l.Cause})" : ""), l.Room, mid, parent);
     }
 

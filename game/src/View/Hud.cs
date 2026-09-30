@@ -91,8 +91,8 @@ public partial class Hud : Control
         float room = Screen.Y - y - 10f - Margin;
         if (_main.SelectedCrew is CrewMember crew) DrawCrewInspector(crew, y + 10f, mouse);
         else if (_main.SelectedRobot is Robot robot) DrawRobotInspector(robot, y + 10f, room);
-        else if (_main.SelectedFurniture is Furniture f) DrawMachineInspector(f, y + 10f, room);
-        else if (_main.SelectedRoom is Room r) DrawRoomInspector(r, y + 10f);
+        else if (_main.SelectedFurniture is Furniture f) { if (!DrawFurnitureCodex(f, y + 10f, room, mouse)) DrawMachineInspector(f, y + 10f, room, mouse); }
+        else if (_main.SelectedRoom is Room r) { if (!DrawRoomCodex(r, y + 10f, room, mouse)) DrawRoomInspector(r, y + 10f, mouse); }
         else DrawWorkBoard(y + 10f, room, mouse);
 
         DrawLog();
@@ -838,7 +838,7 @@ public partial class Hud : Control
 
     // ─────────────────────────────── 설비 상세 ───────────────────────────────
 
-    private void DrawMachineInspector(Furniture f, float y, float maxHeight)
+    private void DrawMachineInspector(Furniture f, float y, float maxHeight, Vector2 mouse)
     {
         var m = f.Machine;
         var accent = Palette.Room(f.Room.Type);
@@ -858,6 +858,7 @@ public partial class Hud : Control
         Gfx.RoundRect(this, new Rect2(x, y + 18, 16, 16), accent.WithAlpha(0.25f), 4, accent.WithAlpha(0.8f));
         Gfx.Text(this, Fonts.Bold, new Vector2(x + 26, y + 32), f.Label, 17, Palette.Text);
         Gfx.Text(this, Fonts.Body, new Vector2(x + 26, y + 50), f.Room.Name, 12, Palette.TextMuted);
+        if (Codex.Of(f.Type) != null) CodexButton(right, y + 38, mouse); // v12.2 설명서
         float ly = y + 60;
 
         if (m != null)
@@ -1056,7 +1057,7 @@ public partial class Hud : Control
 
     // ─────────────────────────────── 방 상세 ───────────────────────────────
 
-    private void DrawRoomInspector(Room room, float y)
+    private void DrawRoomInspector(Room room, float y, Vector2 mouse)
     {
         var accent = Palette.Room(room.Type);
         float x0 = Screen.X - Margin - RightColumnWidth;
@@ -1073,7 +1074,8 @@ public partial class Hud : Control
         Gfx.RoundRect(this, new Rect2(x, y + 18, 16, 16), accent.WithAlpha(0.25f), 4, accent.WithAlpha(0.8f));
         Gfx.Text(this, Fonts.Bold, new Vector2(x + 26, y + 32), room.Name, 18, Palette.Text);
         string power = room.Powered ? $"{PowerGrid.CircuitName(room.Circuit)}회로 · 전력 정상" : $"{PowerGrid.CircuitName(room.Circuit)}회로 · 정전";
-        Gfx.TextRight(this, Fonts.Body, new Vector2(right, y + 32), power, 12, room.Powered ? Palette.TextMuted : Palette.Danger);
+        Gfx.TextRight(this, Fonts.Body, new Vector2(right, y + 20), power, 12, room.Powered ? Palette.TextMuted : Palette.Danger);
+        CodexButton(right, y + 25, mouse); // v12.2 설명서
         Divider(x, right, y + 48);
 
         var air = room.Air;
