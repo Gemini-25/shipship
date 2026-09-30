@@ -1,0 +1,410 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Text;
+
+namespace ShipSim.Core;
+
+/// <summary>관찰자가 한 일 하나 (그 틱에, 무엇을).</summary>
+public sealed record PlayerCommand(long Tick, string Kind, string Arg)
+{
+    public override string ToString() => $"{Tick} {Kind} {Arg}".TrimEnd();
+}
+
+/// <summary>
+/// 관찰자의 손. 사고를 일으키는 건 전부 여기를 거친다: 일으키면서 기록해 두면
+/// 저장은 "시드 + 이 기록"만으로 끝나고, 불러오기는 같은 시드에서 같은 틱에 같은 일을 다시 하면 된다 (결정론).
+/// </summary>
+public static class Player
+{
+    private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+
+    private static void Record(World w, string kind, string arg = "")
+    {
+        // v10.3: 되감은 역사를 다시 흘리는 중에 관찰자가 새 사고를 일으키면, 거기서 역사가 갈라진다 (뒤에 있던 사고는 일어나지 않는다)
+        if (!w.ApplyingRecord && w.Scheduled.Count > 0)
+        {
+            int dropped = w.Scheduled.Count;
+            w.Scheduled.Clear();
+            w.Log.Add(w.Tick, LogKind.Ship, $"관찰자가 새 사고를 일으켰다 — 되감은 역사에서 갈라진다 (원래 뒤에 있던 사고 {dropped}건은 일어나지 않는다)");
+        }
+        w.Commands.Add(new PlayerCommand(w.Tick, kind, arg));
+    }
+
+    /// <summary>v10.1: 운석을 던진다 — 몇 분 동안 날아와 부딪힌다 (그 사이 누가 먼저 보느냐는 통신실이 정한다).</summary>
+    public static IncomingMeteor? Meteor(World w, Cell target, float size)
+    {
+        Record(w, "meteor", $"{target.X} {target.Y} {size.ToString("R", Inv)}");
+        var m = w.Sensors.Launch(target, size);
+        if (m != null) w.History.NoteCause(w, $"{(size >= 0.7f ? "큰" : "작은")} 운석({m.Room?.Name ?? "선체"})");
+        return m;
+    }
+
+    public static bool Fire(World w, Cell cell)
+    {
+        Record(w, "fire", $"{cell.X} {cell.Y}");
+        bool ok = Incidents.Fire(w, cell);
+        if (ok) w.History.NoteCause(w, $"화재({w.Ship.RoomAt(cell)?.Name ?? "?"})");
+        return ok;
+    }
+
+    public static bool Break(World w, Furniture f)
+    {
+        Record(w, "break", f.Id.ToString(Inv));
+        bool ok = Incidents.Break(w, f);
+        if (ok) w.History.NoteCause(w, $"고장({f.Label})");
+        return ok;
+    }
+
+    public static bool BreakAll(World w, string typeName, bool all, FaultKind? kind = null)
+    {
+        Record(w, "breaktype", $"{typeName} {(all ? 1 : 0)}" + (kind != null ? $" {kind}" : ""));
+        var targets = w.Ship.Furniture.Where(f => f.Type.ToString() == typeName && f.Machine != null).ToList();
+        foreach (var t in all ? targets : targets.Take(1)) w.Machines.Break(t.Machine!, kind);
+        if (targets.Count > 0) w.History.NoteCause(w, $"고장({targets[0].Name})");
+        return targets.Count > 0;
+    }
+
+    /// <summary>v9: 배관을 터뜨린다 (그 칸 가까운 관).</summary>
+    public static PipeSegment? PipeBurst(World w, Cell near, float severity)
+    {
+        Record(w, "pipe", $"{near.X} {near.Y} {severity.ToString("R", Inv)}");
+        var s = w.Piping.Burst(near, severity);
+        if (s != null) w.History.NoteCause(w, $"배관 파손({s.Name})");
+        return s;
+    }
+
+    public static bool Scenario(World w, string name, out Room? focus)
+    {
+        Record(w, "scenario", name);
+        return Scenarios.Apply(w, name, out focus);
+    }
+
+    public static void Scarcity(World w)
+    {
+        Record(w, "scarcity");
+        Scenarios.Scarcity(w);
+    }
+
+    public static void AllowDeath(World w, bool on)
+    {
+        Record(w, "death", on ? "1" : "0");
+        w.CrewCanDie = on;
+    }
+
+    /// <summary>v10.7: 항해 중에 밸런스 수치를 바꾼다 (기록되어 되감기·불러오기가 같은 틱에 같은 값으로 바꾼다).</summary>
+    public static bool Tune(World w, string key, float value)
+    {
+        if (Tuning.Find(key) is not TuningEntry e) return false;
+        Record(w, "tune", $"{key} {value.ToString("R", Inv)}");
+        float before = e.Get();
+        Tuning.Apply(key, value);
+        w.Log.Add(w.Tick, LogKind.Ship, $"관찰자가 수치를 바꿨다: {e.Label} {before:0.###} → {e.Get():0.###}");
+        return true;
+    }
+
+    /// <summary>불러올 때: 기록된 일을 그대로 다시 한다 (다시 기록도 된다 → 불러온 뒤 또 저장할 수 있다).</summary>
+    public static void Apply(World w, PlayerCommand cmd)
+    {
+        bool was = w.ApplyingRecord;
+        w.ApplyingRecord = true;
+        try { ApplyInner(w, cmd); }
+        finally { w.ApplyingRecord = was; }
+    }
+
+    private static void ApplyInner(World w, PlayerCommand cmd)
+    {
+        var a = cmd.Arg.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        switch (cmd.Kind)
+        {
+            case "meteor":
+                Meteor(w, new Cell(int.Parse(a[0], Inv), int.Parse(a[1], Inv)), float.Parse(a[2], Inv));
+                break;
+            case "fire":
+                Fire(w, new Cell(int.Parse(a[0], Inv), int.Parse(a[1], Inv)));
+                break;
+            case "pipe":
+                PipeBurst(w, new Cell(int.Parse(a[0], Inv), int.Parse(a[1], Inv)), float.Parse(a[2], Inv));
+                break;
+            case "break":
+            {
+                int id = int.Parse(a[0], Inv);
+                if (id < w.Ship.Furniture.Count) Break(w, w.Ship.Furniture[id]);
+                break;
+            }
+            case "breaktype":
+                BreakAll(w, a[0], a.Length > 1 && a[1] == "1", a.Length > 2 ? Enum.Parse<FaultKind>(a[2]) : null);
+                break;
+            case "scenario":
+                Scenario(w, cmd.Arg, out _);
+                break;
+            case "scarcity":
+                Scarcity(w);
+                break;
+            case "death":
+                AllowDeath(w, cmd.Arg == "1");
+                break;
+            case "tune":
+                Tune(w, a[0], float.Parse(a[1], Inv));
+                break;
+            default:
+                throw new FormatException($"모르는 기록: {cmd}");
+        }
+    }
+}
+
+/// <summary>
+/// 저장 파일: 시드 + 관찰자가 한 일 + 저장한 틱 + 그때 상태의 지문(해시).
+/// 우주선의 모든 것(승무원의 기억, 벽의 이력, 작업 중인 일…)을 직렬화하는 대신 결정론으로 다시 만든다.
+/// 불러온 뒤 지문이 같으면 한 틱도 어긋나지 않고 같은 역사를 되짚었다는 뜻이다.
+/// </summary>
+public static class SaveGame
+{
+    /// <summary>v8: 설계도(드론 거치대)와 구조가 바뀌어 v7 저장(1)은 같은 역사를 되짚을 수 없다.</summary>
+    public const string Header = "shipsim-save 9";
+
+    public static string Write(World w)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(Header);
+        sb.AppendLine($"seed {w.Seed}");
+        if (w.ShipKey != ShipCatalog.Default.Key) sb.AppendLine($"ship {w.ShipKey}");
+        if (w.StartCrew != (ShipCatalog.Find(w.ShipKey) ?? ShipCatalog.Default).Crew) sb.AppendLine($"crew {w.StartCrew}");
+        foreach (var (k, v) in w.StartTuning) sb.AppendLine($"tune {k} {v.ToString("R", CultureInfo.InvariantCulture)}");
+        sb.AppendLine($"tick {w.Tick}");
+        sb.AppendLine($"hash {StateHash(w):x8}");
+        sb.AppendLine($"day {w.Day} {w.Clock}");
+        foreach (var c in w.Commands.Concat(w.Scheduled)) sb.AppendLine($"cmd {c}"); // v10.3: 되감은 역사의 앞으로 올 사고도
+        return sb.ToString();
+    }
+
+    public sealed record Data(int Seed, long Tick, uint Hash, List<PlayerCommand> Commands, int Crew = 0, string? Ship = null,
+        List<(string key, float value)>? Tunes = null);
+
+    /// <summary>
+    /// v10 되감기: 그 틱으로 돌아간다. v10.3: 관찰자가 그 뒤에 한 일도 함께 적는다 — 불러오면 그 틱까지 빨리 감고,
+    /// 뒤의 일은 그 틱이 오면 다시 일어난다 (같은 역사가 다시 흐른다). 지문은 모르니 0 — 불러온 뒤 확인하지 않는다.
+    /// </summary>
+    public static string WriteAt(World w, long tick)
+    {
+        tick = Math.Clamp(tick, 0, w.Tick);
+        var sb = new StringBuilder();
+        sb.AppendLine(Header);
+        sb.AppendLine($"seed {w.Seed}");
+        if (w.ShipKey != ShipCatalog.Default.Key) sb.AppendLine($"ship {w.ShipKey}");
+        if (w.StartCrew != (ShipCatalog.Find(w.ShipKey) ?? ShipCatalog.Default).Crew) sb.AppendLine($"crew {w.StartCrew}");
+        foreach (var (k, v) in w.StartTuning) sb.AppendLine($"tune {k} {v.ToString("R", CultureInfo.InvariantCulture)}");
+        sb.AppendLine($"tick {tick}");
+        sb.AppendLine("hash 00000000");
+        sb.AppendLine($"day {SimTime.Day(tick)} {SimTime.Clock(tick)}");
+        foreach (var c in w.Commands.Concat(w.Scheduled)) sb.AppendLine($"cmd {c}");
+        return sb.ToString();
+    }
+
+    public static Data Parse(string text)
+    {
+        var lines = text.Replace("\r", "").Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        if (lines.Length > 0 && lines[0].Trim() == "shipsim-save 1") throw new FormatException("v7 저장 파일이다 — v8에서 우주선 설계(드론 거치대)와 구조가 바뀌어 다시 돌릴 수 없다");
+        if (lines.Length > 0 && lines[0].Trim() is "shipsim-save 2" or "shipsim-save 3" or "shipsim-save 4" or "shipsim-save 5" or "shipsim-save 6" or "shipsim-save 7" or "shipsim-save 8")
+            throw new FormatException("예전 판의 저장 파일이다 — v9(배관)·v9.2(함교의 주 컴퓨터)·v9.3(저출력 운영)·v10.1(통신실, 날아오는 운석)·v10.2(칸막이로 방을 나눔)·v10.3(지문이 더 많은 상태를 본다)·v10.5(설비 단계·방 모듈·연구)에서 우주선 설계와 규칙이 바뀌어 같은 역사를 다시 돌릴 수 없다");
+        if (lines.Length == 0 || lines[0].Trim() != Header) throw new FormatException("저장 파일이 아니다");
+        int seed = 0, crew = 0;
+        string? ship = null;
+        long tick = 0;
+        uint hash = 0;
+        var cmds = new List<PlayerCommand>();
+        var tunes = new List<(string, float)>();
+        foreach (var raw in lines.Skip(1))
+        {
+            var line = raw.Trim();
+            int sp = line.IndexOf(' ');
+            if (sp < 0) continue;
+            string key = line[..sp], rest = line[(sp + 1)..];
+            switch (key)
+            {
+                case "seed": seed = int.Parse(rest, CultureInfo.InvariantCulture); break;
+                case "crew": crew = int.Parse(rest, CultureInfo.InvariantCulture); break;
+                case "ship": ship = ShipCatalog.Find(rest)?.Key ?? throw new FormatException($"모르는 배: {rest}"); break;
+                case "tick": tick = long.Parse(rest, CultureInfo.InvariantCulture); break;
+                case "tune":
+                {
+                    var kv = rest.Split(' ', 2);
+                    if (Tuning.Find(kv[0]) == null) throw new FormatException($"모르는 수치: {kv[0]}");
+                    tunes.Add((kv[0], float.Parse(kv[1], CultureInfo.InvariantCulture)));
+                    break;
+                }
+                case "hash": hash = uint.Parse(rest, NumberStyles.HexNumber, CultureInfo.InvariantCulture); break;
+                case "cmd":
+                {
+                    var parts = rest.Split(' ', 3);
+                    cmds.Add(new PlayerCommand(long.Parse(parts[0], CultureInfo.InvariantCulture), parts[1], parts.Length > 2 ? parts[2] : ""));
+                    break;
+                }
+            }
+        }
+        return new Data(seed, tick, hash, cmds, crew, ship, tunes);
+    }
+
+    /// <summary>지금 상태의 지문: 승무원·설비·벽·물자·공기·전력·역사를 훑은 FNV 해시.</summary>
+    public static uint StateHash(World w)
+    {
+        uint h = 2166136261;
+        void I(long v)
+        {
+            unchecked
+            {
+                for (int i = 0; i < 8; i++)
+                {
+                    h ^= (byte)(v >> (i * 8));
+                    h *= 16777619;
+                }
+            }
+        }
+        void F(float v) => I(BitConverter.SingleToInt32Bits(v));
+        I(w.Tick);
+        foreach (var c in w.Crew)
+        {
+            F(c.Position.X); F(c.Position.Y);
+            F(c.Needs.Food); F(c.Needs.Rest); F(c.Needs.Stress); F(c.Needs.Social);
+            F(c.Vitals.Health); F(c.Vitals.Injury); F(c.Traits.Calm); F(c.Memory.Trauma);
+            I(c.Dead ? 2 : c.Down ? 1 : 0);
+            foreach (var f in c.Memory.Fear) F(f);
+        }
+        foreach (var m in w.Ship.Machines)
+        {
+            F(m.Wear); F(m.Condition); I(m.Faults.Count); I((int)m.Grade); I(m.FaultCount);
+        }
+        foreach (var (cell, wall) in w.Ship.Walls)
+        {
+            if (!wall.IsHull) continue;
+            F(wall.Integrity); F(wall.MaxIntegrity); I(wall.Patched ? 1 : 0);
+        }
+        foreach (var k in ItemKinds.All) I(w.Ship.CountStored(k));
+        foreach (var r in w.Ship.Rooms) { F(r.Air.O2); F(r.Air.Pressure); I(r.Abandoned ? 1 : 0); }
+        F(w.Air.Reserve); F(w.Water.Level); F(w.Power.BatteryCharge);
+        I(w.History.Events.Count); I(w.Ship.Furniture.Count);
+        // v8 구조·드론·EVA
+        foreach (var j in w.Structure.Joints) { F(j.Strength); F(j.Known); I(j.Released ? 1 : 0); }
+        foreach (var f in w.Structure.Fragments) { F(f.Offset.X); F(f.Offset.Y); I((int)f.State); }
+        foreach (var d in w.Drones.Drones) { F(d.Position.X); F(d.Position.Y); F(d.Battery); F(d.Condition); I((int)d.State); }
+        foreach (var c in w.Crew) I(c.Outside ? 1 : 0);
+        I(w.AirlockCycles);
+        // v9 배관·냉각
+        foreach (var s in w.Piping.Segments) { F(s.Integrity); F(s.RadiatorCondition); F(s.Bypass); I(s.Closed ? 1 : 0); I(s.Patched ? 1 : 0); }
+        F(w.Piping.Coolant); F(w.Power.ReactorTemperature); I(w.SuitRefills);
+        I(w.Automation.MainOnline ? 1 : 0); I(w.Automation.Backup ? 1 : 0); I(w.Automation.Outages); I(w.Power.Brownout ? 1 : 0); I(w.Power.Brownouts); I(w.Fixtures.DoorFailures); I(w.Fixtures.LightFailures); I(w.Ship.Doors.Count(d => d.MotorBroken)); I(w.Ship.Rooms.Count(r => r.LightsOut));
+        foreach (var r in w.Ship.Rooms) I(r.DamperStuck ? 1 : 0);
+        // v10.1 통신실
+        I(w.Sensors.Incoming.Count); I(w.Sensors.Warned); I(w.Sensors.Unwarned); I(w.Sensors.PreSeals);
+        I(w.Ship.Rooms.Count); I(w.History.Partitions); // v10.2
+        // v10.3: 뒤의 결과를 바꾸는 상태를 더 — 혈중 산소·우주복·들고 있는 것·하는 일, 방의 온도·기체·연기·환기·조명,
+        // 불(칸마다), 작물, 설비 전기, 원자로, 다가오는 운석, 그리고 난수를 몇 번 뽑았나
+        foreach (var c in w.Crew)
+        {
+            F(c.Vitals.Oxygen); F(c.Suit?.Oxygen ?? -1f); I(c.Carrying is ItemStack st ? (int)st.Kind * 1000 + st.Count : -1);
+            I(c.Cell.X); I(c.Cell.Y); I(c.Job?.Label?.Length ?? -1); I(c.Bed?.Id ?? -1);
+        }
+        foreach (var r in w.Ship.Rooms)
+        {
+            F(r.Air.Temperature); F(r.Air.CO2); F(r.Air.N2); F(r.Air.Smoke);
+            I(r.VentOpen ? 1 : 0); I(r.LightsOut ? 1 : 0); I(r.Lockdown ? 1 : 0); I(r.Cells.Count);
+        }
+        foreach (var (cell, v) in w.Fire.Fires.OrderBy(kv => kv.Key.Y).ThenBy(kv => kv.Key.X)) { I(cell.X); I(cell.Y); F(v); }
+        foreach (var m in w.Ship.Machines)
+        {
+            I(m.Powered ? 1 : 0); I(m.Parked ? 1 : 0); I(m.Tier);
+            if (m.Crop is CropState crop) { F(crop.Growth); F(crop.Care); F(crop.DryHours); }
+        }
+        foreach (var d in w.Ship.Doors) { F(d.Openness); I(d.Locked ? 1 : 0); }
+        F(w.Power.ReactorLimit); I(w.Power.ReactorOnline ? 1 : 0); I(w.Power.LowPowerMode ? 1 : 0);
+        foreach (var m in w.Sensors.Incoming) { I(m.Arrive); I((int)m.Warned); }
+        I(w.Rng.Draws); I(w.Ship.Furniture.Count); F(w.Research);
+        return h;
+    }
+}
+
+/// <summary>
+/// 불러오기: 같은 시드로 새 우주선을 띄우고, 기록된 틱마다 기록된 일을 하면서 저장한 틱까지 돌린다.
+/// 게임 화면에서는 한 프레임에 조금씩 (역사가 빨리 감기로 다시 흐르는 걸 볼 수 있다).
+/// </summary>
+public sealed class ReplayRunner
+{
+    private readonly List<PlayerCommand> _commands;
+    private int _next;
+
+    public World World { get; }
+    public long TargetTick { get; }
+    public uint ExpectedHash { get; }
+    private readonly long _startTick;
+
+    public ReplayRunner(string saveText)
+    {
+        var data = SaveGame.Parse(saveText);
+        // v10.7: 그 항해를 시작할 때의 수치로 되돌린 뒤 만든다 (항해 중에 바꾼 값은 기록(tune)으로 그 틱에 다시 바뀐다)
+        Tuning.ResetDefaults();
+        foreach (var (k, v) in data.Tunes ?? new()) Tuning.Apply(k, v);
+        World = World.CreateDefault(data.Seed, data.Crew, data.Ship ?? ShipCatalog.Default.Key);
+        // v10.3: 저장·되감은 틱 뒤의 기록은 앞으로 다시 일어날 일로 넘긴다 (불러오기가 100%에서 멈추지 않게)
+        var all = data.Commands.OrderBy(c => c.Tick).ToList();
+        foreach (var c in all) Validate(World, c);
+        _commands = all.Where(c => c.Tick <= data.Tick).ToList();
+        World.Scheduled.AddRange(all.Where(c => c.Tick > data.Tick));
+        TargetTick = data.Tick;
+        ExpectedHash = data.Hash;
+        _startTick = World.Tick;
+        ApplyDue();
+    }
+
+    public bool Done => World.Tick >= TargetTick && _next >= _commands.Count;
+
+    /// <summary>되감은 뒤 앞으로 다시 일어날 관찰자의 사고 수.</summary>
+    public int Upcoming => World.Scheduled.Count;
+    public float Progress => TargetTick <= _startTick ? 1f : Math.Clamp((World.Tick - _startTick) / (float)(TargetTick - _startTick), 0f, 1f);
+
+    /// <summary>지문이 저장할 때와 같은지 (불러오기가 끝난 뒤).</summary>
+    public bool Verified => SaveGame.StateHash(World) == ExpectedHash;
+
+    /// <summary>v10 되감기로 만든 재생 (지문을 모른다).</summary>
+    public bool Rewind => ExpectedHash == 0;
+
+    /// <summary>v10.3: 기록 한 줄이 이 배에서 다시 할 수 있는 일인지 미리 본다 (망가진 파일이 불러오는 도중에 터지지 않게).</summary>
+    private static void Validate(World w, PlayerCommand c)
+    {
+        var a = c.Arg.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var inv = CultureInfo.InvariantCulture;
+        bool Cell2() => a.Length >= 2 && int.TryParse(a[0], NumberStyles.Integer, inv, out var x) && int.TryParse(a[1], NumberStyles.Integer, inv, out var y)
+                        && w.Ship.Grid.InBounds(new Cell(x, y));
+        bool ok = c.Kind switch
+        {
+            "meteor" or "pipe" => Cell2() && a.Length >= 3 && float.TryParse(a[2], NumberStyles.Float, inv, out _),
+            "fire" => Cell2(),
+            // v10.6: 모듈을 달면 설비가 늘어난다 — 나중에 생긴 설비의 고장도 기록될 수 있다
+            "break" => a.Length >= 1 && int.TryParse(a[0], NumberStyles.Integer, inv, out var id) && id >= 0 && id < w.Ship.Furniture.Count + 500,
+            "tune" => a.Length >= 2 && Tuning.Find(a[0]) != null && float.TryParse(a[1], NumberStyles.Float, inv, out _),
+            "breaktype" => a.Length >= 2 && (a.Length < 3 || Enum.TryParse<FaultKind>(a[2], out _)),
+            "scenario" => Scenarios.All.Any(s => s.Name == c.Arg),
+            "scarcity" or "death" => true,
+            _ => false,
+        };
+        if (!ok) throw new FormatException($"다시 할 수 없는 기록이다: {c}");
+    }
+
+    private void ApplyDue()
+    {
+        while (_next < _commands.Count && _commands[_next].Tick <= World.Tick)
+            Player.Apply(World, _commands[_next++]);
+    }
+
+    /// <summary>최대 maxSteps틱만큼 앞으로. 다 되면 true.</summary>
+    public bool Advance(int maxSteps)
+    {
+        for (int i = 0; i < maxSteps && World.Tick < TargetTick; i++)
+        {
+            World.Step();
+            ApplyDue();
+        }
+        if (World.Tick >= TargetTick) ApplyDue();
+        return Done;
+    }
+}
