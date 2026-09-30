@@ -152,7 +152,7 @@ public partial class Hud
         var log = _world.Causes;
         float x0 = Margin, y0 = Margin + 52f + 8f + 40f + 8f + 64f + 10f;
         float w = Mathf.Min(640f, Screen.X - RightColumnWidth - Margin * 3);
-        float height = Screen.Y - y0 - LogHeight - Margin - 10f;
+        float height = Screen.Y - y0 - LogHeight - Margin - 10f - 30f; // 아래에 시간 막대
         var card = new Rect2(x0, y0, w, height);
         _chainRect = card;
         Card(card);
@@ -162,6 +162,7 @@ public partial class Hud
         // 머리: 뿌리 · 상태 · 숫자
         Gfx.Text(this, Fonts.Bold, new Vector2(x, y0 + 30), Fit(root.Text, right - x - 150, 17, Fonts.Bold), 17, Palette.Text);
         Button(new Rect2(right - 58, y0 + 12, 58, 26), "K 닫기", false, mouse, () => OpenChain(null), 11);
+        Button(new Rect2(right - 58 - 92, y0 + 12, 86, 26), "↶ 직전으로", false, mouse, () => _main.RewindTo(inc.Start - SimTime.Minutes(3)), 11);
         int lasting = inc.Nodes.Count(i => log.Node(i).Lasting);
         int open = inc.Nodes.Count(i => log.Node(i).Open);
         string when = $"{SimTime.Day(inc.Start)}일 {SimTime.Clock(inc.Start)}" + (inc.ByObserver ? " · 관찰자가 일으킴" : "");
@@ -251,6 +252,68 @@ public partial class Hud
             Gfx.TextRight(this, Fonts.Body, new Vector2(right, card.End.Y - 8), $"{_chainScroll + 1}–{Math.Min(rows.Count, _chainScroll + fit)} / {rows.Count} · 휠로 넘기기 · 줄을 누르면 그곳으로", 10, Palette.TextMuted);
         else
             Gfx.TextRight(this, Fonts.Body, new Vector2(right, card.End.Y - 8), "줄을 누르면 그곳으로 · 도면 위 화살표가 번진 길", 10, Palette.TextMuted);
+    }
+
+    // ─────────────────────────────── 시간 막대 ───────────────────────────────
+
+    /// <summary>화면 아래 가는 띠: 지난 사흘(짧으면 항해 전체)의 사고 구간·사망·지금. 누르면 그 사고 사슬.</summary>
+    private void DrawTimeBar(Vector2 mouse)
+    {
+        if (ChronicleOpen || TechOpen) return;
+        var log = _world.Causes;
+        float x0 = Margin, x1 = Screen.X - RightColumnWidth - Margin * 2;
+        float y = Screen.Y - Margin - LogHeight - 28f;
+        var strip = new Rect2(x0, y, x1 - x0, 20f);
+        long now = _world.Tick;
+        long span = System.Math.Min(SimTime.TicksPerDay * 3, System.Math.Max(SimTime.Hours(6), now - _world.History.FoundedTick));
+        long start = now - span;
+        float X(long t) => strip.Position.X + 8 + (strip.Size.X - 16) * Mathf.Clamp((t - start) / (float)span, 0f, 1f);
+        Gfx.RoundRect(this, strip, new Color(0.04f, 0.05f, 0.07f, 0.72f), 6, Palette.PanelBorder.WithAlpha(0.6f));
+        _cards.Add(strip);
+        // 눈금: 여섯 시간마다, 날이 바뀌면 굵게
+        long first = (start / SimTime.Hours(6) + 1) * SimTime.Hours(6);
+        for (long t = first; t < now; t += SimTime.Hours(6))
+        {
+            bool day = t % SimTime.TicksPerDay == 0;
+            float tx = X(t);
+            DrawLine(new Vector2(tx, strip.Position.Y + (day ? 3 : 12)), new Vector2(tx, strip.End.Y - 3), Palette.TextMuted.WithAlpha(day ? 0.6f : 0.3f), 1f);
+            if (day) Gfx.Text(this, Fonts.Body, new Vector2(tx + 3, strip.Position.Y + 11), $"{SimTime.Day(t)}일", 9, Palette.TextMuted);
+        }
+        // 사고 구간
+        CauseIncident? hover = null;
+        foreach (var inc in log.Notable())
+        {
+            long end = inc.End >= 0 ? inc.End : now;
+            if (end < start) continue;
+            float a = X(inc.Start), b = Mathf.Max(a + 4f, X(end));
+            var col = inc.Deaths > 0 ? Palette.Danger : inc.Open ? Palette.Warning : Palette.Good.WithAlpha(0.8f);
+            var r = new Rect2(a, strip.Position.Y + 6, b - a, 8);
+            bool sel = ChainIncident == inc;
+            DrawRect(r, col.WithAlpha(sel ? 1f : 0.7f));
+            if (sel) DrawRect(r.Grow(2f), Palette.Accent, false, 1f);
+            var hit = r.Grow(3f);
+            if (hit.HasPoint(mouse)) hover = inc;
+            var captured = inc;
+            _buttons.Add((hit, () => { OpenChain(captured); FocusNode(log.Node(captured.Root)); }));
+            // 사망: 흰 십자
+            foreach (var id in inc.Nodes)
+            {
+                var n = log.Node(id);
+                if (n.Kind != CauseKind.Death || n.Tick < start) continue;
+                float dx = X(n.Tick);
+                DrawLine(new Vector2(dx - 3, strip.Position.Y + 4), new Vector2(dx + 3, strip.End.Y - 4), Colors.White, 1.5f);
+                DrawLine(new Vector2(dx + 3, strip.Position.Y + 4), new Vector2(dx - 3, strip.End.Y - 4), Colors.White, 1.5f);
+            }
+        }
+        // 지금
+        float nx = X(now);
+        DrawLine(new Vector2(nx, strip.Position.Y + 2), new Vector2(nx, strip.End.Y - 2), Palette.Accent, 2f);
+        if (hover != null)
+        {
+            var root = log.Node(hover.Root);
+            string tip = $"{SimTime.Day(hover.Start)}일 {SimTime.Clock(hover.Start)} · {root.Text}" + (hover.Deaths > 0 ? $" · 사망 {hover.Deaths}" : hover.Casualties > 0 ? $" · 쓰러짐 {hover.Casualties}" : "") + " · 누르면 사슬";
+            Gfx.Pill(this, Fonts.Bold, new Vector2(Mathf.Clamp(mouse.X, x0 + 200, x1 - 200), strip.Position.Y - 14), tip, 12, Palette.Text, new Color(0.05f, 0.06f, 0.09f, 0.95f), Palette.PanelBorder, 10f, 5f);
+        }
     }
 
     private bool ScrollChain(InputEventMouseButton mb)

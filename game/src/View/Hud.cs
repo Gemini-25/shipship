@@ -98,6 +98,7 @@ public partial class Hud : Control
         DrawLog();
         DrawMinimap(); // v11.3
         DrawIncidentCards(mouse); // v12.2 사고 카드
+        if (_world.Causes.Notable().Any()) DrawTimeBar(mouse); // v12.2 시간 막대
         if (ChainOpen) DrawChain(mouse); // v12.2 인과 사슬
         else if (ChronicleOpen) DrawChronicle(mouse);
         else if (TechOpen) DrawTech(mouse);
@@ -170,7 +171,7 @@ public partial class Hud : Control
         float dayW = Gfx.Width(Fonts.Body, day, 12);
         const float btnW = 40f, btnGap = 4f;
         float speedW = labels.Length * btnW + (labels.Length - 1) * btnGap;
-        float w = 18 + 16 + nameW + 20 + 20 + clockW + 8 + dayW + 20 + 14 + speedW + 12;
+        float w = 18 + 16 + nameW + 20 + 20 + clockW + 8 + dayW + 20 + 14 + speedW + 8 + 52 + 12;
 
         var card = new Rect2(Margin, Margin, w, 52f);
         Card(card);
@@ -202,6 +203,9 @@ public partial class Hud : Control
             int speed = i - 1;
             Button(rect, labels[i], active, mouse, i == 0 ? _main.TogglePause : () => _main.SetSpeed(speed));
         }
+        // v12.2 하이라이트 모드: 배속을 저절로
+        var auto = new Rect2(x + labels.Length * (btnW + btnGap) + 4, cy - 14f, 52f, 28f);
+        Button(auto, _main.SlowMotion ? "느리게" : "자동", _main.Highlight, mouse, _main.ToggleHighlight, 12);
         return card.End.X;
     }
 

@@ -228,7 +228,7 @@ public partial class Main : Node2D
         }
         else if (!Paused)
         {
-            _accumulator += delta * Speeds[SpeedIndex] * SimTime.TicksPerSecond;
+            _accumulator += delta * Speeds[SpeedIndex] * (SlowMotion ? 0.3 : 1.0) * SimTime.TicksPerSecond; // v12.2 결정적 순간엔 느리게
             int steps = (int)Math.Floor(_accumulator);
             if (steps > MaxStepsPerFrame)
             {
@@ -244,8 +244,12 @@ public partial class Main : Node2D
             WatchAlerts();
         }
 
+        UpdateHighlight(delta); // v12.2 하이라이트 모드 · 자동 카메라
         UpdateHover();
         _stars.CameraPosition = Camera.Position;
+        // v12.2 운항: 별이 뒤로 흐른다 (배속에 비례, 회피 기동 연소 중엔 더 빠르게), 잔해 지대에선 잔해가 지나간다
+        _stars.Cruise = Paused || Replaying != null ? 0f : 7f * Speeds[SpeedIndex] * (SlowMotion ? 0.3f : 1f) * (Sim.Propulsion.Burning ? 3f : 1f);
+        _stars.Debris = Sim.Propulsion.Zone == ZoneKind.Debris;
         _stars.Storm = Sim.Hazards.StormActive ? 1f : 0f;
 
         if (_screenshotFrames > 0 && --_screenshotFrames == 0) TakeScreenshotAndQuit();
@@ -316,6 +320,13 @@ public partial class Main : Node2D
         else if (Sim.Alerts.LastOrDefault(a => a.Level == AlertLevel.Critical) is Alert a) tick = a.Tick;
         if (tick < 0) { ShowNotice("되감을 사건이 없다 ([ ]로 사고를 고르거나, 치명 경보가 난 뒤에)"); return; }
         _pendingLoad = Core.SaveGame.WriteAt(Sim, Math.Max(0, tick - SimTime.Minutes(3)));
+        GetTree().CallDeferred(SceneTree.MethodName.ReloadCurrentScene);
+    }
+
+    /// <summary>v12.2 그 틱의 조금 전으로 되감는다 (사고 사슬의 '직전으로').</summary>
+    public void RewindTo(long tick)
+    {
+        _pendingLoad = Core.SaveGame.WriteAt(Sim, Math.Max(0, tick));
         GetTree().CallDeferred(SceneTree.MethodName.ReloadCurrentScene);
     }
 
@@ -441,6 +452,7 @@ public partial class Main : Node2D
                 case Key.P: ToggleTool(IncidentTool.PipeBurst); break;
                 case Key.J: Hud.ToggleChronicle(); break;
                 case Key.K: Hud.ToggleChain(); break;
+                case Key.L: ToggleHighlight(); break;
                 case Key.G: Hud.ToggleMinimap(); break;
                 case Key.T: Hud.ToggleTech(); break;
                 case Key.F5: SaveGame(); break;
@@ -464,6 +476,7 @@ public partial class Main : Node2D
     {
         SpeedIndex = Math.Clamp(index, 0, Speeds.Length - 1);
         Paused = false;
+        if (Settings.Highlight) { Settings.Highlight = false; Settings.Save(); ShowNotice("배속을 손으로 골라 하이라이트 모드를 껐다 (L로 다시)"); }
     }
 
     public void CycleView(int dir)
