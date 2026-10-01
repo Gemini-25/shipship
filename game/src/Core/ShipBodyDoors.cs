@@ -283,6 +283,7 @@ public sealed partial class BodySystem
             return 0f;
         }
         long waited = now - db.WaitFrom;
+        if (db.Helper < 0 && waited >= 3 && w.Automation.RemotePass(c, d, db)) { ClearCall(db); return 0f; } // v16.6 출입 관리 모듈: 급한 까닭이면 컴퓨터가 원격으로
         if (db.Helper < 0 && waited >= 3)
         {
             var h = FindHelper(c, d, db);

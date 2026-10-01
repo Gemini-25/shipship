@@ -14,6 +14,7 @@ public static class Brain
         new EvacuateActivity(),
         new CheckRoomActivity(), // v16.6 컴퓨터 확인 요청 (직접 가서 보고 쓰러진 사람을 데려 나온다)
         new ShelterActivity(), // v12.6 태양 폭풍
+        new HeedBroadcastActivity(), // v16.6 대피 방송을 들은 사람만 미리 대피소로 (ComputerLinks.cs)
         new QuarantineActivity(), // v12.6 격리실
         new RecoverActivity(),
         new StowSuitActivity(),

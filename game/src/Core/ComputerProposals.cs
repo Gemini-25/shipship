@@ -33,6 +33,10 @@ public sealed class Proposal
     /// <summary>실제로 그때 안에 있던 사람 (컴퓨터는 모른다 — 채점·신뢰용).</summary>
     public List<int> Inside { get; init; } = new();
     public List<int> Found { get; } = new();
+    /// <summary>받으면 할 일 (일반 제안 — 배급 · 대피 · 모듈 …; 소화 제안은 대응 수순이 직접 본다). v16.16 계획자가 여기에 할 일을 싣는다.</summary>
+    public Action<World, Proposal>? OnAccept { get; init; }
+    /// <summary>일반 제안 채점 (null이면 "안에 사람이 있었나"로 채점).</summary>
+    public Func<World, Proposal, (int, string)?>? Grader { get; init; }
     public bool Accepted => State == ProposalState.Accepted || State == ProposalState.Expired && DecideWhy.StartsWith("받");
 }
 
@@ -60,13 +64,14 @@ public sealed class ProposalBoard
         return risky || mode >= 2;
     }
 
-    public Proposal Propose(string key, string kind, Room? room, string title, string basis, string effect, float minutes, int? believed)
+    public Proposal Propose(string key, string kind, Room? room, string title, string basis, string effect, float minutes, int? believed,
+        Action<World, Proposal>? onAccept = null, Func<World, Proposal, (int, string)?>? grader = null)
     {
         var w = _w;
         var p = new Proposal
         {
             Id = _next++, Tick = w.Tick, Deadline = w.Tick + SimTime.Minutes(minutes), Key = key, Kind = kind, RoomId = room?.Id ?? -1,
-            Title = title, Basis = basis, Effect = effect, Believed = believed,
+            Title = title, Basis = basis, Effect = effect, Believed = believed, OnAccept = onAccept, Grader = grader,
             Inside = room == null ? new() : w.Crew.Where(c => !c.Dead && c.Room == room && !c.Outside).Select(c => c.Id).ToList(),
         };
         All.Add(p);
@@ -89,7 +94,8 @@ public sealed class ProposalBoard
         if (accept) Accepted++; else Rejected++;
         if (who == "플레이어" || who == "관찰자") ByPlayer++; else ByCaptain++;
         w.Log.Add(w.Tick, LogKind.Ship, $"{who}: 컴퓨터 제안 \"{p.Title}\" {(accept ? "받음" : "거절")}" + (why != "" ? $" — {why}" : ""));
-        if (!accept && p.RoomId >= 0)
+        if (accept) p.OnAccept?.Invoke(w, p);
+        if (!accept && p.RoomId >= 0 && p.OnAccept == null)
         {
             var room = w.Ship.Rooms[p.RoomId];
             w.Automation.RequestCheck(room, $"제안 거절 — {p.Title} 전에 안을 직접 본다", p.Id);
@@ -124,6 +130,13 @@ public sealed class ProposalBoard
         var w = _w;
         if (p.State == ProposalState.Pending) return null;
         if (w.Tick - p.DecidedAt < SimTime.Minutes(5)) return null;
+        if (p.Grader != null)
+        {
+            if (p.Grader(w, p) is not (int gs, string gw)) return null;
+            p.Score = gs; p.Result = gw;
+            if (gs < 0) w.Automation.Learn.Remember(p.RoomId, p.Kind, gw);
+            return (gs, gw);
+        }
         var names = p.Inside.Select(id => w.Crew.FirstOrDefault(c => c.Id == id)?.Name ?? "?").ToList();
         string who = string.Join("·", names);
         (int s, string why) r;

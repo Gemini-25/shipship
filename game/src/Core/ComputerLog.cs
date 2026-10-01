@@ -8,7 +8,7 @@ namespace ShipSim.Core;
 // 결과는 몇 분 뒤 채점한다 (그 방이 나아졌나 · 사람이 쓰러졌나 · 오경보였나). 기존 판단 근거(Reason)도 이 장부를 부른다.
 // 배율 모듈이 실제로 아낀 양(전력 kWh · 물 L · 미룬 고장 · 피로 경보 …)을 쌓아 하루 보고로 남긴다.
 
-public enum ActKind { Alarm, Damper, Bulkhead, Valve, Breaker, Suppress, Shed, Module, Zone, Advice, Proposal, Broadcast, Reboot }
+public enum ActKind { Alarm, Damper, Bulkhead, Valve, Breaker, Suppress, Shed, Module, Zone, Advice, Proposal, Broadcast, Reboot, Door, Forecast }
 
 /// <summary>컴퓨터가 한 일 하나 (다섯 칸).</summary>
 public sealed class ComputerAct
@@ -39,10 +39,12 @@ public sealed class ComputerTally
 {
     public float Kwh, WaterL, CalibHours, SpoilHours, LeadMinutes, DeferredHours;
     public int Deferred, Fatigue, DoorEq, Archived, SoilRuns, Backflow, Schedules, Messages, Rosters, Meals, Logs, Trainings, Quiet, Access, Balance, Media;
+    public int Passes, Denied, RationLeads, Forecasts, ForecastHits; // v16.6 출입 원격 열기 · 배급 앞당김 · 예보
     public void Clear()
     {
         Kwh = WaterL = CalibHours = SpoilHours = LeadMinutes = DeferredHours = 0f;
         Deferred = Fatigue = DoorEq = Archived = SoilRuns = Backflow = Schedules = Messages = Rosters = Meals = Logs = Trainings = Quiet = Access = Balance = Media = 0;
+        Passes = Denied = RationLeads = Forecasts = ForecastHits = 0;
     }
 }
 
@@ -204,6 +206,9 @@ public sealed class ComputerLogBook
         if (t.Logs > 0) parts.Add($"항해 일지 {t.Logs}줄");
         if (t.Quiet > 0) parts.Add($"야간 소음 낮춤 {t.Quiet}번");
         if (t.Trainings > 0) parts.Add($"신입 교육 {t.Trainings}번");
+        if (t.Passes + t.Denied > 0) parts.Add($"출입 관리 원격 열기 {t.Passes}번" + (t.Denied > 0 ? $" · 막음 {t.Denied}번" : ""));
+        if (t.RationLeads > 0) parts.Add("식단 계획으로 배급 하루 앞당김");
+        if (t.Forecasts > 0) parts.Add($"앞날 예측 {t.ForecastHits}/{t.Forecasts} 맞힘");
         parts.Add($"자동 조치 {ActsToday}건 (맞음 {RightToday} · 틀림 {WrongToday})");
         string text = $"{day}일 컴퓨터 보고: " + string.Join(" · ", parts);
         var rep = new DailyReport(day, text, t.Kwh, t.WaterL, t.Deferred, t.Fatigue, ActsToday, RightToday, WrongToday);
@@ -239,6 +244,8 @@ public sealed partial class AutomationSystem
         Trusts.Update();
         Voice.Update();
         Apps.Update(dt);
+        Links(dt); // v16.6 문 본체 · 식단 · 대재난과 잇기 (ComputerLinks.cs)
+        Foresight.Update(); // v16.6 → v16.16 앞날 예측 · 계획 (ComputerForesight.cs)
     }
 
     /// <summary>배율 모듈이 실제로 아낀 양을 1분마다 쌓는다 (방 단위 · 설비 단위).</summary>

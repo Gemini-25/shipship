@@ -16,6 +16,8 @@ public sealed class Broadcast
     public int RoomId { get; init; } = -1;
     /// <summary>0 알림 · 1 안내 · 2 경보.</summary>
     public int Priority { get; init; }
+    /// <summary>방송에 실린 지시 ("shelter" 대피소로 · "gather:방번호" 모여라 …) — 들은 사람만 따른다 (HeedBroadcastActivity).</summary>
+    public string Order { get; init; } = "";
     public List<int> Rooms { get; } = new();
     public List<int> Silent { get; } = new();
     public List<int> HeardBy { get; } = new();
@@ -48,12 +50,12 @@ public sealed class PublicAddress
     public bool Heard(CrewMember c, int id) => Recent.FirstOrDefault(b => b.Id == id)?.HeardBy.Contains(c.Id) == true;
 
     /// <summary>방송한다. 주 컴퓨터가 멎으면 못 한다 (null).</summary>
-    public Broadcast? Announce(string text, Room? about, int priority)
+    public Broadcast? Announce(string text, Room? about, int priority, string order = "")
     {
         var w = _w;
         var a = w.Automation;
         if (!a.Present || !a.MainOnline) return null;
-        var b = new Broadcast { Id = _next++, Tick = w.Tick, Text = text, RoomId = about?.Id ?? -1, Priority = priority };
+        var b = new Broadcast { Id = _next++, Tick = w.Tick, Text = text, RoomId = about?.Id ?? -1, Priority = priority, Order = order };
         foreach (var r in w.Ship.Rooms)
         {
             if (r.Detached) continue;
@@ -86,6 +88,18 @@ public sealed class PublicAddress
         if (priority >= 1) a.Book.Add(ActKind.Broadcast, about, text, $"들은 사람 {b.HeardBy.Count} · 못 들은 사람 {b.Missed.Count}", "선내 방송", "", "pa:" + (about?.Id ?? -1) + ":" + priority, SimTime.Minutes(2), 6f,
             (world, act) => (b.Missed.Count == 0 ? 1 : 2, b.Missed.Count == 0 ? "모두 들었다" : $"{b.Missed.Count}명은 못 들었다 (스피커·잠)"));
         return b;
+    }
+
+    /// <summary>이 사람이 최근(within) 이 지시가 실린 방송을 들었나 — 못 들은 사람은 모른다.</summary>
+    public Broadcast? Ordered(CrewMember c, string order, long within)
+    {
+        for (int i = Recent.Count - 1; i >= 0; i--)
+        {
+            var b = Recent[i];
+            if (_w.Tick - b.Tick > within) break;
+            if (b.Order == order && b.HeardBy.Contains(c.Id)) return b;
+        }
+        return null;
     }
 
     /// <summary>한 시간마다: 오래 탄 방 스피커는 녹는다.</summary>
