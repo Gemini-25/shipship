@@ -126,6 +126,7 @@ public sealed class SoilSystem
                 s.Hands[k] = MathF.Max(0f, s.Hands[k] - 0.02f * dt);
                 s.Clothes[k] = MathF.Max(0f, s.Clothes[k] - 0.003f * dt);
             }
+            w.Matter.Touch(c, s, dt); // v16.4 손잡이 · 공용 공구로 옮는 손때 (재질 표의 머금음)
         }
         // 방은 천천히 옅어진다 (환기 · 닦기)
         foreach (var r in w.Ship.Rooms) // v15 식기 세척기 · 공기 청정기 · 멸균기가 있으면 더 빨리

@@ -148,7 +148,7 @@ public sealed class MoistureSystem
             if (op != null && w.Automation.MainOnline && depth <= 0.25f && !someoneInWater)
                 w.Automation.Reason($"floodwatch:{room.Id}", $"{room.Name} 바닥 물 {DepthCm(room):0}cm — 아직 얕다, 전기를 살려 두고 지켜본다 (분전함은 깊어지면)", SimTime.Hours(2));
             // 누전: 그 방 회로가 단락된다
-            if (w.Rng.Chance(3f * depth * dt) && ship.FurnitureOf(FurnitureType.PowerPanel).FirstOrDefault()?.Machine is Machine panel && !panel.Faults.Any(f => f.Circuit == room.Circuit))
+            if (w.Rng.Chance(Matter.ShortRate(depth) * dt) && ship.FurnitureOf(FurnitureType.PowerPanel).FirstOrDefault()?.Machine is Machine panel && !panel.Faults.Any(f => f.Circuit == room.Circuit))
             {
                 panel.Faults.Add(new Fault { Kind = FaultKind.ShortCircuit, Since = w.Tick, Circuit = room.Circuit });
                 panel.FaultCount++;
@@ -157,7 +157,7 @@ public sealed class MoistureSystem
                 w.RaiseAlert($"{room.Name} 누전 — 바닥의 물로 {PowerGrid.CircuitName(room.Circuit)} 회로가 단락됐다", room, AlertLevel.Warning, shipWide: true);
             }
             // 전기 화재: 물에 잠긴 콘센트·설비에서 불꽃
-            if (w.Rng.Chance(0.25f * depth * dt))
+            if (w.Rng.Chance(Matter.SparkRate * depth * dt))
             {
                 var m = room.Furniture.Where(f => f.Machine is Machine mm && mm.Powered && mm.Spec.PowerDraw > 0f).Select(f => f.Machine!).FirstOrDefault();
                 var spot = m?.Body.UseSpots.FirstOrDefault(s => ship.IsOpenFloor(s)) ?? room.Cells.FirstOrDefault(ship.IsOpenFloor);
@@ -171,7 +171,7 @@ public sealed class MoistureSystem
             foreach (var c in w.Crew)
             {
                 if (c.Dead || c.Outside || c.Room != room || c.Suit != null) continue;
-                if (!w.Rng.Chance(1.6f * depth * dt)) continue;
+                if (!w.Rng.Chance(Matter.ShockRate * depth * dt * w.Matter.ShockMul(c))) continue; // v16.4 고무 매트 · 고무 바닥은 막는다
                 float dmg = w.Rng.Range(0.08f, 0.25f) * (0.5f + depth);
                 c.Vitals.Health = MathF.Max(0.02f, c.Vitals.Health - dmg);
                 NeedsSystem.AddInjury(c.Vitals, dmg * 0.8f, "감전");
@@ -291,6 +291,7 @@ public static partial class WorkPlanners
         var room = o.Target.CurrentRoom;
         if (room == null) { w.Board.Close(o); return null; }
         var toils = Plans.DropOff(c, w, dist);
+        if (o.Kind is WorkKind.IsolateRoom or WorkKind.BreakerOn) w.Matter.Footing(c, dist, toils, at); // v16.4 젖은 바닥이면 고무 매트부터 (고무 = 절연)
         toils.Add(new GotoToil(at));
         float hours = o.Kind switch { WorkKind.IsolateRoom => 0.04f, WorkKind.BreakerOn => 0.12f, _ => 0.1f };
         toils.Add(new WorkToil(hours, o.Skill, at.Center) { Resume = o });

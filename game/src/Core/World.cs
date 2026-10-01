@@ -155,6 +155,7 @@ public sealed class World
     public FlowSystem Flow { get; } // v14.8 배관 · 배선 전달량
     public CultureSystem Culture { get; } // v14.9 배의 문화
     public DailySystem Daily { get; } // v15 일상 사건 70
+    public MatterSystem Matter { get; } // v16.4 재질 × 원소 · 칸 장 · 물건 물리
     public CosmicSystem Cosmic { get; } // v18.13 우주 규모 대재난 30
     public ExpeditionSystem Expedition { get; } // v16.12 재료 탐사 원정
     public BodySystem Body { get; } // v16.3 배 본체 (칸 3층 · 칸 상태 · 벽 층 · 문)
@@ -259,6 +260,7 @@ public sealed class World
         Flow = new FlowSystem(this);
         Culture = new CultureSystem(this);
         Daily = new DailySystem(this);
+        Matter = new MatterSystem(this); // v16.4
         Cosmic = new CosmicSystem(this); // v18.13
         Expedition = new ExpeditionSystem(this); // v16.12
         Body = new BodySystem(this); // v16.3
@@ -357,6 +359,7 @@ public sealed class World
             Culture.Update(dt); // v14.9 겪은 일이 관행이 되어 전해진다
             pf = Prof.Lap("sys.Culture", pf);
             Daily.Update(dt); // v15 사고가 아닌 날의 일상 사건
+            Matter.Update(dt); // v16.4 재질 × 원소: 물건 · 쏟은 물 · 칸 온도 · 전기 · 바람 · 그을음 연기 · 컴퓨터 경고
             Cosmic.Update(dt); // v18.13 우주 대재난: 예보 · 대비 · 본 사건 · 후유증
             pf = Prof.Lap("sys.Daily", pf);
             Blast.Update(dt); // v16.13 폭발성 물건 · 연쇄 · 이명 · 흔적 · 위험 배치 읽기
