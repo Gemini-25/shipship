@@ -74,23 +74,41 @@ public sealed partial class PortableSystem
     /// <summary>멀티탭 · 플러그가 달아오른 정도 (0~1.5) — 화면이 그린다.</summary>
     public float OutletHeat(int circuit) => circuit >= 0 && circuit < _hot.Length ? _hot[circuit] : 0f;
 
-    /// <summary>냄새 × 승무원 (같은 방): 피복 타는 냄새를 맡은 사람은 밥을 먹다가도 둘러본다 — 달아오른 멀티탭을 보면 일어나 뽑는다.</summary>
+    /// <summary>냄새 × 승무원 (같은 방): 탄내를 맡은 사람은 밥을 먹다가도 둘러본다 — 달아오른 멀티탭을 보면 일어나 뽑고, 먼지 타는 히터면 까닭을 안다.</summary>
     private void HotOutletGlance(float dt)
     {
         var w = _w;
         for (int i = 0; i < PowerGrid.CircuitCount; i++)
         {
             if (CircuitLoad[i] <= OutletCapKw || _hot[i] < 0.2f || ProjectedKw(i) <= OutletCapKw || OutletRoom(i) is not Room o) continue;
-            foreach (var c in w.Crew)
-            {
-                if (c.Dead || c.Room != o || !c.CanAct || !c.IsAwake || c.Job?.Urgent == true || c.Suit != null) continue;
-                if (w.Smells.Smelled(c, SmellKind.Burnt, SimTime.Minutes(20)) is null) continue; // 냄새를 맡은 사람만 둘러본다
-                if (!R.Chance(MathF.Min(1f, (4f + 4f * c.Traits.Diligence) * dt))) continue; // 10분쯤 안에 (꼼꼼하면 빨리)
-                c.Interrupt(w);
-                SmellFound(c, o, here: true);
-                break;
-            }
+            if (GlanceBy(o, dt) is CrewMember c) SmellFound(c, o, here: true);
         }
+        foreach (var d in Devices) // 먼지 타는 히터: 한 번 알아채면 그 히터는 다시 둘러보지 않는다 (창고에 들어가면 잊는다)
+        {
+            if (d.Kind != PortableKind.Heater) continue;
+            if (d.Stored) { _dustSeen.Remove(d.Id); continue; }
+            if (!d.Running || d.Dust <= 0.05f || _dustSeen.Contains(d.Id) || RoomOf(d) is not Room r) continue;
+            if (GlanceBy(r, dt) is not CrewMember c) continue;
+            _dustSeen.Add(d.Id);
+            SmellFound(c, r, here: true);
+        }
+    }
+
+    private readonly HashSet<int> _dustSeen = new();
+
+    /// <summary>그 방에서 탄내를 맡은 사람 하나가 둘러본다 (10분쯤 안에 · 꼼꼼하면 빨리).</summary>
+    private CrewMember? GlanceBy(Room o, float dt)
+    {
+        var w = _w;
+        foreach (var c in w.Crew)
+        {
+            if (c.Dead || c.Room != o || !c.CanAct || !c.IsAwake || c.Job?.Urgent == true || c.Suit != null) continue;
+            if (w.Smells.Smelled(c, SmellKind.Burnt, SimTime.Minutes(20)) is null) continue; // 냄새를 맡은 사람만 둘러본다
+            if (!R.Chance(MathF.Min(1f, (4f + 4f * c.Traits.Diligence) * dt))) continue;
+            c.Interrupt(w);
+            return c;
+        }
+        return null;
     }
 
     private void BodyLinks()
@@ -312,7 +330,8 @@ public sealed partial class PortableSystem
             var to = room.Cells.Where(x => w.Ship.IsOpenFloor(x) && !Occupied(x) && !Flammable(x)).OrderBy(x => (x.Center - h.At.Center).LengthSquared()).ThenBy(x => x.Y).ThenBy(x => x.X).Cast<Cell?>().FirstOrDefault();
             if (to is Cell t) { h.At = t; moved = true; }
         }
-        w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(c.Name)} 탄 냄새를 따라와 보니 오래 둔 히터 열선의 먼지가 타는 냄새였다" + (moved ? " — 침구 곁이라 조금 옮겨 놓았다" : ""), c.Id);
+        _dustSeen.Add(h.Id);
+        w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(c.Name)} {(here ? "탄 냄새에 둘러보니" : "탄 냄새를 따라와 보니")} 오래 둔 히터 열선의 먼지가 타는 냄새였다" + (moved ? " — 침구 곁이라 조금 옮겨 놓았다" : ""), c.Id);
         return true;
     }
 }

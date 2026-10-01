@@ -1172,7 +1172,9 @@ public sealed partial class PortableSystem
     internal void Unplug(CrewMember c, PortableDevice d)
     {
         var w = _w;
-        if (TurnOffFlagged(c, d)) return; // 주 컴퓨터가 짚은 빈 방 히터: 끈다
+        int oc = d.Plug == PortablePlug.Outlet && d.Outlet != null ? d.Outlet.Circuit : -1;
+        bool heedOver = oc >= 0 && ProjectedKw(oc) > OutletCapKw && Warned(oc) && !_learned[oc]; // 과부하 경고(방송 · 뜨거운 콘센트)를 듣고 차단기 전에
+        if (TurnOffFlagged(c, d)) { if (heedOver) { Stats.Unplugged++; Stats.HeededWarns++; } return; } // 주 컴퓨터가 짚은 빈 방 히터: 끈다 (그 회로 과부하도 풀린다)
         if (!d.Placed || d.Plug != PortablePlug.Outlet || d.Outlet is not Room was) return;
         int circuit = was.Circuit;
         bool heed = Warned(circuit) && !_learned[circuit];
