@@ -485,7 +485,11 @@ public sealed class EvacuateActivity : Activity
         var toils = new List<Toil>
         {
             new GotoToil(target),
-            new WaitToil(SimTime.Minutes(20), Pose.Standing),
+            // v13.1 조를 맡은 사람은 숨을 고르면(2분) 바로 제 일로 돌아간다
+            new WaitToil(SimTime.Minutes(20), Pose.Standing, null, SimTime.Minutes(2))
+            {
+                DoneWhen = (cm, world) => world.Command.Active && world.Command.TeamOf(cm) is { Kind: not TeamKind.Reserve } && DangerHere(cm, world) < 0.2f,
+            },
         };
         return new Job(this, "대피", toils)
         {

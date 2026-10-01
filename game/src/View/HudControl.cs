@@ -77,13 +77,22 @@ public partial class Hud
         ly += 34;
         // v13.0 방침 (회의가 정한다)
         SectionTitle(x, ly + 14, "방침");
-        foreach (var p in PolicySystem.All)
+        // 두 칸으로 (이름 · 지금 값 — 최근에 바뀐 것은 밝게)
+        float colW = (right - x - 44) / 2f;
+        for (int i = 0; i < PolicySystem.All.Length; i++)
         {
+            var p = PolicySystem.All[i];
+            float px = x + 44 + (i % 2) * colW;
             var last = w.Policies.Changes.LastOrDefault(c => c.Id == p.Id);
-            Gfx.Text(this, Fonts.Body, new Vector2(x + 44, ly + 14), p.Name, 11, Palette.TextDim);
-            Gfx.Text(this, Fonts.Bold, new Vector2(x + 140, ly + 14), w.Policies.Option(p.Id), 11, Palette.Text);
-            Gfx.Text(this, Fonts.Body, new Vector2(x + 260, ly + 14), Fit(last != null ? $"{SimTime.Day(last.Tick)}일 {last.Why}" + (last.Yes + last.No > 0 ? $" (찬성 {last.Yes} · 반대 {last.No})" : "") : "처음 정한 대로", right - x - 264, 10, Fonts.Body), 10, Palette.TextMuted);
-            ly += 16;
+            bool recent = last != null && w.Tick - last.Tick < SimTime.TicksPerDay;
+            Gfx.Text(this, Fonts.Body, new Vector2(px, ly + 14), p.Name, 11, Palette.TextDim);
+            Gfx.Text(this, Fonts.Bold, new Vector2(px + 86, ly + 14), w.Policies.Option(p.Id), 11, recent ? Palette.Accent : Palette.Text);
+            if (i % 2 == 1 || i == PolicySystem.All.Length - 1) ly += 15;
+        }
+        if (w.Policies.Changes.LastOrDefault() is PolicyChange lc)
+        {
+            Gfx.Text(this, Fonts.Body, new Vector2(x + 44, ly + 14), Fit($"최근: {SimTime.Day(lc.Tick)}일 {PolicySystem.Spec(lc.Id).Name} → {PolicySystem.Spec(lc.Id).Options[lc.To]} — {lc.Why}" + (lc.Yes + lc.No > 0 ? $" (찬성 {lc.Yes} · 반대 {lc.No})" : ""), right - x - 48, 10, Fonts.Body), 10, Palette.TextMuted);
+            ly += 15;
         }
         Gfx.Text(this, Fonts.Body, new Vector2(x + 44, ly + 14), $"늦게 닫아 옆방까지 잃은 일 {a.LateSeals} · 닫힌 방 안에서 쓰러짐 {a.TrappedCasualties} · 질식 소화 {a.Smothered} · 진공 소화 {a.Vacuumed} · 불활성 가스 {(a.InertCapacity > 0 ? a.InertGas / a.InertCapacity * 100 : 100):0}%", 10, Palette.TextMuted);
         ly += 22;
@@ -97,6 +106,28 @@ public partial class Hud
             Gfx.Text(this, Fonts.Bold, new Vector2(x, ly + 14), $"🔥 {room.Name} {step}{count}", 12, c);
             Gfx.Text(this, Fonts.Body, new Vector2(x + 200, ly + 14), Fit(fc.Status, right - x - 204, 11, Fonts.Body), 11, Palette.TextDim);
             ly += 18;
+        }
+        // v13.1 지휘
+        {
+            var cmd = w.Command;
+            var cap = cmd.Captain;
+            SectionTitle(x, ly + 14, "지휘");
+            Gfx.Text(this, Fonts.Body, new Vector2(x + 44, ly + 14),
+                $"선장 {cap?.Name ?? "-"} ({CommandSystem.StyleName(cmd.Style)}) · 신뢰 {cmd.Trust * 100:0}% · 컴퓨터 신뢰 {cmd.ComputerTrust * 100:0}%" +
+                (cmd.Active ? $" · 현장 지휘 {cmd.CommanderName}" : " · 평시") + (cmd.Elections > 0 ? $" · 선거 {cmd.Elections}번" : ""), 11, cmd.Trust < 0.35f ? Palette.Warning : Palette.TextDim);
+            ly += 18;
+            if (cmd.Active)
+            {
+                foreach (var t in cmd.Teams.Where(t => t.Kind != TeamKind.Reserve))
+                {
+                    string Nm(int id) => w.Crew.FirstOrDefault(c => c.Id == id)?.Name ?? "?";
+                    Gfx.Text(this, Fonts.Body, new Vector2(x + 44, ly + 13), Fit($"{CommandSystem.TeamName(t.Kind)} {Nm(t.Worker)}" + (t.Watcher >= 0 ? $" · 감시 {Nm(t.Watcher)}" : "") + (t.Room != null ? $" → {t.Room.Name}" : "") + $" ({t.Detail})", right - x - 48, 11, Fonts.Body), 11, Palette.Text);
+                    ly += 15;
+                }
+                var reserve = cmd.Teams.Where(t => t.Kind == TeamKind.Reserve).Select(t => w.Crew.FirstOrDefault(c => c.Id == t.Worker)?.Name).ToList();
+                if (reserve.Count > 0) { Gfx.Text(this, Fonts.Body, new Vector2(x + 44, ly + 13), Fit("대기조 " + string.Join("·", reserve), right - x - 48, 11, Fonts.Body), 11, Palette.TextMuted); ly += 15; }
+            }
+            ly += 4;
         }
         if (a.ZoneActive)
         {

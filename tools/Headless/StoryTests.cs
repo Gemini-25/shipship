@@ -13,7 +13,8 @@ public static partial class Program
         try
         {
             string Apply(World w, HazardKind k, Cell at = default, int id = -1) => Hazards.Apply(w, k, at, id) ?? "(못 걸음)";
-            int Nodes(World w) => w.Causes.Incidents.LastOrDefault()?.Nodes.Count ?? 0;
+            // 그 사고의 사슬 (뒤에 생긴 작은 실수 기록이 "마지막 사고"가 되지 않게 — 가장 큰 사슬)
+            int Nodes(World w) => w.Causes.Incidents.Where(i => w.Causes.Node(i.Root).Kind != CauseKind.Mistake).Select(i => i.Nodes.Count).DefaultIfEmpty(0).Max();
 
             // 1) 냉각 상실 → 원자로 긴급 정지 → 바닥 물
             {

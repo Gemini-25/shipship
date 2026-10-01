@@ -56,8 +56,14 @@ public static partial class Program
         {
             var w = DayOne(seed, "Mirinae");
             Scenarios.Apply(w, "chaos", out _);
-            Run(w, SimTime.TicksPerDay);
+            // 사고 뒤 하루 동안 한 번이라도 모이는지 (v13.1 조 편성으로 빨리 정식 수리까지 끝나기도 한다)
             var items = Deferred.Items(w);
+            for (int h = 0; h < 24; h++)
+            {
+                Run(w, SimTime.Hours(1));
+                var now = Deferred.Items(w);
+                if (now.Count > items.Count) items = now;
+            }
             Check("미뤄 둔 정비 — 사고 뒤에 남은 일이 모인다", items.Count > 0, string.Join(" / ", items.Take(6).Select(x => $"{x.What}({x.Why})")));
         }
 

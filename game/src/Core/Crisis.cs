@@ -219,6 +219,8 @@ public static class Crisis
         note = null;
         var level = Level(w);
         if (Disabled || level < CrisisLevel.Emergency) return 1f;
+        // v13.1 교대: 지휘자가 쉬게 한 사람은 잔다
+        if (w.Command.Resting(c) && a is SleepActivity or RelaxActivity or EatActivity) { note = "교대 — 쉬라는 지시"; return a is SleepActivity ? 1.6f : 1f; }
         bool survival = level == CrisisLevel.Survival;
         float grit = Math.Clamp(0.55f * c.Traits.Diligence + 0.25f * c.Traits.Calm + 0.2f * c.Traits.Bravery - 0.3f * c.Needs.Stress, 0f, 1f);
         switch (a)

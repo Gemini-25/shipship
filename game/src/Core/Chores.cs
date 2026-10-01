@@ -46,6 +46,7 @@ public sealed class ChoresActivity : Activity
         if (o.Kind == WorkKind.Train && o.Circuit / 10 != c.Id) return -1f; // v11.3: 배우는 사람만
         if (o.Kind == WorkKind.Rehab && o.Circuit != c.Id) return -1f; // v11.3: 재활은 다친 사람이
         if (o.Kind == WorkKind.Handover && o.Circuit != c.Id) return -1f; // v12.0: 인수인계는 기록을 든 사람이
+        if (o.Kind == WorkKind.SafetyWatch && (w.Command.TeamOf(c) is not Team st || st.Watcher != c.Id || st.Worker != o.Circuit)) return -1f; // v13.1 정해진 짝만
         // v12.0 전조 손보기는 그 기록을 아는 사람만 (직접 봤거나 · 인계받았거나 · 컴퓨터 일지로 읽었다)
         if (o.Kind == WorkKind.PreventiveCheck && o.Target.Furniture?.Machine?.Omen?.Note is ShiftNote note && !w.Watch.Knows(note, c)) return -1f;
         if (DecisionOnly(o.Kind)) return -1f;
@@ -74,6 +75,7 @@ public sealed class ChoresActivity : Activity
         // 위기 판단: 비상·생존 위기에 맞닿은 일(사람·불·전기·공기·사람 있는 방의 구멍)은 앞으로, 딴일은 뒤로.
         // 비번·취침 시간이어도 불려 나온다 (비상 소집)
         score += Crisis.Bias(w, o);
+        score += w.Command.Bias(c, o); // v13.1 현장 지휘: 맡은 조의 일
         bool allHands = Crisis.AllHands(w, o);
         // v12.0 교대 한 시간 전에는 새 점검을 벌이기보다 기록을 넘긴다
         if (o.Kind == WorkKind.PreventiveCheck && !emergency && OnShiftStatic(c, w)
@@ -311,6 +313,7 @@ public static partial class WorkPlanners
             WorkKind.IsolateRoom or WorkKind.BreakerOn or WorkKind.ShutRoomValve or WorkKind.OpenRoomValve => RoomSwitch(activity, o, c, w, dist, at, out blocked),
             WorkKind.PumpOut => PumpOut(activity, o, c, w, dist, at, out blocked),
             WorkKind.ManualControl => ManualControl(activity, o, c, w, dist, at, out blocked),
+            WorkKind.SafetyWatch => SafetyWatch(activity, o, c, w, dist, at, out blocked),
             WorkKind.Reline => Reline(activity, o, c, w, dist, at, out blocked),
             WorkKind.UnloadSupply => UnloadSupply(activity, o, c, w, dist, at),
             WorkKind.AnswerSignal => AnswerSignal(activity, o, c, w, dist, at),
@@ -472,7 +475,14 @@ public static partial class WorkPlanners
     {
         if (c.Suit is { Oxygen: > 1f }) return true;
         // v12.9.1 급하지 않은 일은 마지막 한 벌을 남겨 둔다 (봉합·구조하러 갈 사람의 몫)
-        if (!allowDash && w.Ship.FurnitureOf(FurnitureType.SuitLocker).Sum(f => f.Storage!.Count(ItemKind.Suit)) <= 1) return false;
+        int suitsLeft = w.Ship.FurnitureOf(FurnitureType.SuitLocker).Sum(f => f.Storage!.Count(ItemKind.Suit));
+        if (!allowDash && suitsLeft <= 1) return false;
+        // v13.1 방침(우주복: 비상조 먼저): 조 편성이 있으면 위험한 방에 가는 조 몫을 남긴다
+        if (w.Policies["suits"] == 0 && w.Command.Active && w.Command.TeamOf(c) is not { Hazard: true })
+        {
+            int teamNeed = w.Command.Teams.Where(t => t.Hazard).SelectMany(t => new[] { t.Worker, t.Watcher }).Count(id => id >= 0 && w.Crew.Any(x => x.Id == id && x.Suit == null));
+            if (suitsLeft <= teamNeed) return false;
+        }
         var (locker, spot) = Plans.NearestContainer(w, dist, c, f => f.Type == FurnitureType.SuitLocker && f.Storage!.Count(ItemKind.Suit) > 0);
         if (locker == null) return false;
 
