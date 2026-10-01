@@ -25,6 +25,8 @@ public sealed class NetLink
     public float Integrity { get; set; } = 1f;
     public bool Temp { get; set; }             // 임시로 이었다 (평온해지면 제대로)
     public string? Cause { get; set; }
+    /// <summary>v14.8 임시로 이은 사람 (접촉 저항으로 달아오르면 그 사람이 기억한다).</summary>
+    public int SplicedBy { get; set; } = -1;
     public bool Cut => Integrity < 0.3f;
     /// <summary>v12.2 인과 사슬: 이 토막이 끊긴 고리.</summary>
     public int Node { get; set; } = -1;
@@ -46,7 +48,7 @@ public sealed class NetStats
 /// 문이 여럿인 방(큰 배의 통로)은 다른 길로 돌아간다. 폭발·불·운석·방 분리가 가까운 토막을 상하게 하고, 사람이 다시 잇는다.
 /// 단수: 재배대가 마르고, 주방이 요리를 못 하고, 산소 발생기가 전해할 물이 없다. 환기 끊김: 그 방은 산소가 안 들고 CO₂·연기가 안 빠진다.
 /// </summary>
-public sealed class UtilityNet
+public sealed partial class UtilityNet
 {
     private readonly World _w;
     private List<NetLink>[][] _adj = Array.Empty<List<NetLink>[]>();
@@ -133,7 +135,7 @@ public sealed class UtilityNet
             Add(k, $"{k}:ring:{from}-{to}", ha.node, hb.node, room, null, Line(ha.cell, hb.cell));
         }
         foreach (var l in Links)
-            if (old.TryGetValue(l.Key, out var o)) { l.Integrity = o.Integrity; l.Temp = o.Temp; l.Cause = o.Cause; l.Node = o.Node; }
+            if (old.TryGetValue(l.Key, out var o)) { l.Integrity = o.Integrity; l.Temp = o.Temp; l.Cause = o.Cause; l.Node = o.Node; l.SplicedBy = o.SplicedBy; }
         // v14.2 마디마다 닿는 토막 (종류별) — 도달 계산이 틱마다 목록을 새로 만들지 않게
         _adj = new List<NetLink>[Enum.GetValues<NetKind>().Length][];
         for (int k = 0; k < _adj.Length; k++)
@@ -375,17 +377,17 @@ public sealed partial class WorkBoard
     {
         var w = _world;
         var net = w.Net;
-        foreach (var l in net.Links.Where(l => l.Integrity < 0.55f || l.Temp && Crisis.Level(w) < CrisisLevel.Emergency).OrderBy(l => l.Integrity).Take(10))
+        foreach (var l in net.Links.Where(l => l.Integrity < 0.55f || l.Temp && (Crisis.Level(w) < CrisisLevel.Emergency || w.Flow.Hot(l))).OrderBy(l => l.Integrity).Take(10))
         {
             if (l.Room.Detached || l.Room.Abandoned || l.Room.OffLimits) continue;
             var spot = l.Cells.FirstOrDefault(c => w.Ship.IsWalkable(c));
             if (spot == default) spot = l.Cells[l.Cells.Count / 2];
             var down = l.Cut ? net.Downstream(l) : new List<Room>();
             bool vital = down.Any(r => r.Type is RoomType.LifeSupport or RoomType.Reactor or RoomType.Cooling or RoomType.Medbay or RoomType.Bridge or RoomType.Power or RoomType.Hydroponics);
-            float u = l.Cut ? (l.Kind == NetKind.Power ? 0.85f : l.Kind == NetKind.Air ? 0.75f : l.Kind == NetKind.Data ? 0.55f : 0.6f) + (vital ? 0.2f : 0f) + 0.03f * down.Count : l.Temp ? 0.3f : 0.4f;
+            float u = l.Cut ? (l.Kind == NetKind.Power ? 0.85f : l.Kind == NetKind.Air ? 0.75f : l.Kind == NetKind.Data ? 0.55f : 0.6f) + (vital ? 0.2f : 0f) + 0.03f * down.Count : l.Temp ? (w.Flow.Hot(l) ? 0.75f : 0.3f) : 0.4f; // v14.8 달아오른 임시 이음은 급하다
             string detail = l.Cut
                 ? $"{UtilityNet.Name(l.Kind)} 끊김 ({l.Cause}) — {(down.Count > 0 ? string.Join("·", down.Select(r => r.Name)) + (l.Kind == NetKind.Power ? " 정전" : l.Kind == NetKind.Water ? " 단수" : l.Kind == NetKind.Data ? " 감지기·원격 제어 끊김" : " 환기 끊김") : "다른 길로 돈다")}"
-                : l.Temp ? $"임시로 이은 {UtilityNet.Name(l.Kind)} → 제대로 다시" : $"{UtilityNet.Name(l.Kind)} 상함 ({l.Integrity * 100:0}%)";
+                : l.Temp ? (w.Flow.Hot(l) ? $"임시로 이은 {UtilityNet.Name(l.Kind)}이 달아오른다 (접촉 저항) → 제대로 다시" : $"임시로 이은 {UtilityNet.Name(l.Kind)} → 제대로 다시") : $"{UtilityNet.Name(l.Kind)} 상함 ({l.Integrity * 100:0}%)";
             post(WorkKind.RepairNet, WorkTarget.AtCell(spot, l.Room), MathF.Min(1.15f, u), l.Kind is NetKind.Power or NetKind.Data ? Skill.Electrical : Skill.Mechanics, detail, circuit: l.Id);
         }
     }
@@ -418,6 +420,7 @@ public static partial class WorkPlanners
             world.Board.Close(o);
             bool wasCut = l.Cut;
             l.Integrity = temp ? 0.6f : 1f;
+            l.SplicedBy = temp ? cm.Id : -1; // v14.8
             l.Temp = temp;
             if (temp) world.Net.Stats.TempRepairs++; else world.Net.Stats.Repairs++;
             world.Net.Update(0f);

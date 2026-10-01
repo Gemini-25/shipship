@@ -116,6 +116,10 @@ public sealed class Room
     /// <summary>배 전체 망에서 이 방까지 전력 간선·급수관·환기 덕트가 이어져 있나 (끊기면 정전·단수·환기 끊김).</summary>
     public bool PowerLinked { get; set; } = true;
     public bool WaterLinked { get; set; } = true;
+    /// <summary>v14.8 이 방이 받는 몫 0~1 (전압 · 수압 · 환기) — 가는 토막 · 먼 길 · 몰린 우회로.</summary>
+    public float PowerFlow { get; set; } = 1f;
+    public float WaterFlow { get; set; } = 1f;
+    public float AirFlow { get; set; } = 1f;
     public bool DuctLinked { get; set; } = true;
     /// <summary>v12.3 데이터선: 감지기 값·원격 제어(격벽·댐퍼·경보)가 이 방까지 닿는다.</summary>
     public bool DataLinked { get; set; } = true;

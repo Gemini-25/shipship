@@ -44,6 +44,7 @@ public static partial class Program
             bool self = r.Fault == null && r.SelfRepairsTotal >= 1 && w.Log.Entries.Any(e => e.Text.Contains("자가 진단"));
             var r2 = w.Robots.Robots.First(x => x.Kind == RobotKind.Maintainer);
             r2.Condition = 0.2f;
+            int selfBefore = r2.SelfRepairsTotal; // (앞서 혼자 고친 적이 있을 수 있다 — 이번 고장만 본다)
             w.Robots.ForceFault(r2, RobotFault.Sensor);
             bool posted = false;
             for (int t = 0; t < SimTime.Hours(14); t++)
@@ -51,8 +52,8 @@ public static partial class Program
                 w.Step();
                 posted |= w.Board.Open.Any(o => o.Kind == WorkKind.RepairRobot && o.Target.Robot == r2);
             }
-            Check("가벼운 고장은 스스로, 임계점을 넘으면 사람이", self && posted && r2.Fault == null && r2.SelfRepairsTotal == 0,
-                $"재배 로봇 자가 수리 {r.SelfRepairsTotal}{(self ? "" : " (자가 수리 확인 실패)")} · 닳은 정비 로봇 수리 요청 {(posted ? "올라옴" : "없음")} · 고장 {(r2.Fault is RobotFault f2 ? RobotSystem.FaultName(f2) : "없음")} · 정비 로봇 자가 수리 {r2.SelfRepairsTotal}");
+            Check("가벼운 고장은 스스로, 임계점을 넘으면 사람이", self && posted && r2.Fault == null && r2.SelfRepairsTotal == selfBefore,
+                $"재배 로봇 자가 수리 {r.SelfRepairsTotal}{(self ? "" : " (자가 수리 확인 실패)")} · 닳은 정비 로봇 수리 요청 {(posted ? "올라옴" : "없음")} · 고장 {(r2.Fault is RobotFault f2 ? RobotSystem.FaultName(f2) : "없음")} · 정비 로봇 자가 수리 {r2.SelfRepairsTotal - selfBefore} (앞서 {selfBefore})");
         }
 
         // ── 2) 방전돼 멈춘 로봇은 사람이 충전대까지 끌고 온다 ──

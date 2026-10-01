@@ -155,7 +155,8 @@ public static partial class Program
                 // 사람은 진짜 교정값을 모른다 — 헛경보를 현장에서 확인하고 나서야 그 방을 교정한다
                 var calibrated = w.Ship.Machines.Where(m => m.LastCalibrated > 0).ToList();
                 float fixedAvg = calibrated.Select(m => m.SensorCal).DefaultIfEmpty(0f).Average();
-                Check("계기 오류 — 교정이 틀어진 감지기가 헛경보를 내고, 현장 확인 뒤 그 방을 다시 맞춘다", st.Phantoms > 0 && st.PhantomsCaught > 0 && st.Calibrations > 0 && fixedAvg > 0.85f,
+                // (헛경보가 난 감지기는 현장에서 바로 맞추고, 남은 방은 교정 순회로 — 순회는 급하지 않아 사흘 안에 안 돌 수도 있다)
+                Check("계기 오류 — 교정이 틀어진 감지기가 헛경보를 내고, 현장 확인 뒤 다시 맞춘다 (그 자리에서 · 방을 돌며)", st.Phantoms > 0 && st.PhantomsCaught > 0 && calibrated.Count >= Math.Min(3, st.PhantomsCaught) && fixedAvg > 0.85f,
                     $"계기 오류 {st.Phantoms}(잡음 {st.PhantomsCaught}) · 교정 {st.Calibrations}방(맞춘 감지기 {calibrated.Count}개 평균 {fixedAvg * 100:0}%) · 배 전체 평균 50% → {avg * 100:0}% · 헛일(계기 오류에 부품을 갈음) {w.Watch.Notes.Count(n => n.Omen.Cause == OmenCause.Phantom && n.WrongFixes > 0)}");
             }
 

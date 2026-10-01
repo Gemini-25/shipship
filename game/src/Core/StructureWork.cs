@@ -442,7 +442,7 @@ public static partial class WorkPlanners
             return true;
         }));
         toils.Add(new GotoToil(inner));
-        toils.Add(new WaitToil(SimTime.Minutes(2), Pose.Working, hatch.Cell.Center)); // 에어락 감압
+        toils.AddRange(w.Flow.AirlockOut(c, hatch, inner, Crisis.Level(w) >= CrisisLevel.Emergency)); // v14.8 점검 → 감압 (전기가 모자라면 손 펌프 · 급하면 공기를 버리고)
         return true;
     }
 
@@ -452,7 +452,7 @@ public static partial class WorkPlanners
         var hatch = DroneSystem.Hatch(w);
         if (hatch == null || Inner(w, hatch) is not Cell inner) return;
         toils.Add(new GotoToil(inner));
-        toils.Add(new WaitToil(SimTime.Minutes(2), Pose.Working, hatch.Cell.Center)); // 가압
+        toils.AddRange(w.Flow.AirlockIn(hatch, inner)); // v14.8 가압 → 에어락 안에서 우주복을 턴다
         toils.Add(new DoToil((cm, world) =>
         {
             cm.EvaMode = false;

@@ -1267,6 +1267,13 @@ public partial class Hud : Control
                 var mine = _world.Net.Links.Where(l => l.Kind == k && (l.Room == room || l.Door != null && (l.Door.RoomA == room || l.Door.RoomB == room))).ToList();
                 var worst = mine.OrderBy(l => l.Integrity).FirstOrDefault();
                 string name = k switch { NetKind.Power => "전력", NetKind.Water => "급수", NetKind.Data => "데이터", _ => "덕트" };
+                // v14.8 얼마나 오나: 전압 · 수압 · 환기가 모자라면 몇 %인지와 까닭
+                if (k != NetKind.Data && UtilityNet.Fed(k, room) && _world.Flow.Share(k, room) is { Frac: < 0.9f } fs)
+                {
+                    parts.Add($"{(k == NetKind.Power ? "전압" : k == NetKind.Water ? "수압" : "환기")} {fs.Frac * 100:0}%" + (fs.Why != null ? $" ({fs.Why})" : ""));
+                    warn = true;
+                    continue;
+                }
                 if (!UtilityNet.Fed(k, room)) { parts.Add($"{name} 끊김"); bad = true; }
                 else if (worst != null && worst.Integrity < 0.95f) { parts.Add($"{name} {worst.Integrity * 100:0}%" + (worst.Temp ? " 임시" : "")); warn = true; }
                 else if (worst != null && worst.Temp) { parts.Add($"{name} 임시로 이음"); warn = true; }

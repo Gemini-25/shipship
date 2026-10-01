@@ -28,7 +28,7 @@ public static class Brain
         new HobbyActivity(), // v14.3 취미 (물건을 가져와서 하고 제자리에)
         new TidyActivity(), // v14.3 두고 온 물건 찾아오기 · 정리
         new MendActivity(), // v14.3 망가진 물건 고쳐 주기
-        new ReachOutActivity(), new ReclaimActivity(), new PartTestActivity(), new WashUpActivity(), new LaundryActivity(), new DeconActivity(), // v14.7 씻기 · 빨래 · 우주복 털기 · v14.6 부품 시험 · v14.5 두고 간 짐 · v14.4 목적 있는 말 걸기 (걱정 · 위로 · 신입 · 사과 · 진실 · 소문)
+        new ReachOutActivity(), new ReclaimActivity(), new PartTestActivity(), new WashUpActivity(), new LaundryActivity(), new DeconActivity(), new FlushActivity(), // v14.8 급수관 씻어 내기 · v14.7 씻기 · 빨래 · 우주복 털기 · v14.6 부품 시험 · v14.5 두고 간 짐 · v14.4 목적 있는 말 걸기 (걱정 · 위로 · 신입 · 사과 · 진실 · 소문)
         new InspectActivity(), // v14.4 소문을 듣고 확인하러 간다
         new ChatActivity(),
         new RelaxActivity(),

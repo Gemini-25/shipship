@@ -406,7 +406,7 @@ public sealed class PartTestActivity : Activity
     public override string Label => "부품 시험";
 
     private static ItemKind? Pending(World w) =>
-        PartsSystem.TestKinds.FirstOrDefault(k => w.Parts.StockOf(k).Any(l => !l.Tested && (l.Suspect || l.Origin is PartOrigin.Salvage or PartOrigin.Handmade)));
+        PartsSystem.TestKinds.Where(k => w.Parts.StockOf(k).Any(l => !l.Tested && (l.Suspect || l.Origin is PartOrigin.Salvage or PartOrigin.Handmade))).Cast<ItemKind?>().FirstOrDefault(); // (없으면 null — 열거형 첫 값이 아니라)
 
     private static Furniture? Bench(World w, DistanceField dist) =>
         w.Ship.FurnitureOf(FurnitureType.PartTestBench).Concat(w.Ship.FurnitureOf(FurnitureType.Workbench))

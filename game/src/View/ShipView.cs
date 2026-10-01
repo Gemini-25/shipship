@@ -260,6 +260,8 @@ public partial class ShipView : Node2D
                 _ => new Color(0.88f, 0.9f, 0.95f),
             };
             float strength = emergency ? 0.14f : room.Type == RoomType.Corridor ? 0.10f : 0.17f;
+            if (!emergency && room.PowerFlow < 0.75f) // v14.8 전압 강하: 불이 흐리고, 많이 떨어지면 깜빡인다
+                strength *= (0.45f + 0.55f * room.PowerFlow / 0.75f) * (room.PowerFlow < 0.55f ? 0.8f + 0.2f * Mathf.Sin(_world.Tick * 0.7f + room.Id) : 1f);
             if (emergency && Mathf.Sin(_time * 2.2f + room.Id) < -0.2f) strength *= 0.5f; // 비상등은 느리게 깜빡인다
             int minX = room.Cells.Min(c => c.X), minY = room.Cells.Min(c => c.Y);
             foreach (var c in room.Cells)

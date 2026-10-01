@@ -1386,8 +1386,8 @@ public static partial class WorkPlanners
         var patient = o.Target.Crew!;
         var toils = Fetch(c, w, dist, ItemKind.MedKit, 1);
         if (toils == null) { blocked = "구급 키트 없음"; return null; }
+        toils.AddRange(w.Soil.WashFirst(c, o.Urgency >= 0.9f, "치료")); // v14.7 급하지 않으면 손부터 (환자 곁에 가기 전에 — 씻는 사이 환자가 자리를 뜨지 않게)
         toils.Add(new GotoToil(at));
-        toils.AddRange(w.Soil.WashFirst(c, o.Urgency >= 0.9f, "치료")); // v14.7 급하지 않으면 손부터
         toils.Add(new WorkToil(0.5f, Skill.Medicine, patient.Position)
         {
             CanContinue = (cm, _) => cm.Carrying?.Kind == ItemKind.MedKit && (patient.Position - cm.Position).Length() < 2.2f,

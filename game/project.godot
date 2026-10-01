@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="ShipSim"
-config/version="14.7"
+config/version="14.8"
 config/description="스스로 살아가고, 망가지고, 수리하고, 적응하는 우주선 생태 관찰 시뮬레이터"
 run/main_scene="res://scenes/Main.tscn"
 config/features=PackedStringArray("4.7", "C#", "GL Compatibility")

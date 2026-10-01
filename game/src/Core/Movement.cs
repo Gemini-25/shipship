@@ -185,6 +185,22 @@ public sealed class MovementSystem
             }
         }
 
+        // ── v14.8 문 양쪽 기압이 다르면 손으로 못 연다: 균압 밸브로 맞추고 연다 ──
+        //    (한 번 맞추고 나면 그 문은 잠깐 다시 보지 않는다 — 새는 방 앞에서 끝없이 서 있지 않게)
+        if (w.Ship.DoorAt(next) is Door pd && (gt.CheckedDoor != pd || now - gt.CheckedAt > SimTime.Minutes(5)) && c.Room is Room here && c.PathIndex + 1 < path.Count
+            && w.Ship.RoomAt(path[c.PathIndex + 1]) is Room there && there != here && !there.Detached && !here.Detached
+            && there.Air.Pressure >= 20f && here.Air.Pressure >= 20f && FlowSystem.DoorDelta(here, there) >= FlowSystem.EqualizeAbove)
+        {
+            float dp = FlowSystem.DoorDelta(here, there);
+            w.Flow.Equalize(here, there, urgent ? 0.75f : 0.6f);
+            w.Flow.Stats.Equalized++;
+            if (c.SaidUntil < now) c.Say(w, $"문에 압이 걸렸다 ({dp:0}kPa) — 균압 밸브부터");
+            gt.CheckedDoor = pd; gt.CheckedAt = now; gt.DoorReading = $"균압 {dp:0}kPa";
+            gt.DoorCheckUntil = now + Math.Min(12, (urgent ? 1 : 2) + (int)(dp / (urgent ? 8f : 4f)));
+            Locomotion.Face(c, next.Center);
+            return 0f;
+        }
+
         // ── 좁은 곳에서 마주친 사람 ──
         var other = At(next);
         var dir = Dir(c.Cell, next);

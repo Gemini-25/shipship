@@ -152,6 +152,7 @@ public sealed class World
     public MovementSystem Movement { get; } // v14.5 움직임
     public PartsSystem Parts { get; } // v14.6 부품마다의 수명과 내력
     public SoilSystem Soil { get; } // v14.7 오염 · 위생
+    public FlowSystem Flow { get; } // v14.8 배관 · 배선 전달량
     public AmbienceSystem Ambience { get; }
     public ExteriorSystem Exterior { get; }
     public LifeSystem Life { get; }
@@ -241,6 +242,7 @@ public sealed class World
         Movement = new MovementSystem(this);
         Parts = new PartsSystem(this);
         Soil = new SoilSystem(this);
+        Flow = new FlowSystem(this);
         Ambience = new AmbienceSystem(this);
         Exterior = new ExteriorSystem(this);
         Life = new LifeSystem(this);
@@ -299,6 +301,8 @@ public sealed class World
             long pf = Prof.Now; // v14.2 구간별 시간
             Net.Update(dt); // 배 전체 망: 어느 방까지 전기·물·공기가 닿나
             pf = Prof.Lap("sys.Net", pf);
+            Flow.Update(dt); // v14.8 얼마나 오나 (전압 · 수압 · 역류 · 접촉 저항)
+            pf = Prof.Lap("sys.Flow", pf);
             Piping.Update(dt);
             pf = Prof.Lap("sys.Piping", pf);
             Automation.Update(dt);
