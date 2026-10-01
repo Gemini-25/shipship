@@ -16,7 +16,7 @@ public partial class Hud
     public void ToggleControl()
     {
         ControlOpen = !ControlOpen;
-        if (ControlOpen) { ChronicleOpen = false; TechOpen = false; OpenChain(null); }
+        if (ControlOpen) { ChronicleOpen = false; TechOpen = false; PolicyOpen = false; OpenChain(null); }
     }
 
     private void DrawControl(Vector2 mouse)
@@ -77,17 +77,19 @@ public partial class Hud
         ly += 34;
         // v13.0 방침 (회의가 정한다)
         SectionTitle(x, ly + 14, "방침");
-        // 두 칸으로 (이름 · 지금 값 — 최근에 바뀐 것은 밝게)
+        // 두 칸으로 (이름 · 지금 값 — 최근에 바뀐 것은 밝게) · v13.2 컴퓨터에 걸린 재난·지휘 방침만 (전부는 E 방침·회의 화면)
+        Gfx.TextRight(this, Fonts.Body, new Vector2(right, ly + 14), "전부 보기: E", 10, Palette.TextMuted);
         float colW = (right - x - 44) / 2f;
-        for (int i = 0; i < PolicySystem.All.Length; i++)
+        var shown = PolicySystem.All.Where(p => p.Area != "자원" && p.Id is not ("election" or "noconfidence" or "minutes")).ToArray();
+        for (int i = 0; i < shown.Length; i++)
         {
-            var p = PolicySystem.All[i];
+            var p = shown[i];
             float px = x + 44 + (i % 2) * colW;
             var last = w.Policies.Changes.LastOrDefault(c => c.Id == p.Id);
             bool recent = last != null && w.Tick - last.Tick < SimTime.TicksPerDay;
             Gfx.Text(this, Fonts.Body, new Vector2(px, ly + 14), p.Name, 11, Palette.TextDim);
             Gfx.Text(this, Fonts.Bold, new Vector2(px + 86, ly + 14), w.Policies.Option(p.Id), 11, recent ? Palette.Accent : Palette.Text);
-            if (i % 2 == 1 || i == PolicySystem.All.Length - 1) ly += 15;
+            if (i % 2 == 1 || i == shown.Length - 1) ly += 15;
         }
         if (w.Policies.Changes.LastOrDefault() is PolicyChange lc)
         {

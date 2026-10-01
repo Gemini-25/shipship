@@ -146,8 +146,11 @@ public static class Evolution
         _ => ItemKinds.Tier(k) is ItemTier.General or ItemTier.Advanced ? 1 : 0,
     };
 
+    /// <summary>v13.2 방침(비축)에 맞춘 비상용 몫.</summary>
+    public static int Reserve(ItemKind k, World w) => w.History.Doctrine.StockScale == 1f ? Reserve(k) : (int)MathF.Round(Reserve(k) * w.History.Doctrine.StockScale);
+
     public static bool Affordable(WorkBoard b, (ItemKind kind, int count)[] cost) =>
-        cost.All(x => b.Have(x.kind) - x.count >= Reserve(x.kind) + b.Held(x.kind));
+        cost.All(x => b.Have(x.kind) - x.count >= Reserve(x.kind, b.World) + b.Held(x.kind));
 
     public static (ItemKind kind, int count)[] Cost(UpgradeKind k, Furniture? f) => k switch
     {
@@ -178,7 +181,7 @@ public static class Evolution
 
     /// <summary>개조하고도 비상용 위로 얼마나 남나 (0 = 딱 비상용만, 1 이상 = 넉넉).</summary>
     public static float Slack(World w, (ItemKind kind, int count)[] cost) =>
-        cost.Length == 0 ? 1f : cost.Min(x => (w.Board.Have(x.kind) - x.count - Reserve(x.kind)) / (float)Math.Max(2, x.count));
+        cost.Length == 0 ? 1f : cost.Min(x => (w.Board.Have(x.kind) - x.count - Reserve(x.kind, w)) / (float)Math.Max(2, x.count));
 
     public static string ShortTitle(UpgradePlan p) => p.Kind switch
     {

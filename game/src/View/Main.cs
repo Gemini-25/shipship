@@ -461,6 +461,7 @@ public partial class Main : Node2D
                 case Key.L: ToggleHighlight(); break;
                 case Key.I: Hud.ToggleCodex(); break;
                 case Key.Y: Hud.ToggleControl(); break;
+                case Key.E: Hud.TogglePolicy(); break; // v13.2 방침·회의
                 case Key.G: Hud.ToggleMinimap(); break;
                 case Key.T: Hud.ToggleTech(); break;
                 case Key.F5: SaveGame(); break;
@@ -775,6 +776,15 @@ public partial class Main : Node2D
                 case "--control":
                     Hud.ToggleControl();
                     break;
+                case "--policies": // v13.2 방침·회의 화면
+                    Hud.TogglePolicy();
+                    break;
+                case "--review": // v13.2 화면 시험: --review=vacuumfire:0 (다음 정기 회의의 사후 검토 안건)
+                {
+                    var rp = value.Split(':');
+                    if (rp.Length == 2 && int.TryParse(rp[1], out int rv)) Sim.Meetings.QueueReview(rp[0], rv, "창고 화재 때 소화 수순 중에 사람이 쓰러졌다");
+                    break;
+                }
                 case "--codex":
                     Hud.CodexMode = true;
                     break;

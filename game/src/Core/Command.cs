@@ -6,7 +6,7 @@ namespace ShipSim.Core;
 
 // v13.1 지휘: 선장 · 현장 지휘자 · 조 편성 · 2인 1조와 안전 감시자 · 교대 · 선장 스타일 · 불신임.
 //
-// 선장: 처음엔 지휘 순서의 첫 사람(기관장). 신뢰가 무너지면 저녁 회의에서 불신임 → 새 선장을 뽑는다 (방침: 선출 방식·불신임 문턱).
+// 선장: 처음엔 지휘 순서의 첫 사람(기관장). 신뢰가 무너지면 정기 회의(v13.2)에서 불신임 → 새 선장을 뽑는다 (방침: 선출 방식·불신임 문턱).
 // 선장 스타일: 권위형(정해 준 조를 꼭 지킨다 · 빠르다) / 협의형(조를 지키되 의견을 듣는다 · 덜 지친다) / 방임형(각자 판단).
 // 현장 지휘자: 위기 때 방침(지휘: 사람 · 컴퓨터 · 상황 따라)대로 — 사람이면 선장(못 하면 다음 사람), 컴퓨터면 V 지휘 컴퓨터.
 // 조 편성: 급한 일을 묶어(구조 · 봉합 · 소화 · 전력·냉각 · 치료) 솜씨·거리·피로를 보고 사람을 붙이고, 나머지는 대기조.
@@ -45,7 +45,6 @@ public sealed class CommandSystem
     /// <summary>선장에 대한 배 전체의 신뢰 0~1.</summary>
     public float Trust { get; set; } = 0.65f;
     public int Elections, NoConfidence, CaptainsLost;
-    private long _lastEvening = -1;
 
     public static string StyleName(CaptainStyle s) => s switch { CaptainStyle.Authoritarian => "권위형", CaptainStyle.Consultative => "협의형", _ => "방임형" };
 
@@ -109,7 +108,6 @@ public sealed class CommandSystem
             var acting = Council.Decider(w, true);
             if (acting != null) Appoint(acting, "선장이 숨져 지휘 순서대로 대신 맡았다");
         }
-        Evening();
 
         var level = Crisis.Level(w);
         // 위기: 비상 이상이거나, 경계 중 사고 일(구조·봉합·소화·전력)이 있을 때 — 치료만으로는 조를 짜지 않는다
@@ -369,28 +367,41 @@ public sealed class CommandSystem
 
     public void OnIncidentClosed(bool deaths)
     {
+        _w.Meetings.OnIncidentClosed(deaths); // v13.2 결정의 무게
         if (!deaths) Trust = MathF.Min(1f, Trust + 0.03f);
     }
 
-    private void Evening()
+    /// <summary>v13.2 정기 회의의 안건: 신뢰가 무너진 선장을 불신임한다 (토론 · 표결 · 방침의 문턱).</summary>
+    public AgendaItem VoteNoConfidence(List<CrewMember> voters, MeetingSystem m)
     {
         var w = _w;
-        float hour = SimTime.HourOfDay(w.Tick);
-        long day = w.Tick / SimTime.TicksPerDay;
-        if (hour < 20f || day == _lastEvening) return;
-        _lastEvening = day;
-        var cap = Captain;
-        var voters = w.Crew.Where(c => !c.Dead && !c.IsChild && c.CanAct).ToList();
-        if (cap == null || voters.Count < 3) return;
-        // 불신임: 신뢰가 무너졌다
-        if (Trust >= 0.35f) return;
+        var cap = Captain!;
         NoConfidence++;
-        int yes = voters.Count(c => c != cap && (c.AffinityTo(cap) < 0.15f || Trust < 0.2f));
+        var item = new AgendaItem { Title = $"선장 {cap.Name} 불신임", Topic = "captain" };
+        (float, string) Opinion(CrewMember c)
+        {
+            if (c == cap) return (-1f, "끝까지 맡겠다");
+            var terms = new List<(float v, string why)>
+            {
+                (0.45f - Trust, Trust < 0.2f ? "아무도 선장을 믿지 않는다" : "믿음이 무너졌다"),
+                (-0.5f * c.AffinityTo(cap), c.AffinityTo(cap) > 0.2f ? "선장 편이다" : "선장과 사이가 나쁘다"),
+                (m.Guilt(cap) > 0.2f ? 0.15f : 0f, "선장이 정한 일로 사람이 죽었다"),
+                (c.Value == CrewValue.Rules ? -0.1f : 0f, "선장을 함부로 바꾸면 안 된다"),
+            };
+            float s = terms.Sum(t => t.v);
+            return (s, s > 0f ? terms.Where(t => t.v > 0f).OrderByDescending(t => t.v).First().why : terms.Where(t => t.v <= 0f).OrderBy(t => t.v).Select(t => t.why).DefaultIfEmpty("그대로 두자").First());
+        }
+        var (yes, no) = m.Debate(voters, Opinion, Leadership, item, null);
         int need = w.Policies["noconfidence"] == 0 ? voters.Count / 2 + 1 : (int)MathF.Ceiling(voters.Count * 2f / 3f);
-        bool pass = yes >= need;
-        w.History.Add(w, HistoryKind.Decision, $"저녁 회의: 선장 {cap.Name} 불신임 — 찬성 {yes} · 필요 {need} → {(pass ? "가결" : "부결")} (신뢰 {Trust * 100:0}%)", null, voters, log: true);
-        if (!pass) { Trust = MathF.Min(1f, Trust + 0.08f); return; }
+        bool pass = yes.Count >= need;
+        item.Passed = pass;
+        item.Outcome = pass ? "가결" : "부결";
+        w.History.Add(w, HistoryKind.Decision, $"정기 회의: 선장 {cap.Name} 불신임 — 찬성 {yes.Count} · 필요 {need} → {(pass ? "가결" : "부결")} (신뢰 {Trust * 100:0}%)"
+            + (item.FlippedBy != null ? $" · {item.FlippedBy}의 설득으로 뒤집혔다" : ""), null, voters, log: true);
+        m.Split(yes, no);
+        if (!pass) { Trust = MathF.Min(1f, Trust + 0.08f); return item; }
         Elect(voters, cap);
+        return item;
     }
 
     /// <summary>선장 선거 (방침: 직책 순서 · 다수결 · 경력).</summary>

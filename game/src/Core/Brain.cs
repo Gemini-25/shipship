@@ -20,6 +20,7 @@ public static class Brain
         new SleepActivity(),
         new ChoresActivity(),
         new DutyActivity(),
+        new MeetingActivity(), // v13.2 정기 회의
         new VisitActivity(), // v12.7 문병
         new ChatActivity(),
         new RelaxActivity(),

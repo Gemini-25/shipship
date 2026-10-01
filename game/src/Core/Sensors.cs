@@ -227,7 +227,7 @@ public sealed class SensorSystem
     /// <summary>자동화: 방이 비면 그 방 격벽을 닫고 댐퍼를 닫는다 (새도 옆방까지 번지지 않게).</summary>
     private void TrySeal(IncomingMeteor m)
     {
-        if (m.Room is not Room room || room.Detached || !_w.Automation.DoorsIn(room)) return;
+        if (m.Room is not Room room || room.Detached || !_w.Automation.AutoDoorsIn(room)) return;
         bool occupied = _w.Crew.Any(c => !c.Dead && !c.Outside && c.Room == room);
         if (occupied) return;
         foreach (var d in room.Doors)

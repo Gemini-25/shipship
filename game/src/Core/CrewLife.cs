@@ -296,6 +296,9 @@ public sealed class LifeSystem
                 // v12.9.4 평소에도 조금씩 부딪힌다 (좁은 배에 오래 붙어 있으면) — 지치고 배고프고 예민하면 훨씬 잦다
                 float tension = 0.06f + (Irritable(a) + Irritable(b)) / 2f;
                 var (clash, about) = Clash(a, b);
+                // v13.2 파벌: 회의에서 가치관대로 갈린 표가 쌓인 사이는 더 자주 부딪힌다
+                float rift = w.Meetings.Tension(a.Value, b.Value);
+                if (rift > 0.15f) { clash = MathF.Max(clash, 0.5f) * (1f + 2f * rift); about = "회의에서 갈린 표를"; }
                 float p = tension * clash * 0.12f * dt * (1.2f - MathF.Max(0f, (a.AffinityTo(b) + b.AffinityTo(a)) / 2f));
                 if (!_rng.Chance(p)) continue;
                 Stats.Arguments++;

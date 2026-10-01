@@ -53,6 +53,9 @@ public sealed partial class AutomationSystem
 
     /// <summary>v12.3 그 방까지 데이터선이 이어져 있어야 자동으로 한다 (끊기면 그 방만 손으로).</summary>
     public bool DoorsIn(Room r) => Doors && r.DataLinked;
+
+    /// <summary>v13.2 방침(컴퓨터 자동 실행)이 허락할 때만 격벽을 스스로 닫는다 (경보만이면 사람이 손으로).</summary>
+    public bool AutoDoorsIn(Room r) => DoorsIn(r) && _world.Policies["autoscope"] >= 1;
     public bool DampersIn(Room r) => Dampers && r.DataLinked;
     public bool AlarmsIn(Room r) => Alarms && r.DataLinked;
     public bool DroneControl => !Present || MainOnline;

@@ -195,6 +195,9 @@ public sealed class SprayToil : Toil
 
     public SprayToil(Cell aim) => _aim = aim;
 
+    /// <summary>v13.2 소화기 대신 물 (느리고, 물을 쓰고, 바닥이 젖는다).</summary>
+    public bool Water { get; init; }
+
     public override void Begin(CrewMember c, World w)
     {
         c.Pose = Pose.Working;
@@ -211,7 +214,7 @@ public sealed class SprayToil : Toil
 
     public override ToilStatus Tick(CrewMember c, World w)
     {
-        if (c.Carrying?.Kind != ItemKind.Extinguisher) return ToilStatus.Failed;
+        if (Water ? w.Water.Level < 1f : c.Carrying?.Kind != ItemKind.Extinguisher) return ToilStatus.Failed;
         _elapsed++;
         // 가장 가까운 불을 겨눈다
         Cell? nearest = null;
@@ -226,6 +229,16 @@ public sealed class SprayToil : Toil
         Locomotion.Face(c, aim.Center);
         float rate = (10f + 6f * c.SkillLevel(Skill.Mechanics)) * (0.8f + 0.4f * c.Traits.Calm) / SimTime.TicksPerHour;
         if (_panic > 0) { _panic--; rate *= 0.35f; }
+        if (Water)
+        {
+            rate *= 0.6f;
+            w.Fire.Suppress(aim, 1.5f, rate);
+            float liters = 2f * 60f / SimTime.TicksPerHour; // 분당 2L
+            w.Water.Level = MathF.Max(0f, w.Water.Level - liters);
+            if (c.Room != null) w.Moisture.AddWater(c.Room, liters * 0.8f);
+            if (_elapsed > SimTime.Minutes(15)) return ToilStatus.Succeeded;
+            return ToilStatus.Running;
+        }
         w.Fire.Suppress(aim, 1.5f, rate);
         // v12.2 소화 분말은 곁의 설비를 뒤덮는다 (닦아야 한다), 좁은 방에서는 공기가 탁해진다
         foreach (var d in Cell.Dirs8.Append(new Cell(0, 0)))
@@ -257,7 +270,18 @@ public static partial class WorkPlanners
         bool selfSuit = o.Kind == WorkKind.SealBreach || ChoresActivity.NeedsEvaField(o);
         if (!selfSuit && c.Suit is not { Oxygen: > 1f } && NeedsSuit(o, c, w, at))
         {
-            if (!SuitUp(c, w, dist, suitUp, allowDash: WorkKinds.IsEmergency(o.Kind) || o.Kind == WorkKind.Treat)) { blocked = "우주복 없음"; return null; }
+            if (!SuitUp(c, w, dist, suitUp, allowDash: WorkKinds.IsEmergency(o.Kind) || o.Kind == WorkKind.Treat))
+            {
+                // v13.2 방침(구조: 무조건): 우주복이 없어도 숨을 참고 뛰어들어 끌어낸다
+                if (o.Kind != WorkKind.Rescue || w.Policies["rescue"] != 0 || c.Traits.Bravery < 0.3f) { blocked = "우주복 없음"; return null; }
+                suitUp.Clear();
+                suitUp.Add(new DoToil((cm, world) =>
+                {
+                    cm.Dashing = true;
+                    world.Log.Add(world.Tick, LogKind.Warning, "우주복이 없다 — 숨을 참고 구하러 뛰어든다 (방침: 무조건 구조)", cm.Id);
+                    return true;
+                }));
+            }
         }
 
         var job = o.Kind switch
@@ -482,6 +506,13 @@ public static partial class WorkPlanners
         {
             int teamNeed = w.Command.Teams.Where(t => t.Hazard).SelectMany(t => new[] { t.Worker, t.Watcher }).Count(id => id >= 0 && w.Crew.Any(x => x.Id == id && x.Suit == null));
             if (suitsLeft <= teamNeed) return false;
+        }
+        // v13.2 방침(우주복: 한 사람 한 벌): 사람마다 정해 둔 한 벌 — 내 몫이 없으면 남의 것을 입지 않는다
+        if (w.Policies["suits"] == 2)
+        {
+            int total = suitsLeft + w.Crew.Count(x => !x.Dead && x.Suit != null);
+            int rank = w.Crew.Where(x => !x.Dead && !x.IsChild).OrderBy(x => x.Id).ToList().IndexOf(c);
+            if (rank >= total) return false;
         }
         var (locker, spot) = Plans.NearestContainer(w, dist, c, f => f.Type == FurnitureType.SuitLocker && f.Storage!.Count(ItemKind.Suit) > 0);
         if (locker == null) return false;
@@ -1110,14 +1141,21 @@ public static partial class WorkPlanners
         if (aim is not Cell fire) { w.Board.Close(o); return null; }
 
         List<Toil>? toils;
+        bool water = false;
         if (c.Carrying?.Kind == ItemKind.Extinguisher) toils = new List<Toil>();
         else
         {
             toils = Fetch(c, w, dist, ItemKind.Extinguisher, 1);
-            if (toils == null) { blocked = "소화기 없음"; return null; }
+            if (toils == null)
+            {
+                // v13.2 방침(불 끄는 수단: 물도 쓴다): 소화기가 없으면 소화전 호스로 물을 뿌린다 (바닥이 젖고 누전이 난다)
+                if (w.Policies["firemethod"] != 2 || w.Water.Level < 20f) { blocked = "소화기 없음"; return null; }
+                water = true;
+                toils = Plans.DropOff(c, w, dist);
+            }
         }
         toils.Add(new GotoToil(at));
-        toils.Add(new SprayToil(fire));
+        toils.Add(new SprayToil(fire) { Water = water });
         toils.Add(new DoToil((cm, world) =>
         {
             cm.Stats.Emergencies++;
@@ -1131,7 +1169,7 @@ public static partial class WorkPlanners
             else world.Board.Release(o, cm); // 다른 칸에 불이 남았다 → 다시 가장 가까운 불을 찾아 이어서
             return true;
         }));
-        return Wrap(a, o, c, w, "화재 진압", toils, $"소화기를 들고 {Ko.EuRo(room.Name)} 간다");
+        return Wrap(a, o, c, w, "화재 진압", toils, water ? $"소화기가 없다 — 호스를 끌고 {Ko.EuRo(room.Name)} 간다" : $"소화기를 들고 {Ko.EuRo(room.Name)} 간다");
     }
 
     // ── 구조: 쓰러진 사람을 업어서 치료 침대(없으면 안전한 방)로 ──

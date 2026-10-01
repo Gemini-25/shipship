@@ -402,7 +402,9 @@ public sealed class EvacuateActivity : Activity
         if (c.Room.EvacuateBy >= 0 || c.Room.Purging || c.Room.Inerting) danger = MathF.Max(danger, 1f);
         if (c.Suit is { Oxygen: > 0f and < 0.4f } && Atmosphere.Danger(c.Room) > 0.3f) danger = 1f; // 탱크가 바닥나 간다
         // v12.9.1 맨몸으로 산소가 묽어지는 방에 있으면 일을 두고 나온다 (머리가 먼저 흐려진다 — 쓰러지기 전에)
-        if (c.Suit is not { Oxygen: > 0.05f } && c.Room.Air.O2 < 16.5f) danger = MathF.Max(danger, 0.6f + (16.5f - c.Room.Air.O2) * 0.1f);
+        // v13.2 방침(대피 기준): 일찍 17 · 보통 16.5 · 버티며 작업 15
+        float leave = w.Policies["evac"] switch { 0 => 17f, 2 => 15f, _ => 16.5f };
+        if (c.Suit is not { Oxygen: > 0.05f } && c.Room.Air.O2 < leave) danger = MathF.Max(danger, 0.6f + (leave - c.Room.Air.O2) * 0.1f);
         // v9: 새는 냉각수의 증기 (그 관을 고치러 온 사람은 각오하고 버틴다)
         if (c.Job?.Order?.Target.Pipe == null)
         {
@@ -420,8 +422,8 @@ public sealed class EvacuateActivity : Activity
     }
 
     /// <summary>v12.9.1 우주복 없이 산소 14kPa 아래 방에 있다 (몇 분 안에 쓰러진다).</summary>
-    public static bool Breathless(CrewMember c) =>
-        c.Room != null && c.Suit is not { Oxygen: > 0.05f } && c.Room.Air.O2 < 14f && c.CarryingPerson == null && !c.Dashing;
+    public static bool Breathless(CrewMember c, World w) =>
+        c.Room != null && c.Suit is not { Oxygen: > 0.05f } && c.Room.Air.O2 < (w.Policies["evac"] switch { 0 => 15f, 2 => 13f, _ => 14f }) && c.CarryingPerson == null && !c.Dashing;
 
     private static bool Safe(CrewMember c, World w, Room room) =>
         Atmosphere.Danger(room) <= 0.1f && !room.Leaking && w.Fire.CountIn(room) == 0 && w.Sensors.Threat(room) == null
@@ -442,7 +444,7 @@ public sealed class EvacuateActivity : Activity
         }
         if (c.Room == null) return (0f, "—");
         // v12.9.1 맨몸으로 숨이 찰 만큼 산소가 묽다 — 무슨 일이든 두고 당장 나간다 (사람을 업고 있거나 각오하고 뛰어든 사람은 빼고)
-        if (Breathless(c)) return (3f, $"{c.Room.Name} 산소 {c.Room.Air.O2:0}kPa — 숨이 차다, 당장 나간다");
+        if (Breathless(c, w)) return (3f, $"{c.Room.Name} 산소 {c.Room.Air.O2:0}kPa — 숨이 차다, 당장 나간다");
         float danger = DangerHere(c, w);
         if (danger < 0.2f) return (0f, "안전함");
         float fear = 1.2f - 0.4f * c.Traits.Bravery;

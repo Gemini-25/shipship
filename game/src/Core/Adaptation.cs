@@ -38,14 +38,15 @@ public static class Adaptation
     /// <summary>
     /// 그 부품을 뜯어낼 설비. 받는 쪽보다 쓸모가 낮아야 하고, 핵심 설비·이미 뜯긴 설비·쓰는 중인 설비는 제외.
     /// </summary>
-    public static Machine? BestDonor(World w, ItemKind part, float recipientWorth, ICollection<Machine> exclude)
+    public static Machine? BestDonor(World w, ItemKind part, float recipientWorth, ICollection<Machine> exclude, bool anything = false)
     {
         Machine? best = null;
         float bestWorth = float.MaxValue;
+        if (anything) recipientWorth *= 1.5f; // v13.2 방침(부품 뜯기: 필요하면 무엇이든)
         foreach (var m in w.Ship.Machines)
         {
             if (m.Spec.Critical || exclude.Contains(m) || m.Has(FaultKind.Stripped)) continue;
-            if (m.Body.Type == FurnitureType.WaterRecycler) continue; // 뜯으면 열흘 뒤 물 → 작물 → 식량이 무너진다 (60일 시험에서 확인)
+            if (m.Body.Type == FurnitureType.WaterRecycler && !anything) continue; // 뜯으면 열흘 뒤 물 → 작물 → 식량이 무너진다 (60일 시험에서 확인)
             if (!Faults.SalvageOf(m.Body.Type).Contains(part)) continue;
             if (m.Body.ReservedBy != null) continue; // 누가 쓰고 있다 (치료 침대에 환자 등)
             if (w.Fire.CountIn(m.Body.Room) > 0) continue;

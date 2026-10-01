@@ -192,12 +192,16 @@ public sealed class VoyageSystem
             Credits += fee;
             lines.Add($"짐삯 {fee:0}");
         }
-        // 사기: 모자란 것부터
-        foreach (var (k, want, price) in new[] { (ItemKind.Plate, 10, 1.5f), (ItemKind.Electronics, 6, 3f), (ItemKind.Sealant, 4, 2f), (ItemKind.MedKit, 4, 3f), (ItemKind.Filter, 4, 2f), (ItemKind.Cable, 6, 1f) })
+        // 사기: 모자란 것부터 (v13.2 방침(기항지 지출): 아끼면 덜 사고 돈을 남기고, 넉넉하면 더 산다)
+        int spend = w.Policies["portspend"];
+        float wantScale = spend == 0 ? 0.6f : spend == 2 ? 1.5f : 1f;
+        float keepMoney = spend == 0 ? MathF.Max(Reserve, 20f) : spend == 2 ? 0f : Reserve;
+        foreach (var (k, want0, price) in new[] { (ItemKind.Plate, 10, 1.5f), (ItemKind.Electronics, 6, 3f), (ItemKind.Sealant, 4, 2f), (ItemKind.MedKit, 4, 3f), (ItemKind.Filter, 4, 2f), (ItemKind.Cable, 6, 1f) })
         {
+            int want = (int)MathF.Round(want0 * wantScale);
             int have = ship.CountStored(k);
             int buy = Math.Max(0, want - have);
-            buy = Math.Min(buy, (int)(MathF.Max(0f, Credits - (have == 0 ? 0f : Reserve)) / price)); // 하나도 없으면 아껴 둔 돈도 쓴다
+            buy = Math.Min(buy, (int)(MathF.Max(0f, Credits - (have == 0 ? 0f : keepMoney)) / price)); // 하나도 없으면 아껴 둔 돈도 쓴다
             if (buy <= 0) continue;
             int put = 0;
             foreach (var box in ship.Containers.Where(f => f.Storage!.Accepts(k)))
@@ -223,9 +227,9 @@ public sealed class VoyageSystem
         }
         Trades++;
         // 개수 공사: 가장 낡은 설비 둘
-        foreach (var m in ship.Machines.Where(m => m.Faults.Count == 0).OrderByDescending(m => m.Wear).Take(2))
+        foreach (var m in ship.Machines.Where(m => m.Faults.Count == 0).OrderByDescending(m => m.Wear).Take(spend == 0 ? 0 : spend == 2 ? 4 : 2))
         {
-            if (Credits - Reserve < 6f || m.Wear < 0.25f) break;
+            if (Credits - keepMoney < 6f || m.Wear < 0.25f) break;
             Credits -= 6f;
             m.Wear = 0.05f;
             m.Condition = MathF.Max(m.Condition, 0.95f);

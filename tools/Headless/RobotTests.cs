@@ -10,6 +10,7 @@ public static partial class Program
     {
         var w = World.CreateDefault(seed, 0, ship);
         Run(w, SimTime.TicksPerDay);
+        w.Policies.ResetDefaults(); // v13.2 첫 출항 회의가 바꾼 방침은 되돌린다 (각 점검은 처음 값에서)
         return w;
     }
 

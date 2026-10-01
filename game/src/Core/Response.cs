@@ -137,6 +137,8 @@ public sealed partial class AutomationSystem
                     bool escalate = cells >= 6 || minutes >= grace && (cells >= 2 || !crewOnIt);
                     if (Level < 4) escalate &= minutes >= grace * 1.5f; // 추론이 안 되면 늦게 (보수적으로) 올린다
                     if (!escalate) { fc.Status = crewOnIt ? $"소화조가 끈다 ({cells}칸 · {minutes:0}분)" : $"소화조를 기다린다 ({cells}칸)"; break; }
+                    // v13.2 방침(컴퓨터 자동 실행): 전부가 아니면 소화 수순은 하지 않는다
+                    if (w.Policies["autoscope"] < 2) { fc.Status = $"자동 실행 범위 밖 — 소화조에 맡긴다 ({cells}칸)"; break; }
                     var method = PickMethod(room, fc);
                     if (method == null) { fc.Status = $"쓸 수단이 없다 — 소화조에 맡긴다 ({cells}칸)"; break; }
                     Plan(fc, room, method, cells, minutes);

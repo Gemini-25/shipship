@@ -162,7 +162,7 @@ public sealed class HullSystem
             {
                 room.Lockdown = true;
                 int locked = 0;
-                bool auto = _world.Automation.DoorsIn(room); // v9.2: 격벽 자동 잠금은 주 컴퓨터가 한다 (v12.3 데이터선이 그 방까지 닿아야)
+                bool auto = _world.Automation.AutoDoorsIn(room); // v9.2: 격벽 자동 잠금은 주 컴퓨터가 한다 (v12.3 데이터선이 그 방까지 닿아야 · v13.2 방침이 허락해야)
                 // v12.5 사람 우선: 안에 사람이 있으면 2분 기다린다 (배 우선이면 바로)
                 var inside = _world.Crew.Where(c => !c.Dead && c.Room == room && !c.Outside).ToList();
                 if (auto && inside.Count > 0 && !_world.Automation.ShipFirst)
@@ -216,7 +216,7 @@ public sealed class HullSystem
                 else continue;
             }
             // 잠긴 방의 문에 전기가 다시 들어오면 마저 닫는다 (손으로 닫지 못한 문)
-            if (room.Lockdown && !room.Abandoned && _world.Automation.DoorsIn(room))
+            if (room.Lockdown && !room.Abandoned && _world.Automation.AutoDoorsIn(room))
                 foreach (var d in room.Doors)
                     if (!d.IsExternal && d.Powered && !d.Locked) d.Locked = true;
 

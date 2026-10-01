@@ -42,6 +42,10 @@ public static partial class Council
         return w.Crew.FirstOrDefault(c => c.CanAct);
     }
 
+    /// <summary>v13.2 긴급 판단: 선장이 혼자 정한다 (선장이 못 하면 지휘 순서대로).</summary>
+    public static CrewMember? Judge(World w, bool urgent) =>
+        w.Command.Captain is CrewMember cap && cap.CanAct && (cap.IsAwake || urgent) ? cap : Decider(w, urgent);
+
     private static bool Stake(CrewMember c, Room? r) =>
         r != null && (c.Stations.Contains(r.Type) || c.Bed?.Room == r || c.HomeBed?.Room == r);
 
@@ -169,6 +173,7 @@ public static partial class Council
                 p = 1f;
                 break;
         }
+        if (o.Kind == WorkKind.Jettison && w.Policies["jettison"] == 2) p += 0.15f; // v13.2 방침(사출: 적극)
         return p + 0.15f * o.Rejections;
     }
 
@@ -448,6 +453,7 @@ public static partial class Council
                 break;
             }
         }
+        ExtraTerms(w, c, o, terms, pressure); // v13.2 가치관 · 경험 · 상태 · 죄책감
         foreach (var (v, _) in terms) s += v;
         // 결정하는 사람과 가까우면 그 사람 편을 든다
         var leader = o.Decider;
@@ -486,28 +492,71 @@ public static partial class Council
             if (o.Decision == DecisionState.None)
             {
                 bool alone = pressure >= 0.9f;
-                var decider = Decider(w, alone);
+                var decider = Judge(w, alone);
                 if (decider == null) { o.Decision = DecisionState.Approved; continue; }
                 o.Decider = decider;
                 o.Alone = alone;
+                // v13.2 현장 협의: 위기 중(조가 짜여 있으면) 지휘자·조장들이 무전으로 짧게
+                o.Field = !alone && w.Command.Active;
                 float calm = alone ? decider.Traits.Calm : w.Crew.Where(c => c.CanAct).Select(c => c.Traits.Calm).DefaultIfEmpty(0.5f).Average();
-                o.DecideAt = w.Tick + (alone ? SimTime.Minutes(2f + 10f * (1f - calm)) : SimTime.Minutes(15f + 25f * (1f - calm)));
+                o.DecideAt = w.Tick + (alone ? SimTime.Minutes(2f + 10f * (1f - calm)) : o.Field ? SimTime.Minutes(1f + 1f * (1f - calm)) : SimTime.Minutes(15f + 25f * (1f - calm)));
                 o.Decision = DecisionState.Pending;
                 continue;
+            }
+            // v13.2 기다리는 사이 위기가 왔다 — 모일 새 없이 현장 협의(무전)로
+            if (o.Decision == DecisionState.Pending && !o.Alone && !o.Field && w.Command.Active)
+            {
+                o.Field = true;
+                o.DecideAt = Math.Min(o.DecideAt, w.Tick + SimTime.Minutes(2));
             }
             if (o.Decision == DecisionState.Pending && w.Tick >= o.DecideAt) Decide(w, o, pressure);
         }
     }
 
-    private static void Decide(World w, WorkOrder o, float pressure)
+    /// <summary>v13.2 정기 회의에서 미뤄 둔 결정을 모인 사람들로 바로 정한다.</summary>
+    internal static void DecideNow(World w, WorkOrder o, List<CrewMember> attendees, MeetingRecord rec)
+    {
+        if (attendees.FirstOrDefault(c => c.Id == rec.Chair) is CrewMember chair) o.Decider = chair;
+        Decide(w, o, Pressure(w, o), attendees, rec);
+    }
+
+    private static void Decide(World w, WorkOrder o, float pressure, List<CrewMember>? attendees = null, MeetingRecord? rec = null)
     {
         var h = w.History;
-        var decider = o.Decider is { CanAct: true } d0 ? d0 : Decider(w, o.Alone);
+        var decider = o.Decider is { CanAct: true } d0 ? d0 : Judge(w, o.Alone);
         if (decider == null) { o.Decision = DecisionState.Approved; return; }
         o.Decider = decider;
         var awake = w.Crew.Where(c => c.CanAct && (c.IsAwake || c == decider)).ToList();
-        var voters = o.Alone ? new List<CrewMember> { decider } : awake;
-        var opinions = voters.Select(c => (who: c, op: Opinion(w, c, o, pressure))).ToList();
+        List<CrewMember> voters;
+        if (attendees != null) { voters = attendees.Where(c => c.CanAct).ToList(); if (!voters.Contains(decider)) voters.Add(decider); }
+        else if (o.Alone) voters = new List<CrewMember> { decider };
+        else if (o.Field)
+        {
+            // 현장 협의: 지휘자 · 조를 맡은 사람 (무전)
+            var cmd = w.Command;
+            var ids = cmd.Teams.Where(t => t.Kind != TeamKind.Reserve).Select(t => t.Worker).Append(cmd.Commander?.Id ?? -1).Append(cmd.CaptainId).ToHashSet();
+            voters = awake.Where(c => ids.Contains(c.Id) || c == decider).ToList();
+        }
+        else voters = awake;
+        // v13.2 회의록 한 줄 (안건 · 발언 · 표)
+        var kind = attendees != null ? rec!.Kind : o.Alone ? MeetingKind.Emergency : o.Field ? MeetingKind.Field : MeetingKind.AdHoc;
+        var item = new AgendaItem { Title = o.Title, Topic = "order:" + o.Kind };
+        var final = new Dictionary<CrewMember, (float s, string why)>();
+        if (voters.Count >= 3) w.Meetings.Debate(voters, c => Opinion(w, c, o, pressure), c => c.SkillLevel(o.Skill), item, decider, final);
+        else foreach (var c in voters) { var op = Opinion(w, c, o, pressure); final[c] = op; item.Votes.Add((c.Id, op.support > 0f, op.why)); item.Speeches.Add(new Speech { Who = c.Id, For = op.support > 0f, Text = op.why }); }
+        var opinions = voters.Select(c => (who: c, op: (support: final[c].s, why: final[c].why))).ToList();
+        if (rec != null) rec.Items.Add(item);
+        else
+        {
+            var mr = new MeetingRecord
+            {
+                Id = w.Meetings.Minutes.Count + 1, Kind = kind, Tick = w.Tick, End = w.Tick, Chair = decider.Id,
+                Venue = o.Alone ? "그 자리" : o.Field ? "무전" : "깨어 있는 사람끼리", Attendees = voters.Select(c => c.Id).ToList(),
+            };
+            mr.Items.Add(item);
+            w.Meetings.Minutes.Add(mr);
+            if (w.Meetings.Minutes.Count > 60) w.Meetings.Minutes.RemoveAt(0);
+        }
         var yes = opinions.Where(x => x.op.support > 0f).ToList();
         var no = opinions.Where(x => x.op.support <= 0f).ToList();
         // 혼자 정할 때도 깨어 있는 사람은 한마디 한다: 크게 반대하는 사람은 기록에 남고 서운함이 남는다
@@ -537,11 +586,16 @@ public static partial class Council
             }
             else
             {
-                text = $"회의 ({decider.Name} 주재): {title} — 찬성 {yes.Count} · 반대 {no.Count}";
+                text = $"{MeetingLabel(kind, decider)}: {title} — 찬성 {yes.Count} · 반대 {no.Count}";
                 if (no.Count > 0) text += $" ({string.Join("·", no.Select(x => x.who.Name))}: {no[0].op.why})";
                 else if (yes.Count > 0) text += $" ({yes.OrderByDescending(x => x.op.support).First().op.why})";
+                if (item.FlippedBy != null) text += $" · {item.FlippedBy}의 설득으로 뒤집혔다";
             }
             o.Verdict = text;
+            item.Passed = true;
+            item.Outcome = "승인";
+            w.Meetings.Record(title, "order:" + o.Kind, o.Target.CurrentRoom?.Id ?? -1, decider, yes.Select(x => x.who).ToList(), no.Select(x => x.who).ToList(), "");
+            w.Meetings.Split(yes.Select(x => x.who).ToList(), no.Select(x => x.who).ToList());
             // 반대했던 사람은 서운하다 (결정한 사람에게)
             foreach (var (who, op) in no)
             {
@@ -601,8 +655,11 @@ public static partial class Council
             }
             o.BlockedUntil = w.Tick + SimTime.Hours(hold);
             string text = o.Alone ? $"{Ko.IGa(decider.Name)} {Ko.EulReul(title)} 미뤘다 — {mine.why}"
-                : $"회의 ({decider.Name} 주재): {title} 부결 — 찬성 {yes.Count} · 반대 {no.Count} ({no.OrderBy(x => x.op.support).First().op.why})";
+                : $"{MeetingLabel(kind, decider)}: {title} 부결 — 찬성 {yes.Count} · 반대 {no.Count} ({no.OrderBy(x => x.op.support).First().op.why})"
+                  + (item.FlippedBy != null ? $" · {item.FlippedBy}의 설득으로 뒤집혔다" : "");
             o.Verdict = text;
+            item.Outcome = "부결";
+            w.Meetings.Split(yes.Select(x => x.who).ToList(), no.Select(x => x.who).ToList());
             foreach (var (who, _) in yes) who.Needs.Stress = MathF.Min(1f, who.Needs.Stress + 0.02f);
             if (o.Kind == WorkKind.Upgrade)
             {
@@ -612,6 +669,65 @@ public static partial class Council
             var involved = new List<CrewMember> { decider };
             involved.AddRange(no.Select(x => x.who).Where(c => c != decider));
             h.Add(w, HistoryKind.Decision, text, o.Target.CurrentRoom, involved, log: true);
+        }
+    }
+
+    private static string MeetingLabel(MeetingKind k, CrewMember chair) => k switch
+    {
+        MeetingKind.Field => $"현장 협의 (무전 · {chair.Name})",
+        MeetingKind.Regular or MeetingKind.Review => $"{MeetingSystem.KindName(k)} ({chair.Name} 주재)",
+        _ => $"회의 ({chair.Name} 주재)",
+    };
+
+    /// <summary>v13.2 일마다 가치관이 기우는 쪽 (안전 · 효율 · 사람 · 규칙 · 자유 — 승인하는 쪽이 +).</summary>
+    private static float[]? Axis(WorkOrder o) => o.Kind switch
+    {
+        WorkKind.SealOffRoom => new[] { 1f, 0.5f, -0.5f, 0.5f, 0f },
+        WorkKind.ReopenRoom => new[] { -0.5f, 1f, 0.5f, 0f, 0.5f },
+        WorkKind.Cannibalize => new[] { 0.3f, 0.5f, 0f, -0.5f, 0.5f },
+        WorkKind.ShedLoad or WorkKind.Brownout => new[] { 0.5f, 0.5f, -0.5f, 0.3f, -0.3f },
+        WorkKind.RepurposeRoom or WorkKind.BuildWorkshop => new[] { 0f, 1f, 0f, 0f, 0.3f },
+        WorkKind.Recycle => new[] { 0f, 1f, 0f, 0f, 0f },
+        WorkKind.Upgrade => new[] { 0.5f, 0.5f, 0f, 0f, 0f },
+        WorkKind.Jettison => new[] { 1f, -0.5f, 0f, 0.3f, 0f },
+        WorkKind.Retrieve or WorkKind.RestoreRoom => new[] { -0.5f, 1f, 0.5f, 0f, 0.3f },
+        WorkKind.IsolateMain => new[] { 1f, -0.5f, 0f, 0.5f, 0f },
+        WorkKind.LimpMain => new[] { -1f, 1f, 0f, -0.3f, 0.5f },
+        WorkKind.PlanRepipe => new[] { 0.5f, -0.3f, 0f, 0.5f, 0f },
+        WorkKind.ChangeCourse => (ZoneKind)o.Circuit == ZoneKind.Debris ? new[] { -0.5f, 1f, 0f, 0f, 0.5f } : new[] { 1f, -0.3f, 0.3f, 0f, 0f },
+        WorkKind.Ration => new[] { 0.5f, 0.3f, -0.5f, 0.5f, -1f },
+        WorkKind.Distress => new[] { 0.5f, 0f, 1f, 0f, 0f },
+        WorkKind.AnswerSignal => new[] { -0.5f, 0f, 1f, 0f, 0.5f },
+        _ => null,
+    };
+
+    private static readonly (string pro, string con)[] ValueVoice =
+    {
+        ("그게 더 안전하다", "위험을 늘린다"),
+        ("배가 더 잘 돈다", "손해가 크다"),
+        ("사람을 지키는 길이다", "사람에게 짐을 지운다"),
+        ("절차대로다", "절차에 없는 일이다"),
+        ("현장이 알아서 할 여지가 생긴다", "사람을 묶어 둔다"),
+    };
+
+    /// <summary>v13.2 의견의 근거 확장: 가치관 · 경험(베테랑) · 상태(지침·스트레스) · 죄책감.</summary>
+    private static void ExtraTerms(World w, CrewMember c, WorkOrder o, List<(float v, string why)> terms, float pressure)
+    {
+        var axis = Axis(o);
+        if (axis != null)
+        {
+            float a = axis[(int)c.Value];
+            if (MathF.Abs(a) > 0.01f) terms.Add((0.1f * a, a > 0f ? ValueVoice[(int)c.Value].pro : ValueVoice[(int)c.Value].con));
+            float g = w.Meetings.Guilt(c);
+            if (g > 0.1f && MathF.Abs(axis[0]) > 0.01f) terms.Add((0.2f * g * MathF.Sign(axis[0]), "다시는 사람을 잃고 싶지 않다"));
+        }
+        // 베테랑: 미루면 커진다는 걸 안다
+        if (c.Stats.Emergencies >= 10 && pressure > 0.6f) terms.Add((0.08f, "겪어 봐서 안다 — 미루면 커진다"));
+        // 지치고 예민하면 일을 더 벌이기 싫다
+        if (o.Kind is WorkKind.Upgrade or WorkKind.RepurposeRoom or WorkKind.BuildWorkshop or WorkKind.PlanRepipe)
+        {
+            if (c.Needs.Stress > 0.65f) terms.Add((-0.06f, "지쳤다 — 일을 더 벌이지 말자"));
+            if (c.Needs.Rest < 0.25f) terms.Add((-0.05f, "잠도 못 잤다"));
         }
     }
 }

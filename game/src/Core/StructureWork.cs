@@ -169,7 +169,16 @@ public sealed partial class WorkBoard
             else if (w.Fire.IsKnown(room) && w.Fire.BurningHours(room) >= 1.5f && w.Fire.CountIn(room) >= Math.Max(4, room.Volume / 4)
                      && Have(ItemKind.Extinguisher) == 0 && !(room.Suppression && room.Powered))
                 reason = $"불이 {w.Fire.BurningHours(room):0.#}시간째 꺼지지 않는다 ({w.Fire.CountIn(room)}칸) — 소화기가 없다";
-            if (reason != null)
+            // v13.2 방침(사출: 적극): 더 일찍 떼어 낸다
+            if (reason == null && w.Policies["jettison"] == 2)
+            {
+                if (knownCap < 0.3f * room.DesignJoints && room.Joints.Any(j => !j.KnownBroken))
+                    reason = $"연결부가 많이 끊어졌다 ({room.Joints.Count(j => !j.KnownBroken)}/{room.Joints.Count}) — 방침대로 일찍 떼어 낸다";
+                else if (w.Fire.IsKnown(room) && w.Fire.CountIn(room) >= Math.Max(3, room.Volume / 5)
+                         && (w.Fire.BurningHours(room) >= 1f && Have(ItemKind.Extinguisher) == 0 || w.Fire.BurningHours(room) >= 2.5f))
+                    reason = $"불이 {w.Fire.BurningHours(room):0.#}시간째 — 방침대로 일찍 떼어 낸다";
+            }
+            if (reason != null && w.Policies["jettison"] != 0) // v13.2 방침(사출: 금지)
                 post(WorkKind.Jettison, WorkTarget.OfRoom(room), 1.0f, Skill.Mechanics, reason);
         }
 

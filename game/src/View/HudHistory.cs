@@ -20,7 +20,7 @@ public partial class Hud
     public void ToggleChronicle()
     {
         ChronicleOpen = !ChronicleOpen;
-        if (ChronicleOpen) { TechOpen = false; OpenChain(null); }
+        if (ChronicleOpen) { TechOpen = false; PolicyOpen = false; OpenChain(null); }
         _chronicleScroll = 0;
     }
 

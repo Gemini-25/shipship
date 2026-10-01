@@ -63,7 +63,6 @@ public sealed partial class AutomationSystem
         get => _world.Policies["decompress"] == 1;
         set => _world.Policies.Set("decompress", value ? 1 : 0, "시험·설정");
     }
-    public string PolicyNote { get; set; } = "처음 정한 대로 (사람 우선)";
     public int LateSeals { get; set; }      // 기다리는 사이 옆방까지 공기가 빠졌다
     public int TrappedCasualties { get; set; } // 닫힌 방 안에서 쓰러졌다
     private long _policyReviewed = -1;
@@ -138,31 +137,10 @@ public sealed partial class AutomationSystem
         if (w.Tick - _policyReviewed >= SimTime.TicksPerDay)
         {
             _policyReviewed = w.Tick;
-            if (!ShipFirst && LateSeals >= 2) Vote(true, $"감압 때 사람을 기다리다 옆방까지 공기를 {LateSeals}번 잃었다");
-            else if (ShipFirst && TrappedCasualties >= 1) Vote(false, $"바로 닫은 격벽 안에서 {TrappedCasualties}명이 쓰러졌다");
+            // v13.2 사후 검토: 다음 정기 회의에 올린다 (토론 · 표결)
+            if (!ShipFirst && LateSeals >= 2) { w.Meetings.QueueReview("decompress", 1, $"감압 때 사람을 기다리다 옆방까지 공기를 {LateSeals}번 잃었다"); LateSeals = 0; }
+            else if (ShipFirst && TrappedCasualties >= 1) { w.Meetings.QueueReview("decompress", 0, $"바로 닫은 격벽 안에서 {TrappedCasualties}명이 쓰러졌다"); TrappedCasualties = 0; }
         }
-    }
-
-    /// <summary>승무원 회의: 사람 우선 ↔ 배 우선 (침착하고 성실한 사람은 배 우선, 용감한 사람은 사람 우선 쪽으로).</summary>
-    private void Vote(bool shipFirst, string why)
-    {
-        var w = _world;
-        var voters = w.Crew.Where(c => !c.Dead && c.CanAct && !c.IsChild).ToList();
-        if (voters.Count == 0) return;
-        // v12.7 가치관: 효율·규칙을 앞세우는 사람은 배 우선, 사람을 앞세우는 사람은 사람 우선 쪽으로 기운다
-        static float Lean(CrewMember c) => c.Value switch { CrewValue.Efficiency => 0.15f, CrewValue.Rules => 0.1f, CrewValue.People => -0.2f, CrewValue.Safety => -0.05f, _ => 0f };
-        int yes = voters.Count(c => (c.Traits.Calm + c.Traits.Diligence) * 0.5f - 0.3f * c.Traits.Bravery + Lean(c) + (shipFirst ? 0.1f : -0.1f) > 0.3f == shipFirst);
-        int no = voters.Count - yes;
-        bool pass = yes > no;
-        string rule = shipFirst ? "감압 때 격벽을 바로 닫는다 (배 우선)" : "안에 사람이 있으면 격벽을 기다린다 (사람 우선)";
-        if (pass)
-        {
-            w.Policies.Set("decompress", shipFirst ? 1 : 0, why, yes, no);
-            PolicyNote = $"{SimTime.Day(w.Tick)}일 회의: {rule} — 찬성 {yes} · 반대 {no}";
-            LateSeals = 0; TrappedCasualties = 0;
-        }
-        w.History.Add(w, HistoryKind.Decision, $"회의: {rule}? — {why} · 찬성 {yes} · 반대 {no} → {(pass ? "정했다" : "그대로")}", crew: voters, log: true);
-        w.History.DecisionsMade++;
     }
 }
 
@@ -174,6 +152,7 @@ public sealed partial class WorkBoard
         var w = _world;
         var a = w.Automation;
         if (!a.Present || !a.MainOnline || a.Level < 2) return;
+        if (w.Policies["controlseat"] == 1 && a.Level >= 4) return; // v13.2 방침(관제석: 컴퓨터에 맡긴다) — 컴퓨터가 III 아래로 떨어지면 누구든 앉는다
         var level = Crisis.Level(w);
         bool trouble = level >= CrisisLevel.Alert || w.Ship.Rooms.Any(r => !r.Detached && (MoistureSystem.Depth(r) > 0.08f || r.BreakerOff || r.LockPendingUntil >= 0));
         if (!trouble) return;

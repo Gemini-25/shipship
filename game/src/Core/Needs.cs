@@ -95,7 +95,7 @@ public static class NeedsSystem
 
         // ── 욕구 ──
         // v10.11 배급: 한 끼씩 줄여 먹으니 허기가 덜 빠진다 (그만큼 날카로워진다 — 아래)
-        n.Food -= (asleep ? FoodDecayAsleep : FoodDecayAwake) * c.Traits.Appetite * (w.Food.Rationing ? FoodPolicy.RationDecay : 1f) * dt;
+        n.Food -= (asleep ? FoodDecayAsleep : FoodDecayAwake) * c.Traits.Appetite * w.Food.Decay(w, c) * dt;
 
         float restMul = (hypoxic ? 1.6f : 1f) * (stuffy ? 1.5f : 1f);
         // 침대가 아닌 곳(바닥, 의자)에서 자면 덜 쉰다

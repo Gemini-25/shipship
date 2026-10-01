@@ -90,6 +90,9 @@ public sealed class Doctrine
     /// <summary>v10.10 비축 방침 (자원 장부가 정한다): 사고 직후엔 쓴 것을 서둘러 채우고, 극한엔 살 길부터.</summary>
     public StockMode Mode { get; set; }
 
+    /// <summary>v13.2 방침(비축): 적게 0.75 · 보통 1 · 많이 1.35.</summary>
+    public float StockScale { get; set; } = 1f;
+
     public int Target(Recipe r)
     {
         int t = r.Product switch
@@ -101,6 +104,7 @@ public sealed class Doctrine
             _ => r.Target,
         };
         bool lifeline = r.Product is ItemKind.Sealant or ItemKind.Plate or ItemKind.Structure;
+        if (StockScale != 1f && t > 0) t = Math.Max(1, (int)MathF.Round(t * StockScale));
         return Mode switch
         {
             StockMode.Recovery when lifeline => (int)MathF.Ceiling(t * 1.3f),

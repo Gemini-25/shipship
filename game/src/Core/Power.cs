@@ -378,7 +378,11 @@ public sealed class PowerGrid
             LowPowerMode = false;
             _world.Log.Add(_world.Tick, LogKind.Ship, "냉각 펌프가 돌기 시작했다 — 원자로 정상 운전으로 올린다");
         }
-        if (ReactorOnline && !LowPowerMode && CoolingCapacity < ScramCoolingKw)
+        // v13.2 방침(원자로 운전): 보수면 냉각이 조금만 흔들려도 세우고, 출력 유지면 바닥 가까이까지 버틴다
+        int rpol = _world.Policies["reactor"];
+        float scramKw = rpol == 0 ? ScramCoolingKw * 1.6f : rpol == 2 ? ScramCoolingKw * 0.6f : ScramCoolingKw;
+        float scramC = rpol == 0 ? OverheatScramC - 15f : rpol == 2 ? OverheatScramC + 25f : OverheatScramC;
+        if (ReactorOnline && !LowPowerMode && CoolingCapacity < scramKw)
         {
             ReactorOnline = false;
             ReactorRamp = 0f;
@@ -406,7 +410,7 @@ public sealed class PowerGrid
             _world.Board.RequestScan();
         }
         // v9: 노심이 너무 뜨거워지면 긴급 정지 (냉각이 갑자기 줄었는데 제어봉이 따라가지 못했다)
-        if (ReactorOnline && ReactorTemperature >= OverheatScramC)
+        if (ReactorOnline && ReactorTemperature >= scramC)
         {
             ReactorOnline = false;
             LowPowerMode = false;
@@ -564,6 +568,8 @@ public sealed class PowerGrid
                 _world.RaiseAlert($"원자로 과열 — 노심 {ReactorTemperature:0}℃ (냉각이 모자라다)", reactor?.Body.Room, AlertLevel.Critical, shipWide: true);
             }
             else if (ReactorTemperature < OverheatWarnC - 30f) _overheatWarned = false;
+            // v13.2 출력 유지: 과열 경고를 넘긴 채 돌리면 노심이 닳는다
+            if (ReactorTemperature > OverheatScramC && Reactor is Machine rm) rm.Wear = MathF.Min(1f, rm.Wear + 0.04f * dtHours);
         }
 
         // 8) 문은 양쪽 방 중 하나라도 전기가 있으면 자동

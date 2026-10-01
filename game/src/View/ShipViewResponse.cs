@@ -145,3 +145,33 @@ public partial class ShipView
             }
     }
 }
+
+// v13.2 회의 장면: 모이는 곳에 "정기 회의" 표지, 회의 중에는 지금 말하는 사람 머리 위에 말풍선 (찬성은 초록 · 반대는 붉은 테)
+public partial class ShipView
+{
+    private void PaintMeeting(CanvasItem ci)
+    {
+        var w = _world;
+        var mt = w.Meetings;
+        if (mt.Venue is not Room v || !mt.Gathering && mt.Session == null) return;
+        // 회의실 표지 (모이는 중이면 몇 명이 왔는지)
+        float pulse = 0.4f + 0.2f * Mathf.Sin(_time * 1.5f);
+        PaintOutline(ci, v, new Color(1f, 0.85f, 0.45f, pulse), false);
+        string head = mt.Session != null ? $"{MeetingSystem.KindName(mt.Session.Kind)} — " + (mt.Session.Items.Count > 0 ? $"안건 {mt.Session.Items.Count}" : "하루를 돌아본다")
+            : $"정기 회의 — 모이는 중 {mt.Present.Count}/{mt.Invited.Count}";
+        var at = ToPx(v.Center) + new Vector2(0, -T * (v.Cells.Max(c => c.Y) - v.Cells.Min(c => c.Y) + 1) * 0.5f - 6f);
+        float hw = Gfx.Width(Fonts.Bold, head, 12) + 14;
+        Gfx.RoundRect(ci, new Rect2(at - new Vector2(hw / 2, 12), hw, 19), new Color(0.2f, 0.16f, 0.06f, 0.85f), 6, new Color(1f, 0.85f, 0.45f, 0.8f), 1);
+        Gfx.Text(ci, Fonts.Bold, at + new Vector2(-hw / 2 + 7, 2), head, 12, new Color(1f, 0.93f, 0.75f));
+        if (mt.Speaking() is not var (who, text, pro)) return;
+        // 말풍선
+        var p = CrewPx(who) + new Vector2(0, -CrewRadius - 16f);
+        string line = text.Length > 26 ? text[..25] + "…" : text;
+        float bw = Gfx.Width(Fonts.Body, line, 12) + 16;
+        var rect = new Rect2(p.X - bw / 2, p.Y - 22, bw, 22);
+        var edge = pro ? new Color(0.5f, 1f, 0.6f, 0.9f) : new Color(1f, 0.45f, 0.4f, 0.9f);
+        Gfx.RoundRect(ci, rect, new Color(0.08f, 0.09f, 0.12f, 0.92f), 8, edge, 1);
+        ci.DrawColoredPolygon(new[] { new Vector2(p.X - 5, p.Y), new Vector2(p.X + 5, p.Y), new Vector2(p.X, p.Y + 7) }, new Color(0.08f, 0.09f, 0.12f, 0.92f));
+        Gfx.Text(ci, Fonts.Body, new Vector2(rect.Position.X + 8, rect.Position.Y + 16), line, 12, new Color(0.95f, 0.96f, 1f));
+    }
+}

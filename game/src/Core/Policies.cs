@@ -46,6 +46,102 @@ public sealed class PolicySystem
             "신뢰가 무너진 선장을 저녁 회의에서 물러나게 하는 문턱"),
         new("suits", "자원", "우주복", new[] { "비상조 먼저", "먼저 쓰는 사람", "한 사람 한 벌" }, 0,
             "모자란 우주복을 누가 입나 — 위험한 방에 가는 조부터 / 먼저 집는 사람 / 사람마다 정해 둔 한 벌"),
+        // v13.2 방침 1차 — 재난
+        new("rescue", "재난", "구조", new[] { "무조건", "구조자 안전부터", "가망 있을 때만" }, 1,
+            "쓰러진 사람을 언제 구하러 들어가나 — 우주복이 없어도 숨을 참고 / 구조자가 안전할 때 / 살 가망이 있는 사람부터(분류)"),
+        new("evac", "재난", "대피 기준", new[] { "일찍", "보통", "버티며 작업" }, 1,
+            "산소가 묽어지는 방에서 언제 일을 두고 나오나 (17 / 16.5 / 15kPa)"),
+        new("reactor", "재난", "원자로 운전", new[] { "보수", "표준", "출력 유지" }, 1,
+            "냉각이 흔들릴 때 — 작은 이상에도 세운다 / 정해진 대로 / 정지를 미루고 버틴다(노심이 닳는다)"),
+        new("firemethod", "재난", "불 끄는 수단", new[] { "소화기", "자동 소화 먼저", "물도 쓴다" }, 0,
+            "소화기로 / 자동 소화 장치가 있는 방은 장치가 끄게 기다린다 / 소화기가 없으면 물로 (누전 위험)"),
+        new("jettison", "재난", "사출", new[] { "금지", "최후 수단", "적극" }, 1,
+            "망가진 방을 떼어 내는 결정 — 하지 않는다 / 다른 길이 없을 때 / 일찍 떼어 낸다"),
+        new("shed", "재난", "전원 차단", new[] { "넓게", "보통", "좁게" }, 1,
+            "전기가 모자랄 때 회로를 언제 내리나 — 배터리가 넉넉할 때 일찍(안전) / 보통 / 바닥 가까이까지 버틴다(손해 적게)"),
+        // v13.2 방침 1차 — 지휘·조직
+        new("muster", "지휘", "비상 소집", new[] { "해당 조만", "모두 깨운다" }, 1,
+            "위기 때 비번인 사람도 깨우나 — 조에 든 사람만 / 모두"),
+        new("autoscope", "지휘", "컴퓨터 자동 실행", new[] { "경보만", "차단까지", "전부" }, 2,
+            "컴퓨터가 스스로 해도 되는 일 — 알리기만 / 격벽·댐퍼까지 / 소화 수순까지"),
+        new("controlseat", "지휘", "관제석", new[] { "위기 때 사람이 앉는다", "컴퓨터에 맡긴다" }, 0,
+            "위기 때 관제석에 사람이 앉아 손으로 조종하나 (컴퓨터가 III 아래로 떨어지면 누구든 앉는다)"),
+        new("minutes", "지휘", "정보 공개", new[] { "회의록 모두 공개", "선장만" }, 0,
+            "누가 어디에 표를 던졌는지 모두 아나 — 결정이 틀리면 비난이 찬성한 사람에게 / 선장에게"),
+        // v13.2 방침 1차 — 자원
+        new("rations", "자원", "식량 배급", new[] { "똑같이", "일하는 사람 먼저", "아픈 사람 먼저", "줄인다" }, 0,
+            "먹을 것이 모자랄 때 — 모두 똑같이 줄인다 / 비상 일을 하는 사람은 덜 줄인다 / 다친 사람은 덜 줄인다 / 나흘치 아래면 미리 줄인다"),
+        new("water", "자원", "물", new[] { "자유", "아낀다", "엄격" }, 0,
+            "씻고 마시는 물 — 마음껏 / 샤워·세탁을 줄인다 / 마실 만큼만 (날카로워진다)"),
+        new("stock", "자원", "비축", new[] { "적게", "보통", "많이" }, 1,
+            "수리재·부품을 얼마나 쌓아 두나 (제작 목표 · 개조에 손대지 않는 몫)"),
+        new("cannibalize", "자원", "부품 뜯기", new[] { "금지", "필수 아닌 것만", "필요하면 무엇이든" }, 1,
+            "부품이 바닥났을 때 다른 설비에서 뜯나 — 뜯지 않는다 / 덜 중요한 설비에서만 / 정수기라도"),
+        new("portspend", "자원", "기항지 지출", new[] { "아낀다", "보통", "넉넉히" }, 1,
+            "기항지에서 돈을 얼마나 쓰나 — 꼭 필요한 것만 / 보통 / 넉넉히 사고 낡은 설비도 손본다"),
+        new("medicine", "자원", "의약품", new[] { "아낀다", "필요한 대로" }, 1,
+            "구급 키트 — 크게 다친 사람에게만 / 다치면 바로"),
+    };
+
+    /// <summary>
+    /// 가치관마다 기우는 선택지 (첫 출항 회의·정기 회의). 없는 가치관은 처음 값 쪽. Bold: 번호가 클수록 과감하면 +1, 작을수록 과감하면 -1.
+    /// </summary>
+    private static readonly Dictionary<string, (int[] lean, int bold)> Leans = new()
+    {
+        //                    Safety Efficiency People Rules Freedom
+        ["decompress"] = (new[] { 1, 1, 0, 0, 0 }, 0),
+        ["vacuumfire"] = (new[] { 1, 2, 1, 1, 1 }, 1),
+        ["inertfire"] = (new[] { 1, 2, 1, 1, 1 }, 1),
+        ["zoneabandon"] = (new[] { 0, 0, 1, 0, 2 }, 1),
+        ["risktaking"] = (new[] { 0, 1, 0, 0, 2 }, 1),
+        ["command"] = (new[] { 2, 1, 0, 2, 0 }, 0),
+        ["rotation"] = (new[] { 0, 2, 0, 1, 1 }, 1),
+        ["election"] = (new[] { 2, 2, 1, 0, 1 }, 0),
+        ["noconfidence"] = (new[] { 1, 1, 0, 1, 0 }, 0),
+        ["suits"] = (new[] { 0, 0, 2, 2, 1 }, 0),
+        ["rescue"] = (new[] { 1, 2, 0, 1, 0 }, -1),
+        ["evac"] = (new[] { 0, 2, 0, 1, 1 }, 1),
+        ["reactor"] = (new[] { 0, 2, 1, 1, 1 }, 1),
+        ["firemethod"] = (new[] { 1, 2, 0, 0, 0 }, 1),
+        ["jettison"] = (new[] { 2, 1, 1, 1, 0 }, 0),
+        ["shed"] = (new[] { 0, 2, 1, 1, 1 }, 1),
+        ["muster"] = (new[] { 1, 0, 1, 1, 0 }, 0),
+        ["autoscope"] = (new[] { 2, 2, 1, 2, 0 }, 0),
+        ["controlseat"] = (new[] { 0, 1, 0, 0, 1 }, 0),
+        ["minutes"] = (new[] { 0, 1, 0, 0, 0 }, 0),
+        ["rations"] = (new[] { 3, 1, 2, 0, 0 }, 0),
+        ["water"] = (new[] { 1, 1, 0, 2, 0 }, 0),
+        ["stock"] = (new[] { 2, 0, 1, 1, 0 }, 0),
+        ["cannibalize"] = (new[] { 1, 2, 1, 0, 2 }, 0),
+        ["portspend"] = (new[] { 0, 1, 2, 0, 2 }, 0),
+        ["medicine"] = (new[] { 1, 0, 1, 0, 1 }, 0),
+    };
+
+    /// <summary>이 사람이 바라는 선택지 (가치관 + 대담함 + 겪은 일).</summary>
+    public static int Preferred(CrewMember c, string id)
+    {
+        var spec = Spec(id);
+        if (!Leans.TryGetValue(id, out var l)) return spec.Default;
+        int v = l.lean[(int)c.Value];
+        if (l.bold != 0)
+        {
+            // 아주 대담하면 한 칸 과감하게, 겁이 많거나 크게 데인 적이 있으면 한 칸 신중하게
+            if (c.Traits.Bravery > 0.78f) v += l.bold;
+            else if (c.Traits.Bravery < 0.22f || c.Memory.Trauma > 0.35f) v -= l.bold;
+        }
+        return Math.Clamp(v, 0, spec.Options.Length - 1);
+    }
+
+    /// <summary>방침마다 말에 무게가 실리는 솜씨 (전문성).</summary>
+    public static float Expertise(CrewMember c, string id) => id switch
+    {
+        "decompress" or "zoneabandon" or "jettison" => MathF.Max(c.SkillLevel(Skill.Mechanics), c.SkillLevel(Skill.Engineering)),
+        "vacuumfire" or "inertfire" or "firemethod" or "risktaking" => MathF.Max(c.SkillLevel(Skill.Mechanics), 0.5f * c.Stats.Emergencies / 20f),
+        "rescue" or "evac" or "medicine" => c.SkillLevel(Skill.Medicine),
+        "reactor" or "shed" or "autoscope" or "controlseat" => MathF.Max(c.SkillLevel(Skill.Engineering), c.SkillLevel(Skill.Electrical)),
+        "rations" or "water" => c.SkillLevel(Skill.Cooking),
+        "stock" or "cannibalize" or "portspend" or "suits" => c.SkillLevel(Skill.Mechanics),
+        _ => CommandSystem.Leadership(c),
     };
 
     public static PolicySpec Spec(string id) => All.First(p => p.Id == id);
@@ -75,10 +171,21 @@ public sealed class PolicySystem
         value = Math.Clamp(value, 0, spec.Options.Length - 1);
         int from = this[id];
         _value[id] = value;
+        Sync();
         if (from == value) return;
         _setAt[id] = _w.Tick;
         Changes.Add(new PolicyChange { Tick = _w.Tick, Id = id, From = from, To = value, Why = why, Yes = yes, No = no });
     }
+
+    /// <summary>시험용: 모든 방침을 처음 값으로 (첫 출항 회의가 바꾼 것을 되돌린다).</summary>
+    public void ResetDefaults()
+    {
+        foreach (var p in All) _value[p.Id] = p.Default;
+        Sync();
+    }
+
+    /// <summary>방침이 다른 시스템의 값으로 이어지는 것 (비축 목표).</summary>
+    private void Sync() => _w.History.Doctrine.StockScale = this["stock"] switch { 0 => 0.75f, 2 => 1.35f, _ => 1f };
 
     /// <summary>마지막으로 바꾼 틱 (-1: 처음 그대로).</summary>
     public long SetAt(string id) => _setAt.TryGetValue(id, out var t) ? t : -1;

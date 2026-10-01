@@ -27,6 +27,18 @@ public sealed class FoodPolicy
     /// <summary>배급 중 허기가 빠지는 몫.</summary>
     public const float RationDecay = 0.72f;
 
+    /// <summary>v13.2 방침(식량 배급): 이 사람의 허기가 빠지는 몫 — 똑같이 / 일하는 사람 먼저 / 아픈 사람 먼저.</summary>
+    public float Decay(World w, CrewMember c)
+    {
+        if (!Rationing) return 1f;
+        return w.Policies["rations"] switch
+        {
+            1 => c.Job?.Activity is ChoresActivity || w.Command.TeamOf(c) is { Kind: not TeamKind.Reserve } ? 0.88f : 0.64f,
+            2 => c.Down || c.CareBed != null || c.Vitals.Injury > 0.2f || c.Vitals.Health < 0.6f || DiseaseSystem.Sick(c) ? 0.92f : 0.66f,
+            _ => RationDecay,
+        };
+    }
+
     /// <summary>한 사람이 하루에 먹는 몫 (끼니 기준, 식사 1 · 비상식량 1 · 채소는 조리하면 1.5배).</summary>
     public const float MealsPerPersonDay = 2.6f;
 
@@ -74,10 +86,11 @@ public sealed partial class WorkBoard
         float days = FoodPolicy.FoodDays(w);
         float grow = FoodPolicy.GrowingPerDay(w);
         float need = crew * FoodPolicy.MealsPerPersonDay;
-        if (!f.Rationing && days < 2f && grow < need * 1.05f)
+        float below = w.Policies["rations"] == 3 ? 4f : 2f; // v13.2 방침(식량 배급: 줄인다) — 나흘치 아래면 미리
+        if (!f.Rationing && days < below && grow < need * 1.05f)
             post(WorkKind.Ration, WorkTarget.Of(board), 0.6f + MathF.Min(0.3f, (2f - days) * 0.2f), Skill.Cooking,
                 $"먹을 것 {days:0.0}일치 ({FoodPolicy.FoodStock(w):0}끼 · {crew}명) · 재배대가 하루 {grow:0}끼를 대는데 {need:0}끼를 먹는다");
-        if (f.Rationing && f.PlentySince >= 0 && w.Tick - f.PlentySince > SimTime.Hours(12))
+        if (f.Rationing && f.PlentySince >= 0 && w.Tick - f.PlentySince > SimTime.Hours(12) && (w.Policies["rations"] != 3 || days > 6f))
             post(WorkKind.EndRation, WorkTarget.Of(board), 0.35f, Skill.Cooking, $"먹을 것 {days:0.0}일치 — 열두 시간째 넉넉하다");
     }
 }

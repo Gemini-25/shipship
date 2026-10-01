@@ -247,6 +247,8 @@ public sealed class WorkOrder
 
     /// <summary>급해서 지휘자 혼자 정하는지 (아니면 회의).</summary>
     public bool Alone { get; set; }
+    /// <summary>v13.2 위기 중 현장 협의 (지휘자·조장들이 무전으로).</summary>
+    public bool Field { get; set; }
     public int Rejections { get; set; }
 
     /// <summary>결정 한 줄 (누가 정했고 누가 반대했나).</summary>
@@ -397,6 +399,7 @@ public sealed partial class WorkBoard
     private bool _scanRequested = true;
 
     public WorkBoard(World world) => _world = world;
+    internal World World => _world;
 
     public IEnumerable<WorkOrder> Open => _open.Values.Where(o => !o.Closed).OrderByDescending(o => o.Urgency);
     public int OpenCount => _open.Count;
@@ -686,7 +689,13 @@ public sealed partial class WorkBoard
                             && (draining || (p.BatteryPercent < 0.05f && p.ReactorLimit + 0.5f < p.Demand));
             // 수리가 부품을 기다리는 동안에는 작업대·정제기가 있는 회로를 끊지 않는다 (끊으면 부품을 못 만든다)
             bool making = PartDemand().Count > 0;
-            float[] shedBelow = { 0f, 0.2f, 0.35f, 0.5f };
+            // v13.2 방침(전원 차단): 넓게 = 일찍 · 좁게 = 바닥 가까이까지
+            float[] shedBelow = w.Policies["shed"] switch
+            {
+                0 => new[] { 0f, 0.3f, 0.45f, 0.6f },
+                2 => new[] { 0f, 0.12f, 0.24f, 0.38f },
+                _ => new[] { 0f, 0.2f, 0.35f, 0.5f },
+            };
             if (starving)
                 for (int i = PowerGrid.CircuitCount - 1; i >= 1; i--)
                 {
@@ -784,6 +793,7 @@ public sealed partial class WorkBoard
         // v9.2: 주 컴퓨터를 아예 잃었는데 임시 제어 컴퓨터를 짤 전자재가 없으면, 콘솔 같은 덜 중요한 설비에서 뜯는다
         if (w.Automation.Gone && w.Tick - w.Automation.GoneSince > SimTime.Hours(4) && Have(ItemKind.Electronics) < 2)
             needs.Add((ItemKind.Electronics, 8f, 0.6f, null, "임시 제어 컴퓨터"));
+        if (w.Policies["cannibalize"] == 0) needs.Clear(); // v13.2 방침(부품 뜯기: 금지)
         foreach (var group in needs.GroupBy(n => n.part))
         {
             var part = group.Key;
@@ -791,7 +801,7 @@ public sealed partial class WorkBoard
             if (_open.Values.Any(o => o.Kind == WorkKind.Cannibalize && o.Product == part && o.Assignee != null)) continue;
             var top = group.OrderByDescending(n => n.worth).First();
             var exclude = group.Where(n => n.forMachine != null).Select(n => n.forMachine!).ToHashSet();
-            var donor = Adaptation.BestDonor(w, part, top.worth, exclude);
+            var donor = Adaptation.BestDonor(w, part, top.worth, exclude, anything: w.Policies["cannibalize"] == 2);
             if (donor == null) continue;
             post(WorkKind.Cannibalize, WorkTarget.Of(donor.Body), MathF.Min(0.95f, group.Max(n => n.urgency)), Skill.Mechanics,
                 $"{top.why}에 쓸 {ItemKinds.Name(part)} 재고 없음 · {Ko.EunNeun(donor.Name)} 영구히 멈춘다" + (donor.Body.Room.Abandoned ? " · 포기한 구획" : ""),
@@ -1105,7 +1115,7 @@ public sealed partial class WorkBoard
             if (!room.Lockdown || room.Abandoned) continue;
             foreach (var d in room.Doors)
             {
-                if (d.IsExternal || d.Locked || (d.Powered && w.Automation.Doors && (d.RoomA?.DataLinked ?? true) && (d.RoomB?.DataLinked ?? true))) continue;
+                if (d.IsExternal || d.Locked || (d.Powered && w.Automation.Doors && w.Policies["autoscope"] >= 1 && (d.RoomA?.DataLinked ?? true) && (d.RoomB?.DataLinked ?? true))) continue;
                 var other = d.RoomA == room ? d.RoomB : d.RoomA;
                 Post(WorkKind.CrankDoor, WorkTarget.OfDoor(d), room.Leaking ? 1.15f : 0.9f, Skill.Mechanics,
                     $"{room.Name} 감압 중인데 {(d.Powered ? "자동화가 꺼져" : "전기가 없어")} {(other != null ? other.Name + " 쪽 " : "")}격벽이 안 닫힘"
@@ -1118,6 +1128,8 @@ public sealed partial class WorkBoard
         {
             if (room.ResponseHold) continue; // v13.0 컴퓨터가 질식·진공 소화로 끄는 중 — 사람은 들어가지 않는다
             bool critical = room.Type is RoomType.Reactor or RoomType.Power or RoomType.LifeSupport or RoomType.Cooling;
+            // v13.2 방침(불 끄는 수단: 자동 소화 먼저): 장치가 있는 방은 45분 동안 장치에 맡긴다
+            if (w.Policies["firemethod"] == 1 && room.Suppression && room.Powered && w.Fire.BurningHours(room) < 0.75f) continue;
             // 불이 크면 두 사람 몫
             int crews = count >= 4 ? 2 : 1;
             for (int slot = 0; slot < crews; slot++)
@@ -1134,12 +1146,16 @@ public sealed partial class WorkBoard
                 bool danger = c.Room == null || Atmosphere.Danger(c.Room) > 0.2f || c.Room.Leaking || w.Fire.AnyWithin(c.Cell, 2.5f);
                 // 안전한 곳에 눕혀 두었고 빈 치료 침대가 없으면, 침대가 날 때까지 그대로 둔다 (같은 사람을 계속 옮기지 않게)
                 if (!danger && c.LaidSafe && !ship.FurnitureOf(FurnitureType.MedBed).Any(b => b.ReservedBy == null && b.Machine!.Efficiency > 0f)) continue;
+                // v13.2 방침(구조: 가망 있을 때만): 위험한 곳에서 살 가망이 낮은 사람은 들어가지 않는다 (분류)
+                if (danger && w.Policies["rescue"] == 2 && (c.Vitals.Health < 0.15f || c.Vitals.Oxygen < 0.1f && c.Room is { } vr && WorkPlanners.Unsafe(vr))) continue;
                 Post(WorkKind.Rescue, WorkTarget.OfCrew(c), danger ? 1.3f : 1.0f, Skill.Medicine,
                     $"{c.Room?.Name ?? "?"}에 쓰러짐 · 체력 {c.Vitals.Health * 100:0}%" + (danger ? " · 위험한 곳" : ""));
                 continue;
             }
             bool resting = c.Job?.Activity is RecoverActivity || c.CareBed != null;
             bool needs = c.Vitals.Health < 0.6f || (resting && c.Vitals.Health < 0.8f) || c.Vitals.Injury >= 0.3f;
+            // v13.2 방침(의약품: 아낀다): 크게 다친 사람에게만 구급 키트를 쓴다
+            if (w.Policies["medicine"] == 0) needs = c.Vitals.Health < 0.45f || c.Vitals.Injury >= 0.45f;
             if (needs && w.Tick - c.Vitals.TreatedTick > SimTime.Hours(c.Vitals.Injury >= 0.3f ? 6 : 3))
                 Post(WorkKind.Treat, WorkTarget.OfCrew(c), 0.6f + MathF.Max(0.6f - c.Vitals.Health, c.Vitals.Injury * 0.5f), Skill.Medicine,
                     c.Vitals.Injury >= 0.05f ? $"체력 {c.Vitals.Health * 100:0}% · 부상 {c.Vitals.Injury * 100:0}% ({c.Vitals.InjuryCause})" : $"체력 {c.Vitals.Health * 100:0}%");

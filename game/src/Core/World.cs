@@ -105,6 +105,8 @@ public sealed class World
 
     /// <summary>v13.1 지휘: 선장 · 현장 지휘 · 조 편성 · 2인 1조 · 교대.</summary>
     public CommandSystem Command { get; }
+    /// <summary>v13.2 회의: 첫 출항 회의 · 정기 회의 · 사후 검토 · 결정의 무게 · 파벌.</summary>
+    public MeetingSystem Meetings { get; }
     public FixturesSystem Fixtures { get; }
 
     /// <summary>에어락을 드나든 횟수 (EVA·드론 발진). 한 번마다 공기 탱크가 조금 준다.</summary>
@@ -234,6 +236,7 @@ public sealed class World
         Piping = new PipeNetwork(this);
         Policies = new PolicySystem(this);
         Command = new CommandSystem(this);
+        Meetings = new MeetingSystem(this);
         Automation = new AutomationSystem(this);
         Fixtures = new FixturesSystem(this);
     }
@@ -294,6 +297,7 @@ public sealed class World
             Exterior.Update(dt); // v12.6 외부 설비: 안테나·태양 날개 (드론이 고친다)
             Life.Update(dt); // v12.7 실수·말다툼·추모·자격
             Command.Update(dt); // v13.1 선장·현장 지휘·조 편성
+            Meetings.Update(dt); // v13.2 첫 출항 회의 · 정기 회의 · 사후 검토
             Eras.Update(); // v12.8 시대 기술 (회의가 고른 연구)
             Voyage.Update(dt); // v12.8 항로 구간 · 기항지 · 난파선
             Generation.Update(dt); // v12.9 나이 · 짝 · 출생 · 성장
@@ -374,7 +378,7 @@ public sealed class World
             }
 
             // v12.9.1 숨이 찰 만큼 산소가 묽어지면 10분을 기다리지 않고 곧장 다시 판단한다 (대피)
-            if ((Tick + c.Id) % 15 == 0 && c.Job?.Activity is not EvacuateActivity && (EvacuateActivity.Breathless(c) || c.Room is { EvacuateBy: >= 0 })) c.NextThinkTick = Tick;
+            if ((Tick + c.Id) % 15 == 0 && c.Job?.Activity is not EvacuateActivity && (EvacuateActivity.Breathless(c, this) || c.Room is { EvacuateBy: >= 0 })) c.NextThinkTick = Tick;
 
             if (c.Job == null || Tick >= c.NextThinkTick)
             {
@@ -476,6 +480,8 @@ public sealed class World
 
     private void Die(CrewMember c)
     {
+        var lastJob = c.Job?.Order?.Kind; // v13.2 사후 검토: 무엇을 하다 죽었나
+        var lastTeam = Command.TeamOf(c);
         c.EndJob(this, ToilStatus.Interrupted);
         if (c.CarriedBy is CrewMember carrier) { carrier.CarryingPerson = null; c.CarriedBy = null; }
         if (c.CareBed is Furniture bed && bed.ReservedBy == c) bed.ReservedBy = null;
@@ -507,6 +513,7 @@ public sealed class World
         History.Deaths++;
         Life.OnDeath(c); // v12.7 추모 · 슬픔
         Command.OnDeath(c); // v13.1 선장에 대한 신뢰
+        Meetings.OnDeath(c, lastJob, lastTeam, c.Room); // v13.2 결정의 무게 · 사후 검토
         if (History.Current != null) History.Current.Deaths++;
         if (c.Room != null)
         {
