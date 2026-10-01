@@ -159,6 +159,7 @@ public sealed class World
     public DailySceneSystem Scenes { get; } // v16.1 일상 → 행동 (장면 · 인수인계 · 쪽지)
     public CookingSystem Cooking { get; } public SmellSystem Smells { get; } // v16.8 실제 음식 · 냄새
     public PortableSystem Portable { get; } // v16.7 이동식 장비
+    public ShipOriginSystem Origin { get; } // v16.9 배의 내력 (설계사 · 시작 상태 · 숨은 이야기 · 갈라짐 · 침대 교대)
     public OutsideSystem Outside { get; } // v15.4 외부 사건 40
     public PropSystem Props { get; } // v15.8 소품·장식 70
     public TitleSystem Titles { get; } // v15.9 칭호·업적 50
@@ -258,6 +259,7 @@ public sealed class World
         Scenes = new DailySceneSystem(this);
         Cooking = new CookingSystem(this); Smells = new SmellSystem(this); // v16.8
         Portable = new PortableSystem(this); // v16.7
+        Origin = new ShipOriginSystem(this);
         Outside = new OutsideSystem(this);
         Props = new PropSystem(this);
         Titles = new TitleSystem(this);
@@ -348,6 +350,8 @@ public sealed class World
             pf = Prof.Lap("sys.Culture", pf);
             Daily.Update(dt); // v15 사고가 아닌 날의 일상 사건
             pf = Prof.Lap("sys.Daily", pf);
+            Origin.Update(dt); // v16.9 숨은 이야기 발견 · 전하기 · 갈라짐과 다시 이음 · 침대 인계
+            pf = Prof.Lap("sys.Origin", pf);
             Portable.Update(dt); // v16.7 이동식 장비 (전원 · 회로 부하 · 효과 · 회수)
             pf = Prof.Lap("sys.Portable", pf);
             Cooking.Update(dt); Smells.Update(dt); // v16.8 냄비 · 접시 · 냄새가 공기를 타고
@@ -761,7 +765,7 @@ public sealed class World
     public static int DefaultCrewSize => DefaultCrew.Length;
 
     /// <summary>v10.1: 늘릴 수 있는 최대 승무원 수 (간이침대를 놓을 자리와 공기·식량이 버티는 선).</summary>
-    public const int MaxCrew = 40;
+    public const int MaxCrew = 60; // v16.9 40~60인 배
 
     /// <summary>v10.4: 이 배의 템플릿 (저장·재생이 같은 배를 다시 만들 수 있게).</summary>
     public string ShipKey { get; private set; } = "Mirinae";
@@ -805,7 +809,7 @@ public sealed class World
         var names = NameGen.ForShip(seed, crewSize);
         for (int i = 0; i < crewSize; i++)
         {
-            var s = i < DefaultCrew.Length ? DefaultCrew[i] : ExtraSeed(i, rng);
+            var s = crewSize == 2 && i == 1 ? DefaultCrew[2] : i < DefaultCrew.Length ? DefaultCrew[i] : ExtraSeed(i, rng); // v16.9 2인 배는 기관사 + 조종사
             var c = new CrewMember
             {
                 Id = i,
@@ -858,6 +862,7 @@ public sealed class World
         foreach (var b in world.Crew)
             if (a != b) a.Affinity[b.Id] = rng.Range(-0.1f, 0.3f);
 
+        world.Origin.Apply(template); // v16.9 설계사 · 시작 상태 · 시작 화물 · 숨은 이야기 · 침대 교대 (예전 배는 그대로)
         world.Power.Update(0.01f);
         world.Log.Add(world.Tick, LogKind.Ship, $"{ship.Name} 항해 기록 시작 · 승무원 {world.Crew.Count}명");
         world.History.Founded(world);
