@@ -8,6 +8,9 @@ namespace ShipSim.View;
 // v16.1 진행 중인 일상 장면 (읽기만): 탁자 위 체스판과 말 · 놓인 커피 잔(김) / 찻잔(받침 · 티백 꼬리표) · 바닥의 국 자국(번들거림 · 건더기 · 닦인 자국) ·
 // 영화 스크린(깜빡이는 화면 · 영사기 빛 · 진척 줄 · 바닥 방석) · 몽유병자(내민 팔 · 떠오르는 z) · 만들다 만 소품(진척만큼 채워진 뼈대 · 톱밥) ·
 // 냉장고 쪽지(노란 메모 · 테이프) · 당번표 낙서(줄 친 표 · 빨간 낙서) · 생일 카드(접힌 분홍 카드 · 서명 줄) · 인수인계 메모(클립 · 느낌표).
+// 체스 말은 종류마다 실루엣이 다르다(폰 · 룩 · 나이트 · 비숍 · 퀸 · 킹) · 잡힌 말은 판 옆에 줄 선다 · 국 자국은 마르면 갈라진 딱지가 되고, 닦는 동안엔 노란 "미끄럼 주의" 표지 ·
+// 컴퓨터가 한 일도 보인다: 몽유병자 둘레의 복도 감지 고리 · 부른 당직까지 점선 / 볼륨을 낮춘 스피커의 칩 표시 / 보관함 영화 제목 · 보관함이 꺼지면 도는 고리 / 알림이 간 메모의 단말 표시.
+// 이름표 접시를 먹는 사람 손엔 이름표 붙은 접시 · 캄캄해서 멈춘 작업대엔 꺼진 전구.
 // 멀리서는 실루엣만, 가까이에서는 말 · 서명 · 글줄까지. 시뮬레이션은 바꾸지 않는다.
 public partial class ShipView
 {
@@ -39,16 +42,22 @@ public partial class ShipView
                     PaintTray(ci, CrewPx(m) + new Vector2(CrewRadius * 0.9f, -CrewRadius * 0.2f), s.Targets.Count - s.Delivered, s.Tea);
                     break;
                 case SceneKind.Snack when s.Holding && sc.CrewOf(s.Host) is CrewMember e:
-                    PaintPudding(ci, CrewPx(e) + new Vector2(CrewRadius * 0.95f, CrewRadius * 0.1f));
+                    if (s.Plate >= 0) PaintTaggedPlate(ci, CrewPx(e) + new Vector2(CrewRadius * 0.95f, CrewRadius * 0.1f), s.Victim, close);
+                    else PaintPudding(ci, CrewPx(e) + new Vector2(CrewRadius * 0.95f, CrewRadius * 0.1f));
                     break;
                 case SceneKind.Sleepwalk when sc.CrewOf(s.Host) is CrewMember z && z.Job?.Activity is SceneActivity:
                     PaintSleepwalker(ci, z, s.Holding ? sc.CrewOf(s.Other) : null);
+                    if (s.ComputerAct >= 0) PaintSensorPing(ci, z, s.Holding ? null : sc.CrewOf(s.Other));
                     break;
                 case SceneKind.Craft when s.Holding && sc.CrewOf(s.Host) is CrewMember mk:
                     PaintCarriedProp(ci, CrewPx(mk) + new Vector2(0f, -CrewRadius * 1.25f), s);
                     break;
                 case SceneKind.Spill when s.Holding && sc.CrewOf(s.Other) is CrewMember cl:
                     PaintMop(ci, CrewPx(cl), cl.Pose == Pose.Working);
+                    if (s.Here.Contains(cl.Id)) PaintWetSign(ci, CellRect(s.Spot).GetCenter() + new Vector2(T * 0.55f, -T * 0.35f), close);
+                    break;
+                case SceneKind.Craft when !s.Holding && s.PauseWhy == "어두움":
+                    PaintDeadBulb(ci, CellRect(s.Spot2).GetCenter() + new Vector2(0f, -T * 0.55f));
                     break;
                 case SceneKind.Movie:
                     foreach (var id in s.Floor)
@@ -88,13 +97,17 @@ public partial class ShipView
                     int col = k % 8, row = side == 0 ? 7 - k / 8 : k / 8;
                     if (k < bucket) { col = (int)(hsh % 8); row = Math.Clamp(row + (side == 0 ? -1 : 1) * (int)(hsh / 8 % 4), 0, 7); }
                     var c = o + new Vector2((col + 0.5f) * q, (row + 0.5f) * q);
-                    bool king = k == 4;
-                    var fill = side == 0 ? new Color(0.98f, 0.96f, 0.9f) : new Color(0.12f, 0.1f, 0.1f);
-                    var rim = side == 0 ? new Color(0.25f, 0.2f, 0.15f) : new Color(0.85f, 0.8f, 0.7f);
-                    ci.DrawCircle(c, q * (king ? 0.42f : 0.32f), rim);
-                    ci.DrawCircle(c, q * (king ? 0.32f : 0.24f), fill);
-                    if (king) { ci.DrawLine(c + new Vector2(0, -q * 0.22f), c + new Vector2(0, q * 0.22f), rim, 0.8f); ci.DrawLine(c + new Vector2(-q * 0.14f, -q * 0.08f), c + new Vector2(q * 0.14f, -q * 0.08f), rim, 0.8f); }
+                    // 남은 말: 뒷줄(룩 나이트 비숍 퀸 킹 비숍 나이트 룩)이 먼저 남고, 잡히는 건 폰부터
+                    int kind = k < 8 ? BackRank[k] : 0;
+                    PaintPiece(ci, c, q, kind, side == 0);
                 }
+            }
+            // 잡힌 말: 판 옆에 줄 선다 (흰 말은 왼쪽 · 검은 말은 오른쪽)
+            for (int k = 0; k < taken; k++)
+            {
+                bool white = k % 2 == 1;
+                var c = o + new Vector2(white ? -q * 0.9f : size + q * 0.9f, q * (0.6f + (k / 2) * 0.9f));
+                PaintPiece(ci, c, q * 0.8f, 0, white);
             }
             // 방금 둔 칸이 깜빡인다 (두는 동안만)
             if (s.Stage == SceneStage.Run)
@@ -119,6 +132,63 @@ public partial class ShipView
             var pc = o + new Vector2(size, size) * 0.5f;
             ci.DrawRect(new Rect2(pc + new Vector2(-4f, -5f), new Vector2(3f, 10f)), new Color(1f, 1f, 1f, 0.85f));
             ci.DrawRect(new Rect2(pc + new Vector2(1f, -5f), new Vector2(3f, 10f)), new Color(1f, 1f, 1f, 0.85f));
+        }
+    }
+
+    private static readonly int[] BackRank = { 1, 2, 3, 4, 5, 3, 2, 1 }; // 0 폰 · 1 룩 · 2 나이트 · 3 비숍 · 4 퀸 · 5 킹
+
+    /// <summary>체스 말 하나: 종류마다 다른 실루엣 (위에서 본 모양 — 받침 고리 + 머리).</summary>
+    private void PaintPiece(CanvasItem ci, Vector2 c, float q, int kind, bool white)
+    {
+        var fill = white ? new Color(0.98f, 0.96f, 0.9f) : new Color(0.13f, 0.11f, 0.1f);
+        var rim = white ? new Color(0.3f, 0.24f, 0.17f) : new Color(0.82f, 0.76f, 0.66f);
+        float r = q * 0.36f;
+        switch (kind)
+        {
+            case 0: // 폰: 작은 받침과 둥근 머리
+                ci.DrawCircle(c, r * 0.8f, rim);
+                ci.DrawCircle(c, r * 0.62f, fill);
+                ci.DrawCircle(c + new Vector2(-r * 0.15f, -r * 0.15f), r * 0.2f, fill.Lightened(0.25f));
+                break;
+            case 1: // 룩: 네모 성탑 · 네 귀퉁이 흉벽
+                ci.DrawRect(new Rect2(c - new Vector2(r, r), new Vector2(r * 2f, r * 2f)), rim);
+                ci.DrawRect(new Rect2(c - new Vector2(r * 0.75f, r * 0.75f), new Vector2(r * 1.5f, r * 1.5f)), fill);
+                for (int i = 0; i < 4; i++)
+                {
+                    var d = new Vector2(i % 2 == 0 ? -1f : 1f, i < 2 ? -1f : 1f) * r * 0.55f;
+                    ci.DrawRect(new Rect2(c + d - new Vector2(r * 0.18f, r * 0.18f), new Vector2(r * 0.36f, r * 0.36f)), rim);
+                }
+                break;
+            case 2: // 나이트: 말 머리 (주둥이가 상대 쪽을 본다)
+            {
+                float f = white ? -1f : 1f;
+                ci.DrawCircle(c, r * 0.95f, rim);
+                ci.DrawColoredPolygon(new[] { c + new Vector2(-r * 0.6f, r * 0.6f), c + new Vector2(r * 0.6f, r * 0.6f), c + new Vector2(r * 0.55f, -r * 0.1f * f),
+                    c + new Vector2(r * 0.15f, r * 0.85f * f), c + new Vector2(-r * 0.45f, r * 0.35f * f) }, fill);
+                ci.DrawCircle(c + new Vector2(r * 0.15f, r * 0.2f * f), r * 0.12f, rim);
+                break;
+            }
+            case 3: // 비숍: 길쭉한 머리와 비스듬한 홈
+                ci.DrawCircle(c, r * 0.9f, rim);
+                ci.DrawCircle(c, r * 0.68f, fill);
+                ci.DrawLine(c + new Vector2(-r * 0.4f, r * 0.35f), c + new Vector2(r * 0.4f, -r * 0.35f), rim, 1f);
+                ci.DrawCircle(c + new Vector2(0f, -r * 0.7f), r * 0.16f, rim);
+                break;
+            case 4: // 퀸: 다섯 갈래 관
+                ci.DrawCircle(c, r * 1.05f, rim);
+                ci.DrawCircle(c, r * 0.8f, fill);
+                for (int i = 0; i < 5; i++)
+                {
+                    float a = Mathf.Tau * i / 5f - Mathf.Pi / 2f;
+                    ci.DrawCircle(c + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r * 0.62f, r * 0.15f, rim);
+                }
+                break;
+            default: // 킹: 큰 받침과 십자
+                ci.DrawCircle(c, r * 1.15f, rim);
+                ci.DrawCircle(c, r * 0.88f, fill);
+                ci.DrawLine(c + new Vector2(0f, -r * 0.6f), c + new Vector2(0f, r * 0.6f), rim, 1.1f);
+                ci.DrawLine(c + new Vector2(-r * 0.4f, -r * 0.15f), c + new Vector2(r * 0.4f, -r * 0.15f), rim, 1.1f);
+                break;
         }
     }
 
@@ -200,6 +270,28 @@ public partial class ShipView
             float sh = 0.25f + 0.15f * Mathf.Sin(_time * 2f + s.Id);
             ci.DrawArc(c + new Vector2(-2f, -3f), 4f, Mathf.Pi * 1.1f, Mathf.Pi * 1.6f, 8, new Color(1f, 1f, 1f, sh * a), 1f, true);
         }
+        // 오래 둔 자국: 가장자리가 말라붙어 갈라진 딱지 (반나절 넘게 아무도 안 닦았다)
+        float hours = (_world.Tick - t.Since) / (float)SimTime.TicksPerHour;
+        if (hours > 6f && s.Progress < 0.05f)
+        {
+            var crust = new Color(0.45f, 0.26f, 0.1f, Mathf.Clamp((hours - 6f) / 12f, 0.2f, 0.75f) * a);
+            for (int k = 0; k < 12; k++) ci.DrawLine(pts[k], pts[(k + 1) % 12], crust, 1.4f, true);
+            if (close)
+                for (int k = 0; k < 4; k++)
+                {
+                    uint hh = (uint)(s.Id * 131 + k * 977);
+                    var p0 = c + new Vector2((int)(hh % 9) - 4, (int)(hh / 9 % 7) - 3);
+                    ci.DrawPolyline(new[] { p0, p0 + new Vector2(2f, 1.5f), p0 + new Vector2(3.5f, 0.5f) }, crust, 0.6f, true);
+                }
+        }
+        // 기름 막: 배 본체 바닥 상태의 기름이 남아 있으면 무지갯빛이 돈다 (닦으면 사라진다)
+        float oil = _world.Body.Mark(t.At, CellMark.Oil);
+        if (oil > 0.1f && close)
+            for (int k = 0; k < 3; k++)
+            {
+                float hue = Mathf.PosMod(0.55f + k * 0.12f + _time * 0.03f, 1f);
+                ci.DrawArc(c + new Vector2(2f, 1f), 3f + k * 1.6f, Mathf.Pi * (0.1f + k * 0.2f), Mathf.Pi * (0.9f + k * 0.2f), 10, Color.FromHsv(hue, 0.5f, 1f, 0.35f * oil), 0.8f, true);
+            }
         if (s.Progress > 0.02f)
         {
             // 걸레질 자국: 닦인 쪽부터 젖은 회색 호
@@ -215,6 +307,61 @@ public partial class ShipView
         var head = p + new Vector2(CrewRadius * 0.9f + sw, CrewRadius * 0.9f);
         ci.DrawLine(p + new Vector2(CrewRadius * 0.5f, -CrewRadius * 0.4f), head, new Color(0.6f, 0.45f, 0.3f), 1.6f, true);
         for (int k = -2; k <= 2; k++) ci.DrawLine(head, head + new Vector2(k * 1.4f, 3.5f), new Color(0.85f, 0.85f, 0.8f), 1f, true);
+    }
+
+    // ── "미끄럼 주의" 노란 A자 표지: 닦는 동안 자국 곁에 세운다 ──
+    private void PaintWetSign(CanvasItem ci, Vector2 p, bool close)
+    {
+        var yel = new Color(1f, 0.82f, 0.1f);
+        ci.DrawColoredPolygon(new[] { p + new Vector2(-4f, 5f), p + new Vector2(0f, -6f), p + new Vector2(4f, 5f) }, yel);
+        ci.DrawPolyline(new[] { p + new Vector2(-4f, 5f), p + new Vector2(0f, -6f), p + new Vector2(4f, 5f), p + new Vector2(-4f, 5f) }, new Color(0.25f, 0.2f, 0.05f), 0.8f, true);
+        if (close)
+        {
+            // 넘어지는 사람 그림 (머리 · 몸 · 다리)
+            ci.DrawCircle(p + new Vector2(-0.8f, -1.5f), 0.8f, new Color(0.1f, 0.1f, 0.1f));
+            ci.DrawLine(p + new Vector2(-0.5f, -0.6f), p + new Vector2(0.8f, 1.6f), new Color(0.1f, 0.1f, 0.1f), 0.7f);
+            ci.DrawLine(p + new Vector2(0.8f, 1.6f), p + new Vector2(2.2f, 1.2f), new Color(0.1f, 0.1f, 0.1f), 0.6f);
+            ci.DrawLine(p + new Vector2(-2.4f, 3.6f), p + new Vector2(2.4f, 3.6f), new Color(0.1f, 0.1f, 0.1f), 0.5f);
+        }
+    }
+
+    // ── 캄캄해서 멈춘 작업대: 꺼진 전구 (깜빡이는 물음표) ──
+    private void PaintDeadBulb(CanvasItem ci, Vector2 p)
+    {
+        ci.DrawCircle(p, 3.2f, new Color(0.35f, 0.36f, 0.4f, 0.9f));
+        ci.DrawRect(new Rect2(p + new Vector2(-1.6f, 2.6f), new Vector2(3.2f, 2f)), new Color(0.55f, 0.55f, 0.58f));
+        ci.DrawLine(p + new Vector2(-1f, 0.5f), p + new Vector2(1f, -1f), new Color(0.2f, 0.2f, 0.22f), 0.6f);
+        Gfx.TextCentered(ci, Fonts.Bold, p + new Vector2(5.5f, -3f), "?", 8, new Color(0.85f, 0.88f, 1f, 0.5f + 0.5f * Mathf.Sin(_time * 3f)));
+    }
+
+    // ── 주 컴퓨터가 본 몽유병: 복도 감지기의 퍼지는 고리 · 부른 당직까지 점선 (오는 중) ──
+    private void PaintSensorPing(CanvasItem ci, CrewMember z, CrewMember? coming)
+    {
+        var p = CrewPx(z);
+        var cyan = new Color(0.35f, 0.9f, 1f);
+        for (int k = 0; k < 2; k++)
+        {
+            float ph = (_time * 0.6f + k * 0.5f) % 1f;
+            ci.DrawArc(p, CrewRadius * (1.6f + 2.2f * ph), 0f, Mathf.Tau, 28, cyan.WithAlpha(0.45f * (1f - ph)), 1.2f, true);
+        }
+        // 감지기 표시 (작은 부채꼴)
+        var head = p + new Vector2(0f, -CrewRadius * 2.4f);
+        ci.DrawColoredPolygon(new[] { head, head + new Vector2(-4f, 6f), head + new Vector2(4f, 6f) }, cyan.WithAlpha(0.18f));
+        ci.DrawCircle(head, 1.4f, cyan);
+        if (coming != null) ci.DrawDashedLine(CrewPx(coming), p, cyan.WithAlpha(0.6f), 1f, 4f);
+    }
+
+    // ── 이름표 붙은 남의 접시 (음식에서 덜어 둔 몫) — 먹는 손에 들린 접시 · 이름표는 주인 색 ──
+    private void PaintTaggedPlate(CanvasItem ci, Vector2 p, int owner, bool close)
+    {
+        ci.DrawCircle(p, 4.6f, new Color(0.95f, 0.95f, 0.97f));
+        ci.DrawArc(p, 4.6f, 0f, Mathf.Tau, 18, new Color(0.6f, 0.62f, 0.68f), 0.6f, true);
+        ci.DrawCircle(p, 3f, new Color(0.85f, 0.55f, 0.25f));
+        ci.DrawCircle(p + new Vector2(-1f, -0.5f), 0.9f, new Color(0.4f, 0.7f, 0.3f));
+        var tag = new Rect2(p + new Vector2(2.5f, -6.5f), new Vector2(5f, 3f));
+        ci.DrawRect(tag, new Color(0.98f, 0.97f, 0.9f));
+        ci.DrawRect(tag, owner >= 0 ? Palette.Crew(owner) : new Color(0.5f, 0.5f, 0.5f), false, 0.7f);
+        if (close) ci.DrawLine(tag.Position + new Vector2(1f, 1.5f), tag.Position + new Vector2(4f, 1.5f), new Color(0.2f, 0.2f, 0.25f), 0.5f);
     }
 
     // ── 영화: 벽의 스크린(돌면 색이 흐르고 · 멈추면 회색 ❚❚ · 정전이면 꺼진 검정) · 영사기 빛 · 진척 줄 · 소리를 줄였으면 스피커에 빗금 ──
@@ -239,6 +386,14 @@ public partial class ShipView
             if (src.DistanceTo(c) > T * 0.5f)
                 ci.DrawColoredPolygon(new[] { src, o + new Vector2(0f, size.Y), o + size }, new Color(1f, 0.95f, 0.8f, 0.07f));
         }
+        else if (s.PauseWhy == "보관함 꺼짐")
+        {
+            // 보관함이 꺼졌다: 파란 빈 화면에 도는 불러오기 고리
+            ci.DrawRect(new Rect2(o, size), new Color(0.08f, 0.16f, 0.4f));
+            var pc = o + size * 0.5f;
+            float a0 = _time * 4f;
+            ci.DrawArc(pc, size.Y * 0.32f, a0, a0 + Mathf.Pi * 1.4f, 12, new Color(0.85f, 0.9f, 1f), 1.2f, true);
+        }
         else
         {
             ci.DrawRect(new Rect2(o, size), dark ? new Color(0.02f, 0.02f, 0.03f) : new Color(0.42f, 0.44f, 0.48f));
@@ -253,6 +408,15 @@ public partial class ShipView
         var sp = o + new Vector2(size.X + 5f, size.Y * 0.5f);
         ci.DrawColoredPolygon(new[] { sp + new Vector2(-2f, -1.5f), sp + new Vector2(0f, -1.5f), sp + new Vector2(2.5f, -3.5f), sp + new Vector2(2.5f, 3.5f), sp + new Vector2(0f, 1.5f), sp + new Vector2(-2f, 1.5f) }, new Color(0.8f, 0.8f, 0.85f, 0.8f));
         if (s.Holding) ci.DrawLine(sp + new Vector2(-3f, 4f), sp + new Vector2(4f, -4f), new Color(1f, 0.4f, 0.35f), 1.2f, true);
+        if (s.Holding && s.ComputerAct >= 0)
+        {
+            // 컴퓨터가 낮췄다: 스피커 옆 작은 칩 (다리 넷)
+            var chip = sp + new Vector2(7f, -4f);
+            ci.DrawRect(new Rect2(chip - new Vector2(2.2f, 2.2f), new Vector2(4.4f, 4.4f)), new Color(0.2f, 0.75f, 0.9f));
+            for (int k = -1; k <= 1; k += 2) { ci.DrawLine(chip + new Vector2(k * 2.2f, -1f), chip + new Vector2(k * 3.4f, -1f), new Color(0.6f, 0.9f, 1f), 0.5f); ci.DrawLine(chip + new Vector2(k * 2.2f, 1f), chip + new Vector2(k * 3.4f, 1f), new Color(0.6f, 0.9f, 1f), 0.5f); }
+        }
+        // 보관함에서 트는 영화: 화면 위 제목 (가까이에서)
+        if (s.Film != null && close) Gfx.TextCentered(ci, Fonts.Bold, o + new Vector2(size.X * 0.5f, -4f), $"「{s.Film}」", 7, new Color(0.95f, 0.9f, 0.75f, 0.85f));
         else if (run) for (int k = 1; k <= 2; k++) ci.DrawArc(sp + new Vector2(2.5f, 0f), 2f * k + Mathf.PosMod(_time * 3f, 1f), -0.7f, 0.7f, 6, new Color(1f, 1f, 1f, 0.35f), 0.8f, true);
     }
 
@@ -389,6 +553,14 @@ public partial class ShipView
                 ci.DrawCircle(new Vector2(-3.5f, 2.2f), 0.7f, new Color(0.9f, 0.3f, 0.2f));
                 if (close) for (int k = 0; k < Math.Min(3, n.Items.Count + 1); k++) ci.DrawLine(new Vector2(-1.5f, -2.5f + k * 2.2f), new Vector2(3.5f, -2.5f + k * 2.2f), ink, 0.6f);
                 bool read = n.For >= 0 ? n.Readers.Contains(n.For) : n.Readers.Count > 1;
+                if (n.Pinged && !read)
+                {
+                    // 컴퓨터가 받을 사람에게 알렸다: 작은 단말 화면과 퍼지는 신호
+                    ci.DrawRect(new Rect2(-9.5f, -7f, 4f, 3f), new Color(0.15f, 0.2f, 0.25f));
+                    ci.DrawRect(new Rect2(-9f, -6.5f, 3f, 2f), new Color(0.35f, 0.9f, 1f));
+                    float ph = (_time * 0.8f) % 1f;
+                    ci.DrawArc(new Vector2(-7.5f, -5.5f), 2f + 4f * ph, -1.2f, 0.2f, 6, new Color(0.35f, 0.9f, 1f, 1f - ph), 0.6f, true);
+                }
                 if (read) ci.DrawPolyline(new[] { new Vector2(1.5f, 4f), new Vector2(2.6f, 5f), new Vector2(4.6f, 2.6f) }, new Color(0.3f, 0.85f, 0.4f), 0.9f, true);
                 else ci.DrawCircle(new Vector2(4.5f, -5f), 1.2f + 0.4f * Mathf.Sin(_time * 4f), new Color(1f, 0.6f, 0.2f)); // 아직 아무도 안 읽었다
                 break;

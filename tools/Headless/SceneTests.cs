@@ -120,12 +120,35 @@ public static partial class Program
                 bool frozen = MathF.Abs(s.Progress - atCut) < 0.001f;
                 room.PowerCut = false;
                 bool lit = ScUntil(w, () => s.Stage == SceneStage.Run || !s.Open, 0.5f);
+                foreach (var id in s.Here.ToList()) if (w.Crew.FirstOrDefault(c => c.Id == id) is CrewMember v) ScFree(w, v); // 남은 사람은 끝까지 볼 만큼 배부르고 기운 있다
                 Check("정전 — 영사기가 꺼져 멈췄다가, 전기가 돌아오면 그 자리부터 · 영화 소리는 옆방까지 번진다", !s.Open || cut && frozen && lit && noiseNb > 0.1f,
                     $"정전 멈춤 {cut} · 멈춘 동안 진척 그대로 {frozen} ({atCut:P0}) · 다시 {lit} · 옆방 {nb?.Name} 소음 {noiseNb:0.00} · {s.Trail.LastOrDefault(t => t.Contains("전기"))}");
                 bool end = ScUntil(w, () => !s.Open, 3f);
                 bool partial = tired == null || !s.Here.Contains(tired.Id) && (s.Share.TryGetValue(tired.Id, out var sh) ? sh : 0f) < 1f && tired.Diary.Any(d => d.text.Contains("결말을 못 봤다"));
                 Check("끝 — 끝까지 본 사람만 끝까지 본 만큼 (떠난 사람은 결말을 못 봤다)", end && s.Stage == SceneStage.Done && s.Progress >= 1f && s.Finished >= 1 && partial,
-                    $"{s.Stage} · 끊김 {s.Pauses} · 끝까지 {s.Finished}명 · {tired?.Name}: {(tired != null && s.Share.TryGetValue(tired.Id, out var t2) ? t2 : 0f):P0} · {tired?.Diary.LastOrDefault().text}");
+                    $"{s.Stage} · 끊김 {s.Pauses} · 끝까지 {s.Finished}명 · {tired?.Name}: {(tired != null && s.Share.TryGetValue(tired.Id, out var t2) ? t2 : 0f):P0} · {tired?.Diary.LastOrDefault().text} · {string.Join(" / ", s.Trail.TakeLast(4))}");
+            }
+
+            // 2-2) 주 컴퓨터: 영화 소리 × 옆방에서 자는 사람 → 볼륨을 낮추거나(등급 · 야간 소음 관리) 연 사람에게 알린다
+            {
+                var w = DayOne(seed, "Hanbit");
+                var room = w.Ship.LiveRooms.Where(r => r.Type is RoomType.Theater or RoomType.Lounge && !r.OffLimits).OrderBy(r => r.Type == RoomType.Theater ? 0 : 1).ThenBy(r => r.Id).First();
+                var adults = w.Crew.Where(c => !c.Dead && !c.IsChild).OrderBy(c => c.Id).ToList();
+                var host = adults[0];
+                ScFree(w, host);
+                var s = w.Scenes.OpenMovie(host, room)!;
+                bool running = ScUntil(w, () => s.Stage == SceneStage.Run && s.Here.Count >= 1, 2f);
+                // 옆방 (소리가 넘어가는 방)에 둘을 재운다
+                var nb = w.Ambience.Neighbors(room).Select(x => x.room).Where(r => r.Cells.Count(w.Ship.IsWalkable) >= 2).OrderBy(r => r.Type == RoomType.Corridor ? 1 : 0).ThenBy(r => r.Id).First();
+                var sleepers = w.Crew.Where(c => !c.Dead && c != host && !s.Invited.Contains(c.Id) && !s.Here.Contains(c.Id)).OrderBy(c => c.Id).Take(2).ToList();
+                var beds = nb.Cells.Where(x => w.Ship.IsWalkable(x) && w.Ship.FurnitureAt(x) == null).OrderBy(x => x.Y).ThenBy(x => x.X).ToList();
+                for (int k = 0; k < sleepers.Count && k < beds.Count; k++) Stay(w, sleepers[k], beds[k], Pose.Sleeping);
+                ComputerAct? act = null;
+                bool judged = ScUntil(w, () => (act = w.Automation.Book.Acts.LastOrDefault(a => a.Key == "mvq:" + s.Id)) != null, 0.5f);
+                bool reacted = s.Holding || s.Trail.Any(t => t.Contains("못 본 척"));
+                Check("주 컴퓨터 — 영화 소리가 옆방에서 자는 사람을 깨울 것 같으면 판단하고 볼륨을 낮추거나 연 사람에게 알린다",
+                    running && judged && reacted && w.Scenes.Stats.PcQuiet + w.Scenes.Stats.Hushed + (s.Trail.Any(t => t.Contains("못 본 척")) ? 1 : 0) >= 1,
+                    $"{room.Name} → 옆 {nb.Name} {sleepers.Count}명 잠 · 등급 {w.Automation.Level} · [{act?.Observe} | {act?.Judge} | {act?.Act} | {act?.Request}] · 볼륨 낮춤 {s.Holding} · {s.Trail.LastOrDefault()}");
             }
 
             // 3) 국 엎기: 자국이 남고 · 둘레가 반응하고 · 누군가 도구를 가져와 닦는다
@@ -134,6 +157,8 @@ public static partial class Program
                 CrewMember? c = null;
                 ScUntil(w, () => (c = w.Crew.Where(x => !x.Dead && !x.IsChild && x.IsAwake && x.Room?.Type is RoomType.Mess or RoomType.Galley).OrderBy(x => x.Id).FirstOrDefault()) != null, 24f, 150);
                 var s = w.Scenes.OpenSpill(c!)!;
+                float wet0 = w.Body.Mark(s.Spot, CellMark.Wet), oil0 = w.Body.Mark(s.Spot, CellMark.Oil);
+                float slip0 = w.Body.SlipAt(w.Ship.Grid.Index(s.Spot));
                 Run(w, SimTime.Minutes(3));
                 bool stays = s.Things.Any(t => t.Kind == ThingKind.Stain);
                 if (s.Other < 0 || s.Other == c!.Id)
@@ -145,10 +170,14 @@ public static partial class Program
                     helper.Interrupt(w);
                 }
                 bool cleaned = ScUntil(w, () => !s.Open, 8f);
-                var cleaner = w.Crew.First(x => x.Id == s.Other); // 처음 나선 사람이 못 오면 다른 사람이 닦는다
-                bool mem = w.Relations.All.Any(m => m.Who == c!.Id && m.About == cleaner.Id && m.Reason == RelationReason.FixedMyThing);
+                var cleaner = w.Crew.FirstOrDefault(x => x.Id == s.Other); // 처음 나선 사람이 못 오면 다른 사람이 닦는다
+                bool mem = cleaner != null && (cleaner == c || w.Relations.All.Any(m => m.Who == c!.Id && m.About == cleaner.Id && m.Reason == RelationReason.FixedMyThing));
                 Check("국 — 바닥에 자국이 남았다가, 걸레를 가져온 사람이 닦는다 (엎은 사람이 기억한다)", stays && cleaned && s.Stage == SceneStage.Done && !s.Things.Any(t => t.Kind == ThingKind.Stain) && w.Scenes.Stats.Cleaned >= 1 && mem,
-                    $"{c!.Name} 엎음 · 본 사람 {s.Seen.Count} · 닦은 사람 {cleaner.Name} · {string.Join(" / ", s.Trail.TakeLast(3))}");
+                    $"{c!.Name} 엎음 · 본 사람 {s.Seen.Count} · 닦은 사람 {cleaner?.Name} · {s.Stage} · {string.Join(" / ", s.Trail.TakeLast(4))}");
+                float oil1 = w.Body.Mark(s.Spot, CellMark.Oil);
+                Check("국 × 배 본체 — 엎은 자리가 젖고 기름져 미끄러워졌다가, 닦으면 기름이 걷힌다 (바닥 규칙 · 길찾기가 같은 상태를 읽는다)",
+                    wet0 > 0.5f && oil0 > 0.3f && slip0 > 0.25f && oil1 < 0.05f,
+                    $"젖음 {wet0:0.00} · 기름 {oil0:0.00} · 미끄럼 {slip0:0.00} → 닦은 뒤 기름 {oil1:0.00} · 젖음 {w.Body.Mark(s.Spot, CellMark.Wet):0.00} · 미끄러진 사람 {s.Slipped.Count}");
             }
 
             // 4) 한밤의 간식: 냉장고까지 가서 꺼내 먹는다 (식량 재고) · 남의 것이었으면 냉장고 쪽지 → 읽은 사람만 안다
@@ -159,7 +188,7 @@ public static partial class Program
                 ScFree(w, eater);
                 eater.Needs.Food = 0.6f;
                 int meals0 = w.Ship.CountStored(ItemKind.Meal) + w.Ship.CountStored(ItemKind.Produce);
-                var s = w.Scenes.OpenSnack(eater)!;
+                var s = w.Scenes.OpenSnack(eater, takePlate: false)!;
                 s.Victim = adults[0].Id;
                 bool ate = ScUntil(w, () => !s.Open, 2f);
                 int meals1 = w.Ship.CountStored(ItemKind.Meal) + w.Ship.CountStored(ItemKind.Produce);
@@ -174,32 +203,102 @@ public static partial class Program
                 var reader = adults.Where(c => c != owner && c != eater && c.CanAct).OrderBy(c => c.Id).Last();
                 ScFree(w, reader);
                 reader.Needs.Food = 0.6f;
-                var s2 = w.Scenes.OpenSnack(reader); // 냉장고 앞에 서면 읽는다
+                var s2 = w.Scenes.OpenSnack(reader, takePlate: false); // 냉장고 앞에 서면 읽는다
                 ScUntil(w, () => s2 == null || !s2.Open, 2f);
                 var far = adults.FirstOrDefault(c => note != null && !note.Readers.Contains(c.Id));
                 Check("쪽지 — 냉장고 쪽지는 냉장고 앞에 선 사람만 읽는다 (안 간 사람은 모른다)", note != null && note.Readers.Contains(reader.Id) && far != null,
                     $"\"{note?.Text}\" · 읽은 사람 {readers0} → {note?.Readers.Count}명({string.Join(",", note?.Readers.Select(id => w.Crew.First(c => c.Id == id).Name) ?? Array.Empty<string>())}) · 못 읽은 사람 예: {far?.Name}");
             }
 
+            // 4-2) 간식 × 음식: 식탁에 이름표를 붙여 덜어 둔 남의 몫을 밤에 먹어 버린다 → 주인은 늦은 끼니를 못 찾고 · 쪽지를 붙인다
+            {
+                var w = DayOne(seed, "Mirinae");
+                var adults = w.Crew.Where(c => !c.Dead && !c.IsChild && c.CanAct).OrderBy(c => c.Id).ToList();
+                var owner = adults[0];
+                var eater = adults.Skip(1).OrderBy(c => c.AffinityTo(owner)).ThenBy(c => c.Id).First();
+                var table = w.Ship.RoomsOf(RoomType.Mess).SelectMany(r => r.Furniture).FirstOrDefault(f => f.Type == FurnitureType.Table)
+                            ?? w.Ship.Furniture.First(f => f.Type == FurnitureType.Table && !f.Room.OffLimits);
+                var plate = new Plate { Id = 90001, Recipe = 0, Cook = adults[^1].Id, Quality = 0.7f, For = owner.Id, By = adults[^1].Id, SetAt = w.Tick, Temp = 60f, Table = table };
+                w.Cooking.Plates.Add(plate);
+                ScFree(w, eater); ScFree(w, owner);
+                eater.Needs.Food = 0.3f;
+                bool hadPlate = w.Cooking.PlateFor(owner) == plate;
+                var s = w.Scenes.OpenSnack(eater, takePlate: true)!;
+                bool ate = ScUntil(w, () => !s.Open, 2f);
+                bool gone = plate.Eaten && w.Cooking.PlateFor(owner) == null;
+                bool owned = ScUntil(w, () => owner.Diary.Any(d => d.text.Contains("이름표 붙여 둔 내 몫")), 14f, 150);
+                var note = w.Scenes.Notes.LastOrDefault(n => n.Kind == NoteKind.Fridge && n.Author == owner.Id);
+                Check("간식 × 음식 — 이름표 붙은 남의 접시를 먹으면 주인은 제 몫을 못 찾고, 알아채고 쪽지를 붙인다 (먹은 사람은 안다)",
+                    hadPlate && ate && s.Plate == plate.Id && gone && owned && note != null && eater.Diary.Any(d => d.text.Contains("이름표")),
+                    $"{eater.Name} → {owner.Name} 몫 {plate.Spec.Name} · 먹음 {plate.Eaten} · 주인 앎 {owned} · 쪽지 \"{note?.Text}\" · {s.Trail.LastOrDefault()}");
+            }
+
             // 5) 몽유병: 잠결에 복도로 → 당직이 발견 → 침대로 (본인은 아침에 들어서 안다)
+            //    경보가 울려 혼자 깨면 다음 밤에 다시 (경보는 장면을 끊는다 — 그건 규칙대로다)
+            (World w, CrewMember c, DailyScene s, bool walked, bool knewBefore, bool home)? Walk(bool computer)
             {
                 var w = DayOne(seed, "Hanbit");
-                CrewMember? c = null;
-                ScUntil(w, () => SimTime.HourOfDay(w.Tick) is >= 1f and < 4f && (c = w.Crew.Where(x => !x.Dead && !x.IsChild && x.Pose == Pose.Sleeping && x.Bed != null && !w.Society.OnNightWatch(x)).OrderBy(x => x.Id).FirstOrDefault()) != null, 30f, 150);
-                c!.Needs.Stress = 0.7f;
-                var s = w.Scenes.OpenSleepwalk(c)!;
-                bool walked = ScUntil(w, () => c.Cell == s.Spot, 1f);
-                bool knewBefore = c.Diary.Any(d => d.text.Contains("걸어 나왔단다"));
-                bool home = ScUntil(w, () => !s.Open, 2.5f);
-                var esc = w.Crew.FirstOrDefault(x => x.Id == s.Other);
-                var bed = c.Bed ?? c.HomeBed;
-                bool atBed = bed != null && (c.Position - bed.Center).LengthSquared() < 9f;
-                Check("몽유병 — 잠결에 복도로 걸어 나오고, 깨어 있던 사람(당직)이 찾아 침대로 데려간다", walked && home && esc != null && atBed && w.Scenes.Stats.Escorts >= 1 && !knewBefore,
-                    $"{c.Name} · 복도 {walked} · 찾은 사람 {esc?.Name}({(esc != null && w.Society.OnNightWatch(esc) ? "야간 당직" : "깨어 있던 사람")}) · 침대 곁 {atBed} · {string.Join(" / ", s.Trail.TakeLast(2))}");
-                ScUntil(w, () => s.Told, 20f, 300);
-                bool knows = c.Diary.Any(d => d.text.Contains("걸어 나왔단다"));
-                Check("세계 ≠ 아는 것 — 본인은 데려다준 사람이 말해 줘야 안다", !s.Told && !knows || s.Told && knows,
-                    s.Told ? $"{esc?.Name}에게 들었다: {c.Diary.LastOrDefault(d => d.text.Contains("걸어")).text}" : "아직 못 들었다 (모른다)");
+                for (int night = 0; night < 3; night++)
+                {
+                    CrewMember? c = null;
+                    ScUntil(w, () => SimTime.HourOfDay(w.Tick) is >= 1f and < 3.5f && !Crisis.Acting(w)
+                        && (c = w.Crew.Where(x => !x.Dead && !x.IsChild && x.Pose == Pose.Sleeping && x.Bed != null && !w.Society.OnNightWatch(x) && !w.Scenes.Busy(x)).OrderBy(x => x.Id).FirstOrDefault()) != null, 30f, 150);
+                    if (c == null) return null;
+                    c.Needs.Stress = 0.7f;
+                    var s = w.Scenes.OpenSleepwalk(c)!;
+                    if (computer)
+                    {
+                        // 깨어 있는 사람은 당직 하나만 — 복도에서 먼 방에 둔다 (지나가다 볼 수 없게: 컴퓨터가 불러야 안다)
+                        var awake = w.Crew.Where(x => !x.Dead && x != c && x.IsAwake && x.CanAct).OrderBy(x => x.Id).ToList();
+                        var watch = awake.Where(x => !x.IsChild).OrderByDescending(x => w.Society.OnNightWatch(x)).ThenBy(x => x.Id).FirstOrDefault()
+                                    ?? w.Crew.Where(x => !x.Dead && x != c && !x.IsChild && x.CanAct).OrderBy(x => x.Id).First();
+                        foreach (var x in awake) if (x != watch) Stay(w, x, x.Cell, Pose.Sleeping);
+                        float h = SimTime.HourOfDay(w.Tick);
+                        if (!w.Society.OnNightWatch(watch)) watch.Schedule = new Schedule { SleepStart = SimTime.Wrap(h + 6f), SleepLength = 8f, WorkStart = SimTime.Wrap(h - 1f), WorkLength = 8f };
+                        var far = w.Ship.LiveRooms.Where(r => r.Type != RoomType.Corridor && !r.OffLimits).SelectMany(r => r.Cells)
+                            .Where(x => w.Ship.IsWalkable(x) && w.Ship.FurnitureAt(x) == null).OrderByDescending(x => Math.Abs(x.X - s.Spot.X) + Math.Abs(x.Y - s.Spot.Y)).ThenBy(x => x.Y).ThenBy(x => x.X).First();
+                        Stay(w, watch, far, Pose.Working);
+                        watch.NextThinkTick = w.Tick + SimTime.Hours(1);
+                    }
+                    bool walked = ScUntil(w, () => c.Cell == s.Spot || !s.Open, 1f);
+                    bool knewBefore = c.Diary.Any(d => d.text.Contains("걸어 나왔단다"));
+                    bool home = ScUntil(w, () => !s.Open, 2.5f);
+                    if (s.Trail.Any(t => t.Contains("경보"))) { Run(w, SimTime.Hours(12)); continue; }
+                    return (w, c, s, walked, knewBefore, home);
+                }
+                return null;
+            }
+            {
+                var r = Walk(false);
+                if (r is not { } rv) { Check("몽유병 — 장면이 열린다", false, "잠든 사람이 없거나 사흘 밤 내내 경보"); }
+                else
+                {
+                    var (w, c, s, walked, knewBefore, home) = rv;
+                    var esc = w.Crew.FirstOrDefault(x => x.Id == s.Other);
+                    var bed = c.Bed ?? c.HomeBed;
+                    bool atBed = bed != null && (c.Position - bed.Center).LengthSquared() < 9f;
+                    Check("몽유병 — 잠결에 복도로 걸어 나오고, 깨어 있던 사람(당직)이 찾아 침대로 데려간다", walked && home && esc != null && atBed && w.Scenes.Stats.Escorts >= 1 && !knewBefore,
+                        $"{c.Name} · 복도 {walked} · 찾은 사람 {esc?.Name}({(esc != null && w.Society.OnNightWatch(esc) ? "야간 당직" : "깨어 있던 사람")}) · 침대 곁 {atBed} · {string.Join(" / ", s.Trail.TakeLast(3))}");
+                    ScUntil(w, () => s.Told, 20f, 300);
+                    bool knows = c.Diary.Any(d => d.text.Contains("걸어 나왔단다"));
+                    Check("세계 ≠ 아는 것 — 본인은 데려다준 사람이 말해 줘야 안다", !s.Told && !knows || s.Told && knows,
+                        s.Told ? $"{esc?.Name}에게 들었다: {c.Diary.LastOrDefault(d => d.text.Contains("걸어")).text}" : "아직 못 들었다 (모른다)");
+                }
+            }
+            {
+                // 5-2) 주 컴퓨터: 새벽 복도의 움직임 → 잠결 걸음으로 판단 → 멀리 있던 당직을 부른다 → 당직이 와서 침대로
+                var r = Walk(true);
+                if (r is not { } rv) { Check("주 컴퓨터 — 몽유병 장면이 열린다", false, "잠든 사람이 없거나 사흘 밤 내내 경보"); }
+                else
+                {
+                    var (w, c, s, walked, _, home) = rv;
+                    var act = w.Automation.Book.Acts.FirstOrDefault(a => a.Key == "sw:" + s.Id);
+                    var esc = w.Crew.FirstOrDefault(x => x.Id == s.Other);
+                    Run(w, SimTime.Hours(2));
+                    Check("주 컴퓨터 — 새벽 복도에 멈춰 선 사람을 잠결 걸음으로 보고 당직을 불러, 당직이 와서 침대로 데려간다",
+                        walked && home && act != null && esc != null && s.Holding && s.Stage == SceneStage.Done && w.Scenes.Stats.PcPages >= 1,
+                        $"{c.Name} · [{act?.Observe} | {act?.Judge} | {act?.Act} | {act?.Request}] → 결과 {act?.Result} ({act?.Score}) · 온 사람 {esc?.Name} · {string.Join(" / ", s.Trail.TakeLast(3))}");
+                }
             }
 
             // 6) 교대 인수인계: 메모를 남기면 다음 근무자가 확인하러 가고 / 빠뜨리면 모르고 지나간다
@@ -207,6 +306,7 @@ public static partial class Program
                 (World w, CrewMember a, CrewMember b, Machine m, int t) Setup(bool omit)
                 {
                     var w = DayOne(seed, "Hanbit");
+                    w.PreventionBlind = true; // 감지기 · 순찰이 먼저 찾아 고쳐 버리지 않게 (사람의 인수인계만 본다)
                     var m = w.Ship.Machines.Where(x => x.Body.Type is FurnitureType.CoolantPump or FurnitureType.WaterRecycler && x.Faults.Count == 0 && !x.Body.Stowed)
                         .OrderBy(x => x.Body.Type == FurnitureType.CoolantPump ? 0 : 1).ThenBy(x => x.Body.Id).First();
                     var fault = m.Spec.FaultKinds.First(k => k != FaultKind.BreakerTrip && Prevention.KindOf(k) != null);
@@ -262,6 +362,24 @@ public static partial class Program
                     else Check("불 — 메모가 타는 장면 (이번엔 말로 넘겨 건너뜀)", true, h?.Verbal == true ? "말로 넘김" : "메모 없음");
                 }
                 {
+                    // 주 컴퓨터: 받을 사람이 근무를 시작하고도 메모를 안 열면 단말로 알린다 → 게시판으로 가서 읽고 확인하러 간다
+                    var (w, a, b, m, t) = Setup(false);
+                    var board = w.Scenes.DutyBoard();
+                    var far = w.Ship.LiveRooms.Where(r => r.Type != RoomType.Corridor && !r.OffLimits && r.Id != board?.room.Id).SelectMany(r => r.Cells)
+                        .Where(x => w.Ship.IsWalkable(x) && w.Ship.FurnitureAt(x) == null).OrderByDescending(x => board == null ? 0 : Math.Abs(x.X - board.Value.at.X) + Math.Abs(x.Y - board.Value.at.Y)).ThenBy(x => x.Y).ThenBy(x => x.X).First();
+                    Stay(w, b, far, Pose.Working); // 근무 시작 무렵 먼 곳에서 일에 붙들려 있다
+                    b.NextThinkTick = w.Tick + SimTime.Minutes(70);
+                    ScUntil(w, () => w.Scenes.Handoffs.Any(h => h.From == a.Id), 1f, 5);
+                    var memo = w.Scenes.Notes.FirstOrDefault(n => n.Kind == NoteKind.Memo && n.Author == a.Id);
+                    ComputerAct? act = null;
+                    bool pinged = memo != null && ScUntil(w, () => (act = w.Automation.Book.Acts.FirstOrDefault(x => x.Key == "memo:" + memo.Id)) != null, 2f);
+                    bool read = memo != null && ScUntil(w, () => memo.Readers.Contains(b.Id), 3f);
+                    Run(w, SimTime.Minutes(30));
+                    Check("주 컴퓨터 — 받을 사람이 근무를 시작하고도 인수인계 메모를 안 열면 단말로 알리고, 그 사람이 게시판에 가서 읽는다",
+                        memo != null && pinged && memo.Pinged && read && w.Scenes.Stats.PcMemo >= 1,
+                        memo == null ? "메모 없이 말로 넘김" : $"[{act?.Observe} | {act?.Act} | {act?.Request}] → {act?.Result} · {b.Name} 읽음 {read} · {w.Automation.Apps.Messages.LastOrDefault(x => x.CrewId == b.Id)?.Text}");
+                }
+                {
                     var (w, a, b, m, t) = Setup(true);
                     ScUntil(w, () => w.Scenes.Handoffs.Any(h => h.From == a.Id), 1f);
                     var h = w.Scenes.Handoffs.FirstOrDefault(x => x.From == a.Id);
@@ -310,6 +428,28 @@ public static partial class Program
                 var placed = w.Props.Placed.LastOrDefault(p => p.Spec == spec && p.Maker == maker.Id);
                 Check("소품 — 재료를 쓰고 · 진척을 쌓고 · 들고 가서 설치한다", opened && s.Stage == SceneStage.Done && midway > 0f && carried && placed != null && w.Props.Stats.Made > made0 && w.Ship.CountStored(spec.Material.Value) < mat0,
                     $"{maker.Name}의 {spec.Name} · 중간 {midway:P0} · 들고 감 {carried} · {(placed != null ? $"{w.Ship.Rooms[placed.RoomId].Name}에 놓임" : "없음")} · 재료 {mat0} → {w.Ship.CountStored(spec.Material.Value)}");
+            }
+
+            // 8-2) 소품 × 정전 · 이동식 등: 캄캄한 작업대에선 손을 놓고 기다리다, 불(또는 작업등)이 들어오면 이어 만든다
+            {
+                var w = DayOne(seed, "Mirinae");
+                var spec = Props.All.First(p => p.Source == PropSource.Craft && p.Material is ItemKind m && w.Ship.CountStored(m) > 0 && !p.Kid);
+                var maker = w.Crew.Where(c => !c.Dead && !c.IsChild && c.CanAct).OrderBy(c => c.Id).Skip(3).First();
+                ScFree(w, maker);
+                w.Scenes.Craft(maker, spec);
+                var s = w.Scenes.Scenes.Last();
+                bool going = ScUntil(w, () => s.Stage == SceneStage.Run && s.Progress > 0.1f, 4f);
+                var bench = w.Ship.Rooms[s.RoomId];
+                bench.PowerCut = true;
+                bool dark = ScUntil(w, () => s.Stage == SceneStage.Paused && s.PauseWhy == "어두움", 0.5f);
+                float at = s.Progress;
+                Run(w, SimTime.Minutes(10));
+                bool held = bench.PortableLit > 0 || MathF.Abs(s.Progress - at) < 0.001f;
+                bench.PowerCut = false;
+                bool back = ScUntil(w, () => s.Stage == SceneStage.Run && s.Progress > at + 0.01f || !s.Open, 3f);
+                Check("소품 × 정전 — 캄캄한 작업대에선 손을 놓았다가(진척 그대로), 불이 들어오면 이어 만든다",
+                    going && dark && held && back && w.Scenes.Stats.Dark >= 1,
+                    $"{bench.Name} · 멈춤 {dark} ({at:P0}) · 그대로 {held} · 작업등 {bench.PortableLit} · 다시 {back} ({s.Progress:P0}) · {s.Trail.LastOrDefault(t => t.Contains("다시"))}");
             }
 
             // 9) 저절로: 며칠 지내면 장면이 열리고 · 끝나고 · 끊긴 것이 이어진다

@@ -89,6 +89,14 @@ public sealed class DailyScene
     /// <summary>연 사람이 자리에 온 때 · 끝까지 함께한 사람 수.</summary>
     public long Since { get; set; } = -1;
     public int Finished { get; set; }
+    /// <summary>주 컴퓨터가 이 장면을 보고 한 일 (몽유병: 복도 움직임을 보고 당직 호출 · 영화: 잠든 옆방 때문에 볼륨을 낮춤) — 다섯 칸 기록 번호.</summary>
+    public int ComputerAct { get; set; } = -1;
+    /// <summary>간식: 이름표 붙은 남의 접시를 먹었다 (Cooking 접시 번호).</summary>
+    public int Plate { get; set; } = -1;
+    /// <summary>영화: 주 컴퓨터 오락 보관함에서 트는 영화 (보관함이 꺼지면 멈춘다) — 없으면 가져온 파일.</summary>
+    public string? Film { get; set; }
+    /// <summary>국: 미끄러진 사람 (배 본체 바닥 규칙으로 넘어진 사람).</summary>
+    public List<int> Slipped { get; } = new();
     public List<string> Trail { get; } = new();
     public bool Open => Stage is SceneStage.Gather or SceneStage.Run or SceneStage.Paused;
 }
@@ -117,6 +125,8 @@ public sealed class ShipNote
     public int Witness { get; init; } = -1;
     public bool Given { get; set; }
     public bool Gone { get; set; }
+    /// <summary>주 컴퓨터가 받을 사람에게 "게시판에 메모가 있다"고 알렸다.</summary>
+    public bool Pinged { get; set; }
 }
 
 public enum ConcernKind { Sound, Unfinished }
@@ -155,10 +165,12 @@ public sealed class Handoff
 public sealed class SceneStats
 {
     public int Opened, Done, Dropped, Paused, Resumed, Late, FloorSeats, Cups, Empty, Cleaned, Snacks, Escorts, Crafts,
-        Handoffs, Verbal, Memos, Omitted, Checks, Found, Notes, Reads, Signed, Laughs, Annoyed, Burned, Slips, Hushed, PowerCuts;
+        Handoffs, Verbal, Memos, Omitted, Checks, Found, Notes, Reads, Signed, Laughs, Annoyed, Burned, Slips, Hushed, PowerCuts,
+        PcPages, PcQuiet, PcMemo, PcStock, Plates, Dark;
     public string Summary() =>
         $"장면 {Opened}(끝 {Done} · 접음 {Dropped} · 멈춤 {Paused} · 이어 함 {Resumed} · 늦게 옴 {Late} · 바닥 {FloorSeats}) · 커피 {Cups}잔(통 빔 {Empty}) · 닦음 {Cleaned} · 간식 {Snacks} · 침대로 {Escorts} · 소품 {Crafts} · " +
-        $"인수인계 {Handoffs}(말 {Verbal} · 메모 {Memos} · 빠뜨림 {Omitted}) · 확인 {Checks}(찾음 {Found}) · 쪽지 {Notes}(읽음 {Reads} · 서명 {Signed} · 웃음 {Laughs} · 짜증 {Annoyed} · 불에 탐 {Burned}) · 미끄러짐 {Slips} · 소리 줄임 {Hushed} · 정전 {PowerCuts}";
+        $"인수인계 {Handoffs}(말 {Verbal} · 메모 {Memos} · 빠뜨림 {Omitted}) · 확인 {Checks}(찾음 {Found}) · 쪽지 {Notes}(읽음 {Reads} · 서명 {Signed} · 웃음 {Laughs} · 짜증 {Annoyed} · 불에 탐 {Burned}) · 미끄러짐 {Slips} · 소리 줄임 {Hushed} · 정전 {PowerCuts} · 어두움 {Dark} · " +
+        $"이름표 접시 {Plates} · 컴퓨터(당직 호출 {PcPages} · 볼륨 {PcQuiet} · 메모 알림 {PcMemo} · 재고 {PcStock})";
 }
 
 public sealed class DailySceneSystem
@@ -177,7 +189,7 @@ public sealed class DailySceneSystem
     private long[] _boardSeen = Array.Empty<long>();
     private readonly Dictionary<int, int> _jobScene = new();
     private long _nextHour = -1, _nextRead = -1;
-    private readonly List<(int victim, int thief, int witness, long at, Cell fridge)> _missing = new();
+    private readonly List<(int victim, int thief, int witness, long at, Cell fridge, bool plate)> _missing = new();
 
     /// <summary>시험용: true면 인수인계 때 모두 빠뜨리고, false면 하나도 빠뜨리지 않는다 (null = 사람마다).</summary>
     public bool? ForceOmit { get; set; }
@@ -230,7 +242,7 @@ public sealed class DailySceneSystem
     private Cell? FreeCell(Room room, Cell near, CrewMember? me, int skip = 0, Func<Cell, bool>? ok = null)
     {
         var ship = _w.Ship;
-        var list = room.Cells.Where(x => ship.IsWalkable(x) && ship.FurnitureAt(x) == null && (me == null || !_w.IsSpotTaken(x, me)) && (ok == null || ok(x)))
+        var list = room.Cells.Where(x => ship.IsWalkable(x) && ship.FurnitureAt(x) == null && !_w.Portable.Occupied(x) && (me == null || !_w.IsSpotTaken(x, me)) && (ok == null || ok(x))) // 꺼내 둔 이동식 장비 · 카트 자리는 비켜 앉는다
             .OrderBy(x => Math.Abs(x.X - near.X) + Math.Abs(x.Y - near.Y)).ThenBy(x => x.Y).ThenBy(x => x.X).Skip(skip).Take(1).ToList();
         return list.Count == 0 ? null : list[0];
     }
@@ -359,6 +371,12 @@ public sealed class DailySceneSystem
         var screen = WallCell(room);
         if (screen == null) return null;
         var s = New(SceneKind.Movie, host, $"{room.Name} 영화의 밤", room);
+        // 주 컴퓨터 오락 보관함이 돌면 거기서 고른다 (보관함이 꺼지면 영화도 멈춘다)
+        if (_w.Automation.MainOnline && _w.Automation.Active(ComputerModule.MediaVault))
+        {
+            s.Film = ComputerV16.Films[(SimTime.Day(_w.Tick) * 3 + room.Id + host.Id) % ComputerV16.Films.Length];
+            s.Title = $"{room.Name} 영화의 밤 「{s.Film}」";
+        }
         s.Spot2 = screen.Value;
         s.Spot = proj?.Cells[0] ?? screen.Value;
         s.Hours = 1.8f;
@@ -397,6 +415,11 @@ public sealed class DailySceneSystem
         s.Stage = SceneStage.Run;
         s.Spot = at;
         s.Things.Add(new SceneThing { Kind = ThingKind.Stain, At = at, Owner = c.Id, Since = _w.Tick });
+        // 배 본체 바닥: 국물은 젖음, 국 기름은 기름 — 같은 미끄럼 규칙(밟으면 실제로 미끄러진다)과 길찾기 비용(사람들이 돌아간다)을 탄다
+        _w.Body.RaiseMark(at, CellMark.Wet, 0.75f, "엎지른 국");
+        _w.Body.RaiseMark(at, CellMark.Oil, 0.4f, "국 기름");
+        foreach (var d in Cell.Dirs4)
+            if (_w.Ship.IsWalkable(at + d) && R.Chance(0.5f)) _w.Body.RaiseMark(at + d, CellMark.Wet, 0.35f, "튄 국물");
         Say(c, "앗, 뜨거…!");
         foreach (var o in _w.Crew.Where(o => o.Room == room && o.IsAwake && Able(o)).OrderBy(o => o.Id).ToList()) See(s, o);
         // 엎은 사람이 꼼꼼하면 직접 닦는다
@@ -429,9 +452,26 @@ public sealed class DailySceneSystem
         return s != null && x.Done($"{Ko.IGa(c.Name)} 출출해서 냉장고로 간다", c);
     }
 
-    public DailyScene? OpenSnack(CrewMember c)
+    public DailyScene? OpenSnack(CrewMember c, bool? takePlate = null)
     {
         if (!Able(c)) return null;
+        // 식탁에 이름표를 붙여 덜어 둔 남의 몫 (음식 · 늦게 오는 사람 접시) — 밤에 출출한 사람은 이름표를 보고도 먹기도 한다
+        // (사이가 좋은 사람 몫 · 꼼꼼한 사람은 손대지 않는다)
+        Plate? plate = null;
+        if (takePlate != false)
+            foreach (var p in _w.Cooking.Plates)
+                if (!p.Eaten && !p.Spoiled && !p.Found && p.For != c.Id && Usable(p.Table.Room) && CrewOf(p.For) is CrewMember po && !po.Dead && (takePlate == true || c.AffinityTo(po) < 0.35f)
+                    && (plate == null || p.Id < plate.Id)) plate = p;
+        if (plate != null && SpotBy(plate.Table) is Cell pat && (takePlate == true || (Life.Has(c, Habit.Snacker) || c.Needs.Hunger > 0.6f) && c.Traits.Diligence < 0.75f && R.Chance(0.7f)))
+        {
+            var sp = New(SceneKind.Snack, c, $"{c.Name}의 간식", plate.Table.Room);
+            sp.Spot = pat;
+            sp.Spot2 = plate.Table.Cells[0];
+            sp.Plate = plate.Id;
+            sp.Victim = plate.For;
+            c.Interrupt(_w);
+            return sp;
+        }
         var fridge = Fridge(ItemKind.Meal) ?? Fridge(ItemKind.Produce);
         if (fridge == null || SpotBy(fridge) is not Cell at) return null;
         var s = New(SceneKind.Snack, c, $"{c.Name}의 간식", fridge.Room);
@@ -556,10 +596,14 @@ public sealed class DailySceneSystem
                 var mroom = RoomById(s.RoomId);
                 bool power = mroom == null || mroom.Powered;
                 if (!power && s.Stage == SceneStage.Run) { Pause(s, "정전"); break; }
+                // 보관함에서 트는 영화: 컴퓨터가 멎거나(재부팅) 부하로 보관함을 끄면 화면이 멈춘다 — 돌아오면 그 자리부터
+                bool vault = s.Film == null || w.Automation.MainOnline && w.Automation.Active(ComputerModule.MediaVault);
+                if (!vault && s.Stage == SceneStage.Run) { Pause(s, "보관함 꺼짐"); break; }
+                power &= vault;
                 if (s.Here.Count > 0 && !crisis && ready && power)
                 {
                     if (s.Stage == SceneStage.Gather) Trail(s, $"{s.Here.Count}명이 모여 틀었다");
-                    if (s.Stage == SceneStage.Paused) Resume(s, s.PauseWhy == "정전" ? $"전기가 돌아와 다시 튼다 ({Pct(s.Progress)})" : $"남은 {s.Here.Count}명이 멈춘 데서부터 다시 튼다 ({Pct(s.Progress)})");
+                    if (s.Stage == SceneStage.Paused) Resume(s, s.PauseWhy == "정전" ? $"전기가 돌아와 다시 튼다 ({Pct(s.Progress)})" : s.PauseWhy == "보관함 꺼짐" ? $"보관함이 돌아와 다시 튼다 ({Pct(s.Progress)})" : $"남은 {s.Here.Count}명이 멈춘 데서부터 다시 튼다 ({Pct(s.Progress)})");
                     s.Stage = SceneStage.Run;
                     s.Progress += dt / s.Hours;
                     Together(s, dt, 0.08f);
@@ -584,9 +628,17 @@ public sealed class DailySceneSystem
                 if (s.Stage == SceneStage.Gather && age > SimTime.TicksPerDay || s.Stage == SceneStage.Paused && age > SimTime.TicksPerDay * 2) { Drop(s, s.Progress > 0f ? $"{Pct(s.Progress)}까지 만들다 말았다" : "손을 대지 못했다"); return; }
                 if (!s.Holding && s.Here.Contains(s.Host) && s.Progress < 1f)
                 {
-                    if (s.Stage == SceneStage.Paused) Resume(s, $"만들다 둔 것을 이어 만든다 ({Pct(s.Progress)})");
+                    // 캄캄한 작업대: 천장 불이 없고 이동식 작업등도 없으면 손을 놓고 기다린다 (등이 오면 등빛에 기대 · 조금 느리게)
+                    if (RoomById(s.RoomId) is Room br && PortableSystem.Unlit(br) && br.PortableLit == 0)
+                    {
+                        if (s.Stage == SceneStage.Run) { Pause(s, "어두움"); Stats.Dark++; }
+                        break;
+                    }
+                    if (s.Stage == SceneStage.Paused) Resume(s, s.PauseWhy == "어두움" ? $"불이 들어와 다시 손을 댄다 ({Pct(s.Progress)})" : $"만들다 둔 것을 이어 만든다 ({Pct(s.Progress)})");
                     s.Stage = SceneStage.Run;
-                    s.Progress = MathF.Min(1f, s.Progress + dt / s.Hours);
+                    var mk = CrewOf(s.Host);
+                    float hand = mk == null ? 1f : w.Portable.LampWorkMul(mk) * (1f - 0.5f * mk.Vitals.Injury); // 등빛 · 다친 손은 느리다
+                    s.Progress = MathF.Min(1f, s.Progress + dt / s.Hours * hand);
                     var wip = s.Things.FirstOrDefault(t => t.Kind == ThingKind.Work);
                     if (wip == null) s.Things.Add(new SceneThing { Kind = ThingKind.Work, At = s.Spot2, Owner = s.Host, Since = w.Tick });
                 }
@@ -595,6 +647,18 @@ public sealed class DailySceneSystem
             {
                 var stain = s.Things.FirstOrDefault(t => t.Kind == ThingKind.Stain);
                 if (stain != null) stain.Amount = 1f - s.Progress;
+                // 자국을 밟고 넘어진 사람 (배 본체의 바닥 규칙이 굴렸다) — 엎은 사람 탓을 하고 · 꼼꼼한 사람은 닦겠다고 나선다
+                foreach (var c in w.Crew)
+                {
+                    if (c.Room?.Id != s.RoomId || !w.Body.Fallen(c) || s.Slipped.Contains(c.Id) || (c.Position - s.Spot.Center).LengthSquared() > 4f) continue;
+                    s.Slipped.Add(c.Id);
+                    Stats.Slips++;
+                    c.Soil.Clothes[(int)SoilKind.Bio] = MathF.Min(1f, c.Soil.Clothes[(int)SoilKind.Bio] + 0.1f);
+                    Trail(s, $"{c.Name}: 국 자국을 밟고 미끄러졌다");
+                    if (CrewOf(s.Host) is CrewMember sp && sp != c) { c.ChangeAffinity(sp, -0.02f); if (!s.Seen.Contains(c.Id)) Diary(c, $"{Ko.IGa(sp.Name)} 엎은 국에 미끄러졌다"); }
+                    if (s.Other < 0 && c.Traits.Diligence > 0.4f && !c.IsChild) { s.Other = c.Id; Trail(s, $"{c.Name}: 안 되겠다, 닦아야지"); }
+                    if (!s.Seen.Contains(c.Id)) s.Seen.Add(c.Id);
+                }
                 if (w.Tick - s.Opened > SimTime.TicksPerDay * 2) Drop(s, "말라붙은 채 남았다");
                 else if (s.Other >= 0 && CrewOf(s.Other) is CrewMember cl && (!Able(cl) || w.Tick - s.Opened > SimTime.Hours(4) && !s.Here.Contains(cl.Id) && !_jobScene.TryGetValue(cl.Id, out _)))
                 { Trail(s, $"{cl.Name}: 닦으러 오지 못했다"); s.Other = -1; }
@@ -605,6 +669,11 @@ public sealed class DailySceneSystem
                 var c = CrewOf(s.Host);
                 if (c == null || c.Dead || c.Down) { Drop(s, "멈췄다"); return; }
                 if (c.Job?.Activity != SceneActivity.Instance) { if (s.Open) WakeUp(s, "잠에서 깼다"); return; }
+                if (c.Cell == s.Spot && s.Since < 0) s.Since = w.Tick;
+                // 주 컴퓨터: 새벽 복도의 움직임 — 목적지 없이 제자리에 선 사람 → 잠결 걸음으로 보고 당직을 부른다
+                if (s.Other < 0 && s.ComputerAct < 0 && s.Since >= 0 && RoomById(s.RoomId) is Room hall && Sees(hall)
+                    && w.Tick - s.Since >= SimTime.Minutes(w.Automation.Active(ComputerModule.Access) ? 2 : 5))
+                    PageWatch(s, c, hall);
                 // 깨어 있는 사람이 가까이 지나가면 알아챈다 (야간 당직 먼저)
                 if (s.Other < 0 && c.Cell == s.Spot)
                 {
@@ -771,6 +840,7 @@ public sealed class DailySceneSystem
             return;
         }
         s.Finished = finishers.Count;
+        if (s.Film != null && finishers.Count > 0) _w.Automation.Apps.Watched[s.Film] = _w.Automation.Apps.Watched.GetValueOrDefault(s.Film) + finishers.Count; // 보관함이 본 사람 수를 센다
         string text = $"{room?.Name ?? "?"} 영화의 밤 — {finishers.Count}명이 끝까지 봤다" + (s.Pauses > 0 ? $" (경보로 {s.Pauses}번 멈췄다가 남은 사람이 이어 봤다)" : "") + (s.Floor.Count > 0 ? $" · {s.Floor.Count}명은 바닥에서" : "");
         if (host != null && !host.Dead) Diary(host, $"영화의 밤 — {finishers.Count}명이 끝까지 봤다");
         if (s.Pauses > 0 && finishers.Count > 0) _w.History.Add(_w, HistoryKind.Memory, text, room, finishers.ToArray(), log: true);
@@ -863,6 +933,9 @@ public sealed class DailySceneSystem
         int i = c.Id;
         if (duty && i < _dutyStart.Length && _dutyStart[i] > 0 && _boardSeen[i] < _dutyStart[i] && _w.Tick - _dutyStart[i] < SimTime.Hours(2) && !c.IsChild && DutyBoard() != null)
             Offer(0.58f + 0.2f * c.Traits.Diligence, "근무 시작 — 당직 게시판을 본다", null, Role.Board);
+        // 주 컴퓨터 알림: 게시판에 내 앞으로 온 메모가 있다
+        foreach (var n in Notes)
+            if (n.Pinged && !n.Gone && n.For == c.Id && !n.Readers.Contains(c.Id)) { Offer(0.82f, "컴퓨터 알림 — 게시판에 인수인계 메모", null, Role.Board); break; }
         return best;
     }
 
@@ -1032,6 +1105,7 @@ public sealed class DailySceneSystem
                 int pots = Math.Max(1, (s.Targets.Count - s.Delivered + 2) / 3);
                 bool ok = true;
                 for (int i = 0; i < pots && ok; i++) ok = ItemsV15.Use(world, s.Tea ? ItemKind.TeaLeaf : ItemKind.Coffee);
+                StockAdvice(s.Tea ? ItemKind.TeaLeaf : ItemKind.Coffee, world.Ship.RoomAt(s.Spot2)); // 주 컴퓨터가 재고를 본다
                 if (!ok)
                 {
                     Stats.Empty++;
@@ -1109,7 +1183,20 @@ public sealed class DailySceneSystem
         {
             if (!s.Open) return false;
             var box = world.Ship.FurnitureAt(s.Spot2);
-            bool took = box?.Storage != null && (box.Storage.Take(ItemKind.Meal, 1) > 0 || box.Storage.Take(ItemKind.Produce, 1) > 0);
+            bool took;
+            if (s.Plate >= 0)
+            {
+                // 이름표 붙은 접시: 음식의 접시가 비고 (주인은 늦은 끼니를 못 찾는다) · 먹은 사람은 누구 몫인지 안다
+                var p = world.Cooking.Plates.FirstOrDefault(x => x.Id == s.Plate);
+                took = p != null && !p.Eaten && !p.Spoiled && !p.Found;
+                if (!took) { Close(s, SceneStage.Dropped, "접시가 이미 없었다"); return false; }
+                p!.Eaten = true;
+                Stats.Plates++;
+                string owner = CrewOf(p.For)?.Name ?? "누군가";
+                Trail(s, $"{cm.Name}: '{owner} 몫' 이름표를 보고도 {Ko.EulReul(p.Spec.Name)} 먹었다");
+                Diary(cm, $"식탁에 '{owner} 몫' 이름표가 붙은 {p.Spec.Name}이 있었다. 배가 고파서 그만… 모른 척해야지");
+            }
+            else took = box?.Storage != null && (box.Storage.Take(ItemKind.Meal, 1) > 0 || box.Storage.Take(ItemKind.Produce, 1) > 0);
             if (!took) { Close(s, SceneStage.Dropped, "냉장고가 비어 있었다"); Say(cm, "아무것도 없네…"); return false; }
             s.Stage = SceneStage.Run;
             s.Holding = true;
@@ -1126,7 +1213,11 @@ public sealed class DailySceneSystem
         toils.Add(new DoToil((cm, world) =>
         {
             if (!s.Open) return true;
-            if (s.Victim >= 0) { _missing.Add((s.Victim, cm.Id, s.Witness, world.Tick, s.Spot2)); Trail(s, $"{CrewOf(s.Victim)?.Name}이(가) 남겨 둔 것이었다 (먹은 사람은 모른다)"); }
+            if (s.Victim >= 0)
+            {
+                _missing.Add((s.Victim, cm.Id, s.Witness, world.Tick, s.Spot2, s.Plate >= 0));
+                if (s.Plate < 0) Trail(s, $"{CrewOf(s.Victim)?.Name}이(가) 남겨 둔 것이었다 (먹은 사람은 모른다)");
+            }
             Close(s, SceneStage.Done, "다 먹었다");
             return true;
         }));
@@ -1154,7 +1245,14 @@ public sealed class DailySceneSystem
         int work = SimTime.Minutes(10);
         toils.Add(new WaitToil(work * 2, Pose.Working, s.Spot.Center)
         {
-            EveryTick = (cm, world) => { if (s.Open) s.Progress = MathF.Min(1f, s.Progress + 1f / work); },
+            EveryTick = (cm, world) =>
+            {
+                if (!s.Open) return;
+                s.Progress = MathF.Min(1f, s.Progress + 1f / work);
+                // 닦은 만큼 기름이 걷힌다 (배 본체 바닥 상태)
+                float oil = world.Body.Mark(s.Spot, CellMark.Oil);
+                if (oil > 0.4f * (1f - s.Progress)) world.Body.SetMark(s.Spot, CellMark.Oil, 0.4f * (1f - s.Progress), "국 기름");
+            },
             DoneWhen = (cm, world) => !s.Open || s.Progress >= 1f,
         });
         toils.Add(new DoToil((cm, world) =>
@@ -1162,6 +1260,9 @@ public sealed class DailySceneSystem
             if (!s.Open || s.Progress < 1f) return true;
             var soil = world.Soil.RoomSoil(room);
             soil[(int)SoilKind.Bio] *= 0.3f;
+            // 걸레질한 바닥은 잠깐 축축하다 (배 본체가 말린다) · 기름은 걷혔다
+            world.Body.SetMark(s.Spot, CellMark.Oil, 0f, "");
+            world.Body.SetMark(s.Spot, CellMark.Wet, 0.3f, "걸레질");
             Stats.Cleaned++;
             var spiller = CrewOf(s.Host);
             if (spiller != null && spiller != cm)
@@ -1570,21 +1671,165 @@ public sealed class DailySceneSystem
             foreach (var c in w.Crew)
             {
                 if (c.Room?.Id != s.RoomId || !c.IsAwake || !Able(c)) continue;
-                // 젖은 자국을 밟고 지나가다 미끄러진다 (서두르는 사람 · 모르고 온 사람 · 덜 닦였으면 덜)
-                if (c.Pose == Pose.Walking && (c.Position - s.Spot.Center).LengthSquared() < 0.8f && s.Progress < 0.8f
-                    && R.Chance((Life.Has(c, Habit.Hasty) || c.Dashing ? 0.5f : 0.2f) * (s.Seen.Contains(c.Id) ? 0.4f : 1f) * (1f - s.Progress)))
-                {
-                    c.Needs.Stress = MathF.Min(1f, c.Needs.Stress + 0.04f);
-                    c.Soil.Clothes[(int)SoilKind.Bio] = MathF.Min(1f, c.Soil.Clothes[(int)SoilKind.Bio] + 0.1f);
-                    Stats.Slips++;
-                    Say(c, "으악, 미끄러워!");
-                    Trail(s, $"{c.Name}: 국 자국을 밟고 미끄러졌다");
-                    if (CrewOf(s.Host) is CrewMember sp && sp != c && s.Seen.Contains(c.Id)) c.ChangeAffinity(sp, -0.01f);
-                    if (s.Other < 0 && c.Traits.Diligence > 0.5f && !c.IsChild) { s.Other = c.Id; Trail(s, $"{c.Name}: 안 되겠다, 닦아야지"); }
-                }
                 if (!s.Seen.Contains(c.Id)) See(s, c);
             }
+            // 닦을 사람이 없다 (맡았던 사람이 못 왔다): 그 방에 있는 꼼꼼한 사람이 나서고, 두 시간 넘게 남으면 보다 못한 누구라도
+            if (s.Other < 0)
+            {
+                long age = w.Tick - s.Opened;
+                CrewMember? v = null;
+                foreach (var c in w.Crew)
+                {
+                    if (c.Room?.Id != s.RoomId || !c.IsAwake || !Able(c) || c.IsChild || Busy(c)) continue;
+                    bool keen = Life.Has(c, Habit.NeatFreak) || Life.Has(c, Habit.Generous) || c.Traits.Diligence > 0.6f || c.Id == s.Host && c.Traits.Diligence >= 0.3f;
+                    if (!keen && age < SimTime.Hours(2)) continue;
+                    if (v == null || c.Traits.Diligence > v.Traits.Diligence) v = c;
+                }
+                if (v != null)
+                {
+                    s.Other = v.Id;
+                    Trail(s, age >= SimTime.Hours(2) ? $"{v.Name}: 보다 못해 걸레를 든다" : $"{v.Name}: 내가 닦을게");
+                    v.Interrupt(w);
+                }
+            }
         }
+        // 주 컴퓨터: 영화 소리 × 옆방 잠 · 안 읽은 인수인계 메모
+        foreach (var s in Scenes)
+            if (s.Kind == SceneKind.Movie && s.Stage == SceneStage.Run && !s.Holding) QuietMovie(s);
+        RemindMemos();
+    }
+
+    // ═══════════════════════════════ 주 컴퓨터가 본다 ═══════════════════════════════
+    // 컴퓨터는 감지기 · 단말 · 출입 기록으로 아는 것만 안다 (사람이 아는 것과 다르다 — 빠뜨린 인수인계는 컴퓨터도 모른다):
+    //  · 새벽 복도의 움직임: 목적지 없이 선 사람 → 잠결 걸음으로 보고 야간 당직을 부른다 (복도 조명 낮게)
+    //  · 영화 소리 × 옆방에서 자는 사람 → 볼륨을 낮춘다 (야간 소음 관리 · 높은 등급) / 아니면 연 사람에게 단말 알림 (사람이 정한다)
+    //  · 당직 게시판 단말: 받을 사람이 근무를 시작하고도 안 연 인수인계 메모 → 개인 알림 → 게시판으로 간다
+    //  · 커피 · 찻잎 재고가 바닥 → 보급 목록 맨 위에 (제안)
+
+    /// <summary>컴퓨터가 그 방을 볼 수 있나: 주 컴퓨터가 돌고 · 방에 전기와 데이터선이 있다.</summary>
+    private bool Sees(Room? r) => r != null && _w.Automation.Present && _w.Automation.MainOnline && r.Powered && r.DataLinked && !r.Detached;
+
+    private void Msg(CrewMember c, string text)
+    {
+        var ms = _w.Automation.Apps.Messages;
+        ms.Add(new PersonalMessage(_w.Tick, c.Id, "알림", text));
+        if (ms.Count > 120) ms.RemoveAt(0);
+        _w.Automation.Book.Today.Messages++;
+    }
+
+    private void PageWatch(DailyScene s, CrewMember z, Room hall)
+    {
+        var w = _w;
+        CrewMember? watch = null;
+        float best = float.MaxValue;
+        foreach (var o in w.Crew)
+        {
+            if (o == z || !Able(o) || !o.IsAwake || o.IsChild || Busy(o)) continue;
+            bool nw = w.Society.OnNightWatch(o);
+            if (!nw && !OnDuty(o)) continue;
+            float d = (o.Position - z.Position).LengthSquared() - (nw ? 10000f : 0f); // 야간 당직 먼저 · 가까운 사람
+            if (d < best) { best = d; watch = o; }
+        }
+        int mins = (int)((w.Tick - s.Since) / (float)SimTime.Minutes(1));
+        var a = w.Automation.Book.Add(ActKind.Advice, hall, $"{SimTime.Clock(w.Tick)} {hall.Name} 움직임 — {z.Name} · {mins}분째 제자리 · 침대가 비었다",
+            "잠결 걸음으로 본다 (깨어 걷는 걸음이 아니다)", watch != null ? "야간 당직 호출 · 복도 조명 낮게" : "복도 조명 낮게 (깨어 있는 사람이 없다)",
+            watch != null ? $"{watch.Name} → {hall.Name}" : "", "sw:" + s.Id, 0, 90f,
+            (world, act) => s.Stage == SceneStage.Done && s.Holding ? (1, $"{CrewOf(s.Other)?.Name}이(가) 침대로 데려갔다") : !s.Open ? (2, "혼자 깼다") : null);
+        if (a == null) return;
+        s.ComputerAct = a.Id;
+        Stats.PcPages++;
+        Trail(s, $"주 컴퓨터: 복도 움직임을 봤다 → {(watch != null ? $"{watch.Name} 호출" : "깨어 있는 사람 없음")}");
+        if (watch == null) return;
+        s.Other = watch.Id;
+        if (!s.Seen.Contains(watch.Id)) s.Seen.Add(watch.Id);
+        Msg(watch, $"{hall.Name}에 {Ko.IGa(z.Name)} 잠결에 서 있습니다 — 침대로 데려가 주세요");
+        w.Log.Add(w.Tick, LogKind.Ship, $"주 컴퓨터: {watch.Name}, {hall.Name}에 {Ko.IGa(z.Name)} 잠결에 서 있습니다 — 침대로 데려가 주세요", watch.Id);
+        watch.Interrupt(w);
+    }
+
+    /// <summary>영화 소리가 옆방에서 자는 사람을 깨울 것 같으면: 볼륨을 낮추거나(야간 소음 관리 · 등급 3 이상) 연 사람에게 알린다.</summary>
+    private void QuietMovie(DailyScene s)
+    {
+        var w = _w;
+        if (RoomById(s.RoomId) is not Room mr || !Sees(mr) || CrewOf(s.Host) is not CrewMember host) return;
+        Room? nb = null;
+        int sleepers = 0;
+        foreach (var (o, _) in w.Ambience.Neighbors(mr))
+        {
+            if (o.Noise < 0.12f) continue;
+            int n = 0;
+            foreach (var c in w.Crew) if (!c.Dead && c.Room == o && c.Pose == Pose.Sleeping) n++;
+            if (n > sleepers) { sleepers = n; nb = o; }
+        }
+        if (nb == null) return;
+        var au = w.Automation;
+        bool can = au.Active(ComputerModule.QuietNight) || au.Level >= 3;
+        var room = nb;
+        int before = sleepers;
+        var a = au.Book.Add(ActKind.Advice, mr, $"{mr.Name} 영화 소리 · 옆 {room.Name} 소음 {room.Noise * 100:0}% · {sleepers}명 자는 중", "잠을 깨울 소리다",
+            can ? "스피커 볼륨을 낮춤" : $"{host.Name}에게 단말 알림", can ? "" : "소리를 줄여 달라", "mvq:" + s.Id, SimTime.Hours(1), 30f,
+            (world, act) =>
+            {
+                int still = 0;
+                foreach (var c in world.Crew) if (!c.Dead && c.Room == room && c.Pose == Pose.Sleeping) still++;
+                return still >= before ? (1, $"옆방 {still}명 계속 잠") : (2, $"옆방 {before - still}명 깸");
+            });
+        if (a == null) return;
+        s.ComputerAct = a.Id;
+        if (can)
+        {
+            s.Holding = true;
+            Stats.PcQuiet++;
+            au.Book.Today.Quiet++;
+            Trail(s, $"주 컴퓨터: 옆 {room.Name}에 {sleepers}명이 자서 볼륨을 낮췄다");
+            return;
+        }
+        // 알림만: 연 사람이 정한다 (꼼꼼하면 줄인다)
+        Msg(host, $"옆 {room.Name}에 {sleepers}명이 자고 있습니다 — 영화 소리를 줄여 주세요");
+        if (R.Chance(Math.Clamp(0.35f + 0.6f * host.Traits.Diligence, 0.1f, 0.95f)))
+        {
+            s.Holding = true;
+            Stats.Hushed++;
+            Say(host, "아, 옆방에서 자는구나 — 소리 줄일게");
+            Trail(s, $"{host.Name}: 컴퓨터 알림을 보고 소리를 줄였다");
+        }
+        else Trail(s, $"{host.Name}: 컴퓨터 알림을 못 본 척했다");
+    }
+
+    /// <summary>당직 게시판 단말: 받을 사람이 근무를 시작한 지 45분이 지나도 안 연 인수인계 메모 → 개인 알림.</summary>
+    private void RemindMemos()
+    {
+        var w = _w;
+        foreach (var n in Notes)
+        {
+            if (n.Gone || n.Pinged || n.Kind != NoteKind.Memo || n.For < 0 || n.Items.Count == 0 || n.Readers.Contains(n.For)) continue;
+            if (CrewOf(n.For) is not CrewMember c || c.Dead || !c.IsAwake || !OnDuty(c) || c.Id >= _dutyStart.Length || _dutyStart[c.Id] <= 0) continue;
+            long on = w.Tick - _dutyStart[c.Id];
+            if (on < SimTime.Minutes(45) || RoomById(n.RoomId) is not Room br || !Sees(br)) continue;
+            var note = n;
+            var a = w.Automation.Book.Add(ActKind.Advice, br, $"당직 게시판 인수인계 메모 — {c.Name} 근무 {on / SimTime.Minutes(1)}분째 · 아직 안 열어 봄",
+                "받을 사람이 모르고 지나갈 수 있다", "개인 단말 알림", $"{c.Name} → {br.Name} 게시판", "memo:" + n.Id, 0, 120f,
+                (world, act) => note.Readers.Contains(note.For) ? (1, "읽었다") : note.Gone ? (2, "메모가 없어졌다") : null);
+            if (a == null) continue;
+            n.Pinged = true;
+            Stats.PcMemo++;
+            Msg(c, $"당직 게시판에 {CrewOf(n.Author)?.Name ?? "앞 근무자"}의 인수인계 메모가 있습니다");
+            Log($"주 컴퓨터: {c.Name}에게 — 당직 게시판에 인수인계 메모가 있습니다 (아직 안 읽음)", c.Id);
+        }
+    }
+
+    /// <summary>커피 · 찻잎이 바닥나 간다 → 보급 목록 맨 위에 (제안).</summary>
+    private void StockAdvice(ItemKind k, Room? room)
+    {
+        var w = _w;
+        int left = w.Ship.CountStored(k);
+        if (left > 2) return;
+        string what = k == ItemKind.TeaLeaf ? "찻잎" : "커피";
+        float days = MathF.Max(1f, SimTime.Day(w.Tick) + 1f);
+        float perDay = MathF.Max(0.5f, Stats.Cups / 3f / days);
+        var a = w.Automation.Book.Add(ActKind.Advice, room, $"{what} 재고 {left}통 · 하루 {perDay:0.#}통꼴로 준다", left == 0 ? "다 떨어졌다" : $"{left / perDay:0.#}일이면 떨어진다",
+            "보급 목록 맨 위에 올림", "다음 기항지에서 사기", "stock:" + (int)k, SimTime.TicksPerDay, 60f);
+        if (a != null) Stats.PcStock++;
     }
 
     /// <summary>읽었다 — 읽은 사람만 안다. 반응 (웃음 · 짜증 · 관계 · 서명 · 확인하러 감).</summary>
@@ -1681,7 +1926,7 @@ public sealed class DailySceneSystem
         // 없어진 간식: 주인이 냉장고를 열어 보면 안다 → 냉장고 쪽지
         for (int i = _missing.Count - 1; i >= 0; i--)
         {
-            var (vid, thief, wit, at, box) = _missing[i];
+            var (vid, thief, wit, at, box, plate) = _missing[i];
             int roomId = _w.Ship.RoomAt(box)?.Id ?? -1;
             var v = CrewOf(vid);
             if (v == null || v.Dead || w.Tick - at > SimTime.TicksPerDay * 2) { _missing.RemoveAt(i); continue; }
@@ -1689,8 +1934,10 @@ public sealed class DailySceneSystem
             _missing.RemoveAt(i);
             bool knows = wit == vid;
             var t = CrewOf(thief);
-            Diary(v, "냉장고에 둔 내 푸딩이 없어졌다" + (knows && t != null ? $". {Ko.IGa(t.Name)} 먹는 걸 봤다" : ". 누구지"));
-            var note = Write(NoteKind.Fridge, v, knows && t != null ? $"{t.Name}, 내 푸딩 먹지 마" : "내 푸딩 먹지 마 — 이름 적어 둔 거 안 보여?", thief: thief, witness: wit, on: _w.Ship.FurnitureAt(box));
+            string mine = plate ? "이름표 붙여 둔 내 몫" : "냉장고에 둔 내 푸딩";
+            Diary(v, $"{mine}이 없어졌다" + (knows && t != null ? $". {Ko.IGa(t.Name)} 먹는 걸 봤다" : ". 누구지"));
+            var note = Write(NoteKind.Fridge, v, plate ? (knows && t != null ? $"{t.Name}, 이름표 붙은 건 남의 거야" : "이름표 붙은 접시 먹은 사람? 내 저녁이었어") : knows && t != null ? $"{t.Name}, 내 푸딩 먹지 마" : "내 푸딩 먹지 마 — 이름 적어 둔 거 안 보여?",
+                thief: thief, witness: wit, on: plate ? null : _w.Ship.FurnitureAt(box));
             if (knows && t != null) { v.ChangeAffinity(t, -0.04f); _w.Relations.Remember(v, t, RelationReason.TookMyThing, "냉장고에 둔 간식을 몰래 먹었다"); }
             if (note != null) Log($"{Ko.IGa(v.Name)} 냉장고에 쪽지를 붙였다: \"{note.Text}\"", v.Id);
         }
