@@ -9,7 +9,7 @@ namespace ShipSim.Core;
 // 시드에 따라 방 순서·크기를 흔들고 크기에 맞는 새 방(표준·대형·세대선)을 섞는다. 설계도 글자 지도(범례 포함)를 내놓는다.
 // 키 "gen:인원:시드" 하나로 같은 배가 다시 나온다 (저장·재생).
 
-public static class ShipGenerator
+public static partial class ShipGenerator
 {
     private sealed class GRoom
     {
@@ -51,7 +51,7 @@ public static class ShipGenerator
 
     private static GRoom Reactor(int n, int H)
     {
-        int s = n <= 6 ? 3 : n <= 12 ? 4 : n <= 20 ? 5 : 6;
+        int s = n <= 6 ? 3 : n <= 12 ? 4 : n <= 20 ? 5 : n <= 40 ? 6 : 7; // v16.9 40명 넘으면 7×7
         var r = new GRoom('r', s + 5, H);
         r.Put('R', 2, 1, s, s);
         r.Put('C', s + 3, 0, 2, 1);
@@ -343,8 +343,9 @@ public static class ShipGenerator
     private static readonly string[] Names = { "새벽호", "누리호", "가람호", "별빛호", "한울호", "다온호", "아라호", "해솔호", "나래호", "미르호", "온새미호", "여울호" };
 
     /// <summary>크기에 맞는 새 방 고르기: 소형은 표준 몇, 중형은 표준 여럿+대형 조금, 대형·초대형은 세대선 방까지.</summary>
-    private static List<RoomSpec> PickExtras(int n, Rng rng)
+    private static List<RoomSpec> PickExtras(int n, Rng rng, ShipPurpose purpose = ShipPurpose.General)
     {
+        if (purpose != ShipPurpose.General) return PickExtrasFor(n, rng, purpose); // v16.9 용도가 방 고르기 가중치를 바꾼다
         int maxTier = n <= 6 ? 1 : n <= 12 ? 2 : 3;
         int count = n <= 4 ? 2 : n <= 6 ? 3 : n <= 12 ? 5 : n <= 20 ? 8 : 11;
         var pool = RoomCatalog.All.Where(s => s.Tier <= maxTier && !Infra.Contains(s.Kind)).ToList();
@@ -378,6 +379,7 @@ public static class ShipGenerator
     public static ShipTemplate? FromKey(string key)
     {
         var p = key.Split(':');
+        if (p.Length == 5) return FromKeyV16(p); // v16.9 "gen:용도:뼈대:인원:시드"
         if (p.Length != 3 || p[0] != "gen" || !int.TryParse(p[1], out int n) || !int.TryParse(p[2], out int seed)) return null;
         return Template(Math.Clamp(n, 4, 40), seed);
     }
@@ -405,17 +407,20 @@ public static class ShipGenerator
         throw new InvalidOperationException($"배를 만들지 못했습니다 ({key}): {last?.Message}");
     }
 
-    private static (string ascii, string note, string name) Build(int n, int seed, int attempt)
+    private static (string ascii, string note, string name) Build(int n, int seed, int attempt, ShipPurpose purpose = ShipPurpose.General, ShipFrame frame = ShipFrame.Linear, int hDelta = 0)
     {
         var rng = new Rng(unchecked(seed * 7919 + attempt * 104729 + n));
+        bool ring = frame == ShipFrame.Ring; // v16.9 고리형: 위아래 통로를 양 끝에서 이어 한 바퀴
         int H = n <= 4 ? 5 : n <= 6 ? 6 : n <= 12 ? 7 : 8;
-        int K = n <= 12 ? 3 : 4;
-        int s = n <= 6 ? 3 : n <= 12 ? 4 : n <= 20 ? 5 : 6;
+        if (hDelta != 0) H = Math.Clamp(H + hDelta, n > 6 ? 6 : 5, 9); // v16.9 군용은 좁고 민간은 넓다
+        int K = ring || n <= 12 ? 3 : 4;
+        int s = n <= 6 ? 3 : n <= 12 ? 4 : n <= 20 ? 5 : n <= 40 ? 6 : 7;
+        if (H < s + 1) H = s + 1; // 원자로가 들어가게 (예전 배는 늘 들어간다)
         float reactorKw = 48f * s * s / 9f;
         int pumps = Math.Max(2, Ceil((int)(reactorKw * 1.15f), 30));
         int beds = Math.Max(2, Ceil(4 * n, 6));
 
-        var extras = PickExtras(n, rng);
+        var extras = PickExtras(n, rng, purpose);
         var legend = new StringBuilder();
         var specialRooms = new List<GRoom>();
         for (int i = 0; i < extras.Count; i++)
@@ -426,11 +431,11 @@ public static class ShipGenerator
         }
 
         var bands = Enumerable.Range(0, K).Select(_ => new List<GRoom>()).ToList();
-        bands[0].AddRange(new[] { Reactor(n, H), Cooling(pumps, H), PowerRoom(Math.Max(2, 2 * Ceil(n, 6)), H), Workshop(n, H) });
+        bands[0].AddRange(new[] { Reactor(n, H), Cooling(pumps, H), PowerRoom(Math.Max(2, 2 * Ceil(n, 6)), H), Workshop(Sized(purpose, 'w', n), H) });
         bands[1].AddRange(new[] { Life(n, H), Hydro(beds, H) });
         bands[K - 1].Add(Airlock(n, H));
         var tail0 = new List<GRoom> { CommsRoom(H) };
-        var pool = new List<GRoom> { Storage(n, H), Medbay(n, H), Lounge(n, H) };
+        var pool = new List<GRoom> { Storage(Sized(purpose, 's', n), H), Medbay(Sized(purpose, 'h', n), H), Lounge(Sized(purpose, 'g', n), H) };
         pool.AddRange(Quarters(n, H));
         pool.AddRange(specialRooms);
         // 시드마다 방 순서가 조금씩 다르다 (같은 너비끼리 섞이고, 가끔 한 칸씩 자리를 바꾼다)
@@ -481,7 +486,7 @@ public static class ShipGenerator
         Pad(K - 1, (int)(wIn * 0.62f));
         foreach (var band in bands) foreach (var r in band) Furnish(r);
         var spineAt = new Dictionary<int, int>();
-        foreach (int b in inner) spineAt[b] = Math.Max(b == 1 ? 2 : 1, bands[b].Count / 2);
+        foreach (int b in inner) spineAt[b] = ring ? 0 : Math.Max(b == 1 ? 2 : 1, bands[b].Count / 2); // 고리형: 왼쪽 끝에서 위아래 통로를 잇는다
 
         // ── 좌표 ──
         var bandY = Enumerable.Range(0, K).Select(b => 1 + b * (H + 4)).ToArray();
@@ -507,15 +512,16 @@ public static class ShipGenerator
             xs[b] = pos;
             bodyEnd[b] = x - 2;
         }
-        int xNose = Enumerable.Range(0, K).Where(b => inner.Contains(b) || K == 3 && b == 1).Max(b => bodyEnd[b]) + 2;
+        int xNose = Enumerable.Range(0, K).Where(b => inner.Contains(b) || K == 3 && b == 1).Max(b => bodyEnd[b]) + 2 + (ring ? 3 : 0);
         foreach (int b in inner)
         {
-            int gap = xNose - 2 - bodyEnd[b];
+            int gap = xNose - 2 - bodyEnd[b] - (ring ? 3 : 0);
             if (gap > 0)
             {
                 xs[b].Where(p => p.room != null).Last().room!.Widen(gap);
                 bodyEnd[b] += gap;
             }
+            if (ring) bodyEnd[b] = xNose - 2; // 오른쪽 끝 연결 통로 (xNose-3 · xNose-2)
         }
         int W = xNose + nose.W + 2;
         int Ht = 1 + h2 + 1;
@@ -542,6 +548,9 @@ public static class ShipGenerator
                 }
                 else Blit(r, x, bandY[b]);
             }
+        if (ring)
+            foreach (int b in inner)
+                for (int yy = bandY[b] - 1; yy < bandY[b] + H + 1; yy++) { grid[yy, xNose - 3] = '.'; grid[yy, xNose - 2] = '.'; }
         Blit(nose, xNose, ny0);
         var corrRows = new List<(int cy, int end)>();
         for (int b = 0; b < K - 1; b++)
@@ -596,9 +605,10 @@ public static class ShipGenerator
         foreach (var (cy, end) in corrRows)
             if (ny0 <= cy && cy <= ny1 && end == xNose - 2) { Door(xNose - 1, cy); Door(xNose - 1, cy + 1); }
         // 구획 격벽 (20인 이상): 통로를 가로질러 격벽 문 — 한쪽이 뚫려도 다른 구획은 지킨다
-        int bulkheads = n >= 30 ? 2 : n >= 20 ? 1 : 0;
+        int bulkheads = ring ? (n >= 30 ? 3 : 2) : n >= 30 ? 2 : n >= 20 ? 1 : 0; // 고리형은 늘 격벽으로 나눈다 (한쪽이 막혀도 반대로)
         var spineXs = new List<int>();
         foreach (int b in inner) foreach (var (r, x) in xs[b]) if (r == null) spineXs.Add(x);
+        if (ring) spineXs.Add(xNose - 3);
         for (int k = 1; k <= bulkheads; k++)
         {
             int target = x0 + (xNose - 2 - x0) * k / (bulkheads + 1);
@@ -668,7 +678,7 @@ public static class ShipGenerator
             for (int x = 0; x < W; x++) line.Append(grid[y, x]);
             sb.Append(line.ToString().TrimEnd()).Append('\n');
         }
-        string name = Names[(int)((uint)seed % Names.Length)];
+        string name = purpose == ShipPurpose.General ? Names[(int)((uint)seed % Names.Length)] : NameFor(purpose, seed);
         string note = $"생성 · {n}인 · 원자로 {s}×{s} · 펌프 {pumps} · 새 방 {extras.Count}: {string.Join("·", extras.Select(e => e.Name))}";
         return (sb.ToString(), note, name);
     }

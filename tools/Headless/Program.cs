@@ -157,6 +157,7 @@ public static partial class Program
         if (args.Contains("--hazard70test")) return RunHazard70Test(seed); // v15 사고 70
         if (args.Contains("--catalogtest")) return RunCatalogTest(seed); // v15 고장·물자 70
         if (args.Contains("--moduletest")) return RunModuleTest(seed); // v15 설비 70
+        if (args.Contains("--shiptest")) return RunShipTest(seed); // v16.9 배 종류
         if (args.Contains("--era15test")) return RunEraV15Test(seed); // v15.5
         if (args.Contains("--voyage15test")) return RunVoyageV15Test(seed); // v15.4
         if (args.Contains("--proptest")) return RunPropTest(seed); // v15.8 소품·장식 70
