@@ -41,8 +41,11 @@ public static partial class Program
     {
         _fails = 0;
         Console.WriteLine($"폭발과 연쇄 점검 (v16.13) · 시드 {seed}\n");
+        var only = Environment.GetEnvironmentVariable("BLASTONLY")?.Split(',');
+        bool On(int n) => only == null || only.Contains(n.ToString());
 
         // ── 1) 배터리 열폭주 → 곁의 산소통이 불에 달아 연쇄 ──
+        if (On(1))
         {
             var w = DayOne(seed, "Hanbit");
             var bat = w.Ship.FurnitureOf(FurnitureType.Battery).First().Machine!;
@@ -57,8 +60,9 @@ public static partial class Program
         }
 
         // ── 2) 닫힌 문 너머는 약하게 · 열린 문 너머는 넘어진다 (+ 문틀이 휜다 · 흔적 · 꺼림 · 구조 · 조사) ──
-        float pClosed = 0f, pOpen = 0f; bool fellClosed = true, fellOpen = false, bent = false;
+        if (On(2))
         {
+            float pClosed = 0f, pOpen = 0f; bool fellClosed = true, fellOpen = false, bent = false;
             for (int pass = 0; pass < 2; pass++)
             {
                 var w = DayOne(seed, "Hanbit");
@@ -81,10 +85,10 @@ public static partial class Program
                     int rubble = w.Ship.Rubble.Count;
                     float fear = x.Memory.FearOf(room);
                     if (Environment.GetEnvironmentVariable("BLASTDBG") != null)
-                        for (int k = 0; k < 4; k++)
+                        for (int k = 0; k < 8; k++)
                         {
-                            Run(w, SimTime.Minutes(10));
-                            Console.WriteLine($"   [dbg] {k * 10 + 10}분 · 다침 {string.Join(",", rec.Hurt)} 넘어짐 {string.Join(",", rec.Fell)} 들음 {rec.Heard.Count} · 불 {w.Fire.Count}");
+                            Run(w, SimTime.Minutes(k < 4 ? 10 : 30));
+                            Console.WriteLine($"   [dbg] {k}단계 · 다침 {string.Join(",", rec.Hurt)} 넘어짐 {string.Join(",", rec.Fell)} 들음 {rec.Heard.Count} · 불 {w.Fire.Count} · 조사자 {rec.Investigator} · 위기 {Crisis.Level(w)} · 방 위험 {Atmosphere.Danger(w.Ship.Rooms[rec.Room]):0.00} · 새는 중 {w.Ship.Rooms[rec.Room].Leaking} · 방 불 {w.Fire.CountIn(w.Ship.Rooms[rec.Room])} · 구조 {w.Blast.Stats.Rescues}");
                             foreach (var c in w.Crew) Console.WriteLine($"     {c.Id} {c.Name} {c.Job?.Label} · " + string.Join(" / ", c.LastEvaluations.Where((e, i) => e.Activity is BlastResponseActivity || i == 0).Select(e => $"{e.Activity.Id} {e.Score:0.00} {e.Reason}")));
                         }
                     Run(w, SimTime.Hours(3));
@@ -106,6 +110,7 @@ public static partial class Program
         }
 
         // ── 3) 파편이 외벽을 뚫어 감압 ──
+        if (On(3))
         {
             var w = DayOne(seed, "Hanbit");
             var ship = w.Ship;
@@ -124,6 +129,7 @@ public static partial class Program
         }
 
         // ── 4) 이명 → 다음 경보를 늦게 듣는다 · 방송을 놓치면 컴퓨터가 다시 알린다 ──
+        if (On(4))
         {
             var w = DayOne(seed, "Hanbit");
             var a = w.Crew.First(c => c.CanAct && c.IsAwake);
@@ -146,6 +152,7 @@ public static partial class Program
         }
 
         // ── 5) 분진 폭발: 첫 폭발이 가루를 날리고 불길이 옮겨 붙는다 ──
+        if (On(5))
         {
             var w = DayOne(seed, "Hanbit");
             var galley = w.Ship.KindOf(RoomType.Galley).First();
@@ -161,6 +168,7 @@ public static partial class Program
         }
 
         // ── 6) 폭약으로 용접된 문을 뚫는다 (작업대 → 설치 → 비키게 → 카운트다운 · 불발이면 다시) ──
+        if (On(6))
         {
             var w = DayOne(seed, "Hanbit");
             var (door, inside, beyond) = BlastDoor(w, 1) ?? BlastDoor(w)!.Value;
@@ -173,6 +181,7 @@ public static partial class Program
         }
 
         // ── 7) 쉭 소리에 몸을 피한다 · 귀가 울리는 사람은 못 듣는다 ──
+        if (On(7))
         {
             var w = DayOne(seed, "Hanbit");
             var z = w.Crew.First(c => c.CanAct && c.IsAwake && c.Room != null && c.Room.Kind != RoomType.Corridor);
@@ -201,6 +210,7 @@ public static partial class Program
         }
 
         // ── 8) 주 컴퓨터가 위험 배치를 읽고 경고 · 제안 → 사람이 옮긴다 ──
+        if (On(8))
         {
             var w = DayOne(seed, "Hanbit");
             var stove = w.Ship.FurnitureOf(FurnitureType.Stove).First();
@@ -219,6 +229,7 @@ public static partial class Program
         }
 
         // ── 9) 무한 연쇄 없음: 빽빽한 폭발성 물건 무더기 ──
+        if (On(9))
         {
             var w = DayOne(seed, "Hanbit");
             var room = w.Ship.LiveRooms.Where(r => r.Kind != RoomType.Corridor).OrderByDescending(r => r.Cells.Count(c => w.Ship.IsOpenFloor(c))).First();
@@ -239,6 +250,7 @@ public static partial class Program
         }
 
         // ── 10) 발효 항아리 · 규모 ──
+        if (On(10))
         {
             var w = DayOne(seed, "Hanbit");
             var galley = w.Ship.KindOf(RoomType.Galley).First();
@@ -254,6 +266,7 @@ public static partial class Program
         }
 
         // ── 11) 폭발성 물건 23종 · 그림 없는 것 없음 (종류마다 이름 · 폭발 종류) ──
+        if (On(11))
         {
             var specs = ExplosiveSet.AllSpecs;
             Check("폭발성 물건 20종 넘게 · 종류마다 다른 폭발", specs.Count >= 20 && specs.Select(s => s.Blast).Distinct().Count() >= 15,
@@ -265,6 +278,7 @@ public static partial class Program
         }
 
         // ── 12) 결정론 ──
+        if (On(12))
         {
             uint H()
             {
