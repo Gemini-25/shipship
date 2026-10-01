@@ -39,6 +39,25 @@ public sealed class ChoresActivity : Activity
     /// <summary>v14.0 두려움이 걸린 일을 꺼리는 정도 (급한 일이면 반쯤 이겨 낸다).</summary>
     private static float emergencyFear(WorkOrder o) => o.Urgency >= 0.9f ? 0.12f : 0.25f;
 
+    private static long _onCallTick = -1;
+    private static World? _onCallWorld;
+    private static int _onCall = -1;
+
+    /// <summary>지금 깨어 있는 사람 중 의료를 가장 잘하는 사람 (틱마다 한 번).</summary>
+    public static int MedicOnCall(World w)
+    {
+        if (_onCallTick == w.Tick && _onCallWorld == w) return _onCall;
+        _onCallTick = w.Tick; _onCallWorld = w; _onCall = -1;
+        float best = 0.25f;
+        foreach (var x in w.Crew)
+        {
+            if (!x.CanAct || x.IsChild || x.Outside || x.Pose == Pose.Sleeping) continue;
+            float s = x.RawSkill(Skill.Medicine);
+            if (s > best) { best = s; _onCall = x.Id; }
+        }
+        return _onCall;
+    }
+
     /// <summary>승무원 한 명이 이 일을 얼마나 하고 싶은지.</summary>
     public static float Appeal(CrewMember c, World w, WorkOrder o, DistanceField dist, out int distance)
     {
@@ -88,8 +107,11 @@ public sealed class ChoresActivity : Activity
         // v12.0 교대 한 시간 전에는 새 점검을 벌이기보다 기록을 넘긴다
         if (o.Kind == WorkKind.PreventiveCheck && !emergency && OnShiftStatic(c, w)
             && !SimTime.InWindow(SimTime.HourOfDay(w.Tick) + 1f, c.Schedule.WorkStart, c.Schedule.WorkLength)) score -= 0.15f;
+        // v14.4 다친 사람 치료는 배에서 의료를 가장 잘하는 사람이 비번이어도 불려 온다 (의무관이 없을 때 — 아는 사람이 맡는다)
+        bool onCall = o.Kind == WorkKind.Treat && MedicOnCall(w) == c.Id;
+        if (onCall) score += 0.1f;
         if (OnShiftStatic(c, w)) score += 0.08f + 0.1f * c.Traits.Diligence;
-        else if (!emergency && !allHands && o.Kind is not (WorkKind.Train or WorkKind.Rehab or WorkKind.Handover or WorkKind.FitProsthetic or WorkKind.RecoverBody))
+        else if (!emergency && !allHands && !onCall && o.Kind is not (WorkKind.Train or WorkKind.Rehab or WorkKind.Handover or WorkKind.FitProsthetic or WorkKind.RecoverBody))
             score -= w.Policies["leisure"] switch { 0 => 0.15f, 2 => 0.45f, _ => 0.3f }; // v11.3 배우기·재활은 비번에 하는 일 · v13.4 휴식·여가 방침
         // v12.1 인수인계는 몇 분짜리 말 — 성실한 사람일수록 넘기고 나서 쉰다 (자기 전에도)
         if (o.Kind == WorkKind.Handover) score += 0.18f + 0.22f * c.Traits.Diligence;
@@ -129,12 +151,18 @@ public sealed class ChoresActivity : Activity
             float aff = c.AffinityTo(patient);
             if (aff > 0.3f) score += 0.3f * aff + (Memory.AreComrades(c, patient) ? 0.15f : 0f);
             if (o.Kind == WorkKind.Rescue && c.Mind.Heroic(w.Tick) && c.Mind.HeroFor == patient.Id) score += 0.6f; // v13.3 영웅심
+            // v14.4 기억: 나를 구해 줬던 사람이면 더 · 전에 두고 나왔던 사람이면 이번엔 꼭 (빚진 마음)
+            if (o.Kind == WorkKind.Rescue && w.Relations.All.Count > 0)
+            {
+                score += 0.15f * MathF.Max(0f, w.Relations.Trust(c, patient));
+                if (w.Relations.Of(patient, c).Any(m => m.Reason == RelationReason.AbandonedMe && m.Weight < 0f)) score += 0.2f;
+            }
         }
         return score;
     }
 
     internal static bool OnShiftStatic(CrewMember c, World w) =>
-        SimTime.InWindow(SimTime.HourOfDay(w.Tick), c.Schedule.WorkStart, c.Schedule.WorkLength);
+        SimTime.InWindow(SimTime.HourOfDay(w.Tick), c.Schedule.WorkStart, c.Schedule.WorkLength) && c.ExcusedUntil <= w.Tick || c.CoveringUntil > w.Tick; // v14.4
 
     private static bool BedtimeStatic(CrewMember c, World w) =>
         SimTime.InWindow(SimTime.HourOfDay(w.Tick), c.Schedule.SleepStart, c.Schedule.SleepLength);
@@ -1268,6 +1296,8 @@ public static partial class WorkPlanners
             cm.Stats.Rescues++;
             cm.Stats.Emergencies++;
             patient.ChangeAffinity(cm, 0.2f); // 목숨을 빚졌다
+            world.Relations.Rescued(patient, cm); // v14.4 두고 갔다고 기억하던 사람이면 오해가 풀린다
+            world.Relations.Remember(patient, cm, RelationReason.SavedMe, "쓰러진 나를 업어 옮겨 줬다");
             cm.ChangeAffinity(patient, 0.08f);
             MarkLog.Add(patient.Memory.Marks, world.Tick, $"{Ko.IGa(cm.Name)} 업어 옮겨 줬다");
             MarkLog.Add(cm.Memory.Marks, world.Tick, $"쓰러진 {Ko.EulReul(patient.Name)} 업어 옮겼다");
@@ -1365,6 +1395,7 @@ public static partial class WorkPlanners
             patient.Vitals.Injury = MathF.Max(0f, patient.Vitals.Injury - (0.06f + 0.14f * skill));
             patient.Vitals.TreatedTick = world.Tick;
             world.Ailments.Treated(patient, cm); // v14.1 진단하고 약을 쓴다
+            if (patient != cm) world.Relations.Remember(patient, cm, RelationReason.NursedMe, "다쳤을 때 치료해 줬다"); // v14.4
             patient.ChangeAffinity(cm, 0.08f);
             cm.Practice(Skill.Medicine, 0.04f);
             world.Board.Close(o);

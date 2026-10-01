@@ -99,4 +99,22 @@ public partial class ShipView
                 break;
         }
     }
+
+    /// <summary>v14.4 말풍선: 짧게 한 말 (목적 있는 대화 · 인수인계 · 깨우기) — 몇 분 동안.</summary>
+    private void PaintTalk(CanvasItem ci)
+    {
+        var w = _world;
+        foreach (var c in w.Crew)
+        {
+            if (c.Dead || c.Said == null || c.SaidUntil <= w.Tick || c.CarriedBy != null) continue;
+            string t = c.Said.Length > 34 ? c.Said[..32] + "…" : c.Said;
+            var p = CrewPx(c) + new Vector2(0f, -CrewRadius - 16f);
+            float bw = Gfx.Width(Fonts.Body, t, 10) + 12;
+            float fade = Mathf.Clamp((c.SaidUntil - w.Tick) / (float)SimTime.Minutes(1), 0f, 1f);
+            var rect = new Rect2(p.X - bw / 2, p.Y - 10, bw, 16);
+            Gfx.RoundRect(ci, rect, new Color(0.96f, 0.95f, 0.9f, 0.92f * fade), 6, Palette.Crew(c.Id).WithAlpha(0.9f * fade), 1);
+            ci.DrawColoredPolygon(new[] { new Vector2(p.X - 4, p.Y + 6), new Vector2(p.X + 4, p.Y + 6), new Vector2(p.X, p.Y + 11) }, new Color(0.96f, 0.95f, 0.9f, 0.92f * fade));
+            Gfx.Text(ci, Fonts.Body, new Vector2(p.X - bw / 2 + 6, p.Y + 2), t, 10, new Color(0.1f, 0.1f, 0.14f, fade));
+        }
+    }
 }

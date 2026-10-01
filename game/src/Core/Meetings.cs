@@ -556,7 +556,7 @@ public sealed class MeetingSystem
                 foreach (var c in voters)
                 {
                     if (c == sp) continue;
-                    float rel = Math.Clamp(c.AffinityTo(sp), -0.5f, 0.8f);
+                    float rel = Math.Clamp(c.AffinityTo(sp) + 0.5f * _w.Relations.Trust(c, sp), -0.6f, 0.9f); // v14.4 그 사람에 대한 기억 (구해 줬다 · 경고를 무시했다…)
                     float faction = c.Value == sp.Value ? 0.3f : 0f;
                     float k = 0.2f * power * (1f - Stubborn(c)) * (0.7f + 0.5f * rel + faction - 0.6f * Tension(c.Value, sp.Value));
                     if (k <= 0f) continue;

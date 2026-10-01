@@ -310,6 +310,7 @@ public sealed class MindSystem
         w.Log.Add(w.Tick, LogKind.Warning, $"명령 무시 — {CommandSystem.TeamName(t.Kind)}을 두고 {Ko.EulReul(o.Title)} 한다 ({cmd.CommanderName}의 지시보다 제 판단)", c.Id);
         if (c.Mind.Ignored == 1) w.History.Add(w, HistoryKind.Decision, $"{Ko.IGa(c.Name)} {cmd.CommanderName}의 지시를 무시했다 — {CommandSystem.TeamName(t.Kind)} 대신 {o.Title}", c.Room, new[] { c });
         if (c.Mind.Ignored >= 2) w.Society.Punish(c, "명령 무시", light: false); // v13.4 규칙 위반
+        if (cmd.Commander is CrewMember boss && boss != c) w.Relations.Remember(boss, c, RelationReason.IgnoredMyWarning, $"내 지시를 무시하고 {Ko.EulReul(o.Title)} 했다"); // v14.4
     }
 
     // ───────────────────────────── 컴퓨터 신뢰 ─────────────────────────────

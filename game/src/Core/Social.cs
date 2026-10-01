@@ -80,6 +80,7 @@ public sealed class ChatActivity : Activity
             if (partner.TalkingTo == cm) partner.TalkingTo = null;
             cm.TalkingTo = null;
             cm.Stats.Chats++;
+            if ((partner.Position - cm.Position).Length() <= 2.5f && partner.IsAwake) world.Relations.Gossip(cm, partner); // v14.4 수다 끝에 고장 이야기가 흘러간다
             // 둘 다 예민하면 말다툼으로 끝난다
             if (cm.Needs.Stress > 0.55f && partner.Needs.Stress > 0.45f && world.Rng.Chance(0.35f))
             {

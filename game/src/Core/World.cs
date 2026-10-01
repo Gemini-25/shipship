@@ -324,6 +324,7 @@ public sealed class World
             Ailments.Update(dt); // v14.1 질병 30
             pf = Prof.Lap("sys.Ailments", pf);
             Belongings.Update(dt); // v14.3 개인 물건 · 취미
+            Relations.Update(dt); // v14.4 엇갈린 기억 · 화해한 사이
             pf = Prof.Lap("sys.Ailments", pf);
             Ambience.Update(dt); // v12.6 인접성: 소음·진동·냄새·방사선
             pf = Prof.Lap("sys.Ambience", pf);

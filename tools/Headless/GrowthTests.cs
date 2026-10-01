@@ -58,6 +58,12 @@ public static partial class Program
                             prevInj[j] = hurt[j].Vitals.Injury;
                         }
                         if (first < 0 && hurt.Any(c => c.Vitals.TreatedTick > start)) first = w.Tick;
+                        if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "4" && i == 0 && first < 0 && t % SimTime.Hours(1) == 0)
+                        {
+                            var doc = w.Crew.Where(c => !c.Dead).OrderByDescending(c => c.RawSkill(Skill.Medicine)).First();
+                            Console.WriteLine($"      {SimTime.Clock(w.Tick)} 치료 주문 {w.Board.Open.Count(o => o.Kind == WorkKind.Treat)} · {doc.Name} {doc.Job?.Label} 평가 {string.Join(",", doc.LastEvaluations.Take(3).Select(e => $"{e.Activity.Label}:{e.Score:0.00}({e.Reason})"))} · 다친 이 " +
+                                string.Join(" | ", hurt.Select(c => $"{c.Name} {c.Vitals.Injury:0.00} {c.Job?.Label} 방 {c.Room?.Name}")));
+                        }
                         if (t == SimTime.Hours(12)) early = inj0 - hurt.Sum(c => c.Vitals.Injury);
                     }
                     float heal = inj0 - hurt.Sum(c => c.Vitals.Injury);
@@ -79,6 +85,7 @@ public static partial class Program
             {
                 var w = DayOne(seed, "Mirinae");
                 w.Growth.NoRehab = !rehab;
+                w.Ailments.Disabled = true; // v14.4 재활만 견준다 (상처 감염으로 누워 버리면 재활할 틈이 없다)
                 // 치료 운을 빼고 재활만 견준다 (구급 키트가 없으면 둘 다 저절로 낫는다)
                 foreach (var f in w.Ship.Furniture.Where(f => f.Storage != null)) f.Storage!.Take(ItemKind.MedKit, 999);
                 var c = w.Crew.First(x => x.Role == CrewRole.Technician);

@@ -100,6 +100,9 @@ public sealed class AilmentSystem
     private readonly Dictionary<(int, string), long> _cooldown = new();
     public AilmentStats Stats { get; } = new();
 
+    /// <summary>시험: 병을 끈다 (다른 것만 견줄 때).</summary>
+    public bool Disabled { get; set; }
+
     public AilmentSystem(World w)
     {
         _w = w;
@@ -232,6 +235,7 @@ public sealed class AilmentSystem
     public void Update(float dt)
     {
         var w = _w;
+        if (Disabled) return;
         bool fresh = w.Ship.CountStored(ItemKind.Produce) + w.Ship.CountStored(ItemKind.Meal) > 0;
         _noFresh = fresh ? 0f : _noFresh + dt;
         _clock += dt;
@@ -287,7 +291,8 @@ public sealed class AilmentSystem
             walk *= 1f - s.Walk * sev;
             sleep = MathF.Max(sleep, s.Sleep * sev / MathF.Max(0.01f, s.Peak));
             panic += s.Panic * sev / MathF.Max(0.01f, s.Peak);
-            if (s.Cure is Cure.Bed or Cure.Medic && s.Health > 0f || s.Cure == Cure.Bed) bed = MathF.Max(bed, sev);
+            // 누워야 하는 병: 침대로 낫는 병 · 약으로 낫는 위험한 병은 심할 때만 (약이 없다고 영영 눕지는 않는다)
+            if (s.Cure == Cure.Bed || s.Cure == Cure.Medic && s.Health > 0f && sev > 0.55f) bed = MathF.Max(bed, sev);
             c.Needs.Rest = MathF.Max(0f, c.Needs.Rest - s.Rest * sev * dt);
             if (s.Stress > 0f) c.Needs.Stress = MathF.Min(1f, c.Needs.Stress + s.Stress * sev * dt);
             // 위험한 병: 가장 아플 때 침대에 눕지 않으면 몸이 버티지 못한다
@@ -316,7 +321,7 @@ public sealed class AilmentSystem
             {
                 case Cure.Rest: gain = c.Pose == Pose.Sleeping || bedRest ? 0.3f : 0f; break;
                 case Cure.Bed: gain = bedRest ? 1f : c.Pose == Pose.Sleeping ? 0.25f : 0f; break;
-                case Cure.Medic: gain = a.TreatedAt >= 0 && w.Tick - a.TreatedAt < SimTime.Hours(24) ? (s.Chronic ? 1.5f : 1f) : 0f; break;
+                case Cure.Medic: gain = a.TreatedAt >= 0 && w.Tick - a.TreatedAt < SimTime.Hours(24) ? (s.Chronic ? 1.5f : 1f) : bedRest ? 0.3f : 0f; break; // 약이 없어도 누워 있으면 아주 천천히
                 case Cure.Food:
                     bool ate = c.Needs.Food > 0.45f && (a.Id != "scurvy" || _noFresh < 1f) && (a.Id != "dehydration" || w.Water.Level > 10f && w.Policies["water"] < 2);
                     gain = ate ? 1f : 0f;

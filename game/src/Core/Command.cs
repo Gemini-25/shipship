@@ -258,7 +258,8 @@ public sealed class CommandSystem
             if (buddy && free.Count > 0)
             {
                 var watcher = prev != null && free.FirstOrDefault(c => c.Id == prev.Watcher) is CrewMember pv ? pv
-                    : free.OrderByDescending(c => -(n.room != null ? (c.Position - n.room.Center).Length() : 0f) / 80f + 0.2f * c.Traits.Calm - (c.IsAwake ? 0f : 0.6f)).First();
+                    : free.OrderByDescending(c => -(n.room != null ? (c.Position - n.room.Center).Length() : 0f) / 80f + 0.2f * c.Traits.Calm - (c.IsAwake ? 0f : 0.6f)
+                                                  + 0.3f * w.Relations.Trust(worker, c)).First(); // v14.4 믿는 사람과 위험한 일을 함께 한다 (두고 갔던 사람은 피한다)
                 free.Remove(watcher);
                 team.Watcher = watcher.Id;
             }

@@ -197,6 +197,15 @@ public static partial class Program
                 {
                     var x = CrisisShip(seed + k, 0);
                     foreach (var m in x.Crew) { m.Fears.Clear(); m.Fears.Add(Fear.Fire); m.Needs.Stress = 0.5f; }
+                    // 불난 창고에 셋이 있었다 (있기만 하면 — 불길을 보면 두려움이 건드려진다; 운에 맡기지 않게)
+                    var burning = StoreRoom(x);
+                    var spots = burning.Cells.Where(x.Ship.IsOpenFloor).ToList();
+                    foreach (var (m, i) in x.Crew.Where(m => m.CanAct && !m.IsChild).Take(3).Select((m, i) => (m, i)))
+                    {
+                        m.EndJob(x, ToilStatus.Interrupted);
+                        m.Position = spots[(i * 5) % spots.Count].Center; m.PreviousPosition = m.Position;
+                        m.NextThinkTick = x.Tick;
+                    }
                     Run(x, SimTime.Minutes(40));
                     byFear += x.Minds.FearPanics;
                 }

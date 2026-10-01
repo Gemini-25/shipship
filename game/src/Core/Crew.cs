@@ -233,6 +233,11 @@ public sealed class CrewMember
     /// <summary>v14.3 제 공구로 일하면 빠르다 (없으면 조금 느리다) · 제 담요를 덮고 자면 더 쉰다.</summary>
     public float ToolFactor { get; set; } = 1f;
     public bool Comfy { get; set; }
+    /// <summary>v14.4 근무를 쉬게 해 줬다 · 대신 근무를 선다 · 소문을 듣고 확인할 당직 기록 · 들은 지난 일(교훈). (말풍선은 Say)</summary>
+    public long ExcusedUntil { get; set; } = -1;
+    public long CoveringUntil { get; set; } = -1;
+    public int CheckNote { get; set; } = -1;
+    public HashSet<string> Lessons { get; } = new();
     /// <summary>v14.3 배에서 태어난 아이의 부모.</summary>
     public List<int> Parents { get; } = new();
     public List<(long tick, string text)> Diary { get; } = new();

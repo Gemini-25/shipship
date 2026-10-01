@@ -140,7 +140,16 @@ public static partial class Program
             {
                 var w = Watchful(seed, "Mirinae", 0f);
                 foreach (var m in w.Ship.Machines) m.SensorCal = 0.5f;
-                Run(w, SimTime.TicksPerDay * 3);
+                if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "2")
+                    for (int h = 0; h < 72; h++)
+                    {
+                        Run(w, SimTime.Hours(1));
+                        if (h % 6 != 0) continue;
+                        var cal = w.Board.Open.Where(o => o.Kind == WorkKind.Calibrate).ToList();
+                        Console.WriteLine($"      {SimTime.Clock(w.Tick)} 교정 주문 {cal.Count} (긴급 {string.Join(",", cal.Select(o => o.Urgency.ToString("0.00")))}) · 자격자 " +
+                            string.Join(" | ", w.Crew.Where(c => Life.HasQual(c, Qual.Computer)).Select(c => $"{c.Name} {c.Job?.Label} 잠 {c.Pose == Pose.Sleeping} 평가 " + string.Join(",", c.LastEvaluations.Take(3).Select(e => $"{e.Activity.Label}:{e.Score:0.00}")))));
+                    }
+                else Run(w, SimTime.TicksPerDay * 3);
                 var st = w.Watch.Stats;
                 float avg = w.Ship.Machines.Average(m => m.SensorCal);
                 // 사람은 진짜 교정값을 모른다 — 헛경보를 현장에서 확인하고 나서야 그 방을 교정한다

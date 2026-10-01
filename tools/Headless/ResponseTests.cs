@@ -103,7 +103,8 @@ public static partial class Program
                     {
                         Run(w, SimTime.Minutes(1));
                         victim.Down = true; victim.Pose = Pose.Down; // 시험: 구하러 오기 전까지 그대로
-                        executed[k] |= room.Purging;
+                        if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "2") Console.WriteLine($"      [{k}] {SimTime.Clock(w.Tick)} 피해자 방 {victim.Room?.Name} 업힘 {victim.CarriedBy?.Name} 빼는 중 {room.Purging} 안 {w.Crew.Count(c => c.Room == room)} · {w.Automation.FireCases.FirstOrDefault()?.Status}");
+                        executed[k] |= room.Purging && (k == 1 || victim.Room == room && victim.CarriedBy == null); // 빈 방만: 쓰러진 사람이 안에 있는 채로 빼면 안 된다 (업어 내온 뒤는 괜찮다)
                     }
                 }
                 Check("방침 — 빈 방만이면 쓰러진 사람이 있는 방은 빼지 않고, 카운트다운이면 시간이 되면 뺀다", !executed[0] && executed[1],

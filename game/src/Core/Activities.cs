@@ -24,7 +24,7 @@ public abstract class Activity
     protected static float Hour(World w) => SimTime.HourOfDay(w.Tick);
 
     protected static bool OnShift(CrewMember c, World w) =>
-        SimTime.InWindow(Hour(w), c.Schedule.WorkStart, c.Schedule.WorkLength);
+        SimTime.InWindow(Hour(w), c.Schedule.WorkStart, c.Schedule.WorkLength) && c.ExcusedUntil <= w.Tick || c.CoveringUntil > w.Tick; // v14.4 근무를 대신 서 준다
 
     protected static bool Bedtime(CrewMember c, World w) =>
         SimTime.InWindow(Hour(w), c.Schedule.SleepStart, c.Schedule.SleepLength);

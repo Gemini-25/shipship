@@ -122,6 +122,7 @@ public static partial class WorkPlanners
             mentor.ChangeAffinity(cm, 0.04f);
             cm.Stats.Lessons++;
             mentor.Stats.Taught++;
+            world.Relations.Remember(cm, mentor, RelationReason.TaughtMe, $"{Ko.EulReul(Skills.Name(skill))} 가르쳐 줬다"); // v14.4
             world.Growth.Lessons++;
             float after = cm.RawSkill(skill);
             foreach (float mark in new[] { 0.35f, 0.5f })

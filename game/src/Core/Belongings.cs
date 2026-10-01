@@ -471,7 +471,8 @@ public sealed class BelongingSystem
         if (All.Any(b => b.Kind == BelongingKind.Toolset && b.BorrowedBy == c.Id)) return;
         // 빌린다: 지금 공구 일을 하지 않는 동료의 공구 (사물함에 있는 것)
         var lend = All.Where(b => b.Kind == BelongingKind.Toolset && b.Owner != c.Id && b.Usable && b.At == null && b.Holder < 0 && b.BorrowedBy < 0
-                                  && CrewOf(b.Owner) is CrewMember o && !o.Dead && !ToolWork(o.Job?.Order))
+                                  && CrewOf(b.Owner) is CrewMember o && !o.Dead && !ToolWork(o.Job?.Order)
+                                  && !w.Relations.Of(o, c).Any(m => m.Reason == RelationReason.TookMyThing && m.Weight < -0.1f)) // v14.4 전에 안 돌려준 사람에겐 빌려주지 않는다
             .OrderByDescending(b => c.AffinityTo(CrewOf(b.Owner)!)).FirstOrDefault();
         if (lend == null) return;
         lend.BorrowedBy = c.Id;

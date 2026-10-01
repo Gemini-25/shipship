@@ -28,6 +28,8 @@ public static class Brain
         new HobbyActivity(), // v14.3 취미 (물건을 가져와서 하고 제자리에)
         new TidyActivity(), // v14.3 두고 온 물건 찾아오기 · 정리
         new MendActivity(), // v14.3 망가진 물건 고쳐 주기
+        new ReachOutActivity(), // v14.4 목적 있는 말 걸기 (걱정 · 위로 · 신입 · 사과 · 진실 · 소문)
+        new InspectActivity(), // v14.4 소문을 듣고 확인하러 간다
         new ChatActivity(),
         new RelaxActivity(),
         new WanderActivity(),
@@ -68,7 +70,7 @@ public static class Brain
             var (score, reason) = a.Score(c, w, dist);
             pt = Prof.Lap(a.ScoreKey, pt);
             // 위기 판단: 비상·생존 위기에는 잠·휴식을 미룬다 (탈진 직전이면 쪽잠)
-            if (a is RelaxActivity or ChatActivity or WanderActivity or HobbyActivity or MendActivity) score *= w.Society.LeisureFactor; // v13.4 휴식·여가 방침
+            if (a is RelaxActivity or ChatActivity or WanderActivity or HobbyActivity or MendActivity or ReachOutActivity) score *= w.Society.LeisureFactor; // v13.4 휴식·여가 방침
             float damp = Crisis.Damp(c, w, a, out var note);
             if (damp < 1f && score > 0f) { score *= damp; if (note != null) reason += $" · {note}"; }
             if (score > 0f) score += w.Rng.Range(-Noise, Noise);

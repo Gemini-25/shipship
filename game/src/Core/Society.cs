@@ -51,13 +51,18 @@ public sealed class SocietySystem
     /// <summary>수습 중 (회의 표 없음 · 위험한 조에 넣지 않는다).</summary>
     public bool OnProbation(CrewMember c) => _w.Policies["newcrew"] == 1 && _joined.TryGetValue(c.Id, out var t) && _w.Tick - t < SimTime.TicksPerDay * 3;
     public bool IsVeteran(CrewMember c) => _veteran.Contains(c.Id);
+    /// <summary>v14.4 새로 탄 지 사흘이 안 됐다 (구조 · 기항지 · 시험).</summary>
+    public bool Recent(CrewMember c) => _joined.TryGetValue(c.Id, out var t) && _w.Tick - t < SimTime.TicksPerDay * 3;
+    public void MarkJoined(CrewMember c) => _joined[c.Id] = _w.Tick;
 
     public void Update(float dt)
     {
         var w = _w;
         // 새로 탄 사람 (구조 · 기항지 · 태어남)
+        // (처음 갱신 때 배에 있던 사람은 처음부터 탄 사람 — 게임 시계는 07:00부터라 "한 시간 안"으로는 못 가린다: v14.4 고침)
+        bool founding = _joined.Count == 0;
         foreach (var c in w.Crew)
-            if (!_joined.ContainsKey(c.Id)) _joined[c.Id] = w.Tick < SimTime.Hours(1) ? -SimTime.TicksPerDay * 10 : w.Tick;
+            if (!_joined.ContainsKey(c.Id)) _joined[c.Id] = founding ? -SimTime.TicksPerDay * 10 : w.Tick;
         Shifts();
         Veterans_();
         MoraleUpdate(dt);
@@ -231,7 +236,8 @@ public sealed class SocietySystem
         MindSystem.Anger(c, 0.15f);
         foreach (var o in w.Crew.Where(o => !o.Dead && o != c)) o.ChangeAffinity(c, -0.05f);
         w.History.Add(w, HistoryKind.Decision, $"숨긴 실수가 드러났다 — {Ko.IGa(c.Name)} {Ko.EulReul(m.Name)} 손보다 덜 조이고 말하지 않았다 ({why})", m.Body.Room, new[] { c }, log: true);
-        Punish(c, "숨긴 실수", light: false);
+        bool covered = w.Relations.OnMistakeRevealed(c); // v14.4 가까운 사람이 감싸 주면 벌이 가볍다
+        Punish(c, "숨긴 실수", light: covered);
     }
 
     /// <summary>규칙 위반의 벌 (방침): 경고 · 근무 박탈 · 넘어간다. 털어놓은 실수는 가볍게.</summary>

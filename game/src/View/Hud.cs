@@ -901,6 +901,12 @@ public partial class Hud : Control
             DrawRect(value >= 0 ? new Rect2(mid, bar.Position.Y, len, bar.Size.Y) : new Rect2(mid - len, bar.Position.Y, len, bar.Size.Y), vc.WithAlpha(0.8f));
             DrawLine(new Vector2(mid, bar.Position.Y - 2), new Vector2(mid, bar.End.Y + 2), new Color(1, 1, 1, 0.25f), 1f);
             Gfx.TextRight(this, Fonts.Body, new Vector2(right, ry + 15), word, 12, value >= 0.25f ? Palette.Good : value < -0.05f ? Palette.Warning : Palette.TextDim);
+            // v14.4 왜 그런 사이인가 (그 사람의 기억 — 오해일 수도 있다)
+            if (_world.Relations.Why(c, who) is RelationMemory why)
+            {
+                Gfx.Text(this, Fonts.Body, new Vector2(x + 16, ry + 30), Fit($"— {why.Text}", right - x - 16, 10, Fonts.Body), 10, why.Weight >= 0f ? new Color("#9fe0b0") : new Color("#ff9a8a"));
+                ry += 13;
+            }
             ry += 26;
         }
 
