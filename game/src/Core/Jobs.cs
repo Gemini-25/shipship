@@ -181,6 +181,7 @@ public sealed class WorkToil : Toil
         if (CanContinue != null && !CanContinue(c, w)) return ToilStatus.Failed;
         float speed = (1f - 0.25f * c.Vitals.Injury) * Wounds.HandFactor(c.Vitals) * (1f - 0.3f * c.Vitals.Scar); // v11.3 후유증 · v12.7 팔을 다치면 더
         if (c.Room is Room here && here.Dark && c.Suit == null) speed *= 0.8f; // v9.4 캄캄한 방 (우주복 헬멧 등이면 괜찮다)
+        speed *= w.Portable.LampWorkMul(c); // v16.7 이동식 등에 기대 일한다 (멀거나 몸에 가리면 느리다)
         if (c.Needs.Rest < 0.2f) speed *= 0.75f;
         if (c.Needs.Stress > 0.7f) speed *= 0.8f;
         if (c.Vitals.Oxygen < 0.85f) speed *= 0.8f;
@@ -464,6 +465,7 @@ public static class Locomotion
         if (path == null) return true;
 
         float budget = Speed(c) * w.Movement.Manners(c, path); // v14.5 비켜서기 · 막힘 · 문 앞 확인 · 조용히 · 움찔
+        budget *= w.Portable.SqueezeMul(c, path); // v16.7 통로에 세워 둔 카트를 비켜 간다
         if (budget <= 0f) return false;
         path = c.Path ?? path; // 돌아가는 길로 바꿨을 수 있다
         bool repathed = false;

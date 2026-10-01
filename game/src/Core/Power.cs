@@ -322,6 +322,7 @@ public sealed class PowerGrid
         foreach (var room in _world.Ship.Rooms) if (room.Circuit == circuit && !room.Detached && !room.PowerCut && !room.BreakerOff) kw += RoomSystemsKw;
         foreach (var m in _world.Ship.Machines)
             if (m.Body.Room.Circuit == circuit && !m.Body.Room.PowerCut && !m.Body.Room.BreakerOff && m.Spec.PowerDraw > 0f && !m.Stopped) kw += m.Demand;
+        kw += _world.Portable.CircuitKw(circuit); // v16.7 이동식 장비 콘센트 부하
         return kw;
     }
 

@@ -170,6 +170,8 @@ public sealed class Room
     /// <summary>v9.4 조명 고장 (전기가 있어도 캄캄하다): 일이 느리고, 길을 꺼리고, 오래 있으면 불안하다.</summary>
     public bool LightsOut { get; set; }
     public long LightsOutSince { get; set; }
+    /// <summary>v16.7 켜진 이동식 작업등 수 (PortableSystem이 시스템 틱마다 센다 — 천장 불이 없어도 어둡지 않다).</summary>
+    public int PortableLit { get; set; }
 
     /// <summary>캄캄한 방 (정전이거나 조명이 나갔다).</summary>
     public bool Dark => (!Powered || LightsOut) && !ModulesV15.Lit(this); // v15 비상등이 있으면 어둡지 않다
