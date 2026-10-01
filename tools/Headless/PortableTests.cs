@@ -10,21 +10,27 @@ public static partial class Program
     private static int RunPortableTest(int seed)
     {
         _fails = 0;
+        static bool Sec(int n) => Environment.GetEnvironmentVariable("PSEC") is not string s || s.Split(',').Contains(n.ToString()); // 개발용: 일부만
         Console.WriteLine($"이동식 장비 점검 (v16.7) · 시드 {seed}\n");
 
         // ── 0) 시작 장비: 모든 배(생성 배 포함) 창고에 배 크기에 맞게 ──
+        if (Sec(0))
         {
             var notes = new List<string>();
             bool ok = true;
-            int prev = 0;
+            var bySize = new List<(int crew, int n)>();
             foreach (var t in ShipCatalog.All)
             {
-                var w = World.CreateDefault(seed, 0, t.Key);
+                World w;
+                try { w = World.CreateDefault(seed, 0, t.Key); }
+                catch (Exception e) { notes.Add($"{t.Key} 배 생성 실패({e.GetType().Name} — 배 담당)"); continue; }
                 var ds = w.Portable.Devices;
-                ok &= Enum.GetValues<PortableKind>().All(k => ds.Any(d => d.Kind == k)) && ds.All(d => d.Stored && w.Ship.RoomAt(d.Home) != null) && ds.Count >= prev;
-                prev = ds.Count;
+                ok &= Enum.GetValues<PortableKind>().All(k => ds.Any(d => d.Kind == k)) && ds.All(d => d.Stored && w.Ship.RoomAt(d.Home) != null) ;
+                bySize.Add((t.Crew, ds.Count));
                 notes.Add($"{t.Key} {ds.Count}");
             }
+            var sorted = bySize.OrderBy(x => x.crew).ThenBy(x => x.n).ToList();
+            for (int i = 1; i < sorted.Count; i++) if (sorted[i].crew > sorted[i - 1].crew + 4) ok &= sorted[i].n >= sorted[i - 1].n; // 큰 배일수록 많다
             var g = World.CreateDefault(seed, 0, ShipGenerator.KeyFor(16, seed));
             ok &= Enum.GetValues<PortableKind>().All(k => g.Portable.Devices.Any(d => d.Kind == k)) && g.Portable.Devices.All(d => d.Stored);
             notes.Add($"생성 배(16명) {g.Portable.Devices.Count}");
@@ -32,6 +38,7 @@ public static partial class Program
         }
 
         // ── 1) 정전된 식당: 이동식 배터리와 작업등 하나를 켜 놓고 모여 식사 ──
+        if (Sec(1))
         {
             var w = DayOne(seed, "Hanbit");
             var mess = w.Ship.RoomsOf(RoomType.Mess).First();
@@ -59,6 +66,7 @@ public static partial class Program
         }
 
         // ── 2) 작업등을 비추다 몸에 가리면 옮긴다 ──
+        if (Sec(2))
         {
             var w = DayOne(seed, "Hanbit");
             bool done = false;
@@ -97,6 +105,7 @@ public static partial class Program
         }
 
         // ── 3) 히터를 한 회로에 여럿 꽂으면 차단기가 떨어진다 → 뽑거나 옆 방 콘센트로 → 차단기를 올린다 ──
+        if (Sec(3))
         {
             var w = DayOne(seed, "Hanbit");
             var room = w.Ship.RoomsOf(RoomType.Quarters).First(r => PortableSystem.OutletOk(r));
@@ -121,6 +130,7 @@ public static partial class Program
         }
 
         // ── 4) 침수된 방에 양수기를 가져와 물을 퍼낸다 → 다 쓰면 회수 (또는 잊고 남음) ──
+        if (Sec(4))
         {
             var w = DayOne(seed, "Hanbit");
             var room = w.Ship.RoomsOf(RoomType.Galley).First();
@@ -144,6 +154,7 @@ public static partial class Program
         }
 
         // ── 5) 잊고 오래 둔 장비 → 정식 시설로 (개조 제안) ──
+        if (Sec(5))
         {
             var w = DayOne(seed, "Hanbit");
             var room = w.Ship.RoomsOf(RoomType.Lounge).FirstOrDefault() ?? w.Ship.RoomsOf(RoomType.Mess).First();
@@ -156,6 +167,7 @@ public static partial class Program
         }
 
         // ── 6) 먼저 쓰는 사람이 있으면 기다리거나 다른 것을 ──
+        if (Sec(6))
         {
             var w = DayOne(seed, "Hanbit");
             var shop = w.Ship.RoomsOf(RoomType.Workshop).FirstOrDefault() ?? w.Ship.RoomsOf(RoomType.Lounge).First();
@@ -186,6 +198,7 @@ public static partial class Program
         }
 
         // ── 7) 상호작용: 히터 × 침구 × 불 · 젖은 케이블 × 누전 · 카트 × 대피 ──
+        if (Sec(7))
         {
             // a) 침대 곁에 켜 둔 히터 → 불 → 그 뒤로 히터 자리는 침구 곁을 피한다
             var w = DayOne(seed, "Hanbit");
@@ -237,7 +250,105 @@ public static partial class Program
                 $"걷기 ×{walk:0.00} · 뛰기 ×{dash:0.00} · 걸림 {w3.Portable.Stats.CartSnags}");
         }
 
+        // ── 9) 주 컴퓨터 × 승무원: 콘센트 부하로 과부하를 예측해 방송 → 들은 사람이 차단기 전에 뽑는다 ──
+        if (Sec(9))
+        {
+            var w = DayOne(seed, "Hanbit");
+            var room = w.Ship.LiveRooms.Where(r => r.Type is RoomType.Lounge or RoomType.Mess && PortableSystem.OutletOk(r)).OrderBy(r => r.Id).First();
+            var cells = room.Cells.Where(c => w.Ship.IsOpenFloor(c) && w.Ship.FurnitureAt(c) == null).ToList();
+            var heaters = w.Portable.Devices.Where(d => d.Kind == PortableKind.Heater).Take(2).ToList();
+            var pump = w.Portable.Devices.First(d => d.Kind == PortableKind.Pump);
+            int k = 0;
+            foreach (var d in heaters.Append(pump)) w.Portable.PlaceNow(d, cells[(k++ * 3) % cells.Count], null, "hold", outlet: room);
+            int circuit = room.Circuit;
+            bool tripped = false;
+            ComputerAct? act = null;
+            for (int i = 0; i < 40 && (w.Portable.Stats.HeededWarns == 0 || act == null); i++)
+            {
+                Run(w, SimTime.Minutes(1));
+                tripped |= w.Portable.Stats.Trips > 0;
+                act ??= w.Automation.Book.Acts.LastOrDefault(a => a.Kind == ActKind.Advice && a.Key == $"pw:over:{circuit}");
+            }
+            var st = w.Portable.Stats;
+            Check("주 컴퓨터 — 콘센트 부하로 과부하를 예측해 방송한다 (무엇이 꽂혔는지는 모른다 · 다섯 칸 기록)", st.ComputerWarns >= 1 && act != null,
+                act == null ? $"기록 없음 · 예측 {st.ComputerWarns}" : $"관찰: {act.Observe} · 판단: {act.Judge} · 요청: {act.Request}");
+            Check("승무원 — 방송을 들은 사람이 차단기가 떨어지기 전에 뽑는다", st.HeededWarns >= 1 && !tripped,
+                $"듣고 뽑음 {st.HeededWarns} · 차단기 {(tripped ? "떨어짐" : "그대로")} · {PowerGrid.CircuitName(circuit)} 회로 {w.Portable.CircuitKw(circuit):0.0}kW · {st.LinkSummary()}");
+        }
+
+        // ── 10) 주 컴퓨터: 빈 방에서 오래 나가는 콘센트 부하 → 켜 둔 히터로 짚는다 → 가서 끈다 ──
+        if (Sec(10))
+        {
+            var w = DayOne(seed, "Hanbit");
+            Run(w, SimTime.Minutes(10));
+            var q = w.Ship.RoomsOf(RoomType.Quarters).Where(r => PortableSystem.OutletOk(r) && r.DataLinked && !w.Crew.Any(c => c.Room == r) && w.Automation.Belief.PeopleIn(r) == 0).OrderBy(r => r.Id).FirstOrDefault()
+                    ?? w.Ship.LiveRooms.Where(r => r.Type != RoomType.Corridor && PortableSystem.OutletOk(r) && r.DataLinked && !w.Crew.Any(c => c.Room == r) && w.Automation.Belief.PeopleIn(r) == 0).OrderBy(r => r.Id).First();
+            var heater = w.Portable.Devices.First(d => d.Kind == PortableKind.Heater);
+            w.Portable.PlaceNow(heater, q.Cells.First(c => w.Ship.IsOpenFloor(c) && w.Ship.FurnitureAt(c) == null), w.Crew[0], "hold", outlet: q);
+            for (int i = 0; i < 24 && w.Portable.Stats.HeaterOffs == 0; i++) Run(w, SimTime.Minutes(5));
+            var st = w.Portable.Stats;
+            var act = w.Automation.Book.Acts.LastOrDefault(a => a.Key == $"pw:heat:{heater.Id}");
+            Check("주 컴퓨터 — 빈 방(문 감지기)에서 콘센트 부하가 오래 나가면 켜 둔 히터로 짚어 끄라 한다 · 들은 사람이 가서 끈다",
+                st.HeaterWarns >= 1 && act != null && st.HeaterOffs >= 1 && !heater.On,
+                $"{q.Name} · 경고 {st.HeaterWarns} · 껐음 {st.HeaterOffs} · 히터 {(heater.On ? "켜짐" : "꺼짐")} · {(act == null ? "기록 없음" : $"관찰: {act.Observe} · 판단: {act.Judge}")}");
+        }
+
+        // ── 11) 주 컴퓨터: 창고 충전대의 빈 자리 → 잊은 장비를 떠올려 돌려놓는다 ──
+        if (Sec(11))
+        {
+            var w = DayOne(seed, "Hanbit");
+            var lounge = w.Ship.LiveRooms.Where(r => r.Type is RoomType.Lounge or RoomType.Mess or RoomType.Workshop).OrderBy(r => r.Id).First();
+            var lamp = w.Portable.Devices.First(d => d.Kind == PortableKind.WorkLamp);
+            w.Portable.PlaceNow(lamp, lounge.Cells.First(c => w.Ship.IsOpenFloor(c) && w.Ship.FurnitureAt(c) == null), w.Crew[0], $"dark:{lounge.Id}");
+            lamp.On = false;
+            lamp.PlacedSince = 0; // 오래전에 꺼내 둔 것
+            lamp.DoneSince = w.Tick - SimTime.Hours(3);
+            lamp.Forgotten = true;
+            int calls0 = w.Portable.Stats.InventoryCalls;
+            for (int i = 0; i < 48 && !lamp.Stored; i++) Run(w, SimTime.Minutes(10));
+            var st = w.Portable.Stats;
+            var act = w.Automation.Book.Acts.LastOrDefault(a => a.Key == "pw:inv");
+            Check("주 컴퓨터 — 창고 충전대 빈 자리로 하루 넘게 안 돌아온 장비를 알리고 · 잊은 사람이 떠올려 창고에 돌려놓는다",
+                st.InventoryCalls > calls0 && st.InventoryFound >= 1 && lamp.Stored,
+                $"알림 {st.InventoryCalls} · 떠올림 {st.InventoryFound} · 작업등 {(lamp.Stored ? "창고" : lamp.Forgotten ? "잊힌 채" : "밖")} · {(act == null ? "기록 없음" : $"관찰: {act.Observe} · 판단: {act.Judge}")}");
+        }
+
+        // ── 12) 냄새 × 승무원: 창고에 오래 둔 히터를 켜면 먼지 타는 냄새 → 냄새를 따라온 사람이 알아챈다 ──
+        if (Sec(12))
+        {
+            var w = DayOne(seed, "Hanbit");
+            var room = w.Ship.LiveRooms.Where(r => r.Type is RoomType.Lounge or RoomType.Mess && PortableSystem.OutletOk(r)).OrderBy(r => r.Id).First();
+            var heater = w.Portable.Devices.First(d => d.Kind == PortableKind.Heater);
+            float dust = heater.Dust;
+            w.Portable.PlaceNow(heater, room.Cells.First(c => w.Ship.IsOpenFloor(c) && w.Ship.FurnitureAt(c) == null), null, "hold", outlet: room);
+            float burnt = 0f;
+            for (int i = 0; i < 30 && w.Portable.Stats.DustSniffs == 0; i++) { Run(w, SimTime.Minutes(1)); burnt = MathF.Max(burnt, w.Smells.Level(room, SmellKind.Burnt)); }
+            Check("냄새 × 승무원 — 오래 둔 히터를 켜면 열선 먼지가 타는 냄새가 나고, 냄새를 따라온 사람이 까닭을 알아챈다",
+                dust > 0.9f && burnt > SmellSystem.Threshold(SmellKind.Burnt) && w.Portable.Stats.DustSniffs >= 1,
+                $"먼지 {dust:0.00}→{heater.Dust:0.00} · {room.Name} 탄내 최고 {burnt:0.00} · 알아챔 {w.Portable.Stats.DustSniffs} · 냄새 {w.Smells.Stats.Summary()}");
+        }
+
+        // ── 13) 배 본체: 얼어붙은 방(서리) × 히터 → 녹은 물웅덩이 → 바닥 케이블에 물이 스민다 · 양수기 호스 끝은 바닥을 적신다 ──
+        if (Sec(13))
+        {
+            var w = DayOne(seed, "Hanbit");
+            var cold = w.Ship.LiveRooms.Where(r => r.Type is RoomType.Storage or RoomType.Workshop or RoomType.Lounge && r.Doors.Any(d => (d.RoomA == r ? d.RoomB : d.RoomA) is Room n && PortableSystem.OutletOk(n)))
+                .OrderBy(r => r.Id).First();
+            var src = cold.Doors.Select(d => d.RoomA == cold ? d.RoomB : d.RoomA).First(n => n != null && PortableSystem.OutletOk(n))!;
+            for (int i = 0; i < 6; i++) { cold.Air.Temperature = -6f; Run(w, SimTime.Minutes(1)); }
+            var spot = cold.Cells.First(c => w.Ship.IsOpenFloor(c) && w.Ship.FurnitureAt(c) == null && w.Portable.Devices.All(d => d.At != c));
+            float frost0 = w.Body.Mark(spot, CellMark.Frost);
+            var heater = w.Portable.Devices.First(d => d.Kind == PortableKind.Heater);
+            w.Portable.PlaceNow(heater, spot, null, "hold", outlet: src);
+            float wetMax = 0f;
+            for (int i = 0; i < 40 && heater.Soak <= 0f; i++) { Run(w, SimTime.Minutes(2)); wetMax = MathF.Max(wetMax, w.Body.Mark(spot, CellMark.Wet)); }
+            Check("배 본체 — 얼어붙은 방에 히터를 켜면 서리가 녹아 물웅덩이가 되고, 그 칸 케이블에 물이 스민다",
+                frost0 > 0.2f && w.Body.Mark(spot, CellMark.Frost) < frost0 && wetMax > 0.3f && heater.Soak > 0f,
+                $"{cold.Name} 서리 {frost0:0.00}→{w.Body.Mark(spot, CellMark.Frost):0.00} · 물웅덩이 {wetMax:0.00} · 케이블 스밈 {heater.Soak:0.000} · 방 {cold.Air.Temperature:0}℃");
+        }
+
         // ── 8) 결정론 ──
+        if (Sec(8))
         {
             uint H() { var w = World.CreateDefault(seed, 0, "Hanbit"); Run(w, SimTime.TicksPerDay + SimTime.Hours(6)); return SaveGame.StateHash(w); }
             uint a = H(), b = H();

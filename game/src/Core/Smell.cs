@@ -173,6 +173,7 @@ public sealed class SmellSystem
     {
         var w = _w;
         w.Cooking.AddSmells(this);
+        w.Portable.AddSmells(this); // v16.7 히터 먼지 · 달아오른 콘센트
         // 불 · 연기: 타는 냄새 (감지기는 불꽃을 봐야 울린다 — 코는 연기만 닿아도 안다)
         if (w.Fire.Count > 0)
             foreach (var (cell, v) in w.Fire.Fires) Emit(w.Ship.RoomAt(cell), SmellKind.Burnt, 0.5f + 0.5f * MathF.Min(1f, v));
@@ -294,6 +295,7 @@ public sealed class SmellSystem
             _resolved[c.Id] = (w.Tick, 1f);
             return;
         }
+        if (w.Portable.SmellFound(c, room)) { Stats.Found++; _resolved[c.Id] = (w.Tick, 1f); return; } // v16.7 이동식 장비 (먼지 타는 히터 · 뜨거운 콘센트)
         // 여기가 가장 진한데 아무것도 없다 — 어디서 흘러온 냄새다
         if (Trail(c, SmellKind.Burnt) == room)
         {

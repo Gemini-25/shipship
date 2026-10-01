@@ -101,6 +101,10 @@ public sealed class PortableDevice
     public Vector2 Aim { get; internal set; }
     public bool Shadowed { get; internal set; }
     internal float ShadowHours;
+    /// <summary>물에 잠긴 케이블 이음매에 스민 물 (1이 되면 누전).</summary>
+    public float Soak { get; internal set; }
+    /// <summary>히터 열선에 앉은 먼지 (창고에 오래 두면 쌓이고, 켜면 타는 냄새를 내며 탄다).</summary>
+    public float Dust { get; internal set; } = 1f;
     public float Hours { get; internal set; }
     /// <summary>실려 가는 카트.</summary>
     public PortableDevice? OnCart { get; internal set; }
@@ -129,6 +133,11 @@ public sealed class PortableStats
     public int HeaterFires, WetTrips, CableShocks, BatteryFires, CartSnags;
     public int Setups, Feeds, Returned, Forgotten, Found, Waits, Swaps, Trips, Unplugged, Rerouted, Avoided, LampMoves, Breakdowns, Wet, Fixed, Dropped, CartTrips, AisleCarts, LampMeals, Gatherings, Settled;
     public float PumpedL, HeatKwh, LampHours;
+    /// <summary>주 컴퓨터: 과부하 예측 방송 · 듣고 뽑음 · 빈 방 히터 경고 · 껐음 · 창고 빈 자리 알림 · 찾아 돌려놓음. 냄새: 히터 먼지 · 뜨거운 콘센트. 배 본체 · 음식.</summary>
+    public int ComputerWarns, HeededWarns, HeaterWarns, HeaterOffs, InventoryCalls, InventoryFound, DustSniffs, HotOutlets, HoseWets, WarmPlates;
+    public string LinkSummary() =>
+        $"컴퓨터 과부하 예측 {ComputerWarns}(듣고 뽑음 {HeededWarns}) · 빈 방 히터 경고 {HeaterWarns}(껐음 {HeaterOffs}) · 창고 빈 자리 알림 {InventoryCalls}(찾음 {InventoryFound}) · " +
+        $"먼지 타는 냄새 {DustSniffs} · 뜨거운 콘센트 {HotOutlets} · 호스 물 {HoseWets} · 히터에 데운 접시 {WarmPlates}";
     public string Summary() =>
         $"꺼내 설치 {Setups}(카트로 {CartTrips}) · 배터리 갖다 댐 {Feeds} · 회수 {Returned} · 잊고 둠 {Forgotten}(찾음 {Found}) · 기다림 {Waits} · 다른 것으로 {Swaps} · " +
         $"차단기 {Trips}(뽑음 {Unplugged} · 옆 방 콘센트로 {Rerouted} · 조심 {Avoided}) · 작업등 옮김 {LampMoves} · 고장 {Breakdowns}(젖어서 {Wet}) · 고침 {Fixed} · " +
@@ -151,7 +160,7 @@ public sealed class PortableNeed
     public PortableDevice? Device { get; init; }
 }
 
-public sealed class PortableSystem
+public sealed partial class PortableSystem
 {
     /// <summary>한 회로의 콘센트가 견디는 이동식 장비 부하 (넘으면 몇 분 뒤 차단기가 떨어진다).</summary>
     public const float OutletCapKw = 3.2f;
@@ -430,7 +439,7 @@ public sealed class PortableSystem
                     // 열 × 불: 침구 · 의자 곁에 둔 히터, 아무도 없는 방에 켜 둔 히터는 불을 낸다
                     bool nearSoft = Flammable(d.At);
                     bool alone = _awake.GetValueOrDefault(room.Id) == 0;
-                    if (R.Chance(HeaterFireRate * (nearSoft ? 4f : 1f) * (alone ? 2.5f : 1f) * dt) && w.Fire.Ignite(d.At, 0.25f))
+                    if (R.Chance(HeaterFireRate * (nearSoft ? 4f : 1f) * (alone ? 2.5f : 1f) * MathF.Max(0.3f, w.Body.SpreadMul(d.At)) * dt) && w.Fire.Ignite(d.At, 0.25f)) // 바닥재: 카펫 · 고무는 잘 탄다 · 젖은 바닥은 덜
                     {
                         Stats.HeaterFires++;
                         _heaterCaution = true;
@@ -472,10 +481,13 @@ public sealed class PortableSystem
         foreach (var d in Devices)
         {
             if (!d.Placed || !d.On || d.Plug != PortablePlug.Outlet || d.Outlet is not Room o || !OutletOk(o) || RoomOf(d) is not Room dr) continue;
-            float depth = MoistureSystem.Depth(dr);
-            if (depth < 0.06f) continue;
-            if (R.Chance(0.3f * WetCableRate * depth * dt))
+            // 방 바닥 물 · 그 칸의 물웅덩이(배 본체 칸 상태 — 양수기 호스가 흘린 물 · 녹은 서리)
+            float depth = MathF.Max(MoistureSystem.Depth(dr), 0.08f * w.Body.Mark(d.At, CellMark.Wet));
+            if (depth < 0.06f) { d.Soak = MathF.Max(0f, d.Soak - dt); continue; }
+            d.Soak += WetCableRate * depth * dt; // 이음매에 물이 스며든다 (오래 잠길수록)
+            if (d.Soak >= 1f)
             {
+                d.Soak = 0f;
                 Stats.WetTrips++;
                 _wetLesson = true;
                 Trip(o.Circuit, CircuitLoad[o.Circuit], $"{dr.Name} 바닥 물에 잠긴 {d.Name} 케이블에서 누전");
@@ -543,6 +555,7 @@ public sealed class PortableSystem
             else _over[i] = MathF.Max(0f, _over[i] - dt * 2f);
             if (_over[i] >= 1f) Trip(i, load);
         }
+        Links(dt); // 주 컴퓨터(과부하 예측 · 빈 방 히터 · 창고 빈 자리) · 배 본체(호스 물 · 카트 바퀴) · 히터 먼지
 
         // 5) 이동식 조명이 켜진 방 (Room.Dark가 본다)
         foreach (var r in _lit) r.PortableLit = 0;
@@ -580,6 +593,7 @@ public sealed class PortableSystem
             if (job.Current is not WaitToil) continue;
             _meal[c.Id] = job;
             Stats.LampMeals++;
+            WarmPlate(c, er); // 음식: 전기가 없어 식은 접시는 켜 둔 히터 곁에 대 데운다
             int with = w.Crew.Count(o => o != c && !o.Dead && o.Room == er && o.Job?.Activity is EatActivity);
             c.Needs.Stress = MathF.Max(0f, c.Needs.Stress - 0.03f * MathF.Min(4, with));
             if (with > 0) c.Needs.Social = MathF.Min(1f, c.Needs.Social + 0.1f);
@@ -617,6 +631,7 @@ public sealed class PortableSystem
     {
         var w = _w;
         _over[circuit] = 0f;
+        _tripAt[circuit] = w.Tick;
         if (w.Ship.FurnitureOf(FurnitureType.PowerPanel).FirstOrDefault()?.Machine is not Machine panel || panel.Faults.Any(f => f.Circuit == circuit)) return;
         var fault = new Fault { Kind = FaultKind.BreakerTrip, Since = w.Tick, Circuit = circuit };
         panel.Faults.Add(fault);
@@ -811,15 +826,18 @@ public sealed class PortableSystem
         for (int i = 0; i < PowerGrid.CircuitCount; i++)
         {
             float kw = ProjectedKw(i);
-            if (kw <= OutletCapKw || !_learned[i]) continue;
+            bool warned = Warned(i) && !_learned[i]; // 차단기는 아직 — 주 컴퓨터 방송 · 뜨거운 콘센트로 안다
+            if (kw <= OutletCapKw || !_learned[i] && !Warned(i)) continue;
             foreach (var d in Devices.Where(d => d.Placed && d.On && d.Plug == PortablePlug.Outlet && d.Outlet?.Circuit == i).OrderByDescending(d => d.Spec.Kw).ThenByDescending(d => d.PlacedSince).ThenBy(d => d.Id))
             {
                 if (kw <= OutletCapKw) break;
                 kw -= d.Spec.Kw;
                 if (RoomOf(d) is Room r)
-                    Need(PortableTask.Unplug, d.Kind, r, d.At, false, $"{PowerGrid.CircuitName(i)} 회로에 너무 많이 꽂았다 (차단기가 떨어졌다)", 0.7f, $"unplug:{d.Id}", device: d);
+                    Need(PortableTask.Unplug, d.Kind, r, d.At, false, warned ? $"{PowerGrid.CircuitName(i)} 회로 과부하 — {_warnWhy[i]}" : $"{PowerGrid.CircuitName(i)} 회로에 너무 많이 꽂았다 (차단기가 떨어졌다)",
+                        warned ? 0.8f : 0.7f, $"unplug:{d.Id}", device: d);
             }
         }
+        ComputerNeeds(); // 주 컴퓨터가 짚은 빈 방 히터
         Needs.Sort((a, b) => b.Urgency.CompareTo(a.Urgency));
         _choice.Clear();
     }
@@ -907,7 +925,7 @@ public sealed class PortableSystem
                     var busy = Devices.Where(d => d.Kind == n.Kind && !d.Lost && !d.Broken && Busy(d) && dist.Reachable(d.HeldBy?.Cell ?? d.At)).OrderBy(d => dist.Get(d.At)).FirstOrDefault();
                     if (busy == null || _waited.TryGetValue(n.Key, out var wt) && _w.Tick - wt < SimTime.Hours(1)) return null;
                     string user = busy.User?.Name ?? busy.HeldBy?.Name ?? (busy.InstalledBy >= 0 ? _w.Crew.FirstOrDefault(x => x.Id == busy.InstalledBy)?.Name : null) ?? "누군가";
-                    return new PortableChoice(n, null, null, null, busy, (n.Urgency - far) * 0.6f, $"{n.Why} · {PortableSpecs.Name(n.Kind)}은 {Ko.IGa(user)} 쓰는 중 — 기다린다");
+                    return new PortableChoice(n, null, null, null, busy, (n.Urgency - far) * 0.85f, $"{n.Why} · {PortableSpecs.Name(n.Kind)}은 {Ko.IGa(user)} 쓰는 중 — 기다린다");
                 }
                 PortableDevice? bat = null, cart = null;
                 if (n.Battery && main.Kind != PortableKind.Battery)
@@ -1132,8 +1150,10 @@ public sealed class PortableSystem
     internal void Unplug(CrewMember c, PortableDevice d)
     {
         var w = _w;
+        if (TurnOffFlagged(c, d)) return; // 주 컴퓨터가 짚은 빈 방 히터: 끈다
         if (!d.Placed || d.Plug != PortablePlug.Outlet || d.Outlet is not Room was) return;
         int circuit = was.Circuit;
+        bool heed = Warned(circuit) && !_learned[circuit];
         var room = RoomOf(d) ?? was;
         // 다른 회로의 옆 방 콘센트에 여유가 있으면 그리로 옮겨 꽂는다
         Room? alt = null;
@@ -1153,9 +1173,10 @@ public sealed class PortableSystem
             d.Outlet = null;
             d.CableTo = null;
             d.Purpose = null;
-            w.Log.Add(w.Tick, LogKind.Work, $"{Ko.EulReul(d.Name)} 뽑아 뒀다 — {PowerGrid.CircuitName(circuit)} 회로에 너무 많이 꽂혀 차단기가 떨어졌다", c.Id);
+            w.Log.Add(w.Tick, LogKind.Work, heed ? $"{Ko.EulReul(d.Name)} 뽑아 뒀다 — {PowerGrid.CircuitName(circuit)} 회로 과부하 ({_warnWhy[circuit]}) · 차단기가 떨어지기 전에" : $"{Ko.EulReul(d.Name)} 뽑아 뒀다 — {PowerGrid.CircuitName(circuit)} 회로에 너무 많이 꽂혀 차단기가 떨어졌다", c.Id);
         }
         Stats.Unplugged++;
+        if (heed) Stats.HeededWarns++;
         MarkLog.Add(room.Marks, w.Tick, $"{c.Name}: {d.Name} 뽑음 ({PowerGrid.CircuitName(circuit)} 회로 과부하)");
     }
 
