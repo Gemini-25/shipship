@@ -163,6 +163,7 @@ public static partial class Program
         if (args.Contains("--foodtest")) return RunFoodTest(seed); // v16.8
         if (args.Contains("--portabletest")) return RunPortableTest(seed); // v16.7
         if (args.Contains("--shiptest")) return RunShipTest(seed); // v16.9 배 종류
+        if (args.Contains("--uitest")) return RunUiTest(seed); // v16.2
         if (args.Contains("--era15test")) return RunEraV15Test(seed); // v15.5
         if (args.Contains("--voyage15test")) return RunVoyageV15Test(seed); // v15.4
         if (args.Contains("--proptest")) return RunPropTest(seed); // v15.8 소품·장식 70
