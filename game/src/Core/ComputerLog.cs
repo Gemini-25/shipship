@@ -174,8 +174,9 @@ public sealed class ComputerLogBook
     internal void Grade()
     {
         var w = _w;
-        foreach (var a in Acts)
+        for (int i = 0; i < Acts.Count; i++) // v16.16 채점이 새 기록(사과 · 방송)을 부를 수 있다 — 번호로 돈다
         {
+            var a = Acts[i];
             if (a.Graded || w.Tick < a.GradeAt) continue;
             (int score, string why)? custom = a.Grader?.Invoke(w, a);
             if (a.Grader != null && custom == null) continue; // 아직 모른다 (조금 더 본다)

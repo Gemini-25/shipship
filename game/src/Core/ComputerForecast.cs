@@ -17,7 +17,7 @@ namespace ShipSim.Core;
 /// <summary>컴퓨터가 지켜보는 자원 하나: 실제 값 · 부족 문턱 · 상한 · 아는 흐름(단위/시간) · 계기가 달린 방 · 채점 허용 오차.</summary>
 public sealed record ResourceModel(string Key, string Name, string Unit,
     Func<World, float> True, Func<World, float> Short, Func<World, float> Cap, Func<World, float> Flow,
-    Func<World, Room?> Gauge, float Tol, Func<World, float>? Believed = null);
+    Func<World, Room?> Gauge, float Tol, Func<World, float>? Believed = null, bool UseTrend = false);
 
 /// <summary>계기 하나를 얼마나 믿나 (사람 눈금 · 흐름과 견준 결과).</summary>
 public sealed class GaugeLedger
@@ -124,7 +124,7 @@ public sealed class ShipForecast
             w => RoomOf(w, FurnitureType.Fridge), 0.4f),
         new("o2", "산소", "%", w => AvgO2(w, false), w => 18.5f, w => 23f, w => 0f, w => null, 0.6f, w => AvgO2(w, true)),
         new("power", "배터리", "kWh", w => w.Power.BatteryCharge, w => w.Power.BatteryCapacity * 0.15f, w => w.Power.BatteryCapacity, w => w.Power.BatteryFlow,
-            w => RoomOf(w, FurnitureType.Battery), 6f),
+            w => RoomOf(w, FurnitureType.Battery), 6f, null, true), // 배터리 흐름은 순간마다 출렁인다 — 추세로
         new("materials", "수리재", "개", w => w.Expedition.Stock(MatCat.Repair), w => 2f, w => float.MaxValue, w => -w.Expedition.Rate[(int)MatCat.Repair] / 24f,
             w => w.Ship.RoomsOf(RoomType.Storage).FirstOrDefault(r => !r.Detached), 1.5f),
         new("propellant", "추진제", "%", w => w.Expedition.Stock(MatCat.Fuel), w => 15f, w => 100f, w => -w.Expedition.Rate[(int)MatCat.Fuel] / 24f,
@@ -211,6 +211,7 @@ public sealed class ShipForecast
         }
         // 컴퓨터가 믿는 값: 믿는 계기면 계기 · 의심하면 마지막 믿은 값에서 흐름으로 셈한다 · 사람이 말해 주면 그 값
         f.DeadReckon = L.Suspect && f.Tick >= 0;
+        if (L.Suspect && g != null) a.Belief.Of(g).Trust = MathF.Min(a.Belief.Of(g).Trust, 0.45f); // 의심하는 동안은 그 방 감지기 전체를 덜 믿는다
         if (told) f.Estimate = truth;
         else if (f.DeadReckon) f.Estimate = Math.Clamp(f.Estimate + flow * dtH, 0f, cap);
         else f.Estimate = read;
@@ -220,9 +221,9 @@ public sealed class ShipForecast
         f.Short = sh;
         f.History.Add((w.Tick, f.Estimate));
         if (f.History.Count > 7) f.History.RemoveAt(0);
-        float span = (f.History[^1].tick - f.History[0].tick) / (float)SimTime.TicksPerHour;
-        f.Trend = span >= 3.5f ? (f.History[^1].est - f.History[0].est) / span : flow;
-        f.Rate = m.Believed != null ? f.Trend : 0.6f * flow + 0.4f * f.Trend;
+        var med = MedianSlope(f.History);
+        f.Trend = med ?? flow;
+        f.Rate = m.Believed != null || m.UseTrend ? med ?? 0f : flow; // 흐름(생산 − 소비)을 아는 자원은 흐름으로 · 모르는 자원(산소)은 추세로
         // 상한에 닿아 넘치는 몫은 버린다 (가득 찬 탱크)
         if (f.Rate > 0f && f.Estimate >= cap - 0.5f) f.Rate = 0f;
         f.DaysToShort = f.Estimate <= sh ? 0f : f.Rate < -1e-4f ? MathF.Min(99f, (f.Estimate - sh) / -f.Rate / 24f) : 99f;
@@ -238,6 +239,21 @@ public sealed class ShipForecast
         _checks.Add((m.Key, w.Tick + SimTime.Hours(12), Math.Clamp(f.Estimate + f.Rate * 12f, 0f, cap)));
         if (_checks.Count > 60) _checks.RemoveAt(0);
         Warn(m, f, g);
+    }
+
+    /// <summary>추세: 이웃한 두 값 사이 기울기들의 가운데 값 (한 번 튄 값에 흔들리지 않는다) · 셋이 안 되면 null.</summary>
+    private static float? MedianSlope(List<(long tick, float est)> h)
+    {
+        if (h.Count < 4) return null;
+        var s = new List<float>(h.Count - 1);
+        for (int i = 1; i < h.Count; i++)
+        {
+            float dt = (h[i].tick - h[i - 1].tick) / (float)SimTime.TicksPerHour;
+            if (dt > 0.1f) s.Add((h[i].est - h[i - 1].est) / dt);
+        }
+        if (s.Count < 3) return null;
+        s.Sort();
+        return s[s.Count / 2];
     }
 
     /// <summary>사람이 눈금을 직접 봤다 — 계기와 견준다.</summary>

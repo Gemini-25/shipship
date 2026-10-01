@@ -73,7 +73,7 @@ public sealed class CrisisPlan
 public sealed class ShipPlanner
 {
     private readonly World _w;
-    private long _next, _sigNext;
+    private long _next, _sigNext, _dirtyAt;
     private int _sig;
     private bool _dirty, _wasDown;
     private string _cause = "";
@@ -115,9 +115,10 @@ public sealed class ShipPlanner
         {
             _sigNext = w.Tick + SimTime.Minutes(15);
             int sig = Signature(out string cause);
-            if (sig != _sig) { if (_sig != 0 && cause != "") { _dirty = true; _cause = cause; } _sig = sig; }
+            // 바뀐 걸 알면 한 틱 뒤에 다시 세운다 (설비가 멈춘 뒤의 흐름을 읽도록)
+            if (sig != _sig) { if (_sig != 0 && cause != "") { _dirty = true; _cause = cause; _dirtyAt = w.Tick + World.SystemInterval; } _sig = sig; }
         }
-        if (!_dirty && w.Tick < _next) return;
+        if (_dirty ? w.Tick < _dirtyAt : w.Tick < _next) return;
         _next = w.Tick + SimTime.Hours(a.Load > 0.95f ? 4f : 2f); // 연산이 넘치면 계획을 덜 자주 (부하 ↔ 계획)
         string why = _dirty ? _cause : "";
         _dirty = false;
@@ -173,7 +174,7 @@ public sealed class ShipPlanner
             if (plan == null) { plan = new ResourcePlan { Key = m.Key, Name = m.Name, Since = w.Tick }; Plans.Add(plan); }
             string mode = ModeOf(f);
             // 확신이 아주 낮으면 대책 대신 주의 (계기를 먼저 맞춘다)
-            if (mode is "대책" && f.Confidence < 0.2f) mode = "주의";
+            if (mode is "대책" && f.Confidence < 0.2f || Rank(mode) >= 2 && f.History.Count < 3) mode = "주의"; // 잰 지 얼마 안 됐다
             if (mode != plan.Mode)
             {
                 string why = (cause != "" ? cause + " — " : "") + f.Line;
@@ -224,14 +225,20 @@ public sealed class ShipPlanner
             case "o2": o.Add("산소 점검"); break;
             case "power": o.Add("절전"); break;
             case "materials":
+                if (canTrip && w.Expedition.Low(MatCat.Repair)) o.Add("원정");
+                break;
             case "propellant":
-                if (canTrip) o.Add("원정");
+                if (canTrip && w.Expedition.Low(MatCat.Fuel)) o.Add("원정");
                 break;
         }
         return o;
     }
 
-    public static bool Council(string option) => option is "원정" or "엄격 절수";
+    /// <summary>모두의 생활에 걸린 대책 (권한이 제안이면 회의에 올린다).</summary>
+    public static bool Everyone(string option) => option is "원정" or "엄격 절수" or "절수" or "배급";
+
+    /// <summary>바로 다시 세운다 (시험 · 큰 변화).</summary>
+    public void Force(string why) { _dirty = true; _cause = why; _dirtyAt = 0; }
 
     private OptionStat Stat(string situation, string option)
     {
@@ -335,11 +342,11 @@ public sealed class ShipPlanner
                 var graded = a.Outlook.Warnings.Count(x => x.Score != 0);
                 var past = w.History.Events.LastOrDefault(e => e.Text.Contains(m.Name) && (e.Text.Contains("바닥") || e.Text.Contains("부족") || e.Text.Contains("모자")));
                 string story = past != null ? $"{SimTime.Day(past.Tick)}일에 겪었다 — \"{(past.Text.Length > 30 ? past.Text[..30] + "…" : past.Text)}\"" :
-                    m.Key == "water" ? "다른 배 기록: 물이 바닥나면 이틀 안에 탈수 · 재배대가 마른다" : $"다른 배 기록: {m.Name}이(가) 바닥나면 손쓸 틈이 없다";
+                    m.Key == "water" ? "다른 배 기록: 물이 바닥나면 이틀 안에 탈수 · 재배대가 마른다" : $"다른 배 기록: {Ko.IGa(m.Name)} 바닥나면 손쓸 틈이 없다";
                 return $"{story} · 지난 예측 {hits}/{Math.Max(graded, hits)} 맞힘 · 지금 {f.Line}";
             }
             case "대안":
-                return $"{(last != null ? $"{last.Option}이(가) 싫다면 " : "")}{option} — 위험 없이 {Effect(m.Key, option, f)} · {f.Line}";
+                return $"{(last != null ? $"{Ko.IGa(last.Option)} 싫다면 " : "")}{option} — 위험 없이 {Effect(m.Key, option, f)} · {f.Line}";
             case "가치":
             {
                 var values = last?.Objectors.Select(o => w.Crew.FirstOrDefault(c => c.Id == o.id)).Where(c => c != null).GroupBy(c => c!.Value).OrderByDescending(g => g.Count()).Select(g => g.Key).ToList() ?? new();
@@ -352,7 +359,7 @@ public sealed class ShipPlanner
                     CrewValue.Rules => "방침에 있는 대로 '아낀다'만 — 절차대로",
                     _ => $"원정보다 싸다 — {Effect(m.Key, option, f)}",
                 };
-                return $"{MeetingSystem.ValueName(v)}을(를) 아끼는 분들께: {pitch} · {f.Line}";
+                return $"{Ko.EulReul(MeetingSystem.ValueName(v))} 아끼는 분들께: {pitch} · {f.Line}";
             }
             default:
                 return $"{f.Line} · {f.Basis}";
@@ -365,7 +372,12 @@ public sealed class ShipPlanner
         var a = w.Automation;
         var dom = Domain.Resources;
         var level = a.Authority.Level(dom);
-        string via = Council(option) ? "회의" : level switch { AuthLevel.Auto => "자동", AuthLevel.Propose => "함장", _ => "조언" };
+        // 권한 안에서만: 조언만 → 말만 · 원정은 늘 회의 · 자동 실행이면 직접 (엄격한 절수는 위기일 때만) · 아니면 모두에게 걸린 일은 회의(시간이 있으면) · 급하면 함장
+        bool crisis = ModeOf(f) == "위기";
+        string via = level == AuthLevel.Advise ? "조언"
+            : option == "원정" ? "회의"
+            : level == AuthLevel.Auto && (option != "엄격 절수" || crisis) ? "자동"
+            : !crisis && Everyone(option) ? "회의" : "함장";
         float trueDays = m.True(w) <= f.Short ? 0f : m.Flow(w) < -1e-4f ? (m.True(w) - f.Short) / -m.Flow(w) / 24f : 99f;
         var p = new Pitch
         {
@@ -384,7 +396,7 @@ public sealed class ShipPlanner
                 plan.Action = $"{title} — 다음 회의 안건 ({attempt}번째 · {arg})";
                 plan.Status = "안건";
                 a.Book.Add(ActKind.Proposal, null, f.Line, p.Basis, $"회의 안건: {title}", "회의에서 정해 달라", "brain:motion:" + p.Id, 0, 60f * 24f, (world, act) => p.Open ? null : (2, $"회의 — {p.State}"));
-                a.Speak.Announce(a.Authority.Say($"{title}을(를) 다음 회의에 올린다 — {p.Basis}", f.Confidence), null, 1);
+                a.Speak.Announce(a.Authority.Say($"{Ko.EulReul(title)} 다음 회의에 올린다 — {p.Basis}", f.Confidence), null, 1);
                 break;
             case "자동":
                 Applied++;
@@ -505,7 +517,7 @@ public sealed class ShipPlanner
         var m = ShipForecast.Models.First(x => x.Key == p.Key);
         var plan = PlanOf(p.Key)!;
         var f = w.Automation.Outlook.Get(p.Key);
-        if (f != null) Apply(plan, m, f, p.Option, p, $"{by}이(가) 받았다");
+        if (f != null) Apply(plan, m, f, p.Option, p, $"{Ko.IGa(by)} 받았다");
     }
 
     /// <summary>회의 결과 (ComputerAuthority.Agenda).</summary>
@@ -541,7 +553,7 @@ public sealed class ShipPlanner
         plan.Action = $"{Title(m, p.Option)} — {how} · 근거를 바꿔 다시 ({p.Attempt}/{MaxAttempts})";
         _cool[p.Key] = w.Tick + SimTime.Hours(p.Via == "회의" ? 1f : 3f);
         w.Log.Add(w.Tick, LogKind.Ship, $"{a.Voice.Call}: {Title(m, p.Option)} — {how}. 받아들인다 · 반대한 까닭을 듣고 다시 생각한다");
-        if (st.Rejected == 2 && st.Accepted == 0) a.Authority.Learned("협상", $"{m.Name} 부족엔 \"{p.Option}\"이(가) 잘 안 받아들여진다 — 다음엔 다른 대책부터");
+        if (st.Rejected == 2 && st.Accepted == 0) a.Authority.Learned("협상", $"{m.Name} 부족엔 \"{p.Option}\" 대책이 잘 안 받아들여진다 — 다음엔 다른 대책부터");
         foreach (var (id, why) in p.Objectors.Take(4)) if (w.Crew.FirstOrDefault(c => c.Id == id) is CrewMember c && !c.Dead) Explain(c, p, m, why);
     }
 
@@ -551,7 +563,8 @@ public sealed class ShipPlanner
         var w = _w;
         var a = w.Automation;
         var f = a.Outlook.Get(m.Key);
-        string text = $"{c.Name}님 — \"{why}\" 맞는 말이다. {Title(m, p.Option)}은(는) 거두겠다. 다만 {f?.Line ?? $"{m.Name}이(가) 모자라다"}. 다른 방법을 다시 가져오겠다";
+        why = why.StartsWith("거절 — ") ? why[5..] : why;
+        string text = $"{c.Name}님 — \"{why}\" 맞는 말이다. {Ko.EunNeun(Title(m, p.Option))} 거두겠다. 다만 {f?.Line ?? $"{Ko.IGa(m.Name)} 모자라다"}. 다른 방법을 다시 가져오겠다";
         a.Apps.Messages.Add(new PersonalMessage(w.Tick, c.Id, "설명", text));
         var prof = a.CrewModel.Of(c);
         prof.Explained++;
@@ -576,7 +589,7 @@ public sealed class ShipPlanner
             p.DecidedAt = w.Tick;
             if (w.Crew.FirstOrDefault(c => c.Name == pr.DecidedBy) is CrewMember boss) p.Objectors.Add((boss.Id, pr.DecideWhy));
             var m = ShipForecast.Models.First(x => x.Key == p.Key);
-            Rejected(p, PlanOf(p.Key)!, m, $"{pr.DecidedBy}이(가) 거절했다");
+            Rejected(p, PlanOf(p.Key)!, m, $"{Ko.IGa(pr.DecidedBy)} 거절했다");
         }
     }
 
@@ -604,7 +617,7 @@ public sealed class ShipPlanner
             bool stuck = g != null && a.Belief.Of(g).Fault == SensorFault.Stuck;
             string cause = stuck ? $"{g!.Name} 계기 값이 멈춰 있었다" : a.Outlook.Ledger(p.Key).Disagree > 0 ? $"{g?.Name ?? "배"} 계기가 틀어져 있었다" : "예측이 틀렸다";
             var plan = PlanOf(p.Key);
-            a.Authority.Admit("act:" + p.Id, Domain.Resources, $"{Title(m, p.Option)}을(를) 괜히 했다 — 실제로는 {m.Name}이(가) {p.TrueDays:0.#}일 치 있었다 (믿은 값 {p.BelievedDays:0.#}일)", cause,
+            a.Authority.Admit("act:" + p.Id, Domain.Resources, $"{Ko.EulReul(Title(m, p.Option))} 괜히 했다 — 실제로는 {Ko.IGa(m.Name)} {p.TrueDays:0.#}일 치 있었다 (믿은 값 {p.BelievedDays:0.#}일)", cause,
                 stuck ? "그 방 계기를 사람이 확인하게 하고, 방침을 되돌린다" : "방침을 되돌리고 계기를 다시 맞춘다", w.Crew.Where(c => !c.Dead && !c.IsChild),
                 () =>
                 {

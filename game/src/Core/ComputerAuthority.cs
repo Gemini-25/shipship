@@ -97,7 +97,7 @@ public sealed class ComputerAuthority
         if (to > from) Granted++; else Revoked++;
         w.History.Add(w, HistoryKind.Decision, $"주 컴퓨터 권한 — {DomainName(d)}: {LevelName(from)} → {LevelName(to)} ({why})", null, log: true);
         var a = w.Automation;
-        a.Speak.Announce(Say(to > from ? $"{DomainName(d)} 권한을 받았다 — 이제 {LevelName(to)}. 결과로 보여 드리겠다" : $"{DomainName(d)} 권한이 {LevelName(to)}(으)로 줄었다 — 회의 결정을 따른다"), null, 0);
+        a.Speak.Announce(Say(to > from ? $"{DomainName(d)} 권한을 받았다 — 이제 {LevelName(to)}. 결과로 보여 드리겠다" : $"{DomainName(d)} 권한이 {Ko.EuRo(LevelName(to))} 줄었다 — 회의 결정을 따른다"), null, 0);
         Learned("권한", $"{DomainName(d)} {LevelName(from)} → {LevelName(to)} — {why}");
     }
 
@@ -147,7 +147,7 @@ public sealed class ComputerAuthority
         {
             var v = _w.Automation.Voice;
             string mood = Humility > 0.45f ? "겸손 — 실수를 기억한다" : Humility > 0.2f ? "조심스러움" : Confidence > 0.8f ? "자신 있음" : "차분함";
-            return $"{mood}" + (v.Tone != "" ? $" · 배 문화 '{v.Tone}'를 닮음" : "") + (v.Name != "" ? $" · '{v.Name}'(이)라 불림" : "");
+            return $"{mood}" + (v.Tone != "" ? $" · 배 문화 '{v.Tone}' 중시를 닮음" : "") + (v.Name != "" ? $" · '{v.Name}'(이)라 불림" : "");
         }
     }
 

@@ -133,7 +133,7 @@ public sealed class CrewModelBook
             if (_asks.TryGetValue(c.Id, out var ask))
             {
                 if (c.Job?.Order?.Id == ask.OrderId) { p.Followed++; Followed++; _asks.Remove(c.Id); }
-                else if (w.Tick > ask.Until) { p.Ignored++; _asks.Remove(c.Id); if (p.Ignored == 3) a.Authority.Learned("사람", $"{c.Name}은(는) 컴퓨터 부탁을 잘 안 듣는다 ({p.Followed}/{p.Followed + p.Ignored})"); }
+                else if (w.Tick > ask.Until) { p.Ignored++; _asks.Remove(c.Id); if (p.Ignored == 3) a.Authority.Learned("사람", $"{Ko.EunNeun(c.Name)} 컴퓨터 부탁을 잘 안 듣는다 ({p.Followed}/{p.Followed + p.Ignored})"); }
             }
         }
     }
@@ -180,7 +180,7 @@ public sealed class CrewModelBook
             if (heard) { p.Grumbles[duty] = p.Grumbles.GetValueOrDefault(duty) + 1; p.Aversion[duty] = before + 0.4f * (0.95f - before); }
         }
         else if (heard) p.Aversion[duty] = before + 0.12f * (0.15f - before);
-        if (before < 0.6f && p.Aversion0(duty) >= 0.6f) a.Authority.Learned("사람", $"{c.Name}은(는) {duty}를 싫어한다 — 투덜댐 {p.Grumbles.GetValueOrDefault(duty)}번");
+        if (before < 0.6f && p.Aversion0(duty) >= 0.6f) a.Authority.Learned("사람", $"{Ko.EunNeun(c.Name)} {Ko.EulReul(duty)} 싫어한다 — 투덜댐 {p.Grumbles.GetValueOrDefault(duty)}번");
     }
 
     /// <summary>이 일을 가장 잘 할 사람 (솜씨 짐작 · 기력 · 싫어함 — 지친 사람은 빼고).</summary>

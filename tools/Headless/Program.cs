@@ -157,6 +157,7 @@ public static partial class Program
         if (args.Contains("--hazard70test")) return RunHazard70Test(seed); // v15 사고 70
         if (args.Contains("--catalogtest")) return RunCatalogTest(seed); // v15 고장·물자 70
         if (args.Contains("--moduletest")) return RunModuleTest(seed); // v15 설비 70
+        if (args.Contains("--computerbraintest")) return RunComputerBrainTest(seed); // v16.16
         if (args.Contains("--cosmictest")) return RunCosmicTest(seed); // v18.13 우주 대재난
         if (args.Contains("--evatest")) return RunEvaTest(seed); // v16.11
         if (args.Contains("--expeditiontest")) return RunExpeditionTest(seed); // v16.12
