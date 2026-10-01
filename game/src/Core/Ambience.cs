@@ -173,6 +173,7 @@ public sealed class AmbienceSystem
         float f = 1f - 0.4f * room.Noise - 0.3f * room.Vibration - 0.2f * room.Smell;
         if (room.Kind is RoomType.QuietQuarters or RoomType.PrivateCabins or RoomType.WaterWallCabin) f += 0.08f;
         f += ModulesV15.SleepAdd(room); // v15 암막 커튼 · 방음재 · 백색 소음기
+        f += Props.SleepAdd(room); // v15.8 베개 · 수면등 · 모빌 …
         return Math.Clamp(f, 0.45f, 1.25f);
     }
 
@@ -191,7 +192,8 @@ public sealed class AmbienceSystem
         RoomType.Theater or RoomType.Chapel or RoomType.Meditation => 1.25f,
         RoomType.Gym or RoomType.Centrifuge => 1.1f,
         _ => 1f,
-    } * (room == null ? 1f : 1f - 0.3f * room.Noise - 0.3f * room.Smell) * ModulesV15.RelaxMul(room); // v15 커피 머신 · 영사기 · 수조 …
+    } * (room == null ? 1f : 1f - 0.3f * room.Noise - 0.3f * room.Smell) * ModulesV15.RelaxMul(room) // v15 커피 머신 · 영사기 · 수조 …
+      * Props.RelaxMul(room); // v15.8 화분 · 러그 · 액자 …
 
     /// <summary>작물 성장 — 진동과 방사선이 깎는다.</summary>
     public static float CropFactor(Room room) => Math.Clamp(1f - 0.3f * room.Vibration - 0.6f * room.Radiation, 0.3f, 1f);
