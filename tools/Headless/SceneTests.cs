@@ -235,7 +235,7 @@ public static partial class Program
 
             // 5) 몽유병: 잠결에 복도로 → 당직이 발견 → 침대로 (본인은 아침에 들어서 안다)
             //    경보가 울려 혼자 깨면 다음 밤에 다시 (경보는 장면을 끊는다 — 그건 규칙대로다)
-            (World w, CrewMember c, DailyScene s, bool walked, bool knewBefore, bool home)? Walk(bool computer)
+            (World w, CrewMember c, DailyScene s, bool walked, bool knewBefore, bool home, int heard0)? Walk(bool computer)
             {
                 var w = DayOne(seed, "Hanbit");
                 for (int night = 0; night < 3; night++)
@@ -245,6 +245,7 @@ public static partial class Program
                         && (c = w.Crew.Where(x => !x.Dead && !x.IsChild && x.Pose == Pose.Sleeping && x.Bed != null && !w.Society.OnNightWatch(x) && !w.Scenes.Busy(x)).OrderBy(x => x.Id).FirstOrDefault()) != null, 30f, 150);
                     if (c == null) return null;
                     c.Needs.Stress = 0.7f;
+                    int heard0 = c.Diary.Count(d => d.text.Contains("걸어 나왔단다")); // 전에 들은 몽유병 이야기 (이번 일과 따로 센다)
                     var s = w.Scenes.OpenSleepwalk(c)!;
                     if (computer)
                     {
@@ -261,10 +262,10 @@ public static partial class Program
                         watch.NextThinkTick = w.Tick + SimTime.Hours(1);
                     }
                     bool walked = ScUntil(w, () => c.Cell == s.Spot || !s.Open, 1f);
-                    bool knewBefore = c.Diary.Any(d => d.text.Contains("걸어 나왔단다"));
+                    bool knewBefore = c.Diary.Count(d => d.text.Contains("걸어 나왔단다")) > heard0;
                     bool home = ScUntil(w, () => !s.Open, 2.5f);
                     if (s.Trail.Any(t => t.Contains("경보"))) { Run(w, SimTime.Hours(12)); continue; }
-                    return (w, c, s, walked, knewBefore, home);
+                    return (w, c, s, walked, knewBefore, home, heard0);
                 }
                 return null;
             }
@@ -273,14 +274,15 @@ public static partial class Program
                 if (r is not { } rv) { Check("몽유병 — 장면이 열린다", false, "잠든 사람이 없거나 사흘 밤 내내 경보"); }
                 else
                 {
-                    var (w, c, s, walked, knewBefore, home) = rv;
+                    var (w, c, s, walked, knewBefore, home, heard0) = rv;
                     var esc = w.Crew.FirstOrDefault(x => x.Id == s.Other);
                     var bed = c.Bed ?? c.HomeBed;
                     bool atBed = bed != null && (c.Position - bed.Center).LengthSquared() < 9f;
                     Check("몽유병 — 잠결에 복도로 걸어 나오고, 깨어 있던 사람(당직)이 찾아 침대로 데려간다", walked && home && esc != null && atBed && w.Scenes.Stats.Escorts >= 1 && !knewBefore,
                         $"{c.Name} · 복도 {walked} · 찾은 사람 {esc?.Name}({(esc != null && w.Society.OnNightWatch(esc) ? "야간 당직" : "깨어 있던 사람")}) · 침대 곁 {atBed} · {string.Join(" / ", s.Trail.TakeLast(3))}");
+                    c.Needs.Stress = 0.2f; // 다음 밤에 또 걷지 않게 (이번 일만 센다)
                     ScUntil(w, () => s.Told, 20f, 300);
-                    bool knows = c.Diary.Any(d => d.text.Contains("걸어 나왔단다"));
+                    bool knows = c.Diary.Count(d => d.text.Contains("걸어 나왔단다")) > heard0;
                     Check("세계 ≠ 아는 것 — 본인은 데려다준 사람이 말해 줘야 안다", !s.Told && !knows || s.Told && knows,
                         s.Told ? $"{esc?.Name}에게 들었다: {c.Diary.LastOrDefault(d => d.text.Contains("걸어")).text}" : "아직 못 들었다 (모른다)");
                 }
@@ -291,7 +293,7 @@ public static partial class Program
                 if (r is not { } rv) { Check("주 컴퓨터 — 몽유병 장면이 열린다", false, "잠든 사람이 없거나 사흘 밤 내내 경보"); }
                 else
                 {
-                    var (w, c, s, walked, _, home) = rv;
+                    var (w, c, s, walked, _, home, _) = rv;
                     var act = w.Automation.Book.Acts.FirstOrDefault(a => a.Key == "sw:" + s.Id);
                     var esc = w.Crew.FirstOrDefault(x => x.Id == s.Other);
                     Run(w, SimTime.Hours(2));
@@ -329,10 +331,10 @@ public static partial class Program
                 }
 
                 {
-                    var (w, a, b, m, t) = Setup(false);
-                    bool handed = ScUntil(w, () => w.Scenes.Handoffs.Any(h => h.From == a.Id), 1f);
-                    var h = w.Scenes.Handoffs.FirstOrDefault(x => x.From == a.Id);
-                    var memo = w.Scenes.Notes.FirstOrDefault(n => n.Kind == NoteKind.Memo && n.Author == a.Id);
+                    var (w, a, b, m, t) = Setup(false); long t0 = w.Tick;
+                    bool handed = ScUntil(w, () => w.Scenes.Handoffs.Any(h => h.From == a.Id && h.Tick >= t0), 1f);
+                    var h = w.Scenes.Handoffs.FirstOrDefault(x => x.From == a.Id && x.Tick >= t0);
+                    var memo = w.Scenes.Notes.FirstOrDefault(n => n.Kind == NoteKind.Memo && n.Author == a.Id && n.Written >= t0);
                     bool checkedIt = ScUntil(w, () => w.Scenes.Concerns.Any(k => k.Who == b.Id && k.Machine == m && k.Checked), 5f);
                     var kb = w.Scenes.Concerns.FirstOrDefault(k => k.Who == b.Id && k.Machine == m);
                     Check("인수인계 — 근무가 끝나며 \"펌프 소리 이상\"을 넘기고(메모 · 말), 다음 근무자가 확인하러 가서 찾는다",
@@ -343,11 +345,11 @@ public static partial class Program
                 }
                 {
                     // 불 — 아직 못 읽은 인수인계 메모가 타면 다음 근무자는 모른다
-                    var (w, a, b, m, t) = Setup(false);
+                    var (w, a, b, m, t) = Setup(false); long t0 = w.Tick;
                     w.Scenes.ForceOmit = false;
-                    ScUntil(w, () => w.Scenes.Handoffs.Any(h => h.From == a.Id), 1f, 5);
-                    var h = w.Scenes.Handoffs.FirstOrDefault(x => x.From == a.Id);
-                    var memo = w.Scenes.Notes.FirstOrDefault(n => n.Kind == NoteKind.Memo && n.Author == a.Id);
+                    ScUntil(w, () => w.Scenes.Handoffs.Any(h => h.From == a.Id && h.Tick >= t0), 1f, 5);
+                    var h = w.Scenes.Handoffs.FirstOrDefault(x => x.From == a.Id && x.Tick >= t0);
+                    var memo = w.Scenes.Notes.FirstOrDefault(n => n.Kind == NoteKind.Memo && n.Author == a.Id && n.Written >= t0);
                     if (memo != null && !h!.Verbal && !memo.Readers.Contains(b.Id))
                     {
                         w.Fire.Ignite(memo.At, 0.9f);
@@ -363,14 +365,14 @@ public static partial class Program
                 }
                 {
                     // 주 컴퓨터: 받을 사람이 근무를 시작하고도 메모를 안 열면 단말로 알린다 → 게시판으로 가서 읽고 확인하러 간다
-                    var (w, a, b, m, t) = Setup(false);
+                    var (w, a, b, m, t) = Setup(false); long t0 = w.Tick;
                     var board = w.Scenes.DutyBoard();
                     var far = w.Ship.LiveRooms.Where(r => r.Type != RoomType.Corridor && !r.OffLimits && r.Id != board?.room.Id).SelectMany(r => r.Cells)
                         .Where(x => w.Ship.IsWalkable(x) && w.Ship.FurnitureAt(x) == null).OrderByDescending(x => board == null ? 0 : Math.Abs(x.X - board.Value.at.X) + Math.Abs(x.Y - board.Value.at.Y)).ThenBy(x => x.Y).ThenBy(x => x.X).First();
                     Stay(w, b, far, Pose.Working); // 근무 시작 무렵 먼 곳에서 일에 붙들려 있다
                     b.NextThinkTick = w.Tick + SimTime.Minutes(70);
-                    ScUntil(w, () => w.Scenes.Handoffs.Any(h => h.From == a.Id), 1f, 5);
-                    var memo = w.Scenes.Notes.FirstOrDefault(n => n.Kind == NoteKind.Memo && n.Author == a.Id);
+                    ScUntil(w, () => w.Scenes.Handoffs.Any(h => h.From == a.Id && h.Tick >= t0), 1f, 5);
+                    var memo = w.Scenes.Notes.FirstOrDefault(n => n.Kind == NoteKind.Memo && n.Author == a.Id && n.Written >= t0);
                     ComputerAct? act = null;
                     bool pinged = memo != null && ScUntil(w, () => (act = w.Automation.Book.Acts.FirstOrDefault(x => x.Key == "memo:" + memo.Id)) != null, 2f);
                     bool read = memo != null && ScUntil(w, () => memo.Readers.Contains(b.Id), 3f);
@@ -380,12 +382,12 @@ public static partial class Program
                         memo == null ? "메모 없이 말로 넘김" : $"[{act?.Observe} | {act?.Act} | {act?.Request}] → {act?.Result} · {b.Name} 읽음 {read} · {w.Automation.Apps.Messages.LastOrDefault(x => x.CrewId == b.Id)?.Text}");
                 }
                 {
-                    var (w, a, b, m, t) = Setup(true);
-                    ScUntil(w, () => w.Scenes.Handoffs.Any(h => h.From == a.Id), 1f);
-                    var h = w.Scenes.Handoffs.FirstOrDefault(x => x.From == a.Id);
+                    var (w, a, b, m, t) = Setup(true); long t0 = w.Tick;
+                    ScUntil(w, () => w.Scenes.Handoffs.Any(h => h.From == a.Id && h.Tick >= t0), 1f);
+                    var h = w.Scenes.Handoffs.FirstOrDefault(x => x.From == a.Id && x.Tick >= t0);
                     Run(w, SimTime.Hours(5));
                     bool bKnows = w.Scenes.Concerns.Any(k => k.Who == b.Id && k.Machine == m);
-                    Check("빠뜨리면 — 다음 근무자는 모르고, 확인하러 가지 않는다", h != null && h.Dropped.Count >= 1 && h.Told.Count == 0 && !bKnows && w.Scenes.Stats.Checks == 0,
+                    Check("빠뜨리면 — 다음 근무자는 모르고, 확인하러 가지 않는다", h != null && h.Dropped.Count >= 1 && h.Told.Count == 0 && !bKnows && !w.Scenes.Concerns.Any(k => k.Who == b.Id && k.Machine == m && k.Checked),
                         $"{a.Name}: 빠뜨림 {string.Join(" · ", h?.Dropped ?? new())} ({h?.Why}) · {b.Name} 앎 {bKnows} · 확인 {w.Scenes.Stats.Checks}");
                 }
             }

@@ -83,8 +83,9 @@ public sealed class DailyScene
     /// <summary>간식: 남이 둔 것이었다 · 본 사람.</summary>
     public int Victim { get; set; } = -1;
     public int Witness { get; set; } = -1;
-    /// <summary>몽유병: 당직이 아침에 말해 줬다.</summary>
+    /// <summary>몽유병: 당직이 아침에 말해 줬다 · 개인 비서(주 컴퓨터)가 감지 기록을 알려 줬다.</summary>
     public bool Told { get; set; }
+    public bool PcTold { get; set; }
     public float Hours { get; set; } = 1f;
     /// <summary>연 사람이 자리에 온 때 · 끝까지 함께한 사람 수.</summary>
     public long Since { get; set; } = -1;
@@ -1948,13 +1949,22 @@ public sealed class DailySceneSystem
             var c = CrewOf(s.Host);
             var e = CrewOf(s.Other);
             if (c == null || e == null || c.Dead || e.Dead || w.Tick - s.Closed > SimTime.TicksPerDay) { s.Told = true; continue; }
+            // 개인 비서가 아침에 감지 기록을 알려 주기도 한다 — 컴퓨터가 본 것(복도 감지)만, 누가 데려갔는지는 호출 기록으로
+            if (s.ComputerAct >= 0 && !s.PcTold && c.IsAwake && hour >= 6f && w.Automation.MainOnline && w.Automation.Active(ComputerModule.Assistant))
+            {
+                s.PcTold = true;
+                Msg(c, $"어젯밤 {RoomById(s.RoomId)?.Name ?? "복도"}에서 잠결 걸음이 감지됐습니다 — {e.Name}님을 호출했습니다");
+                Diary(c, $"개인 비서 기록을 보니 어젯밤 복도에서 잠결 걸음이 잡혔단다. 기억이 하나도 없다");
+                c.Needs.Stress = MathF.Min(1f, c.Needs.Stress + 0.02f);
+            }
             if (!c.IsAwake || !e.IsAwake || c.Room != e.Room) continue;
             s.Told = true;
             bool joke = Life.Has(e, Habit.Joker) || Life.Has(e, Habit.Prankster);
             Say(e, joke ? "어젯밤 복도에서 산책하던데?" : "어젯밤에 자다가 걸어 나왔었어");
-            Diary(c, $"내가 어젯밤 자다가 복도까지 걸어 나왔단다. {Ko.IGa(e.Name)} 침대로 데려다줬다고" + (joke ? " — 아침 내내 놀렸다" : ""));
-            _w.Relations.Remember(c, e, RelationReason.Comforted, "잠결에 복도를 걷던 나를 침대로 데려다줬다");
-            c.ChangeAffinity(e, joke ? 0.01f : 0.04f);
+            // 팔을 잡고 데려다줬을 때만 고마워한다 (보기만 했으면 들은 것만 안다)
+            Diary(c, $"내가 어젯밤 자다가 복도까지 걸어 나왔단다. " + (s.Holding ? $"{Ko.IGa(e.Name)} 침대로 데려다줬다고" : $"{Ko.IGa(e.Name)} 봤다고") + (joke ? " — 아침 내내 놀렸다" : ""));
+            if (s.Holding) _w.Relations.Remember(c, e, RelationReason.Comforted, "잠결에 복도를 걷던 나를 침대로 데려다줬다");
+            c.ChangeAffinity(e, joke ? 0.01f : s.Holding ? 0.04f : 0.01f);
             if (joke) c.Needs.Stress = MathF.Min(1f, c.Needs.Stress + 0.02f);
         }
         // 영화 소리에 옆방에서 자던 사람이 잠을 설친다 → 따지러 오면 소리를 줄인다
