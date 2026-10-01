@@ -42,6 +42,9 @@ public static class Settings
     /// <summary>v12.2 하이라이트 모드에서 카메라가 사고 현장으로 가고, 결정적인 순간엔 느리게.</summary>
     public static bool AutoCamera { get; set; } = true;
 
+    /// <summary>v16.2 화면 UI를 전부 띄운다 (끄면 조용한 HUD — 이상이 생긴 것만 떠오른다).</summary>
+    public static bool ShowAllHud { get; set; }
+
     /// <summary>v10.7: 새 항해의 배 ("auto"면 인원에 맞는 배).</summary>
     public static string Ship { get; set; } = "auto";
 
@@ -86,6 +89,7 @@ public static class Settings
         Highlight = cfg.GetValue("play", "highlight", Highlight).AsBool();
         Tutorial = cfg.GetValue("play", "tutorial", Tutorial).AsBool();
         AutoCamera = cfg.GetValue("play", "auto_camera", AutoCamera).AsBool();
+        ShowAllHud = cfg.GetValue("ui", "show_all", ShowAllHud).AsBool(); // v16.2
     }
 
     public static void Save()
@@ -103,6 +107,7 @@ public static class Settings
         cfg.SetValue("play", "highlight", Highlight);
         cfg.SetValue("play", "tutorial", Tutorial);
         cfg.SetValue("play", "auto_camera", AutoCamera);
+        cfg.SetValue("ui", "show_all", ShowAllHud); // v16.2
         cfg.Save(Path);
     }
 }
@@ -200,6 +205,7 @@ public partial class OptionsPanel : PanelContainer
         box.AddChild(Check("승무원이 죽을 수 있다 (새 항해부터)", Settings.Death, on => Settings.Death = on)); // v12.0
         box.AddChild(Check("하이라이트 모드: 평온하면 빠르게, 사고가 나면 1배속 (L)", Settings.Highlight, on => Settings.Highlight = on)); // v12.2
         box.AddChild(Check("하이라이트 모드에서 카메라가 사고 현장으로 · 결정적 순간 슬로모션", Settings.AutoCamera, on => Settings.AutoCamera = on));
+        box.AddChild(Check("화면 UI 전부 보기 (끄면 조용한 HUD — 이상이 생긴 것만 떠오른다)", Settings.ShowAllHud, on => Settings.ShowAllHud = on)); // v16.2
         var voyage = new HBoxContainer();
         voyage.AddThemeConstantOverride("separation", 8);
         var same = new Button { Text = "같은 시드로 새 항해" };

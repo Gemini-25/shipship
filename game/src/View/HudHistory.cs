@@ -71,32 +71,7 @@ public partial class Hud
     };
 
     /// <summary>글자를 폭에 맞춰 여러 줄로 (공백 기준, 너무 긴 낱말은 글자 단위).</summary>
-    private static List<string> Wrap(string text, Font font, int size, float width, int maxLines = 4)
-    {
-        var lines = new List<string>();
-        var line = "";
-        foreach (var word in text.Split(' '))
-        {
-            string next = line.Length == 0 ? word : line + " " + word;
-            if (Gfx.Width(font, next, size) <= width) { line = next; continue; }
-            if (line.Length > 0) lines.Add(line);
-            line = word;
-            while (Gfx.Width(font, line, size) > width && line.Length > 2)
-            {
-                int cut = line.Length - 1;
-                while (cut > 1 && Gfx.Width(font, line[..cut], size) > width) cut--;
-                lines.Add(line[..cut]);
-                line = line[cut..];
-            }
-        }
-        if (line.Length > 0) lines.Add(line);
-        if (lines.Count > maxLines)
-        {
-            lines = lines.Take(maxLines).ToList();
-            lines[^1] = lines[^1].TrimEnd() + "…";
-        }
-        return lines;
-    }
+    private static List<string> Wrap(string text, Font font, int size, float width, int maxLines = 4) => UiKit.Wrap(text, width, size, font, maxLines); // v16.2 공통 부품
 
     // ─────────────────────────── 연대기 화면 ───────────────────────────
 

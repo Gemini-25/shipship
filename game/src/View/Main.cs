@@ -471,6 +471,7 @@ public partial class Main : Node2D
                 case Key.Bracketleft: CycleEpisode(-1); break;
                 case Key.Bracketright: CycleEpisode(1); break;
                 case Key.R: RewindToEvent(); break;
+                case Key.Slash or Key.Question or Key.F1: Hud.ToggleHelp(); break; // v16.2 ? 도움말
                 default: return;
             }
             GetViewport().SetInputAsHandled();
@@ -728,6 +729,7 @@ public partial class Main : Node2D
                 case "--options":
                     Options.Toggle();
                     break;
+                case "--hud": Settings.ShowAllHud = value == "all"; if (value == "help") Hud.HelpOpen = true; break; // v16.2 화면 시험: --hud=all | quiet | help
                 case "--episode":
                     for (int k = 0; k < int.Parse(value, CultureInfo.InvariantCulture); k++) CycleEpisode(1);
                     break;

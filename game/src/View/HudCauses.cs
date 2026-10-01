@@ -122,12 +122,7 @@ public partial class Hud
         }
     }
 
-    private static string Fit(string text, float width, int size, Font font)
-    {
-        if (Gfx.Width(font, text, size) <= width) return text;
-        while (text.Length > 2 && Gfx.Width(font, text + "…", size) > width) text = text[..^1];
-        return text + "…";
-    }
+    private static string Fit(string text, float width, int size, Font font) => UiKit.Fit(text, width, size, font); // v16.2 공통 부품
 
     /// <summary>그 점이 사슬 패널 오른쪽 빈 곳 가운데에 오게 카메라를 옮긴다.</summary>
     private void FocusAt(System.Numerics.Vector2 at)

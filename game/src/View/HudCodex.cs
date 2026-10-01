@@ -17,7 +17,7 @@ public partial class Hud
     private void CodexButton(float right, float y, Vector2 mouse) =>
         Button(new Rect2(right - 74, y, 74, 20), CodexMode ? "← 상태" : "? 설명서", CodexMode, mouse, ToggleCodex, 11);
 
-    private void DrawCodex(string title, string sub, Color accent, CodexEntry entry, List<(string, string, Color)> links, List<string> past, float y, float maxHeight, Vector2 mouse)
+    private void DrawCodex(string title, string sub, Color accent, CodexEntry entry, List<(string, string, Color)> links, List<string> past, float y, float maxHeight, Vector2 mouse, string? icon = null)
     {
         float x0 = Screen.X - Margin - RightColumnWidth;
         float width = RightColumnWidth - 36;
@@ -32,7 +32,8 @@ public partial class Hud
         var card = new Rect2(x0, y, RightColumnWidth, height);
         Card(card);
         float x = x0 + 18, right = card.End.X - 18;
-        Gfx.RoundRect(this, new Rect2(x, y + 18, 16, 16), accent.WithAlpha(0.25f), 4, accent.WithAlpha(0.8f));
+        Gfx.RoundRect(this, new Rect2(x - 2, y + 15, 22, 22), accent.WithAlpha(0.18f), 5, accent.WithAlpha(0.7f));
+        if (icon != null) Icons.Draw(this, icon, new Vector2(x + 9, y + 26), 16, accent.Lightened(0.25f)); // v16.2 고유 아이콘
         Gfx.Text(this, Fonts.Bold, new Vector2(x + 26, y + 32), Fit(title, width - 110, 17, Fonts.Bold), 17, Palette.Text);
         Gfx.Text(this, Fonts.Body, new Vector2(x + 26, y + 50), $"설명서 · {sub}", 12, Palette.TextMuted);
         CodexButton(right, y + 16, mouse);
@@ -114,7 +115,7 @@ public partial class Hud
         if (!CodexMode || Codex.Of(f.Type) is not CodexEntry e) return false;
         string name = f.Machine?.Name ?? f.Label;
         DrawCodex(f.Label, FurnitureTypes.Name(f.Type), Palette.Room(f.Room.Kind), e, CodexLinks(f),
-            CodexPast(n => n.Kind != CauseKind.Recovery && n.Text.Contains(name)), y, maxHeight, mouse);
+            CodexPast(n => n.Kind != CauseKind.Recovery && n.Text.Contains(name)), y, maxHeight, mouse, Icons.Furniture(f.Type));
         return true;
     }
 
@@ -126,7 +127,7 @@ public partial class Hud
             NetLine("전력 간선", room.PowerLinked), NetLine("급수관", room.WaterLinked, UtilityNet.NeedsWater(room)), NetLine("환기 덕트", room.DuctLinked),
             ("설비", string.Join("·", room.Furniture.Where(x => x.Machine != null).Select(x => FurnitureTypes.Name(x.Type)).Distinct().Take(4)).DefaultIfEmptyText("없음"), Palette.TextDim),
         };
-        DrawCodex(room.Name, "방", Palette.Room(room.Kind), e, links, CodexPast(n => n.RoomId == room.Id && n.Kind != CauseKind.Recovery), y, maxHeight, mouse);
+        DrawCodex(room.Name, "방", Palette.Room(room.Kind), e, links, CodexPast(n => n.RoomId == room.Id && n.Kind != CauseKind.Recovery), y, maxHeight, mouse, Icons.Room(room.Kind));
         return true;
     }
 
