@@ -930,9 +930,7 @@ public sealed class BodyUpkeepActivity : Activity
             if (d.Removed || d.IsExternal) continue;
             float req = db.Flagged ? 0.3f : 0f; // 주 컴퓨터의 정비 요청
             if (db.Gasket < 0.25f && Near(w, d.Cell) is Cell s1) Consider(Task.Gasket, db, s1, (db.Whistling ? 0.45f : 0.25f) + 0.15f * c.SkillLevel(Skill.Mechanics) + req);
-            if ((db.SensorBroken || db.IndicatorBroken) && Near(w, d.Cell) is Cell s2) Consider(Task.Sensor, db, s2, 0.3f + 0.2f * c.SkillLevel(Skill.Electrical) + (db.IndicatorBroken ? req : 0f));
-            if (db.Gasket < 0.25f && Near(w, d.Cell) is Cell s1) Consider(Task.Gasket, db, s1, (db.Whistling ? 0.45f : 0.25f) + 0.15f * c.SkillLevel(Skill.Mechanics));
-            if ((db.SensorBroken || db.IndicatorBroken) && Near(w, d.Cell) is Cell s2) Consider(Task.Sensor, db, s2, 0.3f + 0.2f * c.SkillLevel(Skill.Electrical) + (w.Automation.DoorKnownBroken(db.Door) ? 0.3f : 0f)); // v16.6 컴퓨터가 정비 일정표 맨 앞에 올린 문
+            if ((db.SensorBroken || db.IndicatorBroken) && Near(w, d.Cell) is Cell s2) Consider(Task.Sensor, db, s2, 0.3f + 0.2f * c.SkillLevel(Skill.Electrical) + (db.IndicatorBroken ? req : 0f) + (w.Automation.DoorKnownBroken(db.Door) ? 0.3f : 0f)); // v16.6 컴퓨터가 정비 일정표 맨 앞에 올린 문
             if (d.Bent > 0.3f && Near(w, d.Cell) is Cell s3) Consider(Task.Frame, db, s3, 0.35f + 0.2f * c.SkillLevel(Skill.Mechanics));
         }
         foreach (var (i, s) in b.Marks)
