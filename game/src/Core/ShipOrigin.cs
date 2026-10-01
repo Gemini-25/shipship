@@ -56,9 +56,10 @@ public sealed class OriginStats
 {
     public int Found, Told, Tips, Toasts, Scribbles, Reopened, Splits, Reunions, Handovers, Grumbles;
     public int Rounds, RoundFixes, Squeezes, SqueezeBonds, SqueezeSpats, Ranks, Advice, CultureBorn, Calls; // v16.9 한 바퀴 · 좁은 배 · 컴퓨터 판단 · 정비 문화 · 건너편 교신
+    public int RankFixes; // v16.9 컴퓨터가 순위에 올린 설비를 사람이 먼저 손본 횟수
     public string Summary() =>
         $"숨은 이야기 찾음 {Found} · 전함 {Told} · 쪽지 요령 {Tips} · 건배 {Toasts} · 낙서 보탬 {Scribbles} · 막힌 구역 열림 {Reopened} · 갈라짐 {Splits}(다시 이음 {Reunions}) · 침대 인계 {Handovers}(투덜 {Grumbles})"
-        + $" · 한 바퀴 {Rounds}(손봄 {RoundFixes}) · 비좁아 마주침 {Squeezes}(웃음 {SqueezeBonds} · 짜증 {SqueezeSpats}) · 컴퓨터 정비 순위 {Ranks} · 조언 {Advice} · 정비 문화 {CultureBorn} · 건너편 교신 {Calls}";
+        + $" · 한 바퀴 {Rounds}(손봄 {RoundFixes}) · 비좁아 마주침 {Squeezes}(웃음 {SqueezeBonds} · 짜증 {SqueezeSpats}) · 컴퓨터 정비 순위 {Ranks}(먼저 손봄 {RankFixes}) · 조언 {Advice} · 정비 문화 {CultureBorn} · 건너편 교신 {Calls}";
 }
 
 public sealed partial class ShipOriginSystem
@@ -128,8 +129,12 @@ public sealed partial class ShipOriginSystem
                             p.Lot = new PartLot { Id = 900_000 + _nextId++, Kind = p.Lot.Kind, Origin = PartOrigin.Handmade, Batch = "개척민 손", From = former, Maker = FormerCrew[rng.Range(0, FormerCrew.Length)],
                                 Quality = rng.Range(0.7f, 1.15f), Made = w.Tick };
                 }
+                // 임시로 이은 선은 곁가지에만 — 원자로 · 냉각 · 배전 · 생명유지 같은 줄기와 공급원 방은 처음 지은 그대로 (거기가 가늘면 배 전체가 첫날 멈춘다)
                 foreach (var l in w.Net.Links)
-                    if (rng.Chance(0.08f)) { l.Temp = true; l.Integrity = rng.Range(0.5f, 0.8f); l.Cause = "개척민 임시 개조"; }
+                {
+                    if (l.Room.Type is RoomType.Reactor or RoomType.Cooling or RoomType.Power or RoomType.LifeSupport || l.Room.Kind == RoomType.WaterPlant || w.Net.SourceRoom(l.Kind) == l.Room) continue;
+                    if (rng.Chance(0.08f)) { l.Temp = true; l.Integrity = rng.Range(0.62f, 0.85f); l.Cause = "개척민 임시 개조"; }
+                }
                 break;
         }
 

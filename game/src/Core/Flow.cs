@@ -55,38 +55,7 @@ public sealed partial class UtilityNet
         var sources = Sources(k);
         if (sources.Count == 0 || _nodes == 0) return result;
         if (_designVersion != Version) { Design(); _designVersion = Version; }
-        var adj = _adj[(int)k];
-        var best = new float[_nodes];
-        var doors = new int[_nodes];
-        var via = new NetLink?[_nodes];
-        var done = new bool[_nodes];
-        var pq = new PriorityQueue<int, (float, int)>();
-        foreach (var r in sources)
-        {
-            var hub = _hubs.FirstOrDefault(h => h.room == r);
-            if (hub.room == null) continue;
-            best[hub.node] = 1f;
-            pq.Enqueue(hub.node, (-1f, 0));
-        }
-        while (pq.TryDequeue(out int n, out _))
-        {
-            if (done[n]) continue;
-            done[n] = true;
-            foreach (var l in adj[n])
-            {
-                float cap = Cap(l);
-                if (cap <= 0f) continue;
-                int o = l.NodeA == n ? l.NodeB : l.NodeA;
-                if (done[o]) continue;
-                float b = MathF.Min(best[n], cap);
-                int d = doors[n] + (l.Key.EndsWith(":X") ? 1 : 0);
-                if (b > best[o] + 1e-4f || MathF.Abs(b - best[o]) <= 1e-4f && via[o] != null && d < doors[o])
-                {
-                    best[o] = b; doors[o] = d; via[o] = l;
-                    pq.Enqueue(o, (-b, d));
-                }
-            }
-        }
+        var (best, doors, via) = Route(k, sources, Cap);
         // 한 토막을 지나는 방 수 (방마다 공급원까지 거슬러 올라가며)
         var load = new Dictionary<NetLink, int>();
         foreach (var (node, room) in _hubs)
@@ -125,6 +94,44 @@ public sealed partial class UtilityNet
         return result;
     }
 
+    /// <summary>공급원에서 방마다: 가장 넓은 길 → 문이 적은 길 → 마디 번호 (같으면 늘 같은 길 — 깔 때의 굵기와 지금의 길이 어긋나지 않게).</summary>
+    private (float[] best, int[] doors, NetLink?[] via) Route(NetKind k, List<Room> sources, Func<NetLink, float> capOf)
+    {
+        var adj = _adj[(int)k];
+        var best = new float[_nodes];
+        var doors = new int[_nodes];
+        var via = new NetLink?[_nodes];
+        var done = new bool[_nodes];
+        var pq = new PriorityQueue<int, (float, int, int)>();
+        foreach (var r in sources)
+        {
+            var hub = _hubs.FirstOrDefault(h => h.room == r);
+            if (hub.room == null) continue;
+            best[hub.node] = 1f;
+            pq.Enqueue(hub.node, (-1f, 0, hub.node));
+        }
+        while (pq.TryDequeue(out int n, out _))
+        {
+            if (done[n]) continue;
+            done[n] = true;
+            foreach (var l in adj[n])
+            {
+                float cap = capOf(l);
+                if (cap <= 0f) continue;
+                int o = l.NodeA == n ? l.NodeB : l.NodeA;
+                if (done[o]) continue;
+                float b = MathF.Min(best[n], cap);
+                int d = doors[n] + (l.Key.EndsWith(":X") ? 1 : 0);
+                if (b > best[o] + 1e-4f || MathF.Abs(b - best[o]) <= 1e-4f && via[o] != null && d < doors[o])
+                {
+                    best[o] = b; doors[o] = d; via[o] = l;
+                    pq.Enqueue(o, (-b, d, o));
+                }
+            }
+        }
+        return (best, doors, via);
+    }
+
     /// <summary>깔 때의 굵기: 모두 멀쩡하고 보조 간선이 없을 때 토막마다 지나는 방 수.</summary>
     private void Design()
     {
@@ -133,27 +140,8 @@ public sealed partial class UtilityNet
         {
             var sources = Sources(k);
             if (sources.Count == 0) continue;
-            var adj = _adj[(int)k];
-            var via = new NetLink?[_nodes];
-            var seen = new bool[_nodes];
-            var q = new Queue<int>();
-            foreach (var r in sources)
-            {
-                var hub = _hubs.FirstOrDefault(h => h.room == r);
-                if (hub.room == null || seen[hub.node]) continue;
-                seen[hub.node] = true; q.Enqueue(hub.node);
-            }
-            while (q.Count > 0)
-            {
-                int n = q.Dequeue();
-                foreach (var l in adj[n])
-                {
-                    if (IsRing(l) || l.Room.Detached) continue;
-                    int o = l.NodeA == n ? l.NodeB : l.NodeA;
-                    if (seen[o]) continue;
-                    seen[o] = true; via[o] = l; q.Enqueue(o);
-                }
-            }
+            // v16.9 전달량과 같은 길 고르기 (가장 넓은 길 · 문이 적은 길) — 너비 우선 탐색은 고리형 배에서 다른 길을 골라 "평소 0"인 토막에 방이 몰렸다
+            var (_, _, via) = Route(k, sources, l => IsRing(l) || l.Room.Detached ? 0f : 1f);
             foreach (var (node, room) in _hubs)
             {
                 if (sources.Contains(room)) continue;

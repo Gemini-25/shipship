@@ -23,6 +23,7 @@ public static partial class Program
             Console.WriteLine($"방 {w.Ship.Rooms.Count} · 구획 {w.Ship.Compartments} · 문 {w.Ship.Doors.Count} · 격자 {w.Ship.Grid.Width}x{w.Ship.Grid.Height}");
             return 0;
         }
+        if (argv.FirstOrDefault(a => a.StartsWith("--f1s=")) is string f1s) return F1sPower(seed, f1s[6..], 120); // 임시
         if (argv.FirstOrDefault(a => a.StartsWith("--diag=")) is string diag)
         {
             var w = argv.Contains("--fresh") ? World.CreateDefault(seed, 0, diag[7..]) : DayOne(seed, diag[7..]);
@@ -73,10 +74,14 @@ public static partial class Program
             Console.WriteLine($"만듦 {total - bad}/{total}");
             return bad == 0 ? 0 : 1;
         }
+        // --part=4,8 : 그 부분만 (진단용)
+        var parts = argv.FirstOrDefault(a => a.StartsWith("--part="))?[7..].Split(',').Select(int.Parse).ToHashSet();
+        bool On(int k) => parts == null || parts.Contains(k);
         Console.WriteLine($"배 종류 점검 (v16.9) · 시드 {seed}\n");
         try
         {
             // 1) 대표 배 6척: 뼈대가 저마다 다르고, 필수 설비가 다 있고, 모든 방에 길이 닿는다
+            if (On(1))
             {
                 var mine = ShipCatalog.All.Where(t => !t.Legacy).ToList();
                 var frames = mine.Select(t => t.Meta.Frame).Distinct().Count();
@@ -96,6 +101,7 @@ public static partial class Program
             }
 
             // 2) 생성기: 옛 키는 그대로, 새 키는 용도 · 뼈대 · 2~60인
+            if (On(2))
             {
                 var old = ShipCatalog.Find(ShipGenerator.KeyFor(12, seed))!;
                 var mining = Enumerable.Range(0, 4).Select(i => ShipGenerator.Template(ShipPurpose.Mining, ShipFrame.Linear, 12, seed + i)).ToList();
@@ -115,6 +121,7 @@ public static partial class Program
             }
 
             // 3) 설계사 · 시작 상태가 세계에 남는다
+            if (On(3))
             {
                 var mil = World.CreateDefault(seed, 0, "Bodeum");
                 var civ = World.CreateDefault(seed, 0, "Saeteo");
@@ -143,6 +150,7 @@ public static partial class Program
             }
 
             // 4) 고리형: 통로 한쪽이 막혀도(용접) 반대로 돌아 대피 — 태양 폭풍에 위 식당에서 아래 대피소로
+            if (On(4))
             {
                 bool off = MeetingSystem.MaidenOff;
                 MeetingSystem.MaidenOff = true;
@@ -178,6 +186,7 @@ public static partial class Program
                 {
                     Run(w, 10);
                     if (crew.Any(c => c.Cell.X < mess.MinX - 8 && c.Cell.Y > mess.MaxY + 3)) passedLeft = true;
+                    if (argv.Contains("--trace") && i % (SimTime.Minutes(5) / 10) == 0) Console.WriteLine($"   {SimTime.HourOfDay(w.Tick):0.00}시 폭풍 {w.Ambience.StormPower:0.00} · " + string.Join(" | ", crew.Select(c => $"{c.Name} {c.Cell} {c.Room?.Name}({c.Room?.Radiation * 100:0}%) {c.Job?.Label} 휴식 {c.Needs.Rest * 100:0} · " + string.Join(",", c.LastEvaluations.Take(2).Select(e => $"{e.Activity.Label} {e.Score:0.00}")))));
                 }
                 int safe = crew.Count(c => c.Room == shelter);
                 Check("고리형 대피 — 태양 폭풍에 식당의 넷이 막힌 오른쪽 대신 왼쪽으로 돌아 대피소에 든다", passedLeft && safe >= 3 && crew.All(c => !c.Dead),
@@ -185,6 +194,7 @@ public static partial class Program
             }
 
             // 5) 쌍동선: 연결 통로를 잃고(봉쇄 · 끊김) 둘로 갈라져 버티다 다시 잇는다
+            if (On(5))
             {
                 var w = DayOne(seed, "Bodeum");
                 var ship = w.Ship;
@@ -223,6 +233,7 @@ public static partial class Program
             }
 
             // 6) 숨은 이야기: 정비하다 발견 → 일기 · 물건 · 이야기가 퍼진다 · 쪽지의 요령
+            if (On(6))
             {
                 var w = World.CreateDefault(seed, 0, "Busitdol");
                 Run(w, SimTime.Hours(2));
@@ -252,6 +263,7 @@ public static partial class Program
             }
 
             // 7) 크기 공백: 2 · 8~9 · 40~60인 — 역할 · 침대 · 당직 · 하루
+            if (On(7))
             {
                 foreach (var key in new[] { "Pabal", "Nareumi", "Busitdol", ShipGenerator.KeyFor(ShipPurpose.Colony, ShipFrame.Ring, 60, seed) })
                 {
@@ -261,22 +273,28 @@ public static partial class Program
                     int bedless = w.Crew.Count(c => c.Bed == null);
                     int hoursUncovered = 0;
                     float minFood = 1f, minRest = 1f;
+                    string hungry = "", tired = "";
                     for (int h = 0; h < 24; h++)
                     {
                         Run(w, SimTime.Hours(1));
                         if (!w.Crew.Any(c => !c.Dead && c.IsAwake)) hoursUncovered++;
-                        foreach (var c in w.Crew.Where(c => !c.Dead)) { minFood = MathF.Min(minFood, c.Needs.Food); minRest = MathF.Min(minRest, c.Needs.Rest); }
+                        foreach (var c in w.Crew.Where(c => !c.Dead))
+                        {
+                            if (c.Needs.Food < minFood) { minFood = c.Needs.Food; hungry = $"{c.Name} {SimTime.HourOfDay(w.Tick):0}시 {c.Room?.Name}({c.Job?.Label})"; }
+                            if (c.Needs.Rest < minRest) { minRest = c.Needs.Rest; tired = $"{c.Name} {SimTime.HourOfDay(w.Tick):0}시 {c.Room?.Name}({c.Job?.Label})"; }
+                        }
                     }
                     int n = w.Crew.Count;
                     bool rolesOk = n == 2 ? w.Crew.Any(c => c.Role == CrewRole.Pilot) && w.Crew.Any(c => c.Role == CrewRole.Engineer) : roles >= Math.Min(6, n);
                     bool ok = rolesOk && bedless == 0 && hoursUncovered == 0 && w.Crew.All(c => !c.Dead) && minFood > 0.05f && minRest > 0.05f && w.Power.ReactorOnline;
                     Check($"크기 {n}인 ({w.Ship.Name}) — 역할 · 침대 · 당직(늘 누군가 깨어 있다) · 하루", ok,
-                        $"역할 {roles}가지 · 침대 {beds}(없는 사람 {bedless}) · 아무도 안 깬 시간 {hoursUncovered} · 최저 배고픔 {minFood * 100:0}% · 최저 휴식 {minRest * 100:0}%"
+                        $"역할 {roles}가지 · 침대 {beds}(없는 사람 {bedless}) · 아무도 안 깬 시간 {hoursUncovered} · 최저 배고픔 {minFood * 100:0}%({hungry}) · 최저 휴식 {minRest * 100:0}%({tired})"
                         + (w.Origin.BedShares.Count > 0 ? $" · 침대 교대 {w.Origin.BedShares.Count}쌍 (인계 {w.Origin.Stats.Handovers})" : ""));
                 }
             }
 
             // 8) 모든 배 하루: 길 · 문 · 설비 · 식사 · 수면 · 사고 하나 대응
+            if (On(8))
             {
                 var keys = ShipCatalog.All.Select(t => t.Key).ToList();
                 foreach (var f in ShipInfos.GenFrames)
@@ -308,6 +326,7 @@ public static partial class Program
             }
 
             // 10) ★★ 승무원이 배의 내력을 알아채고 다르게 행동한다 · 주컴퓨터가 읽고 판단한다
+            if (On(10))
             {
                 var junk = DayOne(seed, "Ttaemjil");
                 var fresh = DayOne(seed, "Saeteo");
@@ -322,12 +341,12 @@ public static partial class Program
                 float junkEarly = top.Count > 0 ? o.Early(top[0]) : 0f;
                 float freshEarly = fresh.Origin.Ranked.Count > 0 ? fresh.Origin.Ranked.Values.Max() : 0f;
                 var maint = junk.Board.All.Where(x => x.Kind == WorkKind.Maintain && x.Target.Furniture != null).ToList();
-                int rankedOrders = maint.Count(x => o.Ranked.ContainsKey(x.Target.Furniture!.Id));
+                int rankedNow = maint.Count(x => o.Ranked.ContainsKey(x.Target.Furniture!.Id));
+                int rankedOrders = rankedNow + o.Stats.RankFixes; // 지금 떠 있는 순위 설비 정비 + 하루 동안 순위대로 먼저 손본 것 (하루 끝 한순간만 보면 막 끝낸 정비는 안 보인다)
                 Check("주컴퓨터 — 시작 상태 · 부품 내력으로 고장 위험 순위를 매겨 정비를 앞당긴다 (고물 배는 넷을 크게 · 새 배는 하나를 조금)",
                     act != null && top.Count >= 3 && junkEarly > freshEarly * 1.5f && rankedOrders >= 1,
-                    $"순위 {string.Join(" · ", top.Select(m => m.Name))} · 앞당김 땜질호 {junkEarly * 100:0}%p / 새터호 {freshEarly * 100:0}%p · 순위 설비 정비 작업 {rankedOrders}/{maint.Count} · 판단: {act?.Judge}");
-                var comp = junk.Ship.FurnitureOf(FurnitureType.MainComputer).First().Machine!;
-                junk.Machines.Break(comp);
+                    $"순위 {string.Join(" · ", top.Select(m => m.Name))} · 앞당김 땜질호 {junkEarly * 100:0}%p / 새터호 {freshEarly * 100:0}%p · 순위 설비 정비 지금 {rankedNow}/{maint.Count} · 먼저 손봄 {o.Stats.RankFixes} · 판단: {act?.Judge}");
+                foreach (var comp in junk.Ship.FurnitureOf(FurnitureType.MainComputer)) junk.Machines.Break(comp.Machine!, FaultKind.Wrecked); // 아무 고장이나 걸면 가벼운 고장(효율 25% 넘음)이라 컴퓨터가 안 멎을 수 있다
                 Run(junk, 30);
                 Check("주컴퓨터가 멎으면 정비 순위도 멎는다 (사람 귀만 남는다)", !junk.Automation.MainOnline && top.All(m => o.Early(m) == 0f), $"컴퓨터 {(junk.Automation.MainOnline ? "돎" : "멎음")}");
                 bool spof = fresh.Automation.Book.Acts.Any(x => x.Key == "origin:spof");
@@ -347,6 +366,7 @@ public static partial class Program
             }
 
             // 11) 정비 문화: 닳은 배에서 고장을 겪고 한 바퀴가 몸에 배면 "소리부터 듣는다"가 관행이 된다 (→ 전조를 더 잘 듣는다)
+            if (On(11))
             {
                 var w = DayOne(seed, "Ttaemjil");
                 for (int d = 0; d < 3 && w.Culture.Of(CustomKind.MaintainerWay) == null; d++) Run(w, SimTime.TicksPerDay);
@@ -356,6 +376,7 @@ public static partial class Program
             }
 
             // 9) 결정론
+            if (On(9))
             {
                 uint H(string key) { var w = World.CreateDefault(seed, 0, key); Run(w, SimTime.TicksPerDay + SimTime.Hours(6)); return SaveGame.StateHash(w); }
                 uint x = H("Hanbit"), y = H("Hanbit");

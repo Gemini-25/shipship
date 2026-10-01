@@ -661,7 +661,10 @@ public sealed class ShelterActivity : Activity
     public override (float, string) Score(CrewMember c, World w, DistanceField dist)
     {
         if (c.Outside || c.Room == null || w.Ambience.StormPower < 0.3f) return (0f, "—");
-        if (c.Room.Radiation < 0.2f) return c.Job?.Activity is ShelterActivity ? (0.95f, "태양 폭풍이 지나가길 기다린다") : (0f, "여기는 괜찮다");
+        if (c.Room.Radiation < 0.2f)
+            return c.Job?.Activity is ShelterActivity ? (0.95f, "태양 폭풍이 지나가길 기다린다")
+                : Facilities.Factor(c.Room, "shelter") > 0f ? (0.92f, $"태양 폭풍 — {c.Room.Name}에서 지나가길 기다린다 (밖은 쬔다)") // v16.9 대피소에 닿았으면 폭풍이 갈 때까지 머문다 (방송대로 온 사람도)
+                : (0f, "여기는 괜찮다");
         return (0.8f + 0.4f * c.Room.Radiation, $"태양 폭풍 — {c.Room.Name} 방사선 {c.Room.Radiation * 100:0}%");
     }
 
