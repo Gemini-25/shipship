@@ -19,7 +19,7 @@ public sealed partial class PortableSystem
     private readonly long[] _tripAt = Enumerable.Repeat(-1L, PowerGrid.CircuitCount).ToArray();
     private readonly string[] _warnWhy = Enumerable.Repeat("", PowerGrid.CircuitCount).ToArray();
     private readonly Dictionary<int, long> _alone = new();
-    private readonly HashSet<int> _flagged = new(), _heaterOff = new();
+    private readonly HashSet<int> _flagged = new(), _heaterOff = new(), _recalled = new();
     private long _nextInventory = SimTime.Hours(6);
 
     /// <summary>회로 과부하를 사람들이 안다 (주 컴퓨터 방송을 들었거나 · 냄새를 따라와 뜨거운 콘센트를 만져 봤다) — 한 시간 동안.</summary>
@@ -93,7 +93,7 @@ public sealed partial class PortableSystem
         // 1) 과부하 예측: 배전반이 재는 콘센트 부하 (무엇이 꽂혔는지는 모른다)
         for (int i = 0; i < PowerGrid.CircuitCount; i++)
         {
-            if (_over[i] < 0.25f || Warned(i) || OutletRoom(i) is not Room room) continue;
+            if (_over[i] < 0.06f || OutletRoom(i) is not Room room) continue; // 사람이 이미 알아챘는지는 모른다 (같은 경고는 30분에 한 번)
             float load = CircuitLoad[i], pct = load / OutletCapKw * 100f;
             int ci = i;
             var act = au.Book.Add(ActKind.Advice, room, $"{PowerGrid.CircuitName(i)} 회로 {room.Name} 콘센트 부하 {load:0.0}kW (견딤 {OutletCapKw:0.0}kW · {pct:0}%)",
@@ -103,8 +103,8 @@ public sealed partial class PortableSystem
             Stats.ComputerWarns++;
             var b = au.Speak.Announce(au.Voice.Style($"{PowerGrid.CircuitName(i)} 회로 콘센트 부하 {pct:0}% — 곧 차단기가 떨어진다. {room.Name}에서 하나를 뽑으라"), room, 1);
             if (b is not { HeardBy.Count: > 0 }) continue; // 아무도 못 들었다 (잠 · 스피커)
+            if (!Warned(i)) _warnWhy[i] = $"주 컴퓨터가 콘센트 부하 {pct:0}%를 알렸다";
             _warnAt[i] = w.Tick;
-            _warnWhy[i] = $"주 컴퓨터가 콘센트 부하 {pct:0}%를 알렸다";
             _nextScan = w.Tick; // 들은 사람이 곧 움직인다
             Rethink(b);
         }
@@ -154,6 +154,7 @@ public sealed partial class PortableSystem
                 d.WillForget = false;
                 Stats.Found++;
                 Stats.InventoryFound++;
+                _recalled.Add(d.Id);
                 var who = w.Crew.FirstOrDefault(x => x.Id == d.InstalledBy);
                 w.Log.Add(w.Tick, LogKind.Life, $"방송을 듣고 {(who != null ? Ko.IGa(who.Name) + " " : "")}{RoomOf(d)?.Name ?? "?"}에 두고 잊은 {Ko.EulReul(d.Name)} 떠올렸다 — 창고에 돌려놓는다", d.InstalledBy);
             }
@@ -197,6 +198,9 @@ public sealed partial class PortableSystem
                 Need(PortableTask.Unplug, d.Kind, r, d.At, false, $"주 컴퓨터: 아무도 없는 {r.Name}에 켜 둔 히터 — 불이 날 수 있다", 0.62f, $"cpuheat:{d.Id}", device: d);
         }
     }
+
+    /// <summary>주 컴퓨터 방송으로 떠올린 장비 (회수가 조금 더 급하다).</summary>
+    public bool Recalled(PortableDevice d) => _recalled.Contains(d.Id);
 
     /// <summary>짚인 히터를 끈다 (Unplug 일의 끝): 가 보니 아무도 없는 방에 켜 둔 히터.</summary>
     private bool TurnOffFlagged(CrewMember c, PortableDevice d)
@@ -250,13 +254,16 @@ public sealed partial class PortableSystem
         var w = _w;
         for (int i = 0; i < PowerGrid.CircuitCount; i++)
         {
-            if (CircuitLoad[i] <= OutletCapKw || OutletRoom(i) != room) continue;
+            if (CircuitLoad[i] <= OutletCapKw || ProjectedKw(i) <= OutletCapKw || OutletRoom(i) != room) continue; // 먼저 온 사람이 이미 뽑았으면 식는 중
             Stats.HotOutlets++;
             if (!_learned[i] && !Warned(i)) { _warnAt[i] = w.Tick; _warnWhy[i] = $"{Ko.IGa(c.Name)} 콘센트가 달아오른 걸 알아챘다"; }
             _nextScan = w.Tick;
             c.Say(w, Persona.Say(c, "콘센트가 뜨겁다 — 너무 많이 꽂았어"));
             w.Log.Add(w.Tick, LogKind.Warning, $"{Ko.IGa(c.Name)} 탄 냄새를 따라와 {room.Name} 콘센트가 달아오른 걸 찾았다 — 이동식 장비를 너무 많이 꽂았다 ({CircuitLoad[i]:0.0}kW)", c.Id);
             MarkLog.Add(room.Marks, w.Tick, $"{c.Name}: 콘센트 타는 냄새 ({PowerGrid.CircuitName(i)} 회로)");
+            // 그 자리에서 가장 큰 것 하나를 뽑는다 (다른 회로 콘센트에 여유가 있으면 옮겨 꽂는다)
+            var big = Devices.Where(d => d.Placed && d.On && d.Plug == PortablePlug.Outlet && d.Outlet == room).OrderByDescending(d => d.Spec.Kw).ThenBy(d => d.Id).FirstOrDefault();
+            if (big != null) Unplug(c, big);
             return true;
         }
         var h = Devices.FirstOrDefault(d => d.Kind == PortableKind.Heater && d.Running && d.Dust > 0.02f && RoomOf(d) == room);

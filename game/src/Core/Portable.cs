@@ -815,8 +815,9 @@ public sealed partial class PortableSystem
             {
                 bool aisle = d.Kind == PortableKind.Cart && room.Type == RoomType.Corridor;
                 if (aisle && Crisis.Acting(w)) { Need(PortableTask.Retrieve, d.Kind, room, d.At, false, $"비상 — {room.Name}의 카트를 치운다 (대피로)", 0.75f, $"ret:{d.Id}", device: d); continue; }
-                Need(PortableTask.Retrieve, d.Kind, room, d.At, false, aisle ? $"{room.Name}의 카트가 통로를 막는다" : $"{room.Name}에 둔 {d.Name} — 다 썼다",
-                    aisle ? 0.42f : d.On ? 0.34f : 0.3f, $"ret:{d.Id}", device: d);
+                bool recall = Recalled(d); // 주 컴퓨터가 창고 빈 자리를 알렸다
+                Need(PortableTask.Retrieve, d.Kind, room, d.At, false, aisle ? $"{room.Name}의 카트가 통로를 막는다" : recall ? $"{room.Name}에 두고 잊은 {d.Name} — 주 컴퓨터가 창고 빈 자리를 알렸다" : $"{room.Name}에 둔 {d.Name} — 다 썼다",
+                    aisle ? 0.42f : (d.On ? 0.34f : 0.3f) + (recall ? 0.16f : 0f), $"ret:{d.Id}", device: d);
             }
             // 고장 난 장비 → 고친다
             if (d.Broken && d.ClaimedBy < 0)
@@ -1141,6 +1142,7 @@ public sealed partial class PortableSystem
             d.ClaimedBy = -1;
             d.CableTo = null;
             d.HoseTo = null;
+            _recalled.Remove(d.Id);
             Stats.Returned++;
         }
         var names = got.Where(d => d.Stored).GroupBy(d => d.Kind).OrderBy(g => g.Key).Select(g => g.First().Name).ToList();

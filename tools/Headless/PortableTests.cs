@@ -110,6 +110,8 @@ public static partial class Program
             var w = DayOne(seed, "Hanbit");
             var room = w.Ship.RoomsOf(RoomType.Quarters).First(r => PortableSystem.OutletOk(r));
             int circuit = room.Circuit;
+            w.Automation.Reboot("시험 — 재부팅 중이라 콘센트 부하를 못 본다", 40f); // 미리 알려 줄 컴퓨터가 없다
+            Run(w, SimTime.Minutes(1));
             var spots = room.Cells.Where(c => w.Ship.IsOpenFloor(c)).Take(3).ToList();
             var heaters = w.Portable.Devices.Where(d => d.Kind == PortableKind.Heater).Take(3).ToList();
             while (heaters.Count < 3) heaters.Add(w.Portable.Add(PortableKind.Heater, heaters[0].Home));
@@ -119,7 +121,7 @@ public static partial class Program
             bool tripped = false;
             long t0 = w.Tick;
             for (int i = 0; i < 30 && !tripped; i++) { Run(w, SimTime.Minutes(1)); tripped = Tripped(); }
-            Check("히터 셋을 한 회로에 꽂으면 몇 분 뒤 차단기가 떨어진다", tripped && w.Portable.Stats.Trips >= 1 && w.Portable.Learned(circuit),
+            Check("히터 셋을 한 회로에 꽂으면 몇 분 뒤 차단기가 떨어진다 (주 컴퓨터 재부팅 중 — 아무도 미리 모른다)", tripped && w.Portable.Stats.Trips >= 1 && w.Portable.Learned(circuit),
                 $"{PowerGrid.CircuitName(circuit)} 회로 · 히터 {heaters.Count}대 {w.Portable.ProjectedKw(circuit):0.0}kW (콘센트 {PortableSystem.OutletCapKw}kW) · {(w.Tick - t0) / (float)SimTime.TicksPerHour * 60f:0}분");
             for (int i = 0; i < 36 && (Tripped() || w.Portable.ProjectedKw(circuit) > PortableSystem.OutletCapKw); i++) Run(w, SimTime.Minutes(10));
             Run(w, SimTime.Minutes(30));
@@ -274,6 +276,28 @@ public static partial class Program
                 act == null ? $"기록 없음 · 예측 {st.ComputerWarns}" : $"관찰: {act.Observe} · 판단: {act.Judge} · 요청: {act.Request}");
             Check("승무원 — 방송을 들은 사람이 차단기가 떨어지기 전에 뽑는다", st.HeededWarns >= 1 && !tripped,
                 $"듣고 뽑음 {st.HeededWarns} · 차단기 {(tripped ? "떨어짐" : "그대로")} · {PowerGrid.CircuitName(circuit)} 회로 {w.Portable.CircuitKw(circuit):0.0}kW · {st.LinkSummary()}");
+        }
+
+        // ── 14) 냄새 × 승무원 (컴퓨터 없이): 과부하로 달아오른 콘센트 → 피복 타는 냄새 → 따라온 사람이 그 자리에서 뽑는다 ──
+        if (Sec(14))
+        {
+            var w = DayOne(seed, "Hanbit");
+            w.Automation.Reboot("시험 — 재부팅 중이라 콘센트 부하를 못 본다", 60f);
+            Run(w, SimTime.Minutes(1));
+            var room = w.Ship.LiveRooms.Where(r => r.Type is RoomType.Lounge or RoomType.Mess && PortableSystem.OutletOk(r)).OrderBy(r => r.Id).First();
+            var cells = room.Cells.Where(c => w.Ship.IsOpenFloor(c) && w.Ship.FurnitureAt(c) == null).ToList();
+            int k = 0;
+            foreach (var d in w.Portable.Devices.Where(d => d.Kind == PortableKind.Heater).Take(2).Append(w.Portable.Devices.First(d => d.Kind == PortableKind.Pump)).ToList())
+            {
+                d.Dust = 0f; // 먼지 냄새와 헷갈리지 않게
+                w.Portable.PlaceNow(d, cells[(k++ * 3) % cells.Count], null, "hold", outlet: room);
+            }
+            float burnt = 0f;
+            for (int i = 0; i < 30 && w.Portable.Stats.HotOutlets == 0 && w.Portable.Stats.Trips == 0; i++) { Run(w, SimTime.Minutes(1)); burnt = MathF.Max(burnt, w.Smells.Level(room, SmellKind.Burnt)); }
+            var st = w.Portable.Stats;
+            Check("냄새 × 승무원 — 컴퓨터가 멎어도 달아오른 콘센트의 피복 타는 냄새를 따라온 사람이 그 자리에서 뽑는다 (차단기 전에)",
+                st.ComputerWarns == 0 && st.HotOutlets >= 1 && st.Unplugged >= 1 && st.Trips == 0,
+                $"{room.Name} 탄내 최고 {burnt:0.00} · 뜨거운 콘센트 {st.HotOutlets} · 뽑음 {st.Unplugged} · 차단 {st.Trips} · 컴퓨터 예측 {st.ComputerWarns} · {PowerGrid.CircuitName(room.Circuit)} 회로 {w.Portable.CircuitKw(room.Circuit):0.0}kW");
         }
 
         // ── 10) 주 컴퓨터: 빈 방에서 오래 나가는 콘센트 부하 → 켜 둔 히터로 짚는다 → 가서 끈다 ──
