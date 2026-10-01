@@ -17,8 +17,73 @@ public partial class ShipView
         RobotKind.Maintainer => new Color("#58b6e8"),
         RobotKind.Gardener => new Color("#6fcf7c"),
         RobotKind.Safety => new Color("#e8584a"),
+        _ => RobotColorV15(k),
+    };
+
+    // v15.7 새 로봇·드론: 원형의 색에서 조금씩 비튼 색 (원형 몸에 특기 표식을 단다)
+    private static Color RobotColorV15(RobotKind k) => k switch
+    {
+        RobotKind.Courier => new Color("#f2c14e"),
+        RobotKind.Tanker => new Color("#4fa3c7"),
+        RobotKind.Stocker => new Color("#b07a3a"),
+        RobotKind.Lineman => new Color("#f0e26a"),
+        RobotKind.Assistant => new Color("#9fc7f0"),
+        RobotKind.Overhauler => new Color("#3d7fd1"),
+        RobotKind.Harvester => new Color("#b5d65a"),
+        RobotKind.Tender => new Color("#3fae8a"),
+        RobotKind.Sentry => new Color("#e88a4a"),
+        RobotKind.Firefighter => new Color("#c8302a"),
+        RobotKind.Utility => new Color("#a8a29a"),
         _ => new Color("#cccccc"),
     };
+
+    public static Color DroneColorV15(DroneKind k) => k switch
+    {
+        DroneKind.Scout => new Color("#b8f3ff"),
+        DroneKind.Surveyor => new Color("#4fb8d8"),
+        DroneKind.Welder => new Color("#ffb347"),
+        DroneKind.Radiator => new Color("#ff7f9e"),
+        DroneKind.Tug => new Color("#d9733f"),
+        DroneKind.Rigger => new Color("#5fbf6a"),
+        _ => new Color("#9fe38a"),
+    };
+
+    /// <summary>v15.7 특기 표식: 등판에 원형과 다른 작은 무늬 (짐칸·통 뒤쪽).</summary>
+    private static void PaintRobotBadge(CanvasItem ci, Robot r, Color col, bool working, float t)
+    {
+        var ink = new Color("#11151b");
+        var hi = col.Lightened(0.35f);
+        switch (r.Kind)
+        {
+            case RobotKind.Courier: // 배식판 둘
+                ci.DrawRect(new Rect2(-5.5f, -3.5f, 4f, 3f), hi); ci.DrawRect(new Rect2(-5.5f, 0.5f, 4f, 3f), hi); break;
+            case RobotKind.Tanker: // 물통 (출렁인다)
+                ci.DrawCircle(new Vector2(-3.5f, 0f), 3.2f, new Color("#2c6e8f"), true, -1f, true);
+                ci.DrawCircle(new Vector2(-3.5f, 0f), 1.6f + 0.4f * Mathf.Sin(t * 3f), hi.WithAlpha(0.8f), true, -1f, true); break;
+            case RobotKind.Stocker: // 겹친 상자
+                ci.DrawRect(new Rect2(-6f, -3f, 3.5f, 3.5f), hi); ci.DrawRect(new Rect2(-4f, -0.5f, 3.5f, 3.5f), hi.Darkened(0.25f)); break;
+            case RobotKind.Lineman: // 번개
+                ci.DrawPolyline(new[] { new Vector2(-2f, -4f), new Vector2(-4.5f, 0f), new Vector2(-2.5f, 0f), new Vector2(-5f, 4f) }, ink, 1.4f, true); break;
+            case RobotKind.Assistant: // 손 둘
+                ci.DrawCircle(new Vector2(-4f, -2.5f), 1.4f, hi, true, -1f, true); ci.DrawCircle(new Vector2(-4f, 2.5f), 1.4f, hi, true, -1f, true); break;
+            case RobotKind.Overhauler: // 엇갈린 렌치 둘 (일하면 깜빡인다)
+            {
+                var wr = working ? hi.Lerp(Colors.White, 0.5f + 0.5f * Mathf.Sin(t * 8f)) : hi;
+                ci.DrawLine(new Vector2(-6f, -3f), new Vector2(-1f, 3f), wr, 1.4f, true); ci.DrawLine(new Vector2(-6f, 3f), new Vector2(-1f, -3f), wr, 1.4f, true); break;
+            }
+            case RobotKind.Harvester: // 바구니
+                ci.DrawArc(new Vector2(-4f, 0f), 3f, 0f, Mathf.Pi, 8, hi, 1.4f, true); ci.DrawLine(new Vector2(-7f, 0f), new Vector2(-1f, 0f), hi, 1.4f, true); break;
+            case RobotKind.Tender: // 잎
+                ci.DrawColoredPolygon(new[] { new Vector2(-6f, 0f), new Vector2(-3.5f, -3f), new Vector2(-1f, 0f), new Vector2(-3.5f, 3f) }, hi); break;
+            case RobotKind.Sentry: // 도는 눈
+                ci.DrawCircle(new Vector2(-3.5f, 0f), 2.6f, ink, true, -1f, true);
+                ci.DrawCircle(new Vector2(-3.5f, 0f) + new Vector2(Mathf.Cos(t * 2f), Mathf.Sin(t * 2f)) * 1.1f, 1.1f, new Color("#ffd27a"), true, -1f, true); break;
+            case RobotKind.Firefighter: // 큰 거품 통 둘
+                ci.DrawCircle(new Vector2(-4f, -2.5f), 2f, new Color("#f4f1ec"), true, -1f, true); ci.DrawCircle(new Vector2(-4f, 2.5f), 2f, new Color("#f4f1ec"), true, -1f, true); break;
+            case RobotKind.Utility: // 네 칸
+                for (int i = 0; i < 4; i++) ci.DrawRect(new Rect2(-6f + (i % 2) * 3f, -3f + (i / 2) * 3f, 2.4f, 2.4f), hi.Darkened(0.12f * i)); break;
+        }
+    }
 
     // ── 충전대: 벽에 붙은 충전 패드 · 두 개의 단자 · 상태 띠 · 벽 속으로 들어가는 전선관 ──
     private static void PaintRobotDockBody(CanvasItem ci, Furniture f)
@@ -113,7 +178,7 @@ public partial class ShipView
             var r = FurnitureRect(dock).Grow(-2.5f);
             var here = rs.Robots.FirstOrDefault(x => x.Dock == dock && x.AtDock);
             bool power = RobotSystem.DockWorking(dock);
-            bool charging = here != null && power && (here.Battery < 0.995f || (here.Kind == RobotKind.Safety && here.Foam < 0.995f));
+            bool charging = here != null && power && (here.Battery < 0.995f || (RobotsV15.Fights(here.Kind) && here.Foam < 0.995f));
             Color led = !power ? Palette.Danger : charging ? new Color("#5fd0ff") : here != null ? Palette.Good : Palette.Warning;
             float blink = !power ? 0.35f + 0.65f * Mathf.Abs(Mathf.Sin(_time * 3f)) : charging ? 0.6f + 0.4f * Mathf.Sin(_time * 5f + dock.Id) : 0.85f;
             ci.DrawRect(new Rect2(r.Position.X + 4, r.Position.Y + 3, 9, 3), led.WithAlpha(blink));
@@ -159,13 +224,14 @@ public partial class ShipView
         ci.DrawCircle(p + new Vector2(2.5f, 3f), 9.5f, new Color(0, 0, 0, 0.3f), true, -1f, true);
 
         ci.DrawSetTransform(p, angle, Vector2.One);
-        switch (r.Kind)
+        switch (RobotsV15.Base(r.Kind)) // v15.7 새 로봇은 원형의 몸에 특기 표식
         {
             case RobotKind.Hauler: PaintHauler(ci, r, body, col, moving, t); break;
             case RobotKind.Maintainer: PaintMaintainer(ci, r, body, col, working, t); break;
             case RobotKind.Gardener: PaintGardener(ci, r, body, col, working, t); break;
             case RobotKind.Safety: PaintSafetyBot(ci, r, body, col, working, t); break;
         }
+        if (RobotsV15.Bot(r.Kind) != null) PaintRobotBadge(ci, r, col, working, t);
         // 앞 센서 띠 (가는 쪽)
         var eye = dead ? new Color("#3a3f48") : new Color("#7de8ff").WithAlpha(0.85f);
         ci.DrawLine(new Vector2(8.5f, -4.5f), new Vector2(8.5f, 4.5f), eye, 1.8f, true);
@@ -201,7 +267,7 @@ public partial class ShipView
         else if (r.State == RobotState.Stalled)
             Gfx.TextCentered(ci, Fonts.Bold, p + new Vector2(0, -14f), "!", 11, Palette.Warning.WithAlpha(blink));
         // 진척 (일하는 중)
-        if (working && r.Progress is float pr && pr > 0f && r.Kind != RobotKind.Safety)
+        if (working && r.Progress is float pr && pr > 0f && RobotsV15.Base(r.Kind) != RobotKind.Safety)
         {
             ci.DrawArc(p, 12.5f, -Mathf.Pi / 2f, -Mathf.Pi / 2f + Mathf.Tau * Mathf.Clamp(pr, 0f, 1f), 24, col.WithAlpha(0.8f), 1.6f, true);
         }

@@ -23,7 +23,7 @@ public partial class Hud
         var col = ShipView.RobotColor(r.Kind);
         float x0 = Screen.X - Margin - RightColumnWidth;
         var marks = r.Marks.TakeLast(6).Reverse().ToList();
-        float height = Mathf.Min(maxHeight, 300 + (r.Kind == RobotKind.Safety ? 22 : 0) + (marks.Count > 0 ? 34 + marks.Count * 18 : 0));
+        float height = Mathf.Min(maxHeight, 300 + (RobotsV15.Fights(r.Kind) ? 22 : 0) + (marks.Count > 0 ? 34 + marks.Count * 18 : 0));
         var card = new Rect2(x0, y, RightColumnWidth, height);
         Card(card);
         float x = x0 + 18, right = card.End.X - 18;
@@ -38,12 +38,12 @@ public partial class Hud
         float ly = y + 74;
         Gfx.Text(this, Fonts.Bold, new Vector2(x, ly + 14), r.Doing, 13, col.Lightened(0.25f));
         if (r.Order != null) Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 32), $"맡은 일: {r.Order.Title}", 11, Palette.TextMuted);
-        else if (r.Helping != null) Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 32), $"{Ko.EulReul(r.Helping.Name)} 거든다 — 긴 손일이 {RobotSystem.AssistBonus * 100:0}% 빨라진다", 11, Palette.TextMuted);
+        else if (r.Helping != null) Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 32), $"{Ko.EulReul(r.Helping.Name)} 거든다 — 긴 손일이 {RobotsV15.AssistBonus(r.Kind) * 100:0}% 빨라진다", 11, Palette.TextMuted);
         if (r.Cargo is ItemStack cargo) Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 48), $"싣고 있음: {cargo}", 11, Palette.TextMuted);
         ly += 58;
         Row(x, right, ly, "배터리", r.Battery, Palette.Good, Pct(r.Battery), r.Battery < 0.25f);
         Row(x, right, ly + 22, "상태", r.Condition, new Color("#9fb4cc"), Pct(r.Condition), r.Condition < 0.45f);
-        if (r.Kind == RobotKind.Safety) { Row(x, right, ly + 44, "소화 거품", r.Foam, new Color("#f4f1ec"), Pct(r.Foam), r.Foam < 0.2f); ly += 22; }
+        if (RobotsV15.Fights(r.Kind)) { Row(x, right, ly + 44, "소화 거품", r.Foam, new Color("#f4f1ec"), Pct(r.Foam), r.Foam < 0.2f); ly += 22; }
         ly += 50;
         string fault = r.Fault is RobotFault f
             ? RobotSystem.CanSelfRepair(r)
@@ -56,6 +56,7 @@ public partial class Hud
             $"한 일 {r.JobsDone}건 · 일한 {r.ActiveHours:0}시간 · 거든 {r.AssistHours:0.0}시간 · 고장 {r.Breakdowns}번(스스로 {r.SelfRepairsTotal}) · 끌려옴 {r.Fetched}번", 11, Palette.TextMuted);
         string can = r.Kind switch
         {
+            _ when RobotsV15.Bot(r.Kind) is { } v => $"맡는 일: {v.Note}", // v15.7
             RobotKind.Hauler => "맡는 일: 배식기 채우기 · 드론 자재 보급 · 물통 급수 · 비상 물자함",
             RobotKind.Maintainer => "맡는 일: 정기 정비(원자로 빼고) · 조명 · 사람 옆에서 거들기",
             RobotKind.Gardener => "맡는 일: 작물 돌보기 · 수확해 냉장고로",

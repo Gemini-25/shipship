@@ -27,6 +27,7 @@ public enum UpgradeKind
     BackupHelm,    // v11.1: 함교가 뚫렸거나 자동화가 꺼졌던 배: 엔진실에 예비 조타석 (함교를 잃어도 배를 몬다)
     RingMain,      // v12.3: 간선이 끊겨 정전을 겪은 배: 배전실에서 핵심 방으로 선체 속을 도는 보조 간선
     Repurpose,     // v12.6: 겪은 일에 맞춰 방의 세부 용도를 바꾼다 (창고 → 대피소, 휴게실 → 체력단련실·기도실, 침실 → 조용한 침실, 의무실 → 격리실)
+    Robot,         // v15.7: 겪은 일이 부르는 로봇·드론을 짜 들인다 (굶주림 → 배식 로봇, 조명 고장 → 배선 로봇 … RobotsV15.cs)
 }
 
 /// <summary>개조 계획 하나: 무엇을, 왜(겪은 사고), 무엇으로.</summary>
@@ -83,6 +84,7 @@ public static class Evolution
         UpgradeKind.AuxWorkshop => "보조 작업대",
         UpgradeKind.BackupHelm => "예비 조타석",
         UpgradeKind.Repurpose => "방 용도 변경",
+        UpgradeKind.Robot => "로봇 들이기",
         _ => k.ToString(),
     };
 
@@ -107,6 +109,7 @@ public static class Evolution
         UpgradeKind.AuxWorkshop => $"{o.Target.Room?.Name ?? "?"}에 보조 작업대",
         UpgradeKind.BackupHelm => $"{o.Target.Room?.Name ?? "엔진실"}에 예비 조타석",
         UpgradeKind.Repurpose => $"{Ko.EulReul(o.Target.Room?.Name ?? "?")} {Ko.EuRo(RoomTypes.Name((RoomType)o.Circuit))}",
+        UpgradeKind.Robot => $"{RobotsV15.NameOf(o.Circuit)} 들이기",
         _ => "개조",
     };
 
@@ -131,6 +134,7 @@ public static class Evolution
         UpgradeKind.AuxWorkshop => 4f,
         UpgradeKind.BackupHelm => 3f,
         UpgradeKind.Repurpose => 3f,
+        UpgradeKind.Robot => 3f,
         _ => 2f,
     };
 
@@ -177,6 +181,7 @@ public static class Evolution
     public static (ItemKind kind, int count)[] Cost(WorkOrder o) =>
         o.Upgrade == UpgradeKind.TierUp && o.Target.Furniture?.Machine is Machine tm && Tech.Next(tm) is TechTier nt ? nt.Cost
         : o.Upgrade == UpgradeKind.Module ? Modules.Cost((FurnitureType)o.Circuit)
+        : o.Upgrade == UpgradeKind.Robot ? RobotsV15.Cost(o.Circuit)
         : Cost(o.Upgrade ?? UpgradeKind.Mk3, o.Target.Furniture);
 
     /// <summary>개조하고도 비상용 위로 얼마나 남나 (0 = 딱 비상용만, 1 이상 = 넉넉).</summary>
@@ -204,6 +209,7 @@ public static class Evolution
         UpgradeKind.AuxWorkshop => "보조 작업대",
         UpgradeKind.BackupHelm => "예비 조타석",
         UpgradeKind.Repurpose => $"{p.Target.Room?.Name ?? "?"} → {RoomTypes.Name((RoomType)p.Circuit)}",
+        UpgradeKind.Robot => RobotsV15.NameOf(p.Circuit),
         _ => "침실",
     };
 
@@ -272,7 +278,7 @@ public static class Evolution
         (UpgradeKind.AddGrowBed, CrewRole.Cook) => 0.3f,
         (UpgradeKind.AddGrowBed, CrewRole.Medic) => 0.15f,
         (UpgradeKind.Partition, CrewRole.Technician or CrewRole.Engineer) => 0.2f,
-        (UpgradeKind.TierUp or UpgradeKind.Module, CrewRole.Engineer or CrewRole.Technician or CrewRole.Electrician) => 0.25f,
+        (UpgradeKind.TierUp or UpgradeKind.Module or UpgradeKind.Robot, CrewRole.Engineer or CrewRole.Technician or CrewRole.Electrician) => 0.25f,
         (UpgradeKind.TierUp or UpgradeKind.Module, CrewRole.Botanist) => 0.15f,
         (UpgradeKind.SupplyCache, CrewRole.Technician) => 0.2f,
         (UpgradeKind.SupplyCache, CrewRole.Medic) => 0.2f,
@@ -352,6 +358,7 @@ public static class Evolution
 
         // ── v12.6 방 용도 변경: 겪은 일이 가르쳐 준 방 (전용 방이 없어 본래 방이 겸하던 일) ──
         foreach (var plan in RepurposeCandidates(w)) yield return plan;
+        foreach (var plan in RobotsV15.Candidates(w)) yield return plan; // v15.7 로봇·드론 들이기
 
         // ── v12.3 보조 간선: 간선이 끊겨 방 여럿이 한꺼번에 정전된 배 ──
         if (panel != null && w.Net.Stats.Blackouts >= 1 && w.Net.RingTargets(NetKind.Power).FirstOrDefault() is Room ringTo)
@@ -852,6 +859,9 @@ public static class Evolution
                 room = tm.Body.Room;
                 break;
             }
+            case UpgradeKind.Robot: // v15.7
+                if (!RobotsV15.Install(w, o.Circuit, cm, out text, o.Target.Cell)) return false;
+                break;
             case UpgradeKind.Module:
             {
                 var code = (FurnitureType)o.Circuit;

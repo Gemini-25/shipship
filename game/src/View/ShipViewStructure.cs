@@ -21,7 +21,7 @@ public partial class ShipView
         DroneKind.Inspect => new Color("#7fe3ff"),
         DroneKind.Repair => new Color("#ffd166"),
         DroneKind.Tow => new Color("#ff9a5c"),
-        _ => new Color("#9fe38a"),
+        _ => DroneColorV15(k), // v15.7 (건설 드론은 그대로 초록)
     };
 
     private int _structureVersion = -1;

@@ -8,22 +8,24 @@ namespace ShipSim.Core;
 //  꾸준형 — 고르게, 거의 회복하면 다음 / 몰아치기형 — 오래 조용하다 한꺼번에 / 무작위형 — 예측 불가 / 시험관형 — 배의 급소를 노린다.
 // 기본 규칙: 회복할 틈은 주되, 완전히 회복하기 전에. 난이도는 빈도·크기·시작 물자·부상 강도·작은 이상 빈도를 바꾼다.
 // 수치(성격·난이도)는 밸런스 수치로 저장·재생에 남는다 → 같은 시드면 같은 이야기.
+// v15.7 성격 넷 더 (StorytellerV15.cs): 느린 불씨형 · 계절형 · 자비형 · 앙갚음형.
 
-public enum StoryPersona { Off, Steady, Burst, Random, Tester }
+public enum StoryPersona { Off, Steady, Burst, Random, Tester, SlowBurn, Seasonal, Merciful, Vengeful }
 
-public sealed class Storyteller
+public sealed partial class Storyteller
 {
-    /// <summary>0 끔(예전 무작위 사고) · 1 꾸준형 · 2 몰아치기형 · 3 무작위형 · 4 시험관형.</summary>
+    /// <summary>0 끔(예전 무작위 사고) · 1 꾸준형 · 2 몰아치기형 · 3 무작위형 · 4 시험관형 · 5 느린 불씨형 · 6 계절형 · 7 자비형 · 8 앙갚음형.</summary>
     public static float PersonaValue;
     /// <summary>난이도 1(느긋) ~ 5(가혹), 기본 3.</summary>
     public static float LevelValue = 3f;
 
-    public static StoryPersona Persona => (StoryPersona)Math.Clamp((int)MathF.Round(PersonaValue), 0, 4);
+    public static StoryPersona Persona => (StoryPersona)Math.Clamp((int)MathF.Round(PersonaValue), 0, (int)StoryPersona.Vengeful);
     public static int Level => Math.Clamp((int)MathF.Round(LevelValue), 1, 5);
 
     public static string PersonaName(StoryPersona p) => p switch
     {
-        StoryPersona.Steady => "꾸준형", StoryPersona.Burst => "몰아치기형", StoryPersona.Random => "무작위형", StoryPersona.Tester => "시험관형", _ => "끔",
+        StoryPersona.Steady => "꾸준형", StoryPersona.Burst => "몰아치기형", StoryPersona.Random => "무작위형", StoryPersona.Tester => "시험관형",
+        StoryPersona.SlowBurn => "느린 불씨형", StoryPersona.Seasonal => "계절형", StoryPersona.Merciful => "자비형", StoryPersona.Vengeful => "앙갚음형", _ => "끔",
     };
     public static string LevelName(int l) => l switch { 1 => "느긋", 2 => "쉬움", 3 => "보통", 4 => "어려움", _ => "가혹" };
 
@@ -37,7 +39,7 @@ public sealed class Storyteller
     private readonly World _w;
     private readonly Rng _rng;
     public long Next { get; private set; } = -1;
-    public int Fired { get; private set; }
+    public int Fired { get; internal set; }
     public int BurstLeft { get; private set; }
     public string LastWhy { get; private set; } = "";
     public string LastWhat { get; private set; } = "";
@@ -117,11 +119,15 @@ public sealed class Storyteller
             case StoryPersona.Tester:
                 if (t > (Level >= 4 ? 0.35f : 0.2f)) { Next = w.Tick + SimTime.Hours(1); return; }
                 break;
+            default:
+                if (Hold(persona, t, cap)) { Next = w.Tick + SimTime.Hours(1); return; } // v15.7
+                break;
         }
         var (key, room, why) = Choose(persona, t, cap);
         string? what = w.Hazards.FireStory(key, room);
         if (what == null) { Next = w.Tick + SimTime.Hours(2); return; }
         Fired++;
+        Note(key, t); // v15.7
         LastWhat = what;
         LastWhy = why;
         Journal.Add((w.Tick, what, why));
@@ -134,7 +140,7 @@ public sealed class Storyteller
             BurstLeft--;
             Next = BurstLeft > 0 ? w.Tick + SimTime.Minutes(_rng.Range(20f, 90f)) : w.Tick + GapTicks(gap * 2.2f, persona);
         }
-        else Next = w.Tick + GapTicks(gap, persona);
+        else Next = w.Tick + GapTicks(gap * GapMul(persona, cap), persona); // v15.7 새 성격은 간격 규칙이 다르다 (원래 넷은 1)
     }
 
     private long GapTicks(float days, StoryPersona p)
@@ -175,14 +181,16 @@ public sealed class Storyteller
             pool.Add((s.Kind.ToString(), wt));
         }
         if (p == StoryPersona.Random) for (int i = 0; i < pool.Count; i++) pool[i] = (pool[i].key, 4f);
+        if (p >= StoryPersona.SlowBurn) Shape(p, pool, cap); // v15.7 성격마다 고르는 규칙
         for (int i = 0; i < pool.Count; i++) pool[i] = (pool[i].key, pool[i].weight * w.Voyage.HazardMul(pool[i].key) * w.Eras.RiskMul(pool[i].key)); // v12.8 구간 · 새 기술의 위험
         float total = pool.Sum(x => x.weight), roll = _rng.Float() * total;
-        foreach (var x in pool) { roll -= x.weight; if (roll <= 0f) return (x.key, null, Why(p, tension, cap)); }
-        return (pool[^1].key, null, Why(p, tension, cap));
+        foreach (var x in pool) { roll -= x.weight; if (roll <= 0f) return (x.key, Aim(p), Why(p, tension, cap)); }
+        return (pool[^1].key, Aim(p), Why(p, tension, cap));
     }
 
-    private static string Why(StoryPersona p, float t, float cap) => p switch
+    private string Why(StoryPersona p, float t, float cap) => p switch
     {
+        >= StoryPersona.SlowBurn => WhyV15(p, t, cap),
         StoryPersona.Steady => $"배가 거의 추슬렀다 (긴장 {t:0.00} · 여력 {cap * 100:0}%)",
         StoryPersona.Burst => $"몰아친다 (긴장 {t:0.00} · 여력 {cap * 100:0}%)",
         StoryPersona.Random => $"아무 때나 (긴장 {t:0.00})",

@@ -12,6 +12,8 @@ public enum RobotKind
     Maintainer, // 정비: 정기 정비, 조명 갈기, 사람 옆에서 거들기 (긴 수리·제작이 빨라진다)
     Gardener,   // 재배: 작물 돌보기, 수확해 냉장고로
     Safety,     // 방재: 순찰(불·사고 전조 발견), 소화 거품
+    // v15.7 새 로봇 11 (RobotsV15.cs): 위 넷의 행동을 그대로 쓰고 특기(맡는 일·속도·배터리·고장률)만 다르다
+    Courier, Tanker, Stocker, Lineman, Assistant, Overhauler, Harvester, Tender, Sentry, Firefighter, Utility,
 }
 
 public enum RobotState
@@ -278,8 +280,8 @@ internal sealed class RSpray : RobotStep
         }
         if (nearest is not Cell aim || r.Foam <= 0.01f) return ToilStatus.Succeeded;
         r.Facing = Vector2.Normalize(aim.Center - r.Position + new Vector2(0.0001f, 0f));
-        w.Fire.Suppress(aim, 1.4f, RobotSystem.FoamRate / SimTime.TicksPerHour);
-        r.Foam = MathF.Max(0f, r.Foam - 1f / (RobotSystem.FoamHours * SimTime.TicksPerHour));
+        w.Fire.Suppress(aim, 1.4f, RobotsV15.FoamRate(r.Kind) / SimTime.TicksPerHour); // v15.7 소방 로봇은 더 세게·오래
+        r.Foam = MathF.Max(0f, r.Foam - 1f / (RobotsV15.FoamHours(r.Kind) * SimTime.TicksPerHour));
         return ToilStatus.Running;
     }
 }
@@ -298,10 +300,10 @@ public sealed class RobotSystem
     public int Patrols { get; private set; }
 
     /// <summary>1틱에 움직이는 칸 수 (사람 0.1).</summary>
-    public static float Speed(RobotKind k) => k switch { RobotKind.Hauler => 0.085f, RobotKind.Safety => 0.09f, _ => 0.075f };
+    public static float Speed(RobotKind k) => k switch { RobotKind.Hauler => 0.085f, RobotKind.Safety => 0.09f, RobotKind.Maintainer or RobotKind.Gardener => 0.075f, _ => RobotsV15.Speed(k) };
 
     /// <summary>같은 일에 드는 시간 배율 (사람의 보통 솜씨 = 1). 로봇은 꾸준하지만 느리다.</summary>
-    public static float WorkFactor(RobotKind k) => k switch { RobotKind.Gardener => 1.25f, RobotKind.Maintainer => 1.4f, _ => 1.3f };
+    public static float WorkFactor(RobotKind k) => k switch { RobotKind.Gardener => 1.25f, RobotKind.Maintainer => 1.4f, RobotKind.Hauler or RobotKind.Safety => 1.3f, _ => RobotsV15.Work(k) };
 
     /// <summary>시간당 배터리 소모: 움직일 때 · 일할 때 · 밖에서 기다릴 때.</summary>
     public const float DrainMove = 0.15f, DrainWork = 0.17f, DrainIdle = 0.03f, DrainSpray = 0.3f;
@@ -319,7 +321,7 @@ public sealed class RobotSystem
         RobotKind.Maintainer => "정비 로봇",
         RobotKind.Gardener => "재배 로봇",
         RobotKind.Safety => "방재 로봇",
-        _ => k.ToString(),
+        _ => RobotsV15.Bot(k)?.Name ?? k.ToString(),
     };
 
     public static string FaultName(RobotFault f) => f switch
@@ -391,7 +393,7 @@ public sealed class RobotSystem
         RobotKind.Hauler => w is WorkKind.Restock or WorkKind.StockDock or WorkKind.CarryWater or WorkKind.StockCache or WorkKind.StowCot or WorkKind.RefillPropellant,
         RobotKind.Maintainer => w is WorkKind.Maintain or WorkKind.FixLights,
         RobotKind.Gardener => w is WorkKind.Tend or WorkKind.Harvest,
-        _ => false,
+        _ => RobotsV15.CanDo(k, w),
     };
 
     /// <summary>사람이 로봇이 하는 일에 합류할 수 있는 일 (같은 진척을 함께 채운다).</summary>
@@ -452,7 +454,7 @@ public sealed class RobotSystem
     };
 
     /// <summary>로봇 종류마다 충전대를 둘 방 (먼저 것부터, 자리가 없으면 다음).</summary>
-    private static RoomType[] HomeRooms(RobotKind k) => k switch
+    internal static RoomType[] HomeRooms(RobotKind k) => k switch
     {
         RobotKind.Maintainer or RobotKind.Safety => new[] { RoomType.Workshop, RoomType.Storage, RoomType.Corridor },
         RobotKind.Gardener => new[] { RoomType.Hydroponics, RoomType.Galley, RoomType.Storage, RoomType.Corridor },
@@ -630,7 +632,7 @@ public sealed class RobotSystem
                     {
                         float eff = r.Dock.Machine!.Efficiency;
                         if (r.Battery < 1f) { r.Battery = MathF.Min(MaxCharge(r), r.Battery + ChargePerHour * eff * dt); charging.Add(r.Dock); }
-                        if (r.Kind == RobotKind.Safety && r.Foam < 1f) { r.Foam = MathF.Min(1f, r.Foam + FoamRefillPerHour * eff * dt); charging.Add(r.Dock); }
+                        if (RobotsV15.Fights(r.Kind) && r.Foam < 1f) { r.Foam = MathF.Min(1f, r.Foam + FoamRefillPerHour * eff * dt); charging.Add(r.Dock); }
                     }
                     if (r.Disabled) { r.Doing = "꺼 둠"; break; }
                     if (r.Fault is RobotFault df)
@@ -657,7 +659,7 @@ public sealed class RobotSystem
                     bool moving = r.Path != null;
                     float drain = r.Steps != null && r.StepIndex < r.Steps.Count && r.Steps[r.StepIndex] is RSpray ? DrainSpray
                         : moving ? DrainMove : working ? DrainWork : DrainIdle;
-                    r.Battery = MathF.Max(0f, r.Battery - drain * dt);
+                    r.Battery = MathF.Max(0f, r.Battery - drain * RobotsV15.Drain(r.Kind) * dt); // v15.7 배터리 크기
                     r.ActiveHours += dt;
                     r.Condition = MathF.Max(0f, r.Condition - (working || moving ? 0.008f : 0.002f) * dt);
                     // 가벼운 고장으로 충전대에 돌아가는 중 (느리게): 길이 막히면 그 자리에 멈춘다
@@ -669,9 +671,9 @@ public sealed class RobotSystem
                         break;
                     }
                     // 불 곁에서 그을리거나, 닳아서 고장
-                    if (w.Fire.AnyWithin(r.Cell, 1.2f) && r.Kind != RobotKind.Safety && w.Rng.Chance(0.6f * dt)) { Break(r, RobotFault.Scorched); break; }
-                    if (w.Fire.AnyWithin(r.Cell, 0.8f) && r.Kind == RobotKind.Safety) r.Condition = MathF.Max(0f, r.Condition - 0.05f * dt);
-                    float wearRisk = 0.0025f + 0.045f * (1f - r.Condition) * (1f - r.Condition);
+                    if (w.Fire.AnyWithin(r.Cell, 1.2f) && !RobotsV15.Fireproof(r.Kind) && w.Rng.Chance(0.6f * dt)) { Break(r, RobotFault.Scorched); break; }
+                    if (w.Fire.AnyWithin(r.Cell, 0.8f) && RobotsV15.Fireproof(r.Kind)) r.Condition = MathF.Max(0f, r.Condition - 0.05f * RobotsV15.HeatWear(r.Kind) * dt);
+                    float wearRisk = (0.0025f + 0.045f * (1f - r.Condition) * (1f - r.Condition)) * RobotsV15.Fault(r.Kind); // v15.7 고장률
                     if (w.Rng.Chance(wearRisk * dt)) { Break(r, PickFault(r)); break; }
                     if (r.Battery <= 0.001f) { Stall(r, "배터리가 바닥났다"); break; }
                     // 맡은 일이 사라졌으면 (누가 끝냈거나 조건이 없어졌다) 손을 놓는다
@@ -683,7 +685,7 @@ public sealed class RobotSystem
                     // 배터리가 모자라면 돌아간다 (돌아갈 만큼 남기고) — 맡은 일이든, 사람을 거들든, 순찰이든
                     if (!r.Homing && r.Steps != null && r.Battery < ReturnCost(r) + 0.05f) { Abort(r, "배터리가 모자라 충전대로 돌아간다"); break; }
                     // 방재 로봇: 순찰·귀환 중에도 불이 나면 그쪽으로 (거품이 있을 때)
-                    if (r.Kind == RobotKind.Safety && !r.FightingFire && w.Fire.Count > 0 && r.Foam > 0.15f && r.Battery > ReturnCost(r) + 0.15f)
+                    if (RobotsV15.Fights(r.Kind) && !r.FightingFire && w.Fire.Count > 0 && r.Foam > 0.15f && r.Battery > ReturnCost(r) + 0.15f)
                     {
                         var fireDist = w.Paths.Flood(r.Cell, Profile);
                         var keep = (r.Steps, r.StepIndex, r.Doing, r.Homing);
@@ -722,7 +724,7 @@ public sealed class RobotSystem
     {
         float dist = MathF.Abs(r.DockPosition.X - r.Position.X) + MathF.Abs(r.DockPosition.Y - r.Position.Y);
         dist = dist * 1.4f + 6f;
-        return dist / (Speed(r.Kind) * SimTime.TicksPerHour) * DrainMove + 0.03f;
+        return dist / (Speed(r.Kind) * SimTime.TicksPerHour) * DrainMove * RobotsV15.Drain(r.Kind) + 0.03f;
     }
 
     private void SetState(Robot r, RobotState s)
@@ -744,23 +746,23 @@ public sealed class RobotSystem
         // 충전대에서 기다릴 때는 2분에 한 번만 생각한다 (거리장은 비싸다)
         if (r.AtDock && w.Tick < r.NextDecide) return;
         r.NextDecide = w.Tick + SimTime.Minutes(2);
-        bool fire = r.Kind == RobotKind.Safety && r.Foam > 0.15f && w.Fire.Count > 0;
+        bool fire = RobotsV15.Fights(r.Kind) && r.Foam > 0.15f && w.Fire.Count > 0;
         bool work = w.Board.OpenForRobot().Any(o => CanDo(r.Kind, o.Kind));
-        bool assist = r.Kind == RobotKind.Maintainer && w.Crew.Any(c => c.CanAct && c.Helper == null && c.Job?.Order is WorkOrder jo && Assistable(jo.Kind) && c.Job.Current is WorkToil);
-        bool patrol = r.Kind == RobotKind.Safety && w.Tick >= r.NextPatrol && r.Battery > 0.7f;
+        bool assist = RobotsV15.Assists(r.Kind) && w.Crew.Any(c => c.CanAct && c.Helper == null && c.Job?.Order is WorkOrder jo && Assistable(jo.Kind) && c.Job.Current is WorkToil);
+        bool patrol = RobotsV15.Patrols(r.Kind) && w.Tick >= r.NextPatrol && r.Battery > 0.7f;
         if (!fire && !work && !assist && !patrol) { if (!r.AtDock) GoHome(r, null); return; }
 
         var dist = w.Paths.Flood(r.Cell, Profile);
 
         // 방재 로봇: 불이 먼저
-        if (r.Kind == RobotKind.Safety && r.Foam > 0.15f && PlanFire(r, dist)) return;
+        if (RobotsV15.Fights(r.Kind) && r.Foam > 0.15f && PlanFire(r, dist)) return;
 
         WorkOrder? best = null;
         Cell bestSpot = default;
         float bestScore = float.MinValue;
         foreach (var o in w.Board.OpenForRobot())
         {
-            if (!CanDo(r.Kind, o.Kind)) continue;
+            if (!CanDo(r.Kind, o.Kind) || !RobotsV15.Takes(r.Kind, o)) continue;
             // 원자로 정비는 사람 몫 (제어봉·계측을 손보는 기관 일이다)
             if (o.Kind == WorkKind.Maintain && o.Target.Furniture?.Type == FurnitureType.ReactorCore) continue;
             // v11.2 병충해는 사람 눈과 손으로 (로봇 분무기는 잎 뒷면의 벌레를 못 본다)
@@ -783,8 +785,8 @@ public sealed class RobotSystem
             if (blocked != null) w.Board.Block(best, null, 0.25f);
         }
 
-        if (r.Kind == RobotKind.Maintainer && TryAssist(r, dist)) return;
-        if (r.Kind == RobotKind.Safety && w.Tick >= r.NextPatrol && r.Battery > 0.7f && PlanPatrol(r, dist)) return;
+        if (RobotsV15.Assists(r.Kind) && TryAssist(r, dist)) return;
+        if (RobotsV15.Patrols(r.Kind) && w.Tick >= r.NextPatrol && r.Battery > 0.7f && PlanPatrol(r, dist)) return;
         if (!r.AtDock) GoHome(r, null);
     }
 
@@ -887,7 +889,7 @@ public sealed class RobotSystem
                 steps.Add(new RDo((rb, world) =>
                 {
                     if (o.Closed) return true;
-                    crop.Care = MathF.Max(crop.Care, 0.9f);
+                    crop.Care = MathF.Max(crop.Care, RobotsV15.Care(rb.Kind)); // v15.7 돌봄 로봇은 끝까지
                     world.Board.Close(o);
                     Done(rb, null);
                     return true;
@@ -907,7 +909,7 @@ public sealed class RobotSystem
                 {
                     if (o.Closed || !crop.Ripe) return true;
                     // 로봇 솜씨는 보통 사람쯤 (0.5)
-                    int yield = (int)MathF.Round(FoodChain.HarvestYield * FoodChain.BedSize(bed) * 1.0f * (0.8f + 0.2f * bed.Machine!.Condition));
+                    int yield = (int)MathF.Round(FoodChain.HarvestYield * FoodChain.BedSize(bed) * RobotsV15.Yield(rb.Kind) * (0.8f + 0.2f * bed.Machine!.Condition)); // v15.7 수확 로봇은 덜 흘린다
                     crop.Growth = 0f;
                     rb.Cargo = new ItemStack(ItemKind.Produce, yield);
                     world.Board.Close(o);
@@ -1192,7 +1194,7 @@ public sealed class RobotSystem
             .Where(x => !x.Abandoned && !x.OffLimits && x.Type != RoomType.Corridor && x.Furniture.Any(f => f.Machine != null))
             .OrderBy(x => w.Robots.LastPatrolled.GetValueOrDefault(x.Id, -1_000_000))
             .ThenBy(x => x.Id)
-            .Take(4).ToList();
+            .Take(RobotsV15.PatrolRooms(r.Kind)).ToList();
         var steps = new List<RobotStep>();
         foreach (var room in rooms)
         {
@@ -1204,7 +1206,7 @@ public sealed class RobotSystem
             steps.Add(new RDo((rb, world) => { world.Robots.Inspect(rb, inspected); return true; }));
         }
         if (steps.Count == 0) return false;
-        r.NextPatrol = w.Tick + SimTime.Hours(3);
+        r.NextPatrol = w.Tick + SimTime.Hours(RobotsV15.PatrolHours(r.Kind));
         Patrols++;
         Begin(r, steps, "순찰 — " + string.Join(" · ", rooms.Select(x => x.Name)));
         return true;
@@ -1223,7 +1225,7 @@ public sealed class RobotSystem
 
     /// <summary>불을 본 로봇 (방재 로봇이면 경보가 없어도 알린다).</summary>
     public Robot? Witness(Room room) =>
-        Robots.FirstOrDefault(r => r.Operational && r.State == RobotState.Active && r.Room == room && r.Kind == RobotKind.Safety);
+        Robots.FirstOrDefault(r => r.Operational && r.State == RobotState.Active && r.Room == room && RobotsV15.Base(r.Kind) == RobotKind.Safety);
 
     // ─────────────────────────────── 시험용 ───────────────────────────────
 

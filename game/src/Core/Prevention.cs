@@ -253,7 +253,7 @@ public sealed partial class WorkBoard
         ScanSafety(post);
         if (w.PreventionBlind) return;
         // 순찰: 방재 로봇이 돌고 있으면 사람은 돌지 않는다 (로봇이 멈추면 사람이 다시 돈다)
-        bool robotRounds = w.Robots.Robots.Any(r => r.Kind == RobotKind.Safety && r.Operational);
+        bool robotRounds = w.Robots.Robots.Any(r => RobotsV15.Patrols(r.Kind) && r.Operational); // v15.7 순찰하는 로봇 (순찰 로봇도 · 소방 로봇은 아니다)
         if (robotRounds) return;
         // 가장 오래 안 본 방 두 곳씩만 (한꺼번에 올리면 작업 목록이 순찰로 덮인다) — 하루에 한 번 모든 방을 돈다
         var due = w.Ship.LiveRooms
