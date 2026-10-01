@@ -28,7 +28,8 @@ public sealed class EraSystem
         (1, "근지구 시대", 0f), (2, "태양계 시대", 50f), (3, "핵융합 시대", 130f), (4, "성간 준비 시대", 260f), (5, "탈지구 공학 시대", 450f), (6, "초공간 시대", 700f),
     };
 
-    public static readonly EraTech[] All =
+    public static readonly EraTech[] All = Base().Concat(ErasV15.Rows.Select(r => r.Tech)).ToArray(); // v15.5 18 → 70 (ErasV15.cs)
+    private static EraTech[] Base() => new EraTech[]
     {
         // 1 근지구
         new("fireproof", 1, TechField.Habitat, "불연 내장재", 28.8f, "불이 잘 안 붙는다 (발화 −30%)", "없음"),
@@ -75,6 +76,7 @@ public sealed class EraSystem
         if (key == "fire" && Known.Contains("fireproof")) m *= 0.7f;
         foreach (var t in All)
             if (t.RiskKey == key && Known.Contains(t.Id)) m *= t.RiskMul;
+        m *= ErasV15.Mul(_w, key); // v15.5 새 기술이 줄이는 사고
         return m;
     }
 

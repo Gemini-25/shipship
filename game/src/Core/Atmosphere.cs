@@ -72,7 +72,7 @@ public sealed class Atmosphere
 
         // 2) 생명유지: 산소 보충, CO2 제거 (환기팬이 도는 방만)
         float capacity = ship.FurnitureOf(FurnitureType.OxygenGenerator)
-            .Sum(f => f.Machine!.Efficiency * f.Machine.Rating) * GeneratorCapacity * (1f + Modules.Bonus(_world, FurnitureType.Scrubber)); // v10.6 세정 모듈
+            .Sum(f => f.Machine!.Efficiency * f.Machine.Rating) * GeneratorCapacity * (1f + Modules.Bonus(_world, FurnitureType.Scrubber)) * ErasV15.Mul(_world, "o2"); // v10.6 세정 모듈 · v15.5 흡착제·광합성
         O2Capacity = capacity;
         bool anyGen = ship.FurnitureOf(FurnitureType.OxygenGenerator).Any(f => !f.Stowed && !f.Room.Detached && !f.Room.Abandoned && !f.Machine!.Has(FaultKind.Wrecked));
         if (anyGen) NoGeneratorSince = -1;
