@@ -532,7 +532,7 @@ public sealed partial class PortableSystem
             if (d.Kind == PortableKind.Cart && d.Placed) _cartCells.Add(d.At);
             if (d.Running && d.Placed && RoomOf(d) is Room nr)
             {
-                float n = d.Kind switch { PortableKind.Pump => 0.45f, PortableKind.Fan => 0.22f, PortableKind.Purifier => 0.18f, PortableKind.Heater => 0.12f, _ => 0f };
+                float n = d.Kind switch { PortableKind.Pump => nr.Flood > 1f ? 0.45f : 0.3f, /* 물이 없으면 헛도는 소리 */ PortableKind.Fan => 0.22f, PortableKind.Purifier => 0.18f, PortableKind.Heater => 0.12f, _ => 0f };
                 if (n > _noise.GetValueOrDefault(nr.Id)) _noise[nr.Id] = n;
                 if (d.Kind == PortableKind.Purifier) _clean.Add(nr.Id);
             }
@@ -1301,6 +1301,8 @@ public sealed partial class PortableSystem
             parts.Add(d.Kind == PortableKind.Cart ? $"카트{extra}" : $"{d.Name} {state}{power}{extra}");
         }
         foreach (var d in Devices.Where(d => d.HeldBy != null && d.HeldBy.Room == room)) parts.Add($"{Ko.IGa(d.HeldBy!.Name)} {d.Name} 나르는 중");
+        if (!room.Detached && room.Circuit >= 0 && room.Circuit < _hot.Length && OutletRoom(room.Circuit) == room && _hot[room.Circuit] > 0.1f) // 멀티탭이 달아오른다 (화면은 세계를 그대로 — 사람들이 아는지는 따로)
+            parts.Add($"멀티탭이 달아오른다 ({CircuitLoad[room.Circuit]:0.0}kW{(TripMinutes(room.Circuit) < 90f ? $" · 차단기까지 {TripMinutes(room.Circuit):0}분" : "")})");
         return parts.Count == 0 ? null : string.Join(" · ", parts);
     }
 

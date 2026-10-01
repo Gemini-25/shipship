@@ -124,12 +124,25 @@ public partial class ShipView
         }
         else
         {
-            bool hot = d.Outlet != null && _world.Portable.CircuitKw(d.Outlet.Circuit) > PortableSystem.OutletCapKw;
+            // 멀티탭 열 (0~1.5): 하얀 플러그가 누렇게 · 붉게 달아오르고, 많이 달면 피복이 그을려 잿빛 실연기가 오른다
+            float heat = d.Outlet != null && d.On ? Mathf.Clamp(_world.Portable.OutletHeat(d.Outlet.Circuit), 0f, 1.5f) : 0f;
+            bool hot = heat > 0.05f;
             var plug = new[] { b - dir * 5f + nrm * 2.5f, b + nrm * 2.5f, b - nrm * 2.5f, b - dir * 5f - nrm * 2.5f };
-            ci.DrawColoredPolygon(plug, hot ? new Color(1f, 0.45f + 0.2f * Mathf.Sin(_time * 7f), 0.15f) : new Color("#e8e3d6"));
+            var cold = new Color("#e8e3d6");
+            ci.DrawColoredPolygon(plug, hot ? cold.Lerp(new Color(1f, 0.45f + 0.2f * Mathf.Sin(_time * 7f), 0.15f), Mathf.Min(1f, heat)) : cold);
             ci.DrawLine(b + nrm * 1.2f, b + nrm * 1.2f + dir * 2.5f, PtSteel, 1f);
             ci.DrawLine(b - nrm * 1.2f, b - nrm * 1.2f + dir * 2.5f, PtSteel, 1f);
-            if (hot) ci.DrawCircle(b, 6f + 1.5f * Mathf.Sin(_time * 9f), new Color(1f, 0.5f, 0.1f, 0.18f), true, -1f, true); // 달아오른 콘센트
+            if (hot) ci.DrawCircle(b, 6f + 1.5f * Mathf.Sin(_time * 9f), new Color(1f, 0.5f, 0.1f, 0.1f + 0.15f * Mathf.Min(1f, heat)), true, -1f, true); // 달아오른 콘센트
+            if (heat > 0.5f) // 그을린 자국 · 실연기 (위로 흔들리며 흩어진다)
+            {
+                ci.DrawCircle(b - dir * 2.5f, 2.2f, new Color(0.15f, 0.12f, 0.1f, 0.5f * Mathf.Min(1f, heat - 0.5f)), true, -1f, true);
+                for (int k = 0; k < 3; k++)
+                {
+                    float ph = (_time * 0.7f + k / 3f + d.Id * 0.13f) % 1f;
+                    var sp = b + new Vector2(Mathf.Sin(_time * 3f + k * 2.1f) * 2.5f * ph, -4f - 14f * ph);
+                    ci.DrawCircle(sp, 1.2f + 2.2f * ph, new Color(0.62f, 0.6f, 0.58f, 0.4f * (1f - ph) * Mathf.Min(1f, heat - 0.5f)), true, -1f, true);
+                }
+            }
         }
     }
 
