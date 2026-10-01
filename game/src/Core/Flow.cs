@@ -452,7 +452,7 @@ public sealed class FlowSystem
             yield return new DoToil((cm, world) => { cm.Say(world, "우주복 점검 — 산소 · 봉인 · 통신"); return true; });
             yield return new WaitToil(SimTime.Minutes(1), Pose.Working, hatch.Cell.Center);
         }
-        int pump = urgent ? SimTime.Minutes(1) : power >= 0.6f ? SimTime.Minutes(2) : SimTime.Minutes(5);
+        int pump = urgent ? SimTime.Minutes(1) : power >= 0.6f ? SimTime.Minutes(ModulesV15.AirlockPumped(w) ? 1 : 2) : SimTime.Minutes(5); // v15 회수 펌프
         string say = urgent ? "감압 — 급하니 공기를 버린다" : power >= 0.6f ? "감압" : "감압 — 전기가 모자라 손 펌프로";
         yield return new DoToil((cm, world) => { cm.Say(world, say); return true; });
         yield return new WaitToil(pump, Pose.Working, hatch.Cell.Center);

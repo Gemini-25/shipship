@@ -274,6 +274,7 @@ public sealed class World
     public void CycleAirlock(float cost = AirlockCycleCost)
     {
         AirlockCycles++;
+        if (ModulesV15.AirlockPumped(this)) cost *= 0.6f; // v15 에어락 회수 펌프
         Air.Reserve = MathF.Max(0f, Air.Reserve - cost);
     }
 

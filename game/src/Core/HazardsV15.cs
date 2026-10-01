@@ -197,7 +197,7 @@ public sealed partial class HazardSystem
             case HazardKind.CondensateFlood:
             {
                 if (RoomHere() is not Room r) return null;
-                w.Moisture.AddWater(r, 40f);
+                w.Moisture.AddWater(r, 40f * ModulesV15.DryMul(r)); // v15 제습기
                 MarkLog.Add(r.Marks, w.Tick, "결로가 모여 바닥에 물이 고였다");
                 return Inc($"{r.Name} 천장 결로가 모여 바닥에 물이 고였다", r, $"결로 침수({r.Name})", AlertLevel.Warning);
             }
@@ -250,8 +250,8 @@ public sealed partial class HazardSystem
             case HazardKind.HumiditySpike:
             {
                 if (RoomHere() is not Room r) return null;
-                w.Moisture.AddWater(r, 10f);
-                foreach (var f in r.Furniture.Where(f => f.Machine != null)) f.Machine!.SensorCal = MathF.Max(0.3f, f.Machine.SensorCal - 0.2f);
+                w.Moisture.AddWater(r, 10f * ModulesV15.DryMul(r));
+                foreach (var f in r.Furniture.Where(f => f.Machine != null)) f.Machine!.SensorCal = MathF.Max(0.3f, f.Machine.SensorCal - 0.2f * ModulesV15.DryMul(r));
                 return Inc($"{r.Name} 습도가 치솟았다 — 감지기가 흐려지고 바닥이 젖는다", r, $"습도 급등({r.Name})");
             }
             // ─── 기계 ───
@@ -410,9 +410,9 @@ public sealed partial class HazardSystem
             case HazardKind.MoldOutbreak:
             {
                 if (RoomHere() is not Room r) return null;
-                w.Soil.RoomSoil(r)[(int)SoilKind.Bio] = MathF.Min(1f, w.Soil.RoomSoil(r)[(int)SoilKind.Bio] + 0.5f);
+                w.Soil.RoomSoil(r)[(int)SoilKind.Bio] = MathF.Min(1f, w.Soil.RoomSoil(r)[(int)SoilKind.Bio] + 0.5f * ModulesV15.DryMul(r));
                 var sick = new List<CrewMember>();
-                foreach (var c in w.Crew.Where(c => !c.Dead && c.Room == r)) if (w.Rng.Chance(0.3f) && w.Ailments.Catch(c, "moldlung", null, $"{r.Name} 곰팡이") != null) sick.Add(c);
+                foreach (var c in w.Crew.Where(c => !c.Dead && c.Room == r)) if (w.Rng.Chance(0.3f * ModulesV15.DryMul(r)) && w.Ailments.Catch(c, "moldlung", null, $"{r.Name} 곰팡이") != null) sick.Add(c);
                 var box = r.Furniture.FirstOrDefault(f => f.Storage != null && f.Storage.Count(ItemKind.Meal) > f.Storage.Tainted);
                 if (box != null) box.Storage!.Taint(Math.Min(2, box.Storage.Count(ItemKind.Meal) - box.Storage.Tainted));
                 return Inc($"{r.Name} 구석에 곰팡이가 번졌다" + (sick.Count > 0 ? $" — {sick.Count}명 기침" : ""), r, $"곰팡이({r.Name})", AlertLevel.Warning, crew: sick);

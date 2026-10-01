@@ -172,7 +172,8 @@ public sealed class AmbienceSystem
         if (room == null) return 1f;
         float f = 1f - 0.4f * room.Noise - 0.3f * room.Vibration - 0.2f * room.Smell;
         if (room.Kind is RoomType.QuietQuarters or RoomType.PrivateCabins or RoomType.WaterWallCabin) f += 0.08f;
-        return Math.Clamp(f, 0.45f, 1.1f);
+        f += ModulesV15.SleepAdd(room); // v15 암막 커튼 · 방음재 · 백색 소음기
+        return Math.Clamp(f, 0.45f, 1.25f);
     }
 
     /// <summary>깨어 있을 때 쌓이는 스트레스 (시간당).</summary>
@@ -190,7 +191,7 @@ public sealed class AmbienceSystem
         RoomType.Theater or RoomType.Chapel or RoomType.Meditation => 1.25f,
         RoomType.Gym or RoomType.Centrifuge => 1.1f,
         _ => 1f,
-    } * (room == null ? 1f : 1f - 0.3f * room.Noise - 0.3f * room.Smell);
+    } * (room == null ? 1f : 1f - 0.3f * room.Noise - 0.3f * room.Smell) * ModulesV15.RelaxMul(room); // v15 커피 머신 · 영사기 · 수조 …
 
     /// <summary>작물 성장 — 진동과 방사선이 깎는다.</summary>
     public static float CropFactor(Room room) => Math.Clamp(1f - 0.3f * room.Vibration - 0.6f * room.Radiation, 0.3f, 1f);

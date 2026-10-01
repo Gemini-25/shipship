@@ -244,6 +244,7 @@ public sealed class DailySystem
         {
             if (x.One(c => c.Pose == Pose.Sleeping && x.Has(c, Habit.HeavySleeper), asleepOk: true) is not CrewMember s) return false;
             if (x.Near(s, o => o.Pose == Pose.Sleeping, asleepOk: true) is not CrewMember o) return false;
+            if (ModulesV15.Has(s.Room, FurnitureType.NoiseDamper)) return false; // v15 방음재
             x.Rest(o, -0.08f); x.Aff(o, s, -0.02f);
             x.Diary(o, $"{Ko.IGa(s.Name)} 코를 골아서 한숨도 못 잤다");
             return x.Done($"{s.Name}의 코골이에 {Ko.IGa(o.Name)} 잠을 설쳤다", o, s);

@@ -88,12 +88,14 @@ public static partial class Program
             {
                 var w = DayOne(seed, "Mirinae");
                 w.Growth.NoRehab = !rehab;
+                w.Growth.NoFirstAid = true; // v15 키트 없는 응급 처치도 빼고
                 w.Ailments.Disabled = true; // v14.4 재활만 견준다 (상처 감염으로 누워 버리면 재활할 틈이 없다)
                 // 치료 운을 빼고 재활만 견준다 (구급 키트가 없으면 둘 다 저절로 낫는다)
                 foreach (var f in w.Ship.Furniture.Where(f => f.Storage != null)) f.Storage!.Take(ItemKind.MedKit, 999);
                 var c = w.Crew.First(x => x.Role == CrewRole.Technician);
                 NeedsSystem.AddInjury(c.Vitals, 0.7f, "감압");
                 c.Vitals.Health = 0.6f;
+                c.Vitals.TreatedTick = w.Tick; // 처음 치료는 받았다 (재활은 치료 뒤에 — 그 뒤로는 키트가 없다)
                 float scar0 = c.Vitals.Scar;
                 // 빨리 낫나는 사흘째 부상으로 (엿새면 둘 다 다 낫는다), 후유증은 엿새째로
                 Run(w, SimTime.TicksPerDay * 3);

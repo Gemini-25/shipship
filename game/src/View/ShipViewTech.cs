@@ -20,6 +20,21 @@ public partial class ShipView
     {
         var r = FurnitureRect(f);
         var c = r.GetCenter();
+        if (ModulesV15.Of(f.Type) is ModulesV15.Row mv) // v15 새 모듈 34: 역할마다 색 · 이름 첫 글자
+        {
+            var (bodyC, edgeC) = mv.Role switch
+            {
+                ModuleRole.Omen => (new Color("#141a22"), new Color("#4f7fa8")),
+                ModuleRole.Speed => (new Color("#1d1912"), new Color("#a8844f")),
+                ModuleRole.Clean or ModuleRole.SuitDry or ModuleRole.Laundry or ModuleRole.Dry => (new Color("#121d1b"), new Color("#4fa892")),
+                ModuleRole.Sleep => (new Color("#16142a"), new Color("#6a5fb0")),
+                ModuleRole.Relax => (new Color("#22161a"), new Color("#b06a7e")),
+                _ => (new Color("#221612"), new Color("#c0603c")),
+            };
+            Gfx.RoundRect(ci, r.Grow(-4f), bodyC, 4, edgeC, 2);
+            Gfx.TextCentered(ci, Fonts.Bold, c + new Vector2(0, Gfx.CenterOffset(Fonts.Bold, 11)), mv.Name[..1], 11, edgeC);
+            return true;
+        }
         switch (f.Type)
         {
             case FurnitureType.LedPanel:

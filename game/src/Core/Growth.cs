@@ -18,6 +18,8 @@ public sealed class GrowthStats
 
     /// <summary>시험용: 재활을 하지 않는 배.</summary>
     public bool NoRehab { get; set; }
+    /// <summary>시험용: 구급 키트가 없을 때 응급 처치도 하지 않는다 (재활만 견줄 때).</summary>
+    public bool NoFirstAid { get; set; }
     public int Lessons;
     public int Milestones;
     public int RehabSessions;

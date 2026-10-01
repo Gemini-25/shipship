@@ -144,7 +144,8 @@ public static class Prevention
                         if (m.Body.Room.Dark) p *= 0.5f;
                         bool again = fam >= 0.3f && w.Parts.Owner(m, o.Fault) is { Failures: > 0 }; // v14.6 전에 나갔던 그 부품 — 귀에 익은 소리
                         if (again) p *= 1.6f;
-                        if (w.Culture.Follows(c, CustomKind.MaintainerWay)) p *= 1.35f; // v14.9 정전 속에서 배를 살린 정비사의 방식 — 소리부터 듣는다
+                        if (w.Culture.Follows(c, CustomKind.MaintainerWay)) p *= 1.35f;
+                        p *= ModulesV15.OmenMul(m.Body.Room, o.Kind); // v15 진동 감시기 · 열화상 · 누설 감지기 · 교정 장비 // v14.9 정전 속에서 배를 살린 정비사의 방식 — 소리부터 듣는다
                         if (w.Rng.Chance(p * dt)) { if (again) w.Parts.Stats.Noticed++; Detect(w, m, o, nextDoor ? "옆방에서 들음" : "당직", c); break; }
                     }
                 }

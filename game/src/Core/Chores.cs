@@ -1386,6 +1386,7 @@ public static partial class WorkPlanners
         var patient = o.Target.Crew!;
         var toils = Fetch(c, w, dist, ItemKind.MedKit, 1);
         bool kit = toils != null;
+        if (!kit && w.Growth.NoFirstAid) { blocked = "구급 키트 없음"; return null; } // (시험: 재활만 견준다)
         // v15 키트가 바닥나면 손에 있는 천·소독약으로 응급 처치 (효과는 절반 — 키트는 배에서 못 만든다)
         toils ??= Plans.DropOff(c, w, dist);
         toils.AddRange(w.Soil.WashFirst(c, o.Urgency >= 0.9f, "치료")); // v14.7 급하지 않으면 손부터 (환자 곁에 가기 전에 — 씻는 사이 환자가 자리를 뜨지 않게)

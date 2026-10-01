@@ -333,7 +333,8 @@ public sealed partial class HazardSystem
         var parts = new List<string>();
         // 1) 차단기 둘셋이 떨어지고, 한 회로는 단락
         var circuits = Enumerable.Range(0, PowerGrid.CircuitCount).Where(i => !panel.Faults.Any(f => f.Circuit == i)).ToList();
-        int trips = Math.Min(circuits.Count, 2 + w.Rng.Range(0, 2));
+        bool guard = ModulesV15.SurgeGuard(w); // v15 서지 보호기: 차단기 하나만
+        int trips = Math.Min(circuits.Count, guard ? 1 : 2 + w.Rng.Range(0, 2));
         for (int i = 0; i < trips; i++)
         {
             int c = circuits[w.Rng.Range(0, circuits.Count)];
@@ -349,7 +350,8 @@ public sealed partial class HazardSystem
         // 2) 임시 배선은 과전압에 약하다
         int burnt = 0;
         foreach (var j in w.Power.Jumpers.Where(j => !j.Burnt && !j.Permanent))
-            if (w.Rng.Chance(0.6f)) { j.Burnt = true; burnt++; }
+            if (w.Rng.Chance(guard ? 0.2f : 0.6f)) { j.Burnt = true; burnt++; }
+        if (guard) parts.Add("서지 보호기가 받아 냈다");
         if (burnt > 0) parts.Add($"임시 배선 {burnt}가닥 탐");
         // 3) 배터리 셀이 일부 방전되고, 전자 장비 하나가 튄다
         float lost = w.Power.BatteryCharge * w.Rng.Range(0.2f, 0.4f);

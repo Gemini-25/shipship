@@ -287,7 +287,7 @@ public static class MachineSpecs
         // v10.10 로봇 충전대: 로봇을 충전할 때만 전기를 먹는다. 멈추면 로봇이 방전돼 사람이 그 일을 떠맡는다
         new MachineSpec(FurnitureType.RobotDock, 1.2f, 4, 45f, Skill.Electrical, null, 0.4f, false,
             new[] { FaultKind.ChargerFault, FaultKind.WiringFault }),
-    }.Select(FaultsV15.Extend).ToDictionary(s => s.Type); // v15 설비마다 새 고장을 덧붙인다
+    }.Concat(ModulesV15.Machines).Select(FaultsV15.Extend).ToDictionary(s => s.Type); // v15 새 모듈 34 · 설비마다 새 고장을 덧붙인다
 
     public static MachineSpec? For(FurnitureType t) => Table.TryGetValue(t, out var s) ? s : null;
 }

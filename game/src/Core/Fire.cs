@@ -50,6 +50,7 @@ public sealed class FireSystem
         var ship = _world.Ship;
         if (ship.Grid.Kind(c) != TileKind.Floor || ship.RoomAt(c) is not Room room) return false;
         if (room.Air.O2 < 12f) return false;
+        intensity *= ModulesV15.FireMul(room); // v15 방화포 함이 있으면 바로 덮는다
         _fires[c] = MathF.Max(At(c), intensity);
         _world.Causes.OnIgnite(c, from); // v12.2 인과 사슬: 무엇이 붙였나 (번져 왔으면 그 불)
         return true;

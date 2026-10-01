@@ -103,7 +103,8 @@ public sealed class SoilSystem
             }
             if (room.Air.Smoke > 0.3f) Add(s.Clothes, SoilKind.Soot, 0.3f * room.Air.Smoke * dt);
             // 들어오며 털지 않은 우주복: 옷과 방으로
-            if (s.SuitDust > 0.05f && c.Suit == null && room.Type is not (RoomType.Airlock or RoomType.EvaPrep or RoomType.Decon))
+            if (s.SuitDust > 0.05f && c.Suit == null && ModulesV15.SuitDried(room)) { Decon(c); MarkLog.Add(room.Marks, w.Tick, $"{c.Name}: 우주복을 털었다 (건조기 · 샤워)"); } // v15
+            else if (s.SuitDust > 0.05f && c.Suit == null && room.Type is not (RoomType.Airlock or RoomType.EvaPrep or RoomType.Decon))
             {
                 if (_tracking.Add(c.Id)) Stats.SkippedDecons++; // 털지 않고 들어왔다
                 float move = s.SuitDust * 0.4f * dt * 4f;
@@ -127,7 +128,8 @@ public sealed class SoilSystem
             }
         }
         // 방은 천천히 옅어진다 (환기 · 닦기)
-        foreach (var a in _room.Values) for (int k = 0; k < Soil.Kinds; k++) a[k] = MathF.Max(0f, a[k] - 0.01f * dt);
+        foreach (var r in w.Ship.Rooms) // v15 식기 세척기 · 공기 청정기 · 멸균기가 있으면 더 빨리
+            if (_room.TryGetValue(r.Id, out var a)) { float d = 0.01f * ModulesV15.CleanMul(r) * dt; for (int k = 0; k < Soil.Kinds; k++) a[k] = MathF.Max(0f, a[k] - d); }
     }
 
     private static void Add(float[] a, SoilKind k, float v) => a[(int)k] = Math.Clamp(a[(int)k] + v, 0f, 1f);
@@ -198,7 +200,7 @@ public sealed class SoilSystem
         var w = _w;
         if (LaundryLoad == 0) return false;
         if (WaterShort && LaundryLoad < 10) { Stats.LaundryDeferred++; return false; }
-        float use = 4f * LaundryLoad;
+        float use = 4f * LaundryLoad * ModulesV15.LaundryWaterMul(w); // v15 세탁기면 물 절반
         w.Water.Level = MathF.Max(0f, w.Water.Level - use);
         Stats.WaterUsed += use;
         Stats.LaundryRuns++;

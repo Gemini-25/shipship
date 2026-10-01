@@ -172,7 +172,7 @@ public sealed class Room
     public long LightsOutSince { get; set; }
 
     /// <summary>캄캄한 방 (정전이거나 조명이 나갔다).</summary>
-    public bool Dark => !Powered || LightsOut;
+    public bool Dark => (!Powered || LightsOut) && !ModulesV15.Lit(this); // v15 비상등이 있으면 어둡지 않다
 
     /// <summary>진공에 가까워 우주복 없이는 못 들어감.</summary>
     public bool Unbreathable { get; set; }
@@ -353,6 +353,11 @@ public enum FurnitureType
     RobotDock, // v10.10 선내 로봇 충전대 (칸마다 로봇 한 대)
     SupplyCache, // v10.10 비상 물자함 (실링폼·구급 키트·소화기를 창고 밖에 나눠 둔다 — 개조로 단다)
     PartTestBench, Hoist, MaintCart, // v14.6 정비 장비 (정비실에 단다)
+    // v15 설비 70 (ModulesV15.cs): 개조로 다는 방 모듈 34
+    VibrationMonitor, ThermalCamera, LeakDetector, CalibrationRig, Oven, Lathe, SolderStation, DiagnosticScanner, NutrientDoser, ToolWall,
+    ReactorSimulator, NavComputer, DishWasher, AirPurifier, Autoclave, DeconShower, WashingMachine, BlackoutCurtain, NoiseDamper, WhiteNoise,
+    CoffeeMachine, Projector, GameTable, Bookshelf, Aquarium, Treadmill, PlantWall, EmergencyLight, SurgeProtector, FireBlanket,
+    Dehumidifier, AirlockPump, SuitDryer, SignalBooster,
 }
 
 public static class FurnitureTypes
@@ -427,7 +432,7 @@ public static class FurnitureTypes
         FurnitureType.MaintCart => "정비 카트",
         FurnitureType.RobotDock => "로봇 충전대",
         FurnitureType.SupplyCache => "비상 물자함",
-        _ => t.ToString(),
+        _ => ModulesV15.Name(t) ?? t.ToString(), // v15
     };
 
     /// <summary>올라서거나 누울 수 있는 가구.</summary>
