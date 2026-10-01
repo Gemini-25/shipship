@@ -105,6 +105,7 @@ public sealed class AmbienceSystem
         var own = new (float n, float v, float s, float r)[rooms.Count];
         for (int i = 0; i < rooms.Count; i++) own[i] = Own(rooms[i]);
         float storm = StormPower;
+        if (storm > 0f && w.Eras.Has("magshield")) storm *= 0.5f; // v12.8 자기장 차폐 (v16.0: 방마다 반씩 줄던 버그 — 반복문 밖에서 한 번만)
         for (int i = 0; i < rooms.Count; i++)
         {
             var room = rooms[i];
@@ -121,7 +122,6 @@ public sealed class AmbienceSystem
             var tags = RoomCatalog.Tags(room.Kind);
             if ((tags & RoomTag.Quiet) != 0) { n *= 0.35f; v *= 0.6f; }
             // 태양 폭풍: 바깥벽에 닿은 방이 가장 세다. 대피소·물벽은 거의 막는다
-            if (storm > 0f && w.Eras.Has("magshield")) storm *= 0.5f; // v12.8 자기장 차폐
             if (storm > 0f)
             {
                 float sr = storm * Exposure(room);

@@ -199,7 +199,7 @@ public static class Player
 public static class SaveGame
 {
     /// <summary>v8: 설계도(드론 거치대)와 구조가 바뀌어 v7 저장(1)은 같은 역사를 되짚을 수 없다.</summary>
-    public const string Header = "shipsim-save 14";
+    public const string Header = "shipsim-save 15"; // v16.0
 
     public static string Write(World w)
     {
@@ -405,6 +405,9 @@ public static class SaveGame
         // v11.2 교신
         I(w.Growth.Lessons); I(w.Growth.RehabSessions); foreach (var c in w.Crew) { F(c.Vitals.Scar); foreach (var sk in c.SkillLevels) F(sk); } // v11.3
         I(w.Comms.DistressAt); I(w.Comms.SupplyEta); I(w.Comms.SupplyDocked ? 1 : 0); I(w.Comms.SignalAt); I(w.Comms.PodEta); I(w.Comms.Rescued); I(w.Crew.Count);
+        // v16.0 칭호 · 주 컴퓨터 모듈 (열거 순서대로 — HashSet 순회 순서에 기대지 않는다)
+        I(w.Titles.Awards.Count); foreach (var t in w.Titles.Awards) { I(t.CrewId); I((int)(t.Tick % 1000003)); }
+        foreach (var m in Enum.GetValues<ComputerModule>()) I(w.Automation.Has(m) ? 1 : 0);
         return h;
     }
 }

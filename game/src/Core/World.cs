@@ -331,14 +331,21 @@ public sealed class World
             Water.Update(this, dt);
             pf = Prof.Lap("sys.Water", pf);
             Machines.Update(dt);
-            Parts.Update(dt); // v14.6 부품이 따로 닳는다
-            Soil.Update(dt); // v14.7 손 · 옷 · 방으로 옮겨 다니는 오염
-            Culture.Update(dt); // v14.9 겪은 일이 관행이 되어 전해진다
-            Daily.Update(dt); // v15 사고가 아닌 날의 일상 사건
-            Outside.Update(dt); // v15.4 배 바깥의 사건 (조난 신호 · 상선 · 표류 화물 · 우주 기상 · 해적)
-            Props.Update(dt); // v15.8 소품을 만들고 · 사고 · 겪은 일에서 걸고 · 곁의 사람을 달랜다
-            Titles.Update(dt); // v15.9 칭호·업적 (한 시간마다)
             pf = Prof.Lap("sys.Machines", pf);
+            Parts.Update(dt); // v14.6 부품이 따로 닳는다
+            pf = Prof.Lap("sys.Parts", pf);
+            Soil.Update(dt); // v14.7 손 · 옷 · 방으로 옮겨 다니는 오염
+            pf = Prof.Lap("sys.Soil", pf);
+            Culture.Update(dt); // v14.9 겪은 일이 관행이 되어 전해진다
+            pf = Prof.Lap("sys.Culture", pf);
+            Daily.Update(dt); // v15 사고가 아닌 날의 일상 사건
+            pf = Prof.Lap("sys.Daily", pf);
+            Outside.Update(dt); // v15.4 배 바깥의 사건 (조난 신호 · 상선 · 표류 화물 · 우주 기상 · 해적)
+            pf = Prof.Lap("sys.Outside", pf);
+            Props.Update(dt); // v15.8 소품을 만들고 · 사고 · 겪은 일에서 걸고 · 곁의 사람을 달랜다
+            pf = Prof.Lap("sys.Props", pf);
+            Titles.Update(dt); // v15.9 칭호·업적 (한 시간마다)
+            pf = Prof.Lap("sys.Titles", pf);
             Prevention.Update(this, dt);
             pf = Prof.Lap("sys.Prevention", pf);
             Watch.Update(dt); // v12.0 교대·감지기
@@ -352,8 +359,9 @@ public sealed class World
             Ailments.Update(dt); // v14.1 질병 30
             pf = Prof.Lap("sys.Ailments", pf);
             Belongings.Update(dt); // v14.3 개인 물건 · 취미
+            pf = Prof.Lap("sys.Belongings", pf);
             Relations.Update(dt); // v14.4 엇갈린 기억 · 화해한 사이
-            pf = Prof.Lap("sys.Ailments", pf);
+            pf = Prof.Lap("sys.Relations", pf);
             Ambience.Update(dt); // v12.6 인접성: 소음·진동·냄새·방사선
             pf = Prof.Lap("sys.Ambience", pf);
             Exterior.Update(dt); // v12.6 외부 설비: 안테나·태양 날개 (드론이 고친다)
