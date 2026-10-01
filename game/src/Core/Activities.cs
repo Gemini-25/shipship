@@ -172,17 +172,18 @@ public sealed class SleepActivity : Activity
     /// </summary>
     private static (Cell spot, Room? room, string how)? FindBed(CrewMember c, World w, DistanceField dist)
     {
-        if (c.Bed != null && !c.Bed.Room.OffLimits && dist.Reachable(c.Bed.UseSpots[0])) return (c.Bed.UseSpots[0], c.Bed.Room, "");
+        bool Off(Room r) => r.OffLimits || r.Abandoned || CosmicEvacuateActivity.InLine(r, w); // v18.13 비우고 봉쇄한 구획 · 파편이 지나갈 방에서는 자지 않는다
+        if (c.Bed != null && !Off(c.Bed.Room) && dist.Reachable(c.Bed.UseSpots[0])) return (c.Bed.UseSpots[0], c.Bed.Room, "");
         foreach (var bed in w.Ship.FurnitureOf(FurnitureType.Bed))
         {
             var s = bed.UseSpots[0];
-            if (bed.ReservedBy == null && !bed.Room.OffLimits && dist.Reachable(s) && !w.IsSpotTaken(s, c)) return (s, bed.Room, "남의 침대에서");
+            if (bed.ReservedBy == null && !Off(bed.Room) && dist.Reachable(s) && !w.IsSpotTaken(s, c)) return (s, bed.Room, "남의 침대에서");
         }
         RoomType[] prefer = { RoomType.Lounge, RoomType.Mess, RoomType.Medbay, RoomType.Bridge, RoomType.Workshop };
         foreach (var type in prefer)
         foreach (var room in w.Ship.RoomsOf(type))
         {
-            if (room.Abandoned || room.OffLimits || room.Leaking || Atmosphere.Danger(room) > 0.1f) continue;
+            if (Off(room) || room.Leaking || Atmosphere.Danger(room) > 0.1f) continue;
             foreach (var cell in room.Cells)
                 if ((w.Ship.IsOpenFloor(cell) || w.Ship.FurnitureAt(cell)?.Type == FurnitureType.Seat) && dist.Reachable(cell) && !w.IsSpotTaken(cell, c))
                     return (cell, room, $"침실에 갈 수 없어 {room.Name}에서");

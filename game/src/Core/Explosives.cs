@@ -1047,16 +1047,17 @@ public sealed class BlastResponseActivity : Activity
             if (!knows) continue;
             var room = rec.Room >= 0 ? ship.Rooms[rec.Room] : null;
             bool safe = room != null && !room.Leaking && Atmosphere.Danger(room) < 0.15f && w.Fire.CountIn(room) == 0;
-            if (age < SimTime.Minutes(50))
-                foreach (int id in rec.Hurt.Concat(rec.Fell))
+            if (age < SimTime.Hours(2)) // 불 · 연기가 걷힐 때까지 기다렸다가도 살핀다
+                foreach (int id in rec.Hurt.Concat(rec.Fell).Distinct())
                 {
                     if (id == c.Id || b.Helped.Contains((rec.Id, id))) continue;
+                    if (b.RescueBy.TryGetValue((rec.Id, id), out int by) && by != c.Id && w.Crew.FirstOrDefault(x => x.Id == by) is CrewMember r0 && r0.Job?.Activity is BlastResponseActivity) continue; // 다른 사람이 이미 달려가고 있다
                     var v = w.Crew.FirstOrDefault(x => x.Id == id);
                     if (v == null || v.Dead || v.Outside || v.CarriedBy != null) continue;
                     if (w.Fire.AnyWithin(v.Cell, 1.2f) || v.Room != null && Atmosphere.Danger(v.Room) > 0.6f) continue;
                     Consider(Task.Rescue, (rec, v), v.Cell, 1.1f + 0.2f * c.AffinityTo(v), $"폭발에 다친 {Ko.EulReul(v.Name)} 살핀다");
                 }
-            if (!rec.Investigated && rec.Investigator < 0 && age >= SimTime.Minutes(30) && safe && rec.Power >= 0.1f)
+            if (!rec.Investigated && (rec.Investigator < 0 || rec.Investigator == c.Id) && age >= SimTime.Minutes(30) && safe && rec.Power >= 0.1f)
                 Consider(Task.Investigate, rec, rec.At, (age < SimTime.Hours(6) ? 0.8f : 0.5f) + 0.35f * c.SkillLevel(Skill.Engineering) + (rec.Hurt.Count > 0 ? 0.25f : 0f), $"{room!.Name} 폭발 자리를 살핀다 — 왜 터졌나");
         }
         foreach (var o in b.Items.Secures)
@@ -1107,7 +1108,7 @@ public sealed class BlastResponseActivity : Activity
         {
             case Task.Rescue:
                 var (rec, v) = ((BlastRecord, CrewMember))target;
-                w.Blast.Helped.Add((rec.Id, v.Id));
+                w.Blast.RescueBy[(rec.Id, v.Id)] = c.Id;
                 toils.Add(new GotoToil(spot));
                 toils.Add(new WorkToil(0.1f, Skill.Medicine, v.Position));
                 toils.Add(new DoToil((cm, world) =>
@@ -1117,12 +1118,14 @@ public sealed class BlastResponseActivity : Activity
                     v.Needs.Stress = MathF.Max(0f, v.Needs.Stress - 0.12f);
                     v.ChangeAffinity(cm, 0.06f); cm.ChangeAffinity(v, 0.04f);
                     world.Blast.Stats.Rescues++;
+                    world.Blast.Helped.Add((rec.Id, v.Id));
+                    world.Blast.RescueBy.Remove((rec.Id, v.Id));
                     MarkLog.Add(v.Memory.Marks, world.Tick, $"폭발 뒤 {Ko.IGa(cm.Name)} 달려와 살펴 주었다");
                     world.Log.Add(world.Tick, LogKind.Life, $"폭발에 다친 {Ko.EulReul(v.Name)} 살폈다", cm.Id);
                     Life.Diary(world, v, $"{Ko.IGa(cm.Name)} 제일 먼저 달려왔다.");
                     return true;
                 }));
-                return new Job(this, "폭발 구조", toils) { Urgent = true, LogText = why, LogKind = LogKind.Warning };
+                return new Job(this, "폭발 구조", toils) { Urgent = true, LogText = why, LogKind = LogKind.Warning, OnFinished = (cm, world, st) => { if (world.Blast.RescueBy.TryGetValue((rec.Id, v.Id), out int by) && by == cm.Id) world.Blast.RescueBy.Remove((rec.Id, v.Id)); } };
             case Task.Investigate:
                 var r2 = (BlastRecord)target;
                 r2.Investigator = c.Id;
