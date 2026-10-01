@@ -1273,6 +1273,9 @@ public sealed partial class PortableSystem
                 : d.Plug == PortablePlug.Outlet && d.Outlet != null ? $" · {PowerGrid.CircuitName(d.Outlet.Circuit)} 회로{(d.Outlet != room ? $"({d.Outlet.Name})" : "")}"
                 : d.Capacity > 0f && d.Running ? $" · 내장 {d.ChargeFrac * 100:0}%" : "";
             string extra = d.Kind == PortableKind.Cart ? (room.Type == RoomType.Corridor ? " · 통로를 막는다" : "") : d.Shadowed ? " · 몸에 가림" : d.Forgotten ? " · 잊고 둠" : "";
+            if (d.Soak > 0.3f) extra += " · 케이블이 젖었다";
+            if (Flagged(d)) extra += " · 주 컴퓨터가 끄라 함";
+            if (d.Kind == PortableKind.Heater && d.Running && d.Dust > 0.05f) extra += " · 먼지 타는 냄새";
             parts.Add(d.Kind == PortableKind.Cart ? $"카트{extra}" : $"{d.Name} {state}{power}{extra}");
         }
         foreach (var d in Devices.Where(d => d.HeldBy != null && d.HeldBy.Room == room)) parts.Add($"{Ko.IGa(d.HeldBy!.Name)} {d.Name} 나르는 중");

@@ -1228,6 +1228,7 @@ public partial class Hud : Control
             bool danger = room.Powered && MoistureSystem.Depth(room) > 0.12f;
             lines.Add(("물·습기", string.Join(" · ", parts), danger ? Palette.Danger : Palette.Warning));
         }
+        if (_world.Portable.RoomLine(room) is string pl) lines.Add(("이동식 장비", pl, pl.Contains("고장") || pl.Contains("젖었다") ? Palette.Warning : Palette.Accent)); // v16.7
         // v12.1 배 전체 망: 이 방으로 들어오는 전력 간선·급수관·환기 덕트
         if (!room.Detached && _world.Net.Links.Count > 0)
         {
