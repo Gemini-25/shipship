@@ -178,7 +178,7 @@ public static class NeedsSystem
         if (damage <= 0f && v.Injury > 0f)
         {
             bool resting = inCare || (c.Job?.Activity is RecoverActivity && c.Pose == Pose.Sleeping);
-            float perDay = (resting ? 0.3f : asleep ? 0.08f : 0.03f) * (w.Eras.Has("triage") ? 1.25f : 1f); // v12.8 응급 분류법
+            float perDay = (resting ? 0.3f : asleep ? 0.08f : 0.03f) * (w.Eras.Has("triage") ? 1.25f : 1f) * ErasV15.Mul(w, "heal"); // v12.8 응급 분류법 · v15.5 재생 의학
             v.Injury = MathF.Max(0f, v.Injury - perDay / 24f * dt);
             if (v.Injury == 0f) { v.InjuryCause = null; ShipSim.Core.Wounds.Tidy(v); }
         }

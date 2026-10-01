@@ -400,7 +400,7 @@ public sealed class World
         {
             History.Update(this);
             float before = Research;
-            Research += Tech.ResearchPerHour(this) * (SimTime.Minutes(5) / (float)SimTime.TicksPerHour);
+            Research += Tech.ResearchPerHour(this) * ErasV15.Mul(this, "research") * (SimTime.Minutes(5) / (float)SimTime.TicksPerHour); // v15.5 연구 노트·신경망
             Tech.NoteUnlocks(this, before);
         }
         long ps = Prof.Now;

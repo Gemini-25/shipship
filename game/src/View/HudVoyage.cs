@@ -76,7 +76,12 @@ public partial class Hud
         var e = _world.Eras;
         float x0 = techCard.End.X + 10f, w = MathF.Min(380f, Screen.X - RightColumnWidth - Margin * 2 - x0);
         if (w < 240f) return;
-        float rows = EraSystem.All.Length + EraSystem.Eras.Length;
+        // v15.5 기술 70: 다 안 들어가면 잠긴 시대는 머리줄 하나로, 그래도 넘치면 익힌 기술은 시대마다 한 줄로 접는다
+        int Lines(bool fl, bool fk) => EraSystem.Eras.Sum(q => 1 + (fl && _world.Research < q.research ? 0
+            : EraSystem.All.Count(t => t.Era == q.era && !(fk && e.Known.Contains(t.Id))) + (fk && EraSystem.All.Any(t => t.Era == q.era && e.Known.Contains(t.Id)) ? 1 : 0)));
+        bool foldLocked = 70f + Lines(false, false) * 19f > techCard.Size.Y;
+        bool foldKnown = foldLocked && 70f + Lines(true, false) * 19f > techCard.Size.Y;
+        float rows = Lines(foldLocked, foldKnown);
         float h = MathF.Min(techCard.Size.Y, 70f + rows * 19f);
         var card = new Rect2(x0, techCard.Position.Y, w, h);
         Card(card);
@@ -90,9 +95,19 @@ public partial class Hud
             y += 19f;
             if (y > card.End.Y - 10f) break;
             bool open = _world.Research >= need;
-            Gfx.Text(this, Fonts.Bold, new Vector2(x, y), $"{era}. {name}" + (open ? "" : $" — 연구 {need:0}점에 열린다"), 12, open ? Palette.Accent : Palette.TextMuted);
+            Gfx.Text(this, Fonts.Bold, new Vector2(x, y), $"{era}. {name}" + (open ? "" : $" — 연구 {need:0}점에 열린다") + (!open && foldLocked ? $" · 기술 {EraSystem.All.Count(t => t.Era == era)}개" : ""), 12, open ? Palette.Accent : Palette.TextMuted);
+            if (!open && foldLocked) continue;
+            if (foldKnown && EraSystem.All.Where(t => t.Era == era && e.Known.Contains(t.Id)).Select(t => t.Name).ToList() is { Count: > 0 } learned)
+            {
+                y += 19f;
+                if (y > card.End.Y - 10f) break;
+                string line = $"✓ 익힘 {learned.Count}: " + string.Join(", ", learned);
+                while (line.Length > 6 && Gfx.Width(Fonts.Body, line, 11) > right - x - 8f) line = line[..^2] + "…";
+                Gfx.Text(this, Fonts.Body, new Vector2(x + 8, y), line, 11, Palette.Good);
+            }
             foreach (var t in EraSystem.All.Where(t => t.Era == era))
             {
+                if (foldKnown && e.Known.Contains(t.Id)) continue;
                 y += 19f;
                 if (y > card.End.Y - 10f) break;
                 bool known = e.Known.Contains(t.Id), cur = e.Project == t.Id;

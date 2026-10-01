@@ -42,7 +42,7 @@ public sealed class WaterSystem
 
     public void Update(World w, float dt)
     {
-        float produce = w.Ship.FurnitureOf(FurnitureType.WaterRecycler).Sum(f => f.Machine!.Efficiency * f.Machine.Rating) * RecyclerLitersPerHour;
+        float produce = w.Ship.FurnitureOf(FurnitureType.WaterRecycler).Sum(f => f.Machine!.Efficiency * f.Machine.Rating) * RecyclerLitersPerHour * ErasV15.Mul(w, "water"); // v15.5 증류·광합성
         // v13.2 방침(물): 아끼면 샤워·세탁을 줄이고, 엄격하면 마실 만큼만 (대신 날카로워진다)
         int wp = w.Policies["water"];
         float consume = w.Crew.Count(c => !c.Dead) * CrewLitersPerHour * (wp == 1 ? 0.75f : wp == 2 ? 0.55f : 1f);
@@ -84,7 +84,7 @@ public sealed class MachineSystem
             bool makeshift = false;
             foreach (var f in m.Faults) if (f.Stage > 0) makeshift = true;
             if (makeshift) rate *= 2f; // 임시로 살린 설비는 무리해서 돈다
-            m.Wear = MathF.Min(1f, m.Wear + rate * (_world.Eras.Has("nanorepair") ? 0.75f : 1f) * dt); // v12.8 나노 수리
+            m.Wear = MathF.Min(1f, m.Wear + rate * (_world.Eras.Has("nanorepair") ? 0.75f : 1f) * ErasV15.Mul(w, "wear") * dt); // v12.8 나노 수리 · v15.5 냉각 기술
 
             // 임시 우회는 풀릴 수 있다
             if (makeshift)
@@ -100,7 +100,7 @@ public sealed class MachineSystem
                 }
 
             // v11.0: 닳아서 날 고장의 일부는 먼저 기척(전조)을 낸다 — 누가 알아채면 싸게 막는다
-            if (w.Rng.Float() < m.FaultChancePerHour * w.Parts.AgeFactor(m) * dt && !Prevention.Foreshadow(w, m)) Break(m); // v14.6 수명을 넘긴 부품
+            if (w.Rng.Float() < m.FaultChancePerHour * w.Parts.AgeFactor(m) * ErasV15.Mul(w, "fault") * dt && !Prevention.Foreshadow(w, m)) Break(m); // v14.6 수명을 넘긴 부품 · v15.5 예지 정비
 
             // 파손: 운석 파편이나 불에 수명이 바닥난 설비는 고칠 수 없고 통째로 갈아야 한다
             if (m.Condition < 0.18f && !m.Has(FaultKind.Wrecked))
@@ -168,7 +168,7 @@ public sealed class MachineSystem
             return;
         }
         float rate = dt / FoodChain.GrowHours * m.Efficiency * m.Rating * (1f + Modules.Bonus(_world, FurnitureType.LedPanel, m.Body.Room))
-                     * (0.45f + 0.55f * crop.Care) * (water ? 1f : 0f) * AmbienceSystem.CropFactor(m.Body.Room) * (_world.Eras.Has("genecrops") ? 1.2f : 1f); // v12.6 진동·방사선 · v12.8 개량 작물
+                     * (0.45f + 0.55f * crop.Care) * (water ? 1f : 0f) * AmbienceSystem.CropFactor(m.Body.Room) * (_world.Eras.Has("genecrops") ? 1.2f : 1f) * ErasV15.Mul(_world, "grow"); // v12.6 진동·방사선 · v12.8 개량 작물 · v15.5 재배 기술
         crop.Growth = MathF.Min(1f, crop.Growth + rate);
         if (crop.Ripe) _world.Board.RequestScan();
     }
