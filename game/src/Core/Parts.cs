@@ -38,7 +38,7 @@ public sealed class PartLot
         PartOrigin.Factory => $"새 부품 · {Batch}",
         PartOrigin.Port => $"{From}에서 산 것 · {Batch}",
         PartOrigin.Salvage => $"{From}에서 떼어 온 중고",
-        _ => $"{Maker}이(가) 손으로 만든 것",
+        _ => $"{Ko.IGa(Maker ?? "누군가")} 손으로 만든 것",
     };
 
     public string Label => OriginName + (Tested ? $" · 시험: {TestNote}" : Origin is PartOrigin.Salvage or PartOrigin.Handmade ? " · 시험 안 함" : "") + (Suspect ? " · 같은 묶음 의심" : "");
@@ -274,7 +274,7 @@ public sealed class PartsSystem
                 Stats.RootsFound++;
                 p.Stress = 1f;
                 MarkLog.Add(p.Marks, now, $"{c.Name}: 되풀이된 원인 — {p.Root} (바로잡았다)");
-                MarkLog.Add(m.Marks, now, $"{p.Spec.Name}이(가) 또 나갔다 — {c.Name}이(가) 원인({p.Root})을 찾아 바로잡았다");
+                MarkLog.Add(m.Marks, now, $"{p.Spec.Name}이(가) 또 나갔다 — {Ko.IGa(c.Name)} 원인({p.Root})을 찾아 바로잡았다");
                 w.Log.Add(now, LogKind.Work, $"{m.Name}의 {p.Spec.Name}이(가) 또 나갔다 — 원인은 {p.Root} (바로잡았다)", c.Id);
                 w.History.Add(w, HistoryKind.Maintenance, $"{Ko.IGa(c.Name)} {m.Name}의 {p.Spec.Name}이(가) 자꾸 나가는 까닭({p.Root})을 찾아냈다", m.Body.Room, new[] { c });
             }

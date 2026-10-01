@@ -315,6 +315,7 @@ public static class SaveGame
         foreach (var b in w.Belongings.All) { I(b.Owner); I(b.Holder); I(b.At is Cell bc ? bc.X * 1000 + bc.Y : -1); F(b.Condition); F(b.Progress); } // v14.3
         foreach (var st in w.Movement.Stashes) { I(st.Owner); I(st.Cell.X * 1000 + st.Cell.Y); I((int)st.Stack.Kind); I(st.Stack.Count); } // v14.5 내려놓고 간 짐
         I(w.Movement.Stats.Yields); I(w.Movement.Stats.Reroutes); I(w.Movement.Stats.Startles);
+        I(w.Daily.Stats.Fired); I(w.Daily.Stats.Seen.Count); // v15
         I(w.Culture.Customs.Count); I(w.Culture.Stats.Explained); I(w.Culture.Stats.Imitated); I(w.Culture.Stats.ExtChecks); // v14.9
         I(w.Flow.Stats.Brownouts); I(w.Flow.Stats.Backflows); I(w.Flow.Stats.Equalized); I(w.Flow.Stats.SpliceHot); I((int)(w.Flow.WaterQuality * 1000)); // v14.8
         I(w.Soil.Stats.HandWashes); I(w.Soil.Stats.TaintedMeals); I(w.Soil.LaundryLoad); I(w.Soil.Stats.Decons); // v14.7

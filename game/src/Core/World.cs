@@ -154,6 +154,7 @@ public sealed class World
     public SoilSystem Soil { get; } // v14.7 오염 · 위생
     public FlowSystem Flow { get; } // v14.8 배관 · 배선 전달량
     public CultureSystem Culture { get; } // v14.9 배의 문화
+    public DailySystem Daily { get; } // v15 일상 사건 70
     public AmbienceSystem Ambience { get; }
     public ExteriorSystem Exterior { get; }
     public LifeSystem Life { get; }
@@ -245,6 +246,7 @@ public sealed class World
         Soil = new SoilSystem(this);
         Flow = new FlowSystem(this);
         Culture = new CultureSystem(this);
+        Daily = new DailySystem(this);
         Ambience = new AmbienceSystem(this);
         Exterior = new ExteriorSystem(this);
         Life = new LifeSystem(this);
@@ -325,6 +327,7 @@ public sealed class World
             Parts.Update(dt); // v14.6 부품이 따로 닳는다
             Soil.Update(dt); // v14.7 손 · 옷 · 방으로 옮겨 다니는 오염
             Culture.Update(dt); // v14.9 겪은 일이 관행이 되어 전해진다
+            Daily.Update(dt); // v15 사고가 아닌 날의 일상 사건
             pf = Prof.Lap("sys.Machines", pf);
             Prevention.Update(this, dt);
             pf = Prof.Lap("sys.Prevention", pf);

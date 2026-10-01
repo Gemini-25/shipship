@@ -229,6 +229,14 @@ public sealed class BelongingSystem
     public Belonging Seed2(CrewMember c, BelongingKind k, string? origin = null) =>
         Add(c, k, $"{c.Name}의 새 {Spec(k).Name}", origin ?? "새로 마련한 것");
 
+    /// <summary>v15 손으로 만들어 준 물건 · 선물 (만든 사람과 준 사람이 남는다).</summary>
+    public Belonging Gift(CrewMember to, CrewMember from, BelongingKind k, string name, string origin)
+    {
+        var b = Add(to, k, name, origin, 0f, from.Id);
+        b.From = from.Id;
+        return b;
+    }
+
     private Belonging Add(CrewMember owner, BelongingKind k, string name, string origin, float progress = 0f, int maker = -1)
     {
         var b = new Belonging { Id = _nextId++, Kind = k, Name = name, Owner = owner.Id, Origin = origin, Progress = progress, Maker = maker };
