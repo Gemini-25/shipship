@@ -471,6 +471,8 @@ public static partial class WorkPlanners
     private static bool SuitUp(CrewMember c, World w, DistanceField dist, List<Toil> toils, bool allowDash = true)
     {
         if (c.Suit is { Oxygen: > 1f }) return true;
+        // v12.9.1 급하지 않은 일은 마지막 한 벌을 남겨 둔다 (봉합·구조하러 갈 사람의 몫)
+        if (!allowDash && w.Ship.FurnitureOf(FurnitureType.SuitLocker).Sum(f => f.Storage!.Count(ItemKind.Suit)) <= 1) return false;
         var (locker, spot) = Plans.NearestContainer(w, dist, c, f => f.Type == FurnitureType.SuitLocker && f.Storage!.Count(ItemKind.Suit) > 0);
         if (locker == null) return false;
 

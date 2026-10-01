@@ -179,6 +179,9 @@ public static partial class Program
                 if (watch >= 0f && w.Tick >= (long)(watch * SimTime.TicksPerHour))
                 {
                     Run(w, SimTime.Minutes(1));
+                    Console.WriteLine("      우주복: 보관함 " + string.Join(" ", w.Ship.FurnitureOf(FurnitureType.SuitLocker).Select(f => $"{f.Room.Name}:{f.Storage!.Count(ItemKind.Suit)}"))
+                        + " · 입은 사람 " + string.Join(" ", w.Crew.Where(c => c.Suit != null).Select(c => $"{c.Name}({(c.Dead ? "죽음" : c.Down ? "쓰러짐" : c.Job?.Label ?? "-")}·{c.Suit!.Oxygen * 100:0}%)"))
+                        + " · 바닥 " + w.Ship.Rooms.Sum(r => r.Cells.Sum(cell => 0)) );
                     foreach (var r in w.Ship.Rooms.Where(r => r.Leaking || r.Air.Pressure < 99f || !r.VentOpen))
                         Console.WriteLine($"      [{r.Name}] 샘 {r.Leaking} ({r.BreachArea:0.0000}) 환기 {(r.VentOpen ? "열림" : "닫힘")} 덕트 {r.DuctLinked} 기압 {r.Air.Pressure:0} O2 {r.Air.O2:0.0}");
                     Console.WriteLine($"{SimTime.Clock(w.Tick)} " + string.Join(" | ", w.Crew.Where(c => !c.Dead).Select(c =>
