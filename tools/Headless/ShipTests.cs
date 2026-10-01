@@ -23,6 +23,7 @@ public static partial class Program
             Console.WriteLine($"방 {w.Ship.Rooms.Count} · 구획 {w.Ship.Compartments} · 문 {w.Ship.Doors.Count} · 격자 {w.Ship.Grid.Width}x{w.Ship.Grid.Height}");
             return 0;
         }
+        if (argv.FirstOrDefault(a => a.StartsWith("--f1s=")) is string f1s) return F1sPower(seed, f1s[6..], 120); // 임시
         if (argv.FirstOrDefault(a => a.StartsWith("--diag=")) is string diag)
         {
             var w = argv.Contains("--fresh") ? World.CreateDefault(seed, 0, diag[7..]) : DayOne(seed, diag[7..]);
@@ -73,10 +74,14 @@ public static partial class Program
             Console.WriteLine($"만듦 {total - bad}/{total}");
             return bad == 0 ? 0 : 1;
         }
+        // --part=4,8 : 그 부분만 (진단용)
+        var parts = argv.FirstOrDefault(a => a.StartsWith("--part="))?[7..].Split(',').Select(int.Parse).ToHashSet();
+        bool On(int k) => parts == null || parts.Contains(k);
         Console.WriteLine($"배 종류 점검 (v16.9) · 시드 {seed}\n");
         try
         {
             // 1) 대표 배 6척: 뼈대가 저마다 다르고, 필수 설비가 다 있고, 모든 방에 길이 닿는다
+            if (On(1))
             {
                 var mine = ShipCatalog.All.Where(t => !t.Legacy).ToList();
                 var frames = mine.Select(t => t.Meta.Frame).Distinct().Count();
@@ -96,6 +101,7 @@ public static partial class Program
             }
 
             // 2) 생성기: 옛 키는 그대로, 새 키는 용도 · 뼈대 · 2~60인
+            if (On(2))
             {
                 var old = ShipCatalog.Find(ShipGenerator.KeyFor(12, seed))!;
                 var mining = Enumerable.Range(0, 4).Select(i => ShipGenerator.Template(ShipPurpose.Mining, ShipFrame.Linear, 12, seed + i)).ToList();
@@ -115,6 +121,7 @@ public static partial class Program
             }
 
             // 3) 설계사 · 시작 상태가 세계에 남는다
+            if (On(3))
             {
                 var mil = World.CreateDefault(seed, 0, "Bodeum");
                 var civ = World.CreateDefault(seed, 0, "Saeteo");
@@ -143,6 +150,7 @@ public static partial class Program
             }
 
             // 4) 고리형: 통로 한쪽이 막혀도(용접) 반대로 돌아 대피 — 태양 폭풍에 위 식당에서 아래 대피소로
+            if (On(4))
             {
                 bool off = MeetingSystem.MaidenOff;
                 MeetingSystem.MaidenOff = true;
@@ -185,6 +193,7 @@ public static partial class Program
             }
 
             // 5) 쌍동선: 연결 통로를 잃고(봉쇄 · 끊김) 둘로 갈라져 버티다 다시 잇는다
+            if (On(5))
             {
                 var w = DayOne(seed, "Bodeum");
                 var ship = w.Ship;
@@ -223,6 +232,7 @@ public static partial class Program
             }
 
             // 6) 숨은 이야기: 정비하다 발견 → 일기 · 물건 · 이야기가 퍼진다 · 쪽지의 요령
+            if (On(6))
             {
                 var w = World.CreateDefault(seed, 0, "Busitdol");
                 Run(w, SimTime.Hours(2));
@@ -252,6 +262,7 @@ public static partial class Program
             }
 
             // 7) 크기 공백: 2 · 8~9 · 40~60인 — 역할 · 침대 · 당직 · 하루
+            if (On(7))
             {
                 foreach (var key in new[] { "Pabal", "Nareumi", "Busitdol", ShipGenerator.KeyFor(ShipPurpose.Colony, ShipFrame.Ring, 60, seed) })
                 {
@@ -261,22 +272,28 @@ public static partial class Program
                     int bedless = w.Crew.Count(c => c.Bed == null);
                     int hoursUncovered = 0;
                     float minFood = 1f, minRest = 1f;
+                    string hungry = "", tired = "";
                     for (int h = 0; h < 24; h++)
                     {
                         Run(w, SimTime.Hours(1));
                         if (!w.Crew.Any(c => !c.Dead && c.IsAwake)) hoursUncovered++;
-                        foreach (var c in w.Crew.Where(c => !c.Dead)) { minFood = MathF.Min(minFood, c.Needs.Food); minRest = MathF.Min(minRest, c.Needs.Rest); }
+                        foreach (var c in w.Crew.Where(c => !c.Dead))
+                        {
+                            if (c.Needs.Food < minFood) { minFood = c.Needs.Food; hungry = $"{c.Name} {SimTime.HourOfDay(w.Tick):0}시 {c.Room?.Name}({c.Job?.Label})"; }
+                            if (c.Needs.Rest < minRest) { minRest = c.Needs.Rest; tired = $"{c.Name} {SimTime.HourOfDay(w.Tick):0}시 {c.Room?.Name}({c.Job?.Label})"; }
+                        }
                     }
                     int n = w.Crew.Count;
                     bool rolesOk = n == 2 ? w.Crew.Any(c => c.Role == CrewRole.Pilot) && w.Crew.Any(c => c.Role == CrewRole.Engineer) : roles >= Math.Min(6, n);
                     bool ok = rolesOk && bedless == 0 && hoursUncovered == 0 && w.Crew.All(c => !c.Dead) && minFood > 0.05f && minRest > 0.05f && w.Power.ReactorOnline;
                     Check($"크기 {n}인 ({w.Ship.Name}) — 역할 · 침대 · 당직(늘 누군가 깨어 있다) · 하루", ok,
-                        $"역할 {roles}가지 · 침대 {beds}(없는 사람 {bedless}) · 아무도 안 깬 시간 {hoursUncovered} · 최저 배고픔 {minFood * 100:0}% · 최저 휴식 {minRest * 100:0}%"
+                        $"역할 {roles}가지 · 침대 {beds}(없는 사람 {bedless}) · 아무도 안 깬 시간 {hoursUncovered} · 최저 배고픔 {minFood * 100:0}%({hungry}) · 최저 휴식 {minRest * 100:0}%({tired})"
                         + (w.Origin.BedShares.Count > 0 ? $" · 침대 교대 {w.Origin.BedShares.Count}쌍 (인계 {w.Origin.Stats.Handovers})" : ""));
                 }
             }
 
             // 8) 모든 배 하루: 길 · 문 · 설비 · 식사 · 수면 · 사고 하나 대응
+            if (On(8))
             {
                 var keys = ShipCatalog.All.Select(t => t.Key).ToList();
                 foreach (var f in ShipInfos.GenFrames)
@@ -308,6 +325,7 @@ public static partial class Program
             }
 
             // 10) ★★ 승무원이 배의 내력을 알아채고 다르게 행동한다 · 주컴퓨터가 읽고 판단한다
+            if (On(10))
             {
                 var junk = DayOne(seed, "Ttaemjil");
                 var fresh = DayOne(seed, "Saeteo");
@@ -347,6 +365,7 @@ public static partial class Program
             }
 
             // 11) 정비 문화: 닳은 배에서 고장을 겪고 한 바퀴가 몸에 배면 "소리부터 듣는다"가 관행이 된다 (→ 전조를 더 잘 듣는다)
+            if (On(11))
             {
                 var w = DayOne(seed, "Ttaemjil");
                 for (int d = 0; d < 3 && w.Culture.Of(CustomKind.MaintainerWay) == null; d++) Run(w, SimTime.TicksPerDay);
@@ -356,6 +375,7 @@ public static partial class Program
             }
 
             // 9) 결정론
+            if (On(9))
             {
                 uint H(string key) { var w = World.CreateDefault(seed, 0, key); Run(w, SimTime.TicksPerDay + SimTime.Hours(6)); return SaveGame.StateHash(w); }
                 uint x = H("Hanbit"), y = H("Hanbit");

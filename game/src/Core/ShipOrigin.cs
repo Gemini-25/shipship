@@ -128,8 +128,12 @@ public sealed partial class ShipOriginSystem
                             p.Lot = new PartLot { Id = 900_000 + _nextId++, Kind = p.Lot.Kind, Origin = PartOrigin.Handmade, Batch = "개척민 손", From = former, Maker = FormerCrew[rng.Range(0, FormerCrew.Length)],
                                 Quality = rng.Range(0.7f, 1.15f), Made = w.Tick };
                 }
+                // 임시로 이은 선은 곁가지에만 — 원자로 · 냉각 · 배전 · 생명유지 같은 줄기와 공급원 방은 처음 지은 그대로 (거기가 가늘면 배 전체가 첫날 멈춘다)
                 foreach (var l in w.Net.Links)
-                    if (rng.Chance(0.08f)) { l.Temp = true; l.Integrity = rng.Range(0.5f, 0.8f); l.Cause = "개척민 임시 개조"; }
+                {
+                    if (l.Room.Type is RoomType.Reactor or RoomType.Cooling or RoomType.Power or RoomType.LifeSupport || l.Room.Kind == RoomType.WaterPlant || w.Net.SourceRoom(l.Kind) == l.Room) continue;
+                    if (rng.Chance(0.08f)) { l.Temp = true; l.Integrity = rng.Range(0.62f, 0.85f); l.Cause = "개척민 임시 개조"; }
+                }
                 break;
         }
 
