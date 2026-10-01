@@ -222,6 +222,7 @@ public sealed class LifeSystem
         if (head > 1.05f) { p *= head; reasons.Add((head, "머리를 다쳐 판단이 흐려서")); }
         float hand = Wounds.HandFactor(c.Vitals);
         if (hand < 0.8f) { p *= 1.8f; reasons.Add((1.8f, "다친 팔이 말을 안 들어서")); }
+        { float dk = _w.Portable.DarkMistake(c); if (dk > 1f) { p *= dk; reasons.Add((dk, dk >= 1.5f ? "캄캄해서" : dk >= 1.4f ? "작업등에서 멀어 손이 잘 안 보여서" : "작업등이 몸에 가려서")); } } // v16.7
         float skill = c.SkillLevel(o.Skill);
         if (skill < 0.35f) { p *= 1.8f; reasons.Add((1.8f, $"서툴러서 ({Skills.Name(o.Skill)} {skill * 100:0}%)")); }
         p *= 1.2f - 0.5f * c.Traits.Calm;

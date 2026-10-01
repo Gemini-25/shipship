@@ -359,6 +359,7 @@ public static class Evolution
         // ── v12.6 방 용도 변경: 겪은 일이 가르쳐 준 방 (전용 방이 없어 본래 방이 겸하던 일) ──
         foreach (var plan in RepurposeCandidates(w)) yield return plan;
         foreach (var plan in RobotsV15.Candidates(w)) yield return plan; // v15.7 로봇·드론 들이기
+        foreach (var plan in PortableSystem.Candidates(w)) yield return plan; // v16.7 오래 둔 이동식 장비 → 정식 시설
 
         // ── v12.3 보조 간선: 간선이 끊겨 방 여럿이 한꺼번에 정전된 배 ──
         if (panel != null && w.Net.Stats.Blackouts >= 1 && w.Net.RingTargets(NetKind.Power).FirstOrDefault() is Room ringTo)

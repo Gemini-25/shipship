@@ -133,7 +133,8 @@ public static class ModulesV15
     public static float CleanMul(Room? room) => 1f + Sum(room, r => r.Role == ModuleRole.Clean);
     public static float SleepAdd(Room? room) => Sum(room, r => r.Role == ModuleRole.Sleep);
     public static float RelaxMul(Room? room) => 1f + Sum(room, r => r.Role == ModuleRole.Relax);
-    public static bool Lit(Room room) => room.Furniture.Any(f => f.Type == FurnitureType.EmergencyLight && f.Machine is Machine m && m.Faults.Count == 0);
+    public static bool Lit(Room room) => room.PortableLit > 0 || FixedLit(room); // v16.7 이동식 작업등도 비춘다
+    public static bool FixedLit(Room room) => room.Furniture.Any(f => f.Type == FurnitureType.EmergencyLight && f.Machine is Machine m && m.Faults.Count == 0);
     public static bool SurgeGuard(World w) => w.Ship.FurnitureOf(FurnitureType.SurgeProtector).Any(Works);
     public static float FireMul(Room? room) => Has(room, FurnitureType.FireBlanket) ? 0.5f : 1f;
     public static float DryMul(Room? room) => Has(room, FurnitureType.Dehumidifier) ? 0.3f : 1f;

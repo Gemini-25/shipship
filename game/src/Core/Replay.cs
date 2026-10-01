@@ -405,6 +405,7 @@ public static class SaveGame
         // v11.2 교신
         I(w.Growth.Lessons); I(w.Growth.RehabSessions); foreach (var c in w.Crew) { F(c.Vitals.Scar); foreach (var sk in c.SkillLevels) F(sk); } // v11.3
         I(w.Comms.DistressAt); I(w.Comms.SupplyEta); I(w.Comms.SupplyDocked ? 1 : 0); I(w.Comms.SignalAt); I(w.Comms.PodEta); I(w.Comms.Rescued); I(w.Crew.Count);
+        foreach (var d in w.Portable.Devices) { I(d.At.X * 1000 + d.At.Y); I((d.On ? 1 : 0) + (d.Stored ? 2 : 0) + (d.Broken ? 4 : 0) + (int)d.Plug * 8); F(d.Charge); } // v16.7
         return h;
     }
 }
