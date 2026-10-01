@@ -80,31 +80,12 @@ public static class Incidents
             var p = e.Center + dir * t;
             var cell = Cell.FromPosition(p);
             float strength = size * (1f - t / (reach + 1f));
-            foreach (var d in Cell.Dirs8.Append(new Cell(0, 0)))
-            {
-                if (ship.FurnitureAt(cell + d)?.Machine is Machine m && hitMachines.Add(m))
-                {
-                    m.Condition = MathF.Max(0.02f, m.Condition - 0.5f * strength);
-                    Procedures.DamageLinks(w, m, 0.7f * strength, 0.6f * strength, "파편"); // v12.1
-                    if (w.Rng.Chance(0.7f * strength)) w.Machines.Break(m);
-                }
-                if (ship.WallAt(cell + d) is WallState ws && !ws.IsHull)
-                    Hull.Damage(ship, cell + d, 0.15f * strength);
-                if (d.X == 0 && d.Y == 0) w.Fixtures.OnDebris(cell, strength, ship.RoomAt(cell)); // v9.4 문 구동기·조명
-                if (d.X == 0 && d.Y == 0) w.Net.DamageNear(cell, 1.1f, 0.55f * strength, "파편"); // 배 전체 망
-                if (d.X == 0 && d.Y == 0) w.Causes.Hit(ship.RoomAt(cell), w.Causes.Context); // v12.2 파편이 지나간 방
-            }
+            Shrapnel.Sweep(w, w.Rng, cell, strength, ring: true, hitMachines, "파편"); // v16.13 폭발 파편과 같은 판정
             foreach (var c in w.Crew)
             {
                 if ((c.Position - p).Length() > 1.4f || !hurt.Add(c)) continue;
                 if (c.Dead) continue;
-                float dmg = (0.2f + 0.35f * size) * w.Rng.Range(0.6f, 1f) * (c.Suit != null ? 0.5f : 1f)
-                            * (warned != WarnLevel.None ? 0.75f : 1f); // v10.1: 경보를 듣고 몸을 숙였다
-                c.Vitals.Health = MathF.Max(0.02f, c.Vitals.Health - dmg);
-                NeedsSystem.AddInjury(c.Vitals, dmg * 0.9f, "파편");
-                c.Interrupt(w);
-                w.Log.Add(w.Tick, LogKind.Warning, $"파편에 맞아 다쳤다 (체력 {c.Vitals.Health * 100:0}%)", c.Id);
-                MarkLog.Add(c.Memory.Marks, w.Tick, $"운석 파편에 맞았다 ({c.Room?.Name ?? "?"})");
+                Shrapnel.HitCrew(w, w.Rng, c, 0.2f + 0.35f * size, warned != WarnLevel.None ? 0.75f : 1f, "파편", $"운석 파편에 맞았다 ({c.Room?.Name ?? "?"})"); // v10.1: 경보를 듣고 몸을 숙였다
             }
             if (!fireStarted && w.Rng.Chance(0.12f * size) && w.Fire.Ignite(cell, 0.3f)) fireStarted = true;
         }

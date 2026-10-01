@@ -65,6 +65,7 @@ public sealed class PublicAddress
         {
             if (c.Dead || c.Outside || c.Room == null) continue;
             bool loud = b.Rooms.Contains(c.Room.Id);
+            if (loud && w.Blast.Deaf(c)) { loud = false; w.Blast.MissedBroadcast(c, text); } // v16.13 이명 — 방송을 못 알아듣는다 (컴퓨터가 손목 단말로 다시)
             bool wakes = c.IsAwake || priority >= 2 && !c.DeepAsleep && !c.Down;
             if (loud && wakes)
             {

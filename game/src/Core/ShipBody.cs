@@ -470,6 +470,7 @@ public sealed partial class BodySystem
     }
 
     public bool Fallen(CrewMember c) => c.Id < _fallUntil.Length && _fallUntil[c.Id] > _w.Tick;
+    public void KnockDown(CrewMember c, string why, float injury) { EnsureCrew(c.Id); Fall(c, c.Cell, why, injury, leg: false); } // v16.13 폭발 압력에 넘어진다
 
     /// <summary>
     /// 한 걸음 내딛기 전의 배율 (0이면 이번 틱은 서 있다): 넘어져 있음 · 문(잠금 · 노크 · 손으로 돌리기 · 센서) · 열린 뚜껑 곁 · 연기 속 유도선.
