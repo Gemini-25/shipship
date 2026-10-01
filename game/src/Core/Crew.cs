@@ -138,6 +138,9 @@ public sealed class SuitState
 
     /// <summary>v11.0: 점검을 오래 안 한 보관함의 우주복 — 밸브가 새서 산소가 더 빨리 준다 (1이면 멀쩡).</summary>
     public float Leak { get; set; } = 1f;
+
+    /// <summary>v16.11 이 우주복의 상처 · 패치 · 바이저 · 추진팩 연료 (EvaRisk).</summary>
+    public SuitWear Wear { get; set; } = new();
 }
 
 public sealed class CrewStats

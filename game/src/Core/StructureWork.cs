@@ -435,6 +435,7 @@ public static partial class WorkPlanners
         if (hatch == null) { blocked = "에어락이 없다"; return false; }
         if (Inner(w, hatch) is not Cell inner) { blocked = "에어락이 없다"; return false; }
         if (c.Suit is { Oxygen: < 2f }) { blocked = "입은 우주복 산소가 모자라다"; return false; }
+        if (w.EvaRisk.Refuses(c, out blocked)) return false; // v16.11 선외 공포 — 정비가 밀린다
         if (!SuitUp(c, w, dist, toils)) { blocked = "우주복 없음"; return false; }
         toils.Add(new DoToil((cm, world) =>
         {

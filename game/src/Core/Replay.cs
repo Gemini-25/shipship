@@ -419,6 +419,7 @@ public static class SaveGame
         { var ps = w.Portable.Stats; foreach (var d in w.Portable.Devices) { F(d.Soak); F(d.Dust); } I(ps.ComputerWarns); I(ps.HeededWarns); I(ps.HeaterWarns); I(ps.HeaterOffs); I(ps.InventoryFound); I(ps.DustSniffs); I(ps.HotOutlets); } // v16.7 컴퓨터 · 냄새 · 배 본체
         { var os = w.Origin.Stats; I(os.Found); I(os.Told); I(os.Tips); I(os.Toasts); I(os.Reopened); I(os.Splits); I(os.Handovers); I(os.Rounds); I(os.Squeezes); I(os.Ranks); I(os.Calls); } // v16.9 배의 내력
         w.Cosmic.Hash(I, F); // v18.13 우주 대재난
+        w.EvaRisk.Hash(I, F); foreach (var d in w.Drones.Drones) { F(d.Hurt.Thruster); F(d.Hurt.Battery); F(d.Hurt.Swell); } // v16.11 선외 위험 · 드론 부위
         return h;
     }
 }

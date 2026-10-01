@@ -445,7 +445,7 @@ public sealed class EvacuateActivity : Activity
         {
             bool working = c.Job?.Order is WorkOrder o && (o.External || o.Kind == WorkKind.Rescue) && c.Suit is { Oxygen: > 0.6f };
             // v10.1: 운석 경보 — 궤적을 읽은 경보면 선체 밖 일을 두고 돌아온다
-            if (w.Sensors.Alarm is IncomingMeteor inc && inc.Warned >= WarnLevel.Manual && inc.MinutesLeft(w.Tick) > 0f && c.CarryingPerson == null)
+            if (w.Sensors.Alarm is IncomingMeteor inc && inc.Warned >= WarnLevel.Manual && inc.MinutesLeft(w.Tick) > 0f && c.CarryingPerson == null && !w.EvaRisk.Staying(c)) // v16.11 그늘 · 마저 끝내기
                 return (1.3f, $"운석 경보 — {inc.MinutesLeft(w.Tick):0.#}분 뒤 · 에어락으로");
             if (working) return (0f, "선체 밖 작업 중");
             float s = c.Suit == null ? 1.5f : c.Suit.Oxygen < 0.6f ? 1.35f : 0.95f;
@@ -541,6 +541,7 @@ public sealed class StowSuitActivity : Activity
         {
             if (cm.Suit == null) return true;
             if (locker.Storage!.Add(ItemKind.Suit, 1) == 0) return false;
+            world.EvaRisk.OnStow(cm, locker); // v16.11 상한 우주복은 수리 대기
             world.Log.Add(world.Tick, LogKind.Work, "우주복을 벗어 보관함에 걸었다", cm.Id);
             cm.Suit = null;
             return true;

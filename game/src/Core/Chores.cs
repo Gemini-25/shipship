@@ -601,6 +601,7 @@ public static partial class WorkPlanners
             if (cm.Suit != null) return true;
             if (locker.Storage!.Take(ItemKind.Suit, 1) == 0) return false;
             cm.Suit = new SuitState();
+            world.EvaRisk.OnIssue(cm, locker); // v16.11 멀쩡한 게 없으면 수리 대기 중인 걸 입는다
             // v11.0: 닷새 넘게 점검하지 않은 보관함의 우주복은 밸브가 새기도 한다
             if (world.Tick - locker.Checked > SimTime.Hours(120) && world.Rng.Chance(0.25f))
             {
