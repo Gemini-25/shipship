@@ -41,6 +41,9 @@ public static partial class Program
                     w.CrewCanDie = false;
                     // 다치는 사람: 의료 솜씨가 가장 낮은 셋 (두 배 모두 가장 나은 사람은 멀쩡하다 — 그 사람까지 다치면 어느 배든 대신할 사람이 없다)
                     var hurt = w.Crew.Where(c => !c.Dead).OrderBy(c => c.RawSkill(Skill.Medicine)).ThenBy(c => c.Id).Take(3).ToList();
+                    // 두 배 모두 구급 키트는 넉넉히 (스무 날 동안 쓴 양이 달라도 — 솜씨만 견준다)
+                    var kits = w.Ship.Furniture.FirstOrDefault(f => f.Storage != null && f.Room.Type == RoomType.Medbay) ?? w.Ship.Furniture.First(f => f.Storage != null);
+                    kits.Storage!.Add(ItemKind.MedKit, Math.Max(0, 8 - w.Ship.CountStored(ItemKind.MedKit)));
                     foreach (var c in hurt) Player.Hazard(w, HazardKind.WorkAccident, default, c.Id);
                     float inj0 = hurt.Sum(c => c.Vitals.Injury);
                     long first = -1;
@@ -58,10 +61,10 @@ public static partial class Program
                             prevInj[j] = hurt[j].Vitals.Injury;
                         }
                         if (first < 0 && hurt.Any(c => c.Vitals.TreatedTick > start)) first = w.Tick;
-                        if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "4" && i == 0 && first < 0 && t % SimTime.Hours(1) == 0)
+                        if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "4" && i == int.Parse(Environment.GetEnvironmentVariable("SHIPSIM_RUN") ?? "0") && train && first < 0 && t % SimTime.Hours(2) == 0)
                         {
                             var doc = w.Crew.Where(c => !c.Dead).OrderByDescending(c => c.RawSkill(Skill.Medicine)).First();
-                            Console.WriteLine($"      {SimTime.Clock(w.Tick)} 치료 주문 {w.Board.Open.Count(o => o.Kind == WorkKind.Treat)} · {doc.Name} {doc.Job?.Label} 평가 {string.Join(",", doc.LastEvaluations.Take(3).Select(e => $"{e.Activity.Label}:{e.Score:0.00}({e.Reason})"))} · 다친 이 " +
+                            Console.WriteLine($"      {SimTime.Clock(w.Tick)} 치료 주문 {w.Board.Open.Count(o => o.Kind == WorkKind.Treat)} [{string.Join(",", w.Board.Open.Where(o => o.Kind == WorkKind.Treat).Select(o => $"{o.Urgency:0.00}/{o.Assignee?.Name}/{o.BlockedReason}"))}] 구급키트 {w.Ship.CountStored(ItemKind.MedKit)} · {doc.Name} {doc.Job?.Label} 평가 {string.Join(",", doc.LastEvaluations.Take(3).Select(e => $"{e.Activity.Label}:{e.Score:0.00}({e.Reason})"))} · 다친 이 " +
                                 string.Join(" | ", hurt.Select(c => $"{c.Name} {c.Vitals.Injury:0.00} {c.Job?.Label} 방 {c.Room?.Name}")));
                         }
                         if (t == SimTime.Hours(12)) early = inj0 - hurt.Sum(c => c.Vitals.Injury);

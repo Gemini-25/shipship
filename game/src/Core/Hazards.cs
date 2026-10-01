@@ -27,6 +27,16 @@ public enum HazardKind
     Overheat,           // v12.2 설비 과열: 식히지 않으면 종류마다 다르게 터진다 (열폭주·수소·아크·연료·파열)
     // v12.4 연쇄를 잘 일으키는 사고
     CoolantLoss, DuctFire, HydrogenBuildup, ComputerMisjudge, Epidemic, MicroShower, GasTankRupture, FreezerFailure,
+    // v15 사고 70 (HazardsV15.cs): 전기 · 물 · 공기 · 기계 · 구조 · 바깥 · 불 · 생물 · 사람
+    BreakerCascade, ArcFault, GroundFault, CellAging, InsulationCrack, TrunkSag,
+    PipeFreeze, ValveSeize, Backflow, TankSludge, CondensateFlood, SewageBackup,
+    Co2Spike, ScrubberSaturation, InsulationSmoke, SealLeak, Ozone, HumiditySpike,
+    BearingSeize, FanImbalance, ShaftMisalign, LooseMount, HoistDrop, BadBatch,
+    WeldFatigue, WindowCrack, HatchSeal, ThermalStress, FrameCreak,
+    RadiationBurst, IonStorm, DebrisAlert, CometTail, StaticDischarge,
+    GreaseFire, DryerFire, CableTrayFire, Smolder,
+    MoldOutbreak, SeedRot, NutrientCrash, SkinFungus,
+    PanicAttack, MedError,
 }
 
 /// <summary>사고를 어디에 거는지.</summary>
@@ -36,7 +46,9 @@ public sealed record HazardSpec(HazardKind Kind, string Name, HazardTarget Targe
 
 public static class Hazards
 {
-    public static readonly HazardSpec[] All =
+    public static readonly HazardSpec[] All = Base().Concat(HazardsV15.Specs).ToArray(); // v15 26 → 70
+
+    private static HazardSpec[] Base() => new HazardSpec[]
     {
         new(HazardKind.MeteorShower, "운석우", HazardTarget.Ship, 4f, "운석우 — 30분 동안 잔해 무리가 배를 훑는다 (작은 운석 5~8개, 가끔 큰 것 하나)"),
         new(HazardKind.SolarStorm, "태양 폭풍", HazardTarget.Ship, 4f, "태양 폭풍 — 8시간쯤: 센서가 흐려지고 전자 장비·로봇이 오작동하고, 선체 밖은 방사선으로 위험하다 (선외 작업을 미룬다)"),
@@ -99,7 +111,7 @@ public static class Hazards
             HazardKind.FoodPoisoning => x.Type is FurnitureType.Fridge or FurnitureType.MealDispenser && x.Storage != null,
             HazardKind.FreezerFailure => x.Type == FurnitureType.Fridge && x.Machine != null,
             HazardKind.Overheat => x.Machine != null && VolatileSystem.Mode(x.Type) != BlowKind.None,
-            _ => x.Machine != null,
+            _ => x.Machine != null && HazardsV15.Fits(k, x),
         };
         if (Fits(f)) return f;
         // 설비 옆 칸을 눌렀으면 가까운 것
@@ -176,7 +188,7 @@ public static class Hazards
             HazardKind.MicroShower => sys.MicroShower(),
             HazardKind.GasTankRupture => sys.GasTankRupture(),
             HazardKind.FreezerFailure => sys.FreezerFailure(MachineAt(w, k, at)),
-            _ => null,
+            _ => sys.V15(k, at, id), // v15 새 사고 44
         };
         if (what == null) return null;
         sys.Count[(int)k]++;

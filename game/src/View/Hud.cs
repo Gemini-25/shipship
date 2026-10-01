@@ -531,8 +531,9 @@ public partial class Hud : Control
     private void DrawHazardMenu(Vector2 at, Vector2 mouse)
     {
         var all = Hazards.All;
-        const int cols = 3;
-        const float bw = 150f, bh = 30f, gap = 6f, pad = 14f;
+        int cols = all.Length > 30 ? 5 : 3; // v15 사고 70: 다섯 칸
+        float bw = all.Length > 30 ? 128f : 150f, bh = all.Length > 30 ? 24f : 30f;
+        const float gap = 6f, pad = 14f;
         int rows = (all.Length + cols - 1) / cols;
         var card = new Rect2(at, new Vector2(pad * 2 + cols * bw + (cols - 1) * gap, pad + 26 + 34 + rows * (bh + gap) + 20));
         Card(card);

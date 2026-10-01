@@ -82,7 +82,9 @@ public static partial class Program
                 string what2 = Apply(w2, HazardKind.FreezerFailure, fridge.Cells[0]);
                 Run(w2, SimTime.Hours(8));
                 bool fixedIt = !fridge.Machine!.Has(FaultKind.CompressorFail);
-                Check("냉장고 고장 — 여섯 시간 안에 고치거나, 음식이 상한다", fixedIt || fridge.Storage!.Tainted > 0, $"{what2} · {(fixedIt ? "고쳤다" : $"상한 식사 {fridge.Storage!.Tainted}끼")}");
+                int meals = fridge.Storage!.Count(ItemKind.Meal);
+                Check("냉장고 고장 — 여섯 시간 안에 고치거나, 음식이 상한다 (비어 있으면 상할 것이 없다)", fixedIt || fridge.Storage!.Tainted > 0 || meals == 0,
+                    $"{what2} · {(fixedIt ? "고쳤다" : $"상한 식사 {fridge.Storage!.Tainted}끼 · 남은 식사 {meals}끼")}");
             }
 
             // 8b) 피해 체계: 전자기 교란 (나중의 포격도 같은 말로)

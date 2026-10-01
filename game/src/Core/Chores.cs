@@ -1385,19 +1385,22 @@ public static partial class WorkPlanners
         blocked = null;
         var patient = o.Target.Crew!;
         var toils = Fetch(c, w, dist, ItemKind.MedKit, 1);
-        if (toils == null) { blocked = "구급 키트 없음"; return null; }
+        bool kit = toils != null;
+        // v15 키트가 바닥나면 손에 있는 천·소독약으로 응급 처치 (효과는 절반 — 키트는 배에서 못 만든다)
+        toils ??= Plans.DropOff(c, w, dist);
         toils.AddRange(w.Soil.WashFirst(c, o.Urgency >= 0.9f, "치료")); // v14.7 급하지 않으면 손부터 (환자 곁에 가기 전에 — 씻는 사이 환자가 자리를 뜨지 않게)
         toils.Add(new GotoToil(at));
         toils.Add(new WorkToil(0.5f, Skill.Medicine, patient.Position)
         {
-            CanContinue = (cm, _) => cm.Carrying?.Kind == ItemKind.MedKit && (patient.Position - cm.Position).Length() < 2.2f,
+            CanContinue = (cm, _) => (!kit || cm.Carrying?.Kind == ItemKind.MedKit) && (patient.Position - cm.Position).Length() < 2.2f,
         });
         toils.Add(new DoToil((cm, world) =>
         {
-            Consume(cm, ItemKind.MedKit);
-            float skill = cm.SkillLevel(Skill.Medicine);
-            patient.Vitals.Health = MathF.Min(patient.Vitals.MaxHealth, patient.Vitals.Health + 0.15f + 0.25f * skill);
-            patient.Vitals.Injury = MathF.Max(0f, patient.Vitals.Injury - (0.06f + 0.14f * skill));
+            if (kit) Consume(cm, ItemKind.MedKit);
+            float skill = cm.SkillLevel(Skill.Medicine), eff = kit ? 1f : 0.5f;
+            patient.Vitals.Health = MathF.Min(patient.Vitals.MaxHealth, patient.Vitals.Health + (0.15f + 0.25f * skill) * eff);
+            patient.Vitals.Injury = MathF.Max(0f, patient.Vitals.Injury - (0.06f + 0.14f * skill) * eff);
+            if (!kit) world.Log.Add(world.Tick, LogKind.Warning, $"구급 키트가 없어 {patient.Name}에게 응급 처치만 했다 (천과 소독약)", cm.Id);
             patient.Vitals.TreatedTick = world.Tick;
             world.Ailments.Treated(patient, cm); // v14.1 진단하고 약을 쓴다
             world.Soil.OnTreated(cm, patient); // v14.7 더러운 손이면 상처가 곪기도

@@ -154,6 +154,7 @@ public static partial class Program
         if (args.Contains("--flowtest")) return RunFlowTest(seed); // v14.8
         if (args.Contains("--culturetest")) return RunCultureTest(seed); // v14.9
         if (args.Contains("--dailytest")) return RunDailyTest(seed); // v15
+        if (args.Contains("--hazard70test")) return RunHazard70Test(seed); // v15 사고 70
         if (args.Contains("--replaycheck")) return RunReplayCheck(seed);
         if (args.Contains("--deathtrace")) return RunDeathTrace(Math.Max(1, days), seed);
         if (args.Contains("--stressprobe")) return RunStressProbe(Math.Max(1, days), seed);

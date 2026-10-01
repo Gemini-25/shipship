@@ -164,6 +164,7 @@ public sealed class Storyteller
             (nameof(HazardKind.GasTankRupture), gentle ? 0.3f : 1.5f * big), (nameof(HazardKind.FreezerFailure), 2.5f),
         };
         if (w.Piping.Segments.Count > 0) pool.Add(("pipe", 5f));
+        foreach (var s in HazardsV15.Specs) pool.Add((s.Kind.ToString(), s.Weight * (gentle ? 0.5f : 0.8f))); // v15 새 사고 44
         foreach (var s in Hazards.All)
         {
             if (s.Kind >= HazardKind.CoolantLoss || s.Kind == HazardKind.RescueSignal) continue;
