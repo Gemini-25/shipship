@@ -36,6 +36,9 @@ public static class Settings
     /// <summary>v12.2 하이라이트 모드: 평온하면 빠르게, 사고·주목할 일이 나면 1배속으로.</summary>
     public static bool Highlight { get; set; }
 
+    /// <summary>v12.9 첫 항해 안내 (처음 켜면 켜져 있다 — 끝까지 가거나 끄면 다음부터는 꺼진다).</summary>
+    public static bool Tutorial { get; set; } = true;
+
     /// <summary>v12.2 하이라이트 모드에서 카메라가 사고 현장으로 가고, 결정적인 순간엔 느리게.</summary>
     public static bool AutoCamera { get; set; } = true;
 
@@ -81,6 +84,7 @@ public static class Settings
         Ship = cfg.GetValue("voyage", "ship", Ship).AsString();
         Death = cfg.GetValue("voyage", "death", Death).AsBool();
         Highlight = cfg.GetValue("play", "highlight", Highlight).AsBool();
+        Tutorial = cfg.GetValue("play", "tutorial", Tutorial).AsBool();
         AutoCamera = cfg.GetValue("play", "auto_camera", AutoCamera).AsBool();
     }
 
@@ -97,6 +101,7 @@ public static class Settings
         cfg.SetValue("voyage", "ship", Ship);
         cfg.SetValue("voyage", "death", Death);
         cfg.SetValue("play", "highlight", Highlight);
+        cfg.SetValue("play", "tutorial", Tutorial);
         cfg.SetValue("play", "auto_camera", AutoCamera);
         cfg.Save(Path);
     }
@@ -155,6 +160,13 @@ public partial class OptionsPanel : PanelContainer
             _level.AddItem($"{name} (시작 물자는 새 항해부터)");
         _level.ItemSelected += i => _main.SetTuned("story.level", i + 1);
         box.AddChild(_level);
+        // v12.9 항해 방식 (새 항해부터)
+        _mode = new OptionButton { CustomMinimumSize = new Vector2(360, 0) };
+        foreach (var name in new[] { "항해: 자유 항해 (샌드박스)", "항해: 캠페인 — 이어지는 임무와 갈림길, 끝은 세대선", "항해: 처음부터 세대선 — 아이가 태어나고 자란다" })
+            _mode.AddItem($"{name} (새 항해부터)");
+        _mode.ItemSelected += i => _main.SetTuned("mode.campaign", i);
+        box.AddChild(_mode);
+        box.AddChild(Check("첫 항해 안내 (새 항해를 시작하면 한 단계씩)", Settings.Tutorial, on => Settings.Tutorial = on));
         var speed = new OptionButton();
         foreach (var s in Main.Speeds) speed.AddItem($"시작 배속 {s}×");
         speed.Selected = Settings.StartSpeed;
@@ -244,7 +256,7 @@ public partial class OptionsPanel : PanelContainer
     }
 
     private OptionButton _random = null!;
-    private OptionButton _persona = null!, _level = null!;
+    private OptionButton _persona = null!, _level = null!, _mode = null!;
 
     private static readonly (float days, string name)[] RandomChoices =
         { (0f, "끔 (관찰자가 던진 것만)"), (6f, "드물게 — 평균 6일에 한 번"), (3f, "보통 — 3일에 한 번"), (1.5f, "잦게 — 하루 반에 한 번"), (0.5f, "혼돈 — 반나절에 한 번") };
@@ -261,6 +273,7 @@ public partial class OptionsPanel : PanelContainer
             _random.Selected = best;
             _persona.Selected = (int)ShipSim.Core.Storyteller.Persona;
             _level.Selected = ShipSim.Core.Storyteller.Level - 1;
+            _mode.Selected = (int)ShipSim.Core.CampaignSystem.ModeValue;
             var vp = GetViewportRect().Size;
             Position = (vp - GetCombinedMinimumSize()) * 0.5f;
         }

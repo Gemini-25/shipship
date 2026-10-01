@@ -224,6 +224,7 @@ public sealed class DutyActivity : Activity
 
     public override (float, string) Score(CrewMember c, World w, DistanceField dist)
     {
+        if (c.IsChild) return (0f, "아이는 당직을 서지 않는다"); // v12.9
         float score;
         string reason;
         if (OnShift(c, w))

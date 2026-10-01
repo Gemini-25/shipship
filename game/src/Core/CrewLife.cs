@@ -92,6 +92,7 @@ public static class Life
                 CrewRole.Engineer => Background.MilitaryTech, _ => bgs[rng.Range(0, bgs.Length)],
             };
             c.Background = rng.Chance(0.55f) ? fit : bgs[rng.Range(0, bgs.Length)];
+            if (!c.BornAboard) c.Age = 22f + rng.Range(0f, 34f); // v12.9
             var vals = Enum.GetValues<CrewValue>();
             c.Value = vals[rng.Range(0, vals.Length)];
             var habits = Enum.GetValues<Habit>().ToList();

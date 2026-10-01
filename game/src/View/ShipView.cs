@@ -1215,7 +1215,7 @@ public partial class ShipView : Node2D
         if (c.Vitals.Health < 0.5f) col = col.Lerp(new Color("#8a8f99"), 0.4f);
         bool selected = _main.SelectedCrew == c;
         bool hovered = _main.HoveredCrew == c;
-        float radius = CrewRadius;
+        float radius = CrewRadius * (c.IsChild ? 0.55f + 0.03f * c.Age : 1f); // v12.9 아이는 작다
         float s = radius / 9.5f;
 
         if (c.Dead || c.Down)

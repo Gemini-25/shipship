@@ -107,6 +107,8 @@ public partial class Hud : Control
         DrawHints();
         DrawBanners();
         DrawSummaryCard(mouse); // v12.8 요약 진행
+        DrawCampaign(); // v12.9 임무
+        DrawTutorial(mouse); // v12.9 첫 항해 안내
         if (_hazardMenu) DrawHazardMenu(_hazardMenuAt, mouse); // v11.2 떠 있는 메뉴는 맨 위에
     }
 

@@ -116,7 +116,7 @@ public sealed partial class AutomationSystem
     private void Vote(bool shipFirst, string why)
     {
         var w = _world;
-        var voters = w.Crew.Where(c => !c.Dead && c.CanAct).ToList();
+        var voters = w.Crew.Where(c => !c.Dead && c.CanAct && !c.IsChild).ToList();
         if (voters.Count == 0) return;
         // v12.7 가치관: 효율·규칙을 앞세우는 사람은 배 우선, 사람을 앞세우는 사람은 사람 우선 쪽으로 기운다
         static float Lean(CrewMember c) => c.Value switch { CrewValue.Efficiency => 0.15f, CrewValue.Rules => 0.1f, CrewValue.People => -0.2f, CrewValue.Safety => -0.05f, _ => 0f };

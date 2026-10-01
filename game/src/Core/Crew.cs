@@ -109,7 +109,10 @@ public sealed class Vitals
     public float Injury { get; set; }
 
     /// <summary>부상 때문에 체력이 이 이상 오르지 않는다. v11.3: 후유증도 조금.</summary>
-    public float MaxHealth => 1f - 0.6f * Injury - 0.4f * Scar;
+    public float MaxHealth => 1f - 0.6f * Injury - 0.4f * Scar - Frailty;
+
+    /// <summary>v12.9 나이 든 몸 (일흔 넘어 조금씩 — 최대 체력을 깎는다).</summary>
+    public float Frailty { get; set; }
 
     /// <summary>v11.3 후유증 0~0.3: 크게 다친 뒤 남는 것 (최대 체력·손이 조금 둔하다). 재활로 조금씩, 절반까지만 준다.</summary>
     public float Scar { get; set; }
@@ -227,6 +230,12 @@ public sealed class CrewMember
     public bool Profiled { get; set; }
     /// <summary>v12.8 기항지에서 탄 사람 (어디서).</summary>
     public string? Joined { get; set; }
+
+    /// <summary>v12.9 세대선: 나이(해) · 짝 · 배에서 태어났다. 열네 살 전에는 일하지 않는다.</summary>
+    public float Age { get; set; } = 30f;
+    public int? Partner { get; set; }
+    public bool BornAboard { get; init; }
+    public bool IsChild => BornAboard && Age < 14f;
 
     /// <summary>v12.6 쌓인 방사선 (대략 Sv) — 1 넘으면 몸이 상하기 시작한다. 체력 단련(0~1)은 운동으로 오르고 안 하면 천천히 빠진다.</summary>
     public float Dose { get; set; }

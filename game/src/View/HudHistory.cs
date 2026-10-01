@@ -115,7 +115,8 @@ public partial class Hud
 
         Gfx.Text(this, Fonts.Bold, new Vector2(x, y0 + 30), $"{_world.Ship.Name} 연대기", 17, Palette.Text);
         Gfx.Text(this, Fonts.Body, new Vector2(x + Gfx.Width(Fonts.Bold, $"{_world.Ship.Name} 연대기", 17) + 10, y0 + 30),
-            $"{_world.Day}일째 · 사고 {h.Episodes.Count}건 · 개조 {h.Upgrades} · 결정 {h.DecisionsMade}(부결 {h.DecisionsRejected})", 12, Palette.TextMuted);
+            $"{_world.Day}일째 · 사고 {h.Episodes.Count}건 · 개조 {h.Upgrades} · 결정 {h.DecisionsMade}(부결 {h.DecisionsRejected})"
+            + (_world.Voyage.Past.Count > 0 ? $" · 마친 항해 {_world.Voyage.Past.Count}" : "") + (_world.Life.Memorial.Count > 0 ? $" · 추모 {string.Join("·", _world.Life.Memorial.Select(m => m.name))}" : ""), 12, Palette.TextMuted); // v12.8·v12.7
         Button(new Rect2(right - 58, y0 + 12, 58, 26), "J 닫기", false, mouse, ToggleChronicle, 11);
 
         // 교훈 (운영 방침)

@@ -216,6 +216,8 @@ public partial class Main : Node2D
         // 실행 인자는 처음 한 번만 (F9·되감기로 장면을 다시 띄울 때 또 워프하지 않게). 화면 찍기는 매번
         ApplyCommandLine(onlyShot: _commandLineDone);
         _commandLineDone = true;
+        // v12.9 첫 항해 안내: 새 항해이고, 안내를 켜 두었고, 화면 찍기가 아니면
+        if (!loaded && Settings.Tutorial && !OS.GetCmdlineUserArgs().Any(a => a.StartsWith("--shot"))) Hud.CallDeferred(nameof(Hud.StartTutorial));
         if (loadError != null) ShowNotice($"저장 파일을 불러오지 못해 새 항해로 시작했다 — {loadError}");
     }
 
@@ -961,6 +963,12 @@ public partial class Main : Node2D
                     break;
                 case "--view":
                     if (Enum.TryParse<ViewMode>(value, out var vm)) ViewMode = vm;
+                    break;
+                case "--tutorial": // v12.9 첫 항해 안내
+                    Hud.StartTutorial();
+                    break;
+                case "--campaign": // v12.9 화면 시험: 지금 항해를 캠페인(1)·세대선(2)으로 (기록되지 않는다 — 설정의 '항해 방식'을 쓴다)
+                    if (value == "2") Sim.Generation.Enable(); else Sim.Campaign.Start();
                     break;
                 case "--summary": // v12.8 시험: 시작하자마자 요약 진행
                     CallDeferred(nameof(StartSummaryDeferred), float.Parse(value, CultureInfo.InvariantCulture));

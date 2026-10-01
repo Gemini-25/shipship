@@ -139,6 +139,8 @@ public sealed class World
     public LifeSystem Life { get; }
     public EraSystem Eras { get; }
     public VoyageSystem Voyage { get; }
+    public GenerationSystem Generation { get; }
+    public CampaignSystem Campaign { get; }
     public Storyteller Story { get; }
 
     /// <summary>v12.1 정비 절차 통계.</summary>
@@ -220,6 +222,8 @@ public sealed class World
         Life = new LifeSystem(this);
         Eras = new EraSystem(this);
         Voyage = new VoyageSystem(this);
+        Generation = new GenerationSystem(this);
+        Campaign = new CampaignSystem(this);
         Story = new Storyteller(this, seed);
         Piping = new PipeNetwork(this);
         Automation = new AutomationSystem(this);
@@ -283,6 +287,8 @@ public sealed class World
             Life.Update(dt); // v12.7 실수·말다툼·추모·자격
             Eras.Update(); // v12.8 시대 기술 (회의가 고른 연구)
             Voyage.Update(dt); // v12.8 항로 구간 · 기항지 · 난파선
+            Generation.Update(dt); // v12.9 나이 · 짝 · 출생 · 성장
+            Campaign.Update(); // v12.9 임무
             Volatile.Resume();
             Procedures.Update(this); // v12.1 재조립 불량이 돌아온다
             Causes.Update(); // v12.2 인과 사슬: 번진 상태를 원인에 잇고, 풀린 상태에 복구를 붙인다
@@ -616,6 +622,8 @@ public sealed class World
         int crewSize = crew <= 0 ? template.Crew : Math.Clamp(crew, 1, MaxCrew);
         world.StartCrew = crewSize;
         world.StartTuning = Tuning.NonDefault().ToList();
+        if (CampaignSystem.ModeValue >= 2f) world.Generation.Enable(); // v12.9 처음부터 세대선
+        else if (CampaignSystem.ModeValue >= 1f) world.Campaign.Start(); // v12.9 이어지는 임무
         var ship = shipObj;
 
         // v10.4: 큰 배는 공기 탱크·물통도 크고, 처음 싣는 물자도 설계 인원만큼
@@ -759,6 +767,48 @@ public sealed class World
         if (bed == null && StartingCot(Ship, this) is Furniture cot) bed = cot;
         if (bed != null) { c.Bed = bed; bed.Owner = c; Paths.Invalidate(); }
         Crew.Add(c);
+        return c;
+    }
+
+    /// <summary>v12.9 세대선: 배에서 태어난 아이 — 부모를 닮은 역할·성격, 솜씨는 거의 없다. 부모 곁에서 자란다.</summary>
+    public CrewMember AddChild(CrewMember a, CrewMember b, Rng rng)
+    {
+        int id = Crew.Count;
+        int k = Crew.Count(c => c.Rescued || c.BornAboard);
+        string name = NameGen.Newcomer(Seed, 50 + k, Crew.Select(c => c.Name));
+        var role = rng.Chance(0.5f) ? a.Role : b.Role;
+        float Mix(float x, float y, float lo, float hi) => Math.Clamp((x + y) / 2f + rng.Range(-0.15f, 0.15f), lo, hi);
+        var c = new CrewMember
+        {
+            Id = id,
+            Name = name,
+            Role = role,
+            Traits = new Personality
+            {
+                Diligence = Mix(a.Traits.Diligence, b.Traits.Diligence, 0.2f, 0.95f), Sociability = Mix(a.Traits.Sociability, b.Traits.Sociability, 0.2f, 0.9f),
+                Bravery = Mix(a.Traits.Bravery, b.Traits.Bravery, 0.15f, 0.9f), Appetite = rng.Range(0.85f, 1.15f), Calm = Mix(a.Traits.Calm, b.Traits.Calm, 0.2f, 0.8f),
+            },
+            Memory = new CrewMemory(Ship.Rooms.Count),
+            Schedule = Schedule.FromBedtime(a.Schedule.SleepStart),
+            Stations = a.Role == role ? a.Stations : b.Stations,
+            SkillLevels = Enumerable.Repeat(0.03f, Skills.All.Length).ToArray(),
+            BornAboard = true,
+        };
+        c.Age = 0f;
+        c.Profiled = true;
+        c.Background = Background.Teacher;
+        c.Value = rng.Chance(0.5f) ? a.Value : b.Value;
+        c.Joined = "배에서 태어났다";
+        c.Position = a.Position;
+        c.PreviousPosition = c.Position;
+        c.Room = a.Room;
+        foreach (var o in Crew)
+        {
+            c.Affinity[o.Id] = o == a || o == b ? 0.8f : 0.3f;
+            o.Affinity[c.Id] = o == a || o == b ? 0.9f : 0.3f;
+        }
+        Crew.Add(c);
+        Paths.Invalidate();
         return c;
     }
 
