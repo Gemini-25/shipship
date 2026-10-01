@@ -8,8 +8,14 @@ namespace ShipSim.Core;
 //   구간마다 사고의 무게가 달라진다 (소행성대 → 운석, 성운 → 전력 서지·센서 흐림, 방사선대 → 태양 폭풍).
 //   소행성대는 채집이 좋고, 난파선에서는 건질 것이 있고, 기항지에서는 교역·새 사람·개수 공사를 한다.
 //   엔진이 멎으면 표류한다 (나아가는 속도가 3분의 1). 목적지에 닿으면 항해를 정리하고 다음 항해를 잡는다.
+// v15.4 구간 20 · 지명 70 · 기항지 성격 10 (VoyageV15.cs) — 새 구간은 순항 자리에 섞여 든다.
 
-public enum LegKind { Cruise, AsteroidBelt, Nebula, RadiationBelt, Derelict, Port }
+public enum LegKind
+{
+    Cruise, AsteroidBelt, Nebula, RadiationBelt, Derelict, Port,
+    // v15.4 새 구간 14 (VoyageV15.cs)
+    SolarWind, CometTrail, GasGiant, IceRing, Pulsar, DeepVoid, TradeLane, MagneticField, Graveyard, PatrolLane, Perihelion, SporeCloud, Lagrange, Narrows,
+}
 
 public sealed class Leg
 {
@@ -38,23 +44,24 @@ public sealed class VoyageSystem
     public float Reserve { get; set; }
     /// <summary>지금까지 기항지에 판 개수 (종류별 — 캠페인 임무가 센다).</summary>
     public Dictionary<ItemKind, int> Sold { get; } = new();
+    /// <summary>v15.4 지금까지 기항지에서 팔아 번 돈.</summary>
+    public float Earned { get; private set; }
     private int _incidents0, _deaths0, _techs0;
     private readonly Rng _rng;
+    private readonly Rng _mix; // v15.4 새 구간 · 지명 (본 항로의 뽑기와 따로)
 
     public Leg Current => Legs[Math.Clamp(Index, 0, Legs.Count - 1)];
     public float TotalDays => Legs.Sum(l => l.Days);
     public float DoneDays => Legs.Take(Index).Sum(l => l.Days) + Progress;
     public bool Drifting => !_w.Propulsion.Engines.Any(m => m.Efficiency > 0.1f) || _w.Propulsion.Propellant <= 0f;
 
-    private static readonly string[] Places = { "케레스 정거장", "팔라스 조선소", "유로파 기지", "가니메데 항", "타이탄 정유소", "베스타 광산", "히기에아 교역소", "트리톤 관측소", "에리스 등대", "세드나 개척지" };
-    private static readonly string[] Wrecks = { "버려진 화물선 '바람꽃'", "옛 탐사선 '새벽별'", "부서진 채굴선 '두더지'", "침묵한 정찰기 '까치'" };
-    private static readonly string[] Belts = { "베스타 근처 소행성대", "트로이 소행성군", "카이퍼 띠 안쪽", "히다 소행성 무리" };
-    private static readonly string[] Clouds = { "붉은 성운 가장자리", "이온 구름", "먼지 성운" };
+    private static readonly string[] Places = VoyageV15.PortNames, Wrecks = VoyageV15.Wrecks, Belts = VoyageV15.Belts, Clouds = VoyageV15.Clouds; // v15.4 지명 70
 
     public VoyageSystem(World w)
     {
         _w = w;
         _rng = new Rng(unchecked(w.Seed * 31337 + 7));
+        _mix = new Rng(unchecked(w.Seed * 7027 + 13));
         Plan(first: true);
     }
 
@@ -81,13 +88,15 @@ public sealed class VoyageSystem
             {
                 LegKind.AsteroidBelt => Belts[_rng.Range(0, Belts.Length)],
                 LegKind.Nebula => Clouds[_rng.Range(0, Clouds.Length)],
-                LegKind.RadiationBelt => "방사선대",
+                LegKind.RadiationBelt => VoyageV15.Rads[_mix.Range(0, VoyageV15.Rads.Length)],
                 LegKind.Derelict => Wrecks[_rng.Range(0, Wrecks.Length)],
                 LegKind.Port => Places[_rng.Range(0, Places.Length)],
                 _ => "순항",
             };
             float days = kind switch { LegKind.Port => 1f, LegKind.Derelict => 0.5f, LegKind.Cruise => 2f + _rng.Range(0f, 3f), _ => 1.5f + _rng.Range(0f, 2f) };
             if (route == 2 && kind == LegKind.Cruise) days *= 0.65f; // 빠르게
+            // v15.4 순항 자리 일부가 새 구간이 된다 (따로 굴린다 — 본 항로의 뽑기는 그대로)
+            if (kind == LegKind.Cruise && VoyageV15.Swap(_mix, route) is LegSpec ns) { kind = ns.Kind; name = ns.Places[_mix.Range(0, ns.Places.Length)]; days = ns.DaysMin + _mix.Range(0f, ns.DaysMax - ns.DaysMin); }
             Legs.Add(new Leg { Kind = kind, Name = name, Days = days });
         }
         Legs.Add(new Leg { Kind = LegKind.Port, Name = Destination, Days = 1f });
@@ -100,24 +109,24 @@ public sealed class VoyageSystem
     public static string KindName(LegKind k) => k switch
     {
         LegKind.Cruise => "순항", LegKind.AsteroidBelt => "소행성대", LegKind.Nebula => "성운", LegKind.RadiationBelt => "방사선대",
-        LegKind.Derelict => "난파선", _ => "기항지",
+        LegKind.Derelict => "난파선", LegKind.Port => "기항지", _ => VoyageV15.Spec(k)?.Name ?? "순항",
     };
 
     /// <summary>이 구간에서 사고 하나의 무게 배율.</summary>
-    public float HazardMul(string key) => Current.Kind switch
+    public float HazardMul(string key) => _w.Outside.RiskMul(key) * Current.Kind switch // v15.4 바깥 소식(예보 · 옛 등대)이 무게를 바꾼다
     {
         LegKind.AsteroidBelt => key is "meteor" or "bigmeteor" or nameof(HazardKind.MicroShower) or nameof(HazardKind.MeteorShower) or nameof(HazardKind.DebrisCloud) or nameof(HazardKind.HullCrack) ? 2.5f : 1f,
         LegKind.Nebula => key is nameof(HazardKind.PowerSurge) or nameof(HazardKind.ComputerFault) or nameof(HazardKind.ComputerMisjudge) or nameof(HazardKind.LightsOut) ? 2.5f : 1f,
         LegKind.RadiationBelt => key is nameof(HazardKind.SolarStorm) ? 4f : key is nameof(HazardKind.RobotMalfunction) ? 1.8f : 1f,
         LegKind.Port => key is "meteor" or "bigmeteor" or nameof(HazardKind.MicroShower) ? 0.3f : key is nameof(HazardKind.Epidemic) or nameof(HazardKind.FoodPoisoning) ? 2f : 1f,
-        _ => 1f,
+        _ => VoyageV15.HazardMul(Current.Kind, key), // v15.4 새 구간
     };
 
-    /// <summary>채집 배율 (소행성대는 돌이 많다).</summary>
-    public float MiningMul => Current.Kind == LegKind.AsteroidBelt ? 2f : 1f;
+    /// <summary>채집 배율 (소행성대는 돌이 많다 · v15.4 얼음 고리).</summary>
+    public float MiningMul => Current.Kind == LegKind.AsteroidBelt ? 2f : VoyageV15.MiningMul(Current.Kind);
 
-    /// <summary>센서 배율 (성운 속은 흐리다).</summary>
-    public float SensorMul => Current.Kind == LegKind.Nebula ? 0.6f : 1f;
+    /// <summary>센서 배율 (성운 속은 흐리다 · v15.4 깊은 공허는 맑다).</summary>
+    public float SensorMul => Current.Kind == LegKind.Nebula ? 0.6f : VoyageV15.SensorMul(Current.Kind);
 
     /// <summary>시스템 틱: 나아간다 (엔진이 멎으면 표류).</summary>
     public void Update(float dt)
@@ -125,6 +134,7 @@ public sealed class VoyageSystem
         var w = _w;
         float speed = Drifting ? (w.Eras.Has("fusiondrive") ? 0.5f : 0.33f) : 1f;
         if (w.Eras.Has("warpbubble")) speed *= 2f; // v12.8 공간 왜곡
+        speed *= VoyageV15.SpeedMul(Current.Kind); // v15.4 태양풍 물길
         if (Current.Kind == LegKind.Port) speed = 1f; // 정박 중
         Progress += dt / 24f * speed;
         if (Progress < Current.Days) return;
@@ -142,11 +152,12 @@ public sealed class VoyageSystem
     private void Enter(Leg leg)
     {
         var w = _w;
+        if (VoyageV15.Spec(leg.Kind) is LegSpec spec) { VoyageV15.Enter(w, this, leg, spec, _mix); return; } // v15.4 새 구간의 이점
         switch (leg.Kind)
         {
             case LegKind.Port:
                 PortsVisited++;
-                w.RaiseAlert($"기항지 도착 — {leg.Name} · 교역과 보급, 새 사람", null, AlertLevel.Notice, shipWide: true);
+                w.RaiseAlert($"기항지 도착 — {leg.Name}({VoyageV15.PortOf(leg.Name).Name}) · 교역과 보급, 새 사람", null, AlertLevel.Notice, shipWide: true);
                 w.History.Add(w, HistoryKind.Decision, $"{leg.Name}에 닿았다", null, log: true);
                 Trade(leg);
                 break;
@@ -170,7 +181,7 @@ public sealed class VoyageSystem
 
     private void Leave(Leg leg)
     {
-        if (leg.Kind == LegKind.AsteroidBelt) _w.Space.SetMean(PropulsionSystem.ZoneDensity(_w.Propulsion.Zone));
+        if (leg.Kind == LegKind.AsteroidBelt || VoyageV15.MiningMul(leg.Kind) != 1f) _w.Space.SetMean(PropulsionSystem.ZoneDensity(_w.Propulsion.Zone));
         if (leg.Kind is not (LegKind.Cruise)) _w.Log.Add(_w.Tick, LogKind.Ship, $"{leg.Name}을(를) 벗어났다");
     }
 
@@ -180,6 +191,7 @@ public sealed class VoyageSystem
         var w = _w;
         var ship = w.Ship;
         var lines = new List<string>();
+        var port = VoyageV15.PortOf(leg.Name); // v15.4 기항지 성격 — 값 · 파는 물건 · 태우는 사람 · 들르면 생기는 일
         // 팔기
         foreach (var (k, keep, price) in new[] { (ItemKind.Rare, 2, 6f), (ItemKind.MetalOre, 10, 0.8f), (ItemKind.Ice, 6, 0.5f) })
         {
@@ -187,7 +199,9 @@ public sealed class VoyageSystem
             if (have <= keep) continue;
             int sell = have - keep;
             if (!Life.Take(w, k, sell)) continue;
-            Credits += sell * price * (w.Policies["comms"] == 0 ? 1.15f : 1f); // v13.4 방침(교신: 정기 보고) — 기항지가 반긴다
+            float got = sell * price * port.Sell(k) * (w.Policies["comms"] == 0 ? 1.15f : 1f); // v13.4 방침(교신: 정기 보고) — 기항지가 반긴다
+            Credits += got;
+            Earned += got;
             Sold[k] = Sold.GetValueOrDefault(k) + sell;
             lines.Add($"{ItemKinds.Name(k)} {sell} 팔고");
         }
@@ -201,8 +215,8 @@ public sealed class VoyageSystem
         int spend = w.Policies["portspend"];
         float wantScale = spend == 0 ? 0.6f : spend == 2 ? 1.5f : 1f;
         float keepMoney = spend == 0 ? MathF.Max(Reserve, 20f) : spend == 2 ? 0f : Reserve;
-        foreach (var (k, want0, price) in new[] { (ItemKind.Plate, 10, 1.5f), (ItemKind.Electronics, 6, 3f), (ItemKind.Sealant, 4, 2f), (ItemKind.MedKit, 4, 3f), (ItemKind.Filter, 4, 2f), (ItemKind.Cable, 6, 1f),
-            (ItemKind.Soap, 4, 0.5f), (ItemKind.Coffee, 6, 0.8f), (ItemKind.Bandage, 6, 0.8f), (ItemKind.Disinfectant, 2, 1f), (ItemKind.Spice, 2, 1f), (ItemKind.Gasket, 2, 1f) })
+        foreach (var (k, want0, price) in VoyageV15.Wares(port, new[] { (ItemKind.Plate, 10, 1.5f), (ItemKind.Electronics, 6, 3f), (ItemKind.Sealant, 4, 2f), (ItemKind.MedKit, 4, 3f), (ItemKind.Filter, 4, 2f), (ItemKind.Cable, 6, 1f),
+            (ItemKind.Soap, 4, 0.5f), (ItemKind.Coffee, 6, 0.8f), (ItemKind.Bandage, 6, 0.8f), (ItemKind.Disinfectant, 2, 1f), (ItemKind.Spice, 2, 1f), (ItemKind.Gasket, 2, 1f) }))
         {
             int want = (int)MathF.Round(want0 * wantScale);
             int have = ship.CountStored(k);
@@ -221,16 +235,17 @@ public sealed class VoyageSystem
             lines.Add($"{ItemKinds.Name(k)} {put}");
         }
         // 식량
+        float mealPrice = 0.3f * port.Buy(ItemKind.Meal);
         if (ship.CountStored(ItemKind.Meal) < w.Crew.Count(c => !c.Dead) * 6 && Credits >= 8f)
         {
-            int meals = Math.Min(30, (int)(Credits / 0.3f));
+            int meals = Math.Min(30, (int)(Credits / mealPrice));
             int put = 0;
             foreach (var f in ship.FurnitureOf(FurnitureType.Fridge).Where(f => f.Storage != null))
             {
                 put += f.Storage!.Add(ItemKind.Meal, meals - put);
                 if (put >= meals) break;
             }
-            if (put > 0) { Credits -= put * 0.3f; lines.Add($"끼니 {put}"); }
+            if (put > 0) { Credits -= put * mealPrice; lines.Add($"끼니 {put}"); }
         }
         Trades++;
         // 개수 공사: 가장 낡은 설비 둘
@@ -253,9 +268,26 @@ public sealed class VoyageSystem
             nc.Needs.Food = 0.8f; nc.Needs.Rest = 0.8f; nc.Needs.Stress = 0.2f; nc.Memory.Trauma = 0.05f;
             nc.Joined = $"{leg.Name}에서 탔다";
             Recruits++;
-            lines.Add($"새 승무원 {nc.Name}");
+            lines.Add($"새 승무원 {nc.Name}" + VoyageV15.Recruit(w, nc, port));
         }
-        w.History.Add(w, HistoryKind.Decision, $"{leg.Name} 교역 — " + (lines.Count > 0 ? string.Join(" · ", lines) : "살 것도 팔 것도 없었다") + $" (남은 돈 {Credits:0})", null, log: true);
+        if (port.OnVisit(w, this) is string visit) lines.Add(visit);
+        w.History.Add(w, HistoryKind.Decision, $"{leg.Name}({port.Name}) 교역 — " + (lines.Count > 0 ? string.Join(" · ", lines) : "살 것도 팔 것도 없었다") + $" (남은 돈 {Credits:0})", null, log: true);
+    }
+
+    /// <summary>v15.4 바깥 사건: 항로 안내 · 검문 · 우회로 이 구간에서 나아간 날을 더하거나 뺀다.</summary>
+    public void Shift(float days) => Progress = MathF.Max(0f, Progress + days);
+
+    /// <summary>시험용: 다음 항해를 미리 짜 본다.</summary>
+    public void Replan() => Plan(first: false);
+
+    /// <summary>시험용: 지금 구간을 이 종류로 바꾼다 (enter면 들어선 것처럼 이점 · 교역까지).</summary>
+    public void Force(LegKind k, bool enter = false, string? name = null)
+    {
+        Leave(Current);
+        var pool = VoyageV15.Pool(k);
+        Legs[Math.Clamp(Index, 0, Legs.Count - 1)] = new Leg { Kind = k, Name = name ?? pool[_mix.Range(0, pool.Length)], Days = 1f };
+        Progress = 0f;
+        if (enter) Enter(Current);
     }
 
     /// <summary>난파선: 드론·선외 작업조가 건질 것을 건진다 (금속판·전자 부품·희귀 소재, 가끔 구조 신호).</summary>

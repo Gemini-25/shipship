@@ -12,7 +12,9 @@ public partial class Hud
     public static Color LegColor(LegKind k) => k switch
     {
         LegKind.AsteroidBelt => new Color("#c9a66b"), LegKind.Nebula => new Color("#b58cff"), LegKind.RadiationBelt => new Color("#f5d547"),
-        LegKind.Derelict => new Color("#8d93a6"), LegKind.Port => new Color("#6ee7b7"), _ => new Color("#3d4b63"),
+        LegKind.Derelict => new Color("#8d93a6"), LegKind.Port => new Color("#6ee7b7"),
+        _ when VoyageV15.Spec(k) is LegSpec s => new Color(s.Hex), // v15.4 새 구간
+        _ => new Color("#3d4b63"),
     };
 
     private void DrawVoyageBar(Rect2 minimap)
