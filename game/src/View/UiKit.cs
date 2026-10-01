@@ -89,6 +89,25 @@ public static class UiKit
         return r;
     }
 
+    /// <summary>화면 위 가운데 알림 띠: 뜻 색 테두리 · 아이콘 · 글 (pulse로 맥박). 그린 사각형을 돌려준다.</summary>
+    public static Rect2 Banner(CanvasItem ci, Vector2 center, string text, Tone tone, float pulse = 1f, string? icon = null)
+    {
+        var col = Ui.Of(tone);
+        var bg = new Color(0.03f + col.R * 0.05f, 0.04f + col.G * 0.03f, 0.06f + col.B * 0.03f, 0.92f);
+        float iw = icon != null ? Ui.IconM + 6f : 0f;
+        float w = Gfx.Width(Fonts.Bold, text, Ui.TextLabel) + 28f + iw, h = 28f;
+        var r = new Rect2(center.X - w * 0.5f, center.Y - h * 0.5f, w, h);
+        Gfx.RoundRect(ci, r, bg, h * 0.5f, col.WithAlpha(0.45f));
+        float x = r.Position.X + 14f;
+        if (icon != null)
+        {
+            Icons.Draw(ci, icon, new Vector2(x + Ui.IconM * 0.5f, center.Y), Ui.IconM, col.WithAlpha(pulse));
+            x += iw;
+        }
+        Gfx.Text(ci, Fonts.Bold, new Vector2(x, center.Y + Gfx.CenterOffset(Fonts.Bold, Ui.TextLabel)), text, Ui.TextLabel, col.WithAlpha(pulse));
+        return r;
+    }
+
     /// <summary>추세 화살표 아이콘 이름.</summary>
     public static string TrendIcon(TrendDir d) => d switch { TrendDir.Up => "trend-up", TrendDir.Down => "trend-down", _ => "trend-flat" };
 

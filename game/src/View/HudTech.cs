@@ -35,7 +35,7 @@ public partial class Hud
         var modules = Modules.All.Where(s => w.Ship.RoomsOf(s.Room).Any()).ToList();
         float x0 = Margin, y0 = Margin + 52f + 8f + 40f + 8f + 64f + 10f;
         float width = Mathf.Min(760f, Screen.X - RightColumnWidth - Margin * 3);
-        float avail = Screen.Y - y0 - LogHeight - Margin - 10f;
+        float avail = Screen.Y - y0 - LogFullHeight - Margin - 10f;
         float rowH = Mathf.Clamp((avail - 150f) / (types.Count + modules.Count + 1), 17f, 30f);
         float height = Mathf.Min(avail, 110f + types.Count * rowH + 34f + modules.Count * rowH + 30f);
         var card = new Rect2(x0, y0, width, height);
@@ -44,12 +44,12 @@ public partial class Hud
         float x = x0 + 18, right = card.End.X - 18;
 
         float perDay = Tech.ResearchPerHour(w) * 24f;
-        Gfx.Text(this, Fonts.Bold, new Vector2(x, y0 + 30), $"{w.Ship.Name} 기술", 17, Palette.Text);
-        Gfx.Text(this, Fonts.Body, new Vector2(x + Gfx.Width(Fonts.Bold, $"{w.Ship.Name} 기술", 17) + 10, y0 + 30),
-            $"연구 {w.Research:0}점 · 하루 +{perDay:0.0} (작업대·솜씨 좋은 사람·정밀 가공 모듈)", 12, Palette.TextMuted);
-        Button(new Rect2(right - 58, y0 + 12, 58, 26), "T 닫기", false, mouse, ToggleTech, 11);
+        Gfx.Text(this, Fonts.Bold, new Vector2(x, y0 + 30), $"{w.Ship.Name} 기술", Ui.TextLarge, Palette.Text);
+        Gfx.Text(this, Fonts.Body, new Vector2(x + Gfx.Width(Fonts.Bold, $"{w.Ship.Name} 기술", Ui.TextLarge) + 10, y0 + 30),
+            $"연구 {w.Research:0}점 · 하루 +{perDay:0.0} (작업대·솜씨 좋은 사람·정밀 가공 모듈)", Ui.TextBody, Palette.TextMuted);
+        Button(new Rect2(right - 58, y0 + 12, 58, 26), "T 닫기", false, mouse, ToggleTech, Ui.TextSmall);
         Gfx.Text(this, Fonts.Body, new Vector2(x, y0 + 50),
-            "연구가 문턱을 넘으면 설계가 풀리고, 올리는 건 개조 회의가 정한다 (재료 · 겪은 일 순서). 높은 단계는 출력이 크지만 전기·마모·고장 값을 치른다.", 11, Palette.TextDim);
+            "연구가 문턱을 넘으면 설계가 풀리고, 올리는 건 개조 회의가 정한다 (재료 · 겪은 일 순서). 높은 단계는 출력이 크지만 전기·마모·고장 값을 치른다.", Ui.TextSmall, Palette.TextDim);
 
         // 다음 문턱까지 막대
         int next = Tech.Types.SelectMany(t => Tech.Tiers(t)).Select(t => t.Research).Where(r => r > w.Research).DefaultIfEmpty(0).Min();
@@ -60,20 +60,20 @@ public partial class Hud
         {
             float f = Mathf.Clamp((w.Research - prev) / Mathf.Max(1f, next - prev), 0f, 1f);
             Gfx.RoundRect(this, new Rect2(bar.Position, new Vector2(bar.Size.X * f, bar.Size.Y)), Palette.Accent, 4);
-            Gfx.TextRight(this, Fonts.Body, new Vector2(right, y0 + 84), $"다음 설계까지 {next - w.Research:0}점" + (perDay > 0.01f ? $" (약 {(next - w.Research) / perDay:0.#}일)" : ""), 11, Palette.TextMuted);
+            Gfx.TextRight(this, Fonts.Body, new Vector2(right, y0 + 84), $"다음 설계까지 {next - w.Research:0}점" + (perDay > 0.01f ? $" (약 {(next - w.Research) / perDay:0.#}일)" : ""), Ui.TextSmall, Palette.TextMuted);
         }
-        else Gfx.TextRight(this, Fonts.Body, new Vector2(right, y0 + 84), "모든 설계가 풀렸다", 11, new Color("#8fd65a"));
+        else Gfx.TextRight(this, Fonts.Body, new Vector2(right, y0 + 84), "모든 설계가 풀렸다", Ui.TextSmall, new Color("#8fd65a"));
 
         float y = y0 + 96;
         float nameW = 128f;
         float chipW = (right - x - nameW) / 4f;
-        Gfx.Text(this, Fonts.Bold, new Vector2(x, y + 4), "설비 단계", 12, Palette.TextMuted);
+        Gfx.Text(this, Fonts.Bold, new Vector2(x, y + 4), "설비 단계", Ui.TextBody, Palette.TextMuted);
         y += 10;
         foreach (var type in types)
         {
             if (y + rowH > card.End.Y - 30) break;
             var all = w.Ship.FurnitureOf(type).Where(f => f.Machine != null).ToList();
-            Gfx.Text(this, Fonts.Bold, new Vector2(x, y + rowH * 0.5f + Gfx.CenterOffset(Fonts.Bold, 12)), $"{FurnitureTypes.Name(type)} ×{all.Count}", 12, Palette.Text);
+            Gfx.Text(this, Fonts.Bold, new Vector2(x, y + rowH * 0.5f + Gfx.CenterOffset(Fonts.Bold, Ui.TextBody)), $"{FurnitureTypes.Name(type)} ×{all.Count}", Ui.TextBody, Palette.Text);
             int unlocked = Tech.Unlocked(w, type);
             foreach (var t in Tech.Tiers(type))
             {
@@ -96,7 +96,7 @@ public partial class Hud
         }
 
         y += 8;
-        Gfx.Text(this, Fonts.Bold, new Vector2(x, y + 14), "방 모듈", 12, Palette.TextMuted);
+        Gfx.Text(this, Fonts.Bold, new Vector2(x, y + 14), "방 모듈", Ui.TextBody, Palette.TextMuted);
         y += 20;
         foreach (var spec in modules)
         {
@@ -105,7 +105,7 @@ public partial class Hud
             int working = Modules.Working(w, spec.Type);
             int rooms = w.Ship.RoomsOf(spec.Room).Count(r => !r.Abandoned);
             float cy = y + rowH * 0.5f;
-            Gfx.Text(this, Fonts.Bold, new Vector2(x, cy + Gfx.CenterOffset(Fonts.Bold, 12)), Modules.Name(spec.Type), 12, have > 0 ? Palette.Text : Palette.TextDim);
+            Gfx.Text(this, Fonts.Bold, new Vector2(x, cy + Gfx.CenterOffset(Fonts.Bold, Ui.TextBody)), Modules.Name(spec.Type), Ui.TextBody, have > 0 ? Palette.Text : Palette.TextDim);
             for (int i = 0; i < spec.Max * rooms; i++)
             {
                 var c = new Vector2(x + nameW + 8 + i * 16, cy);
@@ -113,14 +113,14 @@ public partial class Hud
                 else if (i < have) DrawCircle(c, 5f, Palette.Warning, true, -1f, true);
                 else DrawArc(c, 5f, 0, Mathf.Tau, 16, new Color(1, 1, 1, 0.25f), 1f, true);
             }
-            Gfx.Text(this, Fonts.Body, new Vector2(x + nameW + 16 + spec.Max * rooms * 16, cy + Gfx.CenterOffset(Fonts.Body, 11)),
-                $"{spec.Note} · {string.Join(" + ", spec.Cost.Select(k => $"{ItemKinds.Name(k.kind)} {k.count}"))}", 11, Palette.TextMuted);
+            Gfx.Text(this, Fonts.Body, new Vector2(x + nameW + 16 + spec.Max * rooms * 16, cy + Gfx.CenterOffset(Fonts.Body, Ui.TextSmall)),
+                $"{spec.Note} · {string.Join(" + ", spec.Cost.Select(k => $"{ItemKinds.Name(k.kind)} {k.count}"))}", Ui.TextSmall, Palette.TextMuted);
             y += rowH;
         }
 
         if (_techHover != null)
         {
-            Gfx.Text(this, Fonts.Body, new Vector2(x, card.End.Y - 12), _techHover, 11, Palette.Accent);
+            Gfx.Text(this, Fonts.Body, new Vector2(x, card.End.Y - 12), _techHover, Ui.TextSmall, Palette.Accent);
             _techHover = null;
         }
         DrawEraCard(card); // v12.8 시대 기술

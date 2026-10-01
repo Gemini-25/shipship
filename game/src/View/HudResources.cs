@@ -196,6 +196,38 @@ public partial class Hud
             lines.Add(new($"{FurnitureTypes.Name(Makers(k)[0])} 등 설비 {total}대 모두 정상", Palette.Good, Icons.Furniture(Makers(k)[0])));
     }
 
+    /// <summary>주컴퓨터가 이 자원을 두고 본 것 · 판단 (최근 6시간 판단 기록 · 물 30일 예측). 읽기만 한다.</summary>
+    private void ComputerLines(ResourceKey k, List<TipLine> lines)
+    {
+        var a = _world.Automation;
+        if (!a.Present) return;
+        if (!a.MainOnline) { lines.Add(new("주 컴퓨터가 멎어 이 자원을 지켜보지 못한다", Palette.Danger, "computer")); return; }
+        string[] words = k switch
+        {
+            ResourceKey.Power => new[] { "전력", "배터리", "부하", "원자로" },
+            ResourceKey.Oxygen or ResourceKey.AirTank => new[] { "산소", "공기 탱크" },
+            ResourceKey.CO2 => new[] { "CO2", "CO₂", "세정" },
+            ResourceKey.Water => new[] { "물", "정수", "급수" },
+            _ => new[] { "식량", "배급", "식사" },
+        };
+        long since = _world.Tick - SimTime.Hours(6);
+        var acts = a.Book.Acts;
+        for (int i = acts.Count - 1; i >= 0 && acts[i].Tick >= since; i--)
+        {
+            var act = acts[i];
+            if (!words.Any(wd => act.Observe.Contains(wd) || act.Judge.Contains(wd))) continue;
+            string said = act.Judge.Length > 0 ? act.Judge : act.Observe;
+            lines.Add(new($"{a.Voice.Call}: {said}" + (act.Act.Length > 0 ? $" → {act.Act}" : ""), Palette.Accent, "computer"));
+            break;
+        }
+        if (k == ResourceKey.Water && a.Active(ComputerModule.WaterPlan))
+        {
+            int d = a.Apps.WaterEmptyDay;
+            lines.Add(new(d >= 0 ? $"{a.Voice.Call} 30일 물 예측: {d}일 뒤 탱크가 바닥난다" : $"{a.Voice.Call} 30일 물 예측: 한 달 안에는 바닥나지 않는다",
+                d >= 0 && d <= 12 ? Palette.Warning : Palette.Accent, "computer"));
+        }
+    }
+
     /// <summary>자원 툴팁: 최근 하루 그래프 + 문턱 + 생산/소비 분해.</summary>
     private void ResourceTooltip(ResourceKey k, Vector2 anchor)
     {
@@ -242,6 +274,8 @@ public partial class Hud
         }
         // 그 자원을 만드는 설비: 왜 덜 내는지 (고장 · 정전 · 단수 · 닳음 → 효율) — 설비마다 고유 아이콘
         MakerLines(k, lines);
+        // 주컴퓨터가 이 자원을 두고 본 것 · 판단 (화면의 추정과 나란히)
+        ComputerLines(k, lines);
         var col = st.Surfaced ? Palette.Warning : Palette.Accent;
         UiKit.Tooltip(this, anchor, Screen, $"{ResourceWatch.Name(k)} · {Val(st.Value)}", lines, _watch[k].Samples, th, col, Icons.Resource(k));
     }

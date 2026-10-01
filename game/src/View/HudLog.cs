@@ -62,7 +62,7 @@ public partial class Hud
     private void DrawLog(Vector2 mouse)
     {
         if (Quiet && !_logOpen) { DrawLogFolded(mouse); return; }
-        var card = new Rect2(Margin, Screen.Y - Margin - LogHeight, 470f, LogHeight);
+        var card = new Rect2(Margin, Screen.Y - Margin - LogFullHeight, 470f, LogFullHeight);
         _logRect = card;
         Card(card);
         float x = card.Position.X + 18, right = card.End.X - 14;
@@ -156,11 +156,21 @@ public partial class Hud
     }
 
     /// <summary>조용한 HUD: 머리글 한 줄 + 최근 30분의 경고만 (묶어서 셋까지). 누르면 펼친다.</summary>
-    private void DrawLogFolded(Vector2 mouse)
+    private List<LogGroup> FoldedWarnings()
     {
         long since = _world.Tick - SimTime.Minutes(30);
-        var warn = Readout.Group(_world.Log.Entries, 3, e => e.Kind == LogKind.Warning && e.Tick >= since, 3, 120);
-        float h = 36 + warn.Count * 21 + (warn.Count > 0 ? 6 : 0);
+        return Readout.Group(_world.Log.Entries, 3, e => e.Kind == LogKind.Warning && e.Tick >= since, 3, 120);
+    }
+
+    private static float FoldedLogHeight(int warnings) => 36 + warnings * 21 + (warnings > 0 ? 6 : 0);
+
+    /// <summary>그리기 전에 접힌 기록의 높이를 정해 둔다 (컴퓨터 카드가 그 바로 위에 붙도록).</summary>
+    private void MeasureLog() => _logFoldedH = Quiet && !_logOpen ? FoldedLogHeight(FoldedWarnings().Count) : LogFullHeight;
+
+    private void DrawLogFolded(Vector2 mouse)
+    {
+        var warn = FoldedWarnings();
+        float h = FoldedLogHeight(warn.Count);
         var card = new Rect2(Margin, Screen.Y - Margin - h, 470f, h);
         _logRect = card;
         Card(card, warn.Count > 0 ? Tone.Caution : null);

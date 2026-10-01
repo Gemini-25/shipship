@@ -30,13 +30,16 @@ public static class Ui
     public const float RadiusCard = 12f, RadiusControl = 8f, RadiusChip = 6f;
 
     // ── 글자 크기 ──
-    public const int TextTiny = 10;
-    public const int TextSmall = 11;
-    public const int TextBody = 12;
-    public const int TextLabel = 13;
-    public const int TextTitle = 15;
-    public const int TextHeading = 18;
-    public const int TextClock = 22;
+    public const int TextMicro = 9;     // 눈금 · 단축키 글자
+    public const int TextTiny = 10;     // 부가 설명 · 시각
+    public const int TextSmall = 11;    // 칩 · 머리글 · 목록 둘째 줄
+    public const int TextBody = 12;     // 본문
+    public const int TextLabel = 13;    // 단추 · 줄 제목
+    public const int TextSubtitle = 14; // 카드 부제
+    public const int TextTitle = 15;    // 카드 제목
+    public const int TextLarge = 17;    // 큰 수치
+    public const int TextHeading = 18;  // 사람 이름 · 화면 제목
+    public const int TextClock = 22;    // 시계
 
     // ── 면 ──
     public static Color PanelFill => Palette.Panel;

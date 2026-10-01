@@ -82,22 +82,22 @@ public partial class Hud
         var h = _world.History;
         float x0 = Margin, y0 = Margin + 52f + 8f + 40f + 8f + 64f + 10f;
         float w = Mathf.Min(620f, Screen.X - RightColumnWidth - Margin * 3);
-        float height = Screen.Y - y0 - LogHeight - Margin - 10f;
+        float height = Screen.Y - y0 - LogFullHeight - Margin - 10f;
         var card = new Rect2(x0, y0, w, height);
         _chronicleRect = card;
         Card(card);
         float x = x0 + 18, right = card.End.X - 18;
 
-        Gfx.Text(this, Fonts.Bold, new Vector2(x, y0 + 30), $"{_world.Ship.Name} 연대기", 17, Palette.Text);
-        Gfx.Text(this, Fonts.Body, new Vector2(x + Gfx.Width(Fonts.Bold, $"{_world.Ship.Name} 연대기", 17) + 10, y0 + 30),
+        Gfx.Text(this, Fonts.Bold, new Vector2(x, y0 + 30), $"{_world.Ship.Name} 연대기", Ui.TextLarge, Palette.Text);
+        Gfx.Text(this, Fonts.Body, new Vector2(x + Gfx.Width(Fonts.Bold, $"{_world.Ship.Name} 연대기", Ui.TextLarge) + 10, y0 + 30),
             $"{_world.Day}일째 · 사고 {h.Episodes.Count}건 · 개조 {h.Upgrades} · 결정 {h.DecisionsMade}(부결 {h.DecisionsRejected})"
-            + (_world.Voyage.Past.Count > 0 ? $" · 마친 항해 {_world.Voyage.Past.Count}" : "") + (_world.Life.Memorial.Count > 0 ? $" · 추모 {string.Join("·", _world.Life.Memorial.Select(m => m.name))}" : ""), 12, Palette.TextMuted); // v12.8·v12.7
-        Button(new Rect2(right - 58, y0 + 12, 58, 26), "J 닫기", false, mouse, ToggleChronicle, 11);
+            + (_world.Voyage.Past.Count > 0 ? $" · 마친 항해 {_world.Voyage.Past.Count}" : "") + (_world.Life.Memorial.Count > 0 ? $" · 추모 {string.Join("·", _world.Life.Memorial.Select(m => m.name))}" : ""), Ui.TextBody, Palette.TextMuted); // v12.8·v12.7
+        Button(new Rect2(right - 58, y0 + 12, 58, 26), "J 닫기", false, mouse, ToggleChronicle, Ui.TextSmall);
 
         // 교훈 (운영 방침)
         var lessons = h.Doctrine.Summary().ToList();
         string lessonText = lessons.Count > 0 ? "교훈: " + string.Join(" · ", lessons) : "교훈: 아직 없음 (같은 사고를 여러 번 겪으면 생긴다)";
-        Gfx.Text(this, Fonts.Body, new Vector2(x, y0 + 50), lessonText, 11, lessons.Count > 0 ? new Color("#8fd65a") : Palette.TextMuted);
+        Gfx.Text(this, Fonts.Body, new Vector2(x, y0 + 50), lessonText, Ui.TextSmall, lessons.Count > 0 ? new Color("#8fd65a") : Palette.TextMuted);
 
         // ── 시간 띠: 사고(빨강 막대), 개조(청록 마름모), 결정(노랑), 죽음(흰 십자) ──
         var strip = new Rect2(x, y0 + 62, right - x, 34);
@@ -111,7 +111,7 @@ public partial class Hud
         {
             float dx = X((long)(d - 1) * SimTime.TicksPerDay + start);
             DrawLine(new Vector2(dx, strip.End.Y - 6), new Vector2(dx, strip.End.Y - 2), Palette.TextMuted, 1f);
-            Gfx.Text(this, Fonts.Body, new Vector2(dx + 2, strip.End.Y - 2), $"{d}", 9, Palette.TextMuted);
+            Gfx.Text(this, Fonts.Body, new Vector2(dx + 2, strip.End.Y - 2), $"{d}", Ui.TextMicro, Palette.TextMuted);
         }
         foreach (var ep in h.Episodes)
         {
@@ -146,8 +146,8 @@ public partial class Hud
         for (int i = 0; i < Filters.Length; i++)
         {
             int f = i;
-            float bw = Gfx.Width(Fonts.Bold, Filters[i], 11) + 18;
-            Button(new Rect2(fx, y0 + 102, bw, 24), Filters[i], _chronicleFilter == i, mouse, () => { _chronicleFilter = f; _chronicleScroll = 0; }, 11);
+            float bw = Gfx.Width(Fonts.Bold, Filters[i], Ui.TextSmall) + 18;
+            Button(new Rect2(fx, y0 + 102, bw, 24), Filters[i], _chronicleFilter == i, mouse, () => { _chronicleFilter = f; _chronicleScroll = 0; }, Ui.TextSmall);
             fx += bw + 4;
         }
 
@@ -168,21 +168,21 @@ public partial class Hud
             if (hover) Gfx.RoundRect(this, row, new Color(1, 1, 1, 0.05f), 6);
             if (e.Kind is HistoryKind.Recovery or HistoryKind.Death or HistoryKind.Upgrade or HistoryKind.Lesson)
                 DrawRect(new Rect2(x - 8, ly + 3, 2, rowH - 6), KindColor(e.Kind));
-            Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 15), $"{SimTime.Day(e.Tick)}일 {SimTime.Clock(e.Tick)}", 11, Palette.TextMuted);
+            Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 15), $"{SimTime.Day(e.Tick)}일 {SimTime.Clock(e.Tick)}", Ui.TextSmall, Palette.TextMuted);
             var kc = KindColor(e.Kind);
-            Gfx.Pill(this, Fonts.Bold, new Vector2(x + 88, ly + 11), KindName(e.Kind), 10, kc, kc.WithAlpha(0.12f), kc.WithAlpha(0.35f), 6f, 2f);
+            Gfx.Pill(this, Fonts.Bold, new Vector2(x + 88, ly + 11), KindName(e.Kind), Ui.TextTiny, kc, kc.WithAlpha(0.12f), kc.WithAlpha(0.35f), 6f, 2f);
             for (int i = 0; i < lines.Count; i++)
                 Gfx.Text(this, i == 0 && e.Kind is HistoryKind.Recovery or HistoryKind.Death or HistoryKind.Upgrade ? Fonts.Bold : Fonts.Body,
-                    new Vector2(textX, ly + 16 + i * 16), lines[i], 12, e.Kind == HistoryKind.Death ? Colors.White : Palette.Text.WithAlpha(0.92f));
+                    new Vector2(textX, ly + 16 + i * 16), lines[i], Ui.TextBody, e.Kind == HistoryKind.Death ? Colors.White : Palette.Text.WithAlpha(0.92f));
             var ev = e;
             _buttons.Add((row, () => FocusEvent(ev)));
             ly += rowH;
             shown++;
         }
         if (list.Count == 0)
-            Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 16), "아직 아무 일도 없었다.", 12, Palette.TextMuted);
+            Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 16), "아직 아무 일도 없었다.", Ui.TextBody, Palette.TextMuted);
         else if (_chronicleScroll > 0 || shown < list.Count - _chronicleScroll)
-            Gfx.TextRight(this, Fonts.Body, new Vector2(right, card.End.Y - 8), $"{_chronicleScroll + 1}–{_chronicleScroll + shown} / {list.Count} · 휠로 넘기기", 10, Palette.TextMuted);
+            Gfx.TextRight(this, Fonts.Body, new Vector2(right, card.End.Y - 8), $"{_chronicleScroll + 1}–{_chronicleScroll + shown} / {list.Count} · 휠로 넘기기", Ui.TextTiny, Palette.TextMuted);
     }
 
     private void FocusEvent(HistoryEvent e)
@@ -221,7 +221,7 @@ public partial class Hud
         float ly = y + 66;
         if (m.TraumaCause != null && m.Trauma >= 0.03f)
         {
-            Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 12), $"{m.TraumaCause} 뒤로 스트레스가 {Pct(m.Trauma)} 밑으로 안 내려간다", 11, Palette.TextMuted);
+            Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 12), $"{m.TraumaCause} 뒤로 스트레스가 {Pct(m.Trauma)} 밑으로 안 내려간다", Ui.TextSmall, Palette.TextMuted);
             ly += 18;
         }
 
@@ -229,12 +229,12 @@ public partial class Hud
         SectionTitle(x, ly + 10, "무서운 곳");
         ly += 16;
         var fears = Enumerable.Range(0, m.Fear.Length).Where(i => m.Fear[i] >= 0.08f).OrderByDescending(i => m.Fear[i]).Take(3).ToList();
-        if (fears.Count == 0) { Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 14), "없음", 12, Palette.TextMuted); ly += 20; }
+        if (fears.Count == 0) { Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 14), "없음", Ui.TextBody, Palette.TextMuted); ly += 20; }
         foreach (int i in fears)
         {
             var room = _world.Ship.Rooms[i];
             Row(x, right, ly, room.Name, m.Fear[i], ShipView.FearColor, Pct(m.Fear[i]), m.Fear[i] >= 0.35f);
-            Gfx.Text(this, Fonts.Body, new Vector2(x + 70, ly + 28), m.FearCause[i] ?? "", 10, Palette.TextMuted);
+            Gfx.Text(this, Fonts.Body, new Vector2(x + 70, ly + 28), m.FearCause[i] ?? "", Ui.TextTiny, Palette.TextMuted);
             ly += 34;
         }
 
@@ -242,14 +242,14 @@ public partial class Hud
         SectionTitle(x, ly + 10, "함께 넘긴 사고");
         ly += 16;
         var shared = m.Shared.Where(kv => kv.Value > 0).OrderByDescending(kv => kv.Value).Take(3).ToList();
-        if (shared.Count == 0) { Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 14), "아직 없음", 12, Palette.TextMuted); ly += 20; }
+        if (shared.Count == 0) { Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 14), "아직 없음", Ui.TextBody, Palette.TextMuted); ly += 20; }
         foreach (var (id, n) in shared)
         {
             var o = _world.Crew[id];
             DrawCircle(new Vector2(x + 5, ly + 10), 4f, Palette.Crew(o.Id), true, -1f, true);
-            Gfx.Text(this, Fonts.Bold, new Vector2(x + 16, ly + 15), o.Name, 12, Palette.Text);
+            Gfx.Text(this, Fonts.Bold, new Vector2(x + 16, ly + 15), o.Name, Ui.TextBody, Palette.Text);
             bool comrade = m.Comrades.Contains(id);
-            Gfx.TextRight(this, Fonts.Body, new Vector2(right, ly + 15), comrade ? $"전우 · {n}번" : $"{n}번", 11, comrade ? Palette.Good : Palette.TextDim);
+            Gfx.TextRight(this, Fonts.Body, new Vector2(right, ly + 15), comrade ? $"전우 · {n}번" : $"{n}번", Ui.TextSmall, comrade ? Palette.Good : Palette.TextDim);
             ly += 20;
         }
 
@@ -258,10 +258,10 @@ public partial class Hud
         ly += 14;
         foreach (var mark in m.Marks.AsEnumerable().Reverse().Take(4))
         {
-            Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 14), $"{SimTime.Day(mark.Tick)}일", 11, Palette.TextMuted);
+            Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 14), $"{SimTime.Day(mark.Tick)}일", Ui.TextSmall, Palette.TextMuted);
             string t = mark.Text;
-            while (t.Length > 4 && Gfx.Width(Fonts.Body, t, 11) > right - x - 34) t = t[..^2] + "…";
-            Gfx.Text(this, Fonts.Body, new Vector2(x + 34, ly + 14), t, 11, Palette.TextDim);
+            while (t.Length > 4 && Gfx.Width(Fonts.Body, t, Ui.TextSmall) > right - x - 34) t = t[..^2] + "…";
+            Gfx.Text(this, Fonts.Body, new Vector2(x + 34, ly + 14), t, Ui.TextSmall, Palette.TextDim);
             ly += 18;
         }
     }
