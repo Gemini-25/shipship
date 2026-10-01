@@ -195,7 +195,7 @@ public sealed class WorkToil : Toil
         // v11.0: 비상 훈련을 받은 사람은 사고 대응 일이 조금 빠르다
         if (c.Job?.Urgent == true && c.Drilled(w)) speed *= 1.12f;
         // v10.10: 정비 로봇이 옆에서 거들면 (부품을 잡아 주고 공구를 건넨다) 빨라진다
-        if (c.Helper is Robot helper && helper.Helping == c && (helper.Position - c.Position).LengthSquared() < 2.7f * 2.7f) speed *= 1f + RobotSystem.AssistBonus;
+        if (c.Helper is Robot helper && helper.Helping == c && (helper.Position - c.Position).LengthSquared() < 2.7f * 2.7f) speed *= 1f + RobotsV15.AssistBonus(helper.Kind); // v15.7 조수 로봇은 더 거든다
         if (Resume != null && _needed > 0)
         {
             // 로봇과 같은 일을 하면 진척을 함께 쓴다 (누가 먼저 채우든 한 번만 끝난다)

@@ -136,7 +136,7 @@ public sealed class ExteriorSystem
             if (f.Condition >= 0.7f || f.DamagedAt < 0 || w.Hazards.StormActive) continue;
             if (w.Ship.CountStored(ItemKind.Plate) < 1) continue;
             // 드론 먼저: 수리 드론이 거치대에 있으면 바로 나간다. 없으면 반나절 뒤 사람이 나간다
-            var drone = w.Drones.Drones.FirstOrDefault(d => d.Kind == DroneKind.Repair && d.Operational && d.State == DroneState.Docked && d.Battery > 0.5f);
+            var drone = w.Drones.Drones.FirstOrDefault(d => RobotsV15.Base(d.Kind) == DroneKind.Repair && d.Operational && d.State == DroneState.Docked && d.Battery > 0.5f);
             bool crew = drone == null && w.Tick - f.DamagedAt > SimTime.Hours(12) && w.Crew.Any(c => c.CanAct && c.Suit == null);
             if (drone == null && !crew) continue;
             TakePlate();

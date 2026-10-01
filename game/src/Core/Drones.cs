@@ -5,7 +5,7 @@ using System.Numerics;
 
 namespace ShipSim.Core;
 
-public enum DroneKind { Inspect, Repair, Tow, Build }
+public enum DroneKind { Inspect, Repair, Tow, Build, /* v15.7 새 드론 6 (RobotsV15.cs) */ Scout, Surveyor, Welder, Radiator, Tug, Rigger }
 
 public enum DroneState
 {
@@ -141,7 +141,7 @@ public sealed class DroneSystem
         }
         // 밖의 일(연결부·골조·방열판)은 급한 사고(파공·불·격벽)보다 뒤다 — 콘솔에 붙잡혀 배가 새는 걸 놓치지 않게
         if (outside != null) return ($"{Ko.IGa(outside.Name)} 밖에 있다 — {outside.Doing}", 0.55f);
-        if (Drones.Any(d => d.State == DroneState.Adrift) && ready.Any(d => d.Kind == DroneKind.Tow))
+        if (Drones.Any(d => d.State == DroneState.Adrift) && ready.Any(d => RobotsV15.Base(d.Kind) == DroneKind.Tow))
             return ("떠내려가는 드론을 건져야 한다", 0.5f);
         var job = OtherDroneJob(ready);
         if (job != null) return ($"{job.Title}", MathF.Min(0.55f, 0.1f + job.Urgency * 0.5f));
@@ -152,7 +152,7 @@ public sealed class DroneSystem
     private Fragment? TowNeeded()
     {
         var w = _world;
-        if (!Drones.Any(d => d.Kind == DroneKind.Tow && d.Operational && d.State == DroneState.Docked && !d.Dock.Room.Detached)) return null;
+        if (!Drones.Any(d => RobotsV15.Base(d.Kind) == DroneKind.Tow && d.Operational && d.State == DroneState.Docked && !d.Dock.Room.Detached)) return null;
         foreach (var o in w.Board.Open.Where(o => o.Kind == WorkKind.Retrieve && Council.Cleared(o)))
             if (o.Target.Room?.Fragment is Fragment f && f.State is not (FragmentState.Lost or FragmentState.Moored) && f.Tug == null
                 && !Drones.Any(d => d.Order == o))
@@ -172,6 +172,7 @@ public sealed class DroneSystem
         DroneKind.Repair => "수리 드론",
         DroneKind.Tow => "견인 드론",
         DroneKind.Build => "건설 드론",
+        _ when RobotsV15.Flyer(k) is { } v => v.Name,
         _ => k.ToString(),
     };
 
@@ -182,7 +183,8 @@ public sealed class DroneSystem
         DroneKind.Inspect => 0.22f,
         DroneKind.Repair => 0.18f,
         DroneKind.Build => 0.15f,
-        _ => 0.15f,
+        DroneKind.Tow => 0.15f,
+        _ => RobotsV15.Speed(k),
     };
 
     /// <summary>끌고 올 때 속도 (시간당 약 8칸).</summary>
@@ -194,7 +196,8 @@ public sealed class DroneSystem
         DroneKind.Inspect => 0.2f,
         DroneKind.Repair => 0.18f,
         DroneKind.Build => 0.18f,
-        _ => 0.16f,
+        DroneKind.Tow => 0.16f,
+        _ => RobotsV15.Drain(k),
     };
 
     public static bool CanDo(DroneKind d, WorkKind k) => d switch
@@ -204,7 +207,7 @@ public sealed class DroneSystem
         DroneKind.Build => k is WorkKind.RebuildFrame or WorkKind.InstallTruss or WorkKind.Clamp or WorkKind.RepairJoint or WorkKind.ReleaseJoint
             or WorkKind.RepairRadiator,
         DroneKind.Tow => k is WorkKind.Retrieve,
-        _ => false,
+        _ => RobotsV15.CanDo(d, k),
     };
 
     /// <summary>드론이 그 일을 하는 데 걸리는 시간.</summary>
@@ -255,10 +258,10 @@ public sealed class DroneSystem
         }
     }
 
-    public bool Has(DroneKind k) => Drones.Any(d => d.Kind == k && d.Operational);
+    public bool Has(DroneKind k) => Drones.Any(d => RobotsV15.Base(d.Kind) == k && d.Operational); // v15.7 같은 원형의 새 드론도
 
     /// <summary>검사 드론이 곧 나갈 수 있는지.</summary>
-    public bool CanInspect() => Drones.Any(d => d.Kind == DroneKind.Inspect && d.Operational && DockWorking(d));
+    public bool CanInspect() => Drones.Any(d => RobotsV15.Base(d.Kind) == DroneKind.Inspect && d.Operational && DockWorking(d));
 
     /// <summary>이 일을 드론이 맡을 수 있는지 (승무원이 EVA로 나설 필요가 없는지).</summary>
     public bool WillHandle(WorkOrder o)
@@ -319,9 +322,9 @@ public sealed class DroneSystem
                 case DroneState.Returning:
                 case DroneState.Towing:
                 {
-                    float speed = (d.State == DroneState.Towing ? TowSpeed : Speed(d.Kind)) * d.Quirk.Speed;
+                    float speed = (d.State == DroneState.Towing ? TowSpeed * RobotsV15.Tow(d.Kind) : Speed(d.Kind)) * d.Quirk.Speed;
                     float drain = d.State == DroneState.Towing ? 0.3f : Drain(d.Kind);
-                    if (d.Fetching != null && d.State == DroneState.Towing) { speed = 0.02f; drain = 0.3f; }
+                    if (d.Fetching != null && d.State == DroneState.Towing) { speed = 0.02f * RobotsV15.Tow(d.Kind); drain = 0.3f; }
                     d.Battery = MathF.Max(0f, d.Battery - drain * hour);
                     d.FlightHours += hour;
                     bool arrived = Move(d, speed);
@@ -411,7 +414,7 @@ public sealed class DroneSystem
                     }
                     // 고장·닳음
                     d.Condition = MathF.Max(0f, d.Condition - 0.012f * dt);
-                    if (!d.Faulty && w.Rng.Chance((0.004f + 0.05f * (1f - d.Condition) * (1f - d.Condition)) * dt))
+                    if (!d.Faulty && w.Rng.Chance((0.004f + 0.05f * (1f - d.Condition) * (1f - d.Condition)) * RobotsV15.Fault(d.Kind) * dt)) // v15.7 고장률
                     {
                         d.Faulty = true;
                         MarkLog.Add(d.Marks, w.Tick, "밖에서 고장");
@@ -507,12 +510,12 @@ public sealed class DroneSystem
             { d.Doing = "손 조종 — 차례를 기다린다 (한 대씩)"; return; }
             // 한 사람이 한 대씩이니 가장 급한 일부터: 끌어올 조각 → 밖의 일 → 정기 검사
             var ready = Drones.Where(x => x.Operational && x.State == DroneState.Docked && !x.Dock.Room.Detached).ToList();
-            if (d.Kind != DroneKind.Tow && TowNeeded() != null) { d.Doing = "손 조종 — 견인이 먼저"; return; }
-            if (d.Kind == DroneKind.Inspect && OtherDroneJob(ready) is WorkOrder first && first.Kind != WorkKind.InspectHull)
+            if (RobotsV15.Base(d.Kind) != DroneKind.Tow && TowNeeded() != null) { d.Doing = "손 조종 — 견인이 먼저"; return; }
+            if (RobotsV15.Base(d.Kind) == DroneKind.Inspect && OtherDroneJob(ready) is WorkOrder first && first.Kind != WorkKind.InspectHull)
             { d.Doing = "손 조종 — 급한 일이 먼저"; return; }
         }
         if (d.Battery < 0.35f) return;
-        switch (d.Kind)
+        switch (RobotsV15.Base(d.Kind))
         {
             case DroneKind.Inspect:
                 PlanPatrol(d);
@@ -670,7 +673,7 @@ public sealed class DroneSystem
         switch (d.State)
         {
             case DroneState.Outbound:
-                if (d.Kind == DroneKind.Inspect && d.Patrol.Count > 0)
+                if (RobotsV15.Base(d.Kind) == DroneKind.Inspect && d.Patrol.Count > 0)
                 {
                     // 연결부 하나를 보고 다음으로
                     var j = d.Patrol[d.PatrolIndex];
@@ -691,7 +694,7 @@ public sealed class DroneSystem
                     GoHome(d);
                     return;
                 }
-                if (d.Kind == DroneKind.Tow && d.Fetching is Drone lost)
+                if (RobotsV15.Base(d.Kind) == DroneKind.Tow && d.Fetching is Drone lost)
                 {
                     d.State = DroneState.Towing;
                     d.StateSince = w.Tick;
@@ -703,7 +706,7 @@ public sealed class DroneSystem
                 d.State = DroneState.Working;
                 d.StateSince = w.Tick;
                 d.WorkDone = 0f;
-                d.WorkNeeded = d.Order != null ? WorkHours(d.Order.Kind) : 0.1f;
+                d.WorkNeeded = d.Order != null ? WorkHours(d.Order.Kind) * RobotsV15.Work(d.Kind) : 0.1f; // v15.7 손이 빠른 드론
                 return;
             case DroneState.Towing:
                 if (d.Towing is Fragment f)
@@ -883,12 +886,12 @@ public sealed class DroneSystem
             // 이틀(교훈 뒤에는 하루) 넘게 못 본 방 다섯까지 (정기 순회)
             float every = w.History.Doctrine.FrequentInspection ? 24f : 48f;
             rooms = w.Ship.Rooms.Where(r => !r.Detached && r.Joints.Count > 0 && r.Joints.Min(j => j.SeenAt) < w.Tick - SimTime.Hours(every))
-                .OrderBy(r => r.Joints.Min(j => j.SeenAt)).Take(5).ToList();
+                .OrderBy(r => r.Joints.Min(j => j.SeenAt)).Take(RobotsV15.PatrolRooms(d.Kind)).ToList();
             if (rooms.Count < 3 && !rooms.Any(r => r.Joints.Min(j => j.SeenAt) < w.Tick - SimTime.Hours(every * 1.5f))) return; // 모아서 한 번에
         }
         d.Patrol.Clear();
         d.PatrolIndex = 0;
-        foreach (var r in rooms.Take(5))
+        foreach (var r in rooms.Take(RobotsV15.PatrolRooms(d.Kind)))
             d.Patrol.AddRange(r.Joints.Where(j => w.Ship.Grid.Kind(j.Spot) == TileKind.Void || w.Paths.IsSpace(j.Spot)).OrderBy(j => j.Index));
         if (d.Patrol.Count == 0) return;
         Launch(d, d.Patrol[0].Spot.Center, urgent ? $"{rooms[0].Name} 외벽 검사 (운석 뒤)" : $"정기 외벽 검사 ({string.Join("·", rooms.Select(r => r.Name))})");
@@ -901,7 +904,7 @@ public sealed class DroneSystem
         foreach (var o in w.Board.OpenFor(d).Where(o => o.Kind == WorkKind.Retrieve).OrderByDescending(o => o.Urgency))
         {
             if (o.Target.Room!.Fragment is not Fragment f || f.State is FragmentState.Lost or FragmentState.Moored || f.Tug != null) continue;
-            float cost = TripCost(d, f.Center, f.Distance / (TowSpeed * SimTime.TicksPerHour) * 0.6f);
+            float cost = TripCost(d, f.Center, f.Distance / (TowSpeed * RobotsV15.Tow(d.Kind) * SimTime.TicksPerHour) * 0.6f);
             if (d.Battery < MathF.Min(0.95f, cost)) return d.Battery < 0.95f; // 충전을 기다린다
             d.Order = o;
             o.Drone = d;

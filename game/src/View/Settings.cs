@@ -151,7 +151,9 @@ public partial class OptionsPanel : PanelContainer
         box.AddChild(_random);
         // v12.4 이야기꾼 · 난이도 (켜면 무작위 사고 대신 이야기꾼이 사고를 낸다)
         _persona = new OptionButton { CustomMinimumSize = new Vector2(360, 0) };
-        foreach (var name in new[] { "이야기꾼: 끔 (위의 무작위 사고)", "이야기꾼: 꾸준형 — 고르게, 거의 추스르면 다음", "이야기꾼: 몰아치기형 — 오래 조용하다 한꺼번에", "이야기꾼: 무작위형 — 예측 불가", "이야기꾼: 시험관형 — 배의 급소를 노린다" })
+        foreach (var name in new[] { "이야기꾼: 끔 (위의 무작위 사고)", "이야기꾼: 꾸준형 — 고르게, 거의 추스르면 다음", "이야기꾼: 몰아치기형 — 오래 조용하다 한꺼번에", "이야기꾼: 무작위형 — 예측 불가", "이야기꾼: 시험관형 — 배의 급소를 노린다",
+                                   "이야기꾼: 느린 불씨형 — 작게 시작해 점점 잦고 크게", "이야기꾼: 계절형 — 철마다 한 갈래를 몰아서", // v15.7
+                                   "이야기꾼: 자비형 — 다 추스르고 막을 물자가 있을 때만", "이야기꾼: 앙갚음형 — 잘 버틴 만큼 되갚는다" })
             _persona.AddItem(name);
         _persona.ItemSelected += i => _main.SetTuned("story.persona", i);
         box.AddChild(_persona);
