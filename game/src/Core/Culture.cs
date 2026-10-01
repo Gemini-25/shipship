@@ -67,6 +67,7 @@ public sealed class CultureSystem
     };
 
     public Custom? Of(CustomKind k) => Customs.FirstOrDefault(x => x.Kind == k);
+    public Custom Adopt(CustomKind k, string origin, string? founder) => Of(k) ?? Born(k, origin, founder); // v16.9 배의 내력에서 생긴 관행 (고물 배의 정비 습관)
     public bool Follows(CrewMember c, CustomKind k) => Of(k) is Custom cu && cu.Followers.Contains(c.Id);
     public bool KnowsWhy(CrewMember c, CustomKind k) => Of(k) is Custom cu && cu.Knowers.Contains(c.Id);
 

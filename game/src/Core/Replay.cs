@@ -417,6 +417,7 @@ public static class SaveGame
         { var bs = w.Body.Stats; I(bs.ComputerFlags); I(bs.ComputerWarnings); I(bs.Witnessed); I(bs.Mopped); I(bs.FoodSpills); I(bs.Grease); I(bs.Mildew); } // v16.3 배 본체 ↔ 주 컴퓨터 · 다른 시스템
         { var au = w.Automation; I(au.Passes); I(au.Denials); I(au.RationLeads); I(au.DoorBlinds); I(au.Emps); I(au.Forecasts); I(au.Foresight.Made); I(au.Foresight.Hits); I(au.Foresight.Plans); } // v16.6 문 · 식단 · 대재난 · 앞날 예측
         { var ps = w.Portable.Stats; foreach (var d in w.Portable.Devices) { F(d.Soak); F(d.Dust); } I(ps.ComputerWarns); I(ps.HeededWarns); I(ps.HeaterWarns); I(ps.HeaterOffs); I(ps.InventoryFound); I(ps.DustSniffs); I(ps.HotOutlets); } // v16.7 컴퓨터 · 냄새 · 배 본체
+        { var os = w.Origin.Stats; I(os.Found); I(os.Told); I(os.Tips); I(os.Toasts); I(os.Reopened); I(os.Splits); I(os.Handovers); I(os.Rounds); I(os.Squeezes); I(os.Ranks); I(os.Calls); } // v16.9 배의 내력
         return h;
     }
 }
