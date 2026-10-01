@@ -238,7 +238,7 @@ public static class Crisis
                 if (c.Needs.Fatigue >= 0.9f) { note = "탈진 직전 — 쪽잠"; return 0.8f; }
                 note = "비상 — 잠을 미룬다";
                 return (survival ? 0.12f : 0.3f) * (1.3f - 0.6f * grit);
-            case RelaxActivity or ChatActivity or WanderActivity:
+            case RelaxActivity or ChatActivity or WanderActivity or HobbyActivity or TidyActivity or MendActivity:
                 note = "비상 — 쉴 때가 아니다";
                 return (survival ? 0.08f : 0.25f) * (1.4f - 0.8f * grit);
             case DutyActivity:

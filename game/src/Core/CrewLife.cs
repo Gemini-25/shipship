@@ -129,6 +129,7 @@ public static class Life
                 or (Habit.Optimist, Habit.Pessimist) or (Habit.Pessimist, Habit.Optimist) or (Habit.Insomniac, Habit.HeavySleeper) or (Habit.HeavySleeper, Habit.Insomniac)
                 or (Habit.Leader, Habit.Follower) or (Habit.Follower, Habit.Leader)) c.Habits.RemoveAt(1);
             Persona.Extras(w, c); // v14.0 취미 · 두려움 · 말버릇
+            w.Belongings.Seed(c); // v14.3 개인 물건 (취미 물건 · 컵 · 사진 · 담요 · 공구)
             var (skill, bonus, quals) = Gift(c.Background);
             c.SkillLevels[(int)skill] = MathF.Min(1f, c.SkillLevels[(int)skill] + bonus);
             c.Quals.Clear();

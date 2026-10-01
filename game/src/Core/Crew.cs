@@ -230,6 +230,11 @@ public sealed class CrewMember
     public List<Ailment> Ailments { get; } = new();
     public HashSet<string> AilmentImmune { get; } = new();
     public AilmentFx Fx { get; set; }
+    /// <summary>v14.3 제 공구로 일하면 빠르다 (없으면 조금 느리다) · 제 담요를 덮고 자면 더 쉰다.</summary>
+    public float ToolFactor { get; set; } = 1f;
+    public bool Comfy { get; set; }
+    /// <summary>v14.3 배에서 태어난 아이의 부모.</summary>
+    public List<int> Parents { get; } = new();
     public List<(long tick, string text)> Diary { get; } = new();
     public long GriefUntil { get; set; } = -1;
 
@@ -448,6 +453,7 @@ public sealed class CrewMember
     internal void StartJob(Job job, World world, Evaluation? why)
     {
         Job = job;
+        world.Belongings.OnJobStarted(this, job); // v14.3 공구 빌리기·되찾기
         JobReason = why?.Reason;
         if (job.LogText != null && (job.Activity?.Id != LastActivityId || job.AlwaysLog))
             world.Log.Add(world.Tick, job.LogKind, job.LogText, Id);
@@ -455,6 +461,7 @@ public sealed class CrewMember
 
     internal void EndJob(World world, ToilStatus status)
     {
+        if (Job != null) world.Belongings.OnJobEnded(this, Job, status); // v14.3 공구를 두고 나오기 · 빌린 공구 돌려놓기
         Dashing = false;
         EvaMode = false; // 밖에 있으면 Outside로 돌아올 길은 열려 있다
         // 업고 가던 사람이 있으면 그 자리에 내려놓는다

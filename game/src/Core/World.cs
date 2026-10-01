@@ -147,6 +147,8 @@ public sealed class World
     /// <summary>v12.4 전염병 · 이야기꾼.</summary>
     public DiseaseSystem Disease { get; }
     public AilmentSystem Ailments { get; } // v14.1 질병 30
+    public BelongingSystem Belongings { get; } // v14.3 개인 물건 · 취미
+    public RelationSystem Relations { get; } // v14.3~ 관계의 이유
     public AmbienceSystem Ambience { get; }
     public ExteriorSystem Exterior { get; }
     public LifeSystem Life { get; }
@@ -231,6 +233,8 @@ public sealed class World
         Moisture = new MoistureSystem(this);
         Disease = new DiseaseSystem(this);
         Ailments = new AilmentSystem(this);
+        Belongings = new BelongingSystem(this);
+        Relations = new RelationSystem(this);
         Ambience = new AmbienceSystem(this);
         Exterior = new ExteriorSystem(this);
         Life = new LifeSystem(this);
@@ -318,6 +322,8 @@ public sealed class World
             Disease.Update(dt); // v12.4 전염병
             pf = Prof.Lap("sys.Disease", pf);
             Ailments.Update(dt); // v14.1 질병 30
+            pf = Prof.Lap("sys.Ailments", pf);
+            Belongings.Update(dt); // v14.3 개인 물건 · 취미
             pf = Prof.Lap("sys.Ailments", pf);
             Ambience.Update(dt); // v12.6 인접성: 소음·진동·냄새·방사선
             pf = Prof.Lap("sys.Ambience", pf);
@@ -544,6 +550,7 @@ public sealed class World
     private void Die(CrewMember c)
     {
         var lastJob = c.Job?.Order?.Kind; // v13.2 사후 검토: 무엇을 하다 죽었나
+        Belongings.OnDeath(c); // v14.3 공구는 제자에게, 사진은 가족에게
         var lastTeam = Command.TeamOf(c);
         c.EndJob(this, ToilStatus.Interrupted);
         if (c.CarriedBy is CrewMember carrier) { carrier.CarryingPerson = null; c.CarriedBy = null; }
@@ -897,6 +904,7 @@ public sealed class World
         };
         c.Age = 0f;
         c.Profiled = true;
+        c.Parents.Add(a.Id); c.Parents.Add(b.Id); // v14.3
         c.Background = Background.Teacher;
         c.Value = rng.Chance(0.5f) ? a.Value : b.Value;
         c.Joined = "배에서 태어났다";

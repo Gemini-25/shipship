@@ -188,6 +188,7 @@ public sealed class WorkToil : Toil
         speed *= w.Society.WorkFactor; // v13.4 사기
         if (c.Habits.Count > 0) speed *= Persona.Mul(c, h => h.Speed); // v14.0 습관 (서두름·완벽주의)
         speed *= c.Fx.WorkMul; // v14.1 앓는 것
+        if (_skill is Skill.Mechanics or Skill.Electrical or Skill.Engineering) speed *= c.ToolFactor; // v14.3 손에 익은 제 공구
         if (c.Job?.Urgent == true && w.Society.IsVeteran(c)) speed *= 1.1f; // v13.4 베테랑
         // v11.0: 비상 훈련을 받은 사람은 사고 대응 일이 조금 빠르다
         if (c.Job?.Urgent == true && c.Drilled(w)) speed *= 1.12f;

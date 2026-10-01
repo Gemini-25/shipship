@@ -312,6 +312,7 @@ public static class SaveGame
             foreach (var f in c.Memory.Fear) F(f);
             foreach (var a in c.Ailments) { I(a.Id.Length); I(a.Since); F(a.Healed); } // v14.1
         }
+        foreach (var b in w.Belongings.All) { I(b.Owner); I(b.Holder); I(b.At is Cell bc ? bc.X * 1000 + bc.Y : -1); F(b.Condition); F(b.Progress); } // v14.3
         foreach (var m in w.Ship.Machines)
         {
             F(m.Wear); F(m.Condition); I(m.Faults.Count); I((int)m.Grade); I(m.FaultCount);

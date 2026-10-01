@@ -146,6 +146,7 @@ public sealed class AmbienceSystem
             if (c.Dose > 1f && w.Rng.Chance(0.05f * dt)) NeedsSystem.AddInjury(c.Vitals, 0.02f * MathF.Min(3f, c.Dose), "방사선");
             // 체력 단련: 운동하면 오르고 가만있으면 아주 천천히 빠진다
             float gym = c.Job?.Activity is RelaxActivity && c.Pose == Pose.Sitting ? Facilities.Factor(c.Room, "exercise") : 0f;
+            if (HobbyActivity.Exercising(c, w)) gym = MathF.Max(gym, MathF.Max(0.7f, Facilities.Factor(c.Room, "exercise"))); // v14.3 운동 취미
             c.Fitness = Math.Clamp(c.Fitness + (gym > 0f ? 0.08f * gym : -0.004f * (w.Eras.Has("gravity") ? 0.3f : 1f)) * dt, 0f, 1f); // v12.8 인공 중력
         }
     }

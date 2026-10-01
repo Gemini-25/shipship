@@ -26,7 +26,7 @@ public partial class Hud : Control
     private int _crewTab;
 
     /// <summary>승무원 상세의 탭 (0 상태, 1 판단, 2 관계, 3 기억).</summary>
-    public int CrewTab { get => _crewTab; set => _crewTab = Math.Clamp(value, 0, 4); }
+    public int CrewTab { get => _crewTab; set => _crewTab = Math.Clamp(value, 0, 5); }
 
     public void Init(Main main, World world)
     {
@@ -726,7 +726,7 @@ public partial class Hud : Control
         Gfx.Text(this, Fonts.Body, new Vector2(x + 26, y + 49), $"{Life.Name(c.Background)} · {Life.Name(c.Value)} · {c.Traits.Summary()}", 12, Palette.TextMuted); // v12.7 살아온 길·가치관
 
         // 탭
-        string[] tabs = { "상태", "판단", "관계", "기억", "몸·일기" };
+        string[] tabs = { "상태", "판단", "관계", "기억", "몸·일기", "물건" };
         float tw = (w - 36 - 4 * (tabs.Length - 1)) / tabs.Length;
         for (int i = 0; i < tabs.Length; i++)
         {
@@ -747,6 +747,7 @@ public partial class Hud : Control
                 DrawRelationGraph(c, gcard.Position.X + 16, gcard.End.X - 16, y + 34);
                 break;
             case 4: DrawCrewBody(c, x, right, cy, col); break; // v12.7
+            case 5: DrawCrewThings(c, x, right, cy, col); break; // v14.3
             default: DrawCrewMemory(c, x, right, cy, col); break;
         }
 

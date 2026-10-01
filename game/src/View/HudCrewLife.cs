@@ -91,6 +91,39 @@ public partial class Hud
         if (c.Diary.Count == 0) Gfx.Text(this, Fonts.Body, new Vector2(x, ey + 12), "아직 쓴 것이 없다", 12, Palette.TextMuted);
     }
 
+    /// <summary>v14.3 물건 탭: 가진 것 — 어디에 있나 · 상태 · 진척 · 출처와 이력 · 관계의 이유.</summary>
+    private void DrawCrewThings(CrewMember c, float x, float right, float y, Color col)
+    {
+        var w = _world;
+        var bs = w.Belongings;
+        SectionTitle(x, y + 10, "가진 것");
+        float ly = y + 22;
+        foreach (var b in bs.Of(c).OrderBy(b => b.Kind == BelongingKind.Artwork ? 1 : 0).ThenBy(b => b.Id).Take(9))
+        {
+            var bc = !b.Usable ? Palette.Danger : b.Open ? new Color("#ffd27a") : Palette.Text;
+            Gfx.Text(this, Fonts.Bold, new Vector2(x, ly + 12), Fit(b.Name, (right - x) * 0.5f, 12, Fonts.Bold), 12, bc);
+            Gfx.TextRight(this, Fonts.Body, new Vector2(right, ly + 12), Fit(bs.Where(b) + (b.Condition < 0.95f ? $" · {b.Condition * 100:0}%" : "") + (b.Progress > 0.02f && b.Kind != BelongingKind.Artwork ? $" · {b.Progress * 100:0}%" : ""), (right - x) * 0.5f, 11, Fonts.Body), 11, Palette.TextDim);
+            string hist = (b.From >= 0 ? $"{w.Crew.FirstOrDefault(o => o.Id == b.From)?.Name}에게서 · " : "") + (b.Marks.Count > 0 ? b.Marks[^1].Text : b.Origin);
+            Gfx.Text(this, Fonts.Body, new Vector2(x + 8, ly + 27), Fit(hist, right - x - 8, 10, Fonts.Body), 10, Palette.TextMuted);
+            ly += 33;
+        }
+        if (!bs.Of(c).Any()) { Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 12), "가진 것이 없다", 12, Palette.TextMuted); ly += 18; }
+        // 관계의 이유 (v14.3~)
+        var why = w.Relations.All.Where(m => m.Who == c.Id).OrderByDescending(m => m.Tick).Take(4).ToList();
+        if (why.Count > 0)
+        {
+            Divider(x, right, ly + 4);
+            SectionTitle(x, ly + 22, "왜 그런 사이인가");
+            ly += 30;
+            foreach (var m in why)
+            {
+                var o = w.Crew.FirstOrDefault(p => p.Id == m.About);
+                Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 12), Fit($"{o?.Name} — {m.Text}", right - x, 11, Fonts.Body), 11, m.Weight >= 0f ? Palette.Good : new Color("#ff9a8a"));
+                ly += 16;
+            }
+        }
+    }
+
     /// <summary>배 전체 관계도: 사람들을 둥글게 놓고, 가까우면 초록 선·사이가 나쁘면 붉은 선. 고른 사람의 선은 진하게.</summary>
     private void DrawRelationGraph(CrewMember sel, float x, float right, float y)
     {
