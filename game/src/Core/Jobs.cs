@@ -385,6 +385,8 @@ public sealed class Job
         for (int guard = 0; guard < 8; guard++)
         {
             var status = _toils[_index].Tick(c, w);
+            // 단계가 제 일을 안에서 끝냈으면 (Release 가 이미 정리했다) 더 읽지 않는다 — 새 일을 잡았으면 그 일은 건드리지 않게
+            if (_index >= _toils.Count) return c.Job != null && c.Job != this ? ToilStatus.Running : status == ToilStatus.Running ? ToilStatus.Interrupted : status;
             if (status == ToilStatus.Running) return ToilStatus.Running;
 
             _toils[_index].End(c, w);

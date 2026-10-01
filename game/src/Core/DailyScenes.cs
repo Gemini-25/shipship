@@ -849,12 +849,13 @@ public sealed class DailySceneSystem
         Close(s, SceneStage.Done, text);
     }
 
-    private void WakeUp(DailyScene s, string why)
+    // endJob=false: 몽유병 일의 단계 안에서 부를 때 — 그 단계가 실패를 돌려 일이 스스로 끝난다 (안에서 끝내면 목록 밖을 읽는다)
+    private void WakeUp(DailyScene s, string why, bool endJob = true)
     {
         if (!s.Open) return;
         Close(s, SceneStage.Done, why + " — 혼자 침대로 돌아갔다");
         if (CrewOf(s.Host) is not CrewMember c) return;
-        if (_jobScene.TryGetValue(c.Id, out var sid) && sid == s.Id && c.Job?.Activity == SceneActivity.Instance)
+        if (endJob && _jobScene.TryGetValue(c.Id, out var sid) && sid == s.Id && c.Job?.Activity == SceneActivity.Instance)
         {
             _jobScene.Remove(c.Id);
             c.EndJob(_w, ToilStatus.Interrupted);
@@ -1289,7 +1290,7 @@ public sealed class DailySceneSystem
             new DoToil((cm, world) =>
             {
                 if (!s.Open) return false;
-                if (!s.Holding) { WakeUp(s, "아무도 못 보고 혼자 깼다"); return false; }
+                if (!s.Holding) { WakeUp(s, "아무도 못 보고 혼자 깼다", endJob: false); return false; }
                 return true;
             }),
             new GotoToilLate(cm => BedSpot(cm)),
