@@ -139,7 +139,9 @@ public sealed class SoilSystem
     public List<Toil> WashFirst(CrewMember c, bool urgent, string forWhat)
     {
         var toils = new List<Toil>();
-        if (c.Soil.HandsMax < 0.15f) return toils;
+        bool strict = _w.Culture.Follows(c, CustomKind.HandWash); // v14.9 탈이 났던 배는 손이 깨끗해 보여도 씻는다
+        if (c.Soil.HandsMax < (strict ? 0.03f : 0.15f)) return toils;
+        if (strict && c.Soil.HandsMax < 0.15f) _w.Culture.Stats.StrictWashes++;
         if (urgent)
         {
             toils.Add(new DoToil((cm, world) =>
@@ -158,7 +160,9 @@ public sealed class SoilSystem
     public void WashHands(CrewMember c, string why)
     {
         var w = _w;
-        bool partial = WaterShort;
+        bool thrift = !WaterShort && w.Culture.Follows(c, CustomKind.WaterThrift); // v14.9 물이 바닥났던 배는 넉넉해도 아낀다
+        bool partial = WaterShort || thrift;
+        if (thrift) w.Culture.Stats.ThriftWashes++;
         float use = partial ? 0.3f : 1f;
         w.Water.Level = MathF.Max(0f, w.Water.Level - use);
         Stats.WaterUsed += use;

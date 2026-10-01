@@ -152,6 +152,7 @@ public static partial class Program
         if (args.Contains("--parttest")) return RunPartTest(seed); // v14.6
         if (args.Contains("--soiltest")) return RunSoilTest(seed); // v14.7
         if (args.Contains("--flowtest")) return RunFlowTest(seed); // v14.8
+        if (args.Contains("--culturetest")) return RunCultureTest(seed); // v14.9
         if (args.Contains("--replaycheck")) return RunReplayCheck(seed);
         if (args.Contains("--deathtrace")) return RunDeathTrace(Math.Max(1, days), seed);
         if (args.Contains("--stressprobe")) return RunStressProbe(Math.Max(1, days), seed);

@@ -768,6 +768,7 @@ public partial class Hud : Control
         string reason = c.JobReason ?? "—";
         if (c.Gait.Line(c, _world) is string gait) reason = $"{gait}   ·   {reason}"; // v14.5 비켜서는 중 · 문 앞 확인 · 조용히 · 움찔
         if (c.Soil.Line() is string soil) reason += $"   ·   {soil}"; // v14.7 손에 기름 · 옷에 그을음
+        if (_world.Culture.Line(c) is string cul) reason += $"   ·   {cul}"; // v14.9 따르는 관행 (이유를 모르면 그렇다고)
         if (c.Carrying is ItemStack held) reason += $"   ·   들고 있음: {held}";
         Gfx.Text(this, Fonts.Body, new Vector2(x, y + 51), reason, 11, Palette.TextMuted);
 

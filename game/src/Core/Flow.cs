@@ -444,7 +444,9 @@ public sealed class FlowSystem
         var w = _w;
         var room = w.Ship.RoomAt(inner);
         float power = room != null && room.Powered ? room.PowerFlow : 0f;
-        if (!urgent)
+        bool buddy = urgent && w.Culture.Follows(c, CustomKind.HatchBuddy); // v14.9 선체 밖에서 사람을 잃을 뻔한 배는 급해도 점검한다
+        if (buddy) yield return new DoToil((cm, world) => { world.Culture.Stats.BuddyChecks++; cm.Say(world, "급해도 점검은 해 — 우리 배는 그렇게 한다"); return true; });
+        if (!urgent || buddy)
         {
             yield return new DoToil((cm, world) => { cm.Say(world, "우주복 점검 — 산소 · 봉인 · 통신"); return true; });
             yield return new WaitToil(SimTime.Minutes(1), Pose.Working, hatch.Cell.Center);

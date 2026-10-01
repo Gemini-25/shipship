@@ -124,6 +124,7 @@ public static partial class WorkPlanners
             mentor.Stats.Taught++;
             world.Relations.Remember(cm, mentor, RelationReason.TaughtMe, $"{Ko.EulReul(Skills.Name(skill))} 가르쳐 줬다"); // v14.4
             world.Growth.Lessons++;
+            world.Culture.OnLesson(mentor, cm); // v14.9 선배의 관행이 제자에게
             float after = cm.RawSkill(skill);
             foreach (float mark in new[] { 0.35f, 0.5f })
                 if (before < mark && after >= mark)
