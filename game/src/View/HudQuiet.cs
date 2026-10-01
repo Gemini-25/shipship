@@ -217,6 +217,7 @@ public partial class Hud
     {
         var list = new List<(string, string)>();
         if (_main.Paused) list.Add(("Space", "재개"));
+        if (_world.Automation.Present && _world.Automation.Asks.Open.Any()) list.Add(("Y", "컴퓨터 제안 보기")); // 컴퓨터가 묻고 있다
         if (_main.SelectedCrew != null)
         {
             list.Add(("F", _main.Following ? "따라가기 끄기" : "따라가기"));

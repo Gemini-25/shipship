@@ -165,7 +165,7 @@ public static partial class Program
                 // 그 방으로 가는 데이터선을 끊는다 (감지기 경보가 닿지 않는다)
                 foreach (var l in wa.Net.Links.Where(l => l.Kind == NetKind.Data && (l.Room == ra || l.Door != null && (l.Door.RoomA == ra || l.Door.RoomB == ra))).ToList())
                     wa.Net.Hurt(l, 1f, "시험");
-                wa.Step(); wb.Step();
+                for (int t = 0; t < 600 && (t == 0 || ra.DataLinked); t++) { wa.Step(); wb.Step(); } // 망이 다시 계산될 때까지
                 bool lit = false;
                 foreach (var cell in ra.Cells.Skip(ra.Cells.Count / 2))
                     if (wa.Fire.Ignite(cell, 0.6f)) { wb.Fire.Ignite(cell, 0.6f); lit = true; break; }
@@ -213,8 +213,12 @@ public static partial class Program
                     later = finder != null ? $" · 뒤에 {finder.Name}: {CrewWhy.Beliefs(finder, wa, 8).First(x => x.Kind == BeliefKind.Knows && x.Text.StartsWith($"{ra.Name} 불")).Text}" : " · 뒤에 배가 알게 됨";
                 }
                 else later = wa.Fire.CountIn(ra) == 0 ? " · 저절로 꺼짐" : " · 두 시간 동안 아무도 모름";
-                Check("믿음 — 데이터선이 끊긴 방의 불은 '모른다(경보가 닿지 않는다)'로 보이고 모르는 사람은 끄러 가지 않는다 · 이어진 방은 '경보'로 알고 끄러 간다",
-                    lit && !relay && unawareA > 0 && cutReason > 0 && unawareGoing == 0 && (knownA || ordersA == 0) && knowB > 0 && goingB > 0 && cutB == 0,
+                // 주컴퓨터도 같은 규칙을 읽는다: 이어진 방은 화재 감지기 경보를 판단 기록에 남기고, 끊긴 방은 남기지 못한다
+                bool alarmA = wa.Automation.Book.Acts.Any(x => x.Kind == ActKind.Alarm && x.RoomId == ra.Id);
+                bool alarmB = wb.Automation.Book.Acts.Any(x => x.Kind == ActKind.Alarm && x.RoomId == rb.Id);
+                later += $" · 컴퓨터 경보 기록 끊김 {alarmA} / 이어짐 {alarmB} · 끊긴 방 데이터선 {ra.DataLinked}";
+                Check("믿음 — 데이터선이 끊긴 방의 불은 '모른다(경보가 닿지 않는다)'로 보이고 모르는 사람은 끄러 가지 않는다 · 이어진 방은 컴퓨터가 경보하고 사람이 알고 끄러 간다",
+                    lit && !relay && unawareA > 0 && cutReason > 0 && unawareGoing == 0 && (knownA || ordersA == 0) && knowB > 0 && goingB > 0 && cutB == 0 && alarmB && !alarmA,
                     $"{ra.Name}: 끊김 — 모름 {unawareA}명(경보 끊김 탓 {cutReason}) · 모르는 채 끄러 감 {unawareGoing} · 배가 앎 {knownA} · 작업 {ordersA} ({sampleA}) | 이어짐 — 앎 {knowB}명 · 끄러 감 {goingB} ({sampleB}){later}{(relay ? " · 통신 중계가 있어 시험 무효" : "")}");
 
                 // 목표 · 컴퓨터 신뢰 · 기술: 누구를 눌러도 목표가 있고, 컴퓨터가 있으면 신뢰 줄이 있다
