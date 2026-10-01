@@ -148,6 +148,9 @@ public sealed class CosmicSystem
 
     private int _voyage = -1;
     private readonly List<long> _plan = new();
+    /// <summary>이번 항해에 올 때 (시험 · 화면).</summary>
+    public List<long> Planned => _plan;
+    public int PlannedVoyage => _voyage;
     private int _next = 1, _taskNext = 1;
     private float[] _rad = Array.Empty<float>();
     private readonly List<int> _safed = new();          // 꺼 둔 설비 (Furniture.Id, 넣은 순서)

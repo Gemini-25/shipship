@@ -235,6 +235,10 @@ public sealed class CosmicWarnActivity : Activity
         var cs = w.Cosmic;
         foreach (var e in cs.Events)
         {
+            // 비울 구획에서 자는 사람은 깨워서 데리고 나온다 (시간과 상관없이)
+            if (e.SealPlan && !e.Sealed && !e.Avoided && w.Tick < e.Arrive && cs.Knows(c, e))
+                foreach (var o in w.Crew.Where(o => o != c && !o.Dead && !o.Outside && o.Room != null && o.Pose == Pose.Sleeping && (o.Room.Id == e.TargetRoom || e.Evac.Contains(o.Room.Id))).OrderBy(o => o.Id))
+                    if (!cs.WarnClaimed(o, c)) return (e, o, true);
             if (e.Phase is not (CosmicPhase.Brace or CosmicPhase.Impact) || !cs.Knows(c, e)) continue;
             long harm = cs.NextHarm(e);
             float hours = harm == long.MaxValue ? 99f : e.HoursTo(w.Tick, harm);

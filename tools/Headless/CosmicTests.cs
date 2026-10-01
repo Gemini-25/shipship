@@ -192,6 +192,34 @@ public static partial class Program
                 Check("30종 — 하나하나 강제로 걸어도 예외 없이 지나간다", errs.Count == 0 && after == 30, $"지나감 {after}/30" + (errs.Count > 0 ? " · " + string.Join(" / ", errs.Take(4)) : ""));
             }
 
+            // 6-b) 저절로: 항해마다 0~2번 (무작위 사고가 켜져 있을 때만) · 항로 구간에 맞는 것이 잘 생긴다
+            {
+                float keep = HazardSystem.RandomDays;
+                try
+                {
+                    var counts = new List<int>();
+                    for (int s2 = 0; s2 < 6; s2++)
+                    {
+                        var w = World.CreateDefault(seed + s2 * 101, 0, "Mirinae");
+                        Run(w, SimTime.Minutes(2));
+                        counts.Add(w.Cosmic.Planned.Count);
+                    }
+                    var wn = World.CreateDefault(seed, 0, "Mirinae");
+                    Run(wn, SimTime.Minutes(2));
+                    HazardSystem.RandomDays = 0f;
+                    wn.Cosmic.Planned.Clear(); wn.Cosmic.Planned.Add(wn.Tick + 1);
+                    Run(wn, SimTime.Minutes(1));
+                    int off = wn.Cosmic.Events.Count;
+                    HazardSystem.RandomDays = 4f;
+                    wn.Cosmic.Planned.Add(wn.Tick + 1);
+                    Run(wn, SimTime.Minutes(1));
+                    var ev = wn.Cosmic.Events.LastOrDefault();
+                    Check("저절로 — 항해마다 0~2번 정해 두고, 사고가 켜져 있을 때만 그때 생긴다", counts.All(n => n is >= 0 and <= 2) && counts.Distinct().Count() >= 2 && off == 0 && ev != null && ev.Source == "항로",
+                        $"항해마다 {string.Join("·", counts)}번 · 사고 끔일 때 {off} · 켬일 때 {ev?.Spec.Name ?? "없음"}({ev?.Source})");
+                }
+                finally { HazardSystem.RandomDays = keep; }
+            }
+
             // 7) 결정론
             {
                 uint H()
