@@ -166,6 +166,21 @@ public partial class LabelOverlay : Node2D
                 }
             }
 
+            // v12.7 말다툼 (붉은 번개 말풍선) · 슬픔 (푸른 물방울)
+            if (!c.Dead && _world.Tick - c.Quarrel < SimTime.Minutes(40))
+            {
+                var bp = head + new Vector2(-16f, -12f);
+                float shake = Mathf.Sin(_time * 30f) * 1.2f;
+                var bubble = new Rect2(bp.X - 11f + shake, bp.Y - 8f, 22f, 16f);
+                Gfx.RoundRect(this, bubble, new Color("#3a1416").WithAlpha(0.95f), 6, Palette.Danger, 1);
+                Gfx.TextCentered(this, Fonts.Bold, bubble.GetCenter() + new Vector2(0, 1), "#!", 11, new Color("#ff8a80"));
+            }
+            else if (!c.Dead && c.GriefUntil > _world.Tick && c.Pose != Pose.Sleeping)
+            {
+                float t = Mathf.PosMod(_time * 0.6f + c.Id * 0.3f, 1f);
+                DrawCircle(head + new Vector2(6f, 2f + t * 8f), 1.8f, new Color("#9fc4ff").WithAlpha(1f - t), true, -1f, true);
+            }
+
             if (zoom < 0.45f && !selected && !hovered && !c.Down) continue;
             // 위기 중에는 사고에 얽힌 사람만 라벨을 남긴다 (나머지는 가까이 보거나 고르면 보인다)
             if (crisis && !selected && !hovered && zoom < 1.1f && !Severity.Notable(c)) continue;

@@ -47,6 +47,8 @@ public enum WorkKind
     Distress, UnloadSupply, AnswerSignal,
     // v11.3 승무원 성장
     Train, Rehab,
+    // v12.7 승무원: 시신 수습 · 의수·의족
+    RecoverBody, FitProsthetic,
     // v12.0 당직 일지·진단
     Calibrate, Handover,
     // v12.2 설비 열·폭발·잔해·공기
@@ -157,6 +159,8 @@ public static class WorkKinds
         WorkKind.AnswerSignal => "탈출 캡슐 구조",
         WorkKind.Train => "배우기",
         WorkKind.Rehab => "재활",
+        WorkKind.RecoverBody => "시신 수습",
+        WorkKind.FitProsthetic => "의수·의족",
         WorkKind.Calibrate => "감지기 교정",
         WorkKind.Handover => "인수인계",
         WorkKind.CoolDown => "과열 설비 식히기",
@@ -359,6 +363,8 @@ public sealed class WorkOrder
         WorkKind.AnswerSignal => "탈출 캡슐 구조 — 배를 돌린다",
         WorkKind.Train => $"{Target.Crew?.Name ?? "?"}에게 {Skills.Name((Skill)(Circuit % 10))} 배우기",
         WorkKind.Rehab => $"{Target.Crew?.Name ?? "?"} 재활 운동",
+        WorkKind.RecoverBody => $"{Target.Crew?.Name ?? "?"} 모시기",
+        WorkKind.FitProsthetic => $"{Target.Crew?.Name ?? "?"} 의수·의족",
         WorkKind.Calibrate => $"{Target.Label} 감지기 교정",
         WorkKind.Handover => $"{Target.Crew?.Name ?? "?"}에게 인수인계",
         WorkKind.CoolDown => $"{Target.Label} 식히기",
@@ -1187,6 +1193,7 @@ public sealed partial class WorkBoard
         ScanLiving(Post); // v10.11 배급
         ScanComms(Post); // v11.2 외부 교신
         ScanGrowth(Post); // v11.3 배우기 · 재활
+        ScanLife(Post); // v12.7 시신 수습 · 의수·의족
 
         // ── 결정 (v7): 사람이 정해야 하는 일은 심의에 올린다 ──
         Council.Review(w, _open.Values.Where(o => seen.Contains(o.Key)).ToList());

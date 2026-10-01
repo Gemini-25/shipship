@@ -63,6 +63,11 @@ public sealed class ChoresActivity : Activity
         if (o.Kind == WorkKind.Cook && c.Role != CrewRole.Cook
             && w.Crew.Any(x => x.Role == CrewRole.Cook && !x.Dead && !x.Down && x.Pose != Pose.Sleeping && x.CareBed == null && OnShiftStatic(x, w)))
             score -= 0.2f;
+        // v12.7 자격: 자격 있는 사람이 깨어 있으면 자격 없는 사람은 한 발 물러선다 (없으면 서툴러도 한다)
+        // (급한 일·다친 사람 돌보기는 누구든 — 자격은 솜씨와 실수에만)
+        if (o.Urgency < 0.85f && o.Kind is not (WorkKind.Treat or WorkKind.Rescue) && Life.Needs(o) is Qual need && !c.Quals.Contains(need)
+            && w.Crew.Any(x => x != c && x.CanAct && x.Quals.Contains(need) && x.Pose != Pose.Sleeping))
+            score -= 0.12f;
 
         bool emergency = o.Urgency >= 0.9f;
         // 위기 판단: 비상·생존 위기에 맞닿은 일(사람·불·전기·공기·사람 있는 방의 구멍)은 앞으로, 딴일은 뒤로.
@@ -73,7 +78,7 @@ public sealed class ChoresActivity : Activity
         if (o.Kind == WorkKind.PreventiveCheck && !emergency && OnShiftStatic(c, w)
             && !SimTime.InWindow(SimTime.HourOfDay(w.Tick) + 1f, c.Schedule.WorkStart, c.Schedule.WorkLength)) score -= 0.15f;
         if (OnShiftStatic(c, w)) score += 0.08f + 0.1f * c.Traits.Diligence;
-        else if (!emergency && !allHands && o.Kind is not (WorkKind.Train or WorkKind.Rehab or WorkKind.Handover)) score -= 0.3f; // v11.3 배우기·재활은 비번에 하는 일
+        else if (!emergency && !allHands && o.Kind is not (WorkKind.Train or WorkKind.Rehab or WorkKind.Handover or WorkKind.FitProsthetic or WorkKind.RecoverBody)) score -= 0.3f; // v11.3 배우기·재활은 비번에 하는 일
         // v12.1 인수인계는 몇 분짜리 말 — 성실한 사람일수록 넘기고 나서 쉰다 (자기 전에도)
         if (o.Kind == WorkKind.Handover) score += 0.18f + 0.22f * c.Traits.Diligence;
         if (BedtimeStatic(c, w)) score -= emergency || allHands ? 0.1f : o.Kind == WorkKind.Handover ? 0.15f : 0.5f;
@@ -290,6 +295,8 @@ public static partial class WorkPlanners
             WorkKind.Distress => SendDistress(activity, o, c, w, dist, at),
             WorkKind.Train => Train(activity, o, c, w, dist, at, out blocked),
             WorkKind.Rehab => Rehab(activity, o, c, w, dist, at, out blocked),
+            WorkKind.RecoverBody => RecoverBody(activity, o, c, w, dist, at, out blocked),
+            WorkKind.FitProsthetic => FitProsthetic(activity, o, c, w, dist, at, out blocked),
             WorkKind.Calibrate => Calibrate(activity, o, c, w, dist, at, out blocked),
             WorkKind.Handover => Handover(activity, o, c, w, dist, at, out blocked),
             WorkKind.CoolDown => CoolDown(activity, o, c, w, dist, at, out blocked),
@@ -390,6 +397,7 @@ public static partial class WorkPlanners
                         || (o.Kind == WorkKind.Repair && o.Urgency >= 0.9f)))
                     world.History.Responded(cm);
                 if (status == ToilStatus.Succeeded) world.Causes.Worked(o, cm); // v12.2 누가 되돌렸나
+                if (status == ToilStatus.Succeeded) world.Life.AfterWork(cm, o); // v12.7 사람답게 틀린다 (왜 틀렸는지 남는다)
                 if (status != ToilStatus.Succeeded) world.Board.Release(o, cm);
                 if (status != ToilStatus.Succeeded)
                     World.Trace?.Invoke($"{SimTime.Clock(world.Tick)} {cm.Name} {o.Title} {status} @{cm.Job?.Current?.GetType().Name}");

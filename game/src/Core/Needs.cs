@@ -55,6 +55,7 @@ public static class NeedsSystem
         amount *= Storyteller.InjuryScale; // v12.4 난이도: 부상 강도
         if (v.Injury < 0.05f || amount > 0.05f) v.InjuryCause = cause;
         v.Injury = MathF.Min(1f, v.Injury + amount);
+        ShipSim.Core.Wounds.Add(v, amount, cause); // v12.7 어디를 어떻게
         // v11.3 후유증: 절반을 넘게 다치면 무엇인가 남는다 (재활로 절반까지만 준다)
         if (v.Injury > 0.5f)
         {
@@ -105,7 +106,7 @@ public static class NeedsSystem
         // 무서운 방에서 자면 깊이 못 잔다 (v7)
         float dread = asleep ? c.Memory.FearOf(c.Room) : 0f;
         if (asleep) n.Rest += RestGainAsleep * (stuffy ? 0.7f : 1f) * (rough ? 0.75f : 1f) * (cot ? 0.92f : 1f) * (1f - 0.3f * dread) * AmbienceSystem.SleepFactor(c.Room) * dt; // v12.6 옆방 소음·진동
-        else n.Rest -= (c.Pose == Pose.Working ? RestDecayWorking : RestDecayAwake) * restMul * dt;
+        else n.Rest -= (c.Pose == Pose.Working ? RestDecayWorking : RestDecayAwake) * restMul * ShipSim.Core.Wounds.LungLoad(v) * dt; // v12.7 폐를 다치면 쉽게 지친다
 
         if (!asleep) n.Social -= SocialDecay * (0.6f + 0.8f * c.Traits.Sociability) * dt;
 
@@ -176,7 +177,7 @@ public static class NeedsSystem
             bool resting = inCare || (c.Job?.Activity is RecoverActivity && c.Pose == Pose.Sleeping);
             float perDay = resting ? 0.3f : asleep ? 0.08f : 0.03f;
             v.Injury = MathF.Max(0f, v.Injury - perDay / 24f * dt);
-            if (v.Injury == 0f) v.InjuryCause = null;
+            if (v.Injury == 0f) { v.InjuryCause = null; ShipSim.Core.Wounds.Tidy(v); }
         }
         v.Health = Math.Clamp(v.Health, w.CrewCanDie ? 0f : 0.02f, v.MaxHealth);
 

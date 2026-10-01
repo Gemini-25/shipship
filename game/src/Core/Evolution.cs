@@ -106,7 +106,7 @@ public static class Evolution
         UpgradeKind.Relocate => $"{o.Target.Label} 안쪽 방으로 옮기기",
         UpgradeKind.AuxWorkshop => $"{o.Target.Room?.Name ?? "?"}에 보조 작업대",
         UpgradeKind.BackupHelm => $"{o.Target.Room?.Name ?? "엔진실"}에 예비 조타석",
-        UpgradeKind.Repurpose => $"{o.Target.Room?.Name ?? "?"}을(를) {RoomTypes.Name((RoomType)o.Circuit)}(으)로",
+        UpgradeKind.Repurpose => $"{Ko.EulReul(o.Target.Room?.Name ?? "?")} {Ko.EuRo(RoomTypes.Name((RoomType)o.Circuit))}",
         _ => "개조",
     };
 
@@ -219,7 +219,7 @@ public static class Evolution
             var spot = room.Cells.Where(ship.IsOpenFloor).OrderBy(c => (c.Center - room.Center).LengthSquared()).Cast<Cell?>().FirstOrDefault();
             if (spot is not Cell at) return null;
             return new UpgradePlan(UpgradeKind.Repurpose, WorkTarget.AtCell(at, room), score, Skill.Mechanics,
-                $"{why} → {Ko.EulReul(room.Name)} {RoomTypes.Name(to)}(으)로 ({RoomCatalog.Of(to)?.Codex.How ?? ""})", Cost(UpgradeKind.Repurpose, null), 0.25f, (int)to);
+                $"{why} → {Ko.EulReul(room.Name)} {Ko.EuRo(RoomTypes.Name(to))} ({RoomCatalog.Of(to)?.Codex.How ?? ""})", Cost(UpgradeKind.Repurpose, null), 0.25f, (int)to);
         }
         // 태양 폭풍에 방사선을 쬐었다 → 창고 벽에 물자를 쌓아 대피소로 (배 안쪽 창고부터)
         float dose = alive.Max(c => c.Dose);
@@ -235,7 +235,7 @@ public static class Evolution
         if ((loss || trauma > 0.3f) && Plan("grief", RoomType.Lounge, RoomType.Chapel, 0.35f + trauma + (loss ? 0.3f : 0f), loss ? "동료를 잃었다" : $"마음의 상처가 깊다 ({trauma * 100:0}%)") is UpgradePlan d) yield return d;
         // 시끄러운 침실 → 방음
         foreach (var q in ship.RoomsOf(RoomType.Quarters).Where(r => r.Special == null && r.Noise + r.Vibration > 0.35f).Take(1))
-            if (Plan("rest", RoomType.Quarters, RoomType.QuietQuarters, 0.3f + q.Noise + q.Vibration, $"{q.Name}이(가) 시끄러워 잠을 설친다 (소음 {q.Noise * 100:0}%)", r => -(r.Noise + r.Vibration)) is UpgradePlan e) yield return e;
+            if (Plan("rest", RoomType.Quarters, RoomType.QuietQuarters, 0.3f + q.Noise + q.Vibration, $"{Ko.IGa(q.Name)} 시끄러워 잠을 설친다 (소음 {q.Noise * 100:0}%)", r => -(r.Noise + r.Vibration)) is UpgradePlan e) yield return e;
     }
 
     /// <summary>이 사람에게 이 개조안이 얼마나 와닿는지: 교훈의 무게 + 무서워하는 방 + 내 분야 + 내 설비.</summary>
@@ -351,7 +351,7 @@ public static class Evolution
         // ── v12.3 보조 간선: 간선이 끊겨 방 여럿이 한꺼번에 정전된 배 ──
         if (panel != null && w.Net.Stats.Blackouts >= 1 && w.Net.RingTargets(NetKind.Power).FirstOrDefault() is Room ringTo)
             yield return new UpgradePlan(UpgradeKind.RingMain, WorkTarget.Of(panel), 0.5f + 0.25f * w.Net.Stats.Blackouts, Skill.Electrical,
-                $"간선이 끊겨 방 여럿이 {ShipHistory.Times(w.Net.Stats.Blackouts)} 한꺼번에 정전됐다 → 배전실에서 {ringTo.Name}(으)로 선체 속을 도는 보조 간선 (한쪽이 끊겨도 반대쪽으로)",
+                $"간선이 끊겨 방 여럿이 {ShipHistory.Times(w.Net.Stats.Blackouts)} 한꺼번에 정전됐다 → 배전실에서 {Ko.EuRo(ringTo.Name)} 선체 속을 도는 보조 간선 (한쪽이 끊겨도 반대쪽으로)",
                 Cost(UpgradeKind.RingMain, null), 0.4f);
 
         // ── Mk.3 개량: 자주 고장 난 설비 ──
@@ -764,15 +764,15 @@ public static class Evolution
                 room.FormerPurposes.Add(before);
                 room.Special = newKind;
                 MarkLog.Add(room.Marks, w.Tick, $"{cm.Name}: {before} → {room.Name}");
-                text = $"{Ko.IGa(cm.Name)} {Ko.EulReul(before)} {room.Name}(으)로 고쳤다 — {RoomCatalog.Of(newKind)?.Codex.What ?? ""}";
+                text = $"{Ko.IGa(cm.Name)} {Ko.EulReul(before)} {Ko.EuRo(room.Name)} 고쳤다 — {RoomCatalog.Of(newKind)?.Codex.What ?? ""}";
                 break;
             }
             case UpgradeKind.RingMain:
             {
                 if (w.Net.SourceRoom(NetKind.Power) is not Room src || w.Net.RingTargets(NetKind.Power).FirstOrDefault() is not Room to) return false;
                 w.Net.AddRing(NetKind.Power, src, to);
-                MarkLog.Add(o.Target.Furniture!.Machine!.Marks, w.Tick, $"{cm.Name}: {to.Name}(으)로 보조 간선");
-                text = $"{Ko.IGa(cm.Name)} 배전실에서 {to.Name}(으)로 선체 속을 도는 보조 간선을 깔았다 — 간선이 끊겨 {ShipHistory.Times(w.Net.Stats.Blackouts)} 정전된 뒤로";
+                MarkLog.Add(o.Target.Furniture!.Machine!.Marks, w.Tick, $"{cm.Name}: {Ko.EuRo(to.Name)} 보조 간선");
+                text = $"{Ko.IGa(cm.Name)} 배전실에서 {Ko.EuRo(to.Name)} 선체 속을 도는 보조 간선을 깔았다 — 간선이 끊겨 {ShipHistory.Times(w.Net.Stats.Blackouts)} 정전된 뒤로";
                 break;
             }
             case UpgradeKind.Mk3:
@@ -908,7 +908,7 @@ public static class Evolution
                 Remodel2.Move(w, f, spot.room, spot.cells);
                 h.Relocations++;
                 MarkLog.Add(f.Machine?.Marks ?? from.Marks, w.Tick, $"{cm.Name}: {from.Name} → {spot.room.Name}로 옮겼다");
-                MarkLog.Add(from.Marks, w.Tick, $"{f.Label}을(를) 안쪽 {Ko.EuRo(spot.room.Name)} 옮겼다");
+                MarkLog.Add(from.Marks, w.Tick, $"{Ko.EulReul(f.Label)} 안쪽 {Ko.EuRo(spot.room.Name)} 옮겼다");
                 text = $"{Ko.IGa(cm.Name)} {Ko.EulReul(f.Label)} {from.Name}에서 외벽이 없는 {Ko.EuRo(spot.room.Name)} 옮겼다 — 뚫렸던 외벽 방에서 빼냈다";
                 room = spot.room;
                 break;

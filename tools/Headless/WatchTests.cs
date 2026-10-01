@@ -120,11 +120,15 @@ public static partial class Program
                 bool heard = false;
                 for (int h = 0; h < 48 && !heard; h++)
                 {
-                    if (mech.CanAct && mech.Room != pump.Body.Room && pump.Body.UseSpots.FirstOrDefault(s => w.Ship.IsOpenFloor(s)) is var spot && spot != default)
+                    // 펌프 곁에 붙여 둔다 (1분마다 — 데려다 놓아도 곧 쉬러 걸어가 버리면 들을 틈이 없다)
+                    for (int m = 0; m < 15; m++)
                     {
-                        mech.Position = spot.Center; mech.PreviousPosition = mech.Position;
+                        if (mech.CanAct && mech.Room != pump.Body.Room && pump.Body.UseSpots.FirstOrDefault(s => w.Ship.IsOpenFloor(s)) is var spot && spot != default)
+                        {
+                            mech.Position = spot.Center; mech.PreviousPosition = mech.Position;
+                        }
+                        Run(w, SimTime.Minutes(1));
                     }
-                    Run(w, SimTime.Minutes(15));
                     heard = pump.Omen?.Note is ShiftNote n && n.How is "당직" or "옆방에서 들음" || pump.Omen == null && w.Watch.Notes.Any(x => x.Machine == pump && x.How != "감지기");
                 }
                 Check("오래된 측정값 — 컴퓨터가 멎어도 현장에서 소리를 듣는다", offline && age > 2.5f && heard,

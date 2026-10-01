@@ -133,6 +133,9 @@ public static partial class Program
         if (args.Contains("--autotest")) return RunAutomationTest(seed); // v12.5
         if (args.FirstOrDefault(a => a.StartsWith("--ambdebug=")) is string ad) return RunAmbienceDebug(seed, ad[11..]);
         if (args.Contains("--jumpdebug")) return RunJumperDebug(seed);
+        if (args.Contains("--treatdebug")) return RunTreatDebug(seed);
+        if (args.Contains("--watchdebug")) return RunWatchDebug(seed);
+        if (args.Contains("--crewtest")) return RunCrewTest(seed); // v12.7
         if (args.Contains("--designtest")) { args_Print = args.Contains("--print"); return RunDesignTest(seed); } // v12.6
         if (args.Contains("--autodebug")) return RunAutoDebug(seed);
         if (args.Contains("--balance")) return RunBalance(Math.Max(1, days), seed, int.TryParse(args.FirstOrDefault(a => a.StartsWith("--runs="))?.Split('=')[1], out var brn) ? brn : 3);
@@ -262,6 +265,7 @@ public static partial class Program
         Console.WriteLine($"당직 일지: {world.Watch.Stats}"); // v12.0
         Console.WriteLine($"설비 열·폭발: {world.Volatile.Stats} · 뜨거운 설비 {string.Join(", ", world.Ship.Machines.Where(m => m.Heat > 0.4f).Select(m => $"{m.Name} {m.Heat * 100:0}%"))}"); // v12.2
         Console.WriteLine($"물·습기·전기: {world.Moisture.Stats} · 가장 습한 방 {world.Ship.Rooms.Max(r => r.Humidity) * 100:0}%"); // v12.3
+        Console.WriteLine($"승무원 생활: {world.Life.Stats}"); // v12.7
         if (world.Hazards.RandomCount > 0 || world.Hazards.Count.Any(n => n > 0))
         {
             // v11.2 무작위 사고 (켜져 있을 때): 무엇이 언제 났고, 사람이 다치거나 쓰러졌나

@@ -652,7 +652,7 @@ public sealed class ShelterActivity : Activity
                 bestCost = d;
             }
             if (best is not Cell target) continue;
-            string why = room == shelter && factor >= 1f ? "대피소로" : room == shelter ? $"{room.Name} 선반 뒤로 (대피소가 없다)" : $"안쪽 {room.Name}(으)로";
+            string why = room == shelter && factor >= 1f ? "대피소로" : room == shelter ? $"{room.Name} 선반 뒤로 (대피소가 없다)" : $"안쪽 {Ko.EuRo(room.Name)}";
             return new Job(this, "방사선 대피", new List<Toil> { new GotoToil(target), new WaitToil(SimTime.Minutes(40), Pose.Sitting) })
             {
                 LogText = $"태양 폭풍 — {why}",

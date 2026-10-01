@@ -118,7 +118,9 @@ public sealed partial class AutomationSystem
         var w = _world;
         var voters = w.Crew.Where(c => !c.Dead && c.CanAct).ToList();
         if (voters.Count == 0) return;
-        int yes = voters.Count(c => (c.Traits.Calm + c.Traits.Diligence) * 0.5f - 0.3f * c.Traits.Bravery + (shipFirst ? 0.1f : -0.1f) > 0.3f == shipFirst);
+        // v12.7 가치관: 효율·규칙을 앞세우는 사람은 배 우선, 사람을 앞세우는 사람은 사람 우선 쪽으로 기운다
+        static float Lean(CrewMember c) => c.Value switch { CrewValue.Efficiency => 0.15f, CrewValue.Rules => 0.1f, CrewValue.People => -0.2f, CrewValue.Safety => -0.05f, _ => 0f };
+        int yes = voters.Count(c => (c.Traits.Calm + c.Traits.Diligence) * 0.5f - 0.3f * c.Traits.Bravery + Lean(c) + (shipFirst ? 0.1f : -0.1f) > 0.3f == shipFirst);
         int no = voters.Count - yes;
         bool pass = yes > no;
         string rule = shipFirst ? "감압 때 격벽을 바로 닫는다 (배 우선)" : "안에 사람이 있으면 격벽을 기다린다 (사람 우선)";

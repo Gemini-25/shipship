@@ -120,6 +120,9 @@ public sealed class Vitals
 
     /// <summary>부상이 어디서 왔는지 (기록용).</summary>
     public string? InjuryCause { get; set; }
+
+    /// <summary>v12.7 부위별 상처 (전체 부상을 몫대로 나눠 가진다) · 잃은 팔다리.</summary>
+    public List<Wound> Wounds { get; } = new();
 }
 
 /// <summary>입고 있는 우주복.</summary>
@@ -153,6 +156,7 @@ public sealed class CrewStats
     public int Taught;
     public int RehabSessions;
     public int Rescues;
+    public int Mistakes; // v12.7
     public int TimesDown;
     public int Panics;
 }
@@ -209,6 +213,18 @@ public sealed class CrewMember
     public float DiseasePeak { get; set; }
     public bool Immune { get; set; }
     public Furniture? PoisonSource { get; set; }
+
+    /// <summary>v12.7 살아온 길·가치관·습관·자격 · 일기 · 슬픔(이 틱까지) · 마지막 말다툼 · 마지막 문병 · 안치실에 모셨다.</summary>
+    public Background Background { get; set; }
+    public CrewValue Value { get; set; }
+    public List<Habit> Habits { get; } = new();
+    public HashSet<Qual> Quals { get; } = new();
+    public List<(long tick, string text)> Diary { get; } = new();
+    public long GriefUntil { get; set; } = -1;
+    public long Quarrel { get; set; } = -1_000_000;
+    public long LastVisited { get; set; } = -1_000_000;
+    public bool Laid { get; set; }
+    public bool Profiled { get; set; }
 
     /// <summary>v12.6 쌓인 방사선 (대략 Sv) — 1 넘으면 몸이 상하기 시작한다. 체력 단련(0~1)은 운동으로 오르고 안 하면 천천히 빠진다.</summary>
     public float Dose { get; set; }

@@ -104,7 +104,7 @@ public sealed class ExteriorSystem
         {
             string effect = f.Kind == ExtKind.Antenna ? "운석을 늦게 본다" : "배터리 충전이 줄었다";
             w.Causes.Effect(CauseKind.Fault, $"ext:{f.Id}:{f.Kind}", $"{f.Name} 손상 ({why}) — {effect}", f.Room, f.Anchor.Center, w.Causes.Context);
-            w.RaiseAlert($"{f.Name}이(가) 상했다 ({why}) — {effect} · {f.Condition * 100:0}%", f.Room, AlertLevel.Warning, shipWide: false);
+            w.RaiseAlert($"{Ko.IGa(f.Name)} 상했다 ({why}) — {effect} · {f.Condition * 100:0}%", f.Room, AlertLevel.Warning, shipWide: false);
         }
     }
 
@@ -128,8 +128,8 @@ public sealed class ExteriorSystem
                 f.DamagedAt = -1;
                 Repairs++;
                 int n = w.Causes.OpenNode($"ext:{f.Id}:{f.Kind}");
-                if (n >= 0) w.Causes.Resolve(n, $"{f.RepairBy}이(가) {f.Name}을(를) 고쳤다", null);
-                w.Log.Add(w.Tick, LogKind.Ship, $"{f.RepairBy}이(가) {f.Name}을(를) 고쳤다");
+                if (n >= 0) w.Causes.Resolve(n, $"{Ko.IGa(f.RepairBy)} {Ko.EulReul(f.Name)} 고쳤다", null);
+                w.Log.Add(w.Tick, LogKind.Ship, $"{Ko.IGa(f.RepairBy)} {Ko.EulReul(f.Name)} 고쳤다");
                 f.RepairBy = null;
                 continue;
             }
@@ -143,7 +143,7 @@ public sealed class ExteriorSystem
             f.RepairBy = drone != null ? drone.Name : "선외 작업조";
             f.RepairDone = w.Tick + SimTime.Hours(drone != null ? 1.5f : 2.5f);
             if (drone != null) { DroneRepairs++; drone.Battery = MathF.Max(0.2f, drone.Battery - 0.3f); }
-            w.Log.Add(w.Tick, LogKind.Ship, $"{f.RepairBy}이(가) {f.Name}을(를) 고치러 나갔다 ({f.Condition * 100:0}%)");
+            w.Log.Add(w.Tick, LogKind.Ship, $"{Ko.IGa(f.RepairBy)} {Ko.EulReul(f.Name)} 고치러 나갔다 ({f.Condition * 100:0}%)");
         }
     }
 

@@ -136,6 +136,7 @@ public sealed class World
     public DiseaseSystem Disease { get; }
     public AmbienceSystem Ambience { get; }
     public ExteriorSystem Exterior { get; }
+    public LifeSystem Life { get; }
     public Storyteller Story { get; }
 
     /// <summary>v12.1 정비 절차 통계.</summary>
@@ -214,6 +215,7 @@ public sealed class World
         Disease = new DiseaseSystem(this);
         Ambience = new AmbienceSystem(this);
         Exterior = new ExteriorSystem(this);
+        Life = new LifeSystem(this);
         Story = new Storyteller(this, seed);
         Piping = new PipeNetwork(this);
         Automation = new AutomationSystem(this);
@@ -274,6 +276,7 @@ public sealed class World
             Disease.Update(dt); // v12.4 전염병
             Ambience.Update(dt); // v12.6 인접성: 소음·진동·냄새·방사선
             Exterior.Update(dt); // v12.6 외부 설비: 안테나·태양 날개 (드론이 고친다)
+            Life.Update(dt); // v12.7 실수·말다툼·추모·자격
             Volatile.Resume();
             Procedures.Update(this); // v12.1 재조립 불량이 돌아온다
             Causes.Update(); // v12.2 인과 사슬: 번진 상태를 원인에 잇고, 풀린 상태에 복구를 붙인다
@@ -460,6 +463,7 @@ public sealed class World
             Memory.Frighten(this, o, c.Room, o.Room == c.Room ? 0.4f : 0.15f, $"{Ko.IGa(c.Name)} 거기서 죽었다");
         }
         History.Deaths++;
+        Life.OnDeath(c); // v12.7 추모 · 슬픔
         if (History.Current != null) History.Current.Deaths++;
         if (c.Room != null)
         {
@@ -682,6 +686,7 @@ public sealed class World
         world.Log.Add(world.Tick, LogKind.Ship, $"{ship.Name} 항해 기록 시작 · 승무원 {world.Crew.Count}명");
         world.History.Founded(world);
         world.InitialProfile = ShipProfile.Measure(world);
+        Core.Life.Assign(world); // v12.7 경력·가치관·습관·자격 (따로 뽑아 본 난수를 건드리지 않는다)
         return world;
     }
 

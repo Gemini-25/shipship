@@ -972,6 +972,13 @@ public partial class Main : Node2D
                 case "--tab":
                     Hud.CrewTab = int.Parse(value, CultureInfo.InvariantCulture);
                     break;
+                case "--injure": // v12.7 시험: --injure=사람번호:크기:원인
+                {
+                    var p = value.Split(':', 3);
+                    if (p.Length == 3 && int.TryParse(p[0], out int ci) && ci < Sim.Crew.Count)
+                        NeedsSystem.AddInjury(Sim.Crew[ci].Vitals, float.Parse(p[1], CultureInfo.InvariantCulture), p[2]);
+                    break;
+                }
                 case "--zoom":
                     Camera.ZoomAt(float.Parse(value, CultureInfo.InvariantCulture), GetViewportRect().Size * 0.5f);
                     break;

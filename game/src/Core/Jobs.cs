@@ -176,7 +176,7 @@ public sealed class WorkToil : Toil
     public override ToilStatus Tick(CrewMember c, World w)
     {
         if (CanContinue != null && !CanContinue(c, w)) return ToilStatus.Failed;
-        float speed = (1f - 0.4f * c.Vitals.Injury) * (1f - 0.3f * c.Vitals.Scar); // v11.3 후유증
+        float speed = (1f - 0.25f * c.Vitals.Injury) * Wounds.HandFactor(c.Vitals) * (1f - 0.3f * c.Vitals.Scar); // v11.3 후유증 · v12.7 팔을 다치면 더
         if (c.Room is Room here && here.Dark && c.Suit == null) speed *= 0.8f; // v9.4 캄캄한 방 (우주복 헬멧 등이면 괜찮다)
         if (c.Needs.Rest < 0.2f) speed *= 0.75f;
         if (c.Needs.Stress > 0.7f) speed *= 0.8f;
@@ -429,7 +429,7 @@ public static class Locomotion
         if (c.Vitals.Health < 0.4f) s *= 0.75f;
         if (c.Carrying != null) s *= 0.9f;
         if (c.CarryingPerson != null) s *= 0.6f; // 사람을 업고 간다
-        s *= 1f - 0.35f * c.Vitals.Injury;
+        s *= (1f - 0.2f * c.Vitals.Injury) * Wounds.LegFactor(c.Vitals); // v12.7 다리를 다치면 더
         if (c.Job?.Urgent == true) s *= 1.35f; // 급하면 뛴다
         if (c.Outside) s *= 0.8f; // 선체 밖: 추진 팩으로 조심조심 (안전줄을 옮겨 걸며)
         return s;

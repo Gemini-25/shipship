@@ -26,7 +26,7 @@ public partial class Hud : Control
     private int _crewTab;
 
     /// <summary>승무원 상세의 탭 (0 상태, 1 판단, 2 관계, 3 기억).</summary>
-    public int CrewTab { get => _crewTab; set => _crewTab = Math.Clamp(value, 0, 3); }
+    public int CrewTab { get => _crewTab; set => _crewTab = Math.Clamp(value, 0, 4); }
 
     public void Init(Main main, World world)
     {
@@ -707,7 +707,7 @@ public partial class Hud : Control
         var col = Palette.Crew(c.Id);
         float x0 = Screen.X - Margin - RightColumnWidth;
         float w = RightColumnWidth;
-        float height = _crewTab == 3 ? 560f : 500f;
+        float height = _crewTab == 3 ? 560f : _crewTab >= 2 ? 600f : 500f;
         var card = new Rect2(x0, y, w, height);
         Card(card);
         float x = x0 + 18, right = card.End.X - 18;
@@ -718,11 +718,11 @@ public partial class Hud : Control
         Gfx.Text(this, Fonts.Bold, new Vector2(x + 26, y + 31), c.Name, 18, Palette.Text);
         Gfx.Text(this, Fonts.Body, new Vector2(x + 26 + Gfx.Width(Fonts.Bold, c.Name, 18) + 8, y + 31),
             CrewRoles.Name(c.Role), 12, Palette.TextDim);
-        Gfx.Text(this, Fonts.Body, new Vector2(x + 26, y + 49), c.Traits.Summary(), 12, Palette.TextMuted);
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 26, y + 49), $"{Life.Name(c.Background)} · {Life.Name(c.Value)} · {c.Traits.Summary()}", 12, Palette.TextMuted); // v12.7 살아온 길·가치관
 
         // 탭
-        string[] tabs = { "상태", "판단", "관계", "기억" };
-        float tw = (w - 36 - 12) / 4f;
+        string[] tabs = { "상태", "판단", "관계", "기억", "몸·일기" };
+        float tw = (w - 36 - 4 * (tabs.Length - 1)) / tabs.Length;
         for (int i = 0; i < tabs.Length; i++)
         {
             int tab = i;
@@ -733,7 +733,15 @@ public partial class Hud : Control
         {
             case 0: DrawCrewStatus(c, x, right, cy, col); break;
             case 1: DrawCrewThinking(c, x, right, cy, col); break;
-            case 2: DrawCrewRelations(c, x, right, cy, col); break;
+            case 2:
+                DrawCrewRelations(c, x, right, cy, col);
+                // v12.7 관계도: 카드 왼쪽에 따로 (배 전체가 한눈에)
+                var gcard = new Rect2(x0 - 12 - 240, y, 240, 270);
+                Card(gcard);
+                SectionTitle(gcard.Position.X + 16, y + 22, "관계도 — 초록 가까움 · 빨강 사이가 나쁨 · ! 말다툼");
+                DrawRelationGraph(c, gcard.Position.X + 16, gcard.End.X - 16, y + 34);
+                break;
+            case 4: DrawCrewBody(c, x, right, cy, col); break; // v12.7
             default: DrawCrewMemory(c, x, right, cy, col); break;
         }
 
@@ -821,7 +829,10 @@ public partial class Hud : Control
     {
         SectionTitle(x, y + 10, "관계");
         float ry = y + 20;
-        foreach (var (who, value) in c.Relations(_world))
+        // v12.7 사람이 많으면 가장 가깝거나 가장 먼 여섯만 (나머지는 아래 관계도에)
+        var rels = c.Relations(_world).ToList();
+        if (rels.Count > 6) rels = rels.OrderByDescending(r => MathF.Abs(r.Item2)).Take(6).OrderByDescending(r => r.Item2).ToList();
+        foreach (var (who, value) in rels)
         {
             DrawCircle(new Vector2(x + 5, ry + 10), 4f, Palette.Crew(who.Id), true, -1f, true);
             Gfx.Text(this, Fonts.Bold, new Vector2(x + 16, ry + 15), who.Name, 13, Palette.Text);
