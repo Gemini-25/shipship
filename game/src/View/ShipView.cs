@@ -199,6 +199,7 @@ public partial class ShipView : Node2D
                 ci.DrawLine(new Vector2(r.Position.X, r.Position.Y + 1), new Vector2(r.End.X, r.Position.Y + 1), Palette.WallEdge, 2f);
         }
 
+        PaintBodyFloors(ci); // v16.3 바닥재 무늬 · 점검 뚜껑 자리 · 칸막이 · 유도선
         PaintHullSeams(ci);
         PaintWindows(ci);
         PaintWallShade(ci);
@@ -641,6 +642,7 @@ public partial class ShipView : Node2D
         PaintRadiators(ci); // v9 선체 밖 방열판
         PaintExterior(ci); // v12.6 안테나·태양 날개
         PaintScorch(ci);
+        PaintBody(ci); // v16.3 칸 상태 · 열린 뚜껑 · 닳은 길 · 뗀 패널 · 관측창 · 문 잠금 · 벽 장착물
         foreach (var f in ship.Furniture.Where(f => !f.Stowed && !f.Room.Detached)) PaintFurnitureLife(ci, f);
         PaintTierBadges(ci); // v10.8
         PaintRoomProps(ci); // v15.8 소품·장식 (어두운 방은 아래에서 함께 어두워진다)

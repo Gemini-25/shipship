@@ -155,6 +155,7 @@ public sealed class World
     public FlowSystem Flow { get; } // v14.8 배관 · 배선 전달량
     public CultureSystem Culture { get; } // v14.9 배의 문화
     public DailySystem Daily { get; } // v15 일상 사건 70
+    public BodySystem Body { get; } // v16.3 배 본체 (칸 3층 · 칸 상태 · 벽 층 · 문)
     public OutsideSystem Outside { get; } // v15.4 외부 사건 40
     public PropSystem Props { get; } // v15.8 소품·장식 70
     public TitleSystem Titles { get; } // v15.9 칭호·업적 50
@@ -250,6 +251,7 @@ public sealed class World
         Flow = new FlowSystem(this);
         Culture = new CultureSystem(this);
         Daily = new DailySystem(this);
+        Body = new BodySystem(this); // v16.3
         Outside = new OutsideSystem(this);
         Props = new PropSystem(this);
         Titles = new TitleSystem(this);
@@ -340,6 +342,8 @@ public sealed class World
             pf = Prof.Lap("sys.Culture", pf);
             Daily.Update(dt); // v15 사고가 아닌 날의 일상 사건
             pf = Prof.Lap("sys.Daily", pf);
+            Body.Update(dt); // v16.3 배 본체: 뚜껑 · 칸 상태 · 벽 층 · 문 · 엿듣기
+            pf = Prof.Lap("sys.Body", pf);
             Outside.Update(dt); // v15.4 배 바깥의 사건 (조난 신호 · 상선 · 표류 화물 · 우주 기상 · 해적)
             pf = Prof.Lap("sys.Outside", pf);
             Props.Update(dt); // v15.8 소품을 만들고 · 사고 · 겪은 일에서 걸고 · 곁의 사람을 달랜다

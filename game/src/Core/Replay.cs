@@ -408,6 +408,7 @@ public static class SaveGame
         // v16.0 칭호 · 주 컴퓨터 모듈 (열거 순서대로 — HashSet 순회 순서에 기대지 않는다)
         I(w.Titles.Awards.Count); foreach (var t in w.Titles.Awards) { I(t.CrewId); I((int)(t.Tick % 1000003)); }
         foreach (var m in Enum.GetValues<ComputerModule>()) I(w.Automation.Has(m) ? 1 : 0);
+        { var bs = w.Body.Stats; I(bs.Falls); I(bs.HatchOpens); I(bs.Calls); I(bs.Knocks); I(bs.Overheard); I(w.Body.Hatches.Count); I(w.Body.Marks.Count); foreach (var db in w.Body.Doors) { I(db.Pass); F(db.Gasket); } } // v16.3 배 본체
         return h;
     }
 }

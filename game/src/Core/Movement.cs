@@ -157,15 +157,17 @@ public sealed class MovementSystem
         if (gt.StartleUntil >= now) { Locomotion.Face(c, gt.StartleAt); return 0f; }
         if (gt.YieldUntil >= now) return 0f;
         if (gt.DoorCheckUntil >= now) return 0f;
+        float body = w.Body.Step(c, path); // v16.3 배 본체: 넘어짐 · 잠긴 문 · 노크 · 손으로 돌리기 · 뚜껑 · 유도선
+        if (body <= 0f) return 0f;
         var next = path[c.PathIndex];
         bool urgent = c.Job?.Urgent == true;
-        float mul = 1f;
+        float mul = body;
 
         // ── 문 앞: 너머가 위험하면 계기를 보고 (짝이 있으면 기다리고) 들어간다 ──
         if (w.Ship.DoorAt(next) is Door door && (gt.CheckedDoor != door || now - gt.CheckedAt > SimTime.Minutes(5)))
         {
             var beyond = c.PathIndex + 1 < path.Count ? w.Ship.RoomAt(path[c.PathIndex + 1]) : null;
-            if (beyond != null && beyond != c.Room && Hazard(beyond) is string reading)
+            if (beyond != null && beyond != c.Room && w.Body.Reading(door, Hazard(beyond)) is string reading) // v16.3 표시판이 고장이면 오판
             {
                 gt.CheckedDoor = door; gt.CheckedAt = now;
                 gt.DoorReading = reading;
