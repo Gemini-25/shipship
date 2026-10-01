@@ -142,7 +142,9 @@ public static class Prevention
                         float p = (0.04f + 0.22f * c.SkillLevel(m.Spec.Skill)) * (0.6f + 0.6f * c.Traits.Diligence) * (0.3f + 0.7f * level) * (1f + 0.8f * fam);
                         if (nextDoor) p *= 0.35f;
                         if (m.Body.Room.Dark) p *= 0.5f;
-                        if (w.Rng.Chance(p * dt)) { Detect(w, m, o, nextDoor ? "옆방에서 들음" : "당직", c); break; }
+                        bool again = fam >= 0.3f && w.Parts.Owner(m, o.Fault) is { Failures: > 0 }; // v14.6 전에 나갔던 그 부품 — 귀에 익은 소리
+                        if (again) p *= 1.6f;
+                        if (w.Rng.Chance(p * dt)) { if (again) w.Parts.Stats.Noticed++; Detect(w, m, o, nextDoor ? "옆방에서 들음" : "당직", c); break; }
                     }
                 }
             }

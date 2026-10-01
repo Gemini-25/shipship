@@ -22,6 +22,10 @@ public static class Modules
         new(FurnitureType.CapacitorBank, RoomType.Power, 2, new[] { (ItemKind.PowerController, 1), (ItemKind.Electronics, 2), (ItemKind.Cable, 2) }, "배터리 +60kWh", 60f),
         new(FurnitureType.Scrubber, RoomType.LifeSupport, 2, new[] { (ItemKind.Filter, 3), (ItemKind.Plate, 2), (ItemKind.Motor, 1) }, "산소 몫 +15%", 0.15f),
         new(FurnitureType.Fabricator, RoomType.Workshop, 1, new[] { (ItemKind.Motor, 1), (ItemKind.Electronics, 2), (ItemKind.Plate, 2) }, "연구 +2/일", 2f),
+        // v14.6 정비 장비
+        new(FurnitureType.PartTestBench, RoomType.Workshop, 1, new[] { (ItemKind.Electronics, 2), (ItemKind.Sensor, 1), (ItemKind.Plate, 1) }, "부품 시험이 두 배 빠르고 더 많이", 1f),
+        new(FurnitureType.Hoist, RoomType.Workshop, 1, new[] { (ItemKind.Plate, 3), (ItemKind.Motor, 1), (ItemKind.Cable, 2) }, "무거운 부품 교체가 빠르고 허리를 다치지 않는다", 1f),
+        new(FurnitureType.MaintCart, RoomType.Workshop, 1, new[] { (ItemKind.Plate, 2), (ItemKind.Bearing, 1) }, "정비실 밖 수리 −10%", 1f),
     };
 
     public static Spec? Of(FurnitureType t) => All.FirstOrDefault(s => s.Type == t);
@@ -75,6 +79,10 @@ public static class Modules
             FurnitureType.CapacitorBank => h.DarkHours > 1f ? (0.4f, $"캄캄했던 {h.DarkHours:0}시간") : w.Power.Brownouts > 0 ? (0.3f, "저출력 운영을 겪었다") : (0f, ""),
             FurnitureType.Scrubber => w.Air.Reserve < 0.8f * w.Air.ReserveCapacity ? (0.35f, "공기 탱크가 줄었다") : w.Research >= 30f ? (0.1f, $"연구 {w.Research:0}점") : (0f, ""),
             FurnitureType.Fabricator => w.Research >= 10f ? (0.2f, $"연구 {w.Research:0}점") : (0f, ""),
+            FurnitureType.PartTestBench => w.Parts.Stats.EarlyFailures + w.Procs.Defects >= 2 ? (0.45f, $"부품이 일찍 나가거나 재조립 불량이 {w.Parts.Stats.EarlyFailures + w.Procs.Defects}번")
+                : w.Parts.Stats.ByOrigin[(int)PartOrigin.Salvage] + w.Parts.Stats.ByOrigin[(int)PartOrigin.Handmade] >= 3 ? (0.3f, "시험 안 한 중고·손으로 만든 부품을 달았다") : (0f, ""),
+            FurnitureType.Hoist => w.Parts.Stats.Strains > 0 ? (0.5f, $"무거운 부품을 들다 허리를 다친 일 {w.Parts.Stats.Strains}번") : w.Parts.Stats.HeavyLifts >= 3 ? (0.3f, $"무거운 부품을 맨손으로 {w.Parts.Stats.HeavyLifts}번") : (0f, ""),
+            FurnitureType.MaintCart => w.Parts.Stats.FarRepairs >= 8 ? (0.25f, $"정비실에서 먼 수리 {w.Parts.Stats.FarRepairs}번") : (0f, ""),
             _ => (0f, ""),
         };
     }

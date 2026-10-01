@@ -45,6 +45,26 @@ public partial class ShipView
                 ci.DrawCircle(c, Mathf.Min(r.Size.X, r.Size.Y) * 0.34f, new Color("#0b1215"), true, -1f, true);
                 ci.DrawArc(c, Mathf.Min(r.Size.X, r.Size.Y) * 0.34f, 0f, Mathf.Tau, 24, new Color("#2c4d55"), 1.5f, true);
                 return true;
+            case FurnitureType.PartTestBench: // v14.6 부품 시험대: 물림쇠 + 바늘 계기
+            {
+                Gfx.RoundRect(ci, r.Grow(-3f), new Color("#17191d"), 4, new Color("#7a6a3a"), 2);
+                ci.DrawRect(new Rect2(r.Position.X + 5, r.End.Y - 9, r.Size.X - 10, 4), new Color("#2b2a26"));
+                float rad = Mathf.Min(r.Size.X, r.Size.Y) * 0.22f;
+                ci.DrawCircle(c + new Vector2(0, -3), rad, new Color("#0e1013"), true, -1f, true);
+                ci.DrawArc(c + new Vector2(0, -3), rad, 0f, Mathf.Tau, 18, new Color("#a08c4a"), 1.2f, true);
+                return true;
+            }
+            case FurnitureType.Hoist: // v14.6 호이스트: 레일과 기둥
+                ci.DrawLine(new Vector2(r.Position.X + 3, r.Position.Y + 5), new Vector2(r.End.X - 3, r.Position.Y + 5), new Color("#8a8f99"), 3f);
+                ci.DrawLine(new Vector2(r.Position.X + 4, r.Position.Y + 5), new Vector2(r.Position.X + 4, r.End.Y - 3), new Color("#5a5f69"), 2f);
+                ci.DrawLine(new Vector2(r.End.X - 4, r.Position.Y + 5), new Vector2(r.End.X - 4, r.End.Y - 3), new Color("#5a5f69"), 2f);
+                return true;
+            case FurnitureType.MaintCart: // v14.6 정비 카트: 붉은 상자에 바퀴
+                Gfx.RoundRect(ci, new Rect2(r.Position.X + 5, r.Position.Y + 7, r.Size.X - 10, r.Size.Y - 14), new Color("#7a2a20"), 3, new Color("#e0623e"), 1);
+                ci.DrawLine(new Vector2(r.Position.X + 7, r.Position.Y + 12), new Vector2(r.End.X - 7, r.Position.Y + 12), new Color("#2a1410"), 1f);
+                ci.DrawCircle(new Vector2(r.Position.X + 8, r.End.Y - 6), 2.5f, new Color("#222222"), true, -1f, true);
+                ci.DrawCircle(new Vector2(r.End.X - 8, r.End.Y - 6), 2.5f, new Color("#222222"), true, -1f, true);
+                return true;
             case FurnitureType.Fabricator:
                 Gfx.RoundRect(ci, r.Grow(-3f), new Color("#1a1814"), 4, new Color("#6b5a3a"), 2);
                 ci.DrawRect(new Rect2(r.Position.X + 6, r.Position.Y + 6, r.Size.X - 12, 3), new Color("#4a4030"));
@@ -95,6 +115,29 @@ public partial class ShipView
                     float h = (cell.Size.Y - 4) * charge;
                     ci.DrawRect(new Rect2(cell.Position.X + 2, cell.End.Y - 2 - h, cell.Size.X - 4, h), (on ? new Color("#c6e85a") : new Color("#5c6640")).WithAlpha(0.8f));
                 }
+                break;
+            }
+            case FurnitureType.PartTestBench:
+            {
+                // 누가 부품을 물려 돌리고 있으면 바늘이 떨린다
+                bool testing = on && _world.Crew.Any(x => x.Room == f.Room && x.Job?.Activity is PartTestActivity && x.Pose == Pose.Working);
+                float rad = Mathf.Min(r.Size.X, r.Size.Y) * 0.2f;
+                float a = -Mathf.Pi * 0.8f + (testing ? 0.6f + 0.25f * Mathf.Sin(t * 9f) : 0.1f);
+                var o = c + new Vector2(0, -3);
+                ci.DrawLine(o, o + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * rad, testing ? new Color("#ffd27a") : new Color("#6d6450"), 1.2f, true);
+                break;
+            }
+            case FurnitureType.Hoist:
+            {
+                // 무거운 부품을 갈고 있으면 갈고리가 내려와 흔들린다
+                bool lifting = on && _world.Crew.Any(x => x.Job?.Order is WorkOrder wo && wo.Kind == WorkKind.Repair && x.Pose == Pose.Working
+                    && wo.Target.Furniture?.Machine?.Faults.Any(fl => PartsSystem.Heavy(fl.Part)) == true);
+                float drop = lifting ? r.Size.Y * 0.55f : r.Size.Y * 0.2f;
+                float sway = lifting ? Mathf.Sin(t * 2.2f) * 2f : 0f;
+                var top = new Vector2(c.X, r.Position.Y + 5);
+                var hook = top + new Vector2(sway, drop);
+                ci.DrawLine(top, hook, new Color("#b9bec8"), 1f, true);
+                ci.DrawArc(hook + new Vector2(0, 2), 2.5f, 0f, Mathf.Pi, 6, new Color("#e0b040"), 1.4f, true);
                 break;
             }
             case FurnitureType.Scrubber:

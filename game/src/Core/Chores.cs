@@ -665,6 +665,7 @@ public static partial class WorkPlanners
         {
             Procedures.Before(w, c, m, proc, toils, o);
             if (proc.Steps.Contains(ProcStep.Test)) hours += 0.15f;
+            hours *= w.Parts.RepairFactor(m, fault.Kind, out _); // v14.6 무거운 부품(호이스트) · 정비 카트 · 비좁은 자리
         }
         toils.Add(new WorkToil(hours, m.Spec.Skill, f.Center)
         {
@@ -964,6 +965,7 @@ public static partial class WorkPlanners
             if (!UseAll(cm, needs)) return false;
             int made = r.Yield * batches;
             cm.Carrying = new ItemStack(product, made);
+            if (!refinery && !r.FromProduce) world.Parts.Made(product, made, cm, cm.SkillLevel(r.Skill)); // v14.6 만든 사람이 남는다
             cm.Practice(r.Skill, r.FromProduce ? 0.01f : 0.02f);
             world.Board.Close(o);
             if (product == ItemKind.Fuel) world.Adapt.FuelMade++;
@@ -1709,6 +1711,7 @@ public static partial class WorkPlanners
             if (donor.Has(FaultKind.Stripped)) return false;
             donor.Faults.Add(new Fault { Kind = FaultKind.Stripped, Since = world.Tick, PartOverride = part });
             world.UsedParts.Add(part); // v12.1 떼어 온 중고 부품 (검사하지 않고 쓰면 불량이 잦다)
+            world.Parts.Salvaged(part, 1, donor.Name); // v14.6 어디서 떼어 왔는지
             donor.Condition = MathF.Max(0.2f, donor.Condition - 0.1f);
             donor.Active = false;
             cm.Carrying = new ItemStack(part, 1);

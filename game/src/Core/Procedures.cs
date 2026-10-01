@@ -183,6 +183,7 @@ public static class Procedures
         }
         if (m.LockedOut) { m.LockedOut = false; m.Parked = false; }
         if (p.Derate) w.Power.MaintenanceCap = false;
+        w.Parts.OnFixed(m, fixedFault, c, p.UsedPart); // v14.6 그 고장을 맡은 부품만 갈고, 일찍 나갔으면 묶음을 · 또 나갔으면 원인을
     }
 
     /// <summary>시스템 틱: 재조립 불량이 때가 되면 같은 고장으로 돌아온다.</summary>

@@ -100,7 +100,7 @@ public sealed class MachineSystem
                 }
 
             // v11.0: 닳아서 날 고장의 일부는 먼저 기척(전조)을 낸다 — 누가 알아채면 싸게 막는다
-            if (w.Rng.Float() < m.FaultChancePerHour * dt && !Prevention.Foreshadow(w, m)) Break(m);
+            if (w.Rng.Float() < m.FaultChancePerHour * w.Parts.AgeFactor(m) * dt && !Prevention.Foreshadow(w, m)) Break(m); // v14.6 수명을 넘긴 부품
 
             // 파손: 운석 파편이나 불에 수명이 바닥난 설비는 고칠 수 없고 통째로 갈아야 한다
             if (m.Condition < 0.18f && !m.Has(FaultKind.Wrecked))
@@ -183,7 +183,7 @@ public sealed class MachineSystem
         var choices = m.Spec.FaultKinds.Where(k => IsCircuitFault(k) || !m.Has(k)).ToList();
         if (forced != null) choices = new List<FaultKind> { forced.Value };
         if (choices.Count == 0) return null;
-        var kind = w.Rng.Pick(choices);
+        var kind = choices.Count == 1 ? choices[0] : w.Parts.PickFault(m, choices, w.Rng.Float()); // v14.6 닳은 부품이 맡은 고장부터
 
         int circuit = -1;
         if (IsCircuitFault(kind))

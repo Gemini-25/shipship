@@ -140,9 +140,16 @@ public partial class Hud
         // 몸통
         var body = new Rect2(x, top, 18, bottom - top);
         Gfx.RoundRect(this, body, accent.WithAlpha(0.18f), 4, accent.WithAlpha(0.6f));
+        var fitted = _world.Parts.Of(m); // v14.6 부품마다의 나이 · 내력
         for (int i = 0; i < parts.Length; i++)
         {
             var st = MachineParts.State(m, parts[i], _world.Tick);
+            if (i < fitted.Length && fitted[i] is FittedPart fp && !st.Broken && !st.Hidden && st.Text is "좋음" or "닳음" or "많이 닳음")
+            {
+                string age = fp.Age >= 1f ? "수명 넘김" : fp.Age > 0.75f ? "수명 끝 무렵" : fp.Age > 0.4f ? "반쯤 닳음" : "아직 새것";
+                st = st with { Health = Mathf.Min(st.Health, Mathf.Clamp(1f - 0.8f * fp.Age, 0.05f, 1f)),
+                               Text = $"{age} · {fp.Lot.OriginName}" + (fp.Failures > 0 ? $" · 고장 {fp.Failures}번" : "") + (fp.Root != null ? (fp.RootKnown ? $" · 원인 {fp.Root}" : " · 원인 모름") : "") };
+            }
             float cy = ly + i * 20 + 10;
             var col = st.Broken ? Palette.Danger : st.Hidden ? Palette.Warning.WithAlpha(0.6f) : st.Health < 0.45f ? Palette.Warning : st.Health < 0.75f ? Palette.Text.WithAlpha(0.8f) : Palette.Good;
             // 지시선 (부품이 몸통에서 떨어져 나온 듯)

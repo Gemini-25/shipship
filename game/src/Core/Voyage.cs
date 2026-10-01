@@ -216,6 +216,7 @@ public sealed class VoyageSystem
             }
             if (put <= 0) continue;
             Credits -= put * price;
+            w.Parts.Bought(k, put, leg.Name); // v14.6 기항지 묶음
             lines.Add($"{ItemKinds.Name(k)} {put}");
         }
         // 식량

@@ -348,6 +348,7 @@ public enum FurnitureType
     LedPanel, HeatExchanger, CapacitorBank, Scrubber, Fabricator,
     RobotDock, // v10.10 선내 로봇 충전대 (칸마다 로봇 한 대)
     SupplyCache, // v10.10 비상 물자함 (실링폼·구급 키트·소화기를 창고 밖에 나눠 둔다 — 개조로 단다)
+    PartTestBench, Hoist, MaintCart, // v14.6 정비 장비 (정비실에 단다)
 }
 
 public static class FurnitureTypes
@@ -417,6 +418,9 @@ public static class FurnitureTypes
         FurnitureType.CapacitorBank => "축전 모듈",
         FurnitureType.Scrubber => "CO₂ 세정 모듈",
         FurnitureType.Fabricator => "정밀 가공 모듈",
+        FurnitureType.PartTestBench => "부품 시험대",
+        FurnitureType.Hoist => "호이스트",
+        FurnitureType.MaintCart => "정비 카트",
         FurnitureType.RobotDock => "로봇 충전대",
         FurnitureType.SupplyCache => "비상 물자함",
         _ => t.ToString(),

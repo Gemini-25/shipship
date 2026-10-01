@@ -150,6 +150,7 @@ public sealed class World
     public BelongingSystem Belongings { get; } // v14.3 개인 물건 · 취미
     public RelationSystem Relations { get; } // v14.3~ 관계의 이유
     public MovementSystem Movement { get; } // v14.5 움직임
+    public PartsSystem Parts { get; } // v14.6 부품마다의 수명과 내력
     public AmbienceSystem Ambience { get; }
     public ExteriorSystem Exterior { get; }
     public LifeSystem Life { get; }
@@ -237,6 +238,7 @@ public sealed class World
         Belongings = new BelongingSystem(this);
         Relations = new RelationSystem(this);
         Movement = new MovementSystem(this);
+        Parts = new PartsSystem(this);
         Ambience = new AmbienceSystem(this);
         Exterior = new ExteriorSystem(this);
         Life = new LifeSystem(this);
@@ -312,6 +314,7 @@ public sealed class World
             Water.Update(this, dt);
             pf = Prof.Lap("sys.Water", pf);
             Machines.Update(dt);
+            Parts.Update(dt); // v14.6 부품이 따로 닳는다
             pf = Prof.Lap("sys.Machines", pf);
             Prevention.Update(this, dt);
             pf = Prof.Lap("sys.Prevention", pf);

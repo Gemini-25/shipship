@@ -73,7 +73,7 @@ public static partial class Program
             foreach (var l in w.Net.Links.Where(l => l.Kind == NetKind.Power && l.Door != null && (l.Door.RoomA == power || l.Door.RoomB == power))) w.Net.Hurt(l, 1f, "시험");
             w.Net.Update(0f);
             int before = w.Net.Rings.Count;
-            Run(w, SimTime.TicksPerDay * 6);
+            for (int d = 0; d < 10 && w.Net.Rings.Count == 0; d++) Run(w, SimTime.TicksPerDay); // 회의가 다른 개조를 먼저 고르면 늦어진다
             if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "2")
                 Console.WriteLine("      개조 일감: " + string.Join(" / ", w.Board.All.Where(o => o.Kind == WorkKind.Upgrade).Select(o => $"{o.Title} [{o.Decision}] 맡은 {o.Assignee?.Name ?? "-"} 막힘 {o.BlockedReason ?? "-"} 닫힘 {o.Closed}"))
                     + " · 역사: " + string.Join(" / ", w.History.Events.Where(e => e.Kind == HistoryKind.Decision).TakeLast(4).Select(e => e.Text)));

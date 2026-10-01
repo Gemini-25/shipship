@@ -272,6 +272,10 @@ public static class MachineSpecs
         new MachineSpec(FurnitureType.CapacitorBank, 0f, 9, 50f, Skill.Electrical, null, 0.4f, false, new[] { FaultKind.CellDegradation }),
         new MachineSpec(FurnitureType.Scrubber, 0.8f, 9, 30f, Skill.Mechanics, ItemKind.Filter, 0.5f, false, new[] { FaultKind.FilterClogged, FaultKind.WiringFault }),
         new MachineSpec(FurnitureType.Fabricator, 1.2f, 3, 30f, Skill.Mechanics, ItemKind.Lubricant, 0.5f, false, new[] { FaultKind.WiringFault, FaultKind.BearingWear }),
+        // v14.6 정비 장비
+        new MachineSpec(FurnitureType.PartTestBench, 0.6f, 3, 60f, Skill.Electrical, null, 0.4f, false, new[] { FaultKind.DisplayFault, FaultKind.WiringFault }),
+        new MachineSpec(FurnitureType.Hoist, 0.3f, 3, 50f, Skill.Mechanics, ItemKind.Lubricant, 0.4f, false, new[] { FaultKind.BearingWear, FaultKind.Jam }),
+        new MachineSpec(FurnitureType.MaintCart, 0f, 1, 80f, Skill.Mechanics, null, 0.2f, false, new[] { FaultKind.Jam }),
         // 장거리 센서 (v10.1): 선체 밖 안테나와 레이더. 궤적 계산은 주 컴퓨터가, 컴퓨터가 없으면 통신실 사람이 화면을 읽는다
         new MachineSpec(FurnitureType.SensorArray, 0.5f, 5, 30f, Skill.Electrical, null, 0.5f, false,
             new[] { FaultKind.AntennaDrift, FaultKind.AntennaDrift, FaultKind.RadarFault, FaultKind.WiringFault }),
