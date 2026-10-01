@@ -30,6 +30,7 @@ public static class Brain
         new MendActivity(), // v14.3 망가진 물건 고쳐 주기
         new ReachOutActivity(), new ReclaimActivity(), new PartTestActivity(), new WashUpActivity(), new LaundryActivity(), new DeconActivity(), new FlushActivity(), new ExtinguisherCheckActivity(), new MemorialVisitActivity(), new SharedMealActivity(), // v14.9 관행 · v14.8 급수관 씻어 내기 · v14.7 씻기 · 빨래 · 우주복 털기 · v14.6 부품 시험 · v14.5 두고 간 짐 · v14.4 목적 있는 말 걸기 (걱정 · 위로 · 신입 · 사과 · 진실 · 소문)
         new InspectActivity(), // v14.4 소문을 듣고 확인하러 간다
+        new CheckSmellActivity(), new SavedPlateActivity(), new SetAsidePlateActivity(), new FollowSmellActivity(), // v16.8 탄내 확인 · 남겨 둔 접시 · 냄새를 따라
         new ChatActivity(),
         new RelaxActivity(),
         new WanderActivity(),

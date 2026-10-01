@@ -247,6 +247,7 @@ public sealed class VoyageSystem
             }
             if (put > 0) { Credits -= put * mealPrice; lines.Add($"끼니 {put}"); }
         }
+        w.Cooking.OnPort(leg.Name, lines); // v16.8 고향 재료
         Trades++;
         // 개수 공사: 가장 낡은 설비 둘
         foreach (var m in ship.Machines.Where(m => m.Faults.Count == 0).OrderByDescending(m => m.Wear).Take(spend == 0 ? 0 : spend == 2 ? 4 : 2))

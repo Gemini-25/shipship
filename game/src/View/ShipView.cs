@@ -644,6 +644,7 @@ public partial class ShipView : Node2D
         foreach (var f in ship.Furniture.Where(f => !f.Stowed && !f.Room.Detached)) PaintFurnitureLife(ci, f);
         PaintTierBadges(ci); // v10.8
         PaintRoomProps(ci); // v15.8 소품·장식 (어두운 방은 아래에서 함께 어두워진다)
+        PaintFood(ci, mode); // v16.8 냄비 · 항아리 · 남겨 둔 접시 · 냄새 (읽기만)
 
         // 정전된 방은 어둡게 (v9.4: 조명이 나간 방도)
         foreach (var room in ship.LiveRooms)

@@ -155,6 +155,7 @@ public sealed class World
     public FlowSystem Flow { get; } // v14.8 배관 · 배선 전달량
     public CultureSystem Culture { get; } // v14.9 배의 문화
     public DailySystem Daily { get; } // v15 일상 사건 70
+    public CookingSystem Cooking { get; } public SmellSystem Smells { get; } // v16.8 실제 음식 · 냄새
     public OutsideSystem Outside { get; } // v15.4 외부 사건 40
     public PropSystem Props { get; } // v15.8 소품·장식 70
     public TitleSystem Titles { get; } // v15.9 칭호·업적 50
@@ -250,6 +251,7 @@ public sealed class World
         Flow = new FlowSystem(this);
         Culture = new CultureSystem(this);
         Daily = new DailySystem(this);
+        Cooking = new CookingSystem(this); Smells = new SmellSystem(this); // v16.8
         Outside = new OutsideSystem(this);
         Props = new PropSystem(this);
         Titles = new TitleSystem(this);
@@ -335,6 +337,7 @@ public sealed class World
             Soil.Update(dt); // v14.7 손 · 옷 · 방으로 옮겨 다니는 오염
             Culture.Update(dt); // v14.9 겪은 일이 관행이 되어 전해진다
             Daily.Update(dt); // v15 사고가 아닌 날의 일상 사건
+            Cooking.Update(dt); Smells.Update(dt); // v16.8 냄비 · 접시 · 냄새가 공기를 타고
             Outside.Update(dt); // v15.4 배 바깥의 사건 (조난 신호 · 상선 · 표류 화물 · 우주 기상 · 해적)
             Props.Update(dt); // v15.8 소품을 만들고 · 사고 · 겪은 일에서 걸고 · 곁의 사람을 달랜다
             Titles.Update(dt); // v15.9 칭호·업적 (한 시간마다)
