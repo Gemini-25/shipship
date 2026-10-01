@@ -32,7 +32,7 @@ public sealed class ExteriorSystem
     public List<ExtFixture> All { get; } = new();
     public int Repairs, DroneRepairs;
 
-    public const float SolarKw = 5f; // 날개 하나 (볕이 좋을 때)
+    public const float SolarKw = 1.5f; // 날개 하나 (볕이 좋을 때) — 조명 몇 개 몫, 정전 때 배터리를 조금 늦출 뿐
 
     public ExteriorSystem(World w)
     {

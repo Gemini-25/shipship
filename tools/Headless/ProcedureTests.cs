@@ -41,6 +41,8 @@ public static partial class Program
             var w = DayOne(seed, "Mirinae");
             var gen = w.Ship.FurnitureOf(FurnitureType.OxygenGenerator).First().Machine!;
             w.Volatile.Blast(gen.Body.UseSpots.First(s => w.Ship.IsOpenFloor(s)), 0.6f, "시험");
+            // 이 시험은 전선·관을 다시 잇는지를 본다 — 폭발이 낸 불은 바로 끈다 (불이 크게 번지면 생명유지실이 숨 막혀 다른 이야기가 된다)
+            w.Fire.ClearRoom(gen.Body.Room);
             bool Hurt(Machine m) => m.Feed < 0.5f || m.Line < 0.5f && Procedures.Plumbed(m.Body.Type); // 일감이 붙는 기준과 같게
             int cut = w.Ship.Machines.Count(Hurt);
             Console.WriteLine("    " + string.Join(", ", w.Ship.Machines.OrderBy(m => (m.Body.Center - gen.Body.Center).LengthSquared()).Take(5).Select(m => $"{m.Name} d={(m.Body.Center - gen.Body.Center).Length():0.0} 전선 {m.Feed * 100:0}% 관 {m.Line * 100:0}%")));

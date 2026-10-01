@@ -652,15 +652,37 @@ public sealed partial class WorkBoard
             if (m.Fouled > 0.3f && !m.Body.Room.Leaking && w.Fire.CountIn(m.Body.Room) == 0)
                 post(WorkKind.CleanUp, WorkTarget.Of(m.Body), 0.2f + 0.25f * m.Fouled, Skill.Mechanics, $"소화 분말·그을음 {m.Fouled * 100:0}% — 효율이 떨어지고 전자 장비가 합선된다");
         }
-        // 잔해: 문과 통로 먼저 (한 번에 여덟 칸까지)
-        foreach (var (cell, amount) in ship.Rubble.OrderByDescending(kv => ship.DoorAt(kv.Key) != null ? 2 : ship.RoomAt(kv.Key)?.Type == RoomType.Corridor ? 1 : 0)
+        // 잔해: 문, 고장 난 설비 앞(v12.6 — 수리 자리를 막으면 아무도 못 고친다), 통로 순 (한 번에 여덟 칸까지)
+        // 고장 난 설비가 있는 방에 잔해 때문에 들어갈 수 없다 (문에서 수리 자리까지 길이 없다)
+        var cutOff = new HashSet<int>();
+        foreach (var rr in ship.Rubble.Keys.Select(ship.RoomAt).OfType<Room>().Distinct())
+        {
+            var bad = rr.Furniture.Where(f => f.Machine is Machine bm && (bm.Faults.Count > 0 || bm.Feed < 0.5f) && f.UseSpots.Count > 0).ToList();
+            if (bad.Count == 0) continue;
+            var door = rr.Doors.FirstOrDefault(d => !d.IsExternal);
+            if (door == null) continue;
+            var outside = Cell.Dirs4.Select(d => door.Cell + d).FirstOrDefault(x => ship.RoomAt(x) is Room o && o != rr && ship.IsWalkable(x));
+            if (outside == default) continue;
+            var prof = new PathProfile(1f, true, true);
+            if (!bad.Any(f => f.UseSpots.Any(u => ship.IsWalkable(u) && w.Paths.Find(outside, u, prof) != null))) cutOff.Add(rr.Id);
+        }
+        bool BlocksRepair(Cell cell) => ship.RoomAt(cell) is Room cr && cutOff.Contains(cr.Id) || ship.RoomAt(cell) is Room rr && rr.Furniture.Any(f => f.UseSpots.Contains(cell)
+            && f.Machine is Machine mm && (mm.Faults.Count > 0 || mm.Feed < 0.5f || mm.Line < 0.5f));
+        foreach (var (cell, amount) in ship.Rubble.OrderByDescending(kv => ship.DoorAt(kv.Key) != null || Cell.Dirs4.Any(d => ship.DoorAt(kv.Key + d) != null) ? 3 : BlocksRepair(kv.Key) ? 2 : ship.RoomAt(kv.Key)?.Type == RoomType.Corridor ? 1 : 0)
                      .ThenBy(kv => kv.Key.Y).ThenBy(kv => kv.Key.X).Take(8))
         {
             var room = ship.RoomAt(cell);
             if (room?.Leaking == true || room?.Abandoned == true) continue;
-            bool door = ship.DoorAt(cell) != null;
-            post(WorkKind.ClearRubble, WorkTarget.AtCell(cell, room), door ? 0.8f : room?.Type == RoomType.Corridor ? 0.65f : 0.4f, Skill.Mechanics,
-                door ? "문에 잔해가 끼여 닫히지 않는다" : $"잔해 {amount * 100:0}% — 길을 막는다");
+            bool door = ship.DoorAt(cell) != null, repair = !door && BlocksRepair(cell);
+            bool doorway = !door && Cell.Dirs4.Any(d => ship.DoorAt(cell + d) != null); // 문 바로 안쪽: 방 전체가 막힌다
+            bool broken = room != null && room.Furniture.Any(f => f.Machine is Machine bm && (bm.Faults.Count > 0 || bm.Feed < 0.5f));
+            float u = door ? 0.8f : repair || doorway && broken ? 0.78f : doorway ? 0.7f : room?.Type == RoomType.Corridor ? 0.65f : broken ? 0.55f : 0.4f;
+            // 숨·전기를 대는 핵심 설비가 잔해 너머에 갇혔다 → 비상 (우주복을 입고라도 치운다)
+            if (room != null && cutOff.Contains(room.Id) && room.Furniture.Any(f => f.Machine is Machine cm && cm.Spec.Critical && (cm.Faults.Count > 0 || cm.Feed < 0.5f)))
+                u = 0.92f;
+            post(WorkKind.ClearRubble, WorkTarget.AtCell(cell, room), u, Skill.Mechanics,
+                door ? "문에 잔해가 끼여 닫히지 않는다" : repair ? "고장 난 설비 앞을 잔해가 막았다 — 치워야 고친다"
+                : doorway ? "문 바로 안쪽을 잔해가 막았다 — 방에 들어갈 수 없다" : $"잔해 {amount * 100:0}% — 길을 막는다");
         }
         foreach (var room in ship.LiveRooms)
         {

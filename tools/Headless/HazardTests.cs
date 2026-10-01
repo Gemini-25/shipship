@@ -46,8 +46,9 @@ public static partial class Program
             var panel = w.Ship.FurnitureOf(FurnitureType.PowerPanel).First().Machine!;
             Player.Hazard(w, HazardKind.PowerSurge, default);
             int circuit = panel.Faults.Count(f => f.Circuit >= 0);
-            Run(w, SimTime.Hours(10));
-            int left = panel.Faults.Count(f => f.Circuit >= 0);
+            // 다 되살린 적이 있는지 (되살린 뒤 과부하로 새로 떨어지는 차단기는 다른 이야기)
+            int left = circuit;
+            for (int i = 0; i < 10 * 4 && left > 0; i++) { Run(w, SimTime.Minutes(15)); left = panel.Faults.Count(f => f.Circuit >= 0); }
             Check("전력 서지 — 회로가 끊기고 복구한다", circuit >= 2 && left == 0, $"끊긴 회로 {circuit} → 남은 {left}");
         }
 

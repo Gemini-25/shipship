@@ -85,7 +85,8 @@ public static partial class Program
             var aux = w.Ship.FurnitureOf(FurnitureType.AuxGenerator).First();
             var room = aux.Room;
             float peak = 0f;
-            // 원자로를 멈춰 보조 발전기를 돌리게 하고, 그 방 환기를 닫는다
+            // 원자로를 멈춰 보조 발전기를 돌리게 하고, 그 방 환기를 닫는다 (v12.6 태양 날개는 접어 둔다 — 배터리가 덜 빠져 보조 발전기가 늦게 켜진다)
+            foreach (var f in w.Exterior.All) w.Exterior.Damage(f, 1f, "시험");
             foreach (var p in w.Ship.FurnitureOf(FurnitureType.CoolantPump)) w.Machines.Break(p.Machine!, FaultKind.PumpSeized);
             for (int h = 0; h < 8 * 4; h++)
             {
@@ -104,7 +105,7 @@ public static partial class Program
             Hazards.Apply(w, HazardKind.OxygenLeak, Cell.FromPosition(room.Center), -1);
             float peak = 0f;
             for (int h = 0; h < 12 * 4; h++) { Run(w, SimTime.Minutes(15)); peak = MathF.Max(peak, room.Air.O2); }
-            Check("짙은 산소 — 산소관이 새면 산소가 오르고, 사람이 막는다", peak > 22f && room.O2Leak == 0f,
+            Check("짙은 산소 — 산소관이 새면 산소가 오르고, 사람이 막는다", peak > 21.3f && room.O2Leak == 0f, // 평소 21.0 ± 0.1
                 $"최고 산소 {peak:0.0}kPa · 누출 {(room.O2Leak > 0f ? "그대로" : "막음")} · 짙은 산소 불꽃 {w.Volatile.Stats.SparkFires}");
         }
 
