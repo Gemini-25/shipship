@@ -53,9 +53,9 @@ public partial class Hud
         var (title, text, done) = steps[TutorialStep];
         if (done()) { TutorialStep++; Arm(); return; }
         float w = 380f;
-        var card = new Rect2(Margin, Screen.Y - LogHeight - Margin - 120f, w, 108f);
+        var card = new Rect2(Margin, Screen.Y - LogFullHeight - Margin - 120f, w, 108f);
         Card(card);
-        Gfx.Text(this, Fonts.Bold, card.Position + new Vector2(16, 26), $"첫 항해 안내 {TutorialStep + 1}/{steps.Length} — {title}", 14, Palette.Accent);
+        Gfx.Text(this, Fonts.Bold, card.Position + new Vector2(16, 26), $"첫 항해 안내 {TutorialStep + 1}/{steps.Length} — {title}", Ui.TextSubtitle, Palette.Accent);
         // 줄바꿈 (폭에 맞게)
         var words = text.Split(' ');
         string line = "";
@@ -63,12 +63,12 @@ public partial class Hud
         foreach (var word in words)
         {
             string t = line.Length == 0 ? word : line + " " + word;
-            if (Gfx.Width(Fonts.Body, t, 12) > w - 32) { Gfx.Text(this, Fonts.Body, new Vector2(card.Position.X + 16, y), line, 12, Palette.TextDim); y += 17; line = word; }
+            if (Gfx.Width(Fonts.Body, t, Ui.TextBody) > w - 32) { Gfx.Text(this, Fonts.Body, new Vector2(card.Position.X + 16, y), line, Ui.TextBody, Palette.TextDim); y += 17; line = word; }
             else line = t;
         }
-        if (line.Length > 0) Gfx.Text(this, Fonts.Body, new Vector2(card.Position.X + 16, y), line, 12, Palette.TextDim);
-        Button(new Rect2(card.End.X - 120, card.Position.Y + 8, 52, 24), "다음", false, mouse, () => { TutorialStep++; Arm(); }, 11);
-        Button(new Rect2(card.End.X - 64, card.Position.Y + 8, 52, 24), "끄기", false, mouse, () => { TutorialOn = false; Settings.Tutorial = false; Settings.Save(); }, 11);
+        if (line.Length > 0) Gfx.Text(this, Fonts.Body, new Vector2(card.Position.X + 16, y), line, Ui.TextBody, Palette.TextDim);
+        Button(new Rect2(card.End.X - 120, card.Position.Y + 8, 52, 24), "다음", false, mouse, () => { TutorialStep++; Arm(); }, Ui.TextSmall);
+        Button(new Rect2(card.End.X - 64, card.Position.Y + 8, 52, 24), "끄기", false, mouse, () => { TutorialOn = false; Settings.Tutorial = false; Settings.Save(); }, Ui.TextSmall);
     }
 }
 
@@ -100,7 +100,7 @@ public partial class Hud
         }
         Gfx.Bar(this, new Rect2(bar.Position.X + 8f, bar.End.Y - 5f, bar.Size.X - 16f, 2f), prog, new Color("#b58cff"));
         string t = text;
-        while (t.Length > 6 && Gfx.Width(Fonts.Body, t, 11) > bar.Size.X - 16f) t = t[..^2] + "…";
-        Gfx.Text(this, Fonts.Body, new Vector2(bar.Position.X + 8f, bar.Position.Y + 15f), t, 11, new Color("#d7c6ff"));
+        while (t.Length > 6 && Gfx.Width(Fonts.Body, t, Ui.TextSmall) > bar.Size.X - 16f) t = t[..^2] + "…";
+        Gfx.Text(this, Fonts.Body, new Vector2(bar.Position.X + 8f, bar.Position.Y + 15f), t, Ui.TextSmall, new Color("#d7c6ff"));
     }
 }

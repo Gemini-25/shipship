@@ -29,17 +29,17 @@ public partial class Hud
         float x = x0 + 18, right = card.End.X - 18;
 
         Gfx.RoundRect(this, new Rect2(x, y + 18, 16, 16), col.WithAlpha(0.3f), 5, col);
-        Gfx.Text(this, Fonts.Bold, new Vector2(x + 26, y + 32), r.Name, 17, Palette.Text);
-        Gfx.Text(this, Fonts.Body, new Vector2(x + 26, y + 50), $"{r.Room?.Name ?? "?"} · 충전대 {r.Dock.Room.Name} · 버릇: {r.Quirk.Name}", 12, Palette.TextMuted);
+        Gfx.Text(this, Fonts.Bold, new Vector2(x + 26, y + 32), r.Name, Ui.TextLarge, Palette.Text);
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 26, y + 50), $"{r.Room?.Name ?? "?"} · 충전대 {r.Dock.Room.Name} · 버릇: {r.Quirk.Name}", Ui.TextBody, Palette.TextMuted);
         var sc = r.Fault != null || r.State is RobotState.Stalled or RobotState.Towed ? Palette.Danger : r.Battery < 0.25f ? Palette.Warning : Palette.Good;
-        Gfx.TextRight(this, Fonts.Bold, new Vector2(right, y + 32), RobotStateText(r), 12, sc);
+        Gfx.TextRight(this, Fonts.Bold, new Vector2(right, y + 32), RobotStateText(r), Ui.TextBody, sc);
         Divider(x, right, y + 64);
 
         float ly = y + 74;
-        Gfx.Text(this, Fonts.Bold, new Vector2(x, ly + 14), r.Doing, 13, col.Lightened(0.25f));
-        if (r.Order != null) Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 32), $"맡은 일: {r.Order.Title}", 11, Palette.TextMuted);
-        else if (r.Helping != null) Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 32), $"{Ko.EulReul(r.Helping.Name)} 거든다 — 긴 손일이 {RobotsV15.AssistBonus(r.Kind) * 100:0}% 빨라진다", 11, Palette.TextMuted);
-        if (r.Cargo is ItemStack cargo) Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 48), $"싣고 있음: {cargo}", 11, Palette.TextMuted);
+        Gfx.Text(this, Fonts.Bold, new Vector2(x, ly + 14), r.Doing, Ui.TextLabel, col.Lightened(0.25f));
+        if (r.Order != null) Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 32), $"맡은 일: {r.Order.Title}", Ui.TextSmall, Palette.TextMuted);
+        else if (r.Helping != null) Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 32), $"{Ko.EulReul(r.Helping.Name)} 거든다 — 긴 손일이 {RobotsV15.AssistBonus(r.Kind) * 100:0}% 빨라진다", Ui.TextSmall, Palette.TextMuted);
+        if (r.Cargo is ItemStack cargo) Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 48), $"싣고 있음: {cargo}", Ui.TextSmall, Palette.TextMuted);
         ly += 58;
         Row(x, right, ly, "배터리", r.Battery, Palette.Good, Pct(r.Battery), r.Battery < 0.25f);
         Row(x, right, ly + 22, "상태", r.Condition, new Color("#9fb4cc"), Pct(r.Condition), r.Condition < 0.45f);
@@ -51,9 +51,9 @@ public partial class Hud
                 : $"{RobotSystem.FaultName(f)} — 사람이 고쳐야 한다: " + (RobotSystem.WhyNotSelf(r) ?? "") +
                   (RobotSystem.FaultParts(f).Length == 0 ? "" : " · " + string.Join(" + ", RobotSystem.FaultParts(f).Select(p => $"{ItemKinds.Name(p.kind)} {p.count}")))
             : $"고장 없음 · 자가 수리 {r.SelfRepairs}/{RobotSystem.SelfRepairLimit} (사람 정비 뒤) · 임계점 상태 {RobotSystem.SelfRepairFloor * 100:0}%";
-        Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 14), fault, 12, r.Fault == null ? Palette.TextDim : RobotSystem.CanSelfRepair(r) ? Palette.Warning : Palette.Danger);
+        Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 14), fault, Ui.TextBody, r.Fault == null ? Palette.TextDim : RobotSystem.CanSelfRepair(r) ? Palette.Warning : Palette.Danger);
         Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 34),
-            $"한 일 {r.JobsDone}건 · 일한 {r.ActiveHours:0}시간 · 거든 {r.AssistHours:0.0}시간 · 고장 {r.Breakdowns}번(스스로 {r.SelfRepairsTotal}) · 끌려옴 {r.Fetched}번", 11, Palette.TextMuted);
+            $"한 일 {r.JobsDone}건 · 일한 {r.ActiveHours:0}시간 · 거든 {r.AssistHours:0.0}시간 · 고장 {r.Breakdowns}번(스스로 {r.SelfRepairsTotal}) · 끌려옴 {r.Fetched}번", Ui.TextSmall, Palette.TextMuted);
         string can = r.Kind switch
         {
             _ when RobotsV15.Bot(r.Kind) is { } v => $"맡는 일: {v.Note}", // v15.7
@@ -62,7 +62,7 @@ public partial class Hud
             RobotKind.Gardener => "맡는 일: 작물 돌보기 · 수확해 냉장고로",
             _ => "맡는 일: 순찰(불·사고 전조 찾기) · 소화 거품",
         };
-        Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 52), can, 11, Palette.TextMuted);
+        Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 52), can, Ui.TextSmall, Palette.TextMuted);
         ly += 64;
         if (marks.Count > 0)
         {
@@ -70,7 +70,7 @@ public partial class Hud
             ly += 18;
             foreach (var m in marks)
             {
-                Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 14), $"{SimTime.Day(m.Tick)}일 {SimTime.Clock(m.Tick)}  {m.Text}", 11, Palette.TextDim);
+                Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 14), $"{SimTime.Day(m.Tick)}일 {SimTime.Clock(m.Tick)}  {m.Text}", Ui.TextSmall, Palette.TextDim);
                 ly += 18;
             }
         }

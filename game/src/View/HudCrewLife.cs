@@ -38,23 +38,23 @@ public partial class Hud
         string summary = Wounds.Summary(v);
         foreach (var part in (summary.Length > 0 ? summary : "다친 데 없음").Split(" · "))
         {
-            Gfx.Text(this, Fonts.Body, new Vector2(lx, ly + 10), part, 12, summary.Length > 0 ? Palette.Warning : Palette.Good);
+            Gfx.Text(this, Fonts.Body, new Vector2(lx, ly + 10), part, Ui.TextBody, summary.Length > 0 ? Palette.Warning : Palette.Good);
             ly += 16;
         }
         float hand = Wounds.HandFactor(v), leg = Wounds.LegFactor(v), lung = Wounds.LungLoad(v);
-        Gfx.Text(this, Fonts.Body, new Vector2(lx, ly + 14), $"손 {hand * 100:0}% · 걸음 {leg * 100:0}% · 숨 {100f / lung:0}%", 12, Palette.TextDim);
+        Gfx.Text(this, Fonts.Body, new Vector2(lx, ly + 14), $"손 {hand * 100:0}% · 걸음 {leg * 100:0}% · 숨 {100f / lung:0}%", Ui.TextBody, Palette.TextDim);
         ly += 18;
-        if (c.Dose > 0.05f) { Gfx.Text(this, Fonts.Body, new Vector2(lx, ly + 14), $"방사선 {c.Dose:0.00}Sv" + (c.Dose > 1f ? " — 몸이 상한다" : ""), 12, c.Dose > 1f ? Palette.Danger : Palette.TextDim); ly += 18; }
-        Gfx.Text(this, Fonts.Body, new Vector2(lx, ly + 14), $"체력 단련 {c.Fitness * 100:0}%", 12, Palette.TextDim);
+        if (c.Dose > 0.05f) { Gfx.Text(this, Fonts.Body, new Vector2(lx, ly + 14), $"방사선 {c.Dose:0.00}Sv" + (c.Dose > 1f ? " — 몸이 상한다" : ""), Ui.TextBody, c.Dose > 1f ? Palette.Danger : Palette.TextDim); ly += 18; }
+        Gfx.Text(this, Fonts.Body, new Vector2(lx, ly + 14), $"체력 단련 {c.Fitness * 100:0}%", Ui.TextBody, Palette.TextDim);
         // v14.1 앓는 것 (진단 전이면 "어딘가 아프다")
-        if (DiseaseSystem.Sick(c)) { ly += 18; Gfx.Text(this, Fonts.Body, new Vector2(lx, ly + 14), $"열병 {_world.Disease.Severity(c) * 100:0}%", 12, Palette.Warning); }
+        if (DiseaseSystem.Sick(c)) { ly += 18; Gfx.Text(this, Fonts.Body, new Vector2(lx, ly + 14), $"열병 {_world.Disease.Severity(c) * 100:0}%", Ui.TextBody, Palette.Warning); }
         foreach (var a in c.Ailments.Take(3))
         {
             ly += 18;
             var s = AilmentSystem.Spec(a.Id);
             float sev = _world.Ailments.Severity(a);
             string name = a.Diagnosed ? $"{s.Name} {sev * 100:0}% · {AilmentSystem.CureName(s.Cure)}" : $"어딘가 아프다 {sev * 100:0}% — 진단 전";
-            Gfx.Text(this, Fonts.Body, new Vector2(lx, ly + 14), Fit(name, right - lx, 12, Fonts.Body), 12, sev > 0.5f ? Palette.Danger : sev > 0.25f ? Palette.Warning : new Color("#ffd27a"));
+            Gfx.Text(this, Fonts.Body, new Vector2(lx, ly + 14), Fit(name, right - lx, Ui.TextBody, Fonts.Body), Ui.TextBody, sev > 0.5f ? Palette.Danger : sev > 0.25f ? Palette.Warning : new Color("#ffd27a"));
         }
 
         // 자격 · 습관
@@ -62,20 +62,20 @@ public partial class Hud
         Divider(x, right, sy);
         SectionTitle(x, sy + 22, "자격");
         string quals = c.Quals.Count == 0 ? "없음" : string.Join(" · ", c.Quals.OrderBy(q => q).Select(Life.Name));
-        Gfx.Text(this, Fonts.Body, new Vector2(x + 44, sy + 24), Fit(quals, right - x - 160, 12, Fonts.Body), 12, Palette.Text);
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 44, sy + 24), Fit(quals, right - x - 160, Ui.TextBody, Fonts.Body), Ui.TextBody, Palette.Text);
         SectionTitle(x, sy + 44, "습관");
-        Gfx.Text(this, Fonts.Body, new Vector2(x + 44, sy + 46), c.Habits.Count == 0 ? "—" : string.Join(" · ", c.Habits.Select(Life.Name)), 12, Palette.Text);
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 44, sy + 46), c.Habits.Count == 0 ? "—" : string.Join(" · ", c.Habits.Select(Life.Name)), Ui.TextBody, Palette.Text);
         // v14.0 취미 · 두려움 · 말버릇
         SectionTitle(x, sy + 66, "취미");
-        Gfx.Text(this, Fonts.Body, new Vector2(x + 44, sy + 68), c.Hobbies.Count == 0 ? "—" : string.Join(" · ", c.Hobbies.Select(h => Persona.Of(h).Name)), 12, new Color("#9fe0b0"));
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 44, sy + 68), c.Hobbies.Count == 0 ? "—" : string.Join(" · ", c.Hobbies.Select(h => Persona.Of(h).Name)), Ui.TextBody, new Color("#9fe0b0"));
         SectionTitle(x, sy + 88, "두려움");
-        Gfx.Text(this, Fonts.Body, new Vector2(x + 52, sy + 90), c.Fears.Count == 0 ? "딱히 없다" : Fit(string.Join(" · ", c.Fears.Select(f => $"{Persona.Of(f).Name} ({Persona.Of(f).Note})")), right - x - 60, 12, Fonts.Body), 12, c.Fears.Count == 0 ? Palette.TextMuted : new Color("#ffb38a"));
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 52, sy + 90), c.Fears.Count == 0 ? "딱히 없다" : Fit(string.Join(" · ", c.Fears.Select(f => $"{Persona.Of(f).Name} ({Persona.Of(f).Note})")), right - x - 60, Ui.TextBody, Fonts.Body), Ui.TextBody, c.Fears.Count == 0 ? Palette.TextMuted : new Color("#ffb38a"));
         SectionTitle(x, sy + 110, "말버릇");
-        Gfx.Text(this, Fonts.Body, new Vector2(x + 52, sy + 112), c.Quirk < 0 ? "—" : $"“{Persona.Say(c, "그건 내가 볼게")}”", 12, Palette.TextDim);
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 52, sy + 112), c.Quirk < 0 ? "—" : $"“{Persona.Say(c, "그건 내가 볼게")}”", Ui.TextBody, Palette.TextDim);
         SectionTitle(x, sy + 132, "칭호"); // v15.9 칭호·업적
-        Gfx.Text(this, Fonts.Body, new Vector2(x + 44, sy + 134), Fit(_world.Titles.Line(c), right - x - 52, 12, Fonts.Body), 12, new Color("#ffd27a"));
-        if (c.Stats.Mistakes > 0) Gfx.TextRight(this, Fonts.Body, new Vector2(right, sy + 46), $"실수 {c.Stats.Mistakes}번", 12, Palette.Warning);
-        if (c.GriefUntil > _world.Tick) Gfx.TextRight(this, Fonts.Body, new Vector2(right, sy + 24), "슬픔에 잠겨 있다", 12, new Color("#9fb4ff"));
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 44, sy + 134), Fit(_world.Titles.Line(c), right - x - 52, Ui.TextBody, Fonts.Body), Ui.TextBody, new Color("#ffd27a"));
+        if (c.Stats.Mistakes > 0) Gfx.TextRight(this, Fonts.Body, new Vector2(right, sy + 46), $"실수 {c.Stats.Mistakes}번", Ui.TextBody, Palette.Warning);
+        if (c.GriefUntil > _world.Tick) Gfx.TextRight(this, Fonts.Body, new Vector2(right, sy + 24), "슬픔에 잠겨 있다", Ui.TextBody, new Color("#9fb4ff"));
 
         // 일기
         float dy = sy + 152;
@@ -84,13 +84,13 @@ public partial class Hud
         float ey = dy + 34;
         foreach (var (tick, text) in c.Diary.AsEnumerable().Reverse().Take(6))
         {
-            Gfx.Text(this, Fonts.Body, new Vector2(x, ey + 12), $"{SimTime.Day(tick)}일 {SimTime.Clock(tick)}", 11, Palette.TextMuted);
+            Gfx.Text(this, Fonts.Body, new Vector2(x, ey + 12), $"{SimTime.Day(tick)}일 {SimTime.Clock(tick)}", Ui.TextSmall, Palette.TextMuted);
             string t = text;
-            while (t.Length > 4 && Gfx.Width(Fonts.Body, t, 12) > right - x - 78) t = t[..^2] + "…";
-            Gfx.Text(this, Fonts.Body, new Vector2(x + 74, ey + 12), t, 12, Palette.TextDim);
+            while (t.Length > 4 && Gfx.Width(Fonts.Body, t, Ui.TextBody) > right - x - 78) t = t[..^2] + "…";
+            Gfx.Text(this, Fonts.Body, new Vector2(x + 74, ey + 12), t, Ui.TextBody, Palette.TextDim);
             ey += 19;
         }
-        if (c.Diary.Count == 0) Gfx.Text(this, Fonts.Body, new Vector2(x, ey + 12), "아직 쓴 것이 없다", 12, Palette.TextMuted);
+        if (c.Diary.Count == 0) Gfx.Text(this, Fonts.Body, new Vector2(x, ey + 12), "아직 쓴 것이 없다", Ui.TextBody, Palette.TextMuted);
     }
 
     /// <summary>v14.3 물건 탭: 가진 것 — 어디에 있나 · 상태 · 진척 · 출처와 이력 · 관계의 이유.</summary>
@@ -103,13 +103,13 @@ public partial class Hud
         foreach (var b in bs.Of(c).OrderBy(b => b.Kind == BelongingKind.Artwork ? 1 : 0).ThenBy(b => b.Id).Take(9))
         {
             var bc = !b.Usable ? Palette.Danger : b.Open ? new Color("#ffd27a") : Palette.Text;
-            Gfx.Text(this, Fonts.Bold, new Vector2(x, ly + 12), Fit(b.Name, (right - x) * 0.5f, 12, Fonts.Bold), 12, bc);
-            Gfx.TextRight(this, Fonts.Body, new Vector2(right, ly + 12), Fit(bs.Where(b) + (b.Condition < 0.95f ? $" · {b.Condition * 100:0}%" : "") + (b.Progress > 0.02f && b.Kind != BelongingKind.Artwork ? $" · {b.Progress * 100:0}%" : ""), (right - x) * 0.5f, 11, Fonts.Body), 11, Palette.TextDim);
+            Gfx.Text(this, Fonts.Bold, new Vector2(x, ly + 12), Fit(b.Name, (right - x) * 0.5f, Ui.TextBody, Fonts.Bold), Ui.TextBody, bc);
+            Gfx.TextRight(this, Fonts.Body, new Vector2(right, ly + 12), Fit(bs.Where(b) + (b.Condition < 0.95f ? $" · {b.Condition * 100:0}%" : "") + (b.Progress > 0.02f && b.Kind != BelongingKind.Artwork ? $" · {b.Progress * 100:0}%" : ""), (right - x) * 0.5f, Ui.TextSmall, Fonts.Body), Ui.TextSmall, Palette.TextDim);
             string hist = (b.From >= 0 ? $"{w.Crew.FirstOrDefault(o => o.Id == b.From)?.Name}에게서 · " : "") + (b.Marks.Count > 0 ? b.Marks[^1].Text : b.Origin);
-            Gfx.Text(this, Fonts.Body, new Vector2(x + 8, ly + 27), Fit(hist, right - x - 8, 10, Fonts.Body), 10, Palette.TextMuted);
+            Gfx.Text(this, Fonts.Body, new Vector2(x + 8, ly + 27), Fit(hist, right - x - 8, Ui.TextTiny, Fonts.Body), Ui.TextTiny, Palette.TextMuted);
             ly += 33;
         }
-        if (!bs.Of(c).Any()) { Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 12), "가진 것이 없다", 12, Palette.TextMuted); ly += 18; }
+        if (!bs.Of(c).Any()) { Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 12), "가진 것이 없다", Ui.TextBody, Palette.TextMuted); ly += 18; }
         // 관계의 이유 (v14.3~)
         var why = w.Relations.All.Where(m => m.Who == c.Id).OrderByDescending(m => m.Tick).Take(4).ToList();
         if (why.Count > 0)
@@ -120,7 +120,7 @@ public partial class Hud
             foreach (var m in why)
             {
                 var o = w.Crew.FirstOrDefault(p => p.Id == m.About);
-                Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 12), Fit($"{o?.Name} — {m.Text}", right - x, 11, Fonts.Body), 11, m.Weight >= 0f ? Palette.Good : new Color("#ff9a8a"));
+                Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 12), Fit($"{o?.Name} — {m.Text}", right - x, Ui.TextSmall, Fonts.Body), Ui.TextSmall, m.Weight >= 0f ? Palette.Good : new Color("#ff9a8a"));
                 ly += 16;
             }
         }
@@ -148,9 +148,9 @@ public partial class Hud
         {
             bool me = people[i] == sel;
             DrawCircle(pos[i], me ? 6f : 4f, Palette.Crew(people[i].Id), true, -1f, true);
-            if (_world.Tick - people[i].Quarrel < SimTime.Hours(6)) Gfx.TextCentered(this, Fonts.Bold, pos[i] + new Vector2(0, -10), "!", 11, Palette.Danger);
+            if (_world.Tick - people[i].Quarrel < SimTime.Hours(6)) Gfx.TextCentered(this, Fonts.Bold, pos[i] + new Vector2(0, -10), "!", Ui.TextSmall, Palette.Danger);
         }
         var st = _world.Life.Stats;
-        Gfx.TextCentered(this, Fonts.Body, new Vector2(center.X, y + size + 14), $"말다툼 {st.Arguments} · 중재 {st.Mediations} · 문병 {st.Visits}", 11, Palette.TextMuted);
+        Gfx.TextCentered(this, Fonts.Body, new Vector2(center.X, y + size + 14), $"말다툼 {st.Arguments} · 중재 {st.Mediations} · 문병 {st.Visits}", Ui.TextSmall, Palette.TextMuted);
     }
 }

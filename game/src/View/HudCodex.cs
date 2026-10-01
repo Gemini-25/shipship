@@ -15,7 +15,7 @@ public partial class Hud
     public void ToggleCodex() => CodexMode = !CodexMode;
 
     private void CodexButton(float right, float y, Vector2 mouse) =>
-        Button(new Rect2(right - 74, y, 74, 20), CodexMode ? "← 상태" : "? 설명서", CodexMode, mouse, ToggleCodex, 11);
+        Button(new Rect2(right - 74, y, 74, 20), CodexMode ? "← 상태" : "? 설명서", CodexMode, mouse, ToggleCodex, Ui.TextSmall);
 
     private void DrawCodex(string title, string sub, Color accent, CodexEntry entry, List<(string, string, Color)> links, List<string> past, float y, float maxHeight, Vector2 mouse, string? icon = null)
     {
@@ -26,7 +26,7 @@ public partial class Hud
             ("하는 일", entry.What, Palette.Text), ("원리", entry.How, Palette.TextDim), ("필요한 것", entry.Needs, Palette.Accent),
             ("멈추면", entry.IfStopped, Palette.Warning), ("관리", entry.Care, Palette.Good), ("위험", entry.Danger, Palette.Danger),
         };
-        var wrapped = sections.Select(s => (s.label, lines: WrapText(s.text, width, 12), s.col)).ToList();
+        var wrapped = sections.Select(s => (s.label, lines: WrapText(s.text, width, Ui.TextBody), s.col)).ToList();
         float height = 64 + wrapped.Sum(s => 20 + s.lines.Count * 17 + 6) + (links.Count > 0 ? 30 + links.Count * 19 : 0) + (past.Count > 0 ? 30 + past.Count * 17 : 0) + 10;
         height = Mathf.Min(height, maxHeight);
         var card = new Rect2(x0, y, RightColumnWidth, height);
@@ -34,8 +34,8 @@ public partial class Hud
         float x = x0 + 18, right = card.End.X - 18;
         Gfx.RoundRect(this, new Rect2(x - 2, y + 15, 22, 22), accent.WithAlpha(0.18f), 5, accent.WithAlpha(0.7f));
         if (icon != null) Icons.Draw(this, icon, new Vector2(x + 9, y + 26), 16, accent.Lightened(0.25f)); // v16.2 고유 아이콘
-        Gfx.Text(this, Fonts.Bold, new Vector2(x + 26, y + 32), Fit(title, width - 110, 17, Fonts.Bold), 17, Palette.Text);
-        Gfx.Text(this, Fonts.Body, new Vector2(x + 26, y + 50), $"설명서 · {sub}", 12, Palette.TextMuted);
+        Gfx.Text(this, Fonts.Bold, new Vector2(x + 26, y + 32), Fit(title, width - 110, Ui.TextLarge, Fonts.Bold), Ui.TextLarge, Palette.Text);
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 26, y + 50), $"설명서 · {sub}", Ui.TextBody, Palette.TextMuted);
         CodexButton(right, y + 16, mouse);
         float ly = y + 64;
         foreach (var (label, lines, col) in wrapped)
@@ -44,7 +44,7 @@ public partial class Hud
             SectionTitle(x, ly + 12, label);
             DrawLine(new Vector2(x, ly + 16), new Vector2(x + 3, ly + 16), col, 2f);
             ly += 18;
-            foreach (var l in lines) { Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 13), l, 12, col == Palette.Text ? Palette.Text : col.Lerp(Palette.Text, 0.35f)); ly += 17; }
+            foreach (var l in lines) { Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 13), l, Ui.TextBody, col == Palette.Text ? Palette.Text : col.Lerp(Palette.Text, 0.35f)); ly += 17; }
             ly += 6;
         }
         if (links.Count > 0 && ly < card.End.Y - 40)
@@ -54,8 +54,8 @@ public partial class Hud
             ly += 28;
             foreach (var (label, value, col) in links)
             {
-                Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 13), label, 12, Palette.TextDim);
-                Gfx.TextRight(this, Fonts.Body, new Vector2(right, ly + 13), Fit(value, width - 80, 12, Fonts.Body), 12, col);
+                Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 13), label, Ui.TextBody, Palette.TextDim);
+                Gfx.TextRight(this, Fonts.Body, new Vector2(right, ly + 13), Fit(value, width - 80, Ui.TextBody, Fonts.Body), Ui.TextBody, col);
                 ly += 19;
             }
         }
@@ -67,7 +67,7 @@ public partial class Hud
             foreach (var p in past)
             {
                 if (ly > card.End.Y - 14) break;
-                Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 12), Fit(p, width, 11, Fonts.Body), 11, Palette.TextDim);
+                Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 12), Fit(p, width, Ui.TextSmall, Fonts.Body), Ui.TextSmall, Palette.TextDim);
                 ly += 17;
             }
         }
@@ -157,9 +157,9 @@ public partial class Hud
             DrawLine(new Vector2(body.End.X, cy), new Vector2(x + 30, cy), Palette.PanelBorder.Lightened(0.3f), 1f);
             DrawCircle(new Vector2(x + 32, cy), 3f, col, true, -1f, true);
             if (st.Broken || st.Health < 0.45f) DrawCircle(new Vector2(x + 32, cy), 5.5f + Mathf.Sin(_time * 5f + i), col.WithAlpha(0.18f), true, -1f, true);
-            Gfx.Text(this, Fonts.Body, new Vector2(x + 40, cy + 4), parts[i].Name, 12, Palette.TextDim);
+            Gfx.Text(this, Fonts.Body, new Vector2(x + 40, cy + 4), parts[i].Name, Ui.TextBody, Palette.TextDim);
             Gfx.Bar(this, new Rect2(x + 124, cy - 3, 50, 5), st.Health, col);
-            Gfx.TextRight(this, Fonts.Body, new Vector2(right, cy + 4), Fit(st.Text, right - x - 184, 11, Fonts.Body), 11, col);
+            Gfx.TextRight(this, Fonts.Body, new Vector2(right, cy + 4), Fit(st.Text, right - x - 184, Ui.TextSmall, Fonts.Body), Ui.TextSmall, col);
         }
         return ly + parts.Length * 20;
     }

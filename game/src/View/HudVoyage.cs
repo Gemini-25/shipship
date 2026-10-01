@@ -43,10 +43,10 @@ public partial class Hud
         var next = v.Index + 1 < v.Legs.Count ? v.Legs[v.Index + 1] : null;
         string head = $"{v.Number}번째 항해 · {v.Origin} → {v.Destination} · 지금 {VoyageSystem.KindName(cur.Kind)}" + (cur.Kind != LegKind.Cruise ? $"({cur.Name})" : "")
                       + (next != null ? $" · {left:0.0}일 뒤 {VoyageSystem.KindName(next.Kind)}" : "") + (v.Drifting ? " · 표류 중" : "");
-        Gfx.Text(this, Fonts.Body, new Vector2(bar.Position.X + 10f, bar.Position.Y + 13f), head, 11, v.Drifting ? Palette.Danger : Palette.TextDim);
+        Gfx.Text(this, Fonts.Body, new Vector2(bar.Position.X + 10f, bar.Position.Y + 13f), head, Ui.TextSmall, v.Drifting ? Palette.Danger : Palette.TextDim);
         var e = _world.Eras;
         string era = $"{EraSystem.EraName(e.Era)} · " + (e.Project != null ? $"연구 {EraSystem.All.First(t => t.Id == e.Project).Name} {e.Progress / EraSystem.All.First(t => t.Id == e.Project).Cost * 100:0}%" : "연구할 것 없음");
-        Gfx.TextRight(this, Fonts.Body, new Vector2(bar.End.X - 10f, bar.Position.Y + 36f), era, 10, Palette.TextMuted);
+        Gfx.TextRight(this, Fonts.Body, new Vector2(bar.End.X - 10f, bar.Position.Y + 36f), era, Ui.TextTiny, Palette.TextMuted);
     }
 
     // ── 요약 진행 ──
@@ -59,12 +59,12 @@ public partial class Hud
         float w = 460f, h = 60f + SummaryLines.Length * 22f;
         var card = new Rect2((Screen.X - w) / 2f, Screen.Y * 0.22f, w, h);
         Card(card);
-        Gfx.Text(this, Fonts.Bold, card.Position + new Vector2(20, 32), "요약 진행", 17, Palette.Text);
-        Button(new Rect2(card.End.X - 74, card.Position.Y + 12, 58, 26), "닫기", false, mouse, () => SummaryLines = null, 11);
+        Gfx.Text(this, Fonts.Bold, card.Position + new Vector2(20, 32), "요약 진행", Ui.TextLarge, Palette.Text);
+        Button(new Rect2(card.End.X - 74, card.Position.Y + 12, 58, 26), "닫기", false, mouse, () => SummaryLines = null, Ui.TextSmall);
         float y = card.Position.Y + 58;
         foreach (var line in SummaryLines)
         {
-            Gfx.Text(this, Fonts.Body, new Vector2(card.Position.X + 20, y + 10), line, 13, line.StartsWith("멈춤") ? Palette.Warning : Palette.TextDim);
+            Gfx.Text(this, Fonts.Body, new Vector2(card.Position.X + 20, y + 10), line, Ui.TextLabel, line.StartsWith("멈춤") ? Palette.Warning : Palette.TextDim);
             y += 22f;
         }
     }
@@ -88,24 +88,24 @@ public partial class Hud
         var card = new Rect2(x0, techCard.Position.Y, w, h);
         Card(card);
         float x = x0 + 14f, right = card.End.X - 14f, y = card.Position.Y + 28f;
-        Gfx.Text(this, Fonts.Bold, new Vector2(x, y), $"시대 기술 — {EraSystem.EraName(e.Era)}", 15, Palette.Text);
+        Gfx.Text(this, Fonts.Bold, new Vector2(x, y), $"시대 기술 — {EraSystem.EraName(e.Era)}", Ui.TextTitle, Palette.Text);
         y += 18f;
-        Gfx.Text(this, Fonts.Body, new Vector2(x, y), e.Project != null ? $"연구 중: {EraSystem.All.First(t => t.Id == e.Project).Name} ({e.ProjectWhy})" : "고를 연구가 없다", 11, Palette.TextDim);
+        Gfx.Text(this, Fonts.Body, new Vector2(x, y), e.Project != null ? $"연구 중: {EraSystem.All.First(t => t.Id == e.Project).Name} ({e.ProjectWhy})" : "고를 연구가 없다", Ui.TextSmall, Palette.TextDim);
         y += 8f;
         foreach (var (era, name, need) in EraSystem.Eras)
         {
             y += 19f;
             if (y > card.End.Y - 10f) break;
             bool open = _world.Research >= need;
-            Gfx.Text(this, Fonts.Bold, new Vector2(x, y), $"{era}. {name}" + (open ? "" : $" — 연구 {need:0}점에 열린다") + (!open && foldLocked ? $" · 기술 {EraSystem.All.Count(t => t.Era == era)}개" : ""), 12, open ? Palette.Accent : Palette.TextMuted);
+            Gfx.Text(this, Fonts.Bold, new Vector2(x, y), $"{era}. {name}" + (open ? "" : $" — 연구 {need:0}점에 열린다") + (!open && foldLocked ? $" · 기술 {EraSystem.All.Count(t => t.Era == era)}개" : ""), Ui.TextBody, open ? Palette.Accent : Palette.TextMuted);
             if (!open && foldLocked) continue;
             if (foldKnown && EraSystem.All.Where(t => t.Era == era && e.Known.Contains(t.Id)).Select(t => t.Name).ToList() is { Count: > 0 } learned)
             {
                 y += 19f;
                 if (y > card.End.Y - 10f) break;
                 string line = $"✓ 익힘 {learned.Count}: " + string.Join(", ", learned);
-                while (line.Length > 6 && Gfx.Width(Fonts.Body, line, 11) > right - x - 8f) line = line[..^2] + "…";
-                Gfx.Text(this, Fonts.Body, new Vector2(x + 8, y), line, 11, Palette.Good);
+                while (line.Length > 6 && Gfx.Width(Fonts.Body, line, Ui.TextSmall) > right - x - 8f) line = line[..^2] + "…";
+                Gfx.Text(this, Fonts.Body, new Vector2(x + 8, y), line, Ui.TextSmall, Palette.Good);
             }
             foreach (var t in EraSystem.All.Where(t => t.Era == era))
             {
@@ -115,10 +115,10 @@ public partial class Hud
                 bool known = e.Known.Contains(t.Id), cur = e.Project == t.Id;
                 string mark = known ? "✓" : cur ? "▶" : open ? "·" : " ";
                 var col = known ? Palette.Good : cur ? Palette.Warning : open ? Palette.TextDim : Palette.TextMuted.WithAlpha(0.6f);
-                Gfx.Text(this, Fonts.Body, new Vector2(x + 8, y), $"{mark} {t.Name}", 12, col);
+                Gfx.Text(this, Fonts.Body, new Vector2(x + 8, y), $"{mark} {t.Name}", Ui.TextBody, col);
                 string note = cur ? $"{e.Progress / t.Cost * 100:0}% · {t.Effect}" : t.Effect + (t.Risk != "없음" ? $" · 위험: {t.Risk}" : "");
-                while (note.Length > 6 && Gfx.Width(Fonts.Body, note, 10) > right - x - 130f) note = note[..^2] + "…";
-                Gfx.Text(this, Fonts.Body, new Vector2(x + 128, y), note, 10, known && t.Risk != "없음" ? Palette.Warning.WithAlpha(0.8f) : Palette.TextMuted);
+                while (note.Length > 6 && Gfx.Width(Fonts.Body, note, Ui.TextTiny) > right - x - 130f) note = note[..^2] + "…";
+                Gfx.Text(this, Fonts.Body, new Vector2(x + 128, y), note, Ui.TextTiny, known && t.Risk != "없음" ? Palette.Warning.WithAlpha(0.8f) : Palette.TextMuted);
             }
         }
     }

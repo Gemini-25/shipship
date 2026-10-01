@@ -13,7 +13,16 @@ namespace ShipSim.View;
 public partial class Hud : Control
 {
     public const float RightColumnWidth = 324f;
-    public const float LogHeight = 190f;
+    /// <summary>펼친 기록 카드 높이 (사고 카드 · 미니맵 띠가 이 높이에 맞춘다).</summary>
+    public const float LogFullHeight = 190f;
+    /// <summary>
+    /// 지금 왼쪽 아래 기록 카드가 차지하는 높이 — 조용한 HUD에서 접히면 낮아지고, 그 위의 컴퓨터 카드가 따라 내려와
+    /// 늘 화면 왼쪽 아래 가장 잘 보이는 자리에 붙는다.
+    /// </summary>
+    public float LogHeight => Quiet && !_logOpen ? _logFoldedH : LogFullHeight;
+    private float _logFoldedH = 36f;
+    /// <summary>왼쪽 아래 컴퓨터 카드 너비 (HudComputer와 같은 값 — 다른 띠가 그 자리를 비워 둔다).</summary>
+    private const float ComputerCardWidth = 318f;
     public const float TopHeight = 110f;
     private const float Margin = 16f;
     private const int LogRows = 7;
@@ -84,6 +93,7 @@ public partial class Hud : Control
         _buttons.Clear();
         _tip = null;
         var mouse = GetLocalMousePosition();
+        MeasureLog(); // v16.2 접힌 기록 높이 → 컴퓨터 카드가 그 바로 위에
 
         float topRight = DrawTopBar(mouse);
         DrawStatus(topRight + 10f, mouse);
@@ -98,14 +108,20 @@ public partial class Hud : Control
         DrawProfile();
 
         // v16.2 조용한 HUD: 승무원은 살펴볼 사람만 (머리글을 누르면 모두)
-        float y = Quiet && !_rosterOpen ? DrawCrewSummary(mouse) : DrawRoster(mouse);
+        // 승무원 카드가 주인공: 조용한 HUD에서 누군가를 고르면 위 칸은 줄여 카드에 자리를 준다
+        float y = Quiet && !_rosterOpen ? DrawCrewSummary(mouse, _main.SelectedCrew != null ? 2 : 6) : DrawRoster(mouse);
         if (Quiet && _rosterOpen) DrawRosterFold(y, mouse);
         float room = Screen.Y - y - 10f - Margin - 40f; // 오른쪽 아래 ? 단추 · 힌트 자리
         if (_main.SelectedCrew is CrewMember crew) DrawCrewInspector(crew, y + 10f, mouse);
         else if (_main.SelectedRobot is Robot robot) DrawRobotInspector(robot, y + 10f, room);
         else if (_main.SelectedFurniture is Furniture f) { if (!DrawFurnitureCodex(f, y + 10f, room, mouse)) DrawMachineInspector(f, y + 10f, room, mouse); }
         else if (_main.SelectedRoom is Room r) { if (!DrawRoomCodex(r, y + 10f, room, mouse)) DrawRoomInspector(r, y + 10f, mouse); }
-        else if (!Quiet || _workOpen || _world.Board.Open.Any(o => o.Urgency >= 0.9f)) DrawWorkBoard(y + 10f, room, mouse); // 조용한 HUD: 긴급 작업만 떠오른다
+        else
+        {
+            // 아무도 고르지 않았으면: 지금 눈여겨볼 한 사람의 작은 승무원 카드 (목표 · 이유 사슬 · 믿음) — 조용한 HUD에서도 늘
+            float sy = DrawCrewSpotlight(y + 10f, mouse);
+            if (!Quiet || _workOpen || _world.Board.Open.Any(o => o.Urgency >= 0.9f)) DrawWorkBoard(sy + 10f, Screen.Y - sy - 20f - Margin - 40f, mouse); // 조용한 HUD: 긴급 작업만 떠오른다
+        }
 
         DrawComputerCard(mouse); // v16.0 ④ 주컴퓨터 상시 카드 (HudComputer.cs)
         DrawLog(mouse);
@@ -149,8 +165,23 @@ public partial class Hud : Control
 
     private void Divider(float x0, float x1, float y) => UiKit.Divider(this, x0, x1, y);
 
-    private void SectionTitle(float x, float y, string text) =>
-        Gfx.Text(this, Fonts.Bold, new Vector2(x, y), text, Ui.TextSmall, Palette.TextMuted);
+    /// <summary>칸 제목 (v16.2 UiKit.Header — 제목마다 아이콘이 붙는다).</summary>
+    private void SectionTitle(float x, float y, string text, string? icon = null) =>
+        UiKit.Header(this, x, x + RightColumnWidth, y, text, null, icon ?? SectionIcon(text));
+
+    /// <summary>칸 제목 → 아이콘 (같은 뜻은 어디서나 같은 그림).</summary>
+    private static string? SectionIcon(string title) =>
+        title.StartsWith("승무원") ? "people" : title.StartsWith("관계") || title.StartsWith("왜 그런 사이") ? "relation"
+        : title.StartsWith("기술") || title.StartsWith("자격") ? "skill-engineering" : title.StartsWith("목표") ? "target"
+        : title.StartsWith("지금 연결") ? "cable" : title.StartsWith("지금") ? "clock" : title.StartsWith("행동 후보") ? "why"
+        : title.StartsWith("지나온 일") || title.StartsWith("지금까지") || title.StartsWith("이 배에서") ? "memory"
+        : title.StartsWith("이력") || title.StartsWith("일기") || title.StartsWith("회의록") ? "log"
+        : title.StartsWith("있는 사람") ? "crew" : title.StartsWith("설비") || title.StartsWith("부품") ? "parts"
+        : title.Contains("작업") ? "work" : title.StartsWith("보관") || title.StartsWith("가진 것") ? "materials"
+        : title.StartsWith("몸") ? "health" : title.StartsWith("두려움") || title.StartsWith("무서운 곳") ? "panic"
+        : title.StartsWith("성격") ? "stress" : title.StartsWith("함께 넘긴") ? "incident" : title.StartsWith("습관") ? "rest"
+        : title.StartsWith("취미") ? "game-table" : title.StartsWith("말버릇") ? "social" : title.StartsWith("칭호") ? "star"
+        : title.StartsWith("파벌") ? "people" : null;
 
     /// <summary>굵은 글씨 기준으로 너비에 맞춰 접는다 (v16.2 UiKit.Wrap).</summary>
     private static List<string> WrapText(string text, float width, int size) => UiKit.Wrap(text, width, size, Fonts.Bold);
@@ -168,9 +199,9 @@ public partial class Hud : Control
         string day = $"{_world.Day}일차";
         string[] labels = { "II", "1×", "3×", "10×", "30×" };
 
-        float nameW = Gfx.Width(Fonts.Bold, name, 15);
-        float clockW = Gfx.Width(Fonts.Bold, "00:00", 22);
-        float dayW = Gfx.Width(Fonts.Body, day, 12);
+        float nameW = Gfx.Width(Fonts.Bold, name, Ui.TextTitle);
+        float clockW = Gfx.Width(Fonts.Bold, "00:00", Ui.TextClock);
+        float dayW = Gfx.Width(Fonts.Body, day, Ui.TextBody);
         const float btnW = 40f, btnGap = 4f;
         float speedW = labels.Length * btnW + (labels.Length - 1) * btnGap;
         float w = 18 + 16 + nameW + 20 + 20 + clockW + 8 + dayW + 20 + 14 + speedW + 8 + 52 + 12;
@@ -185,15 +216,15 @@ public partial class Hud : Control
         DrawCircle(new Vector2(x + 4, cy), 7f, status.WithAlpha(0.12f + 0.12f * pulse), true, -1f, true);
         DrawCircle(new Vector2(x + 4, cy), 3.5f, status, true, -1f, true);
         x += 16;
-        Gfx.Text(this, Fonts.Bold, new Vector2(x, cy + Gfx.CenterOffset(Fonts.Bold, 15)), name, 15, Palette.Text);
+        Gfx.Text(this, Fonts.Bold, new Vector2(x, cy + Gfx.CenterOffset(Fonts.Bold, Ui.TextTitle)), name, Ui.TextTitle, Palette.Text);
         x += nameW + 20;
         DrawLine(new Vector2(x, card.Position.Y + 13), new Vector2(x, card.End.Y - 13), Palette.PanelBorder, 1f);
         x += 20;
 
-        float baseline = cy + Gfx.CenterOffset(Fonts.Bold, 22);
-        Gfx.Text(this, Fonts.Bold, new Vector2(x, baseline), _world.Clock, 22, Palette.Text);
+        float baseline = cy + Gfx.CenterOffset(Fonts.Bold, Ui.TextClock);
+        Gfx.Text(this, Fonts.Bold, new Vector2(x, baseline), _world.Clock, Ui.TextClock, Palette.Text);
         x += clockW + 8;
-        Gfx.Text(this, Fonts.Body, new Vector2(x, baseline), day, 12, Palette.TextDim);
+        Gfx.Text(this, Fonts.Body, new Vector2(x, baseline), day, Ui.TextBody, Palette.TextDim);
         x += dayW + 20;
         DrawLine(new Vector2(x, card.Position.Y + 13), new Vector2(x, card.End.Y - 13), Palette.PanelBorder, 1f);
         x += 14;
@@ -207,7 +238,7 @@ public partial class Hud : Control
         }
         // v12.2 하이라이트 모드: 배속을 저절로
         var auto = new Rect2(x + labels.Length * (btnW + btnGap) + 4, cy - 14f, 52f, 28f);
-        Button(auto, _main.SlowMotion ? "느리게" : "자동", _main.Highlight, mouse, _main.ToggleHighlight, 12);
+        Button(auto, _main.SlowMotion ? "느리게" : "자동", _main.Highlight, mouse, _main.ToggleHighlight, Ui.TextBody);
         return card.End.X;
     }
 
@@ -353,38 +384,38 @@ public partial class Hud : Control
         if (_world.Tick % 30 == 0 || _profile == null) _profile = ShipProfile.Measure(_world).RelativeTo(basis);
         var values = _profile.Values;
         if (Quiet && !_toolsOpen && values.All(v => v >= 90f)) return; // v16.2 조용한 HUD: 떨어진 지표가 있을 때만 떠오른다
-        var widths = ShipProfile.Names.Select((n, i) => Gfx.Width(Fonts.Body, n, 10) + 4 + Gfx.Width(Fonts.Bold, $"{values[i]:0}", 12) + 14).ToList();
+        var widths = ShipProfile.Names.Select((n, i) => Gfx.Width(Fonts.Body, n, Ui.TextTiny) + 4 + Gfx.Width(Fonts.Bold, $"{values[i]:0}", Ui.TextBody) + 14).ToList();
         // 재료: 기본 수리재·부품 재고와 채집 (평소엔 천천히 쌓이고, 큰 사고는 몇 주 치를 쓴다)
         var ship = _world.Ship;
         int basic = ItemKinds.All.Where(k => ItemKinds.Tier(k) == ItemTier.Basic).Sum(ship.CountStored);
         int parts = ItemKinds.All.Where(k => ItemKinds.Tier(k) is ItemTier.General or ItemTier.Advanced).Sum(ship.CountStored);
         bool collecting = ship.FurnitureOf(FurnitureType.Collector).Any(f => f.Machine!.Efficiency > 0f);
         string mats = $"수리재 {basic} · 부품 {parts} · 채집 {(collecting ? _world.Space.DensityName : "멈춤")}";
-        float titleW = Gfx.Width(Fonts.Body, "함선 지표 · 처음 = 100", 10) + 16 + Gfx.Width(Fonts.Bold, mats, 10);
+        float titleW = Gfx.Width(Fonts.Body, "함선 지표 · 처음 = 100", Ui.TextTiny) + 16 + Gfx.Width(Fonts.Bold, mats, Ui.TextTiny);
         string evo = EvolutionSummary();
-        titleW = Mathf.Max(titleW, Gfx.Width(Fonts.Body, evo, 10));
+        titleW = Mathf.Max(titleW, Gfx.Width(Fonts.Body, evo, Ui.TextTiny));
         // v12.4 이야기꾼: 성격·난이도·긴장·여력·다음 사고까지
         string story = StoryLine();
-        titleW = Mathf.Max(titleW, Gfx.Width(Fonts.Body, story, 10));
+        titleW = Mathf.Max(titleW, Gfx.Width(Fonts.Body, story, Ui.TextTiny));
         var card = new Rect2(Margin, Margin + 52f + 8f + 40f + 8f, 28 + Mathf.Max(widths.Sum() - 14, titleW), story.Length > 0 ? 80f : 64f);
         Card(card);
-        Gfx.Text(this, Fonts.Body, new Vector2(card.Position.X + 14, card.Position.Y + 16), "함선 지표 · 처음 = 100", 10, Palette.TextMuted);
-        Gfx.TextRight(this, Fonts.Bold, new Vector2(card.End.X - 14, card.Position.Y + 16), mats, 10,
+        Gfx.Text(this, Fonts.Body, new Vector2(card.Position.X + 14, card.Position.Y + 16), "함선 지표 · 처음 = 100", Ui.TextTiny, Palette.TextMuted);
+        Gfx.TextRight(this, Fonts.Bold, new Vector2(card.End.X - 14, card.Position.Y + 16), mats, Ui.TextTiny,
             basic < 20 || parts < 5 || !collecting ? Palette.Warning : Palette.TextDim);
         float x = card.Position.X + 14;
         for (int i = 0; i < values.Length; i++)
         {
             float v = values[i];
             var col = v >= 104f ? new Color("#6fd3b0") : v >= 90f ? Palette.Text : v >= 70f ? Palette.Warning : Palette.Danger;
-            Gfx.Text(this, Fonts.Body, new Vector2(x, card.Position.Y + 36), ShipProfile.Names[i], 10, Palette.TextDim);
-            float nw = Gfx.Width(Fonts.Body, ShipProfile.Names[i], 10);
-            Gfx.Text(this, Fonts.Bold, new Vector2(x + nw + 4, card.Position.Y + 37), $"{v:0}", 12, col);
+            Gfx.Text(this, Fonts.Body, new Vector2(x, card.Position.Y + 36), ShipProfile.Names[i], Ui.TextTiny, Palette.TextDim);
+            float nw = Gfx.Width(Fonts.Body, ShipProfile.Names[i], Ui.TextTiny);
+            Gfx.Text(this, Fonts.Bold, new Vector2(x + nw + 4, card.Position.Y + 37), $"{v:0}", Ui.TextBody, col);
             x += widths[i];
         }
         // 진화: 겪은 사고에 따라 고쳐 짠 것과 배운 것 (v7)
-        Gfx.Text(this, Fonts.Body, new Vector2(card.Position.X + 14, card.Position.Y + 55), evo, 10,
+        Gfx.Text(this, Fonts.Body, new Vector2(card.Position.X + 14, card.Position.Y + 55), evo, Ui.TextTiny,
             evo.StartsWith("개조: 아직") ? Palette.TextMuted : new Color("#5fd4e8"));
-        if (story.Length > 0) Gfx.Text(this, Fonts.Body, new Vector2(card.Position.X + 14, card.Position.Y + 71), story, 10, new Color("#e0a3ff"));
+        if (story.Length > 0) Gfx.Text(this, Fonts.Body, new Vector2(card.Position.X + 14, card.Position.Y + 71), story, Ui.TextTiny, new Color("#e0a3ff"));
     }
 
     private ShipProfile? _profile;
@@ -411,11 +442,11 @@ public partial class Hud : Control
             var mode = m;
             var r = new Rect2(x, card.Position.Y + 6, bw, 28);
             // v12.3 Shift를 누른 채 누르면 겹쳐 보기 (두 번째 보기)
-            Button(r, ViewModes.Name(m), _main.ViewMode == m, mouse, () => { if (Input.IsKeyPressed(Key.Shift) && mode != ViewMode.Normal) _main.SecondaryView = _main.SecondaryView == mode ? null : mode; else _main.ViewMode = mode; }, 12);
+            Button(r, ViewModes.Name(m), _main.ViewMode == m, mouse, () => { if (Input.IsKeyPressed(Key.Shift) && mode != ViewMode.Normal) _main.SecondaryView = _main.SecondaryView == mode ? null : mode; else _main.ViewMode = mode; }, Ui.TextBody);
             if (_main.SecondaryView == m && _main.ViewMode != m) Gfx.RoundRect(this, r.Grow(-1), new Color(0, 0, 0, 0), 8, Palette.Warning.WithAlpha(0.7f));
             x += bw + gap;
         }
-        Gfx.Text(this, Fonts.Body, new Vector2(x + 10, card.GetCenter().Y + Gfx.CenterOffset(Fonts.Body, 11)), _main.SecondaryView is ViewMode sv ? $"+{ViewModes.Name(sv)}" : "V 전환", 11, _main.SecondaryView != null ? Palette.Warning : Palette.TextMuted);
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 10, card.GetCenter().Y + Gfx.CenterOffset(Fonts.Body, Ui.TextSmall)), _main.SecondaryView is ViewMode sv ? $"+{ViewModes.Name(sv)}" : "V 전환", Ui.TextSmall, _main.SecondaryView != null ? Palette.Warning : Palette.TextMuted);
         return card.End.X;
     }
 
@@ -424,12 +455,12 @@ public partial class Hud : Control
     {
         var tools = IncidentTools.All;
         const float bw = 74f, gap = 4f;
-        float titleW = Gfx.Width(Fonts.Bold, "사고", 11) + 14f;
+        float titleW = Gfx.Width(Fonts.Bold, "사고", Ui.TextSmall) + 14f;
         const float moreW = 84f;
         var card = new Rect2(x0, Margin + 52f + 8f, 14 + titleW + tools.Length * (bw + gap) + moreW + 14, 40f);
         Card(card);
         float cy = card.GetCenter().Y;
-        Gfx.Text(this, Fonts.Bold, new Vector2(card.Position.X + 14, cy + Gfx.CenterOffset(Fonts.Bold, 11)), "사고", 11, Palette.Danger.WithAlpha(0.8f));
+        Gfx.Text(this, Fonts.Bold, new Vector2(card.Position.X + 14, cy + Gfx.CenterOffset(Fonts.Bold, Ui.TextSmall)), "사고", Ui.TextSmall, Palette.Danger.WithAlpha(0.8f));
         float x = card.Position.X + 14 + titleW;
         foreach (var t in tools)
         {
@@ -440,12 +471,12 @@ public partial class Hud : Control
             var bg = active ? Palette.Danger.WithAlpha(0.18f) : hover ? new Color(1, 1, 1, 0.06f) : new Color(1, 1, 1, 0f);
             Gfx.RoundRect(this, rect, bg, 8, active ? Palette.Danger.WithAlpha(0.55f) : null);
             string label = IncidentTools.Name(t);
-            float lw = Gfx.Width(Fonts.Bold, label, 12);
-            float kw = Gfx.Width(Fonts.Body, IncidentTools.Key(t), 10);
+            float lw = Gfx.Width(Fonts.Bold, label, Ui.TextBody);
+            float kw = Gfx.Width(Fonts.Body, IncidentTools.Key(t), Ui.TextTiny);
             float lx = rect.GetCenter().X - (lw + 5 + kw) * 0.5f;
-            float by = rect.GetCenter().Y + Gfx.CenterOffset(Fonts.Bold, 12);
-            Gfx.Text(this, Fonts.Bold, new Vector2(lx, by), label, 12, active ? Palette.Danger : hover ? Palette.Text : Palette.TextDim);
-            Gfx.Text(this, Fonts.Body, new Vector2(lx + lw + 5, by), IncidentTools.Key(t), 10, Palette.TextMuted);
+            float by = rect.GetCenter().Y + Gfx.CenterOffset(Fonts.Bold, Ui.TextBody);
+            Gfx.Text(this, Fonts.Bold, new Vector2(lx, by), label, Ui.TextBody, active ? Palette.Danger : hover ? Palette.Text : Palette.TextDim);
+            Gfx.Text(this, Fonts.Body, new Vector2(lx + lw + 5, by), IncidentTools.Key(t), Ui.TextTiny, Palette.TextMuted);
             _buttons.Add((rect, () => _main.ToggleTool(tool)));
             x += bw + gap;
         }
@@ -457,7 +488,7 @@ public partial class Hud : Control
             Gfx.RoundRect(this, rect, active ? Palette.Danger.WithAlpha(0.18f) : hover ? new Color(1, 1, 1, 0.06f) : new Color(1, 1, 1, 0f), 8,
                 active ? Palette.Danger.WithAlpha(0.55f) : null);
             string label = _main.Tool == IncidentTool.Hazard ? Hazards.Name(_main.ToolHazard) : "더 보기";
-            Gfx.TextCentered(this, Fonts.Bold, rect.GetCenter() + new Vector2(0, Gfx.CenterOffset(Fonts.Bold, 12)), label + (_hazardMenu ? " ▴" : " ▾"), 12,
+            Gfx.TextCentered(this, Fonts.Bold, rect.GetCenter() + new Vector2(0, Gfx.CenterOffset(Fonts.Bold, Ui.TextBody)), label + (_hazardMenu ? " ▴" : " ▾"), Ui.TextBody,
                 active ? Palette.Danger : hover ? Palette.Text : Palette.TextDim);
             // 무작위 사고가 켜져 있으면 작은 표시등
             if (HazardSystem.RandomDays > 0f)
@@ -508,22 +539,22 @@ public partial class Hud : Control
         var card = new Rect2(at, new Vector2(pad * 2 + cols * bw + (cols - 1) * gap, pad + 26 + 34 + rows * (bh + gap) + 20));
         Card(card);
         float x = card.Position.X + pad, y = card.Position.Y + pad;
-        Gfx.Text(this, Fonts.Bold, new Vector2(x, y + 12), "사고 더 보기", 13, Palette.Danger.WithAlpha(0.85f));
-        Gfx.TextRight(this, Fonts.Body, new Vector2(card.End.X - pad, y + 12), "● 배 전체 — 누르면 바로  ○ 대상 — 고른 뒤 클릭", 10, Palette.TextMuted);
+        Gfx.Text(this, Fonts.Bold, new Vector2(x, y + 12), "사고 더 보기", Ui.TextLabel, Palette.Danger.WithAlpha(0.85f));
+        Gfx.TextRight(this, Fonts.Body, new Vector2(card.End.X - pad, y + 12), "● 배 전체 — 누르면 바로  ○ 대상 — 고른 뒤 클릭", Ui.TextTiny, Palette.TextMuted);
         y += 24;
         // 무작위 사고 (기록되는 수치: 되감기·불러오기가 같은 때에 같은 사고를 낸다)
         int mode = RandomModeIndex();
-        Gfx.Text(this, Fonts.Body, new Vector2(x, y + 19), "무작위 사고", 12, Palette.TextDim);
+        Gfx.Text(this, Fonts.Body, new Vector2(x, y + 19), "무작위 사고", Ui.TextBody, Palette.TextDim);
         float mx = x + 76;
         for (int i = 0; i < RandomModes.Length; i++)
         {
             var (days, name) = RandomModes[i];
             string label = name.Split(" · ")[0];
-            float w = Gfx.Width(Fonts.Bold, label, 11) + 18;
+            float w = Gfx.Width(Fonts.Bold, label, Ui.TextSmall) + 18;
             var r = new Rect2(mx, y + 6, w, 22);
             bool on = i == mode, hover = r.HasPoint(mouse);
             Gfx.RoundRect(this, r, on ? Palette.Danger.WithAlpha(0.2f) : hover ? new Color(1, 1, 1, 0.06f) : new Color(1, 1, 1, 0.02f), 7, on ? Palette.Danger.WithAlpha(0.6f) : null);
-            Gfx.TextCentered(this, Fonts.Bold, r.GetCenter() + new Vector2(0, Gfx.CenterOffset(Fonts.Bold, 11)), label, 11, on ? Palette.Danger : hover ? Palette.Text : Palette.TextDim);
+            Gfx.TextCentered(this, Fonts.Bold, r.GetCenter() + new Vector2(0, Gfx.CenterOffset(Fonts.Bold, Ui.TextSmall)), label, Ui.TextSmall, on ? Palette.Danger : hover ? Palette.Text : Palette.TextDim);
             float d = days;
             _buttons.Add((r, () => _main.SetRandomIncidents(d)));
             mx += w + 4;
@@ -538,12 +569,12 @@ public partial class Hud : Control
             Gfx.RoundRect(this, r, active ? Palette.Danger.WithAlpha(0.18f) : hover ? new Color(1, 1, 1, 0.07f) : new Color(1, 1, 1, 0.025f), 8,
                 active ? Palette.Danger.WithAlpha(0.6f) : new Color(1, 1, 1, 0.06f));
             bool ship = spec.Target == HazardTarget.Ship;
-            Gfx.Text(this, Fonts.Body, new Vector2(r.Position.X + 10, r.GetCenter().Y + Gfx.CenterOffset(Fonts.Body, 11)), ship ? "●" : "○", 11,
+            Gfx.Text(this, Fonts.Body, new Vector2(r.Position.X + 10, r.GetCenter().Y + Gfx.CenterOffset(Fonts.Body, Ui.TextSmall)), ship ? "●" : "○", Ui.TextSmall,
                 ship ? Palette.Danger.WithAlpha(0.8f) : Palette.TextMuted);
-            Gfx.Text(this, Fonts.Bold, new Vector2(r.Position.X + 26, r.GetCenter().Y + Gfx.CenterOffset(Fonts.Bold, 12)), spec.Name, 12,
+            Gfx.Text(this, Fonts.Bold, new Vector2(r.Position.X + 26, r.GetCenter().Y + Gfx.CenterOffset(Fonts.Bold, Ui.TextBody)), spec.Name, Ui.TextBody,
                 active ? Palette.Danger : hover ? Palette.Text : Palette.TextDim);
             int n = _world.Hazards.Count[i];
-            if (n > 0) Gfx.TextRight(this, Fonts.Body, new Vector2(r.End.X - 10, r.GetCenter().Y + Gfx.CenterOffset(Fonts.Body, 10)), $"{n}번", 10, Palette.TextMuted);
+            if (n > 0) Gfx.TextRight(this, Fonts.Body, new Vector2(r.End.X - 10, r.GetCenter().Y + Gfx.CenterOffset(Fonts.Body, Ui.TextTiny)), $"{n}번", Ui.TextTiny, Palette.TextMuted);
             var kind = spec.Kind;
             _buttons.Add((r, () =>
             {
@@ -553,7 +584,7 @@ public partial class Hud : Control
             if (hover) _hazardHover = spec.Hint;
         }
         string foot = _hazardHover ?? (_world.Hazards.RandomCount > 0 ? $"무작위 사고 {_world.Hazards.RandomCount}번 · 마지막: {_world.Hazards.LastRandomText}" : "무작위 사고는 되감기·불러오기에도 같은 때 같은 사고로 난다 (시드·수치가 같으면)");
-        Gfx.Text(this, Fonts.Body, new Vector2(x, card.End.Y - 12), Clip(foot, card.Size.X - pad * 2, 10), 10, Palette.TextMuted);
+        Gfx.Text(this, Fonts.Body, new Vector2(x, card.End.Y - 12), Clip(foot, card.Size.X - pad * 2, Ui.TextTiny), Ui.TextTiny, Palette.TextMuted);
         _hazardHover = null;
     }
 
@@ -574,7 +605,7 @@ public partial class Hud : Control
         Card(card);
 
         SectionTitle(x0 + 18, card.Position.Y + 24, "승무원");
-        Gfx.TextRight(this, Fonts.Body, new Vector2(card.End.X - 18, card.Position.Y + 24), $"{crew.Count}명", 11, Palette.TextMuted);
+        Gfx.TextRight(this, Fonts.Body, new Vector2(card.End.X - 18, card.Position.Y + 24), $"{crew.Count}명", Ui.TextSmall, Palette.TextMuted);
 
         for (int i = 0; i < crew.Count; i++)
         {
@@ -591,19 +622,19 @@ public partial class Hud : Control
             if (_world.Tick - c.AlertedTick < SimTime.Minutes(3) || c.Vitals.Health < 0.5f)
                 DrawCircle(new Vector2(row.Position.X + 18, cy - 4), 2.5f, Palette.Danger, true, -1f, true);
             float nx = row.Position.X + 28;
-            Gfx.Text(this, Fonts.Bold, new Vector2(nx, cy + Gfx.CenterOffset(Fonts.Bold, 14)), c.Name, 14, Palette.Text);
-            nx += Gfx.Width(Fonts.Bold, c.Name, 14) + 7;
-            Gfx.Text(this, Fonts.Body, new Vector2(nx, cy + Gfx.CenterOffset(Fonts.Body, 11)), CrewRoles.Name(c.Role), 11, Palette.TextMuted);
+            Gfx.Text(this, Fonts.Bold, new Vector2(nx, cy + Gfx.CenterOffset(Fonts.Bold, Ui.TextSubtitle)), c.Name, Ui.TextSubtitle, Palette.Text);
+            nx += Gfx.Width(Fonts.Bold, c.Name, Ui.TextSubtitle) + 7;
+            Gfx.Text(this, Fonts.Body, new Vector2(nx, cy + Gfx.CenterOffset(Fonts.Body, Ui.TextSmall)), CrewRoles.Name(c.Role), Ui.TextSmall, Palette.TextMuted);
 
             string where = c.Room?.Name ?? "";
             float rx = row.End.X - 12;
-            float by = cy + Gfx.CenterOffset(Fonts.Body, 12);
-            Gfx.TextRight(this, Fonts.Body, new Vector2(rx, by), where, 11, Palette.TextMuted);
-            rx -= Gfx.Width(Fonts.Body, where, 11) + 6;
+            float by = cy + Gfx.CenterOffset(Fonts.Body, Ui.TextBody);
+            Gfx.TextRight(this, Fonts.Body, new Vector2(rx, by), where, Ui.TextSmall, Palette.TextMuted);
+            rx -= Gfx.Width(Fonts.Body, where, Ui.TextSmall) + 6;
             string state = c.Dead ? "사망" : c.CarriedBy != null ? "업혀 감" : c.Down ? "쓰러짐" : c.ActivityLabel;
             var stateColor = c.Dead ? Palette.TextMuted : c.Down ? Palette.Danger : col.Lightened(0.2f);
-            Gfx.TextRight(this, Fonts.Bold, new Vector2(rx, by), state, 12, stateColor);
-            Icons.Draw(this, Icons.CrewState(c, _world.Tick), new Vector2(rx - Gfx.Width(Fonts.Bold, state, 12) - 10, cy), 13, stateColor); // v16.2
+            Gfx.TextRight(this, Fonts.Bold, new Vector2(rx, by), state, Ui.TextBody, stateColor);
+            Icons.Draw(this, Icons.CrewState(c, _world.Tick), new Vector2(rx - Gfx.Width(Fonts.Bold, state, Ui.TextBody) - 10, cy), 13, stateColor); // v16.2
 
             var target = c;
             _buttons.Add((row, () => _main.Select(_main.SelectedCrew == target ? null : target)));
@@ -624,12 +655,12 @@ public partial class Hud : Control
         SectionTitle(x0 + 18, card.Position.Y + 24, "승무원");
         int alive = _world.Crew.Count(c => !c.Dead), down = _world.Crew.Count(c => c.Down && !c.Dead);
         Gfx.TextRight(this, Fonts.Body, new Vector2(card.End.X - 18, card.Position.Y + 24),
-            $"{alive}/{_world.Crew.Count}명" + (down > 0 ? $" · 쓰러짐 {down}" : ""), 11, down > 0 ? Palette.Danger : Palette.TextMuted);
+            $"{alive}/{_world.Crew.Count}명" + (down > 0 ? $" · 쓰러짐 {down}" : ""), Ui.TextSmall, down > 0 ? Palette.Danger : Palette.TextMuted);
         float y = card.Position.Y + 34;
         foreach (var g in groups)
         {
             var roleCol = RoleColor(g.Key);
-            Gfx.Text(this, Fonts.Bold, new Vector2(x0 + 12, y + 12), $"{CrewRoles.Name(g.Key)} {g.Count()}", 10, roleCol);
+            Gfx.Text(this, Fonts.Bold, new Vector2(x0 + 12, y + 12), $"{CrewRoles.Name(g.Key)} {g.Count()}", Ui.TextTiny, roleCol);
             y += headH;
             int i = 0;
             foreach (var c in g)
@@ -644,14 +675,14 @@ public partial class Hud : Control
                 DrawCircle(new Vector2(cell.Position.X + 10, cy), 4f, c.Dead ? Palette.TextMuted : col, true, -1f, true);
                 if (_world.Tick - c.AlertedTick < SimTime.Minutes(3) || c.Vitals.Health < 0.5f)
                     DrawCircle(new Vector2(cell.Position.X + 13, cy - 3), 2f, Palette.Danger, true, -1f, true);
-                Gfx.Text(this, Fonts.Bold, new Vector2(cell.Position.X + 18, cy + Gfx.CenterOffset(Fonts.Bold, 11)), c.Name, 11, c.Dead ? Palette.TextMuted : Palette.Text);
+                Gfx.Text(this, Fonts.Bold, new Vector2(cell.Position.X + 18, cy + Gfx.CenterOffset(Fonts.Bold, Ui.TextSmall)), c.Name, Ui.TextSmall, c.Dead ? Palette.TextMuted : Palette.Text);
                 string state = c.Dead ? "사망" : c.CarriedBy != null ? "업혀 감" : c.Down ? "쓰러짐" : c.ActivityLabel;
-                float nameW = Gfx.Width(Fonts.Bold, c.Name, 11);
+                float nameW = Gfx.Width(Fonts.Bold, c.Name, Ui.TextSmall);
                 float room = cell.Size.X - 26 - nameW - 14;
-                while (state.Length > 1 && Gfx.Width(Fonts.Body, state, 10) > room) state = state[..^1];
+                while (state.Length > 1 && Gfx.Width(Fonts.Body, state, Ui.TextTiny) > room) state = state[..^1];
                 var sc = c.Dead ? Palette.TextMuted : c.Down ? Palette.Danger : col.Lightened(0.2f);
-                Gfx.TextRight(this, Fonts.Body, new Vector2(cell.End.X - 4, cy + Gfx.CenterOffset(Fonts.Body, 10)), state, 10, sc);
-                Icons.Draw(this, Icons.CrewState(c, _world.Tick), new Vector2(cell.End.X - 4 - Gfx.Width(Fonts.Body, state, 10) - 7, cy), 11, sc); // v16.2
+                Gfx.TextRight(this, Fonts.Body, new Vector2(cell.End.X - 4, cy + Gfx.CenterOffset(Fonts.Body, Ui.TextTiny)), state, Ui.TextTiny, sc);
+                Icons.Draw(this, Icons.CrewState(c, _world.Tick), new Vector2(cell.End.X - 4 - Gfx.Width(Fonts.Body, state, Ui.TextTiny) - 7, cy), 11, sc); // v16.2
                 var target = c;
                 _buttons.Add((cell, () => _main.Select(_main.SelectedCrew == target ? null : target)));
                 i++;
@@ -680,7 +711,10 @@ public partial class Hud : Control
         var col = Palette.Crew(c.Id);
         float x0 = Screen.X - Margin - RightColumnWidth;
         float w = RightColumnWidth;
-        float height = _crewTab == CardTab ? 610f : _crewTab == 3 ? 560f : _crewTab >= 2 ? 600f : 500f;
+        // 요약 카드는 담긴 만큼 (지난 그림에서 잰 높이) · 화면 아래 ? 단추 자리까지
+        float avail = Screen.Y - y - Margin - 40f;
+        float height = _crewTab == CardTab ? Mathf.Clamp(_crewCardH, 320f, Mathf.Max(320f, avail)) : _crewTab == 3 ? 560f : _crewTab >= 2 ? 600f : 500f;
+        _crewCardBottom = y + height - 50f; // 따라가기 단추 위까지
         var card = new Rect2(x0, y, w, height);
         Card(card);
         float x = x0 + 18, right = card.End.X - 18;
@@ -688,10 +722,10 @@ public partial class Hud : Control
         // 머리글
         DrawCircle(new Vector2(x + 8, y + 26), 8f, col, true, -1f, true);
         DrawCircle(new Vector2(x + 8, y + 26) + c.Facing.ToGodot() * 3.5f, 3f, col.Lightened(0.6f), true, -1f, true);
-        Gfx.Text(this, Fonts.Bold, new Vector2(x + 26, y + 31), c.Name, 18, Palette.Text);
-        Gfx.Text(this, Fonts.Body, new Vector2(x + 26 + Gfx.Width(Fonts.Bold, c.Name, 18) + 8, y + 31),
-            CrewRoles.Name(c.Role), 12, Palette.TextDim);
-        Gfx.Text(this, Fonts.Body, new Vector2(x + 26, y + 49), $"{Life.Name(c.Background)} · {Life.Name(c.Value)} · {c.Traits.Summary()}", 12, Palette.TextMuted); // v12.7 살아온 길·가치관
+        Gfx.Text(this, Fonts.Bold, new Vector2(x + 26, y + 31), c.Name, Ui.TextHeading, Palette.Text);
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 26 + Gfx.Width(Fonts.Bold, c.Name, Ui.TextHeading) + 8, y + 31),
+            CrewRoles.Name(c.Role), Ui.TextBody, Palette.TextDim);
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 26, y + 49), $"{Life.Name(c.Background)} · {Life.Name(c.Value)} · {c.Traits.Summary()}", Ui.TextBody, Palette.TextMuted); // v12.7 살아온 길·가치관
 
         // 탭
         (int tab, string name)[] tabs = { (CardTab, "요약"), (0, "상태"), (1, "판단"), (2, "관계"), (3, "기억"), (4, "몸·일기"), (5, "물건") }; // v16.2 요약 카드가 맨 앞
@@ -699,7 +733,7 @@ public partial class Hud : Control
         for (int i = 0; i < tabs.Length; i++)
         {
             int tab = tabs[i].tab;
-            Button(new Rect2(x + i * (tw + 3), y + 62, tw, 28), tabs[i].name, _crewTab == tab, mouse, () => _crewTab = tab, 11);
+            Button(new Rect2(x + i * (tw + 3), y + 62, tw, 28), tabs[i].name, _crewTab == tab, mouse, () => _crewTab = tab, Ui.TextSmall);
         }
         float cy = y + 102;
         switch (_crewTab)
@@ -721,25 +755,25 @@ public partial class Hud : Control
         }
 
         var follow = new Rect2(x, card.End.Y - 42, right - x, 28);
-        Button(follow, _main.Following ? "따라가는 중  ·  F" : "따라가기  ·  F", _main.Following, mouse, _main.ToggleFollow, 12);
+        Button(follow, _main.Following ? "따라가는 중  ·  F" : "따라가기  ·  F", _main.Following, mouse, _main.ToggleFollow, Ui.TextBody);
     }
 
     private void DrawCrewStatus(CrewMember c, float x, float right, float y, Color col)
     {
         SectionTitle(x, y + 10, "지금");
         string activity = c.Dead ? "사망" : c.CarriedBy != null ? $"{c.CarriedBy.Name}에게 업혀 감" : c.Down ? (c.CareBed != null ? "의식 없음 · 치료 침대" : "쓰러짐 — 구조를 기다림") : c.ActivityLabel;
-        Gfx.Text(this, Fonts.Bold, new Vector2(x, y + 32), activity, 15, col.Lightened(0.2f));
-        float ax = x + Gfx.Width(Fonts.Bold, activity, 15) + 8;
+        Gfx.Text(this, Fonts.Bold, new Vector2(x, y + 32), activity, Ui.TextTitle, col.Lightened(0.2f));
+        float ax = x + Gfx.Width(Fonts.Bold, activity, Ui.TextTitle) + 8;
         string where = c.IsMoving && c.Job?.TargetRoom != null
             ? $"{c.Room?.Name ?? "?"} → {c.Job.TargetRoom.Name}"
             : c.Room?.Name ?? "";
-        Gfx.Text(this, Fonts.Body, new Vector2(ax, y + 32), where, 13, Palette.TextDim);
+        Gfx.Text(this, Fonts.Body, new Vector2(ax, y + 32), where, Ui.TextLabel, Palette.TextDim);
         string reason = c.JobReason ?? "—";
         if (c.Gait.Line(c, _world) is string gait) reason = $"{gait}   ·   {reason}"; // v14.5 비켜서는 중 · 문 앞 확인 · 조용히 · 움찔
         if (c.Soil.Line() is string soil) reason += $"   ·   {soil}"; // v14.7 손에 기름 · 옷에 그을음
         if (_world.Culture.Line(c) is string cul) reason += $"   ·   {cul}"; // v14.9 따르는 관행 (이유를 모르면 그렇다고)
         if (c.Carrying is ItemStack held) reason += $"   ·   들고 있음: {held}";
-        Gfx.Text(this, Fonts.Body, new Vector2(x, y + 51), reason, 11, Palette.TextMuted);
+        Gfx.Text(this, Fonts.Body, new Vector2(x, y + 51), reason, Ui.TextSmall, Palette.TextMuted);
 
         float by = y + 64;
         var n = c.Needs;
@@ -762,7 +796,7 @@ public partial class Hud : Control
         string grow = (c.Stats.Lessons > 0 ? $" · 배움 {c.Stats.Lessons}번" : "") + (c.Stats.Taught > 0 ? $" · 가르침 {c.Stats.Taught}번" : "")
                       + (c.Stats.RehabSessions > 0 ? $" · 재활 {c.Stats.RehabSessions}번" : "") + (c.Rescued ? " · 탈출 캡슐에서 건짐" : "");
         Gfx.Text(this, Fonts.Body, new Vector2(x, by + 172),
-            $"수면 {SimTime.Range(s.SleepStart, s.SleepLength)}   ·   근무 {SimTime.Range(s.WorkStart, s.WorkLength)}" + grow, 12, Palette.TextMuted);
+            $"수면 {SimTime.Range(s.SleepStart, s.SleepLength)}   ·   근무 {SimTime.Range(s.WorkStart, s.WorkLength)}" + grow, Ui.TextBody, Palette.TextMuted);
 
         SectionTitle(x, by + 198, "기술");
         float colW = (right - x - 16) / 2f;
@@ -772,9 +806,10 @@ public partial class Hud : Control
             float sx = x + (i % 2) * (colW + 16);
             float sy = by + 208 + (i / 2) * 20;
             float level = c.SkillLevel(skill);
-            Gfx.Text(this, Fonts.Body, new Vector2(sx, sy + 12), Skills.Name(skill), 11, Palette.TextDim);
-            Gfx.Bar(this, new Rect2(sx + 32, sy + 6, colW - 60, 4), level, level >= 0.7f ? col : new Color(1, 1, 1, 0.35f));
-            Gfx.TextRight(this, Fonts.Body, new Vector2(sx + colW, sy + 12), $"{Mathf.RoundToInt(level * 100)}", 11, Palette.Text);
+            Icons.Draw(this, Icons.Skill(skill), new Vector2(sx + 6, sy + 8), 12, level >= 0.7f ? col : Palette.TextDim); // v16.2 기술마다 고유 아이콘
+            Gfx.Text(this, Fonts.Body, new Vector2(sx + 15, sy + 12), Skills.Name(skill), Ui.TextSmall, Palette.TextDim);
+            UiKit.Gauge(this, new Rect2(sx + 46, sy + 6, colW - 74, 4), level, level >= 0.7f ? col : new Color(1, 1, 1, 0.35f));
+            Gfx.TextRight(this, Fonts.Body, new Vector2(sx + colW, sy + 12), $"{Mathf.RoundToInt(level * 100)}", Ui.TextSmall, Palette.Text);
         }
     }
 
@@ -785,9 +820,9 @@ public partial class Hud : Control
         var w = _world;
         var gc = mind.Goal switch { GoalTier.Survival => Palette.Danger, GoalTier.Role => Palette.Accent, GoalTier.Work => Palette.Good, _ => Palette.TextDim };
         SectionTitle(x, y + 10, "목표");
-        Gfx.RoundRect(this, new Rect2(x + 34, y - 1, Gfx.Width(Fonts.Bold, MindSystem.GoalName(mind.Goal), 11) + 12, 16), gc.WithAlpha(0.2f), 4, gc.WithAlpha(0.7f), 1);
-        Gfx.Text(this, Fonts.Bold, new Vector2(x + 40, y + 11), MindSystem.GoalName(mind.Goal), 11, gc);
-        Gfx.Text(this, Fonts.Body, new Vector2(x + 50 + Gfx.Width(Fonts.Bold, MindSystem.GoalName(mind.Goal), 11), y + 11), Fit(mind.GoalWhy, right - x - 120, 11, Fonts.Body), 11, Palette.TextDim);
+        Gfx.RoundRect(this, new Rect2(x + 34, y - 1, Gfx.Width(Fonts.Bold, MindSystem.GoalName(mind.Goal), Ui.TextSmall) + 12, 16), gc.WithAlpha(0.2f), 4, gc.WithAlpha(0.7f), 1);
+        Gfx.Text(this, Fonts.Bold, new Vector2(x + 40, y + 11), MindSystem.GoalName(mind.Goal), Ui.TextSmall, gc);
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 50 + Gfx.Width(Fonts.Bold, MindSystem.GoalName(mind.Goal), Ui.TextSmall), y + 11), Fit(mind.GoalWhy, right - x - 120, Ui.TextSmall, Fonts.Body), Ui.TextSmall, Palette.TextDim);
         var feel = new System.Collections.Generic.List<(string, Color)>();
         if (mind.Panicking(w.Tick)) feel.Add((mind.Frozen ? "공황 · 얼어붙음" : "공황 · 달아남", Palette.Danger));
         if (mind.Heroic(w.Tick)) feel.Add(("영웅심", Palette.Accent));
@@ -802,18 +837,18 @@ public partial class Hud : Control
         float fx = x;
         foreach (var (t, fc) in feel)
         {
-            float fw = Gfx.Width(Fonts.Body, t, 10) + 12;
+            float fw = Gfx.Width(Fonts.Body, t, Ui.TextTiny) + 12;
             if (fx + fw > right) break;
             Gfx.RoundRect(this, new Rect2(fx, y + 18, fw, 16), fc.WithAlpha(0.14f), 4, fc.WithAlpha(0.5f), 1);
-            Gfx.Text(this, Fonts.Body, new Vector2(fx + 6, y + 30), t, 10, fc);
+            Gfx.Text(this, Fonts.Body, new Vector2(fx + 6, y + 30), t, Ui.TextTiny, fc);
             fx += fw + 4;
         }
         string knows = mind.Knows.Count == 0 ? "아는 사고 없음" : "아는 사고: " + string.Join(" · ", mind.Knows.Values.OrderBy(k => k.tick).Select(k => $"{k.what} ({MindSystem.SourceName(k.src)})"));
-        Gfx.Text(this, Fonts.Body, new Vector2(x, y + 50), Fit(knows, right - x, 10, Fonts.Body), 10, mind.Knows.Count > 0 ? Palette.Warning : Palette.TextMuted);
+        Gfx.Text(this, Fonts.Body, new Vector2(x, y + 50), Fit(knows, right - x, Ui.TextTiny, Fonts.Body), Ui.TextTiny, mind.Knows.Count > 0 ? Palette.Warning : Palette.TextMuted);
         // v13.4 일과표: 24시간 띠 (잠 · 근무 · 정기 회의 · 지금)
         {
             float sx = x + 38, sw = right - sx, sy = y + 58;
-            Gfx.Text(this, Fonts.Body, new Vector2(x, sy + 9), "일과", 10, Palette.TextMuted);
+            Gfx.Text(this, Fonts.Body, new Vector2(x, sy + 9), "일과", Ui.TextTiny, Palette.TextMuted);
             Gfx.RoundRect(this, new Rect2(sx, sy, sw, 10), new Color(1, 1, 1, 0.05f), 3);
             for (int hh = 0; hh < 24; hh++)
             {
@@ -831,7 +866,7 @@ public partial class Hud : Control
 
         SectionTitle(x, y + 10, "행동 후보와 점수");
         long ago = (_world.Tick - c.LastThinkTick) * 60 / SimTime.TicksPerHour;
-        Gfx.TextRight(this, Fonts.Body, new Vector2(right, y + 10), ago < 1 ? "방금 판단" : $"{ago}분 전 판단", 11, Palette.TextMuted);
+        Gfx.TextRight(this, Fonts.Body, new Vector2(right, y + 10), ago < 1 ? "방금 판단" : $"{ago}분 전 판단", Ui.TextSmall, Palette.TextMuted);
 
         var evals = c.LastEvaluations;
         float maxScore = Math.Max(1f, evals.Count > 0 ? evals.Max(e => e.Score) : 1f);
@@ -840,11 +875,11 @@ public partial class Hud : Control
         {
             bool chosen = c.Job?.Activity == e.Activity;
             var labelColor = chosen ? col.Lightened(0.2f) : e.Score <= 0.01f ? Palette.TextMuted : Palette.TextDim;
-            Gfx.Text(this, chosen ? Fonts.Bold : Fonts.Body, new Vector2(x, ey + 14), e.Activity.Label, 13, labelColor);
+            Gfx.Text(this, chosen ? Fonts.Bold : Fonts.Body, new Vector2(x, ey + 14), e.Activity.Label, Ui.TextLabel, labelColor);
             string reason = e.Reason;
-            while (reason.Length > 4 && Gfx.Width(Fonts.Body, reason, 11) > right - x - 44 - 40) reason = reason[..^2] + "…";
-            Gfx.Text(this, Fonts.Body, new Vector2(x + 44, ey + 14), reason, 11, Palette.TextMuted);
-            Gfx.TextRight(this, Fonts.Body, new Vector2(right, ey + 14), e.Score.ToString("0.00"), 11,
+            while (reason.Length > 4 && Gfx.Width(Fonts.Body, reason, Ui.TextSmall) > right - x - 44 - 40) reason = reason[..^2] + "…";
+            Gfx.Text(this, Fonts.Body, new Vector2(x + 44, ey + 14), reason, Ui.TextSmall, Palette.TextMuted);
+            Gfx.TextRight(this, Fonts.Body, new Vector2(right, ey + 14), e.Score.ToString("0.00"), Ui.TextSmall,
                 chosen ? Palette.Text : Palette.TextMuted);
             Gfx.Bar(this, new Rect2(x, ey + 20, right - x, 3f), e.Score / maxScore,
                 chosen ? col.WithAlpha(0.9f) : new Color(1, 1, 1, 0.22f), new Color(1, 1, 1, 0.04f));
@@ -862,7 +897,7 @@ public partial class Hud : Control
         foreach (var (who, value) in rels)
         {
             DrawCircle(new Vector2(x + 5, ry + 10), 4f, Palette.Crew(who.Id), true, -1f, true);
-            Gfx.Text(this, Fonts.Bold, new Vector2(x + 16, ry + 15), who.Name, 13, Palette.Text);
+            Gfx.Text(this, Fonts.Bold, new Vector2(x + 16, ry + 15), who.Name, Ui.TextLabel, Palette.Text);
             string word = value > 0.5f ? "각별함" : value > 0.25f ? "친함" : value > -0.05f ? "보통" : value > -0.3f ? "서먹함" : "불편함";
             // -1~1 막대 (가운데가 0)
             var bar = new Rect2(x + 80, ry + 8, right - x - 80 - 56, 5);
@@ -872,11 +907,11 @@ public partial class Hud : Control
             var vc = value >= 0 ? Palette.Good : Palette.Danger;
             DrawRect(value >= 0 ? new Rect2(mid, bar.Position.Y, len, bar.Size.Y) : new Rect2(mid - len, bar.Position.Y, len, bar.Size.Y), vc.WithAlpha(0.8f));
             DrawLine(new Vector2(mid, bar.Position.Y - 2), new Vector2(mid, bar.End.Y + 2), new Color(1, 1, 1, 0.25f), 1f);
-            Gfx.TextRight(this, Fonts.Body, new Vector2(right, ry + 15), word, 12, value >= 0.25f ? Palette.Good : value < -0.05f ? Palette.Warning : Palette.TextDim);
+            Gfx.TextRight(this, Fonts.Body, new Vector2(right, ry + 15), word, Ui.TextBody, value >= 0.25f ? Palette.Good : value < -0.05f ? Palette.Warning : Palette.TextDim);
             // v14.4 왜 그런 사이인가 (그 사람의 기억 — 오해일 수도 있다)
             if (_world.Relations.Why(c, who) is RelationMemory why)
             {
-                Gfx.Text(this, Fonts.Body, new Vector2(x + 16, ry + 30), Fit($"— {why.Text}", right - x - 16, 10, Fonts.Body), 10, why.Weight >= 0f ? new Color("#9fe0b0") : new Color("#ff9a8a"));
+                Gfx.Text(this, Fonts.Body, new Vector2(x + 16, ry + 30), Fit($"— {why.Text}", right - x - 16, Ui.TextTiny, Fonts.Body), Ui.TextTiny, why.Weight >= 0f ? new Color("#9fe0b0") : new Color("#ff9a8a"));
                 ry += 13;
             }
             ry += 26;
@@ -895,7 +930,7 @@ public partial class Hud : Control
             $"사고 대응 {st.Emergencies}회 · 구조 {st.Rescues}회 · 쓰러짐 {st.TimesDown}회",
         };
         for (int i = 0; i < lines.Length; i++)
-            Gfx.Text(this, Fonts.Body, new Vector2(x, ry + 42 + i * 19), lines[i], 12, Palette.TextDim);
+            Gfx.Text(this, Fonts.Body, new Vector2(x, ry + 42 + i * 19), lines[i], Ui.TextBody, Palette.TextDim);
     }
 
     // ─────────────────────────────── 설비 상세 ───────────────────────────────
@@ -920,40 +955,40 @@ public partial class Hud : Control
 
         Gfx.RoundRect(this, new Rect2(x - 2, y + 15, 22, 22), accent.WithAlpha(0.18f), 5, accent.WithAlpha(0.7f));
         Icons.Draw(this, Icons.Furniture(f.Type), new Vector2(x + 9, y + 26), 16, accent.Lightened(0.25f)); // v16.2 설비마다 고유 아이콘
-        Gfx.Text(this, Fonts.Bold, new Vector2(x + 26, y + 32), f.Label, 17, Palette.Text);
-        Gfx.Text(this, Fonts.Body, new Vector2(x + 26, y + 50), f.Room.Name, 12, Palette.TextMuted);
+        Gfx.Text(this, Fonts.Bold, new Vector2(x + 26, y + 32), f.Label, Ui.TextLarge, Palette.Text);
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 26, y + 50), f.Room.Name, Ui.TextBody, Palette.TextMuted);
         if (Codex.Of(f.Type) != null) CodexButton(right, y + 38, mouse); // v12.2 설명서
         float ly = y + 60;
 
         if (m != null)
         {
             var statusColor = m.Faults.Count > 0 ? Palette.Danger : m.Wear > 0.6f || (!m.Powered && m.Spec.PowerDraw > 0) ? Palette.Warning : Palette.Good;
-            Gfx.TextRight(this, Fonts.Bold, new Vector2(right, y + 32), m.StatusText, 12, statusColor);
+            Gfx.TextRight(this, Fonts.Bold, new Vector2(right, y + 32), m.StatusText, Ui.TextBody, statusColor);
             Divider(x, right, ly + 4);
             Row(x, right, ly + 12, "수명", m.Condition, Palette.Good, Pct(m.Condition), m.Condition < 0.4f);
             Row(x, right, ly + 34, "마모", m.Wear, Palette.Severity(m.Wear), Pct(m.Wear), m.Wear > 0.6f);
             Row(x, right, ly + 56, "효율", m.Efficiency, Palette.Accent, Pct(m.Efficiency));
             string power = m.Spec.PowerDraw <= 0f ? "전력 소비 없음"
                 : $"{m.Demand:0.0} kW · {PowerGrid.CircuitName(f.Room.Circuit)}회로 · {(m.Powered ? "공급 중" : "끊김")}";
-            Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 96), power, 12, m.Powered || m.Spec.PowerDraw <= 0f ? Palette.TextDim : Palette.Danger);
+            Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 96), power, Ui.TextBody, m.Powered || m.Spec.PowerDraw <= 0f ? Palette.TextDim : Palette.Danger);
             string service = m.ServiceCount > 0
                 ? $"정비 {m.ServiceCount}회 · 마지막 {(_world.Tick - m.LastServiced) / SimTime.TicksPerHour}시간 전 · 고장 {m.FaultCount}회"
                 : $"정비 기록 없음 · 고장 {m.FaultCount}회";
-            Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 114), service, 11, Palette.TextMuted);
+            Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 114), service, Ui.TextSmall, Palette.TextMuted);
             ly += 124;
 
             if (m.Faults.Count == 0)
             {
-                Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 14), "고장 없음", 12, Palette.TextMuted);
+                Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 14), "고장 없음", Ui.TextBody, Palette.TextMuted);
                 ly += 20;
             }
             foreach (var fault in m.Faults)
             {
                 DrawCircle(new Vector2(x + 4, ly + 10), 3.5f, Palette.Danger, true, -1f, true);
-                Gfx.Text(this, Fonts.Bold, new Vector2(x + 14, ly + 15), fault.Name, 12, Palette.Danger);
+                Gfx.Text(this, Fonts.Bold, new Vector2(x + 14, ly + 15), fault.Name, Ui.TextBody, Palette.Danger);
                 var mats = fault.Materials;
                 string need = mats.Length > 0 ? string.Join(" + ", mats.Select(x => x.count > 1 ? $"{ItemKinds.Name(x.kind)} {x.count}" : ItemKinds.Name(x.kind))) + " 필요" : "부품 불필요";
-                Gfx.TextRight(this, Fonts.Body, new Vector2(right, ly + 15), need, 11, Palette.TextMuted);
+                Gfx.TextRight(this, Fonts.Body, new Vector2(right, ly + 15), need, Ui.TextSmall, Palette.TextMuted);
                 ly += 20;
             }
             if (parts != null) ly = DrawParts(m, parts, x, right, ly, accent);
@@ -961,8 +996,8 @@ public partial class Hud : Control
 
         foreach (var (label, value) in extra)
         {
-            Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 15), label, 12, Palette.TextDim);
-            Gfx.TextRight(this, Fonts.Bold, new Vector2(right, ly + 15), value, 12, Palette.Text);
+            Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 15), label, Ui.TextBody, Palette.TextDim);
+            Gfx.TextRight(this, Fonts.Bold, new Vector2(right, ly + 15), value, Ui.TextBody, Palette.Text);
             ly += 20;
         }
         ly = DrawHistoryLines(history, x, right, ly);
@@ -971,18 +1006,18 @@ public partial class Hud : Control
         {
             Divider(x, right, ly + 8);
             SectionTitle(x, ly + 28, "보관");
-            Gfx.TextRight(this, Fonts.Body, new Vector2(right, ly + 28), $"{inv.Total}/{inv.Capacity}", 11, Palette.TextMuted);
+            Gfx.TextRight(this, Fonts.Body, new Vector2(right, ly + 28), $"{inv.Total}/{inv.Capacity}", Ui.TextSmall, Palette.TextMuted);
             ly += 34;
             if (inv.Total == 0)
             {
-                Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 15), "비어 있음", 12, Palette.TextMuted);
+                Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 15), "비어 있음", Ui.TextBody, Palette.TextMuted);
                 ly += 20;
             }
             foreach (var (kind, count) in inv.Contents)
             {
                 DrawRect(new Rect2(x, ly + 6, 8, 8), Palette.Item(kind));
-                Gfx.Text(this, Fonts.Body, new Vector2(x + 16, ly + 15), ItemKinds.Name(kind), 12, Palette.TextDim);
-                Gfx.TextRight(this, Fonts.Bold, new Vector2(right, ly + 15), $"{count}", 12, Palette.Text);
+                Gfx.Text(this, Fonts.Body, new Vector2(x + 16, ly + 15), ItemKinds.Name(kind), Ui.TextBody, Palette.TextDim);
+                Gfx.TextRight(this, Fonts.Bold, new Vector2(right, ly + 15), $"{count}", Ui.TextBody, Palette.Text);
                 ly += 20;
             }
         }
@@ -994,9 +1029,9 @@ public partial class Hud : Control
             ly += 34;
             foreach (var o in orders)
             {
-                Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 15), $"#{o.Id} {o.Title}", 12, Palette.TextDim);
+                Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 15), $"#{o.Id} {o.Title}", Ui.TextBody, Palette.TextDim);
                 string who = o.Assignee?.Name ?? (o.BlockedUntil > _world.Tick ? "보류" : "대기");
-                Gfx.TextRight(this, Fonts.Bold, new Vector2(right, ly + 15), who, 12, o.Assignee != null ? Palette.Crew(o.Assignee.Id) : Palette.TextMuted);
+                Gfx.TextRight(this, Fonts.Bold, new Vector2(right, ly + 15), who, Ui.TextBody, o.Assignee != null ? Palette.Crew(o.Assignee.Id) : Palette.TextMuted);
                 ly += 20;
             }
         }
@@ -1138,9 +1173,9 @@ public partial class Hud : Control
 
         Gfx.RoundRect(this, new Rect2(x - 2, y + 15, 22, 22), accent.WithAlpha(0.18f), 5, accent.WithAlpha(0.7f));
         Icons.Draw(this, Icons.Room(room.Kind), new Vector2(x + 9, y + 26), 16, accent.Lightened(0.25f)); // v16.2 방 종류마다 고유 아이콘
-        Gfx.Text(this, Fonts.Bold, new Vector2(x + 26, y + 32), room.Name, 18, Palette.Text);
+        Gfx.Text(this, Fonts.Bold, new Vector2(x + 26, y + 32), room.Name, Ui.TextHeading, Palette.Text);
         string power = room.Powered ? $"{PowerGrid.CircuitName(room.Circuit)}회로 · 전력 정상" : $"{PowerGrid.CircuitName(room.Circuit)}회로 · 정전";
-        Gfx.TextRight(this, Fonts.Body, new Vector2(right, y + 20), power, 12, room.Powered ? Palette.TextMuted : Palette.Danger);
+        Gfx.TextRight(this, Fonts.Body, new Vector2(right, y + 20), power, Ui.TextBody, room.Powered ? Palette.TextMuted : Palette.Danger);
         CodexButton(right, y + 25, mouse); // v12.2 설명서
         Divider(x, right, y + 48);
 
@@ -1156,20 +1191,20 @@ public partial class Hud : Control
         float ly = ay + 116;
         foreach (var (label, value, color) in status)
         {
-            Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 12), label, 12, Palette.TextDim);
+            Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 12), label, Ui.TextBody, Palette.TextDim);
             // 값이 길어 이름과 겹치면 다음 줄로 내린다
             float lw = Fonts.Body.GetStringSize(label, HorizontalAlignment.Left, -1, 12).X;
             float vw = Fonts.Bold.GetStringSize(value, HorizontalAlignment.Left, -1, 12).X;
             if (vw > right - x - lw - 14f)
             {
                 // 너무 길면 다음 줄부터 패널 너비에 맞춰 접는다
-                foreach (var part in WrapText(value, right - x, 12))
+                foreach (var part in WrapText(value, right - x, Ui.TextBody))
                 {
                     ly += 18;
-                    Gfx.TextRight(this, Fonts.Bold, new Vector2(right, ly + 12), part, 12, color);
+                    Gfx.TextRight(this, Fonts.Bold, new Vector2(right, ly + 12), part, Ui.TextBody, color);
                 }
             }
-            else Gfx.TextRight(this, Fonts.Bold, new Vector2(right, ly + 12), value, 12, color);
+            else Gfx.TextRight(this, Fonts.Bold, new Vector2(right, ly + 12), value, Ui.TextBody, color);
             ly += 20;
         }
         ly += 16;
@@ -1177,29 +1212,29 @@ public partial class Hud : Control
         ly += 8;
         if (inside.Count == 0)
         {
-            Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 16), "아무도 없음", 12, Palette.TextMuted);
+            Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 16), "아무도 없음", Ui.TextBody, Palette.TextMuted);
             ly += 22;
         }
         foreach (var c in inside)
         {
-            DrawCircle(new Vector2(x + 5, ly + 11), 4f, Palette.Crew(c.Id), true, -1f, true);
-            Gfx.Text(this, Fonts.Bold, new Vector2(x + 16, ly + 16), c.Name, 13, Palette.Text);
-            Gfx.TextRight(this, Fonts.Body, new Vector2(right, ly + 16), c.ActivityLabel, 12, Palette.TextDim);
+            Icons.Draw(this, Icons.CrewState(c, _world.Tick), new Vector2(x + 6, ly + 11), 13, Palette.Crew(c.Id)); // 지금 상태 아이콘 (색 = 사람)
+            Gfx.Text(this, Fonts.Bold, new Vector2(x + 18, ly + 16), c.Name, Ui.TextLabel, Palette.Text);
+            Gfx.TextRight(this, Fonts.Body, new Vector2(right, ly + 16), c.ActivityLabel, Ui.TextBody, Palette.TextDim);
             ly += 22;
         }
 
         ly += 18;
         SectionTitle(x, ly, "설비");
         ly += 8;
-        if (equipment.Count == 0) Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 16), "없음", 12, Palette.TextMuted);
+        if (equipment.Count == 0) Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 16), "없음", Ui.TextBody, Palette.TextMuted);
         foreach (var f in equipment.Take(8))
         {
             var m = f.Machine;
             var dot = m == null ? Palette.TextMuted : m.Faults.Count > 0 ? Palette.Danger : m.Wear > 0.6f ? Palette.Warning : Palette.Good;
-            DrawCircle(new Vector2(x + 4, ly + 10), 3.5f, dot, true, -1f, true);
-            Gfx.Text(this, Fonts.Body, new Vector2(x + 14, ly + 15), f.Label, 12, Palette.TextDim);
+            Icons.Draw(this, Icons.Furniture(f.Type), new Vector2(x + 6, ly + 10), 13, dot); // v16.2 설비 이름 옆엔 그 설비의 아이콘 (색 = 상태)
+            Gfx.Text(this, Fonts.Body, new Vector2(x + 18, ly + 15), f.Label, Ui.TextBody, Palette.TextDim);
             string info = m != null ? m.StatusText : f.Storage != null ? $"{f.Storage.Total}/{f.Storage.Capacity}" : "";
-            Gfx.TextRight(this, Fonts.Body, new Vector2(right, ly + 15), info, 11, Palette.TextMuted);
+            Gfx.TextRight(this, Fonts.Body, new Vector2(right, ly + 15), info, Ui.TextSmall, Palette.TextMuted);
             ly += 20;
         }
         DrawHistoryLines(history, x, right, ly + 4);
@@ -1386,20 +1421,20 @@ public partial class Hud : Control
         if (urgentOrders.Count > 0)
         {
             float pulse = 0.7f + 0.3f * Mathf.Sin(_time * 4f);
-            Gfx.Text(this, Fonts.Bold, new Vector2(x, y + 25), $"긴급 작업 {urgentOrders.Count}", 12, Palette.Danger.WithAlpha(pulse));
-            Gfx.TextRight(this, Fonts.Body, new Vector2(right, y + 25), "사고 대응이 먼저", 11, Palette.TextMuted);
+            Gfx.Text(this, Fonts.Bold, new Vector2(x, y + 25), $"긴급 작업 {urgentOrders.Count}", Ui.TextBody, Palette.Danger.WithAlpha(pulse));
+            Gfx.TextRight(this, Fonts.Body, new Vector2(right, y + 25), "사고 대응이 먼저", Ui.TextSmall, Palette.TextMuted);
         }
         else
         {
             SectionTitle(x, y + 25, "작업 목록");
-            Gfx.TextRight(this, Fonts.Body, new Vector2(right, y + 25), "승무원이 스스로 골라 맡는 일", 11, Palette.TextMuted);
+            Gfx.TextRight(this, Fonts.Body, new Vector2(right, y + 25), "승무원이 스스로 골라 맡는 일", Ui.TextSmall, Palette.TextMuted);
         }
         if (folded > 0)
-            Gfx.Text(this, Fonts.Body, new Vector2(x, card.End.Y - 14), $"그 밖의 작업 {folded}건은 사고가 가라앉은 뒤에", 11, Palette.TextMuted);
+            Gfx.Text(this, Fonts.Body, new Vector2(x, card.End.Y - 14), $"그 밖의 작업 {folded}건은 사고가 가라앉은 뒤에", Ui.TextSmall, Palette.TextMuted);
 
         if (orders.Count == 0)
         {
-            Gfx.Text(this, Fonts.Body, new Vector2(x, y + 58), "할 일이 없다. 우주선이 평온하다.", 12, Palette.TextMuted);
+            Gfx.Text(this, Fonts.Body, new Vector2(x, y + 58), "할 일이 없다. 우주선이 평온하다.", Ui.TextBody, Palette.TextMuted);
             return;
         }
 
@@ -1412,14 +1447,14 @@ public partial class Hud : Control
             Gfx.RoundRect(this, new Rect2(row.Position.X + 6, row.Position.Y + 6, 3, row.Size.Y - 12), uc, 1.5f);
             string oi = o.Target.Furniture is Furniture of ? Icons.Furniture(of.Type) : o.Target.CurrentRoom is Room orr ? Icons.Room(orr.Kind) : "work";
             Icons.Draw(this, oi, new Vector2(x + 9, ry + 11), 14, uc); // v16.2 대상마다 고유 아이콘
-            Gfx.Text(this, Fonts.Bold, new Vector2(x + 22, ry + 15), o.Title, 12, Palette.Text);
+            Gfx.Text(this, Fonts.Bold, new Vector2(x + 22, ry + 15), o.Title, Ui.TextBody, Palette.Text);
             string detail = o.BlockedUntil > _world.Tick && o.BlockedReason != null ? $"보류 — {o.BlockedReason}" : o.Detail;
-            Gfx.Text(this, Fonts.Body, new Vector2(x + 22, ry + 30), detail, 11, o.BlockedUntil > _world.Tick ? Palette.Warning : Palette.TextMuted);
+            Gfx.Text(this, Fonts.Body, new Vector2(x + 22, ry + 30), detail, Ui.TextSmall, o.BlockedUntil > _world.Tick ? Palette.Warning : Palette.TextMuted);
             if (o.Assignee is CrewMember a)
-                Gfx.Pill(this, Fonts.Bold, new Vector2(right - Gfx.Width(Fonts.Bold, a.Name, 11) * 0.5f - 7, ry + 17), a.Name, 11,
+                Gfx.Pill(this, Fonts.Bold, new Vector2(right - Gfx.Width(Fonts.Bold, a.Name, Ui.TextSmall) * 0.5f - 7, ry + 17), a.Name, Ui.TextSmall,
                     Palette.Crew(a.Id), new Color(0, 0, 0, 0.3f), Palette.Crew(a.Id).WithAlpha(0.4f));
             else
-                Gfx.TextRight(this, Fonts.Body, new Vector2(right, ry + 21), $"긴급도 {o.Urgency:0.00}", 11, Palette.TextMuted);
+                Gfx.TextRight(this, Fonts.Body, new Vector2(right, ry + 21), $"긴급도 {o.Urgency:0.00}", Ui.TextSmall, Palette.TextMuted);
             var target = o.Target;
             _buttons.Add((row, () => _main.Focus(target)));
             ry += rowH;
@@ -1433,36 +1468,31 @@ public partial class Hud : Control
         if (_main.Replaying is ReplayRunner rr)
         {
             float pulse = 0.7f + 0.3f * Mathf.Sin(_time * 4f);
-            Gfx.Pill(this, Fonts.Bold, new Vector2(cx, y), $"불러오는 중 — 같은 시드에서 역사를 다시 돌린다 {Pct(rr.Progress)} · {_world.Day}일차", 13,
-                Palette.Accent.WithAlpha(pulse), new Color(0.03f, 0.05f, 0.08f, 0.92f), Palette.Accent.WithAlpha(0.45f), 14f, 7f);
+            UiKit.Banner(this, new Vector2(cx, y), $"불러오는 중 — 같은 시드에서 역사를 다시 돌린다 {Pct(rr.Progress)} · {_world.Day}일차", Tone.Info, pulse, "clock");
             y += 36f;
         }
         if (_main.Notice is string notice && (Time.GetTicksMsec() - _main.NoticeMsec < 6000 || Engine.GetProcessFrames() - _main.NoticeFrame < 120))
         {
-            Gfx.Pill(this, Fonts.Bold, new Vector2(cx, y), notice, 13, Palette.Good, new Color(0.03f, 0.07f, 0.06f, 0.92f), Palette.Good.WithAlpha(0.45f), 14f, 7f);
+            UiKit.Banner(this, new Vector2(cx, y), notice, Tone.Good, 1f, "info");
             y += 36f;
         }
-        if (_main.Paused)
+        if (_main.Paused && !Quiet) // v16.2 조용한 HUD에서 일시정지는 글 대신 화면 테두리 · 채도로만
         {
             float pulse = 0.6f + 0.4f * Mathf.Sin(_time * 3f);
-            Gfx.Pill(this, Fonts.Bold, new Vector2(cx, y), "일시정지  ·  Space로 재개", 13,
-                Palette.Warning.WithAlpha(pulse), new Color(0.05f, 0.06f, 0.09f, 0.9f), Palette.Warning.WithAlpha(0.35f), 14f, 7f);
+            UiKit.Banner(this, new Vector2(cx, y), "일시정지  ·  Space로 재개", Tone.Caution, pulse, "pause");
             y += 36f;
         }
         if (_main.Tool != IncidentTool.None)
         {
             float pulse = 0.7f + 0.3f * Mathf.Sin(_time * 4f);
-            Gfx.Pill(this, Fonts.Bold, new Vector2(cx, y), $"{_main.ToolHint}  ·  Shift 연속 · Esc 취소", 13,
-                Palette.Danger.WithAlpha(pulse), new Color(0.08f, 0.04f, 0.05f, 0.92f), Palette.Danger.WithAlpha(0.45f), 14f, 7f);
+            UiKit.Banner(this, new Vector2(cx, y), $"{_main.ToolHint}  ·  Shift 연속 · Esc 취소", Tone.Danger, pulse, "incident");
             y += 36f;
         }
         var alert = _world.Alerts.LastOrDefault();
         if (alert != null && alert.Level >= AlertLevel.Warning && _world.Tick - alert.Tick < SimTime.Hours(1))
         {
             float pulse = 0.7f + 0.3f * Mathf.Sin(_time * 5f);
-            var col = alert.Level == AlertLevel.Critical ? Palette.Danger : Palette.Warning;
-            Gfx.Pill(this, Fonts.Bold, new Vector2(cx, y), $"경보 · {alert.Text}", 13,
-                col.WithAlpha(pulse), new Color(0.08f, 0.04f, 0.05f, 0.92f), col.WithAlpha(0.5f), 14f, 7f);
+            UiKit.Banner(this, new Vector2(cx, y), $"경보 · {alert.Text}", alert.Level == AlertLevel.Critical ? Tone.Danger : Tone.Caution, pulse, "alert");
         }
     }
 }

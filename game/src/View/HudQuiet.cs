@@ -42,14 +42,13 @@ public partial class Hud
     }
 
     /// <summary>조용한 승무원 칸: 머리글(인원 · 괜찮은지) + 살펴볼 사람만 + 작업 한 줄. 끝 y를 돌려준다.</summary>
-    private float DrawCrewSummary(Vector2 mouse)
+    private float DrawCrewSummary(Vector2 mouse, int maxRows = 6)
     {
         var crew = _world.Crew;
         var watch = new List<(CrewMember c, string icon, string text, Tone tone)>();
         foreach (var c in crew)
             if (Attention(c) is var (icon, text, tone)) watch.Add((c, icon, text, tone));
         watch = watch.OrderBy(a => a.tone == Tone.Danger ? 0 : a.tone == Tone.Caution ? 1 : 2).ThenBy(a => a.c.Id).ToList();
-        const int maxRows = 6;
         int rows = Math.Min(maxRows, watch.Count);
         var all = _world.Board.Open.ToList();
         int urgent = all.Count(o => o.Urgency >= 0.9f);
