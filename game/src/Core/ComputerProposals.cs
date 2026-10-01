@@ -305,6 +305,8 @@ public sealed class CheckRoomActivity : Activity
         if (w.Automation.Checks.Count == 0 || c.Down || c.Outside) return (0f, "—");
         if (Mine(c, w) is not RoomCheck k) return (0f, "—");
         var room = w.Ship.Rooms[k.RoomId];
+        // 눈으로 본 쓰러진 사람을 두고 조의 다른 일(문 밖 감시 · 대피)로 가지 않는다 — 데려 나오는 게 가장 급하다
+        if (k.Seen && (c.CarryingPerson != null || Patient(w, room, c) != null)) return (2.6f, $"{room.Name}에서 본 쓰러진 사람을 데려 나온다 (컴퓨터는 빈 방이라 믿었다)");
         return (1.25f, k.Seen ? $"컴퓨터 확인 요청 — {room.Name}에서 쓰러진 사람을 데려 나온다" : $"컴퓨터 확인 요청 — {room.Name} ({k.Why})");
     }
 
@@ -383,6 +385,6 @@ public sealed class CheckRoomActivity : Activity
             if (Patient(world, room, cm) == null) k.Done = true; // 남은 사람이 있으면 다시 들어간다
             return true;
         }));
-        return new Job(this, "직접 확인", toils) { LogText = k.Seen ? $"{room.Name}에서 쓰러진 사람을 데려 나온다" : $"컴퓨터 확인 요청 — {room.Name}에 가서 본다", LogKind = LogKind.Work, Urgent = true };
+        return new Job(this, "직접 확인", toils) { LogText = k.Seen ? $"{room.Name}에서 쓰러진 사람을 데려 나온다" : $"컴퓨터 확인 요청 — {room.Name}에 가서 본다", LogKind = LogKind.Work, Urgent = true, InterruptMargin = 0.5f };
     }
 }

@@ -233,7 +233,9 @@ public sealed partial class AutomationSystem
     {
         var w = _world;
         strength = Math.Clamp(strength, 0f, 1f);
-        foreach (var fc in SpaceForecasts) if (!fc.Graded && fc.Name == name && w.Tick <= fc.Due) fc.Hit = true;
+        bool forecast = false;
+        foreach (var fc in SpaceForecasts) if (!fc.Graded && fc.Name == name && w.Tick <= fc.Due) { fc.Hit = true; forecast = true; }
+        if (forecast) ForecastsDue(); // 닿는 순간 채점 — 미리 피한 사람은 곧장 "컴퓨터 말이 맞았다"
         if ((fx & CosmicFx.Radiation) != 0 && Present && MainOnline)
         {
             var shelter = ShelterRoom();
@@ -272,11 +274,14 @@ public sealed partial class AutomationSystem
             if (fc.Hit) { ForecastHits++; Book.Today.ForecastHits++; } else ForecastMisses++;
             var b = Speak.Recent.FirstOrDefault(x => x.Id == fc.BroadcastId);
             if (b == null) continue;
+            var shelter = ShelterRoom();
             foreach (var id in b.HeardBy)
             {
                 if (w.Crew.FirstOrDefault(c => c.Id == id) is not CrewMember c || c.Dead) continue;
-                if (fc.Hit) Trusts.Change(c, 0.05f, $"{fc.Name} 예보를 듣고 미리 피했다 — 컴퓨터 말이 맞았다", quiet: true);
-                else Trusts.Change(c, -0.04f, $"{fc.Name} 예보를 듣고 대피소에서 기다렸는데 오지 않았다", quiet: true);
+                bool hid = c.Room == shelter || c.Job?.Activity is HeedBroadcastActivity; // 실제로 따랐나
+                if (fc.Hit) Trusts.Change(c, hid ? 0.06f : 0.02f, hid ? $"{fc.Name} 예보를 듣고 미리 피했다 — 컴퓨터 말이 맞았다" : $"{fc.Name} 예보가 맞았다 — 따를 걸 그랬다", quiet: true);
+                else Trusts.Change(c, hid ? -0.05f : -0.02f, $"{fc.Name} 예보를 듣고 " + (hid ? "대피소에서 기다렸는데 오지 않았다" : "긴장했는데 오지 않았다"), quiet: true);
+                if (fc.Hit && hid) MarkLog.Add(c.Memory.Marks, w.Tick, $"{fc.Name} 예보를 듣고 미리 {Ko.EuRo(shelter?.Name ?? "대피소")} 피했다");
             }
             if (!fc.Hit) Learn.Remember(-1, "forecast", $"{fc.Name} 헛예보");
         }
@@ -298,8 +303,10 @@ public sealed class HeedBroadcastActivity : Activity
         if (!a.Trusts.Obeys(c)) return (0f, "컴퓨터 방송 — 믿지 않는다");
         var (shelter, _) = Facilities.Best(w.Ship, "shelter", r => !r.Detached && !r.OffLimits && !r.Leaking);
         if (shelter == null) return (0f, "대피소가 없다");
-        if (c.Room == shelter) return c.Job?.Activity is HeedBroadcastActivity ? (0.9f, "방송대로 대피소에서 기다린다") : (0f, "이미 대피소");
-        return (0.86f, $"방송 — {b.Text}");
+        // 믿는 만큼 급하다: 컴퓨터를 믿는 사람은 밥숟가락을 놓고 가고, 반신반의하는 사람은 하던 일을 마치고 간다
+        float urge = 0.8f + 0.5f * a.Trusts.Of(c);
+        if (c.Room == shelter) return c.Job?.Activity is HeedBroadcastActivity ? (urge, "방송대로 대피소에서 기다린다") : (0f, "이미 대피소");
+        return (urge, $"방송 — {b.Text}");
     }
 
     public override Job? Plan(CrewMember c, World w, DistanceField dist)
@@ -320,6 +327,7 @@ public sealed class HeedBroadcastActivity : Activity
         return new Job(this, "방송대로 대피", new List<Toil> { new GotoToil(target), new WaitToil(SimTime.Minutes(30), Pose.Sitting) })
         {
             TargetRoom = shelter,
+            Urgent = true,
             LogText = $"선내 방송을 듣고 {Ko.EuRo(shelter.Name)} 미리 대피",
             LogKind = LogKind.Warning,
         };

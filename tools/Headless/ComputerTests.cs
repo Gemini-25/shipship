@@ -284,6 +284,8 @@ public static partial class Program
                     heedH |= hearer.Job?.Activity is HeedBroadcastActivity;
                     heedD |= deaf.Job?.Activity is HeedBroadcastActivity;
                     inShelter |= hearer.Room == shelter;
+                    if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "7")
+                        Console.WriteLine($"   {m}분 {hearer.Name} {hearer.Room?.Name} {hearer.Cell} 일 {hearer.Job?.Label} 단계 {hearer.Job?.Current?.GetType().Name} 생각 {string.Join(" / ", hearer.LastEvaluations.Take(3).Select(e => $"{e.Activity.Id}:{e.Score:0.00}"))} · 대피소 {shelter.Name}");
                 }
                 Check("예보 방송 → 들은 사람만 미리 대피소로 간다 (스피커 고장 방 사람은 모른다)",
                     b != null && b.HeardBy.Contains(hearer.Id) && !b.HeardBy.Contains(deaf.Id) && heedH && inShelter && !heedD,
