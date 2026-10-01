@@ -159,7 +159,13 @@ public sealed class LifeSystem
     private readonly HashSet<(int, BodyPart)> _lost = new();
     public List<(string name, long tick, string cause)> Memorial { get; } = new();
 
-    public LifeSystem(World w) => _w = w;
+    private readonly Rng _rng; // v12.9.5 말다툼은 따로 굴린다 (주 난수의 흐름 — 사고·고장 — 을 흔들지 않게)
+
+    public LifeSystem(World w)
+    {
+        _w = w;
+        _rng = new Rng(unchecked(w.Seed * 6151 + 29));
+    }
 
     // ── 실수 ──
 
@@ -291,7 +297,7 @@ public sealed class LifeSystem
                 float tension = 0.06f + (Irritable(a) + Irritable(b)) / 2f;
                 var (clash, about) = Clash(a, b);
                 float p = tension * clash * 0.12f * dt * (1.2f - MathF.Max(0f, (a.AffinityTo(b) + b.AffinityTo(a)) / 2f));
-                if (!w.Rng.Chance(p)) continue;
+                if (!_rng.Chance(p)) continue;
                 Stats.Arguments++;
                 a.ChangeAffinity(b, -0.15f); b.ChangeAffinity(a, -0.15f);
                 a.Needs.Stress = MathF.Min(1f, a.Needs.Stress + 0.06f);
@@ -305,7 +311,7 @@ public sealed class LifeSystem
                 Life.Diary(w, b, $"{Ko.WaGwa(a.Name)} {about} 두고 다퉜다.");
                 // 중재: 그 자리에 사교적인 사람이 있으면 바로 달랜다
                 var mediator = awake.Where(x => x != a && x != b && x.Room == a.Room && x.Traits.Sociability > 0.6f).OrderByDescending(x => x.Traits.Sociability).FirstOrDefault();
-                if (mediator != null && w.Rng.Chance(0.6f))
+                if (mediator != null && _rng.Chance(0.6f))
                 {
                     Stats.Mediations++;
                     a.ChangeAffinity(b, 0.1f); b.ChangeAffinity(a, 0.1f);
