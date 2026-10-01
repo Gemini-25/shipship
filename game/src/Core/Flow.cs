@@ -348,7 +348,7 @@ public sealed class FlowSystem
         {
             if (r.Detached || !r.WaterLinked || r.ValveShut || r.WaterFlow <= 0f || r.WaterFlow >= BackflowBelow) continue;
             float dirty = w.Soil.RoomSoil(r)[(int)SoilKind.Bio] + (r.Type is RoomType.Medbay or RoomType.Laundry ? 0.4f : 0f) + (r.Type == RoomType.Hydroponics ? 0.2f : 0f);
-            if (dirty < 0.3f || !R.Chance(0.5f * dirty * dt)) continue;
+            if (dirty < 0.3f || !R.Chance(0.5f * dirty * ComputerV15.BackflowMul(w, r) * dt)) continue; // v15.9 배관 압력 감시: 체크 밸브
             Stats.Backflows++;
             WaterQuality = MathF.Max(0f, WaterQuality - 0.3f);
             TaintFrom = r.Name;
@@ -359,7 +359,7 @@ public sealed class FlowSystem
         {
             // 정수기가 천천히 되돌린다
             float clean = w.Ship.FurnitureOf(FurnitureType.WaterRecycler).Sum(f => f.Machine!.Efficiency);
-            WaterQuality = MathF.Min(1f, WaterQuality + 0.04f * clean * dt);
+            WaterQuality = MathF.Min(1f, WaterQuality + 0.04f * clean * ComputerV15.FlushMul(w) * dt); // v15.9 배관 압력 감시: 그 구간부터 돌려 씻는다
             // 마신 사람이 탈이 난다
             foreach (var c in w.Crew)
             {

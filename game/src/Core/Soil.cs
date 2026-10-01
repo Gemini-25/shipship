@@ -129,7 +129,7 @@ public sealed class SoilSystem
         }
         // 방은 천천히 옅어진다 (환기 · 닦기)
         foreach (var r in w.Ship.Rooms) // v15 식기 세척기 · 공기 청정기 · 멸균기가 있으면 더 빨리
-            if (_room.TryGetValue(r.Id, out var a)) { float d = 0.01f * ModulesV15.CleanMul(r) * dt; for (int k = 0; k < Soil.Kinds; k++) a[k] = MathF.Max(0f, a[k] - d); }
+            if (_room.TryGetValue(r.Id, out var a)) { float d = 0.01f * ModulesV15.CleanMul(r) * ComputerV15.SoilMul(w, r) * dt; for (int k = 0; k < Soil.Kinds; k++) a[k] = MathF.Max(0f, a[k] - d); } // v15.9 오염 감시
     }
 
     private static void Add(float[] a, SoilKind k, float v) => a[(int)k] = Math.Clamp(a[(int)k] + v, 0f, 1f);

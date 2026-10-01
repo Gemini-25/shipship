@@ -23,7 +23,7 @@ public sealed class Omen
     public OmenKind Kind { get; init; }
     public FaultKind Fault { get; init; }
     public long Since { get; init; }
-    public long Due { get; init; }
+    public long Due { get; set; } // v15.9 전조 분석이 늦출 수 있다
     public bool Known { get; set; }
     public string? KnownBy { get; set; }
     public long KnownAt { get; set; }
@@ -124,7 +124,7 @@ public static class Prevention
                 bool logged = o.Note is { Logged: true };
                 float sensor = !logged && !w.Watch.NoSensors && w.Automation.MainOnline && m.Body.Room.Powered && m.Body.Room.DataLinked
                     ? (phantom ? 0.5f : o.Kind switch { OmenKind.Heat => 0.22f, OmenKind.Pressure => 0.18f, OmenKind.Drift => 0.12f, _ => 0.05f }) * (0.4f + 0.6f * m.SensorCal)
-                      * (!phantom && w.Automation.Level >= 4 ? 1.5f : 1f) * (phantom ? 1f : ErasV15.Mul(w, "omen")) : 0f; // v12.5 IV 추론: 전조를 먼저 본다 · v15.5 감지 기술
+                      * (!phantom && w.Automation.Level >= 4 ? 1.5f : 1f) * (phantom ? 1f : ErasV15.Mul(w, "omen")) * ComputerV15.OmenSensorMul(w, phantom) : 0f; // v12.5 IV 추론: 전조를 먼저 본다 · v15.5 감지 기술 · v15.9 전조 분석
                 if (sensor > 0f && w.Rng.Chance(sensor * (phantom ? 5f : 0.3f + 0.7f * level) * dt))
                     Detect(w, m, o, "감지기", null);
                 else if (!phantom)
@@ -184,6 +184,7 @@ public static class Prevention
         o.Known = true;
         o.KnownAt = w.Tick;
         o.KnownBy = byName ?? by?.Name ?? how;
+        ComputerV15.OnDetect(w, m, o); // v15.9 전조 분석: 부하를 낮춰 고장을 늦춘다
         st.Detected++;
         switch (how)
         {

@@ -157,6 +157,7 @@ public sealed class World
     public DailySystem Daily { get; } // v15 일상 사건 70
     public OutsideSystem Outside { get; } // v15.4 외부 사건 40
     public PropSystem Props { get; } // v15.8 소품·장식 70
+    public TitleSystem Titles { get; } // v15.9 칭호·업적 50
     public AmbienceSystem Ambience { get; }
     public ExteriorSystem Exterior { get; }
     public LifeSystem Life { get; }
@@ -251,6 +252,7 @@ public sealed class World
         Daily = new DailySystem(this);
         Outside = new OutsideSystem(this);
         Props = new PropSystem(this);
+        Titles = new TitleSystem(this);
         Ambience = new AmbienceSystem(this);
         Exterior = new ExteriorSystem(this);
         Life = new LifeSystem(this);
@@ -335,6 +337,7 @@ public sealed class World
             Daily.Update(dt); // v15 사고가 아닌 날의 일상 사건
             Outside.Update(dt); // v15.4 배 바깥의 사건 (조난 신호 · 상선 · 표류 화물 · 우주 기상 · 해적)
             Props.Update(dt); // v15.8 소품을 만들고 · 사고 · 겪은 일에서 걸고 · 곁의 사람을 달랜다
+            Titles.Update(dt); // v15.9 칭호·업적 (한 시간마다)
             pf = Prof.Lap("sys.Machines", pf);
             Prevention.Update(this, dt);
             pf = Prof.Lap("sys.Prevention", pf);

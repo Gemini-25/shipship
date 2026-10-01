@@ -209,11 +209,11 @@ public sealed class CultureSystem
                     Life.Diary(w, c, Persona.Say(c, $"{Ko.IGa(teacher.Name)} 이 배에선 {Name(cu.Kind)}고 했다. {cu.Origin}"));
                     w.Relations.Remember(c, teacher, RelationReason.TaughtMe, $"이 배의 관행을 알려 줬다 ({Name(cu.Kind)})");
                 }
-                else if (talk && cu.Written && Records(w))
+                else if ((talk || ComputerV15.Archived(w)) && cu.Written && (Records(w) || ComputerV15.Archived(w))) // v15.9 기록 보관: 신입이 스스로 찾아 읽는다
                 {
                     cu.Knowers.Add(c.Id);
                     Stats.Recovered++;
-                    teacher.Say(w, Persona.Say(teacher, "원래 그렇게 해 — 왜인지는 기록에 있을걸"));
+                    if (talk) teacher.Say(w, Persona.Say(teacher, "원래 그렇게 해 — 왜인지는 기록에 있을걸"));
                     Life.Diary(w, c, Persona.Say(c, $"{Name(cu.Kind)} — 기록을 찾아보니 {cu.Origin}"));
                 }
                 else
@@ -254,7 +254,8 @@ public sealed class CultureSystem
         foreach (var c in w.Crew) if (c.Dead && !_gone.Contains(c.Id)) OnGone(c);
         foreach (var cu in Customs)
         {
-            if (cu.Written && !Records(w)) cu.Written = false; // 기록이 사라졌다
+            if (!cu.Written && cu.Knowers.Count > 0 && Records(w) && ComputerV15.Archived(w)) { cu.Written = true; w.Automation.V15Acts[ComputerModule.Archive]++; } // v15.9 기록 보관: 아는 사람이 있을 때 적어 둔다
+            if (cu.Written && !Records(w) && !ComputerV15.Archived(w)) cu.Written = false; // 기록이 사라졌다 (v15.9 예비 기억 장치에 있으면 남는다)
             bool lost = cu.Knowers.Count == 0 && !cu.Written;
             if (lost && !cu.ReasonLost && cu.Followers.Count > 0)
             {

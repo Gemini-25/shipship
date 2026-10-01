@@ -160,6 +160,7 @@ public static partial class Program
         if (args.Contains("--era15test")) return RunEraV15Test(seed); // v15.5
         if (args.Contains("--voyage15test")) return RunVoyageV15Test(seed); // v15.4
         if (args.Contains("--proptest")) return RunPropTest(seed); // v15.8 소품·장식 70
+        if (args.Contains("--computer15test")) return RunComputerV15Test(seed); // v15.9
         if (args.Contains("--replaycheck")) return RunReplayCheck(seed);
         if (args.Contains("--deathtrace")) return RunDeathTrace(Math.Max(1, days), seed);
         if (args.Contains("--stressprobe")) return RunStressProbe(Math.Max(1, days), seed);

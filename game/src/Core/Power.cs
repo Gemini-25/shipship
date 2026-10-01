@@ -463,7 +463,7 @@ public sealed class PowerGrid
             var r = room;
             // 떨어져 나갔거나 사출 준비로 전력을 끊은 방은 전기가 없다
             if (!CircuitFed[r.Circuit] || r.Detached || r.PowerCut || r.BreakerOff || !r.PowerLinked) { r.Powered = false; continue; }
-            consumers.Add((8, RoomSystemsKw, r.Circuit, on => r.Powered = on));
+            consumers.Add((8, RoomSystemsKw * ComputerV15.RoomKwMul(_world, r), r.Circuit, on => r.Powered = on)); // v15.9 전력 분배: 빈 방은 낮춘다
         }
         float parkedKw = 0f;
         foreach (var m in ship.Machines)
@@ -478,7 +478,7 @@ public sealed class PowerGrid
             int prio = Brownout && (m.Body.Type is FurnitureType.GrowBed or FurnitureType.Fridge or FurnitureType.Stove or FurnitureType.MealDispenser
                                     || (m.Active && m.Body.Type == FurnitureType.Refinery))
                 ? 8 : m.Spec.Priority;
-            consumers.Add((prio, m.Demand, m.Body.Room.Circuit, on => mm.Powered = on));
+            consumers.Add((prio, m.Demand * ComputerV15.IdleKwMul(_world, m), m.Body.Room.Circuit, on => mm.Powered = on)); // v15.9 전력 분배: 쉬는 설비 대기 전력
         }
         // 같은 우선순위는 설계도 순서대로 (안정 정렬). v9.2: 자동화가 꺼지면 우선순위를 모른다 — 먼저 붙은 것부터 받는다
         if (_world.Automation.Priority) consumers = consumers.OrderByDescending(x => x.priority).ToList();
