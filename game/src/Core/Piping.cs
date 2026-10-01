@@ -260,7 +260,7 @@ public sealed class PipeNetwork
             FillPort = port;
         }
         else FillPort = NearestFloor(manifold, cooling) ?? manifold;
-        foreach (var s in Segments) s.LeakAt = s.Path[s.Path.Count / 2];
+        foreach (var s in Segments) if (s.Path.Count > 0) s.LeakAt = s.Path[s.Path.Count / 2]; // v16.3 길이 빈 구간(배치가 다른 배)은 건너뛴다
     }
 
     /// <summary>보충구: 냉각실 아래쪽 벽 가까운 바닥 칸 중 문 앞이 아닌 곳.</summary>

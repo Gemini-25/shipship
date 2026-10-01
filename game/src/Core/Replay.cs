@@ -414,6 +414,7 @@ public static class SaveGame
         { var au = w.Automation; I(au.Book.Total); I(au.Book.Right); I(au.Book.Wrong); I(au.Asks.All.Count); I(au.Asks.Rejected); I(au.CheckFound); I(au.Reboots); I(au.Suspended.Count); I(au.Speak.Count); I(au.Belief.Repairs); foreach (var c in w.Crew) F(au.Trusts.Of(c)); foreach (var m in au.Modules.OrderBy(m => (int)m)) I((int)m); }
         w.Cooking.Hash(I, F); w.Smells.Hash(I, F); // v16.8 음식 · 냄새
         foreach (var d in w.Portable.Devices) { I(d.At.X * 1000 + d.At.Y); I((d.On ? 1 : 0) + (d.Stored ? 2 : 0) + (d.Broken ? 4 : 0) + (int)d.Plug * 8); F(d.Charge); } // v16.7
+        { var bs = w.Body.Stats; I(bs.ComputerFlags); I(bs.ComputerWarnings); I(bs.Witnessed); I(bs.Mopped); I(bs.FoodSpills); I(bs.Grease); I(bs.Mildew); } // v16.3 배 본체 ↔ 주 컴퓨터 · 다른 시스템
         return h;
     }
 }

@@ -196,6 +196,11 @@ public static partial class Program
                     Force(w, owner, new Job(null, "책 읽기", new List<Toil> { new WaitToil(SimTime.Hours(2), Pose.Sitting) }));
                     b.DoorOf(w.Ship.DoorAt(door)!)!.Knocker = -1;
                     Run(w, SimTime.Minutes(70)); // 돌아선 사람은 한 시간 동안 다시 두드리지 않는다
+                    // 그새 주인이 나갔을 수 있다 — 다시 제 선실에서 책을 읽게 (깨어 있음)
+                    Teleport(w, owner, bedSpot);
+                    w.Step();
+                    Force(w, owner, new Job(null, "책 읽기", new List<Toil> { new WaitToil(SimTime.Hours(2), Pose.Sitting) }));
+                    b.DoorOf(w.Ship.DoorAt(door)!)!.Knocker = -1;
                     Teleport(w, visitor, outside);
                     w.Step();
                     Force(w, visitor, new Job(null, "들르기", new List<Toil> { new GotoToil(target), new WaitToil(20, Pose.Standing) }));
@@ -264,18 +269,25 @@ public static partial class Program
 
         // 5) 젖은 타일에서 뛰면 미끄러질 수 있다 · 바닥 물(침수)이 칸 상태로
         {
-            int Slips(bool urgent, bool wet, out string where)
+            float runRisk = 0f, walkRisk = 0f;
+            int Slips(bool urgent, bool wet, out string where, out string seen)
             {
                 var w = DayOne(seed, "Hanbit");
                 var b = w.Body;
                 var room = w.Ship.LiveRooms.Where(r => b.FloorAt(r.Cells[0]) == Material.Tile && r.Cells.Count(w.Ship.IsWalkable) >= 8).OrderByDescending(r => r.Cells.Count).First();
                 where = room.Name;
+                w.Automation.Speak.BreakSpeaker(room, "시험", 6f); // 방송을 못 듣는다 — 아무도 조심하라는 말을 못 들은 바닥
                 if (wet) foreach (var c in room.Cells) b.SetMark(c, CellMark.Wet, 1f, "시험");
                 var walk = room.Cells.Where(w.Ship.IsWalkable).ToList();
                 Cell a = walk.OrderBy(c => c.X).ThenBy(c => c.Y).First(), z = walk.OrderByDescending(c => c.X).ThenByDescending(c => c.Y).First();
                 var p = w.Crew.Where(c => c.CanAct && !c.IsChild && !c.Outside).OrderBy(c => c.Id).First();
+                var by = w.Crew.Where(c => c != p && c.CanAct && !c.IsChild && !c.Outside).OrderBy(c => c.Id).First();
                 Teleport(w, p, a);
+                Teleport(w, by, walk.OrderBy(c => (c.Center - (a.Center + z.Center) * 0.5f).LengthSquared()).First());
                 w.Step();
+                Force(w, by, new Job(null, "구경", new List<Toil> { new WaitToil(SimTime.Hours(2), Pose.Standing) }));
+                int wi = w.Ship.Grid.Index(walk[walk.Count / 2]);
+                if (wet && urgent) { runRisk = b.SlipRisk(p, wi, true, false); walkRisk = b.SlipRisk(p, wi, false, false); }
                 var toils = new List<Toil>();
                 for (int k = 0; k < 12; k++) toils.Add(new GotoToil(k % 2 == 0 ? z : a));
                 int s0 = b.Stats.Slips;
@@ -285,11 +297,14 @@ public static partial class Program
                     w.Step();
                     if (wet) foreach (var c in room.Cells) if (b.Mark(c, CellMark.Wet) < 0.9f) b.SetMark(c, CellMark.Wet, 1f, "시험");
                 }
+                seen = $"곁에 선 {by.Name}: 봤다 {b.Stats.Witnessed} · 조심 {b.Cautious(by, room)}({b.CautionWhy(by)}) · 넘어진 사람 조심 {b.Cautious(p, room)}";
+                if (wet && urgent && b.Stats.Slips > s0 && !(b.Stats.Witnessed > 0 && b.Cautious(by, room))) seen = "✘ " + seen;
                 return b.Stats.Slips - s0;
             }
-            int run = Slips(true, true, out var where), walkSlips = Slips(false, true, out _), dry = Slips(true, false, out _);
-            Check("미끄럼 — 젖은 타일에서 뛰면 미끄러진다 (걸으면 드물고, 마른 바닥에선 없다)", run >= 1 && run > walkSlips && dry == 0,
-                $"{where} · 젖은 바닥 뛰기 {run} · 걷기 {walkSlips} · 마른 바닥 뛰기 {dry}");
+            int run = Slips(true, true, out var where, out var seenText), dry = Slips(true, false, out _, out _);
+            Check("미끄럼 — 젖은 타일에서 뛰면 미끄러진다 (걸으면 드물고, 마른 바닥에선 없다)", run >= 1 && runRisk > walkRisk * 4f && walkRisk > 0f && dry == 0,
+                $"{where} · 젖은 바닥 뛰기 {run}번 넘어짐 · 한 칸 위험 뛰기 {runRisk:0.000} / 걷기 {walkRisk:0.000} · 마른 바닥 뛰기 {dry}");
+            Check("★★ 승무원 — 옆 사람이 미끄러지는 걸 본 사람은 그 방에서 조심해서 걷는다", run >= 1 && !seenText.StartsWith("✘"), seenText);
 
             var w2 = DayOne(seed, "Hanbit");
             var flood = w2.Ship.LiveRooms.First(r => r.Kind == RoomType.Galley);
@@ -327,15 +342,95 @@ public static partial class Program
             for (int t = 0; t < World.SystemInterval * 3; t++) { w.Step(); door.Openness = 0f; }
             Check("패킹 — 삭은 문은 닫혀 있어도 새고 휘파람 소리가 난다", b.Stats.Whistles > 0 && b.Stats.MicroLeaks > 0,
                 $"{lo.Name}·{door.RoomB.Name} 압력 차 {dp0:0.0}kPa · 휘파람 {b.Stats.Whistles} · 누출 {b.Stats.MicroLeaks}");
+            for (int t = 0; t < SimTime.Minutes(2); t++) { w.Step(); door.Openness = 0f; }
+            var gact = w.Automation.Book.Acts.LastOrDefault(a => a.Key == "gasket:" + door.Id);
+            Check("★★ 주 컴퓨터 — 닫힌 문 너머 압력 누출을 읽고 '패킹 노화' 판단 · 정비 요청 (손보기가 먼저 한다)", db.Flagged && gact != null,
+                gact != null ? $"관측: {gact.Observe} · 판단: {gact.Judge} · 조치: {gact.Act} · 요청: {gact.Request}" : $"요청 {db.Flagged} · 기록 없음");
             db.IndicatorBroken = true; db.IndicatorSaysSafe = true;
             string? shown = b.Reading(door, "8kPa");
             Check("표시판 — 고장이면 진공을 '정상'으로 오판한다", shown == null && b.Stats.FalseReadings > 0, $"실제 8kPa → 표시 {shown ?? "정상"}");
+
+            // 주 컴퓨터: 표시판 '정상' ↔ 압력 감지기 진공 → 표시판을 믿지 않고 방송 · 들은 사람은 실제 위험을 안다
+            db.Gasket = 1f;
+            for (int t = 0; t < SimTime.Minutes(2); t++) { lo.Air.O2 = 0f; lo.Air.N2 = 0.5f; door.Openness = 0f; w.Step(); }
+            var iact = w.Automation.Book.Acts.LastOrDefault(a => a.Key == "indicator:" + door.Id);
+            var bc = w.Automation.Speak.Recent.LastOrDefault(x => x.Text.Contains("표시판이 고장"));
+            var heard = bc == null ? null : w.Crew.FirstOrDefault(c => bc.HeardBy.Contains(c.Id));
+            var deaf = bc == null ? null : w.Crew.FirstOrDefault(c => !c.Dead && !bc.HeardBy.Contains(c.Id));
+            string? toHeard = heard != null ? b.Reading(door, "진공", heard) : null;
+            Check("★★ 표시판 대조 — 주 컴퓨터는 고장 난 표시판 대신 압력 감지기를 믿고 방송한다 · 들은 사람은 표시판에 속지 않는다", db.IndicatorWarned && iact != null && bc != null && toHeard == "진공",
+                $"{iact?.Observe} → {iact?.Judge} · 방송 들은 {bc?.HeardBy.Count}명 · {heard?.Name}: {toHeard ?? "정상"} · 못 들은 {deaf?.Name ?? "-"}: {(deaf != null ? b.Reading(door, "진공", deaf) ?? "정상(오판)" : "-")}");
+        }
+
+        // 6-2) ★★ 주 컴퓨터가 바닥 물 감지기를 읽고 방송 → 들은 사람만 조심 · 걸레질 요청 → 손보기가 닦는다
+        {
+            var w = DayOne(seed, "Hanbit");
+            var b = w.Body;
+            var room = w.Ship.LiveRooms.Where(r => b.FloorAt(r.Cells[0]) == Material.Tile && r.Cells.Count(w.Ship.IsWalkable) >= 8).OrderByDescending(r => r.Cells.Count).First();
+            var deafRoom = w.Ship.LiveRooms.First(r => r != room && r.Kind == RoomType.Storage || r != room && r.Kind == RoomType.Workshop);
+            w.Automation.Speak.BreakSpeaker(deafRoom, "시험", 6f);
+            var A = w.Crew.Where(c => c.CanAct && !c.IsChild && !c.Outside && c.IsAwake).OrderBy(c => c.Id).First();
+            var B = w.Crew.Where(c => c != A && c.CanAct && !c.IsChild && !c.Outside && c.IsAwake).OrderBy(c => c.Id).First();
+            Teleport(w, A, room.Cells.First(w.Ship.IsWalkable));
+            Teleport(w, B, deafRoom.Cells.First(w.Ship.IsWalkable));
+            w.Step();
+            Force(w, A, new Job(null, "기다림", new List<Toil> { new WaitToil(SimTime.Minutes(10), Pose.Standing) }), SimTime.Minutes(10));
+            Force(w, B, new Job(null, "기다림", new List<Toil> { new WaitToil(SimTime.Minutes(10), Pose.Standing) }), SimTime.Minutes(10));
+            foreach (var c in room.Cells) b.SetMark(c, CellMark.Wet, 1f, "시험");
+            Run(w, SimTime.Minutes(2));
+            var act = w.Automation.Book.Acts.LastOrDefault(a => a.Key == "wetfloor:" + room.Id);
+            var bc = w.Automation.Speak.Recent.LastOrDefault(x => x.Text.Contains("바닥이 젖었다"));
+            int wi = w.Ship.Grid.Index(room.Cells.Where(w.Ship.IsWalkable).ElementAt(3));
+            float rA = b.SlipRisk(A, wi, true, false), rB = b.SlipRisk(B, wi, true, false);
+            Check("★★ 주 컴퓨터 — 바닥 물 감지기로 젖은 타일을 읽고 '뛰지 마라' 방송 · 걸레질 요청 — 들은 사람만 조심한다",
+                act != null && bc != null && b.Cautious(A, room) && !b.Cautious(B, room) && rA < rB * 0.2f && b.MopRequested(room),
+                $"{act?.Observe} → {act?.Judge} · {act?.Act} · 요청 {act?.Request} · 들은 {Ko.IGa(A.Name)} 조심 {b.Cautious(A, room)}(뛰어도 위험 {rA:0.000}) · {deafRoom.Name}(스피커 고장)의 {Ko.IGa(B.Name)} 조심 {b.Cautious(B, room)}(위험 {rB:0.000})");
+            // 걸레질: 계속 젖게 두면 손보기가 요청을 받고 닦으러 온다
+            int m0 = b.Stats.Mopped;
+            string? mopper = null;
+            for (int t = 0; t < SimTime.Hours(3) && b.Stats.Mopped == m0; t++)
+            {
+                w.Step();
+                if (t % 30 == 0) foreach (var c in room.Cells) if (b.Mark(c, CellMark.Wet) > 0.05f && b.Mark(c, CellMark.Wet) < 0.9f) b.SetMark(c, CellMark.Wet, 1f, "시험");
+                mopper ??= w.Crew.FirstOrDefault(c => c.Job?.Label == "젖은 바닥 걸레질")?.Name;
+            }
+            Check("★★ 승무원 — 컴퓨터의 걸레질 요청을 받고 젖은 바닥을 닦는다", b.Stats.Mopped > m0, $"닦은 사람 {mopper ?? "없음"} · 걸레질 {b.Stats.Mopped - m0}번 · {SimTime.Clock(w.Tick)}");
+        }
+
+        // 6-3) 상호작용: 엎지른 국 → 젖은 칸 · 오래 젖은 카펫 → 곰팡이 → 균 → 악취
+        {
+            var w = DayOne(seed, "Hanbit");
+            var b = w.Body;
+            var mess = w.Ship.LiveRooms.FirstOrDefault(r => r.Kind == RoomType.Mess) ?? w.Ship.LiveRooms.First(r => r.Kind == RoomType.Galley);
+            var cook = w.Crew.Where(c => c.CanAct && !c.IsChild && !c.Outside).OrderBy(c => c.Id).First();
+            Teleport(w, cook, mess.Cells.First(w.Ship.IsWalkable));
+            w.Step();
+            var spill = w.Scenes.OpenSpill(cook);
+            Run(w, SimTime.Minutes(2));
+            var stain = spill?.Things.FirstOrDefault(t => t.Kind == ThingKind.Stain);
+            var sm = stain != null ? b.MarksAt(stain.At) : null;
+            Check("상호작용 — 엎지른 국(일상 장면)이 그 칸을 적신다 (바닥재대로 미끄럽다)", sm != null && sm[CellMark.Wet] > 0.3f && sm.Cause[(int)CellMark.Wet] == "엎지른 국",
+                $"{mess.Name} {(stain != null ? Materials.Name(b.FloorAt(stain.At)) : "-")} 젖음 {sm?[CellMark.Wet]:0.00} · 원인 {sm?.Cause[(int)CellMark.Wet] ?? "-"} · 미끄러움 {(stain != null ? b.SlipAt(w.Ship.Grid.Index(stain.At)) : 0f):0.00}");
+
+            var cabin = w.Ship.LiveRooms.First(r => b.FloorAt(r.Cells[0]) == Material.Carpet);
+            var soil = w.Soil.RoomSoil(cabin);
+            float bio0 = soil[(int)SoilKind.Bio], foul0 = w.Smells.Level(cabin, SmellKind.Foul);
+            var wetCells = cabin.Cells.Where(w.Ship.IsWalkable).Take(4).ToList();
+            for (int t = 0; t < SimTime.Hours(4); t++)
+            {
+                if (t % 20 == 0) foreach (var c in wetCells) b.RaiseMark(c, CellMark.Wet, 0.9f, "샌 물");
+                w.Step();
+            }
+            float bio = soil[(int)SoilKind.Bio], foul = w.Smells.Level(cabin, SmellKind.Foul);
+            Check("상호작용 — 오래 젖은 카펫에 곰팡이 → 방에 균 → 냄새가 악취로 번진다", bio > bio0 + 0.2f && foul > foul0 && b.Stats.Mildew > 0,
+                $"{cabin.Name} 균 {bio0:0.00}→{bio:0.00} · 악취 {foul0:0.00}→{foul:0.00} · 곰팡이 {b.Stats.Mildew}");
         }
 
         // 7) 모든 배 (+ 생성 배)에서 하루 정상
         {
             var keys = ShipCatalog.All.Select(t => t.Key).Append(ShipGenerator.KeyFor(12, seed)).ToList();
             var bad = new List<string>();
+            int grease = 0;
             foreach (var key in keys)
             {
                 try
@@ -344,6 +439,7 @@ public static partial class Program
                     int crew = w.Crew.Count(c => !c.Dead);
                     Run(w, SimTime.TicksPerDay);
                     var b = w.Body;
+                    grease += b.Stats.Grease;
                     int dead = crew - w.Crew.Count(c => !c.Dead);
                     float worn = b.Wear.Max();
                     int noFloor = w.Ship.LiveRooms.Sum(r => r.Cells.Count(c => b.FloorAt(c) == Material.None));
@@ -355,6 +451,7 @@ public static partial class Program
                 catch (Exception e) { bad.Add($"{key}: {e.GetType().Name} {e.Message}"); Console.WriteLine(e); }
             }
             Check("모든 배 — 카탈로그 배와 생성 배에서 하루가 정상으로 지나고 바닥이 닳는다", bad.Count == 0, $"{keys.Count}척" + (bad.Count > 0 ? $" · 문제: {string.Join(", ", bad)}" : ""));
+            Check("상호작용 — 끓는 화구 앞에 기름이 튄다 (조리 → 주방 바닥)", grease > 0, $"하루 동안 기름 튐 {grease}번 (모든 배)");
         }
 
         // 8) 결정론

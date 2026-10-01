@@ -229,7 +229,42 @@ public partial class ShipView
                 for (int k = 0; k < 7; k++)
                     ci.DrawRect(new Rect2(r.Position + new Vector2(BH(c.X, c.Y, k + 40) * (T - 3), BH(c.Y, c.X, k + 41) * (T - 3)), new Vector2(2, 2)), new Color(0.02f, 0.02f, 0.02f, 0.6f * soot));
             }
-            if (wet > 0.05f)
+            string? wetWhy = wet > 0.05f ? s.Cause[(int)CellMark.Wet] : null;
+            if (wet > 0.05f && wetWhy is "엎지른 국" or "쏟은 음식")
+            {
+                // 엎지른 국 · 쏟은 음식: 주황갈색 얼룩 + 건더기 · 갓 쏟았으면 김이 오른다
+                var pts = new Vector2[7];
+                for (int k = 0; k < 7; k++)
+                {
+                    float ang = k * Mathf.Tau / 7f + BH(c.X, c.Y, 140);
+                    pts[k] = ctr + new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * T * (0.2f + 0.16f * BH(c.X, c.Y, k + 141)) * (0.5f + 0.5f * wet);
+                }
+                ci.DrawColoredPolygon(pts, new Color(0.72f, 0.42f, 0.16f, 0.55f + 0.3f * wet));
+                for (int k = 0; k < 4; k++)
+                {
+                    var bp = ctr + new Vector2(BH(c.X, c.Y, k + 150) - 0.5f, BH(c.Y, c.X, k + 151) - 0.5f) * T * 0.4f * wet;
+                    ci.DrawRect(new Rect2(bp, new Vector2(2.2f, 1.6f)), k % 2 == 0 ? new Color(0.35f, 0.7f, 0.25f, 0.9f) : new Color(0.95f, 0.85f, 0.6f, 0.9f)); // 건더기
+                }
+                if (detail && w.Tick - s.Since[(int)CellMark.Wet] < SimTime.Minutes(20))
+                    for (int k = 0; k < 2; k++)
+                    {
+                        float ph = Mathf.PosMod(_time * 0.6f + k * 0.5f, 1f);
+                        var sp = ctr + new Vector2(-3 + k * 6 + Mathf.Sin(_time * 2f + k) * 1.5f, -ph * 12f);
+                        ci.DrawArc(sp, 2f, 0f, Mathf.Pi, 6, new Color(1f, 1f, 1f, 0.35f * (1f - ph)), 1f, true); // 김
+                    }
+            }
+            else if (wet > 0.05f && wetWhy == "결로")
+            {
+                // 결로: 차가운 벽 쪽 가장자리에 맺혀 흘러내린 물방울 줄
+                ci.DrawRect(r.Grow(-1f), new Color(0.45f, 0.65f, 0.85f, 0.12f + 0.15f * wet));
+                for (int k = 0; k < 6; k++)
+                {
+                    float x = r.Position.X + 3 + k * 5f, len = 3f + 7f * BH(c.X + k, c.Y, 160) * wet;
+                    ci.DrawLine(new Vector2(x, r.Position.Y + 1), new Vector2(x, r.Position.Y + 1 + len), new Color(0.75f, 0.9f, 1f, 0.6f), 1f, true);
+                    ci.DrawCircle(new Vector2(x, r.Position.Y + 1.5f + len), 1.2f, new Color(0.85f, 0.95f, 1f, 0.8f), true, -1f, true);
+                }
+            }
+            else if (wet > 0.05f)
             {
                 // 물기: 반투명 막 + 천천히 미끄러지는 반사 줄 + 물방울
                 ci.DrawRect(r.Grow(-1f), new Color(0.35f, 0.6f, 0.95f, 0.18f + 0.22f * wet));
@@ -243,7 +278,29 @@ public partial class ShipView
                         ci.DrawCircle(dp, 1.6f, new Color(0.8f, 0.92f, 1f, 0.55f * wet), true, -1f, true);
                     }
             }
-            if (oil > 0.05f)
+            if (wet > 0.3f && body.Floor[i] == Mat.Carpet && w.Tick - s.Since[(int)CellMark.Wet] > SimTime.Hours(3))
+            {
+                // 곰팡이: 오래 젖은 카펫에 회녹색 솜털 반점 (가장자리가 번진다)
+                for (int k = 0; k < 4; k++)
+                {
+                    var mp = r.Position + new Vector2(5 + BH(c.X, c.Y, k + 170) * 22, 5 + BH(c.Y, c.X, k + 171) * 22);
+                    float rad = 2f + 2.5f * BH(c.X, c.Y, k + 172);
+                    ci.DrawCircle(mp, rad, new Color(0.32f, 0.4f, 0.28f, 0.55f), true, -1f, true);
+                    if (detail) ci.DrawArc(mp, rad + 1.2f, 0f, Mathf.Tau, 10, new Color(0.62f, 0.7f, 0.55f, 0.45f), 0.8f, true);
+                }
+            }
+            if (oil > 0.05f && s.Cause[(int)CellMark.Oil] == "조리 기름 튐")
+            {
+                // 조리 기름 튐: 웅덩이가 아니라 화구 쪽으로 흩뿌린 노르스름한 방울 + 번들거림
+                for (int k = 0; k < 9; k++)
+                {
+                    var op = r.Position + new Vector2(3 + BH(c.X, c.Y, k + 180) * 26, 3 + BH(c.Y, c.X, k + 181) * 14);
+                    float rad = 0.8f + 1.6f * BH(c.X, c.Y, k + 182) * oil;
+                    ci.DrawCircle(op, rad, new Color(0.78f, 0.62f, 0.2f, 0.75f), true, -1f, true);
+                    if (rad > 1.4f) ci.DrawCircle(op - new Vector2(0.5f, 0.5f), 0.5f, new Color(1f, 1f, 0.85f, 0.9f), true, -1f, true);
+                }
+            }
+            else if (oil > 0.05f)
             {
                 // 기름: 고르지 않은 검갈색 웅덩이 + 무지개 막이 일렁인다
                 var pts = new Vector2[8];
@@ -290,6 +347,18 @@ public partial class ShipView
                     if (glint > 0.85f) ci.DrawCircle(tri[0], 1.3f, new Color(1, 1, 1, 0.9f), true, -1f, true);
                 }
             }
+            if (wet > 0.35f && (c.X * 3 + c.Y) % 4 == 0 && ship.RoomAt(c) is Room wr && body.MopRequested(wr))
+            {
+                // 주 컴퓨터가 바닥에 비춘 "미끄럼 주의" 투영: 노란 삼각 · 깜빡이는 주사선
+                float fl = 0.65f + 0.35f * Mathf.Sin(_time * 7f + c.X);
+                var tri = new[] { ctr + new Vector2(0, -8), ctr + new Vector2(8, 6), ctr + new Vector2(-8, 6) };
+                ci.DrawColoredPolygon(tri, new Color(1f, 0.85f, 0.15f, 0.22f * fl));
+                ci.DrawPolyline(new[] { tri[0], tri[1], tri[2], tri[0] }, new Color(1f, 0.9f, 0.3f, 0.75f * fl), 1.2f, true);
+                ci.DrawLine(ctr + new Vector2(0, -3), ctr + new Vector2(0, 1.5f), new Color(1f, 0.95f, 0.5f, 0.9f * fl), 1.5f);
+                ci.DrawCircle(ctr + new Vector2(0, 3.5f), 0.9f, new Color(1f, 0.95f, 0.5f, 0.9f * fl), true, -1f, true);
+                float scan = Mathf.PosMod(_time * 1.5f, 1f);
+                ci.DrawLine(new Vector2(ctr.X - 8, ctr.Y - 8 + scan * 14), new Vector2(ctr.X + 8, ctr.Y - 8 + scan * 14), new Color(0.6f, 0.85f, 1f, 0.3f), 1f);
+            }
             if (tape > 0.3f)
             {
                 // 테이프 출입 금지선: 노랑 · 검정 빗금 띠가 칸을 두르고 바람에 살짝 떤다
@@ -332,6 +401,7 @@ public partial class ShipView
                 float pulse = 0.5f + 0.5f * Mathf.Sin(_time * 4f);
                 ci.DrawRect(r.Grow(-1f), new Color(1f, 0.55f, 0.1f, 0.4f + 0.5f * pulse), false, 2f);
             }
+            if (h.Flagged) DrawComputerTag(ci, r.End - new Vector2(4, 4));
         }
 
         foreach (var wb in body.WallList)
@@ -480,6 +550,7 @@ public partial class ShipView
                 ci.DrawRect(new Rect2(pan - new Vector2(4, 3), new Vector2(8, 6)), db.IndicatorSaysSafe ? new Color(0.15f, 0.45f, 0.2f) : new Color(0.55f, 0.15f, 0.12f));
                 ci.DrawLine(pan + new Vector2(-4, -3), pan + new Vector2(2, 3), new Color(1, 1, 1, 0.7f), 0.8f);
             }
+            if (db.Flagged && (db.Gasket < 0.25f || db.IndicatorBroken)) DrawComputerTag(ci, r.GetCenter() - side * (T * 0.62f) + outward * (T * 0.3f));
         }
 
         // 벽 장착물: 소화기 · 산소 마스크함 · 손전등 · 게시판 — 꺼내면 빈 걸이 (점선 윤곽)
@@ -519,6 +590,21 @@ public partial class ShipView
                 ci.DrawPolyline(new[] { r.GetCenter() + new Vector2(-4, -3), r.GetCenter() + new Vector2(0, 0), r.GetCenter() + new Vector2(-4, 3) }, new Color(0.7f, 1f, 0.7f, 0.8f * pulse), 1.5f, true);
             }
         }
+    }
+
+    /// <summary>주 컴퓨터 정비 요청 꼬리표: 파란 마름모 홀로그램 + 느낌표 + 도는 주사 고리.</summary>
+    private void DrawComputerTag(CanvasItem ci, Vector2 at)
+    {
+        float bob = Mathf.Sin(_time * 2.4f + at.X * 0.1f) * 1.2f;
+        var p = at + new Vector2(0, bob);
+        var dia = new[] { p + new Vector2(0, -5), p + new Vector2(5, 0), p + new Vector2(0, 5), p + new Vector2(-5, 0) };
+        ci.DrawColoredPolygon(dia, new Color(0.15f, 0.45f, 0.95f, 0.45f));
+        ci.DrawPolyline(new[] { dia[0], dia[1], dia[2], dia[3], dia[0] }, new Color(0.55f, 0.85f, 1f, 0.95f), 1f, true);
+        ci.DrawLine(p + new Vector2(0, -2.6f), p + new Vector2(0, 0.8f), new Color(1f, 1f, 1f, 0.95f), 1.2f);
+        ci.DrawCircle(p + new Vector2(0, 2.4f), 0.7f, new Color(1f, 1f, 1f, 0.95f), true, -1f, true);
+        float a = _time * 3f;
+        ci.DrawArc(p, 7.5f, a, a + 1.6f, 8, new Color(0.5f, 0.8f, 1f, 0.6f), 1f, true);
+        ci.DrawArc(p, 7.5f, a + Mathf.Pi, a + Mathf.Pi + 1.6f, 8, new Color(0.5f, 0.8f, 1f, 0.6f), 1f, true);
     }
 
     private static void DrawHazardBand(CanvasItem ci, Rect2 band)

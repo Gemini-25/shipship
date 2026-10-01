@@ -47,6 +47,10 @@ public sealed class DoorBody
     public int LastCycles { get; set; }
     public bool SealFailNoted { get; set; }
     public int ClaimedBy { get; set; } = -1;
+    /// <summary>주 컴퓨터가 정비를 요청했다 (패킹 누출 · 표시판 대조) — 손보기가 먼저 한다.</summary>
+    public bool Flagged { get; set; }
+    /// <summary>표시판 고장을 방송으로 알렸다.</summary>
+    public bool IndicatorWarned { get; set; }
 
     public static string ZoneName(AccessZone z) => z switch
     {
