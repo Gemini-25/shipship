@@ -288,26 +288,8 @@ public partial class Hud
         }
     }
 
-    /// <summary>조치 종류 그림 (표의 둘째 칸).</summary>
-    private void DrawActGlyph(Vector2 c, ActKind k, Color col)
-    {
-        switch (k)
-        {
-            case ActKind.Damper: DrawArc(c, 5f, 0f, Mathf.Tau, 12, col, 1.2f, true); DrawLine(c + new Vector2(-4, -2), c + new Vector2(4, 2), col, 1.4f); break;
-            case ActKind.Bulkhead: DrawRect(new Rect2(c - new Vector2(5, 5), new Vector2(10, 10)), col, false, 1.4f); DrawLine(c + new Vector2(0, -5), c + new Vector2(0, 5), col, 1.4f); break;
-            case ActKind.Valve: DrawColoredPolygon(new[] { c + new Vector2(-5, -4), c + new Vector2(0, 0), c + new Vector2(-5, 4) }, col); DrawColoredPolygon(new[] { c + new Vector2(5, -4), c + new Vector2(0, 0), c + new Vector2(5, 4) }, col); break;
-            case ActKind.Breaker: DrawRect(new Rect2(c - new Vector2(4, 5), new Vector2(8, 10)), col, false, 1.2f); DrawLine(c + new Vector2(-2, 1), c + new Vector2(2, -3), col, 1.6f); break;
-            case ActKind.Suppress: DrawColoredPolygon(new[] { c + new Vector2(0, -6), c + new Vector2(4, 1), c + new Vector2(2, 5), c + new Vector2(-2, 5), c + new Vector2(-4, 1) }, col); break;
-            case ActKind.Alarm: DrawArc(c + new Vector2(0, 1), 4.5f, Mathf.Pi, Mathf.Tau, 8, col, 1.6f, true); DrawLine(c + new Vector2(-5, 2), c + new Vector2(5, 2), col, 1.4f); DrawCircle(c + new Vector2(0, 4), 1.2f, col); break;
-            case ActKind.Zone: for (int r = 2; r <= 6; r += 2) DrawArc(c, r, 0f, Mathf.Tau, 12, col.WithAlpha(1.1f - r * 0.12f), 1f, true); break;
-            case ActKind.Proposal: DrawRect(new Rect2(c - new Vector2(5, 4), new Vector2(10, 8)), col, false, 1.2f); Gfx.TextCentered(this, Fonts.Bold, c, "?", 8, col); break;
-            case ActKind.Broadcast: DrawColoredPolygon(new[] { c + new Vector2(-5, -2), c + new Vector2(-2, -2), c + new Vector2(1, -5), c + new Vector2(1, 5), c + new Vector2(-2, 2), c + new Vector2(-5, 2) }, col); DrawArc(c + new Vector2(2, 0), 4f, -0.8f, 0.8f, 6, col, 1f, true); break;
-            case ActKind.Reboot: DrawArc(c, 5f, 0.6f, Mathf.Tau - 0.2f, 12, col, 1.4f, true); DrawLine(c + new Vector2(5, -2), c + new Vector2(5, 2), col, 1.4f); break;
-            case ActKind.Module: ComputerIcons.Draw(this, ComputerModule.Foresight, c, 4.5f, ComputerIcons.State.On, _time); break;
-            case ActKind.Shed: DrawLine(c + new Vector2(-5, 0), c + new Vector2(-1, 0), col, 1.4f); DrawLine(c + new Vector2(1, 0), c + new Vector2(5, 0), col, 1.4f); DrawLine(c + new Vector2(-1, -3), c + new Vector2(1, 3), col, 1.2f); break;
-            default: DrawCircle(c, 3.5f, col.WithAlpha(0.8f), true, -1f, true); break;
-        }
-    }
+    /// <summary>조치 종류 그림 (표의 둘째 칸) — 배 화면의 빛 흐름 끝 아이콘과 같은 그림.</summary>
+    private void DrawActGlyph(Vector2 c, ActKind k, Color col) => ComputerIcons.Act(this, k, c, 1f, col, _time);
 
     private void DrawReports(Rect2 card, float x, float right, float y, Vector2 mouse)
     {

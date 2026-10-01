@@ -56,6 +56,7 @@ public sealed partial class AutomationSystem
 
     // ── 재부팅 ──
     public long RebootUntil { get; private set; } = -1;
+    public long RebootStarted { get; private set; } = -1;
     public bool Rebooting => RebootUntil > _world.Tick;
     public string RebootWhy { get; private set; } = "";
     public int Reboots;
@@ -66,6 +67,7 @@ public sealed partial class AutomationSystem
         var w = _world;
         if (!Present || Rebooting) return;
         RebootUntil = w.Tick + SimTime.Minutes(minutes);
+        RebootStarted = w.Tick;
         RebootWhy = why;
         Reboots++;
         Book.Add(ActKind.Reboot, Computer?.Body.Room, why, $"{minutes:0}분 멎는다 — 그동안 사람이 손으로", "재부팅", "격벽·댐퍼·경보를 손으로", "", 0, minutes + 5f,
