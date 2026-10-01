@@ -562,7 +562,7 @@ public sealed partial class WorkBoard
             {
                 if (r.Station != station || !w.History.Doctrine.Knows(r)) continue;
                 int have = Have(r.Product);
-                int target = w.History.Doctrine.Target(r);
+                int held = w.Board.Held(r.Product), target = Math.Max(w.History.Doctrine.Target(r), held); // v15.6 비축 임무: 모을 만큼 더 만든다
                 float wanted = demand.GetValueOrDefault(r.Product);
                 if (have >= target && wanted <= 0f) continue;
                 if (!r.Inputs.All(x => Have(x.kind) >= x.count)) continue;
@@ -582,8 +582,8 @@ public sealed partial class WorkBoard
                 }
                 else
                 {
-                    u = have == 0 ? 0.42f : 0.18f + 0.22f * (1f - have / (float)target);
-                    why = $"{ItemKinds.Name(r.Product)} {have}개 · 목표 {target}" + (target > r.Target ? " (교훈)" : "");
+                    u = have == 0 ? 0.42f : 0.18f + 0.22f * (1f - have / (float)target) + (held > 0 && held >= target ? 0.15f : 0f);
+                    why = $"{ItemKinds.Name(r.Product)} {have}개 · 목표 {target}" + (held >= target && target > r.Target ? " (임무 비축)" : target > r.Target ? " (교훈)" : "");
                 }
                 if (wanted > 0f && wanted > u)
                 {

@@ -943,7 +943,7 @@ public static partial class WorkPlanners
         // 전기가 없거나 멈춘 정제기·작업대에 재료를 들고 가 봐야 헛걸음이다 (재료만 들었다 놨다 되풀이하던 것)
         if (station.Machine!.Efficiency <= 0f) { blocked = station.Machine.Powered ? $"{station.Name} 멈춤" : $"{station.Name}에 전기가 없다"; return null; }
         int have = w.Board.Have(product);
-        int batches = r.FromProduce ? 1 : Math.Clamp((w.History.Doctrine.Target(r) - have + r.Yield - 1) / r.Yield, 1, 3);
+        int batches = r.FromProduce ? 1 : Math.Clamp((Math.Max(w.History.Doctrine.Target(r), w.Board.Held(product)) - have + r.Yield - 1) / r.Yield, 1, 3); // v15.6 비축 임무
         foreach (var (kind, n) in r.Inputs) batches = Math.Min(batches, w.Ship.CountStored(kind) / n);
         if (batches <= 0) { blocked = $"재료 부족 ({Cost(r.Inputs)})"; return null; }
         var needs = r.Inputs.Select(x => (x.kind, x.count * batches)).ToArray();
