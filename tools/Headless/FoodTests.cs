@@ -118,6 +118,7 @@ public static partial class Program
                     if (w.Ship.FurnitureOf(FurnitureType.Stove).Any(s => w.Cooking.CookingAt(s)?.Kind == DishKind.Bread)) bakeAt = w.Tick;
                 }
                 var galley = w.Ship.FurnitureOf(FurnitureType.Stove).FirstOrDefault(s => w.Cooking.CookingAt(s) != null)?.Room;
+                if (Environment.GetEnvironmentVariable("FOODDBG") != null && galley != null) Console.WriteLine($"    [빵 이웃] {galley.Name}: " + string.Join(", ", w.Ambience.Neighbors(galley).Select(n => $"{n.room.Name}{(n.door ? "(문)" : "(벽)")}")));
                 var came = new HashSet<int>();
                 float spread = 0f;
                 for (int m = 0; m < 70 && bakeAt >= 0; m++)
@@ -151,6 +152,7 @@ public static partial class Program
                     if (Environment.GetEnvironmentVariable("FOODDBG") != null && m % 3 == 0) Console.WriteLine($"    [탄 {m}] " + string.Join(" / ", w.Crew.Where(c => !c.Dead).Select(c => $"{c.Name}@{c.Room?.Name} {(c.Room != null ? w.Smells.Level(c.Room, SmellKind.Burnt) : 0f):0.000} {(w.Smells.Smelled(c, SmellKind.Burnt, SimTime.Minutes(20)) != null ? "맡음" : "")} {c.ActivityLabel}")));
                     if (m == 10) where = string.Join(", ", w.Crew.Where(c => !c.Dead).Select(c => $"{c.Name}@{c.Room?.Name}{(c.IsAwake ? "" : "(잠)")}"));
                     if (checkAt < 0 && w.Crew.FirstOrDefault(c => c.Job?.Activity is CheckSmellActivity) is CrewMember ch) { checkAt = w.Tick; checker = ch.Name; }
+                    if (checkAt < 0 && w.Smells.LastCheck.Tick >= left && w.Smells.LastCheck.Room == stove.Room.Id) { checkAt = w.Smells.LastCheck.Tick; checker = w.Crew[w.Smells.LastCheck.Crew].Name; } // 1분이 안 걸린 확인 (곁에 있던 사람)
                     if (alarmAt < 0 && w.Alerts.Any(a => a.Serial > alerts0 && a.Text.Contains("화재"))) alarmAt = w.Tick;
                     if (w.Cooking.ScorchingIn(stove.Room) == null && m > 2) break;
                 }
@@ -191,8 +193,12 @@ public static partial class Program
                 Run(w, SimTime.Hours(2));
                 w.Cooking.Watch.Learn();
                 var stove = w.Ship.FurnitureOf(FurnitureType.Stove).First();
-                foreach (var c in w.Crew.Where(c => c.Room == stove.Room)) c.Interrupt(w);
-                w.Cooking.LeaveOnBurner(stove, null);
+                // 화구 자리 비움: 주방에 있던 사람들이 급히 불려 나갔다 (Interrupt만으로는 화구 앞에 그대로 서 있다)
+                var away = w.Ship.LiveRooms.Where(r => r != stove.Room && r.Type != RoomType.Corridor && !r.OffLimits && w.Ambience.Neighbors(stove.Room).All(n => n.room != r))
+                    .OrderBy(r => r.Id).Select(r => r.Cells.FirstOrDefault(w.Ship.IsOpenFloor)).First(c => c != default);
+                var cookAway = w.Crew.FirstOrDefault(c => !c.Dead && c.Room == stove.Room && c.Job?.Order?.Kind == WorkKind.Cook);
+                foreach (var c in w.Crew.Where(c => c.Room == stove.Room).ToList()) { c.Interrupt(w); Teleport(w, c, away); c.PreviousPosition = c.Position; }
+                w.Cooking.LeaveOnBurner(stove, cookAway);
                 string? asked = null;
                 for (int m = 0; m < 45 && w.Cooking.ScorchingIn(stove.Room) != null; m++)
                 {
@@ -200,6 +206,7 @@ public static partial class Program
                     if (asked == null && w.Crew.FirstOrDefault(c => w.Smells.AskedRoom(c) == stove.Room) is CrewMember a) asked = a.Name;
                 }
                 var st = w.Cooking.Stats;
+                if (Environment.GetEnvironmentVariable("FOODDBG") != null) Console.WriteLine("    [화구] " + string.Join(" / ", w.Log.Entries.Where(e => e.Text.Contains("냄비") || e.Text.Contains("탄 냄새")).TakeLast(6).Select(e => SimTime.Clock(e.Tick) + " " + e.Text)));
                 Check("주컴퓨터 — 화구 자리 비움을 보고 가까운 사람을 부른다 → 가서 불 위의 냄비를 내린다", w.Cooking.Watch.BurnerCalls > 0 && st.ScorchCaught > 0 && st.ScorchFires == 0,
                     $"부른 사람 {asked} · {w.Cooking.Watch.Summary()} · 먼저 내림 {st.ScorchCaught} · 불 {st.ScorchFires} · {w.Smells.Stats.Summary()}");
             }
@@ -263,7 +270,11 @@ public static partial class Program
                 var cook = w.Cooking.HeadCook!;
                 w.Cooking.OnCooked(cook, w.Ship.FurnitureOf(FurnitureType.Stove).First(), 8);
                 who.Needs.Food = 0.25f;
-                Run(w, SimTime.Hours(2));
+                for (int q = 0; q < 8; q++)
+                {
+                    Run(w, SimTime.Minutes(15));
+                    if (Environment.GetEnvironmentVariable("FOODDBG") != null) Console.WriteLine($"    [고향 {q}] {SimTime.Clock(w.Tick)} {who.Name}@{who.Room?.Name} {who.ActivityLabel} 배고픔 {who.Needs.Hunger:0.00} 깸 {who.IsAwake} · 먹음 {w.Cooking.Stats.Served} · 냄비 {string.Join(",", w.Cooking.Batches.Select(b => $"{b.Spec.Name}{b.Portions}"))}");
+                }
                 Check("고향 음식 — 기항지에서 재료를 사고, 그 음식을 먹은 사람이 고향 맛을 느낀다", w.Cooking.Stats.HomeMeals > 0,
                     $"{who.Name}의 고향 음식 {dish.Name} · 기항지 \"{string.Join(", ", lines)}\" · {who.Diary.LastOrDefault(d => d.text.Contains("고향")).text}");
             }

@@ -81,6 +81,7 @@ public partial class ShipView
                 if (fine && z > 1.8f) PortionPips(ci, at + new Vector2(0f, s + 4f), b.Portions, b.Made);
                 if (b.Germy && z > 1.6f) DrawGerms(ci, at, s, b.Id);
                 if (b.Flagged || b.FlagIgnored) DrawComputerNote(ci, at + new Vector2(s + 2f, -s - 3f), b.Flagged, b.Id, fine);
+                if (spec.Home && fine && b.Portions > 0) DrawHomeFlag(ci, at + new Vector2(-s * 0.6f, -s - 1f), spec, b.Id);
             }
         }
         // 3) 남겨 둔 접시 (이름표)
@@ -489,6 +490,22 @@ public partial class ShipView
     // ── 균 · 컴퓨터 쪽지 · 감시 눈 · 히터 열 ──
 
     /// <summary>균: 그릇 테두리에 꿈틀대는 짧은 초록 막대균과 알균 (확대해야 보인다 — 먹는 사람은 모른다).</summary>
+    /// <summary>고향 음식 냄비: 꽂아 둔 작은 종이 깃발 — 그 음식이 고향 맛인 사람들의 색 줄 (기항지 재료로 한 날).</summary>
+    private void DrawHomeFlag(CanvasItem ci, Vector2 foot, DishRecipe r, int seed)
+    {
+        float sway = 0.8f * Mathf.Sin(_time * 1.6f + seed);
+        var top = foot + new Vector2(sway, -9f);
+        ci.DrawLine(foot, top, FdBambooDark, 0.9f, true);
+        ci.DrawColoredPolygon(new[] { top, top + new Vector2(7f, 1.6f), top + new Vector2(0f, 3.6f) }, FdPaper);
+        int k = 0;
+        foreach (var c in _world.Crew)
+        {
+            if (c.Dead || Dishes.HomeDish(_world, c) != r || k >= 3) continue;
+            ci.DrawLine(top + new Vector2(0.8f, 0.9f + k * 0.9f), top + new Vector2(4.5f - k, 1.4f + k * 0.7f), Palette.Crew(c.Id), 0.7f);
+            k++;
+        }
+    }
+
     private void DrawGerms(CanvasItem ci, Vector2 c, float s, int seed)
     {
         for (int i = 0; i < 5; i++)
