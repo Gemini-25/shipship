@@ -7,31 +7,62 @@ namespace ShipSim.Core;
 // v12.5 중앙 컴퓨터 등급 · 수동 조종 · 판단 근거 · 연쇄 예측 · 방침.
 //  I 경보 — 감지·경보·일지 / II 자동 차단 — 격벽·댐퍼·분전함·부하 차단 / III 조정 — 차례로 재가동·원격 급수 밸브
 //  IV 추론 — 원인 추정과 판단 근거를 말한다 · 전조를 먼저 본다 / V 지휘 — 연쇄 예측 · 드론·로봇 지휘
+// v13.0 V 지휘가 기본이다. I~IV는 기술 단계가 아니라 고장 사다리 — 지금 살아 있는 기능:
+//  데이터망이 4분의 1 넘게 끊기거나 컴퓨터가 상하면(효율 60% 아래) IV, 절반 넘게 끊기거나 크게 상하면 III,
+//  주 컴퓨터가 서면 예비 제어기만 II, 그것도 서면 I. 데이터선이 끊긴 방은 그 방만 손으로.
 // 컴퓨터는 보수적이다: 피해는 막지만 넓게 끊는다. 판단력 좋은 사람이 관제석에서 수동 조종하면 좁게·빨리 되돌린다.
 
 public sealed partial class AutomationSystem
 {
     public static string LevelName(int l) => l switch { 1 => "I 경보", 2 => "II 자동 차단", 3 => "III 조정", 4 => "IV 추론", _ => "V 지휘" };
 
-    /// <summary>등급: 컴퓨터 단계 + 2 (주 컴퓨터 → III, 분산 제어 → IV, 그 위 → V). 예비 제어기만 돌면 II, 모두 멎으면 I.</summary>
+    /// <summary>등급 (v13.0 고장 사다리): 멀쩡하면 V. 데이터망·컴퓨터가 상한 만큼 내려간다. 예비 제어기만 돌면 II, 모두 멎으면 I.</summary>
     public int Level
     {
         get
         {
             if (!Present) return 2;
             if (!MainOnline) return BackupActive ? 2 : 1;
-            return Math.Clamp((Computer?.Tier ?? 1) + 2 + ExtraLevel, 1, 5);
+            if (_levelTick == _world.Tick) return _levelCached;
+            _levelTick = _world.Tick;
+            float eff = Computer?.Efficiency ?? 0f;
+            int live = 0, linked = 0;
+            foreach (var r in _world.Ship.LiveRooms) { live++; if (r.DataLinked) linked++; }
+            float coverage = live > 0 ? linked / (float)live : 1f;
+            int lvl = coverage < 0.5f || eff < 0.35f ? 3 : coverage < 0.75f || eff < 0.6f ? 4 : 5;
+            return _levelCached = Math.Clamp(Math.Min(lvl, LevelCap), 1, 5);
         }
     }
+    private long _levelTick = -1;
+    private int _levelCached = 5;
 
-    /// <summary>연구·개조로 얹은 등급 (등급 안의 기능을 더 다는 것).</summary>
-    public int ExtraLevel { get; set; }
+    /// <summary>시험·화면 점검용 상한 (기본 V).</summary>
+    public int LevelCap { get; set; } = 5;
+
+    /// <summary>등급이 왜 내려갔나 (관제 화면).</summary>
+    public string LevelWhy
+    {
+        get
+        {
+            if (!Present) return "주 컴퓨터가 없는 배";
+            if (!MainOnline) return BackupActive ? "주 컴퓨터 정지 — 예비 제어기만" : "주 컴퓨터·예비 제어기 정지";
+            float eff = Computer?.Efficiency ?? 0f;
+            int live = _world.Ship.LiveRooms.Count(), linked = _world.Ship.LiveRooms.Count(r => r.DataLinked);
+            if (LevelCap < 5) return $"상한 {LevelName(LevelCap)}";
+            if (linked < live) return $"데이터선 {live - linked}/{live}방 끊김 · 컴퓨터 {eff * 100:0}%";
+            return eff < 0.6f ? $"컴퓨터 {eff * 100:0}%" : "정상";
+        }
+    }
 
     /// <summary>관제석에서 수동 조종 중인 사람.</summary>
     public CrewMember? Operator { get; private set; }
 
-    /// <summary>감압 때: 배 우선(바로 닫는다) ↔ 사람 우선(안에 사람이 있으면 카운트다운). 승무원 회의가 정한다.</summary>
-    public bool ShipFirst { get; set; }
+    /// <summary>감압 때: 배 우선(바로 닫는다) ↔ 사람 우선(안에 사람이 있으면 카운트다운). 승무원 회의가 정한다 (v13.0 방침 "감압 격벽").</summary>
+    public bool ShipFirst
+    {
+        get => _world.Policies["decompress"] == 1;
+        set => _world.Policies.Set("decompress", value ? 1 : 0, "시험·설정");
+    }
     public string PolicyNote { get; set; } = "처음 정한 대로 (사람 우선)";
     public int LateSeals { get; set; }      // 기다리는 사이 옆방까지 공기가 빠졌다
     public int TrappedCasualties { get; set; } // 닫힌 방 안에서 쓰러졌다
@@ -126,7 +157,7 @@ public sealed partial class AutomationSystem
         string rule = shipFirst ? "감압 때 격벽을 바로 닫는다 (배 우선)" : "안에 사람이 있으면 격벽을 기다린다 (사람 우선)";
         if (pass)
         {
-            ShipFirst = shipFirst;
+            w.Policies.Set("decompress", shipFirst ? 1 : 0, why, yes, no);
             PolicyNote = $"{SimTime.Day(w.Tick)}일 회의: {rule} — 찬성 {yes} · 반대 {no}";
             LateSeals = 0; TrappedCasualties = 0;
         }

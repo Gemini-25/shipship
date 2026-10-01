@@ -33,6 +33,7 @@ public partial class Hud
         int level = a.Level;
         string state = !a.Present ? "주 컴퓨터 없음" : a.MainOnline ? "온라인" : a.BackupActive ? "멎음 · 예비 제어기" : "멎음";
         Gfx.Text(this, Fonts.Bold, new Vector2(x, y0 + 30), $"주 컴퓨터 관제 — 등급 {AutomationSystem.LevelName(level)}", 17, Palette.Text);
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 300, y0 + 30), level < 5 ? $"내려간 까닭: {a.LevelWhy}" : "멀쩡하면 V — 아래는 고장 났을 때 남는 기능", 11, level < 5 ? Palette.Warning : Palette.TextMuted);
         Button(new Rect2(right - 58, y0 + 12, 58, 26), "Y 닫기", false, mouse, ToggleControl, 11);
         var col = a.MainOnline ? Palette.Good : Palette.Danger;
         Gfx.Text(this, Fonts.Body, new Vector2(x, y0 + 50), $"{state} · {(a.Computer is Machine m ? $"{m.Name} (단계 {m.Tier})" : "-")}" +
@@ -59,11 +60,50 @@ public partial class Hud
             ly += 22;
         }
         Divider(x, right, ly + 6);
-        // 방침
-        SectionTitle(x, ly + 24, "감압 방침");
-        Gfx.Text(this, Fonts.Bold, new Vector2(x + 70, ly + 24), a.ShipFirst ? "배 우선 — 사람이 있어도 바로 닫는다" : "사람 우선 — 안에 사람이 있으면 2분 기다린다", 12, a.ShipFirst ? Palette.Warning : Palette.Good);
-        Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 42), $"{a.PolicyNote} · 늦게 닫아 옆방까지 잃은 일 {a.LateSeals} · 닫힌 방 안에서 쓰러짐 {a.TrappedCasualties} (회의가 다시 정한다)", 11, Palette.TextMuted);
-        ly += 50;
+        // v13.0 모듈
+        SectionTitle(x, ly + 24, "모듈");
+        float mx = x + 44;
+        foreach (var mod in Enum.GetValues<ComputerModule>())
+        {
+            bool on = a.Has(mod);
+            string label = AutomationSystem.ModuleName(mod);
+            float wl = Gfx.Width(Fonts.Body, label, 11) + 14;
+            if (mx + wl > right) { mx = x + 44; ly += 18; }
+            var r = new Rect2(mx, ly + 12, wl, 17);
+            Gfx.RoundRect(this, r, on ? Palette.Good.WithAlpha(0.18f) : new Color(1, 1, 1, 0.03f), 4, on ? Palette.Good.WithAlpha(0.6f) : Palette.TextMuted.WithAlpha(0.3f), 1);
+            Gfx.Text(this, Fonts.Body, new Vector2(mx + 7, ly + 25), label, 11, on ? Palette.Text : Palette.TextMuted);
+            mx += wl + 6;
+        }
+        ly += 34;
+        // v13.0 방침 (회의가 정한다)
+        SectionTitle(x, ly + 14, "방침");
+        foreach (var p in PolicySystem.All)
+        {
+            var last = w.Policies.Changes.LastOrDefault(c => c.Id == p.Id);
+            Gfx.Text(this, Fonts.Body, new Vector2(x + 44, ly + 14), p.Name, 11, Palette.TextDim);
+            Gfx.Text(this, Fonts.Bold, new Vector2(x + 140, ly + 14), w.Policies.Option(p.Id), 11, Palette.Text);
+            Gfx.Text(this, Fonts.Body, new Vector2(x + 260, ly + 14), Fit(last != null ? $"{SimTime.Day(last.Tick)}일 {last.Why}" + (last.Yes + last.No > 0 ? $" (찬성 {last.Yes} · 반대 {last.No})" : "") : "처음 정한 대로", right - x - 264, 10, Fonts.Body), 10, Palette.TextMuted);
+            ly += 16;
+        }
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 44, ly + 14), $"늦게 닫아 옆방까지 잃은 일 {a.LateSeals} · 닫힌 방 안에서 쓰러짐 {a.TrappedCasualties} · 질식 소화 {a.Smothered} · 진공 소화 {a.Vacuumed} · 불활성 가스 {(a.InertCapacity > 0 ? a.InertGas / a.InertCapacity * 100 : 100):0}%", 10, Palette.TextMuted);
+        ly += 22;
+        // v13.0 진행 중인 대응 수순
+        foreach (var fc in a.FireCases)
+        {
+            var room = w.Ship.Rooms[fc.RoomId];
+            string step = fc.Stage switch { 0 => "① 소화조", 1 => "② 대피", 2 => fc.Method == "vacuum" ? "③ 진공 소화" : "③ 질식 소화", _ => "④ 다시 가압" };
+            string count = fc.Stage == 1 && fc.ExecAt > w.Tick ? $" · {(fc.ExecAt - w.Tick) / (float)SimTime.Minutes(1):0.0}분" : "";
+            var c = fc.Stage == 2 ? Palette.Danger : fc.Stage == 1 ? Palette.Warning : Palette.Accent;
+            Gfx.Text(this, Fonts.Bold, new Vector2(x, ly + 14), $"🔥 {room.Name} {step}{count}", 12, c);
+            Gfx.Text(this, Fonts.Body, new Vector2(x + 200, ly + 14), Fit(fc.Status, right - x - 204, 11, Fonts.Body), 11, Palette.TextDim);
+            ly += 18;
+        }
+        if (a.ZoneActive)
+        {
+            Gfx.Text(this, Fonts.Bold, new Vector2(x, ly + 14), "▣ 공기 구역", 12, Palette.Warning);
+            Gfx.Text(this, Fonts.Body, new Vector2(x + 90, ly + 14), Fit(a.ZoneNote, right - x - 94, 11, Fonts.Body), 11, Palette.TextDim);
+            ly += 18;
+        }
         // 기다리는 격벽
         foreach (var room in w.Ship.Rooms.Where(r => r.LockPendingUntil >= 0))
         {

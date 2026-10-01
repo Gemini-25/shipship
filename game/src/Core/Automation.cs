@@ -123,6 +123,7 @@ public sealed partial class AutomationSystem
         }
         if (!main) OfflineHours += dt;
         Think(dt); // v12.5 등급·수동 조종·예측·방침
+        Respond(dt); // v13.0 대응 수순 (화재 · 공기 구역)
         bool gone = Gone;
         if (gone && GoneSince < 0) GoneSince = w.Tick;
         else if (!gone) GoneSince = -1;

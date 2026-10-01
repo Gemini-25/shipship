@@ -182,6 +182,21 @@ public sealed class Room
     /// <summary>감압으로 격벽이 잠긴 상태.</summary>
     public bool Lockdown { get; set; }
 
+    /// <summary>v13.0 진공 소화: 배기 밸브를 열어 이 방 공기를 바깥으로 뺀다 (새는 구멍과 달리 봉합할 것이 없다).</summary>
+    public bool Purging { get; set; }
+
+    /// <summary>v13.0 질식 소화: 불활성 가스로 산소를 몰아내는 중.</summary>
+    public bool Inerting { get; set; }
+
+    /// <summary>v13.0 질식 소화 뒤 환기: 공기 탱크의 공기로 불활성 가스를 갈아 낸다.</summary>
+    public bool Flushing { get; set; }
+
+    /// <summary>v13.0 소화 대응이 이 방을 붙잡고 있다 (카운트다운·실행·복구 — 격벽·댐퍼를 컴퓨터가 쥔다).</summary>
+    public bool ResponseHold { get; set; }
+
+    /// <summary>v13.0 대피 카운트다운이 끝나는 틱 (-1: 없음) — 안에 있는 사람은 나간다.</summary>
+    public long EvacuateBy { get; set; } = -1;
+
     /// <summary>
     /// 포기한 구획. 문을 용접해 막고 환기 댐퍼를 닫았다. 우주복을 입은 사람만 드나들고, 재가압하지 않는다.
     /// 조건이 돌아오면(봉합할 수 있고 공기가 있으면) 다시 연다.

@@ -98,7 +98,7 @@ public sealed class FireSystem
             // 산소가 있으면 자라고, 없으면 꺼진다
             float o2 = air.O2;
             // 공기가 충분하면 10분 남짓이면 활활 타오른다. 진공에서는 순식간에 꺼진다.
-            intensity += (air.Pressure < 30f ? -20f : o2 < 11f ? -2.5f : 3.5f * (o2 - 11f) / 10f - 0.3f) * dt;
+            intensity += (air.Pressure < 30f ? -20f : o2 < 6f ? -10f : o2 < 11f ? -2.5f : 3.5f * (o2 - 11f) / 10f - 0.3f) * dt; // v13.0 질식 소화: 산소 6kPa 아래면 몇 분 만에
             // 자동 소화 장치 (v7 개조): 전기가 있으면 불이 자라는 것보다 빨리 뿌린다
             if (room.Suppression && room.Powered) intensity -= 4f * dt;
             if (intensity <= 0f) { _fires.Remove(cell); continue; }

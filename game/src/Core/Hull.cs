@@ -78,6 +78,7 @@ public static class Hull
     /// </summary>
     public static bool WantVentOpen(World w, Room r) =>
         !r.Leaking && !w.Fire.IsKnown(r) && !r.Abandoned && !r.Detached && !r.VentSealed && !w.Structure.DuctOpen && !w.Sensors.Sealing(r)
+        && !r.Purging && !r.Inerting && !w.Automation.KeepDamperShut(r) // v13.0 소화 대응 중
         && w.Hazards.GasSource(r) == null; // v11.2: 가스가 새는 방은 막아 둔다 (막고 나면 열어 세정기로 걸러 낸다)
 
     /// <summary>실제로 새는 넓이 (봉합하면 0).</summary>
@@ -185,7 +186,7 @@ public sealed class HullSystem
                 _world.Board.RequestScan();
             }
             // 해제: 새지 않고 기압이 90을 넘었거나, 공기 탱크가 비어 더 올라갈 수 없는데 안정됐을 때
-            else if (room.Lockdown && !room.Abandoned && !room.Leaking && rate > -1f && (p > 90f || _world.Air.Reserve < 1f))
+            else if (room.Lockdown && !room.Abandoned && !room.Leaking && !room.ResponseHold && rate > -1f && (p > 90f || _world.Air.Reserve < 1f))
             {
                 room.Lockdown = false;
                 _released[room.Id] = _world.Tick;

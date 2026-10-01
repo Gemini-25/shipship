@@ -10,15 +10,21 @@ public static partial class Program
         _fails = 0;
         Console.WriteLine($"자동화 점검 (v12.5) · 시드 {seed}\n");
 
-        // 1) 등급
+        // 1) 등급 (v13.0): 기본 V — 데이터망이 끊기면 내려가고(고장 사다리), 주 컴퓨터가 서면 II·I
         {
             var w = DayOne(seed, "Mirinae");
             int basic = w.Automation.Level;
-            w.Automation.ExtraLevel = 1; int up = w.Automation.Level; w.Automation.ExtraLevel = 0;
-            foreach (var c in w.Ship.FurnitureOf(FurnitureType.MainComputer)) w.Machines.Break(c.Machine!, FaultKind.Wrecked);
-            Run(w, SimTime.Minutes(2));
-            int down = w.Automation.Level;
-            Check("등급 — 주 컴퓨터는 III, 하나 얹으면 IV, 멎으면 I", basic == 3 && up == 4 && down <= 2, $"기본 {AutomationSystem.LevelName(basic)} · 얹으면 {AutomationSystem.LevelName(up)} · 멎으면 {AutomationSystem.LevelName(down)}");
+            foreach (var l in w.Net.Links.Where(l => l.Kind == NetKind.Data).ToList()) w.Net.Hurt(l, 1f, "시험");
+            w.Net.Update(0f);
+            Run(w, SimTime.Minutes(1));
+            int cut = w.Automation.Level;
+            string why = w.Automation.LevelWhy;
+            var w2 = DayOne(seed, "Mirinae");
+            foreach (var c in w2.Ship.FurnitureOf(FurnitureType.MainComputer)) w2.Machines.Break(c.Machine!, FaultKind.Wrecked);
+            Run(w2, SimTime.Minutes(2));
+            int down = w2.Automation.Level;
+            Check("등급 — 기본 V, 데이터망이 끊기면 내려가고, 주 컴퓨터가 서면 II 이하", basic == 5 && cut <= 4 && down <= 2,
+                $"기본 {AutomationSystem.LevelName(basic)} · 데이터망 끊김 {AutomationSystem.LevelName(cut)} ({why}) · 컴퓨터 정지 {AutomationSystem.LevelName(down)}");
         }
         // 2) 격벽: 사람 우선이면 안에 사람이 있을 때 2분 기다린다 · 배 우선이면 바로
         {
@@ -71,7 +77,7 @@ public static partial class Program
             for (int k = 0; k < 2; k++)
             {
                 var w = DayOne(seed, "Mirinae");
-                w.Automation.ExtraLevel = k;
+                w.Automation.LevelCap = 3 + k;
                 foreach (var o in w.Board.Open.Where(o => o.Kind == WorkKind.ManualControl).ToList()) w.Board.Close(o);
                 foreach (var p in w.Ship.FurnitureOf(FurnitureType.CoolantPump)) w.Machines.Break(p.Machine!, FaultKind.PumpSeized);
                 for (int i = 0; i < 20; i++) { Run(w, SimTime.Minutes(3)); foreach (var o in w.Board.Open.Where(o => o.Kind == WorkKind.ManualControl).ToList()) w.Board.Close(o); }
@@ -83,7 +89,6 @@ public static partial class Program
         // 5) V 지휘: 연쇄 예측
         {
             var w = DayOne(seed, "Mirinae");
-            w.Automation.ExtraLevel = 2;
             foreach (var p in w.Ship.FurnitureOf(FurnitureType.CoolantPump)) w.Machines.Break(p.Machine!, FaultKind.PumpSeized);
             Run(w, SimTime.Hours(1));
             var pred = w.Automation.Reasoning.FirstOrDefault(r => r.text.StartsWith("예측"));
@@ -107,7 +112,7 @@ public static partial class Program
         }
         // 8) 결정론
         {
-            uint H() { var w = DayOne(seed, "Mirinae"); w.Automation.ExtraLevel = 2; w.Moisture.AddWater(w.Ship.RoomsOf(RoomType.Galley).First(), 250f); Run(w, SimTime.Hours(8)); return SaveGame.StateHash(w); }
+            uint H() { var w = DayOne(seed, "Mirinae"); w.Moisture.AddWater(w.Ship.RoomsOf(RoomType.Galley).First(), 250f); Run(w, SimTime.Hours(8)); return SaveGame.StateHash(w); }
             uint a = H(), b = H();
             Check("자동화가 든 배의 결정론", a == b, $"지문 {a:x8} / {b:x8}");
         }

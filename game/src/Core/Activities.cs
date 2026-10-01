@@ -398,6 +398,8 @@ public sealed class EvacuateActivity : Activity
         float danger = Atmosphere.DangerFor(c, c.Room);
         // 사출하기로 한 방: 그 방 일(물품 회수 등)을 하는 사람 말고는 나간다
         if (c.Room.Jettison != null && c.Job?.Order?.Target.Room != c.Room) danger = MathF.Max(danger, 0.5f);
+        // v13.0 소화 대응 카운트다운: 질식·진공 소화를 앞둔 방 — 모두 나간다
+        if (c.Room.EvacuateBy >= 0 || c.Room.Purging || c.Room.Inerting) danger = MathF.Max(danger, 1f);
         if (c.Suit is { Oxygen: > 0f and < 0.4f } && Atmosphere.Danger(c.Room) > 0.3f) danger = 1f; // 탱크가 바닥나 간다
         // v12.9.1 맨몸으로 산소가 묽어지는 방에 있으면 일을 두고 나온다 (머리가 먼저 흐려진다 — 쓰러지기 전에)
         if (c.Suit is not { Oxygen: > 0.05f } && c.Room.Air.O2 < 16.5f) danger = MathF.Max(danger, 0.6f + (16.5f - c.Room.Air.O2) * 0.1f);
@@ -422,7 +424,8 @@ public sealed class EvacuateActivity : Activity
         c.Room != null && c.Suit is not { Oxygen: > 0.05f } && c.Room.Air.O2 < 14f && c.CarryingPerson == null && !c.Dashing;
 
     private static bool Safe(CrewMember c, World w, Room room) =>
-        Atmosphere.Danger(room) <= 0.1f && !room.Leaking && w.Fire.CountIn(room) == 0 && w.Sensors.Threat(room) == null;
+        Atmosphere.Danger(room) <= 0.1f && !room.Leaking && w.Fire.CountIn(room) == 0 && w.Sensors.Threat(room) == null
+        && room.EvacuateBy < 0 && !room.ResponseHold;
 
     public override (float, string) Score(CrewMember c, World w, DistanceField dist)
     {
@@ -454,17 +457,19 @@ public sealed class EvacuateActivity : Activity
     {
         Cell? best = null;
         int bestCost = int.MaxValue;
-        foreach (var room in w.Ship.Rooms)
-        {
-            if (room == c.Room || room.Detached || !Safe(c, w, room)) continue;
-            foreach (var cell in room.Cells)
+        // v13.0 공기 구역이 있으면 그 구역부터 (닿을 수 없으면 아무 안전한 방)
+        for (int pass = w.Automation.ZoneActive ? 0 : 1; pass < 2 && best == null; pass++)
+            foreach (var room in w.Ship.Rooms)
             {
-                int d = dist.Get(cell);
-                if (d < 0 || d >= bestCost || !w.Ship.IsOpenFloor(cell) || w.IsSpotTaken(cell, c) || w.Piping.SteamAt(cell) > 0.1f) continue;
-                best = cell;
-                bestCost = d;
+                if (room == c.Room || room.Detached || !Safe(c, w, room) || pass == 0 && !w.Automation.InZone(room)) continue;
+                foreach (var cell in room.Cells)
+                {
+                    int d = dist.Get(cell);
+                    if (d < 0 || d >= bestCost || !w.Ship.IsOpenFloor(cell) || w.IsSpotTaken(cell, c) || w.Piping.SteamAt(cell) > 0.1f) continue;
+                    best = cell;
+                    bestCost = d;
+                }
             }
-        }
         // 안전한 방이 없거나 갈 수 없으면, 적어도 불에서 떨어진 칸으로
         if (best == null && c.Room != null && w.Fire.AnyWithin(c.Cell, 1))
         {

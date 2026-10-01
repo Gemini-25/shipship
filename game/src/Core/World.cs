@@ -99,6 +99,9 @@ public sealed class World
 
     /// <summary>v9.2 주 컴퓨터와 자동화 (격벽·댐퍼·경보·부하·드론·제어봉).</summary>
     public AutomationSystem Automation { get; }
+
+    /// <summary>v13.0 방침 (회의가 정하고 컴퓨터·사람이 그 안에서 움직인다).</summary>
+    public PolicySystem Policies { get; }
     public FixturesSystem Fixtures { get; }
 
     /// <summary>에어락을 드나든 횟수 (EVA·드론 발진). 한 번마다 공기 탱크가 조금 준다.</summary>
@@ -226,6 +229,7 @@ public sealed class World
         Campaign = new CampaignSystem(this);
         Story = new Storyteller(this, seed);
         Piping = new PipeNetwork(this);
+        Policies = new PolicySystem(this);
         Automation = new AutomationSystem(this);
         Fixtures = new FixturesSystem(this);
     }
@@ -365,7 +369,7 @@ public sealed class World
             }
 
             // v12.9.1 숨이 찰 만큼 산소가 묽어지면 10분을 기다리지 않고 곧장 다시 판단한다 (대피)
-            if ((Tick + c.Id) % 15 == 0 && c.Job?.Activity is not EvacuateActivity && EvacuateActivity.Breathless(c)) c.NextThinkTick = Tick;
+            if ((Tick + c.Id) % 15 == 0 && c.Job?.Activity is not EvacuateActivity && (EvacuateActivity.Breathless(c) || c.Room is { EvacuateBy: >= 0 })) c.NextThinkTick = Tick;
 
             if (c.Job == null || Tick >= c.NextThinkTick)
             {

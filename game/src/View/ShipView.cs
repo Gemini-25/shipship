@@ -673,6 +673,7 @@ public partial class ShipView : Node2D
         PaintEvolution(ci);
         if (mode == ViewMode.Trace) PaintTraceMarks(ci);
         PaintVenting(ci);
+        PaintResponse(ci); // v13.0 진공·질식 소화 · 대피 카운트다운 · 공기 구역
         PaintFires(ci);
         foreach (var d in ship.Doors) if (!d.Removed) PaintDoor(ci, d); // v10.12 걷은 칸막이 문 · 떨어져 나간 방의 문은 벽이 됐다
         PaintHoloTable(ci); // v11.2 함교 홀로그램

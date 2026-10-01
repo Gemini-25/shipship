@@ -454,8 +454,9 @@ public sealed partial class WorkBoard
 
         bool someoneOnIt = _open.Values.Any(o => o.Kind == WorkKind.SealBreach && o.Target.Room == room && o.Assignee != null);
         // v9.2: 대신할 게 없는 방은 "아무도 못 막았다"고 버리지 않는다 (막을 실링폼이 없을 때만)
-        if (!someoneOnIt && _world.Tick - room.LeakingSince > SimTime.Hours(4) && Council.Essential(_world, room) == null)
-            return "네 시간째 아무도 막지 못했다";
+        float hours = _world.Policies.AbandonHours; // v13.0 방침: 구역 포기 시점
+        if (!someoneOnIt && !float.IsInfinity(hours) && _world.Tick - room.LeakingSince > SimTime.Hours(hours) && Council.Essential(_world, room) == null)
+            return hours < 2f ? $"{hours:0.#}시간째 아무도 막지 못했다 (방침: 일찍 포기)" : $"{hours:0}시간째 아무도 막지 못했다";
         return null;
     }
 
@@ -1111,6 +1112,7 @@ public sealed partial class WorkBoard
         // ── 화재: 알려진 불만 ──
         foreach (var (room, hottest, count) in w.Fire.KnownFires())
         {
+            if (room.ResponseHold) continue; // v13.0 컴퓨터가 질식·진공 소화로 끄는 중 — 사람은 들어가지 않는다
             bool critical = room.Type is RoomType.Reactor or RoomType.Power or RoomType.LifeSupport or RoomType.Cooling;
             // 불이 크면 두 사람 몫
             int crews = count >= 4 ? 2 : 1;

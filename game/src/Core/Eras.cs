@@ -130,6 +130,8 @@ public sealed class EraSystem
         Project = null;
         w.RaiseAlert($"새 기술 — {t.Name}: {t.Effect}" + (t.Risk != "없음" ? $" · 위험: {t.Risk}" : ""), null, AlertLevel.Notice, shipWide: true);
         w.History.Add(w, HistoryKind.Decision, $"{t.Name}을(를) 익혔다 ({EraName(t.Era)}) — {t.Effect}", null, log: true);
-        if (t.Id is "smartgrid" or "aicaptain") w.Automation.ExtraLevel++;
+        // v13.0 컴퓨터는 처음부터 V — 기술은 기능 모듈을 단다
+        if (t.Id == "smartgrid") w.Automation.Install(ComputerModule.Preempt);
+        if (t.Id == "aicaptain") { w.Automation.Install(ComputerModule.BioMonitor); w.Automation.Install(ComputerModule.EvacGuide); }
     }
 }

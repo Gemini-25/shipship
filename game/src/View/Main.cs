@@ -819,6 +819,25 @@ public partial class Main : Node2D
                     }
                     break;
                 }
+                case "--bigfire": // v13.0 화면 시험: --bigfire=Storage:7 (방 종류:칸 수)
+                {
+                    var bf = value.Split(':');
+                    if (Sim.Ship.Rooms.FirstOrDefault(r => r.Type.ToString() == bf[0]) is Room bfr)
+                        foreach (var c in bfr.Cells.Where(Sim.Ship.IsOpenFloor).Take(bf.Length > 1 ? int.Parse(bf[1]) : 7)) Sim.Fire.Ignite(c, 0.9f);
+                    break;
+                }
+                case "--policy": // v13.0 화면 시험: --policy=inertfire:0
+                {
+                    var pp = value.Split(':');
+                    if (pp.Length == 2 && int.TryParse(pp[1], out int pv)) Sim.Policies.Set(pp[0], pv, "화면 시험");
+                    break;
+                }
+                case "--warpmin": // 몇 분 앞으로
+                {
+                    int wt = SimTime.Minutes(float.Parse(value, CultureInfo.InvariantCulture));
+                    for (int i = 0; i < wt; i++) Sim.Step();
+                    break;
+                }
                 case "--scenario":
                     // 헤드리스 도구와 같은 사고 시험 (Core/Scenarios.cs): --scenario=nosealant
                     if (Player.Scenario(Sim, value, out var sf) && sf != null) SelectRoom(sf);

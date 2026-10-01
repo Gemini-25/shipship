@@ -101,15 +101,18 @@ public sealed class Atmosphere
         float refillBudget = MathF.Min(Reserve, RefillRate * MathF.Max(0.3f, refillEff) * dtHours);
         if (refillEff > 0f && refillBudget > 0f)
         {
+            // v13.0 공기 구역: 탱크가 절반 아래면 지킬 구역부터 채운다
+            bool zoneOnly = _world.Automation.ZoneActive && Reserve < ReserveCapacity * 0.5f;
+            bool Fill(Room r) => Vented(r) && !r.Leaking && (!zoneOnly || _world.Automation.InZone(r));
             float need = 0f;
             foreach (var r in ship.Rooms)
-                if (Vented(r) && !r.Leaking) need += MathF.Max(0f, 99f - r.Air.Pressure) * r.Volume;
+                if (Fill(r)) need += MathF.Max(0f, 99f - r.Air.Pressure) * r.Volume;
             if (need > 1f)
             {
                 float give = MathF.Min(refillBudget, need);
                 foreach (var r in ship.Rooms)
                 {
-                    if (!Vented(r) || r.Leaking) continue;
+                    if (!Fill(r)) continue;
                     float share = give * MathF.Max(0f, 99f - r.Air.Pressure) * r.Volume / need / r.Volume;
                     r.Air.N2 += share * 0.79f;
                     r.Air.O2 += share * 0.21f;
@@ -160,6 +163,42 @@ public sealed class Atmosphere
             float keep = MathF.Exp(-r.Air.Leak * dtHours / r.Volume);
             r.Air.O2 *= keep; r.Air.N2 *= keep; r.Air.CO2 *= keep; r.Air.Smoke *= keep; r.Air.Toxin *= keep; r.Air.CO *= keep;
             r.Air.Temperature += (-20f - r.Air.Temperature) * (1f - keep) * 0.5f;
+        }
+
+        // 5-b) v13.0 진공 소화: 배기 밸브로 몇 분 만에 비운다 · 질식 소화: 불활성 가스가 산소를 밀어낸다 (기압은 그대로)
+        foreach (var r in ship.Rooms)
+        {
+            if (r.Detached) continue;
+            if (r.Purging)
+            {
+                float keep = MathF.Exp(-AutomationSystem.PurgeRate * dtHours); // 2~3분이면 30kPa 아래
+                r.Air.O2 *= keep; r.Air.N2 *= keep; r.Air.CO2 *= keep; r.Air.Smoke *= keep; r.Air.Toxin *= keep; r.Air.CO *= keep;
+                r.Air.Temperature += (-20f - r.Air.Temperature) * (1f - keep) * 0.5f;
+            }
+            if (r.Flushing && r.Air.O2 < 20.5f && Reserve > 0f)
+            {
+                // 질식 소화 뒤: 탱크 공기를 넣고 그만큼 배기 — 기압은 그대로, 산소만 돌아온다 (10분쯤)
+                float dx = MathF.Min(MathF.Min(21f - r.Air.O2, 120f * dtHours), Reserve / MathF.Max(1f, r.Volume) * 0.21f);
+                if (dx > 0f)
+                {
+                    float air = dx / 0.21f;
+                    float scale = MathF.Max(0f, 1f - air / MathF.Max(1f, r.Air.Pressure));
+                    r.Air.N2 *= scale; r.Air.CO2 *= scale; r.Air.CO *= scale; r.Air.Smoke *= scale; r.Air.O2 *= scale;
+                    r.Air.O2 += air * 0.21f; r.Air.N2 += air * 0.79f;
+                    Reserve -= air * r.Volume;
+                }
+            }
+            if (r.Inerting && r.Air.O2 > 4f)
+            {
+                float want = MathF.Min(r.Air.O2 - 4f, AutomationSystem.InertRate * dtHours);
+                float can = MathF.Min(want, _world.Automation.InertGas / MathF.Max(1f, r.Volume));
+                if (can > 0f)
+                {
+                    r.Air.O2 -= can; r.Air.N2 += can;
+                    r.Air.Smoke *= 0.97f;
+                    _world.Automation.InertGas -= can * r.Volume;
+                }
+            }
         }
 
         // 6) 온도: 전기가 있으면 21℃로 조절, 없으면 서서히 식는다. 원자로·엔진은 열이 난다.
