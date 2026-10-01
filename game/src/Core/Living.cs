@@ -87,6 +87,7 @@ public sealed partial class WorkBoard
         float grow = FoodPolicy.GrowingPerDay(w);
         float need = crew * FoodPolicy.MealsPerPersonDay;
         float below = w.Policies["rations"] == 3 ? 4f : 2f; // v13.2 방침(식량 배급: 줄인다) — 나흘치 아래면 미리
+        below = MathF.Max(below, w.Automation.RationLead); // v16.6 식단 계획 모듈 — 바닥나는 날을 먼저 보고 하루 앞당긴다
         if (!f.Rationing && days < below && grow < need * 1.05f)
             post(WorkKind.Ration, WorkTarget.Of(board), 0.6f + MathF.Min(0.3f, (2f - days) * 0.2f), Skill.Cooking,
                 $"먹을 것 {days:0.0}일치 ({FoodPolicy.FoodStock(w):0}끼 · {crew}명) · 재배대가 하루 {grow:0}끼를 대는데 {need:0}끼를 먹는다");

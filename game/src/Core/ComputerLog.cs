@@ -8,7 +8,7 @@ namespace ShipSim.Core;
 // 결과는 몇 분 뒤 채점한다 (그 방이 나아졌나 · 사람이 쓰러졌나 · 오경보였나). 기존 판단 근거(Reason)도 이 장부를 부른다.
 // 배율 모듈이 실제로 아낀 양(전력 kWh · 물 L · 미룬 고장 · 피로 경보 …)을 쌓아 하루 보고로 남긴다.
 
-public enum ActKind { Alarm, Damper, Bulkhead, Valve, Breaker, Suppress, Shed, Module, Zone, Advice, Proposal, Broadcast, Reboot }
+public enum ActKind { Alarm, Damper, Bulkhead, Valve, Breaker, Suppress, Shed, Module, Zone, Advice, Proposal, Broadcast, Reboot, Door, Forecast }
 
 /// <summary>컴퓨터가 한 일 하나 (다섯 칸).</summary>
 public sealed class ComputerAct
@@ -39,10 +39,12 @@ public sealed class ComputerTally
 {
     public float Kwh, WaterL, CalibHours, SpoilHours, LeadMinutes, DeferredHours;
     public int Deferred, Fatigue, DoorEq, Archived, SoilRuns, Backflow, Schedules, Messages, Rosters, Meals, Logs, Trainings, Quiet, Access, Balance, Media;
+    public int Passes, Denied, RationLeads, Forecasts, ForecastHits; // v16.6 출입 원격 열기 · 배급 앞당김 · 예보
     public void Clear()
     {
         Kwh = WaterL = CalibHours = SpoilHours = LeadMinutes = DeferredHours = 0f;
         Deferred = Fatigue = DoorEq = Archived = SoilRuns = Backflow = Schedules = Messages = Rosters = Meals = Logs = Trainings = Quiet = Access = Balance = Media = 0;
+        Passes = Denied = RationLeads = Forecasts = ForecastHits = 0;
     }
 }
 
@@ -87,6 +89,7 @@ public sealed class ComputerLogBook
         if (au.Present && !au.MainOnline && !au.BackupActive && kind != ActKind.Reboot) return null; // 멎은 컴퓨터는 아무것도 안 한다 (재부팅 중엔 사람이 손으로)
         if (key != "" && cooldown > 0 && _dedupe.TryGetValue(key, out var t) && w.Tick - t < cooldown) return null;
         if (key != "") _dedupe[key] = w.Tick;
+        if (request == "") request = DefaultRequest(kind, room); // 넷째 칸(요청)이 비지 않게: 조치마다 사람에게 바라는 것
         var a = new ComputerAct
         {
             Id = _next++, Tick = w.Tick, Kind = kind, RoomId = room?.Id ?? -1, Key = key, Observe = observe, Judge = judge, Act = act, Request = request,
@@ -126,6 +129,23 @@ public sealed class ComputerLogBook
         if (act == "" && kind != ActKind.Advice) act = judge;
         return Add(kind, room, observe, judge, act, request, "r:" + key, cooldown, kind == ActKind.Advice ? 30f : 8f);
     }
+
+    /// <summary>조치 종류마다 사람에게 바라는 것 (판단 근거에 "요청:"이 없을 때).</summary>
+    private static string DefaultRequest(ActKind k, Room? r) => k switch
+    {
+        ActKind.Suppress => $"{(r != null ? r.Name + " " : "")}사람은 나가라 · 소화조는 문밖에서",
+        ActKind.Damper => "그 방 문은 닫아 둔다",
+        ActKind.Bulkhead => "안에 있으면 반대쪽 문으로",
+        ActKind.Valve => "배관 담당이 새는 곳을 본다",
+        ActKind.Breaker => "전기 담당이 분전함을 본다",
+        ActKind.Alarm => "가까운 사람이 확인",
+        ActKind.Zone => "구역 밖으로",
+        ActKind.Shed => "꺼진 설비는 손대지 않는다",
+        ActKind.Broadcast => "들은 사람은 따른다",
+        ActKind.Reboot => "그동안 손으로",
+        ActKind.Forecast => "미리 대비",
+        _ => "참고",
+    };
 
     private static string Join(string a, string b) => a == "" ? b : a + " · " + b;
 
@@ -204,6 +224,9 @@ public sealed class ComputerLogBook
         if (t.Logs > 0) parts.Add($"항해 일지 {t.Logs}줄");
         if (t.Quiet > 0) parts.Add($"야간 소음 낮춤 {t.Quiet}번");
         if (t.Trainings > 0) parts.Add($"신입 교육 {t.Trainings}번");
+        if (t.Passes + t.Denied > 0) parts.Add($"출입 관리 원격 열기 {t.Passes}번" + (t.Denied > 0 ? $" · 막음 {t.Denied}번" : ""));
+        if (t.RationLeads > 0) parts.Add("식단 계획으로 배급 하루 앞당김");
+        if (t.Forecasts > 0) parts.Add($"앞날 예측 {t.ForecastHits}/{t.Forecasts} 맞힘");
         parts.Add($"자동 조치 {ActsToday}건 (맞음 {RightToday} · 틀림 {WrongToday})");
         string text = $"{day}일 컴퓨터 보고: " + string.Join(" · ", parts);
         var rep = new DailyReport(day, text, t.Kwh, t.WaterL, t.Deferred, t.Fatigue, ActsToday, RightToday, WrongToday);
@@ -239,6 +262,8 @@ public sealed partial class AutomationSystem
         Trusts.Update();
         Voice.Update();
         Apps.Update(dt);
+        Links(dt); // v16.6 문 본체 · 식단 · 대재난과 잇기 (ComputerLinks.cs)
+        Foresight.Update(); // v16.6 → v16.16 앞날 예측 · 계획 (ComputerForesight.cs)
     }
 
     /// <summary>배율 모듈이 실제로 아낀 양을 1분마다 쌓는다 (방 단위 · 설비 단위).</summary>

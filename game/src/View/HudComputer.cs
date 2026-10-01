@@ -241,7 +241,7 @@ public partial class Hud
     /// <summary>관제 화면 위 탭 (관제 · 기록 · 보고·모듈 · 사람·믿음). 0이 아니면 탭 내용을 그리고 true.</summary>
     private bool DrawControlTabs(Rect2 card, float x, float right, float y0, Vector2 mouse)
     {
-        string[] tabs = { "관제", "다섯 칸 기록", "보고·모듈", "사람·믿음" };
+        string[] tabs = { "관제", "다섯 칸 기록", "보고·모듈", "사람·믿음", "앞날·계획" };
         float tx = x;
         for (int i = 0; i < tabs.Length; i++)
         {
@@ -256,6 +256,7 @@ public partial class Hud
         {
             case 1: DrawActTable(card, x, right, y); break;
             case 2: DrawReports(card, x, right, y, mouse); break;
+            case 4: DrawForesight(card, x, right, y); break;
             default: DrawPeopleBelief(card, x, right, y); break;
         }
         return true;
@@ -288,26 +289,8 @@ public partial class Hud
         }
     }
 
-    /// <summary>조치 종류 그림 (표의 둘째 칸).</summary>
-    private void DrawActGlyph(Vector2 c, ActKind k, Color col)
-    {
-        switch (k)
-        {
-            case ActKind.Damper: DrawArc(c, 5f, 0f, Mathf.Tau, 12, col, 1.2f, true); DrawLine(c + new Vector2(-4, -2), c + new Vector2(4, 2), col, 1.4f); break;
-            case ActKind.Bulkhead: DrawRect(new Rect2(c - new Vector2(5, 5), new Vector2(10, 10)), col, false, 1.4f); DrawLine(c + new Vector2(0, -5), c + new Vector2(0, 5), col, 1.4f); break;
-            case ActKind.Valve: DrawColoredPolygon(new[] { c + new Vector2(-5, -4), c + new Vector2(0, 0), c + new Vector2(-5, 4) }, col); DrawColoredPolygon(new[] { c + new Vector2(5, -4), c + new Vector2(0, 0), c + new Vector2(5, 4) }, col); break;
-            case ActKind.Breaker: DrawRect(new Rect2(c - new Vector2(4, 5), new Vector2(8, 10)), col, false, 1.2f); DrawLine(c + new Vector2(-2, 1), c + new Vector2(2, -3), col, 1.6f); break;
-            case ActKind.Suppress: DrawColoredPolygon(new[] { c + new Vector2(0, -6), c + new Vector2(4, 1), c + new Vector2(2, 5), c + new Vector2(-2, 5), c + new Vector2(-4, 1) }, col); break;
-            case ActKind.Alarm: DrawArc(c + new Vector2(0, 1), 4.5f, Mathf.Pi, Mathf.Tau, 8, col, 1.6f, true); DrawLine(c + new Vector2(-5, 2), c + new Vector2(5, 2), col, 1.4f); DrawCircle(c + new Vector2(0, 4), 1.2f, col); break;
-            case ActKind.Zone: for (int r = 2; r <= 6; r += 2) DrawArc(c, r, 0f, Mathf.Tau, 12, col.WithAlpha(1.1f - r * 0.12f), 1f, true); break;
-            case ActKind.Proposal: DrawRect(new Rect2(c - new Vector2(5, 4), new Vector2(10, 8)), col, false, 1.2f); Gfx.TextCentered(this, Fonts.Bold, c, "?", 8, col); break;
-            case ActKind.Broadcast: DrawColoredPolygon(new[] { c + new Vector2(-5, -2), c + new Vector2(-2, -2), c + new Vector2(1, -5), c + new Vector2(1, 5), c + new Vector2(-2, 2), c + new Vector2(-5, 2) }, col); DrawArc(c + new Vector2(2, 0), 4f, -0.8f, 0.8f, 6, col, 1f, true); break;
-            case ActKind.Reboot: DrawArc(c, 5f, 0.6f, Mathf.Tau - 0.2f, 12, col, 1.4f, true); DrawLine(c + new Vector2(5, -2), c + new Vector2(5, 2), col, 1.4f); break;
-            case ActKind.Module: ComputerIcons.Draw(this, ComputerModule.Foresight, c, 4.5f, ComputerIcons.State.On, _time); break;
-            case ActKind.Shed: DrawLine(c + new Vector2(-5, 0), c + new Vector2(-1, 0), col, 1.4f); DrawLine(c + new Vector2(1, 0), c + new Vector2(5, 0), col, 1.4f); DrawLine(c + new Vector2(-1, -3), c + new Vector2(1, 3), col, 1.2f); break;
-            default: DrawCircle(c, 3.5f, col.WithAlpha(0.8f), true, -1f, true); break;
-        }
-    }
+    /// <summary>조치 종류 그림 (표의 둘째 칸) — 배 화면의 빛 흐름 끝 아이콘과 같은 그림.</summary>
+    private void DrawActGlyph(Vector2 c, ActKind k, Color col) => ComputerIcons.Act(this, k, c, 1f, col, _time);
 
     private void DrawReports(Rect2 card, float x, float right, float y, Vector2 mouse)
     {
@@ -440,5 +423,73 @@ public partial class Hud
             Gfx.Text(this, Fonts.Body, new Vector2(rx + 242, ry + 11), Fit(tail, right - rx - 242, 10, Fonts.Body), 10, diff ? Palette.Danger : Palette.Warning);
             ry += 13;
         }
+    }
+
+    /// <summary>앞날 · 계획 탭 (v16.16 바탕): 왼쪽 — 지켜보는 값마다 지금 → 6시간 뒤 막대 · 문턱 · 믿음 고리 · 맞음/틀림 점 / 오른쪽 — 계획표 · 우주 예보.</summary>
+    private void DrawForesight(Rect2 card, float x, float right, float y)
+    {
+        var w = _world;
+        var a = w.Automation;
+        var f = a.Foresight;
+        float colW = (right - x) / 2f - 10;
+        float lx = x, ly = y, rx = x + colW + 20, ry = y;
+        SectionTitle(lx, ly + 10, $"앞날 예측 — {ComputerForesight.Horizon:0}시간 뒤 · 맞힘 {f.Hits}/{f.Hits + f.Misses}");
+        ly += 18;
+        foreach (var pr in ComputerForesight.Predictors)
+        {
+            if (ly > card.End.Y - 30) break;
+            var p = f.Current.FirstOrDefault(q => q.Key == pr.Key);
+            float conf = f.Skill(pr.Key);
+            // 믿음 고리
+            var rc = new Vector2(lx + 8, ly + 9);
+            DrawArc(rc, 7f, 0f, Mathf.Tau, 18, Palette.TextMuted.WithAlpha(0.4f), 1.5f, true);
+            DrawArc(rc, 7f, -Mathf.Pi / 2f, -Mathf.Pi / 2f + Mathf.Tau * conf, 18, conf >= 0.6f ? Palette.Good : conf >= 0.4f ? Palette.Accent : Palette.Warning, 2f, true);
+            Gfx.Text(this, Fonts.Bold, new Vector2(lx + 20, ly + 13), Fit(pr.Name, 76, 10, Fonts.Bold), 10, Palette.Text);
+            if (p == null) { Gfx.Text(this, Fonts.Body, new Vector2(lx + 100, ly + 13), "재는 중 (세 시간 모아야 추세)", 10, Palette.TextMuted); ly += 22; continue; }
+            // 막대: 지금(채움) → 예측(테) · 문턱 선
+            float lo = pr.Low(w), hi = pr.High(w);
+            float thr = lo > float.MinValue / 2 ? lo : hi < float.MaxValue / 2 ? hi : p.Now;
+            float span = MathF.Max(MathF.Max(MathF.Abs(p.Now), MathF.Abs(p.Value)), MathF.Abs(thr)) * 1.25f + 0.001f;
+            var bar = new Rect2(lx + 100, ly + 4, colW - 200, 10);
+            DrawRect(bar, new Color(1, 1, 1, 0.05f));
+            float nx = Mathf.Clamp(p.Now / span, 0f, 1f), vx = Mathf.Clamp(p.Value / span, 0f, 1f), tx = Mathf.Clamp(thr / span, 0f, 1f);
+            bool bad = p.Value < lo || p.Value > hi;
+            DrawRect(new Rect2(bar.Position, new Vector2(bar.Size.X * nx, bar.Size.Y)), Palette.Accent.WithAlpha(0.55f));
+            DrawRect(new Rect2(bar.Position.X + bar.Size.X * MathF.Min(nx, vx), bar.Position.Y + 2, bar.Size.X * MathF.Abs(vx - nx), bar.Size.Y - 4), (bad ? Palette.Danger : Palette.Good).WithAlpha(0.6f));
+            DrawLine(new Vector2(bar.Position.X + bar.Size.X * vx, bar.Position.Y - 2), new Vector2(bar.Position.X + bar.Size.X * vx, bar.End.Y + 2), bad ? Palette.Danger : Palette.Text, 1.5f);
+            DrawLine(new Vector2(bar.Position.X + bar.Size.X * tx, bar.Position.Y - 3), new Vector2(bar.Position.X + bar.Size.X * tx, bar.End.Y + 3), Palette.Warning, 1f);
+            Gfx.Text(this, Fonts.Body, new Vector2(bar.End.X + 6, ly + 13), Fit($"{p.Now:0.#} → {p.Value:0.#}{p.Unit}", 92, 10, Fonts.Body), 10, bad ? Palette.Danger : Palette.TextDim);
+            // 최근 채점 점 (맞음 초록 · 틀림 붉음)
+            float dx = lx + 100;
+            foreach (var g in f.Graded.Where(q => q.Key == pr.Key).Reverse().Take(12))
+            {
+                DrawCircle(new Vector2(dx + 3, ly + 19), 2f, g.Hit == true ? Palette.Good : Palette.Danger, true, -1f, true);
+                dx += 7;
+            }
+            ly += 26;
+        }
+        // 오른쪽: 계획표 · 우주 예보
+        SectionTitle(rx, ry + 10, "계획표 — 예측이 문턱을 넘으면");
+        ry += 18;
+        foreach (var it in f.Plan.AsEnumerable().Reverse().Take(8))
+        {
+            var col = it.State == "예정" ? Palette.Accent : Palette.TextMuted;
+            DrawRect(new Rect2(rx, ry + 3, 4, 12), col);
+            Gfx.Text(this, Fonts.Bold, new Vector2(rx + 10, ry + 12), Fit($"{SimTime.Clock(it.Tick)} {it.Goal} — {it.Action}", colW - 10, 10, Fonts.Bold), 10, Palette.Text);
+            Gfx.Text(this, Fonts.Body, new Vector2(rx + 10, ry + 25), Fit($"[{it.State}] {it.Why}", colW - 10, 10, Fonts.Body), 10, Palette.TextDim);
+            ry += 30;
+        }
+        if (f.Plan.Count == 0) { Gfx.Text(this, Fonts.Body, new Vector2(rx, ry + 12), "문턱을 넘을 것 같은 값이 없다", 10, Palette.TextMuted); ry += 18; }
+        ry += 8;
+        SectionTitle(rx, ry + 10, $"우주 예보 · 대재난 — 맞음 {a.ForecastHits} · 헛예보 {a.ForecastMisses} · EMP {a.Emps}");
+        ry += 18;
+        foreach (var fc in a.SpaceForecasts.AsEnumerable().Reverse().Take(4))
+        {
+            string st = !fc.Graded ? $"기다림 ({Math.Max(0, (fc.Due - w.Tick) / (float)SimTime.Minutes(1)):0}분)" : fc.Hit ? "맞았다" : "헛예보";
+            Gfx.Text(this, Fonts.Body, new Vector2(rx, ry + 12), Fit($"{SimTime.Clock(fc.Tick)} {fc.Name} — {st}", colW, 10, Fonts.Body), 10, !fc.Graded ? Palette.Warning : fc.Hit ? Palette.Good : Palette.Danger);
+            ry += 14;
+        }
+        ry += 6;
+        Gfx.Text(this, Fonts.Body, new Vector2(rx, ry + 12), Fit($"문 · 식단: 원격 열기 {a.Passes} · 막음 {a.Denials} · 문 감지기 고장 {a.DoorBlinds} (안 것 {a.DoorsKnown}) · 배급 앞당김 {a.RationLeads} · 식단 불평 {a.MealGripes}", colW, 10, Fonts.Body), 10, Palette.TextDim);
     }
 }

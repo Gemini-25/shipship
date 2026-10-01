@@ -38,7 +38,7 @@ public static partial class Program
                 Check("상시 카드 — 화재 때 \"방 화재 · 댐퍼 폐쇄 · 대피 기다림 n초\"", seen.StartsWith(room.Name), $"\"{seen}\" · 지금: {w.Automation.NowLine}");
                 Run(w, SimTime.Minutes(40));
                 var book = w.Automation.Book;
-                var full = book.Acts.FirstOrDefault(a => a.Kind == ActKind.Suppress && a.Observe != "" && a.Judge != "" && a.Act != "" && a.Graded && a.Result != "");
+                var full = book.Acts.FirstOrDefault(a => a.Kind == ActKind.Suppress && a.Observe != "" && a.Judge != "" && a.Act != "" && a.Request != "" && a.Graded && a.Result != "");
                 int graded = book.Acts.Count(a => a.Graded);
                 Check("다섯 칸 기록 — 소화 조치가 관찰 · 판단 · 조치 · 요청 · 결과로 남고 몇 분 뒤 채점된다", full != null && graded >= 3,
                     full != null ? $"[{full.Kind}] 관찰 {full.Observe} | 판단 {full.Judge} | 조치 {full.Act} | 요청 {full.Request} | 결과 {full.Result} · 채점 {graded}/{book.Acts.Count} (맞음 {book.Right} · 틀림 {book.Wrong})" : $"기록 {book.Acts.Count} · 채점 {graded} · " + string.Join(" / ", book.Acts.Take(4).Select(a => $"{a.Kind}:{a.Act}:{a.Result}")));
@@ -175,7 +175,141 @@ public static partial class Program
                     $"확인 {(k?.Seen == true ? "했다" : "못 했다")} · 오경보 {b.FalseAlarms} · 감지기 믿음 {b.Trust * 100:0}% · 고장 {BeliefModel.FaultName(b.Fault)}");
             }
 
-            // 5) 결정론
+            // 5) 문 본체 × 컴퓨터: 출입 관리 모듈이 다친 사람을 잠긴 약품고에 원격으로 들인다 (기다리지 않는다 · 신뢰 ↑)
+            //    문 감지기 고장 → 컴퓨터는 그 방을 비었다고 믿는다 → 사람 확인으로 드러나면 정비 일정표 맨 앞에 올린다
+            {
+                var w = DayOne(seed, "Hanbit");
+                RunUntilHour(w, 10f);
+                var a = w.Automation;
+                a.Install(ComputerModule.Access);
+                var b = w.Body;
+                var pharm = w.Ship.LiveRooms.Where(r => r.Kind == RoomType.Storage && r.Doors.Count >= 1 && r.Cells.Count >= 4 && r.DataLinked).OrderBy(r => r.Doors.Count).ThenBy(r => r.Id).First();
+                b.SetZone(pharm, AccessZone.Medicine, LockKind.Card);
+                var p = w.Crew.Where(c => c.CanAct && !c.IsChild && c.Role != CrewRole.Medic && c.Id != w.Command.CaptainId && c.Room != pharm && !c.Outside)
+                    .OrderBy(c => (c.Position - pharm.Center).LengthSquared()).First();
+                p.Vitals.Injury = 0.35f;
+                float tr0 = a.Trusts.Of(p);
+                var inside = pharm.Cells.Where(c => w.Ship.IsOpenFloor(c)).OrderBy(c => (c.Center - pharm.Center).LengthSquared()).First();
+                Force(w, p, new Job(null, "약 가지러", new List<Toil> { new GotoToil(inside), new WaitToil(10, Pose.Standing) }));
+                bool reached = false;
+                for (int t = 0; t < SimTime.Minutes(30) && !reached; t++) { w.Step(); reached = p.Room == pharm; if (p.Job == null) break; }
+                var line = w.Log.Entries.LastOrDefault(e => e.Text.Contains("원격으로 열었다")).Text;
+                var act = a.Book.Acts.LastOrDefault(x => x.Kind == ActKind.Door);
+                Check("출입 관리 × 문 — 다친 사람이 잠긴 약품고 앞에 서면 컴퓨터가 원격으로 연다 (사람을 부르지 않는다 · 신뢰 ↑ · 다섯 칸 기록)",
+                    reached && a.Passes > 0 && b.Stats.LetIn == 0 && a.Trusts.Of(p) > tr0 && act != null && act.Act.Contains("원격"),
+                    $"{p.Name} → {pharm.Name} 들어감 {reached} · 원격 열기 {a.Passes} · 사람이 열어 줌 {b.Stats.LetIn} · 신뢰 {tr0 * 100:0}→{a.Trusts.Of(p) * 100:0}% · \"{line}\" · [{act?.Observe} | {act?.Judge} | {act?.Act}]");
+
+                // 문 감지기 고장 → 믿음 Blind
+                var room = w.Ship.LiveRooms.Where(r => r.Type is RoomType.Quarters or RoomType.Lounge && r.DataLinked && r.Doors.Any(d => !d.IsExternal && b.DoorOf(d) != null)).OrderBy(r => r.Id).First();
+                var door = room.Doors.First(d => !d.IsExternal && b.DoorOf(d) != null);
+                var db = b.DoorOf(door)!;
+                db.SensorBroken = true;
+                if (b.Doors.FirstOrDefault(x => x.Inner == room.Id) is DoorBody inn) inn.SensorBroken = true;
+                Run(w, SimTime.Minutes(6));
+                var bel = a.Belief.Of(room);
+                bool blind = bel.Fault == SensorFault.Blind && a.DoorBlinds > 0;
+                var guest = w.Crew.Where(c => c.CanAct && !c.IsChild && c != p).OrderBy(c => c.Id).First();
+                Put(w, guest, room);
+                guest.NextThinkTick = w.Tick + SimTime.Hours(1);
+                Run(w, World.SystemInterval * 2);
+                int believed = a.Belief.Of(room).People;
+                var k = a.RequestCheck(room, "시험 — 사람 수 확인");
+                for (int m = 0; m < 30 && k is { Seen: false }; m++) { Run(w, SimTime.Minutes(1)); if (guest.Room != room) Put(w, guest, room); }
+                Run(w, SimTime.Minutes(6));
+                bool known = a.DoorsKnown > 0 && a.Apps.MaintPlan.Any(x => x.Machine == "문 감지기");
+                int brokenDoor = b.Doors.Where(x => x.SensorBroken).Select(x => x.Door).DefaultIfEmpty(-1).First();
+                Check("문 감지기 고장 → 컴퓨터는 사람이 있는 방을 비었다고 믿는다 → 사람 확인으로 드러나 정비 일정표 맨 앞에 올린다 (수리 우선)",
+                    blind && believed == 0 && k != null && k.Seen && known,
+                    $"{room.Name} 고장 {BeliefModel.FaultName(bel.Fault)} · 믿음 {believed}명 ↔ 실제 {BeliefModel.Actual(w, room)}명 · 확인 {(k?.Seen == true ? "했다" : "못 했다")} · 알게 된 문 {a.DoorsKnown} (수리 우선 {a.DoorKnownBroken(brokenDoor)}) · 정비 일정 {string.Join(" / ", a.Apps.MaintPlan.Take(2).Select(x => $"{x.Machine}({x.Room}) {x.Why}"))}");
+            }
+
+            // 6) 식단 × 식량: 식단 계획 모듈은 배급을 하루 앞당긴다 (주방 당번이 배급표를 붙인다) → 배고픈 사람이 컴퓨터 식단을 탓한다 → 컴퓨터가 거둔다
+            {
+                World Low(bool plan)
+                {
+                    var w = DayOne(seed, "Hanbit");
+                    int crew = w.Crew.Count(c => !c.Dead);
+                    Scenarios.LimitStock(w, ItemKind.Meal, crew);
+                    Scenarios.LimitStock(w, ItemKind.Ration, 0);
+                    Scenarios.LimitStock(w, ItemKind.Produce, 0);
+                    int want = (int)(crew * FoodPolicy.MealsPerPersonDay * 2.7f) - (int)FoodPolicy.FoodStock(w);
+                    foreach (var box in w.Ship.Containers) if (want > 0 && box.Storage!.Accepts(ItemKind.Ration)) want -= box.Storage.Add(ItemKind.Ration, want);
+                    foreach (var bed in w.Ship.FurnitureOf(FurnitureType.GrowBed).Where((_, i) => i % 4 != 0).ToList()) { bed.Machine!.Crop!.Growth = 0.05f; w.Machines.Break(bed.Machine, FaultKind.Wrecked); }
+                    if (plan) w.Automation.Install(ComputerModule.MealPlan);
+                    return w;
+                }
+                var wa = Low(true);
+                var wb = Low(false);
+                float days0 = FoodPolicy.FoodDays(wa);
+                long ta = -1, tb = -1;
+                for (int t = 0; t < SimTime.Hours(20) && (ta < 0 || tb < 0); t++)
+                {
+                    wa.Step(); wb.Step();
+                    if (ta < 0 && wa.Food.Rationing) ta = wa.Tick;
+                    if (tb < 0 && wb.Food.Rationing) tb = wb.Tick;
+                }
+                var adv = wa.Automation.Book.Acts.FirstOrDefault(x => x.Key == "rationlead");
+                Check("식단 × 식량 — 식단 계획 모듈이 바닥나는 날을 먼저 보고 배급을 앞당긴다 (주방 당번이 배급표를 붙인다)",
+                    ta >= 0 && (tb < 0 || ta < tb) && wa.Automation.RationLeads > 0 && adv != null,
+                    $"처음 {days0:0.0}일치 · 모듈 있음: {(ta >= 0 ? SimTime.Clock(ta) : "안 함")} ↔ 없음: {(tb >= 0 ? SimTime.Clock(tb) : "20시간 안에 안 함")} · 기록 [{adv?.Observe} | {adv?.Judge} | {adv?.Act}]");
+                var au = wa.Automation;
+                var eaters = wa.Crew.Where(c => !c.Dead && !c.IsChild).OrderBy(c => c.Id).ToList();
+                var hungry = eaters.Take(eaters.Count / 2 + 1).ToList();
+                var tr0 = hungry.Select(c => au.Trusts.Of(c)).ToList();
+                foreach (var c in hungry) { c.Needs.Food = 0.15f; if (!c.IsAwake) { c.Pose = Pose.Standing; } }
+                for (int m = 0; m < 12 && !au.MealEased; m++) { foreach (var c in hungry) c.Needs.Food = MathF.Min(c.Needs.Food, 0.15f); Run(wa, SimTime.Minutes(1)); }
+                int down = hungry.Where((c, i) => au.Trusts.Of(c) < tr0[i]).Count();
+                Check("배고픈 사람이 컴퓨터 식단을 탓한다(신뢰 ↓) → 불평이 절반을 넘으면 컴퓨터가 앞당기기를 거둔다 (배우기)",
+                    au.MealGripes > 0 && down > 0 && au.MealEased && au.RationLead == 0f && au.Learn.WrongCalls.Any(x => x.kind == "ration"),
+                    $"불평 {au.MealGripes} · 신뢰 내려간 사람 {down}/{hungry.Count} · 앞당김 기준 {au.RationLead:0} · 기억: {au.Learn.WrongCalls.LastOrDefault().why}");
+            }
+
+            // 7) 대재난: 예보 방송 → 들은 사람만(믿으면) 미리 대피소로 · 스피커 고장 방 사람은 그대로 → EMP: 스피커 타고 감지기 값 깨지고 재부팅 → 예보가 맞아 들은 사람 신뢰 ↑
+            {
+                var w = DayOne(seed, "Mirinae");
+                RunUntilHour(w, 11f);
+                var a = w.Automation;
+                var shelter = Facilities.Best(w.Ship, "shelter").room!;
+                var awake = w.Crew.Where(c => c.CanAct && c.IsAwake && !c.IsChild && !c.Outside && c.Room != null && c.Room != shelter).OrderBy(c => c.Id).ToList();
+                var hearer = awake.First(c => a.Speak.SpeakerWorks(c.Room!));
+                var deaf = awake.First(c => c != hearer && c.Room != hearer.Room);
+                a.Speak.BreakSpeaker(deaf.Room!, "시험");
+                foreach (var c in new[] { hearer, deaf }) a.Trusts.Change(c, 0.7f - a.Trusts.Of(c), "시험", quiet: true);
+                float th0 = a.Trusts.Of(hearer);
+                var b = a.CosmicForecast("궤도 무기 EMP", 20f, CosmicFx.Emp | CosmicFx.Shock);
+                bool heedH = false, heedD = false, inShelter = false;
+                for (int m = 0; m < 25 && !inShelter; m++)
+                {
+                    Run(w, SimTime.Minutes(1));
+                    heedH |= hearer.Job?.Activity is HeedBroadcastActivity;
+                    heedD |= deaf.Job?.Activity is HeedBroadcastActivity;
+                    inShelter |= hearer.Room == shelter;
+                }
+                Check("예보 방송 → 들은 사람만 미리 대피소로 간다 (스피커 고장 방 사람은 모른다)",
+                    b != null && b.HeardBy.Contains(hearer.Id) && !b.HeardBy.Contains(deaf.Id) && heedH && inShelter && !heedD,
+                    $"방송 \"{b?.Text}\" · {hearer.Name}({hearer.Room?.Name}) 들음 · 대피 {(inShelter ? shelter.Name + " 도착" : heedH ? $"가는 중 ({hearer.Job?.Label} · {hearer.Room?.Name})" : "안 감")} · {deaf.Name}({deaf.Room?.Name}) 못 들음 · 대피 {(heedD ? "했다" : "안 했다")}");
+                int broken0 = w.Ship.LiveRooms.Count(r => a.Speak.SpeakerBroken(r));
+                int stuck0 = a.Belief.Corruptions;
+                a.CosmicHit("궤도 무기 EMP", CosmicFx.Emp | CosmicFx.Shock, 0.8f);
+                bool rebooting = a.Rebooting;
+                Run(w, SimTime.Minutes(2));
+                var fc = a.SpaceForecasts.LastOrDefault();
+                Check("EMP — 스피커 회로가 타고 감지기 값이 깨지고(낡은 믿음) 재부팅 · 예보가 맞아 미리 피한 사람의 신뢰 ↑",
+                    rebooting && w.Ship.LiveRooms.Count(r => a.Speak.SpeakerBroken(r)) > broken0 && a.Belief.Corruptions > stuck0 && fc is { Graded: true, Hit: true } && a.Trusts.Of(hearer) > th0,
+                    $"재부팅 {rebooting} · 스피커 고장 {broken0} → {w.Ship.LiveRooms.Count(r => a.Speak.SpeakerBroken(r))} · 값 깨짐 {stuck0} → {a.Belief.Corruptions} · 예보 {(fc?.Hit == true ? "맞음" : "?")} · {hearer.Name} 신뢰 {th0 * 100:0}→{a.Trusts.Of(hearer) * 100:0}%");
+            }
+
+            // 8) 앞날 예측 (v16.16 바탕): 한 시간마다 내다보고 여섯 시간 뒤 채점 — 갈래마다 맞힌 비율이 믿음이 된다
+            {
+                var w = DayOne(seed, "Mirinae");
+                Run(w, SimTime.Hours(16));
+                var f = w.Automation.Foresight;
+                Check("앞날 예측 — 지켜보는 값을 내다보고 기한에 채점한다 (맞힌 비율 = 다음 예측의 믿음)",
+                    f.Current.Count >= 4 && f.Graded.Count >= 8 && f.Hits > 0,
+                    $"지금 예측 {f.Current.Count} ({string.Join(" · ", f.Current.Take(4).Select(p => $"{p.Name} {p.Now:0.#}→{p.Value:0.#}{p.Unit} 믿음 {p.Confidence * 100:0}%"))}) · 채점 {f.Graded.Count} (맞음 {f.Hits} · 틀림 {f.Misses}) · 계획 {f.Plan.Count}");
+            }
+
+            // 9) 결정론
             {
                 uint H() { var w = World.CreateDefault(seed, 0, "Hanbit"); Run(w, SimTime.TicksPerDay + SimTime.Hours(6)); return SaveGame.StateHash(w); }
                 uint x = H(), y = H();

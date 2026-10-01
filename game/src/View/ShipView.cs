@@ -687,6 +687,7 @@ public partial class ShipView : Node2D
         PaintCauseChain(ci); // v12.2 고른 사고의 인과 사슬
         PaintDampers(ci, mode == ViewMode.Air);
         PaintRoomStates(ci);
+        PaintComputerWorld(ci); // v16.6 서버 랙 · 조작 빛 흐름 · 스피커 · 콘솔 경고 · 홀로그램 정보판 (ShipViewComputer.cs)
 
         if (_main.HoveredRoom is Room hr && hr != _main.SelectedRoom && !hr.Detached)
             PaintOutline(ci, hr, Palette.Room(hr.Kind).WithAlpha(0.35f), false);
@@ -734,6 +735,7 @@ public partial class ShipView : Node2D
         PaintMeeting(ci); // v13.2 회의 장면 · 발언 말풍선
         PaintMinds(ci); // v13.3 공황 · 영웅심 · 분노 · 모름
         PaintTalk(ci); // v14.4 말풍선 (목적 있는 대화 · 인수인계 · 깨우기)
+        PaintComputerTop(ci, mode); // v16.6 선내 방송 말풍선 · 컴퓨터가 보는 배
         PaintDrones(ci);
         PaintIncoming(ci);
         PaintImpacts(ci);

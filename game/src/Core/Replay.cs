@@ -415,6 +415,7 @@ public static class SaveGame
         w.Cooking.Hash(I, F); w.Smells.Hash(I, F); // v16.8 음식 · 냄새
         foreach (var d in w.Portable.Devices) { I(d.At.X * 1000 + d.At.Y); I((d.On ? 1 : 0) + (d.Stored ? 2 : 0) + (d.Broken ? 4 : 0) + (int)d.Plug * 8); F(d.Charge); } // v16.7
         { var bs = w.Body.Stats; I(bs.ComputerFlags); I(bs.ComputerWarnings); I(bs.Witnessed); I(bs.Mopped); I(bs.FoodSpills); I(bs.Grease); I(bs.Mildew); } // v16.3 배 본체 ↔ 주 컴퓨터 · 다른 시스템
+        { var au = w.Automation; I(au.Passes); I(au.Denials); I(au.RationLeads); I(au.DoorBlinds); I(au.Emps); I(au.Forecasts); I(au.Foresight.Made); I(au.Foresight.Hits); I(au.Foresight.Plans); } // v16.6 문 · 식단 · 대재난 · 앞날 예측
         return h;
     }
 }
