@@ -34,7 +34,7 @@ public sealed class TripMember
 
 public sealed record JournalLine(long Tick, int Day, string Text, int Tone);
 
-public sealed class RadioCall
+public sealed class ExpeditionRadioCall
 {
     public long Tick { get; init; }
     public int Day { get; init; }
@@ -65,7 +65,7 @@ public sealed class Trip
     public long Returned { get; set; } = -1;
     public TripPhase Phase { get; set; }
     public List<JournalLine> Journal { get; } = new();
-    public List<RadioCall> Radio { get; } = new();
+    public List<ExpeditionRadioCall> Radio { get; } = new();
     public Dictionary<ItemKind, int> Loot { get; } = new();
     public List<ItemKind> UsedParts { get; } = new();
     public int Survivors { get; set; }
@@ -1144,7 +1144,7 @@ public sealed class ExpeditionSystem
             text = $"{lead.Name}: " + (lost > 0 ? $"{string.Join("·", t.Members.Where(m => m.Missing).Select(m => w.Crew[m.Id].Name))}을(를) 잃어버렸다. 찾고 있다" : last != null ? last.Text.Split(" — ")[0] : "다들 무사하다")
                    + (hurt > 0 && lost == 0 ? $" · 다친 사람 {hurt}" : lost == 0 && hurt == 0 ? " · 다들 무사하다" : "") + $" · 지금까지 {t.LootTotal}개";
         }
-        var call = new RadioCall { Tick = w.Tick, Day = day, Text = text, Lost = !works };
+        var call = new ExpeditionRadioCall { Tick = w.Tick, Day = day, Text = text, Lost = !works };
         if (works)
         {
             var rooms = new HashSet<int>();
@@ -1164,7 +1164,7 @@ public sealed class ExpeditionSystem
         w.Log.Add(w.Tick, LogKind.Ship, $"[원정 무전] {text}" + (works ? $" (들은 사람 {call.HeardBy.Count})" : ""));
     }
 
-    private void Heard(CrewMember c, Trip t, RadioCall call)
+    private void Heard(CrewMember c, Trip t, ExpeditionRadioCall call)
     {
         var w = _w;
         LastNews[c.Id] = call.Tick;
