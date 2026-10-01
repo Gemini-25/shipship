@@ -155,6 +155,7 @@ public sealed class World
     public FlowSystem Flow { get; } // v14.8 배관 · 배선 전달량
     public CultureSystem Culture { get; } // v14.9 배의 문화
     public DailySystem Daily { get; } // v15 일상 사건 70
+    public ExpeditionSystem Expedition { get; } // v16.12 재료 탐사 원정
     public BodySystem Body { get; } // v16.3 배 본체 (칸 3층 · 칸 상태 · 벽 층 · 문)
     public DailySceneSystem Scenes { get; } // v16.1 일상 → 행동 (장면 · 인수인계 · 쪽지)
     public CookingSystem Cooking { get; } public SmellSystem Smells { get; } // v16.8 실제 음식 · 냄새
@@ -255,6 +256,7 @@ public sealed class World
         Flow = new FlowSystem(this);
         Culture = new CultureSystem(this);
         Daily = new DailySystem(this);
+        Expedition = new ExpeditionSystem(this); // v16.12
         Body = new BodySystem(this); // v16.3
         Scenes = new DailySceneSystem(this);
         Cooking = new CookingSystem(this); Smells = new SmellSystem(this); // v16.8
@@ -349,6 +351,7 @@ public sealed class World
             Culture.Update(dt); // v14.9 겪은 일이 관행이 되어 전해진다
             pf = Prof.Lap("sys.Culture", pf);
             Daily.Update(dt); // v15 사고가 아닌 날의 일상 사건
+            Expedition.Update(dt); // v16.12 재료 바닥 → 정지 · 원정 (배에 없는 사람 · 일지 · 무전 · 귀환)
             pf = Prof.Lap("sys.Daily", pf);
             Origin.Update(dt); // v16.9 숨은 이야기 발견 · 전하기 · 갈라짐과 다시 이음 · 침대 인계
             pf = Prof.Lap("sys.Origin", pf);
@@ -454,6 +457,7 @@ public sealed class World
         Movement.BeginTick(); // v14.5 누가 어느 칸에 · 어느 방에 자는 사람이
         foreach (var c in Crew)
         {
+            if (c.Away) continue; // v16.12 원정 중 — 배에 없다
             // 떨어져 나간 조각에 탄 사람: 조각과 함께 움직인다 (우주복 산소로 버틴다 — 되찾아 오기를 기다린다)
             if (c.Aboard is Fragment fr)
             {
@@ -604,6 +608,8 @@ public sealed class World
         c.NextThinkTick = Tick + 1;
         Log.Add(Tick, LogKind.Life, "정신을 차렸다", c.Id);
     }
+
+    internal void KillAway(CrewMember c) => Die(c); // v16.12 원정에서 돌아오지 못한 사람
 
     private void Die(CrewMember c)
     {

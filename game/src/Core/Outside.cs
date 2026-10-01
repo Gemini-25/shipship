@@ -160,7 +160,7 @@ public sealed class OutsideSystem
     {
         long now = _w.Tick;
         bool recent = Recent.Any(r => r.id == s.Id && now - r.tick < SimTime.TicksPerDay * 3);
-        return s.Weight * (recent ? 0.2f : 1f);
+        return s.Weight * (recent ? 0.2f : 1f) * _w.Expedition.OutsideMul(s.Group); // v16.12 멈춘 배는 해적 눈에 띈다
     }
 
     /// <summary>사건 하나를 일으킨다 (id를 주면 그것만 — 조건은 그대로 따진다).</summary>

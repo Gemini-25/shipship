@@ -73,6 +73,12 @@ public static class ChronicleV15
         C("brave", "겁을 이긴 사람", "겁이 남았는데도 비상에 세 번 달려갔다", (w, c) => c.Memory.Trauma >= 0.3f && c.Stats.Emergencies >= 3),
         C("diarist", "일기 쓰는 사람", "일기가 서른 줄", (w, c) => c.Diary.Count >= 30),
         C("hungry", "배고픔을 아는 사람", "열두 시간을 굶었다", (w, c) => H(c.Stats.TicksStarving) >= 12f),
+        // v16.12 원정
+        S("halted1", "멈췄다 다시 간 배", "재료가 바닥나 멈췄다가 다시 엔진을 켰다", w => w.Expedition.Stats.Resumed >= 1),
+        S("expedition5", "원정의 배", "원정대가 다섯 번 돌아왔다", w => w.Expedition.Stats.Returned >= 5),
+        C("expleader", "원정대장", "원정대를 이끌고 돌아왔다", (w, c) => w.Expedition.Led(c) >= 1),
+        C("explorer3", "떠돌이 채집꾼", "원정을 세 번 다녀왔다", (w, c) => w.Expedition.Went(c) >= 3),
+        C("tether", "끈을 잡은 사람", "원정에서 떠내려가던 동료를 붙잡았다", (w, c) => w.Expedition.Saved(c) >= 1),
     };
 
     public static Row? Of(string id) => Rows.FirstOrDefault(r => r.Id == id);

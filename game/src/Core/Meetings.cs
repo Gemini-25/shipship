@@ -382,6 +382,7 @@ public sealed class MeetingSystem
         // 3) 미뤄 둔 결정: 모인 김에 정한다
         foreach (var o in w.Board.Open.Where(o => Council.Needs(o.Kind) && o.Decision == DecisionState.Pending && !o.Alone && !o.Closed).ToList())
             Council.DecideNow(w, o, attendees, rec);
+        w.Expedition.Agenda(rec, attendees, chair); // v16.12 원정 안건
         // 4) 방침 하나: 모인 사람 다수가 바라는 쪽이 지금과 다르고, 바꾼 지 사흘이 지났으면 올린다
         if (rec.Items.Count(i => i.Topic.StartsWith("policy:")) == 0 && attendees.Count >= 3)
         {

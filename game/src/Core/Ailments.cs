@@ -250,6 +250,7 @@ public sealed class AilmentSystem
                 if (c.Ailments.Count > 0) { if (c.Ailments.Any(a => Spec(a.Id).Health > 0f && Severity(a) > 0.5f)) Stats.Deaths++; c.Ailments.Clear(); c.Fx = default; }
                 continue;
             }
+            if (c.Away) continue; // v16.12 원정 중 (배의 공기 · 방 · 사람과 닿지 않는다)
             Exposure(c);
             if (roll)
                 foreach (var (id, p, why) in Risks(c))
