@@ -186,6 +186,7 @@ public static partial class Program
                 {
                     Run(w, 10);
                     if (crew.Any(c => c.Cell.X < mess.MinX - 8 && c.Cell.Y > mess.MaxY + 3)) passedLeft = true;
+                    if (argv.Contains("--trace") && i % (SimTime.Minutes(5) / 10) == 0) Console.WriteLine($"   {SimTime.HourOfDay(w.Tick):0.00}시 폭풍 {w.Ambience.StormPower:0.00} · " + string.Join(" | ", crew.Select(c => $"{c.Name} {c.Cell} {c.Room?.Name}({c.Room?.Radiation * 100:0}%) {c.Job?.Label} 휴식 {c.Needs.Rest * 100:0} · " + string.Join(",", c.LastEvaluations.Take(2).Select(e => $"{e.Activity.Label} {e.Score:0.00}")))));
                 }
                 int safe = crew.Count(c => c.Room == shelter);
                 Check("고리형 대피 — 태양 폭풍에 식당의 넷이 막힌 오른쪽 대신 왼쪽으로 돌아 대피소에 든다", passedLeft && safe >= 3 && crew.All(c => !c.Dead),
@@ -340,12 +341,12 @@ public static partial class Program
                 float junkEarly = top.Count > 0 ? o.Early(top[0]) : 0f;
                 float freshEarly = fresh.Origin.Ranked.Count > 0 ? fresh.Origin.Ranked.Values.Max() : 0f;
                 var maint = junk.Board.All.Where(x => x.Kind == WorkKind.Maintain && x.Target.Furniture != null).ToList();
-                int rankedOrders = maint.Count(x => o.Ranked.ContainsKey(x.Target.Furniture!.Id));
+                int rankedNow = maint.Count(x => o.Ranked.ContainsKey(x.Target.Furniture!.Id));
+                int rankedOrders = rankedNow + o.Stats.RankFixes; // 지금 떠 있는 순위 설비 정비 + 하루 동안 순위대로 먼저 손본 것 (하루 끝 한순간만 보면 막 끝낸 정비는 안 보인다)
                 Check("주컴퓨터 — 시작 상태 · 부품 내력으로 고장 위험 순위를 매겨 정비를 앞당긴다 (고물 배는 넷을 크게 · 새 배는 하나를 조금)",
                     act != null && top.Count >= 3 && junkEarly > freshEarly * 1.5f && rankedOrders >= 1,
-                    $"순위 {string.Join(" · ", top.Select(m => m.Name))} · 앞당김 땜질호 {junkEarly * 100:0}%p / 새터호 {freshEarly * 100:0}%p · 순위 설비 정비 작업 {rankedOrders}/{maint.Count} · 판단: {act?.Judge}");
-                var comp = junk.Ship.FurnitureOf(FurnitureType.MainComputer).First().Machine!;
-                junk.Machines.Break(comp);
+                    $"순위 {string.Join(" · ", top.Select(m => m.Name))} · 앞당김 땜질호 {junkEarly * 100:0}%p / 새터호 {freshEarly * 100:0}%p · 순위 설비 정비 지금 {rankedNow}/{maint.Count} · 먼저 손봄 {o.Stats.RankFixes} · 판단: {act?.Judge}");
+                foreach (var comp in junk.Ship.FurnitureOf(FurnitureType.MainComputer)) junk.Machines.Break(comp.Machine!, FaultKind.Wrecked); // 아무 고장이나 걸면 가벼운 고장(효율 25% 넘음)이라 컴퓨터가 안 멎을 수 있다
                 Run(junk, 30);
                 Check("주컴퓨터가 멎으면 정비 순위도 멎는다 (사람 귀만 남는다)", !junk.Automation.MainOnline && top.All(m => o.Early(m) == 0f), $"컴퓨터 {(junk.Automation.MainOnline ? "돎" : "멎음")}");
                 bool spof = fresh.Automation.Book.Acts.Any(x => x.Key == "origin:spof");

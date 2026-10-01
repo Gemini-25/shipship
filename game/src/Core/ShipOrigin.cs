@@ -56,9 +56,10 @@ public sealed class OriginStats
 {
     public int Found, Told, Tips, Toasts, Scribbles, Reopened, Splits, Reunions, Handovers, Grumbles;
     public int Rounds, RoundFixes, Squeezes, SqueezeBonds, SqueezeSpats, Ranks, Advice, CultureBorn, Calls; // v16.9 한 바퀴 · 좁은 배 · 컴퓨터 판단 · 정비 문화 · 건너편 교신
+    public int RankFixes; // v16.9 컴퓨터가 순위에 올린 설비를 사람이 먼저 손본 횟수
     public string Summary() =>
         $"숨은 이야기 찾음 {Found} · 전함 {Told} · 쪽지 요령 {Tips} · 건배 {Toasts} · 낙서 보탬 {Scribbles} · 막힌 구역 열림 {Reopened} · 갈라짐 {Splits}(다시 이음 {Reunions}) · 침대 인계 {Handovers}(투덜 {Grumbles})"
-        + $" · 한 바퀴 {Rounds}(손봄 {RoundFixes}) · 비좁아 마주침 {Squeezes}(웃음 {SqueezeBonds} · 짜증 {SqueezeSpats}) · 컴퓨터 정비 순위 {Ranks} · 조언 {Advice} · 정비 문화 {CultureBorn} · 건너편 교신 {Calls}";
+        + $" · 한 바퀴 {Rounds}(손봄 {RoundFixes}) · 비좁아 마주침 {Squeezes}(웃음 {SqueezeBonds} · 짜증 {SqueezeSpats}) · 컴퓨터 정비 순위 {Ranks}(먼저 손봄 {RankFixes}) · 조언 {Advice} · 정비 문화 {CultureBorn} · 건너편 교신 {Calls}";
 }
 
 public sealed partial class ShipOriginSystem

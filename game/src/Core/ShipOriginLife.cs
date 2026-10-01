@@ -18,11 +18,12 @@ public sealed partial class ShipOriginSystem
 {
     private long _nextHour = -1;
     private readonly Dictionary<int, long> _lastYield = new();
-    private readonly SortedDictionary<long, int> _bumps = new(); // (작은 Id << 16 | 큰 Id) → 이번 10분 동안 비켜선 횟수
+    private readonly SortedDictionary<long, (int n, long at, int by)> _bumps = new(); // (작은 Id << 16 | 큰 Id) → 몇 시간 안에 비켜선 횟수 · 마지막 때 · 비켜선 사람
     private readonly Dictionary<int, long> _roundsAt = new();
     private readonly Dictionary<int, long> _checkedAt = new(); // 설비 몸체 Id → 마지막으로 한 바퀴 돈 때
     private readonly Dictionary<int, int> _roundsBy = new();
     private readonly Dictionary<int, float> _early = new(); // 컴퓨터가 앞당긴 설비 (몸체 Id → 앞당김)
+    private readonly SortedDictionary<int, int> _rankSvc = new(); // 순위에 올릴 때의 정비 횟수 (몸체 Id → 횟수)
     private int _faults0 = -1;
     private bool _spofSaid, _sealedSaid;
     private long _lastCall = -1;
@@ -96,39 +97,53 @@ public sealed partial class ShipOriginSystem
             if (g.YieldTo >= w.Crew.Count || g.YieldTo == c.Id) continue;
             int a = Math.Min(c.Id, g.YieldTo), b = Math.Max(c.Id, g.YieldTo);
             long key = ((long)a << 16) | (uint)b;
-            _bumps[key] = _bumps.TryGetValue(key, out var n) ? n + 1 : 1;
+            // 한 번 마주쳐 몇 틱 동안 비켜서는 건 한 번으로 센다
+            var (n, at, by) = _bumps.TryGetValue(key, out var e) ? e : (0, -SimTime.TicksPerDay, -1);
+            if (w.Tick - at < SimTime.Minutes(1)) { _bumps[key] = (n, w.Tick, by); continue; }
+            _bumps[key] = (n + 1, w.Tick, c.Id);
             Stats.Squeezes++;
         }
     }
 
-    /// <summary>10분마다: 자꾸 비켜선 두 사람 — 친하면 농담 · 가까워지고, 사이가 나쁘면 짜증이 쌓인다.</summary>
+    /// <summary>10분마다: 몇 시간 안에 자꾸 비켜선 두 사람 — 친하거나 넉살 좋으면 웃고 · 가까워지고, 사이가 나쁘거나 지쳤으면 짜증이 쌓인다.</summary>
     private void Squeeze()
     {
         var w = _w;
-        foreach (var (key, n) in _bumps)
+        List<long>? drop = null;
+        List<long>? reset = null;
+        foreach (var (key, (n, at, by)) in _bumps)
         {
+            if (w.Tick - at > SimTime.Hours(4)) { (drop ??= new()).Add(key); continue; } // 오래전 일은 잊는다
             if (n < 2) continue;
             var x = w.Crew[(int)(key >> 16)];
             var y = w.Crew[(int)(key & 0xffff)];
+            if (by == y.Id) (x, y) = (y, x); // 방금 비켜선 사람이 말을 건다
             if (!Able(x) || !Able(y)) continue;
+            (reset ??= new()).Add(key);
             float aff = (x.AffinityTo(y) + y.AffinityTo(x)) * 0.5f;
-            if (aff >= 0.1f || x.Habits.Contains(Habit.Joker) || y.Habits.Contains(Habit.Joker))
+            bool joker = x.Habits.Contains(Habit.Joker) || y.Habits.Contains(Habit.Joker);
+            // 사이 · 성격 · 지친 정도가 같은 마주침을 다르게 겪게 한다
+            float mood = aff + 0.25f * (x.Traits.Sociability - 0.5f) + 0.25f * (x.Traits.Calm - 0.5f) - 0.6f * MathF.Max(0f, x.Needs.Stress - 0.45f) - 0.3f * MathF.Max(0f, 0.3f - x.Needs.Rest) + (joker ? 0.3f : 0f);
+            if (mood >= 0.04f)
             {
                 Stats.SqueezeBonds++;
                 x.ChangeAffinity(y, 0.012f); y.ChangeAffinity(x, 0.012f);
                 x.Needs.Social = MathF.Min(1f, x.Needs.Social + 0.03f);
-                if (R.Chance(0.5f)) x.Say(w, Persona.Say(x, $"{y.Name}, 또 만났네 — 이 배는 너무 좁아"));
+                y.Needs.Social = MathF.Min(1f, y.Needs.Social + 0.02f);
+                x.Say(w, Persona.Say(x, joker ? $"{y.Name}, 우리 이러다 정들겠다" : $"{y.Name}, 또 만났네 — 이 배는 너무 좁아"));
+                if (R.Chance(0.3f)) Life.Diary(w, x, Persona.Say(x, $"좁은 통로에서 {Ko.WaGwa(y.Name)} 또 마주쳐 같이 웃었다."));
             }
-            else if (aff < -0.1f || x.Needs.Stress > 0.6f)
+            else if (mood <= -0.04f)
             {
                 Stats.SqueezeSpats++;
                 x.ChangeAffinity(y, -0.012f); y.ChangeAffinity(x, -0.008f);
                 x.Needs.Stress = MathF.Min(1f, x.Needs.Stress + 0.025f);
-                if (R.Chance(0.5f)) x.Say(w, Persona.Say(x, $"{y.Name}, 또 너야? 좀 비켜"));
+                x.Say(w, Persona.Say(x, $"{y.Name}, 또 너야? 좀 비켜"));
                 if (R.Chance(0.3f)) Life.Diary(w, x, Persona.Say(x, $"좁은 통로에서 {Ko.WaGwa(y.Name)} 하루에도 몇 번씩 부딪힌다."));
             }
         }
-        _bumps.Clear();
+        if (drop != null) foreach (var k in drop) _bumps.Remove(k);
+        if (reset != null) foreach (var k in reset) _bumps[k] = (0, _bumps[k].at, _bumps[k].by);
     }
 
     // ───────────────────────────── 한 시간마다: 주컴퓨터 · 정비 문화 ─────────────────────────────
@@ -159,10 +174,15 @@ public sealed partial class ShipOriginSystem
         }
         if (list.Count == 0) return;
         var top = list.OrderByDescending(x => x.risk).ThenBy(x => x.m.Body.Id).Take(Rough >= 0.55f ? 4 : Rough > 0f ? 2 : 1).ToList();
-        float scale = 0.08f + 0.22f * Rough; // 새 배는 조금만, 고물 배는 크게 앞당긴다
+        // 새 배는 조금만, 고물 배는 크게 앞당긴다 — 그래도 기준 마모가 20% 밑으로는 안 내려간다 (막 손본 설비를 또 손보며 소모품을 버리지 않게)
+        float scale = 0.05f + 0.13f * Rough;
+        // 순위에 올랐던 설비를 그동안 사람이 손봤나 (컴퓨터 순위가 정비 순서를 바꿨다)
+        foreach (var (id, svc) in _rankSvc)
+            if (w.Ship.Furniture[id].Machine is Machine pm && pm.ServiceCount > svc) Stats.RankFixes++;
         var before = _early.Keys.OrderBy(k => k).ToList();
         _early.Clear();
-        for (int i = 0; i < top.Count; i++) _early[top[i].m.Body.Id] = scale * (1f - 0.18f * i);
+        _rankSvc.Clear();
+        for (int i = 0; i < top.Count; i++) { _early[top[i].m.Body.Id] = scale * (1f - 0.18f * i); _rankSvc[top[i].m.Body.Id] = top[i].m.ServiceCount; }
         if (before.SequenceEqual(_early.Keys.OrderBy(k => k))) return;
         Stats.Ranks++;
         float avgWear = list.Average(x => x.m.Wear);
