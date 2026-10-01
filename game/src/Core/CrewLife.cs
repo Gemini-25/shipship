@@ -287,10 +287,10 @@ public sealed class LifeSystem
             {
                 var a = awake[i]; var b = awake[j];
                 if (a.Room != b.Room) continue;
-                float tension = (a.Needs.Stress + b.Needs.Stress) / 2f - 0.35f;
-                if (tension <= 0f) continue;
+                // v12.9.4 평소에도 조금씩 부딪힌다 (좁은 배에 오래 붙어 있으면) — 지치고 배고프고 예민하면 훨씬 잦다
+                float tension = 0.06f + (Irritable(a) + Irritable(b)) / 2f;
                 var (clash, about) = Clash(a, b);
-                float p = tension * clash * 0.5f * dt * (1.2f - MathF.Max(0f, (a.AffinityTo(b) + b.AffinityTo(a)) / 2f));
+                float p = tension * clash * 0.12f * dt * (1.2f - MathF.Max(0f, (a.AffinityTo(b) + b.AffinityTo(a)) / 2f));
                 if (!w.Rng.Chance(p)) continue;
                 Stats.Arguments++;
                 a.ChangeAffinity(b, -0.15f); b.ChangeAffinity(a, -0.15f);
@@ -314,6 +314,9 @@ public sealed class LifeSystem
                 }
             }
     }
+
+    /// <summary>날이 선 정도: 스트레스에 피로·배고픔이 더해진다.</summary>
+    private static float Irritable(CrewMember c) => c.Needs.Stress + (c.Needs.Rest < 0.3f ? 0.15f : 0f) + (c.Needs.Hunger > 0.7f ? 0.1f : 0f);
 
     /// <summary>둘이 어긋나는 정도와 무엇 때문인지.</summary>
     public static (float clash, string about) Clash(CrewMember a, CrewMember b)

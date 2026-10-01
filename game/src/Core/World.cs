@@ -472,6 +472,7 @@ public sealed class World
         if (c.CareBed is Furniture bed && bed.ReservedBy == c) bed.ReservedBy = null;
         c.CareBed = null;
         c.Dead = true;
+        c.DiedAt = Tick;
         c.Down = true;
         c.Pose = Pose.Down;
         c.Path = null;

@@ -202,4 +202,28 @@ public static partial class Program
         finally { Storyteller.PersonaValue = p0; Storyteller.LevelValue = l0; }
         return 0;
     }
+    /// <summary>스트레스 측정: 기본 이야기꾼으로 며칠 — 시간마다 평균·최고 스트레스, 같은 방 두 사람의 평균이 0.25·0.35를 넘는 시간, 말다툼 수.</summary>
+    private static int RunStressProbe(int days, int seed)
+    {
+        var w = World.CreateDefault(seed, 0, "Mirinae");
+        int hours = 0, over25 = 0, over35 = 0;
+        float sum = 0f, max = 0f, tiredSum = 0f;
+        for (int h = 0; h < days * 24; h++)
+        {
+            Run(w, SimTime.TicksPerHour);
+            var alive = w.Crew.Where(c => !c.Dead).ToList();
+            hours++;
+            sum += alive.Average(c => c.Needs.Stress);
+            max = MathF.Max(max, alive.Max(c => c.Needs.Stress));
+            tiredSum += alive.Count(c => c.Needs.Rest < 0.3f) / (float)alive.Count;
+            float best = 0f;
+            for (int i = 0; i < alive.Count; i++) for (int j = i + 1; j < alive.Count; j++)
+                if (alive[i].Room != null && alive[i].Room == alive[j].Room && alive[i].IsAwake && alive[j].IsAwake)
+                    best = MathF.Max(best, (alive[i].Needs.Stress + alive[j].Needs.Stress) / 2f);
+            if (best > 0.25f) over25++;
+            if (best > 0.35f) over35++;
+        }
+        Console.WriteLine($"{days}일 · 평균 스트레스 {sum / hours:0.00} · 최고 {max:0.00} · 지친 사람 비율 {tiredSum / hours:0.00} · 같은 방 둘의 평균 > 0.25: {over25}시간 · > 0.35: {over35}시간 · 말다툼 {w.Life.Stats.Arguments} · 실수 {w.Life.Stats.Mistakes}");
+        return 0;
+    }
 }

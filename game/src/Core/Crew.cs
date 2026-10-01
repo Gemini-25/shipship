@@ -282,6 +282,9 @@ public sealed class CrewMember
     /// <summary>숨을 참고 진공을 가로질러 우주복을 가지러 가는 중 (길찾기가 진공을 허용한다).</summary>
     public bool Dashing { get; internal set; }
 
+    /// <summary>v12.9.4 숨진 틱 (시신을 오래 두지 않는다).</summary>
+    public long DiedAt { get; set; } = -1;
+
     /// <summary>선체 밖 작업(EVA)에 나선 중: 길찾기가 외부 해치와 선체 밖 칸을 허용한다 (우주복을 입었을 때만).</summary>
     public bool EvaMode { get; internal set; }
 

@@ -15,7 +15,7 @@ public sealed partial class WorkBoard
         var (morgue, k) = Facilities.Best(w.Ship, "morgue", r => !r.Detached && !r.Leaking && !r.OffLimits && Atmosphere.Danger(r) < 0.1f);
         if (morgue != null && w.History.Current == null)
             foreach (var d in w.Crew.Where(c => c.Dead && !c.Outside && c.CarriedBy == null && c.Room != null && c.Room != morgue && !c.Room.Detached && !c.Laid))
-                post(WorkKind.RecoverBody, WorkTarget.OfCrew(d), 0.3f, Skill.Medicine,
+                post(WorkKind.RecoverBody, WorkTarget.OfCrew(d), MathF.Min(0.6f, 0.3f + 0.05f * (w.Tick - d.DiedAt) / SimTime.TicksPerHour), Skill.Medicine, // 오래 둘수록 마음이 쓰인다
                     $"{Ko.EulReul(d.Name)} {Ko.EuRo(morgue.Name)} 모신다" + (k < 1f ? $" (안치실이 없어 {morgue.Name})" : ""));
         // ── 의수·의족: 팔다리를 잃은 사람이 있고, 정비실에 작업대가 있으면 ──
         foreach (var c in w.Crew.Where(c => !c.Dead && !c.Down))

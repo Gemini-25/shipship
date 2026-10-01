@@ -98,6 +98,13 @@ public static partial class Program
                 bool died = dead.Dead;
                 bool grief = friend.GriefUntil > w.Tick;
                 Run(w, SimTime.Hours(30));
+                if (!dead.Laid && Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "1")
+                {
+                    Console.WriteLine($"   [시신] {dead.Name} 방 {dead.Room?.Name} · 칸 {dead.Cell}");
+                    foreach (var o in w.Board.Open.Where(o => o.Kind == WorkKind.RecoverBody)) Console.WriteLine($"   [작업] {o.Title} {o.Urgency:0.00} 맡은 {o.Assignee?.Name} 보류 {o.BlockedReason}");
+                    foreach (var e in w.Log.Entries.Where(e => e.Text.Contains("시신") || e.Text.Contains("모시")).TakeLast(10)) Console.WriteLine($"   [기록] {SimTime.Clock(e.Tick)} {e.Text}");
+                    foreach (var c in w.Crew.Where(c => !c.Dead)) Console.WriteLine($"   {c.Name} {c.Room?.Name} {c.Job?.Label} · {c.LastEvaluations?.FirstOrDefault().Reason}");
+                }
                 var st = w.Life.Stats;
                 Check("죽음 뒤 — 시신을 모시고, 추모하고, 가까웠던 사람이 슬퍼한다", died && dead.Laid && st.Funerals >= 1 && grief,
                     $"죽음 {(died ? "예" : "아니오")} · 모신 곳 {(dead.Laid ? dead.Room?.Name : "그대로")} · 추모 {st.Funerals} · {friend.Name} 슬픔 {(grief ? "예" : "아니오")} · 추모 명단 {string.Join(",", w.Life.Memorial.Select(m => m.name))}");
