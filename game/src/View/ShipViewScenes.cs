@@ -11,6 +11,9 @@ namespace ShipSim.View;
 // 체스 말은 종류마다 실루엣이 다르다(폰 · 룩 · 나이트 · 비숍 · 퀸 · 킹) · 잡힌 말은 판 옆에 줄 선다 · 국 자국은 마르면 갈라진 딱지가 되고, 닦는 동안엔 노란 "미끄럼 주의" 표지 ·
 // 컴퓨터가 한 일도 보인다: 몽유병자 둘레의 복도 감지 고리 · 부른 당직까지 점선 / 볼륨을 낮춘 스피커의 칩 표시 / 보관함 영화 제목 · 보관함이 꺼지면 도는 고리 / 알림이 간 메모의 단말 표시.
 // 이름표 접시를 먹는 사람 손엔 이름표 붙은 접시 · 캄캄해서 멈춘 작업대엔 꺼진 전구.
+// 체스 시계(둘 차례 쪽 단추가 눌리고 그쪽 바늘만 돈다) · 상대를 기다리는 빈 의자 · 폰이 먼저 나가고 한 칸에 말 하나 · 머그는 사람마다 무늬 · 마신 만큼 줄어드는 잔 ·
+// 영화 화면 속 장면(우주 · 바다 · 도시 밤 · 숲 — 진척에 따라 저문다) · 팝콘 · 한밤의 간식(연 냉장고 빛 · 빈 푸딩 컵과 부스러기) · 몽유병자의 감은 눈 · 발자국 ·
+// 쪽지 색 · 자석 · 읽은 사람 점 · 코르크 게시판과 쓴 사람마다 다른 낙서 · 건넨 생일 카드의 색종이.
 // 멀리서는 실루엣만, 가까이에서는 말 · 서명 · 글줄까지. 시뮬레이션은 바꾸지 않는다.
 public partial class ShipView
 {
@@ -33,6 +36,7 @@ public partial class ShipView
                     case ThingKind.Stain: PaintStain(ci, s, t, close); break;
                     case ThingKind.Screen: PaintScreen(ci, s, t, close); break;
                     case ThingKind.Work: PaintWip(ci, s, t, close); break;
+                    case ThingKind.Snack: PaintSnackLeft(ci, s, t, close); break;
                 }
             }
             if (!s.Open) continue;
@@ -42,6 +46,7 @@ public partial class ShipView
                     PaintTray(ci, CrewPx(m) + new Vector2(CrewRadius * 0.9f, -CrewRadius * 0.2f), s.Targets.Count - s.Delivered, s.Tea);
                     break;
                 case SceneKind.Snack when s.Holding && sc.CrewOf(s.Host) is CrewMember e:
+                    if (s.Stage == SceneStage.Run && (e.Position - s.Spot2.Center).Length() < 2.5f) PaintFridgeLight(ci, CellRect(s.Spot2).GetCenter(), CrewPx(e)); // 연 냉장고 문틈의 찬 빛
                     if (s.Plate >= 0) PaintTaggedPlate(ci, CrewPx(e) + new Vector2(CrewRadius * 0.95f, CrewRadius * 0.1f), s.Victim, close);
                     else PaintPudding(ci, CrewPx(e) + new Vector2(CrewRadius * 0.95f, CrewRadius * 0.1f));
                     break;
@@ -60,6 +65,7 @@ public partial class ShipView
                     PaintDeadBulb(ci, CellRect(s.Spot2).GetCenter() + new Vector2(0f, -T * 0.55f));
                     break;
                 case SceneKind.Movie:
+                    if (s.Stage == SceneStage.Run && close && s.Here.Contains(s.Host) && sc.CrewOf(s.Host) is CrewMember mh) PaintPopcorn(ci, CrewPx(mh) + new Vector2(CrewRadius * 1.05f, CrewRadius * 0.5f), s.Progress);
                     foreach (var id in s.Floor)
                         if (s.Here.Contains(id) && sc.CrewOf(id) is CrewMember f) PaintCushion(ci, CrewPx(f), id);
                     break;
@@ -87,19 +93,29 @@ public partial class ShipView
         int bucket = (int)moves; // 한 수마다 바뀐다
         if (close)
         {
+            // 말 자리: 한 수마다 폰이 먼저 앞으로 나가고(같은 줄을 따라) · 그다음 뒷줄 말이 판 가운데로 · 한 칸에 둘은 없다
+            Span<bool> occ = stackalloc bool[64];
             for (int side = 0; side < 2; side++)
             {
                 int left = 16 - taken / 2 - (side == 0 ? taken % 2 : 0);
+                int fwd = side == 0 ? -1 : 1; // 흰 말(아래)은 위로 · 검은 말(위)은 아래로
                 for (int k = 0; k < left; k++)
                 {
-                    // 처음 자리(양 끝 두 줄)에서 수가 늘수록 판 가운데로 흩어진다
-                    uint hsh = (uint)(s.Id * 7919 + side * 104729 + k * 1299709 + (k < bucket ? bucket * 31 : 0));
-                    int col = k % 8, row = side == 0 ? 7 - k / 8 : k / 8;
-                    if (k < bucket) { col = (int)(hsh % 8); row = Math.Clamp(row + (side == 0 ? -1 : 1) * (int)(hsh / 8 % 4), 0, 7); }
-                    var c = o + new Vector2((col + 0.5f) * q, (row + 0.5f) * q);
+                    bool pawn = k >= 8;
+                    int col = k % 8, row = side == 0 ? (pawn ? 6 : 7) : (pawn ? 1 : 0);
+                    int ord = pawn ? (k - 8) * 2 + side : 16 + k * 2 + side; // 움직이는 차례: 폰 먼저
+                    uint hsh = (uint)(s.Id * 7919 + side * 104729 + k * 1299709 + bucket * 31);
+                    if (ord < bucket)
+                    {
+                        if (pawn) row = Math.Clamp(row + fwd * (1 + (int)(hsh % 3)), 0, 7);
+                        else { col = Math.Clamp(col + (int)(hsh % 5) - 2, 0, 7); row = Math.Clamp(row + fwd * (2 + (int)(hsh / 5 % 3)), 0, 7); }
+                    }
+                    int sq = row * 8 + col;
+                    for (int n = 0; n < 64 && occ[sq]; n++) sq = (sq + (n % 2 == 0 ? 1 : 63)) % 64;
+                    occ[sq] = true;
+                    var c = o + new Vector2((sq % 8 + 0.5f) * q, (sq / 8 + 0.5f) * q);
                     // 남은 말: 뒷줄(룩 나이트 비숍 퀸 킹 비숍 나이트 룩)이 먼저 남고, 잡히는 건 폰부터
-                    int kind = k < 8 ? BackRank[k] : 0;
-                    PaintPiece(ci, c, q, kind, side == 0);
+                    PaintPiece(ci, c, q, pawn ? 0 : BackRank[k], side == 0);
                 }
             }
             // 잡힌 말: 판 옆에 줄 선다 (흰 말은 왼쪽 · 검은 말은 오른쪽)
@@ -116,6 +132,7 @@ public partial class ShipView
                 var lc = o + new Vector2((lm % 8) * q, (lm / 8 % 8) * q);
                 ci.DrawRect(new Rect2(lc, new Vector2(q, q)), new Color(0.4f, 0.9f, 0.5f, 0.25f + 0.2f * Mathf.Sin(_time * 5f)), false, 1f);
             }
+            PaintChessClock(ci, o + new Vector2(size * 0.5f, size + 6f), bucket % 2 == 0, s.Stage == SceneStage.Run);
         }
         else
         {
@@ -126,6 +143,8 @@ public partial class ShipView
         // 진척 고리 (판 귀퉁이)
         var corner = o + new Vector2(size + 3f, -3f);
         ci.DrawArc(corner, 4f, -Mathf.Pi / 2f, -Mathf.Pi / 2f + Mathf.Tau * Mathf.Clamp(s.Progress, 0f, 1f), 16, new Color(0.95f, 0.85f, 0.4f), 1.6f, true);
+        if (s.Stage == SceneStage.Gather && (s.Other < 0 || !s.Here.Contains(s.Other)) && close)
+            PaintEmptySeat(ci, s.Spot2 != s.Table && s.Spot2 != default ? CellRect(s.Spot2).GetCenter() : o + new Vector2(size * 0.5f, -T * 0.45f));
         if (s.Stage == SceneStage.Paused)
         {
             ci.DrawRect(new Rect2(o, new Vector2(size, size)), new Color(0.05f, 0.06f, 0.1f, 0.35f));
@@ -136,6 +155,34 @@ public partial class ShipView
     }
 
     private static readonly int[] BackRank = { 1, 2, 3, 4, 5, 3, 2, 1 }; // 0 폰 · 1 룩 · 2 나이트 · 3 비숍 · 4 퀸 · 5 킹
+
+    /// <summary>체스 시계: 나무 상자에 두 눈금판 — 둘 차례인 쪽 단추가 눌려 있고 그쪽 바늘만 돈다 · 멈추면 둘 다 선다.</summary>
+    private void PaintChessClock(CanvasItem ci, Vector2 c, bool whiteToMove, bool running)
+    {
+        var box = new Rect2(c - new Vector2(7f, 2.6f), new Vector2(14f, 5.2f));
+        ci.DrawRect(box, WoodDark);
+        ci.DrawRect(box, Wood.Lightened(0.15f), false, 0.6f);
+        for (int k = 0; k < 2; k++)
+        {
+            bool mine = (k == 0) == whiteToMove;
+            var f = c + new Vector2(k == 0 ? -3.4f : 3.4f, 0.2f);
+            ci.DrawCircle(f, 2.1f, new Color(0.96f, 0.94f, 0.86f));
+            float ang = running && mine ? _time * 2.5f : (k == 0 ? 0.6f : 2.2f);
+            ci.DrawLine(f, f + new Vector2(Mathf.Sin(ang), -Mathf.Cos(ang)) * 1.7f, new Color(0.15f, 0.1f, 0.08f), 0.5f, true);
+            // 단추: 둘 차례인 쪽이 눌려 낮고 · 상대 쪽이 솟아 있다
+            float bh = mine ? 0.8f : 1.8f;
+            ci.DrawRect(new Rect2(f + new Vector2(-1.2f, -2.6f - bh), new Vector2(2.4f, bh)), mine ? new Color(0.85f, 0.25f, 0.2f) : new Color(0.55f, 0.5f, 0.45f));
+        }
+    }
+
+    /// <summary>체스 상대를 기다린다: 맞은편 빈 의자 윤곽과 깜빡이는 물음표.</summary>
+    private void PaintEmptySeat(CanvasItem ci, Vector2 p)
+    {
+        var col = new Color(0.85f, 0.9f, 1f, 0.55f + 0.25f * Mathf.Sin(_time * 2.5f));
+        ci.DrawRect(new Rect2(p - new Vector2(5f, 4f), new Vector2(10f, 8f)), col, false, 1f);
+        ci.DrawLine(p + new Vector2(-5f, -5.5f), p + new Vector2(5f, -5.5f), col, 1.6f); // 등받이
+        Gfx.TextCentered(ci, Fonts.Bold, p + new Vector2(0f, 3f), "?", 9, col);
+    }
 
     /// <summary>체스 말 하나: 종류마다 다른 실루엣 (위에서 본 모양 — 받침 고리 + 머리).</summary>
     private void PaintPiece(CanvasItem ci, Vector2 c, float q, int kind, bool white)
@@ -198,30 +245,52 @@ public partial class ShipView
         var c = CellRect(t.At).GetCenter() + new Vector2((t.Owner % 3 - 1) * 8f, (t.Owner / 3 % 2 == 0 ? -1f : 1f) * 7f);
         float age = (_world.Tick - t.Since) / (float)SimTime.TicksPerHour;
         bool hot = age < 0.5f;
+        // 남은 양: 놓인 뒤로 조금씩 마신다 (치워 갈 때쯤 바닥)
+        float life = t.Until > t.Since ? (t.Until - t.Since) / (float)SimTime.TicksPerHour : 1f;
+        float left = Mathf.Clamp(1f - age / MathF.Max(0.2f, life) * 0.9f, 0.1f, 1f) * Mathf.Clamp(t.Amount, 0f, 1f);
         var tint = Palette.Crew(t.Owner);
+        // 식어 가며 받친 자리에 남는 커피 고리 (잔 아래로 살짝 비켜)
+        if (!hot && close && !t.Tea) ci.DrawArc(c + new Vector2(1.5f, 1.8f), 4.4f, 0.4f, 4.6f, 14, new Color(0.45f, 0.28f, 0.12f, 0.35f), 0.7f, true);
         if (t.Tea)
         {
             ci.DrawCircle(c, 6.2f, new Color(0.92f, 0.92f, 0.95f));
             ci.DrawArc(c, 6.2f, 0f, Mathf.Tau, 20, new Color(0.6f, 0.62f, 0.7f), 0.8f, true);
+            ci.DrawArc(c, 5.3f, 0f, Mathf.Tau, 20, tint.WithAlpha(0.6f), 0.6f, true); // 받침 테두리 색 = 주인
             ci.DrawCircle(c, 4.2f, new Color(0.97f, 0.97f, 1f));
-            ci.DrawCircle(c, 3.2f, hot ? new Color(0.85f, 0.55f, 0.18f) : new Color(0.62f, 0.4f, 0.16f));
-            if (close) { ci.DrawLine(c + new Vector2(2f, -2f), c + new Vector2(6.5f, -6.5f), new Color(0.9f, 0.9f, 0.85f), 0.7f); ci.DrawRect(new Rect2(c + new Vector2(5.5f, -8.5f), new Vector2(3f, 3f)), tint); }
+            ci.DrawCircle(c, 3.2f * Mathf.Sqrt(left), hot ? new Color(0.85f, 0.55f, 0.18f) : new Color(0.62f, 0.4f, 0.16f));
+            ci.DrawArc(c + new Vector2(4.2f, 0f), 1.6f, -Mathf.Pi / 2f, Mathf.Pi / 2f, 6, new Color(0.8f, 0.8f, 0.86f), 1f, true); // 가는 손잡이
+            if (close)
+            {
+                ci.DrawLine(c + new Vector2(2f, -2f), c + new Vector2(6.5f, -6.5f), new Color(0.9f, 0.9f, 0.85f), 0.7f);
+                ci.DrawRect(new Rect2(c + new Vector2(5.5f, -8.5f), new Vector2(3f, 3f)), tint);
+                ci.DrawLine(c + new Vector2(-4.5f, 4.5f), c + new Vector2(-1.5f, 1.5f), new Color(0.75f, 0.77f, 0.8f), 0.8f, true); // 받침 위 찻숟가락
+            }
         }
         else
         {
+            // 머그: 사람마다 다른 무늬 (줄무늬 · 물방울 · 별 · 두 줄 띠)
             ci.DrawCircle(c, 4.6f, tint.Darkened(0.15f));
             ci.DrawArc(c + new Vector2(4.6f, 0f), 2.2f, -Mathf.Pi / 2f, Mathf.Pi / 2f, 8, tint.Darkened(0.3f), 1.4f, true);
-            ci.DrawCircle(c, 3.4f, hot ? new Color(0.3f, 0.17f, 0.08f) : new Color(0.2f, 0.12f, 0.06f));
-            if (close) ci.DrawArc(c, 2.4f, 0f, Mathf.Tau, 14, hot ? new Color(0.78f, 0.58f, 0.36f, 0.9f) : new Color(0.45f, 0.35f, 0.25f, 0.6f), 0.7f, true);
+            if (close)
+                switch (Math.Abs(t.Owner) % 4)
+                {
+                    case 0: for (int k = 0; k < 6; k++) { float a0 = k * Mathf.Tau / 6f; ci.DrawLine(c + new Vector2(Mathf.Cos(a0), Mathf.Sin(a0)) * 3.6f, c + new Vector2(Mathf.Cos(a0), Mathf.Sin(a0)) * 4.6f, tint.Lightened(0.45f), 0.7f); } break;
+                    case 1: for (int k = 0; k < 5; k++) { float a0 = k * Mathf.Tau / 5f + 0.3f; ci.DrawCircle(c + new Vector2(Mathf.Cos(a0), Mathf.Sin(a0)) * 4.1f, 0.5f, Colors.White); } break;
+                    case 2: ci.DrawCircle(c + new Vector2(-3.6f, -2.4f), 0.9f, new Color(1f, 0.9f, 0.3f)); break;
+                    default: ci.DrawArc(c, 4.1f, 0f, Mathf.Tau, 18, tint.Lightened(0.4f), 0.5f, true); break;
+                }
+            ci.DrawCircle(c, 3.4f, new Color(0.88f, 0.86f, 0.82f)); // 안쪽 벽
+            ci.DrawCircle(c, 3.4f * Mathf.Sqrt(left), hot ? new Color(0.3f, 0.17f, 0.08f) : new Color(0.2f, 0.12f, 0.06f));
+            if (close) ci.DrawArc(c, 2.4f * Mathf.Sqrt(left), 0f, Mathf.Tau, 14, hot ? new Color(0.78f, 0.58f, 0.36f, 0.9f) : new Color(0.45f, 0.35f, 0.25f, 0.6f), 0.7f, true);
         }
         if (hot)
         {
             float a = 0.55f * (1f - age / 0.5f);
-            for (int k = 0; k < 2; k++)
+            for (int k = 0; k < 3; k++)
             {
-                float ph = (_time * 0.7f + k * 0.5f + t.Owner * 0.13f) % 1f;
-                var p0 = c + new Vector2(-1.5f + 3f * k, -3f - 9f * ph);
-                ci.DrawLine(p0, p0 + new Vector2(1.6f * Mathf.Sin(_time * 3f + k), -3f), new Color(1f, 1f, 1f, a * (1f - ph)), 1f, true);
+                float ph = (_time * 0.7f + k * 0.33f + t.Owner * 0.13f) % 1f;
+                var p0 = c + new Vector2(-2f + 2f * k, -3f - 9f * ph);
+                ci.DrawPolyline(new[] { p0, p0 + new Vector2(1.4f * Mathf.Sin(_time * 3f + k), -1.6f), p0 + new Vector2(-0.6f * Mathf.Sin(_time * 2.4f + k), -3.2f) }, new Color(1f, 1f, 1f, a * (1f - ph)), 0.9f, true);
             }
         }
         else if (close) ci.DrawLine(c + new Vector2(-2f, 0.5f), c + new Vector2(2f, 0.2f), new Color(0.75f, 0.65f, 0.5f, 0.5f), 0.6f); // 식은 막
@@ -375,12 +444,13 @@ public partial class ShipView
         bool run = s.Stage == SceneStage.Run, dark = s.PauseWhy == "정전";
         if (run)
         {
-            int bands = close ? 6 : 2;
-            for (int k = 0; k < bands; k++)
-            {
-                float hue = Mathf.PosMod(_time * 0.05f + k * 0.13f + Mathf.Sin(_time * 1.3f + k) * 0.05f, 1f);
-                ci.DrawRect(new Rect2(o + new Vector2(size.X * k / bands, 0f), new Vector2(size.X / bands + 0.5f, size.Y)), Color.FromHsv(hue, 0.45f, 0.75f + 0.2f * Mathf.Sin(_time * 9f + k * 2f)));
-            }
+            if (close) PaintFilmFrame(ci, o, size, s);
+            else
+                for (int k = 0; k < 2; k++)
+                {
+                    float hue = Mathf.PosMod(_time * 0.05f + k * 0.13f + Mathf.Sin(_time * 1.3f + k) * 0.05f, 1f);
+                    ci.DrawRect(new Rect2(o + new Vector2(size.X * k / 2f, 0f), new Vector2(size.X / 2f + 0.5f, size.Y)), Color.FromHsv(hue, 0.45f, 0.75f + 0.2f * Mathf.Sin(_time * 9f + k * 2f)));
+                }
             // 영사기 빛
             var src = CellRect(s.Spot).GetCenter();
             if (src.DistanceTo(c) > T * 0.5f)
@@ -420,6 +490,80 @@ public partial class ShipView
         else if (run) for (int k = 1; k <= 2; k++) ci.DrawArc(sp + new Vector2(2.5f, 0f), 2f * k + Mathf.PosMod(_time * 3f, 1f), -0.7f, 0.7f, 6, new Color(1f, 1f, 1f, 0.35f), 0.8f, true);
     }
 
+    /// <summary>스크린 속 장면: 영화마다(제목 · 장면 번호로) 우주 · 바다 · 도시 밤 · 숲 — 진척에 따라 낮이 저물고 장면이 바뀐다.</summary>
+    private void PaintFilmFrame(CanvasItem ci, Vector2 o, Vector2 size, DailyScene s)
+    {
+        uint fh = 2166136261u;
+        foreach (char ch in s.Film ?? s.Title) fh = (fh ^ ch) * 16777619u; // 실행마다 같은 장면 (string.GetHashCode는 바뀐다)
+        int genre = (int)((fh + (uint)s.Id) % 4u);
+        int cut = (int)(Mathf.Clamp(s.Progress, 0f, 1f) * 5f); // 다섯 장면
+        genre = (genre + cut / 3) % 4; // 중간에 한 번 무대가 바뀐다
+        float dusk = Mathf.Clamp(s.Progress, 0f, 1f);
+        float flick = 0.92f + 0.08f * Mathf.Sin(_time * 23f); // 영사기 깜빡임
+        var r = new Rect2(o, size);
+        switch (genre)
+        {
+            case 0: // 우주: 흐르는 별과 도는 행성
+                ci.DrawRect(r, new Color(0.03f, 0.04f, 0.1f) * flick);
+                for (int k = 0; k < 9; k++)
+                {
+                    float x = Mathf.PosMod(k * 7.3f - _time * (2f + k % 3), size.X);
+                    ci.DrawCircle(o + new Vector2(x, (k * 3.7f) % size.Y), 0.5f, new Color(1f, 1f, 1f, 0.8f));
+                }
+                ci.DrawCircle(o + new Vector2(size.X * 0.7f, size.Y * 0.55f), size.Y * 0.32f, new Color(0.85f, 0.55f, 0.3f) * flick);
+                ci.DrawArc(o + new Vector2(size.X * 0.7f, size.Y * 0.55f), size.Y * 0.48f, -0.3f, 3.4f, 12, new Color(0.95f, 0.85f, 0.6f, 0.8f), 0.6f, true);
+                break;
+            case 1: // 바다: 물결 · 지는 해 · 작은 배
+                ci.DrawRect(r, Color.FromHsv(0.58f - 0.5f * dusk * 0.1f, 0.35f, 0.85f - 0.3f * dusk) * flick);
+                ci.DrawCircle(o + new Vector2(size.X * 0.3f, size.Y * (0.35f + 0.3f * dusk)), size.Y * 0.18f, new Color(1f, 0.75f - 0.3f * dusk, 0.35f));
+                ci.DrawRect(new Rect2(o + new Vector2(0f, size.Y * 0.55f), new Vector2(size.X, size.Y * 0.45f)), new Color(0.12f, 0.3f, 0.5f) * flick);
+                for (int k = 0; k < 4; k++)
+                {
+                    float x = Mathf.PosMod(k * size.X / 4f + _time * 3f, size.X);
+                    ci.DrawArc(o + new Vector2(x, size.Y * 0.7f), 1.6f, Mathf.Pi, Mathf.Tau, 5, new Color(0.8f, 0.9f, 1f, 0.7f), 0.5f);
+                }
+                float bx = Mathf.PosMod(_time * 1.5f + s.Id * 9f, size.X);
+                ci.DrawColoredPolygon(new[] { o + new Vector2(bx - 2.5f, size.Y * 0.55f), o + new Vector2(bx + 2.5f, size.Y * 0.55f), o + new Vector2(bx + 1.5f, size.Y * 0.66f), o + new Vector2(bx - 1.5f, size.Y * 0.66f) }, new Color(0.25f, 0.15f, 0.1f));
+                ci.DrawLine(o + new Vector2(bx, size.Y * 0.55f), o + new Vector2(bx, size.Y * 0.25f), new Color(0.95f, 0.95f, 0.9f), 0.6f);
+                break;
+            case 2: // 도시의 밤: 빌딩 실루엣과 켜졌다 꺼지는 창
+                ci.DrawRect(r, new Color(0.1f, 0.08f, 0.22f) * flick);
+                for (int k = 0; k < 7; k++)
+                {
+                    float bw = size.X / 7f, bh = size.Y * (0.35f + ((k * 37) % 5) * 0.12f);
+                    var bo = o + new Vector2(k * bw, size.Y - bh);
+                    ci.DrawRect(new Rect2(bo, new Vector2(bw - 0.6f, bh)), new Color(0.05f, 0.05f, 0.1f));
+                    for (int j = 0; j < 3; j++)
+                        if (((int)(_time * 0.7f) + k * 3 + j) % 4 != 0)
+                            ci.DrawRect(new Rect2(bo + new Vector2(1f, 1.2f + j * 2.2f), new Vector2(1f, 1f)), new Color(1f, 0.85f, 0.4f, 0.85f));
+                }
+                break;
+            default: // 숲: 겹친 나무 · 반딧불 (저물수록 어두워진다)
+                ci.DrawRect(r, new Color(0.55f - 0.35f * dusk, 0.75f - 0.4f * dusk, 0.6f - 0.2f * dusk) * flick);
+                for (int k = 0; k < 6; k++)
+                {
+                    float x = (k + 0.5f) * size.X / 6f;
+                    ci.DrawColoredPolygon(new[] { o + new Vector2(x - 3f, size.Y), o + new Vector2(x, size.Y * (0.15f + (k % 3) * 0.1f)), o + new Vector2(x + 3f, size.Y) }, new Color(0.1f, 0.3f - 0.1f * (k % 2), 0.15f));
+                }
+                if (dusk > 0.4f)
+                    for (int k = 0; k < 4; k++)
+                        ci.DrawCircle(o + new Vector2(Mathf.PosMod(k * 11f + Mathf.Sin(_time + k) * 4f, size.X), size.Y * (0.4f + 0.12f * Mathf.Sin(_time * 1.7f + k))), 0.6f, new Color(1f, 1f, 0.5f, 0.5f + 0.5f * Mathf.Sin(_time * 5f + k)));
+                break;
+        }
+        // 필름 결 (긁힌 세로줄이 가끔)
+        if (Mathf.Sin(_time * 7f + s.Id) > 0.85f) { float sx = Mathf.PosMod(_time * 40f, size.X); ci.DrawLine(o + new Vector2(sx, 0f), o + new Vector2(sx, size.Y), new Color(1f, 1f, 1f, 0.25f), 0.5f); }
+    }
+
+    // ── 영화의 밤 팝콘: 연 사람 곁 줄무늬 통 · 튀긴 알 (줄어든다) ──
+    private void PaintPopcorn(CanvasItem ci, Vector2 p, float progress)
+    {
+        var rect = new Rect2(p - new Vector2(3f, 2.5f), new Vector2(6f, 5f));
+        ci.DrawRect(rect, Colors.White);
+        for (int k = 0; k < 3; k++) ci.DrawRect(new Rect2(rect.Position + new Vector2(k * 2f, 0f), new Vector2(1f, 5f)), new Color(0.85f, 0.15f, 0.15f));
+        int n = Math.Max(1, (int)(6f * (1f - Mathf.Clamp(progress, 0f, 1f))));
+        for (int k = 0; k < n; k++) ci.DrawCircle(p + new Vector2(-2.2f + (k % 3) * 2.2f, -3f - (k / 3) * 1.4f), 1.1f, new Color(1f, 0.95f, 0.75f));
+    }
+
     private void PaintCushion(CanvasItem ci, Vector2 p, int id)
     {
         var col = Palette.Crew(id).Lerp(new Color(0.6f, 0.3f, 0.35f), 0.5f);
@@ -449,7 +593,32 @@ public partial class ShipView
             float t = (_time * 0.5f + k / 3f) % 1f;
             Gfx.Text(ci, Fonts.Bold, p + new Vector2(CrewRadius * 0.6f + 5f * t, -CrewRadius - 3f - 14f * t), "z", 8 + k * 2, new Color(0.8f, 0.85f, 1f, 1f - t));
         }
-        if (escort != null) ci.DrawLine(p, CrewPx(escort), new Color(0.95f, 0.9f, 0.8f, 0.7f), 1.4f, true);
+        // 감은 눈 (두 줄 호) · 맨발 발자국이 뒤로 흐려지며 남는다 (잠결의 느린 걸음)
+        for (int k = -1; k <= 1; k += 2)
+        {
+            var eye = p + f * CrewRadius * 0.35f + side * (CrewRadius * 0.28f * k);
+            ci.DrawArc(eye, CrewRadius * 0.14f, 0.2f, Mathf.Pi - 0.2f, 5, new Color(0.15f, 0.15f, 0.25f, 0.9f), 0.9f, true);
+        }
+        for (int k = 1; k <= 4; k++)
+        {
+            var foot = p - f * (CrewRadius * (0.9f + 0.75f * k)) + side * (CrewRadius * 0.3f * (k % 2 == 0 ? 1f : -1f));
+            float a = 0.4f * (1f - k / 5f);
+            ci.DrawSetTransform(foot, Mathf.Atan2(f.Y, f.X) + Mathf.Pi / 2f, Vector2.One);
+            ci.DrawCircle(new Vector2(0f, 0.6f), 1.6f, new Color(0.7f, 0.78f, 1f, a));
+            ci.DrawCircle(new Vector2(0f, -1.6f), 1.1f, new Color(0.7f, 0.78f, 1f, a));
+            for (int t2 = -1; t2 <= 1; t2++) ci.DrawCircle(new Vector2(t2 * 0.8f, -3.2f), 0.4f, new Color(0.7f, 0.78f, 1f, a));
+            ci.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+        }
+        if (escort != null)
+        {
+            // 당직이 팔을 잡고 침대로: 잡은 손 매듭 · 데려가는 쪽으로 작은 화살
+            var ep = CrewPx(escort);
+            ci.DrawLine(p, ep, new Color(0.95f, 0.9f, 0.8f, 0.7f), 1.4f, true);
+            ci.DrawCircle(p.Lerp(ep, 0.5f), 1.8f, new Color(0.95f, 0.85f, 0.7f));
+            var dir = (ep - p).LengthSquared() > 1f ? (ep - p).Normalized() : f;
+            var tip = ep + dir * (CrewRadius * 1.4f);
+            ci.DrawColoredPolygon(new[] { tip, tip - dir * 4f + new Vector2(-dir.Y, dir.X) * 2.4f, tip - dir * 4f - new Vector2(-dir.Y, dir.X) * 2.4f }, new Color(0.95f, 0.9f, 0.8f, 0.6f));
+        }
     }
 
     // ── 만들다 만 소품: 작업대 위 점선 뼈대가 진척만큼 아래부터 채워진다 · 만드는 동안 톱밥 · 다 만들면 들고 간다 ──
@@ -497,6 +666,41 @@ public partial class ShipView
         ci.DrawLine(p + new Vector2(0f, -4.5f), p + new Vector2(0f, 4.5f), col, 1.2f);
     }
 
+    // ── 한밤의 간식: 열린 냉장고 문에서 새어 나오는 푸르스름한 빛 (먹는 사람 쪽으로 부채꼴) · 문짝 ──
+    private void PaintFridgeLight(CanvasItem ci, Vector2 f, Vector2 eater)
+    {
+        var d = eater - f;
+        if (d.LengthSquared() < 1f) d = new Vector2(0f, 1f);
+        d = d.Normalized();
+        var side = new Vector2(-d.Y, d.X);
+        float fl = 0.9f + 0.1f * Mathf.Sin(_time * 13f); // 냉장고 등의 미세한 떨림
+        ci.DrawColoredPolygon(new[] { f + side * 3f, f + d * T * 1.3f + side * T * 0.7f, f + d * T * 1.3f - side * T * 0.7f, f - side * 3f },
+            new Color(0.75f, 0.9f, 1f, 0.16f * fl));
+        // 열린 문짝 (경첩 쪽으로 젖혀진 얇은 판) · 문 안쪽 선반 칸
+        var hinge = f + side * T * 0.32f;
+        var door = hinge + (d * 0.8f + side * 0.6f).Normalized() * T * 0.5f;
+        ci.DrawLine(hinge, door, new Color(0.88f, 0.9f, 0.94f), 2.2f, true);
+        for (int k = 1; k <= 2; k++) ci.DrawLine(hinge.Lerp(door, k / 3f) - d * 1.2f, hinge.Lerp(door, k / 3f) + d * 1.2f, new Color(0.6f, 0.75f, 0.85f), 0.6f);
+    }
+
+    // ── 간식을 먹고 간 자리: 빈 푸딩 컵(비닐 뚜껑이 반쯤 벗겨진) · 숟가락 · 부스러기 — 아침에 누가 봤는지는 Core가 안다 ──
+    private void PaintSnackLeft(CanvasItem ci, DailyScene s, SceneThing t, bool close)
+    {
+        var c = CellRect(t.At).GetCenter() + new Vector2(T * 0.22f, T * 0.18f);
+        float hours = (_world.Tick - t.Since) / (float)SimTime.TicksPerHour;
+        ci.DrawCircle(c, 3.6f, new Color(0.93f, 0.9f, 0.82f, 0.9f));
+        ci.DrawCircle(c, 2.5f, new Color(0.98f, 0.85f, 0.5f, Mathf.Clamp(0.5f - hours * 0.05f, 0.15f, 0.5f))); // 바닥에 남은 캐러멜
+        ci.DrawColoredPolygon(new[] { c + new Vector2(-1f, -3.6f), c + new Vector2(3.8f, -4.8f), c + new Vector2(4.6f, -1f), c + new Vector2(2.8f, -0.6f) }, new Color(0.95f, 0.95f, 1f, 0.75f)); // 벗겨진 뚜껑
+        if (!close) return;
+        ci.DrawLine(c + new Vector2(-5.5f, 3.5f), c + new Vector2(-1.5f, 0.8f), new Color(0.82f, 0.84f, 0.88f), 0.9f, true);
+        ci.DrawCircle(c + new Vector2(-1.4f, 0.7f), 0.9f, new Color(0.82f, 0.84f, 0.88f));
+        for (int k = 0; k < 5; k++)
+        {
+            uint hh = (uint)(s.Id * 2246822519u + k * 3266489917u);
+            ci.DrawCircle(c + new Vector2((int)(hh % 13) - 6, (int)(hh / 13 % 9) - 1) * 0.9f, 0.45f, new Color(0.8f, 0.6f, 0.3f, 0.8f));
+        }
+    }
+
     private void PaintPudding(CanvasItem ci, Vector2 p)
     {
         ci.DrawCircle(p, 3.8f, new Color(0.95f, 0.9f, 0.75f));
@@ -515,19 +719,62 @@ public partial class ShipView
         switch (n.Kind)
         {
             case NoteKind.Fridge:
-                ci.DrawRect(new Rect2(-5f, -5f, 10f, 10f), new Color(1f, 0.92f, 0.35f));
-                ci.DrawRect(new Rect2(-3f, -6.5f, 6f, 2.4f), new Color(0.9f, 0.95f, 1f, 0.55f)); // 테이프
-                if (close) for (int k = 0; k < 3; k++) ci.DrawLine(new Vector2(-3.5f, -2f + k * 2.4f), new Vector2(2.5f - k, -2f + k * 2.4f), ink, 0.7f);
+            {
+                // 메모지 색 · 붙인 방식이 쪽지마다 다르다 (테이프 · 과일 자석) · 귀퉁이가 살짝 말려 있다
+                var paper = (n.Id % 3) switch { 0 => new Color(1f, 0.92f, 0.35f), 1 => new Color(0.6f, 0.95f, 0.7f), _ => new Color(1f, 0.7f, 0.8f) };
+                ci.DrawRect(new Rect2(-5f, -5f, 10f, 10f), paper);
+                ci.DrawColoredPolygon(new[] { new Vector2(5f, 2.5f), new Vector2(5f, 5f), new Vector2(2.5f, 5f) }, paper.Darkened(0.25f));
+                if (n.Id % 2 == 0) ci.DrawRect(new Rect2(-3f, -6.5f, 6f, 2.4f), new Color(0.9f, 0.95f, 1f, 0.55f)); // 테이프
+                else { ci.DrawCircle(new Vector2(0f, -5f), 2f, new Color(0.9f, 0.25f, 0.2f)); ci.DrawLine(new Vector2(0f, -7f), new Vector2(1.2f, -8.2f), new Color(0.3f, 0.6f, 0.2f), 0.8f); } // 사과 자석
+                if (close)
+                {
+                    for (int k = 0; k < 3; k++) ci.DrawLine(new Vector2(-3.5f, -2f + k * 2.4f), new Vector2(2.5f - k, -2f + k * 2.4f), ink, 0.7f);
+                    if (n.For >= 0) ci.DrawRect(new Rect2(-4.5f, -4.5f, 2f, 2f), Palette.Crew(n.For)); // 받을 사람 표시
+                    // 읽은 사람: 아래 가장자리에 그 사람 색 점 (읽은 사람만 안다)
+                    for (int k = 0; k < Math.Min(6, n.Readers.Count); k++) ci.DrawCircle(new Vector2(-4f + k * 1.6f, 6.3f), 0.6f, Palette.Crew(n.Readers[k]));
+                }
                 break;
+            }
             case NoteKind.Roster:
+            {
+                // 코르크 게시판 위 당번표: 줄마다 당번 색 칩 · 그 위 낙서는 쓴 사람마다 다르다
+                var cork = new Color(0.66f, 0.48f, 0.3f);
+                ci.DrawRect(new Rect2(-9f, -8f, 18f, 16f), cork);
+                ci.DrawRect(new Rect2(-9f, -8f, 18f, 16f), cork.Darkened(0.4f), false, 0.8f);
+                if (close) for (int k = 0; k < 10; k++) { uint hh = (uint)(n.Id * 97 + k * 131); ci.DrawCircle(new Vector2((int)(hh % 17) - 8.5f, (int)(hh / 17 % 15) - 7.5f), 0.35f, cork.Darkened(0.25f)); }
                 ci.DrawRect(new Rect2(-7f, -6f, 14f, 12f), new Color(0.96f, 0.96f, 0.94f));
                 for (int k = 1; k < 4; k++) ci.DrawLine(new Vector2(-7f, -6f + k * 3f), new Vector2(7f, -6f + k * 3f), new Color(0.5f, 0.6f, 0.75f, 0.6f), 0.5f);
                 ci.DrawLine(new Vector2(-3f, -6f), new Vector2(-3f, 6f), new Color(0.5f, 0.6f, 0.75f, 0.6f), 0.5f);
-                // 빨간 낙서 (지그재그와 웃는 얼굴)
-                ci.DrawPolyline(new[] { new Vector2(-1f, 1f), new Vector2(1f, -2f), new Vector2(3f, 2f), new Vector2(5f, -1f) }, new Color(0.9f, 0.15f, 0.15f), 0.9f, true);
-                if (close) { ci.DrawArc(new Vector2(-5f, 2.5f), 1.8f, 0f, Mathf.Tau, 10, new Color(0.9f, 0.15f, 0.15f), 0.6f); ci.DrawArc(new Vector2(-5f, 2.5f), 1f, 0.3f, 2.8f, 6, new Color(0.9f, 0.15f, 0.15f), 0.5f); }
+                if (close)
+                    for (int k = 0; k < 4; k++) ci.DrawRect(new Rect2(-6.3f, -5.3f + k * 3f, 2.4f, 1.6f), Palette.Crew((n.Author + k * 3 + n.Id) % Math.Max(1, _world.Crew.Count)));
+                var red = new Color(0.9f, 0.15f, 0.15f);
+                switch (Math.Abs(n.Author + n.Id) % 4)
+                {
+                    case 0: // 지그재그와 웃는 얼굴
+                        ci.DrawPolyline(new[] { new Vector2(-1f, 1f), new Vector2(1f, -2f), new Vector2(3f, 2f), new Vector2(5f, -1f) }, red, 0.9f, true);
+                        if (close) { ci.DrawArc(new Vector2(-5f, 2.5f), 1.8f, 0f, Mathf.Tau, 10, red, 0.6f); ci.DrawArc(new Vector2(-5f, 2.5f), 1f, 0.3f, 2.8f, 6, red, 0.5f); }
+                        break;
+                    case 1: // 별
+                    {
+                        var st = new Vector2[11];
+                        for (int k = 0; k < 11; k++) { float ang = -Mathf.Pi / 2f + k * Mathf.Pi / 5f; float rr = k % 2 == 0 ? 3.2f : 1.3f; st[k] = new Vector2(2f, 0.5f) + new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * rr; }
+                        ci.DrawPolyline(st, red, 0.8f, true);
+                        break;
+                    }
+                    case 2: // 남의 이름에 그린 콧수염
+                        ci.DrawArc(new Vector2(0.5f, 0.5f), 1.6f, 0f, Mathf.Pi, 6, red, 0.9f, true);
+                        ci.DrawArc(new Vector2(3.7f, 0.5f), 1.6f, 0f, Mathf.Pi, 6, red, 0.9f, true);
+                        break;
+                    default: // 번개와 느낌표
+                        ci.DrawPolyline(new[] { new Vector2(1f, -3.5f), new Vector2(-0.5f, 0.5f), new Vector2(2f, 0.5f), new Vector2(0.5f, 4.5f) }, red, 0.9f, true);
+                        ci.DrawLine(new Vector2(4.5f, -3f), new Vector2(4.5f, 1.5f), red, 0.9f);
+                        ci.DrawCircle(new Vector2(4.5f, 3.3f), 0.5f, red);
+                        break;
+                }
                 ci.DrawCircle(new Vector2(0f, -6f), 1.3f, new Color(0.85f, 0.2f, 0.2f)); // 압정
+                ci.DrawCircle(new Vector2(-6.5f, -6f), 1f, new Color(0.25f, 0.5f, 0.9f));
                 break;
+            }
             case NoteKind.Card:
                 var pink = new Color(0.98f, 0.62f, 0.75f);
                 ci.DrawRect(new Rect2(-7f, -5f, 7f, 10f), pink.Darkened(0.08f));
@@ -543,7 +790,23 @@ public partial class ShipView
                         var y = -3.5f + k * 1.1f;
                         ci.DrawLine(new Vector2(-6f, y), new Vector2(-6f + 3f + (k % 3), y + 0.4f), Palette.Crew(n.Signers[k]), 0.6f);
                     }
-                if (n.Given) ci.DrawArc(Vector2.Zero, 9f + Mathf.Sin(_time * 3f), 0f, Mathf.Tau, 20, new Color(1f, 0.8f, 0.4f, 0.5f), 1f, true);
+                if (!n.Given && close && n.Signers.Count > 0)
+                {
+                    // 돌고 있는 카드: 서명할 사람 수만큼 빈 줄 · 펜
+                    ci.DrawLine(new Vector2(6f, 4f), new Vector2(9.5f, 0.5f), new Color(0.2f, 0.3f, 0.7f), 0.9f, true);
+                    ci.DrawCircle(new Vector2(6f, 4f), 0.5f, new Color(0.9f, 0.85f, 0.6f));
+                }
+                if (n.Given)
+                {
+                    ci.DrawArc(Vector2.Zero, 9f + Mathf.Sin(_time * 3f), 0f, Mathf.Tau, 20, new Color(1f, 0.8f, 0.4f, 0.5f), 1f, true);
+                    // 건넨 카드: 색종이가 떨어진다
+                    for (int k = 0; k < 6; k++)
+                    {
+                        float ph = (_time * 0.4f + k / 6f) % 1f;
+                        var cp = new Vector2(-8f + k * 3.2f + Mathf.Sin(_time * 2f + k) * 1.5f, -10f + 18f * ph);
+                        ci.DrawRect(new Rect2(cp, new Vector2(1.2f, 0.8f)), Color.FromHsv((k * 0.17f) % 1f, 0.7f, 1f, 1f - ph));
+                    }
+                }
                 break;
             default: // 인수인계 메모
                 ci.DrawRect(new Rect2(-5f, -6f, 10f, 12f), new Color(0.97f, 0.98f, 1f));
