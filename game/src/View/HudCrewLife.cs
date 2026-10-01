@@ -72,11 +72,13 @@ public partial class Hud
         Gfx.Text(this, Fonts.Body, new Vector2(x + 52, sy + 90), c.Fears.Count == 0 ? "딱히 없다" : Fit(string.Join(" · ", c.Fears.Select(f => $"{Persona.Of(f).Name} ({Persona.Of(f).Note})")), right - x - 60, 12, Fonts.Body), 12, c.Fears.Count == 0 ? Palette.TextMuted : new Color("#ffb38a"));
         SectionTitle(x, sy + 110, "말버릇");
         Gfx.Text(this, Fonts.Body, new Vector2(x + 52, sy + 112), c.Quirk < 0 ? "—" : $"“{Persona.Say(c, "그건 내가 볼게")}”", 12, Palette.TextDim);
+        SectionTitle(x, sy + 132, "칭호"); // v15.9 칭호·업적
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 44, sy + 134), Fit(_world.Titles.Line(c), right - x - 52, 12, Fonts.Body), 12, new Color("#ffd27a"));
         if (c.Stats.Mistakes > 0) Gfx.TextRight(this, Fonts.Body, new Vector2(right, sy + 46), $"실수 {c.Stats.Mistakes}번", 12, Palette.Warning);
         if (c.GriefUntil > _world.Tick) Gfx.TextRight(this, Fonts.Body, new Vector2(right, sy + 24), "슬픔에 잠겨 있다", 12, new Color("#9fb4ff"));
 
         // 일기
-        float dy = sy + 130;
+        float dy = sy + 152;
         Divider(x, right, dy);
         SectionTitle(x, dy + 22, "일기");
         float ey = dy + 34;

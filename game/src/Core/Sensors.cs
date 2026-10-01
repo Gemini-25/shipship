@@ -111,7 +111,7 @@ public sealed class SensorSystem
     public (WarnLevel level, float lead, CrewMember? who) Capability()
     {
         float q = Quality;
-        if (Tracking) return (WarnLevel.Sensor, LeadMinutes(WarnLevel.Sensor) * Math.Clamp(q / 0.8f, 0.3f, 1f), null);
+        if (Tracking) return (WarnLevel.Sensor, LeadMinutes(WarnLevel.Sensor) * Math.Clamp(q / 0.8f, 0.3f, 1f) * ComputerV15.LeadMul(_w), null); // v15.9 항로 위험 예보
         if (Online && Operator is CrewMember op) return (WarnLevel.Manual, LeadMinutes(WarnLevel.Manual) * Math.Clamp(q / 0.8f, 0.3f, 1f), op);
         if (Lookout is CrewMember lo) return (WarnLevel.Lookout, LeadMinutes(WarnLevel.Lookout), lo);
         return (WarnLevel.None, 0f, null);

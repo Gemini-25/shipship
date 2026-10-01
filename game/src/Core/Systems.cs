@@ -51,6 +51,7 @@ public sealed class WaterSystem
                 if (!c.Dead && c.IsAwake) c.Needs.Stress = MathF.Min(1f, c.Needs.Stress + (wp == 2 ? 0.004f : 0.0015f) * dt);
         foreach (var bed in w.Ship.FurnitureOf(FurnitureType.GrowBed))
             if (bed.Machine!.Efficiency > 0f && bed.Machine.Crop is { Ripe: false } && w.Piping.WaterTo(bed.Room)) consume += BedLitersPerHour * FoodChain.BedSize(bed);
+        consume *= ComputerV15.WaterUseMul(w); // v15.9 물 관리
         Produced = produce;
         Consumed = consume;
         Level = Math.Clamp(Level + (produce - consume) * dt, 0f, Capacity);
@@ -84,7 +85,7 @@ public sealed class MachineSystem
             bool makeshift = false;
             foreach (var f in m.Faults) if (f.Stage > 0) makeshift = true;
             if (makeshift) rate *= 2f; // 임시로 살린 설비는 무리해서 돈다
-            m.Wear = MathF.Min(1f, m.Wear + rate * (_world.Eras.Has("nanorepair") ? 0.75f : 1f) * dt); // v12.8 나노 수리
+            m.Wear = MathF.Min(1f, m.Wear + rate * (_world.Eras.Has("nanorepair") ? 0.75f : 1f) * ComputerV15.WearMul(_world, m) * dt); // v12.8 나노 수리 · v15.9 정비 일정
 
             // 임시 우회는 풀릴 수 있다
             if (makeshift)
@@ -122,7 +123,7 @@ public sealed class MachineSystem
         foreach (var fridge in w.Ship.FurnitureOf(FurnitureType.Fridge))
         {
             if (fridge.Machine!.Efficiency > 0.2f) continue;
-            float acc = (_spoil.TryGetValue(fridge, out var a) ? a : 0f) + fridge.Storage!.Total * 0.03f * dt;
+            float acc = (_spoil.TryGetValue(fridge, out var a) ? a : 0f) + fridge.Storage!.Total * 0.03f * ComputerV15.SpoilMul(w) * dt; // v15.9 화물 정리
             int lost = 0;
             while (acc >= 1f)
             {

@@ -13,7 +13,12 @@ namespace ShipSim.Core;
 //   공기 탱크가 모자라면 그 구역만 채우며, 아무도 못 막는 바깥 방은 방침(구역 포기 시점)대로 일찍 포기한다.
 // 나머지 모듈(생체 감시 · 자원 배분 · 대피 안내 · 선제 조치 · 교훈 반영)은 연구·개조로 단다 (v13.1~).
 
-public enum ComputerModule { FireResponse, AirZones, BioMonitor, ResourceAlloc, EvacGuide, Preempt, Lessons }
+public enum ComputerModule
+{
+    FireResponse, AirZones, BioMonitor, ResourceAlloc, EvacGuide, Preempt, Lessons,
+    // v15.9 모듈 13 (ComputerV15)
+    Foresight, MaintPlan, WaterPlan, PowerShare, CargoSort, RouteForecast, FatigueAlert, AutoCalib, CommsRelay, SoilWatch, PipeWatch, DoorPressure, Archive,
+}
 
 public sealed class FireCase
 {
@@ -45,10 +50,10 @@ public sealed partial class AutomationSystem
     private readonly HashSet<ComputerModule> _modules = new() { ComputerModule.FireResponse, ComputerModule.AirZones };
     public IReadOnlyCollection<ComputerModule> Modules => _modules;
     public bool Has(ComputerModule m) => _modules.Contains(m);
-    public void Install(ComputerModule m)
+    public void Install(ComputerModule m, string? why = null)
     {
         if (!_modules.Add(m)) return;
-        _world.History.Add(_world, HistoryKind.Decision, $"주 컴퓨터에 {ModuleName(m)} 모듈을 달았다 — {ModuleNote(m)}", null, log: true);
+        _world.History.Add(_world, HistoryKind.Decision, $"주 컴퓨터에 {ModuleName(m)} 모듈을 달았다 — {ModuleNote(m)}" + (why != null ? $" ({why})" : ""), null, log: true);
     }
     public void Remove(ComputerModule m) => _modules.Remove(m);
 
@@ -60,7 +65,8 @@ public sealed partial class AutomationSystem
         ComputerModule.ResourceAlloc => "자원 배분",
         ComputerModule.EvacGuide => "대피 안내",
         ComputerModule.Preempt => "선제 조치",
-        _ => "교훈 반영",
+        ComputerModule.Lessons => "교훈 반영",
+        _ => ComputerV15.Name(m),
     };
 
     public static string ModuleNote(ComputerModule m) => m switch
@@ -71,7 +77,8 @@ public sealed partial class AutomationSystem
         ComputerModule.ResourceAlloc => "우주복·소화기·구급상자를 역할에 맞게 나눈다",
         ComputerModule.EvacGuide => "조명으로 대피 길을 그리고 문을 연다",
         ComputerModule.Preempt => "연쇄를 예측해 미리 끊는다 (보수적 — 헛정지가 잦다)",
-        _ => "지난 사고의 교훈을 다음 수순에 넣는다",
+        ComputerModule.Lessons => "지난 사고의 교훈을 다음 수순에 넣는다",
+        _ => ComputerV15.Note(m),
     };
 
     // ── 불활성 가스 ──
@@ -390,5 +397,6 @@ public sealed partial class AutomationSystem
         EnsureInert();
         if (Has(ComputerModule.FireResponse) && Level >= 3) FireResponse();
         if (Has(ComputerModule.AirZones) && Level >= 3) AirZones();
+        RespondV15(dt); // v15.9 문 압력 경보 · 새 모듈 올리기
     }
 }

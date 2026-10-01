@@ -57,7 +57,7 @@ public sealed partial class AutomationSystem
     /// <summary>v13.2 방침(컴퓨터 자동 실행)이 허락할 때만 격벽을 스스로 닫는다 (경보만이면 사람이 손으로).</summary>
     public bool AutoDoorsIn(Room r) => DoorsIn(r) && _world.Policies["autoscope"] >= 1;
     public bool DampersIn(Room r) => Dampers && r.DataLinked;
-    public bool AlarmsIn(Room r) => Alarms && r.DataLinked;
+    public bool AlarmsIn(Room r) => Alarms && (r.DataLinked || ComputerV15.Relay(_world)); // v15.9 통신 중계
     public bool DroneControl => !Present || MainOnline;
     public bool Rods => !Present || MainOnline;
 

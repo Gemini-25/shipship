@@ -510,10 +510,10 @@ public sealed class WatchLog
         foreach (var m in w.Ship.Machines)
         {
             var room = m.Body.Room;
-            if (online && room.Powered && room.DataLinked && !room.Detached && !m.Body.Stowed) m.LastReading = w.Tick; // v12.3 데이터선이 끊기면 값이 멈춘다
+            if (online && room.Powered && (room.DataLinked || ComputerV15.Relay(w)) && !room.Detached && !m.Body.Stowed) m.LastReading = w.Tick; // v12.3 데이터선이 끊기면 값이 멈춘다 · v15.9 통신 중계
             // 하루 1%쯤 (태양 폭풍 동안 네 배), 뜨거운 방에서 조금 더
             float heat = room.Air.Temperature > 32f ? 1.5f : 1f;
-            m.SensorCal = MathF.Max(0.3f, m.SensorCal - dt / 24f * 0.011f * stormDrift * heat);
+            m.SensorCal = MathF.Max(0.3f, m.SensorCal - dt / 24f * 0.011f * stormDrift * heat * ComputerV15.DriftMul(w, room)); // v15.9 감지기 자동 교정
             // 작은 이상: 마모와 상관없이 가끔 (풀린 볼트·단자·커넥터·막힘) — 놓치면 고장이 된다
             if (m.Omen == null && m.Faults.Count == 0 && !m.Body.Stowed && !room.Abandoned && !room.OffLimits && !room.Detached && m.Spec.PowerDraw > 0f
                 && w.Rng.Chance(Tuning.AnomalyPerDay * Storyteller.AnomalyScale / 24f * dt))
