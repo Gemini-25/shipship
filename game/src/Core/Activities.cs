@@ -438,7 +438,7 @@ public sealed class EvacuateActivity : Activity
 
     private static bool Safe(CrewMember c, World w, Room room) =>
         Atmosphere.Danger(room) <= 0.1f && !room.Leaking && w.Fire.CountIn(room) == 0 && w.Sensors.Threat(room) == null
-        && room.EvacuateBy < 0 && !room.ResponseHold;
+        && room.EvacuateBy < 0 && !room.ResponseHold && w.Brain2.Beliefs.SafeEnough(c, room); // v16.15 위험하다고 믿는 방(불 · 구멍 · 컴퓨터 경고)은 피한다
 
     public override (float, string) Score(CrewMember c, World w, DistanceField dist)
     {
