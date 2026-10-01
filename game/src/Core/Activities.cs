@@ -417,6 +417,10 @@ public sealed class EvacuateActivity : Activity
         return danger;
     }
 
+    /// <summary>v12.9.1 우주복 없이 산소 14kPa 아래 방에 있다 (몇 분 안에 쓰러진다).</summary>
+    public static bool Breathless(CrewMember c) =>
+        c.Room != null && c.Suit is not { Oxygen: > 0.05f } && c.Room.Air.O2 < 14f && c.CarryingPerson == null && !c.Dashing;
+
     private static bool Safe(CrewMember c, World w, Room room) =>
         Atmosphere.Danger(room) <= 0.1f && !room.Leaking && w.Fire.CountIn(room) == 0 && w.Sensors.Threat(room) == null;
 
@@ -434,6 +438,8 @@ public sealed class EvacuateActivity : Activity
             return (s, c.Suit == null ? "선체 밖 — 우주복 없음" : c.Suit.Oxygen < 0.6f ? "선체 밖 — 우주복 산소가 바닥난다" : "선체 밖 — 에어락으로 돌아간다");
         }
         if (c.Room == null) return (0f, "—");
+        // v12.9.1 맨몸으로 숨이 찰 만큼 산소가 묽다 — 무슨 일이든 두고 당장 나간다 (사람을 업고 있거나 각오하고 뛰어든 사람은 빼고)
+        if (Breathless(c)) return (3f, $"{c.Room.Name} 산소 {c.Room.Air.O2:0}kPa — 숨이 차다, 당장 나간다");
         float danger = DangerHere(c, w);
         if (danger < 0.2f) return (0f, "안전함");
         float fear = 1.2f - 0.4f * c.Traits.Bravery;

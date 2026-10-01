@@ -364,6 +364,9 @@ public sealed class World
                 c.NextThinkTick = Tick;
             }
 
+            // v12.9.1 숨이 찰 만큼 산소가 묽어지면 10분을 기다리지 않고 곧장 다시 판단한다 (대피)
+            if ((Tick + c.Id) % 15 == 0 && c.Job?.Activity is not EvacuateActivity && EvacuateActivity.Breathless(c)) c.NextThinkTick = Tick;
+
             if (c.Job == null || Tick >= c.NextThinkTick)
             {
                 Brain.Think(c, this);

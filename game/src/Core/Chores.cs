@@ -255,7 +255,7 @@ public static partial class WorkPlanners
         bool selfSuit = o.Kind == WorkKind.SealBreach || ChoresActivity.NeedsEvaField(o);
         if (!selfSuit && c.Suit is not { Oxygen: > 1f } && NeedsSuit(o, c, w, at))
         {
-            if (!SuitUp(c, w, dist, suitUp)) { blocked = "우주복 없음"; return null; }
+            if (!SuitUp(c, w, dist, suitUp, allowDash: WorkKinds.IsEmergency(o.Kind) || o.Kind == WorkKind.Treat)) { blocked = "우주복 없음"; return null; }
         }
 
         var job = o.Kind switch
@@ -468,7 +468,7 @@ public static partial class WorkPlanners
     private static string Cost((ItemKind kind, int count)[] needs) => string.Join(" + ", needs.Select(x => $"{ItemKinds.Name(x.kind)} {x.count}"));
 
     /// <summary>우주복 보관함에서 우주복을 꺼내 입는다. 이미 입고 있으면 아무것도 안 한다.</summary>
-    private static bool SuitUp(CrewMember c, World w, DistanceField dist, List<Toil> toils)
+    private static bool SuitUp(CrewMember c, World w, DistanceField dist, List<Toil> toils, bool allowDash = true)
     {
         if (c.Suit is { Oxygen: > 1f }) return true;
         var (locker, spot) = Plans.NearestContainer(w, dist, c, f => f.Type == FurnitureType.SuitLocker && f.Storage!.Count(ItemKind.Suit) > 0);
@@ -479,7 +479,7 @@ public static partial class WorkPlanners
         bool reachable = w.Paths.Find(c.Cell, spot, new PathProfile(c.PathProfile.HazardScale, false, true)) != null;
         if (!reachable)
         {
-            if (c.Traits.Bravery < 0.55f) return false;
+            if (c.Traits.Bravery < 0.55f || !allowDash) return false; // v12.9.1 급하지 않은 일로는 진공에 뛰어들지 않는다
             toils.Add(new DoToil((cm, world) =>
             {
                 cm.Dashing = true;
