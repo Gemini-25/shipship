@@ -271,6 +271,48 @@ public partial class ShipView : Node2D
                 ci.DrawTextureRect(tex, new Rect2(center - new Vector2(size, size) * 0.5f, size, size), false, new Color(tint.R, tint.G, tint.B, strength));
             }
         }
+        PaintBeacons(ci);
+    }
+
+    /// <summary>
+    /// v12.9.1 경광등: 공기가 새거나, 불이 났거나, 공기가 위험하거나, 봉쇄된 방은 천장의 붉은 회전등이 돈다.
+    /// 두 갈래 빛이 방을 쓸고 지나간다 (더하기 섞기 — 어두운 방일수록 또렷하다).
+    /// </summary>
+    private void PaintBeacons(CanvasItem ci)
+    {
+        foreach (var room in _world.Ship.LiveRooms)
+        {
+            if (room.Cells.Count == 0 || room.Type == RoomType.Corridor) continue;
+            bool fire = _world.Fire.IsKnown(room) && _world.Fire.CountIn(room) > 0;
+            bool alarm = room.Leaking || fire || room.Lockdown || room.Unbreathable || Atmosphere.Danger(room) > 0.35f;
+            if (!alarm) continue;
+            // 경광등은 축전지로 돈다 — 정전에도 돌지만, 조명 회로가 끊긴 방은 꺼진다
+            if (room.LightsOut) continue;
+            var color = fire ? new Color(1f, 0.45f, 0.1f) : new Color(1f, 0.12f, 0.08f);
+            float cx = (room.MinX + room.MaxX + 1) * 0.5f * T, top = room.MinY * T + T * 0.6f;
+            var lamp = new Vector2(cx, top);
+            float reach = Mathf.Clamp((room.MaxX - room.MinX + 1) * 0.55f, 3f, 9f) * T;
+            float angle = _time * 3.6f + room.Id * 1.3f;
+            for (int k = 0; k < 2; k++)
+            {
+                float a0 = angle + k * Mathf.Pi;
+                const int seg = 7;
+                var pts = new Vector2[seg + 2];
+                var cols = new Color[seg + 2];
+                pts[0] = lamp;
+                cols[0] = new Color(color.R, color.G, color.B, 0.34f);
+                for (int i = 0; i <= seg; i++)
+                {
+                    float a = a0 - 0.32f + 0.64f * i / seg;
+                    pts[i + 1] = lamp + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * reach;
+                    cols[i + 1] = new Color(color.R, color.G, color.B, 0f);
+                }
+                ci.DrawPolygon(pts, cols);
+            }
+            float pulse = 0.55f + 0.45f * Mathf.Abs(Mathf.Sin(_time * 3.6f + room.Id));
+            ci.DrawCircle(lamp, T * 0.42f, new Color(color.R, color.G, color.B, 0.35f * pulse));
+            ci.DrawCircle(lamp, T * 0.18f, new Color(1f, 0.85f, 0.8f, 0.8f * pulse));
+        }
     }
 
     private void PaintCorridorGuides(CanvasItem ci)

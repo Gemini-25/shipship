@@ -53,7 +53,7 @@ public static class NeedsSystem
     {
         if (amount <= 0f) return;
         amount *= Storyteller.InjuryScale; // v12.4 난이도: 부상 강도
-        if (v.Injury < 0.05f || amount > 0.05f) v.InjuryCause = cause;
+        if (v.Injury < 0.05f || amount > MathF.Max(0.05f, v.Injury * 0.5f)) v.InjuryCause = cause; // 큰 상처를 낸 것이 사인으로 남는다 (작은 상처가 덮어쓰지 않는다)
         v.Injury = MathF.Min(1f, v.Injury + amount);
         ShipSim.Core.Wounds.Add(v, amount, cause); // v12.7 어디를 어떻게
         // v11.3 후유증: 절반을 넘게 다치면 무엇인가 남는다 (재활로 절반까지만 준다)

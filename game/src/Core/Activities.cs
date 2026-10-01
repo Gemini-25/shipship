@@ -399,6 +399,8 @@ public sealed class EvacuateActivity : Activity
         // 사출하기로 한 방: 그 방 일(물품 회수 등)을 하는 사람 말고는 나간다
         if (c.Room.Jettison != null && c.Job?.Order?.Target.Room != c.Room) danger = MathF.Max(danger, 0.5f);
         if (c.Suit is { Oxygen: > 0f and < 0.4f } && Atmosphere.Danger(c.Room) > 0.3f) danger = 1f; // 탱크가 바닥나 간다
+        // v12.9.1 맨몸으로 산소가 묽어지는 방에 있으면 일을 두고 나온다 (머리가 먼저 흐려진다 — 쓰러지기 전에)
+        if (c.Suit is not { Oxygen: > 0.05f } && c.Room.Air.O2 < 16.5f) danger = MathF.Max(danger, 0.6f + (16.5f - c.Room.Air.O2) * 0.1f);
         // v9: 새는 냉각수의 증기 (그 관을 고치러 온 사람은 각오하고 버틴다)
         if (c.Job?.Order?.Target.Pipe == null)
         {

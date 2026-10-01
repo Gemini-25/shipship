@@ -19,6 +19,9 @@ public abstract class Toil
 
     /// <summary>화면에 보여줄 진행률 (없으면 null).</summary>
     public virtual float? Progress => null;
+
+    /// <summary>v12.9.1 이 단계에서 우주복을 입는다 (그 일은 가는 길에 공기가 나빠져도 다시 계획하지 않는다).</summary>
+    public bool DonsSuit { get; init; }
 }
 
 /// <summary>목표 칸으로 걸어간다.</summary>
@@ -311,6 +314,17 @@ public sealed class Job
 
     /// <summary>긴급한 일 (위험 비용을 덜 느낌).</summary>
     public bool Urgent { get; init; }
+
+    /// <summary>v12.9.1 남은 단계 중에 우주복을 입는 단계가 있다.</summary>
+    public bool WillDonSuit
+    {
+        get
+        {
+            for (int i = System.Math.Max(0, _index); i < _toils.Count; i++)
+                if (_toils[i].DonsSuit) return true;
+            return false;
+        }
+    }
 
     /// <summary>다른 행동이 이만큼 더 급해야 이 일을 중단한다.</summary>
     public float InterruptMargin { get; init; } = 0.15f;

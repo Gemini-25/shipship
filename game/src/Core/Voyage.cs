@@ -34,6 +34,10 @@ public sealed class VoyageSystem
     public List<VoyageSummary> Past { get; } = new();
     public int Trades, Recruits, Salvaged, PortsVisited;
     public float Credits { get; set; } = 40f;
+    /// <summary>아껴 둘 돈: 기항지에서 부품·개수 공사에는 이만큼을 남기고 쓴다 (끼니는 예외 — 캠페인 "돈 모으기" 임무).</summary>
+    public float Reserve { get; set; }
+    /// <summary>지금까지 기항지에 판 개수 (종류별 — 캠페인 임무가 센다).</summary>
+    public Dictionary<ItemKind, int> Sold { get; } = new();
     private int _incidents0, _deaths0, _techs0;
     private readonly Rng _rng;
 
@@ -147,6 +151,7 @@ public sealed class VoyageSystem
                 break;
             case LegKind.AsteroidBelt:
                 w.Space.SetMean(PropulsionSystem.ZoneDensity(w.Propulsion.Zone) * MiningMul); // 돌이 많다 — 채집이 좋다
+                Vein(leg);
                 goto default;
             default:
                 w.Log.Add(w.Tick, LogKind.Ship, $"{KindName(leg.Kind)}에 들어섰다 — {leg.Name}" + leg.Kind switch
@@ -178,14 +183,21 @@ public sealed class VoyageSystem
             int sell = have - keep;
             if (!Life.Take(w, k, sell)) continue;
             Credits += sell * price;
+            Sold[k] = Sold.GetValueOrDefault(k) + sell;
             lines.Add($"{ItemKinds.Name(k)} {sell} 팔고");
+        }
+        // 상선단과 함께 가면 실어 나른 짐삯을 받는다 (캠페인 4장 교역의 길)
+        if (w.Campaign.ContractFee() is float fee and > 0f)
+        {
+            Credits += fee;
+            lines.Add($"짐삯 {fee:0}");
         }
         // 사기: 모자란 것부터
         foreach (var (k, want, price) in new[] { (ItemKind.Plate, 10, 1.5f), (ItemKind.Electronics, 6, 3f), (ItemKind.Sealant, 4, 2f), (ItemKind.MedKit, 4, 3f), (ItemKind.Filter, 4, 2f), (ItemKind.Cable, 6, 1f) })
         {
             int have = ship.CountStored(k);
             int buy = Math.Max(0, want - have);
-            buy = Math.Min(buy, (int)(Credits / price));
+            buy = Math.Min(buy, (int)(MathF.Max(0f, Credits - (have == 0 ? 0f : Reserve)) / price)); // 하나도 없으면 아껴 둔 돈도 쓴다
             if (buy <= 0) continue;
             int put = 0;
             foreach (var box in ship.Containers.Where(f => f.Storage!.Accepts(k)))
@@ -213,7 +225,7 @@ public sealed class VoyageSystem
         // 개수 공사: 가장 낡은 설비 둘
         foreach (var m in ship.Machines.Where(m => m.Faults.Count == 0).OrderByDescending(m => m.Wear).Take(2))
         {
-            if (Credits < 6f || m.Wear < 0.25f) break;
+            if (Credits - Reserve < 6f || m.Wear < 0.25f) break;
             Credits -= 6f;
             m.Wear = 0.05f;
             m.Condition = MathF.Max(m.Condition, 0.95f);
@@ -254,6 +266,22 @@ public sealed class VoyageSystem
         Salvaged++;
         w.History.Add(w, HistoryKind.Decision, $"{leg.Name}에서 건졌다 — " + (got.Count > 0 ? string.Join(" · ", got) : "쓸 것이 없었다"), null, log: true);
         if (_rng.Chance(0.25f)) Hazards.Apply(w, HazardKind.RescueSignal, default, -1); // 난파선 근처의 구조 신호
+    }
+
+    /// <summary>소행성대의 광맥: 채집 팔이 닿는 바위에서 희귀 소재를 캔다 (채집 장치가 돌아야 한다). 희귀 소재는 거의 여기서만 모인다.</summary>
+    private void Vein(Leg leg)
+    {
+        var w = _w;
+        float arms = w.Ship.FurnitureOf(FurnitureType.Collector).Sum(f => f.Machine!.Efficiency);
+        if (arms <= 0.05f) { w.Log.Add(w.Tick, LogKind.Ship, $"{leg.Name} — 광맥이 보이지만 채집 장치가 멈춰 있다"); return; }
+        int n = 1 + _rng.Range(0, 3) + (arms >= 1.5f ? 1 : 0);
+        int put = 0;
+        foreach (var box in w.Ship.Containers.Where(f => f.Storage!.Accepts(ItemKind.Rare)))
+        {
+            put += box.Storage!.Add(ItemKind.Rare, n - put);
+            if (put >= n) break;
+        }
+        if (put > 0) w.History.Add(w, HistoryKind.Decision, $"{leg.Name}에서 광맥을 찾았다 — 희귀 소재 {put}", null, log: true);
     }
 
     /// <summary>목적지: 항해를 정리하고 (연대기 요약) 다음 항해를 잡는다.</summary>

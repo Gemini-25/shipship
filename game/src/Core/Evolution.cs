@@ -147,7 +147,7 @@ public static class Evolution
     };
 
     public static bool Affordable(WorkBoard b, (ItemKind kind, int count)[] cost) =>
-        cost.All(x => b.Have(x.kind) - x.count >= Reserve(x.kind));
+        cost.All(x => b.Have(x.kind) - x.count >= Reserve(x.kind) + b.Held(x.kind));
 
     public static (ItemKind kind, int count)[] Cost(UpgradeKind k, Furniture? f) => k switch
     {

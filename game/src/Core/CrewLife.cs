@@ -224,7 +224,9 @@ public sealed class LifeSystem
         {
             what = "공구에 손을 다쳤다";
             w.Causes.Root(CauseKind.Mistake, $"{c.Name}의 실수 — {what} ({why})", c.Room, c.Position, observer: false);
-            NeedsSystem.AddInjury(c.Vitals, 0.06f, "작업 중 실수");
+            // 손을 베고 찧는 정도 — 이미 크게 다친 사람에게 결정타가 되지는 않는다
+            float slip = MathF.Min(0.05f, MathF.Max(0f, 0.55f - c.Vitals.Injury));
+            if (slip > 0f) NeedsSystem.AddInjury(c.Vitals, slip, "작업 중 실수");
         }
         // 곁에서 본 자격 있는 사람이 바로 잡아내기도 한다
         var watcher = w.Crew.FirstOrDefault(x => x != c && !x.Dead && x.IsAwake && x.Room == c.Room && x.SkillLevel(o.Skill) > c.SkillLevel(o.Skill) + 0.15f);

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using ShipSim.Core;
 
@@ -58,6 +59,32 @@ public static partial class Program
                 Run(w, SimTime.TicksPerDay * 2);
                 Check("세대선 — 나이가 들면 몸이 약해진다", old.Vitals.Health < h0 || old.Dead, $"{old.Name} {old.Age:0}살 · 체력 {h0 * 100:0} → {old.Vitals.Health * 100:0}%{(old.Dead ? " · 떠났다" : "")}");
             }
+            // 4) 2장: 모으는 물건은 개조에 쓰지 않고, 기항지에 판 개수로 센다
+            {
+                var w = World.CreateDefault(seed, 0, "Mirinae");
+                var cp = w.Campaign;
+                cp.JumpTo("mine");
+                int held = w.Board.Held(ItemKind.Rare);
+                w.Voyage.Sold[ItemKind.Rare] = w.Voyage.Sold.GetValueOrDefault(ItemKind.Rare) + 4;
+                Run(w, SimTime.Hours(2));
+                Check("2장 — 희귀 소재는 개조에 안 쓰고, 기항지에 판 개수로 센다", held == 6 && cp.Current?.Chapter == 3 && w.Board.Held(ItemKind.Rare) == 0,
+                    $"붙잡아 둠 {held} · 지금 {cp.Current?.Chapter}장 「{cp.Current?.Title}」");
+                cp.JumpTo("trade");
+                Check("4장 상선단 — 돈을 모으는 동안 기항지에서 아껴 쓴다", w.Voyage.Reserve == 60f, $"아껴 둘 돈 {w.Voyage.Reserve:0}");
+            }
+            // 5) 5장 세대선: 배에서 태어난 맏이가 열네 살이 되어 일을 맡으면 캠페인이 끝난다 (배는 계속 간다)
+            {
+                var w = World.CreateDefault(seed, 0, "Hanbit");
+                var cp = w.Campaign;
+                cp.JumpTo("colony");
+                var adults = w.Crew.Where(c => !c.Dead).Take(2).ToList();
+                var kid = w.AddChild(adults[0], adults[1], new Rng(seed));
+                kid.Age = 13.9f;
+                string before = cp.Status().text;
+                Run(w, SimTime.Hours(12));
+                Check("5장 세대선 — 맏이가 열네 살이 되면 다음 세대 · 캠페인 끝", cp.Current == null && cp.Done.LastOrDefault().ok && w.Generation.Enabled,
+                    $"{before} → {(cp.Current == null ? "캠페인 끝" : cp.Status().text)} · {kid.Name} {kid.Age:0.0}살");
+            }
             // 3) 결정론: 세대선 배도 같은 시드면 같은 역사
             {
                 uint H()
@@ -87,7 +114,7 @@ public static partial class Program
         return _fails == 0 ? 0 : 1;
     }
     /// <summary>긴 캠페인: 1장부터 끝까지 (길어야 days일) — 장이 바뀔 때마다, 그리고 열흘마다 한 줄.</summary>
-    private static int RunCampaignLong(int days, int seed, string ship)
+    private static int RunCampaignLong(int days, int seed, string ship, string? from = null)
     {
         float mode0 = CampaignSystem.ModeValue;
         CampaignSystem.ModeValue = 1f;
@@ -95,11 +122,15 @@ public static partial class Program
         CampaignSystem.ModeValue = mode0;
         Player.AllowDeath(w, true);
         var cp = w.Campaign;
-        Console.WriteLine($"긴 캠페인 · {ship} · 시드 {seed} · 길어야 {days}일\n");
-        int doneSeen = 0;
+        if (from != null) cp.JumpTo(from);
+        Console.WriteLine($"긴 캠페인 · {ship} · 시드 {seed} · 길어야 {days}일{(from != null ? $" · {cp.Current?.Chapter}장 「{cp.Current?.Title}」부터" : "")}\n");
+        int doneSeen = 0, histSeen = 0;
         for (int d = 1; d <= days; d++)
         {
             Run(w, SimTime.TicksPerDay);
+            foreach (var e in w.History.Events.Skip(histSeen).Where(e => e.Text.Contains("광맥") || e.Text.Contains("교역 —") || e.Text.Contains("건졌다") || e.Text.Contains("죽었다") || e.Text.Contains("태어났다") || e.Text.Contains("짝이")))
+                Console.WriteLine($"        {e.Tick / (float)SimTime.TicksPerDay,5:0.0}일  {e.Text}");
+            histSeen = w.History.Events.Count;
             while (cp.Done.Count > doneSeen)
             {
                 var (m, ok, tick, note) = cp.Done[doneSeen++];

@@ -368,9 +368,17 @@ public static partial class WorkPlanners
         return job;
     }
 
+    /// <summary>누구든 맨몸으로는 못 들어가는 방: 숨 쉴 수 없거나, 기압이 낮거나, 유독하다.</summary>
+    public static bool Unsafe(Room r) => r.Unbreathable || r.Air.Pressure < 60f || r.Air.Toxin > 0.2f;
+
+    /// <summary>v12.9.1 급하지 않은 일(차단기·수리·정비…)로는 맨몸으로 들어가지 않는 방: 산소가 묽거나, 새는 채 환기가 끊겼다 (곧 묽어진다).
+    /// 비상 대응(봉합·소화·구조·격리…)은 각오하고 들어간다 — 그 판단은 계획마다 따로 한다.</summary>
+    public static bool Hostile(Room r) =>
+        Unsafe(r) || r.Air.O2 < 17f || r.Leaking && (r.Air.Pressure < 92f || !r.VentOpen || !r.DuctLinked);
+
     private static bool NeedsSuit(WorkOrder o, CrewMember c, World w, Cell at)
     {
-        if (o.Target.CurrentRoom is Room r && (r.Unbreathable || r.Air.Pressure < 60f || r.Air.Toxin > 0.2f)) return true; // v11.2 유독 가스
+        if (o.Target.CurrentRoom is Room r && (WorkKinds.IsEmergency(o.Kind) ? Unsafe(r) : Hostile(r))) return true; // v11.2 유독 가스 · v12.9.1 산소가 묽거나 새는 채 닫힌 방
         if (w.Ship.RoomAt(at) is Room ar && ar.Unbreathable) return true;
         // 우주복 없이 (비상 개방만 하고) 갈 수 있는지
         var profile = new PathProfile(c.PathProfile.HazardScale, false, o.Urgency >= 0.9f);
@@ -496,7 +504,7 @@ public static partial class WorkPlanners
             }
             else world.Log.Add(world.Tick, LogKind.Work, "우주복을 입었다", cm.Id);
             return true;
-        }));
+        }) { DonsSuit = true });
         return true;
     }
 

@@ -355,6 +355,15 @@ public sealed class World
                 c.NextThinkTick = Tick;
             }
 
+            // v12.9.1 가는 사이 일할 방의 공기가 나빠졌으면 맨몸으로 들어가지 않는다 — 다시 계획하면 우주복부터 입는다 (비상 대응·치료는 따로 판단)
+            if (c.Job is { Order: WorkOrder wo } sj && !sj.WillDonSuit && c.Suit is not { Oxygen: > 1f } && !WorkKinds.IsEmergency(wo.Kind) && wo.Kind != WorkKind.Treat
+                && (Tick + c.Id) % 15 == 0 && wo.Target.CurrentRoom is Room tr && c.Room != tr && !tr.Detached && WorkPlanners.Hostile(tr))
+            {
+                Log.Add(Tick, LogKind.Warning, $"{tr.Name} 공기가 나빠졌다 — 우주복부터 입고 간다", c.Id);
+                c.EndJob(this, ToilStatus.Interrupted);
+                c.NextThinkTick = Tick;
+            }
+
             if (c.Job == null || Tick >= c.NextThinkTick)
             {
                 Brain.Think(c, this);
@@ -464,7 +473,11 @@ public sealed class World
         c.Pose = Pose.Down;
         c.Path = null;
         c.Destination = null;
-        RaiseAlert($"{Ko.IGa(c.Name)} 죽었다 — {c.Room?.Name ?? "?"} ({c.Vitals.InjuryCause ?? "사고"})", c.Room, AlertLevel.Critical, shipWide: true);
+        // 사인: 가장 큰 상처를 낸 것 (처음 다친 작은 상처가 아니라) — 숨이 막혀 쓰러졌으면 그대로
+        if (c.Vitals.Wounds.Where(x => !x.Lost).OrderByDescending(x => x.Weight).FirstOrDefault() is Wound big && big.Weight >= 0.15f && big.Cause != c.Vitals.InjuryCause
+            && c.Vitals.Wounds.Where(x => x.Cause == c.Vitals.InjuryCause).Sum(x => x.Weight) < big.Weight)
+            c.Vitals.InjuryCause = big.Cause;
+        RaiseAlert($"{Ko.IGa(c.Name)} 죽었다 — {c.Room?.Name ?? "떨어져 나간 구획"} ({c.Vitals.InjuryCause ?? "사고"})", c.Room, AlertLevel.Critical, shipWide: true);
         // 남은 사람들: 가까웠던 사람일수록 크게 흔들린다. 그 방은 모두에게 무서운 곳이 된다
         foreach (var o in Crew)
         {
@@ -482,7 +495,7 @@ public sealed class World
             c.Room.Deaths++;
             MarkLog.Add(c.Room.Marks, Tick, $"{Ko.IGa(c.Name)} 죽었다");
         }
-        History.Add(this, HistoryKind.Death, $"{Ko.IGa(c.Name)} {c.Room?.Name ?? "?"}에서 죽었다 ({c.Vitals.InjuryCause ?? "사고"})", c.Room, new[] { c });
+        History.Add(this, HistoryKind.Death, $"{Ko.IGa(c.Name)} {c.Room?.Name ?? (Ship.Grid.InBounds(c.Cell) ? "떨어져 나간 구획" : "배 밖")}에서 죽었다 ({c.Vitals.InjuryCause ?? "사고"})", c.Room, new[] { c });
         Board.RequestScan();
     }
 
