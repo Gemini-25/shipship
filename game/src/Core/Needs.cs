@@ -95,7 +95,9 @@ public static class NeedsSystem
 
         // ── 욕구 ──
         // v10.11 배급: 한 끼씩 줄여 먹으니 허기가 덜 빠진다 (그만큼 날카로워진다 — 아래)
-        n.Food -= (asleep ? FoodDecayAsleep : FoodDecayAwake) * c.Traits.Appetite * w.Food.Decay(w, c) * dt;
+        float appetite = 1f, socialMul = 1f, restMulH = 1f, stressMul = 1f; // v14.0 습관
+        foreach (var h in c.Habits) { var hs = Persona.Of(h); appetite *= hs.Appetite; socialMul *= hs.Social; restMulH *= hs.Rest; stressMul *= hs.Stress; }
+        n.Food -= (asleep ? FoodDecayAsleep : FoodDecayAwake) * c.Traits.Appetite * appetite * w.Food.Decay(w, c) * dt;
 
         float restMul = (hypoxic ? 1.6f : 1f) * (stuffy ? 1.5f : 1f);
         // 침대가 아닌 곳(바닥, 의자)에서 자면 덜 쉰다
@@ -105,10 +107,10 @@ public static class NeedsSystem
         bool cot = under is { Type: FurnitureType.Cot, Improved: false };
         // 무서운 방에서 자면 깊이 못 잔다 (v7)
         float dread = asleep ? c.Memory.FearOf(c.Room) : 0f;
-        if (asleep) n.Rest += RestGainAsleep * (stuffy ? 0.7f : 1f) * (rough ? 0.75f : 1f) * (cot ? 0.92f : 1f) * (1f - 0.3f * dread) * AmbienceSystem.SleepFactor(c.Room) * dt; // v12.6 옆방 소음·진동
+        if (asleep) n.Rest += RestGainAsleep * restMulH * (stuffy ? 0.7f : 1f) * (rough ? 0.75f : 1f) * (cot ? 0.92f : 1f) * (1f - 0.3f * dread) * AmbienceSystem.SleepFactor(c.Room) * dt; // v12.6 옆방 소음·진동
         else n.Rest -= (c.Pose == Pose.Working ? RestDecayWorking : RestDecayAwake) * restMul * ShipSim.Core.Wounds.LungLoad(v) * dt; // v12.7 폐를 다치면 쉽게 지친다
 
-        if (!asleep) n.Social -= SocialDecay * (0.6f + 0.8f * c.Traits.Sociability) * dt;
+        if (!asleep) n.Social -= SocialDecay * (0.6f + 0.8f * c.Traits.Sociability) * socialMul * dt;
 
         float stress = c.Pose switch
         {
@@ -116,7 +118,7 @@ public static class NeedsSystem
             Pose.Sleeping => StressSleeping,
             _ => StressIdle,
         };
-        if (relaxing) stress = StressRelaxing * AmbienceSystem.RelaxFactor(c.Room); // v12.6 관측실·정원은 더 풀린다
+        if (relaxing) stress = StressRelaxing * AmbienceSystem.RelaxFactor(c.Room) * (c.Hobbies.Count > 0 && Persona.HobbyIn(c, c.Room) != null ? 1.3f : 1f); // v12.6 관측실·정원은 더 풀린다 · v14.0 취미의 방
         else if (!asleep && !suited) stress += AmbienceSystem.Stress(c.Room, c.Pose == Pose.Working); // v12.6 시끄럽고 냄새나는 방
         if (n.Food < 0.15f) stress += StressHungry;
         if (n.Rest < 0.15f) stress += StressExhausted;
@@ -142,6 +144,7 @@ public static class NeedsSystem
                     stress *= 0.75f; // 전우 곁에서 일하면 덜 힘들다
                     break;
                 }
+        if (stress > 0f) stress *= stressMul; // v14.0 습관 (낙천가는 덜, 걱정 많은 사람은 더)
         n.Stress += stress * dt;
 
         // ── 체력 ──

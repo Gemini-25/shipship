@@ -43,6 +43,7 @@ public sealed class MindSystem
     private readonly Rng _rng;
     private readonly Dictionary<int, long> _downSince = new();
     public int Panics, Freezes, Flees, Heroics, Ignores, Rumors, Radios, Alarms, Sightings;
+    public int FearPanics; // v14.0 두려움 때문에
     private string _nick = "";
 
     public MindSystem(World w)
@@ -186,22 +187,42 @@ public sealed class MindSystem
     /// <summary>난이도에 따른 공황의 세기 (느긋 0.15 ~ 가혹 1.8).</summary>
     public static float PanicScale => Storyteller.Level switch { 1 => 0.15f, 2 => 0.4f, 3 => 0.8f, 4 => 1.3f, _ => 1.8f };
 
+    /// <summary>지금 이 사람이 공황에 빠질 확률 (한 시간에) — 위험한 자리 · 쓰러지는 걸 봤다 · v14.0 두려움 · 습관.</summary>
+    public float PanicRate(CrewMember c, out Fear? fear)
+    {
+        var w = _w;
+        var m = c.Mind;
+        fear = null;
+        float danger = EvacuateActivity.DangerHere(c, w);
+        bool witness = m.Knows.Any(k => k.Key.StartsWith("down:") && k.Value.src == KnowSource.Seen && w.Tick - k.Value.tick < SimTime.Minutes(3));
+        float trigger = (danger > 0.5f ? 10f : danger >= 0.3f ? 3f : 0f) + (witness ? 6f : 0f);
+        // v14.0 두려움이 건드려지면 (불·물·가스·진공…) 공황이 잦다 · 습관 (걱정·미신은 잦고, 낙천가·겁 없음은 드물다)
+        // (어둠·좁은 곳·기계·지휘·병 같은 오래가는 두려움은 위험할 때만 겹친다 — 평소엔 마음만 무겁다)
+        if (c.Fears.Count > 0 && Persona.Triggered(w, c) is Fear fr && (trigger > 0f || Persona.Acute(fr)))
+        {
+            trigger = trigger > 0f ? trigger * 1.5f + 4f : 3f;
+            fear = fr;
+        }
+        if (trigger <= 0f) return 0f;
+        if (c.Habits.Count > 0) trigger *= Persona.Mul(c, h => h.Panic);
+        float veteran = MathF.Min(0.6f, c.Stats.Emergencies * 0.03f);
+        return PanicScale * trigger * MathF.Pow(1f - c.Traits.Calm, 1.5f) * (0.3f + c.Needs.Stress) * (1f - veteran) * (1f - 0.5f * c.Traits.Bravery) * (1.5f - w.Society.Morale);
+    }
+
     private void Emotions(CrewMember c, float dt)
     {
         var w = _w;
         var m = c.Mind;
         m.Anger = MathF.Max(0f, m.Anger - 0.25f * dt / 24f);
         if (c.Down || !c.IsAwake || c.Outside) return;
+        // v14.0 오래가는 두려움 (어둠·좁은 곳·기계…) — 평소엔 마음만 무겁다
+        if (c.Fears.Count > 0 && Persona.Triggered(w, c) is Fear cf && !Persona.Acute(cf)) c.Needs.Stress = MathF.Min(1f, c.Needs.Stress + 0.04f * dt);
         // 공황
         if (!m.Panicking(w.Tick) && m.PanicUntil < w.Tick - SimTime.Minutes(20))
         {
-            float danger = EvacuateActivity.DangerHere(c, w);
-            bool witness = m.Knows.Any(k => k.Key.StartsWith("down:") && k.Value.src == KnowSource.Seen && w.Tick - k.Value.tick < SimTime.Minutes(3));
-            float trigger = (danger > 0.5f ? 10f : danger >= 0.3f ? 3f : 0f) + (witness ? 6f : 0f);
-            if (trigger > 0f)
+            float p = PanicRate(c, out var fear);
+            if (p > 0f)
             {
-                float veteran = MathF.Min(0.6f, c.Stats.Emergencies * 0.03f);
-                float p = PanicScale * trigger * MathF.Pow(1f - c.Traits.Calm, 1.5f) * (0.3f + c.Needs.Stress) * (1f - veteran) * (1f - 0.5f * c.Traits.Bravery) * (1.5f - w.Society.Morale);
                 if (_rng.Chance(p * dt))
                 {
                     m.Panics++;
@@ -214,7 +235,8 @@ public sealed class MindSystem
                     c.EndJob(w, ToilStatus.Interrupted);
                     c.NextThinkTick = w.Tick;
                     c.Needs.Stress = MathF.Min(1f, c.Needs.Stress + 0.08f);
-                    w.Log.Add(w.Tick, LogKind.Warning, m.Frozen ? "공황 — 얼어붙어 꼼짝 못 한다" : "공황 — 하던 일을 두고 정신없이 달아난다", c.Id);
+                    w.Log.Add(w.Tick, LogKind.Warning, (m.Frozen ? "공황 — 얼어붙어 꼼짝 못 한다" : "공황 — 하던 일을 두고 정신없이 달아난다") + (fear is Fear ff ? $" ({Persona.Of(ff).Name}을(를) 무서워한다)" : ""), c.Id);
+                    if (fear is Fear f2) { FearPanics++; Life.Diary(w, c, Persona.Say(c, $"{Persona.Of(f2).Name}... 몸이 말을 듣지 않았다")); }
                     MarkLog.Add(c.Memory.Marks, w.Tick, m.Frozen ? "공황에 얼어붙었다" : "공황에 달아났다");
                 }
             }

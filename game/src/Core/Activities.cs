@@ -304,9 +304,11 @@ public sealed class RelaxActivity : Activity
             var spot = seat.UseSpots[0];
             int d = dist.Get(spot);
             if (d < 0 || w.IsSpotTaken(spot, c)) continue;
-            if (seat.Room.Type is not (RoomType.Lounge or RoomType.Mess) || seat.Room.OffLimits) continue;
+            var hobby = c.Hobbies.Count > 0 ? Persona.HobbyIn(c, seat.Room) : null; // v14.0 취미의 방 (도서실·체육관·관측실·공방…)
+            if (seat.Room.Type is not (RoomType.Lounge or RoomType.Mess) && hobby == null || seat.Room.OffLimits) continue;
 
-            float value = seat.Room.Type == RoomType.Lounge ? 1f : 0.4f;
+            float value = seat.Room.Type == RoomType.Lounge ? 1f : seat.Room.Type == RoomType.Mess ? 0.4f : 0.5f;
+            if (hobby != null) value += 0.6f;
             value *= AmbienceSystem.RelaxFactor(seat.Room); // v12.6 관측실·정원은 더 끌린다, 시끄러운 곳은 덜
             value += 0.5f * (0.6f - c.Fitness) * Facilities.Factor(seat.Room, "exercise"); // 몸이 굳었으면 운동하러
             value += 0.8f * c.Memory.Trauma * Facilities.Factor(seat.Room, "grief"); // 마음이 무거우면 기도실로
@@ -337,14 +339,16 @@ public sealed class RelaxActivity : Activity
                 {
                     if (o == cm || !o.IsAwake || (o.Position - cm.Position).Length() > 2.5f) continue;
                     cm.Needs.Social += 0.12f * dt;
-                    cm.ChangeAffinity(o, 0.006f * dt);
+                    cm.ChangeAffinity(o, (Persona.Shared(cm, o) != null ? 0.012f : 0.006f) * dt); // v14.0 같은 취미면 더 빨리 가까워진다
                 }
             },
             DoneWhen = (cm, _) => cm.Needs.Stress < 0.03f,
         });
-        var job = new Job(this, "휴식", toils)
+        var hb = c.Hobbies.Count > 0 ? Persona.HobbyIn(c, chosen.Room) : null;
+        if (hb != null) w.Life.Stats.HobbyRests++;
+        var job = new Job(this, hb is Hobby hby ? Persona.Of(hby).Name : "휴식", toils)
         {
-            LogText = $"{chosen.Room.Name}에서 쉰다",
+            LogText = hb is Hobby hbl ? $"{chosen.Room.Name}에서 {Persona.Of(hbl).Doing}" : $"{chosen.Room.Name}에서 쉰다",
             TargetRoom = chosen.Room,
         };
         return job.Reserve(chosen, c);

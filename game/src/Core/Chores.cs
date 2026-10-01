@@ -36,6 +36,9 @@ public sealed class ChoresActivity : Activity
     private static bool DecisionOnly(WorkKind k) => k is WorkKind.Jettison or WorkKind.Retrieve or WorkKind.RestoreRoom or WorkKind.IsolateMain or WorkKind.LimpMain
         or WorkKind.PlanRepipe;
 
+    /// <summary>v14.0 두려움이 걸린 일을 꺼리는 정도 (급한 일이면 반쯤 이겨 낸다).</summary>
+    private static float emergencyFear(WorkOrder o) => o.Urgency >= 0.9f ? 0.12f : 0.25f;
+
     /// <summary>승무원 한 명이 이 일을 얼마나 하고 싶은지.</summary>
     public static float Appeal(CrewMember c, World w, WorkOrder o, DistanceField dist, out int distance)
     {
@@ -70,9 +73,11 @@ public sealed class ChoresActivity : Activity
             score -= 0.2f;
         // v12.7 자격: 자격 있는 사람이 깨어 있으면 자격 없는 사람은 한 발 물러선다 (없으면 서툴러도 한다)
         // (급한 일·다친 사람 돌보기는 누구든 — 자격은 솜씨와 실수에만)
-        if (o.Urgency < 0.85f && o.Kind is not (WorkKind.Treat or WorkKind.Rescue) && Life.Needs(o) is Qual need && !c.Quals.Contains(need)
-            && w.Crew.Any(x => x != c && x.CanAct && x.Quals.Contains(need) && x.Pose != Pose.Sleeping))
-            score -= 0.12f;
+        if (o.Urgency < 0.85f && o.Kind is not (WorkKind.Treat or WorkKind.Rescue) && Life.Needs(o) is Qual need && !Life.HasQual(c, need)
+            && w.Crew.Any(x => x != c && x.CanAct && Life.HasQual(x, need) && x.Pose != Pose.Sleeping))
+            score -= Persona.Core(need) ? 0.12f : 0.06f;
+        // v14.0 두려움: 무서운 일은 꺼린다 (급하면 덜)
+        if (c.Fears.Count > 0 && Persona.FearOf(c, o) is Fear) score -= emergencyFear(o);
 
         bool emergency = o.Urgency >= 0.9f;
         // 위기 판단: 비상·생존 위기에 맞닿은 일(사람·불·전기·공기·사람 있는 방의 구멍)은 앞으로, 딴일은 뒤로.

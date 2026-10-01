@@ -28,8 +28,8 @@ public static partial class Program
             w.Automation.GetType(); // (그대로)
             var bats = w.Ship.FurnitureOf(FurnitureType.Battery).ToList();
             var b = bats.First().Machine!;
-            // 곁에서 불이 달구는 것처럼: 한 시간 동안 식지 않게
-            for (int i = 0; i < SimTime.Hours(1) && w.Volatile.Stats.ThermalRunaways == 0; i++) { b.Heat = MathF.Max(b.Heat, 1.25f); w.Step(); }
+            // 곁에서 불이 달구는 것처럼: 식지 않게 (터지는 건 시간당 한 번꼴의 운 — 세 시간이면 거의 반드시)
+            for (int i = 0; i < SimTime.Hours(3) && w.Volatile.Stats.ThermalRunaways == 0; i++) { b.Heat = MathF.Max(b.Heat, 1.25f); w.Step(); }
             var room = b.Body.Room;
             Check("배터리 열폭주 — 불·유독 연기·옆 셀이 달아오른다", w.Volatile.Stats.ThermalRunaways > 0 && (w.Fire.CountIn(room) > 0 || room.Air.Toxin > 0.05f),
                 $"열폭주 {w.Volatile.Stats.ThermalRunaways} · 불 {w.Fire.CountIn(room)} · 유독 가스 {room.Air.Toxin * 100:0}% · 옆 셀 열 {string.Join(", ", bats.Skip(1).Select(x => $"{x.Machine!.Heat * 100:0}%"))} · 폭발 {w.Volatile.Stats.Explosions} · 잔해 {w.Ship.Rubble.Count}칸");

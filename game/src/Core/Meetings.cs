@@ -183,6 +183,7 @@ public sealed class MeetingSystem
         float p = 0.3f + 0.35f * expertise + 0.15f * c.Traits.Sociability + 0.1f * c.Traits.Calm + Credibility(c)
                   - 0.2f * c.Needs.Stress - 0.15f * Guilt(c) + MathF.Min(0.12f, c.Stats.Emergencies * 0.01f);
         if (c.Id == _w.Command.CaptainId) p += 0.12f * _w.Command.Trust;
+        if (c.Habits.Count > 0) p += Persona.Add(c, h => h.Persuade); // v14.0 앞장서기·진지함 / 비관적·따르기
         return Math.Clamp(p, 0.05f, 1.2f);
     }
 
@@ -233,7 +234,7 @@ public sealed class MeetingSystem
             w.Policies.Set(spec.Id, best.Key, $"첫 출항 회의 — {Culture}", yes, no);
             var item = new AgendaItem { Title = $"{spec.Name}: {spec.Options[best.Key]}", Topic = "policy:" + spec.Id, Yes = yes, No = no, Passed = true, Outcome = "정했다" };
             var voice = best.OrderByDescending(x => PolicySystem.Expertise(x.c, spec.Id) + x.c.Traits.Sociability).First().c;
-            item.Speeches.Add(new Speech { Who = voice.Id, For = true, Text = ValueWhy(voice.Value) });
+            item.Speeches.Add(new Speech { Who = voice.Id, For = true, Text = Persona.Say(voice, ValueWhy(voice.Value)) });
             foreach (var (c, pref) in prefs) item.Votes.Add((c.Id, pref == best.Key, ValueWhy(c.Value)));
             rec.Items.Add(item);
             changed.Add($"{spec.Name} {spec.Options[best.Key]}");
@@ -551,7 +552,7 @@ public sealed class MeetingSystem
                 var (ss, why) = s[sp];
                 bool pro = ss > 0f;
                 float power = Persuasion(sp, expertise(sp)) * MathF.Min(1f, MathF.Abs(ss) + 0.25f);
-                var speech = new Speech { Who = sp.Id, For = pro, Text = why };
+                var speech = new Speech { Who = sp.Id, For = pro, Text = Persona.Say(sp, why) }; // v14.0 말버릇
                 foreach (var c in voters)
                 {
                     if (c == sp) continue;

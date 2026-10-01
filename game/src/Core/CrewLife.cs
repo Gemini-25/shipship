@@ -10,69 +10,88 @@ namespace ShipSim.Core;
 //   돌봄: 아프거나 다친 사람을 가까운 사람이 찾아가 곁에 있어 준다.
 //   죽음 뒤: 시신을 안치실(없으면 냉동 창고·창고)로 모시고, 다음 날 추모한다. 가까웠던 사람은 오래 슬퍼한다.
 
-public enum Background { Miner, MilitaryTech, FarmResearcher, CargoPilot, MedStudent, Reporter, Teacher, Chef, Lineworker, Programmer, Artist, Athlete }
+public enum Background
+{
+    Miner, MilitaryTech, FarmResearcher, CargoPilot, MedStudent, Reporter, Teacher, Chef, Lineworker, Programmer, Artist, Athlete,
+    // v14.0
+    Firefighter, Nurse, Welder, Plumber, Chemist, Physicist, Astronomer, Diver, Paramedic, Soldier, Police, Lawyer, Accountant, Monk,
+    Psychologist, AutoMechanic, Carpenter, Gardener, Baker, Veterinarian, DroneRacer, Roboticist, SysAdmin, Musician, Writer, TruckDriver,
+    Climber, SafetyInspector,
+}
 public enum CrewValue { Safety, Efficiency, People, Rules, Freedom }
-public enum Habit { NightOwl, EarlyBird, NeatFreak, Messy, Talker, Loner, GymRat, Snacker, Worrier, Tinkerer }
-public enum Qual { Reactor, Eva, Medic, Helm, Electrical }
+public enum Habit
+{
+    NightOwl, EarlyBird, NeatFreak, Messy, Talker, Loner, GymRat, Snacker, Worrier, Tinkerer,
+    // v14.0
+    Perfectionist, Hasty, Procrastinator, Optimist, Pessimist, Joker, Serious, Superstitious, Insomniac, HeavySleeper,
+    CoffeeAddict, TeaLover, Hoarder, Generous, Grumbler, Hummer, Bookworm, Gazer, Fidgety, Methodical,
+    Daredevil, Homesick, Cheerful, ShortTempered, Patient, Forgetful, Leader, Follower, Collector, Prankster,
+}
+public enum Qual
+{
+    Reactor, Eva, Medic, Helm, Electrical,
+    // v14.0
+    Welding, Plumbing, LifeSupport, Computer, Chemistry, Firefighting, RescueTeam, FoodSafety, Agronomy, RobotTech,
+    DronePilot, Radiation, Structure, Counseling, Instructor,
+}
 
 public static class Life
 {
-    public static string Name(Background b) => b switch
-    {
-        Background.Miner => "소행성 광부", Background.MilitaryTech => "군 정비병", Background.FarmResearcher => "농업 연구원",
-        Background.CargoPilot => "화물선 항해사", Background.MedStudent => "의대 중퇴", Background.Reporter => "기자",
-        Background.Teacher => "교사", Background.Chef => "요리사", Background.Lineworker => "송전 기사", Background.Programmer => "프로그래머",
-        Background.Artist => "화가", _ => "운동선수",
-    };
+    public static string Name(Background b) => Persona.Bg(b).Name; // v14.0 경력 40
 
     public static string Name(CrewValue v) => v switch
     {
         CrewValue.Safety => "안전 먼저", CrewValue.Efficiency => "효율 먼저", CrewValue.People => "사람 먼저", CrewValue.Rules => "규칙대로", _ => "제 방식대로",
     };
 
-    public static string Name(Habit h) => h switch
-    {
-        Habit.NightOwl => "올빼미", Habit.EarlyBird => "아침형", Habit.NeatFreak => "정리광", Habit.Messy => "어지르기", Habit.Talker => "수다쟁이",
-        Habit.Loner => "혼자가 편함", Habit.GymRat => "운동광", Habit.Snacker => "군것질", Habit.Worrier => "걱정이 많음", _ => "만지작거림",
-    };
+    public static string Name(Habit h) => Persona.Of(h).Name; // v14.0 습관 40
 
-    public static string Name(Qual q) => q switch
-    {
-        Qual.Reactor => "원자로 운전", Qual.Eva => "선외 작업", Qual.Medic => "응급 의료", Qual.Helm => "조타", _ => "고압 전기",
-    };
+    public static string Name(Qual q) => Persona.Of(q).Name; // v14.0 자격 20
 
     /// <summary>경력이 주는 솜씨와 자격.</summary>
-    public static (Skill skill, float bonus, Qual[] quals) Gift(Background b) => b switch
-    {
-        Background.Miner => (Skill.Mechanics, 0.08f, new[] { Qual.Eva }),
-        Background.MilitaryTech => (Skill.Electrical, 0.08f, new[] { Qual.Eva, Qual.Electrical }),
-        Background.FarmResearcher => (Skill.Botany, 0.1f, Array.Empty<Qual>()),
-        Background.CargoPilot => (Skill.Piloting, 0.1f, new[] { Qual.Helm }),
-        Background.MedStudent => (Skill.Medicine, 0.08f, new[] { Qual.Medic }),
-        Background.Chef => (Skill.Cooking, 0.12f, Array.Empty<Qual>()),
-        Background.Lineworker => (Skill.Electrical, 0.1f, new[] { Qual.Electrical }),
-        Background.Programmer => (Skill.Engineering, 0.06f, Array.Empty<Qual>()),
-        _ => (Skill.Mechanics, 0.03f, Array.Empty<Qual>()),
-    };
+    public static (Skill skill, float bonus, Qual[] quals) Gift(Background b) { var s = Persona.Bg(b); return (s.Skill, s.Bonus, s.Quals); }
+
+    /// <summary>v14.0 자격이 있나 (응급 의료는 구조대를 겸한다).</summary>
+    public static bool HasQual(CrewMember c, Qual q) => c.Quals.Contains(q) || q == Qual.RescueTeam && c.Quals.Contains(Qual.Medic);
 
     /// <summary>그 일을 제대로 하려면 필요한 자격 (없어도 하지만 서툴고 실수가 잦다).</summary>
     public static Qual? Needs(WorkOrder o) => o.Kind switch
     {
         WorkKind.RestartReactor => Qual.Reactor,
         WorkKind.ManualControl => Qual.Helm,
-        WorkKind.Treat or WorkKind.Rescue => Qual.Medic,
+        WorkKind.Treat => Qual.Medic,
+        WorkKind.Rescue => Qual.RescueTeam, // v14.0 (응급 의료도 된다)
         WorkKind.BreakerOn or WorkKind.IsolateRoom or WorkKind.ReplacePanel => Qual.Electrical,
-        _ => o.External ? Qual.Eva : null,
+        _ when o.External => Qual.Eva,
+        // v14.0 자격 20
+        WorkKind.WeldBulkhead or WorkKind.RepairHull => Qual.Welding,
+        WorkKind.RepairJoint or WorkKind.Clamp or WorkKind.InstallTruss or WorkKind.RebuildFrame => Qual.Structure,
+        WorkKind.PatchPipe or WorkKind.ReplacePipe or WorkKind.LayBypass or WorkKind.CloseValve or WorkKind.OpenValve or WorkKind.IsolatePipes or WorkKind.RefillCoolant => Qual.Plumbing,
+        WorkKind.BuildOxygen => Qual.LifeSupport,
+        WorkKind.Calibrate => Qual.Computer,
+        WorkKind.BleedRoom or WorkKind.SealO2Line => Qual.Chemistry,
+        WorkKind.Extinguish => Qual.Firefighting,
+        WorkKind.Cook => Qual.FoodSafety,
+        WorkKind.Tend or WorkKind.Harvest => Qual.Agronomy,
+        WorkKind.ServiceRobot or WorkKind.RepairRobot => Qual.RobotTech,
+        WorkKind.PilotDrones or WorkKind.ServiceDrone => Qual.DronePilot,
+        WorkKind.Train => Qual.Instructor,
+        WorkKind.Repair when o.Target.Furniture?.Type is FurnitureType.OxygenGenerator or FurnitureType.Scrubber or FurnitureType.WaterRecycler => Qual.LifeSupport,
+        WorkKind.Repair when o.Target.Furniture?.Type == FurnitureType.MainComputer => Qual.Computer,
+        WorkKind.Repair when o.Target.Furniture?.Type == FurnitureType.ReactorCore => Qual.Radiation,
+        _ => null,
     };
 
     /// <summary>역할이 처음부터 가진 자격.</summary>
     public static Qual[] RoleQuals(CrewRole r) => r switch
     {
-        CrewRole.Engineer => new[] { Qual.Reactor, Qual.Electrical },
-        CrewRole.Electrician => new[] { Qual.Electrical },
+        CrewRole.Engineer => new[] { Qual.Reactor, Qual.Electrical, Qual.Radiation },
+        CrewRole.Electrician => new[] { Qual.Electrical, Qual.Computer },
         CrewRole.Medic => new[] { Qual.Medic },
-        CrewRole.Pilot => new[] { Qual.Helm },
-        CrewRole.Technician => new[] { Qual.Eva },
+        CrewRole.Pilot => new[] { Qual.Helm, Qual.DronePilot },
+        CrewRole.Technician => new[] { Qual.Eva, Qual.Welding, Qual.Plumbing },
+        CrewRole.Botanist => new[] { Qual.Agronomy, Qual.LifeSupport },
+        CrewRole.Cook => new[] { Qual.FoodSafety },
         _ => Array.Empty<Qual>(),
     };
 
@@ -85,12 +104,10 @@ public static class Life
             var rng = new Rng(unchecked(w.Seed * 7349 + c.Id * 104729 + 11));
             var bgs = Enum.GetValues<Background>();
             // 역할과 어울리는 경력이 조금 더 잦다
-            var fit = c.Role switch
-            {
-                CrewRole.Medic => Background.MedStudent, CrewRole.Pilot => Background.CargoPilot, CrewRole.Electrician => Background.Lineworker,
-                CrewRole.Botanist => Background.FarmResearcher, CrewRole.Cook => Background.Chef, CrewRole.Technician => Background.Miner,
-                CrewRole.Engineer => Background.MilitaryTech, _ => bgs[rng.Range(0, bgs.Length)],
-            };
+            // v14.0 역할에 어울리는 경력이 여럿 — 그중 하나는 따로 굴린다 (본 흐름의 뽑기 횟수는 그대로)
+            var fits = Persona.Fits(c.Role);
+            var side = new Rng(unchecked(w.Seed * 3571 + c.Id * 31337 + 5));
+            var fit = fits.Length > 0 ? fits[side.Range(0, fits.Length)] : bgs[rng.Range(0, bgs.Length)];
             c.Background = rng.Chance(0.55f) ? fit : bgs[rng.Range(0, bgs.Length)];
             if (!c.BornAboard) c.Age = 22f + rng.Range(0f, 34f); // v12.9
             var vals = Enum.GetValues<CrewValue>();
@@ -107,16 +124,36 @@ public static class Life
                     or (Habit.Messy, Habit.NeatFreak) or (Habit.Talker, Habit.Loner) or (Habit.Loner, Habit.Talker));
                 c.Habits.Add(h);
             }
+            // v14.0 서로 어긋나는 습관을 더 (완벽주의↔서두름, 낙천가↔비관적, 불면증↔잠꾸러기, 따르기↔앞장서기)
+            if (c.Habits.Count == 2 && (c.Habits[0], c.Habits[1]) is (Habit.Perfectionist, Habit.Hasty) or (Habit.Hasty, Habit.Perfectionist)
+                or (Habit.Optimist, Habit.Pessimist) or (Habit.Pessimist, Habit.Optimist) or (Habit.Insomniac, Habit.HeavySleeper) or (Habit.HeavySleeper, Habit.Insomniac)
+                or (Habit.Leader, Habit.Follower) or (Habit.Follower, Habit.Leader)) c.Habits.RemoveAt(1);
+            Persona.Extras(w, c); // v14.0 취미 · 두려움 · 말버릇
             var (skill, bonus, quals) = Gift(c.Background);
             c.SkillLevels[(int)skill] = MathF.Min(1f, c.SkillLevels[(int)skill] + bonus);
             c.Quals.Clear();
             foreach (var q in RoleQuals(c.Role).Concat(quals)) c.Quals.Add(q);
             if (c.RawSkill(Skill.Medicine) >= 0.55f) c.Quals.Add(Qual.Medic);
             if (c.RawSkill(Skill.Piloting) >= 0.55f) c.Quals.Add(Qual.Helm);
+            foreach (var (q, _) in Eligible(c).ToList()) c.Quals.Add(q); // v14.0 처음부터 갖춘 자격은 조용히
         }
     }
 
     public static bool Has(CrewMember c, Habit h) => c.Habits.Contains(h);
+
+    /// <summary>v14.0 자격 20 — 지금 딸 수 있는 자격 (솜씨가 찼다 · 구조대는 구조 두 번 · 소방은 사고 대응 네 번 · 상담은 사교적인 사람 · 교관은 무엇이든 0.8).</summary>
+    public static IEnumerable<(Qual q, Skill s)> Eligible(CrewMember c)
+    {
+        foreach (var qs in Persona.Quals)
+        {
+            if (c.Quals.Contains(qs.Id)) continue;
+            if (qs.Id == Qual.RescueTeam && c.Stats.Rescues < 2) continue;
+            if (qs.Id == Qual.Firefighting && c.Stats.Emergencies < 4) continue;
+            if (qs.Id == Qual.Counseling && c.Traits.Sociability < 0.6f) continue;
+            var skill = qs.Id == Qual.Instructor ? Enum.GetValues<Skill>().OrderByDescending(c.RawSkill).First() : qs.Skill;
+            if (c.RawSkill(skill) >= qs.Need) yield return (qs.Id, skill);
+        }
+    }
 
     /// <summary>창고에서 꺼내 쓴다 (모자라면 아무것도 안 꺼낸다).</summary>
     public static bool Take(World w, ItemKind k, int n)
@@ -131,7 +168,8 @@ public static class Life
     }
 
     public static string Profile(CrewMember c) =>
-        $"{Name(c.Background)} · {Name(c.Value)}" + (c.Habits.Count > 0 ? " · " + string.Join("·", c.Habits.Select(Name)) : "");
+        $"{Name(c.Background)} · {Name(c.Value)}" + (c.Habits.Count > 0 ? " · " + string.Join("·", c.Habits.Select(Name)) : "")
+        + (Persona.Line(c) is string pl && pl.Length > 0 ? " · " + pl.TrimStart(' ', '·') : "");
 
     /// <summary>일기 한 줄 (사람마다 최근 것만 남긴다).</summary>
     public static void Diary(World w, CrewMember c, string text)
@@ -144,6 +182,7 @@ public static class Life
 public sealed class LifeStats
 {
     public int Mistakes, Caught, Arguments, Feuds, Mediations, Visits, Funerals, BodiesMoved, QualsEarned, Prosthetics, LimbsLost;
+    public int HobbyRests; // v14.0 취미의 방에서 쉰 번
     public override string ToString() =>
         $"실수 {Mistakes}(잡아냄 {Caught}) · 말다툼 {Arguments} · 냉전 {Feuds} · 중재 {Mediations} · 문병 {Visits} · 추모 {Funerals} · 시신 수습 {BodiesMoved} · 자격 {QualsEarned} · 팔다리 잃음 {LimbsLost} · 의수·의족 {Prosthetics}";
 }
@@ -177,7 +216,7 @@ public sealed class LifeSystem
         if (c.Needs.Rest < 0.25f) { p *= 4f; reasons.Add((4f, $"졸려서 (기력 {c.Needs.Rest * 100:0}%)")); }
         if (c.Needs.Stress > 0.65f) { p *= 2.5f; reasons.Add((2.5f, $"예민해서 (스트레스 {c.Needs.Stress * 100:0}%)")); }
         if (c.Needs.Food < 0.15f) { p *= 1.5f; reasons.Add((1.5f, "배가 고파 손이 떨려서")); }
-        if (Life.Needs(o) is Qual q && !c.Quals.Contains(q)) { p *= 2.5f; reasons.Add((2.5f, $"{Life.Name(q)} 자격이 없어서")); }
+        if (Life.Needs(o) is Qual q && !Life.HasQual(c, q)) { float k = Persona.Core(q) ? 2.5f : 1.4f; p *= k; reasons.Add((k, $"{Life.Name(q)} 자격이 없어서")); }
         float head = Wounds.HeadLoad(c.Vitals);
         if (head > 1.05f) { p *= head; reasons.Add((head, "머리를 다쳐 판단이 흐려서")); }
         float hand = Wounds.HandFactor(c.Vitals);
@@ -186,8 +225,13 @@ public sealed class LifeSystem
         if (skill < 0.35f) { p *= 1.8f; reasons.Add((1.8f, $"서툴러서 ({Skills.Name(o.Skill)} {skill * 100:0}%)")); }
         p *= 1.2f - 0.5f * c.Traits.Calm;
         if (_w.Eras.Has("checklist")) p *= 0.7f; // v12.8 점검표 문화
-        if (Life.Has(c, Habit.Messy)) { p *= 1.4f; reasons.Add((1.4f, "덜렁대서")); }
-        if (Life.Has(c, Habit.Worrier) || Life.Has(c, Habit.NeatFreak)) p *= 0.75f;
+        // v14.0 습관 40 (덜렁댐·서두름·깜빡함은 늘고, 꼼꼼함·완벽주의·걱정은 준다)
+        foreach (var h in c.Habits)
+        {
+            float k = Persona.Of(h).Mistake;
+            p *= k;
+            if (k >= 1.2f) reasons.Add((k, h switch { Habit.Messy => "덜렁대서", Habit.Hasty => "서두르다가", Habit.Forgetful => "깜빡해서", _ => $"{Persona.Of(h).Name} 버릇 탓에" }));
+        }
         if (c.Job?.Urgent == true) { p *= 1.5f; reasons.Add((1.5f, "급하게 하다가")); }
         string why = reasons.Count > 0 ? reasons.OrderByDescending(r => r.w).First().text : "깜빡해서";
         return (MathF.Min(0.5f, p), why);
@@ -308,6 +352,7 @@ public sealed class LifeSystem
                 // v12.9.4 평소에도 조금씩 부딪힌다 (좁은 배에 오래 붙어 있으면) — 지치고 배고프고 예민하면 훨씬 잦다
                 float tension = 0.06f + (Irritable(a) + Irritable(b)) / 2f;
                 var (clash, about) = Clash(a, b);
+                clash *= Persona.Mul(a, h => h.Clash) * Persona.Mul(b, h => h.Clash); // v14.0 다혈질·참을성·퍼주기
                 // v13.2 파벌: 회의에서 가치관대로 갈린 표가 쌓인 사이는 더 자주 부딪힌다
                 float rift = w.Meetings.Tension(a.Value, b.Value);
                 if (rift > 0.15f) { clash = MathF.Max(clash, 0.5f) * (1f + 2f * rift); about = "회의에서 갈린 표를"; }
@@ -337,8 +382,9 @@ public sealed class LifeSystem
                     continue;
                 }
                 // 중재: 그 자리에 사교적인 사람이 있으면 바로 달랜다 (그냥 둔다면 아무도 나서지 않는다)
-                var mediator = conflict == 2 ? null : awake.Where(x => x != a && x != b && x.Room == a.Room && x.Traits.Sociability > 0.6f).OrderByDescending(x => x.Traits.Sociability).FirstOrDefault();
-                if (mediator != null && _rng.Chance(0.6f))
+                var mediator = conflict == 2 ? null : awake.Where(x => x != a && x != b && x.Room == a.Room && (x.Traits.Sociability > 0.6f || x.Quals.Contains(Qual.Counseling)))
+                    .OrderByDescending(x => x.Quals.Contains(Qual.Counseling)).ThenByDescending(x => x.Traits.Sociability).FirstOrDefault();
+                if (mediator != null && _rng.Chance(mediator.Quals.Contains(Qual.Counseling) ? 0.85f : 0.6f)) // v14.0 심리 상담 자격
                 {
                     Stats.Mediations++;
                     a.ChangeAffinity(b, 0.1f); b.ChangeAffinity(a, 0.1f);
@@ -358,12 +404,7 @@ public sealed class LifeSystem
             return (1f, "안전이냐 효율이냐를");
         if ((a.Value, b.Value) is (CrewValue.Rules, CrewValue.Freedom) or (CrewValue.Freedom, CrewValue.Rules))
             return (0.9f, "규칙을 지키느냐를");
-        if (Life.Has(a, Habit.NeatFreak) && Life.Has(b, Habit.Messy) || Life.Has(b, Habit.NeatFreak) && Life.Has(a, Habit.Messy))
-            return (0.9f, "어질러 둔 공구를");
-        if (Life.Has(a, Habit.NightOwl) && Life.Has(b, Habit.EarlyBird) || Life.Has(b, Habit.NightOwl) && Life.Has(a, Habit.EarlyBird))
-            return (0.6f, "밤늦게 내는 소리를");
-        if (Life.Has(a, Habit.Talker) && Life.Has(b, Habit.Loner) || Life.Has(b, Habit.Talker) && Life.Has(a, Habit.Loner))
-            return (0.5f, "쉴 새 없는 수다를");
+        if (Persona.Rival(a, b) is var (k, about)) return (k, about); // v14.0 부딪히는 습관
         if (a.Value != b.Value) return (0.3f, "일하는 방식을");
         return (0.12f, "사소한 일을");
     }
@@ -430,19 +471,13 @@ public sealed class LifeSystem
         var w = _w;
         foreach (var c in w.Crew.Where(c => !c.Dead))
         {
-            void Try(Qual q, Skill s, float need)
+            foreach (var (q, s) in Life.Eligible(c).ToList())
             {
-                if (c.Quals.Contains(q) || c.RawSkill(s) < need) return;
                 c.Quals.Add(q);
                 Stats.QualsEarned++;
                 w.History.Add(w, HistoryKind.Bond, $"{Ko.IGa(c.Name)} {Life.Name(q)} 자격을 땄다 ({Skills.Name(s)} {c.RawSkill(s) * 100:0}%)", c.Room, new[] { c }, log: true);
                 Life.Diary(w, c, $"{Life.Name(q)} 자격을 땄다.");
             }
-            Try(Qual.Reactor, Skill.Engineering, 0.6f);
-            Try(Qual.Electrical, Skill.Electrical, 0.55f);
-            Try(Qual.Medic, Skill.Medicine, 0.5f);
-            Try(Qual.Helm, Skill.Piloting, 0.55f);
-            Try(Qual.Eva, Skill.Mechanics, 0.6f);
         }
     }
 }

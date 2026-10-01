@@ -52,18 +52,25 @@ public partial class Hud
         Divider(x, right, sy);
         SectionTitle(x, sy + 22, "자격");
         string quals = c.Quals.Count == 0 ? "없음" : string.Join(" · ", c.Quals.OrderBy(q => q).Select(Life.Name));
-        Gfx.Text(this, Fonts.Body, new Vector2(x + 44, sy + 24), quals, 12, Palette.Text);
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 44, sy + 24), Fit(quals, right - x - 160, 12, Fonts.Body), 12, Palette.Text);
         SectionTitle(x, sy + 44, "습관");
         Gfx.Text(this, Fonts.Body, new Vector2(x + 44, sy + 46), c.Habits.Count == 0 ? "—" : string.Join(" · ", c.Habits.Select(Life.Name)), 12, Palette.Text);
+        // v14.0 취미 · 두려움 · 말버릇
+        SectionTitle(x, sy + 66, "취미");
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 44, sy + 68), c.Hobbies.Count == 0 ? "—" : string.Join(" · ", c.Hobbies.Select(h => Persona.Of(h).Name)), 12, new Color("#9fe0b0"));
+        SectionTitle(x, sy + 88, "두려움");
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 52, sy + 90), c.Fears.Count == 0 ? "딱히 없다" : Fit(string.Join(" · ", c.Fears.Select(f => $"{Persona.Of(f).Name} ({Persona.Of(f).Note})")), right - x - 60, 12, Fonts.Body), 12, c.Fears.Count == 0 ? Palette.TextMuted : new Color("#ffb38a"));
+        SectionTitle(x, sy + 110, "말버릇");
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 52, sy + 112), c.Quirk < 0 ? "—" : $"“{Persona.Say(c, "그건 내가 볼게")}”", 12, Palette.TextDim);
         if (c.Stats.Mistakes > 0) Gfx.TextRight(this, Fonts.Body, new Vector2(right, sy + 46), $"실수 {c.Stats.Mistakes}번", 12, Palette.Warning);
         if (c.GriefUntil > _world.Tick) Gfx.TextRight(this, Fonts.Body, new Vector2(right, sy + 24), "슬픔에 잠겨 있다", 12, new Color("#9fb4ff"));
 
         // 일기
-        float dy = sy + 64;
+        float dy = sy + 130;
         Divider(x, right, dy);
         SectionTitle(x, dy + 22, "일기");
         float ey = dy + 34;
-        foreach (var (tick, text) in c.Diary.AsEnumerable().Reverse().Take(9))
+        foreach (var (tick, text) in c.Diary.AsEnumerable().Reverse().Take(6))
         {
             Gfx.Text(this, Fonts.Body, new Vector2(x, ey + 12), $"{SimTime.Day(tick)}일 {SimTime.Clock(tick)}", 11, Palette.TextMuted);
             string t = text;

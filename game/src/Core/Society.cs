@@ -90,7 +90,7 @@ public sealed class SocietySystem
         var adults = _w.Crew.Where(x => !x.Dead && !x.IsChild).OrderBy(x => x.Id).ToList();
         int rank = Math.Max(0, adults.IndexOf(c));
         float base_ = _baseBedtime.TryGetValue(c.Id, out var b) ? b : c.Schedule.SleepStart;
-        if (c.IsChild || mode == 2) return c.IsChild && mode != 2 ? 21f : base_;
+        if (c.IsChild || mode == 2) return c.IsChild && mode != 2 ? 21f : c.IsChild ? base_ : SimTime.Wrap(base_ + Persona.Add(c, h => h.BedShift)); // v14.0 올빼미·아침형
         return mode switch
         {
             0 => new[] { 23f, 7f, 15f }[rank % 3],
@@ -199,6 +199,7 @@ public sealed class SocietySystem
         p *= 1f + c.Mind.Anger;
         p *= 1.4f - 0.8f * Morale;
         p *= 1f - 0.4f * c.Traits.Diligence;
+        if (c.Fears.Contains(Fear.Failure)) p *= 1.5f; // v14.0 실패가 두려운 사람은 더 숨긴다
         return _rng.Chance(MathF.Min(0.85f, p));
     }
 

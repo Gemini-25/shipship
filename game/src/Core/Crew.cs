@@ -222,6 +222,10 @@ public sealed class CrewMember
     public CrewValue Value { get; set; }
     public List<Habit> Habits { get; } = new();
     public HashSet<Qual> Quals { get; } = new();
+    /// <summary>v14.0 취미 · 두려움 · 말버릇 (말버릇 번호, -1 없음).</summary>
+    public List<Hobby> Hobbies { get; } = new();
+    public List<Fear> Fears { get; } = new();
+    public int Quirk { get; set; } = -1;
     public List<(long tick, string text)> Diary { get; } = new();
     public long GriefUntil { get; set; } = -1;
 
