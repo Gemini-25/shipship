@@ -420,6 +420,7 @@ public static class SaveGame
         { var os = w.Origin.Stats; I(os.Found); I(os.Told); I(os.Tips); I(os.Toasts); I(os.Reopened); I(os.Splits); I(os.Handovers); I(os.Rounds); I(os.Squeezes); I(os.Ranks); I(os.Calls); } // v16.9 배의 내력
         w.Cosmic.Hash(I, F); // v18.13 우주 대재난
         w.EvaRisk.Hash(I, F); foreach (var d in w.Drones.Drones) { F(d.Hurt.Thruster); F(d.Hurt.Battery); F(d.Hurt.Swell); } // v16.11 선외 위험 · 드론 부위
+        w.Expedition.Hash(I, F); foreach (var c in w.Crew) I(c.Away ? 1 : 0); // v16.12 원정
         return h;
     }
 }

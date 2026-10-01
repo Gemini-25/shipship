@@ -136,6 +136,7 @@ public sealed class VoyageSystem
         if (w.Eras.Has("warpbubble")) speed *= 2f; // v12.8 공간 왜곡
         speed *= VoyageV15.SpeedMul(Current.Kind); // v15.4 태양풍 물길
         if (Current.Kind == LegKind.Port) speed = 1f; // 정박 중
+        if (w.Expedition.Halted) speed = 0f; // v16.12 재료가 바닥나 엔진을 껐다 — 일정이 밀린다
         Progress += dt / 24f * speed;
         if (Progress < Current.Days) return;
         Progress = 0f;

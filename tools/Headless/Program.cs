@@ -159,6 +159,7 @@ public static partial class Program
         if (args.Contains("--moduletest")) return RunModuleTest(seed); // v15 설비 70
         if (args.Contains("--cosmictest")) return RunCosmicTest(seed); // v18.13 우주 대재난
         if (args.Contains("--evatest")) return RunEvaTest(seed); // v16.11
+        if (args.Contains("--expeditiontest")) return RunExpeditionTest(seed); // v16.12
         if (args.Contains("--bodytest")) return RunBodyTest(seed); // v16.3
         if (args.Contains("--scenetest")) return RunSceneTest(seed); // v16.1
         if (args.Contains("--computertest")) return RunComputerTest(seed); // v16.6

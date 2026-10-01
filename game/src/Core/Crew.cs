@@ -336,7 +336,10 @@ public sealed class CrewMember
     public Furniture? CareBed { get; internal set; }
 
     /// <summary>스스로 판단하고 움직일 수 있는지.</summary>
-    public bool CanAct => !Dead && !Down;
+    public bool CanAct => !Dead && !Down && !Away;
+
+    /// <summary>v16.12 원정 중 — 배에 없다 (배 위 시스템이 건너뛴다).</summary>
+    public bool Away { get; internal set; }
 
     /// <summary>다른 승무원에 대한 호감 -1~1 (Id로 찾음).</summary>
     public Dictionary<int, float> Affinity { get; } = new();
@@ -421,7 +424,7 @@ public sealed class CrewMember
 
     public string ActivityLabel => Job?.Label ?? "대기";
     public bool IsMoving => Path != null;
-    public bool IsAwake => Pose is not (Pose.Sleeping or Pose.Down) && !Dead;
+    public bool IsAwake => Pose is not (Pose.Sleeping or Pose.Down) && !Dead && !Away;
 
     /// <summary>지금 발휘할 수 있는 기술 (다치면 손이 둔해진다).</summary>
     public float SkillLevel(Skill s) => SkillLevels[(int)s] * (1f - 0.4f * Vitals.Injury);
