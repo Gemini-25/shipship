@@ -182,6 +182,7 @@ public sealed class WorkToil : Toil
         float speed = (1f - 0.25f * c.Vitals.Injury) * Wounds.HandFactor(c.Vitals) * (1f - 0.3f * c.Vitals.Scar); // v11.3 후유증 · v12.7 팔을 다치면 더
         if (c.Room is Room here && here.Dark && c.Suit == null) speed *= 0.8f; // v9.4 캄캄한 방 (우주복 헬멧 등이면 괜찮다)
         speed *= w.Portable.LampWorkMul(c); // v16.7 이동식 등에 기대 일한다 (멀거나 몸에 가리면 느리다)
+        speed *= w.Blast.WorkMul(c); // v16.13 섬광 · 이명
         if (c.Needs.Rest < 0.2f) speed *= 0.75f;
         if (c.Needs.Stress > 0.7f) speed *= 0.8f;
         if (c.Vitals.Oxygen < 0.85f) speed *= 0.8f;

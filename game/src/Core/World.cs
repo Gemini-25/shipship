@@ -159,6 +159,7 @@ public sealed class World
     public DailySceneSystem Scenes { get; } // v16.1 일상 → 행동 (장면 · 인수인계 · 쪽지)
     public CookingSystem Cooking { get; } public SmellSystem Smells { get; } // v16.8 실제 음식 · 냄새
     public PortableSystem Portable { get; } // v16.7 이동식 장비
+    public BlastSystem Blast { get; } // v16.13 폭발 공통 물리 · 폭발성 물건 · 의도적 폭파
     public ShipOriginSystem Origin { get; } // v16.9 배의 내력 (설계사 · 시작 상태 · 숨은 이야기 · 갈라짐 · 침대 교대)
     public OutsideSystem Outside { get; } // v15.4 외부 사건 40
     public PropSystem Props { get; } // v15.8 소품·장식 70
@@ -259,6 +260,7 @@ public sealed class World
         Scenes = new DailySceneSystem(this);
         Cooking = new CookingSystem(this); Smells = new SmellSystem(this); // v16.8
         Portable = new PortableSystem(this); // v16.7
+        Blast = new BlastSystem(this); // v16.13
         Origin = new ShipOriginSystem(this);
         Outside = new OutsideSystem(this);
         Props = new PropSystem(this);
@@ -349,6 +351,7 @@ public sealed class World
             Culture.Update(dt); // v14.9 겪은 일이 관행이 되어 전해진다
             pf = Prof.Lap("sys.Culture", pf);
             Daily.Update(dt); // v15 사고가 아닌 날의 일상 사건
+            Blast.Update(dt); // v16.13 폭발성 물건 · 연쇄 · 이명 · 흔적 · 위험 배치 읽기
             pf = Prof.Lap("sys.Daily", pf);
             Origin.Update(dt); // v16.9 숨은 이야기 발견 · 전하기 · 갈라짐과 다시 이음 · 침대 인계
             pf = Prof.Lap("sys.Origin", pf);
@@ -673,6 +676,7 @@ public sealed class World
             if (!nearby && !broadcast) continue;
             // 곯아떨어진 사람(탈진)은 방송으로는 잘 깨지 않는다 — 누가 가서 흔들어 깨워야 한다
             if (!c.IsAwake && !nearby && c.Needs.Fatigue > 0.85f && Rng.Chance(0.6f)) { c.DeepAsleep = true; continue; }
+            if (Blast.HearLate(c, nearby, text)) continue; // v16.13 이명 — 경보를 늦게 듣는다
             c.Interrupt(this);
             // 위급 경보에 가슴이 철렁한다 (침착한 사람은 덜)
             if (level == AlertLevel.Critical && !c.Dead) c.Needs.Stress = MathF.Min(1f, c.Needs.Stress + 0.04f * (1f - c.Traits.Calm));
