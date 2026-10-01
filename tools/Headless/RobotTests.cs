@@ -204,12 +204,19 @@ public static partial class Program
             foreach (var e in w2.Propulsion.Engines) w2.Machines.Break(e, FaultKind.Wrecked);
             bool leftWhileDead = false;
             float deadHours = 0f;
+            var prevZone = w2.Propulsion.Zone;
             for (int t = 0; t < SimTime.Hours(24 * 6); t++)
             {
                 w2.Step();
                 if (w2.Tick % World.SystemInterval != 0) continue;
                 if (w2.Propulsion.Thrust < 0.5f) deadHours += World.SystemInterval / (float)SimTime.TicksPerHour;
-                if (w2.Propulsion.Zone == ZoneKind.Normal && w2.Propulsion.Thrust < 0.5f && w2.Propulsion.Transfers > 0) leftWhileDead = true;
+                // 잔해 지대를 벗어나는 그 순간에 엔진이 멎어 있었나 (벗어난 뒤 다시 멎는 건 상관없다)
+                if (prevZone == ZoneKind.Debris && w2.Propulsion.Zone == ZoneKind.Normal && w2.Propulsion.Thrust < 0.5f) leftWhileDead = true;
+                prevZone = w2.Propulsion.Zone;
+                if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "2" && w2.Tick % SimTime.Hours(6) == 0)
+                    Console.WriteLine($"      {SimTime.Day(w2.Tick)}일 {SimTime.Clock(w2.Tick)} 추력 {w2.Propulsion.Thrust:0.00} · {PropulsionSystem.ZoneName(w2.Propulsion.Zone)} · 엔진 " +
+                        string.Join(", ", w2.Propulsion.Engines.Select(e => $"{e.Name} {e.StatusText}")) + " · 수리 일감 " +
+                        string.Join(", ", w2.Board.Open.Where(o => o.Kind == WorkKind.Repair && w2.Propulsion.Engines.Contains(o.Target.Furniture?.Machine!)).Select(o => $"{o.Title} 맡은 {o.Assignee?.Name ?? "-"} 막힘 {o.BlockedReason ?? "-"}")));
             }
             bool stuck = !leftWhileDead && w2.Propulsion.AmbientHits >= 1;
             Check("원료가 모자라면 잔해 지대로 · 엔진이 멎은 동안엔 못 나온다", went && stuck,

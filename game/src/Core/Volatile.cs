@@ -373,6 +373,7 @@ public sealed class VolatileSystem
 
     private void BlastCore(Cell at, float power, string cause, Machine? source)
     {
+        _w.Movement.Bang(_w.Ship.RoomAt(at), at.Center, MathF.Min(1f, 0.45f + power), cause); // v14.5 펑 — 가까운 사람이 움찔한다
         var w = _w;
         var ship = w.Ship;
         Stats.Explosions++;

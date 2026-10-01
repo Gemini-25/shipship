@@ -58,11 +58,15 @@ public static partial class Program
             }
             // 3) 2인 1조: 위험한 방은 짝이 문 밖에서 지키고, 안에서 쓰러지면 바로 끌어낸다
             {
-                var w = CrisisShip(seed, 0);
-                var store = StoreRoom(w);
                 CrewMember? worker = null, watcher = null;
                 bool atDoor = false;
-                for (int m = 0; m < 25 && !atDoor; m++)
+                World w = null!; Room store = null!;
+                // 연기가 우주복 보관함 가는 길을 막아 짝이 늦으면 불이 먼저 꺼진다 — 배 둘까지
+                for (int attempt = 0; attempt < 2 && !atDoor; attempt++)
+                {
+                w = CrisisShip(seed + attempt * 13, 0);
+                store = StoreRoom(w);
+                for (int m = 0; m < 45 && !atDoor; m++) // 불난 곳 너머 우주복을 꺼내기까지 걸릴 수 있다
                 {
                     Run(w, SimTime.Minutes(1));
                     var t = w.Command.Teams.FirstOrDefault(x => x.Kind == TeamKind.Fire && x.Watcher >= 0);
@@ -74,12 +78,15 @@ public static partial class Program
                     {
                         Console.WriteLine($"   {SimTime.Clock(w.Tick)} 짝 {watcher.Name} {watcher.Room?.Name} {watcher.Job?.Label} {watcher.Job?.Current?.GetType().Name} · 일꾼 {worker.Name} {worker.Room?.Name} {worker.Job?.Label} · 감시 일감 {w.Board.Open.Count(o => o.Kind == WorkKind.SafetyWatch)} · 평가 {watcher.LastEvaluations?.FirstOrDefault().Reason}");
                         { var wd = w.Paths.Flood(watcher.Cell, watcher.PathProfile); Console.WriteLine($"      짝 판단 {string.Join(" / ", (watcher.LastEvaluations ?? Array.Empty<Evaluation>()).Take(3).Select(e => $"{e.Activity.Label} {e.Score:0.00} {e.Reason}"))} · 감시 끌림 {string.Join(",", w.Board.Open.Where(o => o.Kind == WorkKind.SafetyWatch).Select(o => $"{ChoresActivity.Appeal(watcher, w, o, wd, out _):0.00}(열림 {w.Board.AvailableTo(watcher).Contains(o)} 보류 {o.BlockedReason})"))} · 앓음 {watcher.Fx.Worst:0.00} {w.Ailments.Line(watcher)}"); }
+                        Console.WriteLine($"      짝 걸음: 칸 {watcher.Cell} 길 {watcher.PathIndex}/{watcher.Path?.Count} 목적지 {watcher.Destination} · {watcher.Gait.Line(watcher, w) ?? "-"} · 막힘 {watcher.Gait.Blocked} · 움직임 {w.Movement.Stats.Summary()}");
+                        Console.WriteLine($"      우주복 보관 {w.Ship.CountStored(ItemKind.Suit)} · 입은 사람 {string.Join(",", w.Crew.Where(c => c.Suit != null).Select(c => c.Name))} · 든 사람 {string.Join(",", w.Crew.Where(c => c.Carrying?.Kind == ItemKind.Suit).Select(c => c.Name))} · 내려놓은 짐 {string.Join(",", w.Movement.Stashes.Select(x => x.Stack.ToString()))}");
                         Console.WriteLine($"      일꾼 마지막 판단 {SimTime.Clock(worker.LastThinkTick)} 다음 {SimTime.Clock(worker.NextThinkTick)} · {string.Join(" / ", worker.LastEvaluations.Take(3).Select(e => $"{e.Activity.Label} {e.Score:0.00} {e.Reason}"))} · 손에 {worker.Carrying?.Kind}");
                         var dist = w.Paths.Flood(worker.Cell, worker.PathProfile);
                         Console.WriteLine($"      작업 점수 지금: {new ChoresActivity().Score(worker, w, dist)}");
                         foreach (var o in w.Board.Open.Where(o => o.Kind is WorkKind.Extinguish or WorkKind.Repair && o.Urgency >= 0.8f).Take(4))
                             Console.WriteLine($"      {o.Title} 긴급 {o.Urgency:0.00} 맡은 {o.Assignee?.Name} 보류 {o.BlockedReason} {(o.BlockedUntil > w.Tick ? $"~{SimTime.Clock(o.BlockedUntil)}" : "")} 열림 {w.Board.AvailableTo(worker).Contains(o)} · {worker.Name} 끌림 {ChoresActivity.Appeal(worker, w, o, dist, out _):0.00} (지휘 {w.Command.Bias(worker, o):0.00} 위기 {Crisis.Bias(w, o):0.00}) 앎 {w.Minds.Aware(worker, o)}");
                     }
+                }
                 }
                 bool rescued = false; int took = 0;
                 if (atDoor && worker != null && watcher != null)

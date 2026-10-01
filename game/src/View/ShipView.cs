@@ -1258,7 +1258,7 @@ public partial class ShipView : Node2D
 
     private void PaintCrew(CanvasItem ci, CrewMember c)
     {
-        var p = CrewPx(c);
+        var p = CrewPx(c) + new Vector2(c.Gait.Aside.X, c.Gait.Aside.Y) * T; // v14.5 비켜선 몸
         var col = Palette.Crew(c.Id);
         if (c.Vitals.Health < 0.5f) col = col.Lerp(new Color("#8a8f99"), 0.4f);
         bool selected = _main.SelectedCrew == c;
@@ -1301,8 +1301,19 @@ public partial class ShipView : Node2D
         }
         else
         {
-            float bob = c.IsMoving ? Mathf.Sin(_time * (c.Job?.Urgent == true ? 20f : 14f) + c.Id) * 0.9f : 0f;
-            var body = p + new Vector2(0f, bob);
+            // v14.5 몸짓: 조용한 걸음은 작게 · 다리를 다쳤으면 절뚝 · 지치거나 앓으면 앞으로 숙인다
+            bool quiet = c.Gait.Quiet(_world);
+            float leg = Wounds.LegFactor(c.Vitals);
+            float bob = c.IsMoving ? Mathf.Sin(_time * (c.Job?.Urgent == true ? 20f : quiet ? 8f : 14f) + c.Id) * (quiet ? 0.35f : 0.9f) : 0f;
+            var sway = Vector2.Zero;
+            if (c.IsMoving && leg < 0.9f)
+            {
+                float ph = _time * 7f + c.Id;
+                bob = Mathf.Abs(Mathf.Sin(ph)) * 2.4f * (1f - leg);
+                sway = new Vector2(-c.Facing.Y, c.Facing.X) * Mathf.Sin(ph) * 1.6f;
+            }
+            bool slump = c.Needs.Rest < 0.2f || c.Fx.Worst > 0.4f || c.Vitals.Health < 0.5f;
+            var body = p + new Vector2(0f, bob) + sway + (slump ? c.Facing.ToGodot() * 1.6f + new Vector2(0f, 1.2f) : Vector2.Zero);
 
             ci.DrawSetTransform(p + new Vector2(0f, 8f * s), 0f, new Vector2(1f, 0.42f));
             ci.DrawCircle(Vector2.Zero, 10f * s, new Color(0f, 0f, 0f, 0.4f), true, -1f, true);
@@ -1341,6 +1352,7 @@ public partial class ShipView : Node2D
             }
 
             if (c.Job?.Current is SprayToil) PaintSpray(ci, body, facing, rr);
+            PaintGait(ci, c, body, facing, rr, s);
 
             // 손에 든 물건
             if (c.Carrying is ItemStack held)

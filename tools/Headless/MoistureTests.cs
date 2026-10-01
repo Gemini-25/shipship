@@ -28,13 +28,24 @@ public static partial class Program
             for (int k = 0; k < 6 && (shorts + shocks + fires == 0 || crewIso == 0); k++) // 배 여섯까지 (누전이 먼저 회로를 떨어뜨리면 내릴 분전함이 없다)
             {
                 var w = DayOne(seed + k * 17, "Mirinae");
-                foreach (var comp in w.Ship.FurnitureOf(FurnitureType.MainComputer)) w.Machines.Break(comp.Machine!, FaultKind.Wrecked);
                 var room = w.Ship.RoomsOf(RoomType.Storage).First();
                 // 창고 곁에 아무도 없을 때 물이 찬다 (아무도 모른다)
                 for (int t = 0; t < 24 * 12 && w.Crew.Any(c => c.Room == room || c.Room != null && room.Doors.Any(d => d.RoomA == c.Room || d.RoomB == c.Room)); t++) Run(w, SimTime.Minutes(5));
+                // 물을 붓기 직전에 컴퓨터가 멎는다 (기다리는 동안 고쳐 놓으면 컴퓨터가 분전함을 내려 버린다) — 여덟 시간 동안 멎은 채로
+                void NoComputer() { foreach (var comp in w.Ship.FurnitureOf(FurnitureType.MainComputer)) if (!comp.Machine!.Has(FaultKind.Wrecked)) w.Machines.Break(comp.Machine!, FaultKind.Wrecked); }
+                NoComputer();
                 w.Moisture.AddWater(room, room.Cells.Count * 20f * 0.5f);
-                Run(w, SimTime.Hours(8));
+                if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "2" && k == 0)
+                    for (int q = 0; q < 12; q++)
+                    {
+                        NoComputer(); Run(w, SimTime.Minutes(10));
+                        var panel = w.Ship.FurnitureOf(FurnitureType.PowerPanel).FirstOrDefault()?.Machine;
+                        Console.WriteLine($"        {SimTime.Clock(w.Tick)} 깊이 {MoistureSystem.Depth(room):0.00} 전기 {room.Powered} 분전함 {(room.BreakerOff ? "내림" : "올림")} 회로 {room.Circuit} 배전반 고장 {string.Join(",", panel?.Faults.Select(f => $"{f.Kind}/{f.Circuit}") ?? Array.Empty<string>())} 누전 {w.Moisture.Stats.Shorts} 컴퓨터 {w.Automation.MainOnline}");
+                    }
+                for (int hh = 0; hh < 8 * 4; hh++) { NoComputer(); Run(w, SimTime.Minutes(15)); }
                 var st = w.Moisture.Stats;
+                if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "2")
+                    Console.WriteLine($"      배 {k}: 누전 {st.Shorts} · 감전 {st.Shocks} · 화재 {st.ElectricFires} · 사람 차단 {st.CrewIsolations} · 물 {room.Flood:0}L · 전기 {room.Powered} · 분전함 {(room.BreakerOff ? "내림" : "올림")} · 위기 {Crisis.Level(w)}");
                 shorts += st.Shorts; shocks += st.Shocks; fires += st.ElectricFires; crewIso += st.CrewIsolations;
             }
             Check("컴퓨터 없음 — 아무도 모르는 물이 누전·전기 화재를 부르고, 알아챈 사람이 분전함을 내린다", shorts + shocks + fires > 0 && crewIso > 0,

@@ -766,6 +766,7 @@ public partial class Hud : Control
             : c.Room?.Name ?? "";
         Gfx.Text(this, Fonts.Body, new Vector2(ax, y + 32), where, 13, Palette.TextDim);
         string reason = c.JobReason ?? "—";
+        if (c.Gait.Line(c, _world) is string gait) reason = $"{gait}   ·   {reason}"; // v14.5 비켜서는 중 · 문 앞 확인 · 조용히 · 움찔
         if (c.Carrying is ItemStack held) reason += $"   ·   들고 있음: {held}";
         Gfx.Text(this, Fonts.Body, new Vector2(x, y + 51), reason, 11, Palette.TextMuted);
 

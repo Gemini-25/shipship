@@ -353,6 +353,9 @@ public sealed class CrewMember
 
     public List<Cell>? Path { get; set; }
 
+    /// <summary>v14.5 걸음: 비켜서기 · 문 앞 확인 · 조용히 · 움찔.</summary>
+    public Gait Gait { get; } = new();
+
     /// <summary>v10.3: 가던 길이 막혀 다시 찾지 못했다 (이동 단계가 실패한다).</summary>
     public bool PathBlocked { get; set; }
     public int PathIndex { get; set; }

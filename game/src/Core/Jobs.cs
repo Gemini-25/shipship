@@ -461,7 +461,9 @@ public static class Locomotion
         var path = c.Path;
         if (path == null) return true;
 
-        float budget = Speed(c);
+        float budget = Speed(c) * w.Movement.Manners(c, path); // v14.5 비켜서기 · 막힘 · 문 앞 확인 · 조용히 · 움찔
+        if (budget <= 0f) return false;
+        path = c.Path ?? path; // 돌아가는 길로 바꿨을 수 있다
         bool repathed = false;
         while (budget > 0f && c.PathIndex < path.Count)
         {
@@ -528,6 +530,12 @@ public static class Plans
         // 한 번에 다 들어가는 곳을 먼저, 없으면 조금이라도 들어가는 곳
         var (box, spot) = NearestContainer(w, dist, c, f => f.Storage!.Accepts(held.Kind) && f.Storage.Free >= held.Count);
         if (box == null) (box, spot) = NearestContainer(w, dist, c, f => f.Storage!.Accepts(held.Kind) && f.Storage.Free > 0);
+        // v14.5 비상 경보 중: 보관함이 멀면 먹을 것·원료는 그 자리에 내려놓고 간다 (공구·수리재·부품은 그 일에 쓸 수 있어 들고 간다) — 조용해지면 챙긴다
+        if (w.Movement.Hurry(w) && MovementSystem.CanSetDown(held.Kind) && (box == null || dist.Get(spot) > 60) && c.Room != null && !c.Outside)
+        {
+            toils.Add(new DoToil((cm, world) => { world.Movement.SetDown(cm, "경보"); return true; }));
+            return toils;
+        }
         if (box == null)
             World.Trace?.Invoke($"DROPOFF-FAIL {c.Name} {held} @{c.Cell} room {c.Room?.Name} reach " +
                 string.Join(",", w.Ship.Containers.Where(f => f.Storage!.Accepts(held.Kind)).Select(f => $"{f.Label}:{f.Storage!.Free}:{f.UseSpots.Select(dist.Get).DefaultIfEmpty(-9).Max()}")));

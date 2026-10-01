@@ -149,6 +149,7 @@ public sealed class World
     public AilmentSystem Ailments { get; } // v14.1 질병 30
     public BelongingSystem Belongings { get; } // v14.3 개인 물건 · 취미
     public RelationSystem Relations { get; } // v14.3~ 관계의 이유
+    public MovementSystem Movement { get; } // v14.5 움직임
     public AmbienceSystem Ambience { get; }
     public ExteriorSystem Exterior { get; }
     public LifeSystem Life { get; }
@@ -235,6 +236,7 @@ public sealed class World
         Ailments = new AilmentSystem(this);
         Belongings = new BelongingSystem(this);
         Relations = new RelationSystem(this);
+        Movement = new MovementSystem(this);
         Ambience = new AmbienceSystem(this);
         Exterior = new ExteriorSystem(this);
         Life = new LifeSystem(this);
@@ -395,6 +397,7 @@ public sealed class World
         Robots.Step();
         Prof.Lap("step.drones·robots", ps);
 
+        Movement.BeginTick(); // v14.5 누가 어느 칸에 · 어느 방에 자는 사람이
         foreach (var c in Crew)
         {
             // 떨어져 나간 조각에 탄 사람: 조각과 함께 움직인다 (우주복 산소로 버틴다 — 되찾아 오기를 기다린다)

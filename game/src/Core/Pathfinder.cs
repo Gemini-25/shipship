@@ -140,6 +140,16 @@ public sealed class Pathfinder
         return d < 0 || !_ship.Doors[d].IsExternal;
     }
 
+    private int _avoid = -1;
+
+    /// <summary>v14.5 한 칸(일하는 사람이 막고 선 곳)을 되도록 피해 가는 길.</summary>
+    public List<Cell>? FindAvoiding(Cell start, Cell goal, PathProfile profile, Cell avoid)
+    {
+        _avoid = _ship.Grid.InBounds(avoid) ? _ship.Grid.Index(avoid) : -1;
+        try { return Find(start, goal, profile); }
+        finally { _avoid = -1; }
+    }
+
     /// <summary>start 다음 칸부터 goal까지의 경로. 못 가면 null, 이미 도착했으면 빈 목록.</summary>
     public List<Cell>? Find(Cell start, Cell goal, PathProfile profile = default)
     {
@@ -372,6 +382,7 @@ public sealed class Pathfinder
     private int StepCost(int k, int to, int goal, PathProfile profile)
     {
         int cost = k < 4 ? Straight : Diagonal;
+        if (to == _avoid) cost += 400;
         if (_space[to]) cost += PathProfile.SpaceCost;
         if (to != goal && _furniture[to]) cost += FurniturePenalty;
         int r = _room[to];

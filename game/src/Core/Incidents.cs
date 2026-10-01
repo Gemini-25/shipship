@@ -161,6 +161,7 @@ public static class Incidents
             + (warned != WarnLevel.None ? $" · {SensorSystem.LevelName(warned)} {leadMinutes:0.#}분 전" : w.Sensors.Array != null ? " · 경보 없이" : ""), room, hurt, e);
         foreach (var c in hurt) Memory.Frighten(w, c, c.Room, 0.3f + 0.3f * size, "운석 파편에 맞았다");
         w.RaiseAlert($"{(size >= 1.3f ? "거대 " : size >= 0.7f ? "대형 " : "")}운석 충돌 — {where} ({state})", room, AlertLevel.Critical, shipWide: true);
+        w.Movement.Bang(room, e.Center, MathF.Min(1f, 0.5f + 0.4f * size), "운석이 외벽을 때렸다"); // v14.5
         w.Board.RequestScan();
         return impact;
     }

@@ -433,6 +433,7 @@ public sealed class StructureSystem
         MarkLog.Add(room.Marks, w.Tick, $"{j.Label} 끊어짐 ({left}/{room.Joints.Count} 남음)");
         w.History.Add(w, HistoryKind.Damage, $"{Ko.IGa(j.Label)} 끊어졌다 ({why}) — 남은 연결부 {left}/{room.Joints.Count}", room, at: j.Cell);
         w.RaiseAlert($"{j.Label} 끊어짐 · 남은 연결부 {left}/{room.Joints.Count}", room, left <= 1 ? AlertLevel.Critical : AlertLevel.Warning, shipWide: true);
+        w.Movement.Bang(room, j.Cell.Center, 0.7f, $"{j.Label}이(가) 끊어지는 소리"); // v14.5
         foreach (var c in w.Crew)
             if (!c.Dead && c.Room == room) Memory.Frighten(w, c, room, 0.15f, "연결부가 끊어지는 소리를 들었다");
         w.Board.RequestScan();

@@ -108,6 +108,7 @@ public static partial class Program
                 var w = DayOne(seed, "Mirinae");
                 var hero = w.Crew.Where(c => c.CanAct).OrderByDescending(c => c.Traits.Bravery).First();
                 if (!hero.IsAwake) { hero.EndJob(w, ToilStatus.Interrupted); hero.Pose = Pose.Standing; } // 깨어 있어야 안다
+                hero.Needs.Rest = 1f; hero.NextThinkTick = w.Tick; // 푹 잤다 (다시 잠들지 않게)
                 var victim = w.Crew.Where(c => c.CanAct && c != hero).OrderBy(c => c.Id).First();
                 hero.ChangeAffinity(victim, 0.8f);
                 foreach (var l in w.Ship.FurnitureOf(FurnitureType.SuitLocker)) l.Storage!.Take(ItemKind.Suit, 99);
@@ -116,6 +117,7 @@ public static partial class Program
                 var wall = w.Ship.Walls.Where(kv => kv.Value.IsHull && Hull.InsideRoom(w.Ship, kv.Key) == lounge).Select(kv => kv.Key).First();
                 victim.EndJob(w, ToilStatus.Interrupted);
                 victim.Position = lounge.Cells.Where(w.Ship.IsOpenFloor).OrderByDescending(x => (x.X - wall.X) * (x.X - wall.X) + (x.Y - wall.Y) * (x.Y - wall.Y)).First().Center; victim.PreviousPosition = victim.Position; // 구멍에서 먼 자리
+                victim.HoldUntil = w.Tick + SimTime.Minutes(5); victim.HoldWhy = "시험: 휴게실에 있다"; victim.NextThinkTick = w.Tick; // 구멍이 나기 전에 걸어 나가지 않게
                 Hull.Damage(w.Ship, wall, 0.7f);
                 bool heroic = false, dashed = false;
                 for (int m = 0; m < 25; m++)

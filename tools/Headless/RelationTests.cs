@@ -106,6 +106,9 @@ public static partial class Program
                 v.Vitals.Health = 0.1f;
                 Run(w, SimTime.Minutes(1));
                 bool down = v.Down;
+                if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "2")
+                    Console.WriteLine($"      쓰러진 때 {SimTime.Clock(w.Tick)}: " + string.Join(" / ", xs.Select(x0 => $"{x0.Name} 같은 방 {x0.Room == v.Room} 거리² {(x0.Position - v.Position).LengthSquared():0.0} 깨어 {x0.IsAwake} 일 {x0.Job?.Label} 비켜섬 {x0.Gait.YieldUntil >= w.Tick}")));
+                if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "2") Console.WriteLine($"      곁에 있던 사람 기록: {w.Relations.PendingFor(v)}");
                 // 둘은 우주복을 가지러 간 척 (다른 방으로) — 구하러 오는 건 그다음 판단
                 var away = w.Ship.Rooms.First(r => r != v.Room && !r.Detached && r.Cells.Any(cl => w.Ship.IsOpenFloor(cl)));
                 foreach (var x0 in xs)
@@ -115,7 +118,12 @@ public static partial class Program
                 }
                 Run(w, SimTime.Minutes(1));
                 v.Vitals.Health = 0.6f; v.Vitals.Oxygen = 1f;
-                for (int mi = 0; mi < 180 && (mi < 2 || v.Down); mi++) Run(w, SimTime.Minutes(1)); // 깨어날 때까지
+                for (int mi = 0; mi < 180 && (mi < 2 || v.Down); mi++)
+                {
+                    Run(w, SimTime.Minutes(1)); // 깨어날 때까지
+                    if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "2" && mi % 5 == 0) Console.WriteLine($"      {SimTime.Clock(w.Tick)} {v.Name} 쓰러짐 {v.Down} 업힘 {v.CarriedBy?.Name} · 기록 {w.Relations.PendingFor(v)}");
+                }
+                Run(w, SimTime.Minutes(1)); // 깨어난 뒤 시스템 틱이 한 번 돌아야 기억으로 남는다
                 if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "2")
                     Console.WriteLine($"      {SimTime.Clock(w.Tick)} {v.Name} 쓰러짐 {v.Down} 업힘 {v.CarriedBy?.Name} · 두고 감 {w.Relations.Stats.Abandons} · {v.Name}의 기억 " + string.Join(", ", w.Relations.All.Where(mm => mm.Who == v.Id).Select(mm => $"{w.Crew[mm.About].Name}:{RelationSystem.Name(mm.Reason)}")));
                 var m = w.Relations.All.FirstOrDefault(mm => mm.Who == v.Id && xs.Any(x0 => x0.Id == mm.About) && mm.Reason == RelationReason.AbandonedMe);
@@ -133,6 +141,7 @@ public static partial class Program
                 m.Omen = o;
                 var author = w.Crew.Where(c => !c.IsChild).OrderBy(c => c.RawSkill(Skill.Mechanics)).First(); // 고칠 줄 모르는 사람이 봤다
                 w.Watch.NoSensors = true; // 컴퓨터 일지로는 퍼지지 않게 — 사람의 입으로만
+                w.PreventionBlind = true; // 다른 사람이 따로 알아채지 않게 (당직이 같은 기척을 다시 찾으면 소문이 필요 없다)
                 w.Watch.Observe(m, o, "당직", author, null);
                 w.Policies.Set("violations", 1, "시험"); w.Society.Punish(author, "시험", light: false); // 본 사람은 근무 박탈 — 직접 고치지 못한다 (말은 한다)
                 var note = o.Note!;

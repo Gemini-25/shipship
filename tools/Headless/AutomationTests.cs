@@ -78,11 +78,19 @@ public static partial class Program
             {
                 var w = DayOne(seed, "Mirinae");
                 w.Automation.LevelCap = 3 + k;
+                w.Policies.Set("controlseat", 1, "시험"); // 관제석은 컴퓨터에 (사람이 앉으면 사람이 말한다 — 컴퓨터의 말만 센다)
                 foreach (var o in w.Board.Open.Where(o => o.Kind == WorkKind.ManualControl).ToList()) w.Board.Close(o);
                 foreach (var p in w.Ship.FurnitureOf(FurnitureType.CoolantPump)) w.Machines.Break(p.Machine!, FaultKind.PumpSeized);
-                for (int i = 0; i < 20; i++) { Run(w, SimTime.Minutes(3)); foreach (var o in w.Board.Open.Where(o => o.Kind == WorkKind.ManualControl).ToList()) w.Board.Close(o); }
+                for (int i = 0; i < 60; i++)
+                {
+                    Run(w, SimTime.Minutes(1));
+                    // 관제석에 사람이 앉으면 사람이 말한다 — 컴퓨터가 하는 말만 세려고 앉지 못하게 한다 (컴퓨터가 III 아래로 떨어지면 누구든 앉는다)
+                    foreach (var o in w.Board.Open.Where(o => o.Kind == WorkKind.ManualControl).ToList()) w.Board.Close(o);
+                    if (w.Automation.Operator is CrewMember seated) { seated.EndJob(w, ToilStatus.Interrupted); seated.NextThinkTick = w.Tick + 1; }
+                }
                 reasons[k] = w.Automation.Reasoning.Count;
-                if (k == 1) Console.WriteLine("    " + string.Join("\n    ", w.Automation.Reasoning.Take(3).Select(r => $"{SimTime.Clock(r.tick)} {r.text}")));
+                if (k == 1 || Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "2")
+                    Console.WriteLine($"    [{(k == 0 ? "III" : "IV")} · 단계 {w.Automation.Level} · 관제석 {w.Automation.Operator?.Name ?? "-"}]\n    " + string.Join("\n    ", w.Automation.Reasoning.Take(3).Select(r => $"{SimTime.Clock(r.tick)} {r.text}")));
             }
             Check("IV 추론 — 원인을 짚어 말한다 (III은 조용)", reasons[0] == 0 && reasons[1] > 0, $"III {reasons[0]}줄 · IV {reasons[1]}줄");
         }

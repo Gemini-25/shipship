@@ -21,6 +21,7 @@ public sealed partial class HazardSystem
         var hit = w.Piping.Burst(seg.Path[seg.Path.Count / 2], 0.95f);
         if (hit == null) return null;
         w.RaiseAlert($"냉각 상실 — {hit.Name}이(가) 크게 터졌다 · 냉각수가 쏟아진다", w.Ship.RoomAt(hit.LeakAt), AlertLevel.Critical, shipWide: true);
+        w.Movement.Bang(w.Ship.RoomAt(hit.LeakAt), hit.LeakAt.Center, 0.6f, $"{hit.Name}이(가) 터졌다"); // v14.5
         w.History.Add(w, HistoryKind.Incident, $"냉각 상실 — {hit.Name} 파열", w.Ship.RoomAt(hit.LeakAt), at: hit.LeakAt);
         return $"냉각 상실({hit.Name})";
     }

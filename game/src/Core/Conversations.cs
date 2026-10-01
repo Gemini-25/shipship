@@ -154,6 +154,8 @@ public sealed partial class RelationSystem
     private readonly Dictionary<(int, int, TalkTopic), long> _talked = new();
     private readonly List<(int victim, int witness, long tick, string truth)> _pending = new();
     private readonly HashSet<int> _wasDown = new();
+    /// <summary>시험용: 쓰러진 사람 곁에 있던 사람들 (아직 깨어나지 않았다).</summary>
+    internal string PendingFor(CrewMember v) => string.Join(", ", _pending.Where(p => p.victim == v.Id).Select(p => $"{_w.Crew.FirstOrDefault(c => c.Id == p.witness)?.Name}({p.truth})"));
 
     private static readonly string[] Foods = { "김치찌개", "라면", "초콜릿", "커피", "갓 구운 빵", "과일", "볶음밥", "수프", "떡", "만두", "카레", "팬케이크" };
 

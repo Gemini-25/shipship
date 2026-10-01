@@ -313,6 +313,8 @@ public static class SaveGame
             foreach (var a in c.Ailments) { I(a.Id.Length); I(a.Since); F(a.Healed); } // v14.1
         }
         foreach (var b in w.Belongings.All) { I(b.Owner); I(b.Holder); I(b.At is Cell bc ? bc.X * 1000 + bc.Y : -1); F(b.Condition); F(b.Progress); } // v14.3
+        foreach (var st in w.Movement.Stashes) { I(st.Owner); I(st.Cell.X * 1000 + st.Cell.Y); I((int)st.Stack.Kind); I(st.Stack.Count); } // v14.5 내려놓고 간 짐
+        I(w.Movement.Stats.Yields); I(w.Movement.Stats.Reroutes); I(w.Movement.Stats.Startles);
         foreach (var m in w.Ship.Machines)
         {
             F(m.Wear); F(m.Condition); I(m.Faults.Count); I((int)m.Grade); I(m.FaultCount);
