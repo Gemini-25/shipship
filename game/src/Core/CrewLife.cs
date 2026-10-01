@@ -220,13 +220,19 @@ public sealed class LifeSystem
             int node = w.Causes.Root(CauseKind.Mistake, $"{c.Name}의 실수 — {what} ({why})", next ?? c.Room, c.Position, observer: false);
             if (next != null) using (w.Causes.Because(node)) w.Moisture.Isolate(next, null);
         }
-        else
+        else if (w.Rng.Chance(0.35f))
         {
             what = "공구에 손을 다쳤다";
             w.Causes.Root(CauseKind.Mistake, $"{c.Name}의 실수 — {what} ({why})", c.Room, c.Position, observer: false);
-            // 손을 베고 찧는 정도 — 이미 크게 다친 사람에게 결정타가 되지는 않는다
-            float slip = MathF.Min(0.05f, MathF.Max(0f, 0.55f - c.Vitals.Injury));
+            // 손을 베고 찧는 정도 — 이미 다친 사람에게 쌓여 결정타가 되지는 않는다
+            float slip = MathF.Min(0.04f, MathF.Max(0f, 0.35f - c.Vitals.Injury));
             if (slip > 0f) NeedsSystem.AddInjury(c.Vitals, slip, "작업 중 실수");
+        }
+        else
+        {
+            // 대개는 공구를 떨어뜨리거나 순서를 헷갈려 다시 한다 (시간과 기분만 잃는다)
+            what = "공구를 떨어뜨려 처음부터 다시 했다";
+            w.Causes.Root(CauseKind.Mistake, $"{c.Name}의 실수 — {what} ({why})", c.Room, c.Position, observer: false);
         }
         // 곁에서 본 자격 있는 사람이 바로 잡아내기도 한다
         var watcher = w.Crew.FirstOrDefault(x => x != c && !x.Dead && x.IsAwake && x.Room == c.Room && x.SkillLevel(o.Skill) > c.SkillLevel(o.Skill) + 0.15f);

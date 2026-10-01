@@ -480,6 +480,10 @@ public sealed class World
         if (c.Vitals.Wounds.Where(x => !x.Lost).OrderByDescending(x => x.Weight).FirstOrDefault() is Wound big && big.Weight >= 0.15f && big.Cause != c.Vitals.InjuryCause
             && c.Vitals.Wounds.Where(x => x.Cause == c.Vitals.InjuryCause).Sum(x => x.Weight) < big.Weight)
             c.Vitals.InjuryCause = big.Cause;
+        // 상처가 작은데 죽었다 — 숨이 막혔거나 기력이 다했다 (처음 난 작은 상처가 사인으로 남지 않게)
+        float ownWound = c.Vitals.Wounds.Where(x => x.Cause == c.Vitals.InjuryCause).Sum(x => x.Weight);
+        if (c.Vitals.Injury < 0.4f && ownWound < 0.15f || c.Vitals.InjuryCause == "작업 중 실수" && ownWound < 0.4f)
+            c.Vitals.InjuryCause = c.Vitals.Oxygen < 0.5f ? "질식" : c.Vitals.InjuryCause is null or "작업 중 실수" ? "기력이 다해" : c.Vitals.InjuryCause;
         RaiseAlert($"{Ko.IGa(c.Name)} 죽었다 — {c.Room?.Name ?? "떨어져 나간 구획"} ({c.Vitals.InjuryCause ?? "사고"})", c.Room, AlertLevel.Critical, shipWide: true);
         // 남은 사람들: 가까웠던 사람일수록 크게 흔들린다. 그 방은 모두에게 무서운 곳이 된다
         foreach (var o in Crew)
