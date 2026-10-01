@@ -35,6 +35,8 @@ public partial class ShipView
         ActKind.Proposal => CompAmber,
         ActKind.Broadcast => CompViolet,
         ActKind.Reboot => new Color("#e6eaf2"),
+        ActKind.Door => new Color("#5fd0c8"),
+        ActKind.Forecast => new Color("#9fd8ff"),
         _ => new Color("#7cc4ff"),
     };
 
@@ -55,6 +57,27 @@ public partial class ShipView
         PaintRoomAsks(ci);
         PaintDataFlows(ci);
         PaintHoloBoard(ci);
+        if (a.ShelterCall) PaintShelterCall(ci);
+    }
+
+    /// <summary>대피 방송이 살아 있는 동안: 대피소에 보랏빛 방패와 모이는 고리 (들은 사람이 여기로 온다).</summary>
+    private void PaintShelterCall(CanvasItem ci)
+    {
+        var (shelter, _) = Facilities.Best(_world.Ship, "shelter", r => !r.Detached && !r.OffLimits && !r.Leaking);
+        if (shelter == null) return;
+        var c = ToPx(shelter.Center);
+        for (int k = 0; k < 3; k++)
+        {
+            float q = Mathf.PosMod(_time * 0.6f + k / 3f, 1f);
+            ci.DrawArc(c, T * (2.2f - 1.8f * q), 0f, Mathf.Tau, 36, CompViolet.WithAlpha(0.5f * q), 1.4f, true); // 바깥에서 안으로 모인다
+        }
+        float pulse = 0.75f + 0.25f * Mathf.Sin(_time * 3f);
+        var shield = new[] { c + new Vector2(0, -11), c + new Vector2(8, -7), c + new Vector2(7, 3), c + new Vector2(0, 11), c + new Vector2(-7, 3), c + new Vector2(-8, -7) };
+        ci.DrawColoredPolygon(shield, new Color(0.12f, 0.08f, 0.2f, 0.85f));
+        ci.DrawPolyline(new[] { shield[0], shield[1], shield[2], shield[3], shield[4], shield[5], shield[0] }, CompViolet.WithAlpha(pulse), 1.6f, true);
+        ci.DrawLine(c + new Vector2(0, -6), c + new Vector2(0, 6), CompViolet.WithAlpha(pulse), 1.2f);
+        ci.DrawLine(c + new Vector2(-4, -1), c + new Vector2(4, -1), CompViolet.WithAlpha(pulse), 1.2f);
+        if (Zoom > 0.8f) Gfx.TextCentered(ci, Fonts.Bold, c + new Vector2(0, 20f), "방송 — 대피소", 9, CompViolet);
     }
 
     /// <summary>사람 위 층: 방송 말풍선 · 들은/못 들은 표시 · "컴퓨터가 보는 배".</summary>

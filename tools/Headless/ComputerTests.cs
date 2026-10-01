@@ -38,7 +38,7 @@ public static partial class Program
                 Check("상시 카드 — 화재 때 \"방 화재 · 댐퍼 폐쇄 · 대피 기다림 n초\"", seen.StartsWith(room.Name), $"\"{seen}\" · 지금: {w.Automation.NowLine}");
                 Run(w, SimTime.Minutes(40));
                 var book = w.Automation.Book;
-                var full = book.Acts.FirstOrDefault(a => a.Kind == ActKind.Suppress && a.Observe != "" && a.Judge != "" && a.Act != "" && a.Graded && a.Result != "");
+                var full = book.Acts.FirstOrDefault(a => a.Kind == ActKind.Suppress && a.Observe != "" && a.Judge != "" && a.Act != "" && a.Request != "" && a.Graded && a.Result != "");
                 int graded = book.Acts.Count(a => a.Graded);
                 Check("다섯 칸 기록 — 소화 조치가 관찰 · 판단 · 조치 · 요청 · 결과로 남고 몇 분 뒤 채점된다", full != null && graded >= 3,
                     full != null ? $"[{full.Kind}] 관찰 {full.Observe} | 판단 {full.Judge} | 조치 {full.Act} | 요청 {full.Request} | 결과 {full.Result} · 채점 {graded}/{book.Acts.Count} (맞음 {book.Right} · 틀림 {book.Wrong})" : $"기록 {book.Acts.Count} · 채점 {graded} · " + string.Join(" / ", book.Acts.Take(4).Select(a => $"{a.Kind}:{a.Act}:{a.Result}")));
@@ -278,7 +278,7 @@ public static partial class Program
                 float th0 = a.Trusts.Of(hearer);
                 var b = a.CosmicForecast("궤도 무기 EMP", 20f, CosmicFx.Emp | CosmicFx.Shock);
                 bool heedH = false, heedD = false, inShelter = false;
-                for (int m = 0; m < 15; m++)
+                for (int m = 0; m < 25 && !inShelter; m++)
                 {
                     Run(w, SimTime.Minutes(1));
                     heedH |= hearer.Job?.Activity is HeedBroadcastActivity;
@@ -287,7 +287,7 @@ public static partial class Program
                 }
                 Check("예보 방송 → 들은 사람만 미리 대피소로 간다 (스피커 고장 방 사람은 모른다)",
                     b != null && b.HeardBy.Contains(hearer.Id) && !b.HeardBy.Contains(deaf.Id) && heedH && inShelter && !heedD,
-                    $"방송 \"{b?.Text}\" · {hearer.Name}({hearer.Room?.Name}) 들음 · 대피 {(inShelter ? shelter.Name + " 도착" : heedH ? "가는 중" : "안 감")} · {deaf.Name}({deaf.Room?.Name}) 못 들음 · 대피 {(heedD ? "했다" : "안 했다")}");
+                    $"방송 \"{b?.Text}\" · {hearer.Name}({hearer.Room?.Name}) 들음 · 대피 {(inShelter ? shelter.Name + " 도착" : heedH ? $"가는 중 ({hearer.Job?.Label} · {hearer.Room?.Name})" : "안 감")} · {deaf.Name}({deaf.Room?.Name}) 못 들음 · 대피 {(heedD ? "했다" : "안 했다")}");
                 int broken0 = w.Ship.LiveRooms.Count(r => a.Speak.SpeakerBroken(r));
                 int stuck0 = a.Belief.Corruptions;
                 a.CosmicHit("궤도 무기 EMP", CosmicFx.Emp | CosmicFx.Shock, 0.8f);

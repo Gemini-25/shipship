@@ -89,6 +89,7 @@ public sealed class ComputerLogBook
         if (au.Present && !au.MainOnline && !au.BackupActive && kind != ActKind.Reboot) return null; // 멎은 컴퓨터는 아무것도 안 한다 (재부팅 중엔 사람이 손으로)
         if (key != "" && cooldown > 0 && _dedupe.TryGetValue(key, out var t) && w.Tick - t < cooldown) return null;
         if (key != "") _dedupe[key] = w.Tick;
+        if (request == "") request = DefaultRequest(kind, room); // 넷째 칸(요청)이 비지 않게: 조치마다 사람에게 바라는 것
         var a = new ComputerAct
         {
             Id = _next++, Tick = w.Tick, Kind = kind, RoomId = room?.Id ?? -1, Key = key, Observe = observe, Judge = judge, Act = act, Request = request,
@@ -128,6 +129,23 @@ public sealed class ComputerLogBook
         if (act == "" && kind != ActKind.Advice) act = judge;
         return Add(kind, room, observe, judge, act, request, "r:" + key, cooldown, kind == ActKind.Advice ? 30f : 8f);
     }
+
+    /// <summary>조치 종류마다 사람에게 바라는 것 (판단 근거에 "요청:"이 없을 때).</summary>
+    private static string DefaultRequest(ActKind k, Room? r) => k switch
+    {
+        ActKind.Suppress => $"{(r != null ? r.Name + " " : "")}사람은 나가라 · 소화조는 문밖에서",
+        ActKind.Damper => "그 방 문은 닫아 둔다",
+        ActKind.Bulkhead => "안에 있으면 반대쪽 문으로",
+        ActKind.Valve => "배관 담당이 새는 곳을 본다",
+        ActKind.Breaker => "전기 담당이 분전함을 본다",
+        ActKind.Alarm => "가까운 사람이 확인",
+        ActKind.Zone => "구역 밖으로",
+        ActKind.Shed => "꺼진 설비는 손대지 않는다",
+        ActKind.Broadcast => "들은 사람은 따른다",
+        ActKind.Reboot => "그동안 손으로",
+        ActKind.Forecast => "미리 대비",
+        _ => "참고",
+    };
 
     private static string Join(string a, string b) => a == "" ? b : a + " · " + b;
 

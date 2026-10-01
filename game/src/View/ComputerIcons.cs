@@ -215,6 +215,18 @@ public static class ComputerIcons
             case ActKind.Reboot: ci.DrawArc(c, 5f, 0.6f, Mathf.Tau - 0.2f, 12, col, 1.4f, true); ci.DrawLine(c + new Vector2(5, -2), c + new Vector2(5, 2), col, 1.4f); break;
             case ActKind.Module: Draw(ci, ComputerModule.Foresight, c, 4.5f, ComputerIcons.State.On, t); break;
             case ActKind.Shed: ci.DrawLine(c + new Vector2(-5, 0), c + new Vector2(-1, 0), col, 1.4f); ci.DrawLine(c + new Vector2(1, 0), c + new Vector2(5, 0), col, 1.4f); ci.DrawLine(c + new Vector2(-1, -3), c + new Vector2(1, 3), col, 1.2f); break;
+            case ActKind.Door: // 문틀 + 열쇠 구멍 (원격 열기 · 막음)
+                ci.DrawRect(new Rect2(c - new Vector2(4, 5.5f), new Vector2(8, 11)), col, false, 1.3f);
+                ci.DrawCircle(c + new Vector2(1.5f, -0.5f), 1.3f, col, true, -1f, true);
+                ci.DrawLine(c + new Vector2(1.5f, 0.3f), c + new Vector2(1.5f, 2.8f), col, 1.2f);
+                ci.DrawLine(c + new Vector2(-4, 5.5f), c + new Vector2(-6, 3.5f), col.WithAlpha(0.7f), 1f);
+                break;
+            case ActKind.Forecast: // 레이더 부채꼴이 돈다 (예보 · 앞날 예측)
+                ci.DrawArc(c, 5f, 0f, Mathf.Tau, 14, col.WithAlpha(0.6f), 1f, true);
+                ci.DrawArc(c, 2.6f, 0f, Mathf.Tau, 10, col.WithAlpha(0.4f), 0.8f, true);
+                ci.DrawColoredPolygon(new[] { c, c + new Vector2(Mathf.Cos(t * 3f), Mathf.Sin(t * 3f)) * 5f, c + new Vector2(Mathf.Cos(t * 3f + 0.7f), Mathf.Sin(t * 3f + 0.7f)) * 5f }, col.WithAlpha(0.8f));
+                ci.DrawCircle(c + new Vector2(2.5f, -2.5f), 1f, col, true, -1f, true);
+                break;
             default: ci.DrawCircle(c, 3.5f, col.WithAlpha(0.8f), true, -1f, true); break;
         }
         ci.DrawSetTransformMatrix(Transform2D.Identity);

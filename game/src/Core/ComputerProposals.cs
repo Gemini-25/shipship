@@ -149,6 +149,11 @@ public sealed class ProposalBoard
         p.Score = r.s;
         p.Result = r.why;
         if (r.s < 0) w.Automation.Learn.Remember(p.RoomId, p.Kind, r.why);
+        // 거절이 옳았다: 안에 있던 사람은 확인한 사람에게 못 들었어도 나중에 소문으로 안다 (신뢰 ↓)
+        if (!p.Accepted && r.s < 0 && p.RoomId >= 0)
+            foreach (var id in p.Inside)
+                if (!p.Found.Contains(id) && w.Crew.FirstOrDefault(c => c.Id == id) is CrewMember c && !c.Dead)
+                    w.Automation.Trusts.Change(c, -0.2f, $"나중에 들었다 — 컴퓨터는 내가 {w.Ship.Rooms[p.RoomId].Name}에 있는 줄 모르고 {Ko.EulReul(p.Title)} 하려 했다");
         return r;
     }
 }
@@ -208,6 +213,20 @@ public sealed partial class AutomationSystem
         {
             var k = Checks[i];
             var who = w.Crew.FirstOrDefault(c => c.Id == k.CheckerId);
+            // 맡은 사람이 아니어도 누군가 그 방에 들어가 봤으면 확인이 된다 (소화조 · 지나가던 사람)
+            if (!k.Seen && k.RoomId < w.Ship.Rooms.Count)
+            {
+                var room = w.Ship.Rooms[k.RoomId];
+                var pr = k.ProposalId >= 0 ? Asks.All.FirstOrDefault(p => p.Id == k.ProposalId) : null;
+                var eye = w.Crew.FirstOrDefault(c => c != who && !c.Dead && !c.Down && c.CanAct && c.IsAwake && c.Room == room && !c.Outside && pr?.Inside.Contains(c.Id) != true);
+                if (eye != null)
+                {
+                    w.Log.Add(w.Tick, LogKind.Work, $"{Ko.IGa(eye.Name)} {room.Name}에 들어가 대신 확인했다", eye.Id);
+                    Inspected(k, eye);
+                    k.CheckerId = eye.Id;
+                    who = eye;
+                }
+            }
             bool stale = w.Tick - k.Since > SimTime.Minutes(40);
             if (k.Done || stale || who == null || !who.CanAct)
             {
