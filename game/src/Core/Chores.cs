@@ -1397,10 +1397,11 @@ public static partial class WorkPlanners
         toils.Add(new DoToil((cm, world) =>
         {
             if (kit) Consume(cm, ItemKind.MedKit);
-            float skill = cm.SkillLevel(Skill.Medicine), eff = kit ? 1f : 0.5f;
+            bool bandage = !kit && ItemsV15.Use(world, ItemKind.Bandage); // v15 키트가 없으면 붕대로
+            float skill = cm.SkillLevel(Skill.Medicine), eff = kit ? 1f : bandage ? 0.75f : 0.5f;
             patient.Vitals.Health = MathF.Min(patient.Vitals.MaxHealth, patient.Vitals.Health + (0.15f + 0.25f * skill) * eff);
             patient.Vitals.Injury = MathF.Max(0f, patient.Vitals.Injury - (0.06f + 0.14f * skill) * eff);
-            if (!kit) world.Log.Add(world.Tick, LogKind.Warning, $"구급 키트가 없어 {patient.Name}에게 응급 처치만 했다 (천과 소독약)", cm.Id);
+            if (!kit) world.Log.Add(world.Tick, LogKind.Warning, $"구급 키트가 없어 {patient.Name}에게 응급 처치만 했다 ({(bandage ? "붕대" : "천과 소독약")})", cm.Id);
             patient.Vitals.TreatedTick = world.Tick;
             world.Ailments.Treated(patient, cm); // v14.1 진단하고 약을 쓴다
             world.Soil.OnTreated(cm, patient); // v14.7 더러운 손이면 상처가 곪기도

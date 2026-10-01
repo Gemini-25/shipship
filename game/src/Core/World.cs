@@ -1031,6 +1031,8 @@ public sealed class World
         // 보조 발전기 예비 연료통 (다 쓰면 채소로 바이오 연료를 만들어야 한다)
         (Shelf(RoomType.Power, 0) ?? s1)?.Add(ItemKind.Fuel, 2);
 
+        ItemsV15.Stock(ship); // v15 비누·세제·소독약·붕대·테이프·커피 · 흔한 예비 부품 몇
+
         // v10.4: 큰 배 — 기본 적재량의 (배율 − 1)만큼 더 싣는다 (창고 선반부터, 모자라면 정비실 선반)
         if (scale > 1.01f)
         {

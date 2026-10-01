@@ -28,7 +28,9 @@ public static class Recipes
 {
     private static (ItemKind, int)[] In(params (ItemKind, int)[] x) => x;
 
-    public static readonly Recipe[] All =
+    public static readonly Recipe[] All = Base().Concat(ItemsV15.Recipes).ToArray(); // v15 새 부품·소모품
+
+    private static Recipe[] Base() => new Recipe[]
     {
         // 작업대: 남는 채소 → 소모품
         new(ItemKind.Filter, In((ItemKind.Produce, 3)), 1.2f, Skill.Mechanics, Station.Workbench, 10),

@@ -44,6 +44,12 @@ public enum ItemKind
 
     // ── 고급 부품: 희귀 소재와 오랜 정밀 작업이 필요하다 ──
     ReactorControl,
+
+    // ── v15 물자 70 (CatalogV15.cs): 부품 24 · 소모품 20 ──
+    Gasket, Seal, Valve, Fan, Belt, Relay, Capacitor, Insulator, Coupling, Impeller, Brush, Nozzle,
+    Membrane, Thermostat, Diode, Spring, Hose, Clamp, Gear, Bushing, Fiber, Lamp, Thermocouple, Solenoid,
+    Solvent, Tape, Glue, Nutrient, Seed, Soap, Detergent, Disinfectant, Bandage, Coffee, TeaLeaf, Spice,
+    Vitamin, Gloves, Rag, CellPack, Thread, Paint, Desiccant, Mesh,
 }
 
 /// <summary>재료 등급 (리뷰어 안: 원료 → 기본 수리재 → 일반 부품 → 고급 부품).</summary>
@@ -79,7 +85,7 @@ public static class ItemKinds
         ItemKind.PowerController => "전력 제어기",
         ItemKind.Sensor => "센서",
         ItemKind.ReactorControl => "원자로 제어부",
-        _ => k.ToString(),
+        _ => ItemsV15.Name(k) ?? k.ToString(), // v15
     };
 
     public static ItemTier Tier(ItemKind k) => k switch
@@ -88,7 +94,7 @@ public static class ItemKinds
         ItemKind.Plate or ItemKind.Structure or ItemKind.Cable or ItemKind.Fuse or ItemKind.Electronics or ItemKind.Sealant => ItemTier.Basic,
         ItemKind.Motor or ItemKind.Pump or ItemKind.Bearing or ItemKind.PowerController or ItemKind.Sensor => ItemTier.General,
         ItemKind.ReactorControl => ItemTier.Advanced,
-        _ => ItemTier.Supply,
+        _ => ItemsV15.Tier(k), // v15
     };
 
     public static string TierName(ItemTier t) => t switch

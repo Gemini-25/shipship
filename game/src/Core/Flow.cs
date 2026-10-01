@@ -382,7 +382,8 @@ public sealed class FlowSystem
     public void Flush(CrewMember c)
     {
         var w = _w;
-        float use = MathF.Min(w.Water.Level, 20f);
+        bool dis = ItemsV15.Use(w, ItemKind.Disinfectant); // v15 소독약이 있으면 물을 절반만
+        float use = MathF.Min(w.Water.Level, dis ? 10f : 20f);
         w.Water.Level -= use;
         WaterQuality = 1f;
         Stats.Flushes++;

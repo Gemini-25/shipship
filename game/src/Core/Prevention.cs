@@ -73,7 +73,7 @@ public static class Prevention
         FaultKind.FilterClogged or FaultKind.MembraneFouling or FaultKind.NutrientClog or FaultKind.HopperJam or FaultKind.Jam => OmenKind.Pressure,
         FaultKind.SensorDrift or FaultKind.ControlFault or FaultKind.AntennaDrift or FaultKind.RadarFault or FaultKind.DisplayFault
             or FaultKind.SensorFouling or FaultKind.LightFailure => OmenKind.Drift,
-        _ => null,
+        _ => FaultsV15.Omen(f), // v15
     };
 
     /// <summary>전조를 손보는 데 드는 것 (고장을 고치는 것보다 훨씬 싸다).</summary>

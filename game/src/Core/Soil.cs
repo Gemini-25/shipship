@@ -45,6 +45,7 @@ public sealed class Soil
 public sealed class SoilStats
 {
     public int HandWashes, SkippedWashes, PartialWashes, Changes, LaundryRuns, LaundryDeferred, Decons, SkippedDecons, TaintedMeals, WoundInfections, ContactCatches;
+    public int NoSoap, NoDetergent; // v15
     public float WaterUsed;
     public string Summary() =>
         $"손 씻기 {HandWashes}(급해서 건너뜀 {SkippedWashes} · 물이 모자라 손만 {PartialWashes}) · 옷 갈아입기 {Changes} · 빨래 {LaundryRuns}(미룸 {LaundryDeferred}) · 우주복 털기 {Decons}(그냥 들어옴 {SkippedDecons})"
@@ -53,6 +54,7 @@ public sealed class SoilStats
 
 public sealed class SoilSystem
 {
+    private int _soapUses; private bool _noSoap; // v15 비누
     private readonly World _w;
     private Rng? _rng;
     private Rng R => _rng ??= new Rng(unchecked(_w.Seed * 5113 + 73));
@@ -161,12 +163,16 @@ public sealed class SoilSystem
     {
         var w = _w;
         bool thrift = !WaterShort && w.Culture.Follows(c, CustomKind.WaterThrift); // v14.9 물이 바닥났던 배는 넉넉해도 아낀다
+        // v15 비누: 여덟 번 씻으면 하나 — 없으면 물로만 (덜 씻긴다)
+        bool soap = true;
+        if ((_soapUses += 1) >= 8) { _soapUses = 0; soap = ItemsV15.Use(w, ItemKind.Soap); if (!soap) { Stats.NoSoap++; _noSoap = true; } else _noSoap = false; }
+        else soap = !_noSoap;
         bool partial = WaterShort || thrift;
         if (thrift) w.Culture.Stats.ThriftWashes++;
         float use = partial ? 0.3f : 1f;
         w.Water.Level = MathF.Max(0f, w.Water.Level - use);
         Stats.WaterUsed += use;
-        for (int k = 0; k < Soil.Kinds; k++) c.Soil.Hands[k] *= partial ? 0.35f : 0.08f;
+        for (int k = 0; k < Soil.Kinds; k++) c.Soil.Hands[k] *= partial ? 0.35f : soap ? 0.08f : 0.25f;
         c.Soil.WashedAt = w.Tick;
         Stats.HandWashes++;
         if (partial) Stats.PartialWashes++;
@@ -196,6 +202,7 @@ public sealed class SoilSystem
         w.Water.Level = MathF.Max(0f, w.Water.Level - use);
         Stats.WaterUsed += use;
         Stats.LaundryRuns++;
+        if (!ItemsV15.Use(w, ItemKind.Detergent)) Stats.NoDetergent++; // v15 세제가 없으면 물로만 (옷이 덜 깨끗해진다)
         w.Log.Add(w.Tick, LogKind.Life, $"빨래를 돌렸다 ({LaundryLoad}벌 · 물 {use:0}L)", c.Id);
         LaundryLoad = 0;
         return true;

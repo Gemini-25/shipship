@@ -201,7 +201,8 @@ public sealed class VoyageSystem
         int spend = w.Policies["portspend"];
         float wantScale = spend == 0 ? 0.6f : spend == 2 ? 1.5f : 1f;
         float keepMoney = spend == 0 ? MathF.Max(Reserve, 20f) : spend == 2 ? 0f : Reserve;
-        foreach (var (k, want0, price) in new[] { (ItemKind.Plate, 10, 1.5f), (ItemKind.Electronics, 6, 3f), (ItemKind.Sealant, 4, 2f), (ItemKind.MedKit, 4, 3f), (ItemKind.Filter, 4, 2f), (ItemKind.Cable, 6, 1f) })
+        foreach (var (k, want0, price) in new[] { (ItemKind.Plate, 10, 1.5f), (ItemKind.Electronics, 6, 3f), (ItemKind.Sealant, 4, 2f), (ItemKind.MedKit, 4, 3f), (ItemKind.Filter, 4, 2f), (ItemKind.Cable, 6, 1f),
+            (ItemKind.Soap, 4, 0.5f), (ItemKind.Coffee, 6, 0.8f), (ItemKind.Bandage, 6, 0.8f), (ItemKind.Disinfectant, 2, 1f), (ItemKind.Spice, 2, 1f), (ItemKind.Gasket, 2, 1f) })
         {
             int want = (int)MathF.Round(want0 * wantScale);
             int have = ship.CountStored(k);

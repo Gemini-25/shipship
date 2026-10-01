@@ -181,7 +181,8 @@ public sealed class DailySystem
             if (x.One(c => c.RawSkill(Skill.Cooking) > 0.25f) is not CrewMember cook) return false;
             if (x.Other(cook, c => c.AffinityTo(cook) > 0f || c.Needs.Stress > 0.5f) is not CrewMember o) return false;
             string fav = x.W.Relations.Favorite(o);
-            x.Stress(o, -0.06f); x.Food(o, 0.2f);
+            bool spice = ItemsV15.Use(x.W, ItemKind.Spice); // v15 향신료가 있으면 고향 맛
+            x.Stress(o, spice ? -0.09f : -0.06f); x.Food(o, 0.2f);
             x.Mem(o, cook, RelationReason.GaveMeGift, $"힘들 때 좋아하는 {Ko.EulReul(fav)} 만들어 줬다");
             x.Diary(o, $"{Ko.IGa(cook.Name)} 내가 좋아하는 {Ko.EulReul(fav)} 만들어 줬다");
             return x.Done($"{Ko.IGa(cook.Name)} {o.Name}에게 {Ko.EulReul(fav)} 해 줬다", cook, o);
@@ -219,8 +220,13 @@ public sealed class DailySystem
             if (x.One(c => x.Has(c, Habit.CoffeeAddict) || x.Has(c, Habit.TeaLover)) is not CrewMember c) return false;
             var mates = x.InRoom(c.Room!).Where(o => o != c).ToList();
             if (mates.Count == 0) return false;
-            foreach (var o in mates) { x.Rest(o, 0.04f); x.Social(o, 0.06f); o.ChangeAffinity(c, 0.02f); }
             string what = x.Has(c, Habit.TeaLover) ? "차" : "커피";
+            if (!ItemsV15.Use(x.W, x.Has(c, Habit.TeaLover) ? ItemKind.TeaLeaf : ItemKind.Coffee)) // v15 떨어졌으면
+            {
+                x.Stress(c, 0.04f);
+                return x.Done($"{Ko.IGa(c.Name)} {what}를 타려다 통이 빈 걸 알았다 — 다음 기항지 목록 맨 위에 적었다", c);
+            }
+            foreach (var o in mates) { x.Rest(o, 0.04f); x.Social(o, 0.06f); o.ChangeAffinity(c, 0.02f); }
             return x.Done($"{Ko.IGa(c.Name)} {c.Room!.Name}에 있던 {mates.Count}명에게 {what}를 돌렸다", c);
         }),
         new("tray", "치우지 않은 식판", DailyGroup.Meal, 0.7f, x =>

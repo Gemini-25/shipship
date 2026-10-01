@@ -419,7 +419,8 @@ public static partial class WorkPlanners
             if (!temp && !UseAll(cm, new[] { (item, 1) })) return false;
             world.Board.Close(o);
             bool wasCut = l.Cut;
-            l.Integrity = temp ? 0.6f : 1f;
+            bool tape = temp && l.Kind is NetKind.Power or NetKind.Data && ItemsV15.Use(world, ItemKind.Tape); // v15 절연 테이프로 감으면 덜 달아오른다
+            l.Integrity = temp ? (tape ? 0.72f : 0.6f) : 1f;
             l.SplicedBy = temp ? cm.Id : -1; // v14.8
             l.Temp = temp;
             if (temp) world.Net.Stats.TempRepairs++; else world.Net.Stats.Repairs++;

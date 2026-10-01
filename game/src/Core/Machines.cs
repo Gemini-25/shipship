@@ -38,6 +38,11 @@ public enum FaultKind
     Overheat, StorageFault, // 주 컴퓨터 과열 정지, 저장장치 오류 (v9)
     AntennaDrift, RadarFault, // 장거리 센서 안테나 정렬, 레이더 송수신기 (v10.1)
     GasLeak, // v11.2 냉매(유독 가스) 누출 — 사고로만 난다, 실링폼으로 막는다
+    // v15 고장 70 (CatalogV15.cs)
+    GasketLeak, SealWorn, ValveStuck, FanFail, BeltSlip, RelayStuck, CapacitorBulge, InsulatorCrack, CouplingWear, ImpellerErosion,
+    BrushWear, NozzleClog, MembraneTear, ThermostatFault, DiodeFail, HeatsinkClog, SpringFatigue, HoseCrack, ClampLoose, GearChip,
+    BushingWear, FiberBreak, LampBurnout, ThermocoupleDrift, SolenoidFail, FirmwareCrash, CalibrationLoss, CorrosionPit, ScaleBuildup, DrainClog,
+    LooseTerminal, ArcTracking, GlueFail, OilStarve, AirBound, NutrientImbalance, SeedTrayRot, GaugeStuck, InputFault, MountCrack,
 }
 
 /// <summary>고장 종류별 성질. 출력 배율 0이면 완전히 멈춘다.</summary>
@@ -77,7 +82,7 @@ public static class Faults
         new FaultSpec(FaultKind.AntennaDrift, "안테나 정렬 틀어짐", 0.35f, null, 1f),
         new FaultSpec(FaultKind.RadarFault, "레이더 송수신기 고장", 0f, ItemKind.Sensor, 2f),
         new FaultSpec(FaultKind.GasLeak, "냉매 누출", 0.8f, ItemKind.Sealant, 0.75f),
-    }.ToDictionary(f => f.Kind);
+    }.Concat(FaultsV15.Specs).ToDictionary(f => f.Kind); // v15 고장 70
 
     public static FaultSpec Spec(FaultKind k) => Table[k];
 
@@ -282,7 +287,7 @@ public static class MachineSpecs
         // v10.10 로봇 충전대: 로봇을 충전할 때만 전기를 먹는다. 멈추면 로봇이 방전돼 사람이 그 일을 떠맡는다
         new MachineSpec(FurnitureType.RobotDock, 1.2f, 4, 45f, Skill.Electrical, null, 0.4f, false,
             new[] { FaultKind.ChargerFault, FaultKind.WiringFault }),
-    }.ToDictionary(s => s.Type);
+    }.Select(FaultsV15.Extend).ToDictionary(s => s.Type); // v15 설비마다 새 고장을 덧붙인다
 
     public static MachineSpec? For(FurnitureType t) => Table.TryGetValue(t, out var s) ? s : null;
 }
