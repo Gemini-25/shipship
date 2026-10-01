@@ -10,6 +10,8 @@ namespace ShipSim.Core;
 // 채소가 넉넉하면 항아리에 김치 · 절임을 앉혀 며칠 기다린다 · 기항지에서 고향 재료를 산다 ·
 // 조리사가 다치면 배우던 사람이 대신 서고, 먹는 사람은 맛이 달라진 걸 알아챈다 · 배급 중에는 나누는 방식에 불만이 나온다.
 // 식량 재고(식사 개수)는 그대로 세고, 냄비는 그 식사들이 "무엇이었나"를 붙인다 — 냄비가 없으면 예전처럼 보존식 · 비상식량.
+// 더러운 손 · 지저분한 주방(Soil)은 냄비에 균을 넣고(식중독) · 기름진 요리는 화구 앞 바닥에 기름을 튀긴다(배 본체 칸 상태 — 미끄러짐) ·
+// 정전된 식당에 이동식 히터가 돌면 그 앞에서 그릇을 데운다 · 주컴퓨터(FoodWatch.cs)가 신선도 · 냉장고 · 식단 · 화구를 지켜본다.
 
 public sealed class Batch
 {
@@ -31,6 +33,11 @@ public sealed class Batch
     public bool Spoiled { get; set; }
     public long SpoiledAt { get; set; } = -1;
     public bool WasReady { get; set; }
+    /// <summary>균이 들었다 (더러운 손 · 지저분한 주방) — 먹는 사람은 모른다.</summary>
+    public bool Germy { get; set; }
+    /// <summary>주컴퓨터가 "먼저 쓰라"고 알렸고 조리사가 받아들였다 · 흘려들었다.</summary>
+    public bool Flagged { get; set; }
+    public bool FlagIgnored { get; set; }
     /// <summary>만드는 걸 본 사람 (누가 했는지 안다).</summary>
     public List<int> SawCook { get; } = new();
     public DishRecipe Spec => Dishes.Of(Recipe);
@@ -60,12 +67,12 @@ public sealed class Plate
 public sealed class CookingStats
 {
     public int Batches, Portions, Served, Prepacked, Reheated, Cold, ColdNoPower, SavedPlates, SavedEaten, TasteNoticed, Substituted, Leftovers;
-    public int SourMeals, SpoilPoison, BurntPots, Shared;
+    public int SourMeals, SpoilPoison, BurntPots, Shared, GermPots, GermMeals, OilSplash, HeaterWarm;
     public int Jars, JarsReady, Sides, HomeMeals, HomeGoodsBought, Spoiled, Scorched, ScorchCaught, ScorchFires, RationGripes, CoverCooks;
     public string Summary() =>
         $"냄비 {Batches}(접시 {Portions}) · 먹은 접시 {Served}(보존식 {Prepacked}) · 데움 {Reheated} · 차갑게 {Cold}(전기 모자람 {ColdNoPower}) · 남겨 둔 접시 {SavedPlates}(찾아 먹음 {SavedEaten})"
         + $" · 맛이 달라진 걸 알아챔 {TasteNoticed} · 대체 재료 {Substituted} · 남은 것으로 {Leftovers} · 항아리 {Jars}(익음 {JarsReady} · 곁들임 {Sides}) · 고향 음식 {HomeMeals}(재료 {HomeGoodsBought})"
-        + $" · 상함 {Spoiled}(시큼한 끼니 {SourMeals} · 식중독 {SpoilPoison}) · 불에 탄 냄비 {BurntPots} · 맛보기 나눔 {Shared} · 불 위에 남은 냄비 {Scorched}(먼저 내림 {ScorchCaught} · 불이 남 {ScorchFires}) · 배급 불만 {RationGripes} · 대신 선 부엌 {CoverCooks}";
+        + $" · 상함 {Spoiled}(시큼한 끼니 {SourMeals} · 식중독 {SpoilPoison}) · 균 든 냄비 {GermPots}(균 든 끼니 {GermMeals}) · 바닥 기름 {OilSplash} · 히터 앞에서 데움 {HeaterWarm} · 불에 탄 냄비 {BurntPots} · 맛보기 나눔 {Shared} · 불 위에 남은 냄비 {Scorched}(먼저 내림 {ScorchCaught} · 불이 남 {ScorchFires}) · 배급 불만 {RationGripes} · 대신 선 부엌 {CoverCooks}";
 }
 
 public sealed class CookingSystem
@@ -87,7 +94,7 @@ public sealed class CookingSystem
     private sealed class Serving
     {
         public int Recipe = -1;
-        public bool Reheat, Cold;
+        public bool Reheat, Cold, Heater;
     }
 
     private readonly World _w;
@@ -102,6 +109,7 @@ public sealed class CookingSystem
     public string? ForceNext { get; set; }
 
     private readonly Dictionary<int, int> _planned = new();
+    private readonly HashSet<int> _forced = new();
     private readonly Dictionary<int, (Furniture stove, int recipe, int cook, long start)> _cooking = new();
     private readonly Dictionary<int, (Furniture stove, long since, int cook)> _burner = new();
     private readonly Dictionary<int, long> _lastAte = new();
@@ -115,7 +123,10 @@ public sealed class CookingSystem
     private float _acc;
     private long _lastGripe = -1_000_000;
 
-    public CookingSystem(World w) => _w = w;
+    /// <summary>주컴퓨터의 음식 감시 (신선도 · 냉장고 · 식단 · 화구).</summary>
+    public FoodWatch Watch { get; }
+
+    public CookingSystem(World w) { _w = w; Watch = new FoodWatch(w); }
 
     // ── 누가 부엌을 맡나 ──
 
@@ -130,6 +141,9 @@ public sealed class CookingSystem
             if (head == null || Better(c, head)) { appr = head; head = c; }
             else if (appr == null || Better(c, appr)) appr = c;
         }
+        // 배우던 사람은 쉽게 바뀌지 않는다 (곁에서 보며 배워 온 사람 — 훨씬 잘하는 사람이 나타나야)
+        if (CrewOf(_apprentice) is CrewMember old && !old.Dead && old != head && appr != null && appr != old
+            && appr.RawSkill(Skill.Cooking) < old.RawSkill(Skill.Cooking) + 0.45f) appr = old;
         _head = head?.Id ?? -1;
         _apprentice = appr?.Id ?? -1;
         static bool Better(CrewMember a, CrewMember b)
@@ -154,8 +168,10 @@ public sealed class CookingSystem
         var head = HeadCook;
         if (head == null) return 0f;
         if (c == head && LaidUp(c)) return -0.4f;
-        if (c.Id == _apprentice && LaidUp(head)) return 0.3f;
-        return 0f;
+        if (!LaidUp(head)) return 0f;
+        if (c.Id == _apprentice) return 0.45f;
+        // 배우던 사람이 깨어 있으면 다른 사람은 한 발 물러선다 (그 사람이 부엌을 잇는다)
+        return Apprentice is CrewMember ap && ap != c && !LaidUp(ap) && ap.IsAwake ? -0.15f : 0f;
     }
 
     // ── 무엇을 만드나 ──
@@ -166,6 +182,9 @@ public sealed class CookingSystem
     private Batch? OldLeftover()
     {
         Batch? best = null;
+        foreach (var b in Batches)
+            if (!b.Jar && !b.Spoiled && b.Portions >= 2 && b.Flagged && (best == null || b.Fresh < best.Fresh)) best = b; // 주컴퓨터가 먼저 쓰라고 한 냄비
+        if (best != null) return best;
         foreach (var b in Batches)
             if (!b.Jar && !b.Spoiled && b.Portions >= 2 && _w.Tick - b.Cooked > SimTime.Hours(14) && (best == null || b.Cooked < best.Cooked)) best = b;
         return best;
@@ -184,6 +203,13 @@ public sealed class CookingSystem
         int hour = (int)SimTime.HourOfDay(_w.Tick);
         bool morning = hour >= 5 && hour < 10;
         var left = OldLeftover();
+        if (left is { Flagged: true })
+        {
+            // 주컴퓨터가 먼저 쓰라고 한 냄비 — 받아들인 조리사는 남은 것 요리로 돌린다
+            var opts = new List<int>();
+            for (int i = 0; i < Dishes.All.Length; i++) if (Dishes.All[i].Uses(Ingredient.Leftover)) opts.Add(i);
+            if (opts.Count > 0) { int pickL = opts[R.Range(0, opts.Count)]; Watch.Chosen(pickL); return pickL; }
+        }
         var home = cook != null ? Dishes.HomeDish(_w, cook) : null;
         int spice = Stock(ItemKind.Spice), ration = Stock(ItemKind.Ration), coffee = Stock(ItemKind.Coffee) + Stock(ItemKind.TeaLeaf);
         var wts = new float[Dishes.All.Length];
@@ -202,6 +228,7 @@ public sealed class CookingSystem
             if (morning) wt *= r.Kind is DishKind.Bread or DishKind.Pan or DishKind.Porridge or DishKind.Cake ? 3f : 0.6f;
             else if (r.Kind is DishKind.Soup or DishKind.Stew or DishKind.Noodle) wt *= 1.5f;
             if (r == home) wt *= 1.5f; // 조리사는 제 고향 음식을 자주 한다
+            wt *= Watch.MenuWeight(i); // 주컴퓨터 식단
             if (_recent.Contains(i)) wt *= 0.25f;
             wts[i] = wt;
             sum += wt;
@@ -211,7 +238,7 @@ public sealed class CookingSystem
         for (int i = 0; i < wts.Length; i++)
         {
             pick -= wts[i];
-            if (wts[i] > 0f && pick <= 0f) return i;
+            if (wts[i] > 0f && pick <= 0f) { Watch.Chosen(i); return i; }
         }
         return 0;
     }
@@ -219,7 +246,10 @@ public sealed class CookingSystem
     /// <summary>조리 일감을 짤 때: 무엇을 만들지 정하고, 레시피의 조리 시간 배율을 돌려준다.</summary>
     public float HoursMul(Furniture stove, CrewMember c)
     {
-        int ri = Choose(stove, c);
+        // 정해 둔 것(시험 · 사건)은 일감을 여러 번 짜도 그대로
+        bool forced = ForceNext != null && Dishes.IndexOf(ForceNext) >= 0;
+        int ri = !forced && _forced.Contains(stove.Id) && _planned.TryGetValue(stove.Id, out var keep) ? keep : Choose(stove, c);
+        if (forced) _forced.Add(stove.Id);
         _planned[stove.Id] = ri;
         var r = Dishes.Of(ri);
         float h = r.Hours * (r.Station == CookStation.Oven && !HasOven(stove.Room) ? 1.1f : 1f);
@@ -251,7 +281,10 @@ public sealed class CookingSystem
     public void OnCooked(CrewMember cm, Furniture stove, int cooked)
     {
         var w = _w;
-        int ri = _planned.Remove(stove.Id, out var p) ? p : _cooking.TryGetValue(stove.Id, out var cn) ? cn.recipe : Choose(stove, cm);
+        int ri = ForceNext != null && Dishes.IndexOf(ForceNext) >= 0 ? Choose(stove, cm) // 시험 · 사건이 정해 둔 것이 먼저
+            : _planned.TryGetValue(stove.Id, out var p) ? p : _cooking.TryGetValue(stove.Id, out var cn) ? cn.recipe : Choose(stove, cm);
+        _planned.Remove(stove.Id);
+        _forced.Remove(stove.Id);
         _cooking.Remove(stove.Id);
         var r = Dishes.Of(ri);
         float q = 0.32f + 0.58f * cm.SkillLevel(Skill.Cooking) + R.Range(-0.03f, 0.03f);
@@ -279,6 +312,7 @@ public sealed class CookingSystem
             absorbed = old.Portions;
             Batches.Remove(old);
             Stats.Leftovers++;
+            Watch.Used(cm, old, r);
         }
         var b = new Batch
         {
@@ -288,6 +322,8 @@ public sealed class CookingSystem
         };
         foreach (var o in w.Crew)
             if (!o.Dead && o.Room == stove.Room && o.IsAwake) b.SawCook.Add(o.Id);
+        Germs(cm, stove, b);
+        Grease(cm, stove, r);
         Batches.Add(b);
         _recent.Add(ri);
         if (_recent.Count > 3) _recent.RemoveAt(0);
@@ -301,6 +337,36 @@ public sealed class CookingSystem
             Life.Diary(w, cm, Persona.Say(cm, $"{Ko.IGa(head.Name)} 다쳐서 내가 부엌에 섰다. {Ko.EulReul(r.Name)} 했는데 어떨지"));
         }
         MaybeStartJar(cm);
+    }
+
+    /// <summary>균: 더러운 손(Soil이 방금 센 몫)이나 지저분한 주방 바닥 · 조리대의 균이 냄비에 든다 — 그 냄비에서 나간 끼니가 탈을 낸다.</summary>
+    private void Germs(CrewMember cm, Furniture stove, Batch b)
+    {
+        var w = _w;
+        if (cm.CarryTaint > 0) b.Germy = true;
+        float bio = w.Soil.RoomSoil(stove.Room)[(int)SoilKind.Bio];
+        if (bio > 0.25f && R.Chance(MathF.Min(1f, bio * 1.3f)))
+        {
+            b.Germy = true;
+            // 보관함에 들어간 그 냄비의 몇 끼에 균 (Hazards가 먹은 사람을 앓게 하고, 추적되면 버린다)
+            var box = w.Ship.Containers.Where(f => f.Storage!.Count(ItemKind.Meal) > f.Storage.Tainted).OrderBy(f => f.Type == FurnitureType.Fridge ? 0 : 1).ThenBy(f => f.Id).FirstOrDefault();
+            box?.Storage!.Taint(Math.Max(1, (int)(b.Portions * bio * 0.5f)));
+            MarkLog.Add(stove.Room.Marks, w.Tick, $"지저분한 조리대에서 {b.Spec.Name}");
+        }
+        if (b.Germy) Stats.GermPots++;
+    }
+
+    /// <summary>기름진 요리(전 · 볶음): 화구 앞 바닥에 기름이 튄다 — 솜씨가 없을수록 많이. 닦기 전엔 미끄럽고(배 본체) 방이 기름지다(Soil · 냄새).</summary>
+    private void Grease(CrewMember cm, Furniture stove, DishRecipe r)
+    {
+        var w = _w;
+        if (!r.Oily || stove.UseSpots.Count == 0) return;
+        var spot = stove.UseSpots[0];
+        float add = 0.12f + 0.22f * (1f - cm.SkillLevel(Skill.Cooking));
+        w.Body.RaiseMark(spot, CellMark.Oil, MathF.Min(1f, w.Body.Mark(spot, CellMark.Oil) + add), $"{cm.Name}의 {r.Name} 기름 튐");
+        var soil = w.Soil.RoomSoil(stove.Room);
+        soil[(int)SoilKind.Oil] = MathF.Min(1f, soil[(int)SoilKind.Oil] + 0.04f);
+        Stats.OilSplash++;
     }
 
     /// <summary>채소가 넉넉하면 항아리를 하나 앉힌다 (김치 · 절임 · 식혜 — 며칠 기다리는 음식).</summary>
@@ -336,7 +402,7 @@ public sealed class CookingSystem
         foreach (var b in Batches)
         {
             if (b.Jar || b.Portions <= 0 || b.Spoiled) continue;
-            if (!b.InFridge) { if (hot == null || b.Cooked > hot.Cooked) hot = b; }
+            if (!b.InFridge) { if (hot == null || b.Cooked < hot.Cooked) hot = b; } // 먼저 만든 냄비부터 비운다 (식었으면 데워서)
             else if (old == null || b.Cooked < old.Cooked) old = b;
         }
         return hot ?? old;
@@ -344,10 +410,22 @@ public sealed class CookingSystem
 
     public bool PowerShort => _w.Power.Brownout || _w.Power.DeficitSince >= 0;
 
-    /// <summary>데울 수 있나: 전기가 넉넉하고, 근처(그 방 · 주방)에 도는 화구 · 배식기 · 오븐이 있다.</summary>
+    /// <summary>정전 · 저출력: 근처(그 방 · 식당)에 도는 이동식 히터가 있으면 그 앞에 그릇을 놓고 데운다.</summary>
+    public bool HeaterNear(Room? near)
+    {
+        var p = _w.Portable;
+        foreach (var d in p.Devices)
+        {
+            if (d.Kind != PortableKind.Heater || !d.Running || !d.Placed || p.RoomOf(d) is not Room r) continue;
+            if (r == near || r.Type == RoomType.Mess) return true;
+        }
+        return false;
+    }
+
+    /// <summary>데울 수 있나: 전기가 넉넉하고, 근처(그 방 · 주방)에 도는 화구 · 배식기 · 오븐이 있다 (아니면 이동식 히터 앞).</summary>
     public bool CanReheat(Room? near)
     {
-        if (PowerShort) return false;
+        if (PowerShort) return HeaterNear(near);
         static bool Heater(Furniture f) => f.Type is FurnitureType.Stove or FurnitureType.MealDispenser or FurnitureType.Oven
                                            && f.Room.Powered && f.Machine is { } m && m.Efficiency > 0.2f;
         if (near != null && near.Furniture.Any(Heater)) return true;
@@ -368,8 +446,11 @@ public sealed class CookingSystem
         bool need = r.Hot && b.Temp < 45f;
         bool reheat = need && CanReheat(box.Room);
         bool cold = need && !reheat;
+        if (reheat && PowerShort) HeaterWarm(cm, r);
+        // 균이 든 끼니였다 (방금 EatActivity가 탈 날 시각을 정했다) — 그 냄비에 균이 있었다
+        if (cm.PoisonSource == box && cm.PoisonAt == w.Tick + SimTime.Minutes(40)) { b.Germy = true; Stats.GermMeals++; }
         float q = Taste(cm, b.Quality, b.Fresh, cold);
-        _eating[cm.Id] = new Serving { Recipe = b.Recipe, Reheat = reheat, Cold = cold };
+        _eating[cm.Id] = new Serving { Recipe = b.Recipe, Reheat = reheat, Cold = cold, Heater = reheat && PowerShort };
         if (cold) ColdNote(cm, r);
         Spoiling(cm, b, box);
         Side(cm);
@@ -389,6 +470,15 @@ public sealed class CookingSystem
             Stats.SpoilPoison++;
         }
         Life.Diary(_w, cm, Persona.Say(cm, $"{Ko.EunNeun(b.Spec.Name)} 좀 시큼했다. 냉장고에 오래 있었나"));
+    }
+
+    private void HeaterWarm(CrewMember cm, DishRecipe r)
+    {
+        Stats.HeaterWarm++;
+        if (_coldSaid.TryGetValue(cm.Id, out var t) && _w.Tick - t < SimTime.Hours(12)) return;
+        _coldSaid[cm.Id] = _w.Tick;
+        cm.Say(_w, Persona.Say(cm, $"히터 앞에 {Ko.EulReul(r.Name)} 잠깐 올려 둬야지"));
+        _w.Log.Add(_w.Tick, LogKind.Life, $"전기가 모자란 식당 — {Ko.IGa(cm.Name)} 이동식 히터 앞에서 식은 {Ko.EulReul(r.Name)} 데웠다", cm.Id);
     }
 
     private float Taste(CrewMember cm, float quality, float fresh, bool cold)
@@ -471,6 +561,8 @@ public sealed class CookingSystem
     public bool NeedsReheat(CrewMember c) => _eating.TryGetValue(c.Id, out var s) && s.Reheat;
     /// <summary>지금 먹는 것이 식은 채인가 (화면 · 말).</summary>
     public bool EatingCold(CrewMember c) => _eating.TryGetValue(c.Id, out var s) && s.Cold;
+    /// <summary>정전 · 저출력에 이동식 히터 앞에서 데운 그릇인가 (화면).</summary>
+    public bool EatingByHeater(CrewMember c) => _eating.TryGetValue(c.Id, out var s) && s.Heater;
     public DishRecipe? EatingNow(CrewMember c) => _eating.TryGetValue(c.Id, out var s) && s.Recipe >= 0 ? Dishes.Of(s.Recipe) : null;
 
     private void FinishReheat(CrewMember c)
@@ -618,6 +710,7 @@ public sealed class CookingSystem
         PlatesTick(h);
         Requests();
         Gripes();
+        Watch.Update();
     }
 
     private void Stoves(float h)
@@ -866,7 +959,7 @@ public sealed class CookingSystem
             var r = Dishes.Of(x.recipe);
             s.Emit(x.stove.Room, r.Smell, r.Smell == SmellKind.Bread ? 0.9f : 0.65f);
         }
-        foreach (var (_, x) in _burner) s.Emit(x.stove.Room, SmellKind.Burnt, 0.3f + 0.7f * Scorch(x.stove));
+        foreach (var (_, x) in _burner) s.Emit(x.stove.Room, SmellKind.Burnt, 0.45f + 0.55f * Scorch(x.stove));
         foreach (var b in Batches)
         {
             if (b.Room == null) continue;
@@ -891,6 +984,9 @@ public sealed class CookingSystem
         foreach (var p in Plates) { I(p.For); I(p.By); F(p.Temp); I(p.Eaten ? 1 : 0); I(p.Found ? 1 : 0); }
         foreach (var g in HomeGoods) I(g);
         I(Stats.Served); I(Stats.TasteNoticed); I(Stats.SavedPlates); I(Stats.Scorched); I(Stats.RationGripes);
+        I(Stats.GermPots); I(Stats.OilSplash); I(Stats.HeaterWarm);
+        foreach (var b in Batches) I((b.Germy ? 1 : 0) + (b.Flagged ? 2 : 0));
+        Watch.Hash(I);
     }
 }
 

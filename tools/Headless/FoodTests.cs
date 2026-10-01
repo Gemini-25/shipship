@@ -38,7 +38,8 @@ public static partial class Program
                     foreach (var f in w.Ship.Containers.Where(f => f.Storage!.Accepts(ItemKind.Meal)).OrderBy(f => f.Type == FurnitureType.Fridge ? 0 : 1))
                         if ((put += f.Storage!.Add(ItemKind.Meal, 30 - put)) >= 30) break;
                     w.Cooking.OnCooked(cook, stove, put);
-                    var b = w.Cooking.Batches.Last();
+                    var b = w.Cooking.Batches.Last(x => !x.Jar); // (조리 뒤 항아리를 앉혔을 수도 있다)
+                    b.FlagIgnored = true; // 조리사가 주컴퓨터 알림을 흘려들었다 (컴퓨터 쪽 길은 10번 시험이 본다)
                     float foul = 0f;
                     for (int m = 0; m < 34 * 6; m++)
                     {
@@ -66,7 +67,7 @@ public static partial class Program
                 var stove = w.Ship.FurnitureOf(FurnitureType.Stove).First();
                 w.Cooking.ForceNext = "vegsoup";
                 w.Cooking.OnCooked(cook, stove, 6);
-                var soup = w.Cooking.Batches.Last();
+                var soup = w.Cooking.Batches.Last(x => !x.Jar);
                 Plate? plate = null;
                 string how = "자연";
                 string dbg = "";
@@ -79,7 +80,7 @@ public static partial class Program
                 {
                     // 아무도 식당에 없었다 — 조리사에게 덜어 두게 한다 (장면을 꾸민다)
                     how = "부탁";
-                    if (soup.Portions <= 0) { w.Cooking.ForceNext = "vegsoup"; w.Cooking.OnCooked(cook, stove, 6); soup = w.Cooking.Batches.Last(); }
+                    if (soup.Portions <= 0) { w.Cooking.ForceNext = "vegsoup"; w.Cooking.OnCooked(cook, stove, 6); soup = w.Cooking.Batches.Last(x => !x.Jar); }
                     var saver = w.Crew.Where(c => c != mech && c.CanAct && !c.IsChild).OrderByDescending(c => c == cook).First();
                     w.Cooking.AskToSave(saver, mech, soup);
                     for (int m = 0; m < 120 && plate == null; m++) { Run(w, SimTime.Minutes(1)); plate = w.Cooking.Plates.FirstOrDefault(p => p.For == mech.Id); }
@@ -123,6 +124,7 @@ public static partial class Program
                 {
                     Run(w, SimTime.Minutes(1));
                     foreach (var c in w.Crew) if (c.Job?.Activity is FollowSmellActivity) came.Add(c.Id);
+                    if (Environment.GetEnvironmentVariable("FOODDBG") != null && m % 5 == 0) Console.WriteLine($"    [빵 {m}] " + string.Join(" / ", w.Crew.Where(c => !c.Dead).Select(c => $"{c.Name}@{c.Room?.Name} {(c.Room != null ? w.Smells.Level(c.Room, SmellKind.Bread) : 0f):0.000} {(w.Smells.Smelled(c, SmellKind.Bread, SimTime.Minutes(20)) != null ? "맡음" : "")} 배고픔{c.Needs.Hunger:0.00} {c.ActivityLabel}")));
                     if (galley != null)
                         foreach (var (o, _) in w.Ambience.Neighbors(galley)) spread = MathF.Max(spread, w.Smells.Level(o, SmellKind.Bread));
                 }
@@ -139,16 +141,22 @@ public static partial class Program
                 w.Cooking.LeaveOnBurner(stove, null);
                 long left = w.Tick, checkAt = -1, alarmAt = -1;
                 string? checker = null;
+                float hereMax = 0f, nbMax = 0f;
+                string where = "";
                 for (int m = 0; m < 90; m++)
                 {
                     Run(w, SimTime.Minutes(1));
+                    hereMax = MathF.Max(hereMax, w.Smells.Level(stove.Room, SmellKind.Burnt));
+                    foreach (var (o, _) in w.Ambience.Neighbors(stove.Room)) nbMax = MathF.Max(nbMax, w.Smells.Level(o, SmellKind.Burnt));
+                    if (Environment.GetEnvironmentVariable("FOODDBG") != null && m % 3 == 0) Console.WriteLine($"    [탄 {m}] " + string.Join(" / ", w.Crew.Where(c => !c.Dead).Select(c => $"{c.Name}@{c.Room?.Name} {(c.Room != null ? w.Smells.Level(c.Room, SmellKind.Burnt) : 0f):0.000} {(w.Smells.Smelled(c, SmellKind.Burnt, SimTime.Minutes(20)) != null ? "맡음" : "")} {c.ActivityLabel}")));
+                    if (m == 10) where = string.Join(", ", w.Crew.Where(c => !c.Dead).Select(c => $"{c.Name}@{c.Room?.Name}{(c.IsAwake ? "" : "(잠)")}"));
                     if (checkAt < 0 && w.Crew.FirstOrDefault(c => c.Job?.Activity is CheckSmellActivity) is CrewMember ch) { checkAt = w.Tick; checker = ch.Name; }
                     if (alarmAt < 0 && w.Alerts.Any(a => a.Serial > alerts0 && a.Text.Contains("화재"))) alarmAt = w.Tick;
                     if (w.Cooking.ScorchingIn(stove.Room) == null && m > 2) break;
                 }
                 var st = w.Cooking.Stats;
                 Check("탄 냄새 — 맡은 사람이 경보보다 먼저 확인하러 가서 불 위의 냄비를 내린다", checkAt >= 0 && (alarmAt < 0 || checkAt < alarmAt) && st.ScorchCaught > 0,
-                    $"{checker} 확인 출발 {(checkAt >= 0 ? $"+{(checkAt - left) / (float)SimTime.TicksPerHour * 60:0}분" : "없음")} · 경보 {(alarmAt >= 0 ? $"+{(alarmAt - left) / (float)SimTime.TicksPerHour * 60:0}분" : "없음")} · {st.Summary()} · {w.Smells.Stats.Summary()}");
+                    $"주방 탄내 최고 {hereMax * 100:0}% · 이웃 {nbMax * 100:0}% · [{where}] · {checker} 확인 출발 {(checkAt >= 0 ? $"+{(checkAt - left) / (float)SimTime.TicksPerHour * 60:0}분" : "없음")} · 경보 {(alarmAt >= 0 ? $"+{(alarmAt - left) / (float)SimTime.TicksPerHour * 60:0}분" : "없음")} · {st.Summary()} · {w.Smells.Stats.Summary()}");
             }
 
             // 4b) 감지기가 꺼진 방의 불: 연기 냄새가 옆방으로 새어 나가 맡은 사람이 먼저 찾는다
@@ -171,6 +179,29 @@ public static partial class Program
                 string how = w.Alerts.LastOrDefault(a => a.Text.Contains("화재"))?.Text ?? "";
                 Check("감지기 없는 방의 불 — 탄 냄새를 따라온 사람이 먼저 찾는다", checkAt >= 0 && w.Fire.IsKnown(room) && w.Smells.Stats.FireBySmell > 0,
                     $"{room.Name} · {how} · {w.Smells.Stats.Summary()}");
+                // 주컴퓨터: 사람 코가 먼저 찾은 불을 감지기 상태와 견주어 적고, 화구 자리 비움 감시를 켠다
+                var act = w.Automation.Book.Acts.LastOrDefault(a => a.Key.StartsWith("food:smell"));
+                Check("주컴퓨터 — 탄 냄새 신고와 감지기를 견줘 기록하고(감지기 꺼짐) 화구 감시를 켠다", act != null && act.Judge.Contains("감지기") && w.Cooking.Watch.BurnerWatch,
+                    $"{act?.Observe} | {act?.Judge} | {act?.Act} | {act?.Request} · {w.Cooking.Watch.Summary()}");
+            }
+
+            // 4c) 주컴퓨터의 화구 감시: 배운 뒤로는 화구가 켜진 채 곁에 아무도 없으면 가장 가까운 사람을 부른다 → 그 사람이 가서 냄비를 내린다
+            {
+                var w = DayOne(seed, "Hanbit");
+                Run(w, SimTime.Hours(2));
+                w.Cooking.Watch.Learn();
+                var stove = w.Ship.FurnitureOf(FurnitureType.Stove).First();
+                foreach (var c in w.Crew.Where(c => c.Room == stove.Room)) c.Interrupt(w);
+                w.Cooking.LeaveOnBurner(stove, null);
+                string? asked = null;
+                for (int m = 0; m < 45 && w.Cooking.ScorchingIn(stove.Room) != null; m++)
+                {
+                    Run(w, SimTime.Minutes(1));
+                    if (asked == null && w.Crew.FirstOrDefault(c => w.Smells.AskedRoom(c) == stove.Room) is CrewMember a) asked = a.Name;
+                }
+                var st = w.Cooking.Stats;
+                Check("주컴퓨터 — 화구 자리 비움을 보고 가까운 사람을 부른다 → 가서 불 위의 냄비를 내린다", w.Cooking.Watch.BurnerCalls > 0 && st.ScorchCaught > 0 && st.ScorchFires == 0,
+                    $"부른 사람 {asked} · {w.Cooking.Watch.Summary()} · 먼저 내림 {st.ScorchCaught} · 불 {st.ScorchFires} · {w.Smells.Stats.Summary()}");
             }
 
             // 5) 조리사가 다치면 배우던 사람이 대신 서고, 먹는 사람이 맛이 달라진 걸 알아챈다
@@ -182,36 +213,42 @@ public static partial class Program
                 appr.SkillLevels[(int)Skill.Cooking] = MathF.Max(0.05f, head.RawSkill(Skill.Cooking) - 0.35f); // 아직 배우는 중
                 NeedsSystem.AddInjury(head.Vitals, 0.6f, "주방 화상");
                 int cover0 = w.Cooking.Stats.CoverCooks, taste0 = w.Cooking.Stats.TasteNoticed;
+                long hurtAt = w.Tick;
                 for (int h = 0; h < 36 && (w.Cooking.Stats.CoverCooks == cover0 || w.Cooking.Stats.TasteNoticed == taste0); h++)
                 {
                     Run(w, SimTime.Hours(1));
                     if (head.Vitals.Injury < 0.3f) NeedsSystem.AddInjury(head.Vitals, 0.3f, "주방 화상");
                 }
-                var byAppr = w.Cooking.Batches.Any(b => b.Cook == appr.Id) || w.Log.Entries.Any(e => e.CrewId == appr.Id && e.Text.StartsWith("오늘은"));
+                var byAppr = w.Cooking.Stats.CoverCooks > cover0 && !w.Cooking.Batches.Any(b => b.Cook == head.Id && b.Cooked > hurtAt); // 다친 조리사 대신 다른 사람(대개 배우던 사람 — 자고 있으면 깨어 있는 사람)이 섰다
                 var noticed = w.Crew.SelectMany(c => c.Diary.Select(d => (c.Name, d.text))).Where(d => d.text.Contains("맛")).Select(d => $"{d.Name}: {d.text}").LastOrDefault();
                 Check("조리사 부상 — 배우던 사람이 대신 서고, 맛이 달라진 걸 알아챈다 (일기)", byAppr && w.Cooking.Stats.TasteNoticed > taste0 && noticed != null,
-                    $"조리사 {head.Name} · 배우던 사람 {appr.Name} · 대신 {w.Cooking.Stats.CoverCooks - cover0}번 · 알아챔 {w.Cooking.Stats.TasteNoticed - taste0} · \"{noticed}\"");
+                    $"조리사 {head.Name} · 배우던 사람 {appr.Name}(지금 {w.Cooking.Apprentice?.Name}) · 조리한 사람 {string.Join(",", w.Log.Entries.Where(e => e.Text.StartsWith("오늘은") && e.CrewId >= 0).Select(e => w.Crew[e.CrewId].Name).Distinct())} · 대신 {w.Cooking.Stats.CoverCooks - cover0}번 · 알아챔 {w.Cooking.Stats.TasteNoticed - taste0} · \"{noticed}\"");
             }
 
             // 6) 전기가 모자라면 데우지 않고 차갑게 먹는다 (넉넉하면 데운다)
             {
-                (int cold, int reheated) Meal(bool brownout)
+                (int cold, int reheated, string sum) Meal(bool brownout)
                 {
                     var w = DayOne(seed, "Mirinae");
                     var cook = w.Cooking.HeadCook!;
                     var stove = w.Ship.FurnitureOf(FurnitureType.Stove).First();
                     w.Cooking.ForceNext = "vegsoup";
-                    w.Cooking.OnCooked(cook, stove, 12);
-                    w.Cooking.Batches.Last().Temp = 22f; // 한참 놓여 식었다
+                    w.Cooking.OnCooked(cook, stove, AddMeals(w, 12)); // 재고에도 그만큼
+                    w.Cooking.Batches.Last(x => !x.Jar).Temp = 22f; // 한참 놓여 식었다
+                    foreach (var x in w.Cooking.Batches.Where(x => !x.Jar && x != w.Cooking.Batches.Last(y => !y.Jar))) x.Portions = 0; // 다른 냄비는 비었다
                     if (brownout) w.Power.Brownout = true;
                     foreach (var c in w.Crew) c.Needs.Food = MathF.Min(c.Needs.Food, 0.3f);
+                    int served0 = w.Cooking.Stats.Served;
+                    var soup = w.Cooking.Batches.Last(x => !x.Jar);
                     Run(w, SimTime.Hours(1.5f));
-                    return (w.Cooking.Stats.ColdNoPower, w.Cooking.Stats.Reheated);
+                    string dbg = $"먹음 {w.Cooking.Stats.Served - served0} · 수프 {soup.Spec.Name} {soup.Portions}그릇 {soup.Temp:0}℃ 냉장 {soup.InFridge} · 냄비들 {string.Join(",", w.Cooking.Batches.Select(b => $"{b.Spec.Name}{b.Portions}/{b.Temp:0}℃{(b == soup ? "*" : "")}"))} ·식사 재고 {w.Ship.CountStored(ItemKind.Meal)} · "
+                        + string.Join(" / ", w.Crew.Where(c => !c.Dead).Select(c => $"{c.Name} {c.Needs.Hunger:0.00} {c.ActivityLabel}"));
+                    return (brownout ? w.Cooking.Stats.ColdNoPower : w.Cooking.Stats.Cold, w.Cooking.Stats.Reheated, dbg);
                 }
                 var low = Meal(true);
                 var ok = Meal(false);
                 Check("전력 부족 — 식은 수프를 데우지 않고 차갑게 먹는다 (전기가 넉넉하면 데운다)", low.cold > 0 && ok.reheated > 0 && ok.cold == 0,
-                    $"저출력: 차갑게 {low.cold} · 데움 {low.reheated} / 평소: 차갑게 {ok.cold} · 데움 {ok.reheated}");
+                    $"저출력: 차갑게 {low.cold} · 데움 {low.reheated} / 평소: 차갑게 {ok.cold} · 데움 {ok.reheated} · [{low.sum}]");
             }
 
             // 7) 기항지에서 고향 재료 → 고향 음식을 먹은 사람이 고향 맛을 느낀다
@@ -229,6 +266,88 @@ public static partial class Program
                 Run(w, SimTime.Hours(2));
                 Check("고향 음식 — 기항지에서 재료를 사고, 그 음식을 먹은 사람이 고향 맛을 느낀다", w.Cooking.Stats.HomeMeals > 0,
                     $"{who.Name}의 고향 음식 {dish.Name} · 기항지 \"{string.Join(", ", lines)}\" · {who.Diary.LastOrDefault(d => d.text.Contains("고향")).text}");
+            }
+
+            int AddMeals(World w, int n)
+            {
+                int put = 0;
+                foreach (var f in w.Ship.Containers.Where(f => f.Storage!.Accepts(ItemKind.Meal)).OrderBy(f => f.Type == FurnitureType.Fridge ? 0 : 1).ThenBy(f => f.Id))
+                    if ((put += f.Storage!.Add(ItemKind.Meal, n - put)) >= n) break;
+                return put;
+            }
+
+            // 9) 정전 → 냉장고가 멈춤 → 냄비가 상해 감 → 주컴퓨터 경보 · 시큼한 끼니 → 식중독
+            {
+                var w = DayOne(seed, "Hanbit");
+                var cook = w.Cooking.HeadCook!;
+                var stove = w.Ship.FurnitureOf(FurnitureType.Stove).First();
+                w.Cooking.ForceNext = "stew";
+                w.Cooking.OnCooked(cook, stove, AddMeals(w, 30));
+                var b = w.Cooking.Batches.Last(x => !x.Jar);
+                foreach (var x in w.Cooking.Batches.Where(x => x != b && !x.Jar)) x.Portions = 0; // 다른 냄비는 다 먹었다
+                foreach (var st0 in w.Ship.FurnitureOf(FurnitureType.Stove)) w.Machines.Break(st0.Machine!, FaultKind.Wrecked); // 화구도 멈춰 새로 끓일 수 없다
+                var fr = w.Ship.FurnitureOf(FurnitureType.Fridge).ToList();
+                b.InFridge = true; b.Room = fr.FirstOrDefault()?.Room ?? b.Room; b.Temp = 4f;
+                foreach (var f in fr) f.Room.BreakerOff = true; // 정전: 냉장고 방의 분전함이 내려갔다
+                float f0 = b.Fresh;
+                for (int m = 0; m < 12; m++) { Run(w, SimTime.Minutes(10)); foreach (var f in fr) f.Room.BreakerOff = true; } // 누가 분전함을 올려도 또 내려간다
+                foreach (var f in fr) f.Room.BreakerOff = true;
+                float rot = (f0 - b.Fresh) / 2f; // 시간당 (냉장이면 0.004)
+                b.Fresh = 0.42f; // … 그렇게 아홉 시간쯤 지났다 (장면을 당긴다)
+                float freshAt = b.Fresh;
+                foreach (var c in w.Crew) c.Needs.Food = MathF.Min(c.Needs.Food, 0.25f);
+                for (int m = 0; m < 18 && w.Cooking.Stats.SpoilPoison == 0; m++) { Run(w, SimTime.Minutes(10)); foreach (var f in fr) f.Room.BreakerOff = true; }
+                var st = w.Cooking.Stats;
+                int sick = w.Crew.Count(c => c.PoisonAt >= 0 || c.Ailments.Count > 0);
+                var act = w.Automation.Book.Acts.FirstOrDefault(a => a.Key == "food:fridge");
+                Check("정전 → 냉장고 멈춤 → 냄비가 상해 감 → 주컴퓨터 경보 · 시큼한 끼니 → 식중독", rot > 0.012f && w.Cooking.Watch.FridgeAlerts > 0 && act != null && st.SourMeals > 0 && st.SpoilPoison > 0,
+                    $"정전 중 신선도 시간당 -{rot * 100:0.0}% · {freshAt * 100:0}%에서 먹음 · 경보 \"{w.Alerts.LastOrDefault(a => a.Text.Contains("냉장고"))?.Text}\" · 기록 [{act?.Observe} | {act?.Judge} | {act?.Request}] · 시큼한 끼니 {st.SourMeals} · 식중독 {st.SpoilPoison} · 앓는 사람 {sick}");
+            }
+
+            // 10) 주컴퓨터 신선도 알림: 냉장 냄비가 상해 가면 조리사에게 "먼저 쓰라" → 조리사가 받아들이면 다음 조리에 그 냄비부터 넣는다
+            {
+                var w = DayOne(seed, "Mirinae");
+                var cook = w.Cooking.HeadCook!;
+                var stove = w.Ship.FurnitureOf(FurnitureType.Stove).First();
+                Batch? flagged = null;
+                int tries = 0;
+                while (flagged == null && tries++ < 5)
+                {
+                    w.Cooking.ForceNext = "curry";
+                    w.Cooking.OnCooked(cook, stove, AddMeals(w, 6));
+                    var b = w.Cooking.Batches.Last(x => !x.Jar);
+                    b.InFridge = true; b.Fresh = 0.55f;
+                    Run(w, SimTime.Minutes(12));
+                    if (b.Flagged) flagged = b;
+                }
+                int lo0 = w.Cooking.Stats.Leftovers;
+                w.Cooking.HoursMul(stove, cook); // 조리 일감을 짤 때처럼: 무엇을 만들지 고른다
+                w.Cooking.OnCooked(cook, stove, AddMeals(w, 6));
+                bool used = flagged != null && !w.Cooking.Batches.Contains(flagged);
+                var made = w.Cooking.Batches.Last(x => !x.Jar);
+                var act = w.Automation.Book.Acts.LastOrDefault(a => a.Key.StartsWith("food:fresh"));
+                var msg = w.Automation.Apps.Messages.LastOrDefault(m => m.Kind == "식단" && m.CrewId == cook.Id);
+                Check("주컴퓨터 — 냄비 신선도를 읽고 조리사에게 알린다 → 조리사가 그 냄비부터 쓴다 (남은 것 요리)", act != null && msg != null && used && w.Cooking.Stats.Leftovers > lo0,
+                    $"알림 {tries}번째에 받아들임 · 메시지 \"{msg?.Text}\" · 기록 [{act?.Observe} | {act?.Judge} | {act?.Act}] · 만든 것 {made.Spec.Name} {made.Portions}그릇 · {w.Cooking.Watch.Summary()}");
+            }
+
+            // 11) 오염: 지저분한 주방(균)에서 만든 냄비에 균이 들고 · 기름진 전이 화구 앞 바닥에 기름을 튀긴다 (배 본체 칸 상태)
+            {
+                var w = DayOne(seed, "Mirinae");
+                var cook = w.Cooking.HeadCook!;
+                var stove = w.Ship.FurnitureOf(FurnitureType.Stove).First();
+                w.Soil.RoomSoil(stove.Room)[(int)SoilKind.Bio] = 0.9f;
+                int t0 = w.Ship.Containers.Sum(f => f.Storage!.Tainted);
+                float oil0 = stove.UseSpots.Count > 0 ? w.Body.Mark(stove.UseSpots[0], CellMark.Oil) : 0f;
+                w.Cooking.ForceNext = "pancake";
+                w.Cooking.OnCooked(cook, stove, AddMeals(w, 8));
+                var b = w.Cooking.Batches.Last(x => !x.Jar);
+                int t1 = w.Ship.Containers.Sum(f => f.Storage!.Tainted);
+                float oil = stove.UseSpots.Count > 0 ? w.Body.Mark(stove.UseSpots[0], CellMark.Oil) : 0f;
+                foreach (var c in w.Crew) c.Needs.Food = MathF.Min(c.Needs.Food, 0.3f);
+                Run(w, SimTime.Hours(2));
+                Check("오염 — 지저분한 주방의 냄비에 균이 들고(보관함 식사에 균) · 전을 부치면 화구 앞 바닥에 기름이 튄다", b.Germy && t1 > t0 && oil > oil0 + 0.1f,
+                    $"균 든 냄비 {b.Germy} · 균 든 식사 {t0}→{t1} · 바닥 기름 {oil0 * 100:0}→{oil * 100:0}% · 균 든 끼니 {w.Cooking.Stats.GermMeals} · 앓는 사람 {w.Crew.Count(c => c.PoisonAt >= 0)}");
             }
 
             // 8) 결정론

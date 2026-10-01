@@ -10,10 +10,13 @@ namespace ShipSim.View;
 // 면 냄비(물결 면발) · 죽 냄비(느린 거품) · 오븐 판(칼집 낸 빵 덩이) · 케이크(조각 선) · 프라이팬(지글거리는 전) · 찜기(대나무 결 · 주름 만두) ·
 // 항아리(옹기 · 익는 동안 뽀글) · 유리병(절임 조각). 끓으면 김이 오르고 뚜껑이 들썩, 식으면 김이 잦아들고 막이 앉고, 상하면 곰팡이 · 파리,
 // 불 위에 남아 타면 바닥이 검어지고 검은 연기 · 불씨. 식탁의 남겨 둔 접시엔 이름표(받을 사람 색 띠 · 확대하면 이름).
-// 냄새는 종류마다 다르게 번진다: 빵(금빛 리본이 느리게 감아 오른다) · 요리(주황 짧은 김 가닥) · 탄내(잿빛 연기 덩이 · 그을음 알갱이) · 악취(초록 얼룩 · 지그재그 · 파리).
+// 냄새는 종류마다 다르게 번진다: 빵(금빛 리본이 느리게 감아 오른다) · 요리(주황 짧은 김 가닥) · 탄내(잿빛 연기 덩이 · 그을음 알갱이) · 악취(초록 얼룩 · 지그재그 · 파리) ·
+// 커피(갈색 나선이 감겨 오르고 원두 알갱이가 떠다닌다).
+// 균 든 냄비는 확대하면 테두리에 꿈틀대는 초록 막대균 · 주컴퓨터가 "먼저 쓰라"고 한 냄비엔 호박색 화면 쪽지(받아들임 — 깜빡이는 점 · 흘려들음 — 구겨진 회색) ·
+// 컴퓨터가 화구 때문에 사람을 부르면 화구 위에 하늘색 감시 눈(맥박 고리 · 주사선) · 히터 앞에서 데운 그릇은 아래로 주황 열 물결.
 public partial class ShipView
 {
-    private static readonly Color FogBread = new("#f2c46d"), FogCook = new("#f08a4b"), FogBurnt = new("#7a6d64"), FogFoul = new("#97b83c");
+    private static readonly Color FogBread = new("#f2c46d"), FogCook = new("#f08a4b"), FogBurnt = new("#7a6d64"), FogFoul = new("#97b83c"), FogCoffee = new("#8b5a3c");
     private static readonly Color FdSteel = new("#9aa5b1"), FdSteelDark = new("#5d6672"), FdClay = new("#4a3328"), FdClayRim = new("#6e4c3a"),
         FdIron = new("#2b2d33"), FdBamboo = new("#c9a66b"), FdBambooDark = new("#8f7146"), FdOnggi = new("#5a3a26"), FdGlass = new("#cfe8ef"), FdPaper = new("#f5ebcf");
 
@@ -31,7 +34,13 @@ public partial class ShipView
         {
             var c = FurnitureRect(st).GetCenter();
             float scorch = ck.Scorch(st);
-            if (scorch > 0f) { DrawBurningPot(ci, c, 10f, scorch, st.Id, fine); used.Add(st.Id); continue; }
+            if (scorch > 0f)
+            {
+                DrawBurningPot(ci, c, 10f, scorch, st.Id, fine);
+                if (ck.Watch.Calling(st)) DrawWatchEye(ci, c + new Vector2(0f, -16f), st.Id, fine);
+                used.Add(st.Id);
+                continue;
+            }
             if (ck.CookingAt(st) is DishRecipe r)
             {
                 DrawBurnerGlow(ci, c, 12f, 1f);
@@ -54,11 +63,14 @@ public partial class ShipView
                 var at = new Vector2(box.End.X + 7f + 11f * (k % 3), box.End.Y - 8f - 14f * (k / 3));
                 float prog = b.Ready(w.Tick) ? 1f : Mathf.Clamp((w.Tick - b.Cooked) / (float)Math.Max(1, b.ReadyAt - b.Cooked), 0f, 1f);
                 DrawJar(ci, spec, at, 7f, prog, b.Spoiled, b.Portions / (float)Math.Max(1, b.Made), fine, b.Id);
+                if (b.Germy && z > 1.6f) DrawGerms(ci, at, 7f, b.Id);
             }
             else if (b.InFridge)
             {
                 var at = new Vector2(box.Position.X - 7f - 10f * (k % 2), box.Position.Y + 8f + 9f * (k / 2));
                 DrawTub(ci, spec, at, 6f, b.Spoiled, fine, b.Id);
+                if (b.Germy && z > 1.6f) DrawGerms(ci, at, 6f, b.Id);
+                if (b.Flagged || b.FlagIgnored) DrawComputerNote(ci, at + new Vector2(-6f, -9f), b.Flagged, b.Id, fine);
             }
             else
             {
@@ -67,6 +79,8 @@ public partial class ShipView
                 float s = onBurner || k > 0 ? 7f : 10f;
                 DrawVessel(ci, spec, at, s, heat, false, b.Spoiled, fine, b.Id);
                 if (fine && z > 1.8f) PortionPips(ci, at + new Vector2(0f, s + 4f), b.Portions, b.Made);
+                if (b.Germy && z > 1.6f) DrawGerms(ci, at, s, b.Id);
+                if (b.Flagged || b.FlagIgnored) DrawComputerNote(ci, at + new Vector2(s + 2f, -s - 3f), b.Flagged, b.Id, fine);
             }
         }
         // 3) 남겨 둔 접시 (이름표)
@@ -85,6 +99,7 @@ public partial class ShipView
             if (c.Dead || c.Pose != Pose.Sitting || c.Job?.Activity is not EatActivity || ck.EatingNow(c) is not DishRecipe r) continue;
             var pos = ToPx(c.Position) + new Vector2(0f, -CrewRadius - 3f);
             DrawBowl(ci, r, pos, 4f, ck.EatingCold(c) ? 0f : 0.8f, c.Id);
+            if (ck.EatingByHeater(c)) HeatRipple(ci, pos + new Vector2(0f, 5f), c.Id);
         }
     }
 
@@ -471,6 +486,69 @@ public partial class ShipView
         Steam(ci, c + new Vector2(0f, -1f), heat, seed, 0.45f);
     }
 
+    // ── 균 · 컴퓨터 쪽지 · 감시 눈 · 히터 열 ──
+
+    /// <summary>균: 그릇 테두리에 꿈틀대는 짧은 초록 막대균과 알균 (확대해야 보인다 — 먹는 사람은 모른다).</summary>
+    private void DrawGerms(CanvasItem ci, Vector2 c, float s, int seed)
+    {
+        for (int i = 0; i < 5; i++)
+        {
+            float a = Hash01(seed, i + 11) * Mathf.Tau + _time * 0.3f;
+            var p = c + Vector2.FromAngle(a) * s * (0.9f + 0.15f * Mathf.Sin(_time * 2f + i));
+            var d = Vector2.FromAngle(a + 1.2f + Mathf.Sin(_time * 3f + i) * 0.5f);
+            var col = new Color(0.45f, 0.85f, 0.25f, 0.85f);
+            if (i % 2 == 0) { ci.DrawLine(p - d * 1.6f, p + d * 1.6f, col, 1.1f, true); ci.DrawLine(p + d * 1.6f, p + d * 2.4f + d.Orthogonal() * Mathf.Sin(_time * 9f + i), col.WithAlpha(0.5f), 0.5f, true); } // 막대균과 꼬리
+            else { ci.DrawCircle(p, 0.8f, col, true, -1f, true); ci.DrawCircle(p + d * 1.3f, 0.6f, col, true, -1f, true); } // 알균 둘
+        }
+    }
+
+    /// <summary>주컴퓨터 쪽지: 호박색 작은 화면 · 받아들였으면 깜빡이는 점과 "먼저" 줄, 흘려들었으면 구겨진 회색 쪽지.</summary>
+    private void DrawComputerNote(CanvasItem ci, Vector2 at, bool taken, int seed, bool fine)
+    {
+        if (taken)
+        {
+            var box = new Rect2(at - new Vector2(4.5f, 3f), new Vector2(9f, 6f));
+            Gfx.RoundRect(ci, box, new Color("#2b2418"), 1.2f, new Color("#f2a93b"), 1);
+            float blink = Mathf.PosMod(_time * 1.6f + seed * 0.1f, 1f) < 0.5f ? 1f : 0.3f;
+            ci.DrawCircle(box.Position + new Vector2(2f, 2f), 0.9f, new Color(1f, 0.66f, 0.2f, blink), true, -1f, true);
+            for (int i = 0; i < 2; i++) ci.DrawLine(box.Position + new Vector2(3.6f, 1.8f + i * 2f), box.Position + new Vector2(8f - i * 1.5f, 1.8f + i * 2f), new Color(1f, 0.8f, 0.4f, 0.85f), 0.7f); // 글줄
+            if (fine) Gfx.TextCentered(ci, Fonts.Body, at + new Vector2(0f, -5f), "먼저", 5, new Color("#f2a93b"));
+        }
+        else
+        {
+            var pts = new[] { at + new Vector2(-4f, -2.5f), at + new Vector2(-1f, -3.2f), at + new Vector2(3.8f, -2f), at + new Vector2(4.2f, 2.6f), at + new Vector2(0.5f, 3.2f), at + new Vector2(-3.6f, 2.2f) };
+            ci.DrawColoredPolygon(pts, new Color("#9aa0a6").WithAlpha(0.8f));
+            ci.DrawLine(at + new Vector2(-2.5f, -1.5f), at + new Vector2(2.5f, 1.8f), new Color(0.35f, 0.35f, 0.38f, 0.8f), 0.6f); // 구김
+            ci.DrawLine(at + new Vector2(-2f, 1.6f), at + new Vector2(2.6f, -1.4f), new Color(0.35f, 0.35f, 0.38f, 0.8f), 0.6f);
+        }
+    }
+
+    /// <summary>주컴퓨터 감시 눈: 화구 위 하늘색 렌즈 · 맥박 고리 · 위아래로 훑는 주사선.</summary>
+    private void DrawWatchEye(CanvasItem ci, Vector2 c, int seed, bool fine)
+    {
+        var cyan = new Color("#5fd3f3");
+        float t = Mathf.PosMod(_time * 1.2f + seed * 0.13f, 1f);
+        ci.DrawArc(c, 4f + 6f * t, 0f, Mathf.Tau, 20, cyan.WithAlpha(0.7f * (1f - t)), 1f, true); // 맥박
+        ci.DrawColoredPolygon(new[] { c + new Vector2(-5f, 0f), c + new Vector2(0f, -3f), c + new Vector2(5f, 0f), c + new Vector2(0f, 3f) }, new Color("#14303a"));
+        ci.DrawCircle(c, 1.8f, cyan, true, -1f, true);
+        ci.DrawCircle(c + new Vector2(-0.6f, -0.6f), 0.5f, Colors.White, true, -1f, true);
+        float sy = Mathf.Sin(_time * 4f) * 2.6f;
+        ci.DrawLine(c + new Vector2(-4f, sy), c + new Vector2(4f, sy), cyan.WithAlpha(0.6f), 0.6f); // 주사선
+        if (fine) for (int i = 0; i < 3; i++) ci.DrawArc(c + new Vector2(6f, -4f), 1.5f + i * 1.6f, -1.1f, 0.2f, 5, cyan.WithAlpha(0.5f + 0.3f * Mathf.Sin(_time * 5f - i)), 0.6f, true); // 부르는 전파
+    }
+
+    /// <summary>이동식 히터 앞에서 데운 그릇: 아래로 주황 열 물결이 일렁인다.</summary>
+    private void HeatRipple(CanvasItem ci, Vector2 c, int seed)
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            var pts = new Vector2[6];
+            for (int j = 0; j < pts.Length; j++)
+                pts[j] = c + new Vector2(-4f + j * 1.6f, i * 1.6f + Mathf.Sin(_time * 6f + j + i + seed) * 0.7f);
+            ci.DrawPolyline(pts, new Color(1f, 0.55f, 0.2f, 0.65f - 0.18f * i), 0.8f, true);
+        }
+    }
+
     // ── 냄새 안개 (종류마다 모양 · 움직임이 다르다) ──
 
     private void PaintSmellFog(CanvasItem ci, bool strong)
@@ -481,14 +559,14 @@ public partial class ShipView
         foreach (var room in w.Ship.LiveRooms)
         {
             if (room.Detached) continue;
-            float bread = sm.Level(room, SmellKind.Bread), cook = sm.Level(room, SmellKind.Cooking), burnt = sm.Level(room, SmellKind.Burnt), foul = sm.Level(room, SmellKind.Foul);
-            if (bread < 0.04f && cook < 0.05f && burnt < 0.03f && foul < 0.08f) continue;
+            float bread = sm.Level(room, SmellKind.Bread), cook = sm.Level(room, SmellKind.Cooking), burnt = sm.Level(room, SmellKind.Burnt), foul = sm.Level(room, SmellKind.Foul), coffee = sm.Level(room, SmellKind.Coffee);
+            if (bread < 0.04f && cook < 0.05f && burnt < 0.03f && foul < 0.08f && coffee < 0.05f) continue;
             var box = RoomBox(room);
             int seed = room.Id * 7;
             if (strong)
             {
                 var dom = sm.Dominant(room, out var dv);
-                if (dom is SmellKind k) FillRoom(ci, room, (k switch { SmellKind.Bread => FogBread, SmellKind.Cooking => FogCook, SmellKind.Burnt => FogBurnt, _ => FogFoul }).WithAlpha(0.05f + 0.3f * dv));
+                if (dom is SmellKind k) FillRoom(ci, room, (k switch { SmellKind.Bread => FogBread, SmellKind.Cooking => FogCook, SmellKind.Burnt => FogBurnt, SmellKind.Coffee => FogCoffee, _ => FogFoul }).WithAlpha(0.05f + 0.3f * dv));
             }
             // 빵: 금빛 리본이 느리게 감아 오른다
             if (bread >= 0.04f)
@@ -542,6 +620,27 @@ public partial class ShipView
                     ci.DrawColoredPolygon(Ell(p, 9f * pulse, 4f * pulse, 14, 0.2f * i), FogFoul.WithAlpha(MathF.Min(1f, foul * 2f) * 0.22f * baseA));
                     Stink(ci, p + new Vector2(0f, -4f), 12f, MathF.Min(1f, foul * 2f) * baseA, seed + i);
                     if (foul > 0.25f) Flies(ci, p + new Vector2(0f, -8f), 6f, seed + i);
+                }
+            }
+            // 커피: 갈색 나선이 한 점에서 감겨 오르고, 작은 원두(가운데 홈)가 둥실 떠다닌다
+            if (coffee >= 0.05f)
+            {
+                int n = 1 + (int)(coffee * 3f);
+                for (int i = 0; i < n; i++)
+                {
+                    var b0 = new Vector2(box.Position.X + box.Size.X * (0.2f + 0.6f * Hash01(seed + 8, i)), box.End.Y - 7f);
+                    var pts = new Vector2[14];
+                    for (int j = 0; j < pts.Length; j++)
+                    {
+                        float u = j / (float)(pts.Length - 1);
+                        float a = u * 9f + _time * 1.4f + i;
+                        pts[j] = b0 + new Vector2(Mathf.Cos(a) * (2f + 5f * u), -u * (box.Size.Y * 0.55f));
+                    }
+                    ci.DrawPolyline(pts, FogCoffee.WithAlpha(MathF.Min(1f, coffee * 2.5f) * 0.6f * baseA), 1.6f, true);
+                    float f = Mathf.PosMod(_time * 0.2f + Hash01(seed + 9, i), 1f);
+                    var bean = b0 + new Vector2(Mathf.Sin(_time + i) * 6f, -f * box.Size.Y * 0.6f);
+                    ci.DrawColoredPolygon(Ell(bean, 1.8f, 1.2f, 10, 0.6f + i), new Color("#4a2c1a").WithAlpha((1f - f) * baseA));
+                    ci.DrawLine(bean + Vector2.FromAngle(0.6f + i) * -1.2f, bean + Vector2.FromAngle(0.6f + i) * 1.2f, new Color("#c8955f").WithAlpha((1f - f) * baseA), 0.5f); // 원두 홈
                 }
             }
         }
