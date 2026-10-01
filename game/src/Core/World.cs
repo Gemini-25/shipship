@@ -151,6 +151,7 @@ public sealed class World
     public RelationSystem Relations { get; } // v14.3~ 관계의 이유
     public MovementSystem Movement { get; } // v14.5 움직임
     public PartsSystem Parts { get; } // v14.6 부품마다의 수명과 내력
+    public SoilSystem Soil { get; } // v14.7 오염 · 위생
     public AmbienceSystem Ambience { get; }
     public ExteriorSystem Exterior { get; }
     public LifeSystem Life { get; }
@@ -239,6 +240,7 @@ public sealed class World
         Relations = new RelationSystem(this);
         Movement = new MovementSystem(this);
         Parts = new PartsSystem(this);
+        Soil = new SoilSystem(this);
         Ambience = new AmbienceSystem(this);
         Exterior = new ExteriorSystem(this);
         Life = new LifeSystem(this);
@@ -315,6 +317,7 @@ public sealed class World
             pf = Prof.Lap("sys.Water", pf);
             Machines.Update(dt);
             Parts.Update(dt); // v14.6 부품이 따로 닳는다
+            Soil.Update(dt); // v14.7 손 · 옷 · 방으로 옮겨 다니는 오염
             pf = Prof.Lap("sys.Machines", pf);
             Prevention.Update(this, dt);
             pf = Prof.Lap("sys.Prevention", pf);

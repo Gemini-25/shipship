@@ -150,6 +150,7 @@ public static partial class Program
         if (args.Contains("--relationtest")) return RunRelationTest(seed); // v14.4
         if (args.Contains("--movetest")) return RunMoveTest(seed); // v14.5
         if (args.Contains("--parttest")) return RunPartTest(seed); // v14.6
+        if (args.Contains("--soiltest")) return RunSoilTest(seed); // v14.7
         if (args.Contains("--replaycheck")) return RunReplayCheck(seed);
         if (args.Contains("--deathtrace")) return RunDeathTrace(Math.Max(1, days), seed);
         if (args.Contains("--stressprobe")) return RunStressProbe(Math.Max(1, days), seed);

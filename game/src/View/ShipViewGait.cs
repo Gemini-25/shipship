@@ -10,6 +10,16 @@ public partial class ShipView
     {
         var w = _world;
         var g = c.Gait;
+        // v14.7 손·옷의 얼룩: 손 쪽에 작은 얼룩, 옷이 더러우면 몸 둘레에 탁한 테
+        var soil = c.Soil;
+        if (soil.HandsMax > 0.3f)
+        {
+            int k = 0; for (int i = 1; i < Soil.Kinds; i++) if (soil.Hands[i] > soil.Hands[k]) k = i;
+            var tint = (SoilKind)k switch { SoilKind.Oil => new Color(0.12f, 0.1f, 0.08f), SoilKind.Dust => new Color(0.6f, 0.55f, 0.45f), SoilKind.Soot => new Color(0.05f, 0.05f, 0.05f), _ => new Color(0.45f, 0.7f, 0.3f) };
+            var side = new Vector2(-facing.Y, facing.X);
+            ci.DrawCircle(body + side * (rr * 0.8f) + facing * (rr * 0.2f), 2.2f * s, tint.WithAlpha(0.85f), true, -1f, true);
+        }
+        if (soil.ClothesMax > 0.35f) ci.DrawArc(body, rr + 1f, 0f, Mathf.Tau, 20, new Color(0.2f, 0.18f, 0.15f, 0.25f + 0.4f * soil.ClothesMax), 1.6f, true);
         // 움찔: 머리 위 느낌표가 튀어 올랐다 사라진다
         long since = w.Tick - g.StartleTick;
         if (since >= 0 && since < Gait.Linger)

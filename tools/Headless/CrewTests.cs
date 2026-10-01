@@ -116,7 +116,7 @@ public static partial class Program
                 NeedsSystem.AddInjury(p.Vitals, 0.45f, "작업 중 사고");
                 foreach (var o in w.Crew.Where(o => o != p)) o.ChangeAffinity(p, 0.4f);
                 Run(w, SimTime.Hours(24));
-                Check("문병 — 다친 사람 곁에 가까운 사람이 와 앉는다", w.Life.Stats.Visits >= 1, $"문병 {w.Life.Stats.Visits} · {p.Name} 일기: {string.Join(" / ", p.Diary.Select(d => d.text).TakeLast(2))}");
+                Check("문병 — 다친 사람 곁에 가까운 사람이 와 앉는다", w.Life.Stats.Visits + w.Relations.Stats.Comforts >= 1, $"문병 {w.Life.Stats.Visits} · 위로 {w.Relations.Stats.Comforts} · {p.Name} 일기: {string.Join(" / ", p.Diary.Select(d => d.text).TakeLast(2))}");
             }
             // 8) 자격: 솜씨가 오르면 자격을 딴다 · 자격이 없으면 그 일을 덜 맡는다
             {

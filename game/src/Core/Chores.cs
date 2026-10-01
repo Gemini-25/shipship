@@ -875,6 +875,7 @@ public static partial class WorkPlanners
 
         var toils = fetch;
         toils.Add(new GotoToil(at));
+        toils.AddRange(w.Soil.WashFirst(c, false, "조리")); // v14.7 조리 전에 손을 씻는다
         toils.Add(new WorkToil(FoodChain.CookHours, Skill.Cooking, stove.Center)
         {
             CanContinue = (_, _) => stove.Machine!.Efficiency > 0f,
@@ -887,6 +888,7 @@ public static partial class WorkPlanners
             float skill = cm.SkillLevel(Skill.Cooking);
             int cooked = FoodChain.MealsPerBatch + (skill > 0.7f ? 1 : 0);
             cm.Carrying = new ItemStack(ItemKind.Meal, cooked);
+            world.Soil.OnCooked(cm, cooked); // v14.7 손이 더러웠으면 몇 끼에 균
             cm.Practice(Skill.Cooking, 0.03f);
             cm.Stats.MealsCooked += cooked;
             world.Board.Close(o);
@@ -1385,6 +1387,7 @@ public static partial class WorkPlanners
         var toils = Fetch(c, w, dist, ItemKind.MedKit, 1);
         if (toils == null) { blocked = "구급 키트 없음"; return null; }
         toils.Add(new GotoToil(at));
+        toils.AddRange(w.Soil.WashFirst(c, o.Urgency >= 0.9f, "치료")); // v14.7 급하지 않으면 손부터
         toils.Add(new WorkToil(0.5f, Skill.Medicine, patient.Position)
         {
             CanContinue = (cm, _) => cm.Carrying?.Kind == ItemKind.MedKit && (patient.Position - cm.Position).Length() < 2.2f,
@@ -1397,6 +1400,7 @@ public static partial class WorkPlanners
             patient.Vitals.Injury = MathF.Max(0f, patient.Vitals.Injury - (0.06f + 0.14f * skill));
             patient.Vitals.TreatedTick = world.Tick;
             world.Ailments.Treated(patient, cm); // v14.1 진단하고 약을 쓴다
+            world.Soil.OnTreated(cm, patient); // v14.7 더러운 손이면 상처가 곪기도
             if (patient != cm) world.Relations.Remember(patient, cm, RelationReason.NursedMe, "다쳤을 때 치료해 줬다"); // v14.4
             patient.ChangeAffinity(cm, 0.08f);
             cm.Practice(Skill.Medicine, 0.04f);
