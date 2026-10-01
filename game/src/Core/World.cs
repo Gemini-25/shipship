@@ -161,6 +161,7 @@ public sealed class World
     public PortableSystem Portable { get; } // v16.7 이동식 장비
     public ShipOriginSystem Origin { get; } // v16.9 배의 내력 (설계사 · 시작 상태 · 숨은 이야기 · 갈라짐 · 침대 교대)
     public OutsideSystem Outside { get; } // v15.4 외부 사건 40
+    public EvaRiskSystem EvaRisk { get; } // v16.11 선외 작업의 위험 (우주복 · 생명줄 · 표류 · 무전)
     public PropSystem Props { get; } // v15.8 소품·장식 70
     public TitleSystem Titles { get; } // v15.9 칭호·업적 50
     public AmbienceSystem Ambience { get; }
@@ -261,6 +262,7 @@ public sealed class World
         Portable = new PortableSystem(this); // v16.7
         Origin = new ShipOriginSystem(this);
         Outside = new OutsideSystem(this);
+        EvaRisk = new EvaRiskSystem(this); // v16.11
         Props = new PropSystem(this);
         Titles = new TitleSystem(this);
         Ambience = new AmbienceSystem(this);
@@ -349,6 +351,7 @@ public sealed class World
             Culture.Update(dt); // v14.9 겪은 일이 관행이 되어 전해진다
             pf = Prof.Lap("sys.Culture", pf);
             Daily.Update(dt); // v15 사고가 아닌 날의 일상 사건
+            EvaRisk.Update(dt); // v16.11 우주복 누출 · 표류 · 무전 · 주 컴퓨터 원격 측정 · 선외 공포 · 드론 부위 · 배터리
             pf = Prof.Lap("sys.Daily", pf);
             Origin.Update(dt); // v16.9 숨은 이야기 발견 · 전하기 · 갈라짐과 다시 이음 · 침대 인계
             pf = Prof.Lap("sys.Origin", pf);
@@ -449,6 +452,7 @@ public sealed class World
         ps = Prof.Lap("step.Board", ps);
         Drones.Step();
         Robots.Step();
+        EvaRisk.Step(); // v16.11 표류하는 몸 · 떠다니는 공구와 잔해
         Prof.Lap("step.drones·robots", ps);
 
         Movement.BeginTick(); // v14.5 누가 어느 칸에 · 어느 방에 자는 사람이
@@ -480,7 +484,7 @@ public sealed class World
             SenseHazard(c);
 
             // v8: 선체 밖에서 우주복 산소가 바닥나 가면 하던 일을 두고 돌아온다 (긴 일의 진척은 작업 목록에 남는다)
-            if (c.Outside && c.Suit is { Oxygen: < 0.6f } && c.Job?.Activity is not EvacuateActivity && c.CarryingPerson == null)
+            if (c.Outside && c.Suit is { Oxygen: < 0.6f } && c.Job?.Activity is not EvacuateActivity and not EvaSurviveActivity && c.CarryingPerson == null)
             {
                 if (c.Job != null && Tick - c.SuitWarnedAt > SimTime.Minutes(20))
                 {

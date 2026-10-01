@@ -67,21 +67,8 @@ public static class Incidents
 
         // 1-b) 구조 (v8): 가까운 연결부가 상하고(밖에서 보기 전에는 모른다), 밖에 나와 있던 드론·사람이 맞는다
         w.Structure.OnImpact(e, size);
-        w.Drones.OnImpact(e, size);
         w.Piping.OnImpact(e, size); // v9: 벽 안의 관과 선체 밖 방열판
-        var hurtOutside = new List<CrewMember>();
-        foreach (var c in w.Crew)
-        {
-            if (c.Dead || !c.Outside) continue;
-            float dist = (c.Position - e.Center).Length();
-            if (dist > 2.5f + 2f * size) continue;
-            float dmg = (0.15f + 0.3f * size) * (1f - dist / (3f + 2f * size)) * w.Rng.Range(0.6f, 1.1f);
-            c.Vitals.Health = MathF.Max(0.02f, c.Vitals.Health - dmg);
-            NeedsSystem.AddInjury(c.Vitals, dmg * 0.9f, "파편 (선체 밖)");
-            hurtOutside.Add(c);
-            Memory.Shake(w, c, 0.08f + 0.1f * size, "선체 밖에서 운석 파편을 맞았다");
-            w.Log.Add(w.Tick, LogKind.Warning, $"선체 밖에서 파편에 맞았다 (체력 {c.Vitals.Health * 100:0}%)", c.Id);
-        }
+        var hurtOutside = w.EvaRisk.OnImpact(e, size, dir, warned); // v16.11 선외: 사람(부위 · 우주복 · 생명줄 · 표류 — 하한 없음) · 드론(부위 · 배터리) — 선체 그늘이면 덜 맞는다
 
         // 2) 파편: 안쪽으로 뻗는 원뿔
         float reach = 2f + 5f * size;

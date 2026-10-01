@@ -22,7 +22,7 @@ public enum DroneState
 /// 외부 드론 한 대 (v8). 에어락의 거치대에서 충전하고, 외부 해치로 나가 선체 밖 일을 한다.
 /// 전기(충전)와 정비(부품)와 자재(승무원이 거치대에 보급)가 있어야 일할 수 있다 — 승무원이 드론을 돌보고, 드론이 선체를 돌본다.
 /// </summary>
-public sealed class Drone
+public sealed partial class Drone
 {
     public int Id { get; init; }
     public DroneKind Kind { get; init; }
@@ -93,7 +93,7 @@ public sealed class Drone
 /// 견인 드론은 떨어져 나간 방을 끌어오고, 건설 드론은 잃은 골조를 다시 세우고 임시 트러스를 덧댄다.
 /// 드론이 없거나 멈추면 승무원이 우주복을 입고 나가야 한다 (EVA: 느리고, 위험하고, 무섭다).
 /// </summary>
-public sealed class DroneSystem
+public sealed partial class DroneSystem
 {
     private readonly World _world;
     public List<Drone> Drones { get; } = new();
@@ -309,6 +309,7 @@ public sealed class DroneSystem
         foreach (var d in Drones)
         {
             d.PreviousPosition = d.Position;
+            if (StepHurt(d, hatch)) continue; // v16.11 건지기 · 그늘 · 부푼 배터리 세워 두기 · 빙글빙글
             // 해치 곁을 지나면 문을 연다 (드나들 때마다 에어락이 돈다)
             if (hatch != null && d.State is DroneState.Outbound or DroneState.Returning or DroneState.Towing
                 && (d.Position - hatch.Cell.Center).LengthSquared() < 2.5f) hatch.RequestOverride();
@@ -917,9 +918,10 @@ public sealed class DroneSystem
     /// <summary>견인 드론: 떠내려가는 드론을 건져 온다.</summary>
     private void PlanFetch(Drone d)
     {
+        if (PlanPersonFetch(d)) return; // v16.11 떠내려간 사람 먼저
         if (d.Battery < 0.8f) return;
         var lost = Drones.Where(x => x != d && x.State == DroneState.Adrift).OrderBy(x => (x.Position - d.Position).Length()).FirstOrDefault();
-        if (lost == null) return;
+        if (lost == null) { PlanSalvage(d); return; } // v16.11 떠다니는 잔해 · 공구
         d.Fetching = lost;
         Launch(d, lost.Position, $"떠내려가는 {Ko.EulReul(lost.Name)} 건지러");
     }
@@ -958,6 +960,7 @@ public sealed class DroneSystem
     public void Serviced(Drone d, CrewMember by, float skill)
     {
         var w = _world;
+        HealParts(d, by); // v16.11 상한 부위를 갈고 · 돌보는 사람을 기억한다
         string what = d.Wrecked ? "다시 짜 맞췄다" : d.Faulty ? "고쳤다" : "정비했다";
         if (d.Wrecked) { d.Wrecked = false; d.Condition = 0.7f + 0.15f * skill; d.Battery = MathF.Max(d.Battery, 0.1f); }
         else if (d.Faulty) { d.Faulty = false; d.Condition = MathF.Max(d.Condition, 0.6f + 0.2f * skill); }
@@ -968,8 +971,8 @@ public sealed class DroneSystem
     }
 
     /// <summary>드론이 거치대에 돌아와 있는데 고치거나 정비해야 하는지.</summary>
-    public static (ItemKind kind, int count)[] ServiceCost(Drone d) =>
+    public static (ItemKind kind, int count)[] ServiceCost(Drone d) => WithParts(d, // v16.11 부위별 부품
         d.Wrecked ? new[] { (ItemKind.Electronics, 2), (ItemKind.Motor, 1), (ItemKind.Plate, 2) }
         : d.Faulty ? new[] { (ItemKind.Electronics, 1) }
-        : new[] { (ItemKind.Lubricant, 1) };
+        : new[] { (ItemKind.Lubricant, 1) });
 }

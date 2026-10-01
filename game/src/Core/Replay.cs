@@ -414,6 +414,7 @@ public static class SaveGame
         { var au = w.Automation; I(au.Book.Total); I(au.Book.Right); I(au.Book.Wrong); I(au.Asks.All.Count); I(au.Asks.Rejected); I(au.CheckFound); I(au.Reboots); I(au.Suspended.Count); I(au.Speak.Count); I(au.Belief.Repairs); foreach (var c in w.Crew) F(au.Trusts.Of(c)); foreach (var m in au.Modules.OrderBy(m => (int)m)) I((int)m); }
         w.Cooking.Hash(I, F); w.Smells.Hash(I, F); // v16.8 음식 · 냄새
         foreach (var d in w.Portable.Devices) { I(d.At.X * 1000 + d.At.Y); I((d.On ? 1 : 0) + (d.Stored ? 2 : 0) + (d.Broken ? 4 : 0) + (int)d.Plug * 8); F(d.Charge); } // v16.7
+        w.EvaRisk.Hash(I, F); foreach (var d in w.Drones.Drones) { F(d.Hurt.Thruster); F(d.Hurt.Battery); F(d.Hurt.Swell); } // v16.11 선외 위험 · 드론 부위
         return h;
     }
 }
