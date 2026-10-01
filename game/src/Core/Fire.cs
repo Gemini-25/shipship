@@ -222,6 +222,7 @@ public sealed class FireSystem
             _knownSince[room.Id] = w.Tick;
             bool critical = room.Type is RoomType.Reactor or RoomType.Power or RoomType.LifeSupport or RoomType.Cooling;
             string how = detector ? "화재 감지기 작동" : bot != null ? $"{Ko.IGa(bot.Name)} 발견" : $"{Ko.IGa(witness!.Name)} 발견" + (room.Powered ? " (경보가 돌지 않았다)" : "");
+            how = w.Smells.FireFound(room, how, witness); // v16.8 탄 냄새를 따라 먼저 와 있던 사람
             // 역사: 한 방에 한 번 (진화될 때까지)
             room.Fires++;
             // 우주선은 번진 불을 한 번으로 센다 (한 시간 안에 옆방으로 옮겨 붙은 불)

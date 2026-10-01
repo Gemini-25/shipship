@@ -115,8 +115,10 @@ public sealed class EatActivity : Activity
             // v11.2: 균이 든 식사 — 40분쯤 뒤에 탈이 난다 (먹다가 불려 가도)
             if (cm.CarryTaint > 0 && cm.PoisonAt < 0) { cm.PoisonAt = world.Tick + SimTime.Minutes(40); cm.PoisonSource = box; }
             cm.CarryTaint = 0;
+            world.Cooking.Serve(cm, box, kind); // v16.8 어느 냄비의 몇 도짜리 접시인가
             return true;
         }));
+        toils.AddRange(w.Cooking.ReheatToils()); // v16.8 식었으면 데운다 (전기가 모자라면 그냥)
         if (seat != null) toils.Add(new GotoToil(seat.UseSpots[0]));
 
         var table = seat == null ? null : seat.Room.Furniture.Where(f => f.Type == FurnitureType.Table)

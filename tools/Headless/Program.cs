@@ -160,6 +160,7 @@ public static partial class Program
         if (args.Contains("--bodytest")) return RunBodyTest(seed); // v16.3
         if (args.Contains("--scenetest")) return RunSceneTest(seed); // v16.1
         if (args.Contains("--computertest")) return RunComputerTest(seed); // v16.6
+        if (args.Contains("--foodtest")) return RunFoodTest(seed); // v16.8
         if (args.Contains("--era15test")) return RunEraV15Test(seed); // v15.5
         if (args.Contains("--voyage15test")) return RunVoyageV15Test(seed); // v15.4
         if (args.Contains("--proptest")) return RunPropTest(seed); // v15.8 소품·장식 70

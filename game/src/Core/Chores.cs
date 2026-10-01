@@ -90,6 +90,7 @@ public sealed class ChoresActivity : Activity
         if (o.Kind == WorkKind.Cook && c.Role != CrewRole.Cook
             && w.Crew.Any(x => x.Role == CrewRole.Cook && !x.Dead && !x.Down && x.Pose != Pose.Sleeping && x.CareBed == null && OnShiftStatic(x, w)))
             score -= 0.2f;
+        if (o.Kind == WorkKind.Cook) score += w.Cooking.CookBias(c); // v16.8 다친 조리사 대신 배우던 사람이
         // v12.7 자격: 자격 있는 사람이 깨어 있으면 자격 없는 사람은 한 발 물러선다 (없으면 서툴러도 한다)
         // (급한 일·다친 사람 돌보기는 누구든 — 자격은 솜씨와 실수에만)
         if (o.Urgency < 0.85f && o.Kind is not (WorkKind.Treat or WorkKind.Rescue) && Life.Needs(o) is Qual need && !Life.HasQual(c, need)
@@ -876,7 +877,7 @@ public static partial class WorkPlanners
         var toils = fetch;
         toils.Add(new GotoToil(at));
         toils.AddRange(w.Soil.WashFirst(c, false, "조리")); // v14.7 조리 전에 손을 씻는다
-        toils.Add(new WorkToil(FoodChain.CookHours, Skill.Cooking, stove.Center)
+        toils.Add(new WorkToil(FoodChain.CookHours * w.Cooking.HoursMul(stove, c), Skill.Cooking, stove.Center) // v16.8 레시피마다 조리 시간
         {
             CanContinue = (_, _) => stove.Machine!.Efficiency > 0f,
             OnBegin = (_, _) => stove.Machine!.Active = true,
@@ -889,6 +890,7 @@ public static partial class WorkPlanners
             int cooked = FoodChain.MealsPerBatch + (skill > 0.7f ? 1 : 0);
             cm.Carrying = new ItemStack(ItemKind.Meal, cooked);
             world.Soil.OnCooked(cm, cooked); // v14.7 손이 더러웠으면 몇 끼에 균
+            world.Cooking.OnCooked(cm, stove, cooked); // v16.8 냄비 하나 (누가 · 무엇을 · 몇 도)
             cm.Practice(Skill.Cooking, 0.03f);
             cm.Stats.MealsCooked += cooked;
             world.Board.Close(o);

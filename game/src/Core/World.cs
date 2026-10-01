@@ -157,6 +157,7 @@ public sealed class World
     public DailySystem Daily { get; } // v15 일상 사건 70
     public BodySystem Body { get; } // v16.3 배 본체 (칸 3층 · 칸 상태 · 벽 층 · 문)
     public DailySceneSystem Scenes { get; } // v16.1 일상 → 행동 (장면 · 인수인계 · 쪽지)
+    public CookingSystem Cooking { get; } public SmellSystem Smells { get; } // v16.8 실제 음식 · 냄새
     public OutsideSystem Outside { get; } // v15.4 외부 사건 40
     public PropSystem Props { get; } // v15.8 소품·장식 70
     public TitleSystem Titles { get; } // v15.9 칭호·업적 50
@@ -254,6 +255,7 @@ public sealed class World
         Daily = new DailySystem(this);
         Body = new BodySystem(this); // v16.3
         Scenes = new DailySceneSystem(this);
+        Cooking = new CookingSystem(this); Smells = new SmellSystem(this); // v16.8
         Outside = new OutsideSystem(this);
         Props = new PropSystem(this);
         Titles = new TitleSystem(this);
@@ -344,6 +346,8 @@ public sealed class World
             pf = Prof.Lap("sys.Culture", pf);
             Daily.Update(dt); // v15 사고가 아닌 날의 일상 사건
             pf = Prof.Lap("sys.Daily", pf);
+            Cooking.Update(dt); Smells.Update(dt); // v16.8 냄비 · 접시 · 냄새가 공기를 타고
+            pf = Prof.Lap("sys.Cooking", pf);
             Scenes.Update(dt); // v16.1 장면 진행 · 중단/재개 · 교대 인수인계 · 쪽지 읽기
             pf = Prof.Lap("sys.Scenes", pf);
             Body.Update(dt); // v16.3 배 본체: 뚜껑 · 칸 상태 · 벽 층 · 문 · 엿듣기

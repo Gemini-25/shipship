@@ -412,6 +412,7 @@ public static class SaveGame
         I(w.Scenes.Hash()); // v16.1 일상 장면 · 쪽지 · 인수인계
         // v16.0 ④ · v16.6 주컴퓨터: 다섯 칸 기록 · 제안 · 확인 · 사람마다 신뢰 · 믿음 · 연산 자원 · 방송
         { var au = w.Automation; I(au.Book.Total); I(au.Book.Right); I(au.Book.Wrong); I(au.Asks.All.Count); I(au.Asks.Rejected); I(au.CheckFound); I(au.Reboots); I(au.Suspended.Count); I(au.Speak.Count); I(au.Belief.Repairs); foreach (var c in w.Crew) F(au.Trusts.Of(c)); foreach (var m in au.Modules.OrderBy(m => (int)m)) I((int)m); }
+        w.Cooking.Hash(I, F); w.Smells.Hash(I, F); // v16.8 음식 · 냄새
         return h;
     }
 }

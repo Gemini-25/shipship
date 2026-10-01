@@ -33,6 +33,7 @@ public static class Brain
         new InspectActivity(), // v14.4 소문을 듣고 확인하러 간다
         new OpenDoorActivity(), new BodyUpkeepActivity(), // v16.3 잠긴 문 열어 주기 · 배 손보기 (뚜껑 · 패널 · 문 · 유리 · 빈 걸이)
         SceneActivity.Instance, // v16.1 일상 장면 (체스 · 커피 · 영화 · 닦기 · 간식 · 몽유병 · 소품 · 인수인계 확인)
+        new CheckSmellActivity(), new SavedPlateActivity(), new SetAsidePlateActivity(), new FollowSmellActivity(), // v16.8 탄내 확인 · 남겨 둔 접시 · 냄새를 따라
         new ChatActivity(),
         new RelaxActivity(),
         new WanderActivity(),
