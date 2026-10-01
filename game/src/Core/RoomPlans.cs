@@ -88,6 +88,8 @@ public sealed class RoomTask
     /// <summary>나르다 끊겨 내려놓은 자리 (상자로 보인다).</summary>
     public Cell? SetDown { get; set; }
     public Cell FromCell { get; set; }
+    /// <summary>칸막이 줄 (골조가 진척만큼 차오른다 — 화면).</summary>
+    public List<Cell> Line { get; } = new();
     public int FromRoom { get; set; } = -1;
     public bool Done { get; set; }
     public long Since { get; set; } = -1;
@@ -130,6 +132,20 @@ public sealed class RoomPlanSystem
     public RoomPlan? PlanOf(RoomTask t) { foreach (var p in Plans) if (p.Id == t.PlanId) return p; return null; }
     public RoomTask? TaskOf(CrewMember c) => _doing.TryGetValue(c.Id, out var id) && id >= 0 ? Tasks.FirstOrDefault(t => t.Id == id) : null;
     public bool WorkingOut(CrewMember c) => _doing.TryGetValue(c.Id, out var id) && id == -2;
+    /// <summary>떼어 내 다시 잇기를 기다리는 설비 (화면: 늘어진 전선 · 마개 씌운 관).</summary>
+    public bool Disconnected(int furniture) => _parked.Contains(furniture);
+
+    /// <summary>그 방 이름이 어디서 왔나 (사람 · 사건 · 쓰임 · 소품 — 표지판 모양).</summary>
+    public string? NameSourceOf(Room r)
+    {
+        if (r.CustomName == null) return null;
+        for (int i = Plans.Count - 1; i >= 0; i--)
+        {
+            var p = Plans[i];
+            if (p.State == "완료" && p.NewName == r.CustomName && (p.NewRoomId == r.Id || p.RoomId == r.Id)) return p.NameSource;
+        }
+        return "";
+    }
 
     /// <summary>그 설비를 옮기기로 한 안건 (헷갈려 투덜댈 상대).</summary>
     public RoomPlan? MovedBy(Furniture f)
@@ -746,7 +762,7 @@ public sealed class RoomPlanSystem
             {
                 if (Remodel.FindSplit(w, room, 2) is not Remodel.SplitPlan sp) { Stop(p, "칸막이 칠 자리가 없어졌다"); return; }
                 var spot = Cell.Dirs4.Select(d => sp.Door + d).FirstOrDefault(c => w.Ship.IsOpenFloor(c) && w.Ship.RoomAt(c) == room);
-                AddTask(p, RoomTaskKind.Wall, 0, room, spot, 1.6f);
+                AddTask(p, RoomTaskKind.Wall, 0, room, spot, 1.6f).Line.AddRange(sp.Wall);
                 break;
             }
             case RoomPlanKind.Merge:

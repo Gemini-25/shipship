@@ -657,6 +657,7 @@ public partial class ShipView : Node2D
             if (room.Dark)
                 foreach (var c in room.Cells) ci.DrawRect(CellRect(c), new Color(0, 0, 0, room.Powered ? 0.36f : 0.42f));
         PaintPortable(ci); // v16.7 이동식 장비 (작업등 빛 웅덩이 · 케이블 · 호스 · 장비마다 다른 그림)
+        PaintRoomWork(ci); // v16.17 방 공사 (분리 · 상자 · 손수레 · 골조 · 놓을 자리) · 쓰임 원판 · 헷갈림 · 땀
         PaintJumpers(ci);
 
         foreach (var vm in new[] { mode, _main.SecondaryView ?? mode }.Distinct()) // v12.3 겹쳐 보기
@@ -693,6 +694,7 @@ public partial class ShipView : Node2D
         PaintCauseChain(ci); // v12.2 고른 사고의 인과 사슬
         PaintDampers(ci, mode == ViewMode.Air);
         PaintRoomStates(ci);
+        PaintRoomSigns(ci); // v16.17 승무원이 붙인 이름 표지판 (나무 · 놋쇠 · 칠판 · 법랑)
         PaintComputerWorld(ci); // v16.6 서버 랙 · 조작 빛 흐름 · 스피커 · 콘솔 경고 · 홀로그램 정보판 (ShipViewComputer.cs)
 
         if (_main.HoveredRoom is Room hr && hr != _main.SelectedRoom && !hr.Detached)
