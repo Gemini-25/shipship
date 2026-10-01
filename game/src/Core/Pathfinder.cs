@@ -24,7 +24,7 @@ public sealed class DistanceField
 /// 길을 고르는 사람의 성향. "갈 수는 있는데 가고 싶지는 않다"를 표현한다.
 /// 겁 많은 사람은 위험 비용을 크게 느끼고, 급한 일을 맡은 책임감 있는 사람은 덜 느낀다.
 /// </summary>
-public readonly record struct PathProfile(float HazardScale = 1f, bool Suit = false, bool Responder = false, float[]? Fear = null, bool Eva = false, bool Robot = false)
+public readonly record struct PathProfile(float HazardScale = 1f, bool Suit = false, bool Responder = false, float[]? Fear = null, bool Eva = false, bool Robot = false, bool NoCrawl = false)
 {
     /// <summary>선체 밖 한 칸을 지나는 추가 비용 (손으로 짚어 가며 느리게).</summary>
     public const int SpaceCost = 14;
@@ -74,6 +74,9 @@ public sealed class Pathfinder
     public int[] CellHazard { get; }
     /// <summary>v16.3 배 본체가 채우는 칸 비용 (열린 점검 뚜껑 · 테이프 · 유리 · 기름) — 사람들은 돌아간다.</summary>
     public int[] CellBody { get; }
+    /// <summary>v16.3 정비 통로 (벽 속을 기어서 지나는 칸) — 배 본체가 연다 · 로봇 · 업은 사람 · 다친 사람은 못 지난다.</summary>
+    public bool[] Crawl { get; }
+    public void CrawlChanged() => _hazardVersion++;
     private readonly int[] _dx = { 1, -1, 0, 0, 1, 1, -1, -1 };
     private readonly int[] _dy = { 0, 0, 1, -1, 1, -1, 1, -1 };
 
@@ -87,6 +90,7 @@ public sealed class Pathfinder
         _stamp = new int[_n];
         CellHazard = new int[_n];
         CellBody = new int[_n];
+        Crawl = new bool[_n];
         _offsets = new int[8];
         for (int i = 0; i < 8; i++) _offsets[i] = _dy[i] * _w + _dx[i];
         Invalidate();
@@ -134,7 +138,7 @@ public sealed class Pathfinder
         return d >= 0 && _ship.Doors[d].IsExternal && !_ship.Doors[d].Removed;
     }
 
-    private bool Passable(int i, PathProfile p) => Walk(i) || (p.Eva && (_space[i] || Hatch(i)));
+    private bool Passable(int i, PathProfile p) => Walk(i) || (p.Eva && (_space[i] || Hatch(i))) || Crawl[i] && !p.Robot && !p.NoCrawl;
 
     private bool Walk(int i)
     {
@@ -252,7 +256,7 @@ public sealed class Pathfinder
         var grid = _ship.Grid;
         int version = StateVersion();
         int si = grid.InBounds(start) ? grid.Index(start) : -1;
-        var key = (si, profile.HazardScale, (profile.Suit ? 1 : 0) | (profile.Responder ? 2 : 0) | (profile.Eva ? 4 : 0) | (profile.Robot ? 8 : 0));
+        var key = (si, profile.HazardScale, (profile.Suit ? 1 : 0) | (profile.Responder ? 2 : 0) | (profile.Eva ? 4 : 0) | (profile.Robot ? 8 : 0) | (profile.NoCrawl ? 16 : 0));
         if (_floods.TryGetValue(key, out var e) && e.Version == version && SameFear(e.Fear, profile.Fear))
         {
             FloodHits++;

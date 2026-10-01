@@ -38,6 +38,8 @@ public sealed class OpenHatch
     public string Why { get; init; } = "";
     /// <summary>일을 마치고 닫는 걸 잊었다 (지나가던 사람이 닫거나, 손보기로 닫는다).</summary>
     public bool Forgotten { get; set; }
+    /// <summary>주 컴퓨터가 뚜껑 스위치로 알아채고 닫기를 요청했다 (손보기가 먼저 한다).</summary>
+    public bool Flagged { get; set; }
 }
 
 /// <summary>벽 한 칸의 층: 외판 / 단열재 / 배선 / 안쪽 패널 (얇은 칸막이는 패널 한 겹).</summary>
@@ -61,6 +63,14 @@ public sealed class WallBody
     public long PanelSince { get; set; }
     public bool PanelForgot { get; set; }
     public int ClaimedBy { get; set; } = -1;
+    /// <summary>정비 통로: 문으로 바로 이어지지 않은 두 방 사이를 벽 속으로 기어서 지난다 (양쪽 방 번호).</summary>
+    public bool Crawl { get; set; }
+    public int CrawlA { get; set; } = -1;
+    public int CrawlB { get; set; } = -1;
+    /// <summary>정비 통로 덮개가 열려 있다 (양쪽 압력이 맞고 진공이 아닐 때).</summary>
+    public bool CrawlOpen { get; set; }
+    /// <summary>정비 통로로 굴러 들어간 물건 (꺼낼 때까지).</summary>
+    public ItemStack? Lost { get; set; }
 
     public Material Inner => Thin ? Material.Partition : Material.Panel;
 
@@ -118,14 +128,16 @@ public sealed class BodyStats
     public int Falls, Slips, FootIn, Cuts, HatchOpens, HatchForgot, HatchClosedBy, PanelOffs, PanelForgot, PanelRefit,
         Knocks, NoAnswer, Answered, DropIns, Waits, Calls, LetIn, RemoteOk, GaveUp, EmergencyPass, Cranks, SensorPresses, FalseReadings,
         Overheard, Whistles, MicroLeaks, Complaints, Condensation, FireReleases, Bents, SealFails, Gaskets, Fixed, Cleaned, Taped,
-        MountUses, MountRefills, ShutterCloses, Detours, LockedSleeps, HeldOpens;
+        MountUses, MountRefills, ShutterCloses, Detours, LockedSleeps, HeldOpens,
+        ComputerFlags, ComputerWarnings, CarefulSteps, Witnessed, FoodSpills, Grease, CartSnags, CartSlips, Mildew, Mopped, Crawls, CrawlRefused, RolledIn, Fetched, Crawlways;
     public float Drained;
 
     public override string ToString() =>
         $"넘어짐 {Falls}(발 빠짐 {FootIn} · 베임 {Cuts}) · 뚜껑 {HatchOpens}(잊음 {HatchForgot} · 지나가다 닫음 {HatchClosedBy}) · 패널 {PanelOffs}(잊음 {PanelForgot} · 다시 붙임 {PanelRefit}) · " +
         $"노크 {Knocks}(대답 {Answered} · 없음 {NoAnswer}) · 들름 {DropIns} · 기다림 {Waits} · 부름 {Calls} · 열어 줌 {LetIn} · 원격 {RemoteOk} · 포기 {GaveUp} · " +
         $"손으로 {Cranks} · 센서 {SensorPresses} · 오판 {FalseReadings} · 엿들음 {Overheard} · 휘파람 {Whistles} · 문 좀 닫아 {Complaints} · 결로 {Condensation} · " +
-        $"화재 해제 {FireReleases} · 기밀 실패 {SealFails} · 손보기 {Fixed} · 청소 {Cleaned} · 테이프 {Taped} · 장착물 {MountUses}/{MountRefills}";
+        $"화재 해제 {FireReleases} · 기밀 실패 {SealFails} · 손보기 {Fixed} · 청소 {Cleaned} · 테이프 {Taped} · 장착물 {MountUses}/{MountRefills} · " +
+        $"컴퓨터 요청 {ComputerFlags} · 경고 {ComputerWarnings} · 조심 걸음 {CarefulSteps}(봐서 {Witnessed}) · 쏟음 {FoodSpills} · 기름 튐 {Grease} · 카트 걸림 {CartSnags}/미끄럼 {CartSlips} · 곰팡이 {Mildew} · 걸레질 {Mopped} · 정비 통로 {Crawlways}곳(기어감 {Crawls} · 굴러 들어감 {RolledIn} · 꺼냄 {Fetched})";
 }
 
 public sealed partial class BodySystem
@@ -159,7 +171,7 @@ public sealed partial class BodySystem
     private long _nextSlow;
 
     public const float WearPerStep = 0.0006f;
-    public const int HatchCost = 60, TapeCost = 45, GlassCost = 18, OilCost = 8;
+    public const int HatchCost = 60, TapeCost = 45, GlassCost = 18, OilCost = 8, CrawlCost = 70;
 
     public BodySystem(World w)
     {
@@ -305,6 +317,7 @@ public sealed partial class BodySystem
             wb.Room = a?.Id ?? -1;
         }
         WallList.Sort((x, y) => grid.Index(x.Cell).CompareTo(grid.Index(y.Cell)));
+        PickCrawls();
         BuildThin();
     }
 
@@ -465,7 +478,9 @@ public sealed partial class BodySystem
     public float Step(CrewMember c, List<Cell> path)
     {
         var w = _w;
-        if (c.Outside || c.CarriedBy != null || c.Room == null && w.Ship.Grid.Kind(c.Cell) != TileKind.Door) return 1f;
+        if (c.Outside || c.CarriedBy != null) return 1f;
+        if (c.Room == null && w.Ship.Grid.Kind(c.Cell) == TileKind.Wall) { EnsureCrew(c.Id); return CrawlStep(c); } // 정비 통로 속: 기어서
+        if (c.Room == null && w.Ship.Grid.Kind(c.Cell) != TileKind.Door) return 1f;
         long now = w.Tick;
         EnsureCrew(c.Id);
         int id = c.Id;
@@ -498,10 +513,13 @@ public sealed partial class BodySystem
             if (g <= 0f) return 0f;
             mul *= g;
         }
-        else if (door == null) { _crankDoor[id] = -1; }
+        else if (door == null) { _crankDoor[id] = -1; _dropDoor[id] = -1; } // 문을 지났다 — 다음에 들르면 또 센다
 
         int ni = grid.Index(next);
         if (_hatchOpen[ni]) mul *= 0.5f; // 열린 뚜껑을 타 넘는다 (조심조심)
+        if (_w.Paths.Crawl[ni]) mul *= 0.5f; // 몸을 숙여 정비 통로 덮개로 들어간다
+        if (Marks.Count > 0 && _caution.Count > 0 && Cautious(c, c.Room) && SlipAt(ni) > 0.3f) mul *= 0.8f; // 조심조심 걷는다
+        if (w.Portable.Devices.Count > 0 && Floor[ni] is Material.Grate or Material.Carpet && CartOf(c) != null) mul *= Floor[ni] == Material.Grate ? 0.7f : 0.85f; // 카트 바퀴가 격자 살에 걸리고 카펫에 묻힌다
         if (Marks.Count > 0 && Marks.TryGetValue(ni, out var ms) && (ms.V[(int)CellMark.Glass] > 0.2f || ms.V[(int)CellMark.Oil] > 0.3f)) mul *= 0.8f;
 
         // 연기 속: 고참은 배를 기억하고, 신입은 유도선을 따라간다
@@ -520,7 +538,14 @@ public sealed partial class BodySystem
         // 닳는 바닥
         Steps[i]++;
         var spec = Materials.Of(Floor[i]);
-        Wear[i] = MathF.Min(1f, Wear[i] + spec.Wear * WearPerStep);
+        var cart = w.Portable.Devices.Count > 0 ? CartOf(c) : null;
+        Wear[i] = MathF.Min(1f, Wear[i] + spec.Wear * WearPerStep * (cart != null ? 4f : 1f)); // 무거운 카트 바퀴는 바닥을 빨리 닳게 한다
+        if (cart != null && Floor[i] == Material.Grate && R.Chance(0.15f))
+        {
+            Stats.CartSnags++;
+            _holdUntil[c.Id] = w.Tick + 4; // 바퀴를 살에서 빼낸다
+            if (c.SaidUntil < w.Tick) c.Say(w, Persona.Say(c, "바퀴가 격자에 걸렸네"));
+        }
 
         // 발소리: 격자 · 금속판 위를 뛰면 방이 시끄러워진다 (자는 사람 · 엿듣기에 닿는다), 카펫은 조용하다
         if (urgent && spec.Loud > 0.45f && w.Ship.RoomAt(cell) is Room fr) fr.Noise = MathF.Min(1f, fr.Noise + 0.015f * spec.Loud);
@@ -533,18 +558,17 @@ public sealed partial class BodySystem
             return;
         }
         // 미끄러짐: 재질 × 상태 × 뛰기
-        float slip = SlipAt(i);
-        if (slip > 0.25f)
+        float risk = SlipRisk(c, i, urgent, cart != null);
+        if (risk > 0f)
         {
-            float run = urgent ? 0.6f : 0.08f;
-            if (c.Carrying != null || c.CarryingPerson != null) run *= 1.3f;
-            float risk = (slip - 0.25f) * (slip - 0.25f) * run;
+            if (Cautious(c, w.Ship.RoomAt(cell))) Stats.CarefulSteps++;
             if (R.Chance(risk))
             {
                 var ms = Marks.TryGetValue(i, out var st) ? st : null;
                 string why = ms == null ? "반들반들한 바닥" : ms.V[(int)CellMark.Oil] > 0.2f ? "기름" : ms.V[(int)CellMark.Frost] > 0.2f ? "서리" : ms.V[(int)CellMark.Wet] > 0.1f ? "물기" : "반들반들한 바닥";
-                Fall(c, cell, $"{(urgent ? "뛰다가 " : "")}{spec.Name} 바닥 {why}에 미끄러져 넘어졌다", spec.Hard * (urgent ? 0.07f : 0.035f), leg: false);
+                Fall(c, cell, $"{(urgent ? "뛰다가 " : "")}{(cart != null ? "카트를 밀다 " : "")}{spec.Name} 바닥 {why}에 미끄러져 넘어졌다", spec.Hard * (urgent ? 0.07f : 0.035f), leg: false);
                 Stats.Slips++;
+                if (cart != null) Stats.CartSlips++;
                 return;
             }
         }
@@ -559,6 +583,18 @@ public sealed partial class BodySystem
         if (!urgent) Notice(c, cell);
     }
 
+    /// <summary>이 칸에 들어설 때 미끄러질 확률: 재질 × 상태 × 닳음 × 뛰기 × 짐 · 카트 × 조심 (방송을 들었거나 넘어지는 걸 봤으면 젖은 데서는 걷는다).</summary>
+    public float SlipRisk(CrewMember c, int i, bool urgent, bool cart)
+    {
+        float slip = SlipAt(i);
+        if (slip <= 0.25f) return 0f;
+        float run = urgent ? 0.6f : 0.08f;
+        if (Cautious(c, _w.Ship.RoomAt(_w.Ship.Grid.CellAt(i)))) run = 0.04f; // "뛰지 말고 걸어라"
+        if (c.Carrying != null || c.CarryingPerson != null) run *= 1.3f;
+        if (cart) run *= 1.6f; // 카트가 젖은 바닥에서 미끄러진다
+        return (slip - 0.25f) * (slip - 0.25f) * run;
+    }
+
     private void Fall(CrewMember c, Cell cell, string why, float injury, bool leg)
     {
         var w = _w;
@@ -568,6 +604,8 @@ public sealed partial class BodySystem
         if (injury > 0.01f && R.Chance(leg ? 0.7f : 0.5f)) NeedsSystem.AddInjury(c.Vitals, injury, leg ? "발이 빠져 다침" : "미끄러져 다침");
         w.Log.Add(w.Tick, LogKind.Warning, $"{Ko.IGa(c.Name)} {why} ({w.Ship.RoomAt(cell)?.Name ?? "?"})", c.Id);
         c.Say(w, Persona.Say(c, leg ? "으악, 발이!" : "아이고!"));
+        Drop(c, cell); // 들고 가던 음식을 쏟는다
+        Witness(c, cell); // 본 사람은 조심한다 · 컴퓨터는 센다
     }
 
     private void Notice(CrewMember c, Cell cell)
@@ -618,9 +656,12 @@ public sealed partial class BodySystem
         {
             _nextSlow = w.Tick + SimTime.Minutes(1);
             SyncStructure();
+            LinkSystems(SimTime.Minutes(1) / (float)SimTime.TicksPerHour); // 조리 · 엎지른 국 · 이동식 장비 · 곰팡이
             UpdateCells(SimTime.Minutes(1) / (float)SimTime.TicksPerHour);
             UpdateWalls(SimTime.Minutes(1) / (float)SimTime.TicksPerHour);
             UpdateMounts();
+            ComputerWatch(); // 주 컴퓨터가 뚜껑 스위치 · 바닥 물 · 문 압력 · 표시판을 읽는다
+            UpdateCrawls(); // 정비 통로 덮개: 양쪽 압력이 맞을 때만 열린다
         }
         FillPathCost();
         Prof.Lap("sys.Body", pf);
@@ -632,6 +673,7 @@ public sealed partial class BodySystem
         var cost = _w.Paths.CellBody;
         Array.Clear(cost);
         foreach (var h in Hatches) cost[_w.Ship.Grid.Index(h.Cell)] += HatchCost;
+        foreach (var wb in WallList) if (wb.Crawl) cost[_w.Ship.Grid.Index(wb.Cell)] += CrawlCost; // 기어가는 느린 길
         foreach (var (i, s) in Marks)
         {
             if (s.V[(int)CellMark.Tape] > 0.5f) cost[i] += TapeCost;
@@ -699,10 +741,11 @@ public sealed partial class BodySystem
             var room = ship.Rooms.Count > 0 ? ship.RoomAt(grid.CellAt(i)) : null;
             var m = Materials.Of(Floor[i]);
             float wet = s.V[(int)CellMark.Wet];
+            float dry = DryMul(room); // 이동식 히터 · 선풍기
             if (wet > 0f && (room == null || MoistureSystem.Depth(room) <= 0.004f))
-                (set ??= new()).Add((i, CellMark.Wet, wet - dt * (1.2f + 2f * m.Drain) * (1f - 0.85f * m.Absorb)));
+                (set ??= new()).Add((i, CellMark.Wet, wet - dt * (1.2f + 2f * m.Drain) * (1f - 0.85f * m.Absorb) * dry));
             float fr = s.V[(int)CellMark.Frost];
-            if (fr > 0f && (room == null || room.Air.Temperature > 2f))
+            if (fr > 0f && (room == null || room.Air.Temperature > 2f || dry > 2.5f))
             {
                 (set ??= new()).Add((i, CellMark.Frost, fr - dt * 2f));
                 (set ??= new()).Add((i, CellMark.Wet, MathF.Max(wet, MathF.Min(1f, fr))));
@@ -814,7 +857,7 @@ public sealed partial class BodySystem
                 foreach (var d in Cell.Dirs4)
                 {
                     var wc = c + d;
-                    if (ship.Grid.Kind(wc) != TileKind.Wall || used.Contains(wc) || WallAt(wc) is { Window: true }) continue;
+                    if (ship.Grid.Kind(wc) != TileKind.Wall || used.Contains(wc) || WallAt(wc) is { Window: true } or { Crawl: true }) continue;
                     used.Add(wc);
                     Mounts.Add(new WallMount { Id = Mounts.Count, Kind = kinds[k++], Wall = wc, Spot = c, Room = room.Id });
                     break;
@@ -859,7 +902,7 @@ public sealed class BodyUpkeepActivity : Activity
     public override string Id => "body-upkeep";
     public override string Label => "배 손보기";
 
-    private enum Task { Hatch, Panel, Gasket, Sensor, Frame, Glass, Oil, Mount, Soot }
+    private enum Task { Hatch, Panel, Gasket, Sensor, Frame, Glass, Oil, Mount, Soot, Mop, Fetch }
 
     private static (Task task, object target, Cell spot, int cost, float value)? Pick(CrewMember c, World w, DistanceField dist)
     {
@@ -874,16 +917,18 @@ public sealed class BodyUpkeepActivity : Activity
             if (s > bestScore) { bestScore = s; best = (t, target, spot, d, value); }
         }
         foreach (var h in b.Hatches)
-            if (h.Forgotten && Near(w, h.Cell) is Cell sp) Consider(Task.Hatch, h, sp, 0.55f);
+            if (h.Forgotten && Near(w, h.Cell) is Cell sp) Consider(Task.Hatch, h, sp, h.Flagged ? 0.8f : 0.55f); // 컴퓨터가 요청했으면 먼저
         foreach (var wb in b.WallList)
             if (wb.PanelOff && wb.PanelForgot && wb.ClaimedBy < 0 && Near(w, wb.Cell) is Cell sp) Consider(Task.Panel, wb, sp, 0.35f + 0.2f * c.SkillLevel(Skill.Electrical));
+            else if (wb.Lost != null && wb.ClaimedBy < 0 && c.Carrying == null && Near(w, wb.Cell) is Cell sp2) Consider(Task.Fetch, wb, sp2, 0.3f); // 정비 통로로 굴러 들어간 물건
         foreach (var db in b.Doors)
         {
             if (db.ClaimedBy >= 0 || db.Door >= w.Ship.Doors.Count) continue;
             var d = w.Ship.Doors[db.Door];
             if (d.Removed || d.IsExternal) continue;
-            if (db.Gasket < 0.25f && Near(w, d.Cell) is Cell s1) Consider(Task.Gasket, db, s1, (db.Whistling ? 0.45f : 0.25f) + 0.15f * c.SkillLevel(Skill.Mechanics));
-            if ((db.SensorBroken || db.IndicatorBroken) && Near(w, d.Cell) is Cell s2) Consider(Task.Sensor, db, s2, 0.3f + 0.2f * c.SkillLevel(Skill.Electrical));
+            float req = db.Flagged ? 0.3f : 0f; // 주 컴퓨터의 정비 요청
+            if (db.Gasket < 0.25f && Near(w, d.Cell) is Cell s1) Consider(Task.Gasket, db, s1, (db.Whistling ? 0.45f : 0.25f) + 0.15f * c.SkillLevel(Skill.Mechanics) + req);
+            if ((db.SensorBroken || db.IndicatorBroken) && Near(w, d.Cell) is Cell s2) Consider(Task.Sensor, db, s2, 0.3f + 0.2f * c.SkillLevel(Skill.Electrical) + (db.IndicatorBroken ? req : 0f));
             if (d.Bent > 0.3f && Near(w, d.Cell) is Cell s3) Consider(Task.Frame, db, s3, 0.35f + 0.2f * c.SkillLevel(Skill.Mechanics));
         }
         foreach (var (i, s) in b.Marks)
@@ -892,6 +937,8 @@ public sealed class BodyUpkeepActivity : Activity
             if (s.V[(int)CellMark.Glass] > 0.2f) Consider(Task.Glass, cell, cell, 0.45f);
             else if (s.V[(int)CellMark.Oil] > 0.3f) Consider(Task.Oil, cell, cell, 0.3f);
             else if (s.V[(int)CellMark.Soot] > 0.4f && w.Fire.Count == 0) Consider(Task.Soot, cell, cell, 0.18f); // 불 꺼진 뒤 그을음 닦기
+            else if (s.V[(int)CellMark.Wet] > 0.4f && b.SlipAt(i) > 0.35f && w.Ship.RoomAt(cell) is Room wr && MoistureSystem.Depth(wr) <= 0.004f)
+                Consider(Task.Mop, cell, cell, b.MopRequested(wr) ? 0.4f : 0.12f); // 젖은 타일 · 금속판 걸레질 (컴퓨터가 요청했으면 먼저)
         }
         foreach (var m in b.Mounts)
             if (!m.Present && m.ClaimedBy < 0 && WallMount.Item(m.Kind) is ItemKind ik && w.Ship.CountStored(ik) > 0) Consider(Task.Mount, m, m.Spot, 0.25f);
@@ -916,7 +963,7 @@ public sealed class BodyUpkeepActivity : Activity
     private static string Name(Task t) => t switch
     {
         Task.Hatch => "열린 점검 뚜껑 닫기", Task.Panel => "떼어 둔 벽 패널 다시 붙이기", Task.Gasket => "문 패킹 갈기", Task.Sensor => "문 센서 · 표시판 고치기",
-        Task.Frame => "휜 문틀 펴기", Task.Glass => "유리 조각 쓸기", Task.Oil => "기름 닦기", Task.Soot => "그을음 닦기", _ => "빈 걸이 채우기",
+        Task.Frame => "휜 문틀 펴기", Task.Glass => "유리 조각 쓸기", Task.Oil => "기름 닦기", Task.Soot => "그을음 닦기", Task.Mop => "젖은 바닥 걸레질", Task.Fetch => "정비 통로에 굴러 들어간 물건 꺼내기", _ => "빈 걸이 채우기",
     };
 
     public override Job? Plan(CrewMember c, World w, DistanceField dist)
@@ -947,8 +994,8 @@ public sealed class BodyUpkeepActivity : Activity
         toils.Add(new GotoToil(spot));
         float hours = task switch
         {
-            Task.Hatch => 0.03f, Task.Panel => 0.3f, Task.Gasket => 0.5f, Task.Sensor => 0.4f, Task.Frame => 0.8f,
-            Task.Glass or Task.Oil or Task.Soot => 0.15f * (1f + 2f * Materials.Of(b.FloorAt(spot)).CleanHard), _ => 0.05f,
+            Task.Hatch => 0.03f, Task.Panel => 0.3f, Task.Fetch => 0.2f, Task.Gasket => 0.5f, Task.Sensor => 0.4f, Task.Frame => 0.8f,
+            Task.Glass or Task.Oil or Task.Soot or Task.Mop => 0.15f * (1f + 2f * Materials.Of(b.FloorAt(spot)).CleanHard), _ => 0.05f,
         };
         var skill = task is Task.Panel or Task.Sensor ? Skill.Electrical : Skill.Mechanics;
         var face = target switch { WallBody x => x.Cell.Center, DoorBody x => w.Ship.Doors[x.Door].Cell.Center, WallMount x => x.Wall.Center, OpenHatch x => x.Cell.Center, Cell x => x.Center, _ => (Vector2?)null };
@@ -988,6 +1035,9 @@ public sealed partial class BodySystem
                 if (Hatches.Contains(h)) CloseHatch(h);
                 w.Log.Add(w.Tick, LogKind.Work, $"열린 채 남은 점검 뚜껑을 닫았다 ({w.Ship.RoomAt(h.Cell)?.Name})", c.Id);
                 break;
+            case WallBody lw when task == "Fetch":
+                if (lw.Lost is ItemStack got && c.Carrying == null) { c.Carrying = got; lw.Lost = null; Stats.Fetched++; w.Log.Add(w.Tick, LogKind.Work, $"정비 통로에 팔을 넣어 굴러 들어간 {ItemKinds.Name(got.Kind)}을(를) 꺼냈다", c.Id); }
+                break;
             case WallBody wb:
                 wb.PanelOff = false; wb.PanelForgot = false; wb.PanelBy = -1; wb.PanelOrder = -1;
                 Stats.PanelRefit++;
@@ -1002,7 +1052,18 @@ public sealed partial class BodySystem
                 break;
             case Cell cell:
                 if (task == "Soot" && w.Fire.Scorch.TryGetValue(cell, out var sc)) w.Fire.Scorch[cell] = sc * 0.3f; // 닦으면 불 자국도 옅어진다
-                if (task == "Soot") SetMark(cell, CellMark.Soot, 0f, "");
+                if (task == "Soot")
+                {
+                    SetMark(cell, CellMark.Soot, 0f, "");
+                    if (w.Ship.RoomAt(cell) is Room sr) { var soil = w.Soil.RoomSoil(sr); soil[(int)SoilKind.Soot] *= 0.7f; } // 방 그을음 오염도 준다
+                }
+                if (task == "Mop")
+                {
+                    // 걸레질: 그 칸과 둘레 젖은 칸을 닦는다
+                    foreach (var dd in Cell.Dirs4) if (Mark(cell + dd, CellMark.Wet) > 0.2f) SetMark(cell + dd, CellMark.Wet, 0f, "");
+                    SetMark(cell, CellMark.Wet, 0f, "");
+                    Stats.Mopped++;
+                }
                 SetMark(cell, CellMark.Glass, 0f, "");
                 SetMark(cell, CellMark.Oil, 0f, "");
                 SetMark(cell, CellMark.Tape, 0f, "");

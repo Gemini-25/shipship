@@ -229,7 +229,42 @@ public partial class ShipView
                 for (int k = 0; k < 7; k++)
                     ci.DrawRect(new Rect2(r.Position + new Vector2(BH(c.X, c.Y, k + 40) * (T - 3), BH(c.Y, c.X, k + 41) * (T - 3)), new Vector2(2, 2)), new Color(0.02f, 0.02f, 0.02f, 0.6f * soot));
             }
-            if (wet > 0.05f)
+            string? wetWhy = wet > 0.05f ? s.Cause[(int)CellMark.Wet] : null;
+            if (wet > 0.05f && wetWhy is "엎지른 국" or "쏟은 음식")
+            {
+                // 엎지른 국 · 쏟은 음식: 주황갈색 얼룩 + 건더기 · 갓 쏟았으면 김이 오른다
+                var pts = new Vector2[7];
+                for (int k = 0; k < 7; k++)
+                {
+                    float ang = k * Mathf.Tau / 7f + BH(c.X, c.Y, 140);
+                    pts[k] = ctr + new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * T * (0.2f + 0.16f * BH(c.X, c.Y, k + 141)) * (0.5f + 0.5f * wet);
+                }
+                ci.DrawColoredPolygon(pts, new Color(0.72f, 0.42f, 0.16f, 0.55f + 0.3f * wet));
+                for (int k = 0; k < 4; k++)
+                {
+                    var bp = ctr + new Vector2(BH(c.X, c.Y, k + 150) - 0.5f, BH(c.Y, c.X, k + 151) - 0.5f) * T * 0.4f * wet;
+                    ci.DrawRect(new Rect2(bp, new Vector2(2.2f, 1.6f)), k % 2 == 0 ? new Color(0.35f, 0.7f, 0.25f, 0.9f) : new Color(0.95f, 0.85f, 0.6f, 0.9f)); // 건더기
+                }
+                if (detail && w.Tick - s.Since[(int)CellMark.Wet] < SimTime.Minutes(20))
+                    for (int k = 0; k < 2; k++)
+                    {
+                        float ph = Mathf.PosMod(_time * 0.6f + k * 0.5f, 1f);
+                        var sp = ctr + new Vector2(-3 + k * 6 + Mathf.Sin(_time * 2f + k) * 1.5f, -ph * 12f);
+                        ci.DrawArc(sp, 2f, 0f, Mathf.Pi, 6, new Color(1f, 1f, 1f, 0.35f * (1f - ph)), 1f, true); // 김
+                    }
+            }
+            else if (wet > 0.05f && wetWhy == "결로")
+            {
+                // 결로: 차가운 벽 쪽 가장자리에 맺혀 흘러내린 물방울 줄
+                ci.DrawRect(r.Grow(-1f), new Color(0.45f, 0.65f, 0.85f, 0.12f + 0.15f * wet));
+                for (int k = 0; k < 6; k++)
+                {
+                    float x = r.Position.X + 3 + k * 5f, len = 3f + 7f * BH(c.X + k, c.Y, 160) * wet;
+                    ci.DrawLine(new Vector2(x, r.Position.Y + 1), new Vector2(x, r.Position.Y + 1 + len), new Color(0.75f, 0.9f, 1f, 0.6f), 1f, true);
+                    ci.DrawCircle(new Vector2(x, r.Position.Y + 1.5f + len), 1.2f, new Color(0.85f, 0.95f, 1f, 0.8f), true, -1f, true);
+                }
+            }
+            else if (wet > 0.05f)
             {
                 // 물기: 반투명 막 + 천천히 미끄러지는 반사 줄 + 물방울
                 ci.DrawRect(r.Grow(-1f), new Color(0.35f, 0.6f, 0.95f, 0.18f + 0.22f * wet));
@@ -243,7 +278,29 @@ public partial class ShipView
                         ci.DrawCircle(dp, 1.6f, new Color(0.8f, 0.92f, 1f, 0.55f * wet), true, -1f, true);
                     }
             }
-            if (oil > 0.05f)
+            if (wet > 0.3f && body.Floor[i] == Mat.Carpet && w.Tick - s.Since[(int)CellMark.Wet] > SimTime.Hours(3))
+            {
+                // 곰팡이: 오래 젖은 카펫에 회녹색 솜털 반점 (가장자리가 번진다)
+                for (int k = 0; k < 4; k++)
+                {
+                    var mp = r.Position + new Vector2(5 + BH(c.X, c.Y, k + 170) * 22, 5 + BH(c.Y, c.X, k + 171) * 22);
+                    float rad = 2f + 2.5f * BH(c.X, c.Y, k + 172);
+                    ci.DrawCircle(mp, rad, new Color(0.32f, 0.4f, 0.28f, 0.55f), true, -1f, true);
+                    if (detail) ci.DrawArc(mp, rad + 1.2f, 0f, Mathf.Tau, 10, new Color(0.62f, 0.7f, 0.55f, 0.45f), 0.8f, true);
+                }
+            }
+            if (oil > 0.05f && s.Cause[(int)CellMark.Oil] == "조리 기름 튐")
+            {
+                // 조리 기름 튐: 웅덩이가 아니라 화구 쪽으로 흩뿌린 노르스름한 방울 + 번들거림
+                for (int k = 0; k < 9; k++)
+                {
+                    var op = r.Position + new Vector2(3 + BH(c.X, c.Y, k + 180) * 26, 3 + BH(c.Y, c.X, k + 181) * 14);
+                    float rad = 0.8f + 1.6f * BH(c.X, c.Y, k + 182) * oil;
+                    ci.DrawCircle(op, rad, new Color(0.78f, 0.62f, 0.2f, 0.75f), true, -1f, true);
+                    if (rad > 1.4f) ci.DrawCircle(op - new Vector2(0.5f, 0.5f), 0.5f, new Color(1f, 1f, 0.85f, 0.9f), true, -1f, true);
+                }
+            }
+            else if (oil > 0.05f)
             {
                 // 기름: 고르지 않은 검갈색 웅덩이 + 무지개 막이 일렁인다
                 var pts = new Vector2[8];
@@ -290,6 +347,18 @@ public partial class ShipView
                     if (glint > 0.85f) ci.DrawCircle(tri[0], 1.3f, new Color(1, 1, 1, 0.9f), true, -1f, true);
                 }
             }
+            if (wet > 0.35f && (c.X * 3 + c.Y) % 4 == 0 && ship.RoomAt(c) is Room wr && body.MopRequested(wr))
+            {
+                // 주 컴퓨터가 바닥에 비춘 "미끄럼 주의" 투영: 노란 삼각 · 깜빡이는 주사선
+                float fl = 0.65f + 0.35f * Mathf.Sin(_time * 7f + c.X);
+                var tri = new[] { ctr + new Vector2(0, -8), ctr + new Vector2(8, 6), ctr + new Vector2(-8, 6) };
+                ci.DrawColoredPolygon(tri, new Color(1f, 0.85f, 0.15f, 0.22f * fl));
+                ci.DrawPolyline(new[] { tri[0], tri[1], tri[2], tri[0] }, new Color(1f, 0.9f, 0.3f, 0.75f * fl), 1.2f, true);
+                ci.DrawLine(ctr + new Vector2(0, -3), ctr + new Vector2(0, 1.5f), new Color(1f, 0.95f, 0.5f, 0.9f * fl), 1.5f);
+                ci.DrawCircle(ctr + new Vector2(0, 3.5f), 0.9f, new Color(1f, 0.95f, 0.5f, 0.9f * fl), true, -1f, true);
+                float scan = Mathf.PosMod(_time * 1.5f, 1f);
+                ci.DrawLine(new Vector2(ctr.X - 8, ctr.Y - 8 + scan * 14), new Vector2(ctr.X + 8, ctr.Y - 8 + scan * 14), new Color(0.6f, 0.85f, 1f, 0.3f), 1f);
+            }
             if (tape > 0.3f)
             {
                 // 테이프 출입 금지선: 노랑 · 검정 빗금 띠가 칸을 두르고 바람에 살짝 떤다
@@ -332,6 +401,7 @@ public partial class ShipView
                 float pulse = 0.5f + 0.5f * Mathf.Sin(_time * 4f);
                 ci.DrawRect(r.Grow(-1f), new Color(1f, 0.55f, 0.1f, 0.4f + 0.5f * pulse), false, 2f);
             }
+            if (h.Flagged) DrawComputerTag(ci, r.End - new Vector2(4, 4));
         }
 
         foreach (var wb in body.WallList)
@@ -339,6 +409,7 @@ public partial class ShipView
             var r = CellRect(wb.Cell);
             Cell inward = default;
             foreach (var d in Cell.Dirs4) if (ship.RoomAt(wb.Cell + d) != null) { inward = d; break; }
+            if (wb.Crawl) DrawCrawlway(ci, wb, r);
             // 관측창: 별이 천천히 흐르는 유리창 · 폭풍이면 덮개(가로 살) · 금 간 창
             if (wb.Window)
             {
@@ -480,6 +551,7 @@ public partial class ShipView
                 ci.DrawRect(new Rect2(pan - new Vector2(4, 3), new Vector2(8, 6)), db.IndicatorSaysSafe ? new Color(0.15f, 0.45f, 0.2f) : new Color(0.55f, 0.15f, 0.12f));
                 ci.DrawLine(pan + new Vector2(-4, -3), pan + new Vector2(2, 3), new Color(1, 1, 1, 0.7f), 0.8f);
             }
+            if (db.Flagged && (db.Gasket < 0.25f || db.IndicatorBroken)) DrawComputerTag(ci, r.GetCenter() - side * (T * 0.62f) + outward * (T * 0.3f));
         }
 
         // 벽 장착물: 소화기 · 산소 마스크함 · 손전등 · 게시판 — 꺼내면 빈 걸이 (점선 윤곽)
@@ -519,6 +591,94 @@ public partial class ShipView
                 ci.DrawPolyline(new[] { r.GetCenter() + new Vector2(-4, -3), r.GetCenter() + new Vector2(0, 0), r.GetCenter() + new Vector2(-4, 3) }, new Color(0.7f, 1f, 0.7f, 0.8f * pulse), 1.5f, true);
             }
         }
+    }
+
+    /// <summary>
+    /// 정비 통로: 벽 속 어두운 굴 + 양쪽 덮개(가로 살 루버 · 나사 넷) + 바닥 노란 "정비" 화살표 ·
+    /// 덮개가 닫혔으면(압력 차) 빨간 걸쇠 · 안에 누가 기어가면 손전등 빛이 움직이고 · 굴러 들어간 물건이 반짝인다.
+    /// </summary>
+    private void DrawCrawlway(CanvasItem ci, WallBody wb, Rect2 r)
+    {
+        var ship = _world.Ship;
+        bool vert = ship.RoomAt(wb.Cell + new Cell(0, 1)) != null && ship.RoomAt(wb.Cell + new Cell(0, -1)) != null && ship.RoomAt(wb.Cell + new Cell(1, 0)) == null;
+        var along = vert ? new Vector2(0, 1) : new Vector2(1, 0);
+        var across = new Vector2(along.Y, along.X);
+        var c = r.GetCenter();
+        // 굴 (벽 속 어둠) · 양옆 배관
+        var tube = new Rect2(c - across * (T * 0.3f) - along * (T * 0.5f), across * (T * 0.6f) + along * T).Abs();
+        ci.DrawRect(tube, new Color(0.03f, 0.035f, 0.04f, 0.95f));
+        ci.DrawLine(c - across * (T * 0.24f) - along * (T * 0.5f), c - across * (T * 0.24f) + along * (T * 0.5f), new Color(0.35f, 0.55f, 0.7f, 0.8f), 2f);
+        ci.DrawLine(c + across * (T * 0.24f) - along * (T * 0.5f), c + across * (T * 0.24f) + along * (T * 0.5f), new Color(0.75f, 0.35f, 0.2f, 0.8f), 1.5f);
+        // 양쪽 덮개: 루버 살 · 나사
+        foreach (float side in new[] { -1f, 1f })
+        {
+            var lid = c + along * (side * T * 0.42f);
+            var box = new Rect2(lid - across * (T * 0.3f) - along * 2.5f, across * (T * 0.6f) + along * 5f).Abs();
+            ci.DrawRect(box, wb.CrawlOpen ? new Color(0.42f, 0.46f, 0.5f, 0.95f) : new Color(0.32f, 0.3f, 0.3f, 0.95f));
+            for (int k = -2; k <= 2; k++) ci.DrawLine(lid + across * (k * 3.2f) - along * 1.8f, lid + across * (k * 3.2f) + along * 1.8f, new Color(0.1f, 0.12f, 0.14f, 0.9f), 1f);
+            ci.DrawCircle(lid - across * (T * 0.27f), 0.8f, new Color(0.8f, 0.82f, 0.85f), true, -1f, true);
+            ci.DrawCircle(lid + across * (T * 0.27f), 0.8f, new Color(0.8f, 0.82f, 0.85f), true, -1f, true);
+            if (!wb.CrawlOpen) ci.DrawRect(new Rect2(lid - new Vector2(1.5f, 1.5f), new Vector2(3, 3)), new Color(0.95f, 0.25f, 0.2f)); // 걸쇠 (압력 차로 잠김)
+            // 바닥 노란 화살표 (덮개 앞)
+            var floorAt = c + along * (side * T * 0.85f);
+            ci.DrawPolyline(new[] { floorAt - across * 3f + along * (side * 2f), floorAt - along * (side * 2f), floorAt + across * 3f + along * (side * 2f) }, new Color(0.95f, 0.8f, 0.2f, 0.7f), 1.5f, true);
+        }
+        // 굴러 들어간 물건: 굴 안에서 반짝
+        if (wb.Lost != null)
+        {
+            float gl = 0.5f + 0.5f * Mathf.Sin(_time * 3f + wb.Cell.X);
+            ci.DrawCircle(c + along * 3f, 2.2f, new Color(0.85f, 0.75f, 0.4f, 0.9f), true, -1f, true);
+            ci.DrawCircle(c + along * 3f - new Vector2(0.7f, 0.7f), 0.8f, new Color(1f, 1f, 0.9f, gl), true, -1f, true);
+        }
+        // 안에 기어가는 사람: 손전등 빛이 굴 벽을 훑는다
+        foreach (var cm in _world.Crew)
+        {
+            if (cm.Dead || cm.Cell != wb.Cell) continue;
+            var mv = ToPx(cm.Position) - ToPx(cm.PreviousPosition);
+            var dir = mv.LengthSquared() > 1e-4f ? mv.Normalized() : along;
+            var at = ToPx(cm.Position);
+            float sw = Mathf.Sin(_time * 5f) * 0.35f;
+            var beam = new[] { at, at + (dir.Rotated(sw - 0.4f)) * 12f, at + (dir.Rotated(sw + 0.4f)) * 12f };
+            ci.DrawColoredPolygon(beam, new Color(1f, 0.95f, 0.7f, 0.28f));
+            ci.DrawCircle(at, 1.6f, new Color(1f, 0.95f, 0.75f, 0.9f), true, -1f, true);
+        }
+    }
+
+    /// <summary>정비 통로 속 사람: 엎드린 긴 몸 · 팔꿈치와 무릎이 번갈아 나간다 · 머리에 작은 등.</summary>
+    private void PaintCrawler(CanvasItem ci, CrewMember c, Vector2 p, Color col, float s)
+    {
+        var f = new Vector2(c.Facing.X, c.Facing.Y);
+        if (f.LengthSquared() < 1e-4f) f = new Vector2(1, 0);
+        f = f.Normalized();
+        var side = new Vector2(-f.Y, f.X);
+        float stroke = Mathf.Sin(_time * 7f + c.Id);
+        var hip = p - f * 6f * s;
+        var chest = p + f * 3f * s;
+        ci.DrawLine(hip, chest, Palette.Space.WithAlpha(0.8f), 10f * s, true);
+        ci.DrawLine(hip, chest, col.Darkened(0.15f), 8f * s, true);
+        // 팔꿈치 · 무릎 (번갈아)
+        ci.DrawLine(chest + side * 4f * s, chest + side * 6f * s + f * (4f + 3f * stroke) * s, col.Darkened(0.3f), 2.5f * s, true);
+        ci.DrawLine(chest - side * 4f * s, chest - side * 6f * s + f * (4f - 3f * stroke) * s, col.Darkened(0.3f), 2.5f * s, true);
+        ci.DrawLine(hip + side * 3f * s, hip + side * 5f * s - f * (5f - 3f * stroke) * s, col.Darkened(0.35f), 2.5f * s, true);
+        ci.DrawLine(hip - side * 3f * s, hip - side * 5f * s - f * (5f + 3f * stroke) * s, col.Darkened(0.35f), 2.5f * s, true);
+        var head = p + f * 9f * s;
+        ci.DrawCircle(head, 5f * s, col.Lightened(0.2f), true, -1f, true);
+        ci.DrawCircle(head + f * 3.5f * s, 1.4f * s, new Color(1f, 0.95f, 0.7f), true, -1f, true); // 머리등
+    }
+
+    /// <summary>주 컴퓨터 정비 요청 꼬리표: 파란 마름모 홀로그램 + 느낌표 + 도는 주사 고리.</summary>
+    private void DrawComputerTag(CanvasItem ci, Vector2 at)
+    {
+        float bob = Mathf.Sin(_time * 2.4f + at.X * 0.1f) * 1.2f;
+        var p = at + new Vector2(0, bob);
+        var dia = new[] { p + new Vector2(0, -5), p + new Vector2(5, 0), p + new Vector2(0, 5), p + new Vector2(-5, 0) };
+        ci.DrawColoredPolygon(dia, new Color(0.15f, 0.45f, 0.95f, 0.45f));
+        ci.DrawPolyline(new[] { dia[0], dia[1], dia[2], dia[3], dia[0] }, new Color(0.55f, 0.85f, 1f, 0.95f), 1f, true);
+        ci.DrawLine(p + new Vector2(0, -2.6f), p + new Vector2(0, 0.8f), new Color(1f, 1f, 1f, 0.95f), 1.2f);
+        ci.DrawCircle(p + new Vector2(0, 2.4f), 0.7f, new Color(1f, 1f, 1f, 0.95f), true, -1f, true);
+        float a = _time * 3f;
+        ci.DrawArc(p, 7.5f, a, a + 1.6f, 8, new Color(0.5f, 0.8f, 1f, 0.6f), 1f, true);
+        ci.DrawArc(p, 7.5f, a + Mathf.Pi, a + Mathf.Pi + 1.6f, 8, new Color(0.5f, 0.8f, 1f, 0.6f), 1f, true);
     }
 
     private static void DrawHazardBand(CanvasItem ci, Rect2 band)

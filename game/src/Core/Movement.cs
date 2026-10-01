@@ -167,7 +167,7 @@ public sealed class MovementSystem
         if (w.Ship.DoorAt(next) is Door door && (gt.CheckedDoor != door || now - gt.CheckedAt > SimTime.Minutes(5)))
         {
             var beyond = c.PathIndex + 1 < path.Count ? w.Ship.RoomAt(path[c.PathIndex + 1]) : null;
-            if (beyond != null && beyond != c.Room && w.Body.Reading(door, Hazard(beyond)) is string reading) // v16.3 표시판이 고장이면 오판
+            if (beyond != null && beyond != c.Room && w.Body.Reading(door, Hazard(beyond), c) is string reading) // v16.3 표시판이 고장이면 오판 (고장 방송을 들은 사람은 믿지 않는다)
             {
                 gt.CheckedDoor = door; gt.CheckedAt = now;
                 gt.DoorReading = reading;

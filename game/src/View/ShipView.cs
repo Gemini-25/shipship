@@ -1299,6 +1299,7 @@ public partial class ShipView : Node2D
                 ci.DrawRect(new Rect2(cp.X - 3.5f, cp.Y - 1f, 7f, 2f), Colors.White);
             }
         }
+        else if (_world.Body.Crawling(c)) PaintCrawler(ci, c, p, col, s); // v16.3 정비 통로 속: 엎드려 기는 몸
         else if (c.Pose == Pose.Sleeping)
         {
             Gfx.RoundRect(ci, new Rect2(p.X - 10f, p.Y + 1f, 20f, 26f), col.Darkened(0.35f).WithAlpha(0.95f), 8);
