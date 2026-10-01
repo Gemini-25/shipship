@@ -409,6 +409,7 @@ public partial class ShipView
             var r = CellRect(wb.Cell);
             Cell inward = default;
             foreach (var d in Cell.Dirs4) if (ship.RoomAt(wb.Cell + d) != null) { inward = d; break; }
+            if (wb.Crawl) DrawCrawlway(ci, wb, r);
             // 관측창: 별이 천천히 흐르는 유리창 · 폭풍이면 덮개(가로 살) · 금 간 창
             if (wb.Window)
             {
@@ -589,6 +590,57 @@ public partial class ShipView
                 ci.DrawRect(r.Grow(-12f), new Color(0.4f, 1f, 0.5f, 0.5f * pulse));
                 ci.DrawPolyline(new[] { r.GetCenter() + new Vector2(-4, -3), r.GetCenter() + new Vector2(0, 0), r.GetCenter() + new Vector2(-4, 3) }, new Color(0.7f, 1f, 0.7f, 0.8f * pulse), 1.5f, true);
             }
+        }
+    }
+
+    /// <summary>
+    /// 정비 통로: 벽 속 어두운 굴 + 양쪽 덮개(가로 살 루버 · 나사 넷) + 바닥 노란 "정비" 화살표 ·
+    /// 덮개가 닫혔으면(압력 차) 빨간 걸쇠 · 안에 누가 기어가면 손전등 빛이 움직이고 · 굴러 들어간 물건이 반짝인다.
+    /// </summary>
+    private void DrawCrawlway(CanvasItem ci, WallBody wb, Rect2 r)
+    {
+        var ship = _world.Ship;
+        bool vert = ship.RoomAt(wb.Cell + new Cell(0, 1)) != null && ship.RoomAt(wb.Cell + new Cell(0, -1)) != null && ship.RoomAt(wb.Cell + new Cell(1, 0)) == null;
+        var along = vert ? new Vector2(0, 1) : new Vector2(1, 0);
+        var across = new Vector2(along.Y, along.X);
+        var c = r.GetCenter();
+        // 굴 (벽 속 어둠) · 양옆 배관
+        var tube = new Rect2(c - across * (T * 0.3f) - along * (T * 0.5f), across * (T * 0.6f) + along * T).Abs();
+        ci.DrawRect(tube, new Color(0.03f, 0.035f, 0.04f, 0.95f));
+        ci.DrawLine(c - across * (T * 0.24f) - along * (T * 0.5f), c - across * (T * 0.24f) + along * (T * 0.5f), new Color(0.35f, 0.55f, 0.7f, 0.8f), 2f);
+        ci.DrawLine(c + across * (T * 0.24f) - along * (T * 0.5f), c + across * (T * 0.24f) + along * (T * 0.5f), new Color(0.75f, 0.35f, 0.2f, 0.8f), 1.5f);
+        // 양쪽 덮개: 루버 살 · 나사
+        foreach (float side in new[] { -1f, 1f })
+        {
+            var lid = c + along * (side * T * 0.42f);
+            var box = new Rect2(lid - across * (T * 0.3f) - along * 2.5f, across * (T * 0.6f) + along * 5f).Abs();
+            ci.DrawRect(box, wb.CrawlOpen ? new Color(0.42f, 0.46f, 0.5f, 0.95f) : new Color(0.32f, 0.3f, 0.3f, 0.95f));
+            for (int k = -2; k <= 2; k++) ci.DrawLine(lid + across * (k * 3.2f) - along * 1.8f, lid + across * (k * 3.2f) + along * 1.8f, new Color(0.1f, 0.12f, 0.14f, 0.9f), 1f);
+            ci.DrawCircle(lid - across * (T * 0.27f), 0.8f, new Color(0.8f, 0.82f, 0.85f), true, -1f, true);
+            ci.DrawCircle(lid + across * (T * 0.27f), 0.8f, new Color(0.8f, 0.82f, 0.85f), true, -1f, true);
+            if (!wb.CrawlOpen) ci.DrawRect(new Rect2(lid - new Vector2(1.5f, 1.5f), new Vector2(3, 3)), new Color(0.95f, 0.25f, 0.2f)); // 걸쇠 (압력 차로 잠김)
+            // 바닥 노란 화살표 (덮개 앞)
+            var floorAt = c + along * (side * T * 0.85f);
+            ci.DrawPolyline(new[] { floorAt - across * 3f + along * (side * 2f), floorAt - along * (side * 2f), floorAt + across * 3f + along * (side * 2f) }, new Color(0.95f, 0.8f, 0.2f, 0.7f), 1.5f, true);
+        }
+        // 굴러 들어간 물건: 굴 안에서 반짝
+        if (wb.Lost != null)
+        {
+            float gl = 0.5f + 0.5f * Mathf.Sin(_time * 3f + wb.Cell.X);
+            ci.DrawCircle(c + along * 3f, 2.2f, new Color(0.85f, 0.75f, 0.4f, 0.9f), true, -1f, true);
+            ci.DrawCircle(c + along * 3f - new Vector2(0.7f, 0.7f), 0.8f, new Color(1f, 1f, 0.9f, gl), true, -1f, true);
+        }
+        // 안에 기어가는 사람: 손전등 빛이 굴 벽을 훑는다
+        foreach (var cm in _world.Crew)
+        {
+            if (cm.Dead || cm.Cell != wb.Cell) continue;
+            var mv = ToPx(cm.Position) - ToPx(cm.PreviousPosition);
+            var dir = mv.LengthSquared() > 1e-4f ? mv.Normalized() : along;
+            var at = ToPx(cm.Position);
+            float sw = Mathf.Sin(_time * 5f) * 0.35f;
+            var beam = new[] { at, at + (dir.Rotated(sw - 0.4f)) * 12f, at + (dir.Rotated(sw + 0.4f)) * 12f };
+            ci.DrawColoredPolygon(beam, new Color(1f, 0.95f, 0.7f, 0.28f));
+            ci.DrawCircle(at, 1.6f, new Color(1f, 0.95f, 0.75f, 0.9f), true, -1f, true);
         }
     }
 

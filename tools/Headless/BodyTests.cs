@@ -426,6 +426,47 @@ public static partial class Program
                 $"{cabin.Name} 균 {bio0:0.00}→{bio:0.00} · 악취 {foul0:0.00}→{foul:0.00} · 곰팡이 {b.Stats.Mildew}");
         }
 
+        // 6-4) 정비 통로: 문으로 바로 이어지지 않은 두 방 사이를 느리게 기어서 질러간다 · 업은 사람 · 다친 사람은 못 지난다 · 압력 차면 덮개가 잠긴다
+        {
+            var w = DayOne(seed, "Hanbit");
+            var b = w.Body;
+            Run(w, SimTime.Minutes(1));
+            WallBody? cw = null;
+            Cell sa = default, sb = default;
+            List<Cell>? via = null, around = null;
+            foreach (var x in b.WallList.Where(x => x.Crawl && x.CrawlOpen))
+            {
+                var a0 = Cell.Dirs4.Select(dd => x.Cell + dd).First(c => w.Ship.RoomAt(c)?.Id == x.CrawlA);
+                var b0 = x.Cell + (x.Cell - a0);
+                var p1 = w.Paths.Find(a0, b0, PathProfile.Default);
+                if (p1 == null || !p1.Contains(x.Cell)) continue;
+                cw = x; sa = a0; sb = b0; via = p1;
+                around = w.Paths.Find(a0, b0, PathProfile.Default with { NoCrawl = true });
+                break;
+            }
+            if (cw != null)
+            {
+                var p = w.Crew.Where(c => c.CanAct && !c.IsChild && !c.Outside).OrderBy(c => c.Id).First();
+                Teleport(w, p, sa);
+                w.Step();
+                Force(w, p, new Job(null, "질러가기", new List<Toil> { new GotoToil(sb) }));
+                int c0 = b.Stats.Crawls;
+                long t0 = w.Tick;
+                for (int t = 0; t < SimTime.Minutes(10) && p.Cell != sb; t++) w.Step();
+                bool crawled = b.Stats.Crawls > c0 && p.Cell == sb;
+                long took = w.Tick - t0;
+                // 한쪽 방 압력이 떨어지면 덮개가 잠기고 길에서 빠진다
+                var ra = w.Ship.Rooms[cw.CrawlA];
+                for (int t = 0; t < SimTime.Minutes(2); t++) { ra.Air.O2 = 6f; ra.Air.N2 = 30f; w.Step(); }
+                var after = w.Paths.Find(sa, sb, PathProfile.Default);
+                bool sealedOff = !cw.CrawlOpen && (after == null || !after.Contains(cw.Cell));
+                Check("정비 통로 — 문 없는 두 방 사이를 기어서 질러간다 (느리다) · 업은 사람 · 다친 사람은 돌아간다 · 압력 차면 덮개가 잠긴다",
+                    crawled && (around == null || !around.Contains(cw.Cell)) && sealedOff,
+                    $"{w.Ship.Rooms[cw.CrawlA].Name}↔{w.Ship.Rooms[cw.CrawlB].Name} {cw.Cell} · 통로로 {via!.Count}칸 · 못 기는 사람은 {(around != null ? $"{around.Count}칸 돌아감" : "길 없음")} · {p.Name} 기어감 {crawled}({took}틱) · 압력 차 뒤 덮개 열림 {cw.CrawlOpen} · 정비 통로 {b.Stats.Crawlways}곳");
+            }
+            else Check("정비 통로 — 배에 쓸 만한 정비 통로가 있어야 한다", false, $"{b.Stats.Crawlways}곳 · 열림 {b.WallList.Count(x => x.Crawl && x.CrawlOpen)}");
+        }
+
         // 7) 모든 배 (+ 생성 배)에서 하루 정상
         {
             var keys = ShipCatalog.All.Select(t => t.Key).Append(ShipGenerator.KeyFor(12, seed)).ToList();

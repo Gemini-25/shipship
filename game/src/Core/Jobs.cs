@@ -481,7 +481,7 @@ public static class Locomotion
 
             var next = path[c.PathIndex];
             // v10.3: 가던 길이 막혔다 — 목적지까지 다시 찾는다 (못 찾으면 그 걸음은 실패)
-            if (Blocked(w.Ship, next))
+            if (Blocked(w.Ship, next) && !w.Paths.Crawl[w.Ship.Grid.Index(next)]) // v16.3 열린 정비 통로는 벽이어도 기어서 지난다
             {
                 var goal = c.Destination ?? path[^1];
                 if (repathed || Blocked(w.Ship, goal) || !SetDestination(c, w, goal))

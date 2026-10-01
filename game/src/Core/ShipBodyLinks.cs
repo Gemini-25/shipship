@@ -179,9 +179,23 @@ public sealed partial class BodySystem
         BeCareful(fallen, room, 4f, "넘어져 봤다");
     }
 
-    /// <summary>넘어지면 들고 있던 음식을 쏟는다 — 젖은 칸 · 균.</summary>
+    /// <summary>넘어지면 들고 있던 음식을 쏟는다 — 젖은 칸 · 균. 작은 물건은 곁의 정비 통로로 굴러 들어가기도 한다.</summary>
     private void Drop(CrewMember c, Cell cell)
     {
+        if (c.Carrying is ItemStack small && small.Kind is not (ItemKind.Meal or ItemKind.Ration) && small.Count <= 2)
+        {
+            foreach (var d in Cell.Dirs4)
+                if (WallAt(cell + d) is WallBody cw && cw.Crawl && cw.Lost == null && R.Chance(0.5f))
+                {
+                    cw.Lost = small;
+                    c.Carrying = null;
+                    Stats.RolledIn++;
+                    _w.Log.Add(_w.Tick, LogKind.Life, $"{Ko.IGa(c.Name)} 넘어지며 놓친 {ItemKinds.Name(small.Kind)}이(가) 정비 통로 덮개 틈으로 굴러 들어갔다", c.Id);
+                    if (c.SaidUntil < _w.Tick + 20) c.Say(_w, Persona.Say(c, "아, 저 안으로 굴러 들어갔네…"));
+                    return;
+                }
+            return;
+        }
         if (c.Carrying is not ItemStack held || held.Kind is not (ItemKind.Meal or ItemKind.Ration)) return;
         var w = _w;
         c.Carrying = null;
@@ -257,6 +271,84 @@ public sealed partial class BodySystem
             }
         }
     }
+
+    // ───────────────────────────── 정비 통로 ─────────────────────────────
+
+    private static bool Technical(RoomType k) => k is RoomType.Engine or RoomType.Reactor or RoomType.Power or RoomType.LifeSupport or RoomType.Cooling
+        or RoomType.PumpRoom or RoomType.HvacRoom or RoomType.Workshop or RoomType.Storage or RoomType.Substation or RoomType.BatteryRoom
+        or RoomType.WaterPlant or RoomType.Recycling or RoomType.FuelCell or RoomType.ServerRoom;
+
+    /// <summary>
+    /// 정비 통로 자리: 문으로 바로 이어지지 않은 두 방(한쪽은 기관 · 설비 방) 사이의 한 칸짜리 안쪽 벽, 양쪽이 빈 바닥 — 짝마다 하나, 배마다 몇 개.
+    /// </summary>
+    private void PickCrawls()
+    {
+        var ship = _w.Ship;
+        int max = Math.Clamp(ship.Rooms.Count / 6, 2, 6), n = 0;
+        var pairs = new HashSet<(int, int)>();
+        foreach (var wb in WallList) { if (!wb.Crawl) continue; wb.Crawl = false; }
+        foreach (var wb in WallList)
+        {
+            if (n >= max) break;
+            if (wb.Hull || wb.Thin || wb.Window) continue;
+            for (int axis = 0; axis < 2 && !wb.Crawl; axis++)
+            {
+                var d = axis == 0 ? new Cell(1, 0) : new Cell(0, 1);
+                Cell a = wb.Cell - d, b = wb.Cell + d;
+                if (ship.RoomAt(a) is not Room ra || ship.RoomAt(b) is not Room rb || ra == rb || ra.Detached || rb.Detached) continue;
+                if (!ship.IsOpenFloor(a) || !ship.IsOpenFloor(b) || ship.DoorAt(a) != null || ship.DoorAt(b) != null) continue;
+                if (!(Technical(ra.Kind) || Technical(rb.Kind)) || Cabin(ra.Kind) || Cabin(rb.Kind)) continue;
+                if (ra.Doors.Any(x => x.RoomA == rb || x.RoomB == rb)) continue;
+                var key = ra.Id < rb.Id ? (ra.Id, rb.Id) : (rb.Id, ra.Id);
+                if (pairs.Contains(key)) continue;
+                pairs.Add(key);
+                wb.Crawl = true; wb.CrawlA = ra.Id; wb.CrawlB = rb.Id;
+                n++;
+            }
+        }
+        Stats.Crawlways = n;
+    }
+
+    /// <summary>정비 통로 덮개: 양쪽 압력이 맞고 진공이 아닐 때만 열린다 (안에 사람이 있으면 그대로) — 길찾기에 알린다.</summary>
+    private void UpdateCrawls()
+    {
+        var ship = _w.Ship;
+        var grid = ship.Grid;
+        var crawl = _w.Paths.Crawl;
+        bool changed = false;
+        foreach (var wb in WallList)
+        {
+            int i = grid.Index(wb.Cell);
+            bool open = false;
+            if (wb.Crawl && wb.CrawlA < ship.Rooms.Count && wb.CrawlB < ship.Rooms.Count)
+            {
+                Room ra = ship.Rooms[wb.CrawlA], rb = ship.Rooms[wb.CrawlB];
+                open = !ra.Detached && !rb.Detached && ra.Air.Pressure > 60f && rb.Air.Pressure > 60f && MathF.Abs(ra.Air.Pressure - rb.Air.Pressure) < 15f;
+                if (!open && crawl[i]) foreach (var c in _w.Crew) if (!c.Dead && c.Cell == wb.Cell) { open = true; break; } // 안에 사람이 있다
+            }
+            wb.CrawlOpen = open;
+            if (crawl[i] != open) { crawl[i] = open; changed = true; }
+        }
+        if (changed) _w.Paths.CrawlChanged();
+    }
+
+    /// <summary>정비 통로 속 한 걸음: 엎드려 기어간다 (느리다) · 처음 들어서면 센다.</summary>
+    private float CrawlStep(CrewMember c)
+    {
+        var w = _w;
+        int ci = w.Ship.Grid.Index(c.Cell);
+        if (_lastCell[c.Id] != ci)
+        {
+            _lastCell[c.Id] = ci;
+            Stats.Crawls++;
+            if (c.SaidUntil < w.Tick) c.Say(w, Persona.Say(c, "정비 통로로 질러간다 — 좁네"));
+        }
+        c.Pose = Pose.Walking;
+        return 0.3f;
+    }
+
+    /// <summary>정비 통로에 지금 들어가 있는 사람 (화면).</summary>
+    public bool Crawling(CrewMember c) => c.Room == null && !c.Outside && _w.Ship.Grid.Kind(c.Cell) == TileKind.Wall;
 
     /// <summary>이 칸의 마르는 빠르기 배율 (히터 · 선풍기).</summary>
     private float DryMul(Room? r) => r != null && r.Id < _dryMul.Length ? 1f + _dryMul[r.Id] : 1f;
