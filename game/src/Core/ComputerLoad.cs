@@ -51,6 +51,7 @@ public sealed partial class AutomationSystem
         float d = 0f;
         foreach (var m in _modules) if (!Suspended.Contains(m)) d += ModuleLoad(m);
         d += 2f * FireCases.Count + (ZoneActive ? 2f : 0f) + Asks.Open.Count() + Checks.Count * 0.5f;
+        if (_planner is { Busy: true }) d += 0.5f; // v16.16 협상 중인 계획 (안건 · 제안)
         return d;
     }
 

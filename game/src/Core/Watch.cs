@@ -706,7 +706,7 @@ public sealed partial class WorkBoard
             // 사람은 진짜 교정값을 모른다: 마지막 교정 뒤 지난 날수로 짐작하고, 계기 오류가 확인되면 그제야 안다
             float avg = ms.Average(m => WatchLog.KnownCal(m, w));
             float worstVital = ms.Where(m => m.Spec.Critical).Select(m => WatchLog.KnownCal(m, w)).DefaultIfEmpty(1f).Min();
-            bool phantom = ms.Any(m => m.Omen is { Cause: OmenCause.Phantom, Note: { Stage: NoteStage.Confirmed } }) || w.Watch.PhantomSuspect(room, ms);
+            bool phantom = ms.Any(m => m.Omen is { Cause: OmenCause.Phantom, Note: { Stage: NoteStage.Confirmed } }) || w.Watch.PhantomSuspect(room, ms) || w.Automation.Outlook.Suspect(room); // v16.16 컴퓨터가 의심하는 계기
             if (avg >= 0.72f && worstVital >= 0.7f && !phantom) continue;
             post(WorkKind.Calibrate, WorkTarget.OfRoom(room), MathF.Min(phantom ? 0.65f : 0.5f, 0.2f + (0.8f - avg) * 0.8f + (phantom ? 0.2f : 0f)), Skill.Electrical, // v14.4 계기 오류가 확인된 방은 더 급하다
                 $"감지기 교정 평균 {avg * 100:0}%" + (worstVital < 0.7f ? $" · 핵심 설비 {worstVital * 100:0}%" : "") + (phantom ? " · 계기 오류 확인됨" : ""));

@@ -52,6 +52,7 @@ public sealed class WaterSystem
         foreach (var bed in w.Ship.FurnitureOf(FurnitureType.GrowBed))
             if (bed.Machine!.Efficiency > 0f && bed.Machine.Crop is { Ripe: false } && w.Piping.WaterTo(bed.Room)) consume += BedLitersPerHour * FoodChain.BedSize(bed);
         consume *= ComputerV15.WaterUseMul(w); // v15.9 물 관리
+        consume *= w.Automation.Planner.HeedWaterMul; // v16.16 예측 방송을 믿는 사람은 스스로 아낀다
         Produced = produce;
         Consumed = consume;
         Level = Math.Clamp(Level + (produce - consume) * dt, 0f, Capacity);

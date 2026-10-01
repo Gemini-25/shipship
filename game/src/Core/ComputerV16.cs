@@ -116,7 +116,7 @@ public sealed class ComputerApps
         if (On(ComputerModule.FatigueAlert)) Fatigue();
     }
 
-    private void MakeRoster(int day)
+    public void MakeRoster(int day)
     {
         var w = _w;
         var crew = w.Crew.Where(c => !c.Dead && !c.IsChild && !c.Down).OrderBy(c => c.Id).ToList();
@@ -125,10 +125,12 @@ public sealed class ComputerApps
         var load = crew.ToDictionary(c => c.Id, c => Roster.Count(s => s.CrewId == c.Id));
         foreach (var (duty, time) in new[] { ("야간 당직", "22~06시"), ("조리", "07·12·18시"), ("청소", "10시"), ("정비 순찰", "14시") })
         {
-            var who = crew.OrderBy(c => load[c.Id]).ThenBy(c => duty == "조리" ? -c.RawSkill(Skill.Cooking) : duty == "정비 순찰" ? -c.RawSkill(Skill.Mechanics) : 0f).ThenBy(c => (c.Id + day) % crew.Count).First();
+            var cm = w.Automation.CrewModel; // v16.16 승무원 모형: 지칠 사람 · 싫어하는 사람을 피한다 (짐작이라 틀릴 수 있다)
+            var who = crew.OrderBy(c => load[c.Id] + cm.DutyCost(c, duty)).ThenBy(c => duty == "조리" ? -c.RawSkill(Skill.Cooking) : duty == "정비 순찰" ? -c.RawSkill(Skill.Mechanics) : 0f).ThenBy(c => (c.Id + day) % crew.Count).First();
             load[who.Id]++;
             Roster.Add(new DutySlot(day, duty, time, who.Id));
             Msg(who, "당번", $"오늘 {duty} 당번 ({time})");
+            cm.OnDuty(who, duty);
         }
         w.Automation.Book.Today.Rosters++;
     }
