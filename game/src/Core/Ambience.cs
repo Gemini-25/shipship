@@ -128,6 +128,7 @@ public sealed class AmbienceSystem
                 float sr = storm * Exposure(room);
                 r = MathF.Max(r, sr);
             }
+            r = MathF.Max(r, w.Cosmic.Radiation(room)); // v18.13 우주 대재난 방사선 (물벽이 덜고 · 대피소가 막는다)
             if ((tags & RoomTag.Shielded) != 0) r *= 0.15f;
             else if (storm > 0f && room.Type == RoomType.Storage) r *= 1f - 0.45f * Facilities.Factor(room, "shelter"); // 선반 뒤 (겸용의 대가)
             s = MathF.Max(s, w.Smells.Unpleasant(room)); // v16.8 탄내 · 악취 (Smell.cs가 공기를 타고 퍼뜨린 것)
@@ -141,7 +142,7 @@ public sealed class AmbienceSystem
         foreach (var c in w.Crew)
         {
             if (c.Dead) continue;
-            float rad = c.Outside ? storm + 0.02f : c.Room?.Radiation ?? 0f;
+            float rad = c.Outside ? storm + 0.02f + w.Cosmic.OutsideRad : c.Room?.Radiation ?? 0f; // v18.13 선체 밖
             if (c.Suit != null) rad *= 0.7f;
             if (rad > 0.1f) c.Dose += (rad - 0.05f) * 0.5f * dt;
             else c.Dose = MathF.Max(0f, c.Dose - 0.005f * dt); // 몸이 아주 천천히 회복한다

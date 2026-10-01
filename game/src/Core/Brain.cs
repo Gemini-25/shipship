@@ -14,6 +14,7 @@ public static class Brain
         new EvacuateActivity(),
         new CheckRoomActivity(), // v16.6 컴퓨터 확인 요청 (직접 가서 보고 쓰러진 사람을 데려 나온다)
         new ShelterActivity(), // v12.6 태양 폭풍
+        new CosmicEvacuateActivity(), new CosmicShelterActivity(), new CosmicWarnActivity(), new CosmicBraceActivity(), new CosmicVigilActivity(), new CosmicLookActivity(), // v18.13 우주 대재난: 비우기 · 대피 · 알리기 · 대비 · 그날의 밤 · 창밖 보기
         new QuarantineActivity(), // v12.6 격리실
         new RecoverActivity(),
         new StowSuitActivity(),

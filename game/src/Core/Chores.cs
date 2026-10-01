@@ -129,7 +129,7 @@ public sealed class ChoresActivity : Activity
         // EVA: 발밑이 우주다. 겁 많은 사람은 꺼리고, 긴장한 사람은 더 꺼린다
         if (eva) score -= 0.12f + 0.35f * MathF.Pow(1f - c.Traits.Bravery, 1.3f) + 0.3f * c.Memory.Trauma;
         // v11.2 태양 폭풍: 선체 밖은 방사선 — 급하지 않으면 지나갈 때까지 미룬다
-        if (eva && w.Hazards.StormActive && !emergency) score -= 0.8f;
+        if (eva && (w.Hazards.StormActive || w.Cosmic.NoEva) && !emergency) score -= 0.8f; // v18.13 대재난 예보 · 본 사건
 
         // 겁 많은 사람은 위험한 방의 일을 꺼린다 (용감한 사람은 거의 개의치 않음)
         if (!eva && o.Target.CurrentRoom is Room room)
