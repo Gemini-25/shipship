@@ -362,25 +362,32 @@ public sealed class PropSystem
         float pick = R.Float() * options.Sum(o => o.wt);
         var (maker, spec, _) = options[^1];
         foreach (var o in options) { pick -= o.wt; if (pick <= 0f) { (maker, spec) = (o.c, o.s); break; } }
-        Make(maker, spec);
+        if (!w.Scenes.Craft(maker, spec)) Make(maker, spec); // v16.1 진척 · 운반 · 설치 (장면을 못 열면 예전처럼 바로)
+    }
+
+    /// <summary>v16.1 만들기 전에 어디 둘지 정한다 (좋아할 사람 → 방).</summary>
+    internal Room? Destination(CrewMember maker, PropSpec spec)
+    {
+        var fan = _w.Crew.Where(o => o != maker && !o.Dead && Fan(o, spec)).OrderByDescending(o => maker.AffinityTo(o)).ThenBy(o => o.Id).FirstOrDefault();
+        return RoomFor(maker, spec, fan != null && maker.AffinityTo(fan) >= -0.2f ? fan : null);
     }
 
     /// <summary>그 사람이 그 소품을 만들어 둔다 (시험에서도 부른다).</summary>
-    public PlacedProp? Make(CrewMember maker, PropSpec spec)
+    public PlacedProp? Make(CrewMember maker, PropSpec spec, Room? into = null, bool paid = false, Cell? near = null) // v16.1 장면: 정한 방 · 이미 쓴 재료 · 선 자리
     {
         var w = _w;
         var fans = w.Crew.Where(o => o != maker && !o.Dead && Fan(o, spec)).ToList();
         var fan = fans.Count == 0 ? null : fans.OrderByDescending(o => maker.AffinityTo(o)).ThenBy(o => o.Id).First();
         if (fan != null && maker.AffinityTo(fan) < -0.2f) fan = null;
-        var room = RoomFor(maker, spec, fan);
+        var room = into ?? RoomFor(maker, spec, fan);
         if (room == null) return null;
-        if (spec.Material is ItemKind m && !ItemsV15.Use(w, m)) return null;
+        if (!paid && spec.Material is ItemKind m && !ItemsV15.Use(w, m)) return null;
         string why = fan != null ? $"{Ko.IGa(fan.Name)} 좋아할 것 같아서"
             : maker.Needs.Stress > 0.45f ? "마음을 달래려고"
             : room.Decor.Count == 0 ? $"{Ko.IGa(room.Name)} 휑해서"
             : maker.IsChild ? "그리고 싶어서"
             : spec.Maker is Hobby h ? $"{Persona.Of(h).Name} 취미 삼아" : "손이 심심해서";
-        var p = Place(spec, room, maker, why);
+        var p = Place(spec, room, maker, why, near: near);
         if (p == null) return null;
         Stats.Made++;
         maker.Needs.Stress = MathF.Max(0f, maker.Needs.Stress - 0.04f); // 만드는 보람
