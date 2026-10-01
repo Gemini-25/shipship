@@ -191,7 +191,7 @@ public static class Memory
         m.AnyFear = any;
 
         // 긴장은 아주 천천히 풀린다 (몇 주에 걸쳐. 편히 쉬면 두 배)
-        float relax = c.Job?.Activity is RelaxActivity ? 3f : 1f;
+        float relax = c.Job?.Activity is RelaxActivity ? 3f * (1f + 1.5f * Facilities.Factor(c.Room, "grief")) : 1f; // v12.6 기도실·명상실에서 더 빨리
         m.Trauma = MathF.Max(0f, m.Trauma - 0.002f / 24f * relax * dt);
         if (m.Trauma < 0.08f) m.TraumaNoted = false;
 

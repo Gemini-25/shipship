@@ -859,7 +859,7 @@ public partial class Hud : Control
     private void DrawMachineInspector(Furniture f, float y, float maxHeight, Vector2 mouse)
     {
         var m = f.Machine;
-        var accent = Palette.Room(f.Room.Type);
+        var accent = Palette.Room(f.Room.Kind);
         float x0 = Screen.X - Margin - RightColumnWidth;
         var orders = _world.Board.Open.Where(o => o.Target.Furniture == f).ToList();
         var extra = MachineExtras(f);
@@ -1079,7 +1079,7 @@ public partial class Hud : Control
 
     private void DrawRoomInspector(Room room, float y, Vector2 mouse)
     {
-        var accent = Palette.Room(room.Type);
+        var accent = Palette.Room(room.Kind);
         float x0 = Screen.X - Margin - RightColumnWidth;
         var inside = _world.Crew.Where(c => c.Room == room).ToList();
         var equipment = room.Furniture.Where(f => f.Machine != null || f.Storage != null).ToList();
@@ -1228,6 +1228,26 @@ public partial class Hud : Control
             lines.Add(("연결부", text, stress > 1f || room.Joints.Any(j => j.KnownBroken && !j.Released) ? Palette.Danger : unseen || room.Joints.Any(j => j.Known < 0.7f) ? Palette.Warning : Palette.TextDim));
         }
         else if (room.Type == RoomType.Corridor) lines.Add(("연결부", "용골 (모든 방이 여기에 붙어 있다)", Palette.TextMuted));
+        // v12.6 세부 종류 · 환경 · 맡은 일(겸용의 대가)
+        if (room.Special != null) lines.Add(("종류", $"{RoomTypes.Name(room.Kind)} — {RoomTypes.Name(room.Type)} 기능을 겸한다", Palette.Room(room.Kind)));
+        {
+            var env = new List<string>();
+            if (room.Noise > 0.06f) env.Add($"소음 {room.Noise * 100:0}%");
+            if (room.Vibration > 0.06f) env.Add($"진동 {room.Vibration * 100:0}%");
+            if (room.Smell > 0.06f) env.Add($"냄새 {room.Smell * 100:0}%");
+            if (room.Radiation > 0.08f) env.Add($"방사선 {room.Radiation * 100:0}%");
+            if ((RoomCatalog.Tags(room.Kind) & RoomTag.Sleep) != 0) env.Add($"잠의 질 {AmbienceSystem.SleepFactor(room) * 100:0}%");
+            if (env.Count > 0) lines.Add(("환경", string.Join(" · ", env), room.Radiation > 0.2f || room.Noise > 0.5f ? Palette.Warning : Palette.TextDim));
+            foreach (var fn in RoomCatalog.Functions)
+            {
+                float k = Facilities.Factor(room, fn.Key);
+                if (k <= 0f) continue;
+                var (best, _) = Facilities.Best(_world.Ship, fn.Key);
+                if (k >= 1f) lines.Add(("맡은 일", $"{fn.Name} (전용)", new Color("#8fd65a")));
+                else if (best == room) lines.Add(("겸용", $"{fn.Name} {k * 100:0}% — {fn.Missing}", Palette.Warning));
+            }
+            if (room.Compartment >= 0) lines.Add(("구획", $"{room.Compartment + 1}구획 (격벽 문 {room.Doors.Count(d => d.Bulkhead)})", Palette.TextDim));
+        }
         // v10.6 방 모듈: 달린 것 · 더 달 수 있는 것
         foreach (var spec in Modules.All.Where(s => s.Room == room.Type))
         {

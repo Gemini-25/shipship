@@ -210,6 +210,10 @@ public sealed class CrewMember
     public bool Immune { get; set; }
     public Furniture? PoisonSource { get; set; }
 
+    /// <summary>v12.6 쌓인 방사선 (대략 Sv) — 1 넘으면 몸이 상하기 시작한다. 체력 단련(0~1)은 운동으로 오르고 안 하면 천천히 빠진다.</summary>
+    public float Dose { get; set; }
+    public float Fitness { get; set; } = 0.6f;
+
     /// <summary>
     /// 공구 가방: 여러 재료가 드는 일(부품 제작, Mk.1 대체품, 패널 교체)의 두 번째 이후 재료.
     /// 손에 든 것(Carrying)은 주재료 하나뿐이라, 나머지는 여기에 담아 다닌다. 일이 끝나면 남은 건 꺼낸 곳에 되돌린다.

@@ -153,7 +153,29 @@ public sealed class Ship
     public bool IsOpenFloor(Cell c) => Grid.Kind(c) == TileKind.Floor && Grid.FurnitureId(c) < 0;
 
     // 떨어져 나간 방의 가구·설비는 우주선에 없는 것으로 친다 (조각에 실려 있다)
-    public IEnumerable<Room> RoomsOf(RoomType type) => Rooms.Where(r => r.Type == type && !r.Detached);
+    /// <summary>그 기능의 방들 — v12.6 세부 종류(격리실은 의무실 기능)는 본래 방 뒤에 온다.</summary>
+    public IEnumerable<Room> RoomsOf(RoomType type) => Rooms.Where(r => r.Type == type && !r.Detached).OrderBy(r => r.Special != null ? 1 : 0);
+    public IEnumerable<Room> KindOf(RoomType kind) => Rooms.Where(r => r.Kind == kind && !r.Detached);
+
+    /// <summary>v12.6 구획: 통로와 통로 사이의 문(격벽 문)을 빼고 문으로 이어진 방끼리 한 구획. 구획이 하나면 -1.</summary>
+    public int Compartments { get; private set; }
+    public void AssignCompartments()
+    {
+        foreach (var d in Doors) d.Bulkhead = d.RoomA is { Type: RoomType.Corridor } && d.RoomB is { Type: RoomType.Corridor } && d.RoomA != d.RoomB;
+        var parent = Enumerable.Range(0, Rooms.Count).ToArray();
+        int Find(int x) { while (parent[x] != x) x = parent[x] = parent[parent[x]]; return x; }
+        foreach (var d in Doors)
+            if (!d.Bulkhead && d.RoomA != null && d.RoomB != null) parent[Find(d.RoomA.Id)] = Find(d.RoomB.Id);
+        var ids = new Dictionary<int, int>();
+        foreach (var r in Rooms.OrderBy(r => r.Center.X))
+        {
+            int root = Find(r.Id);
+            if (!ids.TryGetValue(root, out int c)) ids[root] = c = ids.Count;
+            r.Compartment = c;
+        }
+        Compartments = ids.Count;
+        if (Compartments <= 1) foreach (var r in Rooms) r.Compartment = -1;
+    }
     public IEnumerable<Furniture> FurnitureOf(FurnitureType type) => Furniture.Where(f => f.Type == type && !f.Room.Detached && !f.Stowed);
     public IEnumerable<Machine> Machines => Furniture.Where(f => f.Machine != null && !f.Room.Detached && !f.Stowed).Select(f => f.Machine!);
 
@@ -189,6 +211,16 @@ public static class ShipBuilder
     public static Ship FromAscii(string name, string map, int margin = 3)
     {
         var lines = map.Replace("\r", "").Split('\n').ToList();
+        // v12.6 범례: "@x=Gym" 줄은 이 설계도에서 글자 x를 체력단련실로 (소문자·숫자 — 방 70종을 담으려고)
+        var legend = new Dictionary<char, RoomType>();
+        foreach (var l in lines.Where(l => l.StartsWith('@')).ToList())
+        {
+            lines.Remove(l);
+            var kv = l[1..].Split('=', 2);
+            if (kv.Length != 2 || kv[0].Trim().Length != 1 || RoomCatalog.Parse(kv[1]) is not RoomType lt)
+                throw new FormatException($"설계도 범례를 읽을 수 없습니다: {l}");
+            legend[kv[0].Trim()[0]] = lt;
+        }
         while (lines.Count > 0 && lines[^1].Trim().Length == 0) lines.RemoveAt(lines.Count - 1);
         while (lines.Count > 0 && lines[0].Trim().Length == 0) lines.RemoveAt(0);
         if (lines.Count == 0) throw new FormatException("설계도가 비어 있습니다.");
@@ -199,6 +231,7 @@ public static class ShipBuilder
         var ship = new Ship(name, grid);
 
         var labels = new List<(Cell cell, RoomType type)>();
+        var specials = new Dictionary<Cell, RoomType>();
         var furnitureChars = new Dictionary<Cell, char>();
 
         // 1) 타일 종류
@@ -217,7 +250,12 @@ public static class ShipBuilder
                     case '.': grid.SetKind(cell, TileKind.Floor); break;
                     default:
                         grid.SetKind(cell, TileKind.Floor);
-                        if (RoomTypes.FromLabel(ch) is RoomType rt) labels.Add((cell, rt));
+                        if (legend.TryGetValue(ch, out var sk))
+                        {
+                            labels.Add((cell, RoomCatalog.BaseOf(sk)));
+                            if (RoomCatalog.Of(sk) != null) specials[cell] = sk;
+                        }
+                        else if (RoomTypes.FromLabel(ch) is RoomType rt) labels.Add((cell, rt));
                         else if (FurnitureTypes.FromChar(ch) != null) furnitureChars[cell] = ch;
                         else throw new FormatException($"설계도 {row + 1}행 {col + 1}열: 알 수 없는 글자 '{ch}'");
                         break;
@@ -231,7 +269,7 @@ public static class ShipBuilder
             if (grid.RoomId(start) >= 0)
                 throw new FormatException($"{start} 방에 라벨이 두 개 있습니다.");
 
-            var room = new Room { Id = ship.Rooms.Count, Type = type };
+            var room = new Room { Id = ship.Rooms.Count, Type = type, Special = specials.TryGetValue(start, out var sp) ? sp : null };
             ship.Rooms.Add(room);
 
             var stack = new Stack<Cell>();
@@ -370,6 +408,7 @@ public static class ShipBuilder
             ship.AddWall(c, new WallState { IsHull = hull });
         }
 
+        ship.AssignCompartments(); // v12.6
         return ship;
     }
 

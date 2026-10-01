@@ -49,7 +49,7 @@ public static class Palette
         RoomType.Medbay => new Color("#ef8fa6"),
         RoomType.Lounge => new Color("#c79be0"),
         RoomType.Comms => new Color("#6ee7b7"),
-        _ => new Color("#6b7486"),
+        _ => RoomCatalog.Of(t) is RoomSpec spec ? new Color(spec.Color) : new Color("#6b7486"),
     };
 
     public static Color RoomFloor(RoomType t) => Floor.Lerp(Room(t), t == RoomType.Corridor ? 0.06f : 0.1f);

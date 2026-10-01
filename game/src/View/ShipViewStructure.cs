@@ -148,7 +148,7 @@ public partial class ShipView
             foreach (var c in room.Cells)
             {
                 var r = CellRect(c);
-                ci.DrawRect(r, Palette.RoomFloor(room.Type).Darkened(0.25f));
+                ci.DrawRect(r, Palette.RoomFloor(room.Kind).Darkened(0.25f));
                 var (tex, alpha) = Textures.Floor(room.Type);
                 if (tex != null) ci.DrawTextureRectRegion(tex, r, Variant(c), new Color(1, 1, 1, alpha * 0.7f));
             }

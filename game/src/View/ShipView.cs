@@ -167,7 +167,7 @@ public partial class ShipView : Node2D
                 case TileKind.Floor:
                 {
                     var type = ship.RoomAt(c)!.Type;
-                    ci.DrawRect(r, Palette.RoomFloor(type));
+                    ci.DrawRect(r, Palette.RoomFloor(ship.RoomAt(c)!.Kind));
                     var (tex, alpha) = Textures.Floor(type);
                     if (tex != null) ci.DrawTextureRectRegion(tex, r, Variant(c), new Color(1, 1, 1, alpha));
                     break;
@@ -176,7 +176,7 @@ public partial class ShipView : Node2D
                 {
                     var door = ship.DoorAt(c);
                     var room = door?.RoomA ?? door?.RoomB;
-                    ci.DrawRect(r, room != null ? Palette.RoomFloor(room.Type) : Palette.Floor);
+                    ci.DrawRect(r, room != null ? Palette.RoomFloor(room.Kind) : Palette.Floor);
                     if (Textures.Plate != null) ci.DrawTextureRectRegion(Textures.Plate, r, Variant(c), new Color(1, 1, 1, 0.8f));
                     break;
                 }
@@ -295,7 +295,7 @@ public partial class ShipView : Node2D
     {
         var r = FurnitureRect(f);
         var center = r.GetCenter();
-        var accent = Palette.Room(f.Room.Type);
+        var accent = Palette.Room(f.Room.Kind);
         if (PaintModuleBody(ci, f)) return; // v10.8 방 모듈
 
         switch (f.Type)
@@ -595,6 +595,7 @@ public partial class ShipView : Node2D
         PaintFragments(ci); // 떨어져 나가 떠다니는 방 (우주선 밖이라 맨 아래)
         PaintNavLights(ci); // v10.9 항해등
         PaintRadiators(ci); // v9 선체 밖 방열판
+        PaintExterior(ci); // v12.6 안테나·태양 날개
         PaintScorch(ci);
         foreach (var f in ship.Furniture.Where(f => !f.Stowed && !f.Room.Detached)) PaintFurnitureLife(ci, f);
         PaintTierBadges(ci); // v10.8
@@ -616,6 +617,7 @@ public partial class ShipView : Node2D
             case ViewMode.Structure: PaintStructureOverlay(ci); break;
             case ViewMode.Pipes: PaintPipeOverlay(ci); break;
             case ViewMode.Sensors: PaintSensorOverlay(ci); break;
+            case ViewMode.Ambience: PaintAmbienceOverlay(ci); break;
         }
 
         PaintWater(ci); // v12.3 바닥 물·결로·분전함 차단
@@ -638,9 +640,9 @@ public partial class ShipView : Node2D
         PaintRoomStates(ci);
 
         if (_main.HoveredRoom is Room hr && hr != _main.SelectedRoom && !hr.Detached)
-            PaintOutline(ci, hr, Palette.Room(hr.Type).WithAlpha(0.35f), false);
+            PaintOutline(ci, hr, Palette.Room(hr.Kind).WithAlpha(0.35f), false);
         if (_main.SelectedRoom is Room sr && !sr.Detached)
-            PaintOutline(ci, sr, Palette.Room(sr.Type).WithAlpha(0.9f), true);
+            PaintOutline(ci, sr, Palette.Room(sr.Kind).WithAlpha(0.9f), true);
         if (_main.HoveredFurniture is Furniture hf && hf != _main.SelectedFurniture)
             Gfx.RoundRect(ci, FurnitureRect(hf).Grow(1f), new Color(1, 1, 1, 0f), 6, new Color(1, 1, 1, 0.35f), 2);
         if (_main.SelectedFurniture is Furniture sf)
@@ -687,7 +689,7 @@ public partial class ShipView : Node2D
     {
         var r = FurnitureRect(f);
         var center = r.GetCenter();
-        var accent = Palette.Room(f.Room.Type);
+        var accent = Palette.Room(f.Room.Kind);
         float t = _time + f.Id * 0.73f;
         var m = f.Machine;
         float eff = m?.Efficiency ?? 1f;
@@ -1123,7 +1125,7 @@ public partial class ShipView : Node2D
         var r = CellRect(d.Cell);
         float open = Mathf.SmoothStep(0f, 1f, d.Openness);
         float half = T * 0.5f * (1f - open);
-        float th = d.IsExternal ? 12f : 8f;
+        float th = d.IsExternal ? 12f : d.Bulkhead ? 11f : 8f; // v12.6 구획 격벽 문은 두껍다
         var panel = d.IsExternal ? new Color("#4a4f5c") : d.Powered ? new Color("#3a4456") : new Color("#3e3336");
         var light = d.IsExternal ? Palette.Warning.WithAlpha(0.7f)
                   : !d.Powered ? Palette.Danger.WithAlpha(0.55f)
@@ -1148,6 +1150,8 @@ public partial class ShipView : Node2D
             Band(T - half, 2f, light);
             if (d.IsExternal)
                 for (float s = 3f; s < T - 3f; s += 6f) Band(s, 2.5f, new Color("#f5d547").WithAlpha(0.4f));
+            else if (d.Bulkhead)
+                for (float s = 2f; s < half - 2f; s += 4f) { Band(s, 1.5f, new Color("#e0a050").WithAlpha(0.55f)); Band(T - s - 1.5f, 1.5f, new Color("#e0a050").WithAlpha(0.55f)); }
         }
         if (d.Locked && ((d.RoomA?.Abandoned ?? false) || (d.RoomB?.Abandoned ?? false)))
         {

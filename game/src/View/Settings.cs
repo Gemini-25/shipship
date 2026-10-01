@@ -43,7 +43,8 @@ public static class Settings
     public static string Ship { get; set; } = "auto";
 
     public static string ShipFor(int crew) =>
-        ShipSim.Core.ShipCatalog.Find(Ship)?.Key ?? ShipSim.Core.ShipCatalog.ForCrew(crew).Key;
+        Ship == "gen" ? ShipSim.Core.ShipGenerator.KeyFor(System.Math.Clamp(crew, 4, 40), (int)(System.DateTime.Now.Ticks / 10_000_000 % 100_000)) // v12.6 새 항해마다 다른 배
+        : ShipSim.Core.ShipCatalog.Find(Ship)?.Key ?? ShipSim.Core.ShipCatalog.ForCrew(crew).Key;
 
     /// <summary>v10.7: 밸런스 수치 파일 (한 줄에 `열쇠 = 값`). 없으면 기본값으로 만들어 둔다 — 게임 밖에서 고쳐도 된다.</summary>
     public const string TuningPath = "user://tuning.cfg";
@@ -165,15 +166,17 @@ public partial class OptionsPanel : PanelContainer
         var ship = new OptionButton { CustomMinimumSize = new Vector2(360, 0) };
         ship.AddItem("배: 자동 (인원에 맞는 배)");
         foreach (var t in ShipSim.Core.ShipCatalog.All) ship.AddItem($"배: {t.Name} · {t.Crew}인용 — {t.Note}");
-        ship.Selected = Settings.Ship == "auto" ? 0 : 1 + System.Array.FindIndex(ShipSim.Core.ShipCatalog.All, t => t.Key == Settings.Ship);
+        ship.AddItem("배: 절차 생성 — 인원에 맞춰 새 항해마다 다른 배 (새 방 섞임 · 20인 넘으면 구획 격벽)"); // v12.6
+        int genIndex = ShipSim.Core.ShipCatalog.All.Length + 1;
+        ship.Selected = Settings.Ship == "auto" ? 0 : Settings.Ship == "gen" ? genIndex : 1 + System.Array.FindIndex(ShipSim.Core.ShipCatalog.All, t => t.Key == Settings.Ship);
         if (ship.Selected < 0) ship.Selected = 0;
         var crewLabel = Label(CrewText(Settings.Crew));
         var crew = new HSlider { MinValue = 1, MaxValue = ShipSim.Core.World.MaxCrew, Step = 1, Value = Settings.Crew, CustomMinimumSize = new Vector2(360, 24) };
         crew.ValueChanged += v => { Settings.Crew = (int)v; crewLabel.Text = CrewText((int)v); Changed(); };
         ship.ItemSelected += i =>
         {
-            Settings.Ship = i == 0 ? "auto" : ShipSim.Core.ShipCatalog.All[i - 1].Key;
-            if (i > 0) crew.Value = ShipSim.Core.ShipCatalog.All[i - 1].Crew; // 고른 배의 설계 인원으로 (바꿔도 된다)
+            Settings.Ship = i == 0 ? "auto" : i == genIndex ? "gen" : ShipSim.Core.ShipCatalog.All[i - 1].Key;
+            if (i > 0 && i < genIndex) crew.Value = ShipSim.Core.ShipCatalog.All[i - 1].Crew; // 고른 배의 설계 인원으로 (바꿔도 된다)
             crewLabel.Text = CrewText(Settings.Crew);
             Changed();
         };
@@ -288,6 +291,7 @@ public partial class OptionsPanel : PanelContainer
 
     private static string CrewText(int n)
     {
+        if (Settings.Ship == "gen") return $"승무원 {n}명 · 절차 생성 배({System.Math.Clamp(n, 4, 40)}인용)";
         var t = ShipSim.Core.ShipCatalog.Find(Settings.ShipFor(n)) ?? ShipSim.Core.ShipCatalog.Default;
         return $"승무원 {n}명 · {t.Name}({t.Crew}인용)" + (n == t.Crew ? " — 설계 인원"
             : n > t.Crew ? $" — 간이침대 {n - t.Crew}개 · 식량·물이 빠듯하다" : " — 일손이 모자라다");

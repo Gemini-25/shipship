@@ -306,6 +306,9 @@ public sealed class RelaxActivity : Activity
             if (seat.Room.Type is not (RoomType.Lounge or RoomType.Mess) || seat.Room.OffLimits) continue;
 
             float value = seat.Room.Type == RoomType.Lounge ? 1f : 0.4f;
+            value *= AmbienceSystem.RelaxFactor(seat.Room); // v12.6 관측실·정원은 더 끌린다, 시끄러운 곳은 덜
+            value += 0.5f * (0.6f - c.Fitness) * Facilities.Factor(seat.Room, "exercise"); // 몸이 굳었으면 운동하러
+            value += 0.8f * c.Memory.Trauma * Facilities.Factor(seat.Room, "grief"); // 마음이 무거우면 기도실로
             foreach (var o in w.Crew)
             {
                 if (o == c || (o.Position - seat.Center).Length() > 3f) continue;
@@ -612,4 +615,94 @@ public static class IdleJob
 {
     public static Job Create(int ticks = 0) =>
         new(null, "대기", new Toil[] { new WaitToil(ticks > 0 ? ticks : SimTime.Minutes(10), Pose.Standing) });
+}
+
+// ─────────────────────────────── v12.6 방사선 대피 ───────────────────────────────
+
+/// <summary>태양 폭풍의 양성자 비: 바깥벽 방에 있으면 대피소(없으면 창고 선반 뒤, 그것도 없으면 배 안쪽 방)로 가서 기다린다.</summary>
+public sealed class ShelterActivity : Activity
+{
+    public override string Id => "shelter";
+    public override string Label => "방사선 대피";
+
+    public override (float, string) Score(CrewMember c, World w, DistanceField dist)
+    {
+        if (c.Outside || c.Room == null || w.Ambience.StormPower < 0.3f) return (0f, "—");
+        if (c.Room.Radiation < 0.2f) return c.Job?.Activity is ShelterActivity ? (0.95f, "태양 폭풍이 지나가길 기다린다") : (0f, "여기는 괜찮다");
+        return (0.8f + 0.4f * c.Room.Radiation, $"태양 폭풍 — {c.Room.Name} 방사선 {c.Room.Radiation * 100:0}%");
+    }
+
+    public override Job? Plan(CrewMember c, World w, DistanceField dist)
+    {
+        // 이미 덜 쬐는 곳: 그 자리에서 기다린다 (졸리면 앉은 채 존다)
+        if (c.Room is Room here && here.Radiation < 0.2f)
+            return new Job(this, "방사선 대피", new List<Toil> { new WaitToil(SimTime.Minutes(30), c.Needs.Rest < 0.35f ? Pose.Sleeping : Pose.Sitting) }) { TargetRoom = here };
+        var (shelter, factor) = Facilities.Best(w.Ship, "shelter", r => !r.Detached && !r.OffLimits && !r.Leaking);
+        var rooms = shelter != null ? new List<Room> { shelter } : new List<Room>();
+        rooms.AddRange(w.Ship.Rooms.Where(r => !r.Detached && !r.OffLimits && !r.Leaking && r != c.Room && r.Radiation < c.Room!.Radiation - 0.1f).OrderBy(r => r.Radiation));
+        foreach (var room in rooms)
+        {
+            Cell? best = null;
+            int bestCost = int.MaxValue;
+            foreach (var cell in room.Cells)
+            {
+                int d = dist.Get(cell);
+                if (d < 0 || d >= bestCost || !w.Ship.IsOpenFloor(cell) || w.IsSpotTaken(cell, c)) continue;
+                best = cell;
+                bestCost = d;
+            }
+            if (best is not Cell target) continue;
+            string why = room == shelter && factor >= 1f ? "대피소로" : room == shelter ? $"{room.Name} 선반 뒤로 (대피소가 없다)" : $"안쪽 {room.Name}(으)로";
+            return new Job(this, "방사선 대피", new List<Toil> { new GotoToil(target), new WaitToil(SimTime.Minutes(40), Pose.Sitting) })
+            {
+                LogText = $"태양 폭풍 — {why}",
+                LogKind = LogKind.Warning,
+                TargetRoom = room,
+                Urgent = true,
+                InterruptMargin = 0.3f,
+            };
+        }
+        return null;
+    }
+}
+
+// ─────────────────────────────── v12.6 격리 ───────────────────────────────
+
+/// <summary>옮는 병에 걸려 열이 나면 격리실로 가서 쉰다 (격리실이 없으면 이 행동은 없다 — 의무실·침실에서 앓는다).</summary>
+public sealed class QuarantineActivity : Activity
+{
+    public override string Id => "quarantine";
+    public override string Label => "격리";
+
+    private static Room? Ward(World w) => Facilities.Best(w.Ship, "quarantine", r => !r.Detached && !r.OffLimits && !r.Leaking) is (Room r, >= 1f) ? r : null;
+
+    public override (float, string) Score(CrewMember c, World w, DistanceField dist)
+    {
+        if (c.Outside || c.Room == null || !DiseaseSystem.Sick(c) || w.Disease.Severity(c) < 0.08f) return (0f, "—");
+        if (Ward(w) is not Room ward) return (0f, "격리실 없음");
+        return c.Room == ward ? (0.9f, "격리실에서 앓는다") : (0.95f, "열이 난다 — 격리실로");
+    }
+
+    public override Job? Plan(CrewMember c, World w, DistanceField dist)
+    {
+        if (Ward(w) is not Room ward) return null;
+        Cell? best = null;
+        int bestCost = int.MaxValue;
+        foreach (var cell in ward.Cells)
+        {
+            int d = dist.Get(cell);
+            if (d < 0 || d >= bestCost || !w.Ship.IsOpenFloor(cell) && w.Ship.FurnitureAt(cell)?.Type != FurnitureType.MedBed || w.IsSpotTaken(cell, c)) continue;
+            best = cell;
+            bestCost = d;
+        }
+        if (best is not Cell target) return null;
+        var toils = new List<Toil>();
+        if (c.Cell != target) toils.Add(new GotoToil(target));
+        toils.Add(new WaitToil(SimTime.Hours(2), Pose.Sleeping));
+        return new Job(this, "격리", toils)
+        {
+            LogText = c.Room == ward ? null : "열이 난다 — 옮기 전에 격리실로 간다",
+            TargetRoom = ward,
+        };
+    }
 }

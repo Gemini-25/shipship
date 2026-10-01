@@ -139,5 +139,5 @@ public static class Codex
     };
 
     public static CodexEntry? Of(FurnitureType t) => Furniture.TryGetValue(t, out var e) ? e : null;
-    public static CodexEntry? Of(RoomType t) => Rooms.TryGetValue(t, out var e) ? e : null;
+    public static CodexEntry? Of(RoomType t) => Rooms.TryGetValue(t, out var e) ? e : RoomCatalog.Of(t)?.Codex;
 }

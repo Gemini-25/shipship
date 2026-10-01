@@ -42,7 +42,7 @@ public partial class ShipView
         RoomType.Reactor => "RX", RoomType.Cooling => "CL", RoomType.Power => "PW", RoomType.Engine => "EN", RoomType.Workshop => "WS",
         RoomType.Storage => "ST", RoomType.Galley => "GL", RoomType.Mess => "MS", RoomType.Quarters => "QT", RoomType.Medbay => "MD",
         RoomType.Lounge => "LG", RoomType.Bridge => "BR", RoomType.Comms => "CM", RoomType.Hydroponics => "HY", RoomType.LifeSupport => "LS",
-        RoomType.Airlock => "AL", _ => "CR",
+        RoomType.Airlock => "AL", _ => RoomCatalog.Of(t)?.Short ?? "CR",
     };
 
     /// <summary>벽에 붙은 것들. 방마다 안쪽 벽을 훑어 네댓 칸에 하나, 문 옆은 소화기와 번호판.</summary>
@@ -156,7 +156,7 @@ public partial class ShipView
             {
                 var r = Plate(22f, 9f);
                 ci.DrawRect(r.Grow(1f), dark);
-                ci.DrawRect(r, new Color("#3b4760").Lerp(Palette.Room(room.Type), 0.15f));
+                ci.DrawRect(r, new Color("#3b4760").Lerp(Palette.Room(room.Kind), 0.15f));
                 var mid = r.GetCenter();
                 if (vert) ci.DrawLine(new Vector2(r.Position.X, mid.Y), new Vector2(r.End.X, mid.Y), dark, 1f);
                 else ci.DrawLine(new Vector2(mid.X, r.Position.Y), new Vector2(mid.X, r.End.Y), dark, 1f);
@@ -217,9 +217,9 @@ public partial class ShipView
             {
                 var r = Plate(20f, 9f);
                 ci.DrawRect(r.Grow(1f), dark);
-                ci.DrawRect(r, Palette.Room(room.Type).Darkened(0.45f));
-                ci.DrawRect(r, Palette.Room(room.Type).WithAlpha(0.8f), false, 1f);
-                Gfx.TextCentered(ci, Fonts.Bold, r.GetCenter(), $"{RoomCode(room.Type)}-{room.Id + 1}", 6, new Color("#e6edf3"));
+                ci.DrawRect(r, Palette.Room(room.Kind).Darkened(0.45f));
+                ci.DrawRect(r, Palette.Room(room.Kind).WithAlpha(0.8f), false, 1f);
+                Gfx.TextCentered(ci, Fonts.Bold, r.GetCenter(), $"{RoomCode(room.Kind)}-{room.Id + 1}", 6, new Color("#e6edf3"));
                 break;
             }
             case Prop.Tank:

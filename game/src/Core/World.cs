@@ -134,6 +134,8 @@ public sealed class World
     public MoistureSystem Moisture { get; }
     /// <summary>v12.4 전염병 · 이야기꾼.</summary>
     public DiseaseSystem Disease { get; }
+    public AmbienceSystem Ambience { get; }
+    public ExteriorSystem Exterior { get; }
     public Storyteller Story { get; }
 
     /// <summary>v12.1 정비 절차 통계.</summary>
@@ -210,6 +212,8 @@ public sealed class World
         Causes = new CauseLog(this);
         Moisture = new MoistureSystem(this);
         Disease = new DiseaseSystem(this);
+        Ambience = new AmbienceSystem(this);
+        Exterior = new ExteriorSystem(this);
         Story = new Storyteller(this, seed);
         Piping = new PipeNetwork(this);
         Automation = new AutomationSystem(this);
@@ -268,6 +272,8 @@ public sealed class World
             Volatile.Update(dt); // v12.2 열·폭발·잔해·역화·일산화탄소·짙은 산소
             Moisture.Update(dt); // v12.3 물·습기·전기 (누전·감전·결로·기동 전류)
             Disease.Update(dt); // v12.4 전염병
+            Ambience.Update(dt); // v12.6 인접성: 소음·진동·냄새·방사선
+            Exterior.Update(dt); // v12.6 외부 설비: 안테나·태양 날개 (드론이 고친다)
             Volatile.Resume();
             Procedures.Update(this); // v12.1 재조립 불량이 돌아온다
             Causes.Update(); // v12.2 인과 사슬: 번진 상태를 원인에 잇고, 풀린 상태에 복구를 붙인다

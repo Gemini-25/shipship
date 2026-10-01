@@ -131,6 +131,9 @@ public static partial class Program
         if (args.Contains("--moisturetest")) return RunMoistureTest(seed); // v12.3
         if (args.Contains("--storytest")) return RunStoryTest(seed); // v12.4
         if (args.Contains("--autotest")) return RunAutomationTest(seed); // v12.5
+        if (args.FirstOrDefault(a => a.StartsWith("--ambdebug=")) is string ad) return RunAmbienceDebug(seed, ad[11..]);
+        if (args.Contains("--jumpdebug")) return RunJumperDebug(seed);
+        if (args.Contains("--designtest")) { args_Print = args.Contains("--print"); return RunDesignTest(seed); } // v12.6
         if (args.Contains("--autodebug")) return RunAutoDebug(seed);
         if (args.Contains("--balance")) return RunBalance(Math.Max(1, days), seed, int.TryParse(args.FirstOrDefault(a => a.StartsWith("--runs="))?.Split('=')[1], out var brn) ? brn : 3);
         if (args.Contains("--moisturedebug")) return RunMoistureDebug(seed);

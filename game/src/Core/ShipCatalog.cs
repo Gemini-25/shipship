@@ -24,7 +24,9 @@ public static class ShipCatalog
 
     public static ShipTemplate Default => All[1];
 
-    public static ShipTemplate? Find(string? key) => key == null ? null : All.FirstOrDefault(t => t.Key.Equals(key, StringComparison.OrdinalIgnoreCase));
+    public static ShipTemplate? Find(string? key) => key == null ? null
+        : key.StartsWith("gen:", StringComparison.OrdinalIgnoreCase) ? ShipGenerator.FromKey(key.ToLowerInvariant()) // v12.6 절차 생성 배 ("gen:인원:시드")
+        : All.FirstOrDefault(t => t.Key.Equals(key, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>그 인원이 탈 수 있는 가장 작은 배 (30명 넘으면 가장 큰 배).</summary>
     public static ShipTemplate ForCrew(int crew) => All.FirstOrDefault(t => t.Crew >= crew) ?? All[^1];

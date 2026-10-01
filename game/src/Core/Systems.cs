@@ -163,7 +163,7 @@ public sealed class MachineSystem
             return;
         }
         float rate = dt / FoodChain.GrowHours * m.Efficiency * m.Rating * (1f + Modules.Bonus(_world, FurnitureType.LedPanel, m.Body.Room))
-                     * (0.45f + 0.55f * crop.Care) * (water ? 1f : 0f);
+                     * (0.45f + 0.55f * crop.Care) * (water ? 1f : 0f) * AmbienceSystem.CropFactor(m.Body.Room); // v12.6 진동·방사선
         crop.Growth = MathF.Min(1f, crop.Growth + rate);
         if (crop.Ripe) _world.Board.RequestScan();
     }

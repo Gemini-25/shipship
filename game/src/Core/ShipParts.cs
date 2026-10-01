@@ -11,6 +11,13 @@ public enum RoomType
     Corridor, Bridge, Engine, Reactor, Cooling, Power, LifeSupport,
     Workshop, Storage, Galley, Mess, Hydroponics, Airlock, Quarters, Medbay, Lounge,
     Comms, // v10.1 통신실 (장거리 센서·통신 콘솔)
+    // v12.6 방 70종 (표준 · 대형 · 세대선) — 이름·색·설명서·기능은 RoomCatalog 표에서
+    WaterPlant, Laundry, Freezer, BatteryRoom, FuelCell, EvaPrep, Morgue, EscapeBay,
+    ServerRoom, Calibration, PartsPrep, Decon, Quarantine, Shelter, Recycling, DroneBay, RobotBay, Gym, QuietQuarters,
+    Observatory, Lab, SeedVault, Chapel, Cargo, DockingBay, PropellantTank,
+    HvacRoom, PumpRoom, Substation, GasStorage, SuppressionRoom, AlgaeLab, ProteinFarm, WaterWallCabin,
+    ElectronicsLab, WeldingShop, Crusher, Hyperbaric, QuarantineLock, Triage, PrivateCabins, Garden, Theater,
+    MeetingRoom, Archive, Meditation, ShuttleBay, CraneControl, Navigation, HeatStorage, Security, Centrifuge, School, BackupBridge,
 }
 
 public static class RoomTypes
@@ -34,7 +41,7 @@ public static class RoomTypes
         RoomType.Medbay => "의무실",
         RoomType.Lounge => "휴게실",
         RoomType.Comms => "통신실",
-        _ => t.ToString(),
+        _ => RoomCatalog.Of(t)?.Name ?? t.ToString(),
     };
 
     /// <summary>설계도의 소문자 라벨 → 방 종류.</summary>
@@ -123,7 +130,18 @@ public sealed class Room
 
     public int Id { get; init; }
     public RoomType Type { get; init; }
-    public string Name => NameOverride ?? RoomTypes.Name(Type);
+    /// <summary>v12.6 세부 종류 (격리실·체력단련실…). 기능(Type)은 본래 방을 이어받고, 이름·색·설명서·특수 효과는 이것을 따른다.</summary>
+    public RoomType? Special { get; set; }
+    public RoomType Kind => Special ?? Type;
+    public string Name => NameOverride ?? RoomTypes.Name(Kind);
+
+    /// <summary>v12.6 인접성: 이 방에 닿는 소음·진동·냄새·방사선 (0~1, 시스템 틱마다 옆방에서 번져 온다).</summary>
+    public float Noise { get; set; }
+    public float Vibration { get; set; }
+    public float Smell { get; set; }
+    public float Radiation { get; set; }
+    /// <summary>v12.6 구획 번호 (큰 배는 격벽으로 나눈 구획 몇 개). -1 = 구획 없음.</summary>
+    public int Compartment { get; set; } = -1;
 
     /// <summary>v10.2: 칸막이로 나눈 방의 이름 ("식당 안쪽 칸").</summary>
     public string? NameOverride { get; init; }
@@ -497,6 +515,9 @@ public sealed class Door
 
     /// <summary>용접해 막은 격벽 (사출 준비). 떨어져 나가도 이쪽은 새지 않는다.</summary>
     public bool Welded { get; set; }
+
+    /// <summary>v12.6 구획 격벽 문: 통로를 가로질러 배를 구획으로 나눈다 (두껍고, 감압 때 가장 먼저 닫힌다).</summary>
+    public bool Bulkhead { get; set; }
 
     /// <summary>한쪽 방이 떨어져 나가 문이 벽으로 바뀌었다 (다시 붙으면 되살아난다).</summary>
     public bool Removed { get; set; }

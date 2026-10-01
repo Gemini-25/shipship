@@ -104,7 +104,7 @@ public static class NeedsSystem
         bool cot = under is { Type: FurnitureType.Cot, Improved: false };
         // 무서운 방에서 자면 깊이 못 잔다 (v7)
         float dread = asleep ? c.Memory.FearOf(c.Room) : 0f;
-        if (asleep) n.Rest += RestGainAsleep * (stuffy ? 0.7f : 1f) * (rough ? 0.75f : 1f) * (cot ? 0.92f : 1f) * (1f - 0.3f * dread) * dt;
+        if (asleep) n.Rest += RestGainAsleep * (stuffy ? 0.7f : 1f) * (rough ? 0.75f : 1f) * (cot ? 0.92f : 1f) * (1f - 0.3f * dread) * AmbienceSystem.SleepFactor(c.Room) * dt; // v12.6 옆방 소음·진동
         else n.Rest -= (c.Pose == Pose.Working ? RestDecayWorking : RestDecayAwake) * restMul * dt;
 
         if (!asleep) n.Social -= SocialDecay * (0.6f + 0.8f * c.Traits.Sociability) * dt;
@@ -115,7 +115,8 @@ public static class NeedsSystem
             Pose.Sleeping => StressSleeping,
             _ => StressIdle,
         };
-        if (relaxing) stress = StressRelaxing;
+        if (relaxing) stress = StressRelaxing * AmbienceSystem.RelaxFactor(c.Room); // v12.6 관측실·정원은 더 풀린다
+        else if (!asleep && !suited) stress += AmbienceSystem.Stress(c.Room, c.Pose == Pose.Working); // v12.6 시끄럽고 냄새나는 방
         if (n.Food < 0.15f) stress += StressHungry;
         if (n.Rest < 0.15f) stress += StressExhausted;
         if (n.Social < 0.2f) stress += StressLonely;
@@ -166,7 +167,7 @@ public static class NeedsSystem
         bool inCare = c.Down && c.CareBed?.Machine is Machine bed && bed.Efficiency > 0f;
         if (damage > 0f) v.Health -= damage * dt;
         else if (inCare) v.Health += 0.12f * dt;
-        else if (n.Food > 0.2f && n.Rest > 0.2f && !c.Down) v.Health += (asleep ? 0.05f : 0.02f) * dt;
+        else if (n.Food > 0.2f && n.Rest > 0.2f && !c.Down) v.Health += (asleep ? 0.05f : 0.02f) * (0.8f + 0.4f * c.Fitness) * dt; // v12.6 단련한 몸이 빨리 회복
         else if (c.Down && n.Food > 0.1f) v.Health += 0.01f * dt;
 
         // 부상은 며칠에 걸쳐 낫는다 (치료 침대에서 훨씬 빨리)

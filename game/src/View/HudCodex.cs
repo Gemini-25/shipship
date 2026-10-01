@@ -113,20 +113,20 @@ public partial class Hud
     {
         if (!CodexMode || Codex.Of(f.Type) is not CodexEntry e) return false;
         string name = f.Machine?.Name ?? f.Label;
-        DrawCodex(f.Label, FurnitureTypes.Name(f.Type), Palette.Room(f.Room.Type), e, CodexLinks(f),
+        DrawCodex(f.Label, FurnitureTypes.Name(f.Type), Palette.Room(f.Room.Kind), e, CodexLinks(f),
             CodexPast(n => n.Kind != CauseKind.Recovery && n.Text.Contains(name)), y, maxHeight, mouse);
         return true;
     }
 
     private bool DrawRoomCodex(Room room, float y, float maxHeight, Vector2 mouse)
     {
-        if (!CodexMode || Codex.Of(room.Type) is not CodexEntry e) return false;
+        if (!CodexMode || Codex.Of(room.Kind) is not CodexEntry e) return false;
         var links = new List<(string, string, Color)>
         {
             NetLine("전력 간선", room.PowerLinked), NetLine("급수관", room.WaterLinked, UtilityNet.NeedsWater(room)), NetLine("환기 덕트", room.DuctLinked),
             ("설비", string.Join("·", room.Furniture.Where(x => x.Machine != null).Select(x => FurnitureTypes.Name(x.Type)).Distinct().Take(4)).DefaultIfEmptyText("없음"), Palette.TextDim),
         };
-        DrawCodex(room.Name, "방", Palette.Room(room.Type), e, links, CodexPast(n => n.RoomId == room.Id && n.Kind != CauseKind.Recovery), y, maxHeight, mouse);
+        DrawCodex(room.Name, "방", Palette.Room(room.Kind), e, links, CodexPast(n => n.RoomId == room.Id && n.Kind != CauseKind.Recovery), y, maxHeight, mouse);
         return true;
     }
 

@@ -27,7 +27,11 @@ public static class Incidents
         int node = ctx >= 0 ? w.Causes.Effect(CauseKind.Impact, "", text, hit, target.Center, ctx, lasting: false)
             : w.Causes.Root(CauseKind.Impact, text, hit, target.Center, observer: w.Causes.ConsumeObserver());
         w.Causes.Hit(hit, node);
-        using (w.Causes.Because(node)) return MeteorCore(w, target, size, warned, leadMinutes);
+        using (w.Causes.Because(node))
+        {
+            w.Exterior.Hit(target, size, "운석"); // v12.6 선체 밖 설비
+            return MeteorCore(w, target, size, warned, leadMinutes);
+        }
     }
 
     private static Impact? MeteorCore(World w, Cell target, float size, WarnLevel warned, float leadMinutes)

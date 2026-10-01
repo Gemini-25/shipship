@@ -376,7 +376,8 @@ public sealed partial class WorkBoard
             {
                 if (!p.CircuitLive[j.To] && !j.Burnt) continue;
                 if (w.Tick - p.LiveSince(j.To) < SimTime.Hours(2) && !j.Burnt) continue;
-                post(WorkKind.RemoveJumper, WorkTarget.Of(panel), j.Burnt ? 0.3f : 0.22f, Skill.Electrical,
+                float idleH = (w.Tick - p.LiveSince(j.To)) / (float)SimTime.TicksPerHour; // v12.6 미룬 정리는 점점 급해진다 (당직에 밀려 며칠씩 남던 것)
+                post(WorkKind.RemoveJumper, WorkTarget.Of(panel), j.Burnt ? 0.3f : MathF.Min(0.42f, 0.22f + 0.01f * MathF.Max(0f, idleH - 2f)), Skill.Electrical,
                     j.Burnt ? "타 버린 임시 배선 — 걷어 낸다" : $"{PowerGrid.CircuitName(j.To)} 회로가 제 힘으로 돈다 → 케이블 {PowerGrid.JumperCables}개를 되찾는다",
                     circuit: j.To);
             }

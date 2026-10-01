@@ -26,6 +26,7 @@ public enum UpgradeKind
     AuxWorkshop,   // v11.1: 작업대가 한 방에만 있는 배: 안쪽 방에 보조 작업대 (정비실을 잃어도 만들 수 있다)
     BackupHelm,    // v11.1: 함교가 뚫렸거나 자동화가 꺼졌던 배: 엔진실에 예비 조타석 (함교를 잃어도 배를 몬다)
     RingMain,      // v12.3: 간선이 끊겨 정전을 겪은 배: 배전실에서 핵심 방으로 선체 속을 도는 보조 간선
+    Repurpose,     // v12.6: 겪은 일에 맞춰 방의 세부 용도를 바꾼다 (창고 → 대피소, 휴게실 → 체력단련실·기도실, 침실 → 조용한 침실, 의무실 → 격리실)
 }
 
 /// <summary>개조 계획 하나: 무엇을, 왜(겪은 사고), 무엇으로.</summary>
@@ -81,6 +82,7 @@ public static class Evolution
         UpgradeKind.Relocate => "설비 옮기기",
         UpgradeKind.AuxWorkshop => "보조 작업대",
         UpgradeKind.BackupHelm => "예비 조타석",
+        UpgradeKind.Repurpose => "방 용도 변경",
         _ => k.ToString(),
     };
 
@@ -104,6 +106,7 @@ public static class Evolution
         UpgradeKind.Relocate => $"{o.Target.Label} 안쪽 방으로 옮기기",
         UpgradeKind.AuxWorkshop => $"{o.Target.Room?.Name ?? "?"}에 보조 작업대",
         UpgradeKind.BackupHelm => $"{o.Target.Room?.Name ?? "엔진실"}에 예비 조타석",
+        UpgradeKind.Repurpose => $"{o.Target.Room?.Name ?? "?"}을(를) {RoomTypes.Name((RoomType)o.Circuit)}(으)로",
         _ => "개조",
     };
 
@@ -127,6 +130,7 @@ public static class Evolution
         UpgradeKind.Relocate => 3f,
         UpgradeKind.AuxWorkshop => 4f,
         UpgradeKind.BackupHelm => 3f,
+        UpgradeKind.Repurpose => 3f,
         _ => 2f,
     };
 
@@ -163,6 +167,7 @@ public static class Evolution
         UpgradeKind.Relocate => new[] { (ItemKind.Cable, 2), (ItemKind.Plate, 1) },
         UpgradeKind.AuxWorkshop => new[] { (ItemKind.Plate, 3), (ItemKind.Cable, 2), (ItemKind.Motor, 1) },
         UpgradeKind.BackupHelm => new[] { (ItemKind.Electronics, 2), (ItemKind.Cable, 2), (ItemKind.Plate, 1) },
+        UpgradeKind.Repurpose => new[] { (ItemKind.Plate, 2), (ItemKind.Structure, 1) },
         _ => new[] { (ItemKind.Plate, 2) },
     };
 
@@ -195,8 +200,43 @@ public static class Evolution
         UpgradeKind.Relocate => $"{p.Target.Label} 옮기기",
         UpgradeKind.AuxWorkshop => "보조 작업대",
         UpgradeKind.BackupHelm => "예비 조타석",
+        UpgradeKind.Repurpose => $"{p.Target.Room?.Name ?? "?"} → {RoomTypes.Name((RoomType)p.Circuit)}",
         _ => "침실",
     };
+
+    /// <summary>v12.6 방 용도 변경 후보: 겪은 일 → 그 일을 맡을 전용 방이 없으면, 본래 방 하나를 고친다.</summary>
+    private static IEnumerable<UpgradePlan> RepurposeCandidates(World w)
+    {
+        var ship = w.Ship;
+        var alive = w.Crew.Where(c => !c.Dead).ToList();
+        if (alive.Count == 0) yield break;
+        UpgradePlan? Plan(string fn, RoomType from, RoomType to, float score, string why, Func<Room, float>? order = null)
+        {
+            if (Facilities.Best(ship, fn).factor >= 1f) return null;
+            var rooms = ship.RoomsOf(from).Where(r => r.Special == null && !r.Abandoned && !r.Detached && r.Jettison == null).ToList();
+            if (rooms.Count == 0 || (from is RoomType.Lounge or RoomType.Medbay && rooms.Count < 1)) return null;
+            var room = order != null ? rooms.OrderBy(order).First() : rooms.Last();
+            var spot = room.Cells.Where(ship.IsOpenFloor).OrderBy(c => (c.Center - room.Center).LengthSquared()).Cast<Cell?>().FirstOrDefault();
+            if (spot is not Cell at) return null;
+            return new UpgradePlan(UpgradeKind.Repurpose, WorkTarget.AtCell(at, room), score, Skill.Mechanics,
+                $"{why} → {Ko.EulReul(room.Name)} {RoomTypes.Name(to)}(으)로 ({RoomCatalog.Of(to)?.Codex.How ?? ""})", Cost(UpgradeKind.Repurpose, null), 0.25f, (int)to);
+        }
+        // 태양 폭풍에 방사선을 쬐었다 → 창고 벽에 물자를 쌓아 대피소로 (배 안쪽 창고부터)
+        float dose = alive.Max(c => c.Dose);
+        if (dose > 0.25f && Plan("shelter", RoomType.Storage, RoomType.Shelter, 0.5f + dose, $"태양 폭풍에 방사선을 {dose:0.0}Sv까지 쬐었다", r => w.Ambience.Exposure(r)) is UpgradePlan a) yield return a;
+        // 전염병이 돌았다 → 의무실 하나를 음압 격리실로
+        if (w.Disease.Stats.Infections >= 3 && Plan("quarantine", RoomType.Medbay, RoomType.Quarantine, 0.4f + 0.1f * w.Disease.Stats.Infections, $"병이 {w.Disease.Stats.Infections}명에게 옮았다") is UpgradePlan b) yield return b;
+        // 몸이 굳었다 → 휴게실 하나에 운동 기구
+        float fit = alive.Average(c => c.Fitness);
+        if (fit < 0.4f && ship.RoomsOf(RoomType.Lounge).Count() >= 1 && Plan("exercise", RoomType.Lounge, RoomType.Gym, 0.3f + (0.4f - fit), $"다들 몸이 굳었다 (체력 {fit * 100:0}%)") is UpgradePlan c) yield return c;
+        // 동료를 잃었거나 마음의 상처가 깊다 → 조용한 기도실
+        float trauma = alive.Average(c => c.Memory.Trauma);
+        bool loss = w.Crew.Any(c => c.Dead);
+        if ((loss || trauma > 0.3f) && Plan("grief", RoomType.Lounge, RoomType.Chapel, 0.35f + trauma + (loss ? 0.3f : 0f), loss ? "동료를 잃었다" : $"마음의 상처가 깊다 ({trauma * 100:0}%)") is UpgradePlan d) yield return d;
+        // 시끄러운 침실 → 방음
+        foreach (var q in ship.RoomsOf(RoomType.Quarters).Where(r => r.Special == null && r.Noise + r.Vibration > 0.35f).Take(1))
+            if (Plan("rest", RoomType.Quarters, RoomType.QuietQuarters, 0.3f + q.Noise + q.Vibration, $"{q.Name}이(가) 시끄러워 잠을 설친다 (소음 {q.Noise * 100:0}%)", r => -(r.Noise + r.Vibration)) is UpgradePlan e) yield return e;
+    }
 
     /// <summary>이 사람에게 이 개조안이 얼마나 와닿는지: 교훈의 무게 + 무서워하는 방 + 내 분야 + 내 설비.</summary>
     public static float PersonalScore(World w, CrewMember c, UpgradePlan p) =>
@@ -304,6 +344,9 @@ public static class Evolution
                     $"배전반 회로가 {ShipHistory.Times(h.CircuitFaults)} 끊겼다 → {PowerGrid.CircuitName(to)} 회로에 예비 배선 (끊기면 저절로 넘어간다)",
                     Cost(UpgradeKind.Feeder, null), 0.35f, to);
         }
+
+        // ── v12.6 방 용도 변경: 겪은 일이 가르쳐 준 방 (전용 방이 없어 본래 방이 겸하던 일) ──
+        foreach (var plan in RepurposeCandidates(w)) yield return plan;
 
         // ── v12.3 보조 간선: 간선이 끊겨 방 여럿이 한꺼번에 정전된 배 ──
         if (panel != null && w.Net.Stats.Blackouts >= 1 && w.Net.RingTargets(NetKind.Power).FirstOrDefault() is Room ringTo)
@@ -711,6 +754,17 @@ public static class Evolution
                 MarkLog.Add(panel.Machine!.Marks, w.Tick, $"{cm.Name}: {PowerGrid.CircuitName(from)}→{PowerGrid.CircuitName(to)} 예비 배선");
                 h.FeedersAdded++;
                 text = $"{Ko.IGa(cm.Name)} {PowerGrid.CircuitName(to)} 회로에 예비 배선을 깔았다 ({PowerGrid.CircuitName(from)}→{PowerGrid.CircuitName(to)}) — 회로가 {ShipHistory.Times(h.CircuitFaults)} 끊긴 뒤로";
+                break;
+            }
+            case UpgradeKind.Repurpose:
+            {
+                var newKind = (RoomType)o.Circuit;
+                if (room == null || room.Special != null || RoomCatalog.BaseOf(newKind) != room.Type) return false;
+                string before = room.Name;
+                room.FormerPurposes.Add(before);
+                room.Special = newKind;
+                MarkLog.Add(room.Marks, w.Tick, $"{cm.Name}: {before} → {room.Name}");
+                text = $"{Ko.IGa(cm.Name)} {Ko.EulReul(before)} {room.Name}(으)로 고쳤다 — {RoomCatalog.Of(newKind)?.Codex.What ?? ""}";
                 break;
             }
             case UpgradeKind.RingMain:

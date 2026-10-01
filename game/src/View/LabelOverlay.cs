@@ -41,7 +41,7 @@ public partial class LabelOverlay : Node2D
             {
                 if (room.Detached) continue; // 떠다니는 조각은 따로 (PaintFragmentLabels)
                 var severity = Severity.Of(_world, room);
-                var accent = Palette.Room(room.Type);
+                var accent = Palette.Room(room.Kind);
                 bool focus = room == _main.HoveredRoom || room == _main.SelectedRoom;
                 int size = zoom >= 0.9f ? 12 : 11;
                 Vector2 p;
@@ -218,6 +218,18 @@ public partial class LabelOverlay : Node2D
         var air = room.Air;
         switch (mode)
         {
+            case ViewMode.Ambience: // v12.6 소음·진동·냄새·방사선 · 잠의 질
+            {
+                var parts = new System.Collections.Generic.List<string>();
+                if (room.Noise > 0.06f) parts.Add($"소음 {room.Noise * 100:0}");
+                if (room.Vibration > 0.06f) parts.Add($"진동 {room.Vibration * 100:0}");
+                if (room.Smell > 0.06f) parts.Add($"냄새 {room.Smell * 100:0}");
+                if (room.Radiation > 0.08f) parts.Add($"방사선 {room.Radiation * 100:0}");
+                if ((RoomCatalog.Tags(room.Kind) & RoomTag.Sleep) != 0) parts.Add($"잠 {AmbienceSystem.SleepFactor(room) * 100:0}%");
+                if (room.Compartment >= 0 && room.Type == RoomType.Corridor) parts.Add($"{room.Compartment + 1}구획");
+                float top = Mathf.Max(Mathf.Max(room.Noise, room.Vibration), Mathf.Max(room.Smell, room.Radiation * 1.5f));
+                return (string.Join(" · ", parts), room.Radiation > 0.2f ? new Color("#b58cff") : top > 0.35f ? Palette.Warning : top > 0.1f ? new Color("#f5d547") : Palette.Good);
+            }
             case ViewMode.Power:
                 return room.Powered
                     ? ($"{PowerGrid.CircuitName(room.Circuit)} 정상", Palette.Good)

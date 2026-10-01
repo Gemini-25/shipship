@@ -35,7 +35,7 @@ public partial class Hud
         {
             if (room.Detached || room.Cells.Count == 0) continue;
             var sev = Severity.Of(_world, room);
-            var baseCol = Palette.Room(room.Type);
+            var baseCol = Palette.Room(room.Kind);
             var col = sev switch
             {
                 RoomSeverity.Critical => Palette.Danger.WithAlpha(0.55f + 0.35f * Mathf.Sin(_time * 6f)),

@@ -80,10 +80,10 @@ public sealed class DiseaseSystem
             foreach (var d in w.Crew)
             {
                 if (d == c || d.Dead || d.Outside || d.Room != c.Room || d.InfectedAt >= 0 || d.Immune || d.Suit != null) continue;
-                float p = 0.5f * MathF.Max(0.15f, s) * dt
+                float p = 0.5f * (s < 0.1f ? 0.06f : s) * dt // 열이 나기 전엔 덜 옮는다
                           * (Atmosphere.Vented(c.Room) ? 0.6f : 1.3f)
                           * (c.CareBed != null ? 0.3f : 1f)
-                          * (c.Room.Type == RoomType.Medbay ? 0.6f : 1f)
+                          * (c.Room.Type == RoomType.Medbay ? (Facilities.Factor(c.Room, "quarantine") >= 1f ? 0.12f : 0.6f) : 1f) // v12.6 격리실은 거의 막는다 (의무실은 겸용)
                           * (w.History.Doctrine.Quarantine ? 0.5f : 1f); // 교훈: 격리 수칙
                 if (w.Rng.Chance(p)) Infect(d, c);
             }
