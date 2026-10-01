@@ -107,7 +107,6 @@ public partial class Hud : Control
         else if (_main.SelectedRoom is Room r) { if (!DrawRoomCodex(r, y + 10f, room, mouse)) DrawRoomInspector(r, y + 10f, mouse); }
         else if (!Quiet || _workOpen || _world.Board.Open.Any(o => o.Urgency >= 0.9f)) DrawWorkBoard(y + 10f, room, mouse); // 조용한 HUD: 긴급 작업만 떠오른다
 
-        DrawLog();
         DrawComputerCard(mouse); // v16.0 ④ 주컴퓨터 상시 카드 (HudComputer.cs)
         DrawLog(mouse);
         DrawMinimap(); // v11.3
