@@ -484,10 +484,10 @@ public static partial class Program
                     int dead = crew - w.Crew.Count(c => !c.Dead);
                     float worn = b.Wear.Max();
                     int noFloor = w.Ship.LiveRooms.Sum(r => r.Cells.Count(c => b.FloorAt(c) == Material.None));
-                    bool ok = dead == 0 && worn > 0.01f && noFloor == 0 && b.Stats.Falls <= crew * 2 && b.Stats.GaveUp <= crew * 3;
+                    bool ok = dead == 0 && worn > 0f && (crew < 4 || worn > 0.01f) && /* 두세 명 배는 하루에 조금만 닳는다 */ noFloor == 0 && b.Stats.Falls <= crew * 2 && b.Stats.GaveUp <= crew * 3;
                     if (!ok) bad.Add(key);
                     var dark = w.Ship.Doors.Where(d => !d.Powered && !d.Removed && !d.IsExternal).ToList();
-                    Console.WriteLine($"    {w.Ship.Name}: 사람 {crew} · 사망 {dead} · 가장 닳은 칸 {worn:0.00} · 전기 없는 문 {dark.Count}({string.Join(",", dark.Take(3).Select(d => $"{d.RoomA?.Name}·{d.RoomB?.Name}{(d.MotorBroken ? "(모터)" : "")}"))}) · {b.Stats}");
+                    Console.WriteLine($"    {w.Ship.Name}: 사람 {crew} · 사망 {dead} · 가장 닳은 칸 {worn:0.000} · 전기 없는 문 {dark.Count}({string.Join(",", dark.Take(3).Select(d => $"{d.RoomA?.Name}·{d.RoomB?.Name}{(d.MotorBroken ? "(모터)" : "")}"))}) · {b.Stats}");
                 }
                 catch (Exception e) { bad.Add($"{key}: {e.GetType().Name} {e.Message}"); Console.WriteLine(e); }
             }

@@ -644,6 +644,28 @@ public partial class ShipView
         }
     }
 
+    /// <summary>정비 통로 속 사람: 엎드린 긴 몸 · 팔꿈치와 무릎이 번갈아 나간다 · 머리에 작은 등.</summary>
+    private void PaintCrawler(CanvasItem ci, CrewMember c, Vector2 p, Color col, float s)
+    {
+        var f = new Vector2(c.Facing.X, c.Facing.Y);
+        if (f.LengthSquared() < 1e-4f) f = new Vector2(1, 0);
+        f = f.Normalized();
+        var side = new Vector2(-f.Y, f.X);
+        float stroke = Mathf.Sin(_time * 7f + c.Id);
+        var hip = p - f * 6f * s;
+        var chest = p + f * 3f * s;
+        ci.DrawLine(hip, chest, Palette.Space.WithAlpha(0.8f), 10f * s, true);
+        ci.DrawLine(hip, chest, col.Darkened(0.15f), 8f * s, true);
+        // 팔꿈치 · 무릎 (번갈아)
+        ci.DrawLine(chest + side * 4f * s, chest + side * 6f * s + f * (4f + 3f * stroke) * s, col.Darkened(0.3f), 2.5f * s, true);
+        ci.DrawLine(chest - side * 4f * s, chest - side * 6f * s + f * (4f - 3f * stroke) * s, col.Darkened(0.3f), 2.5f * s, true);
+        ci.DrawLine(hip + side * 3f * s, hip + side * 5f * s - f * (5f - 3f * stroke) * s, col.Darkened(0.35f), 2.5f * s, true);
+        ci.DrawLine(hip - side * 3f * s, hip - side * 5f * s - f * (5f + 3f * stroke) * s, col.Darkened(0.35f), 2.5f * s, true);
+        var head = p + f * 9f * s;
+        ci.DrawCircle(head, 5f * s, col.Lightened(0.2f), true, -1f, true);
+        ci.DrawCircle(head + f * 3.5f * s, 1.4f * s, new Color(1f, 0.95f, 0.7f), true, -1f, true); // 머리등
+    }
+
     /// <summary>주 컴퓨터 정비 요청 꼬리표: 파란 마름모 홀로그램 + 느낌표 + 도는 주사 고리.</summary>
     private void DrawComputerTag(CanvasItem ci, Vector2 at)
     {
