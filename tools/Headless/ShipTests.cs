@@ -23,6 +23,41 @@ public static partial class Program
             Console.WriteLine($"방 {w.Ship.Rooms.Count} · 구획 {w.Ship.Compartments} · 문 {w.Ship.Doors.Count} · 격자 {w.Ship.Grid.Width}x{w.Ship.Grid.Height}");
             return 0;
         }
+        if (argv.FirstOrDefault(a => a.StartsWith("--diag=")) is string diag)
+        {
+            var w = argv.Contains("--fresh") ? World.CreateDefault(seed, 0, diag[7..]) : DayOne(seed, diag[7..]);
+            bool fire = !argv.Contains("--nofire");
+            if (fire) w.Fire.Ignite(w.Ship.RoomsOf(RoomType.Galley).First().Cells.First(w.Ship.IsOpenFloor), 0.6f);
+            for (int h = 0; h < 12; h++)
+            {
+                Run(w, SimTime.Hours(1));
+                Console.WriteLine($"-- {SimTime.HourOfDay(w.Tick):0.0}시 불 {w.Fire.Count} · 원자로 {w.Power.ReactorOnline} · 위기 {Crisis.Level(w)} {string.Join(",", Crisis.Now(w).Reasons)} · 급한 일 {string.Join(",", w.Board.Open.Where(o => o.Urgency >= 0.9f).Take(3).Select(o => o.Title))}");
+                foreach (var c in w.Crew)
+                {
+                    Console.WriteLine($"   {c.Name,-8} 휴식 {c.Needs.Rest * 100:0} 배 {c.Needs.Food * 100:0} {c.Pose} {c.Room?.Name} {c.Cell} · {c.Job?.Label} · 침대 {c.Bed?.Label}/{c.Bed?.Room.Name} 예약 {c.Bed?.ReservedBy?.Name} 취침 {c.Schedule.SleepStart:0} 길 {(c.Bed != null ? w.Paths.Find(c.Cell, c.Bed.UseSpots[0])?.Count ?? -1 : -2)} · "
+                        + string.Join(" | ", c.LastEvaluations.Take(3).Select(e => $"{e.Activity.Label} {e.Score:0.00} {e.Reason}")));
+                }
+            }
+            foreach (var c in w.Crew.Where(c => c.Bed != null))
+                foreach (var d in c.Bed!.Room.Doors) Console.WriteLine($"   {c.Bed.Room.Name} 문 {d.Cell} 잠김 {d.Locked} 용접 {d.Welded} 열림 {d.Openness:0.0} 바깥 {d.IsExternal} · 침대 자리 {string.Join(",", c.Bed.UseSpots)} 흐름 {w.Paths.Flood(c.Cell, c.PathProfile).Get(c.Bed.UseSpots[0])}");
+            foreach (var c in w.Crew.Where(c => c.Job?.Label == "대기"))
+            {
+                var fl = w.Paths.Flood(c.Cell, c.PathProfile);
+                var fd = w.Paths.Flood(c.Cell, PathProfile.Default);
+                int n1 = 0, n2 = 0;
+                for (int i = 0; i < w.Ship.Grid.CellCount; i++) { var cc = w.Ship.Grid.CellAt(i); if (fl.Reachable(cc)) n1++; if (fd.Reachable(cc)) n2++; }
+                Console.WriteLine($"   대기 {c.Name} {c.Cell} 칸 {w.Ship.Grid.Kind(c.Cell)} 걸을 수 {w.Ship.IsWalkable(c.Cell)} · 닿는 칸 {n1}/{n2} · 막힘 {c.PathBlocked} · 두려움 {c.Memory.AnyFear} · 문 {w.Ship.DoorAt(c.Cell)?.Cell} 가구 {w.Ship.FurnitureAt(c.Cell)?.Label}");
+                var messC = w.Ship.RoomsOf(RoomType.Mess).First().Cells.First(w.Ship.IsOpenFloor);
+                var pth = w.Paths.Find(c.Cell, messC);
+                Console.WriteLine($"      식당 길 {pth?.Count}: " + string.Join(" ", (pth ?? new List<Cell>()).Where(x => w.Ship.DoorAt(x) != null).Select(x => $"{x}[{w.Ship.DoorAt(x)!.RoomA?.Name}/{w.Ship.DoorAt(x)!.RoomB?.Name} 잠김 {w.Ship.DoorAt(x)!.Locked}]")) + $" · 지나는 방 {string.Join(">", (pth ?? new List<Cell>()).Select(x => w.Ship.RoomAt(x)?.Name).Where(n => n != null).Distinct())}");
+                foreach (var e in w.Log.Entries.Where(e => e.CrewId == c.Id).TakeLast(6)) Console.WriteLine($"      {SimTime.HourOfDay(e.Tick):0.00}시 {e.Text}");
+                foreach (var d in w.Ship.Doors.Where(d => Math.Abs(d.Cell.X - c.Cell.X) + Math.Abs(d.Cell.Y - c.Cell.Y) <= 3)) Console.WriteLine($"      곁의 문 {d.Cell} {d.RoomA?.Name}/{d.RoomB?.Name} 잠김 {d.Locked} 용접 {d.Welded} 열림 {d.Openness:0.0} 격벽 {d.Bulkhead} 영역 {w.Body.DoorOf(d)?.Zone}");
+            }
+            Console.WriteLine($"   내력 {w.Origin.Info?.Designer} {w.Origin.Info?.Start} · 원자로 온도 {w.Power.ReactorTemperature:0} · 냉각 {w.Power.CoolingCapacity:0}kW · 컴퓨터 {w.Automation.MainOnline}");
+            foreach (var o in w.Board.Open.Where(o => o.Kind is WorkKind.Repair or WorkKind.Maintain).Take(12)) Console.WriteLine($"   작업 {o.Title} 급함 {o.Urgency:0.00} 막힘 {o.BlockedReason} · {o.Detail} · 맡은 {o.Assignee?.Name}");
+            foreach (var m in w.Ship.Machines.Where(m => !m.Powered)) Console.WriteLine($"   전기 없음: {m.Name} {m.Body.Room.Name} 회로 {m.Body.Room.Circuit} 고장 {m.Faults.Count}");
+            return 0;
+        }
         if (argv.Contains("--sweep"))
         {
             int bad = 0, total = 0;
@@ -107,42 +142,46 @@ public static partial class Program
                     $"막힌 구역 {string.Join(",", war.Origin.SealedRooms.Select(id => war.Ship.Rooms[id].Name))} · 그을음 {scorch * 100:0}% · 비상식량 더 실음 {cargo}");
             }
 
-            // 4) 고리형: 통로 한쪽이 막혀도(용접 · 불) 반대로 돌아 대피
+            // 4) 고리형: 통로 한쪽이 막혀도(용접) 반대로 돌아 대피 — 태양 폭풍에 위 식당에서 아래 대피소로
             {
-                var w = DayOne(seed, "Saeteo");
+                bool off = MeetingSystem.MaidenOff;
+                MeetingSystem.MaidenOff = true;
+                var w = World.CreateDefault(seed, 8, "Saeteo"); // 여덟 명만 (대피소 자리를 다투지 않게)
+                Run(w, SimTime.Hours(9));
+                MeetingSystem.MaidenOff = off;
                 var ship = w.Ship;
                 var mess = ship.Rooms.First(r => r.Type == RoomType.Mess);
-                var airlock = ship.Rooms.First(r => r.Type == RoomType.Airlock);
+                var shelter = Facilities.Best(ship, "shelter").room!;
                 var from = mess.Cells.First(ship.IsOpenFloor);
-                var to = airlock.Cells.First(ship.IsOpenFloor);
-                int before = w.Paths.Find(from, to)?.Count ?? -1;
-                // 식당 쪽 위 통로의 왼쪽 격벽을 용접한다
-                var left = ship.Doors.Where(d => d.Bulkhead && d.Cell.Y < mess.MaxY + 4 && d.Cell.X < mess.MinX).OrderByDescending(d => d.Cell.X).Take(2).ToList();
-                foreach (var d in left) { d.Welded = true; d.Locked = true; }
+                var to = shelter.Cells.First(ship.IsOpenFloor);
+                int leftX = ship.Rooms.Where(r => r.Type == RoomType.Corridor).Min(r => r.MinX);
+                int rightX = ship.Rooms.Where(r => r.Type == RoomType.Corridor).Max(r => r.MaxX);
+                var direct = w.Paths.Find(from, to);
+                bool directRight = direct != null && direct.Any(c => c.X >= rightX - 2);
+                // 식당과 오른쪽 연결 통로 사이, 위 통로의 격벽을 용접한다
+                var cut = ship.Doors.Where(d => d.Bulkhead && d.Cell.Y > mess.MaxY && d.Cell.Y <= mess.MaxY + 4 && d.Cell.X > mess.MaxX && d.Cell.X < rightX - 2).ToList();
+                foreach (var d in cut) { d.Welded = true; d.Locked = true; }
                 w.Paths.Invalidate();
                 var around = w.Paths.Find(from, to);
-                int rightX = ship.Rooms.Where(r => r.Type == RoomType.Corridor).Max(r => r.MaxX);
-                bool viaRight = around != null && around.Any(c => c.X >= rightX - 2);
-                Check("고리형 — 위 통로 격벽을 용접해도 오른쪽으로 한 바퀴 돌아 에어락에 닿는다", before > 0 && around != null && viaRight && around.Count > before,
-                    $"길이 {before} → {around?.Count ?? -1} (오른쪽 연결 통로를 지남 {viaRight}) · 용접한 격벽 {left.Count}");
-                // 그 상태로 식당에 불 — 안에 있던 사람들이 반대쪽으로 돌아 빠져나간다
-                var crew = w.Crew.Where(c => !c.Dead).Take(4).ToList();
-                foreach (var c in crew)
-                {
-                    var cell = mess.Cells.Where(ship.IsOpenFloor).OrderBy(x => x.X).ThenBy(x => x.Y).ElementAt(crew.IndexOf(c) * 3);
-                    c.Position = cell.Center; c.PreviousPosition = c.Position; c.Interrupt(w);
-                }
-                var fireCell = mess.Cells.Where(ship.IsOpenFloor).OrderByDescending(x => x.X).First();
-                w.Fire.Ignite(fireCell, 0.8f);
-                bool passedRight = false;
-                for (int i = 0; i < SimTime.Hours(1) / 10; i++)
+                bool viaLeft = around != null && around.Any(c => c.X < mess.MinX - 8 && c.Y > mess.MaxY + 3); // 식당 왼쪽에서 아래로 (왼쪽 연결 통로나 가운데 기관 구역을 지나)
+                Check("고리형 — 오른쪽 위 통로 격벽을 용접해도 왼쪽으로 돌아 대피소에 닿는다", directRight && cut.Count > 0 && viaLeft,
+                    $"길이 {direct?.Count ?? -1}(오른쪽으로 {directRight}) → {around?.Count ?? -1}(왼쪽으로 돌아 내려감 {viaLeft}) · 용접한 격벽 {cut.Count}");
+                // 그 상태로 태양 폭풍: 식당의 네 사람이 대피소로 — 막힌 오른쪽 대신 왼쪽으로 돈다
+                var crew = w.Crew.Where(c => !c.Dead && !c.Outside).OrderBy(c => c.Id).Take(4).ToList();
+                var spots = mess.Cells.Where(c => ship.IsOpenFloor(c) && ship.FurnitureAt(c) == null).OrderBy(x => x.X).ThenBy(x => x.Y).ToList();
+                for (int i = 0; i < crew.Count; i++) { crew[i].Position = spots[i * 3].Center; crew[i].PreviousPosition = crew[i].Position; crew[i].Interrupt(w); }
+                Hazards.Apply(w, HazardKind.SolarStorm, default, -1);
+                Run(w, SimTime.Minutes(1));
+                foreach (var c in crew) c.Interrupt(w);
+                bool passedLeft = false;
+                for (int i = 0; i < SimTime.Minutes(90) / 10; i++)
                 {
                     Run(w, 10);
-                    if (crew.Any(c => c.Cell.X >= rightX - 2)) passedRight = true;
+                    if (crew.Any(c => c.Cell.X < mess.MinX - 8 && c.Cell.Y > mess.MaxY + 3)) passedLeft = true;
                 }
-                int inMess = crew.Count(c => c.Room == mess);
-                Check("고리형 대피 — 불난 식당에서 빠져나오고, 막힌 왼쪽 대신 오른쪽으로 돈다", inMess <= 1 && crew.All(c => !c.Dead) && passedRight,
-                    $"식당에 남음 {inMess}/{crew.Count} · 오른쪽 연결 통로를 지난 사람 있음 {passedRight} · 불 {w.Fire.Count}칸");
+                int safe = crew.Count(c => c.Room == shelter);
+                Check("고리형 대피 — 태양 폭풍에 식당의 넷이 막힌 오른쪽 대신 왼쪽으로 돌아 대피소에 든다", passedLeft && safe >= 3 && crew.All(c => !c.Dead),
+                    $"왼쪽으로 돌아 내려감 {passedLeft} · 대피소에 {safe}/{crew.Count} · 식당 방사선 {mess.Radiation * 100:0}% · 대피소 {shelter.Radiation * 100:0}% · " + string.Join(", ", crew.Select(c => $"{c.Name} {c.Room?.Name}({c.Job?.Label})")));
             }
 
             // 5) 쌍동선: 연결 통로를 잃고(봉쇄 · 끊김) 둘로 갈라져 버티다 다시 잇는다
@@ -168,6 +207,9 @@ public static partial class Program
                 bool cutOff = w.Paths.Find(aCell, bCell) == null;
                 Check("쌍동선 — 연결 통로 셋을 잃으면 둘로 갈리고, 아래 선체도 제 몫의 전기 · 공기로 버틴다", split && cutOff && lowerOk && alive == w.Crew.Count,
                     $"갈라짐 {w.Origin.Split} · 길 끊김 {cutOff} · 아래 선체 전기·공기 {lowerOk} ({string.Join(", ", lower.Select(r => $"{r.Name} {(r.PowerLinked ? "전기" : "정전")} O₂{r.Air.O2:0}"))}) · 생존 {alive}/{w.Crew.Count}");
+                var splitAct = w.Automation.Book.Acts.LastOrDefault(x => x.Key == "origin:split");
+                Check("쌍동선 — 주컴퓨터가 쪽마다 없는 것을 알리고 · 걱정되는 사람은 통신기로 건너편을 부른다", splitAct != null && w.Origin.Stats.Calls >= 1,
+                    $"판단: {splitAct?.Judge} · 교신 {w.Origin.Stats.Calls}");
                 // 다시 잇는다: 용접을 끊고 문을 연다 → 다시 만나고, 끊긴 선을 잇는다
                 foreach (var r in links) foreach (var d in r.Doors) { d.Welded = false; d.Locked = false; }
                 w.Paths.Invalidate();
@@ -182,7 +224,8 @@ public static partial class Program
 
             // 6) 숨은 이야기: 정비하다 발견 → 일기 · 물건 · 이야기가 퍼진다 · 쪽지의 요령
             {
-                var w = DayOne(seed, "Busitdol");
+                var w = World.CreateDefault(seed, 0, "Busitdol");
+                Run(w, SimTime.Hours(2));
                 var o = w.Origin;
                 int hidden = o.Finds.Count;
                 var note = o.Finds.Where(f => !f.Found && f.Kind == FindKind.Note && f.Machine >= 0).OrderBy(f => f.Id).FirstOrDefault();
@@ -202,8 +245,9 @@ public static partial class Program
                 }
                 Run(w, SimTime.Hours(18));
                 int knows = note?.Knows.Count ?? 0;
+                var nm = note != null ? w.Ship.Furniture[note.Machine] : null;
                 Check("숨은 이야기 — 버려졌던 배엔 쪽지 · 술병 · 낙서가 숨어 있고, 고치다 패널 뒤에서 찾는다", hidden >= 5 && found && diary && item,
-                    $"숨은 것 {hidden} · 쪽지 찾음 {found} ({(note != null && note.FoundBy >= 0 ? w.Crew[note.FoundBy].Name : "-")}) · 일기 {diary} · 소지품 {item} · {o.Stats.Summary()}");
+                    $"[{nm?.Label} {nm?.Room.Name} 고장 {nm?.Machine?.Faults.Count} 손봄 {nm?.Machine?.ServiceCount}] 숨은 것 {hidden} · 쪽지 찾음 {found} ({(note != null && note.FoundBy >= 0 ? w.Crew[note.FoundBy].Name : "-")}) · 일기 {diary} · 소지품 {item} · {o.Stats.Summary()}");
                 Check("숨은 이야기 — 이야기가 퍼진다 (들은 사람 · 일기 · 가까워짐)", knows >= 2 && o.Stats.Told >= 1, $"아는 사람 {knows} · 전함 {o.Stats.Told}");
             }
 
@@ -261,6 +305,54 @@ public static partial class Program
                     Console.WriteLine($"   {(good ? "·" : "←")} {w.Ship.Name,-6} {key,-28} 생존 {alive}/{w.Crew.Count} · 불 {(fireOut ? "꺼짐" : $"{w.Fire.Count}칸")} · 설비 전기 {powered * 100:0}% · 먹음 {fed} · 잠 {slept} · 길 끊긴 방 {reach} · 고장 문 {stuck} · 원자로 {(w.Power.ReactorOnline ? "돎" : "멈춤")}");
                 }
                 Check("모든 배 하루 — 길 · 문 · 설비 · 식사 · 수면 · 불 하나 끄기", ok == keys.Count, $"{ok}/{keys.Count}" + (bad.Count > 0 ? " · 문제: " + string.Join(", ", bad) : ""));
+            }
+
+            // 10) ★★ 승무원이 배의 내력을 알아채고 다르게 행동한다 · 주컴퓨터가 읽고 판단한다
+            {
+                var junk = DayOne(seed, "Ttaemjil");
+                var fresh = DayOne(seed, "Saeteo");
+                var war = DayOne(seed, "Bodeum");
+                var o = junk.Origin;
+                var walkers = junk.Crew.Where(c => o.RoundsBy(c) > 0).Select(c => $"{c.Name} {o.RoundsBy(c)}").ToList();
+                Check("승무원 — 고물 배를 알아채고 아침마다 한 바퀴 돌며 귀를 댄다 (새 배에선 아무도 안 한다)", o.Stats.Rounds >= 2 && fresh.Origin.Stats.Rounds == 0 && o.Stats.RoundFixes >= 1,
+                    $"땜질호 한 바퀴 {o.Stats.Rounds}(손봄 {o.Stats.RoundFixes} · {string.Join(", ", walkers)}) · 새터호 {fresh.Origin.Stats.Rounds}");
+                // 주컴퓨터: 고장 위험 순위 → 정비를 앞당긴다 (새 배는 하나만 조금) · 컴퓨터가 멎으면 순위도 멎는다
+                var act = junk.Automation.Book.Acts.LastOrDefault(x => x.Key == "origin:rank");
+                var top = o.Ranked.OrderByDescending(kv => kv.Value).Select(kv => junk.Ship.Furniture[kv.Key].Machine!).ToList();
+                float junkEarly = top.Count > 0 ? o.Early(top[0]) : 0f;
+                float freshEarly = fresh.Origin.Ranked.Count > 0 ? fresh.Origin.Ranked.Values.Max() : 0f;
+                var maint = junk.Board.All.Where(x => x.Kind == WorkKind.Maintain && x.Target.Furniture != null).ToList();
+                int rankedOrders = maint.Count(x => o.Ranked.ContainsKey(x.Target.Furniture!.Id));
+                Check("주컴퓨터 — 시작 상태 · 부품 내력으로 고장 위험 순위를 매겨 정비를 앞당긴다 (고물 배는 넷을 크게 · 새 배는 하나를 조금)",
+                    act != null && top.Count >= 3 && junkEarly > freshEarly * 1.5f && rankedOrders >= 1,
+                    $"순위 {string.Join(" · ", top.Select(m => m.Name))} · 앞당김 땜질호 {junkEarly * 100:0}%p / 새터호 {freshEarly * 100:0}%p · 순위 설비 정비 작업 {rankedOrders}/{maint.Count} · 판단: {act?.Judge}");
+                var comp = junk.Ship.FurnitureOf(FurnitureType.MainComputer).First().Machine!;
+                junk.Machines.Break(comp);
+                Run(junk, 30);
+                Check("주컴퓨터가 멎으면 정비 순위도 멎는다 (사람 귀만 남는다)", !junk.Automation.MainOnline && top.All(m => o.Early(m) == 0f), $"컴퓨터 {(junk.Automation.MainOnline ? "돎" : "멎음")}");
+                bool spof = fresh.Automation.Book.Acts.Any(x => x.Key == "origin:spof");
+                bool sealedAdv = war.Automation.Book.Acts.Any(x => x.Key == "origin:sealed");
+                Check("주컴퓨터 — 민간 배의 단일 고장점 · 막아 둔 구역의 공기를 읽고 제안 · 경고한다", spof && sealedAdv, $"단일 고장점 제안(새터호) {spof} · 막힌 구역 경고(보듬호) {sealedAdv}");
+                // 좁은 군용 배: 비켜서기 → 자꾸 마주친 둘의 관계가 바뀐다 (친하면 웃고 · 나쁘면 짜증)
+                var ws = war.Origin.Stats;
+                float perWar = ws.Squeezes / (float)war.Crew.Count, perFresh = fresh.Origin.Stats.Squeezes / (float)fresh.Crew.Count;
+                Check("좁은 군용 배 — 비켜서기가 잦고, 자꾸 마주친 둘의 사이가 바뀐다", ws.Squeezes >= 3 && ws.SqueezeBonds + ws.SqueezeSpats >= 1,
+                    $"보듬호 비켜섬 {ws.Squeezes}(1인당 {perWar:0.0}) · 웃음 {ws.SqueezeBonds} · 짜증 {ws.SqueezeSpats} / 새터호 1인당 {perFresh:0.0}");
+                // 배 본체 · 불: 닳은 배는 바닥이 닳아 미끄럽고 기름이 묻어 있다 · 군용 내장재는 덜 탄다
+                float FloorWear(World x) { float sum = 0f; int n = 0; for (int i = 0; i < x.Body.Wear.Length; i++) if (x.Body.Floor[i] != Material.None) { sum += x.Body.Wear[i]; n++; } return sum / Math.Max(1, n); }
+                int oil = junk.Body.Marks.Values.Count(m => m.V[(int)CellMark.Oil] > 0.05f);
+                Check("배 본체 × 시작 상태 · 설계사 × 불 — 고물 배 바닥은 닳고 기름 · 군용 내장재는 덜 타고 개척민 것은 잘 탄다",
+                    FloorWear(junk) > FloorWear(fresh) + 0.15f && oil >= 1 && war.Origin.FireMul < fresh.Origin.FireMul && fresh.Origin.FireMul < junk.Origin.FireMul,
+                    $"바닥 닳음 땜질호 {FloorWear(junk) * 100:0}% / 새터호 {FloorWear(fresh) * 100:0}% · 기름 칸 {oil} · 넘어짐 땜질호 {junk.Body.Stats.Falls} / 새터호 {fresh.Body.Stats.Falls} · 불 번짐 군용 {war.Origin.FireMul} · 민간 {fresh.Origin.FireMul} · 개척민 {junk.Origin.FireMul}");
+            }
+
+            // 11) 정비 문화: 닳은 배에서 고장을 겪고 한 바퀴가 몸에 배면 "소리부터 듣는다"가 관행이 된다 (→ 전조를 더 잘 듣는다)
+            {
+                var w = DayOne(seed, "Ttaemjil");
+                for (int d = 0; d < 3 && w.Culture.Of(CustomKind.MaintainerWay) == null; d++) Run(w, SimTime.TicksPerDay);
+                var cu = w.Culture.Of(CustomKind.MaintainerWay);
+                Check("상호작용 — 고물 배 마모 → 고장 → 아침 한 바퀴 → 정비 문화 (따르는 사람이 전조를 더 잘 듣는다)", cu != null && cu.Followers.Count >= 2 && w.Origin.Stats.CultureBorn == 1,
+                    $"관행 {(cu != null ? $"{cu.Origin} · 따르는 사람 {cu.Followers.Count}" : "없음")} · {w.Origin.Stats.Summary()}");
             }
 
             // 9) 결정론

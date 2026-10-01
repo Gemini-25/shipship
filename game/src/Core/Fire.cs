@@ -127,7 +127,7 @@ public sealed class FireSystem
 
             // 번짐 (같은 방 옆 칸, 열린 문 너머) — v12.2 짙은 산소에서는 빨리 번진다
             float rich = o2 > 21f ? MathF.Pow(o2 / 21f, 1.5f) : 1f;
-            if (w.Rng.Chance(4f * intensity * rich * dt * w.Body.SpreadMul(cell))) // v16.3 바닥재가 타는 정도 · 젖은 바닥
+            if (w.Rng.Chance(4f * intensity * rich * dt * w.Body.SpreadMul(cell) * w.Origin.FireMul)) // v16.3 바닥재가 타는 정도 · 젖은 바닥
             {
                 var d = w.Rng.Pick(Cell.Dirs4);
                 var n = cell + d;

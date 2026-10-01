@@ -55,11 +55,13 @@ public sealed class HiddenFind
 public sealed class OriginStats
 {
     public int Found, Told, Tips, Toasts, Scribbles, Reopened, Splits, Reunions, Handovers, Grumbles;
+    public int Rounds, RoundFixes, Squeezes, SqueezeBonds, SqueezeSpats, Ranks, Advice, CultureBorn, Calls; // v16.9 한 바퀴 · 좁은 배 · 컴퓨터 판단 · 정비 문화 · 건너편 교신
     public string Summary() =>
-        $"숨은 이야기 찾음 {Found} · 전함 {Told} · 쪽지 요령 {Tips} · 건배 {Toasts} · 낙서 보탬 {Scribbles} · 막힌 구역 열림 {Reopened} · 갈라짐 {Splits}(다시 이음 {Reunions}) · 침대 인계 {Handovers}(투덜 {Grumbles})";
+        $"숨은 이야기 찾음 {Found} · 전함 {Told} · 쪽지 요령 {Tips} · 건배 {Toasts} · 낙서 보탬 {Scribbles} · 막힌 구역 열림 {Reopened} · 갈라짐 {Splits}(다시 이음 {Reunions}) · 침대 인계 {Handovers}(투덜 {Grumbles})"
+        + $" · 한 바퀴 {Rounds}(손봄 {RoundFixes}) · 비좁아 마주침 {Squeezes}(웃음 {SqueezeBonds} · 짜증 {SqueezeSpats}) · 컴퓨터 정비 순위 {Ranks} · 조언 {Advice} · 정비 문화 {CultureBorn} · 건너편 교신 {Calls}";
 }
 
-public sealed class ShipOriginSystem
+public sealed partial class ShipOriginSystem
 {
     private readonly World _w;
     private Rng? _rng;
@@ -120,7 +122,7 @@ public sealed class ShipOriginSystem
             case ShipDesigner.Settler:
                 foreach (var m in ship.Machines)
                 {
-                    if (rng.Chance(0.18f)) { m.Spliced = true; m.Feed = rng.Range(0.55f, 0.8f); MarkLog.Add(m.Marks, w.Tick, "전 주인이 임시로 이어 둔 전선"); }
+                    if (!m.Spec.Critical && !Crisis.PowerChain(m.Body.Type) && rng.Chance(0.18f)) { m.Spliced = true; m.Feed = rng.Range(0.55f, 0.8f); MarkLog.Add(m.Marks, w.Tick, "전 주인이 임시로 이어 둔 전선"); }
                     foreach (var p in w.Parts.Of(m))
                         if (rng.Chance(0.3f))
                             p.Lot = new PartLot { Id = 900_000 + _nextId++, Kind = p.Lot.Kind, Origin = PartOrigin.Handmade, Batch = "개척민 손", From = former, Maker = FormerCrew[rng.Range(0, FormerCrew.Length)],
@@ -207,6 +209,7 @@ public sealed class ShipOriginSystem
 
         // 5) 침대 교대 (침대가 모자란 작은 배)
         if (info.SharedBed) ShareBeds();
+        ApplyBody(rng); // v16.9 배 본체: 닳은 바닥 · 기름 자국 · 그을음 (바닥재는 방 종류로 이미 정해져 있다)
 
         w.Log.Add(w.Tick, LogKind.Ship, $"{ship.Name} — {ShipInfos.Name(info.Designer)} 설계 {ShipInfos.Name(info.Purpose)} · {ShipInfos.Name(info.Frame)} · {ShipInfos.Name(info.Start)}"
             + $" · {ShipInfos.Year - info.Built}년 된 배" + (info.FormerName != null ? $" (예전 이름 {info.FormerName})" : ""));
@@ -324,6 +327,7 @@ public sealed class ShipOriginSystem
             c.HomeBed = partner.Bed;
             c.Schedule = Schedule.FromBedtime(SimTime.Wrap(partner.Schedule.SleepStart + 12f));
             BedShares.Add((c.Id, partner.Id));
+            w.Body.SetZone(partner.Bed!.Room, AccessZone.Open, LockKind.None); // 둘 다 주인 — 교대로 쓰는 선실은 잠그지 않는다 (v16.3 선실 노크 · 잠금에 막히지 않게)
             MarkLog.Add(partner.Bed!.Room.Marks, w.Tick, $"{Ko.WaGwa(partner.Name)} {c.Name}이(가) 침대 하나를 교대로 쓴다");
         }
         w.Paths.Invalidate();
@@ -345,7 +349,10 @@ public sealed class ShipOriginSystem
             Toast();
             Tell();
             Handover();
+            Squeeze(); // v16.9 좁은 배에서 자꾸 마주친다 → 관계
         }
+        Watch(); // v16.9 비켜서기 관찰 (매 틱 · 사람 수만큼)
+        if (w.Tick >= _nextHour) { _nextHour = w.Tick + SimTime.Hours(1); Hourly(); } // v16.9 주컴퓨터 정비 순위 · 조언 · 정비 문화
         if (_nextSplit < 0) _nextSplit = w.Tick + SimTime.Minutes(30);
         if (w.Tick >= _nextSplit)
         {
@@ -390,7 +397,8 @@ public sealed class ShipOriginSystem
                 if (!Able(c) || c.IsChild || c.Room != room) continue;
                 int d = Math.Abs(c.Cell.X - f.At.X) + Math.Abs(c.Cell.Y - f.At.Y);
                 bool working = c.Pose == Pose.Working && c.Job != null && (c.Job.Order != null || c.Job.Target?.Machine != null);
-                if (working && d <= 3 || f.Sealed && d <= 4) { who = c; break; }
+                int reach = w.Culture.Follows(c, CustomKind.MaintainerWay) || RoundsToday(c) ? 5 : 3; // v16.9 소리부터 듣는 사람 · 한 바퀴 도는 사람은 패널 틈을 더 잘 본다
+                if (working && d <= reach || f.Sealed && d <= 4) { who = c; break; }
             }
             if (who == null) continue;
             Found(f, who);
@@ -549,6 +557,7 @@ public sealed class ShipOriginSystem
             var x = w.Crew[a];
             var y = w.Crew[b];
             if (x.Dead || y.Dead) continue;
+            if (y.Bed is Furniture sb && sb.Room.Doors.Any(d => w.Body.DoorOf(d) is DoorBody db && db.Zone != AccessZone.Open)) w.Body.SetZone(sb.Room, AccessZone.Open, LockKind.None); // 구조가 바뀌어 다시 선실이 됐으면
             foreach (var p in new[] { x, y })
             {
                 bool awake = p.IsAwake;
@@ -605,7 +614,9 @@ public sealed class ShipOriginSystem
                 _side.Clear();
                 foreach (var kv in side) _side[kv.Key] = kv.Value;
                 w.History.Add(w, HistoryKind.Structure, $"배가 {groups}쪽으로 갈렸다 — 건너편으로 갈 길이 없다", log: true);
+                OnSplit(side); // v16.9 주컴퓨터가 쪽마다 무엇이 있고 없는지 읽는다
             }
+            Call(side); // v16.9 걱정되는 사람은 통신기로 건너편을 부른다
             // 같은 쪽끼리 가까워지고 · 건너편 친구를 걱정한다
             foreach (var c in w.Crew)
             {
