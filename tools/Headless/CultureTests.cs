@@ -45,10 +45,13 @@ public static partial class Program
             // 3) 이유를 아는 사람이 다 떠나고 기록도 없으면, 이유는 잊히고 행동만 남는다
             {
                 var w = DayOne(seed, "Mirinae");
-                foreach (var f in w.Ship.FurnitureOf(FurnitureType.MainComputer)) w.Machines.Break(f.Machine!, FaultKind.Wrecked); // 기록이 없다
                 Fire(w);
-                Run(w, SimTime.Hours(2));
+                // 불이 알려져 관행이 생길 때까지 (감지기·본 사람) — 그 뒤에 기록이 사라진다
+                for (int h = 0; h < 8 && w.Culture.Of(CustomKind.FireCheck) == null; h++) Run(w, SimTime.Hours(1));
                 var cu = w.Culture.Of(CustomKind.FireCheck)!;
+                w.Automation.Remove(ComputerModule.Archive); w.Automation.V15NoAuto = true; // v15.9 기록 보관 모듈도 없는 배
+                foreach (var f in w.Ship.FurnitureOf(FurnitureType.MainComputer)) w.Machines.Break(f.Machine!, FaultKind.Wrecked); // 기록이 없다
+                Run(w, SimTime.Minutes(30));
                 var spot = w.Ship.LiveRooms.First(r => r.Type is RoomType.Mess or RoomType.Lounge).Cells.First(c => w.Ship.IsWalkable(c));
                 var olds = w.Crew.Where(c => !c.Dead).ToList();
                 var n = w.AddSurvivor(spot);
@@ -57,6 +60,7 @@ public static partial class Program
                 bool knew = cu.Knowers.Contains(n.Id);
                 // 원래 사람들이 기항지에서 내렸다 (시험: 배에서 빠진 셈)
                 foreach (var o in olds) w.Culture.OnGone(o);
+                w.Automation.Remove(ComputerModule.Archive);
                 Run(w, SimTime.Minutes(30));
                 bool lostOk = knew ? !cu.ReasonLost : cu.ReasonLost && w.Culture.Stats.Forgotten > 0;
                 Check("이유가 잊힌다 — 아는 사람이 떠나고 기록도 없으면 행동만 남는다 (이유를 들은 신입이 있으면 남는다)",

@@ -393,6 +393,9 @@ public sealed class AilmentSystem
     public bool Undiagnosed(CrewMember c) => c.Ailments.Any(a => !a.Diagnosed && Severity(a) > 0.15f);
 
     /// <summary>치료(구급 키트) — 진단하고, 약을 쓴다.</summary>
+    /// <summary>v15.1 약 없이 진단만 (구급 키트가 없는 응급 처치).</summary>
+    public void DiagnoseOnly(CrewMember doctor, CrewMember patient) => Diagnose(doctor, patient);
+
     public void Treated(CrewMember patient, CrewMember doctor)
     {
         var w = _w;

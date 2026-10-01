@@ -123,6 +123,8 @@ public sealed partial class AutomationSystem
     public Dictionary<ComputerModule, int> V15Acts { get; } = Enum.GetValues<ComputerModule>().ToDictionary(m => m, _ => 0);
 
     private long _v15Next, _v15Last = -SimTime.TicksPerDay * 2;
+    /// <summary>시험용: 새 모듈을 스스로 올리지 않는다 (모듈 없는 배를 볼 때).</summary>
+    public bool V15NoAuto { get; set; }
     private readonly HashSet<int> _doorEq = new();
 
     /// <summary>주 컴퓨터가 돌 때 (Respond 끝에서): 문 압을 맞추고, 한 시간마다 새 모듈을 올릴지 본다.</summary>
@@ -132,7 +134,7 @@ public sealed partial class AutomationSystem
         if (Has(ComputerModule.DoorPressure)) DoorPressure(dt);
         if (w.Tick < _v15Next) return;
         _v15Next = w.Tick + SimTime.TicksPerHour;
-        if (w.Tick <= SimTime.TicksPerDay || w.Tick - _v15Last < SimTime.TicksPerDay) return; // 첫날은 그대로
+        if (V15NoAuto || w.Tick <= SimTime.TicksPerDay || w.Tick - _v15Last < SimTime.TicksPerDay) return; // 첫날은 그대로
         foreach (var r in ComputerV15.Rows)
         {
             if (Has(r.Module) || ComputerV15.Why(w, r) is not string why) continue;

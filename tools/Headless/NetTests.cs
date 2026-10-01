@@ -44,6 +44,8 @@ public static partial class Program
         {
             var w = DayOne(seed, "Mirinae");
             var bridge = w.Ship.FurnitureOf(FurnitureType.MainComputer).First().Room;
+            w.Automation.Remove(ComputerModule.CommsRelay); // v15.9 통신 중계가 있으면 무선으로 값이 이어진다 — 없는 배로 본다
+            w.Automation.V15NoAuto = true; // (데이터선이 끊기면 컴퓨터가 중계를 스스로 올린다 — 그것도 막는다)
             foreach (var l in w.Net.Links.Where(l => l.Kind == NetKind.Data && (l.Door?.RoomA == bridge || l.Door?.RoomB == bridge))) w.Net.Hurt(l, 1f, "시험");
             w.Net.Update(0f);
             var blind = w.Ship.LiveRooms.Where(r => !r.DataLinked).ToList();

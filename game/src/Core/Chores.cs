@@ -1404,7 +1404,8 @@ public static partial class WorkPlanners
             patient.Vitals.Injury = MathF.Max(0f, patient.Vitals.Injury - (0.06f + 0.14f * skill) * eff);
             if (!kit) world.Log.Add(world.Tick, LogKind.Warning, $"구급 키트가 없어 {patient.Name}에게 응급 처치만 했다 ({(bandage ? "붕대" : "천과 소독약")})", cm.Id);
             patient.Vitals.TreatedTick = world.Tick;
-            world.Ailments.Treated(patient, cm); // v14.1 진단하고 약을 쓴다
+            if (kit) world.Ailments.Treated(patient, cm); // v14.1 진단하고 약을 쓴다
+            else world.Ailments.DiagnoseOnly(cm, patient); // v15.1 키트가 없으면 진단만 — 응급 처치는 약이 아니다
             world.Soil.OnTreated(cm, patient); // v14.7 더러운 손이면 상처가 곪기도
             if (patient != cm) world.Relations.Remember(patient, cm, RelationReason.NursedMe, "다쳤을 때 치료해 줬다"); // v14.4
             patient.ChangeAffinity(cm, 0.08f);
