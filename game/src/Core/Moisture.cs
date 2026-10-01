@@ -336,6 +336,7 @@ public static partial class WorkPlanners
             world.Moisture.Stats.Pumped += take;
             world.Moisture.Stats.Recovered += back;
             if (MoistureSystem.Depth(room) < 0.06f) world.Board.Close(o);
+            else o.Progress = 0f; // v16.7: 한 번 퍼낸 뒤 진척이 남아 있으면 다음 양동이가 2틱 만에 끝났다 (30분 일이 공짜로 되풀이됨)
             world.Log.Add(world.Tick, LogKind.Work, $"{room.Name} 바닥 물을 퍼냈다 ({take:0}L · {back:0}L는 정수기로)", cm.Id);
             return true;
         }));

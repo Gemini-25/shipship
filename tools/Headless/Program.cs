@@ -166,6 +166,7 @@ public static partial class Program
         if (args.Contains("--computertest")) return RunComputerTest(seed); // v16.6
         if (args.Contains("--foodtest")) return RunFoodTest(seed); // v16.8
         if (args.Contains("--portabletest")) return RunPortableTest(seed); // v16.7
+        if (args.Contains("--pdbg")) return RunPortableDebug(seed); // TEMP
         if (args.Contains("--shiptest")) return RunShipTest(seed); // v16.9 배 종류
         if (args.Contains("--uitest")) return RunUiTest(seed); // v16.2
         if (args.Contains("--era15test")) return RunEraV15Test(seed); // v15.5

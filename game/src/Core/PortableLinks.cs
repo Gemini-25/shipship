@@ -60,6 +60,55 @@ public sealed partial class PortableSystem
         }
         BodyLinks();
         if (w.Automation.Present && w.Automation.MainOnline) ComputerWatch();
+        HotOutletGlance(dt);
+    }
+
+    /// <summary>지금 부하로 차단기가 떨어질 때까지 (분) — 주 컴퓨터의 예측 · 화면.</summary>
+    public float TripMinutes(int circuit)
+    {
+        if (circuit < 0 || circuit >= _over.Length) return float.PositiveInfinity;
+        float r = CircuitLoad[circuit] / OutletCapKw - 1f;
+        return r <= 0f ? float.PositiveInfinity : (1f - _over[circuit]) / (r * r * BreakerHeat) * 60f;
+    }
+
+    /// <summary>멀티탭 · 플러그가 달아오른 정도 (0~1.5) — 화면이 그린다.</summary>
+    public float OutletHeat(int circuit) => circuit >= 0 && circuit < _hot.Length ? _hot[circuit] : 0f;
+
+    /// <summary>냄새 × 승무원 (같은 방): 탄내를 맡은 사람은 밥을 먹다가도 둘러본다 — 달아오른 멀티탭을 보면 일어나 뽑고, 먼지 타는 히터면 까닭을 안다.</summary>
+    private void HotOutletGlance(float dt)
+    {
+        var w = _w;
+        for (int i = 0; i < PowerGrid.CircuitCount; i++)
+        {
+            if (CircuitLoad[i] <= OutletCapKw || _hot[i] < 0.2f || ProjectedKw(i) <= OutletCapKw || OutletRoom(i) is not Room o) continue;
+            if (GlanceBy(o, dt) is CrewMember c) SmellFound(c, o, here: true);
+        }
+        foreach (var d in Devices) // 먼지 타는 히터: 한 번 알아채면 그 히터는 다시 둘러보지 않는다 (창고에 들어가면 잊는다)
+        {
+            if (d.Kind != PortableKind.Heater) continue;
+            if (d.Stored) { _dustSeen.Remove(d.Id); continue; }
+            if (!d.Running || d.Dust <= 0.05f || _dustSeen.Contains(d.Id) || RoomOf(d) is not Room r) continue;
+            if (GlanceBy(r, dt) is not CrewMember c) continue;
+            _dustSeen.Add(d.Id);
+            SmellFound(c, r, here: true);
+        }
+    }
+
+    private readonly HashSet<int> _dustSeen = new();
+
+    /// <summary>그 방에서 탄내를 맡은 사람 하나가 둘러본다 (10분쯤 안에 · 꼼꼼하면 빨리).</summary>
+    private CrewMember? GlanceBy(Room o, float dt)
+    {
+        var w = _w;
+        foreach (var c in w.Crew)
+        {
+            if (c.Dead || c.Room != o || !c.CanAct || !c.IsAwake || c.Job?.Urgent == true || c.Suit != null) continue;
+            if (w.Smells.Smelled(c, SmellKind.Burnt, SimTime.Minutes(20)) is null) continue; // 냄새를 맡은 사람만 둘러본다
+            if (!R.Chance(MathF.Min(1f, (4f + 4f * c.Traits.Diligence) * dt))) continue;
+            c.Interrupt(w);
+            return c;
+        }
+        return null;
     }
 
     private void BodyLinks()
@@ -93,11 +142,12 @@ public sealed partial class PortableSystem
         // 1) 과부하 예측: 배전반이 재는 콘센트 부하 (무엇이 꽂혔는지는 모른다)
         for (int i = 0; i < PowerGrid.CircuitCount; i++)
         {
-            if (_over[i] < 0.06f || OutletRoom(i) is not Room room) continue; // 사람이 이미 알아챘는지는 모른다 (같은 경고는 30분에 한 번)
+            if (_hot[i] < 0.06f || OutletRoom(i) is not Room room) continue; // 사람이 이미 알아챘는지는 모른다 (같은 경고는 30분에 한 번)
             float load = CircuitLoad[i], pct = load / OutletCapKw * 100f;
             int ci = i;
+            float eta = TripMinutes(i);
             var act = au.Book.Add(ActKind.Advice, room, $"{PowerGrid.CircuitName(i)} 회로 {room.Name} 콘센트 부하 {load:0.0}kW (견딤 {OutletCapKw:0.0}kW · {pct:0}%)",
-                "예측: 몇 분 안에 차단기가 떨어진다 · 원인 추정: 콘센트에 꽂은 장비가 많다", "선내 방송", $"{room.Name} 콘센트에서 하나를 뽑으라",
+                $"예측: {(eta < 90f ? $"{eta:0}분쯤 뒤" : "한참 뒤")} 차단기가 떨어진다 · 그 전에 멀티탭이 달아오른다 · 원인 추정: 콘센트에 꽂은 장비가 많다", "선내 방송", $"{room.Name} 콘센트에서 하나를 뽑으라",
                 $"pw:over:{i}", SimTime.Minutes(30), 25f, (world, a) => GradeOver(ci, a));
             if (act == null) continue;
             Stats.ComputerWarns++;
@@ -245,11 +295,13 @@ public sealed partial class PortableSystem
         foreach (var d in Devices)
             if (d.Kind == PortableKind.Heater && d.Running && d.Dust > 0.05f && RoomOf(d) is Room r) s.Emit(r, SmellKind.Burnt, 0.05f + 0.15f * d.Dust);
         for (int i = 0; i < PowerGrid.CircuitCount; i++)
-            if (CircuitLoad[i] > OutletCapKw && _over[i] > 0.1f && OutletRoom(i) is Room o) s.Emit(o, SmellKind.Burnt, 0.06f + 0.3f * MathF.Min(1f, _over[i]));
+            if (CircuitLoad[i] > OutletCapKw && _hot[i] > 0.1f && OutletRoom(i) is Room o) s.Emit(o, SmellKind.Burnt, 0.06f + 0.3f * MathF.Min(1f, _hot[i]));
     }
 
     /// <summary>냄새 훅 (Smell.Inspect): 탄내를 따라온 사람이 이동식 장비에서 까닭을 찾는다 — 찾았으면 true.</summary>
-    public bool SmellFound(CrewMember c, Room room)
+    public bool SmellFound(CrewMember c, Room room) => SmellFound(c, room, false);
+
+    private bool SmellFound(CrewMember c, Room room, bool here)
     {
         var w = _w;
         for (int i = 0; i < PowerGrid.CircuitCount; i++)
@@ -259,7 +311,9 @@ public sealed partial class PortableSystem
             if (!_learned[i] && !Warned(i)) { _warnAt[i] = w.Tick; _warnWhy[i] = $"{Ko.IGa(c.Name)} 콘센트가 달아오른 걸 알아챘다"; }
             _nextScan = w.Tick;
             c.Say(w, Persona.Say(c, "콘센트가 뜨겁다 — 너무 많이 꽂았어"));
-            w.Log.Add(w.Tick, LogKind.Warning, $"{Ko.IGa(c.Name)} 탄 냄새를 따라와 {room.Name} 콘센트가 달아오른 걸 찾았다 — 이동식 장비를 너무 많이 꽂았다 ({CircuitLoad[i]:0.0}kW)", c.Id);
+            w.Log.Add(w.Tick, LogKind.Warning, here
+                ? $"{Ko.IGa(c.Name)} {room.Name}에서 피복 타는 냄새에 둘러보니 멀티탭이 달아올라 있었다 — 이동식 장비를 너무 많이 꽂았다 ({CircuitLoad[i]:0.0}kW)"
+                : $"{Ko.IGa(c.Name)} 탄 냄새를 따라와 {room.Name} 콘센트가 달아오른 걸 찾았다 — 이동식 장비를 너무 많이 꽂았다 ({CircuitLoad[i]:0.0}kW)", c.Id);
             MarkLog.Add(room.Marks, w.Tick, $"{c.Name}: 콘센트 타는 냄새 ({PowerGrid.CircuitName(i)} 회로)");
             // 그 자리에서 가장 큰 것 하나를 뽑는다 (다른 회로 콘센트에 여유가 있으면 옮겨 꽂는다)
             var big = Devices.Where(d => d.Placed && d.On && d.Plug == PortablePlug.Outlet && d.Outlet == room).OrderByDescending(d => d.Spec.Kw).ThenBy(d => d.Id).FirstOrDefault();
@@ -276,7 +330,8 @@ public sealed partial class PortableSystem
             var to = room.Cells.Where(x => w.Ship.IsOpenFloor(x) && !Occupied(x) && !Flammable(x)).OrderBy(x => (x.Center - h.At.Center).LengthSquared()).ThenBy(x => x.Y).ThenBy(x => x.X).Cast<Cell?>().FirstOrDefault();
             if (to is Cell t) { h.At = t; moved = true; }
         }
-        w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(c.Name)} 탄 냄새를 따라와 보니 오래 둔 히터 열선의 먼지가 타는 냄새였다" + (moved ? " — 침구 곁이라 조금 옮겨 놓았다" : ""), c.Id);
+        _dustSeen.Add(h.Id);
+        w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(c.Name)} {(here ? "탄 냄새에 둘러보니" : "탄 냄새를 따라와 보니")} 오래 둔 히터 열선의 먼지가 타는 냄새였다" + (moved ? " — 침구 곁이라 조금 옮겨 놓았다" : ""), c.Id);
         return true;
     }
 }

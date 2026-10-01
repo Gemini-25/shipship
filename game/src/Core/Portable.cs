@@ -174,7 +174,9 @@ public sealed partial class PortableSystem
     private Rng R => _rng ??= new Rng(unchecked(_w.Seed * 7451 + 167));
     private int _nextId;
     private long _nextScan;
-    private readonly float[] _over = new float[PowerGrid.CircuitCount];
+    private readonly float[] _over = new float[PowerGrid.CircuitCount], _hot = new float[PowerGrid.CircuitCount];
+    /// <summary>차단기 열동 배율: 시간당 (넘친 비율)² × 이것 — 4.5kW(140%)면 8분쯤 · 3.6kW(113%)면 한 시간 넘게 버틴다.</summary>
+    public const float BreakerHeat = 47f;
     private readonly bool[] _learned = new bool[PowerGrid.CircuitCount];
     private readonly List<Room> _lit = new();
     private readonly Dictionary<string, int> _claims = new();
@@ -461,7 +463,7 @@ public sealed partial class PortableSystem
                 case PortableKind.Pump:
                     if (room.Flood > 0f)
                     {
-                        float take = MathF.Min(room.Flood, 160f * supply * dt);
+                        float take = MathF.Min(room.Flood, 360f * supply * dt); // 시간당 360L (양동이 둘쯤의 몫 — 사람이 퍼내는 것과 함께)
                         room.Flood -= take;
                         float back = take * 0.8f;
                         w.Water.Level = MathF.Min(w.Water.Capacity, w.Water.Level + back);
@@ -530,7 +532,7 @@ public sealed partial class PortableSystem
             if (d.Kind == PortableKind.Cart && d.Placed) _cartCells.Add(d.At);
             if (d.Running && d.Placed && RoomOf(d) is Room nr)
             {
-                float n = d.Kind switch { PortableKind.Pump => 0.45f, PortableKind.Fan => 0.22f, PortableKind.Purifier => 0.18f, PortableKind.Heater => 0.12f, _ => 0f };
+                float n = d.Kind switch { PortableKind.Pump => nr.Flood > 1f ? 0.45f : 0.3f, /* 물이 없으면 헛도는 소리 */ PortableKind.Fan => 0.22f, PortableKind.Purifier => 0.18f, PortableKind.Heater => 0.12f, _ => 0f };
                 if (n > _noise.GetValueOrDefault(nr.Id)) _noise[nr.Id] = n;
                 if (d.Kind == PortableKind.Purifier) _clean.Add(nr.Id);
             }
@@ -551,8 +553,10 @@ public sealed partial class PortableSystem
         for (int i = 0; i < PowerGrid.CircuitCount; i++)
         {
             float load = CircuitLoad[i];
-            if (load > OutletCapKw) _over[i] += dt * (load / OutletCapKw - 1f) * 20f;
-            else _over[i] = MathF.Max(0f, _over[i] - dt * 2f);
+            // 멀티탭 · 플러그는 넘친 만큼 곧 달아오르고(냄새 · 컴퓨터 계측) · 차단기(열동식)는 넘친 정도의 제곱으로 데워진다 — 조금 넘치면 한참 버티고, 많이 넘치면 몇 분
+            float r = load / OutletCapKw - 1f;
+            if (r > 0f) { _hot[i] = MathF.Min(1.5f, _hot[i] + dt * r * 20f); _over[i] += dt * r * r * BreakerHeat; }
+            else { _hot[i] = MathF.Max(0f, _hot[i] - dt * 2f); _over[i] = MathF.Max(0f, _over[i] - dt * 2f); }
             if (_over[i] >= 1f) Trip(i, load);
         }
         Links(dt); // 주 컴퓨터(과부하 예측 · 빈 방 히터 · 창고 빈 자리) · 배 본체(호스 물 · 카트 바퀴) · 히터 먼지
@@ -631,6 +635,7 @@ public sealed partial class PortableSystem
     {
         var w = _w;
         _over[circuit] = 0f;
+        _hot[circuit] = 0f;
         _tripAt[circuit] = w.Tick;
         if (w.Ship.FurnitureOf(FurnitureType.PowerPanel).FirstOrDefault()?.Machine is not Machine panel || panel.Faults.Any(f => f.Circuit == circuit)) return;
         var fault = new Fault { Kind = FaultKind.BreakerTrip, Since = w.Tick, Circuit = circuit };
@@ -675,6 +680,9 @@ public sealed partial class PortableSystem
     {
         if (d.HeldBy != c) return;
         var at = c.Cell;
+        if (_w.Ship.RoomAt(at) == null) // 문간 · 방 밖 칸에 내려놓으면 아무도 다시 못 찾는다 — 바로 옆 방 바닥에
+            foreach (var dir in Cell.Dirs8)
+                if (_w.Ship.RoomAt(at + dir) is Room nr && !nr.Detached && _w.Ship.IsWalkable(at + dir)) { at += dir; break; }
         d.HeldBy = null;
         d.OnCart = null;
         d.At = at;
@@ -964,6 +972,18 @@ public sealed partial class PortableSystem
 
     internal void MarkWaited(string key) { _waited[key] = _w.Tick; Stats.Waits++; }
 
+    /// <summary>하는 중인 장비 일의 무게 — 맡은 요구는 목록에서 빠지므로 (안 그러면 가는 길에 아무 일에나 밀려 들고 가던 장비를 복도에 내려놓는다).</summary>
+    private readonly Dictionary<int, (float score, string why)> _doing = new();
+    internal void Doing(CrewMember c, float score, string why) => _doing[c.Id] = (score, why);
+    internal void Done(CrewMember c) => _doing.Remove(c.Id);
+    internal (float score, string why)? DoingScore(CrewMember c)
+    {
+        if (!_doing.TryGetValue(c.Id, out var d)) return null;
+        // 손에 든 장비가 있으면 마저 갖다 놓는다 (조금 더 버틴다)
+        foreach (var x in Devices) if (x.HeldBy == c) return (d.score + 0.12f, d.why);
+        return d;
+    }
+
     internal bool PickUp(PortableDevice d, CrewMember c, PortableDevice? cart)
     {
         if (d.Lost || d.HeldBy != null && d.HeldBy != c || d.ClaimedBy >= 0 && d.ClaimedBy != c.Id) return false;
@@ -1152,7 +1172,9 @@ public sealed partial class PortableSystem
     internal void Unplug(CrewMember c, PortableDevice d)
     {
         var w = _w;
-        if (TurnOffFlagged(c, d)) return; // 주 컴퓨터가 짚은 빈 방 히터: 끈다
+        int oc = d.Plug == PortablePlug.Outlet && d.Outlet != null ? d.Outlet.Circuit : -1;
+        bool heedOver = oc >= 0 && ProjectedKw(oc) > OutletCapKw && Warned(oc) && !_learned[oc]; // 과부하 경고(방송 · 뜨거운 콘센트)를 듣고 차단기 전에
+        if (TurnOffFlagged(c, d)) { if (heedOver) { Stats.Unplugged++; Stats.HeededWarns++; } return; } // 주 컴퓨터가 짚은 빈 방 히터: 끈다 (그 회로 과부하도 풀린다)
         if (!d.Placed || d.Plug != PortablePlug.Outlet || d.Outlet is not Room was) return;
         int circuit = was.Circuit;
         bool heed = Warned(circuit) && !_learned[circuit];
@@ -1281,6 +1303,8 @@ public sealed partial class PortableSystem
             parts.Add(d.Kind == PortableKind.Cart ? $"카트{extra}" : $"{d.Name} {state}{power}{extra}");
         }
         foreach (var d in Devices.Where(d => d.HeldBy != null && d.HeldBy.Room == room)) parts.Add($"{Ko.IGa(d.HeldBy!.Name)} {d.Name} 나르는 중");
+        if (!room.Detached && room.Circuit >= 0 && room.Circuit < _hot.Length && OutletRoom(room.Circuit) == room && _hot[room.Circuit] > 0.1f) // 멀티탭이 달아오른다 (화면은 세계를 그대로 — 사람들이 아는지는 따로)
+            parts.Add($"멀티탭이 달아오른다 ({CircuitLoad[room.Circuit]:0.0}kW{(TripMinutes(room.Circuit) < 90f ? $" · 차단기까지 {TripMinutes(room.Circuit):0}분" : "")})");
         return parts.Count == 0 ? null : string.Join(" · ", parts);
     }
 
@@ -1336,7 +1360,9 @@ public sealed class PortableActivity : Activity
 
     public override (float, string) Score(CrewMember c, World w, DistanceField dist)
     {
-        if (!c.CanAct || c.Outside || c.IsChild || w.Portable.Needs.Count == 0) return (0f, "—");
+        if (!c.CanAct || c.Outside || c.IsChild) return (0f, "—");
+        if (c.Job?.Activity == this && w.Portable.DoingScore(c) is var (ds, dwhy)) return (ds, dwhy); // 하던 일 (맡은 요구는 목록에서 빠졌다)
+        if (w.Portable.Needs.Count == 0) return (0f, "—");
         if (w.Portable.Choose(c, dist) is not PortableChoice ch) return (0f, "할 일 없음");
         float s = ch.Score;
         if (c.Pose == Pose.Sleeping) s *= ch.Need.Task == PortableTask.Unplug || ch.Need.Kind == PortableKind.Pump ? 0.6f : 0.3f;
@@ -1440,6 +1466,7 @@ public sealed class PortableActivity : Activity
             }
         }
         string key = n.Key;
+        ps.Doing(c, ch.Score, ch.Reason);
         return new Job(this, label, toils)
         {
             LogText = log,
@@ -1453,6 +1480,7 @@ public sealed class PortableActivity : Activity
                 if (status != ToilStatus.Succeeded)
                     foreach (var d in world.Portable.Devices.Where(x => x.HeldBy == cm).ToList()) world.Portable.Drop(d, cm);
                 world.Portable.Release(key, cm);
+                world.Portable.Done(cm);
             },
         };
     }
