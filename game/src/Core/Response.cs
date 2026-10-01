@@ -148,6 +148,7 @@ public sealed partial class AutomationSystem
                     if (!crewOnIt) grace = MathF.Min(grace, 4f);
                     grace *= Learn.GraceMul(room) * (1f + MathF.Max(0f, Load - 1f)); // v16.6 교훈 반영: 같은 종류 방의 불을 겪었으면 일찍 · 연산이 넘치면 늦게
                     if (w.Tick < fc.RejectedUntil) { fc.Status = $"제안이 거절됐다 — 소화조에 맡긴다 ({cells}칸)"; break; }
+                    if (Checks.Any(k => k.RoomId == room.Id)) { fc.Status = $"사람이 안을 확인하는 중 — 다시 제안하지 않는다 ({cells}칸)"; break; } // v16.6 확인 · 구조가 끝나기 전엔 거절된 수단을 다시 꺼내지 않는다
                     bool escalate = cells >= 6 || minutes >= grace && (cells >= 2 || !crewOnIt);
                     if (Level < 4) escalate &= minutes >= grace * 1.5f; // 추론이 안 되면 늦게 (보수적으로) 올린다
                     if (!escalate) { fc.Status = crewOnIt ? $"소화조가 끈다 ({cells}칸 · {minutes:0}분)" : $"소화조를 기다린다 ({cells}칸)"; break; }
