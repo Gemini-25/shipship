@@ -85,6 +85,7 @@ public sealed class EatActivity : Activity
             score += 0.3f;
             reason += " · 자기 전 야식";
         }
+        if (src != Source.Ration && src != Source.Produce && w.Cooking.HomeCraving(c) is float home and > 0f) { score += home; reason += " · 고향 음식이 있다"; } // v16.8
         if (src == Source.Ration) reason += " · 비상식량뿐";
         if (src == Source.Produce) reason += " · 날채소뿐";
         // 자는 중에는 웬만큼 배고파서는 깨지 않는다

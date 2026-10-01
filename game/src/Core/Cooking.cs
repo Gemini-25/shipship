@@ -113,6 +113,7 @@ public sealed class CookingSystem
     private readonly Dictionary<int, (Furniture stove, int recipe, int cook, long start)> _cooking = new();
     private readonly Dictionary<int, (Furniture stove, long since, int cook)> _burner = new();
     private readonly Dictionary<int, long> _lastAte = new();
+    private readonly Dictionary<int, long> _homeTold = new(); // 제 고향 음식을 했다는 말을 들은 사람 · 때
     private readonly Dictionary<int, Palate> _palate = new();
     private readonly Dictionary<int, Serving> _eating = new();
     private readonly Dictionary<int, long> _coldSaid = new();
@@ -330,6 +331,7 @@ public sealed class CookingSystem
         Stats.Batches++;
         Stats.Portions += cooked;
         w.Log.Add(w.Tick, LogKind.Work, $"오늘은 {r.Name}" + (absorbed > 0 ? $" (어제 남은 {absorbed}인분을 넣고)" : "") + (b.Swap != null ? $" — {b.Swap}" : ""), cm.Id);
+        TellHome(cm, r);
         var head = HeadCook;
         if (head != null && head != cm && LaidUp(head))
         {
@@ -337,6 +339,32 @@ public sealed class CookingSystem
             Life.Diary(w, cm, Persona.Say(cm, $"{Ko.IGa(head.Name)} 다쳐서 내가 부엌에 섰다. {Ko.EulReul(r.Name)} 했는데 어떨지"));
         }
         MaybeStartJar(cm);
+    }
+
+    /// <summary>고향 음식을 했다: 그 음식이 고향 맛인 사람에게 알린다 (곁에 있으면 말로 · 멀면 주컴퓨터 개인 메시지로) — 들은 사람은 배가 덜 고파도 한 그릇 먹으러 온다.</summary>
+    private void TellHome(CrewMember cook, DishRecipe r)
+    {
+        if (!r.Home || r.Jar) return;
+        var w = _w;
+        bool board = w.Automation.Present && w.Automation.MainOnline;
+        foreach (var o in w.Crew)
+        {
+            if (o.Dead || o == cook || o.Outside || Dishes.HomeDish(w, o) != r) continue;
+            if (o.Room == cook.Room && o.IsAwake) cook.Say(w, Persona.Say(cook, $"{o.Name}, {r.Name} 했어 — 고향 음식"));
+            else if (board) w.Automation.Apps.Messages.Add(new PersonalMessage(w.Tick, o.Id, "식사", $"{cook.Name}: {r.Name} 했어요 — 고향 음식 · 식기 전에 와요"));
+            else continue; // 말을 전할 길이 없다 (주컴퓨터가 꺼졌다) — 모른다
+            _homeTold[o.Id] = w.Tick;
+        }
+    }
+
+    /// <summary>EatActivity 훅: 제 고향 음식을 했다는 말을 들었고 그 냄비가 아직 있으면 — 배가 덜 고파도 한 그릇 (점수 더함).</summary>
+    public float HomeCraving(CrewMember c)
+    {
+        if (_homeTold.Count == 0 || !_homeTold.TryGetValue(c.Id, out var t) || _w.Tick - t > SimTime.Hours(10) || c.Needs.Hunger < 0.12f) return 0f;
+        var mine = Dishes.HomeDish(_w, c);
+        foreach (var b in Batches)
+            if (b.Spec == mine && !b.Jar && !b.Spoiled && b.Portions > 0 && b.Fresh >= 0.45f) return 0.5f + 0.4f * c.Needs.Hunger;
+        return 0f;
     }
 
     /// <summary>균: 더러운 손(Soil이 방금 센 몫)이나 지저분한 주방 바닥 · 조리대의 균이 냄비에 든다 — 그 냄비에서 나간 끼니가 탈을 낸다.</summary>
@@ -396,16 +424,18 @@ public sealed class CookingSystem
 
     // ── 먹기 ──
 
-    private Batch? PickBatch()
+    private Batch? PickBatch(CrewMember cm)
     {
-        Batch? hot = null, old = null;
+        Batch? hot = null, old = null, home = null;
+        var mine = Dishes.HomeDish(_w, cm);
         foreach (var b in Batches)
         {
             if (b.Jar || b.Portions <= 0 || b.Spoiled) continue;
+            if (b.Spec == mine && b.Fresh >= 0.45f && (home == null || b.Cooked < home.Cooked)) home = b; // 고향 음식 냄비가 있으면 그것부터 뜬다
             if (!b.InFridge) { if (hot == null || b.Cooked < hot.Cooked) hot = b; } // 먼저 만든 냄비부터 비운다 (식었으면 데워서)
             else if (old == null || b.Cooked < old.Cooked) old = b;
         }
-        return hot ?? old;
+        return home ?? hot ?? old;
     }
 
     public bool PowerShort => _w.Power.Brownout || _w.Power.DeficitSince >= 0;
@@ -438,7 +468,7 @@ public sealed class CookingSystem
         var w = _w;
         _lastAte[cm.Id] = w.Tick;
         if (kind != ItemKind.Meal) { _eating.Remove(cm.Id); return; }
-        var b = PickBatch();
+        var b = PickBatch(cm);
         if (b == null) { Stats.Prepacked++; _eating[cm.Id] = new Serving(); return; } // 냄비가 없으면 예전처럼 보존식
         b.Portions--;
         Stats.Served++;
@@ -513,6 +543,7 @@ public sealed class CookingSystem
     {
         if (!r.Home || Dishes.HomeDish(_w, cm) != r) return;
         Stats.HomeMeals++;
+        _homeTold.Remove(cm.Id);
         cm.Needs.Stress = MathF.Max(0f, cm.Needs.Stress - 0.06f);
         var by = cook != cm.Id ? CrewOf(cook) : null;
         Life.Diary(_w, cm, Persona.Say(cm, $"{r.Name} — 고향 맛이다" + (by != null ? $". {Ko.IGa(cookName)} 해 줬다" : "")));
@@ -699,6 +730,7 @@ public sealed class CookingSystem
 
     public void Update(float dt)
     {
+        if (_burner.Count > 0) Watch.BurnerTick(); // 주컴퓨터 화구 감시 (1분마다)
         _acc += dt;
         if (_acc < 0.1f) return;
         float h = _acc;
@@ -984,7 +1016,7 @@ public sealed class CookingSystem
         foreach (var p in Plates) { I(p.For); I(p.By); F(p.Temp); I(p.Eaten ? 1 : 0); I(p.Found ? 1 : 0); }
         foreach (var g in HomeGoods) I(g);
         I(Stats.Served); I(Stats.TasteNoticed); I(Stats.SavedPlates); I(Stats.Scorched); I(Stats.RationGripes);
-        I(Stats.GermPots); I(Stats.OilSplash); I(Stats.HeaterWarm);
+        I(Stats.GermPots); I(Stats.OilSplash); I(Stats.HeaterWarm); I(_homeTold.Count);
         foreach (var b in Batches) I((b.Germy ? 1 : 0) + (b.Flagged ? 2 : 0));
         Watch.Hash(I);
     }

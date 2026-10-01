@@ -34,7 +34,7 @@ public sealed class SmellSystem
     private readonly Dictionary<int, long> _gathered = new();
     private readonly Dictionary<int, long> _complained = new();
     private readonly Dictionary<int, (long tick, float strength)> _resolved = new();
-    private readonly Dictionary<int, (int crew, long tick)> _checking = new();
+    private readonly Dictionary<(int room, int crew), long> _checking = new(); // 방마다 확인하러 나선 사람들 (여럿이 같은 냄새를 따라갈 수 있다)
     private readonly Dictionary<int, (int room, long tick)> _asked = new();
     public SmellStats Stats { get; } = new();
 
@@ -173,7 +173,8 @@ public sealed class SmellSystem
         {
             if (d.RoomA is not Room a || d.RoomB is not Room b || a.Detached || b.Detached) continue;
             float open = d.Removed ? 1f : d.Openness;
-            float k = MathF.Min(0.45f, (open > 0.05f ? 0.25f + 0.75f * open : 0.18f) * h * 6f); // 닫힌 문도 틈 · 오가는 사람으로 샌다
+            float conv = 1f + 0.4f * MathF.Min(4f, MathF.Abs(a.Air.Temperature - b.Air.Temperature)); // 더운 방(오븐 · 화구 · 불)의 공기는 문 위로 빠져나가고 찬 공기가 아래로 든다
+            float k = MathF.Min(0.45f, (open > 0.05f ? 0.25f + 0.75f * open : 0.18f) * conv * h * 6f); // 닫힌 문도 틈 · 오가는 사람으로 샌다
             for (int s = 0; s < Kinds; s++)
             {
                 float flux = (_lvl[a.Id * Kinds + s] - _lvl[b.Id * Kinds + s]) * k * 0.5f;
@@ -307,8 +308,9 @@ public sealed class SmellSystem
             if (room.Smell * nose > 0.4f && (!_complained.TryGetValue(c.Id, out var t) || w.Tick - t > SimTime.Hours(6)) && R.Chance(MathF.Min(1f, 1.5f * h)))
                 Complain(c, room);
         }
-        foreach (var id in _checking.Keys.OrderBy(k => k).ToList())
-            if (w.Tick - _checking[id].tick > SimTime.Hours(1)) _checking.Remove(id);
+        if (_checking.Count > 0)
+            foreach (var key in _checking.Keys.OrderBy(k => k.room).ThenBy(k => k.crew).ToList())
+                if (w.Tick - _checking[key] > SimTime.Hours(1)) _checking.Remove(key);
     }
 
     private void Complain(CrewMember c, Room room)
@@ -329,9 +331,13 @@ public sealed class SmellSystem
     /// <summary>확인하러 가는 사람을 적어 둔다 (불이 그 사람 덕에 먼저 드러나면 기록에 남긴다).</summary>
     public void NoteChecking(CrewMember c, Room room)
     {
-        _checking[room.Id] = (c.Id, _w.Tick);
+        _checking[(room.Id, c.Id)] = _w.Tick;
         Stats.Checks++;
+        LastCheck = (_w.Tick, c.Id, room.Id);
     }
+
+    /// <summary>마지막으로 탄내를 확인하러 나선 때 · 사람 · 방 (기록 · 화면 — 1분이 안 걸리는 확인도 남는다).</summary>
+    public (long Tick, int Crew, int Room) LastCheck { get; private set; } = (-1, -1, -1);
 
     /// <summary>주컴퓨터가 확인을 부탁했다 (화구 자리 비움) — 냄새를 못 맡았어도 간다.</summary>
     public void Ask(CrewMember c, Room room) => _asked[c.Id] = (room.Id, _w.Tick);
@@ -388,8 +394,16 @@ public sealed class SmellSystem
     /// <summary>Fire 훅: 불이 드러날 때 — 탄 냄새를 따라 먼저 와 있던 사람이 있으면 기록에 남긴다.</summary>
     public string FireFound(Room room, string how, CrewMember? witness)
     {
-        if (!_checking.TryGetValue(room.Id, out var ch) || CrewOfId(ch.crew) is not CrewMember who) return how;
-        if (witness != null && witness != who) return how;
+        // 발견한 사람이 냄새를 따라온 사람이면 그 사람 · 모르면 가장 먼저 나선 사람
+        CrewMember? who = null;
+        long first = long.MaxValue;
+        foreach (var ((r, id), t) in _checking)
+        {
+            if (r != room.Id || CrewOfId(id) is not CrewMember x) continue;
+            if (witness != null) { if (x == witness) { who = x; break; } continue; }
+            if (t < first || (t == first && x.Id < (who?.Id ?? int.MaxValue))) { first = t; who = x; }
+        }
+        if (who == null) return how;
         Stats.FireBySmell++;
         _w.Cooking.Watch.Compare(room, who, "불");
         return how + $" · {Ko.IGa(who.Name)} 탄 냄새를 맡고 먼저 와 있었다";

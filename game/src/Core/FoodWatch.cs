@@ -15,7 +15,7 @@ public sealed class FoodWatch
     private readonly World _w;
     private Rng? _rng;
     private Rng R => _rng ??= new Rng(unchecked(_w.Seed * 4517 + 97));
-    private long _next;
+    private long _next, _nextBurner;
     private long _fridgeAlert = -1_000_000;
     private readonly Dictionary<int, long> _called = new();
     /// <summary>화구 자리 비움 감시 (사람 코가 먼저 잡은 일을 겪고 켠다).</summary>
@@ -41,7 +41,15 @@ public sealed class FoodWatch
         Fridges();
         Fresh();
         MakeMenu();
-        if (BurnerWatch) Burners();
+    }
+
+    /// <summary>화구 감시는 1분마다 (켜 둔 채 남은 화구가 있을 때만 — Cooking이 매 시스템 틱 부른다).</summary>
+    public void BurnerTick()
+    {
+        var w = _w;
+        if (!BurnerWatch || w.Tick < _nextBurner || !Online) return;
+        _nextBurner = w.Tick + SimTime.Minutes(1);
+        Burners();
     }
 
     private static bool FridgeDown(Furniture f) => f.Machine is Machine m && (m.Stopped || m.Efficiency < 0.2f);
@@ -172,8 +180,8 @@ public sealed class FoodWatch
         foreach (var st in w.Ship.FurnitureOf(FurnitureType.Stove))
         {
             float sc = ck.Scorch(st);
-            if (sc < 0.1f || !st.Room.Powered) continue; // 4분쯤: 화구 전력이 계속 나가는데
-            if (w.Crew.Any(c => !c.Dead && c.Room == st.Room && c.IsAwake)) continue; // 곁에 사람이 있다
+            if (sc < 0.05f || !st.Room.Powered) continue; // 2분쯤: 조리 일이 끝났는데 화구 전력이 계속 나가고
+            if (Attended(st)) continue; // 화구 앞에 깨어 있는 사람이 있다 (같은 방 구석에서 자거나 먹는 건 '곁'이 아니다)
             if (_called.TryGetValue(st.Id, out var t) && w.Tick - t < SimTime.Minutes(20)) continue;
             CrewMember? best = null;
             float bd = float.MaxValue;
@@ -187,11 +195,20 @@ public sealed class FoodWatch
             _called[st.Id] = w.Tick;
             BurnerCalls++;
             w.Smells.Ask(best, st.Room);
+            if (best.Job?.Urgent != true && best.Job?.Activity is not CheckSmellActivity) best.Interrupt(w); // 호출: 하던 걸 내려놓고 간다
             w.Automation.Apps.Messages.Add(new PersonalMessage(w.Tick, best.Id, "확인", $"{st.Room.Name} 화구가 켜진 채 곁에 아무도 없습니다 — 확인해 주세요"));
             w.Automation.Book.Add(ActKind.Advice, st.Room, $"{st.Room.Name} 화구 전력 계속 {sc * 40f:0}분 · 곁에 사람 없음", "예측: 냄비가 타서 불이 날 수 있다 (사람 코가 먼저 잡았던 일)",
                 "조치: 가장 가까운 사람에게 확인 요청", $"요청: {best.Name} — 화구 확인", "food:burner:" + st.Id, SimTime.Minutes(20), 30f);
             best.Say(w, Persona.Say(best, "주방 화구? 가 볼게"));
         }
+    }
+
+    /// <summary>화구 앞(두 칸 안)에 깨어 있는 사람이 있나.</summary>
+    private bool Attended(Furniture st)
+    {
+        foreach (var c in _w.Crew)
+            if (!c.Dead && c.IsAwake && !c.Down && c.Room == st.Room && (c.Position - st.Center).LengthSquared() <= 2.5f * 2.5f) return true;
+        return false;
     }
 
     public void Hash(Action<long> I)
