@@ -892,7 +892,7 @@ public sealed class DailySceneSystem
             {
                 case SceneKind.Chess:
                     if (s.Host == c.Id) Offer(leisure, s.Stage == SceneStage.Paused ? "끊긴 판으로 돌아간다" : s.Game < 0 ? "체스판을 가져와 편다" : "판 앞에서 상대를 기다린다", s, Role.Host);
-                    else if (s.Other == c.Id) Offer(leisure, s.Stage == SceneStage.Paused ? $"{CrewOf(s.Host)?.Name}와 두던 판으로" : $"{CrewOf(s.Host)?.Name}의 체스 청", s, Role.Join);
+                    else if (s.Other == c.Id) Offer(leisure + (s.Stage == SceneStage.Gather && _w.Tick - s.Opened < SimTime.Hours(1) ? 0.25f : 0f), s.Stage == SceneStage.Paused ? $"{CrewOf(s.Host)?.Name}와 두던 판으로" : $"{CrewOf(s.Host)?.Name}의 체스 청 — 곧 간다고 했다", s, Role.Join); // 받아들였으면 약속이다 (한 시간 안엔 더 끌린다)
                     else if (s.Other < 0 && s.Game >= 0 && c.Room?.Id == s.RoomId && !c.IsChild && (c.Hobbies.Contains(Hobby.Chess) || c.Traits.Calm > 0.6f) && !Busy(c))
                         Offer(leisure - 0.05f, $"{CrewOf(s.Host)?.Name}가 펴 둔 판 — 상대가 없다", s, Role.Join);
                     break;

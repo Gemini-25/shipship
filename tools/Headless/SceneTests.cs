@@ -44,7 +44,7 @@ public static partial class Program
                 bool played = ScUntil(w, () => s.Stage == SceneStage.Run && s.Progress > 0.3f, 3f);
                 var g = w.Belongings.Games.FirstOrDefault(x => x.Id == s.Game);
                 Check("체스 — 체스판을 가져와 탁자에 펴고, 상대가 와서 둔다", played && g != null && g.Scene == s.Id,
-                    $"{s.Title} · {s.Stage} · 진척 {s.Progress:P0} · {string.Join(" / ", s.Trail.TakeLast(3))}");
+                    $"{s.Title} · {s.Stage} · 진척 {s.Progress:P0} · {b.Name}: {b.ActivityLabel} · {string.Join(" / ", s.Trail.TakeLast(3))}");
 
                 var fire = ScFireRoom(w, s.RoomId)!;
                 w.Fire.Ignite(fire.Cells.First(w.Ship.IsWalkable), 0.9f);
