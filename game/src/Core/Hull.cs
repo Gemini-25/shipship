@@ -88,6 +88,10 @@ public static class Hull
 public sealed class HullSystem
 {
     private readonly World _world;
+
+    /// <summary>v16.6 격벽이 닫힐 때 "안에 있다": 방 안이거나 그 방 문간에 선 사람 (문간에 선 사람 위로 격벽을 내리지 않는다).</summary>
+    private bool InOrDoorway(CrewMember c, Room room) =>
+        !c.Outside && (c.Room == room || c.Room == null && _world.Ship.DoorAt(c.Cell) is Door d && !d.IsExternal && (d.RoomA == room || d.RoomB == room));
     private readonly Dictionary<int, float> _lastPressure = new();
     private readonly Dictionary<int, long> _released = new();
     private readonly Dictionary<int, long> _trapped = new(); // v12.5 사람이 남은 채 닫힌 방
@@ -164,7 +168,7 @@ public sealed class HullSystem
                 int locked = 0;
                 bool auto = _world.Automation.AutoDoorsIn(room); // v9.2: 격벽 자동 잠금은 주 컴퓨터가 한다 (v12.3 데이터선이 그 방까지 닿아야 · v13.2 방침이 허락해야)
                 // v12.5 사람 우선: 안에 사람이 있으면 2분 기다린다 (배 우선이면 바로)
-                var inside = _world.Crew.Where(c => !c.Dead && c.Room == room && !c.Outside).ToList();
+                var inside = _world.Crew.Where(c => !c.Dead && InOrDoorway(c, room)).ToList();
                 if (auto && inside.Count > 0 && !_world.Automation.ShipFirst)
                 {
                     room.LockPendingUntil = _world.Tick + SimTime.Minutes(2);
@@ -202,7 +206,7 @@ public sealed class HullSystem
             // v12.5 기다리던 격벽: 사람이 다 나왔거나 시간이 다 됐으면 닫는다
             if (room.LockPendingUntil >= 0)
             {
-                bool left = !_world.Crew.Any(c => !c.Dead && c.Room == room && !c.Outside);
+                bool left = !_world.Crew.Any(c => !c.Dead && InOrDoorway(c, room));
                 if (left || _world.Tick >= room.LockPendingUntil || !room.Lockdown)
                 {
                     if (room.Lockdown && !left)

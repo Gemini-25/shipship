@@ -38,7 +38,7 @@ public static partial class Program
                 var spot = room.Cells.First(w.Ship.IsOpenFloor); c.Position = spot.Center; c.PreviousPosition = c.Position;
                 var wall = w.Ship.Walls.Where(kv => kv.Value.IsHull && Hull.InsideRoom(w.Ship, kv.Key) == room).Select(kv => kv.Key).First();
                 Hull.Damage(w.Ship, wall, 1.2f);
-                Run(w, SimTime.Minutes(1));
+                for (int dbg = 0; dbg < SimTime.Minutes(1); dbg += World.SystemInterval) { Run(w, World.SystemInterval); if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "9") Console.WriteLine($"   {k} t{dbg} 샘 {room.Leaking} 잠금 {room.Lockdown} 대기 {room.LockPendingUntil} 기압 {room.Air.Pressure:0} 사람 {c.Name} {c.Cell}→{spot} 방 {c.Room?.Name}|{w.Ship.RoomAt(c.Cell)?.Name} 밖 {c.Outside} 원정 {c.Away} {c.Job?.Label} 문잠김 {room.Doors.Count(d => d.Locked)} 자동 {w.Automation.AutoDoorsIn(room)}"); }
                 waited[k] = room.LockPendingUntil >= 0 && !room.Doors.Any(d => d.Locked);
                 Run(w, SimTime.Minutes(4));
                 lockedLater[k] = room.Doors.Where(d => !d.IsExternal && d.Powered).All(d => d.Locked) || room.LockPendingUntil < 0;
