@@ -20,6 +20,7 @@ public static class Brain
         new EatActivity(),
         new SleepActivity(),
         new ChoresActivity(),
+        new PatrolActivity(), // v13.4 야간 당직
         new DutyActivity(),
         new MeetingActivity(), // v13.2 정기 회의
         new VisitActivity(), // v12.7 문병
@@ -44,6 +45,7 @@ public static class Brain
         {
             var (score, reason) = a.Score(c, w, dist);
             // 위기 판단: 비상·생존 위기에는 잠·휴식을 미룬다 (탈진 직전이면 쪽잠)
+            if (a is RelaxActivity or ChatActivity or WanderActivity) score *= w.Society.LeisureFactor; // v13.4 휴식·여가 방침
             float damp = Crisis.Damp(c, w, a, out var note);
             if (damp < 1f && score > 0f) { score *= damp; if (note != null) reason += $" · {note}"; }
             if (score > 0f) score += w.Rng.Range(-Noise, Noise);

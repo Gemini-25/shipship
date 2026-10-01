@@ -45,7 +45,7 @@ public static partial class Program
                 var room = StoreRoom(w);
                 ClearRoom(w, room);
                 float gas0 = -1f;
-                BigFire(w, room);
+                BigFire(w, room, 6); // 여덟 칸이 넘으면 컴퓨터는 처음부터 진공을 고른다 (번지는 운을 빼고)
                 bool smothered = false; float minO2 = 21f; int minutes = 0;
                 for (; minutes < 240; minutes++)
                 {
@@ -54,6 +54,8 @@ public static partial class Program
                     smothered |= room.Inerting;
                     minO2 = MathF.Min(minO2, room.Air.O2);
                     if (smothered && w.Fire.CountIn(room) == 0 && !room.ResponseHold) break;
+                    if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "1" && minutes < 12)
+                        Console.WriteLine($"   {minutes}분 불 {w.Fire.CountIn(room)} 등급 {w.Automation.Level} ({w.Automation.LevelWhy}) 수순 {string.Join(",", w.Automation.FireCases.Select(f => $"{f.Stage}:{f.Method}:{f.Status}"))} · 자동실행 {w.Policies["autoscope"]} 질식 {w.Policies["inertfire"]}");
                 }
                 Check("질식 소화 — 소화조로 안 되는 불을 불활성 가스로 끄고, 산소가 돌아오면 격벽을 푼다",
                     smothered && w.Fire.CountIn(room) == 0 && !room.ResponseHold && room.Air.O2 > 17f && w.Automation.InertGas < gas0,

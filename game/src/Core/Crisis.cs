@@ -222,6 +222,12 @@ public static class Crisis
         // v13.1 교대: 지휘자가 쉬게 한 사람은 잔다
         if (w.Command.Resting(c) && a is SleepActivity or RelaxActivity or EatActivity) { note = "교대 — 쉬라는 지시"; return a is SleepActivity ? 1.6f : 1f; }
         bool survival = level == CrisisLevel.Survival;
+        // v13.4 목표 계층: 조를 맡은 사람은 맡은 역할이 생활보다 먼저 — 굶주리거나 탈진 직전이 아니면 끼니·잠을 미룬다
+        if (w.Command.Active && w.Command.TeamOf(c) is { Kind: not TeamKind.Reserve })
+        {
+            if (a is EatActivity && c.Needs.Hunger < 0.93f) { note = "조를 맡았다 — 끼니는 나중에"; return 0.2f; }
+            if (a is SleepActivity && c.Needs.Fatigue < 0.95f && !w.Command.Resting(c)) { note = "조를 맡았다 — 잠은 나중에"; return 0.1f; }
+        }
         // v13.2 방침(비상 소집: 해당 조만): 조에 들지 않은 비번은 그대로 잔다 (생존 위기는 빼고)
         if (!survival && w.Policies["muster"] == 0 && w.Command.Active && w.Command.TeamOf(c) is not { Kind: not TeamKind.Reserve }
             && a is SleepActivity or RelaxActivity) { note = "해당 조만 소집 — 비번"; return 1f; }
@@ -261,6 +267,7 @@ public sealed partial class WorkBoard
             if (!c.DeepAsleep && level < CrisisLevel.Survival) continue;
             if (c.Needs.Fatigue > 0.97f && level < CrisisLevel.Survival) continue; // 정말 쓰러지기 직전이면 둔다
             if (w.Policies["muster"] == 0 && level < CrisisLevel.Survival && w.Command.TeamOf(c) is not { Kind: not TeamKind.Reserve }) continue; // v13.2 해당 조만
+            if (w.Policies["privacy"] == 1 && level < CrisisLevel.Survival && w.Command.TeamOf(c) is not { Kind: not TeamKind.Reserve }) continue; // v13.4 사생활 존중
             post(WorkKind.WakeCrew, WorkTarget.OfCrew(c), level == CrisisLevel.Survival ? 1.0f : 0.85f, Skill.Medicine,
                 $"{Crisis.Now(w).Top} — {c.Name}이(가) 아직 자고 있다");
         }

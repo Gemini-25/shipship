@@ -142,6 +142,8 @@ public static partial class Program
         if (args.Contains("--commandtest")) return RunCommandTest(seed); // v13.1
         if (args.Contains("--meetingtest")) return RunMeetingTest(seed); // v13.2
         if (args.Contains("--mindtest")) return RunMindTest(seed); // v13.3
+        if (args.Contains("--societytest")) return RunSocietyTest(seed); // v13.4
+        if (args.Contains("--replaycheck")) return RunReplayCheck(seed);
         if (args.Contains("--deathtrace")) return RunDeathTrace(Math.Max(1, days), seed);
         if (args.Contains("--stressprobe")) return RunStressProbe(Math.Max(1, days), seed);
         if (args.Contains("--campaignrun")) return RunCampaignLong(Math.Max(1, days), seed, shipArg ?? "Mirinae", args.FirstOrDefault(a => a.StartsWith("--from="))?[7..]);

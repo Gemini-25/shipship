@@ -185,6 +185,8 @@ public sealed class WorkToil : Toil
         if (c.Needs.Stress > 0.7f) speed *= 0.8f;
         if (c.Vitals.Oxygen < 0.85f) speed *= 0.8f;
         if (w.Food.Rationing && c.Needs.Food < 0.5f) speed *= 0.94f; // v10.11 배급: 배고픈 손은 조금 느리다
+        speed *= w.Society.WorkFactor; // v13.4 사기
+        if (c.Job?.Urgent == true && w.Society.IsVeteran(c)) speed *= 1.1f; // v13.4 베테랑
         // v11.0: 비상 훈련을 받은 사람은 사고 대응 일이 조금 빠르다
         if (c.Job?.Urgent == true && c.Drilled(w)) speed *= 1.12f;
         // v10.10: 정비 로봇이 옆에서 거들면 (부품을 잡아 주고 공구를 건넨다) 빨라진다

@@ -153,7 +153,7 @@ public sealed class LifeSystem
 {
     private readonly World _w;
     public LifeStats Stats { get; } = new();
-    private readonly List<(long due, int furnitureId, int node, string why)> _sloppy = new();
+    private readonly List<(long due, int furnitureId, int node, string why, int crewId)> _sloppy = new();
     private readonly List<(long at, int deadId)> _funerals = new();
     private readonly HashSet<int> _mourned = new();
     private readonly HashSet<(int, BodyPart)> _lost = new();
@@ -209,7 +209,7 @@ public sealed class LifeSystem
             // 덜 조였다 → 몇 시간 뒤 다시 고장
             what = $"{Ko.EulReul(m.Name)} 손보다 볼트를 덜 조였다";
             int node = w.Causes.Root(CauseKind.Mistake, $"{c.Name}의 실수 — {what} ({why})", m.Body.Room, m.Body.Center, observer: false);
-            _sloppy.Add((w.Tick + SimTime.Hours(w.Rng.Range(2f, 8f)), m.Body.Id, node, why));
+            _sloppy.Add((w.Tick + SimTime.Hours(w.Rng.Range(2f, 8f)), m.Body.Id, node, why, c.Id));
         }
         else if (o.Kind is WorkKind.Cook)
         {
@@ -250,6 +250,17 @@ public sealed class LifeSystem
             c.ChangeAffinity(watcher, 0.03f);
             return;
         }
+        // v13.4 혼자 안 실수: 털어놓으면 다시 손보고, 숨기면 몇 시간 뒤 고장으로 드러난다
+        if (m != null && _sloppy.Count > 0 && _sloppy[^1].furnitureId == m.Body.Id && _sloppy[^1].crewId == c.Id)
+        {
+            if (w.Society.WillHide(c)) w.Society.Hide(c, what);
+            else
+            {
+                _sloppy.RemoveAt(_sloppy.Count - 1);
+                w.Society.Confess(c, what);
+                return;
+            }
+        }
         c.Needs.Stress = MathF.Min(1f, c.Needs.Stress + 0.05f);
         w.Log.Add(w.Tick, LogKind.Warning, $"실수: {what} — {why}", c.Id);
         Life.Diary(w, c, $"{what}. {why}.");
@@ -263,11 +274,12 @@ public sealed class LifeSystem
         // 덜 조인 설비가 다시 고장 난다
         for (int i = _sloppy.Count - 1; i >= 0; i--)
         {
-            var (due, fid, node, why) = _sloppy[i];
+            var (due, fid, node, why, crewId) = _sloppy[i];
             if (w.Tick < due) continue;
             _sloppy.RemoveAt(i);
             if (w.Ship.Furniture.FirstOrDefault(f => f.Id == fid)?.Machine is not Machine m || m.Faults.Count > 0) continue;
             using (w.Causes.Because(node)) w.Machines.Break(m);
+            w.Society.Surfaced(w.Crew.FirstOrDefault(x => x.Id == crewId), m, why); // v13.4 숨긴 실수가 드러나나
         }
         Quarrels(dt);
         Mourning();
@@ -299,7 +311,7 @@ public sealed class LifeSystem
                 // v13.2 파벌: 회의에서 가치관대로 갈린 표가 쌓인 사이는 더 자주 부딪힌다
                 float rift = w.Meetings.Tension(a.Value, b.Value);
                 if (rift > 0.15f) { clash = MathF.Max(clash, 0.5f) * (1f + 2f * rift); about = "회의에서 갈린 표를"; }
-                float p = tension * clash * 0.12f * dt * (1.2f - MathF.Max(0f, (a.AffinityTo(b) + b.AffinityTo(a)) / 2f));
+                float p = tension * clash * 0.12f * dt * (1.2f - MathF.Max(0f, (a.AffinityTo(b) + b.AffinityTo(a)) / 2f)) * (1.5f - w.Society.Morale); // v13.4 사기
                 if (!_rng.Chance(p)) continue;
                 Stats.Arguments++;
                 a.ChangeAffinity(b, -0.15f); b.ChangeAffinity(a, -0.15f);
@@ -313,8 +325,19 @@ public sealed class LifeSystem
                 w.Log.Add(w.Tick, LogKind.Life, text, a.Id);
                 Life.Diary(w, a, $"{Ko.WaGwa(b.Name)} {about} 두고 다퉜다.");
                 Life.Diary(w, b, $"{Ko.WaGwa(a.Name)} {about} 두고 다퉜다.");
-                // 중재: 그 자리에 사교적인 사람이 있으면 바로 달랜다
-                var mediator = awake.Where(x => x != a && x != b && x.Room == a.Room && x.Traits.Sociability > 0.6f).OrderByDescending(x => x.Traits.Sociability).FirstOrDefault();
+                // v13.4 방침(갈등 해결): 선장 판단 — 선장이 한쪽 손을 들어 준다 (진 쪽은 선장이 서운하다)
+                int conflict = w.Policies["conflict"];
+                if (conflict == 1 && w.Command.Captain is CrewMember cap && cap != a && cap != b && cap.CanAct && _rng.Chance(0.8f))
+                {
+                    var (win, lose) = a.Value == cap.Value || cap.AffinityTo(a) >= cap.AffinityTo(b) ? (a, b) : (b, a);
+                    lose.ChangeAffinity(cap, -0.06f);
+                    win.ChangeAffinity(lose, 0.05f); lose.ChangeAffinity(win, 0.05f);
+                    Stats.Mediations++;
+                    w.Log.Add(w.Tick, LogKind.Life, $"선장 {Ko.IGa(cap.Name)} {win.Name}의 손을 들어 줬다 ({lose.Name}은(는) 서운하다)", cap.Id);
+                    continue;
+                }
+                // 중재: 그 자리에 사교적인 사람이 있으면 바로 달랜다 (그냥 둔다면 아무도 나서지 않는다)
+                var mediator = conflict == 2 ? null : awake.Where(x => x != a && x != b && x.Room == a.Room && x.Traits.Sociability > 0.6f).OrderByDescending(x => x.Traits.Sociability).FirstOrDefault();
                 if (mediator != null && _rng.Chance(0.6f))
                 {
                     Stats.Mediations++;
@@ -381,6 +404,19 @@ public sealed class LifeSystem
                 Life.Diary(w, o, $"{Ko.EulReul(dead.Name)} 추모했다.");
             }
             w.History.Add(w, HistoryKind.Death, $"{room?.Name ?? "식당"}에서 {Ko.EulReul(dead.Name)} 추모했다 — {came}명이 모였다", room);
+            // v13.4 방침(장례)
+            switch (w.Policies["funeral"])
+            {
+                case 0: // 우주장: 에어락으로 별에 — 보내고 나면 마음이 한결 놓인다
+                    foreach (var o in w.Crew.Where(o => !o.Dead && o.GriefUntil > w.Tick)) o.GriefUntil = w.Tick + (o.GriefUntil - w.Tick) / 2;
+                    w.History.Add(w, HistoryKind.Death, $"{Ko.EulReul(dead.Name)} 우주장으로 보냈다 — 에어락 너머 별 사이로", room);
+                    break;
+                case 2: // 재순환: 물과 흙으로 — 배에는 보탬이 되지만 마음이 편치 않은 사람도 있다
+                    w.Water.Level = MathF.Min(w.Water.Capacity, w.Water.Level + 20f);
+                    foreach (var o in w.Crew.Where(o => !o.Dead && o.Value is CrewValue.People or CrewValue.Freedom)) o.Needs.Stress = MathF.Min(1f, o.Needs.Stress + 0.05f);
+                    w.History.Add(w, HistoryKind.Death, $"{Ko.EulReul(dead.Name)} 재순환했다 — 물 20L와 재배대 흙으로", room);
+                    break;
+            }
         }
         // 슬픔: 가까웠던 사람은 한동안 기운이 없다
         foreach (var c in w.Crew)

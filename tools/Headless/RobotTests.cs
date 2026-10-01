@@ -14,7 +14,7 @@ public static partial class Program
         var w = World.CreateDefault(seed, 0, ship);
         Run(w, SimTime.TicksPerDay);
         MeetingSystem.MaidenOff = off;
-        w.Policies.ResetDefaults();
+        Player.Policy(w, "*", 0); // 첫날 회의가 바꾼 방침도 되돌린다 (기록되어 저장·불러오기가 같다)
         return w;
     }
 

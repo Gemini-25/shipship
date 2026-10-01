@@ -297,7 +297,9 @@ public static class Evolution
     public static UpgradePlan? Plan(World w)
     {
         var h = w.History;
-        if (!Peaceful(w) || w.Tick - h.LastUpgradeTick < SimTime.Hours(GapHours)) return null;
+        // v13.4 방침(개조): 보수는 개조 사이를 두 배로, 적극은 절반으로
+        float gap = GapHours * (w.Policies["upgrades"] switch { 0 => 2f, 2 => 0.5f, _ => 1f });
+        if (!Peaceful(w) || w.Tick - h.LastUpgradeTick < SimTime.Hours(gap)) return null;
         var list = Candidates(w)
             .Where(p => !(h.UpgradeVetoedUntil.TryGetValue(p.Target.Key + ":" + p.Kind, out var until) && w.Tick < until))
             .OrderByDescending(p => p.Score).ToList();

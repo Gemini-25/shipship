@@ -108,6 +108,14 @@ public static class Player
         w.CrewCanDie = on;
     }
 
+    /// <summary>v13.4: 방침을 손으로 정한다 (시험·화면 시험 — 기록되어 되감기·불러오기가 같은 틱에 같은 방침으로). id가 "*"이면 모두 처음 값으로.</summary>
+    public static void Policy(World w, string id, int value)
+    {
+        Record(w, "policy", $"{id} {value.ToString(Inv)}");
+        if (id == "*") w.Policies.ResetDefaults();
+        else w.Policies.Set(id, value, "관찰자가 정했다");
+    }
+
     /// <summary>v10.7: 항해 중에 밸런스 수치를 바꾼다 (기록되어 되감기·불러오기가 같은 틱에 같은 값으로 바꾼다).</summary>
     public static bool Tune(World w, string key, float value)
     {
@@ -174,6 +182,9 @@ public static class Player
             case "tune":
                 Tune(w, a[0], float.Parse(a[1], Inv));
                 break;
+            case "policy":
+                Policy(w, a[0], int.Parse(a[1], Inv));
+                break;
             default:
                 throw new FormatException($"모르는 기록: {cmd}");
         }
@@ -188,7 +199,7 @@ public static class Player
 public static class SaveGame
 {
     /// <summary>v8: 설계도(드론 거치대)와 구조가 바뀌어 v7 저장(1)은 같은 역사를 되짚을 수 없다.</summary>
-    public const string Header = "shipsim-save 13";
+    public const string Header = "shipsim-save 14";
 
     public static string Write(World w)
     {
@@ -232,7 +243,7 @@ public static class SaveGame
     {
         var lines = text.Replace("\r", "").Split('\n', StringSplitOptions.RemoveEmptyEntries);
         if (lines.Length > 0 && lines[0].Trim() == "shipsim-save 1") throw new FormatException("v7 저장 파일이다 — v8에서 우주선 설계(드론 거치대)와 구조가 바뀌어 다시 돌릴 수 없다");
-        if (lines.Length > 0 && lines[0].Trim() is "shipsim-save 2" or "shipsim-save 3" or "shipsim-save 4" or "shipsim-save 5" or "shipsim-save 6" or "shipsim-save 7" or "shipsim-save 8" or "shipsim-save 9" or "shipsim-save 10" or "shipsim-save 11" or "shipsim-save 12")
+        if (lines.Length > 0 && lines[0].Trim() is "shipsim-save 2" or "shipsim-save 3" or "shipsim-save 4" or "shipsim-save 5" or "shipsim-save 6" or "shipsim-save 7" or "shipsim-save 8" or "shipsim-save 9" or "shipsim-save 10" or "shipsim-save 11" or "shipsim-save 12" or "shipsim-save 13")
             throw new FormatException("예전 판의 저장 파일이다 — v9(배관)·v9.2(함교의 주 컴퓨터)·v9.3(저출력 운영)·v10.1(통신실, 날아오는 운석)·v10.2(칸막이로 방을 나눔)·v10.3(지문이 더 많은 상태를 본다)·v10.5(설비 단계·방 모듈·연구)·v10.10(선내 로봇·자원 회복)·v11.2(엔진·항로, 사고 종류)·v11.3(난수기)·v12.0(당직 일지·진단)에서 우주선 설계와 규칙이 바뀌어 같은 역사를 다시 돌릴 수 없다");
         if (lines.Length == 0 || lines[0].Trim() != Header) throw new FormatException("저장 파일이 아니다");
         int seed = 0, crew = 0;
@@ -289,6 +300,9 @@ public static class SaveGame
         }
         void F(float v) => I(BitConverter.SingleToInt32Bits(v));
         I(w.Tick);
+        // v13.4 방침과 사기도 지문에 (회의가 바꾼 방침이 저장·불러오기에서 갈라지면 바로 보이게)
+        foreach (var p in PolicySystem.All) I(w.Policies[p.Id]);
+        F(w.Society.Morale);
         foreach (var c in w.Crew)
         {
             F(c.Position.X); F(c.Position.Y);
@@ -444,6 +458,7 @@ public sealed class ReplayRunner
             // v10.6: 모듈을 달면 설비가 늘어난다 — 나중에 생긴 설비의 고장도 기록될 수 있다
             "break" => a.Length >= 1 && int.TryParse(a[0], NumberStyles.Integer, inv, out var id) && id >= 0 && id < w.Ship.Furniture.Count + 500,
             "tune" => a.Length >= 2 && Tuning.Find(a[0]) != null && float.TryParse(a[1], NumberStyles.Float, inv, out _),
+            "policy" => a.Length >= 2 && (a[0] == "*" || PolicySystem.All.Any(p => p.Id == a[0])) && int.TryParse(a[1], NumberStyles.Integer, inv, out _),
             "breaktype" => a.Length >= 2 && (a.Length < 3 || Enum.TryParse<FaultKind>(a[2], out _)),
             "scenario" => Scenarios.All.Any(s => s.Name == c.Arg),
             "scarcity" or "death" => true,

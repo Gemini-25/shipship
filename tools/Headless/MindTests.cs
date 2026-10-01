@@ -106,7 +106,8 @@ public static partial class Program
             // 5) 영웅심: 용감한 사람은 가까운 사람이 진공 속에 쓰러지면 우주복 없이도 뛰어든다
             {
                 var w = DayOne(seed, "Mirinae");
-                var hero = w.Crew.Where(c => c.CanAct && c.IsAwake).OrderByDescending(c => c.Traits.Bravery).First();
+                var hero = w.Crew.Where(c => c.CanAct).OrderByDescending(c => c.Traits.Bravery).First();
+                if (!hero.IsAwake) { hero.EndJob(w, ToilStatus.Interrupted); hero.Pose = Pose.Standing; } // 깨어 있어야 안다
                 var victim = w.Crew.Where(c => c.CanAct && c != hero).OrderBy(c => c.Id).First();
                 hero.ChangeAffinity(victim, 0.8f);
                 foreach (var l in w.Ship.FurnitureOf(FurnitureType.SuitLocker)) l.Storage!.Take(ItemKind.Suit, 99);
@@ -164,5 +165,24 @@ public static partial class Program
         Storyteller.LevelValue = level0;
         Console.WriteLine(_fails == 0 ? "\n✔ 판단·인지·감정 점검 모두 통과" : $"\n✘ {_fails}개 실패");
         return _fails == 0 ? 0 : 1;
+    }
+}
+
+public static partial class Program
+{
+    /// <summary>원인 가리기: 첫날 배 → 몇 시간 → 저장·불러오기 지문 비교 (--replaycheck).</summary>
+    private static int RunReplayCheck(int seed)
+    {
+        foreach (var hours in new[] { 0, 2, 8, 24 })
+        {
+            var w = DayOne(seed, "Mirinae");
+            Run(w, SimTime.Hours(hours));
+            uint h = SaveGame.StateHash(w);
+            var runner = new ReplayRunner(SaveGame.Write(w));
+            while (!runner.Advance(50000)) { }
+            uint r = SaveGame.StateHash(runner.World);
+            Console.WriteLine($"  첫날 + {hours}시간: {(h == r ? "같음" : "다름")} {h:x8}/{r:x8} · 방침 다른 것 {string.Join(",", PolicySystem.All.Where(p => w.Policies[p.Id] != runner.World.Policies[p.Id]).Select(p => $"{p.Id}:{w.Policies[p.Id]}/{runner.World.Policies[p.Id]}"))} · 문화 {w.Meetings.Culture}/{runner.World.Meetings.Culture}");
+        }
+        return 0;
     }
 }

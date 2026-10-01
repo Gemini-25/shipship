@@ -72,6 +72,10 @@ public sealed class VoyageSystem
         for (int i = 0; i < n; i++)
         {
             var kind = (_rng.Range(0, 10)) switch { 0 or 1 or 2 => LegKind.Cruise, 3 or 4 => LegKind.AsteroidBelt, 5 => LegKind.Nebula, 6 => LegKind.RadiationBelt, 7 => LegKind.Derelict, _ => LegKind.Port };
+            // v13.4 방침(항로 성향): 안전은 소행성대·방사선대를 돌아가고, 탐사는 난파선·성운을 찾아간다
+            int route = _w.Policies is PolicySystem pol ? pol["route"] : 0; // (배를 만들 때는 방침보다 항로가 먼저다)
+            if (route == 1 && kind is LegKind.AsteroidBelt or LegKind.RadiationBelt && _rng.Chance(0.6f)) kind = LegKind.Cruise;
+            if (route == 3 && kind == LegKind.Cruise && _rng.Chance(0.4f)) kind = _rng.Chance(0.5f) ? LegKind.Derelict : LegKind.Nebula;
             if (kind == LegKind.Port && Legs.Any(l => l.Kind == LegKind.Port)) kind = LegKind.Cruise;
             string name = kind switch
             {
@@ -83,6 +87,7 @@ public sealed class VoyageSystem
                 _ => "순항",
             };
             float days = kind switch { LegKind.Port => 1f, LegKind.Derelict => 0.5f, LegKind.Cruise => 2f + _rng.Range(0f, 3f), _ => 1.5f + _rng.Range(0f, 2f) };
+            if (route == 2 && kind == LegKind.Cruise) days *= 0.65f; // 빠르게
             Legs.Add(new Leg { Kind = kind, Name = name, Days = days });
         }
         Legs.Add(new Leg { Kind = LegKind.Port, Name = Destination, Days = 1f });
@@ -182,7 +187,7 @@ public sealed class VoyageSystem
             if (have <= keep) continue;
             int sell = have - keep;
             if (!Life.Take(w, k, sell)) continue;
-            Credits += sell * price;
+            Credits += sell * price * (w.Policies["comms"] == 0 ? 1.15f : 1f); // v13.4 방침(교신: 정기 보고) — 기항지가 반긴다
             Sold[k] = Sold.GetValueOrDefault(k) + sell;
             lines.Add($"{ItemKinds.Name(k)} {sell} 팔고");
         }
@@ -256,8 +261,11 @@ public sealed class VoyageSystem
     {
         var w = _w;
         var got = new List<string>();
-        foreach (var (k, n) in new[] { (ItemKind.Plate, 2 + _rng.Range(0, 4)), (ItemKind.Electronics, _rng.Range(0, 3)), (ItemKind.Rare, _rng.Range(0, 2)), (ItemKind.Structure, _rng.Range(0, 3)) })
+        // v13.4 방침(난파선: 적극 건진다) — 안까지 들어가 더 건지지만 다치기도 한다
+        bool bold = w.Policies["wrecks"] == 1;
+        foreach (var (k, n0) in new[] { (ItemKind.Plate, 2 + _rng.Range(0, 4)), (ItemKind.Electronics, _rng.Range(0, 3)), (ItemKind.Rare, _rng.Range(0, 2)), (ItemKind.Structure, _rng.Range(0, 3)) })
         {
+            int n = bold ? (int)MathF.Ceiling(n0 * 1.6f) : n0;
             if (n <= 0) continue;
             int put = 0;
             foreach (var box in w.Ship.Containers.Where(f => f.Storage!.Accepts(k)))
@@ -268,7 +276,12 @@ public sealed class VoyageSystem
             if (put > 0) got.Add($"{ItemKinds.Name(k)} {put}");
         }
         Salvaged++;
-        w.History.Add(w, HistoryKind.Decision, $"{leg.Name}에서 건졌다 — " + (got.Count > 0 ? string.Join(" · ", got) : "쓸 것이 없었다"), null, log: true);
+        w.History.Add(w, HistoryKind.Decision, $"{leg.Name}에서 건졌다 — " + (got.Count > 0 ? string.Join(" · ", got) : "쓸 것이 없었다") + (bold ? " (안까지 들어갔다)" : ""), null, log: true);
+        if (bold && _rng.Chance(0.3f) && w.Crew.Where(c => c.CanAct && !c.IsChild).OrderByDescending(c => c.Traits.Bravery).FirstOrDefault() is CrewMember diver)
+        {
+            NeedsSystem.AddInjury(diver.Vitals, 0.15f, "난파선 안에서 부상");
+            w.History.Add(w, HistoryKind.Damage, $"{Ko.IGa(diver.Name)} 난파선 안에서 다쳤다 — 무너진 격벽에 걸렸다", null, new[] { diver }, log: true);
+        }
         if (_rng.Chance(0.25f)) Hazards.Apply(w, HazardKind.RescueSignal, default, -1); // 난파선 근처의 구조 신호
     }
 

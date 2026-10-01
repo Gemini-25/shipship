@@ -250,6 +250,13 @@ public sealed class MeetingSystem
     private List<CrewMember> Eligible() =>
         _w.Crew.Where(c => !c.Dead && !c.IsChild && c.CanAct && c.IsAwake && !c.Outside && c.Room != null && c.Vitals.Health > 0.35f).ToList();
 
+    /// <summary>v13.4 표를 던지는 사람 (수습 중인 새 승무원은 듣기만 한다).</summary>
+    private List<CrewMember> Voters(List<CrewMember> attendees)
+    {
+        var v = attendees.Where(c => !_w.Society.OnProbation(c)).ToList();
+        return v.Count >= 2 ? v : attendees;
+    }
+
     private Room? PickVenue()
     {
         var w = _w;
@@ -353,6 +360,18 @@ public sealed class MeetingSystem
             Id = Minutes.Count + 1, Kind = kind, Tick = w.Tick, Chair = chair.Id, Venue = venue,
             Attendees = attendees.Select(c => c.Id).ToList(),
         };
+        var listeners = attendees;
+        attendees = Voters(attendees);
+        // v13.4 방침(추모: 기념일): 떠난 사람의 이름을 부른다
+        if (w.Policies["memorial"] == 0 && w.Life.Memorial.Count > 0 && kind == MeetingKind.Regular)
+        {
+            foreach (var c in listeners)
+            {
+                c.Needs.Stress = MathF.Max(0f, c.Needs.Stress - 0.03f);
+                if (c.GriefUntil > w.Tick) c.GriefUntil -= SimTime.Hours(2);
+            }
+            rec.Items.Add(new AgendaItem { Title = $"추모 — {string.Join("·", w.Life.Memorial.TakeLast(3).Select(m => m.name))}", Topic = "memorial", Passed = true, Outcome = "이름을 불렀다" });
+        }
         // 1) 사후 검토: 사고가 남긴 방침 안건
         if (Reviews.Count > 0) rec.Kind = MeetingKind.Review;
         foreach (var (id, to, why) in Reviews.Take(3).ToList()) ResolvePolicy(rec, attendees, chair, id, to, why);

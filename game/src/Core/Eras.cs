@@ -101,10 +101,19 @@ public sealed class EraSystem
             TechField.Fabrication => 0.02f * w.Ship.Machines.Sum(m => m.FaultCount),
             _ => 0f,
         };
-        var pick = options.OrderByDescending(t => Need(t) - 0.01f * t.Cost).ThenBy(t => t.Id).First();
+        // v13.4 방침(연구 방향): 안전 · 효율 · 탐사 쪽 분야를 먼저
+        int dir = w.Policies["research"];
+        float Lean(EraTech t) => dir switch
+        {
+            1 => t.Field is TechField.Habitat or TechField.Medical or TechField.Hull or TechField.Defense or TechField.Life ? 0.6f : 0f,
+            2 => t.Field is TechField.Power or TechField.Fabrication or TechField.Computing or TechField.Food ? 0.6f : 0f,
+            3 => t.Field is TechField.Propulsion or TechField.Sensors or TechField.Robotics ? 0.7f : 0f,
+            _ => 0f,
+        };
+        var pick = options.OrderByDescending(t => Need(t) + Lean(t) - 0.01f * t.Cost).ThenBy(t => t.Id).First();
         Project = pick.Id;
         Progress = 0f;
-        ProjectWhy = Need(pick) > 0.3f ? $"겪은 일 때문에 ({Fields(pick.Field)})" : "다음 차례";
+        ProjectWhy = Need(pick) > 0.3f ? $"겪은 일 때문에 ({Fields(pick.Field)})" : Lean(pick) > 0f ? $"연구 방침 '{w.Policies.Option("research")}'" : "다음 차례";
         w.History.Add(w, HistoryKind.Decision, $"회의: 다음 연구는 {pick.Name} — {pick.Effect} ({ProjectWhy})", null, log: true);
     }
 

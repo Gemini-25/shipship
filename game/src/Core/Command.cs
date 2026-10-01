@@ -82,7 +82,7 @@ public sealed class CommandSystem
     private readonly Dictionary<int, Team> _teamOf = new();
     private readonly Dictionary<int, long> _dutySince = new();
     private readonly Dictionary<int, long> _restUntil = new();
-    private long _nextAssign = -1;
+    private long _nextAssign = -1, _nudgeAt;
     private string _lastPlan = "";
     public int Rotations, WatchRescues, Assignments;
     /// <summary>컴퓨터 지휘에 대한 신뢰 (v13.3에서 헛경보·오판으로 오르내린다).</summary>
@@ -135,6 +135,15 @@ public sealed class CommandSystem
             _lastAssignTick = w.Tick;
             Assign(skill);
             _nextAssign = w.Tick + SimTime.Minutes(skill > 0.6f ? 4f : 8f);
+        }
+        // v13.4 목표 계층: 조를 맡았는데 딴일을 하는 사람은 2분마다 다시 본다 (보류됐던 조의 일이 풀리면 곧장 돌아간다)
+        if (w.Tick >= _nudgeAt)
+        {
+            _nudgeAt = w.Tick + SimTime.Minutes(2);
+            foreach (var (id, t) in _teamOf)
+                if (t.Kind != TeamKind.Reserve && Find(id) is CrewMember m && m.CanAct && m.Job?.Order is WorkOrder jo
+                    && Group(jo.Kind) != t.Kind && jo.Kind != WorkKind.SafetyWatch && t.Watcher != id)
+                    m.NextThinkTick = Math.Min(m.NextThinkTick, w.Tick + 1);
         }
         Watch();
         Rotate();
@@ -215,7 +224,7 @@ public sealed class CommandSystem
         needs = needs.OrderBy(n => n.kind).ThenByDescending(n => n.urgency).ToList();
 
         // 2) 쓸 수 있는 사람
-        var free = w.Crew.Where(c => c.CanAct && !c.IsChild && !c.Outside && !Resting(c) && c.Vitals.Injury < 0.5f).ToList();
+        var free = w.Crew.Where(c => c.CanAct && !c.IsChild && !c.Outside && !Resting(c) && c.Vitals.Injury < 0.5f && !w.Society.Suspended(c)).ToList();
         if (!ComputerCommands && Commander != null) free.Remove(Commander); // 사람 지휘자는 지휘에 매인다 (작은 배면 같이 뛴다)
         if (free.Count <= 2 && Commander != null && !ComputerCommands) free.Add(Commander);
         int risk = w.Policies["risktaking"]; // 0 신중(위험한 방은 2인 1조) · 1 보통(숨 쉴 수 없는 방만) · 2 과감(혼자)
@@ -236,7 +245,9 @@ public sealed class CommandSystem
             }
             // 하던 사람은 그대로 (조가 자꾸 바뀌지 않게)
             var prev = Teams.FirstOrDefault(t => t.Key == n.key);
-            var worker = prev != null && free.FirstOrDefault(c => c.Id == prev.Worker) is CrewMember pw ? pw : free.OrderByDescending(Fit).First();
+            // v13.4 수습 중인 새 승무원은 위험한 조에 넣지 않는다
+            var pool = n.hazard && free.Any(c => !w.Society.OnProbation(c)) ? free.Where(c => !w.Society.OnProbation(c)).ToList() : free;
+            var worker = prev != null && free.FirstOrDefault(c => c.Id == prev.Worker) is CrewMember pw ? pw : pool.OrderByDescending(Fit).First();
             free.Remove(worker);
             var team = new Team { Key = n.key, Kind = n.kind, Room = n.room, Worker = worker.Id, Hazard = n.hazard, Detail = n.detail };
             bool buddy = n.hazard && n.kind != TeamKind.Medical && (risk == 0 || risk == 1 && n.room != null && WorkPlanners.Unsafe(n.room));
@@ -337,7 +348,8 @@ public sealed class CommandSystem
     public float Bias(CrewMember c, WorkOrder o)
     {
         if (!Active || !_teamOf.TryGetValue(c.Id, out var t)) return 0f;
-        float k = ComputerCommands ? 0.35f : Style switch { CaptainStyle.Authoritarian => 0.45f, CaptainStyle.Consultative => 0.35f, _ => 0.18f };
+        // v13.4 목표 계층(맡은 역할 > 일): 조의 일에 끌리는 힘을 키웠다
+        float k = ComputerCommands ? 0.55f : Style switch { CaptainStyle.Authoritarian => 0.7f, CaptainStyle.Consultative => 0.55f, _ => 0.28f };
         k *= _w.Minds.Obedience(c); // v13.3 명령을 따르는 정도
         var group = Group(o.Kind);
         bool mine = group == t.Kind && (t.Room == null || o.Target.CurrentRoom == t.Room || t.Kind is TeamKind.Rescue or TeamKind.Medical && o.Target.Crew?.Id.ToString() == t.Key.Split(':')[1]);

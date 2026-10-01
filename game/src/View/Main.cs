@@ -839,7 +839,7 @@ public partial class Main : Node2D
                 case "--policy": // v13.0 화면 시험: --policy=inertfire:0
                 {
                     var pp = value.Split(':');
-                    if (pp.Length == 2 && int.TryParse(pp[1], out int pv)) Sim.Policies.Set(pp[0], pv, "화면 시험");
+                    if (pp.Length == 2 && int.TryParse(pp[1], out int pv)) Core.Player.Policy(Sim, pp[0], pv); // v13.4 기록된다
                     break;
                 }
                 case "--warpmin": // 몇 분 앞으로

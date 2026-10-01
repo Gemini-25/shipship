@@ -43,7 +43,7 @@ public partial class Hud
         var w = _world;
         var mt = w.Meetings;
         float x0 = Margin, y0 = Margin + 52f + 8f + 40f + 8f + 64f + 10f;
-        float wdt = Mathf.Min(1040f, Screen.X - RightColumnWidth - Margin * 3);
+        float wdt = Mathf.Min(1260f, Screen.X - RightColumnWidth - Margin * 3);
         float height = Screen.Y - y0 - LogHeight - Margin - 10f;
         var card = new Rect2(x0, y0, wdt, height);
         _chronicleRect = card;
@@ -52,55 +52,79 @@ public partial class Hud
         Gfx.Text(this, Fonts.Bold, new Vector2(x, y0 + 30), "방침과 회의", 17, Palette.Text);
         string culture = mt.Culture != "" ? $"이 배의 문화: {mt.Culture}" : "첫 출항 회의 전";
         var cap = w.Command.Captain;
-        Gfx.Text(this, Fonts.Body, new Vector2(x + 110, y0 + 30), $"{culture} · 선장 {cap?.Name ?? "-"} (신뢰 {w.Command.Trust * 100:0}%) · 정기 회의 {mt.Held}번 · 걸른 회의 {mt.Postponed} · 뒤집힌 표결 {mt.Flips} · 바뀐 방침 {w.Policies.Changes.Count}", 11, Palette.TextMuted);
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 110, y0 + 30), Fit($"{culture} · 선장 {cap?.Name ?? "-"} (신뢰 {w.Command.Trust * 100:0}%) · 정기 회의 {mt.Held}번 · 걸른 회의 {mt.Postponed} · 뒤집힌 표결 {mt.Flips} · 바뀐 방침 {w.Policies.Changes.Count}", right - x - 110 - 250, 11, Fonts.Body), 11, Palette.TextMuted);
+        // v13.4 사기: 지금 값과 최근 일주일 (두 시간마다)
+        {
+            var soc = w.Society;
+            float gx = right - 240, gw = 170, gy = y0 + 16;
+            var mc = soc.Morale >= 0.6f ? Palette.Good : soc.Morale >= 0.4f ? Palette.Warning : Palette.Danger;
+            Gfx.Text(this, Fonts.Bold, new Vector2(gx - 74, y0 + 30), $"사기 {soc.Morale * 100:0}%", 12, mc);
+            Gfx.RoundRect(this, new Rect2(gx, gy, gw, 20), new Color(1, 1, 1, 0.04f), 4);
+            var hist = soc.MoraleHistory;
+            for (int i = 1; i < hist.Count; i++)
+            {
+                float x1 = gx + gw * (i - 1) / 83f, x2 = gx + gw * i / 83f;
+                DrawLine(new Vector2(x1, gy + 20 - 20 * hist[i - 1]), new Vector2(x2, gy + 20 - 20 * hist[i]), mc.WithAlpha(0.8f), 1.5f, true);
+            }
+            Gfx.Text(this, Fonts.Body, new Vector2(gx, gy + 32), Fit($"{SocietySystem.MoraleName(soc.Morale)} — {soc.MoraleWhy}", gw + 70, 9, Fonts.Body), 9, Palette.TextMuted);
+        }
         Button(new Rect2(right - 58, y0 + 12, 58, 26), "E 닫기", false, mouse, TogglePolicy, 11);
 
-        // ── 왼쪽: 방침 ──
-        float colL = x, colLW = (right - x) * 0.47f;
-        float ly = y0 + 52;
-        float rowH = Mathf.Clamp((height - 70f - 3 * 22f) / PolicySystem.All.Length, 14f, 21f);
-        foreach (var g in PolicySystem.All.GroupBy(p => p.Area))
+        // ── 왼쪽 두 칸: 방침 (재난·지휘·자원 / 생활·사회·세대선·항해) ──
+        float colW = Mathf.Min(370f, (right - x) * 0.31f);
+        float colL = x;
+        var columns = new[] { new[] { "재난", "지휘", "자원" }, new[] { "생활", "사회", "세대선", "항해" } };
+        int maxRows = columns.Max(cs => PolicySystem.All.Count(p => cs.Contains(p.Area)));
+        float rowH = Mathf.Clamp((height - 78f - 4 * 20f) / maxRows, 13f, 21f);
+        for (int col = 0; col < columns.Length; col++)
         {
-            var ac = AreaColor(g.Key);
-            Gfx.Text(this, Fonts.Bold, new Vector2(colL, ly + 14), g.Key, 12, ac);
-            DrawLine(new Vector2(colL + 34, ly + 9), new Vector2(colL + colLW, ly + 9), ac.WithAlpha(0.25f), 1f);
-            ly += 20;
-            foreach (var p in g)
+            float cx0 = x + col * (colW + 14);
+            float ly = y0 + 52;
+            foreach (var g in PolicySystem.All.Where(p => columns[col].Contains(p.Area)).GroupBy(p => p.Area))
             {
-                int cur = w.Policies[p.Id];
-                var last = w.Policies.Changes.LastOrDefault(c => c.Id == p.Id);
-                bool recent = last != null && w.Tick - last.Tick < SimTime.TicksPerDay;
-                var row = new Rect2(colL, ly, colLW, rowH);
-                bool hover = row.HasPoint(mouse);
-                if (hover) Gfx.RoundRect(this, row, new Color(1, 1, 1, 0.04f), 4);
-                Gfx.Text(this, Fonts.Body, new Vector2(colL + 4, ly + rowH - 5), p.Name, 11, cur != p.Default ? Palette.Text : Palette.TextDim);
-                // 선택지 칩
-                float cx = colL + 96;
-                for (int i = 0; i < p.Options.Length; i++)
+                var ac = AreaColor(g.Key);
+                Gfx.Text(this, Fonts.Bold, new Vector2(cx0, ly + 14), g.Key, 12, ac);
+                DrawLine(new Vector2(cx0 + 44, ly + 9), new Vector2(cx0 + colW, ly + 9), ac.WithAlpha(0.25f), 1f);
+                ly += 18;
+                foreach (var p in g)
                 {
-                    string label = p.Options[i];
-                    float cw = Gfx.Width(Fonts.Body, label, 10) + 10;
-                    if (cx + cw > colL + colLW) break;
-                    bool on = i == cur;
-                    var r = new Rect2(cx, ly + 2, cw, rowH - 4);
-                    Gfx.RoundRect(this, r, on ? ac.WithAlpha(recent ? 0.38f : 0.22f) : new Color(1, 1, 1, 0.025f), 4, on ? ac.WithAlpha(0.8f) : null, 1);
-                    Gfx.Text(this, Fonts.Body, new Vector2(cx + 5, ly + rowH - 5), label, 10, on ? Palette.Text : Palette.TextMuted.WithAlpha(i == p.Default ? 0.9f : 0.6f));
-                    cx += cw + 3;
+                    int cur = w.Policies[p.Id];
+                    var last = w.Policies.Changes.LastOrDefault(c => c.Id == p.Id);
+                    bool recent = last != null && w.Tick - last.Tick < SimTime.TicksPerDay;
+                    var row = new Rect2(cx0, ly, colW, rowH);
+                    bool hover = row.HasPoint(mouse);
+                    if (hover) Gfx.RoundRect(this, row, new Color(1, 1, 1, 0.04f), 4);
+                    Gfx.Text(this, Fonts.Body, new Vector2(cx0 + 4, ly + rowH - 4), p.Name, 10, cur != p.Default ? Palette.Text : Palette.TextDim);
+                    // 선택지 칩
+                    float chx = cx0 + 84;
+                    for (int i = 0; i < p.Options.Length; i++)
+                    {
+                        string label = p.Options[i];
+                        float cw = Gfx.Width(Fonts.Body, label, 9) + 8;
+                        if (chx + cw > cx0 + colW) break;
+                        bool on = i == cur;
+                        var r = new Rect2(chx, ly + 1.5f, cw, rowH - 3);
+                        Gfx.RoundRect(this, r, on ? ac.WithAlpha(recent ? 0.38f : 0.22f) : new Color(1, 1, 1, 0.025f), 4, on ? ac.WithAlpha(0.8f) : null, 1);
+                        Gfx.Text(this, Fonts.Body, new Vector2(chx + 4, ly + rowH - 4.5f), label, 9, on ? Palette.Text : Palette.TextMuted.WithAlpha(i == p.Default ? 0.9f : 0.6f));
+                        chx += cw + 3;
+                    }
+                    if (hover)
+                    {
+                        // 설명 · 정한 날과 찬반 (마우스를 올리면 아래쪽에)
+                        string hist = last != null ? $"{SimTime.Day(last.Tick)}일 {p.Options[last.From]} → {p.Options[last.To]}" + (last.Yes + last.No > 0 ? $" (찬성 {last.Yes} · 반대 {last.No})" : "") + $" — {last.Why}" : "처음 값 그대로";
+                        _policyHover = $"{p.Name}: {p.Note}\n{hist}";
+                    }
+                    ly += rowH;
                 }
-                if (hover)
-                {
-                    // 설명 · 정한 날과 찬반 (마우스를 올리면 아래쪽에)
-                    string hist = last != null ? $"{SimTime.Day(last.Tick)}일 {p.Options[last.From]} → {p.Options[last.To]}" + (last.Yes + last.No > 0 ? $" (찬성 {last.Yes} · 반대 {last.No})" : "") + $" — {last.Why}" : "처음 값 그대로";
-                    _policyHover = $"{p.Name}: {p.Note}\n{hist}";
-                }
-                ly += rowH;
+                ly += 2;
             }
-            ly += 4;
         }
+        float colLW = colW * 2 + 14;
         if (_policyHover != null)
         {
             var lines = _policyHover.Split('\n');
             float hy = card.End.Y - 14 - 15 * lines.Length;
+            Gfx.RoundRect(this, new Rect2(colL - 4, hy - 14, colLW + 8, 15 * lines.Length + 8), Palette.Panel.WithAlpha(0.97f), 6, Palette.PanelBorder, 1);
             foreach (var l in lines)
             {
                 Gfx.Text(this, Fonts.Body, new Vector2(colL, hy), Fit(l, colLW, 10, Fonts.Body), 10, Palette.Accent);

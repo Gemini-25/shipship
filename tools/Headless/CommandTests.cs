@@ -11,6 +11,9 @@ public static partial class Program
         w.Policies.Set("inertfire", 0, "시험");
         w.Policies.Set("vacuumfire", 0, "시험");
         w.Policies.Set("command", command, "시험");
+        // 소화기는 창고 밖에도 (창고에만 있으면 불난 창고에서 꺼낼 수 없다)
+        var spare = w.Ship.Containers.FirstOrDefault(f => f.Room != StoreRoom(w) && f.Storage!.Accepts(ItemKind.Extinguisher) && f.Storage.Free >= 3);
+        spare?.Storage!.Add(ItemKind.Extinguisher, 3);
         BigFire(w, StoreRoom(w), 5);
         var lounge = w.Ship.RoomsOf(RoomType.Lounge).First();
         var wall = w.Ship.Walls.Where(kv => kv.Value.IsHull && Hull.InsideRoom(w.Ship, kv.Key) == lounge).Select(kv => kv.Key).First();
@@ -68,7 +71,14 @@ public static partial class Program
                     watcher = w.Crew.First(c => c.Id == t.Watcher);
                     atDoor = watcher.Job?.Order?.Kind == WorkKind.SafetyWatch && watcher.Room != store && watcher.Job.Current is WaitToil;
                     if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "2")
+                    {
                         Console.WriteLine($"   {SimTime.Clock(w.Tick)} 짝 {watcher.Name} {watcher.Room?.Name} {watcher.Job?.Label} {watcher.Job?.Current?.GetType().Name} · 일꾼 {worker.Name} {worker.Room?.Name} {worker.Job?.Label} · 감시 일감 {w.Board.Open.Count(o => o.Kind == WorkKind.SafetyWatch)} · 평가 {watcher.LastEvaluations?.FirstOrDefault().Reason}");
+                        Console.WriteLine($"      일꾼 마지막 판단 {SimTime.Clock(worker.LastThinkTick)} 다음 {SimTime.Clock(worker.NextThinkTick)} · {string.Join(" / ", worker.LastEvaluations.Take(3).Select(e => $"{e.Activity.Label} {e.Score:0.00} {e.Reason}"))} · 손에 {worker.Carrying?.Kind}");
+                        var dist = w.Paths.Flood(worker.Cell, worker.PathProfile);
+                        Console.WriteLine($"      작업 점수 지금: {new ChoresActivity().Score(worker, w, dist)}");
+                        foreach (var o in w.Board.Open.Where(o => o.Kind is WorkKind.Extinguish or WorkKind.Repair && o.Urgency >= 0.8f).Take(4))
+                            Console.WriteLine($"      {o.Title} 긴급 {o.Urgency:0.00} 맡은 {o.Assignee?.Name} 보류 {o.BlockedReason} {(o.BlockedUntil > w.Tick ? $"~{SimTime.Clock(o.BlockedUntil)}" : "")} 열림 {w.Board.AvailableTo(worker).Contains(o)} · {worker.Name} 끌림 {ChoresActivity.Appeal(worker, w, o, dist, out _):0.00} (지휘 {w.Command.Bias(worker, o):0.00} 위기 {Crisis.Bias(w, o):0.00}) 앎 {w.Minds.Aware(worker, o)}");
+                    }
                 }
                 bool rescued = false; int took = 0;
                 if (atDoor && worker != null && watcher != null)

@@ -274,7 +274,8 @@ public static partial class Council
     internal static float CommsPressure(World w, WorkOrder o) => o.Kind switch
     {
         WorkKind.Distress => 0.65f + (w.Air.Reserve < w.Air.ReserveCapacity * 0.1f || FoodPolicy.FoodDays(w) < 0.5f ? 0.25f : 0.1f),
-        _ => 0.5f + (w.Tick - w.Comms.SignalAt > SimTime.Hours(12) ? 0.1f : 0f),
+        // v13.4 방침(구조 신호): 늘 간다 · 여유 있을 때 · 무시
+        _ => 0.5f + (w.Tick - w.Comms.SignalAt > SimTime.Hours(12) ? 0.1f : 0f) + w.Policies["distress"] switch { 0 => 0.3f, 2 => -0.6f, _ => 0f },
     };
 
     internal static void CommsTerms(World w, CrewMember c, WorkOrder o, List<(float v, string why)> terms, float pressure)

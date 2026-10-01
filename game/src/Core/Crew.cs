@@ -170,7 +170,7 @@ public sealed class CrewMember
     public string Name { get; init; } = "";
     public CrewRole Role { get; init; }
     public Personality Traits { get; init; } = new();
-    public Schedule Schedule { get; init; } = new();
+    public Schedule Schedule { get; set; } = new(); // v13.4 근무 방침으로 다시 짠다
 
     /// <summary>당직을 서는 방 종류.</summary>
     public IReadOnlyList<RoomType> Stations { get; init; } = new List<RoomType>();

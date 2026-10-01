@@ -51,6 +51,8 @@ public sealed class ChoresActivity : Activity
         if (o.Kind == WorkKind.PreventiveCheck && o.Target.Furniture?.Machine?.Omen?.Note is ShiftNote note && !w.Watch.Knows(note, c)) return -1f;
         if (DecisionOnly(o.Kind)) return -1f;
         if (!w.Minds.Aware(c, o)) return -1f; // v13.3 모르는 사고의 일은 하지 않는다
+        // v13.4 근무 박탈 · 은퇴한 노인: 급한 일 말고는 하지 않는다
+        if (o.Urgency < 0.9f && (w.Society.Suspended(c) || c.Age >= 65f && w.Policies["elders"] == 0)) return -1f;
         // v8: 선체 밖 일은 드론이 맡을 수 있으면 드론에게 맡긴다 (드론이 없거나 멈췄을 때만 사람이 나간다)
         bool eva = NeedsEvaField(o) && o.Kind != WorkKind.Rescue;
         if (eva && w.Drones.WillHandle(o)) return -1f;
@@ -82,14 +84,16 @@ public sealed class ChoresActivity : Activity
         if (o.Kind == WorkKind.PreventiveCheck && !emergency && OnShiftStatic(c, w)
             && !SimTime.InWindow(SimTime.HourOfDay(w.Tick) + 1f, c.Schedule.WorkStart, c.Schedule.WorkLength)) score -= 0.15f;
         if (OnShiftStatic(c, w)) score += 0.08f + 0.1f * c.Traits.Diligence;
-        else if (!emergency && !allHands && o.Kind is not (WorkKind.Train or WorkKind.Rehab or WorkKind.Handover or WorkKind.FitProsthetic or WorkKind.RecoverBody)) score -= 0.3f; // v11.3 배우기·재활은 비번에 하는 일
+        else if (!emergency && !allHands && o.Kind is not (WorkKind.Train or WorkKind.Rehab or WorkKind.Handover or WorkKind.FitProsthetic or WorkKind.RecoverBody))
+            score -= w.Policies["leisure"] switch { 0 => 0.15f, 2 => 0.45f, _ => 0.3f }; // v11.3 배우기·재활은 비번에 하는 일 · v13.4 휴식·여가 방침
         // v12.1 인수인계는 몇 분짜리 말 — 성실한 사람일수록 넘기고 나서 쉰다 (자기 전에도)
         if (o.Kind == WorkKind.Handover) score += 0.18f + 0.22f * c.Traits.Diligence;
         if (BedtimeStatic(c, w)) score -= emergency || allHands ? 0.1f : o.Kind == WorkKind.Handover ? 0.15f : 0.5f;
 
         score -= distance / 6000f;
         score -= 0.15f * c.Needs.Stress;
-        if (o.Assignee == c) score += 0.25f; // 하던 일은 마저 끝내고 싶다 (교대 시간이 돼도 바로 손을 놓지 않음)
+        // 하던 일은 마저 끝내고 싶다 (교대 시간이 돼도 바로 손을 놓지 않음) — v13.4 조를 맡았으면 조의 일이 아닌 하던 일은 덜 붙든다
+        if (o.Assignee == c) score += w.Command.TeamOf(c) is Team mt && mt.Kind != TeamKind.Reserve && CommandSystem.Group(o.Kind) != mt.Kind ? 0.05f : 0.25f;
         else if (o.Robot != null) score -= 0.15f; // v10.10: 로봇이 하고 있는 일에 합류 — 더 급한 일이 없을 때만
         if (c.Vitals.Health < 0.5f) score -= 0.3f;
 

@@ -99,7 +99,7 @@ public sealed class MindSystem
         bool bio = w.Automation.Has(ComputerModule.BioMonitor) && w.Automation.MainOnline;
         foreach (var c in w.Crew.Where(c => c.Down && !c.Dead && c.CareBed == null && c.CarriedBy == null))
             list.Add(($"down:{c.Id}", c.Room, c.Outside ? $"{c.Name} 선체 밖" : $"{c.Name} 쓰러짐",
-                bio || (c.Outside ? w.Automation.MainOnline || !w.Automation.Present : AlarmReaches(c.Room)), c)); // 선체 밖은 외부 감지기·카메라
+                bio || (c.Room == null ? w.Automation.MainOnline || !w.Automation.Present : AlarmReaches(c.Room)), c)); // 선체 밖·문간은 외부 감지기·카메라
         _incidents = list;
         return list;
     }
@@ -201,7 +201,7 @@ public sealed class MindSystem
             if (trigger > 0f)
             {
                 float veteran = MathF.Min(0.6f, c.Stats.Emergencies * 0.03f);
-                float p = PanicScale * trigger * MathF.Pow(1f - c.Traits.Calm, 1.5f) * (0.3f + c.Needs.Stress) * (1f - veteran) * (1f - 0.5f * c.Traits.Bravery);
+                float p = PanicScale * trigger * MathF.Pow(1f - c.Traits.Calm, 1.5f) * (0.3f + c.Needs.Stress) * (1f - veteran) * (1f - 0.5f * c.Traits.Bravery) * (1.5f - w.Society.Morale);
                 if (_rng.Chance(p * dt))
                 {
                     m.Panics++;
@@ -227,7 +227,7 @@ public sealed class MindSystem
                 if (!key.StartsWith("down:") || !int.TryParse(key[5..], out int id)) continue;
                 var p = w.Crew.FirstOrDefault(x => x.Id == id);
                 if (p == null || p.Dead || c.AffinityTo(p) < 0.35f) continue;
-                if (p.Room == null || Atmosphere.Danger(p.Room) < 0.3f && !p.Room.Leaking && w.Fire.CountIn(p.Room) == 0) continue;
+                if (p.Room != null && Atmosphere.Danger(p.Room) < 0.3f && !p.Room.Leaking && w.Fire.CountIn(p.Room) == 0) continue; // (방 밖·선체 밖이면 위험한 곳)
                 m.HeroUntil = w.Tick + SimTime.Minutes(20);
                 m.HeroFor = id;
                 Heroics++;
@@ -287,6 +287,7 @@ public sealed class MindSystem
         if (!cmd.ComputerCommands) cmd.Trust = MathF.Max(0f, cmd.Trust - 0.01f);
         w.Log.Add(w.Tick, LogKind.Warning, $"명령 무시 — {CommandSystem.TeamName(t.Kind)}을 두고 {Ko.EulReul(o.Title)} 한다 ({cmd.CommanderName}의 지시보다 제 판단)", c.Id);
         if (c.Mind.Ignored == 1) w.History.Add(w, HistoryKind.Decision, $"{Ko.IGa(c.Name)} {cmd.CommanderName}의 지시를 무시했다 — {CommandSystem.TeamName(t.Kind)} 대신 {o.Title}", c.Room, new[] { c });
+        if (c.Mind.Ignored >= 2) w.Society.Punish(c, "명령 무시", light: false); // v13.4 규칙 위반
     }
 
     // ───────────────────────────── 컴퓨터 신뢰 ─────────────────────────────

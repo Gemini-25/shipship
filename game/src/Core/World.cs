@@ -109,6 +109,8 @@ public sealed class World
     public MeetingSystem Meetings { get; }
     /// <summary>v13.3 판단·인지·감정: 누가 무엇을 아나 · 공황 · 분노 · 영웅심 · 명령 반응 · 컴퓨터 신뢰.</summary>
     public MindSystem Minds { get; }
+    /// <summary>v13.4 사회: 사기 · 일과표 · 베테랑 · 실수 숨기기 · 야간 당직 · 규칙 위반 · 수습.</summary>
+    public SocietySystem Society { get; }
     public FixturesSystem Fixtures { get; }
 
     /// <summary>에어락을 드나든 횟수 (EVA·드론 발진). 한 번마다 공기 탱크가 조금 준다.</summary>
@@ -240,6 +242,7 @@ public sealed class World
         Command = new CommandSystem(this);
         Meetings = new MeetingSystem(this);
         Minds = new MindSystem(this);
+        Society = new SocietySystem(this);
         Automation = new AutomationSystem(this);
         Fixtures = new FixturesSystem(this);
     }
@@ -302,6 +305,7 @@ public sealed class World
             Command.Update(dt); // v13.1 선장·현장 지휘·조 편성
             Meetings.Update(dt); // v13.2 첫 출항 회의 · 정기 회의 · 사후 검토
             Minds.Update(dt); // v13.3 아는 것 · 감정 · 목표 · 명령 반응
+            Society.Update(dt); // v13.4 사기 · 일과표 · 베테랑
             Eras.Update(); // v12.8 시대 기술 (회의가 고른 연구)
             Voyage.Update(dt); // v12.8 항로 구간 · 기항지 · 난파선
             Generation.Update(dt); // v12.9 나이 · 짝 · 출생 · 성장

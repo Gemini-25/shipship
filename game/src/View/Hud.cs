@@ -821,6 +821,9 @@ public partial class Hud : Control
         if (mind.Anger > 0.15f) feel.Add(($"분노 {mind.Anger * 100:0}%", Palette.Warning));
         if (c.GriefUntil > w.Tick) feel.Add(("슬픔", new Color("#90caf9")));
         if (w.Meetings.Guilt(c) > 0.05f) feel.Add(($"죄책감 {w.Meetings.Guilt(c) * 100:0}%", Palette.Danger));
+        if (w.Society.IsVeteran(c)) feel.Add(("베테랑", new Color("#cfd8dc")));
+        if (w.Society.Suspended(c)) feel.Add(("근무 박탈", Palette.Warning));
+        if (w.Society.OnProbation(c)) feel.Add(("수습", Palette.TextMuted));
         float ob = w.Minds.Obedience(c);
         feel.Add(($"지시를 따름 {ob * 100:0}%", ob < 0.45f ? Palette.Warning : Palette.TextMuted));
         float fx = x;
@@ -834,7 +837,24 @@ public partial class Hud : Control
         }
         string knows = mind.Knows.Count == 0 ? "아는 사고 없음" : "아는 사고: " + string.Join(" · ", mind.Knows.Values.OrderBy(k => k.tick).Select(k => $"{k.what} ({MindSystem.SourceName(k.src)})"));
         Gfx.Text(this, Fonts.Body, new Vector2(x, y + 50), Fit(knows, right - x, 10, Fonts.Body), 10, mind.Knows.Count > 0 ? Palette.Warning : Palette.TextMuted);
-        y += 64;
+        // v13.4 일과표: 24시간 띠 (잠 · 근무 · 정기 회의 · 지금)
+        {
+            float sx = x + 38, sw = right - sx, sy = y + 58;
+            Gfx.Text(this, Fonts.Body, new Vector2(x, sy + 9), "일과", 10, Palette.TextMuted);
+            Gfx.RoundRect(this, new Rect2(sx, sy, sw, 10), new Color(1, 1, 1, 0.05f), 3);
+            for (int hh = 0; hh < 24; hh++)
+            {
+                bool sleep = SimTime.InWindow(hh + 0.5f, c.Schedule.SleepStart, c.Schedule.SleepLength);
+                bool work = SimTime.InWindow(hh + 0.5f, c.Schedule.WorkStart, c.Schedule.WorkLength);
+                if (!sleep && !work) continue;
+                DrawRect(new Rect2(sx + sw * hh / 24f, sy + 1, sw / 24f - 1, 8), sleep ? new Color("#5c7cfa").WithAlpha(0.6f) : new Color("#69db7c").WithAlpha(0.55f));
+            }
+            float mh = w.Meetings.Hour;
+            DrawRect(new Rect2(sx + sw * mh / 24f, sy - 2, 2, 14), new Color("#ffd43b"));
+            float now = SimTime.HourOfDay(w.Tick);
+            DrawLine(new Vector2(sx + sw * now / 24f, sy - 3), new Vector2(sx + sw * now / 24f, sy + 13), Palette.Text, 1.5f);
+        }
+        y += 82;
 
         SectionTitle(x, y + 10, "행동 후보와 점수");
         long ago = (_world.Tick - c.LastThinkTick) * 60 / SimTime.TicksPerHour;

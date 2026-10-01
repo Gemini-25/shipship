@@ -46,8 +46,12 @@ public sealed class GenerationSystem
             {
                 // 놀면서 배운다 — 학교가 있으면 두 배
                 float school = Facilities.Best(w.Ship, "learning").factor;
+                // v13.4 방침(아이 교육): 실무는 부모 곁에서 더 빨리 · 학교는 고르게 · 자유는 덜 배우지만 덜 지친다
+                int edu = w.Policies["education"];
+                float rate = edu == 0 ? 1.3f : edu == 2 ? 0.7f : 1f + school;
                 for (int s = 0; s < c.SkillLevels.Length; s++)
-                    c.SkillLevels[s] = MathF.Min(0.5f, c.SkillLevels[s] + years * 0.02f * (1f + school));
+                    c.SkillLevels[s] = MathF.Min(edu == 0 ? 0.6f : 0.5f, c.SkillLevels[s] + years * 0.02f * rate);
+                if (edu == 2) c.Needs.Stress = MathF.Max(0f, c.Needs.Stress - 0.002f * dt);
             }
             c.Vitals.Frailty = Math.Clamp((c.Age - 68f) / 35f, 0f, 0.6f);
             if (c.Age > 70f)
@@ -64,6 +68,8 @@ public sealed class GenerationSystem
         int beds = w.Ship.FurnitureOf(FurnitureType.Bed).Count() + w.Ship.FurnitureOf(FurnitureType.Cot).Count();
         int alive = w.Crew.Count(c => !c.Dead);
         bool room = alive < Math.Min(World.MaxCrew, beds + 2) && w.Ship.CountStored(ItemKind.Meal) + w.Ship.CountStored(ItemKind.Produce) > alive * 3;
+        // v13.4 방침(짝·출산: 수용력에 맞춘 허가) — 빈 침대가 있고 먹을 것이 두 배로 넉넉할 때만
+        if (w.Policies["birth"] == 1) room &= alive < beds && w.Ship.CountStored(ItemKind.Meal) + w.Ship.CountStored(ItemKind.Produce) > alive * 6;
         foreach (var a in adults)
         {
             if (a.Partner is int pid)

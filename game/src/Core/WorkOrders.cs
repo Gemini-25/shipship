@@ -961,7 +961,8 @@ public sealed partial class WorkBoard
             bool haveItem = (m.Spec.ServiceItem is not ItemKind item || ship.CountStored(item) > 0) && !Adaptation.Rationed(w, m);
             bool sealedOff = m.Body.Room.Abandoned; // 포기한 구획의 설비는 핵심 설비 고장만 우주복 입고 간다
             // 소모품이 없으면 임시 정비(마모를 0.35까지만 낮춤)밖에 못 하므로, 0.5는 넘어야 손을 댄다
-            if (!sealedOff && m.Faults.Count == 0 && m.Wear >= (haveItem ? 0.35f : 0.5f))
+            // v13.4 방침(정비: 고장 나면) — 거의 닳아 빠질 때까지 손대지 않는다
+            if (!sealedOff && m.Faults.Count == 0 && m.Wear >= (w.Policies["maint"] == 1 ? 0.88f : haveItem ? 0.35f : 0.5f))
             {
                 float u = 0.15f + 0.7f * (m.Wear - 0.35f) / 0.65f + (m.Spec.Critical ? 0.1f : 0f);
                 Post(WorkKind.Maintain, t, u, m.Spec.Skill, haveItem ? $"마모 {m.Wear * 100:0}%"

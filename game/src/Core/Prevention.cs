@@ -243,8 +243,8 @@ public sealed partial class WorkBoard
             string state = n.Confirmed is OmenCause done
                 ? $"확인: {Causes.Name(done)}" + (Causes.NeedsParts(done) ? " — " + string.Join(" + ", Causes.Spec(done).Fix.Select(x => $"{ItemKinds.Name(x.kind)} {x.count}")) : " — 부품 없이")
                 : n.Suspect is OmenCause s ? $"관측: {n.Observation} · 판단: {Causes.Name(s)} 의심 ({n.Confidence * 100:0}%)" : $"관측: {n.Observation} · 원인 모름";
-            post(WorkKind.PreventiveCheck, WorkTarget.Of(m.Body), 0.45f + 0.4f * o.Level(w.Tick) + (m.Spec.Critical ? 0.15f : 0f), m.Spec.Skill,
-                $"{state} · {left:0}시간쯤 남음");
+            post(WorkKind.PreventiveCheck, WorkTarget.Of(m.Body), (0.45f + 0.4f * o.Level(w.Tick) + (m.Spec.Critical ? 0.15f : 0f)) * (w.Policies["maint"] == 1 ? 0.5f : 1f), m.Spec.Skill,
+                $"{state} · {left:0}시간쯤 남음"); // v13.4 방침(정비: 고장 나면)이면 전조 점검은 뒤로
         }
         ScanSafety(post);
         if (w.PreventionBlind) return;
@@ -289,7 +289,10 @@ public sealed partial class WorkBoard
         foreach (var c in w.Crew)
         {
             // 훈련 효과(열흘)가 사흘 남았을 때부터 다시 (처음 훈련은 항해 사흘째부터)
-            if (!c.CanAct || w.Tick - w.StartTickOf < SimTime.Hours(72) || w.Tick < c.DrilledUntil - SimTime.Hours(72)) continue;
+            // v13.4 방침(비상 훈련): 없음 · 주 1회(지금) · 이틀마다
+            int drills = w.Policies["drills"];
+            if (drills == 0) break;
+            if (!c.CanAct || w.Tick - w.StartTickOf < SimTime.Hours(72) || w.Tick < c.DrilledUntil - SimTime.Hours(drills == 2 ? 192 : 72)) continue;
             post(WorkKind.Drill, WorkTarget.OfRoom(airlock), 0.22f, Skill.Mechanics, $"{c.Name} · 우주복 착용·격벽·소화 훈련", circuit: c.Id);
         }
     }

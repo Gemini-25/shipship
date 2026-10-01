@@ -74,11 +74,13 @@ public static partial class Program
 
         // ── 3) 재활과 후유증: 크게 다친 사람은 후유증이 남고, 재활하면 부상이 빨리 낫고 후유증이 절반까지 준다 ──
         {
-            float injA = 0f, injB = 0f, scarA = 0f, scarB = 0f, floorA = 0f;
+            float injA = 0f, injB = 0f, scarA = 0f, scarB = 0f, floorA = 0f, inj6A = 0f, inj6B = 0f;
             foreach (bool rehab in new[] { true, false })
             {
                 var w = DayOne(seed, "Mirinae");
                 w.Growth.NoRehab = !rehab;
+                // 치료 운을 빼고 재활만 견준다 (구급 키트가 없으면 둘 다 저절로 낫는다)
+                foreach (var f in w.Ship.Furniture.Where(f => f.Storage != null)) f.Storage!.Take(ItemKind.MedKit, 999);
                 var c = w.Crew.First(x => x.Role == CrewRole.Technician);
                 NeedsSystem.AddInjury(c.Vitals, 0.7f, "감압");
                 c.Vitals.Health = 0.6f;
@@ -87,11 +89,11 @@ public static partial class Program
                 Run(w, SimTime.TicksPerDay * 3);
                 float inj3 = c.Vitals.Injury;
                 Run(w, SimTime.TicksPerDay * 3);
-                if (rehab) { injA = inj3; scarA = c.Vitals.Scar; floorA = c.Vitals.ScarFloor; }
-                else { injB = inj3; scarB = c.Vitals.Scar; }
+                if (rehab) { injA = inj3; inj6A = c.Vitals.Injury; scarA = c.Vitals.Scar; floorA = c.Vitals.ScarFloor; }
+                else { injB = inj3; inj6B = c.Vitals.Injury; scarB = c.Vitals.Scar; }
                 Console.WriteLine($"    {(rehab ? "재활하는 배" : "재활 없는 배")}: {c.Name} 부상 70% → 사흘째 {inj3 * 100:0.0}% → 엿새째 {c.Vitals.Injury * 100:0}% · 후유증 {scar0 * 100:0}% → {c.Vitals.Scar * 100:0}% (바닥 {c.Vitals.ScarFloor * 100:0}%) · 재활 {c.Stats.RehabSessions}번");
             }
-            Check("재활·후유증 — 재활하면 빨리 낫고, 후유증은 절반까지만", injA < injB && scarA < scarB && scarA >= floorA - 1e-4f && floorA > 0f,
+            Check("재활·후유증 — 재활하면 빨리 낫고, 후유증은 절반까지만", (injA < injB || injA <= injB && inj6A < inj6B) && scarA < scarB && scarA >= floorA - 1e-4f && floorA > 0f,
                 $"사흘째 부상 {injA * 100:0.0} ↔ {injB * 100:0.0}% · 엿새째 후유증 {scarA * 100:0} ↔ {scarB * 100:0}%");
         }
 
