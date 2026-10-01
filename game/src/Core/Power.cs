@@ -269,6 +269,7 @@ public sealed class PowerGrid
         foreach (var m in ship.Machines) m.Parked = false;
         ParkedCount = 0;
         w.Cosmic.Park(); // v18.13 대재난 대비로 꺼 둔 설비
+        w.RoomPlans.Park(); // v16.17 옮기려고 떼어 낸 설비는 다시 이을 때까지 돌지 않는다
         if (!Brownout) { _parkedPump = _parkedO2 = -1; return; }
 
         // 냉각 펌프: 분기 하나로 원자로 출력을 식힐 수 있으면 약한 쪽 분기의 펌프를 내린다

@@ -162,8 +162,8 @@ public static class Props
     /// <summary>그 방에 어울리나.</summary>
     public static bool Fits(PropPlace p, Room r) => p switch
     {
-        PropPlace.Rest => r.Type is RoomType.Lounge or RoomType.Mess || RoomCatalog.Has(r.Kind, RoomTag.Rest),
-        PropPlace.Sleep => r.Type == RoomType.Quarters || RoomCatalog.Has(r.Kind, RoomTag.Sleep),
+        PropPlace.Rest => r.Type is RoomType.Lounge or RoomType.Mess || RoomCatalog.Has(r.Kind, RoomTag.Rest) || r.UsedAs is RoomType.Lounge or RoomType.Mess, // v16.17 쓰임
+        PropPlace.Sleep => (r.Type == RoomType.Quarters || RoomCatalog.Has(r.Kind, RoomTag.Sleep)) && r.UsedAs is null or RoomType.Quarters || r.UsedAs == RoomType.Quarters,
         PropPlace.Galley => r.Type is RoomType.Galley or RoomType.Mess,
         PropPlace.Work => r.Type is RoomType.Workshop or RoomType.Engine or RoomType.Power or RoomType.Cooling or RoomType.LifeSupport or RoomType.Reactor or RoomType.Storage,
         PropPlace.Command => r.Type is RoomType.Bridge or RoomType.Comms,
