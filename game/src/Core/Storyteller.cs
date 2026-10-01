@@ -174,6 +174,7 @@ public sealed class Storyteller
             pool.Add((s.Kind.ToString(), wt));
         }
         if (p == StoryPersona.Random) for (int i = 0; i < pool.Count; i++) pool[i] = (pool[i].key, 4f);
+        for (int i = 0; i < pool.Count; i++) pool[i] = (pool[i].key, pool[i].weight * w.Voyage.HazardMul(pool[i].key) * w.Eras.RiskMul(pool[i].key)); // v12.8 구간 · 새 기술의 위험
         float total = pool.Sum(x => x.weight), roll = _rng.Float() * total;
         foreach (var x in pool) { roll -= x.weight; if (roll <= 0f) return (x.key, null, Why(p, tension, cap)); }
         return (pool[^1].key, null, Why(p, tension, cap));

@@ -92,7 +92,7 @@ public sealed class SensorSystem
     public Room? CommsRoom => _w.Ship.RoomsOf(RoomType.Comms).FirstOrDefault();
 
     /// <summary>센서가 내는 몫 0~1 (전기·고장·마모). 방을 버렸거나 떨어져 나가면 0.</summary>
-    public float Quality => Array is Furniture f && f.Machine is Machine m && !f.Room.Abandoned ? m.Efficiency * _w.Hazards.SensorFactor * _w.Exterior.AntennaFactor : 0f; // v12.6 안테나가 상하면 흐리다 // v11.2 태양 폭풍이면 잡음
+    public float Quality => Array is Furniture f && f.Machine is Machine m && !f.Room.Abandoned ? m.Efficiency * _w.Hazards.SensorFactor * _w.Exterior.AntennaFactor * _w.Voyage.SensorMul * (_w.Eras.Has("quantumsense") ? 1.3f : 1f) : 0f; // v12.6 안테나 · v12.8 성운·양자 센서 // v11.2 태양 폭풍이면 잡음
 
     public bool Online => Quality > 0.05f;
 

@@ -20,6 +20,7 @@ public static class Incidents
     /// </summary>
     public static Impact? Meteor(World w, Cell target, float size, WarnLevel warned = WarnLevel.None, float leadMinutes = 0f)
     {
+        if (w.Eras.Has("forcefield")) size *= 0.6f; // v12.8 역장
         // v12.2 인과 사슬: 이 운석이 뿌리 (운석우의 한 알이면 운석우의 자식) — 이 안에서 생긴 피해는 모두 이 운석의 자식
         var hit = w.Ship.RoomAt(target) ?? w.Ship.LiveRooms.Where(r => !r.Detached).OrderBy(r => (r.Center - target.Center).LengthSquared()).FirstOrDefault();
         string text = $"{(size >= 0.7f ? "큰" : size >= 0.4f ? "중간" : "작은")} 운석 충돌 — {hit?.Name ?? "선체"}";

@@ -121,6 +121,7 @@ public sealed class AmbienceSystem
             var tags = RoomCatalog.Tags(room.Kind);
             if ((tags & RoomTag.Quiet) != 0) { n *= 0.35f; v *= 0.6f; }
             // 태양 폭풍: 바깥벽에 닿은 방이 가장 세다. 대피소·물벽은 거의 막는다
+            if (storm > 0f && w.Eras.Has("magshield")) storm *= 0.5f; // v12.8 자기장 차폐
             if (storm > 0f)
             {
                 float sr = storm * Exposure(room);
@@ -145,7 +146,7 @@ public sealed class AmbienceSystem
             if (c.Dose > 1f && w.Rng.Chance(0.05f * dt)) NeedsSystem.AddInjury(c.Vitals, 0.02f * MathF.Min(3f, c.Dose), "방사선");
             // 체력 단련: 운동하면 오르고 가만있으면 아주 천천히 빠진다
             float gym = c.Job?.Activity is RelaxActivity && c.Pose == Pose.Sitting ? Facilities.Factor(c.Room, "exercise") : 0f;
-            c.Fitness = Math.Clamp(c.Fitness + (gym > 0f ? 0.08f * gym : -0.004f) * dt, 0f, 1f);
+            c.Fitness = Math.Clamp(c.Fitness + (gym > 0f ? 0.08f * gym : -0.004f * (w.Eras.Has("gravity") ? 0.3f : 1f)) * dt, 0f, 1f); // v12.8 인공 중력
         }
     }
 

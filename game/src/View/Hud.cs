@@ -97,6 +97,7 @@ public partial class Hud : Control
 
         DrawLog();
         DrawMinimap(); // v11.3
+        if (MinimapOpen && !ChronicleOpen && !TechOpen && _minimapRect.Size.X > 0f) DrawVoyageBar(_minimapRect); // v12.8 항로
         DrawIncidentCards(mouse); // v12.2 사고 카드
         if (_world.Causes.Notable().Any()) DrawTimeBar(mouse); // v12.2 시간 막대
         if (ControlOpen) DrawControl(mouse); // v12.5 관제 화면
@@ -105,6 +106,7 @@ public partial class Hud : Control
         else if (TechOpen) DrawTech(mouse);
         DrawHints();
         DrawBanners();
+        DrawSummaryCard(mouse); // v12.8 요약 진행
         if (_hazardMenu) DrawHazardMenu(_hazardMenuAt, mouse); // v11.2 떠 있는 메뉴는 맨 위에
     }
 

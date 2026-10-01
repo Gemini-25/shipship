@@ -178,6 +178,7 @@ public sealed class LifeSystem
         float skill = c.SkillLevel(o.Skill);
         if (skill < 0.35f) { p *= 1.8f; reasons.Add((1.8f, $"서툴러서 ({Skills.Name(o.Skill)} {skill * 100:0}%)")); }
         p *= 1.2f - 0.5f * c.Traits.Calm;
+        if (_w.Eras.Has("checklist")) p *= 0.7f; // v12.8 점검표 문화
         if (Life.Has(c, Habit.Messy)) { p *= 1.4f; reasons.Add((1.4f, "덜렁대서")); }
         if (Life.Has(c, Habit.Worrier) || Life.Has(c, Habit.NeatFreak)) p *= 0.75f;
         if (c.Job?.Urgent == true) { p *= 1.5f; reasons.Add((1.5f, "급하게 하다가")); }

@@ -79,7 +79,7 @@ public sealed class MachineSystem
             bool makeshift = false;
             foreach (var f in m.Faults) if (f.Stage > 0) makeshift = true;
             if (makeshift) rate *= 2f; // 임시로 살린 설비는 무리해서 돈다
-            m.Wear = MathF.Min(1f, m.Wear + rate * dt);
+            m.Wear = MathF.Min(1f, m.Wear + rate * (_world.Eras.Has("nanorepair") ? 0.75f : 1f) * dt); // v12.8 나노 수리
 
             // 임시 우회는 풀릴 수 있다
             if (makeshift)
@@ -163,7 +163,7 @@ public sealed class MachineSystem
             return;
         }
         float rate = dt / FoodChain.GrowHours * m.Efficiency * m.Rating * (1f + Modules.Bonus(_world, FurnitureType.LedPanel, m.Body.Room))
-                     * (0.45f + 0.55f * crop.Care) * (water ? 1f : 0f) * AmbienceSystem.CropFactor(m.Body.Room); // v12.6 진동·방사선
+                     * (0.45f + 0.55f * crop.Care) * (water ? 1f : 0f) * AmbienceSystem.CropFactor(m.Body.Room) * (_world.Eras.Has("genecrops") ? 1.2f : 1f); // v12.6 진동·방사선 · v12.8 개량 작물
         crop.Growth = MathF.Min(1f, crop.Growth + rate);
         if (crop.Ripe) _world.Board.RequestScan();
     }

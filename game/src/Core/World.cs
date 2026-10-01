@@ -137,6 +137,8 @@ public sealed class World
     public AmbienceSystem Ambience { get; }
     public ExteriorSystem Exterior { get; }
     public LifeSystem Life { get; }
+    public EraSystem Eras { get; }
+    public VoyageSystem Voyage { get; }
     public Storyteller Story { get; }
 
     /// <summary>v12.1 정비 절차 통계.</summary>
@@ -216,6 +218,8 @@ public sealed class World
         Ambience = new AmbienceSystem(this);
         Exterior = new ExteriorSystem(this);
         Life = new LifeSystem(this);
+        Eras = new EraSystem(this);
+        Voyage = new VoyageSystem(this);
         Story = new Storyteller(this, seed);
         Piping = new PipeNetwork(this);
         Automation = new AutomationSystem(this);
@@ -277,6 +281,8 @@ public sealed class World
             Ambience.Update(dt); // v12.6 인접성: 소음·진동·냄새·방사선
             Exterior.Update(dt); // v12.6 외부 설비: 안테나·태양 날개 (드론이 고친다)
             Life.Update(dt); // v12.7 실수·말다툼·추모·자격
+            Eras.Update(); // v12.8 시대 기술 (회의가 고른 연구)
+            Voyage.Update(dt); // v12.8 항로 구간 · 기항지 · 난파선
             Volatile.Resume();
             Procedures.Update(this); // v12.1 재조립 불량이 돌아온다
             Causes.Update(); // v12.2 인과 사슬: 번진 상태를 원인에 잇고, 풀린 상태에 복구를 붙인다

@@ -141,7 +141,7 @@ public sealed class ExteriorSystem
             if (drone == null && !crew) continue;
             TakePlate();
             f.RepairBy = drone != null ? drone.Name : "선외 작업조";
-            f.RepairDone = w.Tick + SimTime.Hours(drone != null ? 1.5f : 2.5f);
+            f.RepairDone = w.Tick + SimTime.Hours(drone != null ? (w.Eras.Has("dronenet") ? 0.8f : 1.5f) : 2.5f); // v12.8 드론 편대
             if (drone != null) { DroneRepairs++; drone.Battery = MathF.Max(0.2f, drone.Battery - 0.3f); }
             w.Log.Add(w.Tick, LogKind.Ship, $"{Ko.IGa(f.RepairBy)} {Ko.EulReul(f.Name)} 고치러 나갔다 ({f.Condition * 100:0}%)");
         }

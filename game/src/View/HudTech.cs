@@ -123,6 +123,7 @@ public partial class Hud
             Gfx.Text(this, Fonts.Body, new Vector2(x, card.End.Y - 12), _techHover, 11, Palette.Accent);
             _techHover = null;
         }
+        DrawEraCard(card); // v12.8 시대 기술
     }
 
     private string? _techHover;

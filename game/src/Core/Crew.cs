@@ -225,6 +225,8 @@ public sealed class CrewMember
     public long LastVisited { get; set; } = -1_000_000;
     public bool Laid { get; set; }
     public bool Profiled { get; set; }
+    /// <summary>v12.8 기항지에서 탄 사람 (어디서).</summary>
+    public string? Joined { get; set; }
 
     /// <summary>v12.6 쌓인 방사선 (대략 Sv) — 1 넘으면 몸이 상하기 시작한다. 체력 단련(0~1)은 운동으로 오르고 안 하면 천천히 빠진다.</summary>
     public float Dose { get; set; }

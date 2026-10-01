@@ -753,6 +753,7 @@ public sealed partial class HazardSystem
             if (s.Kind == HazardKind.SolarStorm && StormActive) continue;
             pool.Add((s.Kind.ToString(), s.Weight));
         }
+        for (int i = 0; i < pool.Count; i++) pool[i] = (pool[i].key, pool[i].weight * w.Voyage.HazardMul(pool[i].key) * w.Eras.RiskMul(pool[i].key)); // v12.8 구간 · 새 기술의 위험
         for (int tries = 0; tries < 6; tries++)
         {
             float total = pool.Sum(p => p.weight), roll = rr.Float() * total;

@@ -228,6 +228,7 @@ public partial class Main : Node2D
             // 불러오는 중: 한 프레임에 몇천 틱씩 빨리 감는다 (역사가 화면에서 다시 흐른다)
             FinishReplay(rr.Advance(9000));
         }
+        else if (StepSummary()) { WatchAlerts(); } // v12.8 요약 진행: 화면 없이 빨리 감는다
         else if (!Paused)
         {
             _accumulator += delta * Speeds[SpeedIndex] * (SlowMotion ? 0.3 : 1.0) * SimTime.TicksPerSecond; // v12.2 결정적 순간엔 느리게
@@ -454,6 +455,7 @@ public partial class Main : Node2D
                 case Key.P: ToggleTool(IncidentTool.PipeBurst); break;
                 case Key.J: Hud.ToggleChronicle(); break;
                 case Key.K: Hud.ToggleChain(); break;
+                case Key.U: ToggleSummary(); break; // v12.8 요약 진행
                 case Key.L: ToggleHighlight(); break;
                 case Key.I: Hud.ToggleCodex(); break;
                 case Key.Y: Hud.ToggleControl(); break;
@@ -959,6 +961,9 @@ public partial class Main : Node2D
                     break;
                 case "--view":
                     if (Enum.TryParse<ViewMode>(value, out var vm)) ViewMode = vm;
+                    break;
+                case "--summary": // v12.8 시험: 시작하자마자 요약 진행
+                    CallDeferred(nameof(StartSummaryDeferred), float.Parse(value, CultureInfo.InvariantCulture));
                     break;
                 case "--view2":
                     if (Enum.TryParse<ViewMode>(value, out var vm2)) SecondaryView = vm2;

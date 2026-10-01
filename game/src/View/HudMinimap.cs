@@ -14,6 +14,8 @@ public partial class Hud
 
     public void ToggleMinimap() => MinimapOpen = !MinimapOpen;
 
+    private Rect2 _minimapRect;
+
     private void DrawMinimap()
     {
         if (!MinimapOpen || ChronicleOpen || TechOpen) return;
@@ -25,6 +27,7 @@ public partial class Hud
         var card = new Rect2(Margin + 470f + 10f, Screen.Y - Margin - LogHeight, size.X + 24f, size.Y + 36f);
         Card(card);
         _minimapRight = card.End.X;
+        _minimapRect = card;
         Gfx.Text(this, Fonts.Bold, new Vector2(card.Position.X + 12, card.Position.Y + 18), "지도", 11, Palette.TextDim);
         Gfx.TextRight(this, Fonts.Body, new Vector2(card.End.X - 12, card.Position.Y + 18), "G", 10, Palette.TextMuted);
         var origin = card.Position + new Vector2(12f, 26f);
