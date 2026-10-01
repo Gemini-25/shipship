@@ -48,7 +48,7 @@ public static partial class Program
                 for (int i = 0; i < w.Ship.Grid.CellCount; i++) { var cc = w.Ship.Grid.CellAt(i); if (fl.Reachable(cc)) n1++; if (fd.Reachable(cc)) n2++; }
                 Console.WriteLine($"   대기 {c.Name} {c.Cell} 칸 {w.Ship.Grid.Kind(c.Cell)} 걸을 수 {w.Ship.IsWalkable(c.Cell)} · 닿는 칸 {n1}/{n2} · 막힘 {c.PathBlocked} · 두려움 {c.Memory.AnyFear} · 문 {w.Ship.DoorAt(c.Cell)?.Cell} 가구 {w.Ship.FurnitureAt(c.Cell)?.Label}");
                 var messC = w.Ship.RoomsOf(RoomType.Mess).First().Cells.First(w.Ship.IsOpenFloor);
-                var pth = w.Paths.Find(c.Cell, messC);
+                var pth = w.Paths.Find(c.Cell, messC, c.PathProfile);
                 Console.WriteLine($"      식당 길 {pth?.Count}: " + string.Join(" ", (pth ?? new List<Cell>()).Where(x => w.Ship.DoorAt(x) != null).Select(x => $"{x}[{w.Ship.DoorAt(x)!.RoomA?.Name}/{w.Ship.DoorAt(x)!.RoomB?.Name} 잠김 {w.Ship.DoorAt(x)!.Locked}]")) + $" · 지나는 방 {string.Join(">", (pth ?? new List<Cell>()).Select(x => w.Ship.RoomAt(x)?.Name).Where(n => n != null).Distinct())}");
                 foreach (var e in w.Log.Entries.Where(e => e.CrewId == c.Id).TakeLast(6)) Console.WriteLine($"      {SimTime.HourOfDay(e.Tick):0.00}시 {e.Text}");
                 foreach (var d in w.Ship.Doors.Where(d => Math.Abs(d.Cell.X - c.Cell.X) + Math.Abs(d.Cell.Y - c.Cell.Y) <= 3)) Console.WriteLine($"      곁의 문 {d.Cell} {d.RoomA?.Name}/{d.RoomB?.Name} 잠김 {d.Locked} 용접 {d.Welded} 열림 {d.Openness:0.0} 격벽 {d.Bulkhead} 영역 {w.Body.DoorOf(d)?.Zone}");
