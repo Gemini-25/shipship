@@ -305,7 +305,7 @@ public sealed class SmellSystem
                 c.Needs.Food = MathF.Max(0f, c.Needs.Food - 0.04f * h); // 식욕: 냄새를 맡으면 배가 더 빨리 고파진다 (끼니를 당긴다)
             }
             if (Level(room, SmellKind.Coffee) * nose > Threshold(SmellKind.Coffee)) c.Needs.Stress = MathF.Max(0f, c.Needs.Stress - 0.01f * h);
-            if (room.Smell * nose > 0.4f && (!_complained.TryGetValue(c.Id, out var t) || w.Tick - t > SimTime.Hours(6)) && R.Chance(MathF.Min(1f, 1.5f * h)))
+            if (room.Smell * nose > Threshold(SmellKind.Foul) && (!_complained.TryGetValue(c.Id, out var t) || w.Tick - t > SimTime.Hours(6)) && R.Chance(MathF.Min(1f, 1.5f * h)))
                 Complain(c, room);
         }
         if (_checking.Count > 0)
