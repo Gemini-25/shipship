@@ -59,10 +59,16 @@ public sealed record CosmicSpec(
     public CosmicFx AllFx => Stages.Aggregate(CosmicFx.None, (a, s) => a | s.Fx);
     public bool Has(CosmicFx f) => (AllFx & f) != 0;
     public float Span => Stages.Max(s => s.At + s.Hours);
+    /// <summary>v16.18 사고 다섯 규모 (개인 · 방 · 계통 · 배 · 우주급) — 이 30종은 모두 우주급.</summary>
+    public string Scale => CosmicCatalog.Scale;
 }
 
 public static class CosmicCatalog
 {
+    /// <summary>사고 규모 표시 (v16.18에서 다섯 규모로 묶는다): 이 목록은 모두 우주급.</summary>
+    public const string Scale = "우주급";
+    public const string ScaleId = "cosmic";
+
     private static CosmicStage S(float at, float h, CosmicFx fx, float p, string text, bool close = false) => new(at, h, fx, p, text, close);
     private const CosmicFx L = CosmicFx.Light, R = CosmicFx.Radiation, H = CosmicFx.Heat, C = CosmicFx.Cold, K = CosmicFx.Shock, E = CosmicFx.Emp,
         D = CosmicFx.Debris, B = CosmicFx.Blind, N = CosmicFx.Nav, T = CosmicFx.Tidal, Q = CosmicFx.Quake, X = CosmicFx.Strike, P = CosmicFx.Plasma, A = CosmicFx.Hostile;

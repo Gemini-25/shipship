@@ -642,6 +642,7 @@ public partial class ShipView : Node2D
         PaintNavLights(ci); // v10.9 항해등
         PaintRadiators(ci); // v9 선체 밖 방열판
         PaintExterior(ci); // v12.6 안테나·태양 날개
+        PaintCosmicUnder(ci); // v18.13 우주 대재난: 다가오는 것 · 자기력선 · 조석 · 스치는 잔해
         PaintScorch(ci);
         PaintBody(ci); // v16.3 칸 상태 · 열린 뚜껑 · 닳은 길 · 뗀 패널 · 관측창 · 문 잠금 · 벽 장착물
         foreach (var f in ship.Furniture.Where(f => !f.Stowed && !f.Room.Detached)) PaintFurnitureLife(ci, f);
@@ -683,6 +684,7 @@ public partial class ShipView : Node2D
         PaintVenting(ci);
         PaintResponse(ci); // v13.0 진공·질식 소화 · 대피 카운트다운 · 공기 구역
         PaintFires(ci);
+        PaintCosmicOver(ci); // v18.13 방사선 반짝임 · 물벽 · 꺼 둔 설비 · 봉쇄 · 충격파 앞머리
         foreach (var d in ship.Doors) if (!d.Removed) PaintDoor(ci, d); // v10.12 걷은 칸막이 문 · 떨어져 나간 방의 문은 벽이 됐다
         PaintHoloTable(ci); // v11.2 함교 홀로그램
         PaintComms(ci); // v11.2 보급·탈출 캡슐, 송신 파동

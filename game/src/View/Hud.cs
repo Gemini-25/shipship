@@ -124,6 +124,7 @@ public partial class Hud : Control
         }
 
         DrawComputerCard(mouse); // v16.0 ④ 주컴퓨터 상시 카드 (HudComputer.cs)
+        DrawCosmicPanel(mouse); // v18.13 우주 대재난 예보 (HudCosmic.cs)
         DrawLog(mouse);
         DrawMinimap(); // v11.3
         if (MinimapOpen && !ChronicleOpen && !TechOpen && _minimapRect.Size.X > 0f) DrawVoyageBar(_minimapRect); // v12.8 항로

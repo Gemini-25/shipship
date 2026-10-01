@@ -179,6 +179,7 @@ public partial class Main : Node2D
         AddChild(background);
         _stars = new Starfield { Name = "Stars" };
         background.AddChild(_stars);
+        background.AddChild(new CosmicSky { Name = "CosmicSky", Main = this }); // v18.13 우주 대재난 하늘 · 섬광 · 소리 · 바깥 시점
 
         ShipView = new ShipView { Name = "Ship" };
         AddChild(ShipView);

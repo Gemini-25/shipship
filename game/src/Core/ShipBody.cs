@@ -774,10 +774,11 @@ public sealed partial class BodySystem
             float hit = MathF.Min(ws.Integrity, 1f - 0.6f * ws.Scorch);
             if (hit < wb.Insulation - 0.05f) wb.Insulation = MathF.Max(0f, hit);
             // 관측창: 태양 폭풍이면 덮개를 내린다
-            if (wb.Window && wb.Shutter != storm)
+            bool shut = storm || w.Cosmic.Shut(wb.Room); // v18.13 우주 대재난 대비 (컴퓨터가 · 사람이 손으로)
+            if (wb.Window && wb.Shutter != shut)
             {
-                wb.Shutter = storm;
-                if (storm) Stats.ShutterCloses++;
+                wb.Shutter = shut;
+                if (shut) Stats.ShutterCloses++;
             }
             if (wb.Insulation >= 0.5f) continue;
             // 단열재가 상한 벽: 차갑다 → 결로 (습한 방에서 벽 밑 바닥이 젖는다)
