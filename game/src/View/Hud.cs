@@ -807,6 +807,35 @@ public partial class Hud : Control
 
     private void DrawCrewThinking(CrewMember c, float x, float right, float y, Color col)
     {
+        // v13.3 마음: 목표 계층 · 감정 · 명령 반응 · 아는 사고
+        var mind = c.Mind;
+        var w = _world;
+        var gc = mind.Goal switch { GoalTier.Survival => Palette.Danger, GoalTier.Role => Palette.Accent, GoalTier.Work => Palette.Good, _ => Palette.TextDim };
+        SectionTitle(x, y + 10, "목표");
+        Gfx.RoundRect(this, new Rect2(x + 34, y - 1, Gfx.Width(Fonts.Bold, MindSystem.GoalName(mind.Goal), 11) + 12, 16), gc.WithAlpha(0.2f), 4, gc.WithAlpha(0.7f), 1);
+        Gfx.Text(this, Fonts.Bold, new Vector2(x + 40, y + 11), MindSystem.GoalName(mind.Goal), 11, gc);
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 50 + Gfx.Width(Fonts.Bold, MindSystem.GoalName(mind.Goal), 11), y + 11), Fit(mind.GoalWhy, right - x - 120, 11, Fonts.Body), 11, Palette.TextDim);
+        var feel = new System.Collections.Generic.List<(string, Color)>();
+        if (mind.Panicking(w.Tick)) feel.Add((mind.Frozen ? "공황 · 얼어붙음" : "공황 · 달아남", Palette.Danger));
+        if (mind.Heroic(w.Tick)) feel.Add(("영웅심", Palette.Accent));
+        if (mind.Anger > 0.15f) feel.Add(($"분노 {mind.Anger * 100:0}%", Palette.Warning));
+        if (c.GriefUntil > w.Tick) feel.Add(("슬픔", new Color("#90caf9")));
+        if (w.Meetings.Guilt(c) > 0.05f) feel.Add(($"죄책감 {w.Meetings.Guilt(c) * 100:0}%", Palette.Danger));
+        float ob = w.Minds.Obedience(c);
+        feel.Add(($"지시를 따름 {ob * 100:0}%", ob < 0.45f ? Palette.Warning : Palette.TextMuted));
+        float fx = x;
+        foreach (var (t, fc) in feel)
+        {
+            float fw = Gfx.Width(Fonts.Body, t, 10) + 12;
+            if (fx + fw > right) break;
+            Gfx.RoundRect(this, new Rect2(fx, y + 18, fw, 16), fc.WithAlpha(0.14f), 4, fc.WithAlpha(0.5f), 1);
+            Gfx.Text(this, Fonts.Body, new Vector2(fx + 6, y + 30), t, 10, fc);
+            fx += fw + 4;
+        }
+        string knows = mind.Knows.Count == 0 ? "아는 사고 없음" : "아는 사고: " + string.Join(" · ", mind.Knows.Values.OrderBy(k => k.tick).Select(k => $"{k.what} ({MindSystem.SourceName(k.src)})"));
+        Gfx.Text(this, Fonts.Body, new Vector2(x, y + 50), Fit(knows, right - x, 10, Fonts.Body), 10, mind.Knows.Count > 0 ? Palette.Warning : Palette.TextMuted);
+        y += 64;
+
         SectionTitle(x, y + 10, "행동 후보와 점수");
         long ago = (_world.Tick - c.LastThinkTick) * 60 / SimTime.TicksPerHour;
         Gfx.TextRight(this, Fonts.Body, new Vector2(right, y + 10), ago < 1 ? "방금 판단" : $"{ago}분 전 판단", 11, Palette.TextMuted);
@@ -814,7 +843,7 @@ public partial class Hud : Control
         var evals = c.LastEvaluations;
         float maxScore = Math.Max(1f, evals.Count > 0 ? evals.Max(e => e.Score) : 1f);
         float ey = y + 22;
-        foreach (var e in evals)
+        foreach (var e in evals.Take(9))
         {
             bool chosen = c.Job?.Activity == e.Activity;
             var labelColor = chosen ? col.Lightened(0.2f) : e.Score <= 0.01f ? Palette.TextMuted : Palette.TextDim;

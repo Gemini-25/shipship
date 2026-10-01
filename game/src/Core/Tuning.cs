@@ -63,6 +63,7 @@ public static class Tuning
         E("story.level", "난이도 (1 느긋 · 2 쉬움 · 3 보통 · 4 어려움 · 5 가혹 — 사고 빈도·크기·시작 물자·부상·작은 이상)", 3f, 1f, 5f, () => Storyteller.LevelValue, v => Storyteller.LevelValue = MathF.Round(v)),
         E("mode.campaign", "캠페인 (0 자유 항해 · 1 이어지는 임무 · 2 처음부터 세대선)", 0f, 0f, 2f, () => CampaignSystem.ModeValue, v => CampaignSystem.ModeValue = MathF.Round(v)), // v12.9
         E("generation.yeardays", "세대선의 한 해 (일)", 3f, 0.5f, 60f, () => GenerationSystem.YearDaysValue, v => GenerationSystem.YearDaysValue = v),
+        E("meeting.maiden", "첫 출항 회의 (1 가치관대로 방침을 정한다 · 0 처음 값 그대로)", 1f, 0f, 1f, () => MeetingSystem.MaidenOff ? 0f : 1f, v => MeetingSystem.MaidenOff = v < 0.5f), // v13.2
     };
 
     private static TuningEntry E(string key, string label, float def, float min, float max, Func<float> get, Action<float> set) =>

@@ -93,6 +93,7 @@ public static partial class Program
         world.CrewCanDie = death;
         world.Log.Capacity = 60000; // 긴 시험의 기록을 끝까지 볼 수 있게
         var ship = world.Ship;
+        if (Environment.GetEnvironmentVariable("SHIPSIM_MAIDEN") == "0") MeetingSystem.MaidenOff = true; // v13.2 첫 출항 회의 끄기 (원인 가리기)
         if (Environment.GetEnvironmentVariable("SHIPSIM_TRACE") is string trace)
             World.Trace = msg => { if (msg.Contains(trace)) Console.WriteLine("  [trace] " + msg); };
 
@@ -140,6 +141,7 @@ public static partial class Program
         if (args.Contains("--responsetest")) return RunResponseTest(seed); // v13.0
         if (args.Contains("--commandtest")) return RunCommandTest(seed); // v13.1
         if (args.Contains("--meetingtest")) return RunMeetingTest(seed); // v13.2
+        if (args.Contains("--mindtest")) return RunMindTest(seed); // v13.3
         if (args.Contains("--deathtrace")) return RunDeathTrace(Math.Max(1, days), seed);
         if (args.Contains("--stressprobe")) return RunStressProbe(Math.Max(1, days), seed);
         if (args.Contains("--campaignrun")) return RunCampaignLong(Math.Max(1, days), seed, shipArg ?? "Mirinae", args.FirstOrDefault(a => a.StartsWith("--from="))?[7..]);

@@ -28,6 +28,8 @@ public sealed class FireCase
     public long StartedAt { get; set; } = -1;
     public long OutSince { get; set; } = -1;
     public bool TriedInert { get; set; }
+    /// <summary>v13.3 수순 중 그 방에서 사람이 쓰러지거나 죽었다 (컴퓨터 신뢰가 떨어진다).</summary>
+    public bool Casualty { get; set; }
     public string Status { get; set; } = "소화조가 끈다";
     public int Node { get; set; } = -1;
 }
@@ -201,6 +203,8 @@ public sealed partial class AutomationSystem
                     room.EvacuateBy = -1;
                     FireCases.Remove(fc);
                     w.Log.Add(w.Tick, LogKind.Ship, $"{room.Name} 소화 대응 끝 — 숨 쉴 수 있다 · 격벽 해제");
+                    // v13.3 컴퓨터 신뢰: 사람을 잃지 않고 끝냈다
+                    if (!fc.Casualty) w.Minds.ComputerResult(0.05f, $"{room.Name} 불을 수순대로 껐다");
                     break;
                 }
             }
@@ -266,7 +270,7 @@ public sealed partial class AutomationSystem
         if (fc.Method == "vacuum" && !sealed_)
         {
             if (Policy("inert") > 0 && !fc.TriedInert && InertGas > 17f * room.Volume * 0.6f) fc.Method = "inert";
-            else { Release(fc, room, "문이 닫히지 않아 진공 소화를 못 한다 (옆방 공기까지 빠진다)"); return; }
+            else { Release(fc, room, "문이 닫히지 않아 진공 소화를 못 한다 (옆방 공기까지 빠진다)"); w.Minds.ComputerResult(-0.03f, $"{room.Name} 소화 수순이 틀어졌다 (문이 안 닫힌다)"); return; }
         }
         room.Lockdown = true;
         room.ResponseHold = true;

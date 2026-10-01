@@ -50,6 +50,7 @@ public sealed class ChoresActivity : Activity
         // v12.0 전조 손보기는 그 기록을 아는 사람만 (직접 봤거나 · 인계받았거나 · 컴퓨터 일지로 읽었다)
         if (o.Kind == WorkKind.PreventiveCheck && o.Target.Furniture?.Machine?.Omen?.Note is ShiftNote note && !w.Watch.Knows(note, c)) return -1f;
         if (DecisionOnly(o.Kind)) return -1f;
+        if (!w.Minds.Aware(c, o)) return -1f; // v13.3 모르는 사고의 일은 하지 않는다
         // v8: 선체 밖 일은 드론이 맡을 수 있으면 드론에게 맡긴다 (드론이 없거나 멈췄을 때만 사람이 나간다)
         bool eva = NeedsEvaField(o) && o.Kind != WorkKind.Rescue;
         if (eva && w.Drones.WillHandle(o)) return -1f;
@@ -117,6 +118,7 @@ public sealed class ChoresActivity : Activity
         {
             float aff = c.AffinityTo(patient);
             if (aff > 0.3f) score += 0.3f * aff + (Memory.AreComrades(c, patient) ? 0.15f : 0f);
+            if (o.Kind == WorkKind.Rescue && c.Mind.Heroic(w.Tick) && c.Mind.HeroFor == patient.Id) score += 0.6f; // v13.3 영웅심
         }
         return score;
     }
@@ -140,6 +142,7 @@ public sealed class ChoresActivity : Activity
             if (skip != null && skip.Contains(o)) continue;
             if (o.MinSkill > 0f && c.SkillLevel(o.Skill) < o.MinSkill) continue;
             if (DecisionOnly(o.Kind)) continue;
+            if (!w.Minds.Aware(c, o)) continue; // v13.3 모르는 사고
             var field = dist;
             if (NeedsEvaField(o)) field = evaField ??= EvaField(c, w);
             else if (NeedsEmergencyField(o)) field = emergency ??= EmergencyField(c, w);
@@ -156,7 +159,9 @@ public sealed class ChoresActivity : Activity
         var (best, bestScore, _) = Best(c, w, dist);
         if (best == null || best == current) return false;
         var field = NeedsEvaField(current) ? EvaField(c, w) : NeedsEmergencyField(current) ? EmergencyField(c, w) : dist;
-        return bestScore > Appeal(c, w, current, field, out _) + 0.3f;
+        // v13.2 조를 맡았으면 조의 일로 곧장 갈아탄다 (하던 딴일을 붙들고 있지 않는다)
+        float margin = w.Command.TeamOf(c) is Team t && t.Kind != TeamKind.Reserve && CommandSystem.Group(best.Kind) == t.Kind && CommandSystem.Group(current.Kind) != t.Kind ? 0.05f : 0.3f;
+        return bestScore > Appeal(c, w, current, field, out _) + margin;
     }
 
     public override (float, string) Score(CrewMember c, World w, DistanceField dist)
@@ -273,12 +278,13 @@ public static partial class WorkPlanners
             if (!SuitUp(c, w, dist, suitUp, allowDash: WorkKinds.IsEmergency(o.Kind) || o.Kind == WorkKind.Treat))
             {
                 // v13.2 방침(구조: 무조건): 우주복이 없어도 숨을 참고 뛰어들어 끌어낸다
-                if (o.Kind != WorkKind.Rescue || w.Policies["rescue"] != 0 || c.Traits.Bravery < 0.3f) { blocked = "우주복 없음"; return null; }
+                bool hero = o.Kind == WorkKind.Rescue && c.Mind.Heroic(w.Tick) && o.Target.Crew?.Id == c.Mind.HeroFor; // v13.3 영웅심
+                if (!hero && (o.Kind != WorkKind.Rescue || w.Policies["rescue"] != 0 || c.Traits.Bravery < 0.3f)) { blocked = "우주복 없음"; return null; }
                 suitUp.Clear();
                 suitUp.Add(new DoToil((cm, world) =>
                 {
                     cm.Dashing = true;
-                    world.Log.Add(world.Tick, LogKind.Warning, "우주복이 없다 — 숨을 참고 구하러 뛰어든다 (방침: 무조건 구조)", cm.Id);
+                    world.Log.Add(world.Tick, LogKind.Warning, hero ? "우주복이 없다 — 영웅심에 숨을 참고 뛰어든다" : "우주복이 없다 — 숨을 참고 구하러 뛰어든다 (방침: 무조건 구조)", cm.Id);
                     return true;
                 }));
             }

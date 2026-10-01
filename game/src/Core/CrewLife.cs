@@ -306,6 +306,7 @@ public sealed class LifeSystem
                 a.Needs.Stress = MathF.Min(1f, a.Needs.Stress + 0.06f);
                 b.Needs.Stress = MathF.Min(1f, b.Needs.Stress + 0.06f);
                 a.Quarrel = b.Quarrel = w.Tick;
+                MindSystem.Anger(a, 0.1f); MindSystem.Anger(b, 0.1f); // v13.3
                 bool feud = a.AffinityTo(b) < -0.45f;
                 if (feud) Stats.Feuds++;
                 string text = $"{Ko.WaGwa(a.Name)} {Ko.IGa(b.Name)} {about} 두고 말다툼했다" + (feud ? " — 서로 말을 안 한다" : "");

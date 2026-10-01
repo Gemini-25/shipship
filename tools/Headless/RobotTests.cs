@@ -8,9 +8,13 @@ public static partial class Program
 {
     private static World DayOne(int seed, string ship)
     {
+        // v13.2 점검용 첫날 배는 처음 방침 그대로 하루를 보낸다 (첫 출항 회의의 문화가 첫날을 흔들지 않게 — 문화는 회의·밸런스·긴 시험이 본다)
+        bool off = MeetingSystem.MaidenOff;
+        MeetingSystem.MaidenOff = true;
         var w = World.CreateDefault(seed, 0, ship);
         Run(w, SimTime.TicksPerDay);
-        w.Policies.ResetDefaults(); // v13.2 첫 출항 회의가 바꾼 방침은 되돌린다 (각 점검은 처음 값에서)
+        MeetingSystem.MaidenOff = off;
+        w.Policies.ResetDefaults();
         return w;
     }
 
@@ -48,7 +52,7 @@ public static partial class Program
                 posted |= w.Board.Open.Any(o => o.Kind == WorkKind.RepairRobot && o.Target.Robot == r2);
             }
             Check("가벼운 고장은 스스로, 임계점을 넘으면 사람이", self && posted && r2.Fault == null && r2.SelfRepairsTotal == 0,
-                $"재배 로봇 자가 수리 {r.SelfRepairsTotal} · 닳은 정비 로봇 수리 요청 {(posted ? "올라옴" : "없음")} · 고장 {(r2.Fault is RobotFault f2 ? RobotSystem.FaultName(f2) : "없음")}");
+                $"재배 로봇 자가 수리 {r.SelfRepairsTotal}{(self ? "" : " (자가 수리 확인 실패)")} · 닳은 정비 로봇 수리 요청 {(posted ? "올라옴" : "없음")} · 고장 {(r2.Fault is RobotFault f2 ? RobotSystem.FaultName(f2) : "없음")} · 정비 로봇 자가 수리 {r2.SelfRepairsTotal}");
         }
 
         // ── 2) 방전돼 멈춘 로봇은 사람이 충전대까지 끌고 온다 ──

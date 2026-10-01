@@ -10,6 +10,7 @@ public static class Brain
 {
     public static readonly Activity[] Activities =
     {
+        new PanicActivity(), // v13.3 공황 (얼어붙거나 달아난다)
         new EvacuateActivity(),
         new ShelterActivity(), // v12.6 태양 폭풍
         new QuarantineActivity(), // v12.6 격리실

@@ -137,7 +137,8 @@ public sealed class MoistureSystem
             // v12.5 관제석에 사람이 있으면 좁게: 깊거나 물에 선 사람이 있을 때만 내린다 (그 전엔 지켜본다)
             var op = w.Automation.Operator;
             bool someoneInWater = w.Crew.Any(c => !c.Dead && c.Room == room && c.Suit == null);
-            if (w.Automation.Level >= 2 && w.Automation.MainOnline && room.DataLinked && _floodSeen.TryGetValue(room.Id, out var seen) && w.Tick - seen > SimTime.Minutes(3)
+            // (v13.2 깊은 물은 기다리지 않는다 — 확인하는 사이 누전이 먼저 나지 않게)
+            if (w.Automation.Level >= 2 && w.Automation.MainOnline && room.DataLinked && _floodSeen.TryGetValue(room.Id, out var seen) && (depth > 0.25f || w.Tick - seen > SimTime.Minutes(3))
                 && (op == null || depth > 0.25f || someoneInWater))
             {
                 w.Automation.Reason($"flood:{room.Id}", $"{room.Name} 바닥 물 {DepthCm(room):0}cm · 습도 {room.Humidity * 100:0}% — 누전 위험 · 조치: 분전함 차단" + (op == null ? " (그 방 설비도 멈춘다)" : $" ({op.Name}: 더는 못 기다린다)") + " · 요청: 물 퍼내기, 새는 곳 점검", SimTime.Hours(2));

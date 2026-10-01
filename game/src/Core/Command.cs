@@ -205,6 +205,7 @@ public sealed class CommandSystem
         foreach (var o in w.Board.Open.Where(o => o.Urgency >= 0.85f))
         {
             if (Group(o.Kind) is not TeamKind kind) continue;
+            if (!w.Minds.CommandKnows(o)) continue; // v13.3 지휘하는 쪽이 아직 모르는 사고
             var room = o.Target.CurrentRoom;
             string key = kind == TeamKind.Rescue || kind == TeamKind.Medical ? $"{kind}:{o.Target.Crew?.Id}" : $"{kind}:{room?.Id}";
             if (needs.Any(n => n.key == key)) continue;
@@ -228,7 +229,8 @@ public sealed class CommandSystem
             {
                 float d = n.room != null ? (c.Position - n.room.Center).Length() : 0f;
                 float s = c.SkillLevel(sk) + (CrewRoles.Owns(c.Role, new WorkOrder { Kind = n.kind == TeamKind.Fire ? WorkKind.Extinguish : n.kind == TeamKind.Power ? WorkKind.ResetBreaker : WorkKind.Rescue, Skill = sk }) ? 0.15f : 0f)
-                          - d / 80f - 0.4f * MathF.Max(0f, 0.35f - c.Needs.Rest) + 0.1f * c.Traits.Bravery * (n.hazard ? 1f : 0f);
+                          - d / 80f - 0.4f * MathF.Max(0f, 0.35f - c.Needs.Rest) + 0.1f * c.Traits.Bravery * (n.hazard ? 1f : 0f)
+                          - (c.IsAwake ? 0f : 0.6f); // v13.2 깨어 있는 사람부터 (자는 사람은 깨워야 온다)
                 // 솜씨 없는 지휘자는 가끔 엉뚱한 사람을 보낸다
                 return s + _rng.Range(-0.3f, 0.3f) * (1f - skill);
             }
@@ -241,7 +243,7 @@ public sealed class CommandSystem
             if (buddy && free.Count > 0)
             {
                 var watcher = prev != null && free.FirstOrDefault(c => c.Id == prev.Watcher) is CrewMember pv ? pv
-                    : free.OrderByDescending(c => -(n.room != null ? (c.Position - n.room.Center).Length() : 0f) / 80f + 0.2f * c.Traits.Calm).First();
+                    : free.OrderByDescending(c => -(n.room != null ? (c.Position - n.room.Center).Length() : 0f) / 80f + 0.2f * c.Traits.Calm - (c.IsAwake ? 0f : 0.6f)).First();
                 free.Remove(watcher);
                 team.Watcher = watcher.Id;
             }
@@ -336,6 +338,7 @@ public sealed class CommandSystem
     {
         if (!Active || !_teamOf.TryGetValue(c.Id, out var t)) return 0f;
         float k = ComputerCommands ? 0.35f : Style switch { CaptainStyle.Authoritarian => 0.45f, CaptainStyle.Consultative => 0.35f, _ => 0.18f };
+        k *= _w.Minds.Obedience(c); // v13.3 명령을 따르는 정도
         var group = Group(o.Kind);
         bool mine = group == t.Kind && (t.Room == null || o.Target.CurrentRoom == t.Room || t.Kind is TeamKind.Rescue or TeamKind.Medical && o.Target.Crew?.Id.ToString() == t.Key.Split(':')[1]);
         // 감시자: 제 짝이 쓰러지면 가장 급하다

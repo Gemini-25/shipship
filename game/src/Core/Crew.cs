@@ -224,6 +224,9 @@ public sealed class CrewMember
     public HashSet<Qual> Quals { get; } = new();
     public List<(long tick, string text)> Diary { get; } = new();
     public long GriefUntil { get; set; } = -1;
+
+    /// <summary>v13.3 아는 것 · 감정 · 목표 · 명령 반응.</summary>
+    public MindState Mind { get; } = new();
     public long Quarrel { get; set; } = -1_000_000;
     public long LastVisited { get; set; } = -1_000_000;
     public bool Laid { get; set; }

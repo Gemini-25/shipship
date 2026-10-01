@@ -115,7 +115,7 @@ public partial class Hud
             var cap = cmd.Captain;
             SectionTitle(x, ly + 14, "지휘");
             Gfx.Text(this, Fonts.Body, new Vector2(x + 44, ly + 14),
-                $"선장 {cap?.Name ?? "-"} ({CommandSystem.StyleName(cmd.Style)}) · 신뢰 {cmd.Trust * 100:0}% · 컴퓨터 신뢰 {cmd.ComputerTrust * 100:0}%" +
+                $"선장 {cap?.Name ?? "-"} ({CommandSystem.StyleName(cmd.Style)}) · 신뢰 {cmd.Trust * 100:0}% · 컴퓨터 신뢰 {cmd.ComputerTrust * 100:0}%" + (w.Minds.ComputerNick != "" ? $" ('{w.Minds.ComputerNick}')" : "") +
                 (cmd.Active ? $" · 현장 지휘 {cmd.CommanderName}" : " · 평시") + (cmd.Elections > 0 ? $" · 선거 {cmd.Elections}번" : ""), 11, cmd.Trust < 0.35f ? Palette.Warning : Palette.TextDim);
             ly += 18;
             if (cmd.Active)

@@ -175,3 +175,30 @@ public partial class ShipView
         Gfx.Text(ci, Fonts.Body, new Vector2(rect.Position.X + 8, rect.Position.Y + 16), line, 12, new Color(0.95f, 0.96f, 1f));
     }
 }
+
+// v13.3 마음 표시: 공황(!! · 얼음) · 영웅심(★) · 분노(#) · 사고를 아직 모른다(?)
+public partial class ShipView
+{
+    private void PaintMinds(CanvasItem ci)
+    {
+        var w = _world;
+        bool incidents = w.Minds.Incidents().Count > 0;
+        foreach (var c in w.Crew)
+        {
+            if (c.Dead || c.Down || c.CarriedBy != null || c.IsChild) continue;
+            var m = c.Mind;
+            string? t = null;
+            Color col = default;
+            if (m.Panicking(w.Tick)) { t = m.Frozen ? "얼음" : "!!"; col = new Color(1f, 0.35f, 0.3f); }
+            else if (m.Heroic(w.Tick)) { t = "★"; col = new Color(1f, 0.85f, 0.35f); }
+            else if (m.Anger > 0.5f) { t = "#"; col = new Color(1f, 0.6f, 0.25f); }
+            else if (incidents && c.IsAwake && m.Knows.Count == 0) { t = "?"; col = new Color(0.65f, 0.75f, 0.9f); }
+            if (t == null) continue;
+            var p = CrewPx(c) + new Vector2(-CrewRadius - 6f, -CrewRadius - 6f);
+            float bw = Gfx.Width(Fonts.Bold, t, 10) + 8;
+            float pulse = t == "!!" ? 0.6f + 0.4f * Mathf.Sin(_time * 10f) : 1f;
+            Gfx.RoundRect(ci, new Rect2(p.X - bw / 2, p.Y - 8, bw, 14), new Color(0.06f, 0.07f, 0.1f, 0.85f * pulse), 5, col.WithAlpha(0.9f * pulse), 1);
+            Gfx.Text(ci, Fonts.Bold, new Vector2(p.X - bw / 2 + 4, p.Y + 3), t, 10, col);
+        }
+    }
+}

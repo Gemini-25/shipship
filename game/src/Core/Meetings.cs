@@ -115,6 +115,8 @@ public sealed class MeetingSystem
     private readonly Dictionary<(CrewValue, CrewValue), float> _tension = new();
     public int Held, Postponed, Flips, Blames, Guilts, Praises, FactionSplits, PolicyChanges;
     public bool MaidenDone { get; private set; }
+    /// <summary>시험용: 첫 출항 회의를 하지 않는다 (방침이 처음 값 그대로 — 특정 동작을 재는 점검용).</summary>
+    public static bool MaidenOff { get; set; }
     /// <summary>첫 출항 회의가 정한 이 배의 문화 (가장 많은 가치관).</summary>
     public string Culture { get; private set; } = "";
 
@@ -213,6 +215,7 @@ public sealed class MeetingSystem
         var voters = Adults();
         if (voters.Count == 0 || voters.Any(c => !c.Profiled)) return;
         MaidenDone = true;
+        if (MaidenOff) { Culture = "(시험: 처음 값)"; return; }
         var top = voters.GroupBy(c => c.Value).OrderByDescending(g => g.Count()).ThenBy(g => (int)g.Key).First();
         Culture = $"{ValueName(top.Key)} 중시";
         var rec = new MeetingRecord
@@ -551,6 +554,9 @@ public sealed class MeetingSystem
         }
         var yes = voters.Where(c => s[c].s > 0f).ToList();
         var no = voters.Where(c => s[c].s <= 0f).ToList();
+        // v13.3 크게 반대했는데 진 사람은 화가 난다
+        var losers = yes.Count > no.Count ? no : yes;
+        foreach (var c in losers) if (MathF.Abs(s[c].s) > 0.4f) MindSystem.Anger(c, 0.05f);
         item.Yes = yes.Count;
         item.No = no.Count;
         foreach (var c in voters) item.Votes.Add((c.Id, s[c].s > 0f, s[c].why));
@@ -625,6 +631,7 @@ public sealed class MeetingSystem
         if (room != null && (room.Purging || room.Inerting || room.EvacuateBy >= 0 || room.ResponseHold))
         {
             var fc = w.Automation.FireCases.FirstOrDefault(f => f.RoomId == room.Id);
+            if (fc != null && !fc.Casualty) { fc.Casualty = true; w.Minds.ComputerResult(-0.15f, $"{room.Name} 소화 수순 중에 {Ko.IGa(dead.Name)} 죽었다"); }
             string id = fc?.Method == "vacuum" ? "vacuumfire" : "inertfire";
             Q(id, Math.Min(p[id], 1) == p[id] ? 0 : 1, $"{room.Name} 소화 수순 중에 {Ko.IGa(dead.Name)} 죽었다");
         }
@@ -662,8 +669,11 @@ public sealed class MeetingSystem
         var targets = open ? d.Yes.Append(d.Decider).Distinct().Select(Find).Where(c => c != null).Cast<CrewMember>().ToList()
             : cap != null ? new List<CrewMember> { cap } : new List<CrewMember>();
         foreach (var b in blamers)
+        {
+            MindSystem.Anger(b, 0.15f); // v13.3 분노
             foreach (var t in targets)
                 b.ChangeAffinity(t, t == decider || !open ? -0.08f : -0.04f);
+        }
         if (!open || decider == cap)
         {
             w.Command.Trust = MathF.Max(0f, w.Command.Trust - (open ? 0.05f : 0.08f));
