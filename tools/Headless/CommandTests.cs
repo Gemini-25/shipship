@@ -73,6 +73,7 @@ public static partial class Program
                     if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "2")
                     {
                         Console.WriteLine($"   {SimTime.Clock(w.Tick)} 짝 {watcher.Name} {watcher.Room?.Name} {watcher.Job?.Label} {watcher.Job?.Current?.GetType().Name} · 일꾼 {worker.Name} {worker.Room?.Name} {worker.Job?.Label} · 감시 일감 {w.Board.Open.Count(o => o.Kind == WorkKind.SafetyWatch)} · 평가 {watcher.LastEvaluations?.FirstOrDefault().Reason}");
+                        { var wd = w.Paths.Flood(watcher.Cell, watcher.PathProfile); Console.WriteLine($"      짝 판단 {string.Join(" / ", (watcher.LastEvaluations ?? Array.Empty<Evaluation>()).Take(3).Select(e => $"{e.Activity.Label} {e.Score:0.00} {e.Reason}"))} · 감시 끌림 {string.Join(",", w.Board.Open.Where(o => o.Kind == WorkKind.SafetyWatch).Select(o => $"{ChoresActivity.Appeal(watcher, w, o, wd, out _):0.00}(열림 {w.Board.AvailableTo(watcher).Contains(o)} 보류 {o.BlockedReason})"))} · 앓음 {watcher.Fx.Worst:0.00} {w.Ailments.Line(watcher)}"); }
                         Console.WriteLine($"      일꾼 마지막 판단 {SimTime.Clock(worker.LastThinkTick)} 다음 {SimTime.Clock(worker.NextThinkTick)} · {string.Join(" / ", worker.LastEvaluations.Take(3).Select(e => $"{e.Activity.Label} {e.Score:0.00} {e.Reason}"))} · 손에 {worker.Carrying?.Kind}");
                         var dist = w.Paths.Flood(worker.Cell, worker.PathProfile);
                         Console.WriteLine($"      작업 점수 지금: {new ChoresActivity().Score(worker, w, dist)}");

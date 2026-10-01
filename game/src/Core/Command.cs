@@ -141,9 +141,13 @@ public sealed class CommandSystem
         {
             _nudgeAt = w.Tick + SimTime.Minutes(2);
             foreach (var (id, t) in _teamOf)
-                if (t.Kind != TeamKind.Reserve && Find(id) is CrewMember m && m.CanAct && m.Job?.Order is WorkOrder jo
-                    && Group(jo.Kind) != t.Kind && jo.Kind != WorkKind.SafetyWatch && t.Watcher != id)
-                    m.NextThinkTick = Math.Min(m.NextThinkTick, w.Tick + 1);
+            {
+                if (t.Kind == TeamKind.Reserve || Find(id) is not CrewMember m || !m.CanAct) continue;
+                bool offTask = m.Job?.Order is WorkOrder jo && Group(jo.Kind) != t.Kind && jo.Kind != WorkKind.SafetyWatch && t.Watcher != id;
+                // v14.1 조원이 당직·산책·쉼처럼 일이 아닌 걸 하고 있어도 다시 본다 (감시 일이 뒤늦게 올라온 짝 등)
+                bool idle = m.Job?.Activity is DutyActivity or WanderActivity or RelaxActivity or ChatActivity or PatrolActivity;
+                if (offTask || idle) m.NextThinkTick = Math.Min(m.NextThinkTick, w.Tick + 1);
+            }
         }
         Watch();
         Rotate();

@@ -139,8 +139,25 @@ public sealed class ChoresActivity : Activity
     private static bool BedtimeStatic(CrewMember c, World w) =>
         SimTime.InWindow(SimTime.HourOfDay(w.Tick), c.Schedule.SleepStart, c.Schedule.SleepLength);
 
+    // v14.2 판단 한 번 동안 같은 평가를 다시 하지 않는다 (점수 · 갈아타기 · 계획이 같은 후보를 본다) — 판단을 시작할 때 비운다
+    private static CrewMember? _memoCrew;
+    private static DistanceField? _memoDist;
+    private static long _memoTick = -1;
+    private static (WorkOrder? order, float score, DistanceField? field) _memo;
+    internal static void ResetMemo() { _memoCrew = null; _memoDist = null; }
+
     private static (WorkOrder? order, float score, DistanceField? field) Best(CrewMember c, World w, DistanceField dist,
         HashSet<WorkOrder>? skip = null)
+    {
+        bool plain = skip == null || skip.Count == 0;
+        if (plain && _memoCrew == c && _memoDist == dist && _memoTick == w.Tick) return _memo;
+        var r = BestCore(c, w, dist, skip);
+        if (plain) { _memoCrew = c; _memoDist = dist; _memoTick = w.Tick; _memo = r; }
+        return r;
+    }
+
+    private static (WorkOrder? order, float score, DistanceField? field) BestCore(CrewMember c, World w, DistanceField dist,
+        HashSet<WorkOrder>? skip)
     {
         WorkOrder? best = null;
         DistanceField? bestField = null;

@@ -56,6 +56,7 @@ public static class Brain
     public static void Think(CrewMember c, World w)
     {
         ThinkCount++;
+        ChoresActivity.ResetMemo(); // v14.2
         var dist = w.Paths.Flood(c.Cell, c.PathProfile);
         var evals = new List<Evaluation>(Activities.Length);
         long pt = Prof.Now;

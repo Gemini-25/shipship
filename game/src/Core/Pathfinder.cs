@@ -248,6 +248,12 @@ public sealed class Pathfinder
     private static bool SameFear(float[]? a, float[]? b) =>
         a == null ? b == null || b.All(x => x <= 0.05f) : b == null ? a.All(x => x <= 0.05f) : a.AsSpan().SequenceEqual(b);
 
+    // v14.2 거리장 계산을 빠르게: 방·문·칸의 성질을 계산마다 한 번 배열로 펴 두고 (같은 식, 같은 값), 큐를 다시 쓴다.
+    private readonly PriorityQueue<int, int> _open = new();
+    private bool[] _pass = Array.Empty<bool>();
+    private int[] _roomAdd = Array.Empty<int>(), _doorAdd = Array.Empty<int>();
+    private bool[] _roomBlocked = Array.Empty<bool>(), _doorBlocked = Array.Empty<bool>();
+
     private DistanceField FloodCore(Cell start, PathProfile profile)
     {
         if (profile.HazardScale == 0f) profile = PathProfile.Default;
@@ -258,17 +264,76 @@ public sealed class Pathfinder
 
         int s = grid.Index(start);
         int startRoom = _room[s];
-        var open = new PriorityQueue<int, int>();
+        // 칸: 지나갈 수 있나 (Passable과 같다)
+        if (_pass.Length != _n) _pass = new bool[_n];
+        for (int i = 0; i < _n; i++) _pass[i] = Passable(i, profile);
+        // 방: 위험·공포 비용, 숨 못 쉬는 방 (StepCost·CanStep과 같은 식)
+        int nr = _ship.Rooms.Count;
+        if (_roomAdd.Length < nr) { _roomAdd = new int[nr]; _roomBlocked = new bool[nr]; }
+        for (int r = 0; r < nr; r++)
+        {
+            var room = _ship.Rooms[r];
+            int add = 0;
+            int hazard = room.HazardCost;
+            if (hazard > 0) add += (int)(hazard * profile.HazardScale);
+            if (profile.Fear is { } fear && r < fear.Length && fear[r] > 0.05f)
+                add += (int)(fear[r] * PathProfile.FearCost * (profile.Responder ? 0.4f : 1f));
+            _roomAdd[r] = add;
+            _roomBlocked[r] = !profile.Suit && !profile.Robot && r != startRoom && room.Unbreathable;
+        }
+        // 문: 잠긴 격벽을 못 지나는가, 전기 없는 문·잠긴 문 비용
+        int nd0 = _ship.Doors.Count;
+        if (_doorAdd.Length < nd0) { _doorAdd = new int[nd0]; _doorBlocked = new bool[nd0]; }
+        for (int d = 0; d < nd0; d++)
+        {
+            var door = _ship.Doors[d];
+            int add = 0;
+            if (!door.Powered) add += ManualDoorPenalty;
+            if (door.Locked) add += ManualDoorPenalty * 2;
+            _doorAdd[d] = add;
+            bool blocked = false;
+            if (door.Locked)
+            {
+                bool leaving = (door.RoomA?.Id ?? -1) == startRoom || (door.RoomB?.Id ?? -1) == startRoom;
+                bool sealedOff = (door.RoomA?.Abandoned ?? false) || (door.RoomB?.Abandoned ?? false);
+                blocked = !leaving && !profile.Suit && (sealedOff || !profile.Responder);
+            }
+            _doorBlocked[d] = blocked;
+        }
+        float cellScale = (profile.Suit ? 0.5f : 1f);
+        var open = _open;
+        open.Clear();
         cost[s] = 0;
         open.Enqueue(s, 0);
         while (open.TryDequeue(out int cur, out int dist))
         {
             if (dist > cost[cur]) continue;
+            int dcur = _door[cur];
             for (int k = 0; k < 8; k++)
             {
                 int ni = cur + _offsets[k];
-                if (!CanStep(cur, k, ni, profile, startRoom)) continue;
-                int nd = dist + StepCost(k, ni, -1, profile);
+                // ── CanStep ──
+                if (ni < 0 || ni >= _n || !_pass[ni]) continue;
+                int dr = _door[ni];
+                if (dr >= 0 && _doorBlocked[dr]) continue;
+                int r = _room[ni];
+                if (r >= 0 && _roomBlocked[r]) continue;
+                if (k >= 4)
+                {
+                    if (dcur >= 0 || dr >= 0) continue;
+                    int a = cur + _dx[k];
+                    int b = cur + _dy[k] * _w;
+                    if (!_pass[a] || !_pass[b] || _door[a] >= 0 || _door[b] >= 0) continue;
+                }
+                // ── StepCost (goal 없음) ──
+                int step = k < 4 ? Straight : Diagonal;
+                if (_space[ni]) step += PathProfile.SpaceCost;
+                if (_furniture[ni]) step += FurniturePenalty;
+                if (r >= 0) step += _roomAdd[r];
+                if (dr >= 0) step += _doorAdd[dr];
+                int h = CellHazard[ni];
+                if (h > 0) step += (int)(h * cellScale * profile.HazardScale);
+                int nd = dist + step;
                 if (cost[ni] >= 0 && nd >= cost[ni]) continue;
                 cost[ni] = nd;
                 open.Enqueue(ni, nd);
