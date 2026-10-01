@@ -384,7 +384,9 @@ public sealed class ExplosiveSet
             float fire = 0f, flame = 0f;
             if (w.Fire.Count > 0) { flame = w.Fire.At(e.Cell); foreach (var d in Cell.Dirs8) fire = MathF.Max(fire, w.Fire.At(e.Cell + d)); fire = MathF.Max(fire, flame); }
             float temp = room?.Air.Temperature ?? -40f;
-            float heatIn = flame * 4f + fire * 1.2f + MathF.Max(0f, temp - 45f) / 35f + e.NearHeat; // 불길에 바로 닿으면 몇 분 만에
+            float jet = 0f;
+            foreach (var j in _b.Jets) { float jd = (j.at.Center - e.Cell.Center).Length(); if (jd < 2f) jet += j.heat * 10f * (1f - jd / 2f); }
+            float heatIn = flame * 10f + fire * 1.5f + jet + MathF.Max(0f, temp - 45f) / 35f + e.NearHeat; // 불길에 바로 닿으면 몇 분 만에
             e.Heat = MathF.Max(0f, e.Heat + (spec.HeatRate * heatIn * (e.Inside ? 0.6f : 1f) - 0.6f * e.Heat) * dt);
             switch (e.Kind)
             {
@@ -661,7 +663,7 @@ public sealed class ExplosiveSet
             if (e.Kind == ExplosiveKind.FermentJar && e.Pressure > 0.6f) { risk += 0.3f; why.Add("항아리가 부풀었다"); }
             if (e.Power >= 0.25f)
             {
-                var mates = All.Where(o => o != e && !o.Spent && o.Power >= 0.2f && (o.Cell.Center - e.Cell.Center).Length() <= 2.2f).Select(o => o.Spec.Name).Distinct().ToList();
+                var mates = All.Where(o => o != e && !o.Spent && o.Power >= 0.2f && !(o.Inside && e.Inside) && (o.Cell.Center - e.Cell.Center).Length() <= 2.2f).Select(o => o.Spec.Name).Distinct().ToList();
                 if (mates.Count > 0) { risk += 0.2f + 0.1f * mates.Count; why.Add($"곁에 {string.Join("·", mates)} — 연쇄"); }
             }
             if (e.Stability < 0.5f) { risk += 0.2f; why.Add("상했다"); }
@@ -699,7 +701,7 @@ public sealed class ExplosiveSet
         Explosive? top = null;
         foreach (var e in All)
         {
-            if (e.Spent || e.Carried >= 0 || e.Risk < 0.45f || w.Tick - e.WarnedAt < SimTime.Hours(6) || Secures.Any(o => o.Explosive == e.Id && !o.Done) || _asked.ContainsKey(e.Id)) continue;
+            if (e.Spent || e.Carried >= 0 || e.Risk < 0.5f || w.Tick - e.WarnedAt < SimTime.Hours(6) || Secures.Any(o => o.Explosive == e.Id && !o.Done) || _asked.ContainsKey(e.Id)) continue;
             if (top == null || e.Risk > top.Risk) top = e;
         }
         if (top == null) return;
@@ -939,6 +941,7 @@ public sealed class ExplosiveSet
             case BreachKind.Door when o.DoorId >= 0 && o.DoorId < ship.Doors.Count:
                 var d = ship.Doors[o.DoorId];
                 d.JammedOpen = true; d.Welded = false; d.Locked = false; d.Blocked = false; d.MotorBroken = true; d.Openness = 1f; d.Bent = 1f;
+                _b.MarkBlown(d);
                 ship.Rubble.Remove(d.Cell);
                 if (w.Body.DoorOf(d) is DoorBody db) db.Gasket = 0f;
                 o.Result = "문을 뚫었다";
@@ -1050,11 +1053,11 @@ public sealed class BlastResponseActivity : Activity
                     if (id == c.Id || b.Helped.Contains((rec.Id, id))) continue;
                     var v = w.Crew.FirstOrDefault(x => x.Id == id);
                     if (v == null || v.Dead || v.Outside || v.CarriedBy != null) continue;
-                    if (v.Room != null && (Atmosphere.Danger(v.Room) > 0.3f || w.Fire.AnyWithin(v.Cell, 1.5f))) continue;
-                    Consider(Task.Rescue, (rec, v), v.Cell, 0.95f + 0.2f * c.AffinityTo(v), $"폭발에 다친 {Ko.EulReul(v.Name)} 살핀다");
+                    if (w.Fire.AnyWithin(v.Cell, 1.2f) || v.Room != null && Atmosphere.Danger(v.Room) > 0.6f) continue;
+                    Consider(Task.Rescue, (rec, v), v.Cell, 1.1f + 0.2f * c.AffinityTo(v), $"폭발에 다친 {Ko.EulReul(v.Name)} 살핀다");
                 }
             if (!rec.Investigated && rec.Investigator < 0 && age >= SimTime.Minutes(30) && safe && rec.Power >= 0.1f)
-                Consider(Task.Investigate, rec, rec.At, 0.38f + 0.3f * c.SkillLevel(Skill.Engineering), $"{room!.Name} 폭발 자리를 살핀다");
+                Consider(Task.Investigate, rec, rec.At, (age < SimTime.Hours(6) ? 0.8f : 0.5f) + 0.35f * c.SkillLevel(Skill.Engineering) + (rec.Hurt.Count > 0 ? 0.25f : 0f), $"{room!.Name} 폭발 자리를 살핀다 — 왜 터졌나");
         }
         foreach (var o in b.Items.Secures)
         {
@@ -1124,9 +1127,9 @@ public sealed class BlastResponseActivity : Activity
                 var r2 = (BlastRecord)target;
                 r2.Investigator = c.Id;
                 toils.Add(new GotoToil(spot));
-                toils.Add(new WorkToil(0.4f, Skill.Engineering, r2.At.Center));
+                toils.Add(new WorkToil(0.3f, Skill.Engineering, r2.At.Center));
                 toils.Add(new DoToil((cm, world) => { world.Blast.Investigate(r2, cm); return true; }));
-                return new Job(this, "폭발 조사", toils) { LogText = why, OnFinished = (cm, world, st) => { if (!r2.Investigated && r2.Investigator == cm.Id) r2.Investigator = -1; } };
+                return new Job(this, "폭발 조사", toils) { LogText = why, InterruptMargin = 0.35f, OnFinished = (cm, world, st) => { if (!r2.Investigated && r2.Investigator == cm.Id) r2.Investigator = -1; } };
             case Task.Secure:
                 var o = (SecureOrder)target;
                 if (items.Get(o.Explosive) is not Explosive e) return null;

@@ -1109,7 +1109,7 @@ public sealed partial class WorkBoard
         //    (v8: 불에 휘어 열린 채 걸린 문은 지렛대로 억지로 닫는다 — 안 닫으면 불이 옆방 공기를 끌어들인다)
         foreach (var d in ship.Doors)
         {
-            if (!d.JammedOpen || d.Removed) continue;
+            if (!d.JammedOpen || d.Removed || w.Blast.Blown(d)) continue; // v16.13 폭발에 날아간 문은 문짝이 없다 (문틀을 펴면 다시 단다)
             var burning = new[] { d.RoomA, d.RoomB }.FirstOrDefault(r => r != null && w.Fire.IsKnown(r));
             if (burning == null) { d.JammedOpen = false; continue; } // 식으면 풀린다
             Post(WorkKind.CrankDoor, WorkTarget.OfDoor(d), 1.1f, Skill.Mechanics, $"{burning.Name} 문이 열에 휘어 열린 채 걸렸다 — 지렛대로 억지로 닫는다");

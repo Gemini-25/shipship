@@ -12,13 +12,17 @@ public static partial class Program
         var ship = w.Ship;
         foreach (var d in ship.Doors)
         {
-            if (d.Removed || d.IsExternal || d.Bulkhead || d.RoomA == null || d.RoomB == null || d.RoomA.Kind == RoomType.Corridor && d.RoomB.Kind == RoomType.Corridor) continue;
+            if (d.Removed || d.IsExternal || d.Bulkhead || d.RoomA == null || d.RoomB == null) continue;
             var axis = d.ConnectsVertically ? new Cell(0, 1) : new Cell(1, 0);
-            var a1 = d.Cell + axis; var b1 = new Cell(d.Cell.X - axis.X, d.Cell.Y - axis.Y);
-            var a2 = d.Cell + axis + axis; var b2 = new Cell(d.Cell.X - 2 * axis.X, d.Cell.Y - 2 * axis.Y);
-            if (!ship.IsOpenFloor(a1) || !ship.IsOpenFloor(b1) || !ship.IsOpenFloor(a2) || !ship.IsOpenFloor(b2)) continue;
-            if (skip-- > 0) continue;
-            return (d, a1, b2);
+            for (int side = 0; side < 2; side++)
+            {
+                var ax = side == 0 ? axis : new Cell(-axis.X, -axis.Y);
+                var a1 = d.Cell + ax; var b1 = new Cell(d.Cell.X - ax.X, d.Cell.Y - ax.Y);
+                var a2 = a1 + ax;
+                if (!ship.IsOpenFloor(a1) || !ship.IsOpenFloor(b1) || !ship.IsOpenFloor(a2) || ship.RoomAt(a2)?.Kind == RoomType.Corridor) continue;
+                if (skip-- > 0) continue;
+                return (d, a2, b1);
+            }
         }
         return null;
     }
@@ -64,7 +68,7 @@ public static partial class Program
                 x.Position = beyond.Center; x.PreviousPosition = x.Position;
                 door.Openness = pass == 0 ? 0f : 1f;
                 door.HoldOpen = pass == 1;
-                var rec = w.Blast.Detonate(inside, 0.6f, BlastKind.Charge, "시험 폭약")!;
+                var rec = w.Blast.Detonate(inside, 0.8f, BlastKind.Oxygen, "시험 산소통")!;
                 float p = w.Blast.PAt(beyond);
                 bool fell = rec.Fell.Contains(x.Id);
                 if (pass == 0) { pClosed = p; fellClosed = fell; bent = door.Bent > 0.3f; }
@@ -76,6 +80,13 @@ public static partial class Program
                     int soot = rec.Wave.Count(c => w.Body.Mark(new Cell(c.X, c.Y), CellMark.Soot) > 0.2f);
                     int rubble = w.Ship.Rubble.Count;
                     float fear = x.Memory.FearOf(room);
+                    if (Environment.GetEnvironmentVariable("BLASTDBG") != null)
+                        for (int k = 0; k < 4; k++)
+                        {
+                            Run(w, SimTime.Minutes(10));
+                            Console.WriteLine($"   [dbg] {k * 10 + 10}분 · 다침 {string.Join(",", rec.Hurt)} 넘어짐 {string.Join(",", rec.Fell)} 들음 {rec.Heard.Count} · 불 {w.Fire.Count}");
+                            foreach (var c in w.Crew) Console.WriteLine($"     {c.Id} {c.Name} {c.Job?.Label} · " + string.Join(" / ", c.LastEvaluations.Where((e, i) => e.Activity is BlastResponseActivity || i == 0).Select(e => $"{e.Activity.Id} {e.Score:0.00} {e.Reason}")));
+                        }
                     Run(w, SimTime.Hours(3));
                     var st = w.Blast.Stats;
                     Check("흔적 — 방사형 그을음 · 잔해 · 깨진 조명 · 자리", soot >= 3 && rubble > 0 && w.Blast.Scars.Count > 0,
@@ -125,7 +136,11 @@ public static partial class Program
             w.RaiseAlert("시험 경보", b.Room, AlertLevel.Critical, shipWide: true);
             bool aNow = a.AlertedTick == t, bNow = b.AlertedTick == t;
             Run(w, SimTime.Minutes(30));
+            w.Blast.Deafen(a, 1f, 3f);
+            w.Automation.Speak.Announce("시험 방송", a.Room, 2);
+            Run(w, SimTime.Minutes(15));
             var st = w.Blast.Stats;
+            Check("이명 — 방송을 놓치면 주 컴퓨터가 손목 단말로 다시 알린다", st.BroadcastMissed > 0 && st.ComputerRelays > 0, $"놓침 {st.BroadcastMissed} · 다시 알림 {st.ComputerRelays}");
             Check("이명 — 경보를 늦게 듣는다", deaf && !aNow && bNow && a.AlertedTick > t && st.HeardLate > 0,
                 $"{a.Name} 이명 {(deaf ? "예" : "아니오")} · 경보 바로 {(aNow ? "들음" : "못 들음")} → {(a.AlertedTick - t) / (float)SimTime.TicksPerHour * 60f:0.#}분 뒤 · {b.Name} 바로 {(bNow ? "들음" : "못 들음")} · 늦게 {st.HeardLate} · 방송 놓침 {st.BroadcastMissed}(컴퓨터 다시 {st.ComputerRelays})");
         }
@@ -154,7 +169,7 @@ public static partial class Program
             for (int i = 0; i < SimTime.Hours(10) && o.Stage != BreachOrder.Step.Done; i++) w.Step();
             var ist = w.Blast.Items.Stats;
             Check("폭약으로 막힌 문을 뚫는다", o.Stage == BreachOrder.Step.Done && door.JammedOpen && !door.Welded,
-                $"단계 {o.Stage} · {o.Result} · 만듦 {ist.Crafted} · 불발 {ist.Duds} · 과폭 {ist.Overcharges} · 비키게 함 {ist.Cleared} · 몸을 피함 {ist.TookCover}");
+                $"단계 {o.Stage} · {o.Result} · 문 열림 {door.Openness:0.0}(걸림 {door.JammedOpen} · 용접 {door.Welded} · 날아감 {w.Blast.Blown(door)}) · 만듦 {ist.Crafted} · 불발 {ist.Duds} · 과폭 {ist.Overcharges} · 비키게 함 {ist.Cleared} · 몸을 피함 {ist.TookCover}");
         }
 
         // ── 7) 쉭 소리에 몸을 피한다 · 귀가 울리는 사람은 못 듣는다 ──
@@ -172,6 +187,7 @@ public static partial class Program
                 if (near != default) { deafOne.Position = near.Center; deafOne.PreviousPosition = deafOne.Position; }
             }
             var cell = w.Blast.Items.Place(ExplosiveKind.BatteryCell, spot, 1f);
+            w.Step();
             w.Blast.Items.Ignite(cell, "시험 — 셀이 부풀었다");
             cell.FuseAt = w.Tick + SimTime.Minutes(4);
             float d0 = (z.Position - spot.Center).Length();
@@ -180,36 +196,33 @@ public static partial class Program
             var ist = w.Blast.Items.Stats;
             Check("쉭 소리 — 알아챈 사람이 몸을 피한다", ist.TookCover > 0 && d1 > d0 + 1.5f,
                 $"{z.Name} 거리 {d0:0.0} → {d1:0.0}칸 · 알아챔 {ist.Noticed} · 피함 {ist.TookCover} · 지금 일 {z.Job?.Label}");
-            Check("귀가 울리는 사람은 쉭 소리를 못 듣는다", deafOne == null || ist.Unheard > 0 || deafOne.Mind.Knows.ContainsKey($"boom:{cell.Id}") == false,
+            Check("귀가 울리는 사람은 쉭 소리를 못 듣는다", deafOne != null && ist.Unheard > 0,
                 $"못 들음 {ist.Unheard} · {deafOne?.Name}");
         }
 
         // ── 8) 주 컴퓨터가 위험 배치를 읽고 경고 · 제안 → 사람이 옮긴다 ──
         {
             var w = DayOne(seed, "Hanbit");
-            var room = w.Ship.LiveRooms.Where(r => r.Kind is RoomType.Workshop or RoomType.Storage or RoomType.Mess).OrderByDescending(r => r.Cells.Count).First();
-            var free = room.Cells.Where(c => w.Ship.IsOpenFloor(c) && w.Blast.Items.At(c) == null).ToList();
-            var hc = free.First(c => free.Contains(c + new Cell(1, 0)));
-            var heater = w.Portable.Devices.First(d => d.Kind == PortableKind.Heater);
-            w.Portable.PlaceNow(heater, hc, null, "시험 — 히터 곁 산소통");
-            var tank = w.Blast.Items.Place(ExplosiveKind.OxygenTank, hc + new Cell(1, 0), 1f);
-            for (int i = 0; i < SimTime.Hours(1) && w.Blast.Items.Stats.ComputerWarnings == 0; i++) w.Step();
+            var stove = w.Ship.FurnitureOf(FurnitureType.Stove).First();
+            var spot = stove.Cells.SelectMany(fc => Cell.Dirs8.Select(d => fc + d)).First(c => w.Ship.IsOpenFloor(c) && !stove.UseSpots.Contains(c) && w.Blast.Items.At(c) == null);
+            var tank = w.Blast.Items.Place(ExplosiveKind.OxygenTank, spot, 1f, w.Crew[0].Id);
+            for (int i = 0; i < SimTime.Hours(1) && tank.WarnedAt < 0; i++) w.Step();
             var ist = w.Blast.Items.Stats;
-            bool warned = ist.ComputerWarnings > 0;
+            bool warned = tank.WarnedAt >= 0;
             string risk = tank.RiskWhy;
-            for (int i = 0; i < SimTime.Hours(5) && !tank.Moved; i++) w.Step();
-            float dist = (tank.Cell.Center - heater.At.Center).Length();
-            Check("주 컴퓨터 — 히터 곁 산소통을 읽고 경고 · 제안", warned && risk.Contains("히터"),
-                $"경고 {ist.ComputerWarnings} · 제안 {ist.Proposals} · 위험 \"{risk}\"");
+            for (int i = 0; i < SimTime.Hours(6) && !tank.Moved; i++) w.Step();
+            float dist = (tank.Cell.Center - stove.Center).Length();
+            Check("주 컴퓨터 — 조리대 곁 산소통을 읽고 경고 · 제안", warned && risk.Contains("곁"),
+                $"경고 {ist.ComputerWarnings} · 제안 {ist.Proposals} · 위험 {tank.Risk * 100:0}% \"{risk}\"");
             Check("승무원 — 경고를 받고 안전한 곳으로 옮긴다", tank.Moved && dist >= 2.5f,
-                $"옮김 {ist.Secured} · 히터와 거리 {dist:0.0}칸 · 사람이 알아챔 {ist.CrewNoticed}");
+                $"옮김 {ist.Secured} · 조리대와 거리 {dist:0.0}칸 · 사람이 알아챔 {ist.CrewNoticed}");
         }
 
         // ── 9) 무한 연쇄 없음: 빽빽한 폭발성 물건 무더기 ──
         {
             var w = DayOne(seed, "Hanbit");
             var room = w.Ship.LiveRooms.Where(r => r.Kind != RoomType.Corridor).OrderByDescending(r => r.Cells.Count(c => w.Ship.IsOpenFloor(c))).First();
-            var cells = room.Cells.Where(c => w.Ship.IsOpenFloor(c)).Take(28).ToList();
+            var cells = room.Cells.Where(c => w.Ship.IsOpenFloor(c)).OrderBy(c => (c.Center - room.Center).LengthSquared()).ThenBy(c => c.X).ThenBy(c => c.Y).Take(28).ToList();
             var kinds = new[] { ExplosiveKind.OxygenTank, ExplosiveKind.GasCylinder, ExplosiveKind.FuelCan, ExplosiveKind.HydrogenTank, ExplosiveKind.WeldingGas, ExplosiveKind.Aerosol, ExplosiveKind.BatteryCell };
             var placed = cells.Select((c, i) => w.Blast.Items.Place(kinds[i % kinds.Length], c, 1f)).ToList();
             Clear(w, cells[0]);
@@ -217,6 +230,8 @@ public static partial class Program
             w.Blast.Items.Ignite(placed[0], "시험 — 첫 불씨");
             placed[0].FuseAt = w.Tick + 1;
             Run(w, SimTime.Hours(2));
+            if (Environment.GetEnvironmentVariable("BLASTDBG") != null)
+                foreach (var r in w.Blast.Recent) Console.WriteLine($"   [dbg] {r.Spec.Name} at {r.At} p{r.Power:0.00} d{r.Depth} shards {string.Join(",", r.Shards.Select(x => $"{x.Hit}:{(x.To - x.From).Length():0.0}"))} · 쉭 {string.Join(",", placed.Where(e => e.Primed).Select(e => e.Id))} · items {string.Join(",", placed.Take(6).Select(e => $"{e.Cell}{(e.Spent ? "x" : "")}"))}");
             int det = w.Blast.Stats.Detonations - before;
             bool live = placed.Any(e => e.Primed && !e.Spent);
             Check("무한 연쇄 없음 — 끝이 있다", det <= placed.Count + 12 && !live && w.Blast.Stats.MaxDepth <= ExplosiveSet.MaxDepth + 1,

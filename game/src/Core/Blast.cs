@@ -48,6 +48,8 @@ public sealed class BlastRecord
     public string BlameWhy { get; set; } = "";
     public BlastScale Scale { get; set; }
     public List<WaveCell> Wave { get; } = new();
+    /// <summary>압력파가 부딪친 벽 칸과 힘 (화면: 고리가 벽에 막혀 번쩍).</summary>
+    public List<WaveCell> WallHits { get; } = new();
     public List<Shard> Shards { get; } = new();
     public List<int> Heard { get; } = new();
     public List<int> Deafened { get; } = new();
@@ -108,6 +110,13 @@ public sealed partial class BlastSystem
     public List<BlastScar> Scars { get; } = new();
     public ExplosiveSet Items { get; }
     internal HashSet<(int rec, int victim)> Helped { get; } = new();
+    /// <summary>문짝이 날아간 문 (문틀을 펴면 다시 단다).</summary>
+    private readonly SortedSet<int> _blown = new();
+    /// <summary>불기둥 · 셀 분출: 몇 분 동안 그 자리를 달군다 (곁의 폭발성 물건이 익는다).</summary>
+    public List<(Cell at, long until, float heat, BlastKind kind)> Jets { get; } = new();
+    public bool Blown(Door d) => _blown.Contains(d.Id);
+    internal void MarkBlown(Door d) { if (_blown.Add(d.Id)) Stats.DoorsBlown++; }
+    public IReadOnlyCollection<int> BlownDoors => _blown;
     private int _next = 1;
 
     public BlastSystem(World w)
@@ -231,7 +240,13 @@ public sealed partial class BlastSystem
         _field.Clear();
         foreach (int i in _reached) _field[i] = _v[i];
         _wallField.Clear();
-        foreach (int i in _wallsTouched) _wallField[i] = _wl[i];
+        foreach (int i in _wallsTouched)
+        {
+            _wallField[i] = _wl[i];
+            if (_wl[i] < 0.04f) continue;
+            var wc = ship.Grid.CellAt(i);
+            rec.WallHits.Add(new WaveCell((short)wc.X, (short)wc.Y, _wl[i], (wc.Center - at.Center).Length()));
+        }
 
         // ── 2) 벽: 받은 힘만큼 (외벽은 구멍 · 칸막이는 무너진다) · 창은 깨진다 ──
         foreach (int i in _wallsTouched)
@@ -384,7 +399,7 @@ public sealed partial class BlastSystem
         if (d.Removed || d.JammedOpen) return 0.9f;
         float closed = d.Bulkhead ? 0.06f : 0.12f;
         if (d.Welded) closed *= 0.8f;
-        closed += 0.35f * Math.Clamp(d.Bent, 0f, 1f); // 휜 문틀은 덜 막는다
+        closed += 0.2f * Math.Clamp(d.Bent, 0f, 1f); // 휜 문틀은 덜 막는다
         float open = Math.Clamp(d.Openness, 0f, 1f);
         return MathF.Min(0.92f, closed + (0.92f - closed) * open);
     }
@@ -513,6 +528,7 @@ public sealed partial class BlastSystem
             {
                 d.JammedOpen = true; d.Welded = false; d.Locked = false; d.MotorBroken = true; d.Openness = 1f;
                 d.Bent = 1f;
+                _blown.Add(id);
                 if (w.Body.DoorOf(d) is DoorBody db) { db.Gasket = 0f; }
                 rec.BlownDoors.Add(id);
                 Stats.DoorsBlown++;
@@ -651,7 +667,7 @@ public sealed partial class BlastSystem
             }
             if (hit && !rec.Hurt.Contains(c.Id)) rec.Hurt.Add(c.Id);
             // 밀쳐냄: 바깥쪽으로 한 칸 · 세면 넘어진다
-            float fallAt = 0.2f * (c.Suit != null ? 1.25f : 1f) * (c.IsChild ? 0.7f : 1f);
+            float fallAt = 0.18f * (c.Suit != null ? 1.25f : 1f) * (c.IsChild ? 0.7f : 1f);
             if (p > fallAt * 0.75f)
             {
                 var away = c.Position - at.Center;
@@ -900,6 +916,12 @@ public sealed partial class BlastSystem
                     float ch = spec.Heat * power * (1f - d / (fireR + 0.5f)) * 1.3f * o2 * (1f - 0.7f * wet) * (1f + oil);
                     if (R.Chance(MathF.Min(0.95f, ch)) && w.Fire.Ignite(c, MathF.Min(0.8f, 0.25f + 0.5f * ch))) rec.Ignited.Add(c);
                 }
+            // 불기둥 · 셀 분출: 몇 분 동안 그 자리를 달군다
+            if (spec.Heat >= 0.5f && rec.Kind != BlastKind.Dust)
+            {
+                Jets.Add((at, w.Tick + SimTime.Minutes(2f + 10f * power * spec.Heat), power * spec.Heat * 2.5f, rec.Kind));
+                if (Jets.Count > 12) Jets.RemoveAt(0);
+            }
             // 분진: 노란 불길이 방 안 가루를 타고 번진다
             if (rec.Kind == BlastKind.Dust && room != null)
                 foreach (var c in room.Cells)
@@ -1016,6 +1038,24 @@ public sealed partial class BlastSystem
         var w = _w;
         // 방 출렁임이 잦아든다
         for (int i = 0; i < _slosh.Length; i++) _slosh[i] *= 0.6f;
+        // 불기둥: 그 칸이 계속 탄다
+        Jets.RemoveAll(j => j.until <= w.Tick);
+        foreach (var j in Jets) if (w.Fire.At(j.at) < 0.3f && w.Ship.Grid.Kind(j.at) == TileKind.Floor) w.Fire.Ignite(j.at, 0.4f);
+        // 날아간 문: 문짝이 없으니 열린 채 — 문틀을 펴면(배 손보기) 다시 단다
+        foreach (int id in _blown.ToList())
+        {
+            if (id >= w.Ship.Doors.Count) { _blown.Remove(id); continue; }
+            var d = w.Ship.Doors[id];
+            if (d.Removed) { _blown.Remove(id); continue; }
+            if (d.Bent < 0.3f)
+            {
+                _blown.Remove(id);
+                d.JammedOpen = false;
+                w.Log.Add(w.Tick, LogKind.Work, $"{d.RoomA?.Name ?? "?"}·{d.RoomB?.Name ?? "?"} 사이 날아간 문을 다시 달았다");
+                continue;
+            }
+            d.JammedOpen = true;
+        }
         Late();
         Items.Update(dt);
         if (w.Tick < _nextSlow) return;
@@ -1088,7 +1128,7 @@ public sealed partial class BlastSystem
     public void Hash(Action<long> I, Action<float> F)
     {
         I(Stats.Detonations); I(Stats.Chains); I(Stats.Knocked); I(Stats.Deafened); I(Stats.HeardLate); I(Stats.Investigations);
-        I(Recent.Count); I(Scars.Count);
+        I(Recent.Count); I(Scars.Count); I(_blown.Count); I(Jets.Count);
         foreach (var r in Recent) { I(r.Tick); I(r.At.X); I(r.At.Y); F(r.Power); I((int)r.Kind); I(r.Hurt.Count); I(r.Shards.Count); }
         Items.Hash(I, F);
     }
