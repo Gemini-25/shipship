@@ -410,6 +410,8 @@ public static class SaveGame
         foreach (var m in Enum.GetValues<ComputerModule>()) I(w.Automation.Has(m) ? 1 : 0);
         { var bs = w.Body.Stats; I(bs.Falls); I(bs.HatchOpens); I(bs.Calls); I(bs.Knocks); I(bs.Overheard); I(w.Body.Hatches.Count); I(w.Body.Marks.Count); foreach (var db in w.Body.Doors) { I(db.Pass); F(db.Gasket); } } // v16.3 배 본체
         I(w.Scenes.Hash()); // v16.1 일상 장면 · 쪽지 · 인수인계
+        // v16.0 ④ · v16.6 주컴퓨터: 다섯 칸 기록 · 제안 · 확인 · 사람마다 신뢰 · 믿음 · 연산 자원 · 방송
+        { var au = w.Automation; I(au.Book.Total); I(au.Book.Right); I(au.Book.Wrong); I(au.Asks.All.Count); I(au.Asks.Rejected); I(au.CheckFound); I(au.Reboots); I(au.Suspended.Count); I(au.Speak.Count); I(au.Belief.Repairs); foreach (var c in w.Crew) F(au.Trusts.Of(c)); foreach (var m in au.Modules.OrderBy(m => (int)m)) I((int)m); }
         return h;
     }
 }

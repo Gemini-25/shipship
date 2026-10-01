@@ -12,6 +12,7 @@ public static class Brain
     {
         new PanicActivity(), // v13.3 공황 (얼어붙거나 달아난다)
         new EvacuateActivity(),
+        new CheckRoomActivity(), // v16.6 컴퓨터 확인 요청 (직접 가서 보고 쓰러진 사람을 데려 나온다)
         new ShelterActivity(), // v12.6 태양 폭풍
         new QuarantineActivity(), // v12.6 격리실
         new RecoverActivity(),

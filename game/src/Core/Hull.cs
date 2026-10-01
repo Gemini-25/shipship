@@ -180,6 +180,7 @@ public sealed class HullSystem
                     d.Locked = true;
                     locked++;
                 }
+                if (locked > 0) _world.Automation.Book.Add(ActKind.Bulkhead, room, $"{room.Name} 감압 {p:0}kPa" + (room.Leaking ? " · 구멍" : ""), inside.Count > 0 ? $"배 우선 — 안에 {inside.Count}명" : "빈 방 — 바로 닫는다", $"격벽 {locked}개 폐쇄", "구멍 막기", "lock:" + room.Id, SimTime.Minutes(10), 6f); // v16.0 다섯 칸 기록
                 bool unlockedAny = room.Doors.Any(d => !d.IsExternal && !d.Locked);
                 _world.RaiseAlert($"{room.Name} 감압! " + (!auto ? (_world.Automation.Doors ? "데이터선이 끊겨 격벽이 저절로 닫히지 않는다" : "자동화가 꺼져 격벽이 저절로 닫히지 않는다") : unlockedAny ? "일부 격벽이 전기·구동기가 없어 안 닫힘" : "격벽 폐쇄"),
                     room, AlertLevel.Critical, shipWide: true);
@@ -228,6 +229,7 @@ public sealed class HullSystem
                 room.VentOpen = want;
                 string why = want ? "" : room.Leaking ? " (감압)" : _world.Fire.IsKnown(room) ? " (화재)" : _world.Structure.DuctOpen ? " (환기망 격리)" : "";
                 _world.Log.Add(_world.Tick, LogKind.Ship, $"{room.Name} 환기 댐퍼 자동 {(want ? "개방" : "폐쇄")}{why}");
+                _world.Automation.Book.Add(ActKind.Damper, room, $"{room.Name}{(why == "" ? " 평온" : why)}", want ? "위험이 걷혔다" : "공기·연기가 번지지 않게", $"환기 댐퍼 {(want ? "개방" : "폐쇄")}", "", "damp:" + room.Id + (want ? "o" : "c"), SimTime.Minutes(10), 6f); // v16.0
             }
         }
     }

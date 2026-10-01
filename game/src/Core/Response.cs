@@ -18,6 +18,8 @@ public enum ComputerModule
     FireResponse, AirZones, BioMonitor, ResourceAlloc, EvacGuide, Preempt, Lessons,
     // v15.9 모듈 13 (ComputerV15)
     Foresight, MaintPlan, WaterPlan, PowerShare, CargoSort, RouteForecast, FatigueAlert, AutoCalib, CommsRelay, SoilWatch, PipeWatch, DoorPressure, Archive,
+    // v16.6 새 모듈 10 (ComputerV16 — 실제 물건·행동을 만든다)
+    Roster, Assistant, MealPlan, LightCycle, QuietNight, Access, Balance, MediaVault, Training, AutoLog,
 }
 
 public sealed class FireCase
@@ -37,6 +39,10 @@ public sealed class FireCase
     public bool Casualty { get; set; }
     public string Status { get; set; } = "소화조가 끈다";
     public int Node { get; set; } = -1;
+    /// <summary>v16.6 제안이 거절됐다 — 이때까지는 소화조에 맡긴다 (사람이 확인하러 간다).</summary>
+    public long RejectedUntil { get; set; } = -1;
+    /// <summary>v16.6 대피 경보를 듣고 빠져나간 사람 (수순이 사람을 잃지 않고 끝나면 컴퓨터를 더 믿는다).</summary>
+    public List<int> Evacuees { get; } = new();
 }
 
 public sealed partial class AutomationSystem
@@ -66,7 +72,7 @@ public sealed partial class AutomationSystem
         ComputerModule.EvacGuide => "대피 안내",
         ComputerModule.Preempt => "선제 조치",
         ComputerModule.Lessons => "교훈 반영",
-        _ => ComputerV15.Name(m),
+        _ => ComputerV16.Of(m)?.Name ?? ComputerV15.Name(m),
     };
 
     public static string ModuleNote(ComputerModule m) => m switch
@@ -78,7 +84,7 @@ public sealed partial class AutomationSystem
         ComputerModule.EvacGuide => "조명으로 대피 길을 그리고 문을 연다",
         ComputerModule.Preempt => "연쇄를 예측해 미리 끊는다 (보수적 — 헛정지가 잦다)",
         ComputerModule.Lessons => "지난 사고의 교훈을 다음 수순에 넣는다",
-        _ => ComputerV15.Note(m),
+        _ => ComputerV16.Of(m)?.Note ?? ComputerV15.Note(m),
     };
 
     // ── 불활성 가스 ──
@@ -111,12 +117,9 @@ public sealed partial class AutomationSystem
     /// <summary>바깥으로 뺄 수 있는 방 (외벽이 있다 — 배기 밸브).</summary>
     private bool CanVent(Room r) => _world.Ship.Walls.Any(kv => kv.Value.IsHull && Hull.InsideRoom(_world.Ship, kv.Key) == r);
 
-    /// <summary>안에 누가 있나 — 데이터선이 이어진 방은 문 감지기로 안다 (생체 감시면 끊겨도). 모르면 null.</summary>
-    private int? Occupants(Room r)
-    {
-        if (!r.DataLinked && !Has(ComputerModule.BioMonitor)) return null;
-        return _world.Crew.Count(c => !c.Dead && c.Room == r && !c.Outside);
-    }
+    /// <summary>안에 누가 있나 — 데이터선이 이어진 방은 문 감지기로 안다 (생체 감시면 끊겨도). 모르면 null.
+    /// v16.6 컴퓨터가 믿는 배로: 문 감지기가 틀어지면 틀린 믿음 그대로 (오경보가 잦은 감지기는 모른다고 본다).</summary>
+    private int? Occupants(Room r) => Belief.PeopleIn(r);
 
     private void FireResponse()
     {
@@ -143,6 +146,8 @@ public sealed partial class AutomationSystem
                     bool crewOnIt = w.Board.Open.Any(o => o.Kind == WorkKind.Extinguish && o.Target.CurrentRoom == room && o.Assignee != null);
                     float grace = critical ? 3f : 8f;
                     if (!crewOnIt) grace = MathF.Min(grace, 4f);
+                    grace *= Learn.GraceMul(room) * (1f + MathF.Max(0f, Load - 1f)); // v16.6 교훈 반영: 같은 종류 방의 불을 겪었으면 일찍 · 연산이 넘치면 늦게
+                    if (w.Tick < fc.RejectedUntil) { fc.Status = $"제안이 거절됐다 — 소화조에 맡긴다 ({cells}칸)"; break; }
                     bool escalate = cells >= 6 || minutes >= grace && (cells >= 2 || !crewOnIt);
                     if (Level < 4) escalate &= minutes >= grace * 1.5f; // 추론이 안 되면 늦게 (보수적으로) 올린다
                     if (!escalate) { fc.Status = crewOnIt ? $"소화조가 끈다 ({cells}칸 · {minutes:0}분)" : $"소화조를 기다린다 ({cells}칸)"; break; }
@@ -165,7 +170,10 @@ public sealed partial class AutomationSystem
                     // 컴퓨터 판단(진공): 정신이 있는 사람이 아직 안에 있고 핵심 방이 아니면 3분 더 기다린다
                     if (go && fc.Method == "vacuum" && policy == 3 && !empty && !CriticalRoom(room)
                         && w.Crew.Any(c => !c.Dead && !c.Down && c.Room == room) && w.Tick < fc.ExecAt + SimTime.Minutes(3)) go = false;
+                    bool held = go && Held(fc, room, inside); // v16.6 제안 → 승인 (거절되면 이미 풀었다)
+                    if (held) { if (fc.Stage != 1) break; go = false; }
                     if (go) Execute(fc, room);
+                    else if (held) { }
                     else
                     {
                         fc.Status = inside is int n ? $"{(fc.Method == "vacuum" ? "진공" : "질식")} 소화 — 안에 {n}명 · 대피 기다림" : "안을 알 수 없다 (데이터선) — 기다림";
@@ -212,6 +220,8 @@ public sealed partial class AutomationSystem
                     w.Log.Add(w.Tick, LogKind.Ship, $"{room.Name} 소화 대응 끝 — 숨 쉴 수 있다 · 격벽 해제");
                     // v13.3 컴퓨터 신뢰: 사람을 잃지 않고 끝냈다
                     if (!fc.Casualty) w.Minds.ComputerResult(0.05f, $"{room.Name} 불을 수순대로 껐다");
+                    Learn.FireDone(room, (w.Tick - fc.Since) / (float)SimTime.Minutes(1)); // v16.6 교훈
+                    if (!fc.Casualty) foreach (var id in fc.Evacuees) if (w.Crew.FirstOrDefault(c => c.Id == id) is CrewMember ev && !ev.Dead && !ev.Down) Trusts.Change(ev, 0.08f, $"{room.Name} 소화 경보를 듣고 빠져나왔다 — 컴퓨터가 불을 껐다");
                     break;
                 }
             }
@@ -259,6 +269,10 @@ public sealed partial class AutomationSystem
         using (w.Causes.Because(fire))
             fc.Node = w.Causes.Effect(CauseKind.Recovery, $"resp:{room.Id}:{method}", $"{room.Name} {name} 준비 ({rule})", room, null);
         Reason($"fire1:{room.Id}", $"{room.Name} 불 {cells}칸 · {minutes:0}분 — 소화조로 잡히지 않는다 → {name} ({(method == "vacuum" ? "공기를 바깥으로 뺀다" : "불활성 가스로 산소를 밀어낸다")}) · {rule}", SimTime.Minutes(30));
+        fc.Evacuees.Clear();
+        foreach (var c in w.Crew) if (!c.Dead && !c.Down && c.Room == room) fc.Evacuees.Add(c.Id);
+        Book.Add(ActKind.Suppress, room, $"{room.Name} 불 {cells}칸 · {minutes:0}분 · 안에 {(Occupants(room) is int n0 ? $"{n0}명(믿음)" : "모름")}", $"소화조로 안 잡힌다 · {rule}", $"{name} 준비 · 댐퍼 폐쇄 · 대피 경보", "모두 나가라", $"plan:{room.Id}", SimTime.Minutes(5), 15f);
+        Speak.Announce(Voice.Style($"{room.Name} {name} 준비 — 모두 나가라"), room, 2);
         w.RaiseAlert(countdown ? $"{room.Name} {name} — {wait / (float)SimTime.Minutes(1):0.#}분 뒤 · 모두 나가라" : $"{room.Name} {name} 준비 — 방이 비면 시작한다 · 모두 나가라", room, AlertLevel.Critical, shipWide: true);
         w.Board.RequestScan();
     }
@@ -294,6 +308,14 @@ public sealed partial class AutomationSystem
             w.Causes.Effect(CauseKind.Recovery, "", $"{room.Name} {name} 시작" + (inside > 0 ? $" — 안에 {inside}명" : ""), room, null);
         w.History.Add(w, HistoryKind.Decision, $"주 컴퓨터: {room.Name} {name}" + (inside > 0 ? $" — 안에 {string.Join("·", w.Crew.Where(c => !c.Dead && c.Room == room).Select(c => c.Name))}이(가) 남은 채" : ""), room, log: true);
         w.RaiseAlert($"{room.Name} {name} 시작", room, AlertLevel.Critical, shipWide: true);
+        // v16.6 다섯 칸 기록 · 안에 남은 사람은 컴퓨터를 의심한다
+        int? believed = Occupants(room);
+        Book.Add(ActKind.Suppress, room, $"{room.Name} 불 {w.Fire.CountIn(room)}칸 · 안에 {(believed is int b ? $"{b}명" : "모름")}(믿음)", fc.Method == "vacuum" ? "공기를 빼면 확실히 꺼진다" : "가스로 산소를 밀어낸다",
+            $"{name} 시작 · 격벽 폐쇄", "다시 가압은 꺼진 뒤", $"exec:{room.Id}", SimTime.Minutes(5), 12f,
+            (world, a) => ComputerLogBook.DownIn(world, room) > a.DownBefore ? (-1, $"틀렸다 — {room.Name} 안에서 사람이 쓰러졌다")
+                : world.Fire.CountIn(room) == 0 ? (1, $"맞았다 — {room.Name} 불이 꺼졌다") : (2, $"보류 — 아직 탄다 ({world.Fire.CountIn(room)}칸)"));
+        foreach (var c in w.Crew.Where(c => !c.Dead && c.Room == room && !c.Outside).ToList())
+            Trusts.Change(c, -0.3f, $"내가 {room.Name}에 있는데 컴퓨터가 {Ko.EulReul(name)} 시작했다");
     }
 
     private void Restore(FireCase fc, Room room)
@@ -323,6 +345,42 @@ public sealed partial class AutomationSystem
         fc.Status = why;
         Reason($"firex:{room.Id}", $"{room.Name} 소화 대응 — {why}", SimTime.Minutes(30));
         w.Board.RequestScan();
+    }
+
+    /// <summary>v16.6 제안 → 승인: 방침이 묻게 하면 실행 전에 제안 카드를 낸다. 결정이 나기 전엔 기다리고(true), 받으면 실행(false), 거절하면 사람 확인.</summary>
+    private bool Held(FireCase fc, Room room, int? believed)
+    {
+        var w = _world;
+        string key = $"fire:{room.Id}:{fc.Method}";
+        var last = Asks.Latest(key);
+        if (last != null && last.State != ProposalState.Pending && last.Tick >= fc.PlannedAt)
+        {
+            if (last.Accepted) return false;
+            fc.RejectedUntil = w.Tick + SimTime.Minutes(10);
+            Release(fc, room, $"제안 거절 ({last.DecidedBy}) — 사람이 확인하러 간다 · 그동안 소화조");
+            return true;
+        }
+        string? wrong = Learn.WrongBefore(room, fc.Method);
+        if (!Asks.Needed(fc.Method) && wrong == null) return false;
+        if (!Asks.Needed(fc.Method) && wrong != null)
+        {
+            // 바로 실행하는 방침이지만 지난번 이 방에서 틀렸다 — 1분 더 확인한다
+            if (w.Tick - fc.PlannedAt < SimTime.Minutes(1.3f)) { Reason($"wrong:{room.Id}", $"{room.Name} — 지난번 이 방에서 틀렸다 ({wrong}) · 1분 더 확인한다", SimTime.Minutes(30)); fc.Status = "지난번에 틀린 방 — 한 번 더 확인"; return true; }
+            return false;
+        }
+        if (last is { State: ProposalState.Pending })
+        {
+            fc.Status = $"제안 — 승인 기다림 {(last.Deadline - w.Tick) / (float)SimTime.Minutes(1) * 60f:0}초";
+            return true;
+        }
+        var b = Belief.Of(room);
+        string name = fc.Method == "vacuum" ? "진공 소화" : "질식 소화";
+        string seen = believed is int n ? (n == 0 ? $"비었다 (문 감지기 · {(w.Tick - b.Updated) / (float)SimTime.Minutes(1) * 60f:0}초 전)" : $"{n}명") : "모른다";
+        string basis = $"{room.Name} 불 {w.Fire.CountIn(room)}칸 · 안: {seen}" + (b.FalseAlarms + b.Misreads > 0 ? $" · 이 방 감지기 틀린 적 {b.FalseAlarms + b.Misreads}번" : "") + (wrong != null ? $" · 지난번 틀렸다: {wrong}" : "");
+        string effect = fc.Method == "vacuum" ? $"3분 안에 꺼진다 · 공기 {room.Air.Pressure * room.Volume / 100f:0}칸분을 잃는다" : $"2분 안에 꺼진다 · 가스 {17f * room.Volume:0} 쓴다";
+        Asks.Propose(key, fc.Method, room, $"{room.Name} {name}", basis, effect, 3f, believed);
+        fc.Status = "제안 — 승인 기다림";
+        return true;
     }
 
     // ── 공기 구역 관리 ──

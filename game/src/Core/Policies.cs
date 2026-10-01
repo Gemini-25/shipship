@@ -127,6 +127,9 @@ public sealed class PolicySystem
             "본부·기항지와의 교신 — 날마다 보고한다(전기를 쓰지만 기항지가 반긴다) / 필요할 때만"),
         new("doorfire", "재난", "화재 때 출입 통제", new[] { "자동 해제", "그대로" }, 0,
             "불이 나면 카드 · 지문 · 함장 승인 문을 모두 푸나 — 사람이 빠져나가고 들어가기 쉽다 ↔ 약품고 · 원자로실은 잠긴 채로"), // v16.3
+        // v16.6 제안 → 승인
+        new("computerask", "지휘", "컴퓨터 제안", new[] { "바로 실행", "위험한 조치는 묻는다", "모두 묻는다" }, 0,
+            "컴퓨터가 위험한 조치(진공·질식 소화)를 바로 하나 — 바로 / 제안 카드를 내고 받거나 거절을 기다린다(기한이 지나면 지휘하는 사람이 정한다) / 모듈 끄기·재부팅까지 묻는다"),
     };
 
     /// <summary>
@@ -188,6 +191,7 @@ public sealed class PolicySystem
     public static int Preferred(CrewMember c, string id)
     {
         var spec = Spec(id);
+        if (id == "computerask" && c.ComputerFaith >= 0f) return c.ComputerFaith < 0.2f ? 2 : c.ComputerFaith < 0.42f ? 1 : 0; // v16.6 컴퓨터에 데인 사람은 묻게 하자고 한다
         if (!Leans.TryGetValue(id, out var l)) return spec.Default;
         int v = l.lean[(int)c.Value];
         if (l.bold != 0)

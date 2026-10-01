@@ -74,6 +74,7 @@ public sealed partial class AutomationSystem
     public void Reason(string key, string text, long cooldown = -1)
     {
         var w = _world;
+        if (MainOnline || BackupActive || !Present) Book.FromReason(key, text, cooldown < 0 ? SimTime.Hours(1) : cooldown); // v16.0 다섯 칸 기록 (말은 IV부터지만 조치는 늘 적는다)
         if (Level < 4 && Operator == null) return; // 판단 근거를 말하는 건 IV부터 (사람이 조종하면 사람이 말한다)
         if (cooldown < 0) cooldown = SimTime.Hours(1);
         if (_said.TryGetValue(key, out var t) && w.Tick - t < cooldown) return;
@@ -129,7 +130,12 @@ public sealed partial class AutomationSystem
         foreach (var (roomId, since) in w.Hull.Trapped.ToList())
         {
             if (w.Tick - since > SimTime.Hours(1)) { w.Hull.Trapped.Remove(roomId); continue; }
-            if (w.Crew.Any(c => c.Down && c.Room?.Id == roomId)) { TrappedCasualties++; w.Hull.Trapped.Remove(roomId); }
+            if (w.Crew.Any(c => c.Down && c.Room?.Id == roomId))
+            {
+                TrappedCasualties++;
+                w.Hull.Trapped.Remove(roomId);
+                foreach (var c in w.Crew.Where(c => c.Down && !c.Dead && c.Room?.Id == roomId).ToList()) Trusts.Change(c, -0.2f, $"컴퓨터가 닫은 격벽 안에서 쓰러졌다 ({w.Ship.Rooms[roomId].Name})"); // v16.6
+            }
         }
 
         // 방침 검토 (하루 한 번): 늦게 닫아 옆방까지 잃었다 ↔ 닫힌 방에서 사람이 쓰러졌다

@@ -40,7 +40,8 @@ public partial class Hud
             (a.Operator is CrewMember op ? $" · 관제석: {op.Name} (수동 조종 — 좁게 끊고 빨리 되돌린다)" : " · 관제석 비어 있음 (컴퓨터가 보수적으로)"), 12, a.Operator != null ? Palette.Accent : col);
 
         // 등급 사다리
-        float ly = y0 + 64;
+        if (DrawControlTabs(card, x, right, y0, mouse)) return; // v16.0 ④ · v16.6 다섯 칸 기록 · 보고·모듈 · 사람·믿음
+        float ly = y0 + 88;
         string[] can =
         {
             "감지·경보·일지",

@@ -96,6 +96,7 @@ public partial class Hud : Control
         else DrawWorkBoard(y + 10f, room, mouse);
 
         DrawLog();
+        DrawComputerCard(mouse); // v16.0 ④ 주컴퓨터 상시 카드 (HudComputer.cs)
         DrawMinimap(); // v11.3
         if (MinimapOpen && !ChronicleOpen && !TechOpen && _minimapRect.Size.X > 0f) DrawVoyageBar(_minimapRect); // v12.8 항로
         DrawIncidentCards(mouse); // v12.2 사고 카드
