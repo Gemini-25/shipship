@@ -187,14 +187,7 @@ public sealed class DailySystem
             x.Diary(o, $"{Ko.IGa(cook.Name)} 내가 좋아하는 {Ko.EulReul(fav)} 만들어 줬다");
             return x.Done($"{Ko.IGa(cook.Name)} {o.Name}에게 {Ko.EulReul(fav)} 해 줬다", cook, o);
         }),
-        new("snack", "한밤의 간식", DailyGroup.Meal, 0.8f, x =>
-        {
-            if (x.One(c => x.Has(c, Habit.Snacker) || x.Has(c, Habit.NightOwl)) is not CrewMember c) return false;
-            x.Food(c, 0.15f);
-            var g = x.Other(c, o => x.Has(o, Habit.Grumbler) || x.Has(o, Habit.NeatFreak));
-            if (g != null) { x.Aff(c, g, -0.02f); x.Diary(g, $"냉장고에 둔 내 간식이 없어졌다. {c.Name}일 거다"); }
-            return x.Done($"{Ko.IGa(c.Name)} 냉장고를 몰래 털었다" + (g != null ? $" — {Ko.IGa(g.Name)} 눈치챘다" : ""), c);
-        }),
+        new("snack", "한밤의 간식", DailyGroup.Meal, 0.8f, x => x.W.Scenes.Snack(x)), // v16.1 장면으로 (Core/DailyScenes.cs)
         new("recipe", "고향의 조리법", DailyGroup.Meal, 0.8f, x =>
         {
             if (x.One(c => x.Was(c, Background.Chef, Background.Baker) || x.Likes(c, Hobby.Cooking) || x.Likes(c, Hobby.Baking)) is not CrewMember c) return false;
@@ -204,31 +197,8 @@ public sealed class DailySystem
             x.Diary(o, $"{Ko.IGa(c.Name)} 고향 조리법을 알려 줬다. 다음엔 내가 해 봐야지");
             return x.Done($"{Ko.IGa(c.Name)} {o.Name}에게 고향 조리법을 알려 줬다", c, o);
         }),
-        new("spill", "엎지른 국", DailyGroup.Meal, 0.8f, x =>
-        {
-            if (x.One(c => (x.Has(c, Habit.Hasty) || x.Has(c, Habit.Fidgety) || x.Has(c, Habit.Forgetful)) && c.Room?.Type is RoomType.Mess or RoomType.Galley) is not CrewMember c) return false;
-            var room = c.Room!;
-            x.W.Soil.RoomSoil(room)[(int)SoilKind.Bio] = MathF.Min(1f, x.W.Soil.RoomSoil(room)[(int)SoilKind.Bio] + 0.15f);
-            c.Soil.Clothes[(int)SoilKind.Bio] = MathF.Min(1f, c.Soil.Clothes[(int)SoilKind.Bio] + 0.3f);
-            x.Mark(room, $"{c.Name}: 국을 엎었다");
-            var helper = x.Near(c, o => x.Has(o, Habit.NeatFreak) || x.Has(o, Habit.Generous));
-            if (helper != null) { x.W.Soil.RoomSoil(room)[(int)SoilKind.Bio] *= 0.3f; x.Mem(c, helper, RelationReason.FixedMyThing, "국을 엎었을 때 같이 닦아 줬다"); }
-            return x.Done($"{Ko.IGa(c.Name)} {room.Name}에 국을 엎었다" + (helper != null ? $" — {Ko.IGa(helper.Name)} 같이 닦았다" : ""), c);
-        }),
-        new("coffee", "커피 한 잔씩", DailyGroup.Meal, 1f, x =>
-        {
-            if (x.One(c => x.Has(c, Habit.CoffeeAddict) || x.Has(c, Habit.TeaLover)) is not CrewMember c) return false;
-            var mates = x.InRoom(c.Room!).Where(o => o != c).ToList();
-            if (mates.Count == 0) return false;
-            string what = x.Has(c, Habit.TeaLover) ? "차" : "커피";
-            if (!ItemsV15.Use(x.W, x.Has(c, Habit.TeaLover) ? ItemKind.TeaLeaf : ItemKind.Coffee)) // v15 떨어졌으면
-            {
-                x.Stress(c, 0.04f);
-                return x.Done($"{Ko.IGa(c.Name)} {what}를 타려다 통이 빈 걸 알았다 — 다음 기항지 목록 맨 위에 적었다", c);
-            }
-            foreach (var o in mates) { x.Rest(o, 0.04f); x.Social(o, 0.06f); o.ChangeAffinity(c, 0.02f); }
-            return x.Done($"{Ko.IGa(c.Name)} {c.Room!.Name}에 있던 {mates.Count}명에게 {what}를 돌렸다", c);
-        }),
+        new("spill", "엎지른 국", DailyGroup.Meal, 0.8f, x => x.W.Scenes.Spill(x)), // v16.1 장면으로 (Core/DailyScenes.cs)
+        new("coffee", "커피 한 잔씩", DailyGroup.Meal, 1f, x => x.W.Scenes.Coffee(x)), // v16.1 장면으로 (Core/DailyScenes.cs)
         new("tray", "치우지 않은 식판", DailyGroup.Meal, 0.7f, x =>
         {
             if (x.One(c => x.Has(c, Habit.Messy) || x.Has(c, Habit.Procrastinator)) is not CrewMember c) return false;
@@ -267,16 +237,7 @@ public sealed class DailySystem
             x.Diary(o, $"새벽에 {Ko.WaGwa(c.Name)} 한참 이야기했다");
             return x.Done($"{Ko.WaGwa(c.Name)} {o.Name}, 새벽까지 이야기했다", c, o);
         }),
-        new("sleepwalk", "몽유병", DailyGroup.Sleep, 0.3f, x =>
-        {
-            if (x.One(c => c.Pose == Pose.Sleeping && c.Needs.Stress > 0.5f, asleepOk: true) is not CrewMember c) return false;
-            var hall = x.RoomOf(RoomType.Corridor);
-            if (hall == null) return false;
-            x.Mark(hall, $"{c.Name}: 자다가 걸어 나왔다");
-            var o = x.Other(c, w => w.IsAwake);
-            if (o != null && x.Has(o, Habit.Joker)) x.Diary(c, $"내가 자다가 통로를 걸었단다. {Ko.IGa(o.Name)} 아침 내내 놀렸다");
-            return x.Done($"{Ko.IGa(c.Name)} 자다가 {hall.Name}까지 걸어 나왔다" + (o != null ? $" — {Ko.IGa(o.Name)} 침대로 데려다줬다" : ""), c);
-        }),
+        new("sleepwalk", "몽유병", DailyGroup.Sleep, 0.3f, x => x.W.Scenes.Sleepwalk(x)), // v16.1 장면으로 (Core/DailyScenes.cs)
         new("blanket", "빌려준 담요", DailyGroup.Sleep, 0.8f, x =>
         {
             var b = x.W.Belongings.All.FirstOrDefault(b => b.Kind == BelongingKind.Blanket && b.Owner >= 0 && b.Owner < x.W.Crew.Count && !x.W.Crew[b.Owner].Dead && b.BorrowedBy < 0);
@@ -436,14 +397,7 @@ public sealed class DailySystem
             x.Stress(c, 0.03f);
             return x.Done($"{Ko.IGa(c.Name)} {(tool?.Name ?? "공구")}를 어디 뒀는지 몰라 한 시간을 찾았다" + (o != null ? $" — {Ko.IGa(o.Name)} 같이 찾았다" : ""), c);
         }),
-        new("overtime", "야근 커피", DailyGroup.Work, 0.8f, x =>
-        {
-            if (x.One(c => c.Job?.Order != null && c.Needs.Rest < 0.5f) is not CrewMember c) return false;
-            if (x.Other(c, o => o.AffinityTo(c) > 0f) is not CrewMember o) return false;
-            x.Rest(c, 0.05f);
-            x.Mem(c, o, RelationReason.Comforted, "늦게까지 일할 때 커피를 가져다줬다");
-            return x.Done($"{Ko.IGa(o.Name)} 늦게까지 일하는 {c.Name}에게 커피를 가져다줬다", o, c);
-        }),
+        new("overtime", "야근 커피", DailyGroup.Work, 0.8f, x => x.W.Scenes.Overtime(x)), // v16.1 장면으로 (Core/DailyScenes.cs)
         new("hazardspot", "바닥의 기름", DailyGroup.Work, 0.8f, x =>
         {
             var room = x.W.Ship.LiveRooms.Where(r => x.W.Soil.RoomSoil(r)[(int)SoilKind.Oil] > 0.15f).OrderByDescending(r => x.W.Soil.RoomSoil(r)[(int)SoilKind.Oil]).FirstOrDefault();
@@ -722,13 +676,7 @@ public sealed class DailySystem
             foreach (var o in mates) { x.Social(o, 0.1f); x.Aff(c, o, 0.02f); }
             return x.Done($"{Ko.IGa(c.Name)} {mates.Count}명과 카드를 쳤다 — {Ko.IGa(winner.Name)} 이겨서 한참 으스댔다", c, winner);
         }),
-        new("chess", "체스", DailyGroup.Leisure, 0.8f, x =>
-        {
-            if (x.One(c => x.Likes(c, Hobby.Chess)) is not CrewMember c) return false;
-            if (x.Other(c, o => x.Likes(o, Hobby.Chess) || o.Traits.Calm > 0.6f) is not CrewMember o) return false;
-            x.Aff(c, o, 0.03f); x.Social(c, 0.08f); x.Social(o, 0.08f);
-            return x.Done($"{Ko.WaGwa(c.Name)} {o.Name}, 체스 한 판에 한 시간을 썼다", c, o);
-        }),
+        new("chess", "체스", DailyGroup.Leisure, 0.8f, x => x.W.Scenes.Chess(x)), // v16.1 장면으로 (Core/DailyScenes.cs)
         new("jam", "즉흥 합주", DailyGroup.Leisure, 0.7f, x =>
         {
             var players = x.W.Crew.Where(c => !c.Dead && c.IsAwake && (x.Likes(c, Hobby.Instrument) || x.Was(c, Background.Musician))).ToList();
@@ -739,16 +687,7 @@ public sealed class DailySystem
             foreach (var o in listeners) { x.Social(o, 0.1f); x.Stress(o, -0.04f); }
             return x.Done($"{string.Join("·", players.Take(3).Select(p => p.Name))}의 즉흥 합주 — {room.Name}에 {listeners.Count}명이 모였다", players.ToArray());
         }),
-        new("movie", "영화의 밤", DailyGroup.Leisure, 0.8f, x =>
-        {
-            if (x.Hour < 19) return false;
-            if (x.One(c => x.Likes(c, Hobby.Movies)) is not CrewMember c) return false;
-            var room = x.RoomOf(RoomType.Theater, RoomType.Lounge);
-            if (room == null) return false;
-            var mates = x.W.Crew.Where(o => !o.Dead && o.IsAwake && o.Job?.Order == null && !o.IsChild).Take(6).ToList();
-            foreach (var o in mates) { x.Social(o, 0.12f); x.Rest(o, -0.03f); }
-            return x.Done($"{Ko.IGa(c.Name)} {room.Name}에서 영화의 밤을 열었다 ({mates.Count}명)", c);
-        }),
+        new("movie", "영화의 밤", DailyGroup.Leisure, 0.8f, x => x.W.Scenes.Movie(x)), // v16.1 장면으로 (Core/DailyScenes.cs)
         new("stars", "창밖의 별", DailyGroup.Leisure, 0.8f, x =>
         {
             if (x.One(c => x.Likes(c, Hobby.Stargazing) || x.Has(c, Habit.Gazer) || x.Was(c, Background.Astronomer)) is not CrewMember c) return false;

@@ -723,6 +723,7 @@ public partial class ShipView : Node2D
         else if (_main.HoveredRobot is Robot hr2) ci.DrawArc(RobotPx(hr2), 13f, 0f, Mathf.Tau, 28, new Color(1, 1, 1, 0.35f), 1.2f, true);
         PaintTethers(ci);
         PaintBelongings(ci); // v14.3 놓인 물건 · 손에 든 취미 물건 · 음표 · 판
+        PaintScenes(ci); // v16.1 진행 중 장면 (판 · 커피 · 국 자국 · 쪽지 · 스크린 · 만들다 만 소품)
         PaintRobots(ci); // v10.10 선내 로봇 (사람 밑에)
         // 쓰러진 사람은 밑에, 업힌 사람은 업은 사람 위에
         foreach (var c in _world.Crew.OrderBy(c => c.CarriedBy != null ? 2 : c.Down ? 0 : 1)) PaintCrew(ci, c);

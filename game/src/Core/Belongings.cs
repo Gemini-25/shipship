@@ -68,6 +68,8 @@ public sealed class HobbyGame
     public bool Done { get; set; }
     public int Winner { get; set; } = -1;
     public int Breaks { get; set; }
+    /// <summary>v16.1 일상 장면이 맡은 판 (취미로는 손대지 않는다 · -1 = 아님).</summary>
+    public int Scene { get; set; } = -1;
 }
 
 /// <summary>지금 하고 있는 취미 (곁의 사람이 듣고 · 함께 하고 · 조용히 해 달라 한다).</summary>
@@ -195,7 +197,7 @@ public sealed class BelongingSystem
 
     /// <summary>그 취미에 쓸 물건 (자기 것, 쓸 만한 것).</summary>
     public Belonging? ItemFor(CrewMember c, Hobby h) =>
-        ItemFor(h) is BelongingKind k ? All.FirstOrDefault(b => b.Owner == c.Id && b.Kind == k && b.Usable && (b.BorrowedBy < 0 || b.BorrowedBy == c.Id) && (b.Holder < 0 || b.Holder == c.Id)) : null;
+        ItemFor(h) is BelongingKind k ? All.FirstOrDefault(b => b.Owner == c.Id && b.Kind == k && b.Usable && (b.BorrowedBy < 0 || b.BorrowedBy == c.Id) && (b.Holder < 0 || b.Holder == c.Id) && !Games.Any(g => !g.Done && g.Scene >= 0 && g.Item == b.Id)) : null; // v16.1 장면의 판에 놓인 체스판은 빼고
 
     private void Mark(Belonging b, string text) => MarkLog.Add(b.Marks, _w.Tick, text);
 
@@ -630,7 +632,7 @@ public sealed class BelongingSystem
         Life.Diary(w, c, Persona.Say(c, $"{Ko.EulReul(what)} 완성했다"));
     }
 
-    private void EndGame(HobbyGame g)
+    internal void EndGame(HobbyGame g) // v16.1 장면도 부른다
     {
         var w = _w;
         g.Done = true;
@@ -679,7 +681,7 @@ public sealed class BelongingSystem
         var w = _w;
         foreach (var g in Games)
         {
-            if (g.Done || g.Kind != h) continue;
+            if (g.Done || g.Kind != h || g.Scene >= 0) continue; // v16.1 장면의 판은 장면이 잇는다
             // 끊긴 내 판 — 상대가 한가하면 이어 둔다
             if ((g.A == c.Id || g.B == c.Id) && g.B >= 0 && CrewOf(g.A == c.Id ? g.B : g.A) is CrewMember o && Free(o)) return g;
             // 남이 연 판 — 상대를 기다린다
