@@ -75,6 +75,8 @@ public sealed class CosmicEvent
     public float FuelSpent { get; set; }
     public bool ShutdownComputer { get; set; }
     public bool SealPlan { get; set; }
+    /// <summary>파편이 지나갈 줄의 방 (봉쇄 구획 뒤 — 부딪히기 전에 비운다).</summary>
+    public List<int> Evac { get; } = new();
     public bool Sealed { get; set; }
     public List<BraceTask> Tasks { get; } = new();
 
@@ -85,6 +87,8 @@ public sealed class CosmicEvent
     public long AfterUntil { get; set; } = -1;
     internal readonly List<(int id, float dose, bool sheltered)> Snap = new();
     public bool Snapped => Snap.Count > 0;
+    /// <summary>방사선이 쏟아지는 동안 한 시간마다: 차폐된 곳에 있었나 (사람 Id → 숨은 시간 · 모든 시간).</summary>
+    internal readonly Dictionary<int, (int sh, int tot)> ShelterLog = new();
 
     // ── 결과 ──
     public int Hits, EmpKills, Glitches, Falls, Fires, Broken, Sick;
@@ -181,8 +185,16 @@ public sealed class CosmicSystem
     public IReadOnlyList<int> SafedIds => _safed;
     /// <summary>ShipBody: 이 방 관측창 덮개를 내려 둔다.</summary>
     public bool Shut(int roomId) => _shut.Contains(roomId);
-    public bool Knows(CrewMember c, CosmicEvent e) => c.Mind.Knows.ContainsKey(Key(e));
-    private static string Key(CosmicEvent e) => $"cosmic:{e.Id}";
+    // 누가 무엇을 아나 (Mind.Knows는 선내 사고만 들고 있다가 지운다 — 대재난은 여기서 따로)
+    private readonly Dictionary<long, (KnowSource src, long tick, string how)> _know = new();
+    private readonly HashSet<string> _looked = new();
+    private readonly HashSet<int> _went = new(); // 대재난을 겪은 사람
+    private static long KK(int crew, int ev) => (long)crew * 100000 + ev;
+    public bool Knows(CrewMember c, CosmicEvent e) => _know.ContainsKey(KK(c.Id, e.Id));
+    public (KnowSource src, long tick, string how)? Knowing(CrewMember c, CosmicEvent e) => _know.TryGetValue(KK(c.Id, e.Id), out var k) ? k : null;
+    public bool Looked(CrewMember c, string key) => _looked.Contains($"{c.Id}:{key}");
+    internal void MarkLooked(CrewMember c, string key) => _looked.Add($"{c.Id}:{key}");
+    public bool WentThrough(CrewMember c) => _went.Contains(c.Id);
     public CosmicCustom? CustomOf(CosmicCustomKind k) => Customs.FirstOrDefault(c => c.Kind == k);
     public bool Follows(CrewMember c, CosmicCustomKind k) => CustomOf(k) is CosmicCustom cu && cu.Followers.Contains(c.Id);
 
@@ -431,8 +443,9 @@ public sealed class CosmicSystem
 
     private void Learn(CrewMember c, CosmicEvent e, KnowSource src, string how)
     {
-        if (c.Dead || c.Mind.Knows.ContainsKey(Key(e))) return;
-        c.Mind.Knows[Key(e)] = (src, _w.Tick, $"{e.Spec.Name} ({how})");
+        if (c.Dead || Knows(c, e)) return;
+        _know[KK(c.Id, e.Id)] = (src, _w.Tick, how);
+        _went.Add(c.Id);
         c.NextThinkTick = Math.Min(c.NextThinkTick, _w.Tick + 1);
     }
 
@@ -519,6 +532,15 @@ public sealed class CosmicSystem
         if (e.SealPlan || e.TargetRoom < 0 || e.TargetRoom >= w.Ship.Rooms.Count) return;
         e.SealPlan = true;
         var room = w.Ship.Rooms[e.TargetRoom];
+        // 파편이 안쪽으로 뻗는 줄: 그 구획 뒤로 열 칸 남짓 — 그 방들도 비운다
+        var inward = -Dir(e);
+        var side = new Vector2(-inward.Y, inward.X);
+        for (float k = 0f; k <= 11f; k += 0.5f)
+            for (int l = -1; l <= 1; l++)
+            {
+                var p = room.Center + inward * k + side * l;
+                if (w.Ship.RoomAt(Cell.FromPosition(p)) is Room r && r != room && !e.Evac.Contains(r.Id)) e.Evac.Add(r.Id);
+            }
         w.Automation.Book.Add(ActKind.Advice, room, $"{e.Spec.Name} 충돌 예상 구획 — {room.Name}", $"{why} — 그 구획을 비우고 봉쇄하면 옆으로 번지지 않는다", "봉쇄 계획", $"{room.Name}에서 나오고 격벽을 막아 달라", "cosmic:seal:" + e.Id, 0, 30f);
         Broadcast(e, $"{room.Name} 구역을 비워 달라 — {e.Spec.Name} 충돌 예상. 비면 봉쇄한다", 2);
         w.RaiseAlert($"{e.Spec.Name} — {room.Name}을(를) 비우고 봉쇄한다 ({why})", room, AlertLevel.Critical, shipWide: true);
@@ -617,11 +639,12 @@ public sealed class CosmicSystem
                 if (f.Type == FurnitureType.Console && f.Room.Type == RoomType.Bridge) continue; // 조타는 남긴다
                 if (f.Type == FurnitureType.SensorArray && needEyes) continue; // 날아드는 것을 봐야 한다
                 if (n++ >= 7 && f.Type != FurnitureType.MainComputer) continue;
-                AddTask(e, BraceKind.PowerDown, f.Room.Id, f.Id, 0.08f, $"{f.Label} 끄기", last: f.Type == FurnitureType.MainComputer);
+                AddTask(e, BraceKind.PowerDown, f.Room.Id, f.Id, 0.08f, $"{f.Label} 끄기", last: f.Type is FurnitureType.MainComputer or FurnitureType.SensorArray); // 눈과 머리는 마지막에
             }
         }
         if (spec.Has(CosmicFx.Shock) || spec.Has(CosmicFx.Quake) || spec.Has(CosmicFx.Tidal) || spec.Has(CosmicFx.Strike))
-            foreach (var r in ship.Rooms.Where(r => !r.Detached && !r.Abandoned && r.Type != RoomType.Corridor && (r.Furniture.Count >= 3 || w.Belongings.All.Any(b => b.At is Cell bc && ship.RoomAt(bc) == r))).OrderBy(r => r.Id).Take(5))
+            foreach (var r in ship.Rooms.Where(r => !r.Detached && !r.Abandoned && r.Type != RoomType.Corridor && r.Furniture.Count >= 2)
+                         .OrderByDescending(r => w.Belongings.All.Count(b => b.At is Cell bc && ship.RoomAt(bc) == r) + (r.Type is RoomType.Mess or RoomType.Galley or RoomType.Medbay or RoomType.Quarters ? 3 : 0)).ThenBy(r => r.Id).Take(5))
                 AddTask(e, BraceKind.Stow, r.Id, -1, 0.2f, $"{r.Name} 물건 묶어 두기");
         if (spec.Has(CosmicFx.Plasma) || spec.Has(CosmicFx.Debris) || spec.Has(CosmicFx.Hostile))
             if (w.Sensors.CommsRoom is Room comms) AddTask(e, BraceKind.Fold, comms.Id, -1, 0.25f, "바깥 설비 접기 (안테나 · 태양 날개)");
@@ -638,7 +661,7 @@ public sealed class CosmicSystem
     {
         if (t.Done || t.By >= 0) return false;
         if (t.Kind == BraceKind.Restart) return e.Phase == CosmicPhase.After || e.Phase == CosmicPhase.Done;
-        if (e.Phase != CosmicPhase.Brace && !(e.Phase == CosmicPhase.Impact && t.Kind is BraceKind.Seal)) return false;
+        if (e.Phase != CosmicPhase.Brace && !(e.Phase == CosmicPhase.Impact && _w.Tick < NextHarm(e))) return false;
         if (t.Last && _w.Tick < PredictedHarm(e) - SimTime.Hours(1f)) return false;
         if (t.Kind == BraceKind.Seal && (e.Avoided || e.Sealed)) return false;
         return true;
@@ -758,15 +781,10 @@ public sealed class CosmicSystem
             case CosmicPhase.Brace:
                 if (e.Ghost && w.Tick >= e.Predicted + SimTime.Hours(e.ErrorHours + 1f)) { GhostEnd(e); return; }
                 if (!e.Ghost && w.Tick >= e.Arrive) { BeginImpact(e); return; }
-                // 숨을 시간: 컴퓨터가 크게 부른다 (자는 사람도 깬다)
-                if (w.Tick >= NextHarm(e) - SimTime.Hours(1f) && !e.Notes.Contains("shelter-call"))
-                {
-                    e.Notes.Add("shelter-call");
-                    Broadcast(e, $"{e.Spec.Name} 한 시간 전 — 대피소로. 선외 작업 중지", 2);
-                    foreach (var c in w.Crew.Where(c => !c.Dead && c.Outside && Knows(c, e))) c.Interrupt(w);
-                }
+                ShelterCall(e);
                 break;
             case CosmicPhase.Impact:
+                ShelterCall(e);
                 Impact(e, dt);
                 if (w.Tick >= e.End) Aftermath(e);
                 break;
@@ -780,6 +798,19 @@ public sealed class CosmicSystem
         foreach (var t in e.Tasks)
             if (!t.Done && t.By >= 0 && (w.Crew.FirstOrDefault(c => c.Id == t.By) is not CrewMember c || c.Dead || c.Job?.Activity is not CosmicBraceActivity || w.Tick - t.ClaimedAt > SimTime.Hours(3f)))
                 t.By = -1;
+    }
+
+    /// <summary>숨을 시간: 해로운 단계 한 시간 전에 컴퓨터가 크게 부른다 (자는 사람도 깬다 · 선외 작업 중지).</summary>
+    private void ShelterCall(CosmicEvent e)
+    {
+        var w = _w;
+        long harm = NextHarm(e);
+        if (harm == long.MaxValue || w.Tick < harm - SimTime.Hours(1f) || w.Tick >= harm) return;
+        string key = $"shelter-call:{harm}";
+        if (e.Notes.Contains(key)) return;
+        e.Notes.Add(key);
+        Broadcast(e, $"{e.Spec.Name} 한 시간 전 — {(CosmicCrew.NeedsShelter(e.Spec) ? "대피소로" : "몸을 고정하라")}. 선외 작업 중지", 2);
+        foreach (var c in w.Crew.Where(c => !c.Dead && c.Outside && Knows(c, e))) c.Interrupt(w);
     }
 
     private void BeginBrace(CosmicEvent e)
@@ -867,7 +898,16 @@ public sealed class CosmicSystem
         if ((s.Fx & CosmicFx.Radiation) != 0 && !e.Snapped)
             foreach (var c in w.Crew.Where(c => !c.Dead)) e.Snap.Add((c.Id, c.Dose, Sheltered(c)));
         var center = ShipCenter();
-        if ((s.Fx & CosmicFx.Light) != 0) Flash(e, p);
+        if ((s.Fx & CosmicFx.Light) != 0)
+        {
+            Flash(e, p);
+            long harm = NextHarm(e);
+            if (harm != long.MaxValue && harm - w.Tick > SimTime.Hours(2f))
+            {
+                w.Automation.Book.Add(ActKind.Advice, null, $"{e.Spec.Name} 섬광", $"예측: {e.HoursTo(w.Tick, harm):0}시간 뒤 다음 파도", "다시 예보", "그 전에 대비를 마치고 숨을 곳으로", "cosmic:wave:" + e.Id, 0, 10f);
+                Broadcast(e, $"섬광을 봤다 — {e.Spec.Name}. {e.HoursTo(w.Tick, harm):0}시간 뒤 방사선 파도가 온다", 2);
+            }
+        }
         if ((s.Fx & CosmicFx.Shock) != 0) Shock(e, p, center);
         if ((s.Fx & CosmicFx.Emp) != 0) Emp(e, p);
         if ((s.Fx & CosmicFx.Strike) != 0) Strike(e, p, center);
@@ -1154,7 +1194,7 @@ public sealed class CosmicSystem
                 {
                     if (Knows(c, e) || c.Room == null) continue;
                     var teller = live.FirstOrDefault(o => o != c && o.Room == c.Room && o.IsAwake && Knows(o, e));
-                    if (teller != null && c.IsAwake) Learn(c, e, KnowSource.Rumor, $"{teller.Name}에게 들었다");
+                    if (teller != null && c.IsAwake && R.Chance(0.6f)) Learn(c, e, KnowSource.Rumor, $"{teller.Name}에게 들었다");
                 }
             }
             if (e.Phase == CosmicPhase.Impact)
@@ -1177,6 +1217,11 @@ public sealed class CosmicSystem
                 float rp = FxNow(e, CosmicFx.Radiation);
                 if (rp > 0f)
                 {
+                    foreach (var c in live)
+                    {
+                        var (sh, tot) = e.ShelterLog.TryGetValue(c.Id, out var v) ? v : (0, 0);
+                        e.ShelterLog[c.Id] = (sh + (Sheltered(c) ? 1 : 0), tot + 1);
+                    }
                     // 전자 장비가 튄다 (꺼 둔 것은 빼고) · 작물이 탄다
                     var pool = w.Ship.Machines.Where(m => Sensitive(m.Body) && m.Faults.Count == 0 && !_safed.Contains(m.Body.Id)).OrderBy(m => m.Body.Id).ToList();
                     if (pool.Count > 0 && R.Chance(0.3f * rp))
@@ -1201,7 +1246,7 @@ public sealed class CosmicSystem
             foreach (var c in live)
             {
                 if (c.Outside || c.Room is not Room r || !c.IsAwake || w.Body.WindowsOf(r) == 0 || _shut.Contains(r.Id)) continue;
-                bool was = c.Mind.Knows.Keys.Any(k => k.StartsWith("cosmic:"));
+                bool was = _went.Contains(c.Id);
                 c.Needs.Stress = MathF.Max(0f, c.Needs.Stress - (was ? 0.004f : 0.012f) * Math.Min(3, Sky.Count));
             }
         }
@@ -1215,9 +1260,10 @@ public sealed class CosmicSystem
         e.AfterUntil = w.Tick + SimTime.Hours(24f * R.Range(10f, 20f));
         var live = w.Crew.Where(c => !c.Dead).ToList();
         // 대피소 vs 바깥 쪽: 실제로 얼마나 더 쬐었나
-        foreach (var (id, dose, sh) in e.Snap)
+        foreach (var (id, dose, sh0) in e.Snap)
         {
             if (w.Crew.FirstOrDefault(c => c.Id == id) is not CrewMember c) continue;
+            bool sh = e.ShelterLog.TryGetValue(id, out var lg) && lg.tot > 0 ? lg.sh * 2 >= lg.tot : sh0;
             float gain = MathF.Max(0f, c.Dose - dose);
             if (sh) { e.GainSheltered += gain; e.NSheltered++; } else { e.GainExposed += gain; e.NExposed++; }
             if (c.Dose > 1f) e.Sick++;
@@ -1287,7 +1333,7 @@ public sealed class CosmicSystem
     private void Found(CosmicCustomKind k, CosmicEvent e, CrewMember? founder, string origin, IEnumerable<CrewMember> followers)
     {
         var w = _w;
-        var cu = new CosmicCustom { Kind = k, Born = w.Tick, Origin = origin, Founder = founder?.Name, EventId = e.Id, NextDay = w.Tick + SimTime.Hours(24f * 7f) };
+        var cu = new CosmicCustom { Kind = k, Born = w.Tick, Origin = origin, Founder = founder?.Name, EventId = e.Id, NextDay = (w.Tick / SimTime.TicksPerDay + 7) * SimTime.TicksPerDay };
         if (founder != null) cu.Followers.Add(founder.Id);
         foreach (var c in followers.OrderBy(c => c.Id)) cu.Followers.Add(c.Id);
         Customs.Add(cu);
@@ -1302,7 +1348,7 @@ public sealed class CosmicSystem
         foreach (var cu in Customs)
         {
             if (cu.Kind != CosmicCustomKind.Vigil) continue;
-            if (w.Tick >= cu.NextDay + SimTime.Hours(18f)) { cu.NextDay += SimTime.Hours(24f * 10f); cu.Kept.Clear(); }
+            if (w.Tick >= cu.NextDay + SimTime.TicksPerDay) { cu.NextDay += SimTime.Hours(24f * 10f); cu.Kept.Clear(); }
         }
         // 사건이 지나고 일주일: 회의가 없었으면 겪은 사람 하나가 시작한다
         foreach (var e in Events)
@@ -1317,7 +1363,7 @@ public sealed class CosmicSystem
         }
     }
 
-    public bool IsVigilDay => CustomOf(CosmicCustomKind.Vigil) is CosmicCustom cu && _w.Tick >= cu.NextDay && _w.Tick < cu.NextDay + SimTime.Hours(18f);
+    public bool IsVigilDay => CustomOf(CosmicCustomKind.Vigil) is CosmicCustom cu && _w.Tick >= cu.NextDay && _w.Tick < cu.NextDay + SimTime.TicksPerDay;
 
     internal void KeepVigil(CrewMember c)
     {
@@ -1384,6 +1430,9 @@ public sealed class CosmicSystem
 
     // ───────────────────────────── 서로 알리기 ─────────────────────────────
 
+    /// <summary>시험: 이 사람은 모른다고 되돌린다.</summary>
+    internal void Forget(CrewMember c, CosmicEvent e) => _know.Remove(KK(c.Id, e.Id));
+
     internal bool WarnClaimed(CrewMember target, CrewMember me) => _warnClaim.TryGetValue(target.Id, out var by) && by != me.Id;
     internal void ClaimWarn(CrewMember target, CrewMember by) => _warnClaim[target.Id] = by.Id;
     internal void ReleaseWarn(CrewMember target) => _warnClaim.Remove(target.Id);
@@ -1415,7 +1464,7 @@ public sealed class CosmicSystem
     /// <summary>지문.</summary>
     public void Hash(Action<long> I, Action<float> F)
     {
-        I(Events.Count); I(Sky.Count); I(Customs.Count); I(Learned); I(_safed.Count); I(_launch.Count); I(_latent.Count);
+        I(Events.Count); I(Sky.Count); I(Customs.Count); I(Learned); I(_know.Count); I(_looked.Count); I(_safed.Count); I(_launch.Count); I(_latent.Count);
         foreach (var e in Events) { I((int)e.Kind); I((int)e.Phase); I(e.Predicted % 1000003); F(e.Confidence); I(e.Tasks.Count(t => t.Done)); I(e.Hits + e.EmpKills * 7 + e.Falls * 13); I(e.Avoided ? 1 : 0); I(e.Sealed ? 1 : 0); }
         foreach (var cu in Customs) { I((int)cu.Kind); I(cu.Followers.Count); I(cu.Times); }
     }

@@ -60,7 +60,11 @@ public sealed class CosmicEvacuateActivity : Activity
     public override string Label => "구획 비우기";
 
     private static CosmicEvent? Target(CrewMember c, World w) =>
-        c.Room == null ? null : w.Cosmic.Events.FirstOrDefault(e => e.SealPlan && !e.Sealed && !e.Avoided && e.Phase <= CosmicPhase.Impact && e.TargetRoom == c.Room.Id && w.Tick < e.Arrive);
+        c.Room == null ? null : w.Cosmic.Events.FirstOrDefault(e => e.SealPlan && !e.Avoided && e.Phase <= CosmicPhase.Impact && w.Tick < e.Arrive + SimTime.Minutes(10)
+            && (e.TargetRoom == c.Room.Id && !e.Sealed || e.Evac.Contains(c.Room.Id) && w.Tick >= e.Arrive - SimTime.Hours(2f)));
+
+    /// <summary>파편이 지나갈 방인가 (거기로 숨거나 비켜 가지 않는다).</summary>
+    public static bool InLine(Room r, World w) => w.Cosmic.Events.Any(e => e.SealPlan && !e.Avoided && e.Phase <= CosmicPhase.Impact && w.Tick < e.Arrive + SimTime.Minutes(10) && (e.TargetRoom == r.Id || e.Evac.Contains(r.Id)));
 
     public override (float, string) Score(CrewMember c, World w, DistanceField dist)
     {
@@ -72,7 +76,7 @@ public sealed class CosmicEvacuateActivity : Activity
     {
         if (Target(c, w) is not CosmicEvent e) return null;
         var here = c.Room!;
-        foreach (var r in w.Ship.Rooms.Where(r => r != here && !r.Detached && !r.Abandoned && !r.Leaking).OrderBy(r => (r.Center - here.Center).LengthSquared()).ThenBy(r => r.Id))
+        foreach (var r in w.Ship.Rooms.Where(r => r != here && !r.Detached && !r.Abandoned && !r.Leaking && !InLine(r, w)).OrderBy(r => (r.Center - here.Center).LengthSquared()).ThenBy(r => r.Id))
         {
             if (CosmicCrew.SpotIn(r, c, w, dist) is not Cell at) continue;
             return new Job(this, "구획 비우기", new List<Toil> { new GotoToil(at), new WaitToil(SimTime.Minutes(5), Pose.Standing) })
@@ -95,7 +99,7 @@ public sealed class CosmicShelterActivity : Activity
         if (!CosmicCrew.Free(c)) return (0f, "—");
         var (e, urg, why) = CosmicCrew.ShelterCall(c, w);
         if (e == null) return (0f, "—");
-        if (w.Cosmic.RelExposure(c.Room!) <= 0.32f) return (0.9f + 0.1f * urg, $"{why} — 여기서 기다린다");
+        if (w.Cosmic.RelExposure(c.Room!) <= 0.32f && !CosmicEvacuateActivity.InLine(c.Room!, w)) return (0.9f + 0.1f * urg, $"{why} — 여기서 기다린다");
         return (0.85f + 0.3f * urg + (w.Cosmic.Follows(c, CosmicCustomKind.Drill) ? 0.1f : 0f), $"{why} — 대피");
     }
 
@@ -105,14 +109,14 @@ public sealed class CosmicShelterActivity : Activity
         var (e, _, _) = CosmicCrew.ShelterCall(c, w);
         if (e == null) return null;
         var here = c.Room!;
-        if (cs.RelExposure(here) <= 0.32f)
+        if (cs.RelExposure(here) <= 0.32f && !CosmicEvacuateActivity.InLine(here, w))
             return new Job(this, "대피", new List<Toil> { new WaitToil(SimTime.Minutes(40), c.Needs.Rest < 0.35f ? Pose.Sleeping : Pose.Sitting) }) { TargetRoom = here };
         // 숨을 곳: 차폐 → 물벽 → 배 안쪽 · 너무 붐비면 다음 곳
         var order = cs.Refuges();
         order.AddRange(w.Ship.Rooms.Where(r => !order.Contains(r) && !r.Detached && !r.OffLimits && !r.Leaking && !r.Abandoned).OrderBy(cs.RelExposure).ThenBy(r => r.Id));
         foreach (var room in order)
         {
-            if (cs.RelExposure(room) >= cs.RelExposure(here) - 0.1f) continue;
+            if (cs.RelExposure(room) >= cs.RelExposure(here) - 0.1f || CosmicEvacuateActivity.InLine(room, w)) continue;
             int inside = w.Crew.Count(o => !o.Dead && o != c && (o.Room == room || o.Job?.TargetRoom == room && o.Job.Activity is CosmicShelterActivity));
             if (inside >= Math.Max(3, room.Cells.Count / 2)) continue; // 꽉 찼다
             if (CosmicCrew.SpotIn(room, c, w, dist) is not Cell at) continue;
@@ -298,13 +302,13 @@ public sealed class CosmicLookActivity : Activity
             bool visible = e.Phase == CosmicPhase.Impact || e.Phase <= CosmicPhase.Brace && e.HoursTo(w.Tick, e.Arrive) < 24f;
             if (!visible) continue;
             string key = $"cosmiclook:{e.Id}:{(int)e.Phase}";
-            if (!c.Mind.Knows.ContainsKey(key)) return (key, e.Phase == CosmicPhase.Impact ? $"{e.Spec.Name}이(가) 창밖을 채웠다" : $"창밖에 {e.Spec.Name}의 징조", e);
+            if (!cs.Looked(c, key)) return (key, e.Phase == CosmicPhase.Impact ? $"{e.Spec.Name}이(가) 창밖을 채웠다" : $"창밖에 {e.Spec.Name}의 징조", e);
         }
         foreach (var s in cs.Sky)
         {
             if (w.Tick - s.Tick > SimTime.TicksPerDay * 5) continue;
             string key = $"cosmiclook:sky:{s.EventId}";
-            if (!c.Mind.Knows.ContainsKey(key)) return (key, $"창밖에 {s.Name}", null);
+            if (!cs.Looked(c, key)) return (key, $"창밖에 {s.Name}", null);
         }
         return null;
     }
@@ -325,7 +329,7 @@ public sealed class CosmicLookActivity : Activity
             new WaitToil(SimTime.Minutes(12), Pose.Standing),
             new DoToil((cm, world) =>
             {
-                cm.Mind.Knows[s.key] = (KnowSource.Seen, world.Tick, s.what);
+                world.Cosmic.MarkLooked(cm, s.key);
                 if (s.e != null) world.Cosmic.SawIt(cm, s.e);
                 bool brave = cm.Traits.Bravery >= 0.5f;
                 cm.Needs.Stress = Math.Clamp(cm.Needs.Stress + (brave ? -0.05f : 0.05f), 0f, 1f);
