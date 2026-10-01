@@ -61,7 +61,7 @@ public sealed class CosmicEvacuateActivity : Activity
 
     private static CosmicEvent? Target(CrewMember c, World w) =>
         c.Room == null ? null : w.Cosmic.Events.FirstOrDefault(e => e.SealPlan && !e.Avoided && e.Phase <= CosmicPhase.Impact && w.Tick < e.Arrive + SimTime.Minutes(10)
-            && (e.TargetRoom == c.Room.Id && !e.Sealed || e.Evac.Contains(c.Room.Id) && w.Tick >= e.Arrive - SimTime.Hours(2f)));
+            && (e.TargetRoom == c.Room.Id || e.Evac.Contains(c.Room.Id) && w.Tick >= e.Arrive - SimTime.Hours(2f)));
 
     /// <summary>파편이 지나갈 방인가 (거기로 숨거나 비켜 가지 않는다).</summary>
     public static bool InLine(Room r, World w) => w.Cosmic.Events.Any(e => e.SealPlan && !e.Avoided && e.Phase <= CosmicPhase.Impact && w.Tick < e.Arrive + SimTime.Minutes(10) && (e.TargetRoom == r.Id || e.Evac.Contains(r.Id)));

@@ -110,6 +110,8 @@ public sealed partial class BlastSystem
     public List<BlastScar> Scars { get; } = new();
     public ExplosiveSet Items { get; }
     internal HashSet<(int rec, int victim)> Helped { get; } = new();
+    /// <summary>지금 살피러 가는 사람 (다친 사람 → 구조하러 가는 사람). 끝나면 Helped 로 옮긴다 — 도중에 끊기면 다른 사람이 간다.</summary>
+    internal Dictionary<(int rec, int victim), int> RescueBy { get; } = new();
     /// <summary>문짝이 날아간 문 (문틀을 펴면 다시 단다).</summary>
     private readonly SortedSet<int> _blown = new();
     /// <summary>불기둥 · 셀 분출: 몇 분 동안 그 자리를 달군다 (곁의 폭발성 물건이 익는다).</summary>

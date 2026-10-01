@@ -157,6 +157,8 @@ public static partial class Program
             {
                 var wa = DayOne(seed, "Hanbit");
                 var wb = DayOne(seed, "Hanbit");
+                // 통신 중계 모듈이 없는 배 (중계가 있으면 끊긴 데이터선도 무선으로 이어져 이 장면이 생기지 않는다 — 두 배 모두 같게)
+                foreach (var ww in new[] { wa, wb }) { ww.Automation.Remove(ComputerModule.CommsRelay); ww.Automation.V15NoAuto = true; } // 끊긴 선을 보고 스스로 중계를 올리지도 않는다
                 // 사람도 로봇도 없는 한적한 방 (창고 · 화물칸부터)
                 Room Pick(World w) => w.Ship.Rooms.Where(r => !r.Detached && r.Kind != RoomType.Corridor && w.Crew.All(c => c.Room != r) && w.Robots.Robots.All(b => b.Room != r))
                     .OrderBy(r => r.Kind is RoomType.Storage or RoomType.Cargo ? 0 : r.Kind is RoomType.Workshop or RoomType.Galley or RoomType.Mess or RoomType.Bridge ? 2 : 1).ThenBy(r => r.Id).First();

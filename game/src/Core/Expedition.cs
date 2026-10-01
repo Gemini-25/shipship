@@ -326,7 +326,12 @@ public sealed class ExpeditionSystem
             else _bottomSince[i] = -1;
         }
         bool anyBottom = Cats.Any(Bottom);
-        if (Halted && HaltCat == null && worst is MatCat cw) { HaltCat = cw; HaltWhy = $"{ExpeditionSites.CatName(cw)}가 바닥났다 ({StockText(cw)}) · 원정대를 기다린다"; } // 기다리는 사이 바닥났다
+        if (Halted && HaltCat == null && (worst ?? Cats.Where(Bottom).Cast<MatCat?>().FirstOrDefault()) is MatCat cw) // 기다리는 사이 바닥났다 — 이미 멈춘 배라 기다리지 않고 까닭을 바꾼다
+        {
+            HaltCat = cw;
+            HaltWhy = $"{ExpeditionSites.CatName(cw)}가 바닥났다 ({StockText(cw)}) · 원정대를 기다린다";
+            w.History.Add(w, HistoryKind.Decision, $"엔진을 끈 채로 — {HaltWhy} · 원정대가 가져올 것에 배가 걸렸다", null, null, log: true);
+        }
         if (!Halted && worst is MatCat c && CanHalt) Halt(c);
         else if (Halted && !anyBottom && Current == null) Resume("재료가 다시 찼다");
         else if (Halted && Current == null && Pending == null && Spoils.Count == 0 && w.Tick - HaltedSince > SimTime.TicksPerDay * 4 && w.Policies["expedition"] != 1)
@@ -364,9 +369,17 @@ public sealed class ExpeditionSystem
     }
 
     /// <summary>재료가 바닥나지 않았어도 원정대를 보내려면 배를 세운다.</summary>
-    private void Hold(Site site)
+    private void Hold(Site site, MatCat? forCat = null)
     {
         var w = _w;
+        // 이미 바닥난 재료가 있으면 그게 엔진을 끈 까닭이다 — 원정대를 기다리는 것은 그다음 (연대기 · 경보 · 사유가 같은 말을 한다)
+        MatCat? bottom = forCat is MatCat fc && Bottom(fc) ? fc : Cats.Where(Bottom).Cast<MatCat?>().FirstOrDefault();
+        if (bottom is MatCat b && CanHalt)
+        {
+            Halt(b);
+            HaltWhy += $" · 원정대를 기다린다 — {site.Name}";
+            return;
+        }
         Halted = true;
         HaltCat = null;
         HaltedSince = w.Tick;
@@ -863,7 +876,7 @@ public sealed class ExpeditionSystem
         t.At = at;
         Current = t;
         Stats.Trips++;
-        if (!Halted) Hold(site); // 원정대를 두고 갈 수는 없다 — 배를 세우고 기다린다
+        if (!Halted) Hold(site, p.For); // 원정대를 두고 갈 수는 없다 — 배를 세우고 기다린다
         // 일손: 떠나는 사람의 역할을 아무도 안 맡으면 가장 비슷한 사람이 근무를 대신 선다 (당직이 밀린다)
         foreach (var m in t.Members) Cover(t, m, days);
         string names = string.Join("·", team.Select(c => c.Name));
@@ -1542,11 +1555,15 @@ public sealed class ExpeditionActivity : Activity
 
     private enum Task { None, Prep, Depart, Radio, Greet, Haul, Story }
 
+    /// <summary>전리품을 들고 창고로 가는 중 (들어 올린 뒤에는 더미가 비어도 끝까지 간다 — 자기가 든 것 때문에 일을 놓지 않는다).</summary>
+    private static bool Hauling(CrewMember c) => c.Job?.Activity is ExpeditionActivity && c.Job.Label == "전리품 나르기" && c.Carrying != null;
+
     private static Task Pick(CrewMember c, World w, out float score, out string why)
     {
         var x = w.Expedition;
         score = 0f; why = "—";
         if (c.IsChild && c.Age < 10f) return Task.None;
+        if (Hauling(c)) { score = 0.7f; why = $"원정 전리품을 창고로 — {c.Carrying}"; return Task.Haul; }
         // 비상(냉각 · 전기 · 쓰러진 사람)은 재료가 바닥난 배의 흔한 모습이다 — 원정이 바로 그 길이라 출발 · 나르기는 한다. 불 · 생존 위기면 모두 미룬다
         bool crisis = Crisis.Acting(w);
         bool dire = crisis && (Crisis.Level(w) == CrisisLevel.Survival || w.Fire.Count > 0);
@@ -1591,7 +1608,7 @@ public sealed class ExpeditionActivity : Activity
 
     public override (float, string) Score(CrewMember c, World w, DistanceField dist)
     {
-        if (w.Expedition.Current == null && w.Expedition.Pending == null && w.Expedition.Spoils.Count == 0 && w.Expedition.StoryTrip is not { StoryTold: false }) return (0f, "—");
+        if (w.Expedition.Current == null && w.Expedition.Pending == null && w.Expedition.Spoils.Count == 0 && w.Expedition.StoryTrip is not { StoryTold: false } && !Hauling(c)) return (0f, "—");
         Pick(c, w, out float s, out string why);
         return (s, why);
     }

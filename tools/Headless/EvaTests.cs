@@ -285,6 +285,8 @@ public static partial class Program
         {
             var w = DayOne(seed, "Hanbit");
             var c = Adult(w);
+            // 입고 나간 우주복은 보관함에서 꺼낸 것이다 (걸이 한 칸이 빈다 — 돌아와 걸 자리)
+            foreach (var lk in w.Ship.FurnitureOf(FurnitureType.SuitLocker).OrderBy(f => f.Id)) if (lk.Storage!.Take(ItemKind.Suit, 1) > 0) break;
             var p = PutOutside(w, c, HullSpots(w, 4)[0]);
             c.Suit!.Wear.Breach = SuitBreach.Tear;
             c.Suit.Wear.Scuff = 0.4f;
@@ -292,10 +294,12 @@ public static partial class Program
             p.Incident = true;
             for (int t = 0; t < SimTime.Hours(6) && (c.Suit != null || c.Outside); t += 50) Run(w, 50);
             bool hung = w.EvaRisk.Stats.SuitChecks >= 1 && w.EvaRisk.DamagedSuits.Count >= 1;
-            Check("돌아와 우주복 점검 → 상한 우주복은 수리 대기로 걸린다", hung, $"점검 {w.EvaRisk.Stats.SuitChecks} · 대기 {w.EvaRisk.DamagedSuits.Count} · 우주복 {(c.Suit != null ? "입음" : "벗음")} · 밖 {c.Outside} · 일 {c.Job?.Label}");
-            foreach (var box in w.Ship.Containers.Take(1)) { box.Storage!.Add(ItemKind.Tape, 2); box.Storage.Add(ItemKind.Glue, 2); }
+            Check("돌아와 우주복 점검 → 상한 우주복은 수리 대기로 걸린다", hung, $"점검 {w.EvaRisk.Stats.SuitChecks} · 대기 {w.EvaRisk.DamagedSuits.Count} · 우주복 {(c.Suit != null ? "입음" : "벗음")} · 밖 {c.Outside} · 일 {c.Job?.Label} · 보관함 빈칸 {w.Ship.FurnitureOf(FurnitureType.SuitLocker).Sum(f => f.Storage!.Free)}");
+            VoyageV15.Put(w, ItemKind.Tape, 2); VoyageV15.Put(w, ItemKind.Glue, 2); // 받는 선반에 (첫 보관함이 테이프를 받지 않을 수 있다)
             for (int t = 0; t < SimTime.Hours(20) && w.EvaRisk.Stats.SuitsMended < 1; t += 100) Run(w, 100);
-            Check("상한 우주복을 고친다", w.EvaRisk.Stats.SuitsMended >= 1, $"수리 {w.EvaRisk.Stats.SuitsMended} · 대기 {w.EvaRisk.DamagedSuits.Count}");
+            var mender = w.Crew.Where(x => !x.Dead && x.Role is CrewRole.Technician or CrewRole.Engineer).OrderBy(x => x.Id).FirstOrDefault();
+            string mendWhy = mender == null ? "기술자 없음" : string.Join(" · ", mender.LastEvaluations.Where(e => e.Activity is SuitMendActivity).Select(e => $"{mender.Name} {e.Score:0.00} {e.Reason}"));
+            Check("상한 우주복을 고친다", w.EvaRisk.Stats.SuitsMended >= 1, $"수리 {w.EvaRisk.Stats.SuitsMended} · 대기 {w.EvaRisk.DamagedSuits.Count} · 테이프 {w.Ship.CountStored(ItemKind.Tape)} · 접착제 {w.Ship.CountStored(ItemKind.Glue)} · {mendWhy}");
         }
 
         // ── 10) 결정론 ──
