@@ -235,6 +235,7 @@ public sealed class Room
     /// <summary>예전에 쓰이던 용도 (임시 침실이었다가 되돌아간 방 등).</summary>
     public List<string> FormerPurposes { get; } = new();
     public List<Mark> Marks { get; } = new();
+    public List<PlacedProp> Decor { get; } = new(); // v15.8 놓인 소품·장식 (Props.cs)
 
     // ── 구조 (v8): 외판을 용골(중앙 통로)에 잇는 연결부 ──
     /// <summary>구조 연결부. 끊긴 만큼 남은 연결부에 하중이 몰리고, 다 끊어지면 방이 떨어져 나간다.</summary>
