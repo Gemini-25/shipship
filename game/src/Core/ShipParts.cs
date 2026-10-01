@@ -580,6 +580,10 @@ public sealed class Door
     /// <summary>v12.2 잔해가 끼여 닫히지 않는다 (치우면 풀린다).</summary>
     public bool Blocked { get; set; }
 
+    /// <summary>v16.3 문틀 변형 0~1 (0.3 넘으면 끝까지 안 닫힌다 → 기밀 실패) · 열어 둔다(선실 주인).</summary>
+    public float Bent { get; set; }
+    public bool HoldOpen { get; set; }
+
     internal void Update()
     {
         if ((JammedOpen || Blocked) && !Removed)
@@ -589,12 +593,14 @@ public sealed class Door
             _override = false;
             return;
         }
+        if (HoldOpen && !Locked) _requested = true; // v16.3 열어 둔 문
         bool open = _requested && (!Locked || _override);
         float speed = Locked ? 0.03f : Powered ? (MotorMk1 ? 0.06f : 0.1f) : 0.025f;
         float before = Openness;
         Openness += open ? speed : Locked ? -0.08f : -0.04f;
         if (Openness < 0f) Openness = 0f;
         if (Openness > 1f) Openness = 1f;
+        if (Bent > 0.3f && Openness < 0.05f + 0.1f * Bent) Openness = 0.05f + 0.1f * Bent; // v16.3 휜 문틀: 틈이 남는다
         if (before < 0.05f && Openness >= 0.05f) { Cycles++; PendingCycles++; }
         _requested = false;
         _override = false;

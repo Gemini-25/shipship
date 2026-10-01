@@ -72,6 +72,8 @@ public sealed class Pathfinder
 
     /// <summary>칸마다 덧붙는 위험 비용 (불과 그 주변). 화재 시스템이 채운다.</summary>
     public int[] CellHazard { get; }
+    /// <summary>v16.3 배 본체가 채우는 칸 비용 (열린 점검 뚜껑 · 테이프 · 유리 · 기름) — 사람들은 돌아간다.</summary>
+    public int[] CellBody { get; }
     private readonly int[] _dx = { 1, -1, 0, 0, 1, 1, -1, -1 };
     private readonly int[] _dy = { 0, 0, 1, -1, 1, -1, 1, -1 };
 
@@ -84,6 +86,7 @@ public sealed class Pathfinder
         _parent = new int[_n];
         _stamp = new int[_n];
         CellHazard = new int[_n];
+        CellBody = new int[_n];
         _offsets = new int[8];
         for (int i = 0; i < 8; i++) _offsets[i] = _dy[i] * _w + _dx[i];
         Invalidate();
@@ -203,6 +206,15 @@ public sealed class Pathfinder
     {
         if (_hazardSeen.Length == CellHazard.Length && CellHazard.AsSpan().SequenceEqual(_hazardSeen)) return;
         _hazardSeen = (int[])CellHazard.Clone();
+        _hazardVersion++;
+    }
+
+    private int[] _bodySeen = Array.Empty<int>();
+    /// <summary>v16.3 배 본체 칸 비용을 다시 채웠다.</summary>
+    public void BodyChanged()
+    {
+        if (_bodySeen.Length == CellBody.Length && CellBody.AsSpan().SequenceEqual(_bodySeen)) return;
+        _bodySeen = (int[])CellBody.Clone();
         _hazardVersion++;
     }
 
@@ -343,6 +355,7 @@ public sealed class Pathfinder
                 if (dr >= 0) step += _doorAdd[dr];
                 int h = CellHazard[ni];
                 if (h > 0) step += (int)(h * cellScale * profile.HazardScale);
+                step += CellBody[ni]; // v16.3
                 int nd = dist + step;
                 if (cost[ni] >= 0 && nd >= cost[ni]) continue;
                 cost[ni] = nd;
@@ -398,6 +411,7 @@ public sealed class Pathfinder
         if (d >= 0 && _ship.Doors[d].Locked) cost += ManualDoorPenalty * 2;
         int h = CellHazard[to];
         if (h > 0) cost += (int)(h * (profile.Suit ? 0.5f : 1f) * profile.HazardScale);
+        cost += CellBody[to]; // v16.3
         return cost;
     }
 
