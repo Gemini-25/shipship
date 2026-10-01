@@ -74,13 +74,13 @@ public sealed class FoodWatch
     private void Fresh()
     {
         foreach (var b in _w.Cooking.Batches)
-            if (!b.Jar && !b.Spoiled && !b.Flagged && b.Portions >= 2 && b.Fresh < 0.6f) Flag(b, $"신선도 {b.Fresh * 100:0}%");
+            if (!b.Jar && !b.Spoiled && !b.Flagged && !b.FlagIgnored && b.Portions >= 2 && b.Fresh < 0.6f) Flag(b, $"신선도 {b.Fresh * 100:0}%");
     }
 
     private void Flag(Batch b, string why)
     {
         var w = _w;
-        if (b.Flagged) return;
+        if (b.Flagged || b.FlagIgnored) return; // 흘려들은 냄비는 다시 조르지 않는다
         var ck = w.Cooking;
         var cook = ck.HeadCook is CrewMember h && !CookingSystem.LaidUp(h) ? h : ck.Apprentice;
         if (cook == null) return;
@@ -158,6 +158,9 @@ public sealed class FoodWatch
         w.Log.Add(w.Tick, LogKind.Life, $"주컴퓨터: {who.Name}의 탄 냄새 신고와 감지기를 견줬다 — {judge}", who.Id);
         BurnerWatch = true;
     }
+
+    /// <summary>화면: 주컴퓨터가 이 화구 때문에 사람을 부른 참이다.</summary>
+    public bool Calling(Furniture st) => _called.TryGetValue(st.Id, out var t) && _w.Tick - t < SimTime.Minutes(20) && _w.Cooking.Scorch(st) > 0f;
 
     /// <summary>시험용: 감시를 미리 켜 둔다.</summary>
     public void Learn() => BurnerWatch = true;

@@ -94,7 +94,7 @@ public sealed class CookingSystem
     private sealed class Serving
     {
         public int Recipe = -1;
-        public bool Reheat, Cold;
+        public bool Reheat, Cold, Heater;
     }
 
     private readonly World _w;
@@ -402,7 +402,7 @@ public sealed class CookingSystem
         foreach (var b in Batches)
         {
             if (b.Jar || b.Portions <= 0 || b.Spoiled) continue;
-            if (!b.InFridge) { if (hot == null || b.Cooked > hot.Cooked) hot = b; }
+            if (!b.InFridge) { if (hot == null || b.Cooked < hot.Cooked) hot = b; } // 먼저 만든 냄비부터 비운다 (식었으면 데워서)
             else if (old == null || b.Cooked < old.Cooked) old = b;
         }
         return hot ?? old;
@@ -450,7 +450,7 @@ public sealed class CookingSystem
         // 균이 든 끼니였다 (방금 EatActivity가 탈 날 시각을 정했다) — 그 냄비에 균이 있었다
         if (cm.PoisonSource == box && cm.PoisonAt == w.Tick + SimTime.Minutes(40)) { b.Germy = true; Stats.GermMeals++; }
         float q = Taste(cm, b.Quality, b.Fresh, cold);
-        _eating[cm.Id] = new Serving { Recipe = b.Recipe, Reheat = reheat, Cold = cold };
+        _eating[cm.Id] = new Serving { Recipe = b.Recipe, Reheat = reheat, Cold = cold, Heater = reheat && PowerShort };
         if (cold) ColdNote(cm, r);
         Spoiling(cm, b, box);
         Side(cm);
@@ -561,6 +561,8 @@ public sealed class CookingSystem
     public bool NeedsReheat(CrewMember c) => _eating.TryGetValue(c.Id, out var s) && s.Reheat;
     /// <summary>지금 먹는 것이 식은 채인가 (화면 · 말).</summary>
     public bool EatingCold(CrewMember c) => _eating.TryGetValue(c.Id, out var s) && s.Cold;
+    /// <summary>정전 · 저출력에 이동식 히터 앞에서 데운 그릇인가 (화면).</summary>
+    public bool EatingByHeater(CrewMember c) => _eating.TryGetValue(c.Id, out var s) && s.Heater;
     public DishRecipe? EatingNow(CrewMember c) => _eating.TryGetValue(c.Id, out var s) && s.Recipe >= 0 ? Dishes.Of(s.Recipe) : null;
 
     private void FinishReheat(CrewMember c)

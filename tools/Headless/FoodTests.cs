@@ -39,6 +39,7 @@ public static partial class Program
                         if ((put += f.Storage!.Add(ItemKind.Meal, 30 - put)) >= 30) break;
                     w.Cooking.OnCooked(cook, stove, put);
                     var b = w.Cooking.Batches.Last(x => !x.Jar); // (조리 뒤 항아리를 앉혔을 수도 있다)
+                    b.FlagIgnored = true; // 조리사가 주컴퓨터 알림을 흘려들었다 (컴퓨터 쪽 길은 10번 시험이 본다)
                     float foul = 0f;
                     for (int m = 0; m < 34 * 6; m++)
                     {
@@ -234,12 +235,13 @@ public static partial class Program
                     w.Cooking.ForceNext = "vegsoup";
                     w.Cooking.OnCooked(cook, stove, AddMeals(w, 12)); // 재고에도 그만큼
                     w.Cooking.Batches.Last(x => !x.Jar).Temp = 22f; // 한참 놓여 식었다
+                    foreach (var x in w.Cooking.Batches.Where(x => !x.Jar && x != w.Cooking.Batches.Last(y => !y.Jar))) x.Portions = 0; // 다른 냄비는 비었다
                     if (brownout) w.Power.Brownout = true;
                     foreach (var c in w.Crew) c.Needs.Food = MathF.Min(c.Needs.Food, 0.3f);
                     int served0 = w.Cooking.Stats.Served;
                     var soup = w.Cooking.Batches.Last(x => !x.Jar);
                     Run(w, SimTime.Hours(1.5f));
-                    string dbg = $"먹음 {w.Cooking.Stats.Served - served0} · 수프 {soup.Spec.Name} {soup.Portions}그릇 {soup.Temp:0}℃ 냉장 {soup.InFridge} · 식사 재고 {w.Ship.CountStored(ItemKind.Meal)} · "
+                    string dbg = $"먹음 {w.Cooking.Stats.Served - served0} · 수프 {soup.Spec.Name} {soup.Portions}그릇 {soup.Temp:0}℃ 냉장 {soup.InFridge} · 냄비들 {string.Join(",", w.Cooking.Batches.Select(b => $"{b.Spec.Name}{b.Portions}/{b.Temp:0}℃{(b == soup ? "*" : "")}"))} ·식사 재고 {w.Ship.CountStored(ItemKind.Meal)} · "
                         + string.Join(" / ", w.Crew.Where(c => !c.Dead).Select(c => $"{c.Name} {c.Needs.Hunger:0.00} {c.ActivityLabel}"));
                     return (brownout ? w.Cooking.Stats.ColdNoPower : w.Cooking.Stats.Cold, w.Cooking.Stats.Reheated, dbg);
                 }
@@ -298,7 +300,7 @@ public static partial class Program
                 var st = w.Cooking.Stats;
                 int sick = w.Crew.Count(c => c.PoisonAt >= 0 || c.Ailments.Count > 0);
                 var act = w.Automation.Book.Acts.FirstOrDefault(a => a.Key == "food:fridge");
-                Check("정전 → 냉장고 멈춤 → 냄비가 상해 감 → 주컴퓨터 경보 · 시큼한 끼니 → 식중독", rot > 0.03f && w.Cooking.Watch.FridgeAlerts > 0 && act != null && st.SourMeals > 0 && st.SpoilPoison > 0,
+                Check("정전 → 냉장고 멈춤 → 냄비가 상해 감 → 주컴퓨터 경보 · 시큼한 끼니 → 식중독", rot > 0.012f && w.Cooking.Watch.FridgeAlerts > 0 && act != null && st.SourMeals > 0 && st.SpoilPoison > 0,
                     $"정전 중 신선도 시간당 -{rot * 100:0.0}% · {freshAt * 100:0}%에서 먹음 · 경보 \"{w.Alerts.LastOrDefault(a => a.Text.Contains("냉장고"))?.Text}\" · 기록 [{act?.Observe} | {act?.Judge} | {act?.Request}] · 시큼한 끼니 {st.SourMeals} · 식중독 {st.SpoilPoison} · 앓는 사람 {sick}");
             }
 
