@@ -18,8 +18,9 @@ public static partial class Program
             var rows = ChronicleV15.Rows;
             Check("목록 — 모듈 20 (새 13은 표·이름이 있다) · 칭호 50 (배 25 · 사람 25, 이름·id 겹침 없음)",
                 mods.Length == 30 && ComputerV15.Rows.Length == 13 && fresh.Count == 13 && noRow.Count == 0
-                && rows.Length == 50 && rows.Select(r => r.Id).Distinct().Count() == 50 && rows.Select(r => r.Name).Distinct().Count() == 50
-                && rows.Count(r => r.Scope == TitleScope.Ship) == 25 && rows.All(r => (r.Ship != null) == (r.Scope == TitleScope.Ship) && (r.Crew != null) == (r.Scope == TitleScope.Crew)),
+                // v15.9 칭호 50 (배 25) 위에 뒤 단계가 더한다 (v16.12 원정 5) — 겹침 없음이 핵심
+                && rows.Length >= 50 && rows.Select(r => r.Id).Distinct().Count() == rows.Length && rows.Select(r => r.Name).Distinct().Count() == rows.Length
+                && rows.Count(r => r.Scope == TitleScope.Ship) >= 25 &&rows.All(r => (r.Ship != null) == (r.Scope == TitleScope.Ship) && (r.Crew != null) == (r.Scope == TitleScope.Crew)),
                 $"모듈 {mods.Length} · 새 표 {ComputerV15.Rows.Length} · 표 없음 {string.Join(",", noRow)} · 칭호 {rows.Length}(배 {rows.Count(r => r.Scope == TitleScope.Ship)})");
 
             // 1) 새 모듈 13: 올리기 전과 뒤 — 같은 배에서 같은 자리를 재 본다

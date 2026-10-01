@@ -102,13 +102,17 @@ public sealed partial class AutomationSystem
     public bool RemotePass(CrewMember c, Door d, DoorBody db)
     {
         var w = _world;
-        if (!Active(ComputerModule.Access) || !MainOnline || !d.Powered) return false;
+        if (!MainOnline || !d.Powered) return false;
         if (db.Zone is AccessZone.Captain or AccessZone.Security or AccessZone.Cabin or AccessZone.Open) return false; // 사생활 · 함장 권한은 사람이
         var inner = db.Inner >= 0 && db.Inner < w.Ship.Rooms.Count ? w.Ship.Rooms[db.Inner] : null;
         if (inner == null || inner.Detached || !inner.DataLinked) return false;
+        // 제 방송으로 보낸 대피소가 잠겨 있으면 컴퓨터가 연다 (출입 관리 모듈이 없어도 — 제 말에 책임진다)
+        bool shelter = ShelterCall && inner == ShelterRoom() && Speak.Ordered(c, "shelter", SimTime.Hours(1)) != null;
+        if (!shelter && !Active(ComputerModule.Access)) return false;
         string zone = DoorBody.ZoneName(db.Zone);
         string? why = db.Zone switch
         {
+            _ when shelter => "대피 방송 — 대피소로 들인다",
             AccessZone.Medicine when c.CarryingPerson is CrewMember p => $"{Ko.EulReul(p.Name)} 업고 왔다",
             AccessZone.Medicine when c.Vitals.Injury > 0.15f || c.Vitals.Health < 0.7f || DiseaseSystem.Sick(c) => "다쳤거나 아프다",
             AccessZone.Reactor when inner.Furniture.Any(f => f.Machine is { Faults.Count: > 0 }) && (c.SkillLevel(Skill.Engineering) >= 0.4f || c.SkillLevel(Skill.Electrical) >= 0.4f) => "고장 난 설비를 고칠 줄 안다",
@@ -297,7 +301,7 @@ public sealed class HeedBroadcastActivity : Activity
     public override (float, string) Score(CrewMember c, World w, DistanceField dist)
     {
         var a = w.Automation;
-        if (c.Outside || c.Room == null || c.Down || c.CarriedBy != null || !a.ShelterCall) return (0f, "—");
+        if (c.Outside || c.Down || c.CarriedBy != null || !a.ShelterCall) return (0f, "—"); // 문간(방 없음)에서 다시 생각해도 잊지 않는다
         var b = a.Speak.Ordered(c, "shelter", SimTime.Hours(1));
         if (b == null) return (0f, "대피 방송을 못 들었다");
         if (!a.Trusts.Obeys(c)) return (0f, "컴퓨터 방송 — 믿지 않는다");

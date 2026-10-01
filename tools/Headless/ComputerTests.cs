@@ -114,10 +114,11 @@ public static partial class Program
                 if (p != null)
                 {
                     a.Asks.Decide(p, false, "플레이어");
-                    bool rescued = false; int minutes = 0;
+                    bool rescued = false, purgedOnHim = false; int minutes = 0;
                     for (; minutes < 40 && !rescued; minutes++)
                     {
-                        Run(w, SimTime.Minutes(1));
+                        // 거절을 지켰나: 그 사람이 안에 있는 동안 진공(공기 빼기)이 한 번도 없어야 한다 (데리고 나온 뒤 다시 승인받아 빼는 건 된다)
+                        for (int s = 0; s < SimTime.Minutes(1); s += World.SystemInterval) { Run(w, World.SystemInterval); purgedOnHim |= room.Purging && victim.Room == room; }
                         if (victim.CarriedBy == null && victim.Room == room && !victim.LaidSafe) { victim.Down = true; victim.Pose = Pose.Down; }
                         rescued = victim.Room != room && victim.CarriedBy == null && !victim.Dead;
                         if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "3")
@@ -129,8 +130,8 @@ public static partial class Program
                     }
                     var k = a.ChecksDone.Concat(a.Checks).FirstOrDefault(x => x.RoomId == room.Id);
                     var checker = k != null ? w.Crew.FirstOrDefault(c => c.Id == k.CheckerId) : null;
-                    Check("거절 → 사람이 확인하러 가 안에 있던 사람을 데리고 나온다", rescued && k != null && k.Seen && k.Found.Contains(victim.Id) && !room.Purging,
-                        $"{minutes}분 · 확인 {checker?.Name ?? "-"} ({(k?.Seen == true ? $"봤다 · 안에 {k.Found.Count}명" : "못 봤다")}) · {victim.Name} → {victim.Room?.Name} · 진공 {(a.Vacuumed > 0 ? "했다" : "안 했다")} · 믿음 고침 {a.Belief.Repairs}");
+                    Check("거절 → 사람이 확인하러 가 안에 있던 사람을 데리고 나온다", rescued && k != null && k.Seen && k.Found.Contains(victim.Id) && !purgedOnHim,
+                        $"{minutes}분 · 확인 {checker?.Name ?? "-"} ({(k?.Seen == true ? $"봤다 · 안에 {k.Found.Count}명" : "못 봤다")}) · {victim.Name} → {victim.Room?.Name} · 진공 {(a.Vacuumed > 0 ? "했다" : "안 했다")}{(purgedOnHim ? " (안에 사람이 있을 때!)" : a.Vacuumed > 0 ? " (데리고 나온 뒤 다시 승인)" : "")} · 믿음 고침 {a.Belief.Repairs}");
                     Run(w, SimTime.Minutes(8));
                     float trust1 = a.Trusts.Of(victim);
                     var others = w.Crew.Where(c => !c.Dead && c != victim).Select(c => a.Trusts.Of(c)).ToList();
