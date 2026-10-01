@@ -230,7 +230,7 @@ public sealed class PipeNetwork
         ColdLeg = cold;
 
         // 급수: 정수기 → 수경재배실, 정수기 → 냉각실 보충구
-        var recycler = ship.Furniture.FirstOrDefault(f => f.Type == FurnitureType.WaterRecycler);
+        var recycler = ship.Furniture.Where(f => f.Type == FurnitureType.WaterRecycler).OrderBy(f => f.Room.Special != null ? 1 : 0).FirstOrDefault(); // 본관은 생명유지실 정수기에서 (정수실은 덧붙는 공급원)
         var hydro = ship.Rooms.FirstOrDefault(r => r.Type == RoomType.Hydroponics);
         if (recycler != null && hydro != null)
         {

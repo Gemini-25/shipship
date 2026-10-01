@@ -137,6 +137,7 @@ public static partial class Program
         if (args.Contains("--watchdebug")) return RunWatchDebug(seed);
         if (args.Contains("--voyagetest")) return RunVoyageTest(seed); // v12.8
         if (args.Contains("--campaigntest")) return RunCampaignTest(seed); // v12.9
+        if (args.Contains("--campaignrun")) return RunCampaignLong(Math.Max(1, days), seed, shipArg ?? "Mirinae");
         if (args.Contains("--crewtest")) return RunCrewTest(seed); // v12.7
         if (args.Contains("--designtest")) { args_Print = args.Contains("--print"); return RunDesignTest(seed); } // v12.6
         if (args.Contains("--autodebug")) return RunAutoDebug(seed);

@@ -331,7 +331,7 @@ public static class ShipGenerator
         return r;
     }
 
-    // 기반 시설을 새로 나누는 방(정수실·배터리실·변전실…)은 배관·간선 규칙을 흔들어서 생성기에는 아직 넣지 않는다.
+    // 기반 시설을 새로 나누는 방(정수실·배터리실·변전실…)은 무작위로 뽑지 않는다 — 크기에 따라 정해 넣는다 (InfraFor).
     private static readonly HashSet<RoomType> Infra = new()
     {
         RoomType.WaterPlant, RoomType.BatteryRoom, RoomType.FuelCell, RoomType.HvacRoom, RoomType.PumpRoom, RoomType.Substation,
@@ -358,7 +358,19 @@ public static class ShipGenerator
             rest.Remove(s);
             pick.Add(s);
         }
-        return pick.Take(Math.Min(count, LegendChars.Length)).ToList();
+        pick = pick.Take(Math.Min(count, LegendChars.Length)).ToList();
+        // 기반 시설 방: 큰 배일수록 생명유지·전력을 한 방에 몰지 않는다 (한 번의 사고가 배 전체를 멈추지 않게)
+        foreach (var kind in InfraFor(n))
+            if (pick.Count < LegendChars.Length && RoomCatalog.Of(kind) is RoomSpec spec) pick.Add(spec);
+        return pick;
+    }
+
+    /// <summary>크기별 기반 시설 방: 12인 이상 정수실(예비 정수기 둘), 20인 이상 배터리실(축전지 넷), 30인 이상 공조실(산소 발생기 둘).</summary>
+    public static IEnumerable<RoomType> InfraFor(int n)
+    {
+        if (n >= 12) yield return RoomType.WaterPlant;
+        if (n >= 20) yield return RoomType.BatteryRoom;
+        if (n >= 30) yield return RoomType.HvacRoom;
     }
 
     public static string KeyFor(int crew, int seed) => $"gen:{crew}:{seed}";

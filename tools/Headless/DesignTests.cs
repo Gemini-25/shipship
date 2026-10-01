@@ -140,6 +140,26 @@ public static partial class Program
                 Console.WriteLine("   미리내호 — " + string.Join(" · ", lines));
                 Check("겸용의 대가 — 전용 방이 없으면 본래 방이 효율을 깎아 맡는다", Facilities.Best(w.Ship, "exercise").factor is > 0f and < 1f, "");
             }
+            // 8) 기반 시설 방: 큰 생성 배는 정수실·배터리실·공조실을 따로 둔다 — 망에 이어지고, 생명유지실 정수기가 다 서도 물이 난다
+            {
+                var w = World.CreateDefault(seed, 0, ShipGenerator.KeyFor(30, seed));
+                var kinds = ShipGenerator.InfraFor(30).ToList();
+                bool all = kinds.All(k => w.Ship.Rooms.Any(r => r.Kind == k));
+                Run(w, SimTime.Hours(6));
+                var plant = w.Ship.Rooms.FirstOrDefault(r => r.Kind == RoomType.WaterPlant);
+                var cells = w.Ship.Rooms.FirstOrDefault(r => r.Kind == RoomType.BatteryRoom);
+                var hvac = w.Ship.Rooms.FirstOrDefault(r => r.Kind == RoomType.HvacRoom);
+                bool linked = plant is { WaterLinked: true, PowerLinked: true } && cells is { PowerLinked: true } && hvac is { PowerLinked: true };
+                int roomBatteries = cells == null ? 0 : w.Ship.FurnitureOf(FurnitureType.Battery).Count(f => f.Room == cells);
+                // 생명유지실 정수기를 모두 세운다 → 정수실만으로 물이 난다
+                foreach (var f in w.Ship.FurnitureOf(FurnitureType.WaterRecycler).Where(f => f.Room.Special == null).ToList()) w.Machines.Break(f.Machine!, FaultKind.PumpSeized);
+                Run(w, SimTime.Minutes(10));
+                float backup = w.Water.Produced;
+                Check("기반 시설 방 — 정수실·배터리실·공조실이 망에 이어져 일한다", all && linked && roomBatteries >= 4 && backup > 0.5f,
+                    $"{string.Join(", ", kinds.Select(k => RoomCatalog.Of(k)!.Name))} · 망 {(linked ? "이어짐" : "끊김")} · 배터리실 축전지 {roomBatteries} · 생명유지실 정수기가 다 서도 물 {backup:0.0}L/h");
+                int small = World.CreateDefault(seed, 0, ShipGenerator.KeyFor(6, seed)).Ship.Rooms.Count(r => kinds.Contains(r.Kind));
+                Check("작은 배는 한 방에 모은다 (기반 시설 방 없음)", small == 0, $"6인 배 기반 시설 방 {small}");
+            }
         }
         catch (Exception e)
         {

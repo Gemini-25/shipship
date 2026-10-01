@@ -86,4 +86,34 @@ public static partial class Program
         Console.WriteLine(_fails == 0 ? "\n✔ 캠페인 점검 모두 통과" : $"\n✘ {_fails}개 실패");
         return _fails == 0 ? 0 : 1;
     }
+    /// <summary>긴 캠페인: 1장부터 끝까지 (길어야 days일) — 장이 바뀔 때마다, 그리고 열흘마다 한 줄.</summary>
+    private static int RunCampaignLong(int days, int seed, string ship)
+    {
+        float mode0 = CampaignSystem.ModeValue;
+        CampaignSystem.ModeValue = 1f;
+        var w = World.CreateDefault(seed, 0, ship);
+        CampaignSystem.ModeValue = mode0;
+        Player.AllowDeath(w, true);
+        var cp = w.Campaign;
+        Console.WriteLine($"긴 캠페인 · {ship} · 시드 {seed} · 길어야 {days}일\n");
+        int doneSeen = 0;
+        for (int d = 1; d <= days; d++)
+        {
+            Run(w, SimTime.TicksPerDay);
+            while (cp.Done.Count > doneSeen)
+            {
+                var (m, ok, tick, note) = cp.Done[doneSeen++];
+                Console.WriteLine($"  {tick / (float)SimTime.TicksPerDay,5:0.0}일  {m.Chapter}장 「{m.Title}」 {(ok ? "해냄" : "실패")} — {note}{(m.NextB != null ? $" → {cp.Choice}" : "")}");
+            }
+            int alive = w.Crew.Count(c => !c.Dead);
+            if (d % 10 == 0 || alive == 0)
+                Console.WriteLine($"  {d,5}일  {cp.Current?.Chapter}장 {cp.Status().text} · 살아 있음 {alive} (어린이 {w.Crew.Count(c => !c.Dead && c.IsChild)}) · 사망 {w.History.Deaths} · 항해 {w.Voyage.Number} · 돈 {w.Voyage.Credits:0} · 기술 {w.Eras.Known.Count} · {EraSystem.EraName(w.Eras.Era)}");
+            if (alive == 0) { Console.WriteLine("  전멸"); break; }
+            if (cp.Current == null) { Console.WriteLine("  캠페인 끝"); break; }
+        }
+        var g = w.Generation;
+        Console.WriteLine($"\n세대선: 태어남 {g.Births} · 성인식 {g.Comings} · 노환 {g.Elders} · 기념일 {g.Anniversaries} · 짝 {w.Crew.Count(c => !c.Dead && c.Partner != null) / 2}");
+        Console.WriteLine($"사고 {w.Causes.Incidents.Count} · 실수 {w.Life.Stats.Mistakes} · 말다툼 {w.Life.Stats.Arguments} · 지문 {SaveGame.StateHash(w):x8}");
+        return 0;
+    }
 }
