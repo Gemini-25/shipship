@@ -107,7 +107,7 @@ public static class NeedsSystem
         bool cot = under is { Type: FurnitureType.Cot, Improved: false };
         // 무서운 방에서 자면 깊이 못 잔다 (v7)
         float dread = asleep ? c.Memory.FearOf(c.Room) : 0f;
-        if (asleep) n.Rest += RestGainAsleep * restMulH * (stuffy ? 0.7f : 1f) * (rough ? 0.75f : 1f) * (cot ? 0.92f : 1f) * (1f - 0.3f * dread) * AmbienceSystem.SleepFactor(c.Room) * dt; // v12.6 옆방 소음·진동
+        if (asleep) n.Rest += RestGainAsleep * restMulH * (1f - c.Fx.Sleep) * (stuffy ? 0.7f : 1f) * (rough ? 0.75f : 1f) * (cot ? 0.92f : 1f) * (1f - 0.3f * dread) * AmbienceSystem.SleepFactor(c.Room) * dt; // v12.6 옆방 소음·진동
         else n.Rest -= (c.Pose == Pose.Working ? RestDecayWorking : RestDecayAwake) * restMul * ShipSim.Core.Wounds.LungLoad(v) * dt; // v12.7 폐를 다치면 쉽게 지친다
 
         if (!asleep) n.Social -= SocialDecay * (0.6f + 0.8f * c.Traits.Sociability) * socialMul * dt;

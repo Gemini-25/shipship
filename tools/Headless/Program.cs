@@ -85,6 +85,7 @@ public static partial class Program
         if (args.FirstOrDefault(a => a.StartsWith("--tuning=")) is string tf && System.IO.File.Exists(tf.Split('=', 2)[1]))
             Console.WriteLine($"수치 파일: {Tuning.Load(System.IO.File.ReadAllText(tf.Split('=', 2)[1]))}개 적용");
         if (args.Contains("--bench")) return RunBench(days, seed);
+        if (args.Contains("--profile")) return RunProfile(seed, args); // v14.2
         if (args.Contains("--ships")) return RunShips(days, seed);
         if (args.Contains("--bigships")) return RunBigShips(days, seed, args);
         if (args.Contains("--tiers")) return RunTierRecovery(seed, args);
@@ -144,6 +145,7 @@ public static partial class Program
         if (args.Contains("--mindtest")) return RunMindTest(seed); // v13.3
         if (args.Contains("--societytest")) return RunSocietyTest(seed); // v13.4
         if (args.Contains("--personatest")) return RunPersonaTest(seed); // v14.0
+        if (args.Contains("--illnesstest")) return RunIllnessTest(seed); // v14.1
         if (args.Contains("--replaycheck")) return RunReplayCheck(seed);
         if (args.Contains("--deathtrace")) return RunDeathTrace(Math.Max(1, days), seed);
         if (args.Contains("--stressprobe")) return RunStressProbe(Math.Max(1, days), seed);

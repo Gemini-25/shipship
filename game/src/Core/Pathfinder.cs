@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace ShipSim.Core;
 
@@ -91,6 +92,7 @@ public sealed class Pathfinder
     /// <summary>벽·문·가구가 바뀌면 호출 (사고로 구조가 바뀔 때).</summary>
     public void Invalidate()
     {
+        _structure++;
         var grid = _ship.Grid;
         _walk = new bool[_n];
         _room = new int[_n];
@@ -174,7 +176,79 @@ public sealed class Pathfinder
     }
 
     /// <summary>다익스트라로 모든 칸까지의 비용을 한 번에 (가장 가까운 X 찾기용).</summary>
+    // ── v14.2 거리장 캐시: 결과를 바꾸는 입력(구조 · 문 · 방 · 불의 칸 위험 · 성향 · 두려움)이 모두 같으면 다시 쓴다 ──
+    private int _structure;              // Invalidate마다
+    private int _hazardVersion;          // 불의 칸 위험을 다시 채울 때마다
+    private int _stateVersion;           // 문·방 상태가 바뀔 때마다
+    private int[] _state = Array.Empty<int>(), _scratch = Array.Empty<int>();
+    private sealed class FloodEntry { public int Version; public float[]? Fear; public DistanceField Field = null!; }
+    private readonly Dictionary<(int start, float scale, int flags), FloodEntry> _floods = new();
+    public int FloodHits { get; private set; }
+    public int FloodMisses { get; private set; }
+
+    private int[] _hazardSeen = Array.Empty<int>();
+
+    /// <summary>불의 칸 위험(CellHazard)을 다시 채웠다 (화재 시스템) — 실제로 달라졌을 때만 판 번호를 올린다.</summary>
+    public void HazardChanged()
+    {
+        if (_hazardSeen.Length == CellHazard.Length && CellHazard.AsSpan().SequenceEqual(_hazardSeen)) return;
+        _hazardSeen = (int[])CellHazard.Clone();
+        _hazardVersion++;
+    }
+
+    /// <summary>문·방의 길에 걸리는 상태를 훑어, 바뀌었으면 판 번호를 올린다.</summary>
+    private int StateVersion()
+    {
+        int nd = _ship.Doors.Count, nr = _ship.Rooms.Count;
+        int len = 2 + nd + nr * 2;
+        if (_scratch.Length != len) _scratch = new int[len];
+        var s = _scratch;
+        s[0] = _structure; s[1] = _hazardVersion;
+        for (int i = 0; i < nd; i++)
+        {
+            var d = _ship.Doors[i];
+            s[2 + i] = (d.Locked ? 1 : 0) | (d.Powered ? 2 : 0) | (d.Removed ? 4 : 0) | (d.IsExternal ? 8 : 0);
+        }
+        for (int i = 0; i < nr; i++)
+        {
+            var r = _ship.Rooms[i];
+            s[2 + nd + i * 2] = r.HazardCost;
+            s[3 + nd + i * 2] = (r.Unbreathable ? 1 : 0) | (r.Abandoned ? 2 : 0);
+        }
+        if (_state.Length != len || !s.AsSpan().SequenceEqual(_state))
+        {
+            _state = (int[])s.Clone();
+            _stateVersion++;
+        }
+        return _stateVersion;
+    }
+
     public DistanceField Flood(Cell start, PathProfile profile = default)
+    {
+        long pf = Prof.Now;
+        if (profile.HazardScale == 0f) profile = PathProfile.Default;
+        var grid = _ship.Grid;
+        int version = StateVersion();
+        int si = grid.InBounds(start) ? grid.Index(start) : -1;
+        var key = (si, profile.HazardScale, (profile.Suit ? 1 : 0) | (profile.Responder ? 2 : 0) | (profile.Eva ? 4 : 0) | (profile.Robot ? 8 : 0));
+        if (_floods.TryGetValue(key, out var e) && e.Version == version && SameFear(e.Fear, profile.Fear))
+        {
+            FloodHits++;
+            Prof.Lap("path.Flood(캐시)", pf);
+            return e.Field;
+        }
+        var field = FloodCore(start, profile);
+        if (_floods.Count > 512) _floods.Clear();
+        _floods[key] = new FloodEntry { Version = version, Fear = profile.Fear == null ? null : (float[])profile.Fear.Clone(), Field = field };
+        FloodMisses++;
+        Prof.Lap("path.Flood", pf);
+        return field;
+    }
+
+    private static bool SameFear(float[]? a, float[]? b) =>
+        a == null ? b == null || b.All(x => x <= 0.05f) : b == null ? a.All(x => x <= 0.05f) : a.AsSpan().SequenceEqual(b);
+
+    private DistanceField FloodCore(Cell start, PathProfile profile)
     {
         if (profile.HazardScale == 0f) profile = PathProfile.Default;
         var grid = _ship.Grid;

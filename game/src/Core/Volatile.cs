@@ -133,7 +133,9 @@ public sealed class VolatileSystem
             float gain = 0f;
             if (running && m.Spec.PowerDraw > 0f) gain = heatRate * (0.35f + 0.25f * (Tech.Of(m).Power - 1f));
             // 마모·고장·임시품은 더 달군다
-            float stress = 1f + 1.2f * m.Wear * m.Wear + (m.Faults.Any(x => Heaty(x.Kind) && x.Circuit < 0) ? 1.3f : 0f) + (m.Grade == MachineGrade.Mk1 ? 0.4f : 0f);
+            bool heaty = false;
+            foreach (var x in m.Faults) if (Heaty(x.Kind) && x.Circuit < 0) { heaty = true; break; }
+            float stress = 1f + 1.2f * m.Wear * m.Wear + (heaty ? 1.3f : 0f) + (m.Grade == MachineGrade.Mk1 ? 0.4f : 0f);
             gain *= stress;
             switch (t)
             {
@@ -153,11 +155,15 @@ public sealed class VolatileSystem
                     break;
             }
             // 곁의 불이 달군다
-            foreach (var d in Cell.Dirs8.Append(new Cell(0, 0)))
-                foreach (var c in f.Cells.Take(4))
+            if (w.Fire.Count > 0) // v14.2 불이 없으면 볼 것도 없다 (목록을 만들지 않는다)
+                for (int di = 0; di <= Cell.Dirs8.Length; di++)
                 {
-                    float fire = w.Fire.At(c + d);
-                    if (fire > 0f) { gain += 0.25f * fire; break; }
+                    var d = di < Cell.Dirs8.Length ? Cell.Dirs8[di] : new Cell(0, 0);
+                    for (int ci = 0; ci < f.Cells.Count && ci < 4; ci++)
+                    {
+                        float fire = w.Fire.At(f.Cells[ci] + d);
+                        if (fire > 0f) { gain += 0.25f * fire; break; }
+                    }
                 }
             if (room.Air.Temperature > 40f) gain += (room.Air.Temperature - 40f) / 40f * 0.3f;
             // 식힘: 환기가 돌면 잘, 전기가 없으면 덜, 진공에서는 열이 빠질 데가 없다 (대류가 없다)
@@ -193,9 +199,9 @@ public sealed class VolatileSystem
             // 한계를 넘으면 터진다 (종류마다)
             var mode = Mode(t);
             if (mode == BlowKind.None) continue;
-            bool spark = SparkIn(room, m);
+            // (불꽃은 기체가 찼을 때만 본다 — 난수 순서는 예전과 같다)
             if (m.Heat > 0.9f && w.Rng.Chance(MathF.Min(1f, (m.Heat - 0.9f) * 5f) * dt)) Blow(m, mode, "과열");
-            else if (m.Vapor > 0.55f && spark && w.Rng.Chance(2f * dt)) Blow(m, mode, "불꽃");
+            else if (m.Vapor > 0.55f && SparkIn(room, m) && w.Rng.Chance(2f * dt)) Blow(m, mode, "불꽃");
         }
 
         // 방마다: 역화 · 일산화탄소 · 짙은 산소

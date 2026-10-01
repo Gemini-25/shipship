@@ -24,6 +24,7 @@ public static class Brain
         new DutyActivity(),
         new MeetingActivity(), // v13.2 정기 회의
         new VisitActivity(), // v12.7 문병
+        new HoldActivity(), // v14.1 잠깐 그 자리에서 기다린다
         new ChatActivity(),
         new RelaxActivity(),
         new WanderActivity(),
@@ -36,14 +37,32 @@ public static class Brain
     /// <summary>판단 횟수 (성능 점검용).</summary>
     public static long ThinkCount;
 
+    private static Job? PlanTimed(Activity a, CrewMember c, World w, DistanceField dist)
+    {
+        long t = Prof.Now;
+        var job = a.Plan(c, w, dist);
+        Prof.Lap(a.PlanKey, t);
+        return job;
+    }
+
+    private static bool SwitchTimed(ChoresActivity a, CrewMember c, World w, DistanceField dist, WorkOrder cur)
+    {
+        long t = Prof.Now;
+        bool r = a.ShouldSwitch(c, w, dist, cur);
+        Prof.Lap("chores.ShouldSwitch", t);
+        return r;
+    }
+
     public static void Think(CrewMember c, World w)
     {
         ThinkCount++;
         var dist = w.Paths.Flood(c.Cell, c.PathProfile);
         var evals = new List<Evaluation>(Activities.Length);
+        long pt = Prof.Now;
         foreach (var a in Activities)
         {
             var (score, reason) = a.Score(c, w, dist);
+            pt = Prof.Lap(a.ScoreKey, pt);
             // 위기 판단: 비상·생존 위기에는 잠·휴식을 미룬다 (탈진 직전이면 쪽잠)
             if (a is RelaxActivity or ChatActivity or WanderActivity) score *= w.Society.LeisureFactor; // v13.4 휴식·여가 방침
             float damp = Crisis.Damp(c, w, a, out var note);
@@ -65,9 +84,9 @@ public static class Brain
             if (best.Activity == c.Job.Activity)
             {
                 // 같은 "작업"이라도 훨씬 급한 일이 올라오면 하던 정비를 내려놓고 간다
-                if (best.Activity is ChoresActivity chores && c.Job.Order is WorkOrder cur && chores.ShouldSwitch(c, w, dist, cur))
+                if (best.Activity is ChoresActivity chores && c.Job.Order is WorkOrder cur && SwitchTimed(chores, c, w, dist, cur))
                 {
-                    var urgent = chores.Plan(c, w, dist);
+                    var urgent = PlanTimed(chores, c, w, dist);
                     if (urgent != null)
                     {
                         c.EndJob(w, ToilStatus.Interrupted);
@@ -85,7 +104,7 @@ public static class Brain
             if (!c.Job.Urgent && c.Needs.Hunger > 0.85f && best.Activity is EatActivity) margin = 0f; // v10.10: 0.9 → 0.85 (급한 수리 뒤 끼니를 놓치던 것)
             if (best.Score < current + margin) return;
 
-            var next = best.Activity.Plan(c, w, dist);
+            var next = PlanTimed(best.Activity, c, w, dist);
             if (next == null) return;
             c.EndJob(w, ToilStatus.Interrupted);
             c.StartJob(next, w, best);
@@ -95,7 +114,7 @@ public static class Brain
         foreach (var e in evals)
         {
             if (e.Score <= 0f) continue;
-            var job = e.Activity.Plan(c, w, dist);
+            var job = PlanTimed(e.Activity, c, w, dist);
             if (job == null) continue;
             c.StartJob(job, w, e);
             return;

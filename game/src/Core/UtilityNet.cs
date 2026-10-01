@@ -49,7 +49,7 @@ public sealed class NetStats
 public sealed class UtilityNet
 {
     private readonly World _w;
-    private string _signature = "";
+    private List<NetLink>[][] _adj = Array.Empty<List<NetLink>[]>();
     private readonly List<(int node, Room room)> _hubs = new();
     private int _nodes;
     private readonly Dictionary<int, bool> _powerFed = new();
@@ -70,17 +70,29 @@ public sealed class UtilityNet
 
     // ─────────────────────────────── 짓기 ───────────────────────────────
 
-    private string Signature() =>
-        string.Join(",", _w.Ship.Doors.Where(d => !d.Removed && !d.IsExternal && d.RoomA != null && d.RoomB != null).Select(d => $"{d.Id}:{d.RoomA!.Id}-{d.RoomB!.Id}"))
-        + "|" + string.Join(",", _w.Ship.Rooms.Where(r => r.Detached || r.Merged).Select(r => r.Id))
-        + "|R" + string.Join(",", Rings.Select(x => $"{x.kind}{x.from}-{x.to}"));
+    // v14.2 구조 지문: 문(이어진 두 방) · 떨어지거나 합쳐진 방 · 보조 간선 — 숫자 배열로 비교한다 (예전엔 문자열을 틱마다 만들었다)
+    private readonly List<int> _sigBuf = new();
+    private int[] _sig = Array.Empty<int>();
+
+    private bool SignatureChanged()
+    {
+        var b = _sigBuf;
+        b.Clear();
+        foreach (var d in _w.Ship.Doors)
+            if (!d.Removed && !d.IsExternal && d.RoomA != null && d.RoomB != null) { b.Add(d.Id); b.Add(d.RoomA.Id); b.Add(d.RoomB.Id); }
+        b.Add(-1);
+        foreach (var r in _w.Ship.Rooms) if (r.Detached || r.Merged) b.Add(r.Id);
+        b.Add(-2);
+        foreach (var (k, from, to) in Rings) { b.Add((int)k); b.Add(from); b.Add(to); }
+        if (b.Count == _sig.Length && System.Runtime.InteropServices.CollectionsMarshal.AsSpan(b).SequenceEqual(_sig)) return false;
+        _sig = b.ToArray();
+        return true;
+    }
 
     /// <summary>문·방이 바뀌었으면 망을 다시 짠다 (남아 있는 토막의 상태는 이어받는다).</summary>
     public void EnsureBuilt()
     {
-        var sig = Signature();
-        if (sig == _signature) return;
-        _signature = sig;
+        if (!SignatureChanged()) return;
         var old = Links.ToDictionary(l => l.Key);
         Links.Clear();
         _hubs.Clear();
@@ -122,6 +134,18 @@ public sealed class UtilityNet
         }
         foreach (var l in Links)
             if (old.TryGetValue(l.Key, out var o)) { l.Integrity = o.Integrity; l.Temp = o.Temp; l.Cause = o.Cause; l.Node = o.Node; }
+        // v14.2 마디마다 닿는 토막 (종류별) — 도달 계산이 틱마다 목록을 새로 만들지 않게
+        _adj = new List<NetLink>[Enum.GetValues<NetKind>().Length][];
+        for (int k = 0; k < _adj.Length; k++)
+        {
+            _adj[k] = new List<NetLink>[_nodes];
+            for (int n = 0; n < _nodes; n++) _adj[k][n] = new List<NetLink>();
+        }
+        foreach (var l in Links)
+        {
+            _adj[(int)l.Kind][l.NodeA].Add(l);
+            if (l.NodeB != l.NodeA) _adj[(int)l.Kind][l.NodeB].Add(l);
+        }
         Version++;
 
         void Add(NetKind k, string key, int na, int nb, Room room, Door? door, List<Cell> cells) =>
@@ -173,7 +197,7 @@ public sealed class UtilityNet
         EnsureBuilt();
         if (SourceRoom(NetKind.Power) is Room p) foreach (var r in RingTargets(NetKind.Power).Take(designCrew >= 20 ? 3 : 2)) Rings.Add((NetKind.Power, p.Id, r.Id));
         if (SourceRoom(NetKind.Data) is Room d) foreach (var r in RingTargets(NetKind.Data).Take(1)) Rings.Add((NetKind.Data, d.Id, r.Id));
-        _signature = "";
+        _sig = Array.Empty<int>(); // 다시 짠다
         EnsureBuilt();
     }
 
@@ -227,14 +251,17 @@ public sealed class UtilityNet
             if (hub.room == null) continue;
             if (reach.Add(hub.node)) q.Enqueue(hub.node);
         }
-        var live = Links.Where(l => l.Kind == k && (!l.Cut || l == assumeFixed) && !l.Room.Detached).ToList();
-        var adj = live.ToLookup(l => l.NodeA);
-        var adjB = live.ToLookup(l => l.NodeB);
+        var adj = _adj[(int)k];
         while (q.Count > 0)
         {
             int n = q.Dequeue();
-            foreach (var l in adj[n]) if (reach.Add(l.NodeB)) q.Enqueue(l.NodeB);
-            foreach (var l in adjB[n]) if (reach.Add(l.NodeA)) q.Enqueue(l.NodeA);
+            if (n < 0 || n >= adj.Length) continue;
+            foreach (var l in adj[n])
+            {
+                if (l.Cut && l != assumeFixed || l.Room.Detached) continue;
+                int other = l.NodeA == n ? l.NodeB : l.NodeA;
+                if (reach.Add(other)) q.Enqueue(other);
+            }
         }
         return reach;
     }

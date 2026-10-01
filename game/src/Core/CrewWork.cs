@@ -21,8 +21,8 @@ public sealed partial class WorkBoard
         foreach (var c in w.Crew.Where(c => !c.Dead && !c.Down))
             foreach (var wd in Wounds.Missing(c.Vitals).Take(1))
             {
-                if (!w.Ship.FurnitureOf(FurnitureType.Workbench).Any(f => !f.Room.Detached && !f.Room.Abandoned)) continue;
-                if (Have(ItemKind.Electronics) < 2 || Have(ItemKind.Plate) < 1) continue;
+                if (!wd.ProstheticMade && !w.Ship.FurnitureOf(FurnitureType.Workbench).Any(f => !f.Room.Detached && !f.Room.Abandoned)) continue;
+                if (!wd.ProstheticMade && (Have(ItemKind.Electronics) < 2 || Have(ItemKind.Plate) < 1)) continue;
                 post(WorkKind.FitProsthetic, WorkTarget.OfCrew(c), 0.4f, Skill.Mechanics,
                     $"{c.Name}의 {Wounds.PartName(wd.Part)} — {(Wounds.IsArm(wd.Part) ? "의수를" : "의족을")} 만들어 단다 (전자 부품 2 + 금속판 1)", minSkill: 0.35f);
             }
@@ -82,20 +82,39 @@ public static partial class WorkPlanners
         if (patient.Dead || wd == null) { w.Board.Close(o); return null; }
         var bench = w.Ship.FurnitureOf(FurnitureType.Workbench).Where(f => !f.Room.Detached && f.UseSpots.Count > 0 && dist.Reachable(f.UseSpots[0]))
             .OrderBy(f => dist.Get(f.UseSpots[0])).FirstOrDefault();
-        if (bench == null) { blocked = "작업대에 닿을 수 없다"; return null; }
-        if (w.Ship.CountStored(ItemKind.Electronics) < 2 || w.Ship.CountStored(ItemKind.Plate) < 1) { blocked = "재료가 없다"; return null; }
+        if (bench == null && !wd.ProstheticMade) { blocked = "작업대에 닿을 수 없다"; return null; }
         var toils = Plans.DropOff(c, w, dist);
-        toils.Add(new GotoToil(bench.UseSpots[0]));
-        toils.Add(new WorkToil(3f, Skill.Mechanics, bench.Center));
-        toils.Add(new DoToil((cm, world) => Life.Take(world, ItemKind.Electronics, 2) && Life.Take(world, ItemKind.Plate, 1)));
-        toils.Add(new GotoToilLate(cm => Cell.Dirs8.Select(d => patient.Cell + d).Where(x => w.Ship.IsWalkable(x)).Cast<Cell?>().FirstOrDefault()));
-        toils.Add(new WorkToil(1f, Skill.Medicine, patient.Position)
+        if (!wd.ProstheticMade && bench != null)
         {
-            CanContinue = (cm, world) => !patient.Dead && (patient.Position - cm.Position).LengthSquared() < 9f,
+            if (w.Ship.CountStored(ItemKind.Electronics) < 2 || w.Ship.CountStored(ItemKind.Plate) < 1) { blocked = "재료가 없다"; return null; }
+            toils.Add(new GotoToil(bench.UseSpots[0]));
+            toils.Add(new WorkToil(3f, Skill.Mechanics, bench.Center));
+            toils.Add(new DoToil((cm, world) => wd.ProstheticMade = Life.Take(world, ItemKind.Electronics, 2) && Life.Take(world, ItemKind.Plate, 1)));
+        }
+        toils.Add(new GotoToilLate(cm => Cell.Dirs8.Select(d => patient.Cell + d).Where(x => w.Ship.IsWalkable(x)).Cast<Cell?>().FirstOrDefault()));
+        // v14.1 맞추는 동안 그 자리에 앉아 있어 달라고 한다 (돌아다니면 맞출 수 없다)
+        toils.Add(new DoToil((cm, world) =>
+        {
+            if (patient.Dead || (patient.Position - cm.Position).LengthSquared() > 16f) return false;
+            patient.HoldUntil = world.Tick + SimTime.Minutes(50);
+            patient.HoldWhy = $"{cm.Name}이(가) {(Wounds.IsArm(wd.Part) ? "의수를" : "의족을")} 맞춰 준다";
+            patient.NextThinkTick = world.Tick;
+            return true;
+        }));
+        toils.Add(new GotoToilLate(cm => Cell.Dirs8.Select(d => patient.Cell + d).Where(x => w.Ship.IsWalkable(x)).Cast<Cell?>().FirstOrDefault()));
+        toils.Add(new WorkToil(0.6f, Skill.Medicine, patient.Position)
+        {
+            CanContinue = (cm, world) =>
+            {
+                if (patient.Dead || (patient.Position - cm.Position).LengthSquared() >= 9f) return false;
+                patient.HoldUntil = Math.Max(patient.HoldUntil, world.Tick + SimTime.Minutes(5)); // 끝날 때까지 기다려 준다
+                return true;
+            },
         });
         toils.Add(new DoToil((cm, world) =>
         {
             wd.Prosthetic = true;
+            patient.HoldUntil = -1;
             world.Life.Stats.Prosthetics++;
             string what = Wounds.IsArm(wd.Part) ? "의수" : "의족";
             patient.ChangeAffinity(cm, 0.15f);
@@ -116,7 +135,7 @@ public sealed class VisitActivity : Activity
 
     private static CrewMember? Patient(CrewMember c, World w) =>
         w.Crew.Where(p => p != c && !p.Dead && !p.Outside && p.Room != null && p.CarriedBy == null
-                          && (p.Down || p.CareBed != null || p.Vitals.Injury > 0.35f || w.Disease.Severity(p) > 0.3f || p.GriefUntil > w.Tick)
+                          && (p.Down || p.CareBed != null || p.Vitals.Injury > 0.35f || w.Disease.Severity(p) > 0.3f || p.GriefUntil > w.Tick || p.Fx.Worst > 0.4f)
                           && w.Tick - p.LastVisited > SimTime.Hours(10) && c.AffinityTo(p) > 0.15f
                           && !(DiseaseSystem.Sick(p) && p.Room.Kind is RoomType.Quarantine or RoomType.QuarantineLock))
             .OrderByDescending(p => c.AffinityTo(p)).FirstOrDefault();
@@ -128,7 +147,7 @@ public sealed class VisitActivity : Activity
         if (w.Board.Open.Any(o => o.Kind == WorkKind.Treat && o.Target.Crew == c)) return (0f, "치료를 기다린다");
         var p = Patient(c, w);
         if (p == null || !dist.Reachable(p.Cell)) return (0f, "—");
-        string why = p.GriefUntil > w.Tick && !p.Down ? "슬픔에 잠겨 있다" : p.Down ? "쓰러져 누워 있다" : DiseaseSystem.Sick(p) ? "열이 난다" : "다쳤다";
+        string why = p.GriefUntil > w.Tick && !p.Down ? "슬픔에 잠겨 있다" : p.Down ? "쓰러져 누워 있다" : DiseaseSystem.Sick(p) ? "열이 난다" : p.Fx.Worst > 0.4f ? "앓고 있다" : "다쳤다";
         return (0.2f + 0.35f * c.AffinityTo(p) + 0.1f * c.Traits.Sociability, $"{Ko.IGa(p.Name)} {why}");
     }
 
@@ -157,5 +176,21 @@ public sealed class VisitActivity : Activity
             }),
         };
         return new Job(this, "문병", toils) { LogText = $"{Ko.EulReul(p.Name)} 보러 간다", LogKind = LogKind.Life, TargetRoom = p.Room };
+    }
+}
+
+/// <summary>v14.1 잠깐 그 자리에서 기다린다 (누가 의수를 맞춰 주는 동안 등).</summary>
+public sealed class HoldActivity : Activity
+{
+    public override string Id => "hold";
+    public override string Label => "기다림";
+
+    public override (float, string) Score(CrewMember c, World w, DistanceField dist) =>
+        c.HoldUntil > w.Tick && !c.Down && !c.Outside && EvacuateActivity.DangerHere(c, w) < 0.3f ? (1.4f, c.HoldWhy ?? "기다려 달라고 했다") : (0f, "—");
+
+    public override Job? Plan(CrewMember c, World w, DistanceField dist)
+    {
+        var toils = new List<Toil> { new WaitToil(Math.Max(SimTime.Minutes(1), (int)(c.HoldUntil - w.Tick)), Pose.Sitting, c.Position) { DoneWhen = (cm, world) => cm.HoldUntil <= world.Tick } };
+        return new Job(this, "기다림", toils) { LogText = c.HoldWhy, LogKind = LogKind.Life };
     }
 }

@@ -19,6 +19,7 @@ public sealed class Wound
     public string Cause { get; init; } = "";
     public bool Lost { get; set; }           // 팔·다리를 잃었다
     public bool Prosthetic { get; set; }     // 의수·의족을 달았다
+    public bool ProstheticMade { get; set; } // v14.1 다 만들어 두었다 (맞추다 끊기면 맞추기만 다시)
 }
 
 public static class Wounds
@@ -76,9 +77,13 @@ public static class Wounds
     public static float Severity(Vitals v, Wound w)
     {
         if (w.Lost) return w.Prosthetic ? 0.15f : 0.7f;
-        float total = v.Wounds.Where(x => !x.Lost).Sum(x => x.Weight);
+        // v14.2 반복문 (LINQ의 float 합은 double로 더한다 — 같게)
+        double acc = 0;
+        int kept = 0;
+        foreach (var x in v.Wounds) if (!x.Lost) { acc += x.Weight; kept++; }
+        float total = (float)acc;
         if (total <= 0f || v.Injury <= 0f) return 0f;
-        return MathF.Min(1f, v.Injury * w.Weight / total * MathF.Max(1f, v.Wounds.Count(x => !x.Lost)));
+        return MathF.Min(1f, v.Injury * w.Weight / total * MathF.Max(1f, kept));
     }
 
     /// <summary>부상이 다 나으면 상처는 지운다 (잃은 팔다리는 남는다).</summary>
@@ -87,8 +92,21 @@ public static class Wounds
         if (v.Injury <= 0.001f) v.Wounds.RemoveAll(x => !x.Lost);
     }
 
-    private static float Worst(Vitals v, Func<BodyPart, bool> which) =>
-        v.Wounds.Where(x => which(x.Part)).Select(x => Severity(v, x)).DefaultIfEmpty(0f).Max();
+    private static float Worst(Vitals v, Func<BodyPart, bool> which)
+    {
+        // v14.2 매 틱 불린다 — 목록을 만들지 않는다 (값은 예전과 같다: 없으면 0, 있으면 가장 큰 것)
+        if (v.Wounds.Count == 0) return 0f;
+        bool any = false;
+        float worst = float.MinValue;
+        foreach (var x in v.Wounds)
+        {
+            if (!which(x.Part)) continue;
+            float s = Severity(v, x);
+            if (!any || s > worst) worst = s;
+            any = true;
+        }
+        return any ? worst : 0f;
+    }
 
     /// <summary>손 (일 속도): 팔을 다치면 느리다. 오른팔이 조금 더.</summary>
     public static float HandFactor(Vitals v)

@@ -258,6 +258,15 @@ public sealed class CauseLog
         return HitOf(room);
     }
 
+    /// <summary>v14.1 그 방에서 지금 열린 사고 고리 (공기 끊김·정전·단수 → 불 → 방을 때린 사고) — 없으면 -1.</summary>
+    public int ParentFor(Room? room)
+    {
+        if (room == null) return -1;
+        foreach (var k in new[] { "noair", "dark", "nowater" }) { int g = RoomState(k, room); if (g >= 0) return g; }
+        int f = OpenNode($"fire:{room.Id}");
+        return f >= 0 ? f : HitOf(room);
+    }
+
     // ─────────────────────────────── 직접 원인의 갈고리 ───────────────────────────────
 
     /// <summary>운석·폭발이 방을 때렸다 (그 방의 감압·쓰러짐을 이 사고로 잇는다).</summary>

@@ -43,7 +43,7 @@ public sealed class FireSystem
     public int Count => _fires.Count;
     public float At(Cell c) => _fires.TryGetValue(c, out var v) ? v : 0f;
     public bool IsKnown(Room r) => _knownRooms.Contains(r.Id);
-    public int CountIn(Room r) => _fires.Keys.Count(c => _world.Ship.RoomAt(c) == r);
+    public int CountIn(Room r) => _fires.Count == 0 ? 0 : _fires.Keys.Count(c => _world.Ship.RoomAt(c) == r); // v14.2 불이 없으면 바로
 
     public bool Ignite(Cell c, float intensity, Cell? from = null)
     {
@@ -68,8 +68,13 @@ public sealed class FireSystem
         }
     }
 
-    public bool AnyWithin(Cell center, float radius) =>
-        _fires.Keys.Any(c => (c.X - center.X) * (c.X - center.X) + (c.Y - center.Y) * (c.Y - center.Y) <= radius * radius);
+    public bool AnyWithin(Cell center, float radius)
+    {
+        if (_fires.Count == 0) return false; // v14.2 매 틱 사람마다 불린다 — 불이 없으면 바로
+        foreach (var c in _fires.Keys)
+            if ((c.X - center.X) * (c.X - center.X) + (c.Y - center.Y) * (c.Y - center.Y) <= radius * radius) return true;
+        return false;
+    }
 
     /// <summary>알려진 불: 방마다 가장 센 칸과 칸 수.</summary>
     public IEnumerable<(Room room, Cell hottest, int count)> KnownFires()
@@ -81,6 +86,12 @@ public sealed class FireSystem
     }
 
     public void Update(float dt)
+    {
+        UpdateCore(dt);
+        _world.Paths.HazardChanged(); // v14.2 거리장 캐시: 칸 위험을 다시 채웠다
+    }
+
+    private void UpdateCore(float dt)
     {
         var w = _world;
         var ship = w.Ship;

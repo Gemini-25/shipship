@@ -25,7 +25,7 @@ public static partial class Program
         // ── 2) 컴퓨터가 없고 모두 잠든 밤: 아무도 모르는 물 → 누전·감전 → 깬 사람이 분전함을 내린다 ──
         {
             int shorts = 0, shocks = 0, fires = 0, crewIso = 0;
-            for (int k = 0; k < 3; k++)
+            for (int k = 0; k < 6 && (shorts + shocks + fires == 0 || crewIso == 0); k++) // 배 여섯까지 (누전이 먼저 회로를 떨어뜨리면 내릴 분전함이 없다)
             {
                 var w = DayOne(seed + k * 17, "Mirinae");
                 foreach (var comp in w.Ship.FurnitureOf(FurnitureType.MainComputer)) w.Machines.Break(comp.Machine!, FaultKind.Wrecked);

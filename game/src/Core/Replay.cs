@@ -310,6 +310,7 @@ public static class SaveGame
             F(c.Vitals.Health); F(c.Vitals.Injury); F(c.Traits.Calm); F(c.Memory.Trauma);
             I(c.Dead ? 2 : c.Down ? 1 : 0);
             foreach (var f in c.Memory.Fear) F(f);
+            foreach (var a in c.Ailments) { I(a.Id.Length); I(a.Since); F(a.Healed); } // v14.1
         }
         foreach (var m in w.Ship.Machines)
         {

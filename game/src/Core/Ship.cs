@@ -202,7 +202,14 @@ public sealed class Ship
     }
 
     /// <summary>우주선 전체에 있는 물건 개수 (보관함만, 손에 든 것 제외).</summary>
-    public int CountStored(ItemKind k) => Containers.Sum(f => f.Storage!.Count(k));
+    public int CountStored(ItemKind k)
+    {
+        // v14.2 여기저기서 자주 불린다 — 목록을 만들지 않고 센다 (Containers와 같은 조건)
+        int n = 0;
+        foreach (var f in Furniture)
+            if (f.Storage != null && !f.Room.Detached && !f.Stowed && f.Type != FurnitureType.DroneDock) n += f.Storage.Count(k);
+        return n;
+    }
 }
 
 /// <summary>텍스트 설계도 → Ship.</summary>

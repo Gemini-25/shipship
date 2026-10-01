@@ -903,6 +903,7 @@ public sealed partial class WorkBoard
         var w = _world;
         var ship = w.Ship;
         var seen = new HashSet<string>();
+        long psc = Prof.Now; // v14.2
 
         void Post(WorkKind kind, WorkTarget target, float urgency, Skill skill, string detail, FaultKind? fault = null, int circuit = -1,
             ItemKind? product = null, float minSkill = 0f, UpgradeKind? upgrade = null)
@@ -989,7 +990,9 @@ public sealed partial class WorkBoard
             Post(WorkKind.StartAux, WorkTarget.Of(aux), 1.15f, Skill.Electrical, $"배터리 {p.BatteryPercent * 100:0}% · 원자로 {p.ReactorLimit:0}kW");
 
         ScanAdaptation(Post);
+        psc = Prof.Lap("scan.Adaptation", psc);
 
+        psc = Prof.Lap("scan.machines·power", psc);
         // ── 선체: 파공 봉합, 외벽 수리 ──
         foreach (var (cell, wall) in ship.Walls)
         {
@@ -1137,6 +1140,7 @@ public sealed partial class WorkBoard
                 Post(WorkKind.Extinguish, WorkTarget.FireIn(room, hottest, slot), (critical ? 1.2f : 1.1f) - 0.05f * slot, Skill.Mechanics, $"불 {count}칸");
         }
 
+        psc = Prof.Lap("scan.hull·doors·fire", psc);
         // ── 부상자 치료 ──
         foreach (var c in w.Crew)
         {
@@ -1157,11 +1161,19 @@ public sealed partial class WorkBoard
             bool needs = c.Vitals.Health < 0.6f || (resting && c.Vitals.Health < 0.8f) || c.Vitals.Injury >= 0.3f;
             // v13.2 방침(의약품: 아낀다): 크게 다친 사람에게만 구급 키트를 쓴다
             if (w.Policies["medicine"] == 0) needs = c.Vitals.Health < 0.45f || c.Vitals.Injury >= 0.45f;
+            // v14.1 약을 써야 낫는 병 · 진단 안 된 병 (의무관이 봐 줘야 한다) — 다친 사람 치료와 같은 일 (한 번에 함께)
+            var ill = c.Ailments.Count > 0 ? w.Ailments.NeedsMedic(c) : null;
+            bool exam = c.Ailments.Count > 0 && ill == null && w.Ailments.Undiagnosed(c) && c.Fx.Worst > (w.Policies["medicine"] == 0 ? 0.45f : 0.3f) && w.Tick - c.Vitals.TreatedTick > SimTime.Hours(8);
+            bool sick = ill != null && (w.Policies["medicine"] != 0 || w.Ailments.Severity(ill) > 0.4f) || exam;
+            if (sick && !(needs && w.Tick - c.Vitals.TreatedTick > SimTime.Hours(c.Vitals.Injury >= 0.3f ? 6 : 3)))
+                Post(WorkKind.Treat, WorkTarget.OfCrew(c), 0.5f + 0.4f * c.Fx.Worst, Skill.Medicine,
+                    ill != null ? $"{AilmentSystem.Spec(ill.Id).Name} {w.Ailments.Severity(ill) * 100:0}% — 약" : $"어딘가 아프다 {c.Fx.Worst * 100:0}% — 진찰");
             if (needs && w.Tick - c.Vitals.TreatedTick > SimTime.Hours(c.Vitals.Injury >= 0.3f ? 6 : 3))
                 Post(WorkKind.Treat, WorkTarget.OfCrew(c), 0.6f + MathF.Max(0.6f - c.Vitals.Health, c.Vitals.Injury * 0.5f), Skill.Medicine,
                     c.Vitals.Injury >= 0.05f ? $"체력 {c.Vitals.Health * 100:0}% · 부상 {c.Vitals.Injury * 100:0}% ({c.Vitals.InjuryCause})" : $"체력 {c.Vitals.Health * 100:0}%");
         }
 
+        psc = Prof.Lap("scan.treat", psc);
         // ── 식량 ──
         int crewCount = Math.Max(1, w.Crew.Count(c => !c.Dead));
         int meals = ship.CountStored(ItemKind.Meal);
@@ -1190,6 +1202,7 @@ public sealed partial class WorkBoard
 
         // ── 제작과 정제 (v6): 작업대(부품·소모품)와 정제기(원료 → 기본 수리재), 얼음 → 공기 탱크 ──
         ScanFabrication(Post, crewCount, produce, meals);
+        psc = Prof.Lap("scan.Fabrication", psc);
 
         // ── 진화 (v7): 평화롭고 재료가 남으면, 겪은 사고가 가르쳐 준 곳을 고쳐 짠다 ──
         foreach (var busy in _open.Values.Where(o => o.Kind == WorkKind.Upgrade && o.Assignee != null).ToList())
@@ -1199,25 +1212,45 @@ public sealed partial class WorkBoard
 
         // ── 구조와 외부 작업 (v8): 연결부·골조·드론·사출·되찾기·재연결 ──
         ScanStructure(Post);
+        psc = Prof.Lap("scan.Structure", psc);
         ScanPiping(Post); // v9
+        psc = Prof.Lap("scan.Piping", psc);
         ScanRobots(Post); // v10.10 선내 로봇 (수리·끌어오기·정비)
+        psc = Prof.Lap("scan.Robots", psc);
         ScanRecovery(Post); // v10.10 자원 회복 (물통·비상 물자·정리)
+        psc = Prof.Lap("scan.Recovery", psc);
         ScanPrevention(Post); // v11.0 예방과 안전
+        psc = Prof.Lap("scan.Prevention", psc);
         ScanCalibration(Post); // v12.0 감지기 교정
+        psc = Prof.Lap("scan.Calibration", psc);
         ScanHandover(Post); // v12.0 찾아가 인수인계
+        psc = Prof.Lap("scan.Handover", psc);
         ScanVolatile(Post); // v12.2 식히기·잔해·청소·역화·산소관
+        psc = Prof.Lap("scan.Volatile", psc);
         ScanWake(Post); // 위기에 잠든 동료 깨우기
+        psc = Prof.Lap("scan.Wake", psc);
         ScanLinks(Post); // v12.1 설비 전선·관
+        psc = Prof.Lap("scan.Links", psc);
         ScanNet(Post); // 배 전체 망
+        psc = Prof.Lap("scan.Net", psc);
         ScanMoisture(Post); // v12.3 침수·분전함·밸브
+        psc = Prof.Lap("scan.Moisture", psc);
         ScanManualControl(Post); // v12.5 관제석 수동 조종
+        psc = Prof.Lap("scan.ManualControl", psc);
         ScanSafetyWatch(Post); // v13.1 2인 1조
+        psc = Prof.Lap("scan.SafetyWatch", psc);
         ScanNavigation(Post); // v11.2 항로와 추진
+        psc = Prof.Lap("scan.Navigation", psc);
         ScanHazards(Post); // v11.2 사고 뒷정리 (오염된 식사)
+        psc = Prof.Lap("scan.Hazards", psc);
         ScanLiving(Post); // v10.11 배급
+        psc = Prof.Lap("scan.Living", psc);
         ScanComms(Post); // v11.2 외부 교신
+        psc = Prof.Lap("scan.Comms", psc);
         ScanGrowth(Post); // v11.3 배우기 · 재활
+        psc = Prof.Lap("scan.Growth", psc);
         ScanLife(Post); // v12.7 시신 수습 · 의수·의족
+        psc = Prof.Lap("scan.Life", psc);
 
         // ── 결정 (v7): 사람이 정해야 하는 일은 심의에 올린다 ──
         Council.Review(w, _open.Values.Where(o => seen.Contains(o.Key)).ToList());

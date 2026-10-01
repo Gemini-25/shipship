@@ -46,9 +46,19 @@ public partial class Hud
         ly += 18;
         if (c.Dose > 0.05f) { Gfx.Text(this, Fonts.Body, new Vector2(lx, ly + 14), $"방사선 {c.Dose:0.00}Sv" + (c.Dose > 1f ? " — 몸이 상한다" : ""), 12, c.Dose > 1f ? Palette.Danger : Palette.TextDim); ly += 18; }
         Gfx.Text(this, Fonts.Body, new Vector2(lx, ly + 14), $"체력 단련 {c.Fitness * 100:0}%", 12, Palette.TextDim);
+        // v14.1 앓는 것 (진단 전이면 "어딘가 아프다")
+        if (DiseaseSystem.Sick(c)) { ly += 18; Gfx.Text(this, Fonts.Body, new Vector2(lx, ly + 14), $"열병 {_world.Disease.Severity(c) * 100:0}%", 12, Palette.Warning); }
+        foreach (var a in c.Ailments.Take(3))
+        {
+            ly += 18;
+            var s = AilmentSystem.Spec(a.Id);
+            float sev = _world.Ailments.Severity(a);
+            string name = a.Diagnosed ? $"{s.Name} {sev * 100:0}% · {AilmentSystem.CureName(s.Cure)}" : $"어딘가 아프다 {sev * 100:0}% — 진단 전";
+            Gfx.Text(this, Fonts.Body, new Vector2(lx, ly + 14), Fit(name, right - lx, 12, Fonts.Body), 12, sev > 0.5f ? Palette.Danger : sev > 0.25f ? Palette.Warning : new Color("#ffd27a"));
+        }
 
         // 자격 · 습관
-        float sy = y + 136;
+        float sy = MathF.Max(y + 136, ly + 24);
         Divider(x, right, sy);
         SectionTitle(x, sy + 22, "자격");
         string quals = c.Quals.Count == 0 ? "없음" : string.Join(" · ", c.Quals.OrderBy(q => q).Select(Life.Name));

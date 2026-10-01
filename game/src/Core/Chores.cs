@@ -101,6 +101,7 @@ public sealed class ChoresActivity : Activity
         if (o.Assignee == c) score += w.Command.TeamOf(c) is Team mt && mt.Kind != TeamKind.Reserve && CommandSystem.Group(o.Kind) != mt.Kind ? 0.05f : 0.25f;
         else if (o.Robot != null) score -= 0.15f; // v10.10: 로봇이 하고 있는 일에 합류 — 더 급한 일이 없을 때만
         if (c.Vitals.Health < 0.5f) score -= 0.3f;
+        if (c.Fx.Worst > 0.45f && o.Urgency < 0.9f) score -= 0.3f * c.Fx.Worst; // v14.1 앓는 사람은 급하지 않은 일을 미룬다
 
         // EVA: 발밑이 우주다. 겁 많은 사람은 꺼리고, 긴장한 사람은 더 꺼린다
         if (eva) score -= 0.12f + 0.35f * MathF.Pow(1f - c.Traits.Bravery, 1.3f) + 0.3f * c.Memory.Trauma;
@@ -1346,6 +1347,7 @@ public static partial class WorkPlanners
             patient.Vitals.Health = MathF.Min(patient.Vitals.MaxHealth, patient.Vitals.Health + 0.15f + 0.25f * skill);
             patient.Vitals.Injury = MathF.Max(0f, patient.Vitals.Injury - (0.06f + 0.14f * skill));
             patient.Vitals.TreatedTick = world.Tick;
+            world.Ailments.Treated(patient, cm); // v14.1 진단하고 약을 쓴다
             patient.ChangeAffinity(cm, 0.08f);
             cm.Practice(Skill.Medicine, 0.04f);
             world.Board.Close(o);

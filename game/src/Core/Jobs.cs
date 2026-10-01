@@ -187,6 +187,7 @@ public sealed class WorkToil : Toil
         if (w.Food.Rationing && c.Needs.Food < 0.5f) speed *= 0.94f; // v10.11 배급: 배고픈 손은 조금 느리다
         speed *= w.Society.WorkFactor; // v13.4 사기
         if (c.Habits.Count > 0) speed *= Persona.Mul(c, h => h.Speed); // v14.0 습관 (서두름·완벽주의)
+        speed *= c.Fx.WorkMul; // v14.1 앓는 것
         if (c.Job?.Urgent == true && w.Society.IsVeteran(c)) speed *= 1.1f; // v13.4 베테랑
         // v11.0: 비상 훈련을 받은 사람은 사고 대응 일이 조금 빠르다
         if (c.Job?.Urgent == true && c.Drilled(w)) speed *= 1.12f;
@@ -449,6 +450,7 @@ public static class Locomotion
         s *= (1f - 0.2f * c.Vitals.Injury) * Wounds.LegFactor(c.Vitals); // v12.7 다리를 다치면 더
         if (c.Job?.Urgent == true) s *= 1.35f; // 급하면 뛴다
         if (c.Outside) s *= 0.8f; // 선체 밖: 추진 팩으로 조심조심 (안전줄을 옮겨 걸며)
+        s *= c.Fx.WalkMul; // v14.1 앓는 것 (감압병·관절염·근육 위축…)
         return s;
     }
 

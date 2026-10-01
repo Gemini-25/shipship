@@ -15,6 +15,9 @@ public abstract class Activity
 {
     public abstract string Id { get; }
     public abstract string Label { get; }
+    private string? _scoreKey, _planKey;
+    public string ScoreKey => _scoreKey ??= "score." + Id; // v14.2 구간별 시간
+    public string PlanKey => _planKey ??= "plan." + Id;
     public abstract (float score, string reason) Score(CrewMember c, World w, DistanceField dist);
     public abstract Job? Plan(CrewMember c, World w, DistanceField dist);
 
@@ -604,6 +607,8 @@ public sealed class RecoverActivity : Activity
         float injury = c.Vitals.Injury;
         float byHealth = h < 0.75f ? (0.75f - h) * 2.2f : 0f;
         float byInjury = injury > 0.25f ? (injury - 0.25f) * 1.2f : 0f; // 크게 다쳤으면 누워서 낫는다
+        float byIll = c.Fx.Bed > 0.35f ? (c.Fx.Bed - 0.2f) * 1.3f : 0f; // v14.1 누워야 낫는 병
+        if (byIll > MathF.Max(byHealth, byInjury)) return (byIll, $"앓는다 — {w.Ailments.Line(c)}");
         if (byHealth <= 0f && byInjury <= 0f) return (0f, "건강함");
         return (MathF.Max(byHealth, byInjury), injury > 0.05f ? $"체력 {h * 100:0}% · 부상 {injury * 100:0}% ({c.Vitals.InjuryCause})" : $"체력 {h * 100:0}%");
     }
@@ -622,7 +627,7 @@ public sealed class RecoverActivity : Activity
             {
                 if (bed.Machine!.Efficiency > 0f) cm.Vitals.Health += 0.12f / SimTime.TicksPerHour;
             },
-            DoneWhen = (cm, _) => cm.Vitals.Health >= MathF.Min(0.92f, cm.Vitals.MaxHealth - 0.02f) && cm.Vitals.Injury < 0.25f,
+            DoneWhen = (cm, _) => cm.Vitals.Health >= MathF.Min(0.92f, cm.Vitals.MaxHealth - 0.02f) && cm.Vitals.Injury < 0.25f && cm.Fx.Bed < 0.25f,
         });
         var job = new Job(this, "치료", toils)
         {

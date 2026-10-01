@@ -226,6 +226,10 @@ public sealed class CrewMember
     public List<Hobby> Hobbies { get; } = new();
     public List<Fear> Fears { get; } = new();
     public int Quirk { get; set; } = -1;
+    /// <summary>v14.1 앓는 것들 · 면역 · 효과(매 틱).</summary>
+    public List<Ailment> Ailments { get; } = new();
+    public HashSet<string> AilmentImmune { get; } = new();
+    public AilmentFx Fx { get; set; }
     public List<(long tick, string text)> Diary { get; } = new();
     public long GriefUntil { get; set; } = -1;
 
@@ -233,6 +237,9 @@ public sealed class CrewMember
     public MindState Mind { get; } = new();
     public long Quarrel { get; set; } = -1_000_000;
     public long LastVisited { get; set; } = -1_000_000;
+    /// <summary>v14.1 누가 잠깐 그 자리에 있어 달라고 했다 (의수 맞추기 등) — 그때까지 앉아 기다린다.</summary>
+    public long HoldUntil { get; set; } = -1;
+    public string? HoldWhy { get; set; }
     public bool Laid { get; set; }
     public bool Profiled { get; set; }
     /// <summary>v12.8 기항지에서 탄 사람 (어디서).</summary>
@@ -254,7 +261,13 @@ public sealed class CrewMember
     /// </summary>
     public List<(Furniture from, ItemKind kind, int count)> Kit { get; } = new();
 
-    public int KitCount(ItemKind k) => Kit.Where(x => x.kind == k).Sum(x => x.count);
+    public int KitCount(ItemKind k)
+    {
+        if (Kit.Count == 0) return 0; // v14.2 재고를 셀 때마다 사람마다 불린다
+        int n = 0;
+        foreach (var x in Kit) if (x.kind == k) n += x.count;
+        return n;
+    }
 
     /// <summary>가방에서 n개를 쓴다. 모자라면 false (아무것도 안 씀).</summary>
     public bool UseKit(ItemKind k, int n)

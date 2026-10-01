@@ -206,7 +206,7 @@ public sealed class MindSystem
         if (trigger <= 0f) return 0f;
         if (c.Habits.Count > 0) trigger *= Persona.Mul(c, h => h.Panic);
         float veteran = MathF.Min(0.6f, c.Stats.Emergencies * 0.03f);
-        return PanicScale * trigger * MathF.Pow(1f - c.Traits.Calm, 1.5f) * (0.3f + c.Needs.Stress) * (1f - veteran) * (1f - 0.5f * c.Traits.Bravery) * (1.5f - w.Society.Morale);
+        return PanicScale * trigger * (1f + c.Fx.Panic) * MathF.Pow(1f - c.Traits.Calm, 1.5f) * (0.3f + c.Needs.Stress) * (1f - veteran) * (1f - 0.5f * c.Traits.Bravery) * (1.5f - w.Society.Morale);
     }
 
     private void Emotions(CrewMember c, float dt)

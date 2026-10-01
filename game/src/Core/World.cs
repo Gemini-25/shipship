@@ -146,6 +146,7 @@ public sealed class World
     public MoistureSystem Moisture { get; }
     /// <summary>v12.4 전염병 · 이야기꾼.</summary>
     public DiseaseSystem Disease { get; }
+    public AilmentSystem Ailments { get; } // v14.1 질병 30
     public AmbienceSystem Ambience { get; }
     public ExteriorSystem Exterior { get; }
     public LifeSystem Life { get; }
@@ -229,6 +230,7 @@ public sealed class World
         Causes = new CauseLog(this);
         Moisture = new MoistureSystem(this);
         Disease = new DiseaseSystem(this);
+        Ailments = new AilmentSystem(this);
         Ambience = new AmbienceSystem(this);
         Exterior = new ExteriorSystem(this);
         Life = new LifeSystem(this);
@@ -284,46 +286,89 @@ public sealed class World
         if (Tick % SystemInterval == 0)
         {
             const float dt = SystemInterval / (float)SimTime.TicksPerHour;
+            long pf = Prof.Now; // v14.2 구간별 시간
             Net.Update(dt); // 배 전체 망: 어느 방까지 전기·물·공기가 닿나
+            pf = Prof.Lap("sys.Net", pf);
             Piping.Update(dt);
+            pf = Prof.Lap("sys.Piping", pf);
             Automation.Update(dt);
+            pf = Prof.Lap("sys.Automation", pf);
             Power.Update(dt);
+            pf = Prof.Lap("sys.Power", pf);
             Hull.Update(dt);
+            pf = Prof.Lap("sys.Hull", pf);
             Fixtures.Update(dt);
+            pf = Prof.Lap("sys.Fixtures", pf);
             Air.Update(dt);
+            pf = Prof.Lap("sys.Air", pf);
             Fire.Update(dt);
+            pf = Prof.Lap("sys.Fire", pf);
             Water.Update(this, dt);
+            pf = Prof.Lap("sys.Water", pf);
             Machines.Update(dt);
+            pf = Prof.Lap("sys.Machines", pf);
             Prevention.Update(this, dt);
+            pf = Prof.Lap("sys.Prevention", pf);
             Watch.Update(dt); // v12.0 교대·감지기
+            pf = Prof.Lap("sys.Watch", pf);
             Volatile.Update(dt); // v12.2 열·폭발·잔해·역화·일산화탄소·짙은 산소
+            pf = Prof.Lap("sys.Volatile", pf);
             Moisture.Update(dt); // v12.3 물·습기·전기 (누전·감전·결로·기동 전류)
+            pf = Prof.Lap("sys.Moisture", pf);
             Disease.Update(dt); // v12.4 전염병
+            pf = Prof.Lap("sys.Disease", pf);
+            Ailments.Update(dt); // v14.1 질병 30
+            pf = Prof.Lap("sys.Ailments", pf);
             Ambience.Update(dt); // v12.6 인접성: 소음·진동·냄새·방사선
+            pf = Prof.Lap("sys.Ambience", pf);
             Exterior.Update(dt); // v12.6 외부 설비: 안테나·태양 날개 (드론이 고친다)
+            pf = Prof.Lap("sys.Exterior", pf);
             Life.Update(dt); // v12.7 실수·말다툼·추모·자격
+            pf = Prof.Lap("sys.Life", pf);
             Command.Update(dt); // v13.1 선장·현장 지휘·조 편성
+            pf = Prof.Lap("sys.Command", pf);
             Meetings.Update(dt); // v13.2 첫 출항 회의 · 정기 회의 · 사후 검토
+            pf = Prof.Lap("sys.Meetings", pf);
             Minds.Update(dt); // v13.3 아는 것 · 감정 · 목표 · 명령 반응
+            pf = Prof.Lap("sys.Minds", pf);
             Society.Update(dt); // v13.4 사기 · 일과표 · 베테랑
+            pf = Prof.Lap("sys.Society", pf);
             Eras.Update(); // v12.8 시대 기술 (회의가 고른 연구)
+            pf = Prof.Lap("sys.Eras", pf);
             Voyage.Update(dt); // v12.8 항로 구간 · 기항지 · 난파선
+            pf = Prof.Lap("sys.Voyage", pf);
             Generation.Update(dt); // v12.9 나이 · 짝 · 출생 · 성장
+            pf = Prof.Lap("sys.Generation", pf);
             Campaign.Update(); // v12.9 임무
+            pf = Prof.Lap("sys.Campaign", pf);
             Volatile.Resume();
+            pf = Prof.Lap("sys.Volatile", pf);
             Procedures.Update(this); // v12.1 재조립 불량이 돌아온다
+            pf = Prof.Lap("sys.Procedures", pf);
             Causes.Update(); // v12.2 인과 사슬: 번진 상태를 원인에 잇고, 풀린 상태에 복구를 붙인다
+            pf = Prof.Lap("sys.Causes", pf);
             Collection.Update(dt);
+            pf = Prof.Lap("sys.Collection", pf);
             Structure.Update(dt);
+            pf = Prof.Lap("sys.Structure", pf);
             Drones.SystemUpdate(dt);
+            pf = Prof.Lap("sys.Drones", pf);
             Robots.SystemUpdate(dt);
+            pf = Prof.Lap("sys.Robots", pf);
             Propulsion.SystemUpdate(dt);
+            pf = Prof.Lap("sys.Propulsion", pf);
             Hazards.SystemUpdate(dt);
+            pf = Prof.Lap("sys.Hazards", pf);
             Food.Update(this, dt);
+            pf = Prof.Lap("sys.Food", pf);
             Comms.SystemUpdate(dt);
+            pf = Prof.Lap("sys.Comms", pf);
             Ledger.Sample(this, dt);
+            pf = Prof.Lap("sys.Ledger", pf);
             CheckShip();
+            pf = Prof.Lap("sys.CheckShip", pf);
             foreach (var c in Crew) Memory.Update(this, c);
+            Prof.Lap("sys.Memory", pf);
         }
         if (Tick % SimTime.Minutes(5) == 0)
         {
@@ -332,12 +377,16 @@ public sealed class World
             Research += Tech.ResearchPerHour(this) * (SimTime.Minutes(5) / (float)SimTime.TicksPerHour);
             Tech.NoteUnlocks(this, before);
         }
+        long ps = Prof.Now;
         Hazards.Step();
         Sensors.Step();
         Propulsion.Step();
+        ps = Prof.Lap("step.hazards·sensors", ps);
         Board.Update();
+        ps = Prof.Lap("step.Board", ps);
         Drones.Step();
         Robots.Step();
+        Prof.Lap("step.drones·robots", ps);
 
         foreach (var c in Crew)
         {
@@ -355,8 +404,10 @@ public sealed class World
                 continue;
             }
             if (c.Dead) continue;
+            long pc = Prof.Now;
             NeedsSystem.Update(c, this);
             CheckVitals(c);
+            pc = Prof.Lap("crew.needs", pc);
             if (!c.CanAct)
             {
                 UpdatePlace(c);
@@ -388,10 +439,12 @@ public sealed class World
             // v12.9.1 숨이 찰 만큼 산소가 묽어지면 10분을 기다리지 않고 곧장 다시 판단한다 (대피)
             if ((Tick + c.Id) % 15 == 0 && c.Job?.Activity is not EvacuateActivity && (EvacuateActivity.Breathless(c, this) || c.Room is { EvacuateBy: >= 0 })) c.NextThinkTick = Tick;
 
+            pc = Prof.Lap("crew.checks", pc);
             if (c.Job == null || Tick >= c.NextThinkTick)
             {
                 Brain.Think(c, this);
                 c.NextThinkTick = Tick + Brain.ThinkInterval + Rng.Range(0, SimTime.Minutes(4));
+                pc = Prof.Lap("crew.think", pc);
             }
 
             if (c.Job != null)
@@ -410,8 +463,10 @@ public sealed class World
                 }
             }
 
+            pc = Prof.Lap("crew.job", pc);
             UpdatePlace(c);
             Ship.DoorAt(c.Cell)?.Request();
+            Prof.Lap("crew.place", pc);
         }
 
         // 업힌 사람은 업은 사람 등에 붙어 간다
