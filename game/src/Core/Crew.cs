@@ -311,6 +311,8 @@ public sealed class CrewMember
 
     /// <summary>숨을 참고 진공을 가로질러 우주복을 가지러 가는 중 (길찾기가 진공을 허용한다).</summary>
     public bool Dashing { get; internal set; }
+    /// <summary>v16.6 이 사람의 컴퓨터 신뢰 (−1 = 아직 배 전체 신뢰 그대로 · CrewTrustBook이 적는다 — 회의 표에 쓴다).</summary>
+    public float ComputerFaith { get; internal set; } = -1f;
 
     /// <summary>v12.9.4 숨진 틱 (시신을 오래 두지 않는다).</summary>
     public long DiedAt { get; set; } = -1;

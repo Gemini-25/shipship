@@ -57,7 +57,7 @@ public static class ComputerV15
     // ── 효과 ──
 
     /// <summary>모듈이 올라가 있고 주 컴퓨터가 돈다.</summary>
-    public static bool On(World w, ComputerModule m) => w.Automation.Has(m) && w.Automation.MainOnline;
+    public static bool On(World w, ComputerModule m) => w.Automation.Active(m) && w.Automation.MainOnline; // v16.6 연산이 모자라 잠시 끈 모듈은 쉰다
     private static bool On(World w, ComputerModule m, Room r) => r.DataLinked && On(w, m);
 
     /// <summary>전조 분석: 감지기가 진짜 전조를 잡는 배율 (계기 오류는 그대로).</summary>
@@ -67,8 +67,12 @@ public static class ComputerV15
     public static void OnDetect(World w, Machine m, Omen o)
     {
         if (o.Cause == OmenCause.Phantom || !On(w, ComputerModule.Foresight, m.Body.Room) || o.Due <= w.Tick) return;
-        o.Due += (long)((o.Due - w.Tick) * 0.25f);
+        long gain = (long)((o.Due - w.Tick) * 0.25f);
+        o.Due += gain;
         w.Automation.V15Acts[ComputerModule.Foresight]++;
+        w.Automation.Book.Today.Deferred++; w.Automation.Book.Today.DeferredHours += gain / (float)SimTime.TicksPerHour; // v16.0 하루 보고
+        w.Automation.Book.Add(ActKind.Module, m.Body.Room, $"{m.Name} 전조 ({Prevention.Name(o.Kind)})", "고장 전에 부하를 낮추면 버틴다", $"부하를 낮춰 고장을 {gain / (float)SimTime.TicksPerHour:0}시간 늦춤", "정비", "", 0, 120f,
+            (world, a) => m.Faults.Count == 0 ? (1, "맞았다 — 아직 멀쩡하다") : (2, "보류 — 결국 고장 났다"));
         MarkLog.Add(m.Marks, w.Tick, "전조 분석 — 부하를 낮춰 고장을 늦췄다");
     }
 
@@ -152,11 +156,14 @@ public sealed partial class AutomationSystem
         {
             if (d.IsExternal || d.RoomA is not Room a || d.RoomB is not Room b || a == b) continue;
             bool pressed = FlowSystem.DoorDelta(a, b) >= FlowSystem.EqualizeAbove;
-            if (!pressed || !ComputerV15.CalmSide(w, a) || !ComputerV15.CalmSide(w, b)) { if (!pressed && _doorEq.Remove(d.Id)) V15Acts[ComputerModule.DoorPressure]++; continue; }
+            if (!pressed || !ComputerV15.CalmSide(w, a) || !ComputerV15.CalmSide(w, b)) { if (!pressed && _doorEq.Remove(d.Id)) { V15Acts[ComputerModule.DoorPressure]++; Book.Today.DoorEq++; } continue; }
             if (_doorEq.Add(d.Id))
+            {
                 w.Log.Add(w.Tick, LogKind.Ship, $"문 압력 경보 — {a.Name}↔{b.Name} {FlowSystem.DoorDelta(a, b):0}kPa · 균압 밸브를 미리 연다");
+                Book.Add(ActKind.Valve, a, $"{a.Name}↔{b.Name} 문에 {FlowSystem.DoorDelta(a, b):0}kPa", "새지 않는 두 방 — 맞춰도 된다", "균압 밸브를 연다", "", "deq:" + d.Id, SimTime.Minutes(30), 5f);
+            }
             w.Flow.Equalize(a, b, MathF.Min(0.5f, 4f * dt));
-            if (FlowSystem.DoorDelta(a, b) < FlowSystem.EqualizeAbove && _doorEq.Remove(d.Id)) V15Acts[ComputerModule.DoorPressure]++;
+            if (FlowSystem.DoorDelta(a, b) < FlowSystem.EqualizeAbove && _doorEq.Remove(d.Id)) { V15Acts[ComputerModule.DoorPressure]++; Book.Today.DoorEq++; }
         }
     }
 }

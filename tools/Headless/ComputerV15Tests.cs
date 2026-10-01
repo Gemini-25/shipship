@@ -13,11 +13,11 @@ public static partial class Program
         try
         {
             var mods = Enum.GetValues<ComputerModule>();
-            var fresh = mods.Where(m => m >= ComputerModule.Foresight).ToList();
+            var fresh = mods.Where(m => m >= ComputerModule.Foresight && m <= ComputerModule.Archive).ToList(); // v16.6 새 모듈 10은 ComputerV16 표
             var noRow = fresh.Where(m => ComputerV15.Of(m) == null || AutomationSystem.ModuleName(m) == m.ToString()).ToList();
             var rows = ChronicleV15.Rows;
             Check("목록 — 모듈 20 (새 13은 표·이름이 있다) · 칭호 50 (배 25 · 사람 25, 이름·id 겹침 없음)",
-                mods.Length == 20 && ComputerV15.Rows.Length == 13 && fresh.Count == 13 && noRow.Count == 0
+                mods.Length == 30 && ComputerV15.Rows.Length == 13 && fresh.Count == 13 && noRow.Count == 0
                 && rows.Length == 50 && rows.Select(r => r.Id).Distinct().Count() == 50 && rows.Select(r => r.Name).Distinct().Count() == 50
                 && rows.Count(r => r.Scope == TitleScope.Ship) == 25 && rows.All(r => (r.Ship != null) == (r.Scope == TitleScope.Ship) && (r.Crew != null) == (r.Scope == TitleScope.Crew)),
                 $"모듈 {mods.Length} · 새 표 {ComputerV15.Rows.Length} · 표 없음 {string.Join(",", noRow)} · 칭호 {rows.Length}(배 {rows.Count(r => r.Scope == TitleScope.Ship)})");

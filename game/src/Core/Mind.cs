@@ -100,7 +100,7 @@ public sealed class MindSystem
         bool bio = w.Automation.Has(ComputerModule.BioMonitor) && w.Automation.MainOnline;
         foreach (var c in w.Crew.Where(c => c.Down && !c.Dead && c.CareBed == null && c.CarriedBy == null))
             list.Add(($"down:{c.Id}", c.Room, c.Outside ? $"{c.Name} 선체 밖" : $"{c.Name} 쓰러짐",
-                bio || (c.Room == null ? w.Automation.MainOnline || !w.Automation.Present : AlarmReaches(c.Room)), c)); // 선체 밖·문간은 외부 감지기·카메라
+                bio || (c.Room == null ? w.Automation.MainOnline || !w.Automation.Present : AlarmReaches(c.Room) && w.Automation.Belief.SeesPeople(c.Room)), c)); // v16.6 문 감지기가 틀어지면 쓰러진 사람도 못 본다 // 선체 밖·문간은 외부 감지기·카메라
         _incidents = list;
         return list;
     }

@@ -406,7 +406,7 @@ public sealed class EvacuateActivity : Activity
         // 사출하기로 한 방: 그 방 일(물품 회수 등)을 하는 사람 말고는 나간다
         if (c.Room.Jettison != null && c.Job?.Order?.Target.Room != c.Room) danger = MathF.Max(danger, 0.5f);
         // v13.0 소화 대응 카운트다운: 질식·진공 소화를 앞둔 방 — 모두 나간다
-        if (c.Room.EvacuateBy >= 0 || c.Room.Purging || c.Room.Inerting) danger = MathF.Max(danger, 1f);
+        if (c.Room.EvacuateBy >= 0 || c.Room.Purging || c.Room.Inerting) danger = MathF.Max(danger, c.Room.Purging || c.Room.Inerting || w.Automation.Trusts.Obeys(c) ? 1f : 0.35f); // v16.6 컴퓨터를 아주 못 믿으면 대피 지시를 바로 따르지 않는다
         if (c.Suit is { Oxygen: > 0f and < 0.4f } && Atmosphere.Danger(c.Room) > 0.3f) danger = 1f; // 탱크가 바닥나 간다
         // v12.9.1 맨몸으로 산소가 묽어지는 방에 있으면 일을 두고 나온다 (머리가 먼저 흐려진다 — 쓰러지기 전에)
         // v13.2 방침(대피 기준): 일찍 17 · 보통 16.5 · 버티며 작업 15

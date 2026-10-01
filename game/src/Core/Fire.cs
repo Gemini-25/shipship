@@ -231,6 +231,7 @@ public sealed class FireSystem
             MarkLog.Add(room.Marks, w.Tick, $"화재 ({how})");
             w.History.Add(w, HistoryKind.Incident, $"{room.Name} 화재 — {how}", room, witness != null ? new[] { witness } : null);
             w.RaiseAlert($"{room.Name} 화재 — {how}", room, critical ? AlertLevel.Critical : AlertLevel.Warning, shipWide: true);
+            if (detector) w.Automation.Book.Add(ActKind.Alarm, room, $"{room.Name} 화재 감지기 · 불 {w.Fire.CountIn(room)}칸", critical ? "핵심 방 — 위급" : "화재", "배 전체 화재 경보", "진화 (소화조)", "fire:" + room.Id, SimTime.Minutes(30), 10f); // v16.0
             w.Board.RequestScan();
         }
         foreach (var id in _knownRooms.ToList())

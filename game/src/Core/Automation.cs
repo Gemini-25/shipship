@@ -78,7 +78,8 @@ public sealed partial class AutomationSystem
     {
         var m = Computer;
         if (m == null || m.Body.Room != room || !m.Powered || m.Stopped) return 0f;
-        return Ventilated(room) ? 3f : 24f;
+        float busy = MathF.Max(0f, Load - 0.6f); // v16.6 연산 부하가 크면 더 달아오른다
+        return Ventilated(room) ? 3f + 8f * busy : 24f + 6f * busy;
     }
 
     public void Update(float dt)
@@ -100,7 +101,7 @@ public sealed partial class AutomationSystem
             }
         }
 
-        bool main = m != null && m.Efficiency > 0.25f;
+        bool main = m != null && m.Efficiency > 0.25f && !Rebooting; // v16.6 재부팅 중에는 사람이 손으로
         var panelRoom = w.Ship.FurnitureOf(FurnitureType.PowerPanel).FirstOrDefault()?.Room;
         BackupActive = Backup && !main && panelRoom != null && panelRoom.Powered;
         if (main != MainOnline)
@@ -110,7 +111,7 @@ public sealed partial class AutomationSystem
             {
                 Outages++;
                 OfflineSince = w.Tick;
-                string why = m == null ? "함교와 끊겼다" : !m.Powered ? "전기가 없다" : m.Faults.FirstOrDefault()?.Name ?? "멈췄다";
+                string why = m == null ? "함교와 끊겼다" : Rebooting ? $"재부팅 — {RebootWhy}" : !m.Powered ? "전기가 없다" : m.Faults.FirstOrDefault()?.Name ?? "멈췄다";
                 w.RaiseAlert($"주 컴퓨터 정지({why}) — 자동화 꺼짐: 격벽·댐퍼·화재 경보·부하 관리를 손으로" +
                              (BackupActive ? " · 예비 제어기가 격벽·댐퍼·경보를 맡는다" : ""), m?.Body.Room, AlertLevel.Critical, shipWide: true);
                 w.History.Add(w, HistoryKind.Damage, $"자동화가 꺼졌다 — 주 컴퓨터 {why}", m?.Body.Room);
@@ -125,6 +126,7 @@ public sealed partial class AutomationSystem
             w.Board.RequestScan();
         }
         if (!main) OfflineHours += dt;
+        V16(dt); // v16.0 ④ · v16.6 다섯 칸 기록 · 믿는 배 · 제안 · 신뢰 · 연산 자원 · 방송 · 새 모듈
         Think(dt); // v12.5 등급·수동 조종·예측·방침
         Respond(dt); // v13.0 대응 수순 (화재 · 공기 구역)
         bool gone = Gone;

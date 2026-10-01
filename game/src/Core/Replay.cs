@@ -405,6 +405,8 @@ public static class SaveGame
         // v11.2 교신
         I(w.Growth.Lessons); I(w.Growth.RehabSessions); foreach (var c in w.Crew) { F(c.Vitals.Scar); foreach (var sk in c.SkillLevels) F(sk); } // v11.3
         I(w.Comms.DistressAt); I(w.Comms.SupplyEta); I(w.Comms.SupplyDocked ? 1 : 0); I(w.Comms.SignalAt); I(w.Comms.PodEta); I(w.Comms.Rescued); I(w.Crew.Count);
+        // v16.0 ④ · v16.6 주컴퓨터: 다섯 칸 기록 · 제안 · 확인 · 사람마다 신뢰 · 믿음 · 연산 자원 · 방송
+        { var au = w.Automation; I(au.Book.Total); I(au.Book.Right); I(au.Book.Wrong); I(au.Asks.All.Count); I(au.Asks.Rejected); I(au.CheckFound); I(au.Reboots); I(au.Suspended.Count); I(au.Speak.Count); I(au.Belief.Repairs); foreach (var c in w.Crew) F(au.Trusts.Of(c)); foreach (var m in au.Modules.OrderBy(m => (int)m)) I((int)m); }
         return h;
     }
 }

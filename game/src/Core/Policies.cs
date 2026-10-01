@@ -125,6 +125,9 @@ public sealed class PolicySystem
             "난파선을 지날 때 — 바깥만 훑는다 / 안까지 들어가 더 건지지만 위험하다"),
         new("comms", "항해", "교신", new[] { "정기 보고", "필요할 때만" }, 1,
             "본부·기항지와의 교신 — 날마다 보고한다(전기를 쓰지만 기항지가 반긴다) / 필요할 때만"),
+        // v16.6 제안 → 승인
+        new("computerask", "지휘", "컴퓨터 제안", new[] { "바로 실행", "위험한 조치는 묻는다", "모두 묻는다" }, 0,
+            "컴퓨터가 위험한 조치(진공·질식 소화)를 바로 하나 — 바로 / 제안 카드를 내고 받거나 거절을 기다린다(기한이 지나면 지휘하는 사람이 정한다) / 모듈 끄기·재부팅까지 묻는다"),
     };
 
     /// <summary>
@@ -186,6 +189,7 @@ public sealed class PolicySystem
     public static int Preferred(CrewMember c, string id)
     {
         var spec = Spec(id);
+        if (id == "computerask" && c.ComputerFaith >= 0f) return c.ComputerFaith < 0.2f ? 2 : c.ComputerFaith < 0.42f ? 1 : 0; // v16.6 컴퓨터에 데인 사람은 묻게 하자고 한다
         if (!Leans.TryGetValue(id, out var l)) return spec.Default;
         int v = l.lean[(int)c.Value];
         if (l.bold != 0)
