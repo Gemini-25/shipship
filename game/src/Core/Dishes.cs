@@ -22,6 +22,8 @@ public sealed record DishRecipe(string Id, string Name, DishKind Kind, (Ingredie
     /// <summary>굽는 냄새인가 (빵 · 전 · 케이크) — 아니면 끓이고 볶는 냄새.</summary>
     public SmellKind Smell => Kind is DishKind.Bread or DishKind.Cake or DishKind.Pan ? SmellKind.Bread : SmellKind.Cooking;
     public bool Uses(Ingredient i) => Needs.Any(x => x.what == i);
+    /// <summary>기름진 요리 (전 · 볶음) — 화구 앞 바닥에 기름이 튄다.</summary>
+    public bool Oily => Kind == DishKind.Pan || Id is "friedrice" or "japchae" or "budae";
 }
 
 public static class Dishes
