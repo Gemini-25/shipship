@@ -274,6 +274,7 @@ public partial class ShipView : Node2D
                 ci.DrawTextureRect(tex, new Rect2(center - new Vector2(size, size) * 0.5f, size, size), false, new Color(tint.R, tint.G, tint.B, strength));
             }
         }
+        PaintPortableLights(ci); // v16.7 이동식 광원 (작업등 원뿔 · 히터 열기)
         PaintBeacons(ci);
     }
 
@@ -652,6 +653,7 @@ public partial class ShipView : Node2D
         foreach (var room in ship.LiveRooms)
             if (room.Dark)
                 foreach (var c in room.Cells) ci.DrawRect(CellRect(c), new Color(0, 0, 0, room.Powered ? 0.36f : 0.42f));
+        PaintPortable(ci); // v16.7 이동식 장비 (작업등 빛 웅덩이 · 케이블 · 호스 · 장비마다 다른 그림)
         PaintJumpers(ci);
 
         foreach (var vm in new[] { mode, _main.SecondaryView ?? mode }.Distinct()) // v12.3 겹쳐 보기
