@@ -152,7 +152,7 @@ public sealed class RoomPlanSystem
     public static float Weight(Furniture f) => BaseWeight(f.Type) * MathF.Max(1f, f.Cells.Count / 2f) + 0.6f * (f.Storage?.Total ?? 0);
 
     /// <summary>옮길 수 있나 (원자로 · 엔진 · 주 컴퓨터 · 배전반 · 채집 장치 · 드론 거치대는 배에 박혀 있다).</summary>
-    public static bool Movable(FurnitureType t) => t is not (FurnitureType.ReactorCore or FurnitureType.EngineCore or FurnitureType.MainComputer
+    public static bool Movable(FurnitureType t) => t is not (FurnitureType.Bed or FurnitureType.Cot or FurnitureType.ReactorCore or FurnitureType.EngineCore or FurnitureType.MainComputer
         or FurnitureType.PowerPanel or FurnitureType.Collector or FurnitureType.DroneDock or FurnitureType.SensorArray or FurnitureType.GrowBed);
 
     /// <summary>기관 구역 설비 (배관 · 배선 · 무게 · 안전 판단이 드는 것).</summary>
@@ -320,7 +320,7 @@ public sealed class RoomPlanSystem
     {
         var w = _w;
         var store = w.Ship.Rooms.Where(r => !r.Detached && !r.Abandoned && !r.OffLimits && RoomUseSystem.Actual(r) == RoomType.Storage && r.Special == null
-                                            && r.Furniture.Any(f => f.Type == FurnitureType.Shelf) && Remodel.FindSplit(w, r) != null)
+                                            && r.Furniture.Any(f => f.Type == FurnitureType.Shelf) && Remodel.FindSplit(w, r, 2) != null)
             .OrderByDescending(r => r.Cells.Count).ThenBy(r => r.Id).FirstOrDefault();
         if (store == null) return null;
         string name = GymName(by);
@@ -361,6 +361,9 @@ public sealed class RoomPlanSystem
         Propose(New(EngineGear(f.Type) ? RoomPlanKind.MoveEngine : RoomPlanKind.Move, by, f.Room, $"{Ko.EulReul(f.Label)} {f.Room.Name}에서 {Ko.EuRo(to.Name)}", why, "겪은 일", f.Id, to.Id));
 
     // ── 이름: 사람 · 사건 · 소품 · 쓰임 ──
+    /// <summary>'이름'으로 · '이름'로 (따옴표 안 이름의 받침을 본다).</summary>
+    private static string QEuRo(string name) => $"'{name}'" + Ko.EuRo(name)[name.Length..];
+
     private static string Noun(RoomType use) => use switch
     {
         RoomType.Workshop => "작업장", RoomType.Hydroponics => "정원", RoomType.Galley => "부엌", RoomType.Lounge => "사랑방",
@@ -388,7 +391,7 @@ public sealed class RoomPlanSystem
             if (dead != null)
             {
                 var friend = adults.OrderByDescending(c => c.AffinityTo(dead)).ThenBy(c => c.Id).First();
-                cands.Add(New(RoomPlanKind.Rename, friend, r, $"{Ko.EulReul(r.Name)} '{dead.Name}의 {Noun(use)}'로", $"{Ko.IGa(dead.Name)} 여기서 떠났다 — 잊지 않으려고",
+                cands.Add(New(RoomPlanKind.Rename, friend, r, $"{Ko.EulReul(r.Name)} {QEuRo($"{dead.Name}의 {Noun(use)}")}", $"{Ko.IGa(dead.Name)} 여기서 떠났다 — 잊지 않으려고",
                     "겪은 일", name: $"{dead.Name}의 {Noun(use)}", nameSource: "사람", namedFor: dead.Id));
                 continue;
             }
@@ -396,7 +399,7 @@ public sealed class RoomPlanSystem
             {
                 var vet = adults.Where(c => c.Memory.FearOf(r) < 0.35f).OrderByDescending(c => c.Memory.FearOf(r)).ThenBy(c => c.Id).FirstOrDefault();
                 if (vet != null)
-                    cands.Add(New(RoomPlanKind.Rename, vet, r, $"{Ko.EulReul(r.Name)} '그날의 {RoomTypes.Name(use)}'로", $"{Ko.IGa(r.Name)} {(r.Fires > 0 ? "불" : "구멍")}을 함께 넘겼다 — 그날을 기억하자",
+                    cands.Add(New(RoomPlanKind.Rename, vet, r, $"{Ko.EulReul(r.Name)} {QEuRo($"그날의 {RoomTypes.Name(use)}")}", $"{Ko.IGa(r.Name)} {(r.Fires > 0 ? "불" : "구멍")}을 함께 넘겼다 — 그날을 기억하자",
                         "겪은 일", name: $"그날의 {RoomTypes.Name(use)}", nameSource: "사건"));
                 continue;
             }
@@ -404,14 +407,14 @@ public sealed class RoomPlanSystem
             if (r.Furniture.Any(f => f.Type == FurnitureType.Aquarium && !f.Stowed))
             {
                 var fan = adults.OrderByDescending(c => c.Habits.Contains(Habit.Cheerful) ? 1 : 0).ThenByDescending(c => c.Traits.Sociability).ThenBy(c => c.Id).First();
-                cands.Add(New(RoomPlanKind.Rename, fan, r, $"{Ko.EulReul(r.Name)} '물고기 방'으로", "다들 어항 보러 간다", "쓰임", name: "물고기 방", nameSource: "소품"));
+                cands.Add(New(RoomPlanKind.Rename, fan, r, $"{Ko.EulReul(r.Name)} {QEuRo("물고기 방")}", "다들 어항 보러 간다", "쓰임", name: "물고기 방", nameSource: "소품"));
                 continue;
             }
             // 쓰임: 설계와 다르게 하루 넘게 쓰인 방 → 다들 부르는 이름
             if (r.UsedAs is RoomType u && r.FormerPurposes.Count > 0)
             {
                 var by = adults.OrderByDescending(c => w.RoomUse.Who(r, c)).ThenBy(c => c.Id).First();
-                cands.Add(New(RoomPlanKind.Rename, by, r, $"{Ko.EulReul(r.Name)} '{Slang(u)}'으로", $"설계는 {RoomTypes.Name(r.Kind)}지만 다들 {Ko.EuRo(RoomUseSystem.UseName(u))} 쓴다",
+                cands.Add(New(RoomPlanKind.Rename, by, r, $"{Ko.EulReul(r.Name)} {QEuRo(Slang(u))}", $"설계는 {RoomTypes.Name(r.Kind)}지만 다들 {Ko.EuRo(RoomUseSystem.UseName(u))} 쓴다",
                     "쓰임", name: Slang(u), nameSource: "쓰임"));
                 continue;
             }
@@ -421,7 +424,7 @@ public sealed class RoomPlanSystem
             {
                 var friend = adults.Where(c => c != owner).OrderByDescending(c => c.AffinityTo(owner)).ThenBy(c => c.Id).FirstOrDefault();
                 if (friend == null || friend.AffinityTo(owner) < 0f) continue;
-                cands.Add(New(RoomPlanKind.Rename, friend, r, $"{Ko.EulReul(r.Name)} '{owner.Name}의 {Noun(use)}'으로", $"{Ko.IGa(owner.Name)} 여기서 산다 ({hours:0}시간 · {share * 100:0}%)",
+                cands.Add(New(RoomPlanKind.Rename, friend, r, $"{Ko.EulReul(r.Name)} {QEuRo($"{owner.Name}의 {Noun(use)}")}", $"{Ko.IGa(owner.Name)} 여기서 산다 ({hours:0}시간 · {share * 100:0}%)",
                     "사람", name: $"{owner.Name}의 {Noun(use)}", nameSource: "사람", namedFor: owner.Id));
             }
         }
@@ -454,7 +457,7 @@ public sealed class RoomPlanSystem
         int beds = w.Ship.Furniture.Count(f => !f.Stowed && !f.Room.Detached && FurnitureTypes.Sleepable(f.Type) && f.Type != FurnitureType.MedBed);
         if (alive > w.StartCrew || alive > beds)
         {
-            var q = w.Ship.Rooms.Where(r => !r.Detached && !r.Partitioned && RoomUseSystem.Actual(r) == RoomType.Quarters && Remodel.FindSplit(w, r) != null)
+            var q = w.Ship.Rooms.Where(r => !r.Detached && !r.Partitioned && RoomUseSystem.Actual(r) == RoomType.Quarters && Remodel.FindSplit(w, r, 2) != null)
                 .OrderByDescending(r => r.Cells.Count).FirstOrDefault();
             var by = adults.OrderByDescending(c => c.Bed?.Room == q ? 1 : 0).ThenBy(c => c.Traits.Sociability).ThenBy(c => c.Id).First();
             if (q != null) cands.Add(New(RoomPlanKind.Split, by, q, $"{q.Name}에 칸막이 — 선실을 하나 더", $"사람이 늘었다 ({w.StartCrew}명 → {alive}명) · 좁다", "인원 변화"));
@@ -741,7 +744,7 @@ public sealed class RoomPlanSystem
         {
             case RoomPlanKind.Convert or RoomPlanKind.Split:
             {
-                if (Remodel.FindSplit(w, room) is not Remodel.SplitPlan sp) { Stop(p, "칸막이 칠 자리가 없어졌다"); return; }
+                if (Remodel.FindSplit(w, room, 2) is not Remodel.SplitPlan sp) { Stop(p, "칸막이 칠 자리가 없어졌다"); return; }
                 var spot = Cell.Dirs4.Select(d => sp.Door + d).FirstOrDefault(c => w.Ship.IsOpenFloor(c) && w.Ship.RoomAt(c) == room);
                 AddTask(p, RoomTaskKind.Wall, 0, room, spot, 1.6f);
                 break;
@@ -939,7 +942,26 @@ public sealed class RoomPlanSystem
             foreach (var s in f.UseSpots) if (dist.Reachable(s)) return s;
             return null;
         }
+        if (t.Kind == RoomTaskKind.Assemble && (!_w.Ship.IsOpenFloor(t.Spot) || _w.Ship.RoomAt(t.Spot)?.Id != t.RoomId) && AssembleSpot(_w.Ship.Rooms[t.RoomId]) is Cell a2) t.Spot = a2;
         return dist.Reachable(t.Spot) ? t.Spot : null;
+    }
+
+    /// <summary>운동 기구를 짤 칸 (벽에 붙고 · 문 앞이 아니고 · 길을 끊지 않는 곳 — 문에서 먼 곳부터).</summary>
+    private Cell? AssembleSpot(Room gym)
+    {
+        var w = _w;
+        var door = gym.Doors.FirstOrDefault(d => !d.Removed && !d.IsExternal)?.Cell ?? gym.Cells[0];
+        foreach (var c in gym.Cells.OrderByDescending(c => (c.Center - door.Center).LengthSquared()).ThenBy(c => c.Y).ThenBy(c => c.X))
+        {
+            if (!w.Ship.IsOpenFloor(c) || c == gym.DamperSpot || w.Body.HatchOpenAt(c)) continue;
+            if (!Cell.Dirs4.Any(d => w.Ship.Grid.Kind(c + d) == TileKind.Wall)) continue;
+            if (gym.Doors.Any(d => Math.Abs(d.Cell.X - c.X) + Math.Abs(d.Cell.Y - c.Y) <= 1)) continue;
+            if (gym.Furniture.Any(f => f.UseSpots.Count == 1 && f.UseSpots[0] == c)) continue;
+            if (!Cell.Dirs4.Any(d => w.Ship.IsOpenFloor(c + d) && w.Ship.RoomAt(c + d) == gym)) continue;
+            if (!Adaptation.SafeToBlock(w, gym, c)) continue;
+            return c;
+        }
+        return null;
     }
 
     public string TaskName(RoomTask t) => t.Kind switch
@@ -1168,7 +1190,7 @@ public sealed class RoomPlanSystem
         {
             case RoomTaskKind.Wall:
             {
-                if (Remodel.FindSplit(w, room) is not Remodel.SplitPlan sp) { t.Progress = 0.95f; return false; }
+                if (Remodel.FindSplit(w, room, 2) is not Remodel.SplitPlan sp) { t.Progress = 0.95f; return false; }
                 if (!ItemsV15.Use(w, ItemKind.Plate)) w.Log.Add(w.Tick, LogKind.Ship, "칸막이 — 금속판이 없어 뜯어 둔 패널로", c.Id);
                 ItemsV15.Use(w, ItemKind.Plate);
                 ItemsV15.Use(w, ItemKind.Structure);
@@ -1219,8 +1241,10 @@ public sealed class RoomPlanSystem
             {
                 bool full = ItemsV15.Use(w, ItemKind.Motor) && ItemsV15.Use(w, ItemKind.Belt);
                 if (!full) ItemsV15.Use(w, ItemKind.Plate);
-                if (!w.Ship.IsOpenFloor(t.Spot) || w.Ship.RoomAt(t.Spot) != room) { if (Spot(1, 1, room, Reserved()) is List<Cell> s1) t.Spot = s1[0]; else return false; }
-                var mill = w.Ship.AddFurniture(FurnitureType.Treadmill, t.Spot);
+                var at = w.Ship.IsOpenFloor(t.Spot) && w.Ship.RoomAt(t.Spot) == room && !w.Crew.Any(o => o.Cell == t.Spot && o != c) ? t.Spot : AssembleSpot(room) ?? t.Spot;
+                if (!w.Ship.IsOpenFloor(at) || w.Ship.RoomAt(at) != room) return false;
+                foreach (var o in w.Crew) if (!o.Dead && o.Cell == at && FreeNear(at) is Cell free) { o.Position = free.Center; o.PreviousPosition = o.Position; }
+                var mill = w.Ship.AddFurniture(FurnitureType.Treadmill, at);
                 mill.Improved = full;
                 mill.Label = full ? "운동 기구" : "손으로 짠 운동 기구";
                 w.Paths.Invalidate();
@@ -1280,10 +1304,7 @@ public sealed class RoomPlanSystem
         }
         else
         {
-            var spot = gym.Cells.Where(c => w.Ship.IsOpenFloor(c) && Cell.Dirs4.Any(d => w.Ship.Grid.Kind(c + d) == TileKind.Wall)
-                                            && !gym.Doors.Any(d => Math.Abs(d.Cell.X - c.X) + Math.Abs(d.Cell.Y - c.Y) <= 2) && c != gym.DamperSpot)
-                .OrderByDescending(c => (c.Center - gym.Doors.First().Cell.Center).LengthSquared()).ThenBy(c => c.Y).ThenBy(c => c.X).FirstOrDefault();
-            AddTask(p, RoomTaskKind.Assemble, 2, gym, spot, 1.2f);
+            AddTask(p, RoomTaskKind.Assemble, 2, gym, AssembleSpot(gym) ?? gym.Cells[0], 1.2f); // 선반이 다 나가면 자리를 다시 본다
         }
         AddTask(p, RoomTaskKind.Sign, 4, gym, SignSpot(gym), 0.25f, label: p.NewName);
     }
@@ -1408,9 +1429,9 @@ public sealed class RoomPlanSystem
         var rooms = new List<Room>();
         if (t.ToRoom >= 0) rooms.Add(w.Ship.Rooms[t.ToRoom]);
         if (f.Storage != null)
-            rooms.AddRange(w.Ship.Rooms.Where(r => !r.Detached && !r.Abandoned && !r.OffLimits && r.Id != t.FromRoom && !rooms.Contains(r)
-                                                   && RoomUseSystem.Actual(r) is RoomType.Storage or RoomType.Workshop && r.Type != RoomType.Corridor)
-                .OrderBy(r => RoomUseSystem.Actual(r) == RoomType.Storage ? 0 : 1).ThenBy(r => r.Id));
+            rooms.AddRange(w.Ship.Rooms.Where(r => !r.Detached && !r.Abandoned && !r.OffLimits && r.Id != t.FromRoom && !rooms.Contains(r) && r.Type != RoomType.Corridor
+                                                   && RoomUseSystem.Actual(r) is RoomType.Storage or RoomType.Workshop or RoomType.Lounge or RoomType.Mess or RoomType.Hydroponics)
+                .OrderBy(r => RoomUseSystem.Actual(r) switch { RoomType.Storage => 0, RoomType.Workshop => 1, _ => 2 }).ThenBy(r => r.Id)); // 창고 · 정비실 · 그래도 없으면 휴게실 벽에
         foreach (var r in rooms)
             if (Spot(t.W, t.H, r, avoid) is List<Cell> cells) { t.ToRoom = r.Id; return cells; }
         return null;
