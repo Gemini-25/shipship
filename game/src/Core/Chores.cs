@@ -124,6 +124,8 @@ public sealed class ChoresActivity : Activity
         if (o.Assignee == c) score += w.Command.TeamOf(c) is Team mt && mt.Kind != TeamKind.Reserve && CommandSystem.Group(o.Kind) != mt.Kind ? 0.05f : 0.25f;
         else if (o.Robot != null) score -= 0.15f; // v10.10: 로봇이 하고 있는 일에 합류 — 더 급한 일이 없을 때만
         if (c.Vitals.Health < 0.5f) score -= 0.3f;
+        // 제 치료를 기다리는 사람은 남을 치료하러 돌아다니지 않는다 (다친 사람끼리 서로 쫓으면 치료하러 온 사람이 헛걸음한다 — 성한 사람이 간다)
+        if (o.Kind == WorkKind.Treat && o.Urgency < 0.9f && w.Board.Open.Any(x => x.Kind == WorkKind.Treat && x.Target.Crew == c)) score -= 0.3f;
         if (c.Fx.Worst > 0.45f && o.Urgency < 0.9f) score -= 0.3f * c.Fx.Worst; // v14.1 앓는 사람은 급하지 않은 일을 미룬다
 
         // EVA: 발밑이 우주다. 겁 많은 사람은 꺼리고, 긴장한 사람은 더 꺼린다
@@ -1394,6 +1396,11 @@ public static partial class WorkPlanners
         toils ??= Plans.DropOff(c, w, dist);
         toils.AddRange(w.Soil.WashFirst(c, o.Urgency >= 0.9f, "치료")); // v14.7 급하지 않으면 손부터 (환자 곁에 가기 전에 — 씻는 사이 환자가 자리를 뜨지 않게)
         toils.Add(new GotoToil(at));
+        // 환자가 그새 자리를 떴으면 (냄새 따라 식사 · 남 치료하러) 지금 있는 곳 곁으로 따라간다 — 두 번까지
+        Cell? Chase(CrewMember cm) => (patient.Position - cm.Position).Length() < 2f || patient.Dead ? null
+            : Cell.Dirs8.Select(d => patient.Cell + d).Where(x => w.Ship.IsWalkable(x) && dist.Reachable(x)).OrderBy(x => (x.Center - cm.Position).LengthSquared()).Cast<Cell?>().FirstOrDefault();
+        toils.Add(new GotoToilLate(Chase));
+        toils.Add(new GotoToilLate(Chase));
         toils.Add(new WorkToil(0.5f, Skill.Medicine, patient.Position)
         {
             CanContinue = (cm, _) => (!kit || cm.Carrying?.Kind == ItemKind.MedKit) && (patient.Position - cm.Position).Length() < 2.2f,
