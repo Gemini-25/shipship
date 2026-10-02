@@ -692,6 +692,7 @@ public partial class ShipView : Node2D
         PaintHoloTable(ci); // v11.2 함교 홀로그램
         PaintComms(ci); // v11.2 보급·탈출 캡슐, 송신 파동
         PaintCauseChain(ci); // v12.2 고른 사고의 인과 사슬
+        PaintScaleRooms(ci); // v16.18 번진 방마다 규모별 테두리 · 점호 깃발
         PaintDampers(ci, mode == ViewMode.Air);
         PaintRoomStates(ci);
         PaintRoomSigns(ci); // v16.17 승무원이 붙인 이름 표지판 (나무 · 놋쇠 · 칠판 · 법랑)
