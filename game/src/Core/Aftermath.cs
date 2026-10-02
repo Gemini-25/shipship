@@ -213,7 +213,7 @@ public sealed partial class AftermathSystem
     /// <summary>화면: 최근 다른 방에서 먹은 자리 (쟁반).</summary>
     public List<(long tick, Cell at, int crew)> AwayPlates { get; } = new();
     private readonly SortedSet<int> _dead = new();
-    private long _fridgeOff = -1;
+    private long _fridgeOff = -1, _fridgeUp = -1;
     private int _fridgeId = -1;
     private readonly SortedDictionary<int, float> _potMax = new();
     private List<Furniture>? _beds;
@@ -359,7 +359,7 @@ public sealed partial class AftermathSystem
             foreach (var o in w.Crew) if (!o.Dead) es.Knew.Add(o.Id);
             Seats.Add(es);
             Stats.EmptySeats++;
-            Traces.Add(new AfterTrace { Kind = AfterTraceKind.EmptySeat, Room = sf.Room.Id, At = sf.Cells[0], Tick = w.Tick, Crew = dead.Id, Item = seat, Event = $"{dead.Name}의 죽음", Text = $"{sf.Room.Name}의 빈 의자 — {dead.Name}이 늘 앉던 자리" });
+            Traces.Add(new AfterTrace { Kind = AfterTraceKind.EmptySeat, Room = sf.Room.Id, At = sf.Cells[0], Tick = w.Tick, Crew = dead.Id, Item = seat, Event = $"{dead.Name}의 죽음", Text = $"{sf.Room.Name}의 빈 의자 — {Ko.IGa(dead.Name)} 늘 앉던 자리" });
         }
         // 남은 사람: 혼자 먹기 · 꿈거리
         foreach (var o in w.Crew)
@@ -373,7 +373,7 @@ public sealed partial class AftermathSystem
             {
                 var om = Mind(o);
                 float wd = Math.Clamp(0.45f + 0.6f * close + (o.Habits.Contains(Habit.Loner) ? 0.15f : 0f) - 0.25f * o.Traits.Sociability, 0f, 1f);
-                if (wd > om.Withdraw) { om.Withdraw = wd; om.WithdrawWhy = $"{dead.Name}을(를) 잃고"; om.WithdrawFrom = w.Tick; }
+                if (wd > om.Withdraw) { om.Withdraw = wd; om.WithdrawWhy = $"{Ko.EulReul(dead.Name)} 잃고"; om.WithdrawFrom = w.Tick; }
                 Stats.Withdrawn++;
             }
         }
@@ -445,7 +445,7 @@ public sealed partial class AftermathSystem
                 room.Humidity = MathF.Min(1f, room.Humidity + 0.02f * h * MathF.Min(1f, l.Wet + 0.2f)); // 젖은 천이 방을 눅눅하게
                 if (l.Wet < 0.06f && l.Dried < 0) { l.Wet = 0f; l.Dried = w.Tick; }
             }
-            if (l.Dried >= 0 && !l.Forgot && w.Tick - l.Dried > SimTime.Hours(14))
+            if (l.Dried >= 0 && !l.Forgot && w.Tick - l.Dried > SimTime.Hours(16))
             {
                 l.Forgot = true;
                 Stats.ForgotLines++;
@@ -480,17 +480,22 @@ public sealed partial class AftermathSystem
         if (down != null)
         {
             if (_fridgeOff < 0) { _fridgeOff = w.Tick; _fridgeId = down.Id; _potMax.Clear(); }
+            _fridgeUp = -1; // 잠깐 돌다 또 멈췄다 — 같은 정전으로 본다
             foreach (var b in w.Cooking.Batches)
                 if (b.InFridge && !b.Spoiled) _potMax[b.Id] = MathF.Max(_potMax.GetValueOrDefault(b.Id, 4f), b.Temp);
             return;
         }
         if (_fridgeOff < 0) return;
-        float hrs = (w.Tick - _fridgeOff) / (float)SimTime.TicksPerHour;
-        long off = _fridgeOff;
+        // 다시 돈다: 30분은 제대로 도는 걸 보고 나서 고른다
+        if (_fridgeUp < 0) { _fridgeUp = w.Tick; return; }
+        if (w.Tick - _fridgeUp < SimTime.Minutes(30)) return;
+        float hrs = (_fridgeUp - _fridgeOff) / (float)SimTime.TicksPerHour;
+        long off = _fridgeOff, on = _fridgeUp;
         _fridgeOff = -1;
+        _fridgeUp = -1;
         var pots = w.Cooking.Batches.Where(b => b.InFridge && !b.Spoiled && !b.Jar && b.Portions > 0).ToList();
         if (hrs < 1.5f || pots.Count == 0) return;
-        var fs = new FridgeSort { Fridge = _fridgeId, Off = off, On = w.Tick };
+        var fs = new FridgeSort { Fridge = _fridgeId, Off = off, On = on };
         foreach (var b in pots)
         {
             float mt = _potMax.GetValueOrDefault(b.Id, b.Temp);

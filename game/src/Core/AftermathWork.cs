@@ -77,7 +77,7 @@ public sealed partial class AftermathSystem
             bool orphan = Crew(l.Owner) is not CrewMember ow || ow.Dead;
             if (!mine && !neat && !(orphan && w.Tick - l.Dried > SimTime.Hours(20))) continue;
             if (!dist.Reachable(l.At)) continue;
-            Consider(new AfterTask(AfterTaskKind.Fetch, mine ? (shift ? 0.22f : 0.38f) + (bed ? 0.25f : 0f) : 0.26f, mine ? "널어 둔 침구가 말랐다" : "누가 걷지 않은 침구", l));
+            Consider(new AfterTask(AfterTaskKind.Fetch, mine ? (shift ? 0.25f : 0.42f) + (bed ? 0.35f : 0f) : 0.3f, mine ? "널어 둔 침구가 말랐다" : "누가 걷지 않은 침구", l));
         }
         // 3) 독서등 가져오기 · 돌려놓기
         foreach (var lm in Lamps)
@@ -182,7 +182,7 @@ public sealed partial class AftermathSystem
                 toils.Add(new DoToil((cm, world) => { world.After.Hang(cm, bed, dr, at, hook); return true; }));
                 return new Job(act, "침구 널기", toils)
                 {
-                    LogText = $"젖은 침구를 걷어 {Ko.EuRo(dr.Name)} 가져간다", TargetRoom = dr, InterruptMargin = 0.2f,
+                    LogText = $"젖은 침구를 걷어 {Ko.EuRo(dr.Name)} 가져간다", TargetRoom = dr, InterruptMargin = 0.45f,
                     OnFinished = (cm, world, st) => { var m = world.After.Mind(cm); m.CarryBundle = -1; },
                 };
             }
@@ -199,7 +199,7 @@ public sealed partial class AftermathSystem
                 toils.Add(new DoToil((cm, world) => { world.After.Fetched(cm, l, bedF); return true; }));
                 return new Job(act, "침구 걷기", toils)
                 {
-                    LogText = l.Owner == c.Id ? "마른 침구를 걷으러 간다" : $"{Crew(l.Owner)?.Name}의 침구를 걷어 준다", InterruptMargin = 0.2f,
+                    LogText = l.Owner == c.Id ? "마른 침구를 걷으러 간다" : $"{Crew(l.Owner)?.Name}의 침구를 걷어 준다", InterruptMargin = 0.45f,
                     OnFinished = (cm, world, st) => { world.After.Mind(cm).CarryBundle = -1; if (!l.Done) l.ClaimedBy = -1; },
                 };
             }
@@ -229,7 +229,7 @@ public sealed partial class AftermathSystem
                 toils.Add(new DoToil((cm, world) => { world.After.SetLamp(cm, lm, to, table); return true; }));
                 return new Job(act, "등 가져오기", toils)
                 {
-                    LogText = $"선실의 {Ko.EulReul(prop.Spec.Name)} 가지러 간다", TargetRoom = to, InterruptMargin = 0.2f,
+                    LogText = $"선실의 {Ko.EulReul(prop.Spec.Name)} 가지러 간다", TargetRoom = to, InterruptMargin = 0.5f,
                     OnFinished = (cm, world, st) => world.After.LampDropped(cm, lm),
                 };
             }
@@ -250,7 +250,7 @@ public sealed partial class AftermathSystem
                 toils.Add(new DoToil((cm, world) => { world.After.HomeLamp(cm, lb); return true; }));
                 return new Job(act, "등 돌려놓기", toils)
                 {
-                    LogText = $"{Ko.EulReul(prop.Spec.Name)} 선실로 가져간다", TargetRoom = home, InterruptMargin = 0.2f,
+                    LogText = $"{Ko.EulReul(prop.Spec.Name)} 선실로 가져간다", TargetRoom = home, InterruptMargin = 0.5f,
                     OnFinished = (cm, world, st) => world.After.LampDropped(cm, lb),
                 };
             }
@@ -383,7 +383,7 @@ public sealed partial class AftermathSystem
                         w.Automation.Trusts.Change(by, 0.08f, "냄새로 남긴 냄비가 시었다 — 온도 기록이 맞았다");
                         Life.Diary(w, by, Persona.Say(by, $"남겨 둔 {Ko.IGa(b.Spec.Name)} 결국 시었다. 다음엔 컴퓨터 온도 기록을 볼 걸"));
                     }
-                    w.Brain2.Emotions.Feel(by, Feeling.Shame, 0.08f, $"남긴 {b.Spec.Name}이 시었다");
+                    w.Brain2.Emotions.Feel(by, Feeling.Shame, 0.08f, $"남긴 {Ko.IGa(b.Spec.Name)} 시었다");
                 }
                 break;
             }
@@ -484,11 +484,11 @@ public sealed partial class AftermathSystem
         Stats.Repainted++;
         if (forDead) Stats.ForDead++;
         AddTrace(new AfterTrace { Kind = AfterTraceKind.Repainted, Room = room.Id, At = placed.At, Tick = w.Tick, Crew = forDead ? bp.Maker : c.Id, Item = placed.Id, Event = $"{room.Name} 화재",
-            Text = $"{room.Name}의 {spec.Name} — {c.Name}이 다시 그렸다 ({keep})" });
-        w.Brain2.Emotions.Feel(c, Feeling.Pride, 0.15f, $"{spec.Name}을 다시 그렸다");
+            Text = $"{room.Name}의 {spec.Name} — {Ko.IGa(c.Name)} 다시 그렸다 ({keep})" });
+        w.Brain2.Emotions.Feel(c, Feeling.Pride, 0.15f, $"{Ko.EulReul(spec.Name)} 다시 그렸다");
         w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(c.Name)} 불에 탄 {Ko.EulReul(spec.Name)} 다시 그려 {room.Name}에 걸었다 — {keep}", c.Id);
-        w.History.Add(w, HistoryKind.Memory, $"{room.Name}의 {spec.Name}을(를) {Ko.IGa(c.Name)} 다시 그렸다 — {keep}", room, forDead ? new[] { c, maker! } : new[] { c }, log: false);
-        Life.Diary(w, c, Persona.Say(c, forDead ? $"{maker!.Name}이 그리던 그림을 이어 그렸다. 구석에 그 사람 서명을 남겼다" : $"불에 탄 {Ko.EulReul(spec.Name)} 다시 그렸다. 그을린 자국은 지우지 않았다"));
+        w.History.Add(w, HistoryKind.Memory, $"{room.Name}의 {Ko.EulReul(spec.Name)} {Ko.IGa(c.Name)} 다시 그렸다 — {keep}", room, forDead ? new[] { c, maker! } : new[] { c }, log: false);
+        Life.Diary(w, c, Persona.Say(c, forDead ? $"{Ko.IGa(maker!.Name)} 그리던 그림을 이어 그렸다. 구석에 그 사람 서명을 남겼다" : $"불에 탄 {Ko.EulReul(spec.Name)} 다시 그렸다. 그을린 자국은 지우지 않았다"));
         foreach (var o in w.Crew)
             if (!o.Dead && o != c && o.Room == room && o.IsAwake) { w.Brain2.Emotions.Feel(o, Feeling.Joy, 0.06f, $"다시 걸린 {spec.Name}"); if (forDead) w.Brain2.Emotions.Feel(o, Feeling.Sadness, 0.04f, maker!.Name, maker); }
     }

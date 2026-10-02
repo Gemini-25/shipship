@@ -265,6 +265,24 @@ public static partial class Program
             Console.WriteLine($"  {af.Stats.Summary()}");
         }
 
+        // ── 손대지 않은 10일 항해 (이야기꾼의 사고만): 흔적으로 짐작한 것은 모두 실제로 겪은 일이다 ──
+        if (Do("natural"))
+        {
+            var w = World.CreateDefault(seed, 0, "Hanbit");
+            Player.AllowDeath(w, true);
+            Run(w, SimTime.TicksPerDay * 10);
+            var af = w.After;
+            var real = new SortedSet<string>(StringComparer.Ordinal);
+            if (w.History.Fires > 0) real.Add("불");
+            if (w.History.Deaths > 0) real.Add("죽음");
+            if (w.Major.Traces.Count > 0) real.Add("큰 사고");
+            if (w.Moisture.Stats.Floods > 0 || af.Stats.WetBeds > 0) real.Add("물");
+            if (w.Fixtures.LightFailures > 0 || af.Fridges.Count > 0 || w.Scale.Cases.Any(k => k.KindsSeen.Contains(CauseKind.Outage))) real.Add("정전");
+            var guess = af.Infer();
+            Check("손대지 않은 10일 항해 — 흔적으로 짐작한 일은 모두 실제로 겪은 일이다 (지어내지 않는다)", guess.All(real.Contains),
+                $"겪은 일 {string.Join(",", real)} · 짐작 {string.Join(",", guess)} · 흔적 {af.TraceList().Count}줄 · {af.Stats.Summary()}");
+        }
+
         // ── 결정론 ──
         if (Do("det"))
         {

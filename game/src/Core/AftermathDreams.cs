@@ -333,7 +333,7 @@ public sealed partial class AftermathSystem
             if (d.Kind == DreamKind.Loss && about != null) emo.Feel(c, Feeling.Sadness, 0.12f, $"꿈에 {about.Name}", about);
             RefreshPlaces(c, d);
             string tail = d.Wakes >= 2 ? $" 밤새 {d.Wakes}번 깼다." : d.Wakes == 1 ? " 한 번 깨서 한참 천장을 봤다." : "";
-            Life.Diary(w, c, Persona.Say(c, $"또 {d.Text}을 꿨다.{tail}"));
+            Life.Diary(w, c, Persona.Say(c, $"{(m.Nightmares > 1 ? "또 " : "")}{d.Text}을 꿨다.{tail}"));
         }
         else if (d.Grief)
         {
@@ -478,7 +478,7 @@ public sealed partial class AftermathSystem
             teller.Say(w, Persona.Say(teller, $"{where}{es.Name} 자리였어. {story} — 이제 네 자리 해"));
             w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(teller.Name)} 신입 {c.Name}에게 {es.Name} 이야기를 해 주고 그 자리를 내주었다", teller.Id);
             w.History.Add(w, HistoryKind.Memory, $"{es.Name}의 빈자리에 신입 {Ko.IGa(c.Name)} 앉게 되었다 — {Ko.IGa(teller.Name)} {es.Name} 이야기를 해 주었다", seatRoom ?? r, new[] { teller, c }, log: false);
-            foreach (var t in Traces) if (t.Kind == AfterTraceKind.EmptySeat && t.Item == es.Seat && !t.Gone) t.Text = $"{seatRoom?.Name}의 의자 — {es.Name}이 앉던 자리, 지금은 {c.Name}의 자리";
+            foreach (var t in Traces) if (t.Kind == AfterTraceKind.EmptySeat && t.Item == es.Seat && !t.Gone) t.Text = $"{seatRoom?.Name}의 의자 — {Ko.IGa(es.Name)} 앉던 자리, 지금은 {c.Name}의 자리";
         }
         Life.Diary(w, c, Persona.Say(c, $"내가 앉은 의자가 {es.Name}의 자리였단다. {story}"));
     }
@@ -607,7 +607,7 @@ public sealed partial class AftermathSystem
             es.Cup = true;
             es.CupBy = c.Id;
             Stats.Cups++;
-            w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(c.Name)} {es.Name}이 앉던 의자 앞에 잠깐 멈춰 섰다가 그 자리에 컵 하나를 놓았다", c.Id);
+            w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(c.Name)} {Ko.IGa(es.Name)} 앉던 의자 앞에 잠깐 멈춰 섰다가 그 자리에 컵 하나를 놓았다", c.Id);
             Life.Diary(w, c, Persona.Say(c, $"{es.Name} 자리에 컵을 하나 놓아 두었다"));
         }
         else w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(c.Name)} {es.Name}의 빈자리 앞에서 잠깐 멈췄다", c.Id);
@@ -642,7 +642,7 @@ public sealed partial class AftermathSystem
         bool tease = !same && !woke && d.Nightmare && (o.Habits.Contains(Habit.Joker) || o.Habits.Contains(Habit.Prankster)) && o.AffinityTo(c) < 0.2f;
         var emo = w.Brain2.Emotions;
         if (woke) o.Say(w, Persona.Say(o, $"어젯밤 소리 지르던데 — 괜찮아?"));
-        c.Say(w, Persona.Say(c, d.Grief ? $"어젯밤 꿈에 {(d.About >= 0 ? Crew(d.About)?.Name : "")}을(를) 봤어" : $"어젯밤 {d.Text}을 꿨어"));
+        c.Say(w, Persona.Say(c, d.Grief ? $"어젯밤 꿈에 {Ko.EulReul(d.About >= 0 ? Crew(d.About)?.Name ?? "그 사람" : "그 사람")} 봤어" : $"어젯밤 {d.Text}을 꿨어"));
         if (same)
         {
             Stats.SharedDreams++;
@@ -804,7 +804,7 @@ public sealed partial class AftermathSystem
                 var room = RoomById(p.Room);
                 AddTrace(new AfterTrace { Kind = AfterTraceKind.SpotFlower, Room = p.Room, At = p.At, Tick = w.Tick, Crew = dead.Id, Event = $"{dead.Name}의 죽음", Text = $"{room?.Name} 바닥의 종이꽃 — {Ko.IGa(dead.Name)} 쓰러진 자리 ({c.Name})" });
                 w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(c.Name)} {Ko.IGa(dead.Name)} 쓰러졌던 자리에 종이꽃 하나를 내려놓았다", c.Id);
-                Life.Diary(w, c, Persona.Say(c, $"{dead.Name}이 쓰러진 자리에 꽃을 접어 두었다. 아직 그쪽으로는 잘 안 가게 된다"));
+                Life.Diary(w, c, Persona.Say(c, $"{Ko.IGa(dead.Name)} 쓰러진 자리에 꽃을 접어 두었다. 아직 그쪽으로는 잘 안 가게 된다"));
                 break;
             }
         }
