@@ -65,7 +65,8 @@ public static partial class Program
                 w.Air.Reserve = w.Air.ReserveCapacity * 0.5f;
                 w.Water.Level = w.Water.Capacity * 0.5f;
                 VoyageV15.Put(w, ItemKind.MetalOre, 30);
-                foreach (var m in w.Ship.Machines.OrderBy(m => m.Body.Id).Take(4)) m.Wear = 0.6f;
+                // v16.22 새 설계에서는 번호 앞쪽이 냉각 펌프다 (닳게 하면 원자로가 멎고 엔진이 선다) — 원자로 · 냉각 · 엔진 · 배전 밖의 설비 넷을 닳게 한다
+                foreach (var m in w.Ship.Machines.Where(m => m.Body.Room.Type is not (RoomType.Reactor or RoomType.Cooling or RoomType.Engine or RoomType.Power) && m.Body.Type is not (FurnitureType.CoolantPump or FurnitureType.ReactorCore or FurnitureType.EngineCore)).OrderBy(m => m.Body.Id).Take(4)) m.Wear = 0.6f;
                 foreach (var c in w.Crew) c.Needs.Stress = MathF.Max(c.Needs.Stress, 0.4f);
                 float Stored(params ItemKind[] ks) => ks.Sum(k => w.Ship.CountStored(k));
                 float Metric(LegPerk p) => p switch
@@ -90,7 +91,7 @@ public static partial class Program
                 foreach (var spec in VoyageV15.Legs)
                 {
                     v.Force(LegKind.Cruise);
-                    w.Power.BatteryCharge = w.Power.BatteryCapacity * 0.2f;
+                    w.Power.BatteryCharge = w.Power.BatteryCapacity * (spec.Perk == LegPerk.Battery ? 0.2f : 0.8f); // v16.22 새 한빛호는 원자로 여유가 적다 — 배터리가 바닥이면 엔진 · 채집 팔부터 끊는다 (배터리 이점을 잴 때만 낮춘다)
                     bool good;
                     string how;
                     if (spec.Perk == LegPerk.Speed)
@@ -109,6 +110,7 @@ public static partial class Program
                         good = b > a + 1e-4f;
                         how = $"{a:0.##}→{b:0.##}";
                     }
+                    if (!good) how += $" · 표류 {v.Drifting} · 엔진 {string.Join(",", w.Propulsion.Engines.Select(m => $"{m.Efficiency:0.00}"))} · 채집 {w.Ship.FurnitureOf(FurnitureType.Collector).Sum(f => f.Machine!.Efficiency):0.00} · 원자로 {w.Power.ReactorOnline} · 배터리 {w.Power.BatteryCharge:0} · 엔진실 전기 {w.Propulsion.Engines.First().Body.Room.Powered}/{w.Propulsion.Engines.First().Powered}/고장 {string.Join(",", w.Propulsion.Engines.First().Faults.Select(f => f.Kind))} · 배전반 {string.Join(",", w.Ship.FurnitureOf(FurnitureType.PowerPanel).SelectMany(f => f.Machine!.Faults).Select(f => $"{f.Kind}@{f.Circuit}"))} · 회로 {string.Join("", w.Power.CircuitFed.Select(x => x ? "1" : "0"))}";
                     (good ? ok : bad).Add($"{spec.Name}({spec.Perk} {how})");
                 }
                 Check("새 구간 — 이점이 실제로 든다 (14가지)", bad.Count == 0, $"듦 {ok.Count}/{VoyageV15.Legs.Length}" + (bad.Count > 0 ? $" · 안 듦: {string.Join(" / ", bad)}" : $" · 예: {string.Join(" / ", ok.Take(4))}"));

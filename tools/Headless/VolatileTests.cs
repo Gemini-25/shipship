@@ -91,6 +91,7 @@ public static partial class Program
             for (int h = 0; h < 8 * 4; h++)
             {
                 room.VentOpen = false;
+                room.DamperStuck = true; // v16.22 새 설계 배전실 댐퍼는 컴퓨터가 바로 다시 연다 — "환기가 닫힌 방"은 닫힌 채 걸린 댐퍼로
                 // 원자로가 계속 멈춰 있게 (고친 펌프는 다시 멈춘다 — 이 시험은 보조 발전기의 일산화탄소를 본다)
                 foreach (var p in w.Ship.FurnitureOf(FurnitureType.CoolantPump)) if (p.Machine!.Faults.Count == 0) w.Machines.Break(p.Machine!, FaultKind.PumpSeized);
                 Run(w, SimTime.Minutes(15));

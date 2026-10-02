@@ -80,12 +80,14 @@ public static partial class Program
             }
             // 6) 격리실: 격리실이 있으면 덜 옮는다
             {
-                int Infections(string key)
+                // v16.22 새 설계 한빛호도 격리실을 단다 — 같은 배에서 격리실을 닫아 둔 것과 견준다 (배 생김새가 같아야 견줄 수 있다)
+                int Infections(string key, bool closeWard = false)
                 {
                     int sum = 0;
                     for (int k = 0; k < 2; k++)
                     {
                         var w = World.CreateDefault(seed + k, 0, key);
+                        if (closeWard) foreach (var r in w.Ship.Rooms.Where(r => r.Kind is RoomType.Quarantine or RoomType.QuarantineLock)) r.Special = RoomType.Storage; // 격리실을 창고로 돌려 쓴 배
                         Run(w, SimTime.Hours(1));
                         Hazards.Apply(w, HazardKind.Epidemic, default, w.Crew.First(c => c.CanAct).Id);
                         Run(w, SimTime.TicksPerDay * 6);
@@ -93,8 +95,8 @@ public static partial class Program
                     }
                     return sum;
                 }
-                int a = Infections(ShipGenerator.KeyFor(12, seed)), b = Infections("Hanbit");
-                Check("격리실 — 열이 나면 격리실로 가서 덜 옮긴다", a < b, $"격리실 있는 배 감염 {a} · 없는 한빛호 {b} (두 번씩)");
+                int a = Infections("Hanbit"), b = Infections("Hanbit", closeWard: true);
+                Check("격리실 — 열이 나면 격리실로 가서 덜 옮긴다", a < b, $"격리실 연 한빛호 감염 {a} · 격리실 닫은 한빛호 {b} (두 번씩)");
             }
             // 6b) 구획: 큰 배는 통로가 격벽 문으로 나뉜다 — 한 구획 통로가 뚫려도 다른 구획은 기압을 지킨다
             {

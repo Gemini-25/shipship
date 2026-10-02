@@ -11,6 +11,7 @@ public static partial class Program
         _fails = 0;
         Console.WriteLine($"통합 시험 (v16.26) · 시드 {seed}\n");
         string only = Environment.GetEnvironmentVariable("INTEG_ONLY") ?? "path,heat,rad,storm,shower,sleep,cosmic,hash";
+        if (only.Contains("probe")) { IgProbe(seed, Environment.GetEnvironmentVariable("PROBE") ?? ""); return 0; }
         if (only.Contains("path")) IgBarredPath(seed);
         if (only.Contains("heat")) IgHeat(seed);
         if (only.Contains("rad")) IgRadiation(seed);
@@ -258,5 +259,78 @@ public static partial class Program
         int harsh = kinds.Count(k => { var s = CosmicCatalog.Spec(k); return s.Has(CosmicFx.Radiation) || s.Has(CosmicFx.Debris) || s.Has(CosmicFx.Shock) || s.Has(CosmicFx.Heat) || s.Has(CosmicFx.Strike) || s.Has(CosmicFx.Hostile); });
         Check("우주급 — 같은 시드의 다섯 배가 서로 다른 것을 맞는다 (표본이 다양하다)", kinds.Distinct().Count() >= 8, $"{kinds.Distinct().Count()}종 / {kinds.Count} · " + string.Join(",", kinds.Take(10)));
         Check("우주급 — 사람에게 닿는 것(방사선 · 잔해 · 충격 · 열 · 직격)이 대부분", harsh >= kinds.Count * 0.6f, $"{harsh}/{kinds.Count}");
+    }
+
+    /// <summary>진단만 (INTEG_ONLY=probe PROBE=…): 회귀 실패 원인을 본다.</summary>
+    private static void IgProbe(int seed, string what)
+    {
+        if (what.Contains("comms"))
+        {
+            var w = DayOne(seed, "Hanbit");
+            Console.WriteLine("통신실: " + string.Join(", ", w.Ship.Rooms.Where(r => r.Type == RoomType.Comms).Select(r => $"{r.Name}#{r.Id} det={r.Detached} con={r.Furniture.Count(f => f.Type == FurnitureType.Console)}")));
+            var comms = w.Sensors.CommsRoom!;
+            w.Structure.Detach(comms, "교신 시험", controlled: true);
+            comms.Wreck = true;
+            Console.WriteLine($"뗀 뒤 CommsRoom={w.Sensors.CommsRoom?.Name}#{w.Sensors.CommsRoom?.Id} Console={w.Comms.Console?.Label} room={w.Comms.Console?.Room.Name}");
+        }
+        if (what.Contains("aux"))
+        {
+            var w = DayOne(seed, "Mirinae");
+            Console.WriteLine("보조 발전기: " + string.Join(", ", w.Ship.FurnitureOf(FurnitureType.AuxGenerator).Select(f => $"{f.Label}@{f.Room.Name} eff={f.Machine?.Efficiency:0.00} vol={f.Room.Volume:0}")));
+            var aux = w.Ship.FurnitureOf(FurnitureType.AuxGenerator).First();
+            foreach (var f in w.Exterior.All) w.Exterior.Damage(f, 1f, "시험");
+            foreach (var p in w.Ship.FurnitureOf(FurnitureType.CoolantPump)) w.Machines.Break(p.Machine!, FaultKind.PumpSeized);
+            for (int h = 0; h < 8 * 4; h++)
+            {
+                aux.Room.VentOpen = false;
+                foreach (var p in w.Ship.FurnitureOf(FurnitureType.CoolantPump)) if (p.Machine!.Faults.Count == 0) w.Machines.Break(p.Machine!, FaultKind.PumpSeized);
+                Run(w, SimTime.Minutes(15));
+                if (h == 4) { float c0 = aux.Room.Air.CO; w.Volatile.Update(0.01f); Console.WriteLine($"   direct {c0:0.0000} -> {aux.Room.Air.CO:0.0000} machines has aux {w.Ship.Machines.Contains(aux.Machine!)} vol={aux.Room.Volume}"); }
+                if (h == 4) { for (int k = 0; k < 6; k++) { for (int q = 0; q < World.SystemInterval; q++) w.Step(); Console.WriteLine($"   tick CO={aux.Room.Air.CO:0.0000} merged={aux.Room.Merged} doors={string.Join("/", aux.Room.Doors.Select(d => $"{d.Openness:0.0}"))} type={aux.Room.Type} inert={w.Volatile.Inert} active={aux.Machine!.Active} stopped={aux.Machine.Stopped} parked={aux.Machine.Parked}"); } }
+                if (h % 4 == 3) Console.WriteLine($" {h / 4 + 1}h aux={w.Power.AuxRunning} eff={aux.Machine?.Efficiency:0.00} CO={aux.Room.Air.CO:0.000} pow={aux.Room.Powered} reactor={w.Power.ReactorOnline} batt={w.Power.BatteryCharge:0}");
+            }
+        }
+        if (what.Contains("gas"))
+        {
+            var w = DayOne(seed, "Hanbit");
+            var room = w.Ship.RoomsOf(RoomType.LifeSupport).First();
+            Player.Hazard(w, HazardKind.GasLeak, room.Cells[0]);
+            for (int h = 0; h < 14 * 2; h++)
+            {
+                Run(w, SimTime.Minutes(30));
+                Console.WriteLine($" {h * 0.5f + 0.5f:0.0}h tox={room.Air.Toxin:0.00} vent={room.VentOpen} want={Hull.WantVentOpen(w, room)} src={w.Hazards.GasSource(room)?.Name} sealed={room.VentSealed} jam={room.DamperJammed}/{room.DamperStuck} pow={room.Powered} damp={w.Automation.DampersIn(room)} leak={room.Leaking} fire={w.Fire.IsKnown(room)} duct={w.Structure.DuctOpen} purge={room.Purging}/{room.Inerting} hold={w.Automation.KeepDamperShut(room)}");
+            }
+        }
+        if (what.Contains("voy"))
+        {
+            var w = World.CreateDefault(seed, 0, "Hanbit");
+            Run(w, SimTime.Hours(2));
+            Console.WriteLine($"엔진 {string.Join(",", w.Propulsion.Engines.Select(m => $"{m.Name}:{m.Efficiency:0.00}/{m.Body.Room.Name}/pow{m.Powered}"))} · 표류 {w.Voyage.Drifting} · 추진제 {w.Propulsion.Propellant:0}/{w.Propulsion.Capacity:0}");
+            Console.WriteLine($"채집 팔 {string.Join(",", w.Ship.FurnitureOf(FurnitureType.Collector).Select(f => $"{f.Label}:{f.Machine!.Efficiency:0.00}"))}");
+            Console.WriteLine("처음 넷: " + string.Join(",", w.Ship.Machines.OrderBy(m => m.Body.Id).Take(4).Select(m => m.Name)));
+        }
+        if (what.Contains("power"))
+        {
+            foreach (var key in new[] { "Kestrel", "Mirinae", "Hanbit", "Eunha", "Cheonma" })
+            {
+                var w = World.CreateDefault(seed, 0, key);
+                var line = new List<string>();
+                for (int h = 0; h < 24; h += 3)
+                {
+                    Run(w, SimTime.Hours(3));
+                    var p = w.Power;
+                    line.Add($"{h + 3}h 한도{p.ReactorLimit:0}/수요{p.Demand:0}/전체{p.FullDemand:0} 끊음{p.ShedCount} 배터리{p.BatteryPercent * 100:0}% 엔진{(w.Propulsion.Engines.Any(m => m.Powered) ? "켜짐" : "꺼짐")}");
+                }
+                Console.WriteLine($"{key}: " + string.Join(" | ", line));
+            }
+        }
+        if (what.Contains("quar"))
+        {
+            foreach (var key in new[] { ShipGenerator.KeyFor(12, seed), "Hanbit" })
+            {
+                var w = World.CreateDefault(seed, 0, key);
+                Console.WriteLine($"{key}: 격리실 {w.Ship.KindOf(RoomType.Quarantine).Count()} · 의무실 {w.Ship.KindOf(RoomType.Medbay).Count()} · 사람 {w.Crew.Count}");
+            }
+        }
     }
 }
