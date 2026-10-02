@@ -149,6 +149,7 @@ public partial class ShipView
             {
                 var r = CellRect(c);
                 ci.DrawRect(r, Palette.RoomFloor(room.Kind).Darkened(0.25f));
+                if (LookOn) { ci.DrawTextureRectRegion(LookTextures.Floors[(int)LookSpec.Floor(Materials.FloorFor(room.Kind), room.Kind, false)]!, r, LookTextures.Region(c), new Color(0.62f, 0.64f, 0.7f)); continue; } // v16.5a 떨어져 나간 방도 같은 바닥재 (빛이 꺼져 어둡다)
                 var (tex, alpha) = Textures.Floor(room.Type);
                 if (tex != null) ci.DrawTextureRectRegion(tex, r, Variant(c), new Color(1, 1, 1, alpha * 0.7f));
             }
@@ -156,7 +157,8 @@ public partial class ShipView
             {
                 var r = CellRect(cell);
                 ci.DrawRect(r, Palette.Wall);
-                if (Textures.Wall != null) ci.DrawTextureRectRegion(Textures.Wall, r, Variant(cell), new Color(1, 1, 1, 0.85f));
+                if (LookOn) ci.DrawTextureRectRegion(LookTextures.Walls[(int)LookSpec.WallLook.Hull]!, r, LookTextures.Region(cell), new Color(0.7f, 0.72f, 0.78f)); // v16.5a
+                else if (Textures.Wall != null) ci.DrawTextureRectRegion(Textures.Wall, r, Variant(cell), new Color(1, 1, 1, 0.85f));
                 if (wall.StageIndex > 0) PaintWallDamage(ci, cell, wall);
             }
             foreach (var d in f.Doors)
