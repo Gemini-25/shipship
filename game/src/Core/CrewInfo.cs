@@ -697,7 +697,7 @@ public sealed partial class InfoSystem
         if (Roster.Count == 0)
         {
             DishAgendaPending = true;
-            DishAgendaWhy = $"{Ko.IGa(top.Name)} 사흘 동안 설거지 {mine}번 — {string.Join("·", free.Take(3).Select(f => f.Name))}은(는) 0번";
+            DishAgendaWhy = $"{Ko.IGa(top.Name)} 사흘 동안 설거지 {mine}번 — {Ko.EunNeun(string.Join("·", free.Take(3).Select(f => f.Name)))} 0번";
         }
         w.Log.Add(w.Tick, LogKind.Life, $"설거지 장부를 보고 메신저에 불만을 올렸다 ({mine}번 · 안 한 사람 {free.Count}명)", top.Id);
     }

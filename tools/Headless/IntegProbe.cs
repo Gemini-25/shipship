@@ -47,5 +47,36 @@ public static partial class Program
             var ship = w.Ship;
             Console.WriteLine($"   전력 고리 {w.Net.Rings.Count(r => r.kind == NetKind.Power)} · 펌프+베어링 {ship.CountStored(ItemKind.Pump) + ship.CountStored(ItemKind.Bearing)} · 교정 틀어짐 {ship.Machines.Count(m => m.SensorCal < 0.7f)} · 실링폼 {ship.CountStored(ItemKind.Sealant)} · 구급 {ship.CountStored(ItemKind.MedKit)} · 식사 {ship.CountStored(ItemKind.Meal)}/{w.Crew.Count * 4}");
         }
+
+        if (what.Contains("robot"))
+        {
+            var w = DayOne(seed, "Hanbit");
+            var r = w.Robots.Robots.First(x => x.Kind == RobotKind.Maintainer);
+            w.Robots.ForceFault(r, RobotFault.Drive);
+            for (int h = 0; h < 14; h++)
+            {
+                Run(w, SimTime.Hours(1));
+                var os = w.Board.All.Where(o => !o.Closed && (o.Kind is WorkKind.RepairRobot or WorkKind.FetchRobot)).ToList();
+                Console.WriteLine($"   {h + 1}h 고장 {r.Fault} 상태 {r.State} 위치 {r.Position} · 일 {string.Join(" / ", os.Select(o => $"{o.Kind} {o.Urgency:0.00} {o.Assignee?.Name ?? "-"} 로봇 {o.Robot?.Name ?? "-"}({o.Robot?.State} {o.Robot?.Kind} 배터리 {o.Robot?.Battery:0.00} 고침 {o.Robot?.Fixing?.Name} 위치 {o.Robot?.Position}) {o.BlockedReason}"))} · 부품 {w.Ship.CountStored(ItemKind.Motor)}");
+                if (r.Fault == null) break;
+                if (h == 1)
+                {
+                    foreach (var e in w.Log.Entries.Where(e => e.Tick > w.Tick - SimTime.Hours(2) && (e.Text.Contains("로봇") || e.Text.Contains("모터") || w.Crew.FirstOrDefault(c => c.Id == e.CrewId)?.Name == "온다인")).Take(25))
+                        Console.WriteLine($"      {SimTime.Clock(e.Tick)} [{w.Crew.FirstOrDefault(c => c.Id == e.CrewId)?.Name}] {e.Text}");
+                    var oo = w.Board.All.First(o => !o.Closed && o.Kind == WorkKind.RepairRobot);
+                    foreach (var c in w.Crew.Where(c => c.CanAct).Take(12))
+                    {
+                        var dist = w.Paths.Flood(c.Cell, c.PathProfile);
+                        Console.WriteLine($"      {c.Name}: 매력 {ChoresActivity.Appeal(c, w, oo, dist, out int dd):0.00} 거리 {dd} · 일 {c.Job?.Label}");
+                    }
+                }
+            }
+        }
+        if (what.Contains("fooddays"))
+            foreach (var key in new[] { "Kestrel", "Mirinae", "Hanbit", "Eunha", "Cheonma" })
+            {
+                var w = DayOne(seed, key);
+                Console.WriteLine($"   {key}: 사람 {w.Crew.Count} · 먹을 것 {FoodPolicy.FoodDays(w):0.0}일 ({FoodPolicy.FoodStock(w):0}끼) · 재배 {FoodPolicy.GrowingPerDay(w):0}/{w.Crew.Count * FoodPolicy.MealsPerPersonDay:0}");
+            }
     }
 }

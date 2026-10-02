@@ -257,6 +257,8 @@ public sealed class DutyActivity : Activity
         }
         score -= 0.25f * c.Needs.Stress;
         if (c.Needs.Stress > 0.5f) reason += " · 스트레스로 의욕 저하";
+        // 통합: 당직은 할 일이 따로 없을 때 — 붙을 만한 일이 있으면 그 일보다 앞서지 않는다 (배가 커져 일터가 멀어지자 고장 난 로봇을 두고 반나절 당직만 섰다)
+        if (score > 0.05f && OnShift(c, w) && ChoresActivity.BestScore(c, w, dist) is float job && job > 0.12f && job < score + 0.01f) { score = job * 0.9f; reason += " · 할 일이 있다"; }
         return (MathF.Max(0f, score), reason);
     }
 

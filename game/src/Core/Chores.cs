@@ -226,6 +226,9 @@ public sealed class ChoresActivity : Activity
         return bestScore > Appeal(c, w, current, field, out _) + margin;
     }
 
+    /// <summary>통합: 지금 이 사람이 붙을 만한 가장 나은 일의 점수 (없으면 0) — 당직이 "할 일이 따로 없을 때"인지 본다.</summary>
+    internal static float BestScore(CrewMember c, World w, DistanceField dist) { var (o, s, _) = Best(c, w, dist); return o == null ? 0f : s; }
+
     public override (float, string) Score(CrewMember c, World w, DistanceField dist)
     {
         var (o, s, _) = Best(c, w, dist);
