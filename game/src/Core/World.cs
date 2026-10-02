@@ -171,6 +171,7 @@ public sealed class World
     public ScaleSystem Scale { get; } // v16.18 사고 · 재난 다섯 규모 (판정 · 대응 · 완급 · 연쇄 · 도감)
     public CasualtySystem Casualty { get; } // v16.24 큰 상처 뒤: 출혈 · 화상 쇼크 · 심정지 · 불붙는 순간
     public PerilSystem Perils { get; } // v16.26 위험이 사람에게 닿는 길: 열사병 · 큰 피폭 · 늦게 깨는 잠
+    public WaysSystem Ways { get; } // v16.25 문제마다 여러 갈래 해법
     public CrisisCrewSystem CrisisCrew { get; } // v16.21 승무원 위기 행동 (공황 · 비상 배치표 · 비상 절차 · 여러 손 · 우선순위)
     public ExpeditionSystem Expedition { get; } // v16.12 재료 탐사 원정
     public BodySystem Body { get; } // v16.3 배 본체 (칸 3층 · 칸 상태 · 벽 층 · 문)
@@ -291,6 +292,7 @@ public sealed class World
         Scale = new ScaleSystem(this); // v16.18
         Casualty = new CasualtySystem(this); // v16.24
         Perils = new PerilSystem(this); // v16.26
+        Ways = new WaysSystem(this); // v16.25
         CrisisCrew = new CrisisCrewSystem(this); // v16.21
         Expedition = new ExpeditionSystem(this); // v16.12
         Body = new BodySystem(this); // v16.3
@@ -399,6 +401,8 @@ public sealed class World
             RoomUse.Update(dt); RoomPlans.Update(dt); // v16.17 쓰임 → 용도 · 승무원 안건 → 회의 → 공사
             Cosmic.Update(dt); // v18.13 우주 대재난: 예보 · 대비 · 본 사건 · 후유증
             pf = Prof.Lap("sys.Daily", pf);
+            Ways.Update(dt); // v16.25 문제마다 여러 갈래 해법
+            pf = Prof.Lap("sys.Ways", pf);
             After.Update(dt); // v17.5 사고 뒤 며칠 (그을음 냄새 · 젖은 침구 · 냉장고 · 개인 조명 · 빈자리) · 꿈 · 장소의 기억
             pf = Prof.Lap("sys.After", pf);
             Casualty.Update(dt); // v16.24 큰 상처 뒤 — 누르고 · 가슴을 누르고 · 컴퓨터가 부른다
