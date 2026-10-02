@@ -293,6 +293,8 @@ public sealed partial class AnnexSystem
         {
             _nextThink = w.Tick + SimTime.Hours(1);
             if (!ThinkOff || Directive) Think();
+            // 약한 이음은 개통 뒤에도 며칠 동안 터질 수 있다
+            foreach (var q in Plans) if (q.Enclosed >= 0 && q.State is "공사" or "개통" && w.Tick - q.Enclosed < SimTime.TicksPerDay * 5) Seams(q);
         }
         var p = Active;
         if (p == null) { Working = 0; EvaHalted = false; QuietHours = false; return; }
@@ -304,7 +306,7 @@ public sealed partial class AnnexSystem
         Working = n + _drone.Count;
         CheckStage(p);
         if (w.Tick % SimTime.Minutes(10) < World.SystemInterval) Noise(p);
-        if (w.Tick % SimTime.TicksPerHour < World.SystemInterval) { Seams(p); EnsureSpace(p); }
+        if (w.Tick % SimTime.TicksPerHour < World.SystemInterval) EnsureSpace(p);
     }
 
     private bool Valid(AnnexPlan p)
