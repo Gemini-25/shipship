@@ -724,6 +724,7 @@ public partial class ShipView : Node2D
         PaintBelongings(ci); // v14.3 놓인 물건 · 손에 든 취미 물건 · 음표 · 판
         PaintInfo(ci); // v17.3 컵 · 깨진 조각 · 벽 사진 · 만든 것 · 독서등 · 그릇 더미 · 당번표 · 손목 단말
         PaintScenes(ci); // v16.1 진행 중 장면 (판 · 커피 · 국 자국 · 쪽지 · 스크린 · 만들다 만 소품)
+        PaintSchemesFloor(ci); // v18.14 꾸미는 일 (밀주 통 · 비밀 정원 · 방송 장비 · 덮개 · 압수 상자 · 팻말 · 깃발 줄)
         PaintHairClips(ci); // v17.1 바닥에 떨어진 머리카락
         PaintRobots(ci); // v10.10 선내 로봇 (사람 밑에)
         PaintFleetLinks(ci); // v16.20b 견인 줄 · 같이 드는 들것 · 고치는 불꽃 · 명령선 · 잔해
@@ -733,6 +734,7 @@ public partial class ShipView : Node2D
         PaintCommandBadges(ci); // v13.1 선장 별 · 지휘자 테 · 조 배지
         PaintStations(ci); // v16.21 비상 배치 완장 · 거드는 손 · 정신 차리게 한 손
         PaintMeeting(ci); // v13.2 회의 장면 · 발언 말풍선
+        PaintSchemesOver(ci); // v18.14 쉿 · 귓속말 · 냄새 따라 · 팻말 · 빚 · 고른 사람이 아는 일
         PaintCouncilOver(ci); // v18.18 파벌 완장 · 서명 종이 · 손 들기 · 투표용지 · 증언 · 불만 구름 · 본 눈 · 벌 근무
         PaintMinds(ci); // v13.3 공황 · 영웅심 · 분노 · 모름
         PaintEmotions(ci); // v16.15 머리 위 감정 그림 (분노 · 두려움 · 기쁨 · 슬픔 · 수치 · 자부심)

@@ -65,7 +65,7 @@ public static class SchemeTable
         Prank("salt_sugar", "소금과 설탕 바꾸기", Place.Galley, "salt sugar spoon", "주방 소금통과 설탕통을 몰래 바꿔 두기로 했다", "국에서 단맛이 났다"),
         Prank("voice_swap", "컴퓨터 목소리 바꾸기", Place.Core, "speaker duck wave", "주 컴퓨터 안내 목소리를 오리 소리로 바꿔 두기로 했다", "안내 방송이 꽥꽥거렸다", 0.8f, Drive.Craft, Tell.Sensor, Need.None),
         Prank("cushion_trap", "의자에 방석 함정", Place.Mess, "cushion chair horn", "식당 의자에 소리 나는 방석을 깔아 두기로 했다", "앉자마자 요란한 소리가 났다"),
-        Prank("fake_note", "함장이 찾는다는 가짜 쪽지", Place.Lounge, "note pin star", "함장이 찾는다는 쪽지를 몰래 붙여 두기로 했다", "함장실까지 갔다가 헛걸음했다"),
+        Prank("fake_note", "함장이 찾는다는 가짜 쪽지", Place.Lounge, "memo pin star", "함장이 찾는다는 쪽지를 몰래 붙여 두기로 했다", "함장실까지 갔다가 헛걸음했다"),
         Prank("glove_balloons", "장갑 풍선 매달기", Place.Workshop, "glove balloon string", "작업대 위에 부풀린 고무장갑을 주렁주렁 매달기로 했다", "작업대가 장갑 풍선 숲이 됐다"),
         Prank("glued_boots", "작업화 바닥에 붙이기", Place.Airlock, "boots glue drip", "에어록 앞 작업화 밑창에 접착제를 바르기로 했다", "작업화가 바닥에서 떨어지지 않았다"),
         Prank("blue_tea", "찻주전자에 식용 색소", Place.Galley, "teapot dye drop", "찻주전자에 파란 색소를 몇 방울 넣기로 했다", "차가 새파랬다"),
