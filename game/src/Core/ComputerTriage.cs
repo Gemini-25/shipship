@@ -249,6 +249,11 @@ public sealed class PowerTriage
             {
                 if (p.CircuitLive[i] || p.ManualOff[i] || p.FeedingJumper(i) != null || Feeders >= 3) continue;
                 if (!pm.Faults.Any(f => f.Circuit == i && f.Kind != FaultKind.BreakerTrip)) continue;
+                if (MoistureSystem.Depth(panel.Room) > 0.03f) // 젖은 배전반에 예비 배선을 물리면 또 단락 — 손으로 말리고 고친 뒤에
+                {
+                    a.Book.Add(ActKind.Breaker, panel.Room, $"{PowerGrid.CircuitName(i)} 회로가 죽었다 · {panel.Room.Name} 바닥에 물", "젖은 배전반에 예비 배선을 물리면 또 단락이 난다", "예비 배선을 넣지 않고 둔다", "물을 퍼내고 배전반을 말려 달라", "feedwet:" + i, SimTime.Hours(1), 30f);
+                    continue;
+                }
                 int from = p.JumperSource(i);
                 if (from < 0) continue;
                 var cell = panel.Cells.FirstOrDefault();

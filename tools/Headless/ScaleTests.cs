@@ -282,6 +282,7 @@ public static partial class Program
                 foreach (var r in w.Ship.Rooms) if (w.Fire.CountIn(r) > 0) w.Fire.ClearRoom(r);
                 Run(w, SimTime.Minutes(1));
             }
+            if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "23") { Console.WriteLine($"   [규모] 열림 {k?.Open} 지금 {k?.Now} 수순 {string.Join(",", w.Automation.FireCases.Select(f => $"{w.Ship.Rooms[f.RoomId].Name}:{f.Stage}:{f.Method}:{f.Status}"))} 불 {w.Fire.Count} 탱크 {w.Air.Reserve:0}"); foreach (var d in w.Automation.Foresee.Timeline) Console.WriteLine($"     {d.Title} → {d.Pick.Name}"); if (k != null && w.Causes.IncidentOf(k.Root) is var inc && inc != null) foreach (var line in w.Causes.Tree(inc).Take(30)) Console.WriteLine("     " + line); }
             bool lesson = w.Scale.Lessons.TryGetValue("cause:Fire", out var ls) && ls == IncidentScale.System;
             var vets = w.Crew.Where(c => w.Scale.Veterans.ContainsKey(c.Id)).ToList();
             bool marked = vets.Any(c => c.Memory.Marks.Any(m => m.Text.Contains("처음 겪었다")));

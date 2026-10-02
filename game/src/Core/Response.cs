@@ -141,7 +141,7 @@ public sealed partial class AutomationSystem
             {
                 case 0: // 소화조가 끈다 — 안 되면 다음 수단
                 {
-                    if (!burning) { FireCases.Remove(fc); continue; }
+                    if (!burning) { FireCases.Remove(fc); if (fc.Node >= 0) w.Causes.Resolve(fc.Node, $"{room.Name} 불이 먼저 꺼졌다", by: ""); continue; }
                     bool critical = CriticalRoom(room);
                     bool crewOnIt = w.Board.Open.Any(o => o.Kind == WorkKind.Extinguish && o.Target.CurrentRoom == room && o.Assignee != null);
                     float grace = critical ? 3f : 8f;
@@ -225,6 +225,7 @@ public sealed partial class AutomationSystem
                     room.Flushing = false;
                     room.EvacuateBy = -1;
                     FireCases.Remove(fc);
+                    if (fc.Node >= 0) w.Causes.Resolve(fc.Node, $"{room.Name} 소화 대응 끝 — 숨 쉴 수 있다", by: ""); // v16.20
                     w.Log.Add(w.Tick, LogKind.Ship, $"{room.Name} 소화 대응 끝 — 숨 쉴 수 있다 · 격벽 해제");
                     // v13.3 컴퓨터 신뢰: 사람을 잃지 않고 끝냈다
                     if (!fc.Casualty) w.Minds.ComputerResult(0.05f, $"{room.Name} 불을 수순대로 껐다");
@@ -351,6 +352,7 @@ public sealed partial class AutomationSystem
         fc.Stage = 0;
         fc.Method = "";
         fc.Status = why;
+        if (fc.Node >= 0) { w.Causes.Resolve(fc.Node, $"{room.Name} 소화 준비를 거뒀다 — {why}", by: ""); fc.Node = -1; } // v16.20 거둔 수순이 사고를 열어 두지 않게
         Reason($"firex:{room.Id}", $"{room.Name} 소화 대응 — {why}", SimTime.Minutes(30));
         w.Board.RequestScan();
     }
