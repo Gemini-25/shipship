@@ -673,6 +673,7 @@ public sealed partial class WaysSystem
             bool subject = c.Id == k.CrewId;
             if (k.Snag == Snag.Injured && subject) continue;
             if (!subject && !Knows(c, k, room)) continue;
+            if (InDanger(c) && !(k.Snag is Snag.Breach or Snag.Trapped && c.Room?.Id == k.RoomId)) continue; // 제 방이 빠지는 중이면 먼저 나간다
             int d = Math.Abs(c.Cell.X - k.At.X) + Math.Abs(c.Cell.Y - k.At.Y);
             if (subject) d = -1;
             picked.Add((c, d));
@@ -693,6 +694,13 @@ public sealed partial class WaysSystem
 
     private bool Free(CrewMember c) =>
         c.CanAct && !c.Outside && !c.EvaMode && !c.IsChild && c.CarryingPerson == null && TryOf(c) == null && c.Job?.Activity is not (PanicActivity or EvacuateActivity);
+
+    /// <summary>우주복 없이 공기가 빠지거나 못 쉬는 방에 있다 — 딴 문제에 손댈 때가 아니다.</summary>
+    private bool InDanger(CrewMember c)
+    {
+        if (c.Suit != null || c.Room is not Room r) return false;
+        return r.Leaking || WorkPlanners.Unsafe(r);
+    }
 
     private bool Knows(CrewMember c, WayCase k, Room? room)
     {
