@@ -42,6 +42,8 @@ public sealed partial class ShipMate
     public List<Promise> Promises { get; } = new();
     public int PromisesKept, PromisesBroken, GuessesRight, GuessesWrong;
     private readonly SortedDictionary<int, WorkAsk> _askSeen = new();
+    private readonly SortedSet<long> _handled = new();
+    private static long Key(WorkAsk a) => (long)a.CrewId * 10_000_000L + a.OrderId;
     /// <summary>사람마다 기억하는 컴퓨터 약속 (지킨 것 · 어긴 것).</summary>
     private readonly SortedDictionary<int, (int kept, int broken)> _promiseMemory = new();
     private int _promiseId = 1;
@@ -56,10 +58,19 @@ public sealed partial class ShipMate
         {
             if (cm.Asks.TryGetValue(id, out var now) && now.OrderId == ask.OrderId) continue;
             _askSeen.Remove(id);
-            if (ask.Crisis || w.Tick <= ask.Until || Crew(id) is not CrewMember c || c.Dead) continue; // 따랐거나 거둔 부탁
+            if (ask.Crisis || w.Tick <= ask.Until || !_handled.Add(Key(ask)) || Crew(id) is not CrewMember c || c.Dead) continue; // 따랐거나 거둔 부탁
             if (c.Job?.Order?.Id == ask.OrderId) continue;
             Refused(c, ask);
         }
+        // 기한이 한참 지났는데 그대로인 부탁 (컴퓨터가 못 보는 곳에서 버틴 사람)
+        var stale = new List<WorkAsk>();
+        foreach (var ask in cm.Asks.Values) if (!ask.Crisis && w.Tick > ask.Until + SimTime.Minutes(10) && !_handled.Contains(Key(ask))) stale.Add(ask);
+        foreach (var ask in stale.OrderBy(x => x.CrewId))
+        {
+            _handled.Add(Key(ask));
+            if (Crew(ask.CrewId) is CrewMember c && !c.Dead && c.Job?.Order?.Id != ask.OrderId) Refused(c, ask);
+        }
+        if (_handled.Count > 400) _handled.Clear();
         foreach (var (id, ask) in cm.Asks) _askSeen[id] = ask;
         if (Refusals.Count > 60) Refusals.RemoveRange(0, Refusals.Count - 60);
     }
@@ -103,6 +114,11 @@ public sealed partial class ShipMate
                 cap.Say(w, Persona.Say(cap, $"{alt.Name}, {order.Title} 좀 맡아 줘"));
             }
             a.Authority.Learned("사람", $"{order.Title} — 부탁이 {before + 1}번 막혀 함장에게 넘겼다");
+        }
+        else if (before >= 1 && cap != null && refusers.Contains(cap.Id))
+        {
+            rc.Next = "함장도 거절 — 미뤄 두고 다음 정비표에 다시 올린다";
+            w.Board.Block(order, null, 4f);
         }
         else if (guess == "나를 못 믿는다" && before == 0)
         {

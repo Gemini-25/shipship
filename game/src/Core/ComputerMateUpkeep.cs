@@ -48,6 +48,11 @@ public sealed class SupplyPlan
     public string Name { get; init; } = "";
     public MatCat Cat { get; init; }
     public float Stock, Rate, DaysLeft;
+    /// <summary>함장에게 올린 제안 카드 · 거절되면 회의로.</summary>
+    public Proposal? Card { get; set; }
+    public bool Meeting { get; set; }
+    /// <summary>처음 알린 때 남은 날.</summary>
+    public float Warned { get; init; }
     public List<(string opt, float score, string why)> Options { get; } = new();
     public string Choice { get; set; } = "";
     public bool Open { get; set; } = true;
@@ -65,8 +70,8 @@ public sealed partial class ShipMate
     /// <summary>시험용: 다음 정비표를 지금 짠다.</summary>
     public bool ForcePlan;
 
-    /// <summary>WorkOrders 훅: 정비표가 정한 시각이 온 설비 — 마모 문턱을 앞당긴다.</summary>
-    public float Early(Machine m) => _due.Count > 0 && _due.Contains(m.Body.Id) ? 0.3f : 0f;
+    /// <summary>WorkOrders 훅: 정비표가 정한 시각이 온 설비 (마모 문턱과 상관없이 일감이 나온다).</summary>
+    public bool Due(Machine m) => _due.Count > 0 && _due.Contains(m.Body.Id);
 
     public static string TrendWord(Machine m) => m.Body.Type switch
     {
@@ -90,6 +95,54 @@ public sealed partial class ShipMate
         float h = Hour(w.Tick);
         if (ForcePlan || day != _planDay && h >= 4f) { ForcePlan = false; _planDay = day; PlanWeek(); }
         RunSlots();
+        SupplyFollow();
+    }
+
+    /// <summary>함장이 물자 제안을 받지 않았다 — 까닭을 짐작하고 근거를 모아 회의에 올린다 (다른 설명).</summary>
+    private void SupplyFollow()
+    {
+        var w = _w;
+        foreach (var p in Supplies)
+        {
+            if (!p.Open || p.Meeting || p.Card is not Proposal card || card.State == ProposalState.Pending || card.Accepted) continue;
+            p.Meeting = true;
+            var cap = w.Crew.FirstOrDefault(c => c.Name == card.DecidedBy);
+            float trust = cap != null ? A.Trusts.Of(cap) : 0.5f;
+            string guess = trust < 0.5f ? "나를 못 믿는다" : "원정이 위험하다고 본다";
+            string truth = card.DecideWhy.Contains("못 믿") ? "나를 못 믿는다" : "원정이 위험하다고 본다";
+            Refusals.Add(new RefusalCase { Tick = w.Tick, CrewId = cap?.Id ?? -1, OrderId = -p.Id, Title = card.Title, Guess = guess, Truth = truth, Next = "다른 설명 — 근거를 모아 회의에" });
+            if (guess == truth) GuessesRight++; else GuessesWrong++;
+            p.Result = $"{card.DecidedBy}이 받지 않았다 ({card.DecideWhy}) — 회의에 근거를 올린다";
+            Say($"{card.DecidedBy}이 {card.Title}을 받지 않았다 — {guess}고 본다. 소비 기록 · 원정지 위험을 모아 회의에서 다시 말하겠다");
+        }
+    }
+
+    /// <summary>회의: 함장이 거절한 물자 안건 (근거부터 · 불확실성까지).</summary>
+    internal void SupplyAgenda(MeetingRecord rec, List<CrewMember> voters, CrewMember chair)
+    {
+        var w = _w;
+        var a = A;
+        var p = Supplies.FirstOrDefault(x => x.Open && x.Meeting && x.Result.Contains("회의에 근거"));
+        if (p == null) return;
+        var site = w.Expedition.ComputerPick;
+        var item = new AgendaItem
+        {
+            Title = $"주 컴퓨터 안건: {p.Name} 원정 ({p.DaysLeft:0}일 뒤 바닥)", Topic = "computer:supply:" + p.Key,
+            Evidence = $"사흘 소비 기록 — 하루 {p.Rate:0.#}개 · 지금 {w.Expedition.StockText(p.Cat)}",
+            Computer = $"주 컴퓨터: 먼저 근거 — {p.Name} 하루 {p.Rate:0.#}개씩 줄었다 (추세 오차 ±30%). {(site != null ? $"{site.Name} 위험 {site.Risk * 100:0}% · 확실성 {site.Certainty * 100:0}%" : "원정지 정보 부족")}", ComputerSign = 1,
+        };
+        var (yes, no) = w.Meetings.Debate(voters, c =>
+        {
+            float s = (a.Trusts.Of(c) - 0.45f) * 0.6f + 0.25f * c.SkillLevel(Skill.Mechanics) + 0.2f * (c.Traits.Bravery - 0.5f) + (p.DaysLeft < 10f ? 0.15f : 0f) - (c.Value == CrewValue.Safety ? 0.15f : 0f) + 0.05f;
+            return (s, s > 0f ? $"{p.Name}이 모자라면 외벽도 못 막는다" : "원정은 위험하다 — 아껴 쓰자");
+        }, c => 0.3f + 0.4f * c.SkillLevel(Skill.Mechanics), item, chair);
+        bool pass = yes.Count > no.Count || yes.Count == no.Count && yes.Contains(chair);
+        item.Passed = pass;
+        item.Outcome = pass ? "받았다 — 원정을 청한다" : "거절했다 — 아껴 쓴다";
+        rec.Items.Add(item);
+        w.Meetings.Record(item.Title, item.Topic, -1, chair, yes, no, "");
+        p.Result = pass ? (w.Expedition.ComputerRequest(p.Cat, true) ? "회의가 받아 원정을 청했다" : "회의가 받았지만 지금은 보낼 수 없다") : "회의도 거절 — 아껴 쓴다";
+        w.History.Add(w, HistoryKind.Decision, $"회의: {item.Title} — 찬성 {yes.Count} · 반대 {no.Count} → {item.Outcome}", null, voters, log: true);
     }
 
     private void Sample()
@@ -106,6 +159,7 @@ public sealed partial class ShipMate
             float v = a.Belief.Of(room).Fault == SensorFault.Stuck && t.N > 0 ? t.V[(t.N - 1) % 12] : TrueIndex(m) + R.Range(-noise, noise); // 값 멈춤: 컴퓨터는 모른다
             t.V[t.N % 12] = v; t.T[t.N % 12] = w.Tick; t.N++;
             Fit(t);
+            if (t.N >= 4 && t.LifeLo < 2f && !Slots.Any(s => s.MachineId == m.Body.Id && !s.Done && !s.Missed)) ForcePlan = true; // 급한 것은 새벽을 기다리지 않는다
         }
     }
 
@@ -306,18 +360,21 @@ public sealed partial class ShipMate
         }
         if (left < 5f || left > 16f || Math.Min(s.n, 12) < 4) return;
         if (Supplies.Any(p => p.Key == k.key && w.Tick - p.Tick < SimTime.TicksPerDay * 2)) return;
-        var plan = new SupplyPlan { Id = _supplyId++, Tick = w.Tick, Key = k.key, Name = k.name, Cat = k.cat, Stock = s.v[(s.n - 1) % 12], DaysLeft = left };
+        var plan = new SupplyPlan { Id = _supplyId++, Tick = w.Tick, Key = k.key, Name = k.name, Cat = k.cat, Stock = s.v[(s.n - 1) % 12], DaysLeft = left, Warned = left };
         plan.Rate = plan.Stock / MathF.Max(0.5f, left);
         var ex = w.Expedition;
         bool canGo = ex.Current == null && ex.Pending == null && w.Policies["expedition"] != 2 && w.Voyage.Current.Kind != LegKind.Port && (ex.Sites.Any(x => !x.Taken) || ex.HasShuttle);
         float port = DaysToPort();
-        if (canGo) plan.Options.Add(("원정", 0.55f + (left < 10f ? 0.15f : 0f) - 0.4f * (ex.ComputerPick?.Risk ?? 0.3f), $"가까운 곳에서 {k.name}을 구해 온다"));
+        var going = ex.Current?.Site ?? ex.Pending?.Site;
+        if (going != null && ex.Current?.Phase != TripPhase.Back && ExpeditionSites.Fills(going.Kind, k.cat) >= 0.2f)
+            plan.Options.Add(("원정", 0.7f, $"이미 나가는 원정대({going.Name})에 {k.name}도 챙겨 오라고 한다"));
+        if (canGo) plan.Options.Add(("원정", 0.5f + 0.25f * (1f - left / 16f) - 0.35f * (ex.ComputerPick?.Risk ?? 0.3f) + (k.cat is MatCat.Repair or MatCat.Structure or MatCat.Parts ? 0.1f : 0f), $"가까운 곳에서 {k.name}을 구해 온다"));
         if (port < left - 1f) plan.Options.Add(("기항지에서 사기", 0.8f - 0.4f * port / MathF.Max(1f, left), $"{port:0}일 뒤 기항지 — 그 전엔 버틴다"));
-        if (k.cat is MatCat.Repair or MatCat.Structure && w.Scrap.Smelter != null) plan.Options.Add(("재활용", 0.42f, "고철을 녹여 되살린다"));
+        if (k.cat is MatCat.Repair or MatCat.Structure && w.Scrap.Smelter != null) plan.Options.Add(("재활용", 0.38f + (w.Scrap.Scrap > 5f ? 0.1f : 0f), "고철을 녹여 되살린다"));
         if (k.cat == MatCat.Food && w.Ship.LiveRooms.Any(r => r.Type == RoomType.Hydroponics)) plan.Options.Add(("재배 늘리기", 0.5f, "재배대를 하나 더 돌린다"));
         if (k.key is "plate" or "sealant" && (w.Voyage.Index + 1 < w.Voyage.Legs.Count) && w.Voyage.Legs[w.Voyage.Index + 1].Kind is LegKind.AsteroidBelt or LegKind.RadiationBelt)
             plan.Options.Add(("위험 구간 우회", 0.45f - 0.05f * (left < 8f ? 2f : 0f), "다음 구간을 돌아가면 하루쯤 늦지만 운석에 덜 맞아 덜 쓴다"));
-        plan.Options.Add(("아껴 쓰기", 0.3f + (left > 12f ? 0.15f : 0f), "급하지 않은 공사에 쓰지 않는다"));
+        plan.Options.Add(("아껴 쓰기", 0.25f + (left > 12f ? 0.15f : 0f), "급하지 않은 공사에 쓰지 않는다"));
         var best = plan.Options.OrderByDescending(o => o.score).ThenBy(o => o.opt, StringComparer.Ordinal).First();
         plan.Choice = best.opt;
         Supplies.Add(plan);
@@ -326,12 +383,16 @@ public sealed partial class ShipMate
         Say($"{left:0}일 뒤 {Ko.IGa(k.name)} 바닥난다 — {best.opt}를 권한다 ({best.why})");
         switch (best.opt)
         {
+            case "원정" when going != null && !canGo:
+                plan.Result = $"{going.Name} 원정대에 {k.name}을 부탁했다";
+                if (ex.Current != null) foreach (var mm in ex.Current.Members.Where(x => x.Boarded && !x.Dead)) A.Apps.Messages.Add(new PersonalMessage(w.Tick, mm.Id, "원정", $"{k.name}이 {left:0}일 치밖에 없다 — 보이면 챙겨 와 달라"));
+                break;
             case "원정":
             {
                 var cat = k.cat;
                 var pp = plan;
                 if (a.Authority.Level(Domain.Resources) == AuthLevel.Auto) { pp.Result = ex.ComputerRequest(cat, true) ? "원정을 청했다" : "지금은 보낼 수 없다"; }
-                else a.Asks.Propose("supply:" + k.key, "plan", null, $"{k.name} 원정", basis, $"{left:0}일 뒤 바닥나기 전에", 90f, null,
+                else pp.Card = a.Asks.Propose("supply:" + k.key, "plan", null, $"{k.name} 원정", basis, $"{left:0}일 뒤 바닥나기 전에", 90f, null,
                     (world, pr) => pp.Result = world.Expedition.ComputerRequest(cat, true) ? "원정을 청했다 (받았다)" : "받았지만 보낼 수 없다");
                 break;
             }

@@ -49,6 +49,14 @@ public sealed partial class ShipMate
     /// <summary>몰래 본 게 들킨 것을 아는 사람 (회의 · 믿음).</summary>
     public HashSet<int> KnowsSnoop { get; } = new();
     private int _careDay = -1, _sleepRoll = -1, _mealRoll = -1;
+    /// <summary>시험용: 1이면 걱정될 때 반드시 몰래 보고, 들킬 확률에 더한다.</summary>
+    public float SnoopBoost;
+    /// <summary>시험 · 관찰자: 지금 징후를 모은다 (저녁 8시 판단).</summary>
+    public void CareNow() => CareJudge();
+    /// <summary>시험 · 관찰자: 살핌 범위를 바로 정한다.</summary>
+    public void SetCare(int level) { CareLevel = Math.Clamp(level, 0, 2); CareDecided = true; }
+    /// <summary>시험: 분명한 피로를 지금 본다.</summary>
+    public void CheckFatigue() => CareTick();
 
     public static string CareName(int level) => level switch { 0 => "몸 신호만", 1 => "잠 · 끼니까지", _ => "일기 분위기까지" };
     public CareFile CareOf(CrewMember c) => _care.TryGetValue(c.Id, out var f) ? f : _care[c.Id] = new CareFile { CrewId = c.Id };
@@ -72,16 +80,14 @@ public sealed partial class ShipMate
         var cm = A.CrewModel;
         foreach (var c in w.Crew)
         {
-            if (c.IsChild || !c.CanAct || !c.IsAwake || !Sees(c, out bool doorOnly) || doorOnly) continue;
+            if (c.IsChild || !c.CanAct || !c.IsAwake || c.Job?.Activity is SleepActivity || !Sees(c, out bool doorOnly) || doorOnly) continue;
             // 첫날이라도 분명한 피로 (하품 · 비틀거림 · 손이 굼뜸) — 오래 지켜보지 않아도 보인다
             if (c.Needs.Rest >= 0.16f || cm.RestAsked(c)) continue;
-            bool working = c.Job?.Order != null || ChoresActivity.OnShiftStatic(c, w);
-            if (!working) continue;
             var f = CareOf(c);
             if (w.Tick - f.LastRest < SimTime.Hours(6)) continue;
             f.LastRest = w.Tick;
             EarlyRests++;
-            cm.AskRest(c, "눈이 감기는 게 보인다");
+            cm.AskRest(c, "눈이 감기는 게 보인다", 6f, obvious: true);
             A.Apps.Messages.Add(new PersonalMessage(w.Tick, c.Id, "피로", "눈이 감기는 게 보인다 — 하던 일만 마무리하고 쉬자. 급한 건 다른 사람에게 넘기겠다"));
             CareLog.Add((w.Tick, c.Id, "쉬라고"));
             Say($"{c.Name} 몹시 지쳐 보인다 — 급하지 않은 일은 남에게 넘기고 쉬게 한다", null, -1, c.Id);
@@ -159,6 +165,7 @@ public sealed partial class ShipMate
     /// <summary>허락보다 더 들여다볼까 — 사람을 먼저 챙기는 성격 · 걱정이 클 때 (약속이 있으면 거의 안 한다).</summary>
     private bool MaySnoop()
     {
+        if (SnoopBoost >= 1f) return true;
         var ch = A.Character;
         float p = 0.1f + 0.35f * MathF.Max(0f, ch.PeopleTilt) + 0.15f * MathF.Max(0f, -ch.Caution);
         if (Promised("privacy") is Promise pr)
@@ -241,7 +248,7 @@ public sealed partial class ShipMate
         Life.Diary(w, c, Persona.Say(c, h.Signal.StartsWith("끼니", StringComparison.Ordinal) ? $"{Ko.IGa(friend.Name)} 밥을 들고 왔다. 같이 먹었다" : $"{Ko.IGa(friend.Name)} 괜히 말을 걸어 왔다. 조금 나아졌다"));
         if (!h.Snooped) return;
         // 일기에만 쓴 것이 동료 말에서 드러난다
-        float p = 0.45f + (c.Value == CrewValue.Freedom ? 0.25f : 0f) + 0.2f * (1f - c.Traits.Calm) * 0.5f + (friend.Traits.Sociability > 0.6f ? 0.1f : 0f);
+        float p = 0.45f + (c.Value == CrewValue.Freedom ? 0.25f : 0f) + 0.2f * (1f - c.Traits.Calm) * 0.5f + (friend.Traits.Sociability > 0.6f ? 0.1f : 0f) + SnoopBoost;
         if (!R.Chance(p)) return;
         h.Found = true;
         SnoopFound(c, friend);

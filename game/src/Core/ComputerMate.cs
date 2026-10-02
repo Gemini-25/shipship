@@ -70,6 +70,7 @@ public sealed partial class ShipMate
         if (voters.Count < 2) return;
         if (_w.Tick >= SimTime.TicksPerDay / 2) CareAgenda(rec, voters, chair);
         UpgradeAgenda(rec, voters, chair);
+        SupplyAgenda(rec, voters, chair);
     }
 
     internal void Hash(Action<long> I, Action<float> F)

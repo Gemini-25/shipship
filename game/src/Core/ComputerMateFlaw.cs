@@ -136,7 +136,7 @@ public sealed partial class ShipMate
     private void HeardBriefing(Briefing b)
     {
         var w = _w;
-        foreach (var e in Memory.Values.Where(x => x.Corrupt && x.Claimed >= 0 && x.Fixed < 0).ToList())
+        foreach (var e in Memory.Values.Where(x => x.Corrupt && x.Claimed >= b.Tick && x.Fixed < 0).ToList())
         {
             var m = w.Ship.Machines.FirstOrDefault(x => x.Body.Id == e.RefId);
             if (m == null) continue;

@@ -158,6 +158,7 @@ public static partial class Program
         if (args.Contains("--hazard70test")) return RunHazard70Test(seed); // v15 사고 70
         if (args.Contains("--catalogtest")) return RunCatalogTest(seed); // v15 고장·물자 70
         if (args.Contains("--moduletest")) return RunModuleTest(seed); // v15 설비 70
+        if (args.Contains("--computercrewtest")) return RunComputerCrewTest(seed); // v16.27
         if (args.Contains("--infotest")) return RunInfoTest(seed); // v17.3 개인 자리 · 못 끝낸 일 · 정보 차이 · 메신저 · 사진 · 장부
         if (args.Contains("--computerplantest")) return RunComputerPlanTest(seed); // v16.26
         if (args.Contains("--integtest")) return RunIntegTest(seed); // v16.26 토대 묶음 통합

@@ -50,7 +50,10 @@ public sealed partial class ShipMate
         if (today.Count > 0)
             b.Lines.Add(("정비", "오늘 정비: " + string.Join(" · ", today.Select(s => $"{s.Machine} {s.Hour:0}시"))
                 + $" (가장 급한 것 남은 수명 {LifeText(today[0])})"));
-        foreach (var m in Memory.Values.Where(x => x.Kind == MemKind.Service && x.Corrupt && x.Claimed < 0).OrderBy(x => x.Key).Take(1))
+        else if (w.Board.Open.Where(o => o.Kind is WorkKind.Maintain or WorkKind.PreventiveCheck or WorkKind.Calibrate && o.Target.Furniture != null).OrderByDescending(o => o.Urgency).ThenBy(o => o.Id).Take(2).ToList() is { Count: > 0 } jobs)
+            b.Lines.Add(("정비", "오늘 정비: " + string.Join(" · ", jobs.Select(o => $"{o.Target.Furniture!.Label} ({o.Detail})"))));
+        else b.Lines.Add(("정비", "오늘 급한 정비 없음 — 정비표는 이번 주 내내 비어 있다"));
+        foreach (var m in Memory.Values.Where(x => x.Kind == MemKind.Service && x.Corrupt && x.Claimed == -1).OrderBy(x => x.Key).Take(1))
         {
             m.Claimed = w.Tick;
             b.Lines.Add(("정비", $"{m.Label}은 어제 손봤다 — 이번 주 정비에서 뺐다"));
@@ -59,7 +62,7 @@ public sealed partial class ShipMate
         if (LastSky is SkyForecast f) b.Lines.Add(("날씨", SkyLine(f)));
         // 주의할 곳
         var cautions = Cautions(2);
-        if (cautions.Count > 0) b.Lines.Add(("주의", "주의할 곳: " + string.Join(" · ", cautions.Select(c => c.text))));
+        b.Lines.Add(("주의", cautions.Count > 0 ? "주의할 곳: " + string.Join(" · ", cautions.Select(c => c.text)) : "주의할 곳 없음"));
         // 일정
         var plan = new List<string>();
         if (NextDrill is DrillRun nd && SimTime.Day(nd.Start) == day) plan.Add($"{Hour(nd.Start):0}시 {nd.Kind} 훈련");
@@ -99,7 +102,17 @@ public sealed partial class ShipMate
             if (!r.DataLinked || a.Belief.Of(r).Fault != SensorFault.None) list.Add((1, r, $"{r.Name} (감지기가 안 닿는다)"));
             else if (MoistureSystem.DepthCm(r) > 0.6f) list.Add((2, r, $"{r.Name} 바닥이 젖었다"));
             else if (r.Radiation > 0.3f) list.Add((2, r, $"{r.Name} 방사선이 높다"));
+            else if (r.Air.Temperature > 30f || r.Air.Temperature < 14f) list.Add((3, r, $"{r.Name} {(r.Air.Temperature > 30f ? "덥다" : "춥다")} ({r.Air.Temperature:0}도)"));
         }
+        long since = w.Tick - SimTime.TicksPerDay;
+        for (int i = w.History.Events.Count - 1; i >= 0; i--)
+        {
+            var e = w.History.Events[i];
+            if (e.Tick < since) break;
+            if (e.Kind == HistoryKind.Incident && e.RoomId >= 0 && w.Ship.Rooms.FirstOrDefault(x => x.Id == e.RoomId) is Room er && !er.OffLimits)
+                list.Add((4, er, $"{er.Name} (사고 뒤 — 발밑 · 냄새 조심)"));
+        }
+        foreach (var m in w.Ship.Machines) if (m.Omen is Omen om && om.Known && !m.Body.Room.Detached) list.Add((1, m.Body.Room, $"{m.Name} {Prevention.Name(om.Kind)}"));
         foreach (var t in Trends.Values)
             if (t.Now > 0.6f && w.Ship.Machines.FirstOrDefault(m => m.Body.Id == t.MachineId) is Machine m)
                 list.Add((0, m.Body.Room, $"{m.Name} {TrendWord(m)}이 커졌다"));
