@@ -78,7 +78,7 @@ public partial class Hud
         Item(c => TechIcons.Draw(this, demo, c, 7f, 0), "고를 수 있음");
         Item(c => TechIcons.Draw(this, demo, c, 7f, 2, 0.8f), "선행 · 조건 대기");
         Item(c => { TechIcons.Draw(this, demo, c, 7f, 3); TechIcons.Lock(this, c, 4f, Palette.Danger); }, "갈림길에서 버림");
-        Item(c => { DrawArc(c, 7f, 0, Mathf.Tau, 14, WebGold.WithAlpha(0.7f), 1f, true); Gfx.TextCentered(this, Fonts.Bold, c + new Vector2(0, 3.5f), "?", 10, WebGold); }, "숨은 기술의 기척");
+        Item(c => { DrawArc(c, 7f, 0, Mathf.Tau, 14, WebGold.WithAlpha(0.7f), 1f, true); Gfx.TextCentered(this, Fonts.Bold, c + new Vector2(0, 3.5f), "?", Ui.TextTiny, WebGold); }, "숨은 기술의 기척");
         Item(c => { DrawDashed(c - new Vector2(7, 0), c + new Vector2(7, 0), WebFork, 1.4f, 3f); }, "갈림길");
         Item(c => TechIcons.Glyph(this, "chip", c, 5f, WebRec, 1.2f), "컴퓨터 추천");
         Item(c => TechIcons.Glyph(this, "flask", c, 5f, Palette.Warning, 1.2f), "실험 중");
@@ -360,14 +360,14 @@ public partial class Hud
                 TechIcons.Draw(this, t, new Vector2(cx + 6f, y - 4f), 6f, chosen ? 1 : lost ? 3 : 0);
                 cx += 15f;
                 string nm = t.Name;
-                Gfx.Text(this, chosen ? Fonts.Bold : Fonts.Body, new Vector2(cx, y), nm, 10, chosen ? WebGold : lost ? Palette.TextMuted : Palette.TextDim);
-                cx += Gfx.Width(Fonts.Body, nm, 10) + 6f;
+                Gfx.Text(this, chosen ? Fonts.Bold : Fonts.Body, new Vector2(cx, y), nm, Ui.TextTiny, chosen ? WebGold : lost ? Palette.TextMuted : Palette.TextDim);
+                cx += Gfx.Width(Fonts.Body, nm, Ui.TextTiny) + 6f;
             }
             Side(a, st.Side == 0, st.Side == 1);
-            Gfx.Text(this, Fonts.Bold, new Vector2(cx, y), "↔", 10, WebFork);
+            Gfx.Text(this, Fonts.Bold, new Vector2(cx, y), "↔", Ui.TextTiny, WebFork);
             cx += 16f;
             Side(b, st.Side == 1, st.Side == 0);
-            if (mid != "") Gfx.Text(this, Fonts.Body, new Vector2(cx, y), mid, 9, st.Side < 0 ? WebFork : Palette.Warning);
+            if (mid != "") Gfx.Text(this, Fonts.Body, new Vector2(cx, y), mid, Ui.TextMicro, st.Side < 0 ? WebFork : Palette.Warning);
         }
 
         Head("최근");

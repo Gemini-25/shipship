@@ -960,6 +960,9 @@ public partial class Hud : Control
         Icons.Draw(this, Icons.Furniture(f.Type), new Vector2(x + 9, y + 26), 16, accent.Lightened(0.25f)); // v16.2 설비마다 고유 아이콘
         Gfx.Text(this, Fonts.Bold, new Vector2(x + 26, y + 32), f.Label, Ui.TextLarge, Palette.Text);
         Gfx.Text(this, Fonts.Body, new Vector2(x + 26, y + 50), f.Room.Name, Ui.TextBody, Palette.TextMuted);
+        if (FixtureArt.Readout(f, _world) is (string rd, int rl)) // v16.24 가까이 본 계기 숫자 · 무엇을 재나
+            Gfx.Text(this, Fonts.Body, new Vector2(x + 34 + Gfx.Width(Fonts.Body, f.Room.Name, Ui.TextBody), y + 50), $"계기 {rd} · {FixtureArt.ReadoutWhat(f)}", Ui.TextSmall,
+                rl == 2 ? Palette.Danger : rl == 1 ? Palette.Warning : new Color("#7dffa8").Darkened(0.2f));
         if (Codex.Of(f.Type) != null) CodexButton(right, y + 38, mouse); // v12.2 설명서
         float ly = y + 60;
 

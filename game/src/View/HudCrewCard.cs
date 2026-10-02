@@ -85,6 +85,21 @@ public partial class Hud
             if (why.Length > 0)
                 Gfx.Text(this, Fonts.Body, new Vector2(badge.End.X + 8, y + 9 + Gfx.CenterOffset(Fonts.Body, Ui.TextSmall)), UiKit.Fit(why, right - badge.End.X - 8, Ui.TextSmall), Ui.TextSmall, Palette.TextDim);
             y += 22;
+            // v16.24 가까이 본 얼굴의 까닭 (표정 · 숫자)
+            var face = ZoomDetail.Face(w, c);
+            string faceNum = face switch
+            {
+                FaceLook.Pain => $"부상 {c.Vitals.Injury * 100:0}%",
+                FaceLook.Tired => $"기력 {c.Needs.Rest * 100:0}%",
+                FaceLook.Worry => $"스트레스 {c.Needs.Stress * 100:0}%",
+                FaceLook.Fear => $"두려움 {w.Brain2.Emotions.Get(c, Feeling.Fear) * 100:0}%",
+                FaceLook.Angry => $"화 {w.Brain2.Emotions.Get(c, Feeling.Anger) * 100:0}%",
+                FaceLook.Sad => $"슬픔 {w.Brain2.Emotions.Get(c, Feeling.Sadness) * 100:0}%",
+                FaceLook.Smile => $"기쁨 {w.Brain2.Emotions.Get(c, Feeling.Joy) * 100:0}%",
+                _ => "",
+            };
+            Gfx.Text(this, Fonts.Body, new Vector2(x, y + 8), UiKit.Fit($"얼굴: {ZoomDetail.FaceWhy(w, c)}" + (faceNum != "" ? $" ({faceNum})" : ""), right - x, Ui.TextTiny), Ui.TextTiny, Palette.TextMuted);
+            y += 14;
         }
 
         // ── 왜: 이유 사슬 ──
@@ -97,7 +112,7 @@ public partial class Hud
             var next = c.LastEvaluations.Where(e => e.Activity != act).OrderByDescending(e => e.Score).FirstOrDefault();
             var mine = c.LastEvaluations.FirstOrDefault(e => e.Activity == act);
             if (next.Activity != null && mine.Activity != null)
-                Gfx.Text(this, Fonts.Body, new Vector2(x, y + 6), UiKit.Fit($"{mine.Score:0.00}점 — 다음 후보 {next.Activity.Label} {next.Score:0.00} ({next.Reason})", right - x, Ui.TextTiny), Ui.TextTiny, Palette.TextMuted);
+                Gfx.Text(this, Fonts.Body, new Vector2(x, y + 6), UiKit.Fit($"이쪽으로 {mine.Score:0.00} 기울었다 — 다음은 {next.Activity.Label} {next.Score:0.00} ({next.Reason})", right - x, Ui.TextTiny), Ui.TextTiny, Palette.TextMuted);
             y += 12;
         }
         y += 6;

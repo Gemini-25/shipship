@@ -28,7 +28,7 @@ public enum Detail : uint
 }
 
 /// <summary>얼굴: 감정 · 몸에서 읽는다.</summary>
-public enum Expression : byte { Calm, Smile, Worry, Fear, Pain, Tired, Sad, Angry, Asleep }
+public enum FaceLook : byte { Calm, Smile, Worry, Fear, Pain, Tired, Sad, Angry, Asleep }
 
 public static class ZoomDetail
 {
@@ -67,33 +67,33 @@ public static class ZoomDetail
     // ── 표정 ──
 
     /// <summary>지금 얼굴 (가까이에서만 그린다): 잠 · 아픔 · 두려움 · 화 · 슬픔 · 피곤 · 걱정 · 웃음 · 평온.</summary>
-    public static Expression Face(World w, CrewMember c)
+    public static FaceLook Face(World w, CrewMember c)
     {
-        if (c.Dead) return Expression.Asleep;
-        if (c.Pose == Pose.Sleeping || c.Down) return Expression.Asleep;
-        if (c.Vitals.Injury >= 0.45f) return Expression.Pain;
+        if (c.Dead) return FaceLook.Asleep;
+        if (c.Pose == Pose.Sleeping || c.Down) return FaceLook.Asleep;
+        if (c.Vitals.Injury >= 0.45f) return FaceLook.Pain;
         var em = w.Brain2.Emotions;
         float fear = em.Get(c, Feeling.Fear), anger = em.Get(c, Feeling.Anger), sad = em.Get(c, Feeling.Sadness), joy = em.Get(c, Feeling.Joy);
-        if (fear >= 0.5f) return Expression.Fear;
-        if (anger >= 0.5f) return Expression.Angry;
-        if (sad >= 0.5f) return Expression.Sad;
-        if (c.Needs.Rest < 0.2f) return Expression.Tired;
-        if (c.Needs.Stress >= 0.6f || fear >= 0.25f) return Expression.Worry;
-        if (joy >= 0.35f || c.Needs.Social >= 0.85f && c.Needs.Stress < 0.25f) return Expression.Smile;
-        return Expression.Calm;
+        if (fear >= 0.5f) return FaceLook.Fear;
+        if (anger >= 0.5f) return FaceLook.Angry;
+        if (sad >= 0.5f) return FaceLook.Sad;
+        if (c.Needs.Rest < 0.2f) return FaceLook.Tired;
+        if (c.Needs.Stress >= 0.6f || fear >= 0.25f) return FaceLook.Worry;
+        if (joy >= 0.35f || c.Needs.Social >= 0.85f && c.Needs.Stress < 0.25f) return FaceLook.Smile;
+        return FaceLook.Calm;
     }
 
     /// <summary>표정 까닭 한 줄 (누르면 카드에).</summary>
     public static string FaceWhy(World w, CrewMember c) => Face(w, c) switch
     {
-        Expression.Asleep => c.Down ? "쓰러져 있다" : "자는 중",
-        Expression.Pain => $"다쳐서 아프다 (부상 {c.Vitals.Injury * 100:0}%)",
-        Expression.Fear => "겁에 질렸다",
-        Expression.Angry => "화가 났다",
-        Expression.Sad => "슬프다",
-        Expression.Tired => "몹시 지쳤다",
-        Expression.Worry => "걱정이 많다",
-        Expression.Smile => "기분이 좋다",
+        FaceLook.Asleep => c.Down ? "쓰러져 있다" : "자는 중",
+        FaceLook.Pain => $"다쳐서 아프다 (부상 {c.Vitals.Injury * 100:0}%)",
+        FaceLook.Fear => "겁에 질렸다",
+        FaceLook.Angry => "화가 났다",
+        FaceLook.Sad => "슬프다",
+        FaceLook.Tired => "몹시 지쳤다",
+        FaceLook.Worry => "걱정이 많다",
+        FaceLook.Smile => "기분이 좋다",
         _ => "덤덤하다",
     };
 }

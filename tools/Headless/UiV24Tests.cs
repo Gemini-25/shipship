@@ -73,7 +73,7 @@ public static partial class Program
         var hurt = alive[0];
         hurt.Vitals.Injury = 0.6f;
         var faces = alive.Select(c => ZoomDetail.Face(w, c)).ToList();
-        bool painOk = ZoomDetail.Face(w, hurt) == Expression.Pain && ZoomDetail.FaceWhy(w, hurt).Contains("다쳐");
+        bool painOk = ZoomDetail.Face(w, hurt) == FaceLook.Pain && ZoomDetail.FaceWhy(w, hurt).Contains("다쳐");
         hurt.Vitals.Injury = 0f;
         float dark = ZoomDetail.Luma(0.10f, 0.07f, 0.05f), light = ZoomDetail.Luma(0.85f, 0.7f, 0.5f);
         bool rim = ZoomDetail.NeedsRim(dark) && !ZoomDetail.NeedsRim(light) && ZoomDetail.Lift(dark) > 0.1f && ZoomDetail.Lift(light) == 0f;

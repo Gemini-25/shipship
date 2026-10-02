@@ -35,6 +35,7 @@ public partial class LabelOverlay : Node2D
         var mode = _main.ViewMode;
 
         bool crisis = Severity.Crisis(_world);
+        if (ZoomDetail.Shows(zoom, Detail.RoomIcon)) PaintRoomIcons(xf, zoom); // v16.24 멀리: 방 가운데 큰 아이콘 (이름 대신)
         if (zoom >= 0.35f)
         {
             foreach (var room in _world.Ship.Rooms)
@@ -51,6 +52,7 @@ public partial class LabelOverlay : Node2D
                     if (mode == ViewMode.Normal && RoomAlert(room).text.Length == 0) continue;
                     p = xf * (ShipView.ToPx(room.Center) + new Vector2(-T * 3f, -T * 0.6f));
                 }
+                else if (!ZoomDetail.Shows(zoom, Detail.RoomLabel) && !focus) { } // v16.24 멀리선 이름 대신 아이콘 (고르거나 올리면 이름)
                 else
                 {
                     p = xf * _main.ShipView.RoomLabelAnchor(room);
@@ -181,7 +183,8 @@ public partial class LabelOverlay : Node2D
                 DrawCircle(head + new Vector2(6f, 2f + t * 8f), 1.8f, new Color("#9fc4ff").WithAlpha(1f - t), true, -1f, true);
             }
 
-            if (zoom < 0.45f && !selected && !hovered && !c.Down) continue;
+            if (ZoomDetail.Shows(zoom, Detail.NameTag) && !c.Dead && c.CarriedBy == null) PaintNameTag(c, xf, col, selected || hovered); // v16.24 가까이: 이름표
+            if (!ZoomDetail.Shows(zoom, Detail.StatusIcon) && !selected && !hovered && !c.Down) continue; // v16.24 멀리선 점만 (상태 아이콘은 중간부터)
             // 위기 중에는 사고에 얽힌 사람만 라벨을 남긴다 (나머지는 가까이 보거나 고르면 보인다)
             if (crisis && !selected && !hovered && zoom < 1.1f && !Severity.Notable(c)) continue;
 
@@ -199,6 +202,37 @@ public partial class LabelOverlay : Node2D
             bool emergency = Severity.Notable(c) && crisis;
             HeadBadge.Draw(this, _world, c, center, zoom, selected, hovered, emergency, col, _time);
         }
+    }
+
+    /// <summary>v16.24 멀리: 방마다 가운데에 그 방 종류 아이콘 (방 색 · 크기는 방에 맞춰). 사고가 난 방은 그 뜻 색.</summary>
+    private void PaintRoomIcons(Transform2D xf, float zoom)
+    {
+        const float T = ShipView.T;
+        foreach (var room in _world.Ship.Rooms)
+        {
+            if (room.Detached || room.Type == RoomType.Corridor) continue;
+            var c = xf * new Vector2((room.MinX + room.MaxX + 1) * 0.5f * T, (room.MinY + room.MaxY + 1) * 0.5f * T);
+            float w = (room.MaxX - room.MinX + 1) * T * zoom, h = (room.MaxY - room.MinY + 1) * T * zoom;
+            float size = Mathf.Clamp(Mathf.Min(w, h) * 0.45f, 10f, 30f);
+            var sev = Severity.Of(_world, room);
+            var col = sev == RoomSeverity.Critical ? Palette.Danger : Palette.Room(room.Kind).Lightened(0.15f);
+            DrawCircle(c, size * 0.72f, new Color(0.02f, 0.03f, 0.05f, 0.55f), true, -1f, true);
+            Icons.Draw(this, Icons.Room(room.Kind), c, size, col.WithAlpha(0.9f));
+        }
+    }
+
+    /// <summary>v16.24 가까이: 발밑 이름표 (사람 색 점 · 이름). 고르거나 올리면 밝게.</summary>
+    private void PaintNameTag(CrewMember c, Transform2D xf, Color col, bool focus)
+    {
+        float r = _main.ShipView.CrewRadius;
+        var at = xf * (_main.ShipView.CrewPx(c) + new Vector2(0f, r + 7f));
+        string name = c.Name;
+        float w = Gfx.Width(Fonts.Body, name, Ui.TextTiny) + 14f;
+        var tag = new Rect2(at.X - w * 0.5f, at.Y - 7f, w, 13f);
+        Gfx.RoundRect(this, tag, new Color(0.03f, 0.04f, 0.06f, focus ? 0.92f : 0.7f), 4f, col.WithAlpha(focus ? 0.8f : 0.35f));
+        DrawCircle(new Vector2(tag.Position.X + 5f, at.Y - 0.5f), 2f, col, true, -1f, true);
+        Gfx.Text(this, Fonts.Body, new Vector2(tag.Position.X + 9f, at.Y + Gfx.CenterOffset(Fonts.Body, Ui.TextTiny) - 0.5f), name, Ui.TextTiny,
+            focus ? Palette.Text : Palette.TextDim);
     }
 
     /// <summary>방에서 벌어지는 사고를 한 줄로.</summary>

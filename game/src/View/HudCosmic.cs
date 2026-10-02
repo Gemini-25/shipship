@@ -38,7 +38,7 @@ public partial class Hud
             string sky = cs.Sky.Count > 0 ? $"창밖: {string.Join(" · ", cs.Sky.TakeLast(2).Select(s => s.Name))}" : "";
             var vig = cs.CustomOf(CosmicCustomKind.Vigil);
             string cust = vig != null ? $" · 그날의 밤 {Math.Max(0, (int)Math.Ceiling((vig.NextDay - w.Tick) / (float)SimTime.TicksPerDay))}일 뒤" : "";
-            Gfx.Text(this, Fonts.Body, new Vector2(x + 12f, y + 19f), Fit(sky + cust, width - 24f, 11, Fonts.Body), 11, Palette.TextDim);
+            Gfx.Text(this, Fonts.Body, new Vector2(x + 12f, y + 19f), Fit(sky + cust, width - 24f, Ui.TextSmall, Fonts.Body), Ui.TextSmall, Palette.TextDim);
             return;
         }
         var spec = e.Spec;
@@ -55,9 +55,9 @@ public partial class Hud
         CosmicArt.Draw(this, e.Kind, ic, 22f * CosmicIconScale(e.Kind), _time, MathF.Max(0.7f, near), MathF.Min(0.6f, hit), iconRect, ic + new Vector2(30f, 10f), e.Id * 97 + 13);
         DrawRect(iconRect, pcol.WithAlpha(0.6f), false, 1.5f);
         // 머리: 이름 · 우주급 · 단계
-        Gfx.Text(this, Fonts.Bold, new Vector2(x + 56f, y + 22f), Fit(spec.Name, width - 170f, 14, Fonts.Bold), 14, Palette.Text);
-        Gfx.Pill(this, Fonts.Bold, new Vector2(x + width - 96f, y + 18f), CosmicCatalog.Scale, 10, new Color("#ffd166"), new Color(0.12f, 0.08f, 0.02f, 0.9f), new Color("#ffd166").WithAlpha(0.5f), 7f, 3f);
-        Gfx.Pill(this, Fonts.Bold, new Vector2(x + width - 40f, y + 18f), e.PhaseName, 10, pcol, new Color(0.03f, 0.04f, 0.07f, 0.9f), pcol.WithAlpha(0.5f), 7f, 3f);
+        Gfx.Text(this, Fonts.Bold, new Vector2(x + 56f, y + 22f), Fit(spec.Name, width - 170f, Ui.TextSubtitle, Fonts.Bold), Ui.TextSubtitle, Palette.Text);
+        Gfx.Pill(this, Fonts.Bold, new Vector2(x + width - 96f, y + 18f), CosmicCatalog.Scale, Ui.TextTiny, new Color("#ffd166"), new Color(0.12f, 0.08f, 0.02f, 0.9f), new Color("#ffd166").WithAlpha(0.5f), 7f, 3f);
+        Gfx.Pill(this, Fonts.Bold, new Vector2(x + width - 40f, y + 18f), e.PhaseName, Ui.TextTiny, pcol, new Color(0.03f, 0.04f, 0.07f, 0.9f), pcol.WithAlpha(0.5f), 7f, 3f);
         string sub;
         if (e.Phase <= CosmicPhase.Brace)
         {
@@ -70,25 +70,25 @@ public partial class Hud
             sub = spec.Stages[idx].Text + (e.Avoided ? " (비켜 약하게)" : "");
         }
         else sub = $"{e.Grade} · {(e.AfterUntil - w.Tick) / (float)SimTime.TicksPerDay:0}일 동안 후유증";
-        Gfx.Text(this, Fonts.Body, new Vector2(x + 56f, y + 40f), Fit(sub, width - 66f, 11, Fonts.Body), 11, pcol);
-        Button(new Rect2(card.End.X - 24f, y + 30f, 18f, 18f), _cosmicFolded ? "▾" : "▴", false, mouse, () => _cosmicFolded = !_cosmicFolded, 10);
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 56f, y + 40f), Fit(sub, width - 66f, Ui.TextSmall, Fonts.Body), Ui.TextSmall, pcol);
+        Button(new Rect2(card.End.X - 24f, y + 30f, 18f, 18f), _cosmicFolded ? "▾" : "▴", false, mouse, () => _cosmicFolded = !_cosmicFolded, Ui.TextTiny);
         if (_cosmicFolded) return;
         float yy = y + 62f;
         float lx = x + 12f, right = card.End.X - 12f;
         // 신뢰도 막대 (컴퓨터가 믿는 정도) · 누가 봤나
-        Gfx.Text(this, Fonts.Body, new Vector2(lx, yy + 4f), "예보 신뢰도", 10, Palette.TextMuted);
+        Gfx.Text(this, Fonts.Body, new Vector2(lx, yy + 4f), "예보 신뢰도", Ui.TextTiny, Palette.TextMuted);
         var bar = new Rect2(lx + 70f, yy - 3f, 150f, 8f);
         Gfx.Bar(this, bar, e.Confidence, e.Confidence >= 0.7f ? Palette.Good : e.Confidence >= 0.45f ? Palette.Warning : Palette.Danger);
-        Gfx.Text(this, Fonts.Bold, new Vector2(bar.End.X + 6f, yy + 4f), $"{e.Confidence * 100:0}%", 10, Palette.Text);
-        Gfx.TextRight(this, Fonts.Body, new Vector2(right, yy + 4f), Fit(e.KnownBy, 60f, 10, Fonts.Body), 10, Palette.TextDim);
+        Gfx.Text(this, Fonts.Bold, new Vector2(bar.End.X + 6f, yy + 4f), $"{e.Confidence * 100:0}%", Ui.TextTiny, Palette.Text);
+        Gfx.TextRight(this, Fonts.Body, new Vector2(right, yy + 4f), Fit(e.KnownBy, 60f, Ui.TextTiny, Fonts.Body), Ui.TextTiny, Palette.TextDim);
         yy += 18f;
         int live = w.Crew.Count(c => !c.Dead), knows = w.Crew.Count(c => !c.Dead && cs.Knows(c, e));
         int hidden = w.Crew.Count(c => !c.Dead && !c.Outside && c.Room != null && cs.RelExposure(c.Room) <= 0.32f);
-        Gfx.Text(this, Fonts.Body, new Vector2(lx, yy + 4f), Fit($"아는 사람 {knows}/{live} · 차폐 쪽 {hidden}명 · {spec.Detect}", width - 24f, 10, Fonts.Body), 10, Palette.TextDim);
+        Gfx.Text(this, Fonts.Body, new Vector2(lx, yy + 4f), Fit($"아는 사람 {knows}/{live} · 차폐 쪽 {hidden}명 · {spec.Detect}", width - 24f, Ui.TextTiny, Fonts.Body), Ui.TextTiny, Palette.TextDim);
         yy += 18f;
         // 대비 계획 진행: 종류마다 작은 칸 (끝난 것은 채운다)
         int done = e.Tasks.Count(t => t.Done), all = e.Tasks.Count;
-        Gfx.Text(this, Fonts.Bold, new Vector2(lx, yy + 4f), all == 0 ? "대비 계획 — 아직" : $"대비 {done}/{all}", 11, all > 0 && done == all ? Palette.Good : Palette.Text);
+        Gfx.Text(this, Fonts.Bold, new Vector2(lx, yy + 4f), all == 0 ? "대비 계획 — 아직" : $"대비 {done}/{all}", Ui.TextSmall, all > 0 && done == all ? Palette.Good : Palette.Text);
         float bx = lx + 72f;
         foreach (var t in e.Tasks.Take(18))
         {
@@ -97,7 +97,7 @@ public partial class Hud
             DrawRect(r, col.WithAlpha(t.Done ? 0.85f : 0.5f), t.Done || t.By >= 0);
             if (!t.Done && t.By < 0) DrawRect(r, col, false, 1f);
             BraceGlyph(t.Kind, r.GetCenter(), t.Done ? new Color(0.02f, 0.05f, 0.04f) : Palette.Text);
-            if (r.HasPoint(mouse)) Gfx.Text(this, Fonts.Body, new Vector2(lx, yy + 22f), Fit($"{t.Label}{(t.Done ? $" ✓ {t.DoneBy}" : t.By >= 0 ? " — 하는 중" : "")}", width - 24f, 10, Fonts.Body), 10, Palette.Warning);
+            if (r.HasPoint(mouse)) Gfx.Text(this, Fonts.Body, new Vector2(lx, yy + 22f), Fit($"{t.Label}{(t.Done ? $" ✓ {t.DoneBy}" : t.By >= 0 ? " — 하는 중" : "")}", width - 24f, Ui.TextTiny, Fonts.Body), Ui.TextTiny, Palette.Warning);
             bx += 14f;
         }
         yy += 32f;
@@ -107,25 +107,25 @@ public partial class Hud
             : "피할 수 없다 — 버틴다";
         if (e.SealPlan && e.TargetRoom >= 0) plan += $" · {w.Ship.Rooms[e.TargetRoom].Name} {(e.Sealed ? "봉쇄됨" : "비우는 중")}";
         if (e.ShutdownComputer) plan += " · 주 컴퓨터를 내린다";
-        Gfx.Text(this, Fonts.Body, new Vector2(lx, yy + 4f), Fit(plan, width - 24f, 11, Fonts.Body), 11, e.Avoided ? Palette.Good : Palette.Text);
+        Gfx.Text(this, Fonts.Body, new Vector2(lx, yy + 4f), Fit(plan, width - 24f, Ui.TextSmall, Fonts.Body), Ui.TextSmall, e.Avoided ? Palette.Good : Palette.Text);
         yy += 18f;
         foreach (var p in openAsks)
         {
             var pr = new Rect2(lx, yy - 6f, width - 24f, 26f);
             Gfx.RoundRect(this, pr, new Color(0.1f, 0.08f, 0.02f, 0.8f), 6f, Palette.Warning.WithAlpha(0.4f));
             float left = (p.Deadline - w.Tick) / (float)SimTime.Minutes(1);
-            Gfx.Text(this, Fonts.Body, new Vector2(lx + 8f, yy + 11f), Fit($"제안 · {p.Title} ({left:0}분)", width - 140f, 10, Fonts.Body), 10, Palette.Warning);
+            Gfx.Text(this, Fonts.Body, new Vector2(lx + 8f, yy + 11f), Fit($"제안 · {p.Title} ({left:0}분)", width - 140f, Ui.TextTiny, Fonts.Body), Ui.TextTiny, Palette.Warning);
             // v16.20 완전 관전: 받기 · 거절은 지휘하는 사람이 (화면에는 누가 정하는지만)
             var boss = w.Command.Active && w.Command.Commander != null ? w.Command.Commander : w.Command.Captain;
-            Gfx.TextRight(this, Fonts.Body, new Vector2(pr.End.X - 8f, yy + 11f), boss != null ? $"{Ko.IGa(boss.Name)} 정한다" : "기한이 지나면 컴퓨터가", 9, Palette.TextMuted);
+            Gfx.TextRight(this, Fonts.Body, new Vector2(pr.End.X - 8f, yy + 11f), boss != null ? $"{Ko.IGa(boss.Name)} 정한다" : "기한이 지나면 컴퓨터가", Ui.TextMicro, Palette.TextMuted);
             yy += 30f;
         }
         // 관행 · 바깥 시점
         var drill = cs.CustomOf(CosmicCustomKind.Drill);
         string foot = cs.Customs.Count > 0 ? "관행: " + string.Join(" · ", cs.Customs.Select(c => c.Kind switch { CosmicCustomKind.Vigil => "그날의 밤", CosmicCustomKind.Drill => "예보 훈련", _ => "흔들림 대비 정리" })) : "";
         if (drill != null && e.Phase <= CosmicPhase.Brace) foot += " (대비를 일찍 시작한다)";
-        Gfx.Text(this, Fonts.Body, new Vector2(lx, yy + 6f), Fit(foot, width - 130f, 10, Fonts.Body), 10, Palette.TextMuted);
-        Button(new Rect2(right - 104f, yy - 6f, 104f, 20f), CosmicViewSettings.OutsideView ? "바깥 시점 켬" : "바깥 시점 끔", CosmicViewSettings.OutsideView, mouse, () => CosmicViewSettings.OutsideView = !CosmicViewSettings.OutsideView, 10);
+        Gfx.Text(this, Fonts.Body, new Vector2(lx, yy + 6f), Fit(foot, width - 130f, Ui.TextTiny, Fonts.Body), Ui.TextTiny, Palette.TextMuted);
+        Button(new Rect2(right - 104f, yy - 6f, 104f, 20f), CosmicViewSettings.OutsideView ? "바깥 시점 켬" : "바깥 시점 끔", CosmicViewSettings.OutsideView, mouse, () => CosmicViewSettings.OutsideView = !CosmicViewSettings.OutsideView, Ui.TextTiny);
     }
 
     /// <summary>대비 일마다 다른 작은 기호 (물방울 · 상자 · 덮개 · 전원 · 끈 · 빗금 · 접힘 · 담요 · 조타 · 다시 켬).</summary>

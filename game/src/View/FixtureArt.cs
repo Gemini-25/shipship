@@ -227,6 +227,7 @@ public static partial class FixtureArt
         if (!Table.TryGetValue(f.Type, out var a)) return;
         var x = new Fix(ci, f, null, 0f, 2f, false);
         a.Fine(in x);
+        WearClose(in x); // v16.24 가까이: 잔 낡은 자국
     }
 
     /// <summary>동적 층: 움직이는 부분 (단계 · 핵융합 같은 덧그림은 ShipView 가 앞뒤로 부른다).</summary>
@@ -678,6 +679,7 @@ public partial class ShipView
         if (f.Type == FurnitureType.GrowBed && m?.Crop is CropState crop) PaintBlight(ci, f, crop); // v11.2
         if (f.Type is FurnitureType.Fridge or FurnitureType.MealDispenser) PaintTaint(ci, f); // v11.2
         FixtureArt.PaintState(ci, f, _world, t, _fixZoom);
+        if (ZoomDetail.Shows(_fixZoom, Detail.GaugeDigits)) FixtureArt.PaintReadout(ci, f, _world, t); // v16.24 가까이: 계기 숫자
         return true;
     }
 }

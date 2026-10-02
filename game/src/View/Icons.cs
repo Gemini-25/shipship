@@ -155,6 +155,8 @@ public static class Icons
         RoomType.Archive => "bookshelf",
         RoomType.School => "room-school",
         RoomType.Navigation => "route",
+        RoomType.ComputerRoom => "room-computer-core", // v16.24
+        RoomType.MushroomFarm => "room-mushroom-farm",
         _ => "room",
     };
 
