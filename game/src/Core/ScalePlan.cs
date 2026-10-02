@@ -69,6 +69,7 @@ public sealed partial class ScaleSystem
         if (s >= IncidentScale.Room && (prep >= IncidentScale.System || Notable(k)))
         {
             var planned = prep;
+            var judged = s;
             var kk = k;
             a.Book.Add(s >= IncidentScale.System ? ActKind.Broadcast : ActKind.Advice, room,
                 $"{k.Name} · 번진 방 {k.Rooms.Count}" + (why.Length > 0 ? $" · {why}" : ""),
@@ -77,7 +78,7 @@ public sealed partial class ScaleSystem
                 k.Suggest.Length > 0 ? k.Suggest : ScaleTable.Response(s),
                 $"scale:{k.Id}:{(int)s}", 0, 30f,
                 (world, act) => kk.Peak > planned ? (-1, $"규모를 낮게 봤다 — {ScaleTable.Label(kk.Peak)}까지 번졌다")
-                    : !kk.Open || kk.Now < planned ? (1, $"판정한 규모({ScaleTable.Name(planned)}) 안에서 막았다")
+                    : !kk.Open || kk.Now < judged ? (1, $"판정한 규모({ScaleTable.Name(planned)}) 안에서 막았다")
                     : (2, $"아직 {ScaleTable.Label(kk.Now)}"));
         }
         // 제안: 방침이 위험한 조치는 물으라고 하면 카드로 (전원 소집 · 일상 중단 · 항로 변경)

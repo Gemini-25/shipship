@@ -143,6 +143,15 @@ public partial class Hud
         // 규모가 오른 지 얼마 안 됐으면 위로 화살 (번지는 중)
         if (inc.Open && k.Steps.Count > 1 && _world.Tick - k.Steps[^1].Tick < SimTime.Minutes(20) && k.Steps[^1].To > k.Steps[^1].From)
             DrawColoredPolygon(new[] { pill.End + new Vector2(6, -9), pill.End + new Vector2(2, -3), pill.End + new Vector2(10, -3) }, col.WithAlpha(0.6f + 0.4f * pulse));
+        // 컴퓨터가 교훈으로 한 칸 높여 대비했다: 겹친 꺾쇠 + "대비 ③" (배지 왼쪽)
+        if (k.Steps.Count > 0 && k.Guess > k.Steps[0].To)
+        {
+            var gc = ScaleColor(k.Guess);
+            var at = new Vector2(pill.Position.X - 4f, pill.Position.Y + 9f);
+            for (int i = 0; i < 2; i++)
+                DrawPolyline(new[] { at + new Vector2(-10f, 3f - i * 4f), at + new Vector2(-6f, -1f - i * 4f), at + new Vector2(-2f, 3f - i * 4f) }, gc.WithAlpha(0.9f - 0.3f * i), 1.4f, true);
+            Gfx.TextRight(this, Fonts.Bold, at + new Vector2(-13f, 3f), $"대비 {ScaleTable.Mark(k.Guess)}", Ui.TextMicro, gc);
+        }
     }
 
     /// <summary>시간 막대의 규모 색 (규모를 모르면 null — 원래 색).</summary>
@@ -287,7 +296,7 @@ public partial class Hud
         Gfx.Text(this, Fonts.Bold, new Vector2(x, y0 + 30), "사고 도감 — 다섯 규모", Ui.TextLarge, Palette.Text);
         Button(new Rect2(right - 76, y0 + 12, 76, 26), "⇧K 닫기", false, mouse, ToggleScaleCodex, Ui.TextSmall);
         int total = ScaleTable.All.Length, seenKinds = ScaleTable.All.Count(r => sc.SeenOf(r.Key) > 0);
-        Gfx.Text(this, Fonts.Body, new Vector2(x, y0 + 50), $"표 {total}종 · 겪어 본 것 {seenKinds}종 · 규모가 오른 일 {sc.Escalations} · 컴퓨터 판정 {sc.Plans} · 이야기꾼이 쉬어 감 {sc.Rests}", Ui.TextBody, Palette.TextDim);
+        Gfx.Text(this, Fonts.Body, new Vector2(x, y0 + 50), $"표 {total}종 · 겪어 본 것 {seenKinds}종 · 규모가 오른 일 {sc.Escalations} · 컴퓨터 판정 {sc.Plans} · 교훈 {sc.Lessons.Count} · 이야기꾼이 쉬어 감 {sc.Rests}", Ui.TextBody, Palette.TextDim);
         Divider(x, right, y0 + 62);
         float y = y0 + 70f;
         float rowH = (card.End.Y - y - 10f) / 5f;
@@ -318,6 +327,14 @@ public partial class Hud
                 if (ty > maxY) break;
                 if (n > 0) Gfx.RoundRect(this, new Rect2(tx - 3f, ty - 10f, tw - 4f, 13f), col.WithAlpha(0.16f), 4f);
                 Gfx.Text(this, Fonts.Body, new Vector2(tx, ty), t, Ui.TextTiny, n > 0 ? col.Lerp(Palette.Text, 0.4f) : Palette.TextMuted);
+                // 컴퓨터 교훈: 다음엔 한 칸 높여 부르는 종류 — 그 규모 색 꺾쇠 (칩 오른쪽 위)
+                if (sc.Lessons.TryGetValue(r.Key, out var ls))
+                {
+                    var lc = ScaleColor(ls);
+                    var lp = new Vector2(tx + tw - 9f, ty - 9f);
+                    DrawPolyline(new[] { lp + new Vector2(-3f, 2f), lp, lp + new Vector2(3f, 2f) }, lc, 1.3f, true);
+                    DrawPolyline(new[] { lp + new Vector2(-3f, 5f), lp + new Vector2(0f, 3f), lp + new Vector2(3f, 5f) }, lc.WithAlpha(0.6f), 1.2f, true);
+                }
                 tx += tw;
                 shown++;
             }
