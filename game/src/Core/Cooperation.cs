@@ -169,6 +169,7 @@ public sealed partial class CoopSystem
     private readonly Dictionary<int, Session> _sess = new();
     private readonly Dictionary<int, DugBox> _digging = new();
     private readonly Dictionary<long, long> _holds = new();
+    private readonly Dictionary<int, int> _holdN = new(); // v16.24 짝을 못 구해 보류한 횟수 (일마다)
     private readonly Dictionary<long, long> _passed = new();
     private int _nextId = 1;
     private byte[] _slow = Array.Empty<byte>();
@@ -254,6 +255,7 @@ public sealed partial class CoopSystem
         UpdateBenches(now, dt);
         UpdatePaused(now);
         Transfers.RemoveAll(t => t.Until < now - SimTime.Minutes(10));
+        if (_holdN.Count > 16) foreach (var k in _holdN.Keys.Where(id => !w.Board.Open.Any(x => x.Id == id)).ToList()) _holdN.Remove(k);
         foreach (var (k, until) in _holds.ToList())
         {
             if (until <= now) { _holds.Remove(k); continue; }
@@ -279,6 +281,7 @@ public sealed partial class CoopSystem
         public Cell Spot;
         public Vector2 Face;
         public bool Relevant, Urgent, SiteWork, NeedPair, Solo, Careful, Ordered, Waiting, Ended, Finished;
+        public bool Held; // v16.24 짝이 안 와 보류 — 자리를 맡아 두지 않는다 (다른 사람 · 나중에)
         public int Phase;
         public long Until = -1, BoostUntil, WaitFrom = -1;
         public float Boost = 1f, SetupMin;
@@ -469,7 +472,7 @@ public sealed partial class CoopSystem
         site.State = SiteState.Left;
         site.LeftAt = now;
         // 급하지 않은 일은 펼친 사람 몫으로 맡아 둔다 (곧 돌아온다) — 다른 사람은 남의 펼친 자리에 손대지 않는다
-        if (s.Order.Urgency < 0.9f && !c.Dead && (s.Order.Assignee == null || s.Order.Assignee == c)) { s.Order.Assignee = c; site.Reserved = true; }
+        if (!s.Held && s.Order.Urgency < 0.9f && !c.Dead && (s.Order.Assignee == null || s.Order.Assignee == c)) { s.Order.Assignee = c; site.Reserved = true; }
         site.Why = c.Dead ? "쓰러졌다" : c.Down ? "다쳐 쓰러졌다" : c.Job?.Label ?? "자리를 비웠다";
         Stats.Left++;
         bool urgentCall = c.Job?.Urgent == true || Crisis.Acting(w) || c.Job?.Activity is EvacuateActivity or MusterActivity;
@@ -931,9 +934,11 @@ public sealed partial class CoopSystem
                      + (c.Value == CrewValue.Efficiency ? 0.15f : 0f) - (Life.Has(c, Habit.Methodical) ? 0.2f : 0f) - (c.Value == CrewValue.Safety ? 0.2f : 0f) - 0.5f * c.Vitals.Injury;
         call.Done = true;
         if (late != null) { Stats.Late++; c.ChangeAffinity(late, -0.01f); }
-        if (solo >= 0.3f || s.Urgent)
+        int held = s.Order is WorkOrder ho ? _holdN.GetValueOrDefault(ho.Id) : 0; // v16.24 두 번 허탕 쳤으면 더 미루지 않는다
+        if (solo >= 0.3f || s.Urgent || held >= 2)
         {
             call.Outcome = "아무도 안 와 혼자 지그로";
+            if (held >= 2) { c.Say(w, Persona.Say(c, "벌써 몇 번째야 — 지그로 물려 놓고 혼자 끝낸다")); s.Solo = true; Stats.Solos++; w.Log.Add(now, LogKind.Work, $"{Ko.EulReul(call.Part)} 잡아 줄 사람을 {held}번 기다리다 말았다 — 지그로 물려 놓고 혼자 천천히 한다", c.Id); c.Pose = Pose.Working; return 1f; }
             s.Solo = true;
             Stats.Solos++;
             c.Say(w, Persona.Say(c, "혼자 하자 — 지그로 물려 놓고"));
@@ -945,6 +950,9 @@ public sealed partial class CoopSystem
         Stats.Holds++;
         var o = s.Order!;
         _holds[o.Id] = now + SimTime.Hours(1);
+        _holdN[o.Id] = held + 1;
+        s.Held = true;            // v16.24 맡아 두지 않는다 — 시간이 되면 손이 빈 누구든 (둘이 있을 때) 다시 잡는다
+        w.Board.Release(o, c);
         w.Board.Block(o, $"{Ko.EulReul(call.Part)} 잡아 줄 사람이 없다 — 한 시간 뒤 다시", 1f);
         c.Say(w, Persona.Say(c, "혼자는 무리야 — 사람 있을 때 하자"));
         return -1f;
