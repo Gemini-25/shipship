@@ -740,6 +740,7 @@ public partial class ShipView : Node2D
         PaintCommandBadges(ci); // v13.1 선장 별 · 지휘자 테 · 조 배지
         PaintMeeting(ci); // v13.2 회의 장면 · 발언 말풍선
         PaintMinds(ci); // v13.3 공황 · 영웅심 · 분노 · 모름
+        PaintEmotions(ci); // v16.15 머리 위 감정 그림 (분노 · 두려움 · 기쁨 · 슬픔 · 수치 · 자부심)
         PaintTalk(ci); // v14.4 말풍선 (목적 있는 대화 · 인수인계 · 깨우기)
         PaintComputerTop(ci, mode); // v16.6 선내 방송 말풍선 · 컴퓨터가 보는 배
         PaintDrones(ci);

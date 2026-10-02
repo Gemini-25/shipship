@@ -410,8 +410,17 @@ public static partial class Program
                     BrainSystem.Enabled = true;
                     return sw.Elapsed.TotalSeconds;
                 }
-                double off = Time(false, out _, out long th0);
-                double on = Time(true, out int beliefs, out long th1);
+                if (debug)
+                {
+                    Prof.On = true; Prof.Reset();
+                    var pw = World.CreateDefault(seed, 0, "Cheonma");
+                    Run(pw, SimTime.TicksPerDay);
+                    Prof.On = false;
+                    foreach (var (key, ms, calls, _) in Prof.Report().Where(r => r.key.Contains("brain2") || r.key is "score.plan" or "score.outage" or "score.firebelief" or "score.tell" or "crew.think" or "sys.Daily").OrderByDescending(r => r.ms))
+                        Console.WriteLine($"    {key}: {ms:0}ms ({calls})");
+                }
+                double off = Math.Min(Time(false, out _, out long th0), Time(false, out _, out _));
+                double on = Math.Min(Time(true, out int beliefs, out long th1), Time(true, out _, out _));
                 double ratio = on / Math.Max(0.001, off);
                 Check("성능 — 30명 하루가 예전 두뇌보다 크게 늘지 않는다 (나눠 보기 · 바뀔 때만 계획)", ratio < 1.3,
                     $"천마 30명 하루: 끔 {off:0.0}초 · 켬 {on:0.0}초 (×{ratio:0.00}) · 판단 {th0} → {th1} · 믿음 {beliefs}줄");
