@@ -162,7 +162,7 @@ public static class NeedsSystem
             damage += pressure < 8f && v.Oxygen < 0.3f ? 5f : 1.5f; // v16.24 정신을 잃은 채 거의 진공이면 몇 분 — 우주복을 든 사람이 늦으면 못 산다
             AddInjury(v, 0.3f * dt, "감압");
         }
-        if (!suited && !masked && air != null && air.Smoke > 0.4f) { damage += (air.Smoke > 0.7f ? 0.8f : 0.3f) * air.Smoke; AddInjury(v, 0.2f * air.Smoke * dt, "연기 흡입"); } // 연기 흡입 (폐에 남는다) (v16.24 짙은 연기는 한 시간 남짓이면 쓰러진다)
+        if (!suited && !masked && air != null && air.Smoke > 0.4f) { damage += (air.Smoke > 0.7f ? 1.5f : 0.45f) * air.Smoke; AddInjury(v, 0.25f * air.Smoke * dt, "연기 흡입"); } // 통합: 짙은 연기는 사십 분 남짓이면 정신을 잃는다 (깨지 못한 잠 · 갇힌 사람) // 연기 흡입 (폐에 남는다) (v16.24 짙은 연기는 한 시간 남짓이면 쓰러진다)
         if (!suited && air != null && air.Toxin > 0.15f)                  // v11.2 유독 가스 흡입 (폐에 남는다)
         {
             damage += (air.Toxin > 0.4f ? 0.6f : 0.2f) * air.Toxin; // v16.24 짙으면 폐가 빨리 상한다

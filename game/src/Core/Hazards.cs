@@ -815,7 +815,7 @@ public sealed partial class HazardSystem
     }
 
     /// <summary>v16.24 사고는 대개 쓰는 중에 난다: 깨어 있는 사람이 있는 방을 더 자주 고른다 (한 방에 셋까지 · 빈 방도 가끔).</summary>
-    private T Busy<T>(List<T> pool, Func<T, Room> roomOf, Rng rr)
+    private T Busy<T>(List<T> pool, Func<T, Room> roomOf, Rng rr, bool sleepers = false)
     {
         var w = _w;
         var wt = new float[pool.Count];
@@ -824,7 +824,7 @@ public sealed partial class HazardSystem
         {
             var r = roomOf(pool[i]);
             int n = 0;
-            foreach (var c in w.Crew) if (!c.Dead && c.Room == r && c.IsAwake) n++;
+            foreach (var c in w.Crew) if (!c.Dead && c.Room == r && (c.IsAwake || sleepers && c.Pose == Pose.Sleeping)) n++;
             sum += wt[i] = 1f + 1.5f * Math.Min(3, n);
         }
         float x = rr.Float() * sum;
@@ -847,7 +847,7 @@ public sealed partial class HazardSystem
             {
                 var hullRooms = rooms.Where(r => ship.Walls.Any(kv => kv.Value.IsHull && Hull.InsideRoom(ship, kv.Key) == r)).ToList();
                 if (hullRooms.Count == 0) return null;
-                var room = prefer != null && hullRooms.Contains(prefer) ? prefer : hullRooms[rr.Range(0, hullRooms.Count)];
+                var room = prefer != null && hullRooms.Contains(prefer) ? prefer : Busy(hullRooms, r => r, rr, sleepers: true); // 통합: 사람이 지내는 외벽 방에도 (자는 방 · 일하는 방)
                 float size = key == "bigmeteor" ? 0.8f + 0.2f * rr.Float() : 0.25f + 0.3f * rr.Float();
                 var m = w.Sensors.Launch(Scenarios.OuterTarget(w, room), size);
                 if (m == null) return null;
@@ -857,7 +857,7 @@ public sealed partial class HazardSystem
             }
             case "fire":
             {
-                var room = prefer != null && rooms.Contains(prefer) ? prefer : Busy(rooms, r => r, rr); // 통합: 불도 대개 쓰는 방에서 난다 (조리 · 용접 · 전기 기구)
+                var room = prefer != null && rooms.Contains(prefer) ? prefer : Busy(rooms, r => r, rr, sleepers: true); // 통합: 불도 대개 쓰는 방에서 난다 (조리 · 용접 · 전기 기구 · 잠든 방의 충전기)
                 var floor = room.Cells.Where(ship.IsOpenFloor).ToList();
                 if (floor.Count == 0 || !Incidents.Fire(w, floor[rr.Range(0, floor.Count)])) return null;
                 string what = $"화재({room.Name})";

@@ -97,5 +97,50 @@ public static partial class Program
                 if (i % 20 == 1) { var t = w.Casualty.Of(v); Console.WriteLine($"   {i} v {v.Room?.Name} {v.Cell} pose {v.Pose} · h {h.Name} {h.Room?.Name} {h.Cell} canact {h.CanAct} pose {h.Pose} out {h.Outside}/{v.Outside} 급함 {h.Job?.Urgent} 일 {h.Job?.Label} · 거리 {(h.Position - v.Position).Length():0.00} · 상처 {t?.Kind} {t?.Rate:0.000} 도움 {t?.Helper}"); }
             }
         }
+
+        if (what.Contains("storm"))
+        {
+            var w = DayOne(seed, "Hanbit"); w.CrewCanDie = true;
+            RunUntilHour(w, 2f);
+            w.Hazards.StartStorm();
+            typeof(HazardSystem).GetProperty("StormPeak")!.SetValue(w.Hazards, 2.5f);
+            for (int q = 0; q <= 16; q++)
+            {
+                if (q % 2 == 0)
+                {
+                    Console.WriteLine($"   {SimTime.Clock(w.Tick)} 폭풍 {w.Ambience.StormPower:0.00}");
+                    foreach (var c in w.Crew.Where(c => !c.Dead).Take(12))
+                        Console.WriteLine($"      {c.Name,-6} {c.Room?.Name ?? (c.Outside ? "선외" : "-"),-8} 노출 {(c.Room != null ? w.Ambience.Exposure(c.Room) : 0):0.00} 방사 {c.Room?.Radiation:0.00} 누적 {c.Dose:0.00}Sv · {c.Pose} {c.Job?.Label}");
+                }
+                Run(w, SimTime.Minutes(15));
+            }
+        }
+
+        if (what.Contains("major"))
+        {
+            string list = Environment.GetEnvironmentVariable("MAJ") ?? "reactorcool,multifire,platetear,cascadedecomp,smokespread,ammonia,lscascade,crackrun,cargo,trunkfire";
+            foreach (var key in list.Split(','))
+            {
+                var w = DayOne(seed, Environment.GetEnvironmentVariable("SHIP") ?? "Hanbit"); w.CrewCanDie = true;
+                RunUntilHour(w, float.Parse(Environment.GetEnvironmentVariable("HOUR") ?? "14"));
+                var inj0 = w.Crew.ToDictionary(c => c.Id, c => c.Vitals.Injury);
+                var minHp = w.Crew.ToDictionary(c => c.Id, c => 1f);
+                string? what2 = w.Major.Fire("major:" + key, null);
+                float maxHeat = 0f, maxTemp = 0f, maxSmoke = 0f, minP = 200f;
+                var hurt = new Dictionary<string, float>();
+                for (int m = 0; m < 6 * 60; m++)
+                {
+                    Run(w, SimTime.Minutes(1));
+                    foreach (var c in w.Crew)
+                    {
+                        if (c.Vitals.Health < minHp[c.Id]) minHp[c.Id] = c.Vitals.Health;
+                        maxHeat = MathF.Max(maxHeat, w.Perils.HeatOf(c));
+                        if (c.Room != null) { maxTemp = MathF.Max(maxTemp, c.Room.Air.Temperature); maxSmoke = MathF.Max(maxSmoke, c.Room.Air.Smoke); minP = MathF.Min(minP, c.Room.Air.Pressure); }
+                    }
+                }
+                foreach (var c in w.Crew) { float d = c.Vitals.Injury - inj0[c.Id]; if (d > 0.01f) { string k = c.Vitals.InjuryCause ?? "?"; hurt[k] = hurt.GetValueOrDefault(k) + d; } }
+                Console.WriteLine($"   {key}: {what2} · 죽음 {w.Crew.Count(c => c.Dead)} · 쓰러짐 {w.History.Collapses} · 최저 체력 {minHp.Values.Min():0.00} · 사람이 겪은 최고 {maxTemp:0}℃ 연기 {maxSmoke:0.00} 최저 압력 {minP:0} · 열 {maxHeat:0.00} · 다침 {string.Join(" ", hurt.Select(kv => $"{kv.Key} {kv.Value:0.00}"))} · 출혈 {w.Casualty.Bleeds}");
+            }
+        }
     }
 }
