@@ -19,7 +19,7 @@ public partial class Hud
     {
         CouncilOpen = !CouncilOpen;
         _sittingIndex = -1;
-        if (CouncilOpen) { PolicyOpen = false; ChronicleOpen = false; TechOpen = false; ControlOpen = false; OpenChain(null); }
+        if (CouncilOpen) { PolicyOpen = false; ChronicleOpen = false; TechOpen = false; ControlOpen = false; ScaleCodexOpen = false; OpenChain(null); }
     }
 
     private string Who(int id) => id < 0 ? "주 컴퓨터" : id < _world.Crew.Count ? _world.Crew[id].Name : "?";
@@ -35,6 +35,8 @@ public partial class Hud
     {
         var w = _world;
         var mo = w.Motions;
+        // 다른 창을 열면 비켜 준다
+        if (PolicyOpen || ChronicleOpen || TechOpen || ControlOpen || ChainOpen || ScaleCodexOpen) { CouncilOpen = false; return; }
         float x0 = Margin, y0 = Margin + 52f + 8f + 40f + 8f + 64f + 10f;
         float wdt = Mathf.Min(1260f, Screen.X - RightColumnWidth - Margin * 3);
         float height = Screen.Y - y0 - LogFullHeight - Margin - 10f;

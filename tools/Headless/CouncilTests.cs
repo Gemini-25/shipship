@@ -128,6 +128,13 @@ public static partial class Program
                 Check("모여 앉기 — 따로 연 회의에 부른 사람 대부분이 그 방에 와서 앉고, 말풍선이 차례로 뜬다", past.Present.Count >= 3 && past.Script.Count >= 3,
                     $"{past.Venue.Name} · 부름 {past.Invited.Count} · 온 사람 {past.Present.Count} · 발언 {past.Script.Count} · 손 {past.Hands.Count}/{past.Voters.Count}");
             }
+            // 사고 조사: 사람을 잃은 뒤 — 컴퓨터가 그날 기록을 내놓고, 정한 사람에게 책임을 묻는다
+            var asker = w.Crew.Where(c => !c.Dead && !c.IsChild && c.CanAct).OrderByDescending(c => c.Value == CrewValue.Safety ? 1 : 0).ThenBy(c => c.Id).First();
+            w.History.Add(w, HistoryKind.Casualty, $"{asker.Name}의 동료가 기관실에서 쓰러졌다", null, null);
+            var inq = w.Motions.Propose(asker, MotionKind.Crisis, SittingKind.Inquiry, "기관실 일 — 왜 그렇게 됐나", "다시는 이러면 안 된다");
+            CouncilUntil(w, () => inq.Decided >= 0 && w.Motions.Now == null, SimTime.TicksPerDay * 2, 30);
+            Check("사고 조사 — 서명이 모이면 조사 자리가 열리고, 주 컴퓨터가 그날 기록을 근거로 낸다", inq.Decided >= 0 && inq.Item?.Computer?.Contains("쓰러졌다") == true,
+                $"{inq.Title} → {inq.Outcome} · {inq.Item?.Computer}");
         }
 
         // ── 3) 재판: 배급을 빼돌린 사람 — 본 사람만 증언하고, 처벌을 표결로 정한다 (비밀 투표 뒤 추측)
@@ -232,6 +239,11 @@ public static partial class Program
             Console.WriteLine($"   사흘: {st.Line()}");
             Check("저절로 — 사흘 동안 승무원이 낸 안건이 서명을 거쳐 회의에 오른다", st.Proposed >= 2 && st.Signed >= 2 && st.Passed + st.Failed >= 1,
                 string.Join(" / ", w.Motions.All.Take(6).Select(m => $"{m.Title} [{m.Stage}{(m.Decided >= 0 ? " " + m.Outcome : "")}]")));
+            Run(w, SimTime.TicksPerDay * 3);
+            Console.WriteLine($"   엿새: {st.Line()}");
+            var gone = w.Motions.Factions.Where(f => f.Gone).ToList();
+            Check("파벌은 생겼다 흩어진다 — 다음 안건에서 갈라서거나 한동안 같이 설 일이 없으면", st.FactionsBorn >= 1 && gone.Count >= 1,
+                string.Join(" / ", w.Motions.Factions.Select(f => $"{f.Name}{(f.Gone ? $" (흩어짐: {f.GoneWhy})" : $" (이김 {f.Wins} · 짐 {f.Losses})")}")));
         }
 
         // ── 6) 결정론 · 성능

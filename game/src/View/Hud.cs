@@ -836,6 +836,7 @@ public partial class Hud : Control
         if (w.Society.IsVeteran(c)) feel.Add(("베테랑", new Color("#cfd8dc")));
         if (w.Society.Suspended(c)) feel.Add(("근무 박탈", Palette.Warning));
         if (w.Society.OnProbation(c)) feel.Add(("수습", Palette.TextMuted));
+        if (w.Motions.FactionOf(c) is Faction cf) feel.Add((cf.Name, ShipView.FactionColor(cf))); if (w.Motions.GrudgeOf(c) is not null) feel.Add(("앙금", new Color("#b0bec5"))); if (w.Motions.NoVote(c)) feel.Add(("표 없음", Palette.Warning)); // v18.18 파벌 · 진 쪽 · 특권 박탈
         float ob = w.Minds.Obedience(c);
         feel.Add(($"지시를 따름 {ob * 100:0}%", ob < 0.45f ? Palette.Warning : Palette.TextMuted));
         float fx = x;

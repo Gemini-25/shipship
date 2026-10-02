@@ -211,7 +211,7 @@ public sealed partial class MotionSystem
     public bool Summoned(CrewMember c) => Now is { } s && s.Invited.Contains(c.Id) && (s.End <= 0 || _w.Tick < s.End);
     public bool Feasting => _feastAt >= 0 && _w.Tick >= _feastAt && _w.Tick < _feastEnd;
     /// <summary>승무원이 선장 불신임 서명을 돌리고 있다 (정기 회의의 자동 불신임 대신).</summary>
-    public bool ConfidencePending => !Off && All.Any(m => m.Kind == MotionKind.Confidence && m.Stage is MotionStage.Signing or MotionStage.Ready or MotionStage.Sitting);
+    public bool ConfidencePending => !Off && All.Any(m => m.Kind == MotionKind.Confidence && m.Stage is MotionStage.Ready or MotionStage.Sitting);
     public bool SawTheftLately(CrewMember c) => _sawTheft.TryGetValue(c.Id, out var t) && _w.Tick - t < SimTime.Minutes(40);
 
     // ───────────────────────────── 틱 ─────────────────────────────
@@ -306,7 +306,8 @@ public sealed partial class MotionSystem
         // 1) 배분: 먹을 것이 줄어든다 — 배급을 줄이자 (창고를 보는 사람 · 안전 · 규칙 · 효율)
         float days = FoodPolicy.FoodDays(w);
         int rations = w.Policies["rations"];
-        if (rations != 3 && days < 5f && !w.Food.Disabled && !Pending("rations"))
+        bool settled = w.Policies.SetAt("rations") < 0 || w.Tick - w.Policies.SetAt("rations") >= SimTime.TicksPerDay;
+        if (rations != 3 && days < 5f && !w.Food.Disabled && !Pending("rations") && settled)
         {
             float s = 0.25f + (5f - days) * 0.1f + c.Value switch { CrewValue.Safety => 0.15f, CrewValue.Rules => 0.12f, CrewValue.Efficiency => 0.12f, CrewValue.People => -0.1f, _ => 0f }
                       + (c.Role == CrewRole.Cook ? 0.2f : 0f) - 0.5f * c.Needs.Hunger;
@@ -314,7 +315,7 @@ public sealed partial class MotionSystem
             Consider(s, () => Propose(c, MotionKind.Allocation, SittingKind.Regular, "배급을 줄이자", why, "rations", 3));
         }
         // 1b) 배급을 줄였는데 넉넉해졌고 배가 고프다 — 되돌리자 (진 쪽의 앙금도)
-        if (rations == 3 && !Pending("rations") && (days > 6f || c.Needs.Hunger > 0.55f))
+        if (rations == 3 && !Pending("rations") && settled && (days > 6f || c.Needs.Hunger > 0.55f))
         {
             float s = 0.15f + 0.5f * c.Needs.Hunger + (days > 6f ? 0.15f : 0f) + (g != null && Get(g.Motion)?.Policy == "rations" ? 0.25f : 0f);
             Consider(s, () => Propose(c, MotionKind.RuleChange, SittingKind.Regular, "배급을 다시 똑같이", c.Needs.Hunger > 0.55f ? "배가 고파서 손이 떨린다" : "이제 먹을 것이 넉넉하다", "rations", 0));
@@ -408,7 +409,7 @@ public sealed partial class MotionSystem
         {
             if (w.Policies[id] == to || Pending(id)) return;
             long set = w.Policies.SetAt(id);
-            if (set >= 0 && w.Tick - set < SimTime.TicksPerDay) s -= 0.3f; // 정한 지 하루도 안 됐다
+            if (set >= 0 && w.Tick - set < SimTime.TicksPerDay * (kind == MotionKind.Crisis ? 1 : 3)) return; // 정한 지 사흘도 안 됐다 (급한 일은 하루)
             consider(s, () => Propose(c, kind, sitting, title, why, id, to));
         }
         // 쉴 틈이 없다
@@ -538,7 +539,8 @@ public sealed partial class MotionSystem
         {
             if (m.Stage != MotionStage.Signing && m.Stage != MotionStage.Ready) continue;
             var who = P(m.Proposer);
-            bool gone = who == null || who.Dead || m.Target >= 0 && P(m.Target) is not { Dead: false };
+            bool gone = who == null || who.Dead || m.Target >= 0 && P(m.Target) is not { Dead: false }
+                        || m.Kind == MotionKind.Confidence && m.Target != w.Command.CaptainId; // 선장이 이미 바뀌었다
             if (!gone && w.Tick < m.Deadline) continue;
             if (m.Stage == MotionStage.Ready && !gone && w.Tick < m.Deadline + SimTime.TicksPerDay * 2) continue; // 모인 안건은 회의를 기다린다
             m.Stage = MotionStage.Dropped;

@@ -173,6 +173,12 @@ public sealed partial class MotionSystem
             if (accuser != null && !Open.Any(x => x.Kind == MotionKind.Punishment && x.Target == c.Id))
                 Propose(accuser, MotionKind.Punishment, SittingKind.Regular, $"{Ko.IGa(c.Name)} 벌 근무를 하지 않았다", "회의에서 정한 벌을 안 지키면 정한 게 무슨 소용이냐", target: c.Id);
         }
+        // 급할 때 정한 물 규칙: 물탱크가 다시 차면 정한 대로 푼다
+        if (_waterRevert.motion >= 0 && w.Water.Capacity > 0 && w.Water.Level >= w.Water.Capacity * 0.5f)
+        {
+            if (w.Policies["water"] == 2) w.Policies.Set("water", _waterRevert.to, "물탱크가 다시 찼다 — 회의에서 정한 대로 푼다");
+            _waterRevert = (-1, 0);
+        }
         // 주 컴퓨터: 창고 수량이 배식 기록과 어긋난다 (누가 꺼냈는지는 모른다)
         foreach (var t in Thefts)
         {

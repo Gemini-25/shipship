@@ -97,7 +97,11 @@ public sealed partial class MotionSystem
         if (prop != null)
         {
             float rel = 0.22f * c.AffinityTo(prop) + 0.15f * w.Relations.Trust(c, prop);
-            if (MathF.Abs(rel) > 0.05f) t.Add((rel, rel > 0f ? $"{prop.Name}의 말이라면 믿는다" : $"{Ko.IGa(prop.Name)} 낸 안건이라"));
+            // 그 사람에 대한 기억이 근거가 된다 (구해 줬다 · 내 경고를 무시했다 · 서명해 줬다…)
+            var mem = MathF.Abs(rel) > 0.05f ? w.Relations.Why(c, prop) : null;
+            string relWhy = mem != null && MathF.Abs(mem.Weight) >= 0.15f && MathF.Sign(mem.Weight) == MathF.Sign(rel) ? $"{Ko.EunNeun(prop.Name)} {mem.Text}"
+                : rel > 0f ? $"{prop.Name}의 말이라면 믿는다" : $"{Ko.IGa(prop.Name)} 낸 안건이라";
+            if (MathF.Abs(rel) > 0.05f) t.Add((rel, relWhy));
             if (GrudgeOf(c) is Grudge g && (g.Against == prop.Id || FactionOf(prop) is Faction pf && pf.Members.Contains(g.Against)))
                 t.Add((-0.25f, $"지난번 '{Get(g.Motion)?.Title ?? "그 일"}' 때도 저쪽 뜻대로였다"));
             if (FactionOf(c) is Faction f && f.Members.Contains(prop.Id)) t.Add((0.15f, "우리 쪽 안건이다"));
@@ -258,6 +262,7 @@ public sealed partial class MotionSystem
         {
             if (m.Policy != "" && m.To >= 0)
             {
+                if (m.Kind == MotionKind.Crisis && m.Policy == "water") _waterRevert = (m.Id, w.Policies["water"]); // 물이 다시 차면 푼다 (급할 때만의 규칙)
                 w.Policies.Set(m.Policy, m.To, $"{prop?.Name ?? "누군가"}의 안건 — {m.Why}", yes.Count, no.Count);
                 w.Meetings.Record(m.Title, "policy:" + m.Policy, -1, chair, yes, no, MeetingSystem.Hazard(m.Policy));
                 if (m.Policy == "rations" && m.To == 3) RationsMotion = m.Id;
@@ -311,6 +316,7 @@ public sealed partial class MotionSystem
     /// <summary>배급을 줄이기로 한 안건 (이걸 어기면 결정 위반).</summary>
     public int RationsMotion { get; private set; } = -1;
     private bool _feastDone;
+    private (int motion, int to) _waterRevert = (-1, 0);
 
     /// <summary>표결 뒤: 파벌 · 소수파 불만 · 비밀 투표 추측 · 회의록과 일기.</summary>
     private void Aftermath(Motion m, List<CrewMember> voters, List<CrewMember> yes, List<CrewMember> no, bool pass)
