@@ -30,6 +30,8 @@ public static partial class Program
         _fails = 0;
         Console.WriteLine($"승무원이 여는 회의 · 파벌 · 재판 · 선거 점검 (v18.18) · 시드 {seed}\n");
         var minutes = new List<string>();
+        string only = Environment.GetEnvironmentVariable("SHIPSIM_SCENE") ?? "";
+        bool Do(string k) => only == "" || only.Contains(k);
 
         // ── 1) 배급을 줄이자: 먹을 것이 줄자 누군가 스스로 안건을 내고, 서명을 받으러 다니고, 정기 회의에서 파벌이 갈린다
         World w1 = DayOne(seed, "Hanbit");
@@ -49,6 +51,7 @@ public static partial class Program
             {
                 Run(w, 60);
                 rat ??= w.Motions.All.FirstOrDefault(m => m.Policy == "rations" && m.To == 3);
+                if (i % 60 == 0) foreach (var c in w.Crew.Where(c => !c.Dead && !c.IsChild && c.Id % 2 == 0)) c.Needs.Food = MathF.Min(c.Needs.Food, 0.35f); // 요즘 몫이 적어 늘 배가 고프다
                 if (rat == null) { if (i % 30 == 0) TrimFood(w, 3.5f); continue; }
                 foreach (var c in w.Crew) if (c.Job?.Activity is PetitionActivity) { walked++; asked.Add(c.Id); }
                 if (readyAt < 0 && rat.Stage != MotionStage.Signing) { readyAt = w.Tick; signersAtReady = rat.Signers.Count; }
@@ -62,6 +65,8 @@ public static partial class Program
                 rat != null ? $"찾아다닌 틱 {walked} · 부탁 {rat.Asked.Count - 1}명 · 서명 {rat.Signers.Count}/{rat.Need} · 거절 {rat.Refused.Count} · 회의 전 서명 {signersAtReady}" : "");
             var item = rat?.Item;
             if (item != null) minutes.Add($"[정기 회의] {item.Title} → {item.Outcome} · " + string.Join(" / ", item.Speeches.Select(s => $"{w.Crew.First(c => c.Id == s.Who).Name}: {s.Text}")));
+            if (item != null && Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "1")
+                foreach (var v in item.Votes) { var c = w.Crew.First(x => x.Id == v.who); Console.WriteLine($"     {c.Name} {MeetingSystem.ValueName(c.Value)} 배고픔 {c.Needs.Hunger:0.00} 식욕 {c.Traits.Appetite:0.00} {c.Role} → {(v.yes ? "찬" : "반")} {rat!.Final.GetValueOrDefault(c.Id):+0.00;-0.00} {v.why}"); }
             var fac = rat?.FactionIds.Select(id => w.Motions.Factions.First(f => f.Id == id)).ToList() ?? new List<Faction>();
             bool split = item != null && item.Yes > 0 && item.No > 0;
             Check("파벌 — 배급 안건에 양쪽이 갈리고, 강하게 선 사람끼리 별명 붙은 파벌이 생긴다", split && fac.Count >= 1,
@@ -95,6 +100,7 @@ public static partial class Program
         }
 
         // ── 2) 서명이 모여야 회의가 열린다 (긴급 회의) · 모자라면 접힌다
+        if (Do("2"))
         {
             var w = DayOne(seed + 1, "Hanbit");
             w.Motions.Quiet = true;
@@ -121,6 +127,7 @@ public static partial class Program
         }
 
         // ── 3) 재판: 배급을 빼돌린 사람 — 본 사람만 증언하고, 처벌을 표결로 정한다 (비밀 투표 뒤 추측)
+        if (Do("3"))
         {
             var w = w1;
             w.Motions.Quiet = true;
@@ -178,6 +185,7 @@ public static partial class Program
         }
 
         // ── 4) 선장 불신임 선거 → 후보 연설 → 비밀 투표 → 새 선장의 방침 (위험 감수 · 컴퓨터에 맡길 몫)
+        if (Do("4"))
         {
             var w = DayOne(seed + 2, "Hanbit");
             w.Motions.Quiet = true;
@@ -212,6 +220,7 @@ public static partial class Program
         }
 
         // ── 5) 스스로 굴러가는 사흘 (안건 · 파벌 · 흩어짐)
+        if (Do("5"))
         {
             var w = DayOne(seed + 3, "Hanbit");
             Run(w, SimTime.TicksPerDay * 3);
@@ -222,6 +231,7 @@ public static partial class Program
         }
 
         // ── 6) 결정론 · 성능
+        if (Do("6"))
         {
             uint H() { var w = World.CreateDefault(seed, 0, "Hanbit"); Run(w, SimTime.TicksPerDay + SimTime.Hours(6)); return SaveGame.StateHash(w); }
             uint h1 = H(), h2 = H();

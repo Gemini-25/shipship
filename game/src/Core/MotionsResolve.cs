@@ -27,9 +27,14 @@ public sealed partial class MotionSystem
                 case "rations":
                 {
                     float sign = m.To == 3 ? 1f : -1f;
-                    t.Add((sign * MathF.Min(0.45f, (4.5f - days) * 0.12f), days < 4.5f ? $"이대로면 {days:0.#}일 뒤 바닥난다" : "아직은 먹을 것이 있다"));
-                    t.Add((-sign * 0.7f * (c.Needs.Hunger - 0.25f), c.Needs.Hunger > 0.4f ? "배가 고프면 손이 안 움직인다" : "조금 덜 먹어도 버틴다"));
+                    // 창고를 보는 사람(조리 · 재배 · 안전을 따지는 사람)은 남은 날을 무겁게 본다
+                    float knows = c.Role is CrewRole.Cook or CrewRole.Botanist || c.Value == CrewValue.Safety ? 1f : 0.5f;
+                    t.Add((sign * knows * MathF.Min(0.45f, (4.5f - days) * 0.12f), days < 4.5f ? $"이대로면 {days:0.#}일 뒤 바닥난다" : "아직은 먹을 것이 있다"));
+                    float h = c.Needs.Hunger;
+                    t.Add((-sign * (h > 0.3f ? 0.8f * (h - 0.3f) : -0.05f), h > 0.4f ? "배가 고프면 손이 안 움직인다" : "조금 덜 먹어도 버틴다"));
+                    if (c.Value == CrewValue.Freedom) t.Add((-sign * 0.12f, "먹는 것까지 정해 두면 숨 막힌다"));
                     if (c.Role is CrewRole.Engineer or CrewRole.Technician) t.Add((-sign * 0.15f, "일하는 사람은 먹어야 한다"));
+                    if (c.Traits.Appetite > 1.1f) t.Add((-sign * 0.5f * (c.Traits.Appetite - 1f), "원래 먹는 양이 많다"));
                     if (c.Role == CrewRole.Cook) t.Add((sign * 0.25f, "창고를 날마다 보면 안다"));
                     if (c.Value == CrewValue.People) t.Add((-sign * 0.12f, "아픈 사람 몫까지 줄일 순 없다"));
                     break;
@@ -98,7 +103,7 @@ public sealed partial class MotionSystem
             if (FactionOf(c) is Faction f && f.Members.Contains(prop.Id)) t.Add((0.15f, "우리 쪽 안건이다"));
         }
         if (m.Item is { ComputerSign: not 0 } it && c.ComputerFaith >= 0f)
-            t.Add((0.2f * it.ComputerSign * (c.ComputerFaith - 0.35f), it.ComputerSign > 0 ? "컴퓨터 기록도 그렇게 말한다" : "컴퓨터 기록은 반대다"));
+            t.Add((0.3f * it.ComputerSign * (c.ComputerFaith - 0.3f), it.ComputerSign > 0 ? "컴퓨터 기록도 그렇게 말한다" : "컴퓨터 기록은 반대다"));
         float s = t.Sum(x => x.v);
         var why = (s > 0f ? t.Where(x => x.v > 0f && x.why != "").OrderByDescending(x => x.v) : t.Where(x => x.v < 0f && x.why != "").OrderBy(x => x.v)).Select(x => x.why).FirstOrDefault()
                   ?? (s > 0f ? "해 볼 만하다" : "글쎄다");
@@ -318,7 +323,7 @@ public sealed partial class MotionSystem
         int against = pass ? m.Proposer : lead?.Id ?? -1;
         foreach (var c in losers)
         {
-            if (MathF.Abs(m.Final.GetValueOrDefault(c.Id)) < 0.3f || c.Id == against) continue;
+            if (MathF.Abs(m.Final.GetValueOrDefault(c.Id)) < 0.22f || c.Id == against) continue;
             AddGrudge(c, m, against, $"'{m.Title}' — {(pass ? "통과됐다" : "떨어졌다")}");
             if (!m.Secret && P(against) is CrewMember ag) w.Relations.Remember(c, ag, RelationReason.VotedAgainstMe, $"'{m.Title}' 때 반대편에 섰다");
         }
@@ -396,8 +401,10 @@ public sealed partial class MotionSystem
     {
         var w = _w;
         if (voters.Count < 4) return;
-        var sides = new[] { true, false }.Select(pro => (pro, ids: voters.Where(c => pro ? m.Final.GetValueOrDefault(c.Id) > 0.3f : m.Final.GetValueOrDefault(c.Id) < -0.3f).Select(c => c.Id).OrderBy(i => i).ToList())).ToList();
+        var sides = new[] { true, false }.Select(pro => (pro, ids: voters.Where(c => pro ? m.Final.GetValueOrDefault(c.Id) > 0.12f : m.Final.GetValueOrDefault(c.Id) < -0.12f).Select(c => c.Id).OrderBy(i => i).ToList())).ToList();
         var touched = new HashSet<int>();
+        // 표가 갈린 안건에서만 새 파벌이 생긴다 (양쪽 다 둘 이상) — 한쪽으로 쏠린 안건은 있던 파벌만 다시 뭉친다
+        bool contested = sides.All(x => x.ids.Count >= 2);
         foreach (var (pro, ids) in sides)
         {
             if (ids.Count < 2) continue;
@@ -418,6 +425,7 @@ public sealed partial class MotionSystem
                 m.FactionIds.Add(best.Id);
                 continue;
             }
+            if (!contested) continue;
             int hue = Enumerable.Range(0, Hues).FirstOrDefault(h => !Factions.Any(f => !f.Gone && f.Hue == h), _nextFaction % Hues);
             var nf = new Faction { Id = _nextFaction++, Name = Nick(m, pro, leader), Hue = hue, Members = ids, Leader = leader.Id, Born = w.Tick, Last = w.Tick, Motions = 1 };
             if (pro == pass) nf.Wins++; else nf.Losses++;
