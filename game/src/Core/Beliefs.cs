@@ -11,7 +11,7 @@ namespace ShipSim.Core;
 // 주요 행동(대피할 방 · 불 확인 · 물건 찾기 · 사람 찾기 · 정전 대처)은 세계 대신 이 믿음으로 판단한다.
 
 /// <summary>믿음의 주제. Id는 방 · 사람 · 물건 종류 · 설비 · 대재난 번호.</summary>
-public enum Topic : byte { Fire, Breach, Down, Dark, Air, Water, Person, Item, Omen, Cosmic, Shelter, Warn, Outage, Slip, Mix, Forecast } // v16 통합: 미끄러운 바닥(본 것 · 방송) · 위험 조합 경고(Matter) · 컴퓨터 예측(Outlook)
+public enum Topic : byte { Fire, Breach, Down, Dark, Air, Water, Person, Item, Omen, Cosmic, Shelter, Warn, Outage, Slip, Mix, Forecast, Thing } // v16 통합: 미끄러운 바닥(본 것 · 방송) · 위험 조합 경고(Matter) · 컴퓨터 예측(Outlook)
 
 /// <summary>어떻게 알았나 — 출처마다 확신과 흐려지는 속도가 다르다.</summary>
 public enum BeliefSource : byte { Seen, Alarm, Broadcast, Radio, Told, Rumor, Overheard, Computer, Guess }
@@ -349,6 +349,7 @@ public sealed class BeliefSystem
             Topic.Slip => b.Value == 1 ? $"{R(b.Id)} 바닥 미끄러움" : $"{R(b.Id)} 바닥 마름",
             Topic.Mix => b.Value == 1 ? $"{R(b.Id)} 위험한 조합 (컴퓨터 경고)" : $"{R(b.Id)} 조합 괜찮음",
             Topic.Forecast => ForecastText(b),
+            Topic.Thing => _w.Info.DescribeThing(b), // v17.3 개인 물건 (어디 있나 · 누가 깼나)
             _ => "?",
         };
     }

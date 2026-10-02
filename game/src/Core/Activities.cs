@@ -106,7 +106,7 @@ public sealed class EatActivity : Activity
         var seat = w.Ship.RoomsOf(RoomType.Mess).Where(r => !r.OffLimits).SelectMany(r => r.Furniture)
             .Where(f => f.Type == FurnitureType.Seat && f.ReservedBy == null && dist.Reachable(f.UseSpots[0])
                         && !w.IsSpotTaken(f.UseSpots[0], c))
-            .OrderBy(f => (f.Center - box.Center).LengthSquared() + w.Coop.Queues.SeatBias(c, f)) // v17.4 줄에서 다툰 사람 곁은 피하고 양보해 준 사람 곁으로
+            .OrderBy(f => (f.Center - box.Center).LengthSquared() + w.Coop.Queues.SeatBias(c, f) + w.Info.SeatBias(c, f)) // v17.3 늘 앉던 자리 · 친한 사람 · 소음 · 조명 · 다툰 사람 · v17.4 줄에서 다툰 사람 곁은 피하고 양보해 준 사람 곁으로
             .FirstOrDefault();
 
         var toils = Plans.DropOff(c, w, dist);

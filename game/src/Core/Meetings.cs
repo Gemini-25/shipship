@@ -281,6 +281,7 @@ public sealed class MeetingSystem
         }
         if (Gathering) { Gather(day); return; }
         PickHour();
+        Hour = _w.Info.Chat.MeetingHour(Hour); // v17.3 메신저로 옮긴 회의 시각
         if (day == _lastDay || hour < Hour || hour >= MathF.Min(23.5f, Hour + 4f)) return;
         if (!Calm())
         {
@@ -388,6 +389,7 @@ public sealed class MeetingSystem
         w.Annex.Agenda(rec, attendees, chair); // v16.10 증축 안건 (침실 · 창고 — 주 컴퓨터의 무게 · 자재 · 위험 조언)
         w.RoomPlans.Agenda(rec, attendees, chair); // v16.17 승무원이 낸 방 안건 (옮기기 · 나누기 · 이름 · 꾸미기)
         w.Automation.Authority.Agenda(rec, attendees, chair); // v16.16 컴퓨터 안건 (계획 · 권한)
+        w.Info.Agenda(rec, attendees, chair); // v17.3 공동 장부 (설거지 당번)
         w.CrisisCrew.Agenda(rec, attendees, chair); // v16.21 사람이 바뀌면 비상 배치표를 다시 짠다
         // 4) 방침 하나: 모인 사람 다수가 바라는 쪽이 지금과 다르고, 바꾼 지 사흘이 지났으면 올린다
         if (rec.Items.Count(i => i.Topic.StartsWith("policy:")) == 0 && attendees.Count >= 3)
@@ -760,6 +762,7 @@ public sealed class MeetingActivity : Activity
     {
         var m = w.Meetings;
         if (!m.Summoned(c) || m.Venue is not Room v || c.Down || c.Outside) return (0f, "—");
+        if (w.Info.Chat.NotYet(c)) return (0f, "회의는 아직이라고 안다"); // v17.3 메신저를 못 봤다
         if (!v.Cells.Any(dist.Reachable)) return (0f, "회의실에 갈 수 없다");
         if (c.Job?.Activity is MeetingActivity) return (0.95f, "회의 중");
         float s = 0.8f + 0.1f * c.Traits.Diligence + (c.Id == w.Command.CaptainId ? 0.1f : 0f);
