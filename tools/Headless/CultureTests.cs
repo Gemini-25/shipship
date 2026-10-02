@@ -94,10 +94,13 @@ public static partial class Program
                 Run(a, SimTime.Hours(14)); Run(b, SimTime.Hours(14));
                 string A = string.Join(", ", a.Culture.Customs.Select(x => CultureSystem.Name(x.Kind)));
                 string B = string.Join(", ", b.Culture.Customs.Select(x => CultureSystem.Name(x.Kind)));
+                // v16.14 뒤로는 물 배에서도 실험 사고(축전기 방전 · 용접 불똥)로 불이 날 수 있다 — 그러면 그 배도 소화기 관행이 맞다.
+                // 갈라짐의 뜻은 "관행은 제 배가 겪은 일에서만 생긴다": 물 배의 소화기 관행은 제 배에 불이 났을 때만.
                 Check("갈라짐 — 같은 배가 겪은 일에 따라 다른 관행을 갖는다",
-                    a.Culture.Of(CustomKind.FireCheck) != null && a.Culture.Of(CustomKind.WaterThrift) == null && b.Culture.Of(CustomKind.WaterThrift) != null && b.Culture.Of(CustomKind.FireCheck) == null
+                    a.Culture.Of(CustomKind.FireCheck) != null && a.Culture.Of(CustomKind.WaterThrift) == null && b.Culture.Of(CustomKind.WaterThrift) != null
+                    && (b.Culture.Of(CustomKind.FireCheck) == null || b.History.Fires > 0)
                     && b.Culture.Stats.ThriftWashes > 0,
-                    $"불을 겪은 배: {A} ↔ 물이 바닥난 배: {B} (아껴 씻기 {b.Culture.Stats.ThriftWashes})");
+                    $"불을 겪은 배: {A} ↔ 물이 바닥난 배: {B} (아껴 씻기 {b.Culture.Stats.ThriftWashes} · 물 배의 불 {b.History.Fires} · 방침 물 {b.Policies["water"]})");
             }
 
             // 6) 정전 속에서 배를 살린 정비사의 방식: 그 사람에게서 시작해 배우는 사람에게 건너간다

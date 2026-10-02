@@ -46,6 +46,12 @@ public static partial class Program
             {
                 var w = DayOne(seed, "Mirinae");
                 var c = w.Crew.First(x => !x.IsChild && x.CanAct);
+                // 털지 않고 식당까지 들어왔다 — 두뇌 2.0 뒤로 이 사람이 아침에 에어락 곁 통로(넓은 방 · 칸이 많아 쌓임이 옅다)에 있기도 해 곧장 털러 간다:
+                // 장면은 "생활 공간까지 들어온 분진"이므로 식당에서 시작한다
+                var mess = w.Ship.RoomsOf(RoomType.Mess).First();
+                c.EndJob(w, ToilStatus.Interrupted);
+                Place(c, mess.Cells.First(x => w.Ship.IsWalkable(x) && w.Ship.FurnitureAt(x) == null));
+                w.Step();
                 c.Soil.SuitDust = 0.8f;
                 var room = c.Room!;
                 float dust0 = w.Soil.RoomSoil(room)[(int)SoilKind.Dust];

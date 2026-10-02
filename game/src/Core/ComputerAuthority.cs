@@ -300,6 +300,9 @@ public sealed class ComputerAuthority
         float conf = f?.Confidence ?? p.Confidence;
         terms.Add(((conf - 0.5f) * 0.5f, conf >= 0.5f ? $"확신 {conf * 100:0}%라면" : $"확신이 {conf * 100:0}%뿐이다"));
         if (p.BelievedDays <= 2f) terms.Add((0.15f, "날이 얼마 없다"));
+        // v16 통합: 예측 방송을 듣고 믿게 된 사람 (승무원 두뇌 2.0 믿음 — 못 들은 사람 · 컴퓨터를 못 믿는 사람은 약하다)
+        float heard = w.Brain2.Beliefs.ForecastBelief(c, p.Key);
+        if (heard > 0.05f) terms.Add((0.3f * heard, $"예측을 들었다 — {w.Brain2.Beliefs.Describe(w.Brain2.Beliefs.Get(c, Topic.Forecast, ShipForecast.Models.FindIndex(x => x.Key == p.Key))!)}"));
         switch (p.Option)
         {
             case "원정":

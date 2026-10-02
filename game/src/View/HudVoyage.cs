@@ -45,7 +45,7 @@ public partial class Hud
                       + (next != null ? $" · {left:0.0}일 뒤 {VoyageSystem.KindName(next.Kind)}" : "") + (v.Drifting ? " · 표류 중" : "");
         Gfx.Text(this, Fonts.Body, new Vector2(bar.Position.X + 10f, bar.Position.Y + 13f), head, Ui.TextSmall, v.Drifting ? Palette.Danger : Palette.TextDim);
         var e = _world.Eras;
-        string era = $"{EraSystem.EraName(e.Era)} · " + (e.Project != null ? $"연구 {EraSystem.All.First(t => t.Id == e.Project).Name} {e.Progress / EraSystem.All.First(t => t.Id == e.Project).Cost * 100:0}%" : "연구할 것 없음");
+        string era = $"{EraSystem.EraName(e.Era)} · " + (EraSystem.Find(e.Project) is EraTech pt ? $"연구 {pt.Name} {e.Progress / _world.TechWeb.CostOf(pt) * 100:0}%" : "연구할 것 없음"); // v16 통합: 그물 새 기술(Extra)도 찾는다 (All 만 보면 예외)
         Gfx.TextRight(this, Fonts.Body, new Vector2(bar.End.X - 10f, bar.Position.Y + 36f), era, Ui.TextTiny, Palette.TextMuted);
     }
 

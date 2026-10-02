@@ -159,7 +159,8 @@ public sealed class MatterActivity : Activity
             var room = w.Ship.RoomAt(t.At);
             if (room == null || room.Detached) continue;
             // 그을리는 것: 경보 · 눈 · 탄 냄새로 안다
-            if (t.Smolder && w.Fire.At(t.At) <= 0f && (m.Alarmed(room) || c.Room == room || t.Known && t.Char > 0.1f || w.Smells.Smelled(c, SmellKind.Burnt, SimTime.Minutes(40)) is { } sn && sn.Room == room.Id))
+            // (불 · 구멍 · 나쁜 공기라고 믿는 방은 들어가지 않는다 — 그 방은 소화 · 대피의 일: 두뇌 2.0 믿음)
+            if (t.Smolder && w.Fire.At(t.At) <= 0f && (room == c.Room || w.Brain2.Beliefs.SafeEnough(c, room)) && (m.Alarmed(room) || c.Room == room || t.Known && t.Char > 0.1f || w.Smells.Smelled(c, SmellKind.Burnt, SimTime.Minutes(40)) is { } sn && sn.Room == room.Id))
             { Consider(Task.Smolder, t, null, null, t.At, 0.95f); continue; }
             // 히터 · 불 곁의 천 · 종이 · 플라스틱 (보이는 것 · 컴퓨터가 짚은 것)
             if (!quiet && (t.Known || t.Flagged) && Matter.React(t.Mat, Element.Heat) is Reaction.Char or Reaction.Melt && t.Char < 1f && t.Stage != BreakStage.Shards && m.Hot(t))

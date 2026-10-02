@@ -120,6 +120,13 @@ public sealed class ProposalBoard
             float yes = trust + (boss.Value == CrewValue.Efficiency ? 0.1f : boss.Value == CrewValue.People ? -0.12f : boss.Value == CrewValue.Safety ? -0.05f : 0f);
             bool accept = !knows && (yes >= 0.5f || yes >= 0.4f && R.Chance(0.5f));
             string why = knows ? "안에 사람이 있는 걸 안다" : accept ? $"컴퓨터를 믿는다 ({trust * 100:0}%)" : $"컴퓨터 말만으론 못 믿겠다 ({trust * 100:0}%) — 직접 본다";
+            // v16 통합: 아끼던 방침을 풀자는 제안 — 못 믿는 사람은 탱크 눈금을 직접 보고 정한다 (넉넉하면 푼다 · 아니면 그대로)
+            if (!accept && p.Key.StartsWith("lift:") && ShipForecast.Models.FirstOrDefault(m => m.Key == p.Key[5..]) is ResourceModel rm)
+            {
+                bool plenty = rm.True(w) >= rm.Short(w) * 2.5f;
+                accept = plenty;
+                why = plenty ? $"{rm.Name} 눈금을 직접 봤다 — 넉넉하다" : $"{rm.Name} 눈금을 직접 봤다 — 아직은 아낀다";
+            }
             Decide(p, accept, boss.Name, why);
         }
     }

@@ -257,7 +257,7 @@ public sealed class PlanSystem
                 if (s.Who is not CrewMember who || who.Dead) { s.Note = "그 사람이 없다"; return null; }
                 var room = s.Room ?? w.Brain2.Beliefs.WhereIs(c, who, out _);
                 if (room == null) room = GuessPlace(c, who, dist);
-                if (room != null && !RoomOk(c, room)) { s.Note = $"{room.Name}은(는) 위험하다 — 못 간다"; return null; }
+                if (room != null && room != c.Room && !RoomOk(c, room)) { s.Note = $"{room.Name}은(는) 위험하다 — 못 간다"; return null; } // 이미 그 방에 있으면 들어갈 일이 없다 (곁의 사람에게 바로 말한다)
                 if (room == null || SpotIn(room, dist, c, who) is not Cell spot) { s.Note = $"{who.Name}이(가) 어디 있는지 모른다"; return null; }
                 s.Room = room;
                 bool tell = s.Kind == StepKind.Tell;
@@ -616,6 +616,14 @@ public sealed class PlanSystem
             if (s.Tries < 1)
             {
                 var next = Locate(c, who);
+                // 알리러 갔는데 없고, 다시 짐작한 곳도 갈 수 없다 — 그 사람은 두고, 모를 것 같은 다른 사람에게 (알릴 일은 그대로 남는다)
+                if (s.Kind == StepKind.Tell && (next == null || next != c.Room && !RoomOk(c, next))
+                    && w.Brain2.Social.TellTarget(c, w.Paths.Flood(c.Cell, c.PathProfile), who) is { } t2 && t2.b.Topic == p.FactTopic && t2.b.Id == p.FactId)
+                {
+                    p.For = t2.who;
+                    Insert(p, StepKind.Tell, Method.Tell, $"{t2.who.Name}에게 대신 알리기", null, null, t2.who).Tries = s.Tries + 1;
+                    return;
+                }
                 var again = Insert(p, s.Kind, s.Method, $"{who.Name} 다시 찾기", next, null, who);
                 again.Tries = s.Tries + 1;
             }

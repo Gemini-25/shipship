@@ -564,7 +564,12 @@ public static class Plans
         {
             // 가려던 선반이 그새 찼으면 다른 곳을 다시 찾는다 (정말 둘 곳이 하나도 없을 때만 버린다)
             if (cm.Carrying is ItemStack still && world.Ship.Containers.Any(f => f.Storage!.Accepts(still.Kind) && f.Storage.Free > 0))
+            {
+                if (world.Ship.Containers.Any(f => f.Storage!.Accepts(still.Kind) && f.Storage.Free > 0 && world.Body.MayEnter(cm, f.Room))) return false;
+                // 둘 선반은 잠긴 구역에만 있다 — 버리지 않고 이 방 바닥에 내려놓는다 (들어갈 수 있는 사람이 챙긴다)
+                if (world.Movement.SetDown(cm, "둘 선반이 잠긴 방에 있다", any: true)) return true;
                 return false;
+            }
             if (cm.Carrying is ItemStack left)
             {
                 world.Log.Add(world.Tick, ItemKinds.IsFood(left.Kind) ? LogKind.Life : LogKind.Warning,
@@ -585,7 +590,7 @@ public static class Plans
         int bestCost = int.MaxValue;
         foreach (var f in w.Ship.Containers)
         {
-            if (!match(f)) continue;
+            if (!match(f) || !w.Body.MayEnter(c, f.Room)) continue; // 잠긴 구역의 보관함은 고르지 않는다
             foreach (var s in f.UseSpots)
             {
                 int d = dist.Get(s);

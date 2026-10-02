@@ -50,7 +50,7 @@ public sealed class SocialMind
     // ─────────────────────────── 알리기 ───────────────────────────
 
     /// <summary>내가 직접 본(경보 없이) 위험을 모를 것 같은 사람 — 가까운 사이 · 자는 사람 · 가까운 곳부터.</summary>
-    public (Belief b, CrewMember who, float s, string why)? TellTarget(CrewMember c, DistanceField dist)
+    public (Belief b, CrewMember who, float s, string why)? TellTarget(CrewMember c, DistanceField dist, CrewMember? skip = null)
     {
         var w = _w;
         var bel = w.Brain2.Beliefs;
@@ -61,8 +61,9 @@ public sealed class SocialMind
             if (b.Src != BeliefSource.Seen || b.Alarmed || w.Tick - b.Since > SimTime.Minutes(45)) continue;
             foreach (var p in w.Crew)
             {
-                if (p == c || p.Dead || p.Away || p.Down || p.Outside || ThinksKnows(c, p, b)) continue;
+                if (p == c || p == skip || p.Dead || p.Away || p.Down || p.Outside || ThinksKnows(c, p, b)) continue;
                 var where = bel.WhereIs(c, p, out float wc);
+                if (where != null && where != c.Room && !w.Brain2.Plans.RoomOk(c, where)) continue; // 위험하다고 믿는 방에 있다고 믿는 사람 — 갈 수 없다 (헛계획 대신 갈 수 있는 사람부터)
                 bool asleep = bel.Get(c, Topic.Person, p.Id) is Belief pb && pb.Aux == 1 && pb.Value >= 0;
                 int d = -1;
                 if (where != null) foreach (var cell in where.Cells) { int x = dist.Get(cell); if (x >= 0 && (d < 0 || x < d)) d = x; }
@@ -299,7 +300,9 @@ public sealed class TellActivity : Activity
         s *= w.Brain2.Learning.Bias(c, Method.Tell);
         // 어차피 나가야 한다 — 나가는 길에 알린다 (겁 많고 사교적일수록 대피 대신 알리며 나간다)
         // 피하던 중이면 피하는 길을 알리는 길로 바꾼다 (대피의 버티기 여유를 넘을 만큼)
-        if (danger > 0.2f) return (Math.Clamp(s * t.s + danger * (0.6f + 0.6f * c.Traits.Sociability) * (1.3f - 0.6f * c.Traits.Bravery) + (c.Job?.Activity is EvacuateActivity ? 0.45f : 0f), 0f, 2.3f), t.why + " · 나가는 길에");
+        // 나가는 길에 알리기도 나가는 길이다 — 두려움이 대피를 끄는 만큼 이 길도 끈다 (두려움이 대피만 키우면 알리러 가던 사람이 그냥 숨는다)
+        if (danger > 0.2f) return (Math.Clamp(s * t.s + danger * (0.6f + 0.6f * c.Traits.Sociability) * (1.3f - 0.6f * c.Traits.Bravery) + (c.Job?.Activity is EvacuateActivity ? 0.45f : 0f), 0f, 2.3f)
+                                   * w.Brain2.Emotions.Tilt(c, ActCat.Survival), t.why + " · 나가는 길에");
         if (c.Job?.Activity is EvacuateActivity) s += 0.4f;
         return (Math.Clamp(s * t.s, 0f, 1.3f), t.why);
     }

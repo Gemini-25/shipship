@@ -308,6 +308,19 @@ public sealed class ShipForecast
         }
     }
 
+    /// <summary>
+    /// v16 통합: 예측을 들은 사람의 믿음 — 컴퓨터를 믿는 만큼 × 예측의 확신만큼 "며칠 뒤 모자란다"고 믿는다.
+    /// 회의에서 컴퓨터 안건에 손을 들 때 · 아껴 쓸 때 이 믿음을 읽는다 (Mind.Knows 는 사고 열쇠만 쥔다).
+    /// </summary>
+    private void HeardForecast(CrewMember c, ResourceModel m, ResourceForecast f, BeliefSource src)
+    {
+        var w = _w;
+        int i = Models.IndexOf(m);
+        if (i < 0 || c.Dead) return;
+        float conf = (0.3f + 0.7f * w.Automation.Trusts.Of(c)) * (0.4f + 0.6f * f.Confidence);
+        w.Brain2.Beliefs.Learn(c, Topic.Forecast, i, 1, src, conf, -2, (int)MathF.Round(Math.Clamp(f.DaysToShort, 0f, 99f) * 10f));
+    }
+
     /// <summary>부족 경고: 나흘 안에 문턱 아래 · 믿음이 반 넘으면 방송 (들은 사람만 안다).</summary>
     private void Warn(ResourceModel m, ResourceForecast f, Room? g)
     {
@@ -341,7 +354,7 @@ public sealed class ShipForecast
             if (who != null)
             {
                 a.Apps.Messages.Add(new PersonalMessage(w.Tick, who.Id, "예측", $"{f.Line} — {f.Basis}"));
-                who.Mind.Knows[$"forecast:{key}"] = (KnowSource.Radio, w.Tick, f.Line);
+                HeardForecast(who, m, f, BeliefSource.Computer); // 개인 메시지 — 믿음 장부로 (Mind.Knows 는 사고 열쇠만 남기고 지운다)
                 wn.Heard.Add(who.Id);
             }
             return;
@@ -355,7 +368,7 @@ public sealed class ShipForecast
                     wn.Heard.Add(id);
                     var c = w.Crew.FirstOrDefault(x => x.Id == id);
                     if (c == null) continue;
-                    c.Mind.Knows[$"forecast:{key}"] = (KnowSource.Radio, w.Tick, f.Line); // 들은 사람만 안다 (승무원 두뇌 2.0 믿음으로 이어진다)
+                    HeardForecast(c, m, f, BeliefSource.Broadcast); // 들은 사람만 안다 — 승무원 두뇌 2.0 믿음 (예전 Mind.Knows["forecast:…"] 는 Mind 가 사고가 아니라며 바로 지웠다)
                     if (c.Traits.Calm < 0.4f) c.Needs.Stress = MathF.Min(1f, c.Needs.Stress + 0.03f * f.Confidence); // 걱정 많은 사람은 마음이 쓰인다
                 }
         }
@@ -381,16 +394,16 @@ public sealed class ShipForecast
         }
     }
 
-    /// <summary>고장 위험 · 바깥 위험 (컴퓨터가 데이터선으로 보는 설비만).</summary>
+    /// <summary>고장 위험 · 바깥 위험 (컴퓨터가 데이터선으로 보는 설비만 · 전조는 누가 · 감지기가 알아챈 것만 — 숨은 전조를 미리 알지 않는다).</summary>
     private void Risk()
     {
         var w = _w;
         Risks.Clear();
         foreach (var mm in w.Ship.Machines.Where(x => !x.Body.Room.Detached && x.Body.Room.DataLinked && !x.Stopped)
-                     .Select(x => (m: x, p: 1f - MathF.Pow(1f - MathF.Min(0.5f, x.FaultChancePerHour), 24f) + (x.Omen != null ? 0.25f : 0f)))
+                     .Select(x => (m: x, p: 1f - MathF.Pow(1f - MathF.Min(0.5f, x.FaultChancePerHour), 24f) + (x.Omen is { Known: true } ? 0.25f : 0f)))
                      .Where(x => x.p >= 0.08f).OrderByDescending(x => x.p).ThenBy(x => x.m.Body.Id).Take(4))
             Risks.Add(new FailureRisk(mm.m.Body.Id, mm.m.Name, mm.m.Body.Room.Name, MathF.Min(0.99f, mm.p),
-                mm.m.Omen != null ? "전조가 보인다" : $"마모 {mm.m.Wear * 100:0}%"));
+                mm.m.Omen is { Known: true } ? "전조가 보인다" : $"마모 {mm.m.Wear * 100:0}%"));
         var parts = new List<string>();
         if (w.Hazards.StormActive) parts.Add("태양 폭풍 중");
         foreach (var sf in w.Automation.SpaceForecasts.Where(x => !x.Graded).Take(2)) parts.Add($"{sf.Name} 예보");

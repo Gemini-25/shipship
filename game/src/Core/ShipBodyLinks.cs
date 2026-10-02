@@ -28,10 +28,11 @@ public sealed partial class BodySystem
     public string? CautionWhy(CrewMember c) => _caution.TryGetValue(c.Id, out var x) && x.until > _w.Tick ? x.why : null;
     public bool MopRequested(Room r) => _mopRequest.TryGetValue(r.Id, out var t) && t > _w.Tick;
 
-    private void BeCareful(CrewMember c, Room r, float hours, string why)
+    private void BeCareful(CrewMember c, Room r, float hours, string why, BeliefSource src = BeliefSource.Seen, float conf = 1f)
     {
         if (c.Dead || c.IsChild && c.Age < 6f) return;
         _caution[c.Id] = (r.Id, _w.Tick + SimTime.Hours(hours), why);
+        _w.Brain2.Beliefs.Learn(c, Topic.Slip, r.Id, 1, src, conf); // v16 통합: 본 것 · 들은 것은 믿음 장부로 (가서 마른 바닥을 보면 고친다 · 알리러 간다)
     }
 
     /// <summary>문 너머 표시판 (사람마다): 고장 방송을 들은 사람은 표시판을 믿지 않고 실제 위험을 안다.</summary>
@@ -99,7 +100,7 @@ public sealed partial class BodySystem
                 var b = au.Speak.Announce(au.Voice.Style($"{room.Name} 바닥이 젖었다 — 뛰지 말고 걸어라"), room, 1);
                 if (b != null)
                     foreach (var id in b.HeardBy)
-                        if (CrewById(id) is CrewMember c) BeCareful(c, room, 3f, "방송을 들었다");
+                        if (CrewById(id) is CrewMember c) BeCareful(c, room, 3f, "방송을 들었다", BeliefSource.Broadcast, 0.3f + 0.7f * au.Trusts.Of(c));
             }
 
         // 3) 문: 닫힌 문 너머로 압력이 조금씩 샌다 → 패킹 노화 추정 · 정비 요청 / 표시판이 압력 감지기와 다르다 → 표시판을 믿지 말라
@@ -172,7 +173,8 @@ public sealed partial class BodySystem
         list.Add(w.Tick);
         foreach (var o in w.Crew)
         {
-            if (o == fallen || o.Dead || !o.IsAwake || o.Room != room || (o.Position - cell.Center).LengthSquared() > 36f) continue;
+            // 같은 방에서 눈에 닿는 거리(10칸)면 본다 — 6칸이면 넓은 방(수경재배실) 맞은편에서 지켜보던 사람도 못 본 셈이 되던 것
+            if (o == fallen || o.Dead || !o.IsAwake || o.Room != room || (o.Position - cell.Center).LengthSquared() > 100f) continue;
             if (!Cautious(o, room)) Stats.Witnessed++;
             BeCareful(o, room, 2f, $"{Ko.IGa(fallen.Name)} 넘어지는 걸 봤다");
         }

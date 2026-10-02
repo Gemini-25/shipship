@@ -203,6 +203,7 @@ public static partial class Program
                 var reader = adults.Where(c => c != owner && c != eater && c.CanAct).OrderBy(c => c.Id).Last();
                 ScFree(w, reader);
                 reader.Needs.Food = 0.6f;
+                ScUntil(w, () => reader.Room != null, 1f, 1); // 문턱을 지나는 중이면 장면을 못 연다 (어느 방에 있어야 일상 장면이 열린다) — 연구 · 배우기가 생긴 뒤로 그 순간 문간에 있기도 하다
                 var s2 = w.Scenes.OpenSnack(reader, takePlate: false); // 냉장고 앞에 서면 읽는다
                 ScUntil(w, () => s2 == null || !s2.Open, 2f);
                 var far = adults.FirstOrDefault(c => note != null && !note.Readers.Contains(c.Id));

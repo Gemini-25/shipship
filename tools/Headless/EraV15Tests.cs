@@ -139,7 +139,7 @@ public static partial class Program
                     return !Near(ErasV15.Mul(w, s), expect, 1e-4f);
                 }).ToList();
                 Check("연구 흐름 — 회의가 새 기술을 골라 익히고, 수치는 익힌 것만큼", got.Count >= 10 && chosen >= 10 && mismatch.Count == 0,
-                    $"익힌 기술 {w.Eras.Known.Count} (새 {got.Count}) · 회의가 고른 새 기술 {chosen} · 처음 다섯: {string.Join(", ", got.Take(5).Select(id => EraSystem.All.First(t => t.Id == id).Name))}"
+                    $"익힌 기술 {w.Eras.Known.Count} (새 {got.Count}) · 회의가 고른 새 기술 {chosen} · 처음 다섯: {string.Join(", ", got.Take(5).Select(id => (EraSystem.Find(id)?.Name ?? id)))}"
                     + $" · 연구 ×{ErasV15.Mul(w, "research"):0.00} · 수리 ×{ErasV15.Mul(w, "repair"):0.00}" + (mismatch.Count > 0 ? $" · 어긋남: {string.Join(",", mismatch)}" : ""));
             }
 

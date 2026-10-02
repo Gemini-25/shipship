@@ -66,8 +66,8 @@ public sealed class BrainSystem
             HobbyActivity or CosmicLookActivity => ActCat.Hobby,
             RelaxActivity or WanderActivity => ActCat.Rest,
             VisitActivity or MendActivity or MemorialVisitActivity or EvaRescueActivity or OpenDoorActivity => ActCat.Care,
-            ExpeditionActivity or InspectActivity or FollowSmellActivity => ActCat.Explore,
-            EatActivity or SavedPlateActivity => ActCat.Food,
+            ExpeditionActivity or InspectActivity => ActCat.Explore,
+            EatActivity or SavedPlateActivity or FollowSmellActivity => ActCat.Food, // v16 통합: 빵 냄새를 따라가는 건 먹고 싶은 마음 — "배고프다" 목표가 끈다 (꿈 · 두려움이 탐험처럼 끌거나 막지 않는다)
             _ => ActCat.None,
         };
         _cats[a] = k;

@@ -166,9 +166,13 @@ public static partial class Program
                 var w = DayOne(seed, "Hanbit");
                 Run(w, SimTime.Hours(2));
                 foreach (var rb in w.Robots.Robots.Where(r => RobotsV15.Base(r.Kind) == RobotKind.Safety)) w.Robots.ForceFault(rb, RobotFault.Drive); // 순찰 로봇은 멈춰 있다
-                var room = w.Ship.LiveRooms.Where(r => r.Type is not (RoomType.Corridor or RoomType.Galley or RoomType.Mess) && !r.Abandoned && w.Crew.All(c => c.Room != r)
+                // 문으로 이어진 옆방에 깨어 있는 사람이 있는 빈 방 — 두뇌 2.0 뒤로는 2시간째에 통로가 빌 때가 있어(모두 방 안에서 일함) 그런 순간이 올 때까지 1분씩 기다린다
+                Room? PickRoom() => w.Ship.LiveRooms.Where(r => r.Type is not (RoomType.Corridor or RoomType.Galley or RoomType.Mess) && !r.Abandoned && w.Crew.All(c => c.Room != r)
                         && w.Ambience.Neighbors(r).Any(n => n.door && w.Crew.Any(c => c.IsAwake && c.Room == n.room)) && r.Cells.Any(c => w.Ship.IsWalkable(c)))
-                    .OrderBy(r => r.Id).First();
+                    .OrderBy(r => r.Id).FirstOrDefault();
+                Room? picked = PickRoom();
+                for (int k = 0; k < 180 && picked == null; k++) { Run(w, SimTime.Minutes(1)); picked = PickRoom(); }
+                var room = picked ?? throw new InvalidOperationException("4b 장면: 문 옆에 깨어 있는 사람이 있는 빈 방이 3시간 동안 없다");
                 room.BreakerOff = true; // 분전함을 내려 감지기가 꺼졌다
                 var cell = room.Cells.First(c => w.Ship.IsWalkable(c));
                 w.Fire.Ignite(cell, 0.25f);
