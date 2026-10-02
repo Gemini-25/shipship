@@ -1234,6 +1234,7 @@ public sealed partial class RobotSystem
         r.NextPatrol = w.Tick + SimTime.Hours(RobotsV15.PatrolHours(r.Kind));
         Patrols++;
         Begin(r, steps, "순찰 — " + string.Join(" · ", rooms.Select(x => x.Name)));
+        if (w.Fleet.Lesson(rooms[0]) is string lesson) r.Mind.Say(lesson, w.Tick); // v16.20b 배운 것: 자주 고장 나는 곳을 먼저
         return true;
     }
 

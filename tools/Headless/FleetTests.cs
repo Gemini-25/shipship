@@ -114,6 +114,14 @@ public static partial class Program
                     Check("고장 난 드론을 다른 드론이 끌고 온다 (견인 드론이 없을 때)", lost.State == DroneState.Docked && f.Fetches >= 1,
                         $"상태 {lost.State} · {lost.Doing} · 건지러 간 {f.Fetches} · 건진 드론 {by?.Name} · 명령선 {w.Automation.Command.Lines.Count(l => l.Target == CmdTarget.Drone)}");
                 }
+                // 조용할 때: 약해진 외벽을 드론이 밖에서 미리 덧댄다 (외벽 순찰)
+                if (FleetHullWall(w) is var (hc, hw, hroom))
+                {
+                    hw.Integrity = hw.MaxIntegrity * 0.7f;
+                    for (int t = 0; t < SimTime.Hours(6) && hw.Integrity < hw.MaxIntegrity * 0.8f; t += 30) Run(w, 30);
+                    Check("조용할 때 드론이 약해진 외벽을 밖에서 덧댄다 (외벽 순찰)", f.HullRounds >= 1 && hw.Integrity >= hw.MaxIntegrity * 0.8f && hw.Marks.Any(m => m.Text.Contains("순찰")),
+                        $"{hroom.Name} 외벽 강도 {hw.Integrity:0.00}/{hw.MaxIntegrity:0.00} · 순찰 {f.HullRounds} · {string.Join(" / ", hw.Marks.TakeLast(2).Select(m => m.Text))}");
+                }
             }
 
             // ── 3) 불: 사람보다 소방 로봇이 먼저 · 본 사람은 컴퓨터를 더 믿는다 ──
@@ -132,13 +140,14 @@ public static partial class Program
                     foreach (var c in cells) w.Fire.Ignite(c, 0.5f);
                     float trust0 = w.Crew.Where(c => !c.Dead).Sum(c => w.Automation.Trusts.Of(c));
                     long robotIn = -1, crewOn = -1;
+                    var inside = w.Crew.Where(c => c.Room == room).Select(c => c.Id).ToHashSet(); // 불이 났을 때 방 안에 있던 사람은 그 자리에서 끈다
                     var foam0 = w.Robots.Robots.ToDictionary(r => r.Id, r => r.Foam);
                     Robot? went = null;
                     for (int t = 0; t < SimTime.Minutes(40) && w.Fire.CountIn(room) > 0; t++)
                     {
                         w.Step();
                         if (robotIn < 0 && w.Robots.Robots.FirstOrDefault(r => RobotsV15.Fights(r.Kind) && (r.Room == room || r.Foam < foam0[r.Id] - 0.01f)) is Robot rb) { robotIn = w.Tick; went = rb; }
-                        if (crewOn < 0 && w.Crew.Any(c => !c.Dead && c.Room == room && c.Job?.Order?.Kind == WorkKind.Extinguish)) crewOn = w.Tick;
+                        if (crewOn < 0 && w.Crew.Any(c => !c.Dead && !inside.Contains(c.Id) && c.Room == room && c.Job?.Order?.Kind == WorkKind.Extinguish)) crewOn = w.Tick; // 밖에서 들어온 사람
                         if (Environment.GetEnvironmentVariable("FLEETDBG") == "1" && t % 60 == 0)
                             Console.WriteLine($"    t{t} {fighter.Name} {fighter.State} {fighter.Room?.Name} 길 {(fighter.Path == null ? -1 : fighter.Path.Count - fighter.PathIndex)} 비킴 {fighter.YieldTicks} 거품 {fighter.Foam:0.00} 소화 {fighter.FightingFire} · {fighter.Doing} · 불 {w.Fire.CountIn(room)} · {room.Name} 압 {room.Air.Pressure:0} O2 {room.Air.O2:0.00} · 수순 {w.Automation.FireCases.FirstOrDefault(c => c.RoomId == room.Id)?.Status} · 질식 {w.Automation.Smothered} 로봇맡음 {f.BotOn(room)}");
                     }
@@ -215,6 +224,8 @@ public static partial class Program
 
                 // 정비: 부품 → 정비 → 시험 가동 (하루 동안 지켜본다)
                 List<string>? maint = null;
+                foreach (var m in w.Ship.Machines.Where(m => m.Spec.ServiceItem is ItemKind it && w.Ship.CountStored(it) > 0 && m.Faults.Count == 0 && m.Body.Room.Type != RoomType.Reactor && !m.Body.Room.Detached)
+                    .OrderBy(m => m.Body.Id).Take(5)) m.Wear = MathF.Max(m.Wear, 0.62f); // 여러 설비가 한꺼번에 닳았다 — 로봇도 몇 곳을 맡는다
                 for (int t = 0; t < SimTime.Hours(20) && maint == null; t++)
                 {
                     w.Step();
@@ -304,7 +315,8 @@ public static partial class Program
                     }
                     finally { FleetSystem.Off = false; }
                 }
-                double off = Day(true), on = Day(false);
+                double off = Day(true), on = Day(false); // 번갈아 두 번씩 — 빠른 쪽 (다른 일이 CPU를 나눠 쓴다)
+                on = Math.Min(on, Day(false)); off = Math.Min(off, Day(true));
                 Check("성능 — 30인 배 하루가 크게 늘지 않는다 (+10% 안)", on <= off * 1.10 + 0.4, $"끔 {off:0.00}초 · 켬 {on:0.00}초 ({(on / off - 1) * 100:+0;-0}%)");
             }
         }

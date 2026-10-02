@@ -88,7 +88,7 @@ public sealed class FleetSystem
     private readonly SortedSet<int> _fetchSaid = new();
     private long _next;
     /// <summary>다음 외벽 순찰을 찾아볼 때.</summary>
-    internal long NextHullRound;
+    internal long NextHullRound, NextHullCare;
 
     private sealed class FireWatch { public int Robot; public long Since, HoldUntil; public bool Held, Seen; public int Decision; public float Foam0; }
 
@@ -396,11 +396,31 @@ public sealed class FleetSystem
         bool hold = dec.Pick.Key == "robot";
         var fw = new FireWatch { Robot = best.Id, Since = w.Tick, Held = hold, HoldUntil = w.Tick + SimTime.Minutes(bestEta + 8f), Decision = dec.Id, Foam0 = best.Foam };
         _fire[room.Id] = fw;
-        if (hold) Hold(room, true);
+        if (hold) { StandBack(room, best); Hold(room, true); }
         FireFirst++;
         best.Mind.Say($"주 컴퓨터가 보냈다 — 사람보다 먼저 {room.Name} 불로 ({dec.Reason})", w.Tick);
         Line(CmdTarget.Robot, best.Id, room, $"{best.Name}: {room.Name} 불 — " + (hold ? "사람보다 먼저" : "사람과 함께"), dec.Reason, 0.95f, 20f, dec.Id);
         if (hold) w.Automation.Command.Line(CmdTarget.Broadcast, -1, room, $"{room.Name} — 소방 로봇이 먼저 들어간다 · 문 앞에서 기다려라", "사람이 연기 속에 들어가지 않게", 0.8f, 10f, dec.Id);
+    }
+
+    /// <summary>"문 앞에서 기다려라": 소화하러 가던 사람을 세운다 — 컴퓨터를 믿는 사람은 따르고, 못 믿는 사람은 그대로 들어간다.</summary>
+    private void StandBack(Room room, Robot bot)
+    {
+        var w = _w;
+        foreach (var c in w.Crew)
+        {
+            if (c.Dead || c.Room == room || c.Job?.Order is not { Kind: WorkKind.Extinguish } eo || eo.Target.CurrentRoom != room) continue;
+            if (w.Automation.Trusts.Of(c) >= 0.4f)
+            {
+                c.EndJob(w, ToilStatus.Interrupted);
+                w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(c.Name)} 소화기를 든 채 {room.Name} 문 앞에서 멈췄다 — {Ko.IGa(bot.Name)} 먼저 들어간다", c.Id);
+            }
+            else
+            {
+                w.Automation.Trusts.Change(c, -0.01f, $"{room.Name} 불 — 로봇을 기다리라는 말을 듣지 않았다", quiet: true);
+                w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(c.Name)} 로봇을 기다릴 수 없다며 그대로 {room.Name}에 들어간다", c.Id);
+            }
+        }
     }
 
     /// <summary>이 방 불에 소방 로봇이 가 있다 (화재 대응 수순이 소화조로 셈한다).</summary>
