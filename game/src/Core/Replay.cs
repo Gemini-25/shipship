@@ -434,6 +434,7 @@ public static class SaveGame
         w.Automation.HashShip(I, F); // v16.20 우주선급 주컴퓨터
         w.Failsafe.Hash(I); w.Major.Hash(I); // v16.19 차압 문 · 예비 회로 · 큰 사고
         w.CrisisCrew.Hash(I, F); // v16.21 승무원 위기 행동
+        w.After.Hash(I, F); // v17.5 사고 뒤 며칠 · 꿈 · 장소의 기억
         return h;
     }
 }

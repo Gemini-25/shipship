@@ -459,7 +459,7 @@ public sealed class CrewMember
             // 무서운 방은 돌아서 간다 (v7: 감압·화재·쓰러짐을 겪은 방)
             bool suited = Suit is { Oxygen: > 0.1f };
             return new PathProfile(scale, suited || Dashing, responder, Memory.AnyFear ? Memory.Fear : null, suited && (EvaMode || Outside),
-                NoCrawl: CarryingPerson != null || Vitals.Injury > 0.4f || Carrying is { Count: > 4 }); // v16.3 정비 통로: 업은 사람 · 다친 사람 · 큰 짐은 못 기어간다
+                NoCrawl: CarryingPerson != null || Vitals.Injury > 0.4f || Carrying is { Count: > 4 }, Spots: Memory.Spots); // v17.5 장소의 기억 · v16.3 정비 통로: 업은 사람 · 다친 사람 · 큰 짐은 못 기어간다
         }
     }
 

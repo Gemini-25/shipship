@@ -471,6 +471,7 @@ public sealed class PropSystem
         if (burnt.Count == 0) return;
         foreach (var p in burnt)
         {
+            w.After.OnPropBurned(p, room); // v17.5 다시 그릴 거리
             Remove(p);
             Stats.Burned++;
             if (p.Maker >= 0 && p.Maker < w.Crew.Count && w.Crew[p.Maker] is { Dead: false } mk)
