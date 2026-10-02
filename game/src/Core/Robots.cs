@@ -39,7 +39,7 @@ public enum RobotFault
 /// 충전대에서 전기를 받아야 움직이고, 닳으면 고장 나고, 멈추면 사람이 고치거나 끌고 와야 한다 —
 /// 로봇이 멈추면 그 일은 다시 작업 목록으로 돌아가 사람이 한다. 한가한 정비 로봇은 긴 일을 하는 사람 옆에서 거든다.
 /// </summary>
-public sealed class Robot
+public sealed partial class Robot
 {
     public int Id { get; init; }
     public RobotKind Kind { get; init; }
@@ -169,6 +169,7 @@ internal sealed class RTake : RobotStep
     private readonly int _count;
     private readonly bool _partialOk;
     public RTake(Furniture from, ItemKind kind, int count, bool partialOk = false) { _from = from; _kind = kind; _count = count; _partialOk = partialOk; }
+    internal ItemKind Kind => _kind;
 
     public override ToilStatus Tick(Robot r, World w)
     {
@@ -210,11 +211,12 @@ internal sealed class RWork : RobotStep
     private float _done, _needed;
     public Func<Robot, World, bool>? CanContinue { get; init; }
     public RWork(float hours, WorkOrder? shared, Vector2? face) { _hours = hours; _shared = shared; _face = face; }
+    internal float Hours => _hours;
     public override float? Progress => _shared != null ? _shared.Progress : _needed > 0 ? _done / _needed : 0f;
 
     public override void Begin(Robot r, World w)
     {
-        _needed = SimTime.Hours(_hours) * RobotSystem.WorkFactor(r.Kind);
+        _needed = SimTime.Hours(_hours) * RobotSystem.WorkFactor(r.Kind) * w.Fleet.Work; // v16.20b 공구 등급
         if (_face is Vector2 f && (f - r.Position).LengthSquared() > 0.0001f) r.Facing = Vector2.Normalize(f - r.Position);
     }
 
@@ -288,7 +290,7 @@ internal sealed class RSpray : RobotStep
 
 // ─────────────────────────────── 로봇 체계 ───────────────────────────────
 
-public sealed class RobotSystem
+public sealed partial class RobotSystem
 {
     private readonly World _world;
     public List<Robot> Robots { get; } = new();
@@ -520,6 +522,7 @@ public sealed class RobotSystem
                     r.Position = r.DockPosition;
                     break;
                 case RobotState.Towed:
+                    if (TowedByBot(r)) break; // v16.20b 다른 로봇이 끌고 간다
                     if (r.TowedBy is not CrewMember c || !c.CanAct || c.Job?.Order?.Target.Robot != r)
                     {
                         // 끌던 사람이 손을 놓았다 — 그 자리에 선다
@@ -570,18 +573,20 @@ public sealed class RobotSystem
     {
         var path = r.Path;
         if (path == null) return true;
-        float budget = Speed(r.Kind) * r.Quirk.Speed * (r.Fault == null && r.Battery > 0.02f ? 1f : 0.5f);
+        float budget = Speed(r.Kind) * r.Quirk.Speed * (r.Fault == null && r.Battery > 0.02f ? 1f : 0.5f) * w.Fleet.Speed(r); // v16.20b 단계 · 아껴 쓰기 · 같이 들기
         bool repathed = false;
         while (budget > 0f && r.PathIndex < path.Count)
         {
             for (int k = r.PathIndex; k < Math.Min(path.Count, r.PathIndex + 2); k++)
                 if (w.Ship.DoorAt(path[k]) is Door ahead && !ahead.Locked) ahead.Request();
             var next = path[r.PathIndex];
+            if (w.Fleet.GiveWay(r, next)) break; // v16.20b 급히 지나가는 사람에게 길을 비켜 준다
             var door = w.Ship.DoorAt(next);
             if (Locomotion.Blocked(w.Ship, next) || (door != null && door.Locked && !Leaving(r, door)))
             {
                 var goal = r.Goal ?? path[^1];
                 if (repathed || !SetDestination(r, w, goal)) { r.Path = null; return false; }
+                w.Fleet.Rerouted(r, next, door); // v16.20b 막힌 곳을 배우고 다른 길로
                 path = r.Path!;
                 repathed = true;
                 continue;
@@ -659,7 +664,7 @@ public sealed class RobotSystem
                     bool moving = r.Path != null;
                     float drain = r.Steps != null && r.StepIndex < r.Steps.Count && r.Steps[r.StepIndex] is RSpray ? DrainSpray
                         : moving ? DrainMove : working ? DrainWork : DrainIdle;
-                    r.Battery = MathF.Max(0f, r.Battery - drain * RobotsV15.Drain(r.Kind) * Durability.RobotDrain * dt); // v15.7 배터리 크기 · v16.19 큰 셀
+                    r.Battery = MathF.Max(0f, r.Battery - drain * RobotsV15.Drain(r.Kind) * Durability.RobotDrain * w.Fleet.Drain(r) * dt); // v15.7 배터리 크기 · v16.19 큰 셀 · v16.20b 셀 등급 · 아껴 쓰기
                     r.ActiveHours += dt;
                     r.Condition = MathF.Max(0f, r.Condition - (working || moving ? 0.008f : 0.002f) * Durability.RobotWear * dt);
                     // 가벼운 고장으로 충전대에 돌아가는 중 (느리게): 길이 막히면 그 자리에 멈춘다
@@ -671,9 +676,9 @@ public sealed class RobotSystem
                         break;
                     }
                     // 불 곁에서 그을리거나, 닳아서 고장
-                    if (w.Fire.AnyWithin(r.Cell, 1.2f) && !RobotsV15.Fireproof(r.Kind) && w.Rng.Chance(0.6f * Durability.RobotScorch * dt)) { Break(r, RobotFault.Scorched); break; } // v16.19 방열 외피
+                    if (w.Fire.AnyWithin(r.Cell, 1.2f) && !RobotsV15.Fireproof(r.Kind) && w.Rng.Chance(0.6f * Durability.RobotScorch * w.Fleet.Hurt * dt)) { Break(r, RobotFault.Scorched); break; } // v16.19 방열 외피
                     if (w.Fire.AnyWithin(r.Cell, 0.8f) && RobotsV15.Fireproof(r.Kind)) r.Condition = MathF.Max(0f, r.Condition - 0.05f * RobotsV15.HeatWear(r.Kind) * dt);
-                    float wearRisk = (0.0025f + 0.045f * (1f - r.Condition) * (1f - r.Condition)) * RobotsV15.Fault(r.Kind) * Durability.RobotFault; // v15.7 고장률 · v16.19 재조정
+                    float wearRisk = (0.0025f + 0.045f * (1f - r.Condition) * (1f - r.Condition)) * RobotsV15.Fault(r.Kind) * Durability.RobotFault * w.Fleet.FaultMul; // v16.20b 외피 등급 · v15.7 고장률 · v16.19 재조정
                     if (w.Rng.Chance(wearRisk * dt)) { Break(r, PickFault(r)); break; }
                     if (r.Battery <= 0.001f) { Stall(r, "배터리가 바닥났다"); break; }
                     // 맡은 일이 사라졌으면 (누가 끝냈거나 조건이 없어졌다) 손을 놓는다
@@ -767,7 +772,8 @@ public sealed class RobotSystem
             if (o.Kind == WorkKind.Maintain && o.Target.Furniture?.Type == FurnitureType.ReactorCore) continue;
             // v11.2 병충해는 사람 눈과 손으로 (로봇 분무기는 잎 뒷면의 벌레를 못 본다)
             if (o.Kind == WorkKind.Tend && o.Target.Furniture?.Machine?.Crop is { Blight: > 0f }) continue;
-            if (o.Target.CurrentRoom is Room room && (room.Abandoned || room.OffLimits || w.Fire.CountIn(room) > 0)) continue;
+            if (o.Target.CurrentRoom is Room room && (room.Abandoned || room.OffLimits || w.Fire.CountIn(room) > 0 || !w.Fleet.MayEnter(r, room))) continue; // v16.20b 견딜 수 없는 방
+            if (!w.Fleet.Allowed(r, o)) continue; // v16.20b 비상 — 급하지 않은 일은 미룬다
             if (Spot(r, o, dist) is not Cell spot) continue;
             float score = o.Urgency - dist.Get(spot) / 9000f + w.Automation.Command.Bias(r, o); // v16.20 컴퓨터 명령 (ComputerCommand.Order)
             if (score > bestScore) { bestScore = score; best = o; bestSpot = spot; }
@@ -775,8 +781,10 @@ public sealed class RobotSystem
         if (best != null)
         {
             var steps = Plan(r, best, bestSpot, dist, out string? blocked);
+            if (steps != null && !w.Fleet.Affords(r, best, steps, bestSpot)) { if (!r.AtDock) GoHome(r, "남은 일에 배터리가 모자라"); return; } // v16.20b 남은 일 · 거리 계산
             if (steps != null)
             {
+                w.Fleet.Chose(r, best, steps); // v16.20b 판단 이유 · 단계
                 best.Robot = r;
                 r.Order = best;
                 Begin(r, steps, best.Title);
@@ -844,6 +852,7 @@ public sealed class RobotSystem
                 }
                 steps.Add(new RGoto(at));
                 steps.Add(new RWork(m.Spec.ServiceHours * (full ? 1f : 0.6f), o, f.Center));
+                steps.Add(new RTest(m, full ? "maint:full" : "maint:temp")); // v16.20b 고친 뒤 시험 가동
                 bool fullService = full;
                 steps.Add(new RDo((rb, world) =>
                 {
@@ -1208,7 +1217,7 @@ public sealed class RobotSystem
         var w = _world;
         var rooms = w.Ship.LiveRooms
             .Where(x => !x.Abandoned && !x.OffLimits && x.Type != RoomType.Corridor && x.Furniture.Any(f => f.Machine != null))
-            .OrderBy(x => w.Robots.LastPatrolled.GetValueOrDefault(x.Id, -1_000_000))
+            .OrderBy(x => w.Robots.LastPatrolled.GetValueOrDefault(x.Id, -1_000_000) - w.Fleet.Hot(x)) // v16.20b 자주 고장 나는 곳 먼저
             .ThenBy(x => x.Id)
             .Take(RobotsV15.PatrolRooms(r.Kind)).ToList();
         var steps = new List<RobotStep>();
@@ -1270,6 +1279,7 @@ public sealed class RobotSystem
         r.Breakdowns++;
         Breakdowns++;
         MarkLog.Add(r.Marks, w.Tick, $"{FaultName(f)} ({r.Room?.Name ?? "?"})");
+        w.Fleet.Learn(r.Room, FaultName(f)); // v16.20b 자주 고장 나는 곳
         if (CanSelfRepair(r))
         {
             // 가벼운 고장: 하던 일은 작업 목록에 두고, 느리게 충전대로 돌아가 스스로 고친다

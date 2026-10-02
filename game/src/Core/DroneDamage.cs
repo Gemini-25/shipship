@@ -225,7 +225,7 @@ public sealed partial class DroneSystem
         var w = _world;
         var h = d.Hurt;
         if (d.State == DroneState.Lost) return;
-        power *= Durability.DroneHurt; // v16.19 두꺼운 외피 · 충격 흡수 다리
+        power *= Durability.DroneHurt * w.Fleet.Hurt; // v16.20b 외피 등급 · v16.19 두꺼운 외피 · 충격 흡수 다리
         PartHits++;
         h.HitAt = w.Tick;
         d.Condition = MathF.Max(0f, d.Condition - power);
@@ -483,7 +483,7 @@ public sealed partial class DroneSystem
             {
                 _recallFor = -1;
                 foreach (var d in Drones)
-                    if (d.Hurt.Sheltering) { d.Hurt.Sheltering = false; GoHome(d); w.Log.Add(w.Tick, LogKind.Work, $"{d.Name}: 파편이 지나갔다 — 그늘에서 나와 돌아온다"); }
+                    if (d.Hurt.Sheltering) { d.Hurt.Sheltering = false; if (FleetResume(d)) continue; GoHome(d); w.Log.Add(w.Tick, LogKind.Work, $"{d.Name}: 파편이 지나갔다 — 그늘에서 나와 돌아온다"); }
             }
             return;
         }
@@ -502,7 +502,7 @@ public sealed partial class DroneSystem
         {
             float eta = Eta(d);
             float arrive = MathF.Max(eta, t + 0.5f); // 해치 드론 포트는 한 대씩 (30초)
-            if (arrive + 0.2f < left || d.Hurt.FetchPerson >= 0)
+            if (arrive + 0.2f < left && !FleetShelters(d) || d.Hurt.FetchPerson >= 0) // v16.20b 맡은 파공 곁에서 그늘로 피했다 다시
             {
                 d.Hurt.RecallRank = rank;
                 d.Hurt.RecallFor = inc.Id;

@@ -221,6 +221,7 @@ public sealed partial class DroneSystem
         WorkKind.ReleaseJoint => 0.2f,
         WorkKind.Retrieve => 0.15f,
         WorkKind.RepairRadiator => 0.6f,
+        WorkKind.SealBreach => 0.5f, // v16.20b 밖에서 파공 막기
         _ => 0.05f,
     };
 
@@ -323,10 +324,10 @@ public sealed partial class DroneSystem
                 case DroneState.Returning:
                 case DroneState.Towing:
                 {
-                    float speed = (d.State == DroneState.Towing ? TowSpeed * RobotsV15.Tow(d.Kind) : Speed(d.Kind)) * d.Quirk.Speed;
+                    float speed = (d.State == DroneState.Towing ? TowSpeed * RobotsV15.Tow(d.Kind) : Speed(d.Kind)) * d.Quirk.Speed * w.Fleet.DroneSpeed; // v16.20b 단계
                     float drain = d.State == DroneState.Towing ? 0.3f : Drain(d.Kind);
                     if (d.Fetching != null && d.State == DroneState.Towing) { speed = 0.02f * RobotsV15.Tow(d.Kind); drain = 0.3f; }
-                    d.Battery = MathF.Max(0f, d.Battery - drain * Durability.DroneDrain * hour); // v16.19 큰 셀
+                    d.Battery = MathF.Max(0f, d.Battery - drain * Durability.DroneDrain * w.Fleet.DroneDrain * hour); // v16.19 큰 셀 · v16.20b 셀 등급
                     d.FlightHours += hour;
                     bool arrived = Move(d, speed);
                     if (d.State == DroneState.Towing) Drag(d);
@@ -335,7 +336,7 @@ public sealed partial class DroneSystem
                     break;
                 }
                 case DroneState.Working:
-                    d.Battery = MathF.Max(0f, d.Battery - Drain(d.Kind) * 0.8f * Durability.DroneDrain * hour);
+                    d.Battery = MathF.Max(0f, d.Battery - Drain(d.Kind) * 0.8f * Durability.DroneDrain * w.Fleet.DroneDrain * hour);
                     d.FlightHours += hour;
                     d.WorkDone += hour * d.Quirk.Work; // v12.5 버릇
                     if (d.WorkDone >= d.WorkNeeded) FinishWork(d);
@@ -415,7 +416,7 @@ public sealed partial class DroneSystem
                     }
                     // 고장·닳음
                     d.Condition = MathF.Max(0f, d.Condition - 0.012f * dt);
-                    if (!d.Faulty && w.Rng.Chance((0.004f + 0.05f * (1f - d.Condition) * (1f - d.Condition)) * RobotsV15.Fault(d.Kind) * dt)) // v15.7 고장률
+                    if (!d.Faulty && w.Rng.Chance((0.004f + 0.05f * (1f - d.Condition) * (1f - d.Condition)) * RobotsV15.Fault(d.Kind) * w.Fleet.FaultMul * dt)) // v15.7 고장률 · v16.20b 외피 등급
                     {
                         d.Faulty = true;
                         MarkLog.Add(d.Marks, w.Tick, "밖에서 고장");
@@ -515,6 +516,7 @@ public sealed partial class DroneSystem
             if (RobotsV15.Base(d.Kind) == DroneKind.Inspect && OtherDroneJob(ready) is WorkOrder first && first.Kind != WorkKind.InspectHull)
             { d.Doing = "손 조종 — 급한 일이 먼저"; return; }
         }
+        if (FleetDecide(d)) return; // v16.20b 주 컴퓨터가 맡긴 일 (파공 · 교대 · 건지기)
         if (d.Battery < 0.35f) return;
         switch (RobotsV15.Base(d.Kind))
         {
@@ -567,6 +569,8 @@ public sealed partial class DroneSystem
                 return null;
             case TargetKind.Exterior:
                 return o.Target.Cell.Center;
+            case TargetKind.Wall:
+                return WallSpot(o); // v16.20b 파공 바깥 자리
             case TargetKind.Fragment:
                 return o.Target.Room!.Fragment is Fragment f ? f.Center : null;
             case TargetKind.Radiator:
@@ -695,7 +699,7 @@ public sealed partial class DroneSystem
                     GoHome(d);
                     return;
                 }
-                if (RobotsV15.Base(d.Kind) == DroneKind.Tow && d.Fetching is Drone lost)
+                if (d.Fetching is Drone lost) // v16.20b 견인 드론이 없으면 다른 드론도 끈다
                 {
                     d.State = DroneState.Towing;
                     d.StateSince = w.Tick;
@@ -707,7 +711,8 @@ public sealed partial class DroneSystem
                 d.State = DroneState.Working;
                 d.StateSince = w.Tick;
                 d.WorkDone = 0f;
-                d.WorkNeeded = d.Order != null ? WorkHours(d.Order.Kind) * RobotsV15.Work(d.Kind) : 0.1f; // v15.7 손이 빠른 드론
+                d.WorkNeeded = d.Order != null ? WorkHours(d.Order.Kind) * RobotsV15.Work(d.Kind) * w.Fleet.Work : 0.1f; // v15.7 손이 빠른 드론 · v16.20b 공구 등급
+                FleetCarry(d); // v16.20b 교대: 앞 드론이 한 만큼 이어서
                 return;
             case DroneState.Towing:
                 if (d.Towing is Fragment f)
@@ -762,6 +767,7 @@ public sealed partial class DroneSystem
         var w = _world;
         var o = d.Order;
         if (o == null) { GoHome(d); return; }
+        if (o.Kind == WorkKind.SealBreach) { FleetSeal(d, o); return; } // v16.20b
         if (o.Kind == WorkKind.Retrieve && o.Target.Room!.Fragment is Fragment f)
         {
             // 붙잡았다: 먼저 떠내려가는 것을 멈추고, 제자리로 끌고 간다
