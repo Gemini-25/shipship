@@ -294,7 +294,7 @@ public sealed partial class SchemeSystem
         if (came.Count < 2 || key is not ("gambling_den" or "betting_pool" or "chocolate_money")) return;
         var loser = came.OrderByDescending(c => (c.Habits.Contains(Habit.Hasty) || c.Habits.Contains(Habit.Daredevil) ? 0.3f : 0f) + c.Needs.Stress * 0.5f + R.Float()).First();
         var winner = came.Where(c => c != loser).ToList()[R.Range(0, came.Count - 1)];
-        int amt = key == "gambling_den" ? R.Range(1, 4) : 1;
+        int amt = key == "gambling_den" ? R.Range(2, 5) : 1;
         Owe(loser, winner, amt, scheme, key == "gambling_den" ? "판에서 잃은 몫" : "내기에서 진 몫");
     }
 
@@ -517,7 +517,7 @@ public sealed partial class SchemeSystem
         foreach (var d in Debts)
         {
             if (d.Amount <= 0 || P(d.From) is not { Dead: false } a || P(d.To) is not { Dead: false } b) continue;
-            if (morning && R.Chance(0.2f + 0.5f * a.Traits.Diligence) && d.Amount < 3) { d.Amount--; continue; }
+            if (morning && R.Chance(0.15f + 0.4f * a.Traits.Diligence) && d.Amount < 3) { d.Amount--; continue; }
             if (d.Fought >= 0 && w.Tick - d.Fought < SimTime.TicksPerDay) continue;
             if (d.Amount < 3 || w.Tick - d.Since < SimTime.Hours(8) || !a.IsAwake || !b.IsAwake || a.Outside || b.Outside) continue;
             bool hot = b.Habits.Contains(Habit.ShortTempered) || DriveOf(b, Drive.Greed) > 0.4f || b.Mind.Anger > 0.2f || d.Amount >= 6;
@@ -561,8 +561,8 @@ public sealed partial class SchemeSystem
         bool count = (int)SimTime.HourOfDay(w.Tick) == 23; // 밤 장부 대조
         foreach (var s in All.ToList())
         {
-            if (!s.Hiding) continue;
             var t = s.Spec.Tells;
+            if (!s.Hiding && !(s.Stage == SchemeStage.Vote && (t & Tell.Ledger) != 0 && !s.ComputerKnows)) continue; // 장부는 재판 중에도 맞춰 본다
             if (count && (t & Tell.Ledger) != 0 && s.Skimmed - s.SkimSeen >= 2 && (!s.ComputerKnows || s.ComputerSaid == 0 && s.Skimmed - s.SkimSeen >= 4)) { ComputerNotice(s, "장부"); continue; }
             if (s.ComputerKnows) continue;
             bool busy = WorkingNow(s) || s.InSession(w.Tick);
@@ -639,8 +639,9 @@ public sealed partial class SchemeSystem
                 Stats.ComputerTold++;
                 var cap = w.Command.Captain;
                 w.Log.Add(w.Tick, LogKind.Ship, $"{a.Voice.Call}: {(cap != null ? $"{cap.Name} 함장님께 보고합니다" : "보고합니다")} — {sees}. {why}이라 말씀드립니다");
-                if (cap == null || cap == lead) { if (s.Spec.Fate == Fate.Vote && cap == null) ProposeVote(s, lead, lead); break; }
+                if (cap == null || cap == lead) { if (s.Spec.Fate == Fate.Vote && cap == null && s.Stage != SchemeStage.Vote) ProposeVote(s, lead, lead); break; }
                 s.Knows[cap.Id] = KnowHow.Told;
+                if (s.Stage == SchemeStage.Vote) { Life.Diary(w, cap, $"컴퓨터 장부도 같은 말을 한다 — {sees}."); break; } // 이미 회의에 올랐다: 기록만 보탠다
                 Life.Diary(w, cap, $"컴퓨터가 알려 왔다 — {sees}.");
                 var (ok, cwhy) = Approve(cap, s);
                 if (s.Spec.Key == "escape_pod") { s.Knows.Remove(cap.Id); Discover(s, cap, "컴퓨터 보고를 듣고 탈출 포드로 가 보니"); }

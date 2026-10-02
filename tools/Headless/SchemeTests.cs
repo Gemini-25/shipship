@@ -130,7 +130,7 @@ public static partial class Program
             var crew = w.Crew.Where(c => !c.Dead && !c.IsChild).OrderBy(c => c.Id).ToList();
             var gardener = crew[5]; gardener.Hobbies.Add(Hobby.Gardening);
             var g = w.Schemes.Start(SchemeTable.Get("secret_garden")!, gardener);
-            SchemeUntil(w, () => g.Stage != SchemeStage.Prep, SimTime.TicksPerDay * 4, 100);
+            SchemeUntil(w, () => g.Stage != SchemeStage.Prep, SimTime.TicksPerDay * 6, 100);
             Check("비밀 정원 — 창고 구석에서 몰래 키웠다", g.Stage is SchemeStage.Live or SchemeStage.Done, $"{w.Schemes.RoomOf(g)?.Name} · {g.Stage} · 진척 {g.Progress:0.00} · {g.Outcome}");
             Run(w, SimTime.Hours(12));
             var finder = crew.Where(c => c != gardener && !g.KnowsWho(c.Id)).OrderByDescending(c => w.Schemes.Approve(c, g).v).First();

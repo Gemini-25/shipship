@@ -191,9 +191,12 @@ public sealed partial class SchemeSystem
         UpdateTicks += Stopwatch.GetTimestamp() - t0;
     }
 
+    private bool _recentDeath;
+
     private void Hour()
     {
         var w = _w;
+        _recentDeath = w.Crew.Any(o => o.Dead && o.DiedAt >= 0 && w.Tick - o.DiedAt < SimTime.TicksPerDay * 6);
         Boredom();
         if (!NoMotives) Motives();
         foreach (var s in All.ToList())
@@ -284,7 +287,7 @@ public sealed partial class SchemeSystem
                 foreach (var kv in c.Affinity) if (kv.Value > best) best = kv.Value;
                 return best > 0.45f ? 0.35f + 0.5f * best : 0.08f;
             }
-            case Drive.Grief: return c.GriefUntil > w.Tick ? 0.9f : w.Crew.Any(o => o.Dead && o.DiedAt >= 0 && w.Tick - o.DiedAt < SimTime.TicksPerDay * 6) ? 0.6f : 0f;
+            case Drive.Grief: return c.GriefUntil > w.Tick ? 0.9f : _recentDeath ? 0.6f : 0f;
             case Drive.Greed: return MathF.Min(1f, 0.12f + (H(Habit.Hoarder) ? 0.45f : 0f) + (H(Habit.Collector) ? 0.25f : 0f) + (Hb(Hobby.Cards) || Hb(Hobby.Games) ? 0.4f : 0f));
             case Drive.Grudge:
             {

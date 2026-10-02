@@ -19,7 +19,7 @@ public sealed partial class SchemeSystem
     /// <summary>이 사람이 지금 꾸미는 일로 할 것 (1분쯤 기억한다).</summary>
     public SchemeTask Task(CrewMember c)
     {
-        if (_tasks.TryGetValue(c.Id, out var e) && _w.Tick - e.at < 40) return e.t;
+        if (_tasks.TryGetValue(c.Id, out var e) && _w.Tick - e.at < 60) return e.t;
         var t = FindTask(c);
         _tasks[c.Id] = (_w.Tick, t);
         return t;
@@ -87,7 +87,7 @@ public sealed partial class SchemeSystem
             if (s.Stage != SchemeStage.Prep || s.Progress >= 1f || !s.Crew.Contains(c.Id)) continue;
             if (s.Spec.Fate == Fate.Laugh && s.Lead != c.Id) continue;
             bool secret = s.Spec.Secrecy >= 0.45f;
-            return new(SchemeTaskKind.Work, s.Id, -1, s.RoomId, s.Spot, -1, 0.36f + 0.25f * Bored(c) + (late && secret ? 0.08f : 0f), secret ? $"{s.Spec.Name} — 몰래" : $"{s.Spec.Name} 준비");
+            return new(SchemeTaskKind.Work, s.Id, -1, s.RoomId, s.Spot, -1, 0.4f + 0.25f * Bored(c) + (late && secret ? 0.08f : 0f), secret ? $"{s.Spec.Name} — 몰래" : $"{s.Spec.Name} 준비");
         }
         return Idle;
     }
