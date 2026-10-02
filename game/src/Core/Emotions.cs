@@ -45,6 +45,9 @@ public sealed class EmotionSystem
         return e;
     }
 
+    /// <summary>읽기 전용 (없으면 null — 화면용).</summary>
+    public EmotionState? Peek(CrewMember c) => _s.TryGetValue(c.Id, out var e) ? e : null;
+
     public float Get(CrewMember c, Feeling f) => f == Feeling.Anger ? c.Mind.Anger : _s.TryGetValue(c.Id, out var e) ? e.V[(int)f] : 0f;
 
     public static string Name(Feeling f) => f switch
@@ -95,10 +98,14 @@ public sealed class EmotionSystem
     public (Feeling f, float v)? Dominant(CrewMember c, float min = 0.2f)
     {
         if (c.Dead || !_s.TryGetValue(c.Id, out var e)) return null;
-        e.V[0] = c.Mind.Anger;
         int best = -1;
-        for (int i = 0; i < 6; i++) if (e.V[i] >= min && (best < 0 || e.V[i] > e.V[best])) best = i;
-        return best < 0 ? null : ((Feeling)best, e.V[best]);
+        float bv = 0f;
+        for (int i = 0; i < 6; i++)
+        {
+            float v = i == 0 ? c.Mind.Anger : e.V[i];
+            if (v >= min && (best < 0 || v > bv)) { best = i; bv = v; }
+        }
+        return best < 0 ? null : ((Feeling)best, bv);
     }
 
     /// <summary>반감기 (시간): 두려움은 금방, 슬픔은 오래. 침착할수록 빨리 가라앉고, 자면 두려움 · 수치가 덜어진다.</summary>

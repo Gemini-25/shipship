@@ -58,7 +58,7 @@ public sealed class SocialMind
         float bs = 0f;
         foreach (var b in bel.Dangers(c, 0.6f))
         {
-            if (b.Src != BeliefSource.Seen || b.Alarmed || w.Tick - b.First > SimTime.Minutes(45)) continue;
+            if (b.Src != BeliefSource.Seen || b.Alarmed || w.Tick - b.Since > SimTime.Minutes(45)) continue;
             foreach (var p in w.Crew)
             {
                 if (p == c || p.Dead || p.Away || p.Down || p.Outside || ThinksKnows(c, p, b)) continue;
@@ -295,7 +295,12 @@ public sealed class TellActivity : Activity
         if (w.Brain2.Social.TellTarget(c, dist) is not { } t) return (0f, "—");
         float fear = w.Brain2.Emotions.Get(c, Feeling.Fear);
         float s = 0.7f + 0.3f * c.Traits.Sociability + (c.Value == CrewValue.People ? 0.15f : 0f) + 0.15f * MathF.Max(0f, c.AffinityTo(t.who)) - 0.3f * fear * (1f - c.Traits.Bravery);
+        float danger = EvacuateActivity.DangerHere(c, w);
         s *= w.Brain2.Learning.Bias(c, Method.Tell);
+        // 어차피 나가야 한다 — 나가는 길에 알린다 (겁 많고 사교적일수록 대피 대신 알리며 나간다)
+        // 피하던 중이면 피하는 길을 알리는 길로 바꾼다 (대피의 버티기 여유를 넘을 만큼)
+        if (danger > 0.2f) return (Math.Clamp(s * t.s + danger * (0.6f + 0.6f * c.Traits.Sociability) * (1.3f - 0.6f * c.Traits.Bravery) + (c.Job?.Activity is EvacuateActivity ? 0.45f : 0f), 0f, 2.3f), t.why + " · 나가는 길에");
+        if (c.Job?.Activity is EvacuateActivity) s += 0.4f;
         return (Math.Clamp(s * t.s, 0f, 1.3f), t.why);
     }
 

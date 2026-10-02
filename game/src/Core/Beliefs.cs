@@ -31,6 +31,8 @@ public sealed class Belief
     public float Conf;
     public long Tick;
     public long First;
+    /// <summary>지금 값을 믿기 시작한 때 (값이 바뀌면 새로).</summary>
+    public long Since;
     public BeliefSource Src;
     public int From = -1;
     public int Changes;
@@ -59,6 +61,8 @@ public sealed class BeliefSystem
     private readonly Dictionary<int, BeliefBook> _books = new();
     private int _phase;
     private int[] _roomFire = Array.Empty<int>();
+    private bool[] _wasDark = Array.Empty<bool>();
+    private bool _darkInit;
     private readonly List<List<CrewMember>> _roomCrew = new();
     private int _lastBroadcast = -1;
     private long _heardTick = -1;
@@ -156,7 +160,7 @@ public sealed class BeliefSystem
         long k = Key(t, id);
         if (!book.Map.TryGetValue(k, out var b))
         {
-            b = new Belief { Topic = t, Id = id, Value = value, Aux = aux, Conf = conf, Tick = now, First = now, Src = src, From = from };
+            b = new Belief { Topic = t, Id = id, Value = value, Aux = aux, Conf = conf, Tick = now, First = now, Since = now, Src = src, From = from };
             book.Map[k] = b;
             book.Learned++;
             Learns++;
@@ -200,9 +204,13 @@ public sealed class BeliefSystem
         b.Src = src;
         b.From = from;
         b.Changes++;
+        b.Since = now;
         b.Alarmed = false;
-        if (src == BeliefSource.Seen && cur >= 0.3f) Corrected(c, b, old, prevSrc, prevFrom, cur);
-        else OnNew(c, b, old);
+        // 사람은 원래 옮겨 다닌다 — 찾으러 간 자리에 없을 때만 "틀렸다"
+        bool meaningful = t is Topic.Fire or Topic.Breach or Topic.Down or Topic.Item or Topic.Outage or Topic.Warn
+                          || t == Topic.Person && value < 0 && old >= 0 && w.Brain2.Plans.Current(c)?.Step?.Who?.Id == id;
+        if (src == BeliefSource.Seen && cur >= 0.3f && meaningful) Corrected(c, b, old, prevSrc, prevFrom, cur);
+        OnNew(c, b, old);
         return b;
     }
 
@@ -293,6 +301,23 @@ public sealed class BeliefSystem
             if (c.IsAwake && c.SaidUntil < w.Tick) c.Say(w, Persona.Say(c, line));
             w.Log.Add(w.Tick, LogKind.Life, $"믿음을 고쳤다 — {book.LastCorrectionText}", c.Id);
         }
+    }
+
+    /// <summary>믿고 찾아간 자리에 없었다 (가는 길에 믿음이 이미 바뀌었어도 헛걸음은 헛걸음) — 고친 믿음으로 적는다.</summary>
+    public void Missed(CrewMember c, Topic t, int id, int wrongValue)
+    {
+        var w = _w;
+        if (Get(c, t, id) is Belief b && b.Value == wrongValue)
+        {
+            Learn(c, t, id, -1, BeliefSource.Seen, 0.9f);
+            if (b.Value == -1 && Of(c).LastCorrection == w.Tick) return;
+        }
+        var book = Of(c);
+        book.Corrected++;
+        Corrections++;
+        book.LastCorrection = w.Tick;
+        book.LastCorrectionText = $"{Describe(new Belief { Topic = t, Id = id, Value = wrongValue })} 줄 알았는데 — 없었다";
+        w.Log.Add(w.Tick, LogKind.Life, $"믿음을 고쳤다 — {book.LastCorrectionText}", c.Id);
     }
 
     /// <summary>믿음 한 줄을 사람 말로.</summary>
@@ -401,15 +426,15 @@ public sealed class BeliefSystem
         int fire = FireIn(r);
         Learn(c, Topic.Fire, r.Id, fire > 0 ? 1 : 0, BeliefSource.Seen, 1f);
         bool dark = r.Dark;
-        var prevDark = Get(c, Topic.Dark, r.Id);
+        var pd = Get(c, Topic.Dark, r.Id);
+        int prevVal = pd?.Value ?? -1;
+        long prevTick = pd?.Tick ?? -1;
         Learn(c, Topic.Dark, r.Id, dark ? 1 : 0, BeliefSource.Seen, 1f);
-        if (dark && (prevDark == null || prevDark.Value == 0 || book.DarkSince < 0))
+        // 불이 켜져 있던 방이 캄캄해졌다 (정전을 알아챔) — 원래 어두운 방을 지나가는 것과는 다르다
+        if (dark && prevVal == 0 && w.Tick - prevTick < SimTime.Hours(3) && book.DarkSince < 0)
         {
-            if (book.DarkSince < 0)
-            {
-                book.DarkSince = w.Tick;
-                w.Brain2.Emotions.Feel(c, Feeling.Fear, 0.12f + (c.Fears.Contains(Fear.Dark) ? 0.45f : 0f), $"{r.Name} 정전");
-            }
+            book.DarkSince = w.Tick;
+            w.Brain2.Emotions.Feel(c, Feeling.Fear, 0.12f + (c.Fears.Contains(Fear.Dark) ? 0.45f : 0f), $"{r.Name} 정전");
             c.NextThinkTick = Math.Min(c.NextThinkTick, w.Tick + 1);
         }
         if (!dark && book.DarkSince >= 0 && !AnyDarkBelief(c)) book.DarkSince = -1;
@@ -465,6 +490,19 @@ public sealed class BeliefSystem
             }
     }
 
+    /// <summary>불이 꺼졌다 — 정전을 알아챈다 (두려움 · 다시 생각).</summary>
+    private void Noticed(CrewMember c, Room r)
+    {
+        var w = _w;
+        if (c.Dead || !c.IsAwake || c.Outside) return;
+        Learn(c, Topic.Dark, r.Id, 1, BeliefSource.Seen, 1f);
+        var book = Of(c);
+        if (book.DarkSince >= 0) return;
+        book.DarkSince = w.Tick;
+        w.Brain2.Emotions.Feel(c, Feeling.Fear, 0.12f + (c.Fears.Contains(Fear.Dark) ? 0.45f : 0f), $"{r.Name} 정전");
+        c.NextThinkTick = Math.Min(c.NextThinkTick, w.Tick + 1);
+    }
+
     private bool AnyDarkBelief(CrewMember c)
     {
         if (!_books.TryGetValue(c.Id, out var book)) return false;
@@ -489,6 +527,18 @@ public sealed class BeliefSystem
         foreach (var l in _roomCrew) l.Clear();
         foreach (var c in w.Crew)
             if (!c.Dead && !c.Away && c.Room is Room cr && cr.Id < _roomCrew.Count) _roomCrew[cr.Id].Add(c);
+
+        // 방에 있던 사람은 불이 꺼지는 순간을 안다 (정전을 알아챔)
+        if (_wasDark.Length < rooms) Array.Resize(ref _wasDark, rooms + 8);
+        foreach (var r in w.Ship.Rooms)
+        {
+            if (r.Id >= _wasDark.Length) continue;
+            bool d = r.Dark && !r.Detached;
+            if (d && !_wasDark[r.Id] && _darkInit && r.Id < _roomCrew.Count)
+                foreach (var c in _roomCrew[r.Id]) Noticed(c, r);
+            _wasDark[r.Id] = d;
+        }
+        _darkInit = true;
 
         ImportIncidents();
         ImportBroadcasts();
@@ -673,7 +723,8 @@ public sealed class BeliefSystem
             {
                 NudgesHeeded++;
                 if (c.SaidUntil < w.Tick) c.Say(w, Persona.Say(c, "컴퓨터가 불은 없다네 — 돌아가자"));
-                c.NextThinkTick = w.Tick + 1;
+                w.Brain2.Plans.Finish(c, p, true, "컴퓨터가 불은 없다고 했다");
+                c.Interrupt(w);
             }
             else if (c.SaidUntil < w.Tick) c.Say(w, Persona.Say(c, "컴퓨터 말을 어떻게 믿어. 내 눈으로 볼래"));
         }

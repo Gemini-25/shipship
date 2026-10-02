@@ -45,6 +45,10 @@ public sealed class GoalSystem
         return l;
     }
 
+    private static readonly List<CrewGoal> NoGoals = new();
+    /// <summary>읽기 전용 (없으면 만들지 않는다 — 화면용).</summary>
+    public IReadOnlyList<CrewGoal> Peek(CrewMember c) => _g.TryGetValue(c.Id, out var l) ? l : NoGoals;
+
     public bool Has(CrewMember c, string key) => _g.TryGetValue(c.Id, out var l) && l.Any(g => g.Key == key && g.Until > _w.Tick);
 
     public IEnumerable<CrewGoal> Layer(CrewMember c, GoalLayer layer) => Of(c).Where(g => g.Layer == layer && g.Until > _w.Tick);

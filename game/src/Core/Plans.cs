@@ -52,6 +52,8 @@ public sealed class CrewPlan
     public Topic FactTopic;
     public int FactId;
     public long DarkSince = -1;
+    /// <summary>부품을 손에 넣었다 (꺼냈거나 만들었다) — 다른 일 사이에 선반에 내려놓았어도 배에는 있다.</summary>
+    public bool Made;
     public readonly List<string> Trail = new();
     public PlanStep? Step => Index >= 0 && Index < Steps.Count ? Steps[Index] : null;
 }
@@ -327,6 +329,7 @@ public sealed class PlanSystem
             cm.Carrying = new ItemStack(s.Item, s.Count);
             world.Brain2.Beliefs.Learn(cm, Topic.Item, (int)s.Item, have - s.Count > 0 ? box.Id : -1, BeliefSource.Seen, 1f, -1, have - s.Count);
             Fetched++;
+            p.Made = true;
             s.Note = $"{box.Room.Name}에서 꺼냈다";
             SkipToHandoff(p);
             return true;
@@ -351,9 +354,10 @@ public sealed class PlanSystem
         {
             // 솜씨가 모자라다 — 도움을 청한다 (부탁할 사람이 없으면 내가 서툴게라도)
             s.Tries++;
+            Insert(p, StepKind.Craft, Method.CraftPart, $"부탁이 안 되면 서툴게라도 {ItemKinds.Name(s.Item)} 만들기").Tries = 1;
             Insert(p, StepKind.AskHelp, Method.AskHelp, $"{Skills.Name(r.Skill)} 잘하는 사람에게 부탁");
             s.State = StepState.Skipped;
-            p.Steps.Add(new PlanStep { Kind = StepKind.Craft, Method = Method.CraftPart, Text = s.Text, Item = s.Item, Count = s.Count, Tries = 1 });
+            s.Note = "솜씨가 모자라다";
             return null;
         }
         var toils = Plans.DropOff(c, w, dist);
@@ -394,6 +398,7 @@ public sealed class PlanSystem
             cm.Practice(r.Skill, 0.02f);
             world.Adapt.PartsMade += r.Yield;
             Crafted++;
+            p.Made = true;
             s.Note = $"작업대에서 {ItemKinds.Name(s.Item)}을(를) 만들었다";
             world.Log.Add(world.Tick, LogKind.Work, $"계획대로 — 창고에 없던 {Ko.EulReul(ItemKinds.Name(s.Item))} 작업대에서 만들었다", cm.Id);
             SkipToHandoff(p);
@@ -419,7 +424,16 @@ public sealed class PlanSystem
     private Job? BuildHandoff(CrewMember c, CrewPlan p, PlanStep s, DistanceField dist, Activity act)
     {
         var w = _w;
-        if (c.Carrying is not ItemStack held || held.Kind != s.Item) { s.Note = "손에 부품이 없다"; return null; }
+        if (c.Carrying is not ItemStack held || held.Kind != s.Item)
+        {
+            if (!p.Made) { s.Note = "손에 부품이 없다"; return null; }
+            // 다른 일 사이에 선반에 내려놓았다 — 배에는 있으니 보류를 푼다
+            if (p.Order is WorkOrder po && !po.Closed) { po.BlockedUntil = w.Tick; po.BlockedReason = null; }
+            w.Board.RequestScan();
+            Handoffs++;
+            Ok(c, p, s, $"{ItemKinds.Name(s.Item)}은(는) 선반에 있다 — 이제 고칠 수 있다");
+            return null;
+        }
         var (box, spot) = Plans.NearestContainer(w, dist, c, f => f.Storage!.Accepts(held.Kind) && f.Storage.Free >= held.Count && f.Type == FurnitureType.Shelf);
         if (box == null) (box, spot) = Plans.NearestContainer(w, dist, c, f => f.Storage!.Accepts(held.Kind) && f.Storage.Free >= held.Count);
         if (box == null) { s.Note = "둘 곳이 없다"; return null; }
@@ -455,7 +469,7 @@ public sealed class PlanSystem
         var helper = s.Who ?? w.Brain2.Social.Helper(c, r.Skill, MathF.Max(0.35f, r.MinSkill));
         if (helper == null) { s.Note = "부탁할 사람이 없다"; return null; }
         s.Who = helper;
-        var room = w.Brain2.Beliefs.WhereIs(c, helper, out _) ?? helper.Room;
+        var room = s.Room ?? w.Brain2.Beliefs.WhereIs(c, helper, out _) ?? GuessPlace(c, helper, dist);
         if (room == null || SpotIn(room, dist, c, helper) is not Cell spot) { s.Note = $"{helper.Name}에게 갈 수 없다"; return null; }
         s.Room = room;
         var toils = new List<Toil>
@@ -464,7 +478,12 @@ public sealed class PlanSystem
             new DoToil((cm, world) =>
             {
                 world.Brain2.Beliefs.Look(cm);
-                if (helper.Room != cm.Room || !helper.CanAct) { s.Note = $"{helper.Name}이(가) {room.Name}에 없다"; return false; }
+                if (helper.Room != cm.Room || !helper.CanAct)
+                {
+                    s.Note = $"{helper.Name}이(가) {room.Name}에 없다";
+                    if (s.Tries < 1) { var again = Insert(p, StepKind.AskHelp, Method.AskHelp, $"{helper.Name} 다시 찾아 부탁", Locate(cm, helper), null, helper); again.Tries = 1; }
+                    return false;
+                }
                 if (!world.Brain2.Social.Agrees(helper, cm, out string no)) { s.Note = $"{helper.Name}: {no}"; helper.Say(world, Persona.Say(helper, no)); return false; }
                 var hp = Begin(helper, PlanKind.Help, $"{cm.Name} 부탁 — {ItemKinds.Name(part)} 만들기", $"{Ko.IGa(cm.Name)} 부탁했다", Method.CraftPart);
                 hp.Part = part; hp.Target = p.Target; hp.Order = p.Order; hp.For = cm;
@@ -515,7 +534,15 @@ public sealed class PlanSystem
         var reset = new List<Toil>
         {
             new GotoToil(spot),
-            new WorkToil(0.25f, Skill.Electrical, panel.Center) { CanContinue = (cm, _) => m.Faults.Any(f => f.Kind == FaultKind.BreakerTrip && (f.Circuit == circ || circ < 0)) },
+            new WorkToil(0.25f, Skill.Electrical, panel.Center)
+            {
+                CanContinue = (cm, _) =>
+                {
+                    if (m.Faults.Any(f => f.Kind == FaultKind.BreakerTrip && (f.Circuit == circ || circ < 0))) return true;
+                    Ok(cm, p, s, "벌써 누가 올렸다"); // 내가 가는 사이 누가 올렸다 — 실패가 아니다
+                    return false;
+                },
+            },
             new DoToil((cm, world) =>
             {
                 int n = m.Faults.RemoveAll(f => f.Kind == FaultKind.BreakerTrip && (f.Circuit == circ || circ < 0));
@@ -579,6 +606,7 @@ public sealed class PlanSystem
         bool here = who.Room == c.Room && c.Room != null && !who.Dead;
         if (!here)
         {
+            if (s.Room != null) w.Brain2.Beliefs.Missed(c, Topic.Person, who.Id, s.Room.Id);
             s.Note = $"{who.Name}이(가) {s.Room?.Name ?? "거기"}에 없다";
             s.State = StepState.Doing;
             Fail(c, p, s, s.Note);
