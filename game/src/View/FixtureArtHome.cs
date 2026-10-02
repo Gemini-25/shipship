@@ -805,6 +805,9 @@ public static partial class FixtureArt
         }
         foreach (var p in new[] { x.R.Position + new Vector2(2, 2), new Vector2(x.R.End.X - 6, x.R.Position.Y + 2), new Vector2(x.R.Position.X + 2, x.R.End.Y - 6), x.R.End - new Vector2(6, 6) })
             ci.DrawRect(new Rect2(p, new Vector2(4f, 4f)), new Color("#3a4454")); // 기둥
+        Line(ci, x.R.Position + new Vector2(4f, 6f), new Vector2(x.R.Position.X + 4f, x.R.End.Y - 6f), new Color("#2e3746"), 1.2f); // 옆 버팀대
+        Line(ci, new Vector2(x.R.End.X - 4f, x.R.Position.Y + 6f), x.R.End - new Vector2(4f, 6f), new Color("#2e3746"), 1.2f);
+        ci.DrawRect(new Rect2(x.R.Position.X + 6f, x.R.End.Y - 3.5f, x.R.Size.X - 12f, 1.5f), WarnYellow.WithAlpha(0.35f)); // 바닥 걸림 띠
     }
 
     private static readonly Color[] CrateTints = { new("#3a4250"), new("#4a3e30"), new("#2c4440"), new("#3d3548") };

@@ -205,8 +205,10 @@ public static partial class FixtureArt
     {
         var ci = x.Ci;
         float rr = Mathf.Min(x.B.Size.X, x.B.Size.Y) * 0.5f;
+        Box(ci, x.B.Grow(-1f), new Color("#2a2e36"), 4, new Color("#4a525e")); // 받침
         Dot(ci, x.C + new Vector2(1.5f, 2f), rr, Shadow);
         Dot(ci, x.C, rr, new Color("#d8dce2"));
+        ci.DrawArc(x.C, rr * 0.92f, -2.4f, -0.7f, 10, new Color("#5a626e"), 1.6f, true); // 손잡이 홈
         Ring(ci, x.C, rr, new Color("#8a929e"), 1.2f, 28);
         for (int k = 1; k < 5; k++) // 동심 틈 (끊긴 고리)
             for (int s = 0; s < 4; s++)
@@ -359,6 +361,8 @@ public static partial class FixtureArt
         for (int k = 0; k < 4; k++) ci.DrawRect(x.Q(0.12f + k * 0.2f, 0.18f, 0.29f + k * 0.2f, 0.82f), new Color("#2b2033"));
         for (int k = 0; k < 6; k++) Line(ci, x.P(0.08f + k * 0.17f, 0.02f), x.P(0.08f + k * 0.17f, 0.12f), new Color("#3a3046"), 1.2f); // 방열 핀
         Box(ci, x.Q(0.35f, 0.88f, 0.65f, 0.98f), new Color("#0f0c14"), 1); // 전원부
+        Cable(ci, x.P(0.5f, 0.98f), x.R.End - new Vector2(3f, 1f), 1.5f, new Color("#1a1a1a"), 1.2f); // 전원선
+        foreach (float u in new[] { 0.02f, 0.98f }) ci.DrawRect(new Rect2(x.P(u, 0.45f) - new Vector2(1.5f, 1.5f), new Vector2(3f, 3f)), new Color("#6a5a7a")); // 거는 쇠
     }
 
     private static void LedPanelLife(in Fix x)
@@ -491,8 +495,10 @@ public static partial class FixtureArt
         var rope = LeakRope(x);
         ci.DrawPolyline(rope, new Color("#1a1a1a"), 2.4f, true); // 감지 줄
         ci.DrawPolyline(rope, new Color("#3a6aa0"), 1f, true);
+        for (int i = 1; i < 9; i += 2) ci.DrawRect(new Rect2(rope[i] - new Vector2(1.2f, 1.2f), new Vector2(2.4f, 2.4f)), new Color("#6a7080")); // 줄 고정 집게
         var box = new Rect2(x.C - new Vector2(6f, 5f), new Vector2(12f, 10f));
         Box(ci, box, new Color("#2a2e36"), 2, new Color("#6a7080"));
+        ci.DrawRect(new Rect2(box.Position.X + 1.5f, box.End.Y - 3f, box.Size.X - 3f, 2f), new Color("#1a1d22")); // 단자대
         Dot(ci, x.C, 3.6f, new Color("#5a1a1a")); // 경광등 덮개
         Ring(ci, x.C, 3.6f, new Color("#a04040"), 0.8f, 14);
     }

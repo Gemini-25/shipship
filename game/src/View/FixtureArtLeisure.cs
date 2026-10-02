@@ -358,7 +358,10 @@ public static partial class FixtureArt
     private static void DamperBody(in Fix x)
     {
         var ci = x.Ci;
+        ci.DrawRect(new Rect2(x.R.Position.X + 3f, x.R.Position.Y + 1f, x.R.Size.X - 6f, 2f), new Color("#3a4454")); // 붙이는 띠
         Box(ci, x.B, new Color("#2a2a32"), 2, new Color("#4a4a56"), 2);
+        foreach (var p in new[] { x.B.Position, new Vector2(x.B.End.X - 3f, x.B.Position.Y), new Vector2(x.B.Position.X, x.B.End.Y - 3f), x.B.End - new Vector2(3f, 3f) })
+            ci.DrawRect(new Rect2(p, new Vector2(3f, 3f)), new Color("#5a5a66")); // 모서리 집게
         int n = 4;
         float cw = x.B.Size.X / n, chh = x.B.Size.Y / n;
         for (int i = 0; i < n; i++)
@@ -404,8 +407,10 @@ public static partial class FixtureArt
     {
         var ci = x.Ci;
         float rr = Mathf.Min(x.B.Size.X, x.B.Size.Y) * 0.4f;
+        Cable(ci, x.C + new Vector2(rr * 0.7f, rr * 0.7f), x.R.End - new Vector2(2f, 2f), 2f, new Color("#e8ecf2").WithAlpha(0.6f), 1f); // 전원선
         Dot(ci, x.C + new Vector2(1.2f, 1.6f), rr, Shadow);
         Dot(ci, x.C, rr, new Color("#c8ccd4"));
+        for (int k = 0; k < 3; k++) Dot(ci, x.C + Vector2.FromAngle(Mathf.Pi / 2f + k * Mathf.Tau / 3f) * rr * 0.92f, 1.1f, Rubber); // 고무 발
         Ring(ci, x.C, rr, new Color("#8a929e"), 1f, 24);
         for (int ring = 1; ring <= 3; ring++) // 타공 그릴
         {

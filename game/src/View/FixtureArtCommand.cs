@@ -349,7 +349,10 @@ public static partial class FixtureArt
     {
         var ci = x.Ci;
         var pouch = x.Q(0.1f, 0.06f, 0.9f, 0.78f);
+        ci.DrawRect(new Rect2(x.R.Position.X + 6f, x.R.Position.Y + 1f, x.R.Size.X - 12f, 2.5f), new Color("#3a4454")); // 벽 걸이
         Box(ci, pouch, FireRed, 4, FireRed.Lightened(0.3f)); // 빨간 주머니
+        Line(ci, pouch.Position + new Vector2(2f, pouch.Size.Y * 0.28f), new Vector2(pouch.End.X - 2f, pouch.Position.Y + pouch.Size.Y * 0.28f), FireRed.Darkened(0.35f), 1.2f); // 덮개 접힌 선
+        ci.DrawRect(new Rect2(pouch.GetCenter().X - 4f, pouch.Position.Y + pouch.Size.Y * 0.18f, 8f, 1.6f), new Color("#1a1a1a").WithAlpha(0.6f)); // 찍찍이
         Bevel(ci, pouch, 0.15f);
         var c = pouch.GetCenter();
         ci.DrawColoredPolygon(new[] { c + new Vector2(0f, -6f), c + new Vector2(3.5f, 1f), c + new Vector2(2f, 4f), c + new Vector2(-2f, 4f), c + new Vector2(-3.5f, 1f) }, Colors.White.WithAlpha(0.9f)); // 불꽃 표
