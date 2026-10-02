@@ -72,6 +72,7 @@ public sealed class PowerTriage
             case FurnitureType.Stove or FurnitureType.MealDispenser: r = Math.Max(r, 7); break;
         }
         if (m.Body.Room.Type is RoomType.LifeSupport) r = Math.Max(r, 9);
+        if (w.Automation.ReserveOrNull?.Holds(m) == true) r = Math.Max(r, 10); // v16.26 예약 (이송 중인 부상자 → 의무실)
         return r;
     }
 
@@ -134,7 +135,7 @@ public sealed class PowerTriage
             if (Mode == "평시") Mode = "주의";
             // 얼마나 끌 수 있나 (순위 낮은 것부터 · 생활까지): 목표 — 복구까지 · 아니면 12시간 버틸 만큼 (신중하면 더 오래)
             float targetH = (restore < 98f ? restore + 1f : 12f) * (1f + 0.5f * MathF.Max(0f, ch.Caution));
-            float need = MathF.Max(0f, drain - p.BatteryCharge / MathF.Max(0.5f, targetH));
+            float need = MathF.Max(0f, drain - MathF.Max(0f, p.BatteryCharge - (a.ReserveOrNull?.KeepKwh ?? 0f)) / MathF.Max(0.5f, targetH)); // v16.26 재기동 여유는 남긴다
             // 배전반이 이미 떨군 설비(전기가 모자라 꺼진 것)도 표에 넣어 둔다 — 전기가 조금 돌아와도 다시 먹지 않게. 줄어드는 몫은 지금 켜진 것만.
             var cands = w.Ship.Machines.Where(m => Parkable(m, 7)).OrderBy(m => Rank(w, m)).ThenByDescending(m => m.Demand).ThenBy(m => m.Body.Id).ToList();
             float parkKw = 0f;
@@ -146,7 +147,7 @@ public sealed class PowerTriage
                 if (m.Powered) parkKw += m.Demand;
             }
             // 저출력 운영(남는 펌프 · 산소 발생기 하나 · 빈 치료 침대 · 엔진 · 함교 밖 콘솔 · 센서): 사람이 배전반에 가기 전에 여기서 돌린다
-            bool hurt = w.Crew.Any(c => !c.Dead && (c.Down || c.Vitals.Injury > 0.25f));
+            bool hurt = w.Crew.Any(c => !c.Dead && (c.Down || c.Vitals.Injury > 0.25f)) || a.ReserveOrNull?.MedHold == true;
             float lowKw = p.Brownout ? 0f : w.Ship.Machines.Where(m => m.Powered && !m.Body.Room.Detached && (m.Body.Type is FurnitureType.EngineCore or FurnitureType.SensorArray
                 || m.Body.Type == FurnitureType.Console && m.Body.Room.Type != RoomType.Bridge || m.Body.Type == FurnitureType.MedBed && !hurt)).Sum(m => m.Demand);
             parkKw += lowKw;
@@ -200,8 +201,8 @@ public sealed class PowerTriage
         else if (_parked.Count > 0 && p.ReactorOnline && p.ReactorRamp >= 1f && p.BatteryPercent > 0.5f && drain < 0.1f)
         {
             // 다시 켜기: 여유가 그 설비만큼 있으면 순위 높은 것부터 하나씩 (기동 전류도 줄인다)
-            var back = w.Ship.Machines.Where(m => _parked.Contains(m.Body.Id)).OrderByDescending(m => Rank(w, m)).ThenBy(m => m.Body.Id).FirstOrDefault();
-            if (back == null) { _parked.Clear(); _parkOrder.Clear(); }
+            var back = w.Ship.Machines.Where(m => _parked.Contains(m.Body.Id) && !FixBook.WorkLock(w, m) && a.SelfWatch.Allow(CmdTarget.Machine, m.Body.Id, "다시 켬")).OrderByDescending(m => Rank(w, m)).ThenBy(m => m.Body.Id).FirstOrDefault();
+            if (back == null) { if (!w.Ship.Machines.Any(m => _parked.Contains(m.Body.Id))) { _parked.Clear(); _parkOrder.Clear(); } }
             else if (p.ReactorLimit - p.Demand >= back.Spec.PowerDraw * Grades.Power(back.Grade) + 0.5f)
             {
                 _parked.Remove(back.Body.Id);
@@ -317,6 +318,7 @@ public sealed class PowerTriage
                 if (Cases.Count > 40) Cases.RemoveAt(0);
             }
             string cause = bc.Cause, sig = bc.Sig, cutKind = bc.Kind;
+            if (!a.SelfWatch.Allow(CmdTarget.Breaker, i, "차단기 올림")) { if (bc.State != "멈춤") { bc.State = "멈춤"; Holds++; } continue; } // v16.26 같은 차단기를 거듭 올렸다 — 스스로 멈추고 사람에게
             foreach (var o in w.Board.Open.Where(o => o.Kind == WorkKind.ResetBreaker && o.Circuit == i && o.Assignee == null).ToList()) w.Board.Close(o); // 원인을 볼 동안 사람은 올리러 가지 않는다
             if (!remote) { bc.State = "사람에게 (배전반 데이터선이 끊겼다)"; continue; }
             if (w.Tick - fault.Since < SimTime.Minutes(0.6f) / a.Core.Speed) continue; // 원인을 본다
@@ -537,6 +539,8 @@ public sealed partial class WorkBoard
     /// <summary>v16.20 컴퓨터가 원격으로 못 하는 일만 손에게: 원격 시동이 두 번 안 걸린 보조 발전기.</summary>
     private void ScanComputer(Poster post)
     {
+        ScanProbe(post); // v16.26 ② 사람이 가서 보기
+        ScanSelf(post); // v16.26 ⑥ 센서가 안 닿는 방 순찰
         var w = _world;
         var tr = w.Automation.TriageOrNull;
         if (tr == null || !tr.AuxNeedsHands || w.Power.AuxRunning || w.Power.AuxFuel <= 0.1f) return;
@@ -552,7 +556,7 @@ public sealed partial class AutomationSystem
     public PowerTriage Triage => _triage ??= new PowerTriage(_world);
     internal PowerTriage? TriageOrNull => _triage;
     /// <summary>Power 훅: 원자로 출력 상한 (트리아지).</summary>
-    public float ReactorCap => _triage?.ReactorCap ?? 1f;
+    public float ReactorCap => (_triage?.ReactorCap ?? 1f) * (_fix?.ReactorCap ?? 1f); // v16.26 계획의 감출력
     /// <summary>Power.UpdateParking 훅.</summary>
     internal void Park() => _triage?.Park();
     /// <summary>Moisture 기동 전류 훅: 컴퓨터가 방금 원격으로 올린 회로는 설비를 큰 것부터 하나씩 켠다.</summary>

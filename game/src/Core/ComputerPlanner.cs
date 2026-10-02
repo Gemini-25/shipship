@@ -818,7 +818,7 @@ public sealed partial class AutomationSystem
     {
         if (BrainOff || !Present) return;
         long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
-        Outlook.Update();
+        if (_self == null || !_self.Thin("예측")) Outlook.Update(); // v16.26 ⑥ 달아오르거나 계산이 몰리면 긴 예측부터 줄인다
         CrewModel.Update();
         Planner.Update();
         Authority.Update();

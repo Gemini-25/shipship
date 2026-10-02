@@ -8,7 +8,7 @@ namespace ShipSim.Core;
 // 결과는 몇 분 뒤 채점한다 (그 방이 나아졌나 · 사람이 쓰러졌나 · 오경보였나). 기존 판단 근거(Reason)도 이 장부를 부른다.
 // 배율 모듈이 실제로 아낀 양(전력 kWh · 물 L · 미룬 고장 · 피로 경보 …)을 쌓아 하루 보고로 남긴다.
 
-public enum ActKind { Alarm, Damper, Bulkhead, Valve, Breaker, Suppress, Shed, Module, Zone, Advice, Proposal, Broadcast, Reboot, Door, Forecast }
+public enum ActKind { Alarm, Damper, Bulkhead, Valve, Breaker, Suppress, Shed, Module, Zone, Advice, Proposal, Broadcast, Reboot, Door, Forecast, Plan, Check } // v16.26 수순 · 확인
 
 /// <summary>컴퓨터가 한 일 하나 (다섯 칸).</summary>
 public sealed class ComputerAct
@@ -145,6 +145,8 @@ public sealed class ComputerLogBook
         ActKind.Broadcast => "들은 사람은 따른다",
         ActKind.Reboot => "그동안 손으로",
         ActKind.Forecast => "미리 대비",
+        ActKind.Plan => "부탁받은 사람은 그 순서대로",
+        ActKind.Check => "가까운 사람이 가서 확인",
         _ => "참고",
     };
 
@@ -268,6 +270,7 @@ public sealed partial class AutomationSystem
         Foresight.Update(); // v16.6 → v16.16 앞날 예측 · 계획 (ComputerForesight.cs)
         Brain2(); // v16.16 두뇌 2.0 — 계획자 · 며칠 앞 예측 · 승무원 모형 · 권한 · 협상 · 책임 (ComputerPlanner.cs)
         Ship20(dt); // v16.20 우주선급 — 전력 트리아지 · 미리 돌려 보기 · 성격 · 명령선 (ComputerTriage · ComputerForesee · ComputerCharacter · ComputerCommand)
+        Brain26(); // v16.26 여러 단계 계획 · 확인할 방법 · 자원 예약 · 구획 자율 · 자기 진단 · 사고 뒤 검토 · 성격 셋 (ComputerPlan · Probe · Reserve · Zones · Review · Manner)
     }
 
     /// <summary>배율 모듈이 실제로 아낀 양을 1분마다 쌓는다 (방 단위 · 설비 단위).</summary>

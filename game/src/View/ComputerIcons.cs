@@ -227,6 +227,15 @@ public static class ComputerIcons
                 ci.DrawColoredPolygon(new[] { c, c + new Vector2(Mathf.Cos(t * 3f), Mathf.Sin(t * 3f)) * 5f, c + new Vector2(Mathf.Cos(t * 3f + 0.7f), Mathf.Sin(t * 3f + 0.7f)) * 5f }, col.WithAlpha(0.8f));
                 ci.DrawCircle(c + new Vector2(2.5f, -2.5f), 1f, col, true, -1f, true);
                 break;
+            case ActKind.Plan: // v16.26 수순: 마디 셋을 잇는 계단 길 · 앞으로 가는 빛
+                ci.DrawPolyline(new[] { c + new Vector2(-5, 4), c + new Vector2(-2, 4), c + new Vector2(-2, 0), c + new Vector2(2, 0), c + new Vector2(2, -4), c + new Vector2(5, -4) }, col, 1.3f, true);
+                for (int i = 0; i < 3; i++) ci.DrawCircle(c + new Vector2(-3.5f + i * 4f, 4f - i * 4f), 1.3f, col.WithAlpha(Mathf.PosMod(t * 1.2f, 3f) >= i ? 1f : 0.35f), true, -1f, true);
+                break;
+            case ActKind.Check: // v16.26 확인: 돋보기 + 안의 물음표
+                ci.DrawArc(c + new Vector2(-1, -1), 3.8f, 0f, Mathf.Tau, 12, col, 1.3f, true);
+                ci.DrawLine(c + new Vector2(1.8f, 1.8f), c + new Vector2(5, 5), col, 1.8f, true);
+                Gfx.TextCentered(ci, Fonts.Bold, c + new Vector2(-1, -0.5f), "?", 6, col);
+                break;
             default: ci.DrawCircle(c, 3.5f, col.WithAlpha(0.8f), true, -1f, true); break;
         }
         ci.DrawSetTransformMatrix(Transform2D.Identity);
