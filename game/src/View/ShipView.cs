@@ -718,6 +718,7 @@ public partial class ShipView : Node2D
         PaintTethers(ci);
         PaintBelongings(ci); // v14.3 놓인 물건 · 손에 든 취미 물건 · 음표 · 판
         PaintScenes(ci); // v16.1 진행 중 장면 (판 · 커피 · 국 자국 · 쪽지 · 스크린 · 만들다 만 소품)
+        PaintHairClips(ci); // v17.1 바닥에 떨어진 머리카락
         PaintRobots(ci); // v10.10 선내 로봇 (사람 밑에)
         // 쓰러진 사람은 밑에, 업힌 사람은 업은 사람 위에
         foreach (var c in _world.Crew.OrderBy(c => c.CarriedBy != null ? 2 : c.Down ? 0 : 1)) PaintCrew(ci, c);
@@ -1267,6 +1268,7 @@ public partial class ShipView : Node2D
         bool hovered = _main.HoveredCrew == c;
         float radius = CrewRadius * (c.IsChild ? 0.55f + 0.03f * c.Age : 1f); // v12.9 아이는 작다
         float s = radius / 9.5f;
+        int lod = Puppet.Lod(Zoom); // v17.1 멀리선 점 + 색 · 가까이선 인형
 
         if (c.Dead || c.Down)
         {
@@ -1276,9 +1278,13 @@ public partial class ShipView : Node2D
             var lie = c.CarriedBy is CrewMember carrier
                 ? CrewPx(carrier) + new Vector2(-carrier.Facing.Y, carrier.Facing.X).Normalized() * 13f * s
                 : p;
-            Gfx.RoundRect(ci, new Rect2(lie.X - 13f * s, lie.Y - 6f * s, 26f * s, 12f * s), Palette.Space.WithAlpha(0.8f), 6f * s);
-            Gfx.RoundRect(ci, new Rect2(lie.X - 12f * s, lie.Y - 5f * s, 24f * s, 10f * s), body, 5f * s);
-            ci.DrawCircle(lie + new Vector2(-8f * s, 0f), 5.5f * s, body.Lightened(0.25f), true, -1f, true);
+            if (lod >= 1) PaintPuppetLying(ci, c, lie, s * 0.9f, c.Dead, false); // v17.1 누운 인형
+            else
+            {
+                Gfx.RoundRect(ci, new Rect2(lie.X - 13f * s, lie.Y - 6f * s, 26f * s, 12f * s), Palette.Space.WithAlpha(0.8f), 6f * s);
+                Gfx.RoundRect(ci, new Rect2(lie.X - 12f * s, lie.Y - 5f * s, 24f * s, 10f * s), body, 5f * s);
+                ci.DrawCircle(lie + new Vector2(-8f * s, 0f), 5.5f * s, body.Lightened(0.25f), true, -1f, true);
+            }
             if (c.Suit != null) ci.DrawArc(lie + new Vector2(-8f * s, 0f), 6f * s, 0f, Mathf.Tau, 16, new Color("#dfe6ee"), 1.5f, true);
             if (c.Dead)
             {
@@ -1294,13 +1300,21 @@ public partial class ShipView : Node2D
                 ci.DrawRect(new Rect2(cp.X - 3.5f, cp.Y - 1f, 7f, 2f), Colors.White);
             }
         }
-        else if (_world.Body.Crawling(c)) PaintCrawler(ci, c, p, col, s); // v16.3 정비 통로 속: 엎드려 기는 몸
+        else if (_world.Body.Crawling(c))
+        {
+            if (lod >= 1) PaintPuppetCrawl(ci, c, p, s * 0.85f); // v17.1 기는 인형
+            else PaintCrawler(ci, c, p, col, s); // v16.3 정비 통로 속: 엎드려 기는 몸
+        }
         else if (c.Pose == Pose.Sleeping)
         {
             Gfx.RoundRect(ci, new Rect2(p.X - 10f, p.Y + 1f, 20f, 26f), col.Darkened(0.35f).WithAlpha(0.95f), 8);
             var head = p + new Vector2(0f, -5f);
-            ci.DrawCircle(head, 8.5f * s, Palette.Space.WithAlpha(0.8f), true, -1f, true);
-            ci.DrawCircle(head, 7f * s, col, true, -1f, true);
+            if (lod >= 1) PaintPuppetLying(ci, c, p + new Vector2(0f, 1.5f), s * 0.85f, false, true); // v17.1 베개 위 머리 · 머리카락
+            else
+            {
+                ci.DrawCircle(head, 8.5f * s, Palette.Space.WithAlpha(0.8f), true, -1f, true);
+                ci.DrawCircle(head, 7f * s, col, true, -1f, true);
+            }
         }
         else
         {
@@ -1324,23 +1338,8 @@ public partial class ShipView : Node2D
 
             float rr = c.Pose == Pose.Sitting ? radius * 0.9f : radius;
             var facing = c.Facing.ToGodot();
-            if (c.Suit is SuitState suit)
-            {
-                // 우주복: 흰 여압복 테두리 + 어두운 헬멧 창. 산소가 얼마 없으면 테두리가 깜빡인다.
-                bool low = suit.Oxygen < 0.75f;
-                float blink = low ? 0.5f + 0.5f * Mathf.Sin(_time * 8f) : 1f;
-                ci.DrawCircle(body, rr + 4f * s, Palette.Space.WithAlpha(0.85f), true, -1f, true);
-                ci.DrawCircle(body, rr + 2.5f * s, (low ? Palette.Warning : new Color("#dfe6ee")).WithAlpha(0.95f * blink), true, -1f, true);
-                ci.DrawCircle(body, rr * 0.82f, col, true, -1f, true);
-                ci.DrawCircle(body + facing * (rr * 0.42f), rr * 0.42f, new Color("#1c2a3e"), true, -1f, true);
-                ci.DrawCircle(body + facing * (rr * 0.42f) + new Vector2(-1.5f, -1.5f) * s, rr * 0.14f, new Color(1, 1, 1, 0.6f), true, -1f, true);
-            }
-            else
-            {
-                ci.DrawCircle(body, rr + 2f * s, Palette.Space.WithAlpha(0.85f), true, -1f, true);
-                ci.DrawCircle(body, rr, col, true, -1f, true);
-                ci.DrawCircle(body + facing * (rr * 0.45f), rr * 0.36f, col.Lightened(0.6f), true, -1f, true);
-            }
+            if (lod == 0) PaintCrewDot(ci, c, body, rr, Palette.Crew(c.Id)); // v17.1 멀리선 점 + 색
+            else PaintPuppet(ci, c, body, facing, s * (c.Pose == Pose.Sitting ? 0.92f : 1f), Puppet.Of(_world, c), lod, Palette.Crew(c.Id), c.Vitals.Health < 0.5f); // v17.1 위에서 본 인형
 
             if (c.Pose == Pose.Working)
             {
@@ -1357,8 +1356,8 @@ public partial class ShipView : Node2D
             if (c.Job?.Current is SprayToil) PaintSpray(ci, body, facing, rr);
             PaintGait(ci, c, body, facing, rr, s);
 
-            // 손에 든 물건
-            if (c.Carrying is ItemStack held)
+            // 손에 든 물건: 멀리서는 색 네모 (가까이선 인형 손에 각자 다른 모양)
+            if (lod == 0 && c.Carrying is ItemStack held)
             {
                 var side = new Vector2(-facing.Y, facing.X);
                 var bp = body + side * (rr * 0.95f) + facing * (rr * 0.35f);
