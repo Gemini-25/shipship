@@ -190,7 +190,7 @@ public sealed partial class SchemeSystem
         End(s, SchemeStage.Done, $"모두의 것이 됐다 — {legit}");
         w.Brain2.Emotions.Feel(lead, Feeling.Pride, 0.3f, $"{legit} — 다들 좋아한다");
         w.History.Add(w, HistoryKind.Memory, $"{Ko.IGa(lead.Name)} 몰래 하던 {Ko.IGa(s.Spec.Name)} {Ko.EuRo(legit)} 모두의 것이 됐다", RoomOf(s), new[] { lead, by }, log: true);
-        var msg = w.Info.Chat.Post(by, ChatKind.Notice, ShipChat.Voice(by, $"{RoomOf(s)?.Name} 가 봐. {lead.Name}가 만든 {legit} — 다 같이 쓰자", $"{RoomOf(s)?.Name}에 {lead.Name} 님이 만든 {legit}, 다 같이 쓰면 좋겠습니다"));
+        var msg = w.Info.Chat.Post(by, ChatKind.Notice, ShipChat.Voice(by, $"{RoomOf(s)?.Name} 가 봐. {Ko.IGa(lead.Name)} 만든 {legit} — 다 같이 쓰자", $"{RoomOf(s)?.Name}에 {lead.Name} 님이 만든 {legit}, 다 같이 쓰면 좋겠습니다"));
         s.Invite = msg.Id;
         Life.Diary(w, lead, $"들켰는데 다들 좋아했다. 이제 {legit}이다.");
     }
@@ -548,7 +548,7 @@ public sealed partial class SchemeSystem
                 victim.ChangeAffinity(lead, -0.1f);
                 w.Brain2.Emotions.Feel(victim, Feeling.Anger, 0.3f, $"{spec.Name}", lead);
                 MindSystem.Anger(victim, 0.12f);
-                if (lead.Value == CrewValue.People || lead.Traits.Diligence > 0.6f) w.Brain2.Emotions.Feel(lead, Feeling.Shame, 0.15f, $"{victim.Name}이 정말 화났다", victim);
+                if (lead.Value == CrewValue.People || lead.Traits.Diligence > 0.6f) w.Brain2.Emotions.Feel(lead, Feeling.Shame, 0.15f, $"{Ko.IGa(victim.Name)} 정말 화났다", victim);
                 outcome = "앙금이 남았다";
             }
         }
