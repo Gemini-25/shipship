@@ -305,7 +305,7 @@ public sealed class CosmicWarnActivity : Activity
         if (!CosmicCrew.Free(c) || c.IsChild || Need(c, w) is not { } n) return (0f, "—");
         if (!dist.Reachable(n.who.Cell)) return (0f, "닿지 않는다");
         float s = 0.72f + (c.Value == CrewValue.People ? 0.15f : 0f) + 0.15f * Math.Clamp(c.AffinityTo(n.who), 0f, 1f);
-        return (s, n.wake ? $"{Ko.EulReul(n.who.Name)} 깨워야 한다 — {n.e.Spec.Name}" : $"{n.who.Name}은(는) 아직 모른다 — {n.e.Spec.Name}");
+        return (s, n.wake ? $"{Ko.EulReul(n.who.Name)} 깨워야 한다 — {n.e.Spec.Name}" : $"{Ko.EunNeun(n.who.Name)} 아직 모른다 — {n.e.Spec.Name}");
     }
 
     public override Job? Plan(CrewMember c, World w, DistanceField dist)
@@ -328,7 +328,7 @@ public sealed class CosmicWarnActivity : Activity
             }),
         })
         {
-            LogText = wake ? $"{Ko.EulReul(who.Name)} 깨우러 간다 — {e.Spec.Name}" : $"{who.Name}에게 {e.Spec.Name}을(를) 알리러 간다", LogKind = LogKind.Life, Urgent = wake,
+            LogText = wake ? $"{Ko.EulReul(who.Name)} 깨우러 간다 — {e.Spec.Name}" : $"{who.Name}에게 {Ko.EulReul(e.Spec.Name)} 알리러 간다", LogKind = LogKind.Life, Urgent = wake,
             OnFinished = (cm, world, st) => world.Cosmic.ReleaseWarn(who),
         };
     }
@@ -353,7 +353,7 @@ public sealed class CosmicLookActivity : Activity
             bool visible = e.Phase == CosmicPhase.Impact || e.Phase <= CosmicPhase.Brace && e.HoursTo(w.Tick, e.Arrive) < 24f;
             if (!visible) continue;
             string key = $"cosmiclook:{e.Id}:{(int)e.Phase}";
-            if (!cs.Looked(c, key)) return (key, e.Phase == CosmicPhase.Impact ? $"{e.Spec.Name}이(가) 창밖을 채웠다" : $"창밖에 {e.Spec.Name}의 징조", e);
+            if (!cs.Looked(c, key)) return (key, e.Phase == CosmicPhase.Impact ? $"{Ko.IGa(e.Spec.Name)} 창밖을 채웠다" : $"창밖에 {e.Spec.Name}의 징조", e);
         }
         foreach (var s in cs.Sky)
         {
@@ -424,7 +424,7 @@ public sealed class CosmicVigilActivity : Activity
                 cm.Needs.Stress = MathF.Max(0f, cm.Needs.Stress - 0.08f);
                 cm.Needs.Social = MathF.Min(1f, cm.Needs.Social + 0.2f);
                 cm.Memory.Trauma = MathF.Max(0f, cm.Memory.Trauma - 0.01f);
-                MarkLog.Add(cm.Memory.Marks, world.Tick, sky != null ? $"그날의 밤 — {sky.Name}을(를) 봤다" : "그날의 밤을 지켰다");
+                MarkLog.Add(cm.Memory.Marks, world.Tick, sky != null ? $"그날의 밤 — {Ko.EulReul(sky.Name)} 봤다" : "그날의 밤을 지켰다");
                 return true;
             }),
         }) { LogText = sky != null ? $"그날의 밤 — 창밖의 {sky.Name}" : "그날의 밤", LogKind = LogKind.Life, TargetRoom = room };

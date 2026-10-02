@@ -270,7 +270,7 @@ public sealed partial class WorkBoard
             if (w.Policies["muster"] == 0 && level < CrisisLevel.Survival && w.Command.TeamOf(c) is not { Kind: not TeamKind.Reserve }) continue; // v13.2 해당 조만
             if (w.Policies["privacy"] == 1 && level < CrisisLevel.Survival && w.Command.TeamOf(c) is not { Kind: not TeamKind.Reserve }) continue; // v13.4 사생활 존중
             post(WorkKind.WakeCrew, WorkTarget.OfCrew(c), level == CrisisLevel.Survival ? 1.0f : 0.85f, Skill.Medicine,
-                $"{Crisis.Now(w).Top} — {c.Name}이(가) 아직 자고 있다");
+                $"{Crisis.Now(w).Top} — {Ko.IGa(c.Name)} 아직 자고 있다");
         }
     }
 }

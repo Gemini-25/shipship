@@ -419,7 +419,7 @@ public sealed class OutsideSystem
         {
             string? hit = x.Hazard(nameof(HazardKind.MicroShower));
             int ice = x.Arms > 0.05f ? x.Put(ItemKind.Ice, 2) : 0;
-            return x.Warn("혜성 부스러기가 쏟아진다 — " + (hit ?? "외판을 긁고 지나갔다") + (ice > 0 ? $" · 얼음 {ice}을 건졌다" : ""));
+            return x.Warn("혜성 부스러기가 쏟아진다 — " + (hit ?? "외판을 긁고 지나갔다") + (ice > 0 ? $" · 얼음 {ice}덩이를 건졌다" : ""));
         }),
         new("tidal", "조석력 흔들림", "기상", 0.6f, L(LegKind.GasGiant, LegKind.Narrows, LegKind.Pulsar), false, true, x =>
             x.Warn("조석력에 배가 비틀렸다 — " + (x.Hazard(nameof(HazardKind.FrameCreak)) ?? "골조가 한참 삐걱댔다"))),

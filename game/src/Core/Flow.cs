@@ -263,7 +263,7 @@ public sealed class FlowSystem
                 if (s.Frac <= 0f) continue; // 끊긴 건 망이 따로 알린다
                 if (k == NetKind.Power) Mark(_dim, r, s.Frac < 0.75f, () => { Stats.Brownouts++; w.Log.Add(w.Tick, LogKind.Warning, $"{r.Name} 전압이 떨어졌다 ({s.Frac * 100:0}% — {s.Why ?? "멀다"}) · 불이 흐리고 설비가 덜 돈다"); MarkLog.Add(r.Marks, w.Tick, $"전압 강하 {s.Frac * 100:0}% ({s.Why})"); });
                 if (k == NetKind.Water && UtilityNet.NeedsWater(r)) Mark(_lowP, r, s.Frac < 0.6f, () => { Stats.LowPressure++; w.Log.Add(w.Tick, LogKind.Warning, $"{r.Name} 수압이 낮다 ({s.Frac * 100:0}% — {s.Why ?? "멀다"})"); MarkLog.Add(r.Marks, w.Tick, $"수압 낮음 {s.Frac * 100:0}% ({s.Why})"); });
-                if (k != NetKind.Air) Mark(_bypass, r, s.ViaRing, () => { Stats.Bypassed++; w.Log.Add(w.Tick, LogKind.Ship, $"{r.Name} {UtilityNet.Name(k)}이 보조 간선으로 돌아 들어온다 ({s.Frac * 100:0}% — 보조 간선은 가늘다)"); });
+                if (k != NetKind.Air) Mark(_bypass, r, s.ViaRing, () => { Stats.Bypassed++; w.Log.Add(w.Tick, LogKind.Ship, $"{r.Name} {Ko.IGa(UtilityNet.Name(k))} 보조 간선으로 돌아 들어온다 ({s.Frac * 100:0}% — 보조 간선은 가늘다)"); });
             }
         }
         Splices(dt);
@@ -397,7 +397,7 @@ public sealed class FlowSystem
             if (!before.Contains(l.Key))
             {
                 Stats.CommonMode++;
-                w.Log.Add(w.Tick, LogKind.Warning, $"{UtilityNet.Name(l.Kind)} 보조 간선이 주 간선과 같은 {rooms}을(를) 지난다 — 거기서 한 번 터지면 둘 다 끊긴다");
+                w.Log.Add(w.Tick, LogKind.Warning, $"{UtilityNet.Name(l.Kind)} 보조 간선이 주 간선과 같은 {Ko.EulReul(rooms)} 지난다 — 거기서 한 번 터지면 둘 다 끊긴다");
             }
         }
     }

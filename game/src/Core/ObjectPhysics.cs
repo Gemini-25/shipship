@@ -394,7 +394,7 @@ public sealed partial class MatterSystem
     {
         if (t.Contents <= 0f) return;
         var hold = t.Spec.Holds;
-        if (hold is Material.Liquid or Material.Oil) Pour(t.At, hold, t.Contents, $"{t.Name}이(가) 깨져 쏟아졌다");
+        if (hold is Material.Liquid or Material.Oil) Pour(t.At, hold, t.Contents, $"{Ko.IGa(t.Name)} 깨져 쏟아졌다");
         else if (hold == Material.Powder) Raise(t.At, MathF.Min(1f, 0.25f + t.Contents / 25f), $"{t.Name} 터짐 ({why})");
         t.Contents = 0f;
         if (t.Kind == ArticleKind.PowderSack) t.Ruined = true;
@@ -445,7 +445,7 @@ public sealed partial class MatterSystem
             {
                 t.Ruined = true;
                 Stats.Ruined++;
-                MarkLog.Add(room.Marks, w.Tick, $"{t.Name}이(가) 젖어 망가졌다");
+                MarkLog.Add(room.Marks, w.Tick, $"{Ko.IGa(t.Name)} 젖어 망가졌다");
             }
             if (!t.Ruined && t.Spec.Electronic && (t.Water > 0.05f || depth > 0.05f) && R.Chance(0.3f * h * 60f * Matter.Electronic(Element.Water).Rate / 6f)) { t.Ruined = true; Stats.Shorts++; } // 전자기기는 젖으면 불안정 → 합선
 
@@ -487,7 +487,7 @@ public sealed partial class MatterSystem
                 {
                     float before = t.Char;
                     t.Char = MathF.Min(1f, t.Char + (0.6f + (t.Temp - cp) / 18f) * ign * h);
-                    if (before < 0.04f && t.Char >= 0.04f) { Stats.Charred++; MarkLog.Add(room.Marks, w.Tick, $"{t.Name}이(가) 그을기 시작했다 ({t.Temp:0}℃)"); }
+                    if (before < 0.04f && t.Char >= 0.04f) { Stats.Charred++; MarkLog.Add(room.Marks, w.Tick, $"{Ko.IGa(t.Name)} 그을기 시작했다 ({t.Temp:0}℃)"); }
                     if (t.Char >= 0.04f && !t.Smolder) { t.Smolder = true; Stats.Smolders++; }
                 }
                 else if (t.Smolder && t.Temp < cp - 25f) t.Smolder = false; // 식으면 잦아든다
@@ -516,7 +516,7 @@ public sealed partial class MatterSystem
                 float tox = Matter.ToxicSmoke(t.Mat, sp.Electronic);
                 air.Toxin = MathF.Min(1f, air.Toxin + tox * 2.5f * (t.Melt - before) * 10f / MathF.Max(4f, room.Volume));
                 air.Smoke = MathF.Min(1f, air.Smoke + 0.4f * (t.Melt - before) * 10f / MathF.Max(4f, room.Volume));
-                if (before < 0.1f && t.Melt >= 0.1f) { Stats.Melted++; MarkLog.Add(room.Marks, w.Tick, $"{t.Name}이(가) 녹아내린다 — 유독 연기"); }
+                if (before < 0.1f && t.Melt >= 0.1f) { Stats.Melted++; MarkLog.Add(room.Marks, w.Tick, $"{Ko.IGa(t.Name)} 녹아내린다 — 유독 연기"); }
                 if (t.Melt >= 0.6f && !t.Ruined) { t.Ruined = true; if (t.Spec.Holds == Material.Liquid && t.Contents > 0f) Burst(t, "녹아 샘"); }
             }
 
@@ -529,7 +529,7 @@ public sealed partial class MatterSystem
                     t.Mass -= melt;
                     Pour(t.At, Matter.Rule(Material.Ice, Element.Heat).Into, melt, $"녹은 {t.Name}");
                     t.Temp = 0f;
-                    if (t.Mass <= 0.15f) { (gone ??= new()).Add(t); Stats.Thawed++; MarkLog.Add(room.Marks, w.Tick, $"{t.Name}이(가) 다 녹아 물이 됐다"); }
+                    if (t.Mass <= 0.15f) { (gone ??= new()).Add(t); Stats.Thawed++; MarkLog.Add(room.Marks, w.Tick, $"{Ko.IGa(t.Name)} 다 녹아 물이 됐다"); }
                 }
             }
 
@@ -592,7 +592,7 @@ public sealed partial class MatterSystem
                     t.Water += take;
                     s.Liters -= take;
                     Stats.Absorbed += take;
-                    if (t.Water >= t.Spec.Capacity * 0.999f) { Stats.Overflows++; MarkLog.Add(room.Marks, w.Tick, $"{t.Name}이(가) 물을 다 머금었다 — 넘친다"); }
+                    if (t.Water >= t.Spec.Capacity * 0.999f) { Stats.Overflows++; MarkLog.Add(room.Marks, w.Tick, $"{Ko.IGa(t.Name)} 물을 다 머금었다 — 넘친다"); }
                 }
             // 2) 격자는 아래로 빠진다
             var floor = b.FloorAt(c);

@@ -300,8 +300,8 @@ public sealed class BeliefSystem
             string line = b.Topic switch
             {
                 Topic.Fire or Topic.Breach => old == 1 ? $"…{(b.Topic == Topic.Fire ? "불" : "구멍")}이 없잖아. {(oldSrc is BeliefSource.Rumor or BeliefSource.Told or BeliefSource.Overheard ? "헛소문이었나" : "벌써 끝났구나")}" : $"어? {now}!",
-                Topic.Person => $"{CrewById(b.Id)?.Name ?? "?"}이(가) 여기 없네",
-                Topic.Item => $"{ItemKinds.Name((ItemKind)b.Id)}이(가) 여기 없네",
+                Topic.Person => $"{Ko.IGa(CrewById(b.Id)?.Name ?? "?")} 여기 없네",
+                Topic.Item => $"{Ko.IGa(ItemKinds.Name((ItemKind)b.Id))} 여기 없네",
                 _ => $"{now}였구나",
             };
             if (c.IsAwake && c.SaidUntil < w.Tick) c.Say(w, Persona.Say(c, line));

@@ -77,15 +77,15 @@ public partial class Hud
                 for (int k = 0; k < 4; k++) DrawCircle(new Vector2(x + 4, cy) + Vector2.FromAngle(Mathf.Pi / 4f + k * Mathf.Pi / 2f) * 3.4f, 1.3f, u.col.WithAlpha(0.8f), true, -1f, true);
                 DrawCircle(new Vector2(x + 4, cy), 1.8f, u.bad ? Palette.Danger : u.col, true, -1f, true);
             }
-            Gfx.Text(this, Fonts.Bold, new Vector2(x + 13, cy + 4), Fit(u.name, nameW - 13, 9, Fonts.Bold), 9, u.bad ? Palette.Danger : u.busy ? Palette.Text : Palette.TextDim);
+            Gfx.Text(this, Fonts.Bold, new Vector2(x + 13, cy + 4), Fit(u.name, nameW - 13, Ui.TextMicro, Fonts.Bold), Ui.TextMicro, u.bad ? Palette.Danger : u.busy ? Palette.Text : Palette.TextDim);
             float bx = x + nameW;
             DrawRect(new Rect2(bx, cy - 2, barW, 4), new Color(1, 1, 1, 0.08f));
             DrawRect(new Rect2(bx, cy - 2, barW * Mathf.Clamp(u.bat, 0f, 1f), 4), (u.bat < 0.25f ? Palette.Warning : Palette.Good).WithAlpha(0.85f));
             float tx = bx + barW + 8;
-            Gfx.Text(this, Fonts.Body, new Vector2(tx, cy + 4), Fit(u.now, nowW, 9, Fonts.Body), 9, Palette.TextDim);
-            Gfx.Text(this, Fonts.Body, new Vector2(tx + nowW + 6, cy + 4), Fit(u.why, right - tx - nowW - 6, 9, Fonts.Body), 9, u.col.Lightened(0.3f).WithAlpha(0.85f));
+            Gfx.Text(this, Fonts.Body, new Vector2(tx, cy + 4), Fit(u.now, nowW, Ui.TextMicro, Fonts.Body), Ui.TextMicro, Palette.TextDim);
+            Gfx.Text(this, Fonts.Body, new Vector2(tx + nowW + 6, cy + 4), Fit(u.why, right - tx - nowW - 6, Ui.TextMicro, Fonts.Body), Ui.TextMicro, u.col.Lightened(0.3f).WithAlpha(0.85f));
             y += 15f;
         }
-        if (units.Count > rows) Gfx.TextRight(this, Fonts.Body, new Vector2(right, r.End.Y - 3), $"외 {units.Count - rows}대", 9, Palette.TextMuted);
+        if (units.Count > rows) Gfx.TextRight(this, Fonts.Body, new Vector2(right, r.End.Y - 3), $"외 {units.Count - rows}대", Ui.TextMicro, Palette.TextMuted);
     }
 }

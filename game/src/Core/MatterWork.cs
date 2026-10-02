@@ -309,7 +309,7 @@ public sealed partial class MatterSystem
         Carry(rug, c);
         Stats.Lifted++;
         if (JunctionAt(at) is { } j) Expose(rug, j, c);
-        _w.Log.Add(_w.Tick, LogKind.Work, $"물을 머금은 {rug.Name}를 걷었다 ({rug.Water:0.0}L)", c.Id);
+        _w.Log.Add(_w.Tick, LogKind.Work, $"물을 머금은 {Ko.EulReul(rug.Name)} 걷었다 ({rug.Water:0.0}L)", c.Id);
         return true;
     }
 
@@ -334,27 +334,27 @@ public sealed partial class MatterSystem
                 string off = "";
                 foreach (var d in w.Portable.Devices) // 열원(히터)도 끈다
                     if (d.Kind == PortableKind.Heater && d.On && d.Placed && _carryFrom.TryGetValue(t.Id, out var from) && Math.Max(Math.Abs(d.At.X - from.X), Math.Abs(d.At.Y - from.Y)) <= 2 && w.Ship.RoomAt(d.At) == room) { d.On = false; d.Running = false; off = " · 곁의 히터도 껐다"; }
-                w.Log.Add(w.Tick, LogKind.Work, $"그을던 {t.Name}를 열에서 떼어 물에 적셨다 — 연기가 멎는다{off}", c.Id);
-                if (room != null) MarkLog.Add(room.Marks, w.Tick, $"{c.Name}: 그을던 {t.Name}를 치우고 적심");
-                MarkLog.Add(c.Memory.Marks, w.Tick, $"그을던 {t.Name}를 찾아 껐다");
+                w.Log.Add(w.Tick, LogKind.Work, $"그을던 {Ko.EulReul(t.Name)} 열에서 떼어 물에 적셨다 — 연기가 멎는다{off}", c.Id);
+                if (room != null) MarkLog.Add(room.Marks, w.Tick, $"{c.Name}: 그을던 {Ko.EulReul(t.Name)} 치우고 적심");
+                MarkLog.Add(c.Memory.Marks, w.Tick, $"그을던 {Ko.EulReul(t.Name)} 찾아 껐다");
                 break;
             case "Heat":
                 Stats.MovedFromHeat++;
-                w.Log.Add(w.Tick, LogKind.Work, $"{(t.WetFrac > 0.2f ? "젖은 " : "")}{t.Name}를 열에서 떨어뜨려 놓았다 — {Materials.Name(t.Mat)}는 달궈지면 {Matter.Name(Matter.React(t.Mat, Element.Heat))}", c.Id);
+                w.Log.Add(w.Tick, LogKind.Work, $"{(t.WetFrac > 0.2f ? "젖은 " : "")}{Ko.EulReul(t.Name)} 열에서 떨어뜨려 놓았다 — {Ko.EunNeun(Materials.Name(t.Mat))} 달궈지면 {Matter.Name(Matter.React(t.Mat, Element.Heat))}", c.Id);
                 break;
             case "Hang":
                 t.Hung = true;
                 Stats.Hung++;
-                w.Log.Add(w.Tick, LogKind.Work, $"젖은 {t.Name}를 널어 말린다", c.Id);
+                w.Log.Add(w.Tick, LogKind.Work, $"젖은 {Ko.EulReul(t.Name)} 널어 말린다", c.Id);
                 break;
             case "ReturnRug":
                 t.Hung = false;
                 Stats.Returned++;
-                w.Log.Add(w.Tick, LogKind.Work, $"마른 {t.Name}를 제자리에 깔았다", c.Id);
+                w.Log.Add(w.Tick, LogKind.Work, $"마른 {Ko.EulReul(t.Name)} 제자리에 깔았다", c.Id);
                 break;
             case "Aisle":
                 Stats.Aisles++;
-                w.Log.Add(w.Tick, LogKind.Work, $"통로를 막은 {t.Name}를 창고로 치웠다", c.Id);
+                w.Log.Add(w.Tick, LogKind.Work, $"통로를 막은 {Ko.EulReul(t.Name)} 창고로 치웠다", c.Id);
                 break;
         }
         if (heeded) { Stats.HeededWarns++; t.Flagged = false; }

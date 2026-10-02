@@ -73,6 +73,9 @@ public partial class ShipView
 
         var skin = SkinColor(l, c.Id);
         var hair = HairColor(l);
+        // v16.24 어두운 피부 · 머리는 어두운 바닥에 묻힌다: 색감은 두고 밝기만 조금 (테두리는 PaintHead)
+        skin = skin.Lightened(ZoomDetail.Lift(ZoomDetail.Luma(skin.R, skin.G, skin.B)) * 0.5f);
+        hair = hair.Lightened(ZoomDetail.Lift(ZoomDetail.Luma(hair.R, hair.G, hair.B)));
         bool suit = spec.Suit;
         var cloth = suit ? new Color("#dfe6ee") : RoleCloth(c.Role);
         if (dim) cloth = cloth.Lerp(new Color("#8a8f99"), 0.35f);
@@ -286,7 +289,7 @@ public partial class ShipView
     private void PaintHeld(CanvasItem ci, Transform2D xf, HeldThing held, Vector2 at, int side, Color accent, int lod, float t, CrewMember c)
     {
         var outline = Palette.Space.WithAlpha(0.8f);
-        bool detail = lod >= 2;
+        bool detail = ZoomDetail.Draws((ZoomTier)lod).HasFlag(Detail.Held); // v16.24 가까이: 든 물건 자세히
         switch (held)
         {
             case HeldThing.Tool:
@@ -397,7 +400,9 @@ public partial class ShipView
 
     private void PaintHead(CanvasItem ci, Transform2D xf, Vector2 head, CrewMember c, BodyLook? l, Color skin, Color hair, int lod, float swing, float t)
     {
-        var outline = Palette.Space.WithAlpha(0.6f);
+        // v16.24 어두운 머리 · 피부: 어두운 윤곽 대신 밝은 테두리 (바닥과 갈린다)
+        bool rim = ZoomDetail.NeedsRim(Mathf.Min(ZoomDetail.Luma(skin.R, skin.G, skin.B), ZoomDetail.Luma(hair.R, hair.G, hair.B)));
+        var outline = rim ? new Color(0.82f, 0.88f, 0.98f, 0.45f) : Palette.Space.WithAlpha(0.6f);
         const float R = 3.1f;
         bool detail = lod >= 2;
         var style = l?.Style ?? HairStyle.Crop;
@@ -455,6 +460,7 @@ public partial class ShipView
         {
             if (c.Age > 40f) ci.DrawArc(head + new Vector2(-0.4f, 0f), R - 0.3f, Mathf.Pi * 0.55f, Mathf.Pi * 1.45f, 10, hair, 1f, true); // 뒤통수 테
             if (detail) Oval(ci, xf, head + new Vector2(-0.6f, -1.2f), 1.3f, 0.7f, new Color(1f, 1f, 1f, 0.35f));
+            PaintFace(ci, head, c, lod, t, 1.2f);
             return;
         }
         // 머리 덮개: 뒤로 치우친 원 (앞쪽 얼굴이 초승달로 남는다) · 길이 · 덥수룩함 · 삐뚤함이 윤곽을 바꾼다
@@ -504,6 +510,79 @@ public partial class ShipView
             // 머리카락 결 (정수리에서 뒤로)
             for (int j = -1; j <= 1; j++)
                 ci.DrawLine(capC + new Vector2(1.6f, j * 0.8f), capC + new Vector2(-r0 * 0.7f, j * 1.1f), hair.Lightened(0.12f).WithAlpha(0.3f), 0.3f, true);
+        }
+        PaintFace(ci, head, c, lod, t, -back + r0 + 0.1f);
+    }
+
+    /// <summary>
+    /// v16.24 가까이: 표정 — 머리털 앞 얼굴(앞쪽 초승달)에 눈 · 눈썹 · 입. 감정 · 몸에서 읽는다 (ZoomDetail.Face):
+    /// 평온(점 눈 · 작은 입) · 웃음(둥근 입) · 걱정(처진 눈썹) · 두려움(크게 뜬 눈 · 벌린 입) · 아픔(질끈 감은 눈) · 피곤(반쯤 감은 눈) ·
+    /// 슬픔(처진 입) · 화(모인 눈썹) · 잠(감은 눈). 가끔 눈을 깜빡인다.
+    /// </summary>
+    private void PaintFace(CanvasItem ci, Vector2 head, CrewMember c, int lod, float t, float browX)
+    {
+        if (!ZoomDetail.Draws((ZoomTier)lod).HasFlag(Detail.Face)) return;
+        var e = ZoomDetail.Face(_world, c);
+        var ink = new Color(0.07f, 0.05f, 0.05f, 0.92f);
+        float ex = Mathf.Max(1.75f, browX + 0.45f), ey = 0.95f;
+        var eyeL = head + new Vector2(ex, -ey);
+        var eyeR = head + new Vector2(ex, ey);
+        bool blink = Mathf.PosMod(t * 0.27f + c.Id * 0.37f, 1f) < 0.035f;
+        void Closed(Vector2 p) => ci.DrawLine(p - new Vector2(0f, 0.38f), p + new Vector2(0f, 0.38f), ink, 0.32f, true);
+        switch (e)
+        {
+            case FaceLook.Asleep:
+            case FaceLook.Tired when blink:
+                Closed(eyeL); Closed(eyeR);
+                break;
+            case FaceLook.Tired:
+                ci.DrawLine(eyeL - new Vector2(0f, 0.38f), eyeL + new Vector2(0f, 0.38f), ink, 0.42f, true);
+                ci.DrawLine(eyeR - new Vector2(0f, 0.38f), eyeR + new Vector2(0f, 0.38f), ink, 0.42f, true);
+                ci.DrawCircle(eyeL + new Vector2(0.15f, 0f), 0.16f, ink, true, -1f, true);
+                ci.DrawCircle(eyeR + new Vector2(0.15f, 0f), 0.16f, ink, true, -1f, true);
+                break;
+            case FaceLook.Pain:
+                // 질끈: > <
+                foreach (var (p, k) in new[] { (eyeL, -1f), (eyeR, 1f) })
+                {
+                    ci.DrawLine(p + new Vector2(-0.3f, -0.35f * k), p + new Vector2(0.2f, 0f), ink, 0.3f, true);
+                    ci.DrawLine(p + new Vector2(0.2f, 0f), p + new Vector2(-0.3f, 0.35f * k), ink, 0.3f, true);
+                }
+                break;
+            case FaceLook.Fear:
+                foreach (var p in new[] { eyeL, eyeR })
+                {
+                    ci.DrawCircle(p, 0.42f, new Color(0.97f, 0.97f, 0.95f), true, -1f, true);
+                    ci.DrawCircle(p + new Vector2(0.12f, 0f), 0.2f, ink, true, -1f, true);
+                }
+                break;
+            default:
+                if (blink) { Closed(eyeL); Closed(eyeR); }
+                else { ci.DrawCircle(eyeL, 0.27f, ink, true, -1f, true); ci.DrawCircle(eyeR, 0.27f, ink, true, -1f, true); }
+                break;
+        }
+        // 눈썹 (화 · 걱정 · 두려움만 — 기울기로)
+        if (e is FaceLook.Angry or FaceLook.Worry or FaceLook.Fear)
+        {
+            float tilt = e == FaceLook.Angry ? 0.35f : -0.3f; // 화: 안쪽이 앞으로 · 걱정: 안쪽이 뒤로
+            foreach (float k in new[] { -1f, 1f })
+            {
+                var inner = head + new Vector2(ex - 0.55f + tilt, k * 0.45f);
+                var outer = head + new Vector2(ex - 0.55f - tilt * 0.3f, k * 1.35f);
+                ci.DrawLine(inner, outer, ink, 0.3f, true);
+            }
+        }
+        // 입 (앞쪽 가장자리)
+        var mouth = head + new Vector2(2.55f, 0f);
+        switch (e)
+        {
+            case FaceLook.Smile: ci.DrawArc(head + new Vector2(1.85f, 0f), 0.85f, -0.85f, 0.85f, 8, ink, 0.3f, true); break;
+            case FaceLook.Sad: ci.DrawArc(head + new Vector2(3.35f, 0f), 0.8f, Mathf.Pi - 0.7f, Mathf.Pi + 0.7f, 8, ink, 0.3f, true); break;
+            case FaceLook.Fear: ci.DrawCircle(mouth, 0.33f, ink, true, -1f, true); break;
+            case FaceLook.Pain:
+            case FaceLook.Angry: ci.DrawLine(mouth - new Vector2(0f, 0.55f), mouth + new Vector2(0f, 0.55f), ink, 0.34f, true); break;
+            case FaceLook.Asleep: break;
+            default: ci.DrawLine(mouth - new Vector2(0f, 0.35f), mouth + new Vector2(0f, 0.35f), ink.WithAlpha(0.7f), 0.26f, true); break;
         }
     }
 

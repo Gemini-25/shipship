@@ -208,14 +208,14 @@ public partial class OptionsPanel : PanelContainer
         box.AddChild(crewLabel);
         box.AddChild(crew);
         box.AddChild(Check("승무원이 죽을 수 있다 (새 항해부터)", Settings.Death, on => Settings.Death = on)); // v12.0
-        box.AddChild(Check("하이라이트 모드: 평온하면 빠르게, 사고가 나면 1배속 (L)", Settings.Highlight, on => Settings.Highlight = on)); // v12.2
-        box.AddChild(Check("하이라이트 모드에서 카메라가 사고 현장으로 · 결정적 순간 슬로모션", Settings.AutoCamera, on => Settings.AutoCamera = on));
-        box.AddChild(Check("화면 UI 전부 보기 (끄면 조용한 HUD — 이상이 생긴 것만 떠오른다)", Settings.ShowAllHud, on => Settings.ShowAllHud = on)); // v16.2
+        box.AddChild(Check("자동 배속: 평온하면 빠르게, 사고가 나면 1배속 (L)", Settings.Highlight, on => Settings.Highlight = on)); // v12.2
+        box.AddChild(Check("자동 배속일 때 화면이 사고 현장으로 · 고비에서는 느리게", Settings.AutoCamera, on => Settings.AutoCamera = on));
+        box.AddChild(Check("화면 안내 전부 보기 (끄면 조용한 화면 — 이상이 생긴 것만 떠오른다)", Settings.ShowAllHud, on => Settings.ShowAllHud = on)); // v16.2
         var voyage = new HBoxContainer();
         voyage.AddThemeConstantOverride("separation", 8);
-        var same = new Button { Text = "같은 시드로 새 항해" };
+        var same = new Button { Text = "같은 항해 번호로 새 항해" };
         same.Pressed += () => { Toggle(); _main.NewVoyage(Settings.Crew, newSeed: false); };
-        var fresh = new Button { Text = "새 시드로 새 항해" };
+        var fresh = new Button { Text = "새 항해 번호로 새 항해" };
         fresh.Pressed += () => { Toggle(); _main.NewVoyage(Settings.Crew, newSeed: true); };
         voyage.AddChild(same);
         voyage.AddChild(fresh);

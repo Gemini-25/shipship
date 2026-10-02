@@ -549,8 +549,8 @@ public sealed partial class BodySystem
         db.ComplainedAt = w.Tick;
         Stats.Complaints++;
         string why = dT >= 4f ? "찬바람" : dN >= 0.25f ? "소음" : "냄새";
-        who.Say(w, Persona.Say(who, $"문 좀 닫아! {why}이 들어오잖아"));
-        w.Log.Add(w.Tick, LogKind.Life, $"\"문 좀 닫아!\" — {source.Name} 쪽 {why}이(가) {victim.Name}(으)로 샌다", who.Id);
+        who.Say(w, Persona.Say(who, $"문 좀 닫아! {Ko.IGa(why)} 들어오잖아"));
+        w.Log.Add(w.Tick, LogKind.Life, $"\"문 좀 닫아!\" — {source.Name} 쪽 {Ko.IGa(why)} {Ko.EuRo(victim.Name)} 샌다", who.Id);
         if (db.HeldOpen && CrewById(db.HeldBy) is CrewMember holder && holder != who)
         {
             who.ChangeAffinity(holder, -0.04f);

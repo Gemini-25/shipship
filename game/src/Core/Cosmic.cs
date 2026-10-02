@@ -411,7 +411,7 @@ public sealed class CosmicSystem
         else
         {
             Learn(op!, e, KnowSource.Seen, "화면으로 봤다");
-            MarkLog.Add(op!.Memory.Marks, w.Tick, $"{spec.Name}을(를) 레이더 화면으로 먼저 봤다");
+            MarkLog.Add(op!.Memory.Marks, w.Tick, $"{Ko.EulReul(spec.Name)} 레이더 화면으로 먼저 봤다");
         }
         e.AnnouncedPredicted = e.Predicted;
         // 피할 수 있는 것: 컴퓨터가 항로 변경을 제안한다 (아니면 지휘하는 사람이 정한다)
@@ -547,7 +547,7 @@ public sealed class CosmicSystem
             }
         w.Automation.Book.Add(ActKind.Advice, room, $"{e.Spec.Name} 충돌 예상 구획 — {room.Name}", $"{why} — 그 구획을 비우고 봉쇄하면 옆으로 번지지 않는다", "봉쇄 계획", $"{room.Name}에서 나오고 격벽을 막아 달라", "cosmic:seal:" + e.Id, 0, 30f);
         Broadcast(e, $"{room.Name} 구역을 비워 달라 — {e.Spec.Name} 충돌 예상. 비면 봉쇄한다", 2);
-        w.RaiseAlert($"{e.Spec.Name} — {room.Name}을(를) 비우고 봉쇄한다 ({why})", room, AlertLevel.Critical, shipWide: true);
+        w.RaiseAlert($"{e.Spec.Name} — {Ko.EulReul(room.Name)} 비우고 봉쇄한다 ({why})", room, AlertLevel.Critical, shipWide: true);
         if (e.Phase == CosmicPhase.Brace) AddTask(e, BraceKind.Seal, room.Id, -1, 0.35f, $"{room.Name} 비우고 봉쇄");
     }
 
@@ -572,7 +572,7 @@ public sealed class CosmicSystem
             Stats.Avoided++;
             w.History.Add(w, HistoryKind.Response, $"{e.Spec.Name} — 항로를 바꿔 비켰다 ({by} · 추진제 {cost:0}kg)", log: true);
             w.RaiseAlert($"{e.Spec.Name} — 항로 변경 성공 ({by})", null, AlertLevel.Notice, shipWide: true);
-            if (who != null) MarkLog.Add(who.Memory.Marks, w.Tick, $"{e.Spec.Name}을(를) 비키려 엔진을 몰았다");
+            if (who != null) MarkLog.Add(who.Memory.Marks, w.Tick, $"{Ko.EulReul(e.Spec.Name)} 비키려 엔진을 몰았다");
             if (e.Sealed) Unseal(e, "비켰다");
         }
         else
@@ -699,7 +699,7 @@ public sealed class CosmicSystem
                 if (f == null) return false;
                 if (!_safed.Contains(f.Id)) _safed.Add(f.Id);
                 if (f.Machine != null) MarkLog.Add(f.Machine.Marks, w.Tick, $"{e.Spec.Name} 대비로 껐다 ({c.Name})");
-                if (f.Type == FurnitureType.MainComputer) w.History.Add(w, HistoryKind.Decision, $"{Ko.IGa(c.Name)} 주 컴퓨터를 내렸다 — {e.Spec.Name}이 지나갈 때까지 손으로", f.Room, new[] { c }, log: true);
+                if (f.Type == FurnitureType.MainComputer) w.History.Add(w, HistoryKind.Decision, $"{Ko.IGa(c.Name)} 주 컴퓨터를 내렸다 — {Ko.IGa(e.Spec.Name)} 지나갈 때까지 손으로", f.Room, new[] { c }, log: true);
                 break;
             }
             case BraceKind.Restart:
@@ -727,7 +727,7 @@ public sealed class CosmicSystem
                 e.Sealed = true;
                 Stats.Sealed++;
                 MarkLog.Add(room.Marks, w.Tick, $"{e.Spec.Name} 충돌 대비로 비우고 봉쇄 ({c.Name})");
-                w.History.Add(w, HistoryKind.Adaptation, $"{Ko.EulReul(room.Name)} 비우고 봉쇄했다 — {e.Spec.Name}이 그쪽으로 온다", room, new[] { c }, log: true);
+                w.History.Add(w, HistoryKind.Adaptation, $"{Ko.EulReul(room.Name)} 비우고 봉쇄했다 — {Ko.IGa(e.Spec.Name)} 그쪽으로 온다", room, new[] { c }, log: true);
                 break;
             }
         }
@@ -1061,8 +1061,8 @@ public sealed class CosmicSystem
             if (Incidents.Meteor(w, at, sizes[k], e.Known ? WarnLevel.Sensor : WarnLevel.None, e.HoursTo(e.KnownAt, e.Arrive) * 60f) != null) e.Hits++;
         }
         Stats.Strikes++;
-        foreach (var c in w.Crew.Where(c => !c.Dead && c.Room == room)) Memory.Frighten(w, c, room, 0.5f, $"{e.Spec.Name}이(가) 들이받았다");
-        w.History.Add(w, HistoryKind.Damage, $"{e.Spec.Name}이(가) {Ko.EulReul(room.Name)} 들이받았다" + (e.Sealed ? " — 비우고 봉쇄해 둔 구획이라 다친 사람은 없다" : ""), room, log: true);
+        foreach (var c in w.Crew.Where(c => !c.Dead && c.Room == room)) Memory.Frighten(w, c, room, 0.5f, $"{Ko.IGa(e.Spec.Name)} 들이받았다");
+        w.History.Add(w, HistoryKind.Damage, $"{Ko.IGa(e.Spec.Name)} {Ko.EulReul(room.Name)} 들이받았다" + (e.Sealed ? " — 비우고 봉쇄해 둔 구획이라 다친 사람은 없다" : ""), room, log: true);
     }
 
     /// <summary>단계가 걸려 있는 동안 (시스템 틱마다).</summary>
@@ -1325,9 +1325,9 @@ public sealed class CosmicSystem
         }
         string tally = $"맞은 것 {e.Hits} · 펄스로 탄 것 {e.EmpKills} · 튄 것 {e.Glitches} · 넘어짐 {e.Falls} · 깨짐 {e.Broken} · 불 {e.Fires}"
                        + (e.NSheltered + e.NExposed > 0 ? $" · 피폭 대피소 {e.GainSheltered:0.00} / 바깥 쪽 {e.GainExposed:0.00}Sv" : "") + (e.Avoided ? " · 항로를 바꿔 비켰다" : "");
-        w.History.Add(w, HistoryKind.Recovery, $"{e.Spec.Name}이(가) 지나갔다 — {tally} · {e.Grade}", log: true);
+        w.History.Add(w, HistoryKind.Recovery, $"{Ko.IGa(e.Spec.Name)} 지나갔다 — {tally} · {e.Grade}", log: true);
         w.Automation.Book.Add(ActKind.Advice, null, $"{e.Spec.Name} 지나감", e.Grade, "피해를 세고 다시 켤 것을 알린다", e.Tasks.Any(t => t.Kind == BraceKind.Restart) ? "꺼 둔 장비를 다시 켜 달라" : "", "cosmic:after:" + e.Id, 0, 10f);
-        Broadcast(e, $"{e.Spec.Name}이 지나갔다. {e.Grade}", 1);
+        Broadcast(e, $"{Ko.IGa(e.Spec.Name)} 지나갔다. {e.Grade}", 1);
     }
 
     private void Close(CosmicEvent e)
@@ -1347,7 +1347,7 @@ public sealed class CosmicSystem
         if (founder != null) cu.Followers.Add(founder.Id);
         foreach (var c in followers.OrderBy(c => c.Id)) cu.Followers.Add(c.Id);
         Customs.Add(cu);
-        w.History.Add(w, HistoryKind.Lesson, $"관행이 생겼다 — {CosmicCustom.Name(k)}: {origin}" + (founder != null ? $" ({founder.Name}이(가) 시작)" : ""), log: true);
+        w.History.Add(w, HistoryKind.Lesson, $"관행이 생겼다 — {CosmicCustom.Name(k)}: {origin}" + (founder != null ? $" ({Ko.IGa(founder.Name)} 시작)" : ""), log: true);
         if (founder != null) Life.Diary(w, founder, Persona.Say(founder, $"{CosmicCustom.Name(k)} — 다시는 그날처럼 되지 않게"));
     }
 
@@ -1451,13 +1451,13 @@ public sealed class CosmicSystem
     internal void Tell(CrewMember who, CosmicEvent e, CrewMember by, bool wake)
     {
         var w = _w;
-        Learn(who, e, KnowSource.Rumor, $"{by.Name}이(가) 알려 줬다");
+        Learn(who, e, KnowSource.Rumor, $"{Ko.IGa(by.Name)} 알려 줬다");
         if (wake || who.Pose == Pose.Sleeping) { who.Jolt(w); who.Interrupt(w); Stats.Woken++; }
         Stats.Warned++;
         who.ChangeAffinity(by, 0.05f);
         by.ChangeAffinity(who, 0.03f);
-        MarkLog.Add(who.Memory.Marks, w.Tick, wake ? $"{Ko.IGa(by.Name)} 깨워 줬다 — {e.Spec.Name}" : $"{Ko.IGa(by.Name)} {e.Spec.Name}을(를) 알려 줬다");
-        w.Log.Add(w.Tick, LogKind.Life, wake ? $"{Ko.EulReul(who.Name)} 깨워 {e.Spec.Name}을(를) 알렸다" : $"{who.Name}에게 {e.Spec.Name}을(를) 알렸다", by.Id);
+        MarkLog.Add(who.Memory.Marks, w.Tick, wake ? $"{Ko.IGa(by.Name)} 깨워 줬다 — {e.Spec.Name}" : $"{Ko.IGa(by.Name)} {Ko.EulReul(e.Spec.Name)} 알려 줬다");
+        w.Log.Add(w.Tick, LogKind.Life, wake ? $"{Ko.EulReul(who.Name)} 깨워 {Ko.EulReul(e.Spec.Name)} 알렸다" : $"{who.Name}에게 {Ko.EulReul(e.Spec.Name)} 알렸다", by.Id);
     }
 
     /// <summary>창밖으로 봤다 — 본 사람은 안다 (방송을 못 들었어도).</summary>

@@ -271,7 +271,7 @@ public sealed class WatchLog
                 n.Holders[by.Id] = true;
                 n.Trail.Add($"{SimTime.Clock(w.Tick)} {by.Name} {how} — 다시 발견 (앞선 기록을 몰랐다)");
                 if (n.Suspect == null) Judge(n, by, m, o);
-                w.Log.Add(w.Tick, LogKind.Work, $"{m.Name}의 {Prevention.Name(o.Kind)} — 이미 {n.Author}이(가) 봤던 것을 모르고 다시 살폈다", by.Id);
+                w.Log.Add(w.Tick, LogKind.Work, $"{m.Name}의 {Prevention.Name(o.Kind)} — 이미 {Ko.IGa(n.Author)} 봤던 것을 모르고 다시 살폈다", by.Id);
             }
             if (sensor && !n.Logged) { n.Logged = true; n.Trail.Add($"{SimTime.Clock(w.Tick)} {byName ?? how} — 컴퓨터 일지에 올림"); }
             return;
@@ -396,12 +396,12 @@ public sealed class WatchLog
         Stats.WrongFixes++;
         n.Suspect = null;
         n.Stage = NoteStage.Observed;
-        string parts = Causes.NeedsParts(plan) ? string.Join(" + ", Causes.Spec(plan).Fix.Select(x => ItemKinds.Name(x.kind))) + "을(를) 갈았지만" : "손봤지만";
-        n.Trail.Add($"{SimTime.Clock(w.Tick)} {c.Name} {Causes.Name(plan)}(으)로 보고 {parts} 그대로 — 아니었다");
-        w.Log.Add(w.Tick, LogKind.Warning, $"{m.Name}: {Causes.Name(plan)}(으)로 보고 {parts} {Prevention.Name(n.Omen.Kind)}은(는) 그대로다", c.Id);
+        string parts = Causes.NeedsParts(plan) ? Ko.EulReul(string.Join(" + ", Causes.Spec(plan).Fix.Select(x => ItemKinds.Name(x.kind)))) + " 갈았지만" : "손봤지만";
+        n.Trail.Add($"{SimTime.Clock(w.Tick)} {c.Name} {Ko.EuRo(Causes.Name(plan))} 보고 {parts} 그대로 — 아니었다");
+        w.Log.Add(w.Tick, LogKind.Warning, $"{m.Name}: {Ko.EuRo(Causes.Name(plan))} 보고 {parts} {Ko.EunNeun(Prevention.Name(n.Omen.Kind))} 그대로다", c.Id);
         MarkLog.Add(m.Marks, w.Tick, $"{c.Name}: 잘못 짚음 — {Causes.Name(plan)}");
         if (Causes.NeedsParts(plan))
-            w.History.Add(w, HistoryKind.Maintenance, $"{Ko.IGa(c.Name)} {m.Name}의 {Prevention.Name(n.Omen.Kind)}을(를) {Causes.Name(plan)}(으)로 보고 부품을 갈았지만 그대로였다 — 열어 봐야 한다",
+            w.History.Add(w, HistoryKind.Maintenance, $"{Ko.IGa(c.Name)} {m.Name}의 {Ko.EulReul(Prevention.Name(n.Omen.Kind))} {Ko.EuRo(Causes.Name(plan))} 보고 부품을 갈았지만 그대로였다 — 열어 봐야 한다",
                 m.Body.Room, new[] { c });
         return false;
     }
@@ -446,7 +446,7 @@ public sealed class WatchLog
             string found = n.Finding != null ? $" — {n.Finding}" : "";
             string wrong = n.WrongFixes > 0 ? $" (한 번 잘못 짚은 뒤)" : "";
             w.History.Add(w, HistoryKind.Maintenance,
-                $"{n.Author}이(가) {SimTime.Clock(n.Tick)}에 적은 \"{n.Machine.Name}: {n.Observation}\" — {c.Name}이(가) {passed}{Causes.Name(n.Omen.Cause)}을(를) 손봤다{wrong}{found}",
+                $"{Ko.IGa(n.Author)} {SimTime.Clock(n.Tick)}에 적은 \"{n.Machine.Name}: {n.Observation}\" — {Ko.IGa(c.Name)} {passed}{Ko.EulReul(Causes.Name(n.Omen.Cause))} 손봤다{wrong}{found}",
                 n.Machine.Body.Room, crew);
         }
     }
@@ -465,7 +465,7 @@ public sealed class WatchLog
             Stats.MissedUnhanded++;
             var crew = n.AuthorId >= 0 ? new[] { w.Crew[n.AuthorId] } : null;
             w.History.Add(w, HistoryKind.Maintenance,
-                $"{n.Author}만 알던 {n.Machine.Name}의 {Prevention.Name(o.Kind)} — 교대 때 전해지지 않아 끝내 {Faults.Spec(o.Fault).Name}(으)로", n.Machine.Body.Room, crew);
+                $"{n.Author}만 알던 {n.Machine.Name}의 {Prevention.Name(o.Kind)} — 교대 때 전해지지 않아 끝내 {Ko.EuRo(Faults.Spec(o.Fault).Name)}", n.Machine.Body.Room, crew);
         }
     }
 
@@ -645,7 +645,7 @@ public sealed class WatchLog
             n.Handovers++;
             Stats.Verbal++;
             n.Trail.Add($"{SimTime.Clock(w.Tick)} {c.Name} → {relief.Name} {how}" + (keepJudgment ? "" : " (관측만)"));
-            w.Log.Add(w.Tick, LogKind.Life, $"{relief.Name}을(를) 찾아가 인수인계: {n.Machine.Name} — {n.Observation}", c.Id);
+            w.Log.Add(w.Tick, LogKind.Life, $"{Ko.EulReul(relief.Name)} 찾아가 인수인계: {n.Machine.Name} — {n.Observation}", c.Id);
         }
         c.Say(w, "인수인계할 게 있어");
         relief.Say(w, "응, 내가 볼게");
@@ -721,7 +721,7 @@ public static partial class WorkPlanners
     {
         blocked = null;
         var relief = o.Target.Crew!;
-        if (!relief.CanAct || !relief.IsAwake) { blocked = $"{relief.Name}이(가) 자고 있다"; return null; }
+        if (!relief.CanAct || !relief.IsAwake) { blocked = $"{Ko.IGa(relief.Name)} 자고 있다"; return null; }
         var near = Cell.Dirs8.Select(d => relief.Cell + d).Where(x => w.Ship.IsWalkable(x) && dist.Reachable(x)).OrderBy(dist.Get).Cast<Cell?>().FirstOrDefault();
         if (near is not Cell spot) { blocked = "곁에 갈 수 없다"; return null; }
         var toils = Plans.DropOff(c, w, dist);
@@ -735,7 +735,7 @@ public static partial class WorkPlanners
             cm.ChangeAffinity(relief, 0.01f);
             return true;
         }));
-        return Wrap(a, o, c, w, "인수인계", toils, $"{relief.Name}을(를) 찾아가 인수인계");
+        return Wrap(a, o, c, w, "인수인계", toils, $"{Ko.EulReul(relief.Name)} 찾아가 인수인계");
     }
 
     /// <summary>감지기 교정: 방의 설비마다 영점을 다시 맞춘다.</summary>

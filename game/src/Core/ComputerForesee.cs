@@ -419,7 +419,7 @@ public sealed class ComputerForesee
         string cmp = string.Join(" / ", opts.Select(o => $"{o.Name} {(o.Allowed ? $"(다칠 사람 {o.People:0.#} · 잃는 것 {o.Ship:0.##})" : $"({o.Blocked})")}"));
         a.Book.Add(ActKind.Forecast, room, title, $"{opts.Count}가지를 {a.Core.Horizon:0}분 앞까지 견줘 봤다: {cmp}", $"{pick.Name} — {reason}", "", $"fs:{d.Id}", 0, kind == "정전" ? 60f : 10f,
             (world, act) => d.Score != 0 ? (d.Score, d.Result) : ((int, string)?)null);
-        w.Log.Add(w.Tick, LogKind.Ship, $"{a.Voice.Call}: {title} — {string.Join(" / ", opts.Select(o => o.Name))}를 견줘 봤습니다. {pick.Name} ({reason})");
+        w.Log.Add(w.Tick, LogKind.Ship, $"{a.Voice.Call}: {title} — {Ko.EulReul(string.Join(" / ", opts.Select(o => o.Name)))} 견줘 봤습니다. {pick.Name} ({reason})");
         return d;
     }
 

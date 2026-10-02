@@ -211,7 +211,7 @@ public static class Hazards
         var m = f.Machine!;
         m.Heat = MathF.Max(m.Heat, 0.95f);
         if (f.Type is FurnitureType.OxygenGenerator or FurnitureType.AuxGenerator) m.Vapor = MathF.Max(m.Vapor, 0.45f);
-        w.History.Add(w, HistoryKind.Incident, $"{m.Name}이(가) 달아오른다 ({VolatileSystem.Name(VolatileSystem.Mode(f.Type))} 위험)", f.Room);
+        w.History.Add(w, HistoryKind.Incident, $"{Ko.IGa(m.Name)} 달아오른다 ({VolatileSystem.Name(VolatileSystem.Mode(f.Type))} 위험)", f.Room);
         return $"{m.Name} 과열";
     }
 
@@ -449,7 +449,7 @@ public sealed partial class HazardSystem
         r.Condition = MathF.Max(0.1f, r.Condition - 0.15f);
         w.Robots.ForceFault(r, RobotFault.Controller);
         w.RaiseAlert($"{r.Name} 오작동 — 제어기 오류로 비틀거리다 멈췄다" + (hit != null ? $" · {Ko.IGa(hit.Name)} 부딪혔다" : ""), r.Room, AlertLevel.Warning, shipWide: false);
-        w.History.Add(w, HistoryKind.Incident, $"{r.Name}이(가) 오작동했다 — 제어기 오류" + (hit != null ? $" · {Ko.IGa(hit.Name)} 부딪혀 다쳤다" : ""), r.Room, hit != null ? new[] { hit } : null);
+        w.History.Add(w, HistoryKind.Incident, $"{Ko.IGa(r.Name)} 오작동했다 — 제어기 오류" + (hit != null ? $" · {Ko.IGa(hit.Name)} 부딪혀 다쳤다" : ""), r.Room, hit != null ? new[] { hit } : null);
         return $"로봇 오작동({r.Name})";
     }
 

@@ -334,7 +334,7 @@ public static partial class Council
                 {
                     // v10.12: 뚫렸던 방이 무서운 사람은 반기고, 그 방이 일터인 사람은 설비가 빠지는 게 싫다
                     float f3 = c.Memory.FearOf(mf.Room);
-                    if (f3 > 0.05f) terms.Add((0.4f * f3, $"{mf.Room.Name}은(는) 또 뚫린다"));
+                    if (f3 > 0.05f) terms.Add((0.4f * f3, $"{Ko.EunNeun(mf.Room.Name)} 또 뚫린다"));
                     if (c.Stations.Contains(mf.Room.Type)) terms.Add((-0.15f, "내 일터에서 설비가 빠진다"));
                     if (mf.Machine?.Spec.Critical == true) terms.Add((0.15f, "핵심 설비는 안쪽에 둬야 한다"));
                 }
@@ -445,7 +445,7 @@ public static partial class Council
                 if (r.Jettisons > 0 && o.Kind == WorkKind.Retrieve) terms.Add((-0.15f, "우리가 일부러 떼어 낸 방이다"));
                 if (Essential(w, r) is string need) terms.Add((0.45f + 0.2f * t.Calm, $"{need} 없이는 버틸 수 없다"));
                 if (w.Crew.Where(x => x.Aboard?.Room == r && !x.Dead).ToList() is { Count: > 0 } onboard)
-                    terms.Add((1.0f + (onboard.Any(x => c.AffinityTo(x) > 0.3f) ? 0.3f : 0f), $"{string.Join("·", onboard.Select(x => x.Name))}이(가) 타고 있다"));
+                    terms.Add((1.0f + (onboard.Any(x => c.AffinityTo(x) > 0.3f) ? 0.3f : 0f), $"{Ko.IGa(string.Join("·", onboard.Select(x => x.Name)))} 타고 있다"));
                 float wreck = StructureSystem.WreckScore(w, r);
                 if (wreck > 0.4f) terms.Add((-0.3f * wreck * (1.2f - t.Bravery), "너무 망가졌다 — 부품만 뜯자"));
                 if (c.Memory.Trauma > 0.08f) terms.Add((-0.3f * c.Memory.Trauma, "또 떨어져 나갈 것이다"));

@@ -335,18 +335,18 @@ public sealed partial class AftermathSystem
             if (d.Kind == DreamKind.Loss && about != null) emo.Feel(c, Feeling.Sadness, 0.12f, $"꿈에 {about.Name}", about);
             RefreshPlaces(c, d);
             string tail = d.Wakes >= 2 ? $" 밤새 {d.Wakes}번 깼다." : d.Wakes == 1 ? " 한 번 깨서 한참 천장을 봤다." : "";
-            Life.Diary(w, c, Persona.Say(c, $"{(m.Nightmares > 1 ? "또 " : "")}{d.Text}을 꿨다.{tail}"));
+            Life.Diary(w, c, Persona.Say(c, $"{(m.Nightmares > 1 ? "또 " : "")}{Ko.EulReul(d.Text)} 꿨다.{tail}"));
         }
         else if (d.Grief)
         {
             emo.Feel(c, Feeling.Sadness, 0.2f, $"꿈에 {about?.Name}", about);
             emo.Feel(c, Feeling.Joy, 0.05f, "꿈에서라도 봤다");
-            Life.Diary(w, c, Persona.Say(c, $"{d.Text}을 꿨다. 깨고 나서 한참 누워 있었다."));
+            Life.Diary(w, c, Persona.Say(c, $"{Ko.EulReul(d.Text)} 꿨다. 깨고 나서 한참 누워 있었다."));
         }
         else
         {
             emo.Feel(c, Feeling.Joy, 0.1f, "고향 꿈");
-            Life.Diary(w, c, Persona.Say(c, $"{d.Text}을 꿨다. 오늘은 조금 가볍다."));
+            Life.Diary(w, c, Persona.Say(c, $"{Ko.EulReul(d.Text)} 꿨다. 오늘은 조금 가볍다."));
         }
         Stats.Diaries++;
         d.Mood = emo.Get(c, Feeling.Fear) + emo.Get(c, Feeling.Sadness) - emo.Get(c, Feeling.Joy);
@@ -645,7 +645,7 @@ public sealed partial class AftermathSystem
         bool tease = !same && !woke && d.Nightmare && (o.Habits.Contains(Habit.Joker) || o.Habits.Contains(Habit.Prankster)) && o.AffinityTo(c) < 0.2f;
         var emo = w.Brain2.Emotions;
         if (woke) o.Say(w, Persona.Say(o, $"어젯밤 소리 지르던데 — 괜찮아?"));
-        c.Say(w, Persona.Say(c, d.Grief ? $"어젯밤 꿈에 {Ko.EulReul(d.About >= 0 ? Crew(d.About)?.Name ?? "그 사람" : "그 사람")} 봤어" : $"어젯밤 {d.Text}을 꿨어"));
+        c.Say(w, Persona.Say(c, d.Grief ? $"어젯밤 꿈에 {Ko.EulReul(d.About >= 0 ? Crew(d.About)?.Name ?? "그 사람" : "그 사람")} 봤어" : $"어젯밤 {Ko.EulReul(d.Text)} 꿨어"));
         if (same)
         {
             Stats.SharedDreams++;

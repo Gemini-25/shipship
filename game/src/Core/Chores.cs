@@ -723,9 +723,9 @@ public static partial class WorkPlanners
                 world.Adapt.Rebuilt++;
                 m.Rebuilds++;
                 MarkLog.Add(m.Marks, world.Tick, $"{cm.Name}: 파손 뒤 다시 짜 맞춤");
-                world.History.Add(world, HistoryKind.Adaptation, $"{Ko.IGa(cm.Name)} 파손된 {Ko.EulReul(m.Name)} {ItemKinds.Name(part!.Value)}와 금속판으로 다시 짜 맞췄다",
+                world.History.Add(world, HistoryKind.Adaptation, $"{Ko.IGa(cm.Name)} 파손된 {Ko.EulReul(m.Name)} {Ko.WaGwa(ItemKinds.Name(part!.Value))} 금속판으로 다시 짜 맞췄다",
                     m.Body.Room, new[] { cm });
-                world.Log.Add(world.Tick, LogKind.Work, $"파손된 {Ko.EulReul(m.Name)} {ItemKinds.Name(part!.Value)}와 금속판으로 다시 짜 맞췄다", cm.Id);
+                world.Log.Add(world.Tick, LogKind.Work, $"파손된 {Ko.EulReul(m.Name)} {Ko.WaGwa(ItemKinds.Name(part!.Value))} 금속판으로 다시 짜 맞췄다", cm.Id);
                 return true;
             }
             m.Faults.Remove(fault);

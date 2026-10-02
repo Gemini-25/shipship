@@ -343,7 +343,7 @@ public sealed class AilmentSystem
             int n = w.Causes.OpenNode($"ail:{c.Id}:{a.Id}");
             if (n >= 0) w.Causes.Resolve(n, $"{c.Name} {s.Name} 나았다", $"crew:{c.Id}");
             w.Log.Add(w.Tick, LogKind.Life, $"{s.Name} — 다 나았다", c.Id);
-            Life.Diary(w, c, $"{s.Name}이(가) 나았다.");
+            Life.Diary(w, c, $"{Ko.IGa(s.Name)} 나았다.");
         }
     }
 

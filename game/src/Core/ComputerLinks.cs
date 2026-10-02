@@ -228,7 +228,7 @@ public sealed partial class AutomationSystem
         if (hide) _shelterUntil = Math.Max(_shelterUntil, fc.Due);
         Book.Add(ActKind.Forecast, shelter, $"{name} 예보 — {minutesAhead:0}분 뒤", hide ? "선체 밖에서 닥친다 — 안쪽 차폐된 방이 덜 다친다" : "대비할 시간이 있다", "예보 방송",
             hide ? "대피소로 미리" : "대비", "fc:" + name + ":" + w.Tick, 0, minutesAhead + 35f,
-            (world, a) => fc.Graded ? (fc.Hit ? (1, $"맞았다 — 예보대로 {name}이(가) 왔다") : (-1, $"헛예보 — {name}은(는) 오지 않았다")) : null);
+            (world, a) => fc.Graded ? (fc.Hit ? (1, $"맞았다 — 예보대로 {Ko.IGa(name)} 왔다") : (-1, $"헛예보 — {Ko.EunNeun(name)} 오지 않았다")) : null);
         return b;
     }
 

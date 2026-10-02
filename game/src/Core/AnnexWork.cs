@@ -70,7 +70,7 @@ public sealed partial class AnnexSystem
         var room = RoomOf(p.Site.AttachRoom);
         string what = p.Frame[i] < 1f ? "구조재" : "금속판";
         w.Automation.Book.Add(ActKind.Advice, room, $"증축 {(p.Frame[i] < 1f ? "골조" : "외판")} — {what} 없음", "공사가 멈췄다", "원정 · 해체로 자재를 구한다",
-            $"{what}를 구해 오세요", "annex:wait", SimTime.Hours(6));
+            $"{Ko.EulReul(what)} 구해 오세요", "annex:wait", SimTime.Hours(6));
         if (w.Tick % SimTime.Hours(12) < World.SystemInterval)
             w.Expedition.ComputerRequest(p.Frame[i] < 1f ? MatCat.Structure : MatCat.Repair, approved: true);
     }
@@ -363,7 +363,7 @@ public sealed partial class AnnexSystem
                 toils.Add(Step(AnnexJob.Fit, i, ch.Spot, FitHours * 1.6f, cell.Center));
                 toils.Add(new DoToil((cm, world) => { world.Annex.FinishFixture(cm, p, i); return true; }));
                 label = $"증축 내장 — {p.FixtureName}";
-                log = $"새 방에 {p.FixtureName}를 들인다 (자르고 · 먼지가 가라앉으면 용접)";
+                log = $"새 방에 {Ko.EulReul(p.FixtureName)} 들인다 (자르고 · 먼지가 가라앉으면 용접)";
                 break;
             }
             default: // 개통식

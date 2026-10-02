@@ -929,7 +929,7 @@ public sealed partial class PortableSystem
                 if (main == null && PortableSpecs.Of(n.Kind).Alt is PortableKind alt && (main = Nearest(alt, c, dist)) != null)
                 {
                     swap = true;
-                    why += $" · {PortableSpecs.Name(n.Kind)}은 다 쓰는 중이라 {Ko.EulReul(PortableSpecs.Name(alt))}";
+                    why += $" · {Ko.EunNeun(PortableSpecs.Name(n.Kind))} 다 쓰는 중이라 {Ko.EulReul(PortableSpecs.Name(alt))}";
                 }
                 if (main == null)
                 {
@@ -937,7 +937,7 @@ public sealed partial class PortableSystem
                     var busy = Devices.Where(d => d.Kind == n.Kind && !d.Lost && !d.Broken && Busy(d) && dist.Reachable(d.HeldBy?.Cell ?? d.At)).OrderBy(d => dist.Get(d.At)).FirstOrDefault();
                     if (busy == null || _waited.TryGetValue(n.Key, out var wt) && _w.Tick - wt < SimTime.Hours(1)) return null;
                     string user = busy.User?.Name ?? busy.HeldBy?.Name ?? (busy.InstalledBy >= 0 ? _w.Crew.FirstOrDefault(x => x.Id == busy.InstalledBy)?.Name : null) ?? "누군가";
-                    return new PortableChoice(n, null, null, null, busy, (n.Urgency - far) * 0.85f, $"{n.Why} · {PortableSpecs.Name(n.Kind)}은 {Ko.IGa(user)} 쓰는 중 — 기다린다");
+                    return new PortableChoice(n, null, null, null, busy, (n.Urgency - far) * 0.85f, $"{n.Why} · {Ko.EunNeun(PortableSpecs.Name(n.Kind))} {Ko.IGa(user)} 쓰는 중 — 기다린다");
                 }
                 PortableDevice? bat = null, cart = null;
                 if (n.Battery && main.Kind != PortableKind.Battery)

@@ -30,7 +30,7 @@ public partial class Hud
 
         Gfx.RoundRect(this, new Rect2(x, y + 18, 16, 16), col.WithAlpha(0.3f), 5, col);
         Gfx.Text(this, Fonts.Bold, new Vector2(x + 26, y + 32), r.Name, Ui.TextLarge, Palette.Text);
-        Gfx.Text(this, Fonts.Body, new Vector2(x + 26, y + 50), $"{r.Room?.Name ?? "?"} · 충전대 {r.Dock.Room.Name} · 버릇: {r.Quirk.Name}", Ui.TextBody, Palette.TextMuted);
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 26, y + 50), UiKit.Fit($"{r.Room?.Name ?? "?"} · 충전대 {r.Dock.Room.Name} · 버릇: {r.Quirk.Name}", right - (x + 26), Ui.TextBody, Fonts.Body), Ui.TextBody, Palette.TextMuted);
         var sc = r.Fault != null || r.State is RobotState.Stalled or RobotState.Towed ? Palette.Danger : r.Battery < 0.25f ? Palette.Warning : Palette.Good;
         Gfx.TextRight(this, Fonts.Bold, new Vector2(right, y + 32), RobotStateText(r), Ui.TextBody, sc);
         Divider(x, right, y + 64);
@@ -38,7 +38,7 @@ public partial class Hud
         float ly = y + 74;
         Gfx.Text(this, Fonts.Bold, new Vector2(x, ly + 14), r.Doing, Ui.TextLabel, col.Lightened(0.25f));
         if (r.Order != null) Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 32), $"맡은 일: {r.Order.Title}", Ui.TextSmall, Palette.TextMuted);
-        else if (r.Helping != null) Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 32), $"{Ko.EulReul(r.Helping.Name)} 거든다 — 긴 손일이 {RobotsV15.AssistBonus(r.Kind) * 100:0}% 빨라진다", Ui.TextSmall, Palette.TextMuted);
+        else if (r.Helping != null) Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 32), UiKit.Fit($"{Ko.EulReul(r.Helping.Name)} 거든다 — 긴 손일이 {RobotsV15.AssistBonus(r.Kind) * 100:0}% 빨라진다", right - (x), Ui.TextSmall, Fonts.Body), Ui.TextSmall, Palette.TextMuted);
         if (r.Cargo is ItemStack cargo) Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 48), $"싣고 있음: {cargo}", Ui.TextSmall, Palette.TextMuted);
         ly += 58;
         Row(x, right, ly, "배터리", r.Battery, Palette.Good, Pct(r.Battery), r.Battery < 0.25f);
@@ -71,7 +71,7 @@ public partial class Hud
             ly += 18;
             foreach (var m in marks)
             {
-                Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 14), $"{SimTime.Day(m.Tick)}일 {SimTime.Clock(m.Tick)}  {m.Text}", Ui.TextSmall, Palette.TextDim);
+                Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 14), UiKit.Fit($"{SimTime.Day(m.Tick)}일 {SimTime.Clock(m.Tick)}  {m.Text}", right - (x), Ui.TextSmall, Fonts.Body), Ui.TextSmall, Palette.TextDim);
                 ly += 18;
             }
         }
@@ -109,7 +109,7 @@ public partial class Hud
         if (f.Machine?.Omen is Omen o && o.Known)
         {
             float left = (o.Due - _world.Tick) / (float)SimTime.TicksPerHour;
-            list.Add(("전조", $"{Prevention.Name(o.Kind)} · {o.KnownBy}이(가) 찾음 · {Faults.Spec(o.Fault).Name}까지 {left:0}시간쯤"));
+            list.Add(("전조", $"{Prevention.Name(o.Kind)} · {Ko.IGa(o.KnownBy)} 찾음 · {Faults.Spec(o.Fault).Name}까지 {left:0}시간쯤"));
         }
     }
 }

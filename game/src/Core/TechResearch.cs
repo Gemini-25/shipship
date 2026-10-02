@@ -316,7 +316,7 @@ public sealed partial class TechWebSystem
         float p = AccidentRisk(x, lead, bench.Room);
         if (p < 0.09f) return;
         var why = new List<string>();
-        if (x.Style == ResearchStyle.Bold) why.Add($"{lead?.Name}은(는) 대담하게 한다");
+        if (x.Style == ResearchStyle.Bold) why.Add($"{Ko.EunNeun(lead?.Name)} 대담하게 한다");
         if (bench.Room.Air.O2 > 23.5f) why.Add($"{bench.Room.Name} 산소 {bench.Room.Air.O2:0.0}kPa");
         if (lead != null && lead.Needs.Rest < 0.3f) why.Add("지쳐 있다");
         if (t.Field is TechField.Power or TechField.Propulsion or TechField.Defense or TechField.Fabrication) why.Add($"{TechFieldName(t.Field)} 실험은 터지기 쉽다");
@@ -561,7 +561,7 @@ public sealed partial class TechWebSystem
         var people = hl.Select(Crew).Where(c => c != null && !c.Dead).Cast<CrewMember>().ToList();
         if (people.Count == 0) return;
         w.History.Add(w, HistoryKind.Upgrade, $"{t.Name} — {string.Join(" · ", people.Select(c => c.Name))}의 실험이 보탰다", null, people, log: true);
-        foreach (var c in people) Life.Diary(w, c, Persona.Say(c, $"{t.Name}을(를) 익혔다. 그 실험대의 시간이 헛되지 않았다."));
+        foreach (var c in people) Life.Diary(w, c, Persona.Say(c, $"{Ko.EulReul(t.Name)} 익혔다. 그 실험대의 시간이 헛되지 않았다."));
         _hands.Remove(t.Id);
         if (Trial?.Tech == t.Id) Trial = null;
     }
@@ -614,7 +614,7 @@ public sealed partial class TechWebSystem
         string rec = best.Id;
         w.Automation.Book.Add(ActKind.Advice, lab, $"연구 후보 {options.Count}개", $"추천: {best.Name} — {RecWhy}", $"다음 연구로 {Ko.EulReul(best.Name)} 권한다",
             "회의에서 정해 주세요", "techrec:" + best.Id, SimTime.Hours(4), 60f,
-            (world, a) => world.Eras.Known.Contains(rec) ? (1, $"권한 {best.Name}을(를) 익혔다") : world.Eras.Project == rec ? null : (2, "참고 — 회의가 다른 연구를 골랐다"));
+            (world, a) => world.Eras.Known.Contains(rec) ? (1, $"권한 {Ko.EulReul(best.Name)} 익혔다") : world.Eras.Project == rec ? null : (2, "참고 — 회의가 다른 연구를 골랐다"));
         return RecTech;
     }
 
@@ -678,7 +678,7 @@ public sealed class ResearchActivity : Activity
         if (tw.BenchOf(x) is not Furniture bench || !bench.UseSpots.Any(dist.Reachable)) return (0f, "실험할 자리가 없다");
         var t = TechWeb.Find(x.Tech);
         if (t == null) return (0f, "—");
-        if (partner && !(w.Crew[x.Lead].Job?.Activity is ResearchActivity) && x.Progress < 0.05f) return (0f, $"{w.Crew[x.Lead].Name}을(를) 기다린다");
+        if (partner && !(w.Crew[x.Lead].Job?.Activity is ResearchActivity) && x.Progress < 0.05f) return (0f, $"{Ko.EulReul(w.Crew[x.Lead].Name)} 기다린다");
         float s = 0.34f + 0.2f * c.Traits.Diligence + 0.3f * TechWebSystem.Interest(c, t.Field) + (OnShift(c, w) ? 0.12f : -0.08f) + (x.Paused ? 0.06f : 0f);
         if (partner) s -= 0.06f;
         if (Bedtime(c, w)) s -= 0.35f;
@@ -712,7 +712,7 @@ public sealed class ResearchActivity : Activity
             toils.Add(new DoToil((cm, world) =>
             {
                 x.RelicSeen = true;
-                world.Log.Add(world.Tick, LogKind.Work, $"{relic.Name}을(를) 들여다보며 재고 적었다 — {t.Name}", cm.Id);
+                world.Log.Add(world.Tick, LogKind.Work, $"{Ko.EulReul(relic.Name)} 들여다보며 재고 적었다 — {t.Name}", cm.Id);
                 return true;
             }));
         }

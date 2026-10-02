@@ -334,7 +334,7 @@ public sealed partial class EvaRiskSystem
             wv.Patches++;
             Stats.Patches++;
             if (by != victim) { Stats.BuddyPatches++; victim.ChangeAffinity(by, 0.15f); w.Relations.Remember(victim, by, RelationReason.SavedMe, "선체 밖에서 새는 내 우주복을 막아 줬다"); }
-            w.Log.Add(w.Tick, LogKind.Work, by == victim ? $"응급 패치 — {what}을 막았다 (남은 패치 {kit.PatchKit})" : $"{Ko.EulReul(victim.Name)} 응급 패치 — {what}을 막아 줬다", by.Id);
+            w.Log.Add(w.Tick, LogKind.Work, by == victim ? $"응급 패치 — {Ko.EulReul(what)} 막았다 (남은 패치 {kit.PatchKit})" : $"{Ko.EulReul(victim.Name)} 응급 패치 — {Ko.EulReul(what)} 막아 줬다", by.Id);
             Say(by, by == victim ? "막았다… 숨 쉴 만하다" : $"{victim.Name}, 막았어 — 천천히 숨 쉬어", RadioTone.Chat, victim.Id);
             Life.Diary(w, victim, Persona.Say(victim, by == victim ? $"쉭 하고 새는 소리를 들으며 {PartName(wv.BreachPart)}에 테이프를 감았다" : $"{Ko.IGa(by.Name)} 내 우주복에 패치를 붙여 줬다"));
             by.Practice(Skill.Mechanics, 0.02f);

@@ -121,7 +121,7 @@ public sealed class GoalSystem
         if (ex.Current is Trip t && t.Members.Any(m => m.Id == c.Id)) Add("trip", $"원정 — {t.Site.Name}", "원정대", ActCat.Explore);
         else if (ex.Pending is ExpProposal pp && (pp.Team.Contains(c.Id) || pp.Volunteers.Any(v => v.who == c.Id))) Add("trip", $"원정 준비 — {pp.Site.Name}", "손을 들었다", ActCat.Explore);
         if (w.Belongings.Of(c).FirstOrDefault(b => b.Condition < 0.4f) is Belonging bb) Add("mend", $"{Ko.EulReul(bb.Name)} 고치기", "망가졌다", ActCat.Care, 0.7f);
-        if (c.GriefUntil > now && w.Life.Memorial.Count > 0) Add("mourn", $"{w.Life.Memorial[^1].name}을(를) 기리기", "떠난 사람", ActCat.Care);
+        if (c.GriefUntil > now && w.Life.Memorial.Count > 0) Add("mourn", $"{Ko.EulReul(w.Life.Memorial[^1].name)} 기리기", "떠난 사람", ActCat.Care);
         if (c.Quarrel > 0 && now - c.Quarrel < SimTime.TicksPerDay * 3)
         {
             var foe = w.Crew.Where(o => o != c && !o.Dead).OrderBy(o => c.AffinityTo(o)).ThenBy(o => o.Id).FirstOrDefault();

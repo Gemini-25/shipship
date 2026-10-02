@@ -11,7 +11,7 @@ public readonly record struct TipLine(string Text, Color Color, string? Icon = n
 /// v16.2 공통 부품: 패널 · 머리글 · 줄 · 게이지 · 아이콘 · 배지 · 툴팁 · 작은 그래프 · 글 줄이기.
 /// 모두 CanvasItem 위에 직접 그린다 (Gfx 위의 한 층). 크기 · 색은 Ui 표준에서.
 /// </summary>
-public static class UiKit
+public static partial class UiKit
 {
     // ─────────────────────────── 면 ───────────────────────────
 

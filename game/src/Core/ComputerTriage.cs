@@ -189,9 +189,9 @@ public sealed class PowerTriage
                     _lowAnnounced = w.Tick;
                     string what = (n > 0 ? $"급하지 않은 설비 {n}대" : "") + (n > 0 && p.Brownout ? " · " : "") + (p.Brownout ? "남는 펌프 · 산소 발생기 하나 · 빈 치료 침대 · 엔진" : "");
                     a.Book.Add(ActKind.Shed, null, $"배터리 {p.BatteryPercent * 100:0}%에서 {drain:0.#}kW씩 빠진다" + (p.ReactorOnline ? "" : " · 원자로 정지"), $"생명유지 · 냉각 · 의무실 먼저 — {targetH:0}시간은 버텨야 한다",
-                        $"{what}를 내렸다 — 그만큼 생명유지 쪽으로", "", "park", SimTime.Minutes(20), 30f,
+                        $"{Ko.EulReul(what)} 내렸다 — 그만큼 생명유지 쪽으로", "", "park", SimTime.Minutes(20), 30f,
                         (world, act) => (world.Power.BatteryPercent > 0.05f || world.Power.ReactorOnline ? 1 : -1, world.Power.BatteryPercent > 0.05f || world.Power.ReactorOnline ? "맞았다 — 필수 회로가 버텼다" : "틀렸다 — 그래도 바닥났다"));
-                    w.Log.Add(w.Tick, LogKind.Ship, $"{a.Voice.Call}: 전기가 모자라 {what}{(n > 0 ? $"({string.Join(" · ", pick.Take(4).Select(m => m.Name))}{(pick.Count > 4 ? " …" : "")})" : "")}를 내리고 생명유지 쪽으로 돌립니다");
+                    w.Log.Add(w.Tick, LogKind.Ship, $"{a.Voice.Call}: 전기가 모자라 {what}{Ko.EulReul((n > 0 ? $"({string.Join(" · ", pick.Take(4).Select(m => m.Name))}{(pick.Count > 4 ? " …" : "")})" : ""))} 내리고 생명유지 쪽으로 돌립니다");
                     a.Speak.Announce(a.Voice.Style(a.Character.Flavor("전기가 모자랍니다 — 급하지 않은 것부터 내리고 생명유지실 쪽으로 먼저 돌립니다" + (a.Core.SelfSaving ? ". 제 연산도 줄입니다" : ""))), null, 1);
                 }
             }
@@ -262,7 +262,7 @@ public sealed class PowerTriage
                 Feeders++;
                 a.Command.Line(CmdTarget.Circuit, i, panel.Room, $"예비 배선 {PowerGrid.CircuitName(from)}→{PowerGrid.CircuitName(i)} 투입", $"{PowerGrid.CircuitName(i)} 회로가 죽었다 — 고칠 때까지 예비 배선으로", 0.8f, 60f);
                 a.Book.Add(ActKind.Breaker, panel.Room, $"{PowerGrid.CircuitName(i)} 회로 정전 ({pm.Faults.First(f => f.Circuit == i).Name})", $"예비 배선은 {PowerGrid.JumperCapacityKw * 0.7f:0}kW까지 — 넘치면 급하지 않은 것부터 끈다",
-                    $"예비 배선 {PowerGrid.CircuitName(from)}→{PowerGrid.CircuitName(i)}을 넣었다", "전기 담당은 회로를 고쳐 달라", "feed:" + i, SimTime.Hours(1), 20f);
+                    $"예비 배선 {PowerGrid.CircuitName(from)}→{Ko.EulReul(PowerGrid.CircuitName(i))} 넣었다", "전기 담당은 회로를 고쳐 달라", "feed:" + i, SimTime.Hours(1), 20f);
             }
     }
 

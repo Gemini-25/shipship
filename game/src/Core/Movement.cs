@@ -142,8 +142,8 @@ public sealed class MovementSystem
         : c.Job?.Urgent == true || c.Job?.Order is WorkOrder o && (WorkKinds.IsEmergency(o.Kind) || o.Kind is WorkKind.Rescue or WorkKind.Treat or WorkKind.SafetyWatch) ? 4 // 비상 대응 중인 사람끼리는 서로 비켜 주느라 늦지 않는다
         : c.Carrying != null ? 3 : c.Job?.Order != null ? 2 : 1;
 
-    private static string Why(CrewMember other) => other.CarryingPerson is CrewMember p ? $"{p.Name}을(를) 업은 {other.Name}"
-        : other.Job?.Urgent == true ? $"급히 가는 {other.Name}" : other.Carrying is ItemStack s ? $"{ItemKinds.Name(s.Kind)}을(를) 든 {other.Name}" : other.Name;
+    private static string Why(CrewMember other) => other.CarryingPerson is CrewMember p ? $"{Ko.EulReul(p.Name)} 업은 {other.Name}"
+        : other.Job?.Urgent == true ? $"급히 가는 {other.Name}" : other.Carrying is ItemStack s ? $"{Ko.EulReul(ItemKinds.Name(s.Kind))} 든 {other.Name}" : other.Name;
 
     /// <summary>
     /// 한 걸음 내딛기 전에: 주변 사람과 문 너머 사정에 맞춰 이번 틱의 걸음 배율 (0이면 이번 틱은 서 있다).
@@ -243,7 +243,7 @@ public sealed class MovementSystem
                     other.Gait.Aside = side * 0.3f;
                     other.Gait.YieldUntil = now + 2;
                     other.Gait.YieldTo = c.Id;
-                    other.Gait.YieldWhy = $"{c.Name}이(가) 지나간다";
+                    other.Gait.YieldWhy = $"{Ko.IGa(c.Name)} 지나간다";
                     Locomotion.Face(other, c.Position);
                     mul *= 0.7f;
                 }
@@ -432,7 +432,7 @@ public sealed class MovementSystem
         c.Carrying = s.Stack;
         Stats.PickedUp++;
         if (s.Owner != c.Id && s.Owner >= 0 && s.Owner < w.Crew.Count && w.Crew[s.Owner] is { Dead: false } owner)
-            MarkLog.Add(c.Memory.Marks, w.Tick, $"{Ko.IGa(owner.Name)} 두고 간 {ItemKinds.Name(s.Stack.Kind)}을(를) 챙겼다");
+            MarkLog.Add(c.Memory.Marks, w.Tick, $"{Ko.IGa(owner.Name)} 두고 간 {Ko.EulReul(ItemKinds.Name(s.Stack.Kind))} 챙겼다");
         return true;
     }
 }
@@ -461,6 +461,6 @@ public sealed class ReclaimActivity : Activity
         toils.Add(new DoToil((cm, world) => world.Movement.PickUp(cm, s)));
         toils.Add(new WaitToil(2, Pose.Standing));
         // 집어 든 짐은 다음 일을 짤 때 보관함에 먼저 넣는다 (모든 계획이 손부터 비운다)
-        return new Job(this, "두고 간 짐 챙기기", toils) { LogText = s.Owner == c.Id ? $"두고 간 {ItemKinds.Name(s.Stack.Kind)}을(를) 챙기러 간다" : null, LogKind = LogKind.Life };
+        return new Job(this, "두고 간 짐 챙기기", toils) { LogText = s.Owner == c.Id ? $"두고 간 {Ko.EulReul(ItemKinds.Name(s.Stack.Kind))} 챙기러 간다" : null, LogKind = LogKind.Life };
     }
 }

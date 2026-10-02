@@ -97,7 +97,7 @@ public static partial class WorkPlanners
         {
             if (patient.Dead || (patient.Position - cm.Position).LengthSquared() > 16f) return false;
             patient.HoldUntil = world.Tick + SimTime.Minutes(50);
-            patient.HoldWhy = $"{cm.Name}이(가) {(Wounds.IsArm(wd.Part) ? "의수를" : "의족을")} 맞춰 준다";
+            patient.HoldWhy = $"{Ko.IGa(cm.Name)} {(Wounds.IsArm(wd.Part) ? "의수를" : "의족을")} 맞춰 준다";
             patient.NextThinkTick = world.Tick;
             return true;
         }));

@@ -51,12 +51,12 @@ public sealed class ComputerCharacter
     /// <summary>타임라인 결정이 채점됐다 (ComputerForesee).</summary>
     internal void Graded(ForeseeDecision d)
     {
-        if (d.Score == 1) Nudge(-0.02f, 0f, $"{d.Title} — {d.Pick.Name}이(가) 맞았다");
+        if (d.Score == 1) Nudge(-0.02f, 0f, $"{d.Title} — {Ko.IGa(d.Pick.Name)} 맞았다");
         else if (d.Score == -1)
         {
             // 틀렸다: 신중해지고, 사람이 쓰러졌으면 사람 쪽으로 · 공기 · 불을 잃었으면 배 쪽으로
             bool hurt = d.Result.Contains("쓰러");
-            Nudge(0.1f, hurt ? 0.08f : -0.04f, $"{d.Title} — {d.Pick.Name}이(가) 틀렸다 ({d.Result})");
+            Nudge(0.1f, hurt ? 0.08f : -0.04f, $"{d.Title} — {Ko.IGa(d.Pick.Name)} 틀렸다 ({d.Result})");
         }
     }
 

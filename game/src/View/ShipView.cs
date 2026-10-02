@@ -1348,7 +1348,7 @@ public partial class ShipView : Node2D
 
             float rr = c.Pose == Pose.Sitting ? radius * 0.9f : radius;
             var facing = c.Facing.ToGodot();
-            if (lod == 0) PaintCrewDot(ci, c, body, rr, Palette.Crew(c.Id)); // v17.1 멀리선 점 + 색
+            if (ZoomDetail.Shows(Zoom, Detail.CrewDot)) PaintCrewDot(ci, c, body, rr, Palette.Crew(c.Id)); // v17.1 · v16.24 멀리선 점 + 색
             else PaintPuppet(ci, c, body, facing, s * (c.Pose == Pose.Sitting ? 0.92f : 1f), Puppet.Of(_world, c), lod, Palette.Crew(c.Id), c.Vitals.Health < 0.5f); // v17.1 위에서 본 인형
 
             if (c.Pose == Pose.Working)

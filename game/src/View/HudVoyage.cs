@@ -59,7 +59,7 @@ public partial class Hud
         float w = 460f, h = 60f + SummaryLines.Length * 22f;
         var card = new Rect2((Screen.X - w) / 2f, Screen.Y * 0.22f, w, h);
         Card(card);
-        Gfx.Text(this, Fonts.Bold, card.Position + new Vector2(20, 32), "요약 진행", Ui.TextLarge, Palette.Text);
+        Gfx.Text(this, Fonts.Bold, card.Position + new Vector2(20, 32), "빨리 감기", Ui.TextLarge, Palette.Text);
         Button(new Rect2(card.End.X - 74, card.Position.Y + 12, 58, 26), "닫기", false, mouse, () => SummaryLines = null, Ui.TextSmall);
         float y = card.Position.Y + 58;
         foreach (var line in SummaryLines)
@@ -97,7 +97,7 @@ public partial class Hud
             y += 19f;
             if (y > card.End.Y - 10f) break;
             bool open = _world.Research >= need;
-            Gfx.Text(this, Fonts.Bold, new Vector2(x, y), $"{era}. {name}" + (open ? "" : $" — 연구 {need:0}점에 열린다") + (!open && foldLocked ? $" · 기술 {EraSystem.All.Count(t => t.Era == era)}개" : ""), Ui.TextBody, open ? Palette.Accent : Palette.TextMuted);
+            Gfx.Text(this, Fonts.Bold, new Vector2(x, y), $"{era}. {name}" + (open ? "" : $" — 연구가 {need:0}만큼 쌓이면 열린다") + (!open && foldLocked ? $" · 기술 {EraSystem.All.Count(t => t.Era == era)}개" : ""), Ui.TextBody, open ? Palette.Accent : Palette.TextMuted);
             if (!open && foldLocked) continue;
             if (foldKnown && EraSystem.All.Where(t => t.Era == era && e.Known.Contains(t.Id)).Select(t => t.Name).ToList() is { Count: > 0 } learned)
             {

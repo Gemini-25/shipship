@@ -190,7 +190,7 @@ public static partial class CrewWhy
             for (int i = 0; i < c.Memory.Fear.Length && i < w.Ship.Rooms.Count; i++)
                 if (c.Memory.Fear[i] >= 0.35f && (worst < 0 || c.Memory.Fear[i] > c.Memory.Fear[worst])) worst = i;
             if (worst >= 0)
-                list.Add(new WhyLink(WhySource.Memory, new[] { c.Memory.FearCause[worst] ?? "겪은 일", $"{w.Ship.Rooms[worst].Name}이 무섭다", "돌아서 감" }, true));
+                list.Add(new WhyLink(WhySource.Memory, new[] { c.Memory.FearCause[worst] ?? "겪은 일", $"{Ko.IGa(w.Ship.Rooms[worst].Name)} 무섭다", "돌아서 감" }, true));
         }
         // 묻은 것 · 따르는 관행 (행동을 바꾸는 것만 화면에 이미 한 줄로 있다 — 여기서는 원인만)
         if (c.Soil.Line() is string soil) list.Add(new WhyLink(WhySource.Soil, new[] { soil, "씻을 때를 찾는다" }, false));

@@ -183,7 +183,7 @@ public sealed class VoyageSystem
     private void Leave(Leg leg)
     {
         if (leg.Kind == LegKind.AsteroidBelt || VoyageV15.MiningMul(leg.Kind) != 1f) _w.Space.SetMean(PropulsionSystem.ZoneDensity(_w.Propulsion.Zone));
-        if (leg.Kind is not (LegKind.Cruise)) _w.Log.Add(_w.Tick, LogKind.Ship, $"{leg.Name}을(를) 벗어났다");
+        if (leg.Kind is not (LegKind.Cruise)) _w.Log.Add(_w.Tick, LogKind.Ship, $"{Ko.EulReul(leg.Name)} 벗어났다");
     }
 
     /// <summary>기항지: 남는 원료·희귀 소재를 팔고 모자란 부품·식량을 산다. 사람이 모자라면 새 사람이 탄다. 가장 낡은 설비 둘을 손본다.</summary>

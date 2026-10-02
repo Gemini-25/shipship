@@ -40,10 +40,7 @@ public partial class Hud
         _chronicleRect = card;
         Card(card);
         float left = x0 + 16f, right = card.End.X - 16f;
-        string title = $"{w.Ship.Name} 기술 지도";
-        Gfx.Text(this, Fonts.Bold, new Vector2(left, y0 + 28), title, Ui.TextLarge, Palette.Text);
-        Gfx.Text(this, Fonts.Body, new Vector2(left + Gfx.Width(Fonts.Bold, title, Ui.TextLarge) + 10, y0 + 28),
-            $"{EraSystem.EraName(e.Era)} · 익힘 {e.Known.Count}/{TechWeb.Every.Length} · 배의 이름: {tw.Identity}", Ui.TextBody, Palette.TextMuted);
+        UiKit.CardTitle(this, left, right - 170f, y0 + 30, $"{w.Ship.Name} 기술 지도", $"{EraSystem.EraName(e.Era)} · 익힘 {e.Known.Count}/{TechWeb.Every.Length}" + (tw.Identity != "" ? $" · {tw.Identity}" : ""), "star"); // v16.24
         Button(new Rect2(right - 58, y0 + 10, 58, 26), "T 닫기", false, mouse, ToggleTech, Ui.TextSmall);
         Button(new Rect2(right - 58 - 96, y0 + 10, 90, 26), "설비 단계", false, mouse, () => TechWebOpen = false, Ui.TextSmall);
         DrawWebLegend(left, y0 + 50f);
@@ -78,7 +75,7 @@ public partial class Hud
         Item(c => TechIcons.Draw(this, demo, c, 7f, 0), "고를 수 있음");
         Item(c => TechIcons.Draw(this, demo, c, 7f, 2, 0.8f), "선행 · 조건 대기");
         Item(c => { TechIcons.Draw(this, demo, c, 7f, 3); TechIcons.Lock(this, c, 4f, Palette.Danger); }, "갈림길에서 버림");
-        Item(c => { DrawArc(c, 7f, 0, Mathf.Tau, 14, WebGold.WithAlpha(0.7f), 1f, true); Gfx.TextCentered(this, Fonts.Bold, c + new Vector2(0, 3.5f), "?", 10, WebGold); }, "숨은 기술의 기척");
+        Item(c => { DrawArc(c, 7f, 0, Mathf.Tau, 14, WebGold.WithAlpha(0.7f), 1f, true); Gfx.TextCentered(this, Fonts.Bold, c + new Vector2(0, 3.5f), "?", Ui.TextTiny, WebGold); }, "숨은 기술의 기척");
         Item(c => { DrawDashed(c - new Vector2(7, 0), c + new Vector2(7, 0), WebFork, 1.4f, 3f); }, "갈림길");
         Item(c => TechIcons.Glyph(this, "chip", c, 5f, WebRec, 1.2f), "컴퓨터 추천");
         Item(c => TechIcons.Glyph(this, "flask", c, 5f, Palette.Warning, 1.2f), "실험 중");
@@ -289,89 +286,128 @@ public partial class Hud
         return l;
     }
 
+    /// <summary>
+    /// v16.24 오른쪽 칸 — 같은 유리 톤의 작은 카드 다섯: 연구 중 · 주 컴퓨터 추천 · 실험 · 갈림길 · 최근.
+    /// 카드마다 아이콘 머리 · 한두 줄 · 숫자는 칩으로 (글 줄을 줄였다).
+    /// </summary>
     private void DrawWebPanel(Rect2 p)
     {
         var w = _world;
         var tw = w.TechWeb;
         var e = w.Eras;
-        float x = p.Position.X, y = p.Position.Y + 4f, right = p.End.X;
-        int max = (int)MathF.Max(16f, p.Size.X / 7.2f);
+        float x = p.Position.X, y = p.Position.Y, right = p.End.X;
         bool Room(float need) => y + need < p.End.Y;
-        void Head(string s) { y += 16f; Gfx.Text(this, Fonts.Bold, new Vector2(x, y), s, Ui.TextSmall, Palette.TextDim); y += 4f; Divider(x, right, y); }
-        void Line(string s, Color c, int size = 10)
+        // 카드 하나: 바탕 · 머리 → 안쪽 그리기(쓴 높이를 돌려준다)
+        void Section(string icon, string title, Color accent, Func<float, float, float> body, float est)
         {
-            foreach (var part in Wrap(s, max))
+            if (!Room(est)) return;
+            float top = y;
+            float h = body(x + Ui.S3, top + 28f) + 34f;
+            h = MathF.Min(h, p.End.Y - top);
+            // 바탕은 내용 뒤에 깔 수 없으니 테두리만 (안쪽은 유리 그대로)
+            Gfx.RoundRect(this, new Rect2(x, top, right - x, h), new Color(1, 1, 1, 0.025f), Ui.RadiusControl, accent.WithAlpha(0.22f));
+            UiKit.Header(this, x + Ui.S3, right - Ui.S3, top + 18f, title, null, icon, accent);
+            y = top + h + Ui.S2;
+        }
+        float Lines(string text, float lx, float ly, Color c, int maxLines = 2, int size = Ui.TextSmall)
+        {
+            var ls = UiKit.Wrap(text, right - lx - Ui.S3, size, Fonts.Body, maxLines);
+            for (int i = 0; i < ls.Count; i++) Gfx.Text(this, Fonts.Body, new Vector2(lx, ly + 12f + i * 15f), ls[i], size, c);
+            return ls.Count * 15f;
+        }
+
+        Section("star", "연구 중", Palette.Warning, (lx, ly) =>
+        {
+            if (TechWeb.Find(e.Project) is not EraTech pt) return Lines("고를 연구가 없다 — 회의나 갈림길을 기다린다", lx, ly, Palette.TextMuted);
+            TechIcons.Draw(this, pt, new Vector2(lx + 9f, ly + 7f), 8f, 0);
+            Gfx.Text(this, Fonts.Bold, new Vector2(lx + 24f, ly + 12f), UiKit.Fit(pt.Name, right - lx - 70f, Ui.TextBody, Fonts.Bold), Ui.TextBody, Palette.Text);
+            float f = Mathf.Clamp(e.Progress / MathF.Max(1f, tw.CostOf(pt)), 0f, 1f);
+            Gfx.TextRight(this, Fonts.Bold, new Vector2(right - Ui.S3, ly + 12f), $"{f * 100f:0}%", Ui.TextSmall, Palette.Warning);
+            UiKit.Gauge(this, new Rect2(lx, ly + 20f, right - lx - Ui.S3, Ui.GaugeH), f, Palette.Warning);
+            return 28f + Lines(e.ProjectWhy, lx, ly + 26f, Palette.TextDim);
+        }, 80f);
+
+        Section("computer", "주 컴퓨터 추천", WebRec, (lx, ly) =>
+        {
+            if (TechWeb.Find(tw.RecTech) is not EraTech rt)
+                return Lines(w.Automation.Present && w.Automation.MainOnline ? "아직 권할 것이 없다" : "주 컴퓨터가 멎어 권하지 못한다", lx, ly, Palette.TextMuted);
+            Gfx.Text(this, Fonts.Bold, new Vector2(lx, ly + 12f), UiKit.Fit(rt.Name, right - lx - Ui.S3, Ui.TextBody, Fonts.Bold), Ui.TextBody, WebRec);
+            float h = 16f + Lines(tw.RecWhy, lx, ly + 16f, Palette.TextDim);
+            UiKit.Stats(this, new Vector2(lx, ly + h + 12f), right - Ui.S3, new (string, int, string, Tone)[]
             {
-                if (!Room(14f)) return;
-                y += 14f;
-                Gfx.Text(this, Fonts.Body, new Vector2(x, y), part, size, c);
-            }
-        }
-        void Bar(float f, Color c) { if (!Room(10f)) return; y += 6f; Gfx.Bar(this, new Rect2(x, y, right - x, 5f), f, c); y += 4f; }
+                ("target", tw.Stats.Followed, "따름", Tone.Good), ("close", tw.Stats.Ignored, "다른 것", Tone.Normal),
+            });
+            return h + (tw.Stats.Followed + tw.Stats.Ignored > 0 ? 22f : 4f);
+        }, 70f);
 
-        Head("연구 중");
-        if (TechWeb.Find(e.Project) is EraTech pt)
+        Section("diagnostic", "실험", Palette.Accent, (lx, ly) =>
         {
-            TechIcons.Draw(this, pt, new Vector2(x + 10f, y + 15f), 9f, 0);
-            Gfx.Text(this, Fonts.Bold, new Vector2(x + 26f, y + 19f), pt.Name, Ui.TextBody, Palette.Warning);
-            y += 22f;
-            Bar(Mathf.Clamp(e.Progress / MathF.Max(1f, tw.CostOf(pt)), 0f, 1f), Palette.Warning);
-            Line(e.ProjectWhy, Palette.TextDim);
-        }
-        else Line("고를 연구가 없다 (회의 · 갈림길 대기)", Palette.TextMuted);
-
-        Head("주 컴퓨터 추천");
-        if (TechWeb.Find(tw.RecTech) is EraTech rt)
-        {
-            Line($"{rt.Name} — {tw.RecWhy}", WebRec);
-            Line($"따름 {tw.Stats.Followed} · 다른 것을 고름 {tw.Stats.Ignored}", Palette.TextMuted);
-        }
-        else Line(w.Automation.Present && w.Automation.MainOnline ? "아직 추천이 없다" : "주 컴퓨터가 멎어 추천이 없다", Palette.TextMuted);
-
-        Head("실험");
-        if (tw.Trial is ExperimentState x1 && TechWeb.Find(x1.Tech) is EraTech xt)
-        {
-            var lead = x1.Lead >= 0 ? w.Crew[x1.Lead] : null;
-            var mate = x1.Partner >= 0 ? w.Crew[x1.Partner] : null;
-            Line($"{xt.Name}{(x1.Relic ? " (유물 역설계)" : "")} — {lead?.Name ?? "?"}({TechWebSystem.StyleName(x1.Style)}){(mate != null ? $" · 짝 {mate.Name}" : "")}", Palette.Text);
-            Bar(x1.Progress, x1.Paused ? Palette.TextMuted : Palette.Warning);
-            Line(x1.Paused ? $"끊김 — 작업대에 노트 ({x1.Progress * 100f:0}%) · 누구든 이어 한다" : lead != null && tw.Researching(lead) ? $"실험 중 · {x1.LeadWhy}" : $"차례를 기다린다 · {x1.LeadWhy}",
-                x1.Paused ? Palette.Warning : Palette.TextDim);
-            if (x1.Warned) Line(x1.Heeded ? "컴퓨터 경고를 듣고 천천히 한다" : "컴퓨터 경고를 듣지 않았다", x1.Heeded ? Palette.Good : Palette.Danger);
-        }
-        else Line("다음 실험 차례를 기다린다", Palette.TextMuted);
-        var s = tw.Stats;
-        Line($"실험 {s.Experiments} · 성공 {s.Successes} · 실패 {s.Failures} · 사고 {s.Accidents} · 돌파구 {s.Breakthroughs} · 노트 {tw.Notes.Count}(탄 것 {s.NotesBurned})", Palette.TextMuted);
-        var tops = tw.Experiments.OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key).Take(3).Where(kv => kv.Key < w.Crew.Count).Select(kv => $"{w.Crew[kv.Key].Name} {kv.Value}").ToList();
-        if (tops.Count > 0) Line("실험한 사람: " + string.Join(" · ", tops), Palette.TextMuted);
-
-        Head("갈림길");
-        foreach (var f in TechWeb.Forks)
-        {
-            if (!Room(30f)) break;
-            var st = tw.ForkStates[f.Id];
-            var a = TechWeb.Find(f.A)!;
-            var b = TechWeb.Find(f.B)!;
-            string mid = st.Side < 0 ? (st.PendingSince >= 0 ? " · 회의 대기" : "") : st.Reopened ? " · 버린 쪽 다시 꺼냄(두 배)" : "";
-            y += 15f;
-            float cx = x;
-            void Side(EraTech t, bool chosen, bool lost)
+            float h = 0f;
+            if (tw.Trial is ExperimentState x1 && TechWeb.Find(x1.Tech) is EraTech xt)
             {
-                TechIcons.Draw(this, t, new Vector2(cx + 6f, y - 4f), 6f, chosen ? 1 : lost ? 3 : 0);
-                cx += 15f;
-                string nm = t.Name;
-                Gfx.Text(this, chosen ? Fonts.Bold : Fonts.Body, new Vector2(cx, y), nm, 10, chosen ? WebGold : lost ? Palette.TextMuted : Palette.TextDim);
-                cx += Gfx.Width(Fonts.Body, nm, 10) + 6f;
+                var lead = x1.Lead >= 0 && x1.Lead < w.Crew.Count ? w.Crew[x1.Lead] : null;
+                var mate = x1.Partner >= 0 && x1.Partner < w.Crew.Count ? w.Crew[x1.Partner] : null;
+                Gfx.Text(this, Fonts.Bold, new Vector2(lx, ly + 12f), UiKit.Fit(xt.Name + (x1.Relic ? " · 유물을 뜯어 본다" : ""), right - lx - 50f, Ui.TextBody, Fonts.Bold), Ui.TextBody, Palette.Text);
+                Gfx.TextRight(this, Fonts.Bold, new Vector2(right - Ui.S3, ly + 12f), $"{x1.Progress * 100f:0}%", Ui.TextSmall, x1.Paused ? Palette.TextMuted : Palette.Warning);
+                UiKit.Gauge(this, new Rect2(lx, ly + 20f, right - lx - Ui.S3, Ui.GaugeH), x1.Progress, x1.Paused ? Palette.TextMuted : Palette.Warning);
+                h = 30f;
+                string who = $"{lead?.Name ?? "?"} ({TechWebSystem.StyleName(x1.Style)})" + (mate != null ? $" · 짝 {mate.Name}" : "");
+                h += Lines(who, lx, ly + h - 4f, Palette.TextDim, 1);
+                string state = x1.Paused ? "멈춤 — 작업대에 노트가 있다 · 누구든 이어 한다" : lead != null && tw.Researching(lead) ? x1.LeadWhy : $"차례를 기다린다 · {x1.LeadWhy}";
+                h += Lines(state, lx, ly + h - 4f, x1.Paused ? Palette.Warning : Palette.TextMuted, 1);
+                if (x1.Warned) h += Lines(x1.Heeded ? "컴퓨터 경고를 듣고 천천히 한다" : "컴퓨터 경고를 듣지 않았다", lx, ly + h - 4f, x1.Heeded ? Palette.Good : Palette.Danger, 1);
             }
-            Side(a, st.Side == 0, st.Side == 1);
-            Gfx.Text(this, Fonts.Bold, new Vector2(cx, y), "↔", 10, WebFork);
-            cx += 16f;
-            Side(b, st.Side == 1, st.Side == 0);
-            if (mid != "") Gfx.Text(this, Fonts.Body, new Vector2(cx, y), mid, 9, st.Side < 0 ? WebFork : Palette.Warning);
-        }
+            else h = Lines("다음 실험 차례를 기다린다", lx, ly, Palette.TextMuted);
+            var s = tw.Stats;
+            UiKit.Stats(this, new Vector2(lx, ly + h + 12f), right - Ui.S3, new (string, int, string, Tone)[]
+            {
+                ("diagnostic", s.Experiments, "실험", Tone.Normal), ("target", s.Successes, "성공", Tone.Good), ("broken", s.Failures, "실패", Tone.Caution),
+                ("incident", s.Accidents, "사고", Tone.Danger), ("star", s.Breakthroughs, "돌파", Tone.Info), ("log", tw.Notes.Count, "노트", Tone.Normal),
+            });
+            return h + 20f;
+        }, 90f);
 
-        Head("최근");
-        foreach (var (tick, text, tone) in tw.Recent.AsEnumerable().Reverse().Take(8))
-            Line($"{SimTime.Clock(tick)} {text}", tone == 1 ? Palette.Good.WithAlpha(0.9f) : tone == 2 ? Palette.Warning : Palette.TextDim);
+        Section("route", "갈림길", WebFork, (lx, ly) =>
+        {
+            float h = 0f;
+            foreach (var f in TechWeb.Forks)
+            {
+                if (ly + h + 18f > p.End.Y - 40f) break;
+                var st = tw.ForkStates[f.Id];
+                var a = TechWeb.Find(f.A)!;
+                var b = TechWeb.Find(f.B)!;
+                float yy = ly + h + 12f;
+                float cx = lx;
+                void Side(EraTech t, bool chosen, bool lost)
+                {
+                    TechIcons.Draw(this, t, new Vector2(cx + 6f, yy - 4f), 6f, chosen ? 1 : lost ? 3 : 0);
+                    cx += 15f;
+                    Gfx.Text(this, chosen ? Fonts.Bold : Fonts.Body, new Vector2(cx, yy), t.Name, Ui.TextTiny, chosen ? WebGold : lost ? Palette.TextMuted : Palette.TextDim);
+                    cx += Gfx.Width(Fonts.Body, t.Name, Ui.TextTiny) + 6f;
+                }
+                Side(a, st.Side == 0, st.Side == 1);
+                Gfx.Text(this, Fonts.Bold, new Vector2(cx, yy), "↔", Ui.TextTiny, WebFork);
+                cx += 16f;
+                Side(b, st.Side == 1, st.Side == 0);
+                string mid = st.Side < 0 ? (st.PendingSince >= 0 ? "회의 대기" : "") : st.Reopened ? "버린 쪽을 다시 꺼냈다" : "";
+                if (mid != "" && cx < right - 40f) Gfx.Text(this, Fonts.Body, new Vector2(cx, yy), UiKit.Fit(mid, right - cx - Ui.S3, Ui.TextMicro), Ui.TextMicro, st.Side < 0 ? WebFork : Palette.Warning);
+                h += 16f;
+            }
+            return h;
+        }, 50f);
+
+        Section("clock", "최근", Palette.TextDim, (lx, ly) =>
+        {
+            float h = 0f;
+            foreach (var (tick, text, tone) in tw.Recent.AsEnumerable().Reverse().Take(6))
+            {
+                if (ly + h + 30f > p.End.Y) break;
+                Gfx.Text(this, Fonts.Body, new Vector2(lx, ly + h + 12f), SimTime.Clock(tick), Ui.TextTiny, Palette.TextMuted);
+                Gfx.Text(this, Fonts.Body, new Vector2(lx + 36f, ly + h + 12f), UiKit.Fit(text, right - lx - 36f - Ui.S3, Ui.TextSmall), Ui.TextSmall,
+                    tone == 1 ? Palette.Good.WithAlpha(0.9f) : tone == 2 ? Palette.Warning : Palette.TextDim);
+                h += 15f;
+            }
+            return h == 0f ? Lines("아직 없다", lx, ly, Palette.TextMuted) : h;
+        }, 40f);
     }
 }

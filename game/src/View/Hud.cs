@@ -176,7 +176,7 @@ public partial class Hud : Control
     private static string? SectionIcon(string title) =>
         title.StartsWith("승무원") ? "people" : title.StartsWith("관계") || title.StartsWith("왜 그런 사이") ? "relation"
         : title.StartsWith("기술") || title.StartsWith("자격") ? "skill-engineering" : title.StartsWith("목표") ? "target"
-        : title.StartsWith("지금 연결") ? "cable" : title.StartsWith("지금") ? "clock" : title.StartsWith("행동 후보") ? "why"
+        : title.StartsWith("지금 연결") ? "cable" : title.StartsWith("지금") ? "clock" : title.StartsWith("할 일 후보") ? "why"
         : title.StartsWith("지나온 일") || title.StartsWith("지금까지") || title.StartsWith("이 배에서") ? "memory"
         : title.StartsWith("이력") || title.StartsWith("일기") || title.StartsWith("회의록") ? "log"
         : title.StartsWith("있는 사람") ? "crew" : title.StartsWith("설비") || title.StartsWith("부품") ? "parts"
@@ -586,7 +586,7 @@ public partial class Hud : Control
             }));
             if (hover) _hazardHover = spec.Hint;
         }
-        string foot = _hazardHover ?? (_world.Hazards.RandomCount > 0 ? $"무작위 사고 {_world.Hazards.RandomCount}번 · 마지막: {_world.Hazards.LastRandomText}" : "무작위 사고는 되감기·불러오기에도 같은 때 같은 사고로 난다 (시드·수치가 같으면)");
+        string foot = _hazardHover ?? (_world.Hazards.RandomCount > 0 ? $"무작위 사고 {_world.Hazards.RandomCount}번 · 마지막: {_world.Hazards.LastRandomText}" : "무작위 사고는 되감기·불러오기에도 같은 때 같은 사고로 난다 (항해 번호 · 수치가 같으면)");
         Gfx.Text(this, Fonts.Body, new Vector2(x, card.End.Y - 12), Clip(foot, card.Size.X - pad * 2, Ui.TextTiny), Ui.TextTiny, Palette.TextMuted);
         _hazardHover = null;
     }
@@ -728,7 +728,7 @@ public partial class Hud : Control
         Gfx.Text(this, Fonts.Bold, new Vector2(x + 26, y + 31), c.Name, Ui.TextHeading, Palette.Text);
         Gfx.Text(this, Fonts.Body, new Vector2(x + 26 + Gfx.Width(Fonts.Bold, c.Name, Ui.TextHeading) + 8, y + 31),
             CrewRoles.Name(c.Role), Ui.TextBody, Palette.TextDim);
-        Gfx.Text(this, Fonts.Body, new Vector2(x + 26, y + 49), $"{Life.Name(c.Background)} · {Life.Name(c.Value)} · {c.Traits.Summary()}", Ui.TextBody, Palette.TextMuted); // v12.7 살아온 길·가치관
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 26, y + 49), UiKit.Fit($"{Life.Name(c.Background)} · {Life.Name(c.Value)} · {c.Traits.Summary()}", right - (x + 26), Ui.TextBody, Fonts.Body), Ui.TextBody, Palette.TextMuted); // v12.7 살아온 길·가치관
 
         // 탭
         (int tab, string name)[] tabs = { (CardTab, "요약"), (0, "상태"), (1, "판단"), (2, "관계"), (3, "기억"), (4, "몸·일기"), (5, "물건") }; // v16.2 요약 카드가 맨 앞
@@ -867,7 +867,7 @@ public partial class Hud : Control
         }
         y += 82;
 
-        SectionTitle(x, y + 10, "행동 후보와 점수");
+        SectionTitle(x, y + 10, "할 일 후보 — 마음이 기운 정도");
         long ago = (_world.Tick - c.LastThinkTick) * 60 / SimTime.TicksPerHour;
         Gfx.TextRight(this, Fonts.Body, new Vector2(right, y + 10), ago < 1 ? "방금 판단" : $"{ago}분 전 판단", Ui.TextSmall, Palette.TextMuted);
 
@@ -960,6 +960,9 @@ public partial class Hud : Control
         Icons.Draw(this, Icons.Furniture(f.Type), new Vector2(x + 9, y + 26), 16, accent.Lightened(0.25f)); // v16.2 설비마다 고유 아이콘
         Gfx.Text(this, Fonts.Bold, new Vector2(x + 26, y + 32), f.Label, Ui.TextLarge, Palette.Text);
         Gfx.Text(this, Fonts.Body, new Vector2(x + 26, y + 50), f.Room.Name, Ui.TextBody, Palette.TextMuted);
+        if (FixtureArt.Readout(f, _world) is (string rd, int rl)) // v16.24 가까이 본 계기 숫자 · 무엇을 재나
+            Gfx.Text(this, Fonts.Body, new Vector2(x + 34 + Gfx.Width(Fonts.Body, f.Room.Name, Ui.TextBody), y + 50), $"계기 {rd} · {FixtureArt.ReadoutWhat(f)}", Ui.TextSmall,
+                rl == 2 ? Palette.Danger : rl == 1 ? Palette.Warning : new Color("#7dffa8").Darkened(0.2f));
         if (Codex.Of(f.Type) != null) CodexButton(right, y + 38, mouse); // v12.2 설명서
         float ly = y + 60;
 
@@ -1321,7 +1324,7 @@ public partial class Hud : Control
         }
         else if (room.Type == RoomType.Corridor) lines.Add(("연결부", "용골 (모든 방이 여기에 붙어 있다)", Palette.TextMuted));
         // v12.6 세부 종류 · 환경 · 맡은 일(겸용의 대가)
-        if (room.Special != null) lines.Add(("종류", $"{RoomTypes.Name(room.Kind)} — {RoomTypes.Name(room.Type)} 기능을 겸한다", Palette.Room(room.Kind)));
+        if (room.Special != null) lines.Add(("종류", $"{RoomTypes.Name(room.Kind)} — {RoomTypes.Name(room.Type)} 노릇도 한다", Palette.Room(room.Kind)));
         {
             var env = new List<string>();
             if (room.Noise > 0.06f) env.Add($"소음 {room.Noise * 100:0}%");
@@ -1472,7 +1475,7 @@ public partial class Hud : Control
         if (_main.Replaying is ReplayRunner rr)
         {
             float pulse = 0.7f + 0.3f * Mathf.Sin(_time * 4f);
-            UiKit.Banner(this, new Vector2(cx, y), $"불러오는 중 — 같은 시드에서 역사를 다시 돌린다 {Pct(rr.Progress)} · {_world.Day}일차", Tone.Info, pulse, "clock");
+            UiKit.Banner(this, new Vector2(cx, y), $"불러오는 중 — 같은 항해 번호에서 역사를 다시 돌린다 {Pct(rr.Progress)} · {_world.Day}일차", Tone.Info, pulse, "clock");
             y += 36f;
         }
         if (_main.Notice is string notice && (Time.GetTicksMsec() - _main.NoticeMsec < 6000 || Engine.GetProcessFrames() - _main.NoticeFrame < 120))

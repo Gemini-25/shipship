@@ -569,7 +569,7 @@ public sealed partial class AftermathSystem
             Stats.AwayEaters++;
             m.AwayFirst = w.Tick;
             w.Log.Add(w.Tick, LogKind.Life, $"{p.From?.Name ?? "식당"}에 그을음 냄새가 남아 {Ko.IGa(c.Name)} 접시를 들고 {Ko.EuRo(p.Room.Name)} 갔다", c.Id);
-            Life.Diary(w, c, Persona.Say(c, $"{p.From?.Name ?? "식당"}은 아직 탄내가 난다. {p.Room.Name}에서 먹었다"));
+            Life.Diary(w, c, Persona.Say(c, $"{Ko.EunNeun(p.From?.Name ?? "식당")} 아직 탄내가 난다. {p.Room.Name}에서 먹었다"));
         }
         m.AwayWhy = "soot";
         m.AwayRoom = p.Room.Id;

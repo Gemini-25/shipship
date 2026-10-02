@@ -257,7 +257,7 @@ public sealed class PartsSystem
                     if (q != p && q.Lot.Batch == old.Batch) { q.Lot.Suspect = true; fitted++; MarkLog.Add(q.Marks, now, $"같은 묶음({old.Batch})이 {m.Name}에서 일찍 나갔다 — 의심"); }
             foreach (var l in _stock.Values.SelectMany(x => x))
                 if (l.Batch == old.Batch) { l.Suspect = true; shelf++; }
-            w.Log.Add(now, LogKind.Warning, $"{m.Name}의 {p.Spec.Name}이(가) {p.Hours:0}시간 만에 나갔다 — 같은 묶음({old.Batch})을 의심한다: 설비에 {fitted}개 · 선반에 {shelf}개", c.Id);
+            w.Log.Add(now, LogKind.Warning, $"{m.Name}의 {Ko.IGa(p.Spec.Name)} {p.Hours:0}시간 만에 나갔다 — 같은 묶음({old.Batch})을 의심한다: 설비에 {fitted}개 · 선반에 {shelf}개", c.Id);
             MarkLog.Add(m.Marks, now, $"{p.Spec.Name} 일찍 나감 — {old.OriginName}");
         }
         else if (early) Stats.EarlyFailures++;
@@ -274,16 +274,16 @@ public sealed class PartsSystem
                 Stats.RootsFound++;
                 p.Stress = 1f;
                 MarkLog.Add(p.Marks, now, $"{c.Name}: 되풀이된 원인 — {p.Root} (바로잡았다)");
-                MarkLog.Add(m.Marks, now, $"{p.Spec.Name}이(가) 또 나갔다 — {Ko.IGa(c.Name)} 원인({p.Root})을 찾아 바로잡았다");
-                w.Log.Add(now, LogKind.Work, $"{m.Name}의 {p.Spec.Name}이(가) 또 나갔다 — 원인은 {p.Root} (바로잡았다)", c.Id);
-                w.History.Add(w, HistoryKind.Maintenance, $"{Ko.IGa(c.Name)} {m.Name}의 {p.Spec.Name}이(가) 자꾸 나가는 까닭({p.Root})을 찾아냈다", m.Body.Room, new[] { c });
+                MarkLog.Add(m.Marks, now, $"{Ko.IGa(p.Spec.Name)} 또 나갔다 — {Ko.IGa(c.Name)} 원인({p.Root})을 찾아 바로잡았다");
+                w.Log.Add(now, LogKind.Work, $"{m.Name}의 {Ko.IGa(p.Spec.Name)} 또 나갔다 — 원인은 {p.Root} (바로잡았다)", c.Id);
+                w.History.Add(w, HistoryKind.Maintenance, $"{Ko.IGa(c.Name)} {m.Name}의 {Ko.IGa(p.Spec.Name)} 자꾸 나가는 까닭({p.Root})을 찾아냈다", m.Body.Room, new[] { c });
             }
             else if (!p.RootKnown)
             {
                 Stats.RootsMissed++;
                 p.Stress = MathF.Min(2f, p.Stress + 0.25f);
-                MarkLog.Add(m.Marks, now, $"{p.Spec.Name}이(가) 또 나갔다 — 원인을 못 찾았다 (또 그럴 수 있다)");
-                w.Log.Add(now, LogKind.Warning, $"{m.Name}의 {p.Spec.Name}이(가) 또 나갔다 — 갈기만 했다, 원인은 모른다", c.Id);
+                MarkLog.Add(m.Marks, now, $"{Ko.IGa(p.Spec.Name)} 또 나갔다 — 원인을 못 찾았다 (또 그럴 수 있다)");
+                w.Log.Add(now, LogKind.Warning, $"{m.Name}의 {Ko.IGa(p.Spec.Name)} 또 나갔다 — 갈기만 했다, 원인은 모른다", c.Id);
             }
         }
 
@@ -364,7 +364,7 @@ public sealed class PartsSystem
         if (Heavy(spec.Part))
         {
             if (Modules.Working(w, FurnitureType.Hoist) > 0) { f *= 0.85f; notes.Add("호이스트로 매달아 든다"); }
-            else { f *= 1.3f; notes.Add($"{ItemKinds.Name(spec.Part!.Value)}을(를) 맨손으로 든다"); }
+            else { f *= 1.3f; notes.Add($"{Ko.EulReul(ItemKinds.Name(spec.Part!.Value))} 맨손으로 든다"); }
         }
         if (m.Body.Room.Type != RoomType.Workshop && Modules.Working(w, FurnitureType.MaintCart) > 0) { f *= 0.9f; notes.Add("정비 카트를 끌고 왔다"); }
         if (spec.RepairHours >= 1.5f && Clearance(m) < 3) { f *= 1.25f; notes.Add($"비좁다 (둘레 빈 칸 {Clearance(m)})"); }
@@ -388,8 +388,8 @@ public sealed class PartsSystem
         {
             Stats.Strains++;
             NeedsSystem.AddInjury(c.Vitals, 0.06f, "무거운 부품을 들다 허리를 삐끗");
-            MarkLog.Add(c.Memory.Marks, w.Tick, $"{m.Name}의 {ItemKinds.Name(spec.Part!.Value)}을(를) 혼자 들다 허리를 삐끗했다");
-            w.Log.Add(w.Tick, LogKind.Warning, $"{ItemKinds.Name(spec.Part!.Value)}을(를) 혼자 들다 허리를 삐끗했다", c.Id);
+            MarkLog.Add(c.Memory.Marks, w.Tick, $"{m.Name}의 {Ko.EulReul(ItemKinds.Name(spec.Part!.Value))} 혼자 들다 허리를 삐끗했다");
+            w.Log.Add(w.Tick, LogKind.Warning, $"{Ko.EulReul(ItemKinds.Name(spec.Part!.Value))} 혼자 들다 허리를 삐끗했다", c.Id);
         }
     }
 
@@ -441,6 +441,6 @@ public sealed class PartTestActivity : Activity
             cm.Practice(Skill.Mechanics, 0.01f);
             return true;
         }));
-        return new Job(this, "부품 시험", toils) { LogText = $"{ItemKinds.Name(k)}을(를) {(real ? "시험대" : "작업대")}에서 시험한다", LogKind = LogKind.Work };
+        return new Job(this, "부품 시험", toils) { LogText = $"{Ko.EulReul(ItemKinds.Name(k))} {(real ? "시험대" : "작업대")}에서 시험한다", LogKind = LogKind.Work };
     }
 }

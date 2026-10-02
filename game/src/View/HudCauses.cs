@@ -77,7 +77,7 @@ public partial class Hud
 
     private void DrawIncidentCards(Vector2 mouse)
     {
-        if (ChronicleOpen || TechOpen) return;
+        if (ChronicleOpen || TechOpen || ControlOpen || PolicyOpen || ScaleCodexOpen) return; // v16.24 큰 화면이 열리면 겹치지 않게
         var log = _world.Causes;
         var list = log.Notable().Where(i => i.Open || _world.Tick - i.End < SimTime.Hours(3)).Take(3).ToList();
         if (list.Count == 0) return;
@@ -162,15 +162,16 @@ public partial class Hud
         var root = log.Node(inc.Root);
 
         // 머리: 뿌리 · 상태 · 숫자
-        Gfx.Text(this, Fonts.Bold, new Vector2(x, y0 + 30), Fit(root.Text, right - x - 150, Ui.TextLarge, Fonts.Bold), Ui.TextLarge, Palette.Text);
         Button(new Rect2(right - 58, y0 + 12, 58, 26), "K 닫기", false, mouse, () => OpenChain(null), Ui.TextSmall);
         Button(new Rect2(right - 58 - 92, y0 + 12, 86, 26), "↶ 직전으로", false, mouse, () => _main.RewindTo(inc.Start - SimTime.Minutes(3)), Ui.TextSmall);
+        float tabsX = ChainTabs(right - 58 - 92 - 6, y0 + 12, mouse); // v16.24 이야기 · 사슬
+        Gfx.Text(this, Fonts.Bold, new Vector2(x, y0 + 30), Fit(root.Text, tabsX - x - 10, Ui.TextLarge, Fonts.Bold), Ui.TextLarge, Palette.Text);
         int lasting = inc.Nodes.Count(i => log.Node(i).Lasting);
         int open = inc.Nodes.Count(i => log.Node(i).Open);
         string when = $"{SimTime.Day(inc.Start)}일 {SimTime.Clock(inc.Start)}" + (inc.ByObserver ? " · 관찰자가 일으킴" : "");
         string state = inc.Open ? $"진행 중 {Dur((_world.Tick - inc.Start) / (float)SimTime.TicksPerHour)}" : $"{Dur((inc.End - inc.Start) / (float)SimTime.TicksPerHour)} 만에 수습";
-        Gfx.Text(this, Fonts.Body, new Vector2(x, y0 + 50), $"{when} · {state} · 번진 것 {inc.Nodes.Count(i => log.Node(i).Kind != CauseKind.Recovery) - 1}" +
-            (inc.Casualties > 0 ? $" · 쓰러짐 {inc.Casualties}" : "") + (inc.Deaths > 0 ? $" · 사망 {inc.Deaths}" : ""), Ui.TextBody, Palette.TextDim);
+        Gfx.Text(this, Fonts.Body, new Vector2(x, y0 + 50), UiKit.Fit($"{when} · {state} · 번진 것 {inc.Nodes.Count(i => log.Node(i).Kind != CauseKind.Recovery) - 1}" +
+            (inc.Casualties > 0 ? $" · 쓰러짐 {inc.Casualties}" : "") + (inc.Deaths > 0 ? $" · 사망 {inc.Deaths}" : ""), right - (x), Ui.TextBody, Fonts.Body), Ui.TextBody, Palette.TextDim);
         var bar = new Rect2(x, y0 + 60, right - x, 6);
         Gfx.Bar(this, bar, lasting > 0 ? (lasting - open) / (float)lasting : 1f, Palette.Good);
         Gfx.TextRight(this, Fonts.Body, new Vector2(right, y0 + 80), $"되돌린 것 {lasting - open}/{lasting} · 아직 {open}", Ui.TextSmall, open > 0 ? Palette.Warning : Palette.Good);
@@ -186,6 +187,7 @@ public partial class Hud
         }
         Divider(x, right, y0 + 90);
         DrawChainScale(inc, x, right, y0); // v16.18 규모 단계 (② → ③ → ④)
+        if (_chainTab == 0) { DrawIncidentStory(inc, x, right, y0 + 98, card.End.Y - 14); return; } // v16.24 사고 카드 여섯 칸
 
         // 나무를 줄로 편다 (깊이 우선)
         var rows = new List<CauseNode>();

@@ -150,7 +150,7 @@ public sealed partial class DroneSystem
         d.Order = best;
         best.Drone = d;
         Launch(d, at, $"{best.Target.Label} — 밖에서 용접");
-        d.Mind.Say($"조용한 틈에 {best.Target.Label}을(를) 밖에서 용접한다 — 사람이 우주복을 입지 않아도 된다", w.Tick);
+        d.Mind.Say($"조용한 틈에 {Ko.EulReul(best.Target.Label)} 밖에서 용접한다 — 사람이 우주복을 입지 않아도 된다", w.Tick);
         f.Line(CmdTarget.Drone, d.Id, best.Target.Room, $"{d.Name}: {best.Target.Label} 밖에서 용접", "평시 선외 수리 · 다음 운석 전에", 0.4f, 90f, -1, best.Id);
         f.HullJobs++;
         return true;

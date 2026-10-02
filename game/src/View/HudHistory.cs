@@ -77,7 +77,8 @@ public partial class Hud
 
     private Rect2 _chronicleRect;
 
-    private void DrawChronicle(Vector2 mouse)
+    /// <summary>모든 기록 (연대기의 "기록"탭 — 역사 줄을 하나하나).</summary>
+    private void DrawChronicleEvents(Vector2 mouse)
     {
         var h = _world.History;
         float x0 = Margin, y0 = Margin + 52f + 8f + 40f + 8f + 64f + 10f;
@@ -93,6 +94,7 @@ public partial class Hud
             $"{_world.Day}일째 · 사고 {h.Episodes.Count}건 · 개조 {h.Upgrades} · 결정 {h.DecisionsMade}(부결 {h.DecisionsRejected})"
             + (_world.Voyage.Past.Count > 0 ? $" · 마친 항해 {_world.Voyage.Past.Count}" : "") + (_world.Life.Memorial.Count > 0 ? $" · 추모 {string.Join("·", _world.Life.Memorial.Select(m => m.name))}" : ""), Ui.TextBody, Palette.TextMuted); // v12.8·v12.7
         Button(new Rect2(right - 58, y0 + 12, 58, 26), "J 닫기", false, mouse, ToggleChronicle, Ui.TextSmall);
+        ChronModeTabs(right - 58f - Ui.S2, y0 + 12f, mouse); // v16.24 날 · 주 · 기록
 
         // 교훈 (운영 방침)
         var lessons = h.Doctrine.Summary().ToList();
@@ -221,7 +223,7 @@ public partial class Hud
         float ly = y + 66;
         if (m.TraumaCause != null && m.Trauma >= 0.03f)
         {
-            Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 12), $"{m.TraumaCause} 뒤로 스트레스가 {Pct(m.Trauma)} 밑으로 안 내려간다", Ui.TextSmall, Palette.TextMuted);
+            Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 12), UiKit.Fit($"{m.TraumaCause} 뒤로 스트레스가 {Pct(m.Trauma)} 밑으로 안 내려간다", right - (x), Ui.TextSmall, Fonts.Body), Ui.TextSmall, Palette.TextMuted);
             ly += 18;
         }
 

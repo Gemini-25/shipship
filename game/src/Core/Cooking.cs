@@ -423,7 +423,7 @@ public sealed class CookingSystem
             Quality = Curve.Clamp01(q), Temp = 8f, Portions = 10, Made = 10, InFridge = true, Stove = fridge, Room = fridge?.Room ?? cm.Room,
         });
         Stats.Jars++;
-        w.Log.Add(w.Tick, LogKind.Work, $"{Ko.IGa(cm.Name)} {r.Name} {Dishes.Vessel(r)}를 앉혔다 — {r.Days}일 뒤에 먹는다", cm.Id);
+        w.Log.Add(w.Tick, LogKind.Work, $"{Ko.IGa(cm.Name)} {r.Name} {Ko.EulReul(Dishes.Vessel(r))} 앉혔다 — {r.Days}일 뒤에 먹는다", cm.Id);
     }
 
     // ── 먹기 ──
@@ -827,7 +827,7 @@ public sealed class CookingSystem
             {
                 // 불이 난 방의 냄비는 탄다 (식사 재고는 불이 태운 만큼 Fire가 센다)
                 Stats.BurntPots++;
-                w.Log.Add(w.Tick, LogKind.Warning, $"{b.Room.Name} 불에 {b.Spec.Name} {Dishes.Vessel(b.Spec)}가 탔다", b.Cook);
+                w.Log.Add(w.Tick, LogKind.Warning, $"{b.Room.Name} 불에 {b.Spec.Name} {Ko.IGa(Dishes.Vessel(b.Spec))} 탔다", b.Cook);
                 Batches.RemoveAt(i);
                 continue;
             }
@@ -853,7 +853,7 @@ public sealed class CookingSystem
                 b.SpoiledAt = w.Tick;
                 Stats.Spoiled++;
                 if (!b.Jar && b.Portions > 0) Life.Take(w, ItemKind.Meal, Math.Min(b.Portions, w.Ship.CountStored(ItemKind.Meal)));
-                w.Log.Add(w.Tick, LogKind.Warning, $"{b.Spec.Name} {Dishes.Vessel(b.Spec)}가 상했다 ({b.CookName} · {SimTime.Day(b.Cooked)}일째)" + (fridge ? "" : " — 냉장고가 멈췄다"));
+                w.Log.Add(w.Tick, LogKind.Warning, $"{b.Spec.Name} {Ko.IGa(Dishes.Vessel(b.Spec))} 상했다 ({b.CookName} · {SimTime.Day(b.Cooked)}일째)" + (fridge ? "" : " — 냉장고가 멈췄다"));
             }
             bool gone = b.Spoiled ? w.Tick - b.SpoiledAt > SimTime.Hours(3) : b.Portions <= 0 && (!b.Jar || b.Ready(w.Tick));
             if (gone && b.Spoiled && b.Room != null) Garbage(b.Room);

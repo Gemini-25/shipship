@@ -24,7 +24,7 @@ public partial class Hud
         if (ScaleCodexOpen) { ChronicleOpen = false; TechOpen = false; ControlOpen = false; PolicyOpen = false; OpenChain(null); }
     }
 
-    public static Color ScaleColor(IncidentScale s) => new(ScaleTable.Hex(s));
+    public static Color ScaleColor(IncidentScale s) => UiKit.ScaleColor(s); // v16.24 공통 부품
 
     // ─────────────────────────────── 아이콘 (규모마다 다른 실루엣) ───────────────────────────────
 
@@ -296,7 +296,7 @@ public partial class Hud
         Gfx.Text(this, Fonts.Bold, new Vector2(x, y0 + 30), "사고 도감 — 다섯 규모", Ui.TextLarge, Palette.Text);
         Button(new Rect2(right - 76, y0 + 12, 76, 26), "⇧K 닫기", false, mouse, ToggleScaleCodex, Ui.TextSmall);
         int total = ScaleTable.All.Length, seenKinds = ScaleTable.All.Count(r => sc.SeenOf(r.Key) > 0);
-        Gfx.Text(this, Fonts.Body, new Vector2(x, y0 + 50), $"표 {total}종 · 겪어 본 것 {seenKinds}종 · 규모가 오른 일 {sc.Escalations} · 컴퓨터 판정 {sc.Plans} · 교훈 {sc.Lessons.Count} · 이야기꾼이 쉬어 감 {sc.Rests}", Ui.TextBody, Palette.TextDim);
+        Gfx.Text(this, Fonts.Body, new Vector2(x, y0 + 50), UiKit.Fit($"표 {total}종 · 겪어 본 것 {seenKinds}종 · 규모가 오른 일 {sc.Escalations} · 컴퓨터 판정 {sc.Plans} · 교훈 {sc.Lessons.Count} · 이야기꾼이 쉬어 감 {sc.Rests}", right - (x), Ui.TextBody, Fonts.Body), Ui.TextBody, Palette.TextDim);
         Divider(x, right, y0 + 62);
         float y = y0 + 70f;
         float rowH = (card.End.Y - y - 10f) / 5f;

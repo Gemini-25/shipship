@@ -1541,7 +1541,7 @@ public sealed class RoomPlanSystem
             helper.ChangeAffinity(c, 0.03f);
             w.Relations.Remember(helper, c, RelationReason.SharedHardship, $"{Ko.EulReul(f.Label)} 같이 들어 {Ko.EuRo(to.Name)} 옮겼다");
         }
-        string how = helper != null ? $"{Ko.WaGwa(c.Name)} {helper.Name}이 같이 들어" : t.Cart ? $"{Ko.IGa(c.Name)} 카트로" : $"{Ko.IGa(c.Name)}";
+        string how = helper != null ? $"{Ko.WaGwa(c.Name)} {Ko.IGa(helper.Name)} 같이 들어" : t.Cart ? $"{Ko.IGa(c.Name)} 카트로" : $"{Ko.IGa(c.Name)}";
         w.Log.Add(w.Tick, LogKind.Life, $"{how} {Ko.EulReul(f.Label)} {from.Name}에서 {Ko.EuRo(to.Name)} 옮겼다", c.Id);
         MarkLog.Add(to.Marks, w.Tick, $"{f.Label} 들어옴 ({from.Name}에서)");
         MarkLog.Add(from.Marks, w.Tick, $"{f.Label} 나감 ({to.Name}로)");

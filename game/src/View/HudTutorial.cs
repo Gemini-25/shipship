@@ -26,8 +26,8 @@ public partial class Hud
         ("사고 일으키기", "사고 메뉴(Z·X·C·B·P 또는 위쪽 사고 버튼)로 작은 운석 하나를 떨어뜨려 보세요. 배가 어떻게 대응하는지 지켜보세요.",
             () => _world.Causes.Incidents.Count > _tutIncidents0),
         ("인과 사슬", "K를 누르면 무엇이 무엇을 일으켰는지 사슬로 보입니다. 사고 카드를 눌러도 됩니다.", () => ChainOpen),
-        ("배속", "1~4로 배속을 바꾸거나 L로 하이라이트 모드를 켜 보세요 — 평온하면 빠르게, 일이 나면 1배속으로 돌아옵니다.", () => _main.SpeedIndex > 0 || Settings.Highlight),
-        ("요약 진행", "U를 누르면 큰 일이 날 때까지 며칠을 빨리 감고, 그동안 있었던 일을 한 장으로 보여 줍니다. 이걸로 안내는 끝입니다.", () => _main.Summarizing || SummaryLines != null),
+        ("배속", "1~4로 배속을 바꾸거나 L로 자동 배속을 켜 보세요 — 평온하면 빠르게, 일이 나면 1배속으로 돌아옵니다.", () => _main.SpeedIndex > 0 || Settings.Highlight),
+        ("빨리 감기", "U를 누르면 큰 일이 날 때까지 며칠을 빨리 감고, 그동안 있었던 일을 한 장으로 보여 줍니다. 이걸로 안내는 끝입니다.", () => _main.Summarizing || SummaryLines != null),
     };
 
     public void StartTutorial()

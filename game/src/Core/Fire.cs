@@ -241,7 +241,7 @@ public sealed class FireSystem
             if (burning.Contains(room)) continue;
             _knownRooms.Remove(id);
             _knownSince.Remove(id);
-            w.Log.Add(w.Tick, LogKind.Ship, $"{room.Name} 화재 진화 완료");
+            w.Log.Add(w.Tick, LogKind.Ship, $"{room.Name} 불을 다 껐다");
         }
     }
 }

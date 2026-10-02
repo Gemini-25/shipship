@@ -209,7 +209,7 @@ public sealed class HullSystem
                     var other = d.RoomA == room ? d.RoomB : d.RoomA;
                     if (!d.IsExternal && (other == null || !other.Lockdown)) d.Locked = false;
                 }
-                _world.Log.Add(_world.Tick, LogKind.Ship, p > 90f ? $"{room.Name} 재가압 완료 · 격벽 해제"
+                _world.Log.Add(_world.Tick, LogKind.Ship, p > 90f ? $"{room.Name} 공기를 다시 채웠다 · 격벽을 연다"
                     : $"{room.Name} 격벽 해제 — 공기 탱크가 비어 {p:0}kPa에서 더 오르지 않는다");
             }
             // v12.5 기다리던 격벽: 사람이 다 나왔거나 시간이 다 됐으면 닫는다

@@ -150,8 +150,8 @@ public static class Procedures
             float dmg = w.Rng.Range(0.08f, 0.2f);
             c.Vitals.Health = MathF.Max(0.05f, c.Vitals.Health - dmg);
             NeedsSystem.AddInjury(c.Vitals, dmg, what);
-            MarkLog.Add(c.Memory.Marks, w.Tick, $"{m.Name}을(를) 고치다 {what}");
-            w.Log.Add(w.Tick, LogKind.Warning, $"{m.Name}을(를) {(p.Hot ? "산 채로" : "잔압을 빼지 않고")} 고치다 {what}", c.Id);
+            MarkLog.Add(c.Memory.Marks, w.Tick, $"{Ko.EulReul(m.Name)} 고치다 {what}");
+            w.Log.Add(w.Tick, LogKind.Warning, $"{Ko.EulReul(m.Name)} {(p.Hot ? "산 채로" : "잔압을 빼지 않고")} 고치다 {what}", c.Id);
         }
         // 재조립 불량: 시험 운전을 했으면 대개 그 자리에서 잡는다
         float defect = 0.08f + (p.UsedPart ? 0.2f : 0f) + (c.Needs.Rest < 0.25f ? 0.08f : 0f) + 0.1f * (1f - c.SkillLevel(m.Spec.Skill));
@@ -178,7 +178,7 @@ public static class Procedures
             if (seg != null && seg.Path.Count > 0)
             {
                 st.WaterHammer++;
-                w.Piping.Damage(seg, 0.4f, seg.Path[seg.Path.Count / 2], $"{m.Name}을(를) 급히 되살리다 압력이 튀었다 (워터해머)");
+                w.Piping.Damage(seg, 0.4f, seg.Path[seg.Path.Count / 2], $"{Ko.EulReul(m.Name)} 급히 되살리다 압력이 튀었다 (워터해머)");
             }
         }
         if (m.LockedOut) { m.LockedOut = false; m.Parked = false; }
@@ -200,8 +200,8 @@ public static class Procedures
             m.Defect = null;
             w.Procs.Defects++;
             if (m.Faults.Count == 0) w.Machines.Break(m, k);
-            MarkLog.Add(m.Marks, w.Tick, $"재조립 불량 — {m.DefectBy}이(가) 시험 운전 없이 올린 뒤 다시 {Faults.Spec(k).Name}");
-            w.History.Add(w, HistoryKind.Maintenance, $"{m.Name}이(가) 다시 {Faults.Spec(k).Name} — {m.DefectBy}이(가) 시험 운전을 건너뛰고 올렸다", m.Body.Room);
+            MarkLog.Add(m.Marks, w.Tick, $"재조립 불량 — {Ko.IGa(m.DefectBy)} 시험 운전 없이 올린 뒤 다시 {Faults.Spec(k).Name}");
+            w.History.Add(w, HistoryKind.Maintenance, $"{Ko.IGa(m.Name)} 다시 {Faults.Spec(k).Name} — {Ko.IGa(m.DefectBy)} 시험 운전을 건너뛰고 올렸다", m.Body.Room);
         }
     }
 
@@ -243,7 +243,7 @@ public static class Deferred
                 list.Add(new($"{m.Name} {f.Spec.Name}", where, f.StageName, "임시로 살려 빨리 닳는다", WorkTarget.Of(m.Body)));
             if (m.Grade == MachineGrade.Mk1) list.Add(new($"{m.Name} Mk.1 임시품", where, "정품 부품이 없었다", "출력 65% · 고장 두 배", WorkTarget.Of(m.Body)));
             if (m.Spliced) list.Add(new($"{m.Name} 임시 전선", where, "정전 중 이어 붙였다", "합선·불 위험", WorkTarget.Of(m.Body)));
-            if (m.Defect != null) list.Add(new($"{m.Name} 시험 운전 안 함", where, $"{m.DefectBy}이(가) 급히 올렸다", "재조립 불량이 숨어 있을지 모른다", WorkTarget.Of(m.Body)));
+            if (m.Defect != null) list.Add(new($"{m.Name} 시험 운전 안 함", where, $"{Ko.IGa(m.DefectBy)} 급히 올렸다", "재조립 불량이 숨어 있을지 모른다", WorkTarget.Of(m.Body)));
             if (m.Fouled > 0.3f) list.Add(new($"{m.Name} 소화 분말", where, "불을 끄고 남은 것", "효율 저하 · 합선", WorkTarget.Of(m.Body)));
             if (m.SensorCal < 0.7f) list.Add(new($"{m.Name} 감지기 교정 {m.SensorCal * 100:0}%", where, "오래 못 맞췄다", "계기 오류 · 전조를 놓친다", WorkTarget.Of(m.Body)));
         }
