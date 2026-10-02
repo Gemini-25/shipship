@@ -114,11 +114,11 @@ public sealed class CasualtySystem
         {
             case WoundKind.Cut or WoundKind.Crush or WoundKind.Fracture:
                 if (hit < 0.14f) return;
-                Start(c, TraumaKind.Bleed, 0.9f * (hit - 0.12f) * (part == BodyPart.Head ? 1.3f : 1f), cause);
+                Start(c, TraumaKind.Bleed, 1.3f * (hit - 0.12f) * (part == BodyPart.Head ? 1.3f : 1f), cause); // 통합: 깊은 상처는 혼자 두면 몇 시간 안에 위험하다
                 break;
             case WoundKind.Burn:
                 if (hit < 0.18f) return;
-                Start(c, TraumaKind.BurnShock, 0.3f * (hit - 0.1f), cause);
+                Start(c, TraumaKind.BurnShock, 0.4f * (hit - 0.1f), cause);
                 break;
             case WoundKind.Barotrauma:
                 Start(c, TraumaKind.Bleed, 0.25f * hit, cause); // 폐가 상했다 — 숨이 차고 피를 토한다

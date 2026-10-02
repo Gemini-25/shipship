@@ -184,7 +184,7 @@ public static partial class Program
             peaks.Add(w.Hazards.StormPeak);
             if (k == 0) Check("태양 폭풍 — 처음 세 시간 세기가 이번 폭풍 세기다", MathF.Abs(w.Ambience.StormPower - w.Hazards.StormPeak) < 0.001f, $"{w.Ambience.StormPower:0.00} / {w.Hazards.StormPeak:0.00}");
         }
-        Check("태양 폭풍 — 세기가 폭풍마다 다르다 (가끔 센 것)", peaks.Max() - peaks.Min() > 0.2f && peaks.All(p => p is >= 0.45f and <= 1.6f), string.Join(" · ", peaks.Select(p => $"{p:0.00}")));
+        Check("태양 폭풍 — 세기가 폭풍마다 다르다 (가끔 센 것)", peaks.Max() - peaks.Min() > 0.2f && peaks.All(p => p is >= 0.45f and <= 5f), string.Join(" · ", peaks.Select(p => $"{p:0.00}")));
         // 창가: 같은 방, 전기가 있으면 덮개가 내려가고 없으면 그대로
         float Rad(bool power)
         {

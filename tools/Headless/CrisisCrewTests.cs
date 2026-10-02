@@ -362,7 +362,8 @@ public static partial class Program
             {
                 CrisisCrewSystem.Off = off;
                 var w = DayOne(seed, "Hanbit");
-                var room = w.Ship.RoomsOf(RoomType.Quarters).First();
+                // 통합: 새 배의 첫 침실은 안쪽 방일 수 있다 — 운석이 뚫을 수 있는 외벽 침실에서 (외벽 없는 방은 뚫리지 않아 몸이 먼저일 까닭이 없었다)
+                var room = w.Ship.RoomsOf(RoomType.Quarters).OrderBy(r => w.Ship.Walls.Any(kv => kv.Value.IsHull && Hull.InsideRoom(w.Ship, kv.Key) == r) ? 0 : 1).ThenBy(r => r.Id).First();
                 var p = w.Crew.Where(c => !c.Dead && !c.IsChild && c.CanAct).OrderBy(c => c.Traits.Bravery).First();
                 CrPut(w, p, room.Cells.Where(w.Ship.IsOpenFloor).OrderBy(x => (x.Center - room.Center).LengthSquared()).First());
                 p.Mind.PanicUntil = w.Tick + SimTime.Minutes(8);

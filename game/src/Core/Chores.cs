@@ -120,6 +120,8 @@ public sealed class ChoresActivity : Activity
             score -= w.Policies["leisure"] switch { 0 => 0.15f, 2 => 0.45f, _ => 0.3f }; // v11.3 배우기·재활은 비번에 하는 일 · v13.4 휴식·여가 방침
         // v12.1 인수인계는 몇 분짜리 말 — 성실한 사람일수록 넘기고 나서 쉰다 (자기 전에도)
         if (o.Kind == WorkKind.Handover) score += 0.18f + 0.22f * c.Traits.Diligence;
+        // 통합: 배우기는 미룰수록 마음에 걸린다 (이틀 미루면 차 한 잔 · 책보다 앞선다) — 취미 · 일상 거리가 늘어 선배 곁에 서는 일이 밀려났다
+        if (o.Kind == WorkKind.Train) score += 0.08f + 0.05f * c.Traits.Diligence + 0.2f * MathF.Min(1f, (w.Tick - o.Posted) / (float)(SimTime.TicksPerDay * 2));
         if (BedtimeStatic(c, w)) score -= emergency || allHands ? 0.1f : o.Kind == WorkKind.Handover ? 0.15f : 0.5f;
 
         score -= distance / 6000f;

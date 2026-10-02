@@ -103,10 +103,11 @@ public static partial class Program
             var w = DayOne(seed, "Hanbit"); w.CrewCanDie = true;
             RunUntilHour(w, 2f);
             w.Hazards.StartStorm();
-            typeof(HazardSystem).GetProperty("StormPeak")!.SetValue(w.Hazards, 2.5f);
-            for (int q = 0; q <= 16; q++)
+            typeof(HazardSystem).GetProperty("StormPeak")!.SetValue(w.Hazards, float.Parse(Environment.GetEnvironmentVariable("PEAK") ?? "2.5"));
+            for (int q = 0; q <= 48; q++)
             {
-                if (q % 2 == 0)
+                if (q == 48) Console.WriteLine($"   12시간 뒤: 최고 {w.Crew.Max(c => c.Dose):0.0}Sv · 4Sv 넘음 {w.Crew.Count(c => c.Dose >= 4f)} · 죽음 {w.Crew.Count(c => c.Dead)} · 큰 피폭 {w.Perils.RadSevere}");
+                if (q % 8 == 0 && Environment.GetEnvironmentVariable("QUIET") == null)
                 {
                     Console.WriteLine($"   {SimTime.Clock(w.Tick)} 폭풍 {w.Ambience.StormPower:0.00}");
                     foreach (var c in w.Crew.Where(c => !c.Dead).Take(12))
@@ -140,6 +141,57 @@ public static partial class Program
                 }
                 foreach (var c in w.Crew) { float d = c.Vitals.Injury - inj0[c.Id]; if (d > 0.01f) { string k = c.Vitals.InjuryCause ?? "?"; hurt[k] = hurt.GetValueOrDefault(k) + d; } }
                 Console.WriteLine($"   {key}: {what2} · 죽음 {w.Crew.Count(c => c.Dead)} · 쓰러짐 {w.History.Collapses} · 최저 체력 {minHp.Values.Min():0.00} · 사람이 겪은 최고 {maxTemp:0}℃ 연기 {maxSmoke:0.00} 최저 압력 {minP:0} · 열 {maxHeat:0.00} · 다침 {string.Join(" ", hurt.Select(kv => $"{kv.Key} {kv.Value:0.00}"))} · 출혈 {w.Casualty.Bleeds}");
+            }
+        }
+
+        if (what.Contains("foodslope"))
+        {
+            var w = DayOne(seed, "Hanbit");
+            for (int m = 0; m <= 180; m += 15)
+            {
+                Console.WriteLine($"   {SimTime.Clock(w.Tick)} 먹을 것 {FoodPolicy.FoodDays(w):0.00}일 · 식사 {w.Ship.CountStored(ItemKind.Meal)} · 비상 {w.Ship.CountStored(ItemKind.Ration)} · 채소 {w.Ship.CountStored(ItemKind.Produce)} · 들고 있음 {w.Crew.Count(c => c.Carrying is ItemStack cs && cs.Kind is ItemKind.Meal or ItemKind.Produce)}");
+                Run(w, SimTime.Minutes(15));
+            }
+        }
+
+        if (what.Contains("lessons"))
+        {
+            var w = DayOne(seed, "Mirinae");
+            int peace = 0, posted = 0, taken = 0;
+            var seen = new HashSet<int>();
+            for (int h = 0; h < 24 * 6; h++)
+            {
+                Run(w, SimTime.Hours(1));
+                if (Evolution.Peaceful(w)) peace++;
+                foreach (var o in w.Board.All.Where(o => o.Kind == WorkKind.Train && !o.Closed))
+                {
+                    if (seen.Add(o.Id)) posted++;
+                    if (o.Assignee != null) taken++;
+                    if (h % 12 == 0) { var l = w.Crew.FirstOrDefault(c => c.Id == o.Circuit / 10); var m = o.Target.Crew; Console.WriteLine($"   {h}h 배우기 {l?.Name}({l?.Job?.Label} {l?.Pose}) ← {m?.Name}({m?.Job?.Label} {m?.Pose} 급함 {m?.Job?.Urgent}) 맡음 {o.Assignee?.Name} 막힘 {o.BlockedReason} 매력 {(l != null ? ChoresActivity.Appeal(l, w, o, w.Paths.Flood(l.Cell, l.PathProfile), out _) : 0):0.00}"); }
+                }
+            }
+            Console.WriteLine($"   평화 {peace}시간/{24 * 6} · 올린 배우기 {posted} · 맡은 시간 {taken} · 수업 {w.Growth.Lessons} · 이야기꾼 {w.Story.Fired}");
+        }
+
+        if (what.Contains("cosmicrad"))
+        {
+            foreach (var kname in (Environment.GetEnvironmentVariable("KINDS") ?? "GammaBurst,Supernova,SuperFlare,PulsarBeam,CosmicRayShower").Split(','))
+            {
+                var kind = Enum.Parse<CosmicKind>(kname);
+                var w = DayOne(seed, Environment.GetEnvironmentVariable("SHIP") ?? "Hanbit"); w.CrewCanDie = true;
+                float lead = float.Parse(Environment.GetEnvironmentVariable("LEAD") ?? "3");
+                var e = w.Cosmic.Force(kind, lead);
+                float maxRoom = 0f, maxOut = 0f; var phases = new HashSet<CosmicPhase>();
+                for (int m = 0; m < 48 * 12 && e.Phase != CosmicPhase.Done; m++)
+                {
+                    Run(w, SimTime.Minutes(5)); phases.Add(e.Phase);
+                    maxOut = MathF.Max(maxOut, w.Cosmic.OutsideRad);
+                    foreach (var r in w.Ship.Rooms) maxRoom = MathF.Max(maxRoom, w.Cosmic.Radiation(r));
+                }
+                Console.WriteLine($"      {kname}: 단계 {string.Join(",", phases)} · 비킴 {e.Avoided} · 방 최고 {maxRoom:0.00} · 밖 최고 {maxOut:0.00}");
+                Run(w, SimTime.Hours(24));
+                var doses = w.Crew.Select(c => c.Dose).OrderByDescending(d => d).ToList();
+                Console.WriteLine($"   {kname}: 죽음 {w.Crew.Count(c => c.Dead)}/{w.Crew.Count} · 쓰러짐 {w.History.Collapses} · 피폭 최고 {doses[0]:0.0} · 중앙 {doses[doses.Count / 2]:0.0} · 4Sv 넘음 {doses.Count(d => d >= 4f)} · 7Sv {doses.Count(d => d >= 7f)} · 큰 피폭 {w.Perils.RadSevere} · 숨짐 {w.Perils.RadDeaths} · {string.Join(" / ", w.History.Events.Where(x => x.Kind == HistoryKind.Death).Select(x => x.Text).Take(3))}");
             }
         }
     }
