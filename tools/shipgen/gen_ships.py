@@ -179,6 +179,21 @@ def build(spec):
         D = max(D, need - 1 if outer else need - 1 + 2 * cw + 2)
         if "--bands" in sys.argv: print(spec["key"], i, "outer" if outer else "inner", need - 1 if outer else need - 1 + 2 * cw + 2)
     D = max(D, spec.get('min_len', 0))
+    # 가운데를 세로로 가로지르는 통로 (큰 배): 안쪽 띠마다 'cuts' 번째 방 앞에서 끊는다 — 구간 폭은 띠들 중 가장 넓은 것
+    ncross = spec.get('cross', 0)
+    seg_len = []
+    if ncross:
+        inner = [b[1] for i, b in enumerate(bands) if b[0] == 'room' and first_c < i < last_c]
+        for k in range(ncross + 1):
+            L = 0
+            for bd in inner:
+                cuts = [0] + bd['cuts'] + [len(bd['rooms'])]
+                L = max(L, band_need(bd['rooms'][cuts[k]:cuts[k + 1]]))
+            seg_len.append(L)
+        D = max(D, sum(seg_len) + ncross * cw + 2 * cw + 1)
+        extra = D - (sum(seg_len) + ncross * cw + 2 * cw + 1)
+        k = 0
+        while extra > 0: seg_len[k % len(seg_len)] += 1; extra -= 1; k += 1
     xB = xE + D
     bowW = bow['w']
     Wtot = xB + bowW + 2
@@ -194,20 +209,34 @@ def build(spec):
         bd = b[1]
         outer = i < first_c or i > last_c
         a, z = (xE, xB) if outer else (xE + cw + 1, xB - cw - 1)
-        widths = spread([r['w'] for r in bd['rooms']], z - a + 1, [r.get('grow', False) for r in bd['rooms']])
-        x = a
-        for r, w in zip(bd['rooms'], widths):
-            s.rect(x, top, x + w + 1, bot)
-            s.room(r['label'], r.get('kind'), x + 1, top + 1, x + w, bot - 1, room_doors(r, bd['doors']), r['items'], r.get('reserve', ()))
-            if r.get('hatch'): s.rooms[-1]['hatch'] = r['hatch']
-            s.rooms[-1]['link'] = r.get('link', False)   # 앞 방과 사이 문 (주방 ↔ 식당 같은 짝)
-            x += w + 1
+        if outer or not ncross: segs = [(a, z, bd['rooms'])]
+        else:
+            cuts = [0] + bd['cuts'] + [len(bd['rooms'])]
+            segs, sa = [], a
+            for k in range(ncross + 1):
+                segs.append((sa, sa + seg_len[k] - 1, bd['rooms'][cuts[k]:cuts[k + 1]]))
+                sa += seg_len[k] + cw
+        for (a, z, rooms) in segs:
+            widths = spread([r['w'] for r in rooms], z - a + 1, [r.get('grow', False) for r in rooms])
+            x = a
+            for r, w in zip(rooms, widths):
+                s.rect(x, top, x + w + 1, bot)
+                s.room(r['label'], r.get('kind'), x + 1, top + 1, x + w, bot - 1, room_doors(r, bd['doors']), r['items'], r.get('reserve', ()))
+                if r.get('hatch'): s.rooms[-1]['hatch'] = r['hatch']
+                s.rooms[-1]['link'] = r.get('link', False)   # 앞 방과 사이 문 (주방 ↔ 식당 같은 짝)
+                x += w + 1
     # 통로: 가로 띠 + 세로 두 줄 (고리)
     for i in corr_idx:
         top, bot = ys[i]
         s.floor(xE + 1, top + 1, xB - 1, bot - 1)
+    cross_x = []
+    xa = xE + cw + 1
+    for k in range(ncross):
+        xa += seg_len[k]
+        cross_x.append(xa)
+        xa += cw
     for y in range(yA0, yC1 + 1):
-        for x in list(range(xE + 1, xE + cw + 1)) + list(range(xB - cw, xB)):
+        for x in list(range(xE + 1, xE + cw + 1)) + list(range(xB - cw, xB)) + [xc + d for xc in cross_x for d in range(cw)]:
             s.g[y][x] = '.'
     # 가로 통로의 위 · 아래 벽 (세로 통로 칸 제외)
     for i in corr_idx:
@@ -248,6 +277,7 @@ def build(spec):
         top, bot = ys[i]
         for k in range(nb):
             bx = xE + cw + 1 + (k + 1) * (xB - xE - 2 * cw - 2) // (nb + 1)
+            while any(xc - 2 <= bx <= xc + cw + 1 for xc in cross_x): bx -= 1
             bulk.append((bx, top + 1, bot - 1))
     bulk_x = {b[0] for b in bulk}
 
@@ -483,6 +513,32 @@ CHEONMA = dict(key='Cheonma', crew=30, corr=2, chamfer=3, bulkheads=3,
     ],
     bow=dict(w=9, rooms=[Rm('o', [A, C, C], 0, h=5), Rm('b', [C, C, C, C, C, S, S, S, S, S], 0, h=9, grow=True), Sp('Navigation', [C, C, K3], 0, h=5),
                          Sp('BackupBridge', [C, C, S, S], 0, h=6)]))
+
+def inner_bands(spec):
+    ci = [i for i, b in enumerate(spec['bands']) if b[0] == 'corr']
+    return [b[1] for i, b in enumerate(spec['bands']) if b[0] == 'room' and ci[0] < i < ci[-1]]
+
+def dining_center(spec):
+    """식당 · 주방 · 냉동 창고를 띠 가운데(가로지르는 통로 바로 옆)로: 식당 → 주방 → 냉동 창고 (사이 문)."""
+    for bd in inner_bands(spec):
+        rooms = bd['rooms']
+        idx = [i for i, r in enumerate(rooms) if r['label'] in ('m', 'j') or r.get('kind') == 'Freezer']
+        if len(idx) != 3: continue
+        m = [r for r in rooms if r['label'] == 'm'][0]; j = [r for r in rooms if r['label'] == 'j'][0]; fz = [r for r in rooms if r.get('kind') == 'Freezer'][0]
+        rest = [r for r in rooms if r not in (m, j, fz)]
+        m['link'], j['link'], fz['link'] = False, True, True
+        bd['rooms'] = rest + [m, j, fz]
+        return len(rest)
+    return None
+
+# 큰 배: 가운데를 세로로 가로지르는 통로 하나 (고리 + 가운데 = 8자) — 배 끝까지 돌아가지 않고 위아래 띠를 오간다.
+#   주컴퓨터실은 그 통로 바로 왼쪽 (한가운데), 식당 · 주방은 그 통로 바로 오른쪽.
+EUNHA['cross'] = 1
+_e = dining_center(EUNHA)
+for bd, c in zip(inner_bands(EUNHA), [[3], [4], [4], [4], [_e]]): bd['cuts'] = c
+CHEONMA['cross'] = 1
+_c = dining_center(CHEONMA)
+for bd, c in zip(inner_bands(CHEONMA), [[4], [5], [5], [5], [_c]]): bd['cuts'] = c
 
 SHIPS = [(KESTREL, '제비호'), (MIRINAE, '미리내호'), (HANBIT, '한빛호'), (EUNHA, '은하호'), (CHEONMA, '천마호')]
 
