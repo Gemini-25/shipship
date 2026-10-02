@@ -198,14 +198,17 @@ public static partial class Program
         if (what.Contains("bodyfirst"))
         {
             var w = DayOne(seed, "Hanbit");
-            var room = w.Ship.RoomsOf(RoomType.Quarters).OrderBy(r => w.Ship.Walls.Any(kv => kv.Value.IsHull && Hull.InsideRoom(w.Ship, kv.Key) == r) ? 0 : 1).ThenBy(r => r.Id).First();
+            var room = w.Ship.LiveRooms.Where(r => r.Type != RoomType.Corridor && r.Cells.Count >= 6 && w.Ship.Walls.Any(kv => kv.Value.IsHull && Hull.InsideRoom(w.Ship, kv.Key) == r))
+                    .OrderBy(r => r.Type == RoomType.Quarters ? 0 : 1).ThenBy(r => r.Id).First();
             var p = w.Crew.Where(c => !c.Dead && !c.IsChild && c.CanAct).OrderBy(c => c.Traits.Bravery).First();
             var t = Scenarios.OuterTarget(w, room);
             Console.WriteLine($"   방 {room.Name} 칸 {room.Cells.Count} · 표적 {t} · {p.Name}");
             p.Mind.PanicUntil = w.Tick + SimTime.Minutes(8); p.Mind.Frozen = true;
+            CrPut(w, p, room.Cells.Where(w.Ship.IsOpenFloor).OrderBy(x => (x.Center - room.Center).LengthSquared()).First());
             var imp = Incidents.Meteor(w, t, 1f);
+            if (w.Ship.Walls.Where(kv => kv.Value.IsHull && Hull.InsideRoom(w.Ship, kv.Key) == room).OrderBy(kv => (kv.Key.Center - p.Position).LengthSquared()).Select(kv => kv.Key).Cast<Cell?>().FirstOrDefault() is Cell hole) Hull.Damage(w.Ship, hole, 2f);
             Console.WriteLine($"   충돌 {(imp == null ? "없음" : $"크기 {imp.Size:0.00}")} · 외벽 " + string.Join(" ", w.Ship.Walls.Where(kv => kv.Value.IsHull && (kv.Key.Center - t.Center).Length() < 3f).Select(kv => $"{kv.Key}:{kv.Value.Integrity:0.00}/{kv.Value.Breach:0.00}/장갑{kv.Value.Armor:0.0}/보강{kv.Value.Reinforced}")));
-            for (int m = 0; m < 8; m++) { Run(w, SimTime.Minutes(1)); Console.WriteLine($"   {m + 1}분 기압 {room.Air.Pressure:0} 샘 {room.Leaking} · {p.Name} {p.Room?.Name} {p.Pose} {p.Job?.Label} 혈중산소 {p.Vitals.Oxygen:0.00} · 몸이 먼저 {w.CrisisCrew.BodyFirsts}"); }
+            for (int m = 0; m < 8; m++) { Run(w, SimTime.Minutes(1)); Console.WriteLine($"   {m + 1}분 기압 {room.Air.Pressure:0} 샘 {room.Leaking} · {p.Name} {p.Room?.Name} {p.Cell} {p.Pose} {p.Job?.Label}/{p.Job?.Current?.GetType().Name} 길 {p.Path?.Count} 혈중산소 {p.Vitals.Oxygen:0.00} · 몸이 먼저 {w.CrisisCrew.BodyFirsts} · 공황 {p.Mind.Panicking(w.Tick)} 얼음 {p.Mind.Frozen} · 문 {string.Join(" ", room.Doors.Select(d => $"{d.Cell}:{d.Openness:0.0}/잠김{d.Locked}/{w.Failsafe.Latched(d)}"))}"); }
         }
     }
 }
