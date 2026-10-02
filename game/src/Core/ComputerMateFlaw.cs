@@ -361,7 +361,7 @@ public sealed partial class ShipMate
         {
             d.Closed = w.Tick;
             foreach (var dr in r.Doors) if (!dr.Removed && !dr.IsExternal && !dr.Locked) { dr.Locked = true; d.Locked.Add(dr.Id); }
-            Say($"{Ko.EulReul(d.Room)} 닫았다 ({d.By}) — 안의 사람은 반대쪽 문 · 마스크로. 곧 가겠다", r, 2);
+            Say($"{Ko.EulReul(d.Room)} 닫았다 ({d.By}) — 안의 사람은 마스크를 쓰고 잠긴 문을 손으로 열고 나와라. 곧 사람을 보낸다", r, 2);
         }
         else Say($"{Ko.EulReul(d.Room)} 열어 둔다 ({d.By}) — 안의 사람은 지금 나와라", r, 2);
         w.History.Add(w, HistoryKind.Decision, $"권한 밖 딜레마: {d.Room} ({d.Hazard}) — {d.Decision} · {d.By}{(d.Reachable ? "" : $" ({d.Unreachable})")}", r, still!, log: false);

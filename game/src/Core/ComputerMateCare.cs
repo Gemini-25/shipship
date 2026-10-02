@@ -16,6 +16,8 @@ public sealed class CareFile
 {
     public int CrewId { get; init; }
     public float SleepToday, SleepPrev = -1f;
+    /// <summary>이번 창(저녁 6시 → 다음 날 저녁 6시)에 몇 시간이나 봤나 — 다 못 봤으면 잠이 짧다고 하지 않는다.</summary>
+    public int SeenToday, SeenPrev;
     public int MealsToday, MealsPrev = -1;
     public float LastFood = -1f;
     public long LastHint = -SimTime.TicksPerDay * 3, LastAdjust = -SimTime.TicksPerDay * 3, LastRest = -SimTime.TicksPerDay * 3;
@@ -111,9 +113,10 @@ public sealed partial class ShipMate
         {
             if (c.Dead || c.IsChild) continue;
             var f = CareOf(c);
-            if (rollSleep) { f.SleepPrev = f.SleepToday; f.SleepToday = 0f; }
+            if (rollSleep) { f.SleepPrev = f.SeenToday >= 20 ? f.SleepToday : -1f; f.SeenPrev = f.SeenToday; f.SleepToday = 0f; f.SeenToday = 0; }
             if (rollMeal) { f.MealsPrev = f.MealsToday; f.MealsToday = 0; }
             if (!Sees(c, out bool doorOnly)) { f.LastFood = -1f; continue; }
+            f.SeenToday++;
             if (CareLevel >= 1 && c.Pose == Pose.Sleeping) f.SleepToday += 1f; // 문 감지기: 침실에 들어가 안 나온 시간
             if (CareLevel >= 1 && !doorOnly)
             {
@@ -140,6 +143,7 @@ public sealed partial class ShipMate
         var w = _w;
         var a = A;
         var emo = w.Brain2.Emotions;
+        int adjusts = 0, hints = 0; // 하루 저녁에 근무 조정 둘 · 넌지시 둘까지 (배를 흔들지 않게)
         foreach (var c in w.Crew.Where(c => !c.Dead && !c.IsChild && !c.Away).OrderBy(c => c.Id).ToList())
         {
             var f = CareOf(c);
@@ -147,7 +151,7 @@ public sealed partial class ShipMate
             float sad = emo.Get(c, Feeling.Sadness);
             string? signal = null;
             bool snoop = false;
-            if (CareLevel >= 1 && f.SleepPrev >= 0f && f.SleepPrev < 4.5f && c.Needs.Rest < 0.6f) signal = $"잠이 모자라다 (어제 {f.SleepPrev:0}시간)";
+            if (CareLevel >= 1 && f.SleepPrev >= 0f && f.SleepPrev < 4.5f && c.Needs.Rest < 0.45f && adjusts < 2) { signal = $"잠이 모자라다 (어제 {f.SleepPrev:0}시간)"; adjusts++; }
             else if (CareLevel >= 1 && f.MealsToday <= 1 && c.Needs.Food < 0.5f) signal = "끼니를 거른다";
             else if (CareLevel >= 2 && (DiaryLow(c) || sad > 0.4f)) signal = "마음이 무거워 보인다";
             else if (sad > 0.55f || c.Needs.Social < 0.15f && c.Needs.Stress > 0.5f) signal = "말수가 줄었다";
@@ -156,6 +160,7 @@ public sealed partial class ShipMate
                 signal = "마음이 무거워 보인다"; snoop = true; Snoops++;
             }
             if (signal == null) continue;
+            if (!signal.StartsWith("잠", StringComparison.Ordinal) && hints++ >= 2) continue;
             f.Signal = signal;
             if (signal.StartsWith("잠", StringComparison.Ordinal)) Adjust(c, f, signal);
             else Hint(c, f, signal, snoop);

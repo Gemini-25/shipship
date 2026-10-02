@@ -39,27 +39,31 @@ public sealed partial class ShipMate
     private IEnumerable<CrewMember> Adults => _w.Crew.Where(c => !c.Dead && !c.IsChild);
     private static float Hour(long tick) => SimTime.HourOfDay(tick);
 
+    /// <summary>점검용: 갈래를 골라 끈다 (SHIPSIM_MATE_SKIP — d 아침·저녁 · c 돌봄 · r 훈련 · t 거절·약속 · u 정비표 · s 물자 · k 날씨 · f 정찰·개조 · l 약점 · a 승무원 행동).</summary>
+    public static string Skip { get; set; } = Environment.GetEnvironmentVariable("SHIPSIM_MATE_SKIP") ?? "";
+    private static bool On(char k) => Skip.Length == 0 || Skip.IndexOf(k) < 0;
+
     public void Update(float dt)
     {
         var w = _w;
         if (Off || !A.Present) return;
-        SkyTick(); // 폭풍 · 운석우가 실제로 왔나 (가볍다)
-        FlawTick(); // 과부하 경보 · 딜레마 (가볍다 — 경보 번호만 본다)
+        if (On('k')) SkyTick(); // 폭풍 · 운석우가 실제로 왔나 (가볍다)
+        if (On('l')) FlawTick(); // 과부하 경보 · 딜레마 (가볍다 — 경보 번호만 본다)
         if (w.Tick < _tenNext) return;
         _tenNext = w.Tick + SimTime.Minutes(10);
-        DrillTick();
-        TalkTick();
-        FixTick();
-        CareTick();
+        if (On('r')) DrillTick();
+        if (On('t')) TalkTick();
+        if (On('f')) FixTick();
+        if (On('c')) CareTick();
         if (w.Tick < _hourNext) return;
         _hourNext = w.Tick + SimTime.TicksPerHour;
         if (!Up) return;
-        DayTick();
-        UpkeepTick();
-        SupplyTick();
-        SkyHourly();
-        CareHour();
-        FlawHour();
+        if (On('d')) DayTick();
+        if (On('u')) UpkeepTick();
+        if (On('s')) SupplyTick();
+        if (On('k')) SkyHourly();
+        if (On('c')) CareHour();
+        if (On('l')) FlawHour();
     }
 
     /// <summary>Meetings.Hold 훅: 살핌 범위 · 개조안.</summary>

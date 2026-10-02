@@ -16,7 +16,7 @@ public sealed class MateActivity : Activity
 
     public override (float, string) Score(CrewMember c, World w, DistanceField dist)
     {
-        if (w.Automation.MateOrNull is not ShipMate m || ShipMate.Off || c.IsChild || !c.CanAct || c.Down) return (0f, "—");
+        if (w.Automation.MateOrNull is not ShipMate m || ShipMate.Off || c.IsChild || !c.CanAct || c.Down || ShipMate.Skip.Contains('a')) return (0f, "—");
         if (m.ActiveDrill != null && m.DrillSpot(c) is Cell) return Crisis.Acting(w) ? (0f, "진짜 비상") : (0.92f, "훈련 — 비상 배치표 자리로");
         if (Crisis.Acting(w)) return (0f, "—");
         if (m.HintFor(c) is CareHint h && w.Crew.FirstOrDefault(x => x.Id == h.About) is CrewMember t && !t.Dead && t.IsAwake && t.Room != null && !t.Outside && c.IsAwake)

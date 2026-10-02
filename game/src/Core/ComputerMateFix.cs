@@ -102,7 +102,7 @@ public sealed partial class ShipMate
         foreach (var r in w.Ship.LiveRooms)
         {
             if (r.Type == RoomType.Corridor || r.OffLimits || !Blind(r, out var why)) continue;
-            if (Scouts.Any(s => s.RoomId == r.Id && (s.Seen < 0 && !s.Failed || w.Tick - s.Sent < SimTime.Hours(6)))) continue;
+            if (Scouts.Any(s => s.RoomId == r.Id && (s.Seen < 0 && !s.Failed || w.Tick - s.Sent < SimTime.Hours(12)))) continue;
             _blind[r.Id] = _blind.GetValueOrDefault(r.Id) + 1;
             if (!r.DataLinked) _breaks[r.Id] = _breaks.GetValueOrDefault(r.Id) + 1;
             SendScout(r, why);
@@ -117,7 +117,9 @@ public sealed partial class ShipMate
     {
         var w = _w;
         bool spare = Crisis.Level(w) < CrisisLevel.Emergency && w.Fire.Count == 0;
-        var bot = !spare ? null : w.Robots.Robots.Where(x => x.Operational && x.Order == null && (x.AtDock || x.Homing) && !x.FightingFire && x.Battery > 0.45f && !x.Dock.Room.Detached && !w.Board.OpenForRobot().Any(o => RobotSystem.CanDo(x.Kind, o.Kind)))
+        // 순찰하는 로봇(방재)만 — 고치는 로봇 · 거드는 로봇은 제 일을 둔다 · 한 번에 하나
+        bool busy = Scouts.Any(s => s.Seen < 0 && !s.Failed && !s.Drone);
+        var bot = !spare || busy ? null : w.Robots.Robots.Where(x => RobotsV15.Patrols(x.Kind) && !RobotsV15.Assists(x.Kind) && x.Operational && x.Order == null && x.AtDock && !x.FightingFire && x.Battery > 0.8f && !x.Dock.Room.Detached && !w.Board.OpenForRobot().Any(o => RobotSystem.CanDo(x.Kind, o.Kind)))
             .OrderBy(x => (x.Position - r.Center).LengthSquared()).ThenBy(x => x.Id).FirstOrDefault();
         ScoutRun? run = null;
         if (bot != null)

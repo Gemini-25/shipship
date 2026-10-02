@@ -87,6 +87,7 @@ public static partial class Program
             MeetingSystem.MaidenOff = off;
             Player.Policy(w, "*", 0);
             var mate = w.Automation.Mate;
+            foreach (var r in Recipes.AllFor(ItemKind.Plate)) foreach (var (k, _) in r.Inputs) Life.Take(w, k, w.Ship.CountStored(k)); // 원료도 바닥 (만들 수 없다)
             // 가까운 기항지를 지운다 (원정이 답인 길)
             var v = w.Voyage;
             for (int i = v.Index; i < v.Legs.Count - 1; i++) if (v.Legs[i].Kind == LegKind.Port) v.Legs[i] = new Leg { Kind = LegKind.Cruise, Name = "빈 바다", Days = v.Legs[i].Days };
@@ -371,6 +372,15 @@ public static partial class Program
             w.Hazards.StartStorm();
             Run(w, SimTime.TicksPerDay + SimTime.Minutes(30));
             Check("못 본 폭풍은 인정하고 약속한다", f2.Judged && f2.StormCame && !f2.Hit && mate.Promised("weather") != null, $"{f2.Verdict} · 약속 {mate.Promised("weather")?.Text}");
+        }
+
+        // ── 99) 점검용: 하루 동안 몇 번이나 나섰나 (--only=99) ──
+        if (Environment.GetCommandLineArgs().Any(a => a == "--only=99"))
+        {
+            var w = World.CreateDefault(seed, 0, "Hanbit");
+            Run(w, SimTime.TicksPerDay * 2);
+            var m = w.Automation.Mate;
+            Console.WriteLine($"    정찰 {m.Scouts.Count} ({string.Join(", ", m.Scouts.Select(x => $"{SimTime.Clock(x.Sent)} {x.Room} {x.By}"))}) · 정비표 {m.Slots.Count} · 물자 {m.Supplies.Count} ({string.Join(", ", m.Supplies.Select(x => $"{x.Name} {x.Choice}"))}) · 넌지시 {m.Hints} · 근무 조정 {m.Adjusts} · 바로 쉬라 {m.EarlyRests} · 거절 {m.Refusals.Count} · 예보 보류 {m.Forecasts.Count(f => f.Held)}/{m.Forecasts.Count} · 훈련 {m.Drills.Count} · 개조 {m.Upgrades.Count}");
         }
 
         // ── 12) 결정론 ──

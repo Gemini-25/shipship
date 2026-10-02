@@ -273,7 +273,7 @@ public sealed partial class ShipMate
                 Remember(m);
                 continue;
             }
-            if (m.Faults.Count > 0 && w.Tick >= s.At - SimTime.TicksPerDay * 3)
+            if (m.Faults.Count > 0) // 정비표의 날보다 먼저 멎었다
             {
                 s.Missed = true; SlotsMissed++; _due.Remove(m.Body.Id);
                 OnMissed(s, m);
@@ -358,13 +358,20 @@ public sealed partial class ShipMate
             if (left > 20f) { open.Open = false; open.Result = $"{open.Result} → 추세가 풀렸다".TrimStart(' ', '→'); }
             return;
         }
-        if (left < 5f || left > 16f || Math.Min(s.n, 12) < 4) return;
+        if (left < 5f || left > 16f || Math.Min(s.n, 12) < 8) return; // 이틀치 기록이 쌓여야 추세로 본다
         if (Supplies.Any(p => p.Key == k.key && w.Tick - p.Tick < SimTime.TicksPerDay * 2)) return;
         var plan = new SupplyPlan { Id = _supplyId++, Tick = w.Tick, Key = k.key, Name = k.name, Cat = k.cat, Stock = s.v[(s.n - 1) % 12], DaysLeft = left, Warned = left };
         plan.Rate = plan.Stock / MathF.Max(0.5f, left);
         var ex = w.Expedition;
         bool canGo = ex.Current == null && ex.Pending == null && w.Policies["expedition"] != 2 && w.Voyage.Current.Kind != LegKind.Port && (ex.Sites.Any(x => !x.Taken) || ex.HasShuttle);
         float port = DaysToPort();
+        // 배 안에서 만들 수 있으면 먼저 (원료가 닷새치 넘게 있으면)
+        if (k.item is ItemKind made && Recipes.For(made) is Recipe rc && rc.Inputs.Length > 0)
+        {
+            int batches = rc.Inputs.Min(i => w.Ship.CountStored(i.kind) / Math.Max(1, i.count));
+            float days = batches * rc.Yield / MathF.Max(0.1f, plan.Rate);
+            plan.Options.Add(("만들기", days >= 5f ? 0.68f : 0.2f + 0.08f * days, $"작업대에서 만든다 ({string.Join(" · ", rc.Inputs.Select(i => ItemKinds.Name(i.kind)))} {days:0}일치)"));
+        }
         var going = ex.Current?.Site ?? ex.Pending?.Site;
         if (going != null && ex.Current?.Phase != TripPhase.Back && ExpeditionSites.Fills(going.Kind, k.cat) >= 0.2f)
             plan.Options.Add(("원정", 0.7f, $"이미 나가는 원정대({going.Name})에 {k.name}도 챙겨 오라고 한다"));
