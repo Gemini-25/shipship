@@ -26,6 +26,7 @@ public static class Brain
         new EatActivity(),
         new SleepActivity(),
         new ChoresActivity(),
+        new StationActivity(), new HelpActivity(), // v16.21 비상 배치 자리로 · 큰 일 거들기
         new PatrolActivity(), // v13.4 야간 당직
         new DutyActivity(),
         new MeetingActivity(), // v13.2 정기 회의
@@ -94,6 +95,7 @@ public static class Brain
             float damp = Crisis.Damp(c, w, a, out var note);
             if (damp < 1f && score > 0f) { score *= damp; if (note != null) reason += $" · {note}"; }
             w.Scale.Damp(c, a, ref score, ref reason); // v16.18 배 전체 · 우주급을 느끼면 일상을 멈춘다
+            w.CrisisCrew.Damp(c, a, ref score, ref reason); // v16.21 제 비상 자리가 있으면 잠 · 끼니 · 여가가 생명 일을 이기지 않게
             if (score > 0f) score += w.Rng.Range(-Noise, Noise);
             evals.Add(new Evaluation(a, score < 0f ? 0f : score, reason));
         }

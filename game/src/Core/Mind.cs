@@ -189,7 +189,7 @@ public sealed class MindSystem
     // ───────────────────────────── 감정 ─────────────────────────────
 
     /// <summary>난이도에 따른 공황의 세기 (느긋 0.15 ~ 가혹 1.8).</summary>
-    public static float PanicScale => Storyteller.Level switch { 1 => 0.15f, 2 => 0.4f, 3 => 0.8f, 4 => 1.3f, _ => 1.8f };
+    public static float PanicScale => Storyteller.Level switch { 1 => 0.15f, 2 => 0.4f, 3 => 0.8f, 4 => CrisisCrewSystem.Off ? 1.3f : 1.1f, _ => CrisisCrewSystem.Off ? 1.8f : 1.35f }; // v16.21 어려움 · 가혹의 상한을 낮췄다
 
     /// <summary>지금 이 사람이 공황에 빠질 확률 (한 시간에) — 위험한 자리 · 쓰러지는 걸 봤다 · v14.0 두려움 · 습관.</summary>
     public float PanicRate(CrewMember c, out Fear? fear)
@@ -213,6 +213,7 @@ public sealed class MindSystem
         // v16 통합 (두뇌 2.0 감정): 이미 겁에 질린 사람(불을 봤다 · 배 전체 경보 · 쓰러지는 걸 봤다)은 위험한 자리에서 더 쉽게 무너진다
         float dread = 1f + 1.6f * w.Brain2.Emotions.Get(c, Feeling.Fear);
         return PanicScale * trigger * dread * (1f + c.Fx.Panic) * MathF.Pow(1f - c.Traits.Calm, 1.5f) * (0.3f + c.Needs.Stress) * (1f - veteran) * (1f - 0.5f * c.Traits.Bravery) * (1.5f - w.Society.Morale);
+        return PanicScale * trigger * (1f + c.Fx.Panic) * MathF.Pow(1f - c.Traits.Calm, 1.5f) * (0.3f + c.Needs.Stress) * (1f - veteran) * (1f - 0.5f * c.Traits.Bravery) * (1.5f - w.Society.Morale) * w.CrisisCrew.PanicMul(c); // v16.21 훈련 · 경험 · 제 자리 · 겪을수록 · 곁의 침착한 동료
     }
 
     private void Emotions(CrewMember c, float dt)
@@ -224,7 +225,7 @@ public sealed class MindSystem
         // v14.0 오래가는 두려움 (어둠·좁은 곳·기계…) — 평소엔 마음만 무겁다
         if (c.Fears.Count > 0 && Persona.Triggered(w, c) is Fear cf && !Persona.Acute(cf)) c.Needs.Stress = MathF.Min(1f, c.Needs.Stress + 0.04f * dt);
         // 공황
-        if (!m.Panicking(w.Tick) && m.PanicUntil < w.Tick - SimTime.Minutes(20))
+        if (!m.Panicking(w.Tick) && m.PanicUntil < w.Tick - w.CrisisCrew.PanicCooldown(c))
         {
             float p = PanicRate(c, out var fear);
             if (p > 0f)
@@ -234,8 +235,9 @@ public sealed class MindSystem
                     m.Panics++;
                     Panics++;
                     // 어려움·가혹에서 겁 많은 사람은 얼어붙는다 (위험한 자리에서 꼼짝 못 한다)
-                    m.Frozen = Storyteller.Level >= 4 && c.Traits.Bravery < 0.45f && _rng.Chance(0.6f);
-                    float minutes = m.Frozen ? 1f + 1.5f * _rng.Float() : 2f + 4f * _rng.Float() * MathF.Min(1f, PanicScale);
+                    m.Frozen = Storyteller.Level >= 4 && c.Traits.Bravery < 0.45f && _rng.Chance(0.6f) && w.CrisisCrew.MayFreeze(c); // v16.21 목숨이 걸린 자리에선 몸이 먼저
+                    float minutes = w.CrisisCrew.PanicMinutes(c, m.Frozen, m.Frozen ? 1f + 1.5f * _rng.Float() : 2f + 4f * _rng.Float() * MathF.Min(1f, PanicScale)); // v16.21 짧게
+                    w.CrisisCrew.OnPanic(c);
                     m.PanicUntil = w.Tick + SimTime.Minutes(minutes);
                     if (m.Frozen) Freezes++; else Flees++;
                     c.EndJob(w, ToilStatus.Interrupted);
@@ -279,6 +281,7 @@ public sealed class MindSystem
         {
             PanicActivity => (GoalTier.Survival, c.Mind.Frozen ? "공황 — 얼어붙었다" : "공황 — 달아난다"),
             EvacuateActivity or ShelterActivity or RefillSuitActivity or RecoverActivity => (GoalTier.Survival, job!.Label),
+            StationActivity or HelpActivity => (GoalTier.Role, job!.Label), // v16.21 비상 배치 · 거들기
             EatActivity when c.Needs.Hunger > 0.93f => (GoalTier.Survival, "굶주림"),
             ChoresActivity when job!.Order is WorkOrder o && w.Command.TeamOf(c) is Team t && t.Kind != TeamKind.Reserve
                                 && (CommandSystem.Group(o.Kind) == t.Kind || o.Kind == WorkKind.SafetyWatch) => (GoalTier.Role, $"{CommandSystem.TeamName(t.Kind)} — {o.Title}"),
@@ -357,8 +360,12 @@ public sealed class PanicActivity : Activity
     public override string Id => "panic";
     public override string Label => "공황";
 
-    public override (float, string) Score(CrewMember c, World w, DistanceField dist) =>
-        c.Mind.Panicking(w.Tick) && !c.Down && !c.Outside ? (5f, c.Mind.Frozen ? "공황 — 얼어붙었다" : "공황 — 달아난다") : (0f, "—");
+    public override (float, string) Score(CrewMember c, World w, DistanceField dist)
+    {
+        if (!c.Mind.Panicking(w.Tick) || c.Down || c.Outside) return (0f, "—");
+        if (w.CrisisCrew.BodyFirst(c, dist, out var act)) return (0f, $"공황 — 몸이 먼저 ({act})"); // v16.21 목숨이 걸린 행동은 공황 중에도
+        return (5f, c.Mind.Frozen ? "공황 — 얼어붙었다" : "공황 — 달아난다");
+    }
 
     public override Job? Plan(CrewMember c, World w, DistanceField dist)
     {
@@ -377,7 +384,7 @@ public sealed class PanicActivity : Activity
         return new Job(this, c.Mind.Frozen ? "얼어붙음" : "달아남", toils)
         {
             LogText = c.Mind.Frozen ? "공황에 얼어붙었다" : "공황에 달아난다",
-            InterruptMargin = 3f,
+            InterruptMargin = CrisisCrewSystem.Off ? 3f : 0.3f, // v16.21 몸이 먼저 움직일 틈
         };
     }
 }

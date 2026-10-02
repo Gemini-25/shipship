@@ -196,6 +196,7 @@ public sealed class WorkToil : Toil
         if (c.Job?.Urgent == true && w.Society.IsVeteran(c)) speed *= 1.1f; // v13.4 베테랑
         // v11.0: 비상 훈련을 받은 사람은 사고 대응 일이 조금 빠르다
         if (c.Job?.Urgent == true && c.Drilled(w)) speed *= 1.12f;
+        speed *= w.CrisisCrew.HandsMul(c); // v16.21 곁에서 거드는 사람 (한 작업에 여러 명)
         // v10.10: 정비 로봇이 옆에서 거들면 (부품을 잡아 주고 공구를 건넨다) 빨라진다
         float co = w.Coop.WorkMul(c, Resume, _face); if (co < 0f) return ToilStatus.Failed; speed *= co; // v17.4 예약 · 옆 설비 · 펼치기 · 짝 기다림 · 이어 함 · 헷갈림 · 혼자
         if (c.Helper is Robot helper && helper.Helping == c && (helper.Position - c.Position).LengthSquared() < 2.7f * 2.7f) speed *= 1f + RobotsV15.AssistBonus(helper.Kind); // v15.7 조수 로봇은 더 거든다

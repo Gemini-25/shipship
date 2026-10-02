@@ -433,6 +433,7 @@ public static class SaveGame
         w.Coop.Hash(I, F); // v17.4 공간과 협력 · 줄 · 구경꾼
         w.Automation.HashShip(I, F); // v16.20 우주선급 주컴퓨터
         w.Failsafe.Hash(I); w.Major.Hash(I); // v16.19 차압 문 · 예비 회로 · 큰 사고
+        w.CrisisCrew.Hash(I, F); // v16.21 승무원 위기 행동
         return h;
     }
 }

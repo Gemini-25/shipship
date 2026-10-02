@@ -87,6 +87,8 @@ public static class NeedsSystem
         float targetOx = suited ? 1f : vacuum ? 0f : air == null ? 1f : Curve.Clamp01((air.O2 - 8f) / 9f);
         // v12.2 일산화탄소는 핏속 산소 자리를 빼앗는다 (모르는 채로 졸리고, 쓰러진다)
         if (!suited && air != null && air.CO > 0.05f) targetOx *= 1f - 0.85f * MathF.Min(1f, air.CO);
+        bool masked = !suited && air != null && pressure >= 40f && (air.O2 < 17f || air.Smoke > 0.4f) && w.CrisisCrew.Masked(c); // v16.21 산소 마스크 (진공에서는 소용없다)
+        if (masked) targetOx = MathF.Max(targetOx, 0.92f);
         float oxRate = !suited && pressure < 40f ? 25f : 3f; // 진공에서는 몇 분 만에
         v.Oxygen += (targetOx - v.Oxygen) * MathF.Min(1f, oxRate * dt);
         float co2 = suited ? 0f : air?.CO2 ?? 0f;
@@ -160,7 +162,7 @@ public static class NeedsSystem
             damage += 1.5f;
             AddInjury(v, 0.3f * dt, "감압");
         }
-        if (!suited && air != null && air.Smoke > 0.4f) damage += 0.08f * air.Smoke; // 연기 흡입
+        if (!suited && !masked && air != null && air.Smoke > 0.4f) damage += 0.08f * air.Smoke; // 연기 흡입
         if (!suited && air != null && air.Toxin > 0.15f)                  // v11.2 유독 가스 흡입 (폐에 남는다)
         {
             damage += 0.2f * air.Toxin;

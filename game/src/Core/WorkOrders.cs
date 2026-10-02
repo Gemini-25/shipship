@@ -987,9 +987,10 @@ public sealed partial class WorkBoard
             if (p.CoolingCapacity >= PowerGrid.RestartCoolingKw)
                 Post(WorkKind.RestartReactor, WorkTarget.Of(reactor), 1.1f, Skill.Engineering, "냉각 확보됨 · 재기동 가능");
         }
+        bool auxLow = p.BatteryPercent < 0.15f && p.ReactorLimit < 12f;
         if (ship.FurnitureOf(FurnitureType.AuxGenerator).FirstOrDefault() is Furniture aux && !p.AuxRunning && p.AuxFuel > 0.1f
-            && !aux.Machine!.Stopped && p.BatteryPercent < 0.15f && p.ReactorLimit < 12f)
-            Post(WorkKind.StartAux, WorkTarget.Of(aux), 1.15f, Skill.Electrical, $"배터리 {p.BatteryPercent * 100:0}% · 원자로 {p.ReactorLimit:0}kW");
+            && !aux.Machine!.Stopped && (auxLow || w.CrisisCrew.AuxDue())) // v16.21 배터리 추세로 미리
+            Post(WorkKind.StartAux, WorkTarget.Of(aux), auxLow ? 1.15f : w.CrisisCrew.AuxUrgency, Skill.Electrical, auxLow ? $"배터리 {p.BatteryPercent * 100:0}% · 원자로 {p.ReactorLimit:0}kW" : w.CrisisCrew.AuxWhy);
 
         ScanAdaptation(Post);
         psc = Prof.Lap("scan.Adaptation", psc);
@@ -1232,6 +1233,7 @@ public sealed partial class WorkBoard
         ScanVolatile(Post); // v12.2 식히기·잔해·청소·역화·산소관
         psc = Prof.Lap("scan.Volatile", psc);
         ScanWake(Post); // 위기에 잠든 동료 깨우기
+        ScanCrisisDrills(Post); // v16.21 사고 뒤 훈련
         psc = Prof.Lap("scan.Wake", psc);
         ScanLinks(Post); // v12.1 설비 전선·관
         psc = Prof.Lap("scan.Links", psc);

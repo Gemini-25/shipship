@@ -107,6 +107,7 @@ public sealed class ChoresActivity : Activity
         score += Crisis.Bias(w, o);
         score += w.Command.Bias(c, o); // v13.1 현장 지휘: 맡은 조의 일
         score += w.Scale.Bias(c, o); // v16.18 규모마다 대응이 커진다 (곁의 사람 → 당직 → 여러 명 → 전원)
+        score += w.CrisisCrew.Bias(c, o); // v16.21 제 비상 자리의 일 · 생명 > 산소/압력 > 불 > 전력 > 나머지
         bool allHands = Crisis.AllHands(w, o) || w.Scale.AllHands(c, o);
         // v12.0 교대 한 시간 전에는 새 점검을 벌이기보다 기록을 넘긴다
         if (o.Kind == WorkKind.PreventiveCheck && !emergency && OnShiftStatic(c, w)
@@ -269,7 +270,7 @@ public sealed class SprayToil : Toil
         c.Pose = Pose.Working;
         Locomotion.Face(c, _aim.Center);
         // v7 침착함: 당황하면 처음 몇 분은 소화기를 엉뚱한 데 뿌린다 (불길 가장자리, 연기 쪽)
-        float panic = 0.35f * (1f - c.Traits.Calm) * (0.4f + c.Needs.Stress);
+        float panic = 0.35f * (1f - c.Traits.Calm) * (0.4f + c.Needs.Stress) * w.CrisisCrew.ProcSlip(c, CrisisProc.Extinguisher); // v16.21 소화기를 익힌 손
         if (w.Rng.Chance(panic))
         {
             _panic = SimTime.Minutes(5);
@@ -295,6 +296,7 @@ public sealed class SprayToil : Toil
         Locomotion.Face(c, aim.Center);
         float rate = (10f + 6f * c.SkillLevel(Skill.Mechanics)) * (0.8f + 0.4f * c.Traits.Calm) / SimTime.TicksPerHour;
         if (_panic > 0) { _panic--; rate *= 0.35f; }
+        rate *= w.CrisisCrew.HandsMul(c); // v16.21 곁에서 물통 · 두 번째 소화기로 거든다
         if (Water)
         {
             rate *= 0.6f;
@@ -501,6 +503,7 @@ public static partial class WorkPlanners
                     world.History.Responded(cm);
                 if (status == ToilStatus.Succeeded) world.Causes.Worked(o, cm); // v12.2 누가 되돌렸나
                 if (status == ToilStatus.Succeeded) world.Life.AfterWork(cm, o); // v12.7 사람답게 틀린다 (왜 틀렸는지 남는다)
+                if (status == ToilStatus.Succeeded) world.CrisisCrew.Did(cm, o); // v16.21 해 본 절차가 손에 붙는다
                 if (status != ToilStatus.Succeeded) world.Board.Release(o, cm);
                 if (status != ToilStatus.Succeeded)
                     World.Trace?.Invoke($"{SimTime.Clock(world.Tick)} {cm.Name} {o.Title} {status} @{cm.Job?.Current?.GetType().Name}");
@@ -745,7 +748,7 @@ public static partial class WorkPlanners
         var m = f.Machine!;
         var toils = Plans.DropOff(c, w, dist);
         toils.Add(new GotoToil(at));
-        toils.Add(new WorkToil(0.25f, Skill.Electrical, f.Center));
+        toils.Add(new WorkToil(0.25f * w.CrisisCrew.ProcTime(c, CrisisProc.Breaker), Skill.Electrical, f.Center)); // v16.21 차단기 점검을 익힌 손
         toils.Add(new DoToil((cm, world) =>
         {
             if (world.Automation.TriageOrNull?.Holding(o.Circuit) is string hold) { world.Board.Close(o); world.Log.Add(world.Tick, LogKind.Work, $"{PowerGrid.CircuitName(o.Circuit)} 회로 차단기 앞 — 주 컴퓨터: {hold}", cm.Id); return true; } // v16.20 원인이 남은 차단기는 올리지 않는다
@@ -1477,15 +1480,15 @@ public static partial class WorkPlanners
         var f = o.Target.Furniture!;
         var toils = Plans.DropOff(c, w, dist);
         toils.Add(new GotoToil(at));
-        toils.Add(new WorkToil(0.3f, Skill.Electrical, f.Center)
+        toils.Add(new WorkToil(0.3f * w.CrisisCrew.ProcTime(c, CrisisProc.Aux), Skill.Electrical, f.Center) // v16.21 익힌 사람은 빠르다
         {
             CanContinue = (_, world) => !world.Power.AuxRunning,
         });
         toils.Add(new DoToil((cm, world) =>
         {
             cm.Stats.Emergencies++;
-            // 오래 쉬던 기계라 한 번에 안 걸릴 때도 있다
-            if (world.Rng.Chance(0.25f - 0.15f * cm.SkillLevel(Skill.Electrical)))
+            // 오래 쉬던 기계라 한 번에 안 걸릴 때도 있다 (v16.21 절차를 익힌 사람은 덜 틀린다)
+            if (world.Rng.Chance((0.25f - 0.15f * cm.SkillLevel(Skill.Electrical)) * world.CrisisCrew.ProcSlip(cm, CrisisProc.Aux)))
             {
                 world.Board.Release(o, cm);
                 world.Log.Add(world.Tick, LogKind.Warning, "보조 발전기 시동이 걸리지 않았다 — 다시 당긴다", cm.Id);
@@ -1766,7 +1769,7 @@ public static partial class WorkPlanners
         var toils = Plans.DropOff(c, w, dist);
         toils.Add(new GotoToil(at));
         bool jammed = door.JammedOpen;
-        toils.Add(new WorkToil((jammed ? 0.5f : 0.2f) * (w.History.Doctrine.ManualDrill ? 0.6f : 1f), Skill.Mechanics, door.Cell.Center)
+        toils.Add(new WorkToil((jammed ? 0.5f : 0.2f) * (w.History.Doctrine.ManualDrill ? 0.6f : 1f) * w.CrisisCrew.ProcTime(c, CrisisProc.Bulkhead), Skill.Mechanics, door.Cell.Center) // v16.21 수동 격벽을 익힌 손
         {
             CanContinue = (_, _) => jammed ? door.JammedOpen : !door.Locked,
         });
