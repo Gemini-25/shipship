@@ -181,7 +181,9 @@ public sealed partial class Storyteller
             if (p == StoryPersona.Random) wt = 4f; // 무작위형: 다 비슷하게
             pool.Add((s.Kind.ToString(), wt));
         }
+        MajorIncidentSystem.AddToPool(w, pool, gentle, big); // v16.19 계통 · 배 전체 사고 24
         if (p == StoryPersona.Random) for (int i = 0; i < pool.Count; i++) pool[i] = (pool[i].key, 4f);
+        else MajorIncidentSystem.ShapeByScale(pool); // v16.19 규모 비율로 (자잘한 것만 쏟아지지 않게)
         if (p >= StoryPersona.SlowBurn) Shape(p, pool, cap); // v15.7 성격마다 고르는 규칙
         for (int i = 0; i < pool.Count; i++) pool[i] = (pool[i].key, pool[i].weight * w.Voyage.HazardMul(pool[i].key) * w.Eras.RiskMul(pool[i].key)); // v12.8 구간 · 새 기술의 위험
         for (int i = 0; i < pool.Count; i++) pool[i] = (pool[i].key, pool[i].weight * w.Scale.PaceMul(pool[i].key)); // v16.18 규모 완급 (큰 것 뒤엔 작은 것 · 조용하면 작은 것부터)

@@ -429,6 +429,7 @@ public static class SaveGame
         w.Automation.HashBrain(I, F); // v16.16 주컴퓨터 두뇌 2.0
         w.Scale.Hash(I, F); // v16.18 사고 규모
         w.Annex.Hash(I, F); // v16.10 증축 (공정 · 격자 높이 · 더한 무게)
+        w.Failsafe.Hash(I); w.Major.Hash(I); // v16.19 차압 문 · 예비 회로 · 큰 사고
         return h;
     }
 }

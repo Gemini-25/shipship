@@ -145,10 +145,10 @@ public sealed class FailsafeSystem
     {
         if (Durability.Legacy) return;
         var p = _w.Power;
-        bool onBattery = !p.ReactorOnline || p.LowPowerMode;
+        bool onBattery = !p.ReactorOnline || p.LowPowerMode || p.BatteryFlow < -1f && p.BatteryPercent < 0.6f; // 원자로가 멈췄거나 모자라 배터리가 빠진다
         float b = p.BatteryPercent;
         int want = !onBattery ? (b > 0.7f || p.ReactorRamp >= 1f ? 0 : _shedLevel) : b < 0.3f ? 2 : b < 0.6f ? Math.Max(1, _shedLevel) : _shedLevel;
-        if (!onBattery && p.ReactorRamp >= 1f) want = 0;
+        if (!onBattery && p.ReactorRamp >= 1f && p.BatteryFlow >= 0f) want = 0;
         if (want != _shedLevel)
         {
             int before = _shedLevel;
@@ -184,6 +184,39 @@ public sealed class FailsafeSystem
         PartitionsTick();
         AltTick();
         if (w.Tick >= _nextRing) { _nextRing = w.Tick + SimTime.Minutes(10); RingTick(); }
+        Review();
+    }
+
+    private bool _wasOnline = true;
+    private long _offSince = -1;
+    public int Reviews;
+
+    /// <summary>주 컴퓨터가 멎었다 다시 돌면: 멎은 동안 저절로 버틴 일(문 · 댐퍼 · 칸막이 · 회로)을 읽고 정리한다.</summary>
+    private void Review()
+    {
+        var w = _w;
+        bool on = w.Automation.MainOnline;
+        if (!on && _wasOnline) _offSince = w.Tick;
+        if (on && !_wasOnline && _offSince >= 0)
+        {
+            var seen = Events.Where(e => e.Tick >= _offSince).ToList();
+            if (seen.Count > 0)
+            {
+                int latch = seen.Count(e => e.Kind == "latch"), damp = seen.Count(e => e.Kind == "damper"), part = seen.Count(e => e.Kind == "partition"), ats = seen.Count(e => e.Kind == "ats"), fail = seen.Count(e => e.Kind == "fail");
+                var parts = new List<string>();
+                if (latch > 0) parts.Add($"차압 문 {latch}개가 저절로 닫혔다");
+                if (damp > 0) parts.Add($"댐퍼 {damp}개가 저절로 닫혔다");
+                if (part > 0) parts.Add($"칸막이 {part}개를 펼쳤다");
+                if (ats > 0) parts.Add($"{ats}개 방이 예비 회로로 넘어갔다");
+                if (fail > 0) parts.Add($"문 {fail}개는 못 닫혔다 — 그쪽부터 살핀다");
+                if (parts.Count > 0)
+                {
+                    Reviews++;
+                    w.Automation.Reason("fs:review", $"멎어 있던 동안 배가 스스로 버틴 일 — {string.Join(" · ", parts)}", SimTime.Minutes(30));
+                }
+            }
+        }
+        _wasOnline = on;
     }
 
     private static float P(Room? r) => r == null || r.Detached ? 0f : r.Air.Pressure;
@@ -192,17 +225,24 @@ public sealed class FailsafeSystem
     private void Doors()
     {
         var w = _w;
+        Dictionary<int, (Room low, List<Room> highs)>? burst = null;
         foreach (var d in w.Ship.Doors)
         {
             if (d.Removed || d.IsExternal || d.RoomA is not Room a || d.RoomB is not Room b) continue;
             float dp = MathF.Abs(P(a) - P(b));
             bool latched = _latched.ContainsKey(d.Id);
-            float thr = _rated.Contains(d.Id) ? RatedLatchKpa : LatchKpa;
+            bool rated = _rated.Contains(d.Id);
+            float thr = rated ? RatedLatchKpa : LatchKpa;
             if (!latched)
             {
-                if (dp < thr || d.Welded) continue;
+                if (dp < 3f || d.Welded) continue;
                 var low = P(a) < P(b) ? a : b;
                 var high = low == a ? b : a;
+                // 낮은 쪽이 우주로 새고 있으면 작은 차에도 · 끌려가 빠진 방이면 65kPa 아래(압력 경계는 80)부터 —
+                // 조금 빠진 통로 때문에 온 배의 문을 닫아 걸지 않게
+                bool venting = low.Leaking || low.Detached;
+                bool need = venting ? dp >= (rated ? 3f : 5f) : dp >= thr && P(low) < (rated ? 80f : 65f);
+                if (!need) continue;
                 if (d.JammedOpen || d.Blocked || d.Bent > 0.3f)
                 {
                     if (_failNoted.Add(d.Id))
@@ -220,12 +260,13 @@ public sealed class FailsafeSystem
                 _latched[d.Id] = w.Tick;
                 _failNoted.Remove(d.Id);
                 d.Locked = true;
+                d.Openness = MathF.Min(d.Openness, 0.25f); // 압력에 떠밀려 쾅 닫힌다
                 Latches++;
-                string lt = $"{low.Name} 감압 {P(low):0}kPa — {high.Name} 쪽 차압 문이 저절로 닫혀 걸렸다";
-                w.Log.Add(w.Tick, LogKind.Ship, lt);
+                Note("latch", $"{low.Name} 감압 {P(low):0}kPa — {high.Name} 쪽 차압 문이 저절로 닫혔다", low, d);
                 MarkLog.Add(high.Marks, w.Tick, $"차압 문이 저절로 닫혔다 ({low.Name} 감압)");
-                Note("latch", lt, low, d);
-                w.Automation.Reason("fs:latch:" + low.Id, $"{low.Name} 감압 — 차압 문이 저절로 닫혀 구획이 버틴다 · {high.Name}은(는) {P(high):0}kPa 유지 · 구멍을 막으면 기압이 맞춰져 풀린다", SimTime.Minutes(30));
+                burst ??= new();
+                if (!burst.TryGetValue(low.Id, out var e)) burst[low.Id] = e = (low, new List<Room>());
+                if (!e.highs.Contains(high)) e.highs.Add(high);
                 Witness(d, low, high);
             }
             else
@@ -236,13 +277,20 @@ public sealed class FailsafeSystem
                     _latched.Remove(d.Id);
                     d.Locked = false;
                     Unlatches++;
-                    string text = $"{a.Name}·{b.Name} 기압이 맞춰져 차압 문이 풀렸다";
-                    w.Log.Add(w.Tick, LogKind.Ship, text);
-                    Note("unlatch", text, a, d);
+                    Note("unlatch", $"{a.Name}·{b.Name} 기압이 맞춰져 차압 문이 풀렸다", a, d);
                 }
                 else if (dp < ReleaseKpa) _latched.Remove(d.Id); // 격벽 잠금이 이어받았다
                 else if (!d.Locked && dp >= thr) d.Locked = true; // 누가 격벽을 풀었지만 아직 차가 크다 — 다시 걸린다
             }
+        }
+        if (burst == null) return;
+        // 방 하나에 한 줄로 (문 여럿이 한꺼번에 닫혀도)
+        foreach (var (low, highs) in burst.Values.OrderBy(x => x.low.Id))
+        {
+            string names = highs.Count <= 3 ? string.Join("·", highs.Select(h => h.Name)) : $"{highs[0].Name} 등 {highs.Count}곳";
+            string text = $"{low.Name} 감압 {P(low):0}kPa — {names} 쪽 차압 문이 저절로 닫혔다";
+            w.Log.Add(w.Tick, LogKind.Ship, text);
+            w.Automation.Reason("fs:latch:" + low.Id, $"{low.Name} 감압 — 차압 문이 저절로 닫혀 옆 구획이 버틴다 · {highs[0].Name} {P(highs[0]):0}kPa 유지 · 구멍을 막으면 기압이 맞춰져 풀린다", SimTime.Minutes(30));
         }
     }
 
