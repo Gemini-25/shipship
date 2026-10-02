@@ -16,7 +16,9 @@ public static partial class Program
     /// <summary>위기 장면 하나를 돌리며 잰다: 공황 · 공황 중 사망 · 대응 없이 죽은 사람 · 보조 발전기 · 위급 작업에 붙은 인원.</summary>
     private static CrisisRun MeasureScene(int seed, string scene, float hours)
     {
-        var w = DayOne(seed, "Hanbit");
+        string ship = "Hanbit";
+        if (scene.Contains('@')) { ship = scene[(scene.IndexOf('@') + 1)..]; scene = scene[..scene.IndexOf('@')]; }
+        var w = DayOne(seed, ship);
         w.CrewCanDie = true;
         int panics0 = w.Minds.Panics;
         var r = new CrisisRun();
@@ -32,8 +34,23 @@ public static partial class Program
             case "fire":
                 Scenarios.Apply(w, "combo", out _);
                 break;
+            case "bigmeteor":
+                w.Hazards.FireStory("bigmeteor", null);
+                break;
+            case "storm":
+                w.Hazards.FireStory("MeteorShower", null);
+                break;
             case "chaos":
                 Scenarios.Apply(w, "chaos", out _);
+                break;
+            case "harsh":
+                // 새벽 두 시 · 잠든 침실에 큰 운석 · 유성우 · 냉각 펌프가 서서 원자로가 멎는다 · 발전기 방 데이터선이 끊겨 원격 기동이 안 된다
+                while (Math.Abs(SimTime.HourOfDay(w.Tick) - 2f) > 0.05f) w.Step();
+                Incidents.Meteor(w, Scenarios.OuterTarget(w, RoomType.Quarters), 1f);
+                Player.Hazard(w, HazardKind.MeteorShower, default);
+                foreach (var p in w.Ship.FurnitureOf(FurnitureType.CoolantPump)) w.Machines.Break(p.Machine!, FaultKind.PumpSeized);
+                w.Power.BatteryCharge = w.Power.BatteryCapacity * 0.3f;
+                CutAuxData(w);
                 break;
             case "night":
                 while (Math.Abs(SimTime.HourOfDay(w.Tick) - 23f) > 0.05f) w.Step();
@@ -68,8 +85,11 @@ public static partial class Program
                 logAt = es.Count;
                 if ((w.Tick - t0) % SimTime.Minutes(30) < 15)
                     Console.WriteLine($"    {SimTime.Clock(w.Tick)} 배터리 {w.Power.BatteryPercent * 100:0}% 흐름 {w.Power.BatteryFlow:0.0} 원자로 {(w.Power.ReactorOnline ? "켜짐" : "꺼짐")} 한도 {w.Power.ReactorLimit:0} 수요 {w.Power.Demand:0}/{w.Power.Delivered:0} 보조 {w.Power.AuxRunning} 위기 {Crisis.Name(Crisis.Level(w))} · 공황 {w.Crew.Count(c => c.Mind.Panicking(w.Tick))}");
+                string? who = Environment.GetEnvironmentVariable("CR_WHO");
                 foreach (var c in w.Crew)
                 {
+                    if (who != null && c.Name == who && !c.Dead && (w.Tick - t0) % SimTime.Minutes(2) < 15)
+                        Console.WriteLine($"      · {SimTime.Clock(w.Tick)} {c.Room?.Name} {Doing(c, w)} 체력 {c.Vitals.Health:0.00} 산소 {c.Vitals.Oxygen:0.00} 압력 {c.Room?.Air.Pressure:0} 우주복 {(c.Suit != null ? $"{c.Suit.Oxygen:0.0}" : "-")}");
                     if (c.Dead && !dead0.Contains(c.Id)) Console.WriteLine($"      ✝ {c.Name} {c.Vitals.InjuryCause} · 마지막: {lastDoing.GetValueOrDefault(c.Id)}");
                     if (!c.Dead) lastDoing[c.Id] = $"{SimTime.Clock(w.Tick)} {c.Room?.Name} {Doing(c, w)} 체력 {c.Vitals.Health:0.00} 산소 {c.Vitals.Oxygen:0.00} 공황 {c.Mind.Panicking(w.Tick)}";
                 }
@@ -105,6 +125,17 @@ public static partial class Program
         r.Panics = w.Minds.Panics - panics0;
         r.Snaps = CrisisSnaps(w);
         return r;
+    }
+
+    /// <summary>보조 발전기 방의 데이터선을 끊는다 (주 컴퓨터가 원격으로 못 켠다).</summary>
+    private static void CutAuxData(World w)
+    {
+        var aux = w.Ship.FurnitureOf(FurnitureType.AuxGenerator).FirstOrDefault();
+        if (aux == null) return;
+        w.Net.EnsureBuilt();
+        foreach (var l in w.Net.Links.Where(l => l.Kind == NetKind.Data && (l.Room == aux.Room || l.Door != null && (l.Door.RoomA == aux.Room || l.Door.RoomB == aux.Room))).ToList())
+            w.Net.Hurt(l, 1f, "합선");
+        w.Net.Update(0f);
     }
 
     /// <summary>이 사람이 거드는 일 (없으면 null) — 예전 AI에는 없다.</summary>
@@ -151,10 +182,14 @@ public static partial class Program
         var seeds = Environment.GetEnvironmentVariable("CR_SEEDS") is string ss ? ss.Split(",").Select(int.Parse).ToArray() : new[] { seed, seed + 4, seed + 13, seed + 22 };
         var scenes0 = Environment.GetEnvironmentVariable("CR_SCENES")?.Split(",") ?? new[] { "meteor", "blackout", "fire" };
         bool off0 = CrisisCrewSystem.Off;
+        float lv0 = Storyteller.LevelValue;
+        if (Environment.GetEnvironmentVariable("CR_LEVEL") is string lv) Storyteller.LevelValue = float.Parse(lv);
+        string only = Environment.GetEnvironmentVariable("CR_ONLY") ?? "";
         CrisisCrewSystem.Off = true;
-        var before = Environment.GetEnvironmentVariable("CR_AFTER") == "1" ? new() : MeasureBundle(seeds, scenes0, 6f);
+        var before = only == "after" ? new() : MeasureBundle(seeds, scenes0, 6f);
         CrisisCrewSystem.Off = off0;
-        var after = MeasureBundle(seeds, scenes0, 6f);
+        var after = only == "before" ? new() : MeasureBundle(seeds, scenes0, 6f);
+        Storyteller.LevelValue = lv0;
         PrintBundle("전 · 예전 승무원", before);
         PrintBundle("후", after);
         return _fails;

@@ -725,6 +725,7 @@ public partial class ShipView : Node2D
         // 쓰러진 사람은 밑에, 업힌 사람은 업은 사람 위에
         foreach (var c in _world.Crew.OrderBy(c => c.CarriedBy != null ? 2 : c.Down ? 0 : 1)) PaintCrew(ci, c);
         PaintCommandBadges(ci); // v13.1 선장 별 · 지휘자 테 · 조 배지
+        PaintStations(ci); // v16.21 비상 배치 완장 · 거드는 손 · 정신 차리게 한 손
         PaintMeeting(ci); // v13.2 회의 장면 · 발언 말풍선
         PaintMinds(ci); // v13.3 공황 · 영웅심 · 분노 · 모름
         PaintEmotions(ci); // v16.15 머리 위 감정 그림 (분노 · 두려움 · 기쁨 · 슬픔 · 수치 · 자부심)

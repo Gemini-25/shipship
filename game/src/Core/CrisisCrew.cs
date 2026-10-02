@@ -41,7 +41,7 @@ public sealed partial class CrisisCrewSystem
     public CrisisCrewSystem(World w) => _w = w;
 
     public StationBill Bill { get; } = new();
-    public int Snaps, HandSnaps, BodyFirsts, Masks, Doors, AuxCalls, AuxEarly, Joins, Leads, Redraws, Fills, Drills, Debriefs, Musters, ProcUses;
+    public int Tanks, Snaps, HandSnaps, BodyFirsts, Masks, Doors, AuxCalls, AuxEarly, Joins, Leads, Redraws, Fills, Drills, Debriefs, Musters, ProcUses;
     public float HelpHours;
     /// <summary>화면용: 최근 정신 차리게 한 손 (누가 → 누구, 손이면 true).</summary>
     public readonly List<(long tick, int from, int to, bool hand)> SnapMarks = new();
@@ -393,6 +393,32 @@ public sealed partial class CrisisCrewSystem
 
     /// <summary>산소 마스크를 쓰고 있다 (연기 · 묽은 산소에서 숨을 잇는다 — 진공에서는 소용없다).</summary>
     public bool Masked(CrewMember c) => !Off && _masked.TryGetValue(c.Id, out var t) && t > _w.Tick;
+
+    /// <summary>입은 우주복의 산소가 한 시간도 안 남았으면 보관함에서 새 통으로 갈아 끼운다 (보관함의 한 벌과 바꿔 입거나 · 공기 탱크에서 채운다). 못 채우면 false.</summary>
+    public bool FreshTank(CrewMember c, Furniture locker)
+    {
+        if (c.Suit is not SuitState s || s.Oxygen > 1f) return true;
+        if (locker.Storage!.Take(ItemKind.Suit, 1) > 0)
+        {
+            locker.Storage.Add(ItemKind.Suit, 1);
+            s.Oxygen = SuitState.TankHours;
+            s.Leak = 1f;
+        }
+        else if (_w.Air.Reserve >= RefillSuitActivity.Cost)
+        {
+            _w.Air.Reserve -= RefillSuitActivity.Cost;
+            s.Oxygen = SuitState.TankHours;
+            _w.SuitRefills++;
+        }
+        else
+        {
+            _w.Log.Add(_w.Tick, LogKind.Warning, "우주복 산소가 바닥인데 갈아 끼울 통이 없다 — 들어가지 않는다", c.Id);
+            return false;
+        }
+        Tanks++;
+        _w.Log.Add(_w.Tick, LogKind.Work, "우주복 산소통을 새것으로 갈아 끼웠다", c.Id);
+        return true;
+    }
 
     // ───────────────────────────── 보조 발전기 예측 ─────────────────────────────
 
