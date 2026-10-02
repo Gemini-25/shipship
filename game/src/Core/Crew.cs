@@ -474,6 +474,7 @@ public sealed class CrewMember
     {
         Job = job;
         world.Belongings.OnJobStarted(this, job); // v14.3 공구 빌리기·되찾기
+        world.RoomUse.OnJobStarted(this, job); // v16.17 옮긴 설비의 옛 자리로 가다 헷갈린다 · 보관함 드나듦
         JobReason = why?.Reason;
         if (job.LogText != null && (job.Activity?.Id != LastActivityId || job.AlwaysLog))
             world.Log.Add(world.Tick, job.LogKind, job.LogText, Id);

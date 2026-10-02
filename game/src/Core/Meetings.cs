@@ -384,6 +384,7 @@ public sealed class MeetingSystem
             Council.DecideNow(w, o, attendees, rec);
         w.Cosmic.Agenda(rec, attendees); // v18.13 대재난 대비 계획 · 그날을 기리는 관행
         w.Expedition.Agenda(rec, attendees, chair); // v16.12 원정 안건
+        w.RoomPlans.Agenda(rec, attendees, chair); // v16.17 승무원이 낸 방 안건 (옮기기 · 나누기 · 이름 · 꾸미기)
         // 4) 방침 하나: 모인 사람 다수가 바라는 쪽이 지금과 다르고, 바꾼 지 사흘이 지났으면 올린다
         if (rec.Items.Count(i => i.Topic.StartsWith("policy:")) == 0 && attendees.Count >= 3)
         {

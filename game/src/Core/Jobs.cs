@@ -221,6 +221,7 @@ public sealed class TakeToil : Toil
     private readonly int _count;
     private readonly bool _partialOk;
 
+    internal Furniture From => _from; // v16.17 옮긴 선반의 옛 자리 (헷갈림)
     public TakeToil(Furniture from, ItemKind kind, int count, bool partialOk = false)
     {
         _from = from;
@@ -252,6 +253,7 @@ public sealed class TakeKitToil : Toil
     private readonly ItemKind _kind;
     private readonly int _count;
 
+    internal Furniture From => _from; // v16.17
     public TakeKitToil(Furniture from, ItemKind kind, int count)
     {
         _from = from;
@@ -274,6 +276,7 @@ public sealed class PutToil : Toil
 {
     private readonly Furniture _into;
     public PutToil(Furniture into) => _into = into;
+    internal Furniture Into => _into; // v16.17
 
     public override ToilStatus Tick(CrewMember c, World w)
     {
@@ -350,6 +353,7 @@ public sealed class Job
     }
 
     public Toil? Current => _index >= 0 && _index < _toils.Count ? _toils[_index] : null;
+    internal IReadOnlyList<Toil> Toils => _toils; // v16.17 이 일이 손댈 보관함 (옛 자리 습관)
 
     /// <summary>뒤에 단계를 덧붙인다 (예: EVA를 마치고 에어락으로 돌아온다).</summary>
     internal void Append(IEnumerable<Toil> toils)

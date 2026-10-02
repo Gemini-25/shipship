@@ -161,7 +161,8 @@ public sealed class World
     public DailySceneSystem Scenes { get; } // v16.1 일상 → 행동 (장면 · 인수인계 · 쪽지)
     public CookingSystem Cooking { get; } public SmellSystem Smells { get; } // v16.8 실제 음식 · 냄새
     public PortableSystem Portable { get; } // v16.7 이동식 장비
-    public BlastSystem Blast { get; } // v16.13 폭발 공통 물리 · 폭발성 물건 · 의도적 폭파
+    public BlastSystem Blast { get; } // v16.13
+    public RoomUseSystem RoomUse { get; } public RoomPlanSystem RoomPlans { get; } // v16.17 쓰임이 정하는 용도 · 승무원이 정하는 방 폭발 공통 물리 · 폭발성 물건 · 의도적 폭파
     public ShipOriginSystem Origin { get; } // v16.9 배의 내력 (설계사 · 시작 상태 · 숨은 이야기 · 갈라짐 · 침대 교대)
     public OutsideSystem Outside { get; } // v15.4 외부 사건 40
     public EvaRiskSystem EvaRisk { get; } // v16.11 선외 작업의 위험 (우주복 · 생명줄 · 표류 · 무전)
@@ -266,6 +267,7 @@ public sealed class World
         Cooking = new CookingSystem(this); Smells = new SmellSystem(this); // v16.8
         Portable = new PortableSystem(this); // v16.7
         Blast = new BlastSystem(this); // v16.13
+        RoomUse = new RoomUseSystem(this); RoomPlans = new RoomPlanSystem(this); // v16.17
         Origin = new ShipOriginSystem(this);
         Outside = new OutsideSystem(this);
         EvaRisk = new EvaRiskSystem(this); // v16.11
@@ -357,6 +359,7 @@ public sealed class World
             Culture.Update(dt); // v14.9 겪은 일이 관행이 되어 전해진다
             pf = Prof.Lap("sys.Culture", pf);
             Daily.Update(dt); // v15 사고가 아닌 날의 일상 사건
+            RoomUse.Update(dt); RoomPlans.Update(dt); // v16.17 쓰임 → 용도 · 승무원 안건 → 회의 → 공사
             Cosmic.Update(dt); // v18.13 우주 대재난: 예보 · 대비 · 본 사건 · 후유증
             pf = Prof.Lap("sys.Daily", pf);
             Blast.Update(dt); // v16.13 폭발성 물건 · 연쇄 · 이명 · 흔적 · 위험 배치 읽기

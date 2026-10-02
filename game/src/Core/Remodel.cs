@@ -13,21 +13,21 @@ namespace ShipSim.Core;
 public static class Remodel
 {
     /// <summary>나눌 계획: 칸막이 벽 칸들, 그 가운데 문, 새 방으로 떼어 낼 쪽.</summary>
-    public sealed record SplitPlan(Room Room, List<Cell> Wall, Cell Door, bool Vertical, HashSet<Cell> SideB);
+    public sealed record SplitPlan(Room Room, List<Cell> Wall, Cell Door, bool Vertical, HashSet<Cell> SideB, bool Fair = false);
 
     public const int MinRoomCells = 30;
     public const int MinSideCells = 12;
 
     /// <summary>이 방을 나눌 수 있는 칸막이 줄 (방 가운데에 가까운 것부터). 없으면 null.</summary>
-    public static SplitPlan? FindSplit(World w, Room room)
+    public static SplitPlan? FindSplit(World w, Room room, int edge = 3) // v16.17 승무원이 정한 칸막이는 벽에서 두 칸까지 (창고 절반)
     {
         var ship = w.Ship;
         if (room.Type is RoomType.Corridor or RoomType.Airlock || room.Detached || room.Abandoned || room.OffLimits || room.Docked
             || room.Leaking || room.Lockdown || room.Cells.Count < MinRoomCells) return null;
         var cells = new HashSet<Cell>(room.Cells);
         var candidates = new List<(bool vertical, int at, float score)>();
-        for (int x = room.MinX + 3; x <= room.MaxX - 3; x++) candidates.Add((true, x, MathF.Abs(x + 0.5f - room.Center.X)));
-        for (int y = room.MinY + 3; y <= room.MaxY - 3; y++) candidates.Add((false, y, MathF.Abs(y + 0.5f - room.Center.Y) + 0.25f));
+        for (int x = room.MinX + edge; x <= room.MaxX - edge; x++) candidates.Add((true, x, MathF.Abs(x + 0.5f - room.Center.X)));
+        for (int y = room.MinY + edge; y <= room.MaxY - edge; y++) candidates.Add((false, y, MathF.Abs(y + 0.5f - room.Center.Y) + 0.25f));
         foreach (var (vertical, at, _) in candidates.OrderBy(c => c.score))
         {
             var line = cells.Where(c => vertical ? c.X == at : c.Y == at).OrderBy(c => vertical ? c.Y : c.X).ToList();
@@ -56,19 +56,23 @@ public static class Remodel
             if (room.Furniture.Any(f => f.UseSpots.Count > 0 && f.UseSpots.All(lineSet.Contains))) continue;
             // 연결부는 양쪽에 하나 이상 (각 칸이 선체에 따로 붙어 있어야 한다)
             int ja = 0, jb = 0;
-            foreach (var j in room.Joints.Where(j => !j.Released))
+            foreach (var j in FairOrder(room.Joints.Where(j => !j.Released), sideA, sideB, edge < 3))
                 if (JointSide(j, sideA, sideB, ja, jb)) jb++; else ja++;
             if (ja == 0 || jb == 0) continue;
             // 떼어 낼 쪽: 원래 문(통로 쪽)이 없는 쪽을 새 방으로 (없으면 작은 쪽)
             bool aHasDoor = room.Doors.Any(d => !d.IsExternal && Cell.Dirs4.Any(n => sideA.Contains(d.Cell + n)));
             bool bHasDoor = room.Doors.Any(d => !d.IsExternal && Cell.Dirs4.Any(n => sideB.Contains(d.Cell + n)));
             var split = aHasDoor && !bHasDoor ? sideB : bHasDoor && !aHasDoor ? sideA : sideB.Count <= sideA.Count ? sideB : sideA;
-            return new SplitPlan(room, line, dc, vertical, split);
+            return new SplitPlan(room, line, dc, vertical, split, edge < 3);
         }
         return null;
     }
 
     /// <summary>연결부가 어느 쪽 외벽에 박혔나 (true = B). 칸막이 바로 끝에 박힌 것은 연결부가 적은 쪽으로.</summary>
+    /// <summary>v16.17 칸막이 끝에 걸친 연결부는 맨 뒤에 나눈다 (양쪽에 하나씩 가도록 — 승무원이 정한 칸막이만).</summary>
+    private static IEnumerable<Joint> FairOrder(IEnumerable<Joint> js, HashSet<Cell> a, HashSet<Cell> b, bool fair) =>
+        fair ? js.OrderBy(j => Cell.Dirs8.Any(d => a.Contains(j.Cell + d)) && Cell.Dirs8.Any(d => b.Contains(j.Cell + d)) ? 1 : 0).ToList() : js;
+
     private static bool JointSide(Joint j, HashSet<Cell> sideA, HashSet<Cell> sideB, int countA, int countB)
     {
         bool a = Cell.Dirs8.Any(d => sideA.Contains(j.Cell + d));
@@ -212,7 +216,7 @@ public static class Remodel
         // 5) 연결부: 떼어 낸 쪽 외벽에 박힌 것은 새 방의 것 (설계 연결부 수도 나눈다)
         var sideA = a.Cells.ToHashSet();
         int ka = 0, kb = 0;
-        foreach (var j in a.Joints.ToList())
+        foreach (var j in FairOrder(a.Joints.ToList(), sideA, p.SideB, p.Fair))
         {
             bool toB = JointSide(j, sideA, p.SideB, ka, kb);
             if (!toB) { ka++; continue; }

@@ -137,7 +137,10 @@ public sealed class Room
     /// <summary>v12.6 세부 종류 (격리실·체력단련실…). 기능(Type)은 본래 방을 이어받고, 이름·색·설명서·특수 효과는 이것을 따른다.</summary>
     public RoomType? Special { get; set; }
     public RoomType Kind => Special ?? Type;
-    public string Name => NameOverride ?? RoomTypes.Name(Kind);
+    public string Name => CustomName ?? NameOverride ?? RoomTypes.Name(Kind);
+    /// <summary>v16.17 쓰임에서 생긴 지금 용도 (설계 용도와 같으면 null) · 승무원이 회의로 붙인 이름 (설계 이름보다 먼저).</summary>
+    public RoomType? UsedAs { get; set; }
+    public string? CustomName { get; set; }
 
     /// <summary>v12.6 인접성: 이 방에 닿는 소음·진동·냄새·방사선 (0~1, 시스템 틱마다 옆방에서 번져 온다).</summary>
     public float Noise { get; set; }

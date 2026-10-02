@@ -240,10 +240,11 @@ public static class Facilities
         var fn = RoomCatalog.Function(key);
         foreach (var k in fn.Best)
             foreach (var r in ship.KindOf(k))
-                if (!r.Abandoned && (ok == null || ok(r))) return (r, 1f);
+                if (!r.Abandoned && r.UsedAs == null && (ok == null || ok(r))) return (r, 1f); // v16.17 다른 용도로 쓰이는 방은 뺀다
+        if (RoomUseSystem.BestUsed(ship, fn, ok) is Room used) return (used, 1f); // v16.17 쓰임으로 그 용도가 된 방 (창고 절반의 땀방)
         foreach (var (k, f) in fn.Fallback)
             foreach (var r in ship.KindOf(k))
-                if (!r.Abandoned && (ok == null || ok(r))) return (r, f);
+                if (!r.Abandoned && (ok == null || ok(r))) return (r, RoomUseSystem.Factor(fn, r, f));
         return (null, 0f);
     }
 
@@ -252,8 +253,9 @@ public static class Facilities
     {
         if (room == null) return 0f;
         var fn = RoomCatalog.Function(key);
-        if (fn.Best.Contains(room.Kind)) return 1f;
-        foreach (var (k, f) in fn.Fallback) if (room.Kind == k) return f;
-        return 0f;
+        float b = 0f;
+        if (fn.Best.Contains(room.Kind)) b = 1f;
+        else foreach (var (k, f) in fn.Fallback) if (room.Kind == k) b = f;
+        return RoomUseSystem.Factor(fn, room, b); // v16.17 쓰임이 설계를 이긴다
     }
 }

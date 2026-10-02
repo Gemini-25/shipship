@@ -422,6 +422,7 @@ public static class SaveGame
         w.EvaRisk.Hash(I, F); foreach (var d in w.Drones.Drones) { F(d.Hurt.Thruster); F(d.Hurt.Battery); F(d.Hurt.Swell); } // v16.11 선외 위험 · 드론 부위
         w.Expedition.Hash(I, F); foreach (var c in w.Crew) I(c.Away ? 1 : 0); // v16.12 원정
         w.Blast.Hash(I, F); // v16.13 폭발 · 폭발성 물건
+        w.RoomUse.Hash(I, F); w.RoomPlans.Hash(I, F); // v16.17 쓰임 · 방 이름 · 공사
         return h;
     }
 }
