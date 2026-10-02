@@ -36,6 +36,21 @@ public partial class ShipView
             var at = CrewPx(c) + new Vector2(r * 0.95f, r * 0.55f + bob);
             DrawStationTag(ci, at, role, 6.2f, stand, atPost);
         }
+        // 산소 마스크: 얼굴 앞 노란 컵 · 고무줄 · 어깨로 내려간 관
+        foreach (var c in w.Crew)
+        {
+            if (c.Dead || c.CarriedBy != null || !cc.Masked(c)) continue;
+            var p = CrewPx(c);
+            var f = new Vector2(c.Facing.X, c.Facing.Y);
+            if (f.LengthSquared() < 0.01f) f = new Vector2(0, 1);
+            f = f.Normalized();
+            var face = p + f * r * 0.55f + new Vector2(0, -r * 0.25f);
+            var side = new Vector2(-f.Y, f.X);
+            ci.DrawLine(face - side * r * 0.5f, face + side * r * 0.5f, new Color(0.2f, 0.2f, 0.2f, 0.8f), 1f, true);
+            ci.DrawCircle(face, r * 0.24f, new Color(0.98f, 0.78f, 0.2f));
+            ci.DrawCircle(face + f * r * 0.06f, r * 0.12f, new Color(0.75f, 0.55f, 0.1f));
+            ci.DrawPolyline(new[] { face, face + side * r * 0.35f + f * r * 0.1f, p + side * r * 0.55f + new Vector2(0, r * 0.3f) }, new Color(0.85f, 0.88f, 0.9f, 0.85f), 1.2f, true);
+        }
         // 거드는 사람 ↔ 이끄는 사람: 짧게 이은 끈과 손 (둘이 같은 곳을 잡고 있다)
         foreach (var o in w.Board.All)
         {
