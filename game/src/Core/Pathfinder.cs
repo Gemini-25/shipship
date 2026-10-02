@@ -24,8 +24,7 @@ public sealed class DistanceField
 /// 길을 고르는 사람의 성향. "갈 수는 있는데 가고 싶지는 않다"를 표현한다.
 /// 겁 많은 사람은 위험 비용을 크게 느끼고, 급한 일을 맡은 책임감 있는 사람은 덜 느낀다.
 /// </summary>
-public readonly record struct PathProfile(float HazardScale = 1f, bool Suit = false, bool Responder = false, float[]? Fear = null, bool Eva = false, bool Robot = false, bool NoCrawl = false, int[]? Spots = null)
-public readonly record struct PathProfile(float HazardScale = 1f, bool Suit = false, bool Responder = false, float[]? Fear = null, bool Eva = false, bool Robot = false, bool NoCrawl = false, int Who = -1)
+public readonly record struct PathProfile(float HazardScale = 1f, bool Suit = false, bool Responder = false, float[]? Fear = null, bool Eva = false, bool Robot = false, bool NoCrawl = false, int[]? Spots = null, int Who = -1)
 {
     // Who: 길을 고르는 사람 (출입 통제 문 권한을 따진다 · -1 = 따지지 않음 — 급한 일은 비상 해제 손잡이로 지나간다)
     /// <summary>선체 밖 한 칸을 지나는 추가 비용 (손으로 짚어 가며 느리게).</summary>
@@ -248,8 +247,6 @@ public sealed class Pathfinder
     private int[] _spotAdd = Array.Empty<int>();
     /// <summary>v17.5 장소의 기억: 그 사람이 피하는 칸의 비용 (급한 일로 달려갈 때는 40%만).</summary>
     private static int SpotCost(int[] sp, int i, bool responder) { for (int k = 0; k < sp.Length; k += 2) if (sp[k] == i) return responder ? sp[k + 1] * 2 / 5 : sp[k + 1]; return 0; }
-    private readonly Dictionary<(int start, float scale, int flags), FloodEntry> _floods = new();
-    private sealed class FloodEntry { public int Version; public float[]? Fear; public DistanceField Field = null!; }
     private readonly Dictionary<(int start, float scale, int flags, int bar), FloodEntry> _floods = new();
     public int FloodHits { get; private set; }
     public int FloodMisses { get; private set; }
@@ -307,11 +304,9 @@ public sealed class Pathfinder
         var grid = _ship.Grid;
         int version = StateVersion();
         int si = grid.InBounds(start) ? grid.Index(start) : -1;
-        var key = (si, profile.HazardScale, (profile.Suit ? 1 : 0) | (profile.Responder ? 2 : 0) | (profile.Eva ? 4 : 0) | (profile.Robot ? 8 : 0) | (profile.NoCrawl ? 16 : 0));
-        if (_floods.TryGetValue(key, out var e) && e.Version == version && SameFear(e.Fear, profile.Fear) && SameSpots(e.Spots, profile.Spots))
         int bar = MarkBarred(profile, si >= 0 ? _room[si] : -1);
         var key = (si, profile.HazardScale, (profile.Suit ? 1 : 0) | (profile.Responder ? 2 : 0) | (profile.Eva ? 4 : 0) | (profile.Robot ? 8 : 0) | (profile.NoCrawl ? 16 : 0), bar);
-        if (_floods.TryGetValue(key, out var e) && e.Version == version && SameFear(e.Fear, profile.Fear))
+        if (_floods.TryGetValue(key, out var e) && e.Version == version && SameFear(e.Fear, profile.Fear) && SameSpots(e.Spots, profile.Spots))
         {
             FloodHits++;
             Prof.Lap("path.Flood(캐시)", pf);
