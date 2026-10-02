@@ -63,12 +63,33 @@ public sealed class CosmicEvacuateActivity : Activity
         c.Room == null ? null : w.Cosmic.Events.FirstOrDefault(e => e.SealPlan && !e.Avoided && e.Phase <= CosmicPhase.Impact && w.Tick < e.Arrive + SimTime.Minutes(10)
             && (e.TargetRoom == c.Room.Id || e.Evac.Contains(c.Room.Id) && w.Tick >= e.Arrive - SimTime.Hours(2f)));
 
+    /// <summary>지금 비워야 하는 방인가 (봉쇄할 구획 · 마지막 두 시간의 파편 줄) — 머물지도 지나가지도 않는다.</summary>
+    public static bool Emptying(Room r, World w) => w.Cosmic.Events.Any(e => e.SealPlan && !e.Avoided && e.Phase <= CosmicPhase.Impact && w.Tick < e.Arrive + SimTime.Minutes(10)
+        && (e.TargetRoom == r.Id || e.Evac.Contains(r.Id) && w.Tick >= e.Arrive - SimTime.Hours(2f)));
+
+    /// <summary>이 길이 비우는 방을 지나가나.</summary>
+    public static bool Crosses(List<Cell>? path, World w)
+    {
+        if (path == null) return false;
+        Room? last = null;
+        foreach (var x in path)
+        {
+            var r = w.Ship.RoomAt(x);
+            if (r == null || r == last) continue;
+            last = r;
+            if (Emptying(r, w)) return true;
+        }
+        return false;
+    }
+
     /// <summary>파편이 지나갈 방인가 (거기로 숨거나 비켜 가지 않는다).</summary>
     public static bool InLine(Room r, World w) => w.Cosmic.Events.Any(e => e.SealPlan && !e.Avoided && e.Phase <= CosmicPhase.Impact && w.Tick < e.Arrive + SimTime.Minutes(10) && (e.TargetRoom == r.Id || e.Evac.Contains(r.Id)));
 
     public override (float, string) Score(CrewMember c, World w, DistanceField dist)
     {
         if (!CosmicCrew.Free(c) || Target(c, w) is not CosmicEvent e) return (0f, "—");
+        // 봉쇄할 구획의 문 앞에서 막고 있는 사람은 다 막고 나서 간다 (문간 바깥 — 그 구획 안이 아니면)
+        if (c.Room!.Id != e.TargetRoom && c.Job?.Activity is CosmicBraceActivity && CosmicBraceActivity.Mine(c, w) is { t.Kind: BraceKind.Seal } m && m.e == e) return (0f, "봉쇄하는 중");
         return (1.05f, $"{e.Spec.Name} 충돌 예상 — {c.Room!.Name}에서 나간다");
     }
 
@@ -99,6 +120,7 @@ public sealed class CosmicShelterActivity : Activity
         if (!CosmicCrew.Free(c)) return (0f, "—");
         var (e, urg, why) = CosmicCrew.ShelterCall(c, w);
         if (e == null) return (0f, "—");
+        if (CosmicEvacuateActivity.Emptying(c.Room!, w)) return (0f, "먼저 비우는 구획에서 나간다"); // 가장 가까운 안전한 방으로 (구획 비우기) — 대피소까지 파편 줄을 따라 걷지 않게
         if (w.Cosmic.RelExposure(c.Room!) <= 0.32f && !CosmicEvacuateActivity.InLine(c.Room!, w)) return (0.9f + 0.1f * urg, $"{why} — 여기서 기다린다");
         return (0.85f + 0.3f * urg + (w.Cosmic.Follows(c, CosmicCustomKind.Drill) ? 0.1f : 0f), $"{why} — 대피");
     }
@@ -114,12 +136,14 @@ public sealed class CosmicShelterActivity : Activity
         // 숨을 곳: 차폐 → 물벽 → 배 안쪽 · 너무 붐비면 다음 곳
         var order = cs.Refuges();
         order.AddRange(w.Ship.Rooms.Where(r => !order.Contains(r) && !r.Detached && !r.OffLimits && !r.Leaking && !r.Abandoned).OrderBy(cs.RelExposure).ThenBy(r => r.Id));
+        bool crossing = false;
         foreach (var room in order)
         {
             if (cs.RelExposure(room) >= cs.RelExposure(here) - 0.1f || CosmicEvacuateActivity.InLine(room, w)) continue;
             int inside = w.Crew.Count(o => !o.Dead && o != c && (o.Room == room || o.Job?.TargetRoom == room && o.Job.Activity is CosmicShelterActivity));
             if (inside >= Math.Max(3, room.Cells.Count / 2)) continue; // 꽉 찼다
             if (CosmicCrew.SpotIn(room, c, w, dist) is not Cell at) continue;
+            if (CosmicEvacuateActivity.Crosses(w.Paths.Find(c.Cell, at, c.PathProfile), w)) { crossing = true; continue; } // 비우는 구획 · 파편 줄을 지나가야 하면 다른 곳
             string where = (RoomCatalog.Tags(room.Kind) & RoomTag.Shielded) != 0 ? Ko.EuRo(room.Name) : cs.Water(room) > 0.3f ? $"물벽을 친 {Ko.EuRo(room.Name)}" : $"안쪽 {Ko.EuRo(room.Name)}";
             return new Job(this, "우주 재난 대피", new List<Toil> { new GotoToil(at), new WaitToil(SimTime.Minutes(40), Pose.Sitting) })
             {
@@ -127,6 +151,12 @@ public sealed class CosmicShelterActivity : Activity
                 OnFinished = (cm, world, st) => { if (st == ToilStatus.Succeeded && cm.Room == room) world.Cosmic.Stats.Sheltered++; },
             };
         }
+        // 숨을 곳이 모두 파편 줄 건너편이면 건너지 않고 여기서 몸을 낮추고 버틴다
+        if (crossing && !CosmicEvacuateActivity.Emptying(here, w))
+            return new Job(this, "대피", new List<Toil> { new WaitToil(SimTime.Minutes(20), Pose.Sitting) })
+            {
+                LogText = $"{e.Spec.Name} — 파편 줄을 건너지 않고 {here.Name}에서 버틴다", LogKind = LogKind.Warning, TargetRoom = here, InterruptMargin = 0.3f,
+            };
         return null;
     }
 }
@@ -149,10 +179,24 @@ public sealed class CosmicBraceActivity : Activity
         }
     }
 
+    /// <summary>이 사람이 맡아 하고 있는 대비 일.</summary>
+    internal static (CosmicEvent e, BraceTask t) Mine(CrewMember c, World w)
+    {
+        foreach (var e in w.Cosmic.Events)
+        {
+            if (e.Phase == CosmicPhase.Done) continue;
+            foreach (var t in e.Tasks)
+                if (t.By == c.Id && !t.Done) return (e, t);
+        }
+        return default;
+    }
+
     public override (float, string) Score(CrewMember c, World w, DistanceField dist)
     {
         if (!CosmicCrew.Free(c) || c.IsChild) return (0f, "—");
-        var first = OpenTasks(c, w).FirstOrDefault();
+        // 하고 있는 대비 일도 센다 (맡으면 목록에서 빠져, 다시 판단할 때 0점이 되어 창밖 보기 따위에 손을 놓던 것)
+        var first = c.Job?.Activity is CosmicBraceActivity ? Mine(c, w) : default;
+        if (first.t == null) first = OpenTasks(c, w).FirstOrDefault();
         if (first.t == null) return (0f, "—");
         var (e, t) = first;
         if (t.Kind == BraceKind.Restart) return (0.55f, $"{e.Spec.Name} 지나감 — 꺼 둔 장비를 다시 켠다");
@@ -204,6 +248,9 @@ public sealed class CosmicBraceActivity : Activity
         if (task.Kind == BraceKind.Supplies && ship.Rooms.FirstOrDefault(r => !r.Detached && r.Type is RoomType.Storage or RoomType.Mess && r.Id != task.RoomId) is Room store && CosmicCrew.SpotIn(store, c, w, dist, free: false) is Cell ss)
         { toils.Add(new GotoToil(ss)); toils.Add(new WorkToil(0.08f, Skill.Mechanics, null)); }
         toils.Add(new GotoToil(cell));
+        // 봉쇄: 안에 남은 사람이 다 나올 때까지 문 앞에서 기다렸다가 닫기 시작한다 (반쯤 막다가 사람이 있어 처음부터 다시 하지 않게)
+        if (task.Kind == BraceKind.Seal && task.RoomId >= 0 && task.RoomId < ship.Rooms.Count && ship.Rooms[task.RoomId] is Room sealRoom)
+            toils.Add(new WaitToil(SimTime.Minutes(30), Pose.Standing) { DoneWhen = (cm, world) => !world.Crew.Any(x => !x.Dead && x.Room == sealRoom) });
         toils.Add(new WorkToil(task.Hours, SkillOf(task.Kind), null));
         toils.Add(new DoToil((cm, world) =>
         {
