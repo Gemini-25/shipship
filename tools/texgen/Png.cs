@@ -71,7 +71,7 @@ public static class Png
                     int c = x >= 4 && y > 0 ? rgba[(y - 1) * stride + x - 4] : 0;
                     int v = f switch { 0 => cur, 1 => cur - a, 2 => cur - b, 3 => cur - ((a + b) >> 1), _ => cur - Paeth(a, b, c) };
                     trial[x] = (byte)v;
-                    sum += Math.Abs((sbyte)(byte)v);
+                    { int sv = (sbyte)(byte)v; sum += sv < 0 ? -sv : sv; }
                 }
                 if (sum < bestSum) { bestSum = sum; bestF = f; Array.Copy(trial, best, stride); }
             }
