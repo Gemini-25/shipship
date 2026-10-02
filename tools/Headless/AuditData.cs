@@ -34,6 +34,7 @@ public sealed class AuditRun
     public List<AStall> Stalls = new();
     public Dictionary<string, int> TextHits = new();
     public List<string> TextEx = new();
+    public int Bleeds, Arrests, Revived, TraumaDied, Flashes, WorkHurts, WorkBad, Paged, DarkFalls; // v16.24 큰 상처 뒤
 }
 
 /// <summary>죽음 하나: 죽기 전 30분 동안 무엇을 했나.</summary>

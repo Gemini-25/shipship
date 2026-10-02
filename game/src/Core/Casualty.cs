@@ -25,6 +25,7 @@ public sealed class Trauma
     public bool Asleep { get; init; }         // 다칠 때 자고 있었다
     public bool SelfPressed { get; set; }
     public float PressMul { get; set; } = 1f; // 스스로 누른 만큼 (정신을 잃으면 1로)
+    public int Helped { get; set; } = -1;     // 곁의 사람이 눌러 늦췄다 (깊은 상처)
     public long HelperSince { get; set; } = -1;
     public int Helper { get; set; } = -1;
     public bool Paged { get; set; }           // 컴퓨터가 불렀다
@@ -203,9 +204,22 @@ public sealed class CasualtySystem
             // 곁의 사람이 눌러 준다 · 식혀서 감싼다 (2분 남짓)
             if (helper != null && helped >= 2f)
             {
-                Pressed++;
-                Stop(c, t, t.Kind == TraumaKind.Bleed ? $"{Ko.IGa(helper.Name)} 상처를 눌러 피를 멎게 했다" : $"{Ko.IGa(helper.Name)} 덴 곳을 식혀 감쌌다", helper);
-                return;
+                // 의료를 아는 손이거나 작은 상처면 그 자리에서 멎는다 · 깊은 상처는 눌러서 늦출 뿐 — 치료(의무실 · 의무관)까지 가야 한다
+                bool sure = helper.Role == CrewRole.Medic || helper.SkillLevel(Skill.Medicine) >= 0.5f || t.Rate < 0.15f;
+                if (sure)
+                {
+                    Pressed++;
+                    Stop(c, t, t.Kind == TraumaKind.Bleed ? $"{Ko.IGa(helper.Name)} 상처를 눌러 피를 멎게 했다" : $"{Ko.IGa(helper.Name)} 덴 곳을 식혀 감쌌다", helper);
+                    return;
+                }
+                if (t.Helped < 0)
+                {
+                    t.Helped = helper.Id;
+                    Pressed++;
+                    t.Rate *= 0.35f;
+                    helper.Say(w, Persona.Say(helper, "꽉 누르고 있어 — 의무실로 가자"));
+                    w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(helper.Name)} {c.Name}의 상처를 눌러 피를 늦췄다 — 깊어서 다 멎지는 않는다", c.Id);
+                }
             }
             // 작은 출혈은 저절로 멎는다 · 화상 쇼크는 천천히 준다
             float clot = t.Kind == TraumaKind.Bleed ? (t.Rate < 0.08f ? 1.0f : 0.1f) : 0.12f;
@@ -294,6 +308,55 @@ public sealed class CasualtySystem
         if (room != null) MarkLog.Add(room.Marks, w.Tick, $"{c.Name}: {KindWord(t.Kind)} — {why}");
         foreach (var o in w.Crew)
             if (!o.Dead && o != c && o.AffinityTo(c) > 0.3f) MarkLog.Add(o.Memory.Marks, w.Tick, $"{c.Name} — {why}");
+    }
+
+    // ───────────── 대응 · 수리는 그 자체로 위험하다 ─────────────
+    public int WorkHurts, WorkBad;
+
+    /// <summary>
+    /// 대응 · 수리를 마친 순간: 불길 · 찢어진 외판 · 살아 있는 배선 · 뜨거운 관을 만진 사람은 가끔 다친다.
+    /// 대개는 가볍게 · 가끔 크게 (급할수록 · 어두울수록 · 지칠수록 · 서툴수록 · 서두르는 버릇이면 더, 꼼꼼하면 덜).
+    /// 크게 다친 뒤가 어떻게 되는지는 곁에 누가 있나에 달렸다 (출혈 · 심정지 · 화상 쇼크).
+    /// </summary>
+    public void WorkRisk(CrewMember c, WorkOrder o)
+    {
+        var w = _w;
+        if (c.Dead || c.Away || c.Outside) return;
+        var m = o.Target.Furniture?.Machine;
+        (float p, string cause, string how) = o.Kind switch
+        {
+            WorkKind.Extinguish => (0.1f, "불길에 덴 화상", "불길이 확 덮쳐 데었다"),
+            WorkKind.SealBreach or WorkKind.RepairHull => (0.07f, "찢어진 외판에 베임", "찢어진 외판 끝에 베였다"),
+            WorkKind.WeldBulkhead => (0.07f, "용접 화상", "용접 불똥에 데었다"),
+            WorkKind.ResetBreaker or WorkKind.RestoreCircuit or WorkKind.InstallJumper or WorkKind.ReplacePanel or WorkKind.IsolatePower or WorkKind.BreakerOn
+                => (0.06f, "배선 감전", "살아 있는 선에 손이 닿았다"),
+            WorkKind.PatchPipe or WorkKind.ReplacePipe or WorkKind.LayBypass or WorkKind.CloseValve or WorkKind.IsolateMain or WorkKind.RepairRadiator
+                => (0.06f, "증기 화상", "관에서 뜨거운 김이 뿜어져 데었다"),
+            WorkKind.ManualStart or WorkKind.StartAux => (0.02f, "시동 손잡이에 맞음", "시동 손잡이가 튀어 팔을 쳤다"),
+            WorkKind.Repair when m != null && m.Spec.PowerDraw > 1f => (0.02f, "수리 중 감전", "전기가 남아 있던 단자를 만졌다"),
+            _ => (0f, "", ""),
+        };
+        if (p <= 0f) return;
+        float skill = c.SkillLevel(o.Skill);
+        p *= (o.Urgency >= 0.9f ? 1.4f : 1f) * (c.Room?.Dark == true ? 1.6f : 1f) * (c.Needs.Rest < 0.25f ? 1.4f : 1f) * (1.3f - 0.6f * skill)
+             * (Life.Has(c, Habit.Hasty) ? 1.3f : 1f) * (Life.Has(c, Habit.Methodical) ? 0.7f : 1f) * (c.Suit != null && !cause.Contains("감전") ? 0.5f : 1f);
+        if (!R.Chance(p)) return;
+        float u = R.Float();
+        bool bad = u > 0.75f, worst = u > 0.96f;
+        float dmg = worst ? R.Range(0.42f, 0.65f) : bad ? R.Range(0.16f, 0.32f) : R.Range(0.04f, 0.11f);
+        WorkHurts++;
+        if (bad) WorkBad++;
+        c.Vitals.Health = MathF.Max(0.02f, c.Vitals.Health - dmg * (worst ? 1.1f : 0.7f));
+        NeedsSystem.AddInjury(c.Vitals, dmg, cause);
+        string where = c.Room?.Name ?? "?";
+        w.Log.Add(w.Tick, bad ? LogKind.Warning : LogKind.Work, $"{c.Name}: {o.Title} — {how}" + (bad ? $" (체력 {c.Vitals.Health * 100:0}%)" : ""), c.Id);
+        MarkLog.Add(c.Memory.Marks, w.Tick, $"{o.Title} 하다 {how} ({where})");
+        if (bad)
+        {
+            Memory.Frighten(w, c, c.Room, 0.2f, how);
+            c.Say(w, Persona.Say(c, worst ? "으윽…" : "아악 — 괜찮아, 괜찮아"));
+            w.History.Add(w, HistoryKind.Casualty, $"{Ko.IGa(c.Name)} {o.Title} 하다 크게 다쳤다 — {how}", c.Room, new[] { c });
+        }
     }
 
     // ───────────── 불붙는 순간 곁에 있던 사람 ─────────────

@@ -567,7 +567,7 @@ public sealed partial class BodySystem
         if (urgent && spec.Loud > 0.45f && w.Ship.RoomAt(cell) is Room fr) fr.Noise = MathF.Min(1f, fr.Noise + 0.015f * spec.Loud);
 
         // v16.24 캄캄한 방 (정전 · 조명 나감 · 비상등 없음): 뛰면 문턱 · 설비 모서리에 걸린다 — 사다리 · 계단 칸이면 크게
-        if (w.Ship.RoomAt(cell) is { Dark: true } dr && R.Chance(urgent ? 0.004f : 0.0008f))
+        if (w.Ship.RoomAt(cell) is { Dark: true } dr && R.Chance(urgent ? 0.01f : 0.002f))
         {
             bool ladder = _w.Paths.Crawl[i] || dr.Type is RoomType.Reactor or RoomType.Engine or RoomType.Cooling;
             Fall(c, cell, ladder ? "캄캄한 데서 발을 헛디뎌 아래로 떨어졌다" : "캄캄한 데서 무언가에 걸려 넘어졌다", ladder ? 0.18f + R.Range(0f, 0.25f) : 0.02f + R.Range(0f, 0.03f), leg: ladder);

@@ -13,6 +13,26 @@ public static partial class Program
         if (Environment.GetEnvironmentVariable("AUDITFIX_STALL") is string stall) return AuditFixStall(seed, stall);
         if (Environment.GetEnvironmentVariable("AUDITFIX_AUX") is string aux) return AuditFixAux(seed, aux);
         if (Environment.GetEnvironmentVariable("AUDITFIX_EXPOSE") is string expo) return AuditFixExpose(seed, expo);
+        if (Environment.GetEnvironmentVariable("AUDITFIX_FIRE") is string fz)
+        {
+            var parts = fz.Split(',');
+            Storyteller.PersonaValue = 1f; Storyteller.LevelValue = 3f;
+            var w = World.CreateDefault(seed, 0, parts[0]); w.CrewCanDie = true; w.Log.Capacity = 4000;
+            long t0 = w.Tick, from = t0 + (long)(float.Parse(parts[1]) * SimTime.TicksPerHour), to = t0 + (long)(float.Parse(parts[2]) * SimTime.TicksPerHour);
+            int last = 0;
+            while (w.Tick < to)
+            {
+                w.Step();
+                if (w.Tick < from) continue;
+                if (w.Fire.Fires.Count != last)
+                {
+                    last = w.Fire.Fires.Count;
+                    var fc = w.Fire.Fires.Keys.FirstOrDefault();
+                    Console.WriteLine($"{(w.Tick - t0) / (float)SimTime.TicksPerHour:0.000}h 틱{w.Tick % World.SystemInterval} 불칸 {last} · 불붙음 {w.Casualty.Flashes} · " + string.Join(" ", w.Crew.Where(c => !c.Dead).OrderBy(c => (c.Position - fc.Center).LengthSquared()).Take(2).Select(c => $"{c.Name} {(c.Position - fc.Center).Length():0.0}")));
+                }
+            }
+            return 0;
+        }
         _fails = 0;
         Console.WriteLine($"점검 항해 고치기 시험 (v16.24) · 시드 {seed}\n");
         AfxHarm(seed);
@@ -23,7 +43,7 @@ public static partial class Program
             var w = DayOne(seed, "Mirinae"); w.CrewCanDie = true;
             Scenarios.Apply(w, "blackout", out _);
             int dark = 0;
-            for (int m = 0; m < 8 * 60; m++) { Run(w, SimTime.Minutes(1)); dark += w.Ship.LiveRooms.Count(r => r.Dark); }
+            for (int m = 0; m < 8 * 60; m++) { foreach (var r in w.Ship.LiveRooms) r.LightsOut = true; /* 전구가 다 나갔다 */ Run(w, SimTime.Minutes(1)); dark += w.Ship.LiveRooms.Count(r => r.Dark); }
             Check("정전으로 캄캄한 방에서 발을 헛디딘다 (본 사람은 조심한다)", w.Body.Stats.DarkFalls > 0, $"넘어짐 {w.Body.Stats.DarkFalls} · 캄캄한 방-분 {dark}");
             uint H() { var x = World.CreateDefault(seed, 0, "Hanbit"); Run(x, SimTime.TicksPerDay + SimTime.Hours(6)); return SaveGame.StateHash(x); }
             uint a = H(), b = H();
@@ -124,7 +144,8 @@ public static partial class Program
             var spot = v.Cell;
             for (int i = 0; i < SimTime.Minutes(5); i++) { if (i % 20 == 0) { v.Position = spot.Center; AfxNextTo(w, h, v); h.EndJob(w, ToilStatus.Interrupted); } w.Step(); }
             var done = w.Casualty.Done.LastOrDefault(x => x.CrewId == v.Id);
-            Check("곁에 있던 사람이 상처를 눌러 피가 멎는다 · 고마움이 남는다", w.Casualty.Of(v) == null && done != null && done.Outcome.Contains(h.Name) && v.Memory.Marks.Any(m => m.Text.Contains("살렸다")) && !v.Dead,
+            bool medic = h.Role == CrewRole.Medic || h.SkillLevel(Skill.Medicine) >= 0.5f;
+            Check(medic ? "곁의 의무관이 상처를 눌러 피가 멎는다 · 고마움이 남는다" : "곁의 사람이 눌러 피를 늦춘다 (깊은 상처는 치료까지 가야 멎는다)", !v.Dead && (medic ? w.Casualty.Of(v) == null && done != null && done.Outcome.Contains(h.Name) && v.Memory.Marks.Any(m => m.Text.Contains("살렸다")) : w.Casualty.Of(v) is Trauma tp && tp.Helped == h.Id && tp.Rate < 0.15f || done != null && done.Outcome.Contains(h.Name)),
                 $"{done?.Outcome ?? "아직"} · 체력 {v.Vitals.Health:0.00}" + (w.Casualty.Of(v) is Trauma tt ? $" · 열림 {tt.Kind} {tt.Rate:0.000} 도움 {tt.Helper} 부름 {tt.Paged} 스스로 {tt.SelfPressed} 방 {v.Room?.Name} 정신 {v.CanAct}" : $" · 닫힘 {w.Casualty.Done.LastOrDefault(x => x.CrewId == v.Id)?.Outcome}"));
         }
         // 혼자 · 컴퓨터가 못 보는 방 · 다른 사람은 모두 배 밖 → 출혈로 숨진다 (까닭이 남는다)
@@ -182,6 +203,28 @@ public static partial class Program
             }
             Check("심정지 — 곁에서 가슴을 누르면 살아나기도 한다", revived >= 1, $"{revived}/{tries}");
             Check("심정지 — 혼자면 몇 분 안에 숨진다 (사인: 심정지)", alone == tries, $"{alone}/{tries}");
+        }
+        // 대응 · 수리는 그 자체로 위험하다: 지친 채 캄캄한 방에서 급히 하면 더 자주 · 쉬고 밝은 데서 차분히 하면 덜
+        {
+            int Hurts(bool bad)
+            {
+                var w = DayOne(seed, "Mirinae"); w.CrewCanDie = true;
+                var room = AfxQuietRoom(w);
+                var v = w.Crew.First(c => c.CanAct);
+                Put(w, v, room); Run(w, 1);
+                var o = new WorkOrder { Kind = WorkKind.Extinguish, Target = WorkTarget.OfRoom(room), Urgency = bad ? 1.2f : 0.5f, Skill = Skill.Engineering };
+                int before = w.Casualty.WorkHurts;
+                for (int i = 0; i < 400; i++)
+                {
+                    v.Vitals.Health = 1f; v.Vitals.Injury = 0f; v.Vitals.Wounds.Clear();
+                    v.Needs.Rest = bad ? 0.1f : 0.9f;
+                    room.LightsOut = bad;
+                    w.Casualty.WorkRisk(v, o);
+                }
+                return w.Casualty.WorkHurts - before;
+            }
+            int calm = Hurts(false), rough = Hurts(true);
+            Check("불을 끄다 다치기도 한다 — 지치고 · 캄캄하고 · 급하면 훨씬 자주", calm > 0 && rough > calm * 2, $"차분히 {calm}/400 · 지쳐서 급히 캄캄한 데서 {rough}/400");
         }
         // 길이 끝까지 가나: 갇힌 사람 — 짙은 연기 · 진공 (아무도 못 온다)
         foreach (string kind in new[] { "연기", "진공" })
@@ -305,7 +348,7 @@ public static partial class Program
         long total = (long)(days * SimTime.TicksPerDay);
         var ex = new Dictionary<string, int>();
         void A(string k) => ex[k] = ex.GetValueOrDefault(k) + 1;
-        float minOx = 1f, minHp = 1f; var injPrev = new Dictionary<int, float>();
+        float minOx = 1f, minHp = 1f; var injPrev = new Dictionary<int, float>(); var fireSeen = new HashSet<Cell>();
         for (long t = 1; t <= total; t++)
         {
             w.Step();
@@ -339,6 +382,13 @@ public static partial class Program
                 if (r.Air.O2 < 15f) A($"[방] 산소<15 (사람 {Math.Min(n, 2)})");
             }
             if (w.Fire.Fires.Count > 0) A($"[불] 칸 {Math.Min(w.Fire.Fires.Count, 5)}");
+            if (w.Fire.Fires.Count > 0 && fireSeen.Count == 0)
+            {
+                var fc = w.Fire.Fires.Keys.First();
+                var near = w.Crew.Where(c => !c.Dead && c.Room != null).OrderBy(c => (c.Position - fc.Center).LengthSquared()).FirstOrDefault();
+                Console.WriteLine($"  {(w.Tick - SimTime.Hours(7)) / (float)SimTime.TicksPerHour:0.0}h 불 시작 {w.Ship.RoomAt(fc)?.Name} · 가장 가까운 {near?.Name} {(near == null ? -1 : (near.Position - fc.Center).Length()):0.0}칸 ({near?.Job?.Label}) · {w.Log.Entries.Where(e => e.Text.Contains("불")).Select(e => e.Text).LastOrDefault()}");
+            }
+            fireSeen.Clear(); foreach (var k in w.Fire.Fires.Keys) fireSeen.Add(k);
         }
         foreach (var kv in ex.OrderBy(k => k.Key, StringComparer.Ordinal)) Console.WriteLine($"  {kv.Key}: {kv.Value}분");
         Console.WriteLine($"최저 혈중 산소 {minOx:0.00} · 최저 체력 {minHp:0.00} · 쓰러짐 {w.Crew.Sum(c => c.Stats.TimesDown)} · 사망 {w.Crew.Count(c => c.Dead)}");

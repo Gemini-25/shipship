@@ -504,6 +504,7 @@ public static partial class WorkPlanners
                 if (status == ToilStatus.Succeeded) world.Causes.Worked(o, cm); // v12.2 누가 되돌렸나
                 if (status == ToilStatus.Succeeded) world.Life.AfterWork(cm, o); // v12.7 사람답게 틀린다 (왜 틀렸는지 남는다)
                 if (status == ToilStatus.Succeeded) world.CrisisCrew.Did(cm, o); // v16.21 해 본 절차가 손에 붙는다
+                if (status == ToilStatus.Succeeded) world.Casualty.WorkRisk(cm, o); // v16.24 불길 · 외판 · 살아 있는 선 · 뜨거운 관을 만진 손은 가끔 다친다
                 if (status != ToilStatus.Succeeded) world.Board.Release(o, cm);
                 if (status != ToilStatus.Succeeded)
                     World.Trace?.Invoke($"{SimTime.Clock(world.Tick)} {cm.Name} {o.Title} {status} @{cm.Job?.Current?.GetType().Name}");
