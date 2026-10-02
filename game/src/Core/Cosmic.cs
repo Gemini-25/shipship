@@ -1139,10 +1139,10 @@ public sealed class CosmicSystem
                 {
                     var r = rooms[i];
                     if (r.Detached) continue;
-                    float v = 0.75f * rp * w.Ambience.Exposure(r) * (0.6f + 0.4f * Facing(r, e, center.Value)) * (1f - 0.6f * Water(r));
+                    float v = 4f * rp * w.Ambience.Exposure(r) * (0.6f + 0.4f * Facing(r, e, center.Value)) * (1f - 0.6f * Water(r));
                     if (v > _rad[i]) _rad[i] = v;
                 }
-                OutsideRad = MathF.Max(OutsideRad, 0.9f * rp);
+                OutsideRad = MathF.Max(OutsideRad, 5f * rp); // 통합: 우주급은 정말 생존을 건다 — 바깥 방에서 시간당 2Sv 남짓 · 대피소(0.15)면 견딘다
             }
             float bp = FxNow(e, CosmicFx.Blind);
             if (bp > 0f) sensor = MathF.Min(sensor, MathF.Max(0.08f, 0.6f - 0.55f * bp));

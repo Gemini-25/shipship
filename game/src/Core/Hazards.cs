@@ -314,7 +314,7 @@ public sealed partial class HazardSystem
         float hours = w.Rng.Range(6f, 10f);
         bool extend = StormActive;
         if (!extend) StormSince = w.Tick;
-        float peak = w.Rng.Chance(0.3f) ? w.Rng.Range(1f, 1.6f) : w.Rng.Range(0.45f, 0.8f); // v16.26 센 양성자 폭풍은 대피소 밖이 위험하다
+        float peak = w.Rng.Chance(0.25f) ? w.Rng.Range(1.6f, 3f) : w.Rng.Range(0.45f, 0.9f); // v16.26 센 양성자 폭풍은 대피소 밖이 위험하다 · 통합: 센 것은 바깥 방에서 세 시간이면 방사선 병 (4Sv 넘게)
         StormPeak = extend ? MathF.Max(StormPeak, peak) : peak;
         StormUntil = Math.Max(StormUntil, w.Tick + SimTime.Hours(hours));
         // 처음 몰아칠 때: 전자 장비 두셋이 튀고, 움직이던 로봇 몇이 센서를 잃는다
@@ -857,7 +857,7 @@ public sealed partial class HazardSystem
             }
             case "fire":
             {
-                var room = prefer != null && rooms.Contains(prefer) ? prefer : rooms[rr.Range(0, rooms.Count)];
+                var room = prefer != null && rooms.Contains(prefer) ? prefer : Busy(rooms, r => r, rr); // 통합: 불도 대개 쓰는 방에서 난다 (조리 · 용접 · 전기 기구)
                 var floor = room.Cells.Where(ship.IsOpenFloor).ToList();
                 if (floor.Count == 0 || !Incidents.Fire(w, floor[rr.Range(0, floor.Count)])) return null;
                 string what = $"화재({room.Name})";

@@ -339,7 +339,14 @@ public sealed partial class HazardSystem
             {
                 var exposed = w.Crew.Where(c => !c.Dead && (c.Outside || c.Room != null && ship.Walls.Any(kv => kv.Value.IsHull && Hull.InsideRoom(ship, kv.Key) == c.Room))).ToList();
                 int sick = 0;
-                foreach (var c in exposed) if (w.Rng.Chance(c.Outside ? 0.8f : 0.2f) && w.Ailments.Catch(c, "radiation", null, "방사선 돌발") != null) sick++;
+                foreach (var c in exposed)
+                {
+                    // 통합: 몸에 쌓이는 피폭으로 (큰 피폭 단계 · 증상 · 치료가 같은 길을 탄다) — 선체 밖은 그대로 · 바깥 방은 외벽 비율만큼 · 대피소는 막는다
+                    float dose = c.Outside ? w.Rng.Range(1.5f, 3f) : w.Rng.Range(0.6f, 1.4f) * w.Ambience.Exposure(c.Room!) * ((RoomCatalog.Tags(c.Room!.Kind) & RoomTag.Shielded) != 0 ? 0.15f : 1f);
+                    c.Dose += dose;
+                    MarkLog.Add(c.Memory.Marks, w.Tick, $"방사선 돌발 — {dose:0.0}Sv 쬐었다");
+                    if (w.Rng.Chance(c.Outside ? 0.8f : 0.2f) && w.Ailments.Catch(c, "radiation", null, "방사선 돌발") != null) sick++;
+                }
                 Glitch("방사선 돌발");
                 return Inc($"방사선 돌발 — 바깥 쪽에 있던 {exposed.Count}명이 쬐었다 (앓는 사람 {sick})", null, "방사선 돌발", AlertLevel.Critical, true, exposed);
             }

@@ -344,7 +344,19 @@ public sealed class MajorIncidentSystem
     {
         var rooms = _w.Ship.Rooms.Where(r => !r.Detached && !r.Abandoned && ok(r)).OrderBy(r => r.Id).ToList();
         if (rooms.Count == 0) return null;
-        return prefer != null && rooms.Contains(prefer) ? prefer : rooms[R.Range(0, rooms.Count)];
+        if (prefer != null && rooms.Contains(prefer)) return prefer;
+        // 통합: 큰 사고도 대개 사람이 쓰고 · 지내는 곳에서 커진다 (돌리던 설비 · 자던 방 — 사람이 있으면 더 자주, 빈 방도 가끔)
+        float sum = 0f;
+        var wt = new float[rooms.Count];
+        for (int i = 0; i < rooms.Count; i++)
+        {
+            int n = 0;
+            foreach (var c in _w.Crew) if (!c.Dead && !c.Away && c.Room == rooms[i]) n++;
+            sum += wt[i] = 1f + 1.2f * Math.Min(3, n);
+        }
+        float x = R.Float() * sum;
+        for (int i = 0; i < rooms.Count; i++) { x -= wt[i]; if (x <= 0f) return rooms[i]; }
+        return rooms[^1];
     }
 
     private Furniture? Furn(FurnitureType t, Room? prefer = null)

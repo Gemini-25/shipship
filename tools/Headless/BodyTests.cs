@@ -75,7 +75,7 @@ public static partial class Program
             Force(w, p, new Job(null, "약 가지러", new List<Toil> { new GotoToil(inside), new WaitToil(10, Pose.Standing) }));
             bool reached = false, waited = false;
             CrewMember? helper = null;
-            for (int t = 0; t < SimTime.Minutes(40) && !reached; t++)
+            for (int t = 0; t < SimTime.Minutes(70) && !reached; t++) // 통합: 새 배는 의무실에서 약품고까지 서른 칸 넘게 걸어온다 (40분이면 오는 도중에 끝났다)
             {
                 w.Step();
                 if (b.Doors.Any(d => d.Caller == p.Id)) waited = true;

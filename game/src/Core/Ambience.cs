@@ -144,7 +144,7 @@ public sealed class AmbienceSystem
         foreach (var c in w.Crew)
         {
             if (c.Dead) continue;
-            float rad = c.Outside ? storm + 0.02f + w.Cosmic.OutsideRad : c.Room?.Radiation ?? 0f; // v18.13 선체 밖
+            float rad = c.Outside ? 4f * storm + 0.02f + w.Cosmic.OutsideRad : c.Room?.Radiation ?? 0f; // v18.13 선체 밖 · 통합: 선체가 막아 주지 못한다 (안쪽 방의 네 배)
             if (c.Suit != null) rad *= 0.7f;
             if (rad > 0.1f) c.Dose += (rad - 0.05f) * 0.5f * dt;
             else c.Dose = MathF.Max(0f, c.Dose - 0.005f * dt); // 몸이 아주 천천히 회복한다

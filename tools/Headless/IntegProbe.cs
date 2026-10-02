@@ -22,10 +22,11 @@ public static partial class Program
             var inside = pharm.Cells.Where(c => w.Ship.IsOpenFloor(c)).OrderBy(c => (c.Center - pharm.Center).LengthSquared()).First();
             Force(w, p, new Job(null, "약 가지러", new List<Toil> { new GotoToil(inside), new WaitToil(10, Pose.Standing) }));
             Room? last = p.Room;
-            for (int t = 0; t < SimTime.Minutes(40); t++)
+            for (int t = 0; t < SimTime.Minutes(60); t++)
             {
                 w.Step();
                 if (p.Room != last) { Console.WriteLine($"   {SimTime.Clock(w.Tick)} {p.Name} → {p.Room?.Name ?? "(방 밖 " + w.Ship.Grid.Kind(p.Cell) + ")"} {p.Cell}"); last = p.Room; }
+                if (t % SimTime.Minutes(1) == 0) foreach (var db in b.Doors.Where(x => x.Caller >= 0)) { var hh = w.Crew.FirstOrDefault(x => x.Id == db.Helper); Console.WriteLine($"      {SimTime.Clock(w.Tick)} 부른 {db.Caller} 도움 {hh?.Name ?? "-"} {hh?.Job?.Label}/{hh?.Job?.Activity?.Id} 위치 {hh?.Room?.Name} 다음생각 {(hh != null ? hh.NextThinkTick - w.Tick : 0)} 깸 {hh?.IsAwake} · 바깥칸 {w.Body.OuterCell(w.Ship.Doors[db.Door], db)} 닿음 {(hh != null && w.Body.OuterCell(w.Ship.Doors[db.Door], db) is Cell oc ? w.Paths.Flood(hh.Cell, hh.PathProfile).Get(oc) : -9)}"); }
                 if (p.Room == pharm || p.Job == null) break;
             }
             foreach (var e in w.Log.Entries.Where(e => e.Tick > w.Tick - SimTime.Minutes(40) && (e.CrewId == p.Id || e.Text.Contains("문"))).TakeLast(8)) Console.WriteLine($"   기록 {SimTime.Clock(e.Tick)} {e.Text}");
@@ -78,5 +79,23 @@ public static partial class Program
                 var w = DayOne(seed, key);
                 Console.WriteLine($"   {key}: 사람 {w.Crew.Count} · 먹을 것 {FoodPolicy.FoodDays(w):0.0}일 ({FoodPolicy.FoodStock(w):0}끼) · 재배 {FoodPolicy.GrowingPerDay(w):0}/{w.Crew.Count * FoodPolicy.MealsPerPersonDay:0}");
             }
+
+        if (what.Contains("press"))
+        {
+            var w = DayOne(seed, "Mirinae"); w.CrewCanDie = true;
+            var room = AfxQuietRoom(w);
+            var v = w.Crew.First(c => c.CanAct); var h = w.Crew.First(c => c.CanAct && c != v);
+            Put(w, v, room); Run(w, 1); AfxNextTo(w, h, v); h.EndJob(w, ToilStatus.Interrupted);
+            v.Vitals.Health = 0.55f; NeedsSystem.AddInjury(v.Vitals, 0.45f, "운석 파편");
+            Run(w, World.SystemInterval * 2);
+            var spot = v.Cell;
+            for (int i = 0; i < SimTime.Minutes(5); i++)
+            {
+                if (i % 20 == 0) { v.Position = spot.Center; AfxNextTo(w, h, v); h.EndJob(w, ToilStatus.Interrupted); AfxStay(w, h); }
+                w.Step();
+                if (w.Tick % World.SystemInterval == 0 && i < 100) Console.WriteLine($"      sys {i}: h방 {h.Room?.Name} v방 {v.Room?.Name} 급함 {h.Job?.Urgent} 대상방 {h.Job?.Target?.Room?.Name} 대상사람 {h.Job?.Order?.Target.Crew?.Name} 거리 {(h.Position - v.Position).Length():0.00} 다른 {string.Join(",", w.Crew.Where(o => o != v && o != h && o.Room == v.Room).Select(o => o.Name))} · 도움 {w.Casualty.Of(v)?.Helper}");
+                if (i % 20 == 1) { var t = w.Casualty.Of(v); Console.WriteLine($"   {i} v {v.Room?.Name} {v.Cell} pose {v.Pose} · h {h.Name} {h.Room?.Name} {h.Cell} canact {h.CanAct} pose {h.Pose} out {h.Outside}/{v.Outside} 급함 {h.Job?.Urgent} 일 {h.Job?.Label} · 거리 {(h.Position - v.Position).Length():0.00} · 상처 {t?.Kind} {t?.Rate:0.000} 도움 {t?.Helper}"); }
+            }
+        }
     }
 }

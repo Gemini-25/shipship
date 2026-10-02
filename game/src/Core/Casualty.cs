@@ -28,6 +28,7 @@ public sealed class Trauma
     public int Helped { get; set; } = -1;     // 곁의 사람이 눌러 늦췄다 (깊은 상처)
     public long HelperSince { get; set; } = -1;
     public int Helper { get; set; } = -1;
+    public long HelperSeen { get; set; } = -1; // 통합: 돕던 사람을 마지막으로 곁에서 본 때 (구급상자를 가지러 한두 걸음 떨어져도 이어서 돕는다)
     public bool Paged { get; set; }           // 컴퓨터가 불렀다
     public int Tries { get; set; }            // 가슴 압박 시도
     public bool Closed { get; set; }
@@ -171,7 +172,10 @@ public sealed class CasualtySystem
         if (helper != null)
         {
             if (t.Helper != helper.Id) { t.Helper = helper.Id; t.HelperSince = now; }
+            t.HelperSeen = now;
         }
+        else if (t.Helper >= 0 && now - t.HelperSeen <= SimTime.Minutes(1) && w.Crew.FirstOrDefault(o => o.Id == t.Helper) is { CanAct: true } back && (back.Position - c.Position).LengthSquared() < 4f * 4f)
+            helper = back; // 통합: 잠깐 자리를 비웠다 (문턱 · 몸을 돌림 · 구급상자) — 누르던 손을 처음부터 다시 세지 않는다
         else { t.Helper = -1; t.HelperSince = -1; }
         float helped = t.HelperSince >= 0 ? (now - t.HelperSince) / (float)SimTime.TicksPerHour * 60f : 0f;
 
@@ -240,7 +244,7 @@ public sealed class CasualtySystem
         foreach (var o in _w.Crew)
         {
             if (o == c || !o.CanAct || o.Outside != c.Outside || o.Pose == Pose.Sleeping) continue;
-            if (o.Room != c.Room && !(c.Room == null && o.Room == null)) continue;
+            if (o.Room != c.Room && c.Room != null && o.Room != null) continue; // 통합: 문턱에 선 사람(방 없음)도 곁이다
             if (o.Job?.Urgent == true && o.Job.Target?.Room != c.Room && o.Job.Order?.Target.Crew != c) continue; // 제 급한 일로 지나가는 사람은 멈추지 않는다
             float d = (o.Position - c.Position).LengthSquared();
             if (d < bd) { bd = d; best = o; }
