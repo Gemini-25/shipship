@@ -540,6 +540,22 @@ CHEONMA['cross'] = 1
 _c = dining_center(CHEONMA)
 for bd, c in zip(inner_bands(CHEONMA), [[4], [5], [5], [5], [_c]]): bd['cuts'] = c
 
+def trim_consoles(spec):
+    """콘솔은 방마다 꼭 필요한 만큼만 (함교 셋 · 주컴퓨터실 둘 · 그 밖 하나 · 대표 설비가 있는 방은 없이) — 설비가 늘면 하루 시뮬이 무거워진다."""
+    keep_none = {'Observatory', 'HeatStorage', 'FuelCell', 'Calibration', 'Lab', 'Theater', 'Quarantine', 'Hyperbaric', 'ServerRoom'}
+    rooms = [r for b in spec['bands'] if b[0] == 'room' for r in b[1]['rooms']] + spec['bow']['rooms']
+    for r in rooms:
+        cap = 3 if r['label'] == 'b' else 2 if r.get('kind') == 'ComputerRoom' else 0 if r.get('kind') in keep_none else 1
+        n, out = 0, []
+        for it in r['items']:
+            if it == C:
+                n += 1
+                if n > cap: continue
+            out.append(it)
+        r['items'] = out
+
+for _spec in (KESTREL, MIRINAE, HANBIT, EUNHA, CHEONMA): trim_consoles(_spec)
+
 SHIPS = [(KESTREL, '제비호'), (MIRINAE, '미리내호'), (HANBIT, '한빛호'), (EUNHA, '은하호'), (CHEONMA, '천마호')]
 
 def to_text(s):

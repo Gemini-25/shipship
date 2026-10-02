@@ -87,7 +87,6 @@ public static partial class Program
         Check("소형은 꼭 필요한 방만 (냉동 창고 하나뿐) · 초대형은 극장 · 학교 · 원심 거주구 · 셔틀 · 정원 · 관측실", smallLean && bigLux,
             $"소형 특수 방 {string.Join(", ", small.Rooms.Where(r => r.Special != null).Select(r => r.Name))} · 초대형 호화 {lux.Count(n => big.Rooms.Any(r => r.Name == n))}/{lux.Length}");
 
-        if (Environment.GetEnvironmentVariable("FSH_ONLY") == null) { // 진단: 수경 장면만 볼 때는 건너뛴다
         // ② v16.19 장갑 벽 · 차압 문 · 예비 회로 · 보조 간선 · 대표 설비 (하루 첫 시간)
         var v19 = new List<string>();
         bool v19ok = true;
@@ -157,7 +156,6 @@ public static partial class Program
         Check("다섯 척 모두 하루 정상 (사망 · 예외 없음)", dayOk, string.Join(" · ", day));
         Check("시작 물자는 크기에 맞게 · 금속판이 사흘 안에 바닥나지 않는다 (재활용실이 고철을 되살린다)", plateOk && stockRise, string.Join(" / ", plateLines));
 
-        }
 
         // ⑤ 수경 재배실이 망가진 사흘
         {
