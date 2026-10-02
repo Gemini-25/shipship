@@ -43,6 +43,13 @@ public static partial class Program
         return eat.Plan(c, w, w.Paths.Flood(c.Cell, c.PathProfile))!;
     }
 
+    /// <summary>v16.22 새 한빛호는 호이스트를 단다 (무거운 부품을 매달아 혼자 든다) — 둘이 드는 장면은 호이스트를 치운 배에서.</summary>
+    private static void SpNoHoist(World w)
+    {
+        foreach (var h in w.Ship.FurnitureOf(FurnitureType.Hoist).ToList()) w.Ship.Stow(h);
+        w.Paths.Invalidate();
+    }
+
     private static int RunSpaceTest(int seed)
     {
         _fails = 0;
@@ -133,6 +140,7 @@ public static partial class Program
         {
             var w = DayOne(seed, "Hanbit");
             RunUntilHour(w, 10f);
+            SpNoHoist(w);
             var fridge = w.Ship.FurnitureOf(FurnitureType.Fridge).OrderBy(x => x.Id).First();
             var shelf = w.Ship.FurnitureOf(FurnitureType.Shelf).Where(x => x.Storage!.Accepts(ItemKind.Motor)).OrderBy(x => x.Id).First();
             shelf.Storage!.Add(ItemKind.Motor, 2);
@@ -156,6 +164,7 @@ public static partial class Program
             // 아무도 안 온다 (거들 사람이 없다): 둘이 동시에 불러도 시간 상한 뒤 혼자 · 보류 — 교착 없음
             var w = DayOne(seed, "Hanbit");
             RunUntilHour(w, 10f);
+            SpNoHoist(w);
             w.Coop.NoHelpers = true;
             var shelf = w.Ship.FurnitureOf(FurnitureType.Shelf).Where(x => x.Storage!.Accepts(ItemKind.Motor)).OrderBy(x => x.Id).First();
             shelf.Storage!.Add(ItemKind.Motor, 2); shelf.Storage.Add(ItemKind.Pump, 2);

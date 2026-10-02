@@ -10,9 +10,12 @@ public static partial class Program
     {
         _fails = 0;
         Console.WriteLine($"우주선급 주컴퓨터 점검 (v16.20) · 시드 {seed}\n");
+        string scOnly = Environment.GetEnvironmentVariable("SC_ONLY") ?? ""; // v16.26 장면 하나만 (SC_ONLY=breaker,breach …)
+        bool Sc(string k) => scOnly == "" || scOnly.Split(',').Contains(k);
         try
         {
             // ① 첫날부터 모듈 전부 · 연구 · 기술 · 겪은 일은 품질(정확도 · 속도 · 동시 처리 · 예측 거리)을 올린다
+            if (Sc("modules"))
             {
                 var w = DayOne(seed, "Mirinae");
                 var a = w.Automation;
@@ -29,6 +32,7 @@ public static partial class Program
             }
 
             // ② 정전 위기: 과부하 원인을 끊고 차단기를 올린다(같은 원인 재발 없음) · 필수 회로로 몰고 · 자기 연산을 줄이고 · 보조 발전기를 원격으로 켠다
+            if (Sc("outage"))
             {
                 var w = DayOne(seed, "Hanbit");
                 var a = w.Automation;
@@ -83,6 +87,7 @@ public static partial class Program
             }
 
             // ③ D 차단기 반복 버그: 사람이 끊긴 히터를 다시 꽂으면 같은 원인 — 이번엔 올리지 않고 사람에게 원인을 빼게 한다
+            if (Sc("breaker"))
             {
                 var w = DayOne(seed, "Hanbit");
                 var a = w.Automation;
@@ -113,7 +118,14 @@ public static partial class Program
                 string order = a.Command.Lines.LastOrDefault(l => l.Target == CmdTarget.Crew)?.What ?? "";
                 // 사람이 원인을 빼면(지시를 듣고 · 뜨거운 콘센트를 보고) 그때 컴퓨터가 올린다
                 var asked = w.Portable.AskedUnplug(circ);
-                for (int m = 0; m < 60 && Tripped(); m++) Run(w, SimTime.Minutes(1)); // 배 끝에서 끝까지 걸어오는 시간
+                for (int m = 0; m < 60 && Tripped(); m++)
+                {
+                    Run(w, SimTime.Minutes(1)); // 배 끝에서 끝까지 걸어오는 시간
+                    var ak = w.Portable.AskedUnplug(circ);
+                    string aks = ak == null ? "-" : ak.Name + " " + ak.Job?.Label + "/" + ak.Room?.Name + "/" + ak.Pose;
+                    if (Environment.GetEnvironmentVariable("SC_DBG") == "1")
+                        Console.WriteLine($"      {m}분 떨어짐 {Tripped()} · 부탁 {aks} · 부하 {w.Portable.ProjectedKw(circ):0.0}kW · 원격 {tr.RemoteResets} · 사례 {string.Join(" / ", tr.Cases.Where(x => x.Circuit == circ).Select(x => $"{x.State}:{x.Sig}"))} · 히터 {string.Join(",", heaters.Select(h => $"{(h.Placed ? "놓임" : "-")}{(h.On ? "켬" : "끔")}{h.Plug}@{h.Outlet?.Name}"))}");
+                }
                 var hands = w.Log.Entries.Where(e => e.CrewId >= 0 && e.Tick >= (hold?.Since ?? 0) && (e.Text.Contains("뽑아 뒀다") || e.Text.Contains("옮겨 꽂았다"))).Select(e => e.CrewId).Distinct().ToList();
                 bool byAsked = asked != null && hands.Contains(asked.Id);
                 var closed = a.Command.Lines.LastOrDefault(l => l.Target == CmdTarget.Crew && l.TargetId == asked?.Id);
@@ -123,6 +135,7 @@ public static partial class Program
             }
 
             // ④ 운석 파공: 지금 닫기 / 2분 기다렸다 닫기 / 사람 보내 막기를 견줘 고르고 타임라인에 남긴다 (방침 안에서)
+            if (Sc("breach"))
             {
                 ForeseeDecision? Scene(bool shipFirst, out World ww)
                 {
@@ -157,6 +170,7 @@ public static partial class Program
             }
 
             // ② 데이터선 절반이 끊겨도 판단은 유지 (그 구역만 손으로) · 무선 예비로 읽기는 이어진다
+            if (Sc("datalink"))
             {
                 var w = DayOne(seed, "Hanbit");
                 var a = w.Automation;
@@ -180,6 +194,7 @@ public static partial class Program
             }
 
             // ② 과열 → 정지 대신 안전 모드 (환기가 돌면 풀린다) · 극한이면 본체만 멎고 예비 연산기가 붙잡는다
+            if (Sc("overheat"))
             {
                 var w = DayOne(seed, "Mirinae");
                 var a = w.Automation;
@@ -216,6 +231,7 @@ public static partial class Program
             }
 
             // ② 재부팅은 차례로 — 그동안 예비 연산기가 댐퍼 · 경보를 맡고, 다시 켜지면 하던 일을 하나씩 되찾는다
+            if (Sc("reboot"))
             {
                 var w = DayOne(seed, "Mirinae");
                 var a = w.Automation;
@@ -241,6 +257,7 @@ public static partial class Program
             }
 
             // ④ 겹친 사고: 위험한 사람 수 × 위험까지 남은 시간으로 순서 · 동시 처리 수를 넘는 사고는 기다린다
+            if (Sc("overlap"))
             {
                 var w = DayOne(seed, "Hanbit");
                 var a = w.Automation;
@@ -261,6 +278,7 @@ public static partial class Program
             }
 
             // ⑤ 두 배가 다른 일을 겪으면 성격이 다르게 자란다 → 같은 장면에서 무게가 다르다
+            if (Sc("character"))
             {
                 var wa = DayOne(seed, "Mirinae");
                 var wb = DayOne(seed, "Mirinae");
@@ -277,6 +295,7 @@ public static partial class Program
             }
 
             // ③ 명령선: 로봇 명령 API (다음 단계가 쓴다) · 위험한 방에서 자는 사람은 단말로 깨운다
+            if (Sc("cmdapi"))
             {
                 var w = DayOne(seed, "Hanbit");
                 var a = w.Automation;
@@ -310,6 +329,7 @@ public static partial class Program
             }
 
             // 결정론
+            if (Sc("hash"))
             {
                 uint H() { var w = World.CreateDefault(seed, 0, "Hanbit"); Run(w, SimTime.TicksPerDay + SimTime.Hours(6)); return SaveGame.StateHash(w); }
                 uint h1 = H(), h2 = H();
@@ -317,6 +337,7 @@ public static partial class Program
             }
 
             // 성능: 30인 배 하루 (v16.20 켜고 · 끄고)
+            if (Sc("perf"))
             {
                 double Day(bool off)
                 {

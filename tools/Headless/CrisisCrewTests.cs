@@ -401,7 +401,7 @@ public static partial class Program
                 w.Machines.Break(f.Machine!, FaultKind.ElectrolyzerFault);
                 long t0 = w.Tick;
                 int max = 0;
-                while (w.Tick - t0 < SimTime.Hours(4) && f.Machine!.Faults.Count > 0)
+                while (w.Tick - t0 < SimTime.Hours(12) /* v16.26 혼자서도 끝날 때까지 잰다 (4시간이면 혼자는 못 끝낸 채 견줬다) */ && f.Machine!.Faults.Count > 0)
                 {
                     Run(w, 15);
                     if (Environment.GetEnvironmentVariable("CR_DBG") == "hands" && (w.Tick - t0) % SimTime.Minutes(10) < 15)
@@ -417,10 +417,10 @@ public static partial class Program
             }
             var h0 = HandsScene(true);
             var h1 = HandsScene(false);
-            string M(long t) => t == long.MaxValue ? "4시간 안에 못 끝냄" : $"{t * 60f / SimTime.TicksPerHour:0}분";
+            string M(long t) => t == long.MaxValue ? "12시간 안에 못 끝냄" : $"{t * 60f / SimTime.TicksPerHour:0}분";
             Console.WriteLine($"  큰 수리 (산소 발생기): 혼자 {M(h0.ticks)} · 여럿 {M(h1.ticks)} (최대 {h1.max}명 · 거들기 {h1.joins})");
             Check("여러 손 · 큰 수리에 셋이 붙는다", h1.max >= 3, $"최대 {h1.max}명");
-            Check("여러 손 · 혼자보다 빨리 끝난다", h1.ticks < h0.ticks * 0.85f, $"{h0.ticks} → {h1.ticks}틱");
+            Check("여러 손 · 혼자보다 빨리 끝난다", h0.ticks != long.MaxValue && h1.ticks < h0.ticks * 0.85f, $"혼자 {M(h0.ticks)} → 여럿 {M(h1.ticks)}");
             var w = DayOne(seed, "Hanbit");
             var o2 = new WorkOrder { Kind = WorkKind.ClearRubble, Target = WorkTarget.AtCell(CrFloor(w, RoomType.Storage), w.Ship.RoomsOf(RoomType.Storage).First()), Skill = Skill.Mechanics, Urgency = 1f };
             Check("여러 손 · 일감마다 인원 상한 (잔해 여럿 · 치료는 혼자)", w.Board.MaxHands(o2) >= 3 && w.Board.MaxHands(new WorkOrder { Kind = WorkKind.Treat, Target = o2.Target }) == 1,

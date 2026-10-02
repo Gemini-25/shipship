@@ -197,7 +197,9 @@ public sealed partial class CrisisCrewSystem
             // 불 · 공기 · 생명이 걸린 위험한 일은 그 자리(배치표 · 지휘 조) 사람만 붙는다 — 나머지는 비켜 준다
             bool teamSame = w.Command.Active && w.Command.TeamOf(c) is Team tt && CommandSystem.Group(o.Kind) == tt.Kind;
             bool hot = o.Target.CurrentRoom is Room hr && (w.Fire.CountIn(hr) > 0 || Atmosphere.Danger(hr) > 0.3f);
-            if ((tier <= 2 && role != StationRole.None || hot) && !mineRole && !teamSame) continue;
+            // v16.26 제 비상 자리가 없는 손 빈 사람은 손이 모자란 큰 일에 붙는다 (할 줄 알고 · 뜨거운 방이면 마스크나 우주복이 있어야) — 실제 사고에서 거의 혼자 하던 것
+            bool spare = !_active.ContainsKey(c.Id) && have < cap && c.SkillLevel(o.Skill) >= 0.25f && (!hot || c.Suit != null || o.Target.CurrentRoom is Room hr2 && Atmosphere.Danger(hr2) < 0.5f || w.CrisisCrew.Masked(c) || o.Kind == WorkKind.Extinguish && c.Carrying?.Kind == ItemKind.Extinguisher);
+            if ((tier <= 2 && role != StationRole.None || hot) && !mineRole && !teamSame && !spare) continue;
             // 전원 소집이 걸렸으면 눈앞의 생명 일만
             if (muster && (tier > 0 || (o.Target.Center - c.Position).LengthSquared() > 64f)) continue;
             field ??= o.Urgency >= 0.9f ? w.Paths.Flood(c.Cell, new PathProfile(c.PathProfile.HazardScale * 0.8f, true, true)) : dist;

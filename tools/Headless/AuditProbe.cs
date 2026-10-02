@@ -446,6 +446,7 @@ public static partial class Program
             for (int i = 0; i < FoodSourceSystem.Count; i++) if (w.FoodSources.In[i] > 0) _run.FoodWays[FoodSourceSystem.Name((FoodSrc)i)] = w.FoodSources.In[i]; // v16.22
             _run.Alive = w.Crew.Count(c => !c.Dead);
             var cs = w.Casualty; _run.Bleeds = cs.Bleeds; _run.Arrests = cs.Arrests; _run.Revived = cs.Revived; _run.TraumaDied = cs.Died; _run.Flashes = cs.Flashes; _run.WorkHurts = cs.WorkHurts; _run.WorkBad = cs.WorkBad; _run.Paged = cs.Paged; _run.DarkFalls = w.Body.Stats.DarkFalls; // v16.24
+            var pr = w.Perils; _run.HeatStrokes = pr.HeatStrokes; _run.HeatDeaths = pr.HeatDeaths; _run.RadSevere = pr.RadSevere; _run.RadCollapses = pr.RadCollapses; _run.RadDeaths = pr.RadDeaths; _run.LateWakes = pr.LateWakes; _run.MaxDose10 = (int)(10f * w.Crew.Select(c => c.Dose).DefaultIfEmpty(0f).Max()); // v16.26
             _run.RoomsLost = w.Ship.Rooms.Count(r => r.Detached && !r.Merged && r.Type != RoomType.Corridor);
             _run.Stalls = _stalls.Values.OrderBy(s => s.Hour).ToList();
         }

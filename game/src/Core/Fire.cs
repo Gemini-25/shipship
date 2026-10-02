@@ -43,6 +43,21 @@ public sealed class FireSystem
     public int Count => _fires.Count;
     public float At(Cell c) => _fires.TryGetValue(c, out var v) ? v : 0f;
     public bool IsKnown(Room r) => _knownRooms.Contains(r.Id);
+
+    /// <summary>v16.26 열린 문 곁(두 칸 안)에 깨어 선 사람이 문 너머로 연기가 쏟아지는 걸 본다 (탄 냄새를 따라와 문을 연 사람 · 작은 방은 연기가 금방 차 들어가지 못한다).</summary>
+    private CrewMember? DoorWitness(Room room)
+    {
+        if (room.Air.Smoke < 0.3f) return null;
+        foreach (var d in room.Doors)
+        {
+            if (d.IsExternal || d.Openness < 0.4f) continue;
+            var other = d.RoomA == room ? d.RoomB : d.RoomA;
+            if (other == null) continue;
+            foreach (var c in _world.Crew)
+                if (c.Room == other && c.IsAwake && c.CanAct && (c.Position - d.Cell.Center).LengthSquared() < 2.5f * 2.5f) return c;
+        }
+        return null;
+    }
     public int CountIn(Room r) => _fires.Count == 0 ? 0 : _fires.Keys.Count(c => _world.Ship.RoomAt(c) == r); // v14.2 불이 없으면 바로
 
     public bool Ignite(Cell c, float intensity, Cell? from = null)
@@ -214,7 +229,7 @@ public sealed class FireSystem
         foreach (var room in burning)
         {
             if (_knownRooms.Contains(room!.Id)) continue;
-            var witness = w.Crew.FirstOrDefault(c => c.Room == room && c.IsAwake && c.CanAct);
+            var witness = w.Crew.FirstOrDefault(c => c.Room == room && c.IsAwake && c.CanAct) ?? DoorWitness(room!); // v16.26 열린 문간에서 연기가 쏟아지는 걸 본 사람도
             bool detector = room.Powered && w.Automation.AlarmsIn(room); // v9.2: 감지기 경보는 주 컴퓨터가 돌린다
             var bot = detector || witness != null ? null : w.Robots.Witness(room); // v10.10: 순찰하던 방재 로봇이 본다
             if (!detector && witness == null && bot == null) continue;

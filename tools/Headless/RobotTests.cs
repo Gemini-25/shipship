@@ -175,7 +175,9 @@ public static partial class Program
                 {
                     var w = DayOne(seed + k * 37, "Mirinae");
                     if (stopped) foreach (var e in w.Propulsion.Engines) w.Machines.Break(e, FaultKind.Wrecked);
-                    var room = w.Ship.RoomsOf(RoomType.Quarters).First();
+                    // v16.22 새 설계: 침실은 배 안쪽 — 외벽에 닿은 첫 방(사람이 지내는 곳부터)을 겨눈다
+                    bool OnHull(Room r) => w.Ship.Walls.Any(kv => kv.Value.IsHull && Hull.InsideRoom(w.Ship, kv.Key) == r);
+                    var room = w.Ship.RoomsOf(RoomType.Quarters).FirstOrDefault(OnHull) ?? w.Ship.LiveRooms.Where(r => r.Type != RoomType.Corridor && OnHull(r)).OrderBy(r => r.Type is RoomType.Mess or RoomType.Lounge or RoomType.Bridge ? 0 : 1).ThenBy(r => r.Id).First();
                     Player.Meteor(w, Scenarios.OuterTarget(w, room), 0.9f);
                     Run(w, SimTime.Minutes(20));
                     if (stopped) { stoppedAttempts += w.Propulsion.Evasions; breachStopped += w.History.Breaches; }
@@ -212,6 +214,8 @@ public static partial class Program
             {
                 w2.Step();
                 if (w2.Tick % World.SystemInterval != 0) continue;
+                // v16.22 새 미리내호는 엔진을 반나절이면 고친다 (첫 잔해는 18~42시간 뒤) — 이틀은 멎어 있게 (부품이 바닥난 배)
+                if (t < SimTime.Hours(48)) foreach (var e in w2.Propulsion.Engines) if (e.Faults.Count == 0) w2.Machines.Break(e, FaultKind.Wrecked);
                 if (w2.Propulsion.Thrust < 0.5f) deadHours += World.SystemInterval / (float)SimTime.TicksPerHour;
                 // 잔해 지대를 벗어나는 그 순간에 엔진이 멎어 있었나 (벗어난 뒤 다시 멎는 건 상관없다)
                 if (prevZone == ZoneKind.Debris && w2.Propulsion.Zone == ZoneKind.Normal && w2.Propulsion.Thrust < 0.5f) leftWhileDead = true;
