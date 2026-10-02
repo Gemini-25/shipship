@@ -15,7 +15,7 @@ public enum ActCat : byte { None, Survival, Work, Duty, Social, Hobby, Rest, Car
 public sealed class BrainSystem
 {
     /// <summary>두뇌 2.0을 끈다 (성능 비교 시험용 — 끄면 예전 두뇌와 같다).</summary>
-    public static bool Enabled = true;
+    public static bool Enabled = Environment.GetEnvironmentVariable("SHIPSIM_BRAIN2") != "0";
 
     private readonly World _w;
     public BeliefSystem Beliefs { get; }
