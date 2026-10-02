@@ -11,7 +11,7 @@ namespace ShipSim.Core;
 //   → 다시 가압 (공기 탱크) → 격벽 해제. 누가 안에 있으면 방침대로: 금지 / 빈 방만 / 카운트다운 뒤 / 컴퓨터 판단.
 // 공기 구역 관리 (기본 모듈): 여러 방이 한꺼번에 새면 지킬 구역(생명유지실이 있는 이어진 방들)을 정해 사람을 모으고,
 //   공기 탱크가 모자라면 그 구역만 채우며, 아무도 못 막는 바깥 방은 방침(구역 포기 시점)대로 일찍 포기한다.
-// 나머지 모듈(생체 감시 · 자원 배분 · 대피 안내 · 선제 조치 · 교훈 반영)은 연구·개조로 단다 (v13.1~).
+// v16.20 모듈은 잠금 해제가 아니다 — 첫날부터 전부 탑재. 연구 · 기술 · 겪은 일은 같은 모듈을 다시 "달아" 등급(정확도 · 속도)을 올린다 (ComputerCore.cs).
 
 public enum ComputerModule
 {
@@ -53,12 +53,12 @@ public sealed partial class AutomationSystem
     /// <summary>질식 소화: 산소를 밀어내는 속도 (kPa/시간) — 2분 남짓이면 6kPa 아래로.</summary>
     public const float InertRate = 480f;
 
-    private readonly HashSet<ComputerModule> _modules = new() { ComputerModule.FireResponse, ComputerModule.AirZones };
+    private readonly HashSet<ComputerModule> _modules = new(Enum.GetValues<ComputerModule>()); // v16.20 첫날부터 전부
     public IReadOnlyCollection<ComputerModule> Modules => _modules;
     public bool Has(ComputerModule m) => _modules.Contains(m);
     public void Install(ComputerModule m, string? why = null)
     {
-        if (!_modules.Add(m)) return;
+        if (!_modules.Add(m)) { if (why != null) Core.Upgrade(m, why); return; } // v16.20 이미 있다 — 등급을 올린다
         _world.History.Add(_world, HistoryKind.Decision, $"주 컴퓨터에 {ModuleName(m)} 모듈을 달았다 — {ModuleNote(m)}" + (why != null ? $" ({why})" : ""), null, log: true);
     }
     public void Remove(ComputerModule m) => _modules.Remove(m);
@@ -141,7 +141,7 @@ public sealed partial class AutomationSystem
             {
                 case 0: // 소화조가 끈다 — 안 되면 다음 수단
                 {
-                    if (!burning) { FireCases.Remove(fc); continue; }
+                    if (!burning) { FireCases.Remove(fc); if (fc.Node >= 0) w.Causes.Resolve(fc.Node, $"{room.Name} 불이 먼저 꺼졌다", by: ""); continue; }
                     bool critical = CriticalRoom(room);
                     bool crewOnIt = w.Board.Open.Any(o => o.Kind == WorkKind.Extinguish && o.Target.CurrentRoom == room && o.Assignee != null);
                     float grace = critical ? 3f : 8f;
@@ -155,7 +155,13 @@ public sealed partial class AutomationSystem
                     if (!escalate) { fc.Status = crewOnIt ? $"소화조가 끈다 ({cells}칸 · {minutes:0}분)" : $"소화조를 기다린다 ({cells}칸)"; break; }
                     // v13.2 방침(컴퓨터 자동 실행): 전부가 아니면 소화 수순은 하지 않는다
                     if (w.Policies["autoscope"] < 2) { fc.Status = $"자동 실행 범위 밖 — 소화조에 맡긴다 ({cells}칸)"; break; }
-                    var method = PickMethod(room, fc);
+                    if (!Foresee.Attending("fire:" + room.Id)) { fc.Status = $"순서를 기다린다 — 더 급한 사고부터 ({cells}칸)"; break; } // v16.20 동시 처리 수를 넘었다
+                    // v16.20 미리 돌려 보고 고른다: 소화조에 더 맡김 / 질식 / 진공 (모형을 못 쓰면 예전 규칙)
+                    float need = 17f * room.Volume;
+                    bool inertOk = Policy("inert") > 0 && InertGas >= need * 0.6f && !fc.TriedInert, vacOk = Policy("vacuum") > 0 && CanVent(room);
+                    int fighters = w.Crew.Count(c => !c.Dead && c.Job?.Order is { Kind: WorkKind.Extinguish } eo && eo.Target.CurrentRoom == room);
+                    var method = Foresee.Fire(room, fc, cells, minutes, inertOk, vacOk, crewOnIt, fighters, () => PickMethod(room, fc));
+                    if (method == "crew") { fc.Status = $"미리 돌려 봄 — 소화조 {fighters}명이 잡는다 ({cells}칸)"; break; }
                     if (method == null) { fc.Status = $"쓸 수단이 없다 — 소화조에 맡긴다 ({cells}칸)"; break; }
                     Plan(fc, room, method, cells, minutes);
                     break;
@@ -219,6 +225,7 @@ public sealed partial class AutomationSystem
                     room.Flushing = false;
                     room.EvacuateBy = -1;
                     FireCases.Remove(fc);
+                    if (fc.Node >= 0) w.Causes.Resolve(fc.Node, $"{room.Name} 소화 대응 끝 — 숨 쉴 수 있다", by: ""); // v16.20
                     w.Log.Add(w.Tick, LogKind.Ship, $"{room.Name} 소화 대응 끝 — 숨 쉴 수 있다 · 격벽 해제");
                     // v13.3 컴퓨터 신뢰: 사람을 잃지 않고 끝냈다
                     if (!fc.Casualty) w.Minds.ComputerResult(0.05f, $"{room.Name} 불을 수순대로 껐다");
@@ -345,6 +352,7 @@ public sealed partial class AutomationSystem
         fc.Stage = 0;
         fc.Method = "";
         fc.Status = why;
+        if (fc.Node >= 0) { w.Causes.Resolve(fc.Node, $"{room.Name} 소화 준비를 거뒀다 — {why}", by: ""); fc.Node = -1; } // v16.20 거둔 수순이 사고를 열어 두지 않게
         Reason($"firex:{room.Id}", $"{room.Name} 소화 대응 — {why}", SimTime.Minutes(30));
         w.Board.RequestScan();
     }
@@ -453,10 +461,13 @@ public sealed partial class AutomationSystem
     /// <summary>시스템 틱마다 (Think 안에서): 주 컴퓨터가 돌면 모듈을 돌린다.</summary>
     internal void Respond(float dt)
     {
-        if (!MainOnline) { ZoneActive = false; return; }
+        if (!CoreOnline) { ZoneActive = false; return; } // v16.20 예비 코어도 핵심 고리(진행 중인 소화 · 공기 구역)를 붙잡는다
         EnsureInert();
+        Foresee.Rank(); // v16.20 겹친 사고 순서 (위험한 사람 수 × 위험까지 남은 시간)
         if (Has(ComputerModule.FireResponse) && Level >= 3) FireResponse();
         if (Has(ComputerModule.AirZones) && Level >= 3) AirZones();
-        RespondV15(dt); // v15.9 문 압력 경보 · 새 모듈 올리기
+        if (!MainOnline) return;
+        RespondV15(dt); // v15.9 문 압력 경보
+        GrowModules(); // v16.20 겪은 일로 모듈 등급이 오른다
     }
 }

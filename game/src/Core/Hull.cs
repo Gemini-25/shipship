@@ -169,10 +169,18 @@ public sealed class HullSystem
                 bool auto = _world.Automation.AutoDoorsIn(room); // v9.2: 격벽 자동 잠금은 주 컴퓨터가 한다 (v12.3 데이터선이 그 방까지 닿아야 · v13.2 방침이 허락해야)
                 // v12.5 사람 우선: 안에 사람이 있으면 2분 기다린다 (배 우선이면 바로)
                 var inside = _world.Crew.Where(c => !c.Dead && InOrDoorway(c, room)).ToList();
-                if (auto && inside.Count > 0 && !_world.Automation.ShipFirst)
+                var plan = auto && inside.Count > 0 && _world.Automation.Foresee.Attending("breach:" + room.Id) ? _world.Automation.Foresee.Breach(room, inside) : null; // v16.20 미리 돌려 보고 고른다 (지금 봉쇄 / 기다려 대피 후 / 사람 보내 막기)
+                if (plan is { Key: "patch" })
                 {
-                    room.LockPendingUntil = _world.Tick + SimTime.Minutes(2);
-                    _world.RaiseAlert($"{room.Name} 감압! 안에 {string.Join("·", inside.Select(c => c.Name))} — 격벽 폐쇄 대기 2분 (사람 우선)", room, AlertLevel.Critical, shipWide: true);
+                    room.LockPendingUntil = _world.Tick + plan.WaitTicks; // 못 막으면 그때 닫는다
+                    _world.RaiseAlert($"{room.Name} 감압! 안에 {string.Join("·", inside.Select(c => c.Name))} — 문을 열어 둔 채 {plan.Patcher!.Name}에게 막게 한다 (미리 돌려 봄)", room, AlertLevel.Critical, shipWide: true);
+                    _world.Board.RequestScan();
+                    continue;
+                }
+                if (plan is { Key: "wait" } || plan == null && auto && inside.Count > 0 && !_world.Automation.ShipFirst)
+                {
+                    room.LockPendingUntil = _world.Tick + (plan?.WaitTicks ?? SimTime.Minutes(2));
+                    _world.RaiseAlert($"{room.Name} 감압! 안에 {string.Join("·", inside.Select(c => c.Name))} — 격벽 폐쇄 대기 {(plan?.WaitTicks ?? SimTime.Minutes(2)) / (float)SimTime.Minutes(1):0.#}분 (사람 우선)", room, AlertLevel.Critical, shipWide: true);
                     _world.Automation.Reason($"lock:{room.Id}", $"{room.Name} 감압 · 안에 {inside.Count}명 — 방침(사람 우선)에 따라 격벽 폐쇄를 2분 늦춘다 · 그동안 옆방 공기도 빠진다", SimTime.Minutes(10));
                     _world.Board.RequestScan();
                     continue;
@@ -206,7 +214,7 @@ public sealed class HullSystem
             // v12.5 기다리던 격벽: 사람이 다 나왔거나 시간이 다 됐으면 닫는다
             if (room.LockPendingUntil >= 0)
             {
-                bool left = !_world.Crew.Any(c => !c.Dead && InOrDoorway(c, room));
+                bool left = !_world.Crew.Any(c => !c.Dead && InOrDoorway(c, room)) && !_world.Automation.Foresee.HoldOpen(room); // v16.20 사람을 보내 막는 동안은 열어 둔다
                 if (left || _world.Tick >= room.LockPendingUntil || !room.Lockdown)
                 {
                     if (room.Lockdown && !left)

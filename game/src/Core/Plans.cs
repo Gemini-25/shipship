@@ -525,6 +525,7 @@ public sealed class PlanSystem
                     bool trip = m.Faults.Any(f => f.Kind == FaultKind.BreakerTrip && (f.Circuit == circ || circ < 0));
                     var cause = Cause(p.Room);
                     if (p.Room != null) world.Brain2.Beliefs.Learn(cm, Topic.Outage, p.Room.Id, (int)cause, BeliefSource.Seen, 0.9f);
+                    if (trip && world.Automation.TriageOrNull?.Holding(Math.Max(0, circ)) is string hold) { s.Note = $"차단기는 떨어져 있지만 — {hold}"; cm.Say(world, Persona.Say(cm, "컴퓨터가 원인부터 본다고 한다")); foreach (var x in p.Steps) if (x.State == StepState.Todo) x.State = StepState.Skipped; return true; } // v16.20 같은 원인이면 다시 안 올린다
                     if (trip) { s.Note = $"{PowerGrid.CircuitName(Math.Max(0, circ))} 회로 차단기가 떨어져 있다"; Insert(p, StepKind.ResetPanel, Method.ResetBreaker, "차단기 올리기", panel.Room, panel); return true; }
                     if (p.Room is { Dark: false }) { s.Note = "벌써 누가 올렸다"; foreach (var x in p.Steps) if (x.State == StepState.Todo) x.State = StepState.Skipped; return true; }
                     s.Note = $"차단기는 멀쩡하다 — {BeliefSystem.OutageName(cause)}";

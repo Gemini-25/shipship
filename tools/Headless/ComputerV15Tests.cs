@@ -148,11 +148,12 @@ public static partial class Program
                 float stress0 = hero.Needs.Stress = 0.5f;
                 int awards0 = w.Titles.Awards.Count;
                 Run(w, SimTime.Hours(3));
-                var added = w.Automation.Modules.Where(m => m >= ComputerModule.Foresight).ToList();
-                var installLog = w.History.Events.Where(e => e.Text.StartsWith("주 컴퓨터에") && e.Text.EndsWith(")") && added.Any(m => e.Text.Contains(ComputerV15.Name(m)))).Select(e => e.Text).ToList();
-                Check("설치 — 이튿날부터 까닭이 있으면 주 컴퓨터에 새 모듈을 하나 올린다 (하루 하나)",
-                    added.Count == 1 && installLog.Count == 1,
-                    $"올린 것 {string.Join(",", added.Select(ComputerV15.Name))} · {installLog.LastOrDefault()}");
+                // v16.20 모듈은 첫날부터 전부 — "겪은 일로 단다"는 "겪은 일로 그 판단이 더 정확해진다"(등급)로 바뀌었다. 하루 하나 · 까닭이 기록에 남는다.
+                var added = Enum.GetValues<ComputerModule>().Where(m => m >= ComputerModule.Foresight && w.Automation.Core.Grade(m) > 0).ToList();
+                var installLog = w.History.Events.Where(e => e.Text.StartsWith("주 컴퓨터의") && e.Text.Contains("더 정확해졌다") && added.Any(m => e.Text.Contains(AutomationSystem.ModuleName(m)))).Select(e => e.Text).ToList();
+                Check("설치 — 이튿날부터 까닭이 있으면 주 컴퓨터의 판단 하나가 더 정확해진다 (하루 하나 · v16.20 모듈은 첫날부터 전부)",
+                    added.Count == 1 && installLog.Count == 1 && w.Automation.Modules.Count == Enum.GetValues<ComputerModule>().Length,
+                    $"오른 것 {string.Join(",", added.Select(AutomationSystem.ModuleName))} · {installLog.LastOrDefault()}");
                 var got = w.Titles.Awards.Skip(awards0).ToList();
                 int shipGot = got.Count(x => x.CrewId < 0), heroGot = got.Count(x => x.CrewId == hero.Id);
                 bool logged = w.History.Events.Count(e => e.Kind == HistoryKind.Milestone && e.Text.Contains("붙은 이름")) >= got.Count

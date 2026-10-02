@@ -769,7 +769,7 @@ public sealed class RobotSystem
             if (o.Kind == WorkKind.Tend && o.Target.Furniture?.Machine?.Crop is { Blight: > 0f }) continue;
             if (o.Target.CurrentRoom is Room room && (room.Abandoned || room.OffLimits || w.Fire.CountIn(room) > 0)) continue;
             if (Spot(r, o, dist) is not Cell spot) continue;
-            float score = o.Urgency - dist.Get(spot) / 9000f;
+            float score = o.Urgency - dist.Get(spot) / 9000f + w.Automation.Command.Bias(r, o); // v16.20 컴퓨터 명령 (ComputerCommand.Order)
             if (score > bestScore) { bestScore = score; best = o; bestSpot = spot; }
         }
         if (best != null)

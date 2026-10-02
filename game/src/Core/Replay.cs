@@ -431,6 +431,7 @@ public static class SaveGame
         w.Annex.Hash(I, F); // v16.10 증축 (공정 · 격자 높이 · 더한 무게)
         w.Body2.Hash(I, F); // v17.1 머리카락 · 체중 · 우주복 치수 · 이발
         w.Coop.Hash(I, F); // v17.4 공간과 협력 · 줄 · 구경꾼
+        w.Automation.HashShip(I, F); // v16.20 우주선급 주컴퓨터
         return h;
     }
 }

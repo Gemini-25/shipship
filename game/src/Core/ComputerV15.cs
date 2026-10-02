@@ -126,7 +126,7 @@ public sealed partial class AutomationSystem
     /// <summary>v15.9 모듈마다 스스로 한 일 (전조를 늦춤 · 문 압을 맞춤 …).</summary>
     public Dictionary<ComputerModule, int> V15Acts { get; } = Enum.GetValues<ComputerModule>().ToDictionary(m => m, _ => 0);
 
-    private long _v15Next, _v15Last = -SimTime.TicksPerDay * 2;
+    private long _v15Last = -SimTime.TicksPerDay * 2;
     /// <summary>시험용: 새 모듈을 스스로 올리지 않는다 (모듈 없는 배를 볼 때).</summary>
     public bool V15NoAuto { get; set; }
     private readonly HashSet<int> _doorEq = new();
@@ -136,16 +136,7 @@ public sealed partial class AutomationSystem
     {
         var w = _world;
         if (Has(ComputerModule.DoorPressure)) DoorPressure(dt);
-        if (w.Tick < _v15Next) return;
-        _v15Next = w.Tick + SimTime.TicksPerHour;
-        if (V15NoAuto || w.Tick <= SimTime.TicksPerDay || w.Tick - _v15Last < SimTime.TicksPerDay) return; // 첫날은 그대로
-        foreach (var r in ComputerV15.Rows)
-        {
-            if (Has(r.Module) || ComputerV15.Why(w, r) is not string why) continue;
-            _v15Last = w.Tick;
-            Install(r.Module, why);
-            return;
-        }
+        // v16.20 모듈은 첫날부터 다 있다 — 겪은 일로 등급을 올리는 건 GrowModules (ComputerCore.cs)
     }
 
     /// <summary>문 압력 경보: 새지 않는 두 방 사이 문에 압이 걸렸으면 알리고 균압 밸브를 미리 연다.</summary>

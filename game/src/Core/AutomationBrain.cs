@@ -11,6 +11,8 @@ namespace ShipSim.Core;
 //  데이터망이 4분의 1 넘게 끊기거나 컴퓨터가 상하면(효율 60% 아래) IV, 절반 넘게 끊기거나 크게 상하면 III,
 //  주 컴퓨터가 서면 예비 제어기만 II, 그것도 서면 I. 데이터선이 끊긴 방은 그 방만 손으로.
 // 컴퓨터는 보수적이다: 피해는 막지만 넓게 끊는다. 판단력 좋은 사람이 관제석에서 수동 조종하면 좁게·빨리 되돌린다.
+// v16.20 다쳐도 느려질 뿐: 등급은 연산 여유로 천천히 내려간다 — 안전 모드 · 상한 효율 · 부하가 넘치면 IV, 데이터선이 4분의 3 넘게 끊겨
+//  손을 거의 못 쓰면 IV (끊긴 방만 손으로 — 반이 끊겨도 판단은 V 그대로), 주 코어가 멎으면 예비 코어 III, 구역 제어기만 II, 모두 멎으면 I.
 
 public sealed partial class AutomationSystem
 {
@@ -22,14 +24,15 @@ public sealed partial class AutomationSystem
         get
         {
             if (!Present) return 2;
-            if (!MainOnline) return BackupActive ? 2 : 1;
+            if (!MainOnline) return Math.Min(LevelCap, Core.BackupCore ? 3 : BackupActive ? 2 : 1);
             if (_levelTick == _world.Tick) return _levelCached;
             _levelTick = _world.Tick;
-            float eff = Computer?.Efficiency ?? 0f;
+            float eff = Core.MainHealth(Computer);
             int live = 0, linked = 0;
             foreach (var r in _world.Ship.LiveRooms) { live++; if (r.DataLinked) linked++; }
             float coverage = live > 0 ? linked / (float)live : 1f;
-            int lvl = coverage < 0.5f || eff < 0.35f ? 3 : coverage < 0.75f || eff < 0.6f ? 4 : 5;
+            // v16.20 연산 여유로 천천히: 안전 모드 · 효율 35% 아래 · 부하가 넘침 → IV · 데이터선이 4분의 3 넘게 끊김 → IV · 효율 15% 아래 → III
+            int lvl = eff < 0.15f ? 3 : Core.SafeMode || eff < 0.35f || Load > 1.15f || coverage < 0.25f ? 4 : 5;
             return _levelCached = Math.Clamp(Math.Min(lvl, LevelCap), 1, 5);
         }
     }
@@ -45,12 +48,13 @@ public sealed partial class AutomationSystem
         get
         {
             if (!Present) return "주 컴퓨터가 없는 배";
-            if (!MainOnline) return BackupActive ? "주 컴퓨터 정지 — 예비 제어기만" : "주 컴퓨터·예비 제어기 정지";
-            float eff = Computer?.Efficiency ?? 0f;
+            if (!MainOnline) return Core.BackupCore ? (Rebooting ? $"다시 켜는 중 {Core.RebootStage}/3 — {ShipCore.StageName(Core.RebootStage)}" : "본체 정지 — 예비 연산기가 붙잡는 중") : BackupActive ? "본체 · 예비 연산기 정지 — 방 제어기만" : "주 컴퓨터 · 방 제어기 정지";
+            float eff = Core.MainHealth(Computer);
             int live = _world.Ship.LiveRooms.Count(), linked = _world.Ship.LiveRooms.Count(r => r.DataLinked);
             if (LevelCap < 5) return $"상한 {LevelName(LevelCap)}";
-            if (linked < live) return $"데이터선 {live - linked}/{live}방 끊김 · 컴퓨터 {eff * 100:0}%";
-            return eff < 0.6f ? $"컴퓨터 {eff * 100:0}%" : "정상";
+            string extra = (Core.SafeMode ? " · 달아올라 느리게" : "") + (Core.OnUps ? $" · 비상 전지 {Core.Ups:0}분" : "") + (Core.SelfSaving ? " · 연산 줄임" : "") + (Load > 1.15f ? $" · 부하 {Load * 100:0}%" : "");
+            if (linked < live) return $"데이터선 {live - linked}/{live}방 끊김(그 방만 손으로) · 컴퓨터 {eff * 100:0}%" + extra;
+            return (eff < 0.6f ? $"컴퓨터 {eff * 100:0}%" : "정상") + extra;
         }
     }
 

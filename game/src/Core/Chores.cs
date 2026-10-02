@@ -748,6 +748,7 @@ public static partial class WorkPlanners
         toils.Add(new WorkToil(0.25f, Skill.Electrical, f.Center));
         toils.Add(new DoToil((cm, world) =>
         {
+            if (world.Automation.TriageOrNull?.Holding(o.Circuit) is string hold) { world.Board.Close(o); world.Log.Add(world.Tick, LogKind.Work, $"{PowerGrid.CircuitName(o.Circuit)} 회로 차단기 앞 — 주 컴퓨터: {hold}", cm.Id); return true; } // v16.20 원인이 남은 차단기는 올리지 않는다
             m.Faults.RemoveAll(x => x.Kind == FaultKind.BreakerTrip && x.Circuit == o.Circuit);
             cm.Practice(Skill.Electrical, 0.02f);
             cm.Stats.Repairs++;

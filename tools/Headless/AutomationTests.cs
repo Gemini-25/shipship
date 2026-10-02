@@ -46,11 +46,13 @@ public static partial class Program
             Check("격벽 — 사람 우선은 기다리고, 배 우선은 바로 닫는다", waited[0] && lockedLater[0] && !waited[1], $"사람 우선: 기다림 {waited[0]} → 닫힘 {lockedLater[0]} · 배 우선: 기다림 {waited[1]}");
         }
         // 3) 관제석: 컴퓨터 혼자면 일찍 끊고 늦게 되돌린다 ↔ 사람이 조종하면 늦게 끊고 빨리 되돌린다 (정전된 총시간)
+        //    v16.20 멀쩡한 주컴퓨터(V)는 원인부터 끊고 원격으로 올려 관제석만큼 빨라졌다 — 사람 판단의 이점은 컴퓨터가 III(예비 연산기)으로 내려앉았을 때 본다.
         {
             float[] darkMin = new float[2]; string op = "-";
             for (int k = 0; k < 2; k++)
             {
                 var w = DayOne(seed, "Mirinae");
+                w.Automation.LevelCap = 3;
                 for (int t = 0; t < 48 && !w.Crew.Any(c => c.CanAct && c.IsAwake && c.SkillLevel(Skill.Electrical) >= 0.5f && WatchLog.OnShift(c, w)); t++) Run(w, SimTime.Minutes(30));
                 var room = w.Ship.RoomsOf(RoomType.Galley).First();
                 if (k == 1)
