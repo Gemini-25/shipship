@@ -143,27 +143,28 @@ public static partial class Program
             {
                 var w = DayOne(seed, "Hanbit");
                 w.Eras.Begin("rcd", "시험");
-                int det0 = w.Blast.Stats.Detonations;
+                int det0 = w.Blast.Stats.Detonations, acc0 = w.TechWeb.Stats.Accidents;
                 int adv0 = w.Automation.Book.Acts.Count(a => a.Observe.StartsWith("실험 사고"));
                 ExperimentState? trial = null;
-                for (int i = 0; i < 48 && w.TechWeb.Stats.Accidents == 0; i++)
+                for (int i = 0; i < 48 && w.TechWeb.Stats.Accidents == acc0; i++)
                 {
                     Run(w, SimTime.Minutes(30));
-                    if (w.TechWeb.Trial is ExperimentState x && x.Force == null) { x.Force = "accident"; x.Style = ResearchStyle.Bold; trial = x; }
+                    if (w.TechWeb.Trial is ExperimentState x && x.Tech == "rcd" && x.Force == null) { x.Force = "accident"; x.Style = ResearchStyle.Bold; trial = x; }
                 }
                 var s = w.TechWeb.Stats;
                 var lead = trial != null ? w.Crew[trial.Lead] : null;
-                bool hit = s.Accidents == 1 && w.Blast.Stats.Detonations > det0;
+                bool hit = s.Accidents == acc0 + 1 && trial != null && w.Blast.Stats.Detonations > det0;
                 bool hist = w.History.Events.Any(e => e.Text.StartsWith("실험 사고"));
                 bool comp = w.Automation.Book.Acts.Count(a => a.Observe.StartsWith("실험 사고")) > adv0;
                 bool alive = w.Crew.All(c => !c.Dead);
                 bool shaken = lead != null && w.TechWeb.StyleOf(lead) == ResearchStyle.Cautious;
-                bool noted = w.TechWeb.Notes.Any(n => n.Kind == 3);
+                bool noted = w.TechWeb.Notes.Any(n => n.Kind == 3) || w.TechWeb.Stats.NotesBurned > 0; // 사고 노트가 남거나 · 사고 불에 탔다
                 bool fear = lead != null && w.TechWeb.Marks.Any(m => m.Kind == 0) && lead.Memory.Fear.Max() > 0f;
                 Check("실험 사고 — 대담한 연구자의 동력 실험이 방전 폭발(작게)을 내고, 연대기 · 주 컴퓨터가 읽고, 연구자는 사흘 신중해진다 (아무도 죽지 않는다)",
                     hit && hist && comp && alive && shaken && noted && fear,
-                    $"사고 {s.Accidents} · 폭발 {det0} → {w.Blast.Stats.Detonations} · {w.History.Events.LastOrDefault(e => e.Text.StartsWith("실험 사고"))?.Text}"
-                    + $" · 컴퓨터: {w.Automation.Book.Acts.LastOrDefault(a => a.Observe.StartsWith("실험 사고"))?.Judge} · {lead?.Name} 다음 버릇 {(lead != null ? TechWebSystem.StyleName(w.TechWeb.StyleOf(lead)) : "?")}");
+                    $"사고 {acc0} → {s.Accidents} · 폭발 {det0} → {w.Blast.Stats.Detonations} · {w.History.Events.LastOrDefault(e => e.Text.StartsWith("실험 사고"))?.Text}"
+                    + $" · 컴퓨터: {w.Automation.Book.Acts.LastOrDefault(a => a.Observe.StartsWith("실험 사고"))?.Judge} · {lead?.Name} 다음 버릇 {(lead != null ? TechWebSystem.StyleName(w.TechWeb.StyleOf(lead)) : "?")}"
+                    + (hit && hist && comp && alive && shaken && noted && fear ? "" : $" · [폭발 {hit} 연대기 {hist} 컴퓨터 {comp} 생존 {alive} 신중 {shaken} 노트 {noted} 두려움 {fear}]"));
             }
 
             // 5) 경보에 끊기고 노트를 펴고 이어 한다

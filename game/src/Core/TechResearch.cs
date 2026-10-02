@@ -74,6 +74,7 @@ public sealed partial class TechWebSystem
     public Dictionary<int, int> Experiments { get; } = new();
     private readonly Dictionary<string, List<int>> _hands = new();
     private readonly Dictionary<int, long> _shaken = new();
+    private readonly Dictionary<int, long> _avoided = new(); // 실험실이 무서워 미룬 사람 (일기는 하루 한 번)
     private long _nextTrial = SimTime.Hours(3);
     private long _nextBurn;
     private int _noteId = 1;
@@ -256,7 +257,12 @@ public sealed partial class TechWebSystem
         if (afraid.Count > 0 && (ranked.Count == 0 || afraid.Any(a => 0.6f * a.RawSkill(SkillOf(t.Field)) + Interest(a, t.Field) > Fit(ranked[0], t, lab))))
         {
             Stats.Avoided++;
-            foreach (var a in afraid) Life.Diary(w, a, Persona.Say(a, $"{lab?.Name ?? "실험실"}에는 아직 못 들어가겠다 — {t.Name} 실험은 남에게 미뤘다."));
+            foreach (var a in afraid)
+            {
+                if (_avoided.TryGetValue(a.Id, out var at) && w.Tick - at < SimTime.TicksPerDay) continue;
+                _avoided[a.Id] = w.Tick;
+                Life.Diary(w, a, Persona.Say(a, $"{lab?.Name ?? "실험실"}에는 아직 못 들어가겠다 — {t.Name} 실험은 남에게 미뤘다."));
+            }
         }
         if (ranked.Count == 0) return false;
         var nl = ranked[0];
@@ -267,7 +273,7 @@ public sealed partial class TechWebSystem
         float sk = nl.RawSkill(SkillOf(t.Field));
         if (sk >= 0.5f) why.Add($"{Skills.Name(SkillOf(t.Field))} {sk:0.00}");
         if (Interest(nl, t.Field) >= 0.15f) why.Add($"{TechFieldName(t.Field)}에 관심");
-        why.Add($"{StyleName(x.Style)}한 연구자");
+        if (why.Count == 0) why.Add("손이 비었다");
         x.LeadWhy = string.Join(" · ", why);
         x.Partner = -1;
         if (ranked.Count >= 2 && w.Crew.Count(c => !c.Dead && !c.IsChild) >= 4)
@@ -286,8 +292,8 @@ public sealed partial class TechWebSystem
     {
         var t = TechWeb.Find(x.Tech);
         if (t == null) return 0f;
-        float p = 0.07f;
-        p *= x.Style switch { ResearchStyle.Bold => 2f, ResearchStyle.Cautious => 0.4f, _ => 1f };
+        float p = 0.05f;
+        p *= x.Style switch { ResearchStyle.Bold => 1.8f, ResearchStyle.Cautious => 0.4f, _ => 1f };
         p *= t.Field switch
         {
             TechField.Power or TechField.Propulsion or TechField.Defense or TechField.Fabrication => 1.3f,
@@ -308,7 +314,7 @@ public sealed partial class TechWebSystem
         if (!w.Automation.Present || !w.Automation.MainOnline) return;
         var lead = Crew(x.Lead);
         float p = AccidentRisk(x, lead, bench.Room);
-        if (p < 0.1f) return;
+        if (p < 0.09f) return;
         var why = new List<string>();
         if (x.Style == ResearchStyle.Bold) why.Add($"{lead?.Name}은(는) 대담하게 한다");
         if (bench.Room.Air.O2 > 23.5f) why.Add($"{bench.Room.Name} 산소 {bench.Room.Air.O2:0.0}kPa");
@@ -668,7 +674,7 @@ public sealed class ResearchActivity : Activity
         if (partner) s -= 0.06f;
         if (Bedtime(c, w)) s -= 0.35f;
         s -= 0.3f * c.Needs.Stress + 0.4f * c.Memory.FearOf(bench.Room);
-        string why = lead ? $"{t.Name} 실험 — {x.LeadWhy}" + (x.Paused ? " · 끊긴 실험을 이어 한다" : "") : $"{w.Crew[x.Lead].Name}의 {t.Name} 실험을 거든다";
+        string why = lead ? $"{t.Name} 실험 — {x.LeadWhy} · {TechWebSystem.StyleName(x.Style)}하게" + (x.Paused ? " · 끊긴 실험을 이어 한다" : "") : $"{w.Crew[x.Lead].Name}의 {t.Name} 실험을 거든다";
         return (MathF.Max(0f, s), why);
     }
 
