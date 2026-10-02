@@ -305,7 +305,7 @@ public partial class ShipView
                 for (int k = 0; k < 3; k++) { float a = k * Mathf.Tau / 3f + _time; var e = c + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * 9f; ci.DrawLine(c, e, col, 1.2f, true); ci.DrawCircle(e, 1.5f, col, true, -1f, true); }
             // 초시계
             var sw = new Vector2(rp.End.X - 8f, rp.Position.Y + 9f);
-            float frac = Mathf.Clamp((_world.Tick - d.Start) / (float)SimTime.Minutes(35), 0f, 1f);
+            float frac = Mathf.Clamp((_world.Tick - d.Start) / (float)SimTime.Minutes(60), 0f, 1f);
             ci.DrawCircle(sw, 5f, new Color("#10151d"), true, -1f, true);
             ci.DrawArc(sw, 5f, -Mathf.Pi / 2f, -Mathf.Pi / 2f + Mathf.Tau * frac, 20, col, 1.4f, true);
             ci.DrawLine(sw + new Vector2(0, -5f), sw + new Vector2(0, -7f), new Color("#c8ced8"), 1.2f, true);

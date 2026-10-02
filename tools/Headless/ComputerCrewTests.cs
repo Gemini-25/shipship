@@ -122,8 +122,13 @@ public static partial class Program
             {
                 w2.Automation.Belief.Break(room2, SensorFault.Blind, "시험");
                 ScoutRun? run2 = null;
-                for (int i = 0; i < SimTime.Hours(3) && (run2 == null || run2.Seen < 0); i++) { w2.Step(); run2 ??= w2.Automation.Mate.Scouts.FirstOrDefault(s => s.RoomId == room2.Id); }
-                Check("로봇이 없으면 드론이 정찰한다", run2 is { Drone: true }, run2 == null ? "없음" : $"{run2.By} · {(run2.Seen >= 0 ? run2.Found : run2.Failed ? "실패" : "가는 중")}");
+                for (int i = 0; i < SimTime.Hours(4) && (run2 == null || run2.Seen < 0 && !run2.Failed); i++)
+                {
+                    w2.Step(); run2 ??= w2.Automation.Mate.Scouts.FirstOrDefault(s => s.RoomId == room2.Id);
+                    if (Environment.GetCommandLineArgs().Contains("--matedebug") && i % SimTime.Minutes(20) == 0)
+                        Console.WriteLine($"      {SimTime.Clock(w2.Tick)} 일감 {string.Join(" / ", w2.Board.Open.Where(o => o.Kind == WorkKind.InspectHull).Select(o => $"{o.Title} 드론 {o.Drone?.Name} 사람 {o.Assignee?.Name} 막힘 {o.BlockedUntil > w2.Tick}"))} · 드론 {string.Join(" / ", w2.Drones.Drones.Select(d => $"{d.Name} {d.Kind} {d.State} {d.Doing} 배터리 {d.Battery:0.00}"))}");
+                }
+                Check("로봇이 없으면 드론이 정찰한다", run2 is { Drone: true, Seen: >= 0 }, run2 == null ? "없음" : $"{run2.By} · {(run2.Seen >= 0 ? run2.Found : run2.Failed ? "실패" : "가는 중")}");
             }
             else Console.WriteLine("    (드론 점검기가 없는 배 — 드론 정찰은 건너뜀)");
         }
@@ -199,7 +204,13 @@ public static partial class Program
             var lazy = w.Crew.Where(c => !c.Dead && !c.IsChild && w.CrisisCrew.BillRole(c) != StationRole.None && c.IsAwake).OrderBy(c => c.Id).FirstOrDefault();
             if (lazy != null) { lazy.Needs.Stress = 1f; lazy.Needs.Rest = 0.3f; lazy.Value = CrewValue.Freedom; w.Automation.Trusts.Change(lazy, -0.4f, "시험", quiet: true); }
             var d = mate.PlanDrill("불", w.Tick + SimTime.Minutes(5));
-            for (int i = 0; i < SimTime.Minutes(50) && !(d?.Done ?? true); i++) w.Step();
+            var jobs0 = new Dictionary<int, string>();
+            for (int i = 0; i < SimTime.Minutes(75) && !(d?.Done ?? true); i++)
+            {
+                w.Step();
+                if (Environment.GetCommandLineArgs().Contains("--matedebug") && d != null && d.Begun && i % SimTime.Minutes(1) == 0)
+                    foreach (var (id, sp) in d.Spot) { var c = w.Crew.First(x => x.Id == id); string jb = $"{c.Job?.Activity?.Id}/{c.Job?.Label}/{c.Pose}"; if (jobs0.GetValueOrDefault(id) != jb) { jobs0[id] = jb; Console.WriteLine($"      {SimTime.Clock(w.Tick)} {c.Name} [{d.Role[id]}] {jb} 거리 {(c.Cell.X - sp.X) * (c.Cell.X - sp.X) + (c.Cell.Y - sp.Y) * (c.Cell.Y - sp.Y)} 도착 {d.Arrive.ContainsKey(id)}"); } }
+            }
             Check("한가한 날 훈련을 했다 (사람이 실제로 자리로 걸었다)", d != null && d.Done && d.Arrive.Count > 0, d == null ? "—" : d.Summary);
             Check("진지한 사람과 귀찮아하는 사람이 갈렸다", d != null && d.Serious.Count > 0 && d.Skipped.Count + d.Grumbled.Count > 0, d == null ? "—" : $"진지 {d.Serious.Count} · 투덜 {d.Grumbled.Count} · 안 옴 {d.Skipped.Count}");
             Check("훈련 결과로 배치표가 바뀌었다", bill.Version > v0 && d != null && d.Changes.Count > 0, $"판 {v0} → {bill.Version} · {string.Join(" · ", d?.Changes ?? new List<string>())}");

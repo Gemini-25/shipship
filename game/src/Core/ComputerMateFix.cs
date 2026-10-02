@@ -59,8 +59,6 @@ public sealed partial class ShipMate
     private readonly SortedDictionary<int, int> _faultSeen = new();
     private long _causeNext;
     private int _gearId = 1, _scoutId = 1, _overloads;
-    /// <summary>드론이 바깥에서 들여다볼 방 (WorkBoard.ScanMate).</summary>
-    internal readonly SortedSet<int> DroneLook = new();
 
     public static string GearName(MateGear k) => k switch
     {
@@ -98,7 +96,7 @@ public sealed partial class ShipMate
         foreach (var s in Scouts)
         {
             if (s.Seen >= 0 || s.Failed) continue;
-            if (w.Tick - s.Sent > SimTime.Hours(3)) { s.Failed = true; DroneLook.Remove(s.RoomId); continue; }
+            if (w.Tick - s.Sent > SimTime.Hours(3)) { s.Failed = true; continue; }
             if (s.Drone && w.Ship.Rooms.FirstOrDefault(r => r.Id == s.RoomId) is Room dr && dr.Joints.Any(j => j.SeenAt >= s.Sent)) SawRoom(s, dr, "드론");
         }
         foreach (var r in w.Ship.LiveRooms)
@@ -129,7 +127,7 @@ public sealed partial class ShipMate
         if (run == null && w.Drones.CanInspect() && r.Joints.Count > 0)
         {
             run = new ScoutRun { Id = _scoutId++, RoomId = r.Id, Room = r.Name, Sent = w.Tick, By = "드론", Unit = "점검 드론", Drone = true };
-            DroneLook.Add(r.Id);
+            w.Structure.Unseen.TryAdd(r.Id, w.Tick); // 검사 드론이 먼저 도는 방 (창 너머 · 연결부)
         }
         if (run == null) return null;
         Scouts.Add(run);
@@ -144,7 +142,6 @@ public sealed partial class ShipMate
         if (s.Seen >= 0) return;
         s.Seen = w.Tick;
         ScoutsSeen++;
-        DroneLook.Remove(r.Id);
         var b = A.Belief.Of(r);
         int people = BeliefModel.Actual(w, r);
         bool fire = w.Fire.CountIn(r) > 0 || r.Air.Smoke > 0.25f;
@@ -354,17 +351,5 @@ public sealed partial class RobotSystem
         Begin(r, steps, $"정찰 — {room.Name} (감지기가 안 닿는다)");
         r.Mind.Say($"{room.Name}을 직접 보러 간다", w.Tick);
         return true;
-    }
-}
-
-public sealed partial class WorkBoard
-{
-    /// <summary>v16.27 드론이 바깥에서 들여다볼 방 (사각지대 정찰 — 로봇이 없을 때).</summary>
-    private void ScanMate(Poster post)
-    {
-        if (_world.Automation.MateOrNull is not ShipMate m || m.DroneLook.Count == 0) return;
-        foreach (var id in m.DroneLook)
-            if (_world.Ship.Rooms.FirstOrDefault(r => r.Id == id) is Room r && !r.Detached)
-                post(WorkKind.InspectHull, WorkTarget.OfExterior(r), 0.62f, Skill.Mechanics, "주 컴퓨터: 감지기가 안 닿는다 — 창으로 들여다봐 달라");
     }
 }

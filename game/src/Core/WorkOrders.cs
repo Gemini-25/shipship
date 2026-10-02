@@ -1259,7 +1259,6 @@ public sealed partial class WorkBoard
         ScanGrowth(Post); // v11.3 배우기 · 재활
         psc = Prof.Lap("scan.Growth", psc);
         ScanLife(Post); // v12.7 시신 수습 · 의수·의족
-        ScanMate(Post); // v16.27 사각지대 드론 정찰
         ScanComputer(Post); // v16.20 원격으로 안 되는 일만 손에게 (ComputerTriage.cs)
         psc = Prof.Lap("scan.Life", psc);
 

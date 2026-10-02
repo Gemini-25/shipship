@@ -56,7 +56,7 @@ public sealed partial class ShipMate
     private void DrillTick()
     {
         var w = _w;
-        if (ActiveDrill is DrillRun d) { if (w.Tick - d.Start > SimTime.Minutes(35) || d.Role.Keys.All(id => d.Arrive.ContainsKey(id) || d.Skipped.Contains(id))) Finish(d); return; }
+        if (ActiveDrill is DrillRun d) { if (w.Tick - d.Start > SimTime.Minutes(60) || d.Role.Keys.All(id => d.Arrive.ContainsKey(id) || d.Skipped.Contains(id))) Finish(d); return; }
         if (!Up) return;
         if (NextDrill is DrillRun n)
         {
@@ -153,16 +153,15 @@ public sealed partial class ShipMate
             d.Role[c.Id] = role;
             d.Spot[c.Id] = spot;
             d.From[c.Id] = c.Cell;
-            float dist = MathF.Sqrt(MathF.Pow(spot.X - c.Cell.X, 2) + MathF.Pow(spot.Y - c.Cell.Y, 2)) * 1.35f;
-            dists.Add(0.6f + dist / 55f);
+            dists.Add(MusterMin(c.Cell, spot));
             // 진지함: 성실 · 안전/규칙 · 겪은 사고 · 컴퓨터 믿음 − 자유 · 지침 · 지난번 귀찮아함 (이유를 들으면 조금 낫다)
             int att = _attitude.GetValueOrDefault(c.Id);
-            float s = 0.35f * c.Traits.Diligence + (c.Value is CrewValue.Safety or CrewValue.Rules ? 0.2f : 0f) + 0.3f * c.Memory.Trauma + 0.2f * a.Trusts.Of(c)
-                      - (c.Value == CrewValue.Freedom ? 0.22f : 0f) - 0.2f * c.Needs.Stress - 0.15f * (1f - c.Needs.Rest) + (att < 0 ? 0.12f : 0f) + R.Range(-0.08f, 0.08f);
+            float s = 0.25f + 0.35f * c.Traits.Diligence + (c.Value is CrewValue.Safety or CrewValue.Rules ? 0.15f : 0f) + 0.25f * c.Memory.Trauma + 0.3f * (a.Trusts.Of(c) - 0.5f)
+                      - (c.Value == CrewValue.Freedom ? 0.2f : 0f) - 0.15f * c.Needs.Stress - 0.1f * (1f - c.Needs.Rest) + (att < 0 ? 0.1f : 0f) + 0.03f * att + R.Range(-0.08f, 0.08f);
             if (att < 0) a.Apps.Messages.Add(new PersonalMessage(w.Tick, c.Id, "훈련", "지난번 불 때 제 자리까지 4분이 걸렸다 — 그래서 다시 한다. 2분이면 막을 불이었다"));
-            if (s < 0.28f) { d.Skipped.Add(c.Id); c.Say(w, Persona.Say(c, "또 훈련이야? 이것만 끝내고")); continue; }
+            if (s < 0.2f) { d.Skipped.Add(c.Id); c.Say(w, Persona.Say(c, "또 훈련이야? 이것만 끝내고")); continue; }
             long go = w.Tick;
-            if (s < 0.45f) { d.Grumbled.Add(c.Id); go += SimTime.Minutes(3 + R.Range(0, 5)); c.Say(w, Persona.Say(c, "훈련이라며. 커피는 마시고 가자")); }
+            if (s < 0.38f) { d.Grumbled.Add(c.Id); go += SimTime.Minutes(3 + R.Range(0, 5)); c.Say(w, Persona.Say(c, "훈련이라며. 커피는 마시고 가자")); }
             else d.Serious.Add(c.Id);
             d.Go[c.Id] = go;
             c.Interrupt(w);
@@ -170,6 +169,10 @@ public sealed partial class ShipMate
         dists.Sort();
         d.Expect = dists.Count == 0 ? 0f : dists[dists.Count / 2] * MusterFactor;
     }
+
+    /// <summary>컴퓨터의 집결 시간 셈 (분): 곧은 거리 × 굽은 길 · 걷는 빠르기 · 알아듣는 데 30초.</summary>
+    private static float MusterMin(Cell from, Cell to) =>
+        0.5f + MathF.Sqrt(MathF.Pow(to.X - from.X, 2) + MathF.Pow(to.Y - from.Y, 2)) * 1.35f / (Locomotion.BaseSpeed * SimTime.TicksPerHour / 60f);
 
     /// <summary>훈련 행동이 읽는다: 이 사람이 지금 갈 자리.</summary>
     public Cell? DrillSpot(CrewMember c) =>
@@ -206,8 +209,7 @@ public sealed partial class ShipMate
             foreach (var (oid, orole) in d.Role)
             {
                 if (oid == id || orole == role || !d.Arrive.ContainsKey(oid) || d.Changes.Any(x => x.Contains(Crew(oid)?.Name ?? "?"))) continue;
-                var from = d.From[oid];
-                float est = 0.6f + MathF.Sqrt(MathF.Pow(spot.X - from.X, 2) + MathF.Pow(spot.Y - from.Y, 2)) * 1.35f / 55f;
+                float est = MusterMin(d.From[oid], spot);
                 if (est < best) { best = est; pick = oid; }
             }
             if (pick < 0 || Crew(id) is not CrewMember slow || Crew(pick) is not CrewMember fast) continue;
