@@ -115,7 +115,6 @@ public sealed class Junction
     public Cell At { get; init; }
     public int Room { get; init; } = -1;
     public float Wet { get; internal set; }
-    public bool Hidden => true;
     public bool Known { get; internal set; }
     public bool Suspected { get; internal set; }
     public bool Taped { get; internal set; }
@@ -524,7 +523,6 @@ public sealed partial class MatterSystem
             // ── 얼음 + 열 = 물 ──
             if (t.Mat == Material.Ice)
             {
-                float over = t.Temp > 0f ? cellT : 0f;
                 if (cellT > 0f || fire > 0f)
                 {
                     float melt = MathF.Min(t.Mass, (0.8f + 0.12f * MathF.Max(0f, cellT) + 20f * fire) * Matter.Rule(Material.Ice, Element.Heat).Rate * h);
@@ -533,7 +531,6 @@ public sealed partial class MatterSystem
                     t.Temp = 0f;
                     if (t.Mass <= 0.15f) { (gone ??= new()).Add(t); Stats.Thawed++; MarkLog.Add(room.Marks, w.Tick, $"{t.Name}이(가) 다 녹아 물이 됐다"); }
                 }
-                _ = over;
             }
 
             // ── 음식: 열 · 물 · 방사선에 상한다 ──
