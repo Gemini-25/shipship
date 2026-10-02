@@ -187,7 +187,9 @@ public static partial class Program
         if (On(7))
         {
             var w = DayOne(seed, "Hanbit");
-            var z = w.Crew.First(c => c.CanAct && c.IsAwake && c.Room != null && c.Room.Kind != RoomType.Corridor);
+            bool Pick(CrewMember c) => c.CanAct && c.IsAwake && c.Room != null && c.Room.Kind != RoomType.Corridor;
+            for (int i = 0; i < 24 && !w.Crew.Any(Pick); i++) Run(w, SimTime.Minutes(10)); // 통합: 새 배에서는 첫 순간 깨어 있는 사람이 다 복도에 있을 수 있다 — 방에 들어설 때까지
+            var z = w.Crew.First(Pick);
             var room = z.Room!;
             var deafOne = w.Crew.FirstOrDefault(c => c != z && c.CanAct && c.IsAwake);
             var spot = Cell.Dirs8.Select(d => z.Cell + d).FirstOrDefault(c => w.Ship.IsOpenFloor(c) && w.Ship.RoomAt(c) == room);

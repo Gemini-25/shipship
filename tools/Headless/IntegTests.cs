@@ -264,6 +264,7 @@ public static partial class Program
     /// <summary>진단만 (INTEG_ONLY=probe PROBE=…): 회귀 실패 원인을 본다.</summary>
     private static void IgProbe(int seed, string what)
     {
+        IgProbe2(seed, what); // 통합 4차 진단
         if (what.Contains("comms"))
         {
             var w = DayOne(seed, "Hanbit");

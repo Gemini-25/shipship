@@ -69,12 +69,21 @@ public sealed class Pathfinder
         {
             if (d < 0 || d >= nd || inner == startRoom) continue; // 안에 있는 사람은 언제나 나간다
             _barMark[d] = _barRun;
+            if (inner >= 0) { if (_roomBar.Length <= inner) Array.Resize(ref _roomBar, Math.Max(inner + 1, _ship.Rooms.Count)); _roomBar[inner] = _barRun; } // 통합: 그 방으로 드는 정비 통로도
             sig = unchecked(sig * 31 + d + 1);
         }
         return sig;
     }
 
     private bool Barred(int door) => door >= 0 && door < _barMark.Length && _barMark[door] == _barRun;
+    private int[] _roomBar = Array.Empty<int>();
+    /// <summary>통합: 정비 통로(벽 속)에서 권한 없는 출입 통제 방으로 내려서는 걸음 — 문을 비켜 몰래 드는 길이 되지 않게 막는다 (나가는 것은 된다).</summary>
+    private bool CrawlIntoBarred(int from, int to)
+    {
+        if (!Crawl[from] || _walk[from]) return false;
+        int r = _room[to];
+        return r >= 0 && r < _roomBar.Length && _roomBar[r] == _barRun;
+    }
 
     private readonly Ship _ship;
     private readonly int _w;
@@ -409,6 +418,7 @@ public sealed class Pathfinder
                 int ni = cur + _offsets[k];
                 // ── CanStep ──
                 if (ni < 0 || ni >= _n || !_pass[ni]) continue;
+                if (CrawlIntoBarred(cur, ni)) continue;
                 int dr = _door[ni];
                 if (dr >= 0 && _doorBlocked[dr]) continue;
                 int r = _room[ni];
@@ -495,6 +505,8 @@ public sealed class Pathfinder
                     int ni = cur + _offsets[k];
                     // ── CanStep ──
                     if (ni < 0 || ni >= _n || !_pass[ni]) continue;
+                    if (CrawlIntoBarred(cur, ni)) continue;
+                if (CrawlIntoBarred(cur, ni)) continue;
                     int dr = _door[ni];
                     if (dr >= 0 && _doorBlocked[dr]) continue;
                     int r = _room[ni];
@@ -530,6 +542,7 @@ public sealed class Pathfinder
         // 설계도 둘레에 빈 여백이 있으므로 이웃 인덱스가 배열 밖으로 나가지 않는다
         if (to < 0 || to >= _n) return false;
         if (!Passable(to, profile)) return false;
+        if (CrawlIntoBarred(from, to)) return false;
         int dr = _door[to];
         if (dr >= 0 && _ship.Doors[dr].Locked)
         {
