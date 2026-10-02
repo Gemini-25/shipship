@@ -216,6 +216,7 @@ public static partial class FixtureArt
         if (!Table.TryGetValue(f.Type, out var a)) return false;
         var x = new Fix(ci, f, null, 0f, 1f, false);
         a.Body(in x);
+        Weathering(in x, a); // 낡음 · 상처 (FixtureArtWear.cs)
         return true;
     }
 
@@ -264,6 +265,7 @@ public static partial class FixtureArt
                 Smoke(ci, e, time, x.Id, 0.5f, x.Lod, 2);
                 break;
         }
+        Moments(in x, a, m, e); // 고장 순간 · 고치는 중 (FixtureArtWear.cs)
         if (x.Lod == 0) return;
         // 열 · 압력 스트레스: 아지랑이
         if (m.Heat > 0.85f) Shimmer(ci, x.B, time, Mathf.Clamp((m.Heat - 0.85f) / 0.5f, 0.15f, 1f));
@@ -280,14 +282,14 @@ public static partial class FixtureArt
                 Dot(ci, x.B.Position + new Vector2(Hash(x.Id, k, 61), Hash(x.Id, k, 62)) * x.B.Size, 1.2f + 2.2f * Hash(x.Id, k, 63), Powder.WithAlpha(0.35f * m.Fouled));
     }
 
-    /// <summary>tier · grade · 주인 · 치움이 바뀌면 정적 몸체를 다시 그린다 (v16.5b 덧그림이 바로 보이게).</summary>
+    /// <summary>tier · grade · 주인 · 치움 · 낡음 단계가 바뀌면 정적 몸체를 다시 그린다 (v16.5b 덧그림이 바로 보이게).</summary>
     public static int Signature(Ship ship)
     {
         int h = 17;
         foreach (var f in ship.Furniture)
         {
             int k = f.Id * 31 + (f.Owner?.Id ?? -1) * 7 + (f.Stowed ? 3 : 0) + (f.Improved ? 5 : 0);
-            if (f.Machine is Machine m) k += m.Tier * 101 + (int)m.Grade * 1009;
+            if (f.Machine is Machine m) k += m.Tier * 101 + (int)m.Grade * 1009 + WearStep(m) * 10007 + ScarStep(m) * 100003; // 낡음 단계도
             h = unchecked(h * 486187739 + k);
         }
         return h;
