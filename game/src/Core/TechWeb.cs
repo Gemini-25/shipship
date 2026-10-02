@@ -114,7 +114,7 @@ public static class TechWeb
         //   컴퓨터 (중앙 · 분산은 갈림길에)
         T("watchdog", 2, TechField.Computing, "감시 타이머", 36f, "멎은 프로그램을 스스로 다시 켠다", X((H(HazardKind.ComputerFault), 0.7f))),
         //   방 공사
-        T("modularfit", 2, TechField.Fabrication, "모듈식 고정구", 36f, "설비를 볼트 넷으로 뗐다 붙인다", X(("room.hours", 0.75f))),
+        T("modularfit", 2, TechField.Fabrication, "조립식 고정구", 36f, "설비를 볼트 넷으로 뗐다 붙인다", X(("room.hours", 0.75f))),
         T("quickcouple", 3, TechField.Fabrication, "빠른 이음 배관", 62f, "배관을 돌려 끼워 잇는다", X(("room.risk", 0.7f))),
     };
 

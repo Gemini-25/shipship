@@ -987,7 +987,7 @@ public sealed partial class WorkBoard
             if (p.CoolingCapacity >= PowerGrid.RestartCoolingKw)
                 Post(WorkKind.RestartReactor, WorkTarget.Of(reactor), 1.1f, Skill.Engineering, "냉각 확보됨 · 재기동 가능");
         }
-        bool auxLow = p.BatteryPercent < 0.15f && p.ReactorLimit < 12f;
+        bool auxLow = p.BatteryPercent < 0.15f && (p.ReactorLimit < 12f || p.DeficitSince >= 0 && w.Tick - p.DeficitSince > SimTime.Minutes(3)); // v16.24 원자로가 돌아도 모자라면 (정비 중 절반 · 재기동 직후)
         if (ship.FurnitureOf(FurnitureType.AuxGenerator).FirstOrDefault() is Furniture aux && !p.AuxRunning && p.AuxFuel > 0.1f
             && !aux.Machine!.Stopped && (auxLow || w.CrisisCrew.AuxDue())) // v16.21 배터리 추세로 미리
             Post(WorkKind.StartAux, WorkTarget.Of(aux), auxLow ? 1.15f : w.CrisisCrew.AuxUrgency, Skill.Electrical, auxLow ? $"배터리 {p.BatteryPercent * 100:0}% · 원자로 {p.ReactorLimit:0}kW" : w.CrisisCrew.AuxWhy);
@@ -1172,8 +1172,9 @@ public sealed partial class WorkBoard
             if (sick && !(needs && w.Tick - c.Vitals.TreatedTick > SimTime.Hours(c.Vitals.Injury >= 0.3f ? 6 : 3)))
                 Post(WorkKind.Treat, WorkTarget.OfCrew(c), 0.5f + 0.4f * c.Fx.Worst, Skill.Medicine,
                     ill != null ? $"{AilmentSystem.Spec(ill.Id).Name} {w.Ailments.Severity(ill) * 100:0}% — 약" : $"어딘가 아프다 {c.Fx.Worst * 100:0}% — 진찰");
-            if (needs && w.Tick - c.Vitals.TreatedTick > SimTime.Hours(c.Vitals.Injury >= 0.3f ? 6 : 3))
-                Post(WorkKind.Treat, WorkTarget.OfCrew(c), 0.6f + MathF.Max(0.6f - c.Vitals.Health, c.Vitals.Injury * 0.5f), Skill.Medicine,
+            bool bleeding = w.Casualty.Urgent(c); // v16.24 피가 나는 사람은 방금 치료받았어도 다시 · 급하게
+            if (needs && w.Tick - c.Vitals.TreatedTick > SimTime.Hours(c.Vitals.Injury >= 0.3f ? 6 : 3) || bleeding)
+                Post(WorkKind.Treat, WorkTarget.OfCrew(c), (bleeding ? 1.15f : 0.6f) + MathF.Max(0.6f - c.Vitals.Health, c.Vitals.Injury * 0.5f), Skill.Medicine,
                     c.Vitals.Injury >= 0.05f ? $"체력 {c.Vitals.Health * 100:0}% · 부상 {c.Vitals.Injury * 100:0}% ({c.Vitals.InjuryCause})" : $"체력 {c.Vitals.Health * 100:0}%");
         }
 

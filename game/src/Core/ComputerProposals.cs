@@ -87,12 +87,12 @@ public sealed class ProposalBoard
     {
         var w = _w;
         if (p.State != ProposalState.Pending) return;
-        p.State = who == "플레이어" || who == "관찰자" ? (accept ? ProposalState.Accepted : ProposalState.Rejected) : ProposalState.Expired;
+        p.State = who == "관찰자" ? (accept ? ProposalState.Accepted : ProposalState.Rejected) : ProposalState.Expired;
         p.DecidedBy = who;
         p.DecideWhy = (accept ? "받음" : "거절") + (why != "" ? $" — {why}" : "");
         p.DecidedAt = w.Tick;
         if (accept) Accepted++; else Rejected++;
-        if (who == "플레이어" || who == "관찰자") ByPlayer++; else ByCaptain++;
+        if (who == "관찰자") ByPlayer++; else ByCaptain++;
         w.Log.Add(w.Tick, LogKind.Ship, $"{who}: 컴퓨터 제안 \"{p.Title}\" {(accept ? "받음" : "거절")}" + (why != "" ? $" — {why}" : ""));
         if (accept) p.OnAccept?.Invoke(w, p);
         if (!accept && p.RoomId >= 0 && p.OnAccept == null)

@@ -118,7 +118,8 @@ public sealed class PowerTriage
         var a = w.Automation;
         var p = w.Power;
         var ch = a.Character;
-        float drain = MathF.Max(0f, -p.BatteryFlow);
+        // v16.24 배터리가 바닥나면 빠지는 흐름이 0이다 — 모자란 만큼(못 준 전기)을 빠지는 양으로 본다 (아니면 '배터리로 버틴다'가 99시간으로 보였다)
+        float drain = MathF.Max(MathF.Max(0f, -p.BatteryFlow), p.BatteryPercent < 0.05f ? MathF.Max(0f, p.Demand - p.Delivered) : 0f);
         bool deficit = p.DeficitSince >= 0;
         bool crisis = drain > 0.3f && (!p.ReactorOnline || p.BatteryPercent < 0.6f) || deficit;
         var auxF = w.Ship.FurnitureOf(FurnitureType.AuxGenerator).FirstOrDefault(f => !f.Room.Detached);

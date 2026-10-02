@@ -351,11 +351,14 @@ public sealed class ComputerForesee
         float H(float drain) => drain <= 0.05f ? 99f : charge / drain;
         float Risk(float hours) => restoreHours >= 98f ? Math.Clamp(1f - hours / 24f, 0f, 1f) * crew * 0.3f : Math.Clamp((restoreHours - hours) / MathF.Max(0.5f, restoreHours), 0f, 1f) * crew * 0.3f;
         float h0 = H(drainKw) * Noise(), h1 = H(drainKw - parkKw) * Noise(), h2 = H(drainKw - parkKw - auxKw * (1f - auxFail)) * Noise();
+        // v16.24 배터리가 이미 바닥이면 '몇 시간'은 모두 0 — 지금 못 대는 전기 중 얼마를 메우나로 견준다 (아니면 아무것도 안 하는 안이 이겼다)
+        float Gap(float left) => charge > 0.5f || drainKw <= 0.05f ? 1f : Math.Clamp(left / drainKw, 0.05f, 1f);
+        float g0 = Gap(drainKw), g1 = Gap(drainKw - parkKw), g2 = Gap(drainKw - parkKw - auxKw * (1f - auxFail));
         var opts = new List<ForeseeOption>
         {
-            new() { Key = "hold", Name = "배터리로 버틴다", Minutes = h0 * 60f, People = Risk(h0), Ship = 0f, Note = $"필수까지 {h0:0.#}시간" },
-            new() { Key = "park", Name = "급하지 않은 설비를 끄고 생명유지 쪽으로", Minutes = h1 * 60f, People = Risk(h1), Ship = parkKw * 0.01f, Note = $"{parkKw:0.#}kW 끔 → {h1:0.#}시간", Allowed = parkKw > 0.1f, Blocked = parkKw > 0.1f ? "" : "끌 것이 없다" },
-            new() { Key = "aux", Name = "보조 발전기를 켜고 생명유지 쪽으로", Minutes = h2 * 60f, People = Risk(h2), Ship = parkKw * 0.01f + 0.05f, Note = $"{auxKw:0.#}kW · 실패 {auxFail * 100:0}% → {h2:0.#}시간", Allowed = auxKw > 0.1f, Blocked = auxKw > 0.1f ? "" : "보조 발전기를 여기서 켤 수 없다" },
+            new() { Key = "hold", Name = "배터리로 버틴다", Minutes = h0 * 60f, People = Risk(h0) * g0, Ship = 0f, Note = $"필수까지 {h0:0.#}시간" },
+            new() { Key = "park", Name = "급하지 않은 설비를 끄고 생명유지 쪽으로", Minutes = h1 * 60f, People = Risk(h1) * g1, Ship = parkKw * 0.01f, Note = $"{parkKw:0.#}kW 끔 → {h1:0.#}시간", Allowed = parkKw > 0.1f, Blocked = parkKw > 0.1f ? "" : "끌 것이 없다" },
+            new() { Key = "aux", Name = "보조 발전기를 켜고 생명유지 쪽으로", Minutes = h2 * 60f, People = Risk(h2) * g2, Ship = parkKw * 0.01f + 0.05f, Note = $"{auxKw:0.#}kW · 실패 {auxFail * 100:0}% → {h2:0.#}시간", Allowed = auxKw > 0.1f, Blocked = auxKw > 0.1f ? "" : "보조 발전기를 여기서 켤 수 없다" },
         };
         return Choose("정전", w.Power.Reactor?.Body.Room, $"전기가 모자라다 — 배터리 {p.BatteryPercent * 100:0}%에서 {drainKw:0.#}kW씩 빠진다" + (restoreHours < 98f ? $" · 원자로까지 {restoreHours:0.#}시간" : " · 원자로를 언제 켤지 모른다"), opts, pw, sw);
     }

@@ -117,7 +117,7 @@ public static partial class Program
                     p == null ? $"제안 없음 · 수순 {string.Join(",", a.FireCases.Select(f => $"{f.Stage}:{f.Method}:{f.Status}"))}" : $"제안: {p.Title} · 근거 {p.Basis} · 예상 {p.Effect} · 믿음 {believed}명 · 다름: {why}");
                 if (p != null)
                 {
-                    a.Asks.Decide(p, false, "플레이어");
+                    a.Asks.Decide(p, false, "관찰자");
                     bool rescued = false, purgedOnHim = false; int minutes = 0;
                     for (; minutes < 40 && !rescued; minutes++)
                     {

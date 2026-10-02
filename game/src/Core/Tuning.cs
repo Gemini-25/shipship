@@ -104,7 +104,7 @@ public static class Tuning
     public static string Write()
     {
         var sb = new StringBuilder();
-        sb.AppendLine("# ShipSim 밸런스 수치 (v10.4). `열쇠 = 값`. 새 항해부터 쓰인다 (설정 창에서 바꾸면 지금 항해에도 기록되어 적용된다).");
+        sb.AppendLine("# ShipSim 밸런스 수치. `열쇠 = 값`. 새 항해부터 쓰인다 (설정 창에서 바꾸면 지금 항해에도 기록되어 적용된다).");
         foreach (var e in Entries)
             sb.AppendLine($"{e.Key} = {e.Get().ToString("0.###", CultureInfo.InvariantCulture)}    # {e.Label} (기본 {e.Default.ToString("0.###", CultureInfo.InvariantCulture)})");
         return sb.ToString();
