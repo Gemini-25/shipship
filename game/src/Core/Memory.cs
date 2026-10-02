@@ -40,6 +40,9 @@ public sealed class CrewMemory
 
     public bool AnyFear { get; internal set; }
 
+    /// <summary>v17.5 장소의 기억: 피하는 칸과 그 비용 [칸 번호, 비용, …] (없으면 null) — 길 고르기에 쓴다.</summary>
+    public int[]? Spots { get; set; }
+
     /// <summary>방 Id → 마지막으로 그 방에서 크게 놀란 틱 (한 사고에 한 번만 크게 놀란다).</summary>
     internal long[] Scared { get; private set; }
 

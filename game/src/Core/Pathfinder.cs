@@ -24,7 +24,7 @@ public sealed class DistanceField
 /// 길을 고르는 사람의 성향. "갈 수는 있는데 가고 싶지는 않다"를 표현한다.
 /// 겁 많은 사람은 위험 비용을 크게 느끼고, 급한 일을 맡은 책임감 있는 사람은 덜 느낀다.
 /// </summary>
-public readonly record struct PathProfile(float HazardScale = 1f, bool Suit = false, bool Responder = false, float[]? Fear = null, bool Eva = false, bool Robot = false, bool NoCrawl = false)
+public readonly record struct PathProfile(float HazardScale = 1f, bool Suit = false, bool Responder = false, float[]? Fear = null, bool Eva = false, bool Robot = false, bool NoCrawl = false, int[]? Spots = null)
 {
     /// <summary>선체 밖 한 칸을 지나는 추가 비용 (손으로 짚어 가며 느리게).</summary>
     public const int SpaceCost = 14;
@@ -213,7 +213,11 @@ public sealed class Pathfinder
     private int _hazardVersion;          // 불의 칸 위험을 다시 채울 때마다
     private int _stateVersion;           // 문·방 상태가 바뀔 때마다
     private int[] _state = Array.Empty<int>(), _scratch = Array.Empty<int>();
-    private sealed class FloodEntry { public int Version; public float[]? Fear; public DistanceField Field = null!; }
+    private sealed class FloodEntry { public int Version; public float[]? Fear; public int[]? Spots; public DistanceField Field = null!; }
+    private static bool SameSpots(int[]? a, int[]? b) => a == b || a != null && b != null && a.AsSpan().SequenceEqual(b); // v17.5
+    private int[] _spotAdd = Array.Empty<int>();
+    /// <summary>v17.5 장소의 기억: 그 사람이 피하는 칸의 비용 (급한 일로 달려갈 때는 40%만).</summary>
+    private static int SpotCost(int[] sp, int i, bool responder) { for (int k = 0; k < sp.Length; k += 2) if (sp[k] == i) return responder ? sp[k + 1] * 2 / 5 : sp[k + 1]; return 0; }
     private readonly Dictionary<(int start, float scale, int flags), FloodEntry> _floods = new();
     public int FloodHits { get; private set; }
     public int FloodMisses { get; private set; }
@@ -272,7 +276,7 @@ public sealed class Pathfinder
         int version = StateVersion();
         int si = grid.InBounds(start) ? grid.Index(start) : -1;
         var key = (si, profile.HazardScale, (profile.Suit ? 1 : 0) | (profile.Responder ? 2 : 0) | (profile.Eva ? 4 : 0) | (profile.Robot ? 8 : 0) | (profile.NoCrawl ? 16 : 0));
-        if (_floods.TryGetValue(key, out var e) && e.Version == version && SameFear(e.Fear, profile.Fear))
+        if (_floods.TryGetValue(key, out var e) && e.Version == version && SameFear(e.Fear, profile.Fear) && SameSpots(e.Spots, profile.Spots))
         {
             FloodHits++;
             Prof.Lap("path.Flood(캐시)", pf);
@@ -280,7 +284,7 @@ public sealed class Pathfinder
         }
         var field = FloodCore(start, profile);
         if (_floods.Count > 512) _floods.Clear();
-        _floods[key] = new FloodEntry { Version = version, Fear = profile.Fear == null ? null : (float[])profile.Fear.Clone(), Field = field };
+        _floods[key] = new FloodEntry { Version = version, Fear = profile.Fear == null ? null : (float[])profile.Fear.Clone(), Spots = profile.Spots, Field = field };
         FloodMisses++;
         Prof.Lap("path.Flood", pf);
         return field;
@@ -343,6 +347,9 @@ public sealed class Pathfinder
             _doorBlocked[d] = blocked;
         }
         float cellScale = (profile.Suit ? 0.5f : 1f);
+        if (_spotAdd.Length != _n) _spotAdd = new int[_n];
+        bool spotsOn = profile.Spots != null;
+        if (profile.Spots is { } sp0) for (int k = 0; k < sp0.Length; k += 2) if (sp0[k] >= 0 && sp0[k] < _n) _spotAdd[sp0[k]] += profile.Responder ? sp0[k + 1] * 2 / 5 : sp0[k + 1]; // v17.5
         var open = _open;
         open.Clear();
         cost[s] = 0;
@@ -376,12 +383,14 @@ public sealed class Pathfinder
                 int h = CellHazard[ni];
                 if (h > 0) step += (int)(h * cellScale * profile.HazardScale);
                 step += CellBody[ni]; // v16.3
+                if (spotsOn) step += _spotAdd[ni]; // v17.5 장소의 기억
                 int nd = dist + step;
                 if (cost[ni] >= 0 && nd >= cost[ni]) continue;
                 cost[ni] = nd;
                 open.Enqueue(ni, nd);
             }
         }
+        if (profile.Spots is { } sp1) for (int k = 0; k < sp1.Length; k += 2) if (sp1[k] >= 0 && sp1[k] < _n) _spotAdd[sp1[k]] = 0; // v17.5
         return new DistanceField(grid, cost);
     }
 
@@ -433,6 +442,7 @@ public sealed class Pathfinder
         int h = CellHazard[to];
         if (h > 0) cost += (int)(h * (profile.Suit ? 0.5f : 1f) * profile.HazardScale);
         cost += CellBody[to]; // v16.3
+        if (profile.Spots is { } sp) cost += SpotCost(sp, to, profile.Responder); // v17.5 장소의 기억
         return cost;
     }
 

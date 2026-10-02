@@ -161,6 +161,7 @@ public static partial class Program
         if (args.Contains("--fleettest")) return RunFleetTest(seed); // v16.20b
         if (args.Contains("--shipdesigntest")) return RunShipDesignTest(seed); // v16.22 배 재설계 · 크기별 등급 · 방 종류 · 식량원
         if (args.Contains("--auditfixtest")) return RunAuditFixTest(seed); // v16.24 점검 항해 고치기
+        if (args.Contains("--aftertest")) return RunAfterTest(seed); // v17.5 사고 뒤 며칠 · 꿈 · 장소의 기억
         if (args.Contains("--crisistest")) return RunCrisisCrewTest(seed); // v16.21 승무원 위기 행동
         if (args.Contains("--looktest")) return RunLookTest(seed); // v17.1 승무원 인형 · 몸의 변화
         if (args.Contains("--spacetest")) return RunSpaceTest(seed); // v17.4 공간과 협력 · 줄 서기 · 구경꾼
