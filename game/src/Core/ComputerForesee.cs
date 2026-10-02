@@ -375,6 +375,9 @@ public sealed class ComputerForesee
         return Choose("차단기", null, $"{PowerGrid.CircuitName(circuit)} 회로 차단기가 떨어졌다 — {cause}", opts, pw, sw);
     }
 
+    /// <summary>v16.20b 함대 지휘: 로봇 · 드론을 보낼지 사람을 보낼지 같은 저울로 견준다 (타임라인에 남는다).</summary>
+    public ForeseeDecision Fleet(string kind, Room? room, string title, List<ForeseeOption> opts) { var (pw, sw) = Weights(); return Choose(kind, room, title, opts, pw, sw); }
+
     // ───────────── 고르기 · 기록 ─────────────
 
     private ForeseeDecision Choose(string kind, Room? room, string title, List<ForeseeOption> opts, float pw, float sw)
