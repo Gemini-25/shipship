@@ -270,7 +270,7 @@ public static partial class WorkPlanners
             cm.Carrying = new ItemStack(got[0].kind, got[0].count);
             world.Adapt.Recycled++;
             MarkLog.Add(room.Marks, world.Tick, $"{cm.Name}: 뜯긴 {Ko.EulReul(f.Label)} 해체해 재활용");
-            world.History.Add(world, HistoryKind.Adaptation, $"{Ko.IGa(cm.Name)} 뜯긴 {Ko.EulReul(f.Label)} 해체했다 — {string.Join(" + ", got.Select(x => $"{ItemKinds.Name(x.kind)} {x.count}"))}을(를) 되찾았다", room, new[] { cm });
+            world.History.Add(world, HistoryKind.Adaptation, $"{Ko.IGa(cm.Name)} 뜯긴 {Ko.EulReul(f.Label)} 해체했다 — {Ko.EulReul(string.Join(" + ", got.Select(x => $"{ItemKinds.Name(x.kind)} {x.count}")))} 되찾았다", room, new[] { cm });
             world.Board.Close(o);
             return true;
         }));

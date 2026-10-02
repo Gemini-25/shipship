@@ -691,7 +691,7 @@ public sealed partial class BlastSystem
             c.Interrupt(w);
             // 놀람 · 공포 (그 방을 꺼리게 된다) · 긴장
             float k = MathF.Min(1f, p * 1.4f + (hit ? 0.2f : 0f));
-            if (c.Room != null) Memory.Frighten(w, c, room ?? c.Room, 0.25f + 0.55f * k, $"{spec.Name}이(가) 났다");
+            if (c.Room != null) Memory.Frighten(w, c, room ?? c.Room, 0.25f + 0.55f * k, $"{Ko.IGa(spec.Name)} 났다");
             Memory.Shake(w, c, 0.05f + 0.15f * k, spec.Name);
             MarkLog.Add(c.Memory.Marks, w.Tick, hit ? $"폭발에 휘말렸다 ({cause})" : $"폭발을 곁에서 겪었다 ({cause})");
             c.Needs.Stress = MathF.Min(1f, c.Needs.Stress + 0.1f + 0.3f * k);
@@ -1091,7 +1091,7 @@ public sealed partial class BlastSystem
             Stats.Memorials++;
             if (Scars.FirstOrDefault(s => s.Record == rec.Id) is BlastScar sc) sc.Memorial = true;
             var room = rec.Room >= 0 ? ship.Rooms[rec.Room] : null;
-            w.History.Add(w, HistoryKind.Memory, $"{room?.Name ?? "?"}의 폭발 자리 — {string.Join("·", dead.Select(c => c!.Name))}을(를) 기억하는 자리가 되었다", room, dead.Cast<CrewMember>(), rec.At);
+            w.History.Add(w, HistoryKind.Memory, $"{room?.Name ?? "?"}의 폭발 자리 — {Ko.EulReul(string.Join("·", dead.Select(c => c!.Name)))} 기억하는 자리가 되었다", room, dead.Cast<CrewMember>(), rec.At);
         }
     }
 

@@ -155,7 +155,7 @@ public sealed class BeliefModel
             b.Trust = MathF.Min(1f, b.Trust + 0.02f);
             if (b.Fault is SensorFault.Stuck or SensorFault.Blind && a.Active(ComputerModule.AutoCalib) && r.DataLinked && w.Tick - b.FaultSince > SimTime.Hours(6))
             {
-                w.Log.Add(w.Tick, LogKind.Ship, $"감지기 자동 교정 — {r.Name} {FaultName(b.Fault)}을 스스로 잡았다");
+                w.Log.Add(w.Tick, LogKind.Ship, $"감지기 자동 교정 — {r.Name} {Ko.EulReul(FaultName(b.Fault))} 스스로 잡았다");
                 b.Fault = SensorFault.None;
                 Repairs++;
             }

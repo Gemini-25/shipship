@@ -71,7 +71,7 @@ public sealed class SocialMind
                 if (s <= bs) continue;
                 bs = s;
                 string what = bel.Describe(b);
-                best = (b, p, s, $"{what} — {p.Name}은(는) 모를 것 (경보가 안 울렸다{(asleep ? " · 자고 있다" : "")})");
+                best = (b, p, s, $"{what} — {Ko.EunNeun(p.Name)} 모를 것 (경보가 안 울렸다{(asleep ? " · 자고 있다" : "")})");
             }
         }
         return best;
@@ -233,7 +233,7 @@ public sealed class SocialMind
             y.ChangeAffinity(x, 0.03f);
             return true;
         }
-        if (g.f == Feeling.Joy && g.v >= 0.3f) { emo.Feel(x, Feeling.Joy, 0.04f, $"{y.Name}이(가) 즐거워 보여서"); return false; }
+        if (g.f == Feeling.Joy && g.v >= 0.3f) { emo.Feel(x, Feeling.Joy, 0.04f, $"{Ko.IGa(y.Name)} 즐거워 보여서"); return false; }
         return false;
     }
 

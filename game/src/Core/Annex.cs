@@ -733,7 +733,7 @@ public sealed partial class AnnexSystem
                 p.OpenUntil = w.Tick + SimTime.Hours(1.2f);
                 Next(p, AnnexStage.Opening, $"내장 · {p.FixtureName}까지 끝났다 — 개통식 (한 시간)");
                 if (w.Automation.Present && w.Automation.MainOnline)
-                    w.Automation.Speak.Announce(w.Automation.Voice.Style($"증축한 {p.UseName}을 연다 — 손 비는 사람은 모이자"), RoomOf(p.RoomId), 1);
+                    w.Automation.Speak.Announce(w.Automation.Voice.Style($"증축한 {Ko.EulReul(p.UseName)} 연다 — 손 비는 사람은 모이자"), RoomOf(p.RoomId), 1);
                 break;
             case AnnexStage.Opening when w.Tick >= p.OpenUntil:
                 Open(p);

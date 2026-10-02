@@ -243,7 +243,7 @@ public sealed class MindSystem
                     c.EndJob(w, ToilStatus.Interrupted);
                     c.NextThinkTick = w.Tick;
                     c.Needs.Stress = MathF.Min(1f, c.Needs.Stress + 0.08f);
-                    w.Log.Add(w.Tick, LogKind.Warning, (m.Frozen ? "공황 — 얼어붙어 꼼짝 못 한다" : "공황 — 하던 일을 두고 정신없이 달아난다") + (fear is Fear ff ? $" ({Persona.Of(ff).Name}을(를) 무서워한다)" : ""), c.Id);
+                    w.Log.Add(w.Tick, LogKind.Warning, (m.Frozen ? "공황 — 얼어붙어 꼼짝 못 한다" : "공황 — 하던 일을 두고 정신없이 달아난다") + (fear is Fear ff ? $" ({Ko.EulReul(Persona.Of(ff).Name)} 무서워한다)" : ""), c.Id);
                     if (fear is Fear f2) { FearPanics++; Life.Diary(w, c, Persona.Say(c, $"{Persona.Of(f2).Name}... 몸이 말을 듣지 않았다")); }
                     MarkLog.Add(c.Memory.Marks, w.Tick, m.Frozen ? "공황에 얼어붙었다" : "공황에 달아났다");
                 }
@@ -316,7 +316,7 @@ public sealed class MindSystem
         c.Mind.LastIgnored = w.Tick;
         Ignores++;
         if (!cmd.ComputerCommands) cmd.Trust = MathF.Max(0f, cmd.Trust - 0.01f);
-        w.Log.Add(w.Tick, LogKind.Warning, $"명령 무시 — {CommandSystem.TeamName(t.Kind)}을 두고 {Ko.EulReul(o.Title)} 한다 ({cmd.CommanderName}의 지시보다 제 판단)", c.Id);
+        w.Log.Add(w.Tick, LogKind.Warning, $"명령 무시 — {Ko.EulReul(CommandSystem.TeamName(t.Kind))} 두고 {Ko.EulReul(o.Title)} 한다 ({cmd.CommanderName}의 지시보다 제 판단)", c.Id);
         if (c.Mind.Ignored == 1) w.History.Add(w, HistoryKind.Decision, $"{Ko.IGa(c.Name)} {cmd.CommanderName}의 지시를 무시했다 — {CommandSystem.TeamName(t.Kind)} 대신 {o.Title}", c.Room, new[] { c });
         if (c.Mind.Ignored >= 2) w.Society.Punish(c, "명령 무시", light: false); // v13.4 규칙 위반
         if (cmd.Commander is CrewMember boss && boss != c) w.Relations.Remember(boss, c, RelationReason.IgnoredMyWarning, $"내 지시를 무시하고 {Ko.EulReul(o.Title)} 했다"); // v14.4

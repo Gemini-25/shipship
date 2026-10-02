@@ -90,7 +90,7 @@ public sealed class FoodSourceSystem
         string unit = k switch { CropKind.Algae => "통", CropKind.Protein => "덩이", CropKind.Mushroom => "송이", CropKind.Herb => "줌", _ => "개" };
         string verb = k switch { CropKind.Algae => "떠냈다", CropKind.Protein => "건져 냈다", CropKind.Mushroom => "땄다", CropKind.Herb => "뜯었다", _ => "수확했다" };
         string where = k == CropKind.Veg ? bed.Label : $"{bed.Room.Name} {bed.Label}";
-        return $"{where}에서 {Noun(k)} {yield}{unit}을 {verb}";
+        return $"{where}에서 {Noun(k)} {yield}{Ko.EulReul(unit)} {verb}";
     }
 
     // ─────────────────────────────── 기록 ───────────────────────────────
@@ -271,7 +271,7 @@ public sealed class AltCropActivity : Activity
         bool told = w.Tick - fs.AdvisedAt < SimTime.Hours(12); // 주컴퓨터가 셈해 알린 뒤엔 다들 조금 더 서두른다
         if (told) s += 0.1f;
         if (Bedtime(c, w)) s -= 0.3f;
-        return (MathF.Max(0f, s), $"수경 재배가 멎었다 — {bed.Room.Name}을 한 번 더 돌본다" + (told ? " (주컴퓨터가 버틸 날을 셈해 알렸다)" : ""));
+        return (MathF.Max(0f, s), $"수경 재배가 멎었다 — {Ko.EulReul(bed.Room.Name)} 한 번 더 돌본다" + (told ? " (주컴퓨터가 버틸 날을 셈해 알렸다)" : ""));
     }
 
     public override Job? Plan(CrewMember c, World w, DistanceField dist)
@@ -283,7 +283,7 @@ public sealed class AltCropActivity : Activity
         toils.Add(new DoToil((cm, world) => { world.FoodSources.Tended(cm, bed); return true; }));
         return new Job(this, "다른 재배실 돌보기", toils)
         {
-            TargetRoom = bed.Room, Target = bed, LogText = $"{bed.Room.Name}을 돌보러 간다 (수경 재배가 멎었다)", LogKind = LogKind.Work,
+            TargetRoom = bed.Room, Target = bed, LogText = $"{Ko.EulReul(bed.Room.Name)} 돌보러 간다 (수경 재배가 멎었다)", LogKind = LogKind.Work,
         }.Reserve(bed, c);
     }
 }

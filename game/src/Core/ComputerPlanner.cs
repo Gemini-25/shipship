@@ -690,7 +690,7 @@ public sealed class ShipPlanner
                 var alt = w.Crew.Where(x => !x.Dead && !x.IsChild && x.CanAct && x != c && !roster.Any(r => r.Day == day && r.CrewId == x.Id)).OrderBy(x => cm.DutyCost(x, s.Duty)).ThenBy(x => x.Id).FirstOrDefault();
                 if (alt == null || cm.DutyCost(alt, s.Duty) >= 1.5f) continue;
                 roster[i] = s with { CrewId = alt.Id };
-                a.Apps.Messages.Add(new PersonalMessage(w.Tick, c.Id, "당번", $"오늘 {s.Duty}는 {alt.Name}에게 넘겼다 — 기력이 모자라 보인다"));
+                a.Apps.Messages.Add(new PersonalMessage(w.Tick, c.Id, "당번", $"오늘 {Ko.EunNeun(s.Duty)} {alt.Name}에게 넘겼다 — 기력이 모자라 보인다"));
                 a.Apps.Messages.Add(new PersonalMessage(w.Tick, alt.Id, "당번", $"오늘 {s.Duty} ({s.Time}) — {c.Name} 대신"));
                 cm.OnDuty(alt, s.Duty);
                 Schedule.Add(new ScheduleItem("당번", $"{s.Duty}: {c.Name} → {alt.Name}", alt.Id, $"{c.Name} 기력 {cm.RestNow(c) * 100:0}%", w.Tick));

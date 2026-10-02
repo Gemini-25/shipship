@@ -329,7 +329,7 @@ public sealed class ExpeditionSystem
         if (Halted && HaltCat == null && (worst ?? Cats.Where(Bottom).Cast<MatCat?>().FirstOrDefault()) is MatCat cw) // 기다리는 사이 바닥났다 — 이미 멈춘 배라 기다리지 않고 까닭을 바꾼다
         {
             HaltCat = cw;
-            HaltWhy = $"{ExpeditionSites.CatName(cw)}가 바닥났다 ({StockText(cw)}) · 원정대를 기다린다";
+            HaltWhy = $"{Ko.IGa(ExpeditionSites.CatName(cw))} 바닥났다 ({StockText(cw)}) · 원정대를 기다린다";
             w.History.Add(w, HistoryKind.Decision, $"엔진을 끈 채로 — {HaltWhy} · 원정대가 가져올 것에 배가 걸렸다", null, null, log: true);
         }
         if (!Halted && worst is MatCat c && CanHalt) Halt(c);
@@ -347,7 +347,7 @@ public sealed class ExpeditionSystem
         Stats.Halts++;
         var cap = w.Command.Captain is CrewMember cp && cp.CanAct ? cp : Council.Decider(w, false);
         HaltBy = w.Automation.Present && w.Automation.MainOnline ? "주 컴퓨터" : cap?.Name ?? "배";
-        HaltWhy = $"{ExpeditionSites.CatName(cat)}가 바닥났다 ({StockText(cat)})";
+        HaltWhy = $"{Ko.IGa(ExpeditionSites.CatName(cat))} 바닥났다 ({StockText(cat)})";
         w.RaiseAlert($"배가 멈췄다 — {HaltWhy} · 엔진을 끄고 원정을 궁리한다", null, AlertLevel.Notice, shipWide: true);
         w.History.Add(w, HistoryKind.Decision, $"엔진을 껐다 — {HaltWhy} · 재료 없이 가면 고장 하나에 배를 잃는다 ({HaltBy})", null, cap != null ? new[] { cap } : null, log: true);
         if (w.Automation.Present && w.Automation.MainOnline)
@@ -485,7 +485,7 @@ public sealed class ExpeditionSystem
             float fill = HaltCat is MatCat hc ? ExpeditionSites.Fills(s.Kind, hc) : Cats.Where(Low).Select(c => ExpeditionSites.Fills(s.Kind, c)).DefaultIfEmpty(0f).Max();
             s.CompScore = s.Yield * (0.4f + 0.6f * s.Certainty) * (0.6f + fill) - s.Risk * 14f - s.Dist * 2.5f;
             var notes = new List<string>();
-            if (fill > 0.25f) notes.Add($"{(HaltCat is MatCat c0 ? ExpeditionSites.CatName(c0) : "모자란 재료")}를 채운다");
+            if (fill > 0.25f) notes.Add($"{Ko.EulReul((HaltCat is MatCat c0 ? ExpeditionSites.CatName(c0) : "모자란 재료"))} 채운다");
             if (s.Certainty < 0.4f) notes.Add("확실성 낮음 — 센서 반사가 흐리다");
             if (s.Risk > 0.45f) notes.Add("위험 높음");
             if (s.Spec.Cutter && Count(ItemKind.CellPack) == 0) notes.Add("절단기 배터리 없음");
@@ -515,7 +515,7 @@ public sealed class ExpeditionSystem
             Scan();
             var pick = ComputerPick;
             string rec = pick != null ? $" · 권하는 곳: {pick.Name}({pick.Spec.Name} · 편도 {pick.Dist:0.0}일 · 위험 {pick.Risk * 100:0}% · 확실성 {pick.Certainty * 100:0}%)" : " · 쓸 만한 후보가 아직 없다";
-            string text = $"예측 — {ExpeditionSites.CatName(cat)}가 {d:0.0}일 안에 바닥난다 (하루 {Rate[i]:0.0}{(cat == MatCat.Fuel ? "%" : cat == MatCat.Water ? "L" : "개")} 소모){rec}";
+            string text = $"예측 — {Ko.IGa(ExpeditionSites.CatName(cat))} {d:0.0}일 안에 바닥난다 (하루 {Rate[i]:0.0}{(cat == MatCat.Fuel ? "%" : cat == MatCat.Water ? "L" : "개")} 소모){rec}";
             Forecasts.Add((w.Tick, cat, d, text));
             if (Forecasts.Count > 30) Forecasts.RemoveAt(0);
             Stats.Forecasts++;
@@ -590,7 +590,7 @@ public sealed class ExpeditionSystem
         if (site == null) return;
         _nextPropose = w.Tick + SimTime.Hours(Halted ? 8f : 60f);
         string source = proposer != null ? proposer.Name : "주 컴퓨터";
-        string why = Halted ? $"배가 멈췄다 — {HaltWhy}" : $"{ExpeditionSites.CatName(cat)}가 모자라다 ({StockText(cat)}) · 가까운 곳에 {site.Spec.Name}";
+        string why = Halted ? $"배가 멈췄다 — {HaltWhy}" : $"{Ko.IGa(ExpeditionSites.CatName(cat))} 모자라다 ({StockText(cat)}) · 가까운 곳에 {site.Spec.Name}";
         var p = new ExpProposal { Id = _nextProp++, Tick = w.Tick, Site = site, Source = source, ProposerId = proposer?.Id ?? -1, Why = why, For = cat, Halted = Halted };
         ComputerSay(p);
         // 승무원: 자원 · 반대 (목표 · 감정 · 관계)
@@ -617,7 +617,7 @@ public sealed class ExpeditionSystem
             + (p.Objectors.Count > 0 ? $" · 반대 {string.Join("·", p.Objectors.Select(v => w.Crew[v.who].Name))}" : ""), proposer?.Id ?? -1);
         if (proposer != null)
         {
-            proposer.Say(w, Persona.Say(proposer, Halted ? $"이대로 떠 있을 순 없어. {site.Name}에 가 보자" : $"{ExpeditionSites.CatName(cat)}가 떨어져 가. {site.Name}이 가까워"));
+            proposer.Say(w, Persona.Say(proposer, Halted ? $"이대로 떠 있을 순 없어. {site.Name}에 가 보자" : $"{Ko.IGa(ExpeditionSites.CatName(cat))} 떨어져 가. {Ko.IGa(site.Name)} 가까워"));
             Life.Diary(w, proposer, Persona.Say(proposer, $"{site.Name}에 가자고 했다. 다들 내 얼굴만 봤다."));
         }
         foreach (var (id, vwhy) in p.Volunteers) Life.Diary(w, w.Crew[id], Persona.Say(w.Crew[id], $"원정에 손을 들었다 — {vwhy}"));
@@ -644,8 +644,8 @@ public sealed class ExpeditionSystem
         var site = p.Site;
         if (comp == null) { p.ComputerPick = null; p.ComputerSign = 0; p.Computer = null; return; }
         p.ComputerPick = comp.Id;
-        if (comp == site) { p.ComputerSign = 1; p.Computer = $"주 컴퓨터: {site.Name}을(를) 권한다 — {site.CompNote}"; }
-        else if (site.Risk > comp.Risk + 0.12f || site.CompScore < comp.CompScore - 4f) { p.ComputerSign = -1; p.Computer = $"주 컴퓨터: {site.Name}보다 {comp.Name}이(가) 낫다 — {comp.CompNote} (그곳은 {site.CompNote})"; }
+        if (comp == site) { p.ComputerSign = 1; p.Computer = $"주 컴퓨터: {Ko.EulReul(site.Name)} 권한다 — {site.CompNote}"; }
+        else if (site.Risk > comp.Risk + 0.12f || site.CompScore < comp.CompScore - 4f) { p.ComputerSign = -1; p.Computer = $"주 컴퓨터: {site.Name}보다 {Ko.IGa(comp.Name)} 낫다 — {comp.CompNote} (그곳은 {site.CompNote})"; }
         else { p.ComputerSign = 0; p.Computer = $"주 컴퓨터: {site.Name}도 괜찮다 — {site.CompNote}"; }
     }
 
@@ -664,7 +664,7 @@ public sealed class ExpeditionSystem
             (0.4f * c.Traits.Bravery, "겁이 없다"),
             (0.25f * MathF.Max(c.SkillLevel(Skill.Mechanics), c.SkillLevel(Skill.Engineering)), "손이 익다"),
             (0.15f * (1f - c.Needs.Stress), "마음이 가볍다"),
-            (Notices(c, cat) ? 0.18f : 0f, $"내 일에 쓸 {ExpeditionSites.CatName(cat)}가 바닥났다"),
+            (Notices(c, cat) ? 0.18f : 0f, $"내 일에 쓸 {Ko.IGa(ExpeditionSites.CatName(cat))} 바닥났다"),
             (Life.Has(c, Habit.Daredevil) ? 0.15f : 0f, "모험이 좋다"),
             (c.Value == CrewValue.Efficiency ? 0.08f : c.Value == CrewValue.Freedom ? 0.06f : 0f, c.Value == CrewValue.Freedom ? "답답한 배를 벗어나고 싶다" : "배가 서 있는 게 아깝다"),
             (Went(c) > 0 ? 0.08f : 0f, "전에도 다녀왔다"),
@@ -686,8 +686,8 @@ public sealed class ExpeditionSystem
         {
             (c.Value == CrewValue.Safety ? 0.25f : c.Value == CrewValue.People ? 0.12f : 0f, c.Value == CrewValue.Safety ? "안전이 먼저다" : "사람이 먼저다"),
             (0.3f * (1f - c.Traits.Bravery), "무섭다"),
-            (0.6f * c.Memory.Trauma, c.Memory.TraumaCause != null ? $"{c.Memory.TraumaCause}을 겪고 나니" : "데인 적이 있다"),
-            (0.4f * p.Site.Risk, $"{p.Site.Name}은 위험하다"),
+            (0.6f * c.Memory.Trauma, c.Memory.TraumaCause != null ? $"{Ko.EulReul(c.Memory.TraumaCause)} 겪고 나니" : "데인 적이 있다"),
+            (0.4f * p.Site.Risk, $"{Ko.EunNeun(p.Site.Name)} 위험하다"),
             (p.Site.Certainty < 0.35f ? 0.15f : 0f, "가 봐야 아는 곳에 사람을 보낼 순 없다"),
             (p.ComputerSign < 0 ? 0.3f * w.Automation.Trusts.Of(c) : 0f, "컴퓨터도 말린다"),
             (Halted ? -0.25f : 0f, ""),
@@ -697,8 +697,8 @@ public sealed class ExpeditionSystem
         {
             var m = w.Crew[id];
             if (m == c) continue;
-            if (c.Partner == id) terms.Add((0.35f, $"{m.Name}을(를) 보내고 싶지 않다"));
-            else if (c.AffinityTo(m) > 0.5f) terms.Add((0.15f, $"{m.Name}이(가) 걱정된다"));
+            if (c.Partner == id) terms.Add((0.35f, $"{Ko.EulReul(m.Name)} 보내고 싶지 않다"));
+            else if (c.AffinityTo(m) > 0.5f) terms.Add((0.15f, $"{Ko.IGa(m.Name)} 걱정된다"));
         }
         float s = terms.Sum(t => t.v) - 0.1f;
         var best = terms.Where(t => t.v > 0f && t.why != "").OrderByDescending(t => t.v).FirstOrDefault();
@@ -758,7 +758,7 @@ public sealed class ExpeditionSystem
             w.Log.Add(w.Tick, LogKind.Ship, $"관찰자가 원정 목적지를 바꿨다 — {ns.Name}({ns.Spec.Name}) · 원정대 {string.Join("·", p.Team.Select(id => w.Crew[id].Name))}");
             if (ns.Risk > 0.4f || ns.Certainty < 0.4f) Warn(ns, "목적지 변경");
         }
-        if (!Sites.Contains(p.Site) || p.Site.Expires <= w.Tick && !p.Site.Taken) { Close(p, false, "배", $"{p.Site.Name}이(가) 센서에서 사라졌다"); return; }
+        if (!Sites.Contains(p.Site) || p.Site.Expires <= w.Tick && !p.Site.Taken) { Close(p, false, "배", $"{Ko.IGa(p.Site.Name)} 센서에서 사라졌다"); return; }
         long waited = w.Tick - p.Tick;
         if (p.Halted && waited >= SimTime.Hours(6) && !w.Meetings.Gathering && w.Meetings.Session == null)
         {
@@ -780,7 +780,7 @@ public sealed class ExpeditionSystem
             (p.Halted ? 0.35f : 0.05f, p.Halted ? "멈춘 채로는 못 버틴다" : "모자란 재료를 채울 때다"),
             ((v.Traits.Bravery - 0.5f) * 0.5f, v.Traits.Bravery > 0.5f ? "해 볼 만하다" : "겁이 난다"),
             (v.Value switch { CrewValue.Efficiency => 0.15f, CrewValue.Freedom => 0.05f, CrewValue.Safety => -0.2f, _ => 0f }, v.Value == CrewValue.Safety ? "안전이 먼저다" : "배가 서 있는 게 아깝다"),
-            (-p.Site.Risk * 0.6f, $"{p.Site.Name}은 위험하다"),
+            (-p.Site.Risk * 0.6f, $"{Ko.EunNeun(p.Site.Name)} 위험하다"),
             (p.Site.Certainty * 0.2f - 0.1f, p.Site.Certainty > 0.5f ? "센서가 또렷이 봤다" : "가 봐야 안다"),
             (-v.Memory.Trauma * 0.5f, "데인 기억"),
         };
@@ -788,7 +788,7 @@ public sealed class ExpeditionSystem
         if (p.Volunteers.Any(x => x.who == v.Id)) terms.Add((0.5f, "내가 가겠다"));
         if (p.Objectors.FirstOrDefault(x => x.who == v.Id) is { who: >= 0 } ob && p.Objectors.Any(x => x.who == v.Id)) terms.Add((-0.5f, ob.why));
         if (p.ProposerId >= 0 && p.ProposerId != v.Id) terms.Add((0.25f * v.AffinityTo(w.Crew[p.ProposerId]), $"{w.Crew[p.ProposerId].Name}의 말이라면"));
-        foreach (var id in p.Team) if (v.Partner == id && id != v.Id) terms.Add((-0.25f, $"{w.Crew[id].Name}을(를) 보내기 싫다"));
+        foreach (var id in p.Team) if (v.Partner == id && id != v.Id) terms.Add((-0.25f, $"{Ko.EulReul(w.Crew[id].Name)} 보내기 싫다"));
         float s = terms.Sum(t => t.v);
         var top = (s >= 0f ? terms.Where(t => t.v > 0f).OrderByDescending(t => t.v) : terms.Where(t => t.v < 0f).OrderBy(t => t.v)).FirstOrDefault();
         return (s >= 0f, top.why ?? (s >= 0f ? "찬성" : "반대"));
@@ -805,7 +805,7 @@ public sealed class ExpeditionSystem
             Topic = "expedition", Evidence = p.Why, Computer = p.Computer, ComputerSign = p.ComputerSign,
         };
         if (p.ProposerId >= 0 && attendees.Any(c => c.Id == p.ProposerId))
-            item.Speeches.Add(new Speech { Who = p.ProposerId, For = true, Text = Persona.Say(w.Crew[p.ProposerId], p.Halted ? "떠 있기만 하면 다 같이 마른다. 가서 가져오자" : $"{p.Site.Name}이 가깝다. 지금 아니면 놓친다") });
+            item.Speeches.Add(new Speech { Who = p.ProposerId, For = true, Text = Persona.Say(w.Crew[p.ProposerId], p.Halted ? "떠 있기만 하면 다 같이 마른다. 가서 가져오자" : $"{Ko.IGa(p.Site.Name)} 가깝다. 지금 아니면 놓친다") });
         foreach (var (id, vwhy) in p.Volunteers.Take(2)) if (attendees.Any(c => c.Id == id)) item.Speeches.Add(new Speech { Who = id, For = true, Text = Persona.Say(w.Crew[id], $"내가 가겠다 — {vwhy}") });
         foreach (var (id, owhy) in p.Objectors.Take(2)) if (attendees.Any(c => c.Id == id)) item.Speeches.Add(new Speech { Who = id, For = false, Text = Persona.Say(w.Crew[id], $"반대다 — {owhy}") });
         int yes = 0, no = 0;
@@ -949,7 +949,7 @@ public sealed class ExpeditionSystem
         m.CoveredBy = sub.Id;
         sub.CoveringUntil = Math.Max(sub.CoveringUntil, w.Tick + SimTime.Hours(days * 24f + 6f));
         Stats.Covered++;
-        w.Log.Add(w.Tick, LogKind.Life, $"{c.Name}이(가) 원정에 가는 동안 {CrewRoles.Name(c.Role)} 근무를 {(sub.Role == c.Role ? "혼자 두 몫으로" : "대신")} 선다 — 당직이 밀렸다", sub.Id);
+        w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(c.Name)} 원정에 가는 동안 {CrewRoles.Name(c.Role)} 근무를 {(sub.Role == c.Role ? "혼자 두 몫으로" : "대신")} 선다 — 당직이 밀렸다", sub.Id);
         Life.Diary(w, sub, Persona.Say(sub, $"{c.Name} 몫까지 서야 한다. 며칠은 잠이 모자라겠다."));
     }
 
@@ -1032,7 +1032,7 @@ public sealed class ExpeditionSystem
             var close = team.Where(c => o.Partner == c.Id || o.AffinityTo(c) > 0.45f).ToList();
             if (close.Count == 0) continue;
             o.Needs.Stress = MathF.Min(1f, o.Needs.Stress + 0.04f * close.Count);
-            Life.Diary(w, o, Persona.Say(o, $"{string.Join("·", close.Select(c => c.Name))}이(가) 떠났다. 무전 시간을 손꼽아 기다린다."));
+            Life.Diary(w, o, Persona.Say(o, $"{Ko.IGa(string.Join("·", close.Select(c => c.Name)))} 떠났다. 무전 시간을 손꼽아 기다린다."));
         }
     }
 
@@ -1167,7 +1167,7 @@ public sealed class ExpeditionSystem
             var last = t.Journal.LastOrDefault();
             int hurt = t.Members.Count(m => m.Hurt > 0.05f && !m.Missing);
             int lost = t.Members.Count(m => m.Missing);
-            text = $"{lead.Name}: " + (lost > 0 ? $"{string.Join("·", t.Members.Where(m => m.Missing).Select(m => w.Crew[m.Id].Name))}을(를) 잃어버렸다. 찾고 있다" : last != null ? last.Text.Split(" — ")[0] : "다들 무사하다")
+            text = $"{lead.Name}: " + (lost > 0 ? $"{Ko.EulReul(string.Join("·", t.Members.Where(m => m.Missing).Select(m => w.Crew[m.Id].Name)))} 잃어버렸다. 찾고 있다" : last != null ? last.Text.Split(" — ")[0] : "다들 무사하다")
                    + (hurt > 0 && lost == 0 ? $" · 다친 사람 {hurt}" : lost == 0 && hurt == 0 ? " · 다들 무사하다" : "") + $" · 지금까지 {t.LootTotal}개";
         }
         var call = new ExpeditionRadioCall { Tick = w.Tick, Day = day, Text = text, Lost = !works };
@@ -1239,7 +1239,7 @@ public sealed class ExpeditionSystem
             {
                 Stats.Worries++;
                 var who = t.Members.Select(m => w.Crew[m.Id]).OrderByDescending(o => c.AffinityTo(o) + (c.Partner == o.Id ? 1f : 0f)).First();
-                Life.Diary(w, c, Persona.Say(c, since > 20f ? $"{who.Name} 소식이 없다. 무전기 앞을 떠날 수가 없다." : $"{who.Name}은(는) 지금쯤 뭘 하고 있을까."));
+                Life.Diary(w, c, Persona.Say(c, since > 20f ? $"{who.Name} 소식이 없다. 무전기 앞을 떠날 수가 없다." : $"{Ko.EunNeun(who.Name)} 지금쯤 뭘 하고 있을까."));
                 w.Log.Add(w.Tick, LogKind.Life, $"원정대 걱정 — {who.Name} 소식을 {since:0}시간째 못 들었다", c.Id);
             }
         }
@@ -1358,7 +1358,7 @@ public sealed class ExpeditionSystem
             {
                 dr.Doing = $"원정에서 잃었다 — {t.Site.Name}";
                 MarkLog.Add(dr.Marks, w.Tick, $"{t.Site.Name} 원정에서 돌아오지 못했다");
-                foreach (var c in home) Life.Diary(w, c, Persona.Say(c, $"'{dr.Name}'을(를) 두고 왔다. 그 녀석이 끌어 준 덕에 살았는데."));
+                foreach (var c in home) Life.Diary(w, c, Persona.Say(c, $"{Ko.EulReul(dr.Name)} 두고 왔다. 그 녀석이 끌어 준 덕에 살았는데."));
             }
         }
         if (t.Shuttle) ShuttleWear = MathF.Min(1f, ShuttleWear + 0.05f + t.ShuttleDamage);
@@ -1527,7 +1527,7 @@ public sealed class ExpeditionSystem
         teller.Needs.Social = MathF.Min(1f, teller.Needs.Social + 0.3f);
         teller.Needs.Stress = MathF.Max(0f, teller.Needs.Stress - 0.08f);
         foreach (var o in listeners.Where(o => (o.Id + t.Id) % 2 == 0).Take(3))
-            Life.Diary(w, o, Persona.Say(o, sad ? $"저녁에 {teller.Name}이(가) {string.Join("·", dead.Select(d => d.Name))} 이야기를 했다. 아무도 숟가락을 들지 못했다." : $"저녁에 {teller.Name}의 원정 이야기를 들었다 — {t.Story.Split(" — ")[0]}"));
+            Life.Diary(w, o, Persona.Say(o, sad ? $"저녁에 {Ko.IGa(teller.Name)} {string.Join("·", dead.Select(d => d.Name))} 이야기를 했다. 아무도 숟가락을 들지 못했다." : $"저녁에 {teller.Name}의 원정 이야기를 들었다 — {t.Story.Split(" — ")[0]}"));
         if (sad) foreach (var d in dead) Life.Diary(w, teller, Persona.Say(teller, $"{d.Name}의 자리를 비워 두고 이야기했다."));
         w.Log.Add(w.Tick, LogKind.Life, $"식탁에서 원정 이야기 — \"{t.Story}\" (들은 사람 {listeners.Count})", teller.Id);
         w.History.Add(w, HistoryKind.Bond, $"{Ko.IGa(teller.Name)} 식탁에서 {t.Site.Name} 원정 이야기를 했다 — \"{t.Story}\" · 들은 사람 {listeners.Count}" + (sad ? $" · {string.Join("·", dead.Select(d => d.Name))}의 빈자리" : ""), teller.Room, listeners.Append(teller), log: true);

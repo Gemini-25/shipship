@@ -214,7 +214,7 @@ public sealed partial class PortableSystem
                 "선내 방송", "다 쓴 장비는 창고로", "pw:inv", SimTime.Hours(5), 240f, (world, a) => GradeInventory(ids));
             if (act == null) return;
             Stats.InventoryCalls++;
-            var b = au.Speak.Announce(au.Voice.Style($"창고 충전대에 {what}이 하루 넘게 비었다 — 다 쓴 장비는 창고로 돌려놓으라"), null, 0);
+            var b = au.Speak.Announce(au.Voice.Style($"창고 충전대에 {Ko.IGa(what)} 하루 넘게 비었다 — 다 쓴 장비는 창고로 돌려놓으라"), null, 0);
             if (b is not { HeardBy.Count: > 0 }) return;
             foreach (var d in away)
             {

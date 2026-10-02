@@ -893,9 +893,9 @@ public sealed class DailySceneSystem
             {
                 case SceneKind.Chess:
                     if (s.Host == c.Id) Offer(leisure, s.Stage == SceneStage.Paused ? "끊긴 판으로 돌아간다" : s.Game < 0 ? "체스판을 가져와 편다" : "판 앞에서 상대를 기다린다", s, Role.Host);
-                    else if (s.Other == c.Id) Offer(leisure + (s.Stage == SceneStage.Gather && _w.Tick - s.Opened < SimTime.Hours(1) ? 0.25f : 0f), s.Stage == SceneStage.Paused ? $"{CrewOf(s.Host)?.Name}와 두던 판으로" : $"{CrewOf(s.Host)?.Name}의 체스 청 — 곧 간다고 했다", s, Role.Join); // 받아들였으면 약속이다 (한 시간 안엔 더 끌린다)
+                    else if (s.Other == c.Id) Offer(leisure + (s.Stage == SceneStage.Gather && _w.Tick - s.Opened < SimTime.Hours(1) ? 0.25f : 0f), s.Stage == SceneStage.Paused ? $"{Ko.WaGwa(CrewOf(s.Host)?.Name)} 두던 판으로" : $"{CrewOf(s.Host)?.Name}의 체스 청 — 곧 간다고 했다", s, Role.Join); // 받아들였으면 약속이다 (한 시간 안엔 더 끌린다)
                     else if (s.Other < 0 && s.Game >= 0 && c.Room?.Id == s.RoomId && !c.IsChild && (c.Hobbies.Contains(Hobby.Chess) || c.Traits.Calm > 0.6f) && !Busy(c))
-                        Offer(leisure - 0.05f, $"{CrewOf(s.Host)?.Name}가 펴 둔 판 — 상대가 없다", s, Role.Join);
+                        Offer(leisure - 0.05f, $"{Ko.IGa(CrewOf(s.Host)?.Name)} 펴 둔 판 — 상대가 없다", s, Role.Join);
                     break;
                 case SceneKind.Movie:
                     if (s.Host == c.Id || s.Invited.Contains(c.Id) || s.Joined.Contains(c.Id))
@@ -913,11 +913,11 @@ public sealed class DailySceneSystem
                     if (s.Host == c.Id) Offer(0.6f, "출출하다 — 냉장고로", s, Role.Eat);
                     break;
                 case SceneKind.Spill:
-                    if (s.Other == c.Id) Offer(0.5f - (bed ? 0.2f : 0f), s.Host == c.Id ? "엎은 국을 닦는다" : $"{CrewOf(s.Host)?.Name}가 엎은 국 — 걸레를 가져와 닦는다", s, Role.Clean);
+                    if (s.Other == c.Id) Offer(0.5f - (bed ? 0.2f : 0f), s.Host == c.Id ? "엎은 국을 닦는다" : $"{Ko.IGa(CrewOf(s.Host)?.Name)} 엎은 국 — 걸레를 가져와 닦는다", s, Role.Clean);
                     break;
                 case SceneKind.Craft:
                     if (s.Host == c.Id) Offer((0.3f + (s.Progress > 0f ? 0.12f : 0f) + (s.Holding ? 0.3f : 0f)) * lf + (AfterWork(c) ? 0.15f : 0f) - (duty ? 0.25f : 0f) - (bed ? 0.25f : 0f),
-                        s.Holding ? $"다 만든 {s.Prop!.Name} — 가져다 둔다" : s.Progress > 0f ? $"만들다 둔 {s.Prop!.Name} ({Pct(s.Progress)})" : $"{s.Prop!.Name}을(를) 만든다", s, Role.Craft);
+                        s.Holding ? $"다 만든 {s.Prop!.Name} — 가져다 둔다" : s.Progress > 0f ? $"만들다 둔 {s.Prop!.Name} ({Pct(s.Progress)})" : $"{Ko.EulReul(s.Prop!.Name)} 만든다", s, Role.Craft);
                     break;
             }
         }
@@ -1196,7 +1196,7 @@ public sealed class DailySceneSystem
                 Stats.Plates++;
                 string owner = CrewOf(p.For)?.Name ?? "누군가";
                 Trail(s, $"{cm.Name}: '{owner} 몫' 이름표를 보고도 {Ko.EulReul(p.Spec.Name)} 먹었다");
-                Diary(cm, $"식탁에 '{owner} 몫' 이름표가 붙은 {p.Spec.Name}이 있었다. 배가 고파서 그만… 모른 척해야지");
+                Diary(cm, $"식탁에 '{owner} 몫' 이름표가 붙은 {Ko.IGa(p.Spec.Name)} 있었다. 배가 고파서 그만… 모른 척해야지");
             }
             else took = box?.Storage != null && (box.Storage.Take(ItemKind.Meal, 1) > 0 || box.Storage.Take(ItemKind.Produce, 1) > 0);
             if (!took) { Close(s, SceneStage.Dropped, "냉장고가 비어 있었다"); Say(cm, "아무것도 없네…"); return false; }
@@ -1218,7 +1218,7 @@ public sealed class DailySceneSystem
             if (s.Victim >= 0)
             {
                 _missing.Add((s.Victim, cm.Id, s.Witness, world.Tick, s.Spot2, s.Plate >= 0));
-                if (s.Plate < 0) Trail(s, $"{CrewOf(s.Victim)?.Name}이(가) 남겨 둔 것이었다 (먹은 사람은 모른다)");
+                if (s.Plate < 0) Trail(s, $"{Ko.IGa(CrewOf(s.Victim)?.Name)} 남겨 둔 것이었다 (먹은 사람은 모른다)");
             }
             Close(s, SceneStage.Done, "다 먹었다");
             return true;
@@ -1271,7 +1271,7 @@ public sealed class DailySceneSystem
             {
                 world.Relations.Remember(spiller, cm, RelationReason.FixedMyThing, "국을 엎었을 때 걸레를 가져와 닦아 줬다");
                 spiller.ChangeAffinity(cm, 0.03f);
-                Log($"{Ko.IGa(cm.Name)} {spiller.Name}이(가) 엎은 국을 걸레로 닦았다", cm.Id);
+                Log($"{Ko.IGa(cm.Name)} {Ko.IGa(spiller.Name)} 엎은 국을 걸레로 닦았다", cm.Id);
             }
             else Log($"{Ko.IGa(cm.Name)} 엎은 국을 직접 닦았다", cm.Id);
             Close(s, SceneStage.Done, $"{cm.Name}: 다 닦았다");
@@ -1738,7 +1738,7 @@ public sealed class DailySceneSystem
         var a = w.Automation.Book.Add(ActKind.Advice, hall, $"{SimTime.Clock(w.Tick)} {hall.Name} 움직임 — {z.Name} · {mins}분째 제자리 · 침대가 비었다",
             "잠결 걸음으로 본다 (깨어 걷는 걸음이 아니다)", watch != null ? "야간 당직 호출 · 복도 조명 낮게" : "복도 조명 낮게 (깨어 있는 사람이 없다)",
             watch != null ? $"{watch.Name} → {hall.Name}" : "", "sw:" + s.Id, 0, 90f,
-            (world, act) => s.Stage == SceneStage.Done && s.Holding ? (1, $"{CrewOf(s.Other)?.Name}이(가) 침대로 데려갔다") : !s.Open ? (2, "혼자 깼다") : null);
+            (world, act) => s.Stage == SceneStage.Done && s.Holding ? (1, $"{Ko.IGa(CrewOf(s.Other)?.Name)} 침대로 데려갔다") : !s.Open ? (2, "혼자 깼다") : null);
         if (a == null) return;
         s.ComputerAct = a.Id;
         Stats.PcPages++;
@@ -1861,7 +1861,7 @@ public sealed class DailySceneSystem
                     // 본 사람이 쪽지를 읽고 말해 준다 — 그제야 주인이 안다
                     author.ChangeAffinity(thief, -0.04f);
                     _w.Relations.Remember(author, thief, RelationReason.TookMyThing, "냉장고에 둔 간식을 몰래 먹었다");
-                    Say(c, $"그거 {thief.Name}이(가) 먹던데");
+                    Say(c, $"그거 {Ko.IGa(thief.Name)} 먹던데");
                     Log($"{Ko.IGa(c.Name)} 냉장고 쪽지를 보고 {author.Name}에게 귀띔했다 — 범인은 {thief.Name}", c.Id);
                 }
                 else if (Life.Has(c, Habit.Joker) || Life.Has(c, Habit.Prankster)) { c.Needs.Stress = MathF.Max(0f, c.Needs.Stress - 0.02f); Say(c, "푸딩 전쟁이네"); Stats.Laughs++; if (author != null) author.ChangeAffinity(c, -0.01f); }
@@ -1939,7 +1939,7 @@ public sealed class DailySceneSystem
             bool knows = wit == vid;
             var t = CrewOf(thief);
             string mine = plate ? "이름표 붙여 둔 내 몫" : "냉장고에 둔 내 푸딩";
-            Diary(v, $"{mine}이 없어졌다" + (knows && t != null ? $". {Ko.IGa(t.Name)} 먹는 걸 봤다" : ". 누구지"));
+            Diary(v, $"{Ko.IGa(mine)} 없어졌다" + (knows && t != null ? $". {Ko.IGa(t.Name)} 먹는 걸 봤다" : ". 누구지"));
             var note = Write(NoteKind.Fridge, v, plate ? (knows && t != null ? $"{t.Name}, 이름표 붙은 건 남의 거야" : "이름표 붙은 접시 먹은 사람? 내 저녁이었어") : knows && t != null ? $"{t.Name}, 내 푸딩 먹지 마" : "내 푸딩 먹지 마 — 이름 적어 둔 거 안 보여?",
                 thief: thief, witness: wit, on: plate ? null : _w.Ship.FurnitureAt(box));
             if (knows && t != null) { v.ChangeAffinity(t, -0.04f); _w.Relations.Remember(v, t, RelationReason.TookMyThing, "냉장고에 둔 간식을 몰래 먹었다"); }
@@ -2029,7 +2029,7 @@ public sealed class DailySceneSystem
                 {
                     string[] lines = { $"{target.Name} 차례: 영원히 미정", $"{target.Name} — 설거지 당번 또 건너뜀", $"{target.Name}의 양말 실종 사건 담당", $"{target.Name} 당번 = 전설 속 이야기" };
                     var n = Write(NoteKind.Roster, a, lines[R.Range(0, lines.Length)], target.Id, anonymous: true);
-                    if (n != null) Trail0($"{a.Name}이(가) 당번표에 낙서했다 (이름 없이)");
+                    if (n != null) Trail0($"{Ko.IGa(a.Name)} 당번표에 낙서했다 (이름 없이)");
                 }
             }
         }

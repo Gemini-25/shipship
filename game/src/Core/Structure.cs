@@ -433,7 +433,7 @@ public sealed class StructureSystem
         MarkLog.Add(room.Marks, w.Tick, $"{j.Label} 끊어짐 ({left}/{room.Joints.Count} 남음)");
         w.History.Add(w, HistoryKind.Damage, $"{Ko.IGa(j.Label)} 끊어졌다 ({why}) — 남은 연결부 {left}/{room.Joints.Count}", room, at: j.Cell);
         w.RaiseAlert($"{j.Label} 끊어짐 · 남은 연결부 {left}/{room.Joints.Count}", room, left <= 1 ? AlertLevel.Critical : AlertLevel.Warning, shipWide: true);
-        w.Movement.Bang(room, j.Cell.Center, 0.7f, $"{j.Label}이(가) 끊어지는 소리"); // v14.5
+        w.Movement.Bang(room, j.Cell.Center, 0.7f, $"{Ko.IGa(j.Label)} 끊어지는 소리"); // v14.5
         foreach (var c in w.Crew)
             if (!c.Dead && c.Room == room) Memory.Frighten(w, c, room, 0.15f, "연결부가 끊어지는 소리를 들었다");
         w.Board.RequestScan();
@@ -547,7 +547,7 @@ public sealed class StructureSystem
             var plug = new WallState { IsHull = true, Integrity = integrity, MaxIntegrity = MathF.Max(0.5f, integrity), Frame = integrity < 0.05f ? 0.5f : 1f };
             plug.Breach = Hull.BreachFromIntegrity(plug.Integrity);
             if (plug.Breach > 0f) torn++;
-            MarkLog.Add(plug.Marks, w.Tick, d.Welded ? "용접한 격벽 (사출)" : $"{room.Name}이 떨어져 나가며 문이 벽이 됐다");
+            MarkLog.Add(plug.Marks, w.Tick, d.Welded ? "용접한 격벽 (사출)" : $"{Ko.IGa(room.Name)} 떨어져 나가며 문이 벽이 됐다");
             grid.SetKind(d.Cell, TileKind.Wall);
             ship.AddWall(d.Cell, plug);
             frag.Plugs.Add((d, plug));
@@ -674,7 +674,7 @@ public sealed class StructureSystem
             }
         }
         if (dronesAboard > 0) notes.Add($"드론 {dronesAboard}대가 거치대째 함께");
-        if (aboardList.Count > 0) notes.Add($"{string.Join("·", aboardList.Select(c => c.Name))}이(가) 조각에 탄 채 떠내려간다");
+        if (aboardList.Count > 0) notes.Add($"{Ko.IGa(string.Join("·", aboardList.Select(c => c.Name)))} 조각에 탄 채 떠내려간다");
         // 로봇도 조각에 실려 간다
         foreach (var r in w.Robots.Robots.Where(r => r.Aboard == null && (floor.Contains(Cell.FromPosition(r.Position)) || r.Room == room)))
         {

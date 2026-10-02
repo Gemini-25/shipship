@@ -339,7 +339,7 @@ public sealed partial class UtilityNet
             l.Cause = cause;
             Stats.Cuts++;
             MarkLog.Add(l.Room.Marks, _w.Tick, $"{Name(l.Kind)} 끊김 ({cause})");
-            _w.Log.Add(_w.Tick, LogKind.Warning, $"{l.Room.Name} {Name(l.Kind)}이(가) 끊겼다 ({cause})");
+            _w.Log.Add(_w.Tick, LogKind.Warning, $"{l.Room.Name} {Ko.IGa(Name(l.Kind))} 끊겼다 ({cause})");
             _w.Board.RequestScan();
             _w.Causes.OnCut(l); // v12.2 인과 사슬
         }
@@ -387,7 +387,7 @@ public sealed partial class WorkBoard
             float u = l.Cut ? (l.Kind == NetKind.Power ? 0.85f : l.Kind == NetKind.Air ? 0.75f : l.Kind == NetKind.Data ? 0.55f : 0.6f) + (vital ? 0.2f : 0f) + 0.03f * down.Count : l.Temp ? (w.Flow.Hot(l) ? 0.75f : 0.3f) : 0.4f; // v14.8 달아오른 임시 이음은 급하다
             string detail = l.Cut
                 ? $"{UtilityNet.Name(l.Kind)} 끊김 ({l.Cause}) — {(down.Count > 0 ? string.Join("·", down.Select(r => r.Name)) + (l.Kind == NetKind.Power ? " 정전" : l.Kind == NetKind.Water ? " 단수" : l.Kind == NetKind.Data ? " 감지기·원격 제어 끊김" : " 환기 끊김") : "다른 길로 돈다")}"
-                : l.Temp ? (w.Flow.Hot(l) ? $"임시로 이은 {UtilityNet.Name(l.Kind)}이 달아오른다 (접촉 저항) → 제대로 다시" : $"임시로 이은 {UtilityNet.Name(l.Kind)} → 제대로 다시") : $"{UtilityNet.Name(l.Kind)} 상함 ({l.Integrity * 100:0}%)";
+                : l.Temp ? (w.Flow.Hot(l) ? $"임시로 이은 {Ko.IGa(UtilityNet.Name(l.Kind))} 달아오른다 (접촉 저항) → 제대로 다시" : $"임시로 이은 {UtilityNet.Name(l.Kind)} → 제대로 다시") : $"{UtilityNet.Name(l.Kind)} 상함 ({l.Integrity * 100:0}%)";
             post(WorkKind.RepairNet, WorkTarget.AtCell(spot, l.Room), MathF.Min(1.15f, u), l.Kind is NetKind.Power or NetKind.Data ? Skill.Electrical : Skill.Mechanics, detail, circuit: l.Id);
         }
     }
@@ -426,8 +426,8 @@ public static partial class WorkPlanners
             if (temp) world.Net.Stats.TempRepairs++; else world.Net.Stats.Repairs++;
             world.Net.Update(0f);
             MarkLog.Add(l.Room.Marks, world.Tick, $"{cm.Name}: {UtilityNet.Name(l.Kind)} {(temp ? "임시로 이음" : "다시 이음")}");
-            world.Log.Add(world.Tick, LogKind.Work, $"{l.Room.Name} {UtilityNet.Name(l.Kind)}을(를) {(temp ? "임시로 이었다 — 나중에 제대로" : "다시 이었다")}", cm.Id);
-            if (wasCut) world.History.Add(world, HistoryKind.Response, $"{Ko.IGa(cm.Name)} 끊긴 {l.Room.Name} {UtilityNet.Name(l.Kind)}을(를) {(temp ? "임시로 " : "")}이었다", l.Room, new[] { cm });
+            world.Log.Add(world.Tick, LogKind.Work, $"{l.Room.Name} {Ko.EulReul(UtilityNet.Name(l.Kind))} {(temp ? "임시로 이었다 — 나중에 제대로" : "다시 이었다")}", cm.Id);
+            if (wasCut) world.History.Add(world, HistoryKind.Response, $"{Ko.IGa(cm.Name)} 끊긴 {l.Room.Name} {Ko.EulReul(UtilityNet.Name(l.Kind))} {(temp ? "임시로 " : "")}이었다", l.Room, new[] { cm });
             return true;
         }));
         return Wrap(a, o, c, w, temp ? "임시로 잇기" : "망 잇기", toils, $"{l.Room.Name} {UtilityNet.Name(l.Kind)} {(temp ? "임시로 잇기" : "다시 잇기")}");

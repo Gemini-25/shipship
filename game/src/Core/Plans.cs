@@ -257,13 +257,13 @@ public sealed class PlanSystem
                 if (s.Who is not CrewMember who || who.Dead) { s.Note = "그 사람이 없다"; return null; }
                 var room = s.Room ?? w.Brain2.Beliefs.WhereIs(c, who, out _);
                 if (room == null) room = GuessPlace(c, who, dist);
-                if (room != null && room != c.Room && !RoomOk(c, room)) { s.Note = $"{room.Name}은(는) 위험하다 — 못 간다"; return null; } // 이미 그 방에 있으면 들어갈 일이 없다 (곁의 사람에게 바로 말한다)
-                if (room == null || SpotIn(room, dist, c, who) is not Cell spot) { s.Note = $"{who.Name}이(가) 어디 있는지 모른다"; return null; }
+                if (room != null && room != c.Room && !RoomOk(c, room)) { s.Note = $"{Ko.EunNeun(room.Name)} 위험하다 — 못 간다"; return null; } // 이미 그 방에 있으면 들어갈 일이 없다 (곁의 사람에게 바로 말한다)
+                if (room == null || SpotIn(room, dist, c, who) is not Cell spot) { s.Note = $"{Ko.IGa(who.Name)} 어디 있는지 모른다"; return null; }
                 s.Room = room;
                 bool tell = s.Kind == StepKind.Tell;
                 var toils = new List<Toil> { new GotoToil(spot), new DoToil((cm, world) => { Meet(cm, p, s); return true; }) };
                 return Wrap(p, s, act, tell ? "알리러 감" : "사람 챙기기", toils,
-                    tell ? $"{Ko.EuRo(room.Name)} — {who.Name}에게 알리러 간다" : $"{who.Name}이(가) 걱정돼 {Ko.EuRo(room.Name)} 간다", room, urgent: tell);
+                    tell ? $"{Ko.EuRo(room.Name)} — {who.Name}에게 알리러 간다" : $"{Ko.IGa(who.Name)} 걱정돼 {Ko.EuRo(room.Name)} 간다", room, urgent: tell);
             }
             case StepKind.Wait:
             {
@@ -286,7 +286,7 @@ public sealed class PlanSystem
                     {
                         world.Brain2.Beliefs.Look(cm);
                         if (cm.Room is { Dark: true } dr) { s.Note = $"{dr.Name}도 캄캄하다"; if (s.Tries++ < 1) Insert(p, StepKind.GoLit, Method.GoLit, "다른 밝은 곳으로"); return false; }
-                        s.Note = $"{cm.Room?.Name ?? "?"}은(는) 밝다";
+                        s.Note = $"{Ko.EunNeun(cm.Room?.Name ?? "?")} 밝다";
                         return true;
                     }),
                     new WaitToil(SimTime.Minutes(10), Pose.Standing),
@@ -295,7 +295,7 @@ public sealed class PlanSystem
             }
             case StepKind.CheckRoom:
             {
-                if (s.Room is Room lr && (lr.Lockdown || lr.OffLimits || lr.EvacuateBy >= 0 || lr.Detached)) { s.Note = $"{lr.Name}은(는) 봉쇄됐다"; return null; }
+                if (s.Room is Room lr && (lr.Lockdown || lr.OffLimits || lr.EvacuateBy >= 0 || lr.Detached)) { s.Note = $"{Ko.EunNeun(lr.Name)} 봉쇄됐다"; return null; }
                 if (s.Room is not Room room || SpotIn(room, dist, c) is not Cell spot) { s.Note = "그 방에 갈 수 없다"; return null; }
                 var toils = new List<Toil> { new GotoToil(spot), new DoToil((cm, world) => { CheckRoom(cm, p, s); return true; }) };
                 return Wrap(p, s, act, "불 확인", toils, $"{room.Name}에 불이 났다고 들었다 — 확인하러 간다", room);
@@ -311,7 +311,7 @@ public sealed class PlanSystem
         if (c.Carrying is ItemStack h && h.Kind == s.Item && h.Count >= s.Count) { Ok(c, p, s, "이미 손에 있다"); SkipToHandoff(p); return null; }
         bool none = false;
         var box = s.At ?? Believed(c, s.Item, dist, out none);
-        if (box == null) { s.Note = none ? $"{ItemKinds.Name(s.Item)}이(가) 배에 없다고 안다" : $"{ItemKinds.Name(s.Item)}이(가) 어디 있는지 모른다"; return null; }
+        if (box == null) { s.Note = none ? $"{Ko.IGa(ItemKinds.Name(s.Item))} 배에 없다고 안다" : $"{Ko.IGa(ItemKinds.Name(s.Item))} 어디 있는지 모른다"; return null; }
         if (UseSpot(box, dist) is not Cell spot) { s.Note = $"{box.Room.Name} {box.Name}에 갈 수 없다"; return null; }
         s.At = box;
         s.Room = box.Room;
@@ -324,7 +324,7 @@ public sealed class PlanSystem
             if (have < s.Count || cm.Carrying != null)
             {
                 world.Brain2.Beliefs.Learn(cm, Topic.Item, (int)s.Item, have > 0 ? box.Id : -1, BeliefSource.Seen, 1f, -1, have);
-                s.Note = $"{box.Room.Name} {box.Name}에 {ItemKinds.Name(s.Item)}이(가) 없다";
+                s.Note = $"{box.Room.Name} {box.Name}에 {Ko.IGa(ItemKinds.Name(s.Item))} 없다";
                 return false;
             }
             box.Storage!.Take(s.Item, s.Count);
@@ -377,7 +377,7 @@ public sealed class PlanSystem
                 if (have < n || hand && cm.Carrying != null)
                 {
                     world.Brain2.Beliefs.Learn(cm, Topic.Item, (int)kind, have > 0 ? box.Id : -1, BeliefSource.Seen, 1f, -1, have);
-                    s.Note = $"재료 {ItemKinds.Name(kind)}이(가) {box.Room.Name}에 없다";
+                    s.Note = $"재료 {Ko.IGa(ItemKinds.Name(kind))} {box.Room.Name}에 없다";
                     return false;
                 }
                 box.Storage!.Take(kind, n);
@@ -401,12 +401,12 @@ public sealed class PlanSystem
             world.Adapt.PartsMade += r.Yield;
             Crafted++;
             p.Made = true;
-            s.Note = $"작업대에서 {ItemKinds.Name(s.Item)}을(를) 만들었다";
+            s.Note = $"작업대에서 {Ko.EulReul(ItemKinds.Name(s.Item))} 만들었다";
             world.Log.Add(world.Tick, LogKind.Work, $"계획대로 — 창고에 없던 {Ko.EulReul(ItemKinds.Name(s.Item))} 작업대에서 만들었다", cm.Id);
             SkipToHandoff(p);
             return true;
         }));
-        return Wrap(p, s, act, "부품 만들기", toils, $"{ItemKinds.Name(s.Item)}이(가) 없으면 만든다 — {bench.Room.Name} 작업대", bench.Room, bench);
+        return Wrap(p, s, act, "부품 만들기", toils, $"{Ko.IGa(ItemKinds.Name(s.Item))} 없으면 만든다 — {bench.Room.Name} 작업대", bench.Room, bench);
     }
 
     private void ProposeTrip(CrewMember c, CrewPlan p, PlanStep s)
@@ -416,7 +416,7 @@ public sealed class PlanSystem
         string part = ItemKinds.Name(p.Part ?? ItemKind.Plate) ?? "부품";
         w.Brain2.Goals.Push(c, "trip", "원정을 꺼내 보기", $"{part} 만들 재료가 바닥났다", ActCat.Explore, 48f);
         c.Say(w, Persona.Say(c, $"{part} 만들 재료도 없어. 나가서 구해 와야 해"));
-        Life.Diary(w, c, Persona.Say(c, $"{p.Target?.Name ?? "설비"}를 고칠 {part}가 없다. 창고도 작업대도 안 된다. 원정을 꺼내야겠다."));
+        Life.Diary(w, c, Persona.Say(c, $"{Ko.EulReul(p.Target?.Name ?? "설비")} 고칠 {Ko.IGa(part)} 없다. 창고도 작업대도 안 된다. 원정을 꺼내야겠다."));
         w.Log.Add(w.Tick, LogKind.Ship, $"{Ko.IGa(c.Name)} {p.Target?.Name ?? "설비"} 고칠 {part} 재료가 없다며 원정을 꺼내려 한다", c.Id);
         s.Note = "원정을 꺼냈다";
         if (p.Target != null) _cool[(c.Id, p.Target.Id)] = w.Tick + SimTime.Hours(12);
@@ -433,7 +433,7 @@ public sealed class PlanSystem
             if (p.Order is WorkOrder po && !po.Closed) { po.BlockedUntil = w.Tick; po.BlockedReason = null; }
             w.Board.RequestScan();
             Handoffs++;
-            Ok(c, p, s, $"{ItemKinds.Name(s.Item)}은(는) 선반에 있다 — 이제 고칠 수 있다");
+            Ok(c, p, s, $"{Ko.EunNeun(ItemKinds.Name(s.Item))} 선반에 있다 — 이제 고칠 수 있다");
             return null;
         }
         var (box, spot) = Plans.NearestContainer(w, dist, c, f => f.Storage!.Accepts(held.Kind) && f.Storage.Free >= held.Count && f.Type == FurnitureType.Shelf);
@@ -449,17 +449,17 @@ public sealed class PlanSystem
                 if (p.Order is WorkOrder o && !o.Closed) { o.BlockedUntil = world.Tick; o.BlockedReason = null; }
                 world.Board.RequestScan();
                 Handoffs++;
-                s.Note = $"{box.Room.Name} {box.Name}에 {ItemKinds.Name(s.Item)}을(를) 두었다 — 이제 고칠 수 있다";
+                s.Note = $"{box.Room.Name} {box.Name}에 {Ko.EulReul(ItemKinds.Name(s.Item))} 두었다 — 이제 고칠 수 있다";
                 if (p.For is CrewMember asker && asker != cm && !asker.Dead)
                 {
                     asker.ChangeAffinity(cm, 0.05f);
-                    world.Brain2.Emotions.Feel(asker, Feeling.Joy, 0.12f, $"{cm.Name}이(가) 부품을 만들어 줬다", cm);
-                    Life.Diary(world, asker, Persona.Say(asker, $"{Ko.IGa(cm.Name)} 부탁한 {ItemKinds.Name(s.Item)}을(를) 만들어 줬다"));
+                    world.Brain2.Emotions.Feel(asker, Feeling.Joy, 0.12f, $"{Ko.IGa(cm.Name)} 부품을 만들어 줬다", cm);
+                    Life.Diary(world, asker, Persona.Say(asker, $"{Ko.IGa(cm.Name)} 부탁한 {Ko.EulReul(ItemKinds.Name(s.Item))} 만들어 줬다"));
                 }
                 return true;
             }),
         };
-        return Wrap(p, s, act, "부품 가져다 두기", toils, $"{ItemKinds.Name(s.Item)}을(를) {box.Room.Name} 선반에 둔다", box.Room, box);
+        return Wrap(p, s, act, "부품 가져다 두기", toils, $"{Ko.EulReul(ItemKinds.Name(s.Item))} {box.Room.Name} 선반에 둔다", box.Room, box);
     }
 
     // ── 도움 청하기: 솜씨 좋은 (믿는 자리의) 사람에게 가서 부탁한다 → 그 사람이 만들기를 맡는다 (일 나누기) ──
@@ -472,7 +472,7 @@ public sealed class PlanSystem
         if (helper == null) { s.Note = "부탁할 사람이 없다"; return null; }
         s.Who = helper;
         var room = s.Room ?? w.Brain2.Beliefs.WhereIs(c, helper, out _) ?? GuessPlace(c, helper, dist);
-        if (room != null && !RoomOk(c, room)) { s.Note = $"{room.Name}은(는) 지금 들어갈 수 없다"; return null; }
+        if (room != null && !RoomOk(c, room)) { s.Note = $"{Ko.EunNeun(room.Name)} 지금 들어갈 수 없다"; return null; }
         if (room == null || SpotIn(room, dist, c, helper) is not Cell spot) { s.Note = $"{helper.Name}에게 갈 수 없다"; return null; }
         s.Room = room;
         var toils = new List<Toil>
@@ -483,7 +483,7 @@ public sealed class PlanSystem
                 world.Brain2.Beliefs.Look(cm);
                 if (helper.Room != cm.Room || !helper.CanAct)
                 {
-                    s.Note = $"{helper.Name}이(가) {room.Name}에 없다";
+                    s.Note = $"{Ko.IGa(helper.Name)} {room.Name}에 없다";
                     if (s.Tries < 1) { var again = Insert(p, StepKind.AskHelp, Method.AskHelp, $"{helper.Name} 다시 찾아 부탁", Locate(cm, helper), null, helper); again.Tries = 1; }
                     return false;
                 }
@@ -611,7 +611,7 @@ public sealed class PlanSystem
         if (!here)
         {
             if (s.Room != null) w.Brain2.Beliefs.Missed(c, Topic.Person, who.Id, s.Room.Id);
-            s.Note = $"{who.Name}이(가) {s.Room?.Name ?? "거기"}에 없다";
+            s.Note = $"{Ko.IGa(who.Name)} {s.Room?.Name ?? "거기"}에 없다";
             s.State = StepState.Doing;
             Fail(c, p, s, s.Note);
             if (s.Tries < 1)

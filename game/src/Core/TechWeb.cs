@@ -540,13 +540,13 @@ public sealed partial class TechWebSystem
             if (n.Combo != null && !_revealed.Contains(n.Id) && n.Combo.All(Known))
             {
                 Stats.Combos++;
-                Reveal(n.Id, $"{string.Join(" + ", n.Combo.Select(p => TechWeb.Find(p)!.Name))}을(를) 익혀 보였다");
+                Reveal(n.Id, $"{Ko.EulReul(string.Join(" + ", n.Combo.Select(p => TechWeb.Find(p)!.Name)))} 익혀 보였다");
             }
             if (n.Gate is not TechGate g || _opened.Contains(n.Id)) continue;
             string? why = g.Kind switch
             {
-                GateKind.Incident => TechWeb.Incidents(w, g.Key) >= g.Need ? $"{IncidentName(g.Key)}을(를) {TechWeb.Incidents(w, g.Key)}번 겪었다" : null,
-                GateKind.Room => Enum.TryParse<RoomType>(g.Key, out var rt) && w.Ship.RoomsOf(rt).FirstOrDefault(r => !r.Abandoned) is Room room ? $"{room.Name}이(가) 있다" : null,
+                GateKind.Incident => TechWeb.Incidents(w, g.Key) >= g.Need ? $"{Ko.EulReul(IncidentName(g.Key))} {TechWeb.Incidents(w, g.Key)}번 겪었다" : null,
+                GateKind.Room => Enum.TryParse<RoomType>(g.Key, out var rt) && w.Ship.RoomsOf(rt).FirstOrDefault(r => !r.Abandoned) is Room room ? $"{Ko.IGa(room.Name)} 있다" : null,
                 GateKind.Skill => Enum.TryParse<Skill>(g.Key, out var sk) && w.Crew.Where(c => !c.Dead && !c.IsChild && c.RawSkill(sk) >= g.Need).OrderByDescending(c => c.RawSkill(sk)).ThenBy(c => c.Id).FirstOrDefault() is CrewMember who
                     ? $"{who.Name}의 {Skills.Name(sk)} 솜씨({who.RawSkill(sk):0.00})" : null,
                 GateKind.Material => w.Ship.CountStored(ItemKind.Rare) >= g.Need ? $"창고에 희귀 소재 {w.Ship.CountStored(ItemKind.Rare)}" : null,
@@ -849,7 +849,7 @@ public sealed partial class TechWebSystem
         var rival = TechWeb.Find(side == 0 ? f.B : f.A)!;
         string title = side == 0 ? f.TitleA : f.TitleB;
         Epithets.Add(title);
-        string text = $"갈림길 — {f.Problem}: {Ko.EulReul(chosen.Name)} 골랐다 ({why}) · {rival.Name}은(는) 잠긴다 · 배의 이름 '{title}'";
+        string text = $"갈림길 — {f.Problem}: {Ko.EulReul(chosen.Name)} 골랐다 ({why}) · {Ko.EunNeun(rival.Name)} 잠긴다 · 배의 이름 '{title}'";
         Note(text, 1);
         w.History.Add(w, HistoryKind.Decision, text, null, voters, log: true);
         w.History.Add(w, HistoryKind.Milestone, $"{w.Ship.Name}에 붙은 이름 — '{title}' ({f.Problem}에 {Ko.EulReul(chosen.Name)} 고른 배)", log: true);
@@ -881,12 +881,12 @@ public sealed partial class TechWebSystem
             {
                 var founder = w.Crew.Where(x => !x.Dead && !x.IsChild && x.CanAct).OrderByDescending(x => x.Traits.Diligence).ThenBy(x => x.Id).FirstOrDefault();
                 bool fresh = w.Culture.Of(k) == null;
-                w.Culture.Adopt(k, $"{t.Name}을(를) 들이고 — {c.Text}", founder?.Name);
+                w.Culture.Adopt(k, $"{Ko.EulReul(t.Name)} 들이고 — {c.Text}", founder?.Name);
                 if (fresh) { Stats.Customs++; if (founder != null) Life.Diary(w, founder, Persona.Say(founder, $"{t.Name} 뒤로 할 일이 늘었다. {c.Text}.")); }
             }
             if (c.Mul > 1f && w.Automation.Present) // 주 컴퓨터가 읽는다: 새 위험을 예보하고 점검을 권한다
-                w.Automation.Book.Add(ActKind.Forecast, null, $"{t.Name}을(를) 들인 뒤 {TechWeb.KeyName(c.Key)} 위험이 늘었다", $"예측: {fx}",
-                    $"점검 순서에 {TechWeb.KeyName(c.Key)}을(를) 앞당긴다", "관련 설비 둘레를 한 번씩 봐 주세요", "techchain:" + c.Tech + c.Key, SimTime.TicksPerDay);
+                w.Automation.Book.Add(ActKind.Forecast, null, $"{Ko.EulReul(t.Name)} 들인 뒤 {TechWeb.KeyName(c.Key)} 위험이 늘었다", $"예측: {fx}",
+                    $"점검 순서에 {Ko.EulReul(TechWeb.KeyName(c.Key))} 앞당긴다", "관련 설비 둘레를 한 번씩 봐 주세요", "techchain:" + c.Tech + c.Key, SimTime.TicksPerDay);
         }
     }
 

@@ -68,7 +68,7 @@ public sealed partial class WorkBoard
             if (learner == null) continue;
             busy.Add(learner.Id);
             post(WorkKind.Train, WorkTarget.OfCrew(mentor), 0.42f, skill,
-                $"{Skills.Name(skill)}을(를) 할 줄 아는 사람이 {mentor.Name}뿐 · {learner.Name} {learner.RawSkill(skill) * 100:0}% → 곁에서 따라 하며 배운다",
+                $"{Ko.EulReul(Skills.Name(skill))} 할 줄 아는 사람이 {mentor.Name}뿐 · {learner.Name} {learner.RawSkill(skill) * 100:0}% → 곁에서 따라 하며 배운다",
                 circuit: learner.Id * 10 + (int)skill);
             posted++;
         }
@@ -97,8 +97,8 @@ public static partial class WorkPlanners
         blocked = null;
         var mentor = o.Target.Crew!;
         var skill = (Skill)(o.Circuit % 10);
-        if (mentor.Dead || mentor.Down || mentor.Outside || mentor.Pose == Pose.Sleeping) { blocked = $"{mentor.Name}이(가) 가르칠 수 없다"; return null; }
-        if (mentor.Job?.Urgent == true) { blocked = $"{mentor.Name}이(가) 급한 일 중"; return null; }
+        if (mentor.Dead || mentor.Down || mentor.Outside || mentor.Pose == Pose.Sleeping) { blocked = $"{Ko.IGa(mentor.Name)} 가르칠 수 없다"; return null; }
+        if (mentor.Job?.Urgent == true) { blocked = $"{Ko.IGa(mentor.Name)} 급한 일 중"; return null; }
         // 선배 곁 빈 칸
         var near = Cell.Dirs8.Select(d => mentor.Cell + d).Where(x => w.Ship.IsWalkable(x) && dist.Reachable(x)).OrderBy(dist.Get).Cast<Cell?>().FirstOrDefault();
         if (near is not Cell spot) { blocked = "곁에 설 자리가 없다"; return null; }
@@ -133,12 +133,12 @@ public static partial class WorkPlanners
                 {
                     world.Growth.Milestones++;
                     string what = mark < 0.4f ? "기본은 한다" : "혼자서도 맡을 수 있다";
-                    MarkLog.Add(cm.Memory.Marks, world.Tick, $"{mentor.Name}에게 {Skills.Name(skill)}을(를) 배웠다 — {what}");
-                    world.History.Add(world, HistoryKind.Bond, $"{Ko.IGa(cm.Name)} {mentor.Name}에게 {Skills.Name(skill)}을(를) 배워 {what} ({after * 100:0}%)", cm.Room, new[] { cm, mentor }, log: true);
+                    MarkLog.Add(cm.Memory.Marks, world.Tick, $"{mentor.Name}에게 {Ko.EulReul(Skills.Name(skill))} 배웠다 — {what}");
+                    world.History.Add(world, HistoryKind.Bond, $"{Ko.IGa(cm.Name)} {mentor.Name}에게 {Ko.EulReul(Skills.Name(skill))} 배워 {what} ({after * 100:0}%)", cm.Room, new[] { cm, mentor }, log: true);
                 }
             return true;
         }));
-        return Wrap(a, o, c, w, "배우기", toils, $"{mentor.Name} 곁에서 {Skills.Name(skill)}을(를) 배운다", LogKind.Life);
+        return Wrap(a, o, c, w, "배우기", toils, $"{mentor.Name} 곁에서 {Ko.EulReul(Skills.Name(skill))} 배운다", LogKind.Life);
     }
 
     /// <summary>재활: 의무실(휴게실)에서 한 시간 몸을 푼다 — 의무관이 같은 방에 있으면 더 낫다.</summary>
@@ -166,7 +166,7 @@ public static partial class WorkPlanners
             cm.Stats.RehabSessions++;
             world.Growth.RehabSessions++;
             if (medic != null) { medic.Practice(Skill.Medicine, 0.01f); cm.ChangeAffinity(medic, 0.03f); }
-            world.Log.Add(world.Tick, LogKind.Life, $"{room.Name}에서 재활 운동을 했다 (부상 {v.Injury * 100:0}%" + (medic != null ? $" · {medic.Name}이(가) 봐 줬다)" : ")"), cm.Id);
+            world.Log.Add(world.Tick, LogKind.Life, $"{room.Name}에서 재활 운동을 했다 (부상 {v.Injury * 100:0}%" + (medic != null ? $" · {Ko.IGa(medic.Name)} 봐 줬다)" : ")"), cm.Id);
             return true;
         }));
         return Wrap(a, o, c, w, "재활", toils, null, LogKind.Life);

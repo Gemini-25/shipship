@@ -297,7 +297,7 @@ public sealed class FleetSystem
         if (Off) return;
         Reroutes++;
         var room = _w.Ship.RoomAt(at);
-        r.Mind.Say(door != null && door.Locked ? $"{room?.Name ?? "앞"} 문이 잠겨 다른 길로 돌아간다" : $"{room?.Name ?? "앞"}이 막혀 다른 길로 돌아간다", _w.Tick);
+        r.Mind.Say(door != null && door.Locked ? $"{room?.Name ?? "앞"} 문이 잠겨 다른 길로 돌아간다" : $"{Ko.IGa(room?.Name ?? "앞")} 막혀 다른 길로 돌아간다", _w.Tick);
     }
 
     // ───────────── 배우기 ─────────────

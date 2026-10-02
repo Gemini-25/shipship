@@ -492,7 +492,7 @@ public sealed class VolatileSystem
             {
                 m.CoolingDown = false;
                 m.Parked = false;
-                _w.Log.Add(_w.Tick, LogKind.Ship, $"{m.Name}이(가) 식어 다시 돈다");
+                _w.Log.Add(_w.Tick, LogKind.Ship, $"{Ko.IGa(m.Name)} 식어 다시 돈다");
             }
     }
 }

@@ -116,7 +116,7 @@ public sealed class InspectActivity : Activity
         if (n.Machine.Body.UseSpots.Count == 0 || !dist.Reachable(n.Machine.Body.UseSpots[0])) return (0f, "닿을 수 없다");
         float s = 0.3f + (OnShift(c, w) ? 0.15f : 0f) + 0.1f * c.Traits.Diligence;
         if (Bedtime(c, w)) s -= 0.3f;
-        return (MathF.Max(0f, s), $"{n.Machine.Name}이(가) 이상하다는 소문 — 직접 본다");
+        return (MathF.Max(0f, s), $"{Ko.IGa(n.Machine.Name)} 이상하다는 소문 — 직접 본다");
     }
 
     public override Job? Plan(CrewMember c, World w, DistanceField dist)
@@ -138,7 +138,7 @@ public sealed class InspectActivity : Activity
             world.Log.Add(world.Tick, LogKind.Life, $"소문을 듣고 {Ko.EulReul(n.Machine.Name)} 직접 봤다 — {n.Observation}", cm.Id);
             return true;
         }));
-        return new Job(this, "확인하러 감", toils) { LogText = $"{n.Machine.Name}이(가) 이상하다는 말을 듣고 보러 간다", LogKind = LogKind.Work, TargetRoom = n.Machine.Body.Room };
+        return new Job(this, "확인하러 감", toils) { LogText = $"{Ko.IGa(n.Machine.Name)} 이상하다는 말을 듣고 보러 간다", LogKind = LogKind.Work, TargetRoom = n.Machine.Body.Room };
     }
 }
 
@@ -249,7 +249,7 @@ public sealed partial class RelationSystem
                 if (w.Watch.OpenNotes.FirstOrDefault(n => n.Holders.ContainsKey(c.Id) && !n.Holders.ContainsKey(o.Id)) is ShiftNote n)
                 {
                     bool saw = n.AuthorId == c.Id || n.Holders[c.Id];
-                    c.Say(w, Persona.Say(c, saw ? $"내가 봤는데, {n.Machine.Name}에서 {n.Observation}" : $"{n.Machine.Name}이(가) 좀 이상하다던데… {n.Observation}"));
+                    c.Say(w, Persona.Say(c, saw ? $"내가 봤는데, {n.Machine.Name}에서 {n.Observation}" : $"{Ko.IGa(n.Machine.Name)} 좀 이상하다던데… {n.Observation}"));
                 }
                 break;
         }
@@ -321,7 +321,7 @@ public sealed partial class RelationSystem
                     o.Mind.Anger = MathF.Max(0f, o.Mind.Anger - 0.2f);
                     o.Say(w, Persona.Say(o, "나도 미안해"));
                     Remember(o, c, RelationReason.Apologized, "먼저 사과했다");
-                    w.History.Add(w, HistoryKind.Bond, $"{Ko.WaGwa(c.Name)} {o.Name}이(가) 다툰 일을 풀었다", c.Room, new[] { c, o }, log: true);
+                    w.History.Add(w, HistoryKind.Bond, $"{Ko.WaGwa(c.Name)} {Ko.IGa(o.Name)} 다툰 일을 풀었다", c.Room, new[] { c, o }, log: true);
                     _reconciled.Add((Math.Min(c.Id, o.Id), Math.Max(c.Id, o.Id)));
                 }
                 else
@@ -376,7 +376,7 @@ public sealed partial class RelationSystem
             var n = w.Watch.OpenNotes.FirstOrDefault(x => x.Holders.ContainsKey(c.Id) && !x.Holders.ContainsKey(o.Id));
             if (n == null || !_rng.Chance(0.5f + 0.3f * c.Traits.Sociability)) continue;
             bool saw = n.AuthorId == c.Id || n.Holders[c.Id];
-            c.Say(w, Persona.Say(c, saw ? $"그러고 보니 {n.Machine.Name}에서 {n.Observation}" : $"{n.Machine.Name}이(가) 좀 이상하다던데… {n.Observation}"));
+            c.Say(w, Persona.Say(c, saw ? $"그러고 보니 {n.Machine.Name}에서 {n.Observation}" : $"{Ko.IGa(n.Machine.Name)} 좀 이상하다던데… {n.Observation}"));
             PassRumor(c, o, n, "수다 끝에");
             return;
         }
@@ -390,12 +390,12 @@ public sealed partial class RelationSystem
     private string Trouble(CrewMember o)
     {
         var w = _w;
-        if (o.GriefUntil > w.Tick && w.Life.Memorial.Count > 0) return $"{w.Life.Memorial[^1].name}이(가) 자꾸 생각나";
+        if (o.GriefUntil > w.Tick && w.Life.Memorial.Count > 0) return $"{Ko.IGa(w.Life.Memorial[^1].name)} 자꾸 생각나";
         if (o.Fx.Worst > 0.3f) return $"몸이 안 좋아 — {w.Ailments.Line(o)}";
         if (o.Quarrel > 0 && w.Tick - o.Quarrel < SimTime.TicksPerDay * 2) return "요즘 다툰 일이 마음에 걸려";
         if (o.Needs.Rest < 0.3f) return "잠을 통 못 잤어";
         if (o.Needs.Food < 0.3f) return "배가 고파서 그래";
-        if (o.Memory.Trauma > 0.4f) return $"{o.Memory.TraumaCause ?? "그때 일"}이(가) 자꾸 떠올라";
+        if (o.Memory.Trauma > 0.4f) return $"{Ko.IGa(o.Memory.TraumaCause ?? "그때 일")} 자꾸 떠올라";
         if (Life.Has(o, Habit.Homesick)) return "집 생각이 나서";
         return "그냥… 지쳤어";
     }
@@ -479,7 +479,7 @@ public sealed partial class RelationSystem
             who.ChangeAffinity(accused, 0.04f);
             who.Say(w, Persona.Say(who, "…그래도 말해 줘서 고마워"));
         }
-        w.Log.Add(w.Tick, LogKind.Life, $"{accused.Name}이(가) 그때 {truth}는 걸 알았다 ({how})", who.Id);
+        w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(accused.Name)} 그때 {Ko.EunNeun(truth)} 걸 알았다 ({how})", who.Id);
         Life.Diary(w, who, Persona.Say(who, $"{Ko.IGa(accused.Name)} 그때 {truth}고 한다"));
     }
 

@@ -481,7 +481,7 @@ public sealed class FollowSmellActivity : Activity
         {
             world.Smells.Stats.Gathered++;
             if (k == SmellKind.Coffee) world.Smells.Stats.CoffeeGathered++;
-            world.Log.Add(world.Tick, LogKind.Life, $"{Ko.IGa(cm.Name)} {SmellSystem.Name(k)}를 따라 {Ko.EuRo(target.Name)} 왔다", cm.Id);
+            world.Log.Add(world.Tick, LogKind.Life, $"{Ko.IGa(cm.Name)} {Ko.EulReul(SmellSystem.Name(k))} 따라 {Ko.EuRo(target.Name)} 왔다", cm.Id);
             return true;
         }));
         toils.Add(new WaitToil(SimTime.Minutes(12), Pose.Standing, face, minTicks: SimTime.Minutes(4))
@@ -519,7 +519,7 @@ public sealed class FollowSmellActivity : Activity
             else if (k == SmellKind.Coffee) cm.Needs.Social = MathF.Min(1f, cm.Needs.Social + 0.05f); // 커피 냄새 곁에서 한마디씩
             return true;
         }));
-        return new Job(this, k == SmellKind.Bread ? "빵 냄새를 따라" : k == SmellKind.Coffee ? "커피 냄새를 따라" : "냄새를 따라", toils) { LogText = $"{SmellSystem.Name(k)}를 따라 {Ko.EuRo(target.Name)}", TargetRoom = target };
+        return new Job(this, k == SmellKind.Bread ? "빵 냄새를 따라" : k == SmellKind.Coffee ? "커피 냄새를 따라" : "냄새를 따라", toils) { LogText = $"{Ko.EulReul(SmellSystem.Name(k))} 따라 {Ko.EuRo(target.Name)}", TargetRoom = target };
     }
 }
 

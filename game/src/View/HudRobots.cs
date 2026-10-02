@@ -109,7 +109,7 @@ public partial class Hud
         if (f.Machine?.Omen is Omen o && o.Known)
         {
             float left = (o.Due - _world.Tick) / (float)SimTime.TicksPerHour;
-            list.Add(("전조", $"{Prevention.Name(o.Kind)} · {o.KnownBy}이(가) 찾음 · {Faults.Spec(o.Fault).Name}까지 {left:0}시간쯤"));
+            list.Add(("전조", $"{Prevention.Name(o.Kind)} · {Ko.IGa(o.KnownBy)} 찾음 · {Faults.Spec(o.Fault).Name}까지 {left:0}시간쯤"));
         }
     }
 }

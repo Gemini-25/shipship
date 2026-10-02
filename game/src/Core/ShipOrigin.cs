@@ -333,7 +333,7 @@ public sealed partial class ShipOriginSystem
             c.Schedule = Schedule.FromBedtime(SimTime.Wrap(partner.Schedule.SleepStart + 12f));
             BedShares.Add((c.Id, partner.Id));
             w.Body.SetZone(partner.Bed!.Room, AccessZone.Open, LockKind.None); // 둘 다 주인 — 교대로 쓰는 선실은 잠그지 않는다 (v16.3 선실 노크 · 잠금에 막히지 않게)
-            MarkLog.Add(partner.Bed!.Room.Marks, w.Tick, $"{Ko.WaGwa(partner.Name)} {c.Name}이(가) 침대 하나를 교대로 쓴다");
+            MarkLog.Add(partner.Bed!.Room.Marks, w.Tick, $"{Ko.WaGwa(partner.Name)} {Ko.IGa(c.Name)} 침대 하나를 교대로 쓴다");
         }
         w.Paths.Invalidate();
     }
@@ -423,7 +423,7 @@ public sealed partial class ShipOriginSystem
         string what = f.Kind switch
         {
             FindKind.Note => $"전 승무원 {f.Author}의 쪽지를 찾았다 — {f.Text}",
-            FindKind.Bottle => $"{f.Author}이(가) 숨겨 둔 술병을 찾았다 — {f.Text}",
+            FindKind.Bottle => $"{Ko.IGa(f.Author)} 숨겨 둔 술병을 찾았다 — {f.Text}",
             _ => $"벽 낙서를 찾았다 — {f.Text}",
         };
         w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(c.Name)} {room.Name}에서 {how} {what}", c.Id);
@@ -432,7 +432,7 @@ public sealed partial class ShipOriginSystem
         Life.Diary(w, c, Persona.Say(c, f.Kind switch
         {
             FindKind.Note => $"{room.Name} 패널 뒤에서 {f.Author}라는 사람의 쪽지를 찾았다. {f.Text} — 이 배에도 우리 전에 살던 사람들이 있었다.",
-            FindKind.Bottle => $"{f.Author}이(가) 숨겨 둔 술을 찾았다. 오늘 저녁에 다 같이 나눠야겠다.",
+            FindKind.Bottle => $"{Ko.IGa(f.Author)} 숨겨 둔 술을 찾았다. 오늘 저녁에 다 같이 나눠야겠다.",
             _ => $"{room.Name} 벽에 낙서가 있었다. {f.Text} — 웃음이 났다.",
         }));
         c.Say(w, Persona.Say(c, f.Kind switch { FindKind.Note => "어? 쪽지가 있네…", FindKind.Bottle => "이게 왜 여기 있지? 술이잖아!", _ => "누가 여기다 낙서를 했네" }));
@@ -511,8 +511,8 @@ public sealed partial class ShipOriginSystem
             f.At = table?.Cells[0] ?? c.Cell;
             f.Wall = -1;
             c.Say(w, Persona.Say(c, $"{f.Author}에게 — 건배!"));
-            w.History.Add(w, HistoryKind.Bond, $"{Ko.IGa(c.Name)} {f.Author}이(가) 숨겨 둔 술을 {c.Room.Name}에서 {string.Join(", ", mates.Select(m => m.Name))}와(과) 나눠 마셨다", c.Room, all, log: true);
-            foreach (var o in all) Life.Diary(w, o, Persona.Say(o, $"{c.Name}이(가) 찾은 옛 승무원의 술을 다 같이 나눠 마셨다. {f.Author}이라는 사람도 이렇게 마셨겠지."));
+            w.History.Add(w, HistoryKind.Bond, $"{Ko.IGa(c.Name)} {Ko.IGa(f.Author)} 숨겨 둔 술을 {c.Room.Name}에서 {Ko.WaGwa(string.Join(", ", mates.Select(m => m.Name)))} 나눠 마셨다", c.Room, all, log: true);
+            foreach (var o in all) Life.Diary(w, o, Persona.Say(o, $"{Ko.IGa(c.Name)} 찾은 옛 승무원의 술을 다 같이 나눠 마셨다. {f.Author}이라는 사람도 이렇게 마셨겠지."));
         }
     }
 
@@ -541,7 +541,7 @@ public sealed partial class ShipOriginSystem
                     c.Say(w, Persona.Say(c, f.Kind switch
                     {
                         FindKind.Note => $"그거 알아? {f.Author}라는 사람이 남긴 쪽지가 있었어 — {f.Text}",
-                        FindKind.Bottle => $"{f.Author}이(가) 숨겨 둔 술 얘기 들었어?",
+                        FindKind.Bottle => $"{Ko.IGa(f.Author)} 숨겨 둔 술 얘기 들었어?",
                         _ => $"{w.Ship.Rooms[f.RoomId].Name} 벽에 낙서 봤어? {f.Text}",
                     }));
                     o.ChangeAffinity(c, 0.02f);

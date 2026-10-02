@@ -544,7 +544,7 @@ public sealed class ExplosiveSet
         {
             Stats.Fizzled++;
             if (spec.Blast != BlastKind.Powder && w.Ship.Grid.Kind(e.Cell) == TileKind.Floor) w.Fire.Ignite(e.Cell, 0.35f);
-            w.Log.Add(w.Tick, LogKind.Warning, $"{room?.Name ?? "?"}의 {spec.Name}이(가) 터지지 않고 타 버렸다");
+            w.Log.Add(w.Tick, LogKind.Warning, $"{room?.Name ?? "?"}의 {Ko.IGa(spec.Name)} 터지지 않고 타 버렸다");
             return;
         }
         // 불에 단 것 중 일부는 터지지 않고 불기둥으로 탄다
@@ -587,7 +587,7 @@ public sealed class ExplosiveSet
             {
                 // 첫 폭발이 가라앉은 가루를 날리고 → 그 불길이 가루에 옮겨 붙는다 (2차 분진 폭발)
                 e.Cloud = MathF.Max(e.Cloud, MathF.Min(1f, p * 2.5f));
-                if (bs.Heat > 0.3f && p > 0.08f && !e.Primed && rec.Depth < MaxDepth) { Prime(e, $"{bs.Name}이(가) 날린 가루에 불이 붙었다", rec.Depth + 1); Count(rec); }
+                if (bs.Heat > 0.3f && p > 0.08f && !e.Primed && rec.Depth < MaxDepth) { Prime(e, $"{Ko.IGa(bs.Name)} 날린 가루에 불이 붙었다", rec.Depth + 1); Count(rec); }
                 continue;
             }
             if (e.Kind == ExplosiveKind.FermentJar && p > 0.2f) { Shatter(e, $"{bs.Name}에 깨졌다"); continue; }
@@ -741,7 +741,7 @@ public sealed class ExplosiveSet
                 float ch = 0.08f * (0.5f + c.Traits.Diligence) * (xp >= 2 ? 3f : xp == 1 ? 1.8f : 1f);
                 if (!R.Chance(ch)) continue;
                 Stats.CrewNoticed++;
-                Order(e, $"{c.Name}이(가) 알아챘다 — {e.RiskWhy}", c.Name);
+                Order(e, $"{Ko.IGa(c.Name)} 알아챘다 — {e.RiskWhy}", c.Name);
                 c.Say(w, Persona.Say(c, xp > 0 ? $"{Ko.EulReul(e.Spec.Name)} 저기 두면 안 돼 — 그때 같은 일 난다" : $"{Ko.EulReul(e.Spec.Name)} 여기 두면 위험한데"));
                 break;
             }
@@ -922,7 +922,7 @@ public sealed class ExplosiveSet
         e.Handler = c.Id;
         e.FuseAt = w.Tick + SimTime.Minutes(1f);
         e.PrimedAt = w.Tick;
-        e.Why = $"{o.Why} — {c.Name}이(가) 기폭";
+        e.Why = $"{o.Why} — {Ko.IGa(c.Name)} 기폭";
         e.Depth = 0;
         c.Say(w, Persona.Say(c, "셋 · 둘 · 하나!"));
         w.Log.Add(w.Tick, LogKind.Work, $"폭약 카운트다운 — {o.Why}", c.Id);

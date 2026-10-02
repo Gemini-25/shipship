@@ -163,7 +163,7 @@ public sealed class CommsSystem
             }
             w.Board.RequestScan();
             w.RaiseAlert($"탈출 캡슐 도킹 — {string.Join("·", names)} 구조 (다쳤다 · 의무실로)", air, AlertLevel.Notice, shipWide: true);
-            w.History.Add(w, HistoryKind.Milestone, $"탈출 캡슐에서 {string.Join("·", names)}을(를) 건졌다 — 이제 승무원 {w.Crew.Count(c => !c.Dead)}명", air, joined, log: true);
+            w.History.Add(w, HistoryKind.Milestone, $"탈출 캡슐에서 {Ko.EulReul(string.Join("·", names))} 건졌다 — 이제 승무원 {w.Crew.Count(c => !c.Dead)}명", air, joined, log: true);
         }
     }
 }

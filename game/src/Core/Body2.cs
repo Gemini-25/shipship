@@ -436,7 +436,7 @@ public sealed partial class Body2System
         var act = au.Book.Add(ActKind.Advice, room,
             $"{c.Name} 우주복 치수 불일치 — 잰 체중 {l.KnownKg:0.0}kg · 맞춘 치수 {l.SuitKg:0.0}kg ({m:+0.0;-0.0}kg · {by})",
             m > 0 ? "예측: 선외에서 꽉 낀 관절이 긁히고 목 고리가 덜 물려 샌다 · 숨이 가빠 산소를 더 쓴다" : "예측: 헐렁해 몸이 놀고 이음매가 벌어진다 · 자세를 바로잡느라 추진제를 더 쓴다",
-            "조치: 우주복 치수 조정 작업을 올렸다", $"요청: {c.Name}은(는) 다음 선외 작업 전에 보관함에서 치수를 맞출 것",
+            "조치: 우주복 치수 조정 작업을 올렸다", $"요청: {Ko.EunNeun(c.Name)} 다음 선외 작업 전에 보관함에서 치수를 맞출 것",
             $"fit:{c.Id}", SimTime.Hours(20), 60f * 30f,
             (world, a) =>
             {
@@ -477,7 +477,7 @@ public sealed partial class Body2System
                 $"{c.Name} 체중 {delta:+0.0;-0.0}kg / {span}일 ({k0:0.0} → {k1:0.0}kg · {l.KnownBy})",
                 up ? "판단: 먹는 양이 쓰는 양보다 많다 · 운동 부족 추세 — 이대로면 우주복 치수가 어긋난다" : thin ? "판단: 영양 부족 — 체력 · 회복이 떨어진다" : "판단: 먹는 양이 모자라다 (배급 · 과로) 추세",
                 up ? "조치: 운동 권고를 보냈다" : "조치: 식사를 챙기라고 알렸다",
-                up ? $"요청: {c.Name}은(는) 땀방 · 달리기로 몸을 움직일 것" : $"요청: {c.Name}은(는) 끼니를 거르지 말 것",
+                up ? $"요청: {Ko.EunNeun(c.Name)} 땀방 · 달리기로 몸을 움직일 것" : $"요청: {Ko.EunNeun(c.Name)} 끼니를 거르지 말 것",
                 $"trend:{c.Id}", SimTime.Hours(70), 60f * 72f,
                 (world, a) =>
                 {
@@ -644,7 +644,7 @@ public sealed partial class Body2System
         {
             // 굶어서 빠졌다: 걱정한다 (가까운 사람은 끼니를 챙기게 한다)
             o.Say(w, Persona.Say(o, "얼굴이 반쪽이 됐어 — 밥은 먹고 다녀?"));
-            w.Brain2.Emotions.Feel(o, Feeling.Fear, 0.05f, $"{s.Name}이(가) 많이 말랐다", s);
+            w.Brain2.Emotions.Feel(o, Feeling.Fear, 0.05f, $"{Ko.IGa(s.Name)} 많이 말랐다", s);
             s.ChangeAffinity(o, 0.03f);
             s.Needs.Food = MathF.Max(0f, s.Needs.Food - 0.05f); // 들으니 배가 고프다 (끼니를 당긴다)
             Stats.Worries++;

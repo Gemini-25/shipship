@@ -956,7 +956,7 @@ public sealed partial class RobotSystem
                 steps.Add(new RTake(shelf, kind, want, partialOk: true));
                 steps.Add(new RGoto(at));
                 steps.Add(new RPut(dock));
-                steps.Add(new RDo((rb, world) => { world.Board.Close(o); Done(rb, $"{dock.Label}에 {ItemKinds.Name(kind)}를 실었다"); return true; }));
+                steps.Add(new RDo((rb, world) => { world.Board.Close(o); Done(rb, $"{dock.Label}에 {Ko.EulReul(ItemKinds.Name(kind))} 실었다"); return true; }));
                 steps.Add(new RGoto(_ => r.Cargo != null ? shelfSpot : null));
                 steps.Add(new RPut(shelf));
                 return steps;
@@ -1285,13 +1285,13 @@ public sealed partial class RobotSystem
         if (CanSelfRepair(r))
         {
             // 가벼운 고장: 하던 일은 작업 목록에 두고, 느리게 충전대로 돌아가 스스로 고친다
-            w.Log.Add(w.Tick, LogKind.Warning, $"{r.Name} {FaultName(f)} — 스스로 고치러 충전대로 (느리게)" + (r.Order != null ? $" · {r.Order.Title}은 작업 목록으로" : ""));
+            w.Log.Add(w.Tick, LogKind.Warning, $"{r.Name} {FaultName(f)} — 스스로 고치러 충전대로 (느리게)" + (r.Order != null ? $" · {Ko.EunNeun(r.Order.Title)} 작업 목록으로" : ""));
             DropTask(r);
             if (r.State == RobotState.Active) GoHome(r, "자가 수리하러");
             return;
         }
         if (Minor(f)) w.Log.Add(w.Tick, LogKind.Warning, $"{r.Name}: {WhyNotSelf(r)} — 사람이 고쳐야 한다");
-        w.Log.Add(w.Tick, LogKind.Warning, $"{r.Name} {FaultName(f)} — {r.Room?.Name ?? "?"}에 멈춰 섰다" + (r.Order != null ? $" (하던 일 {r.Order.Title}은 작업 목록으로)" : ""));
+        w.Log.Add(w.Tick, LogKind.Warning, $"{r.Name} {FaultName(f)} — {r.Room?.Name ?? "?"}에 멈춰 섰다" + (r.Order != null ? $" (하던 일 {Ko.EunNeun(r.Order.Title)} 작업 목록으로)" : ""));
         DropTask(r);
         SetState(r, RobotState.Stalled);
         w.Board.RequestScan();
@@ -1355,7 +1355,7 @@ public sealed partial class RobotSystem
         SelfRepairs++;
         r.Condition = MathF.Max(0f, r.Condition - 0.02f);
         MarkLog.Add(r.Marks, w.Tick, $"스스로 고쳤다 ({FaultName(f)} · 사람 정비 뒤 {r.SelfRepairs}번째)");
-        w.Log.Add(w.Tick, LogKind.Work, $"{r.Name}: {FaultName(f)}을(를) 자가 진단으로 고쳤다 ({r.SelfRepairs}/{SelfRepairLimit})");
+        w.Log.Add(w.Tick, LogKind.Work, $"{r.Name}: {Ko.EulReul(FaultName(f))} 자가 진단으로 고쳤다 ({r.SelfRepairs}/{SelfRepairLimit})");
     }
 
     public int SelfRepairs { get; private set; }

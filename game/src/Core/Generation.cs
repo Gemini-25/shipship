@@ -83,7 +83,7 @@ public sealed class GenerationSystem
             if (mate != null)
             {
                 a.Partner = mate.Id; mate.Partner = a.Id;
-                w.History.Add(w, HistoryKind.Bond, $"{Ko.WaGwa(a.Name)} {mate.Name}이 짝이 되었다", a.Room, new[] { a, mate }, log: true);
+                w.History.Add(w, HistoryKind.Bond, $"{Ko.WaGwa(a.Name)} {Ko.IGa(mate.Name)} 짝이 되었다", a.Room, new[] { a, mate }, log: true);
             }
         }
     }
@@ -93,9 +93,9 @@ public sealed class GenerationSystem
         var w = _w;
         var c = w.AddChild(a, b, _rng);
         Births++;
-        w.History.Add(w, HistoryKind.Bond, $"{Ko.WaGwa(a.Name)} {b.Name} 사이에 {c.Name}이(가) 태어났다 — 배에서 태어난 {Births}번째 아이", a.Room, new[] { a, b }, log: true);
-        Life.Diary(w, a, $"{c.Name}이(가) 태어났다.");
-        Life.Diary(w, b, $"{c.Name}이(가) 태어났다.");
+        w.History.Add(w, HistoryKind.Bond, $"{Ko.WaGwa(a.Name)} {b.Name} 사이에 {Ko.IGa(c.Name)} 태어났다 — 배에서 태어난 {Births}번째 아이", a.Room, new[] { a, b }, log: true);
+        Life.Diary(w, a, $"{Ko.IGa(c.Name)} 태어났다.");
+        Life.Diary(w, b, $"{Ko.IGa(c.Name)} 태어났다.");
         foreach (var o in w.Crew.Where(o => !o.Dead)) o.Needs.Stress = MathF.Max(0f, o.Needs.Stress - 0.1f);
     }
 

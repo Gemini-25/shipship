@@ -320,7 +320,7 @@ public static class Logistics
             float score = 0.25f + 0.2f * breaches + 0.15f * fires + 0.25f * far + (vital ? 0.1f : 0f);
             string why = breaches + fires > 0
                 ? $"{room.Name}에서 파공 {breaches}번 · 불 {fires}번"
-                : $"{room.Name}은 창고에서 멀다";
+                : $"{Ko.EunNeun(room.Name)} 창고에서 멀다";
             yield return (room, score, why);
         }
     }

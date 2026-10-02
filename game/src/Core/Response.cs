@@ -316,7 +316,7 @@ public sealed partial class AutomationSystem
         if (inside > 0) _world.Hull.Trapped[room.Id] = w.Tick;
         using (w.Causes.Because(fc.Node))
             w.Causes.Effect(CauseKind.Recovery, "", $"{room.Name} {name} 시작" + (inside > 0 ? $" — 안에 {inside}명" : ""), room, null);
-        w.History.Add(w, HistoryKind.Decision, $"주 컴퓨터: {room.Name} {name}" + (inside > 0 ? $" — 안에 {string.Join("·", w.Crew.Where(c => !c.Dead && c.Room == room).Select(c => c.Name))}이(가) 남은 채" : ""), room, log: true);
+        w.History.Add(w, HistoryKind.Decision, $"주 컴퓨터: {room.Name} {name}" + (inside > 0 ? $" — 안에 {Ko.IGa(string.Join("·", w.Crew.Where(c => !c.Dead && c.Room == room).Select(c => c.Name)))} 남은 채" : ""), room, log: true);
         w.RaiseAlert($"{room.Name} {name} 시작", room, AlertLevel.Critical, shipWide: true);
         // v16.6 다섯 칸 기록 · 안에 남은 사람은 컴퓨터를 의심한다
         int? believed = Occupants(room);

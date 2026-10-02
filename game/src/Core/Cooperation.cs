@@ -1177,7 +1177,7 @@ public sealed partial class CoopSystem
             var room = w.Ship.RoomAt(s.Spot);
             if (room == null || !room.DataLinked) continue;
             if (au.Book.Add(ActKind.Advice, room, $"{room.Name} 통로에 펼쳐 둔 공구 · 부품 {aisle}점 ({s.Label} 작업, {(now - s.LeftAt) / SimTime.Minutes(1)}분째 비움)",
-                    "판단: 통로가 좁아져 다니는 길이 돌아간다 · 급한 사람이 걷어찰 수 있다", "선내 메시지", $"{CrewById(s.Owner)?.Name ?? "맡은 사람"}은(는) 돌아와 이어 하거나 한쪽으로 모아 달라",
+                    "판단: 통로가 좁아져 다니는 길이 돌아간다 · 급한 사람이 걷어찰 수 있다", "선내 메시지", $"{Ko.EunNeun(CrewById(s.Owner)?.Name ?? "맡은 사람")} 돌아와 이어 하거나 한쪽으로 모아 달라",
                     $"coop:aisle:{s.Id}", SimTime.Hours(2), 30f) != null) Stats.AisleWarns++;
         }
         foreach (var b in Boxes)

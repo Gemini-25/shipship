@@ -376,7 +376,7 @@ public sealed class DailySystem
             if (m == null) return false;
             m.Wear = MathF.Max(0f, m.Wear - 0.04f);
             MarkLog.Add(m.Marks, x.W.Tick, $"{c.Name}: 다시 조였다");
-            return x.Done($"{Ko.IGa(c.Name)} {m.Name}을(를) 한 번 더 보다가 헐거운 볼트를 조였다", c);
+            return x.Done($"{Ko.IGa(c.Name)} {Ko.EulReul(m.Name)} 한 번 더 보다가 헐거운 볼트를 조였다", c);
         }),
         new("shortcut", "지름길", DailyGroup.Work, 0.6f, x =>
         {
@@ -395,7 +395,7 @@ public sealed class DailySystem
             var o = x.Other(c);
             if (o != null) { x.Aff(c, o, o.Traits.Diligence > 0.6f ? -0.01f : 0.01f); x.Mem(c, o, RelationReason.SavedMyThing, "잃어버린 공구를 같이 찾아 줬다"); }
             x.Stress(c, 0.03f);
-            return x.Done($"{Ko.IGa(c.Name)} {(tool?.Name ?? "공구")}를 어디 뒀는지 몰라 한 시간을 찾았다" + (o != null ? $" — {Ko.IGa(o.Name)} 같이 찾았다" : ""), c);
+            return x.Done($"{Ko.IGa(c.Name)} {Ko.EulReul((tool?.Name ?? "공구"))} 어디 뒀는지 몰라 한 시간을 찾았다" + (o != null ? $" — {Ko.IGa(o.Name)} 같이 찾았다" : ""), c);
         }),
         new("overtime", "야근 커피", DailyGroup.Work, 0.8f, x => x.W.Scenes.Overtime(x)), // v16.1 장면으로 (Core/DailyScenes.cs)
         new("hazardspot", "바닥의 기름", DailyGroup.Work, 0.8f, x =>
@@ -458,7 +458,7 @@ public sealed class DailySystem
                 .Where(p => p.a.AffinityTo(p.b) > 0.25f && p.b.AffinityTo(p.a) > 0.25f).OrderBy(p => p.a.Id).FirstOrDefault();
             if (pair.a == null) return false;
             x.Aff(pair.a, pair.b, 0.05f);
-            return x.Done($"{Ko.IGa(m.Name)} {Ko.WaGwa(pair.a.Name)} {pair.b.Name}를 같은 조에 넣자고 넌지시 말했다", m, pair.a, pair.b);
+            return x.Done($"{Ko.IGa(m.Name)} {Ko.WaGwa(pair.a.Name)} {Ko.EulReul(pair.b.Name)} 같은 조에 넣자고 넌지시 말했다", m, pair.a, pair.b);
         }),
         new("cardpeace", "카드로 푼 앙금", DailyGroup.Bond, 0.6f, x =>
         {
@@ -492,7 +492,7 @@ public sealed class DailySystem
             if (x.One(c => x.Has(c, Habit.GymRat) || x.Likes(c, Hobby.Workout)) is not CrewMember c) return false;
             if (x.Other(c, o => o.Needs.Stress > 0.3f) is not CrewMember o) return false;
             x.Stress(c, -0.04f); x.Stress(o, -0.06f); x.Rest(o, -0.05f); x.Aff(c, o, 0.03f);
-            return x.Done($"{Ko.IGa(c.Name)} {o.Name}를 끌고 가 같이 운동했다", c, o);
+            return x.Done($"{Ko.IGa(c.Name)} {Ko.EulReul(o.Name)} 끌고 가 같이 운동했다", c, o);
         }),
         new("hiccup", "딸꾹질", DailyGroup.Body, 0.5f, x =>
         {
@@ -654,7 +654,7 @@ public sealed class DailySystem
             string[] names = { "고집쟁이", "할매", "투덜이", "늙은 말", "울보", "골칫덩이", "든든이" };
             string nick = names[(m.Body.Id + x.W.Seed) % names.Length];
             MarkLog.Add(m.Marks, x.W.Tick, $"별명: {nick} ({c.Name})");
-            return x.Remembered($"{Ko.IGa(c.Name)} 자주 말썽인 {m.Name}을(를) '{nick}'라고 부르기 시작했다", c);
+            return x.Remembered($"{Ko.IGa(c.Name)} 자주 말썽인 {Ko.EulReul(m.Name)} '{nick}'라고 부르기 시작했다", c);
         }),
         new("trophy", "걸어 둔 물건", DailyGroup.Custom, 0.4f, x =>
         {

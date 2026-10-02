@@ -260,7 +260,7 @@ public sealed partial class DroneSystem
                     d.Faulty = true;
                     // 싣고 있던 자재를 놓친다 → 떠다닌다
                     foreach (var (k, n) in d.Cargo)
-                        w.EvaRisk.Spawn(k is ItemKind.Plate or ItemKind.Structure ? FloatKind.Plate : FloatKind.Scrap, $"{d.Name}이 놓친 {ItemKinds.Name(k)}", d.Position,
+                        w.EvaRisk.Spawn(k is ItemKind.Plate or ItemKind.Structure ? FloatKind.Plate : FloatKind.Scrap, $"{Ko.IGa(d.Name)} 놓친 {ItemKinds.Name(k)}", d.Position,
                             away * HR.Range(4f, 12f) + new Vector2(HR.Range(-4f, 4f), HR.Range(-4f, 4f)), new[] { (k, n) }, -1, d.Id);
                     d.Cargo = Array.Empty<(ItemKind, int)>();
                     if (outside && d.State != DroneState.Adrift) Abort(d, "팔이 꺾였다 — 일을 두고 돌아온다");

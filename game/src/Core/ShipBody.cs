@@ -1063,7 +1063,7 @@ public sealed partial class BodySystem
                 w.Log.Add(w.Tick, LogKind.Work, $"열린 채 남은 점검 뚜껑을 닫았다 ({w.Ship.RoomAt(h.Cell)?.Name})", c.Id);
                 break;
             case WallBody lw when task == "Fetch":
-                if (lw.Lost is ItemStack got && c.Carrying == null) { c.Carrying = got; lw.Lost = null; Stats.Fetched++; w.Log.Add(w.Tick, LogKind.Work, $"정비 통로에 팔을 넣어 굴러 들어간 {ItemKinds.Name(got.Kind)}을(를) 꺼냈다", c.Id); }
+                if (lw.Lost is ItemStack got && c.Carrying == null) { c.Carrying = got; lw.Lost = null; Stats.Fetched++; w.Log.Add(w.Tick, LogKind.Work, $"정비 통로에 팔을 넣어 굴러 들어간 {Ko.EulReul(ItemKinds.Name(got.Kind))} 꺼냈다", c.Id); }
                 break;
             case WallBody wb:
                 wb.PanelOff = false; wb.PanelForgot = false; wb.PanelBy = -1; wb.PanelOrder = -1;
@@ -1099,7 +1099,7 @@ public sealed partial class BodySystem
             case WallMount m:
                 m.Present = true; m.TakenBy = -1;
                 Stats.MountRefills++;
-                w.Log.Add(w.Tick, LogKind.Work, $"빈 걸이에 {WallMount.Name(m.Kind)}을(를) 채웠다", c.Id);
+                w.Log.Add(w.Tick, LogKind.Work, $"빈 걸이에 {Ko.EulReul(WallMount.Name(m.Kind))} 채웠다", c.Id);
                 break;
         }
         return true;

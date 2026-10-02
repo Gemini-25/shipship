@@ -1140,9 +1140,9 @@ public sealed partial class EvaRiskSystem
         if (own != null)
         {
             own.Condition = MathF.Max(0.25f, own.Condition - 0.25f);
-            MarkLog.Add(own.Marks, w.Tick, $"선체 밖에서 {FloatName(k)}가 빠져 떠내려갔다");
+            MarkLog.Add(own.Marks, w.Tick, $"선체 밖에서 {Ko.IGa(FloatName(k))} 빠져 떠내려갔다");
         }
-        w.Log.Add(w.Tick, LogKind.Warning, $"{name}를 놓쳤다 — 빙글빙글 떠내려간다", c.Id);
+        w.Log.Add(w.Tick, LogKind.Warning, $"{Ko.EulReul(name)} 놓쳤다 — 빙글빙글 떠내려간다", c.Id);
     }
 
     /// <summary>선체 밖의 사람이 손 닿는 곳의 떠다니는 것을 붙잡는다.</summary>
@@ -1209,7 +1209,7 @@ public sealed partial class EvaRiskSystem
             if (Crew(f.Owner) is CrewMember o && !o.Dead)
             {
                 o.Needs.Stress = MathF.Min(1f, o.Needs.Stress + (f.Belonging >= 0 ? 0.05f : 0.02f));
-                if (f.Belonging >= 0) Life.Diary(w, o, Persona.Say(o, $"{FloatName(f.Kind)}가 별 사이로 사라졌다. 손에 익은 거였는데"));
+                if (f.Belonging >= 0) Life.Diary(w, o, Persona.Say(o, $"{Ko.IGa(FloatName(f.Kind))} 별 사이로 사라졌다. 손에 익은 거였는데"));
             }
             w.Log.Add(w.Tick, LogKind.Life, $"놓친 {Ko.IGa(f.Name)} 시야 밖으로 사라졌다");
         }

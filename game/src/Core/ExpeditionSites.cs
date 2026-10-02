@@ -181,13 +181,13 @@ public static class ExpeditionSites
         {
             var m = x.Any();
             x.Lose("공구");
-            return x.Line($"{m.Name}이(가) 렌치를 놓쳤다 — 빙글빙글 돌며 멀어졌다 (공구 하나 잃음)", -1);
+            return x.Line($"{Ko.IGa(m.Name)} 렌치를 놓쳤다 — 빙글빙글 돌며 멀어졌다 (공구 하나 잃음)", -1);
         }),
         new("sprain", "발목을 접질렸다", null, 0.6f, x => 0.4f + x.Fatigue, x =>
         {
             var m = x.Any();
             x.Hurt(m, 0.08f, "원정 중 넘어짐");
-            return x.Line($"{m.Name}이(가) 발판에서 미끄러져 발목을 접질렸다", -1);
+            return x.Line($"{Ko.IGa(m.Name)} 발판에서 미끄러져 발목을 접질렸다", -1);
         }),
         new("cut", "날카로운 모서리", null, 0.6f, x => 0.3f + x.Risk, x =>
         {
@@ -209,14 +209,14 @@ public static class ExpeditionSites
             var m = x.Team.OrderBy(c => c.Traits.Calm).First();
             x.Stress(m, 0.06f);
             x.Diary(m, "배의 불빛이 점처럼 보인다. 돌아가면 따뜻한 국부터 먹고 싶다.");
-            return x.Line($"{m.Name}이(가) 자꾸 배 쪽 하늘을 올려다봤다", 0);
+            return x.Line($"{Ko.IGa(m.Name)} 자꾸 배 쪽 하늘을 올려다봤다", 0);
         }),
         new("stars", "별", null, 0.6f, null, x =>
         {
             var m = x.Any();
             x.Stress(m, -0.06f);
             x.Diary(m, "배 밖에서 보는 별은 창으로 보던 것과 다르다.");
-            return x.Line($"{m.Name}이(가) 작업을 멈추고 한참 별을 봤다", 1);
+            return x.Line($"{Ko.IGa(m.Name)} 작업을 멈추고 한참 별을 봤다", 1);
         }),
         new("bigfind", "큰 덩어리", null, 0.6f, x => 0.5f + x.Site.Truth * 0.5f, x => x.Line($"생각보다 큰 덩어리를 찾았다 — {x.Haul(x.R.Range(4, 7))}", 1)),
         new("falselead", "헛걸음", null, 0.6f, x => 1.4f - x.Site.Certainty, x => { x.Delay(0.25f); return x.Line("센서가 가리킨 곳에 아무것도 없었다 — 헛걸음 (센서 반사가 거짓말을 했다)", -1); }),
@@ -236,7 +236,7 @@ public static class ExpeditionSites
             if (b == null) return false;
             x.Hurt(a, 0.05f, "원정 중 떠밀림");
             x.Bond(a, b, 0.12f);
-            x.W.Relations.Remember(a, b, RelationReason.SavedMe, $"원정에서 떠내려가던 나를 {b.Name}이(가) 붙잡았다");
+            x.W.Relations.Remember(a, b, RelationReason.SavedMe, $"원정에서 떠내려가던 나를 {Ko.IGa(b.Name)} 붙잡았다");
             x.T.Saves.Add((b.Id, a.Id));
             return x.Line($"{a.Name}의 생명줄 고리가 풀렸다 — {Ko.IGa(b.Name)} 몸을 날려 붙잡았다", -1);
         }),
@@ -246,19 +246,19 @@ public static class ExpeditionSites
             if (x.Has("드론"))
             {
                 x.Stress(m, 0.1f);
-                return x.Line($"{m.Name}이(가) 생명줄이 끊겨 떠내려갔다 — 드론이 쫓아가 끌고 왔다 (식은땀)", -1);
+                return x.Line($"{Ko.IGa(m.Name)} 생명줄이 끊겨 떠내려갔다 — 드론이 쫓아가 끌고 왔다 (식은땀)", -1);
             }
             if (x.Team.Count >= 2 && x.R.Chance(0.75f))
             {
                 var b = x.Team.Where(c => c != m).OrderByDescending(c => c.Traits.Bravery).First();
                 x.Bond(m, b, 0.15f);
-                x.W.Relations.Remember(m, b, RelationReason.SavedMe, $"원정에서 표류하던 나를 {b.Name}이(가) 건져 왔다");
+                x.W.Relations.Remember(m, b, RelationReason.SavedMe, $"원정에서 표류하던 나를 {Ko.IGa(b.Name)} 건져 왔다");
                 x.T.Saves.Add((b.Id, m.Id));
                 x.Delay(0.3f);
-                return x.Line($"{m.Name}이(가) 표류했다 — {Ko.IGa(b.Name)} 추진팩으로 쫓아가 건져 왔다", -1);
+                return x.Line($"{Ko.IGa(m.Name)} 표류했다 — {Ko.IGa(b.Name)} 추진팩으로 쫓아가 건져 왔다", -1);
             }
             x.Missing(m, "생명줄이 끊겨 표류 — 무전이 점점 약해졌다");
-            return x.Line($"{m.Name}이(가) 생명줄이 끊겨 떠내려갔다 — 무전이 점점 약해지다 끊겼다", -2);
+            return x.Line($"{Ko.IGa(m.Name)} 생명줄이 끊겨 떠내려갔다 — 무전이 점점 약해지다 끊겼다", -2);
         }),
         new("dronehelp", "드론이 끌었다", null, 0.7f, x => x.Has("드론") ? 1f : 0f, x => x.Line($"드론이 무거운 덩어리를 끌어왔다 — {x.Haul(x.R.Range(3, 5))}", 1)),
         new("dronelost", "드론을 잃었다", null, 0.3f, x => x.Has("드론") ? 0.4f + x.Risk : 0f, x =>
@@ -293,7 +293,7 @@ public static class ExpeditionSites
         {
             var m = x.Team.OrderBy(c => c.Needs.Rest).First();
             x.T.Sick.Add(m.Id);
-            return x.Line($"{m.Name}이(가) 으슬으슬 떨었다 — 몸살 기운", -1);
+            return x.Line($"{Ko.IGa(m.Name)} 으슬으슬 떨었다 — 몸살 기운", -1);
         }),
         new("pirate", "해적선 그림자", null, 0.2f, x => x.W.Expedition.Halted ? 1.5f * x.W.Expedition.OutsideMul("해적") : 0.2f, x =>
         {
@@ -336,7 +336,7 @@ public static class ExpeditionSites
             var m = x.Any();
             x.Suit(m, 0.2f);
             x.Hurt(m, 0.1f, "원정 중 가스 분출에 튕김");
-            return x.Line($"분출구가 발밑에서 터졌다 — {m.Name}이(가) 튕겨 나갔다 ({x.SuitStage(m)})", -1);
+            return x.Line($"분출구가 발밑에서 터졌다 — {Ko.IGa(m.Name)} 튕겨 나갔다 ({x.SuitStage(m)})", -1);
         }),
         new("clearice", "맑은 얼음", S(SiteKind.IceComet, SiteKind.Moon), 0.9f, null, x => { x.Add(ItemKind.Ice, 4); return x.Line("투명한 얼음층 — 녹이면 바로 마실 물 (얼음 4)", 1); }),
         // ── 난파선 ──
@@ -364,14 +364,14 @@ public static class ExpeditionSites
             var k = x.R.Pick(new[] { ItemKind.Motor, ItemKind.Pump, ItemKind.Bearing, ItemKind.Sensor, ItemKind.Valve, ItemKind.Gasket, ItemKind.Relay });
             x.Add(k, 1);
             x.T.UsedParts.Add(k);
-            return x.Line($"기관실에서 {ItemKinds.Name(k)}를 떼어 냈다 — 검사 전엔 믿을 수 없다 (중고)", 1);
+            return x.Line($"기관실에서 {Ko.EulReul(ItemKinds.Name(k))} 떼어 냈다 — 검사 전엔 믿을 수 없다 (중고)", 1);
         }),
         new("leak", "연료 누출", S(SiteKind.Wreck), 0.4f, x => x.Risk, x =>
         {
             var m = x.Any();
             x.Hurt(m, 0.12f, "원정 중 연료 증기 화상");
             x.Add(ItemKind.Fuel, 1);
-            return x.Line($"난파선 연료관이 새고 있었다 — {m.Name}이(가) 증기에 데었다 · 남은 연료통 하나는 건졌다", -1);
+            return x.Line($"난파선 연료관이 새고 있었다 — {Ko.IGa(m.Name)} 증기에 데었다 · 남은 연료통 하나는 건졌다", -1);
         }),
         new("hull", "통째 떼어 온 판", S(SiteKind.Wreck, SiteKind.Debris), 0.7f, x => x.Has("절단기") ? 1.5f : 0.3f, x =>
         {
@@ -388,7 +388,7 @@ public static class ExpeditionSites
         {
             if (x.T.Relic != null) return false;
             x.T.Relic = x.Site.Kind switch { SiteKind.Station => "정거장 개소 기념패", SiteKind.Wreck => $"{x.Site.Name} 명판", SiteKind.Container => "누군가의 엽서 묶음", _ => "신호기 부속 한 조각" };
-            return x.Line($"{x.T.Relic}을(를) 챙겼다 — 배에 걸어 두자", 2);
+            return x.Line($"{Ko.EulReul(x.T.Relic)} 챙겼다 — 배에 걸어 두자", 2);
         }),
         new("power", "전원이 살아났다", S(SiteKind.Station), 0.4f, x => x.Skill, x =>
         {

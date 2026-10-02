@@ -275,10 +275,10 @@ public sealed class MajorIncidentSystem
         k.End = w.Tick;
         Averted++;
         var by = w.Crew.Where(c => !c.Dead && c.Room == f.Room).OrderBy(c => c.Id).FirstOrDefault();
-        string done = $"{m.Name}의 기척을 미리 손봐 {k.Spec.Name}을(를) 막았다" + (by != null ? $" — {by.Name}" : "");
+        string done = $"{m.Name}의 기척을 미리 손봐 {Ko.EulReul(k.Spec.Name)} 막았다" + (by != null ? $" — {by.Name}" : "");
         w.History.Add(w, HistoryKind.Response, done, f.Room, by != null ? new[] { by } : null);
         MarkLog.Add(f.Room.Marks, w.Tick, done);
-        if (by != null) MarkLog.Add(by.Memory.Marks, w.Tick, $"{k.Spec.Name}을(를) 미리 막았다");
+        if (by != null) MarkLog.Add(by.Memory.Marks, w.Tick, $"{Ko.EulReul(k.Spec.Name)} 미리 막았다");
         w.Automation.Reason("major:averted:" + k.Id, $"{done} · 같은 기척이 또 보이면 바로 부르겠다", SimTime.Hours(2));
     }
 
@@ -896,7 +896,7 @@ public sealed class MajorIncidentSystem
         if (at != default) Traces.Add(new MajorTrace(k.Kind, at, w.Tick, k.Room));
         foreach (var c in resp)
         {
-            MarkLog.Add(c.Memory.Marks, w.Tick, $"{spec.Name}을(를) 함께 막았다 — {spec.Memory}");
+            MarkLog.Add(c.Memory.Marks, w.Tick, $"{Ko.EulReul(spec.Name)} 함께 막았다 — {spec.Memory}");
             foreach (var o in resp) if (o != c) c.ChangeAffinity(o, 0.04f);
         }
         foreach (var id in k.Witnesses)

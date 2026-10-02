@@ -128,7 +128,7 @@ public sealed partial class BodySystem
                 au.Book.Add(ActKind.Advice, vac, $"{ra.Name}·{rb.Name} 문 표시판 '정상' ↔ {vac.Name} 압력 감지기 {vac.Air.Pressure:0}kPa",
                     "표시판이 고장 — 압력 감지기를 믿는다", "열지 말라는 방송", "표시판 수리", "indicator:" + db.Door, SimTime.Hours(6), 60f,
                     (world, act) => (1, "표시판 대신 감지기를 믿었다"));
-                var b = au.Speak.Announce(au.Voice.Style($"{ra.Name}·{rb.Name} 문 표시판이 고장 — 너머 {vac.Name}은(는) 진공이다. 열지 마라"), vac, 2);
+                var b = au.Speak.Announce(au.Voice.Style($"{ra.Name}·{rb.Name} 문 표시판이 고장 — 너머 {Ko.EunNeun(vac.Name)} 진공이다. 열지 마라"), vac, 2);
                 if (b != null)
                     foreach (var id in b.HeardBy)
                     {
@@ -192,7 +192,7 @@ public sealed partial class BodySystem
                     cw.Lost = small;
                     c.Carrying = null;
                     Stats.RolledIn++;
-                    _w.Log.Add(_w.Tick, LogKind.Life, $"{Ko.IGa(c.Name)} 넘어지며 놓친 {ItemKinds.Name(small.Kind)}이(가) 정비 통로 덮개 틈으로 굴러 들어갔다", c.Id);
+                    _w.Log.Add(_w.Tick, LogKind.Life, $"{Ko.IGa(c.Name)} 넘어지며 놓친 {Ko.IGa(ItemKinds.Name(small.Kind))} 정비 통로 덮개 틈으로 굴러 들어갔다", c.Id);
                     if (c.SaidUntil < _w.Tick + 20) c.Say(_w, Persona.Say(c, "아, 저 안으로 굴러 들어갔네…"));
                     return;
                 }

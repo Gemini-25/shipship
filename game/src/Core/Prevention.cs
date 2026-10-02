@@ -162,7 +162,7 @@ public static class Prevention
             m.Omen = null;
             w.Watch.Close(o, broke: true);
             st.Missed++;
-            MarkLog.Add(m.Marks, w.Tick, o.Known ? $"{Name(o.Kind)}을(를) 알았지만 손보기 전에 고장" : $"{Name(o.Kind)} — 아무도 몰랐다");
+            MarkLog.Add(m.Marks, w.Tick, o.Known ? $"{Ko.EulReul(Name(o.Kind))} 알았지만 손보기 전에 고장" : $"{Name(o.Kind)} — 아무도 몰랐다");
             w.Machines.Break(m, o.Fault);
             if (o.Kind == OmenKind.Heat && w.Rng.Chance(0.3f))
             {
@@ -229,7 +229,7 @@ public static class Prevention
         w.Precursors.Prevented++;
         m.Wear = MathF.Max(0f, m.Wear - 0.15f);
         MarkLog.Add(m.Marks, w.Tick, $"{by?.Name ?? bot?.Name ?? "?"}: {Name(o.Kind)} 손봄 — 고장을 막았다");
-        w.Log.Add(w.Tick, LogKind.Work, $"{Ko.EulReul(m.Name)} {Name(o.Kind)} 전조를 손봤다 — {Faults.Spec(o.Fault).Name}을(를) 막았다", by?.Id ?? -1);
+        w.Log.Add(w.Tick, LogKind.Work, $"{Ko.EulReul(m.Name)} {Name(o.Kind)} 전조를 손봤다 — {Ko.EulReul(Faults.Spec(o.Fault).Name)} 막았다", by?.Id ?? -1);
     }
 }
 

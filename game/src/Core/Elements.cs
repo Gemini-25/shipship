@@ -216,7 +216,7 @@ public sealed partial class MatterSystem
         Stats.JunctionsFound++;
         var room = w.Ship.RoomAt(j.At);
         string who = by != null ? Ko.IGa(by.Name) : "누군가";
-        w.Log.Add(w.Tick, LogKind.Warning, $"{who} {rug.Name}를 걷자 그 아래 젖은 배선 접속부가 드러났다 — 물이 스며 {(j.Live ? "불꽃이 튄다" : "축축하다")}", by?.Id ?? -1);
+        w.Log.Add(w.Tick, LogKind.Warning, $"{who} {Ko.EulReul(rug.Name)} 걷자 그 아래 젖은 배선 접속부가 드러났다 — 물이 스며 {(j.Live ? "불꽃이 튄다" : "축축하다")}", by?.Id ?? -1);
         if (room != null) MarkLog.Add(room.Marks, w.Tick, $"{rug.Name} 아래 젖은 배선 접속부 발견" + (by != null ? $" ({by.Name})" : ""));
         if (by != null) MarkLog.Add(by.Memory.Marks, w.Tick, $"{room?.Name} 러그 아래 젖은 접속부를 찾았다");
         w.History.Add(w, HistoryKind.Incident, $"{room?.Name ?? "?"} — 젖은 러그 아래 숨은 배선 접속부 (젖음 {j.Wet * 100:0}%)", room, by != null ? new[] { by } : null, j.At);
@@ -564,7 +564,7 @@ public sealed partial class MatterSystem
                 Stats.ComputerWarns++;
                 string wet = t.WetFrac > 0.2f ? "젖은 " : "";
                 string rule = Matter.Rule(t.Mat, Element.Heat).Text;
-                au.Book.Add(ActKind.Advice, room, $"{room.Name} 히터 곁 {wet}{t.Name} ({Materials.Name(t.Mat)})", $"예측: {rule}", "경고", $"{t.Name}를 히터에서 치워라", $"heatcloth:{t.Id}", SimTime.Hours(2), 20f);
+                au.Book.Add(ActKind.Advice, room, $"{room.Name} 히터 곁 {wet}{t.Name} ({Materials.Name(t.Mat)})", $"예측: {rule}", "경고", $"{Ko.EulReul(t.Name)} 히터에서 치워라", $"heatcloth:{t.Id}", SimTime.Hours(2), 20f);
                 au.Reason($"heatcloth:{t.Id}", $"예측: {room.Name} 히터 곁 {wet}{t.Name} — {(t.WetFrac > 0.2f ? "마르고 나면 " : "")}그을다 연기가 난다 ({Materials.Name(t.Mat)} + 열 = {Matter.Name(Matter.React(t.Mat, Element.Heat))}) · 요청: 치워라", SimTime.Hours(2));
             }
         }
@@ -577,7 +577,7 @@ public sealed partial class MatterSystem
             if (src == null) foreach (var j in Junctions) if (j.Live && j.Room == room.Id) { src = "누설 전류"; break; }
             if (src == null && w.Fire.CountIn(room) > 0) src = "불";
             if (src == null) continue;
-            if (au.Book.Add(ActKind.Alarm, room, $"{room.Name} 산소 {room.Air.O2:0}kPa · 불씨: {src}", $"예측: {Matter.Pair(Element.Fire, Element.Oxygen).Text}", "경보", $"{src}를 꺼라 · 환기", $"o2spark:{room.Id}", SimTime.Hours(1), 10f) != null)
+            if (au.Book.Add(ActKind.Alarm, room, $"{room.Name} 산소 {room.Air.O2:0}kPa · 불씨: {src}", $"예측: {Matter.Pair(Element.Fire, Element.Oxygen).Text}", "경보", $"{Ko.EulReul(src)} 꺼라 · 환기", $"o2spark:{room.Id}", SimTime.Hours(1), 10f) != null)
             {
                 Stats.O2Warns++;
                 Stats.ComputerWarns++;

@@ -417,7 +417,7 @@ public partial class Hud
             Gfx.Text(this, Fonts.Body, new Vector2(lx, ly + 11), Fit($"{SimTime.Day(tick)}일 {SimTime.Clock(tick)} {(roomId >= 0 ? w.Ship.Rooms[roomId].Name : "")} — {why}", colW, 10, Fonts.Body), 10, Palette.Warning);
             ly += 13;
         }
-        if (a.Voice.Name != "") Gfx.Text(this, Fonts.Body, new Vector2(lx, ly + 14), $"이름 '{a.Voice.Name}' — {a.Voice.NamedBy}이(가) 붙였다" + (a.Voice.Resets > 0 ? $" · 재설치 {a.Voice.Resets}번 (예전 '{a.Voice.FormerName}')" : ""), 10, Palette.Accent);
+        if (a.Voice.Name != "") Gfx.Text(this, Fonts.Body, new Vector2(lx, ly + 14), $"이름 '{a.Voice.Name}' — {Ko.IGa(a.Voice.NamedBy)} 붙였다" + (a.Voice.Resets > 0 ? $" · 재설치 {a.Voice.Resets}번 (예전 '{a.Voice.FormerName}')" : ""), 10, Palette.Accent);
         // 오른쪽: 컴퓨터가 보는 배 (믿음 ≠ 실제)
         SectionTitle(rx, ry + 10, "컴퓨터가 보는 배 — 믿음과 실제");
         ry += 16;
