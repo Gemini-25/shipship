@@ -155,6 +155,7 @@ public sealed class World
     public FlowSystem Flow { get; } // v14.8 배관 · 배선 전달량
     public CultureSystem Culture { get; } // v14.9 배의 문화
     public DailySystem Daily { get; } // v15 일상 사건 70
+    public FleetSystem Fleet { get; } // v16.20b 로봇 · 드론 두뇌와 성능 · 주컴퓨터 함대 지휘
     public FailsafeSystem Failsafe { get; } // v16.19 차압 문 · 예비 회로 · 보조 간선 · 장갑 벽 · 비상 칸막이 · 부하 차단
     public MajorIncidentSystem Major { get; } // v16.19 계통 · 배 전체 사고 (전조 → 발생 → 번짐 → 수습 → 흔적)
     public AnnexSystem Annex { get; } // v16.10 증축 (선체 바깥에 방을 새로 붙인다)
@@ -270,6 +271,7 @@ public sealed class World
         Flow = new FlowSystem(this);
         Culture = new CultureSystem(this);
         Daily = new DailySystem(this);
+        Fleet = new FleetSystem(this); // v16.20b
         Failsafe = new FailsafeSystem(this); Major = new MajorIncidentSystem(this); // v16.19
         Annex = new AnnexSystem(this); // v16.10
         Body2 = new Body2System(this); // v17.1
@@ -378,6 +380,7 @@ public sealed class World
             Culture.Update(dt); // v14.9 겪은 일이 관행이 되어 전해진다
             pf = Prof.Lap("sys.Culture", pf);
             Daily.Update(dt); // v15 사고가 아닌 날의 일상 사건
+            Fleet.Update(dt); // v16.20b 함대 지휘 · 로봇 · 드론 두뇌
             Failsafe.Update(dt); Major.Update(dt); // v16.19 차압 문 · 예비 회로 · 칸막이 · 큰 사고
             Annex.Update(dt); // v16.10 증축: 제안 → 회의 → 골조 · 외판 · 가압 · 배선 · 내장 · 개통
             TechWeb.Update(dt); // v16.14 기술 그물: 조건 · 조합 · 갈림길 · 부작용 · 실험 차례

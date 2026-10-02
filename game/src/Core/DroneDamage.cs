@@ -206,6 +206,7 @@ public sealed partial class DroneSystem
     public void OnMeteorParts(Cell entry, float size, Vector2 dir)
     {
         var w = _world;
+        w.Fleet.Struck(entry); // v16.20b 자주 맞는 쪽을 배운다 (외벽 순찰 순서)
         var from = entry.Center;
         float r = 3f + 2f * size;
         foreach (var d in Drones.ToList())
@@ -225,7 +226,7 @@ public sealed partial class DroneSystem
         var w = _world;
         var h = d.Hurt;
         if (d.State == DroneState.Lost) return;
-        power *= Durability.DroneHurt; // v16.19 두꺼운 외피 · 충격 흡수 다리
+        power *= Durability.DroneHurt * w.Fleet.Hurt; // v16.20b 외피 등급 · v16.19 두꺼운 외피 · 충격 흡수 다리
         PartHits++;
         h.HitAt = w.Tick;
         d.Condition = MathF.Max(0f, d.Condition - power);
@@ -483,7 +484,7 @@ public sealed partial class DroneSystem
             {
                 _recallFor = -1;
                 foreach (var d in Drones)
-                    if (d.Hurt.Sheltering) { d.Hurt.Sheltering = false; GoHome(d); w.Log.Add(w.Tick, LogKind.Work, $"{d.Name}: 파편이 지나갔다 — 그늘에서 나와 돌아온다"); }
+                    if (d.Hurt.Sheltering) { d.Hurt.Sheltering = false; if (FleetResume(d)) continue; GoHome(d); w.Log.Add(w.Tick, LogKind.Work, $"{d.Name}: 파편이 지나갔다 — 그늘에서 나와 돌아온다"); }
             }
             return;
         }
@@ -502,7 +503,7 @@ public sealed partial class DroneSystem
         {
             float eta = Eta(d);
             float arrive = MathF.Max(eta, t + 0.5f); // 해치 드론 포트는 한 대씩 (30초)
-            if (arrive + 0.2f < left || d.Hurt.FetchPerson >= 0)
+            if (arrive + 0.2f < left && !FleetShelters(d) || d.Hurt.FetchPerson >= 0) // v16.20b 맡은 파공 곁에서 그늘로 피했다 다시
             {
                 d.Hurt.RecallRank = rank;
                 d.Hurt.RecallFor = inc.Id;
@@ -516,7 +517,7 @@ public sealed partial class DroneSystem
             {
                 var sh = DroneShelter(d, inc.Entry.Center);
                 if (d.Towing != null) ReleaseTow(d, "운석 경보 — 잡아 세워 두고 그늘로");
-                if (d.Order != null) { d.Order.Drone = null; d.Order = null; }
+                if (d.Order != null) { if (!_world.Fleet.DroneTask.ContainsKey(d.Id)) d.Order.Drone = null; d.Order = null; } // v16.20b 맡은 파공은 그늘에 숨어 있는 동안에도 이 드론 몫
                 d.Hurt.Sheltering = true;
                 d.Hurt.ShelterAt = sh;
                 d.Hurt.RecallRank = 0;

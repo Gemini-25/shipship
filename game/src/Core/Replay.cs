@@ -434,6 +434,7 @@ public static class SaveGame
         w.Automation.HashShip(I, F); // v16.20 우주선급 주컴퓨터
         w.Failsafe.Hash(I); w.Major.Hash(I); // v16.19 차압 문 · 예비 회로 · 큰 사고
         w.CrisisCrew.Hash(I, F); // v16.21 승무원 위기 행동
+        w.Fleet.Hash(I, F); // v16.20b 함대 지휘
         return h;
     }
 }

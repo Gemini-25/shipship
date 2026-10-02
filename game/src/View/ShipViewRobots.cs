@@ -232,6 +232,7 @@ public partial class ShipView
             case RobotKind.Safety: PaintSafetyBot(ci, r, body, col, working, t); break;
         }
         if (RobotsV15.Bot(r.Kind) != null) PaintRobotBadge(ci, r, col, working, t);
+        PaintRobotTier(ci, r, col, dead, t); // v16.20b 단계 (범퍼 · 방열판 · 다관절 팔)
         // 앞 센서 띠 (가는 쪽)
         var eye = dead ? new Color("#3a3f48") : new Color("#7de8ff").WithAlpha(0.85f);
         ci.DrawLine(new Vector2(8.5f, -4.5f), new Vector2(8.5f, 4.5f), eye, 1.8f, true);
