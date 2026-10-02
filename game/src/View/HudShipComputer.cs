@@ -34,8 +34,12 @@ public partial class Hud
         SectionTitle(lx, y + 10, "컴퓨터가 믿는 배 — 명령이 흐르는 길");
         DrawBeliefMap(new Rect2(lx, y + 20, colW, mapH - 26f));
         float py = y + mapH + 4f;
+        float fy = py + (bottom - py) * 0.5f; // v16.20b 아래 반은 함대 목록
         SectionTitle(lx, py + 10, $"전력 흐름 — {a.Triage.Mode}" + (a.Triage.Plan != "" ? $" · {a.Triage.Plan}" : ""));
-        DrawPowerFlow(new Rect2(lx, py + 20, colW, bottom - py - 20f));
+        DrawPowerFlow(new Rect2(lx, py + 20, colW, fy - py - 20f));
+        var fl = _world.Fleet;
+        SectionTitle(lx, fy + 10, $"로봇 · 드론 — {fl.Mode} · {FleetSystem.TierName(fl.Tier)} · 끌고 옴 {fl.Tows} · 고침 {fl.Fixes} · 교대 {fl.Reliefs} · 밖에서 막음 {fl.Seals}");
+        DrawFleetList(new Rect2(lx, fy + 20, colW, bottom - fy - 20f));
         float tlH = (bottom - y) * 0.6f;
         var fs = a.Foresee;
         SectionTitle(rx, y + 10, $"견줘 본 판단 — {fs.Decisions}번 · 맞음 {fs.Right} · 틀림 {fs.Wrong}");

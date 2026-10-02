@@ -224,17 +224,9 @@ public partial class ShipView
                 ci.DrawCircle(tgt, 3f + 2f * flick, new Color("#fff1c2").WithAlpha(0.8f * flick), true, -1f, true);
             }
 
-            // 몸체: 다이아몬드 + 회전 날개 점
+            // 몸체: 종류마다 다른 드론 (v16.20b — ShipViewFleet.cs) · 다친 곳 · 단계
             bool adrift = d.State == DroneState.Adrift;
-            float spin = adrift ? _time * 2.5f + d.Id : 0f;
-            var pts = new Vector2[4];
-            for (int k = 0; k < 4; k++) pts[k] = p + Vector2.FromAngle(spin + k * Mathf.Pi * 0.5f) * size;
-            var body = d.Wrecked ? new Color("#4a4a4a") : docked ? col.Darkened(0.35f) : col.Darkened(0.15f);
-            ci.DrawColoredPolygon(pts, new Color(0.03f, 0.04f, 0.06f, 0.9f));
-            var inner = pts.Select(q => p + (q - p) * 0.78f).ToArray();
-            ci.DrawColoredPolygon(inner, body);
-            for (int k = 0; k < 4; k++)
-                ci.DrawCircle(pts[k], docked ? 1.5f : 2.2f, col.WithAlpha(docked ? 0.5f : 0.9f), true, -1f, true);
+            PaintDroneArt(ci, d, p, col, docked);
             // 상태 불빛
             Color led = d.Wrecked ? Palette.TextMuted : d.Faulty ? Palette.Danger : adrift ? Palette.Danger : d.Battery < 0.3f ? Palette.Warning : Palette.Good;
             float blink = adrift || d.Faulty ? 0.3f + 0.7f * Mathf.Abs(Mathf.Sin(_time * 4f)) : 1f;

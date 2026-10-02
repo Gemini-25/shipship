@@ -108,6 +108,7 @@ public sealed partial class DroneSystem
             Launch(d, at, $"{o.Target.Room!.Name} 파공 — 밖에서 막는다");
             return true;
         }
+        if (FleetHullCare(d)) return true;
         if (f.FetchTask.TryGetValue(d.Id, out int lid))
         {
             f.FetchTask.Remove(d.Id);
@@ -123,12 +124,134 @@ public sealed partial class DroneSystem
         return false;
     }
 
+    /// <summary>평시 선외 수리: 쉬는 수리 · 건설 드론이 사람이 아직 손대지 않은 외벽 수리(용접)를 밖에서 맡는다 —
+    ///  사람은 우주복도 사다리도 필요 없고, 다음 운석 전에 외벽이 단단해진다. 조용할 때만 (운석 경보 · 파편 · 비상이면 안 나간다).</summary>
+    private bool FleetHullCare(Drone d)
+    {
+        var w = _world;
+        var f = w.Fleet;
+        if (!CanSeal(d.Kind) || d.Battery < 0.9f || f.Mode == "비상" || w.Sensors.Alarm != null || w.Hazards.Shower.Count > 0 || w.Hazards.StormActive) return false;
+        if (!(w.Automation.Present && (w.Automation.MainOnline || w.Automation.Core.BackupCore)) || !w.Automation.DroneControl) return false;
+        if (d.Dock.Storage!.Count(ItemKind.Plate) < 1) return false;
+        WorkOrder? best = null;
+        Vector2 at = default;
+        foreach (var o in w.Board.All)
+        {
+            if (o.Kind != WorkKind.RepairHull || o.Closed || o.Assignee != null || o.Drone != null || o.Target.Kind != TargetKind.Wall) continue;
+            if (w.Tick - o.Posted < SimTime.Minutes(20)) continue; // 사람이 먼저 맡을 틈
+            if (WallSpot(o) is not Vector2 spot || TripCost(d, spot, WorkHours(WorkKind.RepairHull) * _world.Fleet.Work) > 0.8f) continue;
+            if (best == null || o.Urgency > best.Urgency || o.Urgency == best.Urgency && o.Id < best.Id) { best = o; at = spot; }
+        }
+        if (best == null) return FleetHullRound(d);
+        d.Dock.Storage.Take(ItemKind.Plate, 1);
+        d.Cargo = new[] { (ItemKind.Plate, 1) };
+        d.Order = best;
+        best.Drone = d;
+        Launch(d, at, $"{best.Target.Label} — 밖에서 용접");
+        d.Mind.Say($"조용한 틈에 {best.Target.Label}을(를) 밖에서 용접한다 — 사람이 우주복을 입지 않아도 된다", w.Tick);
+        f.Line(CmdTarget.Drone, d.Id, best.Target.Room, $"{d.Name}: {best.Target.Label} 밖에서 용접", "평시 선외 수리 · 다음 운석 전에", 0.4f, 90f, -1, best.Id);
+        f.HullJobs++;
+        return true;
+    }
+
+    /// <summary>외벽 순찰: 아직 작업 목록에 오르지 않은 약해진 벽(운석 · 열 · 피로)을 밖에서 미리 용접한다 — 다음 충격에 뚫리지 않게.
+    ///  자주 맞는 방 쪽을 먼저 (배운 것) · 몇 시간에 한 번만 찾아본다.</summary>
+    private bool FleetHullRound(Drone d)
+    {
+        var w = _world;
+        var f = w.Fleet;
+        if (w.Tick < f.NextHullRound || d.Battery < 0.95f) return false;
+        Cell? pick = null;
+        WallState? pw = null;
+        float bestScore = 0f;
+        Vector2 at = default;
+        foreach (var (cell, wall) in w.Ship.Walls)
+        {
+            if (!wall.IsHull || wall.FrameLost || wall.Breach > 0f || wall.Patched || !Hull.WorthWelding(wall) || wall.Integrity > wall.MaxIntegrity * 0.85f) continue;
+            var room = Hull.InsideRoom(w.Ship, cell);
+            if (room == null || room.Detached || room.Jettison != null) continue;
+            float score = (1f - wall.Integrity / MathF.Max(0.01f, wall.MaxIntegrity)) + 0.05f * (f.RoomFaults.GetValueOrDefault(room.Id) + (f.Hits.TryGetValue(room.Id, out int h) ? h : 0));
+            if (score <= bestScore + 0.0001f) continue;
+            if (Drones.Any(x => x.HullCare == cell)) continue;
+            if (WallSpot(cell) is not Vector2 spot || TripCost(d, spot, WorkHours(WorkKind.RepairHull)) > 0.6f) continue;
+            bool taken = false;
+            foreach (var o in w.Board.All) if (!o.Closed && o.Target.Kind == TargetKind.Wall && o.Target.Cell == cell) { taken = true; break; }
+            if (taken) continue;
+            bestScore = score; pick = cell; pw = wall; at = spot;
+        }
+        if (pick is not Cell c || pw == null)
+        {
+            f.NextHullRound = w.Tick + SimTime.Hours(3);
+            return false;
+        }
+        f.NextHullRound = w.Tick + SimTime.Minutes(30);
+        d.Dock.Storage!.Take(ItemKind.Plate, 1);
+        d.Cargo = new[] { (ItemKind.Plate, 1) };
+        d.HullCare = c;
+        var rm = Hull.InsideRoom(w.Ship, c);
+        Launch(d, at, $"외벽 순찰 — {rm?.Name ?? "?"} 외벽 강도 {pw.Integrity * 100:0}%");
+        d.Mind.Say($"{rm?.Name ?? "?"} 외벽이 {pw.Integrity * 100:0}%로 약해졌다 — 다음 충격 전에 밖에서 덧댄다", w.Tick);
+        f.Line(CmdTarget.Drone, d.Id, rm, $"{d.Name}: {rm?.Name ?? "?"} 외벽 순찰 · 용접", $"강도 {pw.Integrity * 100:0}% · 조용한 틈에", 0.3f, 90f);
+        f.HullRounds++;
+        return true;
+    }
+
+    /// <summary>순찰 중 약한 벽에 닿아 용접을 마쳤다.</summary>
+    private bool FleetRoundWeld(Drone d)
+    {
+        var w = _world;
+        if (d.HullCare is not Cell c) return false;
+        d.HullCare = null;
+        var plate = d.Cargo.Any(x => x.kind == ItemKind.Plate);
+        d.Cargo = Array.Empty<(ItemKind, int)>();
+        if (!plate || w.Ship.WallAt(c) is not WallState wall || wall.Breach > 0f) { GoHome(d); return true; }
+        wall.MaxIntegrity = MathF.Max(0.25f, wall.MaxIntegrity - Hull.WeldFatigue(0.5f));
+        wall.Integrity = MathF.Max(wall.Integrity, wall.MaxIntegrity * (0.86f + 0.02f * w.Fleet.Tier));
+        wall.Welds++;
+        wall.TotalWelds++;
+        JobsDone++;
+        var room = Hull.InsideRoom(w.Ship, c);
+        MarkLog.Add(wall.Marks, w.Tick, $"{d.Name}: 순찰 중 밖에서 덧대 용접 (강도 {wall.Integrity * 100:0}%)");
+        w.Log.Add(w.Tick, LogKind.Work, $"{Ko.IGa(d.Name)} {room?.Name ?? "?"} 외벽을 밖에서 덧대 용접했다 (강도 {wall.Integrity * 100:0}%)");
+        w.Fleet.Method("weld:round", true);
+        w.Fleet.CloseLine(CmdTarget.Drone, d.Id, "덧댔다");
+        d.Mind.Say($"{room?.Name ?? "?"} 외벽을 덧댔다 — 이제 강도 {wall.Integrity * 100:0}%", w.Tick);
+        GoHome(d);
+        return true;
+    }
+
+    /// <summary>밖에서 외벽을 용접했다 (사람 용접보다 조금 덜 매끈하다).</summary>
+    private void FleetWeld(Drone d, WorkOrder o)
+    {
+        var w = _world;
+        d.Order = null;
+        o.Drone = null;
+        d.Cargo = Array.Empty<(ItemKind, int)>();
+        if (w.Ship.WallAt(o.Target.Cell) is not WallState wall || !Hull.WorthWelding(wall)) { if (!o.Closed) w.Board.Close(o); GoHome(d); return; }
+        float q = 0.86f + 0.02f * w.Fleet.Tier;
+        wall.MaxIntegrity = MathF.Max(0.25f, wall.MaxIntegrity - Hull.WeldFatigue(0.5f));
+        wall.Integrity = MathF.Max(wall.Integrity, wall.MaxIntegrity * q);
+        wall.Breach = Hull.BreachFromIntegrity(wall.Integrity);
+        wall.Welds++;
+        wall.TotalWelds++;
+        if (wall.Breach <= 0f) wall.Patched = false;
+        JobsDone++;
+        MarkLog.Add(wall.Marks, w.Tick, $"{d.Name}: 밖에서 용접 (최대 강도 {wall.MaxIntegrity * 100:0}%)");
+        w.Log.Add(w.Tick, LogKind.Work, $"{Ko.IGa(d.Name)} {Ko.EulReul(o.Target.Label)} 밖에서 용접했다 (최대 강도 {wall.MaxIntegrity * 100:0}%)");
+        w.Board.Close(o);
+        w.Fleet.Method("weld:drone", true);
+        w.Fleet.CloseLine(CmdTarget.Drone, d.Id, "용접했다");
+        d.Mind.Say($"{o.Target.Label} 밖에서 용접했다", w.Tick);
+        GoHome(d);
+    }
+
     /// <summary>매 분: 맡긴 일 정리 · 교대 · 떠내려간 드론 건질 차례.</summary>
     internal void FleetTick(FleetSystem f, bool cmd)
     {
         var w = _world;
         foreach (var d in Drones)
         {
+            if (d.HullCare != null && (d.State is DroneState.Docked or DroneState.Adrift or DroneState.Lost || d.Order != null)) d.HullCare = null;
             if (f.DroneTask.TryGetValue(d.Id, out int oid))
             {
                 var o = FindOrder(oid);

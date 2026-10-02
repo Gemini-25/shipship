@@ -222,6 +222,7 @@ public sealed partial class DroneSystem
         WorkKind.Retrieve => 0.15f,
         WorkKind.RepairRadiator => 0.6f,
         WorkKind.SealBreach => 0.5f, // v16.20b 밖에서 파공 막기
+        WorkKind.RepairHull => 0.9f, // v16.20b 밖에서 외벽 용접
         _ => 0.05f,
     };
 
@@ -711,7 +712,7 @@ public sealed partial class DroneSystem
                 d.State = DroneState.Working;
                 d.StateSince = w.Tick;
                 d.WorkDone = 0f;
-                d.WorkNeeded = d.Order != null ? WorkHours(d.Order.Kind) * RobotsV15.Work(d.Kind) * w.Fleet.Work : 0.1f; // v15.7 손이 빠른 드론 · v16.20b 공구 등급
+                d.WorkNeeded = d.Order != null ? WorkHours(d.Order.Kind) * RobotsV15.Work(d.Kind) * w.Fleet.Work : d.HullCare != null ? WorkHours(WorkKind.RepairHull) * RobotsV15.Work(d.Kind) * w.Fleet.Work : 0.1f; // v15.7 손이 빠른 드론 · v16.20b 공구 등급 · 외벽 순찰 용접
                 FleetCarry(d); // v16.20b 교대: 앞 드론이 한 만큼 이어서
                 return;
             case DroneState.Towing:
@@ -766,8 +767,9 @@ public sealed partial class DroneSystem
     {
         var w = _world;
         var o = d.Order;
-        if (o == null) { GoHome(d); return; }
+        if (o == null) { if (!FleetRoundWeld(d)) GoHome(d); return; } // v16.20b 외벽 순찰 용접
         if (o.Kind == WorkKind.SealBreach) { FleetSeal(d, o); return; } // v16.20b
+        if (o.Kind == WorkKind.RepairHull) { FleetWeld(d, o); return; } // v16.20b 밖에서 외벽 용접
         if (o.Kind == WorkKind.Retrieve && o.Target.Room!.Fragment is Fragment f)
         {
             // 붙잡았다: 먼저 떠내려가는 것을 멈추고, 제자리로 끌고 간다

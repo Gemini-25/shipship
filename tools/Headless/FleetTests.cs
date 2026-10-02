@@ -31,6 +31,7 @@ public static partial class Program
     private static int RunFleetTest(int seed)
     {
         _fails = 0;
+        if (Environment.GetEnvironmentVariable("FLEETPROBE") is string probe) return FleetProbe(probe); // 디버그: 배,시드,일수 — 드론을 잃은 까닭
         Console.WriteLine($"v16.20b 로봇 · 드론 두뇌 · 주컴퓨터 함대 지휘 점검 (시드 {seed})");
         string? only = Environment.GetEnvironmentVariable("FLEETONLY"); // 시험 하나만 (디버그)
         try
@@ -310,5 +311,40 @@ public static partial class Program
         catch (Exception e) { Check("예외 없이", false, e.ToString()); }
         Console.WriteLine(_fails == 0 ? "\n✔ 로봇 · 드론 함대 지휘 점검 모두 통과" : $"\n✘ {_fails}개 실패");
         return _fails == 0 ? 0 : 1;
+    }
+
+    /// <summary>디버그: 점검 항해처럼 돌리며 드론 · 로봇 상태 변화를 찍는다 (FLEETPROBE=배,시드,일수[,off]).</summary>
+    private static int FleetProbe(string spec)
+    {
+        var a = spec.Split(',');
+        string ship = a[0];
+        int seed = int.Parse(a[1]);
+        float days = float.Parse(a[2], System.Globalization.CultureInfo.InvariantCulture);
+        FleetSystem.Off = a.Length > 3 && a[3] == "off";
+        Storyteller.PersonaValue = 1f;
+        Storyteller.LevelValue = 3f;
+        var w = World.CreateDefault(seed, 0, ship);
+        w.CrewCanDie = true;
+        var last = new Dictionary<int, DroneState>();
+        long act = 0, min = 0, total = (long)(days * SimTime.TicksPerDay);
+        for (long t = 1; t <= total; t++)
+        {
+            w.Step();
+            if (t % SimTime.Minutes(1) != 0) continue;
+            foreach (var d in w.Drones.Drones)
+            {
+                min++;
+                if (d.State is DroneState.Outbound or DroneState.Working or DroneState.Returning or DroneState.Towing) act++;
+                var prev = last.GetValueOrDefault(d.Id, DroneState.Docked);
+                if (d.State != prev && (d.State is DroneState.Lost or DroneState.Adrift || prev == DroneState.Docked))
+                    Console.WriteLine($"  {SimTime.Day(w.Tick)}일 {SimTime.Clock(w.Tick)} {d.Name} {prev}→{d.State} 배 {d.Battery:0.00} 상태 {d.Condition:0.00} 부풂 {d.Hurt.Swell:0.00} · {d.Doing} · {string.Join(" / ", d.Marks.TakeLast(2).Select(m => m.Text))}");
+                last[d.Id] = d.State;
+            }
+        }
+        Console.WriteLine($"드론 일함 {act * 100.0 / Math.Max(1, min):0.0}% · 잃음 {w.Drones.Drones.Count(d => d.State == DroneState.Lost)} · 로봇 잃음 {w.Robots.Robots.Count(r => r.State == RobotState.Lost)} · 함대 {(FleetSystem.Off ? "끔" : $"선외수리 {w.Fleet.HullJobs} 순찰 {w.Fleet.HullRounds} 막음 {w.Fleet.Seals} 교대 {w.Fleet.Reliefs} 건짐 {w.Fleet.Fetches} 피함 {w.Fleet.Dodges} 끌고옴 {w.Fleet.Tows} 고침 {w.Fleet.Fixes} 우회 {w.Fleet.Reroutes} 물러남 {w.Fleet.Retreats} 소방 {w.Fleet.FireFirst} 부서짐 {w.Fleet.Wrecks}")}");
+        var hull = w.Ship.Walls.Where(kv => kv.Value.IsHull).Select(kv => kv.Value).ToList();
+        Console.WriteLine($"외벽 {hull.Count} · 85% 아래 {hull.Count(x => x.Integrity < x.MaxIntegrity * 0.85f)} · 파공 {hull.Count(x => x.Breach > 0f)} · 봉합 {hull.Count(x => x.Patched)} · 평균 강도 {hull.Average(x => x.Integrity):0.00} · 맞은 방 {w.Fleet.Hits.Count} · 다음 순찰 {(w.Fleet.NextHullRound - w.Tick) / (float)SimTime.TicksPerHour:0.0}시간 · 판 {string.Join(",", w.Drones.Drones.Select(d => d.Dock.Storage!.Count(ItemKind.Plate)).Distinct())}");
+        FleetSystem.Off = false;
+        return 0;
     }
 }

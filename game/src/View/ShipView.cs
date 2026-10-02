@@ -722,6 +722,7 @@ public partial class ShipView : Node2D
         PaintScenes(ci); // v16.1 진행 중 장면 (판 · 커피 · 국 자국 · 쪽지 · 스크린 · 만들다 만 소품)
         PaintHairClips(ci); // v17.1 바닥에 떨어진 머리카락
         PaintRobots(ci); // v10.10 선내 로봇 (사람 밑에)
+        PaintFleetLinks(ci); // v16.20b 견인 줄 · 같이 드는 들것 · 고치는 불꽃 · 명령선 · 잔해
         // 쓰러진 사람은 밑에, 업힌 사람은 업은 사람 위에
         foreach (var c in _world.Crew.OrderBy(c => c.CarriedBy != null ? 2 : c.Down ? 0 : 1)) PaintCrew(ci, c);
         PaintCommandBadges(ci); // v13.1 선장 별 · 지휘자 테 · 조 배지

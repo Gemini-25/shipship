@@ -206,6 +206,7 @@ public sealed partial class DroneSystem
     public void OnMeteorParts(Cell entry, float size, Vector2 dir)
     {
         var w = _world;
+        w.Fleet.Struck(entry); // v16.20b 자주 맞는 쪽을 배운다 (외벽 순찰 순서)
         var from = entry.Center;
         float r = 3f + 2f * size;
         foreach (var d in Drones.ToList())

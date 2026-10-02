@@ -50,6 +50,8 @@ public sealed partial class Robot
 public sealed partial class Drone
 {
     public UnitMind Mind { get; } = new();
+    /// <summary>외벽 순찰: 밖에서 용접하러 가는 벽 (작업 목록에 오르기 전의 약해진 벽).</summary>
+    public Cell? HullCare { get; internal set; }
 }
 
 public sealed class FleetSystem
@@ -69,7 +71,7 @@ public sealed class FleetSystem
     /// <summary>전기가 귀하다: 느리게 움직이고 아껴 쓴다.</summary>
     public bool Thrift { get; private set; }
 
-    public int FireFirst, Tows, Fixes, Seals, SealFails, Reliefs, Fetches, Reroutes, Yields, Lifts, Tests, TestFails, Waits, Retreats, Wrecks, Witnessed, Dodges, Mourned, Lines;
+    public int HullJobs, HullRounds, FireFirst, Tows, Fixes, Seals, SealFails, Reliefs, Fetches, Reroutes, Yields, Lifts, Tests, TestFails, Waits, Retreats, Wrecks, Witnessed, Dodges, Mourned, Lines;
     /// <summary>방마다 로봇 고장 횟수 (자주 고장 나는 곳).</summary>
     public SortedDictionary<int, int> RoomFaults { get; } = new();
     /// <summary>방법마다 잘 됐나 · 안 됐나 (실링폼 · 금속판 · 로봇 먼저 · 정비 …).</summary>
@@ -85,6 +87,8 @@ public sealed class FleetSystem
     private readonly SortedDictionary<int, SortedDictionary<int, float>> _bond = new();
     private readonly SortedSet<int> _fetchSaid = new();
     private long _next;
+    /// <summary>다음 외벽 순찰을 찾아볼 때.</summary>
+    internal long NextHullRound;
 
     private sealed class FireWatch { public int Robot; public long Since, HoldUntil; public bool Held, Seen; public int Decision; public float Foam0; }
 
@@ -287,6 +291,14 @@ public sealed class FleetSystem
     {
         if (room == null) return;
         RoomFaults[room.Id] = RoomFaults.GetValueOrDefault(room.Id) + 1;
+    }
+
+    /// <summary>방마다 운석에 맞은 횟수 (드론 외벽 순찰이 자주 맞는 쪽을 먼저 본다).</summary>
+    public SortedDictionary<int, int> Hits { get; } = new();
+
+    internal void Struck(Cell entry)
+    {
+        if (Hull.InsideRoom(_w.Ship, entry) is Room room) Hits[room.Id] = Hits.GetValueOrDefault(room.Id) + 1;
     }
 
     /// <summary>순찰 순서에 얹는 무게: 고장이 잦은 방은 그만큼 오래 안 본 셈.</summary>
@@ -592,6 +604,6 @@ public sealed class FleetSystem
     internal void Hash(Action<long> I, Action<float> F)
     {
         I(Tier); I(FireFirst); I(Tows); I(Fixes); I(Seals); I(SealFails); I(Reliefs); I(Fetches); I(Reroutes); I(Yields); I(Lifts); I(Tests); I(TestFails);
-        I(Waits); I(Retreats); I(Wrecks); I(Dodges); I(DroneTask.Count); I(Carry.Count); I(_fire.Count);
+        I(Waits); I(Retreats); I(Wrecks); I(Dodges); I(HullJobs); I(HullRounds); I(Hits.Count); I(DroneTask.Count); I(Carry.Count); I(_fire.Count);
     }
 }

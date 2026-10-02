@@ -23,7 +23,7 @@ public partial class Hud
         var col = ShipView.RobotColor(r.Kind);
         float x0 = Screen.X - Margin - RightColumnWidth;
         var marks = r.Marks.TakeLast(6).Reverse().ToList();
-        float height = Mathf.Min(maxHeight, 300 + (RobotsV15.Fights(r.Kind) ? 22 : 0) + (marks.Count > 0 ? 34 + marks.Count * 18 : 0));
+        float height = Mathf.Min(maxHeight, 300 + RobotMindHeight(r) + (RobotsV15.Fights(r.Kind) ? 22 : 0) + (marks.Count > 0 ? 34 + marks.Count * 18 : 0)); // v16.20b 생각
         var card = new Rect2(x0, y, RightColumnWidth, height);
         Card(card);
         float x = x0 + 18, right = card.End.X - 18;
@@ -45,6 +45,7 @@ public partial class Hud
         Row(x, right, ly + 22, "상태", r.Condition, new Color("#9fb4cc"), Pct(r.Condition), r.Condition < 0.45f);
         if (RobotsV15.Fights(r.Kind)) { Row(x, right, ly + 44, "소화 거품", r.Foam, new Color("#f4f1ec"), Pct(r.Foam), r.Foam < 0.2f); ly += 22; }
         ly += 50;
+        ly = DrawRobotMind(r, x, right, ly); // v16.20b 지금 · 다음 · 배터리 · 왜 · 단계
         string fault = r.Fault is RobotFault f
             ? RobotSystem.CanSelfRepair(r)
                 ? $"{RobotSystem.FaultName(f)} — 가벼움 · 충전대에서 스스로 고친다 ({RobotSystem.SelfRepairHours(f) * 60:0}분)"
