@@ -46,8 +46,10 @@ public sealed class Ship
         _doorsByCell[d.Cell] = d;
     }
 
-    internal void AddWall(Cell c, WallState w) => _walls[c] = w;
-    internal void RemoveWall(Cell c) => _walls.Remove(c);
+    internal void AddWall(Cell c, WallState w) { _walls[c] = w; WallsVersion++; }
+    internal void RemoveWall(Cell c) { if (_walls.Remove(c)) WallsVersion++; }
+    /// <summary>통합 성능: 벽 목록이 바뀐 번 (더하고 · 뺀다).</summary>
+    public int WallsVersion { get; private set; }
 
     /// <summary>문을 격자에서 뺀다 (한쪽 방이 떨어져 나갔을 때). 문 목록에는 남는다 (번호가 바뀌지 않게).</summary>
     internal void UnmapDoor(Door d) => _doorsByCell.Remove(d.Cell);

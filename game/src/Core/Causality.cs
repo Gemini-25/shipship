@@ -288,6 +288,8 @@ public sealed class CauseLog
         else
         {
             int parent = _ctx >= 0 ? _ctx : from is Cell f && _fireCells.TryGetValue(f, out var fn) ? fn : -1;
+            // 통합: 방금(15분 안) 그 방을 때린 폭발 · 충돌이 남긴 불씨 — 따로 된 사고 카드가 아니라 그 사고의 고리 (실험 사고 아크 섬광 1분 뒤 불)
+            if (parent < 0 && _roomHit.TryGetValue(room.Id, out var hit) && _w.Tick - hit.tick < SimTime.Minutes(15) && hit.node < Nodes.Count) parent = hit.node;
             string text = parent >= 0 && from is Cell f2 && _w.Ship.RoomAt(f2) is Room fr && fr != room ? $"{room.Name}로 불이 번졌다" : $"{room.Name} 화재";
             node = Effect(CauseKind.Fire, key, text, room, c.Center, parent);
         }

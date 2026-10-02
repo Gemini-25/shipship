@@ -628,14 +628,20 @@ public sealed class WallState
     /// <summary>1 = 멀쩡, 0 = 완전히 뚫림.</summary>
     public float Integrity { get; set; } = 1f;
 
-    /// <summary>뚫린 구멍 크기 0~1. 0보다 크면 공기가 샌다.</summary>
-    public float Breach { get; set; }
+    /// <summary>통합 성능: 구멍 · 땜 · 외벽 여부가 바뀔 때마다 오른다 (모든 배 공용 — 큰 구멍 찾기를 다시 할지 본다).</summary>
+    public static int Version;
 
-    public bool Patched { get; set; }
+    /// <summary>뚫린 구멍 크기 0~1. 0보다 크면 공기가 샌다.</summary>
+    public float Breach { get => _breach; set { if (value != _breach) { _breach = value; Version++; } } }
+    private float _breach;
+
+    public bool Patched { get => _patched; set { if (value != _patched) { _patched = value; Version++; } } }
+    private bool _patched;
     public float PatchQuality { get; set; }
 
     /// <summary>한쪽이 우주에 닿은 외벽인지 (옆 방이 떨어져 나가면 안쪽 벽도 외벽이 된다).</summary>
-    public bool IsHull { get; set; }
+    public bool IsHull { get => _isHull; set { if (value != _isHull) { _isHull = value; Version++; } } }
+    private bool _isHull;
 
     /// <summary>
     /// 골조 0~1 (v8). 외판이 다 뚫린 뒤에도 충격이 남으면 골조가 상한다.

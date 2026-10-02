@@ -87,7 +87,8 @@ public static class Crisis
         // 큰 사고의 흔적: 최근 30분 안의 치명 경보·폭발·충돌, 큰 구멍(사람 없는 방이어도), 사람 있는 방의 유독 가스·일산화탄소, 문을 막은 잔해
         bool recentCritical = w.Alerts.Any(a => a.Level == AlertLevel.Critical && w.Tick - a.Tick < SimTime.Minutes(30));
         bool recentBlast = w.Volatile.Blasts.Any(b => w.Tick - b.Tick < SimTime.Hours(1)) || w.Impacts.Any(i => w.Tick - i.Tick < SimTime.Hours(1) && i.Size >= 0.6f);
-        bool bigHole = w.Ship.Walls.Any(kv => kv.Value.IsHull && kv.Value.Breach >= 0.25f && !kv.Value.Patched && Hull.InsideRoom(w.Ship, kv.Key) is Room hr && !hr.Abandoned && !hr.Detached);
+        bool bigHole = false;
+        foreach (var (cell, _) in BigHoles(w.Ship)) if (Hull.InsideRoom(w.Ship, cell) is Room hr && !hr.Abandoned && !hr.Detached) { bigHole = true; break; }
         bool gas = w.Crew.Any(c => !c.Dead && c.Room != null && c.Suit == null && (c.Room.Air.Toxin > 0.15f || c.Room.Air.CO > 0.2f));
         bool blocked = w.Ship.Doors.Any(d => d.Blocked);
         if (recentBlast) s.Reasons.Add("폭발·충돌");
@@ -105,6 +106,21 @@ public static class Crisis
     }
 
     private static int serious0(Snapshot s) => s.Reasons.Count;
+
+    // 통합 성능: 틱마다 모든 벽을 훑지 않는다 — 큰 구멍 후보(외벽 · 25% 넘게 뚫림 · 안 막음)는 벽이 바뀔 때만 다시 모은다 (방 조건은 매번 본다)
+    private static Ship? _holeShip;
+    private static int _holeWalls = -1, _holeVer = -1;
+    private static readonly List<(Cell cell, WallState wall)> _holes = new();
+    private static List<(Cell cell, WallState wall)> BigHoles(Ship ship)
+    {
+        if (!ReferenceEquals(_holeShip, ship) || _holeWalls != ship.WallsVersion || _holeVer != WallState.Version)
+        {
+            _holes.Clear();
+            foreach (var kv in ship.Walls) if (kv.Value.IsHull && kv.Value.Breach >= 0.25f && !kv.Value.Patched) _holes.Add((kv.Key, kv.Value));
+            _holeShip = ship; _holeWalls = ship.WallsVersion; _holeVer = WallState.Version;
+        }
+        return _holes;
+    }
 
     /// <summary>전기를 만들고 나르는 설비 (원자로가 돌려면 필요한 것까지).</summary>
     public static bool PowerChain(FurnitureType t) => t is FurnitureType.ReactorCore or FurnitureType.CoolantPump or FurnitureType.PowerPanel or FurnitureType.Battery
