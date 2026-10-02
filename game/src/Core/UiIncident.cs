@@ -120,6 +120,11 @@ public sealed class IncidentStory
             if (t.Gone || t.Tick < inc.Start || !rooms.Contains(t.Room)) continue;
             s.Traces.Add(ChronicleBook.Short(t.Text != "" ? t.Text : t.Event, 64));
         }
+        foreach (var t in w.After.TraceList()) // 바닥 · 벽에 남은 얼룩 (그을음 · 물 얼룩 …)
+        {
+            if (s.Traces.Count >= 4) break;
+            if (t.Kind == "stain" && rooms.Contains(t.Room)) s.Traces.Add(ChronicleBook.Short(t.Text, 64));
+        }
         if (mc != null)
         {
             int marks = w.Major.Traces.Count(t => t.Kind == mc.Kind && t.Tick >= inc.Start && rooms.Contains(t.Room));

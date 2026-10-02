@@ -586,7 +586,7 @@ public partial class Hud : Control
             }));
             if (hover) _hazardHover = spec.Hint;
         }
-        string foot = _hazardHover ?? (_world.Hazards.RandomCount > 0 ? $"무작위 사고 {_world.Hazards.RandomCount}번 · 마지막: {_world.Hazards.LastRandomText}" : "무작위 사고는 되감기·불러오기에도 같은 때 같은 사고로 난다 (시드·수치가 같으면)");
+        string foot = _hazardHover ?? (_world.Hazards.RandomCount > 0 ? $"무작위 사고 {_world.Hazards.RandomCount}번 · 마지막: {_world.Hazards.LastRandomText}" : "무작위 사고는 되감기·불러오기에도 같은 때 같은 사고로 난다 (항해 번호 · 수치가 같으면)");
         Gfx.Text(this, Fonts.Body, new Vector2(x, card.End.Y - 12), Clip(foot, card.Size.X - pad * 2, Ui.TextTiny), Ui.TextTiny, Palette.TextMuted);
         _hazardHover = null;
     }
@@ -1475,7 +1475,7 @@ public partial class Hud : Control
         if (_main.Replaying is ReplayRunner rr)
         {
             float pulse = 0.7f + 0.3f * Mathf.Sin(_time * 4f);
-            UiKit.Banner(this, new Vector2(cx, y), $"불러오는 중 — 같은 시드에서 역사를 다시 돌린다 {Pct(rr.Progress)} · {_world.Day}일차", Tone.Info, pulse, "clock");
+            UiKit.Banner(this, new Vector2(cx, y), $"불러오는 중 — 같은 항해 번호에서 역사를 다시 돌린다 {Pct(rr.Progress)} · {_world.Day}일차", Tone.Info, pulse, "clock");
             y += 36f;
         }
         if (_main.Notice is string notice && (Time.GetTicksMsec() - _main.NoticeMsec < 6000 || Engine.GetProcessFrames() - _main.NoticeFrame < 120))

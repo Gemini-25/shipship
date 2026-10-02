@@ -140,7 +140,7 @@ public sealed class BrainSystem
         if (parts.Count == 0) return null;
         var goal = Goals.Layer(c, GoalLayer.Mid).FirstOrDefault() ?? Goals.Layer(c, GoalLayer.Long).FirstOrDefault();
         if (goal != null) parts.Add(goal.Layer == GoalLayer.Long ? $"그래도 언젠가 {goal.Text}." : $"요즘 마음: {goal.Text}.");
-        return string.Join(" ", parts);
+        return DiaryWords.Plain(string.Join(" ", parts)); // v16.24 메모 같은 말 → 일기 문장
     }
 
     /// <summary>지문 (결정론 점검 — StateHash 끝에 들어간다).</summary>

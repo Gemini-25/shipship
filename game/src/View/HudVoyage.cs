@@ -59,7 +59,7 @@ public partial class Hud
         float w = 460f, h = 60f + SummaryLines.Length * 22f;
         var card = new Rect2((Screen.X - w) / 2f, Screen.Y * 0.22f, w, h);
         Card(card);
-        Gfx.Text(this, Fonts.Bold, card.Position + new Vector2(20, 32), "요약 진행", Ui.TextLarge, Palette.Text);
+        Gfx.Text(this, Fonts.Bold, card.Position + new Vector2(20, 32), "빨리 감기", Ui.TextLarge, Palette.Text);
         Button(new Rect2(card.End.X - 74, card.Position.Y + 12, 58, 26), "닫기", false, mouse, () => SummaryLines = null, Ui.TextSmall);
         float y = card.Position.Y + 58;
         foreach (var line in SummaryLines)

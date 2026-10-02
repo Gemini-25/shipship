@@ -26,7 +26,7 @@ public partial class Main
         Settings.Highlight = !Settings.Highlight;
         Settings.Save();
         _seenCauseNodes = Sim.Causes.Nodes.Count;
-        ShowNotice(Settings.Highlight ? "하이라이트 모드 — 평온하면 빠르게, 사고가 나면 1배속으로 (L로 끄기)" : "하이라이트 모드 끔 — 배속을 손으로");
+        ShowNotice(Settings.Highlight ? "자동 배속 — 평온하면 빠르게, 사고가 나면 1배속으로 (L로 끄기)" : "자동 배속 끔 — 배속을 손으로");
     }
 
     private static bool Hot(CauseKind k) => k is CauseKind.Impact or CauseKind.Explosion or CauseKind.Fire or CauseKind.Breach

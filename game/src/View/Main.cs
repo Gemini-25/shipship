@@ -270,7 +270,7 @@ public partial class Main : Node2D
         else
         {
             bool ok = Replaying.Verified;
-            ShowNotice(ok ? $"불러오기 완료 — {Sim.Day}일차 {Sim.Clock} · 지문 일치 (같은 역사)" : "불러오기 완료 — 지문이 다르다 (다른 판 게임으로 저장한 파일?)");
+            ShowNotice(ok ? $"불러왔다 — {Sim.Day}일차 {Sim.Clock} · 저장할 때와 같은 역사" : "불러왔다 — 저장할 때와 역사가 어긋난다 (다른 판에서 저장한 파일?)");
         }
         Replaying = null;
         Paused = true;
@@ -348,7 +348,7 @@ public partial class Main : Node2D
     {
         path ??= SavePath;
         System.IO.File.WriteAllText(path, Core.SaveGame.Write(Sim));
-        ShowNotice($"저장했다 — {Sim.Day}일차 {Sim.Clock} · 관찰자 기록 {Sim.Commands.Count}줄 · 시드 {Sim.Seed}");
+        ShowNotice($"저장했다 — {Sim.Day}일차 {Sim.Clock} · 관찰자 기록 {Sim.Commands.Count}줄 · 항해 번호 {Sim.Seed}");
         GD.Print($"saved: {path}");
     }
 
@@ -487,7 +487,7 @@ public partial class Main : Node2D
     {
         SpeedIndex = Math.Clamp(index, 0, Speeds.Length - 1);
         Paused = false;
-        if (Settings.Highlight) { Settings.Highlight = false; Settings.Save(); ShowNotice("배속을 손으로 골라 하이라이트 모드를 껐다 (L로 다시)"); }
+        if (Settings.Highlight) { Settings.Highlight = false; Settings.Save(); ShowNotice("배속을 손으로 골라 자동 배속을 껐다 (L로 다시)"); }
     }
 
     public void CycleView(int dir)

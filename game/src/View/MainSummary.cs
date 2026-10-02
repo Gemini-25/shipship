@@ -34,7 +34,7 @@ public partial class Main
         _sumDeaths = Sim.History.Deaths;
         _sumHarvest = Sim.Crew.Sum(c => c.Stats.Harvests);
         Hud.SummaryLines = null;
-        ShowNotice($"요약 진행 — 큰 일이 날 때까지, 길어야 {days:0}일");
+        ShowNotice($"빨리 감기 — 큰 일이 날 때까지, 길어야 {days:0}일");
     }
 
     /// <summary>요약 진행 중이면 이 프레임을 대신 돌린다 (true면 보통 진행은 건너뛴다).</summary>
