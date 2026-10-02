@@ -106,7 +106,7 @@ public sealed partial class ShipMate
         {
             // 함장에게: 함장이 사람을 정해 직접 말한다 (함장 말은 더 잘 듣는다)
             var alt = cm.Best(order.Skill, pool.Where(x => x != cap)) ?? (pool.Contains(cap) ? cap : null);
-            rc.Next = alt != null ? $"함장에게 — {cap.Name}이 {alt.Name}에게 맡겼다" : "함장에게 — 맡길 사람이 없다";
+            rc.Next = alt != null ? $"함장에게 — {Ko.IGa(cap.Name)} {alt.Name}에게 맡겼다" : "함장에게 — 맡길 사람이 없다";
             if (alt != null)
             {
                 rc.Alt = alt.Id;

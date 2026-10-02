@@ -28,8 +28,13 @@ public sealed partial class ShipMate
     public float SkyScore { get; private set; }
     private int _skyJudged;
     private bool _stormWas, _showerWas, _outsideWas;
-    private long _skyNext;
+    private long _skyNext, _outNext;
     public int Recalls, ShelterChecks;
+    /// <summary>대피소를 점검해 달라 (예보가 높을 때 — 안내 · 의료 자리 사람이 간다).</summary>
+    public bool ShelterWanted { get; private set; }
+    /// <summary>대피소를 점검해 둔 때까지 (폭풍이 오면 사람들이 덜 긴장한다).</summary>
+    public long ShelterReady { get; private set; } = -1;
+    private int _shelterBy = -1;
 
     /// <summary>선외 작업을 미루라 (Chores 훅).</summary>
     public bool EvaHold => LastSky is SkyForecast f && f.Held && _w.Tick - f.Tick < SimTime.Hours(12);
@@ -71,8 +76,31 @@ public sealed partial class ShipMate
     {
         var w = _w;
         Recalls += w.Drones.WeatherRecall("우주 날씨 예보 — 폭풍 · 운석우에 앞서 들어온다");
+        if (w.Tick > ShelterReady) ShelterWanted = true;
+        Say($"{SkyLine(f)} · 대피소 물 · 마스크를 점검해 달라");
+    }
+
+    /// <summary>대피소 점검을 맡을 사람 (MateActivity): 안내 · 의료 자리 → 아무나.</summary>
+    public Room? ShelterFor(CrewMember c)
+    {
+        if (!ShelterWanted || _shelterBy >= 0 && _shelterBy != c.Id && Crew(_shelterBy) is CrewMember b && b.CanAct && b.Job?.Activity is MateActivity) return null;
+        var role = _w.CrisisCrew.BillRole(c);
+        if (_shelterBy < 0 && role is not (StationRole.Guide or StationRole.Medical) && _w.Tick - (LastSky?.Tick ?? 0) < SimTime.Hours(1)) return null; // 처음 한 시간은 제 자리 사람이
+        var (sh, _) = Facilities.Best(_w.Ship, "shelter", r => !r.Detached && !r.OffLimits);
+        return sh;
+    }
+
+    internal void ShelterTaken(CrewMember c) => _shelterBy = c.Id;
+
+    internal void ShelterChecked(CrewMember c, Room sh)
+    {
+        var w = _w;
+        ShelterWanted = false;
+        _shelterBy = -1;
         ShelterChecks++;
-        Say($"{SkyLine(f)} · 대피소 물 · 마스크를 점검해 둔다");
+        ShelterReady = w.Tick + SimTime.TicksPerDay;
+        Life.Diary(w, c, Persona.Say(c, $"{sh.Name} 물통 · 마스크 · 담요를 셌다. 폭풍이 온다고"));
+        Say($"{Ko.IGa(c.Name)} {Ko.EulReul(sh.Name)} 점검했다 — 물 · 마스크 · 담요 다 있다", sh, -1, c.Id);
     }
 
     /// <summary>매 틱: 폭풍 · 운석우가 실제로 왔나 · 사람이 밖으로 나가나 (약속).</summary>
@@ -88,10 +116,16 @@ public sealed partial class ShipMate
                 if (storm && !_stormWas) f.StormCame = true;
                 if (shower && !_showerWas) f.ShowerCame = true;
             }
+        if (storm && !_stormWas && w.Tick < ShelterReady) // 미리 점검해 둔 대피소 — 사람들이 덜 긴장한다
+        {
+            foreach (var c in w.Crew) if (!c.Dead && !c.Outside) c.Needs.Stress = MathF.Max(0f, c.Needs.Stress - 0.05f);
+            Say("대피소는 어제 점검해 두었다 — 물 · 마스크 · 담요가 있다", null, 1);
+        }
         _stormWas = storm; _showerWas = shower;
         // 약속: 선외 작업 전엔 다시 본다
-        if ((w.Tick & 31) == 0)
+        if (w.Tick >= _outNext)
         {
+            _outNext = w.Tick + SimTime.Minutes(1);
             bool outside = false;
             foreach (var c in w.Crew) if (c.Outside && !c.Dead) { outside = true; break; }
             if (outside && !_outsideWas && Promised("weather") is Promise p && w.Tick - p.LastTest > SimTime.Hours(6))
@@ -118,7 +152,7 @@ public sealed partial class ShipMate
         bool came = f.StormCame || f.ShowerCame;
         string what = f.StormCame ? "태양 폭풍" : f.ShowerCame ? "운석우" : "폭풍";
         float p = f.StormCame ? f.PStorm : f.ShowerCame ? f.PShower : MathF.Max(f.PStorm, f.PShower);
-        if (came && f.Held) { f.Hit = true; f.Verdict = $"{what}을 미리 봤다 ({p * 100:0}%) — 선외 일정 · 드론을 미리 정리했다"; }
+        if (came && f.Held) { f.Hit = true; f.Verdict = $"{Ko.EulReul(what)} 미리 봤다 ({p * 100:0}%) — 선외 일정 · 드론을 미리 정리했다"; }
         else if (!came && !f.Held) { f.Hit = true; f.Verdict = "예보대로 조용했다"; }
         else if (!came && f.Held)
         {
@@ -128,15 +162,16 @@ public sealed partial class ShipMate
                 a.Trusts.Change(c, -0.01f, "날씨 예보가 빗나가 일만 밀렸다", quiet: true);
                 if (R.Chance(0.4f)) Life.Diary(w, c, Persona.Say(c, "폭풍이 온다더니 조용했다. 밖의 일만 하루 밀렸다"));
             }
+            if (a.Character.Caution > 0.25f && p < 0.35f) Review("날씨", $"신중하게 낮은 확률({p * 100:0}%)에도 선외 일을 미뤘다 — 헛걱정으로 늦었다");
             a.Character.Nudge(-0.01f, 0f, "날씨 예보가 빗나갔다 (헛걱정)");
         }
         else
         {
-            f.Verdict = $"{what}을 못 봤다 ({p * 100:0}%) — 밖의 사람이 서둘러 돌아왔다";
+            f.Verdict = $"{Ko.EulReul(what)} 못 봤다 ({p * 100:0}%) — 밖의 사람이 서둘러 돌아왔다";
             var heard = w.Crew.Where(c => !c.Dead && !c.IsChild).ToList();
-            a.Authority.Learned("날씨", $"{what}을 {p * 100:0}%로 낮게 봤는데 왔다");
+            a.Authority.Learned("날씨", $"{Ko.EulReul(what)} {p * 100:0}%로 낮게 봤는데 왔다");
             if (Promised("weather") == null) MakePromise("weather", "확률이 낮아도 사람이 밖에 나가기 전엔 한 번 더 살피겠다", heard);
-            a.Character.Nudge(0.03f, 0f, $"{what}을 못 봤다");
+            a.Character.Nudge(0.03f, 0f, $"{Ko.EulReul(what)} 못 봤다");
         }
         if (f.Held || came) w.Log.Add(w.Tick, LogKind.Ship, $"{a.Voice.Call}: 어제 예보 — {f.Verdict}");
     }

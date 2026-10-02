@@ -116,7 +116,8 @@ public sealed partial class ShipMate
     public ScoutRun? SendScout(Room r, string why)
     {
         var w = _w;
-        var bot = w.Robots.Robots.Where(x => x.Operational && x.Order == null && (x.AtDock || x.Homing) && !x.FightingFire && x.Battery > 0.45f && !x.Dock.Room.Detached)
+        bool spare = Crisis.Level(w) < CrisisLevel.Emergency && w.Fire.Count == 0;
+        var bot = !spare ? null : w.Robots.Robots.Where(x => x.Operational && x.Order == null && (x.AtDock || x.Homing) && !x.FightingFire && x.Battery > 0.45f && !x.Dock.Room.Detached && !w.Board.OpenForRobot().Any(o => RobotSystem.CanDo(x.Kind, o.Kind)))
             .OrderBy(x => (x.Position - r.Center).LengthSquared()).ThenBy(x => x.Id).FirstOrDefault();
         ScoutRun? run = null;
         if (bot != null)
@@ -148,7 +149,7 @@ public sealed partial class ShipMate
         b.People = people; b.Fire = fire; b.Pressure = r.Air.Pressure; b.O2 = r.Air.O2; b.Updated = w.Tick;
         s.Found = $"사람 {people} · {(fire ? "연기" : "불 없음")} · 기압 {r.Air.Pressure:0}";
         Say($"{unit} 눈으로 {Ko.EulReul(r.Name)} 봤다 — {s.Found}", r, -1);
-        if (fire && !w.Fire.IsKnown(r)) w.RaiseAlert($"{unit}이 {r.Name}에서 연기를 봤다 — 감지기가 안 닿는 방", r, AlertLevel.Warning, true);
+        if (fire && !w.Fire.IsKnown(r)) w.RaiseAlert($"{Ko.IGa(unit)} {r.Name}에서 연기를 봤다 — 감지기가 안 닿는 방", r, AlertLevel.Warning, true);
     }
 
     // ───────────── 원인 분석 → 개조안 ─────────────
@@ -173,7 +174,7 @@ public sealed partial class ShipMate
             {
                 var kind = breaks * 2 >= blind ? MateGear.DataLine : MateGear.SensorNode;
                 if (Has(kind, r.Id) || Upgrades.Any(u => u.RoomId == r.Id && u.Kind == kind && w.Tick - u.Tick < SimTime.TicksPerDay * 3)) continue;
-                Propose(kind, r, kind == MateGear.DataLine ? $"데이터선이 {breaks}번 끊겼다" : $"감지기가 {blind - breaks}번 틀어졌다", $"{r.Name}을 {blind}번 못 봤다 (정찰 {Scouts.Count(s => s.RoomId == r.Id)}번)");
+                Propose(kind, r, kind == MateGear.DataLine ? $"데이터선이 {breaks}번 끊겼다" : $"감지기가 {blind - breaks}번 틀어졌다", $"{Ko.EulReul(r.Name)} {blind}번 못 봤다 (정찰 {Scouts.Count(s => s.RoomId == r.Id)}번)");
                 return;
             }
             if (faults >= 3 && !Has(MateGear.Mount, r.Id) && !Upgrades.Any(u => u.RoomId == r.Id && u.Kind == MateGear.Mount && w.Tick - u.Tick < SimTime.TicksPerDay * 3))
@@ -199,7 +200,7 @@ public sealed partial class ShipMate
         u.Spot = GearSpot(kind, r) ?? r.Cells.FirstOrDefault(w.Ship.IsWalkable);
         Upgrades.Add(u);
         if (Upgrades.Count > 30) Upgrades.RemoveAt(0);
-        Say($"까닭을 따져 봤다 — {r.Name}: {cause} ({evidence}). 다음 회의에 {u.Name}을 올린다");
+        Say($"까닭을 따져 봤다 — {r.Name}: {cause} ({evidence}). 다음 회의에 {Ko.EulReul(u.Name)} 올린다");
         return u;
     }
 
@@ -260,7 +261,7 @@ public sealed partial class ShipMate
         u.Decided = w.Tick;
         u.State = pass ? GearState.Approved : GearState.Rejected;
         w.History.Add(w, HistoryKind.Decision, $"회의: {item.Title} ({u.Cause}) — 찬성 {yes.Count} · 반대 {no.Count} → {item.Outcome}", room, voters, log: true);
-        if (!pass) { a.Authority.Learned("개조", $"{u.Room} {u.Name}은 회의가 거절했다 — 더 겪고 근거를 모아 다시"); if (u.Kind != MateGear.CoreRack) _blind[u.RoomId] = 0; }
+        if (!pass) { a.Authority.Learned("개조", $"{u.Room} {Ko.EunNeun(u.Name)} 회의가 거절했다 — 더 겪고 근거를 모아 다시"); if (u.Kind != MateGear.CoreRack) _blind[u.RoomId] = 0; }
     }
 
     public static string GearEffect(MateGear k) => k switch
@@ -326,8 +327,8 @@ public sealed partial class ShipMate
         if (u.Kind == MateGear.Mount && room != null) { _faults[room.Id] = 0; foreach (var m in w.Ship.Machines.Where(m => m.Body.Room == room)) m.Wear = MathF.Max(0f, m.Wear - 0.05f); }
         if (u.Kind == MateGear.CoreRack) _overloads = 0;
         Life.Diary(w, c, Persona.Say(c, $"{u.Room}에 {u.Name} — 다 달았다. 불이 들어오는 걸 봤다"));
-        Say($"{u.Room} {u.Name}을 마쳤다 — {GearEffect(u.Kind)}. {c.Name}에게 고맙다", room, 0, c.Id);
-        w.History.Add(w, HistoryKind.Decision, $"주 컴퓨터 개조: {u.Room} {u.Name} — {u.Cause} 때문에 회의가 정했고 {c.Name}이 달았다", room, new[] { c }, log: false);
+        Say($"{u.Room} {Ko.EulReul(u.Name)} 마쳤다 — {GearEffect(u.Kind)}. {c.Name}에게 고맙다", room, 0, c.Id);
+        w.History.Add(w, HistoryKind.Decision, $"주 컴퓨터 개조: {u.Room} {u.Name} — {u.Cause} 때문에 회의가 정했고 {Ko.IGa(c.Name)} 달았다", room, new[] { c }, log: false);
     }
 
     internal void Overloaded() => _overloads++;
@@ -349,7 +350,7 @@ public sealed partial class RobotSystem
             new RDo((rb, world) => { Inspect(rb, room); seen(rb, world); return true; }),
         };
         Begin(r, steps, $"정찰 — {room.Name} (감지기가 안 닿는다)");
-        r.Mind.Say($"{room.Name}을 직접 보러 간다", w.Tick);
+        r.Mind.Say($"{Ko.EulReul(room.Name)} 직접 보러 간다", w.Tick);
         return true;
     }
 }

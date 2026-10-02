@@ -112,8 +112,8 @@ public sealed partial class ShipMate
             string truth = card.DecideWhy.Contains("못 믿") ? "나를 못 믿는다" : "원정이 위험하다고 본다";
             Refusals.Add(new RefusalCase { Tick = w.Tick, CrewId = cap?.Id ?? -1, OrderId = -p.Id, Title = card.Title, Guess = guess, Truth = truth, Next = "다른 설명 — 근거를 모아 회의에" });
             if (guess == truth) GuessesRight++; else GuessesWrong++;
-            p.Result = $"{card.DecidedBy}이 받지 않았다 ({card.DecideWhy}) — 회의에 근거를 올린다";
-            Say($"{card.DecidedBy}이 {card.Title}을 받지 않았다 — {guess}고 본다. 소비 기록 · 원정지 위험을 모아 회의에서 다시 말하겠다");
+            p.Result = $"{Ko.IGa(card.DecidedBy)} 받지 않았다 ({card.DecideWhy}) — 회의에 근거를 올린다";
+            Say($"{Ko.IGa(card.DecidedBy)} {Ko.EulReul(card.Title)} 받지 않았다 — {guess}고 본다. 소비 기록 · 원정지 위험을 모아 회의에서 다시 말하겠다");
         }
     }
 
@@ -134,7 +134,7 @@ public sealed partial class ShipMate
         var (yes, no) = w.Meetings.Debate(voters, c =>
         {
             float s = (a.Trusts.Of(c) - 0.45f) * 0.6f + 0.25f * c.SkillLevel(Skill.Mechanics) + 0.2f * (c.Traits.Bravery - 0.5f) + (p.DaysLeft < 10f ? 0.15f : 0f) - (c.Value == CrewValue.Safety ? 0.15f : 0f) + 0.05f;
-            return (s, s > 0f ? $"{p.Name}이 모자라면 외벽도 못 막는다" : "원정은 위험하다 — 아껴 쓰자");
+            return (s, s > 0f ? $"{Ko.IGa(p.Name)} 모자라면 외벽도 못 막는다" : "원정은 위험하다 — 아껴 쓰자");
         }, c => 0.3f + 0.4f * c.SkillLevel(Skill.Mechanics), item, chair);
         bool pass = yes.Count > no.Count || yes.Count == no.Count && yes.Contains(chair);
         item.Passed = pass;
@@ -368,7 +368,7 @@ public sealed partial class ShipMate
         var going = ex.Current?.Site ?? ex.Pending?.Site;
         if (going != null && ex.Current?.Phase != TripPhase.Back && ExpeditionSites.Fills(going.Kind, k.cat) >= 0.2f)
             plan.Options.Add(("원정", 0.7f, $"이미 나가는 원정대({going.Name})에 {k.name}도 챙겨 오라고 한다"));
-        if (canGo) plan.Options.Add(("원정", 0.5f + 0.25f * (1f - left / 16f) - 0.35f * (ex.ComputerPick?.Risk ?? 0.3f) + (k.cat is MatCat.Repair or MatCat.Structure or MatCat.Parts ? 0.1f : 0f), $"가까운 곳에서 {k.name}을 구해 온다"));
+        if (canGo) plan.Options.Add(("원정", 0.5f + 0.25f * (1f - left / 16f) - 0.35f * (ex.ComputerPick?.Risk ?? 0.3f) + (k.cat is MatCat.Repair or MatCat.Structure or MatCat.Parts ? 0.1f : 0f), $"가까운 곳에서 {Ko.EulReul(k.name)} 구해 온다"));
         if (port < left - 1f) plan.Options.Add(("기항지에서 사기", 0.8f - 0.4f * port / MathF.Max(1f, left), $"{port:0}일 뒤 기항지 — 그 전엔 버틴다"));
         if (k.cat is MatCat.Repair or MatCat.Structure && w.Scrap.Smelter != null) plan.Options.Add(("재활용", 0.38f + (w.Scrap.Scrap > 5f ? 0.1f : 0f), "고철을 녹여 되살린다"));
         if (k.cat == MatCat.Food && w.Ship.LiveRooms.Any(r => r.Type == RoomType.Hydroponics)) plan.Options.Add(("재배 늘리기", 0.5f, "재배대를 하나 더 돌린다"));
@@ -380,12 +380,12 @@ public sealed partial class ShipMate
         Supplies.Add(plan);
         if (Supplies.Count > 30) Supplies.RemoveAt(0);
         string basis = $"사흘 추세로 하루 {plan.Rate:0.#}개씩 준다 — {left:0}일 뒤 바닥 · 견준 것: {string.Join(" / ", plan.Options.Select(o => $"{o.opt} {o.score:0.00}"))}";
-        Say($"{left:0}일 뒤 {Ko.IGa(k.name)} 바닥난다 — {best.opt}를 권한다 ({best.why})");
+        Say($"{left:0}일 뒤 {Ko.IGa(k.name)} 바닥난다 — {Ko.EulReul(best.opt)} 권한다 ({best.why})");
         switch (best.opt)
         {
             case "원정" when going != null && !canGo:
-                plan.Result = $"{going.Name} 원정대에 {k.name}을 부탁했다";
-                if (ex.Current != null) foreach (var mm in ex.Current.Members.Where(x => x.Boarded && !x.Dead)) A.Apps.Messages.Add(new PersonalMessage(w.Tick, mm.Id, "원정", $"{k.name}이 {left:0}일 치밖에 없다 — 보이면 챙겨 와 달라"));
+                plan.Result = $"{going.Name} 원정대에 {Ko.EulReul(k.name)} 부탁했다";
+                if (ex.Current != null) foreach (var mm in ex.Current.Members.Where(x => x.Boarded && !x.Dead)) A.Apps.Messages.Add(new PersonalMessage(w.Tick, mm.Id, "원정", $"{Ko.IGa(k.name)} {left:0}일 치밖에 없다 — 보이면 챙겨 와 달라"));
                 break;
             case "원정":
             {

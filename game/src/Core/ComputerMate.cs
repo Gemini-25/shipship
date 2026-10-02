@@ -79,7 +79,7 @@ public sealed partial class ShipMate
         I(Drills.Count); I(BillChanges); F(MusterFactor); I(Refusals.Count); I(Promises.Count); I(PromisesKept); I(PromisesBroken);
         I(Trends.Count); I(Slots.Count); I(SlotsDone); I(SlotsMissed); I(Supplies.Count); I(Forecasts.Count); F(SkyScore);
         I(Scouts.Count); I(ScoutsSeen); I(Upgrades.Count); I(UpgradesDone); I(Memory.Count); I(Corruptions); I(Corrections); I(MemoryChecks);
-        I(MissedAlarms.Count); I(Admitted); I(Dilemmas.Count); I(Reviews.Count);
+        I(MissedAlarms.Count); I(Admitted); I(Dilemmas.Count); I(Reviews.Count); I(ShelterChecks); I(Recalls); I(GuessesRight); I(GuessesWrong);
     }
 }
 

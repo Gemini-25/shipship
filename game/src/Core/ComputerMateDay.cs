@@ -6,7 +6,7 @@ namespace ShipSim.Core;
 
 // v16.27 ① 아침 방송 · 저녁 항해 일지.
 //  아침(7시쯤): 오늘 정비(주간 정비표에서) · 우주 날씨 예보 · 주의할 곳(젖은 바닥 · 감지기가 안 닿는 방 · 닳은 설비 · 공사 중) · 일정(훈련 · 원정 · 당직) · 물자 전망.
-//    식당 화면에 같은 줄이 뜨고 방송으로 나간다 — 들은 사람만 안다. 맡은 정비를 들은 사람은 그 일을 먼저 집는다.
+//    식당 화면에 같은 줄이 뜨고 방송으로 나간다 — 들은 사람만 안다 (틀린 말을 바로잡는 것도 들은 사람이다).
 //    컴퓨터 기억이 틀어졌으면 틀린 말도 그대로 나간다 (승무원이 듣고 바로잡는다 — ComputerMateFlaw).
 //  저녁(21시쯤): 그날의 일지 — 성격 따라 말투가 다르다 (신중: 확신 없는 것부터 · 과감: 짧게 · 사람 우선: 사람부터 · 배 우선: 수치부터).
 //    연대기 "장"의 컴퓨터 일지 칸에 이어진다 (UiChronicle.ShipLog).
@@ -56,7 +56,7 @@ public sealed partial class ShipMate
         foreach (var m in Memory.Values.Where(x => x.Kind == MemKind.Service && x.Corrupt && x.Claimed == -1).OrderBy(x => x.Key).Take(1))
         {
             m.Claimed = w.Tick;
-            b.Lines.Add(("정비", $"{m.Label}은 어제 손봤다 — 이번 주 정비에서 뺐다"));
+            b.Lines.Add(("정비", $"{Ko.EunNeun(m.Label)} 어제 손봤다 — 이번 주 정비에서 뺐다"));
         }
         // 날씨
         if (LastSky is SkyForecast f) b.Lines.Add(("날씨", SkyLine(f)));
@@ -115,7 +115,7 @@ public sealed partial class ShipMate
         foreach (var m in w.Ship.Machines) if (m.Omen is Omen om && om.Known && !m.Body.Room.Detached) list.Add((1, m.Body.Room, $"{m.Name} {Prevention.Name(om.Kind)}"));
         foreach (var t in Trends.Values)
             if (t.Now > 0.6f && w.Ship.Machines.FirstOrDefault(m => m.Body.Id == t.MachineId) is Machine m)
-                list.Add((0, m.Body.Room, $"{m.Name} {TrendWord(m)}이 커졌다"));
+                list.Add((0, m.Body.Room, $"{m.Name} {Ko.IGa(TrendWord(m))} 커졌다"));
         foreach (var u in Upgrades.Where(u => u.State == GearState.Working))
             if (w.Ship.Rooms.FirstOrDefault(r => r.Id == u.RoomId) is Room ur) list.Add((3, ur, $"{ur.Name} 공사 중"));
         var seen = new HashSet<int>();

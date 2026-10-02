@@ -76,7 +76,7 @@ public sealed partial class ShipMate
     public List<ShipDilemma> Dilemmas { get; } = new();
     /// <summary>시험용: 연산이 몰렸다고 친다.</summary>
     public bool ForceOverload;
-    private long _alertSeen = -1, _overSince = -1, _dilNext;
+    private long _alertSeen = -1, _overSince = -1, _dilNext, _admitNext;
     private int _dilId = 1;
 
     // ───────────── 기억 ─────────────
@@ -125,7 +125,7 @@ public sealed partial class ShipMate
         {
             if (!e.Corrupt || w.Ship.Machines.FirstOrDefault(m => m.Body.Id == e.RefId) is not Machine m || m.Faults.Count == 0) continue;
             e.Corrupt = false; e.Fixed = w.Tick; e.Value = m.LastServiced;
-            Review("기억", $"기억이 틀어져 {e.Label}을 어제 정비했다고 믿고 정비표에서 뺐다 — 정비 없이 멎었다");
+            Review("기억", $"기억이 틀어져 {Ko.EulReul(e.Label)} 어제 정비했다고 믿고 정비표에서 뺐다 — 정비 없이 멎었다");
             MemoryCheck(null);
         }
         // 미뤄 둔 딜레마 · 인정
@@ -162,7 +162,7 @@ public sealed partial class ShipMate
         a.Manner.Of(c).Corrections.Add((w.Tick, $"{m.Name} 정비 기록"));
         a.Manner.CorrectionsHeard++;
         a.Trusts.Change(c, 0.02f, "컴퓨터가 내 말을 듣고 고쳤다", quiet: true);
-        Life.Diary(w, c, Persona.Say(c, $"아침 방송이 이상했다. {m.Name}은 어제 아무도 안 만졌는데. 말했더니 컴퓨터가 고맙다고 했다"));
+        Life.Diary(w, c, Persona.Say(c, $"아침 방송이 이상했다. {Ko.EunNeun(m.Name)} 어제 아무도 안 만졌는데. 말했더니 컴퓨터가 고맙다고 했다"));
         Say($"{c.Name} 말이 맞다 — {m.Name} 정비 기록이 틀어져 있었다 (방사선으로 기억 칸이 바뀐 듯하다). 기억 전체를 검사한다", m.Body.Room, 1, c.Id);
         MemoryCheck(c);
         if (Promised("memory") == null) MakePromise("memory", "정비 기록은 손으로 쓴 작업 일지와 맞춰 보고 말하겠다", w.Crew.Where(x => !x.Dead && !x.IsChild));
@@ -184,7 +184,7 @@ public sealed partial class ShipMate
         MemoryChecks++;
         LastMemoryCheck = w.Tick;
         LastMemoryNote = $"기억 검사 — {Memory.Count}칸 중 {bad}칸이 더 틀어져 있어 고쳤다";
-        Say(LastMemoryNote + (by != null ? $" ({by.Name}이 알려 줬다)" : ""));
+        Say(LastMemoryNote + (by != null ? $" ({Ko.IGa(by.Name)} 알려 줬다)" : ""));
         return bad;
     }
 
@@ -222,7 +222,7 @@ public sealed partial class ShipMate
             _alertSeen = w.AlertSerial;
             if (MissedAlarms.Count > 40) MissedAlarms.RemoveRange(0, MissedAlarms.Count - 40);
         }
-        if (!over && Up && (w.Tick & 63) == 0 && MissedAlarms.Any(m => m.Admitted < 0)) AdmitMissed();
+        if (!over && Up && w.Tick >= _admitNext) { _admitNext = w.Tick + SimTime.Minutes(2); if (MissedAlarms.Any(m => m.Admitted < 0)) AdmitMissed(); }
         if (w.Tick >= _dilNext) { _dilNext = w.Tick + 30; Dilemma(); }
     }
 
@@ -264,7 +264,7 @@ public sealed partial class ShipMate
         var ch = A.Character;
         if (ch.Caution < -0.25f && s.At - s.Planned > SimTime.Hours(s.LifeLo * 24f * 0.75f))
         {
-            Review("정비", $"남은 수명을 {s.LifeLo:0.#}~{s.LifeHi:0.#}일로 보고 넉넉하게 미뤘다 (과감하게 낙관했다) — {s.Machine}이 정비 전에 멎었다");
+            Review("정비", $"남은 수명을 {s.LifeLo:0.#}~{s.LifeHi:0.#}일로 보고 넉넉하게 미뤘다 (과감하게 낙관했다) — {Ko.IGa(s.Machine)} 정비 전에 멎었다");
             ch.Nudge(0.08f, 0f, $"{s.Machine} 정비를 낙관해 미뤘다");
         }
         else Review("정비", $"{s.Machine} — 정비표에 올렸지만 {(s.Asked ? "손이 닿기 전에" : "맡을 사람을 찾기 전에")} 멎었다");
@@ -285,15 +285,15 @@ public sealed partial class ShipMate
         if (!Up || w.Policies["decompress"] != 0) return; // '배 우선'이면 권한 안 (원래 수순이 닫는다)
         foreach (var r in w.Ship.LiveRooms)
         {
-            bool fire = w.Fire.IsKnown(r) && w.Fire.CountIn(r) >= 2, leak = r.Leaking && r.Air.Pressure < 85f;
-            if (!fire && !leak || r.Type == RoomType.Corridor) continue;
+            bool fire = w.Fire.IsKnown(r) && w.Fire.CountIn(r) >= 2; // 공기가 새는 방은 원래 수순(미리 돌려 보기 · 격벽)이 사람 우선으로 정한다 — 연기는 그 밖이다
+            if (!fire || r.Type == RoomType.Corridor) continue;
             if (Dilemmas.Any(d => d.RoomId == r.Id && w.Tick - d.Tick < SimTime.Hours(2))) continue;
             var inside = w.Crew.Where(c => !c.Dead && c.Room == r).ToList();
             if (inside.Count == 0 || inside.Count > 3) continue;
             int near = 0;
             foreach (var dr in r.Doors) { var o = dr.RoomA == r ? dr.RoomB : dr.RoomA; if (o != null) foreach (var c in w.Crew) if (!c.Dead && c.Room == o) near++; }
             if (near < inside.Count * 2 || r.Doors.All(d => d.Locked || d.Removed)) continue;
-            StartDilemma(r, inside, near, fire ? "불" : "공기");
+            StartDilemma(r, inside, near, "불");
             return;
         }
     }
@@ -307,7 +307,7 @@ public sealed partial class ShipMate
         d.Trapped.AddRange(inside.Select(c => c.Id));
         Dilemmas.Add(d);
         if (Dilemmas.Count > 20) Dilemmas.RemoveAt(0);
-        string q = $"{r.Name}을 닫으면 {string.Join("·", inside.Select(c => c.Name))} {inside.Count}명이 갇히지만 {(hazard == "불" ? "불길 · 연기" : "새는 공기")}가 옆 {near}명에게 안 간다";
+        string q = $"{Ko.EulReul(r.Name)} 닫으면 {string.Join("·", inside.Select(c => c.Name))} {inside.Count}명이 갇히지만 {(hazard == "불" ? "불길 · 연기" : "새는 공기")}가 옆 {near}명에게 안 간다";
         var cap = w.Command.Captain;
         d.CaptainId = cap?.Id ?? -1;
         d.Unreachable = cap == null ? "함장이 없다" : cap.Away ? "함장이 원정 중" : !cap.CanAct ? "함장이 쓰러졌다" : cap.Outside ? "함장이 밖에 있다"
@@ -347,7 +347,7 @@ public sealed partial class ShipMate
             close = still.Count == 0 || s > 0.2f;
             d.By = $"함장 {cap.Name}";
             cap.Say(w, Persona.Say(cap, close ? $"닫아. 옆방 {d.Saved}명을 살려야 해" : "기다려. 저 사람들이 나올 때까지"));
-            Life.Diary(w, cap, Persona.Say(cap, close ? $"{d.Room}을 닫으라고 했다. 안에 사람이 있었다" : $"{d.Room}을 열어 두라고 했다. 옳았는지 모르겠다"));
+            Life.Diary(w, cap, Persona.Say(cap, close ? $"{Ko.EulReul(d.Room)} 닫으라고 했다. 안에 사람이 있었다" : $"{Ko.EulReul(d.Room)} 열어 두라고 했다. 옳았는지 모르겠다"));
         }
         else
         {
@@ -361,9 +361,9 @@ public sealed partial class ShipMate
         {
             d.Closed = w.Tick;
             foreach (var dr in r.Doors) if (!dr.Removed && !dr.IsExternal && !dr.Locked) { dr.Locked = true; d.Locked.Add(dr.Id); }
-            Say($"{d.Room}을 닫았다 ({d.By}) — 안의 사람은 반대쪽 문 · 마스크로. 곧 가겠다", r, 2);
+            Say($"{Ko.EulReul(d.Room)} 닫았다 ({d.By}) — 안의 사람은 반대쪽 문 · 마스크로. 곧 가겠다", r, 2);
         }
-        else Say($"{d.Room}을 열어 둔다 ({d.By}) — 안의 사람은 지금 나와라", r, 2);
+        else Say($"{Ko.EulReul(d.Room)} 열어 둔다 ({d.By}) — 안의 사람은 지금 나와라", r, 2);
         w.History.Add(w, HistoryKind.Decision, $"권한 밖 딜레마: {d.Room} ({d.Hazard}) — {d.Decision} · {d.By}{(d.Reachable ? "" : $" ({d.Unreachable})")}", r, still!, log: false);
     }
 
@@ -380,7 +380,7 @@ public sealed partial class ShipMate
         d.Outcome = dead > 0 ? $"갇힌 사람 중 {dead}명이 숨졌다" : down > 0 ? $"{down}명이 쓰러졌지만 살았다" : "갇혔던 사람 모두 나왔다";
         if (dead > 0)
             foreach (var c in w.Crew.Where(c => !c.Dead && !c.IsChild && people.Any(p => p!.AffinityTo(c) > 0.3f || c.AffinityTo(p!) > 0.3f)).OrderBy(c => c.Id))
-                A.Trusts.Change(c, d.By.StartsWith("주 컴퓨터", StringComparison.Ordinal) ? -0.1f : -0.03f, $"{d.Room}을 닫아 사람이 갇혔다", quiet: true);
+                A.Trusts.Change(c, d.By.StartsWith("주 컴퓨터", StringComparison.Ordinal) ? -0.1f : -0.03f, $"{Ko.EulReul(d.Room)} 닫아 사람이 갇혔다", quiet: true);
         Say($"{d.Room} 다시 열었다 — {d.Outcome}", r);
     }
 }

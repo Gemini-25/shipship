@@ -21,6 +21,8 @@ public sealed class MateActivity : Activity
         if (Crisis.Acting(w)) return (0f, "—");
         if (m.HintFor(c) is CareHint h && w.Crew.FirstOrDefault(x => x.Id == h.About) is CrewMember t && !t.Dead && t.IsAwake && t.Room != null && !t.Outside && c.IsAwake)
             return (Bedtime(c, w) ? 0.2f : 0.58f, $"{t.Name}에게 안부 — 컴퓨터가 넌지시");
+        if (m.ShelterFor(c) is Room && c.IsAwake && !c.Outside)
+            return (OnShift(c, w) ? 0.52f : 0.3f, "대피소 점검 — 날씨 예보");
         if (m.GearFor(c) is GearUpgrade u && c.IsAwake)
             return (OnShift(c, w) ? 0.5f : 0.22f, $"{u.Room} {u.Name} 공사");
         return (0f, "—");
@@ -62,6 +64,20 @@ public sealed class MateActivity : Activity
                 }),
             };
             return new Job(this, $"{t.Name}에게 안부", toils) { LogText = $"{t.Name}에게 말을 건다", LogKind = LogKind.Life };
+        }
+        if (m.ShelterFor(c) is Room sh)
+        {
+            var inside = sh.Cells.Where(x => w.Ship.IsOpenFloor(x) && dist.Reachable(x) && !w.IsSpotTaken(x, c)).OrderBy(dist.Get).Cast<Cell?>().FirstOrDefault();
+            if (inside is not Cell at) return null;
+            var shelter = sh;
+            var toils = new List<Toil>
+            {
+                new DoToil((cm, world) => { world.Automation.Mate.ShelterTaken(cm); return true; }),
+                new GotoToil(at),
+                new WaitToil(SimTime.Minutes(10), Pose.Working),
+                new DoToil((cm, world) => { world.Automation.Mate.ShelterChecked(cm, shelter); return true; }),
+            };
+            return new Job(this, "대피소 점검", toils) { LogText = $"{sh.Name} 점검 (물 · 마스크)", LogKind = LogKind.Work };
         }
         if (m.GearFor(c) is GearUpgrade u)
         {

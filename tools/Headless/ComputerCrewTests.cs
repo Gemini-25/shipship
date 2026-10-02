@@ -318,6 +318,61 @@ public static partial class Program
             Check("첫날 오전에도 분명히 지친 사람에게 쉬라고 했다", mate.EarlyRests > before && w.Automation.CrewModel.RestAsked(c), $"{c.Name} 기력 {c.Needs.Rest * 100:0}% · 쉬라 {w.Automation.CrewModel.RestAsked(c)} · 30번 넘게 본 사람 {known} · {w.Tick / (float)SimTime.TicksPerHour:0.0}시간째 · {c.Room?.Name} 읽힘 {(c.Room != null && w.Automation.Belief.Reading(c.Room))} · 깸 {c.IsAwake} · {c.Job?.Activity?.Id} · 켜짐 {w.Automation.MainOnline} · 알아챔 {mate.EarlyRests - before}");
         }
 
+        // ── 14) 과부하로 덜 급한 경보를 놓치고 나중에 인정한다 ──
+        if (Sec(14))
+        {
+            var w = World.CreateDefault(seed, 0, "Hanbit");
+            Run(w, SimTime.Hours(10));
+            var mate = w.Automation.Mate;
+            mate.ForceOverload = true;
+            var room = w.Ship.LiveRooms.Where(r => r.Type != RoomType.Corridor).OrderBy(r => r.Id).First();
+            for (int i = 0; i < 6; i++) { w.RaiseAlert($"{room.Name} 습도가 높다 ({i + 1})", room, AlertLevel.Warning, false); w.Step(); }
+            Run(w, SimTime.Minutes(20));
+            int missed = mate.MissedAlarms.Count;
+            mate.ForceOverload = false;
+            Run(w, SimTime.Minutes(20));
+            Check("일이 몰린 사이 덜 급한 경보를 놓쳤다", missed > 0, $"놓친 경보 {missed}건");
+            Check("숨이 트이자 늦게 본 걸 인정했다 (약속도)", mate.Admitted > 0 && mate.MissedAlarms.All(x => x.Admitted >= 0) && mate.Promised("alarm") != null, $"인정 {mate.Admitted} · 약속 {mate.Promised("alarm")?.Text}");
+        }
+
+        // ── 15) 성격 탓 실수: 과감하면 낙관해 정비를 미루다 놓친다 → 사고 뒤 검토 ──
+        if (Sec(15))
+        {
+            var w = DayOne(seed, "Hanbit");
+            var mate = w.Automation.Mate;
+            w.Automation.Character.Nudge(-0.9f, 0f, "시험 — 과감해졌다");
+            w.Policies.Set("maint", 1, "시험");
+            var m = w.Ship.Machines.Where(x => x.Body.Room.DataLinked && x.Faults.Count == 0 && x.Body.Type != FurnitureType.ReactorCore).OrderBy(x => x.Body.Id).First();
+            m.Wear = 0.4f;
+            UpkeepSlot? slot = null;
+            for (long t = 0; t < SimTime.TicksPerDay * 2 && slot == null; t++) { if (t % SimTime.TicksPerHour == 0) m.Wear = MathF.Min(1f, m.Wear + 0.01f); w.Step(); slot = mate.Slots.FirstOrDefault(s => s.MachineId == m.Body.Id && !s.Done); }
+            if (slot != null && w.Tick < slot.At)
+            {
+                w.Machines.Break(m); // 정비표의 날보다 먼저 멎었다
+                for (int i = 0; i < SimTime.Hours(2); i++) w.Step();
+            }
+            var rv = mate.Reviews.LastOrDefault();
+            Check("과감한 성격이 남은 수명을 넉넉히 봤다가 놓친 것이 사고 뒤 검토에 남는다", rv != null && rv.Text.Contains("낙관") && w.Automation.Review.Reviews.Any(r => r.Title.StartsWith("정비")), rv?.Text ?? $"검토 없음 · 칸 {(slot == null ? "없음" : $"{slot.Day}일 {slot.Hour}시 (수명 {slot.LifeLo:0.0}~{slot.LifeHi:0.0})")}");
+        }
+
+        // ── 16) 우주 날씨 예보: 선외 일 미룸 · 드론 들임 · 대피소 점검 · 가끔 빗나감 → 약속 ──
+        if (Sec(16))
+        {
+            var w = DayOne(seed, "Hanbit");
+            var mate = w.Automation.Mate;
+            MateRunTo(w, 2, 9f);
+            var f = mate.MakeForecast(storm: 0.6f, shower: 0.05f);
+            Check("폭풍 예보가 높으면 선외 일을 미룬다", f.Held && mate.EvaHold, mate.SkyLine(f));
+            for (int i = 0; i < SimTime.Hours(3) && mate.ShelterChecks == 0; i++) w.Step();
+            Check("대피소를 사람이 가서 점검했다", mate.ShelterChecks > 0, $"점검 {mate.ShelterChecks}");
+            Run(w, SimTime.TicksPerDay + SimTime.Minutes(30));
+            Check("폭풍이 안 오면 빗나간 예보로 남는다 (가끔 빗나감)", f.Judged && !f.Hit && f.Verdict.Contains("빗나갔다"), f.Verdict);
+            var f2 = mate.MakeForecast(storm: 0.04f, shower: 0.02f);
+            w.Hazards.StartStorm();
+            Run(w, SimTime.TicksPerDay + SimTime.Minutes(30));
+            Check("못 본 폭풍은 인정하고 약속한다", f2.Judged && f2.StormCame && !f2.Hit && mate.Promised("weather") != null, $"{f2.Verdict} · 약속 {mate.Promised("weather")?.Text}");
+        }
+
         // ── 12) 결정론 ──
         if (Sec(12))
         {
