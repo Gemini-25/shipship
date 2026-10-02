@@ -55,8 +55,8 @@ public sealed partial class RelationSystem
         RelationReason.IgnoredMyWarning => "내 경고를 무시했다", RelationReason.TookMyThing => "내 물건을 가져갔다", RelationReason.SavedMyThing => "내 물건을 건져 줬다",
         RelationReason.GaveMeGift => "선물을 줬다", RelationReason.FixedMyThing => "내 물건을 고쳐 줬다", RelationReason.AbandonedMe => "나를 두고 갔다",
         RelationReason.NursedMe => "나를 돌봐 줬다", RelationReason.TaughtMe => "나를 가르쳤다", RelationReason.BlamedMe => "나를 탓했다",
-        RelationReason.Comforted => "위로해 줬다", RelationReason.BrokeMyThing => "내 물건을 망가뜨렸다", RelationReason.Apologized => "먼저 사과했다", RelationReason.SharedHardship => "원정에서 함께 고생했다", RelationReason.CutMyHair => "머리를 잘라 줬다", RelationReason.BotchedMyHair => "머리를 망쳐 놨다", _ => "약속을 지켰다",
         RelationReason.Comforted => "위로해 줬다", RelationReason.BrokeMyThing => "내 물건을 망가뜨렸다", RelationReason.Apologized => "먼저 사과했다", RelationReason.SharedHardship => "원정에서 함께 고생했다",
+        RelationReason.CutMyHair => "머리를 잘라 줬다", RelationReason.BotchedMyHair => "머리를 망쳐 놨다",
         RelationReason.CutInLine => "줄에 새치기했다", RelationReason.LetMeFirst => "줄을 양보해 줬다", RelationReason.GoodPartner => "손발이 맞는 짝이다", _ => "약속을 지켰다",
     };
 
