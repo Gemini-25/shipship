@@ -385,6 +385,7 @@ public sealed class MeetingSystem
         w.Cosmic.Agenda(rec, attendees); // v18.13 대재난 대비 계획 · 그날을 기리는 관행
         w.Expedition.Agenda(rec, attendees, chair); // v16.12 원정 안건
         w.TechWeb.Agenda(rec, attendees, chair); // v16.14 기술 갈림길
+        w.Annex.Agenda(rec, attendees, chair); // v16.10 증축 안건 (침실 · 창고 — 주 컴퓨터의 무게 · 자재 · 위험 조언)
         w.RoomPlans.Agenda(rec, attendees, chair); // v16.17 승무원이 낸 방 안건 (옮기기 · 나누기 · 이름 · 꾸미기)
         w.Automation.Authority.Agenda(rec, attendees, chair); // v16.16 컴퓨터 안건 (계획 · 권한)
         // 4) 방침 하나: 모인 사람 다수가 바라는 쪽이 지금과 다르고, 바꾼 지 사흘이 지났으면 올린다

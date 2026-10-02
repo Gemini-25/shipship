@@ -94,6 +94,7 @@ public sealed class AmbienceSystem
         int people = _w.Crew.Count(c => !c.Dead && c.Room == room && c.Pose == Pose.Working);
         if (people > 0) n = MathF.Min(1f, n + 0.05f * people);
         n = MathF.Max(n, _w.Portable.NoiseIn(room)); s *= _w.Portable.SmellMul(room); // v16.7 이동식 장비 소리 · 공기청정기
+        n = MathF.Max(n, _w.Annex?.NoiseIn(room) ?? 0f); // v16.10 증축 공사 (용접 · 망치)
         return (n, v, s, r);
     }
 

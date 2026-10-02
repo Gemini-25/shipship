@@ -527,6 +527,8 @@ public static class Scenarios
                 Meteor(RoomType.Mess, 1.5f);
                 focus = R(RoomType.Mess);
                 break;
+            case "crowded": focus = AnnexSystem.Crowd(w); break; // v16.10 빈 침대는 예전에 화물칸으로 · 구조한 두 사람 → 간이침대
+            case "annex": w.Annex.Directive = true; break; // v16.10 관찰자 지시: 증축 안건
             default:
                 return false;
         }

@@ -189,6 +189,20 @@ public sealed partial class BodySystem
         InitMounts();
     }
 
+    /// <summary>v16.10 증축: 격자가 아래로 자랐다 — 칸 번호는 그대로, 칸 배열 뒤만 늘린다 (새 칸은 새 패널 — 닳음 0).</summary>
+    internal void GrowCells()
+    {
+        int n = _w.Ship.Grid.CellCount;
+        if (Floor.Length >= n) return;
+        var f = Floor; Array.Resize(ref f, n); Floor = f;
+        var u = Under; Array.Resize(ref u, n); Under = u;
+        var ce = Ceiling; Array.Resize(ref ce, n); Ceiling = ce;
+        var g = Guide; Array.Resize(ref g, n); Guide = g;
+        var we = Wear; Array.Resize(ref we, n); Wear = we;
+        var st = Steps; Array.Resize(ref st, n); Steps = st;
+        Array.Resize(ref _hatchOpen, n);
+    }
+
     public WallBody? WallAt(Cell c) => _walls.TryGetValue(c, out var b) ? b : null;
     public bool HatchOpenAt(Cell c) => _w.Ship.Grid.InBounds(c) && _hatchOpen[_w.Ship.Grid.Index(c)];
     public CellState? MarksAt(Cell c) => _w.Ship.Grid.InBounds(c) && Marks.TryGetValue(_w.Ship.Grid.Index(c), out var s) ? s : null;

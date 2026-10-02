@@ -55,9 +55,9 @@ public sealed class PropulsionSystem
     public long NextAmbient { get; private set; } = -1;
 
     /// <summary>회피 한 번에 드는 추진제 (kg, 배 크기에 비례).</summary>
-    public float EvadeCost => 6f * Scale;
+    public float EvadeCost => 6f * Scale * (_w.Annex?.FuelMul ?? 1f); // v16.10 증축한 무게만큼
     /// <summary>항로를 바꾸는 데 드는 추진제.</summary>
-    public float TransferCost => 30f * Scale;
+    public float TransferCost => 30f * Scale * (_w.Annex?.FuelMul ?? 1f);
     public float Scale { get; private set; }
 
     /// <summary>시험용: 회피 기동을 끈다 (운석이 맞았을 때의 결과를 재는 게이트).</summary>
@@ -104,7 +104,7 @@ public sealed class PropulsionSystem
                 // 엔진은 평소 대기 중이라 전기는 연소할 때 따로 본다 — 여기선 고장·마모·단계만
                 sum += m.FaultFactor * (1f - 0.25f * m.Wear * m.Wear) * (0.6f + 0.4f * m.Condition) * Tech.Of(m).Output * Grades.Output(m.Grade);
             }
-            return sum / DesignEngines;
+            return sum / DesignEngines / (_w.Annex?.MassMul ?? 1f); // v16.10 증축: 가속 = 추력 ÷ 무게
         }
     }
 

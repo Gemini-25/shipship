@@ -16,7 +16,7 @@ public sealed class DistanceField
         _cost = cost;
     }
 
-    public int Get(Cell c) => _grid.InBounds(c) ? _cost[_grid.Index(c)] : -1;
+    public int Get(Cell c) { if (!_grid.InBounds(c)) return -1; int i = _grid.Index(c); return i < _cost.Length ? _cost[i] : -1; } // v16.10 증축 전에 만든 거리장은 새 칸을 모른다
     public bool Reachable(Cell c) => Get(c) >= 0;
 }
 
@@ -50,10 +50,10 @@ public sealed class Pathfinder
 
     private readonly Ship _ship;
     private readonly int _w;
-    private readonly int _n;
-    private readonly int[] _g;
-    private readonly int[] _parent;
-    private readonly int[] _stamp;
+    private int _n;
+    private int[] _g;
+    private int[] _parent;
+    private int[] _stamp;
     private int _run;
 
     // 캐시: 걸을 수 있나, 방 번호, 문 번호(없으면 -1), 가구 위인가
@@ -71,11 +71,11 @@ public sealed class Pathfinder
     public bool IsSpace(Cell c) => _ship.Grid.InBounds(c) && _space[_ship.Grid.Index(c)];
 
     /// <summary>칸마다 덧붙는 위험 비용 (불과 그 주변). 화재 시스템이 채운다.</summary>
-    public int[] CellHazard { get; }
+    public int[] CellHazard { get; private set; }
     /// <summary>v16.3 배 본체가 채우는 칸 비용 (열린 점검 뚜껑 · 테이프 · 유리 · 기름) — 사람들은 돌아간다.</summary>
-    public int[] CellBody { get; }
+    public int[] CellBody { get; private set; }
     /// <summary>v16.3 정비 통로 (벽 속을 기어서 지나는 칸) — 배 본체가 연다 · 로봇 · 업은 사람 · 다친 사람은 못 지난다.</summary>
-    public bool[] Crawl { get; }
+    public bool[] Crawl { get; private set; }
     public void CrawlChanged() => _hazardVersion++;
     private readonly int[] _dx = { 1, -1, 0, 0, 1, 1, -1, -1 };
     private readonly int[] _dy = { 0, 0, 1, -1, 1, -1, 1, -1 };
@@ -93,6 +93,21 @@ public sealed class Pathfinder
         Crawl = new bool[_n];
         _offsets = new int[8];
         for (int i = 0; i < 8; i++) _offsets[i] = _dy[i] * _w + _dx[i];
+        Invalidate();
+    }
+
+    /// <summary>v16.10 증축: 격자가 아래로 자랐다 — 칸 번호는 그대로라 배열 뒤만 늘린다 (너비가 같아 이웃 칸 간격도 그대로).</summary>
+    public void Grow()
+    {
+        int n = _ship.Grid.CellCount;
+        if (n == _n) return;
+        _n = n;
+        Array.Resize(ref _g, n); Array.Resize(ref _parent, n); Array.Resize(ref _stamp, n);
+        var h = CellHazard; Array.Resize(ref h, n); CellHazard = h;
+        var b = CellBody; Array.Resize(ref b, n); CellBody = b;
+        var cr = Crawl; Array.Resize(ref cr, n); Crawl = cr;
+        _floods.Clear();
+        _hazardSeen = Array.Empty<int>(); _bodySeen = Array.Empty<int>();
         Invalidate();
     }
 
