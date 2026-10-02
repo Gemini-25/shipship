@@ -257,6 +257,7 @@ public sealed class PlanSystem
                 if (s.Who is not CrewMember who || who.Dead) { s.Note = "그 사람이 없다"; return null; }
                 var room = s.Room ?? w.Brain2.Beliefs.WhereIs(c, who, out _);
                 if (room == null) room = GuessPlace(c, who, dist);
+                if (room != null && !RoomOk(c, room)) { s.Note = $"{room.Name}은(는) 위험하다 — 못 간다"; return null; }
                 if (room == null || SpotIn(room, dist, c, who) is not Cell spot) { s.Note = $"{who.Name}이(가) 어디 있는지 모른다"; return null; }
                 s.Room = room;
                 bool tell = s.Kind == StepKind.Tell;
@@ -294,6 +295,7 @@ public sealed class PlanSystem
             }
             case StepKind.CheckRoom:
             {
+                if (s.Room is Room lr && (lr.Lockdown || lr.OffLimits || lr.EvacuateBy >= 0 || lr.Detached)) { s.Note = $"{lr.Name}은(는) 봉쇄됐다"; return null; }
                 if (s.Room is not Room room || SpotIn(room, dist, c) is not Cell spot) { s.Note = "그 방에 갈 수 없다"; return null; }
                 var toils = new List<Toil> { new GotoToil(spot), new DoToil((cm, world) => { CheckRoom(cm, p, s); return true; }) };
                 return Wrap(p, s, act, "불 확인", toils, $"{room.Name}에 불이 났다고 들었다 — 확인하러 간다", room);
@@ -470,6 +472,7 @@ public sealed class PlanSystem
         if (helper == null) { s.Note = "부탁할 사람이 없다"; return null; }
         s.Who = helper;
         var room = s.Room ?? w.Brain2.Beliefs.WhereIs(c, helper, out _) ?? GuessPlace(c, helper, dist);
+        if (room != null && !RoomOk(c, room)) { s.Note = $"{room.Name}은(는) 지금 들어갈 수 없다"; return null; }
         if (room == null || SpotIn(room, dist, c, helper) is not Cell spot) { s.Note = $"{helper.Name}에게 갈 수 없다"; return null; }
         s.Room = room;
         var toils = new List<Toil>
@@ -918,6 +921,10 @@ public sealed class PlanSystem
         return best;
     }
 
+    /// <summary>들어가도 되는 방: 봉쇄 · 출입 제한 · 대피 지시 · 대응 중이 아니고, 위험하다고 믿지 않는 방.</summary>
+    public bool RoomOk(CrewMember c, Room r) =>
+        !r.Detached && !r.OffLimits && !r.Lockdown && r.EvacuateBy < 0 && !r.ResponseHold && !r.Purging && !r.Inerting && _w.Brain2.Beliefs.SafeEnough(c, r);
+
     private Cell? SpotIn(Room r, DistanceField dist, CrewMember c, CrewMember? near = null)
     {
         Cell? best = null;
@@ -950,7 +957,7 @@ public sealed class PlanSystem
         int bc = int.MaxValue;
         foreach (var r in _w.Ship.Rooms)
         {
-            if (r == c.Room || r.Detached || r.OffLimits || r.Type == RoomType.Corridor || bel.Believes(c, Topic.Dark, r.Id, 1, 0.4f) || !bel.SafeEnough(c, r)) continue;
+            if (r == c.Room || !RoomOk(c, r) || r.Type == RoomType.Corridor || bel.Believes(c, Topic.Dark, r.Id, 1, 0.4f) || !bel.SafeEnough(c, r)) continue;
             foreach (var cell in r.Cells)
             {
                 int d = dist.Get(cell);
@@ -1020,8 +1027,12 @@ public sealed class OutageActivity : Activity
         var plans = w.Brain2.Plans;
         long since = w.Brain2.Beliefs.Of(c).DarkSince;
         if (plans.OutageHandled(c, since) || plans.Current(c) is { Kind: PlanKind.Outage or PlanKind.Tell }) return (0f, "이미 대처 중");
+        // 대피 · 피난 중인 사람은 어둠 때문에 자리를 뜨지 않는다 (대피소 · 방공 · 격리)
+        if (c.Job?.Activity is Activity ja && BrainSystem.Cat(ja) == ActCat.Survival) return (0f, "피하는 중 — 정전보다 급하다");
         var (m, s, why, _) = plans.ChooseOutage(c, dark);
         if (m == Method.CarryOn) return (0f, $"정전 — {why}");
+        // 큰 위기 중에는 문제를 푸는 길(차단기 · 발전 · 컴퓨터)만 — 사람 챙기기 · 밝은 곳 찾기는 위기 대응에 맡긴다
+        if (Crisis.Acting(w) && m is not (Method.ResetBreaker or Method.PowerRoom or Method.AskComputer)) return (0f, $"위기 중 — {why}");
         return (MathF.Min(1.25f, 0.7f + 0.4f * s), $"정전 — {why}");
     }
 

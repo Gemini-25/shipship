@@ -385,6 +385,7 @@ public sealed class Job
         for (int guard = 0; guard < 8; guard++)
         {
             var status = _toils[_index].Tick(c, w);
+            if (_index >= _toils.Count) return status == ToilStatus.Running ? ToilStatus.Interrupted : status; // v16.15 단계 안에서 일이 이미 끝났다 (예: 잠결 장면이 스스로 깨워 EndJob) — 풀린 단계를 다시 만지지 않는다
             if (status == ToilStatus.Running) return ToilStatus.Running;
 
             _toils[_index].End(c, w);
