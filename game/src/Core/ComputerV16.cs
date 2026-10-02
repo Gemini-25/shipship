@@ -356,7 +356,7 @@ public sealed partial class AutomationSystem
         if (V15NoAuto || !MainOnline || w.Tick <= SimTime.TicksPerDay * 2 || w.Tick - _v16Last < SimTime.TicksPerDay) return;
         foreach (var r in ComputerV16.Rows)
         {
-            if (Has(r.Module) || ComputerV16.Why(w, r) is not string why) continue;
+            if (Has(r.Module) || ComputerV16.Why(w, r) is not string why) continue; // v16.20 첫날부터 다 있다 (시험이 뺀 모듈만 다시 단다)
             if ((Demand() + ModuleLoad(r.Module)) / MathF.Max(1f, Capacity) > 0.8f) return; // 연산이 모자라다
             _v16Last = w.Tick;
             Install(r.Module, why);

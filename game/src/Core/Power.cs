@@ -270,6 +270,7 @@ public sealed class PowerGrid
         ParkedCount = 0;
         w.Cosmic.Park(); // v18.13 대재난 대비로 꺼 둔 설비
         w.RoomPlans.Park(); // v16.17 옮기려고 떼어 낸 설비는 다시 이을 때까지 돌지 않는다
+        w.Automation.Park(); // v16.20 전력 트리아지: 필수 우선순위표로 비필수를 끄고 몰아준다
         if (!Brownout) { _parkedPump = _parkedO2 = -1; return; }
 
         // 냉각 펌프: 분기 하나로 원자로 출력을 식힐 수 있으면 약한 쪽 분기의 펌프를 내린다
@@ -427,7 +428,7 @@ public sealed class PowerGrid
         }
         if (ReactorOnline) ReactorRamp = MathF.Min(1f, ReactorRamp + dtHours / RampHours);
         ReactorPoison = MathF.Max(0f, ReactorPoison - dtHours / 6f);
-        float reactorMax = reactor == null || !ReactorOnline ? 0f : ReactorMaxKw * reactor.Rating * reactor.Efficiency * (1f - 0.55f * ReactorPoison) * (MaintenanceCap ? 0.5f : 1f);
+        float reactorMax = reactor == null || !ReactorOnline ? 0f : ReactorMaxKw * reactor.Rating * reactor.Efficiency * (1f - 0.55f * ReactorPoison) * (MaintenanceCap ? 0.5f : 1f) * _world.Automation.ReactorCap; // v16.20 컴퓨터가 달아오른 노심 출력을 낮춘다
         float cooling = LowPowerMode ? NaturalCoolingKw + CoolingCapacity : CoolingCapacity * 0.95f;
         float target = MathF.Min(reactorMax, cooling) * ReactorRamp;
         // v9: 자동 제어봉은 한 시간에 60kW만큼만 출력을 내린다 — 냉각이 갑자기 줄면 그동안 넘치는 열이 노심을 데운다

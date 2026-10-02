@@ -936,6 +936,7 @@ public sealed partial class WorkBoard
             {
                 if (fault.Kind == FaultKind.BreakerTrip)
                 {
+                    if (w.Automation.TriageOrNull?.Holding(fault.Circuit) != null) continue; // v16.20 컴퓨터가 원인을 먼저 끊고 원격으로 올린다 (같은 원인이면 다시 안 올린다)
                     Post(WorkKind.ResetBreaker, t, fault.Circuit == 0 ? 1.05f : 0.85f, Skill.Electrical,
                         $"{PowerGrid.CircuitRole(fault.Circuit)} 회로 정전", fault.Kind, fault.Circuit);
                     continue;
@@ -1253,6 +1254,7 @@ public sealed partial class WorkBoard
         ScanGrowth(Post); // v11.3 배우기 · 재활
         psc = Prof.Lap("scan.Growth", psc);
         ScanLife(Post); // v12.7 시신 수습 · 의수·의족
+        ScanComputer(Post); // v16.20 원격으로 안 되는 일만 손에게 (ComputerTriage.cs)
         psc = Prof.Lap("scan.Life", psc);
 
         // ── 결정 (v7): 사람이 정해야 하는 일은 심의에 올린다 ──

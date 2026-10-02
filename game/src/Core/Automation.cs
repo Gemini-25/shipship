@@ -37,8 +37,8 @@ public sealed partial class AutomationSystem
     /// <summary>주 컴퓨터가 돈다 (모든 자동화).</summary>
     public bool MainOnline { get; private set; } = true;
 
-    /// <summary>예비 제어기가 설치됐다 (개조).</summary>
-    public bool Backup { get; set; }
+    /// <summary>예비 제어기가 설치됐다 (개조). v16.20 구역 소형 제어기 — 첫날부터 있다.</summary>
+    public bool Backup { get; set; } = true;
 
     /// <summary>주 컴퓨터가 멈췄을 때 예비 제어기가 격벽·댐퍼·경보를 맡고 있다.</summary>
     public bool BackupActive { get; private set; }
@@ -49,7 +49,7 @@ public sealed partial class AutomationSystem
     public bool Doors => !Present || MainOnline || BackupActive;
     public bool Dampers => !Present || MainOnline || BackupActive;
     public bool Alarms => !Present || MainOnline || BackupActive;
-    public bool Priority => !Present || MainOnline;
+    public bool Priority => !Present || CoreOnline; // v16.20 부하 우선순위는 핵심 고리 (예비 코어도)
 
     /// <summary>v12.3 그 방까지 데이터선이 이어져 있어야 자동으로 한다 (끊기면 그 방만 손으로).</summary>
     public bool DoorsIn(Room r) => Doors && r.DataLinked;
@@ -59,7 +59,7 @@ public sealed partial class AutomationSystem
     public bool DampersIn(Room r) => Dampers && r.DataLinked;
     public bool AlarmsIn(Room r) => Alarms && (r.DataLinked || ComputerV15.Relay(_world)); // v15.9 통신 중계
     public bool DroneControl => !Present || MainOnline;
-    public bool Rods => !Present || MainOnline;
+    public bool Rods => !Present || CoreOnline; // v16.20 자동 제어봉도 핵심 고리
 
     public int Outages { get; set; }
     public float OfflineHours { get; set; }
@@ -77,9 +77,9 @@ public sealed partial class AutomationSystem
     public float HeatFor(Room room)
     {
         var m = Computer;
-        if (m == null || m.Body.Room != room || !m.Powered || m.Stopped) return 0f;
+        if (m == null || m.Body.Room != room || !m.Powered && !Core.OnUps || m.Stopped && !Core.BackupCore) return 0f;
         float busy = MathF.Max(0f, Load - 0.6f); // v16.6 연산 부하가 크면 더 달아오른다
-        return Ventilated(room) ? 3f + 8f * busy : 24f + 6f * busy;
+        return (Ventilated(room) ? 3f + 8f * busy : 24f + 6f * busy) * Core.HeatMul * (m.Stopped ? 0.3f : 1f); // v16.20 안전 모드 · 절전 · 예비 코어만
     }
 
     public void Update(float dt)
@@ -88,22 +88,13 @@ public sealed partial class AutomationSystem
         if (!Present) return;
         var m = Computer;
 
-        // 과열: 환기가 끊겨 방이 달아오르면 스스로 멈춘다 (식어야 다시 켠다)
-        if (m != null && m.Powered && !m.Stopped && !m.Has(FaultKind.Overheat))
-        {
-            float t = m.Body.Room.Air.Temperature;
-            if (t > OverheatC && w.Rng.Chance(MathF.Min(1f, (t - OverheatC) / 8f) * 3f * dt))
-            {
-                Overheats++;
-                w.Machines.Break(m, FaultKind.Overheat);
-                MarkLog.Add(m.Marks, w.Tick, $"과열 정지 ({t:0}℃)");
-                w.History.Add(w, HistoryKind.Damage, $"주 컴퓨터 과열 정지 — {m.Body.Room.Name} {t:0}℃ (환기가 끊겼다)", m.Body.Room);
-            }
-        }
+        // v16.20 과열: 멈추는 대신 안전 모드 (ComputerCore.cs) · UPS · 품질
+        Core.Before(m, dt);
 
-        bool main = m != null && m.Efficiency > 0.25f && !Rebooting; // v16.6 재부팅 중에는 사람이 손으로
+        bool main = m != null && Core.MainHealth(m) > 0.25f && !Rebooting; // v16.6 재부팅 중에는 주 코어가 쉰다 (v16.20 예비 코어가 핵심 고리를 붙잡는다)
+        Core.After(m, main, dt);
         var panelRoom = w.Ship.FurnitureOf(FurnitureType.PowerPanel).FirstOrDefault()?.Room;
-        BackupActive = Backup && !main && panelRoom != null && panelRoom.Powered;
+        BackupActive = !main && (Core.BackupCore || Backup && panelRoom != null && panelRoom.Powered);
         if (main != MainOnline)
         {
             MainOnline = main;
@@ -111,10 +102,13 @@ public sealed partial class AutomationSystem
             {
                 Outages++;
                 OfflineSince = w.Tick;
-                string why = m == null ? "함교와 끊겼다" : Rebooting ? $"재부팅 — {RebootWhy}" : !m.Powered ? "전기가 없다" : m.Faults.FirstOrDefault()?.Name ?? "멈췄다";
-                w.RaiseAlert($"주 컴퓨터 정지({why}) — 자동화 꺼짐: 격벽·댐퍼·화재 경보·부하 관리를 손으로" +
-                             (BackupActive ? " · 예비 제어기가 격벽·댐퍼·경보를 맡는다" : ""), m?.Body.Room, AlertLevel.Critical, shipWide: true);
-                w.History.Add(w, HistoryKind.Damage, $"자동화가 꺼졌다 — 주 컴퓨터 {why}", m?.Body.Room);
+                string why = m == null ? "함교와 끊겼다" : Rebooting ? $"재부팅 — {RebootWhy}" : !m.Powered && !Core.OnUps ? "전기가 없다" : m.Faults.FirstOrDefault()?.Name ?? "멈췄다";
+                if (Core.BackupCore) // v16.20 예비 코어가 붙잡는다 — 판단(예측 · 원인 추정)만 쉰다
+                    w.RaiseAlert($"주 컴퓨터 본체 정지({why}) — 예비 연산기가 격벽·댐퍼·경보와 급한 곳 전기를 붙잡는다 · 앞일 예측은 쉰다", m?.Body.Room, Rebooting ? AlertLevel.Notice : AlertLevel.Warning, shipWide: !Rebooting);
+                else
+                    w.RaiseAlert($"주 컴퓨터 정지({why}) — 자동화 꺼짐: 격벽·댐퍼·화재 경보·부하 관리를 손으로" +
+                             (BackupActive ? " · 방 제어기가 격벽·댐퍼·경보를 맡는다" : ""), m?.Body.Room, AlertLevel.Critical, shipWide: true);
+                w.History.Add(w, HistoryKind.Damage, Core.BackupCore ? $"주 컴퓨터 본체가 멎었다 — {why} (예비 연산기가 붙잡았다)" : $"자동화가 꺼졌다 — 주 컴퓨터 {why}", m?.Body.Room);
             }
             else
             {

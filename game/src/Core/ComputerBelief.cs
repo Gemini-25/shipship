@@ -45,7 +45,7 @@ public sealed class BeliefModel
     }
 
     /// <summary>감지기가 값을 보내오는 방 (데이터선 또는 통신 중계 · 주 컴퓨터).</summary>
-    public bool Reading(Room r) => !r.Detached && (r.DataLinked || ComputerV15.Relay(_w)) && _w.Automation.MainOnline; // 문 감지기는 데이터선 전원으로 돈다
+    public bool Reading(Room r) => !r.Detached && (r.DataLinked || ComputerV15.Relay(_w)) && _w.Automation.CoreOnline; // 문 감지기는 데이터선 전원으로 돈다 (v16.20 예비 코어도 읽는다)
 
     /// <summary>컴퓨터가 아는 그 방 사람 수 — 모르면 null (데이터선이 끊겼고 생체 감시도 없다 · 감지기를 못 믿는다).</summary>
     public int? PeopleIn(Room r)
@@ -137,11 +137,12 @@ public sealed class BeliefModel
         var a = w.Automation;
         bool bio = a.MainOnline && a.Has(ComputerModule.BioMonitor);
         bool lag = a.Load > 1f && w.Tick / World.SystemInterval % 4 != 0; // 연산이 넘치면 감지기를 네 번에 한 번만 읽는다 (믿음이 낡는다)
+        bool slow = w.Tick / World.SystemInterval % 2 != 0; // v16.20 무선 예비는 대역이 좁다 — 두 번에 한 번
         foreach (var r in w.Ship.Rooms)
         {
             if (r.Detached) continue;
             var b = Of(r);
-            if (Reading(r) && !lag) Read(r, b);
+            if (Reading(r) && !lag && (r.DataLinked || !slow)) Read(r, b);
             else if (bio && b.Fault != SensorFault.Blind) b.People = Actual(w, r);
             if (b.Fault == SensorFault.Ghost && w.Tick - b.FaultSince > SimTime.Minutes(20)) { b.Fault = SensorFault.None; b.FaultWhy = ""; } // 헛불은 잠깐
         }

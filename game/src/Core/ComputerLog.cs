@@ -94,7 +94,7 @@ public sealed class ComputerLogBook
         {
             Id = _next++, Tick = w.Tick, Kind = kind, RoomId = room?.Id ?? -1, Key = key, Observe = observe, Judge = judge, Act = act, Request = request,
             GradeAt = w.Tick + SimTime.Minutes(gradeMinutes), Before = Danger(w, room), DownBefore = DownIn(w, room), Grader = grader,
-            By = au.Operator?.Name ?? (au.Present && !au.MainOnline && au.BackupActive ? "예비 제어기" : null),
+            By = au.Operator?.Name ?? (au.Present && !au.MainOnline && au.BackupActive ? (au.Core.BackupCore ? "예비 연산기" : "방 제어기") : null),
         };
         Acts.Add(a);
         if (Acts.Count > 240) Acts.RemoveAt(0);
@@ -253,7 +253,7 @@ public sealed partial class AutomationSystem
     {
         Belief.Update(dt);
         Resources(dt);
-        if (_wasRebooting && !Rebooting) { Suspended.Clear(); Speak.Announce(Voice.Style($"{Voice.Call} 다시 켜짐 — 자동화가 돌아왔다"), null, 1); }
+        if (_wasRebooting && !Rebooting) Speak.Announce(Voice.Style($"{Voice.Call} 다시 켜졌습니다 — 하던 일을 하나씩 되찾습니다"), null, 1); // v16.20 단계적 (ComputerLoad.Resources가 하나씩)
         _wasRebooting = Rebooting;
         if (MainOnline) { Asks.Update(); InstallV16(); }
         UpdateChecks();
@@ -266,6 +266,7 @@ public sealed partial class AutomationSystem
         Links(dt); // v16.6 문 본체 · 식단 · 대재난과 잇기 (ComputerLinks.cs)
         Foresight.Update(); // v16.6 → v16.16 앞날 예측 · 계획 (ComputerForesight.cs)
         Brain2(); // v16.16 두뇌 2.0 — 계획자 · 며칠 앞 예측 · 승무원 모형 · 권한 · 협상 · 책임 (ComputerPlanner.cs)
+        Ship20(dt); // v16.20 우주선급 — 전력 트리아지 · 미리 돌려 보기 · 성격 · 명령선 (ComputerTriage · ComputerForesee · ComputerCharacter · ComputerCommand)
     }
 
     /// <summary>배율 모듈이 실제로 아낀 양을 1분마다 쌓는다 (방 단위 · 설비 단위).</summary>
@@ -319,8 +320,9 @@ public sealed partial class AutomationSystem
         {
             var w = _world;
             if (!Present) return "주 컴퓨터가 없는 배 — 자동 회로만";
-            if (Rebooting) return $"재부팅 중 · {(RebootUntil - w.Tick) / (float)SimTime.Minutes(1):0.0}분 · 사람이 손으로" + (RebootWhy != "" ? $" ({RebootWhy})" : "");
-            if (!MainOnline) return BackupActive ? "멎음 — 예비 제어기가 격벽·댐퍼·경보만" : "멎음 — 모든 자동화를 사람이 손으로";
+            if (Rebooting) return $"재부팅 중 · {(RebootUntil - w.Tick) / (float)SimTime.Minutes(1):0.0}분 · " + (Core.BackupCore ? $"{Core.RebootStage}/3 {ShipCore.StageName(Core.RebootStage)}" : "사람이 손으로") + (RebootWhy != "" ? $" ({RebootWhy})" : "");
+            if (!MainOnline) return Core.BackupCore ? "본체 멎음 — 예비 연산기가 격벽·댐퍼·경보와 급한 곳 전기를 붙잡는다" : BackupActive ? "멎음 — 방 제어기가 격벽·댐퍼·경보만" : "멎음 — 모든 자동화를 사람이 손으로";
+            if (_foresee?.NowLine is string fl) return fl; // v16.20 미리 돌려 보고 고른 안
             foreach (var fc in FireCases.OrderByDescending(f => f.Stage == 2 ? 3 : f.Stage == 1 ? 2 : f.Stage == 3 ? 1 : 0).ThenBy(f => f.RoomId))
             {
                 var room = w.Ship.Rooms[fc.RoomId];

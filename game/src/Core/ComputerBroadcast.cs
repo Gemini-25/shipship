@@ -54,7 +54,7 @@ public sealed class PublicAddress
     {
         var w = _w;
         var a = w.Automation;
-        if (!a.Present || !a.MainOnline) return null;
+        if (!a.Present || !a.CoreOnline) return null; // v16.20 예비 코어도 방송은 한다 (경보는 핵심 고리)
         var b = new Broadcast { Id = _next++, Tick = w.Tick, Text = text, RoomId = about?.Id ?? -1, Priority = priority, Order = order };
         foreach (var r in w.Ship.Rooms)
         {

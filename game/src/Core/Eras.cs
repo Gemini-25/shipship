@@ -147,8 +147,8 @@ public sealed class EraSystem
         w.RaiseAlert($"새 기술 — {t.Name}: {t.Effect}" + (t.Risk != "없음" ? $" · 위험: {t.Risk}" : ""), null, AlertLevel.Notice, shipWide: true);
         w.History.Add(w, HistoryKind.Decision, $"{t.Name}을(를) 익혔다 ({EraName(t.Era)}) — {t.Effect}", null, log: true);
         // v13.0 컴퓨터는 처음부터 V — 기술은 기능 모듈을 단다
-        if (t.Id == "smartgrid") w.Automation.Install(ComputerModule.Preempt);
-        if (t.Id == "aicaptain") { w.Automation.Install(ComputerModule.BioMonitor); w.Automation.Install(ComputerModule.EvacGuide); }
+        if (t.Id == "smartgrid") w.Automation.Install(ComputerModule.Preempt, "지능형 배전"); // v16.20 이미 있는 모듈 — 등급이 오른다
+        if (t.Id == "aicaptain") { w.Automation.Install(ComputerModule.BioMonitor, "AI 부함장"); w.Automation.Install(ComputerModule.EvacGuide, "AI 부함장"); }
         w.TechWeb.OnLearned(t); // v16.14 갈림길 · 부작용 연쇄 · 조합 · 실험한 사람
     }
 }
