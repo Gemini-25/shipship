@@ -222,10 +222,10 @@ public sealed class CrewModelBook
     }
 
     /// <summary>쉬라는 부탁 (급하지 않은 일은 남에게).</summary>
-    public void AskRest(CrewMember c, string why, float hours = 6f)
+    public void AskRest(CrewMember c, string why, float hours = 6f, bool obvious = false)
     {
         var w = _w;
-        if (RestAsked(c) || !Ready(c)) return;
+        if (RestAsked(c) || !Ready(c) && !obvious) return; // v16.27 분명한 피로(꾸벅꾸벅)는 오래 지켜보지 않아도 안다
         _rest[c.Id] = w.Tick + SimTime.Hours(hours);
         RestAsks++;
         w.Automation.Apps.Messages.Add(new PersonalMessage(w.Tick, c.Id, "쉼", $"{why} — 급하지 않은 일은 다른 사람에게 부탁했다"));

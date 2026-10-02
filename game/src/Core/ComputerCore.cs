@@ -126,7 +126,7 @@ public sealed class ShipCore
         if (m == null) return 20f;
         float baseC = 60f + 20f * m.Tier;
         float health = a.MainOnline ? MathF.Max(0.3f, MainHealth(m)) : BackupCore ? 0.4f : 0.3f;
-        return baseC * health * (_w.Power.Brownout ? 0.8f : 1f) * (SafeMode ? 0.5f : 1f) * (SelfSaving ? 0.75f : 1f);
+        return baseC * (a.MateOrNull?.CapacityMul ?? 1f) * health * (_w.Power.Brownout ? 0.8f : 1f) * (SafeMode ? 0.5f : 1f) * (SelfSaving ? 0.75f : 1f);
     }
 
     /// <summary>방에 내는 열 배율 (안전 모드 · 절전 · UPS).</summary>
@@ -333,5 +333,6 @@ public sealed partial class AutomationSystem
         _character?.Hash(I, F);
         _command?.Hash(I, F);
         Hash26(I, F); // v16.26
+        Hash27(I, F); // v16.27
     }
 }

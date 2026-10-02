@@ -274,8 +274,8 @@ public partial class Hud
     /// <summary>관제 화면 위 탭 (관제 · 기록 · 보고·모듈 · 사람·믿음). 0이 아니면 탭 내용을 그리고 true.</summary>
     private bool DrawControlTabs(Rect2 card, float x, float right, float y0, Vector2 mouse)
     {
-        string[] tabs = { "관제", "지휘", "다섯 칸 기록", "보고·일정", "사람·믿음", "앞날·계획", "계획·권한" };
-        int[] order = { 0, 6, 1, 2, 3, 4, 5 }; // v16.20 "지휘"는 둘째 칸에 (번호는 그대로)
+        string[] tabs = { "관제", "지휘", "하루·정비표", "다섯 칸 기록", "보고·일정", "사람·믿음", "앞날·계획", "계획·권한" };
+        int[] order = { 0, 6, 7, 1, 2, 3, 4, 5 }; // v16.20 "지휘"는 둘째 칸에 (번호는 그대로) · v16.27 "하루·정비표"는 셋째
         float tx = x;
         for (int i = 0; i < tabs.Length; i++)
         {
@@ -293,6 +293,7 @@ public partial class Hud
             case 4: DrawForesight(card, x, right, y); break;
             case 5: DrawBrainTab(card, x, right, y); break; // v16.16
             case 6: DrawCommandTab(card, x, right, y); break; // v16.20 지휘: 믿는 배 지도 · 명령선 · 견줘 본 판단 · 전력 흐름
+            case 7: DrawMateTab(card, x, right, y); break; // v16.27 아침 방송 · 주간 정비표 · 물자 · 날씨 · 돌봄 · 훈련 · 약속 · 거절 · 개조 · 약점
             default: DrawPeopleBelief(card, x, right, y); break;
         }
         return true;

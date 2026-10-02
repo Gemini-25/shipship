@@ -683,6 +683,7 @@ public partial class ShipView : Node2D
         PaintRoomStates(ci);
         PaintRoomSigns(ci); // v16.17 승무원이 붙인 이름 표지판 (나무 · 놋쇠 · 칠판 · 법랑)
         PaintComputerWorld(ci); // v16.6 서버 랙 · 조작 빛 흐름 · 스피커 · 콘솔 경고 · 홀로그램 정보판 (ShipViewComputer.cs)
+        PaintMateWorld(ci); // v16.27 늘린 장비 · 설치 장면 · 정찰 · 훈련 깃발 · 정비 꼬리표 · 식당 화면 · 딜레마 · 안부 쪽지 · 날씨 표지 · 기억 검사 (ShipViewMate.cs)
 
         if (_main.HoveredRoom is Room hr && hr != _main.SelectedRoom && !hr.Detached)
             PaintOutline(ci, hr, Palette.Room(hr.Kind).WithAlpha(0.35f), false);

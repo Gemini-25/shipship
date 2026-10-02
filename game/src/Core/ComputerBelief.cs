@@ -168,7 +168,7 @@ public sealed class BeliefModel
             if (b.Fault != SensorFault.None || r.Type == RoomType.Corridor) continue;
             float cal = 1f; int n = 0;
             foreach (var f in r.Furniture) if (f.Machine is Machine m) { cal = MathF.Min(cal, m.SensorCal); n++; }
-            if (n > 0 && cal < 0.45f && R.Chance(0.01f * ComputerV15.DriftMul(w, r))) Break(r, SensorFault.Blind, $"교정 {cal * 100:0}% 설비 옆 문 감지기");
+            if (n > 0 && cal < 0.45f && R.Chance(0.01f * ComputerV15.DriftMul(w, r) * (a.MateOrNull?.SensorFaultMul(r) ?? 1f))) Break(r, SensorFault.Blind, $"교정 {cal * 100:0}% 설비 옆 문 감지기");
         }
         if (w.Hazards.StormActive && R.Chance(0.25f))
         {
@@ -176,6 +176,7 @@ public sealed class BeliefModel
             if (rooms.Count > 0)
             {
                 var r = R.Pick(rooms);
+                if ((a.MateOrNull?.SensorFaultMul(r) ?? 1f) < 1f && R.Chance(0.6f)) return; // v16.27 차폐한 데이터선 · 겹친 감지기
                 Break(r, SensorFault.Stuck, "방사선 데이터 손상");
                 w.Log.Add(w.Tick, LogKind.Warning, $"방사선 — {r.Name} 감지기 값이 깨졌다 (컴퓨터는 {SimTime.Clock(w.Tick)} 값을 그대로 믿는다)");
             }
