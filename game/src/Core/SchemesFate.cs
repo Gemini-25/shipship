@@ -557,7 +557,20 @@ public sealed partial class SchemeSystem
             // 누가 했는지 모른다 → 메신저에 묻는다 · 장난칠 만한 사람을 짐작한다 (틀릴 수도 있다)
             w.Info.Chat.Post(victim, ChatKind.Ask, ShipChat.Voice(victim, $"{spec.Legit} — 누가 그랬어?", $"{spec.Legit} — 하신 분 계신가요?"));
             var guess = w.Crew.Where(o => Adult(o) && o != victim).OrderByDescending(o => DriveOf(o, Drive.Jest) + 0.2f * (o.Room == victim.Room ? 1f : 0f)).ThenBy(o => o.Id).FirstOrDefault();
-            if (laugh) { Stats.Laughed++; outcome = "누가 했는지 모른 채 웃어넘겼다"; }
+            // 웃어넘기는 걸 보면 장난꾼은 자기가 했다고 밝히고 싶어 못 견딘다 (사이가 좋아진다)
+            if (laugh && lead != null && lead.CanAct && (lead.Habits.Contains(Habit.Prankster) || lead.Habits.Contains(Habit.Joker) || R.Chance(0.4f)))
+            {
+                Stats.Laughed++;
+                s.Identified = true;
+                s.Knows[victim.Id] = KnowHow.Chat;
+                var ask = w.Info.Chat.All.Count > 0 ? w.Info.Chat.All[^1] : null;
+                w.Info.Chat.Post(lead, ChatKind.Joke, ShipChat.Voice(lead, "그거 나야 ㅋㅋ 표정 봤어야 했는데", "죄송해요, 그거 제가 했어요"), reply: ask?.Author == victim.Id ? ask.Id : -1);
+                w.Relations.Remember(victim, lead, RelationReason.LaughedTogether, $"{spec.Name} — 알고 보니 {Ko.IGa(lead.Name)} 했다 · 같이 웃었다");
+                victim.ChangeAffinity(lead, 0.05f); lead.ChangeAffinity(victim, 0.04f);
+                w.Brain2.Emotions.Feel(victim, Feeling.Joy, 0.15f, $"{spec.Name} — 웃겼다", lead);
+                outcome = $"웃어넘기자 {Ko.IGa(lead.Name)} 자기가 했다고 털어놨다";
+            }
+            else if (laugh) { Stats.Laughed++; outcome = "누가 했는지 모른 채 웃어넘겼다"; }
             else
             {
                 Stats.Grudges++;

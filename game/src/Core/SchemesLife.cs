@@ -28,6 +28,32 @@ public sealed partial class SchemeSystem
         "secret_romance" => 21.5f, "sports_league" => 18.5f, "black_market" => 21.5f, "gambling_den" => 21f, _ => 20f,
     };
 
+    /// <summary>모임 시각: 다른 모임 · 관행과 겹치면 앞뒤로 비켜 잡는다 (같은 사람들이 두 군데 다 가고 싶어 하니까).</summary>
+    private float FreeHour(Scheme s)
+    {
+        float h0 = SessionHour(s.Spec);
+        if (s.Spec.Fate != Fate.Club) return h0;
+        if (s.SessionHourSet >= 0f) return s.SessionHourSet;
+        bool Clash(float h)
+        {
+            foreach (var p in Practices) if (MathF.Abs(p.Hour - h) < 1.4f) return true;
+            foreach (var o in All)
+            {
+                if (o == s || !o.Active || o.Spec.Fate != Fate.Club) continue;
+                float oh = o.SessionHourSet >= 0f ? o.SessionHourSet : SessionHour(o.Spec);
+                if (MathF.Abs(oh - h) < 1.4f) return true;
+            }
+            return false;
+        }
+        foreach (var d in new[] { 0f, -1.5f, 1.5f, -3f, -4.5f, 3f, -6f })
+        {
+            float h = h0 + d;
+            if (h < 7f || h > 22.5f) continue;
+            if (!Clash(h)) return s.SessionHourSet = h;
+        }
+        return s.SessionHourSet = h0;
+    }
+
     // ───────────────────────────── 시간마다 ─────────────────────────────
 
     private void Advance(Scheme s, CrewMember lead)
@@ -127,7 +153,7 @@ public sealed partial class SchemeSystem
     private void NextSession(Scheme s)
     {
         var w = _w;
-        float h = SessionHour(s.Spec);
+        float h = FreeHour(s);
         long day0 = w.Tick - w.Tick % SimTime.TicksPerDay;
         int gap = s.Spec.Fate == Fate.Club ? 1 : s.Spec.Key is "moonshine" or "fruit_wine" or "engine_sauna" or "black_market" ? 2 : 1;
         long at = day0 + SimTime.Hours(h);
@@ -216,7 +242,7 @@ public sealed partial class SchemeSystem
             foreach (var c in came) if (!s.Crew.Contains(c.Id) && s.Crew.Count < 10) { s.Crew.Add(c.Id); s.Knows[c.Id] = KnowHow.Part; }
             if (s.Sessions >= 3)
             {
-                AddPractice(s, LegitName(spec), 2, SessionHour(spec), s.Crew, $"{Ko.IGa(lead.Name)} 만든 {spec.Name}이 세 번 넘게 이어졌다");
+                AddPractice(s, LegitName(spec), 2, FreeHour(s), s.Crew, $"{Ko.IGa(lead.Name)} 만든 {spec.Name}이 세 번 넘게 이어졌다");
                 Mark(s, TraceState.Official, LegitName(spec));
                 End(s, SchemeStage.Done, "관행이 됐다");
                 w.Info.Chat.Post(lead, ChatKind.Notice, ShipChat.Voice(lead, $"{LegitName(spec)} — 이제 이틀마다 해요", $"{LegitName(spec)} — 이제 이틀마다 합니다"));

@@ -40,7 +40,8 @@ public sealed partial class SchemeSystem
         foreach (var s in All)
             if (s.Active && s.Spec.Key is "strike" or "slowdown" && s.InSession(now) && s.Crew.Contains(c.Id))
                 return new(SchemeTaskKind.Sit, s.Id, -1, s.RoomId, s.Spot, -1, 0.85f, s.Spec.Key == "strike" ? "일손을 놓고 앉아 있다" : "일을 아주 천천히");
-        // 2) 행사 · 모임
+        // 2) 행사 · 모임 (겹치면 더 마음 가는 쪽)
+        SchemeTask? pick = null; float pv = float.MinValue;
         foreach (var s in All)
         {
             if (!s.Active || !s.InSession(now) || s.Spec.Key is "strike" or "slowdown") continue;
@@ -48,14 +49,22 @@ public sealed partial class SchemeSystem
             {
                 bool read = s.Invite >= 0 && w.Info.Chat.HasRead(c, s.Invite);
                 if (s.Crew.Contains(c.Id) || c.Id == s.Target || (s.Knew(c.Id) || read) && Fancies(c, s))
-                    return new(SchemeTaskKind.Attend, s.Id, -1, s.RoomId, s.Spot, -1, c.Id == s.Target ? 0.75f : 0.62f, s.Spec.Name);
+                {
+                    float v = (c.Id == s.Target ? 3f : s.Crew.Contains(c.Id) ? 2f : 1f) + Interest(c, s.Spec);
+                    if (v > pv) { pv = v; pick = new(SchemeTaskKind.Attend, s.Id, -1, s.RoomId, s.Spot, -1, c.Id == s.Target ? 0.75f : 0.62f, s.Spec.Name); }
+                }
                 continue;
             }
             bool member = s.Crew.Contains(c.Id);
             bool club = s.Spec.Fate == Fate.Club && (s.Knew(c.Id) || s.Invite >= 0 && w.Info.Chat.HasRead(c, s.Invite)) && Interest(c, s.Spec) > 0.3f;
             bool guest = s.Spec.Key is "moonshine" or "fruit_wine" && s.Knows.TryGetValue(c.Id, out var how) && how == KnowHow.Told && Approve(c, s).v > 0f;
-            if (member || club || guest) return new(SchemeTaskKind.Session, s.Id, -1, s.RoomId, s.Spot, -1, member ? 0.56f : 0.48f, s.Spec.Name);
+            if (member || club || guest)
+            {
+                float v = (member ? 2f : 0.5f) + Interest(c, s.Spec) + (s.Lead == c.Id ? 1f : 0f);
+                if (v > pv) { pv = v; pick = new(SchemeTaskKind.Session, s.Id, -1, s.RoomId, s.Spot, -1, member ? 0.56f : 0.48f, s.Spec.Name); }
+            }
         }
+        if (pick is SchemeTask chosen) return chosen;
         // 3) 관행
         for (int i = 0; i < Practices.Count; i++)
         {
