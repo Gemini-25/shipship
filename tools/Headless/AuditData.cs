@@ -28,6 +28,7 @@ public sealed class AuditRun
     public Dictionary<string, float> ResStart = new(), ResMin = new(), ResOut = new();
     public Dictionary<string, int> Harvest = new();
     public float FoodIn, FoodOut;
+    public Dictionary<string, int> FoodWays = new(); // v16.22 식량이 들어온 길 (수경 · 조류 · 버섯 · 단백질 · 정원 · 저장 · 교역 · 원정 · 발효)
     public AComp Comp = new();
     public ABots Bots = new();
     public List<AProf> Prof = new();

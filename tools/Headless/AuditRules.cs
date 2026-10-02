@@ -243,7 +243,9 @@ public static partial class Program
             int all = h.Values.Sum(), hydro = h.GetValueOrDefault(nameof(RoomType.Hydroponics));
             double other = all == 0 ? 0 : 1 - hydro / (double)all;
             float fin = c.Runs.Sum(r => r.FoodIn), fout = c.Runs.Sum(r => r.FoodOut);
-            return F(all > 0 && other < 0.1 ? 1 : 0, all - hydro, 1 - other, $"수확 {all}번 · 수경 {hydro} · 그 밖 {all - hydro} ({other * 100:0}%) · 방별 {string.Join(" · ", h.OrderByDescending(kv => kv.Value).Select(kv => $"{RoomTypes.Name(Enum.Parse<RoomType>(kv.Key))} {kv.Value}"))} · 식량 들어옴 {fin:0} / 나감 {fout:0}끼",
+            var ways = new Dictionary<string, int>(); // v16.22 들어온 길 (거둔 것 · 저장 식량 · 교역 · 원정 · 발효)
+            foreach (var r in c.Runs) foreach (var (k, v) in r.FoodWays) ways[k] = ways.GetValueOrDefault(k) + v;
+            return F(all > 0 && other < 0.1 ? 1 : 0, all - hydro, 1 - other, $"수확 {all}번 · 수경 {hydro} · 그 밖 {all - hydro} ({other * 100:0}%) · 방별 {string.Join(" · ", h.OrderByDescending(kv => kv.Value).Select(kv => $"{RoomTypes.Name(Enum.Parse<RoomType>(kv.Key))} {kv.Value}"))} · 식량 들어옴 {fin:0} / 나감 {fout:0}끼" + (ways.Count > 0 ? " · 들어온 길 " + string.Join(" · ", ways.OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => $"{kv.Key} {kv.Value}")) : ""),
                 "조류 · 단백질 · 정원 · 원정 · 사냥 같은 다른 식량원이 실제로 쓰이는지", null);
         }),
         new("computer.wrong", "주컴퓨터 판단이 틀림", true, c =>

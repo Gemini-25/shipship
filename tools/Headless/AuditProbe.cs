@@ -442,6 +442,7 @@ public static partial class Program
             _run.TechGained = w.Eras.Known.Where(t => !_tech0.Contains(t)).OrderBy(x => x, StringComparer.Ordinal).ToList();
             foreach (var day in w.Ledger.Days)
                 if (day.Flows.TryGetValue("food", out var fl)) { _run.FoodIn += fl.In; _run.FoodOut += fl.Out; }
+            for (int i = 0; i < FoodSourceSystem.Count; i++) if (w.FoodSources.In[i] > 0) _run.FoodWays[FoodSourceSystem.Name((FoodSrc)i)] = w.FoodSources.In[i]; // v16.22
             _run.Alive = w.Crew.Count(c => !c.Dead);
             _run.RoomsLost = w.Ship.Rooms.Count(r => r.Detached && !r.Merged && r.Type != RoomType.Corridor);
             _run.Stalls = _stalls.Values.OrderBy(s => s.Hour).ToList();

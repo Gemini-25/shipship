@@ -26,7 +26,7 @@ public static class ShipClasses
     public static string Blurb(ShipSize s) => s switch
     {
         ShipSize.Small => "꼭 필요한 방만 있다. 통로는 한 사람 폭, 냉동 창고의 저장 식량이 재배실을 받친다.",
-        ShipSize.Basic => "살림이 갖춰졌다. 휴게실 · 체력단련실 · 방사선 대피소 · 조류 배양실까지.",
+        ShipSize.Basic => "살림이 갖춰졌다. 휴게실 · 방사선 대피소 · 조류 배양실 · 선외 준비실까지.",
         ShipSize.Medium => "통로가 차압 문으로 두 구획. 수경 · 조류 · 버섯, 연료전지와 펌프실로 한 번 더 버틴다.",
         ShipSize.Large => "연구실 · 서버실 · 보안실 · 정원 · 관측실 · 개인 선실. 손이 많이 가는 만큼 할 수 있는 것도 많다.",
         _ => "극장 · 학교 · 원심 거주구 · 셔틀 격납고. 배라기보다 작은 도시다.",
@@ -46,9 +46,9 @@ public static class ShipClasses
     {
         ShipSize.Small => (6, 14, 2, 20),
         ShipSize.Basic => (8, 18, 3, 24),
-        ShipSize.Medium => (14, 30, 4, 30),
-        ShipSize.Large => (22, 44, 6, 40),
-        _ => (30, 60, 8, 50),
+        ShipSize.Medium => (14, 30, 4, 0), // 중형부터는 조류 · 버섯 재배실이 있어 저장 식량을 더 싣지 않는다
+        ShipSize.Large => (22, 44, 6, 0),
+        _ => (30, 60, 8, 0),
     };
 
     /// <summary>시작 물자를 크기에 맞춘다 (기본 배 다섯 척 · 배 크기 등급이 있는 배). 저장 식량은 냉동 창고 · 창고 선반부터.</summary>

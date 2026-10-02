@@ -36,6 +36,8 @@ public sealed class FoodSourceSystem
     public float DaysLeft { get; private set; } = 99f;
     public float GrowPerDay { get; private set; }
     public int Advised, AltTends, Preserved, HydroOutages;
+    /// <summary>주컴퓨터가 마지막으로 알린 때 (알림을 들은 사람은 더 서둘러 다른 재배실로 간다).</summary>
+    public long AdvisedAt { get; private set; } = -1_000_000;
     private long _next, _downFrom = -1;
 
     // ─────────────────────────────── 재배대 종류 ───────────────────────────────
@@ -200,7 +202,9 @@ public sealed class FoodSourceSystem
         string act = alts.Count > 0 ? "다른 재배실 수확을 앞당기고 남는 채소는 절여 둔다 · 저장 식량은 냉동 창고 것부터" : "저장 식량으로 버틴다 · 배급을 준비한다";
         string ask = hydro != null ? $"{hydro.Name} 재배대 · 급수 본관을 봐 달라" : "재배대를 봐 달라";
         var a = w.Automation.Book.Add(ActKind.Advice, hydro, $"수경 재배대 {stalled * 100:0}%가 자라지 않는다", judge, act, ask, "food.hydro", SimTime.Hours(6), 120f);
-        if (a != null) Advised++;
+        if (a == null) return; // 컴퓨터가 멎었으면 사람이 알아서 (재배 담당은 그래도 다른 재배실을 돌본다)
+        Advised++;
+        AdvisedAt = w.Tick;
         w.Log.Add(w.Tick, LogKind.Ship, $"주컴퓨터: 수경 재배가 멎었다 — {judge}");
     }
 
@@ -264,8 +268,10 @@ public sealed class AltCropActivity : Activity
         if (!fs.HydroDown || c.IsChild || c.Away) return (0f, "—");
         if (fs.AltBedFor(c, dist) is not Furniture bed) return (0f, "—");
         float s = c.Role == CrewRole.Botanist ? 0.62f : 0.18f + 0.3f * c.SkillLevel(Skill.Botany);
+        bool told = w.Tick - fs.AdvisedAt < SimTime.Hours(12); // 주컴퓨터가 셈해 알린 뒤엔 다들 조금 더 서두른다
+        if (told) s += 0.1f;
         if (Bedtime(c, w)) s -= 0.3f;
-        return (MathF.Max(0f, s), $"수경 재배가 멎었다 — {bed.Room.Name}을 한 번 더 돌본다");
+        return (MathF.Max(0f, s), $"수경 재배가 멎었다 — {bed.Room.Name}을 한 번 더 돌본다" + (told ? " (주컴퓨터가 버틸 날을 셈해 알렸다)" : ""));
     }
 
     public override Job? Plan(CrewMember c, World w, DistanceField dist)

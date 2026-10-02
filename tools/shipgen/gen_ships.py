@@ -12,7 +12,7 @@
   · 앞(오른쪽)은 뱃머리: 통신실(안테나) · 함교 · (큰 배) 항법실 · 예비 함교.
   · 작을수록 꼭 필요한 방만, 클수록 방 종류가 많고 넓고 호화롭다.
 배관 배치 규칙(Piping.Build)을 지킨다: 냉각 펌프는 위 선체 바로 아래 줄, 첫 펌프는 원자로 가운데보다 오른쪽,
-냉각실 아래 벽 바로 밑은 통로, 급수 본관은 생명유지실 정수기에서 시작한다.
+냉각실 아래 벽 바로 밑은 통로, 급수 본관은 생명유지실 정수기에서 시작한다. 로봇 충전대(J)는 그리지 않는다 (배를 띄울 때 단다).
 출력: game/src/Core/ShipTemplates.cs  (손으로 고치지 말고 이 생성기를 고친다)
 """
 import os, sys
@@ -132,6 +132,12 @@ def fit_h(items, w, ds, h):
         if pack(lambda x, y: '.', 0, 0, w - 1, hh - 1, ds, spine(0, 0, w - 1, hh - 1, ds, set()), items) is not None: return hh
     fail(f'방 높이 못 맞춤 {items}')
 
+def room_doors(r, band_doors):
+    """원자로 · 배전 · 주컴퓨터실은 문 하나 (지나다니는 길이 되지 않게 — 출입 통제 문을 질러가다 막히지 않게)."""
+    ds = r.get('doors', band_doors)
+    if (r['label'] in ('r', 'p') or r.get('kind') == 'ComputerRoom') and len(ds) > 1: ds = ['S']
+    return ds
+
 def band_need(rooms): return sum(r['w'] for r in rooms) + len(rooms) + 1
 
 def build(spec):
@@ -159,7 +165,7 @@ def build(spec):
             for r in b[1]['rooms']:
                 hh = b[1]['h']
                 hres = {(r['hatch'], hh - 1), (r['hatch'], hh - 2)} if r.get('hatch') is not None else set()
-                r['w'] = fit_w(r['items'], hh, r.get('doors', b[1]['doors']), r['w'], hres)
+                r['w'] = fit_w(r['items'], hh, room_doors(r, b[1]['doors']), r['w'], hres)
             ci = [i for i, x in enumerate(bands) if x[0] == 'corr']
             if bi < ci[0] or bi > ci[-1]: b[1]['rooms'][-1]['w'] += cut0   # 앞 끝 모서리를 깎을 자리
     for r in bow['rooms']: r['h'] = fit_h(r['items'], bow['w'], ['W'], r['h'])
@@ -190,8 +196,9 @@ def build(spec):
         x = a
         for r, w in zip(bd['rooms'], widths):
             s.rect(x, top, x + w + 1, bot)
-            s.room(r['label'], r.get('kind'), x + 1, top + 1, x + w, bot - 1, r.get('doors', bd['doors']), r['items'], r.get('reserve', ()))
+            s.room(r['label'], r.get('kind'), x + 1, top + 1, x + w, bot - 1, room_doors(r, bd['doors']), r['items'], r.get('reserve', ()))
             if r.get('hatch'): s.rooms[-1]['hatch'] = r['hatch']
+            s.rooms[-1]['link'] = r.get('link', False)   # 앞 방과 사이 문 (주방 ↔ 식당 같은 짝)
             x += w + 1
     # 통로: 가로 띠 + 세로 두 줄 (고리)
     for i in corr_idx:
@@ -264,6 +271,11 @@ def build(spec):
                 ry = [y for y in range(r['y0'], r['y1'] + 1) if s.g[y][r['x0'] - 1] == '#' and s.g[y][r['x0'] - 2] == '.']
                 y = min(ry, key=lambda y: abs(y - (r['y0'] + r['y1']) // 2))
                 door(r['x0'] - 1, y); r['reserve'].add((r['x0'], y))
+        if r.get('link'):   # 앞 방과 사이 문: 둘 다 통로 쪽 빈 줄에서
+            prev = [q for q in s.rooms if q['x1'] == r['x0'] - 2 and q['y0'] == r['y0'] and q['y1'] == r['y1']]
+            if prev:
+                yy = r['y1'] if 'S' in r['doors'] else r['y0']
+                door(r['x0'] - 1, yy); r['reserve'].add((r['x0'], yy)); prev[0]['reserve'].add((r['x0'] - 2, yy))
         if r['hatch']:     # 에어락 바깥 해치 (아래 선체)
             x = r['x0'] + r['hatch']
             door(x, r['y1'] + 1); r['reserve'].update({(x, r['y1']), (x, r['y1'] - 1)})
@@ -357,15 +369,15 @@ def check(s, meta):
     return dict(rooms=len(inv), kinds=len({g[o[1]][o[0]] for o in inv}), comp_dx=round((ccx - cx) / Wt, 3), comp_dy=round((ccy - cy) / Ht, 3))
 
 # ───────────────────────── 방 묶음 ─────────────────────────
-def Rm(label, items, w, kind=None, grow=False, doors=None, h=None, hatch=None):
-    r = dict(label=label, items=items, w=w, kind=kind, grow=grow)
+def Rm(label, items, w, kind=None, grow=False, doors=None, h=None, hatch=None, link=False):
+    r = dict(label=label, items=items, w=w, kind=kind, grow=grow, link=link)
     if doors: r['doors'] = doors
     if h: r['h'] = h
     if hatch is not None: r['hatch'] = hatch
     return r
 
-def Sp(kind, items, w, grow=False, doors=None, h=None):
-    return Rm('?', items, w, kind=kind, grow=grow, doors=doors, h=h)
+def Sp(kind, items, w, grow=False, doors=None, h=None, link=False):
+    return Rm('?', items, w, kind=kind, grow=grow, doors=doors, h=h, link=link)
 
 def band(h, doors, rooms): return ('room', dict(h=h, doors=doors, rooms=rooms))
 CORR = ('corr',)
@@ -374,23 +386,23 @@ CORR = ('corr',)
 KESTREL = dict(key='Kestrel', crew=4, corr=1, chamfer=2,
     engine=dict(w=5, items=[E, E, C]),
     bands=[
-        band(4, ['S'], [Rm('s', [K, K3], 4), Rm('k', [P, P, C], 6), Rm('f', [G, G, G], 10, grow=True), Rm('j', [V, F, K], 7), Sp('Freezer', [F, K], 5), Rm('q', many(B, 4), 8)]),
+        band(4, ['S'], [Rm('s', [K, K3], 4), Rm('k', [P, P, C], 6), Rm('f', [G, G, G], 10, grow=True), Sp('Freezer', [F, K], 5), Rm('q', many(B, 4), 8)]),
         CORR,
         band(5, ['N', 'S'], [Rm('r', [R3, C], 5), Rm('l', [U, O, O], 8), Sp('ComputerRoom', [I, C, C], 5), Rm('p', [X, Z, Y, Y], 7), Rm('h', [M, K3], 4)]),
         CORR,
-        band(4, ['N'], [Rm('w', [H, W, N, K3], 9), Rm('a', [L, L, Q], 6, hatch=4), Rm('m', [D, D, TSET], 6, grow=True), Rm('g', [S, S, T], 4), Rm('s', [K, K], 5)]),
+        band(4, ['N'], [Rm('w', [H, W, N, K3], 9), Rm('s', [K, K], 5, link=True), Rm('a', [L, L, Q], 6, hatch=4), Rm('j', [V, F, K], 7), Rm('m', [D, D, TSET], 6, grow=True, link=True), Rm('g', [S, S, T], 4, link=True)]),
     ],
     bow=dict(w=5, rooms=[Rm('o', [A, C], 0, h=3), Rm('b', [C, C, S, S], 0, h=4, grow=True)]))
 
-# ── 미리내호 (6인 · 기본): 소형에 휴게실 · 체력단련실 · 방사선 대피소 · 조류 배양실 · 냉동 창고.
+# ── 미리내호 (6인 · 기본): 소형에 휴게실 · 방사선 대피소 · 조류 배양실 · 선외 준비실. 운동은 휴게실에서 (몸이 굳으면 창고 절반을 땀방으로 고친다).
 MIRINAE = dict(key='Mirinae', crew=6, corr=2, chamfer=2,
     engine=dict(w=5, items=[E, E, C]),
     bands=[
-        band(5, ['S'], [Rm('s', [K, K, K3], 6), Rm('k', [P, P, C], 6), Rm('f', [G, G, G, G], 10, grow=True), Rm('j', [V, F, K, T], 7), Sp('Freezer', [F, K, K], 6), Rm('q', many(B, 6), 12)]),
+        band(5, ['S'], [Rm('s', [K, K, K3], 6), Rm('k', [P, P, C], 6), Rm('f', [G, G, G, G], 10, grow=True), Sp('Freezer', [F, K, K], 6), Rm('j', [V, F, K, T], 7, link=True), Rm('m', [D, D, TSET, TSET], 9, grow=True, link=True)]),
         CORR,
         band(5, ['N', 'S'], [Rm('r', [R3, C, C], 6), Rm('l', [U, O, O], 8), Sp('ComputerRoom', [I, C, C, K3], 7), Rm('p', [X, Z, Y, Y], 7), Sp('Shelter', [K, K, S, S], 6)]),
         CORR,
-        band(5, ['N'], [Rm('w', [H, W, N, K3], 9), Sp('AlgaeLab', [G, G, U], 6), Rm('a', [L, L, Q, Q], 6, hatch=4), Rm('h', [M, M, K3], 6), Rm('m', [D, D, TSET, TSET], 9, grow=True), Rm('g', [SOFA, S], 6), Sp('Gym', [ROWS2], 4)]),
+        band(5, ['N'], [Rm('w', [H, W, N, K3], 9), Rm('a', [L, L, Q, Q], 6, hatch=4), Sp('EvaPrep', [L, K], 5, link=True), Sp('AlgaeLab', [G, G, U], 6), Rm('h', [M, M, K3], 6), Rm('q', many(B, 6), 12), Rm('g', [SOFA, S, S], 7)]),
     ],
     bow=dict(w=6, rooms=[Rm('o', [A, C], 0, h=3), Rm('b', [C, C, C, S, S], 0, h=6, grow=True)]))
 
@@ -398,16 +410,16 @@ MIRINAE = dict(key='Mirinae', crew=6, corr=2, chamfer=2,
 HANBIT = dict(key='Hanbit', crew=12, corr=2, chamfer=3, bulkheads=1,
     engine=dict(w=5, items=[E, E, E, C]),
     bands=[
-        band(6, ['S'], [Sp('Cargo', many(K, 4), 7), Rm('k', [P, P, C], 6), Sp('PumpRoom', [P, P], 6), Rm('f', many(G, 8), 10), Rm('j', [V, V, F, F, K], 9),
-                        Sp('Freezer', [F, K, K], 6), Sp('Observatory', [S, S, C, SOFA], 7)]),
+        band(6, ['S'], [Sp('Cargo', many(K, 4), 7), Rm('k', [P, P, C], 6), Sp('PumpRoom', [P, P], 6, link=True), Rm('f', many(G, 8), 10), Sp('Freezer', [F, K, K], 6),
+                        Rm('j', [V, V, F, F, K], 9, link=True), Rm('m', [D, D, D, TSET, TSET, TSET], 11, link=True), Sp('Observatory', [S, S, C, SOFA], 7)]),
         CORR,
         band(6, ['N'], [Rm('q', many(B, 8), 9), Sp('QuietQuarters', many(B, 4), 5), Sp('WaterPlant', [U, U], 6), Sp('MushroomFarm', [G, G, K3], 6),
                         Sp('AlgaeLab', [G, G, U], 6), Sp('Quarantine', [M, C], 5), Sp('PartsPrep', [W, K3], 6), Sp('Laundry', [K, K], 5)]),
         band(6, ['S'], [Rm('r', [R4, C, C], 7), Sp('FuelCell', [Z, Z, C], 6), Rm('l', [U, U, O, O, O, O], 8), Sp('ComputerRoom', [I, C, C, K3], 7),
                         Rm('p', [X, Z, Y, Y, Y, Y], 8), Sp('Substation', [X, K3], 6), Sp('BatteryRoom', [Y, Y], 5), Sp('Shelter', [K, K, S, S, S], 7)]),
         CORR,
-        band(6, ['N'], [Rm('w', [H, W, W, N, K3], 10), Sp('Recycling', [N, K3], 6), Sp('DroneBay', [Q, Q, J], 6), Rm('a', [L, L, L, Q, Q], 8, hatch=6), Rm('h', [M, M, M, K3], 7),
-                        Rm('g', [SOFA, SOFA], 8), Sp('Gym', [ROWS2, ROWS2], 6), Rm('m', [D, D, D, TSET, TSET, TSET], 11), Rm('s', [K, K, K], 7)]),
+        band(6, ['N'], [Rm('w', [H, W, W, N, K3], 10), Sp('Recycling', [N, K3], 6, link=True), Sp('DroneBay', [Q, Q, K], 6), Rm('a', [L, L, L, Q, Q], 8, hatch=6), Rm('h', [M, M, M, K3], 7),
+                        Rm('g', [SOFA, SOFA], 8), Sp('Gym', [ROWS2, ROWS2], 6, link=True), Rm('s', [K, K, K], 7)]),
     ],
     bow=dict(w=7, rooms=[Rm('o', [A, C, C], 0, h=4), Rm('b', [C, C, C, S, S, S], 0, h=6, grow=True), Sp('Navigation', [C, C, K3], 0, h=5)]))
 
@@ -420,7 +432,7 @@ EUNHA = dict(key='Eunha', crew=20, corr=2, chamfer=3, bulkheads=2,
                         Sp('Observatory', [S, S, S, C, SOFA], 8), Sp('Garden', [G, G, S, S, S], 8), Sp('EscapeBay', [K, K], 5)]),
         CORR,
         band(6, ['N'], [Rm('q', many(B, 8), 9), Rm('q', many(B, 4), 5), Sp('PrivateCabins', many(B, 2) + [K3], 5), Sp('PrivateCabins', many(B, 2) + [K3], 5),
-                        Sp('Gym', [ROWS2, ROWS2], 6), Sp('MeetingRoom', [T, T, S, S, S, S], 7), Sp('Chapel', [S, S, S, S], 5), Rm('g', [SOFA, SOFA, S], 8)]),
+                        Sp('MeetingRoom', [T, T, S, S, S, S], 7), Sp('Chapel', [S, S, S, S], 5)]),
         band(5, ['S'], [Sp('HeatStorage', [K, K, C], 7), Sp('ServerRoom', [K3, K3, K3, C, C], 8), Sp('Security', [C, C, C, K3], 6), Sp('Calibration', [W, C], 6),
                         Sp('Lab', [W, C, K3], 7), Sp('ElectronicsLab', [W, K3], 6), Sp('SuppressionRoom', [K, K], 5), Sp('SeedVault', [K, K], 5)]),
         CORR,
@@ -428,12 +440,12 @@ EUNHA = dict(key='Eunha', crew=20, corr=2, chamfer=3, bulkheads=2,
                              Rm('p', [X, Z, Y, Y, Y, Y], 8), Sp('Substation', [X, K3], 6), Sp('BatteryRoom', [Y, Y, Y, Y], 7), Sp('HvacRoom', [O, K3], 5)]),
         CORR,
         band(5, ['N'], [Sp('Shelter', [K, K, S, S, S, S], 7), Sp('WaterPlant', [U, U], 6), Sp('MushroomFarm', [G, G, K3], 6), Sp('AlgaeLab', [G, G, G], 6),
-                        Sp('ProteinFarm', [G, G, U], 6), Sp('Recycling', [N, K3], 6), Sp('DroneBay', [Q, Q, J], 6)]),
-        band(6, ['S'], [Sp('Quarantine', [M, M, C], 6), Sp('Triage', [M, M], 5), Sp('QuietQuarters', many(B, 4), 5), Sp('Laundry', [K, K], 5), Sp('EvaPrep', [L, K], 5),
-                        Rm('j', [V, V, V, V, F, F, F, F, K], 11), Sp('Freezer', [F, K, K, K], 7)]),
+                        Sp('ProteinFarm', [G, G, U], 6), Sp('Recycling', [N, K3], 6), Sp('DroneBay', [Q, Q, K], 6)]),
+        band(6, ['S'], [Sp('Quarantine', [M, M, C], 6), Sp('Triage', [M, M], 5, link=True), Sp('QuietQuarters', many(B, 4), 5), Sp('Laundry', [K, K], 5),
+                        Sp('Freezer', [F, K, K, K], 7), Rm('j', [V, V, V, V, F, F, F, F, K], 11, link=True), Rm('m', [D, D, D, D, D, TSET, TSET, TSET, TSET], 12, link=True)]),
         CORR,
-        band(6, ['N'], [Rm('w', [H, W, W, N, N, K3], 11), Rm('a', [L, L, L, Q, Q, Q], 9, hatch=7), Rm('h', [M, M, M, M, K3], 8),
-                        Rm('m', [D, D, D, D, D, TSET, TSET, TSET, TSET], 12), Rm('s', [K, K, K, K], 8)]),
+        band(6, ['N'], [Rm('w', [H, W, W, N, N, K3], 11), Rm('a', [L, L, L, Q, Q, Q], 9, hatch=7), Sp('EvaPrep', [L, K], 5, link=True), Rm('h', [M, M, M, M, K3], 8),
+                        Rm('g', [SOFA, SOFA, S], 8), Sp('Gym', [ROWS2, ROWS2], 6, link=True), Rm('s', [K, K, K, K], 8)]),
     ],
     bow=dict(w=8, rooms=[Rm('o', [A, C, C], 0, h=5), Rm('b', [C, C, C, C, S, S, S, S], 0, h=8, grow=True), Sp('Navigation', [C, C, K3], 0, h=5), Sp('BackupBridge', [C, C, S], 0, h=5)]))
 
@@ -460,12 +472,12 @@ CHEONMA = dict(key='Cheonma', crew=30, corr=2, chamfer=3, bulkheads=3,
         band(5, ['N'], [Sp('Shelter', [K, K, S, S, S, S, S, S], 9), Sp('WaterPlant', [U, U, U], 8), Sp('MushroomFarm', [G, G, G, K3], 9), Sp('AlgaeLab', [G, G, G], 9),
                         Sp('ProteinFarm', [G, G, G, U], 9), Sp('SeedVault', [K, K], 5), Sp('SuppressionRoom', [K, K], 5), Sp('Morgue', [K], 4), Sp('CraneControl', [C, C], 4),
                         Sp('WeldingShop', [W, K3], 6), Sp('Crusher', [N, K3], 6)]),
-        band(6, ['S'], [Sp('Quarantine', [M, M, C], 6), Sp('QuarantineLock', [L], 4), Sp('Hyperbaric', [M, C], 4), Sp('Triage', [M, M, M], 5), Sp('Decon', [L], 4),
-                        Sp('QuietQuarters', many(B, 4), 5), Sp('Laundry', [K, K], 5), Sp('EvaPrep', [L, K], 5), Sp('RobotBay', [J, J, W], 7), Sp('Recycling', [N, K3], 6),
-                        Rm('j', [V] * 5 + [F] * 5 + [K], 13), Sp('Freezer', [F, F, K, K, K], 8)]),
+        band(6, ['S'], [Sp('Quarantine', [M, M, C], 6), Sp('QuarantineLock', [L], 4, link=True), Sp('Hyperbaric', [M, C], 4), Sp('Triage', [M, M, M], 5), Sp('Decon', [L], 4),
+                        Sp('QuietQuarters', many(B, 4), 5), Sp('Laundry', [K, K], 5), Sp('Freezer', [F, F, K, K, K], 8), Rm('j', [V] * 5 + [F] * 5 + [K], 13, link=True),
+                        Rm('m', [D] * 8 + many(TSET, 6), 16, link=True)]),
         CORR,
-        band(6, ['N'], [Rm('w', [H, W, W, W, N, N, K3], 13), Sp('DroneBay', [Q, Q, J], 6), Rm('a', [L, L, L, Q, Q, Q], 9, hatch=7), Rm('h', [M] * 6 + [K3], 10),
-                        Rm('m', [D] * 8 + many(TSET, 6), 16), Rm('s', [K] * 6, 10)]),
+        band(6, ['N'], [Rm('w', [H, W, W, W, N, N, K3], 13), Sp('Recycling', [N, K3], 6, link=True), Sp('RobotBay', [W, K3, K], 7), Sp('DroneBay', [Q, Q, K], 6),
+                        Rm('a', [L, L, L, Q, Q, Q], 9, hatch=7), Sp('EvaPrep', [L, K], 5, link=True), Rm('h', [M] * 6 + [K3], 10), Rm('s', [K] * 6, 10)]),
     ],
     bow=dict(w=9, rooms=[Rm('o', [A, C, C], 0, h=5), Rm('b', [C, C, C, C, C, S, S, S, S, S], 0, h=9, grow=True), Sp('Navigation', [C, C, K3], 0, h=5),
                          Sp('BackupBridge', [C, C, S, S], 0, h=6)]))

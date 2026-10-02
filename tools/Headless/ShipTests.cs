@@ -143,7 +143,7 @@ public static partial class Program
                 int sealedW = war.Origin.SealedRooms.Count;
                 bool welded = war.Origin.SealedRooms.All(id => war.Ship.Rooms[id].Doors.All(d => d.Welded) && war.Ship.Rooms[id].Abandoned);
                 float scorch = war.Ship.Walls.Max(kv => kv.Value.Scorch);
-                int cargo = World.CreateDefault(seed, 0, "Nareumi").Ship.CountStored(ItemKind.Ration) - World.CreateDefault(seed, 0, "Hanbit").Ship.CountStored(ItemKind.Ration);
+                int cargo = World.CreateDefault(seed, 0, "Nareumi").Ship.CountStored(ItemKind.Ration) - World.CreateDefault(seed, 0, "Mirinae").Ship.CountStored(ItemKind.Ration); // v16.22 인원이 비슷한 배와 견준다 (새 한빛호는 창고가 넓다)
                 Check("전쟁 상흔 · 시작 화물 — 그을음 · 막힌 구역(용접 · 포기) · 보급선은 화물을 싣고 떠난다",
                     sealedW >= 1 && welded && scorch > 0.5f && cargo >= 100,
                     $"막힌 구역 {string.Join(",", war.Origin.SealedRooms.Select(id => war.Ship.Rooms[id].Name))} · 그을음 {scorch * 100:0}% · 비상식량 더 실음 {cargo}");

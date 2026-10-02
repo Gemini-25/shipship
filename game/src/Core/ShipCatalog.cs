@@ -15,18 +15,18 @@ public sealed record ShipTemplate(string Key, string Name, int Crew, string Asci
 }
 
 /// <summary>
-/// v10.4 배 크기 템플릿. 사람이 많으면 배도 커진다 — 방이 넓어지고, 원자로가 커지고(칸 수만큼 출력), 냉각 펌프·배터리·정수기·산소 발생기·
-/// 재배대·침대·선반·작업대·조리대가 인원에 맞춰 늘어난다. 미리내호(6인)만 손으로 그렸고, 나머지는 같은 뼈대로 생성기(tools/shipgen)가 뽑았다.
+/// v10.4 배 크기 템플릿 · v16.22 크기 등급(ShipClasses): 작을수록 꼭 필요한 방만, 클수록 방 종류가 많고 호화롭다. 원자로가 커지고(칸 수만큼 출력), 냉각 펌프·배터리·정수기·산소 발생기·
+/// 재배대·침대·선반·작업대·조리대가 인원에 맞춰 늘어난다. 기본 배 다섯 척은 같은 뼈대(심장부 안쪽 · 주컴퓨터실 한가운데)로 생성기(tools/shipgen)가 뽑았다.
 /// </summary>
 public static class ShipCatalog
 {
     public static readonly ShipTemplate[] All =
     {
-        new("Kestrel", ShipBlueprints.KestrelName, 4, ShipBlueprints.Kestrel, "소형 · 원자로 3×3 · 펌프 2 · 재배대 3"),
-        new("Mirinae", ShipBlueprints.MirinaeName, 6, ShipBlueprints.Mirinae, "기본 · 원자로 3×3 · 펌프 2 · 재배대 4 (손으로 그린 배)"),
-        new("Hanbit", ShipBlueprints.HanbitName, 12, ShipBlueprints.Hanbit, "중형 · 원자로 4×4 · 펌프 4 · 재배대 8"),
-        new("Eunha", ShipBlueprints.EunhaName, 20, ShipBlueprints.Eunha, "대형 · 원자로 5×5 · 펌프 6 · 재배대 14"),
-        new("Cheonma", ShipBlueprints.CheonmaName, 30, ShipBlueprints.Cheonma, "초대형 · 원자로 6×6 · 펌프 8 · 재배대 20"),
+        new("Kestrel", ShipBlueprints.KestrelName, 4, ShipBlueprints.Kestrel, "소형 · 꼭 필요한 방만, 좁고 알뜰하다 · 냉동 창고의 저장 식량"),
+        new("Mirinae", ShipBlueprints.MirinaeName, 6, ShipBlueprints.Mirinae, "기본형 · 휴게실 · 대피소 · 조류 배양실 · 선외 준비실"),
+        new("Hanbit", ShipBlueprints.HanbitName, 12, ShipBlueprints.Hanbit, "중형 · 차압 문 두 구획 · 수경 · 조류 · 버섯 · 연료전지 · 펌프실"),
+        new("Eunha", ShipBlueprints.EunhaName, 20, ShipBlueprints.Eunha, "대형 · 연구실 · 서버실 · 보안실 · 정원 · 관측실 · 개인 선실"),
+        new("Cheonma", ShipBlueprints.CheonmaName, 30, ShipBlueprints.Cheonma, "초대형 · 극장 · 학교 · 원심 거주구 · 셔틀 격납고"),
         // v16.9 대표 배 6척 (손으로 그린 배 · 뼈대 · 용도 · 설계사 · 시작 상태가 저마다 다르다)
         ShipBlueprints.SaeteoShip, ShipBlueprints.BusitdolShip, ShipBlueprints.BodeumShip,
         ShipBlueprints.NareumiShip, ShipBlueprints.TtaemjilShip, ShipBlueprints.PabalShip,

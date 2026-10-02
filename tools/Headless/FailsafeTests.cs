@@ -349,7 +349,7 @@ public static partial class Program
         Console.WriteLine("  " + FsLine("후", after, 8));
         Check("전/후 — 정전 방시간 · 필수 방 정전이 줄었다", after.DarkRoomH < before.DarkRoomH * 0.7f && after.DarkEssH <= before.DarkEssH,
             $"정전 방시간 {before.DarkRoomH:0} → {after.DarkRoomH:0} · 필수 {before.DarkEssH:0.0} → {after.DarkEssH:0.0} · 설비 고장 {before.Faults} → {after.Faults} ({sw.Elapsed.TotalSeconds:0}초)");
-        Check("전/후 — 감압이 옆방을 끌고 가지 않는다", after.DecoDragged <= before.DecoDragged && after.DecoMaxRooms <= Math.Max(2, before.DecoMaxRooms), $"끌려간 방 {before.DecoDragged} → {after.DecoDragged} · 최대 {before.DecoMaxRooms} → {after.DecoMaxRooms}");
+        Check("전/후 — 감압이 옆방을 끌고 가지 않는다", after.DecoDragged <= before.DecoDragged && (after.DecoMaxRooms <= Math.Max(2, before.DecoMaxRooms) || after.DecoDragged == 0), /* v16.22 바깥 줄이 작은 방 여럿(완충)이라 운석이 여러 방을 뚫는다 — 끌려간 방이 없으면 된다 */ $"끌려간 방 {before.DecoDragged} → {after.DecoDragged} · 최대 {before.DecoMaxRooms} → {after.DecoMaxRooms}");
     }
 
     // ── 8) 결정론 · 성능 ──

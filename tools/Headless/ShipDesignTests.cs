@@ -53,6 +53,21 @@ public static partial class Program
     private static int RunShipDesignTest(int seed)
     {
         _fails = 0;
+        if (Environment.GetEnvironmentVariable("FSH_DEBUG") is string dbg && dbg != "food")
+        {
+            var w = DayOne(seed, dbg);
+            var brow = RobotsV15.Bot(RobotKind.Maintainer);
+            Console.WriteLine($"기반 {brow?.Base} 자리 {(brow != null ? RobotsV15.DockSpot(w, brow.Base) : null)}");
+            bool ok = RobotsV15.Install(w, RobotsV15.Code(RobotKind.Maintainer), null, out var txt);
+            Console.WriteLine($"설치 {ok} {txt}");
+            for (int i = 0; i < 12; i++) { Run(w, SimTime.Minutes(5)); Console.WriteLine($"  {i}: {string.Join(", ", w.Robots.Robots.Select(r => $"{r.Name} 고장 {r.Fault} 끔 {r.Disabled} 전지 {r.Battery:0.00} 일 {r.Order?.Kind}"))}"); }
+            Console.WriteLine($"로봇: {string.Join(", ", w.Robots.Robots.Select(r => $"{r.Kind} 고장 {r.Fault} 끔 {r.Disabled}"))}");
+            foreach (var k in new[] { RobotKind.Maintainer, RobotKind.Gardener })
+                Console.WriteLine($"{k} 자리: {RobotsV15.DockSpot(w, k)}");
+            foreach (var r in w.Ship.Rooms.Where(r => r.Type is RoomType.Workshop or RoomType.Storage or RoomType.Corridor))
+                Console.WriteLine($"  {r.Name} 빈 칸 {Adaptation.FreeCells(w, r).Count()} · 막아도 되는 칸 {Adaptation.FreeCells(w, r).Count(c => Adaptation.SafeToBlock(w, r, c))}");
+            return 0;
+        }
         Console.WriteLine($"v16.22 배 재설계 · 크기별 등급 · 방 종류 · 식량원 — 시드 {seed}\n");
 
         // ① 설계
@@ -87,6 +102,7 @@ public static partial class Program
         Check("소형은 꼭 필요한 방만 (냉동 창고 하나뿐) · 초대형은 극장 · 학교 · 원심 거주구 · 셔틀 · 정원 · 관측실", smallLean && bigLux,
             $"소형 특수 방 {string.Join(", ", small.Rooms.Where(r => r.Special != null).Select(r => r.Name))} · 초대형 호화 {lux.Count(n => big.Rooms.Any(r => r.Name == n))}/{lux.Length}");
 
+        if (Environment.GetEnvironmentVariable("FSH_ONLY") == null) { // 진단: 수경 장면만 볼 때는 건너뛴다
         // ② v16.19 장갑 벽 · 차압 문 · 예비 회로 · 보조 간선 · 대표 설비 (하루 첫 시간)
         var v19 = new List<string>();
         bool v19ok = true;
@@ -129,6 +145,8 @@ public static partial class Program
             prevPlate = plate0 + ore0 / 2;
             string err = "";
             int minPlate = plate0;
+            float minRest = 1f, minFood = 1f;
+            string restWho = "", foodWho = "";
             var sw = System.Diagnostics.Stopwatch.StartNew();
             try
             {
@@ -136,6 +154,12 @@ public static partial class Program
                 {
                     Run(w, SimTime.Hours(1));
                     minPlate = Math.Min(minPlate, w.Ship.CountStored(ItemKind.Plate));
+                    foreach (var c in w.Crew.Where(c => !c.Dead))
+                    {
+                        if (c.Needs.Rest < minRest) { minRest = c.Needs.Rest; restWho = $"{c.Name} {h}시 {c.Room?.Name}({c.Job?.Label}) 침대 {c.Bed?.Room.Name}"; }
+                        if (c.Needs.Food < minFood) { minFood = c.Needs.Food; foodWho = $"{c.Name} {h}시 {c.Room?.Name}({c.Job?.Label})"; }
+                    }
+                    if (h == 71) Console.WriteLine($"   {w.Ship.Name} 사흘 · 최저 휴식 {minRest * 100:0}% {restWho} · 최저 배부름 {minFood * 100:0}% {foodWho}");
                     if (h == 23) day.Add($"{w.Ship.Name} 하루 {sw.Elapsed.TotalSeconds:0.0}초 · 생존 {w.Crew.Count(c => !c.Dead)}/{w.Crew.Count}");
                     if (h == 23 && w.Crew.Any(c => c.Dead)) dayOk = false;
                 }
@@ -147,6 +171,8 @@ public static partial class Program
         }
         Check("다섯 척 모두 하루 정상 (사망 · 예외 없음)", dayOk, string.Join(" · ", day));
         Check("시작 물자는 크기에 맞게 · 금속판이 사흘 안에 바닥나지 않는다 (재활용실이 고철을 되살린다)", plateOk && stockRise, string.Join(" / ", plateLines));
+
+        }
 
         // ⑤ 수경 재배실이 망가진 사흘
         {
@@ -162,11 +188,34 @@ public static partial class Program
                 f.Storage.Take(ItemKind.Ration, f.Storage.Count(ItemKind.Ration) / 2);
             }
             float minFood = 1f;
+            string hungry = "";
+            bool trace = Environment.GetEnvironmentVariable("FSH_ONLY") == "trace";
             for (int h = 0; h < 72; h++)
             {
-                Run(w, SimTime.Hours(1));
-                foreach (var c in w.Crew.Where(c => !c.Dead)) minFood = Math.Min(minFood, c.Needs.Food);
+                if (trace)
+                    for (int k = 0; k < 6; k++)
+                    {
+                        Run(w, SimTime.Minutes(10));
+                        if (w.Crew.FirstOrDefault(c => !c.Dead && c.Needs.Food < 0.03f) is CrewMember hc)
+                        {
+                            Console.WriteLine($"      곁: 사람 {string.Join(", ", w.Crew.Where(o => o != hc && Math.Abs(o.Cell.X - hc.Cell.X) + Math.Abs(o.Cell.Y - hc.Cell.Y) <= 3).Select(o => $"{o.Name}{o.Cell}{o.Pose}{o.Job?.Label}"))} · 로봇 {string.Join(", ", w.Robots.Robots.Where(r => (r.Position - hc.Position).Length() < 4f).Select(r => $"{r.Name}{r.Position}{r.State}"))} · 이동식 {string.Join(", ", w.Portable.Devices.Where(d => d.At is Cell a && Math.Abs(a.X - hc.Cell.X) + Math.Abs(a.Y - hc.Cell.Y) <= 3).Select(d => $"{d.Kind}{d.At}"))}");
+                            var dd = w.Ship.DoorAt(hc.Cell + new Cell(0, -1)); Console.WriteLine($"      위 문: {dd?.RoomA?.Name}/{dd?.RoomB?.Name} 잠김 {dd?.Locked} 용접 {dd?.Welded} 모터 {dd?.MotorBroken} 붙잡음 {(dd != null && w.Failsafe.Latched(dd))} 길 {string.Join(" ", w.Paths.Find(hc.Cell, w.Ship.FurnitureOf(FurnitureType.MealDispenser).First().UseSpots[0])?.Take(6) ?? new List<Cell>())}");
+                            for (int dy = -2; dy <= 2; dy++) Console.WriteLine("      " + string.Concat(Enumerable.Range(-4, 9).Select(dx => { var cc = hc.Cell + new Cell(dx, dy); return dx == 0 && dy == 0 ? '@' : w.Ship.Grid.Kind(cc) == TileKind.Wall ? '#' : w.Ship.Grid.Kind(cc) == TileKind.Door ? '+' : w.Ship.IsWalkable(cc) ? '.' : 'x'; })));
+                            for (int t = 0; t < 400; t++)
+                            {
+                                w.Step();
+                                if (t % 10 == 0) Console.WriteLine($"      t{t} {hc.Job?.Label} {hc.Job?.Current?.GetType().Name} 들고 {hc.Carrying} 막힘 {hc.PathBlocked} 길 {hc.Path?.Count} 칸 {hc.Cell} 미룸 {w.Coop.Queues.Deferred(hc)}");
+                            }
+                            return 1;
+                        }
+                        foreach (var c in w.Crew.Where(c => !c.Dead && c.Needs.Food < 0.12f))
+                            Console.WriteLine($"    [{h}:{k}0] {c.Name} 배 {c.Needs.Food * 100:0}% 잠 {c.Needs.Rest * 100:0}% {c.Room?.Name} {c.Pose} 일 {c.Job?.Label} ({c.Job?.Activity?.Id}) 이유 {c.JobReason} 칸 {c.Cell} 배식기길 {string.Join(",", w.Ship.FurnitureOf(FurnitureType.MealDispenser).Select(d => (w.Paths.Find(c.Cell, d.UseSpots[0])?.Count ?? -1) + ":" + d.Storage!.Count(ItemKind.Meal) + ":" + d.Machine!.Efficiency.ToString("0.0")))}");
+                    }
+                else Run(w, SimTime.Hours(1));
+                foreach (var c in w.Crew.Where(c => !c.Dead))
+                    if (c.Needs.Food < minFood) { minFood = c.Needs.Food; hungry = $"{c.Name} {h}시 {c.Room?.Name}({c.Job?.Label}) 끼니 {w.Ship.CountStored(ItemKind.Meal)} 채소 {w.Ship.CountStored(ItemKind.Produce)} 비상 {w.Ship.CountStored(ItemKind.Ration)}"; }
             }
+            Console.WriteLine($"   수경 고장 사흘 · 가장 배고팠던 때: {hungry}");
             var fs = w.FoodSources;
             int other = fs.In[(int)FoodSrc.Algae] + fs.In[(int)FoodSrc.Mushroom] + fs.In[(int)FoodSrc.Protein] + fs.In[(int)FoodSrc.Garden];
             int alive = w.Crew.Count(c => !c.Dead);
