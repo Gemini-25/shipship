@@ -91,7 +91,7 @@ public sealed class ShipForecast
     public List<FailureRisk> Risks { get; } = new();
     public List<ShortWarning> Warnings { get; } = new();
     public string HazardLine { get; private set; } = "";
-    public int Samples, ManualReads, Disagreements, Graded, Hits, Suspects;
+    public int Samples, ManualReads, Disagreements, Graded, Hits, Suspects, Thinned;
 
     public ShipForecast(World w) => _w = w;
 
@@ -169,6 +169,7 @@ public sealed class ShipForecast
         if (!a.Present || !a.MainOnline) return;
         if (!force && w.Tick < _next) return;
         _next = w.Tick + SimTime.Hours(SampleHours);
+        if (!force && a.SelfOrNull?.Thin("예측") == true) { Thinned++; return; } // v16.26 ⑥ 달아오르면 긴 예측을 한 번 거른다 (경보 · 제어는 그대로)
         Samples++;
         foreach (var m in Models) Sample(m);
         Grade();

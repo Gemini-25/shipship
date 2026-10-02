@@ -237,8 +237,9 @@ public sealed class CrewModelBook
     /// <summary>Chores.Appeal 훅: 부탁받은 일은 더 하고 싶고, 쉬라는 부탁을 받으면 급하지 않은 일을 덜 한다 — 컴퓨터를 믿는 만큼.</summary>
     public float RequestBias(CrewMember c, WorkOrder o)
     {
-        if (_asks.Count == 0 && _rest.Count == 0) return 0f;
-        float b = 0f;
+        float hold = _w.Automation.ReserveOrNull?.HoldsCrew(c) == true && o.Urgency < 0.6f && Routine(o.Kind) ? -0.3f : 0f; // v16.26 ③ 계획이 곧 부를 사람은 늘 하는 일을 잡지 않는다
+        if (_asks.Count == 0 && _rest.Count == 0) return hold;
+        float b = hold;
         if (_asks.TryGetValue(c.Id, out var ask) && ask.OrderId == o.Id && ask.Until > _w.Tick && (ask.Crisis ? !_w.Command.Active : !_w.Command.Active && _w.Automation.FireCases.Count == 0) && _w.Expedition.MemberOf(c) == null) b += 0.35f * _w.Automation.Trusts.Of(c); // 현장 지휘가 서면 지휘의 조 편성을 따른다
         if (_rest.TryGetValue(c.Id, out var until) && until > _w.Tick && o.Urgency < 0.6f && Routine(o.Kind)) b -= 0.4f * _w.Automation.Trusts.Of(c); // 늘 하는 일만 (급한 일 · 사고 수습 · 관제석은 그대로)
         return b;

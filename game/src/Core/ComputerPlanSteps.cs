@@ -175,6 +175,14 @@ public static class FixSteps
     private static string Range(this FixOption o) => o.Max - o.Min < 1.5f ? $"{o.Min:0}분" : $"{o.Min:0}~{o.Max:0}분";
 
     /// <summary>손 하나 고르기: 기술 · 기력 · 이 배에서 잰 작업 속도 · 다른 계획에 이미 잡힌 사람은 피한다 (전문가 몰림 분산).</summary>
+    /// <summary>그 사람이 다른 열린 계획의 사람 손 걸음을 하고 있나 (전문가에게 몰림).</summary>
+    internal static bool OnOtherPlan(World w, int crewId, FixPlan p)
+    {
+        foreach (var q in w.Automation.Recovery.Plans)
+            if (q != p && q.Open) foreach (var s in q.Steps) if (s.State == FixState.Run && s.Act.Kind == FixKind.Hands && s.Crew == crewId) return true;
+        return false;
+    }
+
     internal static CrewMember? Hand(World w, Machine m, HashSet<int>? skip, bool simple = false)
     {
         var a = w.Automation;
@@ -419,7 +427,15 @@ internal sealed class RepairStep : FixAction
     {
         var m = M(w);
         if (m == null || !FixSteps.Broken(m)) return;
-        Ask(w, p, s, m, _prefer >= 0 ? w.Crew.FirstOrDefault(c => c.Id == _prefer && c.CanAct) : null);
+        var pref = _prefer >= 0 ? w.Crew.FirstOrDefault(c => c.Id == _prefer && c.CanAct) : null;
+        // 전문가에게 몰렸다: 그 사람이 다른 계획의 수리를 하고 있으면 이 일은 비어 있는 사람에게 나눈다
+        if (pref != null && FixSteps.OnOtherPlan(w, pref.Id, p) && FixSteps.Hand(w, m, new HashSet<int> { pref.Id }, simple: true) is CrewMember other)
+        {
+            w.Automation.Recovery.Shared++;
+            w.Automation.Recovery.Revise(p, $"{Ko.IGa(pref.Name)} 다른 수리에 붙어 있다 — 일이 한 사람에게 몰리지 않게 {other.Name}에게 나눈다");
+            pref = other;
+        }
+        Ask(w, p, s, m, pref);
     }
     private void Ask(World w, FixPlan p, FixStep s, Machine m, CrewMember? who)
     {

@@ -95,7 +95,12 @@ public static partial class Program
             var m = pump.Machine!;
             m.Wear = 0.7f; m.Condition = 0.2f; // 실제 원인: 펌프가 닳았다
             ProbeCase? pc = null;
-            for (int i = 0; i < SimTime.Minutes(90); i++) { w.Step(); pc ??= a.Probe.Cases.FirstOrDefault(c => c.Furn == pump.Id); if (pc != null && pc.State != "확인 중") break; }
+            for (int i = 0; i < SimTime.Minutes(90); i++)
+            {
+                w.Step(); pc ??= a.Probe.Cases.FirstOrDefault(c => c.Furn == pump.Id); if (pc != null && pc.State != "확인 중") break;
+                if (PlanDebug && i % SimTime.Minutes(10) == 0) foreach (var o in w.Board.All.Where(o => o.Kind == WorkKind.PreventiveCheck && o.Target.Room == pump.Room))
+                    Console.WriteLine($"      {SimTime.Clock(w.Tick)} 순찰 #{o.Id} 닫힘 {o.Closed} · 맡은 {o.Assignee?.Name ?? "-"} · 막힘 {o.BlockedReason} · 진척 {o.Progress:0.00} · 부탁 {pc?.Now?.Crew} · 그 사람 {o.Assignee?.Job?.Order?.Id}/{o.Assignee?.Job?.Current?.GetType().Name}/{o.Assignee?.Room.Name}/{o.Assignee?.Pose} · 방 {pump.Room.Name}");
+            }
             Check("유량이 줄자 원인 셋을 함께 의심한다", pc != null && pc.H.Count == 3, pc == null ? $"사례 없음 (읽은 유량 {a.Probe.Reading(pump) * 100:0}%)" : string.Join(" · ", pc.H.Select(h => h.Name)));
             if (pc != null)
             {
@@ -320,6 +325,224 @@ public static partial class Program
             for (int i = 0; i < 20; i++) w.Step();
             bool patrol = w.Board.All.Any(o => !o.Closed && o.Kind == WorkKind.PreventiveCheck && o.Detail.Contains("센서가 안 닿는다"));
             Check("센서가 여럿 안 닿으면 확신을 낮추고 순찰을 부탁한다", a.SelfWatch.Sight < 0.8f && patrol, $"닿는 몫 {a.SelfWatch.Sight * 100:0}% · 끊긴 방 {rooms.Count(r => !r.DataLinked)}/{rooms.Count} · 중계 {ComputerV15.Relay(w)} · 순찰 일감 {patrol} · {a.SelfWatch.Status}");
+        }
+
+        // ── 14) 자기 진단 둘: 달아오르면 긴 예측 · 검토를 줄이고 냉각은 그대로 · 식으면 미룬 검토 / 계산이 몰리면 급한 것만 / 켰다 껐다 하면 멈춘다 / 주컴퓨터실이 위험하면 예비로 ──
+        if (Sec(14))
+        {
+            var w = DayOne(seed, "Hanbit");
+            var a = w.Automation;
+            var croom = a.Computer!.Body.Room;
+            var pump = w.Ship.FurnitureOf(FurnitureType.CoolantPump).First();
+            if (w.Ship.CountStored(ItemKind.Pump) < 1) foreach (var f in w.Ship.Containers) { if (f.Storage!.Add(ItemKind.Pump, 1) > 0) break; }
+            int thin0 = a.Outlook.Thinned, rev0 = a.Review.Reviews.Count;
+            bool hot = false, thinOk = false;
+            FixPlan? plan = null;
+            long cooled = -1;
+            for (int i = 0; i < SimTime.Hours(6); i++)
+            {
+                if (cooled < 0) croom.Air.Temperature = MathF.Max(croom.Air.Temperature, 36.5f);
+                w.Step();
+                if (a.SelfWatch.Hot) { hot = true; thinOk |= a.SelfWatch.Thin("검토") && a.SelfWatch.Thin("예측") && !a.SelfWatch.Thin("경보") && !a.SelfWatch.Thin("문"); }
+                if (i == SimTime.Minutes(20)) w.Machines.Break(pump.Machine!, FaultKind.PumpSeized);
+                plan ??= a.Recovery.Plans.FirstOrDefault(p => p.Problem == "냉각");
+                if (cooled < 0 && plan != null && !plan.Open) { cooled = w.Tick; croom.Air.Temperature = 22f; }
+                if (cooled >= 0 && w.Tick - cooled > SimTime.Minutes(40)) break;
+            }
+            bool reviewedHot = plan != null && a.Review.Reviews.Any(r => r.PlanId == plan.Id && r.Tick < cooled);
+            bool reviewedLater = plan != null && a.Review.Reviews.Any(r => r.PlanId == plan.Id);
+            Check("달아오르면 긴 예측 · 사고 검토를 줄이고, 냉각 계획 · 경보 · 문은 그대로 돈다", hot && thinOk && a.Outlook.Thinned > thin0 && plan != null,
+                $"달아오름 {hot} · 줄인 예측 {a.Outlook.Thinned - thin0}번 · 냉각 계획 {plan?.Name ?? "없음"} ({plan?.State})");
+            Check("달아오른 동안 미룬 사고 검토는 식은 뒤에 한다", plan != null && !plan.Open && !reviewedHot && reviewedLater, $"식은 뒤 검토 {reviewedLater} · 달아오른 때 검토 {reviewedHot} · {a.SelfWatch.Notes.LastOrDefault(n => n.text.Contains("식었다")).text}");
+
+            // 계산이 몰린다: 본체가 상하고 달아올라 연산이 반 아래 → 급한 것(냉각 · 문)만, 다른 설비 계획은 미룬다
+            var comp = a.Computer!;
+            float wear0 = comp.Wear, cond0 = comp.Condition; comp.Wear = 1f; comp.Condition = 0.3f;
+            var o2 = w.Ship.FurnitureOf(FurnitureType.OxygenGenerator).First().Machine!;
+            bool crowded = false, o2Plan = false, coolPlan = false;
+            var pump2 = w.Ship.FurnitureOf(FurnitureType.CoolantPump).Skip(1).FirstOrDefault() ?? pump;
+            if (w.Ship.CountStored(ItemKind.Pump) < 1) foreach (var f in w.Ship.Containers) { if (f.Storage!.Add(ItemKind.Pump, 1) > 0) break; }
+            for (int i = 0; i < SimTime.Minutes(12); i++)
+            {
+                croom.Air.Temperature = 39f;
+                w.Step();
+                if (i == SimTime.Minutes(1)) // 불이 여러 곳에서 한꺼번에 — 줄일 수 없는 계산이 몰린다
+                    foreach (var fr in w.Ship.LiveRooms.Where(x => x != croom && x != pump2.Room && x != o2.Body.Room && x.Type is not (RoomType.Corridor or RoomType.LifeSupport or RoomType.Medbay)).OrderBy(x => x.Id).Take(6))
+                        w.Fire.Ignite(fr.Cells.First(w.Ship.IsOpenFloor), 0.6f);
+                if (i == SimTime.Minutes(3)) { w.Machines.Break(o2, FaultKind.ElectrolyzerFault); w.Machines.Break(pump2.Machine!, FaultKind.PumpSeized); }
+                crowded |= a.SelfWatch.Crowded;
+                if (a.SelfWatch.Crowded)
+                {
+                    o2Plan |= a.Recovery.Plans.Any(p => p.Open && p.TargetId == o2.Body.Id);
+                    coolPlan |= a.Recovery.Plans.Any(p => p.Open && p.Problem == "냉각" && p.TargetId == pump2.Id);
+                }
+            }
+            if (PlanDebug) Console.WriteLine($"    용량 {a.Core.Capacity():0.0} · 부하 {a.Load:0.00} · 본체 {a.MainOnline} · 코어 {a.CoreOnline} · 예비 {a.BackupActive} · 원자로 {w.Power.ReactorOnline} · 펌프2 {pump2.Id}/{pump.Id} 고장 {string.Join(",", pump2.Machine!.Faults.Select(f => f.Kind))} · 계획 {string.Join(" / ", a.Recovery.Plans.Select(p => $"{p.Problem}:{p.TargetId}:{p.State}"))}");
+            Check("계산이 몰리면 급한 것(냉각)만 하고 다른 설비 계획은 미룬다", crowded && coolPlan && !o2Plan, $"부하 {a.Load * 100:0}% · 몰림 {crowded} · 냉각 계획 {coolPlan} · 산소 발생기 계획 {o2Plan}");
+            comp.Wear = wear0; comp.Condition = cond0;
+            croom.Air.Temperature = 22f;
+
+            // 켰다 껐다: 같은 설비를 두 시간 안에 네 번 끄고 켜면 스스로 멈추고, 몰아주기도 그 설비를 다시 켜지 않는다
+            var toy = w.Ship.Machines.First(m => m.Spec.PowerDraw > 0f && !m.Spec.Critical && m.Body.Type != FurnitureType.MainComputer);
+            int toggles0 = a.SelfWatch.Toggles;
+            for (int k = 0; k < 4; k++)
+            {
+                a.Command.Line(CmdTarget.Machine, toy.Body.Id, toy.Body.Room, k % 2 == 0 ? $"{toy.Name} 끔 (시험)" : $"{toy.Name} 다시 켬", "시험", 0.5f, 5f);
+                for (int i = 0; i < SimTime.Minutes(5); i++) w.Step();
+            }
+            Check("켰다 껐다를 되풀이하면 스스로 멈추고 원인을 사람에게 넘긴다", a.SelfWatch.Toggles > toggles0 && !a.SelfWatch.Allow(CmdTarget.Machine, toy.Body.Id, "다시 켬"), a.SelfWatch.Notes.LastOrDefault().text ?? "");
+
+            // 주컴퓨터실이 위험하다: 지금 계획 · 명령 상태를 예비 연산기로 넘긴다
+            int moves0 = a.SelfWatch.Relocations;
+            for (int i = 0; i < SimTime.Minutes(4) && !a.SelfWatch.Moved; i++) { croom.Air.Temperature = 47f; w.Step(); }
+            Check("주컴퓨터실이 위험하면 지금 계획 · 명령 상태를 예비로 넘긴다", a.SelfWatch.Moved && a.SelfWatch.Relocations > moves0 && a.SelfWatch.Thin("예측") && !a.SelfWatch.Thin("경보"), a.SelfWatch.Status);
+        }
+
+        // ── 15) 끊긴 동안 미뤄 둔 위험한 원격 명령(시험 운전)은 유효 시간이 지나면 하지 않고 상태부터 다시 본다 ──
+        if (Sec(15))
+        {
+            var w = DayOne(seed, "Hanbit");
+            var a = w.Automation;
+            var pump = w.Ship.FurnitureOf(FurnitureType.CoolantPump).First();
+            if (w.Ship.CountStored(ItemKind.Pump) < 1) foreach (var f in w.Ship.Containers) { if (f.Storage!.Add(ItemKind.Pump, 1) > 0) break; }
+            w.Machines.Break(pump.Machine!, FaultKind.PumpSeized);
+            FixPlan? plan = null;
+            for (int i = 0; i < SimTime.Hours(2); i++)
+            {
+                w.Step();
+                plan ??= a.Recovery.Plans.FirstOrDefault(p => p.Problem == "냉각");
+                if (plan?.Step is FixStep rs && rs.Name == "수리" && rs.State == FixState.Run) break;
+            }
+            var room = pump.Room;
+            var links = w.Net.Links.Where(l => l.Kind == NetKind.Data && (l.Room == room || l.Door != null && (l.Door.RoomA == room || l.Door.RoomB == room))).ToList();
+            foreach (var l in links) w.Net.Hurt(l, 1f, "시험");
+            for (int i = 0; i < 60 && room.DataLinked; i++) w.Step();
+            pump.Machine!.Faults.Clear(); // 끊긴 사이 정비사가 고쳤다 (중앙은 아직 모른다)
+            bool held = false;
+            int cmds0 = a.Command.Lines.Count(o => o.What.Contains("시험 운전"));
+            for (int i = 0; i < SimTime.Minutes(14); i++)
+            {
+                w.Step();
+                var cur = plan == null ? null : a.Recovery.Plans.LastOrDefault(p => p.Problem == "냉각" && p.Open);
+                held |= cur?.Step is FixStep ts && ts.Name == "시험 운전" && ts.State == FixState.Wait && ts.Waiting.Contains("끊");
+            }
+            int cmds1 = a.Command.Lines.Count(o => o.What.Contains("시험 운전"));
+            int exp0 = a.Zones.Expired, rc0 = a.Zones.Reconnects;
+            foreach (var l in links) l.Integrity = 1f;
+            for (int i = 0; i < 90 && a.Zones.Reconnects == rc0; i++) w.Step();
+            var last = a.Recovery.Plans.LastOrDefault(p => p.Problem == "냉각");
+            Check("끊긴 동안 위험한 원격 명령(시험 운전)은 보내지 않고 기다린다", plan != null && held && cmds1 == cmds0, $"기다림 {held} · 시험 운전 명령 {cmds0} → {cmds1} · {plan?.Step?.Waiting}");
+            Check("다시 이어졌을 때 유효 시간이 지난 명령은 하지 않고 상태부터 다시 본다", a.Zones.Expired > exp0 && last != null && last.Revisions.Any(r => r.why.Contains("유효 시간")), last?.Revisions.LastOrDefault().why ?? "");
+        }
+
+        // ── 16) 자원 예약: 마지막 부품 · 계획이 부를 사람 · 지친 기술자 — 승무원이 실제로 다르게 움직인다 ──
+        if (Sec(16))
+        {
+            var w = DayOne(seed, "Hanbit");
+            var a = w.Automation;
+            Run(w, SimTime.Hours(31)); // 주컴퓨터가 사람을 알아 가는 데 하루 남짓 걸린다 (쉬라는 부탁은 아는 사람에게만)
+            // 정수기 필터가 마지막 하나
+            int filters = w.Ship.CountStored(ItemKind.Filter);
+            if (filters < 1) foreach (var f in w.Ship.Containers) { if (f.Storage!.Add(ItemKind.Filter, 1) > 0) break; }
+            foreach (var f in w.Ship.Containers) { int n = w.Ship.CountStored(ItemKind.Filter); if (n <= 1) break; f.Storage!.Take(ItemKind.Filter, n - 1); }
+            var pump = w.Ship.FurnitureOf(FurnitureType.CoolantPump).First();
+            if (w.Ship.CountStored(ItemKind.Pump) < 1) foreach (var f in w.Ship.Containers) { if (f.Storage!.Add(ItemKind.Pump, 1) > 0) break; }
+            w.Machines.Break(pump.Machine!, FaultKind.PumpSeized);
+            FixPlan? plan = null;
+            CrewMember? held = null;
+            for (int i = 0; i < SimTime.Hours(1) && held == null; i++)
+            {
+                w.Step();
+                plan ??= a.Recovery.Plans.FirstOrDefault(p => p.Problem == "냉각");
+                if (plan?.Steps.FirstOrDefault(s => s.Name == "수리") is FixStep rs && rs.Crew >= 0 && a.Reserve.HoldsCrew(w.Crew.First(c => c.Id == rs.Crew))) held = w.Crew.First(c => c.Id == rs.Crew);
+            }
+            Check("핵심 설비의 마지막 부품은 다음 고장 몫으로 묶어 둔다", w.Ship.CountStored(ItemKind.Filter) != 1 || a.Reserve.Now.Any(r => r.Kind == "부품" && r.What.Contains("마지막")), string.Join(" · ", a.Reserve.Now.Select(r => $"{r.Kind}:{r.What}")));
+            var routine = w.Board.Open.FirstOrDefault(o => !o.Closed && CrewModelBook.Routine(o.Kind) && o.Urgency < 0.6f);
+            routine ??= w.Board.All.FirstOrDefault(o => CrewModelBook.Routine(o.Kind) && o.Urgency < 0.6f);
+            float bias = held != null && routine != null ? a.CrewModel.RequestBias(held, routine) : 0f;
+            Check("계획이 곧 부를 사람은 예약하고 — 그 사람은 늘 하던 잡일을 집지 않는다", held != null && routine != null && bias < 0f, $"{held?.Name ?? "없음"} · {routine?.Title ?? "잡일 없음"} · 치우침 {bias:0.00}");
+            // 계획이 도는 동안 지친 기술자에겐 지금 쉬라 한다 (다음 교대 몫) — 그 사람도 잡일을 미룬다
+            var tired = w.Crew.Where(c => !c.Dead && c.CanAct && c != held && a.CrewModel.Ready(c) && (c.SkillLevel(Skill.Mechanics) >= 0.5f || c.SkillLevel(Skill.Electrical) >= 0.5f)).OrderBy(c => c.Id).FirstOrDefault();
+            if (tired != null) tired.Needs.Rest = 0.12f;
+            for (int i = 0; i < SimTime.Minutes(5) && tired != null && !a.CrewModel.RestAsked(tired); i++) { if (tired.Needs.Rest > 0.15f) tired.Needs.Rest = 0.12f; w.Step(); }
+            float tb = tired != null && routine != null ? a.CrewModel.RequestBias(tired, routine) : 0f;
+            Check("계획이 도는 동안 지친 기술자는 쉬게 해 다음 교대를 남긴다 — 그 사람도 잡일을 미룬다", plan?.Open == true && tired != null && a.CrewModel.RestAsked(tired) && tb < 0f, $"{tired?.Name ?? "없음"} · 쉬라 함 {tired != null && a.CrewModel.RestAsked(tired)} · 치우침 {tb:0.00}");
+        }
+
+        // ── 17) 복구 순서: 부품이 오기 전엔 사람을 세우지 않는다 · 한 사람에게 몰리면 나눈다 · 사람이 붙은 설비는 다시 켜지 않는다 ──
+        if (Sec(17))
+        {
+            var w = DayOne(seed, "Hanbit");
+            var a = w.Automation;
+            var o2 = w.Ship.FurnitureOf(FurnitureType.OxygenGenerator).First().Machine!;
+            w.Machines.Break(o2, FaultKind.ElectrolyzerFault);
+            var need = o2.Faults.SelectMany(f => f.Materials).Select(x => x.kind).Distinct().ToList();
+            var keep = need.ToDictionary(k => k, k => w.Ship.CountStored(k));
+            foreach (var k in need) foreach (var f in w.Ship.Containers) f.Storage!.Take(k, 999);
+            FixPlan? plan = null;
+            for (int i = 0; i < SimTime.Minutes(15); i++) { w.Step(); plan ??= a.Recovery.Plans.FirstOrDefault(p => p.Open && p.TargetId == o2.Body.Id); }
+            var part = plan?.Steps.FirstOrDefault();
+            var fix = plan?.Steps.FirstOrDefault(s => s.Name == "수리");
+            Check("부품이 없으면 '부품 구하기'가 앞에 서고, 오기 전엔 사람을 세우지 않는다", plan != null && part?.Name == "부품 구하기" && part.State == FixState.Run && fix != null && fix.Crew < 0 && part.Waiting.Contains("세우지 않는다"),
+                plan == null ? "계획 없음" : $"{string.Join(" → ", plan.Steps.Select(s => $"{s.Name}:{s.State}"))} · {part?.Waiting}");
+            foreach (var k in need) { int n = Math.Max(2, keep[k]); foreach (var f in w.Ship.Containers) { n -= f.Storage!.Add(k, n); if (n <= 0) break; } }
+            for (int i = 0; i < SimTime.Minutes(6) && (fix?.Crew ?? 0) < 0; i++) w.Step();
+            Check("부품이 들어오면 그때 사람을 부른다", fix != null && fix.Crew >= 0, fix == null ? "" : $"{fix.State} · {fix.Note}");
+            // 같은 손이 필요한 다른 핵심 설비도 고장 — 그 사람이 이미 붙어 있으면 다른 사람에게 나눈다
+            var other = w.Ship.Machines.Where(m => m.Spec.Critical && m != o2 && m.Body.Type is not (FurnitureType.CoolantPump or FurnitureType.MainComputer or FurnitureType.ReactorCore) && m.Faults.Count == 0)
+                .OrderBy(m => m.Spec.Skill == o2.Spec.Skill ? 0 : 1).ThenBy(m => m.Body.Id).FirstOrDefault();
+            FixPlan? plan2 = null;
+            if (other != null)
+            {
+                var kind = other.Body.Type == FurnitureType.WaterRecycler ? FaultKind.FilterClogged : other.Body.Type == FurnitureType.OxygenGenerator ? FaultKind.ElectrolyzerFault : FaultKind.ControlFault;
+                w.Machines.Break(other, kind);
+                foreach (var (k, c) in other.Faults.SelectMany(f => f.Materials)) if (w.Ship.CountStored(k) < c) foreach (var f in w.Ship.Containers) { if (f.Storage!.Add(k, c) > 0) break; }
+                for (int i = 0; i < SimTime.Minutes(10); i++) { w.Step(); plan2 ??= a.Recovery.Plans.FirstOrDefault(p => p.Open && p.TargetId == other.Body.Id); if (plan2?.Steps.FirstOrDefault(s => s.Name == "수리")?.Crew >= 0) break; }
+            }
+            var fix2 = plan2?.Steps.FirstOrDefault(s => s.Name == "수리");
+            string who(int id) => w.Crew.FirstOrDefault(c => c.Id == id)?.Name ?? "-";
+            Check("한 사람에게 수리가 몰리면 다른 사람에게 나눈다", fix != null && fix2 != null && fix.Crew >= 0 && fix2.Crew >= 0 && fix2.Crew != fix.Crew,
+                $"{o2.Name}: {who(fix?.Crew ?? -1)} · {other?.Name}: {who(fix2?.Crew ?? -1)} · 나눔 {a.Recovery.Shared} · {plan2?.Revisions.LastOrDefault().why}");
+            // 재기동 잠금: 수리가 끝났어도 정비 잠금이 걸려 있으면(사람이 붙어 있으면) 원격으로 시험 운전을 하지 않는다
+            if (plan2 != null && other != null)
+            {
+                other.LockedOut = true;
+                other.Faults.Clear();
+                int locks0 = a.Recovery.LockWaits;
+                int tests0 = a.Command.Lines.Count(o => o.TargetId == other.Body.Id && o.What.Contains("시험 운전"));
+                FixStep? test = null;
+                for (int i = 0; i < SimTime.Minutes(5); i++) { w.Step(); test = a.Recovery.Plans.LastOrDefault(p => p.TargetId == other.Body.Id)?.Steps.FirstOrDefault(s => s.Name == "시험 운전"); }
+                int tests1 = a.Command.Lines.Count(o => o.TargetId == other.Body.Id && o.What.Contains("시험 운전"));
+                bool waited = test != null && test.State == FixState.Wait && test.Waiting.Contains("재기동 잠금");
+                other.LockedOut = false;
+                for (int i = 0; i < SimTime.Minutes(4); i++) w.Step();
+                test = a.Recovery.Plans.LastOrDefault(p => p.TargetId == other.Body.Id)?.Steps.FirstOrDefault(s => s.Name == "시험 운전");
+                Check("사람이 붙어 일하는 설비는 원격으로 다시 켜지 않고, 잠금이 풀리면 시험 운전한다", waited && tests1 == tests0 && a.Recovery.LockWaits > locks0 && test != null && test.State != FixState.Wait,
+                    $"기다림 {waited} · 잠긴 동안 명령 {tests1 - tests0} · 풀린 뒤 {test?.State} {test?.Note}");
+            }
+        }
+
+        // ── 18) 성격 셋 — 말투 · 판단 선호: 위기엔 말이 짧아진다 · 긴급 정지를 겪으면 여유를 더 남긴다 (안전 제한은 그대로) ──
+        if (Sec(18))
+        {
+            var w = DayOne(seed, "Hanbit");
+            var a = w.Automation;
+            const string line = "냉각 펌프 하나가 멎어 냉각이 모자랍니다 · 예비 펌프를 세게 돌리고 출력을 낮춥니다 · 정비사를 부릅니다";
+            string calm = a.Manner.Speak(line);
+            var wr = WreckedShip(seed, "Hanbit");
+            for (int i = 0; i < SimTime.Minutes(30) && Crisis.Level(wr) < CrisisLevel.Emergency; i++) wr.Step();
+            string tense = wr.Automation.Manner.Speak(line);
+            Check("위기엔 말이 짧아진다 (한가할 땐 다 말한다)", calm == line && tense.Length < line.Length, $"평시: {calm} | {Crisis.Name(Crisis.Level(wr))}: {tense}");
+            var c = new FixCase { Problem = "냉각", Scram = FixSteps.ScramC(w) };
+            FixOption Near() => new FixOption { Key = "near", Name = "아슬아슬", PeakMin = c.Scram - 30f, PeakMax = c.Scram - FixSteps.SafetyFloorC - 2f, Min = 30f, Max = 60f };
+            for (int i = 0; i < SimTime.Hours(1) + 10; i++) w.Step();
+            var o0 = Near(); FixSteps.Score(w, c, o0);
+            float m0 = a.Manner.MarginPref;
+            w.History.Scrams++; // 원자로가 긴급 정지했다
+            for (int i = 0; i < SimTime.Hours(1) + 10; i++) w.Step();
+            var o1 = Near(); FixSteps.Score(w, c, o1);
+            Check("긴급 정지를 겪으면 여유를 더 남긴다 — 아슬아슬한 수순의 점수가 나빠진다 · 안전 제한은 그대로", a.Manner.MarginPref > m0 && o1.Score > o0.Score && FixSteps.SafetyFloorC >= 12f,
+                $"여유 {m0:0.00} → {a.Manner.MarginPref:0.00} · 점수 {o0.Score:0.0} → {o1.Score:0.0} · {a.Manner.Shifts.LastOrDefault().text}");
         }
 
         // ── 11) 결정론 ──
