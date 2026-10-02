@@ -175,7 +175,7 @@ public static class TechLookTable
         V("exterior.ionring", VAnchor.Exterior, "뱃머리 이온 편향 고리 · 푸른 호", live: true),
         F("quarters.pods", FurnitureType.Bed, "침대를 덮는 개인 선실 덮개"),
         // ── 5 탈지구 공학 ──
-        R("bridge.aicaptain", "AI 부함장 눈 (숨 쉬듯 빛난다)", true, RoomType.Bridge, RoomType.BackupBridge, RoomType.Navigation),
+        R("bridge.aicaptain", "부함장 보조 컴퓨터 눈 (숨 쉬듯 빛난다)", true, RoomType.Bridge, RoomType.BackupBridge, RoomType.Navigation),
         R("lifesupport.loop", "재활용 분류함 넷 · 순환 화살표", false, RoomType.LifeSupport, RoomType.Recycling, RoomType.WaterPlant),
         R("workshop.assembler", "분자 조립 상자 (빛 격자)", true, RoomType.Workshop, RoomType.Lab, RoomType.PartsPrep),
         V("hull.memoryalloy", VAnchor.Hull, "외벽 은빛 물결 판", every: 2),
@@ -217,7 +217,7 @@ public static class TechLookTable
         V("hull.printpatch", VAnchor.Hull, "찍어 붙인 벌집 패치", every: 4),
         F("waterplant.heat", FurnitureType.WaterRecycler, "폐열 증류기 · 응축 코일 · 김", true),
         V("exterior.swarm", VAnchor.Exterior, "외판을 기는 수리 로봇 떼", live: true),
-        F("medbay.diagai", FurnitureType.MedBed, "진단 AI 스캔 호 · 눈", true),
+        F("medbay.diagai", FurnitureType.MedBed, "진단 보조기 스캔 호 · 눈", true),
         F("growbed.heirloom", FurnitureType.GrowBed, "옛 씨앗 병 · 빨강 · 보라 열매"),
         F("panel.safegrid", FurnitureType.PowerPanel, "초록 무아크 차단기 줄", true),
         R("workshop.torch", "플라스마 절단기 거치대 · 호스", true, RoomType.Workshop, RoomType.WeldingShop),

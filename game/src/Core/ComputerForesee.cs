@@ -484,7 +484,7 @@ public sealed class ComputerForesee
                 "파공" => down > 0 ? (-1, $"틀렸다 — {down}명이 쓰러졌다") : room != null && room.Leaking && !room.Lockdown && room.Air.Pressure < 50f ? (-1, "틀렸다 — 아직 새고 열려 있다") : (1, $"맞았다 — 쓰러진 사람 없이 ({room?.Air.Pressure ?? 0:0}kPa)"),
                 "불" => down > 0 ? (-1, $"틀렸다 — {down}명이 쓰러졌다") : room != null && w.Fire.CountIn(room) > 8 ? (-1, $"틀렸다 — 불이 {w.Fire.CountIn(room)}칸으로 커졌다") : (1, room != null && w.Fire.CountIn(room) == 0 ? "맞았다 — 꺼졌다" : "맞았다 — 잡혀 간다"),
                 "정전" => w.Power.BatteryPercent > 0.02f || w.Power.ReactorOnline || w.Power.AuxRunning ? (1, $"맞았다 — 필수 회로가 버텼다 (배터리 {w.Power.BatteryPercent * 100:0}%)") : (-1, "틀렸다 — 배터리가 바닥났다"),
-                "차단기" => (2, "트리아지가 따로 채점한다"),
+                "차단기" => (2, "차단기 기록에서 따로 매긴다"),
                 _ => (2, ""),
             };
             if (d.Grader?.Invoke(w, d) is (int gs, string gw)) { s = gs; why = gw; }

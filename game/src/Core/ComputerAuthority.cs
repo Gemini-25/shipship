@@ -75,7 +75,7 @@ public sealed class ComputerAuthority
     public static string ActName(string kind) => kind switch
     {
         "vacuum" => "진공 소화 제안", "inert" => "질식 소화 제안", "Alarm" => "경보", "Damper" => "댐퍼", "Bulkhead" => "격벽", "Valve" => "밸브", "Breaker" => "차단기",
-        "Suppress" => "소화", "Shed" => "부하 차단", "Module" => "모듈", "Zone" => "공기 구역", "Advice" => "조언", "Broadcast" => "방송", "Door" => "문", "Forecast" => "예측", _ => "",
+        "Suppress" => "소화", "Shed" => "부하 차단", "Module" => "제 몸 관리", "Zone" => "공기 구역", "Advice" => "조언", "Broadcast" => "방송", "Door" => "문", "Forecast" => "예측", _ => "",
     };
 
     public static string LevelName(AuthLevel l) => l switch { AuthLevel.Advise => "조언만", AuthLevel.Propose => "제안", _ => "자동 실행" };

@@ -24,7 +24,7 @@ public partial class Hud
         var w = _world;
         var a = w.Automation;
         float x0 = Margin, y0 = Margin + 52f + 8f + 40f + 8f + 64f + 10f;
-        float wdt = Mathf.Min(640f, Screen.X - RightColumnWidth - Margin * 3);
+        float wdt = Mathf.Min(_controlTab == 6 ? 980f : 640f, Screen.X - RightColumnWidth - Margin * 3); // v16.20 지휘 탭은 넓게
         float height = Screen.Y - y0 - LogHeight - Margin - 40f;
         var card = new Rect2(x0, y0, wdt, height);
         _controlRect = card;
@@ -62,7 +62,7 @@ public partial class Hud
         }
         Divider(x, right, ly + 6);
         // v13.0 모듈
-        SectionTitle(x, ly + 24, "모듈");
+        SectionTitle(x, ly + 24, "맡은 일");
         float mx = x + 44;
         foreach (var mod in Enum.GetValues<ComputerModule>())
         {

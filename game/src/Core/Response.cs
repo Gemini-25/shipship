@@ -59,7 +59,7 @@ public sealed partial class AutomationSystem
     public void Install(ComputerModule m, string? why = null)
     {
         if (!_modules.Add(m)) { if (why != null) Core.Upgrade(m, why); return; } // v16.20 이미 있다 — 등급을 올린다
-        _world.History.Add(_world, HistoryKind.Decision, $"주 컴퓨터에 {ModuleName(m)} 모듈을 달았다 — {ModuleNote(m)}" + (why != null ? $" ({why})" : ""), null, log: true);
+        _world.History.Add(_world, HistoryKind.Decision, $"주 컴퓨터가 {Ko.EulReul(ModuleName(m))} 맡았다 — {ModuleNote(m)}" + (why != null ? $" ({why})" : ""), null, log: true);
     }
     public void Remove(ComputerModule m) => _modules.Remove(m);
 

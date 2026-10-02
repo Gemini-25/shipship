@@ -44,7 +44,7 @@ public static class ChronicleV15
         S("rescue", "건져 올린 배", "탈출 캡슐에서 사람을 건졌다", w => w.Comms.Rescued >= 1),
         S("hazards15", "산전수전", "사고를 열다섯 번 넘겼다", w => w.Hazards.Count.Sum() >= 15),
         S("smother", "불을 굶긴 배", "산소를 빼서 불을 껐다", w => w.Automation.Smothered + w.Automation.Vacuumed >= 1),
-        S("thinking", "생각하는 배", "주 컴퓨터에 모듈이 열둘", w => w.Automation.Modules.Count >= 12),
+        S("thinking", "생각하는 배", "주 컴퓨터가 겪은 일로 판단 여섯 가지를 다듬었다", w => w.Automation.Core.GradeSum >= 6), // v16.20 처음부터 다 있다 — 자란 만큼
         S("dark", "어둠을 견딘 배", "정전 속에서 열두 시간을 버텼다", w => w.History.DarkHours >= 12f),
 
         // ── 사람 ──

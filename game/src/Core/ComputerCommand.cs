@@ -106,6 +106,24 @@ public sealed class ComputerCommand
         return o;
     }
 
+    /// <summary>다섯 칸 기록의 원격 조치를 명령선에 옮긴다 (격벽 · 문 · 댐퍼 · 밸브 · 소화 · 방송 · 경보 · 부하 · 재부팅). 차단기 · 예측 · 조언 · 제안은 따로.</summary>
+    internal void FromAct(ComputerAct act, Room? room)
+    {
+        if (act.Act == "") return;
+        CmdTarget? t = act.Kind switch
+        {
+            ActKind.Damper or ActKind.Zone => CmdTarget.Damper,
+            ActKind.Bulkhead or ActKind.Door => CmdTarget.Door,
+            ActKind.Valve or ActKind.Suppress => CmdTarget.Valve,
+            ActKind.Broadcast or ActKind.Alarm => CmdTarget.Broadcast,
+            ActKind.Reboot or ActKind.Module => CmdTarget.Self,
+            ActKind.Shed => room != null && room == _w.Automation.Computer?.Body.Room ? CmdTarget.Self : CmdTarget.Circuit,
+            _ => null,
+        };
+        if (t is not CmdTarget target) return;
+        Line(target, room?.Id ?? -1, room, (room != null && !act.Act.Contains(room.Name) ? room.Name + " — " : "") + act.Act, act.Judge, 0.6f, 5f);
+    }
+
     /// <summary>그 결정에서 나간 사람 지시를 닫는다 (원인을 뺐다 · 일이 풀렸다).</summary>
     public void Close(int decision, string result)
     {

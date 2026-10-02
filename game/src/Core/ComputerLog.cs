@@ -101,6 +101,7 @@ public sealed class ComputerLogBook
         Total++; ActsToday++;
         ByKind[kind]++;
         LastTick = w.Tick;
+        au.Command.FromAct(a, room); // v16.20 원격으로 한 일은 명령선에도 (문 · 댐퍼 · 밸브 · 방송 …)
         return a;
     }
 

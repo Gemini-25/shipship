@@ -160,7 +160,7 @@ public sealed partial class AutomationSystem
                 GhostAlarm(r);
                 if (_bugAlarmsNow >= 2)
                 {
-                    Reason("bug", $"헛불 경보가 {_bugAlarmsNow}번 — 원인 추정: {(BugModule is ComputerModule b2 ? ModuleName(b2) : "새")} 모듈 업데이트 · 조치: 업데이트를 되돌리고 재부팅", 0);
+                    Reason("bug", $"헛불 경보가 {_bugAlarmsNow}번 — 원인 추정: {(BugModule is ComputerModule b2 ? ModuleName(b2) + " 쪽" : "새")} 업데이트 · 조치: 업데이트를 되돌리고 재부팅", 0);
                     BugUntil = -1;
                     Reboot("업데이트 버그 — 되돌린다", 3f);
                 }

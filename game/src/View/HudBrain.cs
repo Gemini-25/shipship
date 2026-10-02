@@ -13,7 +13,7 @@ public partial class Hud
         var w = _world;
         if (c.Dead || !fits(40)) return y;
         var card = CrewWhy.Brain2(c, w, 3);
-        UiKit.Header(this, x, right, y + 10, "두뇌", card.Stance ?? card.PlanGoal ?? "감정 · 목표 · 믿음", "why");
+        UiKit.Header(this, x, right, y + 10, "속마음", card.Stance ?? card.PlanGoal ?? "감정 · 목표 · 믿음", "why");
         y += 16;
 
         // 감정 여섯: 각자 다른 그림 + 막대 (가장 큰 것은 밝게)
