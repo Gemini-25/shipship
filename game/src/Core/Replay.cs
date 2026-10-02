@@ -437,6 +437,7 @@ public static class SaveGame
         w.Fleet.Hash(I, F); // v16.20b 함대 지휘
         w.FoodSources.Hash(I, F); w.Scrap.Hash(I, F); // v16.22 식량원 · 고철
         w.Casualty.Hash(I, F); // v16.24 큰 상처 뒤
+        w.Perils.Hash(I, F); I((long)(w.Hazards.StormPeak * 1000f)); // v16.26 열사병 · 큰 피폭 · 폭풍 세기
         return h;
     }
 }

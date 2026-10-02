@@ -214,7 +214,7 @@ public sealed class LifeSystem
     {
         float p = 0.015f;
         var reasons = new List<(float w, string text)>();
-        if (c.Needs.Rest < 0.25f) { float k = ComputerV15.TiredMistake(_w); p *= k; reasons.Add((k, $"졸려서 (기력 {c.Needs.Rest * 100:0}%)")); } // v15.9 피로 경보
+        if (c.Needs.Rest < 0.25f) { float k = ComputerV15.TiredMistake(_w) * (1f + 2f * (0.25f - c.Needs.Rest)); p *= k; reasons.Add((k, $"졸려서 (기력 {c.Needs.Rest * 100:0}%)")); } // v15.9 피로 경보 · v16.26 더 졸릴수록 더 (피로 경보가 줄여도 녹초면 졸음이 첫째 까닭)
         if (c.Needs.Stress > 0.65f) { p *= 2.5f; reasons.Add((2.5f, $"예민해서 (스트레스 {c.Needs.Stress * 100:0}%)")); }
         if (c.Needs.Food < 0.15f) { p *= 1.5f; reasons.Add((1.5f, "배가 고파 손이 떨려서")); }
         if (Life.Needs(o) is Qual q && !Life.HasQual(c, q)) { float k = Persona.Core(q) ? 2.5f : 1.4f; p *= k; reasons.Add((k, $"{Life.Name(q)} 자격이 없어서")); }

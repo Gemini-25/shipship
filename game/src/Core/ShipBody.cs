@@ -188,6 +188,7 @@ public sealed partial class BodySystem
         SyncStructure();
         InitDoors();
         InitMounts();
+        w.Paths.BarredDoors = BarredFor; // v16.26 길찾기가 못 여는 출입 통제 문을 비켜 간다
     }
 
     /// <summary>v16.10 증축: 격자가 아래로 자랐다 — 칸 번호는 그대로, 칸 배열 뒤만 늘린다 (새 칸은 새 패널 — 닳음 0).</summary>
@@ -801,6 +802,7 @@ public sealed partial class BodySystem
             if (hit < wb.Insulation - 0.05f) wb.Insulation = MathF.Max(0f, hit);
             // 관측창: 태양 폭풍이면 덮개를 내린다
             bool shut = storm || w.Cosmic.Shut(wb.Room); // v18.13 우주 대재난 대비 (컴퓨터가 · 사람이 손으로)
+            if (shut && !wb.Shutter && wb.Window && wb.Room >= 0 && wb.Room < ship.Rooms.Count && !ship.Rooms[wb.Room].Powered) shut = false; // v16.26 덮개 구동기에 전기가 없다 — 창가가 그대로 쬔다
             if (wb.Window && wb.Shutter != shut)
             {
                 wb.Shutter = shut;
@@ -825,12 +827,17 @@ public sealed partial class BodySystem
         // 관측창 경치 → 기분 (덮개를 내리면 없다)
         var views = new int[ship.Rooms.Count];
         foreach (var wb in WallList) if (wb.Window && !wb.Shutter && wb.Room >= 0 && wb.Room < views.Length) views[wb.Room]++;
+        _openWindows = views; // v16.26 덮개 안 내린 창 (폭풍 때 창가가 더 쬔다)
         foreach (var c in w.Crew)
         {
             if (c.Dead || !c.IsAwake || c.Room is not Room r || r.Id >= views.Length || views[r.Id] == 0) continue;
             c.Needs.Stress = MathF.Max(0f, c.Needs.Stress - 0.02f * Math.Min(3, views[r.Id]) * dt);
         }
     }
+
+    private int[] _openWindows = Array.Empty<int>();
+    /// <summary>v16.26 덮개를 안 내린 관측창 수 (방사선: 창가가 더 쬔다).</summary>
+    public int OpenWindows(Room r) => r.Id < _openWindows.Length ? _openWindows[r.Id] : 0;
 
     /// <summary>시험 · 화면: 이 방에 보이는 관측창 수.</summary>
     public int WindowsOf(Room r) => WallList.Count(wb => wb.Window && wb.Room == r.Id);

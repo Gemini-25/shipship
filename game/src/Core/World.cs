@@ -168,6 +168,7 @@ public sealed class World
     public CosmicSystem Cosmic { get; } // v18.13 우주 규모 대재난 30
     public ScaleSystem Scale { get; } // v16.18 사고 · 재난 다섯 규모 (판정 · 대응 · 완급 · 연쇄 · 도감)
     public CasualtySystem Casualty { get; } // v16.24 큰 상처 뒤: 출혈 · 화상 쇼크 · 심정지 · 불붙는 순간
+    public PerilSystem Perils { get; } // v16.26 위험이 사람에게 닿는 길: 열사병 · 큰 피폭 · 늦게 깨는 잠
     public CrisisCrewSystem CrisisCrew { get; } // v16.21 승무원 위기 행동 (공황 · 비상 배치표 · 비상 절차 · 여러 손 · 우선순위)
     public ExpeditionSystem Expedition { get; } // v16.12 재료 탐사 원정
     public BodySystem Body { get; } // v16.3 배 본체 (칸 3층 · 칸 상태 · 벽 층 · 문)
@@ -285,6 +286,7 @@ public sealed class World
         Cosmic = new CosmicSystem(this); // v18.13
         Scale = new ScaleSystem(this); // v16.18
         Casualty = new CasualtySystem(this); // v16.24
+        Perils = new PerilSystem(this); // v16.26
         CrisisCrew = new CrisisCrewSystem(this); // v16.21
         Expedition = new ExpeditionSystem(this); // v16.12
         Body = new BodySystem(this); // v16.3
@@ -393,6 +395,7 @@ public sealed class World
             Cosmic.Update(dt); // v18.13 우주 대재난: 예보 · 대비 · 본 사건 · 후유증
             pf = Prof.Lap("sys.Daily", pf);
             Casualty.Update(dt); // v16.24 큰 상처 뒤 — 누르고 · 가슴을 누르고 · 컴퓨터가 부른다
+            Perils.Update(dt); // v16.26 열사병 · 큰 피폭
             pf = Prof.Lap("sys.Casualty", pf);
             FoodSources.Update(dt); Scrap.Update(dt); // v16.22 식량원 · 수경이 멎으면 다른 재배실로 · 고철 되살리기
             pf = Prof.Lap("sys.FoodSources", pf);
@@ -695,7 +698,8 @@ public sealed class World
         float ownWound = c.Vitals.Wounds.Where(x => x.Cause == c.Vitals.InjuryCause).Sum(x => x.Weight);
         if (c.Vitals.Injury < 0.4f && ownWound < 0.15f || c.Vitals.InjuryCause == "작업 중 실수" && ownWound < 0.4f)
             c.Vitals.InjuryCause = c.Vitals.Oxygen < 0.5f ? "질식" : c.Vitals.InjuryCause is null or "작업 중 실수" ? "기력이 다해" : c.Vitals.InjuryCause;
-        c.Vitals.InjuryCause = Casualty.DeathCause(c) ?? c.Vitals.InjuryCause; // v16.24 상처 뒤 출혈 · 심정지
+        c.Vitals.InjuryCause = Casualty.DeathCause(c) ?? Perils.DeathCause(c) ?? c.Vitals.InjuryCause; // v16.24 상처 뒤 출혈 · 심정지 · v16.26 열사병 · 방사선 병
+        Perils.OnDeath(c); // v16.26
         RaiseAlert($"{Ko.IGa(c.Name)} 죽었다 — {c.Room?.Name ?? "떨어져 나간 구획"} ({c.Vitals.InjuryCause ?? "사고"})", c.Room, AlertLevel.Critical, shipWide: true);
         // 남은 사람들: 가까웠던 사람일수록 크게 흔들린다. 그 방은 모두에게 무서운 곳이 된다
         foreach (var o in Crew)
@@ -754,7 +758,8 @@ public sealed class World
         if (c.Room == null) return;
         float danger = EvacuateActivity.DangerHere(c, this);
         // 자다가도: 연기 냄새·숨 막힘·추위·열기에 깬다 (일산화탄소는 모른다 — 그래서 위험하다)
-        if (c.Pose == Pose.Sleeping && (c.Room.Air.Smoke > 0.15f || c.Room.Air.O2 < 16.5f || c.Room.Air.Temperature < 8f || c.Room.Air.Temperature > 40f || c.Room.Air.Toxin > 0.1f))
+        if (c.Pose == Pose.Sleeping && (c.Room.Air.Smoke > 0.15f || c.Room.Air.O2 < 16.5f || c.Room.Air.Temperature < 8f || c.Room.Air.Temperature > 40f || c.Room.Air.Toxin > 0.1f)
+            && Perils.WakesFromSleep(c)) // v16.26 냄새만으로는 잘 안 깬다 (몸이 느끼는 것은 깨운다)
             c.Jolt(this);
         if (!c.InHazard && danger > 0.25f)
         {

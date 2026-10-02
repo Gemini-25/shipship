@@ -86,7 +86,7 @@ public static class Incidents
             {
                 if ((c.Position - p).Length() > 1.4f || !hurt.Add(c)) continue;
                 if (c.Dead) continue;
-                Shrapnel.HitCrew(w, w.Rng, c, 0.2f + 0.35f * size, warned != WarnLevel.None ? 0.75f : 1f, "파편", $"운석 파편에 맞았다 ({c.Room?.Name ?? "?"})"); // v10.1: 경보를 듣고 몸을 숙였다
+                Shrapnel.HitCrew(w, w.Rng, c, 0.2f + 0.35f * size, warned != WarnLevel.None && c.IsAwake ? 0.75f : c.Pose == Pose.Sleeping ? 1.15f : 1f /* v16.26 잠든 사람은 몸을 못 숙이고 · 누운 자리 그대로 맞는다 */, "파편", $"운석 파편에 맞았다 ({c.Room?.Name ?? "?"})"); // v10.1: 경보를 듣고 몸을 숙였다
             }
             if (!fireStarted && w.Rng.Chance(0.12f * size) && w.Fire.Ignite(cell, 0.3f)) fireStarted = true;
         }

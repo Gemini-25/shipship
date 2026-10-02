@@ -248,6 +248,8 @@ public sealed partial class HazardSystem
     // 태양 폭풍
     public long StormUntil { get; private set; } = -1;
     public long StormSince { get; private set; } = -1;
+    /// <summary>v16.26 이번 폭풍의 처음 세 시간 양성자 세기 (보통 0.45~0.8 · 센 것 1~1.6).</summary>
+    public float StormPeak { get; private set; } = 0.6f;
     public bool StormActive => _w.Tick < StormUntil;
     public float StormHoursLeft => StormActive ? (StormUntil - _w.Tick) / (float)SimTime.TicksPerHour : 0f;
     public int StormGlitches { get; private set; }
@@ -276,20 +278,32 @@ public sealed partial class HazardSystem
     internal string? StartShower()
     {
         var w = _w;
-        var rooms = w.Ship.Rooms.Where(r => !r.Detached && r.Type != RoomType.Corridor && w.Ship.Walls.Any(kv => kv.Value.IsHull && Hull.InsideRoom(w.Ship, kv.Key) == r)).ToList();
+        // v16.26 외벽에 닿은 방 모두 (복도 · 침실 · 식당 — 사람이 있는 곳도), 외벽이 넓을수록 · 잔해 무리가 오는 쪽일수록 많이 맞는다
+        var hullCells = new Dictionary<int, int>();
+        foreach (var (cell, wall) in w.Ship.Walls)
+            if (wall.IsHull && Hull.InsideRoom(w.Ship, cell) is Room hr && !hr.Detached) hullCells[hr.Id] = hullCells.GetValueOrDefault(hr.Id) + 1;
+        var rooms = hullCells.Keys.OrderBy(id => id).Select(id => w.Ship.Rooms[id]).ToList();
         if (rooms.Count == 0) return null;
         int n = 5 + w.Rng.Range(0, 4);
         bool big = w.Rng.Chance(0.3f);
+        var mid = new System.Numerics.Vector2(rooms.Average(r => r.Center.X), rooms.Average(r => r.Center.Y));
+        int side = w.Rng.Range(0, 4);
+        var from = side switch { 0 => new System.Numerics.Vector2(1, 0), 1 => new System.Numerics.Vector2(-1, 0), 2 => new System.Numerics.Vector2(0, 1), _ => new System.Numerics.Vector2(0, -1) };
+        var weight = rooms.Select(r => hullCells[r.Id] * (System.Numerics.Vector2.Dot(r.Center - mid, from) > 0f ? 3f : 1f)).ToList();
+        float wsum = weight.Sum();
         for (int i = 0; i < n; i++)
         {
-            var room = w.Rng.Pick(rooms);
+            float u = w.Rng.Float() * wsum;
+            int pick = 0;
+            while (pick < rooms.Count - 1 && (u -= weight[pick]) > 0f) pick++;
+            var room = rooms[pick];
             long t = w.Tick + SimTime.Minutes(w.Rng.Range(0f, 30f));
             float size = big && i == 0 ? w.Rng.Range(0.75f, 0.95f) : w.Rng.Range(0.18f, 0.45f);
             Shower.Add((t, Scenarios.OuterTarget(w, room), size));
         }
         Shower.Sort((a, b) => a.tick.CompareTo(b.tick));
         ShowerNode = w.Causes.Context;
-        w.RaiseAlert($"운석우 — 잔해 무리가 다가온다 (30분 동안 {n}개쯤{(big ? " · 큰 것 하나" : "")})", null, AlertLevel.Critical, shipWide: true);
+        w.RaiseAlert($"운석우 — 잔해 무리가 다가온다 (30분 동안 {n}개쯤 · 한쪽 외벽에 몰린다{(big ? " · 큰 것 하나" : "")}) — 외벽에서 떨어져라", null, AlertLevel.Critical, shipWide: true);
         w.History.Add(w, HistoryKind.Incident, $"운석우가 배를 훑기 시작했다 — 30분 동안 {n}개쯤" + (big ? " (큰 것 하나)" : ""));
         return "운석우";
     }
@@ -300,6 +314,8 @@ public sealed partial class HazardSystem
         float hours = w.Rng.Range(6f, 10f);
         bool extend = StormActive;
         if (!extend) StormSince = w.Tick;
+        float peak = w.Rng.Chance(0.3f) ? w.Rng.Range(1f, 1.6f) : w.Rng.Range(0.45f, 0.8f); // v16.26 센 양성자 폭풍은 대피소 밖이 위험하다
+        StormPeak = extend ? MathF.Max(StormPeak, peak) : peak;
         StormUntil = Math.Max(StormUntil, w.Tick + SimTime.Hours(hours));
         // 처음 몰아칠 때: 전자 장비 두셋이 튀고, 움직이던 로봇 몇이 센서를 잃는다
         int glitches = 2 + w.Rng.Range(0, 2);
@@ -308,7 +324,7 @@ public sealed partial class HazardSystem
             if (w.Rng.Chance(0.35f)) w.Robots.ForceFault(r, RobotFault.Sensor);
         foreach (var c in w.Crew.Where(c => !c.Dead && c.Outside))
             w.Log.Add(w.Tick, LogKind.Warning, "태양 폭풍 — 선체 밖은 방사선이 세다, 서둘러 돌아간다", c.Id);
-        w.RaiseAlert($"태양 폭풍{(extend ? " 다시" : "")} — {StormHoursLeft:0}시간쯤 · 센서 흐림 · 선외 작업 금지", null, AlertLevel.Critical, shipWide: true);
+        w.RaiseAlert($"태양 폭풍{(extend ? " 다시" : "")} — {(StormPeak >= 1f ? "센 양성자 폭풍 · 대피소로 · " : "")}{StormHoursLeft:0}시간쯤 · 센서 흐림 · 선외 작업 금지", null, AlertLevel.Critical, shipWide: true);
         w.History.Add(w, HistoryKind.Incident, $"태양 폭풍이 몰아쳤다 — {hours:0}시간쯤 · 전자 장비가 튀고 센서가 흐려졌다");
         return "태양 폭풍";
     }

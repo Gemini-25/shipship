@@ -24,8 +24,9 @@ public sealed class DistanceField
 /// 길을 고르는 사람의 성향. "갈 수는 있는데 가고 싶지는 않다"를 표현한다.
 /// 겁 많은 사람은 위험 비용을 크게 느끼고, 급한 일을 맡은 책임감 있는 사람은 덜 느낀다.
 /// </summary>
-public readonly record struct PathProfile(float HazardScale = 1f, bool Suit = false, bool Responder = false, float[]? Fear = null, bool Eva = false, bool Robot = false, bool NoCrawl = false)
+public readonly record struct PathProfile(float HazardScale = 1f, bool Suit = false, bool Responder = false, float[]? Fear = null, bool Eva = false, bool Robot = false, bool NoCrawl = false, int Who = -1)
 {
+    // Who: 길을 고르는 사람 (출입 통제 문 권한을 따진다 · -1 = 따지지 않음 — 급한 일은 비상 해제 손잡이로 지나간다)
     /// <summary>선체 밖 한 칸을 지나는 추가 비용 (손으로 짚어 가며 느리게).</summary>
     public const int SpaceCost = 14;
 
@@ -47,6 +48,33 @@ public sealed class Pathfinder
     private const int Diagonal = 14;
     private const int FurniturePenalty = 25;
     private const int ManualDoorPenalty = 30;
+    /// <summary>권한 없이는 못 여는 출입 통제 문 (원자로실 카드 잠금 · 잠근 선실 …): 다른 길이 200칸 가까이 더 멀어도 돌아간다 — 그 문밖에 길이 없을 때만 문 앞에 가서 권한자를 부른다.</summary>
+    private const int BarredDoorPenalty = 2000;
+
+    /// <summary>v16.26 이 사람이 지금 못 여는 출입 통제 문 (문 번호 · 통제되는 방) 목록을 채운다 — 배 본체가 건다.</summary>
+    public Func<int, List<(int door, int inner)>, bool>? BarredDoors { get; set; }
+    private readonly List<(int door, int inner)> _barred = new();
+    private int[] _barMark = Array.Empty<int>();
+    private int _barRun;
+
+    /// <summary>이 길에서 비켜 갈 출입 통제 문을 표시하고, 거리장 캐시 열쇠에 넣을 서명을 낸다 (0 = 없음).</summary>
+    private int MarkBarred(PathProfile profile, int startRoom)
+    {
+        _barRun++;
+        if (profile.Who < 0 || BarredDoors == null || !BarredDoors(profile.Who, _barred)) return 0;
+        int nd = _ship.Doors.Count;
+        if (_barMark.Length < nd) _barMark = new int[nd];
+        int sig = 0;
+        foreach (var (d, inner) in _barred)
+        {
+            if (d < 0 || d >= nd || inner == startRoom) continue; // 안에 있는 사람은 언제나 나간다
+            _barMark[d] = _barRun;
+            sig = unchecked(sig * 31 + d + 1);
+        }
+        return sig;
+    }
+
+    private bool Barred(int door) => door >= 0 && door < _barMark.Length && _barMark[door] == _barRun;
 
     private readonly Ship _ship;
     private readonly int _w;
@@ -186,6 +214,7 @@ public sealed class Pathfinder
         var open = new PriorityQueue<int, int>();
         int s = grid.Index(start);
         int startRoom = _room[s];
+        MarkBarred(profile, startRoom);
         Touch(s, 0, -1);
         open.Enqueue(s, Heuristic(s, goalIndex));
 
@@ -214,7 +243,7 @@ public sealed class Pathfinder
     private int _stateVersion;           // 문·방 상태가 바뀔 때마다
     private int[] _state = Array.Empty<int>(), _scratch = Array.Empty<int>();
     private sealed class FloodEntry { public int Version; public float[]? Fear; public DistanceField Field = null!; }
-    private readonly Dictionary<(int start, float scale, int flags), FloodEntry> _floods = new();
+    private readonly Dictionary<(int start, float scale, int flags, int bar), FloodEntry> _floods = new();
     public int FloodHits { get; private set; }
     public int FloodMisses { get; private set; }
 
@@ -271,7 +300,8 @@ public sealed class Pathfinder
         var grid = _ship.Grid;
         int version = StateVersion();
         int si = grid.InBounds(start) ? grid.Index(start) : -1;
-        var key = (si, profile.HazardScale, (profile.Suit ? 1 : 0) | (profile.Responder ? 2 : 0) | (profile.Eva ? 4 : 0) | (profile.Robot ? 8 : 0) | (profile.NoCrawl ? 16 : 0));
+        int bar = MarkBarred(profile, si >= 0 ? _room[si] : -1);
+        var key = (si, profile.HazardScale, (profile.Suit ? 1 : 0) | (profile.Responder ? 2 : 0) | (profile.Eva ? 4 : 0) | (profile.Robot ? 8 : 0) | (profile.NoCrawl ? 16 : 0), bar);
         if (_floods.TryGetValue(key, out var e) && e.Version == version && SameFear(e.Fear, profile.Fear))
         {
             FloodHits++;
@@ -331,6 +361,7 @@ public sealed class Pathfinder
             int add = 0;
             if (!door.Powered) add += ManualDoorPenalty;
             if (door.Locked) add += ManualDoorPenalty * 2;
+            if (Barred(d)) add += BarredDoorPenalty;
             _doorAdd[d] = add;
             bool blocked = false;
             if (door.Locked)
@@ -430,6 +461,7 @@ public sealed class Pathfinder
         int d = _door[to];
         if (d >= 0 && !_ship.Doors[d].Powered) cost += ManualDoorPenalty;
         if (d >= 0 && _ship.Doors[d].Locked) cost += ManualDoorPenalty * 2;
+        if (d >= 0 && Barred(d)) cost += BarredDoorPenalty;
         int h = CellHazard[to];
         if (h > 0) cost += (int)(h * (profile.Suit ? 0.5f : 1f) * profile.HazardScale);
         cost += CellBody[to]; // v16.3
