@@ -683,6 +683,7 @@ public sealed partial class BodySystem
             if (s.V[(int)CellMark.Oil] > 0.3f) cost[i] += OilCost;
         }
         _w.Matter.PathCost(cost); // v16.4 통로 점유 (짐 · 카트) · 보이는 전기 불꽃
+        _w.Coop.PathCost(cost); // v17.4 펼친 부품 · 앞 상자 · 구경꾼 · 통로에 선 줄 (같은 규칙)
         _w.Paths.BodyChanged();
     }
 

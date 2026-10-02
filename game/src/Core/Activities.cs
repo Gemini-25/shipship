@@ -102,10 +102,11 @@ public sealed class EatActivity : Activity
         var seat = w.Ship.RoomsOf(RoomType.Mess).Where(r => !r.OffLimits).SelectMany(r => r.Furniture)
             .Where(f => f.Type == FurnitureType.Seat && f.ReservedBy == null && dist.Reachable(f.UseSpots[0])
                         && !w.IsSpotTaken(f.UseSpots[0], c))
-            .OrderBy(f => (f.Center - box.Center).LengthSquared())
+            .OrderBy(f => (f.Center - box.Center).LengthSquared() + w.Coop.Queues.SeatBias(c, f)) // v17.4 줄에서 다툰 사람 곁은 피하고 양보해 준 사람 곁으로
             .FirstOrDefault();
 
         var toils = Plans.DropOff(c, w, dist);
+        toils.Add(new QueueToil(QueueKind.Meal, box, spot)); // v17.4 배식 줄
         toils.Add(new GotoToil(spot));
         toils.Add(new WaitToil(SimTime.Minutes(2), Pose.Standing, box.Center));
         toils.Add(new TakeToil(box, kind, 1));
@@ -120,7 +121,7 @@ public sealed class EatActivity : Activity
             return true;
         }));
         toils.AddRange(w.Cooking.ReheatToils()); // v16.8 식었으면 데운다 (전기가 모자라면 그냥)
-        if (seat != null) toils.Add(new GotoToil(seat.UseSpots[0]));
+        if (seat != null) toils.Add(new GotoToilLate(cm => w.Coop.Queues.SeatFor(cm, seat))); // v17.4 받고 나서 다시 본다 (방금 다툰 사람 곁이면 떨어진 자리로)
 
         var table = seat == null ? null : seat.Room.Furniture.Where(f => f.Type == FurnitureType.Table)
             .OrderBy(f => (f.Center - seat.Center).LengthSquared()).FirstOrDefault();

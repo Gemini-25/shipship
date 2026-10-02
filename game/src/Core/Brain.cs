@@ -46,6 +46,7 @@ public static class Brain
         SceneActivity.Instance, // v16.1 일상 장면 (체스 · 커피 · 영화 · 닦기 · 간식 · 몽유병 · 소품 · 인수인계 확인)
         new CheckSmellActivity(), new SavedPlateActivity(), new SetAsidePlateActivity(), new FollowSmellActivity(), // v16.8 탄내 확인 · 남겨 둔 접시 · 냄새를 따라
         PlanActivity.Instance, new OutageActivity(), new FireBeliefActivity(), new TellActivity(), // v16.15 두뇌 2.0: 계획대로 · 정전 대처 · 믿음대로 불 확인 · 알리러 감
+        new LendHandActivity(), new SpectateActivity(), new SpaceTidyActivity(), new CoffeeRunActivity(), // v17.4 잡아 주기 · 구경 · 통로 상자 치우기 · 커피 줄
         new ChatActivity(),
         new RelaxActivity(),
         new WanderActivity(),

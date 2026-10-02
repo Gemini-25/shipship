@@ -197,6 +197,7 @@ public sealed class WorkToil : Toil
         // v11.0: 비상 훈련을 받은 사람은 사고 대응 일이 조금 빠르다
         if (c.Job?.Urgent == true && c.Drilled(w)) speed *= 1.12f;
         // v10.10: 정비 로봇이 옆에서 거들면 (부품을 잡아 주고 공구를 건넨다) 빨라진다
+        float co = w.Coop.WorkMul(c, Resume, _face); if (co < 0f) return ToilStatus.Failed; speed *= co; // v17.4 예약 · 옆 설비 · 펼치기 · 짝 기다림 · 이어 함 · 헷갈림 · 혼자
         if (c.Helper is Robot helper && helper.Helping == c && (helper.Position - c.Position).LengthSquared() < 2.7f * 2.7f) speed *= 1f + RobotsV15.AssistBonus(helper.Kind); // v15.7 조수 로봇은 더 거든다
         if (Resume != null && _needed > 0)
         {
@@ -210,7 +211,7 @@ public sealed class WorkToil : Toil
         return _done >= _needed ? ToilStatus.Succeeded : ToilStatus.Running;
     }
 
-    public override void End(CrewMember c, World w) => OnEnd?.Invoke(c, w);
+    public override void End(CrewMember c, World w) { OnEnd?.Invoke(c, w); w.Coop.WorkEnded(c, Progress >= 0.999f); } // v17.4 다 했나 · 끊겼나 (작업장이 남는다)
 }
 
 /// <summary>보관함에서 물건을 꺼내 손에 든다.</summary>
@@ -234,6 +235,7 @@ public sealed class TakeToil : Toil
     {
         var inv = _from.Storage;
         if (inv == null) return ToilStatus.Failed;
+        if (w.Coop.Dig(c, _from, _kind)) return ToilStatus.Running; // v17.4 큰 부품은 앞 상자부터 치운다
         if (c.Carrying is ItemStack held && held.Kind != _kind) return ToilStatus.Failed;
         int want = _count;
         if (!_partialOk && inv.Count(_kind) < want) return ToilStatus.Failed;
@@ -474,6 +476,7 @@ public static class Locomotion
 
         float budget = Speed(c) * w.Movement.Manners(c, path); // v14.5 비켜서기 · 막힘 · 문 앞 확인 · 조용히 · 움찔
         budget *= w.Portable.SqueezeMul(c, path); // v16.7 통로에 세워 둔 카트를 비켜 간다
+        budget *= w.Coop.SqueezeMul(c, path); // v17.4 펼친 부품 · 앞 상자 · 구경꾼 사이 · 좁은 문에서 카트 옮겨 싣기
         if (budget <= 0f) return false;
         path = c.Path ?? path; // 돌아가는 길로 바꿨을 수 있다
         bool repathed = false;

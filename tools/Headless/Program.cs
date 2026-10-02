@@ -157,6 +157,7 @@ public static partial class Program
         if (args.Contains("--hazard70test")) return RunHazard70Test(seed); // v15 사고 70
         if (args.Contains("--catalogtest")) return RunCatalogTest(seed); // v15 고장·물자 70
         if (args.Contains("--moduletest")) return RunModuleTest(seed); // v15 설비 70
+        if (args.Contains("--spacetest")) return RunSpaceTest(seed); // v17.4 공간과 협력 · 줄 서기 · 구경꾼
         if (args.Contains("--lookcheck")) return RunLookCheck(seed); // v16.5a 재질 그림
         if (args.Contains("--techwebtest")) return RunTechWebTest(seed); // v16.14
         if (args.Contains("--scaletest")) return RunScaleTest(seed); // v16.18 사고 규모
