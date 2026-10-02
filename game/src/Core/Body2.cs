@@ -826,6 +826,23 @@ public sealed partial class Body2System
 
     public void Cancel(HairSession? s) { if (s != null && !s.Done) s.Canceled = true; }
 
+    /// <summary>카드 한 줄: 몸무게 · 우주복 · 머리 · 수염 (그 배 사람이 하는 말로).</summary>
+    public string? Line(CrewMember c)
+    {
+        if (Peek(c) is not BodyLook l) return null;
+        float d = l.Kg - l.StartKg;
+        var sb = new System.Text.StringBuilder($"몸무게 {l.Kg:0}kg");
+        if (MathF.Abs(d) >= 1f) sb.Append($" (출항 때보다 {d:+0;-0}kg)");
+        if (l.Tight) sb.Append(" · 우주복이 꽉 낀다");
+        else if (l.Loose) sb.Append(" · 우주복이 헐렁하다");
+        if (l.Shaggy) sb.Append(" · 머리가 덥수룩하다");
+        else if (l.Uneven > 0.5f) sb.Append(" · 머리가 삐뚤빼뚤하다");
+        else if (l.CutAt >= 0 && _w.Tick - l.CutAt < SimTime.TicksPerDay * 2 && Crew(l.CutBy) is CrewMember b && b != c) sb.Append($" · {Ko.IGa(b.Name)} 머리를 잘라 줬다");
+        if (l.KeepsBeard && l.BeardMm > 6f) sb.Append(" · 수염을 기른다");
+        else if (!l.KeepsBeard && l.BeardMm > 4f) sb.Append(" · 수염이 거뭇하다");
+        return sb.ToString();
+    }
+
     public void Swept(HairClip clip, CrewMember who)
     {
         var w = _w;

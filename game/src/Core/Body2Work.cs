@@ -47,7 +47,10 @@ public sealed class HaircutActivity : Activity
         if (!Body2System.Enabled) return (0f, "—");
         var b2 = w.Body2;
         if (b2.Sessions.Count > 0 && b2.SessionOf(c) is HairSession s)
+        {
+            if (Crisis.Acting(w) || EvacuateActivity.DangerHere(c, w) > 0.3f) { b2.Cancel(s); return (0f, "—"); } // 사고가 나면 가위를 내려놓는다
             return s.Client == c.Id && !s.Self ? (1.5f, "머리를 자르러 앉는다") : s.Barber == c.Id && c.Job?.Activity is HaircutActivity ? (0.85f, "머리를 자르는 중") : (0f, "—");
+        }
         if (c.IsChild || !c.CanAct || c.Outside || Bedtime(c, w) || c.Vitals.Injury > 0.5f || Crisis.Acting(w)) return (0f, "—");
         var (who, value, why) = Pick(c, w, dist);
         if (who == null)
