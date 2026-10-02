@@ -45,6 +45,8 @@ public sealed class Dream
     public long Woke { get; set; } = -1;
     public bool Told { get; set; }
     public List<int> WokeOthers { get; } = new();
+    /// <summary>깬 직후의 기분 (두려움 + 슬픔 − 기쁨).</summary>
+    public float Mood { get; set; }
 }
 
 /// <summary>한 사람 안에 남은 사고 뒤 며칠.</summary>
@@ -347,6 +349,7 @@ public sealed partial class AftermathSystem
             Life.Diary(w, c, Persona.Say(c, $"{d.Text}을 꿨다. 오늘은 조금 가볍다."));
         }
         Stats.Diaries++;
+        d.Mood = emo.Get(c, Feeling.Fear) + emo.Get(c, Feeling.Sadness) - emo.Get(c, Feeling.Joy);
     }
 
     /// <summary>주컴퓨터: 침대 감지기의 수면 기록 — 사흘 사이 자주 깬 사람은 아침 근무를 늦추자고 한다.</summary>

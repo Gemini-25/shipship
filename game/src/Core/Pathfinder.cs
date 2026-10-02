@@ -348,6 +348,7 @@ public sealed class Pathfinder
         }
         float cellScale = (profile.Suit ? 0.5f : 1f);
         if (_spotAdd.Length != _n) _spotAdd = new int[_n];
+        bool spotsOn = profile.Spots != null;
         if (profile.Spots is { } sp0) for (int k = 0; k < sp0.Length; k += 2) if (sp0[k] >= 0 && sp0[k] < _n) _spotAdd[sp0[k]] += profile.Responder ? sp0[k + 1] * 2 / 5 : sp0[k + 1]; // v17.5
         var open = _open;
         open.Clear();
@@ -381,7 +382,8 @@ public sealed class Pathfinder
                 if (dr >= 0) step += _doorAdd[dr];
                 int h = CellHazard[ni];
                 if (h > 0) step += (int)(h * cellScale * profile.HazardScale);
-                step += CellBody[ni] + _spotAdd[ni]; // v16.3 · v17.5
+                step += CellBody[ni]; // v16.3
+                if (spotsOn) step += _spotAdd[ni]; // v17.5 장소의 기억
                 int nd = dist + step;
                 if (cost[ni] >= 0 && nd >= cost[ni]) continue;
                 cost[ni] = nd;

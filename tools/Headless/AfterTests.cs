@@ -166,13 +166,12 @@ public static partial class Program
             // 아침: 악몽 → 기분 · 일기 · 식탁
             int diary0 = friend.Diary.Count;
             Until(w, () => af.Stats.Nightmares > 0 && af.Minds.Values.Any(m => m.Last is Dream { Woke: >= 0 }), SimTime.TicksPerDay * 2, SimTime.Minutes(10));
-            var dreamer = af.Minds.Values.Where(m => m.Last is Dream { Nightmare: true, Woke: >= 0 }).Select(m => w.Crew[m.Id]).FirstOrDefault()
-                          ?? af.Minds.Values.Where(m => m.Last is Dream { Woke: >= 0 }).Select(m => w.Crew[m.Id]).FirstOrDefault();
+            var dreamer = af.Minds.Values.Where(m => m.Last is Dream { Woke: >= 0 }).OrderByDescending(m => m.Last!.Nightmare || m.Last.Grief ? 1 : 0).ThenByDescending(m => m.Last!.Woke).Select(m => w.Crew[m.Id]).FirstOrDefault();
             var dd = dreamer != null ? af.Peek(dreamer)!.Last : null;
             bool diaryHas = dreamer != null && dreamer.Diary.Any(d => d.text.Contains("꿈"));
-            float fear = dreamer != null ? w.Brain2.Emotions.Get(dreamer, Feeling.Fear) + w.Brain2.Emotions.Get(dreamer, Feeling.Sadness) : 0f;
+            float fear = dd?.Mood ?? 0f; // 깬 직후의 기분
             Check("꿈 — 최근 사건으로 악몽 · 그리움 → 잠버릇(뒤척임 · 깸) · 아침 기분 · 일기", dd != null && diaryHas && fear > 0.05f && af.Stats.Dreams >= 2,
-                dd == null ? $"꿈 없음 ({af.Stats.Summary()})" : $"{dreamer!.Name}: {dd.Text} ({(dd.Nightmare ? "악몽" : dd.Grief ? "그리움" : "꿈")} · {dd.Wakes}번 깸 · 옆 사람 {dd.WokeOthers.Count}) · 두려움+슬픔 {fear:0.00} · 일기 '{dreamer.Diary.LastOrDefault(d => d.text.Contains("꿈")).text}' · 꿈 {af.Stats.Dreams} 악몽 {af.Stats.Nightmares} 그리움 {af.Stats.GriefDreams}");
+                dd == null ? $"꿈 없음 ({af.Stats.Summary()})" : $"{dreamer!.Name}: {dd.Text} ({(dd.Nightmare ? "악몽" : dd.Grief ? "그리움" : "꿈")} · {dd.Wakes}번 깸 · 옆 사람 {dd.WokeOthers.Count}) · 깬 직후 기분(두려움+슬픔) {fear:0.00} · 일기 '{dreamer.Diary.LastOrDefault(d => d.text.Contains("꿈")).text}' · 꿈 {af.Stats.Dreams} 악몽 {af.Stats.Nightmares} 그리움 {af.Stats.GriefDreams}");
             foreach (var c in w.Crew) c.Needs.Food = MathF.Min(c.Needs.Food, 0.45f);
             Until(w, () => af.Stats.TableTalks + af.Stats.Kept2 > 0, SimTime.TicksPerDay * 2, SimTime.Minutes(10));
             Check("아침 식탁 — 간밤 꿈 이야기 (같은 꿈 · 위로 · 놀림 · 혼자 삭임)", af.Stats.TableTalks + af.Stats.Kept2 > 0,
