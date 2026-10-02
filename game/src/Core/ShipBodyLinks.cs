@@ -28,6 +28,7 @@ public sealed partial class BodySystem
     public string? CautionWhy(CrewMember c) => _caution.TryGetValue(c.Id, out var x) && x.until > _w.Tick ? x.why : null;
     public bool MopRequested(Room r) => _mopRequest.TryGetValue(r.Id, out var t) && t > _w.Tick;
 
+    public void Careful(CrewMember c, Room r, float hours, string why) => BeCareful(c, r, hours, why); // v17.8 바닥을 보고 조심 걸음
     private void BeCareful(CrewMember c, Room r, float hours, string why, BeliefSource src = BeliefSource.Seen, float conf = 1f)
     {
         if (c.Dead || c.IsChild && c.Age < 6f) return;

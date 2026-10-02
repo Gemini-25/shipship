@@ -47,7 +47,7 @@ public sealed partial class ReactSystem
                 // 궁금하면 가서 귀를 대 본다: 성실함 · 기계 솜씨 · 구경 버릇 (걱정이 많으면 남에게 말한다)
                 float go = 0.15f + 0.35f * c.Traits.Diligence + 0.3f * c.SkillLevel(Skill.Mechanics) + (Life.Has(c, Habit.Tinkerer) || Life.Has(c, Habit.Gazer) ? 0.2f : 0f) - (Life.Has(c, Habit.Procrastinator) ? 0.25f : 0f);
                 if (R.Chance(Math.Clamp(go, 0.05f, 0.85f)))
-                    Plan(c, s, new ReactAct { Kind = ActKind.Check, For = k, Target = m.Body.Id, Label = "무슨 소리인지 가 본다", Way = "check", Score = 0.48f, Face = m.Body.Center, Until = w.Tick + SimTime.Minutes(30) });
+                    Plan(c, s, new ReactAct { Kind = ReactKind.Check, For = k, Target = m.Body.Id, Label = "무슨 소리인지 가 본다", Way = "check", Score = 0.48f, Face = m.Body.Center, Until = w.Tick + SimTime.Minutes(30) });
                 break;
             }
             case Stir.Smell when arg is SmellKind sk:
@@ -75,7 +75,7 @@ public sealed partial class ReactSystem
                 if (likes) w.Brain2.Emotions.Feel(c, Feeling.Joy, 0.06f, $"{p.Spec.Name}이 걸렸다");
                 if (maker != null && maker != c && likes) c.ChangeAffinity(maker, 0.03f);
                 if ((p.At.Center - c.Position).LengthSquared() > 6f && R.Chance(0.4f + (likes ? 0.3f : 0f)))
-                    Plan(c, s, new ReactAct { Kind = ActKind.Admire, For = k, To = p.At, Face = p.At.Center, Label = $"{p.Spec.Name} 구경", Way = "admire", Score = 0.4f, Until = w.Tick + SimTime.Minutes(20) });
+                    Plan(c, s, new ReactAct { Kind = ReactKind.Admire, For = k, To = p.At, Face = p.At.Center, Label = $"{p.Spec.Name} 구경", Way = "admire", Score = 0.4f, Until = w.Tick + SimTime.Minutes(20) });
                 break;
             }
             case Stir.Cry when arg is CrewMember o:
@@ -84,7 +84,7 @@ public sealed partial class ReactSystem
                 s.LookAt = o.Position; s.LookCrew = o.Id;
                 float care = 0.2f + 0.5f * MathF.Max(0f, c.AffinityTo(o)) + 0.3f * c.Traits.Sociability + (c.Value == CrewValue.People ? 0.15f : 0f) - (Life.Has(c, Habit.Loner) ? 0.25f : 0f);
                 if (R.Chance(Math.Clamp(care, 0.05f, 0.9f)))
-                    Plan(c, s, new ReactAct { Kind = ActKind.Comfort, For = k, Target = o.Id, Label = $"{o.Name} 곁으로", Way = "comfort", Score = 0.58f, Face = o.Position, Until = w.Tick + SimTime.Minutes(20) });
+                    Plan(c, s, new ReactAct { Kind = ReactKind.Comfort, For = k, Target = o.Id, Label = $"{o.Name} 곁으로", Way = "comfort", Score = 0.58f, Face = o.Position, Until = w.Tick + SimTime.Minutes(20) });
                 else Speak(c, s, k, new[] { $"…{Ko.EunNeun(o.Name)} 혼자 있고 싶은가 봐", "모른 척해 주는 게 낫겠지", $"{o.Name} 우는 거 처음 봐" }, room, o.Name, quiet: true);
                 Stats.Cries++;
                 break;
@@ -97,7 +97,7 @@ public sealed partial class ReactSystem
                 s.LookAt = o.Position; s.LookCrew = o.Id;
                 float talk = 0.2f + 0.45f * c.Traits.Sociability + 0.3f * MathF.Max(0f, c.AffinityTo(o)) + (Life.Has(c, Habit.Talker) ? 0.2f : 0f) - (Life.Has(c, Habit.Loner) ? 0.2f : 0f);
                 if (R.Chance(Math.Clamp(talk, 0.05f, 0.85f)))
-                    Plan(c, s, new ReactAct { Kind = ActKind.TalkTo, For = k, Target = o.Id, Label = $"{o.Name}에게 말을 건다", Way = what, Score = 0.46f, Face = o.Position, Until = w.Tick + SimTime.Minutes(15) });
+                    Plan(c, s, new ReactAct { Kind = ReactKind.TalkTo, For = k, Target = o.Id, Label = $"{o.Name}에게 말을 건다", Way = what, Score = 0.46f, Face = o.Position, Until = w.Tick + SimTime.Minutes(15) });
                 else Speak(c, s, k, OddMutter(c, o, what), room, what, quiet: true);
                 break;
             }
@@ -118,7 +118,7 @@ public sealed partial class ReactSystem
         {
             var (id, sc, why, act) = opts[i];
             int same = tk.ways.Count(x => x == id);
-            bool one = act is { Kind: ActKind.Device or ActKind.Fix or ActKind.Window or ActKind.Screen };
+            bool one = act is { Kind: ReactKind.Device or ReactKind.Fix or ReactKind.Window or ReactKind.Screen };
             if (same > 0) sc *= MathF.Pow(one ? 0.2f : 0.45f, same);
             var (ok, bad) = w.Ways.Mine(c, WaysId(id));
             sc *= 1f + 0.12f * Math.Min(3, ok) - 0.15f * Math.Min(2, bad);
@@ -281,6 +281,13 @@ public sealed partial class ReactSystem
         return null;
     }
 
+    /// <summary>설비 곁 빈 자리 (길은 행동을 짤 때 다시 본다).</summary>
+    private Cell? Spot(Furniture f, CrewMember c)
+    {
+        foreach (var u in f.UseSpots) if (_w.Ship.IsOpenFloor(u) && !_w.IsSpotTaken(u, c)) return u;
+        return null;
+    }
+
     private Furniture? Find(Room room, params FurnitureType[] ts)
     {
         foreach (var f in room.Furniture) if (!f.Stowed && Array.IndexOf(ts, f.Type) >= 0) return f;
@@ -297,24 +304,24 @@ public sealed partial class ReactSystem
         if (HasTorch(c, out var tw)) o.Add(("torch", 0.6f + 0.2f * t.Diligence, tw, null));
         if (Stored(PortableKind.WorkLamp, c) is PortableDevice lamp && Running(PortableKind.WorkLamp, room) == null && FreeNear(room, room.Center) is Cell ls)
             o.Add(("lamp", 0.3f + 0.3f * t.Diligence + 0.25f * elec + (c.Role is CrewRole.Electrician or CrewRole.Technician ? 0.12f : 0f), "창고에 작업등이 있다",
-                new ReactAct { Kind = ActKind.Device, Device = PortableKind.WorkLamp, Target = lamp.Id, To = ls, For = Stir.Dark, Label = "작업등을 가져온다", Way = "lamp", Score = 0.6f, Until = until }));
+                new ReactAct { Kind = ReactKind.Device, Device = PortableKind.WorkLamp, Target = lamp.Id, To = ls, For = Stir.Dark, Label = "작업등을 가져온다", Way = "lamp", Score = 0.6f, Until = until }));
         if (room.LightsOut && room.Powered && elec >= 0.35f && FreeNear(room, room.Center) is Cell fs)
             o.Add(("fix", 0.35f + 0.6f * elec, "전등만 나갔다 — 고칠 수 있다",
-                new ReactAct { Kind = ActKind.Fix, To = fs, For = Stir.Dark, Face = room.Center, Label = "전등을 고친다", Way = "fix", Score = 0.62f, Until = until }));
+                new ReactAct { Kind = ReactKind.Fix, To = fs, For = Stir.Dark, Face = room.Center, Label = "전등을 고친다", Way = "fix", Score = 0.62f, Until = until }));
         if (w.Brain2.Plans.Stances.TryGetValue(c.Id, out var st) && w.Tick - st.tick < SimTime.Minutes(15) && st.m is Method.ResetBreaker or Method.PowerRoom)
             o.Add(("breaker", 0.75f, st.why, null));
         if (WindowSpot(room, out var wf) is Cell wsp)
             o.Add(("window", 0.28f + (Life.Has(c, Habit.Gazer) ? 0.3f : 0f) + (c.Background is Background.Astronomer or Background.CargoPilot ? 0.18f : 0f), "창으로 바깥 빛이 든다",
-                new ReactAct { Kind = ActKind.Window, To = wsp, Face = wf, For = Stir.Dark, Label = "창가로 간다", Way = "window", Score = 0.5f, Until = until }));
-        if (room.Powered && Find(room, FurnitureType.Console, FurnitureType.NavComputer) is Furniture con && Plans.WorkSpot(con, w, w.Paths.From(c), c) is Cell cs)
+                new ReactAct { Kind = ReactKind.Window, To = wsp, Face = wf, For = Stir.Dark, Label = "창가로 간다", Way = "window", Score = 0.5f, Until = until }));
+        if (room.Powered && Find(room, FurnitureType.Console, FurnitureType.NavComputer) is Furniture con && Spot(con, c) is Cell cs)
             o.Add(("screen", 0.26f + (c.Background is Background.Programmer or Background.SysAdmin ? 0.3f : 0f) + (c.Role == CrewRole.Pilot ? 0.12f : 0f), "콘솔 화면은 켜져 있다",
-                new ReactAct { Kind = ActKind.Screen, To = cs, Face = con.Center, For = Stir.Dark, Label = "콘솔 화면 불빛 곁으로", Way = "screen", Score = 0.5f, Until = until }));
+                new ReactAct { Kind = ReactKind.Screen, To = cs, Face = con.Center, For = Stir.Dark, Label = "콘솔 화면 불빛 곁으로", Way = "screen", Score = 0.5f, Until = until }));
         o.Add(("wrist", 0.25f + (c.Background is Background.Programmer or Background.DroneRacer or Background.Reporter ? 0.15f : 0f), "손목 단말 불빛", null));
         foreach (var x in ppl)
         {
             if (x == c || !_st.TryGetValue(x.Id, out var xs) || !xs.TorchOn || Beside(x) is not Cell bx) continue;
             o.Add(("follow", 0.18f + 0.35f * t.Sociability + 0.35f * MathF.Max(0f, c.AffinityTo(x)), $"{x.Name}의 손전등 곁",
-                new ReactAct { Kind = ActKind.Near, Target = x.Id, To = bx, Face = x.Position, For = Stir.Dark, Label = $"{x.Name} 불빛 곁으로", Way = "follow", Score = 0.5f, Until = until }));
+                new ReactAct { Kind = ReactKind.Near, Target = x.Id, To = bx, Face = x.Position, For = Stir.Dark, Label = $"{x.Name} 불빛 곁으로", Way = "follow", Score = 0.5f, Until = until }));
             break;
         }
         if (c.IsMoving) o.Add(("feel", 0.22f + 0.2f * t.Bravery, "벽을 짚어 간다", null));
@@ -336,28 +343,28 @@ public sealed partial class ReactSystem
             if (home) o.Add(("blanket", sc + 0.15f, $"{b.Name} — 침대에 있다", null));
             else
             {
-                Cell? at = b.At is Cell bc ? bc : c.Bed != null ? Plans.WorkSpot(c.Bed, w, w.Paths.From(c), c) : null;
+                Cell? at = b.At is Cell bc ? bc : c.Bed != null ? Spot(c.Bed, c) : null;
                 if (at is Cell ac)
                     o.Add(("blanket", sc, $"{b.Name}을 가지러",
-                        new ReactAct { Kind = ActKind.Blanket, To = ac, Target = b.Id, For = Stir.Cold, Label = $"{b.Name}을 가지러 간다", Way = "blanket", Score = 0.5f, Until = until }));
+                        new ReactAct { Kind = ReactKind.Blanket, To = ac, Target = b.Id, For = Stir.Cold, Label = $"{b.Name}을 가지러 간다", Way = "blanket", Score = 0.5f, Until = until }));
             }
         }
         if (Running(PortableKind.Heater, room) is PortableDevice h && FreeNear(room, h.At.Center, 1) is Cell hs)
-            o.Add(("heater", 0.55f, "히터가 돌고 있다", new ReactAct { Kind = ActKind.Near, To = hs, Target = -1, Face = h.At.Center, For = Stir.Cold, Label = "히터 앞으로", Way = "heater", Score = 0.5f, Until = until }));
+            o.Add(("heater", 0.55f, "히터가 돌고 있다", new ReactAct { Kind = ReactKind.Near, To = hs, Target = -1, Face = h.At.Center, For = Stir.Cold, Label = "히터 앞으로", Way = "heater", Score = 0.5f, Until = until }));
         else if (Stored(PortableKind.Heater, c) is PortableDevice sh && FreeNear(room, room.Center) is Cell hsp)
             o.Add(("heater_fetch", 0.24f + 0.3f * t.Diligence + 0.2f * c.SkillLevel(Skill.Electrical), "창고에 히터가 있다",
-                new ReactAct { Kind = ActKind.Device, Device = PortableKind.Heater, Target = sh.Id, To = hsp, For = Stir.Cold, Label = "히터를 가져온다", Way = "heater_fetch", Score = 0.56f, Until = until }));
+                new ReactAct { Kind = ReactKind.Device, Device = PortableKind.Heater, Target = sh.Id, To = hsp, For = Stir.Cold, Label = "히터를 가져온다", Way = "heater_fetch", Score = 0.56f, Until = until }));
         o.Add(("jog", 0.18f + (Life.Has(c, Habit.GymRat) ? 0.4f : 0f) + (c.Background == Background.Athlete ? 0.3f : 0f) + (Life.Has(c, Habit.Fidgety) ? 0.15f : 0f) + 0.1f * t.Bravery, "몸을 움직이면 데워진다",
-            new ReactAct { Kind = ActKind.Jog, For = Stir.Cold, Label = "제자리 뛰기", Way = "jog", Score = 0.45f, Until = until }));
+            new ReactAct { Kind = ReactKind.Jog, For = Stir.Cold, Label = "제자리 뛰기", Way = "jog", Score = 0.45f, Until = until }));
         if (Friend(c, ppl, 0.2f) is CrewMember f && Beside(f) is Cell fc)
             o.Add(("huddle", 0.15f + 0.4f * t.Sociability + 0.4f * c.AffinityTo(f), $"{f.Name} 곁이 따뜻하다",
-                new ReactAct { Kind = ActKind.Near, Target = f.Id, To = fc, Face = f.Position, For = Stir.Cold, Label = $"{f.Name} 곁에 붙는다", Way = "huddle", Score = 0.48f, Until = until }));
+                new ReactAct { Kind = ReactKind.Near, Target = f.Id, To = fc, Face = f.Position, For = Stir.Cold, Label = $"{f.Name} 곁에 붙는다", Way = "huddle", Score = 0.48f, Until = until }));
         if ((Life.Has(c, Habit.TeaLover) || Life.Has(c, Habit.CoffeeAddict) || c.Role == CrewRole.Cook) && CupSpot(c) is (Cell cup, Vector2 cf))
             o.Add(("cup", 0.3f + 0.3f, Life.Has(c, Habit.CoffeeAddict) ? "뜨거운 커피" : "따뜻한 차",
-                new ReactAct { Kind = ActKind.Cup, To = cup, Face = cf, For = Stir.Cold, Label = Life.Has(c, Habit.CoffeeAddict) ? "뜨거운 커피 한 잔" : "따뜻한 차 한 잔", Way = "cup", Score = 0.46f, Until = until }));
+                new ReactAct { Kind = ReactKind.Cup, To = cup, Face = cf, For = Stir.Cold, Label = Life.Has(c, Habit.CoffeeAddict) ? "뜨거운 커피 한 잔" : "따뜻한 차 한 잔", Way = "cup", Score = 0.46f, Until = until }));
         if (Neighbor(room, true) is Room warm && FreeNear(warm, warm.Center) is Cell wc)
             o.Add(("warm_room", 0.22f + (c.Value == CrewValue.Safety ? 0.15f : 0f), $"{warm.Name}이 더 따뜻하다",
-                new ReactAct { Kind = ActKind.Move, To = wc, Target = warm.Id, For = Stir.Cold, Label = $"{warm.Name}으로 옮긴다", Way = "warm_room", Score = 0.44f, Until = until }));
+                new ReactAct { Kind = ReactKind.Move, To = wc, Target = warm.Id, For = Stir.Cold, Label = $"{warm.Name}으로 옮긴다", Way = "warm_room", Score = 0.44f, Until = until }));
         o.Add(("hug", 0.2f, "팔짱을 낀다", null));
         return o;
     }
@@ -370,17 +377,17 @@ public sealed partial class ReactSystem
         var o = new List<(string, float, string, ReactAct?)>();
         if (!s.JacketOff && c.Suit == null) o.Add(("jacket", 0.42f + (c.Value == CrewValue.Freedom ? 0.1f : 0f) - (c.Value == CrewValue.Rules ? 0.12f : 0f), "겉옷을 벗는다", null));
         if (Running(PortableKind.Fan, room) is PortableDevice f && FreeNear(room, f.At.Center, 1) is Cell fs)
-            o.Add(("fan", 0.55f, "선풍기가 돌고 있다", new ReactAct { Kind = ActKind.Near, To = fs, Target = -1, Face = f.At.Center, For = Stir.Heat, Label = "선풍기 앞으로", Way = "fan", Score = 0.5f, Until = until }));
+            o.Add(("fan", 0.55f, "선풍기가 돌고 있다", new ReactAct { Kind = ReactKind.Near, To = fs, Target = -1, Face = f.At.Center, For = Stir.Heat, Label = "선풍기 앞으로", Way = "fan", Score = 0.5f, Until = until }));
         else if (Stored(PortableKind.Fan, c) is PortableDevice sf && FreeNear(room, room.Center) is Cell fsp)
             o.Add(("fan_fetch", 0.24f + 0.3f * t.Diligence, "창고에 선풍기가 있다",
-                new ReactAct { Kind = ActKind.Device, Device = PortableKind.Fan, Target = sf.Id, To = fsp, For = Stir.Heat, Label = "선풍기를 가져온다", Way = "fan_fetch", Score = 0.55f, Until = until }));
+                new ReactAct { Kind = ReactKind.Device, Device = PortableKind.Fan, Target = sf.Id, To = fsp, For = Stir.Heat, Label = "선풍기를 가져온다", Way = "fan_fetch", Score = 0.55f, Until = until }));
         o.Add(("fanself", 0.24f + (Life.Has(c, Habit.Fidgety) ? 0.15f : 0f), "손부채", null));
         if (CupSpot(c) is (Cell cup, Vector2 cf))
             o.Add(("cup", 0.22f + (Life.Has(c, Habit.Snacker) ? 0.15f : 0f) + 0.1f * t.Diligence, "찬물 한 컵",
-                new ReactAct { Kind = ActKind.Cup, To = cup, Face = cf, For = Stir.Heat, Label = "찬물 한 컵", Way = "cup", Score = 0.44f, Until = until }));
+                new ReactAct { Kind = ReactKind.Cup, To = cup, Face = cf, For = Stir.Heat, Label = "찬물 한 컵", Way = "cup", Score = 0.44f, Until = until }));
         if (Neighbor(room, false) is Room cool && FreeNear(cool, cool.Center) is Cell cc)
             o.Add(("cool_room", 0.22f + (c.Value == CrewValue.Safety ? 0.15f : 0f), $"{cool.Name}이 시원하다",
-                new ReactAct { Kind = ActKind.Move, To = cc, Target = cool.Id, For = Stir.Heat, Label = $"{cool.Name}으로 옮긴다", Way = "cool_room", Score = 0.44f, Until = until }));
+                new ReactAct { Kind = ReactKind.Move, To = cc, Target = cool.Id, For = Stir.Heat, Label = $"{cool.Name}으로 옮긴다", Way = "cool_room", Score = 0.44f, Until = until }));
         o.Add(("wipe", 0.18f, "땀을 닦는다", null));
         return o;
     }
@@ -389,11 +396,10 @@ public sealed partial class ReactSystem
     private (Cell, Vector2)? CupSpot(CrewMember c)
     {
         var w = _w;
-        var dist = w.Paths.From(c);
         foreach (var r in w.Ship.LiveRooms)
         {
             if (r.Kind is not (RoomType.Galley or RoomType.Mess or RoomType.Lounge) || r.OffLimits || !r.Powered) continue;
-            if (Find(r, FurnitureType.CoffeeMachine, FurnitureType.MealDispenser, FurnitureType.WaterRecycler) is Furniture f && Plans.WorkSpot(f, w, dist, c) is Cell sp) return (sp, f.Center);
+            if (Find(r, FurnitureType.CoffeeMachine, FurnitureType.MealDispenser, FurnitureType.WaterRecycler) is Furniture f && Spot(f, c) is Cell sp) return (sp, f.Center);
         }
         return null;
     }

@@ -157,6 +157,7 @@ public sealed class World
     public DailySystem Daily { get; } // v15 일상 사건 70
     public MotionSystem Motions { get; } // v18.18 승무원이 여는 회의 · 파벌 · 재판 · 선거
     public SchemeSystem Schemes { get; } // v18.14 승무원이 스스로 꾸미는 일 100+
+    public ReactSystem React { get; } // v17.8 모든 변화에 누군가 반응한다
     public FleetSystem Fleet { get; } // v16.20b 로봇 · 드론 두뇌와 성능 · 주컴퓨터 함대 지휘
     public FoodSourceSystem FoodSources { get; } // v16.22 식량원 (수경 · 조류 · 단백질 · 버섯 · 정원 · 저장 · 교역 · 원정 · 발효)
     public ScrapSystem Scrap { get; } // v16.22 고철 되살리기 (재활용실 · 파쇄실)
@@ -282,6 +283,7 @@ public sealed class World
         Daily = new DailySystem(this);
         Motions = new MotionSystem(this); // v18.18
         Schemes = new SchemeSystem(this); // v18.14
+        React = new ReactSystem(this); // v17.8
         Fleet = new FleetSystem(this); // v16.20b
         FoodSources = new FoodSourceSystem(this); Scrap = new ScrapSystem(this); // v16.22
         Failsafe = new FailsafeSystem(this); Major = new MajorIncidentSystem(this); // v16.19
@@ -397,6 +399,7 @@ public sealed class World
             Culture.Update(dt); // v14.9 겪은 일이 관행이 되어 전해진다
             pf = Prof.Lap("sys.Culture", pf);
             Daily.Update(dt); // v15 사고가 아닌 날의 일상 사건
+            React.Update(dt); // v17.8 더위 · 추위 · 어둠 · 바닥 · 소리 · 냄새 · 남의 몸짓 → 말 · 몸짓 · 짧은 행동
             Schemes.Update(dt); // v18.14 장난 · 몰래 하는 일 · 규칙 어기기 · 모임 · 판 · 목소리 내기 · 혼자 하는 일
             Motions.Update(dt); // v18.18 안건 · 서명 · 회의 · 파벌 · 재판 · 선거
             Info.Update(dt); // v17.3 자리 · 못 끝낸 일 · 깨진 컵 · 메신저 · 사진 · 장부

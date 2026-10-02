@@ -68,11 +68,11 @@ public sealed class ReactState
 }
 
 /// <summary>반응에서 이어지는 짧은 행동 (ReactActivity 가 한다).</summary>
-public enum ActKind : byte { Device, Blanket, Window, Screen, Near, Jog, Check, TalkTo, Comfort, Admire, Move, Fix, Cup }
+public enum ReactKind : byte { Device, Blanket, Window, Screen, Near, Jog, Check, TalkTo, Comfort, Admire, Move, Fix, Cup }
 
 public sealed class ReactAct
 {
-    public ActKind Kind { get; init; }
+    public ReactKind Kind { get; init; }
     public Stir For { get; init; }
     public Cell To { get; init; }
     public Vector2 Face { get; init; }
@@ -356,8 +356,8 @@ public sealed partial class ReactSystem
                 Gest(s, Gesture.Tiptoe, Long);
                 s.LookAt = cell.Center;
                 string what = ms.V[(int)CellMark.Oil] > 0.2f ? "기름" : ms.V[(int)CellMark.Frost] > 0.2f ? "서리" : "물기";
-                if (room != null) w.Body.Careful(c, room, 1.5f, $"바닥 {what}를 보고 조심조심 걷는다");
-                Speak(c, s, Stir.Wet, Pool(c, Stir.Wet, false), room, what);
+                if (room != null) w.Body.Careful(c, room, 0.5f, $"바닥 {what}를 보고 조심조심 걷는다");
+                Speak(c, s, Stir.Wet, WetLines(c, what), room, what);
                 return;
             }
         }
@@ -386,7 +386,7 @@ public sealed partial class ReactSystem
         if (room.Air.Smoke > 0.06f && Ready(s, Stir.Smoke, 20f)) Cand(Stir.Smoke, 0.6f + MathF.Min(0.3f, room.Air.Smoke));
         if (room.Vibration > 0.45f && Ready(s, Stir.Shake, 45f)) Cand(Stir.Shake, 0.45f + 0.3f * room.Vibration);
         if (Ready(s, Stir.Sound, 90f) && (_noisy.TryGetValue(room.Id, out var nm) || NoisyNext(room, out nm)) && nm.Omen is { Known: false }) Cand(Stir.Sound, 0.5f + 0.2f * c.Traits.Diligence, nm);
-        if (Ready(s, Stir.Smell, 60f) && w.Smell.Dominant(room, out float sv) is SmellKind sk && sv > SmellSystem.Threshold(sk) * 2.5f * SmellSystem.Nose(c)) Cand(Stir.Smell, 0.35f + MathF.Min(0.2f, sv * 0.2f), sk);
+        if (Ready(s, Stir.Smell, 60f) && w.Smells.Dominant(room, out float sv) is SmellKind sk && sv > SmellSystem.Threshold(sk) * 2.5f * SmellSystem.Nose(c)) Cand(Stir.Smell, 0.35f + MathF.Min(0.2f, sv * 0.2f), sk);
         // 방송 · 아침 브리핑
         if (w.Automation.Present)
         {
