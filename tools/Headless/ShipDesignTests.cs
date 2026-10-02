@@ -53,6 +53,62 @@ public static partial class Program
     private static int RunShipDesignTest(int seed)
     {
         _fails = 0;
+        if (Environment.GetEnvironmentVariable("FSH_DEBUG") is string sk && sk.StartsWith("stuck:"))
+        {
+            var w = World.CreateDefault(seed, 0, sk[6..]);
+            for (int i = 0; i < 6 * 36; i++)
+            {
+                Run(w, SimTime.Minutes(10));
+                foreach (var c in w.Crew.Where(c => !c.Dead && c.Needs.Food < 0.05f && c.PathBlocked))
+                {
+                    var near = Cell.Dirs4.Select(d => w.Ship.DoorAt(c.Cell + d)).FirstOrDefault(d => d != null);
+                    Console.WriteLine($"  {i / 6}시 {c.Name} {c.Room?.Name} {c.Cell} 옆 문 {near?.RoomA?.Name}/{near?.RoomB?.Name} 구역 {(near != null ? w.Body.DoorOf(near)?.Zone.ToString() : "-")} 다음 {string.Join(" ", c.Path?.Take(3) ?? Enumerable.Empty<Cell>())}");
+                }
+            }
+            return 0;
+        }
+        if (Environment.GetEnvironmentVariable("FSH_DEBUG") == "smell")
+        {
+            var w = DayOne(seed, "Hanbit");
+            Run(w, SimTime.Hours(2));
+            foreach (var rb in w.Robots.Robots.Where(r => RobotsV15.Base(r.Kind) == RobotKind.Safety)) w.Robots.ForceFault(rb, RobotFault.Drive);
+            Room? PickRoom() => w.Ship.LiveRooms.Where(r => r.Type is not (RoomType.Corridor or RoomType.Galley or RoomType.Mess) && !r.Abandoned && w.Crew.All(c => c.Room != r)
+                    && w.Ambience.Neighbors(r).Any(n => n.door && w.Crew.Any(c => c.IsAwake && c.Room == n.room)) && r.Cells.Any(c => w.Ship.IsWalkable(c))).OrderBy(r => r.Id).FirstOrDefault();
+            var room = PickRoom()!;
+            Console.WriteLine($"방 {room.Name} 이웃 {string.Join(", ", w.Ambience.Neighbors(room).Select(n => $"{n.room.Name}{(n.door ? "(문)" : "")}"))}");
+            room.BreakerOff = true;
+            w.Fire.Ignite(room.Cells.First(c => w.Ship.IsWalkable(c)), 0.25f);
+            for (int m = 0; m < 40 && !w.Fire.IsKnown(room); m++)
+            {
+                Run(w, SimTime.Minutes(1));
+                foreach (var c in w.Crew.Where(c => !c.Dead && w.Smells.Smelled(c, SmellKind.Burnt, SimTime.Minutes(20)) != null))
+                {
+                    var t = w.Smells.Likely(c, SmellKind.Burnt);
+                    Console.WriteLine($"  {m}분 {c.Name}@{c.Room?.Name} 맡음 → 짐작 {t?.Name} 알려짐 {(t != null && w.Fire.IsKnown(t))} 위험 {(t != null ? Atmosphere.Danger(t) : -1):0.00} 금지 {t?.OffLimits} 풀림 {w.Smells.Resolved(c, w.Smells.Smelled(c, SmellKind.Burnt, SimTime.Minutes(20))!.Value.Strength)} 일 {c.Job?.Label}");
+                }
+            }
+            return 0;
+        }
+        if (Environment.GetEnvironmentVariable("FSH_DEBUG") == "robot")
+        {
+            var w = DayOne(seed, "Hanbit");
+            var a = w.Automation;
+            for (int i = 0; i < 12 && !w.Robots.Robots.Any(r => r.Kind == RobotKind.Maintainer && r.Fault == null && !r.Disabled && r.Order == null && r.Battery > 0.6f); i++) Run(w, SimTime.Minutes(5));
+            var robot = w.Robots.Robots.Where(r => r.Kind == RobotKind.Maintainer && r.Fault == null && !r.Disabled).OrderBy(r => r.Order == null ? 0 : 1).ThenByDescending(r => r.Battery).First();
+            foreach (var m in w.Ship.Machines.Where(m => m.Body.Type is FurnitureType.Fridge or FurnitureType.Stove or FurnitureType.WaterRecycler).Take(3)) m.Wear = 0.85f;
+            w.Board.RequestScan();
+            Run(w, World.SystemInterval * 2);
+            robot.Battery = 1f;
+            var job = w.Board.OpenForRobot().Where(o => o.Kind == WorkKind.Maintain).OrderBy(o => o.Urgency).ThenBy(o => o.Id).FirstOrDefault();
+            var mc = w.Automation.Computer!; Console.WriteLine($"로봇 {robot.Name} {robot.Room?.Name} {robot.Doing} 급함 {robot.Order?.Urgency:0.00} · 일 {job?.Title} @ {job?.Target.Furniture?.Room.Name} · 주컴퓨터 {mc.Body.Room.Name} {mc.Body.Room.Air.Temperature:0.0}도 마모 {mc.Wear:0.00} 상태 {mc.Condition:0.00} 고장 {string.Join(",", mc.Faults.Select(f => f.Kind))}");
+            var ord = job != null ? a.Command.Order(robot, job, 0.9f, "시험") : null;
+            for (int i = 0; i < 80; i++)
+            {
+                Run(w, World.SystemInterval);
+                if (i % 8 == 0) Console.WriteLine($"  {i} {robot.State} {robot.Doing} 명령 {robot.Order?.Title} 일로봇 {job?.Robot?.Name} 위치 {robot.Position} 방 {robot.Room?.Name}");
+            }
+            return 0;
+        }
         if (Environment.GetEnvironmentVariable("FSH_DEBUG") is string dbg && dbg != "food")
         {
             var w = DayOne(seed, dbg);

@@ -171,7 +171,7 @@ public sealed class MachineSystem
         }
         float rate = dt / FoodChain.GrowHours * m.Efficiency * m.Rating * (1f + Modules.Bonus(_world, FurnitureType.LedPanel, m.Body.Room))
                      * (0.45f + 0.55f * crop.Care) * (water ? 1f : 0f) * AmbienceSystem.CropFactor(m.Body.Room) * (_world.Eras.Has("genecrops") ? 1.2f : 1f) * ErasV15.Mul(_world, "grow"); // v12.6 진동·방사선 · v12.8 개량 작물 · v15.5 재배 기술
-        crop.Growth = MathF.Min(1f, crop.Growth + rate * FoodSourceSystem.GrowMul(m)); // v16.22 조류는 빨리 · 허브는 천천히
+        crop.Growth = MathF.Min(1f, crop.Growth + rate * FoodSourceSystem.GrowMul(m)); // v16.22 재배실마다 빠르기가 다르다 (조류는 하루)
         if (crop.Ripe) _world.Board.RequestScan();
     }
 

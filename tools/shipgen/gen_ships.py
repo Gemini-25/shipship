@@ -11,6 +11,8 @@
   · 큰 배는 고리 안에 띠가 더 있고(안쪽 띠), 통로가 차압 문으로 구획을 나눈다.
   · 앞(오른쪽)은 뱃머리: 통신실(안테나) · 함교 · (큰 배) 항법실 · 예비 함교.
   · 작을수록 꼭 필요한 방만, 클수록 방 종류가 많고 넓고 호화롭다.
+  · 원자로 · 배전 · 주컴퓨터실은 문 하나 (지나다니는 길이 아니다 — 원자로실 출입 통제 문을 질러가다 막히지 않게).
+  · 짝이 되는 방은 사이 문 (냉동 창고 ↔ 주방 ↔ 식당 · 정비실 ↔ 창고 · 에어락 ↔ 선외 준비실 · 휴게실 ↔ 체력단련실).
 배관 배치 규칙(Piping.Build)을 지킨다: 냉각 펌프는 위 선체 바로 아래 줄, 첫 펌프는 원자로 가운데보다 오른쪽,
 냉각실 아래 벽 바로 밑은 통로, 급수 본관은 생명유지실 정수기에서 시작한다. 로봇 충전대(J)는 그리지 않는다 (배를 띄울 때 단다).
 출력: game/src/Core/ShipTemplates.cs  (손으로 고치지 말고 이 생성기를 고친다)
@@ -398,7 +400,7 @@ KESTREL = dict(key='Kestrel', crew=4, corr=1, chamfer=2,
 MIRINAE = dict(key='Mirinae', crew=6, corr=2, chamfer=2,
     engine=dict(w=5, items=[E, E, C]),
     bands=[
-        band(5, ['S'], [Rm('s', [K, K, K3], 6), Rm('k', [P, P, C], 6), Rm('f', [G, G, G, G], 10, grow=True), Sp('Freezer', [F, K, K], 6), Rm('j', [V, F, K, T], 7, link=True), Rm('m', [D, D, TSET, TSET], 9, grow=True, link=True)]),
+        band(5, ['S'], [Rm('s', [K, K, K3], 10), Rm('k', [P, P, C], 6), Rm('f', [G, G, G, G], 10, grow=True), Sp('Freezer', [F, K, K], 6), Rm('j', [V, F, K, T], 7, link=True), Rm('m', [D, D, TSET, TSET], 9, grow=True, link=True)]),
         CORR,
         band(5, ['N', 'S'], [Rm('r', [R3, C, C], 6), Rm('l', [U, O, O], 8), Sp('ComputerRoom', [I, C, C, K3], 7), Rm('p', [X, Z, Y, Y], 7), Sp('Shelter', [K, K, S, S], 6)]),
         CORR,
@@ -406,11 +408,11 @@ MIRINAE = dict(key='Mirinae', crew=6, corr=2, chamfer=2,
     ],
     bow=dict(w=6, rooms=[Rm('o', [A, C], 0, h=3), Rm('b', [C, C, C, S, S], 0, h=6, grow=True)]))
 
-# ── 한빛호 (12인 · 중형): 통로 고리 하나를 차압 문 하나로 두 구획. 수경 · 버섯 · 조류로 식량원이 셋, 연료전지 · 펌프실 · 항법실 · 재활용실이 붙는다.
+# ── 한빛호 (12인 · 중형): 통로 고리 하나를 차압 문 하나로 두 구획. 수경 · 버섯 · 조류로 식량원이 셋, 연료전지 · 펌프실 · 항법실 · 재활용실 · 소화 설비실이 붙는다 (운동은 휴게실 — 몸이 굳으면 창고를 고친다).
 HANBIT = dict(key='Hanbit', crew=12, corr=2, chamfer=3, bulkheads=1,
     engine=dict(w=5, items=[E, E, E, C]),
     bands=[
-        band(6, ['S'], [Sp('Cargo', many(K, 4), 7), Rm('k', [P, P, C], 6), Sp('PumpRoom', [P, P], 6, link=True), Rm('f', many(G, 8), 10), Sp('Freezer', [F, K, K], 6),
+        band(6, ['S'], [Rm('s', [K, K, K], 12), Rm('k', [P, P, C], 6), Sp('PumpRoom', [P, P], 6, link=True), Rm('f', many(G, 8), 10), Sp('Freezer', [F, K, K], 6),
                         Rm('j', [V, V, F, F, K], 9, link=True), Rm('m', [D, D, D, TSET, TSET, TSET], 11, link=True), Sp('Observatory', [S, S, C, SOFA], 7)]),
         CORR,
         band(6, ['N'], [Rm('q', many(B, 8), 9), Sp('QuietQuarters', many(B, 4), 5), Sp('WaterPlant', [U, U], 6), Sp('MushroomFarm', [G, G, K3], 6),
@@ -419,7 +421,7 @@ HANBIT = dict(key='Hanbit', crew=12, corr=2, chamfer=3, bulkheads=1,
                         Rm('p', [X, Z, Y, Y, Y, Y], 8), Sp('Substation', [X, K3], 6), Sp('BatteryRoom', [Y, Y], 5), Sp('Shelter', [K, K, S, S, S], 7)]),
         CORR,
         band(6, ['N'], [Rm('w', [H, W, W, N, K3], 10), Sp('Recycling', [N, K3], 6, link=True), Sp('DroneBay', [Q, Q, K], 6), Rm('a', [L, L, L, Q, Q], 8, hatch=6), Rm('h', [M, M, M, K3], 7),
-                        Rm('g', [SOFA, SOFA], 8), Sp('Gym', [ROWS2, ROWS2], 6, link=True), Rm('s', [K, K, K], 7)]),
+                        Rm('g', [SOFA, SOFA, S], 9), Sp('SuppressionRoom', [K, K], 5), Sp('Cargo', many(K, 4), 7)]),
     ],
     bow=dict(w=7, rooms=[Rm('o', [A, C, C], 0, h=4), Rm('b', [C, C, C, S, S, S], 0, h=6, grow=True), Sp('Navigation', [C, C, K3], 0, h=5)]))
 

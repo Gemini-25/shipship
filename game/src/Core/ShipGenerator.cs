@@ -370,11 +370,15 @@ public static partial class ShipGenerator
     public static IEnumerable<RoomType> InfraFor(int n)
     {
         // v16.22 크기에 따라 기반 시설 방을 나눠 둔다 (전에는 정수실 · 배터리실 · 공조실뿐이라 항법실 · 펌프실 · 서버실 같은 방이 어디에도 없었다)
-        if (n >= 8) yield return RoomType.Navigation;
-        if (n >= 12) { yield return RoomType.WaterPlant; yield return RoomType.PumpRoom; yield return RoomType.FuelCell; }
-        if (n >= 16) { yield return RoomType.ServerRoom; yield return RoomType.Security; }
-        if (n >= 20) { yield return RoomType.BatteryRoom; yield return RoomType.HeatStorage; yield return RoomType.Substation; }
-        if (n >= 30) { yield return RoomType.HvacRoom; yield return RoomType.BackupBridge; yield return RoomType.CraneControl; }
+        //  큰 생성 배(25인 넘게)는 예전 그대로 — 방이 늘면 60인 배의 배식 줄 · 동선이 넘친다 (기본 배 다섯 척이 큰 배의 방을 다 보여 준다)
+        bool mid = n is >= 8 and <= 24;
+        if (mid) yield return RoomType.Navigation;
+        if (n >= 12) yield return RoomType.WaterPlant;
+        if (mid && n >= 12) { yield return RoomType.PumpRoom; yield return RoomType.FuelCell; }
+        if (mid && n >= 16) yield return RoomType.ServerRoom; // 보안실은 생성 배에 넣지 않는다 (함장 승인 문이 통로 사이 지름길이 되면 사람이 막힌다)
+        if (n >= 20) yield return RoomType.BatteryRoom;
+        if (mid && n >= 20) yield return RoomType.HeatStorage;
+        if (n >= 30) yield return RoomType.HvacRoom;
     }
 
     public static string KeyFor(int crew, int seed) => $"gen:{crew}:{seed}";

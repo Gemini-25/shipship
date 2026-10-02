@@ -60,13 +60,13 @@ public sealed class FoodSourceSystem
     /// <summary>자라는 빠르기 배율 (채소 60시간 = 1): 조류는 하루, 버섯은 이틀 남짓, 배양 단백질은 사십 시간.</summary>
     public static float GrowMul(Machine m) => Crop(m.Body.Room) switch
     {
-        CropKind.Algae => 2.5f, CropKind.Mushroom => 1.4f, CropKind.Protein => 1.5f, CropKind.Herb => 0.9f, _ => 1f,
+        CropKind.Algae => 2.5f, CropKind.Mushroom => 1.4f, CropKind.Protein => 1.5f, CropKind.Herb => 1.2f, _ => 1f,
     };
 
-    /// <summary>한 번에 거두는 양 배율: 조류는 조금씩 자주, 버섯 · 단백질은 중간, 허브는 조금.</summary>
+    /// <summary>한 번에 거두는 양 배율: 조류는 조금씩 자주, 버섯 · 단백질 · 허브는 중간 (하루 몫은 채소와 비슷).</summary>
     public static float YieldMul(Furniture bed) => Crop(bed) switch
     {
-        CropKind.Algae => 0.45f, CropKind.Mushroom => 0.65f, CropKind.Protein => 0.7f, CropKind.Herb => 0.4f, _ => 1f,
+        CropKind.Algae => 0.45f, CropKind.Mushroom => 0.72f, CropKind.Protein => 0.7f, CropKind.Herb => 0.7f, _ => 1f, // 하루 몫은 채소와 비슷하게 (자주 · 조금씩)
     };
 
     /// <summary>제 물통이 있어 급수 본관이 끊겨도 자라는 재배대 (버섯 배지 · 단백질 배양조).</summary>
