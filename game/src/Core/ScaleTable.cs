@@ -195,6 +195,9 @@ public static class ScaleTable
         // 사고 70
         foreach (var s in Hazards.All)
             rows.Add(new(s.Kind.ToString(), s.Name, "사고", Of(s.Kind), Grows(Of(s.Kind))));
+        // v16.19 계통 · 배 전체 사고 24
+        foreach (var s in MajorIncidentSystem.All)
+            rows.Add(new("major:" + s.Key, s.Name, "큰 사고", s.Scale, s.Scale >= IncidentScale.Ship ? "—" : "배의 절반 · 원자로 정지면 배 전체"));
         // 반란 (사기 바닥 · 다수의 분노 — ScaleSystem이 살핀다)
         rows.Add(new("unrest", "반란 조짐", "사람", IncidentScale.Ship, "사기가 돌아오면 가라앉는다"));
         // 인과 사슬의 고리
@@ -245,5 +248,5 @@ public static class ScaleTable
     public static IEnumerable<ScaleRow> Group(IncidentScale s) => All.Where(r => r.Base == s);
 
     /// <summary>어디서 온 사고 (표의 갈래 순서).</summary>
-    public static readonly string[] Sources = { "이야기꾼", "사고", "사람", "사슬", "고장", "과열 폭발", "폭발", "질병", "부상", "선외", "우주급" };
+    public static readonly string[] Sources = { "이야기꾼", "사고", "큰 사고", "사람", "사슬", "고장", "과열 폭발", "폭발", "질병", "부상", "선외", "우주급" };
 }

@@ -1166,6 +1166,7 @@ public static class Shrapnel
     /// <summary>파편이 설비를 맞혔다: 수명 · 전선 · 관 · 고장.</summary>
     public static void HitMachine(World w, Rng rng, Machine m, float strength, string label)
     {
+        strength *= Durability.ShardOnMachine(m); // v16.19 강화 외함 · 설비 내구
         m.Condition = MathF.Max(0.02f, m.Condition - 0.5f * strength);
         Procedures.DamageLinks(w, m, 0.7f * strength, 0.6f * strength, label); // v12.1
         if (rng.Chance(0.7f * strength)) w.Machines.Break(m);

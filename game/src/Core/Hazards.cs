@@ -768,6 +768,7 @@ public sealed partial class HazardSystem
             if (s.Kind == HazardKind.SolarStorm && StormActive) continue;
             pool.Add((s.Kind.ToString(), s.Weight));
         }
+        MajorIncidentSystem.AddToPool(w, pool, false, 1f); MajorIncidentSystem.ShapeByScale(pool); // v16.19 계통 · 배 전체 사고 · 규모 비율
         for (int i = 0; i < pool.Count; i++) pool[i] = (pool[i].key, pool[i].weight * w.Voyage.HazardMul(pool[i].key) * w.Eras.RiskMul(pool[i].key)); // v12.8 구간 · 새 기술의 위험
         for (int tries = 0; tries < 6; tries++)
         {
@@ -800,6 +801,7 @@ public sealed partial class HazardSystem
         var ship = w.Ship;
         var rooms = ship.Rooms.Where(r => !r.Detached && !r.Abandoned && r.Type != RoomType.Corridor).ToList();
         if (rooms.Count == 0) return null;
+        if (key.StartsWith("major:")) return w.Major.Fire(key, prefer); // v16.19
         switch (key)
         {
             case "meteor":

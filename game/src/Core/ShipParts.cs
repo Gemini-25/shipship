@@ -226,6 +226,10 @@ public sealed class Room
 
     /// <summary>선체 파공으로 새고 있는 정도 (틈 넓이 합).</summary>
     public float BreachArea { get; set; }
+    /// <summary>v16.19 실제로 공기가 빠지는 넓이 (미세 누출은 작게 · 파공은 그대로) · 두 갈래 급전의 다른 회로 (-1 없음) · 비상 칸막이 (0 없음 · 1 접힘 · 2 펼침).</summary>
+    public float LeakArea { get; set; }
+    public int AltCircuit { get; set; } = -1;
+    public int Partition { get; set; }
 
     // ── 역사 (v7): 이 방이 겪은 것 ──
     public int Breaches { get; set; }
@@ -668,6 +672,9 @@ public sealed class WallState
 
     /// <summary>보강판을 덧댔다 (운석을 겪은 뒤의 개조). 같은 충격에 덜 상한다.</summary>
     public bool Reinforced { get; set; }
+
+    /// <summary>v16.19 장갑 벽: 충격 피해 배율 (1 보통 · 원자로 · 배전 · 주 컴퓨터실은 두꺼운 외판과 골조로 작다).</summary>
+    public float Armor { get; set; } = 1f;
 
     public List<Mark> Marks { get; } = new();
 

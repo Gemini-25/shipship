@@ -79,7 +79,9 @@ public static partial class Program
             if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "2")
                 Console.WriteLine("      개조 일감: " + string.Join(" / ", w.Board.All.Where(o => o.Kind == WorkKind.Upgrade).Select(o => $"{o.Title} [{o.Decision}] 맡은 {o.Assignee?.Name ?? "-"} 막힘 {o.BlockedReason ?? "-"} 닫힘 {o.Closed}"))
                     + " · 역사: " + string.Join(" / ", w.History.Events.Where(e => e.Kind == HistoryKind.Decision).TakeLast(4).Select(e => e.Text)));
-            Check("작은 배 — 간선 정전을 겪으면 승무원이 보조 간선을 깐다", before == 0 && w.Net.Rings.Count > 0,
+            // v16.19 보조 간선은 이제 기본 설비 (작은 배도 처음부터 필수 방마다) — 겪고 나서 까는 것은 남은 방 몫
+            var life0 = w.Ship.RoomsOf(RoomType.LifeSupport).First();
+            Check("작은 배 — 처음부터 보조 간선이 있어 배전실 문 앞이 끊겨도 생명유지실은 산다 (v16.19)", before > 0 && life0.PowerLinked,
                 $"보조 간선 {before} → {w.Net.Rings.Count} · 간선 정전 {w.Net.Stats.Blackouts} · " + string.Join(" / ", w.History.Events.Where(e => e.Text.Contains("보조 간선")).Select(e => e.Text).Take(2)));
         }
         // 결정론

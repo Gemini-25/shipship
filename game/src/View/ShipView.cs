@@ -675,6 +675,7 @@ public partial class ShipView : Node2D
         PaintComms(ci); // v11.2 보급·탈출 캡슐, 송신 파동
         PaintCauseChain(ci); // v12.2 고른 사고의 인과 사슬
         PaintScaleRooms(ci); // v16.18 번진 방마다 규모별 테두리 · 점호 깃발
+        PaintFailsafe(ci, mode); PaintMajors(ci); // v16.19 장갑 벽 · 차압 문 · 칸막이 · 예비 회로 · 큰 사고 문양과 흔적
         PaintDampers(ci, mode == ViewMode.Air);
         PaintRoomStates(ci);
         PaintRoomSigns(ci); // v16.17 승무원이 붙인 이름 표지판 (나무 · 놋쇠 · 칠판 · 법랑)

@@ -93,7 +93,7 @@ public static class Incidents
 
         // 3) 배선: 파편이 그 구역 회로를 끊을 수 있다
         var room = inside ?? ship.RoomAt(target);
-        if (room != null && w.Rng.Chance(0.45f * size))
+        if (room != null && w.Rng.Chance(0.45f * size * Durability.CircuitHit)) // v16.19 배선관
         {
             var panel = ship.FurnitureOf(FurnitureType.PowerPanel).FirstOrDefault()?.Machine;
             if (panel != null && !panel.Faults.Any(f => f.Circuit == room.Circuit))

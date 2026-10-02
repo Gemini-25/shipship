@@ -171,6 +171,7 @@ public sealed class CauseLog
     /// </summary>
     public int Effect(CauseKind kind, string key, string text, Room? room, Vector2? at, int parent = -1, bool lasting = true)
     {
+        if (kind == CauseKind.Recovery) lasting = false; // v16.19 복구 조치(소화 준비 · 시작 · 다시 가압)는 상태가 아니다 — 풀 사람이 없어 사건이 끝나지 않던 것
         if (key.Length > 0 && _open.TryGetValue(key, out var existing)) { Nodes[existing].Repeats++; return existing; }
         if (parent < 0) parent = _ctx;
         if (parent >= Nodes.Count) parent = -1; // 되감기 등으로 사라진 고리

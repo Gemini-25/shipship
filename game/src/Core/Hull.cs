@@ -48,6 +48,7 @@ public static class Hull
         if (ship.WallAt(cell) is not WallState w || amount <= 0f) return;
         amount *= 1f + MathF.Max(0f, 1f - w.MaxIntegrity) * 1.5f; // 피로한 벽은 더 크게 상한다
         if (w.Reinforced) amount *= 0.7f; // 보강판을 덧댄 벽은 덜 상한다 (v7)
+        amount *= w.Armor; // v16.19 장갑 벽 (원자로 · 배전 · 주 컴퓨터실)
         float before = w.Integrity;
         w.Integrity = MathF.Max(0f, w.Integrity - amount);
         // v8: 외판이 다 뚫리고도 남은 충격은 골조를 상하게 한다 → 구조 연결 상실 (외판이 골조에서 뜯겨 나감)
@@ -122,7 +123,7 @@ public sealed class HullSystem
     public void Update(float dt)
     {
         var ship = _world.Ship;
-        foreach (var r in ship.Rooms) r.BreachArea = 0f;
+        foreach (var r in ship.Rooms) { r.BreachArea = 0f; r.LeakArea = 0f; }
         foreach (var (cell, wall) in ship.Walls)
         {
             if (!wall.IsHull) continue;
@@ -143,14 +144,14 @@ public sealed class HullSystem
             }
             float eff = Hull.EffectiveBreach(wall);
             foreach (var d in Cell.Dirs4)
-                if (ship.RoomAt(cell + d) is Room r) r.BreachArea += eff;
+                if (ship.RoomAt(cell + d) is Room r) { r.BreachArea += eff; r.LeakArea += Durability.LeakArea(eff); } // v16.19 미세 누출은 천천히
         }
 
         foreach (var room in ship.Rooms)
         {
             if (room.Detached) continue; // 떨어져 나간 방은 우주선 밖이다
             bool wasLeaking = room.Air.Leak > 0f;
-            room.Air.Leak = room.BreachArea * Hull.LeakPerBreach;
+            room.Air.Leak = room.LeakArea * Hull.LeakPerBreach * _world.Failsafe.LeakMul(room); // v16.19 크기에 비례 · 큰 방은 비상 칸막이
             if (room.Leaking && !wasLeaking) room.LeakingSince = _world.Tick;
 
             // 기압 변화 (kPa/시간)

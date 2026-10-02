@@ -659,9 +659,9 @@ public sealed class RobotSystem
                     bool moving = r.Path != null;
                     float drain = r.Steps != null && r.StepIndex < r.Steps.Count && r.Steps[r.StepIndex] is RSpray ? DrainSpray
                         : moving ? DrainMove : working ? DrainWork : DrainIdle;
-                    r.Battery = MathF.Max(0f, r.Battery - drain * RobotsV15.Drain(r.Kind) * dt); // v15.7 배터리 크기
+                    r.Battery = MathF.Max(0f, r.Battery - drain * RobotsV15.Drain(r.Kind) * Durability.RobotDrain * dt); // v15.7 배터리 크기 · v16.19 큰 셀
                     r.ActiveHours += dt;
-                    r.Condition = MathF.Max(0f, r.Condition - (working || moving ? 0.008f : 0.002f) * dt);
+                    r.Condition = MathF.Max(0f, r.Condition - (working || moving ? 0.008f : 0.002f) * Durability.RobotWear * dt);
                     // 가벼운 고장으로 충전대에 돌아가는 중 (느리게): 길이 막히면 그 자리에 멈춘다
                     if (r.Fault is RobotFault lf)
                     {
@@ -671,9 +671,9 @@ public sealed class RobotSystem
                         break;
                     }
                     // 불 곁에서 그을리거나, 닳아서 고장
-                    if (w.Fire.AnyWithin(r.Cell, 1.2f) && !RobotsV15.Fireproof(r.Kind) && w.Rng.Chance(0.6f * dt)) { Break(r, RobotFault.Scorched); break; }
+                    if (w.Fire.AnyWithin(r.Cell, 1.2f) && !RobotsV15.Fireproof(r.Kind) && w.Rng.Chance(0.6f * Durability.RobotScorch * dt)) { Break(r, RobotFault.Scorched); break; } // v16.19 방열 외피
                     if (w.Fire.AnyWithin(r.Cell, 0.8f) && RobotsV15.Fireproof(r.Kind)) r.Condition = MathF.Max(0f, r.Condition - 0.05f * RobotsV15.HeatWear(r.Kind) * dt);
-                    float wearRisk = (0.0025f + 0.045f * (1f - r.Condition) * (1f - r.Condition)) * RobotsV15.Fault(r.Kind); // v15.7 고장률
+                    float wearRisk = (0.0025f + 0.045f * (1f - r.Condition) * (1f - r.Condition)) * RobotsV15.Fault(r.Kind) * Durability.RobotFault; // v15.7 고장률 · v16.19 재조정
                     if (w.Rng.Chance(wearRisk * dt)) { Break(r, PickFault(r)); break; }
                     if (r.Battery <= 0.001f) { Stall(r, "배터리가 바닥났다"); break; }
                     // 맡은 일이 사라졌으면 (누가 끝냈거나 조건이 없어졌다) 손을 놓는다
