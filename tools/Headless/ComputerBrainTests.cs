@@ -190,6 +190,7 @@ public static partial class Program
                 var teamMember = team0.Count > 0 ? w.Crew.First(c => c.Id == team0[0]) : tired;
                 foreach (var t in new[] { tired, teamMember }) { t.Needs.Rest = 0.1f; }
                 fresh.Needs.Rest = 0.95f;
+                tired.CoveringUntil = w.Tick + SimTime.Hours(3); // 근무 중 (지쳤는데 일하는 사람)
                 a.CrewModel.Update(force: true);
                 foreach (var t in new[] { tired, teamMember }) { t.Needs.Rest = 0.1f; }
                 int crisisRevs = a.Planner.Emergency.Revisions;
@@ -237,7 +238,24 @@ public static partial class Program
                     eth != null ? $"{eth.Situation} · {eth.Choice} · {eth.Basis}" : "없음");
             }
 
-            // 4) 결정론 · 성능 (30인 배)
+            // 4) 긴 항해: 저절로 돌려도 조르지 않고(자원마다 사흘에 세 번까지) · 계획 · 예측 · 모형이 쌓인다
+            {
+                var w = World.CreateDefault(seed, 0, "Hanbit");
+                Run(w, SimTime.TicksPerDay * 4);
+                var a = w.Automation;
+                var pl = a.Planner;
+                int worst = ShipForecast.Models.Max(m => pl.Pitches.Count(p => p.Key == m.Key && w.Tick - p.Tick < SimTime.TicksPerDay * 3));
+                int seen = w.Crew.Count(c => a.CrewModel.Knows(c));
+                Check("긴 항해 — 나흘 동안 계획 · 예측 · 승무원 모형이 쌓이고, 같은 자원으로 사흘에 세 번 넘게 조르지 않는다",
+                    pl.Replans >= 40 && a.Outlook.Samples >= 40 && a.Outlook.Graded > 20 && seen >= w.Crew.Count(c => !c.Dead) / 2 && worst <= ShipPlanner.MaxAttempts,
+                    $"다시 세움 {pl.Replans} · 예측 {a.Outlook.Samples}번 (채점 {a.Outlook.Graded} · 맞힘 {a.Outlook.Hits}) · 본 사람 {seen}/{w.Crew.Count(c => !c.Dead)} · 안건/제안 {pl.Pitches.Count} (자원마다 최대 {worst}) · 고침 {pl.Revisions.Count} · 부탁 {a.CrewModel.WorkAsks} · 쉼 {a.CrewModel.RestAsks} · 사과 {a.Authority.Apologies} · 배움 {a.Authority.LearnedList.Count}");
+                Console.WriteLine($"    계획: {string.Join(" / ", pl.Plans.Select(p => $"{p.Name} {p.Mode}"))} · 예측: {string.Join(" / ", a.Outlook.All.Select(f => f.Line))}");
+                foreach (var l in a.Authority.LearnedList.TakeLast(4)) Console.WriteLine($"    배움 {SimTime.Day(l.Tick)}일 {SimTime.Clock(l.Tick)} [{l.Kind}] {l.Text}");
+                foreach (var p in pl.Pitches.TakeLast(4)) Console.WriteLine($"    안건 {SimTime.Day(p.Tick)}일 {p.Option} [{p.Arg} · {p.Via}] {p.State} — {p.Basis}");
+                foreach (var r in pl.Revisions.TakeLast(6)) Console.WriteLine($"    고침 {SimTime.Day(r.Tick)}일 {SimTime.Clock(r.Tick)} [{r.Key}] {r.From} → {r.To} · {r.Why}");
+            }
+
+            // 5) 결정론 · 성능 (30인 배)
             {
                 uint H()
                 {

@@ -160,7 +160,7 @@ public sealed class ShipPlanner
 
     // ═══════════════════════════════ 자원 계획 ═══════════════════════════════
 
-    private static string ModeOf(ResourceForecast f) => f.Estimate <= f.Short || f.DaysToShort <= 1.5f ? "위기" : f.DaysToShort <= 4f ? "대책" : f.DaysToShort <= 8f ? "주의" : "유지";
+    private static string ModeOf(ResourceForecast f, float k = 1f) => f.Estimate <= f.Short || f.DaysToShort <= 1.5f * k ? "위기" : f.DaysToShort <= 4f * k ? "대책" : f.DaysToShort <= 8f * k ? "주의" : "유지";
 
     private void PlanResources(string cause)
     {
@@ -173,6 +173,7 @@ public sealed class ShipPlanner
             var plan = PlanOf(m.Key);
             if (plan == null) { plan = new ResourcePlan { Key = m.Key, Name = m.Name, Since = w.Tick }; Plans.Add(plan); }
             string mode = ModeOf(f);
+            if (Rank(mode) < Rank(plan.Mode) && Rank(ModeOf(f, 1.25f)) >= Rank(plan.Mode)) mode = plan.Mode; // 나아질 때는 여유를 두고 (문턱에서 오락가락하지 않게)
             // 확신이 아주 낮으면 대책 대신 주의 (계기를 먼저 맞춘다)
             if (mode is "대책" && f.Confidence < 0.2f || Rank(mode) >= 2 && f.History.Count < 3) mode = "주의"; // 잰 지 얼마 안 됐다
             if (mode != plan.Mode)
@@ -664,6 +665,7 @@ public sealed class ShipPlanner
             if (c.Dead || c.IsChild || !c.CanAct || cm.RestAsked(c) || !cm.Knows(c)) continue;
             float rest = cm.RestNow(c);
             if (rest >= 0.25f) continue;
+            if (c.Pose == Pose.Sleeping || c.Job?.Order == null && !ChoresActivity.OnShiftStatic(c, w)) continue; // 이미 쉬는 사람 · 근무 밖에 일 없는 사람은 그냥 둔다
             Schedule.Add(new ScheduleItem("쉼", $"{c.Name} 쉬게 — 기력 {rest * 100:0}%", c.Id, "지친 사람에게 일을 덜 맡긴다", w.Tick));
             if (sched == AuthLevel.Auto) cm.AskRest(c, $"기력 {rest * 100:0}%로 보인다");
             else if (sched == AuthLevel.Propose && a.Asks.Pending("rest:" + c.Id) == null && (a.Asks.Latest("rest:" + c.Id) is not Proposal old || w.Tick - old.Tick > SimTime.TicksPerDay))
@@ -714,9 +716,16 @@ public sealed class ShipPlanner
         var w = _w;
         var a = w.Automation;
         var cm = a.CrewModel;
-        var team = w.Crew.Where(c => !c.Dead && !c.IsChild && c.CanAct && !c.Outside && cm.RestNow(c) >= 0.3f)
-            .OrderByDescending(c => (Life.HasQual(c, Qual.Firefighting) ? 0.5f : 0f) + 0.4f * cm.RestNow(c) + 0.3f * c.Traits.Bravery + 0.2f * c.Traits.Calm - 0.4f * c.Vitals.Injury)
-            .ThenBy(c => c.Id).Take(2).Select(c => c.Id).ToList();
+        // 소화조: 지금 조원이 아직 할 수 있으면 그대로 두고(계획이 이리저리 흔들리지 않게) · 빈자리만 자격 · 기력 · 용기 · 침착으로 채운다
+        bool Fit(CrewMember c) => !c.Dead && !c.IsChild && c.CanAct && !c.Outside && cm.RestNow(c) >= 0.3f && c.Vitals.Injury < 0.4f;
+        var team = Emergency.FireTeam.Where(id => w.Crew.FirstOrDefault(c => c.Id == id) is CrewMember c && Fit(c)).ToList();
+        foreach (var c in w.Crew.Where(c => Fit(c) && !team.Contains(c.Id))
+                     .OrderByDescending(c => (Life.HasQual(c, Qual.Firefighting) ? 0.5f : 0f) + 0.4f * cm.RestNow(c) + 0.3f * c.Traits.Bravery + 0.2f * c.Traits.Calm - 0.4f * c.Vitals.Injury)
+                     .ThenBy(c => c.Id))
+        {
+            if (team.Count >= 2) break;
+            team.Add(c.Id);
+        }
         var shelter = w.Ship.RoomsOf(RoomType.Shelter).FirstOrDefault(r => !r.Leaking && w.Fire.CountIn(r) == 0) ?? w.Ship.RoomsOf(RoomType.Medbay).FirstOrDefault(r => !r.Leaking) ?? w.Ship.RoomsOf(RoomType.Mess).FirstOrDefault();
         string sh = shelter?.Name ?? "가까운 안전한 방";
         if (!team.SequenceEqual(Emergency.FireTeam) || sh != Emergency.Shelter)

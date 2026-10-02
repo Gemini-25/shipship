@@ -55,7 +55,8 @@ public sealed class ComputerAuthority
     private readonly Dictionary<Domain, AuthLevel> _levels = new() { [Domain.Resources] = AuthLevel.Propose, [Domain.Schedule] = AuthLevel.Auto, [Domain.Maintenance] = AuthLevel.Auto };
     private readonly HashSet<string> _admitted = new();
     private long _next;
-    private int _wrongSeen, _mistakeNext = 1;
+    private int _mistakeNext = 1;
+    private long _wrongTick = -1, _sorryAt = -SimTime.TicksPerDay;
     public List<LearnedItem> LearnedList { get; } = new();
     public List<EthicsCase> Ethics { get; } = new();
     public List<Mistake> Mistakes { get; } = new();
@@ -70,6 +71,13 @@ public sealed class ComputerAuthority
     public ComputerAuthority(World w) => _w = w;
 
     public static string DomainName(Domain d) => d switch { Domain.Resources => "자원", Domain.Schedule => "일정", Domain.Maintenance => "정비", _ => "위기" };
+    /// <summary>틀린 판단의 조치 이름 (v16.6 기록의 종류 → 사람 말).</summary>
+    public static string ActName(string kind) => kind switch
+    {
+        "vacuum" => "진공 소화 제안", "inert" => "질식 소화 제안", "Alarm" => "경보", "Damper" => "댐퍼", "Bulkhead" => "격벽", "Valve" => "밸브", "Breaker" => "차단기",
+        "Suppress" => "소화", "Shed" => "부하 차단", "Module" => "모듈", "Zone" => "공기 구역", "Advice" => "조언", "Broadcast" => "방송", "Door" => "문", "Forecast" => "예측", _ => "",
+    };
+
     public static string LevelName(AuthLevel l) => l switch { AuthLevel.Advise => "조언만", AuthLevel.Propose => "제안", _ => "자동 실행" };
 
     /// <summary>회의가 준 권한 (위기 = 방침 "컴퓨터 자동 실행").</summary>
@@ -400,17 +408,25 @@ public sealed class ComputerAuthority
         Humility = MathF.Max(0f, Humility - 0.1f / 24f);
         if (!a.MainOnline) return;
         // v16.6 제안 채점에서 틀린 판단 → 인정 (신뢰는 이미 다쳤다 — 사과만)
-        var wrong = a.Learn.WrongCalls;
-        if (wrong.Count < _wrongSeen) _wrongSeen = wrong.Count;
-        for (int i = _wrongSeen; i < wrong.Count; i++)
+        // (열두 시간에 한 번 · 모아서 — 사과가 잦으면 말이 가벼워진다)
+        var fresh = new List<(long tick, int roomId, string kind, string why)>();
+        long newest = _wrongTick;
+        foreach (var x in a.Learn.WrongCalls)
         {
-            var (tick, roomId, kind, why) = wrong[i];
-            if (w.Tick - tick > SimTime.Hours(6)) continue;
-            Room? room = roomId >= 0 && roomId < w.Ship.Rooms.Count ? w.Ship.Rooms[roomId] : null;
-            Admit($"v16:{tick}:{roomId}:{kind}", Domain.Crisis, $"{(room != null ? room.Name + " " : "")}{(kind is "vacuum" or "inert" ? (kind == "vacuum" ? "진공 소화" : "질식 소화") + " 제안" : "판단")}이 틀렸다", why,
-                "같은 방에서는 사람을 먼저 보내 확인하겠다", w.Crew.Where(c => !c.Dead && room != null && c.Room == room), harm: 0f);
+            if (x.tick > _wrongTick && w.Tick - x.tick <= SimTime.Hours(12)) fresh.Add(x);
+            newest = Math.Max(newest, x.tick);
         }
-        _wrongSeen = wrong.Count;
+        if (fresh.Count > 0 && w.Tick - _sorryAt >= SimTime.Hours(12))
+        {
+            _wrongTick = newest;
+            _sorryAt = w.Tick;
+            var rooms = fresh.Select(x => x.roomId >= 0 && x.roomId < w.Ship.Rooms.Count ? w.Ship.Rooms[x.roomId] : null).Where(r => r != null).Distinct().ToList();
+            var first = fresh[0];
+            string what = fresh.Count == 1 ? $"{(rooms.Count > 0 ? rooms[0]!.Name + " " : "")}{(ActName(first.kind) is string an && an != "" ? an + " " : "")}판단이 틀렸다" : $"최근 판단 {fresh.Count}건이 틀렸다 ({string.Join("·", rooms.Take(3).Select(r => r!.Name))})";
+            Admit($"v16:{first.tick}:{first.roomId}:{first.kind}", Domain.Crisis, what, first.why, "같은 방에서는 사람을 먼저 보내 확인하겠다",
+                w.Crew.Where(c => !c.Dead && c.Room != null && rooms.Contains(c.Room)), harm: 0f);
+        }
+        else if (fresh.Count == 0) _wrongTick = newest;
         // 근거로 권한 안건 (여섯 시간마다)
         if (w.Tick % SimTime.Hours(6) >= SimTime.Hours(1)) return;
         foreach (var d in new[] { Domain.Resources, Domain.Schedule, Domain.Maintenance })
