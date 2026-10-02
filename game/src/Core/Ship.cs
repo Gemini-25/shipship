@@ -225,11 +225,20 @@ public sealed class Ship
     public int CountStored(ItemKind k)
     {
         // v14.2 여기저기서 자주 불린다 — 목록을 만들지 않고 센다 (Containers와 같은 조건)
+        // 통합 성능: 보관함이 있는 가구만 따로 모아 둔다 (가구가 늘거나 보관함이 붙고 떨어질 때만 다시 · 순서는 원래 목록 그대로)
+        if (_storedCount != Furniture.Count || _storedVer != ShipSim.Core.Furniture.StorageVersion)
+        {
+            _stored.Clear();
+            foreach (var f in Furniture) if (f.Storage != null && f.Type != FurnitureType.DroneDock) _stored.Add(f);
+            _storedCount = Furniture.Count; _storedVer = ShipSim.Core.Furniture.StorageVersion;
+        }
         int n = 0;
-        foreach (var f in Furniture)
-            if (f.Storage != null && !f.Room.Detached && !f.Stowed && f.Type != FurnitureType.DroneDock) n += f.Storage.Count(k);
+        foreach (var f in _stored)
+            if (!f.Room.Detached && !f.Stowed) n += f.Storage!.Count(k);
         return n;
     }
+    private readonly List<Furniture> _stored = new();
+    private int _storedCount = -1, _storedVer = -1;
 }
 
 /// <summary>텍스트 설계도 → Ship.</summary>

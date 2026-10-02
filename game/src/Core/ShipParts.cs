@@ -482,7 +482,10 @@ public sealed class Furniture
     public Machine? Machine { get; set; }
 
     /// <summary>물건을 넣어 두는 곳이라면 그 보관함.</summary>
-    public Inventory? Storage { get; set; }
+    public Inventory? Storage { get => _storage; set { _storage = value; StorageVersion++; } }
+    private Inventory? _storage;
+    /// <summary>통합 성능: 보관함이 붙거나 떨어진 번 (모든 배 공용 — 보관함 목록을 다시 모을지 본다).</summary>
+    public static int StorageVersion;
 
     public int MinX { get; set; } = int.MaxValue;
     public int MinY { get; set; } = int.MaxValue;
