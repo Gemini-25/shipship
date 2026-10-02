@@ -150,13 +150,13 @@ public static class Player
         switch (cmd.Kind)
         {
             case "meteor":
-                Meteor(w, new Cell(int.Parse(a[0], Inv), int.Parse(a[1], Inv)), float.Parse(a[2], Inv));
+                if (w.Ship.Grid.InBounds(new Cell(int.Parse(a[0], Inv), int.Parse(a[1], Inv)))) Meteor(w, new Cell(int.Parse(a[0], Inv), int.Parse(a[1], Inv)), float.Parse(a[2], Inv)); // v16.10 증축 전이면 그 칸은 아직 없다
                 break;
             case "fire":
-                Fire(w, new Cell(int.Parse(a[0], Inv), int.Parse(a[1], Inv)));
+                if (w.Ship.Grid.InBounds(new Cell(int.Parse(a[0], Inv), int.Parse(a[1], Inv)))) Fire(w, new Cell(int.Parse(a[0], Inv), int.Parse(a[1], Inv))); // v16.10 증축 전이면 그 칸은 아직 없다
                 break;
             case "pipe":
-                PipeBurst(w, new Cell(int.Parse(a[0], Inv), int.Parse(a[1], Inv)), float.Parse(a[2], Inv));
+                if (w.Ship.Grid.InBounds(new Cell(int.Parse(a[0], Inv), int.Parse(a[1], Inv)))) PipeBurst(w, new Cell(int.Parse(a[0], Inv), int.Parse(a[1], Inv)), float.Parse(a[2], Inv)); // v16.10 증축 전이면 그 칸은 아직 없다
                 break;
             case "break":
             {
@@ -199,7 +199,7 @@ public static class Player
 public static class SaveGame
 {
     /// <summary>v8: 설계도(드론 거치대)와 구조가 바뀌어 v7 저장(1)은 같은 역사를 되짚을 수 없다.</summary>
-    public const string Header = "shipsim-save 15"; // v16.0
+    public const string Header = "shipsim-save 16"; // v16.10 증축 여백 · 2차 시스템
 
     public static string Write(World w)
     {
@@ -483,7 +483,7 @@ public sealed class ReplayRunner
         var a = c.Arg.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var inv = CultureInfo.InvariantCulture;
         bool Cell2() => a.Length >= 2 && int.TryParse(a[0], NumberStyles.Integer, inv, out var x) && int.TryParse(a[1], NumberStyles.Integer, inv, out var y)
-                        && w.Ship.Grid.InBounds(new Cell(x, y));
+                        && x >= 0 && x < w.Ship.Grid.Width && y >= 0 && y < w.Ship.Grid.Height + 64; // v16.10 증축으로 아래쪽 줄이 늘 수 있다 (적용할 때 다시 본다)
         bool ok = c.Kind switch
         {
             "meteor" or "pipe" => Cell2() && a.Length >= 3 && float.TryParse(a[2], NumberStyles.Float, inv, out _),
