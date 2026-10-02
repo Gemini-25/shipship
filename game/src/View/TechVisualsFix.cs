@@ -706,6 +706,10 @@ public partial class ShipView
                     var o = r.Position + new Vector2(FA.Hash(p.K, i, 440), FA.Hash(p.K, i, 441)) * r.Size;
                     FA.Dot(ci, o, 1.4f + FA.Hash(p.K, i, 442), new Color(0.82f, 0.86f, 0.92f, 0.22f));
                 }
+                // 나노 군체 표: 모서리의 작은 육각 (가까이서 보인다)
+                var hc = new Vector2(r.End.X - 3.5f, r.Position.Y + 3.5f);
+                ci.DrawArc(hc, 2f, 0f, Mathf.Tau, 6, col.WithAlpha(0.6f), 0.6f, true);
+                FA.Dot(ci, hc, 0.6f, new Color(0.9f, 0.93f, 1f, 0.8f));
                 break;
             }
             case "panel.nodes":

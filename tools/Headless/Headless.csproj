@@ -10,5 +10,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../game/src/Core/**/*.cs" Link="Core/%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="../../game/src/View/TechLookTable.cs" Link="View/TechLookTable.cs" /><!-- v16.5b 그림 표 (Godot 없이) -->
   </ItemGroup>
 </Project>

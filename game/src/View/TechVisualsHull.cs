@@ -84,6 +84,9 @@ public partial class ShipView
                     for (int i = 0; i < 9; i++) pts[i] = new Vector2(-16f + i * 4f, 10f + k * 4f + Mathf.Sin(i * 1.4f + k) * 1.2f);
                     ci.DrawPolyline(pts, new Color("#d8e0ea").WithAlpha(0.55f - k * 0.1f), 1f, true);
                 }
+                // 판을 잡은 집게 둘 (형상이 돌아오는 기준점)
+                ci.DrawRect(RR(-15.5f, 8f, -13.5f, 20f), FA.Steel4);
+                ci.DrawRect(RR(13.5f, 8f, 15.5f, 20f), FA.Steel4);
                 break;
             }
             case "hull.phase":
@@ -94,6 +97,8 @@ public partial class ShipView
                     float a = 0.15f + 0.15f * Mathf.Sin(x * 0.6f + h.K);
                     ci.DrawLine(new Vector2(x, 6f), new Vector2(x, 22f), col.WithAlpha(a), 0.8f);
                 }
+                FA.Dot(ci, new Vector2(0f, 4.5f), 1.2f, col.Lightened(0.3f).WithAlpha(0.6f)); // 위상 발진 마디
+                FA.Dot(ci, new Vector2(0f, 23.5f), 1.2f, col.Lightened(0.3f).WithAlpha(0.6f));
                 break;
             }
             case "hull.radlayer":
@@ -310,6 +315,12 @@ public partial class ShipView
                     float a0 = i * Mathf.Tau / 48f, a1 = (i + 1) * Mathf.Tau / 48f;
                     ci.DrawLine(new Vector2(mid + Mathf.Cos(a0) * rx, cy + Mathf.Sin(a0) * ry), new Vector2(mid + Mathf.Cos(a1) * rx, cy + Mathf.Sin(a1) * ry), col.WithAlpha(0.3f), 1f, true);
                 }
+                // 거품을 붙드는 왜곡 발진기 넷 (외판 위 · 아래 · 앞 · 뒤)
+                foreach (var o in new[] { HullAt(mid, -1), HullAt(mid, 1), _noseTip, new Vector2(l - 6f, cy) })
+                {
+                    ci.DrawCircle(o, 3.2f, FA.Steel2, true, -1f, true);
+                    ci.DrawArc(o, 3.2f, 0f, Mathf.Tau, 12, col.WithAlpha(0.8f), 1f, true);
+                }
                 break;
             }
             case "exterior.forcefield":
@@ -322,6 +333,7 @@ public partial class ShipView
                     var hex = new Vector2[7];
                     for (int k = 0; k < 7; k++) hex[k] = o + Vector2.FromAngle(k * Mathf.Tau / 6f) * 6f;
                     ci.DrawPolyline(hex, col.WithAlpha(0.18f), 0.7f, true);
+                    if (h.K % 6 == 0) FA.Dot(ci, h.L(0f, 25f), 1.6f, col.WithAlpha(0.7f)); // 역장 투사기
                 }
                 break;
             }
@@ -335,6 +347,8 @@ public partial class ShipView
                     ci.DrawArc(Vector2.Zero, 26f + k * 6f, 0f, Mathf.Tau, 32, col.WithAlpha(0.35f - k * 0.08f), 2.4f, true);
                     ci.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
                 }
+                FA.Dot(ci, _noseTip + new Vector2(54f, 0f), 1.4f, Colors.White.WithAlpha(0.5f)); // 초점
+                ci.DrawLine(_noseTip + new Vector2(8f, 0f), _noseTip + new Vector2(30f, 0f), col.WithAlpha(0.25f), 0.8f); // 렌즈를 붙든 장 축
                 break;
             }
             case "exterior.swarm":
@@ -345,6 +359,8 @@ public partial class ShipView
                     if (_hullSegs.Count == 0) break;
                     var h = _hullSegs[(int)(FA.Hash(g, 3, 470) * _hullSegs.Count) % _hullSegs.Count];
                     for (int k = 0; k < 4; k++) FA.Dot(ci, h.L((k - 1.5f) * 3f, 26f + (k % 2) * 2f), 1.1f, new Color("#f2994a"));
+                    var hatch = h.L(-8f, 22f);
+                    ci.DrawRect(new Rect2(hatch - new Vector2(2f, 2f), new Vector2(4f, 4f)), FA.Steel3); // 떼가 드나드는 작은 문
                 }
                 break;
             }

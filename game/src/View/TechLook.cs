@@ -19,7 +19,15 @@ public static class TechLook
     /// <summary>다음 단계까지 0~1.</summary>
     public static float Toward { get; private set; }
 
-    internal static void Set(LookSet s, float toward) { Now = s; Toward = toward; }
+    /// <summary>세트가 바뀔 때마다 하나씩 는다 (텍스처 생성기가 다시 구울 때를 안다).</summary>
+    public static int Version { get; private set; }
+
+    internal static void Set(LookSet s, float toward)
+    {
+        if (s != Now) Version++;
+        Now = s;
+        Toward = toward;
+    }
 
     public static Color C(uint rgba) => new(rgba);
     public static Color Wall => C(Now.Wall);
@@ -77,7 +85,7 @@ public partial class ShipView
     }
 
     private DrawLayer? _techStatic, _techGlow;
-    private int _techSig = int.MinValue, _techGeoVersion = -1;
+    private int _techSig = int.MinValue, _techGeoVersion = -1, _techFrame, _techRemodelSig;
     private readonly List<Face> _faces = new();
     private readonly List<HullSeg> _hullSegs = new();
     private readonly Dictionary<int, List<Face>> _roomFaces = new();
@@ -102,11 +110,17 @@ public partial class ShipView
         float toward = TechLookTable.Toward(w);
         int sig = (int)lv * 7919 + w.Eras.Known.Count * 131 + w.Structure.Version * 31 + (int)(toward * 4f);
         foreach (var f in TechWeb.Forks) sig = unchecked(sig * 17 + (w.TechWeb?.Side(f.Id) ?? -1) + 2);
-        foreach (var r in w.Ship.LiveRooms)
+        if (_techFrame++ % 30 == 0) // 개조 칸 새것 단계는 천천히 바뀐다 — 30프레임마다만 센다
         {
-            float fr = TechLookTable.Freshness(w.Tick, TechLookTable.RemodelSince(w, r));
-            if (fr > 0f) sig = unchecked(sig * 31 + r.Id * 13 + (int)(fr * 8f));
+            int rs = 0;
+            foreach (var r in w.Ship.LiveRooms)
+            {
+                float fr = TechLookTable.Freshness(w.Tick, TechLookTable.RemodelSince(w, r));
+                if (fr > 0f) rs = unchecked(rs * 31 + r.Id * 13 + (int)(fr * 8f) + 1);
+            }
+            _techRemodelSig = rs;
         }
+        sig = unchecked(sig * 31 + _techRemodelSig);
         if (sig != _techSig)
         {
             bool levelChanged = TechLook.Now.Level != lv;

@@ -846,6 +846,7 @@ public partial class ShipView
                 // 동선 화살표: 두 줄 (오른쪽으로 다닌다) — 통로 긴 쪽 벽 하나에서만
                 if (!CorridorAlong(p.Face)) break;
                 FaceXf(ci, p.Face);
+                for (float x = -15f; x < 15f; x += 6f) ci.DrawLine(new Vector2(x, 16f), new Vector2(x + 3f, 16f), col.WithAlpha(0.25f), 0.8f); // 두 줄 사이 점선
                 for (int lane = 0; lane < 2; lane++)
                 {
                     float y = lane == 0 ? 9f : 23f;

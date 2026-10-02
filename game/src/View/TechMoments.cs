@@ -103,7 +103,8 @@ public partial class ShipView
         {
             float ph = TechLookTable.MomentPhase(now, tick);
             if (ph < 0f || !_visRects.TryGetValue(key, out var rects)) continue;
-            int id = key.GetHashCode() & 0xFFFF;
+            int id = 0;
+            foreach (char ch in key) id = unchecked(id * 31 + ch) & 0xFFFF; // 늘 같은 번호 (string.GetHashCode 는 실행마다 다르다)
             for (int i = 0; i < rects.Count && i < 12; i++)
                 if (_fixView.Intersects(rects[i])) PaintMoment(ci, rects[i], MomentKind.Learned, ph, TechLook.Field(key), id + i, _time);
         }

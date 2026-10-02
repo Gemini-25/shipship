@@ -99,7 +99,7 @@ public static class TechLookTable
 
     public static LookLevel LevelOf(World w) => LevelFor(Score(w));
 
-    /// <summary>다음 단계까지 0~1 (넘어가는 길목을 부드럽게 — 새로 바꾼 칸부터 바뀐 판이 보인다).</summary>
+    /// <summary>다음 단계까지 0~1 (텍스처 생성기 · 화면이 두 세트를 섞어 쓸 때).</summary>
     public static float Toward(World w)
     {
         int s = Score(w);
