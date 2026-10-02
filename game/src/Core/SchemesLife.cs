@@ -292,8 +292,9 @@ public sealed partial class SchemeSystem
     private void Wager(List<CrewMember> came, string key, int scheme)
     {
         if (came.Count < 2 || key is not ("gambling_den" or "betting_pool" or "chocolate_money")) return;
-        var loser = came.OrderByDescending(c => (c.Habits.Contains(Habit.Hasty) || c.Habits.Contains(Habit.Daredevil) ? 0.3f : 0f) + c.Needs.Stress * 0.5f + R.Float()).First();
-        var winner = came.Where(c => c != loser).ToList()[R.Range(0, came.Count - 1)];
+        // 판에도 실력이 있다: 침착한 사람이 자주 따고, 조급하고 지친 사람이 자주 잃는다
+        var loser = came.OrderByDescending(c => (c.Habits.Contains(Habit.Hasty) || c.Habits.Contains(Habit.Daredevil) ? 0.3f : 0f) + c.Needs.Stress * 0.5f - 0.3f * c.Traits.Calm + 0.4f * R.Float()).First();
+        var winner = came.Where(c => c != loser).OrderByDescending(c => c.Traits.Calm + 0.3f * DriveOf(c, Drive.Greed) + 0.4f * R.Float()).First();
         int amt = key == "gambling_den" ? R.Range(2, 5) : 1;
         Owe(loser, winner, amt, scheme, key == "gambling_den" ? "판에서 잃은 몫" : "내기에서 진 몫");
     }
@@ -724,7 +725,8 @@ public sealed partial class SchemeSystem
             if (!s.Hiding || LedgerItem(s.Spec) is not ItemKind k) continue;
             if (s.Spec.Key == "contraband") { if (s.Skimmed == 0) s.Skimmed = 3; continue; }
             int n = s.Spec.Key == "ration_skim" ? 2 : 1;
-            for (int i = 0; i < n; i++) if (Life.Take(w, k, 1)) s.Skimmed++;
+            for (int i = 0; i < n; i++)
+                if (Life.Take(w, k, 1) || ItemKinds.IsFood(k) && (Life.Take(w, ItemKind.Meal, 1) || Life.Take(w, ItemKind.Produce, 1))) s.Skimmed++; // 비상식량이 없으면 다른 먹을 것
             if (P(s.Lead) is CrewMember lead && ItemKinds.IsFood(k)) lead.Needs.Food = MathF.Min(1f, lead.Needs.Food + 0.1f);
         }
         // 어젯밤 방송을 들은 사람이 아침에 메신저에 쓴다 → 읽은 사람도 안다 (누가 하는지는 모른다)

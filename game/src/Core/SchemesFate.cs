@@ -320,7 +320,7 @@ public sealed partial class SchemeSystem
         string legit = LegitName(spec);
         Stats.Legit++;
         var yes = w.Motions.Get(motion) is Motion m ? m.Final.Where(kv => kv.Value > 0f).Select(kv => kv.Key) : Enumerable.Empty<int>();
-        AddPractice(s, legit, spec.Key is "pirate_radio" ? 1 : 4, spec.Key is "coffee_roast" ? 7.5f : 20f, s.Crew.Concat(yes), $"{Ko.IGa(spec.Name)} 들킨 뒤 회의에서 정했다");
+        AddPractice(s, legit, spec.Key is "pirate_radio" ? 1 : spec.Key is "gambling_den" or "betting_pool" ? 2 : 4, spec.Key is "coffee_roast" ? 7.5f : 20f, s.Crew.Concat(yes), $"{Ko.IGa(spec.Name)} 들킨 뒤 회의에서 정했다");
         AddRule(s, true, $"{legit} — 정해진 날에는 괜찮다", motion);
         Mark(s, TraceState.Official, legit);
         End(s, SchemeStage.Done, $"{Ko.EuRo(legit)} 정했다");

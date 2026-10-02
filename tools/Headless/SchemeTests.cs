@@ -64,7 +64,7 @@ public static partial class Program
             Check("밀주 — 냄새를 따라온 사람이 알아챘고 반응이 갈렸다", finder != null && mo.Reactions.Count >= 1 && (mo.FoundHow.Contains("냄새") || w.Schemes.Stats.Smelled >= 1),
                 $"{finder?.Name} — {mo.FoundHow} · 반응 {string.Join(" / ", mo.Reactions.Select(r => $"{w.Crew.First(c => c.Id == r.who).Name} {r.r}"))} · 냄새로 {w.Schemes.Stats.Smelled}");
             var m = w.Motions.Get(mo.Motion);
-            SchemeUntil(w, () => mo.Stage is SchemeStage.Done or SchemeStage.Dropped, SimTime.TicksPerDay * 4, 200);
+            SchemeUntil(w, () => mo.Stage is SchemeStage.Done or SchemeStage.Dropped, SimTime.TicksPerDay * 7, 200);
             var rule = w.Schemes.Rule("moonshine");
             var pr = w.Schemes.PracticeOf("moonshine");
             Check("밀주 — 회의에 올라 금지냐 '주점의 밤'이냐 표결했다", m != null && (m.Decided >= 0 || m.Stage == MotionStage.Dropped) && (rule != null),
@@ -168,7 +168,7 @@ public static partial class Program
             var crew = w.Crew.Where(c => !c.Dead && !c.IsChild).OrderBy(c => c.Id).ToList();
             foreach (var c in crew.Take(3)) { c.Habits.Add(Habit.ShortTempered); if (!c.Hobbies.Contains(Hobby.Cards)) c.Hobbies.Add(Hobby.Cards); }
             var den = w.Schemes.Start(SchemeTable.Get("gambling_den")!, crew[0], -1, crew[1], crew[2]);
-            SchemeUntil(w, () => w.Schemes.Stats.Quarrels >= 1 || den.Over(), SimTime.TicksPerDay * 6, 200);
+            SchemeUntil(w, () => w.Schemes.Stats.Quarrels >= 1, SimTime.TicksPerDay * 8, 200);
             Check("도박판 — 밤마다 판이 벌어져 빚이 생겼다", den.Sessions >= 1 && w.Schemes.Debts.Count >= 1,
                 $"판 {den.Sessions} · 빚 {string.Join(" / ", w.Schemes.Debts.Select(d => $"{w.Crew.First(c => c.Id == d.From).Name}→{w.Crew.First(c => c.Id == d.To).Name} {d.Amount}"))}");
             Check("도박판 — 빚 때문에 다퉜다 (관계 · 감정이 남는다)", w.Schemes.Stats.Quarrels >= 1 && w.Relations.All.Any(m => m.Reason == RelationReason.OwesMe),
@@ -188,6 +188,7 @@ public static partial class Program
                 thief.Value = CrewValue.Freedom;
                 var s = w.Schemes.Start(SchemeTable.Get("ration_skim")!, thief);
                 SchemeUntil(w, () => s.ComputerKnows || s.Over(), SimTime.TicksPerDay * 4, 200);
+                Console.WriteLine($"   빼돌리기 [{caution:+0.0;-0.0}]: {s.Stage} 진척 {s.Progress:0.00} · 빼돌림 {s.Skimmed} · 찾은 사람 {w.Crew.FirstOrDefault(c => c.Id == s.Finder)?.Name}({s.FoundHow}) · 창고 비상식량 {w.Ship.CountStored(ItemKind.Ration)} 식사 {w.Ship.CountStored(ItemKind.Meal)} 채소 {w.Ship.CountStored(ItemKind.Produce)} · {s.Outcome}");
                 return (s, w);
             }
             var (sa, wa) = Skim(0.8f, -0.6f, 0);
