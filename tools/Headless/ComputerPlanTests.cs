@@ -95,7 +95,7 @@ public static partial class Program
             var m = pump.Machine!;
             m.Wear = 0.7f; m.Condition = 0.2f; // 실제 원인: 펌프가 닳았다
             ProbeCase? pc = null;
-            for (int i = 0; i < SimTime.Minutes(40); i++) { w.Step(); pc ??= a.Probe.Cases.FirstOrDefault(c => c.Furn == pump.Id); if (pc != null && pc.State != "확인 중") break; }
+            for (int i = 0; i < SimTime.Minutes(90); i++) { w.Step(); pc ??= a.Probe.Cases.FirstOrDefault(c => c.Furn == pump.Id); if (pc != null && pc.State != "확인 중") break; }
             Check("유량이 줄자 원인 셋을 함께 의심한다", pc != null && pc.H.Count == 3, pc == null ? $"사례 없음 (읽은 유량 {a.Probe.Reading(pump) * 100:0}%)" : string.Join(" · ", pc.H.Select(h => h.Name)));
             if (pc != null)
             {
@@ -126,7 +126,10 @@ public static partial class Program
             var door = room.Doors.First(d => !d.IsExternal);
             door.Bent = 0.9f; // 문틀이 휘어 끝까지 안 닫힌다
             door.JammedOpen = true;
-            Scenarios.Apply(w, "meteor", out _);
+            // 수경재배실 외벽에 구멍 (공기가 샌다 → 격벽 잠금)
+            var hole = w.Ship.Walls.First(kv => kv.Value.IsHull && Hull.InsideRoom(w.Ship, kv.Key) == room).Value;
+            hole.Integrity = 0.15f;
+            hole.Breach = Hull.BreachOf(hole);
             FixPlan? dp = null;
             for (int i = 0; i < SimTime.Minutes(20) && dp == null; i++) { w.Step(); dp = a.Recovery.Plans.FirstOrDefault(p => p.Problem == "문"); }
             if (dp != null && PlanDebug) PrintPlan(w, dp);

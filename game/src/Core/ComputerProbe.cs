@@ -178,7 +178,8 @@ public sealed class ComputerProbe
     {
         var a = _w.Automation;
         float acc = 0.75f + 0.25f * Math.Clamp((a.Core.Accuracy - 0.5f) / 0.47f, 0f, 1f);
-        var r = key == "backup" ? _w.Power.Reactor : f.Machine;
+        if (key != "backup") return acc; // 직접 돌려 보는 확인은 지금 값이다
+        var r = _w.Power.Reactor;
         float age = r == null ? 99f : (_w.Tick - r.LastReading) / (float)SimTime.Minutes(1);
         float stale = age > 15f ? 0.5f : age > 5f ? 0.8f : 1f;
         if (stale < 1f) StaleReads++;
