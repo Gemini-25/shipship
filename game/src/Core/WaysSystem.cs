@@ -1384,6 +1384,13 @@ public sealed partial class WaysSystem
     {
         var w = _w;
         Marks.RemoveAll(m => m.Until >= 0 && w.Tick > m.Until);
+        // 휜 문틀을 다른 손(선체 정비)이 먼저 폈으면 나중 일을 닫고 그림도 걷는다 — 같은 일을 두 번 하지 않게
+        foreach (var f in Follows)
+        {
+            if (f.Done >= 0 || f.Kind != 1 || DoorById(f.DoorId) is not Door fd || fd.JammedOpen || fd.Bent >= 0.3f) continue;
+            f.Done = w.Tick;
+            Marks.RemoveAll(m => m.DoorId == f.DoorId && m.Look is WayLook.PriedDoor or WayLook.CutDoor);
+        }
         // 너무 오래 걸린 갈래는 놓는다 (못 했다)
         foreach (var t in Tries)
         {

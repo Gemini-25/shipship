@@ -194,7 +194,12 @@ public static partial class Program
             if (v.Room != room && w.Ways.Tries.Any(t => t.CaseId == ck?.Id && t.WayId == "trap.pry" && t.Ok))
             {
                 pried = true;
-                Check("쇠지레로 벌린 문은 문틀이 휘어 남고 나중에 펴는 일이 생긴다", room.Doors.Any(d => d.Bent >= 0.5f) && w.Ways.Follows.Any(f => f.Kind == 1) && w.Ways.Marks.Any(m => m.Look == WayLook.PriedDoor), "");
+                var ids = room.Doors.Select(d => d.Id).ToList();
+                var fo = w.Ways.Follows.FirstOrDefault(f => f.Kind == 1 && ids.Contains(f.DoorId));
+                bool stillBent = room.Doors.Any(d => d.Bent >= 0.5f) && fo != null && fo.Done < 0 && w.Ways.Marks.Any(m => m.Look == WayLook.PriedDoor);
+                bool fixedElse = fo != null && fo.Done >= 0 && room.Doors.All(d => d.Bent < 0.3f) && !w.Ways.Marks.Any(m => m.Look == WayLook.PriedDoor && ids.Contains(m.DoorId));
+                Check("쇠지레로 벌린 문은 문틀이 휘어 남고 나중에 펴는 일이 생긴다 (먼저 편 손이 있으면 그 일은 닫힌다)", stillBent || fixedElse,
+                    $"휨 {string.Join(",", room.Doors.Select(d => d.Bent.ToString("0.00")))} · 뒷일 {string.Join(",", w.Ways.Follows.Where(f => f.Kind == 1).Select(f => f.Text + (f.Done >= 0 ? "(끝)" : "")))} · 그림 {w.Ways.Marks.Count(m => m.Look == WayLook.PriedDoor)}");
             }
         }
         foreach (var l in res) Console.WriteLine("     " + l);
