@@ -675,14 +675,9 @@ public sealed class ShipPlanner
                 a.Asks.Propose("rest:" + c.Id, "plan", c.Room, $"{c.Name} 쉬게 하기", $"기력 {rest * 100:0}%로 보인다 (컴퓨터 짐작)", "급하지 않은 일은 남에게", 30f, null, (world, pp) => world.Automation.CrewModel.AskRest(cc, "함장이 쉬게 했다"));
             }
         }
-        // 원정대로 뽑힌 사람: 출발 전에 쉬어 두라고 (원정 ↔ 일정)
-        if (w.Expedition.Pending is ExpProposal ep && sched != AuthLevel.Advise)
-            foreach (var id in ep.Team)
-                if (w.Crew.FirstOrDefault(c => c.Id == id) is CrewMember m && m.CanAct && !cm.RestAsked(m) && cm.Knows(m) && cm.RestNow(m) < 0.6f)
-                {
-                    cm.AskRest(m, $"원정대({ep.Site.Name}) — 출발 전에 쉬어 두라", 8f);
-                    Schedule.Add(new ScheduleItem("쉼", $"{m.Name} 원정 전 휴식", m.Id, ep.Site.Name, w.Tick));
-                }
+        // 원정대로 뽑힌 사람: 부탁하지 않고(Best가 뺀다) · 모이는 동안엔 남은 부탁 · 쉼 부탁을 거둔다 (원정 ↔ 일정)
+        if (w.Expedition.Current is Trip tg && tg.Phase == TripPhase.Gathering) foreach (var mm in tg.Members) cm.Forget(mm.Id);
+        if (w.Expedition.Pending is ExpProposal ep) foreach (var id in ep.Team) Schedule.Add(new ScheduleItem("원정", $"{w.Crew.FirstOrDefault(c => c.Id == id)?.Name} 원정대 — 다른 일은 부탁하지 않는다", id, ep.Site.Name, w.Tick));
         // 당번표: 오늘 당번 중 지칠 사람을 바꾼다
         if (sched != AuthLevel.Advise && a.Active(ComputerModule.Roster))
         {
