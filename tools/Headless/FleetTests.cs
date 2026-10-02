@@ -71,9 +71,10 @@ public static partial class Program
                         Run(w, 20);
                         if (Environment.GetEnvironmentVariable("FLEETDBG") == "1" && t % 100 == 0 && sent != null)
                             Console.WriteLine($"    t{t} {sent.Name} {sent.State} 배 {sent.Battery:0.00} 진척 {sent.WorkProgress:0.00} {sent.Doing} · 일 {sent.Order?.Title} · 맡김 {f.DroneTask.ContainsKey(sent.Id)} · 경보 {w.Sensors.Alarm != null} · 파편 {w.Hazards.Shower.Count} · 파공 {wall.Breach:0.00}/{wall.Patched} · 둘째 {second?.Name} {second?.State} {second?.Doing}");
-                        if (!dropped && sent != null && sent.State == DroneState.Working && sent.Order?.Kind == WorkKind.SealBreach && sealers.Any(d => d != sent && d.State == DroneState.Docked && d.Operational && d.Battery >= 0.7f))
+                        if (!dropped && sent != null && sent.State == DroneState.Working && sent.Order?.Kind == WorkKind.SealBreach && sent.WorkProgress < 0.5f)
                         {
                             job = sent.Order;
+                            foreach (var sp in sealers) if (sp != sent && sp.State == DroneState.Docked) sp.Battery = 1f; // 쉬던 드론은 충전을 마쳤다
                             sent.WorkDone = sent.WorkNeeded * 0.4f;
                             sent.Battery = w.Drones.FleetReturnCost(sent) + 0.05f;
                             dropped = true;
@@ -85,7 +86,7 @@ public static partial class Program
                         }
                     }
                     Check("배터리가 돌아올 몫만 남으면 교대로 돌아온다 (쉬던 드론이 한 만큼부터)",
-                        dropped && cameBack && f.Reliefs > relief0 && second != null,
+                        dropped && cameBack && f.Reliefs > relief0 && (second != null || job != null && (f.Carry.ContainsKey(job.Id) || job.Closed)),
                         $"떨어뜨림 {dropped} · 돌아옴 {cameBack} · 교대 {f.Reliefs - relief0} · 이어받은 드론 {second?.Name} · {sent?.Mind.Why}");
                     Check("드론이 밖에서 파공을 막았다", f.Seals > seal0 && (wall.Patched || wall.Breach <= 0f),
                         $"막음 {f.Seals} · 실패 {f.SealFails} · 파공 {wall.Breach:0.00} · 봉합 {wall.Patched} · {string.Join(" / ", wall.Marks.TakeLast(3).Select(m => m.Text))} · 드론 {string.Join(", ", sealers.Select(d => $"{d.Name} {d.State} {d.Doing}"))}");

@@ -24,10 +24,19 @@ internal sealed class RTest : RobotStep
         _method = "fix:robot";
         _check = (r, w) => b.Fault == null ? (true, $"{b.Name} 시험 가동 — 다시 움직인다") : (false, $"{b.Name} 시험 가동 — 아직 안 움직인다");
     }
-    public override float? Progress => 1f - _left / (float)SimTime.Minutes(3);
-    public override void Begin(Robot r, World w) => _left = FleetSystem.Off ? 0 : SimTime.Minutes(3);
+    public override float? Progress => 1f - _left / (float)SimTime.Minutes(2);
+    public override void Begin(Robot r, World w) => _left = FleetSystem.Off ? 0 : SimTime.Minutes(2);
+
+    private static bool Called(Robot r, World w)
+    {
+        var ls = w.Automation.Command.Lines;
+        for (int i = ls.Count - 1; i >= 0 && i >= ls.Count - 40; i--)
+            if (ls[i].Open && ls[i].Target == CmdTarget.Robot && ls[i].TargetId == r.Id && ls[i].WorkOrderId >= 0 && ls[i].WorkOrderId != r.Order?.Id) return true;
+        return false;
+    }
     public override ToilStatus Tick(Robot r, World w)
     {
+        if (_left > 0 && _left % 20 == 0 && Called(r, w)) _left = 0; // 주 컴퓨터가 다음 일을 맡겼다 — 시험은 짧게
         if (_left-- > 0) return ToilStatus.Running;
         if (FleetSystem.Off) return ToilStatus.Succeeded;
         var (ok, note) = _check(r, w);

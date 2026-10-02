@@ -517,7 +517,7 @@ public sealed partial class DroneSystem
             {
                 var sh = DroneShelter(d, inc.Entry.Center);
                 if (d.Towing != null) ReleaseTow(d, "운석 경보 — 잡아 세워 두고 그늘로");
-                if (d.Order != null) { d.Order.Drone = null; d.Order = null; }
+                if (d.Order != null) { if (!_world.Fleet.DroneTask.ContainsKey(d.Id)) d.Order.Drone = null; d.Order = null; } // v16.20b 맡은 파공은 그늘에 숨어 있는 동안에도 이 드론 몫
                 d.Hurt.Sheltering = true;
                 d.Hurt.ShelterAt = sh;
                 d.Hurt.RecallRank = 0;

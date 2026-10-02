@@ -210,6 +210,11 @@ public sealed class FleetSystem
             return false;
         }
         if (r.Battery >= need || o.Urgency >= 1.1f && r.Battery >= need * 0.7f) return true;
+        if (need > 0.9f && r.Battery >= 0.9f)
+        {
+            r.Mind.Power = $"이 일에 {need * 100:0}% — 한 번 충전으로는 못 끝낸다 · 하다가 교대";
+            return true; // 긴 일: 가득 채웠으면 나가서 하다가 돌아갈 몫이 남으면 교대한다
+        }
         Waits++;
         r.Mind.Say($"{o.Title} — 다녀오는 데 {need * 100:0}%가 드는데 {r.Battery * 100:0}%뿐이라 더 채우고 나간다", _w.Tick);
         if (r.AtDock) r.Doing = $"충전 {r.Battery * 100:0}% — {o.Title}에 {need * 100:0}% 필요";
@@ -391,13 +396,15 @@ public sealed class FleetSystem
             w.Automation.Book.Add(ActKind.Advice, room, $"{room.Name} 불 {cells}칸 · 나갈 수 있는 소방 로봇이 없다", "거품이 비었거나 멈췄거나 다른 불에 가 있다", "사람이 소화기로", "", $"fleet:nofire:{room.Id}", SimTime.Minutes(20), 10f);
         if (best == null) return;
         float smoke = room.Air.CO > 0.05f ? 1.5f : 1f;
+        int inside = w.Automation.Belief.PeopleIn(room) ?? 0; // 컴퓨터가 안에 있다고 믿는 사람 (쓰러졌을 수도) — 그러면 사람을 문 앞에 세우지 않는다
         float crewRisk = MathF.Min(1.6f, 0.25f + 0.08f * cells) * smoke;
         float trust = Rate("fire:robot");
         var opts = new List<ForeseeOption>
         {
             new() { Key = "crew", Name = "사람이 소화기로", People = crewRisk, Ship = 0.01f, Minutes = crewEta, Note = $"{crewEta:0.#}분 뒤 · 불 {cells}칸" },
             new() { Key = "robot", Name = $"{best.Name} 먼저 — 사람은 문 앞에서", People = 0.03f, Ship = 0.015f * MathF.Max(0f, bestEta - crewEta) * (1.3f - 0.6f * trust) + (cells > 10 ? 0.25f : 0f),
-                Minutes = bestEta, Note = $"{bestEta:0.#}분 뒤 · 거품 {best.Foam * 100:0}%", Allowed = cells <= 14, Blocked = "로봇 한 대로 잡기엔 너무 크다" },
+                Minutes = bestEta, Note = $"{bestEta:0.#}분 뒤 · 거품 {best.Foam * 100:0}%", Allowed = cells <= 14 && inside == 0,
+                Blocked = inside > 0 ? $"안에 {inside}명이 있다고 본다 — 사람도 같이 들어가 데리고 나와야 한다" : "로봇 한 대로 잡기엔 너무 크다" },
             new() { Key = "both", Name = "로봇과 사람이 함께", People = crewRisk * 0.55f, Ship = 0.01f, Minutes = MathF.Min(bestEta, crewEta), Note = "먼저 닿는 쪽부터" },
         };
         var dec = w.Automation.Foresee.Fleet("불", room, $"{room.Name} 불 {cells}칸 — 누가 먼저 들어가나", opts);
