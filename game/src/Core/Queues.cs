@@ -218,7 +218,7 @@ public sealed class QueueSystem
         bool force = ForceCut == c.Id;
         if (q.Line.Count < 2 && !(force && q.Line.Count >= 1)) return -1;
         float u = 0f;
-        if (q.Kind == QueueKind.Meal && c.Needs.Hunger > 0.85f) u += 0.3f;
+        if (q.Kind == QueueKind.Meal) u += c.Needs.Hunger > 0.85f ? 0.3f : c.Needs.Hunger > 0.7f ? 0.12f : 0f;
         if (c.Vitals.Injury > 0.3f || c.Fx.Worst > 0.4f) u += 0.2f;
         if (ShiftSoon(c, w)) u += 0.2f;
         if (c.IsChild) u += 0.2f;
@@ -229,7 +229,7 @@ public sealed class QueueSystem
         int friend = -1;
         for (int i = 1; i < q.Line.Count - 1; i++)
             if (CrewById(q.Line[i]) is CrewMember o && c.AffinityTo(o) > 0.35f) { friend = i; break; }
-        float chance = Math.Clamp(u + p - 0.25f + (friend >= 0 ? 0.15f : 0f), 0f, 0.75f);
+        float chance = Math.Clamp(u + p - 0.12f + (friend >= 0 ? 0.15f : 0f), 0f, 0.75f);
         if (!force && (chance <= 0f || !R.Chance(chance))) return -1;
         if (force) ForceCut = -1;
         int pos = friend >= 0 ? friend + 1 : Math.Min(1, q.Line.Count - 1);
