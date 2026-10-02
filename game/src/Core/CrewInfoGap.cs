@@ -190,14 +190,15 @@ public sealed partial class InfoSystem
             MarkLog.Add(cup.Marks, w.Tick, $"{why} — 식탁에서 떨어졌지만 멀쩡했다");
             return false;
         }
-        Break(cup, at, $"배가 덜컹할 때({why}) 식탁에서 떨어져 깨졌다");
+        Break(cup, at, $"배가 덜컹할 때({why})");
         return true;
     }
 
     /// <summary>컵이 깨진다: 조각이 바닥에 (밟으면 베인다 · 손보기가 쓸어 낸다) · 본 사람 · 소리만 들은 사람.</summary>
-    public CupCase Break(Belonging cup, Cell at, string cause)
+    public CupCase Break(Belonging cup, Cell at, string when)
     {
         var w = _w;
+        string cause = $"{when} 식탁에서 떨어져 깨졌다";
         cup.Condition = 0.05f;
         cup.At = at;
         MarkLog.Add(cup.Marks, w.Tick, cause);
@@ -242,7 +243,7 @@ public sealed partial class InfoSystem
             MarkLog.Add(c.Memory.Marks, w.Tick, $"{room.Name} 쪽에서 쨍그랑 소리를 들었다");
             AddIntent(InfoDo.CheckSound, c, -1, k.Id, at, s, $"{room.Name} 쪽에서 쨍그랑 소리", 1f);
         }
-        w.Log.Add(w.Tick, LogKind.Life, $"{room.Name} 식탁에서 {Ko.IGa(cup.Name)} 떨어져 깨졌다 ({cause.Replace("식탁에서 떨어져 깨졌다", "").Trim()}) — 본 사람 {k.Saw.Count} · 소리만 들은 사람 {k.Heard.Count}");
+        w.Log.Add(w.Tick, LogKind.Life, $"{room.Name} 식탁에서 {Ko.IGa(cup.Name)} 떨어져 깨졌다 — {when}" + (k.Saw.Count == 0 ? " (본 사람은 없다)" : ""));
         return k;
     }
 
@@ -309,7 +310,7 @@ public sealed partial class InfoSystem
         var owner = CrewOf(k.Owner);
         var cup = w.Belongings.Get(k.Cup);
         if (owner == null || owner.Dead || cup == null) return;
-        w.Brain2.Emotions.Feel(owner, Feeling.Sadness, 0.12f, $"{cup.Name}이(가) 깨졌다");
+        w.Brain2.Emotions.Feel(owner, Feeling.Sadness, 0.12f, $"{Ko.IGa(cup.Name)} 깨졌다");
         if (!Todos.Any(t => t.Kind == TodoKind.MendCup && t.Item == cup.Id && !t.Done)) AddTodo(owner, TodoKind.MendCup, cup.Name, 0f, item: cup.Id);
         if (k.OwnerTruth) return;
         // 의심할 사람: 알려 준 발견자 · 지금 그 방에 있는 사람 (주인이 아는 범위에서)
@@ -331,9 +332,9 @@ public sealed partial class InfoSystem
         {
             k.Suspect = sus.Id;
             w.Brain2.Beliefs.Learn(owner, Topic.Thing, cup.Id, 2, src == BeliefSource.Seen ? BeliefSource.Guess : src, 0.6f, from, sus.Id + 1);
-            w.Brain2.Emotions.Feel(owner, Feeling.Anger, 0.15f, $"{cup.Name}이(가) 깨졌다", sus);
+            w.Brain2.Emotions.Feel(owner, Feeling.Anger, 0.15f, $"{Ko.IGa(cup.Name)} 깨졌다", sus);
             AddIntent(InfoDo.Confront, owner, sus.Id, k.Id, default, 0.5f + 0.1f * temper, $"{Ko.IGa(sus.Name)} 내 컵을 깬 것 같다", 12f);
-            w.Log.Add(w.Tick, LogKind.Life, $"깨진 {cup.Name}을(를) 보고 {Ko.EulReul(sus.Name)} 의심한다 (본 적은 없다)", owner.Id);
+            w.Log.Add(w.Tick, LogKind.Life, $"깨진 {Ko.EulReul(cup.Name)} 보고 {Ko.EulReul(sus.Name)} 의심한다 (본 적은 없다)", owner.Id);
         }
         else
         {
@@ -359,7 +360,7 @@ public sealed partial class InfoSystem
         string cn = cup?.Name ?? "컵";
         owner.Say(w, Persona.Say(owner, $"내 컵 깬 거 너지? 말이라도 하지"));
         sus.Say(w, Persona.Say(sus, sus.Id == k.Finder ? "아니야 — 소리 듣고 가 본 것뿐이야" : "난 아니야. 그때 거기 없었어"));
-        var mem = w.Relations.Remember(sus, owner, RelationReason.BlamedMe, $"{cn}을(를) 내가 깼다고 몰아붙였다");
+        var mem = w.Relations.Remember(sus, owner, RelationReason.BlamedMe, $"{Ko.EulReul(cn)} 내가 깼다고 몰아붙였다");
         mem.Truth = k.Cause;
         sus.ChangeAffinity(owner, -0.1f);
         owner.ChangeAffinity(sus, -0.05f);

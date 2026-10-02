@@ -309,7 +309,7 @@ public sealed class InfoActivity : Activity
         }));
         return new Job(this, "물건 찾기", toils)
         {
-            LogText = lastSeen ? $"마지막에 둔 {Ko.EuRo(room?.Name ?? "곳")}부터 {Ko.EulReul(b.Name)} 찾아본다" : $"들은 대로 {Ko.EuRo(room?.Name ?? "그곳")} {Ko.EulReul(b.Name)} 찾으러 간다",
+            LogText = lastSeen ? $"마지막에 둔 {room?.Name ?? "곳"}부터 {Ko.EulReul(b.Name)} 찾아본다" : $"들은 대로 {Ko.EuRo(room?.Name ?? "그곳")} {Ko.EulReul(b.Name)} 찾으러 간다",
             TargetRoom = room, InterruptMargin = 0.2f, AlwaysLog = true,
             OnFinished = (cm, world, st) => { if (found) world.Info.Drop(i); },
         };

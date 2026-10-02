@@ -418,7 +418,7 @@ public sealed partial class InfoSystem
         var nt = AddTodo(heir, t.Kind, t.What, t.Progress, t.For, t.Item);
         nt.From = dead.Id;
         Stats.Inherited++;
-        w.Log.Add(w.Tick, LogKind.Life, $"{dead.Name}이(가) 끝내지 못한 {t.What}을(를) 마저 하기로 한다", heir.Id);
+        w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(dead.Name)} 끝내지 못한 {Ko.EulReul(t.What)} 마저 하기로 한다", heir.Id);
         Life.Diary(w, heir, Persona.Say(heir, $"{dead.Name}의 {t.What}. 내가 끝내 주기로 했다"));
     }
 
@@ -454,15 +454,15 @@ public sealed partial class InfoSystem
         {
             case TodoKind.Model:
             {
-                var b = w.Belongings.Seed2(c, BelongingKind.Artwork, from != null ? $"{from.Name}이(가) 만들다 둔 것을 {c.Name}이(가) 마저 만든 것" : "몇 달을 붙들고 있던 것");
+                var b = w.Belongings.Seed2(c, BelongingKind.Artwork, from != null ? $"{Ko.IGa(from.Name)} 만들다 둔 것을 {Ko.IGa(c.Name)} 마저 만든 것" : "몇 달을 붙들고 있던 것");
                 b.Name = t.What;
                 b.Maker = from?.Id ?? c.Id;
                 if (c.Bed is Furniture bed && bed.UseSpots.Count > 0) b.At = bed.UseSpots[0];
                 t.Item = b.Id;
                 w.Log.Add(w.Tick, LogKind.Life, $"마침내 {Ko.EulReul(t.What)} 완성했다", c.Id);
-                Life.Diary(w, c, Persona.Say(c, from != null ? $"{from.Name}의 {t.What}을(를) 끝냈다. 보여 주고 싶었는데" : $"{t.What}, 드디어 끝났다"));
+                Life.Diary(w, c, Persona.Say(c, from != null ? $"{from.Name}의 {Ko.EulReul(t.What)} 끝냈다. 보여 주고 싶었는데" : $"{t.What}, 드디어 끝났다"));
                 w.Brain2.Emotions.Feel(c, Feeling.Pride, 0.25f, $"{t.What} 완성");
-                if (from != null) { c.GriefUntil = Math.Max(w.Tick, c.GriefUntil - SimTime.Hours(12)); w.History.Add(w, HistoryKind.Bond, $"{Ko.IGa(c.Name)} {from.Name}이(가) 남긴 {Ko.EulReul(t.What)} 마저 완성했다", c.Room, new[] { c }, log: false); }
+                if (from != null) { c.GriefUntil = Math.Max(w.Tick, c.GriefUntil - SimTime.Hours(12)); w.History.Add(w, HistoryKind.Bond, $"{Ko.IGa(c.Name)} {Ko.IGa(from.Name)} 남긴 {Ko.EulReul(t.What)} 마저 완성했다", c.Room, new[] { c }, log: false); }
                 break;
             }
             case TodoKind.Lamp:
@@ -482,7 +482,7 @@ public sealed partial class InfoSystem
                     var owner = CrewOf(cup.Owner);
                     if (owner != null && owner != c)
                     {
-                        w.Relations.Remember(owner, c, RelationReason.FixedMyThing, $"깨진 {cup.Name}을(를) 이어 붙여 줬다");
+                        w.Relations.Remember(owner, c, RelationReason.FixedMyThing, $"깨진 {Ko.EulReul(cup.Name)} 이어 붙여 줬다");
                         owner.ChangeAffinity(c, 0.06f);
                         Life.Diary(w, owner, Persona.Say(owner, $"{Ko.IGa(c.Name)} 내 컵을 붙여 줬다. 금 간 자리가 더 예쁘다"));
                     }
@@ -813,7 +813,13 @@ public sealed partial class InfoSystem
             if (room == null || ppl.Count < 2 || ppl.Any(c => c.Room != room)) continue;
             var taker = Taker(room, ppl);
             if (taker == null || !R.Chance(0.5f)) continue;
-            Snap(taker, room, e.Kind == HistoryKind.Recovery ? PhotoScene.Work : PhotoScene.Group, e.Kind == HistoryKind.Recovery ? $"{SimTime.Day(w.Tick)}일, 고비를 넘긴 날" : Short(e.Text), ppl);
+            string cap = e.Kind switch
+            {
+                HistoryKind.Recovery => $"{SimTime.Day(w.Tick)}일, 고비를 넘긴 날",
+                HistoryKind.Milestone => $"{SimTime.Day(w.Tick)}일 기념",
+                _ => ppl.Count == 2 ? $"{Ko.WaGwa(ppl[0].Name)} {ppl[1].Name}" : $"{SimTime.Day(w.Tick)}일 {room.Name}에서",
+            };
+            Snap(taker, room, e.Kind == HistoryKind.Recovery ? PhotoScene.Work : PhotoScene.Group, cap, ppl);
         }
         _histSeen = ev.Count;
         if (crisis) return;
@@ -841,8 +847,6 @@ public sealed partial class InfoSystem
                 break;
             }
     }
-
-    private static string Short(string s) { int i = s.IndexOfAny(new[] { '(', '—', '·' }); s = i > 6 ? s[..i].Trim() : s; return s.Length > 22 ? s[..22] : s; }
 
     /// <summary>찍을 사람: 사진기가 있거나 사진이 취미인 사람 → 없으면 가장 붙임성 있는 사람 (손목 단말로).</summary>
     private CrewMember? Taker(Room room, List<CrewMember> ppl)
