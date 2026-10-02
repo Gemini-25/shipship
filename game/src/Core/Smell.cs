@@ -217,6 +217,7 @@ public sealed class SmellSystem
         var rooms = w.Ship.Rooms;
         w.Cooking.AddSmells(this);
         w.Portable.AddSmells(this); // v16.7 히터 먼지 · 달아오른 콘센트
+        w.Schemes.AddSmells(this); // v18.14 익어 가는 술 · 절인 배추 · 볶는 콩 · 몰래 피우는 담배
         // 불 · 연기: 타는 냄새 (감지기는 불꽃을 봐야 울린다 — 코는 연기만 닿아도 안다)
         if (w.Fire.Count > 0)
             foreach (var (cell, v) in w.Fire.Fires) Emit(w.Ship.RoomAt(cell), SmellKind.Burnt, 0.5f + 0.5f * MathF.Min(1f, v));

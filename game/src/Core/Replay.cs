@@ -442,6 +442,7 @@ public static class SaveGame
         w.Perils.Hash(I, F); I((long)(w.Hazards.StormPeak * 1000f)); // v16.26 열사병 · 큰 피폭 · 폭풍 세기
         w.Ways.Hash(I, F); // v16.25 여러 갈래 해법
         w.Motions.Hash(I, F); // v18.18 안건 · 파벌 · 재판 · 선거
+        w.Schemes.Hash(I, F); // v18.14 꾸미는 일 · 관행 · 흔적 · 빚
         return h;
     }
 }

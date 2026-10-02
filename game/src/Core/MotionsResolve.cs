@@ -93,6 +93,7 @@ public sealed partial class MotionSystem
                 if (c.Id == pt.Id) t.Add((-2f, "그 정도면 됐다"));
                 break;
         }
+        if (w.Schemes.Opinion(c, m) is { } so) t.Add(so); // v18.14 꾸민 일이 올라온 안건
         // 낸 사람과의 사이 · 지난 안건의 앙금 · 같은 편 · 컴퓨터 기록
         if (prop != null)
         {
@@ -241,6 +242,7 @@ public sealed partial class MotionSystem
         var w = _w;
         var prop = P(m.Proposer);
         string by = prop != null ? $"{Ko.IGa(prop.Name)} 서명을 모아 올린 안건" : "회의";
+        if (w.Schemes.Effect(m, pass) is string se) return se; // v18.14
         switch (m.Kind)
         {
             case MotionKind.Practice: return "관행으로 정했다";
@@ -311,6 +313,7 @@ public sealed partial class MotionSystem
             prop.Needs.Stress = MathF.Min(1f, prop.Needs.Stress + 0.04f);
         }
         Aftermath(m, voters, yes, no, pass);
+        w.Schemes.Decided(m, pass); // v18.14 금지냐 정식이냐 · 재판 · 경고 → 관행 · 규칙 · 흔적
     }
 
     /// <summary>배급을 줄이기로 한 안건 (이걸 어기면 결정 위반).</summary>
