@@ -44,7 +44,7 @@ public sealed class InfoActivity : Activity
             {
                 case InfoDo.CheckSound:
                     if (info.Case(i.Thing) is not CupCase k || k.Knows.Contains(c.Id) || k.Swept || !dist.Reachable(i.At)) continue;
-                    if (w.Tick - i.Since > SimTime.Minutes(40)) s -= 0.2f; // 오래되면 시들하다
+                    if (w.Tick - i.Since > SimTime.Minutes(20)) s -= 0.25f; // 쨍그랑 직후가 아니면 시들하다
                     break;
                 case InfoDo.Confront:
                     if (info.Case(i.Thing) is not CupCase k2 || k2.Explained >= 0 || k2.Accused >= 0 || Person(w, i.Other) is not { Dead: false } o || !dist.Reachable(o.Cell)) continue;
@@ -66,7 +66,9 @@ public sealed class InfoActivity : Activity
                     if (bed) s -= 0.25f;
                     break;
                 case InfoDo.HangPhoto:
-                    if (info.Photo(i.Thing) is not PhotoInfo p || p.Hung || !free) continue;
+                    if (info.Photo(i.Thing) is not PhotoInfo p || p.Hung || bed) continue;
+                    if (shift) s -= 0.15f;
+                    if (w.Tick - i.Since > SimTime.Hours(6)) s -= 0.1f;
                     break;
                 case InfoDo.GoMeeting:
                     break;
@@ -80,7 +82,8 @@ public sealed class InfoActivity : Activity
             foreach (var t in info.TodosOf(c))
             {
                 float s = 0.2f + 0.12f * t.Progress;
-                if (t.LastWork >= 0 && w.Tick - t.LastWork < SimTime.Hours(3)) s -= 0.12f;
+                if (t.Cut) s += 0.12f; // 하다 만 것이 눈에 밟힌다
+                else if (t.LastWork >= 0 && w.Tick - t.LastWork < SimTime.Hours(3)) s -= 0.12f;
                 if (Life.Has(c, Habit.Procrastinator)) s -= 0.08f;
                 if (Life.Has(c, Habit.Perfectionist) || Life.Has(c, Habit.Tinkerer)) s += 0.04f;
                 if (t.From >= 0) s += 0.08f;
@@ -163,7 +166,7 @@ public sealed class InfoActivity : Activity
                 toils.Add(new GotoToil(s));
                 toils.Add(new WaitToil(SimTime.Minutes(1), Pose.Standing, i.At.Center));
                 toils.Add(new DoToil((cm, world) => { world.Info.Checked(cm, k); return true; }));
-                return new Job(this, "소리 난 쪽 확인", toils) { LogText = $"쨍그랑 소리가 난 {Ko.EuRo(w.Ship.RoomAt(i.At)?.Name ?? "쪽")} 가 본다", TargetRoom = w.Ship.RoomAt(i.At), InterruptMargin = 0.2f };
+                return new Job(this, "소리 난 쪽 확인", toils) { LogText = $"쨍그랑 소리가 난 {Ko.EuRo(w.Ship.RoomAt(i.At)?.Name ?? "쪽")} 가 본다", TargetRoom = w.Ship.RoomAt(i.At), InterruptMargin = 0.2f, AlwaysLog = true };
             }
             case InfoDo.Confront:
             case InfoDo.Explain:
@@ -191,7 +194,7 @@ public sealed class InfoActivity : Activity
                     InfoDo.Explain => $"{o.Name}에게 컵이 어떻게 깨졌는지 말해 주러 간다",
                     _ => $"{o.Name}에게 사과하러 간다",
                 };
-                return new Job(this, d == InfoDo.Confront ? "따지기" : d == InfoDo.Explain ? "본 대로 말하기" : "사과", toils) { LogText = log, TargetRoom = o.Room, InterruptMargin = 0.2f };
+                return new Job(this, d == InfoDo.Confront ? "따지기" : d == InfoDo.Explain ? "본 대로 말하기" : "사과", toils) { LogText = log, TargetRoom = o.Room, InterruptMargin = 0.2f, AlwaysLog = true };
             }
             case InfoDo.Search: return SearchJob(c, w, dist, p.Intent!, toils);
             case InfoDo.Todo: return TodoJob(c, w, dist, p.Todo!, toils);
@@ -204,7 +207,7 @@ public sealed class InfoActivity : Activity
                 toils.Add(new GotoToil(sink.UseSpots[0]));
                 toils.Add(new WaitToil(SimTime.Minutes(machine ? 7 : 16), Pose.Working, sink.Center, minTicks: SimTime.Minutes(machine ? 5 : 12)));
                 toils.Add(new DoToil((cm, world) => { world.Info.DidDishes(cm, Math.Max(n, world.Info.Dirty)); return true; }));
-                return new Job(this, "설거지", toils) { LogText = machine ? "쌓인 그릇을 식기세척기에 넣는다" : "쌓인 그릇을 설거지한다", TargetRoom = sink.Room, InterruptMargin = 0.2f };
+                return new Job(this, "설거지", toils) { LogText = machine ? "쌓인 그릇을 식기세척기에 넣는다" : "쌓인 그릇을 설거지한다", TargetRoom = sink.Room, InterruptMargin = 0.2f, AlwaysLog = true };
             }
             case InfoDo.HangPhoto:
             {
@@ -217,7 +220,7 @@ public sealed class InfoActivity : Activity
                 toils.Add(new GotoToil(at));
                 toils.Add(new WaitToil(SimTime.Minutes(3), Pose.Working, (at + dir).Center));
                 toils.Add(new DoToil((cm, world) => { world.Info.HangNow(cm, ph, at, dir); world.Info.Drop(i); return true; }));
-                return new Job(this, "사진 걸기", toils) { LogText = $"{ph.Caption} 사진을 {room.Name} 벽에 건다", TargetRoom = room, InterruptMargin = 0.15f };
+                return new Job(this, "사진 걸기", toils) { LogText = $"{ph.Caption} 사진을 {room.Name} 벽에 건다", TargetRoom = room, InterruptMargin = 0.15f, AlwaysLog = true };
             }
             case InfoDo.LookPhoto:
             {
@@ -226,7 +229,7 @@ public sealed class InfoActivity : Activity
                 toils.Add(new GotoToil(spot));
                 toils.Add(new WaitToil(SimTime.Minutes(3), Pose.Standing, (ph.Wall + ph.WallDir).Center));
                 toils.Add(new DoToil((cm, world) => { world.Info.LookAt(cm, ph); return true; }));
-                return new Job(this, "사진 보기", toils) { LogText = $"벽에 걸린 {ph.Caption} 사진 앞에 선다", TargetRoom = w.Ship.RoomAt(ph.Wall), InterruptMargin = 0.1f };
+                return new Job(this, "사진 보기", toils) { LogText = $"벽에 걸린 {ph.Caption} 사진 앞에 선다", TargetRoom = w.Ship.RoomAt(ph.Wall), InterruptMargin = 0.1f, AlwaysLog = true };
             }
             case InfoDo.GoMeeting:
             {
@@ -237,7 +240,7 @@ public sealed class InfoActivity : Activity
                 toils.Add(new GotoToil(s));
                 toils.Add(new WaitToil(SimTime.Minutes(4), Pose.Standing, room!.Center) { DoneWhen = (cm, world) => world.Meetings.Session != null || world.Meetings.Gathering });
                 toils.Add(new DoToil((cm, world) => { world.Info.Drop(i); if (world.Meetings.Session == null && !world.Meetings.Gathering) world.Info.EmptyMeeting(cm); return true; }));
-                return new Job(this, "회의", toils) { LogText = $"회의하러 {Ko.EuRo(room.Name)} 간다", TargetRoom = room, InterruptMargin = 0.2f };
+                return new Job(this, "회의", toils) { LogText = $"회의하러 {Ko.EuRo(room.Name)} 간다", TargetRoom = room, InterruptMargin = 0.2f, AlwaysLog = true };
             }
         }
         return null;
@@ -306,7 +309,7 @@ public sealed class InfoActivity : Activity
         return new Job(this, "물건 찾기", toils)
         {
             LogText = lastSeen ? $"마지막에 둔 {Ko.EuRo(room?.Name ?? "곳")}부터 {Ko.EulReul(b.Name)} 찾아본다" : $"들은 대로 {Ko.EuRo(room?.Name ?? "그곳")} {Ko.EulReul(b.Name)} 찾으러 간다",
-            TargetRoom = room, InterruptMargin = 0.2f,
+            TargetRoom = room, InterruptMargin = 0.2f, AlwaysLog = true,
             OnFinished = (cm, world, st) => { if (found) world.Info.Drop(i); },
         };
     }
@@ -333,7 +336,7 @@ public sealed class InfoActivity : Activity
             return new Job(this, t.Kind == TodoKind.Gift ? "선물 건네기" : "대신 근무 제안", toils)
             {
                 LogText = t.Kind == TodoKind.Gift ? $"{to.Name}에게 늦은 생일 선물을 건네러 간다" : $"{to.Name}에게 오늘 근무는 내가 서겠다고 말하러 간다",
-                TargetRoom = to.Room, InterruptMargin = 0.2f,
+                TargetRoom = to.Room, InterruptMargin = 0.2f, AlwaysLog = true,
             };
         }
         // 어디서: 독서등 · 컵은 제 침대 곁 · 모형 · 선물은 작업대(없으면 침대 곁)
@@ -359,9 +362,9 @@ public sealed class InfoActivity : Activity
         return new Job(this, InfoSystem.TodoText(t, w), toils)
         {
             LogText = resumed ? $"{InfoSystem.TodoText(t, w)} — 하던 걸 이어서 한다" : $"{InfoSystem.TodoText(t, w)} — 오랜만에 손을 댄다",
-            TargetRoom = w.Ship.RoomAt(s), InterruptMargin = 0.15f,
+            TargetRoom = w.Ship.RoomAt(s), InterruptMargin = 0.15f, AlwaysLog = true,
             // 경보에 끊겨도 한 만큼은 남는다
-            OnFinished = (cm, world, st) => { if (start >= 0) world.Info.WorkOn(cm, t, (world.Tick - start) / (float)SimTime.TicksPerHour); },
+            OnFinished = (cm, world, st) => { t.Cut = st != ToilStatus.Succeeded && start >= 0; if (start >= 0) world.Info.WorkOn(cm, t, (world.Tick - start) / (float)SimTime.TicksPerHour); },
         };
     }
 }

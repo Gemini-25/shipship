@@ -37,6 +37,8 @@ public sealed class Todo
     public long DoneAt { get; set; } = -1;
     /// <summary>물려받았으면 처음 시작한 사람.</summary>
     public int From { get; set; } = -1;
+    /// <summary>하다가 끊겼다 (눈에 밟힌다 — 다음에 먼저 손이 간다).</summary>
+    public bool Cut { get; set; }
 }
 
 public enum LedgerKind : byte { Dishes, Cover, Donate }
@@ -60,6 +62,8 @@ public sealed class PhotoInfo
     /// <summary>벽 쪽 (액자가 붙는 방향).</summary>
     public Cell WallDir { get; set; }
     public int Views { get; set; }
+    /// <summary>벽에 걸린 뒤 한 번이라도 본 사람.</summary>
+    public List<int> SeenBy { get; } = new();
 }
 
 public enum InfoDo : byte { CheckSound, Confront, Explain, Apologize, Search, Todo, Dishes, HangPhoto, LookPhoto, GoMeeting }
@@ -240,7 +244,7 @@ public sealed partial class InfoSystem
             float aff = c.AffinityTo(o);
             if (aff > 0.2f && d < 2.6f) b -= 5f * aff * (2.6f - d) / 2.6f;
             // 최근에 다툰 사람 (컵 · 말다툼)
-            if (SpatWith(c, o) is Spat s) b += 14f * (3.5f - d) / 3.5f * (s.Made ? 0.3f : 1f);
+            if (SpatWith(c, o) is Spat s) b += 20f * (3.5f - d) * (s.Made ? 0.25f : 1f);
         }
         // 소음: 배식기 · 커피 머신 · 화구 곁은 조용한 사람이 꺼린다
         float quiet = 1f - c.Traits.Sociability + (Life.Has(c, Habit.Loner) ? 0.5f : 0f) - (Life.Has(c, Habit.Talker) ? 0.4f : 0f);
@@ -424,9 +428,9 @@ public sealed partial class InfoSystem
         var w = _w;
         float rate = t.Kind switch
         {
-            TodoKind.Model => 0.16f,
+            TodoKind.Model => 0.22f,
             TodoKind.Lamp => 0.12f + 0.3f * c.SkillLevel(Skill.Electrical),
-            TodoKind.Gift => 0.22f,
+            TodoKind.Gift => 0.3f,
             TodoKind.MendCup => 0.25f,
             _ => 1f,
         };
@@ -636,12 +640,14 @@ public sealed partial class InfoSystem
     /// <summary>설거지할 마음 (InfoActivity).</summary>
     public (float s, string why) DishWant(CrewMember c)
     {
-        if (Dirty < 5 || c.IsChild || c.Dead) return (0f, "—");
+        var duty = OnDuty();
+        if (Dirty < (duty == c ? 3 : 5) || c.IsChild || c.Dead) return (0f, "—");
         float s = 0.1f + 0.18f * c.Traits.Diligence + MathF.Min(0.15f, (Dirty - 5) * 0.015f);
         string why = $"개수대에 그릇 {Dirty}개";
         if (Life.Has(c, Habit.NeatFreak)) s += 0.12f;
         if (Life.Has(c, Habit.Messy) || Life.Has(c, Habit.Procrastinator)) s -= 0.08f;
-        if (OnDuty() == c) { s += 0.32f; why += " · 오늘 내가 당번"; }
+        if (duty == c) { s += 0.32f; why += " · 오늘 내가 당번"; }
+        else if (duty != null && !duty.Dead) s -= 0.08f; // 오늘은 당번이 있다
         if (_guilt.TryGetValue(c.Id, out var g) && g > _w.Tick) { s += 0.25f; why += " · 장부에 내 이름이 없다"; }
         return (MathF.Max(0f, s), why);
     }
@@ -787,7 +793,7 @@ public sealed partial class InfoSystem
         w.Log.Add(w.Tick, LogKind.Life, $"{caption} — 사진을 찍었다 ({p.People.Length}명)", taker.Id);
         if (Chat.CannotRead(taker) == null)
             Chat.Post(taker, ChatKind.Photo, ShipChat.Voice(taker, $"{caption} 사진 올림", $"{caption} 사진 올립니다"), photo: p.Id);
-        AddIntent(InfoDo.HangPhoto, taker, -1, p.Id, default, 0.32f, $"{caption} 사진을 걸어 두고 싶다", 48f);
+        AddIntent(InfoDo.HangPhoto, taker, -1, p.Id, default, 0.45f, $"{caption} 사진을 걸어 두고 싶다", 48f);
         return p;
     }
 
@@ -888,6 +894,7 @@ public sealed partial class InfoSystem
     {
         var w = _w;
         p.Views++;
+        if (!p.SeenBy.Contains(c.Id)) p.SeenBy.Add(c.Id);
         Stats.Looks++;
         _looked[c.Id] = w.Tick;
         var ppl = p.People.Select(CrewOf).Where(x => x != null && x != c).Cast<CrewMember>().ToList();
@@ -940,11 +947,12 @@ public sealed partial class InfoSystem
             string why = $"{p.Caption} 사진";
             bool inIt = p.People.Contains(c.Id);
             if (inIt) s += 0.06f;
+            if (!p.SeenBy.Contains(c.Id)) { s += 0.12f; why = $"새로 걸린 {p.Caption} 사진"; }
             foreach (var id in p.People)
             {
                 if (id == c.Id || CrewOf(id) is not CrewMember o) continue;
                 if (o.Dead && (c.GriefUntil > w.Tick || c.AffinityTo(o) > 0.25f)) { s += 0.25f; why = $"사진 속 {o.Name}"; }
-                else if (!o.Dead && SpatWith(c, o) != null) { s += 0.1f; why = $"사진 속 {o.Name} — 다툰 뒤"; }
+                else if (!o.Dead && SpatWith(c, o) != null) { s += 0.15f; why = $"사진 속 {o.Name} — 다툰 뒤"; }
             }
             if (best == null || s > best.Value.Item2) best = (p, s, why);
         }
@@ -995,14 +1003,21 @@ public sealed partial class InfoSystem
         foreach (var id in _unawareAtStart)
         {
             if (CrewOf(id) is not CrewMember c || c.Dead || mv.Late.Contains(id)) continue;
-            if (venue != null && c.Room == venue)
+            if (venue != null && c.Room == venue && c.Job?.Activity is not (MeetingActivity or InfoActivity) && Chat.Unaware(c))
+            {
+                // 다른 볼일로 들어왔다가 모여 있는 걸 보고서야 안다 — 그 길로 앉는다
+                Chat.Tell(c, $"{venue.Name}에 들렀다가 다들 모여 있는 걸 보고서야 회의가 당겨진 걸 알았다");
+                continue;
+            }
+            // 모이기 시작한 뒤에야 회의하러 나선 사람 (변경을 못 봤다) — 늦었다
+            if (c.Job?.Activity is MeetingActivity && !Chat.Unaware(c))
             {
                 mv.Late.Add(id);
                 Stats.Late++;
                 Chat.LateArrivals++;
                 int mins = (int)((w.Tick - mv.GatherStart) / (float)SimTime.Minutes(1));
                 c.Say(w, Persona.Say(c, "회의가 당겨졌어? 메신저를 못 봤어"));
-                w.Log.Add(w.Tick, LogKind.Life, $"회의가 당겨진 걸 모르고 {mins}분 늦게 들어왔다", c.Id);
+                w.Log.Add(w.Tick, LogKind.Life, $"회의가 당겨진 걸 모르고 {mins}분 늦게 회의하러 나섰다", c.Id);
                 w.Brain2.Emotions.Feel(c, Feeling.Shame, 0.12f, "회의에 늦었다");
                 if (w.Crew.FirstOrDefault(x => x.Id == mv.Author) is CrewMember a && !a.Dead && a != c)
                 {

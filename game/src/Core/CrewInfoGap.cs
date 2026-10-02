@@ -225,7 +225,7 @@ public sealed partial class InfoSystem
         {
             if (CrewOf(id) is not CrewMember c) continue;
             Stats.Heard++;
-            float s = 0.36f + 0.12f * c.Traits.Bravery + (Life.Has(c, Habit.Worrier) ? 0.08f : 0f) + (Life.Has(c, Habit.NeatFreak) ? 0.05f : 0f) - (Life.Has(c, Habit.Loner) ? 0.08f : 0f);
+            float s = 0.5f + 0.12f * c.Traits.Bravery + (Life.Has(c, Habit.Worrier) ? 0.08f : 0f) + (Life.Has(c, Habit.NeatFreak) ? 0.05f : 0f) - (Life.Has(c, Habit.Loner) ? 0.08f : 0f);
             if (c.Job?.Urgent == true || c.Job?.Order != null) s -= 0.2f;
             if (s < 0.2f) continue;
             MarkLog.Add(c.Memory.Marks, w.Tick, $"{room.Name} 쪽에서 쨍그랑 소리를 들었다");
@@ -261,7 +261,7 @@ public sealed partial class InfoSystem
                     if (k.Finder < 0 && !k.Saw.Contains(c.Id)) Find(k, c);
                 }
             // 아무도 해명하지 않으면 주 컴퓨터가 그 시각 기록을 댄다
-            if (k.Accused >= 0 && k.Explained < 0 && k.ComputerSaid < 0 && now - k.Accused > SimTime.Minutes(40) && w.Automation.Present && w.Automation.CoreOnline)
+            if (k.Accused >= 0 && k.Explained < 0 && k.ComputerSaid < 0 && now - k.Accused > SimTime.Minutes(90) && w.Automation.Present && w.Automation.CoreOnline)
             {
                 var j = Jolts.LastOrDefault(x => Math.Abs(x.tick - k.Tick) < SimTime.Minutes(2));
                 if (j.why != null)

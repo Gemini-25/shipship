@@ -160,8 +160,9 @@ public sealed class ShipChat
         LastRead[c.Id] = _next - 1;
         Reading[c.Id] = _w.Tick + SimTime.Minutes(2);
         Reads++;
-        foreach (var m in All)
-            if (m.Id > r && m.Author != c.Id) _info.OnRead(c, m);
+        int end = All.Count; // 읽다가 답을 달면 글이 늘어난다 — 연 때까지 있던 글만
+        for (int i = 0; i < end && i < All.Count; i++)
+            if (All[i].Id > r && All[i].Author != c.Id) _info.OnRead(c, All[i]);
         if (how != null) _w.Log.Add(_w.Tick, LogKind.Life, how, c.Id);
     }
 
@@ -187,7 +188,7 @@ public sealed class ShipChat
         var w = _w;
         long day = w.Tick / SimTime.TicksPerDay;
         float from = MeetingHour(w.Meetings.Hour);
-        if (MathF.Abs(to - from) < 0.25f) return null;
+        if (MathF.Abs(to - from) < 0.25f || to < SimTime.HourOfDay(w.Tick) + 0.5f || from < SimTime.HourOfDay(w.Tick) + 0.5f) return null; // 지난 시각 · 이미 모이는 중
         bool earlier = to < from;
         string hh = $"{(int)to}시{(to % 1f > 0.01f ? " 반" : "")}";
         var msg = Post(author, ChatKind.Meeting, Voice(author, $"오늘 회의 {hh}로 {(earlier ? "당길게" : "미룰게")}. {why}", $"오늘 회의는 {hh}로 {(earlier ? "당깁니다" : "미룹니다")}. {why}"));
