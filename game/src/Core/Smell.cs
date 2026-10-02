@@ -456,7 +456,10 @@ public sealed class FollowSmellActivity : Activity
         float s = k == SmellKind.Coffee ? 0.2f + 0.45f * c.Needs.Fatigue + 0.1f * c.Traits.Sociability
             : 0.22f + 0.5f * c.Needs.Hunger + (k == SmellKind.Bread ? 0.18f : 0f) + 0.08f * c.Traits.Sociability;
         if (OnShift(c, w)) s -= 0.12f;
-        return (s, k == SmellKind.Bread ? "빵 굽는 냄새" : k == SmellKind.Coffee ? "커피 냄새" : "맛있는 냄새");
+        // 끼니때 갓 구운 빵 · 음식 냄새가 나면 배식기보다 냄새 나는 쪽으로 (끼니를 찾아가는 길이다 — 식사와 같은 끼니때 끌림)
+        bool meal = k != SmellKind.Coffee && EatActivity.MealTime(c, w);
+        if (meal) s += 0.38f;
+        return (s, (k == SmellKind.Bread ? "빵 굽는 냄새" : k == SmellKind.Coffee ? "커피 냄새" : "맛있는 냄새") + (meal ? " · 끼니때" : ""));
     }
 
     public override Job? Plan(CrewMember c, World w, DistanceField dist)

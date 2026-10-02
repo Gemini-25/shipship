@@ -882,10 +882,12 @@ public static partial class WorkPlanners
         var toils = fetch;
         toils.Add(new GotoToil(at));
         toils.AddRange(w.Soil.WashFirst(c, false, "조리")); // v14.7 조리 전에 손을 씻는다
+        bool hurt0 = false;
         toils.Add(new WorkToil(FoodChain.CookHours * w.Cooking.HoursMul(stove, c), Skill.Cooking, stove.Center) // v16.8 레시피마다 조리 시간
         {
-            CanContinue = (_, _) => stove.Machine!.Efficiency > 0f,
-            OnBegin = (_, _) => stove.Machine!.Active = true,
+            // v16 통합: 불 앞에서 크게 다치면(화상 · 넘어짐) 물러난다 — 주문이 다시 열려 배우던 사람이 잇는다 (처음부터 다친 채 선 사람은 끝까지)
+            CanContinue = (cm, _) => stove.Machine!.Efficiency > 0f && (hurt0 || !CookingSystem.LaidUp(cm)),
+            OnBegin = (cm, _) => { stove.Machine!.Active = true; hurt0 = CookingSystem.LaidUp(cm); },
             OnEnd = (_, _) => stove.Machine!.Active = false,
         });
         toils.Add(new DoToil((cm, world) =>

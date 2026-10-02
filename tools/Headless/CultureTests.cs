@@ -94,6 +94,9 @@ public static partial class Program
                 Run(a, SimTime.Hours(14)); Run(b, SimTime.Hours(14));
                 string A = string.Join(", ", a.Culture.Customs.Select(x => CultureSystem.Name(x.Kind)));
                 string B = string.Join(", ", b.Culture.Customs.Select(x => CultureSystem.Name(x.Kind)));
+                var fe = b.History.Events.FirstOrDefault(e => e.Text.Contains("화재"));
+                if (fe != null) Console.WriteLine("DBG 불 전 기록: " + string.Join(" / ", b.Log.Entries.Where(e => e.Tick > fe.Tick - SimTime.Minutes(40) && e.Tick <= fe.Tick).Select(e => SimTime.Clock(e.Tick) + " " + e.Text)));
+                Console.WriteLine($"DBG 물배 불 {b.History.Fires} · {string.Join(" / ", b.History.Events.Where(e => e.Text.Contains("불") || e.Text.Contains("화재")).Take(4).Select(e => SimTime.Clock(e.Tick) + " " + e.Text))} · 손씻기 {b.Soil.Stats.HandWashes} · 관행 {string.Join(",", b.Culture.Customs.Select(x => $"{x.Kind}:{x.Origin}"))}");
                 Check("갈라짐 — 같은 배가 겪은 일에 따라 다른 관행을 갖는다",
                     a.Culture.Of(CustomKind.FireCheck) != null && a.Culture.Of(CustomKind.WaterThrift) == null && b.Culture.Of(CustomKind.WaterThrift) != null && b.Culture.Of(CustomKind.FireCheck) == null
                     && b.Culture.Stats.ThriftWashes > 0,

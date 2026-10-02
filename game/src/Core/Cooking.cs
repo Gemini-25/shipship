@@ -59,6 +59,8 @@ public sealed class Plate
     public Furniture Table { get; init; } = null!;
     public bool Found { get; set; }
     public bool Reheating { get; set; }
+    /// <summary>먹기 시작할 때의 온도 (데운 뒤) — 다 먹을 즈음 식은 것으로 "식은 끼니"를 세지 않는다 (-1 = 아직).</summary>
+    public float ServedTemp { get; set; } = -1f;
     public bool Eaten { get; set; }
     public bool Spoiled { get; set; }
     public DishRecipe Spec => Dishes.Of(Recipe);
@@ -651,21 +653,22 @@ public sealed class CookingSystem
     public void FindPlate(CrewMember c, Plate p)
     {
         var w = _w;
+        var r = p.Spec;
+        bool cold = r.Hot && p.Temp < 45f;
+        p.Reheating = cold && CanReheat(p.Table.Room); // 이미 이름표를 본 접시에 (불려 갔다가) 다시 와도 식었으면 데운다
         if (p.Found) return;
         p.Found = true;
         var by = CrewOf(p.By);
-        var r = p.Spec;
-        bool cold = r.Hot && p.Temp < 45f;
-        p.Reheating = cold && CanReheat(p.Table.Room);
         c.Say(w, Persona.Say(c, $"어? '{c.Name} 몫 — {by?.Name}'"));
         w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(c.Name)} {(cold ? "식은 " : "")}{Ko.EulReul(r.Name)} 먹으려다 이름표를 봤다 — {Ko.IGa(by?.Name ?? "누군가")} 남겨 둔 제 몫", c.Id);
     }
 
     public void FinishPlateReheat(Plate p)
     {
-        if (!p.Reheating) return;
+        if (!p.Reheating) { p.ServedTemp = p.Temp; return; }
         p.Reheating = false;
         p.Temp = 65f;
+        p.ServedTemp = p.Temp;
         Stats.Reheated++;
     }
 
@@ -677,7 +680,7 @@ public sealed class CookingSystem
         _lastAte[c.Id] = w.Tick;
         Stats.SavedEaten++;
         var r = p.Spec;
-        bool cold = r.Hot && p.Temp < 45f;
+        bool cold = r.Hot && (p.ServedTemp >= 0f ? p.ServedTemp : p.Temp) < 45f; // 먹기 시작할 때의 온도 (스무 분 먹는 사이 식은 건 셈하지 않는다)
         if (cold) ColdNote(c, r);
         float q = Taste(c, p.Quality, 1f, cold);
         var by = CrewOf(p.By);
@@ -685,6 +688,7 @@ public sealed class CookingSystem
         {
             w.Relations.Remember(c, by, RelationReason.GaveMeGift, $"늦게 온 나를 위해 {Ko.EulReul(r.Name)} 남겨 뒀다");
             c.ChangeAffinity(by, 0.06f);
+            w.Brain2.Emotions.Feel(c, Feeling.Joy, cold ? 0.08f : 0.14f, $"{Ko.IGa(by.Name)} 남겨 둔 {r.Name}", by); // v16 통합 (음식 × 두뇌): 이름표 붙은 접시는 기쁨 — 감정이 판단을 기울인다
             Life.Diary(w, c, Persona.Say(c, $"늦게 끝나고 가 보니 {(cold ? "식은 " : "")}{r.Name} 한 접시에 이름표가 붙어 있었다 — '{c.Name} 몫, {by.Name}'." + (cold ? " 식었어도 고마웠다" : " 고마웠다")));
         }
         c.Needs.Stress = MathF.Max(0f, c.Needs.Stress - 0.05f);

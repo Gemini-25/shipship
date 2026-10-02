@@ -55,6 +55,14 @@ public sealed class EatActivity : Activity
         return (null, default, Source.None);
     }
 
+    /// <summary>끼니때인가 (기상 후 0.5h · 6h · 11.5h 전후, 조금이라도 출출하면) — 냄새를 따라가는 것도 끼니를 찾아가는 것이다.</summary>
+    public static bool MealTime(CrewMember c, World w)
+    {
+        if (c.Needs.Hunger <= 0.3f) return false;
+        float sinceWake = SimTime.HoursFromTo(c.Schedule.WakeHour, Hour(w));
+        return MathF.Abs(sinceWake - 0.5f) < 0.75f || MathF.Abs(sinceWake - 6f) < 0.75f || MathF.Abs(sinceWake - 11.5f) < 0.75f;
+    }
+
     public override (float, string) Score(CrewMember c, World w, DistanceField dist)
     {
         var (_, _, src) = FindFood(c, w, dist);
@@ -71,14 +79,10 @@ public sealed class EatActivity : Activity
 
         // 기상 후 0.5h, 6h, 11.5h가 식사 시간. 잠들기 1시간 전쯤 출출하면 야식.
         float sinceWake = SimTime.HoursFromTo(c.Schedule.WakeHour, Hour(w));
-        foreach (float meal in new[] { 0.5f, 6f, 11.5f })
+        if (MealTime(c, w))
         {
-            if (MathF.Abs(sinceWake - meal) < 0.75f && hunger > 0.3f)
-            {
-                score += 0.35f;
-                reason += " · 식사 시간";
-                break;
-            }
+            score += 0.35f;
+            reason += " · 식사 시간";
         }
         if (MathF.Abs(sinceWake - 15f) < 0.6f && hunger > 0.4f)
         {

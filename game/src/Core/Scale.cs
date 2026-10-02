@@ -194,9 +194,11 @@ public sealed partial class ScaleSystem
         for (i++; i < log.Incidents.Count; i++)
         {
             var inc = log.Incidents[i];
+            var root = log.Node(inc.Root);
+            // v16 통합: 아무도 모르는 불(감지기 꺼짐 · 본 사람 없음)은 알려질 때까지 규모를 정하지 않는다 — 컴퓨터가 세계를 미리 알고 방송하던 것 (탄내를 맡은 사람이 먼저 찾는다)
+            if (root.Kind == CauseKind.Fire && _w.Ship.Rooms.FirstOrDefault(r => r.Id == root.RoomId) is Room fr && !_w.Fire.IsKnown(fr)) { if (_w.Fire.CountIn(fr) > 0) break; _lastRoot = Math.Max(_lastRoot, inc.Root); continue; } // 모른 채 꺼진 불은 사건이 아니다
             _lastRoot = Math.Max(_lastRoot, inc.Root);
             if (_byRoot.ContainsKey(inc.Root)) continue;
-            var root = log.Node(inc.Root);
             if (root.Kind == CauseKind.Recovery) continue;
             // 우주급 사건의 본 사건 고리면 그 사건에 붙인다
             ScaleCase? cos = null;

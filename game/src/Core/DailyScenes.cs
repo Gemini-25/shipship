@@ -1448,6 +1448,8 @@ public sealed class DailySceneSystem
         var k = new Concern { Id = _nextConcern++, Who = c.Id, Kind = src.Kind, Machine = src.Machine, Place = src.Place, Text = src.Text, How = how, From = from, Since = _w.Tick };
         Concerns.Add(k);
         if (src.Machine?.Omen?.Note is ShiftNote n && !n.Holders.ContainsKey(c.Id)) n.Holders[c.Id] = false; // 당직 일지에도: 관측만 전해 들었다
+        // v16 통합: 말 · 메모(쪽지)로 넘겨받은 고장 기미는 믿음 장부로 — 누구에게서 들었는지 남는다 (가서 보면 굳거나 고쳐진다)
+        if (src.Machine != null) _w.Brain2.Beliefs.Learn(c, Topic.Omen, src.Machine.Body.Id, 1, BeliefSource.Told, how.Contains("메모") ? 0.75f : 0.65f, from);
         return k;
     }
 
@@ -1728,8 +1730,8 @@ public sealed class DailySceneSystem
         {
             if (o == z || !Able(o) || !o.IsAwake || o.IsChild || Busy(o)) continue;
             bool nw = w.Society.OnNightWatch(o);
-            if (!nw && !OnDuty(o)) continue;
-            float d = (o.Position - z.Position).LengthSquared() - (nw ? 10000f : 0f); // 야간 당직 먼저 · 가까운 사람
+            // 야간 당직 먼저 · 근무 중인 사람 · 가까운 사람 — 아무도 근무 중이 아니면 깨어 있는 어른 누구든 (컴퓨터가 쉬라고 근무에서 뺀 사람도 깨어 있으면 부른다)
+            float d = (o.Position - z.Position).LengthSquared() - (nw ? 10000f : 0f) + (nw || OnDuty(o) ? 0f : 10000f);
             if (d < best) { best = d; watch = o; }
         }
         int mins = (int)((w.Tick - s.Since) / (float)SimTime.Minutes(1));
