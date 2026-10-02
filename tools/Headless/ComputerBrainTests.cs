@@ -156,7 +156,7 @@ public static partial class Program
                 var a = w.Automation;
                 a.Install(ComputerModule.BioMonitor);
                 a.Install(ComputerModule.Roster);
-                Run(w, SimTime.Hours(4));
+                Run(w, SimTime.Hours(9)); // 모형이 서도록 (하루 넘게 본 사람에게만 부탁한다)
                 var m = ShipForecast.Models.First(x => x.Key == "water");
                 var g = m.Gauge(w)!;
                 var L = a.Outlook.Ledger("water");

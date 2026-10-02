@@ -641,13 +641,14 @@ public sealed class ShipPlanner
         var cm = a.CrewModel;
         Schedule.Clear();
         var level = a.Authority.Level(Domain.Maintenance);
+        bool calm = a.FireCases.Count == 0 && !w.Command.Active && Crisis.Level(w) < CrisisLevel.Emergency; // 위기엔 정비 부탁을 하지 않는다 (지휘 · 대응 수순이 먼저)
         // 고장 위험 → 정비 부탁 (솜씨 있고 덜 지친 사람)
         foreach (var risk in a.Outlook.Risks)
         {
             var o = w.Board.Open.FirstOrDefault(x => x.Target.Furniture?.Id == risk.MachineId && x.Kind is WorkKind.Maintain or WorkKind.Repair or WorkKind.PreventiveCheck && x.Assignee == null);
             var who = o != null ? cm.Best(o.Skill) : null;
             Schedule.Add(new ScheduleItem("정비", $"{risk.Machine} ({risk.Room}) — 하루 안 고장 {risk.P24 * 100:0}%", who?.Id ?? -1, risk.Why, w.Tick));
-            if (o == null || who == null) continue;
+            if (o == null || who == null || !calm) continue;
             if (cm.Asks.TryGetValue(who.Id, out var had) && had.OrderId == o.Id) continue;
             string why = $"하루 안 고장 {risk.P24 * 100:0}% · {risk.Why}";
             if (level == AuthLevel.Auto) cm.Ask(who, o, why);
@@ -674,6 +675,14 @@ public sealed class ShipPlanner
                 a.Asks.Propose("rest:" + c.Id, "plan", c.Room, $"{c.Name} 쉬게 하기", $"기력 {rest * 100:0}%로 보인다 (컴퓨터 짐작)", "급하지 않은 일은 남에게", 30f, null, (world, pp) => world.Automation.CrewModel.AskRest(cc, "함장이 쉬게 했다"));
             }
         }
+        // 원정대로 뽑힌 사람: 출발 전에 쉬어 두라고 (원정 ↔ 일정)
+        if (w.Expedition.Pending is ExpProposal ep && sched != AuthLevel.Advise)
+            foreach (var id in ep.Team)
+                if (w.Crew.FirstOrDefault(c => c.Id == id) is CrewMember m && m.CanAct && !cm.RestAsked(m) && cm.Knows(m) && cm.RestNow(m) < 0.6f)
+                {
+                    cm.AskRest(m, $"원정대({ep.Site.Name}) — 출발 전에 쉬어 두라", 8f);
+                    Schedule.Add(new ScheduleItem("쉼", $"{m.Name} 원정 전 휴식", m.Id, ep.Site.Name, w.Tick));
+                }
         // 당번표: 오늘 당번 중 지칠 사람을 바꾼다
         if (sched != AuthLevel.Advise && a.Active(ComputerModule.Roster))
         {
@@ -702,7 +711,7 @@ public sealed class ShipPlanner
             var o = w.Board.Open.FirstOrDefault(x => x.Kind == WorkKind.Calibrate && x.Target.Room == room && x.Assignee == null);
             var who = o != null ? cm.Best(Skill.Electrical) : null;
             Schedule.Add(new ScheduleItem("교정", $"{room.Name} {m.Name} 계기 교정", who?.Id ?? -1, L.LastWhy, w.Tick));
-            if (o != null && who != null && level != AuthLevel.Advise && !(cm.Asks.TryGetValue(who.Id, out var had) && had.OrderId == o.Id)) cm.Ask(who, o, $"{m.Name} 계기가 {L.Disagree}번 어긋났다");
+            if (o != null && who != null && calm && level != AuthLevel.Advise && !(cm.Asks.TryGetValue(who.Id, out var had) && had.OrderId == o.Id)) cm.Ask(who, o, $"{m.Name} 계기가 {L.Disagree}번 어긋났다");
         }
         // 원정 일정
         if (w.Expedition.Current is Trip t) Schedule.Add(new ScheduleItem("원정", $"{t.Site.Name} — {t.Phase}", t.Leader, t.Why, w.Tick));
@@ -759,7 +768,7 @@ public sealed class ShipPlanner
             if (!led && a.Authority.Level(Domain.Crisis) == AuthLevel.Auto)
                 foreach (var id in Emergency.FireTeam)
                     if (w.Crew.FirstOrDefault(c => c.Id == id) is CrewMember c && w.Board.Open.FirstOrDefault(o => o.Kind == WorkKind.Extinguish && o.Target.CurrentRoom == room) is WorkOrder o)
-                        cm.Ask(c, o, "화재 대응 계획의 소화조", 1f);
+                        cm.Ask(c, o, "화재 대응 계획의 소화조", 1f, crisis: true);
         }
         if (fc == null) Emergency.AnnouncedFire = -1;
     }

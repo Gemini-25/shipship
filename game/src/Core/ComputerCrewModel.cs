@@ -29,7 +29,7 @@ public sealed class CrewProfile
 }
 
 /// <summary>컴퓨터가 한 사람에게 한 부탁 (작업 하나 · 기한).</summary>
-public sealed record WorkAsk(int CrewId, int OrderId, string Title, string Why, long Until, long Tick);
+public sealed record WorkAsk(int CrewId, int OrderId, string Title, string Why, long Until, long Tick, bool Crisis = false);
 
 public sealed class CrewModelBook
 {
@@ -49,6 +49,9 @@ public sealed class CrewModelBook
 
     public CrewProfile Of(CrewMember c) => _p.TryGetValue(c.Id, out var p) ? p : _p[c.Id] = new CrewProfile { Id = c.Id };
     public bool Knows(CrewMember c) => _p.TryGetValue(c.Id, out var p) && p.RestSeen >= 0;
+    /// <summary>모형이 섰다 (하루 넘게 — 서른 번 넘게 봤다) — 그 전엔 부탁 · 당번 짐작에 쓰지 않는다 (모르는 사람에게 함부로 부탁하지 않는다).</summary>
+    public bool Ready(CrewMember c) => _p.TryGetValue(c.Id, out var p) && p.Seen >= ReadySeen;
+    public const int ReadySeen = 30;
     public IReadOnlyDictionary<int, WorkAsk> Asks => _asks;
     public bool RestAsked(CrewMember c) => _rest.TryGetValue(c.Id, out var t) && t > _w.Tick;
     /// <summary>쉬라는 부탁을 받은 사람 (화면).</summary>
@@ -152,6 +155,7 @@ public sealed class CrewModelBook
     /// <summary>당번 하나를 맡기는 값 (낮을수록 맡긴다): 지침 · 싫어함 · 솜씨.</summary>
     public float DutyCost(CrewMember c, string duty)
     {
+        if (!Ready(c)) return 0f; // 아직 모른다 — 당번표는 원래대로
         var p = Of(c);
         float rest = RestNow(c);
         float hours = duty == "야간 당직" ? 8f : 2f;
@@ -193,7 +197,8 @@ public sealed class CrewModelBook
         float bs = float.MinValue;
         foreach (var c in pool ?? w.Crew)
         {
-            if (c.Dead || c.IsChild || !c.CanAct || c.Outside || c.Away) continue;
+            if (c.Dead || c.IsChild || !c.CanAct || c.Outside || c.Away || !Ready(c)) continue;
+            if (w.Expedition.Pending?.Team.Contains(c.Id) == true || w.Expedition.MemberOf(c) != null) continue; // 원정대로 뽑힌 사람은 출발 전에 아껴 둔다
             float rest = RestNow(c);
             if (rest < 0.3f) continue;
             var p = Of(c);
@@ -204,11 +209,11 @@ public sealed class CrewModelBook
     }
 
     /// <summary>작업 부탁 (믿는 만큼 따른다 — Chores.Appeal 훅).</summary>
-    public void Ask(CrewMember c, WorkOrder o, string why, float hours = 4f)
+    public void Ask(CrewMember c, WorkOrder o, string why, float hours = 4f, bool crisis = false)
     {
         var w = _w;
-        if (_asks.TryGetValue(c.Id, out var old) && old.OrderId == o.Id) return;
-        _asks[c.Id] = new WorkAsk(c.Id, o.Id, o.Title, why, w.Tick + SimTime.Hours(hours), w.Tick);
+        if (_asks.TryGetValue(c.Id, out var old) && old.OrderId == o.Id || !Ready(c) && !crisis) return;
+        _asks[c.Id] = new WorkAsk(c.Id, o.Id, o.Title, why, w.Tick + SimTime.Hours(hours), w.Tick, crisis);
         Of(c).Asked++;
         WorkAsks++;
         w.Automation.Apps.Messages.Add(new PersonalMessage(w.Tick, c.Id, "부탁", $"{o.Title} 부탁 — {why}"));
@@ -219,7 +224,7 @@ public sealed class CrewModelBook
     public void AskRest(CrewMember c, string why, float hours = 6f)
     {
         var w = _w;
-        if (RestAsked(c)) return;
+        if (RestAsked(c) || !Ready(c)) return;
         _rest[c.Id] = w.Tick + SimTime.Hours(hours);
         RestAsks++;
         w.Automation.Apps.Messages.Add(new PersonalMessage(w.Tick, c.Id, "쉼", $"{why} — 급하지 않은 일은 다른 사람에게 부탁했다"));
@@ -233,7 +238,7 @@ public sealed class CrewModelBook
     {
         if (_asks.Count == 0 && _rest.Count == 0) return 0f;
         float b = 0f;
-        if (_asks.TryGetValue(c.Id, out var ask) && ask.OrderId == o.Id && ask.Until > _w.Tick) b += 0.35f * _w.Automation.Trusts.Of(c);
+        if (_asks.TryGetValue(c.Id, out var ask) && ask.OrderId == o.Id && ask.Until > _w.Tick && (ask.Crisis ? !_w.Command.Active : !_w.Command.Active && _w.Automation.FireCases.Count == 0) && _w.Expedition.MemberOf(c) == null) b += 0.35f * _w.Automation.Trusts.Of(c); // 현장 지휘가 서면 지휘의 조 편성을 따른다
         if (_rest.TryGetValue(c.Id, out var until) && until > _w.Tick && o.Urgency < 0.6f && Routine(o.Kind)) b -= 0.4f * _w.Automation.Trusts.Of(c); // 늘 하는 일만 (급한 일 · 사고 수습 · 관제석은 그대로)
         return b;
     }

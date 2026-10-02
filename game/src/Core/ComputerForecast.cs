@@ -333,6 +333,19 @@ public sealed class ShipForecast
                 world.Automation.Authority.ForecastGraded(wn, r.Item1);
                 return r;
             });
+        // 목숨에 걸린 자원(물 · 식량 · 산소 · 전력)은 배 전체에 방송 · 재료 · 추진제는 맡은 사람에게만 (온 배를 걱정시키지 않는다)
+        if (key is "materials" or "propellant")
+        {
+            var sk = key == "materials" ? ShipSim.Core.Skill.Mechanics : ShipSim.Core.Skill.Piloting;
+            var who = w.Crew.Where(c => !c.Dead && !c.IsChild).OrderByDescending(c => c.SkillLevel(sk)).ThenBy(c => c.Id).FirstOrDefault();
+            if (who != null)
+            {
+                a.Apps.Messages.Add(new PersonalMessage(w.Tick, who.Id, "예측", $"{f.Line} — {f.Basis}"));
+                who.Mind.Knows[$"forecast:{key}"] = (KnowSource.Radio, w.Tick, f.Line);
+                wn.Heard.Add(who.Id);
+            }
+            return;
+        }
         if (f.Confidence >= 0.4f)
         {
             var b = a.Speak.Announce(a.Authority.Say($"예측 — {f.Line}. {m.Name} {f.Estimate:0}{m.Unit} · 하루 {f.Rate * 24f:+0;-0}{m.Unit}"), g, 1);
