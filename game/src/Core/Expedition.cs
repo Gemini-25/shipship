@@ -640,7 +640,8 @@ public sealed class ExpeditionSystem
     /// <summary>먼저 꺼내는 사람: 대담하고 성실하고 말이 많고 — 그 재료를 손에 쥐는 사람.</summary>
     public float Initiative(CrewMember c, MatCat cat) =>
         0.35f * c.Traits.Bravery + 0.25f * c.Traits.Diligence + 0.2f * c.Traits.Sociability + (Notices(c, cat) ? 0.2f : 0f) + (Halted ? 0.1f : 0f)
-        + (c.Value == CrewValue.Efficiency ? 0.08f : c.Value == CrewValue.Safety ? -0.08f : 0f) - c.Memory.Trauma * 0.5f - c.Needs.Stress * 0.15f;
+        + (c.Value == CrewValue.Efficiency ? 0.08f : c.Value == CrewValue.Safety ? -0.08f : 0f) - c.Memory.Trauma * 0.5f - c.Needs.Stress * 0.15f
+        + _w.Brain2.Goals.Urge(c, "trip"); // v16.15 계획이 막혀 "원정을 꺼내 보자"는 중기 목표
 
     /// <summary>자원하나: 용기 · 솜씨 · 내 일에 필요한 재료 · 같이 가고픈 사람 − 겁 · 부상 · 병 · 피로 · 두고 갈 사람.</summary>
     public (float, string) VolunteerScore(CrewMember c, Site site, MatCat cat)

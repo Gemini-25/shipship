@@ -114,10 +114,14 @@ public sealed class MindSystem
         return room.Doors.Any(d => (d.RoomA == c.Room || d.RoomB == c.Room) && (d.Openness > 0.3f || person == null));
     }
 
+    /// <summary>v16.15 다른 사람이 찾아와 알려 줬다 (두뇌 2.0 알리러 감) — 소문과 같은 출처로 안다.</summary>
+    public void Hear(CrewMember c, string key, string what) { if (!c.Mind.Knows.ContainsKey(key)) Learn(c, key, KnowSource.Rumor, what); }
+
     private void Learn(CrewMember c, string key, KnowSource src, string what)
     {
         var w = _w;
         c.Mind.Knows[key] = (src, w.Tick, what);
+        w.Brain2.Beliefs.FromMind(c, key, src, what); // v16.15 아는 것은 믿음 장부로 모인다
         c.NextThinkTick = Math.Min(c.NextThinkTick, w.Tick + 1); // 알게 된 그 자리에서 다시 판단한다
         switch (src)
         {

@@ -119,6 +119,8 @@ public partial class Hud
             y += 6;
         }
 
+        y = DrawBrainSection(c, x, right, y, Fits); // v16.15 두뇌: 감정 · 꿈과 목표 · 계획 · 믿음 (HudBrain.cs)
+
         // ── 영향: 여러 시스템에 걸친 원인 → 결과 ──
         var links = CrewWhy.Influences(c, w);
         if (links.Count > 0 && Fits(Mathf.Min(3, links.Count) * 16 + 4))

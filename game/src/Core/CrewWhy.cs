@@ -26,7 +26,7 @@ public readonly record struct WhyLink(WhySource Source, string[] Steps, bool Hur
 /// ("배고픔 → 식당 → 자리 없음 → 기다림").
 /// 읽기 전용이다: 시뮬레이션 상태를 바꾸지 않고, 난수도 쓰지 않는다 (화면이 있든 없든 결과가 같다).
 /// </summary>
-public static class CrewWhy
+public static partial class CrewWhy
 {
     /// <summary>지금 하는 일의 이유 사슬. 맨 앞이 동기, 맨 뒤가 지금 단계.</summary>
     public static List<WhyStep> Chain(CrewMember c, World w)

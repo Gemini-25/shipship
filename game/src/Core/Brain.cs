@@ -42,6 +42,7 @@ public static class Brain
         new OpenDoorActivity(), new BodyUpkeepActivity(), // v16.3 잠긴 문 열어 주기 · 배 손보기 (뚜껑 · 패널 · 문 · 유리 · 빈 걸이)
         SceneActivity.Instance, // v16.1 일상 장면 (체스 · 커피 · 영화 · 닦기 · 간식 · 몽유병 · 소품 · 인수인계 확인)
         new CheckSmellActivity(), new SavedPlateActivity(), new SetAsidePlateActivity(), new FollowSmellActivity(), // v16.8 탄내 확인 · 남겨 둔 접시 · 냄새를 따라
+        PlanActivity.Instance, new OutageActivity(), new FireBeliefActivity(), new TellActivity(), // v16.15 두뇌 2.0: 계획대로 · 정전 대처 · 믿음대로 불 확인 · 알리러 감
         new ChatActivity(),
         new RelaxActivity(),
         new WanderActivity(),
@@ -83,6 +84,7 @@ public static class Brain
             pt = Prof.Lap(a.ScoreKey, pt);
             // 위기 판단: 비상·생존 위기에는 잠·휴식을 미룬다 (탈진 직전이면 쪽잠)
             if (a is RelaxActivity or ChatActivity or WanderActivity or HobbyActivity or MendActivity or ReachOutActivity) score *= w.Society.LeisureFactor; // v13.4 휴식·여가 방침
+            w.Brain2.Tilt(c, a, ref score, ref reason); // v16.15 장 · 중기 목표와 감정이 점수를 기울인다
             float damp = Crisis.Damp(c, w, a, out var note);
             if (damp < 1f && score > 0f) { score *= damp; if (note != null) reason += $" · {note}"; }
             if (score > 0f) score += w.Rng.Range(-Noise, Noise);
