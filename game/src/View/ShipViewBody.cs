@@ -46,6 +46,7 @@ public partial class ShipView
             var r = CellRect(c);
             var p = r.Position;
             var tint = new Color((uint)(Materials.Of(m).Tint << 8 | 0xff));
+            if (!LookOn) // v16.5a 생성기 바닥재 그림이 있으면 선 무늬는 생략
             switch (m)
             {
                 case Mat.Grate:
@@ -164,7 +165,7 @@ public partial class ShipView
         // 얇은 칸막이: 밝은 판 두 장 사이 이음선 (두꺼운 벽과 실루엣이 다르다)
         foreach (var wb in body.WallList)
         {
-            if (!wb.Thin) continue;
+            if (!wb.Thin || LookOn) continue; // v16.5a 칸막이 그림(골판)이 바탕 층에 있다
             var r = CellRect(wb.Cell);
             ci.DrawRect(r.Grow(-6f), new Color(0.66f, 0.66f, 0.62f, 0.85f));
             bool vert = ship.RoomAt(wb.Cell + new Cell(1, 0)) != null && ship.RoomAt(wb.Cell + new Cell(-1, 0)) != null;
@@ -189,7 +190,7 @@ public partial class ShipView
 
         // 닳은 길: 카펫은 눌려 어둡고, 타일 · 금속판은 반들반들 밝다 (재질 마찰이 바뀐 만큼)
         var wear = body.Wear;
-        for (int i = 0; i < wear.Length; i++)
+        for (int i = 0; i < (LookOn ? 0 : wear.Length); i++) // v16.5a 닳음은 겹치기 그림 · 발자국 흔적이 맡는다
         {
             float v = wear[i];
             if (v < 0.03f) continue;
@@ -225,7 +226,7 @@ public partial class ShipView
             if (soot > 0.05f)
             {
                 // 그을음: 결 따라 번진 검댕 + 고운 알갱이
-                ci.DrawRect(r.Grow(-1f), new Color(0.05f, 0.04f, 0.035f, 0.25f * soot));
+                if (!LookOn) ci.DrawRect(r.Grow(-1f), new Color(0.05f, 0.04f, 0.035f, 0.25f * soot));
                 for (int k = 0; k < 7; k++)
                     ci.DrawRect(new Rect2(r.Position + new Vector2(BH(c.X, c.Y, k + 40) * (T - 3), BH(c.Y, c.X, k + 41) * (T - 3)), new Vector2(2, 2)), new Color(0.02f, 0.02f, 0.02f, 0.6f * soot));
             }
@@ -256,7 +257,7 @@ public partial class ShipView
             else if (wet > 0.05f && wetWhy == "결로")
             {
                 // 결로: 차가운 벽 쪽 가장자리에 맺혀 흘러내린 물방울 줄
-                ci.DrawRect(r.Grow(-1f), new Color(0.45f, 0.65f, 0.85f, 0.12f + 0.15f * wet));
+                if (!LookOn) ci.DrawRect(r.Grow(-1f), new Color(0.45f, 0.65f, 0.85f, 0.12f + 0.15f * wet));
                 for (int k = 0; k < 6; k++)
                 {
                     float x = r.Position.X + 3 + k * 5f, len = 3f + 7f * BH(c.X + k, c.Y, 160) * wet;
@@ -267,7 +268,7 @@ public partial class ShipView
             else if (wet > 0.05f)
             {
                 // 물기: 반투명 막 + 천천히 미끄러지는 반사 줄 + 물방울
-                ci.DrawRect(r.Grow(-1f), new Color(0.35f, 0.6f, 0.95f, 0.18f + 0.22f * wet));
+                if (!LookOn) ci.DrawRect(r.Grow(-1f), new Color(0.35f, 0.6f, 0.95f, 0.18f + 0.22f * wet)); // v16.5a 물 막은 겹치기 그림이
                 float ph = Mathf.PosMod(_time * 0.35f + BH(c.X, c.Y, 3), 1f);
                 float y = r.Position.Y + 4 + ph * (T - 8);
                 ci.DrawLine(new Vector2(r.Position.X + 4 + ph * 6, y), new Vector2(r.End.X - 6, y - 4), new Color(0.9f, 0.97f, 1f, 0.35f * wet), 1.5f, true);
@@ -310,7 +311,7 @@ public partial class ShipView
                     float rad = T * (0.22f + 0.18f * BH(c.X, c.Y, k + 60)) * (0.6f + 0.4f * oil);
                     pts[k] = ctr + new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * rad;
                 }
-                ci.DrawColoredPolygon(pts, new Color(0.12f, 0.08f, 0.04f, 0.75f * oil));
+                if (!LookOn) ci.DrawColoredPolygon(pts, new Color(0.12f, 0.08f, 0.04f, 0.75f * oil));
                 float sh = _time * 0.8f + c.X;
                 ci.DrawArc(ctr + new Vector2(-2, -1), T * 0.16f, sh, sh + 2.2f, 10, new Color(0.85f, 0.3f, 0.85f, 0.5f * oil), 1.2f, true);
                 ci.DrawArc(ctr + new Vector2(1, 1), T * 0.12f, sh + 2f, sh + 4.2f, 10, new Color(0.3f, 0.9f, 0.55f, 0.5f * oil), 1.2f, true);
@@ -319,7 +320,7 @@ public partial class ShipView
             if (frost > 0.05f)
             {
                 // 서리: 희뿌연 막 + 여섯 갈래 결정이 반짝인다
-                ci.DrawRect(r.Grow(-1f), new Color(0.88f, 0.95f, 1f, 0.2f + 0.3f * frost));
+                if (!LookOn) ci.DrawRect(r.Grow(-1f), new Color(0.88f, 0.95f, 1f, 0.2f + 0.3f * frost));
                 int n = detail ? 4 : 2;
                 for (int k = 0; k < n; k++)
                 {

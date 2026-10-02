@@ -10,5 +10,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../game/src/Core/**/*.cs" Link="Core/%(RecursiveDir)%(Filename)%(Extension)" />
+    <!-- v16.5a 재질 그림 점검(lookcheck): 텍스처 생성기 · 재질 그림 표 (Godot 없이 컴파일되는 것만) -->
+    <Compile Include="../texgen/TexGen*.cs;../texgen/Png.cs" Link="TexGen/%(Filename)%(Extension)" />
+    <Compile Include="../../game/src/View/LookSpec.cs" Link="View/LookSpec.cs" />
   </ItemGroup>
 </Project>

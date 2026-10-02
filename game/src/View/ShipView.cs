@@ -33,10 +33,13 @@ public partial class ShipView : Node2D
         _static = new DrawLayer { Name = "Static", Painter = PaintStatic };
         _lights = new DrawLayer { Name = "Lights", Painter = PaintLights, Material = new CanvasItemMaterial { BlendMode = CanvasItemMaterial.BlendModeEnum.Add } };
         _dynamic = new DrawLayer { Name = "Dynamic", Painter = PaintDynamic };
+        AddLookUnder(); // v16.5a 바탕(생성기 바닥재 · 벽) · 상태 겹치기 · 흔적 — 정적 층 아래
         AddChild(_static);
         AddFixtureFineLayer(); // v16.5c 설비 디테일 층 (가까이서만)
+        AddLookLight(); // v16.5a 2D 조명: 낮은 해상도 빛 버퍼 (곱하기)
         AddChild(_lights); // v10: 천장 조명이 바닥에 떨어뜨리는 빛 (더하기 섞기)
         AddChild(_dynamic);
+        AddLookOver(); // v16.5a 입자 (김 · 물방울 · 불꽃 · 연기 · 먼지 · 결로)
         BuildOutlines();
         BuildLabelAnchors();
         Bounds = ComputeBounds();
@@ -49,12 +52,13 @@ public partial class ShipView : Node2D
         CheckStructureChanged();
         CheckCircuitsChanged();
         UpdateFixtureLod(); // v16.5c 확대 단계 · 보이는 범위
+        UpdateLook((float)delta); // v16.5a 확대 단계 · 겹치기 지문 · 빛 버퍼 · 입자
         _dynamic.QueueRedraw();
         _lights.QueueRedraw();
     }
 
     /// <summary>선체가 바뀌었을 때(사고, 개조) 호출.</summary>
-    public void RedrawStatic() { _static.QueueRedraw(); _fixFine?.QueueRedraw(); } // v16.5c 디테일 층도
+    public void RedrawStatic() { RedrawLook(); _static.QueueRedraw(); _fixFine?.QueueRedraw(); } // v16.5c 디테일 층도
 
     public static Rect2 CellRect(Cell c) => new(c.X * T, c.Y * T, T, T);
     public static Rect2 FurnitureRect(Furniture f) => new(f.MinX * T, f.MinY * T, f.Width * T, f.Height * T);
@@ -148,42 +152,8 @@ public partial class ShipView : Node2D
     {
         var ship = _world.Ship;
         var g = ship.Grid;
-        PaintHullSkin(ci); // v10.9 외판·날개·노즐
-
-        for (int i = 0; i < g.CellCount; i++)
-        {
-            var c = g.CellAt(i);
-            if (g.Kind(c) != TileKind.Void) ci.DrawRect(CellRect(c).Grow(3f), Palette.HullRim);
-        }
-
-        for (int i = 0; i < g.CellCount; i++)
-        {
-            var c = g.CellAt(i);
-            var r = CellRect(c);
-            switch (g.Kind(c))
-            {
-                case TileKind.Wall:
-                    ci.DrawRect(r, Palette.Wall);
-                    if (Textures.Wall != null) ci.DrawTextureRectRegion(Textures.Wall, r, Variant(c), new Color(1, 1, 1, 0.9f));
-                    break;
-                case TileKind.Floor:
-                {
-                    var type = ship.RoomAt(c)!.Type;
-                    ci.DrawRect(r, Palette.RoomFloor(ship.RoomAt(c)!.Kind));
-                    var (tex, alpha) = Textures.Floor(type);
-                    if (tex != null) ci.DrawTextureRectRegion(tex, r, Variant(c), new Color(1, 1, 1, alpha));
-                    break;
-                }
-                case TileKind.Door:
-                {
-                    var door = ship.DoorAt(c);
-                    var room = door?.RoomA ?? door?.RoomB;
-                    ci.DrawRect(r, room != null ? Palette.RoomFloor(room.Kind) : Palette.Floor);
-                    if (Textures.Plate != null) ci.DrawTextureRectRegion(Textures.Plate, r, Variant(c), new Color(1, 1, 1, 0.8f));
-                    break;
-                }
-            }
-        }
+        // v16.5a 외판 · 테두리 · 바닥 · 벽 칸은 바탕 층(PaintLookBase)이 그린다 — 겹치기 · 흔적이 그 위, 가구 아래에 오도록
+        if (_hullCells == null || _hullVersion != _world.Structure.Version) BuildHull(); // 그리는 순서가 바뀌어도 외판 칸은 먼저
 
         // 벽 안쪽 모서리 하이라이트
         for (int i = 0; i < g.CellCount; i++)
@@ -266,6 +236,7 @@ public partial class ShipView : Node2D
             if (!emergency && room.PowerFlow < 0.75f) // v14.8 전압 강하: 불이 흐리고, 많이 떨어지면 깜빡인다
                 strength *= (0.45f + 0.55f * room.PowerFlow / 0.75f) * (room.PowerFlow < 0.55f ? 0.8f + 0.2f * Mathf.Sin(_world.Tick * 0.7f + room.Id) : 1f);
             if (emergency && Mathf.Sin(_time * 2.2f + room.Id) < -0.2f) strength *= 0.5f; // 비상등은 느리게 깜빡인다
+            if (LookLightOn) strength *= 0.5f; // v16.5a 바탕 빛은 빛 버퍼가 맡고 여기선 번짐만
             int minX = room.Cells.Min(c => c.X), minY = room.Cells.Min(c => c.Y);
             foreach (var c in room.Cells)
             {
@@ -277,6 +248,7 @@ public partial class ShipView : Node2D
             }
         }
         PaintPortableLights(ci); // v16.7 이동식 광원 (작업등 원뿔 · 히터 열기)
+        PaintLookGlow(ci); // v16.5a 불길 깜빡임 번짐
         PaintBeacons(ci);
     }
 
