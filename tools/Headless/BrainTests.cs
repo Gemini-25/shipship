@@ -182,7 +182,7 @@ public static partial class Program
                         var te = witness.LastEvaluations.FirstOrDefault(e => e.Activity is TellActivity);
                         var top = witness.LastEvaluations.FirstOrDefault();
                         var wb = w.Brain2.Beliefs.Get(witness, Topic.Fire, room.Id);
-                        Console.WriteLine($"    {m * 0.5f}분 {witness.Name}: {witness.Job?.Label} @{witness.Room?.Name} · 알리기 {te.Score:0.00} ({te.Reason}) · 1위 {top.Activity?.Label} {top.Score:0.00} ({top.Reason}) · 믿음 {(wb != null ? $"{BeliefSystem.SourceName(wb.Src)} 경보{wb.Alarmed}" : "-")} · {friend.Name} 앎 {(friend.Mind.Knows.TryGetValue($"fire:{room.Id}", out var fk) ? MindSystem.SourceName(fk.src) : "-")} · 데이터선 {room.DataLinked}");
+                        Console.WriteLine($"    {m * 0.5f}분 {witness.Name}: {witness.Job?.Label} @{witness.Room?.Name} · 알리기 {te.Score:0.00} ({te.Reason}) · 1위 {top.Activity?.Label} {top.Score:0.00} ({top.Reason}) · 대피 {witness.LastEvaluations.FirstOrDefault(e => e.Activity is EvacuateActivity).Score:0.00} 여유 {witness.Job?.InterruptMargin:0.00} 생각 {SimTime.Clock(witness.LastThinkTick)} · 믿음 {(wb != null ? $"{BeliefSystem.SourceName(wb.Src)} 경보{wb.Alarmed}" : "-")} · {friend.Name} 앎 {(friend.Mind.Knows.TryGetValue($"fire:{room.Id}", out var fk) ? MindSystem.SourceName(fk.src) : "-")} · 데이터선 {room.DataLinked}");
                     }
                 }
                 var wp = w.Brain2.Plans.Past.Concat(w.Brain2.Plans.Active).Where(p => p.Owner == witness.Id && p.Kind == PlanKind.Tell).ToList();

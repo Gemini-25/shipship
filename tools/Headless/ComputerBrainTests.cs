@@ -84,7 +84,7 @@ public static partial class Program
                 var all = a.Planner.Pitches.Where(p => p.Key == "water").ToList();
                 win ??= all.LastOrDefault(p => p.State == "통과" && p != p1); // 정기 회의가 먼저 정했을 수도 있다
                 Check("근거를 바꿔 다시 설득 — 다른 근거 갈래(사례 · 대안 · 가치)로 다시 올려 통과 · 세 번까지만", win != null && p1 != null && win.Arg != p1.Arg && win.Basis != p1.Basis && win.Attempt <= ShipPlanner.MaxAttempts,
-                    string.Join(" → ", all.Select(p => $"{p.Attempt}:{p.Option}/{p.Arg}/{p.State}")) + (win != null ? $" · 통과 근거: {win.Basis}" : ""));
+                    string.Join(" → ", all.Select(p => $"{p.Attempt}:{p.Option}/{p.Arg}/{p.State}({p.Yes}:{p.No} {string.Join(",", p.Objectors.Take(3).Select(o => o.why))})")) + (win != null ? $" · 통과 근거: {win.Basis}" : ""));
                 bool acted = win != null && (win.Option is "절수" or "엄격 절수" ? w.Policies["water"] >= 1 : w.Expedition.Pending != null || w.Expedition.Current != null || w.Expedition.Past.Count > 0);
                 Check("통과한 대책을 실제로 한다 (방침 물 · 원정)", acted, $"방침 물 {w.Policies["water"]} · 원정 {(w.Expedition.Current != null ? "출발" : w.Expedition.Pending != null ? "기다림" : "없음")} · 계획: {a.Planner.PlanOf("water")?.Action}");
                 Check("배우기 — 거절된 대책은 다음에 덜 고른다 (같은 상황 · 다른 조치)", a.Planner.Strategy.TryGetValue("water:short", out var st) && st.Values.Any(s => s.Rejected > 0) && (win == null || p1 == null || win.Option != p1.Option || win.Arg != p1.Arg),

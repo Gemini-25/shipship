@@ -294,9 +294,12 @@ public static partial class Program
                 Force(w, p, new Job(null, "왔다 갔다", toils) { Urgent = urgent });
                 for (int t = 0; t < SimTime.Hours(1) && p.Job?.Label == "왔다 갔다"; t++)
                 {
+                    int sl = b.Stats.Slips;
                     w.Step();
+                    if (b.Stats.Slips > sl && Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "9") Console.WriteLine($"DBG 미끄럼 {SimTime.Clock(w.Tick)} by {by.Name} {by.Job?.Label} @{by.Room?.Name} 깸 {by.IsAwake} 거리 {(by.Position - p.Position).Length():0.0} · p @{p.Room?.Name} {p.Cell}");
                     if (wet) foreach (var c in room.Cells) if (b.Mark(c, CellMark.Wet) < 0.9f) b.SetMark(c, CellMark.Wet, 1f, "시험");
                 }
+                if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "9") Console.WriteLine($"DBG by {by.Name} {by.Job?.Label} @{by.Room?.Name} 깸 {by.IsAwake} 거리 {(by.Position - p.Position).Length():0.0} · p {p.Job?.Label} @{p.Room?.Name} · 미끄럼 {b.Stats.Slips - s0}");
                 seen = $"곁에 선 {by.Name}: 봤다 {b.Stats.Witnessed} · 조심 {b.Cautious(by, room)}({b.CautionWhy(by)}) · 넘어진 사람 조심 {b.Cautious(p, room)}";
                 if (wet && urgent && b.Stats.Slips > s0 && !(b.Stats.Witnessed > 0 && b.Cautious(by, room))) seen = "✘ " + seen;
                 return b.Stats.Slips - s0;

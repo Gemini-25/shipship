@@ -11,7 +11,7 @@ namespace ShipSim.Core;
 // 주요 행동(대피할 방 · 불 확인 · 물건 찾기 · 사람 찾기 · 정전 대처)은 세계 대신 이 믿음으로 판단한다.
 
 /// <summary>믿음의 주제. Id는 방 · 사람 · 물건 종류 · 설비 · 대재난 번호.</summary>
-public enum Topic : byte { Fire, Breach, Down, Dark, Air, Water, Person, Item, Omen, Cosmic, Shelter, Warn, Outage }
+public enum Topic : byte { Fire, Breach, Down, Dark, Air, Water, Person, Item, Omen, Cosmic, Shelter, Warn, Outage, Slip, Mix, Forecast } // v16 통합: 미끄러운 바닥(본 것 · 방송) · 위험 조합 경고(Matter) · 컴퓨터 예측(Outlook)
 
 /// <summary>어떻게 알았나 — 출처마다 확신과 흐려지는 속도가 다르다.</summary>
 public enum BeliefSource : byte { Seen, Alarm, Broadcast, Radio, Told, Rumor, Overheard, Computer, Guess }
@@ -104,6 +104,9 @@ public sealed class BeliefSystem
         Topic.Shelter => 1.5f,
         Topic.Warn => 2f,
         Topic.Outage => 4f,
+        Topic.Slip => 3f, // 바닥은 마른다
+        Topic.Mix => 24f, // 위험한 조합 경고는 오래 기억한다
+        Topic.Forecast => 36f, // 며칠 뒤 예측 — 다음 예측까지
         _ => s switch
         {
             BeliefSource.Seen => 8f,
@@ -343,8 +346,25 @@ public sealed class BeliefSystem
             Topic.Shelter => "대피소로 가라는 방송",
             Topic.Warn => $"{R(b.Id)} 위험 (컴퓨터 경고)",
             Topic.Outage => $"{R(b.Id)} 정전 — {OutageName((OutageCause)b.Value)}",
+            Topic.Slip => b.Value == 1 ? $"{R(b.Id)} 바닥 미끄러움" : $"{R(b.Id)} 바닥 마름",
+            Topic.Mix => b.Value == 1 ? $"{R(b.Id)} 위험한 조합 (컴퓨터 경고)" : $"{R(b.Id)} 조합 괜찮음",
+            Topic.Forecast => ForecastText(b),
             _ => "?",
         };
+    }
+
+    /// <summary>컴퓨터 예측 믿음 (Id = 자원 순번 · Value 1 = 부족 예보 · Aux = 며칠 뒤 × 10).</summary>
+    private static string ForecastText(Belief b)
+    {
+        string name = b.Id >= 0 && b.Id < ShipForecast.Models.Count ? ShipForecast.Models[b.Id].Name : "자원";
+        return b.Value == 1 ? $"{ShipForecast.When(b.Aux / 10f)} {name} 부족 (컴퓨터 예측)" : $"{name} 넉넉 (컴퓨터 예측)";
+    }
+
+    /// <summary>컴퓨터 예측을 들은 사람: 그 자원이 모자랄 거라고 믿나 (확신).</summary>
+    public float ForecastBelief(CrewMember c, string key)
+    {
+        int i = ShipForecast.Models.FindIndex(m => m.Key == key);
+        return i < 0 ? 0f : Conf(c, Topic.Forecast, i, 1);
     }
 
     public static string OutageName(OutageCause k) => k switch
@@ -444,6 +464,9 @@ public sealed class BeliefSystem
         Learn(c, Topic.Air, r.Id, Atmosphere.Danger(r) > 0.3f ? 1 : 0, BeliefSource.Seen, 1f);
         Learn(c, Topic.Breach, r.Id, r.Leaking ? 1 : 0, BeliefSource.Seen, 1f);
         Learn(c, Topic.Water, r.Id, r.Flood > 40f ? 1 : 0, BeliefSource.Seen, 1f);
+        // v16 통합 (배 본체): 미끄럽다고 믿던 바닥이 말랐으면 고친다 · 젖은 바닥을 보면 안다
+        if (book.Map.TryGetValue(Key(Topic.Slip, r.Id), out var sb) && sb.Value == 1 && (sb.Src != BeliefSource.Seen || w.Tick - sb.Tick > SimTime.Minutes(30)))
+            Learn(c, Topic.Slip, r.Id, w.Body.WetCells(r) >= 2 ? 1 : 0, BeliefSource.Seen, 0.9f);
         // 열린 문 너머 (불빛 · 연기)
         foreach (var d in r.Doors)
         {

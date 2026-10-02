@@ -203,8 +203,7 @@ public sealed partial class BodySystem
         int i = grid.Index(c);
         if (Floor[i] == Material.None) return 1f;
         float wet = Marks.Count > 0 && Marks.TryGetValue(i, out var s) ? s.V[(int)CellMark.Wet] : 0f;
-        return Matter.FireSpreadMul(Floor[i], wet) * _w.Matter.FuelMul(c); // v16.4 재질 × 원소 표 · 놓인 물건 (마른 러그는 키우고 젖은 것은 막는다)
-        return (0.9f + 0.5f * Materials.Of(Floor[i]).Burn) * (1f - 0.6f * wet) * TechWeb.Mul(_w, "body.burn"); // v16.14 난연 바닥 코팅
+        return Matter.FireSpreadMul(Floor[i], wet) * _w.Matter.FuelMul(c) * TechWeb.Mul(_w, "body.burn"); // v16.4 재질 × 원소 표 · 놓인 물건 (마른 러그는 키우고 젖은 것은 막는다) · v16.14 난연 바닥 코팅 (합치며 둘째 return 이 닿지 않던 것을 하나로)
     }
 
     /// <summary>지금 그 칸의 미끄러움 (재질 × 상태 × 닳음).</summary>

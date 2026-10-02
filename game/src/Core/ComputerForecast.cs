@@ -308,6 +308,19 @@ public sealed class ShipForecast
         }
     }
 
+    /// <summary>
+    /// v16 통합: 예측을 들은 사람의 믿음 — 컴퓨터를 믿는 만큼 × 예측의 확신만큼 "며칠 뒤 모자란다"고 믿는다.
+    /// 회의에서 컴퓨터 안건에 손을 들 때 · 아껴 쓸 때 이 믿음을 읽는다 (Mind.Knows 는 사고 열쇠만 쥔다).
+    /// </summary>
+    private void HeardForecast(CrewMember c, ResourceModel m, ResourceForecast f, BeliefSource src)
+    {
+        var w = _w;
+        int i = Models.IndexOf(m);
+        if (i < 0 || c.Dead) return;
+        float conf = (0.3f + 0.7f * w.Automation.Trusts.Of(c)) * (0.4f + 0.6f * f.Confidence);
+        w.Brain2.Beliefs.Learn(c, Topic.Forecast, i, 1, src, conf, -2, (int)MathF.Round(Math.Clamp(f.DaysToShort, 0f, 99f) * 10f));
+    }
+
     /// <summary>부족 경고: 나흘 안에 문턱 아래 · 믿음이 반 넘으면 방송 (들은 사람만 안다).</summary>
     private void Warn(ResourceModel m, ResourceForecast f, Room? g)
     {
@@ -341,7 +354,7 @@ public sealed class ShipForecast
             if (who != null)
             {
                 a.Apps.Messages.Add(new PersonalMessage(w.Tick, who.Id, "예측", $"{f.Line} — {f.Basis}"));
-                who.Mind.Knows[$"forecast:{key}"] = (KnowSource.Radio, w.Tick, f.Line);
+                HeardForecast(who, m, f, BeliefSource.Computer); // 개인 메시지 — 믿음 장부로 (Mind.Knows 는 사고 열쇠만 남기고 지운다)
                 wn.Heard.Add(who.Id);
             }
             return;
@@ -355,7 +368,7 @@ public sealed class ShipForecast
                     wn.Heard.Add(id);
                     var c = w.Crew.FirstOrDefault(x => x.Id == id);
                     if (c == null) continue;
-                    c.Mind.Knows[$"forecast:{key}"] = (KnowSource.Radio, w.Tick, f.Line); // 들은 사람만 안다 (승무원 두뇌 2.0 믿음으로 이어진다)
+                    HeardForecast(c, m, f, BeliefSource.Broadcast); // 들은 사람만 안다 — 승무원 두뇌 2.0 믿음 (예전 Mind.Knows["forecast:…"] 는 Mind 가 사고가 아니라며 바로 지웠다)
                     if (c.Traits.Calm < 0.4f) c.Needs.Stress = MathF.Min(1f, c.Needs.Stress + 0.03f * f.Confidence); // 걱정 많은 사람은 마음이 쓰인다
                 }
         }
