@@ -1002,7 +1002,7 @@ public sealed partial class EvaRiskSystem
             case EvaPart.Tether:
                 return "";
         }
-        float sev = d + wv.Scuff * 0.25f;
+        float sev = (d + wv.Scuff * 0.25f) * TechWeb.Mul(w, "eva.suit"); // v16.14 아라미드 겹 · 자가 봉합 우주복
         if (wv.Patched && wv.Breach >= SuitBreach.MicroLeak && R.Chance(0.5f))
         {
             wv.Patched = false;

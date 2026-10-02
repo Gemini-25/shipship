@@ -65,7 +65,7 @@ public partial class Main
         int legs = (Sim.Voyage.Number - _sumVoyage) * 100 + Sim.Voyage.Index - _sumLeg;
         if (Sim.Voyage.Number > _sumVoyage) lines.Add($"항해를 마치고 {Sim.Voyage.Number}번째 항해에 나섰다");
         else if (legs > 0) lines.Add($"구간 {legs}개를 지났다 — 지금 {VoyageSystem.KindName(Sim.Voyage.Current.Kind)}");
-        if (Sim.Eras.Known.Count > _sumTechs) lines.Add($"새 기술 {Sim.Eras.Known.Count - _sumTechs}: " + string.Join(", ", Sim.Eras.Order.Skip(_sumTechs).Select(id => EraSystem.All.First(t => t.Id == id).Name)));
+        if (Sim.Eras.Known.Count > _sumTechs) lines.Add($"새 기술 {Sim.Eras.Known.Count - _sumTechs}: " + string.Join(", ", Sim.Eras.Order.Skip(_sumTechs).Select(id => EraSystem.Find(id)?.Name ?? id)));
         lines.Add(why);
         Hud.SummaryLines = lines.ToArray();
         WatchAlerts();

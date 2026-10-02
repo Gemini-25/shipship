@@ -203,7 +203,7 @@ public sealed partial class BodySystem
         int i = grid.Index(c);
         if (Floor[i] == Material.None) return 1f;
         float wet = Marks.Count > 0 && Marks.TryGetValue(i, out var s) ? s.V[(int)CellMark.Wet] : 0f;
-        return (0.9f + 0.5f * Materials.Of(Floor[i]).Burn) * (1f - 0.6f * wet);
+        return (0.9f + 0.5f * Materials.Of(Floor[i]).Burn) * (1f - 0.6f * wet) * TechWeb.Mul(_w, "body.burn"); // v16.14 난연 바닥 코팅
     }
 
     /// <summary>지금 그 칸의 미끄러움 (재질 × 상태 × 닳음).</summary>
@@ -593,7 +593,7 @@ public sealed partial class BodySystem
         if (Cautious(c, _w.Ship.RoomAt(_w.Ship.Grid.CellAt(i)))) run = 0.04f; // "뛰지 말고 걸어라"
         if (c.Carrying != null || c.CarryingPerson != null) run *= 1.3f;
         if (cart) run *= 1.6f; // 카트가 젖은 바닥에서 미끄러진다
-        return (slip - 0.25f) * (slip - 0.25f) * run;
+        return (slip - 0.25f) * (slip - 0.25f) * run * TechWeb.Mul(_w, "body.slip"); // v16.14 미끄럼 방지 바닥
     }
 
     private void Fall(CrewMember c, Cell cell, string why, float injury, bool leg)

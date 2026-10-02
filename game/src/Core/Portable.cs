@@ -405,7 +405,7 @@ public sealed partial class PortableSystem
                         break;
                     case PortablePlug.Battery when d.Source is { Broken: false, Placed: true, On: true } s && s.Charge > 0f:
                         run = true;
-                        s.Charge = MathF.Max(0f, s.Charge - d.Spec.Kw * dt);
+                        s.Charge = MathF.Max(0f, s.Charge - d.Spec.Kw * dt * TechWeb.Mul(_w, "portable.drain")); // v16.14 저전력 작업등 · 휴대 셀
                         if (s.Charge <= 0f) { w.Log.Add(w.Tick, LogKind.Warning, $"{room.Name}의 이동식 배터리가 다 됐다 — {Ko.IGa(d.Name)} 꺼진다"); }
                         break;
                 }
@@ -413,7 +413,7 @@ public sealed partial class PortableSystem
                 if (!run && d.Charge > 0f)
                 {
                     run = true;
-                    d.Charge = MathF.Max(0f, d.Charge - d.Spec.Kw * dt);
+                    d.Charge = MathF.Max(0f, d.Charge - d.Spec.Kw * dt * TechWeb.Mul(_w, "portable.drain")); // v16.14
                 }
             }
             d.Running = run;

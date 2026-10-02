@@ -90,7 +90,7 @@ public partial class Hud
         float x = x0 + 14f, right = card.End.X - 14f, y = card.Position.Y + 28f;
         Gfx.Text(this, Fonts.Bold, new Vector2(x, y), $"시대 기술 — {EraSystem.EraName(e.Era)}", Ui.TextTitle, Palette.Text);
         y += 18f;
-        Gfx.Text(this, Fonts.Body, new Vector2(x, y), e.Project != null ? $"연구 중: {EraSystem.All.First(t => t.Id == e.Project).Name} ({e.ProjectWhy})" : "고를 연구가 없다", Ui.TextSmall, Palette.TextDim);
+        Gfx.Text(this, Fonts.Body, new Vector2(x, y), e.Project != null ? $"연구 중: {EraSystem.Find(e.Project)?.Name} ({e.ProjectWhy})" : "고를 연구가 없다", Ui.TextSmall, Palette.TextDim);
         y += 8f;
         foreach (var (era, name, need) in EraSystem.Eras)
         {

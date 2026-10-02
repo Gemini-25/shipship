@@ -566,6 +566,7 @@ public sealed class RoomPlanSystem
                 p.Sign = 0;
                 break;
         }
+        p.Risk *= TechWeb.Mul(w, "room.risk"); p.Hours *= TechWeb.Mul(w, "room.hours"); // v16.14 빠른 이음 배관 · 모듈식 고정구
         string order = string.Join(" → ", p.Steps.Select((s, i) => $"{i + 1}) {s}"));
         string judge = $"위험 {p.Risk * 100:0}% · 공사 {p.Hours:0.#}시간(손이 가는 시간) · 멈추는 계통: {p.Stops}" + (p.Sign < 0 ? (p.Kind == RoomPlanKind.Merge ? " — 칸막이가 감압을 반으로 막고 있다" : " — 위험이 크다") : "");
         var act = w.Automation.Book.Add(ActKind.Advice, room, $"{Crew(p.Proposer)?.Name ?? "?"}의 안건: {p.Title}", judge, "공사 순서: " + order,

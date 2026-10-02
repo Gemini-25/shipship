@@ -172,6 +172,7 @@ public sealed class World
     public ExteriorSystem Exterior { get; }
     public LifeSystem Life { get; }
     public EraSystem Eras { get; }
+    public TechWebSystem TechWeb { get; } // v16.14 기술 그물 (선행 · 갈림길 · 조건 · 조합 · 부작용 · 실험)
     public VoyageSystem Voyage { get; }
     public GenerationSystem Generation { get; }
     public CampaignSystem Campaign { get; }
@@ -277,6 +278,7 @@ public sealed class World
         Exterior = new ExteriorSystem(this);
         Life = new LifeSystem(this);
         Eras = new EraSystem(this);
+        TechWeb = new TechWebSystem(this); // v16.14
         Voyage = new VoyageSystem(this);
         Generation = new GenerationSystem(this);
         Campaign = new CampaignSystem(this);
@@ -359,6 +361,7 @@ public sealed class World
             Culture.Update(dt); // v14.9 겪은 일이 관행이 되어 전해진다
             pf = Prof.Lap("sys.Culture", pf);
             Daily.Update(dt); // v15 사고가 아닌 날의 일상 사건
+            TechWeb.Update(dt); // v16.14 기술 그물: 조건 · 조합 · 갈림길 · 부작용 · 실험 차례
             RoomUse.Update(dt); RoomPlans.Update(dt); // v16.17 쓰임 → 용도 · 승무원 안건 → 회의 → 공사
             Cosmic.Update(dt); // v18.13 우주 대재난: 예보 · 대비 · 본 사건 · 후유증
             pf = Prof.Lap("sys.Daily", pf);

@@ -113,7 +113,7 @@ public static class Tech
 
     /// <summary>연구로 풀린 가장 높은 단계.</summary>
     public static int Unlocked(World w, FurnitureType t) =>
-        Tiers(t).Where(x => x.Research <= w.Research).Select(x => x.Tier).DefaultIfEmpty(1).Max();
+        Tiers(t).Where(x => x.Research <= w.Research && TechWeb.TierOk(w, t, x.Tier)).Select(x => x.Tier).DefaultIfEmpty(1).Max(); // v16.14 핵융합로 설계 · 갈림길
 
     /// <summary>다음 단계 (없으면 null).</summary>
     public static TechTier? Next(Machine m)
