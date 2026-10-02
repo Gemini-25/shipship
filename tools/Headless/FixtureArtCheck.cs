@@ -141,6 +141,42 @@ public static partial class Program
                     $"설비 {ms.Count}대 ({types}종) · 가동 {running} · 대기 {standby} · 고장 낸 것 {FurnitureTypes.Name(target.Body.Type)} → 멈춤 {target.Stopped}");
             }
 
+            // 12) 낡음 · 고장 순간 · 고치는 중: 고장 모양마다 다른 자국 · 터짐 · 연장, 낡음 단계가 바뀔 때만 정적 몸체를 다시 그린다
+            {
+                string Body(string name)
+                {
+                    var m = Regex.Match(src, @"\b(void|int|bool)\s+" + name + @"\s*\(");
+                    if (!m.Success) return "";
+                    int open = src.IndexOf('{', m.Index), depth = 0;
+                    for (int i = open; i < src.Length; i++)
+                    {
+                        if (src[i] == '{') depth++;
+                        else if (src[i] == '}' && --depth == 0) return src.Substring(open, i - open + 1);
+                    }
+                    return "";
+                }
+                string wb = Body("Weathering"), mb = Body("Moments"), sig = Body("Signature"), pb = Body("PaintBody"), ps = Body("PaintState");
+                var noScar = lookEnum.Where(l => !Regex.IsMatch(wb, $@"case\s+Look\.{l}\s*:")).ToList();
+                var noMoment = lookEnum.Where(l => Regex.Matches(mb, $@"case\s+Look\.{l}\s*:").Count < 2).ToList();
+                bool reads = wb.Contains("WearStep(m)") && wb.Contains("ScarStep(m)") && mb.Contains(".Since") && mb.Contains("x.User") && mb.Contains("Pose.Working");
+                bool hooked = pb.Contains("Weathering(in x, a)") && ps.Contains("Moments(in x, a, m, e)") && sig.Contains("WearStep(m)") && sig.Contains("ScarStep(m)");
+                Check("낡음 — 고장 모양마다 다른 자국(그을음 · 열 변색 · 녹 줄 · 기름때 · 손때 · 잔여물) · 막 고장 난 순간 · 고치는 연장, 단계가 바뀔 때만 다시 그린다",
+                    wb.Length > 0 && mb.Length > 0 && noScar.Count == 0 && noMoment.Count == 0 && reads && hooked,
+                    $"자국 {lookEnum.Length - noScar.Count}/{lookEnum.Length} · 순간+연장 {lookEnum.Length - noMoment.Count}/{lookEnum.Length} · 읽음 {reads} · 연결 {hooked}"
+                    + (noScar.Count > 0 ? $" · 자국 없음: {string.Join(",", noScar)}" : "") + (noMoment.Count > 0 ? $" · 순간 없음: {string.Join(",", noMoment)}" : ""));
+
+                var w = DayOne(seed, "Hanbit");
+                Run(w, SimTime.TicksPerDay);
+                var ms = w.Ship.Machines.Where(m => !m.Body.Room.Detached).OrderBy(m => m.Body.Id).ToList();
+                float maxWear = ms.Max(m => m.Wear);
+                int worn = ms.Count(m => m.Wear >= 0.25f);
+                var target = ms.First(m => m.Faults.Count == 0 && m.Spec.FaultKinds.Any());
+                var fault = w.Machines.Break(target, target.Spec.FaultKinds.First());
+                bool fresh = fault != null && fault.Since == w.Tick;
+                Check("장면 — 하루 돌면 설비가 닳고(자국이 쌓일 재료), 막 난 고장은 시각이 찍혀 순간 터짐이 나온다", maxWear > 0f && fresh,
+                    $"가장 닳은 것 {maxWear:0.00} · 0.25 넘은 것 {worn}대 · {FurnitureTypes.Name(target.Body.Type)} 고장 시각 {fault?.Since} = 지금 {w.Tick}");
+            }
+
             // 11) 결정론 (시뮬레이션 지문은 그림과 상관없이 같다)
             {
                 uint H() { var w = World.CreateDefault(seed, 0, "Hanbit"); Run(w, SimTime.TicksPerDay + SimTime.Hours(6)); return SaveGame.StateHash(w); }
