@@ -171,7 +171,7 @@ public sealed partial class MotionSystem
             if (w.Automation.Present && w.Automation.CoreOnline)
                 w.Automation.Reason("motion.duty", $"벌 근무 기록이 비어 있습니다 — {c.Name} · 회의가 정한 두 시간 중 {2f - hours:0.#}시간", SimTime.Hours(6));
             if (accuser != null && !Open.Any(x => x.Kind == MotionKind.Punishment && x.Target == c.Id))
-                Propose(accuser, MotionKind.Punishment, SittingKind.Regular, $"{c.Name}이 벌 근무를 하지 않았다", "회의에서 정한 벌을 안 지키면 정한 게 무슨 소용이냐", target: c.Id);
+                Propose(accuser, MotionKind.Punishment, SittingKind.Regular, $"{Ko.IGa(c.Name)} 벌 근무를 하지 않았다", "회의에서 정한 벌을 안 지키면 정한 게 무슨 소용이냐", target: c.Id);
         }
         // 주 컴퓨터: 창고 수량이 배식 기록과 어긋난다 (누가 꺼냈는지는 모른다)
         foreach (var t in Thefts)
@@ -198,7 +198,7 @@ public sealed partial class MotionSystem
             var m = Get(g.Motion);
             string line = c.Value switch
             {
-                CrewValue.Rules => $"아직도 '{m?.Title ?? "그 일"}'이 마음에 걸린다. 정해진 건 따르지만.",
+                CrewValue.Rules => $"아직도 '{m?.Title ?? "그 일"}'{Ko.IGa(m?.Title ?? "그 일")[(m?.Title ?? "그 일").Length..]} 마음에 걸린다. 정해진 건 따르지만.",
                 CrewValue.Freedom => $"'{m?.Title ?? "그 일"}' — 저쪽 사람들 얼굴을 보면 아직 속이 끓는다.",
                 CrewValue.People => $"'{m?.Title ?? "그 일"}' 뒤로 식당 공기가 다르다.",
                 _ => $"'{m?.Title ?? "그 일"}' — 그때 더 말했어야 했다.",
@@ -277,7 +277,7 @@ public sealed partial class MotionSystem
         foreach (var o in w.Crew)
             if (o != thief && !o.Dead && o.IsAwake && o.Room == box.Room && !o.Outside) See(o, t);
         t.SeenAtOnce = t.Witnesses.Count > 0;
-        Life.Diary(w, thief, t.SeenAtOnce ? $"{t.Room}에서 {t.Item}을 하나 꺼내 먹었다. 누가 본 것 같다." : $"{t.Room}에서 {t.Item}을 하나 꺼내 먹었다. 아무도 못 봤다. 그래도 속이 편하지 않다.");
+        Life.Diary(w, thief, t.SeenAtOnce ? $"{t.Room}에서 {Ko.EulReul(t.Item)} 하나 꺼내 먹었다. 누가 본 것 같다." : $"{t.Room}에서 {Ko.EulReul(t.Item)} 하나 꺼내 먹었다. 아무도 못 봤다. 그래도 속이 편하지 않다.");
         if (t.SeenAtOnce) thief.Needs.Stress = MathF.Min(1f, thief.Needs.Stress + 0.08f);
         return t;
     }
@@ -290,9 +290,9 @@ public sealed partial class MotionSystem
         t.Witnesses.Add(o.Id);
         Stats.Witnessed++;
         _sawTheft[o.Id] = w.Tick;
-        w.Relations.Remember(o, thief, RelationReason.TookMyThing, $"{t.Room}에서 몰래 {t.Item}을 꺼내 먹는 걸 봤다");
-        w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(thief.Name)} {t.Room}에서 몰래 {t.Item}을 꺼내 먹는 걸 봤다", o.Id);
-        Life.Diary(w, o, $"{thief.Name}이 {t.Room}에서 몰래 {t.Item}을 먹는 걸 봤다. 다들 줄여 먹는데.");
+        w.Relations.Remember(o, thief, RelationReason.TookMyThing, $"{t.Room}에서 몰래 {Ko.EulReul(t.Item)} 꺼내 먹는 걸 봤다");
+        w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(thief.Name)} {t.Room}에서 몰래 {Ko.EulReul(t.Item)} 꺼내 먹는 걸 봤다", o.Id);
+        Life.Diary(w, o, $"{Ko.IGa(thief.Name)} {t.Room}에서 몰래 {Ko.EulReul(t.Item)} 먹는 걸 봤다. 다들 줄여 먹는데.");
     }
 
     /// <summary>벌 근무 한 시간을 했다.</summary>

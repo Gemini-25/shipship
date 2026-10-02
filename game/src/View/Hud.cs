@@ -130,7 +130,8 @@ public partial class Hud : Control
         if (MinimapOpen && !ChronicleOpen && !TechOpen && _minimapRect.Size.X > 0f) DrawVoyageBar(_minimapRect); // v12.8 항로
         DrawIncidentCards(mouse); // v12.2 사고 카드
         if (_world.Causes.Notable().Any()) DrawTimeBar(mouse); // v12.2 시간 막대
-        if (PolicyOpen) DrawPolicy(mouse); // v13.2 방침·회의 화면
+        if (CouncilOpen) DrawCouncil(mouse); // v18.18 회의록 · 안건 · 파벌 (HudCouncil.cs)
+        else if (PolicyOpen) DrawPolicy(mouse); // v13.2 방침·회의 화면
         else if (ControlOpen) DrawControl(mouse); // v12.5 관제 화면
         else if (ChainOpen) DrawChain(mouse); // v12.2 인과 사슬
         else if (ChronicleOpen) DrawChronicle(mouse);

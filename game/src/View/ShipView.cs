@@ -727,11 +727,13 @@ public partial class ShipView : Node2D
         PaintHairClips(ci); // v17.1 바닥에 떨어진 머리카락
         PaintRobots(ci); // v10.10 선내 로봇 (사람 밑에)
         PaintFleetLinks(ci); // v16.20b 견인 줄 · 같이 드는 들것 · 고치는 불꽃 · 명령선 · 잔해
+        PaintCouncilFloor(ci); // v18.18 둘러앉는 방석 · 의장 탁자 · 재판석 · 투표함 · 잔치 깃발
         // 쓰러진 사람은 밑에, 업힌 사람은 업은 사람 위에
         foreach (var c in _world.Crew.OrderBy(c => c.CarriedBy != null ? 2 : c.Down ? 0 : 1)) PaintCrew(ci, c);
         PaintCommandBadges(ci); // v13.1 선장 별 · 지휘자 테 · 조 배지
         PaintStations(ci); // v16.21 비상 배치 완장 · 거드는 손 · 정신 차리게 한 손
         PaintMeeting(ci); // v13.2 회의 장면 · 발언 말풍선
+        PaintCouncilOver(ci); // v18.18 파벌 완장 · 서명 종이 · 손 들기 · 투표용지 · 증언 · 불만 구름 · 본 눈 · 벌 근무
         PaintMinds(ci); // v13.3 공황 · 영웅심 · 분노 · 모름
         PaintEmotions(ci); // v16.15 머리 위 감정 그림 (분노 · 두려움 · 기쁨 · 슬픔 · 수치 · 자부심)
         PaintTalk(ci); // v14.4 말풍선 (목적 있는 대화 · 인수인계 · 깨우기)

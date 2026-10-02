@@ -36,8 +36,8 @@ public static partial class Program
         Motion? rat = null;
         {
             var w = w1;
-            TrimFood(w, 3.2f);
-            foreach (var f in w.Ship.FurnitureOf(FurnitureType.GrowBed)) f.Machine!.Crop = null; // 작물이 시들었다
+            TrimFood(w, 3.5f);
+            foreach (var f in w.Ship.FurnitureOf(FurnitureType.GrowBed).Where((_, i) => i % 3 != 0)) f.Machine!.Crop = null; // 작물 셋 중 둘이 시들었다
             // 일하는 사람 절반은 배가 고프다
             foreach (var c in w.Crew.Where(c => !c.Dead && !c.IsChild && c.Id % 2 == 0)) c.Needs.Food = 0.3f;
             int walked = 0;
@@ -49,7 +49,7 @@ public static partial class Program
             {
                 Run(w, 60);
                 rat ??= w.Motions.All.FirstOrDefault(m => m.Policy == "rations" && m.To == 3);
-                if (rat == null) { if (i % 30 == 0) TrimFood(w, 3.2f); continue; }
+                if (rat == null) { if (i % 30 == 0) TrimFood(w, 3.5f); continue; }
                 foreach (var c in w.Crew) if (c.Job?.Activity is PetitionActivity) { walked++; asked.Add(c.Id); }
                 if (readyAt < 0 && rat.Stage != MotionStage.Signing) { readyAt = w.Tick; signersAtReady = rat.Signers.Count; }
                 if (rat.Decided >= 0 && (readyAt < 0 || rat.Decided < readyAt)) heldEarly = true;
@@ -153,7 +153,7 @@ public static partial class Program
             bool onlySaw = witLines.Count > 0 && witLines.All(l => th.Witnesses.Contains(l.Who) || nat != null && nat.Witnesses.Contains(l.Who));
             bool others = past != null && past.Script.Where(l => l.Who >= 0 && !th.Witnesses.Contains(l.Who) && l.Role is LineRole.Hearsay).All(l => l.Text.Contains("못") || l.Text.Contains("들은"));
             Check("고발 — 그 자리에서 본 사람이 스스로 고발하고 서명을 모아 재판을 연다", trial != null && th.Witnesses.Contains(trial.Proposer) && past != null,
-                trial != null ? $"{accuser.Name} → {trial.Title} · 서명 {trial.Signers.Count}/{trial.Need} · {(past != null ? $"{past.Venue.Name} 재판 · {past.Present.Count}명" : "재판 안 열림")}" : "고발 없음");
+                trial != null ? $"{w.Crew.First(c => c.Id == trial.Proposer).Name} → {trial.Title} · 서명 {trial.Signers.Count}/{trial.Need} (부탁 {trial.Asked.Count - 2} · 거절 {trial.Refused.Count} · {trial.Stage}) · {(past != null ? $"{past.Venue.Name} 재판 · {past.Present.Count}명" : "재판 안 열림")}" : "고발 없음");
             Check("증언 — 본 사람만 '봤다'고 증언하고, 못 본 사람은 들은 말뿐이다", onlySaw && others,
                 $"본 사람 {string.Join("·", th.Witnesses.Select(id => w.Crew.First(c => c.Id == id).Name))} · 증언 {witLines.Count}줄 ({string.Join(" / ", witLines.Select(l => w.Crew.First(c => c.Id == l.Who).Name))})");
             if (past != null) minutes.Add("[재판] " + string.Join(" / ", past.Script.Select(l => $"{(l.Who < 0 ? "주 컴퓨터" : w.Crew.First(c => c.Id == l.Who).Name)}: {l.Text}")) + $" → {trial!.Outcome}");

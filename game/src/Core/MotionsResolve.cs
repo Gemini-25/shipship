@@ -56,12 +56,12 @@ public sealed partial class MotionSystem
                     t.Add((-0.2f, "배급을 줄여 놓고 잔치는 말이 안 된다"));
                 break;
             case MotionKind.Grievance when P(m.Target) is CrewMember g:
-                t.Add((-0.45f * c.AffinityTo(g) - 0.35f * w.Relations.Trust(c, g), c.AffinityTo(g) > 0.2f ? $"{g.Name}도 사정이 있다" : $"{g.Name}은 늘 그렇다"));
+                t.Add((-0.45f * c.AffinityTo(g) - 0.35f * w.Relations.Trust(c, g), c.AffinityTo(g) > 0.2f ? $"{g.Name}도 사정이 있다" : $"{Ko.EunNeun(g.Name)} 늘 그렇다"));
                 if (c.Value == CrewValue.People) t.Add((-0.12f, "사람을 앞에 세워 놓고 따지는 건 아니다"));
                 if (c.Id == g.Id) t.Add((-2f, "억울하다"));
                 break;
             case MotionKind.Crew when P(m.Target) is CrewMember out1 && P(m.Other) is CrewMember in1:
-                t.Add((0.35f * (c.AffinityTo(in1) - c.AffinityTo(out1)) + (out1.Vitals.Injury > 0.2f ? 0.25f : 0f), out1.Vitals.Injury > 0.2f ? $"{out1.Name}은 아직 다친 데가 있다" : $"{in1.Name}이 낫다"));
+                t.Add((0.35f * (c.AffinityTo(in1) - c.AffinityTo(out1)) + (out1.Vitals.Injury > 0.2f ? 0.25f : 0f), out1.Vitals.Injury > 0.2f ? $"{Ko.EunNeun(out1.Name)} 아직 다친 데가 있다" : $"{Ko.IGa(in1.Name)} 낫다"));
                 if (c.Id == out1.Id) t.Add((-1f, "내가 가야 한다"));
                 if (c.Id == in1.Id) t.Add((0.6f, "내가 가겠다"));
                 break;
@@ -75,7 +75,7 @@ public sealed partial class MotionSystem
             case MotionKind.Accusation when P(m.Target) is CrewMember ac:
                 t.Add((c.Value switch { CrewValue.Rules => 0.3f, CrewValue.Safety => 0.15f, CrewValue.Efficiency => 0.12f, CrewValue.People => -0.12f, _ => -0.05f }, c.Value == CrewValue.People ? "따로 불러 이야기하면 될 일이다" : "그냥 넘어가면 다음에 또 그런다"));
                 t.Add((0.35f * c.Needs.Hunger, "다들 줄여 먹는데"));
-                t.Add((-0.6f * c.AffinityTo(ac) - 0.3f * w.Relations.Trust(c, ac), c.AffinityTo(ac) > 0.2f ? $"{ac.Name}이 그랬을 리 없다" : $"{ac.Name}이라면 그럴 만하다"));
+                t.Add((-0.6f * c.AffinityTo(ac) - 0.3f * w.Relations.Trust(c, ac), c.AffinityTo(ac) > 0.2f ? $"{Ko.IGa(ac.Name)} 그랬을 리 없다" : $"{ac.Name}{(Ko.IGa(ac.Name).EndsWith("이") ? "이라면" : "라면")} 그럴 만하다"));
                 if (c.Id == ac.Id) t.Add((-2f, "억울하다"));
                 break;
             case MotionKind.Crisis when m.Sitting == SittingKind.Inquiry:
@@ -92,7 +92,7 @@ public sealed partial class MotionSystem
         if (prop != null)
         {
             float rel = 0.22f * c.AffinityTo(prop) + 0.15f * w.Relations.Trust(c, prop);
-            if (MathF.Abs(rel) > 0.05f) t.Add((rel, rel > 0f ? $"{prop.Name}의 말이라면 믿는다" : $"{prop.Name}이 낸 안건이라"));
+            if (MathF.Abs(rel) > 0.05f) t.Add((rel, rel > 0f ? $"{prop.Name}의 말이라면 믿는다" : $"{Ko.IGa(prop.Name)} 낸 안건이라"));
             if (GrudgeOf(c) is Grudge g && (g.Against == prop.Id || FactionOf(prop) is Faction pf && pf.Members.Contains(g.Against)))
                 t.Add((-0.25f, $"지난번 '{Get(g.Motion)?.Title ?? "그 일"}' 때도 저쪽 뜻대로였다"));
             if (FactionOf(c) is Faction f && f.Members.Contains(prop.Id)) t.Add((0.15f, "우리 쪽 안건이다"));
@@ -149,7 +149,8 @@ public sealed partial class MotionSystem
                 float later = days / FoodPolicy.RationDecay - days;
                 string head = $"식량 {days:0.#}일치 · 재배 하루 {grow:0}끼 · 먹는 양 하루 {need:0}끼";
                 text = m.To == 3
-                    ? shortRun ? $"{head} · {(f != null ? f.Line + " · " : "")}배급을 줄이면 바닥나는 날이 {later:0.#}일 늦어집니다" : $"{head} · 지금 속도면 바닥나지 않습니다"
+                    ? days < 0.3f ? $"{head} · 창고가 이미 비었습니다 — 배급을 줄여도 늦출 날이 없습니다"
+                    : shortRun ? $"{head} · {(f != null ? f.Line + " · " : "")}배급을 줄이면 바닥나는 날이 {later:0.#}일 늦어집니다" : $"{head} · 지금 속도면 바닥나지 않습니다"
                     : $"{head} · 배급을 풀면 하루 {need * (1f - FoodPolicy.RationDecay):0.#}끼가 더 나갑니다";
                 sign = m.To == 3 ? (shortRun && days < 4.5f ? 1 : -1) : (days > 6f || !shortRun ? 1 : -1);
                 break;
@@ -193,7 +194,7 @@ public sealed partial class MotionSystem
         m.Stage = MotionStage.Sitting;
         ComputerAdvice(m, item);
         var prop = P(m.Proposer);
-        lines.Add(new SittingLine(chair.Id, Persona.Say(chair, prop != null ? $"{prop.Name}이 서명 {m.Signers.Count}장을 모아 올린 안건이다 — {m.Title}" : m.Title), true, LineRole.Chair));
+        lines.Add(new SittingLine(chair.Id, Persona.Say(chair, prop != null ? $"{Ko.IGa(prop.Name)} 서명 {m.Signers.Count}장을 모아 올린 안건이다 — {m.Title}" : m.Title), true, LineRole.Chair));
         if (m.Kind == MotionKind.Accusation) apply = Trial(m, voters, attendees, chair, item, lines);
         else if (m.Kind == MotionKind.Confidence) apply = Election(m, voters, chair, item, lines);
         else apply = Vote(m, voters, chair, item, lines);
@@ -229,7 +230,7 @@ public sealed partial class MotionSystem
     {
         var w = _w;
         var prop = P(m.Proposer);
-        string by = prop != null ? $"{prop.Name}이 서명을 모아 올린 안건" : "회의";
+        string by = prop != null ? $"{Ko.IGa(prop.Name)} 서명을 모아 올린 안건" : "회의";
         switch (m.Kind)
         {
             case MotionKind.Practice: return "관행으로 정했다";
@@ -331,7 +332,7 @@ public sealed partial class MotionSystem
         {
             float s = m.Final.GetValueOrDefault(c.Id);
             bool won = s > 0f == pass;
-            string line = c.Id == m.Proposer ? (pass ? $"내가 낸 '{m.Title}'이 통과됐다. 서명해 준 사람들이 고맙다." : $"'{m.Title}'은 떨어졌다. {(item.FlippedBy != null ? $"{item.FlippedBy}의 말에 다들 넘어갔다." : "아직 때가 아닌가 보다.")}")
+            string line = c.Id == m.Proposer ? (pass ? $"내가 낸 '{m.Title}'{Ko.IGa(m.Title)[(m.Title).Length..]} 통과됐다. 서명해 준 사람들이 고맙다." : $"'{m.Title}'{Ko.EunNeun(m.Title)[(m.Title).Length..]} 떨어졌다. {(item.FlippedBy != null ? $"{item.FlippedBy}의 말에 다들 넘어갔다." : "아직 때가 아닌가 보다.")}")
                 : MathF.Abs(s) < 0.2f ? $"'{m.Title}' — 어느 쪽이든 상관없었다."
                 : won ? $"'{m.Title}' — {(pass ? "잘 정해졌다" : "막아서 다행이다")}."
                 : c.Value switch
@@ -424,7 +425,7 @@ public sealed partial class MotionSystem
             touched.Add(nf.Id);
             m.FactionIds.Add(nf.Id);
             Stats.FactionsBorn++;
-            w.Log.Add(w.Tick, LogKind.Life, $"사람들이 {string.Join("·", ids.Select(i => P(i)?.Name))} 쪽을 '{nf.Name}'이라고 부르기 시작했다", leader.Id);
+            w.Log.Add(w.Tick, LogKind.Life, $"사람들이 {string.Join("·", ids.Select(i => P(i)?.Name))} 쪽을 '{nf.Name}'{(Ko.IGa(nf.Name).EndsWith("이") ? "이라고" : "라고")} 부르기 시작했다", leader.Id);
         }
         // 이번 안건에서 갈라진 파벌은 흩어진다
         foreach (var f in Factions)
@@ -442,7 +443,7 @@ public sealed partial class MotionSystem
         f.Gone = true;
         f.GoneWhy = why;
         Stats.FactionsGone++;
-        w.Log.Add(w.Tick, LogKind.Life, $"'{f.Name}'은 흩어졌다 — {why}", f.Leader);
+        w.Log.Add(w.Tick, LogKind.Life, $"'{f.Name}'{Ko.EunNeun(f.Name)[(f.Name).Length..]} 흩어졌다 — {why}", f.Leader);
     }
 
     private string Nick(Motion m, bool pro, CrewMember leader)
@@ -481,7 +482,7 @@ public sealed partial class MotionSystem
         if (prop != null)
         {
             bool saw = th != null && th.Witnesses.Contains(prop.Id);
-            lines.Add(new SittingLine(prop.Id, Persona.Say(prop, saw ? $"내가 봤다 — {when}에서 {th!.Item}을 꺼내 먹었다" : $"들은 이야기다 — {m.Why}"), true, saw ? LineRole.Accuser : LineRole.Hearsay));
+            lines.Add(new SittingLine(prop.Id, Persona.Say(prop, saw ? $"내가 봤다 — {when}에서 {Ko.EulReul(th!.Item)} 꺼내 먹었다" : $"들은 이야기다 — {m.Why}"), true, saw ? LineRole.Accuser : LineRole.Hearsay));
             if (saw) testified.Add(prop);
         }
         // 증인: 본 사람만 증언한다 (그 자리에 있던 사람)
@@ -489,7 +490,7 @@ public sealed partial class MotionSystem
             foreach (int id in th.Witnesses)
             {
                 if (id == m.Proposer || P(id) is not CrewMember wit || !attendees.Contains(wit)) continue;
-                lines.Add(new SittingLine(wit.Id, Persona.Say(wit, $"나도 봤다 — {when}, 창고 앞에 {acc.Name}이 있었다"), true, LineRole.Witness));
+                lines.Add(new SittingLine(wit.Id, Persona.Say(wit, $"나도 봤다 — {when}, 창고 앞에 {Ko.IGa(acc.Name)} 있었다"), true, LineRole.Witness));
                 testified.Add(wit);
                 Stats.Testimonies++;
             }
@@ -513,7 +514,7 @@ public sealed partial class MotionSystem
                 (testified.Count == 0 ? -1.4f : 0.25f * MathF.Min(2, testified.Count), testified.Count == 0 ? "본 사람이 없다" : "본 사람이 있다"),
                 (th != null && th.Witnesses.Contains(c.Id) ? 0.5f : 0f, "내 눈으로 봤다"),
                 (c.Needs.Hunger > 0.45f ? -0.45f : 0f, "나도 배가 고프다"),
-                (-1.3f * c.AffinityTo(acc) - 0.7f * w.Relations.Trust(c, acc), c.AffinityTo(acc) > 0.2f ? $"{acc.Name}을 안다 — 그럴 사람이 아니다" : $"{acc.Name}은 전에도 그랬다"),
+                (-1.3f * c.AffinityTo(acc) - 0.7f * w.Relations.Trust(c, acc), c.AffinityTo(acc) > 0.2f ? $"{Ko.EulReul(acc.Name)} 안다 — 그럴 사람이 아니다" : $"{Ko.EunNeun(acc.Name)} 전에도 그랬다"),
                 (confess ? -0.6f : testified.Count > 0 ? 0.45f : 0f, confess ? "털어놓았으니 봐주자" : "끝까지 아니라고 한다"),
                 (th?.Breach >= 0 && Get(th.Breach) is Motion bm && bm.Final.GetValueOrDefault(c.Id) > 0f ? 0.4f : 0f, "다 같이 정한 걸 어겼다"),
                 (GrudgeOf(c) is Grudge g && g.Against == acc.Id ? 0.35f : 0f, "지난번 일도 있다"),
@@ -681,7 +682,7 @@ public sealed partial class MotionSystem
                     Stats.FactionsBorn++;
                 }
                 if (cd == winner) continue;
-                foreach (int id in sup) if (P(id) is CrewMember s && s != winner) AddGrudge(s, m, winner.Id, $"{cd.Name}이 선거에서 졌다");
+                foreach (int id in sup) if (P(id) is CrewMember s && s != winner) AddGrudge(s, m, winner.Id, $"{Ko.IGa(cd.Name)} 선거에서 졌다");
             }
             if (cap != null)
             {

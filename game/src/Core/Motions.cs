@@ -322,7 +322,7 @@ public sealed partial class MotionSystem
             float aff = c.AffinityTo(thief) + 0.5f * w.Relations.Trust(c, thief);
             if (aff > 0.4f) continue; // 가까운 사이는 말하지 않는다
             float s = 0.45f + (c.Value == CrewValue.Rules ? 0.25f : c.Value == CrewValue.People ? -0.1f : 0f) - 0.4f * aff + (t.Breach >= 0 ? 0.15f : 0f) + 0.2f * c.Needs.Hunger;
-            string why = $"{SimTime.Clock(t.Tick)}에 {t.Room}에서 {t.Item}을 몰래 꺼내 먹는 걸 내 눈으로 봤다";
+            string why = $"{SimTime.Clock(t.Tick)}에 {t.Room}에서 {Ko.EulReul(t.Item)} 몰래 꺼내 먹는 걸 내 눈으로 봤다";
             var tt = t;
             Consider(s, () =>
             {
@@ -380,7 +380,7 @@ public sealed partial class MotionSystem
                 if (swap == null) continue;
                 var mm2 = mem; var sw = swap;
                 Consider(0.15f + doubt * 0.6f, () => Propose(c, MotionKind.Crew, SittingKind.Regular, $"원정 인선 — {mm2.Name} 대신 {sw.Name}",
-                    mm2.Vitals.Injury > 0.2f ? $"{mm2.Name}은 아직 다친 데가 낫지 않았다" : $"{mm2.Name}에게 목숨을 맡기기 어렵다", target: mm2.Id, other: sw.Id));
+                    mm2.Vitals.Injury > 0.2f ? $"{Ko.EunNeun(mm2.Name)} 아직 다친 데가 낫지 않았다" : $"{mm2.Name}에게 목숨을 맡기기 어렵다", target: mm2.Id, other: sw.Id));
                 break;
             }
         }
@@ -483,7 +483,7 @@ public sealed partial class MotionSystem
 
     // ───────────────────────────── 서명 ─────────────────────────────
 
-    /// <summary>{asker}가 {who}에게 서명을 부탁한다 — 안건에 대한 생각 · 관계 · 말솜씨 · 그 사람이 아는 것.</summary>
+    /// <summary>{Ko.IGa(asker)} {who}에게 서명을 부탁한다 — 안건에 대한 생각 · 관계 · 말솜씨 · 그 사람이 아는 것.</summary>
     public bool Ask(CrewMember asker, CrewMember who, Motion m)
     {
         var w = _w;
@@ -522,7 +522,7 @@ public sealed partial class MotionSystem
         m.Stage = MotionStage.Ready;
         Stats.Ready++;
         var who = P(m.Proposer);
-        string when = m.Sitting == SittingKind.Regular ? "다음 정기 회의에 올린다" : $"{SittingName(m.Sitting)}를 연다";
+        string when = m.Sitting == SittingKind.Regular ? "다음 정기 회의에 올린다" : $"{Ko.EulReul(SittingName(m.Sitting))} 연다";
         w.Log.Add(w.Tick, LogKind.Ship, $"서명 {m.Signers.Count}장이 모였다 — '{m.Title}' · {when}", m.Proposer);
         if (who != null) Life.Diary(w, who, $"서명 {m.Signers.Count}장이 모였다. {when}.");
     }
