@@ -79,6 +79,8 @@ public sealed class AnnexPlan
     public float[] Frame = Array.Empty<float>(), Plate = Array.Empty<float>(), PlateQ = Array.Empty<float>(), Fit = Array.Empty<float>();
     /// <summary>그 칸에 붙어 일하는 사람 (−1 없음).</summary>
     public int[] BusyBy = Array.Empty<int>();
+    /// <summary>운석에 휜 골조 (다시 세울 때까지 — 화면).</summary>
+    public bool[] Bent = Array.Empty<bool>();
     public int[] FitBy = Array.Empty<int>();
     public float Pressure, Utilities, Sheet;
     public int PressureBy = -1, WireBy = -1, SheetBy = -1;
@@ -298,10 +300,7 @@ public sealed partial class AnnexSystem
         UpdateHalt(p);
         DroneWork(p, dt);
         int n = 0;
-        foreach (var b in p.BusyBy) if (b >= 0) n++;
-        foreach (var b in p.FitBy) if (b >= 0) n++;
-        if (p.PressureBy >= 0) n++;
-        if (p.WireBy >= 0) n++;
+        foreach (var kv in _doing) if (kv.Value.plan == p.Id && kv.Value.kind != AnnexJob.Celebrate && Crew(kv.Key) is CrewMember wc && wc.Pose == Pose.Working) n++;
         Working = n + _drone.Count;
         CheckStage(p);
         if (w.Tick % SimTime.Minutes(10) < World.SystemInterval) Noise(p);
@@ -622,6 +621,7 @@ public sealed partial class AnnexSystem
         int n = s.Shell.Count;
         p.Frame = new float[n]; p.Plate = new float[n]; p.PlateQ = new float[n];
         p.BusyBy = Enumerable.Repeat(-1, n).ToArray();
+        p.Bent = new bool[n];
         // 설비 자리: 먼 줄을 따라 한 칸 걸러 (문 아래 줄은 비운다 — 드나드는 길)
         p.FixtureSpots.Clear();
         int fy = s.Y0 + s.Depth;
@@ -1018,6 +1018,7 @@ public sealed partial class AnnexSystem
                 float before = p.Frame[i];
                 p.Frame[i] = MathF.Max(0f, p.Frame[i] - dmg);
                 lost += before - p.Frame[i];
+                p.Bent[i] = true;
                 bent++;
             }
         }

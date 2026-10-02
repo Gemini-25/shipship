@@ -170,7 +170,7 @@ public sealed partial class AnnexSystem
         {
             case AnnexJob.Frame:
                 if (EvaHalted) return;
-                if (p.Frame[i] < 1f) p.Frame[i] = MathF.Min(1f, p.Frame[i] + rate / FrameHours);
+                if (p.Frame[i] < 1f) { p.Frame[i] = MathF.Min(1f, p.Frame[i] + rate / FrameHours); if (p.Frame[i] >= 1f) p.Bent[i] = false; }
                 else if (p.Stage == AnnexStage.Plating && p.Plate[i] < 1f) p.Plate[i] = MathF.Min(1f, p.Plate[i] + rate / PlateHours);
                 break;
             case AnnexJob.Test: p.Pressure = MathF.Min(1f, p.Pressure + rate / (p.FullTest == true ? TestHours : QuickTestHours)); break;
@@ -398,7 +398,7 @@ public sealed partial class AnnexSystem
     {
         var w = _w;
         var ds = w.Drones;
-        bool eva = p.Stage is AnnexStage.Frame or AnnexStage.Plating && p.Enclosed < 0;
+        bool eva = p.Stage is AnnexStage.Frame or AnnexStage.Plating && p.Enclosed < 0 && !QuietHours; // 밤에는 드론 용접도 멈춘다 (주 컴퓨터가 몬다)
         foreach (var d in ds.Drones)
         {
             if (!_drone.TryGetValue(d.Id, out int idx)) continue;
@@ -418,7 +418,7 @@ public sealed partial class AnnexSystem
                 _drone[d.Id] = idx = nx[0]; // 이웃 칸이라 그 자리에서 팔을 뻗는다
             }
             float rate = 0.7f * RobotsV15.Work(d.Kind) * d.Quirk.Work * dt;
-            if (p.Frame[idx] < 1f) p.Frame[idx] = MathF.Min(1f, p.Frame[idx] + rate / FrameHours);
+            if (p.Frame[idx] < 1f) { p.Frame[idx] = MathF.Min(1f, p.Frame[idx] + rate / FrameHours); if (p.Frame[idx] >= 1f) p.Bent[idx] = false; }
             else if (p.Stage == AnnexStage.Plating && p.Plate[idx] < 1f) p.Plate[idx] = MathF.Min(1f, p.Plate[idx] + rate / PlateHours);
             if (p.Frame[idx] >= 1f && Paid(p, idx, frame: true)) Stats.Members++;
             if (p.Plate[idx] >= 1f && p.PlateQ[idx] <= 0f) { Paid(p, idx, frame: false); p.PlateQ[idx] = 0.62f + R.Range(-0.05f, 0.08f); Stats.Plates++; }
