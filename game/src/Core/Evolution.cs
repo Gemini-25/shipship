@@ -77,7 +77,7 @@ public static class Evolution
         UpgradeKind.AddGrowBed => "재배대 증설",
         UpgradeKind.Partition => "칸막이",
         UpgradeKind.TierUp => "설비 단계 올리기",
-        UpgradeKind.Module => "모듈 설치",
+        UpgradeKind.Module => "보조 장비 달기",
         UpgradeKind.SupplyCache => "비상 물자함",
         UpgradeKind.RemovePartition => "칸막이 철거",
         UpgradeKind.Relocate => "설비 옮기기",
@@ -341,7 +341,7 @@ public static class Evolution
         float dark = h.Scrams + h.DarkHours / 4f + 0.3f * h.CircuitFaults;
         if (h.BatteriesAdded < MaxBatteries && (h.Scrams >= 1 || h.DarkHours >= 3f) && dark >= 1.2f && BatterySpot(w) is { } bs)
             yield return new UpgradePlan(UpgradeKind.AddBattery, WorkTarget.AtCell(bs.cell, bs.room), 0.4f + 0.3f * h.Scrams + h.DarkHours / 12f,
-                Skill.Electrical, $"원자로가 {ShipHistory.Times(Math.Max(1, h.Scrams))} 멈췄다 · 캄캄했던 {h.DarkHours:0}시간 → 배터리 모듈 하나 더",
+                Skill.Electrical, $"원자로가 {ShipHistory.Times(Math.Max(1, h.Scrams))} 멈췄다 · 캄캄했던 {h.DarkHours:0}시간 → 배터리 묶음 하나 더",
                 Cost(UpgradeKind.AddBattery, null), 0.35f);
 
         // ── 예비 배선: 배전반 회로가 자주 끊긴 배 (A → B 순) ──
@@ -753,7 +753,7 @@ public static class Evolution
                 MarkLog.Add(bat.Machine.Marks, w.Tick, $"{cm.Name}: 항해 중에 증설");
                 w.Paths.Invalidate();
                 h.BatteriesAdded++;
-                text = $"{Ko.IGa(cm.Name)} {room.Name}에 배터리 모듈을 하나 더 달았다 — 원자로가 {ShipHistory.Times(Math.Max(1, h.Scrams))} 멈춘 뒤로 (+{PowerGrid.BatteryKwh(bat):0}kWh)";
+                text = $"{Ko.IGa(cm.Name)} {room.Name}에 배터리 묶음을 하나 더 달았다 — 원자로가 {ShipHistory.Times(Math.Max(1, h.Scrams))} 멈춘 뒤로 (+{PowerGrid.BatteryKwh(bat):0}kWh)";
                 MarkLog.Add(room.Marks, w.Tick, "배터리 증설");
                 break;
             }

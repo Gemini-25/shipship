@@ -271,6 +271,9 @@ public static partial class Program
             sb.AppendLine($"| {ScaleTable.Label(s)} | {cs.Count} | {cs.Sum(k => k.Deaths)} | {(cs.Count == 0 ? "-" : (cs.Sum(k => k.Deaths) / (double)cs.Count).ToString("0.000"))} | {cs.Sum(k => k.Downs)} | {(cs.Count == 0 ? "-" : (cs.Sum(k => k.Downs) / (double)cs.Count).ToString("0.00"))} | {(cs.Count == 0 ? "-" : cs.Average(k => k.Hours).ToString("0.0") + "시간")} | {cs.Count(k => k.Peak > k.Base)} |");
         }
         sb.AppendLine();
+        var rs = c.Runs;
+        sb.AppendLine($"큰 상처 뒤 (항해 합): 출혈 {rs.Sum(r => r.Bleeds)} · 심정지 {rs.Sum(r => r.Arrests)} (살림 {rs.Sum(r => r.Revived)}) · 그 뒤 숨짐 {rs.Sum(r => r.TraumaDied)} · 불붙는 순간 덴 사람 {rs.Sum(r => r.Flashes)} · 대응 · 수리 중 다침 {rs.Sum(r => r.WorkHurts)} (크게 {rs.Sum(r => r.WorkBad)}) · 컴퓨터가 생체 신호로 부름 {rs.Sum(r => r.Paged)} · 캄캄한 데서 넘어짐 {rs.Sum(r => r.DarkFalls)}");
+        sb.AppendLine();
         sb.AppendLine("## 항해별");
         sb.AppendLine();
         sb.AppendLine("| 항해 | 생존 | 사고 | 고장 | 반복 고장 | 정전(10분+) · 보조 켬 | 컴퓨터 조치 맞음/틀림 | 하루 시뮬 | 지문 |");

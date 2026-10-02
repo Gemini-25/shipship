@@ -1275,6 +1275,7 @@ public partial class ShipView : Node2D
         float radius = CrewRadius * (c.IsChild ? 0.55f + 0.03f * c.Age : 1f); // v12.9 아이는 작다
         float s = radius / 9.5f;
         int lod = Puppet.Lod(Zoom); // v17.1 멀리선 점 + 색 · 가까이선 인형
+        PaintTrauma(ci, c, p, s); // v16.24 출혈 웅덩이 · 화상 열기 · 끊긴 심전도 (몸 아래에)
 
         if (c.Dead || c.Down)
         {

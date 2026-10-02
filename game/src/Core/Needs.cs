@@ -159,13 +159,13 @@ public static class NeedsSystem
         if (air != null && !suited && (air.Temperature < 0f || air.Temperature > 50f)) damage += 0.05f;
         if (!suited && pressure < 25f)                                   // 감압 손상 (폐·고막 — 오래 남는다)
         {
-            damage += 1.5f;
+            damage += pressure < 8f && v.Oxygen < 0.3f ? 5f : 1.5f; // v16.24 정신을 잃은 채 거의 진공이면 몇 분 — 우주복을 든 사람이 늦으면 못 산다
             AddInjury(v, 0.3f * dt, "감압");
         }
-        if (!suited && !masked && air != null && air.Smoke > 0.4f) damage += 0.08f * air.Smoke; // 연기 흡입
+        if (!suited && !masked && air != null && air.Smoke > 0.4f) { damage += (air.Smoke > 0.7f ? 0.8f : 0.3f) * air.Smoke; AddInjury(v, 0.2f * air.Smoke * dt, "연기 흡입"); } // 연기 흡입 (폐에 남는다) (v16.24 짙은 연기는 한 시간 남짓이면 쓰러진다)
         if (!suited && air != null && air.Toxin > 0.15f)                  // v11.2 유독 가스 흡입 (폐에 남는다)
         {
-            damage += 0.2f * air.Toxin;
+            damage += (air.Toxin > 0.4f ? 0.6f : 0.2f) * air.Toxin; // v16.24 짙으면 폐가 빨리 상한다
             AddInjury(v, 0.04f * air.Toxin * dt, "유독 가스");
         }
 

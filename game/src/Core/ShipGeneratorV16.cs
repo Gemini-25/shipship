@@ -150,7 +150,7 @@ public static partial class ShipGenerator
                    + (frame == ShipFrame.Spine ? 1 : 0) + (n <= 3 ? 1 : 0) - (designer == ShipDesigner.Military ? 1 : 0);
         string pros = frame switch
         {
-            ShipFrame.Ring => "어디든 두 갈래 길 — 한쪽이 막혀도 돌아간다", ShipFrame.Spine => "모듈째 봉쇄 · 분리 — 사고가 번지지 않는다", _ => "익숙한 배치",
+            ShipFrame.Ring => "어디든 두 갈래 길 — 한쪽이 막혀도 돌아간다", ShipFrame.Spine => "구획째 봉쇄 · 분리 — 사고가 번지지 않는다", _ => "익숙한 배치",
         } + (designer == ShipDesigner.Military ? " · 격벽과 이중 배선" : designer == ShipDesigner.Civilian ? " · 넓은 방" : " · 손에 익은 임시 개조");
         string cons = frame switch
         {
@@ -285,7 +285,7 @@ public static partial class ShipGenerator
                 int hallRow = top ? H - 1 : 0, outRow = top ? 0 : H - 1;
                 int? px = FreeAt(r, x, hallRow);
                 if (px == null) { FlipV(r); px = FreeAt(r, x, hallRow); }
-                if (px == null) throw new InvalidOperationException($"{r.Label}: 모듈 복도 쪽 문 자리가 없다");
+                if (px == null) throw new InvalidOperationException($"{r.Label}: 구획 복도 쪽 문 자리가 없다");
                 Blit(r, x, top ? yTopRoom : yBotRoom);
                 doors.Add((px.Value, top ? yTopWall : yBotWall));
                 if (r.Label == 'a')
@@ -325,7 +325,7 @@ public static partial class ShipGenerator
         LabelCorridors(grid);
         CheckDoorFronts(grid);
         string name = purpose == ShipPurpose.General ? Names[(int)((uint)seed % Names.Length)] : NameFor(purpose, seed);
-        string note = $"생성 · {n}인 · 모듈 {placed.Count} · 원자로 {s}×{s} · 펌프 {pumps} · 새 방 {extras.Count}: {string.Join("·", extras.Select(e => e.Name))}";
+        string note = $"생성 · {n}인 · 구획 {placed.Count} · 원자로 {s}×{s} · 펌프 {pumps} · 새 방 {extras.Count}: {string.Join("·", extras.Select(e => e.Name))}";
         return (legend + Ascii(grid), note, name);
     }
 

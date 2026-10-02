@@ -471,7 +471,7 @@ public sealed class PipeNetwork
             if (c.Dead || c.Outside) continue;
             float steam = SteamAt(c.Cell);
             if (steam <= 0.05f) continue;
-            float dmg = 0.35f * steam * dt * (c.Suit != null ? 0.3f : 1f);
+            float dmg = (steam > 0.5f ? 1.4f : 0.45f) * steam * dt /* v16.24 터진 고온관 곁의 김은 몇 분이면 깊게 덴다 */ * (c.Suit != null ? 0.3f : 1f);
             c.Vitals.Health = MathF.Max(0.05f, c.Vitals.Health - dmg);
             NeedsSystem.AddInjury(c.Vitals, dmg, "증기 화상");
         }

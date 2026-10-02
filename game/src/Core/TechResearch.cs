@@ -504,6 +504,15 @@ public sealed partial class TechWebSystem
             if (!fire) what += " — 산소가 짙어 불이 붙었다";
         }
         lead.Vitals.Injury = MathF.Min(1f, lead.Vitals.Injury + 0.03f);
+        // v16.24 바로 앞에 있던 사람: 대개 놀라고 끝나지만, 서두른 실험 · 보호구 없는 손이면 가끔 크게 (유리 조각 · 불꽃 · 시약)
+        if (R.Chance(x.Style == ResearchStyle.Bold ? 0.3f : 0.15f))
+        {
+            float hurt = R.Range(0.12f, 0.32f);
+            string hc = kind is BlastKind.Gas ? "실험 시약 흡입" : fire || kind is BlastKind.Arc or BlastKind.Propellant ? "실험 화상" : "실험 파편";
+            lead.Vitals.Health = MathF.Max(0.05f, lead.Vitals.Health - hurt * 0.7f);
+            NeedsSystem.AddInjury(lead.Vitals, hurt, hc);
+            w.Log.Add(w.Tick, LogKind.Warning, $"{Ko.IGa(lead.Name)} 실험대 앞에서 다쳤다 — {hc} ({room.Name})", lead.Id);
+        }
         lead.Needs.Stress = MathF.Min(1f, lead.Needs.Stress + 0.12f);
         Memory.Frighten(w, lead, room, 0.25f, $"실험 사고 — {t.Name}");
         foreach (var c in w.Crew)

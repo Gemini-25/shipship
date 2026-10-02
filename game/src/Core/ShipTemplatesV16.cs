@@ -235,11 +235,11 @@ public static partial class ShipBlueprints
             "통로가 길어 사고 현장까지 멀다 · 민간 설계 — 배전반 하나에 다 걸려 있다 · 싼 부품", 2,
             "새 개척지로 마흔 명을 실어 나르는 이민선. 고리 안쪽에 원자로와 재배실, 바깥에 사람이 산다."));
 
-    public static readonly ShipTemplate BusitdolShip = new("Busitdol", BusitdolName, 9, Busitdol, "척추형 채굴선 · 모듈 여덟 · 파쇄실 · 화물칸 · 드론 격납고",
+    public static readonly ShipTemplate BusitdolShip = new("Busitdol", BusitdolName, 9, Busitdol, "척추형 채굴선 · 구획 여덟 · 파쇄실 · 화물칸 · 드론 격납고",
         new ShipInfo(ShipPurpose.Mining, ShipFrame.Spine, ShipDesigner.Settler, ShipStart.Derelict, 2203,
             new[] { (ItemKind.MetalOre, 40), (ItemKind.Plate, 10), (ItemKind.Structure, 6) }, "광산 예인선 OX-17",
             new[] { "2203년 베스타 광산 조합이 건조", "2231년 파쇄실 분진 폭발 — 승무원이 모두 떠났다", "8년 동안 소행성대를 떠돌았다", "2240년 개척민들이 예인해 와 다시 띄웠다" },
-            "모듈마다 기밀문 하나 — 사고 난 모듈만 통째 봉쇄 · 분리 · 파쇄실과 드론 격납고",
+            "구획마다 기밀문 하나 — 사고 난 구획만 통째 봉쇄 · 분리 · 파쇄실과 드론 격납고",
             "척추가 막히면 앞뒤가 끊긴다 · 오래 비어 있던 배 — 막힌 구역과 닳은 설비 · 비표준 부품", 4,
             "버려진 채굴선을 개척민들이 끌어와 다시 띄웠다. 패널 뒤에 전 승무원이 남긴 것이 아직 있다."));
 
@@ -259,12 +259,12 @@ public static partial class ShipBlueprints
             "생활 구역이 뒤쪽에 몰려 비좁다 · 화물칸을 지나야 함교에 닿는다 · 단일 고장점", 2,
             "정거장 사이를 오가는 보급선. 배의 절반이 화물칸이다."));
 
-    public static readonly ShipTemplate TtaemjilShip = new("Ttaemjil", TtaemjilName, 10, Ttaemjil, "누더기형 고물선 · 모듈 셋 (예인선 · 바지선 · 여객선 앞부분) · 재활용실 · 용접실",
+    public static readonly ShipTemplate TtaemjilShip = new("Ttaemjil", TtaemjilName, 10, Ttaemjil, "누더기형 고물선 · 선체 토막 셋 (예인선 · 바지선 · 여객선 앞부분) · 재활용실 · 용접실",
         new ShipInfo(ShipPurpose.General, ShipFrame.Patchwork, ShipDesigner.Settler, ShipStart.Junk, 2181,
             new[] { (ItemKind.Plate, 8), (ItemKind.Tape, 10), (ItemKind.Glue, 6) }, "청람 2호 · 바람개비호 · 제3 화물 예인선",
-            new[] { "2181년 예인선으로 건조 (지금의 엔진 · 원자로 모듈)", "2204년 화물 바지선을 이어 붙였다 (가운데 · 통로 한 칸)", "2219년 여객선 앞부분을 떼어 붙였다 (앞 · 통로 세 칸)", "주인이 다섯 번 바뀌었다" },
+            new[] { "2181년 예인선으로 건조 (지금의 엔진 · 원자로 구획)", "2204년 화물 바지선을 이어 붙였다 (가운데 · 통로 한 칸)", "2219년 여객선 앞부분을 떼어 붙였다 (앞 · 통로 세 칸)", "주인이 다섯 번 바뀌었다" },
             "고칠 데가 많아 손에 익는다 · 재활용실 · 용접실 · 선외 준비실",
-            "시대가 다른 모듈 — 통로 폭이 제각각 (두 칸 · 한 칸 · 세 칸) · 많이 닳았다 · 비표준 부품", 4,
+            "시대가 다른 선체 토막 — 통로 폭이 제각각 (두 칸 · 한 칸 · 세 칸) · 많이 닳았다 · 비표준 부품", 4,
             "세 척의 배를 이어 붙인 누더기 배. 이음매마다 시대가 다르다."));
 
     public static readonly ShipTemplate PabalShip = new("Pabal", PabalName, 2, Pabal, "2인 우편선 · 엔진 셋 · 침대 하나 (교대로) · 한 칸 통로",

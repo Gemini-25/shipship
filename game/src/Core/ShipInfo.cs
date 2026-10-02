@@ -48,10 +48,10 @@ public static class ShipInfos
     public static string FrameNote(ShipFrame f) => f switch
     {
         ShipFrame.Ring => "통로가 한 바퀴 돈다 — 어디든 두 갈래 길",
-        ShipFrame.Spine => "긴 중앙 통로에 모듈이 가지처럼 — 모듈마다 기밀문 하나, 통째 봉쇄 · 분리",
+        ShipFrame.Spine => "긴 중앙 통로에 구획이 가지처럼 — 구획마다 기밀문 하나, 통째 봉쇄 · 분리",
         ShipFrame.Twin => "선체 둘을 연결 통로로 — 끊겨도 반쪽씩 버틴다",
         ShipFrame.Cargo => "가운데 큰 화물칸 · 생활 구역은 뒤쪽에 작게",
-        ShipFrame.Patchwork => "시대가 다른 모듈을 이어 붙였다 — 통로 폭이 제각각",
+        ShipFrame.Patchwork => "시대가 다른 선체 토막을 이어 붙였다 — 통로 폭이 제각각",
         ShipFrame.Courier => "엔진이 배의 절반 · 비좁다",
         _ => "엔진실 → 층마다 방 줄 → 뱃머리 함교",
     };

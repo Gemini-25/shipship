@@ -167,6 +167,7 @@ public sealed class World
     public MatterSystem Matter { get; } // v16.4 재질 × 원소 · 칸 장 · 물건 물리
     public CosmicSystem Cosmic { get; } // v18.13 우주 규모 대재난 30
     public ScaleSystem Scale { get; } // v16.18 사고 · 재난 다섯 규모 (판정 · 대응 · 완급 · 연쇄 · 도감)
+    public CasualtySystem Casualty { get; } // v16.24 큰 상처 뒤: 출혈 · 화상 쇼크 · 심정지 · 불붙는 순간
     public CrisisCrewSystem CrisisCrew { get; } // v16.21 승무원 위기 행동 (공황 · 비상 배치표 · 비상 절차 · 여러 손 · 우선순위)
     public ExpeditionSystem Expedition { get; } // v16.12 재료 탐사 원정
     public BodySystem Body { get; } // v16.3 배 본체 (칸 3층 · 칸 상태 · 벽 층 · 문)
@@ -283,6 +284,7 @@ public sealed class World
         Matter = new MatterSystem(this); // v16.4
         Cosmic = new CosmicSystem(this); // v18.13
         Scale = new ScaleSystem(this); // v16.18
+        Casualty = new CasualtySystem(this); // v16.24
         CrisisCrew = new CrisisCrewSystem(this); // v16.21
         Expedition = new ExpeditionSystem(this); // v16.12
         Body = new BodySystem(this); // v16.3
@@ -390,6 +392,8 @@ public sealed class World
             RoomUse.Update(dt); RoomPlans.Update(dt); // v16.17 쓰임 → 용도 · 승무원 안건 → 회의 → 공사
             Cosmic.Update(dt); // v18.13 우주 대재난: 예보 · 대비 · 본 사건 · 후유증
             pf = Prof.Lap("sys.Daily", pf);
+            Casualty.Update(dt); // v16.24 큰 상처 뒤 — 누르고 · 가슴을 누르고 · 컴퓨터가 부른다
+            pf = Prof.Lap("sys.Casualty", pf);
             FoodSources.Update(dt); Scrap.Update(dt); // v16.22 식량원 · 수경이 멎으면 다른 재배실로 · 고철 되살리기
             pf = Prof.Lap("sys.FoodSources", pf);
             CrisisCrew.Update(dt); // v16.21 비상 배치 · 동료가 깨우는 공황 · 마스크 · 정전 예측 · 사고 뒤 훈련
@@ -691,6 +695,7 @@ public sealed class World
         float ownWound = c.Vitals.Wounds.Where(x => x.Cause == c.Vitals.InjuryCause).Sum(x => x.Weight);
         if (c.Vitals.Injury < 0.4f && ownWound < 0.15f || c.Vitals.InjuryCause == "작업 중 실수" && ownWound < 0.4f)
             c.Vitals.InjuryCause = c.Vitals.Oxygen < 0.5f ? "질식" : c.Vitals.InjuryCause is null or "작업 중 실수" ? "기력이 다해" : c.Vitals.InjuryCause;
+        c.Vitals.InjuryCause = Casualty.DeathCause(c) ?? c.Vitals.InjuryCause; // v16.24 상처 뒤 출혈 · 심정지
         RaiseAlert($"{Ko.IGa(c.Name)} 죽었다 — {c.Room?.Name ?? "떨어져 나간 구획"} ({c.Vitals.InjuryCause ?? "사고"})", c.Room, AlertLevel.Critical, shipWide: true);
         // 남은 사람들: 가까웠던 사람일수록 크게 흔들린다. 그 방은 모두에게 무서운 곳이 된다
         foreach (var o in Crew)

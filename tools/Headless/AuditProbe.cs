@@ -275,7 +275,7 @@ public static partial class Program
         {
             var w = _w;
             var p = w.Power;
-            bool essDark = _ess.Any(r => !r.Powered && !r.Detached);
+            bool essDark = _ess.Any(r => !r.Powered && !r.Detached && !r.BreakerOff && !r.PowerCut && r.PowerLinked); // v16.24 방 차단기 · 끊긴 선은 보조 발전기로 못 켠다 (그건 손 · 원격 차단기 일)
             bool low = p.BatteryPercent < 0.15f && p.Delivered < p.Demand * 0.95f;
             bool crisis = essDark || low;
             if (crisis)
@@ -336,7 +336,8 @@ public static partial class Program
             foreach (var o in _w.Board.All)
             {
                 if (o.Closed || o.Assignee == null) { _claims.Remove(o.Id); continue; }
-                if (!_claims.TryGetValue(o.Id, out var c) || c.who != o.Assignee.Id || MathF.Abs(c.prog - o.Progress) > 1e-4f)
+                if (!_claims.TryGetValue(o.Id, out var c) || c.who != o.Assignee.Id || MathF.Abs(c.prog - o.Progress) > 1e-4f
+                    || o.Assignee.Job?.Order == o && o.Assignee.Pose == Pose.Working) // v16.24 손을 대고 있으면 (긴급 우회 · 부분 복구 · 실패 뒤 다시) 멈춘 게 아니다
                 {
                     _claims[o.Id] = (o.Assignee.Id, now, o.Progress);
                     continue;
@@ -444,6 +445,7 @@ public static partial class Program
                 if (day.Flows.TryGetValue("food", out var fl)) { _run.FoodIn += fl.In; _run.FoodOut += fl.Out; }
             for (int i = 0; i < FoodSourceSystem.Count; i++) if (w.FoodSources.In[i] > 0) _run.FoodWays[FoodSourceSystem.Name((FoodSrc)i)] = w.FoodSources.In[i]; // v16.22
             _run.Alive = w.Crew.Count(c => !c.Dead);
+            var cs = w.Casualty; _run.Bleeds = cs.Bleeds; _run.Arrests = cs.Arrests; _run.Revived = cs.Revived; _run.TraumaDied = cs.Died; _run.Flashes = cs.Flashes; _run.WorkHurts = cs.WorkHurts; _run.WorkBad = cs.WorkBad; _run.Paged = cs.Paged; _run.DarkFalls = w.Body.Stats.DarkFalls; // v16.24
             _run.RoomsLost = w.Ship.Rooms.Count(r => r.Detached && !r.Merged && r.Type != RoomType.Corridor);
             _run.Stalls = _stalls.Values.OrderBy(s => s.Hour).ToList();
         }

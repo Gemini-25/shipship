@@ -436,6 +436,7 @@ public static class SaveGame
         w.CrisisCrew.Hash(I, F); // v16.21 승무원 위기 행동
         w.Fleet.Hash(I, F); // v16.20b 함대 지휘
         w.FoodSources.Hash(I, F); w.Scrap.Hash(I, F); // v16.22 식량원 · 고철
+        w.Casualty.Hash(I, F); // v16.24 큰 상처 뒤
         return h;
     }
 }

@@ -530,8 +530,12 @@ public sealed partial class HazardSystem
         if (c == null || c.Dead) return null;
         string how = AccidentKinds[w.Rng.Range(0, AccidentKinds.Length)];
         float dmg = w.Rng.Range(0.3f, 0.45f);
-        c.Vitals.Health = MathF.Max(0.05f, c.Vitals.Health - dmg * 0.6f);
-        NeedsSystem.AddInjury(c.Vitals, dmg, "작업 사고");
+        // v16.24 대개는 손을 다치고 끝나지만, 가끔 크게 (높은 데서 머리부터 · 센 전기 · 혼자 무거운 걸 들다) — 지친 사람 · 서두른 사람이 더
+        bool bad = w.Rng.Chance(0.1f + 0.1f * (c.Needs.Rest < 0.2f ? 1f : 0f) + (c.Job?.Urgent == true ? 0.08f : 0f));
+        if (bad) dmg = w.Rng.Range(0.55f, 0.75f);
+        c.Vitals.Health = MathF.Max(0.05f, c.Vitals.Health - dmg * (bad ? 1.2f : 0.6f));
+        string cause = how.Contains("전기") ? "작업 중 감전" : how.Contains("데었다") ? "작업 중 화상" : how.Contains("떨어") ? "사다리에서 떨어짐" : "작업 사고";
+        NeedsSystem.AddInjury(c.Vitals, dmg, cause);
         c.Interrupt(w);
         Memory.Shake(w, c, 0.1f, how);
         MarkLog.Add(c.Memory.Marks, w.Tick, $"작업 사고 — {how}" + (c.Room != null ? $" ({c.Room.Name})" : ""));
@@ -794,6 +798,24 @@ public sealed partial class HazardSystem
         return what;
     }
 
+    /// <summary>v16.24 사고는 대개 쓰는 중에 난다: 깨어 있는 사람이 있는 방을 더 자주 고른다 (한 방에 셋까지 · 빈 방도 가끔).</summary>
+    private T Busy<T>(List<T> pool, Func<T, Room> roomOf, Rng rr)
+    {
+        var w = _w;
+        var wt = new float[pool.Count];
+        float sum = 0f;
+        for (int i = 0; i < pool.Count; i++)
+        {
+            var r = roomOf(pool[i]);
+            int n = 0;
+            foreach (var c in w.Crew) if (!c.Dead && c.Room == r && c.IsAwake) n++;
+            sum += wt[i] = 1f + 1.5f * Math.Min(3, n);
+        }
+        float x = rr.Float() * sum;
+        for (int i = 0; i < pool.Count; i++) { x -= wt[i]; if (x <= 0f) return pool[i]; }
+        return pool[^1];
+    }
+
     private string? RandomOne(string key, Room? prefer = null)
     {
         var w = _w;
@@ -854,14 +876,14 @@ public sealed partial class HazardSystem
         switch (spec.Target)
         {
             case HazardTarget.Room:
-                at = (prefer != null && rooms.Contains(prefer) ? prefer : rooms[rr.Range(0, rooms.Count)]).Cells[0];
+                at = (prefer != null && rooms.Contains(prefer) ? prefer : Busy(rooms, r => r, rr)).Cells[0]; // v16.24 쓰는 방에서 더 자주 (돌리고 · 켜고 · 끓이는 중에 난다)
                 break;
             case HazardTarget.Machine:
             {
                 var pool = ship.Furniture.Where(f => !f.Stowed && !f.Room.Detached && Hazards.MachineAt(w, k, f.Cells[0]) == f).ToList();
                 if (pool.Count == 0) return null;
                 var pick = prefer != null ? pool.FirstOrDefault(f => f.Room == prefer) : null;
-                at = (pick ?? pool[rr.Range(0, pool.Count)]).Cells[0];
+                at = (pick ?? Busy(pool, f => f.Room, rr)).Cells[0]; // v16.24 쓰는 설비가 더 자주 탈 난다
                 break;
             }
             case HazardTarget.Hull:

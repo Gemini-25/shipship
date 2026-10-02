@@ -47,7 +47,7 @@ public partial class Hud
         float perDay = Tech.ResearchPerHour(w) * 24f;
         Gfx.Text(this, Fonts.Bold, new Vector2(x, y0 + 30), $"{w.Ship.Name} 기술", Ui.TextLarge, Palette.Text);
         Gfx.Text(this, Fonts.Body, new Vector2(x + Gfx.Width(Fonts.Bold, $"{w.Ship.Name} 기술", Ui.TextLarge) + 10, y0 + 30),
-            $"연구 {w.Research:0}점 · 하루 +{perDay:0.0} (작업대·솜씨 좋은 사람·정밀 가공 모듈)", Ui.TextBody, Palette.TextMuted);
+            $"연구 {w.Research:0}점 · 하루 +{perDay:0.0} (작업대·솜씨 좋은 사람·정밀 가공기)", Ui.TextBody, Palette.TextMuted);
         Button(new Rect2(right - 58, y0 + 12, 58, 26), "T 닫기", false, mouse, ToggleTech, Ui.TextSmall);
         Button(new Rect2(right - 58 - 96, y0 + 12, 90, 26), "기술 지도", false, mouse, () => TechWebOpen = true, Ui.TextSmall); // v16.14 Shift+T
         Gfx.Text(this, Fonts.Body, new Vector2(x, y0 + 50),
@@ -98,7 +98,7 @@ public partial class Hud
         }
 
         y += 8;
-        Gfx.Text(this, Fonts.Bold, new Vector2(x, y + 14), "방 모듈", Ui.TextBody, Palette.TextMuted);
+        Gfx.Text(this, Fonts.Bold, new Vector2(x, y + 14), "보조 장비", Ui.TextBody, Palette.TextMuted);
         y += 20;
         foreach (var spec in modules)
         {

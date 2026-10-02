@@ -1085,7 +1085,7 @@ public partial class Hud : Control
                         : $"{nx.Name} — 연구 {_world.Research:0}/{nx.Research}점"));
             }
             if (Modules.Of(f.Type) is Modules.Spec ms)
-                list.Add(("모듈", $"{ms.Note} · {(mm.Faults.Count == 0 && (mm.Powered || mm.Spec.PowerDraw <= 0f) ? "작동 중" : "멈춤 (보너스 없음)")}"));
+                list.Add(("보조 장비", $"{ms.Note} · {(mm.Faults.Count == 0 && (mm.Powered || mm.Spec.PowerDraw <= 0f) ? "작동 중" : "멈춤 (보너스 없음)")}"));
         }
         switch (f.Type)
         {

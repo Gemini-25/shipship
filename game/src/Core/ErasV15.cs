@@ -77,7 +77,7 @@ public static class ErasV15
         T("multispec", 4, TechField.Sensors, "다중 분광 감시", 98f, "열·연기·가스를 한눈에 본다", X(("omen", 1.2f), (nameof(HazardKind.Smolder), 0.7f))),
         T("solidcell", 4, TechField.Power, "고체 전지", 100f, "셀이 덜 늙고 수소가 안 샌다", X((nameof(HazardKind.CellAging), 0.5f), (nameof(HazardKind.HydrogenBuildup), 0.7f)), "고전압 셀 — 정전기 방전", nameof(HazardKind.StaticDischarge), 1.2f),
         T("iondeflector", 4, TechField.Defense, "이온 편향기", 112f, "대전 입자를 비켜 낸다", X((nameof(HazardKind.IonStorm), 0.6f), (nameof(HazardKind.SolarStorm), 0.7f)), "편향기 과부하 — 접지 불량", nameof(HazardKind.GroundFault), 1.3f),
-        T("podcabin", 4, TechField.Habitat, "개인 선실 모듈", 92f, "제 문을 닫고 푹 쉰다", X((nameof(HazardKind.PanicAttack), 0.6f), ("heal", 1.05f)), "칸막이가 늘어난다 — 문 씰 손상", nameof(HazardKind.SealLeak), 1.2f),
+        T("podcabin", 4, TechField.Habitat, "조립식 개인 선실", 92f, "제 문을 닫고 푹 쉰다", X((nameof(HazardKind.PanicAttack), 0.6f), ("heal", 1.05f)), "칸막이가 늘어난다 — 문 씰 손상", nameof(HazardKind.SealLeak), 1.2f),
         // 5 탈지구 공학
         T("assembler", 5, TechField.Fabrication, "분자 조립기", 160f, "원료에서 부품을 짜 맞춘다", X(("craft", 1.2f), ("repair", 1.05f)), "조립 찌꺼기 — 설비가 가끔 상한다", "break", 1.15f),
         T("shapememory", 5, TechField.Hull, "형상 기억 합금", 150f, "찌그러진 판이 제 모양으로 돌아온다", X((nameof(HazardKind.HullCrack), 0.7f), (nameof(HazardKind.WindowCrack), 0.6f), (nameof(HazardKind.HatchSeal), 0.7f))),
