@@ -38,6 +38,7 @@ public static class Brain
         new ShipRoundsActivity(), // v16.9 닳은 배의 아침 한 바퀴
         new ExpeditionActivity(), // v16.12 원정 출발 · 우주복 점검 · 무전 기다리기 · 마중 · 전리품 · 식탁 이야기
         new ResearchActivity(), // v16.14 실험 (연구자가 실험실 · 작업대에서 — 끊기면 노트 · 이어 하기)
+        new AnnexWorkActivity(), // v16.10 증축 공사 (선외 골조 · 외판 · 기밀 시험 · 배선 · 비닐 막 · 내장 · 개통식)
         new RoomWorkActivity(), // v16.17 방 공사 (분리 · 같이 들기 · 카트 · 다시 잇기 · 칸막이 · 표지판 · 선실 꾸미기 · 땀방 운동)
         new PortableActivity(), // v16.7 이동식 장비 (꺼내 와 설치 · 배터리 · 회수 · 뽑기 · 기다리기)
         new InspectActivity(), // v14.4 소문을 듣고 확인하러 간다

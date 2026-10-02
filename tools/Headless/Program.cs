@@ -159,6 +159,7 @@ public static partial class Program
         if (args.Contains("--moduletest")) return RunModuleTest(seed); // v15 설비 70
         if (args.Contains("--lookcheck")) return RunLookCheck(seed); // v16.5a 재질 그림
         if (args.Contains("--techlookcheck")) return RunTechLookCheck(seed); // v16.5b 기술 · 설비가 티 나는 그림
+        if (args.Contains("--annextest")) return RunAnnexTest(seed); // v16.10
         if (args.Contains("--techwebtest")) return RunTechWebTest(seed); // v16.14
         if (args.Contains("--scaletest")) return RunScaleTest(seed); // v16.18 사고 규모
         if (args.Contains("--fixartcheck")) return RunFixArtCheck(seed); // v16.5c 설비 그림 표

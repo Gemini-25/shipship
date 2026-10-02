@@ -31,6 +31,7 @@ public static class Incidents
         using (w.Causes.Because(node))
         {
             w.Exterior.Hit(target, size, "운석"); // v12.6 선체 밖 설비
+            w.Annex.OnImpact(target, size); // v16.10 공사 중인 증축 골조 · 외판이 휜다
             return MeteorCore(w, target, size, warned, leadMinutes);
         }
     }

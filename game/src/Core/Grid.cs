@@ -37,11 +37,32 @@ public enum TileKind : byte
 public sealed class ShipGrid
 {
     public int Width { get; }
-    public int Height { get; }
+    public int Height { get; private set; }
 
-    private readonly TileKind[] _kinds;
-    private readonly int[] _roomIds;
-    private readonly int[] _furnitureIds;
+    private TileKind[] _kinds;
+    private int[] _roomIds;
+    private int[] _furnitureIds;
+
+    /// <summary>v16.10 격자가 자란 횟수 (증축) — 칸 배열을 쥔 쪽이 늘려야 하는지 본다.</summary>
+    public int Version { get; private set; }
+
+    /// <summary>
+    /// v16.10 증축: 아래(+Y)로 줄을 덧붙인다. 칸 번호 = Y·Width + X 라 기존 칸의 번호 · 좌표는 하나도 바뀌지 않는다 —
+    /// 칸 번호를 쥔 배열은 뒤를 늘리기만 하면 되고(새 칸은 빈 우주), 번호를 키로 쓴 사전 · 기록은 그대로 맞는다.
+    /// (옆으로 넓히면 모든 번호가, 위 · 왼쪽으로 넓히면 모든 좌표가 바뀐다 — 그래서 아래로만.)
+    /// </summary>
+    public void GrowRows(int rows)
+    {
+        if (rows <= 0) return;
+        int n = Width * (Height + rows), old = Width * Height;
+        Array.Resize(ref _kinds, n);
+        Array.Resize(ref _roomIds, n);
+        Array.Resize(ref _furnitureIds, n);
+        Array.Fill(_roomIds, -1, old, n - old);
+        Array.Fill(_furnitureIds, -1, old, n - old);
+        Height += rows;
+        Version++;
+    }
 
     public ShipGrid(int width, int height)
     {

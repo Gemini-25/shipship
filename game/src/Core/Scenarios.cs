@@ -69,6 +69,9 @@ public static class Scenarios
         ("doorbreach", "창고 문 구동기 고장 + 창고에 큰 운석 → 격벽이 저절로 안 잠긴다 → 통로로 번지기 전에 손으로"),
         ("darkfire", "정비실 조명이 나간 채 정비실 화재 → 캄캄한 방에서 불을 끈다"),
         ("nomotors", "모터·케이블·금속판 없이 문 구동기 셋 고장 → 손으로 여닫는 배"),
+        // ── 증축 (v16.10) ──
+        ("crowded", "빈 침대는 예전에 화물칸으로 · 구조한 두 사람이 탄다 → 간이침대 → 승무원이 증축을 낸다"),
+        ("annex", "관찰자 지시: 아래 외벽에 방을 새로 붙이자는 안건 (다음 생각 때 · 회의)"),
     };
 
     public static readonly string[] Extreme = { "nosuits", "nosealant", "keycrew", "nofuel", "overload", "secondhit" };
@@ -527,6 +530,8 @@ public static class Scenarios
                 Meteor(RoomType.Mess, 1.5f);
                 focus = R(RoomType.Mess);
                 break;
+            case "crowded": focus = AnnexSystem.Crowd(w); break; // v16.10 빈 침대는 예전에 화물칸으로 · 구조한 두 사람 → 간이침대
+            case "annex": w.Annex.Directive = true; break; // v16.10 관찰자 지시: 증축 안건
             default:
                 return false;
         }

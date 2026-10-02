@@ -638,6 +638,7 @@ public partial class ShipView : Node2D
         PaintPortable(ci); // v16.7 이동식 장비 (작업등 빛 웅덩이 · 케이블 · 호스 · 장비마다 다른 그림)
         PaintResearch(ci); // v16.14 실험대 장치 (분야마다) · 연구 노트 · 사고 그을음 · 돌파구 반짝임 · 보안경 · 돋보기
         PaintRoomWork(ci); // v16.17 방 공사 (분리 · 상자 · 손수레 · 골조 · 놓을 자리) · 쓰임 원판 · 헷갈림 · 땀
+        PaintAnnex(ci); // v16.10 증축 (청사진 · 비계 · 골조 · 외판 · 압력계 · 배선 · 비닐 막 · 설비 · 개통식 · 새 패널)
         PaintJumpers(ci);
 
         foreach (var vm in new[] { mode, _main.SecondaryView ?? mode }.Distinct()) // v12.3 겹쳐 보기
