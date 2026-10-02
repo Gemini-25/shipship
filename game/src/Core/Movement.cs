@@ -390,10 +390,10 @@ public sealed class MovementSystem
     // ───────────────────────────── 내려놓은 짐 ─────────────────────────────
 
     /// <summary>경보: 보관함이 멀면 들고 있던 짐을 그 자리에 내려놓는다.</summary>
-    public bool SetDown(CrewMember c, string why)
+    public bool SetDown(CrewMember c, string why, bool any = false)
     {
         var w = _w;
-        if (c.Carrying is not ItemStack s || c.Room == null || c.Outside || !CanSetDown(s.Kind)) return false;
+        if (c.Carrying is not ItemStack s || c.Room == null || c.Outside || !any && !CanSetDown(s.Kind)) return false;
         Stashes.Add(new Stash { Id = ++_stashId, Cell = c.Cell, Stack = s, Owner = c.Id, Tick = w.Tick, Why = why });
         c.Carrying = null;
         Stats.SetDowns++;

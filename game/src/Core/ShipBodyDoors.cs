@@ -159,6 +159,18 @@ public sealed partial class BodySystem
 
     private bool HasPass(CrewMember c, DoorBody db) => db.Pass == c.Id && _w.Tick < db.PassUntil;
 
+    /// <summary>
+    /// 이 사람이 지금 들어갈 수 있는 방인가 (잠긴 출입 통제 구역 · 남의 잠긴 선실이 아니다) — 짐을 둘 곳 · 먹을 것을 찾을 곳을 고를 때.
+    /// (잠긴 원자로실 선반에 구급 키트를 두러 갔다가 문 앞에서 돌아서고, 다시 그 선반을 고르며 굶던 것)
+    /// </summary>
+    public bool MayEnter(CrewMember c, Room? r)
+    {
+        if (r == null || c.Room == r) return true;
+        foreach (var d in r.Doors)
+            if (DoorOf(d) is DoorBody db && db.Inner == r.Id && db.Zone != AccessZone.Open && Engaged(db, d) && !Allowed(c, db) && !HasPass(c, db)) return false;
+        return true;
+    }
+
     // ───────────────────────────── 문 앞에서 (한 걸음마다) ─────────────────────────────
 
     private float Gate(CrewMember c, Door d, Room? beyond, bool urgent)
