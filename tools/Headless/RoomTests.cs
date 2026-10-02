@@ -161,7 +161,8 @@ public static partial class Program
             bool hist = w.History.Events.Any(e => mess.CustomName != null && e.Text.Contains(mess.CustomName));
             Check("이름 — 겪은 일에서 나와 기록 · 저장(지문)에 남는다", mess.CustomName != null && hist && runner.Verified && mess2.CustomName == mess.CustomName,
                 $"{mess.CustomName ?? "(이름 없음)"} · 기록 {(hist ? "있음" : "없음")} · 불러오기 {(runner.Verified ? "같은 역사" : "어긋남")} · 불러온 배: {mess2.Name}"
-                + $" · 안건 {w.RoomPlans.Stats.Proposed} · {string.Join(" / ", w.RoomPlans.Plans.Select(p => $"{p.Title}:{p.State}"))}");
+                + $" · 안건 {w.RoomPlans.Stats.Proposed} · {string.Join(" / ", w.RoomPlans.Plans.Select(p => $"{p.Title}:{p.State}"))}"
+                + $" · 쓰임 바뀜 {w.RoomUse.Stats.Changes}: {string.Join(" / ", w.History.Events.Where(e => e.Text.Contains("쓰인다")).Select(e => e.Text).Take(4))}");
         }
 
         // ── 5) 결정론 ──

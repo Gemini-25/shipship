@@ -1291,8 +1291,13 @@ public sealed class RoomPlanSystem
             case RoomTaskKind.Decorate:
             {
                 if (p.Prop == null || f == null) break;
-                var placed = w.Props.Place(Props.Get(p.Prop), room, c, "선실 꾸미기 (회의)", near: f.Cells.FirstOrDefault());
-                if (placed == null) return false;
+                var spec = Props.Get(p.Prop);
+                var placed = w.Props.Place(spec, room, c, "선실 꾸미기 (회의)", near: f.Cells.FirstOrDefault()) ?? w.Props.Place(spec, room, c, "선실 꾸미기 (회의)");
+                if (placed == null)
+                {
+                    w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(c.Name)} {Ko.EulReul(spec.Name)} 걸 자리를 못 찾았다 — 침대 머리맡에 세워 둔다", c.Id);
+                    break;
+                }
                 Stats.Decorated++;
                 c.Needs.Stress = MathF.Max(0f, c.Needs.Stress - 0.08f);
                 w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(c.Name)} 침대 곁에 {Ko.EulReul(placed.Name)} 걸었다 — {p.Why}", c.Id);
