@@ -300,6 +300,12 @@ public static partial class FixtureArt
 
     private static void GrowBody(in Fix x)
     {
+        if (CropBody(x)) return; // v16.22 조류 · 버섯 · 단백질 · 허브는 FixtureArtFood
+        GrowBodyVeg(x);
+    }
+
+    private static void GrowBodyVeg(in Fix x)
+    {
         var ci = x.Ci;
         Box(ci, x.B, new Color("#1c2619"), 5, new Color("#3b5a33"));
         var soil = x.Q(0.03f, 0.2f, 0.97f, 0.8f);
@@ -314,6 +320,12 @@ public static partial class FixtureArt
     }
 
     private static void GrowLife(in Fix x)
+    {
+        if (CropLife(x)) return; // v16.22
+        GrowLifeVeg(x);
+    }
+
+    private static void GrowLifeVeg(in Fix x)
     {
         var ci = x.Ci;
         bool alive = x.Eff > 0.01f && !x.Dead;
@@ -345,6 +357,12 @@ public static partial class FixtureArt
     }
 
     private static void GrowFine(in Fix x)
+    {
+        if (CropFine(x)) return; // v16.22
+        GrowFineVeg(x);
+    }
+
+    private static void GrowFineVeg(in Fix x)
     {
         var ci = x.Ci;
         Bolts(ci, x.B, 2f, 0.6f);

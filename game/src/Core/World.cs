@@ -156,6 +156,8 @@ public sealed class World
     public CultureSystem Culture { get; } // v14.9 배의 문화
     public DailySystem Daily { get; } // v15 일상 사건 70
     public FleetSystem Fleet { get; } // v16.20b 로봇 · 드론 두뇌와 성능 · 주컴퓨터 함대 지휘
+    public FoodSourceSystem FoodSources { get; } // v16.22 식량원 (수경 · 조류 · 단백질 · 버섯 · 정원 · 저장 · 교역 · 원정 · 발효)
+    public ScrapSystem Scrap { get; } // v16.22 고철 되살리기 (재활용실 · 파쇄실)
     public FailsafeSystem Failsafe { get; } // v16.19 차압 문 · 예비 회로 · 보조 간선 · 장갑 벽 · 비상 칸막이 · 부하 차단
     public MajorIncidentSystem Major { get; } // v16.19 계통 · 배 전체 사고 (전조 → 발생 → 번짐 → 수습 → 흔적)
     public AnnexSystem Annex { get; } // v16.10 증축 (선체 바깥에 방을 새로 붙인다)
@@ -272,6 +274,7 @@ public sealed class World
         Culture = new CultureSystem(this);
         Daily = new DailySystem(this);
         Fleet = new FleetSystem(this); // v16.20b
+        FoodSources = new FoodSourceSystem(this); Scrap = new ScrapSystem(this); // v16.22
         Failsafe = new FailsafeSystem(this); Major = new MajorIncidentSystem(this); // v16.19
         Annex = new AnnexSystem(this); // v16.10
         Body2 = new Body2System(this); // v17.1
@@ -387,6 +390,8 @@ public sealed class World
             RoomUse.Update(dt); RoomPlans.Update(dt); // v16.17 쓰임 → 용도 · 승무원 안건 → 회의 → 공사
             Cosmic.Update(dt); // v18.13 우주 대재난: 예보 · 대비 · 본 사건 · 후유증
             pf = Prof.Lap("sys.Daily", pf);
+            FoodSources.Update(dt); Scrap.Update(dt); // v16.22 식량원 · 수경이 멎으면 다른 재배실로 · 고철 되살리기
+            pf = Prof.Lap("sys.FoodSources", pf);
             CrisisCrew.Update(dt); // v16.21 비상 배치 · 동료가 깨우는 공황 · 마스크 · 정전 예측 · 사고 뒤 훈련
             pf = Prof.Lap("sys.CrisisCrew", pf);
             Coop.Update(dt); // v17.4 작업장 · 짝 · 예약 · 옆 설비 · 줄 · 구경꾼 · 소문
@@ -859,6 +864,7 @@ public sealed class World
         world.Water.Level *= scale;
         world.Propulsion.SetScale(scale);
         StockShip(ship, rng, scale * Storyteller.StockScale); // v12.4 난이도: 시작 물자
+        if (ShipClasses.Base(template.Key) || template.Key.StartsWith("gen:") && !template.Legacy) { ShipClasses.Stock(ship, ShipClasses.Of(template)); if (ShipClasses.Base(template.Key)) ShipClasses.FitOut(world, ShipClasses.Of(template)); } // v16.22 크기 등급: 시작 물자 · 특수 방 대표 설비
         if (Storyteller.StockScale < 0.99f) TrimStock(ship, Storyteller.StockScale);
 
         var beds = ship.FurnitureOf(FurnitureType.Bed).OrderBy(b => b.MinX).ToList();

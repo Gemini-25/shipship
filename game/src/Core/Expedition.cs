@@ -1344,6 +1344,7 @@ public sealed class ExpeditionSystem
         }
         // 전리품: 에어락 · 격납고 바닥에 쌓인다 (다들 날라야 창고에 들어간다)
         foreach (var (k, n) in t.Loot.OrderBy(kv => (int)kv.Key)) if (n > 0) Spoils.Add((k, n));
+        w.FoodSources.Expedition(t.Loot); // v16.22 원정에서 가져온 먹을 것
         SpoilsRoom = room0?.Id ?? -1;
         SpoilsAt = PileCell(room0, at0);
         Stats.LootTotal += t.LootTotal;

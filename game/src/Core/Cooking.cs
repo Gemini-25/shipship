@@ -276,7 +276,9 @@ public sealed class CookingSystem
                 jar.Portions -= Math.Min(jar.Portions, n * 2);
                 return true;
             default:
-                return Dishes.Item(what) is ItemKind k && Life.Take(_w, k, n);
+                if (Dishes.Item(what) is not ItemKind k || !Life.Take(_w, k, n)) return false;
+                if (k == ItemKind.Ration) _w.FoodSources.Note(FoodSrc.Stored, n); // v16.22 저장 식량을 섞어 쓴다
+                return true;
         }
     }
 
@@ -404,7 +406,7 @@ public sealed class CookingSystem
     {
         var w = _w;
         if (Batches.Any(b => b.Jar && !b.Spoiled && (!b.Ready(w.Tick) || b.Portions > 3))) return;
-        if (Stock(ItemKind.Produce) < 16 || !R.Chance(0.35f)) return;
+        if (Stock(ItemKind.Produce) < 16 || !R.Chance(0.35f * w.FoodSources.JarMul)) return; // v16.22 수경이 멎으면 남는 채소를 절여 둔다
         var options = new List<int>();
         for (int i = 0; i < Dishes.All.Length; i++)
             if (Dishes.All[i].Jar && (!Dishes.All[i].Uses(Ingredient.HomeGoods) || HomeGoods[i] > 0)) options.Add(i);
@@ -842,6 +844,7 @@ public sealed class CookingSystem
             {
                 b.WasReady = true;
                 Stats.JarsReady++;
+                w.FoodSources.Note(FoodSrc.Ferment, b.Portions); // v16.22 발효 음식이 익었다
                 w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(b.CookName)} 앉혀 둔 {Ko.IGa(b.Spec.Name)} 익었다", b.Cook);
             }
             if (!b.Spoiled && b.Fresh < 0.2f)

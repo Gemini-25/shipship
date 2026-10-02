@@ -246,7 +246,7 @@ public sealed class VoyageSystem
                 put += f.Storage!.Add(ItemKind.Meal, meals - put);
                 if (put >= meals) break;
             }
-            if (put > 0) { Credits -= put * mealPrice; lines.Add($"끼니 {put}"); }
+            if (put > 0) { Credits -= put * mealPrice; lines.Add($"끼니 {put}"); w.FoodSources.Note(FoodSrc.Trade, put); } // v16.22 교역
         }
         w.Cooking.OnPort(leg.Name, lines); // v16.8 고향 재료
         Trades++;

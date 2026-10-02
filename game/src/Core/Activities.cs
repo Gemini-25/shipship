@@ -122,6 +122,7 @@ public sealed class EatActivity : Activity
             if (cm.CarryTaint > 0 && cm.PoisonAt < 0) { cm.PoisonAt = world.Tick + SimTime.Minutes(40); cm.PoisonSource = box; }
             cm.CarryTaint = 0;
             world.Cooking.Serve(cm, box, kind); // v16.8 어느 냄비의 몇 도짜리 접시인가
+            if (kind == ItemKind.Ration) world.FoodSources.Note(FoodSrc.Stored, 1); // v16.22 저장 식량을 뜯었다
             return true;
         }));
         toils.AddRange(w.Cooking.ReheatToils()); // v16.8 식었으면 데운다 (전기가 모자라면 그냥)

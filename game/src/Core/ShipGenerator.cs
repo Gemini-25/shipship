@@ -335,7 +335,7 @@ public static partial class ShipGenerator
     private static readonly HashSet<RoomType> Infra = new()
     {
         RoomType.WaterPlant, RoomType.BatteryRoom, RoomType.FuelCell, RoomType.HvacRoom, RoomType.PumpRoom, RoomType.Substation,
-        RoomType.HeatStorage, RoomType.BackupBridge, RoomType.Navigation, RoomType.CraneControl, RoomType.Security, RoomType.ServerRoom,
+        RoomType.HeatStorage, RoomType.BackupBridge, RoomType.Navigation, RoomType.CraneControl, RoomType.Security, RoomType.ServerRoom, RoomType.ComputerRoom,
     };
 
     private const string LegendChars = "dintuvxyz0123456789";
@@ -369,8 +369,15 @@ public static partial class ShipGenerator
     /// <summary>크기별 기반 시설 방: 12인 이상 정수실(예비 정수기 둘), 20인 이상 배터리실(축전지 넷), 30인 이상 공조실(산소 발생기 둘).</summary>
     public static IEnumerable<RoomType> InfraFor(int n)
     {
+        // v16.22 크기에 따라 기반 시설 방을 나눠 둔다 (전에는 정수실 · 배터리실 · 공조실뿐이라 항법실 · 펌프실 · 서버실 같은 방이 어디에도 없었다)
+        //  큰 생성 배(25인 넘게)는 예전 그대로 — 방이 늘면 60인 배의 배식 줄 · 동선이 넘친다 (기본 배 다섯 척이 큰 배의 방을 다 보여 준다)
+        bool mid = n is >= 8 and <= 24;
+        if (mid) yield return RoomType.Navigation;
         if (n >= 12) yield return RoomType.WaterPlant;
+        if (mid && n >= 12) { yield return RoomType.PumpRoom; yield return RoomType.FuelCell; }
+        if (mid && n >= 16) yield return RoomType.ServerRoom; // 보안실은 생성 배에 넣지 않는다 (함장 승인 문이 통로 사이 지름길이 되면 사람이 막힌다)
         if (n >= 20) yield return RoomType.BatteryRoom;
+        if (mid && n >= 20) yield return RoomType.HeatStorage;
         if (n >= 30) yield return RoomType.HvacRoom;
     }
 

@@ -179,6 +179,7 @@ public partial class ShipView : Node2D
         PaintWallShade(ci);
         PaintCorridorGuides(ci);
         PaintFloorDecor(ci); // v10.9 바닥 격자·배수구·깔개·경고 띠
+        PaintRoomKinds(ci); // v16.22 방 종류마다 바닥 (주컴퓨터실 · 버섯 · 냉동 · 항법 …)
         PaintHoloPad(ci); // v11.2 함교 홀로그램 테이블 패드
         PaintWiring(ci); // v10.9 케이블 트레이·분전함·간선
         PaintWallProps(ci); // v10.9 벽에 붙은 계기·사물함·소화기·번호판

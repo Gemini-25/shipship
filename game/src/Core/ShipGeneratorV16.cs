@@ -17,9 +17,9 @@ public static partial class ShipGenerator
     private static readonly Dictionary<ShipPurpose, RoomType[]> PurposeRooms = new()
     {
         [ShipPurpose.Mining] = new[] { RoomType.Crusher, RoomType.Cargo, RoomType.DroneBay, RoomType.Recycling, RoomType.WeldingShop, RoomType.PropellantTank, RoomType.PartsPrep },
-        [ShipPurpose.Colony] = new[] { RoomType.PrivateCabins, RoomType.Theater, RoomType.School, RoomType.Garden, RoomType.Chapel, RoomType.SeedVault, RoomType.WaterWallCabin, RoomType.Meditation },
+        [ShipPurpose.Colony] = new[] { RoomType.PrivateCabins, RoomType.Theater, RoomType.School, RoomType.Garden, RoomType.Chapel, RoomType.SeedVault, RoomType.WaterWallCabin, RoomType.Meditation, RoomType.MushroomFarm, RoomType.ProteinFarm }, // v16.22 이민선은 먹을 길이 여럿 (버섯 · 단백질)
         [ShipPurpose.Hospital] = new[] { RoomType.Triage, RoomType.Quarantine, RoomType.Hyperbaric, RoomType.QuarantineLock, RoomType.Morgue, RoomType.Decon, RoomType.Lab },
-        [ShipPurpose.Research] = new[] { RoomType.Lab, RoomType.ElectronicsLab, RoomType.Observatory, RoomType.Calibration, RoomType.Archive, RoomType.AlgaeLab },
+        [ShipPurpose.Research] = new[] { RoomType.Lab, RoomType.Calibration, RoomType.AlgaeLab, RoomType.ElectronicsLab, RoomType.Observatory, RoomType.Archive }, // v16.22 교정실 · 조류 배양실을 꼭
         [ShipPurpose.Supply] = new[] { RoomType.Cargo, RoomType.Freezer, RoomType.DockingBay, RoomType.GasStorage, RoomType.Laundry, RoomType.ShuttleBay, RoomType.PropellantTank },
     };
 

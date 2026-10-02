@@ -113,7 +113,7 @@ public sealed partial class AutomationSystem
             else
             {
                 float hours = (w.Tick - OfflineSince) / (float)SimTime.TicksPerHour;
-                bool temp = m?.Grade == MachineGrade.Mk1 && m.Body.Room.Type != RoomType.Bridge;
+                bool temp = m?.Grade == MachineGrade.Mk1 && m.Body.Room.Type != RoomType.Bridge && m.Body.Room.Kind != RoomType.ComputerRoom; // v16.22 주컴퓨터실
                 w.Log.Add(w.Tick, LogKind.Ship, (temp ? $"{m!.Body.Room.Name}의 임시 제어 컴퓨터가 돈다" : "주 컴퓨터 복구") + $" — 자동화가 돌아왔다 ({hours:0.0}시간 만)");
                 if (hours >= 0.5f) w.History.Add(w, HistoryKind.Response, $"자동화가 {hours:0.0}시간 만에 돌아왔다" + (temp ? " (임시 제어 컴퓨터)" : ""), m?.Body.Room);
             }

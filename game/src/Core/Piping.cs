@@ -231,13 +231,13 @@ public sealed class PipeNetwork
 
         // 급수: 정수기 → 수경재배실, 정수기 → 냉각실 보충구
         var recycler = ship.Furniture.Where(f => f.Type == FurnitureType.WaterRecycler).OrderBy(f => f.Room.Special != null ? 1 : 0).FirstOrDefault(); // 본관은 생명유지실 정수기에서 (정수실은 덧붙는 공급원)
-        var hydro = ship.Rooms.FirstOrDefault(r => r.Type == RoomType.Hydroponics);
+        var hydro = ship.RoomsOf(RoomType.Hydroponics).FirstOrDefault(); // v16.22 본래 수경재배실 먼저 (조류 · 버섯 · 단백질 방은 뒤)
         if (recycler != null && hydro != null)
         {
             var life = recycler.Room;
             int y = recycler.Cells.Max(c => c.Y) + 1;
             var main = new PipeSegment { Id = id++, Name = "급수 본관", Kind = PipeKind.Water, Role = PipeRole.WaterMain };
-            main.Path.AddRange(Route(new Cell(recycler.Cells.Max(c => c.X), y), new Cell(hydro.MaxX, y)));
+            main.Path.AddRange(Route(new Cell(recycler.Cells.Max(c => c.X), y), new Cell(hydro.MaxX, Math.Clamp(y, hydro.MinY, hydro.MaxY)))); // v16.22 다른 띠의 재배실까지 꺾어 들어간다
             main.ValveCell = NearestFloor(new Cell(recycler.Cells.Max(c => c.X), y), life) ?? recycler.UseSpots.First();
             main.ValveRoom = life;
             Segments.Add(main);

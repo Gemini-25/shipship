@@ -58,7 +58,7 @@ public sealed class FoodPolicy
     /// <summary>재배대가 지금 얼마나 대 주나 (익어 가는 작물 · 하루 몇 끼).</summary>
     public static float GrowingPerDay(World w) =>
         w.Ship.FurnitureOf(FurnitureType.GrowBed).Where(f => !f.Room.Abandoned && f.Machine!.Efficiency > 0f && f.Machine.Crop != null)
-            .Sum(f => FoodChain.HarvestYield * FoodChain.BedSize(f) * f.Machine!.Efficiency * f.Machine.Rating * 24f / FoodChain.GrowHours)
+            .Sum(f => FoodChain.HarvestYield * FoodChain.BedSize(f) * f.Machine!.Efficiency * f.Machine.Rating * 24f / FoodChain.GrowHours * FoodSourceSystem.YieldMul(f) * FoodSourceSystem.GrowMul(f.Machine)) // v16.22 재배실마다
         * (FoodChain.MealsPerBatch / (float)FoodChain.ProducePerBatch);
 
     public void Update(World w, float dt)

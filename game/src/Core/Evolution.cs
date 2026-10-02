@@ -972,6 +972,7 @@ public static class Evolution
                 {
                     room.Purpose = "제2 재배실";
                     w.Adapt.Repurposed++;
+                    if (room.Type == RoomType.Storage && room.Special == null && w.FoodSources.HydroDown) { room.Special = RoomType.MushroomFarm; room.Purpose = null; } // v16.22 수경이 멎었을 때 어두운 창고 한쪽은 버섯 재배실로
                 }
                 text = $"{Ko.IGa(cm.Name)} {room.Name}에 두 칸짜리 재배대를 짜 넣었다 — 굶주린 시간이 {StarvedHours(w):0}사람·시간 쌓인 뒤로 (먹을 것은 늘고 물은 더 든다)";
                 MarkLog.Add(room.Marks, w.Tick, "재배대 증설");

@@ -192,14 +192,19 @@ public partial class OptionsPanel : PanelContainer
         var crewLabel = Label(CrewText(Settings.Crew));
         var crew = new HSlider { MinValue = 1, MaxValue = ShipSim.Core.World.MaxCrew, Step = 1, Value = Settings.Crew, CustomMinimumSize = new Vector2(360, 24) };
         crew.ValueChanged += v => { Settings.Crew = (int)v; crewLabel.Text = CrewText((int)v); Changed(); };
+        var preview = new ShipPreview { CustomMinimumSize = new Vector2(360, 200) }; // v16.22 고른 배의 크기 · 윤곽 (같은 축척)
         ship.ItemSelected += i =>
         {
             Settings.Ship = i == 0 ? "auto" : i == genIndex ? "gen" : ShipSim.Core.ShipCatalog.All[i - 1].Key;
             if (i > 0 && i < genIndex) crew.Value = ShipSim.Core.ShipCatalog.All[i - 1].Crew; // 고른 배의 설계 인원으로 (바꿔도 된다)
             crewLabel.Text = CrewText(Settings.Crew);
+            preview.Show(Settings.Ship, Settings.Crew);
             Changed();
         };
+        crew.ValueChanged += v => preview.Show(Settings.Ship, (int)v);
         box.AddChild(ship);
+        box.AddChild(preview);
+        preview.Show(Settings.Ship, Settings.Crew);
         box.AddChild(crewLabel);
         box.AddChild(crew);
         box.AddChild(Check("승무원이 죽을 수 있다 (새 항해부터)", Settings.Death, on => Settings.Death = on)); // v12.0
