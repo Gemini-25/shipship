@@ -217,6 +217,7 @@ public static partial class FixtureArt
         var x = new Fix(ci, f, null, 0f, 1f, false);
         a.Body(in x);
         Weathering(in x, a); // 낡음 · 상처 (FixtureArtWear.cs)
+        TierGrade(in x, a); // v16.5b 기술 수준 테두리 · 단계 부품 · 등급 손질 (FixtureArtTier.cs)
         return true;
     }
 
@@ -265,6 +266,7 @@ public static partial class FixtureArt
                 Smoke(ci, e, time, x.Id, 0.5f, x.Lod, 2);
                 break;
         }
+        TierGradeLife(in x, a, m); // v16.5b 단계 부품 빛 · Mk.3 테 · Mk.1 손질 움직임 (FixtureArtTier.cs)
         Moments(in x, a, m, e); // 고장 순간 · 고치는 중 (FixtureArtWear.cs)
         if (x.Lod == 0) return;
         // 열 · 압력 스트레스: 아지랑이
