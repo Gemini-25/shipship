@@ -77,7 +77,7 @@ public partial class Hud
 
     private void DrawIncidentCards(Vector2 mouse)
     {
-        if (ChronicleOpen || TechOpen) return;
+        if (ChronicleOpen || TechOpen || ControlOpen || PolicyOpen || ScaleCodexOpen) return; // v16.24 큰 화면이 열리면 겹치지 않게
         var log = _world.Causes;
         var list = log.Notable().Where(i => i.Open || _world.Tick - i.End < SimTime.Hours(3)).Take(3).ToList();
         if (list.Count == 0) return;

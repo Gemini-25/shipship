@@ -49,6 +49,7 @@ public static class ProposalTiming
             if (p.SeenAt < 0) { p.SeenAt = w.Tick; p.Trail.Add((w.Tick, $"회의 안건으로 올렸다 ({m.Venue?.Name ?? "회의실"})")); }
             return "회의에서 이야기하고 정했다";
         }
+        bool thought = p.SeenAt >= 0 && w.Tick - p.SeenAt >= SimTime.Minutes(ThinkMinutes);
         if (AtTerminal(boss))
         {
             if (p.SeenAt < 0)
@@ -57,9 +58,10 @@ public static class ProposalTiming
                 p.Trail.Add((w.Tick, $"{Ko.IGa(boss.Name)} {boss.Room!.Name} 단말에서 제안을 봤다"));
                 return null;
             }
-            return w.Tick - p.SeenAt >= SimTime.Minutes(ThinkMinutes) ? $"{boss.Room!.Name} 단말 앞에서 정했다" : null;
+            return thought ? $"{boss.Room!.Name} 단말 앞에서 정했다" : null;
         }
-        return null;
+        // 보고 자리를 떴어도 이미 읽었으니 생각한 만큼 지나면 정한다 (손목 단말로 답한다)
+        return thought ? "단말에서 본 것을 생각해 보고 손목 단말로 답했다" : null;
     }
 
     /// <summary>정한 뒤 마지막 줄.</summary>
