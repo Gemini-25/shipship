@@ -207,12 +207,18 @@ public static partial class Program
                 Check("위기 대응 계획도 고친다 — 소화조가 지치면 다른 사람으로", team0.Count == 0 || !teamNow.Contains(teamMember.Id) && a.Planner.Emergency.Revisions > crisisRevs,
                     $"소화조 {string.Join("·", team0.Select(id => w.Crew[id].Name))} → {string.Join("·", teamNow.Select(id => w.Crew[id].Name))} · {a.Planner.Revisions.LastOrDefault(r => r.Key == "crisis")?.Why}");
                 // 싫어하는 당번 (투덜댐을 듣고 배운다)
-                var grump = adults.OrderByDescending(c => CrewModelBook.TrueAversion(c, "청소")).First();
-                grump.Needs.Rest = 0.9f;
-                for (int i = 0; i < 4; i++) a.CrewModel.OnDuty(grump, "청소");
-                float av = a.CrewModel.Of(grump).Aversion0("청소");
-                Check("승무원 습관을 배운다 — 싫은 당번에 투덜대면 그 사람이 싫어한다고 짐작한다 (참는 사람은 모른다)", CrewModelBook.TrueAversion(grump, "청소") <= 0.55f || av > 0.5f || grump.Habits.Contains(Habit.Patient) || grump.Habits.Contains(Habit.Follower),
-                    $"{grump.Name} 실제 {CrewModelBook.TrueAversion(grump, "청소") * 100:0}% · 짐작 {av * 100:0}% · 투덜댐 {a.CrewModel.Of(grump).Grumbles.GetValueOrDefault("청소")}");
+                // 가장 싫어하는 당번을 가진 사람 (참는 성격은 빼고) — 그 당번을 네 번 맡긴다
+                var (grump, duty) = adults.Where(c => !c.Habits.Contains(Habit.Patient) && !c.Habits.Contains(Habit.Follower))
+                    .SelectMany(c => CrewModelBook.Duties.Select(d => (c, d))).OrderByDescending(x => CrewModelBook.TrueAversion(x.c, x.d)).ThenBy(x => x.c.Id).First();
+                if (grump.Room == null || !grump.Room.DataLinked) { Put(w, grump, w.Ship.RoomsOf(RoomType.Mess).First()); Run(w, 2); }
+                float av0 = a.CrewModel.Of(grump).Aversion0(duty);
+                for (int i = 0; i < 4; i++) a.CrewModel.OnDuty(grump, duty);
+                float av = a.CrewModel.Of(grump).Aversion0(duty);
+                var calm = adults.Where(c => c != grump).OrderBy(c => CrewModelBook.TrueAversion(c, duty)).First();
+                for (int i = 0; i < 4; i++) a.CrewModel.OnDuty(calm, duty);
+                Check("승무원 습관을 배운다 — 싫은 당번에 투덜대면 싫어한다고 짐작하고 · 군말 없는 사람은 괜찮다고 짐작한다 (짐작은 다음 당번표에 쓴다)",
+                    CrewModelBook.TrueAversion(grump, duty) > 0.55f && av > av0 + 0.15f && av - a.CrewModel.Of(calm).Aversion0(duty) > 0.2f,
+                    $"{duty}: {grump.Name} 실제 {CrewModelBook.TrueAversion(grump, duty) * 100:0}% · 짐작 {av0 * 100:0}% → {av * 100:0}% (투덜댐 {a.CrewModel.Of(grump).Grumbles.GetValueOrDefault(duty)}) ↔ {calm.Name} 실제 {CrewModelBook.TrueAversion(calm, duty) * 100:0}% · 짐작 {a.CrewModel.Of(calm).Aversion0(duty) * 100:0}%");
                 // 사생활 ↔ 안전
                 w.Policies.Set("privacy", 1, "시험");
                 var q = w.Ship.RoomsOf(RoomType.Quarters).FirstOrDefault();
