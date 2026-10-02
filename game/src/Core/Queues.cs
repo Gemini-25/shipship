@@ -229,7 +229,7 @@ public sealed class QueueSystem
         int friend = -1;
         for (int i = 1; i < q.Line.Count - 1; i++)
             if (CrewById(q.Line[i]) is CrewMember o && c.AffinityTo(o) > 0.35f) { friend = i; break; }
-        float chance = Math.Clamp(u + p - 0.12f + (friend >= 0 ? 0.15f : 0f), 0f, 0.75f);
+        float chance = Math.Clamp(u + p - 0.04f + (friend >= 0 ? 0.15f : 0f), 0f, 0.75f);
         if (!force && (chance <= 0f || !R.Chance(chance))) return -1;
         if (force) ForceCut = -1;
         int pos = friend >= 0 ? friend + 1 : Math.Min(1, q.Line.Count - 1);
@@ -336,6 +336,8 @@ public sealed class QueueSystem
     {
         if (q.Line.Count == 0 || q.Line[0] != c.Id) return false;
         if (q.Serving >= 0 && q.Serving != c.Id) return false;
+        // 끼어들어 바로 차례가 왔다 — 받기 전에 뒷사람이 먼저 한마디 한다 (물러나면 차례가 아니다)
+        if (_pending.ContainsKey(c.Id)) { OnArrive(c, q); if (q.Line.Count == 0 || q.Line[0] != c.Id) return false; }
         Serve(q, c);
         return true;
     }

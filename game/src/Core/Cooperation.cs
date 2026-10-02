@@ -550,6 +550,7 @@ public sealed partial class CoopSystem
                 site.Reserved = false; // 못 돌아온다 — 다른 사람이 이어받을 수 있게
                 if (site.Order.Assignee?.Id == site.Owner && site.Order.Assignee.Job?.Order != site.Order) site.Order.Assignee = null;
             }
+            else if (site.Reserved && site.Order.Assignee == null && CrewById(site.Owner) is CrewMember own) site.Order.Assignee = own; // 다시 불려 갔어도 제 몫으로 둔다
             // 비워 둔 자리를 지나가는 사람: 급하면 걷어차고, 아니어도 가끔 건드린다
             foreach (var c in w.Crew)
             {

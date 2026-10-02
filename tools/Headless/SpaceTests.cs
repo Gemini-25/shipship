@@ -60,7 +60,6 @@ public static partial class Program
             Force(w, c, SpChore(w, c, o)!, SimTime.Hours(4));
             for (int k = 0; k < 40 && o.Progress < 0.3f; k++) Run(w, SimTime.Minutes(3));
             var site = w.Coop.Sites.FirstOrDefault(s => s.OrderId == o.Id);
-            Console.WriteLine($"   (펼친 사람 {site?.Owner} · 맡은 {c.Id} {c.Name} · 지금 {c.Job?.Label})");
             Check("정비 자리에 공구 · 분해한 부품을 펼친다", site != null && site.Items.Count >= 2 && site.Owner == c.Id && o.Progress > 0.2f,
                 $"{f.Label} · {(site == null ? "작업장 없음" : string.Join("·", site.Items.Select(t => $"{t.Name}{t.At}")))} · 진척 {o.Progress * 100:0}%");
             // 경보: 급한 일로 손을 놓고 달려간다
@@ -91,10 +90,14 @@ public static partial class Program
         // ── 1b) 비워 둔 자리를 누가 건드리면 돌아온 사람이 헷갈린다 · 펼친 부품이 통로를 좁힌다 ──
         {
             var w = DayOne(seed, "Hanbit");
+            RunUntilHour(w, 10f);
             var f = w.Ship.Furniture.Where(x => x.Machine is Machine m && !x.Stowed && m.Faults.Count == 0 && m.Spec.ServiceHours >= 0.7f && x.Room.Type != RoomType.Corridor)
                 .OrderBy(x => x.Id).Skip(1).First();
             var o = SpMaintain(w, f)!;
-            var c = SpWorker(w, f.Machine!.Spec.Skill);
+            float h0 = SimTime.HourOfDay(w.Tick);
+            // 교대가 아직 한참 남은 사람 (인수인계로 손을 놓지 않게)
+            var c = w.Crew.Where(x => x.CanAct && !x.IsChild && SimTime.InWindow(h0, x.Schedule.WorkStart, x.Schedule.WorkLength) && SimTime.InWindow(h0 + 3f, x.Schedule.WorkStart, x.Schedule.WorkLength))
+                        .OrderByDescending(x => x.SkillLevel(f.Machine!.Spec.Skill)).ThenBy(x => x.Id).FirstOrDefault() ?? SpWorker(w, f.Machine!.Spec.Skill);
             var other = w.Crew.First(x => x != c && x.CanAct && !x.IsChild);
             foreach (var x in w.Crew) if (x.Job?.Order == o) x.EndJob(w, ToilStatus.Interrupted);
             Force(w, c, SpChore(w, c, o)!, SimTime.Hours(4));
@@ -118,9 +121,7 @@ public static partial class Program
             // 지나가던 사람이 건드렸다
             site.Touched = true; site.Toucher = other.Id;
             float aff = c.AffinityTo(other);
-            Console.WriteLine($"   (1b: 자리 {site.State} 주인 {site.Owner}/{c.Id} 건드림 {site.Touched} · 진척 {o.Progress * 100:0}% · {c.Name} 지금 {c.Job?.Label})");
             Run(w, SimTime.Minutes(10));
-            Console.WriteLine($"   (1b: 10분 뒤 자리 {site.State} 주인 {site.Owner} 건드림 {site.Touched} · {c.Name} 지금 {c.Job?.Label} · 맡은 {o.Assignee?.Name} · 자리 남음 {w.Coop.Sites.Contains(site)})");
             Force(w, c, SpChore(w, c, o)!, SimTime.Hours(4));
             for (int k = 0; k < 30 && w.Coop.Stats.Confused == 0; k++) Run(w, SimTime.Minutes(2));
             var conf = w.Log.Entries.LastOrDefault(e => e.CrewId == c.Id && e.Text.Contains("헷갈려")).Text;
@@ -325,11 +326,12 @@ public static partial class Program
             x.Habits.Add(Habit.Hasty); x.Habits.Add(Habit.ShortTempered);
             foreach (var p in people) Teleport(w, p, disp.UseSpots[0] + new Cell(0, 0));
             Run(w, 2);
-            if (cut) w.Coop.Queues.ForceCut = x.Id;
+            Force(w, x, new Job(null, "시험: 잠깐", new Toil[] { new WaitToil(SimTime.Hours(1), Pose.Standing) }), SimTime.Hours(1)); // 제 차례 전에 스스로 먹으러 가지 않게
             Force(w, a, SpEat(w, a), SimTime.Hours(2));
             Run(w, 3);
             Force(w, v, SpEat(w, v), SimTime.Hours(2));
             Run(w, SimTime.Minutes(1));
+            if (cut) w.Coop.Queues.ForceCut = x.Id;
             Force(w, x, SpEat(w, x), SimTime.Hours(2));
             System.Numerics.Vector2? sv = null, sx = null;
             for (int k = 0; k < SimTime.Hours(1.2f) && (sv == null || sx == null); k++)
