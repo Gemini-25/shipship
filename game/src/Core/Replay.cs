@@ -428,6 +428,7 @@ public static class SaveGame
         w.TechWeb.Hash(I, F); // v16.14 기술 그물 · 실험
         w.Automation.HashBrain(I, F); // v16.16 주컴퓨터 두뇌 2.0
         w.Scale.Hash(I, F); // v16.18 사고 규모
+        w.Body2.Hash(I, F); // v17.1 머리카락 · 체중 · 우주복 치수 · 이발
         return h;
     }
 }

@@ -157,6 +157,7 @@ public static partial class Program
         if (args.Contains("--hazard70test")) return RunHazard70Test(seed); // v15 사고 70
         if (args.Contains("--catalogtest")) return RunCatalogTest(seed); // v15 고장·물자 70
         if (args.Contains("--moduletest")) return RunModuleTest(seed); // v15 설비 70
+        if (args.Contains("--looktest")) return RunLookTest(seed); // v17.1 승무원 인형 · 몸의 변화
         if (args.Contains("--lookcheck")) return RunLookCheck(seed); // v16.5a 재질 그림
         if (args.Contains("--techwebtest")) return RunTechWebTest(seed); // v16.14
         if (args.Contains("--scaletest")) return RunScaleTest(seed); // v16.18 사고 규모
