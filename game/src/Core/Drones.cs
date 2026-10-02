@@ -439,7 +439,7 @@ public sealed partial class DroneSystem
                         break;
                     }
                     // 돌아올 배터리가 남았는지
-                    if (d.State != DroneState.Towing && d.Battery < ReturnCost(d) + 0.06f) Abort(d, "배터리가 모자라 돌아온다");
+                    if (d.State != DroneState.Towing && d.Battery < ReturnCost(d) + 0.06f) { if (!FleetLowBattery(d)) Abort(d, "배터리가 모자라 돌아온다"); } // v16.20b 맡은 파공이면 교대
                     else if (d.State == DroneState.Towing && d.Battery < ReturnCost(d) + 0.04f) ReleaseTow(d, "배터리가 모자라 잡아 세워 두고 돌아온다");
                     break;
                 case DroneState.Adrift:

@@ -158,6 +158,7 @@ public static partial class Program
         if (args.Contains("--hazard70test")) return RunHazard70Test(seed); // v15 사고 70
         if (args.Contains("--catalogtest")) return RunCatalogTest(seed); // v15 고장·물자 70
         if (args.Contains("--moduletest")) return RunModuleTest(seed); // v15 설비 70
+        if (args.Contains("--fleettest")) return RunFleetTest(seed); // v16.20b
         if (args.Contains("--crisistest")) return RunCrisisCrewTest(seed); // v16.21 승무원 위기 행동
         if (args.Contains("--looktest")) return RunLookTest(seed); // v17.1 승무원 인형 · 몸의 변화
         if (args.Contains("--spacetest")) return RunSpaceTest(seed); // v17.4 공간과 협력 · 줄 서기 · 구경꾼

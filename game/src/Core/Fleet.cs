@@ -86,7 +86,7 @@ public sealed class FleetSystem
     private readonly SortedSet<int> _fetchSaid = new();
     private long _next;
 
-    private sealed class FireWatch { public int Robot; public long Since, HoldUntil; public bool Held, Seen; public int Decision; }
+    private sealed class FireWatch { public int Robot; public long Since, HoldUntil; public bool Held, Seen; public int Decision; public float Foam0; }
 
     public FleetSystem(World w) => _w = w;
 
@@ -324,7 +324,7 @@ public sealed class FleetSystem
             if (_fire.TryGetValue(id, out var fw))
             {
                 var rb = w.Robots.Robots[fw.Robot];
-                if (!fw.Seen && rb.Room == room) { fw.Seen = true; Witness(rb, room); }
+                if (!fw.Seen && (rb.Room == room || rb.Foam < fw.Foam0 - 0.01f)) { fw.Seen = true; Witness(rb, room); } // 들어갔거나 문턱에서 거품을 뿌리기 시작했다
                 bool on = rb.Operational && rb.Foam > 0.05f && (rb.FightingFire || rb.Room == room);
                 if (!on)
                 {
@@ -332,7 +332,7 @@ public sealed class FleetSystem
                     Settle(id, false);
                     _fire.Remove(id);
                     _decided[$"fire:{id}"] = w.Tick;
-                    w.Log.Add(w.Tick, LogKind.Ship, $"{w.Automation.Voice.Call}: {rb.Name}이(가) 물러났다 — {room.Name} 불은 사람 손으로");
+                    w.Log.Add(w.Tick, LogKind.Ship, $"{w.Automation.Voice.Call}: {Ko.IGa(rb.Name)} 물러났다 — {room.Name} 불은 사람 손으로");
                     continue;
                 }
                 if (fw.Held && w.Tick < fw.HoldUntil) Hold(room, true);
@@ -382,7 +382,7 @@ public sealed class FleetSystem
         if (dec.Pick.Key == "crew") return;
         if (!w.Robots.FleetFire(best, room)) return;
         bool hold = dec.Pick.Key == "robot";
-        var fw = new FireWatch { Robot = best.Id, Since = w.Tick, Held = hold, HoldUntil = w.Tick + SimTime.Minutes(bestEta + 8f), Decision = dec.Id };
+        var fw = new FireWatch { Robot = best.Id, Since = w.Tick, Held = hold, HoldUntil = w.Tick + SimTime.Minutes(bestEta + 8f), Decision = dec.Id, Foam0 = best.Foam };
         _fire[room.Id] = fw;
         if (hold) Hold(room, true);
         FireFirst++;
@@ -390,6 +390,9 @@ public sealed class FleetSystem
         Line(CmdTarget.Robot, best.Id, room, $"{best.Name}: {room.Name} 불 — " + (hold ? "사람보다 먼저" : "사람과 함께"), dec.Reason, 0.95f, 20f, dec.Id);
         if (hold) w.Automation.Command.Line(CmdTarget.Broadcast, -1, room, $"{room.Name} — 소방 로봇이 먼저 들어간다 · 문 앞에서 기다려라", "사람이 연기 속에 들어가지 않게", 0.8f, 10f, dec.Id);
     }
+
+    /// <summary>이 방 불에 소방 로봇이 가 있다 (화재 대응 수순이 소화조로 셈한다).</summary>
+    public bool BotOn(Room room) => !Off && _fire.TryGetValue(room.Id, out var fw) && _w.Robots.Robots[fw.Robot] is var rb && rb.Operational && rb.Foam > 0.05f && rb.FightingFire;
 
     /// <summary>사람의 소화 일을 잠깐 미뤄 둔다 (로봇이 먼저) / 푼다.</summary>
     private void Hold(Room room, bool on)
@@ -427,7 +430,7 @@ public sealed class FleetSystem
             if (c.Dead || !c.IsAwake || c.IsChild) continue;
             float d = MathF.Abs(c.Position.X - rb.Position.X) + MathF.Abs(c.Position.Y - rb.Position.Y);
             if (d > 9f) continue;
-            w.Automation.Trusts.Change(c, 0.02f, $"{rb.Name}이(가) 사람보다 먼저 불 속에 들어갔다", quiet: true);
+            w.Automation.Trusts.Change(c, 0.02f, $"{Ko.IGa(rb.Name)} 사람보다 먼저 불 속에 들어갔다", quiet: true);
             w.Brain2.Beliefs.Learn(c, Topic.Fire, room.Id, 1, BeliefSource.Seen, 0.95f);
             first ??= c;
             Witnessed++;
@@ -463,7 +466,7 @@ public sealed class FleetSystem
             {
                 new() { Key = "crew", Name = suit ? "사람이 우주복을 입고 막는다" : "사람이 안에서 막는다", People = crewRisk, Ship = 0.02f, Minutes = suit ? 14f : 6f,
                     Note = rocks ? "파편이 아직 떨어진다" : "" },
-                new() { Key = "drone", Name = d != null ? $"{d.Name}이(가) 밖에서 막는다" : "드론이 밖에서 막는다", People = 0f, Ship = 0.04f + (rocks ? 0.08f : 0f) + 0.002f * eta,
+                new() { Key = "drone", Name = d != null ? $"{Ko.IGa(d.Name)} 밖에서 막는다" : "드론이 밖에서 막는다", People = 0f, Ship = 0.04f + (rocks ? 0.08f : 0f) + 0.002f * eta,
                     Minutes = eta, Note = rocks ? "드론을 잃을 수 있다" : "", Allowed = d != null, Blocked = why },
             };
             var dec = w.Automation.Foresee.Fleet("파공", room, $"{room.Name} 외벽 파공 {wall.Breach * 100:0}% — 누가 막나", opts);
@@ -475,6 +478,9 @@ public sealed class FleetSystem
             Line(CmdTarget.Drone, d.Id, room, $"{d.Name}: {room.Name} 파공 — 밖에서 막기", dec.Reason, 0.95f, 40f, dec.Id, o.Id);
         }
     }
+
+    /// <summary>이 파공은 다시 견줘 본다 (맡았던 드론을 교대로 돌렸을 때).</summary>
+    internal void Forget(WorkOrder o) => _decided.Remove($"seal:{o.Target.Cell.X},{o.Target.Cell.Y}");
 
     // ───────────── 명령선 · 생각 ─────────────
 

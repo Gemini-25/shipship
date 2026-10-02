@@ -582,7 +582,7 @@ public sealed partial class RobotSystem
             var next = path[r.PathIndex];
             if (w.Fleet.GiveWay(r, next)) break; // v16.20b 급히 지나가는 사람에게 길을 비켜 준다
             var door = w.Ship.DoorAt(next);
-            if (Locomotion.Blocked(w.Ship, next) || (door != null && door.Locked && !Leaving(r, door)))
+            if (Locomotion.Blocked(w.Ship, next) || (door != null && door.Locked && (!Leaving(r, door) || !FleetSystem.Off))) // v16.20b 잠긴 격벽은 로봇이 못 연다 — 다른 길로
             {
                 var goal = r.Goal ?? path[^1];
                 if (repathed || !SetDestination(r, w, goal)) { r.Path = null; return false; }

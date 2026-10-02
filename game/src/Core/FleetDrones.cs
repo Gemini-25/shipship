@@ -25,10 +25,11 @@ public sealed partial class DroneSystem
     }
 
     /// <summary>파공 바깥 자리 (벽 칸 곁의 우주 칸).</summary>
-    internal Vector2? WallSpot(WorkOrder o)
+    internal Vector2? WallSpot(WorkOrder o) => WallSpot(o.Target.Cell);
+
+    internal Vector2? WallSpot(Cell c)
     {
         var grid = _world.Ship.Grid;
-        var c = o.Target.Cell;
         foreach (var d in Cell.Dirs4) { var n = c + d; if (grid.InBounds(n) && grid.Kind(n) == TileKind.Void) return n.Center; }
         foreach (var d in Cell.Dirs8) { var n = c + d; if (grid.InBounds(n) && grid.Kind(n) == TileKind.Void) return n.Center; }
         return null;
@@ -155,6 +156,16 @@ public sealed partial class DroneSystem
         }
     }
 
+    /// <summary>매 틱 배터리 검사에 걸렸다: 주 컴퓨터가 맡긴 파공이면 그냥 돌아오지 않고 교대를 부른다.</summary>
+    private bool FleetLowBattery(Drone d)
+    {
+        var w = _world;
+        if (FleetSystem.Off || d.State != DroneState.Working || d.Order is not WorkOrder o || o.Kind != WorkKind.SealBreach || !w.Fleet.DroneTask.ContainsKey(d.Id)) return false;
+        if (!(w.Automation.Present && (w.Automation.MainOnline || w.Automation.Core.BackupCore))) return false;
+        Handoff(w.Fleet, d, o);
+        return true;
+    }
+
     /// <summary>교대: 돌아올 몫만 남은 드론은 들어오고, 쉬던 드론이 한 만큼부터 이어서 한다.</summary>
     private void Handoff(FleetSystem f, Drone d, WorkOrder o)
     {
@@ -162,11 +173,20 @@ public sealed partial class DroneSystem
         var room = o.Target.Room;
         var fresh = Drones.Where(x => x != d && CanSeal(x.Kind) && x.Operational && x.State == DroneState.Docked && x.Battery >= 0.7f && !f.DroneTask.ContainsKey(x.Id))
             .OrderByDescending(x => x.Battery).ThenBy(x => x.Id).FirstOrDefault();
+        // 쉬는 드론이 없으면 아직 나가지 않은(거치대에서 기다리는) 드론을 데려온다 — 반쯤 막힌 파공을 잇는 게 먼저
+        if (fresh == null && Drones.Where(x => x != d && CanSeal(x.Kind) && x.Operational && x.State == DroneState.Docked && x.Battery >= 0.7f && f.DroneTask.ContainsKey(x.Id))
+                .OrderByDescending(x => x.Battery).ThenBy(x => x.Id).FirstOrDefault() is Drone busy)
+        {
+            if (FindOrder(f.DroneTask[busy.Id]) is WorkOrder other && other.Drone == busy) { other.Drone = null; f.Forget(other); }
+            f.DroneTask.Remove(busy.Id);
+            f.CloseLine(CmdTarget.Drone, busy.Id, "교대가 먼저");
+            fresh = busy;
+        }
         f.Carry[o.Id] = d.WorkProgress;
         f.DroneTask.Remove(d.Id);
         o.Drone = null;
         d.Order = null;
-        d.Mind.Say($"배터리 {d.Battery * 100:0}% — 돌아올 몫만 남아 {(fresh != null ? $"{fresh.Name}와(과) " : "")}교대", w.Tick);
+        d.Mind.Say($"배터리 {d.Battery * 100:0}% — 돌아올 몫만 남아 {(fresh != null ? $"{Ko.WaGwa(fresh.Name)} " : "")}교대", w.Tick);
         w.Log.Add(w.Tick, LogKind.Work, $"{d.Name}: 배터리가 돌아올 만큼만 남았다 — {o.Title} {d.WorkProgress * 100:0}%에서 교대하러 들어온다");
         GoHome(d);
         f.Reliefs++;

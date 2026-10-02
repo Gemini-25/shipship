@@ -143,7 +143,7 @@ public sealed partial class AutomationSystem
                 {
                     if (!burning) { FireCases.Remove(fc); if (fc.Node >= 0) w.Causes.Resolve(fc.Node, $"{room.Name} 불이 먼저 꺼졌다", by: ""); continue; }
                     bool critical = CriticalRoom(room);
-                    bool crewOnIt = w.Board.Open.Any(o => o.Kind == WorkKind.Extinguish && o.Target.CurrentRoom == room && o.Assignee != null);
+                    bool crewOnIt = w.Board.Open.Any(o => o.Kind == WorkKind.Extinguish && o.Target.CurrentRoom == room && o.Assignee != null) || w.Fleet.BotOn(room); // v16.20b 소방 로봇이 맡았다
                     float grace = critical ? 3f : 8f;
                     if (!crewOnIt) grace = MathF.Min(grace, 4f);
                     grace *= Learn.GraceMul(room) * (1f + MathF.Max(0f, Load - 1f)); // v16.6 교훈 반영: 같은 종류 방의 불을 겪었으면 일찍 · 연산이 넘치면 늦게
@@ -159,7 +159,7 @@ public sealed partial class AutomationSystem
                     // v16.20 미리 돌려 보고 고른다: 소화조에 더 맡김 / 질식 / 진공 (모형을 못 쓰면 예전 규칙)
                     float need = 17f * room.Volume;
                     bool inertOk = Policy("inert") > 0 && InertGas >= need * 0.6f && !fc.TriedInert, vacOk = Policy("vacuum") > 0 && CanVent(room);
-                    int fighters = w.Crew.Count(c => !c.Dead && c.Job?.Order is { Kind: WorkKind.Extinguish } eo && eo.Target.CurrentRoom == room);
+                    int fighters = w.Crew.Count(c => !c.Dead && c.Job?.Order is { Kind: WorkKind.Extinguish } eo && eo.Target.CurrentRoom == room) + (w.Fleet.BotOn(room) ? 1 : 0); // v16.20b
                     var method = Foresee.Fire(room, fc, cells, minutes, inertOk, vacOk, crewOnIt, fighters, () => PickMethod(room, fc));
                     if (method == "crew") { fc.Status = $"미리 돌려 봄 — 소화조 {fighters}명이 잡는다 ({cells}칸)"; break; }
                     if (method == null) { fc.Status = $"쓸 수단이 없다 — 소화조에 맡긴다 ({cells}칸)"; break; }

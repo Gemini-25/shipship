@@ -128,7 +128,7 @@ public sealed partial class RobotSystem
             if (r.Partner is Robot p && !(r.Steps?.Any(s => s is RWith) ?? false) && !(p.Steps?.Any(s => s is RWith) ?? false)) { r.Partner = null; if (p.Partner == r) p.Partner = null; }
             if (r.Helping is CrewMember h) f.Bond(r, h);
             // 불길 속: 방열 외피도 오래 버티지는 못한다
-            if (r.State is RobotState.Active or RobotState.Stalled && w.Fire.Count > 0 && w.Fire.AnyWithin(r.Cell, 0.8f))
+            if (r.State is RobotState.Active or RobotState.Stalled && w.Fire.Count > 0 && w.Fire.AnyWithin(r.Cell, 1.2f))
             {
                 r.Condition = MathF.Max(0f, r.Condition - (RobotsV15.Fireproof(r.Kind) ? 0.004f : 0.02f) * f.Hurt);
                 if (r.Condition <= 0.001f) { Wreck(r, $"{r.Room?.Name ?? "?"} 불길 속에서 타 버렸다"); continue; }
@@ -218,7 +218,7 @@ public sealed partial class RobotSystem
         Begin(best, steps, $"멈춘 {Ko.EulReul(b.Name)} 끌고 오기");
         if (job != null) { job.Robot = best; best.Order = job; }
         FleetSystem.Stage(best, steps, null);
-        best.Mind.Say(cmd ? $"주 컴퓨터가 보냈다 — {b.Name}이(가) {b.Room?.Name ?? "?"}에 멈췄다" : $"{b.Name}이(가) 멈춘 걸 봤다", w.Tick);
+        best.Mind.Say(cmd ? $"주 컴퓨터가 보냈다 — {Ko.IGa(b.Name)} {b.Room?.Name ?? "?"}에 멈췄다" : $"{Ko.IGa(b.Name)} 멈춘 걸 봤다", w.Tick);
         f.Line(CmdTarget.Robot, best.Id, b.Room, $"{best.Name}: 멈춘 {b.Name} 끌고 오기", $"{b.Doing}", 0.7f, 40f);
     }
 
@@ -331,7 +331,7 @@ public sealed partial class RobotSystem
         best.Partner = c;
         Begin(best, steps, $"{Ko.WaGwa(c.Name)} {c.Cargo} 같이 들기");
         FleetSystem.Stage(best, steps, null);
-        best.Mind.Say($"{c.Name}이(가) 무거운 짐({c.Cargo})을 혼자 끈다 — 같이 들면 빨라진다", w.Tick);
+        best.Mind.Say($"{Ko.IGa(c.Name)} 무거운 짐({c.Cargo})을 혼자 끈다 — 같이 들면 빨라진다", w.Tick);
         c.Mind.Say($"{Ko.IGa(best.Name)} 같이 든다", w.Tick);
         f.Lifts++;
     }

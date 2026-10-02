@@ -335,7 +335,7 @@ public sealed class Pathfinder
             bool blocked = false;
             if (door.Locked)
             {
-                bool leaving = (door.RoomA?.Id ?? -1) == startRoom || (door.RoomB?.Id ?? -1) == startRoom;
+                bool leaving = !profile.Robot && ((door.RoomA?.Id ?? -1) == startRoom || (door.RoomB?.Id ?? -1) == startRoom); // v16.20b 로봇은 잠긴 격벽을 못 연다 (나가는 길이어도)
                 bool sealedOff = (door.RoomA?.Abandoned ?? false) || (door.RoomB?.Abandoned ?? false);
                 blocked = !leaving && !profile.Suit && (sealedOff || !profile.Responder);
                 if (door.Welded && !profile.Suit) blocked = true; // 용접한 격벽은 비상 개방이 안 된다 (잘라야 한다 — 우주복 입고)
@@ -396,7 +396,7 @@ public sealed class Pathfinder
             // 잠긴 격벽: 그 방에서 나가는 사람, 우주복 입은 사람, 급한 일로 달려가는 사람만 비상 개방으로 통과.
             // 포기한 구획으로 들어가는 문은 용접돼 있어서 우주복을 입어야만 (절단하고) 들어간다.
             var door = _ship.Doors[dr];
-            bool leaving = (door.RoomA?.Id ?? -1) == startRoom || (door.RoomB?.Id ?? -1) == startRoom;
+            bool leaving = !profile.Robot && ((door.RoomA?.Id ?? -1) == startRoom || (door.RoomB?.Id ?? -1) == startRoom); // v16.20b 로봇은 잠긴 격벽을 못 연다 (나가는 길이어도)
             bool sealedOff = (door.RoomA?.Abandoned ?? false) || (door.RoomB?.Abandoned ?? false);
             if (!leaving && !profile.Suit && (sealedOff || !profile.Responder)) return false;
             if (door.Welded && !profile.Suit) return false; // 용접한 격벽은 비상 개방이 안 된다
