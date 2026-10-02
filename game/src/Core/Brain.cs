@@ -31,6 +31,7 @@ public static class Brain
         new PatrolActivity(), // v13.4 야간 당직
         new DutyActivity(),
         new MeetingActivity(), // v13.2 정기 회의
+        new SittingActivity(), new PetitionActivity(), new PenaltyDutyActivity(), new SneakFoodActivity(), new FeastActivity(), // v18.18 따로 연 회의 · 서명 받기 · 벌 근무 · 몰래 꺼내 먹기 · 잔치
         new VisitActivity(), // v12.7 문병
         new HoldActivity(), // v14.1 잠깐 그 자리에서 기다린다
         new HobbyActivity(), // v14.3 취미 (물건을 가져와서 하고 제자리에)

@@ -63,6 +63,9 @@ public sealed class CommandSystem
                    + 0.2f * MathF.Max(c.SkillLevel(Skill.Engineering), c.SkillLevel(Skill.Electrical)) + 0.2f * MathF.Min(1f, c.Stats.Repairs / 30f)
                    - 0.25f * c.Needs.Stress - 0.2f * MathF.Max(0f, 0.4f - c.Needs.Rest), 0f, 1f);
 
+    /// <summary>v18.18 승무원이 연 선거로 뽑힌 선장을 세운다.</summary>
+    public void Install(CrewMember c, string why) { Elections++; Trust = 0.6f; Appoint(c, why); }
+
     private void Appoint(CrewMember c, string why)
     {
         var w = _w;

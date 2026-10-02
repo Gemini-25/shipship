@@ -441,6 +441,7 @@ public static class SaveGame
         w.Info.Hash(I, F); // v17.3 자리 · 못 끝낸 일 · 정보 차이 · 메신저 · 사진 · 장부
         w.Perils.Hash(I, F); I((long)(w.Hazards.StormPeak * 1000f)); // v16.26 열사병 · 큰 피폭 · 폭풍 세기
         w.Ways.Hash(I, F); // v16.25 여러 갈래 해법
+        w.Motions.Hash(I, F); // v18.18 안건 · 파벌 · 재판 · 선거
         return h;
     }
 }
