@@ -390,6 +390,8 @@ public sealed class Job
         {
             var status = _toils[_index].Tick(c, w);
             if (_index >= _toils.Count) return status == ToilStatus.Running ? ToilStatus.Interrupted : status; // v16.15 단계 안에서 일이 이미 끝났다 (예: 잠결 장면이 스스로 깨워 EndJob) — 풀린 단계를 다시 만지지 않는다
+            // 단계가 제 일을 안에서 끝냈으면 (Release 가 이미 정리했다) 더 읽지 않는다 — 새 일을 잡았으면 그 일은 건드리지 않게
+            if (_index >= _toils.Count) return c.Job != null && c.Job != this ? ToilStatus.Running : status == ToilStatus.Running ? ToilStatus.Interrupted : status;
             if (status == ToilStatus.Running) return ToilStatus.Running;
 
             _toils[_index].End(c, w);

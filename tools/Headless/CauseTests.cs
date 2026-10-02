@@ -23,11 +23,12 @@ public static partial class Program
         {
             var w = DayOne(seed, "Mirinae");
             var power = w.Ship.FurnitureOf(FurnitureType.PowerPanel).First().Room;
+            long t0 = w.Tick;
             w.Causes.ObserverNext = true;
             Incidents.Meteor(w, Scenarios.OuterTarget(w, power), 1f);
             w.Causes.ObserverNext = false;
             Run(w, SimTime.Hours(12));
-            var inc = w.Causes.Incidents.First();
+            var inc = w.Causes.Incidents.First(i => i.Start >= t0); // 첫날에 난 작은 사고(실수 등)가 앞에 있을 수 있다 — 운석부터 시작한 사고를 본다
             var kinds = inc.Nodes.Select(i => w.Causes.Node(i).Kind).Distinct().ToList();
             Check("배전실 큰 운석 — 사슬이 번지고 복구가 붙는다", inc.Nodes.Count >= 4 && kinds.Contains(CauseKind.Recovery),
                 $"고리 {inc.Nodes.Count} · 종류 {string.Join(",", kinds)}");

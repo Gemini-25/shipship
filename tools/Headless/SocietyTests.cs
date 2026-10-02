@@ -12,7 +12,7 @@ public static partial class Program
         Console.WriteLine($"사회 점검 (v13.4) · 시드 {seed}\n");
         try
         {
-            // 1) 방침 46개 (분야별) — 첫 출항 회의가 2차 방침도 가치관대로 정한다
+            // 1) 방침 50개 (분야별 · v16 에 화재 출입 통제 · 컴퓨터 제안 · 원정 결정 · 원정 목적지 넷이 늘었다) — 첫 출항 회의가 2차 방침도 가치관대로 정한다
             {
                 var areas = PolicySystem.All.GroupBy(p => p.Area).Select(g => $"{g.Key} {g.Count()}");
                 var cultures = new List<string>();
@@ -25,7 +25,7 @@ public static partial class Program
                     second += changed.Count;
                     cultures.Add($"{ship}/{s} {w.Meetings.Culture}: {(changed.Count > 0 ? string.Join(" · ", changed) : "2차 방침은 처음 값")}");
                 }
-                Check("방침 46개 — 첫 출항 회의가 2차 방침(생활·사회·세대선·항해)도 가치관대로 정한다", PolicySystem.All.Length == 46 && second > 0,
+                Check("방침 50개 — 첫 출항 회의가 2차 방침(생활·사회·세대선·항해·원정)도 가치관대로 정한다", PolicySystem.All.Length == 50 && second > 0,
                     string.Join(" · ", areas) + "\n      " + string.Join("\n      ", cultures));
             }
             // 2) 일과표: 근무 방침이 잠자는 시간을 배 전체로 맞춘다

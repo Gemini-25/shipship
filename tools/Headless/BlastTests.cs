@@ -142,13 +142,16 @@ public static partial class Program
             w.RaiseAlert("시험 경보", b.Room, AlertLevel.Critical, shipWide: true);
             bool aNow = a.AlertedTick == t, bNow = b.AlertedTick == t;
             Run(w, SimTime.Minutes(30));
+            long aHeard = a.AlertedTick; int late = w.Blast.Stats.HeardLate; // 시험 경보를 들은 때 (아래에서 더 기다리는 사이 다른 경보로 바뀌기 전)
+            // 방송은 주 컴퓨터가 한다 — 폭발이 지나가는 간선을 끊어 함교가 꺼졌으면 고쳐 다시 켜질 때까지 (그 사이 이명이 가셨으면 다시 울린다)
+            for (int k = 0; k < 36 && !w.Automation.MainOnline; k++) Run(w, SimTime.Minutes(10));
             w.Blast.Deafen(a, 1f, 3f);
             w.Automation.Speak.Announce("시험 방송", a.Room, 2);
             Run(w, SimTime.Minutes(15));
             var st = w.Blast.Stats;
             Check("이명 — 방송을 놓치면 주 컴퓨터가 손목 단말로 다시 알린다", st.BroadcastMissed > 0 && st.ComputerRelays > 0, $"놓침 {st.BroadcastMissed} · 다시 알림 {st.ComputerRelays}");
-            Check("이명 — 경보를 늦게 듣는다", deaf && !aNow && bNow && a.AlertedTick > t && st.HeardLate > 0,
-                $"{a.Name} 이명 {(deaf ? "예" : "아니오")} · 경보 바로 {(aNow ? "들음" : "못 들음")} → {(a.AlertedTick - t) / (float)SimTime.TicksPerHour * 60f:0.#}분 뒤 · {b.Name} 바로 {(bNow ? "들음" : "못 들음")} · 늦게 {st.HeardLate} · 방송 놓침 {st.BroadcastMissed}(컴퓨터 다시 {st.ComputerRelays})");
+            Check("이명 — 경보를 늦게 듣는다", deaf && !aNow && bNow && aHeard > t && late > 0,
+                $"{a.Name} 이명 {(deaf ? "예" : "아니오")} · 경보 바로 {(aNow ? "들음" : "못 들음")} → {(aHeard - t) / (float)SimTime.TicksPerHour * 60f:0.#}분 뒤 · {b.Name} 바로 {(bNow ? "들음" : "못 들음")} · 늦게 {late} · 방송 놓침 {st.BroadcastMissed}(컴퓨터 다시 {st.ComputerRelays})");
         }
 
         // ── 5) 분진 폭발: 첫 폭발이 가루를 날리고 불길이 옮겨 붙는다 ──

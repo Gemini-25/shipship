@@ -668,6 +668,9 @@ public sealed class CosmicSystem
         if (e.Phase != CosmicPhase.Brace && !(e.Phase == CosmicPhase.Impact && _w.Tick < NextHarm(e))) return false;
         if (t.Last && _w.Tick < PredictedHarm(e) - SimTime.Hours(1f)) return false;
         if (t.Kind == BraceKind.Seal && (e.Avoided || e.Sealed)) return false;
+        // 비우고 봉쇄할 구획 안의 일은 하지 않는다 (들어가면 곧 비우라고 나와야 하고, 들어간 사람이 봉쇄를 막는다) — 파편 줄의 방은 마지막 두 시간
+        if (t.Kind != BraceKind.Seal && e.SealPlan && !e.Avoided && t.RoomId >= 0
+            && (t.RoomId == e.TargetRoom || e.Evac.Contains(t.RoomId) && _w.Tick >= e.Arrive - SimTime.Hours(2f))) return false;
         return true;
     }
 

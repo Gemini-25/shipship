@@ -35,7 +35,7 @@ public static partial class Program
                 w.Automation.ShipFirst = k == 1;
                 var room = w.Ship.RoomsOf(RoomType.Workshop).First();
                 var c = w.Crew.First(x => x.CanAct);
-                var spot = room.Cells.First(w.Ship.IsOpenFloor); c.Position = spot.Center; c.PreviousPosition = c.Position;
+                var spot = room.Cells.First(w.Ship.IsOpenFloor); c.Position = spot.Center; c.PreviousPosition = c.Position; c.Path = null; // 옮겨 놓았으니 가던 길은 버린다 (안 버리면 옛 경로를 따라 벽을 뚫고 방을 나간다)
                 var wall = w.Ship.Walls.Where(kv => kv.Value.IsHull && Hull.InsideRoom(w.Ship, kv.Key) == room).Select(kv => kv.Key).First();
                 Hull.Damage(w.Ship, wall, 1.2f);
                 for (int dbg = 0; dbg < SimTime.Minutes(1); dbg += World.SystemInterval) { Run(w, World.SystemInterval); if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "9") Console.WriteLine($"   {k} t{dbg} 샘 {room.Leaking} 잠금 {room.Lockdown} 대기 {room.LockPendingUntil} 기압 {room.Air.Pressure:0} 사람 {c.Name} {c.Cell}→{spot} 방 {c.Room?.Name}|{w.Ship.RoomAt(c.Cell)?.Name} 밖 {c.Outside} 원정 {c.Away} {c.Job?.Label} 문잠김 {room.Doors.Count(d => d.Locked)} 자동 {w.Automation.AutoDoorsIn(room)}"); }

@@ -771,7 +771,7 @@ public sealed class ExplosiveSet
         var home = ship.RoomAt(e.Cell);
         foreach (var room in new[] { home, ship.RoomsOf(RoomType.Storage).FirstOrDefault() })
         {
-            if (room == null || room.Detached) continue;
+            if (room == null || room.Detached || CosmicEvacuateActivity.Emptying(room, w)) continue; // 우주 대재난으로 비우는 구획엔 두지 않는다
             foreach (var c in room.Cells)
             {
                 if (!ship.IsOpenFloor(c) || At(c, e) != null || c == e.Cell) continue;
@@ -1036,6 +1036,8 @@ public sealed class BlastResponseActivity : Activity
         {
             var spot = Near(w, at, dist);
             if (spot is not Cell s) return;
+            // 우주 대재난으로 비우는 구획 · 파편 줄에서는 구조 말고는 손대지 않는다 (옮기다 파편을 맞는다)
+            if (t != Task.Rescue && (ship.RoomAt(at) is Room ar && CosmicEvacuateActivity.Emptying(ar, w) || ship.RoomAt(s) is Room sr && CosmicEvacuateActivity.Emptying(sr, w))) return;
             float sc = value - dist.Get(s) / 4000f;
             if (sc > bestScore) { bestScore = sc; best = (t, target, s, sc, why); }
         }

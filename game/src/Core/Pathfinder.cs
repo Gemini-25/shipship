@@ -233,7 +233,7 @@ public sealed class Pathfinder
         for (int i = 0; i < nd; i++)
         {
             var d = _ship.Doors[i];
-            s[2 + i] = (d.Locked ? 1 : 0) | (d.Powered ? 2 : 0) | (d.Removed ? 4 : 0) | (d.IsExternal ? 8 : 0);
+            s[2 + i] = (d.Locked ? 1 : 0) | (d.Powered ? 2 : 0) | (d.Removed ? 4 : 0) | (d.IsExternal ? 8 : 0) | (d.Welded ? 16 : 0);
         }
         for (int i = 0; i < nr; i++)
         {
@@ -323,6 +323,7 @@ public sealed class Pathfinder
                 bool leaving = (door.RoomA?.Id ?? -1) == startRoom || (door.RoomB?.Id ?? -1) == startRoom;
                 bool sealedOff = (door.RoomA?.Abandoned ?? false) || (door.RoomB?.Abandoned ?? false);
                 blocked = !leaving && !profile.Suit && (sealedOff || !profile.Responder);
+                if (door.Welded && !profile.Suit) blocked = true; // 용접한 격벽은 비상 개방이 안 된다 (잘라야 한다 — 우주복 입고)
             }
             _doorBlocked[d] = blocked;
         }
@@ -383,6 +384,7 @@ public sealed class Pathfinder
             bool leaving = (door.RoomA?.Id ?? -1) == startRoom || (door.RoomB?.Id ?? -1) == startRoom;
             bool sealedOff = (door.RoomA?.Abandoned ?? false) || (door.RoomB?.Abandoned ?? false);
             if (!leaving && !profile.Suit && (sealedOff || !profile.Responder)) return false;
+            if (door.Welded && !profile.Suit) return false; // 용접한 격벽은 비상 개방이 안 된다
         }
         if (!profile.Suit && !profile.Robot) // v10.10: 로봇은 숨을 쉬지 않는다 (진공도 지나간다 — 잠긴 격벽은 못 연다)
         {
