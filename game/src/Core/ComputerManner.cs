@@ -62,7 +62,7 @@ public sealed class ComputerManner
         var w = _w;
         if (Crisis.Level(w) >= CrisisLevel.Alert || w.Automation.Trusts.Average() < 0.6f || !R.Chance(0.3f)) return "";
         Jokes++;
-        string[] lines = { $"오늘은 {about}가 저보다 고생했습니다", "다들 손이 빨라 제 계산이 머쓱합니다", $"{about}에게 커피라도 한 잔 주고 싶군요" };
+        string[] lines = { $"오늘은 {Ko.IGa(about)} 저보다 고생했습니다", "다들 손이 빨라 제 계산이 머쓱합니다", $"{about}에게 커피라도 한 잔 주고 싶군요" };
         return R.Pick(lines);
     }
 

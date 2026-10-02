@@ -320,6 +320,7 @@ public sealed class FixBook
             Replan(p, $"노심 {w.Power.ReactorTemperature:0}℃ — 중단 조건에 닿았다 · 원자로를 최저로 낮춘다", "low");
             return;
         }
+        if (now - p.Tick > SimTime.Hours(12)) { Finish(p, "중단", "열두 시간이 지나도 끝나지 않는다 — 계획을 접고 사람 판단에 맡긴다"); return; }
         for (int guard = 0; guard < 4; guard++)
         {
             var s = p.Step;
@@ -409,7 +410,7 @@ public sealed class FixBook
         if (why != "") p.Revisions.Add((w.Tick, why));
         a.Review.Plan(p);
         string line = state == "성공"
-            ? $"{p.Goal} — 끝났습니다. 기능이 돌아와 버팁니다 ({p.Elapsed(w.Tick):0}분 · 예상 {p.Range})"
+            ? $"{p.Goal} — 끝났습니다. 기능이 돌아와 버팁니다 ({p.Elapsed(w.Tick):0}분 · 예상 {p.Range})" + (a.Manner.Joke(p.Problem == "냉각" ? "펌프" : "고친 손") is string joke && joke != "" ? $". {joke}" : "")
             : $"{p.Goal} — 이 계획은 접습니다 ({why}). 사람 판단에 맡깁니다";
         w.Log.Add(w.Tick, state == "성공" ? LogKind.Ship : LogKind.Warning, $"{a.Voice.Call}: {a.Manner.Speak(line)}");
         if (p.Elapsed(w.Tick) >= 20f) w.History.Add(w, state == "성공" ? HistoryKind.Response : HistoryKind.Decision,

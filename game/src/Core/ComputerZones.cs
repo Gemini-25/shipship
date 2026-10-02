@@ -173,7 +173,7 @@ public sealed class ComputerSelf
     public float Sight { get; private set; } = 1f;
     public List<(long tick, string text)> Notes { get; } = new();
     public List<Room> PatrolRooms { get; } = new();
-    public string Status => Simple ? "분석 기능을 떼고 정해진 순서로" : Moved ? "예비 연산기로 넘겨 돈다" : Hot ? "달아올라 긴 예측 · 검토를 줄였다" : Crowded ? "계산이 몰려 급한 것만" : Sight < 0.7f ? $"센서가 {Sight * 100:0}%만 닿는다 — 확신을 낮췄다" : "정상";
+    public string Status => Simple ? "분석 기능을 떼고 정해진 순서로" : Moved ? "예비 연산기로 넘겨 돈다" : Hot ? "달아올라 긴 예측 · 검토를 줄였다" : Crowded ? "계산이 몰려 급한 것만" : Sight < 0.8f ? $"센서가 {Sight * 100:0}%만 제대로 닿는다 — 확신을 낮췄다" : "정상";
 
     public ComputerSelf(World w) => _w = w;
 
@@ -280,18 +280,22 @@ public sealed class ComputerSelf
         }
         else if (!danger && Moved) { Moved = false; Say("주컴퓨터실이 안전해졌다 — 본체로 되돌린다"); }
         // 센서망 단절: 확신을 낮추고 순찰을 부탁한다
-        int live = 0, blind = 0;
-        PatrolRooms.Clear();
+        // 무선으로만 읽는 방은 대역이 좁아 값이 늦고 거칠다 (반쯤만 믿는다) · 못 보는 방은 모른다
+        int live = 0, blind = 0, thin = 0;
+        var cand = new List<(int rank, Room r)>();
         foreach (var r in w.Ship.LiveRooms)
         {
             if (r.Type == RoomType.Corridor) continue;
             live++;
-            if (core.Reach(r) == 0 || a.Belief.Of(r).Fault == SensorFault.Blind) { blind++; if (PatrolRooms.Count < 2) PatrolRooms.Add(r); }
+            int reach = core.Reach(r);
+            if (reach == 0 || a.Belief.Of(r).Fault == SensorFault.Blind) { blind++; cand.Add((0, r)); }
+            else if (reach == 1) { thin++; cand.Add((1, r)); }
         }
-        float sight = live == 0 ? 1f : 1f - blind / (float)live;
-        if (sight < 0.75f && Sight >= 0.75f) { PatrolAsks++; Say($"센서가 {blind}곳에 안 닿는다 — 확신을 낮추고 {string.Join(" · ", PatrolRooms.Select(r => r.Name))} 순찰을 부탁한다"); }
+        float sight = live == 0 ? 1f : 1f - (blind + 0.4f * thin) / live;
+        PatrolRooms.Clear();
+        if (sight < 0.8f) foreach (var (_, r) in cand.OrderBy(x => x.rank).ThenBy(x => x.r.Id).Take(2)) PatrolRooms.Add(r);
+        if (sight < 0.8f && Sight >= 0.8f) { PatrolAsks++; Say($"데이터선이 {blind + thin}곳에서 끊겨 {(blind > 0 ? $"{blind}곳은 못 보고 " : "")}무선으로만 읽는다 — 확신을 낮추고 {string.Join(" · ", PatrolRooms.Select(r => r.Name))} 순찰을 부탁한다"); }
         Sight = sight;
-        if (sight >= 0.75f) PatrolRooms.Clear();
     }
 
     private void Say(string text)

@@ -310,13 +310,13 @@ public static partial class Program
             Check("예측이 거듭 빗나가면 수순 비교를 떼고 가장 안전한 정해진 순서로", a.SelfWatch.Simple, a.SelfWatch.Status);
             // 센서망 단절: 확신을 낮추고 순찰을 부탁한다 (사람이 실제로 돌아본다)
             if (w.Sensors.CommsRoom is Room comms) comms.BreakerOff = true; // 통신실 중계도 꺼졌다 (무선으로도 못 본다)
-            var rooms = w.Ship.LiveRooms.Where(r => r.Type != RoomType.Corridor).Take(8).ToList();
-            foreach (var l in w.Net.Links.Where(l => l.Kind == NetKind.Data && rooms.Contains(l.Room)).ToList()) w.Net.Hurt(l, 1f, "시험");
+            var rooms = w.Ship.LiveRooms.Where(r => r.Type != RoomType.Corridor).Take(14).ToList();
+            foreach (var l in w.Net.Links.Where(l => l.Kind == NetKind.Data && (rooms.Contains(l.Room) || l.Door != null && (rooms.Contains(l.Door.RoomA!) || rooms.Contains(l.Door.RoomB!)))).ToList()) w.Net.Hurt(l, 1f, "시험");
             for (int i = 0; i < SimTime.Minutes(8); i++) w.Step();
             w.Board.RequestScan();
             for (int i = 0; i < 20; i++) w.Step();
             bool patrol = w.Board.All.Any(o => !o.Closed && o.Kind == WorkKind.PreventiveCheck && o.Detail.Contains("센서가 안 닿는다"));
-            Check("센서가 여럿 안 닿으면 확신을 낮추고 순찰을 부탁한다", a.SelfWatch.Sight < 0.75f && patrol, $"닿는 몫 {a.SelfWatch.Sight * 100:0}% · 순찰 일감 {patrol} · {a.SelfWatch.Status}");
+            Check("센서가 여럿 안 닿으면 확신을 낮추고 순찰을 부탁한다", a.SelfWatch.Sight < 0.8f && patrol, $"닿는 몫 {a.SelfWatch.Sight * 100:0}% · 끊긴 방 {rooms.Count(r => !r.DataLinked)}/{rooms.Count} · 중계 {ComputerV15.Relay(w)} · 순찰 일감 {patrol} · {a.SelfWatch.Status}");
         }
 
         // ── 11) 결정론 ──
