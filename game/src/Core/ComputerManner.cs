@@ -227,4 +227,5 @@ public sealed partial class AutomationSystem
     private ComputerManner? _manner;
     /// <summary>v16.26 ⑧ 성격 셋 — 말투 · 협업 방식 · 판단 선호.</summary>
     public ComputerManner Manner => _manner ??= new ComputerManner(_world);
+    public ComputerManner? MannerOrNull => _manner;
 }

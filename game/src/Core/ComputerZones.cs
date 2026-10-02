@@ -327,4 +327,5 @@ public sealed partial class AutomationSystem
     /// <summary>v16.26 ⑥ 자기 진단 · 기능 재배치 · 스스로 감시.</summary>
     public ComputerSelf SelfWatch => _self ??= new ComputerSelf(_world);
     internal ComputerSelf? SelfOrNull => _self;
+    public ComputerZones? ZonesOrNull => _zones;
 }

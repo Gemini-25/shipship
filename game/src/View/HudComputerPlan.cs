@@ -252,7 +252,7 @@ public partial class Hud
     private void DrawPlanMarks(Dictionary<int, Vector2> centers)
     {
         var a = _world.Automation;
-        foreach (var z in a.Zones.Alone)
+        foreach (var z in a.ZonesOrNull?.Alone ?? Enumerable.Empty<ZoneState>())
         {
             if (!centers.TryGetValue(z.RoomId, out var c)) continue;
             var col = PlanMint;

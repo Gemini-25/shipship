@@ -517,6 +517,24 @@ public static partial class FixtureArt
             Line(ci, c + Vector2.FromAngle(a) * rr * 0.12f, c + Vector2.FromAngle(a + 0.4f) * rr * 0.5f, col.WithAlpha(alive ? 0.8f : 0.45f), 2f);
         }
         Dot(ci, c, 3.5f, col.WithAlpha(0.9f));
+        // v16.26 주컴퓨터 계획이 정한 세기: 세게(예비 펌프로 시간 벌기 — 달아오른 테두리 맥박 · 열기) · 약하게(시험 운전 — 도는 점선 고리 · 시험 표지)
+        float drive = x.W?.Automation.PumpDrive(x.F) ?? 1f;
+        if (alive && drive > 1.01f)
+        {
+            float pulse = 0.5f + 0.5f * Mathf.Sin(x.T * 8f);
+            ci.DrawArc(c, rr * 0.95f, 0f, Mathf.Tau, 24, new Color("#ff8a3d").WithAlpha(0.35f + 0.35f * pulse), 1.6f, true);
+            for (int k = 0; k < 3; k++)
+            {
+                float ph = Mathf.PosMod(x.T * 0.9f + k / 3f, 1f);
+                var p0 = c + new Vector2((k - 1) * rr * 0.4f, -rr * (0.6f + 0.5f * ph));
+                Line(ci, p0, p0 + new Vector2(Mathf.Sin(x.T * 5f + k) * 1.5f, -3f), new Color("#ffb070").WithAlpha(0.6f * (1f - ph)), 1f);
+            }
+        }
+        else if (alive && drive < 0.99f)
+        {
+            for (int k = 0; k < 12; k += 2) ci.DrawArc(c, rr * 0.95f, k * Mathf.Tau / 12f + x.T, (k + 1) * Mathf.Tau / 12f + x.T, 3, Cyan.WithAlpha(0.7f), 1.2f, true);
+            Dot(ci, x.P(0.12f, 0.12f), 2f, Cyan.WithAlpha(Mathf.Sin(x.T * 6f) > 0f ? 0.9f : 0.2f));
+        }
         if (alive && x.Lod > 0) // 토출관 속 흐름
             for (int k = 0; k < 3; k++)
             {

@@ -281,6 +281,44 @@ public static partial class Program
             Check("보고 · 센서 · 예측을 구분한다", rd.Facts.Concat(rd.Unknowns).Concat(rd.Forecasts).Select(l => l.Kind).Distinct().Count() >= 2, string.Join(" · ", rd.Facts.Concat(rd.Forecasts).Select(l => l.Kind).Distinct()));
         }
 
+        // ── 13) 자기 진단 · 기능 재배치: 저장 손상 · 센서망 단절 · 분석 기능 이상 · 예비로 넘어갈 때 명령 중복 없음 ──
+        if (Sec(13))
+        {
+            var w = DayOne(seed, "Hanbit");
+            var a = w.Automation;
+            // 예비로 넘어가도 명령이 두 번 안 나간다
+            var pumps = w.Ship.FurnitureOf(FurnitureType.CoolantPump).ToList();
+            foreach (var b in w.Piping.Branches) if (b.Pump != pumps[0]) b.RadiatorCondition = 0.72f;
+            foreach (var pp in pumps.Skip(1)) pp.Machine!.Condition = 0.55f;
+            w.Machines.Break(pumps[0].Machine!, FaultKind.PumpSeized);
+            FixPlan? plan = null;
+            for (int i = 0; i < SimTime.Minutes(10) && (plan == null || plan.Cur < 2); i++) { w.Step(); plan ??= a.Recovery.Plans.FirstOrDefault(x => x.Problem == "냉각"); }
+            int boosts0 = a.Command.Lines.Count(o => o.What.Contains("세기 125%"));
+            a.Reboot("시험 — 본체 재부팅", 6f);
+            for (int i = 0; i < SimTime.Minutes(12); i++) w.Step();
+            int boosts1 = a.Command.Lines.Count(o => o.What.Contains("세기 125%"));
+            Check("본체가 멎어 예비로 넘어가도 보낸 명령은 다시 보내지 않는다", plan != null && boosts1 == boosts0 && a.Recovery.Plans.Count(x => x.Problem == "냉각" && x.Open) <= 1, $"펌프 세기 명령 {boosts0} → {boosts1} · 열린 냉각 계획 {a.Recovery.Plans.Count(x => x.Problem == "냉각" && x.Open)}");
+            // 저장 손상: 최근 사건 · 지금 계획 · 방침부터
+            var comp = a.Computer!;
+            comp.Faults.Add(new Fault { Kind = FaultKind.StorageFault, Since = w.Tick });
+            for (int i = 0; i < SimTime.Minutes(3); i++) w.Step();
+            Check("저장장치가 상하면 최근 사건 · 지금 계획 · 배운 값부터 옮겨 담는다", a.SelfWatch.StorageSaves > 0 && a.Recovery.Plans.Any(x => x.Open), a.SelfWatch.Notes.LastOrDefault(n => n.text.Contains("저장")).text ?? "");
+            comp.Faults.RemoveAll(f => f.Kind == FaultKind.StorageFault);
+            // 분석 기능 이상: 예측이 거듭 크게 빗나가면 비교를 떼고 정해진 순서로
+            a.Review.MissStreak = 3;
+            for (int i = 0; i < SimTime.Minutes(2); i++) w.Step();
+            Check("예측이 거듭 빗나가면 수순 비교를 떼고 가장 안전한 정해진 순서로", a.SelfWatch.Simple, a.SelfWatch.Status);
+            // 센서망 단절: 확신을 낮추고 순찰을 부탁한다 (사람이 실제로 돌아본다)
+            if (w.Sensors.CommsRoom is Room comms) comms.BreakerOff = true; // 통신실 중계도 꺼졌다 (무선으로도 못 본다)
+            var rooms = w.Ship.LiveRooms.Where(r => r.Type != RoomType.Corridor).Take(8).ToList();
+            foreach (var l in w.Net.Links.Where(l => l.Kind == NetKind.Data && rooms.Contains(l.Room)).ToList()) w.Net.Hurt(l, 1f, "시험");
+            for (int i = 0; i < SimTime.Minutes(8); i++) w.Step();
+            w.Board.RequestScan();
+            for (int i = 0; i < 20; i++) w.Step();
+            bool patrol = w.Board.All.Any(o => !o.Closed && o.Kind == WorkKind.PreventiveCheck && o.Detail.Contains("센서가 안 닿는다"));
+            Check("센서가 여럿 안 닿으면 확신을 낮추고 순찰을 부탁한다", a.SelfWatch.Sight < 0.75f && patrol, $"닿는 몫 {a.SelfWatch.Sight * 100:0}% · 순찰 일감 {patrol} · {a.SelfWatch.Status}");
+        }
+
         // ── 11) 결정론 ──
         if (Sec(11))
         {

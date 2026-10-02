@@ -137,6 +137,15 @@ public sealed class ComputerReserve
                 RestAsks++;
             }
 
+        // ── 작업대: 부품을 기다리는 계획이 있으면 만들 자리를 남긴다 (몰아주기가 끄지 않는다) ──
+        if (a.Recovery.Plans.Any(x => x.Open && x.Step?.Act is PartStep))
+            foreach (var f in w.Ship.FurnitureOf(FurnitureType.Fabricator).Concat(w.Ship.FurnitureOf(FurnitureType.Workbench)))
+                if (f.Machine is Machine fm && fm.Spec.PowerDraw > 0f && _holdMachines.Add(f.Id))
+                {
+                    Add("전력", $"{f.Room.Name} {f.Name}", fm.Spec.PowerDraw, "kW", "고장 난 설비에 들어갈 부품을 만들 자리", f.Room.Id);
+                    break;
+                }
+
         // ── 산소 · 물 · 장비 (계획이 읽고 화면에 보인다) ──
         int leaking = w.Ship.LiveRooms.Count(r => r.Leaking);
         if (leaking > 0) Add("산소", "재가압 몫", leaking * 6f, "kg", $"새는 방 {leaking}곳을 막은 뒤 다시 채운다", -1);

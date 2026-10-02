@@ -59,7 +59,7 @@ public sealed class ComputerReview
     public int MissStreak { get; set; }
     // 배터리 방전 추적: 시작 % · 시작 틱 · 실제로 나간 에너지 · 그때 예측한 분
     private float _bStart = -1f, _bOut, _bPred, _bDrain;
-    private long _bTick, _bQuiet;
+    private long _bTick, _bQuiet, _bLast;
     public float LastPredMin { get; private set; } = -1f;
     public float LastActualMin { get; private set; } = -1f;
     public string BatteryLine { get; private set; } = "";
@@ -88,13 +88,14 @@ public sealed class ComputerReview
         {
             if (drain > 0.5f && p.BatteryPercent > 0.25f && Nameplate() > 0f)
             {
-                _bStart = p.BatteryPercent; _bTick = w.Tick; _bOut = 0f; _bDrain = drain; _bQuiet = 0;
+                _bStart = p.BatteryPercent; _bTick = w.Tick; _bLast = w.Tick; _bOut = 0f; _bDrain = drain; _bQuiet = 0;
                 _bPred = 0.15f * Nameplate() * Values.BatteryFactor / drain * 60f; // 15%p 떨어지는 데 몇 분
                 BatteryLine = $"배터리 {p.BatteryPercent * 100:0}% · {drain:0.#}kW씩 — 15%p 떨어지는 데 {_bPred:0}분으로 본다";
             }
             return;
         }
-        _bOut += MathF.Max(0f, drain) / 60f;
+        _bOut += MathF.Max(0f, drain) * (w.Tick - _bLast) / (float)SimTime.TicksPerHour; // 실제로 흐른 시간만큼 (시스템 틱 간격)
+        _bLast = w.Tick;
         if (drain < 0.2f) { if (++_bQuiet > 10) _bStart = -1f; return; }
         _bQuiet = 0;
         if (w.Tick - _bTick > SimTime.Hours(8)) { _bStart = -1f; return; }
@@ -239,4 +240,5 @@ public sealed partial class AutomationSystem
     private ComputerReview? _review;
     /// <summary>v16.26 ⑦ 사고 뒤 자기 판단 검토 · 이 배의 실제 값.</summary>
     public ComputerReview Review => _review ??= new ComputerReview(_world);
+    public ComputerReview? ReviewOrNull => _review;
 }

@@ -294,7 +294,13 @@ public sealed class FixBook
         string seq = string.Join(" → ", p.Steps.Select(s => s.Name));
         string reason = second == null ? "다른 수순이 없다" : FixSteps.Why(pick, second);
         a.Book.Add(ActKind.Plan, room, goal, $"수순 {opts.Count}가지를 견줘 봤다: {cmp}", $"{pick.Name}: {seq} — {reason}", pick.Needs, $"plan:{p.Id}", 0, MathF.Max(20f, p.Max + 20f),
-            (world, act) => p.State == "성공" ? (1, $"맞았다 — {p.Elapsed(world.Tick):0}분 만에 돌아와 버틴다") : p.State == "중단" ? (-1, $"틀렸다 — {p.Revisions.LastOrDefault().why ?? "중단"}") : ((int, string)?)null);
+            (world, act) => p.State switch
+            {
+                "성공" => (1, $"맞았다 — {p.Elapsed(world.Tick):0}분 만에 돌아와 버틴다"),
+                "중단" => (-1, $"틀렸다 — {p.Revisions.LastOrDefault().why ?? "중단"}"),
+                "넘김" => (2, "고쳐 짠 계획으로 넘겼다"),
+                _ => ((int, string)?)null,
+            });
         string line = a.Manner.Speak(replacing == null ? $"{goal} — {seq}. 예상 {p.Range}" : $"계획을 고칩니다 — {why}. 이제 {seq}");
         w.Log.Add(w.Tick, LogKind.Ship, $"{a.Voice.Call}: {line}");
         if (problem == "냉각" || replacing != null) a.Speak.Announce(a.Voice.Style(line), room, problem == "냉각" ? 2 : 1);
@@ -321,7 +327,8 @@ public sealed class FixBook
             if (s.State == FixState.Wait)
             {
                 string? why = s.Act.Ready(w, p, s);
-                if (s.Act.Kind == FixKind.Remote && s.Act.Target >= 0 && !a.SelfWatch.Allow(s.Act.Target, s.Name)) why = "같은 명령이 되풀이돼 멈춰 두었다 — 원인부터 본다";
+                if (s.Act.Kind is FixKind.Remote or FixKind.Test && s.Act.Target >= 0 && w.Ship.Furniture.FirstOrDefault(f => f.Id == s.Act.Target) is Furniture tf
+                    && !a.SelfWatch.Allow(CmdTarget.Machine, tf.Id, $"{tf.Name} {s.Name}")) why = "같은 명령이 되풀이돼 멈춰 두었다 — 원인부터 본다";
                 if (why != null)
                 {
                     if (s.Waiting != why) { s.Waiting = why; p.Changed = now; }

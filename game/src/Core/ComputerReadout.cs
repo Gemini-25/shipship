@@ -65,7 +65,7 @@ public static class ComputerReadout
                 r.Facts.Add(new ReadLine { Text = $"냉각 {pw.EffectiveCooling:0}kW · 원자로 출력 {pw.ReactorOutput:0}kW", Kind = "센서" });
                 r.Facts.Add(new ReadLine { Text = $"노심 {pw.ReactorTemperature:0}℃", Kind = "센서", Age = pw.Reactor != null ? Age(pw.Reactor.LastReading) : -1f });
                 if (w.Ship.Furniture.FirstOrDefault(f => f.Id == p.TargetId)?.Machine is Machine pm)
-                    r.Facts.Add(new ReadLine { Text = pm.Faults.Count > 0 ? $"{pm.Body.Name}: {string.Join(" · ", pm.Faults.Select(f => f.Name))}" : $"{pm.Body.Name}: 고장 표시 없음 (유량 {a.Probe.Reading(pm.Body) * 100:0}%)", Kind = "센서", Age = Age(pm.LastReading) });
+                    r.Facts.Add(new ReadLine { Text = pm.Faults.Count > 0 ? $"{pm.Body.Name}: {string.Join(" · ", pm.Faults.Select(f => f.Name))}" : $"{pm.Body.Name}: 고장 표시 없음 (유량 {(a.ProbeOrNull?.Reading(pm.Body) ?? 1f) * 100:0}%)", Kind = "센서", Age = Age(pm.LastReading) });
             }
             foreach (var st in p.Steps.Where(x => x.Act.Kind == FixKind.Hands && x.Crew >= 0 && x.State != FixState.Wait))
                 if (w.Crew.FirstOrDefault(c => c.Id == st.Crew) is CrewMember c)
@@ -85,23 +85,25 @@ public static class ComputerReadout
                 foreach (var t in c.Tries.Where(t => t.Held).Take(1)) r.Unknowns.Add(new ReadLine { Text = $"보류: {t.Name} — {t.Result}", Kind = "계산" });
             }
         // 못 보는 방 · 오래된 값
-        foreach (var z in a.Zones.Alone.Take(3))
+        var zones = a.ZonesOrNull;
+        if (zones != null)
+        foreach (var z in zones.Alone.Take(3))
             if (w.Ship.Rooms.FirstOrDefault(x => x.Id == z.RoomId) is Room zr)
                 r.Unknowns.Add(new ReadLine { Text = $"{zr.Name}: 소식 없음 — 마지막 방침({z.Policy})대로 버틴다고 본다", Kind = "계산", Age = Age(z.Since) });
         // 배터리 예측 (믿는 용량)
         float drain = -pw.BatteryFlow;
         if (drain > 0.3f)
         {
-            float mins = a.Review.BatteryMinutes(drain);
-            r.Forecasts.Add(new ReadLine { Text = $"배터리 {pw.BatteryPercent * 100:0}% · {drain:0.#}kW씩 — 바닥까지 {mins:0}분" + (a.Review.Values.BatterySamples > 0 ? $" (이 배에서 잰 용량 {a.Review.Values.BatteryFactor * 100:0}%)" : " (이름표 용량)"), Kind = "예측" });
+            float mins = a.ReviewOrNull?.BatteryMinutes(drain) ?? float.PositiveInfinity;
+            r.Forecasts.Add(new ReadLine { Text = $"배터리 {pw.BatteryPercent * 100:0}% · {drain:0.#}kW씩 — 바닥까지 {mins:0}분" + (a.ReviewOrNull?.Values.BatterySamples > 0 ? $" (이 배에서 잰 용량 {a.ReviewOrNull!.Values.BatteryFactor * 100:0}%)" : " (이름표 용량)"), Kind = "예측" });
         }
         r.Reserve = a.ReserveOrNull?.Line ?? "";
-        r.Zones = a.Zones.Reports.Count > 0 && now - a.Zones.Reports[^1].tick < SimTime.Hours(2) ? a.Zones.Reports[^1].text : "";
+        r.Zones = zones != null && zones.Reports.Count > 0 && now - zones.Reports[^1].tick < SimTime.Hours(2) ? zones.Reports[^1].text : "";
         var self = a.SelfOrNull;
         r.Self = self == null ? "" : self.Status != "정상" ? self.Status : self.Notes.Count > 0 && now - self.Notes[^1].tick < SimTime.Hours(1) ? self.Notes[^1].text : "";
-        var rv = a.Review.Reviews.LastOrDefault();
+        var rv = a.ReviewOrNull?.Reviews.LastOrDefault();
         r.Review = rv == null ? "" : $"{rv.Title.Split(" — ")[0]}: {string.Join(" · ", rv.Lines.Take(2))}";
-        r.Manner = $"{a.Manner.Line} · {a.Character.Temper}/{a.Character.Tilt}";
+        r.Manner = (a.MannerOrNull != null ? a.MannerOrNull.Line + " · " : "") + $"{a.Character.Temper}/{a.Character.Tilt}";
         return r;
     }
 
@@ -121,7 +123,7 @@ public static class ComputerReadout
         if (!m.Powered) return ($"전기가 없다 ({PowerGrid.CircuitName(f.Room.Circuit)} 회로)", "회로가 살아나면", f.Room.BreakerOff ? "분전함을 올리는 것" : "차단기 · 배전");
         float d = a.PumpDrive(f);
         if (MathF.Abs(d - 1f) > 0.01f) return ($"계획에 따라 세기 {d * 100:0}%", planWhen ?? "계획이 끝나면 100%로", step?.Name ?? "—");
-        if (a.ReserveOrNull?.Holds(m) == true) return ("돌고 있다 — 예약해 두었다 (끄지 않는다)", "—", a.Reserve.Now.FirstOrDefault(x => x.Kind == "전력")?.Why ?? "—");
+        if (a.ReserveOrNull?.Holds(m) == true) return ("돌고 있다 — 예약해 두었다 (끄지 않는다)", "—", a.ReserveOrNull?.Now.FirstOrDefault(x => x.Kind == "전력")?.Why ?? "—");
         return (m.Active ? $"돌고 있다 ({m.Efficiency * 100:0}%)" : "대기 중", "—", "—");
     }
 }

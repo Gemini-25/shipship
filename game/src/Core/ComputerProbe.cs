@@ -135,7 +135,13 @@ public sealed class ComputerProbe
         Cases.Add(c);
         Opened++;
         a.Book.Add(ActKind.Check, f.Room, c.Symptom, $"원인 셋을 함께 의심한다: {string.Join(" · ", c.H.Select(h => $"{h.Name} {h.P * 100:0}%"))}", "가장 싸게 가려낼 확인부터 한다", "", $"probe:{c.Id}", 0, 60f,
-            (world, act) => c.State == "맞음" ? (1, $"맞았다 — {Name(c.Conclusion)}") : c.State == "틀림" ? (-1, $"틀렸다 — 실제로는 {Name(c.Truth)}") : ((int, string)?)null);
+            (world, act) => c.State switch
+            {
+                "맞음" => (1, $"맞았다 — {Name(c.Conclusion)}"),
+                "틀림" => (-1, $"틀렸다 — 실제로는 {Name(c.Truth)}"),
+                "모름" => (2, "가려내기 전에 사정이 바뀌었다"),
+                _ => ((int, string)?)null,
+            });
         w.Log.Add(w.Tick, LogKind.Ship, $"{a.Voice.Call}: {a.Manner.Speak($"{c.Symptom} — 원인을 아직 모릅니다. 확인해 보겠습니다")}");
     }
 
