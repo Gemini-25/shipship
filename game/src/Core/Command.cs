@@ -111,7 +111,7 @@ public sealed class CommandSystem
 
         var level = Crisis.Level(w);
         // 위기: 비상 이상이거나, 경계 중 사고 일(구조·봉합·소화·전력)이 있을 때 — 치료만으로는 조를 짜지 않는다
-        bool crisis = level >= CrisisLevel.Emergency || level == CrisisLevel.Alert && w.Board.Open.Any(o => o.Urgency >= 0.9f && Group(o.Kind) is TeamKind g && g != TeamKind.Medical);
+        bool crisis = level >= CrisisLevel.Emergency || level == CrisisLevel.Alert && w.Board.OpenUnsorted.Any(o => o.Urgency >= 0.9f && Group(o.Kind) is TeamKind g && g != TeamKind.Medical);
         if (!crisis)
         {
             if (Active) Stand("위기가 지나갔다 — 조를 푼다");

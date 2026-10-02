@@ -33,6 +33,7 @@ public static partial class Program
         public int N;
         public long PanicStart = -1;
         public bool Dead, Down;
+        public float Inj; public bool Low; // 통합: 다친 양 · 체력 낮음
         public string? Said;
         public int Diary;
     }
@@ -150,6 +151,10 @@ public static partial class Program
                 if (c.Dead) { tr.Dead = true; Death(c, tr, now); continue; }
                 if (c.Down && !tr.Down) _run.Downs.Add(new ADown { Hour = H(now), Tick = now, Name = c.Name, CrewId = c.Id, RoomId = c.Room?.Id ?? -1, Room = c.Room?.Name ?? "선체 밖" });
                 tr.Down = c.Down;
+                if (c.Vitals.Injury > tr.Inj + 0.001f) { string k = c.Vitals.InjuryCause ?? "?"; _run.HurtBy[k] = _run.HurtBy.GetValueOrDefault(k) + (c.Vitals.Injury - tr.Inj); }
+                tr.Inj = c.Vitals.Injury;
+                if (c.Vitals.Health < 0.4f && !tr.Low) _run.LowHp++;
+                tr.Low = c.Vitals.Health < 0.5f;
                 bool self = !c.Down && AuditSurv(c);
                 bool panic = c.Mind.Panicking(now);
                 int room = c.Room?.Id ?? -1;

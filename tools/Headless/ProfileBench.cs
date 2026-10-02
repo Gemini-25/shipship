@@ -31,6 +31,7 @@ public static partial class Program
 
     private static void Measure(string name, Func<World> make, Action<World>? hit, long ticks, bool daily = false)
     {
+        if (Environment.GetEnvironmentVariable("PROF_ONLY") is string only && only.Length > 0 && !name.Contains(only)) return; // 통합: 장면 하나만
         var w = make();
         hit?.Invoke(w);
         GC.Collect();
@@ -38,7 +39,7 @@ public static partial class Program
         long alloc0 = GC.GetTotalAllocatedBytes(), g0 = GC.CollectionCount(0), g1 = GC.CollectionCount(1), g2 = GC.CollectionCount(2);
         var pause0 = GC.GetTotalPauseDuration();
         Prof.Reset();
-        Prof.On = true;
+        Prof.On = Environment.GetEnvironmentVariable("PROF_OFF") != "1"; // 통합: 구간 재기 없이 맨 시간 (구간 재기 자체가 30%쯤 든다)
         var times = new double[ticks];
         var dayMs = new List<double>();
         double freq = Stopwatch.Frequency / 1000.0;

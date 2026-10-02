@@ -129,7 +129,7 @@ public sealed class ChoresActivity : Activity
         else if (o.Robot != null) score -= 0.15f; // v10.10: 로봇이 하고 있는 일에 합류 — 더 급한 일이 없을 때만
         if (c.Vitals.Health < 0.5f) score -= 0.3f;
         // 제 치료를 기다리는 사람은 남을 치료하러 돌아다니지 않는다 (다친 사람끼리 서로 쫓으면 치료하러 온 사람이 헛걸음한다 — 성한 사람이 간다)
-        if (o.Kind == WorkKind.Treat && o.Urgency < 0.9f && w.Board.Open.Any(x => x.Kind == WorkKind.Treat && x.Target.Crew == c)) score -= 0.3f;
+        if (o.Kind == WorkKind.Treat && o.Urgency < 0.9f && w.Board.OpenUnsorted.Any(x => x.Kind == WorkKind.Treat && x.Target.Crew == c)) score -= 0.3f;
         if (c.Fx.Worst > 0.45f && o.Urgency < 0.9f) score -= 0.3f * c.Fx.Worst; // v14.1 앓는 사람은 급하지 않은 일을 미룬다
 
         // EVA: 발밑이 우주다. 겁 많은 사람은 꺼리고, 긴장한 사람은 더 꺼린다

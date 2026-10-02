@@ -389,7 +389,13 @@ public sealed class Pathfinder
         if (profile.Spots is { } sp0) for (int k = 0; k < sp0.Length; k += 2) if (sp0[k] >= 0 && sp0[k] < _n) _spotAdd[sp0[k]] += profile.Responder ? sp0[k + 1] * 2 / 5 : sp0[k + 1]; // v17.5
         // v16.26 성능: 한 걸음 비용이 작은 정수라 원형 통 큐(버킷)로 — 거리는 가장 짧은 길의 값이라 고르는 순서가 달라도 결과는 같다
         int maxStep = MaxStep(nr, nd0, cellScale * profile.HazardScale);
-        if (maxStep > 0 && maxStep < (1 << 16)) { BucketFlood(s, cost, maxStep, cellScale, profile.HazardScale); return new DistanceField(grid, cost); }
+        if (maxStep > 0 && profile.Spots is { } spm) { int mx = 0; for (int k = 0; k < spm.Length; k += 2) if (spm[k] >= 0 && spm[k] < _n && _spotAdd[spm[k]] > mx) mx = _spotAdd[spm[k]]; maxStep += mx; } // 통합: 장소의 기억도 걸음 비용에 (합칠 때 통 큐 쪽에서 빠졌다)
+        if (maxStep > 0 && maxStep < (1 << 16))
+        {
+            BucketFlood(s, cost, maxStep, cellScale, profile.HazardScale, spotsOn);
+            if (profile.Spots is { } sp2) for (int k = 0; k < sp2.Length; k += 2) if (sp2[k] >= 0 && sp2[k] < _n) _spotAdd[sp2[k]] = 0; // 다음 계산에 남지 않게
+            return new DistanceField(grid, cost);
+        }
         var open = _open;
         open.Clear();
         cost[s] = 0;
@@ -455,7 +461,7 @@ public sealed class Pathfinder
         return m > int.MaxValue / 4 ? int.MaxValue : (int)m;
     }
 
-    private void BucketFlood(int s, int[] cost, int maxStep, float cellScale, float hazardScale)
+    private void BucketFlood(int s, int[] cost, int maxStep, float cellScale, float hazardScale, bool spotsOn)
     {
         int B = maxStep + 1;
         if (_bHead.Length < B) _bHead = new int[Math.Max(B, _bHead.Length * 2)];
@@ -509,6 +515,7 @@ public sealed class Pathfinder
                     int h = hz[ni];
                     if (h > 0) step += (int)(h * cellScale * hazardScale);
                     step += bd[ni]; // v16.3
+                    if (spotsOn) step += _spotAdd[ni]; // v17.5 장소의 기억
                     int nd = dist + step;
                     if (cost[ni] >= 0 && nd >= cost[ni]) continue;
                     cost[ni] = nd;

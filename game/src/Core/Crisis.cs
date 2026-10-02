@@ -65,7 +65,7 @@ public static class Crisis
         bool shedding = p.Delivered < p.Demand * 0.9f;
         s.BatteryHours = p.Demand > 0.5f ? p.BatteryCharge / MathF.Max(0.5f, p.Demand - p.Delivered + (reactorDown ? 0f : 0f)) : 99f;
         s.Power = reactorDown || shedding || p.BatteryPercent < 0.2f && !p.ReactorOnline;
-        s.Cooling = p.ReactorOnline && p.ReactorTemperature > 330f || w.Board.Open.Any(o => o.Kind == WorkKind.Repair && o.Target.Furniture?.Type == FurnitureType.CoolantPump);
+        s.Cooling = p.ReactorOnline && p.ReactorTemperature > 330f || w.Board.OpenUnsorted.Any(o => o.Kind == WorkKind.Repair && o.Target.Furniture?.Type == FurnitureType.CoolantPump);
         s.Fires = w.Fire.Count;
         s.Down = w.Crew.Count(c => c.Down && !c.Dead && c.CareBed == null);
         foreach (var r in w.Ship.LiveRooms)
@@ -98,7 +98,7 @@ public static class Crisis
         bool dying = reactorDown && p.BatteryPercent < 0.15f && !p.AuxRunning || s.Air && o2Low < 15f || s.Fires >= 6;
         s.Level = dying || serious >= 3 ? CrisisLevel.Survival
             : serious >= 1 ? CrisisLevel.Emergency
-            : shedding || w.Ship.LiveRooms.Any(r => r.Leaking && !r.Abandoned) || w.Board.Open.Any(o => o.Urgency >= 0.9f) ? CrisisLevel.Alert
+            : shedding || w.Ship.LiveRooms.Any(r => r.Leaking && !r.Abandoned) || w.Board.OpenUnsorted.Any(o => o.Urgency >= 0.9f) ? CrisisLevel.Alert
             : CrisisLevel.Calm;
         if (s.Level < CrisisLevel.Emergency && w.Scale?.ShipWide() is string big) { s.Level = CrisisLevel.Emergency; s.Reasons.Add(big); } // v16.18 배 전체 사고면 적어도 비상
         return s;

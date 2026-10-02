@@ -402,6 +402,8 @@ public sealed partial class WorkBoard
     internal World World => _world;
 
     public IEnumerable<WorkOrder> Open => _open.Values.Where(o => !o.Closed).OrderByDescending(o => o.Urgency);
+    /// <summary>통합 성능: 순서가 상관없는 물음(Any · Count)용 — 줄 세우지 않는다.</summary>
+    public IEnumerable<WorkOrder> OpenUnsorted => _open.Values.Where(o => !o.Closed);
     public int OpenCount => _open.Count;
 
     public void RequestScan() => _scanRequested = true;

@@ -24,10 +24,25 @@ public sealed partial class AutomationSystem
     private readonly World _world;
     public AutomationSystem(World world) => _world = world;
 
-    private System.Collections.Generic.IEnumerable<Furniture> Bodies => _world.Ship.Furniture.Where(f => f.Type == FurnitureType.MainComputer);
+    private System.Collections.Generic.IReadOnlyList<Furniture> Bodies => _world.Ship.AllOfType(FurnitureType.MainComputer); // 통합 성능: 종류별 목록 (같은 것 · 같은 순서)
 
     /// <summary>자동화를 맡는 컴퓨터: 배에 붙어 있는 것 중 가장 잘 도는 것 (함교 것을 잃으면 임시 제어 컴퓨터).</summary>
-    public Furniture? ComputerBody => Bodies.OrderBy(f => f.Room.Detached ? 1 : 0).ThenByDescending(f => f.Machine!.Efficiency).ThenBy(f => f.Id).FirstOrDefault();
+    public Furniture? ComputerBody
+    {
+        get
+        {
+            // 통합 성능: 붙어 있는 것 → 잘 도는 것 → 번호 순 (줄 세워 첫째를 고르던 것과 같은 답, 목록을 만들지 않는다)
+            Furniture? best = null;
+            int bd = 0; float be = 0f;
+            foreach (var f in Bodies)
+            {
+                int d = f.Room.Detached ? 1 : 0;
+                float e = f.Machine!.Efficiency;
+                if (best == null || d < bd || d == bd && (e > be || e == be && f.Id < best.Id)) { best = f; bd = d; be = e; }
+            }
+            return best;
+        }
+    }
     public Machine? Computer => ComputerBody is Furniture f && !f.Room.Detached ? f.Machine : null;
 
     /// <summary>쓸 수 있는 컴퓨터가 아예 없다 (떨어져 나갔거나 부서졌거나 뜯겼다).</summary>

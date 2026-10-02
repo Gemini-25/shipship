@@ -178,6 +178,8 @@ public sealed class Ship
         }
         return _byType.TryGetValue(type, out var list) ? list : NoFurniture;
     }
+    /// <summary>통합 성능: 그 종류 가구 전부 (치운 것 · 떨어져 나간 것까지 — Furniture.Where(종류)와 같은 순서).</summary>
+    public IReadOnlyList<Furniture> AllOfType(FurnitureType type) => OfType(type);
     public IEnumerable<Machine> Machines => MachineFurniture().Where(f => f.Machine != null && !f.Room.Detached && !f.Stowed).Select(f => f.Machine!);
 
     // v16.26 성능: 설비가 붙는 종류의 가구만 (설비는 종류로 정해진다 — MachineSpecs) · 원래 순서 그대로
