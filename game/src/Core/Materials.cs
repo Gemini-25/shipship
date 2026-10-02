@@ -15,6 +15,8 @@ public enum Material : byte
     HullPlate, Insulation, Panel, Partition, Glass,
     // v16.4 물건이 쓸 몫 (자리만)
     Plastic, Fabric, Wood, Ceramic, Paper,
+    // v16.4 재질 × 원소 표 (Matter.cs): 금속 · 음식 · 액체 · 가스 · 얼음 · 기름 · 가루
+    Metal, Food, Liquid, Gas, Ice, Oil, Powder,
 }
 
 /// <summary>재질 하나의 성질 (모두 0~1, 1이 "많이").</summary>
@@ -77,6 +79,14 @@ public static class Materials
             new(Material.Wood, "나무") { Loud = 0.45f, Absorb = 0.3f, Insulate = 0.7f, Burn = 0.85f, Hard = 0.6f, Tint = 0x9a7048 },
             new(Material.Ceramic, "사기") { Loud = 0.6f, Insulate = 0.6f, Burn = 0f, Hard = 0.95f, Tint = 0xe8e8e0 },
             new(Material.Paper, "종이") { Loud = 0.05f, Absorb = 1f, Insulate = 0.5f, Burn = 1f, Hard = 0f, Tint = 0xf0ead8 },
+            // ── v16.4 재질 × 원소 표가 쓰는 나머지 ──
+            new(Material.Metal, "금속") { Loud = 0.75f, Insulate = 0.05f, CleanHard = 0.2f, Conduct = 0.95f, Burn = 0f, Hard = 0.95f, Tint = 0x8a949c },
+            new(Material.Food, "음식") { Loud = 0.05f, Absorb = 0.5f, Insulate = 0.4f, CleanHard = 0.5f, Conduct = 0.1f, Burn = 0.4f, Hard = 0.15f, Tint = 0xc89050 },
+            new(Material.Liquid, "액체") { Slip = 0.6f, WetSlip = 0.7f, Loud = 0.05f, Insulate = 0.1f, Conduct = 0.6f, Burn = 0f, Hard = 0f, Tint = 0x4a8ac8 },
+            new(Material.Gas, "가스") { Slip = 0f, WetSlip = 0f, Loud = 0f, Insulate = 0.9f, Conduct = 0f, Burn = 1f, Hard = 0f, SoundBlock = 0f, Tint = 0xd0e070 },
+            new(Material.Ice, "얼음") { Slip = 0.8f, WetSlip = 0.9f, Loud = 0.5f, Insulate = 0.6f, Conduct = 0.1f, Burn = 0f, Hard = 0.7f, Tint = 0xd8f0ff },
+            new(Material.Oil, "기름") { Slip = 0.9f, WetSlip = 0.95f, Loud = 0.05f, Insulate = 0.85f, CleanHard = 0.8f, Conduct = 0f, Burn = 0.8f, Hard = 0f, Tint = 0x6a5a20 },
+            new(Material.Powder, "가루") { Slip = 0.35f, WetSlip = 0.5f, Loud = 0.05f, Absorb = 0.7f, Insulate = 0.5f, CleanHard = 0.7f, SmallLoss = 0.9f, Conduct = 0f, Burn = 0.7f, Hard = 0f, Tint = 0xeee6cc },
         };
         var table = new MaterialSpec[Enum.GetValues<Material>().Length];
         foreach (var s in list) table[(int)s.Id] = s;

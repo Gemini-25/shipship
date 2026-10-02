@@ -325,6 +325,7 @@ public sealed partial class BlastSystem
 
         // ── 8) 물건: 보관함 속 물건이 깨지고, 놓인 물건 · 이동식 장비가 날아간다 · 폭발성 물건이 달아오른다(연쇄) ──
         Things(rec, at, cause);
+        w.Matter.OnBlast(at, PAt, cause); // v16.4 물건 물리 한 벌 (같은 Push · 깨짐 단계 · 가루)
         Items.OnBlast(rec, item);
 
         // ── 9) 불 · 연기 · 열 · 독 · 증기 · 냉기 · 산소 ──

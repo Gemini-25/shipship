@@ -87,6 +87,7 @@ public sealed class SoilSystem
             if (c.Outside) { s.SuitDust = MathF.Min(1f, s.SuitDust + 0.4f * dt); _wasOutside.Add(c.Id); continue; }
             _wasOutside.Remove(c.Id);
             if (s.SuitDust < 0.05f) _tracking.Remove(c.Id);
+            w.Matter.Touch(c, s, dt); // v16.4 손잡이 · 공용 공구에 남는 손때 · 옮는 균 (재질 표의 머금음 — 문 칸에서도)
             if (c.Room is not Room room) continue;
             // 일이 손과 옷을 더럽힌다
             if (c.Pose == Pose.Working && c.Job?.Order is WorkOrder o)

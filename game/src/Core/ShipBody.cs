@@ -203,14 +203,14 @@ public sealed partial class BodySystem
         int i = grid.Index(c);
         if (Floor[i] == Material.None) return 1f;
         float wet = Marks.Count > 0 && Marks.TryGetValue(i, out var s) ? s.V[(int)CellMark.Wet] : 0f;
-        return (0.9f + 0.5f * Materials.Of(Floor[i]).Burn) * (1f - 0.6f * wet);
+        return Matter.FireSpreadMul(Floor[i], wet) * _w.Matter.FuelMul(c); // v16.4 재질 × 원소 표 · 놓인 물건 (마른 러그는 키우고 젖은 것은 막는다)
     }
 
     /// <summary>지금 그 칸의 미끄러움 (재질 × 상태 × 닳음).</summary>
     public float SlipAt(int i)
     {
         Marks.TryGetValue(i, out var s);
-        return Materials.SlipNow(Floor[i], s?.V[0] ?? 0f, s?.V[1] ?? 0f, s?.V[2] ?? 0f, Wear[i]);
+        return MathF.Min(1f, Materials.SlipNow(Floor[i], s?.V[0] ?? 0f, s?.V[1] ?? 0f, s?.V[2] ?? 0f, Wear[i]) + _w.Matter.SlipAdd(i)); // v16.4 흩어진 종이 · 얼음 · 가루
     }
 
     // ───────────────────────────── 기본값: 방 종류로 ─────────────────────────────
@@ -681,6 +681,7 @@ public sealed partial class BodySystem
             if (s.V[(int)CellMark.Glass] > 0.2f) cost[i] += GlassCost;
             if (s.V[(int)CellMark.Oil] > 0.3f) cost[i] += OilCost;
         }
+        _w.Matter.PathCost(cost); // v16.4 통로 점유 (짐 · 카트) · 보이는 전기 불꽃
         _w.Paths.BodyChanged();
     }
 

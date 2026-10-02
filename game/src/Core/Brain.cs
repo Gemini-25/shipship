@@ -39,6 +39,7 @@ public static class Brain
         new RoomWorkActivity(), // v16.17 방 공사 (분리 · 같이 들기 · 카트 · 다시 잇기 · 칸막이 · 표지판 · 선실 꾸미기 · 땀방 운동)
         new PortableActivity(), // v16.7 이동식 장비 (꺼내 와 설치 · 배터리 · 회수 · 뽑기 · 기다리기)
         new InspectActivity(), // v14.4 소문을 듣고 확인하러 간다
+        new MatterActivity(), // v16.4 고무 매트 · 불 곁 천 치우기 · 그을리는 것 · 젖은 러그 · 접속부 · 통로 · 손잡이
         new OpenDoorActivity(), new BodyUpkeepActivity(), // v16.3 잠긴 문 열어 주기 · 배 손보기 (뚜껑 · 패널 · 문 · 유리 · 빈 걸이)
         SceneActivity.Instance, // v16.1 일상 장면 (체스 · 커피 · 영화 · 닦기 · 간식 · 몽유병 · 소품 · 인수인계 확인)
         new CheckSmellActivity(), new SavedPlateActivity(), new SetAsidePlateActivity(), new FollowSmellActivity(), // v16.8 탄내 확인 · 남겨 둔 접시 · 냄새를 따라
