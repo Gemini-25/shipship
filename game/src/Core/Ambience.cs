@@ -130,7 +130,7 @@ public sealed class AmbienceSystem
             }
             r = MathF.Max(r, w.Cosmic.Radiation(room)); // v18.13 우주 대재난 방사선 (물벽이 덜고 · 대피소가 막는다)
             if ((tags & RoomTag.Shielded) != 0) r *= 0.15f;
-            else if (storm > 0f && room.Type == RoomType.Storage) r *= 1f - 0.45f * Facilities.Factor(room, "shelter"); // 선반 뒤 (겸용의 대가)
+            else if (storm > 0f && (room.Type == RoomType.Storage || room.UsedAs == RoomType.Storage)) r *= 1f - 0.45f * Facilities.Factor(room, "shelter"); // 선반 뒤 (겸용의 대가) · v16.17 선반을 들여 창고로 쓰는 방도
             s = MathF.Max(s, w.Smells.Unpleasant(room)); // v16.8 탄내 · 악취 (Smell.cs가 공기를 타고 퍼뜨린 것)
             float a = MathF.Min(1f, dt * 4f); // 몇 분에 걸쳐 바뀐다
             room.Noise += (n - room.Noise) * a;

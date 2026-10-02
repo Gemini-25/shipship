@@ -256,6 +256,8 @@ public sealed class RoomPlanSystem
     private void Think()
     {
         var w = _w;
+        // 끝난 공사의 단계는 사흘 뒤 지운다 (목록이 끝없이 늘지 않게)
+        Tasks.RemoveAll(t => PlanOf(t) is not RoomPlan tp || tp.State is "완료" or "부결" or "중단" && (tp.Done < 0 ? tp.Decided : tp.Done) is long end && w.Tick - end > SimTime.TicksPerDay * 3);
         if (Crisis.Level(w) >= CrisisLevel.Emergency || w.Command.Active) return;
         if (Plans.Count(p => p.State is "제안" or "공사") >= 2) return;
         if (w.Tick - _lastProposal < SimTime.Hours(6)) return;
@@ -565,7 +567,7 @@ public sealed class RoomPlanSystem
                 break;
         }
         string order = string.Join(" → ", p.Steps.Select((s, i) => $"{i + 1}) {s}"));
-        string judge = $"위험 {p.Risk * 100:0}% · 공사 {p.Hours:0.#}시간 · 멈추는 계통: {p.Stops}" + (p.Sign < 0 ? (p.Kind == RoomPlanKind.Merge ? " — 칸막이가 감압을 반으로 막고 있다" : " — 위험이 크다") : "");
+        string judge = $"위험 {p.Risk * 100:0}% · 공사 {p.Hours:0.#}시간(손이 가는 시간) · 멈추는 계통: {p.Stops}" + (p.Sign < 0 ? (p.Kind == RoomPlanKind.Merge ? " — 칸막이가 감압을 반으로 막고 있다" : " — 위험이 크다") : "");
         var act = w.Automation.Book.Add(ActKind.Advice, room, $"{Crew(p.Proposer)?.Name ?? "?"}의 안건: {p.Title}", judge, "공사 순서: " + order,
             p.Sign < 0 ? "다시 생각해 주세요" : "회의에서 정해 주세요");
         if (act == null) return; // 컴퓨터가 멎었다 — 조언 없이 회의로
@@ -1412,7 +1414,7 @@ public sealed class RoomPlanSystem
                 c.Say(w, Persona.Say(c, "아이고 허리야…"));
             }
         }
-        if (t.ToCells.Count == 0 || !t.ToCells.All(x => w.Ship.IsOpenFloor(x) || !w.Ship.IsWalkable(x) && w.Ship.FurnitureAt(x) == null))
+        if (t.ToCells.Count == 0 || !t.ToCells.All(w.Ship.IsOpenFloor))
         {
             t.ToCells.Clear();
             if (Destination(t, f) is List<Cell> cells) t.ToCells.AddRange(cells);
