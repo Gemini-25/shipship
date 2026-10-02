@@ -522,6 +522,9 @@ public sealed partial class MotionSystem
         return sign;
     }
 
+    /// <summary>v18.14 꾸민 일이 들켜 올라온 안건: 같이 한 사람 · 본 사람의 서명을 붙인다 (차면 회의에 오른다).</summary>
+    public void Cosign(Motion m, int id) { if (!m.Signers.Contains(id)) { m.Signers.Add(id); m.Asked.Add(id); } if (m.Stage == MotionStage.Signing && m.Signers.Count >= m.Need) Ready(m); }
+
     private void Ready(Motion m)
     {
         var w = _w;
