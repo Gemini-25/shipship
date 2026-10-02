@@ -436,8 +436,9 @@ public sealed partial class CrisisCrewSystem
     public bool ComputerCanStartAux()
     {
         var a = _w.Automation;
-        var aux = _w.Ship.FurnitureOf(FurnitureType.AuxGenerator).FirstOrDefault();
-        return a.Present && (a.MainOnline || a.BackupActive) && aux != null && aux.Room.DataLinked && aux.Machine is { Faults.Count: 0 };
+        var aux = _w.Ship.FurnitureOf(FurnitureType.AuxGenerator).FirstOrDefault(f => !f.Room.Detached);
+        return a.Present && (a.MainOnline || a.BackupActive) && !AutomationSystem.Ship20Off && aux != null && aux.Room.DataLinked
+               && aux.Machine is { Stopped: false } && a.TriageOrNull is not { AuxNeedsHands: true }; // 주 컴퓨터 트리아지와 같은 조건 (두 번 안 걸리면 손으로)
     }
 
     /// <summary>정전이 다가온다 (배터리 추세 · 부하 차단): 바닥나기 전에 미리 발전기를 켠다.</summary>
@@ -484,9 +485,10 @@ public sealed partial class CrisisCrewSystem
             string text = Draw(cap0, "첫 출항");
             w.Log.Add(w.Tick, LogKind.Ship, $"{Ko.IGa(cap0.Name)} 비상 배치표를 붙였다 — {text}");
         }
-        if (w.Tick % SimTime.Minutes(5) == 0 && Bill.Drawn >= 0 && CrewSig() != _crewSig)
+        if (w.Tick % SimTime.Minutes(5) == 0 && Bill.Drawn >= 0)
         {
-            if (!_stale) { _stale = true; _staleSince = w.Tick; }
+            if (CrewSig() == _crewSig) _stale = false; // 돌아왔다 — 그대로 둔다
+            else if (!_stale) { _stale = true; _staleSince = w.Tick; }
             else if (w.Tick - _staleSince > SimTime.TicksPerDay && w.Command.Captain is CrewMember cap1 && !Crisis.Acting(w))
             {
                 string text = Draw(cap1, "함장 혼자");

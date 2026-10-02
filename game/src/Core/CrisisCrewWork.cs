@@ -31,15 +31,41 @@ public sealed partial class WorkBoard
             if (s >= IncidentScale.System) b++;
             if (s >= IncidentScale.Ship) b++;
         }
+        if (BigJob(o)) b++; // 오래 걸리는 수리 (몇 시간짜리)
         b = Math.Min(4, b);
-        // 공간: 일터 둘레(5×5)의 걸을 수 있는 칸 — 둘이 한 칸을 나눠 쓸 수는 없다
-        var at = Cell.FromPosition(o.Target.Center);
+        // 공간: 설비면 몸체를 둘러싼 칸 · 아니면 일터 둘레(5×5)의 걸을 수 있는 칸 — 둘이 한 칸을 나눠 쓸 수는 없다
         int room = 0;
-        for (int dx = -2; dx <= 2; dx++)
-            for (int dy = -2; dy <= 2; dy++)
-                if (w.Ship.IsWalkable(new Cell(at.X + dx, at.Y + dy))) room++;
-        return Math.Max(1, Math.Min(b, room / 2));
+        if (o.Target.Furniture is Furniture fu)
+        {
+            _ring.Clear();
+            foreach (var fc in fu.Cells)
+                foreach (var d in Cell.Dirs8)
+                {
+                    var x = fc + d;
+                    if (!fu.Cells.Contains(x) && w.Ship.IsWalkable(x)) _ring.Add(x);
+                }
+            room = _ring.Count;
+        }
+        else
+        {
+            var at = Cell.FromPosition(o.Target.Center);
+            for (int dx = -2; dx <= 2; dx++)
+                for (int dy = -2; dy <= 2; dy++)
+                    if (w.Ship.IsWalkable(new Cell(at.X + dx, at.Y + dy))) room++;
+            room /= 2;
+        }
+        return Math.Max(1, Math.Min(b, room));
     }
+
+    private readonly HashSet<Cell> _ring = new();
+
+    /// <summary>v16.21 몇 시간짜리 큰 일 (여럿이 붙을 만하다): 고장 수리 2시간 넘게 · 잔해 · 골조 · 선체 · 외판 · 관 교체 · 산소 설비.</summary>
+    public static bool BigJob(WorkOrder o) => o.Kind switch
+    {
+        WorkKind.ClearRubble or WorkKind.RebuildFrame or WorkKind.RepairHull or WorkKind.ReplacePanel or WorkKind.ReplacePipe or WorkKind.BuildOxygen or WorkKind.InstallTruss => true,
+        WorkKind.Repair => o.Target.Furniture?.Machine is Machine m && m.Faults.Any(f => Faults.Spec(f.Kind).RepairHours >= 2f),
+        _ => false,
+    };
 
     /// <summary>v16.21 사고 뒤 훈련: 공황을 겪은 사람은 평온해지면 곧 다시 훈련한다.</summary>
     private void ScanCrisisDrills(Poster post)
@@ -120,11 +146,15 @@ public sealed partial class CrisisCrewSystem
         foreach (var o in w.Board.All)
         {
             if (o.Closed || o.Assignee is not CrewMember lead || lead == c || lead.Job?.Order != o || lead.Pose != Pose.Working) continue;
-            if (o.Urgency < 0.85f && !(acting && o.Urgency >= 0.6f)) continue;
+            bool calm = o.Urgency < 0.85f && !(acting && o.Urgency >= 0.6f);
+            if (calm && !(o.Urgency >= 0.5f && WorkBoard.BigJob(o))) continue; // 급하지 않아도 몇 시간짜리 큰 일은 손 빈 사람이 거든다
             int cap = w.Board.MaxHands(o);
             if (cap <= 1) continue;
             int have = 1 + (_hands.TryGetValue(o.Id, out var l) ? l.Count : 0);
             if (_helping.TryGetValue(c.Id, out var mine) && mine == o.Id) have--;
+            // 이미 "누가 좀 잡아 줘"로 불려 온 짝 (Cooperation) 도 한 사람 — 겹쳐 부르지 않는다
+            foreach (var call in w.Coop.Calls)
+                if (call.OrderId == o.Id && !call.Done && call.Helper >= 0) { if (call.Helper == c.Id) have = cap; else have++; }
             if (have >= cap) continue;
             if (o.MinSkill > 0f && c.SkillLevel(o.Skill) < o.MinSkill || !w.Minds.Aware(c, o)) continue;
             field ??= o.Urgency >= 0.9f ? w.Paths.Flood(c.Cell, new PathProfile(c.PathProfile.HazardScale * 0.8f, true, true)) : dist;
@@ -134,7 +164,7 @@ public sealed partial class CrisisCrewSystem
             a -= w.Command.Bias(c, o);
             if (w.Command.Active && w.Command.TeamOf(c) is Team t)
                 a += t.Kind == TeamKind.Reserve || CommandSystem.Group(o.Kind) == t.Kind ? 0.08f : t.Watcher == c.Id ? -1f : -0.4f;
-            float s = 0.82f * a - 0.04f - 0.05f * (have - 1) + 0.12f * MathF.Max(0f, c.AffinityTo(lead)) + (Memory.AreComrades(c, lead) ? 0.05f : 0f);
+            float s = 0.82f * a - (calm ? 0.12f : 0.04f) - 0.05f * (have - 1) + 0.12f * MathF.Max(0f, c.AffinityTo(lead)) + (Memory.AreComrades(c, lead) ? 0.05f : 0f);
             if (s <= bs) continue;
             bs = s;
             best = o;
