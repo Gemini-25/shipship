@@ -37,7 +37,7 @@ public static partial class Program
             var info = w.Info;
             var mess = w.Ship.RoomsOf(RoomType.Mess).First();
             var next = IfNextRoom(w, mess)!;
-            var adults = IfAdults(w).Where(c => IfFree(c, 16.5f) && IfFree(c, 18.5f)).ToList();
+            var adults = IfAdults(w).OrderBy(c => IfFree(c, 16.5f) && IfFree(c, 18.5f) ? 0 : IfFree(c, 16.5f) ? 1 : 2).ThenBy(c => c.Id).ToList();
             bool Mild(CrewMember c) => Life.Has(c, Habit.Patient) || Life.Has(c, Habit.Optimist) || Life.Has(c, Habit.Generous);
             var owner = adults.First(c => !Mild(c) && w.Belongings.All.Any(b => b.Owner == c.Id && b.Kind == BelongingKind.Mug && b.Usable));
             var finder = adults.First(c => c != owner && !Life.Has(c, Habit.Loner) && c.Traits.Sociability >= 0.25f);
@@ -74,7 +74,6 @@ public static partial class Program
             {
                 Run(w, SimTime.Minutes(1));
                 if (finder.Job?.Activity is InfoActivity) sawCheckJob = true;
-                if (i % 10 == 0) Console.WriteLine($"     [{SimTime.Clock(w.Tick)}] {finder.Name}: {finder.Job?.Label ?? "-"} · 판단 {Brain.Activities.OfType<InfoActivity>().First().Score(finder, w, w.Paths.Flood(finder.Cell, finder.PathProfile))}");
             }
             Check("소리만 들은 사람이 확인하러 간다 → 처음 발견하고 메신저에 알린다", sawCheckJob && k.Finder == finder.Id && w.Info.Chat.All.Any(m => m.Kind == ChatKind.Notice && m.Case == k.Id),
                 $"발견자 {(k.Finder >= 0 ? w.Crew[k.Finder].Name : "-")} · {(w.Tick - t0) / SimTime.Minutes(1)}분 · \"{w.Info.Chat.All.LastOrDefault(m => m.Case == k.Id)?.Text}\" · {IfLog(w, finder.Id, "소리")}");
@@ -85,7 +84,6 @@ public static partial class Program
             for (int i = 0; i < 360 && k.Apologized < 0; i++)
             {
                 Run(w, SimTime.Minutes(1));
-                if (i % 15 == 0) Console.WriteLine($"     [{SimTime.Clock(w.Tick)}] 본 사람 {witness.Name} ({witness.Room?.Name}): {witness.Job?.Label ?? "-"} · 안 읽음 {info.Chat.Unread(witness)} · 못 봄 {info.Chat.CannotRead(witness)} · 할 일 {string.Join(",", info.Intents.Where(x => x.Crew == witness.Id).Select(x => x.Do + ":" + x.Score.ToString("0.00")))} · 판단 {Brain.Activities.OfType<InfoActivity>().First().Score(witness, w, w.Paths.Flood(witness.Cell, witness.PathProfile))}");
             }
             var sorry = w.Relations.Of(finder, owner).FirstOrDefault(m => m.Reason == RelationReason.Apologized);
             Check("본 사람이 \"충격에 떨어졌다\"고 해명 → 주인이 사과한다 (오해가 풀리고 몰아붙인 사람의 신용은 깎인다)",
@@ -102,7 +100,7 @@ public static partial class Program
             RunUntilHour(w, 16.5f);
             var info = w.Info;
             var mess = w.Ship.RoomsOf(RoomType.Mess).First();
-            var adults = IfAdults(w).Where(c => IfFree(c, 16.5f)).ToList();
+            var adults = IfAdults(w).OrderBy(c => IfFree(c, 16.5f) ? 0 : 1).ThenBy(c => c.Id).ToList();
             var owner = adults.First(c => !Life.Has(c, Habit.Patient) && !Life.Has(c, Habit.Optimist) && !Life.Has(c, Habit.Generous) && w.Belongings.All.Any(b => b.Owner == c.Id && b.Kind == BelongingKind.Mug && b.Usable));
             var other = adults.First(c => c != owner);
             owner.ChangeAffinity(other, -0.4f - owner.AffinityTo(other));
@@ -125,7 +123,6 @@ public static partial class Program
             for (int i = 0; i < 300 && (k.Accused < 0 || k.Apologized < 0); i++)
             {
                 Run(w, SimTime.Minutes(1));
-                if (i % 20 == 0 || i == 6) Console.WriteLine($"     [{SimTime.Clock(w.Tick)}] 주인 {owner.Name} ({owner.Room?.Name}): {owner.Job?.Label ?? "-"} · 앎 {k.Knows.Count} {k.OwnerKnows} · 쓸림 {k.Swept} · 유리 {w.Body.Mark(k.At, CellMark.Glass):0.00} · 의심 {k.Suspect} · 몰아붙임 {k.Accused} · 판단 {Brain.Activities.OfType<InfoActivity>().First().Score(owner, w, w.Paths.Flood(owner.Cell, owner.PathProfile))}");
             }
             Check("본 사람이 없으면: 몰아붙인 뒤 주 컴퓨터가 메신저에 그 시각 기록(덜컹)을 대고, 주인은 믿는 만큼 받아들여 사과한다",
                 k.Accused >= 0 && k.ComputerSaid >= 0 && (k.ExplainedBy == -2 && k.Apologized >= 0 || w.Automation.Trusts.Of(owner) < 0.35f),
@@ -254,7 +251,7 @@ public static partial class Program
             var w = DayOne(seed, "Hanbit");
             RunUntilHour(w, 17f);
             var info = w.Info;
-            var adults = IfAdults(w).Where(c => c.Bed != null && IfFree(c, 17f) && IfFree(c, 19f)).ToList();
+            var adults = IfAdults(w).Where(c => c.Bed != null).OrderBy(c => IfFree(c, 17f) && IfFree(c, 19f) ? 0 : 1).ThenBy(c => c.Id).ToList();
             var p = adults.First();
             var n = adults.First(c => c != p && !Life.Has(c, Habit.Loner));
             var lounge = w.Ship.RoomsOf(RoomType.Lounge).FirstOrDefault() ?? w.Ship.RoomsOf(RoomType.Mess).First();
@@ -285,7 +282,6 @@ public static partial class Program
             for (int i = 0; i < 120 && info.Stats.FoundElsewhere + info.Stats.FoundThere == 0; i++)
             {
                 Run(w, SimTime.Minutes(1));
-                if (i % 10 == 0) Console.WriteLine($"     [{SimTime.Clock(w.Tick)}] {p.Name}: {p.Job?.Label ?? "-"} {p.Cell} · 판단 {Brain.Activities.OfType<InfoActivity>().First().Score(p, w, w.Paths.Flood(p.Cell, p.PathProfile))}");
             }
             for (int i = 0; i < 120 && info.Stats.Answered == 0; i++) Run(w, SimTime.Minutes(1));
             var ask = info.Chat.All.LastOrDefault(m => m.Thing == b.Id && m.Kind == ChatKind.Ask);
@@ -300,7 +296,7 @@ public static partial class Program
             RunUntilHour(w, 17f);
             var info = w.Info;
             var lounge = w.Ship.RoomsOf(RoomType.Lounge).FirstOrDefault() ?? w.Ship.RoomsOf(RoomType.Mess).First();
-            var adults = IfAdults(w).Where(c => IfFree(c, 17f) && IfFree(c, 19f)).ToList();
+            var adults = IfAdults(w).OrderBy(c => IfFree(c, 17f) && IfFree(c, 19f) ? 0 : 1).ThenBy(c => c.Id).ToList();
             var ppl = adults.Take(4).ToList();
             var taker = ppl[0];
             SpQuiet(w, ppl, SimTime.Hours(10));
@@ -313,7 +309,6 @@ public static partial class Program
             {
                 taker.NextThinkTick = Math.Min(taker.NextThinkTick, w.Tick + SimTime.Minutes(5));
                 Run(w, SimTime.Minutes(1));
-                if (i % 20 == 0) Console.WriteLine($"     [{SimTime.Clock(w.Tick)}] {taker.Name}: {taker.Job?.Label ?? "-"} · 판단 {Brain.Activities.OfType<InfoActivity>().First().Score(taker, w, w.Paths.Flood(taker.Cell, taker.PathProfile))} · 걸 일 {info.Intents.Count(x => x.Crew == taker.Id && x.Do == InfoDo.HangPhoto)}");
             }
             Check("찍은 사람이 사진을 벽에 건다 (정리하는 사람도 벽 사진은 그대로)", ph.Hung && pb!.At == ph.Wall && w.Ship.RoomAt(ph.Wall) != null,
                 $"{(ph.Hung ? $"{w.Ship.RoomAt(ph.Wall)?.Name} 벽 {ph.Wall}" : "아직")} · {IfLog(w, taker.Id, "걸었다")}");

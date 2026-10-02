@@ -118,9 +118,20 @@ public sealed partial class InfoSystem
     public bool Drawn(Belonging b) => b.Kind switch
     {
         BelongingKind.Photo => Hung(b),
-        BelongingKind.Mug => OnTable.ContainsKey(b.Id) || !b.Usable,
+        BelongingKind.Mug => true, // 컵은 저마다 모양 · 무늬가 달라 따로 그린다 (식탁 · 바닥 · 조각)
+        BelongingKind.Artwork => Made(b) != null,
         _ => false,
     };
+
+    /// <summary>못 끝낸 일로 만든 것 (완성한 모형 · 늦게 건넨 선물) — 화면이 따로 그린다.</summary>
+    public Todo? Made(Belonging b)
+    {
+        foreach (var t in Todos) if (t.Done && t.Item == b.Id && t.Kind is TodoKind.Model or TodoKind.Gift) return t;
+        return null;
+    }
+
+    /// <summary>금빛으로 이어 붙인 컵.</summary>
+    public bool Mended(Belonging b) => b.Kind == BelongingKind.Mug && Todos.Any(t => t.Done && t.Kind == TodoKind.MendCup && t.Item == b.Id);
 
     /// <summary>화면용: 식탁 위에 놓였나 (어디에).</summary>
     public Cell? TableOf(Belonging b) => OnTable.TryGetValue(b.Id, out var tc) && b.At == tc.Spot ? tc.Table : null;
