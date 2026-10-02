@@ -170,8 +170,8 @@ public partial class Hud
         int open = inc.Nodes.Count(i => log.Node(i).Open);
         string when = $"{SimTime.Day(inc.Start)}일 {SimTime.Clock(inc.Start)}" + (inc.ByObserver ? " · 관찰자가 일으킴" : "");
         string state = inc.Open ? $"진행 중 {Dur((_world.Tick - inc.Start) / (float)SimTime.TicksPerHour)}" : $"{Dur((inc.End - inc.Start) / (float)SimTime.TicksPerHour)} 만에 수습";
-        Gfx.Text(this, Fonts.Body, new Vector2(x, y0 + 50), $"{when} · {state} · 번진 것 {inc.Nodes.Count(i => log.Node(i).Kind != CauseKind.Recovery) - 1}" +
-            (inc.Casualties > 0 ? $" · 쓰러짐 {inc.Casualties}" : "") + (inc.Deaths > 0 ? $" · 사망 {inc.Deaths}" : ""), Ui.TextBody, Palette.TextDim);
+        Gfx.Text(this, Fonts.Body, new Vector2(x, y0 + 50), UiKit.Fit($"{when} · {state} · 번진 것 {inc.Nodes.Count(i => log.Node(i).Kind != CauseKind.Recovery) - 1}" +
+            (inc.Casualties > 0 ? $" · 쓰러짐 {inc.Casualties}" : "") + (inc.Deaths > 0 ? $" · 사망 {inc.Deaths}" : ""), right - (x), Ui.TextBody, Fonts.Body), Ui.TextBody, Palette.TextDim);
         var bar = new Rect2(x, y0 + 60, right - x, 6);
         Gfx.Bar(this, bar, lasting > 0 ? (lasting - open) / (float)lasting : 1f, Palette.Good);
         Gfx.TextRight(this, Fonts.Body, new Vector2(right, y0 + 80), $"되돌린 것 {lasting - open}/{lasting} · 아직 {open}", Ui.TextSmall, open > 0 ? Palette.Warning : Palette.Good);

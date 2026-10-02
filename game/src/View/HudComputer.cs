@@ -300,7 +300,7 @@ public partial class Hud
     {
         var a = _world.Automation;
         var book = a.Book;
-        Gfx.Text(this, Fonts.Body, new Vector2(x, y + 10), $"모두 {book.Total}건 · 맞음 {book.Right} · 틀림 {book.Wrong} · 보류 {book.Held} — 몇 분 뒤 그 방이 나아졌나 · 사람이 쓰러졌나로 채점", Ui.TextSmall, Palette.TextDim);
+        Gfx.Text(this, Fonts.Body, new Vector2(x, y + 10), UiKit.Fit($"모두 {book.Total}건 · 맞음 {book.Right} · 틀림 {book.Wrong} · 보류 {book.Held} — 몇 분 뒤 그 방이 나아졌나 · 사람이 쓰러졌나로 채점", right - (x), Ui.TextSmall, Fonts.Body), Ui.TextSmall, Palette.TextDim);
         y += 22;
         float[] cols = { x, x + 44, x + 70, x + 70 + (right - x - 70) * 0.22f, x + 70 + (right - x - 70) * 0.42f, x + 70 + (right - x - 70) * 0.62f, x + 70 + (right - x - 70) * 0.76f };
         string[] head = { "시각", "", "관찰", "판단", "조치", "요청", "결과" };
@@ -441,7 +441,7 @@ public partial class Hud
             Gfx.Text(this, Fonts.Body, new Vector2(lx, ly + 11), Fit($"{SimTime.Day(tick)}일 {SimTime.Clock(tick)} {(roomId >= 0 ? w.Ship.Rooms[roomId].Name : "")} — {why}", colW, Ui.TextTiny, Fonts.Body), Ui.TextTiny, Palette.Warning);
             ly += 13;
         }
-        if (a.Voice.Name != "") Gfx.Text(this, Fonts.Body, new Vector2(lx, ly + 14), $"이름 '{a.Voice.Name}' — {Ko.IGa(a.Voice.NamedBy)} 붙였다" + (a.Voice.Resets > 0 ? $" · 재설치 {a.Voice.Resets}번 (예전 '{a.Voice.FormerName}')" : ""), Ui.TextTiny, Palette.Accent);
+        if (a.Voice.Name != "") Gfx.Text(this, Fonts.Body, new Vector2(lx, ly + 14), UiKit.Fit($"이름 '{a.Voice.Name}' — {Ko.IGa(a.Voice.NamedBy)} 붙였다" + (a.Voice.Resets > 0 ? $" · 재설치 {a.Voice.Resets}번 (예전 '{a.Voice.FormerName}')" : ""), right - (lx), Ui.TextTiny, Fonts.Body), Ui.TextTiny, Palette.Accent);
         // 오른쪽: 컴퓨터가 보는 배 (믿음 ≠ 실제)
         SectionTitle(rx, ry + 10, "컴퓨터가 보는 배 — 믿음과 실제");
         ry += 16;

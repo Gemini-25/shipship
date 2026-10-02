@@ -97,7 +97,7 @@ public partial class Hud
             y += 19f;
             if (y > card.End.Y - 10f) break;
             bool open = _world.Research >= need;
-            Gfx.Text(this, Fonts.Bold, new Vector2(x, y), $"{era}. {name}" + (open ? "" : $" — 연구 {need:0}점에 열린다") + (!open && foldLocked ? $" · 기술 {EraSystem.All.Count(t => t.Era == era)}개" : ""), Ui.TextBody, open ? Palette.Accent : Palette.TextMuted);
+            Gfx.Text(this, Fonts.Bold, new Vector2(x, y), $"{era}. {name}" + (open ? "" : $" — 연구가 {need:0}만큼 쌓이면 열린다") + (!open && foldLocked ? $" · 기술 {EraSystem.All.Count(t => t.Era == era)}개" : ""), Ui.TextBody, open ? Palette.Accent : Palette.TextMuted);
             if (!open && foldLocked) continue;
             if (foldKnown && EraSystem.All.Where(t => t.Era == era && e.Known.Contains(t.Id)).Select(t => t.Name).ToList() is { Count: > 0 } learned)
             {

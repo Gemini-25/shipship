@@ -32,12 +32,11 @@ public partial class Hud
         float x = x0 + 18, right = card.End.X - 18;
         int level = a.Level;
         string state = !a.Present ? "주 컴퓨터 없음" : a.MainOnline ? "온라인" : a.BackupActive ? "멎음 · 예비 제어기" : "멎음";
-        Gfx.Text(this, Fonts.Bold, new Vector2(x, y0 + 30), $"주 컴퓨터 관제 — 등급 {AutomationSystem.LevelName(level)}", Ui.TextLarge, Palette.Text);
-        Gfx.Text(this, Fonts.Body, new Vector2(x + 300, y0 + 30), level < 5 ? $"내려간 까닭: {a.LevelWhy}" : "멀쩡하면 V — 아래는 고장 났을 때도 되는 일", Ui.TextSmall, level < 5 ? Palette.Warning : Palette.TextMuted);
+        UiKit.CardTitle(this, x, right - 70f, y0 + 32, "주 컴퓨터 관제", $"등급 {AutomationSystem.LevelName(level)}" + (level < 5 ? $" · 내려간 까닭: {a.LevelWhy}" : ""), "computer", level < 5 ? Palette.Warning : null); // v16.24
         Button(new Rect2(right - 58, y0 + 12, 58, 26), "Y 닫기", false, mouse, ToggleControl, Ui.TextSmall);
         var col = a.MainOnline ? Palette.Good : Palette.Danger;
-        Gfx.Text(this, Fonts.Body, new Vector2(x, y0 + 50), $"{state} · {(a.Computer is Machine m ? $"{m.Name} (단계 {m.Tier})" : "-")}" +
-            (a.Operator is CrewMember op ? $" · 관제석: {op.Name} (수동 조종 — 좁게 끊고 빨리 되돌린다)" : " · 관제석 비어 있음 (컴퓨터가 보수적으로)"), Ui.TextBody, a.Operator != null ? Palette.Accent : col);
+        Gfx.Text(this, Fonts.Body, new Vector2(x, y0 + 50), UiKit.Fit($"{state} · {(a.Computer is Machine m ? $"{m.Name} (단계 {m.Tier})" : "-")}" +
+            (a.Operator is CrewMember op ? $" · 관제석: {op.Name} (수동 조종 — 좁게 끊고 빨리 되돌린다)" : " · 관제석 비어 있음 (컴퓨터가 보수적으로)"), right - (x), Ui.TextBody, Fonts.Body), Ui.TextBody, a.Operator != null ? Palette.Accent : col);
 
         // 등급 사다리
         if (DrawControlTabs(card, x, right, y0, mouse)) return; // v16.0 ④ · v16.6 다섯 칸 기록 · 보고·모듈 · 사람·믿음
@@ -98,7 +97,7 @@ public partial class Hud
             Gfx.Text(this, Fonts.Body, new Vector2(x + 44, ly + 14), Fit($"최근: {SimTime.Day(lc.Tick)}일 {PolicySystem.Spec(lc.Id).Name} → {PolicySystem.Spec(lc.Id).Options[lc.To]} — {lc.Why}" + (lc.Yes + lc.No > 0 ? $" (찬성 {lc.Yes} · 반대 {lc.No})" : ""), right - x - 48, Ui.TextTiny, Fonts.Body), Ui.TextTiny, Palette.TextMuted);
             ly += 15;
         }
-        Gfx.Text(this, Fonts.Body, new Vector2(x + 44, ly + 14), $"늦게 닫아 옆방까지 잃은 일 {a.LateSeals} · 닫힌 방 안에서 쓰러짐 {a.TrappedCasualties} · 질식 소화 {a.Smothered} · 진공 소화 {a.Vacuumed} · 불활성 가스 {(a.InertCapacity > 0 ? a.InertGas / a.InertCapacity * 100 : 100):0}%", Ui.TextTiny, Palette.TextMuted);
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 44, ly + 14), UiKit.Fit($"늦게 닫아 옆방까지 잃은 일 {a.LateSeals} · 닫힌 방 안에서 쓰러짐 {a.TrappedCasualties} · 질식 소화 {a.Smothered} · 진공 소화 {a.Vacuumed} · 불활성 가스 {(a.InertCapacity > 0 ? a.InertGas / a.InertCapacity * 100 : 100):0}%", right - (x + 44), Ui.TextTiny, Fonts.Body), Ui.TextTiny, Palette.TextMuted);
         ly += 22;
         // v13.0 진행 중인 대응 수순
         foreach (var fc in a.FireCases)
@@ -143,7 +142,7 @@ public partial class Hud
         foreach (var room in w.Ship.Rooms.Where(r => r.LockPendingUntil >= 0))
         {
             float left = (room.LockPendingUntil - w.Tick) / (float)SimTime.Minutes(1);
-            Gfx.Text(this, Fonts.Bold, new Vector2(x, ly + 14), $"⏱ {room.Name} 격벽 폐쇄까지 {left:0.0}분 — 안에 {string.Join("·", w.Crew.Where(c => !c.Dead && c.Room == room).Select(c => c.Name))}", Ui.TextBody, Palette.Danger);
+            Gfx.Text(this, Fonts.Bold, new Vector2(x, ly + 14), UiKit.Fit($"⏱ {room.Name} 격벽 폐쇄까지 {left:0.0}분 — 안에 {string.Join("·", w.Crew.Where(c => !c.Dead && c.Room == room).Select(c => c.Name))}", right - (x), Ui.TextBody, Fonts.Bold), Ui.TextBody, Palette.Danger);
             ly += 20;
         }
         // 감지기·데이터선
@@ -153,8 +152,8 @@ public partial class Hud
         float cal = w.Ship.Machines.Select(mm => mm.SensorCal).DefaultIfEmpty(1f).Average();
         Divider(x, right, ly + 6);
         SectionTitle(x, ly + 24, "감지기·데이터선");
-        Gfx.Text(this, Fonts.Body, new Vector2(x + 90, ly + 24), $"데이터선이 끊긴 방 {blind}/{live.Count} · 값이 멈춘 설비 {stale} · 평균 교정 {cal * 100:0}%" +
-            (w.Ship.Rooms.Count(r => r.BreakerOff) is int off && off > 0 ? $" · 분전함 내린 방 {off}" : ""), Ui.TextSmall, blind > 0 || stale > 3 ? Palette.Warning : Palette.TextDim);
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 90, ly + 24), UiKit.Fit($"데이터선이 끊긴 방 {blind}/{live.Count} · 값이 멈춘 설비 {stale} · 평균 교정 {cal * 100:0}%" +
+            (w.Ship.Rooms.Count(r => r.BreakerOff) is int off && off > 0 ? $" · 분전함 내린 방 {off}" : ""), right - (x + 90), Ui.TextSmall, Fonts.Body), Ui.TextSmall, blind > 0 || stale > 3 ? Palette.Warning : Palette.TextDim);
         ly += 32;
         // 판단 근거
         Divider(x, right, ly);

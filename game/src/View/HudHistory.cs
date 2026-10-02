@@ -223,7 +223,7 @@ public partial class Hud
         float ly = y + 66;
         if (m.TraumaCause != null && m.Trauma >= 0.03f)
         {
-            Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 12), $"{m.TraumaCause} 뒤로 스트레스가 {Pct(m.Trauma)} 밑으로 안 내려간다", Ui.TextSmall, Palette.TextMuted);
+            Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 12), UiKit.Fit($"{m.TraumaCause} 뒤로 스트레스가 {Pct(m.Trauma)} 밑으로 안 내려간다", right - (x), Ui.TextSmall, Fonts.Body), Ui.TextSmall, Palette.TextMuted);
             ly += 18;
         }
 

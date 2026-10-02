@@ -728,7 +728,7 @@ public partial class Hud : Control
         Gfx.Text(this, Fonts.Bold, new Vector2(x + 26, y + 31), c.Name, Ui.TextHeading, Palette.Text);
         Gfx.Text(this, Fonts.Body, new Vector2(x + 26 + Gfx.Width(Fonts.Bold, c.Name, Ui.TextHeading) + 8, y + 31),
             CrewRoles.Name(c.Role), Ui.TextBody, Palette.TextDim);
-        Gfx.Text(this, Fonts.Body, new Vector2(x + 26, y + 49), $"{Life.Name(c.Background)} · {Life.Name(c.Value)} · {c.Traits.Summary()}", Ui.TextBody, Palette.TextMuted); // v12.7 살아온 길·가치관
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 26, y + 49), UiKit.Fit($"{Life.Name(c.Background)} · {Life.Name(c.Value)} · {c.Traits.Summary()}", right - (x + 26), Ui.TextBody, Fonts.Body), Ui.TextBody, Palette.TextMuted); // v12.7 살아온 길·가치관
 
         // 탭
         (int tab, string name)[] tabs = { (CardTab, "요약"), (0, "상태"), (1, "판단"), (2, "관계"), (3, "기억"), (4, "몸·일기"), (5, "물건") }; // v16.2 요약 카드가 맨 앞
