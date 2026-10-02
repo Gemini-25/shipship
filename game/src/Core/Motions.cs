@@ -58,6 +58,10 @@ public sealed class Motion
     public int Winner { get; set; } = -1;
     public List<(int who, int about, bool thinksAgainst, bool truth)> Guesses { get; } = new();
     public Dictionary<int, float> Final { get; } = new();
+    /// <summary>이 안건에서 생기거나 다시 뭉친 파벌.</summary>
+    public List<int> FactionIds { get; } = new();
+    /// <summary>낸 사람이 회의에 없어 미룬 횟수.</summary>
+    public int Deferred { get; set; }
 }
 
 public sealed class Faction
@@ -157,7 +161,7 @@ public sealed partial class MotionSystem
     public List<Sitting> Past { get; } = new();
 
     private int _nextId = 1, _nextFaction = 1, _nextTheft = 1;
-    private long _next, _nextMotive;
+    private long _next, _nextMotive, _lastProposed = -1000000;
     private readonly Dictionary<int, long> _proposedAt = new();
     private readonly Dictionary<int, long> _tempted = new();
     private readonly Dictionary<int, long> _stoleAt = new();
@@ -202,6 +206,8 @@ public sealed partial class MotionSystem
     public Faction? FactionOf(CrewMember c) => Factions.FirstOrDefault(f => !f.Gone && f.Members.Contains(c.Id));
     public bool Summoned(CrewMember c) => Now is { } s && s.Invited.Contains(c.Id) && (s.End <= 0 || _w.Tick < s.End);
     public bool Feasting => _feastAt >= 0 && _w.Tick >= _feastAt && _w.Tick < _feastEnd;
+    /// <summary>승무원이 선장 불신임 서명을 돌리고 있다 (정기 회의의 자동 불신임 대신).</summary>
+    public bool ConfidencePending => !Off && All.Any(m => m.Kind == MotionKind.Confidence && m.Stage is MotionStage.Signing or MotionStage.Ready or MotionStage.Sitting);
     public bool SawTheftLately(CrewMember c) => _sawTheft.TryGetValue(c.Id, out var t) && _w.Tick - t < SimTime.Minutes(40);
 
     // ───────────────────────────── 틱 ─────────────────────────────
@@ -278,6 +284,8 @@ public sealed partial class MotionSystem
             if (!Adult(c) || !c.CanAct || !c.IsAwake || c.Outside || (c.Id + slot) % 3 != 0 || Busy(c) || NoVote(c)) continue;
             if (Motive(c) is not { } mv) continue;
             if (!R.Chance(Math.Clamp(mv.s, 0f, 0.9f) * 0.5f)) continue;
+            if (w.Tick - _lastProposed < SimTime.Hours(2) && mv.s < 0.5f) continue; // 안건이 한꺼번에 쏟아지지 않게 (급한 건 예외)
+            _lastProposed = w.Tick;
             mv.make();
             if (Open.Count() >= 3) return;
         }
@@ -289,6 +297,7 @@ public sealed partial class MotionSystem
         var w = _w;
         (float s, Action make)? best = null;
         void Consider(float s, Action make) { if (s > 0.2f && (best == null || s > best.Value.s)) best = (s, make); }
+        bool Recent(MotionKind k) => All.Any(m => m.Kind == k && (m.Stage is MotionStage.Signing or MotionStage.Ready or MotionStage.Sitting || w.Tick - Math.Max(m.Born, m.Decided) < SimTime.TicksPerDay * 2));
         var g = GrudgeOf(c);
         // 1) 배분: 먹을 것이 줄어든다 — 배급을 줄이자 (창고를 보는 사람 · 안전 · 규칙 · 효율)
         float days = FoodPolicy.FoodDays(w);
@@ -343,7 +352,7 @@ public sealed partial class MotionSystem
             bool survived = false;
             for (int i = ev.Count - 1; i >= 0 && i >= ev.Count - 40; i--) if (ev[i].Kind == HistoryKind.Recovery && w.Tick - ev[i].Tick < SimTime.Hours(14)) { survived = true; break; }
             float s = (c.Traits.Sociability - 0.45f) + (survived ? 0.25f : 0f) + (0.55f - w.Society.Morale) * 0.8f + (c.Value is CrewValue.People or CrewValue.Freedom ? 0.1f : 0f) - (days < 3f ? 0.35f : 0f);
-            if (!Open.Any(m => m.Kind == MotionKind.Celebration))
+            if (!Recent(MotionKind.Celebration))
                 Consider(s, () => Propose(c, MotionKind.Celebration, SittingKind.Feast, survived ? "큰일을 넘긴 축하 자리" : "다 같이 한 끼 — 잔치를 열자",
                     survived ? "다들 버텼다 — 한 번은 같이 웃어야 한다" : "요즘 다들 얼굴이 굳었다"));
         }
@@ -385,7 +394,8 @@ public sealed partial class MotionSystem
         return best;
     }
 
-    private bool Pending(string policy) => Open.Any(m => m.Policy == policy);
+    /// <summary>그 방침을 두고 서명을 받는 중이거나, 정한 지(접은 지) 이틀이 안 됐다.</summary>
+    private bool Pending(string policy) => All.Any(m => m.Policy == policy && (m.Stage is MotionStage.Signing or MotionStage.Ready or MotionStage.Sitting || _w.Tick - Math.Max(m.Born, m.Decided) < SimTime.TicksPerDay * 2));
 
     private void RuleMotive(CrewMember c, Action<float, Action> consider)
     {
@@ -410,6 +420,15 @@ public sealed partial class MotionSystem
         // 고장 나고 고치면 늦다 (정비하는 사람)
         if (w.Policies["maint"] == 1 && c.Role is CrewRole.Technician or CrewRole.Engineer && c.Stats.Repairs >= 3)
             Rule("maint", 0, MotionKind.RuleChange, SittingKind.Regular, 0.25f + MathF.Min(0.2f, c.Stats.Repairs / 40f), "예방 정비를 먼저", "고장 나고 고치면 늘 한밤중이다");
+        // 가치관대로: 지금 방침이 내 생각과 다르다 (평소의 안건 — 가치관이 같은 사람끼리 서명이 모인다)
+        foreach (var id in Everyday)
+        {
+            int pref = PolicySystem.Preferred(c, id);
+            if (pref == w.Policies[id]) continue;
+            var spec = PolicySystem.Spec(id);
+            float s = 0.12f + 0.15f * (c.Traits.Sociability - 0.4f) + 0.12f * c.Needs.Stress + (c.Value is CrewValue.Rules or CrewValue.Freedom ? 0.06f : 0f);
+            Rule(id, pref, MotionKind.RuleChange, SittingKind.Regular, s, EverydayTitle(id, pref) ?? $"{spec.Name}: {spec.Options[pref]}", EverydayWhy(id, pref) ?? ValueWhy(c.Value));
+        }
         // 컴퓨터에 맡길 몫: 데인 사람은 줄이자 · 믿는 사람은 늘리자
         if (c.ComputerFaith >= 0f)
         {
@@ -420,6 +439,32 @@ public sealed partial class MotionSystem
                 Rule("autoscope", cur + 1, MotionKind.Proposal, SittingKind.Regular, 0.1f + (c.ComputerFaith - 0.8f) * 1.5f, "컴퓨터에 더 맡기자", "밤에도 컴퓨터는 깨어 있다");
         }
     }
+
+    private static readonly string[] Everyday = { "privacy", "nightwatch", "conflict", "violations", "memorial", "leisure", "drills" };
+
+    private static string? EverydayTitle(string id, int to) => (id, to) switch
+    {
+        ("privacy", 0) => "공간은 다 같이 쓰자", ("privacy", _) => "개인 공간을 지켜 주자",
+        ("nightwatch", 0) => "야간 당직을 한 명 세우자", ("nightwatch", 1) => "야간 당직을 두 명으로", ("nightwatch", _) => "밤에는 컴퓨터에 맡기자",
+        ("conflict", 0) => "다툼은 누가 가운데 서서 풀자", ("conflict", 1) => "다툼은 선장이 정하자", ("conflict", _) => "다툼은 당사자끼리 풀자",
+        ("violations", 0) => "규칙을 어기면 경고만", ("violations", 1) => "규칙을 어기면 근무에서 빼자", ("violations", _) => "규칙 위반을 따지지 말자",
+        ("memorial", 0) => "기념일마다 떠난 사람 이름을 부르자", ("memorial", _) => "추모는 조용히 하자",
+        ("leisure", 0) => "일부터 하자", ("leisure", 1) => "일과 쉼을 반반으로", ("leisure", _) => "쉬는 시간을 보장하자",
+        ("drills", 0) => "비상 훈련을 그만하자", ("drills", 1) => "비상 훈련은 주에 한 번", ("drills", _) => "비상 훈련을 이틀마다",
+        _ => null,
+    };
+
+    private static string? EverydayWhy(string id, int to) => (id, to) switch
+    {
+        ("privacy", 1) => "남의 침대에 걸터앉는 사람이 있다", ("privacy", _) => "다 같이 쓰면 자리가 남는다",
+        ("nightwatch", 2) => "밤엔 컴퓨터가 더 잘 본다", ("nightwatch", _) => "밤에 아무도 안 보면 불안하다",
+        ("conflict", 0) => "다투면 누가 가운데 서 줘야 한다", ("conflict", 1) => "선장이 정하면 빨리 끝난다", ("conflict", _) => "어른끼리 알아서 한다",
+        ("violations", 0) => "한 번 실수로 근무까지 빼는 건 심하다", ("violations", 1) => "말로 해서는 안 바뀐다", ("violations", _) => "서로 감시하는 배는 싫다",
+        ("memorial", 0) => "떠난 사람 이름을 불러야 한다", ("memorial", _) => "조용히 기억하는 게 낫다",
+        ("leisure", 0) => "일이 밀렸다", ("leisure", 1) => "쉬어야 오래 간다", ("leisure", _) => "쉬는 시간은 지켜 줘야 한다",
+        ("drills", 0) => "훈련하느라 일이 멈춘다", ("drills", 1) => "주에 한 번이면 된다", ("drills", _) => "손에 익어야 산다",
+        _ => null,
+    };
 
     private void PracticeMotive(CrewMember c, Action<float, Action> consider)
     {
@@ -449,7 +494,8 @@ public sealed partial class MotionSystem
         if (m.Theft >= 0 && Thefts.FirstOrDefault(t => t.Id == m.Theft) is Theft th && th.Witnesses.Contains(who.Id)) s += 0.6f; // 자기도 봤다
         if (FactionOf(who) is Faction f && f.Members.Contains(asker.Id)) s += 0.2f;
         if (GrudgeOf(who) is Grudge g && (g.Against == asker.Id || FactionOf(asker) is Faction fa && fa.Members.Contains(g.Against))) s -= 0.3f;
-        bool sign = s > 0.12f;
+        // 서명은 '회의에서 이야기해 보자'는 뜻이라 찬성보다 문턱이 낮다 — 고발 · 불신임은 이름을 거는 일이라 조금 더 신중하다
+        bool sign = s > (m.Kind is MotionKind.Accusation or MotionKind.Confidence ? 0f : -0.06f);
         if (sign)
         {
             m.Signers.Add(who.Id);
@@ -530,6 +576,8 @@ public sealed partial class MotionSystem
         {
             var voters = attendees.Where(c => !NoVote(c) && !_w.Society.OnProbation(c) && c.Id != m.Target).ToList();
             if (voters.Count < 2) continue;
+            // 낸 사람이 자리에 없으면 다음 회의로 미룬다 (두 번까지)
+            if (!attendees.Any(c => c.Id == m.Proposer) && m.Deferred < 2 && P(m.Proposer) is { Dead: false }) { m.Deferred++; m.Deadline = Math.Max(m.Deadline, _w.Tick + SimTime.TicksPerDay); continue; }
             var lines = new List<SittingLine>();
             var item = Resolve(m, voters, attendees, chair, lines, out var apply);
             rec.Items.Add(item);

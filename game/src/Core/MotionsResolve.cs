@@ -72,6 +72,12 @@ public sealed partial class MotionSystem
                 if (c.Value == CrewValue.Rules) t.Add((-0.12f, "선장을 함부로 바꾸면 안 된다"));
                 if (c == cap) t.Add((-2f, "끝까지 맡겠다"));
                 break;
+            case MotionKind.Accusation when P(m.Target) is CrewMember ac:
+                t.Add((c.Value switch { CrewValue.Rules => 0.3f, CrewValue.Safety => 0.15f, CrewValue.Efficiency => 0.12f, CrewValue.People => -0.12f, _ => -0.05f }, c.Value == CrewValue.People ? "따로 불러 이야기하면 될 일이다" : "그냥 넘어가면 다음에 또 그런다"));
+                t.Add((0.35f * c.Needs.Hunger, "다들 줄여 먹는데"));
+                t.Add((-0.6f * c.AffinityTo(ac) - 0.3f * w.Relations.Trust(c, ac), c.AffinityTo(ac) > 0.2f ? $"{ac.Name}이 그랬을 리 없다" : $"{ac.Name}이라면 그럴 만하다"));
+                if (c.Id == ac.Id) t.Add((-2f, "억울하다"));
+                break;
             case MotionKind.Crisis when m.Sitting == SittingKind.Inquiry:
                 t.Add((c.Value is CrewValue.Safety or CrewValue.Rules ? 0.3f : 0.1f, "누가 무엇을 봤는지 맞춰 봐야 한다"));
                 if (w.Meetings.Guilt(c) > 0.1f) t.Add((-0.3f, "그때는 그게 최선이었다"));
@@ -137,10 +143,15 @@ public sealed partial class MotionSystem
         {
             case "rations":
             {
-                string line = a.Outlook.Get("food")?.Line ?? $"식량 {days:0.#}일치";
+                var f = a.Outlook.Get("food");
+                float grow = FoodPolicy.GrowingPerDay(w), need = w.Crew.Count(c => !c.Dead) * FoodPolicy.MealsPerPersonDay;
+                bool shortRun = f != null ? f.DaysToShort < 30f : grow < need;
                 float later = days / FoodPolicy.RationDecay - days;
-                text = m.To == 3 ? $"{line} · 배급을 줄이면 바닥나는 날이 {later:0.#}일 늦어집니다" : $"{line} · 배급을 풀면 하루 {w.Crew.Count(c => !c.Dead) * FoodPolicy.MealsPerPersonDay * (1f - FoodPolicy.RationDecay):0.#}끼가 더 나갑니다";
-                sign = m.To == 3 ? (days < 4.5f ? 1 : -1) : (days > 6f ? 1 : -1);
+                string head = $"식량 {days:0.#}일치 · 재배 하루 {grow:0}끼 · 먹는 양 하루 {need:0}끼";
+                text = m.To == 3
+                    ? shortRun ? $"{head} · {(f != null ? f.Line + " · " : "")}배급을 줄이면 바닥나는 날이 {later:0.#}일 늦어집니다" : $"{head} · 지금 속도면 바닥나지 않습니다"
+                    : $"{head} · 배급을 풀면 하루 {need * (1f - FoodPolicy.RationDecay):0.#}끼가 더 나갑니다";
+                sign = m.To == 3 ? (shortRun && days < 4.5f ? 1 : -1) : (days > 6f || !shortRun ? 1 : -1);
                 break;
             }
             case "water": text = a.Outlook.Get("water")?.Line ?? "물 기록이 없습니다"; sign = w.Water.Level < w.Water.Capacity * 0.3f ? 1 : 0; break;
@@ -403,6 +414,7 @@ public sealed partial class MotionSystem
                 best.Members = ids; best.Last = w.Tick; best.Motions++; best.Leader = leader.Id;
                 if (pro == pass) best.Wins++; else best.Losses++;
                 touched.Add(best.Id);
+                m.FactionIds.Add(best.Id);
                 continue;
             }
             int hue = Enumerable.Range(0, Hues).FirstOrDefault(h => !Factions.Any(f => !f.Gone && f.Hue == h), _nextFaction % Hues);
@@ -410,6 +422,7 @@ public sealed partial class MotionSystem
             if (pro == pass) nf.Wins++; else nf.Losses++;
             Factions.Add(nf);
             touched.Add(nf.Id);
+            m.FactionIds.Add(nf.Id);
             Stats.FactionsBorn++;
             w.Log.Add(w.Tick, LogKind.Life, $"사람들이 {string.Join("·", ids.Select(i => P(i)?.Name))} 쪽을 '{nf.Name}'이라고 부르기 시작했다", leader.Id);
         }
