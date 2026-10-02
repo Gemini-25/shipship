@@ -145,5 +145,6 @@ public static class Codex
     };
 
     public static CodexEntry? Of(FurnitureType t) => Furniture.TryGetValue(t, out var e) ? e : null;
+    public static IEnumerable<ScaleRow> Incidents(IncidentScale s) => ScaleTable.Group(s); // v16.18 사고 도감: 규모별 묶음 (겪은 횟수는 World.Scale.Seen)
     public static CodexEntry? Of(RoomType t) => Rooms.TryGetValue(t, out var e) ? e : RoomCatalog.Of(t)?.Codex;
 }

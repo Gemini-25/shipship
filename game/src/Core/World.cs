@@ -157,6 +157,7 @@ public sealed class World
     public DailySystem Daily { get; } // v15 일상 사건 70
     public BrainSystem Brain2 { get; } // v16.15 승무원 두뇌 2.0 (믿음 · 목표 층 · 계획 · 감정 · 사회적 추론 · 배우기)
     public CosmicSystem Cosmic { get; } // v18.13 우주 규모 대재난 30
+    public ScaleSystem Scale { get; } // v16.18 사고 · 재난 다섯 규모 (판정 · 대응 · 완급 · 연쇄 · 도감)
     public ExpeditionSystem Expedition { get; } // v16.12 재료 탐사 원정
     public BodySystem Body { get; } // v16.3 배 본체 (칸 3층 · 칸 상태 · 벽 층 · 문)
     public DailySceneSystem Scenes { get; } // v16.1 일상 → 행동 (장면 · 인수인계 · 쪽지)
@@ -263,6 +264,7 @@ public sealed class World
         Daily = new DailySystem(this);
         Brain2 = new BrainSystem(this); // v16.15
         Cosmic = new CosmicSystem(this); // v18.13
+        Scale = new ScaleSystem(this); // v16.18
         Expedition = new ExpeditionSystem(this); // v16.12
         Body = new BodySystem(this); // v16.3
         Scenes = new DailySceneSystem(this);
@@ -431,6 +433,7 @@ public sealed class World
             Procedures.Update(this); // v12.1 재조립 불량이 돌아온다
             pf = Prof.Lap("sys.Procedures", pf);
             Causes.Update(); // v12.2 인과 사슬: 번진 상태를 원인에 잇고, 풀린 상태에 복구를 붙인다
+            Scale.Update(dt); // v16.18 사슬의 피해로 규모를 재고 · 컴퓨터 판정 · 소집 · 승무원이 느낀다
             pf = Prof.Lap("sys.Causes", pf);
             Collection.Update(dt);
             pf = Prof.Lap("sys.Collection", pf);

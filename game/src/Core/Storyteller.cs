@@ -123,6 +123,7 @@ public sealed partial class Storyteller
                 if (Hold(persona, t, cap)) { Next = w.Tick + SimTime.Hours(1); return; } // v15.7
                 break;
         }
+        if (w.Scale.Breather(persona, out var rest)) { Next = w.Tick + SimTime.Hours(1); LastWhy = rest; return; } // v16.18 큰 사고 뒤 숨 돌릴 틈
         var (key, room, why) = Choose(persona, t, cap);
         string? what = w.Hazards.FireStory(key, room);
         if (what == null) { Next = w.Tick + SimTime.Hours(2); return; }
@@ -183,6 +184,7 @@ public sealed partial class Storyteller
         if (p == StoryPersona.Random) for (int i = 0; i < pool.Count; i++) pool[i] = (pool[i].key, 4f);
         if (p >= StoryPersona.SlowBurn) Shape(p, pool, cap); // v15.7 성격마다 고르는 규칙
         for (int i = 0; i < pool.Count; i++) pool[i] = (pool[i].key, pool[i].weight * w.Voyage.HazardMul(pool[i].key) * w.Eras.RiskMul(pool[i].key)); // v12.8 구간 · 새 기술의 위험
+        for (int i = 0; i < pool.Count; i++) pool[i] = (pool[i].key, pool[i].weight * w.Scale.PaceMul(pool[i].key)); // v16.18 규모 완급 (큰 것 뒤엔 작은 것 · 조용하면 작은 것부터)
         float total = pool.Sum(x => x.weight), roll = _rng.Float() * total;
         foreach (var x in pool) { roll -= x.weight; if (roll <= 0f) return (x.key, Aim(p), Why(p, tension, cap)); }
         return (pool[^1].key, Aim(p), Why(p, tension, cap));

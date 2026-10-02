@@ -17,6 +17,7 @@ public static class Brain
         new CheckRoomActivity(), // v16.6 컴퓨터 확인 요청 (직접 가서 보고 쓰러진 사람을 데려 나온다)
         new ShelterActivity(), // v12.6 태양 폭풍
         new HeedBroadcastActivity(), // v16.6 대피 방송을 들은 사람만 미리 대피소로 (ComputerLinks.cs)
+        new MusterActivity(), // v16.18 배 전체 사고 — 전원 소집 · 점호 (ScalePlan.cs)
         new CosmicEvacuateActivity(), new CosmicShelterActivity(), new CosmicWarnActivity(), new CosmicBraceActivity(), new CosmicVigilActivity(), new CosmicLookActivity(), // v18.13 우주 대재난: 비우기 · 대피 · 알리기 · 대비 · 그날의 밤 · 창밖 보기
         new QuarantineActivity(), // v12.6 격리실
         new RecoverActivity(),
@@ -87,6 +88,7 @@ public static class Brain
             w.Brain2.Tilt(c, a, ref score, ref reason); // v16.15 장 · 중기 목표와 감정이 점수를 기울인다
             float damp = Crisis.Damp(c, w, a, out var note);
             if (damp < 1f && score > 0f) { score *= damp; if (note != null) reason += $" · {note}"; }
+            w.Scale.Damp(c, a, ref score, ref reason); // v16.18 배 전체 · 우주급을 느끼면 일상을 멈춘다
             if (score > 0f) score += w.Rng.Range(-Noise, Noise);
             evals.Add(new Evaluation(a, score < 0f ? 0f : score, reason));
         }

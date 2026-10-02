@@ -124,6 +124,7 @@ public sealed class CauseLog
     }
     private bool _forceFaults;
     public int OpenNode(string key) => _open.TryGetValue(key, out var id) ? id : -1;
+    public IReadOnlyCollection<int> GroupRooms(int id) => _groups.TryGetValue(id, out var g) ? g : Array.Empty<int>(); // v16.18 묶음 상태(정전 · 단수 · 환기)가 덮은 방
 
     // ─────────────────────────────── 원인 문맥 ───────────────────────────────
 

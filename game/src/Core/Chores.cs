@@ -104,7 +104,8 @@ public sealed class ChoresActivity : Activity
         // 비번·취침 시간이어도 불려 나온다 (비상 소집)
         score += Crisis.Bias(w, o);
         score += w.Command.Bias(c, o); // v13.1 현장 지휘: 맡은 조의 일
-        bool allHands = Crisis.AllHands(w, o);
+        score += w.Scale.Bias(c, o); // v16.18 규모마다 대응이 커진다 (곁의 사람 → 당직 → 여러 명 → 전원)
+        bool allHands = Crisis.AllHands(w, o) || w.Scale.AllHands(c, o);
         // v12.0 교대 한 시간 전에는 새 점검을 벌이기보다 기록을 넘긴다
         if (o.Kind == WorkKind.PreventiveCheck && !emergency && OnShiftStatic(c, w)
             && !SimTime.InWindow(SimTime.HourOfDay(w.Tick) + 1f, c.Schedule.WorkStart, c.Schedule.WorkLength)) score -= 0.15f;
