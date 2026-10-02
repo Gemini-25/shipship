@@ -229,11 +229,11 @@ public static partial class Program
         fridge.Faults.Add(new Fault { Kind = FaultKind.CompressorFail, Since = w.Tick - SimTime.Hours(2) });
         Machine? donor = null;
         long noticedAt = -1;
-        for (int m = 0; m < 720 && noticedAt < 0; m++)
+        for (int m = 0; m < 720 && (noticedAt < 0 || fridge.Has(FaultKind.CompressorFail)); m++) // 알아챔 · 냉장고 살림 둘 다 기다린다
         {
             Run(w, SimTime.Minutes(1));
             donor ??= w.Ship.Machines.FirstOrDefault(x => x.Has(FaultKind.Stripped));
-            if (donor != null && w.Ways.Noticed(donor.Body.Id)) noticedAt = w.Tick;
+            if (donor != null && noticedAt < 0 && w.Ways.Noticed(donor.Body.Id)) noticedAt = w.Tick;
         }
         var ck = w.Ways.CaseFor(Snag.NoPart);
         Console.WriteLine($"     {fridge.Name}: 만들 수 있나 {w.Board.Obtainable(ItemKind.Motor)} · 재고 {w.Board.Have(ItemKind.Motor)} · {string.Join(",", Recipes.AllFor(ItemKind.Motor).Select(r => string.Join("+", r.Inputs.Select(x => $"{ItemKinds.Name(x.kind)}{w.Board.Have(x.kind)}"))))} · {WyTries(w, ck)}");
