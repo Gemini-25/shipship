@@ -118,7 +118,8 @@ public static partial class Program
                 var mech = w.Crew.OrderByDescending(c => c.RawSkill(Skill.Mechanics)).First();
                 mech.Familiarize(FurnitureType.CoolantPump, 0.8f);
                 bool heard = false;
-                for (int h = 0; h < 48 && !heard; h++)
+                // 하루까지 (고장은 30시간 뒤): 귀로 찾는 건 확률이다 — 12시간이면 기대 2.2번 · 못 들을 확률 11% 라 시드에 따라 갈렸다
+                for (int h = 0; h < 96 && !heard; h++)
                 {
                     // 펌프 곁에 붙여 둔다 (1분마다 — 데려다 놓아도 곧 쉬러 걸어가 버리면 들을 틈이 없다)
                     for (int m = 0; m < 15; m++)
