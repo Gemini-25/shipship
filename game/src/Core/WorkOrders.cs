@@ -1197,7 +1197,9 @@ public sealed partial class WorkBoard
         foreach (var d in ship.FurnitureOf(FurnitureType.MealDispenser))
         {
             int n = d.Storage!.Count(ItemKind.Meal);
-            if (n < 6 && fridgeMeals > 0)
+            // 냉장고를 비워 들고 가는 중이면 (누가 맡아 나르는 중) 일은 그대로 있다 — 안 그러면 조건이 사라진 일로 보여 로봇이 도중에 손을 놓는다
+            bool underway = fridgeMeals == 0 && n < 6 && _open.Values.Any(o => o.Kind == WorkKind.Restock && o.Target.Furniture == d && (o.Robot != null || o.Assignee != null));
+            if (n < 6 && (fridgeMeals > 0 || underway))
                 Post(WorkKind.Restock, WorkTarget.Of(d), 0.35f + 0.3f * (1f - n / 6f), Skill.Cooking, $"{n}인분 남음");
         }
 
