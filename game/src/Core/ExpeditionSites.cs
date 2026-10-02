@@ -384,7 +384,7 @@ public static class ExpeditionSites
             x.Add(ItemKind.Ration, 3); x.Add(ItemKind.MedKit, 1);
             return x.Line("잠긴 비상 창고를 열었다 — 비상식량 3 · 구급 키트 1", 1);
         }),
-        new("relic", "옛 기념물", S(SiteKind.Station, SiteKind.Wreck, SiteKind.Signal, SiteKind.Container), 0.5f, x => x.Site.Spec.Relic * 3f, x =>
+        new("relic", "옛 기념물", S(SiteKind.Station, SiteKind.Wreck, SiteKind.Signal, SiteKind.Container), 0.5f, x => x.Site.Spec.Relic * 3f * TechWeb.Mul(x.W, "exp.relic"), x => // v16.14 잔해 탐지기
         {
             if (x.T.Relic != null) return false;
             x.T.Relic = x.Site.Kind switch { SiteKind.Station => "정거장 개소 기념패", SiteKind.Wreck => $"{x.Site.Name} 명판", SiteKind.Container => "누군가의 엽서 묶음", _ => "신호기 부속 한 조각" };

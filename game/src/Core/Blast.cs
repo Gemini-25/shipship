@@ -190,6 +190,7 @@ public sealed partial class BlastSystem
     public BlastRecord? Detonate(Cell at, float power, BlastKind kind, string cause, Machine? source = null, int depth = 0, int blame = -1, Explosive? item = null)
     {
         var w = _w;
+        power *= TechWeb.Mul(w, "blast.power"); // v16.14 폭압 배출구 · 폭발 억제 거품
         if (power <= 0.005f || !w.Ship.Grid.InBounds(at)) return null;
         var cl = w.Causes;
         var room = w.Ship.RoomAt(at);

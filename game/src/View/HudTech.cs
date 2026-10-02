@@ -30,6 +30,7 @@ public partial class Hud
 
     private void DrawTech(Vector2 mouse)
     {
+        if (TechWebOpen) { DrawTechWeb(mouse); return; } // v16.14 기술 지도
         var w = _world;
         var types = Tech.Types.Where(t => w.Ship.FurnitureOf(t).Any()).ToList();
         var modules = Modules.All.Where(s => w.Ship.RoomsOf(s.Room).Any()).ToList();
@@ -48,6 +49,7 @@ public partial class Hud
         Gfx.Text(this, Fonts.Body, new Vector2(x + Gfx.Width(Fonts.Bold, $"{w.Ship.Name} 기술", Ui.TextLarge) + 10, y0 + 30),
             $"연구 {w.Research:0}점 · 하루 +{perDay:0.0} (작업대·솜씨 좋은 사람·정밀 가공 모듈)", Ui.TextBody, Palette.TextMuted);
         Button(new Rect2(right - 58, y0 + 12, 58, 26), "T 닫기", false, mouse, ToggleTech, Ui.TextSmall);
+        Button(new Rect2(right - 58 - 96, y0 + 12, 90, 26), "기술 지도", false, mouse, () => TechWebOpen = true, Ui.TextSmall); // v16.14 Shift+T
         Gfx.Text(this, Fonts.Body, new Vector2(x, y0 + 50),
             "연구가 문턱을 넘으면 설계가 풀리고, 올리는 건 개조 회의가 정한다 (재료 · 겪은 일 순서). 높은 단계는 출력이 크지만 전기·마모·고장 값을 치른다.", Ui.TextSmall, Palette.TextDim);
 

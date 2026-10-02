@@ -206,6 +206,7 @@ public sealed class CosmicSystem
     {
         float e = _w.Ambience.Exposure(r) * (1f - 0.6f * Water(r));
         if ((RoomCatalog.Tags(r.Kind) & RoomTag.Shielded) != 0) e *= 0.15f;
+        e *= TechWeb.Mul(_w, "cosmic.expose"); // v16.14 폭풍 대피 차폐
         return e;
     }
 
@@ -384,7 +385,7 @@ public sealed class CosmicSystem
         if (!comp && (op == null || !w.Sensors.Online)) return; // 아직 아무도 못 봤다
         float conf = comp ? 0.42f + 0.38f * Math.Clamp(q, 0f, 1.2f) : 0.22f + 0.25f * Math.Clamp(q, 0f, 1f);
         conf += 0.05f * Math.Min(4, Learned) + (w.Eras.Has("quantumsense") ? 0.08f : 0f);
-        conf = Math.Clamp(conf, 0.15f, 0.92f);
+        conf = Math.Clamp(conf * TechWeb.Mul(w, "cosmic.conf"), 0.15f, 0.92f); // v16.14 중력파 조기 경보 · 신호기 코어
         float err = MathF.Max(0.4f, lead * 0.35f * (1f - conf));
         e.Conf0 = conf; e.Err0 = err;
         e.Offset = R.Range(-1f, 1f) * err;

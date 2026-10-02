@@ -254,7 +254,7 @@ public sealed class CookingSystem
         _planned[stove.Id] = ri;
         var r = Dishes.Of(ri);
         float h = r.Hours * (r.Station == CookStation.Oven && !HasOven(stove.Room) ? 1.1f : 1f);
-        return h / FoodChain.CookHours;
+        return h / FoodChain.CookHours * TechWeb.Mul(_w, "cook.hours"); // v16.14 압력 조리
     }
 
     /// <summary>지금 이 화구에서 만드는 것 (없으면 null).</summary>
@@ -833,7 +833,7 @@ public sealed class CookingSystem
             float amb = b.InFridge && fridge ? 4f : b.Room?.Air.Temperature ?? 20f;
             b.Temp += (amb - b.Temp) * (1f - MathF.Exp(-h / 0.7f));
             float rot = b.Jar ? (b.Ready(w.Tick) ? 0.003f : 0.001f) : b.InFridge && fridge ? 0.004f : 0.05f;
-            b.Fresh = MathF.Max(0f, b.Fresh - rot * h);
+            b.Fresh = MathF.Max(0f, b.Fresh - rot * h * TechWeb.Mul(_w, "food.rot")); // v16.14 진공 포장
             if (b.Jar && !b.WasReady && b.Ready(w.Tick))
             {
                 b.WasReady = true;

@@ -64,7 +64,10 @@ public sealed class EraSystem
     public int Era => Eras.Where(e => _w.Research >= e.research).Select(e => e.era).DefaultIfEmpty(1).Max();
     public static string EraName(int era) => Eras.First(e => e.era == era).name;
 
-    public IEnumerable<EraTech> Available => All.Where(t => t.Era <= Era && !Known.Contains(t.Id));
+    public IEnumerable<EraTech> Available => TechWeb.Every.Where(t => t.Era <= Era && !Known.Contains(t.Id) && _w.TechWeb.Open(t)); // v16.14 선행 · 조건 · 갈림길 (시대 규칙과 함께)
+    public static EraTech? Find(string? id) => TechWeb.Find(id); // v16.14 새 기술 41까지
+    public void Boost(float amount) => Progress += amount; // v16.14 실험이 연구를 민다
+    internal void Begin(string id, string why) { Project = id; Progress = 0f; ProjectWhy = why; } // v16.14 시험 · 화면
 
     /// <summary>새 기술이 데려온 위험: 사고 무게 배율.</summary>
     public float RiskMul(string key)
@@ -77,6 +80,7 @@ public sealed class EraSystem
         foreach (var t in All)
             if (t.RiskKey == key && Known.Contains(t.Id)) m *= t.RiskMul;
         m *= ErasV15.Mul(_w, key); // v15.5 새 기술이 줄이는 사고
+        m *= _w.TechWeb.RiskMul(key); // v16.14 새 기술 41 · 부작용 연쇄 · 서툰 이틀
         return m;
     }
 
@@ -84,7 +88,7 @@ public sealed class EraSystem
     private void Choose()
     {
         var w = _w;
-        var options = Available.ToList();
+        var options = Available.Where(t => !_w.TechWeb.Undecided(t)).ToList(); // v16.14 갈림길은 회의가 먼저 정한다
         if (options.Count == 0) { Project = null; return; }
         var h = w.History;
         float Need(EraTech t) => t.Field switch
@@ -112,10 +116,11 @@ public sealed class EraSystem
             3 => t.Field is TechField.Propulsion or TechField.Sensors or TechField.Robotics ? 0.7f : 0f,
             _ => 0f,
         };
-        var pick = options.OrderByDescending(t => Need(t) + Lean(t) - 0.01f * t.Cost).ThenBy(t => t.Id).First();
+        var rec = _w.TechWeb.Advise(options, Need); // v16.14 주 컴퓨터가 근거와 함께 추천
+        var pick = options.OrderByDescending(t => Need(t) + Lean(t) - 0.01f * _w.TechWeb.CostOf(t) + _w.TechWeb.Bias(t, rec)).ThenBy(t => t.Id, StringComparer.Ordinal).First();
         Project = pick.Id;
         Progress = 0f;
-        ProjectWhy = Need(pick) > 0.3f ? $"겪은 일 때문에 ({Fields(pick.Field)})" : Lean(pick) > 0f ? $"연구 방침 '{w.Policies.Option("research")}'" : "다음 차례";
+        ProjectWhy = (Need(pick) > 0.3f ? $"겪은 일 때문에 ({Fields(pick.Field)})" : Lean(pick) > 0f ? $"연구 방침 '{w.Policies.Option("research")}'" : TechWeb.Node(pick.Id).Trial ? "배에 둔 유물이 궁금하다" : "다음 차례") + _w.TechWeb.Followed(pick, rec);
         w.History.Add(w, HistoryKind.Decision, $"회의: 다음 연구는 {pick.Name} — {pick.Effect} ({ProjectWhy})", null, log: true);
     }
 
@@ -133,9 +138,9 @@ public sealed class EraSystem
         float gained = MathF.Max(0f, w.Research - _lastResearch);
         _lastResearch = w.Research;
         if (Project == null) { Choose(); if (Project == null) return; }
-        var t = All.First(x => x.Id == Project);
-        Progress += gained;
-        if (Progress < t.Cost) return;
+        var t = Find(Project)!;
+        Progress += gained * _w.TechWeb.FlowMul(t); // v16.14 역설계는 실험으로
+        if (Progress < _w.TechWeb.CostOf(t)) return; // v16.14 버린 갈림길을 다시 꺼내면 두 배
         Known.Add(t.Id);
         Order.Add(t.Id);
         Project = null;
@@ -144,5 +149,6 @@ public sealed class EraSystem
         // v13.0 컴퓨터는 처음부터 V — 기술은 기능 모듈을 단다
         if (t.Id == "smartgrid") w.Automation.Install(ComputerModule.Preempt);
         if (t.Id == "aicaptain") { w.Automation.Install(ComputerModule.BioMonitor); w.Automation.Install(ComputerModule.EvacGuide); }
+        w.TechWeb.OnLearned(t); // v16.14 갈림길 · 부작용 연쇄 · 조합 · 실험한 사람
     }
 }

@@ -102,7 +102,7 @@ public sealed class Trip
     public bool Headed { get; set; }
     public int LootTotal => Loot.Values.Sum();
     public IEnumerable<TripMember> Out => Members.Where(m => m.Boarded);
-    public float RiskNow(World w) => Math.Clamp(Site.TrueRisk * (w.Ambience.StormPower > 0.3f && !StormWarned ? 1.5f : 1f) * (Gear.GetValueOrDefault("구급 키트") > 0 ? 0.9f : 1.1f), 0f, 1f);
+    public float RiskNow(World w) => Math.Clamp(Site.TrueRisk * (w.Ambience.StormPower > 0.3f && !StormWarned ? 1.5f : 1f) * (Gear.GetValueOrDefault("구급 키트") > 0 ? 0.9f : 1.1f) * TechWeb.Mul(w, "exp.risk"), 0f, 1f); // v16.14 원정 지도 공유
 }
 
 public sealed class ExpProposal
