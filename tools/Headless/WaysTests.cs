@@ -104,6 +104,15 @@ public static partial class Program
         var room = w.Ship.LiveRooms.Where(r => r.Kind is RoomType.Storage or RoomType.Workshop && r.Doors.Count > 0 && !r.Doors.Any(d => d.IsExternal)).OrderBy(r => r.Volume).FirstOrDefault();
         if (room == null) { Check("소화기 없는 방의 불 — 장면", false, "창고 · 작업실 없음"); return null; }
         WyClearNear(w, room);
+        {
+            // 주컴퓨터 계획이 한 걸음으로 쓰는 갈래 목록 — 조건 · 시간 범위 · 부작용 · 나중 일
+            var opts = w.Ways.Options(Snag.Fire, room);
+            var ext = opts.FirstOrDefault(o => o.Id == "fire.ext");
+            var seal = opts.FirstOrDefault(o => o.Id == "fire.seal");
+            Check("계획용 갈래 목록: 소화기 없음 → 그 갈래는 못 쓰고 문 닫기는 된다 · 시간 범위 · 부작용 · 나중 일", opts.Count >= 5 && ext is { Ready: false } && seal is { Ready: true }
+                && opts.All(o => o.MinLo <= o.MinHi) && opts.Any(o => o.Side.Length > 0) && opts.Any(o => o.Later.Length > 0) && opts.Any(o => !o.Ready && o.Need.Length > 0),
+                string.Join(" · ", opts.Select(o => $"{o.Way.Name} {(o.Ready ? $"{o.MinLo:0}~{o.MinHi:0}분" : o.Need)}")));
+        }
         foreach (var c in room.Cells.Where(w.Ship.IsOpenFloor).Take(2).ToList()) w.Fire.Ignite(c, 0.6f);
         float minO2 = 21f;
         WayTry? sealTry = null;
@@ -121,6 +130,8 @@ public static partial class Program
         Console.WriteLine($"     {room.Name}: {WyTries(w, ck)} · 컴퓨터 안 {WyName(ck?.ComputerPick ?? "")}");
         Check("소화기가 없는 방의 불을 문을 닫아 산소를 끊어 끈다", sealTry != null && outAt >= 0 && minO2 < 12f && (ck?.SolvedBy == "fire.seal" || sealTry.Ok),
             $"닫은 사람 {w.Crew.FirstOrDefault(c => c.Id == sealTry?.CrewId)?.Name ?? "없음"} · 산소 최저 {minO2:0.0}kPa · 꺼짐 {(outAt >= 0 ? $"{(outAt - (sealTry?.Chosen ?? 0)) / (float)SimTime.Minutes(1):0}분" : "아직")} · 해결 {WyName(ck?.SolvedBy ?? "")}");
+        var st = w.Ways.StepState(Snag.Fire, room, "fire.seal");
+        Check("계획이 걸음을 확인할 수 있다 (해 봤다 · 잘됐다 · 풀렸다)", st.tried && st.ok && st.solved, $"{st}");
         Check("불이 꺼지면 문을 다시 열고 연대기에 한 줄이 남는다", !room.Lockdown && w.History.Events.Any(e => e.Text.Contains("문을 닫아 숨을 끊는다")), $"잠금 {room.Lockdown} · 통풍 {room.VentOpen}");
         return w;
     }
