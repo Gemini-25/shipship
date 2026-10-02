@@ -202,6 +202,8 @@ public static partial class Program
                 int readers0 = note?.Readers.Count ?? 0;
                 var reader = adults.Where(c => c != owner && c != eater && c.CanAct).OrderBy(c => c.Id).Last();
                 ScFree(w, reader);
+                // 통합: 새 배는 냉장고가 여럿이다 — 쪽지가 붙은 냉장고가 있는 방에서 출출해진다 (가까운 다른 냉장고로 가면 쪽지를 못 본다)
+                if (note != null && note.RoomId >= 0 && note.RoomId < w.Ship.Rooms.Count) Put(w, reader, w.Ship.Rooms[note.RoomId]);
                 reader.Needs.Food = 0.6f;
                 ScUntil(w, () => reader.Room != null, 1f, 1); // 문턱을 지나는 중이면 장면을 못 연다 (어느 방에 있어야 일상 장면이 열린다) — 연구 · 배우기가 생긴 뒤로 그 순간 문간에 있기도 하다
                 var s2 = w.Scenes.OpenSnack(reader, takePlate: false); // 냉장고 앞에 서면 읽는다

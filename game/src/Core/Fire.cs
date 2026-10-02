@@ -136,7 +136,7 @@ public sealed class FireSystem
             air.O2 = MathF.Max(0f, air.O2 - 400f * intensity * dt / vol);
             air.CO2 += 300f * intensity * dt / vol;
             // v12.2 산소가 모자란 불은 일산화탄소를 더 낸다
-            air.CO = MathF.Min(1f, air.CO + (intensity < 0.3f ? 60f : o2 < 16f ? 40f : 14f) * intensity * dt / vol); // 통합: 닫힌 방에서 타면 소리 없이 찬다 · 연기만 피우는 불씨(훈소)가 가장 많이 낸다 (잠든 사람을 깨우지 않는다)
+            air.CO = MathF.Min(1f, air.CO + (intensity < 0.3f ? 150f : o2 < 16f ? 40f : 14f) * intensity * dt / vol); // 통합: 닫힌 방에서 타면 소리 없이 찬다 · 연기만 피우는 불씨(훈소)가 가장 많이 낸다 (잠든 사람을 깨우지 않는다)
             air.Smoke = MathF.Min(1f, air.Smoke + 120f * intensity * dt / vol);
             air.Temperature = MathF.Min(95f, air.Temperature + 25f * intensity * dt * 30f / vol);
 
