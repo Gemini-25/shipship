@@ -17,6 +17,7 @@ public partial class ShipView
     private void CheckFurnitureChanged()
     {
         int n = _world.Ship.Furniture.Count * 1000 + _world.Ship.Furniture.Count(f => f.Stowed); // v10.10: 치운 가구도
+        n = unchecked(n * 31 + FixtureArt.Signature(_world.Ship)) & 0x7FFFFFFF; // v16.5c 단계 · 등급 · 주인이 바뀌면 몸체를 다시 그린다
         if (n == _furnitureCount) return;
         if (_furnitureCount >= 0) RedrawStatic();
         _furnitureCount = n;

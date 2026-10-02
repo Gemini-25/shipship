@@ -34,6 +34,7 @@ public partial class ShipView : Node2D
         _lights = new DrawLayer { Name = "Lights", Painter = PaintLights, Material = new CanvasItemMaterial { BlendMode = CanvasItemMaterial.BlendModeEnum.Add } };
         _dynamic = new DrawLayer { Name = "Dynamic", Painter = PaintDynamic };
         AddChild(_static);
+        AddFixtureFineLayer(); // v16.5c 설비 디테일 층 (가까이서만)
         AddChild(_lights); // v10: 천장 조명이 바닥에 떨어뜨리는 빛 (더하기 섞기)
         AddChild(_dynamic);
         BuildOutlines();
@@ -47,12 +48,13 @@ public partial class ShipView : Node2D
         CheckFurnitureChanged();
         CheckStructureChanged();
         CheckCircuitsChanged();
+        UpdateFixtureLod(); // v16.5c 확대 단계 · 보이는 범위
         _dynamic.QueueRedraw();
         _lights.QueueRedraw();
     }
 
     /// <summary>선체가 바뀌었을 때(사고, 개조) 호출.</summary>
-    public void RedrawStatic() => _static.QueueRedraw();
+    public void RedrawStatic() { _static.QueueRedraw(); _fixFine?.QueueRedraw(); } // v16.5c 디테일 층도
 
     public static Rect2 CellRect(Cell c) => new(c.X * T, c.Y * T, T, T);
     public static Rect2 FurnitureRect(Furniture f) => new(f.MinX * T, f.MinY * T, f.Width * T, f.Height * T);
@@ -342,6 +344,7 @@ public partial class ShipView : Node2D
         var r = FurnitureRect(f);
         var center = r.GetCenter();
         var accent = Palette.Room(f.Room.Kind);
+        if (FixtureArt.PaintBody(ci, f)) return; // v16.5c 설비 그림 표 (표에 없는 것만 아래 예전 그림)
         if (PaintModuleBody(ci, f)) return; // v10.8 방 모듈
 
         switch (f.Type)
@@ -764,6 +767,7 @@ public partial class ShipView : Node2D
         var m = f.Machine;
         float eff = m?.Efficiency ?? 1f;
         bool alive = eff > 0.01f;
+        if (PaintFixtureLife(ci, f)) return; // v16.5c 설비 그림 표 (움직임 · 상태)
         if (Modules.IsModule(f.Type)) { PaintModuleLife(ci, f, t); return; } // v10.8
         if (f.Type == FurnitureType.SupplyCache) { PaintSupplyCacheLife(ci, f); return; } // v10.10
         if (m is { Tier: >= 2 } && f.Type != FurnitureType.ReactorCore) PaintTierLife(ci, f, m, t); // v11.3 단계마다 다른 모양
