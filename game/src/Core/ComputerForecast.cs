@@ -394,16 +394,16 @@ public sealed class ShipForecast
         }
     }
 
-    /// <summary>고장 위험 · 바깥 위험 (컴퓨터가 데이터선으로 보는 설비만).</summary>
+    /// <summary>고장 위험 · 바깥 위험 (컴퓨터가 데이터선으로 보는 설비만 · 전조는 누가 · 감지기가 알아챈 것만 — 숨은 전조를 미리 알지 않는다).</summary>
     private void Risk()
     {
         var w = _w;
         Risks.Clear();
         foreach (var mm in w.Ship.Machines.Where(x => !x.Body.Room.Detached && x.Body.Room.DataLinked && !x.Stopped)
-                     .Select(x => (m: x, p: 1f - MathF.Pow(1f - MathF.Min(0.5f, x.FaultChancePerHour), 24f) + (x.Omen != null ? 0.25f : 0f)))
+                     .Select(x => (m: x, p: 1f - MathF.Pow(1f - MathF.Min(0.5f, x.FaultChancePerHour), 24f) + (x.Omen is { Known: true } ? 0.25f : 0f)))
                      .Where(x => x.p >= 0.08f).OrderByDescending(x => x.p).ThenBy(x => x.m.Body.Id).Take(4))
             Risks.Add(new FailureRisk(mm.m.Body.Id, mm.m.Name, mm.m.Body.Room.Name, MathF.Min(0.99f, mm.p),
-                mm.m.Omen != null ? "전조가 보인다" : $"마모 {mm.m.Wear * 100:0}%"));
+                mm.m.Omen is { Known: true } ? "전조가 보인다" : $"마모 {mm.m.Wear * 100:0}%"));
         var parts = new List<string>();
         if (w.Hazards.StormActive) parts.Add("태양 폭풍 중");
         foreach (var sf in w.Automation.SpaceForecasts.Where(x => !x.Graded).Take(2)) parts.Add($"{sf.Name} 예보");

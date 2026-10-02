@@ -140,9 +140,11 @@ public static partial class Program
             var cotCell = Adaptation.CotCells(w, w.Ship.RoomsOf(RoomType.Lounge).First()).First();
             var cot = w.Ship.AddFurniture(FurnitureType.Cot, cotCell);
             w.Paths.Invalidate();
-            Run(w, SimTime.Hours(34));
+            // 34시간 사이 다른 수리(작업대 배선 불량 · 콘솔 전조 손보기)도 케이블을 쓴다 — 걷은 그때의 재고로 케이블을 되찾았는지 본다
+            int cablesAt = -1;
+            for (int hh = 0; hh < 34; hh++) { Run(w, SimTime.Hours(1)); if (cablesAt < 0 && w.Power.RemovedJumpers.Count == 1) cablesAt = w.Board.Have(ItemKind.Cable); }
             bool jumperGone = !w.Power.Jumpers.Any(j => !j.Permanent) && w.Power.RemovedJumpers.Count == 1;
-            Check("임시 배선을 걷는다", jumperGone && w.Board.Have(ItemKind.Cable) >= cables0, $"걷음 {w.Adapt.JumpersRemoved} · 케이블 {cables0} → {w.Board.Have(ItemKind.Cable)}");
+            Check("임시 배선을 걷는다", jumperGone && cablesAt >= cables0, $"걷음 {w.Adapt.JumpersRemoved} · 케이블 {cables0} → 걷은 뒤 {cablesAt} (끝 {w.Board.Have(ItemKind.Cable)})");
             Check("빈 간이침대를 치운다", cot.Stowed, $"치움 {w.Adapt.CotsStowed}");
         }
 
