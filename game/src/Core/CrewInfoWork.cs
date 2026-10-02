@@ -44,7 +44,8 @@ public sealed class InfoActivity : Activity
             {
                 case InfoDo.CheckSound:
                     if (info.Case(i.Thing) is not CupCase k || k.Knows.Contains(c.Id) || k.Swept || !dist.Reachable(i.At)) continue;
-                    if (w.Tick - i.Since > SimTime.Minutes(20)) s -= 0.25f; // 쨍그랑 직후가 아니면 시들하다
+                    if (w.Tick - i.Since < SimTime.Minutes(10)) s += 0.2f; // 쨍그랑 — 무슨 일이지? (하던 걸 멈추고 고개를 든다)
+                    else if (w.Tick - i.Since > SimTime.Minutes(20)) s -= 0.25f; // 쨍그랑 직후가 아니면 시들하다
                     break;
                 case InfoDo.Confront:
                     if (info.Case(i.Thing) is not CupCase k2 || k2.Explained >= 0 || k2.Accused >= 0 || Person(w, i.Other) is not { Dead: false } o || !dist.Reachable(o.Cell)) continue;
@@ -313,6 +314,9 @@ public sealed class InfoActivity : Activity
             OnFinished = (cm, world, st) => { if (found) world.Info.Drop(i); },
         };
     }
+
+    /// <summary>그 일을 한 번 이어 하는 작업 (시험 · 다른 시스템이 부를 때).</summary>
+    public Job? PlanTodo(CrewMember c, World w, DistanceField dist, Todo t) => TodoJob(c, w, dist, t, Plans.DropOff(c, w, dist));
 
     private static bool Near2(Cell a, Cell b) => Math.Abs(a.X - b.X) <= 1 && Math.Abs(a.Y - b.Y) <= 1;
 

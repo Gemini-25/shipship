@@ -272,7 +272,7 @@ public sealed partial class InfoSystem
                     if (k.Finder < 0 && !k.Saw.Contains(c.Id)) Find(k, c);
                 }
             // 아무도 해명하지 않으면 주 컴퓨터가 그 시각 기록을 댄다
-            if (k.Accused >= 0 && k.Explained < 0 && k.ComputerSaid < 0 && now - k.Accused > SimTime.Minutes(90) && w.Automation.Present && w.Automation.CoreOnline)
+            if (k.Accused >= 0 && k.Explained < 0 && k.ComputerSaid < 0 && now - k.Accused > SimTime.Minutes(150) && w.Automation.Present && w.Automation.CoreOnline)
             {
                 var j = Jolts.LastOrDefault(x => Math.Abs(x.tick - k.Tick) < SimTime.Minutes(2));
                 if (j.why != null)
@@ -514,7 +514,7 @@ public sealed partial class InfoSystem
         var real = w.Belongings.CellOf(b);
         if (Near(believed, real) && b.BorrowedBy < 0) return false;
         if (Intents.Any(i => i.Do == InfoDo.Search && i.Crew == c.Id && i.Thing == b.Id)) return false;
-        AddIntent(InfoDo.Search, c, -1, b.Id, believed, 0.4f, $"{Ko.EulReul(b.Name)} 찾는다", 6f);
+        AddIntent(InfoDo.Search, c, -1, b.Id, believed, 0.48f, $"{Ko.EulReul(b.Name)} 찾는다", 6f);
         return true;
     }
 
@@ -603,7 +603,7 @@ public sealed partial class InfoSystem
                 if (k.Saw.Contains(c.Id) && k.Explained < 0 && CrewOf(k.Owner) is CrewMember owner && owner != c)
                 {
                     if (Life.Has(c, Habit.Loner) || m.Kind == ChatKind.Ask) Explain(c, owner, k, false);
-                    else AddIntent(InfoDo.Explain, c, owner.Id, k.Id, default, 0.55f + 0.1f * c.Traits.Diligence, $"{owner.Name}의 컵 — 내가 봤다", 12f);
+                    else AddIntent(InfoDo.Explain, c, owner.Id, k.Id, default, 0.68f + 0.1f * c.Traits.Diligence, $"{owner.Name}의 컵 — 내가 봤다 (누가 억울하게 의심받고 있다)", 12f);
                 }
                 break;
             case ChatKind.Explain when k != null:

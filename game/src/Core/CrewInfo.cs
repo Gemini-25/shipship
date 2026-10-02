@@ -900,7 +900,7 @@ public sealed partial class InfoSystem
         var ppl = p.People.Select(CrewOf).Where(x => x != null && x != c).Cast<CrewMember>().ToList();
         string what;
         var dead = ppl.FirstOrDefault(x => x.Dead);
-        var foe = ppl.FirstOrDefault(x => !x.Dead && (SpatWith(c, x) != null || c.AffinityTo(x) < -0.05f));
+        var foe = ppl.Where(x => !x.Dead && (SpatWith(c, x) != null || c.AffinityTo(x) < -0.05f)).OrderBy(x => SpatWith(c, x) != null ? 0 : 1).ThenBy(x => c.AffinityTo(x)).ThenBy(x => x.Id).FirstOrDefault();
         var friend = ppl.Where(x => !x.Dead).OrderByDescending(x => c.AffinityTo(x)).FirstOrDefault();
         if (dead != null)
         {
