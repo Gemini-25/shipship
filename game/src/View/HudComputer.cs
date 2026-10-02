@@ -57,7 +57,7 @@ public partial class Hud
         if (!a.Present || ControlOpen || ChronicleOpen || TechOpen || PolicyOpen || ChainOpen) return;
         const float width = 318f;
         var open = a.Asks.Open.ToList();
-        float h = ComputerFolded ? 44f : 150f + open.Count * 92f;
+        float h = ComputerFolded ? 44f : 150f + BrainBlockH + open.Count * 92f; // v16.16 두뇌 네 줄
         float bottom = Screen.Y - Margin - LogHeight - 10f;
         var card = new Rect2(Margin, bottom - h, width, h);
         Card(card);
@@ -120,6 +120,8 @@ public partial class Hud
             Gfx.Text(this, Fonts.Body, new Vector2(x, y + 2), Fit($"오늘 조치 {book.ActsToday} · 맞음 {book.RightToday} · 틀림 {book.WrongToday} · 사람 신뢰 {a.Trusts.Average() * 100:0}% · 믿음≠실제 {a.Belief.DivergedCount()}방", width - 28, 10, Fonts.Body), 10, Palette.TextMuted);
         }
         y += 8;
+        DrawBrainBlock(x, y + 4, width - 28); // v16.16 계획 · 예측 · 권한 · 배움
+        y += BrainBlockH;
         // 버튼 줄
         float bx = x;
         foreach (var (label, active, act) in new (string, bool, Action)[]
@@ -241,7 +243,7 @@ public partial class Hud
     /// <summary>관제 화면 위 탭 (관제 · 기록 · 보고·모듈 · 사람·믿음). 0이 아니면 탭 내용을 그리고 true.</summary>
     private bool DrawControlTabs(Rect2 card, float x, float right, float y0, Vector2 mouse)
     {
-        string[] tabs = { "관제", "다섯 칸 기록", "보고·모듈", "사람·믿음", "앞날·계획" };
+        string[] tabs = { "관제", "다섯 칸 기록", "보고·모듈", "사람·믿음", "앞날·계획", "두뇌" };
         float tx = x;
         for (int i = 0; i < tabs.Length; i++)
         {
@@ -257,6 +259,7 @@ public partial class Hud
             case 1: DrawActTable(card, x, right, y); break;
             case 2: DrawReports(card, x, right, y, mouse); break;
             case 4: DrawForesight(card, x, right, y); break;
+            case 5: DrawBrainTab(card, x, right, y); break; // v16.16
             default: DrawPeopleBelief(card, x, right, y); break;
         }
         return true;

@@ -51,6 +51,8 @@ public sealed class CrewModelBook
     public bool Knows(CrewMember c) => _p.TryGetValue(c.Id, out var p) && p.RestSeen >= 0;
     public IReadOnlyDictionary<int, WorkAsk> Asks => _asks;
     public bool RestAsked(CrewMember c) => _rest.TryGetValue(c.Id, out var t) && t > _w.Tick;
+    /// <summary>쉬라는 부탁을 받은 사람 (화면).</summary>
+    public IEnumerable<int> Resting => _rest.Where(kv => kv.Value > _w.Tick).Select(kv => kv.Key);
 
     /// <summary>실제로 싫어하는 정도 (세계 — 컴퓨터는 모른다): 성격 · 습관 · 취미.</summary>
     public static float TrueAversion(CrewMember c, string duty)

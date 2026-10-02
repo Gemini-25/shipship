@@ -55,6 +55,7 @@ public partial class ShipView
         PaintConsoleScreens(ci);
         PaintSpeakers(ci);
         PaintRoomAsks(ci);
+        PaintBrainAsks(ci); // v16.16 부탁 · 쉼 · 의심하는 계기 · 회의 안건
         PaintDataFlows(ci);
         PaintHoloBoard(ci);
         if (a.ShelterCall) PaintShelterCall(ci);
