@@ -210,7 +210,9 @@ public sealed class MindSystem
         if (trigger <= 0f) return 0f;
         if (c.Habits.Count > 0) trigger *= Persona.Mul(c, h => h.Panic);
         float veteran = MathF.Min(0.6f, c.Stats.Emergencies * 0.03f);
-        return PanicScale * trigger * (1f + c.Fx.Panic) * MathF.Pow(1f - c.Traits.Calm, 1.5f) * (0.3f + c.Needs.Stress) * (1f - veteran) * (1f - 0.5f * c.Traits.Bravery) * (1.5f - w.Society.Morale);
+        // v16 통합 (두뇌 2.0 감정): 이미 겁에 질린 사람(불을 봤다 · 배 전체 경보 · 쓰러지는 걸 봤다)은 위험한 자리에서 더 쉽게 무너진다
+        float dread = 1f + 1.6f * w.Brain2.Emotions.Get(c, Feeling.Fear);
+        return PanicScale * trigger * dread * (1f + c.Fx.Panic) * MathF.Pow(1f - c.Traits.Calm, 1.5f) * (0.3f + c.Needs.Stress) * (1f - veteran) * (1f - 0.5f * c.Traits.Bravery) * (1.5f - w.Society.Morale);
     }
 
     private void Emotions(CrewMember c, float dt)
