@@ -154,8 +154,12 @@ public sealed class ComputerManner
                 break;
             default: text = $"{task}를 부탁합니다 — {p.Goal.Split(" — ").Last()} ({s.Min:0}~{s.Max:0}분)"; break;
         }
+        LastBrief = (w.Tick, c.Id, style, text + recall);
         return text + recall;
     }
+
+    /// <summary>마지막으로 사람에게 건넨 부탁 (지휘 탭이 인용으로 보인다).</summary>
+    public (long tick, int crew, string style, string text) LastBrief { get; private set; } = (-1, -1, "", "");
 
     /// <summary>가서 봐 달라는 부탁 (확인할 방법 — 사람이 가서 보기).</summary>
     public string Ask(CrewMember c, Furniture f, ProbeCase pc)

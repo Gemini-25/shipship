@@ -132,7 +132,7 @@ public sealed class FixBook
     private int _next = 1;
     private long _tickNext;
     public List<FixPlan> Plans { get; } = new();
-    public int Made, Succeeded, Aborted, Revised, Replans, Late, Steps, RemoteSteps, HandSteps, Compares, DoorDetours, TestFails, LockWaits, Spread;
+    public int Made, Succeeded, Aborted, Revised, Replans, Late, Steps, RemoteSteps, HandSteps, Compares, DoorDetours, TestFails, LockWaits, Spread, Shared;
     /// <summary>원자로 출력 상한 (계획의 감출력 걸음) — AutomationSystem.ReactorCap에 곱한다.</summary>
     public float ReactorCap { get; internal set; } = 1f;
     private readonly Dictionary<int, float> _drive = new();
@@ -420,7 +420,7 @@ public sealed class FixBook
 
     internal void Hash(Action<long> I, Action<float> F)
     {
-        I(Made); I(Succeeded); I(Aborted); I(Revised); I(Replans); I(Late); I(Steps); I(DoorDetours); I(TestFails); F(ReactorCap); I(_drive.Count);
+        I(Made); I(Succeeded); I(Aborted); I(Revised); I(Replans); I(Late); I(Steps); I(DoorDetours); I(TestFails); F(ReactorCap); I(_drive.Count); I(Shared);
         foreach (var p in Plans) { I(p.Id); I(p.Cur); I(p.Steps.Count); I(p.State.Length); }
     }
 }

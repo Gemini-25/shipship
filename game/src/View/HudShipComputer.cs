@@ -34,11 +34,11 @@ public partial class Hud
         // 왼쪽: 지금 계획 (위) · 읽는 값 (아래)
         float planH = Mathf.Max(150f, (bottom - y) * 0.58f);
         var book = a.RecoveryOrNull;
-        SectionTitle(lx, y + 10, $"지금 계획 — 열린 계획 {rd.Open} · 세움 {book?.Made ?? 0} · 해냄 {book?.Succeeded ?? 0} · 고쳐 짬 {(book?.Revised ?? 0) + (book?.Replans ?? 0)}");
+        UiKit.Header(this, lx, lx + colW, y + 10, "지금 계획", $"열린 {rd.Open} · 세움 {book?.Made ?? 0} · 해냄 {book?.Succeeded ?? 0} · 고쳐 짬 {(book?.Revised ?? 0) + (book?.Replans ?? 0)}", "target");
         DrawPlanPanel(new Rect2(lx, y + 20, colW, planH - 24f), rd);
         float ry = y + planH;
         var pr = a.ProbeOrNull;
-        SectionTitle(lx, ry + 10, $"사실 · 추측 · 예측" + (pr != null && pr.Checks > 0 ? $" — 확인 {pr.Checks}번 · 맞힘 {pr.Right} · 틀림 {pr.Wrong}" : ""));
+        UiKit.Header(this, lx, lx + colW, ry + 10, "사실 · 추측 · 예측", pr != null && pr.Checks > 0 ? $"확인 {pr.Checks}번 · 맞힘 {pr.Right} · 틀림 {pr.Wrong}" : null, "sensor");
         DrawReadings(new Rect2(lx, ry + 20, colW, bottom - ry - 20f), rd);
         // 오른쪽: 믿는 배 · 전력 흐름 · 견준 판단 · 명령선
         float h = bottom - y;
