@@ -37,6 +37,8 @@ public partial class ShipView
         ActKind.Reboot => new Color("#e6eaf2"),
         ActKind.Door => new Color("#5fd0c8"),
         ActKind.Forecast => new Color("#9fd8ff"),
+        ActKind.Plan => new Color("#8fe3ff"),
+        ActKind.Check => new Color("#b9a3ff"),
         _ => new Color("#7cc4ff"),
     };
 

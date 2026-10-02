@@ -22,31 +22,40 @@ public partial class Hud
 
     private static Color StateColor(string s) => s switch { "끝" => Palette.Good, "실패" => Palette.Danger, "취소" => Palette.TextMuted, "하는 중" => Palette.Accent, _ => CmdHands };
 
-    /// <summary>관제 화면 "지휘" 탭.</summary>
+    /// <summary>관제 화면 "지휘" 탭 — v16.26 지금 계획을 읽는 화면: 왼쪽 계획 · 읽는 값, 오른쪽 믿는 배 · 전력 · 견준 판단 · 명령선.</summary>
     private void DrawCommandTab(Rect2 card, float x, float right, float y)
     {
         var a = _world.Automation;
         y = DrawCoreStrip(x, right, y);
         float bottom = card.End.Y - 14f;
-        float colW = (right - x) * 0.5f - 8f;
+        float colW = (right - x) * 0.54f - 8f;
         float lx = x, rx = x + colW + 16f;
-        float mapH = Mathf.Max(120f, (bottom - y) * 0.56f);
-        SectionTitle(lx, y + 10, "컴퓨터가 믿는 배 — 명령이 흐르는 길");
-        DrawBeliefMap(new Rect2(lx, y + 20, colW, mapH - 26f));
-        float py = y + mapH + 4f;
-        float fy = py + (bottom - py) * 0.5f; // v16.20b 아래 반은 함대 목록
-        SectionTitle(lx, py + 10, $"전력 흐름 — {a.Triage.Mode}" + (a.Triage.Plan != "" ? $" · {a.Triage.Plan}" : ""));
-        DrawPowerFlow(new Rect2(lx, py + 20, colW, fy - py - 20f));
-        var fl = _world.Fleet;
-        SectionTitle(lx, fy + 10, $"로봇 · 드론 — {fl.Mode} · {FleetSystem.TierName(fl.Tier)} · 끌고 옴 {fl.Tows} · 고침 {fl.Fixes} · 교대 {fl.Reliefs} · 밖에서 막음 {fl.Seals}");
-        DrawFleetList(new Rect2(lx, fy + 20, colW, bottom - fy - 20f));
-        float tlH = (bottom - y) * 0.6f;
+        var rd = ComputerReadout.Read(_world);
+        // 왼쪽: 지금 계획 (위) · 읽는 값 (아래)
+        float planH = Mathf.Max(150f, (bottom - y) * 0.58f);
+        var book = a.RecoveryOrNull;
+        SectionTitle(lx, y + 10, $"지금 계획 — 열린 계획 {rd.Open} · 세움 {book?.Made ?? 0} · 해냄 {book?.Succeeded ?? 0} · 고쳐 짬 {(book?.Revised ?? 0) + (book?.Replans ?? 0)}");
+        DrawPlanPanel(new Rect2(lx, y + 20, colW, planH - 24f), rd);
+        float ry = y + planH;
+        var pr = a.ProbeOrNull;
+        SectionTitle(lx, ry + 10, $"사실 · 추측 · 예측" + (pr != null && pr.Checks > 0 ? $" — 확인 {pr.Checks}번 · 맞힘 {pr.Right} · 틀림 {pr.Wrong}" : ""));
+        DrawReadings(new Rect2(lx, ry + 20, colW, bottom - ry - 20f), rd);
+        // 오른쪽: 믿는 배 · 전력 흐름 · 견준 판단 · 명령선
+        float h = bottom - y;
+        float mapH = h * 0.34f, flowH = h * 0.2f, tlH = h * 0.24f;
+        SectionTitle(rx, y + 10, "컴퓨터가 믿는 배 — 명령이 흐르는 길");
+        DrawBeliefMap(new Rect2(rx, y + 20, right - rx, mapH - 24f));
+        float py = y + mapH;
+        SectionTitle(rx, py + 10, $"전력 흐름 — {a.Triage.Mode}" + (a.Triage.Plan != "" ? $" · {a.Triage.Plan}" : ""));
+        DrawPowerFlow(new Rect2(rx, py + 20, right - rx, flowH - 24f));
+        float ty = py + flowH;
         var fs = a.Foresee;
-        SectionTitle(rx, y + 10, $"견줘 본 판단 — {fs.Decisions}번 · 맞음 {fs.Right} · 틀림 {fs.Wrong}");
-        DrawTimeline(new Rect2(rx, y + 20, right - rx, tlH - 24f));
-        float oy = y + tlH;
+        SectionTitle(rx, ty + 10, $"한 수 판단 — {fs.Decisions}번 · 맞음 {fs.Right} · 틀림 {fs.Wrong}");
+        DrawTimeline(new Rect2(rx, ty + 20, right - rx, tlH - 24f));
+        float oy = ty + tlH;
         var cmd = a.Command;
-        SectionTitle(rx, oy + 10, $"명령선 — 원격 {cmd.Remote} · 사람에게 {cmd.Hands} · 로봇에게 {cmd.RobotOrders} · 깨움 {cmd.Woken}");
+        var fl = _world.Fleet;
+        SectionTitle(rx, oy + 10, $"명령선 — 원격 {cmd.Remote} · 사람 {cmd.Hands} · 로봇 {cmd.RobotOrders} · 깨움 {cmd.Woken} · 함대 {fl.Mode}");
         DrawOrders(new Rect2(rx, oy + 20, right - rx, bottom - oy - 20f));
     }
 
@@ -184,6 +193,7 @@ public partial class Hud
             if (reach > 0 && a.Belief.Diverged(room, out _)) Gfx.TextCentered(this, Fonts.Bold, mid + new Vector2(0, 5), "≠", 10, Palette.Danger.WithAlpha(0.6f + 0.4f * Mathf.Sin(_time * 7f)));
             else if (b.Fault != SensorFault.None) DrawCircle(mid + new Vector2(5, 4), 1.6f, Palette.Warning, true, -1f, true);
         }
+        DrawPlanMarks(centers); // v16.26 끊긴 구역 · 계획 걸음
         // 컴퓨터실: 칩
         var home = a.Computer?.Body.Room;
         if (home == null || !centers.TryGetValue(home.Id, out var hc)) return;
