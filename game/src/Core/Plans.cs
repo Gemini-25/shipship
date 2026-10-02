@@ -703,9 +703,11 @@ public sealed class PlanSystem
         }
 
         var (who, care) = Loved(c);
-        if (who != null)
+        var whereLoved = who != null ? bel.WhereIs(c, who, out _) : null;
+        // 챙기러 가는 건 그 사람도 어둠 속일 것 같을 때: 큰 정전이거나 · 그 방이 캄캄하다고 믿거나 · 어디 있는지 모르거나
+        if (who != null && (bel.Of(c).DarkWide || whereLoved == null || bel.Believes(c, Topic.Dark, whereLoved.Id, 1, 0.4f)))
         {
-            var where = bel.WhereIs(c, who, out float wc);
+            var where = whereLoved;
             float cp = 0.12f + 0.35f * t.Sociability + 0.45f * care + (c.Value == CrewValue.People ? 0.2f : 0f) + 0.15f * (w.Brain2.Goals.Tilt(c, ActCat.Care) - 1f) * 4f;
             opts.Add((Method.CheckPeople, cp * learn.Bias(c, Method.CheckPeople), $"{Ko.IGa(who.Name)} 걱정된다 — {(where != null ? $"{where.Name}에 있을 것" : "어디 있는지 모른다")}" + Learned(c, Method.CheckPeople)));
         }

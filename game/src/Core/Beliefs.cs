@@ -51,6 +51,8 @@ public sealed class BeliefBook
     public string? LastCorrectionText;
     /// <summary>내 방이 캄캄해진 걸 알아챈 때 (정전 대처의 시작).</summary>
     public long DarkSince = -1;
+    /// <summary>여러 방이 한꺼번에 꺼졌다 (큰 정전 — 다른 방 사람도 어둠 속일 것이다).</summary>
+    public bool DarkWide;
     public IEnumerable<Belief> All => Map.Values;
     public int Count => Map.Count;
 }
@@ -62,6 +64,7 @@ public sealed class BeliefSystem
     private int _phase;
     private int[] _roomFire = Array.Empty<int>();
     private bool[] _wasDark = Array.Empty<bool>();
+    private readonly List<Room> _newDark = new();
     private bool _darkInit;
     private readonly List<List<CrewMember>> _roomCrew = new();
     private int _lastBroadcast = -1;
@@ -437,7 +440,7 @@ public sealed class BeliefSystem
             w.Brain2.Emotions.Feel(c, Feeling.Fear, 0.12f + (c.Fears.Contains(Fear.Dark) ? 0.45f : 0f), $"{r.Name} 정전");
             c.NextThinkTick = Math.Min(c.NextThinkTick, w.Tick + 1);
         }
-        if (!dark && book.DarkSince >= 0 && !AnyDarkBelief(c)) book.DarkSince = -1;
+        if (!dark && book.DarkSince >= 0 && !AnyDarkBelief(c)) { book.DarkSince = -1; book.DarkWide = false; }
         Learn(c, Topic.Air, r.Id, Atmosphere.Danger(r) > 0.3f ? 1 : 0, BeliefSource.Seen, 1f);
         Learn(c, Topic.Breach, r.Id, r.Leaking ? 1 : 0, BeliefSource.Seen, 1f);
         Learn(c, Topic.Water, r.Id, r.Flood > 40f ? 1 : 0, BeliefSource.Seen, 1f);
@@ -491,14 +494,15 @@ public sealed class BeliefSystem
     }
 
     /// <summary>불이 꺼졌다 — 정전을 알아챈다 (두려움 · 다시 생각).</summary>
-    private void Noticed(CrewMember c, Room r)
+    private void Noticed(CrewMember c, Room r, bool wide)
     {
         var w = _w;
         if (c.Dead || !c.IsAwake || c.Outside) return;
         Learn(c, Topic.Dark, r.Id, 1, BeliefSource.Seen, 1f);
         var book = Of(c);
-        if (book.DarkSince >= 0) return;
+        if (book.DarkSince >= 0) { book.DarkWide |= wide; return; }
         book.DarkSince = w.Tick;
+        book.DarkWide = wide;
         w.Brain2.Emotions.Feel(c, Feeling.Fear, 0.12f + (c.Fears.Contains(Fear.Dark) ? 0.45f : 0f), $"{r.Name} 정전");
         c.NextThinkTick = Math.Min(c.NextThinkTick, w.Tick + 1);
     }
@@ -529,14 +533,26 @@ public sealed class BeliefSystem
             if (!c.Dead && !c.Away && c.Room is Room cr && cr.Id < _roomCrew.Count) _roomCrew[cr.Id].Add(c);
 
         // 방에 있던 사람은 불이 꺼지는 순간을 안다 (정전을 알아챔)
+        // 여러 방이 한꺼번에 꺼지면 (환기팬이 멎고 배가 조용해진다) 큰 정전인 줄 안다
         if (_wasDark.Length < rooms) Array.Resize(ref _wasDark, rooms + 8);
+        _newDark.Clear();
         foreach (var r in w.Ship.Rooms)
         {
             if (r.Id >= _wasDark.Length) continue;
             bool d = r.Dark && !r.Detached;
-            if (d && !_wasDark[r.Id] && _darkInit && r.Id < _roomCrew.Count)
-                foreach (var c in _roomCrew[r.Id]) Noticed(c, r);
+            if (d && !_wasDark[r.Id] && _darkInit) _newDark.Add(r);
             _wasDark[r.Id] = d;
+        }
+        foreach (var r in _newDark)
+        {
+            if (r.Id < _roomCrew.Count) foreach (var c in _roomCrew[r.Id]) Noticed(c, r, _newDark.Count >= 2);
+            // 문 너머 옆방 사람도 그 방이 꺼진 걸 본다
+            foreach (var d in r.Doors)
+            {
+                var o = d.RoomA == r ? d.RoomB : d.RoomA;
+                if (o == null || o.Id >= _roomCrew.Count || d.Openness < 0.3f && !_newDark.Contains(o)) continue;
+                foreach (var c in _roomCrew[o.Id]) if (c.IsAwake && !c.Dead) Learn(c, Topic.Dark, r.Id, 1, BeliefSource.Seen, 0.85f);
+            }
         }
         _darkInit = true;
 

@@ -297,6 +297,52 @@ public static partial class Program
                     $"{clumsy.Name}: {(plan3 == null ? "계획 없음" : string.Join(" / ", plan3.Trail))} · 맡은 사람 {(help != null ? w3.Brain2.Beliefs.CrewById(help.Owner)?.Name : "-")}: {help?.Goal ?? "없음"}");
             }
 
+            // ── 5b) 사회적 추론 — 얼굴을 보고 위로 · 부끄러운 실수는 숨기거나(작은 거짓말) 털어놓고 · 나중에 들통 · 컴퓨터를 믿는 사람의 설득 ──
+            {
+                var w = BrainDay(seed, "Mirinae");
+                var ppl = w.Crew.Where(c => c.CanAct && c.IsAwake && !c.IsChild).ToList();
+                var (x, y, z) = (ppl[0], ppl[1], ppl[2]);
+                var mess = w.Ship.RoomsOf(RoomType.Mess).First();
+                BrainPut(w, x, mess, 0); BrainPut(w, y, mess, 1); BrainPut(w, z, mess, 2);
+                Run(w, 2);
+                var soc = w.Brain2.Social;
+                var emo = w.Brain2.Emotions;
+                // 위로: y가 슬퍼 보인다 → x가 다독인다
+                BrainTrait(x, "Sociability", 0.9f);
+                emo.Feel(y, Feeling.Sadness, 0.7f, "시험 — 집 생각");
+                float sad0 = emo.Get(y, Feeling.Sadness);
+                var guess = soc.GuessFeeling(x, y);
+                soc.Chat(x, y);
+                float sad1 = emo.Get(y, Feeling.Sadness);
+                Check("사회적 추론 — 얼굴을 보고 기분을 짐작해 위로한다 (슬픔이 덜어진다)", guess is { f: Feeling.Sadness } && soc.Comforts > 0 && sad1 < sad0,
+                    $"{x.Name}의 짐작: {(guess is { } g ? $"{EmotionSystem.Name(g.f)} {g.v:0.00}" : "모름")} · 위로 {soc.Comforts} · {y.Name} 슬픔 {sad0:0.00} → {sad1:0.00} · 「{x.Said}」");
+                // 숨기기 · 작은 거짓말: 실수가 부끄러운 사람
+                emo.Feel(y, Feeling.Sadness, -1f, "");
+                x.Value = CrewValue.Efficiency; BrainTrait(x, "Diligence", 0.4f);
+                BrainTrait(z, "Sociability", 0.95f);
+                emo.Feel(x, Feeling.Shame, 0.9f, "실수했다");
+                for (int k = 0; k < 12 && soc.Lies + soc.Confessions == 0; k++) soc.Chat(x, z);
+                int lies = soc.Lies, conf = soc.Confessions;
+                // 부끄러움이 가라앉으면 털어놓는다 — 거짓말이었다면 들통
+                Run(w, SimTime.Hours(14));
+                if (lies > 0) { BrainPut(w, x, mess, 0); BrainPut(w, z, mess, 2); Run(w, 2); emo.Feel(x, Feeling.Shame, -1f, ""); for (int k = 0; k < 4 && soc.Revealed == 0; k++) soc.Chat(x, z); }
+                Check("사회적 추론 — 부끄러운 실수는 숨기거나(작은 거짓말) 털어놓는다 · 거짓말은 나중에 들통난다",
+                    lies + conf > 0 && (lies == 0 || soc.Revealed > 0),
+                    $"{x.Name}: 거짓말 {lies} · 털어놓음 {conf} · 들통 {soc.Revealed} · {z.Name}의 마음 {z.AffinityTo(x):0.00}");
+                // 설득: 컴퓨터를 믿는 사교적인 사람이 못 믿는 사람을 설득한다 (컴퓨터 신뢰가 오른다)
+                var tb = w.Automation.Trusts;
+                tb.Change(x, 0.9f - tb.Of(x), "시험"); tb.Change(y, 0.15f - tb.Of(y), "시험");
+                BrainTrait(x, "Sociability", 0.9f);
+                emo.Feel(x, Feeling.Shame, -1f, "");
+                BrainPut(w, x, mess, 0); BrainPut(w, y, mess, 1);
+                Run(w, 2);
+                float t0 = tb.Of(y);
+                int p0 = soc.Persuasions;
+                for (int k = 0; k < 20 && soc.Persuasions == p0; k++) soc.Chat(x, y);
+                Check("사회적 추론 — 설득: 컴퓨터를 믿는 사람이 못 믿는 사람을 설득한다 (주 컴퓨터 신뢰가 오른다)", soc.Persuasions > p0 && tb.Of(y) > t0,
+                    $"{x.Name}(신뢰 {tb.Of(x) * 100:0}%) → {y.Name} {t0 * 100:0}% → {tb.Of(y) * 100:0}% · 「{x.Said}」");
+            }
+
             // ── 6) 감정이 생기고 가라앉는다 · 판단을 바꾼다 (두려움 → 대피 쪽 · 분노 → 덜 따름 · 자부심) ──
             {
                 var w = BrainDay(seed, "Mirinae");
