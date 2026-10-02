@@ -366,9 +366,14 @@ public sealed partial class CrisisCrewSystem
         if (Off || score <= 0f || !_active.ContainsKey(c.Id)) return;
         float m = a switch
         {
-            SleepActivity when c.Needs.Fatigue < 0.95f => 0.5f,
-            EatActivity when c.Needs.Hunger < 0.9f => 0.5f,
-            RelaxActivity or ChatActivity or WanderActivity or HobbyActivity or TidyActivity or MendActivity or SceneActivity => 0.4f,
+            SleepActivity => c.Needs.Fatigue < 0.95f ? 0.5f : 1f,
+            DutyActivity or PatrolActivity => 0.55f, // 평소 당직보다 비상 자리가 먼저
+            EatActivity => c.Needs.Hunger < 0.9f ? 0.5f : 1f,
+            MeetingActivity or VisitActivity or HobbyActivity or TidyActivity or MendActivity or ReachOutActivity or ReclaimActivity or PartTestActivity
+                or WashUpActivity or LaundryActivity or DeconActivity or FlushActivity or ExtinguisherCheckActivity or MemorialVisitActivity or SharedMealActivity
+                or ShipRoundsActivity or ExpeditionActivity or ResearchActivity or AnnexWorkActivity or RoomWorkActivity or InspectActivity or BodyUpkeepActivity
+                or SceneActivity or SavedPlateActivity or SetAsidePlateActivity or FollowSmellActivity or HaircutActivity or SuitFitActivity or JogActivity
+                or SweepClipsActivity or SpectateActivity or SpaceTidyActivity or CoffeeRunActivity or ChatActivity or RelaxActivity or WanderActivity => 0.4f,
             _ => 1f,
         };
         if (m >= 1f) return;
@@ -678,6 +683,12 @@ public sealed partial class CrisisCrewSystem
         _panicsNow.Clear();
         _crisisSince = -1;
         _calmSince = -1;
+    }
+
+    /// <summary>지금 공황에 빠진 사람이 있다 (대피 유도 자리).</summary>
+    public bool AnyPanic
+    {
+        get { foreach (var x in _w.Crew) if (!x.Dead && !x.Down && x.Mind.Panicking(_w.Tick)) return true; return false; }
     }
 
     /// <summary>사고 뒤 훈련이 남은 사람.</summary>

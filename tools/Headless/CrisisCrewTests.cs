@@ -253,14 +253,19 @@ public static partial class Program
                     seen.Add(id);
                     if (c.Job?.Activity is StationActivity or HelpActivity || c.Job?.Order is WorkOrder o && CrisisCrewSystem.RoleFor(o) == r) { did.Add(id); stationed.Add(id); }
                     else if (CrResponding(c, w) || c.Job?.Label == "알리러 감" || r == StationRole.Guide && !w.Crew.Any(x => x.Mind.Panicking(w.Tick))) did.Add(id); // 다른 급한 일 · 알리러 · 공황 난 사람이 없으면 대피 유도는 제자리
-                    if (r == StationRole.Fire && c.Job?.Order?.Kind == WorkKind.Extinguish) fireRoleOnFire++;
+                    if (r == StationRole.Fire && (c.Job?.Order?.Kind == WorkKind.Extinguish || cc.HelpingOrder(c) is int ho && w.Board.All.Any(o => o.Id == ho && o.Kind == WorkKind.Extinguish))) fireRoleOnFire++;
                     if (c.Mind.Knows.Count == 0 && w.Scale.Felt(c) < IncidentScale.System) unaware++;
                     if (Environment.GetEnvironmentVariable("CR_DBG") == "fire" && i % 4 == 0) Console.WriteLine($"    {SimTime.Clock(w.Tick)} {c.Name} {CrisisCrewSystem.RoleName(r)}: {Doing(c, w)} · {c.Room?.Name}");
+                }
+                if (Environment.GetEnvironmentVariable("CR_DBG") == "fire" && i % 4 == 0)
+                {
+                    foreach (var o in w.Board.All.Where(o => !o.Closed && o.Kind == WorkKind.Extinguish))
+                        Console.WriteLine($"      불끄기 {o.Title} {o.Urgency:0.00} · {o.Assignee?.Name ?? "-"} ({(o.Assignee is CrewMember a ? CrisisCrewSystem.RoleName(cc.BillRole(a)) : "")}) · 상한 {w.Board.MaxHands(o)} · 돕는 {cc.HelpersOf(o).Count}");
                 }
             }
             Console.WriteLine($"  불: 자리에 선 사람 {seen.Count} · 대응 {did.Count} (제 자리 · 제 몫의 일 {stationed.Count}) · 소집 {cc.Musters}");
             Check("불 · 경보 → 각자 제 자리 (자리에 선 사람 대부분이 대응)", seen.Count >= 3 && did.Count >= seen.Count * 0.6f && stationed.Count >= 2, $"{did.Count}/{seen.Count} · 제 자리 {stationed.Count}");
-            Check("불 · 소화 자리 사람이 불을 끈다", fireRoleOnFire > 0, $"표본 {fireRoleOnFire}");
+            Check("불 · 소화 자리 사람이 불을 끄거나 거든다", fireRoleOnFire > 0, $"표본 {fireRoleOnFire}");
             Check("불 · 모르는 사람은 자리로 가지 않는다", unaware == 0, $"모르는 채 자리 {unaware}");
         }
 
@@ -388,6 +393,8 @@ public static partial class Program
                 CrisisCrewSystem.Off = off;
                 var w = DayOne(seed, "Hanbit");
                 var f = w.Ship.FurnitureOf(FurnitureType.OxygenGenerator).First();
+                // 부품은 창고에 있다 (부품을 구하러 다니는 시간이 아니라 손을 잰다)
+                w.Ship.Containers.First(x => x.Room.Type == RoomType.Storage && x.Storage!.Free > 0).Storage!.Add(ItemKind.PowerController, 1);
                 w.Machines.Break(f.Machine!, FaultKind.ElectrolyzerFault);
                 long t0 = w.Tick;
                 int max = 0;
@@ -407,7 +414,8 @@ public static partial class Program
             }
             var h0 = HandsScene(true);
             var h1 = HandsScene(false);
-            Console.WriteLine($"  큰 수리 (산소 발생기): 혼자 {h0.ticks * 60f / SimTime.TicksPerHour:0}분 · 여럿 {h1.ticks * 60f / SimTime.TicksPerHour:0}분 (최대 {h1.max}명 · 거들기 {h1.joins})");
+            string M(long t) => t == long.MaxValue ? "4시간 안에 못 끝냄" : $"{t * 60f / SimTime.TicksPerHour:0}분";
+            Console.WriteLine($"  큰 수리 (산소 발생기): 혼자 {M(h0.ticks)} · 여럿 {M(h1.ticks)} (최대 {h1.max}명 · 거들기 {h1.joins})");
             Check("여러 손 · 큰 수리에 셋이 붙는다", h1.max >= 3, $"최대 {h1.max}명");
             Check("여러 손 · 혼자보다 빨리 끝난다", h1.ticks < h0.ticks * 0.85f, $"{h0.ticks} → {h1.ticks}틱");
             var w = DayOne(seed, "Hanbit");
@@ -453,7 +461,7 @@ public static partial class Program
                 CrisisCrewSystem.Off = false;
                 return sw.Elapsed.TotalSeconds;
             }
-            double t0 = Day(true), t1 = Day(false);
+            double t0 = Math.Min(Day(true), Day(true)), t1 = Math.Min(Day(false), Day(false)); // 다른 일이 CPU를 나눠 써서 두 번 중 빠른 쪽
             Console.WriteLine($"  성능 (30인 하루): 예전 {t0:0.0}초 · 지금 {t1:0.0}초 ({(t1 / t0 - 1) * 100:+0;-0}%)");
             Check("성능 · 30인 배 하루가 크게 늘지 않는다", t1 < t0 * 1.15, $"{t0:0.0} → {t1:0.0}초");
         }
