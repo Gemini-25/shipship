@@ -108,7 +108,7 @@ public partial class ShipView
                 // 그을린 담요 더미 (주름) · 실패면 불씨
                 var pts = new List<Vector2>();
                 for (int i = 0; i < 9; i++) { float ang = i / 9f * Mathf.Tau; float r = h * (0.75f + 0.18f * Mathf.Sin(i * 2.3f + m.At.Y)); pts.Add(o + new Vector2(Mathf.Cos(ang) * r, Mathf.Sin(ang) * r * 0.8f)); }
-                ci.DrawColoredPolygon(pts.ToArray(), (m.Mat == Material.Rubber ? WyRubber : new Color("#5b4a3e")).WithAlpha(0.95f * a));
+                ci.DrawColoredPolygon(pts.ToArray(), (m.Mat == ShipSim.Core.Material.Rubber ? WyRubber : new Color("#5b4a3e")).WithAlpha(0.95f * a));
                 for (int i = 0; i < 3; i++) ci.DrawLine(o + new Vector2(-10 + i * 8, -6), o + new Vector2(-6 + i * 8, 6), WySoot.WithAlpha(0.7f * a), 2f, true);
                 ci.DrawCircle(o + new Vector2(3, -2), 5f, WySoot.WithAlpha(0.6f * a));
                 if (!m.Ok) for (int i = 0; i < 5; i++) ci.DrawCircle(o + new Vector2(Mathf.Sin(i * 1.7f) * 9f, Mathf.Cos(i * 2.1f) * 6f), 1.6f, WyEmber.WithAlpha((0.4f + 0.6f * pulse) * a));
