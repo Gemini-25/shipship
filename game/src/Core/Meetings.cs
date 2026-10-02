@@ -386,6 +386,7 @@ public sealed class MeetingSystem
         w.Expedition.Agenda(rec, attendees, chair); // v16.12 원정 안건
         w.TechWeb.Agenda(rec, attendees, chair); // v16.14 기술 갈림길
         w.RoomPlans.Agenda(rec, attendees, chair); // v16.17 승무원이 낸 방 안건 (옮기기 · 나누기 · 이름 · 꾸미기)
+        w.Automation.Authority.Agenda(rec, attendees, chair); // v16.16 컴퓨터 안건 (계획 · 권한)
         // 4) 방침 하나: 모인 사람 다수가 바라는 쪽이 지금과 다르고, 바꾼 지 사흘이 지났으면 올린다
         if (rec.Items.Count(i => i.Topic.StartsWith("policy:")) == 0 && attendees.Count >= 3)
         {

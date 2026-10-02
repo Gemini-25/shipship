@@ -91,6 +91,7 @@ public sealed class ChoresActivity : Activity
             && w.Crew.Any(x => x.Role == CrewRole.Cook && !x.Dead && !x.Down && x.Pose != Pose.Sleeping && x.CareBed == null && OnShiftStatic(x, w)))
             score -= 0.2f;
         if (o.Kind == WorkKind.Cook) score += w.Cooking.CookBias(c); // v16.8 다친 조리사 대신 배우던 사람이
+        score += w.Automation.CrewModel.RequestBias(c, o); // v16.16 컴퓨터 부탁 · 쉬라는 부탁 (믿는 만큼)
         // v12.7 자격: 자격 있는 사람이 깨어 있으면 자격 없는 사람은 한 발 물러선다 (없으면 서툴러도 한다)
         // (급한 일·다친 사람 돌보기는 누구든 — 자격은 솜씨와 실수에만)
         if (o.Urgency < 0.85f && o.Kind is not (WorkKind.Treat or WorkKind.Rescue) && Life.Needs(o) is Qual need && !Life.HasQual(c, need)

@@ -161,6 +161,7 @@ public static partial class Program
         if (args.Contains("--roomtest")) return RunRoomTest(seed); // v16.17 방은 승무원이 정한다
         if (args.Contains("--braintest")) return RunBrainTest(seed); // v16.15
         if (args.Contains("--mattertest")) return RunMatterTest(seed); // v16.4
+        if (args.Contains("--computerbraintest")) return RunComputerBrainTest(seed); // v16.16
         if (args.Contains("--cosmictest")) return RunCosmicTest(seed); // v18.13 우주 대재난
         if (args.Contains("--evatest")) return RunEvaTest(seed); // v16.11
         if (args.Contains("--expeditiontest")) return RunExpeditionTest(seed); // v16.12

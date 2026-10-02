@@ -174,8 +174,9 @@ public sealed class ComputerLogBook
     internal void Grade()
     {
         var w = _w;
-        foreach (var a in Acts)
+        for (int i = 0; i < Acts.Count; i++) // v16.16 채점이 새 기록(사과 · 방송)을 부를 수 있다 — 번호로 돈다
         {
+            var a = Acts[i];
             if (a.Graded || w.Tick < a.GradeAt) continue;
             (int score, string why)? custom = a.Grader?.Invoke(w, a);
             if (a.Grader != null && custom == null) continue; // 아직 모른다 (조금 더 본다)
@@ -264,6 +265,7 @@ public sealed partial class AutomationSystem
         Apps.Update(dt);
         Links(dt); // v16.6 문 본체 · 식단 · 대재난과 잇기 (ComputerLinks.cs)
         Foresight.Update(); // v16.6 → v16.16 앞날 예측 · 계획 (ComputerForesight.cs)
+        Brain2(); // v16.16 두뇌 2.0 — 계획자 · 며칠 앞 예측 · 승무원 모형 · 권한 · 협상 · 책임 (ComputerPlanner.cs)
     }
 
     /// <summary>배율 모듈이 실제로 아낀 양을 1분마다 쌓는다 (방 단위 · 설비 단위).</summary>
