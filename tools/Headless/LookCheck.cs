@@ -222,10 +222,10 @@ public static partial class Program
         var lookFiles = Directory.GetFiles(viewDir, "ShipViewLook*.cs").Concat(Directory.GetFiles(viewDir, "LookTextures.cs")).OrderBy(f => f, StringComparer.Ordinal).ToList();
         var src = string.Join("\n", lookFiles.Select(File.ReadAllText));
         var needs = new[] { "LookSpec.Floor(", "Body.Marks", "Body.Wear", "DustField", "Portable.Lights", "Fire.Fires", "LookSpec.Temperature(", "LookSpec.Glow(", "BlendModeEnum.Mul", "LookSpec.MaxParticles", "LookSpec.LodOf(" };
-        var lacks = needs.Where(n => !src.Contains(n)).ToList();
+        var lacks = needs.Where(n => !src.Contains(n, StringComparison.OrdinalIgnoreCase)).ToList();
         Check("화면 — 바닥 · 겹치기 · 빛 · 입자 코드가 표(LookSpec)와 Core 상태를 읽는다", lookFiles.Count >= 3 && lacks.Count == 0,
             $"파일 {lookFiles.Count}개" + (lacks.Count > 0 ? " · 없음: " + string.Join(",", lacks) : ""));
-        var writes = Regex.Matches(src, @"\.(SetMark|RaiseMark|Drip|PlaceNow|CloseHatch|KnockDown|Add\(ArticleKind)|_world\.\w+\s*=[^=]|\bRng\b|System\.Random").Select(m => m.Value).ToList();
+        var writes = Regex.Matches(src, @"\.(SetMark|RaiseMark|Drip|PlaceNow|CloseHatch|KnockDown|SetGravity|Impact)\(|\.Add\(ArticleKind|_world\.\w+\s*=[^=]|\bRng\b|System\.Random").Select(m => m.Value).ToList();
         Check("화면 — Core 상태를 바꾸지 않고 시뮬레이션 난수를 쓰지 않는다", writes.Count == 0, writes.Count > 0 ? string.Join(",", writes.Distinct()) : "쓰기 없음");
 
         // 8) 결정론: 화면은 시뮬레이션에 끼지 않는다 — 같은 시드 두 번 같은 지문

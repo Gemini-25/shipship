@@ -428,7 +428,7 @@ public partial class ShipView
         }
         // 숨은 이야기 쪽지 (배의 내력 — 찾으면 핀이 꽂힌 채 남는다)
         foreach (var f in w.Origin.Finds)
-            if (f.Kind == FindKind.Note && g.InBounds(f.At)) AddDecal(f.Found ? LookSpec.Decal.PinNote : LookSpec.Decal.Sticky, f.At, (LookSpec.H(f.Id, 3, 9) - 0.5f) * 0.5f, 0.95f, 0.55f, 0.4f);
+            if (f.Kind == FindKind.Note && g.InBounds(f.At)) AddDecal(f.Found ? LookSpec.Decal.PinNote : LookSpec.Decal.Sticky, f.At, (LookSpec.H(f.Id, 3, 9) - 0.5f) * 0.5f, f.Found ? 0.95f : 0.4f, f.Found ? 0.55f : 0.35f, 0.4f); // 못 찾은 쪽지는 작고 흐릿하게 (눈썰미 있는 사람만)
         // 빈 장착물 자리: 가져간 소화기 · 손전등 자리에 나사 구멍
         foreach (var mt in body.Mounts)
             if (!mt.Present && g.InBounds(mt.Wall)) AddDecal(LookSpec.Decal.ScrewHoles, mt.Wall, 0f, 0.8f, 0.6f, 0f);
