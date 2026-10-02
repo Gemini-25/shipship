@@ -66,11 +66,24 @@ public static partial class Program
             texts[(int)k.Now] = k.Broadcast; calledAt[(int)k.Now] = k.Called;
             Console.WriteLine($"  ② {SimTime.Clock(w.Tick)} {k.Name} — {ScaleTable.Label(k.Now)} · 부름 {k.Called} · 붙음 {k.StageResponders[(int)k.Now]} · 방송 \"{k.Broadcast}\"");
             // ③ 물이 간선 접속함에 스며 누전 → 여러 방 정전
-            var link1 = PickLink(d => d.Count >= 2 && !d.Any(r => cooling.Contains(r) || r.Type == RoomType.Reactor));
+            // 주 컴퓨터 방은 살려 둔다 (컴퓨터가 멎으면 사람이 판정한다 — 그건 아래 따로 본다)
+            var compRoom = w.Automation.ComputerBody?.Room;
+            var link1 = PickLink(d => d.Count >= 2 && !d.Any(r => cooling.Contains(r) || r.Type == RoomType.Reactor || r == compRoom));
             using (w.Causes.Because(floodNode))
             {
                 if (link1 != null) w.Net.Hurt(link1, 1f, "물이 간선 접속함에 스며 누전");
-                else w.Machines.Break(w.Ship.FurnitureOf(FurnitureType.PowerPanel).First().Machine!, FaultKind.ShortCircuit);
+                else
+                {
+                    // 물이 배전반 단자에 닿아 한 회로가 단락 (냉각 · 주 컴퓨터가 없는 회로 가운데 방이 가장 많은 것)
+                    var panel = w.Ship.FurnitureOf(FurnitureType.PowerPanel).First().Machine!;
+                    int circ = Enumerable.Range(1, PowerGrid.CircuitCount - 1)
+                        .Where(i => i != (compRoom?.Circuit ?? -1) && !cooling.Any(r => r.Circuit == i))
+                        .OrderByDescending(i => w.Ship.Rooms.Count(r => !r.Detached && r.Circuit == i)).ThenBy(i => i).First();
+                    var f = new Fault { Kind = FaultKind.ShortCircuit, Since = w.Tick, Circuit = circ };
+                    panel.Faults.Add(f);
+                    w.Causes.OnFault(panel, f);
+                    w.RaiseAlert($"{PowerGrid.CircuitName(circ)} 회로 단락 — 배전반에 물이 닿았다", power, AlertLevel.Critical, shipWide: true);
+                }
             }
             for (int i = 0; i < 15 && k.Now < IncidentScale.System; i++) Run(w, SimTime.Minutes(1));
             var s3 = k.Now;
@@ -79,7 +92,7 @@ public static partial class Program
             Console.WriteLine($"  ③ {SimTime.Clock(w.Tick)} {ScaleTable.Label(s3)} · 끊은 간선 {(link1 != null ? link1.Room.Name : "없음 → 배전반 단락")} · 부름 {k.StageCalled[2]} · 붙음 {k.StageResponders[2]} · 방송 \"{k.Broadcast}\"");
             // ④ 정전이 냉각실로 번진다 → 냉각 펌프가 서고 원자로가 긴급 정지
             int outage = w.Causes.Nodes.Where(n => n.Incident == k.Root && n.Kind == CauseKind.Outage).Select(n => n.Id).DefaultIfEmpty(floodNode).Last();
-            var link2 = PickLink(d => d.Any(r => cooling.Contains(r)));
+            var link2 = PickLink(d => d.Any(r => cooling.Contains(r)) && !d.Contains(compRoom!)) ?? PickLink(d => d.Any(r => cooling.Contains(r)));
             using (w.Causes.Because(outage))
             {
                 if (link2 != null) w.Net.Hurt(link2, 1f, "정전 뒤 과부하로 냉각실 간선 접속함이 탔다");
@@ -144,6 +157,25 @@ public static partial class Program
             Run(w, SimTime.Minutes(3));
             Check("같은 불도 방 하나면 방, 번지면 계통", one == IncidentScale.Room && k!.Peak == IncidentScale.System,
                 $"{galley.Name} 불 {one} → {next.Name}까지 {k?.Peak} · 방송 \"{k?.Broadcast}\"");
+        }
+
+        // ── 3b) 주 컴퓨터가 멎었으면 사람이 판정한다 (늦게 · 외쳐서) ──
+        {
+            var w = DayOne(seed, "Hanbit");
+            Hazards.Apply(w, HazardKind.ComputerFault, default, -1);
+            Run(w, SimTime.Minutes(2));
+            bool down = !w.Automation.MainOnline;
+            var galley = w.Ship.RoomsOf(RoomType.Galley).First();
+            var next = galley.Doors.Select(d => d.RoomA == galley ? d.RoomB : d.RoomA).First(r => r != null)!;
+            Incidents.Fire(w, galley.Cells.First(w.Ship.IsOpenFloor));
+            Run(w, SimTime.Minutes(2));
+            var k = w.Scale.OpenCases.FirstOrDefault(x => x.Key == "cause:Fire");
+            if (k != null) using (w.Causes.Because(k.Root)) w.Fire.Ignite(next.Cells.First(w.Ship.IsOpenFloor), 0.35f);
+            Run(w, SimTime.Minutes(3));
+            string early = k?.JudgedBy ?? "";
+            Run(w, SimTime.Minutes(5));
+            Check("주 컴퓨터가 멎으면 사람이 늦게 판정한다", down && k != null && k.Peak >= IncidentScale.System && early == "" && k.JudgedBy.Length > 0 && k.JudgedBy != "주 컴퓨터" && k.ShoutAt >= 0 && w.Scale.HumanJudged > 0,
+                $"컴퓨터 {(down ? "멎음" : "돎")} · {k?.Name} {k?.Peak} · 3분 뒤 판정 \"{early}\" → 8분 뒤 \"{k?.JudgedBy}\" · {k?.Plan}");
         }
 
         // ── 4) 개인 사고: 혼자 · 곁의 사람 ──

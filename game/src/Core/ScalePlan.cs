@@ -209,6 +209,8 @@ public sealed partial class ScaleSystem
     {
         var w = _w;
         bool Ok(Room r) => !r.Detached && !r.OffLimits && !r.Leaking && !k.Rooms.Contains(r.Id) && r.Type != RoomType.Corridor && w.Fire.CountIn(r) == 0;
+        // 방사선 사고는 대피소에 모인다 (선반 · 물벽 뒤)
+        if (k.Key is nameof(HazardKind.SolarStorm) or nameof(HazardKind.RadiationBurst) && Facilities.Best(w.Ship, "shelter", Ok).room is Room shelter) return shelter;
         foreach (var t in new[] { RoomType.Bridge, RoomType.Mess, RoomType.Lounge })
             if (w.Ship.RoomsOf(t).FirstOrDefault(Ok) is Room r) return r;
         return w.Ship.LiveRooms.Where(Ok).OrderByDescending(r => r.Cells.Count).ThenBy(r => r.Id).FirstOrDefault();
@@ -280,6 +282,9 @@ public sealed partial class ScaleSystem
             // 컴퓨터 말대로 모였더니 무사했다: 믿음이 조금 오른다
             if (k.BroadcastId >= 0)
                 foreach (int id in k.Mustered) w.Automation.Trusts.Change(w.Crew[id], 0.01f, $"{k.Name} — 방송대로 모였다", quiet: true);
+            // 셋에 하나 넘게 안 왔다 (잠 · 해당 조만 소집): 다음 정기 회의에 비상 소집 방침을 다시 올린다
+            if (missing.Count * 3 >= Math.Max(3, expected.Count) && w.Policies["muster"] == 0)
+                w.Meetings.QueueReview("muster", 1, $"{k.Name} 점호에 {missing.Count}명이 안 왔다 — 배 전체 사고엔 모두 깨우자");
         }
     }
 
