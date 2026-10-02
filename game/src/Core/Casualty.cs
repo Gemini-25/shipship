@@ -39,6 +39,7 @@ public sealed class CasualtySystem
     private Rng? _rng;
     private Rng R => _rng ??= new Rng(unchecked(_w.Seed * 7457 + 1693));
     private readonly Dictionary<int, float> _inj = new();
+    private readonly Dictionary<int, float> _recent = new(); // 최근 15분쯤 쌓인 부상
     private readonly HashSet<Cell> _fires = new();
     private int _next = 1;
 
@@ -68,7 +69,11 @@ public sealed class CasualtySystem
             float inj = c.Vitals.Injury;
             float last = _inj.TryGetValue(c.Id, out var l) ? l : inj;
             _inj[c.Id] = inj;
-            if (inj - last >= 0.12f && !c.Away && c.CareBed == null) Wounded(c, inj - last);
+            // 한 번에 크게 · 또는 몇 분에 걸쳐 쌓인 것 (김 · 불 곁에 서 있었다)
+            float recent = (_recent.TryGetValue(c.Id, out var rc) ? rc * MathF.Exp(-dt / 0.25f) : 0f) + MathF.Max(0f, inj - last);
+            if (recent >= 0.15f && !c.Away && c.CareBed == null) { Wounded(c, recent); recent = 0f; }
+            else if (inj - last >= 0.12f && !c.Away && c.CareBed == null) { Wounded(c, inj - last); recent = 0f; }
+            if (recent > 0.001f) _recent[c.Id] = recent; else _recent.Remove(c.Id);
         }
         if (Open.Count == 0) return;
         for (int i = Open.Count - 1; i >= 0; i--)
@@ -309,7 +314,7 @@ public sealed class CasualtySystem
                 if (d2 > 1.3f * 1.3f) continue;
                 bool asleep = c.Pose == Pose.Sleeping;
                 // 옷 · 머리카락에 옮겨붙는다 — 깨어 있으면 물러서고, 우주복은 막는다
-                float burn = R.Range(0.08f, 0.24f) * (spread ? 0.6f : 1f) * (asleep ? 1.6f : 1f) * (c.Suit != null ? 0.25f : 1f) * (1.2f - 0.4f * d2 / (1.3f * 1.3f));
+                float burn = R.Range(0.08f, 0.24f) * (spread ? 0.6f : 1f) * (asleep ? 1.6f : 1f) * (c.Suit != null ? 0.25f : 1f) * (c.Job?.Order?.Kind == WorkKind.Extinguish ? 0.4f : 1f) /* 소화기를 겨누고 있던 사람은 물러설 줄 안다 */ * (1.2f - 0.4f * d2 / (1.3f * 1.3f));
                 if (burn < 0.04f) continue;
                 Flashes++;
                 c.Vitals.Health = MathF.Max(0.02f, c.Vitals.Health - burn);

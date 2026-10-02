@@ -18,6 +18,17 @@ public static partial class Program
         AfxHarm(seed);
         AfxAux(seed);
         AfxStall(seed);
+        {
+            Console.WriteLine("── 정전 속 캄캄한 방 · 결정론 ──");
+            var w = DayOne(seed, "Mirinae"); w.CrewCanDie = true;
+            Scenarios.Apply(w, "blackout", out _);
+            int dark = 0;
+            for (int m = 0; m < 8 * 60; m++) { Run(w, SimTime.Minutes(1)); dark += w.Ship.LiveRooms.Count(r => r.Dark); }
+            Check("정전으로 캄캄한 방에서 발을 헛디딘다 (본 사람은 조심한다)", w.Body.Stats.DarkFalls > 0, $"넘어짐 {w.Body.Stats.DarkFalls} · 캄캄한 방-분 {dark}");
+            uint H() { var x = World.CreateDefault(seed, 0, "Hanbit"); Run(x, SimTime.TicksPerDay + SimTime.Hours(6)); return SaveGame.StateHash(x); }
+            uint a = H(), b = H();
+            Check("결정론 (같은 시드 두 번 같은 지문)", a == b, $"{a:x8} / {b:x8}");
+        }
         Console.WriteLine(_fails == 0 ? "\n모두 통과" : $"\n실패 {_fails}");
         return _fails == 0 ? 0 : 1;
     }
@@ -172,6 +183,30 @@ public static partial class Program
             Check("심정지 — 곁에서 가슴을 누르면 살아나기도 한다", revived >= 1, $"{revived}/{tries}");
             Check("심정지 — 혼자면 몇 분 안에 숨진다 (사인: 심정지)", alone == tries, $"{alone}/{tries}");
         }
+        // 길이 끝까지 가나: 갇힌 사람 — 짙은 연기 · 진공 (아무도 못 온다)
+        foreach (string kind in new[] { "연기", "진공" })
+        {
+            var w = DayOne(seed, "Mirinae"); w.CrewCanDie = true;
+            var room = AfxQuietRoom(w);
+            var v = w.Crew.First(c => c.CanAct);
+            foreach (var o in w.Crew.Where(o => o != v)) o.Away = true;
+            Put(w, v, room); Run(w, 1);
+            var spot = v.Cell;
+            long downAt = -1, deadAt = -1;
+            for (int m = 0; m < 240 && deadAt < 0; m++)
+            {
+                for (int k = 0; k < SimTime.Minutes(1); k++)
+                {
+                    if (kind == "연기") { room.Air.Smoke = 0.9f; room.Air.CO = MathF.Max(room.Air.CO, 0.2f); } else { room.Air.N2 = 1.5f; room.Air.O2 = 0.4f; room.Air.CO2 = 0.01f; }
+                    if (!v.Down) { v.Position = spot.Center; v.PreviousPosition = v.Position; }
+                    w.Step();
+                }
+                if (v.Down && downAt < 0) downAt = m;
+                if (v.Dead) deadAt = m;
+            }
+            Check(kind == "연기" ? "짙은 연기에 갇힌 사람은 한두 시간 안에 쓰러지고 끝내 숨진다" : "진공에 갇힌 사람은 몇 분 만에 쓰러지고 곧 숨진다",
+                downAt >= 0 && deadAt >= 0 && (kind == "연기" ? downAt <= 120 : downAt <= 6 && deadAt <= 25), $"쓰러짐 {downAt}분 · 숨짐 {deadAt}분 · 사인 {v.Vitals.InjuryCause}");
+        }
         // 불붙는 순간 곁에 있던 사람 (잠든 사람은 더 덴다)
         {
             var w = DayOne(seed, "Mirinae"); w.CrewCanDie = true;
@@ -307,6 +342,7 @@ public static partial class Program
         }
         foreach (var kv in ex.OrderBy(k => k.Key, StringComparer.Ordinal)) Console.WriteLine($"  {kv.Key}: {kv.Value}분");
         Console.WriteLine($"최저 혈중 산소 {minOx:0.00} · 최저 체력 {minHp:0.00} · 쓰러짐 {w.Crew.Sum(c => c.Stats.TimesDown)} · 사망 {w.Crew.Count(c => c.Dead)}");
+        var cs = w.Casualty; Console.WriteLine($"출혈 {cs.Bleeds} · 감전 {cs.Shocks} · 심정지 {cs.Arrests} · 불붙음 {cs.Flashes} · 멎음 {cs.Stopped} · 살림 {cs.Revived} · 부름 {cs.Paged} · 숨짐 {cs.Died}"); foreach (var t in cs.Done) Console.WriteLine($"  {t.Kind} {t.Cause} → {t.Outcome}");
         return 0;
     }
 

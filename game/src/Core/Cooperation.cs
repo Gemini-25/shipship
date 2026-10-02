@@ -174,6 +174,9 @@ public sealed partial class CoopSystem
     private int _nextId = 1;
     private byte[] _slow = Array.Empty<byte>();
     private long _nextComputer;
+    private long _nextStale; // v16.24 손대지 못한 채 맡고만 있는 일
+    private readonly Dictionary<int, (float prog, long since, int who)> _stale = new();
+    public int StaleDrops;
 
     /// <summary>시험용: 아무도 거들러 오지 않는다 (교착 방지 확인).</summary>
     public bool NoHelpers { get; set; }
@@ -266,6 +269,7 @@ public sealed partial class CoopSystem
         Queues.Update(dt);
         Crowds.Update(dt);
         if (now >= _nextComputer) { _nextComputer = now + SimTime.Minutes(5); ComputerWatch(); }
+        if (now >= _nextStale) { _nextStale = now + SimTime.Minutes(10); Stale(now); }
         RebuildSlow();
     }
 
@@ -956,6 +960,26 @@ public sealed partial class CoopSystem
         w.Board.Block(o, $"{Ko.EulReul(call.Part)} 잡아 줄 사람이 없다 — 한 시간 뒤 다시", 1f);
         c.Say(w, Persona.Say(c, "혼자는 무리야 — 사람 있을 때 하자"));
         return -1f;
+    }
+
+    /// <summary>v16.24 맡아 둔 채 다른 일만 하고 진척이 한 시간 반 넘게 그대로인 일 — 내려놓는다 (자리도 풀고 · 까닭을 남기고 · 손이 빈 사람이 잇는다).</summary>
+    private void Stale(long now)
+    {
+        var w = _w;
+        foreach (var o in w.Board.Open)
+        {
+            if (o.Assignee is not CrewMember a) { _stale.Remove(o.Id); continue; }
+            if (!_stale.TryGetValue(o.Id, out var s) || s.who != a.Id || MathF.Abs(s.prog - o.Progress) > 1e-4f) { _stale[o.Id] = (o.Progress, now, a.Id); continue; }
+            if (a.Job?.Order == o && a.CanAct) continue; // 지금 붙어 있다 (기다리는 중이어도)
+            if (now - s.since < SimTime.Minutes(90)) continue;
+            foreach (var site in Sites) if (site.OrderId == o.Id) site.Reserved = false;
+            w.Board.Release(o, a);
+            _stale.Remove(o.Id);
+            StaleDrops++;
+            string why = !a.CanAct ? (a.Down ? "쓰러져서" : "자리에 없어서") : a.Job?.Label is string l ? $"{l}에 붙들려" : "짬이 안 나서";
+            w.Log.Add(now, LogKind.Work, $"{a.Name}: {o.Title} — {why} {(now - s.since) / (float)SimTime.TicksPerHour:0.#}시간째 손을 못 댔다 · 맡은 것을 내려놓는다 (손이 빈 사람이 잇는다)", a.Id);
+        }
+        if (_stale.Count > 64) foreach (var k in _stale.Keys.Where(id => !w.Board.Open.Any(x => x.Id == id)).ToList()) _stale.Remove(k);
     }
 
     private bool HelperHere(PairCall call)

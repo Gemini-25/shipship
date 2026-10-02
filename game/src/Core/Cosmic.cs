@@ -970,7 +970,8 @@ public sealed class CosmicSystem
             c.Jolt(w);
             float chance = (c.Pose is Pose.Sitting or Pose.Sleeping ? 0.08f : 0.4f) * p * (Stowed(c.Room!) ? 0.5f : 1f);
             if (!R.Chance(chance)) continue;
-            float dmg = R.Range(0.03f, 0.08f) * p;
+            float dmg = R.Range(0.05f, 0.3f) * p * (Stowed(c.Room!) ? 0.6f : 1f); // v16.24 벽 · 설비 모서리에 내동댕이 — 묶지 않은 방은 날아온 물건까지
+            c.Vitals.Health = MathF.Max(0.02f, c.Vitals.Health - dmg * 0.8f);
             NeedsSystem.AddInjury(c.Vitals, dmg, $"{e.Spec.Name} 충격에 넘어짐");
             Memory.Shake(w, c, 0.05f, $"{e.Spec.Name} 충격에 넘어졌다");
             MarkLog.Add(c.Memory.Marks, w.Tick, $"{e.Spec.Name} 충격에 넘어졌다");

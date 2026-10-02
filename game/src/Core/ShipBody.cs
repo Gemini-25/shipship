@@ -125,6 +125,7 @@ public sealed class HeardMemory
 
 public sealed class BodyStats
 {
+    public int DarkFalls; // v16.24 캄캄한 데서 넘어짐
     public int Falls, Slips, FootIn, Cuts, HatchOpens, HatchForgot, HatchClosedBy, PanelOffs, PanelForgot, PanelRefit,
         Knocks, NoAnswer, Answered, DropIns, Waits, Calls, LetIn, RemoteOk, GaveUp, EmergencyPass, Cranks, SensorPresses, FalseReadings,
         Overheard, Whistles, MicroLeaks, Complaints, Condensation, FireReleases, Bents, SealFails, Gaskets, Fixed, Cleaned, Taped,
@@ -565,6 +566,14 @@ public sealed partial class BodySystem
         // 발소리: 격자 · 금속판 위를 뛰면 방이 시끄러워진다 (자는 사람 · 엿듣기에 닿는다), 카펫은 조용하다
         if (urgent && spec.Loud > 0.45f && w.Ship.RoomAt(cell) is Room fr) fr.Noise = MathF.Min(1f, fr.Noise + 0.015f * spec.Loud);
 
+        // v16.24 캄캄한 방 (정전 · 조명 나감 · 비상등 없음): 뛰면 문턱 · 설비 모서리에 걸린다 — 사다리 · 계단 칸이면 크게
+        if (w.Ship.RoomAt(cell) is { Dark: true } dr && R.Chance(urgent ? 0.004f : 0.0008f))
+        {
+            bool ladder = _w.Paths.Crawl[i] || dr.Type is RoomType.Reactor or RoomType.Engine or RoomType.Cooling;
+            Fall(c, cell, ladder ? "캄캄한 데서 발을 헛디뎌 아래로 떨어졌다" : "캄캄한 데서 무언가에 걸려 넘어졌다", ladder ? 0.18f + R.Range(0f, 0.25f) : 0.04f + R.Range(0f, 0.08f), leg: true);
+            Stats.DarkFalls++;
+            return;
+        }
         // 열린 점검 뚜껑에 발이 빠진다
         if (_hatchOpen[i] && R.Chance(urgent ? 0.35f : 0.1f))
         {
@@ -616,7 +625,7 @@ public sealed partial class BodySystem
         Stats.Falls++;
         _fallUntil[c.Id] = w.Tick + R.Range(6, 16);
         c.Pose = Pose.Sitting;
-        if (injury > 0.01f && R.Chance(leg ? 0.7f : 0.5f)) NeedsSystem.AddInjury(c.Vitals, injury, leg ? "발이 빠져 다침" : "미끄러져 다침");
+        if (injury > 0.01f && R.Chance(leg ? 0.7f : 0.5f)) { NeedsSystem.AddInjury(c.Vitals, injury, why.Contains("떨어") ? "떨어져 다침" : leg ? "발이 빠져 다침" : "미끄러져 다침"); if (injury > 0.15f) c.Vitals.Health = MathF.Max(0.05f, c.Vitals.Health - injury * 0.8f); } // v16.24 높은 데서 떨어지면 체력도
         w.Log.Add(w.Tick, LogKind.Warning, $"{Ko.IGa(c.Name)} {why} ({w.Ship.RoomAt(cell)?.Name ?? "?"})", c.Id);
         c.Say(w, Persona.Say(c, leg ? "으악, 발이!" : "아이고!"));
         Drop(c, cell); // 들고 가던 음식을 쏟는다
