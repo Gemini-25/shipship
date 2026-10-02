@@ -113,12 +113,7 @@ public static partial class Program
                 string order = a.Command.Lines.LastOrDefault(l => l.Target == CmdTarget.Crew)?.What ?? "";
                 // 사람이 원인을 빼면(지시를 듣고 · 뜨거운 콘센트를 보고) 그때 컴퓨터가 올린다
                 var asked = w.Portable.AskedUnplug(circ);
-                for (int m = 0; m < 60 && Tripped(); m++)
-                {
-                    Run(w, SimTime.Minutes(1)); // 배 끝에서 끝까지 걸어오는 시간
-                    if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "24")
-                        Console.WriteLine($"   {m}분 [{asked?.Name} {asked?.Job?.Label} @{asked?.Room?.Name} {asked?.Cell} {asked?.Job?.Current?.GetType().Name} 급함 {asked?.Job?.Urgent}] 차단 {Tripped()} 부하 {w.Portable.CircuitKw(circ):0.0} 꽂힘 {w.Portable.ProjectedKw(circ):0.0} 사례 {tr.Cases.Count} · {string.Join(" | ", w.Log.Entries.Where(e => e.Tick > w.Tick - SimTime.Minutes(1) && (e.Text.Contains("차단기") || e.Text.Contains("뽑") || e.Text.Contains("꽂"))).Select(e => e.Text))}");
-                }
+                for (int m = 0; m < 60 && Tripped(); m++) Run(w, SimTime.Minutes(1)); // 배 끝에서 끝까지 걸어오는 시간
                 bool byAsked = asked != null && w.Log.Entries.Any(e => e.CrewId == asked.Id && e.Text.Contains("뽑아 뒀다") || e.CrewId == asked.Id && e.Text.Contains("옮겨 꽂았다"));
                 var closed = a.Command.Lines.LastOrDefault(l => l.Target == CmdTarget.Crew && l.TargetId == asked?.Id);
                 Check("같은 원인으로 또 떨어지면 다시 올리지 않고 사람에게 정확히 말한다 → 원인을 빼면 그때 올린다 (D 차단기 반복 버그)",
@@ -154,6 +149,10 @@ public static partial class Program
                 Run(wp, SimTime.Minutes(12));
                 var graded = wp.Automation.Foresee.Timeline.FirstOrDefault(d => d.Kind == "파공");
                 Check("타임라인 — 몇 분 뒤 실제 결과로 채점한다 (쓰러진 사람 · 기압)", graded != null && graded.Score != 0 && graded.Result != "", $"{graded?.Pick.Name}: {graded?.Result}");
+                var lines = wp.Automation.Command.Lines;
+                Check("명령선 — 원격으로 한 일(격벽 · 문 · 방송)이 그 방까지 선으로 남는다 · 결정 번호로 타임라인과 이어진다",
+                    lines.Any(l => l.Target == CmdTarget.Door && l.RoomId == graded?.RoomId) && lines.Any(l => l.Remote) && lines.All(l => l.What != ""),
+                    string.Join(" / ", lines.TakeLast(5).Select(l => $"{l.Target} {l.What} [{l.State}]")));
             }
 
             // ② 데이터선 절반이 끊겨도 판단은 유지 (그 구역만 손으로) · 무선 예비로 읽기는 이어진다

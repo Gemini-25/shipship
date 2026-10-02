@@ -92,7 +92,7 @@ public static partial class Program
             for (int t = 0; t < SimTime.Hours(4); t++)
             {
                 w.Step();
-                if (w.Crew.Any(x => !x.Dead && !x.Outside && w.Ship.Grid.Kind(x.Cell) == TileKind.Wall)) anyone = true;
+                if (w.Crew.Any(x => !x.Dead && !x.Outside && w.Ship.Grid.Kind(x.Cell) == TileKind.Wall && !w.Paths.Crawl[w.Ship.Grid.Index(x.Cell)])) anyone = true; // 열린 정비 통로(v16.3)는 벽이어도 기어서 지난다
             }
             Check("칸막이 뒤 네 시간 — 벽 칸에 선 사람 없음", !anyone);
         }

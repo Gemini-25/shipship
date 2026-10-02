@@ -284,7 +284,7 @@ public sealed class ShipPlanner
             else return;
         }
         if (_cool.TryGetValue(m.Key, out var until) && w.Tick < until) return;
-        var tries = Pitches.Where(p => p.Key == m.Key && w.Tick - p.Tick < SimTime.TicksPerDay * 3).ToList();
+        var tries = Pitches.Where(p => p.Key == m.Key && p.Via != "자동" && w.Tick - p.Tick < SimTime.TicksPerDay * 3).ToList(); // 조른 횟수 — 권한 안에서 직접 한 일은 "말씀드린" 게 아니다
         if (tries.Count >= MaxAttempts)
         {
             if (plan.Status != "포기")
