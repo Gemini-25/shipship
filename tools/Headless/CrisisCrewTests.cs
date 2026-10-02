@@ -324,9 +324,12 @@ public static partial class Program
             var w = DayOne(seed, "Hanbit");
             var cc = w.CrisisCrew;
             Incidents.Fire(w, CrFloor(w, RoomType.Galley));
+            // 통합: 장면 동안 위기가 이어지게 — 불 한 칸은 부엌에 있던 사람이 3분 안에 꺼 버리기도 한다 (공황이 끝날 까닭이 사고가 끝나서가 되지 않게)
+            foreach (var x in w.Ship.RoomsOf(RoomType.Galley).First().Cells.Where(w.Ship.IsOpenFloor).OrderBy(x => x.Y).ThenBy(x => x.X).Take(3)) w.Fire.Ignite(x, 0.8f);
             Run(w, SimTime.Minutes(3));
             var p = w.Crew.Where(c => !c.Dead && !c.IsChild && c.CanAct && cc.Active(c) != StationRole.Fire && c.Room?.Type != RoomType.Galley)
                 .OrderBy(c => c.Traits.Calm).First();
+            int snaps0 = cc.Snaps; // 통합: 곁의 침착한 동료가 대피 유도보다 먼저 (30틱 안에) 깨우기도 한다 — 그것도 깨운 것
             p.Mind.PanicUntil = w.Tick + SimTime.Minutes(12);
             p.Mind.Frozen = true;
             p.EndJob(w, ToilStatus.Interrupted);
@@ -336,7 +339,6 @@ public static partial class Program
             if (guide?.Room is Room gr && gr.Type != RoomType.Galley && guide != p)
                 CrPut(w, p, gr.Cells.Where(w.Ship.IsOpenFloor).OrderBy(x => MathF.Abs((x.Center - guide.Position).Length() - 3.5f)).First());
             long t0 = w.Tick;
-            int snaps0 = cc.Snaps;
             long woke = -1, back = -1;
             while (w.Tick - t0 < SimTime.Minutes(30))
             {
@@ -362,15 +364,20 @@ public static partial class Program
             {
                 CrisisCrewSystem.Off = off;
                 var w = DayOne(seed, "Hanbit");
-                var room = w.Ship.RoomsOf(RoomType.Quarters).First();
+                // 통합: 운석이 뚫을 수 있는 외벽 방에서 (외벽 없는 방은 뚫리지 않아 몸이 먼저일 까닭이 없었다)
+                var room = w.Ship.LiveRooms.Where(r => r.Type != RoomType.Corridor && r.Cells.Count >= 6 && w.Ship.Walls.Any(kv => kv.Value.IsHull && Hull.InsideRoom(w.Ship, kv.Key) == r))
+                    .OrderBy(r => r.Type == RoomType.Quarters ? 0 : 1).ThenBy(r => r.Cells.Count).ThenBy(r => r.Id).First(); // 새 한빛호의 침실은 모두 안쪽 방이다 — 작은 외벽 방에서
                 var p = w.Crew.Where(c => !c.Dead && !c.IsChild && c.CanAct).OrderBy(c => c.Traits.Bravery).First();
                 CrPut(w, p, room.Cells.Where(w.Ship.IsOpenFloor).OrderBy(x => (x.Center - room.Center).LengthSquared()).First());
                 p.Mind.PanicUntil = w.Tick + SimTime.Minutes(8);
                 p.Mind.Frozen = true;
                 Incidents.Meteor(w, Scenarios.OuterTarget(w, room), 1f);
+                // 통합: 새 배의 외판은 운석 하나로 잘 안 뚫린다 (보강 · 장갑) — 장면은 "뚫린 방"이니 그 방 외벽을 확실히 뚫는다
+                if (w.Ship.Walls.Where(kv => kv.Value.IsHull && Hull.InsideRoom(w.Ship, kv.Key) == room).OrderBy(kv => (kv.Key.Center - p.Position).LengthSquared()).Select(kv => kv.Key).Cast<Cell?>().FirstOrDefault() is Cell hole)
+                    Hull.Damage(w.Ship, hole, 2f);
                 long t0 = w.Tick;
                 bool left = false;
-                while (w.Tick - t0 < SimTime.Minutes(6)) { Run(w, 15); if (p.Room != room) left = true; }
+                while (w.Tick - t0 < SimTime.Minutes(9)) { Run(w, 15); if (p.Room != room) left = true; } // 통합: 차압으로 잠긴 문을 손으로 여는 시간 (v16.19)까지
                 Run(w, SimTime.Minutes(30));
                 int f = w.CrisisCrew.BodyFirsts;
                 CrisisCrewSystem.Off = false;

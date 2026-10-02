@@ -113,8 +113,9 @@ public static partial class Program
                 var away = w.Ship.Rooms.First(r => r != v.Room && !r.Detached && r.Cells.Any(cl => w.Ship.IsOpenFloor(cl)));
                 foreach (var x0 in xs)
                 {
+                    x0.EndJob(w, ToilStatus.Interrupted); // 통합: 벌써 업었으면 그 자리에 내려놓고 간다 (먼저 옮기면 업힌 사람도 같이 딴 방에 내려진다 — 빨라진 구조에서 드러남)
                     x0.Position = away.Cells.First(cl => w.Ship.IsOpenFloor(cl)).Center; x0.PreviousPosition = x0.Position;
-                    x0.EndJob(w, ToilStatus.Interrupted); x0.NextThinkTick = w.Tick;
+                    x0.NextThinkTick = w.Tick;
                 }
                 Run(w, SimTime.Minutes(1));
                 v.Vitals.Health = 0.6f; v.Vitals.Oxygen = 1f;

@@ -258,7 +258,7 @@ public sealed partial class CoopSystem
         UpdateBenches(now, dt);
         UpdatePaused(now);
         Transfers.RemoveAll(t => t.Until < now - SimTime.Minutes(10));
-        if (_holdN.Count > 16) foreach (var k in _holdN.Keys.Where(id => !w.Board.Open.Any(x => x.Id == id)).ToList()) _holdN.Remove(k);
+        if (_holdN.Count > 16) foreach (var k in _holdN.Keys.Where(id => !w.Board.OpenUnsorted.Any(x => x.Id == id)).ToList()) _holdN.Remove(k);
         foreach (var (k, until) in _holds.ToList())
         {
             if (until <= now) { _holds.Remove(k); continue; }
@@ -979,7 +979,7 @@ public sealed partial class CoopSystem
             string why = !a.CanAct ? (a.Down ? "쓰러져서" : "자리에 없어서") : a.Job?.Label is string l ? $"{l}에 붙들려" : "짬이 안 나서";
             w.Log.Add(now, LogKind.Work, $"{a.Name}: {o.Title} — {why} {(now - s.since) / (float)SimTime.TicksPerHour:0.#}시간째 손을 못 댔다 · 맡은 것을 내려놓는다 (손이 빈 사람이 잇는다)", a.Id);
         }
-        if (_stale.Count > 64) foreach (var k in _stale.Keys.Where(id => !w.Board.Open.Any(x => x.Id == id)).ToList()) _stale.Remove(k);
+        if (_stale.Count > 64) foreach (var k in _stale.Keys.Where(id => !w.Board.OpenUnsorted.Any(x => x.Id == id)).ToList()) _stale.Remove(k);
     }
 
     private bool HelperHere(PairCall call)

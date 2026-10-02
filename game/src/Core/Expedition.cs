@@ -881,7 +881,7 @@ public sealed class ExpeditionSystem
         if (t.Shuttle) t.Gear["셔틀"] = 1;
         // 장비 무게: 셔틀이면 일손이 덜 든다
         t.Planned = SimTime.Hours(days * 24f);
-        t.OpenAtStart = w.Board.Open.Count();
+        t.OpenAtStart = w.Board.OpenUnsorted.Count();
         t.SuitsAtCall = SuitsAboard();
         // 출발 자리: 셔틀이면 격납고, 아니면 에어락
         var (room, at) = DepartSpot(t.Shuttle);
@@ -1255,7 +1255,7 @@ public sealed class ExpeditionSystem
                 sub.Needs.Rest = MathF.Max(0.05f, sub.Needs.Rest - 0.008f);
         if ((w.Tick / SimTime.TicksPerHour) % 12 == 0 && t.Phase == TripPhase.Away)
         {
-            int open = w.Board.Open.Count();
+            int open = w.Board.OpenUnsorted.Count();
             if (open > t.OpenAtStart + 2) w.Log.Add(w.Tick, LogKind.Ship, $"일손이 모자라다 — 원정 나간 사이 밀린 일 {open}건 (떠날 때 {t.OpenAtStart}건)");
         }
     }

@@ -166,10 +166,12 @@ public static partial class Program
                 float calm = fires.Count > 0 ? ChoresActivity.Appeal(c, w, fires[0], dist, out _) : -9f;
                 c.Fears.Add(Fear.Fire);
                 float scared = fires.Count > 0 ? ChoresActivity.Appeal(c, w, fires[0], dist, out _) : -9f;
+                string movedOut = c.Room != room ? $" (1분 사이 {c.Room?.Name ?? "문턱"}으로 비켜 있어 불난 방으로 되돌려 봄)" : "";
+                if (c.Room != room) { Teleport(w, c, room.Cells.Where(x => w.Ship.IsWalkable(x) && x != cell).OrderBy(x => (x.Center - cell.Center).LengthSquared()).Skip(1).First()); c.PreviousPosition = c.Position; c.Room = room; } // 통합: 짙어진 연기에 한 걸음 물러섰다 — 이 점검은 "불난 방 안이면 두려움이 건드려진다"
                 bool trig = Persona.Triggered(w, c) == Fear.Fire;
                 c.Fears.Clear(); c.Fears.AddRange(keep);
                 Check("두려움 — 불이 무서우면 소화를 꺼리고, 불난 방에서 두려움이 건드려진다", fires.Count > 0 && scared < calm && trig,
-                    $"소화 끌림 두려움 없음 {calm:0.00} / 불이 무섭다 {scared:0.00} · 불난 {room.Name}에서 두려움 {(trig ? "건드려짐" : "아님")}");
+                    $"소화 끌림 두려움 없음 {calm:0.00} / 불이 무섭다 {scared:0.00} · 불난 {room.Name}에서 두려움 {(trig ? "건드려짐" : "아님")}{movedOut}");
             }
             // 11) 두려움 — 불난 방에서 불을 무서워하는 사람은 공황 확률이 오른다 (오래가는 두려움은 평소엔 공황 없이 마음만 무겁다) · 습관도
             {

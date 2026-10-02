@@ -417,7 +417,7 @@ public sealed partial class InfoSystem
         w.Brain2.Beliefs.Learn(owner, Topic.Thing, k.Cup, 3, src, conf, by?.Id ?? -1);
         if (conf < 0.35f) return;
         k.OwnerTruth = true;
-        if (by == null) { k.ExplainedBy = -2; if (k.Explained < 0) k.Explained = w.Tick; Stats.ComputerExplained++; }
+        if (by == null) { if (k.ExplainedBy < 0) k.ExplainedBy = -2; if (k.Explained < 0) k.Explained = w.Tick; Stats.ComputerExplained++; } // 통합: 먼저 본 대로 말한 사람이 있으면 그 사람이 해명한 것 (컴퓨터 기록은 믿음을 거든다)
         owner.Say(w, Persona.Say(owner, "…그랬구나"));
         if (k.Accused >= 0 && CrewOf(k.Suspect) is CrewMember s && !s.Dead)
         {

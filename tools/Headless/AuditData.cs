@@ -37,6 +37,8 @@ public sealed class AuditRun
     public List<string> TextEx = new();
     public int Bleeds, Arrests, Revived, TraumaDied, Flashes, WorkHurts, WorkBad, Paged, DarkFalls; // v16.24 큰 상처 뒤
     public int HeatStrokes, HeatDeaths, RadSevere, RadCollapses, RadDeaths, LateWakes, MaxDose10; // v16.26 열사병 · 큰 피폭 · 늦게 깬 잠 · 가장 큰 피폭(×10)
+    public Dictionary<string, float> HurtBy = new(); // 통합: 다친 양을 까닭별로 (Injury 증가분 합)
+    public int LowHp; // 통합: 체력이 0.4 밑으로 떨어진 번 (쓰러짐 바로 앞)
 }
 
 /// <summary>죽음 하나: 죽기 전 30분 동안 무엇을 했나.</summary>

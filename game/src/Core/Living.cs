@@ -55,6 +55,23 @@ public sealed class FoodPolicy
         return FoodStock(w) / (crew * MealsPerPersonDay);
     }
 
+    /// <summary>
+    /// 통합: 몇 시간 안에 실제로 거둘 끼니 — 막 심은 판은 다 자란 판처럼 치지 않는다
+    /// (재배대가 많아도 이제 막 심었으면 이틀 안에 들어오는 것은 적다 · 배급을 정할 때 본다).
+    /// </summary>
+    public static float HarvestSoon(World w, float hours)
+    {
+        float meals = 0f;
+        foreach (var f in w.Ship.FurnitureOf(FurnitureType.GrowBed))
+        {
+            if (f.Room.Abandoned || f.Machine is not Machine m || m.Crop is not CropState crop || m.Efficiency <= 0f) continue;
+            float perHour = m.Efficiency * m.Rating * FoodSourceSystem.GrowMul(m) / FoodChain.GrowHours;
+            float left = (1f - crop.Growth) / MathF.Max(0.0001f, perHour);
+            if (left <= hours) meals += FoodChain.HarvestYield * FoodChain.BedSize(f) * FoodSourceSystem.YieldMul(f);
+        }
+        return meals * (FoodChain.MealsPerBatch / (float)FoodChain.ProducePerBatch);
+    }
+
     /// <summary>재배대가 지금 얼마나 대 주나 (익어 가는 작물 · 하루 몇 끼).</summary>
     public static float GrowingPerDay(World w) =>
         w.Ship.FurnitureOf(FurnitureType.GrowBed).Where(f => !f.Room.Abandoned && f.Machine!.Efficiency > 0f && f.Machine.Crop != null)
@@ -88,7 +105,7 @@ public sealed partial class WorkBoard
         float need = crew * FoodPolicy.MealsPerPersonDay;
         float below = w.Policies["rations"] == 3 ? 4f : 2f; // v13.2 방침(식량 배급: 줄인다) — 나흘치 아래면 미리
         below = MathF.Max(below, w.Automation.RationLead); // v16.6 식단 계획 모듈 — 바닥나는 날을 먼저 보고 하루 앞당긴다
-        if (!f.Rationing && days < below && grow < need * 1.05f)
+        if (!f.Rationing && days < below && (grow < need * 1.05f || FoodPolicy.FoodStock(w) + FoodPolicy.HarvestSoon(w, below * 24f) < need * below)) // 통합: 재배대가 많아도 이 기간 안에 거둘 것이 모자라면
             post(WorkKind.Ration, WorkTarget.Of(board), 0.6f + MathF.Min(0.3f, (2f - days) * 0.2f), Skill.Cooking,
                 $"먹을 것 {days:0.0}일치 ({FoodPolicy.FoodStock(w):0}끼 · {crew}명) · 재배대가 하루 {grow:0}끼를 대는데 {need:0}끼를 먹는다");
         if (f.Rationing && f.PlentySince >= 0 && w.Tick - f.PlentySince > SimTime.Hours(12) && (w.Policies["rations"] != 3 || days > 6f))

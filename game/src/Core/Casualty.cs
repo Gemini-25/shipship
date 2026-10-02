@@ -28,6 +28,7 @@ public sealed class Trauma
     public int Helped { get; set; } = -1;     // 곁의 사람이 눌러 늦췄다 (깊은 상처)
     public long HelperSince { get; set; } = -1;
     public int Helper { get; set; } = -1;
+    public long HelperSeen { get; set; } = -1; // 통합: 돕던 사람을 마지막으로 곁에서 본 때 (구급상자를 가지러 한두 걸음 떨어져도 이어서 돕는다)
     public bool Paged { get; set; }           // 컴퓨터가 불렀다
     public int Tries { get; set; }            // 가슴 압박 시도
     public bool Closed { get; set; }
@@ -113,11 +114,11 @@ public sealed class CasualtySystem
         {
             case WoundKind.Cut or WoundKind.Crush or WoundKind.Fracture:
                 if (hit < 0.14f) return;
-                Start(c, TraumaKind.Bleed, 0.9f * (hit - 0.12f) * (part == BodyPart.Head ? 1.3f : 1f), cause);
+                Start(c, TraumaKind.Bleed, 1.3f * (hit - 0.12f) * (part == BodyPart.Head ? 1.3f : 1f), cause); // 통합: 깊은 상처는 혼자 두면 몇 시간 안에 위험하다
                 break;
             case WoundKind.Burn:
                 if (hit < 0.18f) return;
-                Start(c, TraumaKind.BurnShock, 0.3f * (hit - 0.1f), cause);
+                Start(c, TraumaKind.BurnShock, 0.4f * (hit - 0.1f), cause);
                 break;
             case WoundKind.Barotrauma:
                 Start(c, TraumaKind.Bleed, 0.25f * hit, cause); // 폐가 상했다 — 숨이 차고 피를 토한다
@@ -171,7 +172,10 @@ public sealed class CasualtySystem
         if (helper != null)
         {
             if (t.Helper != helper.Id) { t.Helper = helper.Id; t.HelperSince = now; }
+            t.HelperSeen = now;
         }
+        else if (t.Helper >= 0 && now - t.HelperSeen <= SimTime.Minutes(1) && w.Crew.FirstOrDefault(o => o.Id == t.Helper) is { CanAct: true } back && (back.Position - c.Position).LengthSquared() < 4f * 4f)
+            helper = back; // 통합: 잠깐 자리를 비웠다 (문턱 · 몸을 돌림 · 구급상자) — 누르던 손을 처음부터 다시 세지 않는다
         else { t.Helper = -1; t.HelperSince = -1; }
         float helped = t.HelperSince >= 0 ? (now - t.HelperSince) / (float)SimTime.TicksPerHour * 60f : 0f;
 
@@ -225,7 +229,7 @@ public sealed class CasualtySystem
             float clot = t.Kind == TraumaKind.Bleed ? (t.Rate < 0.08f ? 1.0f : 0.1f) : 0.12f;
             t.Rate *= MathF.Exp(-clot * dt);
             if (t.Rate < 0.015f) { Stop(c, t, t.Kind == TraumaKind.Bleed ? "피가 저절로 멎었다" : "고비를 넘겼다", null); return; }
-            c.Vitals.Health -= t.Rate * dt;
+            c.Vitals.Health -= t.Rate * (c.Down && t.Kind == TraumaKind.Bleed ? 1.5f : 1f) * dt; // 통합: 쓰러지면 (쇼크) 피가 더 빨리 빠진다 — 혼자 쓰러진 사람에게 남은 시간
             if (!w.CrewCanDie) c.Vitals.Health = MathF.Max(0.02f, c.Vitals.Health);
         }
         Page(c, t, min);
@@ -240,7 +244,7 @@ public sealed class CasualtySystem
         foreach (var o in _w.Crew)
         {
             if (o == c || !o.CanAct || o.Outside != c.Outside || o.Pose == Pose.Sleeping) continue;
-            if (o.Room != c.Room && !(c.Room == null && o.Room == null)) continue;
+            if (o.Room != c.Room && c.Room != null && o.Room != null) continue; // 통합: 문턱에 선 사람(방 없음)도 곁이다
             if (o.Job?.Urgent == true && o.Job.Target?.Room != c.Room && o.Job.Order?.Target.Crew != c) continue; // 제 급한 일로 지나가는 사람은 멈추지 않는다
             float d = (o.Position - c.Position).LengthSquared();
             if (d < bd) { bd = d; best = o; }

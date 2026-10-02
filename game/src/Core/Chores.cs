@@ -120,6 +120,8 @@ public sealed class ChoresActivity : Activity
             score -= w.Policies["leisure"] switch { 0 => 0.15f, 2 => 0.45f, _ => 0.3f }; // v11.3 배우기·재활은 비번에 하는 일 · v13.4 휴식·여가 방침
         // v12.1 인수인계는 몇 분짜리 말 — 성실한 사람일수록 넘기고 나서 쉰다 (자기 전에도)
         if (o.Kind == WorkKind.Handover) score += 0.18f + 0.22f * c.Traits.Diligence;
+        // 통합: 배우기는 미룰수록 마음에 걸린다 (이틀 미루면 차 한 잔 · 책보다 앞선다) — 취미 · 일상 거리가 늘어 선배 곁에 서는 일이 밀려났다
+        if (o.Kind == WorkKind.Train) score += 0.08f + 0.05f * c.Traits.Diligence + 0.2f * MathF.Min(1f, (w.Tick - o.Posted) / (float)(SimTime.TicksPerDay * 2));
         if (BedtimeStatic(c, w)) score -= emergency || allHands ? 0.1f : o.Kind == WorkKind.Handover ? 0.15f : 0.5f;
 
         score -= distance / 6000f;
@@ -129,7 +131,7 @@ public sealed class ChoresActivity : Activity
         else if (o.Robot != null) score -= 0.15f; // v10.10: 로봇이 하고 있는 일에 합류 — 더 급한 일이 없을 때만
         if (c.Vitals.Health < 0.5f) score -= 0.3f;
         // 제 치료를 기다리는 사람은 남을 치료하러 돌아다니지 않는다 (다친 사람끼리 서로 쫓으면 치료하러 온 사람이 헛걸음한다 — 성한 사람이 간다)
-        if (o.Kind == WorkKind.Treat && o.Urgency < 0.9f && w.Board.Open.Any(x => x.Kind == WorkKind.Treat && x.Target.Crew == c)) score -= 0.3f;
+        if (o.Kind == WorkKind.Treat && o.Urgency < 0.9f && w.Board.OpenUnsorted.Any(x => x.Kind == WorkKind.Treat && x.Target.Crew == c)) score -= 0.3f;
         if (c.Fx.Worst > 0.45f && o.Urgency < 0.9f) score -= 0.3f * c.Fx.Worst; // v14.1 앓는 사람은 급하지 않은 일을 미룬다
 
         // EVA: 발밑이 우주다. 겁 많은 사람은 꺼리고, 긴장한 사람은 더 꺼린다
@@ -225,6 +227,9 @@ public sealed class ChoresActivity : Activity
         float margin = w.Command.TeamOf(c) is Team t && t.Kind != TeamKind.Reserve && CommandSystem.Group(best.Kind) == t.Kind && CommandSystem.Group(current.Kind) != t.Kind ? 0.05f : 0.3f;
         return bestScore > Appeal(c, w, current, field, out _) + margin;
     }
+
+    /// <summary>통합: 지금 이 사람이 붙을 만한 가장 나은 일의 점수 (없으면 0) — 당직이 "할 일이 따로 없을 때"인지 본다.</summary>
+    internal static float BestScore(CrewMember c, World w, DistanceField dist) { var (o, s, _) = Best(c, w, dist); return o == null ? 0f : s; }
 
     public override (float, string) Score(CrewMember c, World w, DistanceField dist)
     {
@@ -1245,6 +1250,7 @@ public static partial class WorkPlanners
                 world.Board.Close(o);
                 world.Log.Add(world.Tick, LogKind.Work, $"{room.Name} 불을 껐다", cm.Id);
                 MarkLog.Add(room.Marks, world.Tick, $"{Ko.IGa(cm.Name)} 불을 껐다");
+                MarkLog.Add(cm.Memory.Marks, world.Tick, $"{room.Name} 불을 껐다 — 손이 아직 떨린다"); // 통합: 불길 앞에 섰던 사람은 그 불을 기억한다 (사고 카드의 "누가 기억하나")
                 world.History.Add(world, HistoryKind.Response, $"{Ko.IGa(cm.Name)} {room.Name} 불을 껐다", room, new[] { cm });
             }
             else world.Board.Release(o, cm); // 다른 칸에 불이 남았다 → 다시 가장 가까운 불을 찾아 이어서

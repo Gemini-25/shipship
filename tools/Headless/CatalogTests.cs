@@ -51,6 +51,7 @@ public static partial class Program
             {
                 var w = DayOne(seed, "Mirinae");
                 foreach (var f in w.Ship.Furniture.Where(f => f.Storage != null)) f.Storage!.Take(ItemKind.MedKit, 999);
+                foreach (var c in w.Crew) if (c.Carrying is ItemStack held && held.Kind == ItemKind.MedKit) c.Carrying = null; // 통합: 그 순간 손에 들고 옮기던 키트도 (나중에 선반에 넣으면 키트로 치료했다)
                 var p = w.Crew[2];
                 NeedsSystem.AddInjury(p.Vitals, 0.4f, "시험");
                 Run(w, SimTime.Hours(12));

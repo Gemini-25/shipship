@@ -533,8 +533,8 @@ public sealed partial class CrisisCrewSystem
         if (s.Fires > 0) _need.Add(StationRole.Fire);
         if (s.Breaches > 0 || leaking) _need.Add(StationRole.Bulkhead);
         if (s.Power || AuxSoon()) _need.Add(StationRole.Power);
-        if (s.Down > 0 || w.Board.Open.Any(o => o.Kind == WorkKind.Treat && o.Urgency >= 0.9f)) _need.Add(StationRole.Medical);
-        if (w.Board.Open.Any(o => o.External && o.Urgency >= 0.85f)) _need.Add(StationRole.Eva);
+        if (s.Down > 0 || w.Board.OpenUnsorted.Any(o => o.Kind == WorkKind.Treat && o.Urgency >= 0.9f)) _need.Add(StationRole.Medical);
+        if (w.Board.OpenUnsorted.Any(o => o.External && o.Urgency >= 0.85f)) _need.Add(StationRole.Eva);
         if (Crisis.Acting(w) && (big || AnyPanic)) _need.Add(StationRole.Guide);
         foreach (var r in DrawOrder)
         {

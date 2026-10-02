@@ -46,8 +46,10 @@ public sealed class Ship
         _doorsByCell[d.Cell] = d;
     }
 
-    internal void AddWall(Cell c, WallState w) => _walls[c] = w;
-    internal void RemoveWall(Cell c) => _walls.Remove(c);
+    internal void AddWall(Cell c, WallState w) { _walls[c] = w; WallsVersion++; }
+    internal void RemoveWall(Cell c) { if (_walls.Remove(c)) WallsVersion++; }
+    /// <summary>통합 성능: 벽 목록이 바뀐 번 (더하고 · 뺀다).</summary>
+    public int WallsVersion { get; private set; }
 
     /// <summary>문을 격자에서 뺀다 (한쪽 방이 떨어져 나갔을 때). 문 목록에는 남는다 (번호가 바뀌지 않게).</summary>
     internal void UnmapDoor(Door d) => _doorsByCell.Remove(d.Cell);
@@ -178,6 +180,8 @@ public sealed class Ship
         }
         return _byType.TryGetValue(type, out var list) ? list : NoFurniture;
     }
+    /// <summary>통합 성능: 그 종류 가구 전부 (치운 것 · 떨어져 나간 것까지 — Furniture.Where(종류)와 같은 순서).</summary>
+    public IReadOnlyList<Furniture> AllOfType(FurnitureType type) => OfType(type);
     public IEnumerable<Machine> Machines => MachineFurniture().Where(f => f.Machine != null && !f.Room.Detached && !f.Stowed).Select(f => f.Machine!);
 
     // v16.26 성능: 설비가 붙는 종류의 가구만 (설비는 종류로 정해진다 — MachineSpecs) · 원래 순서 그대로
@@ -221,11 +225,20 @@ public sealed class Ship
     public int CountStored(ItemKind k)
     {
         // v14.2 여기저기서 자주 불린다 — 목록을 만들지 않고 센다 (Containers와 같은 조건)
+        // 통합 성능: 보관함이 있는 가구만 따로 모아 둔다 (가구가 늘거나 보관함이 붙고 떨어질 때만 다시 · 순서는 원래 목록 그대로)
+        if (_storedCount != Furniture.Count || _storedVer != ShipSim.Core.Furniture.StorageVersion)
+        {
+            _stored.Clear();
+            foreach (var f in Furniture) if (f.Storage != null && f.Type != FurnitureType.DroneDock) _stored.Add(f);
+            _storedCount = Furniture.Count; _storedVer = ShipSim.Core.Furniture.StorageVersion;
+        }
         int n = 0;
-        foreach (var f in Furniture)
-            if (f.Storage != null && !f.Room.Detached && !f.Stowed && f.Type != FurnitureType.DroneDock) n += f.Storage.Count(k);
+        foreach (var f in _stored)
+            if (!f.Room.Detached && !f.Stowed) n += f.Storage!.Count(k);
         return n;
     }
+    private readonly List<Furniture> _stored = new();
+    private int _storedCount = -1, _storedVer = -1;
 }
 
 /// <summary>텍스트 설계도 → Ship.</summary>

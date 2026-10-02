@@ -19,6 +19,14 @@ public static partial class Program
             bed.Machine!.Crop!.Growth = 0.05f;
             w.Machines.Break(bed.Machine, FaultKind.Wrecked);
         }
+        // 통합: 새 배는 재배대가 두 배 — 절반을 부숴도 모자라지 않았다. 먹는 양의 60%를 못 대도록 더 부순다 (조류 · 버섯 판 포함)
+        float need = crew * FoodPolicy.MealsPerPersonDay;
+        foreach (var bed in w.Ship.FurnitureOf(FurnitureType.GrowBed).Where(f => f.Machine!.Efficiency > 0f).OrderBy(f => f.Id).ToList())
+        {
+            if (FoodPolicy.GrowingPerDay(w) < need * 0.6f) break;
+            bed.Machine!.Crop!.Growth = 0.05f;
+            w.Machines.Break(bed.Machine, FaultKind.Wrecked);
+        }
         return w;
     }
 

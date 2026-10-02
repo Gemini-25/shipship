@@ -170,7 +170,7 @@ public static partial class Program
             var p = PutOutside(w, v, HullSpots(w, 6)[0]);
             v.Suit!.Wear.Fuel = 0f;
             var away = Vector2.Normalize(v.Position - w.Structure.ShipCenter);
-            w.EvaRisk.StartDrift(v, p, away * 70f, 300f, "시험: 큰 파편");
+            w.EvaRisk.StartDrift(v, p, away * 90f, 300f, "시험: 큰 파편"); // 통합: 새 한빛호는 커서 같은 세기로 떠밀리면 무전 끝자락(신호 0.05)에서 멈췄다 — 끝을 넘을 만큼
             Run(w, SimTime.Minutes(5));
             float s1 = p.Signal;
             Run(w, SimTime.Minutes(30));

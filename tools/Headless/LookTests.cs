@@ -322,12 +322,11 @@ public static partial class Program
             {
                 Body2System.Enabled = on;
                 var w = World.CreateDefault(seed, 0, "Cheonma");
-                var sw = Stopwatch.StartNew();
+                double c0 = CpuSeconds(); // 통합: 벽시계는 다른 일에 따라 흔들린다
                 Run(w, SimTime.TicksPerDay);
-                sw.Stop();
                 st = w.Body2.Stats;
                 Body2System.Enabled = true;
-                return sw.Elapsed.TotalSeconds;
+                return CpuSeconds() - c0;
             }
             double off = Math.Min(Time(false, out _), Time(false, out _));
             double on = Math.Min(Time(true, out var st), Time(true, out _));

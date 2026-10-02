@@ -289,7 +289,8 @@ public sealed partial class HazardSystem
         var mid = new System.Numerics.Vector2(rooms.Average(r => r.Center.X), rooms.Average(r => r.Center.Y));
         int side = w.Rng.Range(0, 4);
         var from = side switch { 0 => new System.Numerics.Vector2(1, 0), 1 => new System.Numerics.Vector2(-1, 0), 2 => new System.Numerics.Vector2(0, 1), _ => new System.Numerics.Vector2(0, -1) };
-        var weight = rooms.Select(r => hullCells[r.Id] * (System.Numerics.Vector2.Dot(r.Center - mid, from) > 0f ? 3f : 1f)).ToList();
+        // 통합: 오는 쪽을 여섯 배로 (세 배면 운석 대여섯 개 중 오는 쪽이 70%를 못 넘는 일이 절반 — 무리가 한쪽에서 온다는 게 드러나지 않았다)
+        var weight = rooms.Select(r => hullCells[r.Id] * (System.Numerics.Vector2.Dot(r.Center - mid, from) > 0f ? 6f : 1f)).ToList();
         float wsum = weight.Sum();
         for (int i = 0; i < n; i++)
         {
@@ -314,7 +315,7 @@ public sealed partial class HazardSystem
         float hours = w.Rng.Range(6f, 10f);
         bool extend = StormActive;
         if (!extend) StormSince = w.Tick;
-        float peak = w.Rng.Chance(0.3f) ? w.Rng.Range(1f, 1.6f) : w.Rng.Range(0.45f, 0.8f); // v16.26 센 양성자 폭풍은 대피소 밖이 위험하다
+        float roll = w.Rng.Float(), peak = roll < 0.15f ? w.Rng.Range(2.3f, 4.2f) : roll < 0.35f ? w.Rng.Range(1.2f, 2.3f) : w.Rng.Range(0.45f, 0.9f); // v16.26 센 양성자 폭풍은 대피소 밖이 위험하다 · 통합: 센 것은 바깥 방에서 세 시간이면 방사선 병 (4Sv 넘게)
         StormPeak = extend ? MathF.Max(StormPeak, peak) : peak;
         StormUntil = Math.Max(StormUntil, w.Tick + SimTime.Hours(hours));
         // 처음 몰아칠 때: 전자 장비 두셋이 튀고, 움직이던 로봇 몇이 센서를 잃는다
@@ -815,7 +816,7 @@ public sealed partial class HazardSystem
     }
 
     /// <summary>v16.24 사고는 대개 쓰는 중에 난다: 깨어 있는 사람이 있는 방을 더 자주 고른다 (한 방에 셋까지 · 빈 방도 가끔).</summary>
-    private T Busy<T>(List<T> pool, Func<T, Room> roomOf, Rng rr)
+    private T Busy<T>(List<T> pool, Func<T, Room> roomOf, Rng rr, bool sleepers = false)
     {
         var w = _w;
         var wt = new float[pool.Count];
@@ -824,7 +825,7 @@ public sealed partial class HazardSystem
         {
             var r = roomOf(pool[i]);
             int n = 0;
-            foreach (var c in w.Crew) if (!c.Dead && c.Room == r && c.IsAwake) n++;
+            foreach (var c in w.Crew) if (!c.Dead && c.Room == r && (c.IsAwake || sleepers && c.Pose == Pose.Sleeping)) n++;
             sum += wt[i] = 1f + 1.5f * Math.Min(3, n);
         }
         float x = rr.Float() * sum;
@@ -847,7 +848,7 @@ public sealed partial class HazardSystem
             {
                 var hullRooms = rooms.Where(r => ship.Walls.Any(kv => kv.Value.IsHull && Hull.InsideRoom(ship, kv.Key) == r)).ToList();
                 if (hullRooms.Count == 0) return null;
-                var room = prefer != null && hullRooms.Contains(prefer) ? prefer : hullRooms[rr.Range(0, hullRooms.Count)];
+                var room = prefer != null && hullRooms.Contains(prefer) ? prefer : Busy(hullRooms, r => r, rr, sleepers: true); // 통합: 사람이 지내는 외벽 방에도 (자는 방 · 일하는 방)
                 float size = key == "bigmeteor" ? 0.8f + 0.2f * rr.Float() : 0.25f + 0.3f * rr.Float();
                 var m = w.Sensors.Launch(Scenarios.OuterTarget(w, room), size);
                 if (m == null) return null;
@@ -857,7 +858,7 @@ public sealed partial class HazardSystem
             }
             case "fire":
             {
-                var room = prefer != null && rooms.Contains(prefer) ? prefer : rooms[rr.Range(0, rooms.Count)];
+                var room = prefer != null && rooms.Contains(prefer) ? prefer : Busy(rooms, r => r, rr, sleepers: true); // 통합: 불도 대개 쓰는 방에서 난다 (조리 · 용접 · 전기 기구 · 잠든 방의 충전기)
                 var floor = room.Cells.Where(ship.IsOpenFloor).ToList();
                 if (floor.Count == 0 || !Incidents.Fire(w, floor[rr.Range(0, floor.Count)])) return null;
                 string what = $"화재({room.Name})";

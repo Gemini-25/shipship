@@ -10,7 +10,7 @@ public static partial class Program
     {
         _fails = 0;
         Console.WriteLine($"통합 시험 (v16.26) · 시드 {seed}\n");
-        string only = Environment.GetEnvironmentVariable("INTEG_ONLY") ?? "path,heat,rad,storm,shower,sleep,cosmic,hash";
+        string only = Environment.GetEnvironmentVariable("INTEG_ONLY") ?? "path,heat,rad,storm,shower,sleep,cosmic,danger,hash";
         if (only.Contains("probe")) { IgProbe(seed, Environment.GetEnvironmentVariable("PROBE") ?? ""); return 0; }
         if (only.Contains("path")) IgBarredPath(seed);
         if (only.Contains("heat")) IgHeat(seed);
@@ -19,6 +19,7 @@ public static partial class Program
         if (only.Contains("shower")) IgShower(seed);
         if (only.Contains("sleep")) IgSleep(seed);
         if (only.Contains("cosmic")) IgCosmic(seed);
+        if (only.Contains("danger")) IgDanger(seed); // 통합 4차: 위험이 사람에게 닿는 길
         if (!only.Contains("hash")) { Console.WriteLine(_fails == 0 ? "\n모두 통과" : $"\n✘ {_fails}개 실패"); return _fails == 0 ? 0 : 1; }
         uint H() { var w = World.CreateDefault(seed, 0, "Hanbit"); Run(w, SimTime.TicksPerDay + SimTime.Hours(6)); return SaveGame.StateHash(w); }
         uint a = H(), b = H();
@@ -184,7 +185,7 @@ public static partial class Program
             peaks.Add(w.Hazards.StormPeak);
             if (k == 0) Check("태양 폭풍 — 처음 세 시간 세기가 이번 폭풍 세기다", MathF.Abs(w.Ambience.StormPower - w.Hazards.StormPeak) < 0.001f, $"{w.Ambience.StormPower:0.00} / {w.Hazards.StormPeak:0.00}");
         }
-        Check("태양 폭풍 — 세기가 폭풍마다 다르다 (가끔 센 것)", peaks.Max() - peaks.Min() > 0.2f && peaks.All(p => p is >= 0.45f and <= 1.6f), string.Join(" · ", peaks.Select(p => $"{p:0.00}")));
+        Check("태양 폭풍 — 세기가 폭풍마다 다르다 (가끔 센 것)", peaks.Max() - peaks.Min() > 0.2f && peaks.All(p => p is >= 0.45f and <= 5f), string.Join(" · ", peaks.Select(p => $"{p:0.00}")));
         // 창가: 같은 방, 전기가 있으면 덮개가 내려가고 없으면 그대로
         float Rad(bool power)
         {
@@ -264,6 +265,7 @@ public static partial class Program
     /// <summary>진단만 (INTEG_ONLY=probe PROBE=…): 회귀 실패 원인을 본다.</summary>
     private static void IgProbe(int seed, string what)
     {
+        IgProbe2(seed, what); // 통합 4차 진단
         if (what.Contains("comms"))
         {
             var w = DayOne(seed, "Hanbit");
@@ -341,6 +343,75 @@ public static partial class Program
                 var w = World.CreateDefault(seed, 0, key);
                 Console.WriteLine($"{key}: 격리실 {w.Ship.KindOf(RoomType.Quarantine).Count()} · 의무실 {w.Ship.KindOf(RoomType.Medbay).Count()} · 사람 {w.Crew.Count}");
             }
+        }
+    }
+
+    /// <summary>
+    /// 통합 4차 위험 수준: 센 폭풍에 바깥 방에 남은 사람 · 벽이 터진 방의 사람 · 닫힌 방의 불씨 · 대피소 밖의 우주급 방사선 —
+    /// 사고가 사람에게 닿는 길이 실제로 있고, 까닭이 몸 · 기억 · 기록에 남는다.
+    /// </summary>
+    private static void IgDanger(int seed)
+    {
+        // ① 센 태양 폭풍: 대피소 밖 바깥 방에 붙들린 사람은 방사선 병 · 대피소의 사람은 조금
+        {
+            var w = DayOne(seed, "Hanbit"); w.CrewCanDie = true;
+            var outer = w.Ship.LiveRooms.Where(r => r.Type != RoomType.Corridor && r.Cells.Count(w.Ship.IsOpenFloor) >= 2).OrderByDescending(r => w.Ambience.Exposure(r)).ThenBy(r => r.Id).First();
+            var shelter = Facilities.Best(w.Ship, "shelter", r => !r.Detached).room;
+            var v = w.Crew.First(c => c.CanAct);
+            var s0 = w.Crew.First(c => c.CanAct && c != v);
+            Put(w, v, outer);
+            if (shelter != null) Put(w, s0, shelter);
+            w.Hazards.StartStorm();
+            typeof(HazardSystem).GetProperty("StormPeak")!.SetValue(w.Hazards, 3.5f); // 센 폭풍 (2.2~4) 위쪽
+            for (int t = 0; t < SimTime.Hours(3); t += 25)
+            {
+                if (v.Room != outer) { Put(w, v, outer); v.Room = outer; } // 자리를 지켜야 하는 사람 (수동 조종 · 손을 놓지 못하는 수리)
+                if (shelter != null && s0.Room != shelter) { Put(w, s0, shelter); s0.Room = shelter; }
+                Run(w, 25);
+            }
+            Check("센 태양 폭풍 — 바깥 방에 붙들린 사람은 세 시간이면 방사선 병 (4Sv 넘게) · 대피소는 막는다",
+                v.Dose >= 4f && (shelter == null || s0.Dose < v.Dose * 0.3f) && w.Ailments.Has(v, "radiation"),
+                $"{outer.Name}(노출 {w.Ambience.Exposure(outer):0.00}) {v.Dose:0.0}Sv · 대피소 {shelter?.Name ?? "없음"} {s0.Dose:0.0}Sv · 단계 {w.Perils.RadStage(v)}");
+        }
+        // ② 벽이 터지는 순간: 그 방에 있던 사람은 급감압에 다친다 (기억 · 기록)
+        {
+            var w = DayOne(seed, "Hanbit"); w.CrewCanDie = true;
+            var room = w.Ship.LiveRooms.Where(r => r.Type != RoomType.Corridor && r.Doors.Any(d => !d.IsExternal) && w.Ship.Walls.Any(kv => kv.Value.IsHull && Hull.InsideRoom(w.Ship, kv.Key) == r)).OrderBy(r => r.Cells.Count).ThenBy(r => r.Id).First();
+            var v = w.Crew.First(c => c.CanAct);
+            Put(w, v, room); v.Room = room;
+            float inj0 = v.Vitals.Injury;
+            string? what = w.Major.Fire("major:cascadedecomp", room);
+            Check("벽이 터지는 순간 — 그 방 사람은 급감압에 다친다 · 기억에 남는다", what != null && v.Vitals.Injury > inj0 + 0.05f && v.Memory.Marks.Any(m => m.Text.Contains("벽이 터졌다")),
+                $"{what} · {v.Name} 부상 {inj0:0.00}→{v.Vitals.Injury:0.00} ({v.Vitals.InjuryCause})");
+        }
+        // ③ 닫힌 방의 불씨: 연기는 옅어도 일산화탄소가 소리 없이 찬다
+        {
+            var w = DayOne(seed, "Hanbit");
+            var room = w.Ship.LiveRooms.Where(r => r.Kind is RoomType.Quarters or RoomType.PrivateCabins or RoomType.QuietQuarters).OrderBy(r => r.Volume).ThenBy(r => r.Id).First();
+            room.VentOpen = false;
+            foreach (var d in room.Doors) d.Locked = true; // 아무도 모르는 사이 (문을 닫고 나간 빈 선실)
+            foreach (var c in w.Crew.Where(c => c.Room == room).ToList()) { var o = w.Ship.LiveRooms.First(r => r.Type == RoomType.Corridor); Put(w, c, o); c.Room = o; }
+            var cell = room.Cells.First(w.Ship.IsOpenFloor);
+            w.Fire.Ignite(cell, 0.2f);
+            float co = 0f, smoke = 0f;
+            for (int t = 0; t < SimTime.Minutes(60); t++) { if (w.Fire.At(cell) < 0.15f) w.Fire.Ignite(cell, 0.2f); room.VentOpen = false; w.Step(); co = MathF.Max(co, room.Air.CO); smoke = MathF.Max(smoke, room.Air.Smoke); }
+            Check("불씨 — 닫힌 방에서 연기만 피우는 불씨는 일산화탄소를 채운다 (경보 문턱을 넘는다)", co > 0.12f, $"{room.Name} 일산화탄소 최고 {co:0.00} · 연기 {smoke:0.00}");
+        }
+        // ④ 우주급: 초신성 방사선은 바깥 방을 몇 시간이면 앓게 · 대피소는 견딜 만큼
+        {
+            var w = DayOne(seed, "Hanbit");
+            var e = w.Cosmic.Force(CosmicKind.Supernova, 0.2f);
+            float outRad = 0f, shelterRad = 0f;
+            var shelter = Facilities.Best(w.Ship, "shelter", r => !r.Detached).room;
+            for (int m = 0; m < 30 * 12 && e.Phase != CosmicPhase.Done; m++)
+            {
+                Run(w, SimTime.Minutes(5));
+                foreach (var r in w.Ship.LiveRooms) outRad = MathF.Max(outRad, r.Radiation);
+                if (shelter != null) shelterRad = MathF.Max(shelterRad, shelter.Radiation);
+            }
+            // 숨은 사람이 견딜 만큼으로 맞췄다 (우주 시험: 대피소 쪽 평균 0.8Sv 아래) — 바깥 방은 예전의 세 배 남짓
+            Check("우주급 — 초신성: 바깥 방은 시간당 0.8Sv 남짓 (몇 시간이면 방사선 병) · 대피소는 그 몇 분의 일", outRad >= 1.6f && (shelter == null || shelterRad < outRad * 0.3f),
+                $"바깥 방 최고 {outRad:0.00} (시간당 {(outRad - 0.05f) * 0.5f:0.0}Sv) · 대피소 {shelterRad:0.00}");
         }
     }
 }

@@ -78,7 +78,8 @@ public static partial class Program
                 for (int t = 0; t < SimTime.Hours(12) && pa == null; t++)
                 {
                     wa.Step(); wb.Step();
-                    pa = wa.Crew.FirstOrDefault(c => c.Job?.Current is WorkToil && c.Vitals.Injury < 0.01f && c.Helper == null);
+                    pa = wa.Crew.FirstOrDefault(c => c.Job?.Current is WorkToil && c.Vitals.Injury < 0.01f && c.Helper == null
+                        && (c.Job.Order == null || c.Job.Order.Robot == null && wa.CrisisCrew.HelpersOf(c.Job.Order).Count == 0)); // 통합: 같은 일을 로봇 · 거드는 사람과 나눠 하면 진척이 섞인다 (한 사람의 손 빠르기만 잰다)
                 }
                 string detail = "일하는 사람을 못 찾음";
                 bool ok = false;

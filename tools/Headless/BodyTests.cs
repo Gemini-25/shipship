@@ -75,7 +75,7 @@ public static partial class Program
             Force(w, p, new Job(null, "약 가지러", new List<Toil> { new GotoToil(inside), new WaitToil(10, Pose.Standing) }));
             bool reached = false, waited = false;
             CrewMember? helper = null;
-            for (int t = 0; t < SimTime.Minutes(40) && !reached; t++)
+            for (int t = 0; t < SimTime.Minutes(70) && !reached; t++) // 통합: 새 배는 의무실에서 약품고까지 서른 칸 넘게 걸어온다 (40분이면 오는 도중에 끝났다)
             {
                 w.Step();
                 if (b.Doors.Any(d => d.Caller == p.Id)) waited = true;
@@ -226,7 +226,9 @@ public static partial class Program
             var at = cor.Cells.Where(c => w.Ship.IsOpenFloor(c) && (b.Under[w.Ship.Grid.Index(c)] & UnderFlags.HatchSpot) != 0).OrderBy(c => c.X).Skip(3).First();
             Teleport(w, fixer, at);
             w.Step();
-            var order = new WorkOrder { Id = 999999, Kind = WorkKind.PatchPipe, Target = WorkTarget.OfRoom(cor), Skill = Skill.Mechanics, Posted = w.Tick };
+            // 통합: 땜질 일감은 진짜 관을 가리킨다 (관 없는 일감은 로봇이 곁에서 거들며 이름을 부를 때 멈췄다)
+            var pseg = w.Piping.Segments.FirstOrDefault(sg => sg.Path.Count > 0);
+            var order = new WorkOrder { Id = 999999, Kind = WorkKind.PatchPipe, Target = pseg != null ? WorkTarget.OfPipe(pseg, cor) : WorkTarget.OfRoom(cor), Skill = Skill.Mechanics, Posted = w.Tick };
             Force(w, fixer, new Job(null, "배관 땜질", new List<Toil> { new WorkToil(0.4f, Skill.Mechanics, at.Center) }) { Order = order });
             int open0 = b.Stats.HatchOpens;
             bool sawOpen = false;

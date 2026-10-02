@@ -694,7 +694,7 @@ public sealed partial class BodySystem
         }
         FillPathCost();
         Prof.Lap("body.pathcost", pq);
-        Prof.Lap("sys.Body", pf);
+        Prof.Lap("body.all", pf); // 통합: 바깥(World)의 sys.Body와 같은 이름이면 두 번 더해졌다
     }
 
     /// <summary>길찾기에 칸 비용: 열린 뚜껑 · 테이프 · 유리 · 기름 (사람들은 돌아간다).</summary>

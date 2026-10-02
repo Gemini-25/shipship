@@ -31,6 +31,7 @@ public static partial class Program
 
     private static void Measure(string name, Func<World> make, Action<World>? hit, long ticks, bool daily = false)
     {
+        if (Environment.GetEnvironmentVariable("PROF_ONLY") is string only && only.Length > 0 && !name.Contains(only)) return; // 통합: 장면 하나만
         var w = make();
         hit?.Invoke(w);
         GC.Collect();
@@ -38,10 +39,11 @@ public static partial class Program
         long alloc0 = GC.GetTotalAllocatedBytes(), g0 = GC.CollectionCount(0), g1 = GC.CollectionCount(1), g2 = GC.CollectionCount(2);
         var pause0 = GC.GetTotalPauseDuration();
         Prof.Reset();
-        Prof.On = true;
+        Prof.On = Environment.GetEnvironmentVariable("PROF_OFF") != "1"; // 통합: 구간 재기 없이 맨 시간 (구간 재기 자체가 30%쯤 든다)
         var times = new double[ticks];
         var dayMs = new List<double>();
         double freq = Stopwatch.Frequency / 1000.0;
+        var cpu0 = Process.GetCurrentProcess().TotalProcessorTime; // 통합: 다른 일이 CPU를 나눠 쓸 때는 CPU 시간이 덜 흔들린다
         var total = Stopwatch.StartNew();
         double acc = 0;
         for (long i = 0; i < ticks; i++)
@@ -54,6 +56,7 @@ public static partial class Program
             if (daily && (i + 1) % SimTime.TicksPerDay == 0) { dayMs.Add(acc); acc = 0; }
         }
         total.Stop();
+        double cpuMs = (Process.GetCurrentProcess().TotalProcessorTime - cpu0).TotalMilliseconds;
         Prof.On = false;
         long alloc = GC.GetTotalAllocatedBytes() - alloc0;
         var pause = GC.GetTotalPauseDuration() - pause0;
@@ -65,6 +68,7 @@ public static partial class Program
         int worstMin = Array.IndexOf(minutes, minutes.DefaultIfEmpty(0).Max());
         double hours = ticks / (double)SimTime.TicksPerHour;
         Console.WriteLine($"■ {name}");
+        Console.WriteLine($"  CPU {cpuMs:0}ms (프로세스 전체 · 벽시계와 따로)");
         Console.WriteLine($"  전체 {total.ElapsedMilliseconds}ms · 게임 한 시간에 {total.ElapsedMilliseconds / hours:0}ms · {ticks / total.Elapsed.TotalSeconds:N0} 틱/초 · 1배속 여유 ×{(SimTime.TicksPerHour / 3600.0 * hours * 1000) / Math.Max(1, total.ElapsedMilliseconds) * 3600:0}");
         Console.WriteLine($"  틱: 중앙 {P(0.5):0.000}ms · p99 {P(0.99):0.000}ms · p99.9 {P(0.999):0.000}ms · 최대 {sorted[^1]:0.00}ms · 가장 무거운 게임 1분 {minutes.DefaultIfEmpty(0).Max():0}ms ({worstMin}분째)");
         Console.WriteLine($"  할당 {alloc / 1024.0 / 1024.0:0.0}MB (틱당 {alloc / (double)ticks / 1024.0:0.0}KB) · GC {GC.CollectionCount(0) - g0}/{GC.CollectionCount(1) - g1}/{GC.CollectionCount(2) - g2} (0/1/2세대) · 멈춤 {pause.TotalMilliseconds:0}ms");

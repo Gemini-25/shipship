@@ -349,7 +349,9 @@ public sealed partial class BodySystem
             else if (h == null || !h.CanAct || !h.IsAwake || now - db.CalledAt > SimTime.Minutes(3) && h.Job?.Activity is not OpenDoorActivity)
                 db.Helper = -1; // 못 온다 — 다른 사람을
         }
-        if (waited > SimTime.Minutes(15)) GiveUp(c, db, $"잠긴 {zone} 문 앞에서 한참 기다리다 돌아섰다");
+        // 통합: 부른 사람이 오는 중이면 (큰 배는 끝에서 끝까지 반 시간) 더 기다린다 — 오는 걸 두고 돌아서지 않는다
+        bool coming = db.Helper >= 0 && !db.Remote && CrewById(db.Helper) is { Job.Activity: OpenDoorActivity };
+        if (waited > SimTime.Minutes(coming ? 40 : 15)) GiveUp(c, db, $"잠긴 {zone} 문 앞에서 한참 기다리다 돌아섰다");
         return 0f;
     }
 
@@ -703,7 +705,16 @@ public sealed class OpenDoorActivity : Activity
     {
         if (w.Body.CallFor(c) is not DoorBody db) return null;
         var d = w.Ship.Doors[db.Door];
-        if (w.Body.OuterCell(d, db) is not Cell spot || dist.Get(spot) < 0) return null;
+        if (w.Body.OuterCell(d, db) is not Cell outer || dist.Get(outer) < 0) return null;
+        // 통합: 문 앞 칸에는 부른 사람이 서 있다 — 그 곁 빈 칸에 서서 카드를 댄다 (같은 칸을 두고 길이 막혀 되돌아가던 것)
+        var spot = outer;
+        if (w.IsSpotTaken(outer, c))
+            foreach (var dd in Cell.Dirs8)
+            {
+                var x = outer + dd;
+                if (x == d.Cell || !w.Ship.IsOpenFloor(x) || w.Ship.RoomAt(x)?.Id == db.Inner || dist.Get(x) < 0 || w.IsSpotTaken(x, c)) continue;
+                spot = x; break;
+            }
         var toils = new List<Toil>
         {
             new GotoToil(spot),

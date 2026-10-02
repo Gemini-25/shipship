@@ -223,6 +223,14 @@ public sealed class ResourceWatch
         float? slope = Readout.Slope(s, window);
         float? left = Readout.HoursUntil(s, th, falling, window, minRate);
         if (s.Count == 0) left = falling ? (value <= th ? 0f : null) : (value >= th ? 0f : null);
+        // 통합: 식량은 끼니마다 크게 출렁인다 (아침 배식 · 조리하러 들고 간 채소) — 몇 시간의 기울기 대신 먹는 양과 거두는 양으로 본다
+        if (k == ResourceKey.Food)
+        {
+            int crew = w.Crew.Count(c => !c.Dead);
+            float need = crew * FoodPolicy.MealsPerPersonDay, grow = FoodPolicy.GrowingPerDay(w);
+            float net = need > 0f ? 1f - MathF.Min(1f, grow / need) : 0f; // 하루에 줄어드는 날 수
+            left = value <= th ? 0f : net > 0.02f ? (value - th) / net * 24f : null;
+        }
         if (k == ResourceKey.Oxygen && Status(w, ResourceKey.AirTank).HoursLeft is float tank && w.Air.ReserveCapacity > 0f)
             left = left is float l ? MathF.Min(l, tank) : tank;
         bool warn = WarnNow(w, k, value);

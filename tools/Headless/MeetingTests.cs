@@ -167,7 +167,8 @@ public static partial class Program
                     var wall = w2.Ship.Walls.Where(kv => kv.Value.IsHull && Hull.InsideRoom(w2.Ship, kv.Key) == lounge).Select(kv => kv.Key).First();
                     Hull.Damage(w2.Ship, wall, 1.2f);
                     Run(w2, SimTime.Minutes(1f)); // 사람이 손으로 잠그러 오기 전
-                    locked[k] = lounge.Doors.Where(d => !d.IsExternal).Any(d => d.Locked);
+                    // 통합: v16.19 차압 문은 기계라 방침과 상관없이 쾅 닫힌다 — 방침이 바꾸는 것은 주 컴퓨터가 격벽을 잠갔나 (조치 기록)
+                    locked[k] = w2.Automation.Book.Acts.Any(a => a.Key == "lock:" + lounge.Id) || lounge.Doors.Where(d => !d.IsExternal).Any(d => d.Locked && !w2.Failsafe.Latched(d));
                     if (debug) Console.WriteLine($"      [{k}] 새는가 {lounge.Leaking} · 잠금 {lounge.Lockdown} · 대기 {lounge.LockPendingUntil} · 문 {string.Join(",", lounge.Doors.Select(d => $"{(d.IsExternal ? "외" : "")}{(d.Locked ? "L" : "-")}{(d.Powered ? "P" : "x")}"))} · 압력 {lounge.Air.Pressure:0}");
                 }
                 Check("방침 1차 — 대피 기준·물·비축·자동 실행 범위가 실제로 행동을 바꾼다",

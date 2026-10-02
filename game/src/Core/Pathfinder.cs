@@ -69,12 +69,21 @@ public sealed class Pathfinder
         {
             if (d < 0 || d >= nd || inner == startRoom) continue; // 안에 있는 사람은 언제나 나간다
             _barMark[d] = _barRun;
+            if (inner >= 0) { if (_roomBar.Length <= inner) Array.Resize(ref _roomBar, Math.Max(inner + 1, _ship.Rooms.Count)); _roomBar[inner] = _barRun; } // 통합: 그 방으로 드는 정비 통로도
             sig = unchecked(sig * 31 + d + 1);
         }
         return sig;
     }
 
     private bool Barred(int door) => door >= 0 && door < _barMark.Length && _barMark[door] == _barRun;
+    private int[] _roomBar = Array.Empty<int>();
+    /// <summary>통합: 정비 통로(벽 속)에서 권한 없는 출입 통제 방으로 내려서는 걸음 — 문을 비켜 몰래 드는 길이 되지 않게 막는다 (나가는 것은 된다).</summary>
+    private bool CrawlIntoBarred(int from, int to)
+    {
+        if (!Crawl[from] || _walk[from]) return false;
+        int r = _room[to];
+        return r >= 0 && r < _roomBar.Length && _roomBar[r] == _barRun;
+    }
 
     private readonly Ship _ship;
     private readonly int _w;
@@ -389,7 +398,13 @@ public sealed class Pathfinder
         if (profile.Spots is { } sp0) for (int k = 0; k < sp0.Length; k += 2) if (sp0[k] >= 0 && sp0[k] < _n) _spotAdd[sp0[k]] += profile.Responder ? sp0[k + 1] * 2 / 5 : sp0[k + 1]; // v17.5
         // v16.26 성능: 한 걸음 비용이 작은 정수라 원형 통 큐(버킷)로 — 거리는 가장 짧은 길의 값이라 고르는 순서가 달라도 결과는 같다
         int maxStep = MaxStep(nr, nd0, cellScale * profile.HazardScale);
-        if (maxStep > 0 && maxStep < (1 << 16)) { BucketFlood(s, cost, maxStep, cellScale, profile.HazardScale); return new DistanceField(grid, cost); }
+        if (maxStep > 0 && profile.Spots is { } spm) { int mx = 0; for (int k = 0; k < spm.Length; k += 2) if (spm[k] >= 0 && spm[k] < _n && _spotAdd[spm[k]] > mx) mx = _spotAdd[spm[k]]; maxStep += mx; } // 통합: 장소의 기억도 걸음 비용에 (합칠 때 통 큐 쪽에서 빠졌다)
+        if (maxStep > 0 && maxStep < (1 << 16))
+        {
+            BucketFlood(s, cost, maxStep, cellScale, profile.HazardScale, spotsOn);
+            if (profile.Spots is { } sp2) for (int k = 0; k < sp2.Length; k += 2) if (sp2[k] >= 0 && sp2[k] < _n) _spotAdd[sp2[k]] = 0; // 다음 계산에 남지 않게
+            return new DistanceField(grid, cost);
+        }
         var open = _open;
         open.Clear();
         cost[s] = 0;
@@ -403,6 +418,7 @@ public sealed class Pathfinder
                 int ni = cur + _offsets[k];
                 // ── CanStep ──
                 if (ni < 0 || ni >= _n || !_pass[ni]) continue;
+                if (CrawlIntoBarred(cur, ni)) continue;
                 int dr = _door[ni];
                 if (dr >= 0 && _doorBlocked[dr]) continue;
                 int r = _room[ni];
@@ -455,7 +471,7 @@ public sealed class Pathfinder
         return m > int.MaxValue / 4 ? int.MaxValue : (int)m;
     }
 
-    private void BucketFlood(int s, int[] cost, int maxStep, float cellScale, float hazardScale)
+    private void BucketFlood(int s, int[] cost, int maxStep, float cellScale, float hazardScale, bool spotsOn)
     {
         int B = maxStep + 1;
         if (_bHead.Length < B) _bHead = new int[Math.Max(B, _bHead.Length * 2)];
@@ -489,6 +505,8 @@ public sealed class Pathfinder
                     int ni = cur + _offsets[k];
                     // ── CanStep ──
                     if (ni < 0 || ni >= _n || !_pass[ni]) continue;
+                    if (CrawlIntoBarred(cur, ni)) continue;
+                if (CrawlIntoBarred(cur, ni)) continue;
                     int dr = _door[ni];
                     if (dr >= 0 && _doorBlocked[dr]) continue;
                     int r = _room[ni];
@@ -509,6 +527,7 @@ public sealed class Pathfinder
                     int h = hz[ni];
                     if (h > 0) step += (int)(h * cellScale * hazardScale);
                     step += bd[ni]; // v16.3
+                    if (spotsOn) step += _spotAdd[ni]; // v17.5 장소의 기억
                     int nd = dist + step;
                     if (cost[ni] >= 0 && nd >= cost[ni]) continue;
                     cost[ni] = nd;
@@ -523,6 +542,7 @@ public sealed class Pathfinder
         // 설계도 둘레에 빈 여백이 있으므로 이웃 인덱스가 배열 밖으로 나가지 않는다
         if (to < 0 || to >= _n) return false;
         if (!Passable(to, profile)) return false;
+        if (CrawlIntoBarred(from, to)) return false;
         int dr = _door[to];
         if (dr >= 0 && _ship.Doors[dr].Locked)
         {

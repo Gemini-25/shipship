@@ -136,7 +136,7 @@ public sealed class FireSystem
             air.O2 = MathF.Max(0f, air.O2 - 400f * intensity * dt / vol);
             air.CO2 += 300f * intensity * dt / vol;
             // v12.2 산소가 모자란 불은 일산화탄소를 더 낸다
-            air.CO = MathF.Min(1f, air.CO + (o2 < 16f ? 25f : 8f) * intensity * dt / vol);
+            air.CO = MathF.Min(1f, air.CO + (intensity < 0.3f ? 150f : o2 < 16f ? 40f : 14f) * intensity * dt / vol); // 통합: 닫힌 방에서 타면 소리 없이 찬다 · 연기만 피우는 불씨(훈소)가 가장 많이 낸다 (잠든 사람을 깨우지 않는다)
             air.Smoke = MathF.Min(1f, air.Smoke + 120f * intensity * dt / vol);
             air.Temperature = MathF.Min(95f, air.Temperature + 25f * intensity * dt * 30f / vol);
 
@@ -209,8 +209,9 @@ public sealed class FireSystem
                 float dx = c.Position.X - (cell.X + 0.5f), dy = c.Position.Y - (cell.Y + 0.5f);
                 if (dx * dx + dy * dy > 1.6f * 1.6f) continue;
                 float protect = c.Suit != null ? 0.3f : 1f;
-                c.Vitals.Health -= 0.35f * intensity * dt * protect;
-                NeedsSystem.AddInjury(c.Vitals, 0.2f * intensity * dt * protect, "화상");
+                float near = dx * dx + dy * dy < 0.6f * 0.6f ? 2.2f : 1f; // 통합: 불길 한가운데 (누운 자리 · 갇힌 자리)는 몇 분이면 깊게 덴다
+                c.Vitals.Health -= 0.5f * near * intensity * dt * protect;
+                NeedsSystem.AddInjury(c.Vitals, 0.3f * near * intensity * dt * protect, "화상");
             }
 
             // 길찾기: 불과 그 주변은 가기 싫다

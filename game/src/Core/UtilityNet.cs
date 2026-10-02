@@ -268,6 +268,37 @@ public sealed partial class UtilityNet
         return reach;
     }
 
+    // 통합 성능: 시스템 틱의 Reach — 집합 대신 표시 배열(판 번호)과 배열 큐 (닿는 곳은 같다)
+    private int[] _mark = Array.Empty<int>(), _bfs = Array.Empty<int>();
+    private int _markGen;
+    private void ReachMark(NetKind k, List<Room> sources)
+    {
+        int size = _nodes;
+        foreach (var (node, _) in _hubs) if (node + 1 > size) size = node + 1;
+        if (_mark.Length < size) { _mark = new int[size]; _bfs = new int[size]; _markGen = 0; }
+        if (++_markGen == int.MaxValue) { Array.Clear(_mark); _markGen = 1; }
+        int gen = _markGen, head = 0, tail = 0;
+        foreach (var r in sources)
+        {
+            int hub = -1;
+            foreach (var h in _hubs) if (h.room == r) { hub = h.node; break; }
+            if (hub < 0 || _mark[hub] == gen) continue;
+            _mark[hub] = gen; _bfs[tail++] = hub;
+        }
+        var adj = _adj[(int)k];
+        while (head < tail)
+        {
+            int n = _bfs[head++];
+            if (n < 0 || n >= adj.Length) continue;
+            foreach (var l in adj[n])
+            {
+                if (l.Cut || l.Room.Detached) continue;
+                int other = l.NodeA == n ? l.NodeB : l.NodeA;
+                if (_mark[other] != gen) { _mark[other] = gen; _bfs[tail++] = other; }
+            }
+        }
+    }
+
     public void Update(float dt)
     {
         var w = _w;
@@ -276,11 +307,12 @@ public sealed partial class UtilityNet
         foreach (NetKind k in Enum.GetValues<NetKind>())
         {
             var sources = Sources(k);
-            var reach = Reach(k, sources);
+            ReachMark(k, sources);
+            int gen = _markGen;
             int newlyDark = 0;
             foreach (var (node, room) in _hubs)
             {
-                bool fed = reach.Contains(node) || sources.Count == 0; // 공급원이 없는 배(시험용)는 예전처럼
+                bool fed = node >= 0 && node < _mark.Length && _mark[node] == gen || sources.Count == 0; // 공급원이 없는 배(시험용)는 예전처럼
                 if (k == NetKind.Power)
                 {
                     bool was = !_powerFed.TryGetValue(room.Id, out var pf) || pf;

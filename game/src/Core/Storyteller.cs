@@ -221,6 +221,17 @@ public sealed partial class Storyteller
         var fridge = ship.FurnitureOf(FurnitureType.Fridge).FirstOrDefault(f => !f.Room.Detached);
         if (fridge != null && ship.CountStored(ItemKind.Meal) > w.Crew.Count * 4)
             options.Add((nameof(HazardKind.FreezerFailure), fridge.Room, "냉장고에 먹을 것이 몰려 있다", 1f));
+        // 통합: 대비를 잘 갖춘 배에도 급소는 있다 — 사람이 자고 먹는 방이 외벽에 붙어 있으면 (외벽이 넓을수록)
+        Room? exposed = null; int bestHull = 0;
+        foreach (var r in ship.LiveRooms)
+        {
+            if (r.Kind is not (RoomType.Quarters or RoomType.Mess or RoomType.PrivateCabins or RoomType.Lounge) || r.Abandoned) continue;
+            int hull = 0;
+            foreach (var c in r.Cells) foreach (var d in Cell.Dirs4) if (ship.WallAt(c + d) is { IsHull: true }) hull++;
+            if (hull > bestHull) { bestHull = hull; exposed = r; }
+        }
+        if (exposed != null && bestHull >= 3)
+            options.Add((Level >= 4 && _rng.Chance(0.4f) ? "bigmeteor" : "meteor", exposed, $"사람이 자고 먹는 {Ko.IGa(exposed.Name)} 외벽에 붙어 있다", options.Count == 0 ? 1.5f : 0.6f));
         if (options.Count == 0) return null;
         float total = options.Sum(o => o.score), roll = _rng.Float() * total;
         foreach (var o in options) { roll -= o.score; if (roll <= 0f) return (o.key, o.room, $"급소: {o.why}"); }

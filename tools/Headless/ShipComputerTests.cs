@@ -345,9 +345,9 @@ public static partial class Program
                     try
                     {
                         var w = World.CreateDefault(seed, 30, "Hanbit");
-                        var sw = System.Diagnostics.Stopwatch.StartNew();
+                        double c0 = CpuSeconds(); // 통합: 벽시계는 다른 일에 따라 흔들린다 (실행마다 달랐다)
                         Run(w, SimTime.TicksPerDay);
-                        return sw.Elapsed.TotalSeconds;
+                        return CpuSeconds() - c0;
                     }
                     finally { AutomationSystem.Ship20Off = false; }
                 }

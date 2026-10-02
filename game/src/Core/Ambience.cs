@@ -126,7 +126,7 @@ public sealed class AmbienceSystem
             // 태양 폭풍: 바깥벽에 닿은 방이 가장 세다. 대피소·물벽은 거의 막는다
             if (storm > 0f)
             {
-                float sr = storm * Exposure(room) + 0.12f * storm * MathF.Min(3, w.Body.OpenWindows(room)); // v16.26 덮개가 안 내려간 창가
+                float sr = storm * Exposure(room) * (storm > 1.2f ? 1.5f : 1f) + 0.12f * storm * MathF.Min(3, w.Body.OpenWindows(room)); // v16.26 덮개가 안 내려간 창가 · 통합: 센 폭풍은 안쪽 방까지 파고든다
                 r = MathF.Max(r, sr);
             }
             r = MathF.Max(r, w.Cosmic.Radiation(room)); // v18.13 우주 대재난 방사선 (물벽이 덜고 · 대피소가 막는다)
@@ -144,7 +144,7 @@ public sealed class AmbienceSystem
         foreach (var c in w.Crew)
         {
             if (c.Dead) continue;
-            float rad = c.Outside ? storm + 0.02f + w.Cosmic.OutsideRad : c.Room?.Radiation ?? 0f; // v18.13 선체 밖
+            float rad = c.Outside ? 4f * storm + 0.02f + w.Cosmic.OutsideRad : c.Room?.Radiation ?? 0f; // v18.13 선체 밖 · 통합: 선체가 막아 주지 못한다 (안쪽 방의 네 배)
             if (c.Suit != null) rad *= 0.7f;
             if (rad > 0.1f) c.Dose += (rad - 0.05f) * 0.5f * dt;
             else c.Dose = MathF.Max(0f, c.Dose - 0.005f * dt); // 몸이 아주 천천히 회복한다

@@ -245,8 +245,19 @@ public static class Persona
         return best;
     }
     public static QualSpec Of(Qual q) => Quals.FirstOrDefault(x => x.Id == q) ?? Quals[0];
-    public static HobbySpec Of(Hobby h) => Hobbies.First(x => x.Id == h);
-    public static FearSpec Of(Fear f) => Fears.First(x => x.Id == f);
+    // 통합 성능: 종류 → 표 (틱마다 찾는다 — 처음 맞는 것, 예전 First와 같다)
+    private static Dictionary<Hobby, HobbySpec>? _hobbyOf;
+    private static Dictionary<Fear, FearSpec>? _fearOf;
+    public static HobbySpec Of(Hobby h)
+    {
+        if (_hobbyOf == null) { var d = new Dictionary<Hobby, HobbySpec>(); foreach (var x in Hobbies) d.TryAdd(x.Id, x); _hobbyOf = d; }
+        return _hobbyOf.TryGetValue(h, out var s) ? s : Hobbies.First(x => x.Id == h);
+    }
+    public static FearSpec Of(Fear f)
+    {
+        if (_fearOf == null) { var d = new Dictionary<Fear, FearSpec>(); foreach (var x in Fears) d.TryAdd(x.Id, x); _fearOf = d; }
+        return _fearOf.TryGetValue(f, out var s) ? s : Fears.First(x => x.Id == f);
+    }
 
     /// <summary>습관 효과를 곱한 값 (여러 습관이면 모두 곱한다).</summary>
     public static float Mul(CrewMember c, Func<HabitSpec, float> pick)
@@ -374,8 +385,12 @@ public static class Persona
     }
 
     /// <summary>이 방이 이 사람 취미의 방인가.</summary>
-    public static Hobby? HobbyIn(CrewMember c, Room? r) =>
-        r == null ? null : c.Hobbies.Cast<Hobby?>().FirstOrDefault(h => Of(h!.Value).Rooms.Contains(r.Type));
+    public static Hobby? HobbyIn(CrewMember c, Room? r)
+    {
+        if (r == null) return null;
+        foreach (var h in c.Hobbies) if (Of(h).Rooms.Contains(r.Type)) return h; // 통합 성능: 틱마다 불린다 (상자에 담지 않는다)
+        return null;
+    }
 
     public static string Line(CrewMember c) =>
         (c.Hobbies.Count > 0 ? "취미 " + string.Join("·", c.Hobbies.Select(h => Of(h).Name)) : "")

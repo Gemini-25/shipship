@@ -344,7 +344,19 @@ public sealed class MajorIncidentSystem
     {
         var rooms = _w.Ship.Rooms.Where(r => !r.Detached && !r.Abandoned && ok(r)).OrderBy(r => r.Id).ToList();
         if (rooms.Count == 0) return null;
-        return prefer != null && rooms.Contains(prefer) ? prefer : rooms[R.Range(0, rooms.Count)];
+        if (prefer != null && rooms.Contains(prefer)) return prefer;
+        // 통합: 큰 사고도 대개 사람이 쓰고 · 지내는 곳에서 커진다 (돌리던 설비 · 자던 방 — 사람이 있으면 더 자주, 빈 방도 가끔)
+        float sum = 0f;
+        var wt = new float[rooms.Count];
+        for (int i = 0; i < rooms.Count; i++)
+        {
+            int n = 0;
+            foreach (var c in _w.Crew) if (!c.Dead && !c.Away && c.Room == rooms[i]) n++;
+            sum += wt[i] = 1f + 1.2f * Math.Min(3, n);
+        }
+        float x = R.Float() * sum;
+        for (int i = 0; i < rooms.Count; i++) { x -= wt[i]; if (x <= 0f) return rooms[i]; }
+        return rooms[^1];
     }
 
     private Furniture? Furn(FurnitureType t, Room? prefer = null)
@@ -373,6 +385,27 @@ public sealed class MajorIncidentSystem
     {
         foreach (var c in _w.Crew)
             if (!c.Dead && c.Room == r && R.Chance(0.6f)) { NeedsSystem.AddInjury(c.Vitals, amt, cause); c.Interrupt(_w); }
+    }
+
+    /// <summary>
+    /// 통합: 벽이 한순간에 터져 나갔다 — 그 방에 있던 사람은 귀 · 폐가 상하고 (급감압) · 구멍 곁이면 날린 파편에 베인다.
+    /// 깨어 있던 사람은 몸을 붙들지만, 자던 사람은 침대째 흔들린다 (사람마다 다르게 · 기록 · 기억에).
+    /// </summary>
+    private void Burst(Room r, Cell hole, string what)
+    {
+        var w = _w;
+        foreach (var c in w.Crew.Where(c => !c.Dead && !c.Away && c.Room == r).OrderBy(c => c.Id).ToList())
+        {
+            if (c.Suit != null) continue;
+            float near = MathF.Max(0f, 1f - (c.Position - hole.Center).Length() / 6f);
+            float hit = R.Range(0.08f, 0.18f) + 0.25f * near * R.Float() + (c.Pose == Pose.Sleeping ? 0.06f : 0f);
+            NeedsSystem.AddInjury(c.Vitals, hit, "급감압");
+            c.Vitals.Health = MathF.Max(0.05f, c.Vitals.Health - hit * 0.6f);
+            if (near > 0.5f) Shrapnel.HitCrew(w, R, c, 0.12f + 0.2f * near, 1f, "날린 파편에 베였다", $"{r.Name} 벽이 터질 때 날린 파편에 베였다");
+            c.Interrupt(w);
+            MarkLog.Add(c.Memory.Marks, w.Tick, $"{r.Name} 벽이 터졌다 — 귀가 먹먹하고 숨이 빨려 나갔다");
+            w.Log.Add(w.Tick, LogKind.Warning, $"{r.Name} 급감압 — 귀와 가슴이 찢어지는 듯하다", c.Id);
+        }
     }
 
     private bool BreakM(Machine m, FaultKind f) => m.Has(f) || _w.Machines.Break(m, f) != null;
@@ -425,6 +458,7 @@ public sealed class MajorIncidentSystem
                 k.Room = r.Id;
                 var door = r.Doors.Where(d => !d.IsExternal && !d.Removed && d.RoomA != null && d.RoomB != null).OrderBy(d => d.Id).FirstOrDefault();
                 if (door != null) { door.Bent = MathF.Max(door.Bent, 0.4f); k.Doors.Add(door.Id); }
+                Burst(r, cell, spec.Name);
                 return $"{spec.Name}({r.Name})";
             }
             case MajorKind.O2StoreLeak:
@@ -624,6 +658,7 @@ public sealed class MajorIncidentSystem
                 k.Cells.Add(cell);
                 k.Room = r.Id;
                 MarkLog.Add(ws.Marks, w.Tick, "외판이 골조에서 뜯겨 나갔다");
+                Burst(r, cell, spec.Name);
                 return $"{spec.Name}({r.Name})";
             }
             case MajorKind.LifeSupportCascade:

@@ -144,7 +144,7 @@ public sealed class VisitActivity : Activity
     {
         // 문병은 성한 사람이 간다 (다친 사람끼리 오가면 치료하러 온 사람이 헛걸음한다)
         if (c.Down || c.Outside || c.Needs.Rest < 0.3f || c.Needs.Food < 0.3f || c.Vitals.Injury > 0.2f || c.Vitals.Health < 0.6f || DiseaseSystem.Sick(c)) return (0f, "—");
-        if (w.Board.Open.Any(o => o.Kind == WorkKind.Treat && o.Target.Crew == c)) return (0f, "치료를 기다린다");
+        if (w.Board.OpenUnsorted.Any(o => o.Kind == WorkKind.Treat && o.Target.Crew == c)) return (0f, "치료를 기다린다");
         var p = Patient(c, w);
         if (p == null || !dist.Reachable(p.Cell)) return (0f, "—");
         string why = p.GriefUntil > w.Tick && !p.Down ? "슬픔에 잠겨 있다" : p.Down ? "쓰러져 누워 있다" : DiseaseSystem.Sick(p) ? "열이 난다" : p.Fx.Worst > 0.4f ? "앓고 있다" : "다쳤다";

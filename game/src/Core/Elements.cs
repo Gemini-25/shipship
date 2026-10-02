@@ -72,9 +72,9 @@ public sealed partial class MatterSystem
         Oxygen(h);
         Notice();
         SmokeWatch();
-        if (++_watchTurn % 2 == 0) ComputerWatch();
+        ComputerWatch(++_watchTurn % 2 == 0); // 통합: 짙은 산소 + 불씨는 매분 본다 (2분마다면 불꽃이 먼저 튀었다)
         foreach (var c in w.Crew) if (!c.Dead && c.Pose == Pose.Working && MatAt(c.Cell)) Stats.MatWorks++;
-        Prof.Lap("sys.Matter", pf);
+        Prof.Lap("matter.minute", pf); // 통합: 바깥(World)의 sys.Matter와 같은 이름이면 두 번 더해졌다
     }
 
     // ───────────────────────────── 장: 온도 · 바람 ─────────────────────────────
@@ -544,14 +544,14 @@ public sealed partial class MatterSystem
 
     // ───────────────────────────── 주 컴퓨터가 읽는 위험한 조합 ─────────────────────────────
 
-    private void ComputerWatch()
+    private void ComputerWatch(bool full)
     {
         var w = _w;
         var au = w.Automation;
         if (!au.Present || !au.MainOnline) return;
         var ship = w.Ship;
-        // ① 히터 옆 젖은 천 · 종이 (마르면 그을린다)
-        foreach (var d in w.Portable.Devices)
+        // ① 히터 옆 젖은 천 · 종이 (마르면 그을린다) — 2분마다
+        if (full) foreach (var d in w.Portable.Devices)
         {
             if (d.Kind != PortableKind.Heater || !d.Running || !d.Placed) continue;
             var room = ship.RoomAt(d.At);
