@@ -110,6 +110,7 @@ public partial class Hud
             Gfx.TextRight(this, Fonts.Bold, new Vector2(rect.End.X - 12, rect.Position.Y + 19), status, Ui.TextSmall, sev);
             // 둘째 줄: 번진 것 · 사람 · 복구 막대
             string meta = $"번진 것 {inc.Nodes.Count(i => log.Node(i).Kind != CauseKind.Recovery) - 1}" + (inc.Casualties > 0 ? $" · 쓰러짐 {inc.Casualties}" : "") + (inc.Deaths > 0 ? $" · 사망 {inc.Deaths}" : "");
+            if (_world.Ways.MethodIn(inc.Start, inc.Open ? long.MaxValue : inc.End, root.At is System.Numerics.Vector2 rat ? _world.Ship.RoomAt(Cell.FromPosition(rat)) : null) is string used) meta += $" · {used}"; // v16.25 쓴 방법
             Gfx.Text(this, Fonts.Body, new Vector2(x, rect.Position.Y + 36), meta, Ui.TextSmall, Palette.TextDim);
             float done = lasting > 0 ? (lasting - open) / (float)lasting : 1f;
             var bar = new Rect2(rect.End.X - 112, rect.Position.Y + 30, 100, 5);

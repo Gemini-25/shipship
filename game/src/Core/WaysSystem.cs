@@ -149,7 +149,7 @@ public sealed partial class WaysSystem
     private readonly World _w;
     private Rng? _rng;
     private Rng R => _rng ??= new Rng(unchecked(_w.Seed * 6143 + 4231));
-    public static bool Off { get; set; }
+    public static bool Off { get; set; } = Environment.GetEnvironmentVariable("SHIPSIM_WAYS_OFF") != null; // 견줘 보기용 (헤드리스)
     public static bool Debug { get; set; }
 
     public List<WayCase> Cases { get; } = new();
@@ -239,6 +239,9 @@ public sealed partial class WaysSystem
         }
         return list;
     }
+
+    /// <summary>이 배가 그 문제를 마지막으로 잘 푼 길.</summary>
+    public WayPast? PastOk(Snag s) { for (int i = Past.Count - 1; i >= 0; i--) if (Past[i].Snag == s && Past[i].Ok) return Past[i]; return null; }
 
     /// <summary>관행 한 줄씩 (화면용).</summary>
     public IEnumerable<string> CustomLines() => Practices.Where(p => p.Custom).Select(p => $"{WaysTable.Name(WaysTable.Get(p.WayId)!.Snag)}: {WaysTable.Get(p.WayId)!.Name} — {p.Origin}");
@@ -559,6 +562,7 @@ public sealed partial class WaysSystem
                 Ship = way.ShipCost + (1f - way.Power) * 0.3f + MathF.Min(1f, mins / 60f) * WaysTable.Urgency(k.Snag) * 0.25f,
                 Allowed = ok && (!way.Leave || w.Automation.Character.Caution < 0.5f || way.By == WayBy.Computer), Blocked = ok ? (way.Leave ? "허락 없이는 못 한다" : "") : note, Note = note,
             };
+            if (PastOk(k.Snag) is WayPast cp && cp.WayId == way.Id) { o.People *= 0.85f; o.Note = $"지난번 {cp.Room}에서 통했다"; } // 컴퓨터도 이 배의 지난 일을 본다
             opts.Add((way, o));
         }
         if (Debug) Console.WriteLine($"   [컴퓨터] {k.Title}: {string.Join(" · ", opts.Select(x => $"{x.way.Name} {(x.o.Allowed ? $"{x.o.People + x.o.Ship:0.00}" : x.o.Note)}"))}");
@@ -587,6 +591,7 @@ public sealed partial class WaysSystem
         var w = _w;
         var ship = w.Ship;
         if (way.Item is ItemKind it && ship.CountStored(it) < way.ItemCount) return (false, $"{ItemKinds.Name(it)} 없음", way.Minutes);
+        if (way.Item2 is ItemKind it2 && ship.CountStored(it2) < 1) return (false, $"{ItemKinds.Name(it2)} 없음", way.Minutes);
         if (way.Near.Length > 0 || way.Things.Length > 0)
         {
             // 컴퓨터도 사람과 같은 눈으로: 그 자리 가까이에 쓸 것이 있어야 권한다 (호스 길이 · 화덕 곁 · 들고 올 만한 거리)
@@ -610,6 +615,7 @@ public sealed partial class WaysSystem
             case "trap.crawl": if (room == null || !CrawlOut(room).HasValue) return (false, "통로가 없다", 6); break;
             case "power.robotbat": if (!w.Robots.Robots.Any(r => r.Operational && r.AtDock)) return (false, "쉬는 로봇이 없다", 10); break;
             case "hurt.push": if (w.Matter.Gravity > 0.3f) return (false, "중력이 있다", 3); break;
+            case "power.reactor": if (!w.Power.ReactorOnline || w.Power.ReactorOutput > w.Power.ReactorRated * 0.9f) return (false, "더 올릴 여유가 없다", 5); break;
         }
         return (true, "", way.Minutes);
     }
@@ -753,6 +759,7 @@ public sealed partial class WaysSystem
             else if (p != null) s += 0.03f * Math.Min(2, p.Ok) - 0.05f * Math.Min(2, p.Bad);
             var mine = Mine(c, way.Id);
             s += 0.06f * Math.Min(3, mine.ok);
+            if (PastOk(k.Snag) is WayPast pp && pp.WayId == way.Id) s += 0.05f; // 이 배가 지난번에 이렇게 풀었다
             if (c.Lessons.Contains("ways:" + way.Id)) s -= 0.4f;
             if (pick != null && pick.Id == way.Id) s += 0.15f * faith;
             s += R.Range(-0.07f, 0.07f);
@@ -794,6 +801,7 @@ public sealed partial class WaysSystem
         }
         else if (p2 is { Custom: true }) why = $"이 배에선 {WaysTable.Name(k.Snag)}{(Ko.EunNeun(WaysTable.Name(k.Snag))[^1..])} 이렇게 한다";
         else if (mine2.ok > 0) why = "전에 이렇게 해서 됐다";
+        else if (PastOk(k.Snag) is WayPast past && past.WayId == best.Id) why = $"지난번 {past.Room}에서도 이렇게 했다";
         else if (!best.Book && bookBlocked.way != null) why = $"{bookBlocked.a.Note} — {(bestA.Thing.Length > 0 ? $"{Ko.EuRo(bestA.Thing)}" : best.Name)}";
         else if (!best.Book && best.Risk >= 0.35f && c.Traits.Bravery > 0.6f) why = $"급하다 — {(bestA.Thing.Length > 0 ? Ko.EuRo(bestA.Thing) : "손에 잡히는 걸로")}";
         else if (bestA.Why.Length > 0) why = bestA.Why;
@@ -836,6 +844,7 @@ public sealed partial class WaysSystem
             return No($"{ItemKinds.Name(it)}{(Ko.IGa(ItemKinds.Name(it))[^1..])} 없다");
         }
         Furniture? believedBox = null;
+        if (way.Item2 is ItemKind it2 && ship.CountStored(it2) < 1) return No($"{ItemKinds.Name(it2)}{(Ko.IGa(ItemKinds.Name(it2))[^1..])} 없다");
         if (way.Id == "fire.ext" && c.Carrying?.Kind != ItemKind.Extinguisher)
         {
             believedBox = w.Brain2.Beliefs.WhereItem(c, ItemKind.Extinguisher, out _, out bool none);
@@ -882,6 +891,7 @@ public sealed partial class WaysSystem
                 furn = bf!.Id; var fi = WaysRules.FromFurniture(bf.Type); thing = fi.name; mat = fi.mat; bulk = fi.bulk; travel = fd / 3f;
                 if (way.Fx == WayFx.Smother && bf.Type is FurnitureType.Bed or FurnitureType.Cot or FurnitureType.MedBed) thing = "침대 담요";
                 if (way.Id == "fire.lid") thing = "냄비 뚜껑";
+                if (way.Id == "breach.glue") { thing = "수선 패치"; mat = Material.Rubber; bulk = 0.1f; }
             }
         }
         if (way.Fx == WayFx.Pry && thing.Length > 0) thing = "쇠지레";
@@ -952,16 +962,19 @@ public sealed partial class WaysSystem
             case WayFx.Plug:
             {
                 if (wall == null) return No("");
-                if (way.Id == "breach.pot" && wall.Breach >= 0.25f) return No("냄비로는 구멍이 크다");
+                if (room != null && room.Unbreathable && c.Suit == null) return No("숨을 못 쉬는 방이다");
+                if (way.Id is "breach.pot" or "breach.glue" && wall.Breach >= 0.25f) return No(way.Id == "breach.pot" ? "냄비로는 구멍이 크다" : "패치로는 구멍이 크다");
                 est = WaysRules.PlugQuality(mat, bulk, wall.Breach);
                 if (est < 0.3f) return No($"{thing}{(Ko.EunNeun(thing)[^1..])} 빨려 나간다");
                 break;
             }
             case WayFx.Freeze:
+                if (room != null && room.Unbreathable && c.Suit == null) return No("숨을 못 쉬는 방이다");
                 est = wall != null && wall.Breach >= 0.25f ? 0.45f : 0.62f;
                 break;
             case WayFx.Brace:
                 if (wall == null || wall.Breach >= 0.3f) return No("몸으로 막기엔 크다");
+                if (room != null && room.Unbreathable && c.Suit == null) return No("숨을 못 쉬는 방이다");
                 danger += c.Suit == null ? 0.15f : 0f;
                 est = 0.5f;
                 break;

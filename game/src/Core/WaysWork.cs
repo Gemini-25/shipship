@@ -41,7 +41,7 @@ public sealed class WayActivity : Activity
             // 급한 손: 잠긴 격벽 너머도 연다 (일감과 같은 길찾기)
             var field = w.Paths.Flood(c.Cell, c.PathProfile with { Responder = true });
             var job = WaysWork.Build(this, c, w, field, t, out string? why);
-            if (job == null) ways.Finish(t, false, why ?? "그럴 수가 없었다", t.Helper ? null : c);
+            if (job == null) { ways.Cancel(t, why ?? "그럴 수가 없었다"); if (ways.Case(t.CaseId) is WayCase k) k.NextChoose = w.Tick; } // 해 보지도 못했다 — 교훈 없이 다른 손에
             return job;
         }
         if (ways.FollowFor(c) is WayFollow f) return WaysWork.BuildFollow(this, c, w, dist, f);
@@ -94,6 +94,17 @@ public static class WaysWork
         if (box == null) return false;
         toils.Add(new GotoToil(spot));
         toils.Add(new TakeToil(box, kind, n));
+        return true;
+    }
+
+    /// <summary>엮어 쓸 둘째 물건은 주머니(키트)에 챙긴다.</summary>
+    private static bool FetchKit(CrewMember c, World w, DistanceField dist, ItemKind kind, List<Toil> toils)
+    {
+        if (c.KitCount(kind) >= 1) return true;
+        var (box, spot) = Plans.NearestContainer(w, dist, c, f => f.Storage is Inventory inv && inv.Count(kind) >= 1);
+        if (box == null) return false;
+        toils.Add(new GotoToil(spot));
+        toils.Add(new TakeKitToil(box, kind, 1));
         return true;
     }
 
@@ -216,6 +227,7 @@ public static class WaysWork
             case WayFx.Plug or WayFx.Freeze or WayFx.Brace:
             {
                 if (room == null || w.Ship.WallAt(k.At) is not WallState wall) return null;
+                if (way.Item is ItemKind pit && !Fetch(c, w, dist, pit, way.ItemCount, toils)) { why = $"{ItemKinds.Name(pit)} 없음"; return null; }
                 if (way.Fx != WayFx.Brace)
                 {
                     if (artId >= 0) { if (!TakeThing(w, dist, c, artId, toils)) { why = "가져올 게 없다"; return null; } }
@@ -476,6 +488,7 @@ public static class WaysWork
                 if (furn != null) target = furn.Cells[0];
                 if (artId >= 0 && way.Fx is not (WayFx.Strap or WayFx.Wedge) && !TakeThing(w, dist, c, artId, toils)) { why = "물건이 없다"; return null; }
                 if (way.Item is ItemKind it2 && !Fetch(c, w, dist, it2, way.ItemCount, toils)) { why = $"{ItemKinds.Name(it2)} 없음"; return null; }
+                if (way.Item2 is ItemKind k2 && !FetchKit(c, w, dist, k2, toils)) { why = $"{ItemKinds.Name(k2)} 없음"; return null; }
                 Room? goal = way.Fx == WayFx.Gather ? GatherRoom(w, k, room) : null;
                 if (goal != null) target = goal.Cells.FirstOrDefault(w.Ship.IsOpenFloor);
                 if (way.Fx is WayFx.Strap or WayFx.Wedge && artId >= 0 && w.Matter.Get(artId) is Article cargo) target = cargo.At;
@@ -570,6 +583,7 @@ public static class WaysWork
         var a = artId >= 0 ? w.Matter.Get(artId) : null;
         if (way.Fx == WayFx.Brace) { mat = Material.Fabric; bulk = 0.2f; name = "등"; }
         else if (way.Fx == WayFx.Freeze) { mat = Material.Ice; bulk = 0.1f; name = a?.Name ?? "얼음 마개"; }
+        else if (way.Id == "breach.glue") { mat = Material.Rubber; bulk = 0.1f; name = "수선 패치"; Use(c, ItemKind.Glue, 1); }
         else if (a != null) { mat = a.Mat; bulk = WaysRules.Bulk(a.Kind); name = a.Name; }
         else if (furn != null) { var fi = WaysRules.FromFurniture(furn.Type); mat = fi.mat; bulk = fi.bulk; name = fi.name; }
         else return false;
@@ -584,7 +598,7 @@ public static class WaysWork
         }
         wall.Patched = true;
         wall.PatchQuality = MathF.Min(0.9f, q);
-        float decay = way.Fx switch { WayFx.Brace => 1.6f, WayFx.Freeze => 0.22f, _ => WaysRules.PlugDecayPerHour(mat, room.Air.Pressure) };
+        float decay = way.Fx switch { WayFx.Brace => 1.6f, WayFx.Freeze => 0.22f, _ => WaysRules.PlugDecayPerHour(mat, room.Air.Pressure) * (way.Id == "breach.glue" ? 0.5f : 1f) };
         int fid = ways.NextFollow();
         ways.AddPlug(new WayPlug { Wall = at, Mat = mat, Decay = decay, Name = name, Since = w.Tick, Follow = fid });
         ways.AddFollow(new WayFollow { Id = fid, WayId = way.Id, Text = $"{room.Name} 구멍 — {Ko.EulReul(name)} 떼고 제대로 막기", Kind = 0, At = at, RoomId = room.Id, FurnId = furn?.Id ?? -1, Since = w.Tick });
@@ -651,7 +665,8 @@ public static class WaysWork
         if (part is ItemKind p && c.Carrying?.Kind == p) Use(c, p, 1);
         m.Faults.Remove(fault);
         m.Condition = MathF.Min(1f, m.Condition + 0.01f);
-        if (!proper)
+        if (!proper && t.Way.Snag == Snag.Clog) m.Wear = MathF.Min(1f, m.Wear + 0.25f); // 천 필터 · 밀어 뚫기: 곧 다시 막힌다
+        else if (!proper)
         {
             m.Grade = MachineGrade.Mk1; // 임시품: 덜 나오고 더 자주 선다 — 부품이 넉넉해지면 기존 수순이 정품으로 되돌린다
             m.Wear = MathF.Min(1f, m.Wear + 0.2f);
@@ -680,11 +695,13 @@ public static class WaysWork
             }
             case WayFx.TapeHose:
                 if (r != null) r.Flood *= 0.3f;
+                Use(c, ItemKind.Tape, 1); c.UseKit(ItemKind.Hose, 1);
                 res = "테이프로 감고 호스로 물길을 돌렸다";
                 break;
             case WayFx.Warmer:
                 if (r != null) ways.ApplyGen(r, way, c);
                 if (way.Item is ItemKind it2) Use(c, it2, 1);
+                if (way.Item2 is ItemKind k2b) c.UseKit(k2b, 1);
                 res = "냄비 보온기가 데워진다";
                 break;
             case WayFx.Mop:

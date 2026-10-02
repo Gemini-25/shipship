@@ -288,7 +288,8 @@ public static partial class Program
     private static void WaysDefy(int seed)
     {
         var seen = new List<string>();
-        bool any = false;
+        bool any = false, timeline = false;
+        string timelineNote = "";
         for (int i = 0; i < 6 && !any; i++)
         {
             // 로봇이 다 멈춘 배의 휴게실 불: 컴퓨터는 규정대로 소화기를 권하지만, 불 바로 옆에 러그를 든 사람이 있다
@@ -307,13 +308,22 @@ public static partial class Program
             {
                 Run(w, SimTime.Minutes(1));
                 var d = w.Ways.Tries.FirstOrDefault(t => t.Defied && t.Why.Length > 0);
-                if (d != null) { any = true; seen.Add($"{w.Crew.First(c => c.Id == d.CrewId).Name}: {WyName(d.WayId)} — {d.Why} · 컴퓨터 일지에도 남음 {w.Log.Entries.Any(e => e.Text.Contains("다른 길을 골랐습니다"))}"); }
+                if (d != null)
+                {
+                    any = true;
+                    seen.Add($"{w.Crew.First(c => c.Id == d.CrewId).Name}: {WyName(d.WayId)} — {d.Why} · 컴퓨터 일지에도 남음 {w.Log.Entries.Any(e => e.Text.Contains("다른 길을 골랐습니다"))}");
+                    var kc = w.Ways.Case(d.CaseId);
+                    var dec = w.Automation.Foresee.Timeline.FirstOrDefault(x => x.Id == kc?.Decision);
+                    timeline = dec != null && dec.Options.Count >= 2;
+                    timelineNote = dec == null ? "없음" : $"{dec.Title}: {string.Join(" / ", dec.Options.Select(o => o.Name))} → {dec.Pick.Name} ({dec.Reason})";
+                }
             }
             var ck = w.Ways.CaseFor(Snag.Fire, hall);
             if (!any) seen.Add($"{hall.Name}: 컴퓨터 안 {WyName(ck?.ComputerPick ?? "")} · {WyTries(w, ck)}");
         }
         foreach (var l in seen) Console.WriteLine("     " + l);
         Check("컴퓨터 안 대신 사람이 다른 길을 고르고 이유가 남는다", any, seen.LastOrDefault() ?? "");
+        Check("주컴퓨터가 갈래를 견줘 고른 안 · 이유를 타임라인에 남긴다 (나중에 채점)", timeline, timelineNote);
     }
 
     /// <summary>10) 성능: 30인 배 하루 (갈래 시스템 끔 / 켬).</summary>

@@ -100,6 +100,7 @@ public partial class Hud
                 Gfx.Text(this, Fonts.Body, new Vector2(x, y + 6), UiKit.Fit($"{mine.Score:0.00}점 — 다음 후보 {next.Activity.Label} {next.Score:0.00} ({next.Reason})", right - x, Ui.TextTiny), Ui.TextTiny, Palette.TextMuted);
             y += 12;
         }
+        if (w.Ways.WhyLine(c) is string wayWhy && Fits(14)) { Gfx.Text(this, Fonts.Body, new Vector2(x, y + 10), UiKit.Fit(wayWhy, right - x, Ui.TextSmall), Ui.TextSmall, Palette.TextDim); y += 14; } // v16.25 왜 그 방법
         y += 6;
 
         // ── 믿음: 이 사람이 아는 것 (세계와 다를 수 있다 — 어긋난 것을 먼저) ──

@@ -33,7 +33,7 @@ public enum WayFx : byte
 public enum WayLook : byte
 {
     None, Seal, Douse, HydroHose, Smother, Eject, Burnt, PotLid,
-    MattressPlug, TablePlug, PotPlug, CratePlug, MatPlug, FrostPlug, BackPlug, RobotBrace,
+    MattressPlug, TablePlug, PotPlug, CratePlug, MatPlug, FrostPlug, BackPlug, RobotBrace, GluePatch,
     CrawlHatch, PriedDoor, CutDoor, BlownDoor, WallHole, Jumper, Knock,
     RobotBattery, Pedal, Lamp, Stretcher, Cart, Bandage, Terminal,
     Stripped, Improvised, Shavings, Candle, Splitter, Huddle, RationBox, Porridge, ColdStash,
@@ -51,6 +51,8 @@ public sealed record Way(string Id, Snag Snag, string Name, WayBy By, WayFx Fx, 
     /// <summary>창고에서 들고 갈 것.</summary>
     public ItemKind? Item { get; init; }
     public int ItemCount { get; init; } = 1;
+    /// <summary>엮어 쓸 둘째 물건 (테이프 + 호스 · 냄비 + 배터리 · 패치 + 접착제).</summary>
+    public ItemKind? Item2 { get; init; }
     /// <summary>근처에 굴러다니는 물건 (재질로 판정 — 이 중 하나).</summary>
     public ArticleKind[] Things { get; init; } = NoThings;
     /// <summary>손을 뗀 뒤 풀릴 때까지 (분) — 문 닫고 숨 끊기 · 진공처럼 걸어 두고 기다리는 길.</summary>
@@ -135,6 +137,7 @@ public static class WaysTable
         W(Snag.Breach, "pot", "냄비를 눌러 붙인다", WayBy.Crew, WayFx.Plug, 3, 0.5f, 0.3f, WayLook.PotPlug) with { Near = new[] { FurnitureType.Stove, FurnitureType.Oven }, Side = "작은 구멍에만 · 냄비를 잃는다", Later = "실링폼으로 다시 막는다", Line = "구멍이 작다 — 냄비면 된다" },
         W(Snag.Breach, "mat", "고무 매트를 붙인다", WayBy.Crew, WayFx.Plug, 3, 0.65f, 0.3f, WayLook.MatPlug) with { Things = new[] { ArticleKind.RubberMat }, Later = "실링폼으로 다시 막는다", Line = "고무는 들러붙는다" },
         W(Snag.Breach, "crate", "상자를 밀어 붙인다", WayBy.Crew, WayFx.Plug, 3, 0.4f, 0.3f, WayLook.CratePlug) with { Things = new[] { ArticleKind.PlasticCrate, ArticleKind.CardboardBox, ArticleKind.Rug }, Later = "실링폼으로 다시 막는다", Line = "아무거나 일단 대자" },
+        W(Snag.Breach, "glue", "수선 패치에 접착제를 발라 붙인다", WayBy.Crew, WayFx.Plug, 6, 0.65f, 0.3f, WayLook.GluePatch) with { Near = new[] { FurnitureType.SuitLocker }, Item = ItemKind.Glue, Side = "작은 구멍에만 · 접착제 냄새", Later = "실링폼으로 다시 막는다", Line = "우주복 수선 패치에 접착제면 붙는다" },
         W(Snag.Breach, "freeze", "냉매로 얼려 막는다", WayBy.Crew, WayFx.Freeze, 7, 0.6f, 0.35f, WayLook.FrostPlug) with { Near = new[] { FurnitureType.CoolantPump, FurnitureType.HeatExchanger, FurnitureType.Fridge }, Things = new[] { ArticleKind.IceBlock }, Skill = Skill.Engineering, SkillMin = 0.3f, Side = "녹으면 다시 샌다 · 냉매가 준다", Later = "실링폼으로 다시 막는다", Line = "냉매를 뿌리면 얼음 마개가 된다" },
         W(Snag.Breach, "back", "등으로 막고 버틴다", WayBy.Crew, WayFx.Brace, 1, 0.5f, 0.75f, WayLook.BackPlug) with { Side = "등에 멍 · 동상 · 오래 못 버틴다", Later = "누가 실링폼을 들고 와야 한다", Line = "내가 막고 있을게 — 빨리!" },
         W(Snag.Breach, "abandon", "문을 닫고 그 방을 버린다", WayBy.Computer, WayFx.Existing, 4, 0.9f, 0.05f, WayLook.None) with { Order = WorkKind.SealOffRoom, ShipCost = 0.6f, Leave = true, Side = "그 방을 잃는다 · 안에 남은 사람" },
@@ -238,14 +241,14 @@ public static class WaysTable
         // ── 물 샘 ──
         W(Snag.Leak, "valve", "밸브를 잠근다", WayBy.Crew, WayFx.Existing, 5, 0.85f, 0.05f, WayLook.None) with { Order = WorkKind.CloseValve, Book = true },
         W(Snag.Leak, "patch", "배관을 땜질한다", WayBy.Crew, WayFx.Existing, 25, 0.85f, 0.05f, WayLook.None) with { Order = WorkKind.PatchPipe, Book = true },
-        W(Snag.Leak, "tape", "테이프로 감고 호스로 돌린다", WayBy.Crew, WayFx.TapeHose, 8, 0.6f, 0.1f, WayLook.TapeHose) with { Line = "테이프에 호스 하나면 물길이 바뀐다", Later = "배관을 제대로 땜질한다" },
+        W(Snag.Leak, "tape", "테이프로 감고 호스로 돌린다", WayBy.Crew, WayFx.TapeHose, 8, 0.6f, 0.1f, WayLook.TapeHose) with { Item = ItemKind.Tape, Item2 = ItemKind.Hose, Line = "테이프에 호스 하나면 물길이 바뀐다", Later = "배관을 제대로 땜질한다" },
         W(Snag.Leak, "towel", "수건 · 양동이로 받아 낸다", WayBy.Crew, WayFx.Mop, 6, 0.35f, 0f, WayLook.Towel) with { Things = Cloth },
         W(Snag.Leak, "freeze", "얼려서 막는다", WayBy.Crew, WayFx.Generic, 6, 0.5f, 0.1f, WayLook.FrostPlug) with { Near = new[] { FurnitureType.CoolantPump, FurnitureType.Fridge }, Gen = new(Flood: 0.5f, Temp: -1f), Later = "배관을 제대로 땜질한다" },
         W(Snag.Leak, "pump", "펌프로 뽑아낸다", WayBy.Crew, WayFx.Generic, 15, 0.5f, 0f, WayLook.None) with { Near = new[] { FurnitureType.CoolantPump, FurnitureType.WaterRecycler }, Gen = new(Flood: 0.3f) },
 
         // ── 추위 ──
         W(Snag.Cold, "blanket", "담요를 두른다", WayBy.Crew, WayFx.Generic, 2, 0.4f, 0f, WayLook.Blanket) with { Things = Cloth, Near = new[] { FurnitureType.Bed, FurnitureType.Cot }, Gen = new(Stress: -0.03f) },
-        W(Snag.Cold, "warmer", "냄비에 배터리를 물려 보온기를 만든다", WayBy.Crew, WayFx.Warmer, 12, 0.55f, 0.1f, WayLook.PotWarmer) with { Near = new[] { FurnitureType.Stove, FurnitureType.Oven }, Item = ItemKind.Cable, Skill = Skill.Electrical, SkillMin = 0.2f, Gen = new(Temp: 4f, Kwh: -0.5f), Side = "배터리를 먹는다", Line = "냄비 바닥에 열선을 붙이면 된다" },
+        W(Snag.Cold, "warmer", "냄비에 배터리를 물려 보온기를 만든다", WayBy.Crew, WayFx.Warmer, 12, 0.55f, 0.1f, WayLook.PotWarmer) with { Near = new[] { FurnitureType.Stove, FurnitureType.Oven }, Item = ItemKind.CellPack, Item2 = ItemKind.Cable, Skill = Skill.Electrical, SkillMin = 0.2f, Gen = new(Temp: 4f), Side = "전지가 금방 닳는다", Line = "냄비 바닥에 전지를 물리면 보온기다" },
         W(Snag.Cold, "huddle", "한데 붙어 앉는다", WayBy.Crew, WayFx.Gather, 3, 0.35f, 0f, WayLook.Huddle) with { Gen = new(Stress: -0.04f) },
         W(Snag.Cold, "move", "따뜻한 방으로 옮긴다", WayBy.Crew, WayFx.Gather, 4, 0.45f, 0f, WayLook.None),
         W(Snag.Cold, "jog", "몸을 움직인다", WayBy.Crew, WayFx.Generic, 10, 0.3f, 0f, WayLook.Pedal) with { Gen = new(Rest: -0.08f, Stress: -0.02f) },
