@@ -211,7 +211,8 @@ public sealed partial class MotionSystem
     public bool Summoned(CrewMember c) => Now is { } s && s.Invited.Contains(c.Id) && (s.End <= 0 || _w.Tick < s.End);
     public bool Feasting => _feastAt >= 0 && _w.Tick >= _feastAt && _w.Tick < _feastEnd;
     /// <summary>승무원이 선장 불신임 서명을 돌리고 있다 (정기 회의의 자동 불신임 대신).</summary>
-    public bool ConfidencePending => !Off && All.Any(m => m.Kind == MotionKind.Confidence && m.Stage is MotionStage.Ready or MotionStage.Sitting);
+    public bool ConfidencePending => !Off && All.Any(m => m.Kind == MotionKind.Confidence
+        && (m.Stage is MotionStage.Ready or MotionStage.Sitting || m.Stage == MotionStage.Signing && _w.Tick - m.Born < SimTime.TicksPerDay));
     public bool SawTheftLately(CrewMember c) => _sawTheft.TryGetValue(c.Id, out var t) && _w.Tick - t < SimTime.Minutes(40);
 
     // ───────────────────────────── 틱 ─────────────────────────────

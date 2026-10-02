@@ -640,6 +640,7 @@ public sealed partial class MotionSystem
     {
         var w = _w;
         Stats.Elections++;
+        w.Command.NoConfidence++;
         m.Secret = true;
         var cap = w.Command.Captain;
         var prop = P(m.Proposer);
