@@ -175,7 +175,6 @@ public static partial class Program
             long t0 = w.Tick;
             for (int k = 0; k < 40 && w.Coop.Calls.Count(x => x.Caller == a.Id || x.Caller == b.Id) < 2; k++) Run(w, SimTime.Minutes(1));
             var calls = w.Coop.Calls.Where(x => x.Caller == a.Id || x.Caller == b.Id).ToList();
-            Console.WriteLine($"   ({a.Name}: {a.Job?.Label} 손 {a.Carrying} · {b.Name}: {b.Job?.Label} 손 {b.Carrying} · {o2.Title} 맡은 {o2.Assignee?.Name} 막힘 {o2.BlockedReason})");
             long cap = calls.Count > 0 ? calls.Max(x => x.Cap) : t0;
             while (w.Tick < cap + SimTime.Minutes(3)) w.Step();
             bool resolved = calls.Count == 2 && calls.All(x => x.Done) && w.Coop.Stats.Solos + w.Coop.Stats.Holds >= 2;
