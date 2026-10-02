@@ -157,6 +157,8 @@ public static class Icons
         RoomType.Navigation => "route",
         RoomType.ComputerRoom => "room-computer-core", // v16.24
         RoomType.MushroomFarm => "room-mushroom-farm",
+        RoomType.ComputerRoom => "room-computer-core",
+        RoomType.MushroomFarm => "room-mushroom",
         _ => "room",
     };
 

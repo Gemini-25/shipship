@@ -160,6 +160,7 @@ public static partial class Program
         if (args.Contains("--moduletest")) return RunModuleTest(seed); // v15 설비 70
         if (args.Contains("--infotest")) return RunInfoTest(seed); // v17.3 개인 자리 · 못 끝낸 일 · 정보 차이 · 메신저 · 사진 · 장부
         if (args.Contains("--computerplantest")) return RunComputerPlanTest(seed); // v16.26
+        if (args.Contains("--integtest")) return RunIntegTest(seed); // v16.26 토대 묶음 통합
         if (args.Contains("--fleettest")) return RunFleetTest(seed); // v16.20b
         if (args.Contains("--shipdesigntest")) return RunShipDesignTest(seed); // v16.22 배 재설계 · 크기별 등급 · 방 종류 · 식량원
         if (args.Contains("--auditfixtest")) return RunAuditFixTest(seed); // v16.24 점검 항해 고치기

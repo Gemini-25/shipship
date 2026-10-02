@@ -25,7 +25,9 @@ public sealed class DistanceField
 /// 겁 많은 사람은 위험 비용을 크게 느끼고, 급한 일을 맡은 책임감 있는 사람은 덜 느낀다.
 /// </summary>
 public readonly record struct PathProfile(float HazardScale = 1f, bool Suit = false, bool Responder = false, float[]? Fear = null, bool Eva = false, bool Robot = false, bool NoCrawl = false, int[]? Spots = null)
+public readonly record struct PathProfile(float HazardScale = 1f, bool Suit = false, bool Responder = false, float[]? Fear = null, bool Eva = false, bool Robot = false, bool NoCrawl = false, int Who = -1)
 {
+    // Who: 길을 고르는 사람 (출입 통제 문 권한을 따진다 · -1 = 따지지 않음 — 급한 일은 비상 해제 손잡이로 지나간다)
     /// <summary>선체 밖 한 칸을 지나는 추가 비용 (손으로 짚어 가며 느리게).</summary>
     public const int SpaceCost = 14;
 
@@ -47,6 +49,33 @@ public sealed class Pathfinder
     private const int Diagonal = 14;
     private const int FurniturePenalty = 25;
     private const int ManualDoorPenalty = 30;
+    /// <summary>권한 없이는 못 여는 출입 통제 문 (원자로실 카드 잠금 · 잠근 선실 …): 다른 길이 200칸 가까이 더 멀어도 돌아간다 — 그 문밖에 길이 없을 때만 문 앞에 가서 권한자를 부른다.</summary>
+    private const int BarredDoorPenalty = 2000;
+
+    /// <summary>v16.26 이 사람이 지금 못 여는 출입 통제 문 (문 번호 · 통제되는 방) 목록을 채운다 — 배 본체가 건다.</summary>
+    public Func<int, List<(int door, int inner)>, bool>? BarredDoors { get; set; }
+    private readonly List<(int door, int inner)> _barred = new();
+    private int[] _barMark = Array.Empty<int>();
+    private int _barRun;
+
+    /// <summary>이 길에서 비켜 갈 출입 통제 문을 표시하고, 거리장 캐시 열쇠에 넣을 서명을 낸다 (0 = 없음).</summary>
+    private int MarkBarred(PathProfile profile, int startRoom)
+    {
+        _barRun++;
+        if (profile.Who < 0 || BarredDoors == null || !BarredDoors(profile.Who, _barred)) return 0;
+        int nd = _ship.Doors.Count;
+        if (_barMark.Length < nd) _barMark = new int[nd];
+        int sig = 0;
+        foreach (var (d, inner) in _barred)
+        {
+            if (d < 0 || d >= nd || inner == startRoom) continue; // 안에 있는 사람은 언제나 나간다
+            _barMark[d] = _barRun;
+            sig = unchecked(sig * 31 + d + 1);
+        }
+        return sig;
+    }
+
+    private bool Barred(int door) => door >= 0 && door < _barMark.Length && _barMark[door] == _barRun;
 
     private readonly Ship _ship;
     private readonly int _w;
@@ -186,6 +215,7 @@ public sealed class Pathfinder
         var open = new PriorityQueue<int, int>();
         int s = grid.Index(start);
         int startRoom = _room[s];
+        MarkBarred(profile, startRoom);
         Touch(s, 0, -1);
         open.Enqueue(s, Heuristic(s, goalIndex));
 
@@ -219,6 +249,8 @@ public sealed class Pathfinder
     /// <summary>v17.5 장소의 기억: 그 사람이 피하는 칸의 비용 (급한 일로 달려갈 때는 40%만).</summary>
     private static int SpotCost(int[] sp, int i, bool responder) { for (int k = 0; k < sp.Length; k += 2) if (sp[k] == i) return responder ? sp[k + 1] * 2 / 5 : sp[k + 1]; return 0; }
     private readonly Dictionary<(int start, float scale, int flags), FloodEntry> _floods = new();
+    private sealed class FloodEntry { public int Version; public float[]? Fear; public DistanceField Field = null!; }
+    private readonly Dictionary<(int start, float scale, int flags, int bar), FloodEntry> _floods = new();
     public int FloodHits { get; private set; }
     public int FloodMisses { get; private set; }
 
@@ -228,7 +260,7 @@ public sealed class Pathfinder
     public void HazardChanged()
     {
         if (_hazardSeen.Length == CellHazard.Length && CellHazard.AsSpan().SequenceEqual(_hazardSeen)) return;
-        _hazardSeen = (int[])CellHazard.Clone();
+        if (_hazardSeen.Length == CellHazard.Length) Array.Copy(CellHazard, _hazardSeen, CellHazard.Length); else _hazardSeen = (int[])CellHazard.Clone(); // v16.26 새로 만들지 않고 덮어쓴다
         _hazardVersion++;
     }
 
@@ -237,7 +269,7 @@ public sealed class Pathfinder
     public void BodyChanged()
     {
         if (_bodySeen.Length == CellBody.Length && CellBody.AsSpan().SequenceEqual(_bodySeen)) return;
-        _bodySeen = (int[])CellBody.Clone();
+        if (_bodySeen.Length == CellBody.Length) Array.Copy(CellBody, _bodySeen, CellBody.Length); else _bodySeen = (int[])CellBody.Clone();
         _hazardVersion++;
     }
 
@@ -262,7 +294,7 @@ public sealed class Pathfinder
         }
         if (_state.Length != len || !s.AsSpan().SequenceEqual(_state))
         {
-            _state = (int[])s.Clone();
+            if (_state.Length == s.Length) Array.Copy(s, _state, s.Length); else _state = (int[])s.Clone();
             _stateVersion++;
         }
         return _stateVersion;
@@ -277,12 +309,15 @@ public sealed class Pathfinder
         int si = grid.InBounds(start) ? grid.Index(start) : -1;
         var key = (si, profile.HazardScale, (profile.Suit ? 1 : 0) | (profile.Responder ? 2 : 0) | (profile.Eva ? 4 : 0) | (profile.Robot ? 8 : 0) | (profile.NoCrawl ? 16 : 0));
         if (_floods.TryGetValue(key, out var e) && e.Version == version && SameFear(e.Fear, profile.Fear) && SameSpots(e.Spots, profile.Spots))
+        int bar = MarkBarred(profile, si >= 0 ? _room[si] : -1);
+        var key = (si, profile.HazardScale, (profile.Suit ? 1 : 0) | (profile.Responder ? 2 : 0) | (profile.Eva ? 4 : 0) | (profile.Robot ? 8 : 0) | (profile.NoCrawl ? 16 : 0), bar);
+        if (_floods.TryGetValue(key, out var e) && e.Version == version && SameFear(e.Fear, profile.Fear))
         {
             FloodHits++;
             Prof.Lap("path.Flood(캐시)", pf);
             return e.Field;
         }
-        var field = FloodCore(start, profile);
+        var field = FloodCore(start, profile, version);
         if (_floods.Count > 512) _floods.Clear();
         _floods[key] = new FloodEntry { Version = version, Fear = profile.Fear == null ? null : (float[])profile.Fear.Clone(), Spots = profile.Spots, Field = field };
         FloodMisses++;
@@ -299,7 +334,8 @@ public sealed class Pathfinder
     private int[] _roomAdd = Array.Empty<int>(), _doorAdd = Array.Empty<int>();
     private bool[] _roomBlocked = Array.Empty<bool>(), _doorBlocked = Array.Empty<bool>();
 
-    private DistanceField FloodCore(Cell start, PathProfile profile)
+    private int _passVersion = -1, _passFlags = -1;
+    private DistanceField FloodCore(Cell start, PathProfile profile, int version = -1)
     {
         if (profile.HazardScale == 0f) profile = PathProfile.Default;
         var grid = _ship.Grid;
@@ -310,8 +346,13 @@ public sealed class Pathfinder
         int s = grid.Index(start);
         int startRoom = _room[s];
         // 칸: 지나갈 수 있나 (Passable과 같다)
-        if (_pass.Length != _n) _pass = new bool[_n];
-        for (int i = 0; i < _n; i++) _pass[i] = Passable(i, profile);
+        if (_pass.Length != _n) { _pass = new bool[_n]; _passVersion = -1; }
+        int passFlags = (profile.Eva ? 1 : 0) | (profile.Robot ? 2 : 0) | (profile.NoCrawl ? 4 : 0);
+        if (version < 0 || version != _passVersion || passFlags != _passFlags) // v16.26 칸 통행은 구조 · 문 · 정비 통로가 그대로면 같다 (판 번호가 같으면 다시 쓴다)
+        {
+            for (int i = 0; i < _n; i++) _pass[i] = Passable(i, profile);
+            _passVersion = version; _passFlags = passFlags;
+        }
         // 방: 위험·공포 비용, 숨 못 쉬는 방 (StepCost·CanStep과 같은 식)
         int nr = _ship.Rooms.Count;
         if (_roomAdd.Length < nr) { _roomAdd = new int[nr]; _roomBlocked = new bool[nr]; }
@@ -335,6 +376,7 @@ public sealed class Pathfinder
             int add = 0;
             if (!door.Powered) add += ManualDoorPenalty;
             if (door.Locked) add += ManualDoorPenalty * 2;
+            if (Barred(d)) add += BarredDoorPenalty;
             _doorAdd[d] = add;
             bool blocked = false;
             if (door.Locked)
@@ -350,6 +392,9 @@ public sealed class Pathfinder
         if (_spotAdd.Length != _n) _spotAdd = new int[_n];
         bool spotsOn = profile.Spots != null;
         if (profile.Spots is { } sp0) for (int k = 0; k < sp0.Length; k += 2) if (sp0[k] >= 0 && sp0[k] < _n) _spotAdd[sp0[k]] += profile.Responder ? sp0[k + 1] * 2 / 5 : sp0[k + 1]; // v17.5
+        // v16.26 성능: 한 걸음 비용이 작은 정수라 원형 통 큐(버킷)로 — 거리는 가장 짧은 길의 값이라 고르는 순서가 달라도 결과는 같다
+        int maxStep = MaxStep(nr, nd0, cellScale * profile.HazardScale);
+        if (maxStep > 0 && maxStep < (1 << 16)) { BucketFlood(s, cost, maxStep, cellScale, profile.HazardScale); return new DistanceField(grid, cost); }
         var open = _open;
         open.Clear();
         cost[s] = 0;
@@ -392,6 +437,90 @@ public sealed class Pathfinder
         }
         if (profile.Spots is { } sp1) for (int k = 0; k < sp1.Length; k += 2) if (sp1[k] >= 0 && sp1[k] < _n) _spotAdd[sp1[k]] = 0; // v17.5
         return new DistanceField(grid, cost);
+    }
+
+    // ── v16.26 원형 통 큐 (같은 식 · 같은 값) ──
+    private int[] _bHead = Array.Empty<int>();
+    private int[] _eNode = new int[4096], _eNext = new int[4096];
+
+    /// <summary>한 걸음에 드는 비용의 위 끝 (0 = 통 큐를 못 쓴다: 0 이하 걸음이 있을 수 있다).</summary>
+    private int MaxStep(int nr, int nd, float hazardMul)
+    {
+        int maxRoom = 0, maxDoor = 0, maxH = 0, maxB = 0, minB = 0;
+        for (int r = 0; r < nr; r++) { int a = _roomAdd[r]; if (a < 0) return 0; if (a > maxRoom) maxRoom = a; }
+        for (int d = 0; d < nd; d++) { int a = _doorAdd[d]; if (a < 0) return 0; if (a > maxDoor) maxDoor = a; }
+        var hz = CellHazard; var bd = CellBody;
+        for (int i = 0; i < _n; i++)
+        {
+            int h = hz[i]; if (h > maxH) maxH = h;
+            int b = bd[i]; if (b > maxB) maxB = b; else if (b < minB) minB = b;
+        }
+        if (minB < 0 || hazardMul < 0f) return 0;
+        long m = Diagonal + PathProfile.SpaceCost + FurniturePenalty + (long)maxRoom + maxDoor + (long)(maxH * hazardMul) + 1 + maxB;
+        return m > int.MaxValue / 4 ? int.MaxValue : (int)m;
+    }
+
+    private void BucketFlood(int s, int[] cost, int maxStep, float cellScale, float hazardScale)
+    {
+        int B = maxStep + 1;
+        if (_bHead.Length < B) _bHead = new int[Math.Max(B, _bHead.Length * 2)];
+        var head = _bHead;
+        Array.Fill(head, -1, 0, B);
+        int count = 0, pending = 0;
+        void Push(int node, int d)
+        {
+            if (count == _eNode.Length) { Array.Resize(ref _eNode, count * 2); Array.Resize(ref _eNext, count * 2); }
+            int b = d % B;
+            _eNode[count] = node; _eNext[count] = head[b]; head[b] = count; count++; pending++;
+        }
+        cost[s] = 0;
+        Push(s, 0);
+        var hz = CellHazard; var bd = CellBody;
+        for (int dist = 0; pending > 0; dist++)
+        {
+            int bi = dist % B;
+            int e = head[bi];
+            if (e < 0) continue;
+            head[bi] = -1; // 걸음은 늘 1 이상 — 새로 넣는 것은 다른 통으로 간다
+            while (e >= 0)
+            {
+                int cur = _eNode[e];
+                e = _eNext[e];
+                pending--;
+                if (cost[cur] != dist) continue; // 더 짧은 길로 이미 처리했다
+                int dcur = _door[cur];
+                for (int k = 0; k < 8; k++)
+                {
+                    int ni = cur + _offsets[k];
+                    // ── CanStep ──
+                    if (ni < 0 || ni >= _n || !_pass[ni]) continue;
+                    int dr = _door[ni];
+                    if (dr >= 0 && _doorBlocked[dr]) continue;
+                    int r = _room[ni];
+                    if (r >= 0 && _roomBlocked[r]) continue;
+                    if (k >= 4)
+                    {
+                        if (dcur >= 0 || dr >= 0) continue;
+                        int a = cur + _dx[k];
+                        int b = cur + _dy[k] * _w;
+                        if (!_pass[a] || !_pass[b] || _door[a] >= 0 || _door[b] >= 0) continue;
+                    }
+                    // ── StepCost (goal 없음) ──
+                    int step = k < 4 ? Straight : Diagonal;
+                    if (_space[ni]) step += PathProfile.SpaceCost;
+                    if (_furniture[ni]) step += FurniturePenalty;
+                    if (r >= 0) step += _roomAdd[r];
+                    if (dr >= 0) step += _doorAdd[dr];
+                    int h = hz[ni];
+                    if (h > 0) step += (int)(h * cellScale * hazardScale);
+                    step += bd[ni]; // v16.3
+                    int nd = dist + step;
+                    if (cost[ni] >= 0 && nd >= cost[ni]) continue;
+                    cost[ni] = nd;
+                    Push(ni, nd);
+                }
+            }
+        }
     }
 
     private bool CanStep(int from, int k, int to, PathProfile profile, int startRoom)
@@ -439,6 +568,7 @@ public sealed class Pathfinder
         int d = _door[to];
         if (d >= 0 && !_ship.Doors[d].Powered) cost += ManualDoorPenalty;
         if (d >= 0 && _ship.Doors[d].Locked) cost += ManualDoorPenalty * 2;
+        if (d >= 0 && Barred(d)) cost += BarredDoorPenalty;
         int h = CellHazard[to];
         if (h > 0) cost += (int)(h * (profile.Suit ? 0.5f : 1f) * profile.HazardScale);
         cost += CellBody[to]; // v16.3

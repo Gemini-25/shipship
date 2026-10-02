@@ -21,6 +21,7 @@ public static partial class Program
                     var w = DayOne(seed, "Mirinae");
                     w.Policies.Set("inertfire", 0, "시험");
                     w.Policies.Set("vacuumfire", 0, "시험");
+                    w.Automation.Remove(ComputerModule.CommsRelay); w.Automation.V15NoAuto = true; // v16.22 새 설계 배는 통신 중계를 달고 나온다 (끊긴 방 경보도 무선으로) — 중계 없는 배로 본다
                     var room = StoreRoom(w);
                     ClearRoom(w, room);
                     if (cut)

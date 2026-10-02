@@ -171,6 +171,29 @@ public sealed partial class BodySystem
         return true;
     }
 
+    /// <summary>
+    /// v16.26 길을 고를 때: 이 사람이 지금 못 여는 출입 통제 문 (잠겨 있고 · 권한도 통행 허락도 없다).
+    /// 길찾기가 이 문을 비켜 간다 — 원자로실을 가로지르는 지름길을 골랐다가 카드 문 앞에서 오도 가도 못 하던 것.
+    /// 화재 해제 방침 · 정전으로 풀린 문은 막지 않는다 (Engaged와 같다).
+    /// </summary>
+    public bool BarredFor(int crewId, List<(int door, int inner)> into)
+    {
+        into.Clear();
+        CrewMember? c = null;
+        var ship = _w.Ship;
+        foreach (var db in Doors)
+        {
+            if (db.Zone == AccessZone.Open || db.Lock == LockKind.None || db.Inner < 0 || db.Door >= ship.Doors.Count) continue;
+            var d = ship.Doors[db.Door];
+            if (d.Removed || d.IsExternal || !Engaged(db, d)) continue;
+            c ??= CrewById(crewId);
+            if (c == null) return false;
+            if (Allowed(c, db) || HasPass(c, db)) continue;
+            into.Add((db.Door, db.Inner));
+        }
+        return into.Count > 0;
+    }
+
     // ───────────────────────────── 문 앞에서 (한 걸음마다) ─────────────────────────────
 
     private float Gate(CrewMember c, Door d, Room? beyond, bool urgent)

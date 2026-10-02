@@ -36,6 +36,13 @@ public static partial class Program
             foreach (var c in w.Crew.Where(c => c.Room == comms)) { c.Position = w.Ship.RoomsOf(RoomType.Corridor).First().Cells.First(w.Ship.IsOpenFloor).Center; c.PreviousPosition = c.Position; }
             w.Structure.Detach(comms, "교신 시험", controlled: true);
             comms.Wreck = true;
+            // v16.22 새 설계: 항법실 · 주컴퓨터실도 교신 콘솔을 단 통신실 갈래 — "통신실을 잃은 배"는 그 방들까지 잃은 배
+            foreach (var r in w.Ship.Rooms.Where(r => r.Type == RoomType.Comms && !r.Detached).ToList())
+            {
+                foreach (var c in w.Crew.Where(c => c.Room == r)) { c.Position = w.Ship.RoomsOf(RoomType.Corridor).First().Cells.First(w.Ship.IsOpenFloor).Center; c.PreviousPosition = c.Position; }
+                w.Structure.Detach(r, "교신 시험", controlled: true);
+                r.Wreck = true;
+            }
             w.Air.Reserve = w.Air.ReserveCapacity * 0.12f;
             Run(w, SimTime.TicksPerDay);
             Check("통신실을 잃은 배는 조난 신호를 못 보낸다", w.Comms.Distresses == 0 && w.Comms.Console == null, $"신호 {w.Comms.Distresses}번");

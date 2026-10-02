@@ -911,7 +911,7 @@ public sealed partial class PortableSystem
                 var d = n.Device!;
                 if (d.HeldBy != null || d.ClaimedBy >= 0 && d.ClaimedBy != c.Id || !dist.Reachable(d.At)) return null;
                 float s = n.Urgency - far + (n.Task == PortableTask.Fix ? 0.1f * c.SkillLevel(Skill.Electrical) - 0.05f : skill);
-                if (n.Task == PortableTask.Unplug && n.For != null) s += n.For == c ? 0.2f : -0.2f; // v16.20 콕 집힌 사람이 간다 (여럿이 몰려가지 않게)
+                if (n.Task == PortableTask.Unplug && n.For != null) s += n.For == c ? 0.2f + 0.3f * _w.Automation.Trusts.Of(c) : -0.2f; // v16.20 콕 집힌 사람이 간다 (여럿이 몰려가지 않게) · v16.26 컴퓨터를 믿을수록 밥 · 구경보다 먼저
                 if (crisis && n.Task != PortableTask.Unplug && n.Urgency < 0.7f) s *= 0.3f;
                 return new PortableChoice(n, d, null, null, null, s, n.Why);
             }

@@ -442,6 +442,7 @@ public sealed class PowerTriage
         foreach (var c in w.Crew)
         {
             if (c.Dead || !c.CanAct || c.Away || !c.IsAwake || c.Outside || c.Job?.Urgent == true) continue;
+            if (c.Job?.Activity is SleepActivity || c.Needs.Rest < 0.2f) continue; // v16.26 자러 가는 · 녹초인 사람은 부탁을 받아도 자러 간다 (부탁받은 사람이 잠들어 한 시간을 묶였다)
             var cc = c.Cell;
             float d = Math.Abs(cc.X - tc.X) + Math.Abs(cc.Y - tc.Y) - 6f * c.SkillLevel(Skill.Electrical);
             if (d < best || d == best && who != null && c.Id < who.Id) { best = d; who = c; }

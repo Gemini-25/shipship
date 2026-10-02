@@ -57,6 +57,9 @@ public static partial class Program
         w.Ship.LiveRooms.Where(r => r.Type is RoomType.Storage or RoomType.Workshop or RoomType.Hydroponics && r.Cells.Count(w.Ship.IsOpenFloor) >= 4).OrderBy(r => r.Id).FirstOrDefault()
         ?? w.Ship.LiveRooms.Where(r => r.Type != RoomType.Corridor).OrderByDescending(r => r.Cells.Count).First();
 
+    /// <summary>v16.26 곁에 선 사람이 그 자리에 머문다 (위기 배치 · 구경 · 다른 급한 일로 곧장 떠나지 않게 — 장면은 "곁에 사람이 있다").</summary>
+    private static void AfxStay(World w, CrewMember h) { h.HoldUntil = w.Tick + 25; h.HoldWhy = "시험: 곁에 있다"; }
+
     private static void AfxNextTo(World w, CrewMember h, CrewMember v)
     {
         var at = Cell.Dirs4.Select(d => v.Cell + d).FirstOrDefault(c => w.Ship.IsOpenFloor(c) && w.Ship.RoomAt(c) == v.Room);
@@ -142,7 +145,7 @@ public static partial class Program
             var t = w.Casualty.Of(v);
             Check("파편에 크게 다치면 피가 난다 (출혈)", t is { Kind: TraumaKind.Bleed } && t.Rate > 0.1f, t == null ? "없음" : $"{TraumaKind.Bleed} {t.Rate:0.00}/시간 · {t.Cause}");
             var spot = v.Cell;
-            for (int i = 0; i < SimTime.Minutes(5); i++) { if (i % 20 == 0) { v.Position = spot.Center; AfxNextTo(w, h, v); h.EndJob(w, ToilStatus.Interrupted); } w.Step(); }
+            for (int i = 0; i < SimTime.Minutes(5); i++) { if (i % 20 == 0) { v.Position = spot.Center; AfxNextTo(w, h, v); h.EndJob(w, ToilStatus.Interrupted); AfxStay(w, h); } w.Step(); }
             var done = w.Casualty.Done.LastOrDefault(x => x.CrewId == v.Id);
             bool medic = h.Role == CrewRole.Medic || h.SkillLevel(Skill.Medicine) >= 0.5f;
             Check(medic ? "곁의 의무관이 상처를 눌러 피가 멎는다 · 고마움이 남는다" : "곁의 사람이 눌러 피를 늦춘다 (깊은 상처는 치료까지 가야 멎는다)", !v.Dead && (medic ? w.Casualty.Of(v) == null && done != null && done.Outcome.Contains(h.Name) && v.Memory.Marks.Any(m => m.Text.Contains("살렸다")) : w.Casualty.Of(v) is Trauma tp && tp.Helped == h.Id && tp.Rate < 0.15f || done != null && done.Outcome.Contains(h.Name)),
@@ -190,7 +193,7 @@ public static partial class Program
                 var v = w.Crew.First(c => c.CanAct); var h = w.Crew.First(c => c.CanAct && c != v);
                 Put(w, v, room); Run(w, 1); AfxNextTo(w, h, v); h.EndJob(w, ToilStatus.Interrupted);
                 w.Casualty.Inflict(v, TraumaKind.Arrest, 0.6f, "배전반 감전");
-                for (int i = 0; i < SimTime.Minutes(15) && w.Casualty.Of(v) != null; i++) { if (i % 20 == 0) { AfxNextTo(w, h, v); h.EndJob(w, ToilStatus.Interrupted); } w.Step(); }
+                for (int i = 0; i < SimTime.Minutes(15) && w.Casualty.Of(v) != null; i++) { if (i % 20 == 0) { AfxNextTo(w, h, v); h.EndJob(w, ToilStatus.Interrupted); AfxStay(w, h); } w.Step(); }
                 tries++;
                 if (!v.Dead && w.Casualty.Of(v) == null) revived++;
                 var w2 = DayOne(seed + k, "Mirinae"); w2.CrewCanDie = true;

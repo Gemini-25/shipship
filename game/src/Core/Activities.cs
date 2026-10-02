@@ -436,6 +436,7 @@ public sealed class EvacuateActivity : Activity
         // v10.1: 운석이 이 방으로 온다는 경보 (궤적을 읽은 경보만 — 구하러 뛰어든 사람도 일단 빠진다)
         if (w.Sensors.Threat(c.Room) is IncomingMeteor inc && inc.MinutesLeft(w.Tick) > 0f)
             danger = MathF.Max(danger, 0.45f + 0.25f * MathF.Min(1.5f, inc.Size));
+        danger = MathF.Max(danger, w.Perils.HeatDanger(c)); // v16.26 몸에 열이 차오른다 — 어지러워지기 전에 나간다
         if (c.Dashing) danger *= 0.3f; // 이미 각오하고 뛰어들었다
         bool armed = c.Carrying?.Kind == ItemKind.Extinguisher;
         if (w.Fire.AnyWithin(c.Cell, 2.2f)) danger = MathF.Max(danger, armed ? 0.3f : 0.75f);

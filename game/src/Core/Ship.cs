@@ -157,8 +157,43 @@ public sealed class Ship
         Compartments = ids.Count;
         if (Compartments <= 1) foreach (var r in Rooms) r.Compartment = -1;
     }
-    public IEnumerable<Furniture> FurnitureOf(FurnitureType type) => Furniture.Where(f => f.Type == type && !f.Room.Detached && !f.Stowed);
-    public IEnumerable<Machine> Machines => Furniture.Where(f => f.Machine != null && !f.Room.Detached && !f.Stowed).Select(f => f.Machine!);
+    public IEnumerable<Furniture> FurnitureOf(FurnitureType type) => OfType(type).Where(f => !f.Room.Detached && !f.Stowed);
+
+    // v16.26 성능: 종류별 목록 (배 가구 목록은 뒤에 붙기만 한다 — 수가 바뀌면 이어 붙인다 · 순서는 원래 목록 그대로)
+    private readonly Dictionary<FurnitureType, List<Furniture>> _byType = new();
+    private int _byTypeCount;
+    private static readonly List<Furniture> NoFurniture = new();
+    private List<Furniture> OfType(FurnitureType type)
+    {
+        if (_byTypeCount != Furniture.Count)
+        {
+            if (_byTypeCount > Furniture.Count) { _byType.Clear(); _byTypeCount = 0; }
+            for (int i = _byTypeCount; i < Furniture.Count; i++)
+            {
+                var f = Furniture[i];
+                if (!_byType.TryGetValue(f.Type, out var l)) _byType[f.Type] = l = new List<Furniture>();
+                l.Add(f);
+            }
+            _byTypeCount = Furniture.Count;
+        }
+        return _byType.TryGetValue(type, out var list) ? list : NoFurniture;
+    }
+    public IEnumerable<Machine> Machines => MachineFurniture().Where(f => f.Machine != null && !f.Room.Detached && !f.Stowed).Select(f => f.Machine!);
+
+    // v16.26 성능: 설비가 붙는 종류의 가구만 (설비는 종류로 정해진다 — MachineSpecs) · 원래 순서 그대로
+    private readonly List<Furniture> _machineFurniture = new();
+    private int _machineCount;
+    private List<Furniture> MachineFurniture()
+    {
+        if (_machineCount != Furniture.Count)
+        {
+            if (_machineCount > Furniture.Count) { _machineFurniture.Clear(); _machineCount = 0; }
+            for (int i = _machineCount; i < Furniture.Count; i++)
+                if (Furniture[i].Machine != null || MachineSpecs.For(Furniture[i].Type) != null) _machineFurniture.Add(Furniture[i]);
+            _machineCount = Furniture.Count;
+        }
+        return _machineFurniture;
+    }
 
     /// <summary>배에 놓여 있는 가구 (치운 것 빼고).</summary>
     public IEnumerable<Furniture> Placed => Furniture.Where(f => !f.Stowed);

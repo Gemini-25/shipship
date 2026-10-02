@@ -23,7 +23,7 @@ public sealed class AmbienceSystem
             var h = _w.Hazards;
             if (!h.StormActive || h.StormSince < 0) return 0f;
             float hours = (_w.Tick - h.StormSince) / (float)SimTime.TicksPerHour;
-            return hours < 3f ? 0.6f : 0.18f;
+            return hours < 3f ? h.StormPeak : 0.3f * h.StormPeak; // v16.26 폭풍마다 세기가 다르다 (센 폭풍은 바깥 방도 위험하다)
         }
     }
     public bool Storm => _w.Hazards.StormActive;
@@ -126,7 +126,7 @@ public sealed class AmbienceSystem
             // 태양 폭풍: 바깥벽에 닿은 방이 가장 세다. 대피소·물벽은 거의 막는다
             if (storm > 0f)
             {
-                float sr = storm * Exposure(room);
+                float sr = storm * Exposure(room) + 0.12f * storm * MathF.Min(3, w.Body.OpenWindows(room)); // v16.26 덮개가 안 내려간 창가
                 r = MathF.Max(r, sr);
             }
             r = MathF.Max(r, w.Cosmic.Radiation(room)); // v18.13 우주 대재난 방사선 (물벽이 덜고 · 대피소가 막는다)

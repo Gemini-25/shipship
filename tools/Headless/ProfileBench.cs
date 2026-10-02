@@ -70,7 +70,7 @@ public static partial class Program
         Console.WriteLine($"  할당 {alloc / 1024.0 / 1024.0:0.0}MB (틱당 {alloc / (double)ticks / 1024.0:0.0}KB) · GC {GC.CollectionCount(0) - g0}/{GC.CollectionCount(1) - g1}/{GC.CollectionCount(2) - g2} (0/1/2세대) · 멈춤 {pause.TotalMilliseconds:0}ms");
         if (dayMs.Count > 1) Console.WriteLine($"  날마다: {string.Join(" · ", dayMs.Select((d, i) => $"{i + 1}일 {d / 1000:0.0}s"))}");
         double sum = total.Elapsed.TotalMilliseconds;
-        foreach (var (key, ms, calls, bytes) in Prof.Report().Take(24))
+        foreach (var (key, ms, calls, bytes) in Prof.Report().Take(int.TryParse(Environment.GetEnvironmentVariable("PROF_TOP"), out var top) ? top : 24))
             Console.WriteLine($"    {key,-28} {ms,8:0}ms {100 * ms / sum,5:0.0}% · {calls,8}번 · {1000 * ms / Math.Max(1, calls),7:0.0}µs/번 · 할당 {bytes / 1048576.0,7:0.0}MB");
         Console.WriteLine($"    (할당 많은 순) " + string.Join(" · ", Prof.Report().OrderByDescending(x => x.bytes).Take(8).Select(x => $"{x.key} {x.bytes / 1048576.0:0}MB")));
         Console.WriteLine($"    거리장 캐시: 다시 씀 {w.Paths.FloodHits} · 새로 계산 {w.Paths.FloodMisses}");

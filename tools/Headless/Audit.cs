@@ -273,6 +273,7 @@ public static partial class Program
         sb.AppendLine();
         var rs = c.Runs;
         sb.AppendLine($"큰 상처 뒤 (항해 합): 출혈 {rs.Sum(r => r.Bleeds)} · 심정지 {rs.Sum(r => r.Arrests)} (살림 {rs.Sum(r => r.Revived)}) · 그 뒤 숨짐 {rs.Sum(r => r.TraumaDied)} · 불붙는 순간 덴 사람 {rs.Sum(r => r.Flashes)} · 대응 · 수리 중 다침 {rs.Sum(r => r.WorkHurts)} (크게 {rs.Sum(r => r.WorkBad)}) · 컴퓨터가 생체 신호로 부름 {rs.Sum(r => r.Paged)} · 캄캄한 데서 넘어짐 {rs.Sum(r => r.DarkFalls)}");
+        sb.AppendLine($"위험이 사람에게 닿은 길 (항해 합): 열사병 {rs.Sum(r => r.HeatStrokes)} (숨짐 {rs.Sum(r => r.HeatDeaths)}) · 큰 피폭 {rs.Sum(r => r.RadSevere)} (쓰러짐 {rs.Sum(r => r.RadCollapses)} · 숨짐 {rs.Sum(r => r.RadDeaths)}) · 가장 큰 피폭 {rs.Select(r => r.MaxDose10).DefaultIfEmpty(0).Max() / 10f:0.0}Sv · 냄새에 늦게 깬 잠 {rs.Sum(r => r.LateWakes)}"); // v16.26
         sb.AppendLine();
         sb.AppendLine("## 항해별");
         sb.AppendLine();

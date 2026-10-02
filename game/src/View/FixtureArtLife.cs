@@ -301,11 +301,7 @@ public static partial class FixtureArt
     private static void GrowBody(in Fix x)
     {
         if (CropBody(x)) return; // v16.22 조류 · 버섯 · 단백질 · 허브는 FixtureArtFood
-        GrowBodyVeg(x);
-    }
-
-    private static void GrowBodyVeg(in Fix x)
-    {
+        // 채소 재배대 (v16.26 그림 함수 하나에 — 표가 가리키는 함수가 직접 그린다)
         var ci = x.Ci;
         Box(ci, x.B, new Color("#1c2619"), 5, new Color("#3b5a33"));
         var soil = x.Q(0.03f, 0.2f, 0.97f, 0.8f);
@@ -322,11 +318,7 @@ public static partial class FixtureArt
     private static void GrowLife(in Fix x)
     {
         if (CropLife(x)) return; // v16.22
-        GrowLifeVeg(x);
-    }
-
-    private static void GrowLifeVeg(in Fix x)
-    {
+        // 채소 재배대 (v16.26 그림 함수 하나에 — 표가 가리키는 함수가 직접 그린다)
         var ci = x.Ci;
         bool alive = x.Eff > 0.01f && !x.Dead;
         if (alive) ci.DrawRect(x.Q(0.04f, 0.89f, 0.96f, 0.94f), GrowPink.WithAlpha((0.35f + 0.1f * Mathf.Sin(x.T)) * x.Glow)); // 생장등
@@ -359,11 +351,7 @@ public static partial class FixtureArt
     private static void GrowFine(in Fix x)
     {
         if (CropFine(x)) return; // v16.22
-        GrowFineVeg(x);
-    }
-
-    private static void GrowFineVeg(in Fix x)
-    {
+        // 채소 재배대 (v16.26 그림 함수 하나에 — 표가 가리키는 함수가 직접 그린다)
         var ci = x.Ci;
         Bolts(ci, x.B, 2f, 0.6f);
         int n = Mathf.Max(2, x.F.Width * 2);

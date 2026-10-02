@@ -49,7 +49,8 @@ public static partial class Program
             // 다 되살린 적이 있는지 (되살린 뒤 과부하로 새로 떨어지는 차단기는 다른 이야기)
             int left = circuit;
             for (int i = 0; i < 10 * 4 && left > 0; i++) { Run(w, SimTime.Minutes(15)); left = panel.Faults.Count(f => f.Circuit >= 0); }
-            Check("전력 서지 — 회로가 끊기고 복구한다", circuit >= 2 && left == 0, $"끊긴 회로 {circuit} → 남은 {left}");
+            bool guard = ModulesV15.SurgeGuard(w); // v16.22 새 설계 배는 서지 보호기를 달고 나온다 — 차단기 하나만 떨어진다
+            Check("전력 서지 — 회로가 끊기고 복구한다", circuit >= (guard ? 1 : 2) && left == 0, $"끊긴 회로 {circuit}{(guard ? " (서지 보호기)" : "")} → 남은 {left}");
         }
 
         // ── 4) 유독 가스: 방에 가스가 차고, 우주복을 입고 들어가 막고, 환기로 걷어 낸다 ──
@@ -131,7 +132,10 @@ public static partial class Program
         // ── 8) 선체 균열: 새는 곳을 막고, 벽의 피로는 남는다 ──
         {
             var w = DayOne(seed, ship);
-            var room = w.Ship.RoomsOf(RoomType.Quarters).First();
+            // v16.22 새 설계: 침실은 배 안쪽(외벽에 안 닿는다) — 외벽에 닿은 침실이 없으면 외벽에 닿은 첫 방 (사람이 지내는 방부터)
+            bool OnHull(Room r) => Hazards.HullAt(w, Scenarios.OuterTarget(w, r)) != null;
+            var room = w.Ship.RoomsOf(RoomType.Quarters).FirstOrDefault(OnHull)
+                ?? w.Ship.LiveRooms.Where(r => r.Type != RoomType.Corridor && OnHull(r)).OrderBy(r => r.Type is RoomType.Mess or RoomType.Lounge or RoomType.Bridge ? 0 : 1).ThenBy(r => r.Id).First();
             var at = Scenarios.OuterTarget(w, room);
             var wallCell = Hazards.HullAt(w, at)!.Value;
             float max0 = w.Ship.WallAt(wallCell)!.MaxIntegrity;

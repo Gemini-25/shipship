@@ -134,7 +134,17 @@ public sealed class CosmicSystem
 {
     private readonly World _w;
     private Rng? _rng;
-    private Rng R => _rng ??= new Rng(unchecked(_w.Seed * 7643 + 389));
+    private Rng R => _rng ??= new Rng(unchecked(_w.Seed * 7643 + 389 + ShipSalt(_w.Ship.Name))); // v16.26 배마다 하늘이 다르다 (같은 시드의 배들이 같은 날 같은 것을 맞지 않게)
+
+    private static int ShipSalt(string name) { int h = 0; foreach (char ch in name) h = unchecked(h * 31 + ch); return h & 0xffff; }
+
+    /// <summary>v16.26 이야기꾼: 사람에게 닿는 것(방사선 · 잔해 · 충격 · 열 · 직격 · 겨냥)을 더 고른다 — 세게 고른 이야기꾼일수록. 흔들림 · 눈부심만 있는 것은 덜.</summary>
+    private static float StoryMul(CosmicSpec s)
+    {
+        if (Storyteller.Persona == StoryPersona.Off) return 1f;
+        bool harsh = s.Has(CosmicFx.Radiation) || s.Has(CosmicFx.Debris) || s.Has(CosmicFx.Shock) || s.Has(CosmicFx.Heat) || s.Has(CosmicFx.Strike) || s.Has(CosmicFx.Hostile);
+        return harsh ? 1.5f * Storyteller.BigScale : 0.6f;
+    }
 
     /// <summary>항해당 저절로 생기는 횟수 배율 (0이면 끔). 무작위 사고가 꺼져 있으면 저절로는 없다.</summary>
     public static float Rate = 1f;
@@ -322,11 +332,11 @@ public sealed class CosmicSystem
     {
         var leg = _w.Voyage.Current.Kind;
         float total = 0f;
-        foreach (var s in CosmicCatalog.All) total += s.Weight * CosmicCatalog.LegMul(leg, s.Kind);
+        foreach (var s in CosmicCatalog.All) total += s.Weight * CosmicCatalog.LegMul(leg, s.Kind) * StoryMul(s);
         float u = R.Float() * total;
         foreach (var s in CosmicCatalog.All)
         {
-            u -= s.Weight * CosmicCatalog.LegMul(leg, s.Kind);
+            u -= s.Weight * CosmicCatalog.LegMul(leg, s.Kind) * StoryMul(s);
             if (u <= 0f) return s.Kind;
         }
         return CosmicCatalog.All[^1].Kind;
