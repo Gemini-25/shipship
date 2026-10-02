@@ -73,6 +73,9 @@ public sealed class CrowdSystem
     public CrowdStats Stats { get; } = new();
     private readonly Dictionary<int, (int scene, long until)> _shooed = new();
     private readonly Dictionary<int, int> _watching = new();
+    private readonly Dictionary<int, (int scene, long tick)> _squeeze = new();
+    /// <summary>소문이 건너간 길 (말한 사람 → 들은 사람) — 화면 · 시험.</summary>
+    public List<(int teller, int listener, long tick, bool big)> Heard { get; } = new();
     private long _next;
 
     public CrowdSystem(World w, CoopSystem co) { _w = w; _co = co; }
@@ -150,6 +153,7 @@ public sealed class CrowdSystem
             }
             return sc.Spots.Count > 0 ? sc : null;
         }
+        if (k.CrewId >= 0) return null; // 쓰러지지 않은 다친 사람은 구경거리가 아니다
         int roomId = k.RoomId >= 0 ? k.RoomId : k.Rooms.Count > 0 ? k.Rooms[0] : -1;
         if (roomId < 0 || roomId >= ship.Rooms.Count) return null;
         var room = ship.Rooms[roomId];
@@ -158,7 +162,7 @@ public sealed class CrowdSystem
         bool breach = !fire && (k.Key.Contains("Breach", StringComparison.Ordinal) || k.Key.Contains("Decomp", StringComparison.Ordinal));
         var scene = new CrowdScene
         {
-            Id = _co.NextId(), CaseId = k.Id, RoomId = room.Id, What = $"{room.Name} {k.Name}", Center = room.Center,
+            Id = _co.NextId(), CaseId = k.Id, RoomId = room.Id, What = k.Name.Contains(room.Name, StringComparison.Ordinal) ? k.Name : $"{room.Name} {k.Name}", Center = room.Center,
             HasBelief = fire || breach, Topic = fire ? Topic.Fire : Topic.Breach, TopicId = room.Id, Since = now, LastSeen = now,
         };
         // 문 앞 (현장 밖 통로 칸) 둘레
@@ -237,7 +241,7 @@ public sealed class CrowdSystem
     {
         _watching.Remove(c.Id);
         s.Watchers.Remove(c.Id);
-        if (watched < SimTime.Minutes(2)) return;
+        if (watched < SimTime.Minutes(0.5f)) return; // 잠깐이라도 봤으면 말한다
         // 본 것을 퍼뜨린다 — 말이 많은 사람은 부풀린다
         bool talker = Life.Has(c, Habit.Talker) || Life.Has(c, Habit.Joker) || Life.Has(c, Habit.Prankster);
         Rumors.Add(new Rumor
@@ -264,7 +268,8 @@ public sealed class CrowdSystem
             if (s.Ended) continue;
             int i = s.Spots.IndexOf(cell);
             if (i < 0 || s.Taken[i] < 0) continue;
-            if (s.SqueezedBy != c.Id || _w.Tick - s.Squeezed > SimTime.Minutes(3)) Stats.Squeezes++;
+            if (!_squeeze.TryGetValue(c.Id, out var last) || last.scene != s.Id || _w.Tick - last.tick > SimTime.Minutes(3)) Stats.Squeezes++;
+            _squeeze[c.Id] = (s.Id, _w.Tick);
             s.Squeezed = _w.Tick; s.SqueezedBy = c.Id;
             return;
         }
@@ -292,7 +297,7 @@ public sealed class CrowdSystem
             if (r < rank) { rank = r; chief = c; }
         }
         if (chief == null || rank >= 9) return;
-        string title = rank switch { 0 => "지휘자", 1 => "선장", 2 => "당직", _ => "대응자" };
+        string title = rank switch { 0 => "지휘자 ", 1 => "선장 ", 2 => "당직 ", _ => "" };
         s.ShoutLine = rank <= 2 ? "비켜! 현장 비워!" : Life.Has(chief, Habit.ShortTempered) ? "비켜! 길 막지 마!" : "비켜 줘! 지나가야 해!";
         chief.Say(w, Persona.Say(chief, s.ShoutLine));
         s.ShoutAt = now; s.Shouter = chief.Id; s.Shouts++;
@@ -320,8 +325,8 @@ public sealed class CrowdSystem
             }
         }
         string where = s.RoomId >= 0 && s.RoomId < w.Ship.Rooms.Count ? w.Ship.Rooms[s.RoomId].Name : "현장";
-        w.Log.Add(now, LogKind.Life, $"{title} {chief.Name}: \"{s.ShoutLine}\" — {where} 앞 구경꾼 {total}명 중 {obeyed}명이 물러났다", chief.Id);
-        if (s.RoomId >= 0 && s.RoomId < w.Ship.Rooms.Count) MarkLog.Add(w.Ship.Rooms[s.RoomId].Marks, now, $"{chief.Name}이 구경꾼을 물렸다 ({obeyed}/{total})");
+        w.Log.Add(now, LogKind.Life, $"{title}{chief.Name}: \"{s.ShoutLine}\" — {where} 앞 구경꾼 {total}명 중 {obeyed}명이 물러났다", chief.Id);
+        if (s.RoomId >= 0 && s.RoomId < w.Ship.Rooms.Count) MarkLog.Add(w.Ship.Rooms[s.RoomId].Marks, now, $"{Ko.IGa(chief.Name)} 구경꾼을 물렸다 ({obeyed}/{total})");
     }
 
     private void ComputerCheck(CrowdScene s, long now)
@@ -358,6 +363,8 @@ public sealed class CrowdSystem
                 if (r.HasBelief && bel.Get(o, r.Topic, r.Id) is Belief b && b.Value == 1 && BeliefSystem.Eff(b, now) > 0.5f) continue; // 이미 안다
                 r.Told.Add(o.Id);
                 r.Left--;
+                Heard.Add((t.Id, o.Id, now, r.Exaggerate));
+                if (Heard.Count > 40) Heard.RemoveAt(0);
                 Stats.Rumors++;
                 if (r.HasBelief) bel.Learn(o, r.Topic, r.Id, 1, BeliefSource.Rumor, r.Exaggerate ? 0.7f : 0.55f, t.Id);
                 if (r.Exaggerate) Stats.Exaggerated++;

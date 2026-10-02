@@ -118,7 +118,7 @@ public sealed class QueueSystem
         var nq = new ServiceQueue
         {
             Id = _co.NextId(), Kind = kind, FurnitureId = f?.Id ?? -1, RoomId = room?.Id ?? -1, Spot = at, Toward = toward,
-            Label = f != null ? $"{f.Label} {KindName(kind)}" : $"{room?.Name ?? ""} {KindName(kind)}",
+            Label = f != null ? f.Label : $"{room?.Name ?? ""} {KindName(kind)}",
         };
         BuildSlots(nq);
         All.Add(nq);
@@ -317,7 +317,7 @@ public sealed class QueueSystem
         Feuds.Add(new Feud { A = v.Id, B = c.Id, Tick = now, Quarrel = true });
         w.Log.Add(now, LogKind.Life, $"{Ko.IGa(c.Name)} {what} 줄에 끼어들어 {Ko.WaGwa(v.Name)} 말다툼을 했다", c.Id);
         if (w.Ship.RoomAt(q.Spot) is Room room) MarkLog.Add(room.Marks, now, $"{what} 줄 새치기 다툼 ({c.Name} · {v.Name})");
-        MarkLog.Add(v.Memory.Marks, now, $"{c.Name}이 {what} 줄에 새치기했다");
+        MarkLog.Add(v.Memory.Marks, now, $"{Ko.IGa(c.Name)} {what} 줄에 새치기했다");
     }
 
     private void Serve(ServiceQueue q, CrewMember c)
@@ -478,7 +478,7 @@ public sealed class QueueSystem
         {
             int other = f.A == c.Id ? f.B : f.B == c.Id ? f.A : -1;
             if (other < 0 || now - f.Tick > SimTime.Hours(6) || CrewById(other) is not CrewMember o || SeatPos(o) is not Vector2 op) continue;
-            if (f.Quarrel && (seat.Center - op).Length() < 2.5f) { quarrel = f; qpos = op; }
+            if (f.Quarrel && (seat.Center - op).Length() < 3.5f) { quarrel = f; qpos = op; }
             else if (!f.Quarrel && f.A == c.Id && (seat.Center - op).Length() >= 1.6f) { kind = f; kpos = op; }
         }
         if (quarrel == null && kind == null) return seat.UseSpots[0];
@@ -491,7 +491,7 @@ public sealed class QueueSystem
             if (quarrel == null && (s2.Center - kpos).Length() > 1.6f) continue;
             if (key < bk) { bk = key; best = s2; }
         }
-        if (best == null || quarrel != null && (best.Center - qpos).Length() < 2.5f) return seat.UseSpots[0];
+        if (best == null || quarrel != null && (best.Center - qpos).Length() <= (seat.Center - qpos).Length() + 0.5f) return seat.UseSpots[0];
         // 잡아 둔 자리를 바꾼다
         if (c.Job is Job job)
         {

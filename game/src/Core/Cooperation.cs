@@ -55,6 +55,8 @@ public sealed class Worksite
     public int Toucher { get; internal set; } = -1;
     public int Resumes { get; internal set; }
     public float Progress { get; internal set; }
+    /// <summary>비운 동안 펼친 사람 몫으로 맡아 둔다 (두 시간 · 그 사람이 못 오면 풀린다).</summary>
+    public bool Reserved { get; internal set; }
     public List<SiteItem> Items { get; } = new();
 }
 
@@ -69,6 +71,8 @@ public sealed class DugBox
     /// <summary>급해서 바닥에 둔 채 갔다.</summary>
     public bool Left { get; internal set; }
     public int TidyBy { get; internal set; } = -1;
+    /// <summary>주 컴퓨터가 통로 상자를 알렸다 (믿는 사람이 먼저 치운다).</summary>
+    public bool Warned { get; internal set; }
 }
 
 /// <summary>"누가 좀 잡아 줘": 둘이 하는 일의 부름.</summary>
@@ -229,7 +233,17 @@ public sealed partial class CoopSystem
 
     // ─────────────────────────────── 틱 ───────────────────────────────
 
+    /// <summary>성능 점검: Update에 쓴 시간 (Stopwatch 틱 — 시뮬레이션에는 쓰지 않는다).</summary>
+    public static long UpdateTicks;
+
     public void Update(float dt)
+    {
+        long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
+        Step(dt);
+        UpdateTicks += System.Diagnostics.Stopwatch.GetTimestamp() - t0;
+    }
+
+    private void Step(float dt)
     {
         var w = _w;
         long now = w.Tick;
@@ -365,7 +379,7 @@ public sealed partial class CoopSystem
         if (bench) s.Bench = BookOf(s.F!);
         if (!site) return s;
         s.SiteWork = true;
-        s.NeedPair = NeedsPartner(o!, s.F);
+        s.NeedPair = NeedsPartner(c, o!, s.F);
         s.Neighbor = FindNeighbor(s);
         long now = w.Tick;
         var ex = Sites.FirstOrDefault(x => x.OrderId == o!.Id);
@@ -375,6 +389,7 @@ public sealed partial class CoopSystem
         if (ex.State == SiteState.Active && same) return s; // 같은 자리 그대로 (계획만 다시 짰다)
         bool longGap = ex.LeftAt >= 0 && now - ex.LeftAt > SimTime.Minutes(5);
         ex.State = SiteState.Active;
+        ex.Reserved = false;
         if (same && !longGap && !ex.Touched) return s;
         ex.Resumes++;
         string pct = $"{(int)(o!.Progress * 100f)}%";
@@ -401,7 +416,7 @@ public sealed partial class CoopSystem
             var prev = CrewById(ex.Owner);
             s.SetupMin = 1f; s.Boost = 0.85f; s.BoostUntil = now + SimTime.Minutes(15);
             Stats.Inherited++;
-            c.Say(w, Persona.Say(c, prev != null ? $"{prev.Name}이 뜯어 놓은 걸 — 어디까지 했지?" : "누가 뜯어 놓은 걸 — 어디까지 했지?"));
+            c.Say(w, Persona.Say(c, prev != null ? $"{Ko.IGa(prev.Name)} 뜯어 놓은 걸 — 어디까지 했지?" : "누가 뜯어 놓은 걸 — 어디까지 했지?"));
             w.Log.Add(now, LogKind.Work, $"{Ko.IGa(prev?.Name ?? "누가")} 펼쳐 두고 간 {ex.Label} 자리를 이어받는다 ({pct}) — 남의 순서라 더듬는다", c.Id);
             ex.Owner = c.Id;
         }
@@ -439,7 +454,8 @@ public sealed partial class CoopSystem
             call.Outcome = s.Order?.Closed == true ? "함께 끝냈다" : "일이 끊겼다";
         }
         if (s.Call is { Arrived: true } pc && pc.Helper >= 0 && s.Order?.Closed == true) PairDone(c, pc, now);
-        if (s.Pause is PausedFixture p && !p.Done && !p.Approved)
+        if (s.Pause is PausedFixture pa && !pa.Done && pa.Approved) Restore(pa, c, "다시 켰다 — 끝났다고 알리자 컴퓨터가 돌렸다");
+        else if (s.Pause is PausedFixture p && !p.Done && !p.Approved)
         {
             // 끈 사람이 다시 켠다 — 잘 잊는 사람은 그대로 두고 간다 (컴퓨터가 알린다)
             if (Life.Has(c, Habit.Forgetful) || Life.Has(c, Habit.Messy) && R.Chance(0.4f)) { p.Forgotten = true; Stats.Forgotten++; }
@@ -452,12 +468,14 @@ public sealed partial class CoopSystem
         if (site.State == SiteState.Left) return;
         site.State = SiteState.Left;
         site.LeftAt = now;
+        // 급하지 않은 일은 펼친 사람 몫으로 맡아 둔다 (곧 돌아온다) — 다른 사람은 남의 펼친 자리에 손대지 않는다
+        if (s.Order.Urgency < 0.9f && !c.Dead && (s.Order.Assignee == null || s.Order.Assignee == c)) { s.Order.Assignee = c; site.Reserved = true; }
         site.Why = c.Dead ? "쓰러졌다" : c.Down ? "다쳐 쓰러졌다" : c.Job?.Label ?? "자리를 비웠다";
         Stats.Left++;
         bool urgentCall = c.Job?.Urgent == true || Crisis.Acting(w) || c.Job?.Activity is EvacuateActivity or MusterActivity;
         string pct = $"{(int)(s.Order.Progress * 100f)}%";
         w.Log.Add(now, LogKind.Life, urgentCall
-            ? $"{Ko.EulReul(site.Label)} {pct}에서 손을 놓고 {site.Why}(으)로 — 공구 · 뜯은 부품은 그 자리에 그대로"
+            ? $"{Ko.EulReul(site.Label)} {pct}에서 손을 놓고 {Ko.EuRo(site.Why)} — 공구 · 뜯은 부품은 그 자리에 그대로"
             : $"{site.Label} 자리를 비운다 ({pct} · {site.Why}) — 펼친 공구는 그대로 둔다", c.Id);
         if (Furn(site.FurnitureId)?.Machine is Machine m) MarkLog.Add(m.Marks, now, $"{c.Name}: {pct}에서 손을 놓음 ({site.Why}) — 공구 · 부품을 둔 채");
     }
@@ -527,6 +545,11 @@ public sealed partial class CoopSystem
                 continue;
             }
             if (site.State != SiteState.Left) continue;
+            if (site.Reserved && (now - site.LeftAt > SimTime.Hours(2) || CrewById(site.Owner) is not { CanAct: true, Away: false }))
+            {
+                site.Reserved = false; // 못 돌아온다 — 다른 사람이 이어받을 수 있게
+                if (site.Order.Assignee?.Id == site.Owner && site.Order.Assignee.Job?.Order != site.Order) site.Order.Assignee = null;
+            }
             // 비워 둔 자리를 지나가는 사람: 급하면 걷어차고, 아니어도 가끔 건드린다
             foreach (var c in w.Crew)
             {
@@ -543,7 +566,7 @@ public sealed partial class CoopSystem
                     if (!site.Touched)
                     {
                         Stats.Kicks++;
-                        w.Log.Add(now, LogKind.Life, $"{(c.Job?.Urgent == true ? "급히 " : "")}지나가다 {site.Label} 옆에 펼쳐 둔 {t.Name}을(를) 건드렸다", c.Id);
+                        w.Log.Add(now, LogKind.Life, $"{(c.Job?.Urgent == true ? "급히 " : "")}지나가다 {site.Label} 옆에 펼쳐 둔 {Ko.EulReul(t.Name)} 건드렸다", c.Id);
                     }
                     site.Touched = true; site.Toucher = c.Id;
                     break;
@@ -568,7 +591,9 @@ public sealed partial class CoopSystem
         {
             if (s.OrderId != o.Id || s.State != SiteState.Left) continue;
             if (s.Owner == c.Id) return 0.2f;
-            return CrewById(s.Owner) is { CanAct: true } ? -0.08f : 0f;
+            // 남이 펼쳐 두고 간 자리: 그 사람이 돌아올 수 있으면 한동안 손대지 않는다 (급한 일은 예외)
+            if (CrewById(s.Owner) is not { CanAct: true }) return 0f;
+            return o.Urgency >= 0.9f ? -0.05f : _w.Tick - s.LeftAt < SimTime.Hours(2) ? -0.35f : -0.08f;
         }
         return 0f;
     }
@@ -614,7 +639,7 @@ public sealed partial class CoopSystem
         _digging[c.Id] = box;
         Stats.Digs++;
         c.Pose = Pose.Working;
-        c.Say(w, Persona.Say(c, $"{ItemKinds.Name(kind)}이 안쪽이야 — 앞 상자부터 빼고"));
+        c.Say(w, Persona.Say(c, $"{Ko.IGa(ItemKinds.Name(kind))} 안쪽이야 — 앞 상자부터 빼고"));
         return true;
     }
 
@@ -678,7 +703,7 @@ public sealed partial class CoopSystem
         if (helped) Stats.TransfersHelped++;
         string why = door.Bulkhead ? "격벽 문턱" : door.Bent > 0.15f ? "휜 문틀" : door.MotorBroken ? "반만 열리는 문" : "문턱";
         c.Say(w, Persona.Say(c, $"카트가 {why}에 걸려 — 짐을 옮겨 싣자"));
-        w.Log.Add(now, LogKind.Life, $"카트가 {why}을(를) 못 넘는다 — 짐을 내려 문 너머로 옮겨 싣는다" + (helped ? " (곁의 사람이 거든다)" : ""), c.Id);
+        w.Log.Add(now, LogKind.Life, $"카트가 {Ko.EulReul(why)} 못 넘는다 — 짐을 내려 문 너머로 옮겨 싣는다" + (helped ? " (곁의 사람이 거든다)" : ""), c.Id);
         c.Pose = Pose.Working;
         return 0f;
     }
@@ -759,7 +784,7 @@ public sealed partial class CoopSystem
                     "멈추지 말고 옆에서 조심해 작업하라", $"coop:deny:{g.Id}", SimTime.Minutes(30), 20f);
                 s.Careful = true;
                 Stats.Denied++; Stats.Careful++;
-                c.Say(w, Persona.Say(c, $"컴퓨터가 {g.Label}은 못 끈대 — 조심조심"));
+                c.Say(w, Persona.Say(c, $"컴퓨터가 {Ko.EunNeun(g.Label)} 못 끈대 — 조심조심"));
                 return;
             }
             au.Book.Add(ActKind.Module, room, $"{c.Name}: {s.F!.Label} 작업 — 옆 {g.Label} 정지 요청", others > 0 ? $"판단: 같은 설비 {others}대가 버틴다 — {mins:0}분은 괜찮다" : $"판단: 하나뿐이라 짧게만 ({mins:0}분)",
@@ -807,6 +832,13 @@ public sealed partial class CoopSystem
         MarkLog.Add(g.Machine.Marks, now, $"{c.Name}: 옆 설비 작업으로 잠시 멈춤" + (approved ? " (컴퓨터 승인)" : ""));
     }
 
+    /// <summary>Power.UpdateParking: 전력 계산이 내려 둔 설비를 새로 고를 때 다시 멈춰 둔다.</summary>
+    public void Park()
+    {
+        foreach (var p in Paused)
+            if (!p.Done && Furn(p.FurnitureId)?.Machine is Machine m) m.Parked = true;
+    }
+
     private void Restore(PausedFixture p, CrewMember? by, string why)
     {
         p.Done = true;
@@ -824,7 +856,6 @@ public sealed partial class CoopSystem
         {
             if (p.Done) continue;
             if (Furn(p.FurnitureId) is not Furniture f || f.Machine is not Machine m) { p.Done = true; continue; }
-            if (!m.Parked) { p.Done = true; continue; } // 저출력 해제 등으로 이미 다시 돌았다
             if (p.Approved && now >= p.Until)
             {
                 // 승인 시간이 끝났다: 컴퓨터가 다시 켠다 (곁에서 일하던 사람은 조심조심으로)
@@ -837,9 +868,9 @@ public sealed partial class CoopSystem
             {
                 if (online)
                 {
-                    au.Book.Add(ActKind.Module, f.Room, $"{p.Name}이(가) {(now - p.Since) / SimTime.Minutes(1)}분째 꺼져 있다 (정비 때 끈 뒤 안 켰다)", "판단: 꺼 둔 채 잊었다", $"{p.Name} 다시 켬",
+                    au.Book.Add(ActKind.Module, f.Room, $"{Ko.IGa(p.Name)} {(now - p.Since) / SimTime.Minutes(1)}분째 꺼져 있다 (정비 때 끈 뒤 안 켰다)", "판단: 꺼 둔 채 잊었다", $"{p.Name} 다시 켬",
                         $"{CrewById(p.By)?.Name ?? "끈 사람"}에게 알림 — 끈 설비는 다시 켜 달라", $"coop:forgot:{p.FurnitureId}", SimTime.Minutes(30), 10f);
-                    if (CrewById(p.By) is CrewMember by) MarkLog.Add(by.Memory.Marks, now, $"{p.Name}을(를) 꺼 둔 채 잊었다 — 컴퓨터가 켰다");
+                    if (CrewById(p.By) is CrewMember by) MarkLog.Add(by.Memory.Marks, now, $"{Ko.EulReul(p.Name)} 꺼 둔 채 잊었다 — 컴퓨터가 켰다");
                     Restore(p, null, "");
                 }
                 else if (now - p.Since > SimTime.Hours(2)) Restore(p, null, ""); // 누군가 알아채 켰다
@@ -851,13 +882,14 @@ public sealed partial class CoopSystem
 
     // ───────────────────────────── 둘이 하는 일 ─────────────────────────────
 
-    private bool NeedsPartner(WorkOrder o, Furniture? f)
+    private bool NeedsPartner(CrewMember c, WorkOrder o, Furniture? f)
     {
         if (o.External) return false;
         if (o.Kind == WorkKind.Repair && f?.Machine is Machine m)
         {
             var fault = m.Faults.FirstOrDefault(x => x.Kind == o.Fault && x.Circuit == o.Circuit);
-            return fault != null && PartsSystem.Heavy(fault.Spec.Part) && Modules.Working(_w, FurnitureType.Hoist) == 0; // 호이스트가 있으면 매달아 든다
+            // 무거운 새 부품을 들고 왔을 때 (긴급 우회 · 부분 수리는 들어 올릴 것이 없다) — 호이스트가 있으면 매달아 든다
+            return fault != null && PartsSystem.Heavy(fault.Spec.Part) && c.Carrying?.Kind == fault.Spec.Part && Modules.Working(_w, FurnitureType.Hoist) == 0;
         }
         return o.Kind is WorkKind.ReplacePanel or WorkKind.RepairDoor;
     }
@@ -874,7 +906,10 @@ public sealed partial class CoopSystem
             s.Call = new PairCall { Id = NextId(), Caller = c.Id, OrderId = s.Order?.Id ?? -1, Spot = c.Cell, Face = s.Face, Opened = now, Cap = now + SimTime.Minutes(min), Urgent = s.Urgent, Part = part };
             Calls.Add(s.Call);
             Stats.Calls++;
-            c.Say(w, Persona.Say(c, $"누가 {part} 좀 잡아 줘 — 내가 체결할게"));
+            // 부르는 소리를 들은 곁의 사람들이 다시 생각한다 (같은 방 · 옆방)
+            foreach (var nb in w.Crew)
+                if (nb != c && nb.CanAct && !nb.Outside && nb.Job?.Urgent != true && (nb.Position - c.Position).LengthSquared() < 144f && nb.NextThinkTick > now + 1) nb.NextThinkTick = now + 1 + nb.Id % 5;
+            c.Say(w, Persona.Say(c, $"누가 {part} 좀 잡아 줘 — 내가 조일게"));
         }
         var call = s.Call;
         if (call.Helper >= 0 && HelperHere(call))
@@ -883,7 +918,7 @@ public sealed partial class CoopSystem
             Stats.Arrived++;
             var h = CrewById(call.Helper)!;
             int n = PairCount(c.Id, h.Id);
-            w.Log.Add(now, LogKind.Work, $"{Ko.IGa(h.Name)} {call.Part}을(를) 잡고 {Ko.IGa(c.Name)} 체결한다" + (n >= 2 ? $" — 손발이 맞는다 (함께 {n + 1}번째)" : ""), c.Id);
+            w.Log.Add(now, LogKind.Work, $"{Ko.IGa(h.Name)} {Ko.EulReul(call.Part)} 잡고 {Ko.IGa(c.Name)} 조인다" + (n >= 2 ? $" — 손발이 척척 맞는다 (같이 한 게 벌써 {n + 1}번째)" : ""), c.Id);
             h.Say(w, Persona.Say(h, n >= 2 ? "늘 하던 대로 — 잡았어" : "잡았어, 조여"));
             c.Pose = Pose.Working;
             return 1f;
@@ -901,7 +936,7 @@ public sealed partial class CoopSystem
             s.Solo = true;
             Stats.Solos++;
             c.Say(w, Persona.Say(c, "혼자 하자 — 지그로 물려 놓고"));
-            w.Log.Add(now, LogKind.Work, $"{call.Part}을(를) 잡아 줄 사람이 {(late != null ? $"늦는다 ({late.Name})" : "안 온다")} — 혼자 지그로 고정하고 한다 (느리다)", c.Id);
+            w.Log.Add(now, LogKind.Work, $"{Ko.EulReul(call.Part)} 잡아 줄 사람이 {(late != null ? $"늦는다 ({late.Name})" : "안 온다")} — 혼자 지그로 물려 놓고 천천히 한다", c.Id);
             c.Pose = Pose.Working;
             return 1f;
         }
@@ -909,7 +944,7 @@ public sealed partial class CoopSystem
         Stats.Holds++;
         var o = s.Order!;
         _holds[o.Id] = now + SimTime.Hours(1);
-        w.Board.Block(o, $"{call.Part}을(를) 잡아 줄 사람이 없다 — 한 시간 뒤 다시", 1f);
+        w.Board.Block(o, $"{Ko.EulReul(call.Part)} 잡아 줄 사람이 없다 — 한 시간 뒤 다시", 1f);
         c.Say(w, Persona.Say(c, "혼자는 무리야 — 사람 있을 때 하자"));
         return -1f;
     }
@@ -962,9 +997,9 @@ public sealed partial class CoopSystem
             int d = dist.Get(call.Spot);
             if (d < 0) continue;
             int n = PairCount(c.Id, caller.Id);
-            float s = 0.42f + 0.3f * MathF.Max(0f, c.AffinityTo(caller)) + 0.04f * Math.Min(5, n) + 0.1f * c.Traits.Sociability + (call.Urgent ? 0.3f : 0f)
+            float s = 0.55f + 0.3f * MathF.Max(0f, c.AffinityTo(caller)) + 0.04f * Math.Min(5, n) + 0.1f * c.Traits.Sociability + (call.Urgent ? 0.3f : 0f)
                       - d / 4000f + (Life.Has(c, Habit.Generous) ? 0.05f : 0f) - (Life.Has(c, Habit.Loner) ? 0.1f : 0f) - (c.AffinityTo(caller) < -0.3f ? 0.25f : 0f);
-            if (s > bs) { bs = s; best = call; why = n >= 2 ? $"{caller.Name}이 부른다 — 손발이 맞는 짝 ({n}번)" : $"{caller.Name}이 {call.Part}을(를) 잡아 달란다"; }
+            if (s > bs) { bs = s; best = call; why = n >= 2 ? $"{Ko.IGa(caller.Name)} 부른다 — 늘 같이 하던 사이" : $"{Ko.IGa(caller.Name)} {Ko.EulReul(call.Part)} 잡아 달란다"; }
         }
         return (best, bs, why);
     }
@@ -1001,7 +1036,7 @@ public sealed partial class CoopSystem
             Stats.Preempts++;
             user.Say(w, Persona.Say(user, "급한 거면 먼저 해"));
             c.Say(w, Persona.Say(c, $"미안, 급해서 {b.Name} 먼저 쓸게"));
-            w.Log.Add(now, LogKind.Work, $"급한 일이라 {Ko.IGa(user.Name)} 쓰던 {Ko.EulReul(b.Name)} 먼저 쓴다 — {user.Name}은(는) 기다린다", c.Id);
+            w.Log.Add(now, LogKind.Work, $"급한 일이라 {Ko.IGa(user.Name)} 쓰던 {Ko.EulReul(b.Name)} 먼저 쓴다 — {Ko.EunNeun(user.Name)} 기다린다", c.Id);
             if (_sess.TryGetValue(user.Id, out var u2)) { u2.Phase = PBench; }
             b.Waiting.Insert(0, user.Id); b.Since.Insert(0, now);
             Take(b, c, s, now);
@@ -1011,7 +1046,7 @@ public sealed partial class CoopSystem
         {
             AddWaiter(b, c.Id, now);
             Stats.BenchWaits++;
-            c.Say(w, Persona.Say(c, $"{user.Name}이 {b.Name}을(를) 쓰는 중 — 다음은 나"));
+            c.Say(w, Persona.Say(c, $"{Ko.IGa(user.Name)} {Ko.EulReul(b.Name)} 쓰는 중 — 다음은 나"));
         }
         // 오래 기다리면 투덜 (컴퓨터가 순서 · 시간을 알려 줬으면 덜)
         int idx = b.Waiting.IndexOf(c.Id);
@@ -1118,7 +1153,7 @@ public sealed partial class CoopSystem
             var room = w.Ship.RoomAt(b.Item.At);
             if (room == null || !room.DataLinked) continue;
             if (au.Book.Add(ActKind.Advice, room, $"{room.Name} 통로에 상자", "판단: 큰 부품을 꺼내며 내려놓은 앞 상자 — 통로를 좁힌다", "선내 메시지", "지나는 사람이 선반에 되돌려 달라",
-                    $"coop:box:{b.Item.Id}", SimTime.Hours(2), 30f) != null) Stats.AisleWarns++;
+                    $"coop:box:{b.Item.Id}", SimTime.Hours(2), 30f) != null) { Stats.AisleWarns++; b.Warned = true; }
         }
     }
 
@@ -1208,7 +1243,7 @@ public sealed class LendHandActivity : Activity
         toils.Add(new HoldPartToil(call));
         return new Job(this, "잡아 주기", toils)
         {
-            LogText = $"{caller?.Name ?? "누가"}이 {call.Part}을(를) 잡아 달란다 — 거들러 간다", LogKind = LogKind.Work, InterruptMargin = 0.25f,
+            LogText = $"{Ko.IGa(caller?.Name ?? "누가")} {Ko.EulReul(call.Part)} 잡아 달란다 — 거들러 간다", LogKind = LogKind.Work, InterruptMargin = 0.25f,
             OnFinished = (cm, world, st) => { if (call.Helper == cm.Id && !call.Arrived) call.Helper = -1; },
         };
     }
@@ -1267,7 +1302,8 @@ public sealed class SpaceTidyActivity : Activity
         if (w.Coop.Boxes.Count == 0 || !c.CanAct || c.IsChild || Crisis.Acting(w)) return (0f, "—");
         var b = Pick(c, w, dist, out int d);
         if (b == null || d > 400) return (0f, "—");
-        float s = 0.22f + (Life.Has(c, Habit.NeatFreak) ? 0.15f : 0f) + (b.By == c.Id ? 0.12f : 0f) + (w.Matter.InAisle(b.Item.At) ? 0.08f : 0f) - d / 3000f - (Life.Has(c, Habit.Messy) ? 0.1f : 0f);
+        float s = 0.34f + (Life.Has(c, Habit.NeatFreak) ? 0.15f : 0f) + (b.By == c.Id ? 0.15f : 0f) + (w.Matter.InAisle(b.Item.At) ? 0.12f : 0f) - d / 3000f - (Life.Has(c, Habit.Messy) ? 0.1f : 0f)
+                  + (b.Warned ? 0.15f * w.Automation.Trusts.Of(c) : 0f); // 컴퓨터가 치워 달라고 했다 (믿는 만큼)
         if (Bedtime(c, w)) s -= 0.3f;
         return (MathF.Max(0f, s), b.By == c.Id ? "내가 꺼내 둔 상자 — 되돌려 놓자" : "통로에 상자가 나와 있다");
     }
