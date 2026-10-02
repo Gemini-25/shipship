@@ -81,7 +81,7 @@ public static class RoomCatalog
               "수소 누출 감지기 점검.", "수소 누출 → 폭발.")),
         new(RoomType.EscapeBay, RoomType.Storage, "탈출정 격납고", 2, "#9aa5bd", "ES", RoomTag.None, 0f, 0f, 0f, 0f, "K2x2x1",
             E("탈출정 격납고. 배를 버려야 할 때.", "탈출정과 발사 레일.", "전기 (탈출정 충전).", "탈출할 수 없다.", "월 1회 점검.", "없음.")),
-        new(RoomType.ServerRoom, RoomType.Comms, "서버실", 2, "#7fe0c0", "SV", RoomTag.None, 0.3f, 0f, 0f, 0f, "I2x2x1 C1x1x1",
+        new(RoomType.ServerRoom, RoomType.Comms, "서버실", 2, "#7fe0c0", "SV", RoomTag.None, 0.3f, 0f, 0f, 0f, "C1x1x2 K1x3x2", // v16.22 생성 배엔 랙(선반) · 콘솔만 — 주 컴퓨터는 하나
             E("서버실. 주 컴퓨터의 연산과 기록.", "서버 선반과 냉각.", "전기, 냉각, 데이터선.", "주 컴퓨터가 함교에서 버틴다 — 덜 똑똑하다.",
               "먼지·온도 관리.", "과열, 누수 → 누전.")),
         new(RoomType.Calibration, RoomType.Workshop, "교정실", 2, "#cfae6d", "CL", RoomTag.Quiet, 0f, 0f, 0f, 0f, "W3x1x1",
@@ -108,7 +108,7 @@ public static class RoomCatalog
         new(RoomType.HvacRoom, RoomType.LifeSupport, "공조실", 2, "#5ccab8", "HV", RoomTag.None, 0.45f, 0.25f, 0f, 0f, "O2x2x1",
             E("공조실. 배 전체의 공기를 섞고 데우고 식힌다.", "큰 송풍기와 열교환기.", "전기.", "생명유지실이 대신한다 — 방마다 공기가 고르지 않다.",
               "필터·벨트 점검.", "덕트 화재.")),
-        new(RoomType.PumpRoom, RoomType.Cooling, "펌프실", 2, "#6fcfe8", "PM", RoomTag.Wet, 0.5f, 0.45f, 0f, 0f, "P2x2x2",
+        new(RoomType.PumpRoom, RoomType.Cooling, "펌프실", 2, "#6fcfe8", "PM", RoomTag.Wet, 0.5f, 0.45f, 0f, 0f, "C1x1x1 K2x2x1", // v16.22 생성 배엔 예비 펌프 선반 · 제어반 (냉각 펌프는 위 선체 밑 줄에만)
             E("펌프실. 냉각수를 돌리는 큰 펌프들.", "펌프와 열교환기.", "전기, 급수.", "냉각실이 모두 떠맡는다.", "베어링·실 점검.", "누수, 진동.")),
         new(RoomType.Substation, RoomType.Power, "변전실", 2, "#eed65a", "SS", RoomTag.None, 0.25f, 0f, 0f, 0f, "X3x1x1",
             E("변전실. 먼 구역으로 전기를 나눠 보낸다.", "변압기와 차단기.", "간선.", "먼 방의 전압이 떨어진다.", "절연 점검.", "누전·아크 화재.")),
@@ -167,6 +167,15 @@ public static class RoomCatalog
             E("원심 거주구. 돌면서 중력을 만든다.", "도는 고리.", "전기.", "무중력 — 뼈와 근육이 약해진다.", "베어링 점검.", "흔들린다.")),
         new(RoomType.School, RoomType.Lounge, "학교", 3, "#e0b0d0", "SC", RoomTag.Rest, 0.3f, 0.05f, 0f, 0f, "T2x1x2 S2x1x2",
             E("학교. 다음 세대가 배를 배운다.", "교실과 모형.", "없음.", "일하면서 어깨너머로 — 느리게 배운다.", "없음.", "없음.")),
+
+        // ── v16.22 배 한가운데의 주컴퓨터실 · 어두운 방의 버섯 ──
+        new(RoomType.ComputerRoom, RoomType.Comms, "주컴퓨터실", 1, "#6fd6e8", "CO", RoomTag.None, 0.25f, 0f, 0f, 0f, "I2x2x1 C1x1x2",
+            E("주컴퓨터실. 배의 판단이 도는 곳 — 본체 랙과 예비 연산기, 비상 전지.", "배 한가운데 두꺼운 벽 안. 방마다 오는 데이터선이 여기로 모인다.",
+              "전기(두 갈래), 냉방, 데이터선.", "격벽 · 댐퍼 · 경보를 사람이 손으로 돌린다 — 방 제어기만 남는다.", "방열판 먼지 털기 · 케이블 정리 · 거름망 갈기.",
+              "더우면 느려진다(안전 모드). 불이 나면 사람 대신 소화 가스.")),
+        new(RoomType.MushroomFarm, RoomType.Hydroponics, "버섯 재배실", 2, "#c9a77a", "MU", RoomTag.Wet | RoomTag.Quiet, 0.05f, 0f, 0.35f, 0f, "G4x1x2 K1x3x1",
+            E("버섯 재배실. 어둡고 습한 방에서 배지 봉지에 버섯을 키운다.", "선반마다 배지 봉지 — 빛이 거의 없어도 되고 물도 조금. 재배실 찌꺼기와 헌 종이가 배지가 된다.",
+              "습기, 환풍기 전기.", "버섯이 없다 — 수경 채소에만 기댄다.", "잡균 핀 봉지 골라내기 · 배지 갈기.", "포자 — 기침 · 가려움. 곰팡이가 번지면 통째로 버린다.")),
     };
 
     private static readonly Dictionary<RoomType, RoomSpec> ByKind = Specs.ToDictionary(s => s.Kind);

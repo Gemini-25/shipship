@@ -909,7 +909,8 @@ public sealed class RobotSystem
                 {
                     if (o.Closed || !crop.Ripe) return true;
                     // 로봇 솜씨는 보통 사람쯤 (0.5)
-                    int yield = (int)MathF.Round(FoodChain.HarvestYield * FoodChain.BedSize(bed) * RobotsV15.Yield(rb.Kind) * (0.8f + 0.2f * bed.Machine!.Condition)); // v15.7 수확 로봇은 덜 흘린다
+                    int yield = Math.Max(1, (int)MathF.Round(FoodChain.HarvestYield * FoodChain.BedSize(bed) * RobotsV15.Yield(rb.Kind) * (0.8f + 0.2f * bed.Machine!.Condition) * FoodSourceSystem.YieldMul(bed))); // v15.7 수확 로봇은 덜 흘린다 · v16.22 재배실마다
+                    world.FoodSources.Harvested(bed, yield); // v16.22
                     crop.Growth = 0f;
                     rb.Cargo = new ItemStack(ItemKind.Produce, yield);
                     world.Board.Close(o);

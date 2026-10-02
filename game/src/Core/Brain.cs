@@ -37,6 +37,7 @@ public static class Brain
         new MendActivity(), // v14.3 망가진 물건 고쳐 주기
         new ReachOutActivity(), new ReclaimActivity(), new PartTestActivity(), new WashUpActivity(), new LaundryActivity(), new DeconActivity(), new FlushActivity(), new ExtinguisherCheckActivity(), new MemorialVisitActivity(), new SharedMealActivity(), // v14.9 관행 · v14.8 급수관 씻어 내기 · v14.7 씻기 · 빨래 · 우주복 털기 · v14.6 부품 시험 · v14.5 두고 간 짐 · v14.4 목적 있는 말 걸기 (걱정 · 위로 · 신입 · 사과 · 진실 · 소문)
         new ShipRoundsActivity(), // v16.9 닳은 배의 아침 한 바퀴
+        new AltCropActivity(), // v16.22 수경이 멎으면 다른 재배실을 한 번 더
         new ExpeditionActivity(), // v16.12 원정 출발 · 우주복 점검 · 무전 기다리기 · 마중 · 전리품 · 식탁 이야기
         new ResearchActivity(), // v16.14 실험 (연구자가 실험실 · 작업대에서 — 끊기면 노트 · 이어 하기)
         new AnnexWorkActivity(), // v16.10 증축 공사 (선외 골조 · 외판 · 기밀 시험 · 배선 · 비닐 막 · 내장 · 개통식)

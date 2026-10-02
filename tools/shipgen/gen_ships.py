@@ -1,438 +1,498 @@
 #!/usr/bin/env python3
 """
-배 크기 템플릿 생성기 (v10.4, v10.9: 여러 층으로 접은 배).
-미리내호(6인)와 같은 뼈대 — 왼쪽 엔진실, 위 줄(원자로·냉각·배전·정비·창고·주방·식당·통신), 가운데 통로, 아래 줄(생명유지·수경재배·에어락·침실·의무·휴게·함교) —
-를 인원에 맞춰 방 크기와 설비 수를 늘려 뽑는다. 배관 배치 규칙(원자로 오른쪽 → 냉각실, 펌프는 위 외벽 바로 아래, 정수기는 생명유지실 오른쪽 위)을 지킨다.
-출력: game/src/Core/ShipTemplates.cs
+기본 배 다섯 척 생성기 (v16.22 배 재설계 · 크기별 등급).
+  제비호(4 · 소형) · 미리내호(6 · 기본) · 한빛호(12 · 중형) · 은하호(20 · 대형) · 천마호(30 · 초대형)
+
+뼈대 (다섯 척 공통):
+  · 뒤(왼쪽)는 엔진실이 선체 높이 전체를 차지한다.
+  · 바깥 줄(맨 위 · 맨 아래 띠)은 화물 · 창고 · 냉각(방열판은 선체 바깥) · 재배 · 침실 · 정비 · 에어락 — 운석을 먼저 맞는 완충.
+  · 그 안쪽은 통로 고리(위 · 아래 가로 통로를 양 끝 세로 통로가 잇는다 — 어디든 두 갈래 길).
+  · 고리 안쪽이 심장부: 원자로 · 배전 · 주컴퓨터실(배 한가운데) · 생명유지 — 어느 벽도 선체에 닿지 않는다.
+  · 큰 배는 고리 안에 띠가 더 있고(안쪽 띠), 통로가 차압 문으로 구획을 나눈다.
+  · 앞(오른쪽)은 뱃머리: 통신실(안테나) · 함교 · (큰 배) 항법실 · 예비 함교.
+  · 작을수록 꼭 필요한 방만, 클수록 방 종류가 많고 넓고 호화롭다.
+배관 배치 규칙(Piping.Build)을 지킨다: 냉각 펌프는 위 선체 바로 아래 줄, 첫 펌프는 원자로 가운데보다 오른쪽,
+냉각실 아래 벽 바로 밑은 통로, 급수 본관은 생명유지실 정수기에서 시작한다.
+출력: game/src/Core/ShipTemplates.cs  (손으로 고치지 말고 이 생성기를 고친다)
 """
-import math, os
+import os, sys
 
-def ceil(a, b): return -(-a // b)
+LEGEND_POOL = "dintuvxyz0123456789!$%&*?^~;:<>|/-_`,()[]{}αβγδεζηθικλμνξπρστυφχψω"
+BASE = set('cberkplwsjmfaqhgo')
 
-class Room:
-    def __init__(self, label, w, h):
-        self.label, self.w, self.h = label, w, h
-        self.g = [['.'] * w for _ in range(h)]
-        self.g[0][0] = label
-    def put(self, ch, x, y, w=1, h=1):
-        for yy in range(y, y + h):
-            for xx in range(x, x + w):
-                assert 0 <= xx < self.w and 0 <= yy < self.h, (self.label, ch, xx, yy, self.w, self.h)
-                assert self.g[yy][xx] == '.', (self.label, ch, xx, yy, self.g[yy][xx])
-                self.g[yy][xx] = ch
+# ───────────────────────── 설비 묶음 ─────────────────────────
+# 항목: (글자 무늬 줄 목록) — 같은 글자끼리 붙으면 하나의 설비가 된다.
+def blk(ch, w, h): return [ch * w] * h
+R3, R4, R5, R6 = (blk('R', s, s) for s in (3, 4, 5, 6))
+P = blk('P', 2, 2); X = ['XXX']; Z = ['ZZ']; Y = blk('Y', 2, 2); O = blk('O', 2, 2); U = blk('U', 2, 2)
+G = ['GGGG']; F = ['FF']; V = ['VV']; D = ['D']; B = ['B', 'B']; M = ['M', 'M']; W = ['WWW']; N = blk('N', 2, 2)
+H = ['HH']; L = ['L', 'L']; Q = ['Q', 'Q']; K = blk('K', 2, 2); K3 = ['K', 'K', 'K']; C = ['C']; I = blk('I', 2, 2)
+A = ['AA']; S = ['S']; T = ['TT']; J = ['J', 'J']; E = blk('E', 3, 3)
+TSET = ['SS', 'TT', 'SS']          # 식탁 하나 + 의자 넷
+SOFA = ['S.S', 'TTT', 'S.S']        # 휴게 탁자
+ROWS2 = ['SS', 'SS']                # 객석 · 운동 기구 줄
 
-def reactor_room(n, H):
-    s = 3 if n <= 6 else 4 if n <= 12 else 5 if n <= 20 else 6
-    r = Room('r', s + 5, H)
-    r.put('R', 2, 1, s, s)
-    r.put('C', s + 3, 0, 2, 1)
-    return r
+def many(item, n): return [item] * n
 
-def cooling_room(pumps, H):
-    w = 3 * pumps - 1 + 2
-    r = Room('k', w, H)
-    r.g[0][0] = '.'
-    for i in range(pumps):
-        r.put('P', 1 + 3 * i, 0, 2, 2)
-    r.g[H - 1][0] = 'k'
-    return r
+# ───────────────────────── 격자 ─────────────────────────
+class Ship:
+    def __init__(self, key, w, h):
+        self.key = key
+        self.W, self.H = w, h
+        self.g = [[' '] * w for _ in range(h)]
+        self.rooms = []        # dict(label, kind, x0, y0, x1, y1 (내부), doors, items, reserve)
+        self.legend = {}
 
-def power_room(batteries, H):
-    rows = 2 if H >= 7 else 1
-    per_row = ceil(batteries, rows)
-    w = max(6, 3 * per_row + 1)
-    r = Room('p', w, H)
-    r.put('X', 1, 0, 3, 1)
-    r.put('Z', w - 2, 1, 2, 1)
-    for i in range(batteries):
-        row, col = divmod(i, per_row)
-        r.put('Y', 1 + 3 * col, H - 2 - 3 * row, 2, 2)
-    return r
+    def rect(self, x0, y0, x1, y1):
+        """벽 테두리 (x0..x1, y0..y1 포함) + 안은 바닥."""
+        for y in range(y0, y1 + 1):
+            for x in range(x0, x1 + 1):
+                edge = x in (x0, x1) or y in (y0, y1)
+                if edge:
+                    if self.g[y][x] == ' ': self.g[y][x] = '#'
+                else:
+                    self.g[y][x] = '.'
 
-def workshop_room(n, H):
-    benches = max(1, ceil(n, 10))
-    w = max(6, 4 * benches + 3)
-    r = Room('w', w, H)
-    for i in range(benches):
-        r.put('W', 1 + 4 * i, 0, 3, 1)
-    r.put('H', w - 2, 0, 2, 1)
-    refineries = 1 if n <= 12 else 2
-    for i in range(refineries):
-        r.put('N', 1 + 3 * i, H - 2, 2, 2)
-    r.put('K', w - 1, H - 3, 1, 3)
-    return r
+    def floor(self, x0, y0, x1, y1):
+        for y in range(y0, y1 + 1):
+            for x in range(x0, x1 + 1): self.g[y][x] = '.'
 
-def storage_room(n, H):
-    shelves = max(4, ceil(n * 2, 3))
-    rows = [0, 3, H - 2] if H >= 7 else [0, H - 2]   # v10.9: 높은 방은 선반 세 줄 (배가 덜 길어진다)
-    cols = ceil(shelves, len(rows))
-    w = 3 * cols - 1
-    r = Room('s', max(5, w + 1), H)
-    r.g[0][0] = '.'
-    for i in range(shelves):
-        col, row = divmod(i, len(rows))
-        r.put('K', 1 + 3 * col, rows[row], 2, 2)
-    r.g[2][0] = 's'
-    return r
-
-def galley_room(n, H):
-    stoves = max(1, ceil(n, 6)); fridges = max(1, ceil(n, 6))
-    if stoves + fridges <= 4:
-        w = max(5, 3 * (stoves + fridges) + 1)
-        r = Room('j', w, H)
-        x = 1
-        for i in range(stoves): r.put('V', x, 0, 2, 1); x += 3
-        for i in range(fridges): r.put('F', x, 0, 2, 1); x += 3
-        r.put('T', 1, H - 3, 2, 1)
+    def room(self, label, kind, x0, y0, x1, y1, doors, items, reserve=()):
+        """내부 좌표 (x0..x1, y0..y1)."""
+        r = dict(label=label, kind=kind, x0=x0, y0=y0, x1=x1, y1=y1, doors=doors, items=items, reserve=set(reserve), placed=[], hatch=None)
+        self.rooms.append(r)
         return r
-    # v10.9: 큰 주방 — 조리대는 위 벽, 냉장고는 아래 벽, 가운데 조리대(작업 테이블)
-    w = max(7, 3 * max(stoves, fridges) + 2)
-    r = Room('j', w, H)
-    for i in range(stoves): r.put('V', 1 + 3 * i, 0, 2, 1)
-    for i in range(fridges): r.put('F', 1 + 3 * i, H - 1, 2, 1)
-    r.put('T', 2, H // 2 - 1, 2, 1)
-    return r
 
-def mess_room(n, H):
-    disp = max(2, ceil(n, 4))
-    tables = max(2, ceil(n, 4))
-    w = max(9, 3 * tables + 3, disp + 3)
-    r = Room('m', w, H)
-    for i in range(disp): r.put('D', 1 + i, 0)
-    for i in range(tables):
-        x = 3 + 3 * i
-        if x + 1 >= w: break
-        # 배식기 줄(0) 아래 한 줄은 통로로 비운다 (배식기 앞 칸이 의자에 막히면 못 꺼낸다)
-        r.put('S', x, 2, 2, 1); r.put('T', x, 3, 2, 1); r.put('S', x, 4, 2, 1)
-    return r
+def fail(msg):
+    print('생성 실패:', msg)
+    sys.exit(1)
 
-def comms_room(H):
-    r = Room('o', 6, H)
-    r.put('C', 3, 0)
-    r.put('A', 3, 1, 2, 1)
-    return r
+# ───────────────────────── 띠 배치 ─────────────────────────
+def spread(widths, total, grow):
+    """방 내부 폭 목록을 (벽 포함) total 칸에 맞춘다 — grow 표시한 방부터 넓힌다."""
+    need = sum(widths) + len(widths) + 1
+    extra = total - need
+    if extra < 0: fail(f'띠 폭 모자람 need {need} > {total}')
+    ws = list(widths)
+    # 남는 칸은 고루 나눈다 (grow 표시한 방은 두 몫)
+    idx = [i for i, g in enumerate(grow) if g] + list(range(len(ws)))
+    k = 0
+    while extra > 0:
+        ws[idx[k % len(idx)]] += 1; extra -= 1; k += 1
+    return ws
 
-def life_room(n, H):
-    gens = max(2, ceil(n, 3))
-    recyclers = max(1, ceil(n, 6))
-    w = max(8, 3 * gens + 1, 3 * recyclers + 3)
-    r = Room('l', w, H)
-    # 정수기: 오른쪽 위 (첫 대가 가장 오른쪽 — 급수 본관이 여기서 수경재배실로 간다)
-    for i in range(recyclers):
-        r.put('U', w - 2 - 3 * i, 0, 2, 2)
-    if gens > 4 and H >= 8:
-        # v10.9: 산소 발생기가 많으면 두 줄 (2×3)
-        per = ceil(gens, 2)
-        w2 = max(w, 3 * per + 1, 3 * recyclers + 3)
-        if w2 != w:
-            for row in r.g: row.extend(['.'] * (w2 - w))
-            r.w = w2
-            for row in r.g:
-                for x in range(w2): row[x] = '.' if row[x] != 'l' else 'l'
-            for i in range(recyclers): r.put('U', w2 - 2 - 3 * i, 0, 2, 2)
-            w = w2
-        for i in range(gens):
-            row, col = divmod(i, per)
-            r.put('O', 3 * col, H - 6 + 3 * row, 2, 3)
-    else:
-        for i in range(gens):
-            r.put('O', 3 * i, H - 4, 2, 4)
-    r.put('C', w - 1, H - 1)
-    return r
+def spine(x0, y0, x1, y1, ds, res):
+    res = set(res)
+    if 'N' in ds: res.update((x, y0) for x in range(x0, x1 + 1))
+    if 'S' in ds: res.update((x, y1) for x in range(x0, x1 + 1))
+    if 'E' in ds: res.update((x1, y) for y in range(y0, y1 + 1))
+    if 'W' in ds or 'N' in ds or 'S' in ds: res.update((x0, y) for y in range(y0, y1 + 1))
+    return res
 
-def hydro_room(beds, H):
-    ys = [1, 3 if H == 7 else 4, H - 2] if H >= 7 else [1, H - 2]   # v10.9: 높은 방은 재배대 세 줄
-    per_row = ceil(beds, len(ys))
-    w = 5 * per_row + 1
-    r = Room('f', w, H)
-    for i in range(beds):
-        row, col = divmod(i, per_row)
-        r.put('G', 1 + 5 * col, ys[row], 4, 1)
-    return r
+def pack(at, x0, y0, x1, y1, ds, res, items):
+    """먼 쪽 줄부터 첫 자리에 — 설비끼리는 한 칸씩 띄운다. 안 되면 키 큰 것부터 다시."""
+    out = pack1(at, x0, y0, x1, y1, ds, res, items)
+    if out is None: out = pack1(at, x0, y0, x1, y1, ds, res, sorted(items, key=lambda it: -len(it)))
+    return out
 
-def airlock_room(n, H):
-    docks = 2 if n <= 12 else 3
-    lockers = 2 if n <= 6 else 3 if n <= 12 else 4
-    w = 3 if lockers <= 2 and docks <= 2 else 5
-    r = Room('a', w, H)
-    xs = list(range(0, w, 2))
-    for i in range(lockers):
-        r.put('L', xs[i % len(xs)], 1 + 2 * (i // len(xs)), 1, 2) if 1 + 2 * (i // len(xs)) + 1 < H - 2 else None
-    for i in range(docks):
-        r.put('Q', xs[i % len(xs)], H - 2, 1, 2)
-    return r
+def pack1(at, x0, y0, x1, y1, ds, res, items):
+    """먼 쪽 줄부터 첫 자리에 — 설비끼리는 한 칸씩 띄운다 (둘레 바닥이 통로 쪽 줄과 이어진다)."""
+    far_top = not ('N' in ds and 'S' not in ds)
+    rows = list(range(y0, y1 + 1)) if far_top else list(range(y1, y0 - 1, -1))
+    occ, out = {}, []
+    for item in items:
+        ih, iw = len(item), max(len(l) for l in item)
+        ok = False
+        for ry in rows:
+            ty = ry if far_top else ry - ih + 1
+            for tx in range(x0, x1 - iw + 2):
+                box = [(tx + dx, ty + dy) for dy in range(ih) for dx in range(iw)]
+                if any(not (x0 <= x <= x1 and y0 <= y <= y1) for x, y in box): continue
+                if any(at(x, y) != '.' or (x, y) in res for x, y in box): continue
+                if any((x + ax, y + ay) in occ for x, y in box for ax in (-1, 0, 1) for ay in (-1, 0, 1)): continue
+                for dy, line in enumerate(item):
+                    for dx, ch in enumerate(line):
+                        if ch != '.': out.append((tx + dx, ty + dy, ch))
+                for x, y in box: occ[(x, y)] = 1
+                ok = True
+                break
+            if ok: break
+        if not ok: return None
+    return out
 
-def quarters_rooms(n, H):
-    rooms = []
-    left = n
-    while left > 0:
-        k = min(left, 12)
-        bottom = ceil(k, 2); topc = k - bottom
-        top_y = 0 if H <= 5 else 1
-        w = max(8, 2 * max(bottom, topc) + 3)
-        r = Room('q', w, H)
-        for i in range(bottom): r.put('B', 1 + 2 * i, H - 2, 1, 2)
-        for i in range(topc): r.put('B', 1 + 2 * i + (1 if top_y == 0 else 0), top_y, 1, 2) if 1 + 2 * i + (1 if top_y == 0 else 0) < w - 1 else None
-        r.put('K', w - 1, top_y + 2)
-        rooms.append(r)
-        left -= k
-    return rooms
+def fit_w(items, h, ds, w, hres=()):
+    """빈 방에 설비가 다 들어가는 가장 좁은 폭."""
+    for ww in range(max(w, 3), 60):
+        res = spine(0, 0, ww - 1, h - 1, ds, set(hres))
+        if pack(lambda x, y: '.', 0, 0, ww - 1, h - 1, ds, res, items) is not None: return ww
+    fail(f'방 폭 못 맞춤 {items}')
 
-def medbay_room(n, H):
-    beds = max(2, ceil(n, 5))
-    w = max(5, 2 * beds + 1)
-    r = Room('h', w, H)
-    r.put('C', w - 1, 0)
-    for i in range(beds):
-        r.put('M', 1 + 2 * i, H - 3, 1, 2)
-    r.put('K', 0, H - 1)
-    return r
+def fit_h(items, w, ds, h):
+    for hh in range(max(h, 2), 40):
+        if pack(lambda x, y: '.', 0, 0, w - 1, hh - 1, ds, spine(0, 0, w - 1, hh - 1, ds, set()), items) is not None: return hh
+    fail(f'방 높이 못 맞춤 {items}')
 
-def lounge_room(n, H):
-    groups = max(1, ceil(n, 6))
-    w = max(5, 4 * groups + 1)
-    r = Room('g', w, H)
-    for i in range(groups):
-        x = 1 + 4 * i
-        r.put('S', x, 1, 2, 1); r.put('T', x, 2, 2, 2); r.put('S', x, 4, 2, 1) if H > 5 else None
-    return r
+def band_need(rooms): return sum(r['w'] for r in rooms) + len(rooms) + 1
 
+def build(spec):
+    cw = spec['corr']
+    We = spec['engine']['w']
+    bands = spec['bands']            # 위에서 아래로: ('room', dict) | ('corr',)
+    bow = spec['bow']
+    # 세로 위치
+    ys = []
+    y = 0
+    for b in bands:
+        h = cw if b[0] == 'corr' else b[1]['h']
+        ys.append((y, y + h + 1))   # (위 벽, 아래 벽)
+        y += h + 1
+    Htot = y + 1
+    corr_idx = [i for i, b in enumerate(bands) if b[0] == 'corr']
+    first_c, last_c = corr_idx[0], corr_idx[-1]
+    yA0 = ys[first_c][0] + 1          # 첫 통로 첫 줄
+    yC1 = ys[last_c][1] - 1           # 마지막 통로 마지막 줄
+    # 가로 위치: 엔진실 [0..xE] · 바깥 띠 [xE..xB] · 안쪽 띠 [xE+cw+1 .. xB-cw-1] · 뱃머리 [xB..xB+bowW+1]
+    xE = We + 1
+    cut0 = spec.get('chamfer', 2)
+    for bi, b in enumerate(bands):
+        if b[0] == 'room':
+            for r in b[1]['rooms']:
+                hh = b[1]['h']
+                hres = {(r['hatch'], hh - 1), (r['hatch'], hh - 2)} if r.get('hatch') is not None else set()
+                r['w'] = fit_w(r['items'], hh, r.get('doors', b[1]['doors']), r['w'], hres)
+            ci = [i for i, x in enumerate(bands) if x[0] == 'corr']
+            if bi < ci[0] or bi > ci[-1]: b[1]['rooms'][-1]['w'] += cut0   # 앞 끝 모서리를 깎을 자리
+    for r in bow['rooms']: r['h'] = fit_h(r['items'], bow['w'], ['W'], r['h'])
+    D = 0
+    for i, b in enumerate(bands):
+        if b[0] != 'room': continue
+        outer = i < first_c or i > last_c
+        need = band_need(b[1]['rooms'])
+        D = max(D, need - 1 if outer else need - 1 + 2 * cw + 2)
+        if "--bands" in sys.argv: print(spec["key"], i, "outer" if outer else "inner", need - 1 if outer else need - 1 + 2 * cw + 2)
+    D = max(D, spec.get('min_len', 0))
+    xB = xE + D
+    bowW = bow['w']
+    Wtot = xB + bowW + 2
+    s = Ship(spec['key'], Wtot, Htot)
 
-def nose_room(Hn):
-    """함교 = 뱃머리. 오른쪽 위아래를 비스듬히 깎아 뾰족하게 (깎인 칸은 우주). 조타 콘솔이 코끝, 주 컴퓨터는 뒤쪽."""
-    c = min(7, Hn // 2 - 1)
-    w = c + 6
-    r = Room('b', w, Hn)
-    r.carve = set()
-    for y in range(Hn):
-        yy = min(y, Hn - 1 - y)
-        if yy < c:
-            for x in range(w - (c - yy), w):
-                r.carve.add((x, y))
-    mid = Hn // 2
-    r.put('I', 1, mid - 1, 2, 2)
-    r.put('C', w - 2 - (1 if (w - 2, mid) in r.carve else 0), mid)   # 조타 (코끝)
-    r.put('S', w - 3, mid)
-    r.put('C', 5, 1); r.put('S', 4, 1)                                 # 항법
-    r.put('C', 5, Hn - 2); r.put('S', 4, Hn - 2)                       # 통신 중계
-    return r
+    # 엔진실
+    s.rect(0, 0, xE, Htot - 1)
+    eng = s.room('e', None, 1, 1, We, Htot - 2, ['E'], spec['engine']['items'])
+    # 띠
+    for i, b in enumerate(bands):
+        top, bot = ys[i]
+        if b[0] == 'corr': continue
+        bd = b[1]
+        outer = i < first_c or i > last_c
+        a, z = (xE, xB) if outer else (xE + cw + 1, xB - cw - 1)
+        widths = spread([r['w'] for r in bd['rooms']], z - a + 1, [r.get('grow', False) for r in bd['rooms']])
+        x = a
+        for r, w in zip(bd['rooms'], widths):
+            s.rect(x, top, x + w + 1, bot)
+            s.room(r['label'], r.get('kind'), x + 1, top + 1, x + w, bot - 1, r.get('doors', bd['doors']), r['items'], r.get('reserve', ()))
+            if r.get('hatch'): s.rooms[-1]['hatch'] = r['hatch']
+            x += w + 1
+    # 통로: 가로 띠 + 세로 두 줄 (고리)
+    for i in corr_idx:
+        top, bot = ys[i]
+        s.floor(xE + 1, top + 1, xB - 1, bot - 1)
+    for y in range(yA0, yC1 + 1):
+        for x in list(range(xE + 1, xE + cw + 1)) + list(range(xB - cw, xB)):
+            s.g[y][x] = '.'
+    # 가로 통로의 위 · 아래 벽 (세로 통로 칸 제외)
+    for i in corr_idx:
+        top, bot = ys[i]
+        for yy in (top, bot):
+            for x in range(xE, xB + 1):
+                if s.g[yy][x] == ' ': s.g[yy][x] = '#'
+    # 뱃머리
+    by0, by1 = yA0 - 1, yC1 + 1
+    hs = [r['h'] for r in bow['rooms']]
+    hs = spread(hs, by1 - by0 + 1, [r.get('grow', False) for r in bow['rooms']])
+    y = by0
+    for r, h in zip(bow['rooms'], hs):
+        s.rect(xB, y, xB + bowW + 1, y + h + 1)
+        s.room(r['label'], r.get('kind'), xB + 1, y + 1, xB + bowW, y + h, ['W'], r['items'])
+        y += h + 1
+    # 모서리 깎기 (엔진실 뒤 · 뱃머리 앞 · 바깥 띠 앞 끝)
+    cut = spec.get('chamfer', 2)
+    def carve(cells):
+        for (x, y) in cells:
+            if 0 <= x < Wtot and 0 <= y < Htot: s.g[y][x] = ' '
+    for k in range(cut):
+        for j in range(cut - k):
+            carve([(k, j), (k, Htot - 1 - j)])
+            carve([(Wtot - 1 - k, by0 + j), (Wtot - 1 - k, by1 - j)])
+            carve([(xB - k, j), (xB - k, Htot - 1 - j)])
+    # 깎인 자리 다시 벽으로
+    for y in range(Htot):
+        for x in range(Wtot):
+            if s.g[y][x] == '.' and any(0 <= y + dy < Htot and 0 <= x + dx < Wtot and s.g[y + dy][x + dx] == ' '
+                                        for dy in (-1, 0, 1) for dx in (-1, 0, 1)) or s.g[y][x] == '.' and (x in (0, Wtot - 1) or y in (0, Htot - 1)):
+                s.g[y][x] = '#'
 
-def engine_room(n, H2):
-    engines = 2 if n <= 12 else 3
-    w = 7
-    r = Room('e', w, H2)
-    r.carve = set()
-    c = 3
-    for y in range(H2):
-        yy = min(y, H2 - 1 - y)
-        if yy < c:
-            for x in range(0, c - yy):
-                r.carve.add((x, y))
-    r.g[0][0] = '.'; r.g[0][c] = 'e'   # 라벨은 깎이지 않는 곳에
-    span = H2 - 2 * c
-    for i in range(engines):
-        y = c + (i + 1) * span // (engines + 1) - 1
-        r.put('E', 0, y, 3, 3)
-    r.put('C', w - 1, c + 1)
-    return r
+    # 차압 문 자리 (통로를 구획으로 나눈다)
+    bulk = []
+    nb = spec.get('bulkheads', 0)
+    for i in corr_idx:
+        top, bot = ys[i]
+        for k in range(nb):
+            bx = xE + cw + 1 + (k + 1) * (xB - xE - 2 * cw - 2) // (nb + 1)
+            bulk.append((bx, top + 1, bot - 1))
+    bulk_x = {b[0] for b in bulk}
 
-WIDEN_OK = set('swjmqhgfpl')
-
-def widen(room, extra):
-    if not hasattr(room, 'w0'): room.w0 = room.w
-    for row in room.g: row.extend(['.'] * extra)
-    room.w += extra
-
-def furnish(room):
-    """v10.9: 넓힌 방의 빈 자리를 그 방답게 채운다 (식탁·소파·조리대·선반). 문 줄(맨 위·아래)은 비워 둔다."""
-    w0 = getattr(room, 'w0', room.w)
-    H = room.h
-    def free(x, y, w, h):
-        return all(0 <= xx < room.w - 1 and 0 <= yy < H and room.g[yy][xx] == '.' for xx in range(x, x + w) for yy in range(y, y + h))
-    L = room.label
-    x = 1 if L == 'j' else w0 + 1
-    if L == 'j' and H < 7: return
-    while x < room.w - 2:
-        if L == 'm' and H >= 5 and free(x, 2, 2, 3):
-            room.put('S', x, 2, 2, 1); room.put('T', x, 3, 2, 1); room.put('S', x, 4, 2, 1); x += 3
-        elif L == 'g' and H >= 6 and free(x, 1, 2, 4):
-            room.put('S', x, 1, 2, 1); room.put('T', x, 2, 2, 2); room.put('S', x, 4, 2, 1); x += 4
-        elif L == 'j' and free(x, H // 2, 2, 1) and free(x, H // 2 - 1, 2, 1) and free(x, H // 2 + 1, 2, 1):
-            room.put('T', x, H // 2, 2, 1); x += 3
-        elif L == 's' and H >= 7 and free(x, 3, 2, 2):
-            room.put('K', x, 3, 2, 2); x += 3
-        else:
-            x += 1
-
-def build(n, name):
-    H = 5 if n <= 4 else 6 if n <= 6 else 7 if n <= 12 else 8
-    K = 3 if n <= 12 else 4
-    s = 3 if n <= 6 else 4 if n <= 12 else 5 if n <= 20 else 6
-    reactor_kw = 48 * s * s / 9
-    pumps = max(2, ceil(int(reactor_kw * 1.15), 30))
-    beds = max(2, ceil(4 * n, 6))
-
-    # ── 층 나누기: 위 층은 기관(원자로·냉각·배전·정비·통신), 그 아래는 생명유지·수경재배, 맨 아래는 에어락 ──
-    bands = [[] for _ in range(K)]
-    bands[0] = [reactor_room(n, H), cooling_room(pumps, H), power_room(max(2, 2 * ceil(n, 6)), H), workshop_room(n, H)]
-    bands[1] = [life_room(n, H), hydro_room(beds, H)]
-    bands[K - 1] = [airlock_room(n, H)]
-    tail0 = [comms_room(H)]
-    pool = [storage_room(n, H), medbay_room(n, H), lounge_room(n, H)] + quarters_rooms(n, H)
-    galley, mess = galley_room(n, H), mess_room(n, H)
-    ratio = [0.85] + [1.0] * (K - 2) + [0.85]
-    inner = list(range(1, K - 1))
-    def width(b):
-        rooms = bands[b] + (tail0 if b == 0 else [])
-        return sum(r.w for r in rooms) + len(rooms) - 1 + (3 if b in inner else 0)
-    # 주방+식당은 한 덩어리 (조리한 끼니를 나르는 길이 짧게) — 가운데 층에
-    gm_band = inner[-1]
-    bands[gm_band] += [galley, mess]
-    for r in sorted(pool, key=lambda r: -r.w):
-        b = min(range(K), key=lambda b: (width(b) + r.w + 1) / ratio[b])
-        bands[b].append(r)
-    bands[0] += tail0
-    # 층 너비 맞추기: 가운데 층들은 가장 긴 층에 맞추고(방마다 조금씩 넓힌다), 바깥 층은 제 길이대로 (계단식 윤곽)
-    W_in = max(width(b) for b in range(K))
-    def pad(b, target):
-        extra = target - width(b)
-        ok = [r for r in bands[b] if r.label in WIDEN_OK and r.label not in 'lf'] or [r for r in bands[b] if r.label in WIDEN_OK]
-        while extra > 0 and ok:
-            widen(min(ok, key=lambda r: r.w / max(1, len(r.label))), 1)
-            extra -= 1
-    for b in inner: pad(b, W_in)
-    for b in (0, K - 1): pad(b, int(W_in * 0.62))
-    for b in range(K):
-        for r in bands[b]: furnish(r)
-    # 세로 통로(층을 잇는 척추): 가운데 층마다 방들 사이 가운데쯤
-    spine_at = {}
-    for b in inner:
-        idx = max(2 if b == 1 else 1, len(bands[b]) // 2)
-        spine_at[b] = idx
-
-    # ── 좌표 ──
-    band_y = [1 + b * (H + 4) for b in range(K)]
-    H2 = K * H + 4 * (K - 1)
-    eng = engine_room(n, H2)
-    x0 = 1 + eng.w + 1
-    # 뱃머리: K=3 → 가운데 층 + 위아래 통로, K=4 → 가운데 두 층 + 그 사이 통로
-    if K == 3:
-        ny0, ny1 = band_y[1] - 3, band_y[1] + H + 2
-    else:
-        ny0, ny1 = band_y[1], band_y[2] + H - 1
-    nose = nose_room(ny1 - ny0 + 1)
-    body_end = {}
-    xs = {}
-    for b in range(K):
-        x = x0
-        pos = []
-        for i, r in enumerate(bands[b]):
-            if b in spine_at and i == spine_at[b]:
-                pos.append(('spine', x)); x += 3
-            pos.append((r, x)); x += r.w + 1
-        xs[b] = pos
-        body_end[b] = x - 2
-    x_nose = max(body_end[b] for b in range(K) if b in inner or K == 3 and b == 1) + 2
-    # 가운데 층은 뱃머리 앞까지 채운다
-    for b in inner:
-        gap = x_nose - 2 - body_end[b]
-        if gap > 0:
-            r = [r for r, _ in xs[b] if r != 'spine'][-1]
-            widen(r, gap)
-            body_end[b] += gap
-    W = x_nose + nose.w + 2
-    Ht = 1 + H2 + 1
-    grid = [[' '] * W for _ in range(Ht)]
-    carved = set()
-
-    def blit(room, gx, gy):
-        for yy in range(room.h):
-            for xx in range(room.w):
-                if (xx, yy) in getattr(room, 'carve', ()):
-                    carved.add((gx + xx, gy + yy)); continue
-                grid[gy + yy][gx + xx] = room.g[yy][xx]
-
-    blit(eng, 1, 1)
-    for b in range(K):
-        for r, x in xs[b]:
-            if r == 'spine':
-                for yy in range(band_y[b] - 1, band_y[b] + H + 1):
-                    grid[yy][x] = '.'; grid[yy][x + 1] = '.'
-            else:
-                blit(r, x, band_y[b])
-    blit(nose, x_nose, ny0)
-    # 통로: 층 사이마다 2줄, 두 층 중 긴 쪽 끝까지 (뱃머리 앞에서 멈춘다)
-    corr_rows = []
-    for b in range(K - 1):
-        cy = band_y[b] + H + 1
-        end = min(max(body_end[b], body_end[b + 1]), x_nose - 2)
-        for yy in (cy, cy + 1):
-            for xx in range(x0, end + 1): grid[yy][xx] = '.'
-        corr_rows.append((cy, end))
-    grid[corr_rows[0][0]][x0 + 1] = 'c'
-
-    # ── 벽: 바닥에 8방향으로 닿은 빈칸은 벽 ──
-    def floorish(ch): return ch not in ' #'
-    for y in range(Ht):
-        for x in range(W):
-            if grid[y][x] != ' ': continue
-            if any(0 <= y + dy < Ht and 0 <= x + dx < W and floorish(grid[y + dy][x + dx])
-                   for dy in (-1, 0, 1) for dx in (-1, 0, 1)):
-                grid[y][x] = '#'
-
+    # 문
     def door(x, y):
-        assert grid[y][x] == '#', (name, 'door on non-wall', x, y, grid[y][x])
-        grid[y][x] = '+'
+        if s.g[y][x] != '#': fail(f'문 자리가 벽이 아니다 {x},{y} {s.g[y][x]!r}')
+        s.g[y][x] = '+'
+    def pick_x(r, avoid=()):
+        xs = [x for x in range(r['x0'], r['x1'] + 1) if x not in bulk_x and x not in avoid and x - 1 not in bulk_x and x + 1 not in bulk_x]
+        mid = (r['x0'] + r['x1']) // 2
+        return min(xs, key=lambda x: (abs(x - mid), x))
+    corr_rows = [ys[i][0] + 1 for i in corr_idx]
+    for r in s.rooms:
+        for d in r['doors']:
+            if d == 'N':
+                x = pick_x(r); door(x, r['y0'] - 1); r['reserve'].add((x, r['y0']))
+            elif d == 'S':
+                x = pick_x(r); door(x, r['y1'] + 1); r['reserve'].add((x, r['y1']))
+            elif d == 'E':   # 엔진실 → 통로마다
+                for cy in corr_rows:
+                    door(r['x1'] + 1, cy); r['reserve'].add((r['x1'], cy))
+            elif d == 'W':   # 뱃머리 → 세로 통로
+                ry = [y for y in range(r['y0'], r['y1'] + 1) if s.g[y][r['x0'] - 1] == '#' and s.g[y][r['x0'] - 2] == '.']
+                y = min(ry, key=lambda y: abs(y - (r['y0'] + r['y1']) // 2))
+                door(r['x0'] - 1, y); r['reserve'].add((r['x0'], y))
+        if r['hatch']:     # 에어락 바깥 해치 (아래 선체)
+            x = r['x0'] + r['hatch']
+            door(x, r['y1'] + 1); r['reserve'].update({(x, r['y1']), (x, r['y1'] - 1)})
+    for (bx, y0, y1) in bulk:
+        for y in range(y0, y1 + 1): s.g[y][bx] = '#'
+        s.g[y0][bx] = '+'
 
-    def pick(room, gx, row_y, inside_row, prefer=None):
-        free = [xx for xx in range(room.w) if room.g[inside_row][xx] in ('.', room.label) and (xx, inside_row) not in getattr(room, 'carve', ())]
-        if prefer: free = [xx for xx in free if prefer(xx)] or free
-        if not free: return None
-        return gx + min(free, key=lambda xx: abs(xx - room.w // 2))
+    # 방마다: 통로 쪽 줄과 왼쪽 세로 줄은 비운다 (설비마다 손 닿는 바닥이 이어지게) → 설비 채우기
+    for r in s.rooms:
+        x0, y0, x1, y1 = r['x0'], r['y0'], r['x1'], r['y1']
+        ds = r['doors']
+        res = r['reserve'] = spine(x0, y0, x1, y1, ds, r['reserve'])
+        placed = pack(lambda x, y: s.g[y][x], x0, y0, x1, y1, ds, res, r['items'])
+        if placed is None: print("\n".join("".join(s.g[y][x0 - 1:x1 + 2]) for y in range(y0 - 1, y1 + 2))); fail(f"{spec['key']} {r['label']}/{r['kind']} 설비 자리 없음 (방 {x1 - x0 + 1}×{y1 - y0 + 1})")
+        for x, y, ch in placed: s.g[y][x] = ch
+        # 이름표: 비워 둔 줄의 왼쪽 위
+        lab = r['label']
+        if r['kind']:
+            if r['kind'] not in s.legend:
+                s.legend[r['kind']] = LEGEND_POOL[len(s.legend)]
+            lab = s.legend[r['kind']]
+        spots = sorted(res, key=lambda c: (c[1], c[0])) if 'S' not in ds else sorted(res, key=lambda c: (-c[1], c[0]))
+        spots = [c for c in spots if x0 <= c[0] <= x1 and y0 <= c[1] <= y1 and s.g[c[1]][c[0]] == '.']
+        lx, ly = spots[0]
+        s.g[ly][lx] = lab
+    # 통로 구획마다 이름표
+    seen = set()
+    for y in range(Htot):
+        for x in range(Wtot):
+            if s.g[y][x] == '.' and (x, y) not in seen:
+                comp, st = [], [(x, y)]
+                seen.add((x, y))
+                while st:
+                    c = st.pop(); comp.append(c)
+                    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                        n = (c[0] + dx, c[1] + dy)
+                        if n not in seen and 0 <= n[0] < Wtot and 0 <= n[1] < Htot and s.g[n[1]][n[0]] not in '#+ ':
+                            seen.add(n); st.append(n)
+                labs = [c for c in comp if s.g[c[1]][c[0]].islower() or s.g[c[1]][c[0]] in LEGEND_POOL]
+                if not labs:
+                    fl = sorted(c for c in comp if s.g[c[1]][c[0]] == '.')
+                    s.g[fl[0][1]][fl[0][0]] = 'c'
+    return s, dict(xE=xE, xB=xB, yA0=yA0, yC1=yC1, W=Wtot, H=Htot)
 
-    for b in range(K):
-        for r, x in xs[b]:
-            if r == 'spine': continue
-            if b > 0:   # 위 통로로
-                px = pick(r, x, band_y[b] - 1, 0, (lambda xx: xx <= 2) if r.label == 'l' else None)
-                if px is not None: door(px, band_y[b] - 1)
-            if b < K - 1:   # 아래 통로로
-                px = pick(r, x, band_y[b] + H, H - 1, (lambda xx, w=r.w: xx >= w - 3) if r.label == 'k' else None)
-                if px is not None: door(px, band_y[b] + H)
-            if r.label == 'a':   # 에어락 바깥 해치 (아래 선체, 거치대를 피해)
-                door(pick(r, x, band_y[b] + H, H - 1), band_y[b] + H)
-    # 엔진실 → 통로마다 양쪽 문
-    for cy, _ in corr_rows:
-        door(x0 - 1, cy); door(x0 - 1, cy + 1)
-    # 뱃머리 → 닿는 통로
-    for cy, end in corr_rows:
-        if ny0 <= cy <= ny1 and end == x_nose - 2:
-            door(x_nose - 1, cy); door(x_nose - 1, cy + 1)
-    # 문 앞이 막히지 않았는지
+# ───────────────────────── 검사 ─────────────────────────
+def check(s, meta):
+    g = s.g
+    Ht, Wt = s.H, s.W
+    def kind(x, y): return g[y][x] if 0 <= x < Wt and 0 <= y < Ht else ' '
+    # 방 영역: 이름표에서 바닥 따라
+    labels = [(x, y) for y in range(Ht) for x in range(Wt) if (g[y][x].islower() or g[y][x] in LEGEND_POOL) and g[y][x] not in ' #+.']
+    owner = {}
+    for (lx, ly) in labels:
+        st = [(lx, ly)]
+        if (lx, ly) in owner: fail(f'이름표 둘 {lx},{ly}')
+        owner[(lx, ly)] = (lx, ly)
+        while st:
+            c = st.pop()
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                n = (c[0] + dx, c[1] + dy)
+                ch = kind(*n)
+                if ch in '# +': continue
+                if n in owner:
+                    if owner[n] != (lx, ly): fail(f'방 둘이 붙었다 {n}')
+                    continue
+                owner[n] = (lx, ly); st.append(n)
     for y in range(Ht):
-        for x in range(W):
-            if grid[y][x] != '+': continue
-            opens = [(dx, dy) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)) if 0 <= y + dy < Ht and 0 <= x + dx < W and floorish(grid[y + dy][x + dx])]
-            for dx, dy in opens:
-                ch = grid[y + dy][x + dx]
-                assert ch in '.+' or ch.islower(), (name, 'door blocked', x, y, ch)
-    lines = [''.join(row).rstrip() for row in grid]
-    return '\n'.join(lines), dict(n=n, K=K, H=H, reactor=s, pumps=pumps, beds=beds, W=W, H_total=Ht, aspect=round(W / Ht, 2))
+        for x in range(Wt):
+            if g[y][x] not in '# +' and (x, y) not in owner: fail(f'주인 없는 바닥 {x},{y} {g[y][x]}')
+    for y in range(Ht):
+        for x in range(Wt):
+            if g[y][x] != '+': continue
+            v = kind(x, y - 1) not in '#+' and kind(x, y + 1) not in '#+'
+            h = kind(x - 1, y) not in '#+' and kind(x + 1, y) not in '#+'
+            if not (v or h): fail(f'{s.key} 문이 두 공간을 잇지 않는다 {x},{y}')
+    # 선체 벽: 우주에 (8방향) 닿은 벽
+    hull = {(x, y) for y in range(Ht) for x in range(Wt) if g[y][x] in '#+' and any(kind(x + dx, y + dy) == ' ' for dx in (-1, 0, 1) for dy in (-1, 0, 1))}
+    inv = {}
+    for c, o in owner.items(): inv.setdefault(o, []).append(c)
+    crit = {'r', 'p'} | {s.legend.get('ComputerRoom')}
+    for o, cells in inv.items():
+        lab = g[o[1]][o[0]]
+        if lab in crit:
+            if any((c[0] + dx, c[1] + dy) in hull for c in cells for dx in (-1, 0, 1) for dy in (-1, 0, 1)):
+                fail(f'{s.key} 중요한 방 {lab} 이 선체에 닿는다')
+    # 주컴퓨터실이 가운데 근처
+    xs = [x for y in range(Ht) for x in range(Wt) if g[y][x] != ' ']
+    cx, cy = (min(xs) + max(xs)) / 2, (Ht - 1) / 2
+    cr = [o for o in inv if g[o[1]][o[0]] == s.legend.get('ComputerRoom')][0]
+    ccx = sum(c[0] for c in inv[cr]) / len(inv[cr]); ccy = sum(c[1] for c in inv[cr]) / len(inv[cr])
+    return dict(rooms=len(inv), kinds=len({g[o[1]][o[0]] for o in inv}), comp_dx=round((ccx - cx) / Wt, 3), comp_dy=round((ccy - cy) / Ht, 3))
 
-templates = [(4, 'Kestrel', '제비호'), (12, 'Hanbit', '한빛호'), (20, 'Eunha', '은하호'), (30, 'Cheonma', '천마호')]
-out = ['// 자동 생성: tools/shipgen/gen_ships.py (v10.4 배 크기 템플릿). 손으로 고치지 말고 생성기를 고친다.',
-       'namespace ShipSim.Core;', '', 'public static partial class ShipBlueprints', '{']
-info = []
-for n, key, kname in templates:
-    ascii, meta = build(n, key)
-    info.append((n, key, kname, meta))
-    out.append(f'    public const string {key}Name = "{kname}";')
-    out.append(f'    public const string {key} = """')
-    out.append(ascii)
-    out.append('""";')
-    out.append('')
-out.append('}')
-path = os.path.join(os.path.dirname(__file__), '..', '..', 'game', 'src', 'Core', 'ShipTemplates.cs')
-open(path, 'w', encoding='utf-8').write('\n'.join(out) + '\n')
-for n, key, kname, meta in info:
-    print(kname, meta)
+# ───────────────────────── 방 묶음 ─────────────────────────
+def Rm(label, items, w, kind=None, grow=False, doors=None, h=None, hatch=None):
+    r = dict(label=label, items=items, w=w, kind=kind, grow=grow)
+    if doors: r['doors'] = doors
+    if h: r['h'] = h
+    if hatch is not None: r['hatch'] = hatch
+    return r
+
+def Sp(kind, items, w, grow=False, doors=None, h=None):
+    return Rm('?', items, w, kind=kind, grow=grow, doors=doors, h=h)
+
+def band(h, doors, rooms): return ('room', dict(h=h, doors=doors, rooms=rooms))
+CORR = ('corr',)
+
+# ── 제비호 (4인 · 소형): 꼭 필요한 방만. 통로는 한 칸 폭, 방은 좁다. 냉동 창고의 저장 식량이 수경 재배를 받쳐 준다.
+KESTREL = dict(key='Kestrel', crew=4, corr=1, chamfer=2,
+    engine=dict(w=5, items=[E, E, C]),
+    bands=[
+        band(4, ['S'], [Rm('s', [K, K3], 4), Rm('k', [P, P, C], 6), Rm('f', [G, G, G], 10, grow=True), Rm('j', [V, F, K], 7), Sp('Freezer', [F, K], 5), Rm('q', many(B, 4), 8)]),
+        CORR,
+        band(5, ['N', 'S'], [Rm('r', [R3, C], 5), Rm('l', [U, O, O], 8), Sp('ComputerRoom', [I, C, C], 5), Rm('p', [X, Z, Y, Y], 7), Rm('h', [M, K3], 4)]),
+        CORR,
+        band(4, ['N'], [Rm('w', [H, W, N, K3], 9), Rm('a', [L, L, Q], 6, hatch=4), Rm('m', [D, D, TSET], 6, grow=True), Rm('g', [S, S, T], 4), Rm('s', [K, K], 5)]),
+    ],
+    bow=dict(w=5, rooms=[Rm('o', [A, C], 0, h=3), Rm('b', [C, C, S, S], 0, h=4, grow=True)]))
+
+# ── 미리내호 (6인 · 기본): 소형에 휴게실 · 체력단련실 · 방사선 대피소 · 조류 배양실 · 냉동 창고.
+MIRINAE = dict(key='Mirinae', crew=6, corr=2, chamfer=2,
+    engine=dict(w=5, items=[E, E, C]),
+    bands=[
+        band(5, ['S'], [Rm('s', [K, K, K3], 6), Rm('k', [P, P, C], 6), Rm('f', [G, G, G, G], 10, grow=True), Rm('j', [V, F, K, T], 7), Sp('Freezer', [F, K, K], 6), Rm('q', many(B, 6), 12)]),
+        CORR,
+        band(5, ['N', 'S'], [Rm('r', [R3, C, C], 6), Rm('l', [U, O, O], 8), Sp('ComputerRoom', [I, C, C, K3], 7), Rm('p', [X, Z, Y, Y], 7), Sp('Shelter', [K, K, S, S], 6)]),
+        CORR,
+        band(5, ['N'], [Rm('w', [H, W, N, K3], 9), Sp('AlgaeLab', [G, G, U], 6), Rm('a', [L, L, Q, Q], 6, hatch=4), Rm('h', [M, M, K3], 6), Rm('m', [D, D, TSET, TSET], 9, grow=True), Rm('g', [SOFA, S], 6), Sp('Gym', [ROWS2], 4)]),
+    ],
+    bow=dict(w=6, rooms=[Rm('o', [A, C], 0, h=3), Rm('b', [C, C, C, S, S], 0, h=6, grow=True)]))
+
+# ── 한빛호 (12인 · 중형): 통로 고리 하나를 차압 문 하나로 두 구획. 수경 · 버섯 · 조류로 식량원이 셋, 연료전지 · 펌프실 · 항법실 · 재활용실이 붙는다.
+HANBIT = dict(key='Hanbit', crew=12, corr=2, chamfer=3, bulkheads=1,
+    engine=dict(w=5, items=[E, E, E, C]),
+    bands=[
+        band(6, ['S'], [Sp('Cargo', many(K, 4), 7), Rm('k', [P, P, C], 6), Sp('PumpRoom', [P, P], 6), Rm('f', many(G, 8), 10), Rm('j', [V, V, F, F, K], 9),
+                        Sp('Freezer', [F, K, K], 6), Sp('Observatory', [S, S, C, SOFA], 7)]),
+        CORR,
+        band(6, ['N'], [Rm('q', many(B, 8), 9), Sp('QuietQuarters', many(B, 4), 5), Sp('WaterPlant', [U, U], 6), Sp('MushroomFarm', [G, G, K3], 6),
+                        Sp('AlgaeLab', [G, G, U], 6), Sp('Quarantine', [M, C], 5), Sp('PartsPrep', [W, K3], 6), Sp('Laundry', [K, K], 5)]),
+        band(6, ['S'], [Rm('r', [R4, C, C], 7), Sp('FuelCell', [Z, Z, C], 6), Rm('l', [U, U, O, O, O, O], 8), Sp('ComputerRoom', [I, C, C, K3], 7),
+                        Rm('p', [X, Z, Y, Y, Y, Y], 8), Sp('Substation', [X, K3], 6), Sp('BatteryRoom', [Y, Y], 5), Sp('Shelter', [K, K, S, S, S], 7)]),
+        CORR,
+        band(6, ['N'], [Rm('w', [H, W, W, N, K3], 10), Sp('Recycling', [N, K3], 6), Sp('DroneBay', [Q, Q, J], 6), Rm('a', [L, L, L, Q, Q], 8, hatch=6), Rm('h', [M, M, M, K3], 7),
+                        Rm('g', [SOFA, SOFA], 8), Sp('Gym', [ROWS2, ROWS2], 6), Rm('m', [D, D, D, TSET, TSET, TSET], 11), Rm('s', [K, K, K], 7)]),
+    ],
+    bow=dict(w=7, rooms=[Rm('o', [A, C, C], 0, h=4), Rm('b', [C, C, C, S, S, S], 0, h=6, grow=True), Sp('Navigation', [C, C, K3], 0, h=5)]))
+
+# ── 은하호 (20인 · 대형): 다양 · 고성능. 통로 고리 둘(위 · 아래)을 가운데 통로가 잇고, 차압 문 둘로 세 구획.
+#    서버실 · 보안실 · 교정실 · 연구실 · 축열실 · 단백질 농장 · 정원 · 관측실 · 개인 선실 · 예비 함교.
+EUNHA = dict(key='Eunha', crew=20, corr=2, chamfer=3, bulkheads=2,
+    engine=dict(w=5, items=[E, E, E, E, C]),
+    bands=[
+        band(6, ['S'], [Sp('Cargo', many(K, 6), 8), Rm('k', [P, P, P, C], 9), Sp('PumpRoom', [P, P, P], 9), Rm('f', many(G, 7), 10), Rm('f', many(G, 7), 10),
+                        Sp('Observatory', [S, S, S, C, SOFA], 8), Sp('Garden', [G, G, S, S, S], 8), Sp('EscapeBay', [K, K], 5)]),
+        CORR,
+        band(6, ['N'], [Rm('q', many(B, 8), 9), Rm('q', many(B, 4), 5), Sp('PrivateCabins', many(B, 2) + [K3], 5), Sp('PrivateCabins', many(B, 2) + [K3], 5),
+                        Sp('Gym', [ROWS2, ROWS2], 6), Sp('MeetingRoom', [T, T, S, S, S, S], 7), Sp('Chapel', [S, S, S, S], 5), Rm('g', [SOFA, SOFA, S], 8)]),
+        band(5, ['S'], [Sp('HeatStorage', [K, K, C], 7), Sp('ServerRoom', [K3, K3, K3, C, C], 8), Sp('Security', [C, C, C, K3], 6), Sp('Calibration', [W, C], 6),
+                        Sp('Lab', [W, C, K3], 7), Sp('ElectronicsLab', [W, K3], 6), Sp('SuppressionRoom', [K, K], 5), Sp('SeedVault', [K, K], 5)]),
+        CORR,
+        band(7, ['N', 'S'], [Rm('r', [R5, C, C], 8), Sp('FuelCell', [Z, Z, C], 6), Rm('l', [U, U, O, O, O, O], 8), Sp('ComputerRoom', [I, C, C, C, K3], 8),
+                             Rm('p', [X, Z, Y, Y, Y, Y], 8), Sp('Substation', [X, K3], 6), Sp('BatteryRoom', [Y, Y, Y, Y], 7), Sp('HvacRoom', [O, K3], 5)]),
+        CORR,
+        band(5, ['N'], [Sp('Shelter', [K, K, S, S, S, S], 7), Sp('WaterPlant', [U, U], 6), Sp('MushroomFarm', [G, G, K3], 6), Sp('AlgaeLab', [G, G, G], 6),
+                        Sp('ProteinFarm', [G, G, U], 6), Sp('Recycling', [N, K3], 6), Sp('DroneBay', [Q, Q, J], 6)]),
+        band(6, ['S'], [Sp('Quarantine', [M, M, C], 6), Sp('Triage', [M, M], 5), Sp('QuietQuarters', many(B, 4), 5), Sp('Laundry', [K, K], 5), Sp('EvaPrep', [L, K], 5),
+                        Rm('j', [V, V, V, V, F, F, F, F, K], 11), Sp('Freezer', [F, K, K, K], 7)]),
+        CORR,
+        band(6, ['N'], [Rm('w', [H, W, W, N, N, K3], 11), Rm('a', [L, L, L, Q, Q, Q], 9, hatch=7), Rm('h', [M, M, M, M, K3], 8),
+                        Rm('m', [D, D, D, D, D, TSET, TSET, TSET, TSET], 12), Rm('s', [K, K, K, K], 8)]),
+    ],
+    bow=dict(w=8, rooms=[Rm('o', [A, C, C], 0, h=5), Rm('b', [C, C, C, C, S, S, S, S], 0, h=8, grow=True), Sp('Navigation', [C, C, K3], 0, h=5), Sp('BackupBridge', [C, C, S], 0, h=5)]))
+
+# ── 천마호 (30인 · 초대형): 호화 · 세대선급. 극장 · 학교 · 명상실 · 원심 거주구 · 물벽 선실 · 고압 치료실 · 셔틀 격납고 · 도킹 포트 · 크레인 조종실,
+#    차압 문 셋으로 네 구획.
+CHEONMA = dict(key='Cheonma', crew=30, corr=2, chamfer=3, bulkheads=3,
+    engine=dict(w=5, items=[E, E, E, E, E, C]),
+    bands=[
+        band(6, ['S'], [Sp('ShuttleBay', [K, K, K], 8), Sp('Cargo', many(K, 6), 8), Rm('k', [P, P, P, P, C], 12), Sp('PumpRoom', [P, P, P, P], 12),
+                        Rm('f', many(G, 10), 15), Rm('f', many(G, 10), 15), Sp('Observatory', [S, S, S, S, C, SOFA], 9), Sp('Theater', many(ROWS2, 5) + [C], 10),
+                        Sp('DockingBay', [L, K], 5)]),
+        CORR,
+        band(6, ['N'], [Rm('q', many(B, 9), 10), Rm('q', many(B, 9), 10), Sp('WaterWallCabin', many(B, 4), 5), Sp('PrivateCabins', many(B, 2) + [K3], 5),
+                        Sp('PrivateCabins', many(B, 2) + [K3], 5), Sp('Garden', [G, G, G, S, S], 10), Sp('Gym', [ROWS2, ROWS2, ROWS2], 8), Rm('g', [SOFA, SOFA, S, S], 9),
+                        Sp('Meditation', [S, S], 4)]),
+        band(5, ['S'], [Sp('GasStorage', [K, K], 5), Sp('HeatStorage', [K, K, C], 7), Sp('ServerRoom', [K3, K3, K3, K3, C, C], 9), Sp('Security', [C, C, C, K3], 6),
+                        Sp('Calibration', [W, C], 6), Sp('Lab', [W, W, C, K3], 9), Sp('ElectronicsLab', [W, K3], 6), Sp('MeetingRoom', [T, T, S, S, S, S, S, S], 8),
+                        Sp('Archive', [K, K, K], 8), Sp('School', [T, T, S, S, S, S], 8), Sp('Chapel', [S, S, S, S], 5)]),
+        CORR,
+        band(8, ['N', 'S'], [Sp('PropellantTank', [K, K], 5), Rm('r', [R6, C, C], 9), Sp('FuelCell', [Z, Z, Z, C], 6), Rm('l', [U, U, O, O, O, O, O], 9),
+                             Sp('ComputerRoom', [I, C, C, C, C, K3], 8), Rm('p', [X, Z, Y, Y, Y, Y, Y, Y], 9), Sp('Substation', [X, K3], 5),
+                             Sp('BatteryRoom', [Y, Y, Y, Y], 5), Sp('HvacRoom', [O, O, K3], 5), Sp('Centrifuge', [ROWS2, ROWS2, S], 7)]),
+        CORR,
+        band(5, ['N'], [Sp('Shelter', [K, K, S, S, S, S, S, S], 9), Sp('WaterPlant', [U, U, U], 8), Sp('MushroomFarm', [G, G, G, K3], 9), Sp('AlgaeLab', [G, G, G], 9),
+                        Sp('ProteinFarm', [G, G, G, U], 9), Sp('SeedVault', [K, K], 5), Sp('SuppressionRoom', [K, K], 5), Sp('Morgue', [K], 4), Sp('CraneControl', [C, C], 4),
+                        Sp('WeldingShop', [W, K3], 6), Sp('Crusher', [N, K3], 6)]),
+        band(6, ['S'], [Sp('Quarantine', [M, M, C], 6), Sp('QuarantineLock', [L], 4), Sp('Hyperbaric', [M, C], 4), Sp('Triage', [M, M, M], 5), Sp('Decon', [L], 4),
+                        Sp('QuietQuarters', many(B, 4), 5), Sp('Laundry', [K, K], 5), Sp('EvaPrep', [L, K], 5), Sp('RobotBay', [J, J, W], 7), Sp('Recycling', [N, K3], 6),
+                        Rm('j', [V] * 5 + [F] * 5 + [K], 13), Sp('Freezer', [F, F, K, K, K], 8)]),
+        CORR,
+        band(6, ['N'], [Rm('w', [H, W, W, W, N, N, K3], 13), Sp('DroneBay', [Q, Q, J], 6), Rm('a', [L, L, L, Q, Q, Q], 9, hatch=7), Rm('h', [M] * 6 + [K3], 10),
+                        Rm('m', [D] * 8 + many(TSET, 6), 16), Rm('s', [K] * 6, 10)]),
+    ],
+    bow=dict(w=9, rooms=[Rm('o', [A, C, C], 0, h=5), Rm('b', [C, C, C, C, C, S, S, S, S, S], 0, h=9, grow=True), Sp('Navigation', [C, C, K3], 0, h=5),
+                         Sp('BackupBridge', [C, C, S, S], 0, h=6)]))
+
+SHIPS = [(KESTREL, '제비호'), (MIRINAE, '미리내호'), (HANBIT, '한빛호'), (EUNHA, '은하호'), (CHEONMA, '천마호')]
+
+def to_text(s):
+    lines = [''.join(row).rstrip() for row in s.g]
+    leg = [f'@{ch}={k}' for k, ch in s.legend.items()]
+    return '\n'.join(leg + lines)
+
+if __name__ == '__main__':
+    out = ['// 자동 생성: tools/shipgen/gen_ships.py (v16.22 기본 배 다섯 척 · 크기별 등급). 손으로 고치지 말고 생성기를 고친다.',
+           '// 뼈대: 뒤 엔진실 · 바깥 띠(화물 · 창고 · 냉각 · 재배 · 침실 · 정비 — 완충) · 통로 고리 · 안쪽 심장부(원자로 · 배전 · 주컴퓨터실 한가운데) · 앞 뱃머리.',
+           'namespace ShipSim.Core;', '', 'public static partial class ShipBlueprints', '{']
+    for spec, kname in SHIPS:
+        s, meta = build(spec)
+        if "--show" in sys.argv and spec["key"] in sys.argv: print(to_text(s))
+        info = check(s, meta)
+        print(f"{kname:6} {spec['crew']:>2}인 {meta['W']}×{meta['H']} 방 {info['rooms']} 종류 {info['kinds']} 주컴퓨터실 치우침 {info['comp_dx']:+.3f},{info['comp_dy']:+.3f}")
+        if '--show' in sys.argv and spec['key'] in sys.argv: print(to_text(s))
+        out.append(f"    public const string {spec['key']}Name = \"{kname}\";")
+        out.append(f"    public const string {spec['key']} = \"\"\"")
+        out.append(to_text(s))
+        out.append('""";')
+        out.append('')
+    out.append('}')
+    if '--dry' not in sys.argv:
+        path = os.path.join(os.path.dirname(__file__), '..', '..', 'game', 'src', 'Core', 'ShipTemplates.cs')
+        open(path, 'w', encoding='utf-8').write('\n'.join(out) + '\n')

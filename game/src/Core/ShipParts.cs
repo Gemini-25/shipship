@@ -18,6 +18,7 @@ public enum RoomType
     HvacRoom, PumpRoom, Substation, GasStorage, SuppressionRoom, AlgaeLab, ProteinFarm, WaterWallCabin,
     ElectronicsLab, WeldingShop, Crusher, Hyperbaric, QuarantineLock, Triage, PrivateCabins, Garden, Theater,
     MeetingRoom, Archive, Meditation, ShuttleBay, CraneControl, Navigation, HeatStorage, Security, Centrifuge, School, BackupBridge,
+    ComputerRoom, MushroomFarm, // v16.22 주컴퓨터실(배 한가운데) · 버섯 재배실
 }
 
 public static class RoomTypes

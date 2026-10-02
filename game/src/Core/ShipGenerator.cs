@@ -335,7 +335,7 @@ public static partial class ShipGenerator
     private static readonly HashSet<RoomType> Infra = new()
     {
         RoomType.WaterPlant, RoomType.BatteryRoom, RoomType.FuelCell, RoomType.HvacRoom, RoomType.PumpRoom, RoomType.Substation,
-        RoomType.HeatStorage, RoomType.BackupBridge, RoomType.Navigation, RoomType.CraneControl, RoomType.Security, RoomType.ServerRoom,
+        RoomType.HeatStorage, RoomType.BackupBridge, RoomType.Navigation, RoomType.CraneControl, RoomType.Security, RoomType.ServerRoom, RoomType.ComputerRoom,
     };
 
     private const string LegendChars = "dintuvxyz0123456789";
@@ -369,9 +369,12 @@ public static partial class ShipGenerator
     /// <summary>크기별 기반 시설 방: 12인 이상 정수실(예비 정수기 둘), 20인 이상 배터리실(축전지 넷), 30인 이상 공조실(산소 발생기 둘).</summary>
     public static IEnumerable<RoomType> InfraFor(int n)
     {
-        if (n >= 12) yield return RoomType.WaterPlant;
-        if (n >= 20) yield return RoomType.BatteryRoom;
-        if (n >= 30) yield return RoomType.HvacRoom;
+        // v16.22 크기에 따라 기반 시설 방을 나눠 둔다 (전에는 정수실 · 배터리실 · 공조실뿐이라 항법실 · 펌프실 · 서버실 같은 방이 어디에도 없었다)
+        if (n >= 8) yield return RoomType.Navigation;
+        if (n >= 12) { yield return RoomType.WaterPlant; yield return RoomType.PumpRoom; yield return RoomType.FuelCell; }
+        if (n >= 16) { yield return RoomType.ServerRoom; yield return RoomType.Security; }
+        if (n >= 20) { yield return RoomType.BatteryRoom; yield return RoomType.HeatStorage; yield return RoomType.Substation; }
+        if (n >= 30) { yield return RoomType.HvacRoom; yield return RoomType.BackupBridge; yield return RoomType.CraneControl; }
     }
 
     public static string KeyFor(int crew, int seed) => $"gen:{crew}:{seed}";

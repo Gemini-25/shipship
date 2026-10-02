@@ -828,13 +828,14 @@ public static partial class WorkPlanners
             if (o.Closed) return true; // 재배 로봇이 먼저 거뒀다
             if (!crop.Ripe) return false;
             float skill = cm.SkillLevel(Skill.Botany);
-            int yield = (int)MathF.Round(FoodChain.HarvestYield * FoodChain.BedSize(bed) * (0.85f + 0.3f * skill) * (0.8f + 0.2f * bed.Machine!.Condition));
+            int yield = Math.Max(1, (int)MathF.Round(FoodChain.HarvestYield * FoodChain.BedSize(bed) * (0.85f + 0.3f * skill) * (0.8f + 0.2f * bed.Machine!.Condition) * FoodSourceSystem.YieldMul(bed))); // v16.22 조류 · 버섯 · 단백질
             crop.Growth = 0f;
             cm.Carrying = new ItemStack(ItemKind.Produce, yield);
             cm.Practice(Skill.Botany, 0.03f);
             cm.Stats.Harvests++;
             world.Board.Close(o);
-            world.Log.Add(world.Tick, LogKind.Work, $"{bed.Label}에서 채소 {yield}개를 수확했다", cm.Id);
+            world.FoodSources.Harvested(bed, yield); // v16.22
+            world.Log.Add(world.Tick, LogKind.Work, FoodSourceSystem.HarvestText(bed, yield), cm.Id);
             return true;
         }));
         toils.Add(new GotoToil(fridgeSpot));
