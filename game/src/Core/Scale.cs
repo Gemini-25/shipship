@@ -512,6 +512,12 @@ public sealed partial class ScaleSystem
         return k != null && (k.Now >= IncidentScale.Ship || k.Now >= IncidentScale.System && k.Workers.Contains(c.Id));
     }
 
+    /// <summary>그 방의 뜨거운 사건 규모 (없으면 null).</summary>
+    public IncidentScale? RoomScale(Room r) => _roomCase.TryGetValue(r.Id, out var k) ? k.Now : null;
+
+    /// <summary>주 컴퓨터 화재 수순의 기다림 배율: 불이 번져 계통이면 0.6 · 배 전체면 0.45 (소화조만 믿고 기다리지 않는다).</summary>
+    public float GraceMul(Room r) => RoomScale(r) switch { IncidentScale.System => 0.6f, >= IncidentScale.Ship => 0.45f, _ => 1f };
+
     /// <summary>이 사람이 느끼는 가장 큰 규모 (모르면 개인).</summary>
     public IncidentScale Felt(CrewMember c) => _felt.TryGetValue(c.Id, out var f) ? f.s : IncidentScale.Personal;
     public ScaleCase? FeltCase(CrewMember c) => _felt.TryGetValue(c.Id, out var f) ? f.k : null;

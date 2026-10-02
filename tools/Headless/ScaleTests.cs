@@ -155,8 +155,9 @@ public static partial class Program
             var one = k?.Now;
             if (k != null) using (w.Causes.Because(k.Root)) w.Fire.Ignite(next.Cells.First(w.Ship.IsOpenFloor), 0.35f);
             Run(w, SimTime.Minutes(3));
-            Check("같은 불도 방 하나면 방, 번지면 계통", one == IncidentScale.Room && k!.Peak == IncidentScale.System,
-                $"{galley.Name} 불 {one} → {next.Name}까지 {k?.Peak} · 방송 \"{k?.Broadcast}\"");
+            float grace = w.Scale.GraceMul(galley);
+            Check("같은 불도 방 하나면 방, 번지면 계통 (컴퓨터 화재 수순이 일찍 나선다)", one == IncidentScale.Room && k!.Peak == IncidentScale.System && (k.Now < IncidentScale.System || grace < 1f),
+                $"{galley.Name} 불 {one} → {next.Name}까지 {k?.Peak} · 수순 기다림 ×{grace:0.##} · 방송 \"{k?.Broadcast}\"");
         }
 
         // ── 3b) 주 컴퓨터가 멎었으면 사람이 판정한다 (늦게 · 외쳐서) ──
