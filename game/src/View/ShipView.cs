@@ -639,6 +639,7 @@ public partial class ShipView : Node2D
         PaintResearch(ci); // v16.14 실험대 장치 (분야마다) · 연구 노트 · 사고 그을음 · 돌파구 반짝임 · 보안경 · 돋보기
         PaintRoomWork(ci); // v16.17 방 공사 (분리 · 상자 · 손수레 · 골조 · 놓을 자리) · 쓰임 원판 · 헷갈림 · 땀
         PaintAnnex(ci); // v16.10 증축 (청사진 · 비계 · 골조 · 외판 · 압력계 · 배선 · 비닐 막 · 설비 · 개통식 · 새 패널)
+        PaintSpaceUnder(ci); // v17.4 펼친 작업장 · 앞 상자 · 카트 옮겨 싣기 · 잠금표 · 줄 바닥 · 받는 곳
         PaintJumpers(ci);
 
         foreach (var vm in new[] { mode, _main.SecondaryView ?? mode }.Distinct()) // v12.3 겹쳐 보기
@@ -727,6 +728,7 @@ public partial class ShipView : Node2D
         PaintMinds(ci); // v13.3 공황 · 영웅심 · 분노 · 모름
         PaintEmotions(ci); // v16.15 머리 위 감정 그림 (분노 · 두려움 · 기쁨 · 슬픔 · 수치 · 자부심)
         PaintTalk(ci); // v14.4 말풍선 (목적 있는 대화 · 인수인계 · 깨우기)
+        PaintSpaceOver(ci); // v17.4 줄 번호 · 새치기 · 둘이 드는 짐 · 예약 · 구경꾼 · "비켜!" · 소문
         PaintComputerTop(ci, mode); // v16.6 선내 방송 말풍선 · 컴퓨터가 보는 배
         PaintDrones(ci);
         PaintIncoming(ci);

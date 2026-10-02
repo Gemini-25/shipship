@@ -289,7 +289,7 @@ public sealed class WashUpActivity : Activity
     {
         if (Washrooms.Spot(c, w, dist, RoomType.Laundry, RoomType.Decon, RoomType.Quarters, RoomType.Galley, RoomType.Medbay) is not Cell spot) return null;
         var toils = Plans.DropOff(c, w, dist);
-        toils.Add(new GotoToil(spot));
+        toils.Add(new QueueToil(QueueKind.Shower, null, spot)); // v17.4 샤워 · 화장실(세면대) 줄 — 줄 끝에 씻는 자리로 간다
         toils.Add(new WaitToil(SimTime.Minutes(c.Soil.ClothesMax > 0.3f ? 8 : 4), Pose.Standing));
         toils.Add(new DoToil((cm, world) => { world.Soil.WashUp(cm); return true; }));
         return new Job(this, "씻기", toils) { LogText = c.Soil.ClothesMax > 0.3f ? "씻고 옷을 갈아입는다" : "손을 씻는다", LogKind = LogKind.Life };

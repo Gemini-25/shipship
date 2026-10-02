@@ -157,6 +157,7 @@ public sealed class World
     public DailySystem Daily { get; } // v15 일상 사건 70
     public AnnexSystem Annex { get; } // v16.10 증축 (선체 바깥에 방을 새로 붙인다)
     public Body2System Body2 { get; } // v17.1 몸의 변화 (머리카락 · 수염 · 체중 · 우주복 치수 · 이발)
+    public CoopSystem Coop { get; } // v17.4 공간과 협력 · 줄 서기 · 구경꾼
     public BrainSystem Brain2 { get; } // v16.15 승무원 두뇌 2.0 (믿음 · 목표 층 · 계획 · 감정 · 사회적 추론 · 배우기)
     public MatterSystem Matter { get; } // v16.4 재질 × 원소 · 칸 장 · 물건 물리
     public CosmicSystem Cosmic { get; } // v18.13 우주 규모 대재난 30
@@ -268,6 +269,7 @@ public sealed class World
         Daily = new DailySystem(this);
         Annex = new AnnexSystem(this); // v16.10
         Body2 = new Body2System(this); // v17.1
+        Coop = new CoopSystem(this); // v17.4
         Brain2 = new BrainSystem(this); // v16.15
         Matter = new MatterSystem(this); // v16.4
         Cosmic = new CosmicSystem(this); // v18.13
@@ -376,6 +378,8 @@ public sealed class World
             RoomUse.Update(dt); RoomPlans.Update(dt); // v16.17 쓰임 → 용도 · 승무원 안건 → 회의 → 공사
             Cosmic.Update(dt); // v18.13 우주 대재난: 예보 · 대비 · 본 사건 · 후유증
             pf = Prof.Lap("sys.Daily", pf);
+            Coop.Update(dt); // v17.4 작업장 · 짝 · 예약 · 옆 설비 · 줄 · 구경꾼 · 소문
+            pf = Prof.Lap("sys.Coop", pf);
             Body2.Update(dt); // v17.1 머리카락 · 체중 · 우주복 치수 · 알아채기 · 컴퓨터 측정
             pf = Prof.Lap("sys.Body2", pf);
             Matter.Update(dt); // v16.4 재질 × 원소: 물건 · 쏟은 물 · 칸 온도 · 전기 · 바람 · 그을음 연기 · 컴퓨터 경고

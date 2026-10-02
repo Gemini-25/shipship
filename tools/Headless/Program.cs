@@ -158,6 +158,7 @@ public static partial class Program
         if (args.Contains("--catalogtest")) return RunCatalogTest(seed); // v15 고장·물자 70
         if (args.Contains("--moduletest")) return RunModuleTest(seed); // v15 설비 70
         if (args.Contains("--looktest")) return RunLookTest(seed); // v17.1 승무원 인형 · 몸의 변화
+        if (args.Contains("--spacetest")) return RunSpaceTest(seed); // v17.4 공간과 협력 · 줄 서기 · 구경꾼
         if (args.Contains("--lookcheck")) return RunLookCheck(seed); // v16.5a 재질 그림
         if (args.Contains("--techlookcheck")) return RunTechLookCheck(seed); // v16.5b 기술 · 설비가 티 나는 그림
         if (args.Contains("--annextest")) return RunAnnexTest(seed); // v16.10

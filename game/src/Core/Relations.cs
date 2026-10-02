@@ -14,6 +14,7 @@ public enum RelationReason
     NursedMe, TaughtMe, BlamedMe, Comforted, BrokeMyThing, KeptPromise, Apologized,
     SharedHardship, // v16.12 원정에서 함께 고생했다
     CutMyHair, BotchedMyHair, // v17.1 머리를 잘라 줬다 · 망쳐 놨다
+    CutInLine, LetMeFirst, GoodPartner, // v17.4 줄에 새치기 · 양보 · 손발이 맞는 짝
 }
 
 public sealed class RelationMemory
@@ -44,6 +45,7 @@ public sealed partial class RelationSystem
         RelationReason.SavedMyThing => 0.15f, RelationReason.KeptPromise => 0.1f, RelationReason.Apologized => 0.12f, RelationReason.SharedHardship => 0.22f, RelationReason.CutMyHair => 0.12f, RelationReason.BotchedMyHair => -0.12f,
         RelationReason.IgnoredMyWarning => -0.25f, RelationReason.TookMyThing => -0.15f, RelationReason.AbandonedMe => -0.45f,
         RelationReason.BlamedMe => -0.25f, RelationReason.BrokeMyThing => -0.15f,
+        RelationReason.CutInLine => -0.12f, RelationReason.LetMeFirst => 0.12f, RelationReason.GoodPartner => 0.15f, // v17.4
         _ => 0f,
     };
 
@@ -54,6 +56,8 @@ public sealed partial class RelationSystem
         RelationReason.GaveMeGift => "선물을 줬다", RelationReason.FixedMyThing => "내 물건을 고쳐 줬다", RelationReason.AbandonedMe => "나를 두고 갔다",
         RelationReason.NursedMe => "나를 돌봐 줬다", RelationReason.TaughtMe => "나를 가르쳤다", RelationReason.BlamedMe => "나를 탓했다",
         RelationReason.Comforted => "위로해 줬다", RelationReason.BrokeMyThing => "내 물건을 망가뜨렸다", RelationReason.Apologized => "먼저 사과했다", RelationReason.SharedHardship => "원정에서 함께 고생했다", RelationReason.CutMyHair => "머리를 잘라 줬다", RelationReason.BotchedMyHair => "머리를 망쳐 놨다", _ => "약속을 지켰다",
+        RelationReason.Comforted => "위로해 줬다", RelationReason.BrokeMyThing => "내 물건을 망가뜨렸다", RelationReason.Apologized => "먼저 사과했다", RelationReason.SharedHardship => "원정에서 함께 고생했다",
+        RelationReason.CutInLine => "줄에 새치기했다", RelationReason.LetMeFirst => "줄을 양보해 줬다", RelationReason.GoodPartner => "손발이 맞는 짝이다", _ => "약속을 지켰다",
     };
 
     /// <summary>{who}가 {about}에 대해 기억한다 (같은 이유는 하나로 묶고 최근 것으로).</summary>
