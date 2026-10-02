@@ -375,7 +375,7 @@ public sealed class PipeNetwork
         var ship = _world.Ship;
         if (!Built)
         {
-            CoolingKw = ship.FurnitureOf(FurnitureType.CoolantPump).Sum(f => f.Machine!.Efficiency * f.Machine.Rating * PerBranchKw);
+            CoolingKw = ship.FurnitureOf(FurnitureType.CoolantPump).Sum(f => f.Machine!.Efficiency * f.Machine.Rating * PerBranchKw * _world.Automation.PumpDrive(f)); // v16.26 계획이 정한 펌프 세기
             return CoolingKw;
         }
         float main = MathF.Min(HotLeg!.Flow, ColdLeg!.Flow);
@@ -388,7 +388,7 @@ public sealed class PipeNetwork
             float f = b.Flow * m.Efficiency;
             if (f <= 0f) continue;
             flowing++;
-            kw += f * PerBranchKw * m.Rating * (0.35f + 0.65f * b.RadiatorCondition);
+            kw += f * PerBranchKw * m.Rating * (0.35f + 0.65f * b.RadiatorCondition) * _world.Automation.PumpDrive(pf); // v16.26 예비 펌프로 시간 벌기 · 시험 운전
         }
         FlowingBranches = main > 0f ? flowing : 0;
         CoolingKw = kw * main * CoolantFactor * (1f + Modules.Bonus(_world, FurnitureType.HeatExchanger)); // v10.6 열교환 모듈

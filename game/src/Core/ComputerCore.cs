@@ -332,5 +332,6 @@ public sealed partial class AutomationSystem
         _foresee?.Hash(I, F);
         _character?.Hash(I, F);
         _command?.Hash(I, F);
+        Hash26(I, F); // v16.26
     }
 }

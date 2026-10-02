@@ -58,6 +58,7 @@ public sealed class ComputerCommand
         };
         Lines.Add(o);
         if (Lines.Count > 160) Lines.RemoveAt(0);
+        _w.Automation.SelfWatch.Note(t, id, what, room); // v16.26 ⑥ 스스로 감시 (같은 명령 · 켰다 껐다)
         if (o.Remote) Remote++; else Hands++;
         return o;
     }

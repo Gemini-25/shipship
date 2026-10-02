@@ -57,6 +57,7 @@ public sealed partial class AutomationSystem
         if (_foresee != null) d += _foresee.Load; // v16.20 미리 돌려 보기 · 겹친 사고
         if (_triage is { Busy: true }) d += 1f; // v16.20 전력 트리아지
         d += 0.15f * _wireless; // v16.20 무선으로 읽는 방 (대역이 좁아 연산을 더 쓴다)
+        if (_fix != null) d += 0.4f * _fix.Plans.Count(p => p.Open) + (_probe != null ? 0.3f * _probe.Cases.Count(c => c.State == "확인 중") : 0f); // v16.26 계획 · 확인
         return d;
     }
 
