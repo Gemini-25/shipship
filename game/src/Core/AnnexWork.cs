@@ -20,6 +20,7 @@ public sealed partial class AnnexSystem
     private readonly Dictionary<int, int> _drone = new(); // 드론 → 맡은 칸
     private readonly Dictionary<int, long> _blocked = new();
     private readonly Dictionary<int, bool> _heed = new(); // 이 사람은 먼지 경고를 듣나 (일을 맡을 때 정한다)
+    private readonly HashSet<(int plan, int fixture)> _dustWait = new();
 
     public bool Doing(CrewMember c) => _doing.ContainsKey(c.Id);
     /// <summary>화면: 그 드론이 증축 칸에서 일하나 (칸 번호).</summary>
@@ -182,7 +183,7 @@ public sealed partial class AnnexSystem
                 if (w.Matter.DustAt(cell) >= 0.3f)
                 {
                     // 먼지가 뿌옇다: 용접 불꽃이 닿으면 분진 폭발 — 컴퓨터 말을 듣는 사람은 가라앉기를 기다린다
-                    if (_heed.GetValueOrDefault(c.Id, true)) return;
+                    if (_heed.GetValueOrDefault(c.Id, true)) { if (_dustWait.Add((p.Id, i))) Stats.DustWaits++; return; }
                     if (p.Fit[i] >= 0.5f && p.Fit[i] < 0.5f + rate / FitHours + 1e-5f && RoomOf(p.RoomId) is Room rr)
                     {
                         int before = w.Matter.Stats.DustBlasts;

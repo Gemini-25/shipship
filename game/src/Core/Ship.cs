@@ -215,6 +215,9 @@ public sealed class Ship
 /// <summary>텍스트 설계도 → Ship.</summary>
 public static class ShipBuilder
 {
+    /// <summary>v16.10 증축 여백: 아래쪽에만 빈 줄을 더 둔다 (첫 증축은 격자를 키우지 않고 — 저장 기록의 칸이 처음부터 격자 안에 있다).</summary>
+    public const int AnnexReserveRows = 4;
+
     public static Ship FromAscii(string name, string map, int margin = 3)
     {
         var lines = map.Replace("\r", "").Split('\n').ToList();
@@ -233,7 +236,7 @@ public static class ShipBuilder
         if (lines.Count == 0) throw new FormatException("설계도가 비어 있습니다.");
 
         int width = lines.Max(l => l.Length) + margin * 2;
-        int height = lines.Count + margin * 2;
+        int height = lines.Count + margin * 2 + AnnexReserveRows; // v16.10 아래로 증축 여백 (칸 번호 · 좌표는 그대로)
         var grid = new ShipGrid(width, height);
         var ship = new Ship(name, grid);
 

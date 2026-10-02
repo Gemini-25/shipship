@@ -101,7 +101,7 @@ public sealed class AnnexPlan
 public sealed class AnnexStats
 {
     public int Proposed, Passed, Rejected, Opened, Stopped, Grown, MeteorHits, Reworks, Leaks, Seams, DustBlasts, DroneWelds, EvaTrips, Woken, MovedIn,
-        Celebrated, Advices, Halts, Members, Plates, Fixtures, Waits;
+        Celebrated, Advices, Halts, Members, Plates, Fixtures, Waits, DustWaits;
 }
 
 public sealed partial class AnnexSystem
@@ -1047,7 +1047,7 @@ public sealed partial class AnnexSystem
         for (int i = 0; i < p.PlateQ.Length; i++)
         {
             if (p.PlateQ[i] >= 0.45f) continue;
-            if (!R.Chance(0.06f)) continue;
+            if (!R.Chance(0.12f)) continue;
             var cell = p.Site.Shell[i];
             p.PlateQ[i] = 1f;
             if (w.Ship.WallAt(cell) is not WallState ws) continue;
@@ -1108,6 +1108,42 @@ public sealed partial class AnnexSystem
         if (room.Id == p.Site.AttachRoom) return 0.55f;
         if (room.Id == p.RoomId) return 0.7f;
         return 0f;
+    }
+
+    /// <summary>지시 · 시험: 그 쓰임으로 바로 안건을 내고 회의 없이 짓기 시작한다 (자리가 없으면 null).</summary>
+    public AnnexPlan? Order(RoomType use, int fixtures)
+    {
+        var w = _w;
+        var by = Adults().OrderByDescending(c => c.Traits.Diligence).ThenBy(c => c.Id).FirstOrDefault();
+        var sites = Sites(use, fixtures);
+        if (by == null || sites.Count == 0) return null;
+        var p = Propose(new AnnexPlan
+        {
+            Proposer = by.Id, Use = use, Fixtures = fixtures, Site = sites[0], Proposed = w.Tick, Source = "지시", Why = "관찰자 지시",
+            Title = $"{w.Ship.Rooms[sites[0].AttachRoom].Name} 아래 증축 — {(use == RoomType.Storage ? "창고" : "침실")}",
+        });
+        Start(p);
+        return p.State == "공사" ? p : null;
+    }
+
+    /// <summary>시험: 공정을 한꺼번에 끝낸다 (골조 · 외판 → 가압 · 문 → 배선 → 설비 → 개통).</summary>
+    public Room? BuildNow(AnnexPlan p)
+    {
+        var w = _w;
+        var by = Crew(p.Proposer) ?? Adults().FirstOrDefault();
+        if (by == null) return null;
+        if (p.State == "제안") Start(p);
+        if (p.State != "공사") return null;
+        for (int i = 0; i < p.Frame.Length; i++) { p.Frame[i] = 1f; p.Plate[i] = 1f; p.PlateQ[i] = MathF.Max(p.PlateQ[i], 0.8f); p.Bent[i] = false; }
+        p.Stage = AnnexStage.Pressure; p.FullTest = true; p.Pressure = 1f;
+        FinishTest(by, p);
+        if (p.Stage != AnnexStage.Utilities) return null;
+        p.Utilities = 1f;
+        FinishWire(by, p);
+        p.Sheet = 1f;
+        for (int i = 0; i < p.Fit.Length; i++) { p.Fit[i] = 1f; FinishFixture(by, p, i); }
+        Open(p);
+        return RoomOf(p.RoomId);
     }
 
     /// <summary>시나리오 "crowded": 빈 침대는 예전에 뜯어 화물칸으로 썼고, 구조한 두 사람이 탄다 → 간이침대에서 잔다.</summary>
