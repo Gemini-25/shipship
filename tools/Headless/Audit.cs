@@ -10,7 +10,7 @@ using ShipSim.Core;
 
 // v16.23 점검 항해 도구 — 사람이 플레이하며 찾던 문제를 헤드리스로 찾아 보고서로 낸다.
 //   dotnet Headless.dll --audit [일수=10] [시드들=7,11,13] [배들=기본 5척+생성 3척] [--jobs=4] [--out=폴더] [--persona=1] [--level=3]
-//   예: --audit 2 7 Hanbit  (짧은 확인)
+//   예: --audit 2 7 Hanbit  (짧은 확인) · --audit --audit-report=docs/audit/AUDIT_….json (규칙만 고친 뒤 시뮬레이션 없이 다시 쓰기)
 // 항해 하나 = 프로세스 하나 (정적 값이 섞이지 않게 · 결정론). 결과는 docs/audit/AUDIT_<날짜>_s<시드>.md + .json, 이전 보고서와 비교.
 public static partial class Program
 {
@@ -56,6 +56,7 @@ public static partial class Program
     {
         if (args.Contains("--audittest")) return RunAuditTest(seed);
         if (args.Contains("--audit-one")) return RunAuditOne(args);
+        if (AuditOpt(args, "--audit-report") is string again) return AuditReReport(again);
         var sw = Stopwatch.StartNew();
         int ai = Array.IndexOf(args, "--audit");
         var pos = args.Skip(ai + 1).TakeWhile(a => !a.StartsWith("--")).ToList();
@@ -113,27 +114,40 @@ public static partial class Program
         })).ToArray();
         System.Threading.Tasks.Task.WaitAll(workers);
 
-        var ctx = new AuditCtx { Runs = results.Select(r => r!).ToList() };
-        AuditCatalog(ctx);
-        if (root != null) { var (h, ex, n) = AuditScanSource(root); ctx.SrcHits = h; ctx.SrcEx = ex; ctx.SrcFiles = n; }
-        var findings = AuditEvaluate(ctx);
-        double wall = sw.Elapsed.TotalSeconds;
-
-        Directory.CreateDirectory(outDir);
-        string stamp = DateTime.Now.ToString("yyyyMMdd");
-        string name = $"AUDIT_{stamp}_s{string.Join("-", seeds)}_d{days:0.#}{(pos.Count > 2 ? "_" + string.Join("-", ships.Select(s => s.Replace(':', '.'))) : "")}";
-        var prev = AuditPrevious(outDir, name);
         var report = new AuditReport
         {
-            Date = DateTime.Now.ToString("yyyy-MM-dd HH:mm"), Days = days, Seeds = seeds.ToList(), Ships = ships.ToList(), Story = story, Wall = Math.Round(wall),
-            Findings = findings, Runs = ctx.Runs, SrcHits = ctx.SrcHits, SrcEx = ctx.SrcEx, Previous = prev?.file,
+            Date = DateTime.Now.ToString("yyyy-MM-dd HH:mm"), Days = days, Seeds = seeds.ToList(), Ships = ships.ToList(), Story = story,
+            Runs = results.Select(r => r!).ToList(), Custom = pos.Count > 2,
         };
-        string md = AuditMarkdown(report, ctx, prev?.report);
-        File.WriteAllText(Path.Combine(outDir, name + ".md"), md);
+        string name = $"AUDIT_{DateTime.Now:yyyyMMdd}_s{string.Join("-", seeds)}_d{days:0.#}{(pos.Count > 2 ? "_" + string.Join("-", ships.Select(s => s.Replace(':', '.'))) : "")}";
+        report.Wall = Math.Round(sw.Elapsed.TotalSeconds);
+        AuditWrite(outDir, name, report, root);
+        return 0;
+    }
+
+    /// <summary>규칙을 다시 계산해 보고서(.md · .json)를 쓴다 — 시뮬레이션 없이 --audit-report=이전.json 으로도 (규칙만 고쳤을 때).</summary>
+    private static void AuditWrite(string outDir, string name, AuditReport report, string? root)
+    {
+        var ctx = new AuditCtx { Runs = report.Runs };
+        AuditCatalog(ctx);
+        if (root != null) { var (h, ex, n) = AuditScanSource(root); ctx.SrcHits = h; ctx.SrcEx = ex; ctx.SrcFiles = n; }
+        report.Findings = AuditEvaluate(ctx);
+        report.SrcHits = ctx.SrcHits;
+        report.SrcEx = ctx.SrcEx;
+        Directory.CreateDirectory(outDir);
+        var prev = AuditPrevious(outDir, name);
+        report.Previous = prev?.file;
+        File.WriteAllText(Path.Combine(outDir, name + ".md"), AuditMarkdown(report, ctx, prev?.report));
         File.WriteAllText(Path.Combine(outDir, name + ".json"), JsonSerializer.Serialize(report, new JsonSerializerOptions(AuditJson) { WriteIndented = true }));
         Console.WriteLine();
-        foreach (var line in AuditTop(findings, 10)) Console.WriteLine(line);
-        Console.WriteLine($"\n보고서: {Path.Combine(outDir, name + ".md")} · {wall:0}초");
+        foreach (var line in AuditTop(report.Findings, 10)) Console.WriteLine(line);
+        Console.WriteLine($"\n보고서: {Path.Combine(outDir, name + ".md")} · 항해 {report.Wall:0}초");
+    }
+
+    private static int AuditReReport(string path)
+    {
+        var report = JsonSerializer.Deserialize<AuditReport>(File.ReadAllText(path), AuditJson)!;
+        AuditWrite(Path.GetDirectoryName(Path.GetFullPath(path))!, Path.GetFileNameWithoutExtension(path), report, AuditRoot());
         return 0;
     }
 
@@ -143,6 +157,7 @@ public static partial class Program
         public string? Previous;
         public float Days;
         public double Wall;
+        public bool Custom;
         public List<int> Seeds = new();
         public List<string> Ships = new();
         public List<AFinding> Findings = new();

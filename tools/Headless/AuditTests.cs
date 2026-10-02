@@ -46,7 +46,7 @@ public static partial class Program
         var c3 = w.Crew.First(c => !c.Dead && !c.Down);
         c3.Mind.PanicUntil = w.Tick + SimTime.Minutes(20);
         Go(25);
-        Check("공황 길이를 잰다", run.PanicMin.Any(x => x is >= 3 and <= 22), $"공황 {string.Join(",", run.PanicMin)}분");
+        Check("공황 길이를 잰다 (진정되면 일찍 끝난다)", run.PanicMin.Count >= 1 && run.PanicMin.All(x => x is >= 1 and <= 22), $"공황 {string.Join(",", run.PanicMin)}분");
 
         // ④ 같은 고장 반복 · 고친 직후 다시
         var m = w.Ship.Machines.First(x => x.Faults.Count == 0 && x.Body.Type == FurnitureType.WaterRecycler);
@@ -59,6 +59,13 @@ public static partial class Program
             Go(3);
         }
         Check("고친 직후 다시 고장", run.Refails.Count(r => r.What.Contains(m.Body.Name)) >= 2, $"재고장 {run.Refails.Count}");
+        // 1분 안에 났다 고쳐진 고장도 센다 (고장 횟수로)
+        var pm = w.Ship.Machines.First(x => x.Body.Type == FurnitureType.PowerPanel);
+        for (int i = 0; i < 3; i++) { pm.FaultCount++; Go(3); }
+        Check("1분 안에 되돌린 고장도 센다", run.Refails.Any(r => r.What.Contains("1분 안에")), string.Join(" / ", run.Refails.Select(r => r.What).Distinct()));
+        var br = w.Ship.Rooms.First(r => r.Type == RoomType.Galley || r.Type == RoomType.Mess);
+        // 사람이 금방 다시 올리므로 내린 그 순간을 잰다 (점검은 읽기만)
+        for (int i = 0; i < 3; i++) { br.BreakerOff = true; probe.Minute(); br.BreakerOff = false; Go(4); }
 
         // ⑤ 정전 · 배터리 바닥 → 보조 발전기 기록
         w.Power.Heat(2000f);
@@ -67,6 +74,7 @@ public static partial class Program
 
         probe.End();
         Check("반복 고장 (6시간 안에 3번)", run.Repeats.Any(r => r.Count >= 3 && r.What.Contains(m.Body.Name)), string.Join(" / ", run.Repeats.Select(r => $"{r.What} ×{r.Count}")));
+        Check("같은 방 차단기 반복", run.Repeats.Any(r => r.Count >= 3 && r.What.Contains("방 차단기")), string.Join(" / ", run.Repeats.Select(r => $"{r.What} ×{r.Count}")));
         var aux = run.Aux.FirstOrDefault(x => x.Minutes >= 10);
         Check("정전 · 배터리 바닥을 잡는다", aux != null, string.Join(" / ", run.Aux.Select(x => $"{x.Why} {x.Minutes:0}분 · 켬 {x.AfterMin:0}분 {x.By}")));
         Console.WriteLine($"    (보조 발전기: {(aux == null ? "-" : aux.AfterMin >= 0 ? $"{aux.AfterMin:0}분 만에 {aux.By}" : "안 켬")} · 있음 {aux?.Had})");

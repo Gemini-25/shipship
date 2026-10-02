@@ -57,6 +57,8 @@ public static partial class Program
         private readonly Dictionary<string, long> _cleared = new();
         private readonly Dictionary<string, (string what, string room)> _faultName = new();
         private int _gen;
+        private readonly HashSet<int> _roomBreaker = new();
+        private readonly Dictionary<Machine, int> _faultCount = new(ReferenceEqualityComparer.Instance);
         // 수확
         private readonly Dictionary<Machine, float> _crop = new(ReferenceEqualityComparer.Instance);
         // 보조 발전기
@@ -202,9 +204,11 @@ public static partial class Program
             _gen++;
             foreach (var m in _w.Ship.Machines)
             {
+                int seenNew = 0;
                 foreach (var f in m.Faults)
                 {
                     if (_faults.TryGetValue(f, out var known)) { _faults[f] = (known.key, _gen); continue; }
+                    seenNew++;
                     string key = $"{m.Body.Id}:{f.Kind}:{f.Circuit}";
                     _faults[f] = (key, _gen);
                     _run.FaultEvents++;
@@ -215,6 +219,22 @@ public static partial class Program
                     if (_cleared.TryGetValue(key, out long cl) && now - cl <= SimTime.Minutes(30))
                         _run.Refails.Add(new ARefail { What = _faultName[key].what, Room = _faultName[key].room, Hour = H(now), GapMin = (now - cl) / (float)_min });
                 }
+                // 1분 안에 났다가 고쳐진 고장 (차단기를 원격으로 바로 올리는 경우 등) — 고장 횟수가 는 만큼
+                if (_faultCount.TryGetValue(m, out int fc0) && m.FaultCount - fc0 > seenNew)
+                {
+                    string key = $"{m.Body.Id}:quick";
+                    _faultName.TryAdd(key, ($"{m.Body.Name} · 1분 안에 되돌린 고장", m.Body.Room.Name));
+                    if (!_faultTicks.TryGetValue(key, out var ql)) _faultTicks[key] = ql = new List<long>();
+                    for (int q = 0; q < m.FaultCount - fc0 - seenNew; q++)
+                    {
+                        _run.FaultEvents++;
+                        ql.Add(now);
+                        if (_cleared.TryGetValue(key, out long qc) && now - qc <= SimTime.Minutes(30))
+                            _run.Refails.Add(new ARefail { What = _faultName[key].what, Room = _faultName[key].room, Hour = H(now), GapMin = (now - qc) / (float)_min });
+                        _cleared[key] = now;
+                    }
+                }
+                _faultCount[m] = m.FaultCount;
                 if (m.Crop is CropState cs)
                 {
                     if (_crop.TryGetValue(m, out float prev) && prev >= 0.5f && cs.Growth < prev - 0.4f)
@@ -224,6 +244,25 @@ public static partial class Program
                     }
                     _crop[m] = cs.Growth;
                 }
+            }
+            // 방 차단기 (젖은 바닥 누전 등 — 설비 고장 목록 밖)
+            foreach (var r in _w.Ship.Rooms)
+            {
+                bool off = r.BreakerOff;
+                bool was = _roomBreaker.Contains(r.Id);
+                if (off == was) continue;
+                string key = $"room:{r.Id}:breaker";
+                if (off)
+                {
+                    _roomBreaker.Add(r.Id);
+                    _run.FaultEvents++;
+                    _faultName.TryAdd(key, ($"{r.Name} 방 차단기 내려감", r.Name));
+                    if (!_faultTicks.TryGetValue(key, out var list)) _faultTicks[key] = list = new List<long>();
+                    list.Add(now);
+                    if (_cleared.TryGetValue(key, out long cl) && now - cl <= SimTime.Minutes(30))
+                        _run.Refails.Add(new ARefail { What = _faultName[key].what, Room = r.Name, Hour = H(now), GapMin = (now - cl) / (float)_min });
+                }
+                else { _roomBreaker.Remove(r.Id); _cleared[key] = now; }
             }
             List<Fault>? gone = null;
             foreach (var (f, v) in _faults)

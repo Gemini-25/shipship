@@ -253,7 +253,11 @@ public static partial class Program
             int right = cs.Sum(x => x.Right), wrong = cs.Sum(x => x.Wrong), total = cs.Sum(x => x.Total), held = cs.Sum(x => x.Held);
             double rate = right + wrong == 0 ? 0 : wrong / (double)(right + wrong);
             return F(rate > 0.3 ? 2 : rate > 0.15 ? 1 : 0, wrong, rate, $"조치 {total}건 (하루 {total / Math.Max(0.01, c.Days):0.0}) · 맞음 {right} · 틀림 {wrong} ({rate * 100:0}%) · 미룸 {held}",
-                "Automation · ComputerTriage 채점에서 틀린 종류부터", c.Runs.Where(r => r.Comp.Measured).OrderByDescending(r => r.Comp.Wrong).Select(r => $"{AuditCtx.Tag(r)} 조치 {r.Comp.Total} · 틀림 {r.Comp.Wrong}"));
+                "Automation · ComputerTriage 채점에서 틀린 종류부터",
+                new[] { "종류별 맞음/틀림: " + string.Join(" · ", Enum.GetValues<ActKind>().Select(k => k.ToString())
+                    .Select(k => (k, r: cs.Sum(x => x.RightBy.GetValueOrDefault(k)), w: cs.Sum(x => x.WrongBy.GetValueOrDefault(k))))
+                    .Where(x => x.r + x.w > 0).OrderByDescending(x => x.w).Select(x => $"{x.k} {x.r}/{x.w}")) }
+                .Concat(c.Runs.Where(r => r.Comp.Measured).OrderByDescending(r => r.Comp.Wrong).Take(4).Select(r => $"{AuditCtx.Tag(r)} 조치 {r.Comp.Total} · 틀림 {r.Comp.Wrong}")));
         }),
         new("computer.idle", "주컴퓨터가 손 놓은 시간", true, c =>
         {

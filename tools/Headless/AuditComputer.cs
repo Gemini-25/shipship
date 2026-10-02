@@ -11,6 +11,7 @@ public static partial class Program
     {
         private int _lastAct, _lastDecision, _gradeSum = -1;
         private readonly HashSet<string> _seen = new();
+        private readonly HashSet<int> _graded = new();
 
         public void Minute(World w, AComp c, Dictionary<string, int> hits, List<string> ex)
         {
@@ -23,6 +24,11 @@ public static partial class Program
             _gradeSum = gs;
             foreach (var act in a.Book.Acts)
             {
+                if (act.Graded && _graded.Add(act.Id))
+                {
+                    var by = act.Score > 0 ? c.RightBy : c.WrongBy;
+                    by[act.Kind.ToString()] = by.GetValueOrDefault(act.Kind.ToString()) + 1;
+                }
                 if (act.Id <= _lastAct) continue;
                 _lastAct = act.Id;
                 // 원격 조치(문 · 댐퍼 · 밸브 · 차단기 · 소화 · 부하 끊기 …) vs 사람에게 부탁(조언 · 제안 · 방송) — 예보는 빼고

@@ -70,6 +70,7 @@ public sealed class AComp
     public bool Measured;
     public string Note = "";
     public int Total, Right, Wrong, Held, Remote, Asked, OfflineMin, Reboots, Overheats, GradeDrops, Decisions, Options;
+    public Dictionary<string, int> RightBy = new(), WrongBy = new();
 }
 
 public sealed class ABots
