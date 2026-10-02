@@ -606,7 +606,7 @@ public static partial class WorkPlanners
         toils.Add(new DoToil((cm, world) =>
         {
             cm.Dashing = false;
-            if (cm.Suit != null) return true;
+            if (cm.Suit != null) return CrisisCrewSystem.Off || world.CrisisCrew.FreshTank(cm, locker); // v16.21 빈 우주복으로 진공에 다시 들어가지 않는다 — 통을 갈아 끼운다
             if (locker.Storage!.Take(ItemKind.Suit, 1) == 0) return false;
             cm.Suit = new SuitState();
             world.EvaRisk.OnIssue(cm, locker); // v16.11 멀쩡한 게 없으면 수리 대기 중인 걸 입는다

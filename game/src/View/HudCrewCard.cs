@@ -334,7 +334,7 @@ public partial class Hud
         DrawCircle(new Vector2(x + 6, y + 21), 6f, col, true, -1f, true);
         Gfx.Text(this, Fonts.Bold, new Vector2(x + 18, y + 26), c.Name, Ui.TextTitle, Palette.Text);
         float nx = x + 18 + Gfx.Width(Fonts.Bold, c.Name, Ui.TextTitle) + 8;
-        Gfx.Text(this, Fonts.Body, new Vector2(nx, y + 26), UiKit.Fit(attention is { } a2 ? a2.text : CrewRoles.Name(c.Role), head.End.X - nx - 4, Ui.TextSmall), Ui.TextSmall,
+        Gfx.Text(this, Fonts.Body, new Vector2(nx, y + 26), UiKit.Fit(attention is { } a2 ? a2.text : _world.CrisisCrew.BillRole(c) is var br && br != StationRole.None ? $"{CrewRoles.Name(c.Role)} · 비상 {CrisisCrewSystem.RoleName(br)}" : CrewRoles.Name(c.Role), head.End.X - nx - 4, Ui.TextSmall), Ui.TextSmall,
             attention is { } a3 ? Ui.Of(a3.tone) : Palette.TextMuted);
         var target = c;
         _buttons.Add((head, () => { _main.Select(target); FocusAt(target.Position); _crewTab = CardTab; }));

@@ -41,7 +41,7 @@ public sealed partial class CrisisCrewSystem
     public CrisisCrewSystem(World w) => _w = w;
 
     public StationBill Bill { get; } = new();
-    public int Snaps, HandSnaps, BodyFirsts, Masks, Doors, AuxCalls, AuxEarly, Joins, Leads, Redraws, Fills, Drills, Debriefs, Musters, ProcUses;
+    public int Tanks, Snaps, HandSnaps, BodyFirsts, Masks, Doors, AuxCalls, AuxEarly, Joins, Leads, Redraws, Fills, Drills, Debriefs, Musters, ProcUses;
     public float HelpHours;
     /// <summary>화면용: 최근 정신 차리게 한 손 (누가 → 누구, 손이면 true).</summary>
     public readonly List<(long tick, int from, int to, bool hand)> SnapMarks = new();
@@ -345,18 +345,25 @@ public sealed partial class CrisisCrewSystem
     public float Bias(CrewMember c, WorkOrder o)
     {
         if (Off) return 0f;
+        if (o.Target.CurrentRoom is Room vr && (vr.EvacuateBy >= 0 || vr.Purging || vr.Inerting)) return 0f; // 소화 경보 — 비우는 방의 일에 등을 떠밀지 않는다
         float b = 0f;
         var role = RoleFor(o);
-        if (role != StationRole.None)
+        // 현장 지휘가 조를 짰으면 조가 먼저 (배치표는 조를 짤 때 이미 반영됐다)
+        bool teamed = _w.Command.Active && _w.Command.TeamOf(c) != null;
+        if (role != StationRole.None && !teamed)
         {
             if (_active.TryGetValue(c.Id, out var a) && a == role) b += 0.3f;
             else if (Bill.Of.GetValueOrDefault(c.Id) == role && o.Urgency >= 0.85f) b += 0.1f;
         }
+        int tier = -1;
         if (Crisis.Acting(_w) && o.Urgency >= 0.6f)
         {
             float k = Crisis.Level(_w) == CrisisLevel.Survival ? 1f : 0.6f;
-            b += k * Tier(_w, o) switch { 0 => 0.15f, 1 => 0.12f, 2 => 0.05f, 3 => 0f, _ => -0.05f };
+            tier = Tier(_w, o);
+            b += k * tier switch { 0 => 0.15f, 1 => 0.12f, 2 => 0.05f, 3 => 0f, _ => -0.05f };
         }
+        // 전원 소집 · 점호가 걸렸으면 생명 일이 아닌 일로 점호를 빼먹지 않는다 (ScalePlan)
+        if (b > 0f && (tier < 0 ? Tier(_w, o) : tier) > 0 && _w.Scale.MusterCall(c) != null) b = 0f;
         return b;
     }
 
@@ -366,9 +373,14 @@ public sealed partial class CrisisCrewSystem
         if (Off || score <= 0f || !_active.ContainsKey(c.Id)) return;
         float m = a switch
         {
-            SleepActivity when c.Needs.Fatigue < 0.95f => 0.5f,
-            EatActivity when c.Needs.Hunger < 0.9f => 0.5f,
-            RelaxActivity or ChatActivity or WanderActivity or HobbyActivity or TidyActivity or MendActivity or SceneActivity => 0.4f,
+            SleepActivity => c.Needs.Fatigue < 0.95f ? 0.5f : 1f,
+            DutyActivity or PatrolActivity => 0.55f, // 평소 당직보다 비상 자리가 먼저
+            EatActivity => c.Needs.Hunger < 0.9f ? 0.5f : 1f,
+            MeetingActivity or VisitActivity or HobbyActivity or TidyActivity or MendActivity or ReachOutActivity or ReclaimActivity or PartTestActivity
+                or WashUpActivity or LaundryActivity or DeconActivity or FlushActivity or ExtinguisherCheckActivity or MemorialVisitActivity or SharedMealActivity
+                or ShipRoundsActivity or ExpeditionActivity or ResearchActivity or AnnexWorkActivity or RoomWorkActivity or InspectActivity or BodyUpkeepActivity
+                or SceneActivity or SavedPlateActivity or SetAsidePlateActivity or FollowSmellActivity or HaircutActivity or SuitFitActivity or JogActivity
+                or SweepClipsActivity or SpectateActivity or SpaceTidyActivity or CoffeeRunActivity or ChatActivity or RelaxActivity or WanderActivity => 0.4f,
             _ => 1f,
         };
         if (m >= 1f) return;
@@ -394,6 +406,32 @@ public sealed partial class CrisisCrewSystem
     /// <summary>산소 마스크를 쓰고 있다 (연기 · 묽은 산소에서 숨을 잇는다 — 진공에서는 소용없다).</summary>
     public bool Masked(CrewMember c) => !Off && _masked.TryGetValue(c.Id, out var t) && t > _w.Tick;
 
+    /// <summary>입은 우주복의 산소가 한 시간도 안 남았으면 보관함에서 새 통으로 갈아 끼운다 (보관함의 한 벌과 바꿔 입거나 · 공기 탱크에서 채운다). 못 채우면 false.</summary>
+    public bool FreshTank(CrewMember c, Furniture locker)
+    {
+        if (c.Suit is not SuitState s || s.Oxygen > 1f) return true;
+        if (locker.Storage!.Take(ItemKind.Suit, 1) > 0)
+        {
+            locker.Storage.Add(ItemKind.Suit, 1);
+            s.Oxygen = SuitState.TankHours;
+            s.Leak = 1f;
+        }
+        else if (_w.Air.Reserve >= RefillSuitActivity.Cost)
+        {
+            _w.Air.Reserve -= RefillSuitActivity.Cost;
+            s.Oxygen = SuitState.TankHours;
+            _w.SuitRefills++;
+        }
+        else
+        {
+            _w.Log.Add(_w.Tick, LogKind.Warning, "우주복 산소가 바닥인데 갈아 끼울 통이 없다 — 들어가지 않는다", c.Id);
+            return false;
+        }
+        Tanks++;
+        _w.Log.Add(_w.Tick, LogKind.Work, "우주복 산소통을 새것으로 갈아 끼웠다", c.Id);
+        return true;
+    }
+
     // ───────────────────────────── 보조 발전기 예측 ─────────────────────────────
 
     /// <summary>배터리가 바닥나기까지 (분, 추세) — 채우는 중이면 무한.</summary>
@@ -410,8 +448,9 @@ public sealed partial class CrisisCrewSystem
     public bool ComputerCanStartAux()
     {
         var a = _w.Automation;
-        var aux = _w.Ship.FurnitureOf(FurnitureType.AuxGenerator).FirstOrDefault();
-        return a.Present && (a.MainOnline || a.BackupActive) && aux != null && aux.Room.DataLinked && aux.Machine is { Faults.Count: 0 };
+        var aux = _w.Ship.FurnitureOf(FurnitureType.AuxGenerator).FirstOrDefault(f => !f.Room.Detached);
+        return a.Present && (a.MainOnline || a.BackupActive) && !AutomationSystem.Ship20Off && aux != null && aux.Room.DataLinked
+               && aux.Machine is { Stopped: false } && a.TriageOrNull is not { AuxNeedsHands: true }; // 주 컴퓨터 트리아지와 같은 조건 (두 번 안 걸리면 손으로)
     }
 
     /// <summary>정전이 다가온다 (배터리 추세 · 부하 차단): 바닥나기 전에 미리 발전기를 켠다.</summary>
@@ -458,9 +497,10 @@ public sealed partial class CrisisCrewSystem
             string text = Draw(cap0, "첫 출항");
             w.Log.Add(w.Tick, LogKind.Ship, $"{Ko.IGa(cap0.Name)} 비상 배치표를 붙였다 — {text}");
         }
-        if (w.Tick % SimTime.Minutes(5) == 0 && Bill.Drawn >= 0 && CrewSig() != _crewSig)
+        if (w.Tick % SimTime.Minutes(5) == 0 && Bill.Drawn >= 0)
         {
-            if (!_stale) { _stale = true; _staleSince = w.Tick; }
+            if (CrewSig() == _crewSig) _stale = false; // 돌아왔다 — 그대로 둔다
+            else if (!_stale) { _stale = true; _staleSince = w.Tick; }
             else if (w.Tick - _staleSince > SimTime.TicksPerDay && w.Command.Captain is CrewMember cap1 && !Crisis.Acting(w))
             {
                 string text = Draw(cap1, "함장 혼자");
@@ -483,16 +523,25 @@ public sealed partial class CrisisCrewSystem
         _need.Clear();
         if (!Crisis.Acting(w) && !AuxSoon()) return;
         var s = Crisis.Now(w);
+        // 규모 (v16.18): 방 하나의 작은 불이면 소화 자리 한둘 · 계통으로 번지면 소화 자리 전부 — 사고 규모만큼 사람을 부른다
+        IncidentScale fireScale = IncidentScale.Personal, leakScale = IncidentScale.Personal;
+        foreach (var (room, _, _) in w.Fire.KnownFires()) if (w.Scale.RoomScale(room) is IncidentScale fs && fs > fireScale) fireScale = fs;
+        bool leaking = false;
+        foreach (var r in w.Ship.LiveRooms)
+            if (r.Leaking && !r.Abandoned) { leaking = true; if (w.Scale.RoomScale(r) is IncidentScale ls && ls > leakScale) leakScale = ls; }
+        bool big = Crisis.Level(w) == CrisisLevel.Survival || fireScale >= IncidentScale.System || leakScale >= IncidentScale.System;
         if (s.Fires > 0) _need.Add(StationRole.Fire);
-        if (s.Breaches > 0 || w.Ship.LiveRooms.Any(r => r.Leaking && !r.Abandoned)) _need.Add(StationRole.Bulkhead);
+        if (s.Breaches > 0 || leaking) _need.Add(StationRole.Bulkhead);
         if (s.Power || AuxSoon()) _need.Add(StationRole.Power);
         if (s.Down > 0 || w.Board.Open.Any(o => o.Kind == WorkKind.Treat && o.Urgency >= 0.9f)) _need.Add(StationRole.Medical);
         if (w.Board.Open.Any(o => o.External && o.Urgency >= 0.85f)) _need.Add(StationRole.Eva);
-        if (Crisis.Acting(w)) _need.Add(StationRole.Guide);
+        if (Crisis.Acting(w) && (big || AnyPanic)) _need.Add(StationRole.Guide);
         foreach (var r in DrawOrder)
         {
             if (!_need.Contains(r) || !Bill.Order.TryGetValue(r, out var order)) continue;
             int want = Math.Max(1, Bill.Of.Count(kv => kv.Value == r));
+            var sc = r == StationRole.Fire ? fireScale : r == StationRole.Bulkhead ? leakScale : big ? IncidentScale.System : IncidentScale.Room;
+            if (!big && sc <= IncidentScale.Room) want = Math.Min(want, sc == IncidentScale.Personal ? 1 : 2); // 방 하나의 작은 사고는 그 자리 한둘만 (나머지는 당직 · 곁의 사람 몫)
             int got = 0;
             for (int i = 0; i < order.Count && got < want; i++)
             {
@@ -650,6 +699,12 @@ public sealed partial class CrisisCrewSystem
         _panicsNow.Clear();
         _crisisSince = -1;
         _calmSince = -1;
+    }
+
+    /// <summary>지금 공황에 빠진 사람이 있다 (대피 유도 자리).</summary>
+    public bool AnyPanic
+    {
+        get { foreach (var x in _w.Crew) if (!x.Dead && !x.Down && x.Mind.Panicking(_w.Tick)) return true; return false; }
     }
 
     /// <summary>사고 뒤 훈련이 남은 사람.</summary>

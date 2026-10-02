@@ -1038,6 +1038,7 @@ public sealed class BlastResponseActivity : Activity
             if (spot is not Cell s) return;
             // 우주 대재난으로 비우는 구획 · 파편 줄에서는 구조 말고는 손대지 않는다 (옮기다 파편을 맞는다)
             if (t != Task.Rescue && (ship.RoomAt(at) is Room ar && CosmicEvacuateActivity.Emptying(ar, w) || ship.RoomAt(s) is Room sr && CosmicEvacuateActivity.Emptying(sr, w))) return;
+            if (!CrisisCrewSystem.Off && ship.RoomAt(at) is Room vr && (vr.Purging || vr.Inerting || vr.EvacuateBy >= 0)) return; // v16.21 소화 경보로 비우는 방에는 다시 들어가지 않는다
             float sc = value - dist.Get(s) / 4000f;
             if (sc > bestScore) { bestScore = sc; best = (t, target, s, sc, why); }
         }

@@ -547,6 +547,7 @@ public sealed class StowSuitActivity : Activity
         toils.Add(new DoToil((cm, world) =>
         {
             if (cm.Suit == null) return true;
+            if (cm.Room is Room rr && (Atmosphere.Danger(rr) > 0.1f || rr.Leaking) && !CrisisCrewSystem.Off) return false; // v16.21 와 보니 공기가 빠지는 중 — 벗지 않는다
             if (locker.Storage!.Add(ItemKind.Suit, 1) == 0) return false;
             world.EvaRisk.OnStow(cm, locker); // v16.11 상한 우주복은 수리 대기
             world.Log.Add(world.Tick, LogKind.Work, "우주복을 벗어 보관함에 걸었다", cm.Id);

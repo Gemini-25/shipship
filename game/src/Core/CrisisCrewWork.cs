@@ -31,15 +31,41 @@ public sealed partial class WorkBoard
             if (s >= IncidentScale.System) b++;
             if (s >= IncidentScale.Ship) b++;
         }
+        if (BigJob(o)) b++; // 오래 걸리는 수리 (몇 시간짜리)
         b = Math.Min(4, b);
-        // 공간: 일터 둘레(5×5)의 걸을 수 있는 칸 — 둘이 한 칸을 나눠 쓸 수는 없다
-        var at = Cell.FromPosition(o.Target.Center);
+        // 공간: 설비면 몸체를 둘러싼 칸 · 아니면 일터 둘레(5×5)의 걸을 수 있는 칸 — 둘이 한 칸을 나눠 쓸 수는 없다
         int room = 0;
-        for (int dx = -2; dx <= 2; dx++)
-            for (int dy = -2; dy <= 2; dy++)
-                if (w.Ship.IsWalkable(new Cell(at.X + dx, at.Y + dy))) room++;
-        return Math.Max(1, Math.Min(b, room / 2));
+        if (o.Target.Furniture is Furniture fu)
+        {
+            _ring.Clear();
+            foreach (var fc in fu.Cells)
+                foreach (var d in Cell.Dirs8)
+                {
+                    var x = fc + d;
+                    if (!fu.Cells.Contains(x) && w.Ship.IsWalkable(x)) _ring.Add(x);
+                }
+            room = _ring.Count;
+        }
+        else
+        {
+            var at = Cell.FromPosition(o.Target.Center);
+            for (int dx = -2; dx <= 2; dx++)
+                for (int dy = -2; dy <= 2; dy++)
+                    if (w.Ship.IsWalkable(new Cell(at.X + dx, at.Y + dy))) room++;
+            room /= 2;
+        }
+        return Math.Max(1, Math.Min(b, room));
     }
+
+    private readonly HashSet<Cell> _ring = new();
+
+    /// <summary>v16.21 몇 시간짜리 큰 일 (여럿이 붙을 만하다): 고장 수리 2시간 넘게 · 잔해 · 골조 · 선체 · 외판 · 관 교체 · 산소 설비.</summary>
+    public static bool BigJob(WorkOrder o) => o.Kind switch
+    {
+        WorkKind.ClearRubble or WorkKind.RebuildFrame or WorkKind.RepairHull or WorkKind.ReplacePanel or WorkKind.ReplacePipe or WorkKind.BuildOxygen or WorkKind.InstallTruss => true,
+        WorkKind.Repair => o.Target.Furniture?.Machine is Machine m && m.Faults.Any(f => Faults.Spec(f.Kind).RepairHours >= 2f),
+        _ => false,
+    };
 
     /// <summary>v16.21 사고 뒤 훈련: 공황을 겪은 사람은 평온해지면 곧 다시 훈련한다.</summary>
     private void ScanCrisisDrills(Poster post)
@@ -75,6 +101,7 @@ public sealed partial class CrisisCrewSystem
         if (!_hands.TryGetValue(o.Id, out var l)) _hands[o.Id] = l = new List<CrewMember>();
         l.Add(c);
         _helping[c.Id] = o.Id;
+        _candTick = -1;
         Joins++;
     }
 
@@ -107,34 +134,85 @@ public sealed partial class CrisisCrewSystem
         return mul;
     }
 
+    private readonly List<(WorkOrder o, int cap, int have, bool calm, int pair)> _cands = new();
+    private long _candTick = -1;
+
+    /// <summary>거들 만한 일 (틱마다 한 번): 누가 붙어 하고 있는 큰 일 · 급한 일 · 인원 상한이 둘 넘는다.</summary>
+    private List<(WorkOrder o, int cap, int have, bool calm, int pair)> Cands()
+    {
+        var w = _w;
+        if (_candTick == w.Tick) return _cands;
+        _candTick = w.Tick;
+        _cands.Clear();
+        bool acting = Crisis.Acting(w);
+        foreach (var o in w.Board.All)
+        {
+            if (o.Closed || o.Assignee is not CrewMember lead || lead.Job?.Order != o) continue;
+            if (lead.Pose != Pose.Working && o.Urgency < 0.9f) continue; // 급한 일은 이끄는 사람이 가는 중에도 따라붙는다
+            bool calm = o.Urgency < 0.85f && !(acting && o.Urgency >= 0.6f);
+            if (calm && !(o.Urgency >= 0.5f && WorkBoard.BigJob(o))) continue; // 급하지 않아도 몇 시간짜리 큰 일은 손 빈 사람이 거든다
+            int cap = w.Board.MaxHands(o);
+            if (cap <= 1) continue;
+            int have = 1 + (_hands.TryGetValue(o.Id, out var l) ? l.Count : 0), pair = -1;
+            // 이미 "누가 좀 잡아 줘"로 불려 온 짝 (Cooperation) 도 한 사람 — 겹쳐 부르지 않는다
+            foreach (var call in w.Coop.Calls)
+                if (call.OrderId == o.Id && !call.Done && call.Helper >= 0) { have++; pair = call.Helper; }
+            _cands.Add((o, cap, have, calm, pair));
+        }
+        return _cands;
+    }
+
+    /// <summary>그 일을 거드는 사람 중 그 자리 몫이 아닌 사람 (제 자리 사람이 오면 넘기고 물러난다).</summary>
+    internal CrewMember? Relievable(WorkOrder o, StationRole role)
+    {
+        if (!_hands.TryGetValue(o.Id, out var l)) return null;
+        foreach (var h in l)
+            if (!_active.TryGetValue(h.Id, out var hr) || hr != role) return h;
+        return null;
+    }
+
     /// <summary>거들 일 고르기: 누가 이미 하고 있는 큰 일 · 자리가 남았다 · 아는 사고 · 갈 수 있다.</summary>
     internal (WorkOrder? o, float score, string why) HelpPick(CrewMember c, DistanceField dist)
     {
         var w = _w;
         if (Off || c.IsChild || !c.CanAct || c.Outside || c.Mind.Panicking(w.Tick)) return (null, 0f, "");
-        bool acting = Crisis.Acting(w);
+        var cands = Cands();
+        if (cands.Count == 0) return (null, 0f, "");
         WorkOrder? best = null;
         float bs = 0f;
         string bw = "";
         DistanceField? field = null;
-        foreach (var o in w.Board.All)
+        int mine = _helping.TryGetValue(c.Id, out var m0) ? m0 : -1;
+        bool muster = w.Scale.MusterCall(c) != null;
+        foreach (var (o, cap, have0, calm, pair) in cands)
         {
-            if (o.Closed || o.Assignee is not CrewMember lead || lead == c || lead.Job?.Order != o || lead.Pose != Pose.Working) continue;
-            if (o.Urgency < 0.85f && !(acting && o.Urgency >= 0.6f)) continue;
-            int cap = w.Board.MaxHands(o);
-            if (cap <= 1) continue;
-            int have = 1 + (_hands.TryGetValue(o.Id, out var l) ? l.Count : 0);
-            if (_helping.TryGetValue(c.Id, out var mine) && mine == o.Id) have--;
-            if (have >= cap) continue;
+            if (o.Closed || o.Assignee is not CrewMember lead || lead.Job?.Order != o || lead == c || pair == c.Id) continue; // 같은 틱 안에 손을 뗐을 수 있다
+            int have = mine == o.Id ? have0 - 1 : have0;
+            var role = RoleFor(o);
+            bool mineRole = role != StationRole.None && _active.TryGetValue(c.Id, out var myR) && myR == role;
+            if (have >= cap && !(mineRole && mine != o.Id && Relievable(o, role) != null)) continue; // 꽉 찼어도 제 자리 사람은 대신 서 있던 사람과 바꾼다
             if (o.MinSkill > 0f && c.SkillLevel(o.Skill) < o.MinSkill || !w.Minds.Aware(c, o)) continue;
+            if (o.Target.CurrentRoom is Room or && (or.EvacuateBy >= 0 || or.Purging || or.Inerting)) continue; // 곧 빼거나 채울 방에는 들어가지 않는다
+            int tier = Tier(w, o);
+            // 불 · 공기 · 생명이 걸린 위험한 일은 그 자리(배치표 · 지휘 조) 사람만 붙는다 — 나머지는 비켜 준다
+            bool teamSame = w.Command.Active && w.Command.TeamOf(c) is Team tt && CommandSystem.Group(o.Kind) == tt.Kind;
+            bool hot = o.Target.CurrentRoom is Room hr && (w.Fire.CountIn(hr) > 0 || Atmosphere.Danger(hr) > 0.3f);
+            if ((tier <= 2 && role != StationRole.None || hot) && !mineRole && !teamSame) continue;
+            // 전원 소집이 걸렸으면 눈앞의 생명 일만
+            if (muster && (tier > 0 || (o.Target.Center - c.Position).LengthSquared() > 64f)) continue;
             field ??= o.Urgency >= 0.9f ? w.Paths.Flood(c.Cell, new PathProfile(c.PathProfile.HazardScale * 0.8f, true, true)) : dist;
             float a = ChoresActivity.Appeal(c, w, o, field, out int d);
             if (a <= 0f || d < 0) continue;
-            // 지휘: 다른 조를 맡았으면 거들러 가지 않는다 · 대기조와 같은 조는 거든다 (예전 '끼어들지 않는다'를 걷어 낸다)
+            // 지휘: 다른 조 · 감시자는 거들러 가지 않는다 · 대기조는 위험하지 않은 일만 · 같은 조는 거든다
             a -= w.Command.Bias(c, o);
             if (w.Command.Active && w.Command.TeamOf(c) is Team t)
-                a += t.Kind == TeamKind.Reserve || CommandSystem.Group(o.Kind) == t.Kind ? 0.08f : t.Watcher == c.Id ? -1f : -0.4f;
-            float s = 0.82f * a - 0.04f - 0.05f * (have - 1) + 0.12f * MathF.Max(0f, c.AffinityTo(lead)) + (Memory.AreComrades(c, lead) ? 0.05f : 0f);
+            {
+                if (t.Watcher == c.Id || !teamSame && (t.Kind != TeamKind.Reserve || tier <= 2)) continue;
+                if (teamSame) a += 0.08f;
+            }
+            float s = 0.82f * a - (calm ? 0.12f : 0.04f) - 0.05f * (have - 1) + 0.12f * MathF.Max(0f, c.AffinityTo(lead)) + (Memory.AreComrades(c, lead) ? 0.05f : 0f);
+            // 제 비상 자리의 일이면 자리에 서 있기보다 붙는다
+            if (mineRole) s += 0.1f;
             if (s <= bs) continue;
             bs = s;
             best = o;
@@ -149,16 +227,17 @@ public sealed partial class CrisisCrewSystem
     internal (Cell? spot, string where) StationSpot(CrewMember c, StationRole r, DistanceField dist)
     {
         var w = _w;
-        Cell? Near(Cell at, int radius = 1)
+        Cell? Near(Cell at, int radius = 2)
         {
             Cell? best = null;
             int bc = int.MaxValue;
             for (int dx = -radius; dx <= radius; dx++)
                 for (int dy = -radius; dy <= radius; dy++)
                 {
+                    if (Math.Abs(dx) + Math.Abs(dy) <= 1) continue; // 문간 · 문 바로 앞은 비워 둔다 (나오는 사람 · 닫히는 문을 막지 않게)
                     var x = new Cell(at.X + dx, at.Y + dy);
                     int d = dist.Get(x);
-                    if (d < 0 || d >= bc || !w.Ship.IsWalkable(x) || w.IsSpotTaken(x, c) || w.Fire.AnyWithin(x, 1.5f)) continue;
+                    if (d < 0 || d >= bc || !w.Ship.IsWalkable(x) || w.Ship.DoorAt(x) != null || w.IsSpotTaken(x, c) || w.Fire.AnyWithin(x, 1.5f)) continue;
                     best = x; bc = d;
                 }
             return best;
@@ -233,6 +312,9 @@ public sealed partial class CrisisCrewSystem
     {
         foreach (var o in _w.Board.All)
             if (!o.Closed && o.Assignee == null && o.BlockedUntil <= _w.Tick && RoleFor(o) == r && o.Urgency >= 0.8f && _w.Minds.Aware(c, o)) return true;
+        // 누가 붙어 하는 제 자리의 일에 손이 모자라면 거들러 간다
+        foreach (var (o, cap, have, _, _) in Cands())
+            if (have < cap && !o.Closed && o.Assignee is CrewMember a && a != c && RoleFor(o) == r && _w.Minds.Aware(c, o)) return true;
         return false;
     }
 
@@ -248,7 +330,8 @@ public sealed class HelpActivity : Activity
     public override (float, string) Score(CrewMember c, World w, DistanceField dist)
     {
         if (CrisisCrewSystem.Off) return (0f, "—");
-        if (c.Job?.Activity is HelpActivity && w.CrisisCrew.HelpingOrder(c) >= 0) return (0.95f, "거드는 중");
+        if (c.Job?.Activity is HelpActivity && w.CrisisCrew.HelpingOrder(c) >= 0)
+            return c.Room is Room hr && (hr.EvacuateBy >= 0 || hr.Purging || hr.Inerting) ? (0f, "비우는 방") : (0.95f, "거드는 중");
         var (o, s, why) = w.CrisisCrew.HelpPick(c, dist);
         return o == null ? (0f, "거들 일 없음") : (s, why);
     }
@@ -263,7 +346,8 @@ public sealed class HelpActivity : Activity
         foreach (var s in o.Target.Spots(w.Ship).Concat(Cell.Dirs8.Select(d => lead.Cell + d)))
         {
             int d = field.Get(s);
-            if (d < 0 || d >= bc || !w.Ship.IsWalkable(s) || w.IsSpotTaken(s, c) || s == lead.Cell || (s.Center - lead.Position).LengthSquared() > 6.5f) continue;
+            if (d < 0 || d >= bc || !w.Ship.IsWalkable(s) || w.IsSpotTaken(s, c) || s == lead.Cell
+                || (s.Center - lead.Position).LengthSquared() > 6.5f && (s.Center - o.Target.Center).LengthSquared() > 9f) continue;
             spot = s; bc = d;
         }
         if (spot is not Cell at) return null;
@@ -290,6 +374,7 @@ public sealed class AssistToil : Toil
     private readonly WorkOrder _o;
     private readonly CrewMember _lead;
     private int _elapsed;
+    private bool _crowded;
     public AssistToil(WorkOrder o, CrewMember lead) { _o = o; _lead = lead; }
 
     public override void Begin(CrewMember c, World w)
@@ -297,6 +382,18 @@ public sealed class AssistToil : Toil
         c.Pose = Pose.Working;
         Locomotion.Face(c, _o.Target.Center);
         if (w.CrisisCrew.HelpingOrder(c) != _o.Id) w.CrisisCrew.Join(_o, c);
+        // 제 자리 사람이 왔는데 자리가 모자라면 대신 붙어 있던 사람이 넘기고 물러난다
+        var role = CrisisCrewSystem.RoleFor(_o);
+        if (role != StationRole.None && w.CrisisCrew.Active(c) == role && 1 + w.CrisisCrew.HelpersOf(_o).Count > w.Board.MaxHands(_o)
+            && w.CrisisCrew.Relievable(_o, role) is CrewMember off && off != c)
+        {
+            off.Say(w, Persona.Say(off, $"{c.Name}, 여기 — 넘길게"));
+            w.Log.Add(w.Tick, LogKind.Work, $"{Ko.WaGwa(c.Name)} 자리를 바꿨다 ({CrisisCrewSystem.RoleName(role)} 담당이 왔다)", off.Id);
+            w.CrisisCrew.Leave(off);
+            off.EndJob(w, ToilStatus.Succeeded);
+        }
+        // 그래도 비좁으면 늦게 온 사람이 물러난다 (제 자리로 돌아간다)
+        _crowded = 1 + w.CrisisCrew.HelpersOf(_o).Count > w.Board.MaxHands(_o) + 1;
         // 더 솜씨 좋은 사람이 오면 그 사람이 짚어 가며 이끈다
         if (c.SkillLevel(_o.Skill) > _lead.SkillLevel(_o.Skill) + 0.1f)
         {
@@ -308,7 +405,8 @@ public sealed class AssistToil : Toil
     public override ToilStatus Tick(CrewMember c, World w)
     {
         _elapsed++;
-        if (_o.Closed || _lead.Dead || _lead.Down || _lead.Job?.Order != _o) return ToilStatus.Succeeded;
+        if (_crowded || _o.Closed || _lead.Dead || _lead.Down || _lead.Job?.Order != _o) return ToilStatus.Succeeded;
+        if (c.Room is Room cr && (cr.EvacuateBy >= 0 || cr.Purging || cr.Inerting)) return ToilStatus.Succeeded; // 소화 경보 — 비우는 방에서 나간다
         if (_elapsed % 30 == 0) Locomotion.Face(c, _o.Target.Center);
         w.CrisisCrew.HelpHours += 1f / SimTime.TicksPerHour;
         // 곁에서 보며 손에 익는다 (솜씨 좋은 사람 곁이면 더)
@@ -339,7 +437,9 @@ public sealed class StationActivity : Activity
         if (CrisisCrewSystem.Off) return (0f, "—");
         var r = w.CrisisCrew.Active(c);
         if (r == StationRole.None || c.Outside || c.Mind.Panicking(w.Tick)) return (0f, "—");
+        if (w.Scale.MusterCall(c) != null) return (0f, "점호가 먼저");
         if (w.CrisisCrew.RoleWorkOpen(c, r)) return (0f, "제 자리 일이 있다");
+        if (r == StationRole.Guide && !w.CrisisCrew.AnyPanic) return (0f, "진정시킬 사람이 없다");
         float s = 0.74f + 0.12f * c.Traits.Diligence + (w.CrisisCrew.BillRole(c) == r ? 0.04f : 0f);
         if (c.Job?.Activity is StationActivity) return (s + 0.08f, $"비상 배치 {CrisisCrewSystem.RoleName(r)} — 자리를 지킨다");
         return (s, $"비상 배치 {CrisisCrewSystem.RoleName(r)} — 제 자리로");
