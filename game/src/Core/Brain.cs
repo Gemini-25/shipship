@@ -22,6 +22,7 @@ public static class Brain
         new CosmicEvacuateActivity(), new CosmicShelterActivity(), new CosmicWarnActivity(), new CosmicBraceActivity(), new CosmicVigilActivity(), new CosmicLookActivity(), // v18.13 우주 대재난: 비우기 · 대피 · 알리기 · 대비 · 그날의 밤 · 창밖 보기
         new QuarantineActivity(), // v12.6 격리실
         new RecoverActivity(),
+        new RadCareActivity(), new GiveBloodActivity(), // 통합5 방사선 병 간호 · 피 나눠 주기
         new StowSuitActivity(),
         new RefillSuitActivity(),
         new EatActivity(),

@@ -273,7 +273,10 @@ public sealed partial class InfoSystem
                     if (k.Finder < 0 && !k.Saw.Contains(c.Id)) Find(k, c);
                 }
             // 아무도 해명하지 않으면 주 컴퓨터가 그 시각 기록을 댄다
-            if (k.Accused >= 0 && k.Explained < 0 && k.ComputerSaid < 0 && now - k.Accused > SimTime.Minutes(150) && w.Automation.Present && w.Automation.CoreOnline)
+            //   통합5: 본 사람이 살아 있고 아직 말할 틈이 없었으면(자는 중 · 하소연을 아직 못 읽음 · 말하러 가는 중) 그 사람이 먼저 — 열네 시간까지 기다린다
+            bool witnessFirst = now - k.Accused < SimTime.Hours(14) && k.Saw.Any(id => CrewOf(id) is CrewMember s && !s.Dead && !s.Away
+                && (!s.IsAwake || Chat.Unread(s) > 0 || Intents.Any(i => i.Crew == s.Id && i.Do == InfoDo.Explain && i.Thing == k.Id)));
+            if (k.Accused >= 0 && k.Explained < 0 && k.ComputerSaid < 0 && now - k.Accused > SimTime.Minutes(150) && !witnessFirst && w.Automation.Present && w.Automation.CoreOnline)
             {
                 var j = Jolts.LastOrDefault(x => Math.Abs(x.tick - k.Tick) < SimTime.Minutes(2));
                 if (j.why != null)

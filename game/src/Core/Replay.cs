@@ -443,6 +443,7 @@ public static class SaveGame
         w.Ways.Hash(I, F); // v16.25 여러 갈래 해법
         w.Motions.Hash(I, F); // v18.18 안건 · 파벌 · 재판 · 선거
         w.Schemes.Hash(I, F); // v18.14 꾸미는 일 · 관행 · 흔적 · 빚
+        w.RadCare.Hash(I, F); // 통합5 방사선 병 간호
         return h;
     }
 }

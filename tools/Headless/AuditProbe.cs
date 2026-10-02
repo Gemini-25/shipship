@@ -12,7 +12,7 @@ public static partial class Program
     {
         "evacuate", "evasurvive", "evarescue", "suitmend", "takecover", "blastresponse", "roomcheck", "shelter", "heed", "muster",
         "cosmicevac", "cosmicshelter", "cosmicwarn", "cosmicbrace", "cosmicvigil", "quarantine", "recover", "refillsuit",
-        "station", "help", "outage", "firebelief", "open-door",
+        "station", "help", "outage", "firebelief", "open-door", "radcare", "giveblood", // 통합5 방사선 병 간호 · 피 나눠 주기
     };
 
     private static bool AuditSurv(CrewMember c)
@@ -422,13 +422,15 @@ public static partial class Program
             }
             ScaleCase? Attribute(long tick, int crewId, int roomId)
             {
+                // 통합5: 그 사람 · 그 방에 직접 닿은 사고를 먼저 (며칠 끄는 배 전체급 사고가 그 사이 방 하나의 사고로 다친 사람까지 다 가져가지 않게)
                 ScaleCase? best = null;
+                bool bestDirect = false;
                 foreach (var k in cases)
                 {
                     if (k.Start > tick || (k.End >= 0 && tick > k.End + SimTime.Hours(1))) continue;
-                    bool hit = k.CrewId == crewId || (roomId >= 0 && (k.RoomId == roomId || k.Rooms.Contains(roomId))) || k.Peak >= IncidentScale.Ship;
-                    if (!hit) continue;
-                    if (best == null || k.Peak > best.Peak || (k.Peak == best.Peak && k.Start > best.Start)) best = k;
+                    bool direct = k.CrewId == crewId || (roomId >= 0 && (k.RoomId == roomId || k.Rooms.Contains(roomId)));
+                    if (!direct && k.Peak < IncidentScale.Ship) continue;
+                    if (best == null || direct && !bestDirect || direct == bestDirect && (k.Peak > best.Peak || (k.Peak == best.Peak && k.Start > best.Start))) { best = k; bestDirect = direct; }
                 }
                 return best;
             }
