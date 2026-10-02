@@ -266,6 +266,63 @@ public partial class Hud
         "수치만" => "숙련자에게 — 수치만", "순서와 이유" => "처음 하는 사람에게 — 순서와 이유", "짧게" => "지친 사람에게 — 짧게", "근거부터" => "의심 많은 사람에게 — 근거부터", _ => "",
     };
 
+    /// <summary>
+    /// 주컴퓨터 자기 상태마다 다른 그림: 정상(불빛 셋이 도는 랙) · 달아오름(온도계 + 아지랑이) · 계산 몰림(넘치는 막대 셋) ·
+    /// 분석 기능을 뗌(떨어져 나간 조각) · 예비로 넘김(랙 둘 사이 화살) · 센서가 덜 닿음(반쯤 감긴 눈).
+    /// </summary>
+    private void DrawSelfGlyph(Vector2 c, ComputerSelf s, Color col)
+    {
+        if (s.Simple)
+        {
+            Gfx.RoundRect(this, new Rect2(c + new Vector2(-6, -5), new Vector2(7, 10)), col.WithAlpha(0.25f), 1.5f, col);
+            float off = 1.5f + 1f * Mathf.Sin(_time * 2f);
+            Gfx.RoundRect(this, new Rect2(c + new Vector2(2 + off, -3), new Vector2(4, 6)), new Color(0, 0, 0, 0), 1f, col.WithAlpha(0.6f));
+            DrawLine(c + new Vector2(1.5f, -4), c + new Vector2(1.5f + off, -2), col.WithAlpha(0.5f), 1f, true);
+        }
+        else if (s.Moved)
+        {
+            DrawRect(new Rect2(c + new Vector2(-7, -5), new Vector2(4, 10)), col.WithAlpha(0.35f));
+            DrawRect(new Rect2(c + new Vector2(3, -5), new Vector2(4, 10)), col);
+            float t = Mathf.PosMod(_time * 1.2f, 1f);
+            DrawLine(c + new Vector2(-2.5f, 0), c + new Vector2(2, 0), col, 1.2f, true);
+            DrawColoredPolygon(new[] { c + new Vector2(2.5f, -2), c + new Vector2(2.5f, 2), c + new Vector2(4f, 0) }, col);
+            DrawCircle(c + new Vector2(-2.5f + 4.5f * t, 0), 0.9f, Palette.Text, true, -1f, true);
+        }
+        else if (s.Hot)
+        {
+            DrawLine(c + new Vector2(-2, -5), c + new Vector2(-2, 2), col, 2f, true);
+            DrawCircle(c + new Vector2(-2, 3.5f), 2.2f, col, true, -1f, true);
+            for (int i = 0; i < 2; i++)
+            {
+                float ph = _time * 3f + i * 1.7f;
+                var p0 = c + new Vector2(2.5f + i * 2.5f, 4);
+                DrawPolyline(new[] { p0, p0 + new Vector2(Mathf.Sin(ph) * 1.2f, -3), p0 + new Vector2(-Mathf.Sin(ph) * 1.2f, -6), p0 + new Vector2(Mathf.Sin(ph) * 1.2f, -9) }, col.WithAlpha(0.7f), 1f, true);
+            }
+        }
+        else if (s.Crowded)
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                float wdt = i == 0 ? 11f + 1.5f * Mathf.Sin(_time * 6f) : 9f - i;
+                DrawRect(new Rect2(c + new Vector2(-6, -5 + i * 4), new Vector2(wdt, 2.5f)), i == 0 ? Palette.Danger : col.WithAlpha(0.8f));
+            }
+            DrawLine(c + new Vector2(4, -6), c + new Vector2(4, 6), col.WithAlpha(0.6f), 1f);
+        }
+        else if (s.Sight < 0.8f)
+        {
+            DrawArc(c + new Vector2(0, 3f), 5.5f, Mathf.Pi * 1.2f, Mathf.Pi * 1.8f, 8, col, 1.2f, true);
+            DrawLine(c + new Vector2(-5, 0), c + new Vector2(5, 0), col, 1.2f, true);
+            DrawArc(c + new Vector2(0, 0), 1.6f, Mathf.Pi, Mathf.Tau, 6, col, 1.2f, true);
+            for (int i = 0; i < 3; i++) DrawLine(c + new Vector2(-3 + i * 3, 1), c + new Vector2(-3.5f + i * 3, 3), col.WithAlpha(0.5f), 1f);
+        }
+        else
+        {
+            Gfx.RoundRect(this, new Rect2(c + new Vector2(-4, -6), new Vector2(8, 12)), col.WithAlpha(0.15f), 1.5f, col.WithAlpha(0.8f));
+            for (int i = 0; i < 3; i++)
+                DrawCircle(c + new Vector2(1.5f, -3.5f + i * 3.5f), 0.9f, (Mathf.PosMod(_time * 2f, 3f) >= i && Mathf.PosMod(_time * 2f, 3f) < i + 1 ? Palette.Good : col.WithAlpha(0.4f)), true, -1f, true);
+        }
+    }
+
     /// <summary>읽는 값 판 (아래): 사실 · 불확실 · 예측(모양으로 구분) · 예약 · 구역 · 자기 상태 · 돌아봄 · 성격 · 마지막 부탁(인용) · 고른 설비(칸).</summary>
     private void DrawReadings(Rect2 r, PlanReadout rd)
     {
@@ -305,7 +362,8 @@ public partial class Hud
         {
             if (text == "" || y + 15 > bottom) continue;
             FreshBand(new Rect2(x - 4, y + 1, right - x + 8, 14), Fresh("rd:" + label, text), col);
-            Icons.Draw(this, icon, new Vector2(x + 6, y + 8), Ui.IconS, col);
+            if (icon == "computer" && a.SelfOrNull is ComputerSelf me) DrawSelfGlyph(new Vector2(x + 6, y + 8), me, col);
+            else Icons.Draw(this, icon, new Vector2(x + 6, y + 8), Ui.IconS, col);
             Gfx.Text(this, Fonts.Bold, new Vector2(x + 18, y + 12), label, Ui.TextTiny, Palette.TextMuted);
             Gfx.Text(this, Fonts.Body, new Vector2(x + 72, y + 12), Fit(text, right - x - 72, Ui.TextTiny, Fonts.Body), Ui.TextTiny, col);
             y += 15;

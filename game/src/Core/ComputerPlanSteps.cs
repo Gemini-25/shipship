@@ -432,7 +432,7 @@ internal sealed class RepairStep : FixAction
         if (pref != null && FixSteps.OnOtherPlan(w, pref.Id, p) && FixSteps.Hand(w, m, new HashSet<int> { pref.Id }, simple: true) is CrewMember other)
         {
             w.Automation.Recovery.Shared++;
-            w.Automation.Recovery.Revise(p, $"{Ko.EulReul(pref.Name)} 다른 수리에 붙어 있다 — 일이 한 사람에게 몰리지 않게 {other.Name}에게 나눈다");
+            w.Automation.Recovery.Revise(p, $"{Ko.IGa(pref.Name)} 다른 수리에 붙어 있다 — 일이 한 사람에게 몰리지 않게 {other.Name}에게 나눈다");
             pref = other;
         }
         Ask(w, p, s, m, pref);
