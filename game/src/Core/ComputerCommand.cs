@@ -102,8 +102,34 @@ public sealed class ComputerCommand
         var o = Line(CmdTarget.Robot, robot.Id, job.Target.CurrentRoom, $"{robot.Name}: {job.Title}", why, priority, 60f, decision, job.Id, "보냄");
         _robot[robot.Id] = o;
         RobotOrders++;
-        robot.NextDecide = Math.Min(robot.NextDecide, w.Tick); // 충전대에서 기다리던 로봇도 바로 생각한다
+        w.Robots.Redirect(robot, priority); // 충전대에서 기다리던 로봇도 · 거들던 로봇도 바로 다시 고른다
         return o;
+    }
+
+    /// <summary>다섯 칸 기록의 원격 조치를 명령선에 옮긴다 (격벽 · 문 · 댐퍼 · 밸브 · 소화 · 방송 · 경보 · 부하 · 재부팅). 차단기 · 예측 · 조언 · 제안은 따로.</summary>
+    internal void FromAct(ComputerAct act, Room? room)
+    {
+        if (act.Act == "") return;
+        CmdTarget? t = act.Kind switch
+        {
+            ActKind.Damper or ActKind.Zone => CmdTarget.Damper,
+            ActKind.Bulkhead or ActKind.Door => CmdTarget.Door,
+            ActKind.Valve or ActKind.Suppress => CmdTarget.Valve,
+            ActKind.Broadcast or ActKind.Alarm => CmdTarget.Broadcast,
+            ActKind.Reboot or ActKind.Module => CmdTarget.Self,
+            ActKind.Shed => room != null && room == _w.Automation.Computer?.Body.Room ? CmdTarget.Self : CmdTarget.Circuit,
+            _ => null,
+        };
+        if (t is not CmdTarget target) return;
+        Line(target, room?.Id ?? -1, room, (room != null && !act.Act.Contains(room.Name) ? room.Name + " — " : "") + act.Act, act.Judge, 0.6f, 5f);
+    }
+
+    /// <summary>그 결정에서 나간 사람 지시를 닫는다 (원인을 뺐다 · 일이 풀렸다).</summary>
+    public void Close(int decision, string result)
+    {
+        if (decision < 0) return;
+        foreach (var o in Lines)
+            if (o.Open && o.Decision == decision && !o.Remote) { o.State = "끝"; o.Result = result; Done++; }
     }
 
     /// <summary>로봇 일 고르기 훅: 컴퓨터가 시킨 일이면 점수를 얹는다.</summary>
@@ -121,7 +147,7 @@ public sealed class ComputerCommand
             if (!o.Open) continue;
             var job = o.WorkOrderId >= 0 ? w.Board.All.FirstOrDefault(x => x.Id == o.WorkOrderId) : null;
             if (o.Target == CmdTarget.Robot && w.Robots.Robots.FirstOrDefault(r => r.Id == o.TargetId) is Robot rb && rb.Order?.Id == o.WorkOrderId) o.State = "하는 중";
-            if (o.Target == CmdTarget.Crew && w.Crew.FirstOrDefault(c => c.Id == o.TargetId) is CrewMember cm && cm.Job?.Order?.Id == o.WorkOrderId) o.State = "하는 중";
+            if (o.Target == CmdTarget.Crew && w.Crew.FirstOrDefault(c => c.Id == o.TargetId) is CrewMember cm && (o.WorkOrderId >= 0 ? cm.Job?.Order?.Id == o.WorkOrderId : cm.Job?.Urgent == true && cm.Job.TargetRoom?.Id == o.RoomId)) o.State = "하는 중";
             if (job != null && job.Closed) { o.State = "끝"; o.Result = "일이 끝났다"; Done++; continue; }
             if (job == null && o.WorkOrderId >= 0) { o.State = "끝"; o.Result = "일이 사라졌다 (다른 사람이 했거나 필요 없어졌다)"; Done++; continue; }
             if (w.Tick > o.Until) { o.State = "실패"; o.Result = "기한 안에 못 했다"; Failed++; }

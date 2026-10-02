@@ -134,7 +134,8 @@ public static partial class Program
                     }
                     var k = a.ChecksDone.Concat(a.Checks).FirstOrDefault(x => x.RoomId == room.Id);
                     var checker = k != null ? w.Crew.FirstOrDefault(c => c.Id == k.CheckerId) : null;
-                    Check("거절 → 사람이 확인하러 가 안에 있던 사람을 데리고 나온다", rescued && k != null && k.Seen && k.Found.Contains(victim.Id) && !purgedOnHim,
+                    // v16.21 뒤로는 위기 때 곁에 있던 사람이 확인자보다 먼저 쓰러진 사람을 업어 내오기도 한다 — 그때는 확인자가 "못 봤다"여도 된다
+                    Check("거절 → 사람이 확인하러 가(또는 먼저 달려간 사람이) 안에 있던 사람을 데리고 나온다", rescued && k != null && (k.Seen ? k.Found.Contains(victim.Id) : victim.LaidSafe || victim.Room != room) && !purgedOnHim,
                         $"{minutes}분 · 확인 {checker?.Name ?? "-"} ({(k?.Seen == true ? $"봤다 · 안에 {k.Found.Count}명" : "못 봤다")}) · {victim.Name} → {victim.Room?.Name} · 진공 {(a.Vacuumed > 0 ? "했다" : "안 했다")}{(purgedOnHim ? " (안에 사람이 있을 때!)" : a.Vacuumed > 0 ? " (데리고 나온 뒤 다시 승인)" : "")} · 믿음 고침 {a.Belief.Repairs}");
                     Run(w, SimTime.Minutes(8));
                     float trust1 = a.Trusts.Of(victim);

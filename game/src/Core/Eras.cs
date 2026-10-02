@@ -50,7 +50,7 @@ public sealed class EraSystem
         new("nanorepair", 4, TechField.Fabrication, "나노 수리", 112f, "설비가 덜 닳는다 (−25%)", "나노 오염 — 설비가 가끔 이유 없이 상한다", "break", 1.3f),
         new("cryomed", 4, TechField.Medical, "저온 의료", 96f, "죽어 가는 사람을 얼려 붙잡는다 (쓰러진 사람 체력 손실 −50%)", "없음"),
         // 5 탈지구 공학
-        new("aicaptain", 5, TechField.Computing, "AI 부함장", 144f, "자동화 등급 +1 · 회의를 돕는다", "AI 판단 충돌 — 컴퓨터 오판단", nameof(HazardKind.ComputerMisjudge), 1.6f),
+        new("aicaptain", 5, TechField.Computing, "부함장 보조 컴퓨터", 144f, "자동화 등급 +1 · 회의를 돕는다", "보조 컴퓨터와 판단이 엇갈림 — 컴퓨터 오판단", nameof(HazardKind.ComputerMisjudge), 1.6f),
         new("closedloop", 5, TechField.Life, "완전 폐쇄 생태계", 160f, "물·공기를 거의 잃지 않는다", "생태계 붕괴 — 한 번 무너지면 크게", nameof(HazardKind.CropBlight), 1.4f),
         // 6 초공간
         new("warpbubble", 6, TechField.Propulsion, "공간 왜곡 거품", 240f, "항해가 두 배 빠르다", "거품 붕괴 — 큰 운석", "bigmeteor", 1.5f),
@@ -148,7 +148,7 @@ public sealed class EraSystem
         w.History.Add(w, HistoryKind.Decision, $"{t.Name}을(를) 익혔다 ({EraName(t.Era)}) — {t.Effect}", null, log: true);
         // v13.0 컴퓨터는 처음부터 V — 기술은 기능 모듈을 단다
         if (t.Id == "smartgrid") w.Automation.Install(ComputerModule.Preempt, "지능형 배전"); // v16.20 이미 있는 모듈 — 등급이 오른다
-        if (t.Id == "aicaptain") { w.Automation.Install(ComputerModule.BioMonitor, "AI 부함장"); w.Automation.Install(ComputerModule.EvacGuide, "AI 부함장"); }
+        if (t.Id == "aicaptain") { w.Automation.Install(ComputerModule.BioMonitor, "부함장 보조 컴퓨터"); w.Automation.Install(ComputerModule.EvacGuide, "부함장 보조 컴퓨터"); }
         w.TechWeb.OnLearned(t); // v16.14 갈림길 · 부작용 연쇄 · 조합 · 실험한 사람
     }
 }

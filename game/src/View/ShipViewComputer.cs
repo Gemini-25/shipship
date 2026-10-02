@@ -242,6 +242,7 @@ public partial class ShipView
                 ci.DrawLine(new Vector2(x, r.Position.Y - 2f - 10f * ph), new Vector2(x + 2f, r.Position.Y - 6f - 10f * ph), new Color("#ff8a4a").WithAlpha(0.5f * (1f - ph)), 1f, true);
             }
         }
+        if (main) PaintCoreBody(ci, f, r, t); // v16.20 비상 전지 · 예비 연산기 · 느리게 돎 · 절전
     }
 
     // ───────────────────── 조작 빛 흐름 ─────────────────────

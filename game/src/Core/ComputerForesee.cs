@@ -255,6 +255,26 @@ public sealed class ComputerForesee
         return new BreachPlan("seal", 0, null, dec);
     }
 
+    public int DoorHolds;
+    private readonly HashSet<int> _holdNoted = new();
+
+    /// <summary>Failsafe 훅: 주 컴퓨터가 그 방 사람을 빼내는 중(기다렸다 닫기) · 막으러 들어갈 사람을 기다리는 중이면 차압 문을 전동기로 붙잡아 둔다
+    /// (전기 · 데이터선이 닿는 문만 — 컴퓨터가 멎었거나 선이 끊기면 문은 저절로 닫힌다).</summary>
+    public bool HoldsDoor(Door d, Room low)
+    {
+        var w = _w;
+        var a = w.Automation;
+        if (AutomationSystem.Ship20Off || !a.CoreOnline || !d.Powered || !low.DataLinked || low.Detached) return false;
+        if (low.LockPendingUntil < 0 && !HoldOpen(low)) { _holdNoted.Remove(low.Id); return false; }
+        if (_holdNoted.Add(low.Id))
+        {
+            DoorHolds++;
+            a.Book.Add(ActKind.Door, low, $"{low.Name} 감압 — 차압 문이 저절로 닫히려 한다", "안 사람이 나올 때까지 (또는 막을 사람이 들어갈 때까지) 문을 붙잡는다",
+                "차압 문을 전동기로 붙잡아 둠", "안에 있는 사람은 지금 나오십시오", "dhold:" + low.Id, SimTime.Minutes(5), 5f);
+        }
+        return true;
+    }
+
     private int BeliefSystemPeople(Room r) => _w.Automation.Belief.PeopleIn(r) ?? 0;
 
     /// <summary>Hull 훅: 사람을 보내 막는 동안 문을 열어 둔다 (기한이 지나거나 막히면 푼다).</summary>
@@ -484,7 +504,7 @@ public sealed class ComputerForesee
                 "파공" => down > 0 ? (-1, $"틀렸다 — {down}명이 쓰러졌다") : room != null && room.Leaking && !room.Lockdown && room.Air.Pressure < 50f ? (-1, "틀렸다 — 아직 새고 열려 있다") : (1, $"맞았다 — 쓰러진 사람 없이 ({room?.Air.Pressure ?? 0:0}kPa)"),
                 "불" => down > 0 ? (-1, $"틀렸다 — {down}명이 쓰러졌다") : room != null && w.Fire.CountIn(room) > 8 ? (-1, $"틀렸다 — 불이 {w.Fire.CountIn(room)}칸으로 커졌다") : (1, room != null && w.Fire.CountIn(room) == 0 ? "맞았다 — 꺼졌다" : "맞았다 — 잡혀 간다"),
                 "정전" => w.Power.BatteryPercent > 0.02f || w.Power.ReactorOnline || w.Power.AuxRunning ? (1, $"맞았다 — 필수 회로가 버텼다 (배터리 {w.Power.BatteryPercent * 100:0}%)") : (-1, "틀렸다 — 배터리가 바닥났다"),
-                "차단기" => (2, "트리아지가 따로 채점한다"),
+                "차단기" => (2, "차단기 기록에서 따로 매긴다"),
                 _ => (2, ""),
             };
             if (d.Grader?.Invoke(w, d) is (int gs, string gw)) { s = gs; why = gw; }

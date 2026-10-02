@@ -243,6 +243,7 @@ public sealed class FailsafeSystem
                 bool venting = low.Leaking || low.Detached;
                 bool need = venting ? dp >= (rated ? 3f : 5f) : dp >= thr && P(low) < (rated ? 80f : 65f);
                 if (!need) continue;
+                if (w.Automation.Foresee.HoldsDoor(d, low)) continue; // v16.20 주 컴퓨터가 대피 · 막으러 들어갈 사람을 위해 전동기로 문을 붙잡고 있다
                 if (d.JammedOpen || d.Blocked || d.Bent > 0.3f)
                 {
                     if (_failNoted.Add(d.Id))

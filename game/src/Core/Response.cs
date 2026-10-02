@@ -59,7 +59,7 @@ public sealed partial class AutomationSystem
     public void Install(ComputerModule m, string? why = null)
     {
         if (!_modules.Add(m)) { if (why != null) Core.Upgrade(m, why); return; } // v16.20 이미 있다 — 등급을 올린다
-        _world.History.Add(_world, HistoryKind.Decision, $"주 컴퓨터에 {ModuleName(m)} 모듈을 달았다 — {ModuleNote(m)}" + (why != null ? $" ({why})" : ""), null, log: true);
+        _world.History.Add(_world, HistoryKind.Decision, $"주 컴퓨터가 {Ko.EulReul(ModuleName(m))} 맡았다 — {ModuleNote(m)}" + (why != null ? $" ({why})" : ""), null, log: true);
     }
     public void Remove(ComputerModule m) => _modules.Remove(m);
 
@@ -175,6 +175,7 @@ public sealed partial class AutomationSystem
                     bool empty = inside == 0;
                     bool settled = w.Tick - fc.PlannedAt >= SimTime.Minutes(0.3f); // 경보가 돌고 문이 닫힐 틈
                     bool go = countdown ? w.Tick >= fc.ExecAt || empty && settled : empty && settled;
+                    if (go && DoorwayBusy(room)) go = false; // v16.20 문턱에 사람이 서 있다 — 문 끼임 감지로 닫지 않고 다 지나가길 기다린다
                     // 컴퓨터 판단(진공): 정신이 있는 사람이 아직 안에 있고 핵심 방이 아니면 3분 더 기다린다
                     if (go && fc.Method == "vacuum" && policy == 3 && !empty && !CriticalRoom(room)
                         && w.Crew.Any(c => !c.Dead && !c.Down && c.Room == room) && w.Tick < fc.ExecAt + SimTime.Minutes(3)) go = false;
@@ -456,6 +457,15 @@ public sealed partial class AutomationSystem
         ZoneNote = $"지킬 구역: {names} · 새는 방 {leaking.Count}";
         Reason("zone", $"새는 방 {leaking.Count}곳 — 지킬 구역을 정한다: {names} · 사람은 이리 모이고, 공기 탱크는 이 구역부터 · 아무도 못 막는 바깥 방은 {w.Policies.Option("zoneabandon")} 포기 (방침)", SimTime.Minutes(20));
         w.RaiseAlert($"공기 구역 — {names}로 모여라", null, AlertLevel.Warning, shipWide: true);
+    }
+
+    /// <summary>그 방 문턱(문 칸)에 사람이 서 있다 — 문 감지기는 나갔다고 세지만 문을 닫으면 끼이거나 다시 갇힌다.</summary>
+    private bool DoorwayBusy(Room room)
+    {
+        foreach (var d in room.Doors)
+            foreach (var c in _world.Crew)
+                if (!c.Dead && !c.Outside && c.Cell == d.Cell) return true;
+        return false;
     }
 
     /// <summary>시스템 틱마다 (Think 안에서): 주 컴퓨터가 돌면 모듈을 돌린다.</summary>

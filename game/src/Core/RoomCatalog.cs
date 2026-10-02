@@ -82,7 +82,7 @@ public static class RoomCatalog
         new(RoomType.EscapeBay, RoomType.Storage, "탈출정 격납고", 2, "#9aa5bd", "ES", RoomTag.None, 0f, 0f, 0f, 0f, "K2x2x1",
             E("탈출정 격납고. 배를 버려야 할 때.", "탈출정과 발사 레일.", "전기 (탈출정 충전).", "탈출할 수 없다.", "월 1회 점검.", "없음.")),
         new(RoomType.ServerRoom, RoomType.Comms, "서버실", 2, "#7fe0c0", "SV", RoomTag.None, 0.3f, 0f, 0f, 0f, "I2x2x1 C1x1x1",
-            E("서버실. 주 컴퓨터의 두뇌와 기록.", "서버 선반과 냉각.", "전기, 냉각, 데이터선.", "주 컴퓨터가 함교에서 버틴다 — 덜 똑똑하다.",
+            E("서버실. 주 컴퓨터의 연산과 기록.", "서버 선반과 냉각.", "전기, 냉각, 데이터선.", "주 컴퓨터가 함교에서 버틴다 — 덜 똑똑하다.",
               "먼지·온도 관리.", "과열, 누수 → 누전.")),
         new(RoomType.Calibration, RoomType.Workshop, "교정실", 2, "#cfae6d", "CL", RoomTag.Quiet, 0f, 0f, 0f, 0f, "W3x1x1",
             E("교정실. 감지기를 기준값에 맞춘다.", "기준 가스·기준 저항·진동 없는 받침대.", "전기.", "현장에서 교정 — 덜 정확하다.", "기준물 교체.", "없음.")),

@@ -67,7 +67,10 @@ public partial class Hud
         if (head.HasPoint(mouse)) Gfx.RoundRect(this, head.Grow(-3f), new Color(1, 1, 1, 0.03f), 10);
         float x = card.Position.X + 14, y = card.Position.Y, right = card.End.X - 12;
         LevelBadge(new Vector2(x + 13, y + 22), 12f, a);
-        string state = a.Rebooting ? "재부팅" : !a.MainOnline ? (a.BackupActive ? "예비 제어기" : "멎음") : a.Operator != null ? $"관제석 {a.Operator.Name}" : "온라인";
+        string state = a.Rebooting ? "재부팅" : !a.MainOnline ? (a.Core.BackupCore ? "본체 멎음 · 예비 연산기" : a.BackupActive ? "예비 제어기" : "멎음") : a.Operator != null ? $"관제석 {a.Operator.Name}" : "온라인";
+        if (a.MainOnline && a.Core.SafeMode) state += " · 달아올라 느리게";
+        if (a.Core.OnUps) state += $" · 비상 전지 {a.Core.Ups:0}분";
+        else if (a.Core.SelfSaving) state += " · 제 연산 줄임";
         Gfx.Text(this, Fonts.Bold, new Vector2(x + 34, y + 19), Fit($"{a.Voice.Call} · {AutomationSystem.LevelName(a.Level)}", width - 150, 13, Fonts.Bold), 13, Palette.Text);
         Gfx.Text(this, Fonts.Body, new Vector2(x + 34, y + 34), state + (a.Voice.Tone != "" ? $" · 말투 {a.Voice.Tone}" : ""), 10, a.MainOnline ? Palette.Good : Palette.Danger);
         Button(new Rect2(right - 50, y + 9, 24, 22), ComputerFolded ? "▴" : "▾", false, mouse, () => ComputerFolded = !ComputerFolded, 11);
@@ -197,11 +200,13 @@ public partial class Hud
         Gfx.Text(this, Fonts.Body, new Vector2(r.Position.X + 32, r.Position.Y + 31), Fit($"근거: {p.Basis}", r.Size.X - 74, 10, Fonts.Body), 10, Palette.Text);
         Gfx.Text(this, Fonts.Body, new Vector2(r.Position.X + 32, r.Position.Y + 44), Fit($"예상: {p.Effect}", r.Size.X - 40, 10, Fonts.Body), 10, Palette.TextDim);
         var cmd = w.Command;
-        string boss = cmd.Active && cmd.Commander != null ? cmd.Commander.Name : cmd.Captain?.Name ?? "컴퓨터";
-        Gfx.Text(this, Fonts.Body, new Vector2(r.Position.X + 32, r.Position.Y + 57), Fit($"기한이 지나면 {boss}이(가) 정한다", r.Size.X - 40, 9, Fonts.Body), 9, Palette.TextMuted);
-        var proposal = p;
-        Button(new Rect2(r.Position.X + 32, r.End.Y - 24, 70, 20), "받기", false, mouse, () => _world.Automation.Asks.Decide(proposal, true, "플레이어"), 11);
-        Button(new Rect2(r.Position.X + 108, r.End.Y - 24, 110, 20), "거절 · 사람 확인", false, mouse, () => _world.Automation.Asks.Decide(proposal, false, "플레이어"), 11);
+        var bossC = cmd.Active && cmd.Commander != null ? cmd.Commander : cmd.Captain;
+        string boss = bossC?.Name ?? "주 컴퓨터";
+        Gfx.Text(this, Fonts.Body, new Vector2(r.Position.X + 32, r.Position.Y + 57), Fit(bossC != null ? $"{Ko.IGa(boss)} 정한다 — 컴퓨터 신뢰 {w.Automation.Trusts.Of(bossC) * 100:0}%" : "정할 사람이 없다 — 기한이 지나면 컴퓨터가 한다", r.Size.X - 40, 9, Fonts.Body), 9, Palette.TextMuted);
+        // v16.20 완전 관전: 받기 · 거절 버튼 없음 — 지휘하는 사람의 생각 막대 (기한까지)
+        var bar = new Rect2(r.Position.X + 32, r.End.Y - 16, r.Size.X - 60, 4);
+        DrawRect(bar, new Color(1, 1, 1, 0.06f));
+        DrawRect(new Rect2(bar.Position, new Vector2(bar.Size.X * (1f - left), bar.Size.Y)), Palette.Warning.WithAlpha(0.6f));
     }
 
     /// <summary>오늘의 결정: 컴퓨터 제안 · 회의 안건 · 결정 기록 · 개조.</summary>
@@ -243,13 +248,14 @@ public partial class Hud
     /// <summary>관제 화면 위 탭 (관제 · 기록 · 보고·모듈 · 사람·믿음). 0이 아니면 탭 내용을 그리고 true.</summary>
     private bool DrawControlTabs(Rect2 card, float x, float right, float y0, Vector2 mouse)
     {
-        string[] tabs = { "관제", "다섯 칸 기록", "보고·모듈", "사람·믿음", "앞날·계획", "두뇌" };
+        string[] tabs = { "관제", "지휘", "다섯 칸 기록", "보고·일정", "사람·믿음", "앞날·계획", "계획·권한" };
+        int[] order = { 0, 6, 1, 2, 3, 4, 5 }; // v16.20 "지휘"는 둘째 칸에 (번호는 그대로)
         float tx = x;
         for (int i = 0; i < tabs.Length; i++)
         {
-            int idx = i;
+            int idx = order[i];
             float bw = Gfx.Width(Fonts.Bold, tabs[i], 11) + 16;
-            Button(new Rect2(tx, y0 + 58, bw, 22), tabs[i], _controlTab == i, mouse, () => _controlTab = idx, 11);
+            Button(new Rect2(tx, y0 + 58, bw, 22), tabs[i], _controlTab == idx, mouse, () => _controlTab = idx, 11);
             tx += bw + 4;
         }
         if (_controlTab == 0) return false;
@@ -260,6 +266,7 @@ public partial class Hud
             case 2: DrawReports(card, x, right, y, mouse); break;
             case 4: DrawForesight(card, x, right, y); break;
             case 5: DrawBrainTab(card, x, right, y); break; // v16.16
+            case 6: DrawCommandTab(card, x, right, y); break; // v16.20 지휘: 믿는 배 지도 · 명령선 · 견줘 본 판단 · 전력 흐름
             default: DrawPeopleBelief(card, x, right, y); break;
         }
         return true;
@@ -311,12 +318,12 @@ public partial class Hud
         var t = a.Book.Today;
         Gfx.Text(this, Fonts.Body, new Vector2(lx, ly + 13), Fit($"오늘 지금까지: 전력 {t.Kwh:0.#}kWh · 물 {t.WaterL:0}L · 미룬 고장 {t.Deferred} · 피로 경보 {t.Fatigue} · 문 압 {t.DoorEq} · 메시지 {t.Messages}", colW, 10, Fonts.Body), 10, Palette.TextDim);
         ly += 22;
-        SectionTitle(lx, ly + 10, "30일 물 예측" + (a.Active(ComputerModule.WaterPlan) ? "" : " — 물 관리 모듈이 없다"));
+        SectionTitle(lx, ly + 10, "30일 물 예측" + (a.Active(ComputerModule.WaterPlan) ? "" : " — 물 관리를 쉬고 있다"));
         ly += 14;
         var chart = new Rect2(lx, ly, colW, 90);
         DrawWaterChart(chart, apps, w.Water.Capacity);
         ly += 100;
-        SectionTitle(lx, ly + 10, "모듈 · 부하 " + $"{a.Load * 100:0}% / 용량 {a.Capacity:0}");
+        SectionTitle(lx, ly + 10, "맡은 일 · 부하 " + $"{a.Load * 100:0}% / 용량 {a.Capacity:0}");
         ly += 16;
         float mx = lx;
         foreach (var m in Enum.GetValues<ComputerModule>())
@@ -332,7 +339,7 @@ public partial class Hud
         SectionTitle(rx, ry + 10, "정비 일정표");
         ry += 16;
         foreach (var s in apps.MaintPlan.Take(5)) { Gfx.Text(this, Fonts.Body, new Vector2(rx, ry + 11), Fit($"{SimTime.Clock(s.Tick)} {s.Machine} ({s.Room}) — {s.Why}", colW, 10, Fonts.Body), 10, Palette.Text); ry += 13; }
-        if (apps.MaintPlan.Count == 0) { Gfx.Text(this, Fonts.Body, new Vector2(rx, ry + 11), a.Active(ComputerModule.MaintPlan) ? "손볼 설비가 없다" : "정비 일정 모듈이 없다", 10, Palette.TextMuted); ry += 13; }
+        if (apps.MaintPlan.Count == 0) { Gfx.Text(this, Fonts.Body, new Vector2(rx, ry + 11), a.Active(ComputerModule.MaintPlan) ? "손볼 설비가 없다" : "정비 일정을 쉬고 있다", 10, Palette.TextMuted); ry += 13; }
         ry += 6;
         SectionTitle(rx, ry + 10, "당번표");
         ry += 16;

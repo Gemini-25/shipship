@@ -115,8 +115,9 @@ public partial class Hud
             Gfx.RoundRect(this, pr, new Color(0.1f, 0.08f, 0.02f, 0.8f), 6f, Palette.Warning.WithAlpha(0.4f));
             float left = (p.Deadline - w.Tick) / (float)SimTime.Minutes(1);
             Gfx.Text(this, Fonts.Body, new Vector2(lx + 8f, yy + 11f), Fit($"제안 · {p.Title} ({left:0}분)", width - 140f, 10, Fonts.Body), 10, Palette.Warning);
-            Button(new Rect2(pr.End.X - 104f, yy - 3f, 48f, 20f), "받기", false, mouse, () => w.Automation.Asks.Decide(p, true, "관찰자"), 10);
-            Button(new Rect2(pr.End.X - 52f, yy - 3f, 48f, 20f), "거절", false, mouse, () => w.Automation.Asks.Decide(p, false, "관찰자"), 10);
+            // v16.20 완전 관전: 받기 · 거절은 지휘하는 사람이 (화면에는 누가 정하는지만)
+            var boss = w.Command.Active && w.Command.Commander != null ? w.Command.Commander : w.Command.Captain;
+            Gfx.TextRight(this, Fonts.Body, new Vector2(pr.End.X - 8f, yy + 11f), boss != null ? $"{Ko.IGa(boss.Name)} 정한다" : "기한이 지나면 컴퓨터가", 9, Palette.TextMuted);
             yy += 30f;
         }
         // 관행 · 바깥 시점

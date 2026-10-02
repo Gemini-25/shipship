@@ -24,7 +24,7 @@ public partial class Hud
         var w = _world;
         var a = w.Automation;
         float x0 = Margin, y0 = Margin + 52f + 8f + 40f + 8f + 64f + 10f;
-        float wdt = Mathf.Min(640f, Screen.X - RightColumnWidth - Margin * 3);
+        float wdt = Mathf.Min(_controlTab == 6 ? 980f : 640f, Screen.X - RightColumnWidth - Margin * 3); // v16.20 지휘 탭은 넓게
         float height = Screen.Y - y0 - LogHeight - Margin - 40f;
         var card = new Rect2(x0, y0, wdt, height);
         _controlRect = card;
@@ -62,7 +62,7 @@ public partial class Hud
         }
         Divider(x, right, ly + 6);
         // v13.0 모듈
-        SectionTitle(x, ly + 24, "모듈");
+        SectionTitle(x, ly + 24, "맡은 일");
         float mx = x + 44;
         foreach (var mod in Enum.GetValues<ComputerModule>())
         {
@@ -73,6 +73,7 @@ public partial class Hud
             var r = new Rect2(mx, ly + 12, wl, 17);
             Gfx.RoundRect(this, r, on ? Palette.Good.WithAlpha(0.18f) : new Color(1, 1, 1, 0.03f), 4, on ? Palette.Good.WithAlpha(0.6f) : Palette.TextMuted.WithAlpha(0.3f), 1);
             Gfx.Text(this, Fonts.Body, new Vector2(mx + 7, ly + 25), label, 11, on ? Palette.Text : Palette.TextMuted);
+            for (int g = 0; g < a.Core.Grade(mod); g++) DrawCircle(new Vector2(mx + wl - 4 - g * 4, ly + 15), 1.3f, new Color("#f2c66d"), true, -1f, true); // v16.20 겪은 일로 다듬은 만큼
             mx += wl + 6;
         }
         ly += 34;

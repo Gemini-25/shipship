@@ -126,9 +126,11 @@ public static partial class Program
             for (int i = 0; i < 36 && (Tripped() || w.Portable.ProjectedKw(circuit) > PortableSystem.OutletCapKw); i++) Run(w, SimTime.Minutes(10));
             Run(w, SimTime.Minutes(30));
             var st = w.Portable.Stats;
-            Check("차단기를 겪으면 히터를 뽑거나 다른 회로로 옮기고 · 차단기를 올린다 (다시 안 떨어진다)",
-                st.Unplugged >= 1 && !Tripped() && w.Portable.ProjectedKw(circuit) <= PortableSystem.OutletCapKw && room.Powered,
-                $"차단 {st.Trips} · 뽑음 {st.Unplugged} (옆 방으로 {st.Rerouted}) · {PowerGrid.CircuitName(circuit)} 회로 {w.Portable.ProjectedKw(circuit):0.0}kW · 배전반 수요 {w.Power.CircuitDemand(circuit):0.0}kW · 방 전기 {room.Powered}");
+            // v16.20 원격으로 되는 건 컴퓨터가 직접: 재부팅이 끝난 주 컴퓨터가 사람보다 먼저 스마트 콘센트로 원인을 끊을 수 있다
+            var tr = w.Automation.Triage;
+            Check("차단기를 겪으면 히터를 뽑거나 다른 회로로 옮기고(또는 주 컴퓨터가 그 콘센트를 끊고) · 차단기를 올린다 (다시 안 떨어진다)",
+                st.Unplugged + tr.CauseCuts >= 1 && !Tripped() && w.Portable.ProjectedKw(circuit) <= PortableSystem.OutletCapKw && room.Powered,
+                $"차단 {st.Trips} · 뽑음 {st.Unplugged} (옆 방으로 {st.Rerouted}) · 컴퓨터가 끊음 {tr.CauseCuts} · {PowerGrid.CircuitName(circuit)} 회로 {w.Portable.ProjectedKw(circuit):0.0}kW · 배전반 수요 {w.Power.CircuitDemand(circuit):0.0}kW · 방 전기 {room.Powered}");
         }
 
         // ── 4) 침수된 방에 양수기를 가져와 물을 퍼낸다 → 다 쓰면 회수 (또는 잊고 남음) ──

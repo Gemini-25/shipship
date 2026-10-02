@@ -78,7 +78,8 @@ public sealed class CrewModelBook
         var w = _w;
         var a = w.Automation;
         vitalsOnly = false;
-        if (c.Dead || c.Away || c.Outside || c.Room == null || c.Room.Detached) return false;
+        if (c.Dead || c.Away || c.Outside || c.Room is { Detached: true }) return false;
+        if (c.Room == null) return a.Has(ComputerModule.BioMonitor); // v16.20 문턱에 선 사람도 몸에 단 생체 감지기로 본다
         if (!c.Room.DataLinked && !a.Has(ComputerModule.BioMonitor)) return false;
         if (w.Policies["privacy"] == 1 && c.Room.Type is RoomType.Quarters or RoomType.QuietQuarters)
         {

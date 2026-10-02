@@ -109,13 +109,17 @@ public static partial class Program
                     Run(w, World.SystemInterval);
                     held = Tripped() && tr.SameCauseHolds >= 1 && tr.RemoteResets == resets0 && !w.Board.Open.Any(o => o.Kind == WorkKind.ResetBreaker && o.Circuit == circ);
                 }
-                var hold = tr.Cases.LastOrDefault(x => x.Circuit == circ);
+                var hold = tr.Cases.LastOrDefault(x => x.Circuit == circ && x.State == "보류");
                 string order = a.Command.Lines.LastOrDefault(l => l.Target == CmdTarget.Crew)?.What ?? "";
                 // 사람이 원인을 빼면(지시를 듣고 · 뜨거운 콘센트를 보고) 그때 컴퓨터가 올린다
-                for (int m = 0; m < 30 && Tripped(); m++) Run(w, SimTime.Minutes(1));
+                var asked = w.Portable.AskedUnplug(circ);
+                for (int m = 0; m < 60 && Tripped(); m++) Run(w, SimTime.Minutes(1)); // 배 끝에서 끝까지 걸어오는 시간
+                var hands = w.Log.Entries.Where(e => e.CrewId >= 0 && e.Tick >= (hold?.Since ?? 0) && (e.Text.Contains("뽑아 뒀다") || e.Text.Contains("옮겨 꽂았다"))).Select(e => e.CrewId).Distinct().ToList();
+                bool byAsked = asked != null && hands.Contains(asked.Id);
+                var closed = a.Command.Lines.LastOrDefault(l => l.Target == CmdTarget.Crew && l.TargetId == asked?.Id);
                 Check("같은 원인으로 또 떨어지면 다시 올리지 않고 사람에게 정확히 말한다 → 원인을 빼면 그때 올린다 (D 차단기 반복 버그)",
-                    first && again && held && !Tripped() && tr.RemoteResets == resets0 + 1 && w.Portable.ProjectedKw(circ) <= PortableSystem.OutletCapKw && order != "",
-                    $"처음 {first} · 다시 떨어짐 {again} · 붙잡음 {held} (같은 원인 {tr.SameCauseHolds}) · 지시 \"{order}\" · 지금 {(Tripped() ? "떨어진 채" : "올라감")} · {hold?.State} · 원격 올림 {resets0}→{tr.RemoteResets}");
+                    first && again && held && !Tripped() && tr.RemoteResets >= resets0 + 1 && hold != null && !tr.Cases.Any(x => x.Circuit == circ && x.Since > hold.Since && x.Sig == hold.Sig) && w.Portable.ProjectedKw(circ) <= PortableSystem.OutletCapKw && order != "" && hands.Count > 0 && closed?.State == "끝",
+                    $"처음 {first} · 다시 떨어짐 {again} · 붙잡음 {held} (같은 원인 {tr.SameCauseHolds}) · 지시 \"{order}\" → 사람 손으로 뺐다 {hands.Count}명 (지시받은 사람 {byAsked}) · 지시 {closed?.State} ({closed?.Result}) · 지금 {(Tripped() ? "떨어진 채" : "올라감")} · {hold?.State} · 원격 올림 {resets0}→{tr.RemoteResets} [{string.Join(" / ", tr.Cases.Where(x => x.Circuit == circ).Select(x => $"{x.State}:{x.Sig}:{x.Cause}"))}]");
             }
 
             // ④ 운석 파공: 지금 닫기 / 2분 기다렸다 닫기 / 사람 보내 막기를 견줘 고르고 타임라인에 남긴다 (방침 안에서)
@@ -146,6 +150,10 @@ public static partial class Program
                 Run(wp, SimTime.Minutes(12));
                 var graded = wp.Automation.Foresee.Timeline.FirstOrDefault(d => d.Kind == "파공");
                 Check("타임라인 — 몇 분 뒤 실제 결과로 채점한다 (쓰러진 사람 · 기압)", graded != null && graded.Score != 0 && graded.Result != "", $"{graded?.Pick.Name}: {graded?.Result}");
+                var lines = wp.Automation.Command.Lines;
+                Check("명령선 — 원격으로 한 일(격벽 · 문 · 방송)이 그 방까지 선으로 남는다 · 결정 번호로 타임라인과 이어진다",
+                    lines.Any(l => l.Target == CmdTarget.Door && l.RoomId == graded?.RoomId) && lines.Any(l => l.Remote) && lines.All(l => l.What != ""),
+                    string.Join(" / ", lines.TakeLast(5).Select(l => $"{l.Target} {l.What} [{l.State}]")));
             }
 
             // ② 데이터선 절반이 끊겨도 판단은 유지 (그 구역만 손으로) · 무선 예비로 읽기는 이어진다

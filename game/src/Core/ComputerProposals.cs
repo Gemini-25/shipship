@@ -5,7 +5,7 @@ using System.Linq;
 namespace ShipSim.Core;
 
 // v16.6 제안 → 승인: 방침(컴퓨터 제안)에 따라 위험한 조치는 바로 하지 않고 제안 카드를 낸다 — 근거 · 예상 효과 · 기한.
-// 플레이어가 받거나 거절하고(화면 버튼), 기한 안에 안 고르면 지휘하는 사람(현장 지휘 · 선장)이 대신 판단한다. 결과는 다섯 칸 기록으로 채점되고 신뢰가 바뀐다.
+// 지휘하는 사람(현장 지휘 · 선장)이 기한까지 생각하고 정한다 (v16.20 완전 관전 — 화면 버튼 없음 · 시험은 Decide를 직접 부른다). 결과는 다섯 칸 기록으로 채점되고 신뢰가 바뀐다.
 // 거절하면 사람이 확인하러 간다 (사람 확인 요청): 가서 보고, 쓰러진 사람이 있으면 업어 나온다 · 틀어진 감지기를 다시 맞춘다.
 
 public enum ProposalState { Pending, Accepted, Rejected, Expired }
@@ -76,7 +76,7 @@ public sealed class ProposalBoard
         };
         All.Add(p);
         if (All.Count > 80) All.RemoveAt(0);
-        w.Log.Add(w.Tick, LogKind.Ship, $"주 컴퓨터 제안 — {title} · 근거: {basis} · 예상: {effect} · {minutes:0.#}분 안에 받거나 거절 (아니면 지휘하는 사람이 정한다)");
+        w.Log.Add(w.Tick, LogKind.Ship, $"주 컴퓨터 제안 — {title} · 근거: {basis} · 예상: {effect} · 지휘하는 사람에게 묻는다 ({minutes:0.#}분 안에)");
         w.Automation.Book.Add(ActKind.Proposal, room, basis, effect, $"제안: {title}", "승인 · 거절", "p:" + p.Id, 0, minutes + 6f, (world, a) => Grade(p));
         w.Automation.Speak.Announce(w.Automation.Voice.Style($"제안 — {title}. 승인을 기다린다"), room, 1);
         return p;

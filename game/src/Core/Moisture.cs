@@ -212,7 +212,7 @@ public sealed class MoistureSystem
             if (draw < 4f) continue;
             var (tries, last) = _inrush.TryGetValue(room.Id, out var t) ? t : (0, 0L);
             if (w.Tick - last > SimTime.Hours(1)) tries = 0;
-            float chance = MathF.Min(0.7f, 0.12f + 0.03f * draw) * MathF.Pow(0.5f, tries) * (w.Automation.Operator != null ? 0.2f : w.Automation.Level >= 3 ? 0.4f : 1f); // III부터 컴퓨터가 차례로 켠다, 사람이 조종하면 더 잘
+            float chance = MathF.Min(0.7f, 0.12f + 0.03f * draw) * MathF.Pow(0.5f, tries) * (w.Automation.Operator != null ? 0.2f : w.Automation.Level >= 3 ? 0.4f : 1f) * w.Automation.InrushMul(room.Circuit); // III부터 컴퓨터가 차례로 켠다, 사람이 조종하면 더 잘 · v16.20 원격으로 올린 회로는 큰 설비부터 하나씩
             if (!w.Rng.Chance(chance)) continue;
             if (ship.FurnitureOf(FurnitureType.PowerPanel).FirstOrDefault()?.Machine is not Machine panel || panel.Faults.Any(f => f.Circuit == room.Circuit)) continue;
             _inrush[room.Id] = (tries + 1, w.Tick);
