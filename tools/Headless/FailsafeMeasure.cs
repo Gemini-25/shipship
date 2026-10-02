@@ -126,7 +126,15 @@ public static partial class Program
     {
         var w = DayOne(seed, ship);
         w.Hazards.FireStory(key, null);
-        return FsWatch(w, SimTime.Hours(hours));
+        if (!Environment.GetCommandLineArgs().Contains("--fstrace")) return FsWatch(w, SimTime.Hours(hours));
+        var all = new FsProbe();
+        for (int h = 0; h < hours * 2; h++)
+        {
+            all.Add(FsWatch(w, SimTime.Minutes(30)));
+            var p = w.Power;
+            Console.WriteLine($"   {ship} {key} {SimTime.Clock(w.Tick)} 원자로 {(p.ReactorOnline ? "가동" : "정지")} 한계 {p.ReactorLimit:0} 냉각 {p.CoolingCapacity:0} · 수요 {p.Demand:0} 공급 {p.Delivered:0} · 배터리 {p.BatteryPercent * 100:0}% · 보조 {(p.AuxRunning ? "가동" : "-")} · 꺼진 방 {w.Ship.Rooms.Count(r => !r.Detached && !r.Powered)} · 회로 {string.Join("", p.CircuitFed.Select(f => f ? "o" : "x"))} · 계전기 {w.Failsafe.ShedLevel}");
+        }
+        return all;
     }
 
     /// <summary>항해: 이야기꾼(꾸준형 · 보통)을 켜고 days 동안.</summary>

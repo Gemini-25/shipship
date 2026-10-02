@@ -147,7 +147,7 @@ public sealed class FailsafeSystem
         var p = _w.Power;
         bool onBattery = !p.ReactorOnline || p.LowPowerMode || p.BatteryFlow < -1f && p.BatteryPercent < 0.6f; // 원자로가 멈췄거나 모자라 배터리가 빠진다
         float b = p.BatteryPercent;
-        int want = !onBattery ? (b > 0.7f || p.ReactorRamp >= 1f ? 0 : _shedLevel) : b < 0.3f ? 2 : b < 0.6f ? Math.Max(1, _shedLevel) : _shedLevel;
+        int want = !onBattery ? (b > 0.7f || p.ReactorRamp >= 1f ? 0 : _shedLevel) : b < 0.3f || _shedLevel >= 1 && p.ShedCount > 0 ? 2 : b < 0.6f || p.ShedCount > 0 ? Math.Max(1, _shedLevel) : _shedLevel; // 배터리가 바닥나거나 한 번에 낼 세기가 모자라면 (방이 꺼지기 전에)
         if (!onBattery && p.ReactorRamp >= 1f && p.BatteryFlow >= 0f) want = 0;
         if (want != _shedLevel)
         {

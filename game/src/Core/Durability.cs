@@ -29,6 +29,14 @@ public static class Durability
     /// <summary>파편 · 불이 간선 · 관 · 덕트 · 데이터선을 상하게 하는 배율 (전선관 · 배관 받침).</summary>
     public static float NetHit => L(0.6f);
 
+    /// <summary>
+    /// 배터리 뱅크가 한 번에 낼 수 있는 전력: 예전엔 배 크기와 상관없이 20kW로 묶여 큰 배는 원자로가 서면 배터리가 가득해도 방 절반이 꺼졌다 —
+    /// 이제 뱅크 용량에 비례 (세 시간에 다 쓰는 세기 · 적어도 20kW).
+    /// </summary>
+    public static float BatteryDischargeKw(float capacityKwh) => Legacy ? PowerGrid.BatteryMaxDischargeKw : MathF.Max(PowerGrid.BatteryMaxDischargeKw, capacityKwh / 3f);
+    /// <summary>충전 세기도 뱅크에 비례 (여섯 시간에 다 채우는 세기 · 적어도 10kW).</summary>
+    public static float BatteryChargeKw(float capacityKwh) => Legacy ? PowerGrid.BatteryMaxChargeKw : MathF.Max(PowerGrid.BatteryMaxChargeKw, capacityKwh / 6f);
+
     // ── 로봇 ──
     /// <summary>로봇 닳음 고장률.</summary>
     public static float RobotFault => L(0.4f);

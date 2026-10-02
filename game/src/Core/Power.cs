@@ -457,7 +457,7 @@ public sealed class PowerGrid
             .Sum(f => BatteryKwh(f) * f.Machine!.FaultFactor * (0.5f + 0.5f * f.Machine.Condition))
             + Modules.Bonus(_world, FurnitureType.CapacitorBank); // v10.6 축전 모듈
         BatteryCharge = MathF.Min(BatteryCharge, BatteryCapacity);
-        float batteryAvailable = dtHours > 0 ? MathF.Min(BatteryMaxDischargeKw, BatteryCharge / dtHours) : 0f;
+        float batteryAvailable = dtHours > 0 ? MathF.Min(Durability.BatteryDischargeKw(BatteryCapacity), BatteryCharge / dtHours) : 0f; // v16.19 큰 배터리 뱅크는 더 세게 낸다
 
         // 5) 소비자 배분: 우선순위 높은 것부터. A 회로는 보조 발전기 전력을 먼저 쓴다.
         UpdateParking(reactorMax);
@@ -548,7 +548,7 @@ public sealed class PowerGrid
         if (mainUsed <= ReactorLimit)
         {
             float room = dtHours > 0 ? (BatteryCapacity - BatteryCharge) / dtHours : 0f;
-            float charge = MathF.Max(0f, MathF.Min(BatteryMaxChargeKw, MathF.Min(ReactorLimit - mainUsed + spare, room)));
+            float charge = MathF.Max(0f, MathF.Min(Durability.BatteryChargeKw(BatteryCapacity), MathF.Min(ReactorLimit - mainUsed + spare, room))); // v16.19
             ReactorOutput = mainUsed + MathF.Max(0f, charge - spare);
             BatteryFlow = charge;
         }
