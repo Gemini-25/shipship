@@ -225,6 +225,7 @@ public sealed partial class DroneSystem
         var w = _world;
         var h = d.Hurt;
         if (d.State == DroneState.Lost) return;
+        power *= Durability.DroneHurt; // v16.19 두꺼운 외피 · 충격 흡수 다리
         PartHits++;
         h.HitAt = w.Tick;
         d.Condition = MathF.Max(0f, d.Condition - power);

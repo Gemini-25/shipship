@@ -326,7 +326,7 @@ public sealed partial class DroneSystem
                     float speed = (d.State == DroneState.Towing ? TowSpeed * RobotsV15.Tow(d.Kind) : Speed(d.Kind)) * d.Quirk.Speed;
                     float drain = d.State == DroneState.Towing ? 0.3f : Drain(d.Kind);
                     if (d.Fetching != null && d.State == DroneState.Towing) { speed = 0.02f * RobotsV15.Tow(d.Kind); drain = 0.3f; }
-                    d.Battery = MathF.Max(0f, d.Battery - drain * hour);
+                    d.Battery = MathF.Max(0f, d.Battery - drain * Durability.DroneDrain * hour); // v16.19 큰 셀
                     d.FlightHours += hour;
                     bool arrived = Move(d, speed);
                     if (d.State == DroneState.Towing) Drag(d);
@@ -335,7 +335,7 @@ public sealed partial class DroneSystem
                     break;
                 }
                 case DroneState.Working:
-                    d.Battery = MathF.Max(0f, d.Battery - Drain(d.Kind) * 0.8f * hour);
+                    d.Battery = MathF.Max(0f, d.Battery - Drain(d.Kind) * 0.8f * Durability.DroneDrain * hour);
                     d.FlightHours += hour;
                     d.WorkDone += hour * d.Quirk.Work; // v12.5 버릇
                     if (d.WorkDone >= d.WorkNeeded) FinishWork(d);

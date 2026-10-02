@@ -155,6 +155,8 @@ public sealed class World
     public FlowSystem Flow { get; } // v14.8 배관 · 배선 전달량
     public CultureSystem Culture { get; } // v14.9 배의 문화
     public DailySystem Daily { get; } // v15 일상 사건 70
+    public FailsafeSystem Failsafe { get; } // v16.19 차압 문 · 예비 회로 · 보조 간선 · 장갑 벽 · 비상 칸막이 · 부하 차단
+    public MajorIncidentSystem Major { get; } // v16.19 계통 · 배 전체 사고 (전조 → 발생 → 번짐 → 수습 → 흔적)
     public AnnexSystem Annex { get; } // v16.10 증축 (선체 바깥에 방을 새로 붙인다)
     public BrainSystem Brain2 { get; } // v16.15 승무원 두뇌 2.0 (믿음 · 목표 층 · 계획 · 감정 · 사회적 추론 · 배우기)
     public MatterSystem Matter { get; } // v16.4 재질 × 원소 · 칸 장 · 물건 물리
@@ -265,6 +267,7 @@ public sealed class World
         Flow = new FlowSystem(this);
         Culture = new CultureSystem(this);
         Daily = new DailySystem(this);
+        Failsafe = new FailsafeSystem(this); Major = new MajorIncidentSystem(this); // v16.19
         Annex = new AnnexSystem(this); // v16.10
         Brain2 = new BrainSystem(this); // v16.15
         Matter = new MatterSystem(this); // v16.4
@@ -369,6 +372,7 @@ public sealed class World
             Culture.Update(dt); // v14.9 겪은 일이 관행이 되어 전해진다
             pf = Prof.Lap("sys.Culture", pf);
             Daily.Update(dt); // v15 사고가 아닌 날의 일상 사건
+            Failsafe.Update(dt); Major.Update(dt); // v16.19 차압 문 · 예비 회로 · 칸막이 · 큰 사고
             Annex.Update(dt); // v16.10 증축: 제안 → 회의 → 골조 · 외판 · 가압 · 배선 · 내장 · 개통
             TechWeb.Update(dt); // v16.14 기술 그물: 조건 · 조합 · 갈림길 · 부작용 · 실험 차례
             RoomUse.Update(dt); RoomPlans.Update(dt); // v16.17 쓰임 → 용도 · 승무원 안건 → 회의 → 공사

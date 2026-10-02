@@ -270,6 +270,7 @@ public sealed class PowerGrid
         ParkedCount = 0;
         w.Cosmic.Park(); // v18.13 대재난 대비로 꺼 둔 설비
         w.RoomPlans.Park(); // v16.17 옮기려고 떼어 낸 설비는 다시 이을 때까지 돌지 않는다
+        w.Failsafe.Park(); // v16.19 부하 차단 계전기: 배터리만으로 버틸 때 비필수부터 (컴퓨터가 없어도 하드웨어로)
         if (!Brownout) { _parkedPump = _parkedO2 = -1; return; }
 
         // 냉각 펌프: 분기 하나로 원자로 출력을 식힐 수 있으면 약한 쪽 분기의 펌프를 내린다
@@ -464,9 +465,10 @@ public sealed class PowerGrid
         foreach (var room in ship.Rooms)
         {
             var r = room;
+            int rc = _world.Failsafe.Feed(r, CircuitFed); // v16.19 두 갈래 급전: 주 회로가 죽으면 다른 회로로 저절로 넘어간다
             // 떨어져 나갔거나 사출 준비로 전력을 끊은 방은 전기가 없다
-            if (!CircuitFed[r.Circuit] || r.Detached || r.PowerCut || r.BreakerOff || !r.PowerLinked) { r.Powered = false; continue; }
-            consumers.Add((8, RoomSystemsKw * ComputerV15.RoomKwMul(_world, r), r.Circuit, on => r.Powered = on)); // v15.9 전력 분배: 빈 방은 낮춘다
+            if (!CircuitFed[rc] || r.Detached || r.PowerCut || r.BreakerOff || !r.PowerLinked) { r.Powered = false; continue; }
+            consumers.Add((8, RoomSystemsKw * ComputerV15.RoomKwMul(_world, r), rc, on => r.Powered = on)); // v15.9 전력 분배: 빈 방은 낮춘다
         }
         float parkedKw = 0f;
         foreach (var m in ship.Machines)
@@ -474,14 +476,15 @@ public sealed class PowerGrid
             if (m.Spec.PowerDraw <= 0f) { m.Powered = true; continue; }
             if (m.Parked) { m.Powered = false; parkedKw += m.Demand; continue; } // v9.3 저출력 운영으로 내려 둠
             if (m.Feed < 0.3f) { m.Powered = false; continue; } // v12.1 설비 전선이 끊겼다
-            if (!CircuitFed[m.Body.Room.Circuit] || m.Body.Room.PowerCut || m.Body.Room.BreakerOff || !m.Body.Room.PowerLinked) { m.Powered = false; continue; }
+            int mc = _world.Failsafe.Feed(m.Body.Room, CircuitFed); // v16.19 두 갈래 급전
+            if (!CircuitFed[mc] || m.Body.Room.PowerCut || m.Body.Room.BreakerOff || !m.Body.Room.PowerLinked) { m.Powered = false; continue; }
             var mm = m;
             // v9.3 저출력 운영: 재배대·냉장고·조리대·배식기(먹을 것)를 정수기·방 환기와 같은 줄로 올린다 (방 환기가 먼저)
             //    정제기는 사람이 붙어 일하는 동안만 같은 줄로 (금속판·필터를 뽑아야 고칠 수 있다)
             int prio = Brownout && (m.Body.Type is FurnitureType.GrowBed or FurnitureType.Fridge or FurnitureType.Stove or FurnitureType.MealDispenser
                                     || (m.Active && m.Body.Type == FurnitureType.Refinery))
                 ? 8 : m.Spec.Priority;
-            consumers.Add((prio, m.Demand * ComputerV15.IdleKwMul(_world, m), m.Body.Room.Circuit, on => mm.Powered = on)); // v15.9 전력 분배: 쉬는 설비 대기 전력
+            consumers.Add((prio, m.Demand * ComputerV15.IdleKwMul(_world, m), mc, on => mm.Powered = on)); // v15.9 전력 분배: 쉬는 설비 대기 전력
         }
         // 같은 우선순위는 설계도 순서대로 (안정 정렬). v9.2: 자동화가 꺼지면 우선순위를 모른다 — 먼저 붙은 것부터 받는다
         if (_world.Automation.Priority) consumers = consumers.OrderByDescending(x => x.priority).ToList();

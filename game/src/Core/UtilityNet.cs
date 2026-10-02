@@ -324,7 +324,7 @@ public sealed partial class UtilityNet
             foreach (var c in l.Cells) { float d = (c.Center - at.Center).LengthSquared(); if (d < best) best = d; }
             float dist = MathF.Sqrt(best);
             if (dist > radius) continue;
-            float k = amount * (1f - dist / (radius + 0.5f));
+            float k = amount * (1f - dist / (radius + 0.5f)) * Durability.NetHit; // v16.19 전선관 · 배관 받침
             k *= fire ? l.Kind switch { NetKind.Power => 1.3f, NetKind.Data => 1.1f, NetKind.Air => 0.6f, _ => 0.25f } : l.Kind switch { NetKind.Water => 1.2f, NetKind.Air => 1f, _ => 0.9f };
             Hurt(l, k, cause);
         }
