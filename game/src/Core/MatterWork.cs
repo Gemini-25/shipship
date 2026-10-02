@@ -18,8 +18,11 @@ public sealed partial class MatterSystem
 
     internal void Claim(Article t, CrewMember c) { t.ClaimedBy = c.Id; _claimUntil[t.Id] = _w.Tick + SimTime.Hours(2); }
 
+    private readonly Dictionary<int, Cell> _carryFrom = new();
+
     internal void Carry(Article t, CrewMember c)
     {
+        _carryFrom[t.Id] = t.At;
         PickUp(t, c);
         _carryJob[t.Id] = c.Job;
     }
@@ -152,7 +155,7 @@ public sealed class MatterActivity : Activity
         bool quiet = w.Tick < m.QuietUntil;
         foreach (var t in m.Things)
         {
-            if (t.CarriedBy >= 0 || t.ClaimedBy >= 0 && t.ClaimedBy != c.Id) continue;
+            if (t.CarriedBy >= 0 || t.ClaimedBy >= 0 && t.ClaimedBy != c.Id && !t.Smolder) continue; // 연기 나는 것엔 여럿이 달려간다 (먼저 닿은 사람이 치운다)
             var room = w.Ship.RoomAt(t.At);
             if (room == null || room.Detached) continue;
             // 그을리는 것: 경보 · 눈 · 탄 냄새로 안다
@@ -169,14 +172,14 @@ public sealed class MatterActivity : Activity
                 && (m.JunctionAt(t.Home) is not { } jh || jh.Taped || jh.Wet < 0.05f))
                 Consider(Task.ReturnRug, t, null, null, t.At, 0.15f);
             // 통로를 막은 짐
-            if (t.Spec.Bulk >= 6 && t.Known && room.Kind == RoomType.Corridor) Consider(Task.Aisle, t, null, null, t.At, 0.18f);
+            if (t.Spec.Bulk >= 6 && t.Known && m.InAisle(t.At)) Consider(Task.Aisle, t, null, null, t.At, 0.18f);
         }
         foreach (var j in m.Junctions)
             if (j.Known && !j.Fixed && (j.ClaimedBy < 0 || j.ClaimedBy == c.Id))
                 Consider(Task.Junction, null, j, null, j.At, 0.6f + 0.2f * c.SkillLevel(Skill.Electrical));
         foreach (var d in w.Ship.Doors)
         {
-            if (d.Removed || d.IsExternal || m.HandleDirt(d) < 0.45f) continue;
+            if (d.Removed || d.IsExternal || m.HandleSoil(d, SoilKind.Bio) < 0.3f) continue; // 균 묻은 손잡이
             if (!(d.RoomA is Room a && SoilSystem.CleanRoom(a) || d.RoomB is Room b && SoilSystem.CleanRoom(b))) continue;
             foreach (var dd in Cell.Dirs4) if (w.Ship.IsOpenFloor(d.Cell + dd)) { Consider(Task.Handle, null, null, d, d.Cell + dd, 0.2f); break; }
         }
@@ -327,7 +330,10 @@ public sealed partial class MatterSystem
                 t.Smolder = false;
                 t.Temp = room?.Air.Temperature ?? 20f;
                 Stats.Doused++;
-                w.Log.Add(w.Tick, LogKind.Work, $"그을던 {t.Name}를 열에서 떼어 물에 적셨다 — 연기가 멎는다", c.Id);
+                string off = "";
+                foreach (var d in w.Portable.Devices) // 열원(히터)도 끈다
+                    if (d.Kind == PortableKind.Heater && d.On && d.Placed && _carryFrom.TryGetValue(t.Id, out var from) && Math.Max(Math.Abs(d.At.X - from.X), Math.Abs(d.At.Y - from.Y)) <= 2 && w.Ship.RoomAt(d.At) == room) { d.On = false; d.Running = false; off = " · 곁의 히터도 껐다"; }
+                w.Log.Add(w.Tick, LogKind.Work, $"그을던 {t.Name}를 열에서 떼어 물에 적셨다 — 연기가 멎는다{off}", c.Id);
                 if (room != null) MarkLog.Add(room.Marks, w.Tick, $"{c.Name}: 그을던 {t.Name}를 치우고 적심");
                 MarkLog.Add(c.Memory.Marks, w.Tick, $"그을던 {t.Name}를 찾아 껐다");
                 break;

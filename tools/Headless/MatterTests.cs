@@ -190,6 +190,7 @@ public static partial class Program
             var m = w.Matter;
             var room = w.Ship.LiveRooms.Where(r => !r.Detached && r.Powered && r.Kind is RoomType.Galley or RoomType.Mess or RoomType.Storage && Materials.FloorFor(r.Kind) != Material.Rubber).OrderBy(r => r.Id).First();
             room.BreakerOff = true;
+            Player.Policy(w, "controlseat", 1); // 관제석에서 원격으로 올리지 않게 — 사람이 분전함 앞에 서야 한다
             bool laid = false, workedOnMat = false, restored = false;
             int shocks0 = m.Stats.LiveShocks + w.Moisture.Stats.Shocks;
             CrewMember? worker = null;
@@ -200,6 +201,7 @@ public static partial class Program
                     foreach (var c in room.Cells) if (w.Ship.Grid.Kind(c) == TileKind.Floor) w.Body.RaiseMark(c, CellMark.Wet, 0.7f, "퍼내고 남은 물기");
                     w.Board.RequestScan();
                 }
+                if (w.Automation.Operator is CrewMember op) op.EndJob(w, ToilStatus.Interrupted);
                 w.Step();
                 laid |= m.Stats.MatsLaid > 0;
                 foreach (var c in w.Crew)
@@ -241,8 +243,6 @@ public static partial class Program
                 if (smell < 0 && charT > 0 && w.Crew.Any(c => c.Id != sitter.Id && w.Smells.Smelled(c, SmellKind.Burnt, SimTime.Minutes(10)) is { } sn && sn.Tick >= charT)) smell = w.Tick;
                 if (doused < 0 && m.Stats.Doused > 0) { doused = w.Tick; responder = w.Crew.FirstOrDefault(c => c.Job?.Activity is MatterActivity); }
                 if (unseal < 0 && m.Stats.Unseals > 0) unseal = w.Tick;
-                if (Environment.GetEnvironmentVariable("MDBG") == "1" && t % SimTime.Minutes(2) == 0 && charT > 0)
-                    Console.WriteLine($"    [dbg] {SimTime.Clock(w.Tick)} 수건 {towel.Temp:0}℃ 물 {towel.WetFrac:0.00} 그을 {towel.Char:0.00} 연기중 {towel.Smolder} 위치 {towel.At} 들림 {towel.CarriedBy} · 방 연기 {room.Air.Smoke:0.000} · 히터 {heater.Running}/{heater.On} · 경보 {m.Stats.SmokeAlarms} 봉쇄 {m.SmokeSealed(room)} · 옆방 탄내 {string.Join(",", neighbors.Select(r => w.Smells.Level(r, SmellKind.Burnt).ToString("0.000")))} · 맡음 {w.Smells.Stats.BurntSniffs}/{w.Smells.Stats.Checks} · 일 {string.Join(",", w.Crew.Where(c => c.Job?.Activity is MatterActivity).Select(c => c.Name + ":" + c.Job!.Label))}");
             }
             string T(long x) => x < 0 ? "—" : SimTime.Clock(x);
             Check("주 컴퓨터가 위험한 조합을 읽고 경고 — 히터 옆 젖은 천", warn > 0 && (dryT < 0 || warn <= dryT), $"경고 {T(warn)} · 마름 {T(dryT)}");
@@ -258,7 +258,7 @@ public static partial class Program
             var w = World.CreateDefault(seed, 0, "Hanbit");
             RunUntilHour(w, 10f);
             var m = w.Matter;
-            var room = MRoom(w, r => r.DataLinked && r.Kind is RoomType.Quarters or RoomType.Laundry or RoomType.Lounge or RoomType.Mess or RoomType.PrivateCabins or RoomType.Gym);
+            var room = MRoom(w, r => r.DataLinked && r.Kind is RoomType.Laundry or RoomType.Lounge or RoomType.Mess or RoomType.Gym or RoomType.Galley);
             var hub = MHub(w, room)!.Value;
             MHeater(w, room, hub);
             var towel = m.Add(ArticleKind.Towel, hub + new Cell(0, 1), "시험");
@@ -284,8 +284,6 @@ public static partial class Program
             w.Blast.Detonate(hub, 0.3f, BlastKind.Generic, "시험");
             Run(w, 20);
             int moved = new[] { box, towel, tool }.Where((t, i) => t.At != before[i]).Count();
-            if (Environment.GetEnvironmentVariable("MDBG") == "1")
-                foreach (var t in new[] { jar, mug, box, towel, tool }) Console.WriteLine($"    [dbg] {t.Name} {t.At} {t.Stage} 압력 {w.Blast.PAt(t.At):0.00} 유리 {w.Body.Mark(t.At, CellMark.Glass):0.00} · 방 {room.Name} 기압 {room.Air.Pressure:0}");
             var shards = m.Things.Where(t => t.Kind == ArticleKind.Shards).ToList();
             var sc = shards.FirstOrDefault(t => Matter.Sharp(t.Mat))?.At;
             bool hazard = sc is Cell s0 && w.Body.Mark(s0, CellMark.Glass) > 0.2f && w.Paths.CellBody[w.Ship.Grid.Index(s0)] >= BodySystem.GlassCost;
@@ -381,14 +379,15 @@ public static partial class Program
             var crew = w.Crew.Where(c => !c.Dead).OrderBy(c => c.Id).Take(2).ToList();
             var a = crew[0]; var b = crew[1];
             a.Soil.Hands[(int)SoilKind.Oil] = 0.9f;
-            b.Soil.Hands[(int)SoilKind.Oil] = 0f;
+            a.Soil.Hands[(int)SoilKind.Bio] = 0.8f;
+            b.Soil.Hands[(int)SoilKind.Bio] = 0f;
             Teleport(w, a, door.Cell);
             m.Touch(a, a.Soil, 0.01f);
-            float handle = m.HandleSoil(door, SoilKind.Oil);
+            float oil = m.HandleSoil(door, SoilKind.Oil), germ = m.HandleSoil(door, SoilKind.Bio);
             Teleport(w, b, door.Cell);
             m.Touch(b, b.Soil, 0.01f);
-            Check("접촉 오염 — 기름 묻은 장갑 → 문 손잡이 → 다음 사람 손", handle > 0.1f && b.Soil.Hands[(int)SoilKind.Oil] > 0.02f,
-                $"손잡이 기름 {handle:0.00} · {b.Name} 손 {b.Soil.Hands[(int)SoilKind.Oil]:0.00} (손잡이 재질 {Materials.Name(Material.Metal)} · 머금음 {Matter.Hold(Material.Metal):0.00})");
+            Check("접촉 오염 — 더러운 장갑 → 문 손잡이(기름 얼룩 · 균) → 다음 사람 손에 균", oil > 0.1f && germ > 0.1f && b.Soil.Hands[(int)SoilKind.Bio] > 0.05f,
+                $"손잡이 기름 {oil:0.00} · 균 {germ:0.00} · {b.Name} 손 균 {b.Soil.Hands[(int)SoilKind.Bio]:0.00} (손잡이 재질 {Materials.Name(Material.Metal)} · 머금음 {Matter.Hold(Material.Metal):0.00})");
             var corr = w.Ship.LiveRooms.First(r => r.Kind == RoomType.Corridor);
             var cc = corr.Cells.First(c => w.Ship.IsOpenFloor(c) && w.Ship.DoorAt(c) == null && !m.Any(c));
             int i = w.Ship.Grid.Index(cc);

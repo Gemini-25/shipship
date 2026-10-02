@@ -59,6 +59,7 @@ public sealed partial class MatterSystem
         float h = SimTime.Minutes(1) / (float)SimTime.TicksPerHour;
         if (_has.Length != w.Ship.Grid.CellCount) Reindex();
         Release();
+        FadeSoil(h);
         Fields();
         Drips_(h);
         UpdateSpills(h);

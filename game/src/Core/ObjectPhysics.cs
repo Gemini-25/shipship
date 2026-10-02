@@ -742,10 +742,12 @@ public sealed partial class MatterSystem
                 }
                 case RoomType.Laundry:
                     Add(ArticleKind.Towel, Edge(), "처음부터"); Add(ArticleKind.Towel, Edge(), "처음부터"); Add(ArticleKind.WaterJug, Edge(), "처음부터");
+                    Add(ArticleKind.RubberMat, Edge(), "처음부터", stowed: true); // 물 쓰는 방엔 고무 매트
                     break;
                 case RoomType.Galley:
                     Add(ArticleKind.Towel, Edge(), "처음부터"); Add(ArticleKind.GlassJar, Edge(), "처음부터"); Add(ArticleKind.Mug, Edge(), "처음부터");
                     Add(ArticleKind.PowderSack, Edge(), "처음부터"); Add(ArticleKind.FoodCrate, Edge(), "처음부터");
+                    Add(ArticleKind.RubberMat, Edge(), "처음부터", stowed: true);
                     break;
                 case RoomType.Medbay or RoomType.Lab or RoomType.AlgaeLab:
                     Add(ArticleKind.GlassJar, Edge(), "처음부터"); Add(ArticleKind.PaperStack, Edge(), "처음부터");
@@ -755,6 +757,7 @@ public sealed partial class MatterSystem
                     break;
                 case RoomType.Workshop:
                     Add(ArticleKind.Toolbox, Edge(), "처음부터"); Add(ArticleKind.OilCan, Edge(), "처음부터"); Add(ArticleKind.PlasticCrate, Edge(), "처음부터");
+                    Add(ArticleKind.RubberMat, Edge(), "처음부터", stowed: true);
                     break;
                 case RoomType.Storage or RoomType.Cargo:
                     Add(ArticleKind.CardboardBox, Edge(), "처음부터"); Add(ArticleKind.PlasticCrate, Edge(), "처음부터");
@@ -813,27 +816,35 @@ public sealed partial class MatterSystem
         float s = 0f;
         foreach (var t in Things)
         {
-            if (t.CarriedBy >= 0 || _w.Ship.Grid.Index(t.At) != i) continue;
+            if (t.CarriedBy >= 0 || _w.Ship.Grid.Index(t.At) != i || t.LastMoved < 0 && t.Mat != Material.Ice) continue; // 제자리의 서류 뭉치는 밟지 않는다 — 흩어진 뒤에야 미끄럽다
             s += t.Mat switch { Material.Ice => 0.4f, Material.Paper when t.Kind == ArticleKind.PaperStack => 0.2f, Material.Powder when t.Contents <= 0f => 0.15f, _ => 0f };
         }
         return s;
     }
 
-    /// <summary>Body.FillPathCost: 통로 점유 (짐 · 상자 · 카트) · 보이는 전기 불꽃 칸 · 분진.</summary>
+    /// <summary>Body.FillPathCost: 통로 점유 (짐 · 상자 — 카트는 Portable이 비켜 가게 한다) · 보이는 전기 불꽃 칸.</summary>
     public void PathCost(int[] cost)
     {
         foreach (var t in Things)
         {
-            if (t.CarriedBy >= 0 || t.Spec.Bulk <= 0) continue;
+            if (t.CarriedBy >= 0 || t.Spec.Bulk <= 0 || !InAisle(t.At)) continue; // 벽 쪽에 둔 짐은 길을 막지 않는다
             int i = Idx(t.At);
             if (i >= 0) cost[i] += t.Spec.Bulk;
         }
-        foreach (var d in _w.Portable.Devices)
-            if (d.Kind == PortableKind.Cart && d.Placed && Idx(d.At) is int ci && ci >= 0) cost[ci] += 6; // 세워 둔 카트
         foreach (var (i, v) in _liveSeen) cost[i] += (int)(40 * v);
     }
 
-    /// <summary>Soil: 손이 닿는 곳 — 문 손잡이 · 공용 공구 (더러운 장갑 → 손잡이 → 다음 사람).</summary>
+    /// <summary>길목: 통로 · 문 앞 칸 (여기 내려놓은 짐은 동선을 바꾼다).</summary>
+    public bool InAisle(Cell c)
+    {
+        var ship = _w.Ship;
+        if (ship.RoomAt(c) is { Kind: RoomType.Corridor }) return true;
+        foreach (var d in Cell.Dirs4) if (ship.DoorAt(c + d) != null) return true;
+        return false;
+    }
+
+    /// <summary>Soil: 손이 닿는 곳 — 문 손잡이 · 공용 공구 (더러운 장갑 → 손잡이 → 다음 사람).
+    /// 손때는 묻어 남고(재질 표의 머금음 — 금속 손잡이는 덜, 고무 손잡이는 더), 다음 손으로 옮는 건 균(Bio)이다 — 기름 · 그을음은 얼룩으로 남는다.</summary>
     public void Touch(CrewMember c, Soil s, float dt)
     {
         var w = _w;
@@ -841,14 +852,10 @@ public sealed partial class MatterSystem
         {
             EnsureHandles();
             float hold = Matter.Hold(Material.Metal) + 0.3f; // 쥐는 힘으로 눌러 묻는다
-            for (int k = 0; k < Core.Soil.Kinds; k++)
-            {
-                ref float hs = ref _handle[d.Id * Core.Soil.Kinds + k];
-                float give = s.Hands[k] * 0.6f * hold;
-                float get = hs * 0.35f;
-                hs = MathF.Min(1f, hs + give - get * 0.5f);
-                s.Hands[k] = Math.Clamp(s.Hands[k] - give + get, 0f, 1f);
-            }
+            int b = d.Id * Core.Soil.Kinds;
+            for (int k = 0; k < Core.Soil.Kinds; k++) _handle[b + k] = MathF.Min(1f, _handle[b + k] + s.Hands[k] * 0.6f * hold * (1f - _handle[b + k]));
+            float germ = _handle[b + (int)SoilKind.Bio];
+            if (germ > 0.02f && s.Hands[(int)SoilKind.Bio] < germ) s.Hands[(int)SoilKind.Bio] = MathF.Min(1f, s.Hands[(int)SoilKind.Bio] + (germ - s.Hands[(int)SoilKind.Bio]) * 0.35f);
             Stats.HandleTouches++;
         }
         if (c.Pose == Pose.Working && c.Job?.Order is WorkOrder o && o.Kind is WorkKind.Repair or WorkKind.Maintain or WorkKind.PreventiveCheck or WorkKind.Fabricate && c.Room is Room room)
@@ -856,15 +863,19 @@ public sealed partial class MatterSystem
             {
                 if (t.Kind != ArticleKind.Toolbox || t.CarriedBy >= 0 || w.Ship.RoomAt(t.At) != room) continue;
                 float hold = Matter.Hold(t.Mat) + 0.15f; // 손잡이는 고무
-                for (int k = 0; k < Core.Soil.Kinds; k++)
-                {
-                    float give = s.Hands[k] * 0.2f * hold * dt * 6f, get = t.Soil[k] * 0.3f * dt * 6f;
-                    t.Soil[k] = Math.Clamp(t.Soil[k] + give - get * 0.5f, 0f, 1f);
-                    s.Hands[k] = Math.Clamp(s.Hands[k] - give + get, 0f, 1f);
-                }
+                for (int k = 0; k < Core.Soil.Kinds; k++) t.Soil[k] = MathF.Min(1f, t.Soil[k] + s.Hands[k] * 0.2f * hold * dt * 6f * (1f - t.Soil[k]));
+                float germ = t.Soil[(int)SoilKind.Bio];
+                if (germ > 0.02f && s.Hands[(int)SoilKind.Bio] < germ) s.Hands[(int)SoilKind.Bio] = MathF.Min(1f, s.Hands[(int)SoilKind.Bio] + (germ - s.Hands[(int)SoilKind.Bio]) * 0.3f * dt * 6f);
                 Stats.ToolTouches++;
                 break;
             }
+    }
+
+    /// <summary>손잡이 · 공구의 손때는 천천히 옅어진다 (닦으면 바로).</summary>
+    private void FadeSoil(float h)
+    {
+        for (int i = 0; i < _handle.Length; i++) _handle[i] = MathF.Max(0f, _handle[i] - 0.03f * h);
+        foreach (var t in Things) if (t.Kind == ArticleKind.Toolbox) for (int k = 0; k < Core.Soil.Kinds; k++) t.Soil[k] = MathF.Max(0f, t.Soil[k] - 0.02f * h);
     }
 
     private float[] _handle = Array.Empty<float>();
