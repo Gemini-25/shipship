@@ -379,7 +379,7 @@ public sealed class MeetingSystem
         foreach (var (id, to, why) in Reviews.Take(3).ToList()) ResolvePolicy(rec, attendees, chair, id, to, why);
         Reviews.Clear();
         // 2) 선장 불신임
-        if (w.Command.Trust < 0.35f && attendees.Count >= 3 && cap != null) rec.Items.Add(w.Command.VoteNoConfidence(attendees, this));
+        if (w.Command.Trust < 0.35f && attendees.Count >= 3 && cap != null && !w.Motions.ConfidencePending) rec.Items.Add(w.Command.VoteNoConfidence(attendees, this)); // v18.18 서명을 돌리는 중이면 그쪽에서
         // 3) 미뤄 둔 결정: 모인 김에 정한다
         foreach (var o in w.Board.Open.Where(o => Council.Needs(o.Kind) && o.Decision == DecisionState.Pending && !o.Alone && !o.Closed).ToList())
             Council.DecideNow(w, o, attendees, rec);
@@ -390,6 +390,7 @@ public sealed class MeetingSystem
         w.RoomPlans.Agenda(rec, attendees, chair); // v16.17 승무원이 낸 방 안건 (옮기기 · 나누기 · 이름 · 꾸미기)
         w.Automation.Authority.Agenda(rec, attendees, chair); // v16.16 컴퓨터 안건 (계획 · 권한)
         w.Info.Agenda(rec, attendees, chair); // v17.3 공동 장부 (설거지 당번)
+        w.Motions.Agenda(rec, listeners, chair); // v18.18 승무원이 서명을 모아 올린 안건
         w.CrisisCrew.Agenda(rec, attendees, chair); // v16.21 사람이 바뀌면 비상 배치표를 다시 짠다
         // 4) 방침 하나: 모인 사람 다수가 바라는 쪽이 지금과 다르고, 바꾼 지 사흘이 지났으면 올린다
         if (rec.Items.Count(i => i.Topic.StartsWith("policy:")) == 0 && attendees.Count >= 3)

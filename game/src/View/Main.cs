@@ -462,7 +462,7 @@ public partial class Main : Node2D
                 case Key.L: ToggleHighlight(); break;
                 case Key.I: Hud.ToggleCodex(); break;
                 case Key.Y: Hud.ToggleControl(); break;
-                case Key.E: Hud.TogglePolicy(); break; // v13.2 방침·회의
+                case Key.E: if (key.ShiftPressed) Hud.ToggleCouncil(); else Hud.TogglePolicy(); break; // v13.2 방침·회의 · v18.18 ⇧E 회의록
                 case Key.G: Hud.ToggleMinimap(); break;
                 case Key.T: if (key.ShiftPressed) Hud.ToggleTechWeb(); else Hud.ToggleTech(); break; // v16.14 Shift+T 기술 지도
                 case Key.F5: SaveGame(); break;

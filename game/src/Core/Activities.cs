@@ -136,7 +136,7 @@ public sealed class EatActivity : Activity
         var table = seat == null ? null : seat.Room.Furniture.Where(f => f.Type == FurnitureType.Table)
             .OrderBy(f => (f.Center - seat.Center).LengthSquared()).FirstOrDefault();
         bool ration = kind is ItemKind.Ration or ItemKind.Produce;
-        float fill = kind == ItemKind.Produce ? 0.5f : ration ? 0.7f : 0.95f;
+        float fill = (kind == ItemKind.Produce ? 0.5f : ration ? 0.7f : 0.95f) * w.Motions.MealShare(c); // v18.18 재판에서 배급을 깎였다
         int eatTicks = SimTime.Minutes(ration ? 10 : 25);
         toils.Add(new WaitToil(eatTicks + SimTime.Minutes(8), seat != null || away != null ? Pose.Sitting : Pose.Standing,
             away?.Face ?? table?.Center ?? box.Center, minTicks: SimTime.Minutes(ration ? 8 : 15))
