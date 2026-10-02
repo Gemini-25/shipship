@@ -28,9 +28,9 @@ public static partial class FixtureArt
     public sealed record Art(Paint Body, Paint Life, Paint Fine, Look Fault, float Eu, float Ev);
 
     /// <summary>확대가 이보다 크면 디테일 층을 보인다.</summary>
-    public const float FineZoom = 1.1f;
+    public const float FineZoom = ZoomDetail.NearFrom;
     /// <summary>확대가 이보다 작으면 멀리 (움직임을 줄인다).</summary>
-    public const float FarZoom = 0.5f;
+    public const float FarZoom = ZoomDetail.FarBelow;
 
     private static Dictionary<FurnitureType, Art>? _table;
     private static Dictionary<FurnitureType, Art> Table => _table ??= Build();
@@ -109,7 +109,7 @@ public static partial class FixtureArt
             S = Mathf.Clamp(Mathf.Min(B.Size.X, B.Size.Y) / 26f, 0.85f, 2.6f);
             Front = FrontOf(f);
             T = time;
-            Lod = zoom < FarZoom ? 0 : zoom < FineZoom ? 1 : 2;
+            Lod = ZoomDetail.Lod(zoom); // v16.24 확대 3단계 (UiZoom)
             Accent = Palette.Room(f.Room.Kind);
             Tier = M?.Tier ?? 1;
             Grade = M?.Grade ?? MachineGrade.Standard;

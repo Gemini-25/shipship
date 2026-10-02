@@ -16,7 +16,7 @@ public readonly record struct PuppetSpec(PuppetPose Pose, HeldThing Held, bool T
 public static class Puppet
 {
     /// <summary>확대 단계: 0 점 + 색 · 1 단순 인형 · 2 자세한 인형.</summary>
-    public static int Lod(float zoom) => zoom < 0.5f ? 0 : zoom < 1.1f ? 1 : 2;
+    public static int Lod(float zoom) => ZoomDetail.Lod(zoom); // v16.24 확대 3단계 (UiZoom)
 
     private static bool Says(string? label, params string[] keys)
     {

@@ -33,7 +33,7 @@ public partial class Hud
         int level = a.Level;
         string state = !a.Present ? "주 컴퓨터 없음" : a.MainOnline ? "온라인" : a.BackupActive ? "멎음 · 예비 제어기" : "멎음";
         Gfx.Text(this, Fonts.Bold, new Vector2(x, y0 + 30), $"주 컴퓨터 관제 — 등급 {AutomationSystem.LevelName(level)}", 17, Palette.Text);
-        Gfx.Text(this, Fonts.Body, new Vector2(x + 300, y0 + 30), level < 5 ? $"내려간 까닭: {a.LevelWhy}" : "멀쩡하면 V — 아래는 고장 났을 때 남는 기능", 11, level < 5 ? Palette.Warning : Palette.TextMuted);
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 300, y0 + 30), level < 5 ? $"내려간 까닭: {a.LevelWhy}" : "멀쩡하면 V — 아래는 고장 났을 때도 되는 일", 11, level < 5 ? Palette.Warning : Palette.TextMuted);
         Button(new Rect2(right - 58, y0 + 12, 58, 26), "Y 닫기", false, mouse, ToggleControl, 11);
         var col = a.MainOnline ? Palette.Good : Palette.Danger;
         Gfx.Text(this, Fonts.Body, new Vector2(x, y0 + 50), $"{state} · {(a.Computer is Machine m ? $"{m.Name} (단계 {m.Tier})" : "-")}" +

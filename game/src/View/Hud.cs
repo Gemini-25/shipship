@@ -176,7 +176,7 @@ public partial class Hud : Control
     private static string? SectionIcon(string title) =>
         title.StartsWith("승무원") ? "people" : title.StartsWith("관계") || title.StartsWith("왜 그런 사이") ? "relation"
         : title.StartsWith("기술") || title.StartsWith("자격") ? "skill-engineering" : title.StartsWith("목표") ? "target"
-        : title.StartsWith("지금 연결") ? "cable" : title.StartsWith("지금") ? "clock" : title.StartsWith("행동 후보") ? "why"
+        : title.StartsWith("지금 연결") ? "cable" : title.StartsWith("지금") ? "clock" : title.StartsWith("할 일 후보") ? "why"
         : title.StartsWith("지나온 일") || title.StartsWith("지금까지") || title.StartsWith("이 배에서") ? "memory"
         : title.StartsWith("이력") || title.StartsWith("일기") || title.StartsWith("회의록") ? "log"
         : title.StartsWith("있는 사람") ? "crew" : title.StartsWith("설비") || title.StartsWith("부품") ? "parts"
@@ -867,7 +867,7 @@ public partial class Hud : Control
         }
         y += 82;
 
-        SectionTitle(x, y + 10, "행동 후보와 점수");
+        SectionTitle(x, y + 10, "할 일 후보 — 마음이 기운 정도");
         long ago = (_world.Tick - c.LastThinkTick) * 60 / SimTime.TicksPerHour;
         Gfx.TextRight(this, Fonts.Body, new Vector2(right, y + 10), ago < 1 ? "방금 판단" : $"{ago}분 전 판단", Ui.TextSmall, Palette.TextMuted);
 
@@ -1321,7 +1321,7 @@ public partial class Hud : Control
         }
         else if (room.Type == RoomType.Corridor) lines.Add(("연결부", "용골 (모든 방이 여기에 붙어 있다)", Palette.TextMuted));
         // v12.6 세부 종류 · 환경 · 맡은 일(겸용의 대가)
-        if (room.Special != null) lines.Add(("종류", $"{RoomTypes.Name(room.Kind)} — {RoomTypes.Name(room.Type)} 기능을 겸한다", Palette.Room(room.Kind)));
+        if (room.Special != null) lines.Add(("종류", $"{RoomTypes.Name(room.Kind)} — {RoomTypes.Name(room.Type)} 노릇도 한다", Palette.Room(room.Kind)));
         {
             var env = new List<string>();
             if (room.Noise > 0.06f) env.Add($"소음 {room.Noise * 100:0}%");

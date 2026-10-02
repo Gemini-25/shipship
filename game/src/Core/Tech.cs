@@ -132,7 +132,7 @@ public static class Tech
                 if (t.Research > before && t.Research <= w.Research)
                 {
                     w.Log.Add(w.Tick, LogKind.Ship, $"연구 {w.Research:0}점 — {t.Name} 설계가 풀렸다 ({FurnitureTypes.Name(type)} {Roman(t.Tier)}단계 · {t.Note})");
-                    w.History.Add(w, HistoryKind.Milestone, $"연구가 {t.Research}점에 닿아 {t.Name} 설계가 풀렸다");
+                    w.History.Add(w, HistoryKind.Milestone, $"연구 노트가 쌓여 {t.Name} 설계가 풀렸다");
                 }
     }
 

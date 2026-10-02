@@ -682,7 +682,7 @@ public sealed partial class TechWebSystem
         if (f.Id == "heat" && w.History.Fires >= 2) a -= 0.1f;
         string Fx(EraTech t) => t.Effect.Contains('(') ? t.Effect[(t.Effect.IndexOf('(') + 1)..].TrimEnd(')') : t.Effect;
         string text = $"{ta.Name}: {Fx(ta)}" + (ta.Risk != "없음" ? $" · 위험 {ta.Risk}" : "") + $" / {tb.Name}: {Fx(tb)}" + (tb.Risk != "없음" ? $" · 위험 {tb.Risk}" : "")
-                      + $" → 이 배라면 {(a >= b ? ta.Name : tb.Name)} (점수 {a:0.00} 대 {b:0.00})";
+                      + $" → 이 배라면 {(a >= b ? ta.Name : tb.Name)} (견줘 보니 {a:0.00} 대 {b:0.00})";
         return (a - b, text);
     }
 

@@ -33,6 +33,7 @@ public sealed class Proposal
     /// <summary>실제로 그때 안에 있던 사람 (컴퓨터는 모른다 — 채점·신뢰용).</summary>
     public List<int> Inside { get; init; } = new();
     public List<int> Found { get; } = new();
+    public long SeenAt { get; set; } = -1; public List<(long Tick, string Text)> Trail { get; } = new(); // v16.24 함장이 본 때 · 지나온 과정 (ProposalTiming)
     /// <summary>받으면 할 일 (일반 제안 — 배급 · 대피 · 모듈 …; 소화 제안은 대응 수순이 직접 본다). v16.16 계획자가 여기에 할 일을 싣는다.</summary>
     public Action<World, Proposal>? OnAccept { get; init; }
     /// <summary>일반 제안 채점 (null이면 "안에 사람이 있었나"로 채점).</summary>
@@ -75,6 +76,7 @@ public sealed class ProposalBoard
             Inside = room == null ? new() : w.Crew.Where(c => !c.Dead && c.Room == room && !c.Outside).Select(c => c.Id).ToList(),
         };
         All.Add(p);
+        ProposalTiming.Raised(w, p); // v16.24
         if (All.Count > 80) All.RemoveAt(0);
         w.Log.Add(w.Tick, LogKind.Ship, $"주 컴퓨터 제안 — {title} · 근거: {basis} · 예상: {effect} · 지휘하는 사람에게 묻는다 ({minutes:0.#}분 안에)");
         w.Automation.Book.Add(ActKind.Proposal, room, basis, effect, $"제안: {title}", "승인 · 거절", "p:" + p.Id, 0, minutes + 6f, (world, a) => Grade(p));
@@ -91,6 +93,7 @@ public sealed class ProposalBoard
         p.DecidedBy = who;
         p.DecideWhy = (accept ? "받음" : "거절") + (why != "" ? $" — {why}" : "");
         p.DecidedAt = w.Tick;
+        p.Trail.Add((w.Tick, $"{who}: {(accept ? "받음" : "거절")}" + (why != "" ? $" — {why}" : ""))); // v16.24
         if (accept) Accepted++; else Rejected++;
         if (who == "관찰자") ByPlayer++; else ByCaptain++;
         w.Log.Add(w.Tick, LogKind.Ship, $"{who}: 컴퓨터 제안 \"{p.Title}\" {(accept ? "받음" : "거절")}" + (why != "" ? $" — {why}" : ""));
@@ -110,10 +113,12 @@ public sealed class ProposalBoard
         var w = _w;
         foreach (var p in All)
         {
-            if (p.State != ProposalState.Pending || w.Tick < p.Deadline) continue;
+            if (p.State != ProposalState.Pending) continue;
+            string? moment = w.Tick < p.Deadline ? ProposalTiming.Moment(w, p) : "기한이 되어 정했다"; // v16.24 함장 · 회의가 자연스러운 때
+            if (moment == null) continue;
             var cmd = w.Command;
             var boss = cmd.Active && cmd.Commander is CrewMember c0 && c0.CanAct ? c0 : cmd.Captain is CrewMember cap && cap.CanAct ? cap : null;
-            if (boss == null) { Decide(p, true, "주 컴퓨터", "기한이 지났고 판단할 사람이 없다 — 컴퓨터가 실행"); continue; }
+            if (boss == null) { ProposalTiming.Decided(w, p, moment); Decide(p, true, "주 컴퓨터", "기한이 지났고 판단할 사람이 없다 — 컴퓨터가 실행"); continue; }
             Room? room = p.RoomId >= 0 ? w.Ship.Rooms[p.RoomId] : null;
             bool knows = room != null && w.Crew.Any(x => !x.Dead && x.Room == room && (boss.Room == room || boss.Mind.Knows.ContainsKey($"down:{x.Id}")));
             float trust = w.Automation.Trusts.Of(boss);
@@ -127,6 +132,7 @@ public sealed class ProposalBoard
                 accept = plenty;
                 why = plenty ? $"{rm.Name} 눈금을 직접 봤다 — 넉넉하다" : $"{rm.Name} 눈금을 직접 봤다 — 아직은 아낀다";
             }
+            ProposalTiming.Decided(w, p, moment);
             Decide(p, accept, boss.Name, why);
         }
     }
