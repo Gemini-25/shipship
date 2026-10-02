@@ -195,7 +195,7 @@ public static partial class Program
                 int crisisRevs = a.Planner.Emergency.Revisions;
                 a.Planner.Force("시험: 사람이 지쳤다");
                 Run(w, World.SystemInterval * 2);
-                var o = w.Board.Open.FirstOrDefault(x => x.Urgency < 0.9f) ;
+                var o = w.Board.Open.FirstOrDefault(x => x.Urgency < 0.6f);
                 float bt = o != null ? a.CrewModel.RequestBias(tired, o) : 0f, bf = o != null ? a.CrewModel.RequestBias(fresh, o) : 0f;
                 a.Apps.Roster.Clear();
                 foreach (var t in new[] { tired, teamMember }) { t.Needs.Rest = 0.1f; }

@@ -742,9 +742,12 @@ public sealed class ShipPlanner
         {
             Emergency.AnnouncedFire = fc.RoomId;
             var room = w.Ship.Rooms[fc.RoomId];
-            string names = string.Join("·", Emergency.FireTeam.Select(id => w.Crew.FirstOrDefault(c => c.Id == id)?.Name ?? "?"));
-            a.Speak.Announce(a.Authority.Say($"화재 대응 계획 — {room.Name}: 소화조 {names} · 나머지는 {Emergency.Shelter}로"), room, 2);
-            if (a.Authority.Level(Domain.Crisis) == AuthLevel.Auto)
+            // 현장 지휘가 조를 짰으면 그 조를 따른다 (컴퓨터 계획은 지휘가 없을 때의 밑그림)
+            bool led = w.Command.Active;
+            var cmdTeam = led ? w.Crew.Where(c => !c.Dead && w.Command.TeamOf(c) is Team t && t.Kind == TeamKind.Fire).Select(c => c.Id).ToList() : Emergency.FireTeam;
+            string names = cmdTeam.Count > 0 ? string.Join("·", cmdTeam.Select(id => w.Crew.FirstOrDefault(c => c.Id == id)?.Name ?? "?")) : "지휘가 정한다";
+            a.Speak.Announce(a.Authority.Say($"화재 대응 계획 — {room.Name}: 소화조 {names} · 나머지는 {Emergency.Shelter}로"), room, 1);
+            if (!led && a.Authority.Level(Domain.Crisis) == AuthLevel.Auto)
                 foreach (var id in Emergency.FireTeam)
                     if (w.Crew.FirstOrDefault(c => c.Id == id) is CrewMember c && w.Board.Open.FirstOrDefault(o => o.Kind == WorkKind.Extinguish && o.Target.CurrentRoom == room) is WorkOrder o)
                         cm.Ask(c, o, "화재 대응 계획의 소화조", 1f);

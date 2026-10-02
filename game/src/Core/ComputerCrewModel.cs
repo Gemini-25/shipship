@@ -232,9 +232,13 @@ public sealed class CrewModelBook
         if (_asks.Count == 0 && _rest.Count == 0) return 0f;
         float b = 0f;
         if (_asks.TryGetValue(c.Id, out var ask) && ask.OrderId == o.Id && ask.Until > _w.Tick) b += 0.35f * _w.Automation.Trusts.Of(c);
-        if (_rest.TryGetValue(c.Id, out var until) && until > _w.Tick && o.Urgency < 0.9f) b -= 0.4f * _w.Automation.Trusts.Of(c);
+        if (_rest.TryGetValue(c.Id, out var until) && until > _w.Tick && o.Urgency < 0.6f && Routine(o.Kind)) b -= 0.4f * _w.Automation.Trusts.Of(c); // 늘 하는 일만 (급한 일 · 사고 수습 · 관제석은 그대로)
         return b;
     }
+
+    /// <summary>늘 하는 일 (쉬라는 부탁이 미루게 하는 일).</summary>
+    public static bool Routine(WorkKind k) => k is WorkKind.Maintain or WorkKind.Tend or WorkKind.Harvest or WorkKind.Cook or WorkKind.Restock or WorkKind.Fabricate
+        or WorkKind.PreventiveCheck or WorkKind.Calibrate or WorkKind.Upgrade or WorkKind.Train or WorkKind.Drill or WorkKind.CleanUp;
 
     /// <summary>한 줄 요약 (화면).</summary>
     public string Summary(CrewMember c)
