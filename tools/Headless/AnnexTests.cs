@@ -55,6 +55,13 @@ public static partial class Program
                     if (slept && w.Tick - p.Opened > SimTime.Hours(2) || w.Tick - p.Opened > SimTime.TicksPerDay * 1.5f) break;
                 }
             }
+            if (p != null && p.State == "공사")
+            {
+                var ar = w.Ship.Rooms[p.Site.AttachRoom];
+                var cardP = w.Automation.Asks.All.FirstOrDefault(x => x.Id == p.CardId);
+                Console.WriteLine($"  [진단] {p.Stage} · 시험 {p.FullTest} · 맡은 {p.PressureBy} · 위기 {Crisis.Level(w)} · {ar.Name} 버림 {ar.Abandoned} 샘 {ar.Leaking} 압력 {ar.Air.Pressure:0} · 문안 {p.Site.DoorInner} 가구 {w.Ship.FurnitureAt(p.Site.DoorInner)?.Label} 걷기 {w.Ship.IsWalkable(p.Site.DoorInner)} · 카드 {cardP?.State} · 막힘 {w.Annex.Stats.Waits}");
+                foreach (var c in w.Crew.Take(14)) Console.WriteLine($"    {c.Name} {c.Job?.Label} · {c.Room?.Name} · 밖 {c.Outside}");
+            }
             if (p == null)
             {
                 Check("증축 안건이 공사까지", false, $"안건 {w.Annex.Plans.Count}: {string.Join(" / ", w.Annex.Plans.Select(x => $"{x.Title}:{x.State}"))}");

@@ -27,12 +27,12 @@ public enum AnnexStage { Frame, Plating, Pressure, Utilities, FitOut, Opening, D
 /// <summary>증축 자리: 붙는 외벽 줄(Y0) 아래로 안쪽 칸 (X0..X1 × Depth) · 새 벽(옆 · 바닥) · 외벽에 낼 문.</summary>
 public sealed class AnnexSite
 {
-    public int AttachRoom { get; init; } = -1;
+    public int AttachRoom { get; set; } = -1;
     public int X0 { get; init; }
     public int X1 { get; init; }
     public int Y0 { get; init; }
     public int Depth { get; init; }
-    public Cell Door { get; init; }
+    public Cell Door { get; set; }
     /// <summary>격자를 몇 줄 늘려야 하나 (바깥 벽 아래로 우주 세 줄 — 선외 작업 칸).</summary>
     public int Grow { get; set; }
     public List<Cell> Inside { get; } = new();
@@ -300,6 +300,7 @@ public sealed partial class AnnexSystem
         if (p == null) { Working = 0; EvaHalted = false; QuietHours = false; return; }
         if (!Valid(p)) { Stop(p, "붙일 방을 쓸 수 없게 됐다"); return; }
         UpdateHalt(p);
+        if (w.Tick % 300 == 0) { Tend(); RefreshDoor(p); }
         DroneWork(p, dt);
         int n = 0;
         foreach (var kv in _doing) if (kv.Value.plan == p.Id && kv.Value.kind != AnnexJob.Celebrate && Crew(kv.Key) is CrewMember wc && wc.Pose == Pose.Working) n++;
@@ -307,6 +308,31 @@ public sealed partial class AnnexSystem
         CheckStage(p);
         if (w.Tick % SimTime.Minutes(10) < World.SystemInterval) Noise(p);
         if (w.Tick % SimTime.TicksPerHour < World.SystemInterval) EnsureSpace(p);
+    }
+
+    /// <summary>문 자리 다시 보기: 공사 중에 위 방이 칸막이로 나뉘거나 길이 막히면 다른 칸으로 (붙는 방도 따라 바뀐다).</summary>
+    private void RefreshDoor(AnnexPlan p)
+    {
+        var w = _w;
+        var ship = w.Ship;
+        var s = p.Site;
+        if (p.Enclosed >= 0) return;
+        if (ship.IsWalkable(s.DoorInner) && ship.RoomAt(s.DoorInner) is Room r0 && !r0.OffLimits && ship.WallAt(s.Door) is { IsHull: true })
+        {
+            if (s.AttachRoom != r0.Id) { s.AttachRoom = r0.Id; Version++; }
+            return;
+        }
+        foreach (int x in Enumerable.Range(s.X0, s.Width).OrderBy(x => Math.Abs(x - s.Door.X)).ThenBy(x => x))
+        {
+            var inner = new Cell(x, s.Y0 - 1);
+            if (!ship.IsOpenFloor(inner) || !ship.IsWalkable(inner) || ship.RoomAt(inner) is not Room r || r.OffLimits) continue;
+            if (ship.WallAt(new Cell(x, s.Y0)) is not { IsHull: true }) continue;
+            s.Door = new Cell(x, s.Y0);
+            s.AttachRoom = r.Id;
+            Version++;
+            w.Log.Add(w.Tick, LogKind.Ship, $"증축 문 자리를 옮긴다 — {r.Name} 쪽 ({x}칸 · 원래 자리가 막혔다)");
+            return;
+        }
     }
 
     private bool Valid(AnnexPlan p)

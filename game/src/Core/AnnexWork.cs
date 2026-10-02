@@ -29,6 +29,7 @@ public sealed partial class AnnexSystem
     internal float DoingScore(CrewMember c)
     {
         if (!_doing.TryGetValue(c.Id, out var d)) return 0f;
+        if (d.kind != AnnexJob.Frame && Crisis.Level(_w) >= CrisisLevel.Emergency) return 0.25f; // 비상: 공사는 미룬다
         return d.kind switch
         {
             AnnexJob.Frame => c.Outside ? 1.05f : 0.85f, // 선체 밖: "돌아간다"(0.95)보다 높게 — 산소 · 운석 경보는 여전히 이긴다
@@ -81,6 +82,7 @@ public sealed partial class AnnexSystem
         var p = Active;
         if (p == null || !c.CanAct || c.Away) return null;
         if (_blocked.TryGetValue(c.Id, out var until) && w.Tick < until) return null;
+        if (Crisis.Level(w) >= CrisisLevel.Emergency) return null; // 비상: 공사는 미룬다
         var room = RoomOf(p.RoomId);
         // 개통식: 아이도 온다
         if (p.Stage == AnnexStage.Opening)
@@ -221,6 +223,17 @@ public sealed partial class AnnexSystem
         if (frame && i % 4 == 0) ItemsV15.Use(_w, ItemKind.Structure);
         if (!frame && i % 2 == 0) ItemsV15.Use(_w, ItemKind.Plate);
         return true;
+    }
+
+    /// <summary>일을 놓친 사람(죽음 · 쓰러짐 · 다른 일로 끊김)의 칸을 풀어 준다.</summary>
+    private void Tend()
+    {
+        List<int>? gone = null;
+        foreach (var kv in _doing)
+            if (Crew(kv.Key) is not CrewMember c || c.Dead || c.Job?.Activity is not AnnexWorkActivity) (gone ??= new()).Add(kv.Key);
+        if (gone == null) return;
+        gone.Sort();
+        foreach (var id in gone) if (Crew(id) is CrewMember c) Finished(c, ToilStatus.Interrupted); else _doing.Remove(id);
     }
 
     /// <summary>일이 끝났다 (성공이든 끊김이든) — 맡은 칸을 놓는다.</summary>
