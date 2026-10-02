@@ -570,7 +570,7 @@ public sealed partial class BodySystem
         if (w.Ship.RoomAt(cell) is { Dark: true } dr && R.Chance(urgent ? 0.004f : 0.0008f))
         {
             bool ladder = _w.Paths.Crawl[i] || dr.Type is RoomType.Reactor or RoomType.Engine or RoomType.Cooling;
-            Fall(c, cell, ladder ? "캄캄한 데서 발을 헛디뎌 아래로 떨어졌다" : "캄캄한 데서 무언가에 걸려 넘어졌다", ladder ? 0.18f + R.Range(0f, 0.25f) : 0.04f + R.Range(0f, 0.08f), leg: true);
+            Fall(c, cell, ladder ? "캄캄한 데서 발을 헛디뎌 아래로 떨어졌다" : "캄캄한 데서 무언가에 걸려 넘어졌다", ladder ? 0.18f + R.Range(0f, 0.25f) : 0.02f + R.Range(0f, 0.03f), leg: ladder);
             Stats.DarkFalls++;
             return;
         }
