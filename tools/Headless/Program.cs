@@ -90,6 +90,7 @@ public static partial class Program
         if (args.Contains("--bigships")) return RunBigShips(days, seed, args);
         if (args.Contains("--tiers")) return RunTierRecovery(seed, args);
         if (args.Contains("--docks")) return RunDocks();
+        if (args.Contains("--audit") || args.Contains("--audit-one") || args.Contains("--audittest")) return RunAudit(args, seed); // v16.23 점검 항해
         var world = World.CreateDefault(seed, crewArg, shipArg);
         world.CrewCanDie = death;
         world.Log.Capacity = 60000; // 긴 시험의 기록을 끝까지 볼 수 있게
