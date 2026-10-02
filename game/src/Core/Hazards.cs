@@ -289,7 +289,8 @@ public sealed partial class HazardSystem
         var mid = new System.Numerics.Vector2(rooms.Average(r => r.Center.X), rooms.Average(r => r.Center.Y));
         int side = w.Rng.Range(0, 4);
         var from = side switch { 0 => new System.Numerics.Vector2(1, 0), 1 => new System.Numerics.Vector2(-1, 0), 2 => new System.Numerics.Vector2(0, 1), _ => new System.Numerics.Vector2(0, -1) };
-        var weight = rooms.Select(r => hullCells[r.Id] * (System.Numerics.Vector2.Dot(r.Center - mid, from) > 0f ? 3f : 1f)).ToList();
+        // 통합: 오는 쪽을 여섯 배로 (세 배면 운석 대여섯 개 중 오는 쪽이 70%를 못 넘는 일이 절반 — 무리가 한쪽에서 온다는 게 드러나지 않았다)
+        var weight = rooms.Select(r => hullCells[r.Id] * (System.Numerics.Vector2.Dot(r.Center - mid, from) > 0f ? 6f : 1f)).ToList();
         float wsum = weight.Sum();
         for (int i = 0; i < n; i++)
         {

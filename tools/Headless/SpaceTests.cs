@@ -109,7 +109,12 @@ public static partial class Program
             foreach (var x in w.Crew) if (x.Job?.Order == o) x.EndJob(w, ToilStatus.Interrupted);
             Force(w, c, SpChore(w, c, o)!, SimTime.Hours(4));
             for (int k = 0; k < 40 && o.Progress < 0.15f; k++) Run(w, SimTime.Minutes(3));
-            var site = w.Coop.Sites.First(s => s.OrderId == o.Id);
+            var site = w.Coop.Sites.FirstOrDefault(s => s.OrderId == o.Id);
+            if (site == null) // 통합: 멈추지 않고 왜 자리가 안 펼쳐졌는지 남긴다
+            {
+                Check("펼친 부품이 통로를 좁힌다 (ObjectPhysics 통로 점유와 같은 규칙 · 길찾기 비용)", false, $"정비 자리가 안 펼쳐졌다 — {c.Name} {c.Job?.Label} · {c.Room?.Name} · 진척 {o.Progress:P0} · 맡은 사람 {o.Assignee?.Name} · {f.Name}@{f.Room.Name}");
+                goto Skip1b;
+            }
             Force(w, c, new Job(null, "비상 소집", new Toil[] { new WaitToil(SimTime.Minutes(10), Pose.Standing) }) { Urgent = true }, SimTime.Minutes(12));
             Run(w, SimTime.Minutes(2));
             // 펼친 부품 하나가 통로 칸에 있으면 길찾기 비용이 오른다 (짐 · 상자와 같은 규칙)
@@ -134,6 +139,7 @@ public static partial class Program
             var conf = w.Log.Entries.LastOrDefault(e => e.CrewId == c.Id && e.Text.Contains("헷갈려")).Text;
             Check("누가 건드린 자리로 돌아오면 헷갈린다 (느려짐 · 건드린 사람에게 서운함)", w.Coop.Stats.Confused >= 1 && conf != null && c.AffinityTo(other) < aff,
                 $"헷갈림 {w.Coop.Stats.Confused} · \"{conf}\" · {c.Name}→{other.Name} {aff:0.00} → {c.AffinityTo(other):0.00}");
+            Skip1b:;
         }
 
         // ── 2) 둘이 하는 일: 한 명은 잡고 한 명은 체결 — 짝이 오면 함께, 안 오면 시간 상한 뒤 혼자 · 보류 (교착 없음) ──

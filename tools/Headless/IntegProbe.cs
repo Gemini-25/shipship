@@ -11,6 +11,46 @@ public static partial class Program
 
     private static void IgProbe2(int seed, string what)
     {
+        if (what.Contains("allship"))
+        {
+            foreach (var key in new[] { "Cheonma" })
+            {
+                var w = DayOne(seed, key);
+                var galley = w.Ship.RoomsOf(RoomType.Galley).First();
+                w.Fire.Ignite(galley.Cells.First(w.Ship.IsOpenFloor), 0.6f);
+                var watch = w.Crew.Where(c => c.Name == "온다인" || c.Name == "오스카 로시").ToList();
+                for (int h = 0; h < 12; h++)
+                {
+                    for (int q = 0; q < 4; q++) { Run(w, SimTime.Minutes(15)); Console.WriteLine($"   {SimTime.Clock(w.Tick)} " + string.Join(" | ", watch.Select(c => $"{c.Name} 배 {c.Needs.Food:0.00} 쉼 {c.Needs.Rest:0.00} {c.Room?.Name} {c.ActivityLabel} 근무 {c.Schedule.WorkStart}+{c.Schedule.WorkLength}"))); }
+                    var low = w.Crew.Where(c => !c.Dead && c.Needs.Food <= 0.2f).ToList();
+                    Console.WriteLine($"{key} {SimTime.Clock(w.Tick)} 불 {w.Fire.Count} · 주방 CO {galley.Air.CO:0.000} 연기 {galley.Air.Smoke:0.00} · 식사 재고 {w.Ship.CountStored(ItemKind.Meal)} · 배급 {w.Food.Rationing} · 배고픈 {low.Count}: " + string.Join(", ", low.Take(4).Select(c => $"{c.Name} {c.Needs.Food:0.00} {c.Room?.Name} {c.ActivityLabel}")));
+                }
+            }
+        }
+        if (what.Contains("cmdfire"))
+        {
+            var w = DayOne(seed, "Mirinae");
+            w.Policies.Set("inertfire", 0, "시험"); w.Policies.Set("vacuumfire", 0, "시험"); w.Policies.Set("command", 0, "시험");
+            var store = StoreRoom(w);
+            var spare = w.Ship.Containers.FirstOrDefault(f => f.Room != store && f.Storage!.Accepts(ItemKind.Extinguisher) && f.Storage.Free >= 3);
+            spare?.Storage!.Add(ItemKind.Extinguisher, 3);
+            BigFire(w, store, 5);
+            var lounge = w.Ship.RoomsOf(RoomType.Lounge).First();
+            var wall = w.Ship.Walls.Where(kv => kv.Value.IsHull && Hull.InsideRoom(w.Ship, kv.Key) == lounge).Select(kv => kv.Key).First();
+            Hull.Damage(w.Ship, wall, 0.5f);
+            var inside = store.Cells.Where(c => w.Ship.IsOpenFloor(c)).OrderBy(c => (c.Center - store.Center).LengthSquared()).First();
+            for (int m = 0; m < 14; m++)
+            {
+                Run(w, SimTime.Minutes(1));
+                Console.WriteLine($"{SimTime.Clock(w.Tick)} 불 {w.Fire.CountIn(store)} · 문 " + string.Join(", ", store.Doors.Select(d => $"{d.Cell} 잠김 {d.Locked}")));
+                foreach (var c in w.Crew.Where(c => c.Job?.Order?.Kind == WorkKind.Extinguish || c.Job?.Activity is HelpActivity))
+                {
+                    var f = w.Paths.Flood(c.Cell, c.PathProfile);
+                    Console.WriteLine($"   {c.Name} {c.Room?.Name} {c.Cell} {c.Job?.Label} · 창고 안까지 {f.Get(inside)} · 손 {c.Carrying?.Kind}");
+                }
+            }
+            foreach (var e in w.Log.Entries.Where(e => e.Tick > w.Tick - SimTime.Minutes(14)).Take(40)) Console.WriteLine($"   기록 {SimTime.Clock(e.Tick)} {w.Crew.FirstOrDefault(c => c.Id == e.CrewId)?.Name} {e.Text}");
+        }
         if (what.Contains("pharm"))
         {
             var w = DayOne(seed, "Hanbit");
@@ -212,6 +252,21 @@ public static partial class Program
             if (w.Ship.Walls.Where(kv => kv.Value.IsHull && Hull.InsideRoom(w.Ship, kv.Key) == room).OrderBy(kv => (kv.Key.Center - p.Position).LengthSquared()).Select(kv => kv.Key).Cast<Cell?>().FirstOrDefault() is Cell hole) Hull.Damage(w.Ship, hole, 2f);
             Console.WriteLine($"   충돌 {(imp == null ? "없음" : $"크기 {imp.Size:0.00}")} · 외벽 " + string.Join(" ", w.Ship.Walls.Where(kv => kv.Value.IsHull && (kv.Key.Center - t.Center).Length() < 3f).Select(kv => $"{kv.Key}:{kv.Value.Integrity:0.00}/{kv.Value.Breach:0.00}/장갑{kv.Value.Armor:0.0}/보강{kv.Value.Reinforced}")));
             for (int m = 0; m < 8; m++) { Run(w, SimTime.Minutes(1)); Console.WriteLine($"   {m + 1}분 기압 {room.Air.Pressure:0} 샘 {room.Leaking} · {p.Name} {p.Room?.Name} {p.Cell} {p.Pose} {p.Job?.Label}/{p.Job?.Current?.GetType().Name} 길 {p.Path?.Count} 혈중산소 {p.Vitals.Oxygen:0.00} · 몸이 먼저 {w.CrisisCrew.BodyFirsts} · 공황 {p.Mind.Panicking(w.Tick)} 얼음 {p.Mind.Frozen} · 문 {string.Join(" ", room.Doors.Select(d => $"{d.Cell}:{d.Openness:0.0}/잠김{d.Locked}/{w.Failsafe.Latched(d)}"))}"); }
+        }
+
+        if (what.Contains("bandage"))
+        {
+            var w = DayOne(seed, "Mirinae");
+            foreach (var f in w.Ship.Furniture.Where(f => f.Storage != null)) f.Storage!.Take(ItemKind.MedKit, 999);
+            var p = w.Crew[2];
+            NeedsSystem.AddInjury(p.Vitals, 0.4f, "시험");
+            for (int h = 0; h < 12; h++)
+            {
+                Run(w, SimTime.Hours(1));
+                var o = w.Board.All.FirstOrDefault(x => x.Kind == WorkKind.Treat && x.Target.Crew == p && !x.Closed);
+                Console.WriteLine($"   {h + 1}h {p.Name} 부상 {p.Vitals.Injury:0.00} 체력 {p.Vitals.Health:0.00} 치료 {(p.Vitals.TreatedTick > 0 ? SimTime.Clock(p.Vitals.TreatedTick) : "-")} · 일 {(o == null ? "-" : $"{o.Urgency:0.00} {o.Assignee?.Name ?? "-"} {o.BlockedReason}")} · 키트(사람) {w.Crew.Sum(c => c.KitCount(ItemKind.MedKit))} 붕대 {w.Ship.CountStored(ItemKind.Bandage)} · 상처 {w.Casualty.Of(p)?.Kind}");
+            }
+            foreach (var e in w.Log.Entries.Where(e => e.Text.Contains("처치") || e.Text.Contains("치료") || e.Text.Contains("멎")).Take(8)) Console.WriteLine($"      {SimTime.Clock(e.Tick)} {e.Text}");
         }
     }
 }

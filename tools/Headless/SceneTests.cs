@@ -210,7 +210,7 @@ public static partial class Program
                 ScUntil(w, () => s2 == null || !s2.Open, 2f);
                 var far = adults.FirstOrDefault(c => note != null && !note.Readers.Contains(c.Id));
                 Check("쪽지 — 냉장고 쪽지는 냉장고 앞에 선 사람만 읽는다 (안 간 사람은 모른다)", note != null && note.Readers.Contains(reader.Id) && far != null,
-                    $"\"{note?.Text}\" · 읽은 사람 {readers0} → {note?.Readers.Count}명({string.Join(",", note?.Readers.Select(id => w.Crew.First(c => c.Id == id).Name) ?? Array.Empty<string>())}) · 못 읽은 사람 예: {far?.Name}");
+                    $"\"{note?.Text}\" · 읽은 사람 {readers0} → {note?.Readers.Count}명({string.Join(",", note?.Readers.Select(id => w.Crew.First(c => c.Id == id).Name) ?? Array.Empty<string>())}) · 못 읽은 사람 예: {far?.Name} · 냉장고에 보낸 사람 {reader.Name}({reader.Room?.Name}) 간식 {(s2 == null ? "못 엶" : s2.Stage.ToString())} · 쪽지 방 {(note != null && note.RoomId >= 0 && note.RoomId < w.Ship.Rooms.Count ? w.Ship.Rooms[note.RoomId].Name : "?")}");
             }
 
             // 4-2) 간식 × 음식: 식탁에 이름표를 붙여 덜어 둔 남의 몫을 밤에 먹어 버린다 → 주인은 늦은 끼니를 못 찾고 · 쪽지를 붙인다

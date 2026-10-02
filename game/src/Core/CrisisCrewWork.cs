@@ -345,13 +345,22 @@ public sealed class HelpActivity : Activity
         var field = o.Urgency >= 0.9f ? w.Paths.Flood(c.Cell, new PathProfile(c.PathProfile.HazardScale * 0.8f, true, true)) : dist;
         Cell? spot = null;
         int bc = int.MaxValue;
-        foreach (var s in o.Target.Spots(w.Ship).Concat(Cell.Dirs8.Select(d => lead.Cell + d)))
+        // 통합: 이끄는 사람이 아직 일터로 가는 중이면 그 곁(출발점)이 아니라 일터에 가서 선다 — 큰 배에서 출발점에 남아 아무도 없는 곳에서 "거들던" 것
+        bool leadAway = (lead.Position - o.Target.Center).LengthSquared() > 25f;
+        foreach (var s in leadAway ? o.Target.Spots(w.Ship) : o.Target.Spots(w.Ship).Concat(Cell.Dirs8.Select(d => lead.Cell + d)))
         {
             int d = field.Get(s);
             if (d < 0 || d >= bc || !w.Ship.IsWalkable(s) || w.IsSpotTaken(s, c) || s == lead.Cell
                 || (s.Center - lead.Position).LengthSquared() > 6.5f && (s.Center - o.Target.Center).LengthSquared() > 9f) continue;
             spot = s; bc = d;
         }
+        if (spot == null && leadAway)
+            foreach (var s in Cell.Dirs8.Select(d => lead.Cell + d))
+            {
+                int d = field.Get(s);
+                if (d < 0 || d >= bc || !w.Ship.IsWalkable(s) || w.IsSpotTaken(s, c) || s == lead.Cell) continue;
+                spot = s; bc = d;
+            }
         if (spot is not Cell at) return null;
         var toils = Plans.DropOff(c, w, field);
         toils.Add(new GotoToil(at));
@@ -409,6 +418,8 @@ public sealed class AssistToil : Toil
         _elapsed++;
         if (_crowded || _o.Closed || _lead.Dead || _lead.Down || _lead.Job?.Order != _o) return ToilStatus.Succeeded;
         if (c.Room is Room cr && (cr.EvacuateBy >= 0 || cr.Purging || cr.Inerting)) return ToilStatus.Succeeded; // 소화 경보 — 비우는 방에서 나간다
+        // 통합: 이끄는 사람도 일터도 곁에 없다 (그 사람이 아직 가는 중이었다) — 손을 떼고 일터로 다시 간다
+        if (_elapsed % 25 == 0 && (c.Position - _lead.Position).LengthSquared() > 16f && (c.Position - _o.Target.Center).LengthSquared() > 16f) return ToilStatus.Succeeded;
         if (_elapsed % 30 == 0) Locomotion.Face(c, _o.Target.Center);
         w.CrisisCrew.HelpHours += 1f / SimTime.TicksPerHour;
         // 곁에서 보며 손에 익는다 (솜씨 좋은 사람 곁이면 더)

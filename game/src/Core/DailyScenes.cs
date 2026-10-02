@@ -473,7 +473,7 @@ public sealed class DailySceneSystem
             c.Interrupt(_w);
             return sp;
         }
-        var fridge = Fridge(ItemKind.Meal) ?? Fridge(ItemKind.Produce);
+        var fridge = Fridge(ItemKind.Meal, c) ?? Fridge(ItemKind.Produce, c);
         if (fridge == null || SpotBy(fridge) is not Cell at) return null;
         var s = New(SceneKind.Snack, c, $"{c.Name}의 간식", fridge.Room);
         s.Spot = at;
@@ -485,9 +485,9 @@ public sealed class DailySceneSystem
         return s;
     }
 
-    private Furniture? Fridge(ItemKind k) =>
+    private Furniture? Fridge(ItemKind k, CrewMember? near = null) =>
         _w.Ship.Furniture.Where(f => f.Storage != null && !f.Stowed && Usable(f.Room) && f.Storage.Count(k) > 0)
-            .OrderBy(f => f.Type == FurnitureType.Fridge ? 0 : 1).ThenBy(f => f.Id).FirstOrDefault();
+            .OrderBy(f => f.Type == FurnitureType.Fridge ? 0 : 1).ThenBy(f => near == null ? 0f : (f.Cells[0].Center - near.Position).LengthSquared()).ThenBy(f => f.Id).FirstOrDefault(); // 통합: 출출하면 가까운 냉장고로 (새 배는 냉장고가 여럿 — 배 반대편 냉장고까지 가지 않는다)
 
     /// <summary>몽유병: 자던 사람이 잠결에 복도로 걸어 나온다 — 당직이 찾아 침대로 데려간다.</summary>
     public bool Sleepwalk(DailyCtx x)

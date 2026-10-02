@@ -226,7 +226,9 @@ public static partial class Program
             var at = cor.Cells.Where(c => w.Ship.IsOpenFloor(c) && (b.Under[w.Ship.Grid.Index(c)] & UnderFlags.HatchSpot) != 0).OrderBy(c => c.X).Skip(3).First();
             Teleport(w, fixer, at);
             w.Step();
-            var order = new WorkOrder { Id = 999999, Kind = WorkKind.PatchPipe, Target = WorkTarget.OfRoom(cor), Skill = Skill.Mechanics, Posted = w.Tick };
+            // 통합: 땜질 일감은 진짜 관을 가리킨다 (관 없는 일감은 로봇이 곁에서 거들며 이름을 부를 때 멈췄다)
+            var pseg = w.Piping.Segments.FirstOrDefault(sg => sg.Path.Count > 0);
+            var order = new WorkOrder { Id = 999999, Kind = WorkKind.PatchPipe, Target = pseg != null ? WorkTarget.OfPipe(pseg, cor) : WorkTarget.OfRoom(cor), Skill = Skill.Mechanics, Posted = w.Tick };
             Force(w, fixer, new Job(null, "배관 땜질", new List<Toil> { new WorkToil(0.4f, Skill.Mechanics, at.Center) }) { Order = order });
             int open0 = b.Stats.HatchOpens;
             bool sawOpen = false;
