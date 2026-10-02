@@ -253,7 +253,7 @@ public sealed class Pathfinder
     public void HazardChanged()
     {
         if (_hazardSeen.Length == CellHazard.Length && CellHazard.AsSpan().SequenceEqual(_hazardSeen)) return;
-        _hazardSeen = (int[])CellHazard.Clone();
+        if (_hazardSeen.Length == CellHazard.Length) Array.Copy(CellHazard, _hazardSeen, CellHazard.Length); else _hazardSeen = (int[])CellHazard.Clone(); // v16.26 새로 만들지 않고 덮어쓴다
         _hazardVersion++;
     }
 
@@ -262,7 +262,7 @@ public sealed class Pathfinder
     public void BodyChanged()
     {
         if (_bodySeen.Length == CellBody.Length && CellBody.AsSpan().SequenceEqual(_bodySeen)) return;
-        _bodySeen = (int[])CellBody.Clone();
+        if (_bodySeen.Length == CellBody.Length) Array.Copy(CellBody, _bodySeen, CellBody.Length); else _bodySeen = (int[])CellBody.Clone();
         _hazardVersion++;
     }
 
@@ -287,7 +287,7 @@ public sealed class Pathfinder
         }
         if (_state.Length != len || !s.AsSpan().SequenceEqual(_state))
         {
-            _state = (int[])s.Clone();
+            if (_state.Length == s.Length) Array.Copy(s, _state, s.Length); else _state = (int[])s.Clone();
             _stateVersion++;
         }
         return _stateVersion;
@@ -308,7 +308,7 @@ public sealed class Pathfinder
             Prof.Lap("path.Flood(캐시)", pf);
             return e.Field;
         }
-        var field = FloodCore(start, profile);
+        var field = FloodCore(start, profile, version);
         if (_floods.Count > 512) _floods.Clear();
         _floods[key] = new FloodEntry { Version = version, Fear = profile.Fear == null ? null : (float[])profile.Fear.Clone(), Field = field };
         FloodMisses++;
@@ -325,7 +325,8 @@ public sealed class Pathfinder
     private int[] _roomAdd = Array.Empty<int>(), _doorAdd = Array.Empty<int>();
     private bool[] _roomBlocked = Array.Empty<bool>(), _doorBlocked = Array.Empty<bool>();
 
-    private DistanceField FloodCore(Cell start, PathProfile profile)
+    private int _passVersion = -1, _passFlags = -1;
+    private DistanceField FloodCore(Cell start, PathProfile profile, int version = -1)
     {
         if (profile.HazardScale == 0f) profile = PathProfile.Default;
         var grid = _ship.Grid;
@@ -336,8 +337,13 @@ public sealed class Pathfinder
         int s = grid.Index(start);
         int startRoom = _room[s];
         // 칸: 지나갈 수 있나 (Passable과 같다)
-        if (_pass.Length != _n) _pass = new bool[_n];
-        for (int i = 0; i < _n; i++) _pass[i] = Passable(i, profile);
+        if (_pass.Length != _n) { _pass = new bool[_n]; _passVersion = -1; }
+        int passFlags = (profile.Eva ? 1 : 0) | (profile.Robot ? 2 : 0) | (profile.NoCrawl ? 4 : 0);
+        if (version < 0 || version != _passVersion || passFlags != _passFlags) // v16.26 칸 통행은 구조 · 문 · 정비 통로가 그대로면 같다 (판 번호가 같으면 다시 쓴다)
+        {
+            for (int i = 0; i < _n; i++) _pass[i] = Passable(i, profile);
+            _passVersion = version; _passFlags = passFlags;
+        }
         // 방: 위험·공포 비용, 숨 못 쉬는 방 (StepCost·CanStep과 같은 식)
         int nr = _ship.Rooms.Count;
         if (_roomAdd.Length < nr) { _roomAdd = new int[nr]; _roomBlocked = new bool[nr]; }
@@ -374,6 +380,9 @@ public sealed class Pathfinder
             _doorBlocked[d] = blocked;
         }
         float cellScale = (profile.Suit ? 0.5f : 1f);
+        // v16.26 성능: 한 걸음 비용이 작은 정수라 원형 통 큐(버킷)로 — 거리는 가장 짧은 길의 값이라 고르는 순서가 달라도 결과는 같다
+        int maxStep = MaxStep(nr, nd0, cellScale * profile.HazardScale);
+        if (maxStep > 0 && maxStep < (1 << 16)) { BucketFlood(s, cost, maxStep, cellScale, profile.HazardScale); return new DistanceField(grid, cost); }
         var open = _open;
         open.Clear();
         cost[s] = 0;
@@ -414,6 +423,90 @@ public sealed class Pathfinder
             }
         }
         return new DistanceField(grid, cost);
+    }
+
+    // ── v16.26 원형 통 큐 (같은 식 · 같은 값) ──
+    private int[] _bHead = Array.Empty<int>();
+    private int[] _eNode = new int[4096], _eNext = new int[4096];
+
+    /// <summary>한 걸음에 드는 비용의 위 끝 (0 = 통 큐를 못 쓴다: 0 이하 걸음이 있을 수 있다).</summary>
+    private int MaxStep(int nr, int nd, float hazardMul)
+    {
+        int maxRoom = 0, maxDoor = 0, maxH = 0, maxB = 0, minB = 0;
+        for (int r = 0; r < nr; r++) { int a = _roomAdd[r]; if (a < 0) return 0; if (a > maxRoom) maxRoom = a; }
+        for (int d = 0; d < nd; d++) { int a = _doorAdd[d]; if (a < 0) return 0; if (a > maxDoor) maxDoor = a; }
+        var hz = CellHazard; var bd = CellBody;
+        for (int i = 0; i < _n; i++)
+        {
+            int h = hz[i]; if (h > maxH) maxH = h;
+            int b = bd[i]; if (b > maxB) maxB = b; else if (b < minB) minB = b;
+        }
+        if (minB < 0 || hazardMul < 0f) return 0;
+        long m = Diagonal + PathProfile.SpaceCost + FurniturePenalty + (long)maxRoom + maxDoor + (long)(maxH * hazardMul) + 1 + maxB;
+        return m > int.MaxValue / 4 ? int.MaxValue : (int)m;
+    }
+
+    private void BucketFlood(int s, int[] cost, int maxStep, float cellScale, float hazardScale)
+    {
+        int B = maxStep + 1;
+        if (_bHead.Length < B) _bHead = new int[Math.Max(B, _bHead.Length * 2)];
+        var head = _bHead;
+        Array.Fill(head, -1, 0, B);
+        int count = 0, pending = 0;
+        void Push(int node, int d)
+        {
+            if (count == _eNode.Length) { Array.Resize(ref _eNode, count * 2); Array.Resize(ref _eNext, count * 2); }
+            int b = d % B;
+            _eNode[count] = node; _eNext[count] = head[b]; head[b] = count; count++; pending++;
+        }
+        cost[s] = 0;
+        Push(s, 0);
+        var hz = CellHazard; var bd = CellBody;
+        for (int dist = 0; pending > 0; dist++)
+        {
+            int bi = dist % B;
+            int e = head[bi];
+            if (e < 0) continue;
+            head[bi] = -1; // 걸음은 늘 1 이상 — 새로 넣는 것은 다른 통으로 간다
+            while (e >= 0)
+            {
+                int cur = _eNode[e];
+                e = _eNext[e];
+                pending--;
+                if (cost[cur] != dist) continue; // 더 짧은 길로 이미 처리했다
+                int dcur = _door[cur];
+                for (int k = 0; k < 8; k++)
+                {
+                    int ni = cur + _offsets[k];
+                    // ── CanStep ──
+                    if (ni < 0 || ni >= _n || !_pass[ni]) continue;
+                    int dr = _door[ni];
+                    if (dr >= 0 && _doorBlocked[dr]) continue;
+                    int r = _room[ni];
+                    if (r >= 0 && _roomBlocked[r]) continue;
+                    if (k >= 4)
+                    {
+                        if (dcur >= 0 || dr >= 0) continue;
+                        int a = cur + _dx[k];
+                        int b = cur + _dy[k] * _w;
+                        if (!_pass[a] || !_pass[b] || _door[a] >= 0 || _door[b] >= 0) continue;
+                    }
+                    // ── StepCost (goal 없음) ──
+                    int step = k < 4 ? Straight : Diagonal;
+                    if (_space[ni]) step += PathProfile.SpaceCost;
+                    if (_furniture[ni]) step += FurniturePenalty;
+                    if (r >= 0) step += _roomAdd[r];
+                    if (dr >= 0) step += _doorAdd[dr];
+                    int h = hz[ni];
+                    if (h > 0) step += (int)(h * cellScale * hazardScale);
+                    step += bd[ni]; // v16.3
+                    int nd = dist + step;
+                    if (cost[ni] >= 0 && nd >= cost[ni]) continue;
+                    cost[ni] = nd;
+                    Push(ni, nd);
+                }
+            }
+        }
     }
 
     private bool CanStep(int from, int k, int to, PathProfile profile, int startRoom)

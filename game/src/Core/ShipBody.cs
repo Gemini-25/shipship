@@ -672,11 +672,14 @@ public sealed partial class BodySystem
     public void Update(float dt)
     {
         var w = _w;
-        long pf = Prof.Now;
+        long pf = Prof.Now, pq = pf;
         TrackRepairs();
         UpdateShelters(dt);
+        pq = Prof.Lap("body.repairs·shelters", pq);
         UpdateDoors(dt);
+        pq = Prof.Lap("body.doors", pq);
         ScanTalk();
+        pq = Prof.Lap("body.talk", pq);
         if (w.Tick >= _nextSlow)
         {
             _nextSlow = w.Tick + SimTime.Minutes(1);
@@ -687,8 +690,10 @@ public sealed partial class BodySystem
             UpdateMounts();
             ComputerWatch(); // 주 컴퓨터가 뚜껑 스위치 · 바닥 물 · 문 압력 · 표시판을 읽는다
             UpdateCrawls(); // 정비 통로 덮개: 양쪽 압력이 맞을 때만 열린다
+            pq = Prof.Lap("body.slow", pq);
         }
         FillPathCost();
+        Prof.Lap("body.pathcost", pq);
         Prof.Lap("sys.Body", pf);
     }
 

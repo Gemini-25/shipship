@@ -122,6 +122,7 @@ public sealed class VolatileSystem
         if (Inert) return;
         var ship = w.Ship;
         var p = w.Power;
+        long pq = Prof.Now;
         foreach (var m in ship.Machines.ToList())
         {
             var f = m.Body;
@@ -204,6 +205,7 @@ public sealed class VolatileSystem
             else if (m.Vapor > 0.55f && SparkIn(room, m) && w.Rng.Chance(2f * dt)) Blow(m, mode, "불꽃");
         }
 
+        pq = Prof.Lap("vol.machines", pq);
         // 방마다: 역화 · 일산화탄소 · 짙은 산소
         foreach (var room in ship.LiveRooms)
         {
@@ -211,6 +213,7 @@ public sealed class VolatileSystem
             UpdateCo(room, dt);
             UpdateRichO2(room, dt);
         }
+        Prof.Lap("vol.rooms", pq);
 
         // 배터리가 바닥까지 떨어지면 셀이 상한다 (용량이 영구히 준다 — 위기의 흔적)
         if (p.BatteryPercent < 0.05f && p.BatteryCapacity > 1f)

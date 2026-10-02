@@ -324,6 +324,16 @@ public static partial class Program
                 Console.WriteLine($"{key}: " + string.Join(" | ", line));
             }
         }
+        if (what.Contains("hash"))
+        {
+            foreach (var (key, h) in new[] { ("Mirinae", 30), ("Hanbit", 30), ("Eunha", 24), ("Cheonma", 12), ("gen:hospital:spine:16:3", 12) })
+            {
+                var w = World.CreateDefault(seed, 0, key);
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                Run(w, SimTime.Hours(h));
+                Console.WriteLine($"지문 {key} {h}h = {SaveGame.StateHash(w):x8} · {sw.ElapsedMilliseconds}ms");
+            }
+        }
         if (what.Contains("quar"))
         {
             foreach (var key in new[] { ShipGenerator.KeyFor(12, seed), "Hanbit" })
