@@ -229,7 +229,7 @@ public sealed class CasualtySystem
             float clot = t.Kind == TraumaKind.Bleed ? (t.Rate < 0.08f ? 1.0f : 0.1f) : 0.12f;
             t.Rate *= MathF.Exp(-clot * dt);
             if (t.Rate < 0.015f) { Stop(c, t, t.Kind == TraumaKind.Bleed ? "피가 저절로 멎었다" : "고비를 넘겼다", null); return; }
-            c.Vitals.Health -= t.Rate * dt;
+            c.Vitals.Health -= t.Rate * (c.Down && t.Kind == TraumaKind.Bleed ? 1.5f : 1f) * dt; // 통합: 쓰러지면 (쇼크) 피가 더 빨리 빠진다 — 혼자 쓰러진 사람에게 남은 시간
             if (!w.CrewCanDie) c.Vitals.Health = MathF.Max(0.02f, c.Vitals.Health);
         }
         Page(c, t, min);
