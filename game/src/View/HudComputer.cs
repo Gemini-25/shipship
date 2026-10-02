@@ -67,7 +67,10 @@ public partial class Hud
         if (head.HasPoint(mouse)) Gfx.RoundRect(this, head.Grow(-3f), new Color(1, 1, 1, 0.03f), 10);
         float x = card.Position.X + 14, y = card.Position.Y, right = card.End.X - 12;
         LevelBadge(new Vector2(x + 13, y + 22), 12f, a);
-        string state = a.Rebooting ? "재부팅" : !a.MainOnline ? (a.BackupActive ? "예비 제어기" : "멎음") : a.Operator != null ? $"관제석 {a.Operator.Name}" : "온라인";
+        string state = a.Rebooting ? "재부팅" : !a.MainOnline ? (a.Core.BackupCore ? "본체 멎음 · 예비 연산기" : a.BackupActive ? "예비 제어기" : "멎음") : a.Operator != null ? $"관제석 {a.Operator.Name}" : "온라인";
+        if (a.MainOnline && a.Core.SafeMode) state += " · 달아올라 느리게";
+        if (a.Core.OnUps) state += $" · 비상 전지 {a.Core.Ups:0}분";
+        else if (a.Core.SelfSaving) state += " · 제 연산 줄임";
         Gfx.Text(this, Fonts.Bold, new Vector2(x + 34, y + 19), Fit($"{a.Voice.Call} · {AutomationSystem.LevelName(a.Level)}", width - 150, 13, Fonts.Bold), 13, Palette.Text);
         Gfx.Text(this, Fonts.Body, new Vector2(x + 34, y + 34), state + (a.Voice.Tone != "" ? $" · 말투 {a.Voice.Tone}" : ""), 10, a.MainOnline ? Palette.Good : Palette.Danger);
         Button(new Rect2(right - 50, y + 9, 24, 22), ComputerFolded ? "▴" : "▾", false, mouse, () => ComputerFolded = !ComputerFolded, 11);

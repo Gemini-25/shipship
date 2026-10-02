@@ -114,11 +114,12 @@ public static partial class Program
                 // 사람이 원인을 빼면(지시를 듣고 · 뜨거운 콘센트를 보고) 그때 컴퓨터가 올린다
                 var asked = w.Portable.AskedUnplug(circ);
                 for (int m = 0; m < 60 && Tripped(); m++) Run(w, SimTime.Minutes(1)); // 배 끝에서 끝까지 걸어오는 시간
-                bool byAsked = asked != null && w.Log.Entries.Any(e => e.CrewId == asked.Id && e.Text.Contains("뽑아 뒀다") || e.CrewId == asked.Id && e.Text.Contains("옮겨 꽂았다"));
+                var hands = w.Log.Entries.Where(e => e.CrewId >= 0 && e.Tick >= (hold?.Since ?? 0) && (e.Text.Contains("뽑아 뒀다") || e.Text.Contains("옮겨 꽂았다"))).Select(e => e.CrewId).Distinct().ToList();
+                bool byAsked = asked != null && hands.Contains(asked.Id);
                 var closed = a.Command.Lines.LastOrDefault(l => l.Target == CmdTarget.Crew && l.TargetId == asked?.Id);
                 Check("같은 원인으로 또 떨어지면 다시 올리지 않고 사람에게 정확히 말한다 → 원인을 빼면 그때 올린다 (D 차단기 반복 버그)",
-                    first && again && held && !Tripped() && tr.RemoteResets >= resets0 + 1 && hold != null && !tr.Cases.Any(x => x.Circuit == circ && x.Since > hold.Since && x.Sig == hold.Sig) && w.Portable.ProjectedKw(circ) <= PortableSystem.OutletCapKw && order != "" && byAsked && closed?.State == "끝",
-                    $"처음 {first} · 다시 떨어짐 {again} · 붙잡음 {held} (같은 원인 {tr.SameCauseHolds}) · 지시 \"{order}\" → 그 사람이 뺐다 {byAsked} · 지시 {closed?.State} ({closed?.Result}) · 지금 {(Tripped() ? "떨어진 채" : "올라감")} · {hold?.State} · 원격 올림 {resets0}→{tr.RemoteResets} [{string.Join(" / ", tr.Cases.Where(x => x.Circuit == circ).Select(x => $"{x.State}:{x.Sig}:{x.Cause}"))}]");
+                    first && again && held && !Tripped() && tr.RemoteResets >= resets0 + 1 && hold != null && !tr.Cases.Any(x => x.Circuit == circ && x.Since > hold.Since && x.Sig == hold.Sig) && w.Portable.ProjectedKw(circ) <= PortableSystem.OutletCapKw && order != "" && hands.Count > 0 && closed?.State == "끝",
+                    $"처음 {first} · 다시 떨어짐 {again} · 붙잡음 {held} (같은 원인 {tr.SameCauseHolds}) · 지시 \"{order}\" → 사람 손으로 뺐다 {hands.Count}명 (지시받은 사람 {byAsked}) · 지시 {closed?.State} ({closed?.Result}) · 지금 {(Tripped() ? "떨어진 채" : "올라감")} · {hold?.State} · 원격 올림 {resets0}→{tr.RemoteResets} [{string.Join(" / ", tr.Cases.Where(x => x.Circuit == circ).Select(x => $"{x.State}:{x.Sig}:{x.Cause}"))}]");
             }
 
             // ④ 운석 파공: 지금 닫기 / 2분 기다렸다 닫기 / 사람 보내 막기를 견줘 고르고 타임라인에 남긴다 (방침 안에서)
