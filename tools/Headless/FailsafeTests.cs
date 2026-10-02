@@ -156,14 +156,21 @@ public static partial class Program
             // 간선: 생명유지실 문 쪽 간선을 모두 끊는다
             foreach (var l in w.Net.Links.Where(l => l.Kind == NetKind.Power && l.Door != null && (l.Door.RoomA == ls || l.Door.RoomB == ls)).ToList()) w.Net.Hurt(l, 1f, "시험");
             foreach (var l in w.Net.Links.Where(l => l.Kind == NetKind.Power && l.Door != null && (l.Door.RoomA == comp || l.Door.RoomB == comp)).ToList()) w.Net.Hurt(l, 1f, "시험");
-            // 회로: 생명유지실 · 컴퓨터실의 주 회로 차단기가 떨어진다
+            // 회로: 생명유지실 · 컴퓨터실의 주 회로가 단락으로 죽는다 (원격으로 다시 올릴 수 없는 고장 — 차단기 트립은 컴퓨터가 곧 올려 시험이 안 된다)
             var panel = w.Ship.FurnitureOf(FurnitureType.PowerPanel).First().Machine!;
             foreach (int c in new[] { ls.Circuit, comp.Circuit }.Distinct())
-                if (!panel.Faults.Any(f => f.Circuit == c)) panel.Faults.Add(new Fault { Kind = FaultKind.BreakerTrip, Since = w.Tick, Circuit = c });
-            Run(w, SimTime.Minutes(10));
+                if (!panel.Faults.Any(f => f.Circuit == c)) panel.Faults.Add(new Fault { Kind = FaultKind.ShortCircuit, Since = w.Tick, Circuit = c });
             var cm = w.Ship.FurnitureOf(FurnitureType.MainComputer).First().Machine!;
-            Check($"{ship}: 간선 · 주 회로가 끊겨도 생명유지실 · 주 컴퓨터는 산다", ls.Powered && comp.Powered && cm.Powered && w.Automation.MainOnline,
-                $"생명유지 {(ls.Powered ? "켜짐" : "꺼짐")}(간선 {(ls.PowerLinked ? "이어짐" : "끊김")}) · 컴퓨터 {(cm.Powered ? "켜짐" : "꺼짐")} · 넘어간 방 {w.Failsafe.Transfers}");
+            int lsDark = 0, cmDark = 0; // 10분 동안 매 시스템 틱 — 한 번이라도 꺼졌나
+            for (int t = 0; t < SimTime.Minutes(10); t++)
+            {
+                w.Step();
+                if (w.Tick % World.SystemInterval != 1) continue;
+                if (!ls.Powered) lsDark++;
+                if (!cm.Powered) cmDark++;
+            }
+            Check($"{ship}: 간선 · 주 회로가 끊겨도 생명유지실 · 주 컴퓨터는 한 번도 꺼지지 않는다", lsDark == 0 && cmDark == 0 && ls.Powered && comp.Powered && cm.Powered && w.Automation.MainOnline && w.Failsafe.Transfers > 0,
+                $"생명유지 꺼진 틱 {lsDark}(간선 {(ls.PowerLinked ? "이어짐" : "끊김")}) · 컴퓨터 꺼진 틱 {cmDark} · 넘어간 방 {w.Failsafe.Transfers}");
             if (ship == "Hanbit")
             {
                 Check("주 컴퓨터 — 예비 회로로 넘어간 것을 읽고 판단 근거로 남긴다", w.Automation.Book.Acts.Any(a => a.Key.StartsWith("fs:ats")) || w.Automation.Reasoning.Any(r => r.text.Contains("예비 회로")),
@@ -175,9 +182,10 @@ public static partial class Program
                     var o = DayOne(seed, ship);
                     var ols = o.Ship.RoomsOf(RoomType.LifeSupport).First(r => !r.Detached);
                     var opanel = o.Ship.FurnitureOf(FurnitureType.PowerPanel).First().Machine!;
-                    opanel.Faults.Add(new Fault { Kind = FaultKind.BreakerTrip, Since = o.Tick, Circuit = ols.Circuit });
-                    Run(o, SimTime.Minutes(10));
-                    Check("비교 — 예전 배는 같은 차단기 하나에 생명유지실이 꺼졌다", !ols.Powered, $"예전 생명유지 {(ols.Powered ? "켜짐" : "꺼짐")}");
+                    opanel.Faults.Add(new Fault { Kind = FaultKind.ShortCircuit, Since = o.Tick, Circuit = ols.Circuit });
+                    int oDark = 0;
+                    for (int t = 0; t < SimTime.Minutes(10); t++) { o.Step(); if (o.Tick % World.SystemInterval == 1 && !ols.Powered) oDark++; }
+                    Check("비교 — 예전 배는 같은 회로 하나가 죽자 생명유지실이 꺼졌다", oDark > 0, $"예전 생명유지 꺼진 틱 {oDark}");
                 }
                 finally { Durability.Legacy = false; }
                 Check("장갑 벽 — 원자로 · 배전 · 주 컴퓨터실 벽은 충격 피해 절반", w.Failsafe.ArmorWalls > 0 && w.Ship.Walls.Any(kv => kv.Value.Armor <= 0.5f),

@@ -90,7 +90,8 @@ public partial class Hud
         {
             if (m.Spec.PowerDraw > 0f) links.Add(("설비 인입선", m.Feed >= 0.95f ? "정상" : $"{m.Feed * 100:0}%" + (m.Spliced ? " (임시 접속)" : ""), m.Feed < 0.5f ? Palette.Danger : m.Feed < 0.95f ? Palette.Warning : Palette.TextDim));
             if (Procedures.Plumbed(f.Type)) links.Add(("설비 배관", m.Line >= 0.95f ? "정상" : $"{m.Line * 100:0}%", m.Line < 0.5f ? Palette.Danger : m.Line < 0.95f ? Palette.Warning : Palette.TextDim));
-            if (m.Spec.PowerDraw > 0f) links.Add(("쓰는 전기", $"{m.Spec.PowerDraw:0.#} kW · {PowerGrid.CircuitName(room.Circuit)}회로", Palette.TextDim));
+            if (m.Spec.PowerDraw > 0f) links.Add(("쓰는 전기", $"{m.Spec.PowerDraw:0.#} kW · {PowerGrid.CircuitName(room.Circuit)}회로" + (room.AltCircuit >= 0 ? $" (예비 {PowerGrid.CircuitName(room.AltCircuit)})" : ""), Palette.TextDim));
+            if (m.Spec.PowerDraw > 0f) { var ess = Essentials.Of(f.Type); links.Add(("전력 순위", $"{Essentials.Mark(ess)} {Essentials.Name(ess)}" + (m.Parked && _world.Failsafe.ShedLevel > 0 ? " · 계전기가 내려 둠" : ""), ess == Essential.Vital ? Palette.Accent : Palette.TextDim)); } // v16.19 필수도 표
         }
         var live = _world.Ship.LiveRooms.Where(r => !r.Detached).ToList();
         string Fed(System.Func<Room, bool> ok) { var list = live.Where(ok).ToList(); return $"{list.Count}곳 ({string.Join("·", list.Take(3).Select(r => r.Name))}{(list.Count > 3 ? " …" : "")})"; }
