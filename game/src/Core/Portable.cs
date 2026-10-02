@@ -380,13 +380,14 @@ public sealed partial class PortableSystem
 
         // 1) 전원 · 작동
         Array.Clear(CircuitLoad);
+        bool smart = SmartChargeBudget(); // v16.20 주 컴퓨터가 충전을 회로 여유만큼만 차례로 (차단기를 올린 뒤 한꺼번에 몰리지 않게)
         foreach (var d in Devices)
         {
             d.Charging = false;
             var room = RoomOf(d);
             if (d.Lost || room == null) { d.Running = false; d.LightIntensity = 0f; continue; }
             // 창고(또는 꺼 둔 채 꽂힌 곳)에서 전지를 채운다
-            if (d.Capacity > 0f && d.Charge < d.Capacity && d.HeldBy == null && !d.Broken && (d.Stored || !d.On) && OutletOk(room))
+            if (d.Capacity > 0f && d.Charge < d.Capacity && d.HeldBy == null && !d.Broken && (d.Stored || !d.On) && OutletOk(room) && (!smart || ChargeSlot(room)))
             {
                 d.Charge = MathF.Min(d.Capacity, d.Charge + ChargeKw * dt);
                 d.Charging = true;
@@ -837,13 +838,14 @@ public sealed partial class PortableSystem
             float kw = ProjectedKw(i);
             bool warned = Warned(i) && !_learned[i]; // 차단기는 아직 — 주 컴퓨터 방송 · 뜨거운 콘센트로 안다
             if (kw <= OutletCapKw || !_learned[i] && !Warned(i)) continue;
+            var asked = AskedUnplug(i); // v16.20 주 컴퓨터가 차단기를 붙잡고 콕 집어 부탁한 사람
             foreach (var d in Devices.Where(d => d.Placed && d.On && d.Plug == PortablePlug.Outlet && d.Outlet?.Circuit == i).OrderByDescending(d => d.Spec.Kw).ThenByDescending(d => d.PlacedSince).ThenBy(d => d.Id))
             {
                 if (kw <= OutletCapKw) break;
                 kw -= d.Spec.Kw;
                 if (RoomOf(d) is Room r)
-                    Need(PortableTask.Unplug, d.Kind, r, d.At, false, warned ? $"{PowerGrid.CircuitName(i)} 회로 과부하 — {_warnWhy[i]}" : $"{PowerGrid.CircuitName(i)} 회로에 너무 많이 꽂았다 (차단기가 떨어졌다)",
-                        warned ? 0.8f : 0.7f, $"unplug:{d.Id}", device: d);
+                    Need(PortableTask.Unplug, d.Kind, r, d.At, false, asked != null ? $"주 컴퓨터 지시 — {PowerGrid.CircuitName(i)} 회로 차단기가 같은 이유로 또 떨어졌다, 하나 빼 달라" : warned ? $"{PowerGrid.CircuitName(i)} 회로 과부하 — {_warnWhy[i]}" : $"{PowerGrid.CircuitName(i)} 회로에 너무 많이 꽂았다 (차단기가 떨어졌다)",
+                        asked != null ? 0.85f : warned ? 0.8f : 0.7f, $"unplug:{d.Id}", who: asked, device: d);
             }
         }
         ComputerNeeds(); // 주 컴퓨터가 짚은 빈 방 히터
@@ -909,6 +911,7 @@ public sealed partial class PortableSystem
                 var d = n.Device!;
                 if (d.HeldBy != null || d.ClaimedBy >= 0 && d.ClaimedBy != c.Id || !dist.Reachable(d.At)) return null;
                 float s = n.Urgency - far + (n.Task == PortableTask.Fix ? 0.1f * c.SkillLevel(Skill.Electrical) - 0.05f : skill);
+                if (n.Task == PortableTask.Unplug && n.For != null) s += n.For == c ? 0.2f : -0.2f; // v16.20 콕 집힌 사람이 간다 (여럿이 몰려가지 않게)
                 if (crisis && n.Task != PortableTask.Unplug && n.Urgency < 0.7f) s *= 0.3f;
                 return new PortableChoice(n, d, null, null, null, s, n.Why);
             }
@@ -1202,6 +1205,13 @@ public sealed partial class PortableSystem
         Stats.Unplugged++;
         if (heed) Stats.HeededWarns++;
         MarkLog.Add(room.Marks, w.Tick, $"{c.Name}: {d.Name} 뽑음 ({PowerGrid.CircuitName(circuit)} 회로 과부하)");
+        // v16.20 주 컴퓨터가 콕 집어 부탁한 사람은 온 김에 한도 아래로 내려갈 때까지 같은 방 것을 마저 뺀다
+        if (AskedUnplug(circuit) == c && ProjectedKw(circuit) > OutletCapKw)
+            foreach (var x in Devices.Where(x => x != d && x.Placed && x.On && x.HeldBy == null && x.Plug == PortablePlug.Outlet && x.Outlet?.Circuit == circuit && RoomOf(x) == room).OrderByDescending(x => x.Spec.Kw).ThenBy(x => x.Id).ToList())
+            {
+                if (ProjectedKw(circuit) <= OutletCapKw) break;
+                if (x.Outlet?.Circuit == circuit && x.On) Unplug(c, x);
+            }
     }
 
     internal void Fix(CrewMember c, PortableDevice d)
@@ -1474,6 +1484,7 @@ public sealed class PortableActivity : Activity
             AlwaysLog = true,
             TargetRoom = n.Room,
             InterruptMargin = n.Task == PortableTask.Unplug ? 0.25f : 0.15f,
+            Urgent = n.Task == PortableTask.Unplug && n.For == c, // v16.20 주 컴퓨터가 콕 집어 부탁했다 — 뛰어간다
             OnFinished = (cm, world, status) =>
             {
                 // 못 끝냈으면 들고 있던 장비는 그 자리에 남는다

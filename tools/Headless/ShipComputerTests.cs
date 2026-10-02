@@ -109,13 +109,21 @@ public static partial class Program
                     Run(w, World.SystemInterval);
                     held = Tripped() && tr.SameCauseHolds >= 1 && tr.RemoteResets == resets0 && !w.Board.Open.Any(o => o.Kind == WorkKind.ResetBreaker && o.Circuit == circ);
                 }
-                var hold = tr.Cases.LastOrDefault(x => x.Circuit == circ);
+                var hold = tr.Cases.LastOrDefault(x => x.Circuit == circ && x.State == "보류");
                 string order = a.Command.Lines.LastOrDefault(l => l.Target == CmdTarget.Crew)?.What ?? "";
                 // 사람이 원인을 빼면(지시를 듣고 · 뜨거운 콘센트를 보고) 그때 컴퓨터가 올린다
-                for (int m = 0; m < 30 && Tripped(); m++) Run(w, SimTime.Minutes(1));
+                var asked = w.Portable.AskedUnplug(circ);
+                for (int m = 0; m < 60 && Tripped(); m++)
+                {
+                    Run(w, SimTime.Minutes(1)); // 배 끝에서 끝까지 걸어오는 시간
+                    if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "24")
+                        Console.WriteLine($"   {m}분 [{asked?.Name} {asked?.Job?.Label} @{asked?.Room?.Name} {asked?.Cell} {asked?.Job?.Current?.GetType().Name} 급함 {asked?.Job?.Urgent}] 차단 {Tripped()} 부하 {w.Portable.CircuitKw(circ):0.0} 꽂힘 {w.Portable.ProjectedKw(circ):0.0} 사례 {tr.Cases.Count} · {string.Join(" | ", w.Log.Entries.Where(e => e.Tick > w.Tick - SimTime.Minutes(1) && (e.Text.Contains("차단기") || e.Text.Contains("뽑") || e.Text.Contains("꽂"))).Select(e => e.Text))}");
+                }
+                bool byAsked = asked != null && w.Log.Entries.Any(e => e.CrewId == asked.Id && e.Text.Contains("뽑아 뒀다") || e.CrewId == asked.Id && e.Text.Contains("옮겨 꽂았다"));
+                var closed = a.Command.Lines.LastOrDefault(l => l.Target == CmdTarget.Crew && l.TargetId == asked?.Id);
                 Check("같은 원인으로 또 떨어지면 다시 올리지 않고 사람에게 정확히 말한다 → 원인을 빼면 그때 올린다 (D 차단기 반복 버그)",
-                    first && again && held && !Tripped() && tr.RemoteResets == resets0 + 1 && w.Portable.ProjectedKw(circ) <= PortableSystem.OutletCapKw && order != "",
-                    $"처음 {first} · 다시 떨어짐 {again} · 붙잡음 {held} (같은 원인 {tr.SameCauseHolds}) · 지시 \"{order}\" · 지금 {(Tripped() ? "떨어진 채" : "올라감")} · {hold?.State} · 원격 올림 {resets0}→{tr.RemoteResets}");
+                    first && again && held && !Tripped() && tr.RemoteResets >= resets0 + 1 && hold != null && !tr.Cases.Any(x => x.Circuit == circ && x.Since > hold.Since && x.Sig == hold.Sig) && w.Portable.ProjectedKw(circ) <= PortableSystem.OutletCapKw && order != "" && byAsked && closed?.State == "끝",
+                    $"처음 {first} · 다시 떨어짐 {again} · 붙잡음 {held} (같은 원인 {tr.SameCauseHolds}) · 지시 \"{order}\" → 그 사람이 뺐다 {byAsked} · 지시 {closed?.State} ({closed?.Result}) · 지금 {(Tripped() ? "떨어진 채" : "올라감")} · {hold?.State} · 원격 올림 {resets0}→{tr.RemoteResets} [{string.Join(" / ", tr.Cases.Where(x => x.Circuit == circ).Select(x => $"{x.State}:{x.Sig}:{x.Cause}"))}]");
             }
 
             // ④ 운석 파공: 지금 닫기 / 2분 기다렸다 닫기 / 사람 보내 막기를 견줘 고르고 타임라인에 남긴다 (방침 안에서)

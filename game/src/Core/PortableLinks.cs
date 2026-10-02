@@ -28,6 +28,25 @@ public sealed partial class PortableSystem
     /// <summary>주 컴퓨터가 끄라고 짚은 히터 (빈 방 · 콘센트 부하).</summary>
     public bool Flagged(PortableDevice d) => _flagged.Contains(d.Id);
 
+    // v16.20 같은 원인으로 또 떨어진 회로: 주 컴퓨터가 차단기를 붙잡고, 가까운 사람 하나를 콕 집어 뽑아 달라고 했다 (한 시간).
+    private readonly Dictionary<int, (int crewId, long tick)> _askedUnplug = new();
+
+    /// <summary>주 컴퓨터 지시: 이 회로 콘센트에서 장비를 빼 달라 (그 사람이 먼저 · 뛰어간다).</summary>
+    public void AskUnplug(int circuit, CrewMember who)
+    {
+        if (circuit < 0 || circuit >= PowerGrid.CircuitCount) return;
+        _askedUnplug[circuit] = (who.Id, _w.Tick);
+        _nextScan = 0;
+    }
+
+    /// <summary>그 회로를 뽑아 달라고 콕 집힌 사람 (한 시간 안 · 살아 있으면).</summary>
+    public CrewMember? AskedUnplug(int circuit)
+    {
+        if (!_askedUnplug.TryGetValue(circuit, out var a) || _w.Tick - a.tick > SimTime.Hours(1)) return null;
+        foreach (var c in _w.Crew) if (c.Id == a.crewId) return c.Dead ? null : c;
+        return null;
+    }
+
     /// <summary>빛을 내는 장비 (다음 단계의 2D 조명 · 화면이 읽는다): 위치 LightPos · 반경 LightRadius · 세기 LightIntensity · 색 LightColor · 방향 Aim.</summary>
     public IEnumerable<PortableDevice> Lights => Devices.Where(d => !d.Lost && d.LightIntensity > 0.01f);
 

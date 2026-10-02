@@ -368,6 +368,8 @@ public sealed class PowerTriage
         foreach (var r in w.Ship.LiveRooms)
             if (r.Circuit == circuit && !r.BreakerOff && MoistureSystem.Depth(r) > 0.1f)
                 return ($"{r.Name} 바닥에 물 (누전)", "w:" + r.Id, "water");
+        if (_lastReset.TryGetValue(circuit, out var lr) && w.Tick - lr.tick < SimTime.Minutes(3))
+            return ("방금 올린 회로에 설비가 한꺼번에 켜졌다 (기동 전류)", "i", "");
         return ("이유를 모른다 (한꺼번에 켜진 설비 · 순간 과부하?)", "?", "");
     }
 
@@ -410,6 +412,7 @@ public sealed class PowerTriage
         bc.State = "올림";
         bc.Open = false;
         RemoteResets++;
+        a.Command.Close(bc.Decision, why);
         _lastReset[i] = (bc.Sig, w.Tick);
         string cut = bc.Cut.Count > 0 ? string.Join(" · ", bc.Cut.GroupBy(x => x).OrderBy(g => g.Key).Select(g => g.Count() > 1 ? $"{g.Key} {g.Count()}대" : $"{g.Key} 하나")) : "";
         a.Command.Line(CmdTarget.Breaker, i, panelRoom, $"{PowerGrid.CircuitName(i)} 회로 차단기 올림", why + (cut != "" ? $" · 끊은 것: {cut}" : ""), 0.9f, 5f, bc.Decision);
@@ -427,12 +430,26 @@ public sealed class PowerTriage
         string why = bc.Same ? $"같은 이유로 또 떨어졌습니다 — 이번엔 올리지 않겠습니다 ({bc.Cause})" : $"여기서 끊을 수 없는 원인입니다 ({bc.Cause})";
         a.Book.Add(ActKind.Breaker, panelRoom, $"{PowerGrid.CircuitName(bc.Circuit)} 회로 차단기가 떨어졌다 — {bc.Cause}", why, "차단기를 올리지 않고 둔다", what, "bhold:" + bc.Circuit, SimTime.Minutes(30), 30f);
         a.Speak.Announce(a.Voice.Style($"{PowerGrid.CircuitName(bc.Circuit)} 회로 — {why}. {what}"), null, 1);
-        // 가장 가까운 전기 담당에게 단말로
-        var who = w.Crew.Where(c => !c.Dead && c.CanAct && !c.Away && c.IsAwake).OrderByDescending(c => c.SkillLevel(Skill.Electrical)).ThenBy(c => c.Id).FirstOrDefault();
+        // 원인이 있는 곳에 가장 빨리 닿을 사람 하나를 콕 집어 단말로 (전기를 아는 사람이면 조금 더 멀어도) — 여럿에게 뿌리지 않는다
+        Room target = bc.Sig.StartsWith("p:") ? w.Portable.OutletRoom(bc.Circuit) ?? panelRoom
+                    : bc.Sig.StartsWith("w:") && int.TryParse(bc.Sig[2..], out int rid) && rid >= 0 && rid < w.Ship.Rooms.Count ? w.Ship.Rooms[rid] : panelRoom;
+        var tc = target.Cells.Count > 0 ? target.Cells[target.Cells.Count / 2] : panelRoom.Cells.FirstOrDefault();
+        CrewMember? who = null;
+        float best = float.MaxValue;
+        foreach (var c in w.Crew)
+        {
+            if (c.Dead || !c.CanAct || c.Away || !c.IsAwake || c.Outside || c.Job?.Urgent == true) continue;
+            var cc = c.Cell;
+            float d = Math.Abs(cc.X - tc.X) + Math.Abs(cc.Y - tc.Y) - 6f * c.SkillLevel(Skill.Electrical);
+            if (d < best || d == best && who != null && c.Id < who.Id) { best = d; who = c; }
+        }
         if (who != null)
         {
-            w.Automation.Apps.Messages.Add(new PersonalMessage(w.Tick, who.Id, "지시", $"{PowerGrid.CircuitName(bc.Circuit)} 회로: {what} — {why}"));
-            a.Command.Line(CmdTarget.Crew, who.Id, panelRoom, $"{who.Name}: {what}", why, 0.8f, 60f, bc.Decision, -1, "보냄");
+            if (bc.Sig.StartsWith("p:")) w.Portable.AskUnplug(bc.Circuit, who);
+            // 컴퓨터를 믿는 사람은 하던 (급하지 않은) 일을 내려놓고 바로 간다 — 못 믿으면 하던 일을 마치고
+            if (who.Job != null && who.Job.Urgent != true && a.Trusts.Of(who) >= 0.35f) who.EndJob(w, ToilStatus.Interrupted);
+            w.Automation.Apps.Messages.Add(new PersonalMessage(w.Tick, who.Id, "지시", $"{target.Name} · {PowerGrid.CircuitName(bc.Circuit)} 회로: {what} — {why}"));
+            a.Command.Line(CmdTarget.Crew, who.Id, target, $"{who.Name}: {target.Name} — {what}", why, 0.8f, 60f, bc.Decision, -1, "보냄");
         }
     }
 
@@ -444,6 +461,9 @@ public sealed class PowerTriage
         if (bc.State is "보류") return tripped ? (2, "아직 사람이 원인을 빼지 않았다") : (1, "맞았다 — 원인을 뺀 뒤에 올라갔다");
         return (2, bc.State);
     }
+
+    /// <summary>방금(2분 안) 원격으로 올린 회로 — 설비를 차례로 켜는 중.</summary>
+    public bool Staging(int circuit) => _lastReset.TryGetValue(circuit, out var l) && _w.Tick - l.tick < SimTime.Minutes(2);
 
     /// <summary>WorkBoard · 사람 계획 훅: 컴퓨터가 그 차단기를 붙잡고 있나 (원인을 보는 중 · 같은 원인 보류). 붙잡으면 사람은 올리지 않는다.</summary>
     public string? Holding(int circuit)
@@ -468,6 +488,27 @@ public sealed class PowerTriage
 
 public sealed partial class PortableSystem
 {
+    private readonly float[] _chargeRoom = new float[PowerGrid.CircuitCount];
+    public int ChargeWaits;
+
+    /// <summary>v16.20 똑똑한 충전: 주 컴퓨터가 배전반을 볼 때 회로마다 충전에 쓸 여유(콘센트 한도 − 꽂힌 장비)를 잰다.</summary>
+    private bool SmartChargeBudget()
+    {
+        var a = _w.Automation;
+        if (!a.Present || AutomationSystem.Ship20Off || !a.MainOnline || a.Level < 4) return false;
+        for (int i = 0; i < PowerGrid.CircuitCount; i++) _chargeRoom[i] = OutletCapKw * 0.95f - ProjectedKw(i);
+        return true;
+    }
+
+    /// <summary>이 방 충전기가 지금 채워도 되나 (여유가 남은 만큼 차례로 · 데이터선이 끊긴 방은 컴퓨터가 못 막는다).</summary>
+    private bool ChargeSlot(Room room)
+    {
+        if (!room.DataLinked) return true;
+        if (_chargeRoom[room.Circuit] < ChargeKw) { ChargeWaits++; return false; }
+        _chargeRoom[room.Circuit] -= ChargeKw;
+        return true;
+    }
+
     /// <summary>v16.20 스마트 콘센트: 주 컴퓨터가 그 회로 콘센트를 원격으로 끊는다 (값싼 것부터 · 양수기는 마지막) — 그 회로가 목표 아래로 내려갈 때까지.</summary>
     internal List<PortableDevice> RemoteCut(int circuit, float targetKw, string why)
     {
@@ -513,6 +554,8 @@ public sealed partial class AutomationSystem
     public float ReactorCap => _triage?.ReactorCap ?? 1f;
     /// <summary>Power.UpdateParking 훅.</summary>
     internal void Park() => _triage?.Park();
+    /// <summary>Moisture 기동 전류 훅: 컴퓨터가 방금 원격으로 올린 회로는 설비를 큰 것부터 하나씩 켠다.</summary>
+    public float InrushMul(int circuit) => _triage != null && _triage.Staging(circuit) ? 0.15f : 1f;
 
     private int _wireless;
     private long _wirelessNext;
@@ -536,11 +579,11 @@ public sealed partial class AutomationSystem
             int n = 0;
             foreach (var r in w.Ship.LiveRooms) if (!r.DataLinked && Core.Reach(r) == 1) n++;
             _wireless = n;
-            // 손이 필요한 위기: 위험한 방에서 자는 사람은 단말로 깨운다
-            if (CoreOnline)
-                foreach (var c in w.Crew)
-                    if (c.Pose == Pose.Sleeping && !c.Dead && c.Room is Room cr && (cr.Leaking || w.Fire.IsKnown(cr) || cr.Air.CO > 0.08f || cr.Air.O2 < 16f))
-                        Command.Wake(c, cr.Leaking ? $"{cr.Name} 공기가 샙니다 — 나가십시오" : w.Fire.IsKnown(cr) ? $"{cr.Name}에 불 — 나가십시오" : $"{cr.Name} 공기가 나쁩니다 — 나가십시오", cr);
         }
+        // 손이 필요한 위기: 위험한 방에서 자는 사람은 단말로 깨운다 (감지기가 닿는 방 — 데이터선이나 무선)
+        if (CoreOnline)
+            foreach (var c in w.Crew)
+                if (c.Pose == Pose.Sleeping && !c.Dead && c.Room is Room cr && Core.Reach(cr) > 0 && (cr.Leaking || w.Fire.IsKnown(cr) || cr.Air.CO > 0.08f || cr.Air.O2 < 16f))
+                    Command.Wake(c, cr.Leaking ? $"{cr.Name} 공기가 샙니다 — 나가십시오" : w.Fire.IsKnown(cr) ? $"{cr.Name}에 불 — 나가십시오" : cr.Air.CO > 0.08f ? $"{cr.Name}에 일산화탄소 — 나가십시오" : $"{cr.Name} 공기가 나쁩니다 — 나가십시오", cr);
     }
 }

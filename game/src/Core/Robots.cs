@@ -1093,6 +1093,22 @@ public sealed class RobotSystem
         GoHome(r, why != null ? "충전하러" : null);
     }
 
+    /// <summary>v16.20 주 컴퓨터 명령 (ComputerCommand.Order): 거들기 · 순찰 · 귀환 · 덜 급한 일을 내려놓고 바로 다시 고른다 (불 끄는 중 · 짐을 든 채는 끝내고).</summary>
+    internal void Redirect(Robot r, float priority)
+    {
+        r.NextDecide = Math.Min(r.NextDecide, _world.Tick);
+        if (r.State != RobotState.Active || r.FightingFire || r.Cargo != null) return;
+        if (r.Order is WorkOrder now && now.Urgency >= priority) return; // 더 급한 일을 하는 중
+        if (r.Order is WorkOrder o && o.Robot == r) o.Robot = null;
+        if (r.Helping is CrewMember h && h.Helper == r) h.Helper = null;
+        r.Helping = null;
+        r.Order = null;
+        r.Steps = null;
+        r.Path = null;
+        r.Homing = false;
+        Decide(r);
+    }
+
     private void GoHome(Robot r, string? why)
     {
         var w = _world;
