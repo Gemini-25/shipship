@@ -37,6 +37,7 @@ public partial class ShipView : Node2D
         AddChild(_static);
         AddFixtureFineLayer(); // v16.5c 설비 디테일 층 (가까이서만)
         AddLookLight(); // v16.5a 2D 조명: 낮은 해상도 빛 버퍼 (곱하기)
+        AddTechLookLayers(); // v16.5b 기술 수준 벽 · 기술 모습 · 간접 조명 (TechLook.cs)
         AddChild(_lights); // v10: 천장 조명이 바닥에 떨어뜨리는 빛 (더하기 섞기)
         AddChild(_dynamic);
         AddLookOver(); // v16.5a 입자 (김 · 물방울 · 불꽃 · 연기 · 먼지 · 결로)
@@ -53,6 +54,7 @@ public partial class ShipView : Node2D
         CheckCircuitsChanged();
         UpdateFixtureLod(); // v16.5c 확대 단계 · 보이는 범위
         UpdateLook((float)delta); // v16.5a 확대 단계 · 겹치기 지문 · 빛 버퍼 · 입자
+        UpdateTechLook(); // v16.5b 미감 세트 · 익힌 기술 · 개조 칸이 바뀌면 다시 그린다
         _dynamic.QueueRedraw();
         _lights.QueueRedraw();
     }
@@ -624,6 +626,7 @@ public partial class ShipView : Node2D
         PaintMatter(ci); // v16.4 물건 · 쏟은 액체 · 열기 · 전기 불꽃 · 바람 · 가루 (재질 · 상태마다 다른 그림)
         foreach (var f in ship.Furniture.Where(f => !f.Stowed && !f.Room.Detached)) PaintFurnitureLife(ci, f);
         PaintTierBadges(ci); // v10.8
+        PaintTechLookLive(ci); // v16.5b 움직이는 기술 모습 · 설치 · 업그레이드 순간
         PaintRoomProps(ci); // v15.8 소품·장식 (어두운 방은 아래에서 함께 어두워진다)
         PaintExplosives(ci); // v16.13 폭발성 물건 23종 (달아오름 · 쉭 · 카운트다운 · 잔해)
         PaintFood(ci, mode); // v16.8 냄비 · 항아리 · 남겨 둔 접시 · 냄새 (읽기만)
@@ -687,7 +690,7 @@ public partial class ShipView : Node2D
         foreach (var f in ship.Furniture.Where(f => !f.Stowed && !f.Room.Detached))
         {
             if (f.Machine is not Machine m) continue;
-            if (m.Grade == MachineGrade.Mk1) PaintMk1(ci, f, m);
+            if (m.Grade == MachineGrade.Mk1 && !FixtureArt.Has(f.Type)) PaintMk1(ci, f, m); // v16.5b 표에 있는 설비는 FixtureArtTier 가 종류마다 손질을 그린다
             if (m.Has(FaultKind.Wrecked)) PaintWrecked(ci, f);
             if (m.Faults.Count == 0) continue;
             if (m.Has(FaultKind.Stripped)) PaintStripped(ci, f, m); // 뜯긴 설비는 경고 대신 조용한 흔적
