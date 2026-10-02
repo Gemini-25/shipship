@@ -185,8 +185,7 @@ public sealed partial class CrisisCrewSystem
         int mine = _helping.TryGetValue(c.Id, out var m0) ? m0 : -1;
         foreach (var (o, cap, have0, calm, pair) in cands)
         {
-            var lead = o.Assignee!;
-            if (lead == c || pair == c.Id) continue;
+            if (o.Closed || o.Assignee is not CrewMember lead || lead.Job?.Order != o || lead == c || pair == c.Id) continue; // 같은 틱 안에 손을 뗐을 수 있다
             int have = mine == o.Id ? have0 - 1 : have0;
             var role = RoleFor(o);
             bool mineRole = role != StationRole.None && _active.TryGetValue(c.Id, out var myR) && myR == role;
@@ -302,7 +301,7 @@ public sealed partial class CrisisCrewSystem
             if (!o.Closed && o.Assignee == null && o.BlockedUntil <= _w.Tick && RoleFor(o) == r && o.Urgency >= 0.8f && _w.Minds.Aware(c, o)) return true;
         // 누가 붙어 하는 제 자리의 일에 손이 모자라면 거들러 간다
         foreach (var (o, cap, have, _, _) in Cands())
-            if (have < cap && RoleFor(o) == r && o.Assignee != c && _w.Minds.Aware(c, o)) return true;
+            if (have < cap && !o.Closed && o.Assignee is CrewMember a && a != c && RoleFor(o) == r && _w.Minds.Aware(c, o)) return true;
         return false;
     }
 
