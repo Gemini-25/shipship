@@ -57,7 +57,10 @@ public partial class Hud
         if (!a.Present || ControlOpen || ChronicleOpen || TechOpen || PolicyOpen || ChainOpen) return;
         const float width = 318f;
         var open = a.Asks.Open.ToList();
-        float h = ComputerFolded ? 44f : 150f + BrainBlockH + open.Count * 92f; // v16.16 두뇌 네 줄
+        // v16.24 방금 정한 제안 하나도 잠깐 남긴다 (누가 · 어디서 · 어떻게 정했는지 보이게)
+        var just = a.Asks.All.LastOrDefault(p => p.State != ProposalState.Pending && p.DecidedAt >= 0 && w.Tick - p.DecidedAt < SimTime.Minutes(20));
+        if (just != null) open.Add(just);
+        float h = ComputerFolded ? 44f : 150f + BrainBlockH + open.Count * (ProposalH + 6f); // v16.16 두뇌 네 줄
         float bottom = Screen.Y - Margin - LogHeight - 10f;
         var card = new Rect2(Margin, bottom - h, width, h);
         Card(card);
@@ -140,7 +143,7 @@ public partial class Hud
         }
         y += 32;
         // 제안 카드
-        foreach (var p in open) { DrawProposal(new Rect2(x - 4, y, width - 20, 86), p, mouse); y += 92; }
+        foreach (var p in open) { DrawProposal(new Rect2(x - 4, y, width - 20, ProposalH), p, mouse); y += ProposalH + 6f; }
         if (DecisionsOpen) DrawDecisions(new Vector2(card.End.X + 10, card.End.Y), mouse);
     }
 
@@ -173,18 +176,30 @@ public partial class Hud
         DrawLine(new Vector2(top.X + 3, over), new Vector2(top.X + 6, over), Palette.Danger, 1f);
     }
 
-    /// <summary>제안 카드: 근거 · 예상 효과 · 기한 고리 · 받기 / 거절.</summary>
+    private const float ProposalH = 112f;
+
+    /// <summary>
+    /// v16.24 제안 카드: 무엇을 · 왜 · 기한 고리 + 지나온 과정(올라옴 → 함장이 봄 → 정함). 완전 관전 — 받기 · 거절 단추는 없고,
+    /// 함장 · 회의가 자연스러운 때 정한다(단말 앞 · 회의 · 급하면 바로). 아직이면 지금 누가 어디서 무엇을 기다리는지.
+    /// </summary>
     private void DrawProposal(Rect2 r, Proposal p, Vector2 mouse)
     {
         var w = _world;
-        float pulse = 0.5f + 0.5f * Mathf.Sin(_time * 4f);
-        Gfx.RoundRect(this, r, new Color(0.18f, 0.12f, 0.05f, 0.85f), 8, Palette.Warning.WithAlpha(0.45f + 0.35f * pulse), 1);
-        // 기한 고리
+        bool pending = p.State == ProposalState.Pending;
+        float pulse = pending ? 0.5f + 0.5f * Mathf.Sin(_time * 4f) : 0f;
+        var tone = pending ? Palette.Warning : p.Accepted ? Palette.Good : Palette.TextDim;
+        Gfx.RoundRect(this, r, pending ? new Color(0.18f, 0.12f, 0.05f, 0.85f) : UiKit.Well, Ui.RadiusControl, tone.WithAlpha(0.35f + 0.35f * pulse), 1);
+        float x = r.Position.X + 32, right = r.End.X - 10;
+        // 기한 고리 (정했으면 받음 ✔ · 거절 ✘)
         var rc = new Vector2(r.End.X - 20, r.Position.Y + 20);
         float left = Mathf.Clamp((p.Deadline - w.Tick) / (float)Math.Max(1, p.Deadline - p.Tick), 0f, 1f);
         DrawArc(rc, 11f, 0f, Mathf.Tau, 24, new Color(1, 1, 1, 0.08f), 3f, true);
-        DrawArc(rc, 11f, -Mathf.Pi / 2f, -Mathf.Pi / 2f + Mathf.Tau * left, 24, left < 0.3f ? Palette.Danger : Palette.Warning, 3f, true);
-        Gfx.TextCentered(this, Fonts.Bold, rc, $"{(p.Deadline - w.Tick) / (float)SimTime.Minutes(1):0.#}", 9, Palette.Text);
+        if (pending)
+        {
+            DrawArc(rc, 11f, -Mathf.Pi / 2f, -Mathf.Pi / 2f + Mathf.Tau * left, 24, left < 0.3f ? Palette.Danger : Palette.Warning, 3f, true);
+            Gfx.TextCentered(this, Fonts.Bold, rc, $"{(p.Deadline - w.Tick) / (float)SimTime.Minutes(1):0}", Ui.TextMicro, Palette.Text);
+        }
+        else Icons.Draw(this, p.Accepted ? "target" : "close", rc, Ui.IconS, tone);
         // 조치 그림: 진공(바깥으로 빠지는 화살표) · 질식(가스 구름) · 그 밖(톱니)
         var ic = new Vector2(r.Position.X + 16, r.Position.Y + 18);
         if (p.Kind == "vacuum")
@@ -196,17 +211,26 @@ public partial class Hud
         else if (p.Kind == "inert")
             for (int k = 0; k < 4; k++) DrawCircle(ic + new Vector2(-5 + k * 4, Mathf.Sin(_time * 2f + k) * 2f), 3.2f, new Color("#9fb3ff").WithAlpha(0.6f), true, -1f, true);
         else ComputerIcons.Draw(this, ComputerModule.Preempt, ic, 6f, ComputerIcons.State.On, _time);
-        Gfx.Text(this, Fonts.Bold, new Vector2(r.Position.X + 32, r.Position.Y + 17), Fit($"제안 · {p.Title}", r.Size.X - 74, 12, Fonts.Bold), 12, Palette.Warning);
-        Gfx.Text(this, Fonts.Body, new Vector2(r.Position.X + 32, r.Position.Y + 31), Fit($"근거: {p.Basis}", r.Size.X - 74, 10, Fonts.Body), 10, Palette.Text);
-        Gfx.Text(this, Fonts.Body, new Vector2(r.Position.X + 32, r.Position.Y + 44), Fit($"예상: {p.Effect}", r.Size.X - 40, 10, Fonts.Body), 10, Palette.TextDim);
-        var cmd = w.Command;
-        var bossC = cmd.Active && cmd.Commander != null ? cmd.Commander : cmd.Captain;
-        string boss = bossC?.Name ?? "주 컴퓨터";
-        Gfx.Text(this, Fonts.Body, new Vector2(r.Position.X + 32, r.Position.Y + 57), Fit(bossC != null ? $"{Ko.IGa(boss)} 정한다 — 컴퓨터 신뢰 {w.Automation.Trusts.Of(bossC) * 100:0}%" : "정할 사람이 없다 — 기한이 지나면 컴퓨터가 한다", r.Size.X - 40, 9, Fonts.Body), 9, Palette.TextMuted);
-        // v16.20 완전 관전: 받기 · 거절 버튼 없음 — 지휘하는 사람의 생각 막대 (기한까지)
-        var bar = new Rect2(r.Position.X + 32, r.End.Y - 16, r.Size.X - 60, 4);
-        DrawRect(bar, new Color(1, 1, 1, 0.06f));
-        DrawRect(new Rect2(bar.Position, new Vector2(bar.Size.X * (1f - left), bar.Size.Y)), Palette.Warning.WithAlpha(0.6f));
+        Gfx.Text(this, Fonts.Bold, new Vector2(x, r.Position.Y + 17), Fit(p.Title, r.Size.X - 74, Ui.TextLabel, Fonts.Bold), Ui.TextLabel, pending ? Palette.Warning : Palette.Text);
+        Gfx.Text(this, Fonts.Body, new Vector2(x, r.Position.Y + 32), Fit($"왜: {p.Basis} → {p.Effect}", r.Size.X - 74, Ui.TextTiny, Fonts.Body), Ui.TextTiny, Palette.TextDim);
+        // 지나온 과정 (마지막 세 단계) + 지금 기다리는 것
+        var steps = new List<(long, string)>(p.Trail.Skip(Math.Max(0, p.Trail.Count - 3)));
+        if (pending) steps.Add((w.Tick, ProposalWaitLine(p)));
+        UiKit.Steps(this, x - 4, right, r.Position.Y + 40, steps, pending ? Tone.Caution : p.Accepted ? Tone.Good : Tone.Disabled, 4);
+    }
+
+    /// <summary>아직 정하지 않은 제안: 지휘하는 사람이 지금 어디서 무엇을 하나 (언제 정할지 보이게).</summary>
+    private string ProposalWaitLine(Proposal p)
+    {
+        var w = _world;
+        var boss = ProposalTiming.Boss(w);
+        if (boss == null) return "정할 사람이 없다 — 기한이 되면 컴퓨터가 한다";
+        if (ProposalTiming.Urgent(w, p)) return $"급하다 — {Ko.IGa(boss.Name)} 곧 정한다";
+        if (p.SeenAt >= 0) return $"{Ko.IGa(boss.Name)} 생각하는 중";
+        if (w.Meetings.Gathering || w.Meetings.Session != null) return "회의에서 이야기한다";
+        string where = boss.Room?.Name ?? "밖";
+        string doing = boss.Pose == Pose.Sleeping ? "자는 중" : "단말 앞에 가면 본다";
+        return $"{boss.Name}: {where} · {doing}";
     }
 
     /// <summary>오늘의 결정: 컴퓨터 제안 · 회의 안건 · 결정 기록 · 개조.</summary>

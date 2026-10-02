@@ -24,7 +24,7 @@ public partial class Hud
         if (ScaleCodexOpen) { ChronicleOpen = false; TechOpen = false; ControlOpen = false; PolicyOpen = false; OpenChain(null); }
     }
 
-    public static Color ScaleColor(IncidentScale s) => new(ScaleTable.Hex(s));
+    public static Color ScaleColor(IncidentScale s) => UiKit.ScaleColor(s); // v16.24 공통 부품
 
     // ─────────────────────────────── 아이콘 (규모마다 다른 실루엣) ───────────────────────────────
 

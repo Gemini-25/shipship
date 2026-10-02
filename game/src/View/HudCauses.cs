@@ -162,9 +162,10 @@ public partial class Hud
         var root = log.Node(inc.Root);
 
         // 머리: 뿌리 · 상태 · 숫자
-        Gfx.Text(this, Fonts.Bold, new Vector2(x, y0 + 30), Fit(root.Text, right - x - 150, Ui.TextLarge, Fonts.Bold), Ui.TextLarge, Palette.Text);
         Button(new Rect2(right - 58, y0 + 12, 58, 26), "K 닫기", false, mouse, () => OpenChain(null), Ui.TextSmall);
         Button(new Rect2(right - 58 - 92, y0 + 12, 86, 26), "↶ 직전으로", false, mouse, () => _main.RewindTo(inc.Start - SimTime.Minutes(3)), Ui.TextSmall);
+        float tabsX = ChainTabs(right - 58 - 92 - 6, y0 + 12, mouse); // v16.24 이야기 · 사슬
+        Gfx.Text(this, Fonts.Bold, new Vector2(x, y0 + 30), Fit(root.Text, tabsX - x - 10, Ui.TextLarge, Fonts.Bold), Ui.TextLarge, Palette.Text);
         int lasting = inc.Nodes.Count(i => log.Node(i).Lasting);
         int open = inc.Nodes.Count(i => log.Node(i).Open);
         string when = $"{SimTime.Day(inc.Start)}일 {SimTime.Clock(inc.Start)}" + (inc.ByObserver ? " · 관찰자가 일으킴" : "");
@@ -186,6 +187,7 @@ public partial class Hud
         }
         Divider(x, right, y0 + 90);
         DrawChainScale(inc, x, right, y0); // v16.18 규모 단계 (② → ③ → ④)
+        if (_chainTab == 0) { DrawIncidentStory(inc, x, right, y0 + 98, card.End.Y - 14); return; } // v16.24 사고 카드 여섯 칸
 
         // 나무를 줄로 편다 (깊이 우선)
         var rows = new List<CauseNode>();
