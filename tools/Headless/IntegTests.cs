@@ -397,7 +397,7 @@ public static partial class Program
             for (int t = 0; t < SimTime.Minutes(60); t++) { if (w.Fire.At(cell) < 0.15f) w.Fire.Ignite(cell, 0.2f); room.VentOpen = false; w.Step(); co = MathF.Max(co, room.Air.CO); smoke = MathF.Max(smoke, room.Air.Smoke); }
             Check("불씨 — 닫힌 방에서 연기만 피우는 불씨는 일산화탄소를 채운다 (경보 문턱을 넘는다)", co > 0.12f, $"{room.Name} 일산화탄소 최고 {co:0.00} · 연기 {smoke:0.00}");
         }
-        // ④ 우주급: 초신성 방사선은 바깥 방을 몇 시간이면 죽을 만큼 · 대피소는 견딜 만큼
+        // ④ 우주급: 초신성 방사선은 바깥 방을 몇 시간이면 앓게 · 대피소는 견딜 만큼
         {
             var w = DayOne(seed, "Hanbit");
             var e = w.Cosmic.Force(CosmicKind.Supernova, 0.2f);
@@ -409,7 +409,8 @@ public static partial class Program
                 foreach (var r in w.Ship.LiveRooms) outRad = MathF.Max(outRad, r.Radiation);
                 if (shelter != null) shelterRad = MathF.Max(shelterRad, shelter.Radiation);
             }
-            Check("우주급 — 초신성: 바깥 방은 시간당 1Sv 넘게 (몇 시간이면 죽는다) · 대피소는 그 몇 분의 일", outRad >= 2f && (shelter == null || shelterRad < outRad * 0.3f),
+            // 숨은 사람이 견딜 만큼으로 맞췄다 (우주 시험: 대피소 쪽 평균 0.8Sv 아래) — 바깥 방은 예전의 세 배 남짓
+            Check("우주급 — 초신성: 바깥 방은 시간당 0.8Sv 남짓 (몇 시간이면 방사선 병) · 대피소는 그 몇 분의 일", outRad >= 1.6f && (shelter == null || shelterRad < outRad * 0.3f),
                 $"바깥 방 최고 {outRad:0.00} (시간당 {(outRad - 0.05f) * 0.5f:0.0}Sv) · 대피소 {shelterRad:0.00}");
         }
     }
