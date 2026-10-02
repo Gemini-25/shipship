@@ -15,6 +15,7 @@ public sealed class AuditRun
     public string? Error;
     public float ErrorHour = -1f;
     public List<ADeath> Deaths = new();
+    public List<ADown> Downs = new();
     public List<int> PanicMin = new();
     public List<ACase> Cases = new();
     public int FaultEvents;
@@ -40,14 +41,18 @@ public sealed class ADeath
 {
     public float Hour;
     public string Name = "", Room = "", Cause = "", Case = "";
-    public int Scale = -1, SelfMin, NearMin, DownMin, PanicMin;
+    public int Scale = -1, SelfMin, NearMin, DownMin, PanicMin, RoomId = -1, CrewId = -1;
+    public long Tick;
     public bool Panic, Sudden;
 }
+
+/// <summary>쓰러짐 하나 (죽음 바로 아래 단계 — 사고가 사람을 얼마나 위협했나).</summary>
+public sealed class ADown { public float Hour; public long Tick; public string Name = "", Room = ""; public int RoomId = -1, CrewId = -1, Scale = -1; }
 
 public sealed class ACase
 {
     public string Key = "", Name = "", Room = "";
-    public int Base, Peak, Deaths, Chain, Spread;
+    public int Base, Peak, Deaths, Downs, Chain, Spread;
     public float Hour, Hours;
 }
 

@@ -32,7 +32,7 @@ public static partial class Program
         public readonly byte[] Hp = new byte[AuditWin];
         public int N;
         public long PanicStart = -1;
-        public bool Dead;
+        public bool Dead, Down;
         public string? Said;
         public int Diary;
     }
@@ -90,6 +90,8 @@ public static partial class Program
             foreach (var f in w.Ship.Furniture)
                 if (!f.Stowed && !f.Room.Detached) run.FixPresent[f.Type.ToString()] = run.FixPresent.GetValueOrDefault(f.Type.ToString()) + 1;
             run.RoomsTotal = w.Ship.Rooms.Count(r => !r.Detached && r.Type != RoomType.Corridor);
+            run.Bots.Robots = w.Robots.Robots.Count;
+            run.Bots.Drones = w.Drones.Drones.Count;
             Resources(true);
         }
 
@@ -144,6 +146,8 @@ public static partial class Program
                 if (!_crew.TryGetValue(c.Id, out var tr)) _crew[c.Id] = tr = new AuditCrewTrack { Diary = c.Diary.Count };
                 if (tr.Dead) continue;
                 if (c.Dead) { tr.Dead = true; Death(c, tr, now); continue; }
+                if (c.Down && !tr.Down) _run.Downs.Add(new ADown { Hour = H(now), Tick = now, Name = c.Name, CrewId = c.Id, RoomId = c.Room?.Id ?? -1, Room = c.Room?.Name ?? "선체 밖" });
+                tr.Down = c.Down;
                 bool self = !c.Down && AuditSurv(c);
                 bool panic = c.Mind.Panicking(now);
                 int room = c.Room?.Id ?? -1;
@@ -175,7 +179,8 @@ public static partial class Program
         private void Death(CrewMember c, AuditCrewTrack tr, long now)
         {
             int n = Math.Min(tr.N, AuditWin);
-            var d = new ADeath { Hour = H(c.DiedAt >= 0 ? c.DiedAt : now), Name = c.Name, Cause = c.Vitals.InjuryCause ?? "알 수 없음" };
+            long died = c.DiedAt >= 0 ? c.DiedAt : now;
+            var d = new ADeath { Hour = H(died), Tick = died, Name = c.Name, CrewId = c.Id, Cause = c.Vitals.InjuryCause ?? "알 수 없음" };
             for (int k = 1; k <= n; k++)
             {
                 int i = ((tr.N - k) % AuditWin + AuditWin) % AuditWin;
@@ -184,7 +189,7 @@ public static partial class Program
                 if ((f & 2) != 0) { d.PanicMin++; if (k <= 10) d.Panic = true; }
                 if ((f & 4) != 0) d.DownMin++;
                 if ((f & 8) != 0) d.NearMin++;
-                if (k == 1) d.Room = RoomName(tr.R[i]);
+                if (k == 1) { d.RoomId = tr.R[i]; d.Room = RoomName(tr.R[i]); }
                 if (k == 3 && tr.Hp[i] >= 50) d.Sudden = true;
             }
             if (n < 3) d.Sudden = true;
@@ -370,24 +375,22 @@ public static partial class Program
                 AuditScanText(k.Broadcast, "방송", _run.TextHits, _run.TextEx, _seenText);
                 AuditScanText(k.Suggest, "제안", _run.TextHits, _run.TextEx, _seenText);
             }
-            foreach (var d in _run.Deaths)
+            ScaleCase? Attribute(long tick, int crewId, int roomId)
             {
-                var victim = w.Crew.FirstOrDefault(c => c.Name == d.Name);
-                long died = victim?.DiedAt >= 0 ? victim!.DiedAt : _t0 + (long)(d.Hour * SimTime.TicksPerHour);
-                int roomId = w.Ship.Rooms.FirstOrDefault(r => r.Name == d.Room)?.Id ?? -2;
                 ScaleCase? best = null;
                 foreach (var k in cases)
                 {
-                    if (k.Start > died || (k.End >= 0 && died > k.End + SimTime.Hours(1))) continue;
-                    bool hit = k.CrewId == victim?.Id || k.RoomId == roomId || k.Rooms.Contains(roomId) || k.Peak >= IncidentScale.Ship;
+                    if (k.Start > tick || (k.End >= 0 && tick > k.End + SimTime.Hours(1))) continue;
+                    bool hit = k.CrewId == crewId || (roomId >= 0 && (k.RoomId == roomId || k.Rooms.Contains(roomId))) || k.Peak >= IncidentScale.Ship;
                     if (!hit) continue;
                     if (best == null || k.Peak > best.Peak || (k.Peak == best.Peak && k.Start > best.Start)) best = k;
                 }
-                if (best == null) continue;
-                d.Scale = (int)best.Peak;
-                d.Case = best.Name;
-                map[best].Deaths++;
+                return best;
             }
+            foreach (var d in _run.Deaths)
+                if (Attribute(d.Tick, d.CrewId, d.RoomId) is ScaleCase k) { d.Scale = (int)k.Peak; d.Case = k.Name; map[k].Deaths++; }
+            foreach (var d in _run.Downs)
+                if (Attribute(d.Tick, d.CrewId, d.RoomId) is ScaleCase k) { d.Scale = (int)k.Peak; map[k].Downs++; }
             _run.Keys = cases.SelectMany(k => k.KeysSeen.Append(k.Key)).Distinct().OrderBy(x => x, StringComparer.Ordinal).ToList();
             // 쓰임
             foreach (var r in w.Ship.Rooms.Where(r => r.Type != RoomType.Corridor && !r.Merged).OrderBy(r => r.Id))

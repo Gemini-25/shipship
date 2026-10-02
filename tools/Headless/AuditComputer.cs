@@ -25,7 +25,9 @@ public static partial class Program
             {
                 if (act.Id <= _lastAct) continue;
                 _lastAct = act.Id;
-                if (string.IsNullOrWhiteSpace(act.Request)) c.Remote++; else c.Asked++;
+                // 원격 조치(문 · 댐퍼 · 밸브 · 차단기 · 소화 · 부하 끊기 …) vs 사람에게 부탁(조언 · 제안 · 방송) — 예보는 빼고
+                if (act.Kind is ActKind.Advice or ActKind.Proposal or ActKind.Broadcast) c.Asked++;
+                else if (act.Kind != ActKind.Forecast) c.Remote++;
                 AuditScanText(act.Observe, "컴퓨터 기록", hits, ex, _seen);
                 AuditScanText(act.Judge, "컴퓨터 기록", hits, ex, _seen);
                 AuditScanText(act.Act, "컴퓨터 기록", hits, ex, _seen);

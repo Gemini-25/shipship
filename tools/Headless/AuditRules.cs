@@ -54,6 +54,14 @@ public static partial class Program
         return (cs.Count, cs.Sum(k => k.Deaths));
     }
 
+    private static string ScaleDowns(AuditCtx c, params IncidentScale[] s)
+    {
+        var set = s.Select(x => (int)x).ToHashSet();
+        var cs = c.Cases.Where(k => set.Contains(k.Peak)).ToList();
+        int d = cs.Sum(k => k.Downs);
+        return $" · 쓰러짐 {d}명 (사고당 {(cs.Count == 0 ? 0 : d / (double)cs.Count):0.00})";
+    }
+
     private static readonly AuditRule[] AuditRuleTable =
     {
         new("death.noresp", "대응 없이 죽음", true, c =>
@@ -84,7 +92,7 @@ public static partial class Program
             double avg = n == 0 ? 0 : d / (double)n;
             int sev = n == 0 ? 1 : n >= 10 && d == 0 ? 3 : avg > 0.3 ? 3 : avg > 0.15 ? 2 : 0;
             string judge = n == 0 ? "보통 재해가 한 번도 안 났다" : n >= 10 && d == 0 ? "너무 안전 — 보통 재해로 아무도 안 죽었다 (\"가끔 사망\"이 목표)" : d == 0 ? "아직 사망 없음 (사고 수가 적어 판정 보류)" : avg > 0.3 ? "너무 위험 — 보통 재해가 자주 사람을 죽인다" : "목표 범위 (가끔 사망)";
-            return F(sev, d, avg, $"보통 재해 {n}건 · 사망 {d}명 · 사고당 {avg:0.000} — {judge}",
+            return F(sev, d, avg, $"보통 재해 {n}건 · 사망 {d}명 · 사고당 {avg:0.000}{ScaleDowns(c, IncidentScale.Room, IncidentScale.System)} — {judge}",
                 d == 0 ? "운석우 · 화재 · 정전 · 배관 파열이 사람을 다치게 하는 길(연기 · 감압 · 감전 · 고립)이 끝까지 가는지 · 대응이 너무 완벽한지" : "보통 재해 대응/대피 속도",
                 c.Runs.SelectMany(r => r.Cases.Where(k => k.Peak is 1 or 2 && k.Deaths > 0).Select(k => $"{AuditCtx.Tag(r)} {Hr(k.Hour)} · {k.Room} · {k.Name} — 사망 {k.Deaths}")));
         }, 0.08),
@@ -93,14 +101,14 @@ public static partial class Program
             var (n, d) = ScaleDeaths(c, IncidentScale.Ship);
             double avg = n == 0 ? 0 : d / (double)n;
             int sev = n == 0 ? 1 : avg < 0.1 ? 2 : avg > 3 ? 2 : 0;
-            return F(sev, n, avg, n == 0 ? "배 전체급 사고가 한 번도 안 났다" : $"배 전체급 {n}건 · 사망 {d}명 · 사고당 {avg:0.00} ({(avg < 0.1 ? "큰 피해가 아니다" : avg > 3 ? "너무 크다" : "목표 범위")})",
+            return F(sev, n, avg, n == 0 ? "배 전체급 사고가 한 번도 안 났다" : $"배 전체급 {n}건 · 사망 {d}명 · 사고당 {avg:0.00}{ScaleDowns(c, IncidentScale.Ship)} ({(avg < 0.1 ? "큰 피해가 아니다" : avg > 3 ? "너무 크다" : "목표 범위")})",
                 "배 전체급은 \"큰 피해\" — 사망 0.1~3 이 목표", c.Runs.SelectMany(r => r.Cases.Where(k => k.Peak == 3).Select(k => $"{AuditCtx.Tag(r)} {Hr(k.Hour)} · {k.Name} — {k.Hours:0.0}시간 · 사망 {k.Deaths}")));
         }, 1.0),
         new("death.cosmic", "우주급 사고 생존 위기", false, c =>
         {
             var (n, d) = ScaleDeaths(c, IncidentScale.Cosmic);
             double avg = n == 0 ? 0 : d / (double)n;
-            return F(n == 0 ? 0 : avg < 0.5 ? 1 : 0, n, avg, n == 0 ? "우주급 사고 없음 (이 기간 · 이 시드)" : $"우주급 {n}건 · 사망 {d}명 · 사고당 {avg:0.00}{(avg < 0.5 ? " — 생존 위기라기엔 약하다" : "")}",
+            return F(n == 0 ? 0 : avg < 0.5 ? 1 : 0, n, avg, n == 0 ? "우주급 사고 없음 (이 기간 · 이 시드)" : $"우주급 {n}건 · 사망 {d}명 · 사고당 {avg:0.00}{ScaleDowns(c, IncidentScale.Cosmic)}{(avg < 0.5 ? " — 생존 위기라기엔 약하다" : "")}",
                 "우주급만 진짜 생존 위기", c.Runs.SelectMany(r => r.Cases.Where(k => k.Peak == 4).Select(k => $"{AuditCtx.Tag(r)} {Hr(k.Hour)} · {k.Name} — 사망 {k.Deaths}")));
         }, 2.0),
         new("fault.repeat", "같은 고장이 짧은 시간에 반복", true, c =>
@@ -277,7 +285,7 @@ public static partial class Program
             if (min == 0) return F(0, 0, 0, "로봇 없음", "");
             double downFrac = down / (double)min;
             double mtbf = f == 0 ? 0 : act / 60.0 / f;
-            return F(downFrac > 0.3 || lost > 0 ? 2 : downFrac > 0.1 ? 1 : 0, f, downFrac, $"로봇 {c.Runs.Sum(r => r.Bots.Robots > 0 ? r.Bots.Robots : 0)}대분 · 일함 {act * 100.0 / min:0}% · 멈춤/고장 {downFrac * 100:0}% · 고장 {f}번 (일한 {mtbf:0.0}시간마다) · 잃음 {lost}",
+            return F(downFrac > 0.3 || lost > 0 ? 2 : downFrac > 0.1 ? 1 : 0, f, downFrac, $"로봇 항해당 {c.Runs.Average(r => r.Bots.Robots):0.#}대 · 일함 {act * 100.0 / min:0}% · 멈춤/고장 {downFrac * 100:0}% · 고장 {f}번 (일한 {mtbf:0.0}시간마다) · 잃음 {lost}",
                 "로봇 고장 · 충전 · 사람이 고쳐 주는지", null);
         }),
         new("bots.drone", "드론 표류 · 잃음", true, c =>
