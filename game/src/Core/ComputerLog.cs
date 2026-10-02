@@ -322,7 +322,6 @@ public sealed partial class AutomationSystem
             if (!Present) return "주 컴퓨터가 없는 배 — 자동 회로만";
             if (Rebooting) return $"재부팅 중 · {(RebootUntil - w.Tick) / (float)SimTime.Minutes(1):0.0}분 · " + (Core.BackupCore ? $"{Core.RebootStage}/3 {ShipCore.StageName(Core.RebootStage)}" : "사람이 손으로") + (RebootWhy != "" ? $" ({RebootWhy})" : "");
             if (!MainOnline) return Core.BackupCore ? "본체 멎음 — 예비 연산기가 격벽·댐퍼·경보와 급한 곳 전기를 붙잡는다" : BackupActive ? "멎음 — 방 제어기가 격벽·댐퍼·경보만" : "멎음 — 모든 자동화를 사람이 손으로";
-            if (_foresee?.NowLine is string fl) return fl; // v16.20 미리 돌려 보고 고른 안
             foreach (var fc in FireCases.OrderByDescending(f => f.Stage == 2 ? 3 : f.Stage == 1 ? 2 : f.Stage == 3 ? 1 : 0).ThenBy(f => f.RoomId))
             {
                 var room = w.Ship.Rooms[fc.RoomId];
@@ -341,12 +340,13 @@ public sealed partial class AutomationSystem
             if (ZoneActive) return $"공기 구역 · {ZoneNote}";
             foreach (var r in w.Ship.Rooms)
                 if (r.LockPendingUntil >= 0) return $"{r.Name} 감압 · 격벽 폐쇄까지 {(r.LockPendingUntil - w.Tick) / (float)SimTime.Minutes(1) * 60f:0}초 · 대피 기다림";
+            if (_foresee?.NowLine is string fl) return fl; // v16.20 미리 견줘 보고 고른 안
             if (Asks.Open.FirstOrDefault() is Proposal q) return $"제안 · {q.Title} · {Math.Max(0, (q.Deadline - w.Tick) / (float)SimTime.Minutes(1)):0.0}분 안에";
             if (Checks.Count > 0) return $"{w.Ship.Rooms[Checks[0].RoomId].Name} 사람 확인 요청 · {Checks[0].Why}";
             if (Book.Acts.LastOrDefault() is ComputerAct a && w.Tick - a.Tick < SimTime.Minutes(5))
                 return $"{(a.RoomId >= 0 ? w.Ship.Rooms[a.RoomId].Name + " · " : "")}{(a.Act != "" ? a.Act : a.Observe)}";
-            if (Suspended.Count > 0) return $"부하 {Load * 100:0}% · 모듈 {Suspended.Count}개 잠시 끔";
-            return $"평시 감시 · 모듈 {_modules.Count}개 · 부하 {Load * 100:0}%";
+            if (Suspended.Count > 0) return $"부하 {Load * 100:0}% · 급하지 않은 일 {Suspended.Count}가지를 잠시 쉰다";
+            return $"평시 — 배 전체를 본다 · 부하 {Load * 100:0}%";
         }
     }
 

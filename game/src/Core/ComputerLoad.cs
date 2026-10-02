@@ -134,9 +134,10 @@ public sealed partial class AutomationSystem
             if (!crisis && Load <= 0.75f && pr > saving) break;
         }
         // 다시 켜기: 평온하고 부하가 낮으면 하나씩 (높은 순위부터)
-        if (!crisis && Suspended.Count > 0 && Suspended.Any(m => ModulePriority(m) > saving))
+        int floor = Math.Max(saving, crisis ? 2 : -1); // 위기면 비필수(순위 2 이하)는 쉬게 두고, 나머지는 하나씩 되찾는다 (v16.20 재부팅 뒤)
+        if (Suspended.Count > 0 && Suspended.Any(m => ModulePriority(m) > floor))
         {
-            var back = Suspended.Where(m => ModulePriority(m) > saving).OrderByDescending(ModulePriority).ThenBy(m => (int)m).First();
+            var back = Suspended.Where(m => ModulePriority(m) > floor).OrderByDescending(ModulePriority).ThenBy(m => (int)m).First();
             float after = (Demand() + ModuleLoad(back)) / MathF.Max(1f, Capacity);
             if (after <= 0.7f)
             {

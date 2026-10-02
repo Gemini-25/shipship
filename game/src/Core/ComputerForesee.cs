@@ -174,7 +174,7 @@ public sealed class ComputerForesee
     {
         var w = _w;
         var a = w.Automation;
-        if (!a.MainOnline || a.Level < 4) return null;
+        if (!a.MainOnline || a.Level < 4 || AutomationSystem.Ship20Off) return null;
         var (pw, sw) = Weights();
         var ch = a.Character;
         float leak = MathF.Max(1f, room.Air.Leak);
@@ -272,36 +272,46 @@ public sealed class ComputerForesee
     {
         var w = _w;
         var a = w.Automation;
-        if (!a.MainOnline || a.Level < 4) return fallback();
+        if (!a.MainOnline || a.Level < 4 || AutomationSystem.Ship20Off) return fallback();
         if (Timeline.LastOrDefault(d => d.Kind == "불" && d.RoomId == room.Id) is ForeseeDecision last && last.Pick.Key == "crew" && w.Tick - last.Tick < SimTime.Minutes(a.Core.Horizon / 2f))
             return "crew"; // 방금 "더 맡긴다"로 정했다 — 예측 거리의 반만큼 기다렸다 다시 본다
         var (pw, sw) = Weights();
         float shipV = ShipVolume();
         int believed = a.Belief.PeopleIn(room) ?? 0;
+        // 생체 감시가 그 방을 보면 쓰러진 사람을 안다 (아니면 다 걸어 나갈 거라 믿는다 — 틀릴 수 있다)
+        bool bio = a.Active(ComputerModule.BioMonitor) && room.DataLinked && a.Belief.SeesPeople(room);
+        int down = 0;
+        if (bio) foreach (var c in w.Crew) if (!c.Dead && c.Down && c.Room == room) down++;
+        int awake = Math.Max(0, believed - down);
+        // 사람 위험: 회의 방침이 무게를 정한다 — 빈 방만이면 비기 전엔 안 한다(늦어질 뿐) · 카운트다운이면 회의가 받아들인 위험 · 컴퓨터 판단이면 온전히
+        float Lethal(int policy, float mul) => policy == 1 ? 0f : (down * 0.9f * (policy == 2 ? 0.3f : 1f) + awake * 0.03f) * mul;
+        float Delay(int policy) => policy == 1 && believed > 0 ? 5f : 0f;
         float grow = room.Air.O2 > 15f ? 0.12f : 0.04f; // 분당 번지는 비율
         float Damage(float c, float min) => c * min * 0.02f;
         var opts = new List<ForeseeOption>();
-        // 소화조에 더 맡김
+        // 소화조에 더 맡김 (쓰러진 사람은 연기 속에 그대로 — 소화조가 끄면서 데리고 나온다)
         if (crewOnIt)
         {
             float rate = MathF.Max(0.3f, 0.8f * crewCount) * Noise();
             float net = rate - grow * cells;
-            float t = net > 0.05f ? cells / net : 30f;
-            opts.Add(new ForeseeOption { Key = "crew", Name = "소화조에 더 맡기기", Minutes = MathF.Min(30f, t), People = 0.06f * crewCount + (t > 12f ? 0.1f * crewCount : 0f), Ship = Damage(cells + grow * cells * MathF.Min(30f, t), MathF.Min(30f, t)), Note = $"소화조 {crewCount}명 · 분당 {rate:0.#}칸" });
+            float t = MathF.Min(30f, net > 0.05f ? cells / net : 30f);
+            opts.Add(new ForeseeOption { Key = "crew", Name = "소화조에 더 맡기기", Minutes = t, People = 0.06f * crewCount + (t > 12f ? 0.1f * crewCount : 0f) + down * MathF.Min(0.6f, t / 20f), Ship = Damage(cells + grow * cells * t, t), Note = $"소화조 {crewCount}명 · 분당 {rate:0.#}칸" });
         }
         // 질식 소화
         {
+            int pol = _w.Policies["inertfire"];
             float pi = Math.Clamp(1f - (cells - 4f) / 8f, 0.2f, 0.95f) * (inertOk ? 1f : 0f);
-            float t = 0.5f + 2.5f + (1f - pi) * 15f;
-            var o = new ForeseeOption { Key = "inert", Name = "질식 소화", Minutes = t * Noise(), People = believed * 0.35f, Ship = Damage(cells, t) + 0.05f, Note = $"성공 {pi * 100:0}% · 가스 {(a.InertCapacity > 0 ? a.InertGas / a.InertCapacity * 100 : 100):0}%" };
-            if (!inertOk) { o.Allowed = false; o.Blocked = a.InertGas < 17f * room.Volume * 0.6f ? "불활성 가스가 모자라다" : "방침 · 이미 써 봤다"; }
+            float t = 0.5f + 2.5f + (1f - pi) * 15f + Delay(pol);
+            var o = new ForeseeOption { Key = "inert", Name = "질식 소화", Minutes = t * Noise(), People = Lethal(pol, 0.8f), Ship = Damage(cells, t) + 0.05f, Note = $"성공 {pi * 100:0}% · 가스 {(a.InertCapacity > 0 ? a.InertGas / a.InertCapacity * 100 : 100):0}%" };
+            if (!inertOk) { o.Allowed = false; o.Blocked = pol <= 0 ? "회의가 금했다" : a.InertGas < 17f * room.Volume * 0.6f ? "불활성 가스가 모자라다" : "이미 써 봤다"; }
             opts.Add(o);
         }
-        // 진공 소화
+        // 진공 소화 (공기를 잃는다 — 탱크로 다시 채워야 한다)
         {
-            float t = 2f + 3f;
-            var o = new ForeseeOption { Key = "vacuum", Name = "진공 소화", Minutes = t * Noise(), People = believed * 0.8f, Ship = Damage(cells, t) + room.Volume * 101f / (101f * shipV) * 3f + 0.1f, Note = "공기 · 작물을 잃는다 · 확실하다" };
-            if (!vacOk) { o.Allowed = false; o.Blocked = "배기 밸브가 없다 · 방침"; }
+            int pol = _w.Policies["vacuumfire"];
+            float t = 2f + 3f + Delay(pol);
+            var o = new ForeseeOption { Key = "vacuum", Name = "진공 소화", Minutes = t * Noise(), People = Lethal(pol, 1f), Ship = Damage(cells, t) + room.Volume / shipV * 10f + 0.1f, Note = "공기 · 작물을 잃는다 · 확실하다" };
+            if (!vacOk) { o.Allowed = false; o.Blocked = pol <= 0 ? "회의가 금했다" : "공기를 뺄 밸브가 없다"; }
             opts.Add(o);
         }
         if (opts.All(o => !o.Allowed)) return fallback();
@@ -395,7 +405,7 @@ public sealed class ComputerForesee
         var w = _w;
         var a = w.Automation;
         Queue.Clear();
-        if (!a.CoreOnline) return;
+        if (!a.CoreOnline || AutomationSystem.Ship20Off) return;
         var bel = a.Belief;
         foreach (var fc in a.FireCases)
         {

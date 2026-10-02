@@ -42,6 +42,9 @@ public sealed class PowerTriage
     public string Plan { get; private set; } = "";
     public List<BreakerCase> Cases { get; } = new();
     private readonly Dictionary<int, (string sig, long tick)> _lastReset = new();
+    public int LowPower;
+    private bool _ownBrownout;
+    private long _lowAnnounced = -1;
     public int RemoteResets, CauseCuts, Holds, SameCauseHolds, AuxStarts, AuxFails, AuxHandsAsked, Parks, Unparks, Feeders, Trims, RestartAsks, Decisions;
     private int _auxTries;
     private long _auxNext, _next, _restartAsked = -1, _decidedAt = -1;
@@ -65,6 +68,8 @@ public sealed class PowerTriage
             case FurnitureType.MedBed: if (w.Crew.Any(c => !c.Dead && (c.Down || c.CareBed == m.Body))) r = 11; break;
             case FurnitureType.SensorArray: if (w.Sensors.Incoming.Count > 0) r = 10; break;
             case FurnitureType.EngineCore: if (w.Propulsion.Current != null) r = 11; break;
+            case FurnitureType.GrowBed or FurnitureType.Fridge: r = Math.Max(r, 8); break; // 먹을 것 — 작물 · 식량은 한 번 잃으면 못 되돌린다
+            case FurnitureType.Stove or FurnitureType.MealDispenser: r = Math.Max(r, 7); break;
         }
         if (m.Body.Room.Type is RoomType.LifeSupport) r = Math.Max(r, 9);
         return r;
@@ -74,7 +79,7 @@ public sealed class PowerTriage
 
     /// <summary>원격으로 끌 수 있는 설비 (데이터선이 닿고 · 끌 만한 순위 · 사람이 붙어 일하지 않는).</summary>
     private bool Parkable(Machine m, int maxRank) =>
-        !m.Body.Room.Detached && m.Body.Room.DataLinked && m.Spec.PowerDraw > 0f && !m.Parked && m.Powered && !m.Stopped && Rank(_w, m) <= maxRank
+        !m.Body.Room.Detached && m.Body.Room.DataLinked && m.Spec.PowerDraw > 0f && !m.Parked && !m.Stopped && Rank(_w, m) <= maxRank
         && !(m.Active && m.Body.Type is FurnitureType.Refinery or FurnitureType.Workbench or FurnitureType.Fabricator && _w.Crew.Any(c => c.Job?.Target == m.Body && c.Pose == Pose.Working));
 
     // ───────────── 시스템 틱 ─────────────
@@ -129,6 +134,7 @@ public sealed class PowerTriage
             // 얼마나 끌 수 있나 (순위 낮은 것부터 · 생활까지): 목표 — 복구까지 · 아니면 12시간 버틸 만큼 (신중하면 더 오래)
             float targetH = (restore < 98f ? restore + 1f : 12f) * (1f + 0.5f * MathF.Max(0f, ch.Caution));
             float need = MathF.Max(0f, drain - p.BatteryCharge / MathF.Max(0.5f, targetH));
+            // 배전반이 이미 떨군 설비(전기가 모자라 꺼진 것)도 표에 넣어 둔다 — 전기가 조금 돌아와도 다시 먹지 않게. 줄어드는 몫은 지금 켜진 것만.
             var cands = w.Ship.Machines.Where(m => Parkable(m, 7)).OrderBy(m => Rank(w, m)).ThenByDescending(m => m.Demand).ThenBy(m => m.Body.Id).ToList();
             float parkKw = 0f;
             var pick = new List<Machine>();
@@ -136,8 +142,13 @@ public sealed class PowerTriage
             {
                 if (parkKw >= need && Rank(w, m) >= 4) break; // 편의(순위 3 아래)는 위기면 다 끈다
                 pick.Add(m);
-                parkKw += m.Demand;
+                if (m.Powered) parkKw += m.Demand;
             }
+            // 저출력 운영(남는 펌프 · 산소 발생기 하나 · 빈 치료 침대 · 엔진 · 함교 밖 콘솔 · 센서): 사람이 배전반에 가기 전에 여기서 돌린다
+            bool hurt = w.Crew.Any(c => !c.Dead && (c.Down || c.Vitals.Injury > 0.25f));
+            float lowKw = p.Brownout ? 0f : w.Ship.Machines.Where(m => m.Powered && !m.Body.Room.Detached && (m.Body.Type is FurnitureType.EngineCore or FurnitureType.SensorArray
+                || m.Body.Type == FurnitureType.Console && m.Body.Room.Type != RoomType.Bridge || m.Body.Type == FurnitureType.MedBed && !hurt)).Sum(m => m.Demand);
+            parkKw += lowKw;
             // 미리 돌려 보기: 위기 시작 · 30분마다 다시
             if (a.MainOnline && a.Level >= 4 && (_power == null || _decidedAt < 0 || w.Tick - _decidedAt > SimTime.Minutes(30)))
             {
@@ -151,6 +162,19 @@ public sealed class PowerTriage
             {
                 Mode = "몰아주기";
                 int n = 0;
+                var panelF = w.Ship.FurnitureOf(FurnitureType.PowerPanel).FirstOrDefault();
+                if (!p.Brownout && panelF != null && !panelF.Room.Detached && panelF.Room.DataLinked)
+                {
+                    p.Brownout = true;
+                    p.BrownoutSince = w.Tick;
+                    p.Brownouts++;
+                    LowPower++;
+                    _ownBrownout = true;
+                    foreach (var o in w.Board.Open.Where(o => o.Kind == WorkKind.Brownout).ToList()) w.Board.Close(o);
+                    a.Command.Line(CmdTarget.Circuit, -1, panelF.Room, "저출력 운영으로 돌림", "남는 펌프 · 산소 발생기 하나 · 빈 치료 침대 · 엔진 · 콘솔을 내리고 먹을 것 · 숨 쉴 것에 전기를", 0.8f, 60f, _power?.Id ?? -1);
+                    w.History.Add(w, HistoryKind.Adaptation, $"주 컴퓨터가 저출력 운영으로 돌렸다 — 배터리 {p.BatteryPercent * 100:0}% · {drain:0.#}kW씩 빠진다 (사람이 배전반에 가기 전에)", panelF.Room);
+                    w.Board.RequestScan();
+                }
                 foreach (var m in pick)
                 {
                     if (!_parked.Add(m.Body.Id)) continue;
@@ -159,13 +183,15 @@ public sealed class PowerTriage
                     n++;
                     a.Command.Line(CmdTarget.Machine, m.Body.Id, m.Body.Room, $"{m.Name} 끔 ({TierName(Rank(w, m))} · {m.Demand:0.#}kW)", "생명유지 쪽으로 돌린다", 0.6f, 30f, _power?.Id ?? -1);
                 }
-                if (n > 0)
+                if (n > 0 || LowPower > 0 && _lowAnnounced < 0)
                 {
-                    a.Book.Add(ActKind.Shed, null, $"방전 {drain:0.#}kW · 배터리 {p.BatteryPercent * 100:0}%" + (p.ReactorOnline ? "" : " · 원자로 정지"), $"생명유지 · 냉각 · 의무실 먼저 — {targetH:0}시간은 버텨야 한다",
-                        $"급하지 않은 설비 {n}대를 껐다 ({pick.Sum(m => m.Demand):0.#}kW) — 그만큼 생명유지 쪽으로", "", "park", SimTime.Minutes(20), 30f,
+                    _lowAnnounced = w.Tick;
+                    string what = (n > 0 ? $"급하지 않은 설비 {n}대" : "") + (n > 0 && p.Brownout ? " · " : "") + (p.Brownout ? "남는 펌프 · 산소 발생기 하나 · 빈 치료 침대 · 엔진" : "");
+                    a.Book.Add(ActKind.Shed, null, $"배터리 {p.BatteryPercent * 100:0}%에서 {drain:0.#}kW씩 빠진다" + (p.ReactorOnline ? "" : " · 원자로 정지"), $"생명유지 · 냉각 · 의무실 먼저 — {targetH:0}시간은 버텨야 한다",
+                        $"{what}를 내렸다 — 그만큼 생명유지 쪽으로", "", "park", SimTime.Minutes(20), 30f,
                         (world, act) => (world.Power.BatteryPercent > 0.05f || world.Power.ReactorOnline ? 1 : -1, world.Power.BatteryPercent > 0.05f || world.Power.ReactorOnline ? "맞았다 — 필수 회로가 버텼다" : "틀렸다 — 그래도 바닥났다"));
-                    w.Log.Add(w.Tick, LogKind.Ship, $"{a.Voice.Call}: 전기가 모자라 {string.Join(" · ", pick.Take(5).Select(m => m.Name))}{(pick.Count > 5 ? $" 외 {pick.Count - 5}대" : "")}를 끄고 생명유지 쪽으로 돌립니다 ({drain:0.#}kW씩 빠지던 중)");
-                    a.Speak.Announce(a.Voice.Style(a.Character.Flavor($"전기가 모자랍니다 — 급하지 않은 설비 {n}대를 끄고 생명유지실 쪽으로 먼저 돌립니다" + (a.Core.SelfSaving ? ". 제 연산도 줄입니다" : ""))), null, 1);
+                    w.Log.Add(w.Tick, LogKind.Ship, $"{a.Voice.Call}: 전기가 모자라 {what}{(n > 0 ? $"({string.Join(" · ", pick.Take(4).Select(m => m.Name))}{(pick.Count > 4 ? " …" : "")})" : "")}를 내리고 생명유지 쪽으로 돌립니다");
+                    a.Speak.Announce(a.Voice.Style(a.Character.Flavor("전기가 모자랍니다 — 급하지 않은 것부터 내리고 생명유지실 쪽으로 먼저 돌립니다" + (a.Core.SelfSaving ? ". 제 연산도 줄입니다" : ""))), null, 1);
                 }
             }
             if (choice == "aux" && auxRemote) StartAux(auxF!, a);
@@ -184,7 +210,16 @@ public sealed class PowerTriage
             }
             if (_parked.Count == 0) { Mode = "평시"; Plan = ""; w.Log.Add(w.Tick, LogKind.Ship, $"{a.Voice.Call}: 전기에 여유가 생겨 꺼 두었던 설비를 모두 다시 켰습니다"); }
         }
-        else if (!crisis && _parked.Count == 0) { Mode = "평시"; _power = null; _decidedAt = -1; Plan = ""; }
+        else if (!crisis && _parked.Count == 0) { Mode = "평시"; _power = null; _decidedAt = -1; Plan = ""; _lowAnnounced = -1; }
+        // 저출력 운영을 풀기: 컴퓨터가 건 것은 원자로가 넉넉히 돌면 컴퓨터가 푼다 (사람이 건 것은 사람이)
+        if (_ownBrownout && p.Brownout && p.ReactorOnline && p.ReactorRamp >= 1f && p.SurplusSince >= 0 && w.Tick - p.SurplusSince > SimTime.Hours(1))
+        {
+            p.Brownout = false;
+            _ownBrownout = false;
+            a.Command.Line(CmdTarget.Circuit, -1, null, "저출력 운영 풂", "원자로가 다 켠 수요보다 넉넉하다", 0.4f, 10f);
+            w.Log.Add(w.Tick, LogKind.Ship, $"{a.Voice.Call}: 원자로가 넉넉합니다 — 내려 두었던 설비를 다시 올립니다");
+        }
+        if (!p.Brownout) _ownBrownout = false;
         if (!crisis && !p.AuxRunning) { _auxTries = 0; AuxNeedsHands = false; }
 
         // 원자로 출력: 노심이 달아오르면 낮춘다 (긴급 정지 전에) · 식으면 되돌린다
@@ -276,6 +311,7 @@ public sealed class PowerTriage
                 if (Cases.Count > 40) Cases.RemoveAt(0);
             }
             string cause = bc.Cause, sig = bc.Sig, cutKind = bc.Kind;
+            foreach (var o in w.Board.Open.Where(o => o.Kind == WorkKind.ResetBreaker && o.Circuit == i && o.Assignee == null).ToList()) w.Board.Close(o); // 원인을 볼 동안 사람은 올리러 가지 않는다
             if (!remote) { bc.State = "사람에게 (배전반 데이터선이 끊겼다)"; continue; }
             if (w.Tick - fault.Since < SimTime.Minutes(0.6f) / a.Core.Speed) continue; // 원인을 본다
             bool same = _lastReset.TryGetValue(i, out var last) && last.sig == sig && w.Tick - last.tick < SimTime.Hours(2) && (sig != "?" || w.Tick - last.tick < SimTime.Minutes(30));
@@ -337,7 +373,7 @@ public sealed class PowerTriage
         var a = w.Automation;
         if (kind == "portable")
         {
-            var cut = w.Portable.RemoteCut(circuit, PortableSystem.OutletCapKw * 0.9f, $"{PowerGrid.CircuitName(circuit)} 회로에 너무 많이 꽂혔다");
+            var cut = w.Portable.RemoteCut(circuit, PortableSystem.OutletCapKw, $"{PowerGrid.CircuitName(circuit)} 회로에 너무 많이 꽂혔다");
             foreach (var d in cut)
             {
                 bc.Cut.Add(d.Name);
@@ -370,7 +406,7 @@ public sealed class PowerTriage
         bc.Open = false;
         RemoteResets++;
         _lastReset[i] = (bc.Sig, w.Tick);
-        string cut = bc.Cut.Count > 0 ? string.Join(" · ", bc.Cut) : "";
+        string cut = bc.Cut.Count > 0 ? string.Join(" · ", bc.Cut.GroupBy(x => x).OrderBy(g => g.Key).Select(g => g.Count() > 1 ? $"{g.Key} {g.Count()}대" : $"{g.Key} 하나")) : "";
         a.Command.Line(CmdTarget.Breaker, i, panelRoom, $"{PowerGrid.CircuitName(i)} 회로 차단기 올림", why + (cut != "" ? $" · 끊은 것: {cut}" : ""), 0.9f, 5f, bc.Decision);
         a.Book.Add(ActKind.Breaker, panelRoom, $"{PowerGrid.CircuitName(i)} 회로 차단기가 떨어졌다 — {bc.Cause}", why, cut != "" ? $"{Ko.EulReul(cut)} 끊고 차단기를 올렸다" : "차단기를 올렸다", "", "breset:" + i + ":" + w.Tick, 0, 30f);
         w.Log.Add(w.Tick, LogKind.Ship, $"{a.Voice.Call}: {bc.Cause} — " + (cut != "" ? $"{Ko.EulReul(cut)} 끊은 뒤 {PowerGrid.CircuitName(i)} 회로 차단기를 올렸습니다" : $"{PowerGrid.CircuitName(i)} 회로 차단기를 올렸습니다 ({why})"));
@@ -475,12 +511,14 @@ public sealed partial class AutomationSystem
 
     private int _wireless;
     private long _wirelessNext;
+    /// <summary>시험: v16.20을 끄고 견준다 (성능).</summary>
+    public static bool Ship20Off { get; set; }
 
     /// <summary>v16.20 한 틱: 명령선 · 전력 트리아지 · 미리 돌려 보기 채점 · 성격 · 무선 방 수.</summary>
     private void Ship20(float dt)
     {
         var w = _world;
-        if (!Present) return;
+        if (!Present || Ship20Off) return;
         Command.Update();
         if (CoreOnline) Triage.Update(dt);
         Foresee.Update();
@@ -495,7 +533,7 @@ public sealed partial class AutomationSystem
             if (CoreOnline)
                 foreach (var c in w.Crew)
                     if (c.Pose == Pose.Sleeping && !c.Dead && c.Room is Room cr && (cr.Leaking || w.Fire.IsKnown(cr) || cr.Air.CO > 0.08f || cr.Air.O2 < 16f))
-                        Command.Wake(c, cr.Leaking ? $"{cr.Name} 공기가 샌다 — 나가라" : w.Fire.IsKnown(cr) ? $"{cr.Name} 불 — 나가라" : $"{cr.Name} 공기가 나쁘다 — 나가라");
+                        Command.Wake(c, cr.Leaking ? $"{cr.Name} 공기가 샙니다 — 나가십시오" : w.Fire.IsKnown(cr) ? $"{cr.Name}에 불 — 나가십시오" : $"{cr.Name} 공기가 나쁩니다 — 나가십시오", cr);
         }
     }
 }

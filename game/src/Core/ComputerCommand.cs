@@ -73,12 +73,21 @@ public sealed class ComputerCommand
         return Line(CmdTarget.Crew, c.Id, job.Target.CurrentRoom, $"{c.Name}: {job.Title}", why, job.Urgency, crisis ? 20f : 60f, decision, job.Id, "보냄");
     }
 
-    /// <summary>깨우기: 개인 단말 진동 · 방 스피커 (손이 필요한 위기 · 위험한 방에서 자는 사람).</summary>
-    public void Wake(CrewMember c, string why)
+    /// <summary>깨우기: 개인 단말 진동 · 방 스피커 (손이 필요한 위기 · 위험한 방에서 자는 사람).
+    /// 위험한 방이면 그 방이 위험하다고 일러 준다 — 컴퓨터를 믿는 만큼 믿고 나간다 (다시 그 침대로 돌아가지 않는다).</summary>
+    public void Wake(CrewMember c, string why, Room? danger = null)
     {
         var w = _w;
         if (c.Dead || c.Pose != Pose.Sleeping) return;
+        if (danger != null)
+        {
+            float trust = w.Automation.Trusts.Of(c);
+            w.Brain2.Beliefs.Learn(c, danger.Leaking ? Topic.Breach : w.Fire.IsKnown(danger) ? Topic.Fire : Topic.Air, danger.Id, 1, BeliefSource.Computer, 0.45f + 0.5f * trust);
+            if (danger.Air.CO > 0.05f) danger.CoKnown = true; // 컴퓨터가 일산화탄소를 재서 알렸다
+        }
         c.Jolt(w);
+        c.EndJob(w, ToilStatus.Interrupted);
+        c.Pose = Pose.Standing;
         Woken++;
         w.Log.Add(w.Tick, LogKind.Life, Persona.Say(c, $"단말이 울려 깼다 — {why}"), c.Id);
         Line(CmdTarget.Terminal, c.Id, c.Room, $"{c.Name} 깨우기", why, 0.8f, 5f);

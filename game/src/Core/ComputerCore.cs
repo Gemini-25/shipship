@@ -87,7 +87,7 @@ public sealed class ShipCore
     public bool SafeMode { get; private set; }
     public long SafeSince { get; private set; } = -1;
     public int SafeModes;
-    private long _coolSince = -1;
+    private long _coolSince = -1, _extremeSince = -1;
     /// <summary>주 코어가 멎었는데 예비 코어가 핵심 고리를 붙잡고 있다 (등급 III).</summary>
     public bool BackupCore { get; private set; }
     public long BackupSince { get; private set; } = -1;
@@ -189,8 +189,12 @@ public sealed class ShipCore
             else if (w.Tick - _coolSince >= SimTime.Minutes(5)) ExitSafe($"{t:0}℃ · 환기가 돈다");
         }
         // 극한: 안전 모드로도 못 버티면 주 코어만 과열 정지 (예비 코어가 붙잡는다 · 식으면 사람이 다시 켠다)
-        if (SafeMode && t > AutomationSystem.OverheatC + 10f && !m.Has(FaultKind.Overheat) && m.Powered && R.Chance(MathF.Min(1f, (t - AutomationSystem.OverheatC - 10f) / 8f) * 3f * dt))
+        bool extreme = SafeMode && t > AutomationSystem.OverheatC + 10f && !m.Has(FaultKind.Overheat) && m.Powered;
+        if (!extreme) _extremeSince = -1;
+        else if (_extremeSince < 0) _extremeSince = w.Tick;
+        if (extreme && w.Tick - _extremeSince >= SimTime.Minutes(3)) // 느리게 돌아도 3분 넘게 48℃ 위 — 본체를 지킨다
         {
+            _extremeSince = -1;
             a.Overheats++;
             w.Machines.Break(m, FaultKind.Overheat);
             MarkLog.Add(m.Marks, w.Tick, $"본체 과열 정지 ({t:0}℃) — 예비 연산기가 붙잡았다");
