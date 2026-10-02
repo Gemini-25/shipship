@@ -336,6 +336,7 @@ public static partial class WorkPlanners
             cm.DrilledUntil = world.Tick + SimTime.Hours(24 * 10);
             cm.Drills++;
             cm.Traits.Calm = MathF.Min(0.95f, cm.Traits.Calm + 0.01f);
+            world.CrisisCrew.Drilled(cm); // v16.21 비상 절차가 손에 붙는다 (제 자리 절차를 크게)
             world.Board.Close(o);
             world.Log.Add(world.Tick, LogKind.Work, "비상 훈련을 마쳤다 (우주복 2분 30초 · 격벽 손 조작)", cm.Id);
             return true;

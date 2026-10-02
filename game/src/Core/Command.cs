@@ -243,7 +243,8 @@ public sealed class CommandSystem
                 float d = n.room != null ? (c.Position - n.room.Center).Length() : 0f;
                 float s = c.SkillLevel(sk) + (CrewRoles.Owns(c.Role, new WorkOrder { Kind = n.kind == TeamKind.Fire ? WorkKind.Extinguish : n.kind == TeamKind.Power ? WorkKind.ResetBreaker : WorkKind.Rescue, Skill = sk }) ? 0.15f : 0f)
                           - d / 80f - 0.4f * MathF.Max(0f, 0.35f - c.Needs.Rest) + 0.1f * c.Traits.Bravery * (n.hazard ? 1f : 0f)
-                          - (c.IsAwake ? 0f : 0.6f); // v13.2 깨어 있는 사람부터 (자는 사람은 깨워야 온다)
+                          - (c.IsAwake ? 0f : 0.6f) // v13.2 깨어 있는 사람부터 (자는 사람은 깨워야 온다)
+                          + w.CrisisCrew.TeamFit(c, n.kind); // v16.21 비상 배치표에 그 자리로 적힌 사람
                 // 솜씨 없는 지휘자는 가끔 엉뚱한 사람을 보낸다
                 return s + _rng.Range(-0.3f, 0.3f) * (1f - skill);
             }
