@@ -24,8 +24,8 @@ public sealed partial class SchemeSystem
 
     private float SessionHour(SchemeSpec s) => s.Key switch
     {
-        "meditation" or "run_club" => 7.5f, "tea_circle" => 16f, "barter_fair" or "shift_market" => 12.5f, "pirate_radio" => 22f, "gambling_den" => 22.5f,
-        "secret_romance" => 21.5f, "sports_league" => 18.5f, "black_market" => 23f, _ => 20f,
+        "meditation" or "run_club" => 7.5f, "tea_circle" => 16f, "barter_fair" or "shift_market" => 12.5f, "pirate_radio" => 22f,
+        "secret_romance" => 21.5f, "sports_league" => 18.5f, "black_market" => 21.5f, "gambling_den" => 21f, _ => 20f,
     };
 
     // ───────────────────────────── 시간마다 ─────────────────────────────
@@ -49,7 +49,7 @@ public sealed partial class SchemeSystem
                 break;
             case SchemeStage.Prep:
                 if (s.Progress >= 1f) Ready(s, lead);
-                else if (w.Tick - s.Since > SimTime.TicksPerDay * 4) End(s, SchemeStage.Dropped, "손이 안 가서 흐지부지됐다");
+                else if (w.Tick - s.Since > SimTime.TicksPerDay * 6) End(s, SchemeStage.Dropped, "손이 안 가서 흐지부지됐다");
                 break;
             case SchemeStage.Live:
                 Living(s, lead);
@@ -247,13 +247,7 @@ public sealed partial class SchemeSystem
             case "gambling_den" or "betting_pool" or "chocolate_money":
             {
                 Gathered(came, 0.08f, spec.Name);
-                if (came.Count >= 2)
-                {
-                    var loser = came[R.Range(0, came.Count)];
-                    var winner = came.Where(c => c != loser).ToList()[R.Range(0, came.Count - 1)];
-                    int amt = spec.Key == "gambling_den" ? R.Range(1, 4) : 1;
-                    Owe(loser, winner, amt, s.Id, spec.Key == "gambling_den" ? "판에서 잃은 몫" : "내기에서 진 몫");
-                }
+                Wager(came, spec.Key, s.Id);
                 if (spec.Key == "gambling_den") Noise(s);
                 break;
             }
@@ -292,6 +286,16 @@ public sealed partial class SchemeSystem
                 }
                 break;
         }
+    }
+
+    /// <summary>판: 잃은 사람이 딴 사람에게 빚진다 (잃는 사람은 계속 잃는 법 — 조급한 사람이 크게 건다).</summary>
+    private void Wager(List<CrewMember> came, string key, int scheme)
+    {
+        if (came.Count < 2 || key is not ("gambling_den" or "betting_pool" or "chocolate_money")) return;
+        var loser = came.OrderByDescending(c => (c.Habits.Contains(Habit.Hasty) || c.Habits.Contains(Habit.Daredevil) ? 0.3f : 0f) + c.Needs.Stress * 0.5f + R.Float()).First();
+        var winner = came.Where(c => c != loser).ToList()[R.Range(0, came.Count - 1)];
+        int amt = key == "gambling_den" ? R.Range(1, 4) : 1;
+        Owe(loser, winner, amt, scheme, key == "gambling_den" ? "판에서 잃은 몫" : "내기에서 진 몫");
     }
 
     /// <summary>밤판 소리: 옆방에서 자던 사람이 깨고, 깬 사람은 무슨 판인지 안다 (소리 따라 확인하러 갈 수도).</summary>
@@ -491,6 +495,7 @@ public sealed partial class SchemeSystem
             Gathered(came, 0.12f, p.Name);
             foreach (var c in came) if (!p.Followers.Contains(c.Id)) p.Followers.Add(c.Id);
             if (p.Key == "moonshine") foreach (var c in came) c.Needs.Rest = MathF.Max(0f, c.Needs.Rest - 0.04f);
+            Wager(came, p.Key, p.Scheme); // 정식 판에서도 잃고 딴다
         }
         p.Opened = false;
         Schedule(p, false);
@@ -512,12 +517,13 @@ public sealed partial class SchemeSystem
         foreach (var d in Debts)
         {
             if (d.Amount <= 0 || P(d.From) is not { Dead: false } a || P(d.To) is not { Dead: false } b) continue;
-            if (morning && R.Chance(0.25f + 0.5f * a.Traits.Diligence) && d.Amount < 4) { d.Amount--; continue; }
+            if (morning && R.Chance(0.2f + 0.5f * a.Traits.Diligence) && d.Amount < 3) { d.Amount--; continue; }
             if (d.Fought >= 0 && w.Tick - d.Fought < SimTime.TicksPerDay) continue;
-            if (d.Amount < 4 || w.Tick - d.Since < SimTime.Hours(8) || !a.IsAwake || !b.IsAwake || a.Outside || b.Outside) continue;
+            if (d.Amount < 3 || w.Tick - d.Since < SimTime.Hours(8) || !a.IsAwake || !b.IsAwake || a.Outside || b.Outside) continue;
             bool hot = b.Habits.Contains(Habit.ShortTempered) || DriveOf(b, Drive.Greed) > 0.4f || b.Mind.Anger > 0.2f || d.Amount >= 6;
             if (!hot && a.Room != b.Room) continue;
             d.Fought = w.Tick;
+            d.Fights++;
             Stats.Quarrels++;
             a.Quarrel = b.Quarrel = w.Tick;
             w.Brain2.Emotions.Feel(b, Feeling.Anger, 0.3f, $"{d.Why} {d.Amount}을 안 갚는다", a);
@@ -530,6 +536,9 @@ public sealed partial class SchemeSystem
             string where = a.Room == b.Room ? a.Room?.Name ?? "" : $"{Ko.IGa(b.Name)} 찾아가";
             w.Log.Add(w.Tick, LogKind.Life, $"{Ko.WaGwa(b.Name)} {a.Name} — {d.Why} 때문에 다퉜다 ({where})", b.Id);
             Life.Diary(w, b, $"{Ko.IGa(a.Name)} {d.Why}을 안 갚는다. 결국 언성을 높였다.");
+            // 다툰 뒤: 절반은 그 자리에서 갚고, 두 번째 다툼이면 빌려준 쪽이 손을 턴다
+            if (d.Fights >= 2) { d.Amount = 0; Life.Diary(w, b, $"{a.Name}에게 받을 건 이제 안 받기로 했다. 사람을 잃느니."); }
+            else d.Amount = (d.Amount + 1) / 2;
             // 다투는 소리를 들은 사람은 판이 있다는 걸 안다
             if (Get(d.Scheme) is Scheme s && s.Active)
                 foreach (var o in Here(a.Room)) if (Adult(o) && o != a && o != b && !s.Knew(o.Id) && o.IsAwake) { Discover(s, o, "빚 다툼을 듣고"); if (!s.Active || s.Stage == SchemeStage.Vote) break; }
@@ -540,7 +549,7 @@ public sealed partial class SchemeSystem
                 {
                     var need = w.Crew.Where(o => Adult(o) && o != lend && o.Needs.Hunger > 0.4f).OrderByDescending(o => o.Needs.Hunger).ThenBy(o => o.Id).FirstOrDefault();
                     if (need != null) { Owe(need, lend, 1, s.Id, "빌린 간식"); s.Knows.TryAdd(need.Id, KnowHow.Part); }
-                    foreach (var d in Debts) if (d.Scheme == s.Id && d.Amount > 0) d.Amount++;
+                    if (SimTime.Day(w.Tick) % 2 == 0) foreach (var d in Debts) if (d.Scheme == s.Id && d.Amount > 0 && d.Fights == 0) d.Amount++;
                 }
     }
 

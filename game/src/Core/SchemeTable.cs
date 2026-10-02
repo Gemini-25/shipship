@@ -82,9 +82,9 @@ public static class SchemeTable
 
         // ── 몰래 하는 일
         S(SchemeCat.Secret, Fate.Vote, "moonshine", "밀주 담그기", Drive.Bored | Drive.Stress | Drive.Free | Drive.Craft, Place.Engine, "barrel coil drip",
-            "남은 감자 껍질과 효모로 몰래 술을 담가 보기로 했다", "주점의 밤", Tell.Smell | Tell.Sight, Crewing.Pair, 8f, 0.7f, 0.25f),
+            "남은 감자 껍질과 효모로 몰래 술을 담가 보기로 했다", "주점의 밤", Tell.Smell | Tell.Sight, Crewing.Pair, 6f, 0.8f, 0.25f),
         S(SchemeCat.Secret, Fate.Adopt, "secret_garden", "비밀 정원", Drive.Bored | Drive.Homesick | Drive.Stress, Place.Hidden, "pot leafy lamp",
-            "창고 구석에 몰래 꽃을 키워 보기로 했다", "공용 정원", Tell.Sight | Tell.Power, Crewing.Solo, 10f, 0.6f, 0f, Need.None, Hobby.Gardening),
+            "창고 구석에 몰래 꽃을 키워 보기로 했다", "공용 정원", Tell.Sight | Tell.Power, Crewing.Solo, 6f, 0.6f, 0f, Need.None, Hobby.Gardening),
         S(SchemeCat.Secret, Fate.Vote, "pirate_radio", "선내 해적 방송국", Drive.Bored | Drive.Free | Drive.Lonely, Place.Comms, "antenna mic speaker",
             "밤마다 몰래 음악 방송을 내보내기로 했다", "정식 밤 방송", Tell.Sensor | Tell.Talk | Tell.Noise, Crewing.Pair, 5f, 0.5f, 0f, Need.None, Hobby.Music),
         S(SchemeCat.Secret, Fate.Keep, "robot_pet", "손수 만든 로봇 애완동물", Drive.Craft | Drive.Lonely, Place.Workshop, "robot wheel eyes",

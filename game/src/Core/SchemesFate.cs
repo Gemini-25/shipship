@@ -416,7 +416,7 @@ public sealed partial class SchemeSystem
 
     private static SmellKind SmellOf(SchemeSpec s) => (s.Tells & Tell.Smoke) != 0 ? SmellKind.Burnt : s.Key is "herb_tea" or "flower_perfume" ? SmellKind.Cooking : SmellKind.Foul;
     public bool Smelly(SchemeSpec s) => (s.Tells & (Tell.Smell | Tell.Smoke)) != 0;
-    public bool WorkingNow(Scheme s) => s.Working && _w.Tick - s.Stopped < SimTime.Minutes(4);
+    public bool WorkingNow(Scheme s) => s.Working && _w.Tick - s.Stopped < SimTime.Minutes(2);
 
     /// <summary>냄새 (SmellSystem.Sources 훅): 익어 가는 술 · 절인 배추 · 볶는 콩 · 몰래 피우는 담배.</summary>
     public void AddSmells(SmellSystem sm)
@@ -455,9 +455,10 @@ public sealed partial class SchemeSystem
             foreach (var c in here)
                 if (!s.Crew.Contains(c.Id) && c.CanAct && Adult(c)) { Discover(s, c, "불을 끄다가"); return; }
         }
-        bool busy = WorkingNow(s) || s.InSession(w.Tick);
-        float exposed = busy ? 0.3f : s.Stage == SchemeStage.Live || s.Progress > 0.25f ? 0.05f : 0.01f;
-        if (Smelly(spec) && w.Smells.Level(room, SmellOf(spec)) > SmellSystem.Threshold(SmellOf(spec))) exposed += 0.12f;
+        bool busy = s.InSession(w.Tick) || WorkingNow(s) && here.Any(c => s.Crew.Contains(c.Id) && c.Job?.Activity is SchemeActivity);
+        float exposed = busy ? 0.2f : s.Stage == SchemeStage.Live || s.Progress > 0.25f ? 0.02f : 0.005f;
+        bool reek = Smelly(spec) && w.Smells.Level(room, SmellOf(spec)) > SmellSystem.Threshold(SmellOf(spec));
+        if (reek) exposed += 0.12f;
         float vis = 1f - spec.Secrecy;
         foreach (var c in here)
         {
@@ -467,8 +468,9 @@ public sealed partial class SchemeSystem
             if (checking || R.Chance(exposed * vis * curious))
             {
                 if (checking) _suspect.Remove(c.Id);
-                string how = checking ? (Smelly(spec) ? "냄새를 따라가 보니" : "소리를 따라가 보니") : busy ? "하는 걸 봤다" : "숨겨 둔 걸 봤다";
-                if (checking && Smelly(spec)) Stats.Smelled++;
+                bool nose = checking ? Smelly(spec) : reek && !busy;
+                string how = nose ? "냄새를 따라가 보니" : checking ? "소리를 따라가 보니" : busy ? "하는 걸 봤다" : "숨겨 둔 걸 봤다";
+                if (nose) Stats.Smelled++;
                 Discover(s, c, how);
                 if (!s.Active || s.Stage == SchemeStage.Vote) return;
             }
@@ -507,7 +509,10 @@ public sealed partial class SchemeSystem
                + (H(Habit.Cheerful) ? 0.15f : 0f) - (spec.Need == Need.Captain ? 0.1f : 0f) - (v.Mind.Anger > 0.3f ? 0.2f : 0f);
     }
 
-    private void FirePrank(Scheme s, CrewMember victim)
+    /// <summary>시험용: 장난을 바로 터뜨린다 (watched = 꾸민 사람이 그 자리에서 보고 있었나).</summary>
+    public void Spring(Scheme s, CrewMember victim, bool? watched = null) { if (s.Active) FirePrank(s, victim, watched); }
+
+    private void FirePrank(Scheme s, CrewMember victim, bool? watched = null)
     {
         var w = _w;
         var spec = s.Spec;
@@ -515,7 +520,7 @@ public sealed partial class SchemeSystem
         Stats.Pranks++;
         s.Target = victim.Id;
         s.Knows[victim.Id] = KnowHow.Victim;
-        s.Identified = lead != null && (lead.Room == victim.Room || R.Chance(0.35f));
+        s.Identified = lead != null && (watched ?? (lead.Room == victim.Room || R.Chance(lead.Habits.Contains(Habit.Prankster) ? 0.55f : 0.35f))); // 장난꾼은 자랑을 못 참는다
         bool laugh = LaughOdds(victim, lead, spec) > 0.5f;
         victim.Say(w, Persona.Say(victim, laugh ? (victim.Id % 3 == 0 ? "하하, 이거 누구야!" : victim.Id % 3 == 1 ? "아 진짜… 웃기네" : "당했다!") : (victim.Id % 2 == 0 ? "…장난도 정도가 있지" : "누구야, 이거")));
         string outcome;

@@ -62,6 +62,7 @@ public sealed class Scheme
     public SortedSet<int> Came { get; } = new();
     public bool Active => Stage is SchemeStage.Plan or SchemeStage.Prep or SchemeStage.Live or SchemeStage.Vote;
     public bool Hiding => Stage is SchemeStage.Prep or SchemeStage.Live;
+    public bool Over() => Stage is SchemeStage.Done or SchemeStage.Dropped;
     public bool InSession(long t) => SessionAt >= 0 && t >= SessionAt && t < SessionEnd;
     public bool Knew(int id) => Knows.ContainsKey(id);
     /// <summary>누가 했는지까지 아나 (방송만 들은 사람은 모른다).</summary>
@@ -109,6 +110,7 @@ public sealed class Debt
     public int Amount { get; set; }
     public long Since { get; init; }
     public long Fought { get; set; } = -1;
+    public int Fights { get; set; }
     public string Why { get; init; } = "";
     public int Scheme { get; init; } = -1;
 }
@@ -374,8 +376,9 @@ public sealed partial class SchemeSystem
         var w = _w;
         if (Crisis.Acting(w)) return;
         int adults = w.Crew.Count(Adult);
-        int cap = Math.Max(3, adults / 4);
-        if (All.Count(s => s.Active) >= cap) return;
+        int cap = Math.Max(4, adults / 3);
+        int Busy() { int n = 0; foreach (var s in All) if (s.Active && s.Stage != SchemeStage.Vote) n++; return n; } // 회의를 기다리는 일은 세지 않는다
+        if (Busy() >= cap) return;
         int slot = (int)(w.Tick / SimTime.Hours(1) % 2);
         var top = new List<(SchemeSpec s, float v)>(4);
         foreach (var c in w.Crew)
@@ -387,7 +390,7 @@ public sealed partial class SchemeSystem
             foreach (var sp in SchemeTable.All)
             {
                 float v = Want(c, sp);
-                if (v < 0.3f) continue;
+                if (v < 0.25f) continue;
                 if (top.Count < 3) top.Add((sp, v));
                 else
                 {
@@ -398,12 +401,12 @@ public sealed partial class SchemeSystem
             }
             if (top.Count == 0) continue;
             float best = top.Max(x => x.v);
-            if (!R.Chance(0.05f * best * best + 0.02f * best)) continue;
+            if (!R.Chance(0.09f * best * best + 0.03f * best)) continue;
             float roll = R.Float() * top.Sum(x => x.v), acc = 0f;
             var pick = top[^1].s;
             foreach (var (sp, v) in top) { acc += v; if (roll <= acc) { pick = sp; break; } }
             Start(pick, c);
-            if (All.Count(s => s.Active) >= cap) return;
+            if (Busy() >= cap) return;
         }
     }
 
