@@ -200,6 +200,7 @@ public sealed partial class BlastSystem
             return Core(at, power, kind, cause, source, depth, blame, item);
         }
         int node = cl.Root(CauseKind.Explosion, $"{Spec(kind).Name} — {room?.Name ?? "선체"}" + (cause.Length > 0 && cause != "시험" ? $" ({cause})" : ""), room, at.Center, observer: cl.ConsumeObserver());
+        w.Scale.Kind(node, "blast:" + kind); // v16.18 도감: 폭발 종류 (규모는 피해로)
         cl.Hit(room, node);
         using (cl.Because(node)) return Core(at, power, kind, cause, source, depth, blame, item);
     }

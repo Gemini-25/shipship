@@ -57,6 +57,7 @@ public static partial class Program
             }
             // ② 배전실 바닥에 물이 조금 샌다
             w.Moisture.AddWater(power, power.Cells.Count * 20f * 0.2f);
+            w.Moisture.Isolate(power, null); // 주 컴퓨터가 바로 분전함을 내린다 (우연한 누전이 시험 순서를 앞지르지 않게 — 그 번짐은 시드마다 다르다)
             ScaleCase? k = null;
             for (int i = 0; i < 30 && k == null; i++) { Run(w, SimTime.Minutes(1)); k = w.Scale.OpenCases.FirstOrDefault(x => x.Key == "cause:Flood" && x.RoomId == power.Id); }
             if (k == null) { Check("누수 → 사건", false, "침수 사건이 잡히지 않았다"); return 1; }
@@ -151,7 +152,7 @@ public static partial class Program
                        ?? galley.Doors.Select(d => d.RoomA == galley ? d.RoomB : d.RoomA).First(r => r != null)!;
             Incidents.Fire(w, galley.Cells.First(w.Ship.IsOpenFloor));
             Run(w, SimTime.Minutes(3));
-            var k = w.Scale.OpenCases.FirstOrDefault(x => x.Key == "cause:Fire");
+            var k = w.Scale.OpenCases.FirstOrDefault(x => x.Key == "cause:Fire" && (x.RoomId == galley.Id || x.Rooms.Contains(galley.Id)));
             var one = k?.Now;
             if (k != null) using (w.Causes.Because(k.Root)) w.Fire.Ignite(next.Cells.First(w.Ship.IsOpenFloor), 0.35f);
             Run(w, SimTime.Minutes(3));
@@ -170,7 +171,7 @@ public static partial class Program
             var next = galley.Doors.Select(d => d.RoomA == galley ? d.RoomB : d.RoomA).First(r => r != null)!;
             Incidents.Fire(w, galley.Cells.First(w.Ship.IsOpenFloor));
             Run(w, SimTime.Minutes(2));
-            var k = w.Scale.OpenCases.FirstOrDefault(x => x.Key == "cause:Fire");
+            var k = w.Scale.OpenCases.FirstOrDefault(x => x.Key == "cause:Fire" && (x.RoomId == galley.Id || x.Rooms.Contains(galley.Id)));
             if (k != null) using (w.Causes.Because(k.Root)) w.Fire.Ignite(next.Cells.First(w.Ship.IsOpenFloor), 0.35f);
             Run(w, SimTime.Minutes(3));
             string early = k?.JudgedBy ?? "";
@@ -236,6 +237,63 @@ public static partial class Program
             Run(w, SimTime.Minutes(20));
             Check("우주급 — 판정 · 대피 · 항로 변경 · 일상 중단", k != null && k.Now == IncidentScale.Cosmic && k.Broadcast.Contains("우주급") && (k.Suggest.Contains("항로") || k.Suggest.Contains("대피")) && k.Feared.Count > 0,
                 k == null ? "사건 없음" : $"{k.Name} · {e.PhaseName} · \"{k.Broadcast}\" · 제안 {k.Suggest} · 두려움 {k.Feared.Count} · 일상 멈춤 {w.Scale.Halts}");
+        }
+
+        // ── 8) 실제 사건이 자기 종류 줄로 도감에 (고장 종류 · 단락은 처음부터 계통 · 폭발 종류 · 과열 폭발) ──
+        {
+            var w = DayOne(seed, "Hanbit");
+            int seen0 = ScaleTable.All.Count(r => !r.Key.StartsWith("cause:") && w.Scale.SeenOf(r.Key) > 0);
+            w.Machines.Break(w.Ship.FurnitureOf(FurnitureType.CoolantPump).First().Machine!, FaultKind.PumpSeized);
+            var panel = w.Ship.FurnitureOf(FurnitureType.PowerPanel).First().Machine!;
+            var cool = w.Ship.FurnitureOf(FurnitureType.CoolantPump).Select(f => f.Room.Circuit).ToHashSet();
+            int circ = Enumerable.Range(1, PowerGrid.CircuitCount - 1).Where(i => !cool.Contains(i) && i != (w.Automation.ComputerBody?.Room?.Circuit ?? -1)).OrderBy(i => i).First();
+            var f = new Fault { Kind = FaultKind.ShortCircuit, Since = w.Tick, Circuit = circ };
+            panel.Faults.Add(f);
+            w.Causes.OnFault(panel, f);
+            var galley = w.Ship.RoomsOf(RoomType.Galley).First();
+            w.Blast.Detonate(galley.Cells.First(w.Ship.IsOpenFloor), 0.15f, BlastKind.Grease, "시험");
+            if (w.Ship.FurnitureOf(FurnitureType.Battery).FirstOrDefault()?.Machine is Machine bat) w.Volatile.Blow(bat, BlowKind.ThermalRunaway, "시험");
+            Run(w, SimTime.Minutes(2));
+            var shortCase = w.Scale.Cases.FirstOrDefault(k => k.Key == "fault:ShortCircuit");
+            int seen1 = ScaleTable.All.Count(r => !r.Key.StartsWith("cause:") && w.Scale.SeenOf(r.Key) > 0);
+            Check("실제 사건이 자기 종류 줄로 도감에 (펌프 고착 · 단락은 처음부터 계통 · 기름 폭발 · 열폭주)",
+                w.Scale.SeenOf("fault:PumpSeized") >= 1 && shortCase is { Base: IncidentScale.System } && w.Scale.SeenOf("blast:Grease") >= 1 && w.Scale.SeenOf("blow:ThermalRunaway") >= 1 && seen1 >= seen0 + 4,
+                $"펌프 고착 {w.Scale.SeenOf("fault:PumpSeized")} · 단락 {(shortCase == null ? "없음" : $"{ScaleTable.Label(shortCase.Base)} \"{shortCase.Broadcast}\"")} · 기름 폭발 {w.Scale.SeenOf("blast:Grease")} · 열폭주 {w.Scale.SeenOf("blow:ThermalRunaway")} · 자세한 줄 {seen0} → {seen1}");
+        }
+
+        // ── 9) 겪은 것이 다음을 바꾼다: 컴퓨터는 낮게 본 규모를 기억하고 · 함께 넘긴 사람은 덜 두려워한다 ──
+        {
+            var w = DayOne(seed, "Hanbit");
+            var galley = w.Ship.RoomsOf(RoomType.Galley).First();
+            bool Safe(Room r) => !r.Detached && r != galley && r.Type is not (RoomType.Corridor or RoomType.Reactor) && r.Cells.Any(w.Ship.IsOpenFloor)
+                                 && !r.Furniture.Any(x => x.Type is FurnitureType.CoolantPump or FurnitureType.PowerPanel or FurnitureType.MainComputer or FurnitureType.ReactorCore or FurnitureType.Battery);
+            var others = w.Ship.Rooms.Where(Safe).OrderBy(r => r.Id).ToList();
+            Incidents.Fire(w, galley.Cells.First(w.Ship.IsOpenFloor));
+            Run(w, SimTime.Minutes(2));
+            var k = w.Scale.OpenCases.FirstOrDefault(x => x.Key == "cause:Fire" && (x.RoomId == galley.Id || x.Rooms.Contains(galley.Id)));
+            if (k != null) using (w.Causes.Because(k.Root)) foreach (var r in others.Take(3)) w.Fire.Ignite(r.Cells.First(w.Ship.IsOpenFloor), 0.35f);
+            Run(w, SimTime.Minutes(4));
+            var peak = k?.Peak;
+            int called = k?.StageCalled[(int)IncidentScale.Room] ?? 0;
+            // 불을 모두 끈다 → 사건이 가라앉아 닫힌다
+            int waited = 0;
+            for (; waited < 180 && k != null && k.Open; waited++)
+            {
+                foreach (var r in w.Ship.Rooms) if (w.Fire.CountIn(r) > 0) w.Fire.ClearRoom(r);
+                Run(w, SimTime.Minutes(1));
+            }
+            bool lesson = w.Scale.Lessons.TryGetValue("cause:Fire", out var ls) && ls == IncidentScale.System;
+            var vets = w.Crew.Where(c => w.Scale.Veterans.ContainsKey(c.Id)).ToList();
+            bool marked = vets.Any(c => c.Memory.Marks.Any(m => m.Text.Contains("처음 겪었다")));
+            Check("큰 사고를 넘기면 — 컴퓨터는 낮게 본 규모를 기억하고 · 함께 넘긴 사람은 덜 두려워한다", k != null && peak == IncidentScale.Ship && !k.Open && lesson && vets.Count >= 2 && vets.All(c => w.Scale.FearMul(c) < 1f) && marked,
+                k == null ? "사건 없음" : $"{k.Name} {ScaleTable.Label(peak ?? IncidentScale.Personal)} · {(k.Open ? "아직 열림" : $"{waited}분 뒤 닫힘")} · 교훈 {string.Join(",", w.Scale.Lessons.Select(kv => $"{kv.Key}→{ScaleTable.Mark(kv.Value)}"))} · 겪은 사람 {vets.Count} (두려움 ×{(vets.Count > 0 ? w.Scale.FearMul(vets[0]) : 1f):0.0}) · 기억 {(marked ? "남음" : "없음")}");
+            var room2 = others.Count > 3 ? others[3] : others[0];
+            Incidents.Fire(w, room2.Cells.First(w.Ship.IsOpenFloor));
+            Run(w, SimTime.Minutes(2));
+            var k2 = w.Scale.OpenCases.FirstOrDefault(x => x.Key == "cause:Fire" && (x.RoomId == room2.Id || x.Rooms.Contains(room2.Id)));
+            var act = w.Automation.Book.Acts.LastOrDefault(a => k2 != null && a.Key.StartsWith($"scale:{k2.Id}:"));
+            Check("같은 종류가 또 나면 컴퓨터가 처음부터 한 칸 높여 부른다", k2 != null && k2.Steps[0].To == IncidentScale.Room && k2.Guess == IncidentScale.System && k2.Broadcast.Contains("지난번") && k2.StageCalled[(int)IncidentScale.Room] > called && w.Scale.Wary > 0,
+                k2 == null ? "사건 없음" : $"{room2.Name} 불 {ScaleTable.Label(k2.Steps[0].To)} · 대비 {ScaleTable.Label(k2.Guess)} · 부름 {called} → {k2.StageCalled[1]} · \"{k2.Broadcast}\" · 기록 {act?.Judge}");
         }
 
         // ── 7) 결정론 ──

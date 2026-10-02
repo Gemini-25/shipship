@@ -100,6 +100,7 @@ public static class Crisis
             : serious >= 1 ? CrisisLevel.Emergency
             : shedding || w.Ship.LiveRooms.Any(r => r.Leaking && !r.Abandoned) || w.Board.Open.Any(o => o.Urgency >= 0.9f) ? CrisisLevel.Alert
             : CrisisLevel.Calm;
+        if (s.Level < CrisisLevel.Emergency && w.Scale?.ShipWide() is string big) { s.Level = CrisisLevel.Emergency; s.Reasons.Add(big); } // v16.18 배 전체 사고면 적어도 비상
         return s;
     }
 
