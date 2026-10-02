@@ -133,6 +133,29 @@ public static partial class UiKit
         return h + Ui.S2;
     }
 
+    // ─────────────────────────── 말풍선 (손목 단말 · 메신저 자리) ───────────────────────────
+
+    /// <summary>
+    /// 말풍선 한 개: 보낸 사람 · 글 (내 쪽이면 오른쪽에 붙는다). 쓴 높이를 돌려준다.
+    /// 손목 단말 메시지 · 엿들은 말 · 컴퓨터 알림을 같은 톤으로 (메신저 화면은 이 부품을 쓴다).
+    /// </summary>
+    public static float Bubble(CanvasItem ci, float x, float right, float y, string who, string text, bool mine, Color color, int maxLines = 3)
+    {
+        float maxW = (right - x) * 0.82f;
+        var lines = Wrap(text, maxW - 16f, Ui.TextBody, Fonts.Body, maxLines);
+        float w = 16f;
+        foreach (var l in lines) w = Mathf.Max(w, Gfx.Width(Fonts.Body, l, Ui.TextBody) + 16f);
+        w = Mathf.Max(w, Gfx.Width(Fonts.Bold, who, Ui.TextTiny) + 16f);
+        float h = 20f + lines.Count * 16f;
+        float bx = mine ? right - w : x;
+        var r = new Rect2(bx, y, w, h);
+        Gfx.RoundRect(ci, r, mine ? color.Darkened(0.55f).WithAlpha(0.85f) : Well, Ui.RadiusControl, color.WithAlpha(mine ? 0.5f : 0.3f));
+        Gfx.Text(ci, Fonts.Bold, new Vector2(bx + 8f, y + 12f), who, Ui.TextTiny, color);
+        for (int i = 0; i < lines.Count; i++)
+            Gfx.Text(ci, Fonts.Body, new Vector2(bx + 8f, y + 28f + i * 16f), lines[i], Ui.TextBody, Palette.Text.WithAlpha(0.92f));
+        return h + Ui.S1;
+    }
+
     // ─────────────────────────── 단계 줄 (지나온 과정) ───────────────────────────
 
     /// <summary>세로 단계 줄: 점 · 시각 · 글. 마지막 단계는 굵게 · 뜻 색. 쓴 높이를 돌려준다.</summary>

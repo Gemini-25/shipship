@@ -23,7 +23,7 @@ public partial class Hud
     private List<ChronChapter> _chapters = new();
     private List<ChronMark> _chronMarks = new();
     private List<(ChronFilter Filter, string Label, int Count)> _chronChoices = new();
-    private (int, int, int, int, ChronFilter, ChronFilterKind) _chronKey;
+    private (int, ChronFilter, ChronFilterKind) _chronKey = (-1, ChronFilter.All, ChronFilterKind.All);
     private float _chronAt = -99f;
 
     private static readonly string[] ChronModes = { "날", "주", "기록" };
@@ -36,8 +36,9 @@ public partial class Hud
     /// <summary>장 · 점 · 고를 거리를 다시 만든다 (기록이 바뀌었거나 1초가 지났을 때만 — 화면은 읽기만).</summary>
     private void RefreshChronicle()
     {
-        var key = (_world.History.Version, _world.Scale.Cases.Count, _world.Day, _chronMode, _chronFilter, _chronPick);
-        if (key == _chronKey && _time - _chronAt < 1f) return;
+        // 고르개를 바꾸면 바로 · 기록이 바뀌는 것은 3초에 한 번만 다시 만든다
+        var key = (_chronMode, _chronFilter, _chronPick);
+        if (key == _chronKey && _time - _chronAt < 3f) return;
         _chronKey = key;
         _chronAt = _time;
         _chapters = ChronicleBook.Chapters(_world, _chronMode == 1, _chronFilter);
