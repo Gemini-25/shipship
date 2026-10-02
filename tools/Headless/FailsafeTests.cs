@@ -32,6 +32,40 @@ public static partial class Program
             if (P("bundle")) FsBundle2(seed);
             if (P("ba")) FsBeforeAfter(seed);
             if (P("det")) FsDeterminism(seed);
+            if (part == "gasdbg")
+            {
+                var w = DayOne(seed, "Hanbit");
+                var room = w.Ship.RoomsOf(RoomType.LifeSupport).First();
+                Player.Hazard(w, HazardKind.GasLeak, room.Cells[0]);
+                for (int h = 0; h < 30; h++)
+                {
+                    Run(w, SimTime.Minutes(30));
+                    var src = w.Hazards.GasSource(room);
+                    Console.WriteLine($"  {h * 0.5f:0.0}h 독 {room.Air.Toxin:0.00} 샘 {(src == null ? "-" : src.Body.Type.ToString())} 댐퍼 {room.VentOpen} · 문 {string.Join(",", room.Doors.Select(d => (d.Locked ? "L" : "o") + (w.Failsafe.Latched(d) ? "*" : "")))} · 방 안 {string.Join(",", w.Crew.Where(c => c.Room == room).Select(c => c.Name + (c.Suit != null ? "(옷)" : "")))}");
+                    foreach (var o in w.Board.Open.Where(o => o.Target?.Room == room)) Console.WriteLine($"     일감 {o.Kind} {o.Title} 맡은 {o.Assignee?.Name ?? "-"} 막힘 {o.BlockedReason ?? "-"}");
+                }
+                foreach (var e in w.Major.Cases) Console.WriteLine($"  큰 사고 {e.Kind} {e.Phase} 방 {e.Room} 시작 {SimTime.Clock(e.Start)}");
+                foreach (var l in w.Log.Entries.Where(l => l.Text.Contains("가스") || l.Text.Contains("암모니아") || l.Text.Contains("냉매")).TakeLast(12)) Console.WriteLine($"  기록 {SimTime.Clock(l.Tick)} {l.Text}");
+                foreach (var c in w.Crew.Where(c => !c.Dead).Take(6)) Console.WriteLine($"  {c.Name} {c.Room?.Name} 일 {c.Job?.Label}");
+            }
+            if (part == "cosdbg")
+            {
+                var w = DayOne(seed, "Hanbit");
+                w.Propulsion.Propellant = 0f;
+                var e = w.Cosmic.Force(CosmicKind.BigAsteroid, 8f, close: true);
+                if (w.Automation.Asks.Pending("cosmic:avoid:" + e.Id) is Proposal pp) w.Automation.Asks.Decide(pp, true, "관찰자");
+                var room = w.Ship.Rooms[e.TargetRoom];
+                var stay = w.Crew.First(c => !c.Dead);
+                stay.Position = room.Cells.First(c => w.Ship.IsWalkable(c)).Center;
+                bool lastL = false, lastA = false;
+                for (long t = 0; t < SimTime.Hours(10) && w.Tick < e.Arrive - 1; t++)
+                {
+                    w.Step();
+                    if (room.Lockdown != lastL || room.Abandoned != lastA) { Console.WriteLine($"  {SimTime.Clock(w.Tick)} 봉쇄 {room.Lockdown} 비움 {room.Abandoned} 압 {room.Air.Pressure:0} 샘 {room.Leaking}"); lastL = room.Lockdown; lastA = room.Abandoned; }
+                }
+                Console.WriteLine($"  끝 {SimTime.Clock(w.Tick)} 봉쇄 {room.Lockdown} 비움 {room.Abandoned} 계획 {e.SealPlan} 봉함 {e.Sealed}");
+                foreach (var l in w.Log.Entries.Where(l => l.Text.Contains(room.Name)).TakeLast(15)) Console.WriteLine($"  기록 {SimTime.Clock(l.Tick)} {l.Text}");
+            }
             if (part == "scaledbg") FsScaleDebug(seed);
             if (part == "bodydbg")
             {
@@ -50,7 +84,7 @@ public static partial class Program
                 for (int t = 0; t < SimTime.Minutes(10); t++)
                 {
                     w.Step();
-                    if (t % 25 == 0) Console.WriteLine($"  t{t} {p.Cell} → {to} · 문 열림 {door.Openness:0.00} 잠김 {door.Locked} 걸림 {w.Failsafe.Latched(door)} 전기 {door.Powered} · {door.RoomA.Name} {door.RoomA.Air.Pressure:0} {door.RoomB.Name} {door.RoomB.Air.Pressure:0} · 길 {p.Path?.Count}");
+                    if (t % 25 == 0) Console.WriteLine($"  t{t} {p.Cell} → {to} · 문 열림 {door.Openness:0.00} 잠김 {door.Locked} 걸림 {w.Failsafe.Latched(door)} 전기 {door.Powered} · {door.RoomA.Name} {door.RoomA.Air.Pressure:0} {door.RoomB.Name} {door.RoomB.Air.Pressure:0} · 길 {p.Path?.Count} · 일 {p.Job?.Label} {p.Name}");
                     if (p.Cell == to) break;
                 }
             }

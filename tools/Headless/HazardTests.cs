@@ -61,15 +61,15 @@ public static partial class Program
             float peak = room.Air.Toxin;
             bool vent = room.VentOpen;
             float worst = 1f;
-            bool suited = false;
+            bool suited = false, sealedIt = false; // v16.19 막은 적이 있나 (14시간 사이 따로 난 냉매 누출이 끝 무렵 걸려도 이 사고는 막은 것)
             for (int t = 0; t < SimTime.Hours(14); t++)
             {
                 w.Step();
                 peak = MathF.Max(peak, room.Air.Toxin);
                 worst = MathF.Min(worst, w.Crew.Min(c => c.Vitals.Health));
                 suited |= w.Crew.Any(c => c.Room == room && c.Suit != null && room.Air.Toxin > 0.2f);
+                if (t % World.SystemInterval == 0) sealedIt |= w.Hazards.GasSource(room) == null;
             }
-            bool sealedIt = w.Hazards.GasSource(room) == null;
             Check("유독 가스 — 우주복 입고 막고, 환기로 걷어 낸다", peak > 0.3f && !vent && sealedIt && room.Air.Toxin < 0.1f && suited && worst > 0.3f,
                 $"최고 {peak:0.00} · 새는 동안 댐퍼 {(vent ? "열림" : "닫힘")} · 우주복 {(suited ? "입고 들어감" : "없이")} · 지금 {room.Air.Toxin:0.00} · {(sealedIt ? "막음" : "아직 샌다")} · 가장 낮은 체력 {worst * 100:0}%");
         }

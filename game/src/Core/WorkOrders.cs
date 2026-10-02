@@ -1043,6 +1043,7 @@ public sealed partial class WorkBoard
             if (room.Abandoned)
             {
                 if (room.Docked || room.Wreck) continue; // 다시 붙인 방은 재연결부터
+                if (w.Cosmic.Active.Any(e => e.Sealed && e.TargetRoom == room.Id && e.Phase < CosmicPhase.After)) continue; // 충돌 대비로 비운 방은 지나갈 때까지 (끝나면 우주 쪽이 푼다)
                 if (!room.Leaking && w.Air.Reserve >= room.Volume * 70f)
                     Post(WorkKind.ReopenRoom, WorkTarget.OfRoom(room), Council.Essential(w, room) != null ? 0.8f : 0.45f, Skill.Mechanics,
                         "새는 곳 없음 · 공기 탱크 여유 있음" + (Council.Essential(w, room) is string v ? $" · {v} 없이는 버틸 수 없다" : ""));
