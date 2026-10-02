@@ -13,7 +13,7 @@ public partial class ShipView
         var bs = w.Belongings;
         foreach (var b in bs.All)
         {
-            if (b.Holder >= 0 || b.At is not Cell at) continue;
+            if (b.Holder >= 0 || b.At is not Cell at || w.Info.Drawn(b)) continue; // v17.3 벽 사진 · 식탁 컵 · 깨진 컵은 따로 그린다
             var r = CellRect(at);
             var col = Palette.Crew(b.Maker >= 0 ? b.Maker : b.Owner);
             float a = b.Usable ? 1f : 0.45f;

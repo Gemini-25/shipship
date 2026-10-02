@@ -164,6 +164,7 @@ public sealed class World
     public Body2System Body2 { get; } // v17.1 몸의 변화 (머리카락 · 수염 · 체중 · 우주복 치수 · 이발)
     public CoopSystem Coop { get; } // v17.4 공간과 협력 · 줄 서기 · 구경꾼
     public AftermathSystem After { get; } // v17.5 사고 뒤 며칠 · 꿈 · 장소의 기억
+    public InfoSystem Info { get; } // v17.3 개인 자리 · 못 끝낸 일 · 정보 차이 · 선내 메신저 · 사진 · 공동 장부
     public BrainSystem Brain2 { get; } // v16.15 승무원 두뇌 2.0 (믿음 · 목표 층 · 계획 · 감정 · 사회적 추론 · 배우기)
     public MatterSystem Matter { get; } // v16.4 재질 × 원소 · 칸 장 · 물건 물리
     public CosmicSystem Cosmic { get; } // v18.13 우주 규모 대재난 30
@@ -282,6 +283,7 @@ public sealed class World
         Body2 = new Body2System(this); // v17.1
         Coop = new CoopSystem(this); // v17.4
         After = new AftermathSystem(this); // v17.5
+        Info = new InfoSystem(this); // v17.3
         Brain2 = new BrainSystem(this); // v16.15
         Matter = new MatterSystem(this); // v16.4
         Cosmic = new CosmicSystem(this); // v18.13
@@ -387,6 +389,7 @@ public sealed class World
             Culture.Update(dt); // v14.9 겪은 일이 관행이 되어 전해진다
             pf = Prof.Lap("sys.Culture", pf);
             Daily.Update(dt); // v15 사고가 아닌 날의 일상 사건
+            Info.Update(dt); // v17.3 자리 · 못 끝낸 일 · 깨진 컵 · 메신저 · 사진 · 장부
             Fleet.Update(dt); // v16.20b 함대 지휘 · 로봇 · 드론 두뇌
             Failsafe.Update(dt); Major.Update(dt); // v16.19 차압 문 · 예비 회로 · 칸막이 · 큰 사고
             Annex.Update(dt); // v16.10 증축: 제안 → 회의 → 골조 · 외판 · 가압 · 배선 · 내장 · 개통

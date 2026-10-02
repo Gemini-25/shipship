@@ -953,7 +953,7 @@ public sealed class TidyActivity : Activity
         float bestScore = 0f;
         foreach (var b in bs.All)
         {
-            if (b.At is not Cell at || b.Holder >= 0 || b.Kind == BelongingKind.Artwork || b.Memorial) continue;
+            if (b.At is not Cell at || b.Holder >= 0 || b.Kind == BelongingKind.Artwork || b.Memorial || w.Info.Hung(b)) continue; // v17.3 벽에 건 사진은 그대로
             bool mine = b.Owner == c.Id;
             if (!mine && !neat) continue;
             if (b.Open && w.Tick - b.OpenSince < SimTime.Hours(mine ? 30 : 12)) continue; // 펼친 채 둔 건 이어 할 것 — 오래되면 치운다

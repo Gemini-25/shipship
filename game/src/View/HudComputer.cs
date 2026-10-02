@@ -132,6 +132,7 @@ public partial class Hud
                      ("관제", false, ToggleControl),
                      ("보는 배", _main.ViewMode == ViewMode.Belief, () => _main.ViewMode = _main.ViewMode == ViewMode.Belief ? ViewMode.Normal : ViewMode.Belief),
                      ("오늘의 결정", DecisionsOpen, () => DecisionsOpen = !DecisionsOpen),
+                     ("선내 메신저", MessengerOpen, () => MessengerOpen = !MessengerOpen), // v17.3
                  })
         {
             float bw = Gfx.Width(Fonts.Bold, label, 11) + 18;
@@ -142,6 +143,7 @@ public partial class Hud
         // 제안 카드
         foreach (var p in open) { DrawProposal(new Rect2(x - 4, y, width - 20, 86), p, mouse); y += 92; }
         if (DecisionsOpen) DrawDecisions(new Vector2(card.End.X + 10, card.End.Y), mouse);
+        if (MessengerOpen) DrawMessenger(new Vector2(card.End.X + (DecisionsOpen ? 460 : 10), card.End.Y), mouse); // v17.3
     }
 
     /// <summary>지금 하는 일 앞의 표시: 평시엔 천천히 도는 점, 일이 있으면 깜빡이는 삼각 경고.</summary>

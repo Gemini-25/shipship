@@ -365,6 +365,7 @@ public sealed class LifeSystem
                 a.Needs.Stress = MathF.Min(1f, a.Needs.Stress + 0.06f);
                 b.Needs.Stress = MathF.Min(1f, b.Needs.Stress + 0.06f);
                 a.Quarrel = b.Quarrel = w.Tick;
+                w.Info.OnQuarrel(a, b, $"{about} 두고 말다툼"); // v17.3 저녁 자리를 떨어져 앉는다
                 MindSystem.Anger(a, 0.1f); MindSystem.Anger(b, 0.1f); // v13.3
                 bool feud = a.AffinityTo(b) < -0.45f;
                 if (feud) Stats.Feuds++;

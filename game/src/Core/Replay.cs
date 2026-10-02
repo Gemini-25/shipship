@@ -438,6 +438,7 @@ public static class SaveGame
         w.FoodSources.Hash(I, F); w.Scrap.Hash(I, F); // v16.22 식량원 · 고철
         w.Casualty.Hash(I, F); // v16.24 큰 상처 뒤
         w.After.Hash(I, F); // v17.5 사고 뒤 며칠 · 꿈 · 장소의 기억
+        w.Info.Hash(I, F); // v17.3 자리 · 못 끝낸 일 · 정보 차이 · 메신저 · 사진 · 장부
         return h;
     }
 }
