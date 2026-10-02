@@ -93,10 +93,13 @@ public static partial class FixtureArt
         switch (tier)
         {
             case 2:
+                Gfx.RoundRect(ci, x.R.Grow(-1.2f), new Color(0, 0, 0, 0f), 4, Hud.TierColor(2).WithAlpha(0.35f), 1); // 받침 테
                 ci.DrawColoredPolygon(new[] { x.P(0.04f, 0.02f), x.P(0.96f, 0.02f), x.P(0.96f, 0.07f), x.P(0.04f, 0.07f) }, Hud.TierColor(2).WithAlpha(0.45f));
                 break;
             case 3:
             {
+                // 커진 받침: 몸체 둘레 여백까지 티타늄 받침대가 차지한다
+                Gfx.RoundRect(ci, x.R.Grow(-0.8f), new Color(0, 0, 0, 0f), 5, new Color("#8a96a6").WithAlpha(0.7f), 2);
                 var b = x.B;
                 ci.DrawPolygon(new[] { b.Position, new Vector2(b.End.X, b.Position.Y), new Vector2(b.Position.X, b.End.Y) },
                     new[] { new Color(1, 1, 1, 0.09f), new Color(1, 1, 1, 0.02f), new Color(1, 1, 1, 0.02f) });
@@ -106,6 +109,10 @@ public static partial class FixtureArt
             }
             default:
             {
+                // 가장 큰 받침: 검은 받침대 + 모서리 빛 마디
+                Gfx.RoundRect(ci, x.R.Grow(-0.5f), new Color(0, 0, 0, 0f), 6, new Color("#14181f").WithAlpha(0.9f), 3);
+                foreach (var cpt in new[] { x.R.Position + new Vector2(2f, 2f), new Vector2(x.R.End.X - 2f, x.R.Position.Y + 2f), new Vector2(x.R.Position.X + 2f, x.R.End.Y - 2f), x.R.End - new Vector2(2f, 2f) })
+                    Dot(ci, cpt, 1f, glow.WithAlpha(0.8f));
                 Gfx.RoundRect(ci, x.B, new Color(0.02f, 0.03f, 0.05f, 0.22f), 5);
                 ci.DrawLine(x.P(0.06f, 0.05f), x.P(0.94f, 0.05f), glow.WithAlpha(0.55f), 1f);
                 ci.DrawLine(x.P(0.06f, 0.95f), x.P(0.94f, 0.95f), glow.WithAlpha(0.55f), 1f);
@@ -504,7 +511,7 @@ public static partial class FixtureArt
                 break;
             case Trim.Chevron:
             {
-                var o = new Vector2(b.End.X - 7f, b.Position.Y + 6f);
+                var o = new Vector2(b.End.X - 7f, b.End.Y - 9f); // 오른쪽 아래 (위는 단계 딱지 자리)
                 for (int k = 0; k < 2; k++)
                     ci.DrawPolyline(new[] { o + new Vector2(-3f, 1.5f + k * 2.6f), o + new Vector2(0f, -1f + k * 2.6f), o + new Vector2(3f, 1.5f + k * 2.6f) }, glow, 1.2f, true);
                 break;
@@ -523,9 +530,9 @@ public static partial class FixtureArt
                 Line(ci, x.P(0.05f, 0.08f), x.P(0.95f, 0.08f), glow.WithAlpha(0.7f), 0.6f);
                 Line(ci, x.P(0.05f, 0.12f), x.P(0.95f, 0.12f), glow.WithAlpha(0.4f), 0.6f);
                 break;
-            default: // 빛 고리 문장
-                Ring(ci, x.P(0.88f, 0.2f), 3.2f, glow, 1.2f, 16);
-                Dot(ci, x.P(0.88f, 0.2f), 1f, glow);
+            default: // 빛 고리 문장 (오른쪽 아래)
+                Ring(ci, x.P(0.88f, 0.8f), 3.2f, glow, 1.2f, 16);
+                Dot(ci, x.P(0.88f, 0.8f), 1f, glow);
                 break;
         }
     }

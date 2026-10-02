@@ -174,9 +174,45 @@ public partial class ShipView
     {
         if (_techGeoVersion != _world.Structure.Version) BuildTechGeometry();
         var s = TechLook.Now;
+        PaintLookFloor(ci, s);
         foreach (var f in _faces) PaintLookFace(ci, f, s);
         PaintRemodelFresh(ci); // TechMoments.cs — 개조 칸 새 패널
         PaintVisualsStatic(ci); // TechVisuals.cs — 익힌 기술의 배 모습
+    }
+
+    /// <summary>
+    /// 바닥 판 이음 (무늬는 텍스처 생성기 몫 — 여기는 판 크기 · 죔쇠만): 초기 한 칸 판 · 모서리 리벳 / 중간 두 칸 판 · 나사 / 고급 세 칸 판 · 가는 빛 이음.
+    /// 가구 밑은 건너뛴다 (정적 층이 가구 위에 있다).
+    /// </summary>
+    private void PaintLookFloor(CanvasItem ci, LookSet s)
+    {
+        var ship = _world.Ship;
+        int step = Mathf.Max(1, Mathf.RoundToInt(s.PlateScale + 0.25f));
+        var seam = s.Frame == FrameStyle.Seamless ? TechLook.C(s.Trim).WithAlpha(0.12f) : new Color(0, 0, 0, s.Frame == FrameStyle.Riveted ? 0.32f : 0.24f);
+        var fast = TechLook.C(s.WallEdge);
+        foreach (var room in ship.LiveRooms)
+            foreach (var c in room.Cells)
+            {
+                if (!ship.IsOpenFloor(c)) continue;
+                var r = CellRect(c);
+                bool vx = Mathf.PosMod(c.X, step) == 0, hy = Mathf.PosMod(c.Y, step) == 0;
+                if (vx) ci.DrawLine(r.Position, new Vector2(r.Position.X, r.End.Y), seam, 1f);
+                if (hy) ci.DrawLine(r.Position, new Vector2(r.End.X, r.Position.Y), seam, 1f);
+                if (!(vx && hy)) continue;
+                switch (s.Frame)
+                {
+                    case FrameStyle.Riveted:
+                        foreach (var d in new[] { new Vector2(2.5f, 2.5f), new Vector2(-2.5f, 2.5f), new Vector2(2.5f, -2.5f), new Vector2(-2.5f, -2.5f) })
+                            ci.DrawCircle(r.Position + d, 0.9f, fast.WithAlpha(0.45f), true, -1f, true);
+                        break;
+                    case FrameStyle.Seamed:
+                        ci.DrawCircle(r.Position + new Vector2(3f, 3f), 0.8f, fast.WithAlpha(0.4f), true, -1f, true);
+                        break;
+                    default:
+                        ci.DrawLine(r.Position + new Vector2(1f, 1f), r.Position + new Vector2(T * 0.6f, 1f), new Color(1, 1, 1, 0.06f + 0.06f * s.Gloss), 1f);
+                        break;
+                }
+            }
     }
 
     /// <summary>벽 면 하나를 세트대로: 리벳 · 노출 전선 · 벗겨진 칠 / 이음매 · 트레이 · 색 띠 / 매끈 광택 · 점검창 · 둥근 모서리.</summary>

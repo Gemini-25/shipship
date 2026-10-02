@@ -148,6 +148,32 @@ public partial class ShipView
         PaintIdentityCrest(ci); // TechVisualsHull.cs — 갈림길에서 고른 배 이름 문장
     }
 
+    /// <summary>순간 연출을 그릴 자리: 대개 놓인 자리 그대로, 긴 배관 · 망은 가운데 한 칸, 바깥 장치는 그 장치 둘레.</summary>
+    private Rect2 MomentRect(in VisPlace p)
+    {
+        if (p.Pts is { Length: > 0 } pts) return new Rect2(pts[pts.Length / 2] - new Vector2(T * 0.5f, T * 0.5f), new Vector2(T, T));
+        if (p.Row.Anchor != VAnchor.Exterior || _hullSegs.Count == 0) return p.Bound;
+        var (l, r, t, b) = HullBox();
+        float wdt = r - l, mid = (l + r) * 0.5f;
+        Vector2 o = p.Key switch
+        {
+            "exterior.drones" => HullAt(l + wdt * 0.35f, -1),
+            "exterior.rcs" => HullAt(l + wdt * 0.12f, -1),
+            "exterior.pdlaser" => HullAt(mid + wdt * 0.1f, -1),
+            "engine.magnozzle" => _world.Ship.FurnitureOf(FurnitureType.EngineCore).FirstOrDefault() is Furniture f ? new Vector2((f.MinX - 1) * T - NozzleLen * 0.5f, (f.MinY + f.MaxY + 1) * 0.5f * T) : new Vector2(l, (t + b) * 0.5f),
+            "hull.centrifuge" => new Vector2(mid, t - 18f),
+            "exterior.ionring" => _noseTip,
+            "exterior.radiator" => HullAt(l + wdt * 0.42f, -1) + new Vector2(-4f, -27f),
+            "engine.warp" => new Vector2(mid, t - 50f),
+            "exterior.gravlens" => _noseTip + new Vector2(54f, 0f),
+            "exterior.swarm" => HullAt(mid, 1),
+            "exterior.salvagescan" => HullAt(r - wdt * 0.2f, 1) + new Vector2(0f, 10f),
+            "sensor.gravwave" => HullAt(r - wdt * 0.3f, -1) + new Vector2(0f, -20f),
+            _ => HullAt(mid, -1),
+        };
+        return new Rect2(o - new Vector2(T * 0.75f, T * 0.75f), new Vector2(T * 1.5f, T * 1.5f));
+    }
+
     private static Rect2 PtsRect(Vector2[] pts)
     {
         float x0 = float.MaxValue, y0 = float.MaxValue, x1 = float.MinValue, y1 = float.MinValue;
@@ -159,7 +185,7 @@ public partial class ShipView
     {
         _visPlaced.Add(p);
         if (!_visRects.TryGetValue(p.Key, out var l)) _visRects[p.Key] = l = new List<Rect2>();
-        l.Add(p.Bound);
+        l.Add(MomentRect(p)); // 익힌 순간 연출 자리 (긴 배관 · 바깥은 장치 한 곳만)
         switch (p.Row.Anchor)
         {
             case VAnchor.Fix: VisFixStatic(ci, p); break;
