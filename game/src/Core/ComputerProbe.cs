@@ -250,7 +250,9 @@ public sealed class ComputerProbe
             if (v > best) { best = v; bestKey = row.key; bestGain = g; bestCost = row.cost; }
         }
         // 사람이 가서 보기: 오래 걸리지만 셋을 다 가린다 (정정해 준 적 있는 사람이면 더 믿는다)
-        if (!done.Contains("crew"))
+        // 아무도 못 갔으면 한 번 더 — 다른 사람에게 (모르는 채로 덜 확실한 결론을 내지 않는다)
+        bool retry = c.Tries.Count(x => x.Key == "crew") == 1 && c.Tries.Any(x => x.Key == "crew" && x.Result == "아무도 못 갔다");
+        if (!done.Contains("crew") || retry)
         {
             float crewCost = 25f + (a.Recovery.Plans.Any(p => p.Open && p.Problem == "냉각") ? 10f : 0f); // 걸어가는 시간 + 하던 일을 놓는 값
             float g = Entropy(c.H.Select(h => h.P)) * 0.85f;
@@ -275,7 +277,8 @@ public sealed class ComputerProbe
         {
             CrewChecks++;
             t.Until = w.Tick + SimTime.Minutes(45);
-            var who = FixSteps.Hand(w, f.Machine!, null);
+            var skip = c.Tries.Where(x => x.Key == "crew" && x.Crew >= 0 && x.Result == "아무도 못 갔다").Select(x => x.Crew).ToHashSet();
+            var who = FixSteps.Hand(w, f.Machine!, skip.Count > 0 ? skip : null);
             if (who != null) { t.Crew = who.Id; a.Apps.Messages.Add(new PersonalMessage(w.Tick, who.Id, "부탁", a.Manner.Ask(who, f, c))); }
         }
         w.Log.Add(w.Tick, LogKind.Ship, $"{a.Voice.Call}: {c.Symptom} — {name}로 가려 본다 (값 {cost:0}분)");
@@ -290,9 +293,10 @@ public sealed class ComputerProbe
         if (o?.Assignee is CrewMember on) t.Crew = on.Id;
         bool came = o == null && w.Tick - t.Tick > SimTime.Minutes(3) && t.Crew >= 0 && w.Crew.FirstOrDefault(x => x.Id == t.Crew) is CrewMember cm0 && cm0.Room == f.Room
                     || o == null && w.Tick - t.Tick > SimTime.Minutes(6);
-        if (!came && w.Tick < t.Until) return false;
+        bool onIt = o?.Assignee is CrewMember asg && asg.Job?.Order == o; // 가는 중이거나 보고 있다 — 시간이 넘어도 조금 더 기다린다
+        if (!came && (w.Tick < t.Until || onIt && w.Tick < t.Until + SimTime.Minutes(45))) return false;
         var who = w.Crew.FirstOrDefault(x => x.Id == t.Crew);
-        if (!came || who == null) { t.Result = "아무도 못 갔다"; c.Tries.Add(new ProbeTry { Key = "crew2", Name = "사람이 가서 보기", Tick = w.Tick, Held = true, Result = "다음에" }); return true; }
+        if (!came || who == null) { t.Result = "아무도 못 갔다"; if (c.Tries.Count(x => x.Key == "crew") >= 2) c.Tries.Add(new ProbeTry { Key = "crew2", Name = "사람이 가서 보기", Tick = w.Tick, Held = true, Result = "다음에" }); return true; }
         float rel = Math.Clamp(0.7f + 0.25f * who.SkillLevel(Skill.Mechanics) + 0.05f * a.Manner.Corrections(who), 0.6f, 0.97f);
         string said = R.Chance(rel) ? c.Truth : c.H.Where(h => h.Key != c.Truth).OrderBy(h => h.Key).ToList()[R.Range(0, 2)].Key;
         foreach (var h in c.H) h.P *= h.Key == said ? rel : (1f - rel) / 2f;

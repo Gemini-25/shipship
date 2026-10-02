@@ -95,7 +95,12 @@ public static partial class Program
             var m = pump.Machine!;
             m.Wear = 0.7f; m.Condition = 0.2f; // 실제 원인: 펌프가 닳았다
             ProbeCase? pc = null;
-            for (int i = 0; i < SimTime.Minutes(90); i++) { w.Step(); pc ??= a.Probe.Cases.FirstOrDefault(c => c.Furn == pump.Id); if (pc != null && pc.State != "확인 중") break; }
+            for (int i = 0; i < SimTime.Minutes(90); i++)
+            {
+                w.Step(); pc ??= a.Probe.Cases.FirstOrDefault(c => c.Furn == pump.Id); if (pc != null && pc.State != "확인 중") break;
+                if (PlanDebug && i % SimTime.Minutes(10) == 0) foreach (var o in w.Board.All.Where(o => o.Kind == WorkKind.PreventiveCheck && o.Target.Room == pump.Room))
+                    Console.WriteLine($"      {SimTime.Clock(w.Tick)} 순찰 #{o.Id} 닫힘 {o.Closed} · 맡은 {o.Assignee?.Name ?? "-"} · 막힘 {o.BlockedReason} · 진척 {o.Progress:0.00} · 부탁 {pc?.Now?.Crew} · 그 사람 {o.Assignee?.Job?.Order?.Id}/{o.Assignee?.Job?.Current?.GetType().Name}/{o.Assignee?.Room.Name}/{o.Assignee?.Pose} · 방 {pump.Room.Name}");
+            }
             Check("유량이 줄자 원인 셋을 함께 의심한다", pc != null && pc.H.Count == 3, pc == null ? $"사례 없음 (읽은 유량 {a.Probe.Reading(pump) * 100:0}%)" : string.Join(" · ", pc.H.Select(h => h.Name)));
             if (pc != null)
             {
