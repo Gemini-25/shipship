@@ -38,7 +38,9 @@ public sealed class WayActivity : Activity
         var ways = w.Ways;
         if (ways.TryOf(c) is WayTry t)
         {
-            var job = WaysWork.Build(this, c, w, dist, t, out string? why);
+            // 급한 손: 잠긴 격벽 너머도 연다 (일감과 같은 길찾기)
+            var field = w.Paths.Flood(c.Cell, c.PathProfile with { Responder = true });
+            var job = WaysWork.Build(this, c, w, field, t, out string? why);
             if (job == null) ways.Finish(t, false, why ?? "그럴 수가 없었다", t.Helper ? null : c);
             return job;
         }
@@ -246,8 +248,7 @@ public static class WaysWork
             }
             case WayFx.Pry or WayFx.Cut or WayFx.Bypass or WayFx.Blow:
             {
-                if (room == null || k.DoorId < 0 || k.DoorId >= w.Ship.Doors.Count) return null;
-                var door = w.Ship.Doors[k.DoorId];
+                if (room == null || ways.DoorById(k.DoorId) is not Door door) return null;
                 if (!WaysSystem.Stuck(door)) { why = "문이 벌써 열렸다"; return null; }
                 // 연장: 공구함 · 작업대 · 케이블
                 if (artId >= 0 && w.Matter.Get(artId) is Article tb)
@@ -538,7 +539,7 @@ public static class WaysWork
         var aim = NearestFire(w, room, c);
         if (aim is not Cell a) { ways.Finish(t, true, "벌써 꺼졌다", c); return true; }
         var cloth = artId >= 0 ? w.Matter.Get(artId) : null;
-        var mat = cloth?.Mat ?? Material.Fabric;
+        var mat = cloth?.Mat ?? (furn != null ? WaysRules.FromFurniture(furn.Type).mat : Material.Fabric);
         float wet = cloth?.WetFrac ?? 0f;
         bool blanket = furn?.Type == FurnitureType.FireBlanket;
         float p = WaysRules.SmotherChance(mat, wet, w.Fire.At(a), w.Fire.CountIn(room)) + (blanket ? 0.25f : 0f);
@@ -549,10 +550,11 @@ public static class WaysWork
         {
             w.Fire.Suppress(a, 1.1f, 1f);
             bool done = w.Fire.CountIn(room) == 0;
-            if (done) ways.Finish(t, true, blanket ? "방화 담요로 덮어 껐다" : $"{(t.Thing.Length > 0 ? t.Thing : "천")}을 덮어 껐다", c);
+            if (done) ways.Finish(t, true, blanket ? "방화 담요로 덮어 껐다" : $"{Ko.EulReul(t.Thing.Length > 0 ? t.Thing : "천")} 덮어 껐다", c);
             else { t.Rounds++; if (t.Rounds >= 2) ways.Finish(t, false, "한 군데는 덮었는데 옆으로 번졌다", c); else t.State = 0; }
             return true;
         }
+        if (mat == Material.Powder) { foreach (var d in Cell.Dirs4) w.Fire.Ignite(a + d, 0.35f, a); w.Log.Add(w.Tick, LogKind.Warning, $"쏟은 가루가 확 붙었다 — 밀가루였다", c.Id); ways.Finish(t, false, "밀가루를 쏟았더니 확 붙었다", c); return true; }
         NeedsSystem.AddInjury(c.Vitals, 0.08f, "화상");
         w.Log.Add(w.Tick, LogKind.Warning, $"덮은 {(t.Thing.Length > 0 ? t.Thing : "천")}에 불이 옮겨붙었다 — {Ko.IGa(c.Name)} 손을 데었다", c.Id);
         ways.Finish(t, false, "마른 천에 불이 옮겨붙었다", c);
@@ -793,8 +795,9 @@ public static class WaysWork
                 break;
             }
             case 1:
-                if (w.Ship.Doors[f.DoorId].JammedOpen && !Fetch(c, w, dist, ItemKind.Plate, 1, toils)) return null;
-                hours = w.Ship.Doors[f.DoorId].JammedOpen ? 1f : 0.5f;
+                if (ways.DoorById(f.DoorId) is not Door fd) return null;
+                if (fd.JammedOpen && !Fetch(c, w, dist, ItemKind.Plate, 1, toils)) return null;
+                hours = fd.JammedOpen ? 1f : 0.5f;
                 break;
             case 2 or 3: skill = Skill.Electrical; hours = 0.2f; if (f.Kind == 3 && w.Robots.Robots.FirstOrDefault(r => r.Id == f.RobotId) is Robot rb) target = rb.Cell; break;
             case 4 or 5 or 6 or 7: hours = 0.25f; if (ways.FurnById(f.FurnId) is Furniture ff) target = ff.Cells[0]; break;
@@ -836,8 +839,8 @@ public sealed partial class WaysSystem
                     if (room != null && room.Air.Pressure < 60f && c.Suit == null) continue;
                     break;
                 case 1:
-                    if (f.DoorId < 0 || f.DoorId >= w.Ship.Doors.Count) { f.Done = w.Tick; continue; }
-                    if (w.Ship.Doors[f.DoorId].JammedOpen && w.Ship.CountStored(ItemKind.Plate) < 1) continue;
+                    if (DoorById(f.DoorId) is not Door fdoor) { f.Done = w.Tick; continue; }
+                    if (fdoor.JammedOpen && w.Ship.CountStored(ItemKind.Plate) < 1) continue;
                     break;
                 case 2: if (room == null || !room.BreakerOff) { f.Done = w.Tick; continue; } if (MoistureSystem.Depth(room) > 0.05f) continue; break;
                 case 3: if (!w.Power.ReactorOnline && !w.Power.AuxRunning) continue; break;
@@ -878,7 +881,7 @@ public sealed partial class WaysSystem
             }
             case 1:
             {
-                var d = w.Ship.Doors[f.DoorId];
+                if (DoorById(f.DoorId) is not Door d) break;
                 if (d.JammedOpen) { if (c.Carrying?.Kind == ItemKind.Plate) c.Carrying = null; d.JammedOpen = false; d.MotorBroken = false; d.Openness = 1f; }
                 d.Bent = 0f;
                 Marks.RemoveAll(m => m.DoorId == f.DoorId && m.Look is WayLook.PriedDoor or WayLook.CutDoor or WayLook.BlownDoor or WayLook.WallHole);

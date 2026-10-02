@@ -32,7 +32,7 @@ public enum WayFx : byte
 /// <summary>그 갈래가 남기는 그림 (화면이 이 값마다 다른 모양을 그린다).</summary>
 public enum WayLook : byte
 {
-    None, Seal, Douse, HydroHose, Smother, Eject, Burnt,
+    None, Seal, Douse, HydroHose, Smother, Eject, Burnt, PotLid,
     MattressPlug, TablePlug, PotPlug, CratePlug, MatPlug, FrostPlug, BackPlug, RobotBrace,
     CrawlHatch, PriedDoor, CutDoor, BlownDoor, WallHole, Jumper, Knock,
     RobotBattery, Pedal, Lamp, Stretcher, Cart, Bandage, Terminal,
@@ -53,6 +53,8 @@ public sealed record Way(string Id, Snag Snag, string Name, WayBy By, WayFx Fx, 
     public int ItemCount { get; init; } = 1;
     /// <summary>근처에 굴러다니는 물건 (재질로 판정 — 이 중 하나).</summary>
     public ArticleKind[] Things { get; init; } = NoThings;
+    /// <summary>손을 뗀 뒤 풀릴 때까지 (분) — 문 닫고 숨 끊기 · 진공처럼 걸어 두고 기다리는 길.</summary>
+    public float Resolve { get; init; }
     /// <summary>근처 설비 · 가구 (이 중 하나).</summary>
     public FurnitureType[] Near { get; init; } = NoNear;
     public Skill Skill { get; init; } = Skill.Mechanics;
@@ -93,23 +95,29 @@ public static class WaysTable
 
     // 축약
     private static Way W(Snag s, string id, string name, WayBy by, WayFx fx, float min, float power, float risk, WayLook look) => new($"{Key(s)}.{id}", s, name, by, fx, min, power, risk, look);
-    private static string Key(Snag s) => s.ToString().ToLowerInvariant();
+    public static string Key(Snag s) => s switch
+    {
+        Snag.Trapped => "trap", Snag.Blackout => "power", Snag.Injured => "hurt", Snag.NoPart => "part", Snag.Oxygen => "o2", Snag.Overheat => "heat",
+        Snag.ToxicGas => "tox", Snag.CommsDown => "comms", Snag.CargoLoose => "cargo", _ => s.ToString().ToLowerInvariant(),
+    };
 
     public static readonly Way[] All =
     {
         // ── 불 ──
         W(Snag.Fire, "ext", "소화기로 끈다", WayBy.Crew, WayFx.Existing, 8, 0.85f, 0.25f, WayLook.None) with { Order = WorkKind.Extinguish, Item = ItemKind.Extinguisher, Book = true, Line = "소화기부터", Side = "분말이 설비를 덮는다" },
-        W(Snag.Fire, "system", "자동 소화 장치에 맡긴다", WayBy.Ship, WayFx.Existing, 5, 0.8f, 0f, WayLook.None) with { Book = true },
-        W(Snag.Fire, "seal", "문을 닫아 숨을 끊는다", WayBy.Crew, WayFx.Seal, 4, 0.7f, 0.05f, WayLook.Seal) with { ShipCost = 0.25f, Side = "꺼질 때까지 방 안 것이 탄다 · 연기가 고인다", Later = "문을 열고 연기를 뺀다", Line = "문부터 닫자 — 숨을 못 쉬면 불도 죽는다" },
-        W(Snag.Fire, "vacuum", "방을 비워 진공으로 끈다", WayBy.Computer, WayFx.Existing, 6, 0.95f, 0.1f, WayLook.None) with { ShipCost = 0.45f, Leave = true, Side = "안에 남은 사람 · 작물 · 공기를 잃는다", Later = "다시 가압한다" },
-        W(Snag.Fire, "inert", "불활성 가스로 덮는다", WayBy.Computer, WayFx.Existing, 8, 0.8f, 0.05f, WayLook.None) with { ShipCost = 0.2f, Side = "가스가 준다" },
+        W(Snag.Fire, "system", "자동 소화 장치에 맡긴다", WayBy.Ship, WayFx.Existing, 5, 0.8f, 0f, WayLook.None) with { Book = true, Resolve = 5 },
+        W(Snag.Fire, "seal", "문을 닫아 숨을 끊는다", WayBy.Crew, WayFx.Seal, 4, 0.7f, 0.05f, WayLook.Seal) with { Resolve = 45, ShipCost = 0.25f, Side = "꺼질 때까지 방 안 것이 탄다 · 연기가 고인다", Later = "문을 열고 연기를 뺀다", Line = "문부터 닫자 — 숨을 못 쉬면 불도 죽는다" },
+        W(Snag.Fire, "vacuum", "방을 비워 진공으로 끈다", WayBy.Computer, WayFx.Existing, 6, 0.95f, 0.1f, WayLook.None) with { Resolve = 8, ShipCost = 0.45f, Leave = true, Side = "안에 남은 사람 · 작물 · 공기를 잃는다", Later = "다시 가압한다" },
+        W(Snag.Fire, "inert", "불활성 가스로 덮는다", WayBy.Computer, WayFx.Existing, 8, 0.8f, 0.05f, WayLook.None) with { Resolve = 12, ShipCost = 0.2f, Side = "가스가 준다" },
         W(Snag.Fire, "hydro", "수경 탱크 물을 퍼붓는다", WayBy.Crew, WayFx.Douse, 6, 0.6f, 0.35f, WayLook.HydroHose) with { Near = new[] { FurnitureType.GrowBed }, ShipCost = 0.15f, Side = "작물 양액이 빠진다 · 바닥이 젖는다 · 전기 불이면 감전", Later = "양액을 다시 채운다", Line = "수경 탱크 물이 바로 옆이다" },
         W(Snag.Fire, "jug", "물통 물을 붓는다", WayBy.Crew, WayFx.Douse, 3, 0.45f, 0.35f, WayLook.Bucket) with { Things = Wet, Side = "바닥이 젖는다 · 전기 불이면 감전", Line = "물통째 부어 버리자" },
         W(Snag.Fire, "cutwater", "전원을 내리고 물을 붓는다", WayBy.Crew, WayFx.CutDouse, 9, 0.65f, 0.08f, WayLook.Douse) with { Near = new[] { FurnitureType.GrowBed, FurnitureType.WaterRecycler }, Things = Wet, Skill = Skill.Electrical, SkillMin = 0.35f, Side = "그 방 전기가 나간다", Later = "차단기를 다시 올린다", Line = "전기 불이다 — 전원부터 내리고" },
         W(Snag.Fire, "blanket", "담요로 덮는다", WayBy.Crew, WayFx.Smother, 2, 0.55f, 0.4f, WayLook.Smother) with { Things = Cloth, Near = new[] { FurnitureType.FireBlanket, FurnitureType.Bed, FurnitureType.Cot }, Side = "덮은 천이 탄다 · 손을 데기 쉽다", Line = "작을 때 덮어 버리면 된다" },
+        W(Snag.Fire, "lid", "냄비 뚜껑을 덮는다", WayBy.Crew, WayFx.Smother, 1, 0.7f, 0.2f, WayLook.PotLid) with { Near = new[] { FurnitureType.Stove, FurnitureType.Oven }, Side = "뚜껑이 달아오른다", Line = "화덕 불은 뚜껑이다" },
+        W(Snag.Fire, "powder", "가루 포대를 쏟아 덮는다", WayBy.Crew, WayFx.Smother, 2, 0.5f, 0.3f, WayLook.Sawdust) with { Things = new[] { ArticleKind.PowderSack }, Side = "밀가루면 확 붙는다 · 바닥이 엉망", Line = "가루로 덮으면 숨이 막힌다" },
         W(Snag.Fire, "eject", "불붙은 걸 들고 나간다", WayBy.Crew, WayFx.Eject, 2, 0.5f, 0.6f, WayLook.Eject) with { Side = "손 화상 · 가는 길에 불똥", Line = "저것만 치우면 된다" },
         W(Snag.Fire, "robot", "소방 로봇이 뿌린다", WayBy.Robot, WayFx.Existing, 6, 0.75f, 0f, WayLook.None) with { Book = true },
-        W(Snag.Fire, "letburn", "타게 두고 가둔다", WayBy.Crew, WayFx.LetBurn, 3, 0.55f, 0.02f, WayLook.Burnt) with { ShipCost = 0.5f, Side = "방 안 설비가 다 탄다", Later = "탄 방을 치우고 다시 꾸민다", Line = "들어가면 다친다 — 가둬 두자" },
+        W(Snag.Fire, "letburn", "타게 두고 가둔다", WayBy.Crew, WayFx.LetBurn, 3, 0.55f, 0.02f, WayLook.Burnt) with { Resolve = 90, ShipCost = 0.5f, Side = "방 안 설비가 다 탄다", Later = "탄 방을 치우고 다시 꾸민다", Line = "들어가면 다친다 — 가둬 두자" },
 
         // ── 연기 ──
         W(Snag.Smoke, "door", "문을 닫아 연기를 가둔다", WayBy.Crew, WayFx.Air, 2, 0.5f, 0.05f, WayLook.Towel) with { Gen = new(Close: true), Line = "옆방까지 번지지 않게", Side = "그 방은 더 탁해진다" },
@@ -135,13 +143,13 @@ public static class WaysTable
 
         // ── 갇힘 ──
         W(Snag.Trapped, "crawl", "정비 통로로 기어 나온다", WayBy.Crew, WayFx.Crawl, 6, 0.75f, 0.15f, WayLook.CrawlHatch) with { Line = "벽 속 통로가 있다" },
-        W(Snag.Trapped, "pry", "쇠지레로 문을 벌린다", WayBy.Crew, WayFx.Pry, 10, 0.7f, 0.2f, WayLook.PriedDoor) with { Things = new[] { ArticleKind.Toolbox }, Near = new[] { FurnitureType.Workbench, FurnitureType.ToolWall }, Side = "문틀이 휘어 다시 꽉 닫히지 않는다", Later = "문틀을 펴고 문을 다시 단다", Line = "틈만 있으면 쇠지레로 벌린다" },
+        W(Snag.Trapped, "pry", "쇠지레로 문을 벌린다", WayBy.Crew, WayFx.Pry, 10, 0.7f, 0.2f, WayLook.PriedDoor) with { Things = new[] { ArticleKind.Toolbox }, Near = new[] { FurnitureType.Workbench, FurnitureType.ToolWall, FurnitureType.SuitLocker, FurnitureType.SupplyCache, FurnitureType.MaintCart }, Side = "문틀이 휘어 다시 꽉 닫히지 않는다", Later = "문틀을 펴고 문을 다시 단다", Line = "틈만 있으면 쇠지레로 벌린다" },
         W(Snag.Trapped, "cut", "절단기로 문을 자른다", WayBy.Crew, WayFx.Cut, 18, 0.85f, 0.25f, WayLook.CutDoor) with { Near = new[] { FurnitureType.Workbench, FurnitureType.Lathe }, SkillMin = 0.45f, Side = "문짝이 없어진다 · 불똥", Later = "새 문짝을 단다", Line = "잘라 내는 게 확실하다" },
         W(Snag.Trapped, "remote", "컴퓨터가 잠금을 푼다", WayBy.Computer, WayFx.RemoteOpen, 1, 0.9f, 0f, WayLook.None),
         W(Snag.Trapped, "bypass", "문 모터에 선을 이어 연다", WayBy.Crew, WayFx.Bypass, 8, 0.7f, 0.15f, WayLook.Jumper) with { Item = ItemKind.Cable, Skill = Skill.Electrical, SkillMin = 0.35f, Later = "임시선을 걷어 낸다", Line = "모터만 살리면 열린다" },
         W(Snag.Trapped, "blow", "문을 폭파한다", WayBy.Crew, WayFx.Blow, 5, 0.9f, 0.8f, WayLook.BlownDoor) with { Leave = true, Side = "파편 · 안에 있는 사람이 다칠 수 있다", Later = "문틀째 다시 단다", Line = "시간이 없다 — 날려 버리자" },
         W(Snag.Trapped, "wall", "옆 벽을 뚫는다", WayBy.Crew, WayFx.Cut, 70, 0.8f, 0.2f, WayLook.WallHole) with { Near = new[] { FurnitureType.Workbench, FurnitureType.Lathe }, SkillMin = 0.3f, Side = "벽이 뚫린 채 남는다", Later = "벽을 다시 막는다", Line = "문이 안 되면 벽이다" },
-        W(Snag.Trapped, "knock", "벽을 두드려 알리고 기다린다", WayBy.Crew, WayFx.Signal, 2, 0.3f, 0f, WayLook.Knock) with { Line = "누가 오겠지" },
+        W(Snag.Trapped, "knock", "벽을 두드려 알리고 기다린다", WayBy.Crew, WayFx.Signal, 2, 0.3f, 0f, WayLook.Knock) with { Resolve = 30, Line = "누가 오겠지" },
 
         // ── 정전 ──
         W(Snag.Blackout, "aux", "보조 발전기를 돌린다", WayBy.Crew, WayFx.Existing, 15, 0.85f, 0.05f, WayLook.None) with { Order = WorkKind.StartAux, Book = true },
@@ -305,8 +313,8 @@ public static class WaysRules
     {
         var s = Materials.Of(m);
         float conform = 1f - s.Hard, tight = 1f - s.Absorb, strong = s.Hard;
-        float q = 0.2f + 0.3f * conform + 0.3f * tight + 0.2f * strong + bulk;
-        if (Matter.Breakable(m)) q *= 0.3f; // 유리 · 사기 — 기압에 깨진다
+        float q = 0.15f + 0.45f * conform + 0.2f * tight + 0.15f * strong + bulk; // 들러붙는 게 먼저 — 매트리스는 빨려 들어가 꽉 낀다
+        if (Matter.Sharp(m)) q *= 0.3f; // 유리 · 사기 — 기압에 깨진다
         if (s.Hard < 0.1f && s.Absorb > 0.8f && bulk < 0.1f) q *= 0.5f; // 종이 · 얇은 천 — 빨려 나간다
         if (strong > 0.8f && breach >= 0.25f && bulk < 0.15f) q -= 0.2f; // 딱딱한 작은 것은 큰 구멍의 들쭉날쭉한 가장자리를 못 덮는다
         return Math.Clamp(q, 0f, 0.9f);
@@ -333,7 +341,7 @@ public static class WaysRules
     {
         if (live <= 0f) return 0f;
         float pair = Matter.Pair(Element.Water, Element.Electric).R == Reaction.Short ? 1f : 0.6f;
-        return Math.Clamp(0.55f * live * pair * w.Matter.ShockMul(c) * (c.Suit != null ? 0.2f : 1f), 0f, 0.9f);
+        return Math.Clamp((0.3f + 0.6f * live * pair * w.Matter.ShockMul(c)) * (c.Suit != null ? 0.2f : 1f), 0f, 0.9f); // 물줄기가 곧 전선이다
     }
 
     /// <summary>불 곁에 살아 있는 전기가 있나 (전기 불): 켜진 설비 · 살아 있는 접속부 · 그 방 차단기.</summary>
@@ -373,7 +381,7 @@ public static class WaysRules
     /// <summary>굴러다니는 물건의 덩치 (마개로 쓸 때).</summary>
     public static float Bulk(ArticleKind k) => k switch
     {
-        ArticleKind.Rug => 0.1f, ArticleKind.RubberMat => 0.05f, ArticleKind.PlasticCrate => -0.15f /* 상자엔 틈 · 손잡이 구멍 */, ArticleKind.CardboardBox => 0f, _ => 0f,
+        ArticleKind.Rug => 0.05f /* 얇다 — 빨려 나간다 */, ArticleKind.RubberMat => 0.05f, ArticleKind.PlasticCrate => -0.15f /* 상자엔 틈 · 손잡이 구멍 */, ArticleKind.CardboardBox => 0f, _ => 0f,
     };
 
     /// <summary>부품마다 생활 물건으로 만드는 임시품 (없으면 null).</summary>

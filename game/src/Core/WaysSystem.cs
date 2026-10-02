@@ -66,6 +66,8 @@ public sealed class WayTry
     /// <summary>도와주는 사람 (들것 둘째 손).</summary>
     public bool Helper { get; init; }
     public float Score { get; init; }
+    /// <summary>견준 다른 길 (점수 순 — 카드 · 판단 탭).</summary>
+    public string Alts { get; set; } = "";
     public Way Way => WaysTable.Get(WayId)!;
 }
 
@@ -148,6 +150,7 @@ public sealed partial class WaysSystem
     private Rng? _rng;
     private Rng R => _rng ??= new Rng(unchecked(_w.Seed * 6143 + 4231));
     public static bool Off { get; set; }
+    public static bool Debug { get; set; }
 
     public List<WayCase> Cases { get; } = new();
     public List<WayTry> Tries { get; } = new();
@@ -293,7 +296,7 @@ public sealed partial class WaysSystem
                 k = OpenCase(f);
             }
             Observe(k);
-            if (w.Tick >= k.NextChoose && k.Rounds < 5 && !Tries.Any(t => t.CaseId == k.Id && t.State is 0 or 1 || t.CaseId == k.Id && t.State == 2 && t.WayId != "" && WaysTable.Get(t.WayId)!.Fx != WayFx.Existing))
+            if (w.Tick >= k.NextChoose && k.Rounds < 5 && !Tries.Any(t => t.CaseId == k.Id && t.CrewId >= 0 && (t.State is 0 or 1 || t.State == 2 && t.Way.Fx != WayFx.Existing)))
                 Respond(k);
         }
     }
@@ -323,7 +326,7 @@ public sealed partial class WaysSystem
             if (ppl && !burning && (r.Air.Toxin > 0.25f || r.Air.CO > 0.15f)) Add(new Found($"tox:{r.Id}", Snag.ToxicGas, r, mid, $"{r.Name} 독가스"));
             if (ppl && !r.DataLinked) Add(new Found($"comms:{r.Id}", Snag.CommsDown, r, mid, $"{r.Name} 통신 끊김"));
             if (r.Flood > 0.15f) Add(new Found($"leak:{r.Id}", Snag.Leak, r, mid, $"{r.Name} 물 샘"));
-            if (ppl && r.LightsOut && r.Powered) Add(new Found($"dark:{r.Id}", Snag.Dark, r, mid, $"{r.Name} 조명 꺼짐"));
+            if (ppl && !burning && r.LightsOut && r.Powered) Add(new Found($"dark:{r.Id}", Snag.Dark, r, mid, $"{r.Name} 조명 꺼짐"));
             if (ppl && !r.Powered && !r.BreakerOff) Add(new Found($"power:{r.Circuit}", Snag.Blackout, r, mid, $"{PowerGrid.CircuitName(r.Circuit)} 회로 정전"));
         }
         // 파공 (막지 않은 구멍)
@@ -444,6 +447,9 @@ public sealed partial class WaysSystem
             if (t.State == 2 && t.Way.Fx == WayFx.Existing) { t.State = 3; t.Ended = w.Tick; t.Ok = true; t.Result = "끝났다"; continue; }
             if (t.State == 0) { t.State = 3; t.Ended = w.Tick; t.Result = "다른 손이 먼저 풀었다"; }
         }
+        // 갇힌 사람이 문이 그대로인데 나왔다 → 통로로 기어 나왔다
+        if (k.Snag == Snag.Trapped && k.SolvedBy.Length == 0 && RoomOf(k) is Room tr && Trap(tr) != null && CrawlOut(tr) != null && !k.Seen.Any(x => x.way == "trap.crawl"))
+            k.Seen.Add(("trap.crawl", k.CrewId));
         if (k.SolvedBy.Length == 0 && k.Seen.Count > 0)
         {
             var (way, who) = k.Seen[^1];
@@ -513,6 +519,9 @@ public sealed partial class WaysSystem
             case Snag.Smoke:
                 if (room.Purging) See("smoke.purge", -1);
                 break;
+            case Snag.Trapped:
+                if (w.Crew.FirstOrDefault(x => x.Id == k.CrewId) is CrewMember tc && tc.Room != room && w.Paths.Crawl[w.Ship.Grid.Index(tc.Cell)]) See("trap.crawl", tc.Id); // 벽 속 통로를 기어가는 중
+                break;
         }
     }
 
@@ -529,9 +538,18 @@ public sealed partial class WaysSystem
         if (room != null && !room.DataLinked && k.Snag != Snag.CommsDown) return; // 그 방이 보이지 않는다
         int inside = room == null ? 0 : _w.Crew.Count(c => !c.Dead && c.Room == room && c.Id != k.CrewId);
         var opts = new List<(Way way, ForeseeOption o)>();
+        // 사람 손 갈래는 가장 가까운 손의 눈으로 따진다 (컴퓨터와 사람이 같은 규칙을 본다)
+        CrewMember? hand = null; int hd = int.MaxValue;
+        foreach (var c in w.Crew) { if (!c.CanAct || c.Outside || c.IsChild || c.Id == k.CrewId && k.Snag != Snag.Trapped) continue; int hdd = Manhattan(c.Cell, k.At); if (hdd < hd) { hd = hdd; hand = c; } }
         foreach (var way in WaysTable.Of(k.Snag))
         {
             var (ok, note, mins) = ShipCan(way, k, room);
+            if (ok && way.By == WayBy.Crew && hand != null && way.Fx is not (WayFx.Existing or WayFx.Signal or WayFx.Crawl))
+            {
+                var ha = Check(hand, way, k, room);
+                if (!ha.Ok) { ok = false; note = ha.Note; }
+                else mins += ha.Travel;
+            }
             float risk = way.Risk;
             float occupants = way.Fx is WayFx.Seal or WayFx.LetBurn or WayFx.Blow || way.Id is "fire.vacuum" or "breach.abandon" ? inside * 0.6f : 0f;
             var o = new ForeseeOption
@@ -543,12 +561,15 @@ public sealed partial class WaysSystem
             };
             opts.Add((way, o));
         }
+        if (Debug) Console.WriteLine($"   [컴퓨터] {k.Title}: {string.Join(" · ", opts.Select(x => $"{x.way.Name} {(x.o.Allowed ? $"{x.o.People + x.o.Ship:0.00}" : x.o.Note)}"))}");
+        if (Debug && k.DoorId >= 0) Console.WriteLine($"   [문] id {k.DoorId} → {DoorById(k.DoorId)?.Id} 용접 {DoorById(k.DoorId)?.Welded} 잠김 {DoorById(k.DoorId)?.Locked} 휨 {DoorById(k.DoorId)?.Bent}");
         var shortlist = opts.Where(x => x.o.Allowed).OrderBy(x => x.o.People + x.o.Ship).Take(3).Select(x => x.o).ToList();
         if (shortlist.Count < 2) return;
         var blocked = opts.Where(x => !x.o.Allowed && x.way.Book).Select(x => x.o).FirstOrDefault(); // 규정 갈래가 막혔으면 그것도 보여 준다
         if (blocked != null) shortlist.Add(blocked);
         var d = a.Foresee.Fleet(k.Snag is Snag.Fire ? "불" : k.Snag is Snag.Breach ? "파공" : WaysTable.Name(k.Snag), room, k.Title, shortlist);
         k.ComputerPick = d.Pick.Key;
+        if (Debug) Console.WriteLine($"   [컴퓨터 고름] {k.Title}: {d.Pick.Name} ({d.Reason})");
         k.ComputerWhy = d.Reason;
         k.Decision = d.Id;
         var kk = k;
@@ -557,7 +578,7 @@ public sealed partial class WaysSystem
         // 제 손으로 되는 것은 직접 한다 · 로봇을 보낸다 · 사람 갈래는 권한다
         if (pick.By == WayBy.Computer && pick.Fx != WayFx.Existing) ComputerDo(k, pick);
         else if (pick.By == WayBy.Robot && pick.Fx == WayFx.RobotHold) w.Robots.WayHold(this, k, pick);
-        else if (pick.By == WayBy.Crew) w.Log.Add(w.Tick, LogKind.Ship, $"{a.Voice.Call}: {k.Title} — {Ko.EulReul(pick.Name)} 권합니다");
+        else if (pick.By == WayBy.Crew) w.Log.Add(w.Tick, LogKind.Ship, $"{a.Voice.Call}: {k.Title} — ‘{pick.Name}’{(Ko.EulReul(pick.Name)[^1..])} 권합니다");
     }
 
     /// <summary>배가 이 갈래를 쓸 수 있나 (누구 손이든) · 대략 몇 분.</summary>
@@ -566,7 +587,14 @@ public sealed partial class WaysSystem
         var w = _w;
         var ship = w.Ship;
         if (way.Item is ItemKind it && ship.CountStored(it) < way.ItemCount) return (false, $"{ItemKinds.Name(it)} 없음", way.Minutes);
-        if (way.Near.Length > 0 && way.Things.Length == 0 && !way.Near.Any(t => ship.FurnitureOf(t).Any())) return (false, $"{WaysRules.FromFurniture(way.Near[0]).name} 없음", way.Minutes);
+        if (way.Near.Length > 0 || way.Things.Length > 0)
+        {
+            // 컴퓨터도 사람과 같은 눈으로: 그 자리 가까이에 쓸 것이 있어야 권한다 (호스 길이 · 화덕 곁 · 들고 올 만한 거리)
+            int reach = way.Fx is WayFx.Douse or WayFx.CutDouse ? 14 : way.Id == "fire.lid" ? 2 : way.Fx is WayFx.Plug or WayFx.Smother or WayFx.Freeze or WayFx.Eject ? 30 : 80;
+            bool near = way.Near.Length > 0 && ship.Furniture.Any(f => Array.IndexOf(way.Near, f.Type) >= 0 && !f.Room.Detached && !f.Room.Abandoned && f.Cells.Min(x => Manhattan(x, k.At)) <= reach);
+            bool thing = way.Things.Length > 0 && w.Matter.Things.Any(t => Array.IndexOf(way.Things, t.Kind) >= 0 && t.Loose && !t.Ruined && (t.Kind != ArticleKind.WaterJug || t.Contents >= 1f) && Manhattan(t.At, k.At) < 30);
+            if (!near && !thing) return (false, "가까이 쓸 것이 없다", way.Minutes);
+        }
         switch (way.Id)
         {
             case "fire.system": if (room == null || !room.Suppression || !room.Powered) return (false, "소화 장치 없음", 5); break;
@@ -574,10 +602,10 @@ public sealed partial class WaysSystem
             case "fire.vacuum": if (room == null || w.Policies["vacuumfire"] <= 0) return (false, "방침이 막았다", 6); break;
             case "fire.inert": if (room == null || w.Policies["inertfire"] <= 0) return (false, "방침이 막았다", 8); break;
             case "fire.seal" or "fire.letburn": if (room == null || room.Doors.Any(d => d.JammedOpen || d.Removed)) return (false, "문이 안 닫힌다", way.Minutes); break;
-            case "breach.drone": if (!ship.FurnitureOf(FurnitureType.DroneDock).Any()) return (false, "드론 없음", 20); break;
+            case "breach.drone": if (!ship.FurnitureOf(FurnitureType.DroneDock).Any()) return (false, "드론 없음", 20); if (ship.CountStored(ItemKind.Sealant) < 1 && ship.CountStored(ItemKind.Plate) < 2) return (false, "드론이 붙일 재료가 없다", 20); break;
             case "breach.robot" or "cargo.robot": if (!w.Robots.Robots.Any(r => r.Operational)) return (false, "로봇 없음", 4); break;
             case "trap.remote":
-                if (k.DoorId < 0 || ship.Doors[k.DoorId] is not Door td || Stuck(td) && td.Bent > 0.2f || td.Welded && !td.Locked) return (false, "문틀이 휘어 잠금만 풀어선 안 된다", 1);
+                if (DoorById(k.DoorId) is not Door td || td.Welded || !td.Locked) return (false, "꽉 끼어 잠금만 풀어선 안 된다", 1);
                 break;
             case "trap.crawl": if (room == null || !CrawlOut(room).HasValue) return (false, "통로가 없다", 6); break;
             case "power.robotbat": if (!w.Robots.Robots.Any(r => r.Operational && r.AtDock)) return (false, "쉬는 로봇이 없다", 10); break;
@@ -610,7 +638,7 @@ public sealed partial class WaysSystem
             switch (way.Fx)
             {
                 case WayFx.RemoteOpen:
-                    if (k != null && k.DoorId >= 0 && w.Ship.Doors[k.DoorId] is Door d && !(d.Welded && d.Bent > 0.2f)) { d.Welded = false; d.Locked = false; d.Request(); res = "잠금을 풀었다"; }
+                    if (k != null && DoorById(k.DoorId) is Door d && !(d.Welded && d.Bent > 0.2f)) { d.Welded = false; d.Locked = false; d.Request(); res = "잠금을 풀었다"; }
                     else { ok = false; res = "문이 꿈쩍도 않는다"; }
                     break;
                 default:
@@ -650,6 +678,7 @@ public sealed partial class WaysSystem
             if (n >= want) break;
             var used = Tries.Where(t => t.CaseId == k.Id && t.State != 3 && t.Way.Fx != WayFx.Existing).Select(t => t.WayId).ToHashSet();
             var (way, why, score, defied) = Choose(c, k, room, used);
+            if (Debug) Console.WriteLine($"   [갈래] {k.Title} · {c.Name}: {way?.Name ?? "없음"} ({why}) [{LastRank}]");
             if (way == null) continue;
             n++;
             Assign(c, k, way, why, score, defied);
@@ -698,7 +727,8 @@ public sealed partial class WaysSystem
         foreach (var way in WaysTable.Of(k.Snag))
         {
             if (way.By != WayBy.Crew) continue;
-            if (taken != null && taken.Contains(way.Id) && way.Fx != WayFx.Stretcher) continue;
+            if (taken != null && (taken.Contains(way.Id) && way.Fx != WayFx.Stretcher || way.Fx is WayFx.Seal or WayFx.LetBurn && (taken.Contains("fire.seal") || taken.Contains("fire.letburn")))) continue;
+            if (way.Fx == WayFx.Signal && Tries.Any(t => t.CaseId == k.Id && t.CrewId == c.Id && t.WayId == way.Id && _w.Tick - t.Chosen < SimTime.Minutes(40))) continue; // 방금 두드렸다 — 기다린다
             if (Tries.Any(t => t.CaseId == k.Id && t.CrewId == c.Id && t.WayId == way.Id && t.State == 3 && !t.Ok)) continue; // 해 봤는데 안 됐다
             // 갇힌 본인은 안에서 할 수 있는 것만 · 밖의 사람은 갇힌 본인의 길(통로 · 두드리기)을 못 한다
             if (k.Snag == Snag.Trapped)
@@ -708,10 +738,13 @@ public sealed partial class WaysSystem
             }
             var a = Check(c, way, k, room);
             if (!a.Ok) { seen.Add((way, float.MinValue, a)); continue; }
-            float mins = a.Travel + way.Minutes * SpeedMul(c, way);
+            float mins = a.Travel + way.Minutes * SpeedMul(c, way) + way.Resolve * 0.4f;
             float s = a.Est
                 - way.Risk * (1f - riskTol) * 0.9f - a.Danger
-                - urg * Math.Clamp(mins / 45f, 0f, 1f) * 0.5f
+                - urg * Math.Clamp(mins / (k.Snag is Snag.Fire or Snag.Breach ? 25f : 45f), 0f, 1.6f) * (k.Snag is Snag.Fire or Snag.Breach ? 0.6f : 0.5f)
+                + (a.Thing.Length > 0 && a.Travel < 1.5f ? 0.06f : 0f) // 바로 손 닿는 데 있다
+                + (!way.Book && a.Travel < 3f && Life.Has(c, Habit.Hasty) ? 0.12f : 0f) // 성급한 사람은 손에 잡히는 걸로
+                + (way.Book && (Life.Has(c, Habit.Methodical) || Life.Has(c, Habit.Perfectionist)) ? 0.1f : 0f) // 꼼꼼한 사람은 규정대로
                 - way.ShipCost * (0.25f + 0.4f * c.Traits.Diligence)
                 + (way.Book ? 0.06f + 0.08f * c.Traits.Calm : 0f)
                 - (way.Leave ? 0.1f + 0.3f * (1f - c.Traits.Bravery) : 0f);
@@ -726,18 +759,30 @@ public sealed partial class WaysSystem
             seen.Add((way, s, a));
             if (s > bestS) { bestS = s; best = way; bestA = a; }
         }
-        if (best == null) return (null, "", 0f, false);
+        if (best != null && best.Leave && bestS < 0.1f)
+        {
+            // 규칙을 어기는 길은 확실할 때만 — 아니면 다음 길 (없으면 기다린다)
+            var alt = seen.Where(x => x.s > float.MinValue && !x.way.Leave).OrderByDescending(x => x.s).FirstOrDefault();
+            if (alt.way == null) best = null; else { best = alt.way; bestS = alt.s; bestA = alt.a; }
+        }
+        LastRank = "";
+        if (Debug) LastRank = "안 됨: " + string.Join(" · ", seen.Where(x => x.s == float.MinValue).Select(x => $"{x.way.Name}({x.a.Note})")) + " | ";
+        if (best == null || bestS < -0.15f) return (null, "", 0f, false);
+        LastRank += string.Join(" · ", seen.Where(x => x.s > float.MinValue).OrderByDescending(x => x.s).Take(4).Select(x => $"{x.way.Name} {x.s:0.00}"));
         // 이유 (자연스러운 말로)
         string why;
         var bookBlocked = seen.FirstOrDefault(x => x.way.Book && x.s == float.MinValue);
         var p2 = PracticeOrNull(best.Id);
         var mine2 = Mine(c, best.Id);
         bool defied = false;
-        if (pick != null && pick.Id != best.Id && (pick.By == WayBy.Crew || pick.Id is "fire.vacuum" or "breach.abandon" or "fire.letburn"))
+        var busy = pick == null ? null : Tries.FirstOrDefault(t => t.CaseId == k.Id && t.WayId == pick.Id && t.State is 0 or 1 && t.CrewId >= 0 && t.CrewId != c.Id);
+        if (busy != null && pick != null && pick.Id != best.Id && taken != null && taken.Contains(pick.Id))
+            why = $"{Ko.IGa(w.Crew.First(x => x.Id == busy.CrewId).Name)} 그쪽을 맡았다 — 나는 {best.Name}";
+        else if (pick != null && pick.Id != best.Id && (pick.By == WayBy.Crew || Clears(pick)))
         {
             defied = true;
             var mineEntry = seen.FirstOrDefault(x => x.way.Id == pick.Id);
-            string because = mineEntry.way == null ? (k.CrewId >= 0 && k.CrewId != c.Id && pick.Id is "fire.vacuum" or "breach.abandon" ? $"{Ko.IGa(w.Crew.First(x => x.Id == k.CrewId).Name)} 안에 있다" : RoomOf(k) is Room rr && pick.Id is "fire.vacuum" or "breach.abandon" or "fire.letburn" ? $"그러면 {Ko.EulReul(rr.Name)} 잃는다" : "그럴 손이 없다")
+            string because = mineEntry.way == null ? Overrule(c, k, pick)
                 : mineEntry.s == float.MinValue ? mineEntry.a.Note.Length > 0 ? mineEntry.a.Note : "그건 지금 안 된다"
                 : c.Lessons.Contains("ways:" + pick.Id) ? "그건 지난번에 안 됐다"
                 : faith < 0.4f ? "컴퓨터 말은 못 믿겠다"
@@ -745,7 +790,7 @@ public sealed partial class WaysSystem
                 : pick.Minutes > best.Minutes * 2f ? "그건 너무 오래 걸린다"
                 : bestA.Thing.Length > 0 ? $"{Ko.IGa(bestA.Thing)} 바로 옆에 있다"
                 : "이게 더 빠르다";
-            why = $"컴퓨터는 {Ko.EulReul(pick.Name)} 권했지만 {because}";
+            why = $"컴퓨터는 ‘{pick.Name}’{(Ko.EulReul(pick.Name)[^1..])} 권했지만 {because}";
         }
         else if (p2 is { Custom: true }) why = $"이 배에선 {WaysTable.Name(k.Snag)}{(Ko.EunNeun(WaysTable.Name(k.Snag))[^1..])} 이렇게 한다";
         else if (mine2.ok > 0) why = "전에 이렇게 해서 됐다";
@@ -756,8 +801,27 @@ public sealed partial class WaysSystem
         return (best, why, bestS, defied);
     }
 
+    /// <summary>방을 비우게 하는 컴퓨터 수순 (사람이 남아 손으로 하면 맞서는 셈이다).</summary>
+    private static bool Clears(Way w) => w.Id is "fire.vacuum" or "fire.inert" or "fire.letburn" or "breach.abandon" or "smoke.purge" or "tox.vent";
+
+    /// <summary>컴퓨터 수순 대신 손으로 하겠다는 까닭.</summary>
+    private string Overrule(CrewMember c, WayCase k, Way pick)
+    {
+        var w = _w;
+        var room = RoomOf(k);
+        var down = room == null ? null : w.Crew.FirstOrDefault(o => !o.Dead && o != c && o.Room == room && (o.Down || o.Id == k.CrewId));
+        if (down != null && Clears(pick)) return $"안에 {Ko.IGa(down.Name)} 있다";
+        if (k.Snag == Snag.Fire && room != null && w.Fire.CountIn(room) <= 2) return "아직 작다 — 지금 잡으면 된다";
+        if (pick.ShipCost >= 0.4f && room != null) return $"그러면 {Ko.EulReul(room.Name)} 잃는다";
+        if (pick.Id == "fire.inert") return "가스는 아껴 둬야 한다";
+        return "그 전에 손으로 해 볼 게 있다";
+    }
+
     /// <summary>그 사람이 지금 이 갈래를 쓸 수 있나 (물건 · 재질 · 솜씨 · 장소) · 얼마나 될 것 같나 · 몸이 얼마나 위험한가.</summary>
     public readonly record struct Avail(bool Ok, float Est, float Travel, string Thing, string Note, string Why, float Danger, int ArticleId = -1, int FurnId = -1, Material Mat = Material.None, float Bulk = 0f);
+
+    /// <summary>방금 견준 길들 (점수 순).</summary>
+    public string LastRank { get; private set; } = "";
 
     public Avail Check(CrewMember c, Way way, WayCase k, Room? room)
     {
@@ -771,7 +835,12 @@ public sealed partial class WaysSystem
             if (way.Id == "fire.ext") return No("소화기가 없다");
             return No($"{ItemKinds.Name(it)}{(Ko.IGa(ItemKinds.Name(it))[^1..])} 없다");
         }
-        if (way.Id == "fire.ext" && w.Brain2.Beliefs.WhereItem(c, ItemKind.Extinguisher, out _, out bool none) == null && none && c.Carrying?.Kind != ItemKind.Extinguisher) return No("소화기가 없는 줄 안다");
+        Furniture? believedBox = null;
+        if (way.Id == "fire.ext" && c.Carrying?.Kind != ItemKind.Extinguisher)
+        {
+            believedBox = w.Brain2.Beliefs.WhereItem(c, ItemKind.Extinguisher, out _, out bool none);
+            if (believedBox == null && none) return No("소화기가 없는 줄 안다");
+        }
         float est = way.Power, danger = 0f;
         string thing = "", why = "";
         int art = -1, furn = -1;
@@ -796,10 +865,11 @@ public sealed partial class WaysSystem
                 foreach (var f in ship.Furniture)
                 {
                     if (f.Stowed || f.Room.Detached || f.Room.Abandoned || Array.IndexOf(way.Near, f.Type) < 0 || Taken(f)) continue;
+                    if (way.Fx is WayFx.Douse or WayFx.CutDouse && Manhattan(f.Cells[0], at) > 14) continue; // 호스가 닿는 데까지
                     if (f.Type is FurnitureType.Bed or FurnitureType.Cot or FurnitureType.MedBed && (f.ReservedBy != null && f.ReservedBy.Down)) continue; // 누가 누운 침대
                     if (inside && f.Room != room) continue;
                     int d = Manhattan(c.Cell, f.Cells[0]) + Manhattan(f.Cells[0], at);
-                    if (d < fd && d < 46) { fd = d; bf = f; }
+                    if (d < fd && d < (way.Fx is WayFx.Pry or WayFx.Cut or WayFx.Lathe or WayFx.Pedal or WayFx.RobotBattery ? 140 : 46)) { fd = d; bf = f; }
                 }
             if (best == null && bf == null) return No(way.Near.Length > 0 ? $"{WaysRules.FromFurniture(way.Near[0]).name}{(Ko.IGa(WaysRules.FromFurniture(way.Near[0]).name)[^1..])} 근처에 없다" : $"{ArticleSpecs.Of(way.Things[0]).Name}{(Ko.IGa(ArticleSpecs.Of(way.Things[0]).Name)[^1..])} 근처에 없다");
             if (best != null && (bf == null || bd <= fd))
@@ -810,28 +880,36 @@ public sealed partial class WaysSystem
             else
             {
                 furn = bf!.Id; var fi = WaysRules.FromFurniture(bf.Type); thing = fi.name; mat = fi.mat; bulk = fi.bulk; travel = fd / 3f;
+                if (way.Fx == WayFx.Smother && bf.Type is FurnitureType.Bed or FurnitureType.Cot or FurnitureType.MedBed) thing = "침대 담요";
+                if (way.Id == "fire.lid") thing = "냄비 뚜껑";
             }
         }
+        if (way.Fx == WayFx.Pry && thing.Length > 0) thing = "쇠지레";
         var wall = k.Snag == Snag.Breach ? ship.WallAt(at) : null;
         switch (way.Fx)
         {
             case WayFx.Existing:
+                if (way.Id is "part.fab" && k.Part is ItemKind fp && !w.Board.Obtainable(fp)) return No("만들 재료가 없다");
+                if (way.Id is "part.sub" && MachineById(k.FurnId) is Machine sm && Faults.SubstituteCost(sm.Body.Type).Any(x => ship.CountStored(x.kind) < x.count)) return No("대체품 만들 재료가 없다");
                 if (way.Id == "breach.sealant" && wall != null && ship.CountStored(ItemKind.Sealant) < Hull.SealantFor(wall)) return No("실링폼이 모자란다");
                 if (way.Id == "breach.weld" && ship.CountStored(ItemKind.Sealant) >= 1) return No("실링폼이 있으면 그걸로");
                 if (way.Id == "fire.ext")
                 {
                     // 소화기가 어디 있나 — 멀면 늦다
-                    var box = ship.Furniture.Where(f => f.Storage is Inventory inv && inv.Count(ItemKind.Extinguisher) > 0 && !f.Room.Detached).OrderBy(f => Manhattan(c.Cell, f.Cells[0])).FirstOrDefault();
+                    // 그 사람이 아는 소화기 자리 (틀릴 수도 있다) · 모르면 찾아 헤맨다
+                    var box = believedBox ?? ship.Furniture.Where(f => f.Storage is Inventory inv && inv.Count(ItemKind.Extinguisher) > 0 && !f.Room.Detached).OrderBy(f => Manhattan(c.Cell, f.Cells[0])).FirstOrDefault();
                     if (box == null && c.Carrying?.Kind != ItemKind.Extinguisher) return No("소화기가 없다");
-                    if (box != null) travel = (Manhattan(c.Cell, box.Cells[0]) + Manhattan(box.Cells[0], at)) / 3f;
-                    if (travel > 14f) why = "멀어도 소화기가 확실하다";
+                    if (c.Carrying?.Kind == ItemKind.Extinguisher) { travel = Manhattan(c.Cell, at) / 3f; why = "소화기가 손에 있다"; }
+                    else if (box != null) travel = (Manhattan(c.Cell, box.Cells[0]) + Manhattan(box.Cells[0], at)) / 3f;
+                    if (believedBox == null && c.Carrying?.Kind != ItemKind.Extinguisher) { travel += 5f; est -= 0.1f; why = "소화기가 어디 있는지 몰라 찾아본다"; }
+                    else if (travel > 14f) why = "멀어도 소화기가 확실하다";
                 }
                 if (way.Order == WorkKind.Rescue && room != null && room.Unbreathable && c.Suit == null) danger += 0.2f;
                 break;
             case WayFx.Seal or WayFx.LetBurn:
             {
                 if (room == null || room.Doors.Any(d => d.JammedOpen || d.Removed)) return No("문이 안 닫힌다");
-                int believed = w.Crew.Count(o => !o.Dead && o != c && o.Room == room && (o.Down || o.Job?.Order?.Kind != WorkKind.Extinguish));
+                int believed = w.Crew.Count(o => !o.Dead && o != c && o.Room == room && (o.Down || !o.CanAct)); // 제 발로 못 나오는 사람
                 if (believed > 0) { danger += 0.45f * believed; why = "안에 사람이 있다"; }
                 int cells = w.Fire.CountIn(room);
                 est = way.Fx == WayFx.Seal ? 0.72f - 0.02f * cells + (room.Volume < 40f ? 0.08f : 0f) : 0.6f;
@@ -852,6 +930,8 @@ public sealed partial class WaysSystem
             case WayFx.Smother:
             {
                 if (room == null) return No("");
+                if (way.Id == "fire.lid" && (furn < 0 || ship.Furniture.First(f => f.Id == furn).Cells.Min(x => Manhattan(x, at)) > 2)) return No("화덕 불이 아니다");
+                if (way.Id == "fire.powder" && c.SkillLevel(Skill.Cooking) > 0.4f) { danger += 0.3f; why = "밀가루는 오히려 붙는다"; }
                 int cells = w.Fire.CountIn(room);
                 if (cells > 3) return No("천으로 덮기엔 너무 번졌다");
                 float inten = w.Fire.At(at);
@@ -892,8 +972,7 @@ public sealed partial class WaysSystem
                 break;
             case WayFx.Pry or WayFx.Cut or WayFx.Bypass or WayFx.Blow:
             {
-                if (k.DoorId < 0 || k.DoorId >= ship.Doors.Count) return No("");
-                var door = ship.Doors[k.DoorId];
+                if (DoorById(k.DoorId) is not Door door) return No("");
                 if (way.Fx == WayFx.Pry) { est = 0.5f + 0.25f * c.Fitness + 0.2f * door.Bent; if (art < 0 && furn < 0) return No("쇠지레가 없다"); }
                 if (way.Fx == WayFx.Bypass && door.Powered && !door.MotorBroken) return No("모터는 멀쩡하다 — 문틀이 문제다");
                 if (way.Fx == WayFx.Blow)
@@ -969,6 +1048,7 @@ public sealed partial class WaysSystem
     public int FurnOf(WayTry t) => _furnOf.TryGetValue(t.Id, out var v) ? v : -1;
     public int ArticleOf(WayTry t) => _artOf.TryGetValue(t.Id, out var v) ? v : -1;
 
+    public Door? DoorById(int id) { var ds = _w.Ship.Doors; if (id >= 0 && id < ds.Count && ds[id].Id == id) return ds[id]; foreach (var d in ds) if (d.Id == id) return d; return null; }
     public Machine? MachineById(int furnId) { foreach (var f in _w.Ship.Furniture) if (f.Id == furnId) return f.Machine; return null; }
     public Furniture? FurnById(int furnId) { foreach (var f in _w.Ship.Furniture) if (f.Id == furnId) return f; return null; }
 
@@ -997,7 +1077,7 @@ public sealed partial class WaysSystem
         var t = new WayTry
         {
             Id = _nextTry++, CaseId = k.Id, WayId = way.Id, CrewId = c.Id, Why = why, Suggested = k.ComputerPick, Defied = defied, Chosen = w.Tick, Score = score,
-            State = way.Fx == WayFx.Existing ? 2 : 0, Thing = a.Thing,
+            State = way.Fx == WayFx.Existing ? 2 : 0, Thing = a.Thing, Alts = LastRank,
         };
         if (a.FurnId >= 0) _furnOf[t.Id] = a.FurnId;
         if (a.ArticleId >= 0) _artOf[t.Id] = a.ArticleId;
@@ -1070,7 +1150,7 @@ public sealed partial class WaysSystem
             c.Stats.Emergencies++;
             w.History.Add(w, HistoryKind.Response, $"{Ko.IGa(c.Name)} {where} {WaysTable.Name(way.Snag)} — {way.Name}{(t.Thing.Length > 0 && !way.Name.Contains(t.Thing) ? $" ({t.Thing})" : "")}{(result.Length > 0 ? $" · {result}" : "")}", room, new[] { c });
             // 관행: 두 번 넘게 잘 통했고 실패보다 훨씬 많으면 이 배의 방식이 된다
-            if (!p.Custom && p.Ok >= 2 && p.Ok > p.Bad * 2 && !way.Book)
+            if (!p.Custom && p.Ok >= 2 && p.Ok > p.Bad * 2 && !way.Book && way.Fx is not (WayFx.Signal or WayFx.Gather or WayFx.Ration))
             {
                 p.Custom = true;
                 p.Since = w.Tick;
@@ -1150,6 +1230,7 @@ public sealed partial class WaysSystem
                 continue;
             }
             if (s.outSince >= 0) _seals[i] = s with { outSince = -1 };
+            Hold(room);
             if (w.Tick - s.since > SimTime.Hours(4) && t != null && t.State != 3)
             {
                 Finish(t, false, "문을 닫아도 꺼지지 않았다 — 어디선가 공기가 든다", w.Crew.FirstOrDefault(x => x.Id == t.CrewId));
@@ -1160,22 +1241,42 @@ public sealed partial class WaysSystem
     internal void Seal(Room room, WayTry t, bool letBurn)
     {
         var w = _w;
-        room.VentOpen = false;
-        room.Lockdown = true;
-        foreach (var d in room.Doors) if (!d.IsExternal && !d.Removed && !d.JammedOpen) d.Locked = true;
-        _seals.RemoveAll(x => x.room == room.Id);
+        Hold(room);
         _seals.Add((room.Id, t.Id, w.Tick, -1, letBurn));
+        // 문이 닫혔다 — 안으로 들어가야 하는 다른 손은 그만둔다 (교훈 없이)
+        foreach (var o in Tries) if (o != t && o.CaseId == t.CaseId && o.State is 0 or 1 && o.CrewId >= 0 && o.Way.Fx is WayFx.Douse or WayFx.CutDouse or WayFx.Smother or WayFx.Eject) Cancel(o, "문이 닫혀 그만뒀다");
         t.State = 2;
         MarkLog.Add(room.Marks, w.Tick, letBurn ? "타게 두고 문을 잠갔다" : "문을 닫아 숨을 끊었다");
+    }
+
+    /// <summary>문을 잠그고 댐퍼를 닫은 채 붙든다 (감압 해제 · 자동 댐퍼가 풀지 않게).</summary>
+    private static void Hold(Room room)
+    {
+        room.VentOpen = false;
+        room.Lockdown = true;
+        room.ResponseHold = true;
+        foreach (var d in room.Doors) if (!d.IsExternal && !d.Removed && !d.JammedOpen) d.Locked = true;
     }
 
     private void Unseal(Room room)
     {
         if (room.Abandoned) return;
+        if (_seals.Count(x => x.room == room.Id) > 1) return; // 다른 손이 건 것이 남았다
+        room.ResponseHold = false;
         room.Lockdown = false;
         room.VentOpen = true;
         foreach (var d in room.Doors) if (d.Locked && !d.Welded && !d.IsExternal) d.Locked = false;
         _w.Log.Add(_w.Tick, LogKind.Work, $"{room.Name} 불이 꺼졌다 — 문을 다시 연다");
+    }
+
+    /// <summary>그만둔다 (해 보지도 못했다 — 관행 · 교훈에 넣지 않는다).</summary>
+    internal void Cancel(WayTry t, string why)
+    {
+        if (t.State == 3) return;
+        t.State = 3;
+        t.Ended = _w.Tick;
+        t.Result = why;
+        foreach (var m in Marks) if (m.Try == t.Id && m.Active) { m.Active = false; m.Until = _w.Tick + SimTime.Hours(1); }
     }
 
     public bool Sealed(Room room) { foreach (var s in _seals) if (s.room == room.Id) return true; return false; }
@@ -1278,8 +1379,7 @@ public sealed partial class WaysSystem
             if (w.Tick - t.Chosen > SimTime.Minutes(way.Minutes * 3f + 40f))
             {
                 var c = w.Crew.FirstOrDefault(x => x.Id == t.CrewId);
-                if (t.Helper) { t.State = 3; continue; }
-                Finish(t, false, "끝내 손을 못 댔다", c);
+                Cancel(t, "끝내 손을 못 댔다");
             }
             else if (w.Crew.FirstOrDefault(x => x.Id == t.CrewId) is CrewMember c2 && !c2.CanAct) { t.State = 3; t.Result = "쓰러졌다"; }
         }
