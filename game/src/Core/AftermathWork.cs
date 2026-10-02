@@ -86,7 +86,7 @@ public sealed partial class AftermathSystem
             if (lm.Moved < 0 && w.Tick - lm.Asked < SimTime.Hours(12))
                 Consider(new AfterTask(AfterTaskKind.Lamp, shift ? 0.25f : 0.46f, "작업등 불빛이 눈부시다 — 선실의 등을 가져온다", lm));
             else if (lm.Active && lm.WantBack && lm.Carrying < 0)
-                Consider(new AfterTask(AfterTaskKind.LampBack, (shift ? 0.15f : 0.3f) + (bed ? 0.25f : 0f), "조명이 돌아왔다 — 등을 선실로 가져간다", lm));
+                Consider(new AfterTask(AfterTaskKind.LampBack, (shift ? 0.18f : 0.36f) + (bed ? 0.3f : 0f), "조명이 돌아왔다 — 등을 선실로 가져간다", lm));
         }
         // 4) 불탄 그림 다시 그리기 — 그림 그리는 사람 (만든 사람이 살아 있으면 하루는 그 사람 몫)
         if (!shift && !bed && c.Hobbies.Contains(Hobby.Painting))
@@ -237,7 +237,12 @@ public sealed partial class AftermathSystem
             {
                 var prop = w.Props.Placed.FirstOrDefault(p => p.Id == lb.Prop);
                 var home = RoomById(lb.From);
-                if (prop == null || home == null || WalkNear(prop.At, dist) is not Cell pick || WalkNear(lb.Home, dist) is not Cell back) return null;
+                if (prop == null || home == null || WalkNear(prop.At, dist) is not Cell pick) return null;
+                // 제자리(침대 곁)에 못 가면 선실의 아무 빈칸에라도 (공사 중인 방)
+                Cell? back0 = WalkNear(lb.Home, dist);
+                if (back0 == null && c.Bed?.Room == home) foreach (var bc in c.Bed.Cells) if ((back0 = WalkNear(bc, dist)) != null) break;
+                if (back0 == null) foreach (var hc in home.Cells) if (w.Ship.IsWalkable(hc) && dist.Reachable(hc)) { back0 = hc; break; }
+                if (back0 is not Cell back) return null;
                 lb.ClaimedBy = c.Id;
                 toils.Add(new GotoToil(pick));
                 toils.Add(new DoToil((cm, world) => world.After.LiftLamp(cm, lb)));
@@ -278,10 +283,12 @@ public sealed partial class AftermathSystem
         Lines.Add(l);
         WetBeds.Remove(bed.Id);
         Stats.Hung++;
-        bool first = !Traces.Any(t => t.Kind == AfterTraceKind.DryHooks && t.Room == room.Id && t.At == hook);
-        if (first)
-            AddTrace(new AfterTrace { Kind = AfterTraceKind.DryHooks, Room = room.Id, At = hook, Tick = w.Tick, Crew = c.Id, Event = $"{bed.Room.Name} 침수",
-                Text = $"{room.Name} 벽의 빨랫줄 고리 — {Ko.IGa(c.Name)} {bed.Room.Name} 물난리 때 박았다" });
+        // 빨랫줄 고리: 방마다 한 줄 (몇 개 · 누가 처음 박았나 · 어느 물난리)
+        var hooks = Traces.FirstOrDefault(t => t.Kind == AfterTraceKind.DryHooks && t.Room == room.Id);
+        if (hooks == null)
+            AddTrace(hooks = new AfterTrace { Kind = AfterTraceKind.DryHooks, Room = room.Id, At = hook, Tick = w.Tick, Crew = c.Id, Event = $"{bed.Room.Name} 침수" });
+        int n = Lines.Where(x => x.Room == room.Id).Select(x => x.Hook).Distinct().Count();
+        hooks.Text = $"{room.Name} 벽의 빨랫줄 고리 {n}개 — {Ko.IGa(Crew(hooks.Crew)?.Name ?? c.Name)} {bed.Room.Name} 물난리 때 처음 박았다";
         w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(c.Name)} 젖은 침구를 걷어 {room.Name} 벽에 줄을 매고 널었다 ({room.Air.Temperature:0}℃ · 습도 {room.Humidity * 100:0}%)", c.Id);
         MarkLog.Add(room.Marks, w.Tick, $"{owner.Name}의 침구를 널어 말림");
         if (Lines.Count > 30) Lines.RemoveAll(x => x.Done && w.Tick - x.Fetched > SimTime.TicksPerDay * 2);

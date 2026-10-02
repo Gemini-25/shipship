@@ -137,6 +137,8 @@ public sealed class EmptySeat
     public bool Cup { get; set; }
     public int CupBy { get; set; } = -1;
     public int Pauses { get; set; }
+    public int SatBy { get; set; } = -1;
+    public long SatAt { get; set; } = -1;
     public bool Active => Released < 0;
 }
 
@@ -414,7 +416,11 @@ public sealed partial class AftermathSystem
                 {
                     Stats.WetBeds++;
                     var owner = b.Owner ?? w.Crew.FirstOrDefault(c => c.Bed == b);
-                    if (owner != null && !owner.Dead) MarkLog.Add(b.Room.Marks, w.Tick, $"{owner.Name}의 침구가 물에 젖었다");
+                    if (owner != null && !owner.Dead)
+                    {
+                        MarkLog.Add(b.Room.Marks, w.Tick, $"{owner.Name}의 침구가 물에 젖었다");
+                        Impress(owner, DreamKind.Water, 0.3f, $"{b.Room.Name} 물난리", -1, b.Room.Id, $"wetbed:{b.Room.Id}:{SimTime.Day(w.Tick)}");
+                    }
                 }
                 WetBeds[b.Id] = 1f;
             }
@@ -598,8 +604,7 @@ public sealed partial class AftermathSystem
     {
         if (Off) return;
         var s = p.Spec;
-        if (!(s.Maker == Hobby.Painting || s.Kid || s.Shape is PropShape.Frame or PropShape.Poster)) return;
-        if (s.Id is "memorial" or "scorch") return;
+        if (s.Maker != Hobby.Painting) return; // 그림만 (사진 · 포스터 · 아이 그림은 다시 그리지 않는다)
         Burned.Add(new BurnedPic { Spec = s.Id, Room = room.Id, At = p.At, Maker = p.Maker, Tick = _w.Tick, Name = p.Name });
         Stats.Burned++;
         if (Burned.Count > 24) Burned.RemoveAt(0);
@@ -668,8 +673,11 @@ public sealed partial class AftermathSystem
             bool ready = su.Kind == 0 ? su.Uses >= 5 && su.Days.Count >= 2 : w.Tick - su.First > SimTime.Hours(36);
             if (!ready) continue;
             if (su.Kind == 1 && Lamps.FirstOrDefault(l => l.Id == su.Lamp) is { Stays: false } or null) continue;
-            var anchor = r.Furniture.Where(f => f.Type is FurnitureType.Table or FurnitureType.Seat or FurnitureType.GameTable && f.UseSpots.Count > 0).OrderBy(f => f.Id).FirstOrDefault()
-                         ?? r.Furniture.Where(f => f.UseSpots.Count > 0).OrderBy(f => f.Id).FirstOrDefault();
+            // 꾸밀 자리: 식탁 (앉은 사람이 비켜 줄 필요 없는 칸부터)
+            var anchor = r.Furniture.Where(f => f.UseSpots.Count > 0 && !f.Stowed)
+                .OrderBy(f => (f.Type == FurnitureType.Table ? 0 : f.Type == FurnitureType.GameTable ? 1 : f.Type == FurnitureType.Seat ? 3 : 2)
+                              + (w.Ship.FurnitureAt(f.UseSpots[0]) is { Type: FurnitureType.Seat } ? 2 : 0))
+                .ThenBy(f => f.Id).FirstOrDefault();
             if (anchor == null) { su.Plan = -2; continue; }
             // 낸 사람: 거기서 가장 많이 먹은 사람 (임시 식탁) · 등 주인 (옮겨 둔 등)
             CrewMember? by = null;

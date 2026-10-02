@@ -598,7 +598,7 @@ public sealed class RoomPlanSystem
         RoomPlanKind.MoveEngine => $"{Furn(p.FurnitureId)?.Label ?? "설비"}를 안쪽으로 옮기자 — 또 뚫리면 끝이다",
         RoomPlanKind.Move => $"{Furn(p.FurnitureId)?.Label ?? "설비"}를 옮기면 다니기 편하다",
         RoomPlanKind.Rename => $"'{p.NewName}' 어때? {p.Why}",
-        RoomPlanKind.Decorate => "내 자리를 조금 꾸미고 싶다",
+        RoomPlanKind.Decorate => p.Source == "겪은 일" ? $"{p.Why} — 아예 그렇게 두자" : "내 자리를 조금 꾸미고 싶다", // v17.5 굳은 임시 배치
         RoomPlanKind.Split => "사람이 늘었다 — 칸막이로 하나 더 만들자",
         RoomPlanKind.Merge => "빈 칸막이 방, 걷어서 넓게 쓰자",
         _ => p.Title,
@@ -661,7 +661,7 @@ public sealed class RoomPlanSystem
                 bool mate = Furn(p.FurnitureId) is Furniture bed && c.Bed?.Room == bed.Room;
                 s += 0.15f + (mate ? 0f : 0.05f);
                 if (c.Habits.Contains(Habit.NeatFreak) && mate) { s -= 0.35f; why = "방이 어수선해진다"; }
-                else why = "자기 자리는 자기 마음대로";
+                else why = p.Source == "겪은 일" ? "며칠 그렇게 지내 봤다" : "자기 자리는 자기 마음대로"; // v17.5
                 break;
             }
             case RoomPlanKind.Split:
@@ -928,7 +928,8 @@ public sealed class RoomPlanSystem
                 }
                 if (t.Kind == RoomTaskKind.Haul && c.Vitals.Injury > 0.35f) continue;
                 if (t.Kind is RoomTaskKind.Disconnect or RoomTaskKind.Reconnect && p.Kind == RoomPlanKind.MoveEngine && c.SkillLevel(Skill.Electrical) + c.SkillLevel(Skill.Engineering) < 0.5f) continue;
-                if (t.Kind == RoomTaskKind.Decorate && c.Id != p.Proposer) continue;
+                bool bedDeco = t.Kind == RoomTaskKind.Decorate && Furn(p.FurnitureId)?.Type is FurnitureType.Bed or FurnitureType.Cot; // v17.5 침대 곁만 낸 사람 몫 (함께 쓰는 방은 누구나)
+                if (bedDeco && c.Id != p.Proposer) continue;
                 if (AtFor(t, helper, dist) is not Cell spot) continue;
                 float s = shift ? 0.38f + 0.14f * c.Traits.Diligence : 0.12f + 0.1f * c.Traits.Diligence;
                 if (p.Proposer == c.Id) s += 0.12f;
@@ -936,7 +937,7 @@ public sealed class RoomPlanSystem
                 else if (p.Against.Contains(c.Id)) s -= 0.08f;
                 if (t.Kind is RoomTaskKind.Disconnect or RoomTaskKind.Reconnect or RoomTaskKind.Wall && c.Role is CrewRole.Technician or CrewRole.Engineer or CrewRole.Electrician) s += 0.08f;
                 if (helper) s += 0.16f; // 누가 기다린다
-                if (t.Kind == RoomTaskKind.Decorate) s = 0.3f + 0.2f * c.Needs.Stress;
+                if (bedDeco) s = 0.3f + 0.2f * c.Needs.Stress;
                 s -= 0.25f * c.Needs.Stress + (tired ? 0.25f : 0f);
                 s -= 0.002f * MathF.Min(100, dist.Get(spot));
                 string why = helper ? (t.Kind == RoomTaskKind.Haul ? $"{Crew(t.Leader)?.Name ?? "누가"} 같이 들어 달란다 — {Furn(t.FurnitureId)?.Label}" : $"{p.Title} — 거든다")
@@ -1301,8 +1302,8 @@ public sealed class RoomPlanSystem
                 }
                 Stats.Decorated++;
                 c.Needs.Stress = MathF.Max(0f, c.Needs.Stress - 0.08f);
-                w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(c.Name)} 침대 곁에 {Ko.EulReul(placed.Name)} 걸었다 — {p.Why}", c.Id);
-                Life.Diary(w, c, Persona.Say(c, $"침대 곁에 {Ko.EulReul(placed.Name)} 걸었다. 이제 좀 내 자리 같다."));
+                w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(c.Name)} {(f.Type is FurnitureType.Bed or FurnitureType.Cot ? "침대 곁에" : $"{room.Name}에")} {Ko.EulReul(placed.Name)} {(placed.Spec.Shape == PropShape.Rug ? "깔았다" : placed.Spec.Shape == PropShape.Lamp ? "놓았다" : "걸었다")} — {p.Why}", c.Id);
+                Life.Diary(w, c, Persona.Say(c, f.Type is FurnitureType.Bed or FurnitureType.Cot ? $"침대 곁에 {Ko.EulReul(placed.Name)} 걸었다. 이제 좀 내 자리 같다." : $"{room.Name}에 {Ko.EulReul(placed.Name)} 두었다. 그 며칠이 이렇게 남는다."));
                 break;
             }
         }

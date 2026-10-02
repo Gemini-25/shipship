@@ -233,7 +233,7 @@ public sealed partial class AftermathSystem
             * (c.Room != null && c.Room.Noise > 0.3f ? 1.15f : 1f)
             * (1f - 4f * Props.SleepAdd(c.Room));
         float I = total * sens;
-        float p = Math.Clamp(I - 0.12f, 0f, 0.85f);
+        float p = Math.Clamp(I - 0.08f, 0f, 0.85f);
         Dream? d = null;
         if (top != null && p > 0f && R.Chance(p))
         {
@@ -391,8 +391,18 @@ public sealed partial class AftermathSystem
                 m.LastEatJob = j;
                 if (r.Kind == RoomType.Mess) AteAtMess(c, m, r);
             }
+            else if (r.Kind == RoomType.Mess && Seats.Count > 0)
+            {
+                // 신입이 아직 그 의자에 앉아 있다: 아는 사람이 들어오면 그때 이야기한다
+                foreach (var es in Seats)
+                {
+                    if (!es.Active || es.Room != r.Id || es.Knew.Contains(c.Id)) continue;
+                    if (r.Furniture.FirstOrDefault(f => f.Id == es.Seat) is Furniture sf && (sf.UseSpots.Contains(c.Cell) || sf.Cells.Contains(c.Cell))) SeatTaken(c, sf, r);
+                }
+            }
             Breakfast(c, m, r);
         }
+        if (Seats.Count > 0) LaterTell();
         // 혼자 먹기는 날이 갈수록 옅어진다
         float day = Every / (float)SimTime.TicksPerDay;
         foreach (var (_, m) in Minds) if (m.Withdraw > 0f) m.Withdraw = MathF.Max(0f, m.Withdraw - 0.16f * day);
@@ -439,6 +449,60 @@ public sealed partial class AftermathSystem
     }
 
     /// <summary>떠난 사람의 의자에 누가 앉았다: 모르는 신입이면 가까웠던 사람이 그 사람 이야기를 한다 · 날이 지나면 자리를 내준다.</summary>
+    /// <summary>신입에게 그 의자의 주인 이야기를 한다 (그 자리에서 · 나중에 마주쳤을 때).</summary>
+    private void TellNewcomer(EmptySeat es, CrewMember c, CrewMember teller, Room r, bool later)
+    {
+        var w = _w;
+        var dead = Crew(es.Crew);
+        float days = (w.Tick - es.Since) / (float)SimTime.TicksPerDay;
+        Stats.NewcomerTold++;
+        es.SatBy = -1;
+        bool keep = (teller.Habits.Contains(Habit.Superstitious) || teller.Habits.Contains(Habit.Serious)) && dead != null && teller.AffinityTo(dead) > 0.3f && days < 7f;
+        es.Knew.Add(c.Id);
+        string story = dead != null ? StoryOf(dead) : "";
+        string where = later ? "네가 앉았던 그 의자 말이야, " : "거기 ";
+        w.Relations.Remember(c, teller, RelationReason.TaughtMe, $"{es.Name} 이야기를 해 줬다");
+        Impress(c, DreamKind.Loss, 0.12f, $"{es.Name} 이야기", es.Crew, es.Room, $"told:{es.Crew}");
+        var seatRoom = RoomById(es.Room);
+        if (keep)
+        {
+            Stats.SeatsKept++;
+            teller.Say(w, Persona.Say(teller, $"{where}{es.Name} 자리였어. {story} — 한동안은 비워 두자"));
+            w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(teller.Name)} 신입 {c.Name}에게 그 의자가 {es.Name}의 자리였다고 일러 주었다 — 자리는 한동안 더 비워 두기로", teller.Id);
+        }
+        else
+        {
+            es.Released = w.Tick;
+            es.ReleasedTo = c.Id;
+            Stats.SeatsReleased++;
+            teller.Say(w, Persona.Say(teller, $"{where}{es.Name} 자리였어. {story} — 이제 네 자리 해"));
+            w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(teller.Name)} 신입 {c.Name}에게 {es.Name} 이야기를 해 주고 그 자리를 내주었다", teller.Id);
+            w.History.Add(w, HistoryKind.Memory, $"{es.Name}의 빈자리에 신입 {Ko.IGa(c.Name)} 앉게 되었다 — {Ko.IGa(teller.Name)} {es.Name} 이야기를 해 주었다", seatRoom ?? r, new[] { teller, c }, log: false);
+            foreach (var t in Traces) if (t.Kind == AfterTraceKind.EmptySeat && t.Item == es.Seat && !t.Gone) t.Text = $"{seatRoom?.Name}의 의자 — {es.Name}이 앉던 자리, 지금은 {c.Name}의 자리";
+        }
+        Life.Diary(w, c, Persona.Say(c, $"내가 앉은 의자가 {es.Name}의 자리였단다. {story}"));
+    }
+
+    /// <summary>아무도 못 본 사이 신입이 그 의자에 앉았었다: 아는 사람이 신입과 한방에 있게 되면 일러 준다.</summary>
+    private void LaterTell()
+    {
+        var w = _w;
+        foreach (var es in Seats)
+        {
+            if (!es.Active || es.SatBy < 0) continue;
+            if (w.Tick - es.SatAt > SimTime.Hours(30) || Crew(es.SatBy) is not CrewMember n || n.Dead || es.Knew.Contains(n.Id)) { es.SatBy = -1; continue; }
+            if (!n.IsAwake || n.Room is not Room r) continue;
+            var dead = Crew(es.Crew);
+            CrewMember? teller = null;
+            foreach (var o in w.Crew)
+            {
+                if (o == n || o.Dead || !es.Knew.Contains(o.Id) || o.Room != r || !o.IsAwake || o.IsChild || o.Job?.Urgent == true) continue;
+                if (teller == null || dead != null && o.AffinityTo(dead) > teller.AffinityTo(dead)) teller = o;
+            }
+            if (teller != null) TellNewcomer(es, n, teller, r, true);
+        }
+    }
+
     private void SeatTaken(CrewMember c, Furniture seat, Room r)
     {
         var w = _w;
@@ -456,29 +520,8 @@ public sealed partial class AftermathSystem
                     if (o == c || o.Dead || !es.Knew.Contains(o.Id) || o.Room != r || !o.IsAwake || o.IsChild) continue;
                     if (teller == null || (dead != null && o.AffinityTo(dead) > teller.AffinityTo(dead))) teller = o;
                 }
-                if (teller == null) return;
-                Stats.NewcomerTold++;
-                bool keep = (teller.Habits.Contains(Habit.Superstitious) || teller.Habits.Contains(Habit.Serious)) && dead != null && teller.AffinityTo(dead) > 0.3f && days < 7f;
-                es.Knew.Add(c.Id);
-                string story = dead != null ? StoryOf(dead) : "";
-                w.Relations.Remember(c, teller, RelationReason.TaughtMe, $"{es.Name} 이야기를 해 줬다");
-                Impress(c, DreamKind.Loss, 0.12f, $"{es.Name} 이야기", es.Crew, r.Id, $"told:{es.Crew}");
-                if (keep)
-                {
-                    Stats.SeatsKept++;
-                    teller.Say(w, Persona.Say(teller, $"거기는 {es.Name} 자리였어. {story} — 오늘은 앉아, 다음엔 저쪽에"));
-                    w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(teller.Name)} 신입 {c.Name}에게 그 의자가 {es.Name}의 자리였다고 일러 주었다 — 자리는 한동안 더 비워 두기로", teller.Id);
-                }
-                else
-                {
-                    es.Released = w.Tick;
-                    es.ReleasedTo = c.Id;
-                    Stats.SeatsReleased++;
-                    teller.Say(w, Persona.Say(teller, $"거기 {es.Name} 자리였어. {story} — 이제 네 자리 해"));
-                    w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(teller.Name)} 신입 {c.Name}에게 {es.Name} 이야기를 해 주고 그 자리를 내주었다", teller.Id);
-                    w.History.Add(w, HistoryKind.Memory, $"{es.Name}의 빈자리에 신입 {Ko.IGa(c.Name)} 앉게 되었다 — {Ko.IGa(teller.Name)} {es.Name} 이야기를 해 주었다", r, new[] { teller, c }, log: false);
-                    foreach (var t in Traces) if (t.Kind == AfterTraceKind.EmptySeat && t.Item == es.Seat && !t.Gone) t.Text = $"{r.Name}의 의자 — {es.Name}이 앉던 자리, 지금은 {c.Name}의 자리";
-                }
+                if (teller == null) { es.SatBy = c.Id; es.SatAt = w.Tick; return; } // 아무도 못 봤다 — 나중에 누가 듣고 일러 준다
+                TellNewcomer(es, c, teller, r, false);
                 return;
             }
             if (c.Id == es.Crew) return;
