@@ -351,7 +351,7 @@ public sealed partial class Body2System
             l.LastCut = CutResult.Singed; l.CutAt = w.Tick; l.CutBy = -1;
             Stats.Singed++;
             w.Brain2.Emotions.Feel(c, Feeling.Fear, 0.12f, "불길에 머리카락이 그을렸다");
-            w.Log.Add(w.Tick, LogKind.Warning, $"불길에 머리카락이 그을렸다 ({lost:0}cm · 탄내)", c.Id);
+            w.Log.Add(w.Tick, LogKind.Warning, "불길에 머리카락 끝이 그을렸다 — 탄내가 난다", c.Id);
             MarkLog.Add(c.Memory.Marks, w.Tick, "불 곁에서 머리카락이 그을렸다");
             return;
         }
@@ -371,7 +371,7 @@ public sealed partial class Body2System
             wv.BaseLeak *= 1f + (m >= FitWarnKg ? 0.25f * k : m <= -FitWarnKg ? 0.15f * k : 0f) + (beard ? 0.12f : 0f);
             l.LeakBoosted = true;
             Stats.MisfitEva++;
-            wv.Notes.Add(m >= FitWarnKg ? $"꽉 끼는 채로 선외 ({m:+0.0}kg)" : m <= -FitWarnKg ? $"헐렁한 채로 선외 ({m:+0.0}kg)" : "수염이 목 고리에 끼었다");
+            wv.Notes.Add(m >= FitWarnKg ? "몸에 꽉 끼는 채로 밖에 나갔다" : m <= -FitWarnKg ? "헐렁한 채로 밖에 나갔다" : "수염이 목 고리에 끼었다");
         }
         if (m >= FitWarnKg)
         {
@@ -406,7 +406,7 @@ public sealed partial class Body2System
         c.Say(w, Persona.Say(c, m > 0 ? (grumbler ? "누가 우주복을 줄여 놨어? …아, 내가 찐 거구나" : "우주복이 꽉 끼네…") : "우주복이 헐렁하다 — 살이 많이 빠졌나"));
         c.Needs.Stress = MathF.Min(1f, c.Needs.Stress + 0.03f);
         if (m > 0) w.Brain2.Emotions.Feel(c, grumbler ? Feeling.Anger : Feeling.Shame, 0.08f, "우주복이 꽉 낀다");
-        w.Log.Add(w.Tick, LogKind.Life, $"우주복이 {(m > 0 ? "꽉 낀다" : "헐렁하다")} — 맞춘 치수 {l.SuitKg:0}kg · 지금 {l.Kg:0}kg", c.Id);
+        w.Log.Add(w.Tick, LogKind.Life, m > 0 ? "우주복이 꽉 낀다 — 허리 고리가 겨우 잠긴다" : "우주복이 헐렁하다 — 어깨끈을 끝까지 조여도 남는다", c.Id);
     }
 
     // ─────────────────────────────── 주 컴퓨터 ───────────────────────────────
@@ -493,7 +493,7 @@ public sealed partial class Body2System
             if (trust >= 0.45f)
             {
                 Stats.Heeded++;
-                if (up) w.Brain2.Goals.Push(c, "body:trim", "몸을 좀 움직이자", "주 컴퓨터가 체중 추세를 알렸다", ActCat.Hobby, 72f, 1.2f);
+                if (up) w.Brain2.Goals.Push(c, "body:trim", "몸을 좀 움직이자", "주 컴퓨터가 몸무게가 늘고 있다고 알렸다", ActCat.Hobby, 72f, 1.2f);
                 Life.Diary(w, c, Persona.Say(c, up ? "컴퓨터가 체중이 늘었다고 한다. 좀 뛰어야겠다" : "컴퓨터가 끼니를 챙기라고 한다"));
             }
             else
@@ -765,7 +765,7 @@ public sealed partial class Body2System
             client.Say(w, Persona.Say(client, res == CutResult.Botched ? "뒷머리가… 거울로는 안 보인다" : "혼자 잘랐는데 그럭저럭"));
             if (res == CutResult.Botched) w.Brain2.Emotions.Feel(client, Feeling.Shame, 0.1f, "혼자 자른 머리가 삐뚤빼뚤하다");
             Life.Diary(w, client, Persona.Say(client, "아무도 안 잘라 줘서 혼자 머리를 잘랐다."));
-            w.Log.Add(w.Tick, LogKind.Life, $"혼자 머리를 잘랐다 ({Name(res)})", client.Id);
+            w.Log.Add(w.Tick, LogKind.Life, res == CutResult.Botched ? "거울 보며 혼자 머리를 잘랐다 — 뒷머리가 삐뚤빼뚤하다" : "거울 보며 혼자 머리를 잘랐다", client.Id);
             return res;
         }
         var rel = w.Relations;
@@ -806,9 +806,10 @@ public sealed partial class Body2System
             if (o != client && _seen.TryGetValue(Pair(o.Id, client.Id), out var imp)) { imp.HairCm = l.HairCm; imp.CutAt = l.CutAt; imp.Uneven = l.Uneven; }
         }
         if (_seen.TryGetValue(Pair(barber.Id, client.Id), out var bi)) { bi.HairCm = l.HairCm; bi.CutAt = l.CutAt; bi.Uneven = l.Uneven; }
-        w.Log.Add(w.Tick, LogKind.Life, $"{client.Name}의 머리를 잘라 줬다 — {Name(res)} ({before:0}→{l.HairCm:0}cm)", barber.Id);
+        string how = res switch { CutResult.Neat => "말끔하게", CutResult.Fair => "그럭저럭", _ => "한쪽이 짧게 삐뚤빼뚤" };
+        w.Log.Add(w.Tick, LogKind.Life, $"덥수룩하던 {client.Name}의 머리를 {how} 잘라 줬다", barber.Id);
         if (l.Cuts == 1 && bl.CutsGiven <= 2)
-            w.History.Add(w, HistoryKind.Bond, $"{Ko.IGa(barber.Name)} {client.Name}의 머리를 처음 잘라 줬다 — {Name(res)}", client.Room, new[] { barber, client });
+            w.History.Add(w, HistoryKind.Bond, $"{Ko.IGa(barber.Name)} {client.Name}의 머리를 처음 {how} 잘라 줬다", client.Room, new[] { barber, client });
         return res;
     }
 
@@ -849,7 +850,7 @@ public sealed partial class Body2System
         l.FitOrder = false;
         l.FitKnown = false;
         Stats.FitAdjusts++;
-        w.Log.Add(w.Tick, LogKind.Work, $"우주복 치수를 {l.SuitKg:0}kg에 맞춰 조정했다 ({m:+0.0;-0.0}kg 차이 · 어깨끈 · 몸통 고리 · 목 고리)", c.Id);
+        w.Log.Add(w.Tick, LogKind.Work, m > 0 ? "우주복이 끼어서 허리 고리와 어깨끈을 늘렸다" : "우주복이 헐렁해서 어깨끈과 몸통 고리를 줄였다", c.Id);
         if (w.Automation.Present && w.Automation.MainOnline) l.KnownKg = l.SuitKg;
     }
 

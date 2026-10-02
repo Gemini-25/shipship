@@ -195,12 +195,9 @@ public partial class LabelOverlay : Node2D
                     sc, new Color(0.08f, 0.03f, 0.04f, 0.9f), sc.WithAlpha(0.6f));
                 continue;
             }
-            string text = selected || hovered ? $"{c.Name} · {c.ActivityLabel}" : c.ActivityLabel;
+            // v17.1 글자 딱지 → [행동 아이콘 | 감정 그림] (글자는 가까이 확대했을 때만)
             bool emergency = Severity.Notable(c) && crisis;
-            Gfx.Pill(this, emergency ? Fonts.Bold : Fonts.Body, center, text, zoom < 0.7f ? 10 : 11,
-                selected || hovered ? Palette.Text : col.Lightened(0.25f),
-                new Color(0.04f, 0.055f, 0.08f, 0.82f),
-                col.WithAlpha(selected || emergency ? 0.8f : 0.3f));
+            HeadBadge.Draw(this, _world, c, center, zoom, selected, hovered, emergency, col, _time);
         }
     }
 

@@ -170,9 +170,11 @@ public partial class ShipView
         var w = _world;
         var emo = w.Brain2.Emotions;
         bool detail = Zoom >= 0.9f;
+        bool crisis = Severity.Crisis(w);
         foreach (var c in w.Crew)
         {
             if (c.Dead || c.Down || c.CarriedBy != null || c.Away) continue;
+            if (HeadBadge.Shown(w, c, Zoom, _main.SelectedCrew == c, _main.HoveredCrew == c, crisis)) continue; // v17.1 머리 위 딱지 안에 함께 그린다
             if (emo.Dominant(c, 0.22f) is not { } d) continue;
             if (d.f == Feeling.Anger && c.Mind.Anger > 0.5f && !detail) continue; // 멀리서는 Mind 배지(#)와 겹치지 않게
             float r = CrewRadius;
