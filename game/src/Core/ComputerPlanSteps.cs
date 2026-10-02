@@ -276,7 +276,7 @@ public static class FixSteps
             o.Min = work * 0.8f + 5f + (havePart ? 0f : 40f); o.Max = work * 1.3f + 20f + (havePart ? 0f : 120f);
             o.Risk = MathF.Max(0f, 0.45f - skill) * 0.4f; // 손이 서툴면 다시 해야 할 수 있다
             if (who == null) { o.Allowed = false; o.Blocked = "맡을 사람이 없다"; }
-            o.Success = $"{m.Name}이(가) 다시 돌고 20분 버틴다";
+            o.Success = $"{Ko.IGa(m.Name)} 다시 돌고 20분 버틴다";
             o.Abort = "방이 위험해진다 · 부품이 없다";
             o.Needs = (havePart ? "" : "부품 · ") + $"{(who != null ? who.Name : "누군가")} {m.Spec.Skill switch { Skill.Electrical => "전기", Skill.Mechanics => "기계", _ => Skills.Name(m.Spec.Skill) }} 손";
             o.After = key == "best" ? "그 사람이 하던 일이 밀린다" : "더 오래 걸릴 수 있다";
@@ -380,7 +380,7 @@ internal sealed class PartStep : FixAction
         var need = Need(w, _furn);
         var missing = need.Where(x => w.Ship.CountStored(x.kind) < x.count).Select(x => ItemKinds.Name(x.kind)).ToList();
         if (missing.Count == 0) { s.Note = "부품이 생겼다"; return FixState.Done; }
-        s.Waiting = $"{string.Join("·", missing)}이(가) 오기를 기다림 — 사람은 아직 세우지 않는다";
+        s.Waiting = $"{Ko.IGa(string.Join("·", missing))} 오기를 기다림 — 사람은 아직 세우지 않는다";
         return FixState.Run;
     }
     public override string? Late(World w, FixPlan p, FixStep s) => "부품이 예상보다 늦다 — 감출력을 그대로 두고 기다린다";
@@ -412,7 +412,7 @@ internal sealed class RepairStep : FixAction
         var room = m.Body.Room;
         if (room.Leaking || w.Fire.IsKnown(room) || room.Air.O2 < 15f) return "방이 위험하다 — 사람을 들여보내지 않는다";
         var miss = m.Faults.Where(f => f.Kind != FaultKind.BreakerTrip).SelectMany(f => f.Materials).Where(x => w.Ship.CountStored(x.kind) < x.count).ToList();
-        if (miss.Count > 0 && !m.Faults.Any(f => f.Stageable)) return $"{ItemKinds.Name(miss[0].kind)}이(가) 없다 — 오기 전엔 사람을 세우지 않는다";
+        if (miss.Count > 0 && !m.Faults.Any(f => f.Stageable)) return $"{Ko.IGa(ItemKinds.Name(miss[0].kind))} 없다 — 오기 전엔 사람을 세우지 않는다";
         return null;
     }
     public override void Begin(World w, FixPlan p, FixStep s)
@@ -447,9 +447,35 @@ internal sealed class RepairStep : FixAction
         }
         var o = Order(w, m);
         if (s.Crew < 0 && o != null && s.Took(w.Tick) >= 1f) Ask(w, p, s, m, null);
-        if (o?.Assignee is CrewMember on && on.Id != s.Crew) { s.Crew = on.Id; s.Note = $"{on.Name}이(가) 맡았다"; }
+        // 부탁한 사람이 안 온다: 잠들었거나 · 쓰러졌거나 · 20분이 넘도록 손대지 않았다 → 다른 사람에게 넘기고 다시 짠다
+        var asked = w.Crew.FirstOrDefault(c => c.Id == s.Crew);
+        bool working = asked != null && asked.Job?.Order == o;
+        if (s.Crew >= 0 && o != null && !working && (o.Assignee == null || o.Assignee == asked) && s.Late < 3
+            && (asked == null || !asked.CanAct || asked.Pose == Pose.Sleeping || w.Tick - s.Mark > SimTime.Minutes(20)) && Late(w, p, s) is string why)
+        {
+            s.Late++;
+            w.Automation.Recovery.Late++;
+            w.Automation.Recovery.Revise(p, why);
+        }
+        if (o?.Assignee is CrewMember on && on.Id != s.Crew)
+        {
+            var prev = w.Crew.FirstOrDefault(c => c.Id == s.Crew);
+            s.Crew = on.Id;
+            s.Note = $"{Ko.IGa(on.Name)} 맡았다";
+            if (prev != null && s.Took(w.Tick) > 2f)
+            {
+                // 하던 사람이 손을 놓았다 → 이어받은 사람의 속도로 남은 시간을 다시 잰다
+                var f0 = m.Faults.Where(f => f.Kind != FaultKind.BreakerTrip).OrderBy(f => f.OutputFactor).FirstOrDefault();
+                float left = (f0?.Spec.RepairHours ?? 1f) * 60f * (1.15f - 0.4f * on.SkillLevel(m.Spec.Skill)) * w.Automation.Review.Values.PaceOf(on.Id) * (1f - (o.Progress));
+                s.Min = s.Took(w.Tick) + left * 0.8f;
+                s.Max = s.Took(w.Tick) + left * 1.3f + 10f;
+                s.Late++;
+                w.Automation.Recovery.Late++;
+                w.Automation.Recovery.Revise(p, $"{Ko.IGa(prev.Name)} 손을 놓아 늦어진다 — {Ko.IGa(on.Name)} 이어받았다 · 남은 시간을 {left * 0.8f:0}~{left * 1.3f + 10f:0}분으로 다시 잰다");
+            }
+        }
         if (o?.Assignee != null) s.Waiting = "";
-        else if (s.Crew >= 0) s.Waiting = $"{w.Crew.FirstOrDefault(c => c.Id == s.Crew)?.Name ?? "?"}이(가) 오기를 기다림";
+        else if (s.Crew >= 0) s.Waiting = $"{Ko.IGa(w.Crew.FirstOrDefault(c => c.Id == s.Crew)?.Name ?? "?")} 오기를 기다림";
         // 현장에서 "안 된다" — 부품 · 길 · 위험
         if (o?.BlockedReason is string br && o.BlockedUntil > w.Tick && s.Took(w.Tick) > 3f)
         {
@@ -464,14 +490,14 @@ internal sealed class RepairStep : FixAction
         if (m == null) return null;
         var o = Order(w, m);
         if (o?.Assignee != null && o.Assignee.Id == s.Crew && o.Assignee.Job?.Order == o)
-            return $"{o.Assignee.Name}이(가) 고치는 중인데 예상보다 길다 — 감출력을 유지하며 기다린다";
+            return $"{Ko.IGa(o.Assignee.Name)} 고치는 중인데 예상보다 길다 — 감출력을 유지하며 기다린다";
         var late = w.Crew.FirstOrDefault(c => c.Id == s.Crew);
-        if (late != null) _late.Add(late.Id);
+        if (late != null) { _late.Add(late.Id); if (o != null) w.Board.Release(o, late); }
         var next = FixSteps.Hand(w, m, _late);
-        if (next == null) return late != null ? $"{late.Name}이(가) 늦는데 맡길 다른 사람이 없다 — 기다린다" : null;
+        if (next == null) return late != null ? $"{Ko.IGa(late.Name)} 늦는데 맡길 다른 사람이 없다 — 기다린다" : null;
         Ask(w, p, s, m, next);
         // 늦어진 만큼 시간 벌기 걸음은 그대로 (감출력 · 예비 펌프)
-        return late != null ? $"{late.Name}이(가) 늦다 — {next.Name}에게 넘기고, 감출력을 그만큼 더 유지한다" : $"아무도 안 왔다 — {next.Name}에게 부탁했다";
+        return late != null ? $"{Ko.IGa(late.Name)} 늦다 — {next.Name}에게 넘기고, 감출력을 그만큼 더 유지한다" : $"아무도 안 왔다 — {next.Name}에게 부탁했다";
     }
 }
 
@@ -666,10 +692,10 @@ internal sealed class CrankStep : FixAction
     {
         var d = D(w);
         if (d == null || d.Removed) { s.Note = "문이 없어졌다"; return FixState.Done; }
-        if (d.Openness < 0.1f) { s.Note = $"닫힘 확인 ({s.Took(w.Tick):0}분)"; return FixState.Done; }
+        if (d.Openness < 0.08f) { s.Note = $"닫힘 확인 ({s.Took(w.Tick):0}분)"; return FixState.Done; }
         if (!(w.Ship.Rooms.FirstOrDefault(r => r.Id == p.RoomId)?.Lockdown ?? false)) { s.Note = "새는 게 멎었다 — 닫을 까닭이 없어졌다"; return FixState.Done; }
         if (s.Crew < 0 && s.Took(w.Tick) >= 1f) Ask(w, p, s);
-        s.Waiting = s.Crew >= 0 ? $"{w.Crew.FirstOrDefault(c => c.Id == s.Crew)?.Name ?? "?"}이(가) 지렛대로 닫기를 기다림" : "손 닫기 일감을 기다림";
+        s.Waiting = s.Crew >= 0 ? $"{Ko.IGa(w.Crew.FirstOrDefault(c => c.Id == s.Crew)?.Name ?? "?")} 지렛대로 닫기를 기다림" : "손 닫기 일감을 기다림";
         return FixState.Run;
     }
     public override string? Late(World w, FixPlan p, FixStep s)
@@ -678,7 +704,7 @@ internal sealed class CrankStep : FixAction
         if (late != null) _late.Add(late.Id);
         Ask(w, p, s);
         var now = w.Crew.FirstOrDefault(c => c.Id == s.Crew);
-        return late != null && now != null && now != late ? $"{late.Name}이(가) 늦다 — {now.Name}에게 넘겼다" : "아직 아무도 못 닫았다 — 계속 부른다";
+        return late != null && now != null && now != late ? $"{Ko.IGa(late.Name)} 늦다 — {now.Name}에게 넘겼다" : "아직 아무도 못 닫았다 — 계속 부른다";
     }
 }
 

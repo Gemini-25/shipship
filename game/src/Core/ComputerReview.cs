@@ -103,12 +103,12 @@ public sealed class ComputerReview
         float actualMin = (w.Tick - _bTick) / (float)SimTime.Minutes(1);
         float drop = _bStart - p.BatteryPercent;
         float implied = _bOut / MathF.Max(0.01f, drop);
-        float ratio = Math.Clamp(implied / MathF.Max(1f, Nameplate()), 0.25f, 1.3f);
+        float ratio = Math.Clamp(implied / MathF.Max(1f, Nameplate()), 0.08f, 1.3f);
         float before = Values.BatteryFactor;
         // 같은 소모량으로 고쳐 본 예측 (평균 소모 기준)
         float avgDrain = _bOut / MathF.Max(0.01f, actualMin / 60f);
         float predAvg = 0.15f * Nameplate() * before / MathF.Max(0.05f, avgDrain) * 60f;
-        Values.BatteryFactor = Math.Clamp(before * 0.3f + ratio * 0.7f, 0.25f, 1.2f);
+        Values.BatteryFactor = Math.Clamp(Values.BatterySamples == 0 ? ratio : before * 0.4f + ratio * 0.6f, 0.08f, 1.2f); // 처음 잰 값은 그대로 믿는다
         Values.BatterySamples++;
         LastPredMin = predAvg;
         LastActualMin = actualMin;
@@ -163,7 +163,7 @@ public sealed class ComputerReview
         else if (p.State == "성공" && !risky && p.Problem == "냉각" && peak > 0f && peak < FixSteps.ScramC(w) - 60f) a.Manner.NudgeMargin(-0.02f, "여유가 넉넉히 남았다");
         Add(r, null);
         w.Log.Add(w.Tick, LogKind.Ship, $"{a.Voice.Call} 돌아봄: {p.Goal.Split(" — ")[0]} — {string.Join(" · ", r.Lines.Take(3))}");
-        if (lucky) w.History.Add(w, HistoryKind.Decision, $"주 컴퓨터가 돌아봤다 — {p.Name}은(는) 위험했는데 운이 좋았다. 다음에도 그렇게 하지는 않겠다고 적었다", w.Ship.Rooms.FirstOrDefault(x => x.Id == p.RoomId));
+        if (lucky) w.History.Add(w, HistoryKind.Decision, $"주 컴퓨터가 돌아봤다 — {Ko.EunNeun(p.Name)} 위험했는데 운이 좋았다. 다음에도 그렇게 하지는 않겠다고 적었다", w.Ship.Rooms.FirstOrDefault(x => x.Id == p.RoomId));
     }
 
     /// <summary>수순 선호 (점수에 더한다 — 작을수록 좋다): 여러 번 안정적으로 통한 것만 조금 앞세우고, 실패한 것은 뒤로. 운 좋은 성공은 세지 않는다.</summary>

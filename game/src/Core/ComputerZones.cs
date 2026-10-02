@@ -78,7 +78,7 @@ public sealed class ComputerZones
         };
         _alone[r.Id] = z;
         Episodes++;
-        if (a.CoreOnline) w.Log.Add(w.Tick, LogKind.Ship, $"{a.Voice.Call}: {r.Name}과(와) 끊겼습니다 — 그쪽 사정은 모릅니다. 구역 제어기가 마지막 방침({z.Policy})대로 버틴다고 봅니다");
+        if (a.CoreOnline) w.Log.Add(w.Tick, LogKind.Ship, $"{a.Voice.Call}: {Ko.WaGwa(r.Name)} 끊겼습니다 — 그쪽 사정은 모릅니다. 구역 제어기가 마지막 방침({z.Policy})대로 버틴다고 봅니다");
     }
 
     /// <summary>구역 제어기의 제한된 자율 (제자리 감지기만 · 원격 판단 없음).</summary>
@@ -134,10 +134,10 @@ public sealed class ComputerZones
             if (p.Step is FixStep s && s.State == FixState.Wait && s.Act.Valid > 0f && minutes > s.Act.Valid)
             {
                 Expired++;
-                a.Recovery.Replan(p, $"끊긴 {minutes:0}분 동안 미뤄 둔 '{s.Name}'은(는) 유효 시간({s.Act.Valid:0}분)이 지났다 — 하지 않고 상태부터 다시 본다");
+                a.Recovery.Replan(p, $"끊긴 {minutes:0}분 동안 미뤄 둔 {Ko.EunNeun(s.Name)} 유효 시간({s.Act.Valid:0}분)이 지났다 — 하지 않고 상태부터 다시 본다");
             }
-        string text = diffs.Count == 0 ? $"{r.Name}과(와) {minutes:0}분 만에 다시 이어졌다 — 대조해 보니 그대로다"
-            : $"{r.Name}과(와) {minutes:0}분 만에 다시 이어졌다 — 대조: {string.Join(" · ", diffs)}";
+        string text = diffs.Count == 0 ? $"{Ko.WaGwa(r.Name)} {minutes:0}분 만에 다시 이어졌다 — 대조해 보니 그대로다"
+            : $"{Ko.WaGwa(r.Name)} {minutes:0}분 만에 다시 이어졌다 — 대조: {string.Join(" · ", diffs)}";
         Reports.Add((w.Tick, r.Id, text));
         if (Reports.Count > 20) Reports.RemoveAt(0);
         if (a.CoreOnline)
@@ -217,7 +217,7 @@ public sealed class ComputerSelf
         if (cls is "켜고 끔" or "열고 닫음") Toggles++;
         var a = w.Automation;
         string name = t == CmdTarget.Breaker ? $"{PowerGrid.CircuitName(id)} 회로 차단기" : t == CmdTarget.Machine ? w.Ship.Furniture.FirstOrDefault(f => f.Id == id)?.Name ?? "설비" : t == CmdTarget.Reactor ? "원자로" : "그 대상";
-        string text = cls is "켜고 끔" or "열고 닫음" ? $"{name}을(를) 두 시간 안에 {list.Count}번 {cls}했다 — 오락가락한다" : $"{name}에 같은 명령({what})을 두 시간 안에 {list.Count}번 보냈다";
+        string text = cls is "켜고 끔" or "열고 닫음" ? $"{Ko.EulReul(name)} 두 시간 안에 {list.Count}번 {cls}했다 — 오락가락한다" : $"{name}에 같은 명령({what})을 두 시간 안에 {list.Count}번 보냈다";
         Notes.Add((w.Tick, text + " — 멈추고 원인을 본다"));
         if (Notes.Count > 20) Notes.RemoveAt(0);
         a.Book.Add(ActKind.Check, room, text, "되풀이해도 낫지 않는다 — 명령이 아니라 원인이 문제다", "한 시간 동안 이 명령을 멈췄다", "사람이 가서 원인을 봐 달라", "self:" + key, SimTime.Hours(1), 60f);
@@ -276,7 +276,7 @@ public sealed class ComputerSelf
         {
             Moved = true;
             Relocations++;
-            Say($"{room!.Name}이(가) 위험하다 — 지금 계획 · 명령 상태를 예비 연산기로 넘긴다 (보낸 명령은 다시 보내지 않는다)");
+            Say($"{Ko.IGa(room!.Name)} 위험하다 — 지금 계획 · 명령 상태를 예비 연산기로 넘긴다 (보낸 명령은 다시 보내지 않는다)");
         }
         else if (!danger && Moved) { Moved = false; Say("주컴퓨터실이 안전해졌다 — 본체로 되돌린다"); }
         // 센서망 단절: 확신을 낮추고 순찰을 부탁한다

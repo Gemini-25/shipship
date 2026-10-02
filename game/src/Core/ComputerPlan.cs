@@ -198,6 +198,7 @@ public sealed class FixBook
         {
             var m = f.Machine!;
             if (!w.Power.ReactorOnline || m.Faults.Count == 0 || m.Faults.All(x => x.OutputFactor >= 0.9f)) continue;
+            if (m.Faults.Where(x => x.OutputFactor < 0.9f).Max(x => x.Since) > w.Tick - 2 * World.SystemInterval) continue; // 계기 값이 들어온 뒤에 (냉각 수치가 고장을 반영한 다음)
             if (For($"냉각:{f.Id}") != null || Recent($"냉각:{f.Id}", 20f)) continue;
             FixSteps.MakeCooling(w, this, f);
             if (++open >= 5) return;
@@ -208,7 +209,7 @@ public sealed class FixBook
             if (!r.Lockdown || !a.DoorsIn(r)) continue;
             foreach (var d in r.Doors)
             {
-                if (!d.Locked || d.Openness < 0.3f || d.IsExternal || d.Removed || d.HoldOpen) continue;
+                if (!d.Locked || d.Openness < 0.1f || d.IsExternal || d.Removed || d.HoldOpen) continue; // 10% 넘게 열려 있으면 기밀이 안 된다
                 if (!FixSteps.DoorStuck(w, d)) continue;
                 if (For($"문:{d.Id}") != null || Recent($"문:{d.Id}", 15f)) continue;
                 FixSteps.MakeDoor(w, this, d, r);
@@ -236,14 +237,14 @@ public sealed class FixBook
         {
             if (!r.Lockdown) continue;
             foreach (var d in r.Doors)
-                if (d.Locked && d.Openness >= 0.05f && !d.IsExternal && !d.Removed && !DoorSeen.ContainsKey(d.Id)) DoorSeen[d.Id] = w.Tick;
+                if (d.Locked && d.Openness >= 0.08f && !d.IsExternal && !d.Removed && !DoorSeen.ContainsKey(d.Id)) DoorSeen[d.Id] = w.Tick;
         }
         if (DoorSeen.Count == 0) return;
         List<int>? gone = null;
         foreach (var (id, seen) in DoorSeen)
         {
             var d = w.Ship.Doors.FirstOrDefault(x => x.Id == id);
-            if (d != null && d.Locked && d.Openness >= 0.05f) continue;
+            if (d != null && d.Locked && d.Openness >= 0.08f) continue;
             if (d != null && d.Locked && For($"문:{id}") == null) w.Automation.Review.DoorClosed((w.Tick - seen) * 3600f / SimTime.TicksPerHour);
             (gone ??= new()).Add(id);
         }
@@ -388,7 +389,7 @@ public sealed class FixBook
         else Finish(p, "중단", why);
     }
 
-    internal void Finish(FixPlan p, string state, string why = "")
+    public void Finish(FixPlan p, string state, string why = "")
     {
         var w = _w;
         var a = w.Automation;
@@ -405,7 +406,7 @@ public sealed class FixBook
             : $"{p.Goal} — 이 계획은 접습니다 ({why}). 사람 판단에 맡깁니다";
         w.Log.Add(w.Tick, state == "성공" ? LogKind.Ship : LogKind.Warning, $"{a.Voice.Call}: {a.Manner.Speak(line)}");
         if (p.Elapsed(w.Tick) >= 20f) w.History.Add(w, state == "성공" ? HistoryKind.Response : HistoryKind.Decision,
-            state == "성공" ? $"주 컴퓨터가 짠 순서대로 {p.Goal.Split(" — ")[0]}을(를) 되살렸다 — {string.Join(" → ", p.Steps.Where(s => s.State == FixState.Done).Select(s => s.Name))}" : $"주 컴퓨터가 {p.Goal.Split(" — ")[0]} 계획을 접었다 — {why}",
+            state == "성공" ? $"주 컴퓨터가 짠 순서대로 {Ko.EulReul(p.Goal.Split(" — ")[0])} 되살렸다 — {string.Join(" → ", p.Steps.Where(s => s.State == FixState.Done).Select(s => s.Name))}" : $"주 컴퓨터가 {p.Goal.Split(" — ")[0]} 계획을 접었다 — {why}",
             w.Ship.Rooms.FirstOrDefault(r => r.Id == p.RoomId));
     }
 

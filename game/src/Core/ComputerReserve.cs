@@ -69,10 +69,11 @@ public sealed class ComputerReserve
             {
                 med = true;
                 float kw = 0f;
-                foreach (var f in medbay.Furniture) if (f.Machine is Machine m && m.Spec.PowerDraw > 0f) { _holdMachines.Add(f.Id); kw += m.Spec.PowerDraw; }
+                foreach (var f in w.Ship.RoomsOf(RoomType.Medbay).SelectMany(r => r.Furniture).Concat(w.Ship.FurnitureOf(FurnitureType.MedBed)))
+                    if (f.Machine is Machine m && m.Spec.PowerDraw > 0f && _holdMachines.Add(f.Id)) kw += m.Spec.PowerDraw;
                 var who = coming.OrderBy(c => c.Id).First();
-                Add("전력", $"{medbay.Name} 치료 침대 · 기기", kw, "kW", coming.Count == 1 ? $"{who.Name}{(who.CarriedBy != null ? "을(를) 업고 오는 중" : "이(가) 쓰러져 있다")}" : $"부상자 {coming.Count}명이 오는 중", medbay.Id);
-                if (!_since.ContainsKey("med")) { MedHolds++; w.Log.Add(w.Tick, LogKind.Ship, $"{a.Voice.Call}: {a.Manner.Speak($"{medbay.Name} 전기를 남겨 둡니다 — {(who.CarriedBy != null ? $"{who.Name}을(를) 옮기는 중" : $"{who.Name}이(가) 쓰러져 있다")}")}"); }
+                Add("전력", $"{medbay.Name} 치료 침대 · 기기", kw, "kW", coming.Count == 1 ? (who.CarriedBy != null ? $"{Ko.EulReul(who.Name)} 업고 오는 중" : $"{Ko.IGa(who.Name)} 쓰러져 있다") : $"부상자 {coming.Count}명이 오는 중", medbay.Id);
+                if (!_since.ContainsKey("med")) { MedHolds++; w.Log.Add(w.Tick, LogKind.Ship, $"{a.Voice.Call}: {a.Manner.Speak($"{medbay.Name} 전기를 남겨 둡니다 — {(who.CarriedBy != null ? $"{Ko.EulReul(who.Name)} 옮기는 중" : $"{Ko.IGa(who.Name)} 쓰러져 있다")}")}"); }
                 Mark("med");
             }
             else _since.Remove("med");
@@ -105,7 +106,7 @@ public sealed class ComputerReserve
                 if (o.Closed || o.Assignee != null || o.Kind != WorkKind.Repair || o.Furniture?.Type == type || o.Urgency >= 0.9f) continue;
                 if (o.Furniture?.Machine is not Machine om || !om.Faults.Any(f => f.Materials.Any(x => x.kind == part))) continue;
                 if (o.BlockedUntil > w.Tick) continue;
-                w.Board.Block(o, $"마지막 {ItemKinds.Name(part)}은(는) {FurnitureTypes.Name(type)} 몫으로 남긴다", 2f);
+                w.Board.Block(o, $"마지막 {Ko.EunNeun(ItemKinds.Name(part))} {FurnitureTypes.Name(type)} 몫으로 남긴다", 2f);
                 Blocks++;
                 PartHolds++;
             }

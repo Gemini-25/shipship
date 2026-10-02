@@ -95,7 +95,7 @@ public sealed class ComputerManner
         if (s.Understood.Add(t))
         {
             Nicks++;
-            _w.Log.Add(_w.Tick, LogKind.Ship, $"{_w.Automation.Voice.Call}: {c.Name}은(는) {FurnitureTypes.Name(t)}을(를) '{s.Nicknames[t]}'(이)라 부른다 — 알아듣고, {c.Name}에게는 그렇게 부르겠습니다");
+            _w.Log.Add(_w.Tick, LogKind.Ship, $"{_w.Automation.Voice.Call}: {Ko.EunNeun(c.Name)} {Ko.EulReul(FurnitureTypes.Name(t))} '{s.Nicknames[t]}'(이)라 부른다 — 알아듣고, {c.Name}에게는 그렇게 부르겠습니다");
         }
     }
 
@@ -107,7 +107,7 @@ public sealed class ComputerManner
         if (s.Corrections.Count > 8) s.Corrections.RemoveAt(0);
         CorrectionsHeard++;
         _w.Automation.Trusts.Change(c, 0.02f, "주 컴퓨터가 제 말을 받아들였다", quiet: true);
-        _w.Log.Add(_w.Tick, LogKind.Ship, $"{_w.Automation.Voice.Call}: {c.Name}이(가) 가서 본 대로 — {text}. 기억해 두겠습니다");
+        _w.Log.Add(_w.Tick, LogKind.Ship, $"{_w.Automation.Voice.Call}: {Ko.IGa(c.Name)} 가서 본 대로 — {text}. 기억해 두겠습니다");
     }
 
     /// <summary>이 사람에게 맞는 설명 방식.</summary>
@@ -150,7 +150,7 @@ public sealed class ComputerManner
             case "수치만": Experts++; text = $"{task} — {numbers} · {s.Min:0}~{s.Max:0}분"; break;
             case "순서와 이유":
                 Novices++;
-                text = $"{task}: 1) {(part != "" ? $"창고에서 {part}을(를) 챙긴다" : "공구를 챙긴다")} 2) 전원을 잠그고 손댄다 3) 끝나면 알려 준다 — 시험 운전은 제가 합니다. 까닭: {p.Goal.Split(" — ").Last()} — 늦을수록 배터리를 쓴다";
+                text = $"{task}: 1) {(part != "" ? $"창고에서 {Ko.EulReul(part)} 챙긴다" : "공구를 챙긴다")} 2) 전원을 잠그고 손댄다 3) 끝나면 알려 준다 — 시험 운전은 제가 합니다. 까닭: {p.Goal.Split(" — ").Last()} — 늦을수록 배터리를 쓴다";
                 break;
             default: text = $"{task}를 부탁합니다 — {p.Goal.Split(" — ").Last()} ({s.Min:0}~{s.Max:0}분)"; break;
         }

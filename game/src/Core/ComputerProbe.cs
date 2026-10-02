@@ -225,7 +225,7 @@ public sealed class ComputerProbe
             w.Log.Add(w.Tick, LogKind.Ship, $"{a.Voice.Call}: {t.Name} — {t.Result} ({string.Join(" · ", c.H.OrderByDescending(h => h.P).Select(h => $"{h.Name} {h.P * 100:0}%"))})");
         }
         // 충분히 가려졌나
-        if (c.Lead.P >= 0.75f) { Conclude(c, f); return; }
+        if (c.Lead.P >= (c.Lead.Key == "meter" ? 0.7f : 0.75f)) { Conclude(c, f); return; } // 되돌리기 쉬운 손(예비 센서로 바꿔 읽기)은 조금 덜 확실해도 쓴다
         // 다음 확인 고르기: 기대 정보 ÷ (값 + 위험)
         var done = c.Tries.Select(x => x.Key).ToHashSet();
         string? bestKey = null;
@@ -245,7 +245,7 @@ public sealed class ComputerProbe
         // 사람이 가서 보기: 오래 걸리지만 셋을 다 가린다 (정정해 준 적 있는 사람이면 더 믿는다)
         if (!done.Contains("crew"))
         {
-            float crewCost = 12f + (a.Recovery.Plans.Any(p => p.Open && p.Problem == "냉각") ? 6f : 0f);
+            float crewCost = 25f + (a.Recovery.Plans.Any(p => p.Open && p.Problem == "냉각") ? 10f : 0f); // 걸어가는 시간 + 하던 일을 놓는 값
             float g = Entropy(c.H.Select(h => h.P)) * 0.85f;
             if (g / (crewCost + 1f) > best || bestKey == null) { best = g / (crewCost + 1f); bestKey = "crew"; bestGain = g; bestCost = crewCost; }
         }
