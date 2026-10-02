@@ -220,6 +220,7 @@ public sealed partial class MotionSystem
         var final = new Dictionary<CrewMember, (float s, string why)>();
         // 앙금이 깊으면(골이 있으면) 비밀 투표로 한다
         if (m.Sitting != SittingKind.Regular || Factions.Count(f => !f.Gone) >= 2 && Grudges.Count(g => g.Until > w.Tick) >= 2) m.Secret = true;
+        foreach (var c in voters) m.Initial[c.Id] = Opinion(c, m).s;
         var (yes, no) = w.Meetings.Debate(voters, c => Opinion(c, m), c => Expertise(c, m), item, chair, final);
         foreach (var sp in item.Speeches) if (sp.Who != m.Proposer) lines.Add(new SittingLine(sp.Who, sp.Text, sp.For, LineRole.Speech));
         foreach (var kv in final) m.Final[kv.Key.Id] = kv.Value.s;
@@ -323,7 +324,7 @@ public sealed partial class MotionSystem
         int against = pass ? m.Proposer : lead?.Id ?? -1;
         foreach (var c in losers)
         {
-            if (MathF.Abs(m.Final.GetValueOrDefault(c.Id)) < 0.22f || c.Id == against) continue;
+            if (m.Care(c.Id) < 0.22f || c.Id == against) continue;
             AddGrudge(c, m, against, $"'{m.Title}' — {(pass ? "통과됐다" : "떨어졌다")}");
             if (!m.Secret && P(against) is CrewMember ag) w.Relations.Remember(c, ag, RelationReason.VotedAgainstMe, $"'{m.Title}' 때 반대편에 섰다");
         }
@@ -366,7 +367,7 @@ public sealed partial class MotionSystem
     private void Guess(Motion m, List<CrewMember> voters, List<CrewMember> losers, List<CrewMember> winners, CrewMember? subject = null)
     {
         var w = _w;
-        var guessers = subject != null ? new List<CrewMember> { subject } : losers.Where(c => MathF.Abs(m.Final.GetValueOrDefault(c.Id)) > 0.3f).Take(3).ToList();
+        var guessers = subject != null ? new List<CrewMember> { subject } : losers.Where(c => m.Care(c.Id) > 0.25f).Take(3).ToList();
         var spoke = m.Item!.Speeches.ToDictionary(s => s.Who, s => s.For);
         foreach (var g in guessers)
         {
@@ -401,7 +402,7 @@ public sealed partial class MotionSystem
     {
         var w = _w;
         if (voters.Count < 4) return;
-        var sides = new[] { true, false }.Select(pro => (pro, ids: voters.Where(c => pro ? m.Final.GetValueOrDefault(c.Id) > 0.12f : m.Final.GetValueOrDefault(c.Id) < -0.12f).Select(c => c.Id).OrderBy(i => i).ToList())).ToList();
+        var sides = new[] { true, false }.Select(pro => (pro, ids: voters.Where(c => (pro ? m.Final.GetValueOrDefault(c.Id) > 0f : m.Final.GetValueOrDefault(c.Id) <= 0f) && m.Care(c.Id) > 0.12f).Select(c => c.Id).OrderBy(i => i).ToList())).ToList();
         var touched = new HashSet<int>();
         // 표가 갈린 안건에서만 새 파벌이 생긴다 (양쪽 다 둘 이상) — 한쪽으로 쏠린 안건은 있던 파벌만 다시 뭉친다
         bool contested = sides.All(x => x.ids.Count >= 2);
@@ -456,7 +457,19 @@ public sealed partial class MotionSystem
 
     private string Nick(Motion m, bool pro, CrewMember leader)
     {
-        string[] names = (m.Policy, m.Kind) switch
+        int opt = pro ? m.To : m.Policy != "" ? _w.Policies[m.Policy] : -1;
+        string[] names = (m.Policy, opt) switch
+        {
+            ("privacy", 1) => new[] { "칸막이파", "문 닫는 쪽" }, ("privacy", _) => new[] { "한솥밥 쪽", "문 열어 두는 쪽" },
+            ("nightwatch", 2) => new[] { "푹 자자 쪽", "기계 당번 쪽" }, ("nightwatch", _) => new[] { "불침번파", "밤눈 쪽" },
+            ("violations", 1) => new[] { "원칙파", "호루라기 쪽" }, ("violations", 2) => new[] { "너그러운 쪽", "눈감자 쪽" }, ("violations", _) => new[] { "말로 하자 쪽", "경고파" },
+            ("leisure", 0) => new[] { "일벌레들", "일 먼저 쪽" }, ("leisure", _) => new[] { "쉬자 쪽", "느긋파" },
+            ("drills", 0) => new[] { "훈련 질린 쪽", "그만하자 쪽" }, ("drills", _) => new[] { "훈련파", "비상벨 쪽" },
+            ("conflict", 0) => new[] { "중재파", "가운데 쪽" }, ("conflict", 1) => new[] { "선장 말 쪽", "위계파" }, ("conflict", _) => new[] { "알아서 쪽", "각자파" },
+            ("memorial", 0) => new[] { "이름 부르는 쪽", "기억파" }, ("memorial", _) => new[] { "조용한 쪽", "묵념파" },
+            _ => Array.Empty<string>(),
+        };
+        if (names.Length == 0) names = (m.Policy, m.Kind) switch
         {
             ("rations", _) when m.To == 3 == pro => new[] { "허리띠파", "아껴 먹자 쪽", "창고지기네" },
             ("rations", _) => new[] { "밥그릇파", "한 숟갈 더 쪽", "제 몫 쪽" },
@@ -468,6 +481,7 @@ public sealed partial class MotionSystem
             (_, MotionKind.Crisis) => pro ? new[] { "당장 하자 쪽", "비상파" } : new[] { "두고 보자 쪽", "침착파" },
             (_, MotionKind.Practice) => pro ? new[] { "관행파", "손에 익히자 쪽" } : new[] { "각자 알아서 쪽", "자유파" },
             (_, MotionKind.Grievance) => pro ? new[] { "따지자 쪽", "들고일어난 쪽" } : new[] { "참자 쪽", "좋게 넘기자 쪽" },
+            (_, MotionKind.RuleChange) => pro ? new[] { "바꾸자 쪽", "새 규칙파" } : new[] { "그대로 쪽", "옛날 식 쪽" },
             _ => pro ? new[] { "밀자 쪽" } : new[] { "말리자 쪽" },
         };
         string name = R.Chance(0.3f) ? $"{leader.Name}네" : R.Pick(names);
@@ -627,6 +641,7 @@ public sealed partial class MotionSystem
         if (item.Computer != null) lines.Add(new SittingLine(-1, item.Computer, false, LineRole.Computer));
         if (cap != null) lines.Add(new SittingLine(cap.Id, Persona.Say(cap, "끝까지 맡겠다 — 한 번만 더 믿어 달라"), false, LineRole.Defense));
         var final = new Dictionary<CrewMember, (float s, string why)>();
+        foreach (var c in voters) m.Initial[c.Id] = Opinion(c, m).s;
         var (yes, no) = w.Meetings.Debate(voters, c => Opinion(c, m), CommandSystem.Leadership, item, chair, final);
         foreach (var sp in item.Speeches) lines.Add(new SittingLine(sp.Who, sp.Text, sp.For, LineRole.Speech));
         foreach (var kv in final) m.Final[kv.Key.Id] = kv.Value.s;

@@ -58,6 +58,10 @@ public sealed class Motion
     public int Winner { get; set; } = -1;
     public List<(int who, int about, bool thinksAgainst, bool truth)> Guesses { get; } = new();
     public Dictionary<int, float> Final { get; } = new();
+    /// <summary>설득 전 처음 생각 (얼마나 마음을 썼나).</summary>
+    public Dictionary<int, float> Initial { get; } = new();
+    /// <summary>얼마나 마음을 쓰나: 처음과 마지막이 같은 쪽이면 더 큰 쪽 (설득에 밀려 약해져도 처음 마음은 남는다).</summary>
+    public float Care(int id) { float f = Final.GetValueOrDefault(id); float i = Initial.GetValueOrDefault(id, f); return MathF.Sign(f) == MathF.Sign(i) ? MathF.Max(MathF.Abs(f), MathF.Abs(i)) : MathF.Abs(f); }
     /// <summary>이 안건에서 생기거나 다시 뭉친 파벌.</summary>
     public List<int> FactionIds { get; } = new();
     /// <summary>낸 사람이 회의에 없어 미룬 횟수.</summary>

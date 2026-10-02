@@ -92,8 +92,12 @@ public static partial class Program
                     w.Motions.Quiet = true;
                     var next = w.Motions.Propose(winner, MotionKind.Practice, SittingKind.Regular, "밥 먹기 전에 손을 씻자", "병이 한 사람씩 옮아 갔다", custom: CustomKind.HandWash);
                     var (s, why) = w.Motions.Opinion(holder, next);
+                    long until = g0.Until;
+                    g0.Until = w.Tick; // 앙금이 없었다면
+                    var (sNo, _) = w.Motions.Opinion(holder, next);
+                    g0.Until = until;
                     next.Stage = MotionStage.Dropped;
-                    Check("앙금 — 지난 안건에 진 사람은 이긴 쪽이 낸 다음 안건을 꺼린다", why.Contains("지난번") || s < 0f, $"{holder.Name} → {winner.Name}의 안건: {s:+0.00;-0.00} '{why}'");
+                    Check("앙금 — 지난 안건에 진 사람은 이긴 쪽이 낸 다음 안건을 꺼린다", s < sNo - 0.1f, $"{holder.Name} → {winner.Name}의 안건: 앙금 없으면 {sNo:+0.00;-0.00} · 지금 {s:+0.00;-0.00} '{why}'");
                 }
                 else Check("앙금 — 지난 안건에 진 사람은 이긴 쪽이 낸 다음 안건을 꺼린다", false, "불만 없음");
             }
