@@ -133,7 +133,7 @@ public static partial class Program
             double avg = on.Count == 0 ? 0 : on.Average(x => x.a.AfterMin);
             string by = string.Join(" · ", on.GroupBy(x => x.a.By.StartsWith("사람") ? "사람" : x.a.By).OrderBy(g => g.Key, StringComparer.Ordinal).Select(g => $"{g.Key} {g.Count()}"));
             int sev = rate < 0.5 ? 3 : avg > 20 ? 2 : 0;
-            return F(sev, eps.Count - on.Count, 1 - rate, $"정전/배터리 바닥 {eps.Count}번 중 보조 발전기 켬 {on.Count}번 ({rate * 100:0}%) · 켜기까지 평균 {avg:0}분 · 누가: {(by == "" ? "-" : by)}",
+            return F(sev, eps.Count - on.Count, 1 - rate, $"정전/배터리 바닥 {eps.Count}번 중 보조 발전기 켬 {on.Count}번 ({rate * 100:0}%) · 켜기까지 평균 {(on.Count == 0 ? "-" : $"{avg:0}분")} · 누가: {(by == "" ? "-" : by)}",
                 "ComputerTriage 보조 발전기 시동 · 사람 StartAux 작업이 정전 때 실제로 잡히는지", eps.Where(x => x.a.AfterMin < 0f || x.a.AfterMin > 20f).Select(x => $"{AuditCtx.Tag(x.r)} {Hr(x.a.Hour)} · {x.a.Why} {x.a.Minutes:0}분 · {(x.a.AfterMin < 0 ? "끝까지 안 켬" : $"{x.a.AfterMin:0}분 만에 {x.a.By}")}"));
         }),
         new("unused.room", "배에 있는데 아무도 안 쓴 방", true, c =>
@@ -336,11 +336,12 @@ public static partial class Program
         }),
         new("ship.weak", "배가 너무 약함", true, c =>
         {
-            var weak = c.Runs.Where(r => r.Crew > 0 && (r.Alive < r.Crew * 0.5 || r.RoomsLost >= Math.Max(2, r.RoomsTotal / 5))).ToList();
+            // 항해 중 태어나거나 합류한 사람이 있어 산 사람 수 대신 죽은 사람 수로 본다
+            var weak = c.Runs.Where(r => r.Crew > 0 && (r.Deaths.Count > r.Crew * 0.5 || r.RoomsLost >= Math.Max(2, r.RoomsTotal / 5))).ToList();
             double frac = weak.Count / (double)Math.Max(1, c.Runs.Count);
-            int dead = c.Runs.Sum(r => r.Crew - r.Alive), crew = c.Runs.Sum(r => r.Crew);
+            int dead = c.Runs.Sum(r => r.Deaths.Count), crew = c.Runs.Sum(r => r.Crew);
             return F(frac > 0.33 ? 3 : weak.Count > 0 ? 2 : 0, weak.Count, frac, $"절반 넘게 죽거나 방 1/5 넘게 잃은 항해 {weak.Count}/{c.Runs.Count} · 전체 사망 {dead}/{crew}명",
-                "선체 · 구조 · 연쇄 차단이 버티는지", weak.Select(r => $"{AuditCtx.Tag(r)} 생존 {r.Alive}/{r.Crew} · 잃은 방 {r.RoomsLost}/{r.RoomsTotal}"));
+                "선체 · 구조 · 연쇄 차단이 버티는지", weak.Select(r => $"{AuditCtx.Tag(r)} 사망 {r.Deaths.Count}/{r.Crew} · 잃은 방 {r.RoomsLost}/{r.RoomsTotal}"));
         }),
         new("death.total", "사망 원인", true, c =>
         {

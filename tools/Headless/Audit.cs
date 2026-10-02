@@ -138,7 +138,7 @@ public static partial class Program
         var prev = AuditPrevious(outDir, name);
         report.Previous = prev?.file;
         File.WriteAllText(Path.Combine(outDir, name + ".md"), AuditMarkdown(report, ctx, prev?.report));
-        File.WriteAllText(Path.Combine(outDir, name + ".json"), JsonSerializer.Serialize(report, new JsonSerializerOptions(AuditJson) { WriteIndented = true }));
+        File.WriteAllText(Path.Combine(outDir, name + ".json"), JsonSerializer.Serialize(report, AuditJson));
         Console.WriteLine();
         foreach (var line in AuditTop(report.Findings, 10)) Console.WriteLine(line);
         Console.WriteLine($"\n보고서: {Path.Combine(outDir, name + ".md")} · 항해 {report.Wall:0}초");
@@ -203,8 +203,9 @@ public static partial class Program
 
     private static readonly string[] AuditSevName = { "정보", "낮음", "보통", "높음", "치명" };
 
+    /// <summary>심각도 순, 같으면 규칙 표 순서 (표는 사람이 플레이하며 겪은 문제부터 — 사망 · 공황 · 고장 · 보조 발전기 · 쓰임 · 사고 · 자원 · 컴퓨터 · 글).</summary>
     private static IEnumerable<AFinding> AuditRank(List<AFinding> fs) =>
-        fs.Where(f => f.Sev >= 1).OrderByDescending(f => f.Sev).ThenByDescending(f => f.Count).ThenBy(f => f.Id, StringComparer.Ordinal);
+        fs.Where(f => f.Sev >= 1).OrderByDescending(f => f.Sev).ThenBy(f => fs.IndexOf(f));
 
     private static IEnumerable<string> AuditTop(List<AFinding> fs, int n)
     {
