@@ -324,6 +324,8 @@ public static partial class Program
             var w = DayOne(seed, "Hanbit");
             var cc = w.CrisisCrew;
             Incidents.Fire(w, CrFloor(w, RoomType.Galley));
+            // 통합: 장면 동안 위기가 이어지게 — 불 한 칸은 부엌에 있던 사람이 3분 안에 꺼 버리기도 한다 (공황이 끝날 까닭이 사고가 끝나서가 되지 않게)
+            foreach (var x in w.Ship.RoomsOf(RoomType.Galley).First().Cells.Where(w.Ship.IsOpenFloor).OrderBy(x => x.Y).ThenBy(x => x.X).Take(3)) w.Fire.Ignite(x, 0.8f);
             Run(w, SimTime.Minutes(3));
             var p = w.Crew.Where(c => !c.Dead && !c.IsChild && c.CanAct && cc.Active(c) != StationRole.Fire && c.Room?.Type != RoomType.Galley)
                 .OrderBy(c => c.Traits.Calm).First();
@@ -369,6 +371,9 @@ public static partial class Program
                 p.Mind.PanicUntil = w.Tick + SimTime.Minutes(8);
                 p.Mind.Frozen = true;
                 Incidents.Meteor(w, Scenarios.OuterTarget(w, room), 1f);
+                // 통합: 새 배의 외판은 운석 하나로 잘 안 뚫린다 (보강 · 장갑) — 장면은 "뚫린 방"이니 그 방 외벽을 확실히 뚫는다
+                if (!room.Leaking && w.Ship.Walls.Where(kv => kv.Value.IsHull && Hull.InsideRoom(w.Ship, kv.Key) == room).OrderBy(kv => (kv.Key.Center - p.Position).LengthSquared()).Select(kv => kv.Key).Cast<Cell?>().FirstOrDefault() is Cell hole)
+                    Hull.Damage(w.Ship, hole, 2f);
                 long t0 = w.Tick;
                 bool left = false;
                 while (w.Tick - t0 < SimTime.Minutes(6)) { Run(w, 15); if (p.Room != room) left = true; }

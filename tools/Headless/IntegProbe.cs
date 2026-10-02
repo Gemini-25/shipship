@@ -194,5 +194,18 @@ public static partial class Program
                 Console.WriteLine($"   {kname}: 죽음 {w.Crew.Count(c => c.Dead)}/{w.Crew.Count} · 쓰러짐 {w.History.Collapses} · 피폭 최고 {doses[0]:0.0} · 중앙 {doses[doses.Count / 2]:0.0} · 4Sv 넘음 {doses.Count(d => d >= 4f)} · 7Sv {doses.Count(d => d >= 7f)} · 큰 피폭 {w.Perils.RadSevere} · 숨짐 {w.Perils.RadDeaths} · {string.Join(" / ", w.History.Events.Where(x => x.Kind == HistoryKind.Death).Select(x => x.Text).Take(3))}");
             }
         }
+
+        if (what.Contains("bodyfirst"))
+        {
+            var w = DayOne(seed, "Hanbit");
+            var room = w.Ship.RoomsOf(RoomType.Quarters).OrderBy(r => w.Ship.Walls.Any(kv => kv.Value.IsHull && Hull.InsideRoom(w.Ship, kv.Key) == r) ? 0 : 1).ThenBy(r => r.Id).First();
+            var p = w.Crew.Where(c => !c.Dead && !c.IsChild && c.CanAct).OrderBy(c => c.Traits.Bravery).First();
+            var t = Scenarios.OuterTarget(w, room);
+            Console.WriteLine($"   방 {room.Name} 칸 {room.Cells.Count} · 표적 {t} · {p.Name}");
+            p.Mind.PanicUntil = w.Tick + SimTime.Minutes(8); p.Mind.Frozen = true;
+            var imp = Incidents.Meteor(w, t, 1f);
+            Console.WriteLine($"   충돌 {(imp == null ? "없음" : $"크기 {imp.Size:0.00}")} · 외벽 " + string.Join(" ", w.Ship.Walls.Where(kv => kv.Value.IsHull && (kv.Key.Center - t.Center).Length() < 3f).Select(kv => $"{kv.Key}:{kv.Value.Integrity:0.00}/{kv.Value.Breach:0.00}/장갑{kv.Value.Armor:0.0}/보강{kv.Value.Reinforced}")));
+            for (int m = 0; m < 8; m++) { Run(w, SimTime.Minutes(1)); Console.WriteLine($"   {m + 1}분 기압 {room.Air.Pressure:0} 샘 {room.Leaking} · {p.Name} {p.Room?.Name} {p.Pose} {p.Job?.Label} 혈중산소 {p.Vitals.Oxygen:0.00} · 몸이 먼저 {w.CrisisCrew.BodyFirsts}"); }
+        }
     }
 }

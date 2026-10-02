@@ -1250,6 +1250,7 @@ public static partial class WorkPlanners
                 world.Board.Close(o);
                 world.Log.Add(world.Tick, LogKind.Work, $"{room.Name} 불을 껐다", cm.Id);
                 MarkLog.Add(room.Marks, world.Tick, $"{Ko.IGa(cm.Name)} 불을 껐다");
+                MarkLog.Add(cm.Memory.Marks, world.Tick, $"{room.Name} 불을 껐다 — 손이 아직 떨린다"); // 통합: 불길 앞에 섰던 사람은 그 불을 기억한다 (사고 카드의 "누가 기억하나")
                 world.History.Add(world, HistoryKind.Response, $"{Ko.IGa(cm.Name)} {room.Name} 불을 껐다", room, new[] { cm });
             }
             else world.Board.Release(o, cm); // 다른 칸에 불이 남았다 → 다시 가장 가까운 불을 찾아 이어서

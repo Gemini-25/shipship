@@ -126,7 +126,7 @@ public sealed class AmbienceSystem
             // 태양 폭풍: 바깥벽에 닿은 방이 가장 세다. 대피소·물벽은 거의 막는다
             if (storm > 0f)
             {
-                float sr = storm * Exposure(room) * (storm > 1.2f ? 1.6f : 1f) + 0.12f * storm * MathF.Min(3, w.Body.OpenWindows(room)); // v16.26 덮개가 안 내려간 창가 · 통합: 센 폭풍은 안쪽 방까지 파고든다
+                float sr = storm * Exposure(room) * (storm > 1.2f ? 1.3f : 1f) + 0.12f * storm * MathF.Min(3, w.Body.OpenWindows(room)); // v16.26 덮개가 안 내려간 창가 · 통합: 센 폭풍은 안쪽 방까지 파고든다
                 r = MathF.Max(r, sr);
             }
             r = MathF.Max(r, w.Cosmic.Radiation(room)); // v18.13 우주 대재난 방사선 (물벽이 덜고 · 대피소가 막는다)
