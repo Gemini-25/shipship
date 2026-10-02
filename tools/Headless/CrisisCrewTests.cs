@@ -189,7 +189,8 @@ public static partial class Program
     }
 
     private static bool CrResponding(CrewMember c, World w) =>
-        c.Job is Job j && (j.Activity is StationActivity or HelpActivity or EvacuateActivity or TakeCoverActivity || j.Urgent || j.Order is { Urgency: >= 0.8f });
+        c.Job is Job j && (j.Activity is StationActivity or HelpActivity or EvacuateActivity or TakeCoverActivity or TellActivity or CheckSmellActivity or FireBeliefActivity or OutageActivity or MusterActivity
+                           || j.Urgent || j.Order is { Urgency: >= 0.8f });
 
     private static int RunCrisisCrewTest(int seed)
     {
@@ -234,12 +235,12 @@ public static partial class Program
             Check("배치표 · 사람이 빠지면 다시 짠다 (회의 또는 함장)", cc.Bill.Version > v0, $"{v0} → {cc.Bill.Version}판 · {cc.Bill.Why}");
         }
 
-        // ── 2) 불: 경보를 안 사람은 각자 제 자리로 · 소화 자리가 불을 끈다
+        // ── 2) 불 + 파공: 경보를 안 사람은 각자 제 자리로 · 소화 자리가 불을 끈다
         if (Do("fire"))
         {
             var w = DayOne(seed, "Hanbit");
             var cc = w.CrisisCrew;
-            Incidents.Fire(w, CrFloor(w, RoomType.Galley));
+            Scenarios.Apply(w, "combo", out _); // 창고에 큰 운석 + 주방 불 — 소화 · 격벽 자리가 함께 선다
             var seen = new HashSet<int>();
             var did = new HashSet<int>();
             var stationed = new HashSet<int>();
@@ -263,8 +264,8 @@ public static partial class Program
                         Console.WriteLine($"      불끄기 {o.Title} {o.Urgency:0.00} · {o.Assignee?.Name ?? "-"} ({(o.Assignee is CrewMember a ? CrisisCrewSystem.RoleName(cc.BillRole(a)) : "")}) · 상한 {w.Board.MaxHands(o)} · 돕는 {cc.HelpersOf(o).Count}");
                 }
             }
-            Console.WriteLine($"  불: 자리에 선 사람 {seen.Count} · 대응 {did.Count} (제 자리 · 제 몫의 일 {stationed.Count}) · 소집 {cc.Musters}");
-            Check("불 · 경보 → 각자 제 자리 (자리에 선 사람 대부분이 대응)", seen.Count >= 3 && did.Count >= seen.Count * 0.6f && stationed.Count >= 2, $"{did.Count}/{seen.Count} · 제 자리 {stationed.Count}");
+            Console.WriteLine($"  불 + 파공: 자리에 선 사람 {seen.Count} · 대응 {did.Count} (제 자리 · 제 몫의 일 {stationed.Count}) · 소집 {cc.Musters}");
+            Check("불 + 파공 · 경보 → 각자 제 자리 (자리에 선 사람 대부분이 대응)", seen.Count >= 3 && did.Count >= seen.Count * 0.6f && stationed.Count >= 2, $"{did.Count}/{seen.Count} · 제 자리 {stationed.Count}");
             Check("불 · 소화 자리 사람이 불을 끄거나 거든다", fireRoleOnFire > 0, $"표본 {fireRoleOnFire}");
             Check("불 · 모르는 사람은 자리로 가지 않는다", unaware == 0, $"모르는 채 자리 {unaware}");
         }
@@ -324,14 +325,16 @@ public static partial class Program
             var cc = w.CrisisCrew;
             Incidents.Fire(w, CrFloor(w, RoomType.Galley));
             Run(w, SimTime.Minutes(3));
-            var guide = w.Crew.FirstOrDefault(c => cc.Active(c) == StationRole.Guide);
-            var p = w.Crew.Where(c => !c.Dead && !c.IsChild && c.CanAct && c != guide && cc.Active(c) != StationRole.Fire && c.Room?.Type != RoomType.Galley)
+            var p = w.Crew.Where(c => !c.Dead && !c.IsChild && c.CanAct && cc.Active(c) != StationRole.Fire && c.Room?.Type != RoomType.Galley)
                 .OrderBy(c => c.Traits.Calm).First();
-            if (guide?.Room is Room gr && gr.Type != RoomType.Galley)
-                CrPut(w, p, gr.Cells.Where(w.Ship.IsOpenFloor).OrderBy(x => MathF.Abs((x.Center - guide.Position).Length() - 3.5f)).First());
             p.Mind.PanicUntil = w.Tick + SimTime.Minutes(12);
             p.Mind.Frozen = true;
             p.EndJob(w, ToilStatus.Interrupted);
+            Run(w, 30); // 공황에 빠진 사람이 생기면 대피 유도 자리가 선다
+            p.Mind.Frozen = true;
+            var guide = w.Crew.FirstOrDefault(c => cc.Active(c) == StationRole.Guide);
+            if (guide?.Room is Room gr && gr.Type != RoomType.Galley && guide != p)
+                CrPut(w, p, gr.Cells.Where(w.Ship.IsOpenFloor).OrderBy(x => MathF.Abs((x.Center - guide.Position).Length() - 3.5f)).First());
             long t0 = w.Tick;
             int snaps0 = cc.Snaps;
             long woke = -1, back = -1;
@@ -339,7 +342,7 @@ public static partial class Program
             {
                 Run(w, 15);
                 if (woke < 0 && !p.Mind.Panicking(w.Tick)) woke = w.Tick - t0;
-                if (woke >= 0 && back < 0 && CrResponding(p, w)) back = w.Tick - t0;
+                if (woke >= 0 && back < 0 && (CrResponding(p, w) || !Crisis.Acting(w))) back = w.Tick - t0; // 사고가 끝났으면 할 일이 없다
                 if (back >= 0) break;
             }
             float wm = woke * 60f / SimTime.TicksPerHour, bm = back * 60f / SimTime.TicksPerHour;

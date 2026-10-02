@@ -345,18 +345,25 @@ public sealed partial class CrisisCrewSystem
     public float Bias(CrewMember c, WorkOrder o)
     {
         if (Off) return 0f;
+        if (o.Target.CurrentRoom is Room vr && (vr.EvacuateBy >= 0 || vr.Purging || vr.Inerting)) return 0f; // 소화 경보 — 비우는 방의 일에 등을 떠밀지 않는다
         float b = 0f;
         var role = RoleFor(o);
-        if (role != StationRole.None)
+        // 현장 지휘가 조를 짰으면 조가 먼저 (배치표는 조를 짤 때 이미 반영됐다)
+        bool teamed = _w.Command.Active && _w.Command.TeamOf(c) != null;
+        if (role != StationRole.None && !teamed)
         {
             if (_active.TryGetValue(c.Id, out var a) && a == role) b += 0.3f;
             else if (Bill.Of.GetValueOrDefault(c.Id) == role && o.Urgency >= 0.85f) b += 0.1f;
         }
+        int tier = -1;
         if (Crisis.Acting(_w) && o.Urgency >= 0.6f)
         {
             float k = Crisis.Level(_w) == CrisisLevel.Survival ? 1f : 0.6f;
-            b += k * Tier(_w, o) switch { 0 => 0.15f, 1 => 0.12f, 2 => 0.05f, 3 => 0f, _ => -0.05f };
+            tier = Tier(_w, o);
+            b += k * tier switch { 0 => 0.15f, 1 => 0.12f, 2 => 0.05f, 3 => 0f, _ => -0.05f };
         }
+        // 전원 소집 · 점호가 걸렸으면 생명 일이 아닌 일로 점호를 빼먹지 않는다 (ScalePlan)
+        if (b > 0f && (tier < 0 ? Tier(_w, o) : tier) > 0 && _w.Scale.MusterCall(c) != null) b = 0f;
         return b;
     }
 
@@ -516,16 +523,25 @@ public sealed partial class CrisisCrewSystem
         _need.Clear();
         if (!Crisis.Acting(w) && !AuxSoon()) return;
         var s = Crisis.Now(w);
+        // 규모 (v16.18): 방 하나의 작은 불이면 소화 자리 한둘 · 계통으로 번지면 소화 자리 전부 — 사고 규모만큼 사람을 부른다
+        IncidentScale fireScale = IncidentScale.Personal, leakScale = IncidentScale.Personal;
+        foreach (var (room, _, _) in w.Fire.KnownFires()) if (w.Scale.RoomScale(room) is IncidentScale fs && fs > fireScale) fireScale = fs;
+        bool leaking = false;
+        foreach (var r in w.Ship.LiveRooms)
+            if (r.Leaking && !r.Abandoned) { leaking = true; if (w.Scale.RoomScale(r) is IncidentScale ls && ls > leakScale) leakScale = ls; }
+        bool big = Crisis.Level(w) == CrisisLevel.Survival || fireScale >= IncidentScale.System || leakScale >= IncidentScale.System;
         if (s.Fires > 0) _need.Add(StationRole.Fire);
-        if (s.Breaches > 0 || w.Ship.LiveRooms.Any(r => r.Leaking && !r.Abandoned)) _need.Add(StationRole.Bulkhead);
+        if (s.Breaches > 0 || leaking) _need.Add(StationRole.Bulkhead);
         if (s.Power || AuxSoon()) _need.Add(StationRole.Power);
         if (s.Down > 0 || w.Board.Open.Any(o => o.Kind == WorkKind.Treat && o.Urgency >= 0.9f)) _need.Add(StationRole.Medical);
         if (w.Board.Open.Any(o => o.External && o.Urgency >= 0.85f)) _need.Add(StationRole.Eva);
-        if (Crisis.Acting(w)) _need.Add(StationRole.Guide);
+        if (Crisis.Acting(w) && (big || AnyPanic)) _need.Add(StationRole.Guide);
         foreach (var r in DrawOrder)
         {
             if (!_need.Contains(r) || !Bill.Order.TryGetValue(r, out var order)) continue;
             int want = Math.Max(1, Bill.Of.Count(kv => kv.Value == r));
+            var sc = r == StationRole.Fire ? fireScale : r == StationRole.Bulkhead ? leakScale : big ? IncidentScale.System : IncidentScale.Room;
+            if (!big && sc <= IncidentScale.Room) want = Math.Min(want, sc == IncidentScale.Personal ? 1 : 2); // 방 하나의 작은 사고는 그 자리 한둘만 (나머지는 당직 · 곁의 사람 몫)
             int got = 0;
             for (int i = 0; i < order.Count && got < want; i++)
             {
