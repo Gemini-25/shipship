@@ -256,7 +256,7 @@ public sealed partial class Body2System
             _lastDay = day;
         }
         if (SimTime.HourOfDay(w.Tick) is >= 8f and < 8.17f) ComputerDaily();
-        Prof.Lap("sys.Body2", pf);
+        Prof.Lap("body2.all", pf); // 통합: 바깥과 같은 이름이면 두 번 더해졌다
     }
 
     private static float AppetiteOf(CrewMember c)

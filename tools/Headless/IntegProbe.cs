@@ -6,6 +6,9 @@ using ShipSim.Core;
 // 통합 회귀 진단 (INTEG_ONLY=probe PROBE=…): 실패한 장면을 다시 세우고 무엇이 달라졌는지 찍는다.
 public static partial class Program
 {
+    /// <summary>통합: 성능 견주기는 프로세스 CPU 시간으로 (다른 일이 CPU를 나눠 쓰면 벽시계는 실행마다 30%씩 흔들린다).</summary>
+    private static double CpuSeconds() => System.Diagnostics.Process.GetCurrentProcess().TotalProcessorTime.TotalSeconds;
+
     private static void IgProbe2(int seed, string what)
     {
         if (what.Contains("pharm"))

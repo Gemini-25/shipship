@@ -74,7 +74,7 @@ public sealed partial class MatterSystem
         SmokeWatch();
         if (++_watchTurn % 2 == 0) ComputerWatch();
         foreach (var c in w.Crew) if (!c.Dead && c.Pose == Pose.Working && MatAt(c.Cell)) Stats.MatWorks++;
-        Prof.Lap("sys.Matter", pf);
+        Prof.Lap("matter.minute", pf); // 통합: 바깥(World)의 sys.Matter와 같은 이름이면 두 번 더해졌다
     }
 
     // ───────────────────────────── 장: 온도 · 바람 ─────────────────────────────
