@@ -625,6 +625,7 @@ public partial class ShipView : Node2D
         PaintBlastScars(ci); // v16.13 폭발 흔적 (방사형 그을음 · 깨진 조명 · 날아간 문짝 · 추모)
         PaintBody(ci); // v16.3 칸 상태 · 열린 뚜껑 · 닳은 길 · 뗀 패널 · 관측창 · 문 잠금 · 벽 장착물
         PaintMatter(ci); // v16.4 물건 · 쏟은 액체 · 열기 · 전기 불꽃 · 바람 · 가루 (재질 · 상태마다 다른 그림)
+        PaintWays(ci); // v16.25 급한 대로 쓴 갈래의 흔적 (매트리스 마개 · 벌린 문 · 젖은 수건 · 호스 · 속 빈 설비 …)
         foreach (var f in ship.Furniture.Where(f => !f.Stowed && !f.Room.Detached)) PaintFurnitureLife(ci, f);
         PaintTierBadges(ci); // v10.8
         PaintTechLookLive(ci); // v16.5b 움직이는 기술 모습 · 설치 · 업그레이드 순간

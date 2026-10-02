@@ -461,7 +461,7 @@ public static class Locomotion
         if (c.Vitals.Oxygen < 0.85f) s *= 0.8f;
         if (c.Vitals.Health < 0.4f) s *= 0.75f;
         if (c.Carrying != null) s *= 0.9f;
-        if (c.CarryingPerson != null) s *= 0.6f; // 사람을 업고 간다
+        if (c.CarryingPerson != null) s *= 0.6f * CarryGotoToil.Mul(c); // 사람을 업고 간다 (v16.25 들것 · 수레 · 무중력)
         s *= (1f - 0.2f * c.Vitals.Injury) * Wounds.LegFactor(c.Vitals); // v12.7 다리를 다치면 더
         if (c.Job?.Urgent == true) s *= 1.35f; // 급하면 뛴다
         if (c.Outside) s *= 0.8f; // 선체 밖: 추진 팩으로 조심조심 (안전줄을 옮겨 걸며)

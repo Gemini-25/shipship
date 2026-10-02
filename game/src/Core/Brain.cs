@@ -14,6 +14,7 @@ public static class Brain
         new EvacuateActivity(),
         new EvaSurviveActivity(), new EvaRescueActivity(), new SuitMendActivity(), // v16.11 선외 생존(표류 · 패치 · 그늘) · 구조 EVA · 에어락 마중 · 우주복 수리
         new TakeCoverActivity(), new BlastResponseActivity(), new BlastingActivity(), // v16.13 쉭 소리에 몸을 피함 · 구조 · 조사 · 옮기기 · 항아리 · 추모 · 폭파
+        new WayActivity(), // v16.25 여러 갈래 해법 (고른 갈래 · 나중에 제대로)
         new CheckRoomActivity(), // v16.6 컴퓨터 확인 요청 (직접 가서 보고 쓰러진 사람을 데려 나온다)
         new ShelterActivity(), // v12.6 태양 폭풍
         new HeedBroadcastActivity(), // v16.6 대피 방송을 들은 사람만 미리 대피소로 (ComputerLinks.cs)
