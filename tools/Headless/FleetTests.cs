@@ -167,15 +167,19 @@ public static partial class Program
                 var w = DayOne(seed, "Hanbit");
                 var f = w.Fleet;
                 // 고장 난 로봇을 다른 로봇이 부품을 들고 와서 고친다
-                var broken = w.Robots.Robots.Where(r => r.State == RobotState.Docked && r.Operational).OrderByDescending(r => r.Id).FirstOrDefault();
+                var broken = w.Robots.Robots.Where(r => r.Operational && !(RobotsV15.Assists(r.Kind) || RobotsV15.Base(r.Kind) == RobotKind.Maintainer)).OrderByDescending(r => r.Id).FirstOrDefault();
+                for (int t = 0; t < SimTime.Hours(6) && broken != null && broken.State != RobotState.Docked; t++) w.Step();
                 var stagesSeen = new List<string>();
                 if (broken != null)
                 {
+                    foreach (var rb in w.Robots.Robots) rb.Battery = 1f; // 모두 충전을 마친 아침
                     w.Robots.ForceFault(broken, RobotFault.Drive);
                     for (int t = 0; t < SimTime.Hours(6) && broken.Fault != null; t++)
                     {
                         w.Step();
                         if (stagesSeen.Count == 0 && w.Robots.Robots.FirstOrDefault(r => r.Fixing == broken) is Robot fx && fx.Mind.Stages.Count >= 3) stagesSeen.AddRange(fx.Mind.Stages);
+                        if (Environment.GetEnvironmentVariable("FLEETDBG") == "1" && t % 60 == 0 && t < SimTime.Minutes(20))
+                            Console.WriteLine($"    t{t} {broken.Name} {broken.State} {broken.Fault} · 일 {string.Join(",", w.Board.All.Where(o => o.Target.Robot == broken && !o.Closed).Select(o => $"{o.Kind}#{o.Id} {o.Assignee?.Name} 로봇 {o.Robot?.Name} 막힘 {o.BlockedUntil - w.Tick}"))} · {string.Join(" / ", w.Robots.Robots.Where(r => r != broken).Select(r => $"{r.Name} {r.State} 배 {r.Battery:0.00} 일 {r.Order?.Title}({r.Order?.Urgency:0.00}) 짐 {r.Cargo} {r.Doing}"))}");
                     }
                     Run(w, SimTime.Minutes(10));
                 }
@@ -189,7 +193,12 @@ public static partial class Program
                 {
                     for (int t = 0; t < SimTime.Hours(10) && flat.State != RobotState.Active; t++) w.Step();
                     flat.Battery = 0.0005f;
-                    for (int t = 0; t < SimTime.Hours(4) && flat.State != RobotState.Docked; t += 10) Run(w, 10);
+                    for (int t = 0; t < SimTime.Hours(4) && flat.State != RobotState.Docked; t += 10)
+                    {
+                        Run(w, 10);
+                        if (Environment.GetEnvironmentVariable("FLEETDBG") == "1" && t % SimTime.Minutes(15) == 0 && flat.TowBot is Robot tb)
+                            Console.WriteLine($"    t{t} {flat.Name} {flat.State} ← {tb.Name} {tb.State} {tb.Room?.Name} 길 {(tb.Path == null ? -1 : tb.Path.Count - tb.PathIndex)} 단계 {tb.StepIndex}/{tb.Steps?.Count} 비킴 {tb.YieldTicks} 배 {tb.Battery:0.00} · {tb.Doing} · {tb.Mind.Why}");
+                    }
                 }
                 Check("방전돼 멈춘 로봇을 다른 로봇이 충전대까지 끌고 온다", flat != null && flat.State == RobotState.Docked && f.Tows >= 1,
                     $"상태 {flat?.State} · 끌고 옴 {f.Tows} · {flat?.Doing} · {string.Join(" / ", flat?.Marks.TakeLast(3).Select(m => m.Text) ?? Array.Empty<string>())}");
@@ -221,6 +230,21 @@ public static partial class Program
                 Check("막힌 길(잠긴 문)은 다른 길로 돌아간다", mover != null && f.Reroutes > re0 && (mover.Path == null || mover.Path.Skip(mover.PathIndex).All(c => w.Ship.DoorAt(c) != locked)),
                     $"로봇 {mover?.Name} · 돌아감 {f.Reroutes - re0} · {mover?.Mind.Why}");
                 if (locked != null) locked.Locked = false;
+
+                // 서로 손보기: 닳은 로봇을 쉬던 정비 로봇이 고장 나기 전에 손본다
+                var worn = w.Robots.Robots.Where(r => r.Operational && r.Fault == null && !RobotsV15.Fights(r.Kind)).OrderByDescending(r => r.Id).First();
+                for (int t = 0; t < SimTime.Hours(6) && worn.State != RobotState.Docked; t++) w.Step();
+                worn.Condition = 0.6f;
+                foreach (var rb in w.Robots.Robots) if (rb != worn) rb.Battery = MathF.Max(rb.Battery, 0.9f);
+                int tune0 = f.Tunes;
+                for (int t = 0; t < SimTime.Hours(4) && f.Tunes == tune0; t += 10)
+                {
+                    Run(w, 10);
+                    if (Environment.GetEnvironmentVariable("FLEETDBG") == "1" && t % SimTime.Minutes(20) == 0)
+                        Console.WriteLine($"    t{t} {worn.Name} {worn.State} 상태 {worn.Condition:0.00} · 함대 {f.Mode} · {string.Join(" / ", w.Robots.Robots.Where(r => r != worn).Select(r => $"{r.Name} {r.State} 배 {r.Battery:0.00} 상태 {r.Condition:0.00} 고침 {r.Fixing?.Name} {r.Doing}"))}");
+                }
+                Check("닳은 로봇을 다른 로봇이 고장 나기 전에 손본다", f.Tunes > tune0 && worn.Condition >= 0.8f,
+                    $"{worn.Name} 상태 {worn.Condition:0.00} · 손봄 {f.Tunes - tune0} · {string.Join(" / ", worn.Marks.TakeLast(2).Select(m => m.Text))}");
 
                 // 정비: 부품 → 정비 → 시험 가동 (하루 동안 지켜본다)
                 List<string>? maint = null;
@@ -338,11 +362,19 @@ public static partial class Program
         var w = World.CreateDefault(seed, 0, ship);
         w.CrewCanDie = true;
         var last = new Dictionary<int, DroneState>();
+        var rbad = new Dictionary<int, bool>();
         long act = 0, min = 0, total = (long)(days * SimTime.TicksPerDay);
         for (long t = 1; t <= total; t++)
         {
             w.Step();
             if (t % SimTime.Minutes(1) != 0) continue;
+            foreach (var r in w.Robots.Robots)
+            {
+                bool bad = r.Fault != null;
+                if (bad && !rbad.GetValueOrDefault(r.Id))
+                    Console.WriteLine($"  {SimTime.Day(w.Tick)}일 {SimTime.Clock(w.Tick)} 로봇 고장 {r.Name} {r.Fault} · {r.Room?.Name} · 상태 {r.Condition:0.00} · 배 {r.Battery:0.00} · {r.Doing} · 불 {w.Fire.Count}");
+                rbad[r.Id] = bad;
+            }
             foreach (var d in w.Drones.Drones)
             {
                 min++;
@@ -353,7 +385,7 @@ public static partial class Program
                 last[d.Id] = d.State;
             }
         }
-        Console.WriteLine($"드론 일함 {act * 100.0 / Math.Max(1, min):0.0}% · 잃음 {w.Drones.Drones.Count(d => d.State == DroneState.Lost)} · 로봇 잃음 {w.Robots.Robots.Count(r => r.State == RobotState.Lost)} · 함대 {(FleetSystem.Off ? "끔" : $"선외수리 {w.Fleet.HullJobs} 순찰 {w.Fleet.HullRounds} 막음 {w.Fleet.Seals} 교대 {w.Fleet.Reliefs} 건짐 {w.Fleet.Fetches} 피함 {w.Fleet.Dodges} 끌고옴 {w.Fleet.Tows} 고침 {w.Fleet.Fixes} 우회 {w.Fleet.Reroutes} 물러남 {w.Fleet.Retreats} 소방 {w.Fleet.FireFirst} 부서짐 {w.Fleet.Wrecks}")}");
+        Console.WriteLine($"드론 일함 {act * 100.0 / Math.Max(1, min):0.0}% · 손봄 {w.Fleet.Tunes} · 잃음 {w.Drones.Drones.Count(d => d.State == DroneState.Lost)} · 로봇 잃음 {w.Robots.Robots.Count(r => r.State == RobotState.Lost)} · 함대 {(FleetSystem.Off ? "끔" : $"선외수리 {w.Fleet.HullJobs} 순찰 {w.Fleet.HullRounds} 막음 {w.Fleet.Seals} 교대 {w.Fleet.Reliefs} 건짐 {w.Fleet.Fetches} 피함 {w.Fleet.Dodges} 끌고옴 {w.Fleet.Tows} 고침 {w.Fleet.Fixes} 우회 {w.Fleet.Reroutes} 물러남 {w.Fleet.Retreats} 소방 {w.Fleet.FireFirst} 부서짐 {w.Fleet.Wrecks}")}");
         var hull = w.Ship.Walls.Where(kv => kv.Value.IsHull).Select(kv => kv.Value).ToList();
         Console.WriteLine($"외벽 {hull.Count} · 85% 아래 {hull.Count(x => x.Integrity < x.MaxIntegrity * 0.85f)} · 파공 {hull.Count(x => x.Breach > 0f)} · 봉합 {hull.Count(x => x.Patched)} · 평균 강도 {hull.Average(x => x.Integrity):0.00} · 맞은 방 {w.Fleet.Hits.Count} · 다음 순찰 {(w.Fleet.NextHullRound - w.Tick) / (float)SimTime.TicksPerHour:0.0}시간 · 판 {string.Join(",", w.Drones.Drones.Select(d => d.Dock.Storage!.Count(ItemKind.Plate)).Distinct())}");
         FleetSystem.Off = false;

@@ -105,7 +105,18 @@ public sealed partial class RobotSystem
     }
 
     private static bool Free(Robot r) => r.Operational && !r.Wrecked && r.Hauling == null && r.Fixing == null && r.Partner == null && r.TowBot == null && r.Battery >= 0.5f
-        && (r.State == RobotState.Docked || r.State == RobotState.Active && r.Order == null && r.Cargo == null && !r.FightingFire && !r.Homing && r.Helping == null);
+        && (r.State == RobotState.Docked || r.State == RobotState.Active && r.Order == null && r.Cargo == null && !r.FightingFire && r.Helping == null);
+
+    /// <summary>급하지 않은 일을 하던 로봇: 동료가 멈췄으면 내려놓고 간다 (주 컴퓨터가 지휘할 때만).</summary>
+    private static bool Spare(Robot r, bool cmd) => Free(r) || cmd && r.Operational && !r.Wrecked && r.State == RobotState.Active && r.Order is { Urgency: < 0.5f }
+        && r.Cargo == null && !r.FightingFire && !r.Homing && r.Hauling == null && r.Fixing == null && r.Partner == null && r.TowBot == null && r.Battery >= 0.5f;
+
+    private void Release(Robot r)
+    {
+        if (r.State != RobotState.Active) return;
+        if (r.Order != null) r.Mind.Say($"{Ko.EunNeun(r.Order.Title)} 급하지 않다 — 내려놓고 동료부터", _world.Tick);
+        DropTask(r);
+    }
 
     private static float Far(Vector2 a, Vector2 b) => MathF.Abs(a.X - b.X) + MathF.Abs(a.Y - b.Y);
 
@@ -116,6 +127,30 @@ public sealed partial class RobotSystem
         return null;
     }
 
+    /// <summary>동료를 고치러 · 끌러 가는 로봇: 작업 목록에 같은 일이 올라오면 내 몫으로 걸어 둔다.</summary>
+    internal void LinkJob(Robot r)
+    {
+        var b = r.Fixing ?? r.Hauling;
+        if (b == null || r.State != RobotState.Active) return;
+        var job = JobFor(r.Fixing != null ? WorkKind.RepairRobot : WorkKind.FetchRobot, b);
+        if (job == null || job.Robot != null) return;
+        // 막 나서려던 사람(아직 손대지 않음)은 로봇에게 넘기고 하던 일로 — 이미 손댄 사람은 그대로 둔다
+        if (job.Assignee is CrewMember c && job.Progress <= 0f && c.Job?.Order == job && (c.Position - b.Position).LengthSquared() > 4f)
+        {
+            c.EndJob(_world, ToilStatus.Interrupted);
+            _world.Log.Add(_world.Tick, LogKind.Work, $"{Ko.IGa(r.Name)} {Ko.EulReul(b.Name)} 맡았다 — {Ko.EunNeun(c.Name)} 하던 일로 돌아간다", c.Id);
+        }
+        if (job.Assignee == null) job.Robot = r;
+    }
+
+    /// <summary>심한 고장이 난 그 순간: 고칠 수 있는 동료 로봇이 있으면 바로 보낸다.</summary>
+    private void FleetBroke(Robot b)
+    {
+        var w = _world;
+        if (FleetSystem.Off || b.Fault is not RobotFault ft || CanSelfRepair(b) || b.Dock.Room.Detached || Robots.Any(x => x.Fixing == b)) return;
+        TryFix(w.Fleet, b, ft, w.Automation.Present && (w.Automation.MainOnline || w.Automation.Core.BackupCore));
+    }
+
     /// <summary>매 분: 불 속 · 자기 보존 · 교대 · 서로 돕기 · 같이 들기.</summary>
     internal void FleetTick(FleetSystem f, bool cmd)
     {
@@ -123,7 +158,7 @@ public sealed partial class RobotSystem
         foreach (var r in Robots)
         {
             if (r.State == RobotState.Lost) continue;
-            if (r.Hauling != null && (r.State != RobotState.Active || r.Steps == null)) { r.Hauling.TowBot = null; if (r.Hauling.State == RobotState.Towed) SetState(r.Hauling, RobotState.Stalled); r.Hauling = null; }
+            if (r.Hauling != null && (r.State != RobotState.Active || r.Steps == null || !r.Steps.Any(st => st is RHitch))) { /* 끌던 일을 놓았다 (다른 일로 바뀜) */ r.Hauling.TowBot = null; if (r.Hauling.State == RobotState.Towed) SetState(r.Hauling, RobotState.Stalled); r.Hauling = null; }
             if (r.Fixing != null && r.Steps == null) r.Fixing = null;
             if (r.Partner is Robot p && !(r.Steps?.Any(s => s is RWith) ?? false) && !(p.Steps?.Any(s => s is RWith) ?? false)) { r.Partner = null; if (p.Partner == r) p.Partner = null; }
             if (r.Helping is CrewMember h) f.Bond(r, h);
@@ -155,6 +190,7 @@ public sealed partial class RobotSystem
             if (Robots.Any(x => x.Fixing == b || x.Hauling == b)) continue;
             if (b.Fault is RobotFault ft && !CanSelfRepair(b) && b.State is RobotState.Docked or RobotState.Stalled) TryFix(f, b, ft, cmd);
             else if (b.State == RobotState.Stalled && b.Fault == null && b.TowedBy == null && b.TowBot == null) TryHaul(f, b, cmd);
+            else if (b.State == RobotState.Docked && b.Fault == null && b.Condition < 0.75f && f.Mode == "평시" && w.Tick >= _nextTune) TryTune(f, b, cmd);
         }
         foreach (var r in Robots)
             if (r.State == RobotState.Active && r.Partner == null && !r.Homing && FleetSystem.Heavy(r.Cargo)) TryLift(f, r);
@@ -190,8 +226,8 @@ public sealed partial class RobotSystem
         float bd = float.MaxValue;
         foreach (var r in Robots)
         {
-            if (r == b || !Free(r) || !(RobotsV15.Base(r.Kind) is RobotKind.Hauler or RobotKind.Maintainer)) continue;
-            float d = Far(r.Position, b.Position);
+            if (r == b || !Spare(r, cmd) || !(RobotsV15.Base(r.Kind) is RobotKind.Hauler or RobotKind.Maintainer)) continue;
+            float d = Far(r.Position, b.Position) + (Free(r) ? 0f : 20f);
             if (d < bd) { bd = d; best = r; }
         }
         if (best == null) return;
@@ -209,17 +245,67 @@ public sealed partial class RobotSystem
         if (near is not Cell at) return;
         var home = b.Dock.UseSpots.Where(w.Ship.IsWalkable).OrderBy(s => Far(s.Center, b.Position)).Cast<Cell?>().FirstOrDefault();
         if (home is not Cell dockSpot) return;
-        if (best.State == RobotState.Active) { best.Steps = null; best.Path = null; }
+        if (best.State == RobotState.Active) Release(best);
         var steps = new List<RobotStep>
         {
             new RGoto(at), new RHitch(b), new RGoto(dockSpot),
             new RDo((rb, world) => { world.Robots.Delivered(rb, b); return true; }),
         };
         Begin(best, steps, $"멈춘 {Ko.EulReul(b.Name)} 끌고 오기");
-        if (job != null) { job.Robot = best; best.Order = job; }
+        if (job != null && job.Assignee == null) job.Robot = best; // 사람 손을 막아 둔다 (로봇의 맡은 일로는 걸지 않는다 — 목록이 닫아도 하던 일을 놓지 않게)
         FleetSystem.Stage(best, steps, null);
         best.Mind.Say(cmd ? $"주 컴퓨터가 보냈다 — {Ko.IGa(b.Name)} {b.Room?.Name ?? "?"}에 멈췄다" : $"{Ko.IGa(b.Name)} 멈춘 걸 봤다", w.Tick);
         f.Line(CmdTarget.Robot, best.Id, b.Room, $"{best.Name}: 멈춘 {b.Name} 끌고 오기", $"{b.Doing}", 0.7f, 40f);
+    }
+
+    private long _nextTune;
+
+    /// <summary>서로 손보기: 닳은(고장 나기 전) 로봇을 쉬던 정비 로봇이 윤활유를 들고 와서 조이고 닦는다 — 닳을수록 고장이 잦다.</summary>
+    private void TryTune(FleetSystem f, Robot b, bool cmd)
+    {
+        var w = _world;
+        _nextTune = w.Tick + SimTime.Minutes(10);
+        if (JobFor(WorkKind.ServiceRobot, b) is WorkOrder svc && svc.Assignee != null) return; // 사람이 이미 손본다
+        Robot? best = null;
+        float bd = float.MaxValue;
+        foreach (var r in Robots)
+        {
+            if (r == b || !Free(r) || r.State != RobotState.Docked || r.Battery < 0.5f || r.Condition < 0.6f || !(RobotsV15.Assists(r.Kind) || RobotsV15.Base(r.Kind) == RobotKind.Maintainer)) continue;
+            float d = Far(r.DockPosition, b.DockPosition);
+            if (d < bd) { bd = d; best = r; }
+        }
+        if (best == null) return;
+        var dist = w.Paths.Flood(best.Cell, Profile);
+        var steps = new List<RobotStep>();
+        var (box, spot) = Nearest(w, dist, x => x.Storage!.Count(ItemKind.Lubricant) > 0);
+        bool lube = box != null;
+        if (box != null) { steps.Add(new RGoto(spot)); steps.Add(new RTake(box, ItemKind.Lubricant, 1)); }
+        var near = b.Dock.UseSpots.Where(c => w.Ship.IsWalkable(c) && dist.Reachable(c)).OrderBy(c => c.X).ThenBy(c => c.Y).Cast<Cell?>().FirstOrDefault();
+        if (near is not Cell at) return;
+        steps.Add(new RGoto(at));
+        steps.Add(new RWork(0.3f, null, b.DockPosition));
+        steps.Add(new RDo((rb, world) => world.Robots.Tuned(rb, b, lube)));
+        steps.Add(new RTest(b));
+        best.Fixing = b;
+        Begin(best, steps, $"{Ko.EulReul(b.Name)} 손보러 — 상태 {b.Condition * 100:0}%");
+        FleetSystem.Stage(best, steps, null);
+        best.Mind.Say($"{b.Name} 상태가 {b.Condition * 100:0}%다 — 고장 나기 전에 손봐 준다" + (lube ? "" : " (윤활유가 없어 조이고 닦기만)"), w.Tick);
+        f.Line(CmdTarget.Robot, best.Id, b.Dock.Room, $"{best.Name}: {b.Name} 손보기", $"상태 {b.Condition * 100:0}%", 0.35f, 40f);
+    }
+
+    internal bool Tuned(Robot r, Robot b, bool lube)
+    {
+        var w = _world;
+        r.Fixing = null;
+        bool used = lube && r.Cargo is ItemStack c && c.Kind == ItemKind.Lubricant;
+        if (used) r.Cargo = r.Cargo!.Value.Count > 1 ? new ItemStack(ItemKind.Lubricant, r.Cargo.Value.Count - 1) : null;
+        if (!b.AtDock || b.Fault != null) { Done(r, null); return true; }
+        b.Condition = MathF.Max(b.Condition, used ? 0.9f + 0.02f * w.Fleet.Tier : 0.8f);
+        MarkLog.Add(b.Marks, w.Tick, $"{Ko.IGa(r.Name)} 손봤다 ({(used ? "윤활 · 조임" : "조임 · 청소")})");
+        w.Fleet.Tunes++;
+        w.Fleet.CloseLine(CmdTarget.Robot, r.Id, "손봤다");
+        Done(r, null);
+        return true;
     }
 
     internal void Delivered(Robot r, Robot b)
@@ -249,8 +335,8 @@ public sealed partial class RobotSystem
         float bd = float.MaxValue;
         foreach (var r in Robots)
         {
-            if (r == b || !Free(r) || !(RobotsV15.Assists(r.Kind) || RobotsV15.Base(r.Kind) == RobotKind.Maintainer)) continue;
-            float d = Far(r.Position, b.Position);
+            if (r == b || !Spare(r, cmd) || !(RobotsV15.Assists(r.Kind) || RobotsV15.Base(r.Kind) == RobotKind.Maintainer)) continue;
+            float d = Far(r.Position, b.Position) + (Free(r) ? 0f : 20f);
             if (d < bd) { bd = d; best = r; }
         }
         if (best == null) return;
@@ -276,14 +362,14 @@ public sealed partial class RobotSystem
             nc = dd; near = s;
         }
         if (near is not Cell at) return;
-        if (best.State == RobotState.Active) { best.Steps = null; best.Path = null; }
+        if (best.State == RobotState.Active) Release(best);
         steps.Add(new RGoto(at));
         steps.Add(new RWork(FaultHours(fault) * 0.9f, null, b.Position));
         steps.Add(new RDo((rb, world) => world.Robots.FixedBy(rb, b, parts)));
         steps.Add(new RTest(b));
         best.Fixing = b;
         Begin(best, steps, $"{Ko.EulReul(b.Name)} 고치러 — {FaultName(fault)}");
-        if (job != null) { job.Robot = best; best.Order = job; }
+        if (job != null && job.Assignee == null) job.Robot = best; // 사람 손을 막아 둔다 (로봇의 맡은 일로는 걸지 않는다 — 목록이 닫아도 하던 일을 놓지 않게)
         FleetSystem.Stage(best, steps, null);
         best.Mind.Say(cmd ? $"주 컴퓨터가 보냈다 — {b.Name} {FaultName(fault)}" : $"{b.Name} {FaultName(fault)} — 고칠 수 있는 고장", w.Tick);
         f.Line(CmdTarget.Robot, best.Id, b.Room, $"{best.Name}: {b.Name} 고치기 ({FaultName(fault)})", parts.Length == 0 ? "다시 맞추기만" : $"{ItemKinds.Name(parts[0].kind)} {parts[0].count}", 0.7f, 60f);

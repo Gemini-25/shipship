@@ -1294,6 +1294,7 @@ public sealed partial class RobotSystem
         DropTask(r);
         SetState(r, RobotState.Stalled);
         w.Board.RequestScan();
+        FleetBroke(r); // v16.20b 동료 로봇이 바로 나선다 (사람보다 먼저 닿으면)
     }
 
     private void Stall(Robot r, string why)

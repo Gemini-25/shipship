@@ -71,7 +71,7 @@ public sealed class FleetSystem
     /// <summary>전기가 귀하다: 느리게 움직이고 아껴 쓴다.</summary>
     public bool Thrift { get; private set; }
 
-    public int HullJobs, HullRounds, FireFirst, Tows, Fixes, Seals, SealFails, Reliefs, Fetches, Reroutes, Yields, Lifts, Tests, TestFails, Waits, Retreats, Wrecks, Witnessed, Dodges, Mourned, Lines;
+    public int HullJobs, HullRounds, Tunes, FireFirst, Tows, Fixes, Seals, SealFails, Reliefs, Fetches, Reroutes, Yields, Lifts, Tests, TestFails, Waits, Retreats, Wrecks, Witnessed, Dodges, Mourned, Lines;
     /// <summary>방마다 로봇 고장 횟수 (자주 고장 나는 곳).</summary>
     public SortedDictionary<int, int> RoomFaults { get; } = new();
     /// <summary>방법마다 잘 됐나 · 안 됐나 (실링폼 · 금속판 · 로봇 먼저 · 정비 …).</summary>
@@ -121,7 +121,9 @@ public sealed class FleetSystem
     public void Update(float dt)
     {
         var w = _w;
-        if (Off || w.Tick < _next) return;
+        if (Off) return;
+        foreach (var r in w.Robots.Robots) if (r.Fixing != null || r.Hauling != null) w.Robots.LinkJob(r); // 사람이 같은 일을 잡지 않게 (매 틱 · 그런 로봇이 있을 때만)
+        if (w.Tick < _next) return;
         _next = w.Tick + SimTime.Minutes(1);
         Retier();
         Assess();
@@ -199,6 +201,14 @@ public sealed class FleetSystem
         float dm = RobotsV15.Drain(r.Kind) * Durability.RobotDrain * Drain(r);
         float need = ((there + back) / sp * RobotSystem.DrainMove + hours * RobotSystem.DrainWork) * dm + 0.06f;
         r.Mind.Power = $"이 일에 {need * 100:0}% · 지금 {r.Battery * 100:0}%";
+        // 충전 시점: 급하지 않은 일이면 거치대에서 반은 채우고 나간다 (바닥 근처로 오가며 일하면 멈춰 서기 쉽다)
+        if (r.AtDock && o.Urgency < 0.6f && r.Battery < 0.5f && Mode == "평시")
+        {
+            Waits++;
+            r.Doing = $"충전 {r.Battery * 100:0}% — 급하지 않은 일이라 반은 채우고 나간다";
+            if (r.Mind.WhySince < _w.Tick - SimTime.Minutes(10)) r.Mind.Say($"{Ko.EunNeun(o.Title)} 급하지 않다 — 반은 채우고 나간다", _w.Tick);
+            return false;
+        }
         if (r.Battery >= need || o.Urgency >= 1.1f && r.Battery >= need * 0.7f) return true;
         Waits++;
         r.Mind.Say($"{o.Title} — 다녀오는 데 {need * 100:0}%가 드는데 {r.Battery * 100:0}%뿐이라 더 채우고 나간다", _w.Tick);
@@ -238,7 +248,7 @@ public sealed class FleetSystem
                 RWork => o?.Kind switch
                 {
                     WorkKind.Maintain => "고치기", WorkKind.FixLights => "조명 갈기", WorkKind.Tend => "돌보기", WorkKind.Harvest => "거두기",
-                    WorkKind.StowCot => "접어 두기", WorkKind.RefillPropellant => "채우기", null => r.Fixing != null ? "고치기" : "살펴보기", _ => "일하기",
+                    WorkKind.StowCot => "접어 두기", WorkKind.RefillPropellant => "채우기", null => r.Fixing is Robot fb ? fb.Fault == null ? "손보기" : "고치기" : "살펴보기", _ => "일하기",
                 },
                 RTest => "시험 가동",
                 RSpray => "거품 뿌리기",
@@ -624,6 +634,6 @@ public sealed class FleetSystem
     internal void Hash(Action<long> I, Action<float> F)
     {
         I(Tier); I(FireFirst); I(Tows); I(Fixes); I(Seals); I(SealFails); I(Reliefs); I(Fetches); I(Reroutes); I(Yields); I(Lifts); I(Tests); I(TestFails);
-        I(Waits); I(Retreats); I(Wrecks); I(Dodges); I(HullJobs); I(HullRounds); I(Hits.Count); I(DroneTask.Count); I(Carry.Count); I(_fire.Count);
+        I(Waits); I(Retreats); I(Wrecks); I(Dodges); I(HullJobs); I(HullRounds); I(Tunes); I(Hits.Count); I(DroneTask.Count); I(Carry.Count); I(_fire.Count);
     }
 }
