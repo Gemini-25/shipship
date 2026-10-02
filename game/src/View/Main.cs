@@ -457,7 +457,7 @@ public partial class Main : Node2D
                 case Key.B: ToggleTool(IncidentTool.Break); break;
                 case Key.P: ToggleTool(IncidentTool.PipeBurst); break;
                 case Key.J: Hud.ToggleChronicle(); break;
-                case Key.K: Hud.ToggleChain(); break;
+                case Key.K: if (key.ShiftPressed) Hud.ToggleScaleCodex(); else Hud.ToggleChain(); break; // v16.18 ⇧K 사고 도감 (규모별)
                 case Key.U: ToggleSummary(); break; // v12.8 요약 진행
                 case Key.L: ToggleHighlight(); break;
                 case Key.I: Hud.ToggleCodex(); break;

@@ -99,6 +99,7 @@ public partial class Hud
             UiKit.Panel(this, rect, null, Ui.RadiusControl + 2f); // v16.2 공통 패널 + 고름 · 올림 테두리
             if (sel || hover) Gfx.RoundRect(this, rect, sel ? Ui.HoverSoft : new Color(0, 0, 0, 0), Ui.RadiusControl + 2f, sel ? Palette.Accent.WithAlpha(0.6f) : Palette.Text.WithAlpha(0.3f));
             _cards.Add(rect);
+            DrawScaleBadge(rect, inc); // v16.18 규모 배지 · 규모별 테두리
             // 왼쪽 띠: 진행 중이면 맥박
             float pulse = inc.Open ? 0.65f + 0.35f * Mathf.Sin(_time * 4f) : 1f;
             DrawRect(new Rect2(rect.Position + new Vector2(0, 8), new Vector2(3, h - 16)), sev.WithAlpha(pulse));
@@ -184,6 +185,7 @@ public partial class Hud
             if (lx > right - 170) break;
         }
         Divider(x, right, y0 + 90);
+        DrawChainScale(inc, x, right, y0); // v16.18 규모 단계 (② → ③ → ④)
 
         // 나무를 줄로 편다 (깊이 우선)
         var rows = new List<CauseNode>();
@@ -228,6 +230,7 @@ public partial class Hud
             }
             else if (n.Lasting && !isOpen) DrawArc(new Vector2(ix, cy), r, 0, Mathf.Tau, 14, col, 1.5f, true);
             else DrawCircle(new Vector2(ix, cy), r, col, true, -1f, true);
+            DrawNodeScale(n, ix, cy, r); // v16.18 고리의 규모 · 오른 자리 ▲
             float tx = ix + 12;
             Gfx.Text(this, Fonts.Body, new Vector2(tx, cy + 4), SimTime.Clock(n.Tick), Ui.TextTiny, Palette.TextMuted);
             tx += 36;
@@ -290,7 +293,7 @@ public partial class Hud
             long end = inc.End >= 0 ? inc.End : now;
             if (end < start) continue;
             float a = X(inc.Start), b = Mathf.Max(a + 4f, X(end));
-            var col = inc.Deaths > 0 ? Palette.Danger : inc.Open ? Palette.Warning : Palette.Good.WithAlpha(0.8f);
+            var col = ScaleBarColor(inc) ?? (inc.Deaths > 0 ? Palette.Danger : inc.Open ? Palette.Warning : Palette.Good.WithAlpha(0.8f)); // v16.18 규모 색
             var r = new Rect2(a, strip.Position.Y + 6, b - a, 8);
             bool sel = ChainIncident == inc;
             DrawRect(r, col.WithAlpha(sel ? 1f : 0.7f));

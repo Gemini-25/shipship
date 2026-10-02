@@ -150,6 +150,7 @@ public static class Hazards
         if (Spec(k).Target == HazardTarget.Robot && w.Robots.Robots.FirstOrDefault(r => r.Id == id) is Robot bot) { where = bot.Position; room = w.Ship.RoomAt(Cell.FromPosition(bot.Position)); }
         if (Spec(k).Target == HazardTarget.Ship) where = null;
         int node = w.Causes.Root(CauseKind.Hazard, Name(k), room, where, observer: w.Causes.ConsumeObserver());
+        w.Scale.Tag(node, k.ToString()); // v16.18 표의 열쇠 (기본 규모)
         string? what;
         using (w.Causes.Because(node)) what = ApplyCore(w, k, at, id);
         if (what == null) w.Causes.Discard(node);

@@ -135,6 +135,7 @@ public partial class Hud : Control
         else if (ChainOpen) DrawChain(mouse); // v12.2 인과 사슬
         else if (ChronicleOpen) DrawChronicle(mouse);
         else if (TechOpen) DrawTech(mouse);
+        else if (ScaleCodexOpen) DrawScaleCodex(mouse); // v16.18 사고 도감 — 규모별 (HudScale.cs)
         DrawHelpCorner(mouse); // v16.2 단축키 한 줄 대신 ? 도움말 + 상황 힌트
         DrawBanners();
         DrawSummaryCard(mouse); // v12.8 요약 진행
@@ -143,6 +144,7 @@ public partial class Hud : Control
         if (_hazardMenu) DrawHazardMenu(_hazardMenuAt, mouse); // v11.2 떠 있는 메뉴는 맨 위에
         if (HelpOpen) DrawHelp(mouse); // v16.2
         _tip?.Invoke(); // v16.2 툴팁은 맨 위에
+        DrawScaleFrame(); // v16.18 지금 가장 큰 사고의 규모로 화면 테두리
         DrawPauseFrame(); // v16.2 일시정지 테두리
     }
 
