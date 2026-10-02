@@ -199,7 +199,7 @@ public static class Player
 public static class SaveGame
 {
     /// <summary>v8: 설계도(드론 거치대)와 구조가 바뀌어 v7 저장(1)은 같은 역사를 되짚을 수 없다.</summary>
-    public const string Header = "shipsim-save 16"; // v16.10 증축 여백 · 2차 시스템
+    public const string Header = "shipsim-save 17"; // v16.22 기본 다섯 척 새 설계
 
     public static string Write(World w)
     {
@@ -242,9 +242,9 @@ public static class SaveGame
     public static Data Parse(string text)
     {
         var lines = text.Replace("\r", "").Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        if (lines.Length > 0 && lines[0].Trim() == "shipsim-save 1") throw new FormatException("v7 저장 파일이다 — v8에서 우주선 설계(드론 거치대)와 구조가 바뀌어 다시 돌릴 수 없다");
-        if (lines.Length > 0 && lines[0].Trim() is "shipsim-save 2" or "shipsim-save 3" or "shipsim-save 4" or "shipsim-save 5" or "shipsim-save 6" or "shipsim-save 7" or "shipsim-save 8" or "shipsim-save 9" or "shipsim-save 10" or "shipsim-save 11" or "shipsim-save 12" or "shipsim-save 13")
-            throw new FormatException("예전 판의 저장 파일이다 — v9(배관)·v9.2(함교의 주 컴퓨터)·v9.3(저출력 운영)·v10.1(통신실, 날아오는 운석)·v10.2(칸막이로 방을 나눔)·v10.3(지문이 더 많은 상태를 본다)·v10.5(설비 단계·방 모듈·연구)·v10.10(선내 로봇·자원 회복)·v11.2(엔진·항로, 사고 종류)·v11.3(난수기)·v12.0(당직 일지·진단)에서 우주선 설계와 규칙이 바뀌어 같은 역사를 다시 돌릴 수 없다");
+        if (lines.Length > 0 && lines[0].Trim() == "shipsim-save 1") throw new FormatException("아주 오래된 항해의 기록이다 — 그 뒤로 배의 설계와 구조가 바뀌어 같은 항해를 다시 돌릴 수 없다");
+        if (lines.Length > 0 && lines[0].Trim() is "shipsim-save 2" or "shipsim-save 3" or "shipsim-save 4" or "shipsim-save 5" or "shipsim-save 6" or "shipsim-save 7" or "shipsim-save 8" or "shipsim-save 9" or "shipsim-save 10" or "shipsim-save 11" or "shipsim-save 12" or "shipsim-save 13" or "shipsim-save 14" or "shipsim-save 15" or "shipsim-save 16")
+            throw new FormatException("예전 항해의 기록이다 — 그 뒤로 배의 설계와 구조가 바뀌어 같은 항해를 다시 돌릴 수 없다");
         if (lines.Length == 0 || lines[0].Trim() != Header) throw new FormatException("저장 파일이 아니다");
         int seed = 0, crew = 0;
         string? ship = null;
