@@ -390,6 +390,7 @@ public sealed class MeetingSystem
         w.RoomPlans.Agenda(rec, attendees, chair); // v16.17 승무원이 낸 방 안건 (옮기기 · 나누기 · 이름 · 꾸미기)
         w.Automation.Authority.Agenda(rec, attendees, chair); // v16.16 컴퓨터 안건 (계획 · 권한)
         w.Info.Agenda(rec, attendees, chair); // v17.3 공동 장부 (설거지 당번)
+        w.Automation.MateOrNull?.Agenda(rec, attendees, chair); // v16.27 컴퓨터가 살피는 범위 · 개조안
         w.CrisisCrew.Agenda(rec, attendees, chair); // v16.21 사람이 바뀌면 비상 배치표를 다시 짠다
         // 4) 방침 하나: 모인 사람 다수가 바라는 쪽이 지금과 다르고, 바꾼 지 사흘이 지났으면 올린다
         if (rec.Items.Count(i => i.Topic.StartsWith("policy:")) == 0 && attendees.Count >= 3)

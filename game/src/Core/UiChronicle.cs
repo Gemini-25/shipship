@@ -292,6 +292,7 @@ public static class ChronicleBook
     private static void ShipLog(World w, ChronChapter ch)
     {
         int cap = ch.Week ? 6 : 4;
+        if (w.Automation.MateOrNull is ShipMate mate) foreach (var (tick, text) in mate.Evenings) if (tick >= ch.Start && tick < ch.End && ch.ShipLog.Count < cap / 2) ch.ShipLog.Add((tick, Short(StripDay(text), 90))); // v16.27 저녁 항해 일지
         if (w.Automation.Apps is ComputerApps apps)
             foreach (var (tick, text) in apps.Logbook)
                 if (tick >= ch.Start && tick < ch.End && ch.ShipLog.Count < cap / 2) ch.ShipLog.Add((tick, Short(StripDay(text), 70)));

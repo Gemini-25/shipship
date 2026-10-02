@@ -54,6 +54,7 @@ public static class Brain
         new HaircutActivity(), new SuitFitActivity(), new JogActivity(), new SweepClipsActivity(), // v17.1 이발 · 우주복 치수 조정 · 몸 관리 달리기 · 머리카락 치우기
         new LendHandActivity(), new SpectateActivity(), new SpaceTidyActivity(), new CoffeeRunActivity(), // v17.4 잡아 주기 · 구경 · 통로 상자 치우기 · 커피 줄
         new InfoActivity(), // v17.3 소리 확인 · 따지기 · 해명 · 사과 · 물건 찾기 · 못 끝낸 일 · 설거지 · 사진
+        new MateActivity(), // v16.27 훈련 집결 · 컴퓨터가 부탁한 안부 · 컴퓨터 개조 공사
         new ChatActivity(),
         new RelaxActivity(),
         new WanderActivity(),

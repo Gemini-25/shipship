@@ -964,7 +964,7 @@ public sealed partial class WorkBoard
             bool sealedOff = m.Body.Room.Abandoned; // 포기한 구획의 설비는 핵심 설비 고장만 우주복 입고 간다
             // 소모품이 없으면 임시 정비(마모를 0.35까지만 낮춤)밖에 못 하므로, 0.5는 넘어야 손을 댄다
             // v13.4 방침(정비: 고장 나면) — 거의 닳아 빠질 때까지 손대지 않는다
-            float early = w.Origin.Early(m); // v16.9 주컴퓨터가 시작 상태 · 부품 내력으로 앞당긴 설비
+            float early = w.Origin.Early(m) + (w.Automation.MateOrNull?.Early(m) ?? 0f); // v16.27 정비표가 정한 시각 // v16.9 주컴퓨터가 시작 상태 · 부품 내력으로 앞당긴 설비
             if (!sealedOff && m.Faults.Count == 0 && m.Wear >= (w.Policies["maint"] == 1 ? 0.88f : haveItem ? 0.35f : 0.5f) - early)
             {
                 float u = 0.15f + 0.7f * MathF.Max(0f, m.Wear - 0.35f) / 0.65f + (m.Spec.Critical ? 0.1f : 0f) + early;
@@ -1258,6 +1258,7 @@ public sealed partial class WorkBoard
         ScanGrowth(Post); // v11.3 배우기 · 재활
         psc = Prof.Lap("scan.Growth", psc);
         ScanLife(Post); // v12.7 시신 수습 · 의수·의족
+        ScanMate(Post); // v16.27 사각지대 드론 정찰
         ScanComputer(Post); // v16.20 원격으로 안 되는 일만 손에게 (ComputerTriage.cs)
         psc = Prof.Lap("scan.Life", psc);
 

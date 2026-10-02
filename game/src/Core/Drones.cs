@@ -517,6 +517,7 @@ public sealed partial class DroneSystem
             if (RobotsV15.Base(d.Kind) == DroneKind.Inspect && OtherDroneJob(ready) is WorkOrder first && first.Kind != WorkKind.InspectHull)
             { d.Doing = "손 조종 — 급한 일이 먼저"; return; }
         }
+        if (SkyHold(d)) { d.Doing = "우주 날씨 예보 — 거치대에서 기다린다"; return; } // v16.27
         if (FleetDecide(d)) return; // v16.20b 주 컴퓨터가 맡긴 일 (파공 · 교대 · 건지기)
         if (d.Battery < 0.35f) return;
         switch (RobotsV15.Base(d.Kind))
