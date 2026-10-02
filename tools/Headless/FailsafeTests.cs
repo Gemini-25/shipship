@@ -32,28 +32,6 @@ public static partial class Program
             if (P("bundle")) FsBundle2(seed);
             if (P("ba")) FsBeforeAfter(seed);
             if (P("det")) FsDeterminism(seed);
-            if (part == "scaledbg") FsScaleDebug(seed);
-            if (part == "bodydbg")
-            {
-                var w = DayOne(seed, "Hanbit");
-                RunUntilHour(w, 11f);
-                var door = w.Ship.Doors.Where(d => !d.IsExternal && !d.Bulkhead && d.RoomA != null && d.RoomB != null && w.Body.DoorOf(d)!.Zone == AccessZone.Open
-                    && d.RoomA.Kind != RoomType.Reactor && d.RoomB.Kind != RoomType.Reactor).OrderBy(d => d.Id).Skip(2).First();
-                var dir = door.ConnectsVertically ? new Cell(0, 1) : new Cell(1, 0);
-                Cell from = door.Cell - dir - dir, to = door.Cell + dir + dir;
-                if (!w.Ship.IsWalkable(from) || !w.Ship.IsWalkable(to)) { from = door.Cell - dir; to = door.Cell + dir; }
-                door.RoomA!.BreakerOff = true; door.RoomB!.BreakerOff = true; Run(w, World.SystemInterval * 2);
-                var p = w.Crew.Where(c => c.CanAct && !c.IsChild && !c.Outside).OrderBy(c => c.Id).First();
-                Teleport(w, p, from);
-                w.Step();
-                Force(w, p, new Job(null, "지나가기", new List<Toil> { new GotoToil(to), new WaitToil(30, Pose.Standing) }));
-                for (int t = 0; t < SimTime.Minutes(10); t++)
-                {
-                    w.Step();
-                    if (t % 25 == 0) Console.WriteLine($"  t{t} {p.Cell} → {to} · 문 열림 {door.Openness:0.00} 잠김 {door.Locked} 걸림 {w.Failsafe.Latched(door)} 전기 {door.Powered} · {door.RoomA.Name} {door.RoomA.Air.Pressure:0} {door.RoomB.Name} {door.RoomB.Air.Pressure:0} · 길 {p.Path?.Count}");
-                    if (p.Cell == to) break;
-                }
-            }
         }
         finally { Durability.Legacy = false; }
         Console.WriteLine(_fails == 0 ? "\n✔ 모두 통과" : $"\n✘ {_fails}개 실패");
@@ -156,14 +134,21 @@ public static partial class Program
             // 간선: 생명유지실 문 쪽 간선을 모두 끊는다
             foreach (var l in w.Net.Links.Where(l => l.Kind == NetKind.Power && l.Door != null && (l.Door.RoomA == ls || l.Door.RoomB == ls)).ToList()) w.Net.Hurt(l, 1f, "시험");
             foreach (var l in w.Net.Links.Where(l => l.Kind == NetKind.Power && l.Door != null && (l.Door.RoomA == comp || l.Door.RoomB == comp)).ToList()) w.Net.Hurt(l, 1f, "시험");
-            // 회로: 생명유지실 · 컴퓨터실의 주 회로 차단기가 떨어진다
+            // 회로: 생명유지실 · 컴퓨터실의 주 회로가 단락으로 죽는다 (원격으로 다시 올릴 수 없는 고장 — 차단기 트립은 컴퓨터가 곧 올려 시험이 안 된다)
             var panel = w.Ship.FurnitureOf(FurnitureType.PowerPanel).First().Machine!;
             foreach (int c in new[] { ls.Circuit, comp.Circuit }.Distinct())
-                if (!panel.Faults.Any(f => f.Circuit == c)) panel.Faults.Add(new Fault { Kind = FaultKind.BreakerTrip, Since = w.Tick, Circuit = c });
-            Run(w, SimTime.Minutes(10));
+                if (!panel.Faults.Any(f => f.Circuit == c)) panel.Faults.Add(new Fault { Kind = FaultKind.ShortCircuit, Since = w.Tick, Circuit = c });
             var cm = w.Ship.FurnitureOf(FurnitureType.MainComputer).First().Machine!;
-            Check($"{ship}: 간선 · 주 회로가 끊겨도 생명유지실 · 주 컴퓨터는 산다", ls.Powered && comp.Powered && cm.Powered && w.Automation.MainOnline,
-                $"생명유지 {(ls.Powered ? "켜짐" : "꺼짐")}(간선 {(ls.PowerLinked ? "이어짐" : "끊김")}) · 컴퓨터 {(cm.Powered ? "켜짐" : "꺼짐")} · 넘어간 방 {w.Failsafe.Transfers}");
+            int lsDark = 0, cmDark = 0; // 10분 동안 매 시스템 틱 — 한 번이라도 꺼졌나
+            for (int t = 0; t < SimTime.Minutes(10); t++)
+            {
+                w.Step();
+                if (w.Tick % World.SystemInterval != 1) continue;
+                if (!ls.Powered) lsDark++;
+                if (!cm.Powered) cmDark++;
+            }
+            Check($"{ship}: 간선 · 주 회로가 끊겨도 생명유지실 · 주 컴퓨터는 한 번도 꺼지지 않는다", lsDark == 0 && cmDark == 0 && ls.Powered && comp.Powered && cm.Powered && w.Automation.MainOnline && w.Failsafe.Transfers > 0,
+                $"생명유지 꺼진 틱 {lsDark}(간선 {(ls.PowerLinked ? "이어짐" : "끊김")}) · 컴퓨터 꺼진 틱 {cmDark} · 넘어간 방 {w.Failsafe.Transfers}");
             if (ship == "Hanbit")
             {
                 Check("주 컴퓨터 — 예비 회로로 넘어간 것을 읽고 판단 근거로 남긴다", w.Automation.Book.Acts.Any(a => a.Key.StartsWith("fs:ats")) || w.Automation.Reasoning.Any(r => r.text.Contains("예비 회로")),
@@ -175,9 +160,10 @@ public static partial class Program
                     var o = DayOne(seed, ship);
                     var ols = o.Ship.RoomsOf(RoomType.LifeSupport).First(r => !r.Detached);
                     var opanel = o.Ship.FurnitureOf(FurnitureType.PowerPanel).First().Machine!;
-                    opanel.Faults.Add(new Fault { Kind = FaultKind.BreakerTrip, Since = o.Tick, Circuit = ols.Circuit });
-                    Run(o, SimTime.Minutes(10));
-                    Check("비교 — 예전 배는 같은 차단기 하나에 생명유지실이 꺼졌다", !ols.Powered, $"예전 생명유지 {(ols.Powered ? "켜짐" : "꺼짐")}");
+                    opanel.Faults.Add(new Fault { Kind = FaultKind.ShortCircuit, Since = o.Tick, Circuit = ols.Circuit });
+                    int oDark = 0;
+                    for (int t = 0; t < SimTime.Minutes(10); t++) { o.Step(); if (o.Tick % World.SystemInterval == 1 && !ols.Powered) oDark++; }
+                    Check("비교 — 예전 배는 같은 회로 하나가 죽자 생명유지실이 꺼졌다", oDark > 0, $"예전 생명유지 꺼진 틱 {oDark}");
                 }
                 finally { Durability.Legacy = false; }
                 Check("장갑 벽 — 원자로 · 배전 · 주 컴퓨터실 벽은 충격 피해 절반", w.Failsafe.ArmorWalls > 0 && w.Ship.Walls.Any(kv => kv.Value.Armor <= 0.5f),
@@ -364,31 +350,6 @@ public static partial class Program
         Check("전/후 — 정전 방시간 · 필수 방 정전이 줄었다", after.DarkRoomH < before.DarkRoomH * 0.7f && after.DarkEssH <= before.DarkEssH,
             $"정전 방시간 {before.DarkRoomH:0} → {after.DarkRoomH:0} · 필수 {before.DarkEssH:0.0} → {after.DarkEssH:0.0} · 설비 고장 {before.Faults} → {after.Faults} ({sw.Elapsed.TotalSeconds:0}초)");
         Check("전/후 — 감압이 옆방을 끌고 가지 않는다", after.DecoDragged <= before.DecoDragged && after.DecoMaxRooms <= Math.Max(2, before.DecoMaxRooms), $"끌려간 방 {before.DecoDragged} → {after.DecoDragged} · 최대 {before.DecoMaxRooms} → {after.DecoMaxRooms}");
-    }
-
-    private static void FsScaleDebug(int seed)
-    {
-        var w = DayOne(seed, "Hanbit");
-        var galley = w.Ship.RoomsOf(RoomType.Galley).First();
-        bool Safe(Room r) => !r.Detached && r != galley && r.Type is not (RoomType.Corridor or RoomType.Reactor) && r.Cells.Any(w.Ship.IsOpenFloor)
-                             && !r.Furniture.Any(x => x.Type is FurnitureType.CoolantPump or FurnitureType.PowerPanel or FurnitureType.MainComputer or FurnitureType.ReactorCore or FurnitureType.Battery);
-        var others = w.Ship.Rooms.Where(Safe).OrderBy(r => r.Id).ToList();
-        Incidents.Fire(w, galley.Cells.First(w.Ship.IsOpenFloor));
-        Run(w, SimTime.Minutes(2));
-        var k = w.Scale.OpenCases.FirstOrDefault(x => x.Key == "cause:Fire" && (x.RoomId == galley.Id || x.Rooms.Contains(galley.Id)));
-        if (k != null) using (w.Causes.Because(k.Root)) foreach (var r in others.Take(3)) w.Fire.Ignite(r.Cells.First(w.Ship.IsOpenFloor), 0.35f);
-        Run(w, SimTime.Minutes(4));
-        for (int waited = 0; waited < 180 && k != null && k.Open; waited++)
-        {
-            foreach (var r in w.Ship.Rooms) if (w.Fire.CountIn(r) > 0) w.Fire.ClearRoom(r);
-            Run(w, SimTime.Minutes(1));
-        }
-        Console.WriteLine($"사건 {(k == null ? "없음" : k.Open ? "열림" : "닫힘")}");
-        var inc = k == null ? null : w.Causes.IncidentOf(k.Root);
-        if (inc != null) foreach (var id in inc.Nodes) { var n = w.Causes.Node(id); if (n.Open) Console.WriteLine($"  열린 고리 {n.Kind} {n.Key} {n.Text} 방 {n.RoomId}"); }
-        foreach (var fc in w.Automation.FireCases) Console.WriteLine($"  소화 {fc.RoomId} 단계 {fc.Stage} {fc.Method} — {fc.Status}");
-        foreach (var r in w.Ship.Rooms.Where(r => r.Id is 0 or 4))
-            Console.WriteLine($"  {r.Name} {r.Air.Pressure:0}kPa O2 {r.Air.O2:0.0} 불 {w.Fire.CountIn(r)} · 갈아냄 {r.Flushing} 진공 {r.Purging} 질식 {r.Inerting} 댐퍼 {r.VentOpen} 전기 {r.Powered} 잠금 {r.Lockdown} 붙듦 {r.ResponseHold} · 탱크 {w.Air.Reserve:0} · 문 {string.Join(",", r.Doors.Select(d => (d.Locked ? "L" : "o") + (w.Failsafe.Latched(d) ? "*" : "")))}");
     }
 
     // ── 8) 결정론 · 성능 ──
