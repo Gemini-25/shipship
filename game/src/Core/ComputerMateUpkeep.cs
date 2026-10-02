@@ -29,6 +29,8 @@ public sealed class UpkeepSlot
     public float Hour { get; init; }
     public long At { get; init; }
     public long Planned { get; init; }
+    /// <summary>표를 짤 때의 고장 횟수 (그 뒤 늘었으면 정비 전에 멎은 것).</summary>
+    public int FaultBase { get; init; }
     public int MachineId { get; init; }
     public string Machine { get; init; } = "";
     public string Room { get; init; } = "";
@@ -241,7 +243,7 @@ public sealed partial class ShipMate
                 float now = RiskBy(m, t, hrs), late = RiskBy(m, t, hrs + 48f);
                 Slots.Add(new UpkeepSlot
                 {
-                    Day = day + d, Hour = hh, At = at, Planned = w.Tick, MachineId = m.Body.Id, Machine = m.Name, Room = m.Body.Room.Name, LifeLo = t.LifeLo, LifeHi = t.LifeHi,
+                    Day = day + d, Hour = hh, At = at, Planned = w.Tick, FaultBase = m.FaultCount, MachineId = m.Body.Id, Machine = m.Name, Room = m.Body.Room.Name, LifeLo = t.LifeLo, LifeHi = t.LifeHi,
                     RiskNow = now, RiskLate = late, Why = $"{TrendWord(m)} 추세 {t.Now * 100:0} (하루 +{t.Slope * 2400:0.#})",
                 });
             }
@@ -273,7 +275,7 @@ public sealed partial class ShipMate
                 Remember(m);
                 continue;
             }
-            if (m.Faults.Count > 0) // 정비표의 날보다 먼저 멎었다
+            if (m.Faults.Count > 0 || m.FaultCount > s.FaultBase) // 정비표의 날보다 먼저 멎었다 (벌써 고쳤어도)
             {
                 s.Missed = true; SlotsMissed++; _due.Remove(m.Body.Id);
                 OnMissed(s, m);
