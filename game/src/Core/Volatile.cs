@@ -257,6 +257,7 @@ public sealed class VolatileSystem
         string text = $"{m.Name} {Name(mode)}" + (why.Length > 0 && why != "시험" ? $" ({why})" : "");
         int node = parent >= 0 ? w.Causes.Effect(CauseKind.Explosion, "", text, m.Body.Room, m.Body.Center, parent, lasting: false)
             : w.Causes.Root(CauseKind.Explosion, text, m.Body.Room, m.Body.Center, observer: w.Causes.ConsumeObserver());
+        w.Scale.Kind(node, "blow:" + mode); // v16.18 도감: 과열 폭발 방식
         w.Causes.Hit(m.Body.Room, node);
         using (w.Causes.Because(node)) BlowCore(m, mode, why);
     }

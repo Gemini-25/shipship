@@ -37,6 +37,8 @@ public sealed class ScaleCase
     public IncidentScale Peak { get; set; }
     /// <summary>판정한 규모 (컴퓨터든 사람이든 마지막으로).</summary>
     public IncidentScale Planned { get; set; }
+    /// <summary>처음 판정 때 대비한 규모 (교훈으로 한 칸 높였으면 그 규모).</summary>
+    public IncidentScale Guess { get; set; }
     public long Start { get; init; }
     public long Changed { get; set; }
     public long End { get; set; } = -1;
@@ -55,6 +57,8 @@ public sealed class ScaleCase
     public List<int> Told { get; } = new();
     public List<int> Feared { get; } = new();
     public HashSet<CauseKind> KindsSeen { get; } = new();
+    /// <summary>이 사건에서 본 자세한 종류 (도감: 단락 · 열폭주 · 독감 …).</summary>
+    public HashSet<string> KeysSeen { get; } = new(StringComparer.Ordinal);
     public int Called { get; set; }
     /// <summary>규모마다 부른 수 · 실제로 붙은 사람 수 (가장 많았을 때).</summary>
     public int[] StageCalled { get; } = new int[5];
@@ -203,8 +207,8 @@ public sealed partial class ScaleSystem
             foreach (var k0 in _open)
                 if (k0.CosmicId >= 0 && k0.Root < 0 && _w.Cosmic.Events.FirstOrDefault(e => e.Id == k0.CosmicId) is CosmicEvent ce && ce.Cause == inc.Root) { cos = k0; break; }
             if (cos != null) { cos.Root = inc.Root; _byRoot[inc.Root] = cos; continue; }
-            string key = _tags.TryGetValue(inc.Root, out var t) ? t : "cause:" + root.Kind;
-            var bas = _tags.ContainsKey(inc.Root) ? ScaleTable.OfKey(key) : ScaleTable.Of(root.Kind);
+            string key = _tags.TryGetValue(inc.Root, out var t) ? t : DetailKey(root) ?? "cause:" + root.Kind; // 자세한 종류가 표에 있으면 그 줄로 (도감)
+            var bas = _tags.ContainsKey(inc.Root) ? ScaleTable.OfKey(key) : WithDetail(root, ScaleTable.Of(root.Kind));
             var k = NewCase(key, root.Text, bas, root.RoomId);
             k.Root = inc.Root;
             k.Skill = SkillOf(root.Kind, key);
@@ -313,7 +317,7 @@ public sealed partial class ScaleSystem
                 if (Math.Abs(rec.Tick - n.Tick) <= SimTime.Minutes(1) && (rec.Room == n.RoomId || n.RoomId < 0) && ScaleTable.Of(rec.Scale) > s) s = ScaleTable.Of(rec.Scale);
             return s;
         }
-        return ScaleTable.Of(n.Kind);
+        return WithDetail(n, ScaleTable.Of(n.Kind));
     }
 
     private void Refresh(ScaleCase k)
@@ -338,6 +342,7 @@ public sealed partial class ScaleSystem
             var ns = Of(n);
             if (!_nodeScale.TryGetValue(id, out var old) || ns > old) _nodeScale[id] = ns;
             if (k.KindsSeen.Add(n.Kind) && id != k.Root) Seen["cause:" + n.Kind] = SeenOf("cause:" + n.Kind) + 1;
+            if (DetailKey(n) is string dk && dk != k.Key && k.KeysSeen.Add(dk)) Seen[dk] = SeenOf(dk) + 1; // 사슬 속 자세한 종류도 도감에
             bool live = n.Open || !n.Lasting && w.Tick - n.Tick < SimTime.Minutes(30) || id == k.Root && w.Tick - n.Tick < SimTime.Minutes(30);
             if (ns > peak) { peak = ns; why = n.Text; whyNode = id; }
             if (live && ns > now) { now = ns; if (ns >= peak) { why = n.Text; whyNode = id; } }
@@ -434,6 +439,7 @@ public sealed partial class ScaleSystem
         ByPeak[(int)k.Peak]++;
         if (k.Now >= IncidentScale.Ship || k.Peak >= IncidentScale.Ship && LastBigEnd < k.Start) LastBigEnd = _w.Tick;
         if (k.CrewId >= 0) _crewCase.Remove(k.CrewId);
+        Learn(k); // 컴퓨터의 교훈 · 승무원의 경험 (ScaleLearn.cs)
         if (k.Peak >= IncidentScale.System)
             _w.Log.Add(_w.Tick, LogKind.Ship, $"사고 수습 — {k.Name} (가장 컸을 때 {ScaleTable.Label(k.Peak)} · 부른 사람 {k.Called} · 붙은 사람 최대 {k.StageResponders.Max()})");
     }
@@ -568,9 +574,10 @@ public sealed partial class ScaleSystem
                     // 두려움: 배 전체가 흔들린다 · 하늘이 무너진다 (용감 · 침착하면 덜)
                     k.Feared.Add(c.Id);
                     Fears++;
-                    float fear = k.Now >= IncidentScale.Cosmic ? 0.32f : 0.2f;
-                    w.Brain2.Emotions.Feel(c, Feeling.Fear, fear, $"{k.Name} — {ScaleTable.Name(k.Now)}");
-                    c.Needs.Stress = MathF.Min(1f, c.Needs.Stress + (k.Now >= IncidentScale.Cosmic ? 0.07f : 0.04f) * (1.3f - 0.6f * c.Traits.Bravery));
+                    float vet = FearMul(c); // 배 전체를 넘겨 본 사람은 덜 무섭다
+                    float fear = (k.Now >= IncidentScale.Cosmic ? 0.32f : 0.2f) * vet;
+                    w.Brain2.Emotions.Feel(c, Feeling.Fear, fear, $"{k.Name} — {ScaleTable.Name(k.Now)}" + (vet < 1f ? " (겪어 봤다)" : ""));
+                    c.Needs.Stress = MathF.Min(1f, c.Needs.Stress + (k.Now >= IncidentScale.Cosmic ? 0.07f : 0.04f) * (1.3f - 0.6f * c.Traits.Bravery) * vet);
                 }
             }
         }

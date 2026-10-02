@@ -20,14 +20,18 @@ public sealed partial class ScaleSystem
     {
         var w = _w;
         var s = k.Now;
+        var a = w.Automation;
+        bool computer = a.Present && a.MainOnline;
+        var prep = Prepare(k, s, computer, out var lesson); // 지난번 크게 번진 종류면 한 칸 높여 부른다 (ScaleLearn.cs)
         int able = Able();
-        int n = ScaleTable.Muster(s, able);
+        int n = ScaleTable.Muster(prep, able);
         // 일 맡을 사람: 배 전체 · 우주급이면 몇 명만 일에 붙고 나머지는 모인다
         int workers = s >= IncidentScale.Ship ? Math.Clamp(able / 3, 3, 8) : n;
         PickWorkers(k, Math.Min(workers, able));
         k.Called = n;
         k.StageCalled[(int)s] = Math.Max(k.StageCalled[(int)s], n);
-        k.Planned = s;
+        k.Planned = prep;
+        if (k.Steps.Count == 1) k.Guess = prep;
         Plans++;
         var room = k.RoomId >= 0 && k.RoomId < w.Ship.Rooms.Count ? w.Ship.Rooms[k.RoomId] : null;
         string names = string.Join("·", k.Workers.Take(4).Select(id => w.Crew[id].Name));
@@ -38,12 +42,11 @@ public sealed partial class ScaleSystem
         {
             IncidentScale.Personal => $"{k.Name} — 개인 사고. " + (names.Length > 0 ? $"곁의 {Ko.IGa(names)} 돕는다" : "혼자 추스른다"),
             IncidentScale.Room => (k.Name.Contains(where) ? k.Name : $"{where} {k.Name}") + " — 방 규모. " + (names.Length > 0 ? $"당직 {Ko.IGa(names)} 맡는다" : "당직이 맡는다"),
-            IncidentScale.System => $"{k.Name} — 계통으로 번졌다 ({where}). {n}명 소집 · 그쪽 작업 우선",
+            IncidentScale.System => $"{k.Name} — " + (k.Steps.Count > 1 ? "계통으로 번졌다" : "계통 사고") + $" ({where}). {n}명 소집 · 그쪽 작업 우선",
             IncidentScale.Ship => $"{k.Name} — 배 전체 사고. 전원 소집 · 일상 중단" + (k.MusterRoom >= 0 ? $" · {Ko.EuRo(w.Ship.Rooms[k.MusterRoom].Name)} 모여 점호" : ""),
             _ => $"{k.Name} — 우주급 재난. 대피 · " + (CosmicAvoid(k) ? "항로 변경 검토" : "피할 수 없다 — 대피소에서 버틴다"),
         };
-        var a = w.Automation;
-        bool computer = a.Present && a.MainOnline;
+        if (lesson.Length > 0) k.Broadcast += $" · {lesson} ({n}명)";
         if (!computer)
         {
             // 컴퓨터가 없다: 사람이 판정한다 (늦다)
@@ -52,25 +55,25 @@ public sealed partial class ScaleSystem
             return;
         }
         k.JudgedBy = "주 컴퓨터";
-        k.Plan = $"{ScaleTable.Label(s)} · {ScaleTable.Response(s)} · 소집 {n}명" + (k.Suggest.Length > 0 ? $" · 제안: {k.Suggest}" : "");
+        k.Plan = $"{ScaleTable.Label(s)} · {ScaleTable.Response(prep)} · 소집 {n}명" + (lesson.Length > 0 ? $" · 교훈: {lesson}" : "") + (k.Suggest.Length > 0 ? $" · 제안: {k.Suggest}" : "");
         // 방송: 개인은 손목 단말로만 · 방은 안내 · 계통부터 경보
-        int priority = s switch { IncidentScale.Personal => 0, IncidentScale.Room => 1, _ => 2 };
+        int priority = prep switch { IncidentScale.Personal => 0, IncidentScale.Room => 1, _ => 2 };
         string order = s == IncidentScale.Ship && k.MusterRoom >= 0 ? "muster" : "";
-        if (priority > 0 && (s >= IncidentScale.System || Notable(k)))
+        if (priority > 0 && (prep >= IncidentScale.System || Notable(k)))
         {
             var b = a.Speak.Announce(a.Voice.Style(k.Broadcast), room, priority, order);
             if (b != null) { k.BroadcastId = b.Id; Broadcasts++; }
         }
         bool ask = s >= IncidentScale.Ship && a.Asks.Needed("muster"); // 방침이 모두 물으라면 소집도 제안 카드로
         if (s == IncidentScale.Ship && k.MusterRoom >= 0 && !ask) { k.MusterAt = w.Tick; k.MusterDone = false; }
-        if (s >= IncidentScale.Room && (s >= IncidentScale.System || Notable(k)))
+        if (s >= IncidentScale.Room && (prep >= IncidentScale.System || Notable(k)))
         {
-            var planned = s;
+            var planned = prep;
             var kk = k;
             a.Book.Add(s >= IncidentScale.System ? ActKind.Broadcast : ActKind.Advice, room,
                 $"{k.Name} · 번진 방 {k.Rooms.Count}" + (why.Length > 0 ? $" · {why}" : ""),
-                $"규모 {ScaleTable.Label(s)} — {ScaleTable.Examples(s)}급",
-                $"{(k.BroadcastId >= 0 ? "방송" : "단말 알림")} · {n}명 소집" + (s >= IncidentScale.Ship ? " · 일상 중단" : s == IncidentScale.System ? " · 작업 우선" : ""),
+                $"규모 {ScaleTable.Label(s)} — {ScaleTable.Examples(s)}급" + (lesson.Length > 0 ? $" · {lesson}" : ""),
+                $"{(k.BroadcastId >= 0 ? "방송" : "단말 알림")} · {n}명 소집" + (prep >= IncidentScale.Ship ? " · 일상 중단" : prep == IncidentScale.System ? " · 작업 우선" : ""),
                 k.Suggest.Length > 0 ? k.Suggest : ScaleTable.Response(s),
                 $"scale:{k.Id}:{(int)s}", 0, 30f,
                 (world, act) => kk.Peak > planned ? (-1, $"규모를 낮게 봤다 — {ScaleTable.Label(kk.Peak)}까지 번졌다")
@@ -353,6 +356,7 @@ public sealed partial class ScaleSystem
         I(Cases.Count); I(Escalations); I(Plans); I(Broadcasts); I(HumanJudged); I(Musters); I(Rests); I(Fears); I(Serial);
         foreach (var k in _open) { I(k.Id); I((int)k.Now); I((int)k.Peak); I(k.Workers.Count); I(k.Mustered.Count); I(k.Rooms.Count); }
         for (int i = 0; i < 5; i++) I(ByPeak[i]);
+        HashLearn(I);
     }
 }
 
