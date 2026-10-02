@@ -606,7 +606,7 @@ public static class WaysWork
         if (a != null) w.Matter.Remove(a); // 구멍 속에 끼었다
         if (way.Fx == WayFx.Brace) { NeedsSystem.AddInjury(c.Vitals, 0.05f, "등에 멍 · 동상"); c.Say(w, "차갑다 — 빨리 실링폼!"); }
         ways.AddMark(new WayMark { Look = way.Look, At = at, RoomId = room.Id, Since = w.Tick, Try = t.Id, Who = c.Id, Mat = mat, Q = wall.PatchQuality, Dir = from - at, Active = false });
-        MarkLog.Add(wall.Marks, w.Tick, $"{c.Name}: {name}(으)로 임시로 막음");
+        MarkLog.Add(wall.Marks, w.Tick, $"{c.Name}: {Ko.EuRo(name)} 임시로 막음");
         ways.Finish(t, true, $"{Ko.EuRo(name)} 막았다 — 오래는 못 간다", c);
         w.Board.RequestScan();
         return true;

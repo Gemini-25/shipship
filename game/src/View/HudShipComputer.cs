@@ -432,10 +432,12 @@ public partial class Hud
     {
         switch (kind)
         {
+            case "구멍 막기": // v16.25 막을 방법 견줌
             case "파공":
                 DrawArc(c, 4.5f, 0f, Mathf.Tau, 14, col, 1.2f, true);
                 DrawPolyline(new[] { c + new Vector2(-2, -4), c + new Vector2(0, -1), c + new Vector2(-1, 1), c + new Vector2(2, 4) }, col, 1.2f, true);
                 break;
+            case "불 끄기": // v16.25 끌 방법 견줌
             case "불":
                 float f = Mathf.Sin(_time * 9f) * 0.8f;
                 DrawColoredPolygon(new[] { c + new Vector2(0, -5 + f), c + new Vector2(3.5f, 1), c + new Vector2(0, 4), c + new Vector2(-3.5f, 1) }, col.WithAlpha(0.85f));

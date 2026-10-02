@@ -571,7 +571,7 @@ public sealed partial class WaysSystem
         if (shortlist.Count < 2) return;
         var blocked = opts.Where(x => !x.o.Allowed && x.way.Book).Select(x => x.o).FirstOrDefault(); // 규정 갈래가 막혔으면 그것도 보여 준다
         if (blocked != null) shortlist.Add(blocked);
-        var d = a.Foresee.Fleet(k.Snag is Snag.Fire ? "불" : k.Snag is Snag.Breach ? "파공" : WaysTable.Name(k.Snag), room, k.Title, shortlist);
+        var d = a.Foresee.Fleet(k.Snag is Snag.Fire ? "불 끄기" : k.Snag is Snag.Breach ? "구멍 막기" : WaysTable.Name(k.Snag), room, k.Title, shortlist); // 격벽 · 출동 판단("불" · "파공")과 따로 남긴다
         k.ComputerPick = d.Pick.Key;
         if (Debug) Console.WriteLine($"   [컴퓨터 고름] {k.Title}: {d.Pick.Name} ({d.Reason})");
         k.ComputerWhy = d.Reason;
