@@ -168,6 +168,7 @@ public sealed class World
     public CosmicSystem Cosmic { get; } // v18.13 우주 규모 대재난 30
     public ScaleSystem Scale { get; } // v16.18 사고 · 재난 다섯 규모 (판정 · 대응 · 완급 · 연쇄 · 도감)
     public CasualtySystem Casualty { get; } // v16.24 큰 상처 뒤: 출혈 · 화상 쇼크 · 심정지 · 불붙는 순간
+    public WaysSystem Ways { get; } // v16.25 문제마다 여러 갈래 해법
     public CrisisCrewSystem CrisisCrew { get; } // v16.21 승무원 위기 행동 (공황 · 비상 배치표 · 비상 절차 · 여러 손 · 우선순위)
     public ExpeditionSystem Expedition { get; } // v16.12 재료 탐사 원정
     public BodySystem Body { get; } // v16.3 배 본체 (칸 3층 · 칸 상태 · 벽 층 · 문)
@@ -285,6 +286,7 @@ public sealed class World
         Cosmic = new CosmicSystem(this); // v18.13
         Scale = new ScaleSystem(this); // v16.18
         Casualty = new CasualtySystem(this); // v16.24
+        Ways = new WaysSystem(this); // v16.25
         CrisisCrew = new CrisisCrewSystem(this); // v16.21
         Expedition = new ExpeditionSystem(this); // v16.12
         Body = new BodySystem(this); // v16.3
@@ -385,6 +387,7 @@ public sealed class World
             Culture.Update(dt); // v14.9 겪은 일이 관행이 되어 전해진다
             pf = Prof.Lap("sys.Culture", pf);
             Daily.Update(dt); // v15 사고가 아닌 날의 일상 사건
+            Ways.Update(dt); // v16.25 문제마다 여러 갈래 해법
             Fleet.Update(dt); // v16.20b 함대 지휘 · 로봇 · 드론 두뇌
             Failsafe.Update(dt); Major.Update(dt); // v16.19 차압 문 · 예비 회로 · 칸막이 · 큰 사고
             Annex.Update(dt); // v16.10 증축: 제안 → 회의 → 골조 · 외판 · 가압 · 배선 · 내장 · 개통

@@ -158,6 +158,7 @@ public static partial class Program
         if (args.Contains("--hazard70test")) return RunHazard70Test(seed); // v15 사고 70
         if (args.Contains("--catalogtest")) return RunCatalogTest(seed); // v15 고장·물자 70
         if (args.Contains("--moduletest")) return RunModuleTest(seed); // v15 설비 70
+        if (args.Contains("--waystest")) return RunWaysTest(seed); // v16.25
         if (args.Contains("--fleettest")) return RunFleetTest(seed); // v16.20b
         if (args.Contains("--shipdesigntest")) return RunShipDesignTest(seed); // v16.22 배 재설계 · 크기별 등급 · 방 종류 · 식량원
         if (args.Contains("--auditfixtest")) return RunAuditFixTest(seed); // v16.24 점검 항해 고치기
