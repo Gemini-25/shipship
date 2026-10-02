@@ -112,7 +112,7 @@ public static class LookSpec
     public const int LightPx = 4;
     public const float LightRefresh = 0.12f;
     /// <summary>방 바탕 밝기 (켜진 방 · 통로 · 정전 어둠) · 천장 등 웅덩이 세기 · 반지름(칸).</summary>
-    public const float AmbientLit = 0.5f, AmbientCorridor = 0.45f, AmbientDark = 0.06f, CeilingPool = 0.45f, CeilingRadius = 2f;
+    public const float AmbientLit = 0.45f, AmbientCorridor = 0.4f, AmbientDark = 0.06f, CeilingPool = 0.5f, CeilingRadius = 1.8f;
     /// <summary>붉은 비상등 (정전 · 조명이 살아 있는 방) · 비상 조명 설비(흰빛).</summary>
     public static readonly (float r, float g, float b) Emergency = (0.95f, 0.14f, 0.09f), EmergencyFixture = (0.95f, 0.9f, 0.75f);
     /// <summary>불빛 (깜빡이는 주황).</summary>

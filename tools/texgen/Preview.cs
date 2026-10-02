@@ -81,30 +81,39 @@ public static class Preview
             }
         }
         Decal(1, 8, 3); Decal(0, 9, 2); Decal(5, 8, 5); Decal(16, 5, 2); Decal(13, 4, 6); Decal(20, 10, 4); Decal(4, 12, 3); Decal(24, 9, 1); Decal(8, 2, 5); Decal(12, 12, 5); Decal(7, 3, 2);
-        // 빛 (낮은 해상도 빛 버퍼를 곱한다): 천장 등 웅덩이 · 방 색온도 · 정전 붉은 비상등
-        var lights = new List<(float x, float y, float r, float cr, float cg, float cb)>
+        // 빛 (화면 빛 버퍼와 같은 수): 방 바탕 0.45 × 색온도 + 천장 등((x + 2y) % 4 == 0 칸, 세기 0.5 · 반지름 1.8칸) · 정전 방은 0.06 + 붉은 비상등 · 불빛
+        (float r, float g, float b) Temp(int cx) => cx <= 4 ? (0.72f, 0.96f, 1f) : cx <= 9 ? (1f, 0.84f, 0.62f) : (1f, 0.84f, 0.62f);
+        var lights = new List<(float x, float y, float r, float cr, float cg, float cb, int zone)>();
+        int Zone(int cx, int cy) => cx >= 1 && cx <= 4 ? 0 : cx >= 6 && cx <= 9 ? 1 : cx >= 11 && cx <= 14 ? (cy >= 4 ? 3 : 2) : -1;
+        for (int cy = 1; cy < H - 1; cy++)
+        for (int cx = 1; cx < W - 1; cx++)
         {
-            (2.5f, 2f, 3.2f, 0.75f, 1f, 1.05f), (2.5f, 5f, 3.2f, 0.75f, 1f, 1.05f),
-            (7f, 2.5f, 3.4f, 1.1f, 0.92f, 0.7f), (8f, 5f, 3.4f, 1.1f, 0.92f, 0.7f),
-            (13f, 2f, 3f, 1.1f, 0.9f, 0.68f),
-            (12f, 4.6f, 1.6f, 0.95f, 0.18f, 0.12f), (8.5f, 1.2f, 2.4f, 1.3f, 0.7f, 0.3f),
-        };
+            int z = Zone(cx, cy);
+            if (z < 0 || (cx + 2 * cy) % 4 != 0) continue;
+            if (z == 3) { lights.Add((cx + 0.5f, cy + 0.5f, 2.4f, 0.95f * 0.55f, 0.14f * 0.55f, 0.09f * 0.55f, z)); continue; }
+            var t = Temp(cx);
+            lights.Add((cx + 0.5f, cy + 0.5f, 1.8f, t.r * 0.5f, t.g * 0.5f, t.b * 0.5f, z));
+        }
+        lights.Add((8.5f, 1.2f, 3f, 0.75f, 0.41f, 0.15f, 1)); // 불
         for (int y = 0; y < o.H; y++)
         for (int x = 0; x < o.W; x++)
         {
             int cx = x / Cs, cy = y / Cs;
-            char ch = map[cy][cx];
-            bool dark = cx >= 11 && cy >= 4 && ch != 'H';
-            float lr = dark ? 0.08f : ch == 'H' ? 0.6f : 0.55f, lg = lr, lb = dark ? 0.1f : lr * 1.05f;
+            int z = Zone(cx, cy);
+            bool wall = z < 0;
+            var t = Temp(cx);
+            float lr, lg, lb;
+            if (z == 3) { lr = 0.048f; lg = 0.054f; lb = 0.078f; }
+            else { float amb = wall ? 0.41f : 0.45f; lr = amb * t.r; lg = amb * t.g; lb = amb * t.b; }
             float px = x / (float)Cs, py = y / (float)Cs;
             foreach (var l in lights)
             {
-                if (!dark && l.cg < 0.3f) continue;
-                if (dark && l.cg >= 0.3f) continue;
-                float d = MathF.Sqrt((px - l.x) * (px - l.x) + (py - l.y) * (py - l.y)) / l.r;
-                if (d >= 1f) continue;
-                float f = (1f - d * d); f *= f;
-                lr += f * 0.62f * l.cr; lg += f * 0.62f * l.cg; lb += f * 0.62f * l.cb;
+                if (!wall && l.zone != z) continue;
+                float d2 = ((px - l.x) * (px - l.x) + (py - l.y) * (py - l.y)) / (l.r * l.r);
+                if (d2 >= 1f) continue;
+                float f = 1f - d2; f *= f;
+                if (wall) f *= 0.6f;
+                lr += f * l.cr; lg += f * l.cg; lb += f * l.cb;
             }
             int i = o.I(x, y);
             o.R[i] *= MathF.Min(1f, lr); o.G[i] *= MathF.Min(1f, lg); o.B[i] *= MathF.Min(1f, lb);
