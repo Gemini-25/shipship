@@ -220,9 +220,7 @@ public sealed class ShipCore
         {
             BackupSince = w.Tick;
             Takeovers++;
-            string why = a.Rebooting ? $"재부팅 — {a.RebootWhy}" : m == null ? "?" : !m.Powered && !OnUps ? "전기" : m.Faults.FirstOrDefault()?.Name ?? (OnUps ? "UPS 바닥" : "멈춤");
-            a.Book.Add(ActKind.Module, m?.Body.Room, $"본체 멎음 — {why}", "예비 연산기가 넘겨받는다 (앞일 예측 · 원인 짚기는 쉰다)", "예비 연산기: 격벽 · 댐퍼 · 경보 · 급한 곳부터 전기 · 하던 소화", a.Rebooting ? "기다려 달라" : "본체를 고쳐 달라", "takeover", SimTime.Minutes(10), 10f,
-                (world, act) => (world.Automation.CoreOnline ? 1 : -1, world.Automation.MainOnline ? "본체가 돌아왔다" : world.Automation.CoreOnline ? "예비 연산기가 붙잡고 있다" : "예비 연산기도 멎었다"));
+            _takeover = a.Rebooting ? $"재부팅 — {a.RebootWhy}" : m == null ? "?" : !m.Powered && !OnUps ? "전기" : m.Faults.FirstOrDefault()?.Name ?? (OnUps ? "비상 전지 바닥" : "멈춤"); // 기록은 본체가 멎은 뒤에 (예비 연산기 이름으로)
         }
         if (!hold && BackupCore && main) w.Log.Add(w.Tick, LogKind.Ship, $"주 컴퓨터 본체가 돌아왔다 — 예비 연산기가 {(w.Tick - BackupSince) / (float)SimTime.Minutes(1):0}분 붙잡고 있던 일을 넘겨받았다");
         BackupCore = hold;
@@ -249,6 +247,18 @@ public sealed class ShipCore
         }
         if (m != null) m.Active = !(SelfSaving && (OnUps || !p.ReactorOnline || p.DeficitSince >= 0)); // 대기 전력 10%
         if (SelfSaving && m != null && m.Powered) SavedKwh += m.Spec.PowerDraw * 0.9f * dt;
+    }
+
+    private string? _takeover;
+
+    /// <summary>본체가 멎은 뒤(MainOnline이 바뀐 다음) 넘겨받은 일을 예비 연산기 이름으로 적는다.</summary>
+    internal void Flush()
+    {
+        if (_takeover is not string why) return;
+        _takeover = null;
+        var a = _w.Automation;
+        a.Book.Add(ActKind.Module, a.Computer?.Body.Room, $"본체 멎음 — {why}", "예비 연산기가 넘겨받는다 (앞일 예측 · 원인 짚기는 쉰다)", "예비 연산기: 격벽 · 댐퍼 · 경보 · 급한 곳부터 전기 · 하던 소화", a.Rebooting ? "기다려 달라" : "본체를 고쳐 달라", "takeover", SimTime.Minutes(10), 10f,
+            (world, act) => (world.Automation.CoreOnline ? 1 : -1, world.Automation.MainOnline ? "본체가 돌아왔다" : world.Automation.CoreOnline ? "예비 연산기가 붙잡고 있다" : "예비 연산기도 멎었다"));
     }
 
     /// <summary>재부팅 단계 (화면 · 기록): 0 아님 · 1 예비 코어 인수 · 2 기억 점검 · 3 주 코어 복귀 준비.</summary>
@@ -304,6 +314,7 @@ public sealed partial class AutomationSystem
             Install(r.Module, why);
             return;
         }
+        if (w.Tick <= SimTime.TicksPerDay * 2) return; // 생활 쪽 판단은 사흘째부터 (업데이트 버그도 그때부터)
         foreach (var r in ComputerV16.Rows)
         {
             if (Core.Grade(r.Module) >= 1 || ComputerV16.Why(w, r) is not string why) continue;

@@ -310,7 +310,7 @@ public sealed class ComputerForesee
         {
             int pol = _w.Policies["vacuumfire"];
             float t = 2f + 3f + Delay(pol);
-            var o = new ForeseeOption { Key = "vacuum", Name = "진공 소화", Minutes = t * Noise(), People = Lethal(pol, 1f), Ship = Damage(cells, t) + room.Volume / shipV * 10f + 0.1f, Note = "공기 · 작물을 잃는다 · 확실하다" };
+            var o = new ForeseeOption { Key = "vacuum", Name = "진공 소화", Minutes = t * Noise(), People = Lethal(pol, 1f), Ship = Damage(cells, t) + room.Volume / shipV * 10f + 0.4f, Note = "공기 · 작물을 잃는다 · 확실하다" }; // 다시 채울 공기 · 얼어붙는 짐
             if (!vacOk) { o.Allowed = false; o.Blocked = pol <= 0 ? "회의가 금했다" : "공기를 뺄 밸브가 없다"; }
             opts.Add(o);
         }
@@ -390,6 +390,7 @@ public sealed class ComputerForesee
         Timeline.Add(d);
         if (Timeline.Count > 80) Timeline.RemoveAt(0);
         Decisions++;
+        if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "21") Console.WriteLine($"[견줌] {title}: " + string.Join(" / ", opts.Select(o => $"{o.Name} p{o.People:0.00} s{o.Ship:0.00} m{o.Minutes:0.0} = {o.Score:0.00}{(o.Allowed ? "" : "x")} [{o.Note}]")) + $" → {pick.Name}");
         string cmp = string.Join(" / ", opts.Select(o => $"{o.Name} {(o.Allowed ? $"(다칠 사람 {o.People:0.#} · 잃는 것 {o.Ship:0.##})" : $"({o.Blocked})")}"));
         a.Book.Add(ActKind.Forecast, room, title, $"{opts.Count}가지를 {a.Core.Horizon:0}분 앞까지 견줘 봤다: {cmp}", $"{pick.Name} — {reason}", "", $"fs:{d.Id}", 0, kind == "정전" ? 60f : 10f,
             (world, act) => d.Score != 0 ? (d.Score, d.Result) : ((int, string)?)null);

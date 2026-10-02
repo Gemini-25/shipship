@@ -518,7 +518,9 @@ public sealed partial class AutomationSystem
     private void Ship20(float dt)
     {
         var w = _world;
-        if (!Present || Ship20Off) return;
+        if (!Present) return;
+        Core.Flush();
+        if (Ship20Off) return;
         Command.Update();
         if (CoreOnline) Triage.Update(dt);
         Foresee.Update();

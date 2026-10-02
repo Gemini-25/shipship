@@ -36,7 +36,8 @@ public static partial class Program
             {
                 var w = DayOne(seed, "Mirinae");
                 var a = w.Automation;
-                Check("중앙 컴퓨터 — V 지휘가 기본, 화재 대응·공기 구역 모듈", a.Level == 5 && a.Has(ComputerModule.FireResponse) && a.Has(ComputerModule.AirZones) && !a.Has(ComputerModule.BioMonitor),
+                // v16.20 모듈은 잠금 해제가 아니다 — 첫날부터 전부 (예전: 화재 대응 · 공기 구역 둘만)
+                Check("중앙 컴퓨터 — V 지휘가 기본, 화재 대응·공기 구역 모듈 (v16.20: 첫날부터 모듈 전부)", a.Level == 5 && a.Has(ComputerModule.FireResponse) && a.Has(ComputerModule.AirZones) && a.Modules.Count == Enum.GetValues<ComputerModule>().Length,
                     $"{AutomationSystem.LevelName(a.Level)} · 모듈 {string.Join(", ", a.Modules.Select(AutomationSystem.ModuleName))} · 방침 {string.Join(" · ", PolicySystem.All.Select(p => $"{p.Name} {w.Policies.Option(p.Id)}"))}");
             }
             // 2) 질식 소화: 빈 창고에 큰 불 → 가스로 끄고 → 환기로 산소가 돌아온다

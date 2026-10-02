@@ -77,12 +77,16 @@ public static partial class Program
                 Check("선내 방송 — 들은 방 사람만 안다 (스피커가 고장 난 방은 못 듣는다)", bc != null && b0 != null && deaf != null && a.Speak.Heard(b0, bc.Id) && !a.Speak.Heard(deaf, bc.Id),
                     bc == null ? "방송 없음" : $"들음 {bc.HeardBy.Count}명({b0?.Name} {b0?.Room?.Name}) · 못 들음 {bc.Missed.Count}명({deaf?.Name} {deaf?.Room?.Name}) · 안 울린 방 {bc.Silent.Count}");
 
-                // 연산 자원: 모듈을 모두 올리면 부하가 넘쳐 비필수부터 끈다
+                // 연산 자원: v16.20 모듈은 첫날부터 전부여도 부하는 넉넉하다 (용량을 크게) — 넘치는 건 극한에서만:
+                //  달아올라 연산을 반으로 줄이면(안전 모드) 우선순위 낮은 것(오락 보관함)부터 쉰다. (예전: 모듈을 다 올리면 평소에도 넘쳤다)
                 foreach (var m in Enum.GetValues<ComputerModule>()) a.Install(m);
                 float load0 = a.Demand() / a.Capacity;
-                Run(w, SimTime.Minutes(3));
-                Check("연산 자원 — 부하가 넘치면 우선순위 낮은 모듈(오락 보관함)부터 끈다", load0 > 0.9f && a.Suspended.Contains(ComputerModule.MediaVault) && a.Load <= 0.9f,
-                    $"부하 {load0 * 100:0}% → {a.Load * 100:0}% · 끈 모듈 {string.Join("·", a.Suspended.Select(AutomationSystem.ModuleName))} · 컴퓨터 방 열 +{a.HeatFor(a.Computer!.Body.Room):0.0}℃");
+                var cr = a.Computer!.Body.Room;
+                cr.VentOpen = false; cr.DamperStuck = true;
+                for (int i = 0; i < 3; i++) { cr.Air.Temperature = 41f; Run(w, SimTime.Minutes(1)); }
+                Check("연산 자원 — 모듈 전부여도 평소엔 넉넉하고 · 달아올라 연산을 줄이면 우선순위 낮은 모듈(오락 보관함)부터 끈다", load0 < 0.75f && a.Core.SafeMode && a.Suspended.Contains(ComputerModule.MediaVault) && a.Load <= 0.9f,
+                    $"평소 부하 {load0 * 100:0}% → 달아오른 뒤 {a.Load * 100:0}% · 끈 모듈 {string.Join("·", a.Suspended.Select(AutomationSystem.ModuleName))} · 컴퓨터 방 열 +{a.HeatFor(cr):0.0}℃");
+                cr.DamperStuck = false; cr.VentOpen = true;
             }
 
             // 3) 검증 장면: 문 감지기가 틀어진 방 — 컴퓨터는 비었다고 믿고 진공 소화를 제안 → 거절 → 사람이 확인하러 가 쓰러진 사람을 데리고 나온다 → 그 사람의 컴퓨터 신뢰가 바뀐다
@@ -148,6 +152,7 @@ public static partial class Program
                 var a = w.Automation;
                 var room = StoreRoom(w);
                 ClearRoom(w, room);
+                int id0 = a.Book.Acts.LastOrDefault()?.Id ?? 0;
                 a.Reboot("시험 재부팅", 4f);
                 int acts0 = a.Book.Total;
                 BigFire(w, room, 4);
@@ -162,9 +167,12 @@ public static partial class Program
                 int during = a.Book.Total - acts0;
                 bool vent = room.VentOpen;
                 Run(w, SimTime.Minutes(6));
-                Check("재부팅 — 몇 분 동안 자동 조치가 없고(댐퍼·소화 수순 없음), 다시 켜지면 돌아온다",
-                    offline && during == 0 && !cases && vent && a.MainOnline && a.Book.Total > acts0 && card.Contains("재부팅"),
-                    $"재부팅 중 조치 {during} · 수순 {(cases ? "있음" : "없음")} · 댐퍼 {(vent ? "그대로" : "닫힘")} · 카드 \"{card}\" · 다시 켠 뒤 조치 {a.Book.Total - acts0}");
+                // v16.20 재부팅은 차례로 — 예비 연산기가 댐퍼 · 경보 · 하던 소화를 붙잡는다 (예전: 몇 분 동안 아무 조치도 없었다).
+                //  그동안의 조치는 모두 예비 연산기 이름으로 남고, 다시 켜지면 본체가 돌아온다.
+                var byBackup = a.Book.Acts.Where(x => x.Id > id0 && x.Tick > a.RebootStarted && x.Tick < a.RebootUntil && x.Kind != ActKind.Reboot).ToList(); // 재부팅을 거는 그 순간의 방송은 본체가 한다
+                Check("재부팅 — 몇 분 동안 본체는 쉬고 예비 연산기가 댐퍼를 닫는다(기록도 예비 연산기) · 다시 켜지면 돌아온다",
+                    offline && during > 0 && byBackup.Count > 0 && byBackup.All(x => x.By == "예비 연산기") && !vent && a.MainOnline && card.Contains("재부팅"),
+                    $"꺼짐 {offline} · 켜짐 {a.MainOnline} · 재부팅 중 조치 {during} (예비 연산기 {byBackup.Count(x => x.By == "예비 연산기")}/{byBackup.Count} · 다른 것: {string.Join(" / ", byBackup.Where(x => x.By != "예비 연산기").Select(x => $"{x.Kind} {x.By ?? "-"} {SimTime.Clock(x.Tick)} {x.Observe}"))}) · 수순 {(cases ? "있음" : "없음")} · 댐퍼 {(vent ? "그대로" : "닫힘")} · 카드 \"{card}\" · 다시 켠 뒤 조치 {a.Book.Total - acts0}");
 
                 Run(w, SimTime.Hours(2));
                 var quiet = w.Ship.LiveRooms.First(r => r.Type == RoomType.Lounge);
@@ -237,6 +245,7 @@ public static partial class Program
                     foreach (var box in w.Ship.Containers) if (want > 0 && box.Storage!.Accepts(ItemKind.Ration)) want -= box.Storage.Add(ItemKind.Ration, want);
                     foreach (var bed in w.Ship.FurnitureOf(FurnitureType.GrowBed).Where((_, i) => i % 4 != 0).ToList()) { bed.Machine!.Crop!.Growth = 0.05f; w.Machines.Break(bed.Machine, FaultKind.Wrecked); }
                     if (plan) w.Automation.Install(ComputerModule.MealPlan);
+                    else w.Automation.Remove(ComputerModule.MealPlan); // v16.20 첫날부터 다 있다 — 없는 배는 떼어 내서 견준다
                     return w;
                 }
                 var wa = Low(true);
