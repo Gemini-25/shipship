@@ -57,6 +57,7 @@ public sealed class Scheme
     public int Invite { get; set; } = -1;
     public bool Identified { get; set; } = true;
     public bool Working { get; set; }
+    public float SessionHourSet { get; set; } = -1f;
     public long Stopped { get; set; } = -1;
     /// <summary>이번 모임 · 행사에 온 사람.</summary>
     public SortedSet<int> Came { get; } = new();

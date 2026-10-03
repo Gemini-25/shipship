@@ -132,7 +132,9 @@ public static partial class Program
             var g = w.Schemes.Start(SchemeTable.Get("secret_garden")!, gardener);
             SchemeUntil(w, () => g.Stage != SchemeStage.Prep, SimTime.TicksPerDay * 6, 100);
             Check("비밀 정원 — 창고 구석에서 몰래 키웠다", g.Stage is SchemeStage.Live or SchemeStage.Done, $"{w.Schemes.RoomOf(g)?.Name} · {g.Stage} · 진척 {g.Progress:0.00} · {g.Outcome}");
-            Run(w, SimTime.Hours(12));
+            Run(w, SimTime.Hours(2));
+            // 다른 사람이 먼저 보고 일러 치워졌으면 (그것도 이 배에서 일어나는 일이다) 한 번 더 키운다
+            if (!g.Active) { Console.WriteLine($"   먼저 들켰다: {g.Outcome}"); g = w.Schemes.Start(SchemeTable.Get("secret_garden")!, gardener); }
             var finder = crew.Where(c => c != gardener && !g.KnowsWho(c.Id)).OrderByDescending(c => w.Schemes.Approve(c, g).v).First();
             if (g.Active) w.Schemes.Discover(g, finder, "창고에 갔다가 봤다");
             var tr = w.Schemes.Traces.FirstOrDefault(t => t.Scheme == g.Id);
@@ -198,7 +200,7 @@ public static partial class Program
             Check("컴퓨터 — 과감 · 사람 우선 · 사생활 존중이면 함장에게는 말하지 않는다", sb.ComputerSaid is 0 or 2, $"{wb.Automation.Character.Line} → {sb.ComputerSaid} ({sb.ComputerWhy}) · {sb.Outcome}");
             var cap = wa.Command.Captain;
             Check("컴퓨터 — 함장이 들은 뒤 승무원이 움직였다 (고발 · 재판)", cap != null && sa.KnowsWho(cap.Id) && (sa.Motion >= 0 || sa.Over()), $"{sa.Stage} · 안건 {wa.Motions.Get(sa.Motion)?.Title}");
-            Check("컴퓨터 — 함장은 컴퓨터가 알려 준 것만 안다 (다른 쪽 함장은 모른다)", wb.Command.Captain is not CrewMember cb || !sb.KnowsWho(cb.Id) || sb.Crew.Contains(cb.Id), KnowLine(wb, sb));
+            Check("컴퓨터 — 함장은 컴퓨터가 알려 준 것만 안다 (다른 쪽 함장은 컴퓨터에게서 듣지 못했다)", sb.ComputerSaid != 1 && (wb.Command.Captain is not CrewMember cb || !sb.Knows.TryGetValue(cb.Id, out var kb) || kb != KnowHow.Told || sb.Crew.Contains(cb.Id)), KnowLine(wb, sb));
         }
 
         // ── 8) 저절로: 열흘 항해에서 여러 가지 일이 저마다 다른 사람에게서 나온다
