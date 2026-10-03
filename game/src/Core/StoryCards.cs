@@ -326,7 +326,7 @@ public sealed partial class StorySystem
                 Add("sorry", "먼저 사과한다", "내가 미안해. 내가 먼저 말했어야 했어", 0.48f, true, "", mercy * 0.3f + (s.Habits.Contains(Habit.Patient) ? 0.2f : 0f), "먼저 숙이는 사람이다");
                 Add("vent", "서운했던 걸 다 말한다", "나도 할 말 있어. 그동안 서운했던 거", 0.36f, true, "", s.Habits.Contains(Habit.ShortTempered) ? 0.4f : 0.05f, "참았던 말이 터진다");
                 Add("time", "둘만의 시간을 만든다", "오늘 밤 전망창 앞에서 둘이만 있자", 0.54f, aff >= 0.55f, "아직 마음이 깊어야", 0.15f, "말보다 함께 있는 걸 택한다");
-                Add("jealous", "질투를 인정한다", $"{(lv != null && lv.Rival >= 0 ? Name(lv.Rival) : "그 사람")}랑 웃는 거 보고 질투 났어", 0.5f, jealous, "질투가 끼어 있어야", 0.1f, "솔직하다");
+                Add("jealous", "질투를 인정한다", $"{Rang(lv != null && lv.Rival >= 0 ? Name(lv.Rival) : "그 사람")} 웃는 거 보고 질투 났어", 0.5f, jealous, "질투가 끼어 있어야", 0.1f, "솔직하다");
                 Add("end", "그만하자고 한다", "우리 여기까지 하자", 0.9f, aff < 0.3f || s.Needs.Stress > 0.7f, "마음이 식었거나 지쳤을 때만", 0.45f, "지쳤다");
                 break;
             }
@@ -424,7 +424,7 @@ public sealed partial class StorySystem
                     else if (MathF.Min(l.AffinityTo(s), s.AffinityTo(l)) >= 0.5f)
                     {
                         l.ChangeAffinity(s, -0.2f); s.ChangeAffinity(l, -0.15f);
-                        em.Feel(s, Feeling.Sadness, 0.3f, $"{l.Name}와 금이 갔다", l);
+                        em.Feel(s, Feeling.Sadness, 0.3f, $"{Ko.WaGwa(l.Name)} 금이 갔다", l);
                         k.Branch = "오랜 사이에 금이 갔다";
                     }
                     else
@@ -443,7 +443,7 @@ public sealed partial class StorySystem
                     em.Feel(l, Feeling.Fear, -0.25f, "곁에서 붙잡아 줬다", s);
                     w.Relations.Remember(l, s, RelationReason.Comforted, "공황이 왔을 때 곁에서 붙잡아 줬다");
                     l.ChangeAffinity(s, 0.08f);
-                    em.Feel(s, Feeling.Pride, 0.15f, $"{l.Name}를 진정시켰다", l);
+                    em.Feel(s, Feeling.Pride, 0.15f, $"{Ko.EulReul(l.Name)} 진정시켰다", l);
                     k.Answer = "…후. 고마워. 이제 좀 숨이 쉬어져";
                     k.Outcome = "숨이 돌아왔다";
                 }

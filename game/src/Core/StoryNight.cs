@@ -102,7 +102,7 @@ public sealed partial class StorySystem
             };
             for (int k = 0; k < cands.Count; k++)
             {
-                var got = cands[(k + h % 3) % cands.Count]();
+                var got = cands[(k + h % cands.Count) % cands.Count]();
                 if (got.HasValue) return got.Value;
             }
             return PlaceLines(a, b, ra, temp)!.Value;
@@ -114,8 +114,8 @@ public sealed partial class StorySystem
     {
         var ev = _w.History.Events;
         for (int i = ev.Count - 1; i >= 0 && _w.Tick - ev[i].Tick < SimTime.Hours(18); i--)
-            if (ev[i].Kind is HistoryKind.Incident or HistoryKind.Damage or HistoryKind.Death or HistoryKind.Decision or HistoryKind.Casualty)
-                return Short(ev[i].Text);
+            if (ev[i].Kind is HistoryKind.Incident or HistoryKind.Damage or HistoryKind.Death or HistoryKind.Casualty)
+                return (ev[i].Kind == HistoryKind.Death ? "†" : "") + Short(ev[i].Text);
         return null;
     }
 
@@ -126,23 +126,33 @@ public sealed partial class StorySystem
         "바다 폭풍 지나간 다음 날 같더라", "화성 굴에선 이 정도면 그냥 화요일이야", "갱도 무너질 때 나던 소리랑 똑같았어", "정거장이었으면 벌써 대피 방송 나왔지",
         "타이탄 추위에 비하면 별것도 아니야", "구름 도시에선 바닥 흔들리는 게 일상이라", "얼음 갈라지는 소리 같았어", "고리에선 공기 새는 게 제일 무서웠는데",
     };
+    private static readonly string[] FaithGrief = { "별길 따라 잘 갔을 거야", "조상님들 곁으로 갔겠지", "그냥… 보고 싶다", "배도 같이 우는 것 같아", "숨 한 번 같이 쉬자" };
     private static readonly string[] GenLook = { "난 이런 거 처음이라 아직 손이 떨려", "이럴 때일수록 순서대로 하면 돼", "이런 거 한두 번 겪은 게 아니야", "난 배 밖을 모르니까 이게 다 우리 집 일이야" };
     private static readonly string[] FaithLook = { "별길이 지켜 준 거야", "할머니가 지켜 주셨나 봐", "운이 좋았지 뭐", "우리 늙은 배가 버텨 준 거야", "일단 숨부터 고르자" };
 
     private (string, string, string) EventLines(CrewMember a, CrewMember b, Roots ra, Roots rb, int temp, string ev, int h)
     {
+        bool death = ev.StartsWith('†');
+        if (death)
+        {
+            ev = ev[1..];
+            // 죽음 앞에서는 믿음대로 말한다 — 같은 믿음이면 맞장구, 다르면 제 식으로
+            string ga = temp == 0 ? $"{ev}… 너도 그 사람 좋아했잖아" : $"{ev}… {FaithGrief[ra.Faith]}";
+            string gb = temp == 0 ? "지금 그 얘기 하고 싶지 않아" : ra.Faith == rb.Faith ? $"응. 우리 식으로 보내 주자" : FaithGrief[rb.Faith];
+            return (ga, gb, "사건:" + ev);
+        }
         string flavor = (h % 3) switch { 0 => HomeLook[ra.Home], 1 => GenLook[ra.Gen], _ => FaithLook[ra.Faith] };
         string la = temp switch
         {
-            2 => $"{b.Name}, {ev} 때 괜찮았어? {flavor}",
+            2 => $"{ev}… {b.Name}, 괜찮았어? {flavor}",
             0 => $"{ev}… {flavor}. 너야 상관없겠지만",
-            _ => $"{ev} 들었어? {flavor}",
+            _ => $"{ev}, 들었어? {flavor}",
         };
         string lb;
         if (temp == 0) lb = "그래. 할 말 끝났으면 지나갈게";
         else if (ra.Home == rb.Home) lb = $"역시 {HomeShort[rb.Home]} 사람이네. 나도 딱 그 생각 했어";
         else if (ra.Faith != rb.Faith && (h % 3) == 2) lb = rb.Faith == 2 ? "난 그런 거 안 믿어. 정비가 잘된 거지" : $"난 좀 다르게 봐 — {FaithLook[rb.Faith]}";
-        else if (ra.Gen != rb.Gen && (h % 3) == 1) lb = rb.Gen == 2 ? "젊을 땐 다 그래. 금방 익숙해져" : rb.Gen == 0 ? "고참들은 다 그렇게 말하더라" : $"난 {Gens[rb.Gen]}라 그런지 {GenLook[rb.Gen]}";
+        else if (ra.Gen != rb.Gen && (h % 3) == 1) lb = rb.Gen switch { 2 => "젊을 땐 다 그래. 금방 익숙해져", 0 => "고참들은 다 그렇게 말하더라", 3 => GenLook[3], _ => "다들 놀랐지. 그래도 순서대로 하면 돼" };
         else if ((ra.Class == 5) != (rb.Class == 5) && (ra.Class <= 1 || rb.Class <= 1)) lb = rb.Class == 5 ? "다들 너무 호들갑이야" : "넌 이런 일 걱정 안 하고 컸잖아";
         else lb = temp == 2 ? $"너 없었으면 더 무서웠을 거야. {HomeLook[rb.Home]}" : HomeLook[rb.Home];
         return (la, lb, "사건:" + ev);
@@ -175,7 +185,7 @@ public sealed partial class StorySystem
             RoomType.Observatory or RoomType.Bridge => "저쪽 별은 어제보다 조금 밝네",
             RoomType.Medbay => "여긴 올 때마다 소독약 냄새에 긴장돼",
             RoomType.Gym => "어제 무리했더니 다리가 후들거려",
-            _ => $"{room.Name}은 언제 와도 좀 춥다",
+            _ => $"{Ko.EunNeun(room.Name)} 언제 와도 좀 춥다",
         };
         string lb = temp switch { 2 => "너랑 있으니까 그런 것도 괜찮아", 0 => "…그러네", _ => "그러게, 나도 그 생각 했어" };
         return (la, lb, "장소:" + room.Name);
@@ -273,7 +283,7 @@ public sealed partial class StorySystem
                         a.Say(w, Persona.Say(a, $"{b.Name}, 아까는 내가 심했다"));
                         b.Say(w, Persona.Say(b, "나도. 한 잔 받아"));
                         Stats.Makeups++;
-                        kind = "fight"; text = $"{Ko.WaGwa(a.Name)} {b.Name}가 낮의 다툼을 풀었다";
+                        kind = "fight"; text = $"{Ko.WaGwa(a.Name)} {Ko.IGa(b.Name)} 낮의 다툼을 풀었다";
                     }
                     else
                     {
@@ -282,7 +292,7 @@ public sealed partial class StorySystem
                         a.Say(w, Persona.Say(a, "넌 아까 그 말 사과 안 해?"));
                         b.Say(w, Persona.Say(b, "여기서까지 이래야 돼?"));
                         Stats.Fights++;
-                        kind = "fight"; text = $"{Ko.WaGwa(a.Name)} {b.Name}가 식탁에서 다시 언성을 높였다";
+                        kind = "fight"; text = $"{Ko.WaGwa(a.Name)} {Ko.IGa(b.Name)} 식탁에서 다시 언성을 높였다";
                         var med = here.Where(o => o != a && o != b && Talking(o.Id) == null).OrderByDescending(o => MathF.Min(o.AffinityTo(a), o.AffinityTo(b)) + o.Traits.Sociability * 0.3f).ThenBy(o => o.Id).FirstOrDefault();
                         if (med != null) { var k = Hold(CardKind.Mediate, med, a, -1, b.Id); text += $" — {k.Outcome}"; }
                     }
@@ -319,19 +329,20 @@ public sealed partial class StorySystem
                 if (l.Together && l.Public)
                 {
                     var teaser = here.Where(o => o != a && o != b).OrderByDescending(o => o.Habits.Contains(Habit.Joker) ? 1 : 0).ThenBy(o => o.Id).First();
-                    teaser.Say(w, Persona.Say(teaser, $"{Ko.WaGwa(a.Name)} {b.Name}는 오늘도 같이 앉았네~"));
+                    teaser.Say(w, Persona.Say(teaser, $"{Ko.WaGwa(a.Name)} {Ko.EunNeun(b.Name)} 오늘도 같이 앉았네~"));
                     Stats.Cheers++;
-                    kind = "love"; text = $"{Ko.WaGwa(a.Name)} {b.Name}가 놀림을 받으며 웃었다";
+                    kind = "love"; text = $"{Ko.WaGwa(a.Name)} {Ko.IGa(b.Name)} 놀림을 받으며 웃었다";
                     break;
                 }
             }
         // 4) 오늘의 큰일을 두고 저마다 다른 말
-        if (kind == null && !camp.Used.Contains("talk") && RecentEvent() is string ev)
+        if (kind == null && !camp.Used.Contains("talk") && RecentEvent() is string evRaw)
         {
+            string ev = evRaw.TrimStart('†');
             var lines = new List<string>();
             for (int i = 0; i + 1 < here.Count && lines.Count < 3; i += 2)
             {
-                var (la, lb, _) = Passing(here[i], here[i + 1], ev);
+                var (la, lb, _) = Passing(here[i], here[i + 1], evRaw);
                 here[i].Say(w, Persona.Say(here[i], la)); here[i + 1].Say(w, Persona.Say(here[i + 1], lb));
                 lines.Add($"{here[i].Name}: “{la}”");
             }

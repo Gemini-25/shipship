@@ -84,10 +84,10 @@ public sealed partial class StorySystem
                 foreach (var a in w.Crew)
                 {
                     if (!Adult(a) || a.Partner is int || LoveOf(a) != null) continue;
-                    CrewMember? best = null; float bv = 0.45f;
+                    CrewMember? best = null; float bv = 0.4f;
                     foreach (var b in w.Crew)
                     {
-                        if (b == a || !Adult(b) || b.Partner is int || LoveOf(b) != null || b.AffinityTo(a) < 0.3f) continue;
+                        if (b == a || !Adult(b) || b.Partner is int || LoveOf(b) != null || b.AffinityTo(a) < 0.25f) continue;
                         if (Loves.Any(x => x.Has(a.Id) && x.Has(b.Id) && w.Tick - x.Since < SimTime.TicksPerDay * 5)) continue;
                         float v = a.AffinityTo(b);
                         if (v > bv) { bv = v; best = b; }
@@ -145,6 +145,9 @@ public sealed partial class StorySystem
         }
     }
 
+    /// <summary>시험: 지금 바로 고비가 오는지 살핀다.</summary>
+    public void CheckLove(Love l) { if (P(l.A) is CrewMember a && P(l.B) is CrewMember b) CrisisCheck(l, a, b, Math.Max(0.1f, Pace)); }
+
     private void CrisisCheck(Love l, CrewMember a, CrewMember b, float pace)
     {
         var w = _w;
@@ -161,7 +164,7 @@ public sealed partial class StorySystem
                     rival = c.Id;
                     w.Brain2.Emotions.Feel(y, Feeling.Anger, 0.25f, $"{Ko.WaGwa(x.Name)} {c.Name}", c);
                     y.ChangeAffinity(c, -0.15f);
-                    y.Say(w, Persona.Say(y, $"…{c.Name}랑 뭐가 그렇게 재밌어?"));
+                    y.Say(w, Persona.Say(y, $"…{Rang(c.Name)} 뭐가 그렇게 재밌어?"));
                     Stats.Jealousy++;
                     why = $"{Ko.IGa(y.Name)} {Ko.WaGwa(x.Name)} {c.Name} 사이를 질투한다";
                     break;
@@ -177,8 +180,8 @@ public sealed partial class StorySystem
         l.Stage = LoveStage.Crisis; l.Since = w.Tick; l.CrisisWhy = why; l.Rival = rival; l.Crises++;
         Stats.Crises++;
         LoveBeat(l, $"{Ko.WaGwa(a.Name)} {b.Name} — {why}");
-        Life.Diary(w, a, Persona.Say(a, $"{b.Name}와 요즘 어긋난다. {why}."));
-        Life.Diary(w, b, Persona.Say(b, $"{a.Name}와 요즘 어긋난다."));
+        Life.Diary(w, a, Persona.Say(a, $"{Ko.WaGwa(b.Name)} 요즘 어긋난다. {why}."));
+        Life.Diary(w, b, Persona.Say(b, $"{Ko.WaGwa(a.Name)} 요즘 어긋난다."));
     }
 
     /// <summary>둘이 드러낸다 (또는 들킨다): 축하 · 수군거림 · 회의 안건.</summary>
@@ -186,7 +189,7 @@ public sealed partial class StorySystem
     {
         var w = _w;
         l.Public = true;
-        LoveBeat(l, $"{Ko.WaGwa(a.Name)} {b.Name}가 사귄다는 걸 다들 알게 됐다 — {how}", true);
+        LoveBeat(l, $"{Ko.WaGwa(a.Name)} {Ko.IGa(b.Name)} 사귄다는 걸 다들 알게 됐다 — {how}", true);
         foreach (var o in w.Crew)
         {
             if (o == a || o == b || !Adult(o) || !o.CanAct) continue;
@@ -302,7 +305,7 @@ public sealed partial class StorySystem
             k.Branch = "둘은 다른 식탁에 앉기 시작했다";
             LoveBeat(lv, $"{Ko.WaGwa(s.Name)} {l.Name} — 헤어졌다", true);
             foreach (var x in new[] { s, l })
-                if (ArcOf(x) == null && StoryTable.Get("heartbreak") is ArcSpec hb) Start(hb, x, null, $"{(x == s ? l : s).Name}와 헤어진 일");
+                if (ArcOf(x) == null && StoryTable.Get("heartbreak") is ArcSpec hb) Start(hb, x, null, $"{Ko.WaGwa((x == s ? l : s).Name)} 헤어진 일");
             // 친구들은 편을 든다
             foreach (var o2 in w.Crew)
                 if (o2 != s && o2 != l && Adult(o2) && MathF.Abs(o2.AffinityTo(s) - o2.AffinityTo(l)) > 0.3f) { var cold = o2.AffinityTo(s) > o2.AffinityTo(l) ? l : s; o2.ChangeAffinity(cold, -0.04f); Stats.Whispers++; }

@@ -82,6 +82,8 @@ public sealed partial class StorySystem
     private CrewMember? P(int id) { if (id < 0) return null; foreach (var c in _w.Crew) if (c.Id == id) return c; return null; }
     private static bool Adult(CrewMember c) => !c.Dead && !c.IsChild;
     private string Name(int id) => P(id)?.Name ?? "누군가";
+    /// <summary>이름 + 랑/이랑.</summary>
+    private static string Rang(string n) => Ko.WaGwa(n).EndsWith("과") ? n + "이랑" : n + "랑";
 
     // ───────────────────────────── 출신 ─────────────────────────────
 
@@ -293,11 +295,11 @@ public sealed partial class StorySystem
         var st = a.Spec.Steps[next];
         long min = SimTime.Hours(st.Hours / pace);
         if (since < min) return;
-        bool late = since >= min * 3 + SimTime.Hours(12f / pace); // 문이 끝내 안 열리면 그냥 흘러간다
+        bool late = since >= min * 3 + SimTime.Hours(12f); // 문이 끝내 안 열리면 그냥 흘러간다 (근무 · 잠을 한 바퀴 지나도록)
         bool open = st.Gate switch
         {
             ArcGate.Time => true,
-            ArcGate.Place => PlaceOk(a, c),
+            ArcGate.Place => PlaceOk(a, c) || late,
             ArcGate.Confide => a.Confided || late,
             ArcGate.Hurt => HurtSince(c, a.StepAt) || late,
             ArcGate.Strain => c.Needs.Stress > 0.45f || NegFeel(c) > 0.3f || late,

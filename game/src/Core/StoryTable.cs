@@ -77,9 +77,9 @@ public static class StoryTable
                 Cf("{friend}에게 {kin} 사진을 보여 주며 웃었다"),
             }, "{kin}의 졸업 사진이 왔다 — '우리 집 사람이 탄 배'를 발표했단다", "그림이 뜸해졌다 — 아이가 바빠진 모양이다",
                "{kin:이} 영상 통화에서 내 얼굴을 낯설어했다", "family_rift"),
-            A("family_rift", "{kin}와의 틀어진 사이", ArcTheme.Family, "torn_photo", null, c => 0.4f, new[]
+            A("family_rift", "{kin:와}의 틀어진 사이", ArcTheme.Family, "torn_photo", null, c => 0.4f, new[]
             {
-                T("{prev} — {kin}와는 그 뒤로 말을 안 한다", 6f),
+                T("{prev} — {kin:와}는 그 뒤로 말을 안 한다", 6f),
                 St("메신저 창을 열었다 닫았다 한다"),
                 Cf("{friend:이} '먼저 쓰는 쪽이 이기는 거야'라고 했다"),
             }, "짧은 사과 편지를 보냈고, 더 짧은 답이 왔다 — 그걸로 됐다", "보낼 말을 끝내 고르지 못했다", "{kin:이} 연락처를 지웠다는 걸 알았다"),
@@ -175,7 +175,7 @@ public static class StoryTable
             {
                 T("{rival:을} 보자마자 알아봤다 — 그 일의 장본인이다", 4f),
                 Qu("{rival:와} 같은 방에 있을 때마다 공기가 얼어붙는다"),
-                Cf("{friend}에게 {rival}와의 옛일을 털어놓았다"),
+                Cf("{friend}에게 {rival:와}의 옛일을 털어놓았다"),
                 St("{rival}의 웃음소리가 귀에 박힌다"),
             }, "{rival}에게서 그날 일에 대한 사과를 받아 냈다", "아무 말도 못 하고 근무를 바꿨다", "{rival}에게 주먹을 휘둘렀다", "revenge_regret"),
             A("revenge_regret", "복수의 뒷맛", ArcTheme.Revenge, "ash", null, c => 0.2f, new[]
