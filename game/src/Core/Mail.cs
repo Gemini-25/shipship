@@ -362,8 +362,8 @@ public sealed class LetterActivity : Activity
         float h = Hour(w);
         if (h < 17f && h > 9f) return (0f, "—");
         float days = k.OwedSince < 0 ? 0f : (w.Tick - k.OwedSince) / (float)SimTime.TicksPerDay;
-        float s = 0.18f + 0.05f * MathF.Min(3, k.Owed) + (Life.Has(c, Habit.Homesick) ? 0.1f : 0f) + (days > 4f ? 0.12f : 0f);
-        if (Life.Has(c, Habit.Procrastinator)) s *= days > 6f ? 0.8f : 0.3f;
+        float s = 0.3f + 0.08f * MathF.Min(3, k.Owed) + (Life.Has(c, Habit.Homesick) ? 0.12f : 0f) + (days > 2f ? 0.15f : 0f);
+        if (Life.Has(c, Habit.Procrastinator)) s *= days > 5f ? 0.8f : 0.35f;
         return (s, $"{k.Who}에게 답장");
     }
 

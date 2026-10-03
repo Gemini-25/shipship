@@ -326,7 +326,7 @@ public sealed partial class StorySystem
                     foreach (var o in here) if (o != a && o != b) w.Brain2.Emotions.Feel(o, k.Success ? Feeling.Joy : Feeling.Sadness, 0.08f, "밤 모임의 고백", a);
                     break;
                 }
-                if (l.Together && l.Public)
+                if (l.Together && l.Public && here.Count > 2) // 둘뿐이면 놀릴 사람이 없다
                 {
                     var teaser = here.Where(o => o != a && o != b).OrderByDescending(o => o.Habits.Contains(Habit.Joker) ? 1 : 0).ThenBy(o => o.Id).First();
                     teaser.Say(w, Persona.Say(teaser, $"{Ko.WaGwa(a.Name)} {Ko.EunNeun(b.Name)} 오늘도 같이 앉았네~"));

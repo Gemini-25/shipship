@@ -415,11 +415,11 @@ public sealed class WearSystem
         return true;
     }
 
-    /// <summary>제 공구: 쓸수록 손에 붙는다 (1.02 → 1.08).</summary>
-    public float OwnToolFeel(CrewMember c) => 1.02f + 0.06f * MathF.Min(1f, (Peek(c)?.ToolHours ?? 0f) / 30f);
+    /// <summary>제 공구: 쓸수록 손에 붙는다 (1.04 → 1.08).</summary>
+    public float OwnToolFeel(CrewMember c) => 1.04f + 0.04f * MathF.Min(1f, (Peek(c)?.ToolHours ?? 0f) / 30f);
 
     /// <summary>남의 공구: 어색하다.</summary>
-    public float BorrowFeel(CrewMember c) => 0.95f;
+    public float BorrowFeel(CrewMember c) => 0.96f;
 
     public void Hash(Action<long> I, Action<float> F)
     {
