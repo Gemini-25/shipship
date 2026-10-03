@@ -713,7 +713,7 @@ public sealed class MeetingSystem
         var who = targets.FirstOrDefault();
         if (who != null)
             w.History.Add(w, HistoryKind.Decision,
-                $"비난: {string.Join("·", blamers.Take(3).Select(c => c.Name))} → {(open ? string.Join("·", targets.Take(3).Select(c => c.Name)) : $"선장 {who.Name}")} — '{d.Title}' 뒤에 {Ko.IGa(dead.Name)} 죽었다",
+                $"비난: {string.Join("·", blamers.Take(3).Select(c => c.Name))} → {(open ? string.Join("·", targets.Take(3).Select(c => c.Name)) : $"함장 {who.Name}")} — '{d.Title}' 뒤에 {Ko.IGa(dead.Name)} 죽었다",
                 null, blamers.Concat(targets).Distinct().ToList(), log: true);
     }
 

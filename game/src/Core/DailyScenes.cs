@@ -675,6 +675,8 @@ public sealed class DailySceneSystem
                 if (s.Other < 0 && s.ComputerAct < 0 && s.Since >= 0 && RoomById(s.RoomId) is Room hall && Sees(hall)
                     && w.Tick - s.Since >= SimTime.Minutes(w.Automation.Active(ComputerModule.Access) ? 2 : 5))
                     PageWatch(s, c, hall);
+                // 통합6 찾은 사람이 그새 잠들었으면 (자러 가던 길이었다) 다른 사람이 찾을 수 있다
+                if (s.Other >= 0 && !s.Holding && CrewOf(s.Other) is CrewMember fo && (fo.Dead || !fo.IsAwake)) { Trail(s, $"{fo.Name}: 그만 잠들었다"); s.Other = -1; }
                 // 깨어 있는 사람이 가까이 지나가면 알아챈다 (야간 당직 먼저)
                 if (s.Other < 0 && c.Cell == s.Spot)
                 {
@@ -782,6 +784,7 @@ public sealed class DailySceneSystem
         if (status == ToilStatus.Succeeded && s.Kind != SceneKind.Craft) return;
         string why = Crisis.Acting(_w) ? "경보" : c.Down || c.Dead ? "부상" : c.Needs.Fatigue > 0.8f || c.Pose == Pose.Sleeping ? "졸음" : c.Needs.Hunger > 0.8f ? "배고픔" : status == ToilStatus.Succeeded ? "잠시 손을 놓았다" : "다른 일";
         if (was) Trail(s, $"{c.Name} 자리를 떴다 — {why}");
+        if (was && System.Environment.GetEnvironmentVariable("SCENE_WHY") == "1") System.Console.WriteLine($"     [{SimTime.Clock(_w.Tick)}] {s.Kind} {c.Name} 떠남 {status} · " + string.Join(", ", c.LastEvaluations.OrderByDescending(e => e.Score).Take(4).Select(e => $"{e.Activity.Id}:{e.Score:0.00}")));
         switch (s.Kind)
         {
             case SceneKind.Chess when was || c.Id == s.Host && s.Stage != SceneStage.Gather:
@@ -872,6 +875,10 @@ public sealed class DailySceneSystem
     {
         var w = _w;
         (float, string, DailyScene?, Role, Concern?) best = (0f, "—", null, Role.None, null);
+        // 통합6 잠결에 걷는 사람을 찾은 사람은 문턱에 서 있어도 (방이 안 잡혀도) 곧장 데려다주러 간다
+        foreach (var sw in Scenes)
+            if (sw.Open && sw.Kind == SceneKind.Sleepwalk && sw.Other == c.Id && !sw.Holding && !c.Dead && !c.Down && c.CanAct && !c.Outside && c.IsAwake)
+                return (1.3f, $"잠결에 걷는 {CrewOf(sw.Host)?.Name} — 침대로", sw, Role.Escort, null);
         if (!Able(c) || c.Dead) return best;
         bool crisis = Crisis.Acting(w);
         float lf = w.Society.LeisureFactor;
@@ -892,6 +899,7 @@ public sealed class DailySceneSystem
             switch (s.Kind)
             {
                 case SceneKind.Chess:
+                    if (s.Stage == SceneStage.Run && s.Here.Contains(c.Id) && (s.Host == c.Id || s.Other == c.Id)) { Offer(MathF.Max(leisure, 0.45f) + 0.15f, "판에 빠져 있다", s, s.Host == c.Id ? Role.Host : Role.Join); break; } // 통합6 두던 판은 취미 · 잡담 때문에 중간에 일어나지 않는다
                     if (s.Host == c.Id) Offer(leisure, s.Stage == SceneStage.Paused ? "끊긴 판으로 돌아간다" : s.Game < 0 ? "체스판을 가져와 편다" : "판 앞에서 상대를 기다린다", s, Role.Host);
                     else if (s.Other == c.Id) Offer(leisure + (s.Stage == SceneStage.Gather && _w.Tick - s.Opened < SimTime.Hours(1) ? 0.25f : 0f), s.Stage == SceneStage.Paused ? $"{Ko.WaGwa(CrewOf(s.Host)?.Name)} 두던 판으로" : $"{CrewOf(s.Host)?.Name}의 체스 청 — 곧 간다고 했다", s, Role.Join); // 받아들였으면 약속이다 (한 시간 안엔 더 끌린다)
                     else if (s.Other < 0 && s.Game >= 0 && c.Room?.Id == s.RoomId && !c.IsChild && (c.Hobbies.Contains(Hobby.Chess) || c.Traits.Calm > 0.6f) && !Busy(c))
@@ -900,7 +908,7 @@ public sealed class DailySceneSystem
                 case SceneKind.Movie:
                     if (s.Host == c.Id || s.Invited.Contains(c.Id) || s.Joined.Contains(c.Id))
                     {
-                        if (s.Here.Contains(c.Id)) break;
+                        if (s.Here.Contains(c.Id)) { if (s.Stage == SceneStage.Run) Offer(MathF.Max(leisure, 0.45f) + 0.15f, "영화에 빠져 있다", s, s.Host == c.Id ? Role.Host : Role.Join); break; } // 통합6 보던 영화는 취미 · 잡담 때문에 중간에 일어나지 않는다 (급한 일 · 위험 · 졸음 · 배고픔은 그대로 앞선다)
                         // 끊겼다 다시 갈지: 피곤하거나 늦었으면 덜
                         float sc = leisure - (s.Stage == SceneStage.Paused ? 0.25f * c.Needs.Fatigue : 0f);
                         Offer(sc, s.Stage == SceneStage.Paused ? "멈춘 영화를 마저 보러" : s.Stage == SceneStage.Run ? "영화가 벌써 시작했다 — 늦었다" : "영화의 밤", s, s.Host == c.Id ? Role.Host : Role.Join);

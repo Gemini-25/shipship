@@ -133,7 +133,7 @@ public sealed class SocietySystem
         if (recent > 0) terms.Add((-0.12f * MathF.Min(3, recent), $"사흘 사이 {recent}명을 잃었다"));
         if (w.Food.Rationing) terms.Add((-0.08f, "배급 중"));
         if (w.Policies["water"] == 2) terms.Add((-0.04f, "물이 엄격하다"));
-        terms.Add((0.15f * (w.Command.Trust - 0.5f), w.Command.Trust >= 0.5f ? "선장을 믿는다" : "선장을 못 믿는다"));
+        terms.Add((0.15f * (w.Command.Trust - 0.5f), w.Command.Trust >= 0.5f ? "함장을 믿는다" : "함장을 못 믿는다"));
         float rift = w.Meetings.Rifts().Select(r => r.tension).DefaultIfEmpty(0f).Max();
         if (rift > 0.1f) terms.Add((-0.15f * rift, "파벌 사이가 벌어졌다"));
         int lp = w.Policies["leisure"];

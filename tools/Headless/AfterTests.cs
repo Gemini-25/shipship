@@ -109,7 +109,8 @@ public static partial class Program
             foreach (var c in w.Crew) c.Needs.Food = 1f; // 밤새 아무도 냉장고를 열지 않게
             fridge.Room.PowerCut = true;
             bool stopped = Until(w, () => fridge.Machine is Machine fm && (fm.Stopped || fm.Efficiency < 0.2f), SimTime.Hours(1), SimTime.Minutes(1));
-            Run(w, SimTime.Hours(5));
+            if (Environment.GetEnvironmentVariable("AFTER_DEBUG") == "1") for (int k = 0; k < 5; k++) { Run(w, SimTime.Hours(1)); Console.WriteLine($"   [{SimTime.Clock(w.Tick)}] 냉장고 {fridge.Room.Name} 전기 {fridge.Room.Powered} 효율 {fridge.Machine?.Efficiency:0.00} 멈춤 {fridge.Machine?.Stopped} · 묵은 냄비 {old.Temp:0.0}℃ {old.Fresh:0.00} 냉장 {old.InFridge} · 새 {fresh.Temp:0.0}℃ {fresh.Fresh:0.00}"); }
+            else Run(w, SimTime.Hours(5));
             fridge.Room.PowerCut = false;
             truth.Add("정전");
             Until(w, () => af.Stats.FridgeSorts > 0, SimTime.Hours(10));

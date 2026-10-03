@@ -23,11 +23,13 @@ public static partial class Program
                 var w = World.CreateDefault(seed, 0, "Hanbit");
                 var v = w.Voyage;
                 float total = v.TotalDays;
-                int legsSeen = 0, last = -1;
-                for (int d = 0; d < (int)total + 6 && v.Number == 1; d++)
+                int legsSeen = 0, last = -1, halted = 0; // 통합6 원정대를 기다리며 엔진을 끈 날은 일정이 밀린다 (그만큼 더 기다린다 · 열흘까지)
+                for (int d = 0; d < (int)total + 6 + Math.Min(10, halted) && v.Number == 1; d++)
                 {
                     Run(w, SimTime.TicksPerDay);
+                    if (w.Expedition.Halted) halted++;
                     if (v.Index != last) { legsSeen++; last = v.Index; }
+                    if (Environment.GetEnvironmentVariable("VOY_DEBUG") == "1") Console.WriteLine($"   {d}일 구간 {v.Index} {v.Progress:0.0} 표류 {v.Drifting} 멈춤 {w.Expedition.Halted} {w.Expedition.HaltWhy} 불 {w.History.Events.Count(h => h.Text.Contains("불"))} 사고 {w.Scale.Cases.Count}");
                 }
                 var past = v.Past.FirstOrDefault();
                 Check("항해 하나를 끝까지 — 정리하고 다음 항해", v.Number >= 2 && past != null,

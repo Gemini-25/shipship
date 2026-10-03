@@ -796,6 +796,19 @@ public sealed class CookingSystem
         }
     }
 
+    /// <summary>통합6 그 냄비가 든 냉장고가 도는가 (다른 방 냉장고가 돈다고 이 냄비가 차갑지는 않다) — 그 방에 냉장고가 없으면 아무 냉장고나.</summary>
+    private bool FridgeOkFor(Batch b, bool any)
+    {
+        bool here = false;
+        foreach (var f in _w.Ship.FurnitureOf(FurnitureType.Fridge))
+        {
+            if (f.Room != b.Room) continue;
+            here = true;
+            if (f.Machine == null || f.Machine.Efficiency > 0.2f) return true;
+        }
+        return !here && any;
+    }
+
     private bool FridgeOk()
     {
         foreach (var f in _w.Ship.FurnitureOf(FurnitureType.Fridge))
@@ -836,9 +849,10 @@ public sealed class CookingSystem
                 b.InFridge = true; // 남은 냄비는 냉장고로
                 b.Room = w.Ship.FurnitureOf(FurnitureType.Fridge).FirstOrDefault()?.Room ?? b.Room;
             }
-            float amb = b.InFridge && fridge ? 4f : b.Room?.Air.Temperature ?? 20f;
+            bool cold = b.InFridge && FridgeOkFor(b, fridge);
+            float amb = cold ? 4f : b.Room?.Air.Temperature ?? 20f;
             b.Temp += (amb - b.Temp) * (1f - MathF.Exp(-h / 0.7f));
-            float rot = b.Jar ? (b.Ready(w.Tick) ? 0.003f : 0.001f) : b.InFridge && fridge ? 0.004f : 0.05f;
+            float rot = b.Jar ? (b.Ready(w.Tick) ? 0.003f : 0.001f) : cold ? 0.004f : 0.05f;
             b.Fresh = MathF.Max(0f, b.Fresh - rot * h * TechWeb.Mul(_w, "food.rot")); // v16.14 진공 포장
             if (b.Jar && !b.WasReady && b.Ready(w.Tick))
             {

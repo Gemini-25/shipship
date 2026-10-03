@@ -287,7 +287,7 @@ public sealed partial class MatterSystem
         float v0 = impulse / MathF.Max(0.05f, t.Mass);
         float mu = ObjectPhysics.Friction(_w, t) * Gravity;
         float dist = mu * ObjectPhysics.G > 0.05f ? v0 * v0 / (2f * mu * ObjectPhysics.G) : MathF.Min(8f, v0);
-        if (Gravity < 0.2f) t.Vel = dir * MathF.Min(3f, v0 * 0.3f); // 떠돈다
+        if (Gravity < 0.2f && why != "무중력") t.Vel = dir * MathF.Min(3f, v0 * 0.3f); // 떠돈다 (통합6 떠도는 중엔 속도를 그대로 이어 간다 — 공기 저항만)
         dist = MathF.Min(8f, dist);
         var start = t.At;
         var pos = t.At.Center + t.Off;
@@ -324,6 +324,7 @@ public sealed partial class MatterSystem
             if (t.Kind == ArticleKind.Rug && JunctionAt(start) is { } j) Expose(t, j, null); // 밀려난 러그 아래가 드러났다
         }
         if (hit > 0f) Impact(t, hit, why); // 멈춘 자리에서 깨진다 (조각은 거기 흩어진다)
+        if (hit > 0f && Gravity < 0.2f) t.Vel = -dir * MathF.Min(3f, v0 * 0.5f); // 통합6 무중력: 벽 · 설비에 부딪히면 튕겨 나와 반대로 떠돈다
         return moved;
     }
 
@@ -550,7 +551,7 @@ public sealed partial class MatterSystem
             if (Gravity < 0.2f && t.Loose)
             {
                 var v = t.Vel + (DraftAt(t.At) ?? Vector2.Zero) * 0.3f;
-                if (v.LengthSquared() > 0.01f) { t.Vel = v * 0.9f; if (PushThing(t, t.Mass * v.Length(), v, "무중력")) Stats.Drifted++; }
+                if (v.LengthSquared() > 0.01f) { t.Vel = v * 0.95f; var p0 = t.At.Center + t.Off; if (PushThing(t, t.Mass * v.Length(), v, "무중력") || (t.At.Center + t.Off - p0).LengthSquared() > 0.01f) Stats.Drifted++; } // 통합6 좁은 칸 안에서 튕기며 떠도는 것도 떠돎
             }
         }
         if (gone != null) foreach (var t in gone) Things.Remove(t);

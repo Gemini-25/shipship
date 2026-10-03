@@ -1428,7 +1428,7 @@ public static partial class WorkPlanners
             if (kit) Consume(cm, ItemKind.MedKit);
             bool bandage = !kit && ItemsV15.Use(world, ItemKind.Bandage); // v15 키트가 없으면 붕대로
             float skill = cm.SkillLevel(Skill.Medicine), eff = kit ? 1f : bandage ? 0.75f : 0.5f;
-            patient.Vitals.Health = MathF.Min(patient.Vitals.MaxHealth, patient.Vitals.Health + (0.15f + 0.25f * skill) * eff);
+            patient.Vitals.Health = MathF.Min(patient.Vitals.MaxHealth, patient.Vitals.Health + (0.15f + 0.25f * skill) * eff * MathF.Max(0.25f, world.Perils.MarrowMul(patient))); // 통합6 응급 처치로는 무너진 골수를 못 채운다
             patient.Vitals.Injury = MathF.Max(0f, patient.Vitals.Injury - (0.06f + 0.14f * skill) * eff);
             if (!kit) world.Log.Add(world.Tick, LogKind.Warning, $"구급 키트가 없어 {patient.Name}에게 응급 처치만 했다 ({(bandage ? "붕대" : "천과 소독약")})", cm.Id);
             patient.Vitals.TreatedTick = world.Tick;

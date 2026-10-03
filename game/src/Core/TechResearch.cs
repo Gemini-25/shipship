@@ -505,13 +505,23 @@ public sealed partial class TechWebSystem
         }
         lead.Vitals.Injury = MathF.Min(1f, lead.Vitals.Injury + 0.03f);
         // v16.24 바로 앞에 있던 사람: 대개 놀라고 끝나지만, 서두른 실험 · 보호구 없는 손이면 가끔 크게 (유리 조각 · 불꽃 · 시약)
-        if (R.Chance(x.Style == ResearchStyle.Bold ? 0.3f : 0.15f))
+        // 통합6 크게 다치는 까닭은 그때의 사정: 서두른 실험 · 컴퓨터 경고를 흘려들음 · 녹초 · 서툰 손 · 곁에 봐 줄 사람이 없음
+        bool tired = lead.Needs.Rest < 0.3f, ignored = x.Warned && !x.Heeded, alone = partner == null;
+        float pHurt = (x.Style == ResearchStyle.Bold ? 0.3f : 0.15f) * (tired ? 1.4f : 1f) * (ignored ? 1.5f : 1f) * (1.25f - 0.5f * lead.SkillLevel(SkillOf(t.Field)));
+        if (R.Chance(MathF.Min(0.7f, pHurt)))
         {
-            float hurt = R.Range(0.12f, 0.32f);
-            string hc = kind is BlastKind.Gas ? "실험 시약 흡입" : fire || kind is BlastKind.Arc or BlastKind.Propellant ? "실험 화상" : "실험 파편";
+            float hurt = R.Range(0.12f, 0.32f) + (tired ? 0.06f : 0f) + (ignored ? 0.08f : 0f);
+            // 축전기 방전은 손을 타고 몸을 지난다 (심장이 멎기도 한다) · 분진 · 추진제는 불길 · 파편
+            string hc = kind is BlastKind.Gas ? "실험 시약 흡입" : kind is BlastKind.Arc ? "축전기 방전 감전" : fire || kind is BlastKind.Propellant ? "실험 화상" : "실험 파편";
+            if (alone) MarkLog.Add(lead.Memory.Marks, w.Tick, $"혼자 실험하다 다쳤다 ({room.Name})");
             lead.Vitals.Health = MathF.Max(0.05f, lead.Vitals.Health - hurt * 0.7f);
             NeedsSystem.AddInjury(lead.Vitals, hurt, hc);
             w.Log.Add(w.Tick, LogKind.Warning, $"{Ko.IGa(lead.Name)} 실험대 앞에서 다쳤다 — {hc} ({room.Name})", lead.Id);
+            if (kind is BlastKind.Arc && R.Chance(MathF.Min(0.6f, 0.22f * (tired ? 1.4f : 1f) * (ignored ? 1.5f : 1f) * (x.Style == ResearchStyle.Bold ? 1.4f : 1f) * (room.Humidity > 0.7f ? 1.5f : 1f))))
+            {
+                w.Casualty.Inflict(lead, TraumaKind.Arrest, 0.6f, hc); // 통합6 방전이 손에서 가슴을 지났다
+                MarkLog.Add(room.Marks, w.Tick, $"{Ko.IGa(lead.Name)} 축전기 방전에 쓰러졌다" + (alone ? " (혼자였다)" : ""));
+            }
         }
         lead.Needs.Stress = MathF.Min(1f, lead.Needs.Stress + 0.12f);
         Memory.Frighten(w, lead, room, 0.25f, $"실험 사고 — {t.Name}");

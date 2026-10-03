@@ -70,8 +70,9 @@ public sealed class RadCareSystem
     }
 
     /// <summary>수혈이 필요한가 (7Sv 넘고 기운이 빠졌다 · 열두 시간에 한 번).</summary>
+    /// 통합6 7Sv 넘으면 겉으로 멀쩡해도 반나절 안에 피(혈소판)가 바닥난다 — 첫 수혈은 여덟 시간쯤에, 그 뒤엔 기운이 빠질 때 열두 시간에 한 번.
     public bool NeedsBlood(RadPatient p, CrewMember c) =>
-        !p.Stable && _w.Perils.RadStage(c) >= 2 && c.Vitals.Health < 0.6f && (p.BloodAt < 0 || _w.Tick - p.BloodAt > SimTime.Hours(12));
+        !p.Stable && _w.Perils.RadStage(c) >= 2 && (p.BloodAt < 0 ? _w.Tick - p.Since >= SimTime.Hours(8) || c.Vitals.Health < 0.6f : c.Vitals.Health < 0.6f && _w.Tick - p.BloodAt > SimTime.Hours(12));
 
     /// <summary>돌볼 차례인가 (수액 열 시간 · 골수 주사 하루 · 수혈 · 숨이 넘어간다).</summary>
     public string? Due(RadPatient p, CrewMember c)
@@ -113,8 +114,8 @@ public sealed class RadCareSystem
     {
         var w = _w;
         if (Off || w.Tick < _next) return;
-        _next = w.Tick + SimTime.Minutes(10);
-        float h = 10f / 60f;
+        _next = w.Tick + SimTime.Minutes(1); // 통합6 북적이는 방은 금방 흩어진다 — 컴퓨터는 매분 본다
+        float h = 1f / 60f;
         foreach (var c in w.Crew)
         {
             if (c.Dead || c.Away || _pt.ContainsKey(c.Id) || w.Perils.RadStage(c) < 1) continue;

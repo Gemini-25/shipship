@@ -58,7 +58,7 @@ public sealed class Outlook
 public sealed class ValueStats
 {
     public int Reactions, Likes, Dislikes, Dilemmas, ByCaptain, ByComputer, ByCouncil, Returns, LeaveAsks, Departed, Confidence, Plots, Shifts, Warnings;
-    public string Line() => $"반응 {Reactions}(좋아함 {Likes} · 싫어함 {Dislikes}) · 딜레마 {Dilemmas}(선장 {ByCaptain} · 컴퓨터 {ByComputer} · 회의 {ByCouncil}) · 돌아온 결과 {Returns} · 하선 요청 {LeaveAsks}/{Departed} · 불신임 {Confidence} · 모의 {Plots} · 가치관 변화 {Shifts}";
+    public string Line() => $"반응 {Reactions}(좋아함 {Likes} · 싫어함 {Dislikes}) · 딜레마 {Dilemmas}(함장 {ByCaptain} · 컴퓨터 {ByComputer} · 회의 {ByCouncil}) · 돌아온 결과 {Returns} · 하선 요청 {LeaveAsks}/{Departed} · 불신임 {Confidence} · 모의 {Plots} · 가치관 변화 {Shifts}";
 }
 
 public sealed partial class ValueSystem
@@ -278,7 +278,7 @@ public sealed partial class ValueSystem
     // ───────────────────────────── 결정에 대한 반응 ─────────────────────────────
 
     /// <summary>정한 쪽의 이름 (말로).</summary>
-    public string ByName(int by) => by == -1 ? "주 컴퓨터" : by == -2 ? "회의" : P(by) is CrewMember c ? (c.Id == _w.Command.CaptainId ? $"선장 {c.Name}" : c.Name) : "누군가";
+    public string ByName(int by) => by == -1 ? "주 컴퓨터" : by == -2 ? "회의" : P(by) is CrewMember c ? (c.Id == _w.Command.CaptainId ? $"함장 {c.Name}" : c.Name) : "누군가";
 
     /// <summary>한 결정에 사람마다 반응한다: vec = 고른 쪽이 기우는 방향 · subject = 걸린 사람(+1 그 사람에게 좋은 결정 · −1 나쁜 결정).</summary>
     public void React(int verdict, int by, string title, float[] vec, float weight, int subject = -1, int subjectSide = 0, IReadOnlyCollection<int>? voters = null, Func<CrewMember, float>? extra = null)
@@ -426,8 +426,8 @@ public sealed partial class ValueSystem
             {
                 var lead = sore[0];
                 var last = Of(lead).Recent.LastOrDefault(r => !r.Liked && r.By == cap.Id);
-                string why = last != null ? $"요즘 선장이 정하는 일마다 마음에 안 든다 — {last.Title}" : "요즘 선장이 정하는 일마다 마음에 안 든다";
-                var m = w.Motions.Propose(lead, MotionKind.Confidence, SittingKind.Election, $"선장 {cap.Name} 불신임", why, target: cap.Id);
+                string why = last != null ? $"요즘 함장이 정하는 일마다 마음에 안 든다 — {last.Title}" : "요즘 함장이 정하는 일마다 마음에 안 든다";
+                var m = w.Motions.Propose(lead, MotionKind.Confidence, SittingKind.Election, $"함장 {cap.Name} 불신임", why, target: cap.Id);
                 foreach (var o in sore.Skip(1)) w.Motions.Cosign(m, o.Id);
                 _confidenceAt = w.Tick;
                 Stats.Confidence++;
@@ -489,7 +489,7 @@ public sealed partial class ValueSystem
                 _warnedAt = w.Tick;
                 Stats.Warnings++;
                 var a = w.Automation;
-                w.Log.Add(w.Tick, LogKind.Ship, $"{a.Voice.Call}: {a.Manner.Speak($"{cap.Name} 선장님, 최근 결정에 대해 승무원 {sore}명이 불편한 말을 남겼습니다 — 다음 회의 전에 들어 보시길 권합니다")}");
+                w.Log.Add(w.Tick, LogKind.Ship, $"{a.Voice.Call}: {a.Manner.Speak($"{cap.Name} 함장님, 최근 결정에 대해 승무원 {sore}명이 불편한 말을 남겼습니다 — 다음 회의 전에 들어 보시길 권합니다")}");
                 if (w.Command.Style == CaptainStyle.Authoritarian) cap.Needs.Stress = MathF.Min(1f, cap.Needs.Stress + 0.04f);
                 else _listenUntil = w.Tick + SimTime.TicksPerDay * 2; // 듣는 선장: 다음 결정에서 사람들 말을 더 무겁게 듣는다
             }
@@ -510,12 +510,12 @@ public sealed partial class ValueSystem
         if (o.Left) return null;
         if (o.LeaveAsked >= 0) return $"다음 기항지에서 내리겠다고 했다 — {o.LeaveWhy}";
         bool isCap = c.Id == w.Command.CaptainId;
-        if (!isCap && o.Captain < -0.4f) return o.Last is { Liked: false } l && w.Tick - l.Tick < SimTime.TicksPerDay * 3 ? $"요즘 선장 결정이 마음에 안 든다 — {l.Title}" : "요즘 선장 결정이 마음에 안 든다";
+        if (!isCap && o.Captain < -0.4f) return o.Last is { Liked: false } l && w.Tick - l.Tick < SimTime.TicksPerDay * 3 ? $"요즘 함장 결정이 마음에 안 든다 — {l.Title}" : "요즘 함장 결정이 마음에 안 든다";
         if (o.Computer < -0.4f) return "요즘 컴퓨터가 정하는 일이 못 미덥다";
         if (o.Conscience > 0.25f && o.ConscienceWhy != null) return $"{o.ConscienceWhy} 일이 마음에 걸린다";
         if (o.Last is Stand r && w.Tick - r.Tick < SimTime.TicksPerDay)
             return r.Liked ? $"{r.Title} — 잘 정했다고 생각한다" : $"{r.Title} — 그렇게 정하면 안 됐다고 생각한다";
-        if (!isCap && o.Captain > 0.4f) return "요즘 선장이 잘 이끈다고 생각한다";
+        if (!isCap && o.Captain > 0.4f) return "요즘 함장이 잘 이끈다고 생각한다";
         if (o.Council < -0.35f) return "회의에서는 늘 저쪽 뜻대로 된다고 느낀다";
         var order = Enumerable.Range(0, 4).OrderByDescending(i => MathF.Abs(o.V[i])).ToList();
         string a = Belief((Axis)order[0], o.V[order[0]] >= 0f);

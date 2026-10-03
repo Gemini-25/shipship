@@ -52,7 +52,7 @@ public partial class Hud
         Gfx.Text(this, Fonts.Bold, new Vector2(x, y0 + 30), "방침과 회의", Ui.TextLarge, Palette.Text);
         string culture = mt.Culture != "" ? $"이 배의 문화: {mt.Culture}" : "첫 출항 회의 전";
         var cap = w.Command.Captain;
-        Gfx.Text(this, Fonts.Body, new Vector2(x + 110, y0 + 30), Fit($"{culture} · 선장 {cap?.Name ?? "-"} (신뢰 {w.Command.Trust * 100:0}%) · 정기 회의 {mt.Held}번 · 걸른 회의 {mt.Postponed} · 뒤집힌 표결 {mt.Flips} · 바뀐 방침 {w.Policies.Changes.Count}", right - x - 110 - 250, Ui.TextSmall, Fonts.Body), Ui.TextSmall, Palette.TextMuted);
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 110, y0 + 30), Fit($"{culture} · 함장 {cap?.Name ?? "-"} (신뢰 {w.Command.Trust * 100:0}%) · 정기 회의 {mt.Held}번 · 걸른 회의 {mt.Postponed} · 뒤집힌 표결 {mt.Flips} · 바뀐 방침 {w.Policies.Changes.Count}", right - x - 110 - 250, Ui.TextSmall, Fonts.Body), Ui.TextSmall, Palette.TextMuted);
         // v13.4 사기: 지금 값과 최근 일주일 (두 시간마다)
         {
             var soc = w.Society;
@@ -187,7 +187,7 @@ public partial class Hud
                     Gfx.Text(this, Fonts.Body, new Vector2(rx + 8, ry + 11), Fit($"찬성 {(ys == "" ? "-" : ys)} / 반대 {(ns == "" ? "-" : ns)}", rw - 10, Ui.TextTiny, Fonts.Body), Ui.TextTiny, Palette.TextMuted);
                     ry += 14;
                 }
-                else if (!open) { Gfx.Text(this, Fonts.Body, new Vector2(rx + 8, ry + 11), "누가 어디에 표를 던졌는지는 선장만 안다 (방침: 정보 공개)", Ui.TextTiny, Palette.TextMuted); ry += 14; }
+                else if (!open) { Gfx.Text(this, Fonts.Body, new Vector2(rx + 8, ry + 11), "누가 어디에 표를 던졌는지는 함장만 안다 (방침: 정보 공개)", Ui.TextTiny, Palette.TextMuted); ry += 14; }
                 ry += 4;
             }
         }

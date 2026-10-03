@@ -628,10 +628,14 @@ public sealed class RecoverActivity : Activity
         float byHealth = h < 0.75f ? (0.75f - h) * 2.2f : 0f;
         float byInjury = injury > 0.25f ? (injury - 0.25f) * 1.2f : 0f; // 크게 다쳤으면 누워서 낫는다
         float byIll = c.Fx.Bed > 0.35f ? (c.Fx.Bed - 0.2f) * 1.3f : 0f; // v14.1 누워야 낫는 병
-        if (byIll > MathF.Max(byHealth, byInjury)) return (byIll, $"앓는다 — {w.Ailments.Line(c)}");
+        if (RadBed(c, w)) byIll = MathF.Max(byIll, 0.97f); // 통합6 7Sv 넘게 쬔 몸: 토하고 기운이 없어 의무실에 눕는다 (간호 · 수혈을 받을 자리)
+        if (byIll > MathF.Max(byHealth, byInjury)) return (byIll, RadBed(c, w) ? $"방사선 병 — 피폭 {c.Dose:0.0}Sv · 토하고 기운이 없다" : $"앓는다 — {w.Ailments.Line(c)}");
         if (byHealth <= 0f && byInjury <= 0f) return (0f, "건강함");
         return (MathF.Max(byHealth, byInjury), injury > 0.05f ? $"체력 {h * 100:0}% · 부상 {injury * 100:0}% ({c.Vitals.InjuryCause})" : $"체력 {h * 100:0}%");
     }
+
+    /// <summary>통합6 골수가 무너진 몸 (7Sv 넘고 고비를 아직 못 넘김).</summary>
+    public static bool RadBed(CrewMember c, World w) => w.Perils.RadStage(c) >= 2 && w.RadCare.Of(c)?.Stable != true;
 
     public override Job? Plan(CrewMember c, World w, DistanceField dist)
     {
@@ -643,11 +647,11 @@ public sealed class RecoverActivity : Activity
         toils.Add(new GotoToil(bed.UseSpots[0]));
         toils.Add(new WaitToil(SimTime.Hours(8), Pose.Sleeping, minTicks: SimTime.Hours(1))
         {
-            EveryTick = (cm, _) =>
+            EveryTick = (cm, world) =>
             {
-                if (bed.Machine!.Efficiency > 0f) cm.Vitals.Health += 0.12f / SimTime.TicksPerHour;
+                if (bed.Machine!.Efficiency > 0f) cm.Vitals.Health += 0.12f * world.Perils.MarrowMul(cm) / SimTime.TicksPerHour; // 통합6 골수가 무너진 몸은 침대도 기운을 못 채운다
             },
-            DoneWhen = (cm, _) => cm.Vitals.Health >= MathF.Min(0.92f, cm.Vitals.MaxHealth - 0.02f) && cm.Vitals.Injury < 0.25f && cm.Fx.Bed < 0.25f,
+            DoneWhen = (cm, world) => cm.Vitals.Health >= MathF.Min(0.92f, cm.Vitals.MaxHealth - 0.02f) && cm.Vitals.Injury < 0.25f && cm.Fx.Bed < 0.25f && !RadBed(cm, world),
         });
         var job = new Job(this, "치료", toils)
         {

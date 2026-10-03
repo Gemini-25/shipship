@@ -173,7 +173,7 @@ public static partial class Program
                 Check("선장이 급한 일을 잇달아 정했다", decided.Count >= 3, string.Join(" · ", decided.Select(x => x.Choice)));
                 var ko = vs.Of(sore[0]);
                 Check("결정마다 싫어함이 쌓인다", ko.Dislikes >= 3 && ko.Captain < -0.4f, $"싫어함 {ko.Dislikes} · 선장에 대한 마음 {ko.Captain:+0.00;-0.00}");
-                Check("카드: 요즘 선장 결정이 마음에 안 든다", vs.CardLine(sore[0])?.Contains("선장 결정이 마음에 안 든다") == true, vs.CardLine(sore[0]) ?? "-");
+                Check("카드: 요즘 함장 결정이 마음에 안 든다", vs.CardLine(sore[0])?.Contains("함장 결정이 마음에 안 든다") == true, vs.CardLine(sore[0]) ?? "-");
                 Run(w, SimTime.Hours(3));
                 var conf = w.Motions.All.FirstOrDefault(m => m.Kind == MotionKind.Confidence && m.Target == cap.Id);
                 Check("쌓인 반발이 불신임 안건이 됐다", conf != null && sore.Any(c => c.Id == conf.Proposer), conf != null ? $"{conf.Title} — {conf.Why}" : "-");

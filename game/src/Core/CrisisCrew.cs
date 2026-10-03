@@ -52,6 +52,7 @@ public sealed partial class CrisisCrewSystem
     private readonly Dictionary<int, long> _masked = new();
     private readonly Dictionary<int, long> _bodyLogged = new();
     private readonly HashSet<int> _involved = new();
+    private readonly SortedDictionary<int, (int helper, long until)> _buddy = new(); // 통합6 공황에서 깨운 사람과 "같이 하자" — 한동안 그 사람 자리(없으면 지금 필요한 자리)에 함께 선다
     private readonly HashSet<int> _drillDue = new();
     private readonly HashSet<StationRole> _need = new();
     private long _crisisSince = -1, _calmSince = -1, _staleSince = -1, _auxCallAt = -1;
@@ -566,6 +567,19 @@ public sealed partial class CrisisCrewSystem
                 }
             }
         }
+        // 통합6 공황에서 깨어난 사람: 깨운 사람의 자리에 함께 (대피 유도면 지금 필요한 다른 자리) — "정신 차려, 같이 하자"
+        List<int>? gone = null;
+        foreach (var (cid, b) in _buddy)
+        {
+            if (b.until < w.Tick) { (gone ??= new()).Add(cid); continue; }
+            var c = w.Brain2.Beliefs.CrewById(cid);
+            if (c == null || !c.CanAct || c.IsChild || c.Mind.Panicking(w.Tick) || _active.ContainsKey(cid)) continue;
+            var r = _active.TryGetValue(b.helper, out var hr) && hr != StationRole.Guide ? hr : DrawOrder.FirstOrDefault(x => _need.Contains(x) && x != StationRole.Guide);
+            if (r == StationRole.None) continue;
+            _active[cid] = r;
+            _involved.Add(cid);
+        }
+        if (gone != null) foreach (var k in gone) _buddy.Remove(k);
     }
 
     private readonly Dictionary<int, long> _fillLog = new();
@@ -614,6 +628,7 @@ public sealed partial class CrisisCrewSystem
             w.Relations.Remember(c, h, RelationReason.Comforted, hand ? "공황에 빠졌을 때 어깨를 붙잡아 줬다" : "공황에 빠졌을 때 정신 차리라고 불러 줬다");
             Snaps++;
             if (hand) HandSnaps++;
+            _buddy[c.Id] = (h.Id, w.Tick + SimTime.Minutes(20));
             SnapMarks.Add((w.Tick, h.Id, c.Id, hand));
             if (SnapMarks.Count > 12) SnapMarks.RemoveAt(0);
             h.Say(w, Persona.Say(h, hand ? $"{c.Name}, 나 봐. 숨 쉬어 — 같이 하자" : $"{c.Name}! 정신 차려, 할 일 있어"));

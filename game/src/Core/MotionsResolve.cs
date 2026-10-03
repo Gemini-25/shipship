@@ -71,10 +71,10 @@ public sealed partial class MotionSystem
                 if (c.Id == in1.Id) t.Add((0.6f, "내가 가겠다"));
                 break;
             case MotionKind.Confidence when w.Command.Captain is CrewMember cap:
-                t.Add((0.5f - w.Command.Trust, w.Command.Trust < 0.3f ? "아무도 선장을 믿지 않는다" : "믿음이 흔들린다"));
-                t.Add((-0.5f * c.AffinityTo(cap) - 0.3f * w.Relations.Trust(c, cap), c.AffinityTo(cap) > 0.2f ? "선장 편이다" : "선장과 사이가 나쁘다"));
-                if (w.Meetings.Guilt(cap) > 0.2f) t.Add((0.15f, "선장이 정한 일로 사람이 다쳤다"));
-                if (c.Value == CrewValue.Rules) t.Add((-0.12f, "선장을 함부로 바꾸면 안 된다"));
+                t.Add((0.5f - w.Command.Trust, w.Command.Trust < 0.3f ? "아무도 함장을 믿지 않는다" : "믿음이 흔들린다"));
+                t.Add((-0.5f * c.AffinityTo(cap) - 0.3f * w.Relations.Trust(c, cap), c.AffinityTo(cap) > 0.2f ? "함장 편이다" : "함장과 사이가 나쁘다"));
+                if (w.Meetings.Guilt(cap) > 0.2f) t.Add((0.15f, "함장이 정한 일로 사람이 다쳤다"));
+                if (c.Value == CrewValue.Rules) t.Add((-0.12f, "함장을 함부로 바꾸면 안 된다"));
                 if (c == cap) t.Add((-2f, "끝까지 맡겠다"));
                 break;
             case MotionKind.Accusation when P(m.Target) is CrewMember ac:
@@ -176,7 +176,7 @@ public sealed partial class MotionSystem
             {
                 case MotionKind.Celebration: text = $"식량 {days:0.#}일치 · 잔치에 {w.Crew.Count(c => !c.Dead) / 2}끼쯤 듭니다"; sign = days < 3f ? -1 : 0; break;
                 case MotionKind.Confidence when w.Command.Captain is CrewMember cap:
-                    text = $"지난 사흘 선장이 정한 일 {w.Meetings.Decisions.Count(d => d.Decider == cap.Id && w.Tick - d.Tick < SimTime.TicksPerDay * 3)}건 · 다치거나 쓰러진 기록 {Recent(HistoryKind.Casualty, 3f)}건";
+                    text = $"지난 사흘 함장이 정한 일 {w.Meetings.Decisions.Count(d => d.Decider == cap.Id && w.Tick - d.Tick < SimTime.TicksPerDay * 3)}건 · 다치거나 쓰러진 기록 {Recent(HistoryKind.Casualty, 3f)}건";
                     break;
                 case MotionKind.Crisis when m.Sitting == SittingKind.Inquiry:
                 {
@@ -479,7 +479,7 @@ public sealed partial class MotionSystem
             ("violations", 1) => new[] { "원칙파", "호루라기 쪽" }, ("violations", 2) => new[] { "너그러운 쪽", "눈감자 쪽" }, ("violations", _) => new[] { "말로 하자 쪽", "경고파" },
             ("leisure", 0) => new[] { "일벌레들", "일 먼저 쪽" }, ("leisure", _) => new[] { "쉬자 쪽", "느긋파" },
             ("drills", 0) => new[] { "훈련 질린 쪽", "그만하자 쪽" }, ("drills", _) => new[] { "훈련파", "비상벨 쪽" },
-            ("conflict", 0) => new[] { "중재파", "가운데 쪽" }, ("conflict", 1) => new[] { "선장 말 쪽", "위계파" }, ("conflict", _) => new[] { "알아서 쪽", "각자파" },
+            ("conflict", 0) => new[] { "중재파", "가운데 쪽" }, ("conflict", 1) => new[] { "함장 말 쪽", "위계파" }, ("conflict", _) => new[] { "알아서 쪽", "각자파" },
             ("memorial", 0) => new[] { "이름 부르는 쪽", "기억파" }, ("memorial", _) => new[] { "조용한 쪽", "묵념파" },
             _ => Array.Empty<string>(),
         };
@@ -490,7 +490,7 @@ public sealed partial class MotionSystem
             ("autoscope", _) when m.To > _w.Policies["autoscope"] == pro => new[] { "기계 믿는 쪽", "단말파" },
             ("autoscope", _) => new[] { "손으로 하자 쪽", "스위치파" },
             (_, MotionKind.Accusation) or (_, MotionKind.Punishment) => pro ? new[] { "엄벌파", "원칙파" } : new[] { "봐주자 쪽", "용서파" },
-            (_, MotionKind.Confidence) => pro ? new[] { "갈아 보자 쪽", "새 얼굴 쪽" } : new[] { "선장 편", "그대로 쪽" },
+            (_, MotionKind.Confidence) => pro ? new[] { "갈아 보자 쪽", "새 얼굴 쪽" } : new[] { "함장 편", "그대로 쪽" },
             (_, MotionKind.Celebration) => pro ? new[] { "잔치파", "한잔 쪽" } : new[] { "검소파", "일 먼저 쪽" },
             (_, MotionKind.Crisis) => pro ? new[] { "당장 하자 쪽", "비상파" } : new[] { "두고 보자 쪽", "침착파" },
             (_, MotionKind.Practice) => pro ? new[] { "관행파", "손에 익히자 쪽" } : new[] { "각자 알아서 쪽", "자유파" },
@@ -669,7 +669,7 @@ public sealed partial class MotionSystem
             return () =>
             {
                 w.Command.Trust = MathF.Min(1f, w.Command.Trust + 0.06f);
-                if (cap != null && prop != null) { w.Relations.Remember(cap, prop, RelationReason.BlamedMe, "나를 끌어내리려 했다"); AddGrudge(prop, m, cap.Id, "선장을 못 바꿨다"); }
+                if (cap != null && prop != null) { w.Relations.Remember(cap, prop, RelationReason.BlamedMe, "나를 끌어내리려 했다"); AddGrudge(prop, m, cap.Id, "함장을 못 바꿨다"); }
                 Aftermath(m, voters, yes, no, false);
             };
         }
@@ -701,11 +701,11 @@ public sealed partial class MotionSystem
         m.Winner = winner.Id;
         var (wr, wa) = Platform(winner);
         item.Passed = true;
-        item.Outcome = $"새 선장 {winner.Name} ({string.Join(" · ", cands.Select(c => $"{c.Name} {tally[c.Id]}표"))})";
+        item.Outcome = $"새 함장 {winner.Name} ({string.Join(" · ", cands.Select(c => $"{c.Name} {tally[c.Id]}표"))})";
         return () =>
         {
             w.Command.Install(winner, $"선거 {tally[winner.Id]}표");
-            string why = $"새 선장 {winner.Name}의 방침";
+            string why = $"새 함장 {winner.Name}의 방침";
             if (w.Policies["risktaking"] != wr) w.Policies.Set("risktaking", wr, why);
             if (w.Policies["autoscope"] != wa) w.Policies.Set("autoscope", wa, why);
             if (winner.ComputerFaith >= 0f) w.Command.ComputerTrust = 0.5f * w.Command.ComputerTrust + 0.5f * winner.ComputerFaith;
@@ -724,11 +724,11 @@ public sealed partial class MotionSystem
             }
             if (cap != null)
             {
-                AddGrudge(cap, m, prop?.Id ?? winner.Id, "선장 자리에서 끌려 내려왔다");
+                AddGrudge(cap, m, prop?.Id ?? winner.Id, "함장 자리에서 끌려 내려왔다");
                 cap.Needs.Stress = MathF.Min(1f, cap.Needs.Stress + 0.12f);
-                Life.Diary(w, cap, "불신임으로 선장 자리를 내려놓았다. 누가 나를 찍었을까.");
+                Life.Diary(w, cap, "불신임으로 함장 자리를 내려놓았다. 누가 나를 찍었을까.");
             }
-            Life.Diary(w, winner, $"선장이 됐다. {RiskWords(wr)}. {ComputerWords(wa)}.");
+            Life.Diary(w, winner, $"함장이 됐다. {RiskWords(wr)}. {ComputerWords(wa)}.");
             Aftermath(m, voters, yes, no, true);
             if (cap != null)
             {

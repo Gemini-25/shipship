@@ -45,7 +45,7 @@ public partial class Hud
         UiKit.Panel(this, card);
         float x = x0 + 18, right = card.End.X - 18;
         int open = mo.Open.Count(), live = mo.Factions.Count(f => !f.Gone), grudges = mo.Grudges.Count(g => g.Until > w.Tick);
-        UiKit.CardTitle(this, x, right - 40, y0 + 30, "회의록", $"서명 받는 중 {open} · 파벌 {live} · 앙금 {grudges} · 선장 {w.Command.Captain?.Name ?? "-"}");
+        UiKit.CardTitle(this, x, right - 40, y0 + 30, "회의록", $"서명 받는 중 {open} · 파벌 {live} · 앙금 {grudges} · 함장 {w.Command.Captain?.Name ?? "-"}");
         Button(new Rect2(right - 24, y0 + 12, 22, 20), "×", false, mouse, () => CouncilOpen = false, 11);
         float top = y0 + 52, bottom = card.End.Y - 14;
         float colA = x, colB = x + (right - x) * 0.31f, colC = x + (right - x) * 0.71f;
