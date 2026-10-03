@@ -124,7 +124,7 @@ public static class ModulesV15
     public static bool Has(Room? room, FurnitureType t) => room != null && room.Furniture.Any(f => f.Type == t && Works(f));
 
     /// <summary>전조 감지 배율 (그 방에 그 전조를 보는 감시기가 있으면).</summary>
-    public static float OmenMul(Room? room, OmenKind k) => 1f + Sum(room, r => r.Role == ModuleRole.Omen && r.Omen == k);
+    public static float OmenMul(Room? room, OmenKind k) => 1f + Sum(room, r => r.Role == ModuleRole.Omen && r.Omen == k) + ModulesV18.OmenAdd(room, k); // 압축-마 청음기
 
     /// <summary>일 속도 배율 (그 방에 그 기술을 돕는 모듈 · 공구 벽은 모두).</summary>
     public static float SpeedMul(Room? room, Skill s) => 1f + Sum(room, r => r.Role == ModuleRole.Speed && (r.Boost == s || r.Boost == null));
@@ -132,7 +132,7 @@ public static class ModulesV15
     /// <summary>방 오염이 줄어드는 배율.</summary>
     public static float CleanMul(Room? room) => 1f + Sum(room, r => r.Role == ModuleRole.Clean);
     public static float SleepAdd(Room? room) => Sum(room, r => r.Role == ModuleRole.Sleep);
-    public static float RelaxMul(Room? room) => 1f + Sum(room, r => r.Role == ModuleRole.Relax);
+    public static float RelaxMul(Room? room) => 1f + Sum(room, r => r.Role == ModuleRole.Relax) + ModulesV18.RelaxAdd(room); // 압축-마 빵 화덕 · 악기 · 망원경 …
     public static bool Lit(Room room) => room.PortableLit > 0 || FixedLit(room); // v16.7 이동식 작업등도 비춘다
     public static bool FixedLit(Room room) => room.Furniture.Any(f => f.Type == FurnitureType.EmergencyLight && f.Machine is Machine m && m.Faults.Count == 0);
     public static bool SurgeGuard(World w) => w.Ship.FurnitureOf(FurnitureType.SurgeProtector).Any(Works);

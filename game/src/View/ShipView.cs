@@ -738,6 +738,7 @@ public partial class ShipView : Node2D
         PaintValuesFloor(ci); // v18.15 딜레마 표지판 · 밀항자 자리 · 꾸린 짐 · 식당 벽 쪽지
         PaintTalesFloor(ci); // v18.17 밤 모임 등불 · 둘러앉은 자리 (ShipViewTales.cs)
         PaintPersonalFloor(ci); // v18.1 밀린 편지 더미 · v18.9 맞바꾸는 물건
+        PaintIncidentTraces(ci); // 압축-마 새 사고 30의 흔적 · 무르익은 원인의 낌새 (ShipViewTraces.cs)
         // 쓰러진 사람은 밑에, 업힌 사람은 업은 사람 위에
         foreach (var c in _world.Crew.OrderBy(c => c.CarriedBy != null ? 2 : c.Down ? 0 : 1)) PaintCrew(ci, c);
         PaintDockOver(ci); // v18.5 헬멧 등 · v18.6 승객 차림 · 이끄는 손

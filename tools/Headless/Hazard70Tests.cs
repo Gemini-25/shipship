@@ -12,7 +12,7 @@ public static partial class Program
         Console.WriteLine($"사고 70 점검 (v15) · 시드 {seed}\n");
         try
         {
-            Check("목록 — 사고가 70가지이고 순서가 맞는다", Hazards.All.Length == 70 && Hazards.All.Select((s, i) => (int)s.Kind == i).All(x => x),
+            Check("목록 — 사고가 70가지 넘게 있고 순서가 맞는다", Hazards.All.Length >= 70 && Hazards.All.Select((s, i) => (int)s.Kind == i).All(x => x),
                 $"{Hazards.All.Length}가지");
 
             // 1) 하나하나 걸린다 (배 둘 · 대상은 무작위 사고와 같은 규칙으로)

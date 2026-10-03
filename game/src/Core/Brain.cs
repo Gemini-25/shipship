@@ -65,6 +65,7 @@ public static class Brain
         new ManeuverActivity(), // v17.0 기동 준비 · 버티기 · 넘어졌다 일어나기 · 뒤처리 (빗자루 · 줍기 · 집게 · 점검 · 짐 옮기기)
         new ReactActivity(), // v17.8 반응에서 이어지는 짧은 행동 (장비 · 담요 · 창가 · 소리 확인 · 말 걸기 · 위로 · 구경)
         new StoryActivity(), // v18.16 · v18.17 밤 모임 · 할 말 있는 사람 찾아가기 · 이야기의 장소 · 연인 곁
+        new OmenCheckActivity(), new FixtureUseActivity(), // 압축-마 낌새 살피기 · 흔적 치우기 · 새 설비 쓰기
         new ChatActivity(),
         new RelaxActivity(),
         new WanderActivity(),
