@@ -285,6 +285,7 @@ public sealed partial class CoopSystem
         public Cell Spot;
         public Vector2 Face;
         public bool Relevant, Urgent, SiteWork, NeedPair, Solo, Careful, Ordered, Waiting, Ended, Finished;
+        public bool Paired; public long HoldFrom = -1; // 통합7 조여 붙이는 동안만 잡아 준다
         public bool Held; // v16.24 짝이 안 와 보류 — 자리를 맡아 두지 않는다 (다른 사람 · 나중에)
         public int Phase;
         public long Until = -1, BoostUntil, WaitFrom = -1;
@@ -352,6 +353,15 @@ public sealed partial class CoopSystem
             {
                 call.HelperSeen = now;
                 m *= 1.15f + 0.03f * Math.Min(5, PairCount(c.Id, call.Helper)); // 손발이 맞는 짝일수록
+                // 통합7 무거운 부품은 자리에 맞춰 조여 붙일 때까지만 잡아 준다 — 한 시간 넘는 수리 내내 붙들려 있다 끼니때 떠나던 것
+                if (s.HoldFrom < 0) s.HoldFrom = now;
+                else if (now - s.HoldFrom >= SimTime.Minutes(20))
+                {
+                    call.Done = true; call.Outcome = "함께 조여 붙였다 — 나머지는 혼자";
+                    PairDone(c, call, now);
+                    s.Paired = true;
+                    c.Say(_w, Persona.Say(c, "됐어, 붙었다 — 고마워, 나머진 내가 할게"));
+                }
             }
             else if (now - call.HelperSeen > SimTime.Minutes(2))
             {
@@ -379,7 +389,7 @@ public sealed partial class CoopSystem
         if (face is Vector2 fv && w.Ship.FurnitureAt(Cell.FromPosition(fv)) is Furniture ff) s.F = ff;
         s.F ??= job.Target;
         bool bench = s.F != null && BenchType(s.F.Type) && !s.F.Stowed;
-        bool site = o != null && SiteKind(o.Kind) && o.Robot == null && !c.Outside && !o.External && c.Room != null;
+        bool site = o != null && SiteKind(o.Kind) && (o.Robot == null || RobotSystem.Joinable(o)) && !c.Outside && !o.External && c.Room != null; // 통합7 로봇이 맡은 정비에 사람이 손을 보태도 그 사람은 제 공구를 펼친다 (한빛호 냉각 펌프)
         if (!bench && !site) { s.Relevant = false; return s; }
         s.Relevant = true;
         s.Phase = bench ? PBench : PNeighbor;
@@ -460,7 +470,7 @@ public sealed partial class CoopSystem
             call.Done = true;
             call.Outcome = s.Order?.Closed == true ? "함께 끝냈다" : "일이 끊겼다";
         }
-        if (s.Call is { Arrived: true } pc && pc.Helper >= 0 && s.Order?.Closed == true) PairDone(c, pc, now);
+        if (s.Call is { Arrived: true } pc && pc.Helper >= 0 && s.Order?.Closed == true && !s.Paired) PairDone(c, pc, now);
         if (s.Pause is PausedFixture pa && !pa.Done && pa.Approved) Restore(pa, c, "다시 켰다 — 끝났다고 알리자 컴퓨터가 돌렸다");
         else if (s.Pause is PausedFixture p && !p.Done && !p.Approved)
         {
@@ -1334,9 +1344,11 @@ public sealed class SpaceTidyActivity : Activity
     {
         if (w.Coop.Boxes.Count == 0 || !c.CanAct || c.IsChild || Crisis.Acting(w)) return (0f, "—");
         var b = Pick(c, w, dist, out int d);
-        if (b == null || d > 400) return (0f, "—");
-        float s = 0.34f + (Life.Has(c, Habit.NeatFreak) ? 0.15f : 0f) + (b.By == c.Id ? 0.15f : 0f) + (w.Matter.InAisle(b.Item.At) ? 0.12f : 0f) - d / 3000f - (Life.Has(c, Habit.Messy) ? 0.1f : 0f)
-                  + (b.Warned ? 0.15f * w.Automation.Trusts.Of(c) : 0f); // 컴퓨터가 치워 달라고 했다 (믿는 만큼)
+        if (b == null || d > 400 && b.By != c.Id) return (0f, "—"); // 통합7 제가 꺼내 둔 상자는 멀리 와 있어도 기억한다
+        float s = 0.34f + (Life.Has(c, Habit.NeatFreak) ? 0.15f : 0f) + (b.By == c.Id ? 0.3f : 0f) + (w.Matter.InAisle(b.Item.At) ? 0.12f : 0f) - d / 3000f - (Life.Has(c, Habit.Messy) ? 0.1f : 0f)
+                  + (b.Warned ? 0.15f * w.Automation.Trusts.Of(c) : 0f) // 컴퓨터가 치워 달라고 했다 (믿는 만큼)
+                  + (d < 40 ? 0.2f : 0f); // 통합7 바로 곁을 지나면 눈에 걸린다 · 꺼내 둔 사람은 급한 일이 끝나면 제가 넣는다 (네 시간 동안 통로에 나와 있어도 아무도 안 넣던 것)
+        if (b.By == c.Id) s = MathF.Max(s, 0.55f); // 통합7 급한 일이 끝나면 하던 취미보다 먼저 — 구석 선반 앞이라 지나는 사람도 컴퓨터도 못 보던 것
         if (Bedtime(c, w)) s -= 0.3f;
         return (MathF.Max(0f, s), b.By == c.Id ? "내가 꺼내 둔 상자 — 되돌려 놓자" : "통로에 상자가 나와 있다");
     }

@@ -303,7 +303,7 @@ public sealed partial class StorySystem
             {
                 if (ArcOf(c) is not Arc a || a.Confided || a.Step + 1 >= a.Spec.Steps.Length || a.Spec.Steps[a.Step + 1].Gate is not (ArcGate.Confide or ArcGate.Strain)) continue;
                 if (a.Spec.Theme == ArcTheme.Secret) continue; // 비밀은 여럿 앞에서 꺼내지 않는다
-                var f = here.Where(o => o != c).OrderByDescending(o => o.AffinityTo(c)).ThenBy(o => o.Id).First();
+                if (here.Where(o => o != c).OrderByDescending(o => o.AffinityTo(c)).ThenBy(o => o.Id).FirstOrDefault() is not CrewMember f) continue; // 통합7 혼자 남은 밤엔 들어 줄 사람이 없다 (빈 목록 First → 게임이 멈췄다)
                 a.Confided = true; a.Friend = f.Id; a.Support += 0.25f;
                 foreach (var o in here) if (o != c) { o.ChangeAffinity(c, 0.03f); w.Brain2.Emotions.Feel(o, Feeling.Sadness, 0.06f, a.Title, c); }
                 w.Relations.Remember(c, f, RelationReason.Comforted, $"밤 모임에서 {a.Title} 이야기를 들어 줬다");
@@ -327,8 +327,8 @@ public sealed partial class StorySystem
                     break;
                 }
                 if (l.Together && l.Public && here.Count > 2) // 둘뿐이면 놀릴 사람이 없다
+                if (l.Together && l.Public && here.Where(o => o != a && o != b).OrderByDescending(o => o.Habits.Contains(Habit.Joker) ? 1 : 0).ThenBy(o => o.Id).FirstOrDefault() is CrewMember teaser) // 통합7 둘만 남은 밤엔 놀릴 사람이 없다 (빈 목록 First → 게임이 멈췄다)
                 {
-                    var teaser = here.Where(o => o != a && o != b).OrderByDescending(o => o.Habits.Contains(Habit.Joker) ? 1 : 0).ThenBy(o => o.Id).First();
                     teaser.Say(w, Persona.Say(teaser, $"{Ko.WaGwa(a.Name)} {Ko.EunNeun(b.Name)} 오늘도 같이 앉았네~"));
                     Stats.Cheers++;
                     kind = "love"; text = $"{Ko.WaGwa(a.Name)} {Ko.IGa(b.Name)} 놀림을 받으며 웃었다";
@@ -352,7 +352,8 @@ public sealed partial class StorySystem
         // 5) 고향 이야기
         if (kind == null && !camp.Used.Contains("home"))
         {
-            var teller = here.OrderByDescending(c => c.Traits.Sociability).ThenBy(c => c.Id).First();
+            var teller = here.OrderByDescending(c => c.Traits.Sociability).ThenBy(c => c.Id).FirstOrDefault();
+            if (teller == null) return; // 통합7 아무도 없으면 이야기도 없다
             var r = RootsOf(teller);
             int same = 0;
             foreach (var o in here) if (o != teller && RootsOf(o).Home == r.Home) { o.ChangeAffinity(teller, 0.04f); teller.ChangeAffinity(o, 0.04f); same++; }

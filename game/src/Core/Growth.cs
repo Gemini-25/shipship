@@ -44,7 +44,7 @@ public sealed partial class WorkBoard
             if (w.Tick - c.LastRehab < SimTime.Hours(20)) continue;
             var spot = RehabRoom(w);
             if (spot == null) continue;
-            post(WorkKind.Rehab, WorkTarget.OfCrew(c), 0.45f, Skill.Medicine,
+            post(WorkKind.Rehab, WorkTarget.OfCrew(c), v.Injury >= 0.25f || v.Scar > v.ScarFloor + 0.02f ? 0.6f : 0.45f, Skill.Medicine, // 통합7 크게 다친 몸은 의무관 말대로 재활부터 (0.45로는 순찰 · 잡일에 밀려 엿새에 한 번도 못 했다)
                 $"부상 {v.Injury * 100:0}%" + (v.Scar > 0.01f ? $" · 후유증 {v.Scar * 100:0}%" : "") + $" · {spot.Name}에서 한 시간", circuit: c.Id);
         }
         // ── 배우기 ──
@@ -104,11 +104,19 @@ public static partial class WorkPlanners
         if (near is not Cell spot) { blocked = "곁에 설 자리가 없다"; return null; }
         var toils = Plans.DropOff(c, w, dist);
         toils.Add(new GotoToil(spot));
-        toils.Add(new WorkToil(1.2f, skill, mentor.Position)
+        // 통합7 선배는 일하며 자리를 옮긴다 — 한 시간 남짓을 한자리에서만 보면 선배가 네 칸 밖으로 가는 순간 수업이 통째로 깨졌다 (스무 날에 세 번).
+        //       세 토막으로 나눠, 토막 사이에 선배 곁으로 다시 붙는다
+        for (int part = 0; part < 3; part++)
         {
-            CanContinue = (cm, world) => !mentor.Dead && !mentor.Down && mentor.Pose != Pose.Sleeping && mentor.Job?.Urgent != true
-                                          && (mentor.Position - cm.Position).LengthSquared() < 16f,
-        });
+            if (part > 0)
+                toils.Add(new GotoToilLate(cm => (mentor.Position - cm.Position).LengthSquared() < 9f ? null
+                    : Cell.Dirs8.Select(d => mentor.Cell + d).Where(x => w.Ship.IsWalkable(x)).OrderBy(x => (x.Center - cm.Position).LengthSquared()).ThenBy(x => x.X * 1000 + x.Y).Cast<Cell?>().FirstOrDefault()));
+            toils.Add(new WorkToil(0.4f, skill, mentor.Position)
+            {
+                CanContinue = (cm, world) => !mentor.Dead && !mentor.Down && mentor.Pose != Pose.Sleeping && mentor.Job?.Urgent != true
+                                              && (mentor.Position - cm.Position).LengthSquared() < 25f,
+            });
+        }
         toils.Add(new DoToil((cm, world) =>
         {
             world.Board.Close(o);

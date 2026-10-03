@@ -61,7 +61,7 @@ public sealed partial class SchemeSystem
             if (member || club || guest)
             {
                 float v = (member ? 2f : 0.5f) + Interest(c, s.Spec) + (s.Lead == c.Id ? 1f : 0f);
-                if (v > pv) { pv = v; pick = new(SchemeTaskKind.Session, s.Id, -1, s.RoomId, s.Spot, -1, member ? 0.56f : 0.48f, s.Spec.Name); }
+                if (v > pv) { pv = v; pick = new(SchemeTaskKind.Session, s.Id, -1, s.RoomId, s.Spot, -1, s.Lead == c.Id ? 0.72f : member ? 0.56f : 0.48f, s.Spec.Name); } // 통합7 판을 벌인 사람은 제 판에 꼭 나온다 (나흘 동안 DJ가 한 번도 안 나와 방송이 안 나가던 것)
             }
         }
         if (pick is SchemeTask chosen) return chosen;

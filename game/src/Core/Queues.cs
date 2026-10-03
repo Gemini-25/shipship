@@ -153,22 +153,37 @@ public sealed class QueueSystem
         var ship = _w.Ship;
         q.Slots.Clear();
         var away = q.Spot.Center - q.Toward;
-        Cell dir = MathF.Abs(away.X) >= MathF.Abs(away.Y) ? new Cell(away.X >= 0 ? 1 : -1, 0) : new Cell(0, away.Y >= 0 ? 1 : -1);
-        var used = new HashSet<Cell> { q.Spot };
-        var cur = q.Spot;
-        for (int k = 0; k < 10; k++)
+        Cell dir0 = MathF.Abs(away.X) >= MathF.Abs(away.Y) ? new Cell(away.X >= 0 ? 1 : -1, 0) : new Cell(0, away.Y >= 0 ? 1 : -1);
+        // 통합7 받는 칸 바로 뒤가 벽 · 탁자로 막히면 줄이 두 칸에서 끊겼다 (한빛호 식당) — 뒤 · 왼쪽 · 오른쪽으로 먼저 꺾어 보고 가장 길게 서는 쪽으로
+        List<Cell>? best = null;
+        foreach (var start in new[] { dir0, new Cell(-dir0.Y, dir0.X), new Cell(dir0.Y, -dir0.X) })
         {
-            Cell? next = null;
-            var left = new Cell(-dir.Y, dir.X);
-            var right = new Cell(dir.Y, -dir.X);
-            foreach (var cd in new[] { dir, left, right })
+            var line = Line(start);
+            if (best == null || line.Count > best.Count) best = line;
+            if (best.Count >= 10) break;
+        }
+        q.Slots.AddRange(best!);
+
+        List<Cell> Line(Cell dir)
+        {
+            var slots = new List<Cell>();
+            var used = new HashSet<Cell> { q.Spot };
+            var cur = q.Spot;
+            for (int k = 0; k < 10; k++)
             {
-                var n = cur + cd;
-                if (used.Contains(n) || !ship.IsWalkable(n) || ship.FurnitureAt(n) != null || ship.DoorAt(n) != null) continue;
-                next = n; dir = cd; break;
+                Cell? next = null;
+                var left = new Cell(-dir.Y, dir.X);
+                var right = new Cell(dir.Y, -dir.X);
+                foreach (var cd in new[] { dir, left, right })
+                {
+                    var n = cur + cd;
+                    if (used.Contains(n) || !ship.IsWalkable(n) || ship.FurnitureAt(n) != null || ship.DoorAt(n) != null) continue;
+                    next = n; dir = cd; break;
+                }
+                if (next is not Cell nc) break;
+                slots.Add(nc); used.Add(nc); cur = nc;
             }
-            if (next is not Cell nc) break;
-            q.Slots.Add(nc); used.Add(nc); cur = nc;
+            return slots;
         }
     }
 
@@ -454,7 +469,7 @@ public sealed class QueueSystem
             int other = f.A == c.Id ? f.B : f.B == c.Id ? f.A : -1;
             if (other < 0 || CrewById(other) is not CrewMember o || SeatPos(o) is not Vector2 op) continue;
             float d = (seat.Center - op).Length();
-            if (f.Quarrel) { if (d < 3.5f) b += (3.5f - d) * 25f; }
+            if (f.Quarrel) { if (d < 5f) b += (5f - d) * 25f; } // 통합7 다섯 칸 안 (SeatFor 와 같은 거리)
             else if (d < 2.5f) b -= 6f;
         }
         return b;
@@ -480,7 +495,7 @@ public sealed class QueueSystem
         {
             int other = f.A == c.Id ? f.B : f.B == c.Id ? f.A : -1;
             if (other < 0 || now - f.Tick > SimTime.Hours(6) || CrewById(other) is not CrewMember o || SeatPos(o) is not Vector2 op) continue;
-            if (f.Quarrel && (seat.Center - op).Length() < 3.5f) { quarrel = f; qpos = op; }
+            if (f.Quarrel && (seat.Center - op).Length() < 5f) { quarrel = f; qpos = op; } // 통합7 방금 다툰 사람과는 한 탁자 건너(3.6칸)도 가깝다 — 다섯 칸 안이면 더 먼 자리로
             else if (!f.Quarrel && f.A == c.Id && (seat.Center - op).Length() >= 1.6f) { kind = f; kpos = op; }
         }
         if (quarrel == null && kind == null) return seat.UseSpots[0];

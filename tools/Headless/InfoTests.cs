@@ -100,7 +100,7 @@ public static partial class Program
             }
             var sorry = w.Relations.Of(finder, owner).FirstOrDefault(m => m.Reason == RelationReason.Apologized);
             Check("본 사람이 \"충격에 떨어졌다\"고 해명 → 주인이 사과한다 (오해가 풀리고 몰아붙인 사람의 신용은 깎인다)",
-                k.ExplainedBy == witness.Id && k.Apologized >= 0 && sorry != null && blame!.Revealed && info.Cred(owner) < info.Cred(witness),
+                k.ExplainedBy == witness.Id && k.Apologized >= 0 && sorry != null && blame is { Revealed: true } && info.Cred(owner) < info.Cred(witness),
                 $"해명 {(k.ExplainedBy >= 0 ? w.Crew[k.ExplainedBy].Name : k.ExplainedBy.ToString())} {(k.Explained >= 0 ? SimTime.Clock(k.Explained) : "-")} · 사과 {(k.Apologized >= 0 ? SimTime.Clock(k.Apologized) : "-")} · 신용 주인 {info.Cred(owner):0.00} / 본 사람 {info.Cred(witness):0.00} · {IfLog(w, owner.Id, "사과")}");
             Check("주인은 깨진 컵을 붙일 일을 못 끝낸 일로 품는다 (두뇌 중기 목표)", info.Todos.Any(t => t.Kind == TodoKind.MendCup && t.Item == cup.Id),
                 string.Join(" · ", info.TodosOf(owner).Select(t => InfoSystem.TodoText(t, w))));
@@ -295,7 +295,8 @@ public static partial class Program
             for (int i = 0; i < 240 && sj == null; i++) { Run(w, SimTime.Minutes(1)); if (p.Job?.Activity is InfoActivity && p.Job.Label == "물건 찾기") sj = p.Job; if (Environment.GetEnvironmentVariable("INFO_DEBUG") == "1" && i % 10 == 0) Console.WriteLine($"     [{SimTime.Clock(w.Tick)}] {p.Name} ({p.Room?.Name}) 원함 {wanted}: {p.Job?.Label ?? "-"} · 할 일 {string.Join(",", info.Intents.Where(x => x.Crew == p.Id).Select(x => x.Do + ":" + x.Score.ToString("0.00")))} · 판단 {string.Join(" / ", p.LastEvaluations.Take(3).Select(e => e.Activity.Id + ":" + e.Score.ToString("0.00")))}"); }
             Check("주인은 마지막으로 본 곳만 안다 — 마지막에 둔 곳부터 찾으러 간다", wanted && Math.Abs(seenAt.X - spot.X) <= 1 && sj != null && info.Stats.LastSeenFirst >= 1 && IfLog(w, p.Id, "마지막에 둔") != "",
                 $"믿는 곳 {seenAt} · 실제 {(b.At?.ToString() ?? "사물함")} · \"{IfLog(w, p.Id, "찾아본다")}\"");
-            for (int i = 0; i < 120 && info.Stats.FoundElsewhere + info.Stats.FoundThere == 0; i++)
+            // 통합7 찾음 수는 배 전체 통계라 다른 사람이 제 물건을 찾아도 멈췄다 — 주인이 이 책을 찾을(또는 메신저에 물을) 때까지
+            for (int i = 0; i < 240 && IfLog(w, p.Id, "찾았다") == "" && !info.Chat.All.Any(m => m.Thing == b.Id && m.Kind == ChatKind.Ask); i++)
             {
                 Run(w, SimTime.Minutes(1));
             }

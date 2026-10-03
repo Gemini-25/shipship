@@ -737,16 +737,18 @@ public sealed partial class WorkBoard
             // ── 회로 복귀: 주 전력에 여유가 생기면 중요한 회로부터 다시 올린다.
             //    여유가 모자라도 배터리가 가득 차면 일단 올린다 → 다시 빠지면 또 내린다 (돌아가며 끊는 윤번 정전) ──
             bool online = p.ReactorOnline && !p.LowPowerMode && p.ReactorRamp >= 1f;
-            if (online && p.BatteryPercent > 0.4f)
+            // 통합7 저출력 운전이 길어져도 배터리가 가득 차 있으면 내린 회로를 윤번으로 다시 올린다 (부싯돌호: 배터리 가득인 채로 반나절 동안 설비 69%가 꺼져 있었다)
+            if ((online || p.ReactorOnline && p.BatteryPercent > 0.85f) && p.BatteryPercent > 0.4f)
                 for (int i = 1; i < PowerGrid.CircuitCount; i++)
                 {
                     if (!p.ManualOff[i]) continue;
                     float headroom = p.ReactorLimit - p.Delivered;
                     float need = p.CircuitDemand(i);
-                    if (headroom >= need + 1f)
-                        post(WorkKind.RestoreCircuit, pt, 0.5f, Skill.Electrical, $"주 전력 여유 {headroom:0}kW", circuit: i);
+                    // 통합7 내린 회로엔 조리대 · 배식기 · 재배대 · 치료 침대가 매달려 있다 — 여유가 생기면 미루지 않는다 (부싯돌호: 0.5로는 여덟 시간 동안 아무도 안 올려 비상식량만 먹었다)
+                    if (online && headroom >= need + 1f)
+                        post(WorkKind.RestoreCircuit, pt, 0.8f, Skill.Electrical, $"주 전력 여유 {headroom:0}kW", circuit: i);
                     else if (p.BatteryPercent > 0.85f)
-                        post(WorkKind.RestoreCircuit, pt, 0.45f, Skill.Electrical,
+                        post(WorkKind.RestoreCircuit, pt, 0.7f, Skill.Electrical,
                             $"배터리 {p.BatteryPercent * 100:0}% · 여유 {headroom:0}kW < {need:0}kW → 배터리가 버티는 동안만 (윤번)", circuit: i);
                     break;
                 }

@@ -65,7 +65,7 @@ public sealed class EatActivity : Activity
 
     public override (float, string) Score(CrewMember c, World w, DistanceField dist)
     {
-        var (_, _, src) = FindFood(c, w, dist);
+        var (box, _, src) = FindFood(c, w, dist);
         if (src == Source.None) return (0f, "먹을 것이 없음");
         float hunger = c.Needs.Hunger;
         float score = Curve.Smooth(hunger, 0.35f, 0.9f) * 1.1f;
@@ -89,11 +89,23 @@ public sealed class EatActivity : Activity
             score += 0.3f;
             reason += " · 자기 전 야식";
         }
+        // 통합7 회의 · 훈련으로 야식 때를 놓쳤어도 꽤 배고프면 눕기 전에 요기부터 (은하호: 0.33 남기고 잠들었다가 네 시간 만에 굶주려 깨어 먼 식당까지 걸었다)
+        else if (Bedtime(c, w) && c.Pose != Pose.Sleeping && hunger > 0.45f && !(w.Motions.Now != null && w.Motions.Summoned(c))) // 회의에 불렸으면 회의부터 (끝나고 먹는다)
+        {
+            score = MathF.Max(score + 0.7f, 1.1f); // 피곤한 몸의 잠(1.0 남짓)보다 앞서게 — 0.5로는 0.01 차로 누웠다 (광맥호) · 여덟 시간 자면 0.33이 빠진다: 반 넘게 비었으면 먹고 눕는다 (보금자리호: 0.45로 누워 새벽에 굶주려 깼다)
+            reason += " · 눕기 전에 요기";
+        }
         if (src != Source.Ration && src != Source.Produce && w.Cooking.HomeCraving(c) is float home and > 0f) { score += home; reason += " · 고향 음식이 있다"; } // v16.8
         if (src == Source.Ration) reason += " · 비상식량뿐";
         if (src == Source.Produce) reason += " · 날채소뿐";
         // 자는 중에는 웬만큼 배고파서는 깨지 않는다
         if (c.Pose == Pose.Sleeping && hunger < 0.85f) score *= 0.6f;
+        // 통합7 태양 폭풍이 쏟아지는 동안 쬐는 방(식당 · 지나는 통로)으로 밥 먹으러 나가지 않는다 — 굶주리기 전엔 지나간 뒤에 (새터호: 대피소에서 나와 59% 식당으로)
+        if (w.Ambience.StormPower >= 0.3f && hunger < 0.93f && !c.Outside && (box?.Room.Radiation >= 0.2f || c.Room?.Radiation >= 0.2f))
+        {
+            score *= 0.3f;
+            reason += " · 태양 폭풍 — 지나간 뒤에 먹는다";
+        }
         return (score, reason);
     }
 
@@ -106,8 +118,7 @@ public sealed class EatActivity : Activity
         var seat = w.Ship.RoomsOf(RoomType.Mess).Where(r => !r.OffLimits).SelectMany(r => r.Furniture)
             .Where(f => f.Type == FurnitureType.Seat && f.ReservedBy == null && dist.Reachable(f.UseSpots[0])
                         && !w.IsSpotTaken(f.UseSpots[0], c))
-            .OrderBy(f => (f.Center - box.Center).LengthSquared() + w.Coop.Queues.SeatBias(c, f) + w.After.SeatBias(c, f)) // v17.4 줄에서 다툰 사람 곁은 피하고 양보해 준 사람 곁으로 · v17.5 떠난 사람의 의자 · 구석
-            .OrderBy(f => (f.Center - box.Center).LengthSquared() + w.Coop.Queues.SeatBias(c, f) + w.Info.SeatBias(c, f)) // v17.3 늘 앉던 자리 · 친한 사람 · 소음 · 조명 · 다툰 사람 · v17.4 줄에서 다툰 사람 곁은 피하고 양보해 준 사람 곁으로
+            .OrderBy(f => (f.Center - box.Center).LengthSquared() + w.Coop.Queues.SeatBias(c, f) + w.Info.SeatBias(c, f) + w.After.SeatBias(c, f)) // 통합7 두 줄로 나뉘어 뒤 줄이 앞 줄(v17.5 떠난 사람의 의자 · 구석)을 덮던 것을 하나로 · v17.3 늘 앉던 자리 · 친한 사람 · 소음 · 조명 · 다툰 사람 · v17.4 줄에서 다툰 사람 곁은 피하고 양보해 준 사람 곁으로
             .FirstOrDefault();
         var away = w.After.EatAway(c, seat, dist) ?? w.Drains.EatAway(c, seat, dist); // v17.5 묵은 그을음 냄새 · 혼자 먹기 → 다른 방 · 선실 · v18.3 하수 냄새
         if (away != null) seat = null;

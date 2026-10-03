@@ -113,7 +113,7 @@ public sealed partial class ShipOriginSystem
         List<long>? reset = null;
         foreach (var (key, (n, at, by)) in _bumps)
         {
-            if (w.Tick - at > SimTime.Hours(4)) { (drop ??= new()).Add(key); continue; } // 오래전 일은 잊는다
+            if (w.Tick - at > SimTime.Hours(12)) { (drop ??= new()).Add(key); continue; } // 오래전 일은 잊는다 — 통합7 같은 날 아침 · 저녁에 또 마주친 것도 '자꾸'다 (네 시간이면 열네 명 배에서 두 번 마주칠 일이 드물었다)
             if (n < 2) continue;
             var x = w.Crew[(int)(key >> 16)];
             var y = w.Crew[(int)(key & 0xffff)];
@@ -124,7 +124,7 @@ public sealed partial class ShipOriginSystem
             bool joker = x.Habits.Contains(Habit.Joker) || y.Habits.Contains(Habit.Joker);
             // 사이 · 성격 · 지친 정도가 같은 마주침을 다르게 겪게 한다
             float mood = aff + 0.25f * (x.Traits.Sociability - 0.5f) + 0.25f * (x.Traits.Calm - 0.5f) - 0.6f * MathF.Max(0f, x.Needs.Stress - 0.45f) - 0.3f * MathF.Max(0f, 0.3f - x.Needs.Rest) + (joker ? 0.3f : 0f);
-            if (mood >= 0.04f)
+            if (mood >= 0f) // 통합7 서먹한 사이(0 언저리)도 자꾸 마주치면 낯이 익는다 — 그냥 지나치던 띠를 없앴다 (보듬호: 비켜섬 17번에 아무 일 없음)
             {
                 Stats.SqueezeBonds++;
                 x.ChangeAffinity(y, 0.012f); y.ChangeAffinity(x, 0.012f);
@@ -133,7 +133,7 @@ public sealed partial class ShipOriginSystem
                 x.Say(w, Persona.Say(x, joker ? $"{y.Name}, 우리 이러다 정들겠다" : $"{y.Name}, 또 만났네 — 이 배는 너무 좁아"));
                 if (R.Chance(0.3f)) Life.Diary(w, x, Persona.Say(x, $"좁은 통로에서 {Ko.WaGwa(y.Name)} 또 마주쳐 같이 웃었다."));
             }
-            else if (mood <= -0.04f)
+            else
             {
                 Stats.SqueezeSpats++;
                 x.ChangeAffinity(y, -0.012f); y.ChangeAffinity(x, -0.008f);
@@ -200,11 +200,13 @@ public sealed partial class ShipOriginSystem
         var w = _w;
         var au = w.Automation;
         if (!au.Present || !au.MainOnline) return;
-        if (!_spofSaid && Info!.Designer == ShipDesigner.Civilian && w.Net.Rings.Count == 0 && w.Net.SourceRoom(NetKind.Power) is Room ps)
+        // 통합7 꼭 필요한 방(생명 유지 · 의무실 …)의 예비 간선은 처음부터 깔려 있다 — 그 밖의 회로가 배전반 하나에 매달렸는지 본다 (전엔 그 예비 간선 때문에 한 번도 말하지 않았다)
+        int essentialRings = w.Net.Rings.Count(r => r.kind == NetKind.Power && r.to >= 0 && r.to < w.Ship.Rooms.Count && Essentials.DualFeed(w.Ship.Rooms[r.to]));
+        if (!_spofSaid && Info!.Designer == ShipDesigner.Civilian && w.Net.Rings.Count(r => r.kind == NetKind.Power) == essentialRings && w.Net.SourceRoom(NetKind.Power) is Room ps)
         {
             _spofSaid = true;
             Stats.Advice++;
-            au.Book.Add(ActKind.Proposal, ps, "전력 보조 간선 0 · 배전반 하나에 모든 회로", "민간 설계의 단일 고장점 — 배전반이나 간선 하나가 나가면 배 전체가 정전된다",
+            au.Book.Add(ActKind.Proposal, ps, essentialRings > 0 ? $"예비 간선은 꼭 필요한 방 {essentialRings}곳뿐 · 나머지 회로는 배전반 하나에" : "전력 보조 간선 0 · 배전반 하나에 모든 회로", "민간 설계의 단일 고장점 — 배전반이나 간선 하나가 나가면 배 전체가 정전된다",
                 "", "여유가 생기면 보조 간선(이중 배선)을 놓자", "origin:spof", SimTime.TicksPerDay, 60f);
         }
         if (!_sealedSaid && SealedRooms.Count > 0 && SealedRooms.Any(id => w.Ship.Rooms[id].Abandoned))
@@ -224,9 +226,11 @@ public sealed partial class ShipOriginSystem
         if (Rough < 0.55f || w.Culture.Of(CustomKind.MaintainerWay) != null) return;
         int faults = w.Ship.Machines.Sum(m => m.FaultCount) - _faults0;
         var walkers = w.Crew.Where(c => !c.Dead && RoundsBy(c) >= 2).OrderBy(c => c.Id).ToList();
-        if (faults < 2 || walkers.Count < 2) return;
+        // 통합7 한 바퀴 돌며 먼저 잡아 고장이 안 난 것도 겪은 일이다 (잘 막을수록 고장 수가 모자라 관행이 안 생기던 것)
+        if (faults + Stats.RoundFixes < 2 || walkers.Count < 2) return;
         var hero = walkers.OrderByDescending(c => RoundsBy(c)).ThenByDescending(c => c.RawSkill(Skill.Mechanics)).First();
-        var cu = w.Culture.Adopt(CustomKind.MaintainerWay, $"고물 배 — 고장이 {faults}번 나는 동안 {Ko.IGa(hero.Name)} 아침마다 한 바퀴 돌며 소리로 먼저 찾았다", hero.Name);
+        var cu = w.Culture.Adopt(CustomKind.MaintainerWay, faults >= 2 ? $"고물 배 — 고장이 {faults}번 나는 동안 {Ko.IGa(hero.Name)} 아침마다 한 바퀴 돌며 소리로 먼저 찾았다"
+            : $"고물 배 — {Ko.IGa(hero.Name)} 아침마다 한 바퀴 돌며 고장 날 곳 {Stats.RoundFixes}군데를 소리로 먼저 찾아 손봤다", hero.Name);
         cu.Followers.Clear(); cu.Knowers.Clear();
         foreach (var c in walkers) { cu.Followers.Add(c.Id); cu.Knowers.Add(c.Id); }
         Stats.CultureBorn++;

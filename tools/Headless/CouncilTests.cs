@@ -41,9 +41,12 @@ public static partial class Program
             TrimFood(w, 3.5f);
             foreach (var f in w.Ship.FurnitureOf(FurnitureType.GrowBed).Where((_, i) => i % 3 != 0)) f.Machine!.Crop = null; // 작물 셋 중 둘이 시들었다
             // 일하는 사람 절반은 배가 고프다
-            foreach (var c in w.Crew.Where(c => !c.Dead && !c.IsChild && c.Id % 2 == 0)) c.Needs.Food = 0.3f;
+            // 통합7 두 무리는 저녁 정기 회의(19시) 때 깨어 있는 사람끼리 번갈아 나눈다 — 번호 홀짝으로만 나누면 배고픈 쪽이 그 시각 자거나 당직이라 반대표가 한 장만 남는 날이 있었다
+            var meetUp = w.Crew.Where(c => !c.Dead && !c.IsChild && !SimTime.InWindow(w.Meetings.Hour + 0.5f, c.Schedule.SleepStart, c.Schedule.SleepLength) && !SimTime.InWindow(w.Meetings.Hour + 0.5f, c.Schedule.WorkStart, c.Schedule.WorkLength)).OrderBy(c => c.Id).ToList();
+            var hungrySide = new HashSet<int>(meetUp.Where((c, i) => i % 2 == 0).Select(c => c.Id).Concat(w.Crew.Where(c => !meetUp.Contains(c) && c.Id % 2 == 0).Select(c => c.Id)));
+            foreach (var c in w.Crew.Where(c => !c.Dead && !c.IsChild && hungrySide.Contains(c.Id))) c.Needs.Food = 0.3f;
             // 통합6 두 무리를 분명히 세운다 (그날그날 배고픔 · 일정으로 표가 한쪽으로 쏠리지 않게): 배고픈 쪽은 자유를, 창고를 걱정하는 쪽은 안전을 중히 여긴다
-            foreach (var c in w.Crew.Where(c => !c.Dead && !c.IsChild)) c.Value = c.Id % 2 == 0 ? CrewValue.Freedom : CrewValue.Safety;
+            foreach (var c in w.Crew.Where(c => !c.Dead && !c.IsChild)) c.Value = hungrySide.Contains(c.Id) ? CrewValue.Freedom : CrewValue.Safety;
             int walked = 0;
             var asked = new HashSet<int>();
             long readyAt = -1;
@@ -53,10 +56,19 @@ public static partial class Program
             {
                 Run(w, 60);
                 rat ??= w.Motions.All.FirstOrDefault(m => m.Policy == "rations" && m.To == 3);
-                foreach (var c in w.Crew.Where(c => !c.Dead && !c.IsChild && c.Id % 2 == 0)) c.Needs.Food = MathF.Min(c.Needs.Food, 0.35f); // 요즘 몫이 적어 늘 배가 고프다 (통합6 먹고 와도 금방 — 회의 때도 배고픈 채로)
-                foreach (var c in w.Crew.Where(c => !c.Dead && !c.IsChild && c.Id % 2 == 1)) c.Needs.Food = MathF.Max(c.Needs.Food, 0.8f); // 통합6 다른 쪽은 아직 배가 부르다 (창고만 걱정한다)
+                foreach (var c in w.Crew.Where(c => !c.Dead && !c.IsChild && hungrySide.Contains(c.Id))) c.Needs.Food = MathF.Min(c.Needs.Food, 0.35f); // 요즘 몫이 적어 늘 배가 고프다 (통합6 먹고 와도 금방 — 회의 때도 배고픈 채로)
+                foreach (var c in w.Crew.Where(c => !c.Dead && !c.IsChild && !hungrySide.Contains(c.Id))) c.Needs.Food = MathF.Max(c.Needs.Food, 0.8f); // 통합6 다른 쪽은 아직 배가 부르다 (창고만 걱정한다)
                 if (rat == null) { if (i % 30 == 0) TrimFood(w, 3.5f); continue; }
+                // 통합7 의논하는 동안에도 '사흘치 남짓'은 그대로 둔다 — 한쪽을 시험이 매시간 배고프게 하니 끼니마다 먹어 회의 날엔 창고가 0일치가 되고, 그러면 진 쪽도 다툴 거리가 없어 불만이 안 남았다
+                if (i % 30 == 0 && rat.Decided < 0 && FoodPolicy.FoodDays(w) < 2.5f)
+                    foreach (var box in w.Ship.Containers.Where(f => f.Storage!.Accepts(ItemKind.Ration)).OrderBy(f => f.Id))
+                    {
+                        while (FoodPolicy.FoodDays(w) < 3f && box.Storage!.Add(ItemKind.Ration, 1) > 0) { }
+                        if (FoodPolicy.FoodDays(w) >= 3f) break;
+                    }
                 foreach (var c in w.Crew) if (c.Job?.Activity is PetitionActivity) { walked++; asked.Add(c.Id); }
+                if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "1" && w.Motions.Now is Sitting dbgS)
+                    Console.WriteLine($"     [{SimTime.Clock(w.Tick)}] {dbgS.Motion.Title} {dbgS.Venue.Name} 부름 {dbgS.Invited.Count} · " + string.Join(" | ", w.Crew.Where(c => !c.Dead && !c.IsChild).Select(c => $"{c.Name}{(dbgS.Invited.Contains(c.Id) ? "" : "(안 부름)")} {c.Room?.Name}:{c.ActivityLabel}")));
                 if (readyAt < 0 && rat.Stage != MotionStage.Signing) { readyAt = w.Tick; signersAtReady = rat.Signers.Count; }
                 if (rat.Decided >= 0 && (readyAt < 0 || rat.Decided < readyAt)) heldEarly = true;
             }
@@ -95,10 +107,11 @@ public static partial class Program
                     w.Motions.Quiet = true;
                     var next = w.Motions.Propose(winner, MotionKind.Practice, SittingKind.Regular, "밥 먹기 전에 손을 씻자", "병이 한 사람씩 옮아 갔다", custom: CustomKind.HandWash);
                     var (s, why) = w.Motions.Opinion(holder, next);
-                    long until = g0.Until;
-                    g0.Until = w.Tick; // 앙금이 없었다면
+                    // 앙금이 없었다면 — 통합7 그 사람의 앙금을 모두 잠시 걷는다 (하나만 걷으면 다른 안건의 앙금이 대신 잡혀 차이가 0이 됐다)
+                    var mine = w.Motions.Grudges.Where(g => g.Who == holder.Id).Select(g => (g, until: g.Until)).ToList();
+                    foreach (var (g, _) in mine) g.Until = w.Tick;
                     var (sNo, _) = w.Motions.Opinion(holder, next);
-                    g0.Until = until;
+                    foreach (var (g, u) in mine) g.Until = u;
                     next.Stage = MotionStage.Dropped;
                     Check("앙금 — 지난 안건에 진 사람은 이긴 쪽이 낸 다음 안건을 꺼린다", s < sNo - 0.1f, $"{holder.Name} → {winner.Name}의 안건: 앙금 없으면 {sNo:+0.00;-0.00} · 지금 {s:+0.00;-0.00} '{why}'");
                 }

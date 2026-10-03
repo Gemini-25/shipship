@@ -419,7 +419,7 @@ public sealed partial class EvaRiskSystem
             if ((c.Position - w.Structure.ShipCenter).Length() > StructureSystem.LostRange + 30f)
             {
                 p.Lost = true;
-                p.Missing = true;
+                if (!p.Missing) { p.Missing = true; Stats.Missing++; } // 통합7 안테나가 좋은 배(한빛호)는 무전이 닿는 채로 시야 밖에 이른다 — 그때도 실종이다 (실종 수에 안 들어가던 것)
                 w.Log.Add(w.Tick, LogKind.Warning, $"{Ko.IGa(c.Name)} 시야 밖으로 사라졌다 — 다시 찾을 길이 없다", c.Id);
                 w.History.Add(w, HistoryKind.Casualty, $"{Ko.IGa(c.Name)} 별 사이로 사라졌다 — {(c.Dead ? "시신을 찾지 못했다" : "아직 숨이 있었다")}", null, new[] { c });
             }

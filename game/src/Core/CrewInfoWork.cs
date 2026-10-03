@@ -49,6 +49,10 @@ public sealed class InfoActivity : Activity
                     break;
                 case InfoDo.Confront:
                     if (info.Case(i.Thing) is not CupCase k2 || k2.Explained >= 0 || k2.Accused >= 0 || Person(w, i.Other) is not { Dead: false } o || !dist.Reachable(o.Cell)) continue;
+                    // 통합7 화가 식기 전에 · 마주치면 그 자리에서 따진다 (0.5 남짓으로는 취미 · 실험에 밀려 세 시간 뒤 같은 방에 앉아서도 말을 안 꺼냈다)
+                    if (w.Tick - i.Since < SimTime.Hours(1)) s += 0.15f;
+                    s += 0.5f * w.Brain2.Emotions.Get(c, Feeling.Anger);
+                    if (o.Room == c.Room && c.Room != null) s += 0.25f;
                     if (shift) s -= 0.15f;
                     if (bed) s -= 0.2f;
                     break;
@@ -83,7 +87,7 @@ public sealed class InfoActivity : Activity
             foreach (var t in info.TodosOf(c))
             {
                 float s = 0.2f + 0.12f * t.Progress;
-                if (t.Cut) s += 0.12f; // 하다 만 것이 눈에 밟힌다
+                if (t.Cut) s += 0.25f; // 하다 만 것이 눈에 밟힌다 — 통합7 0.12로는 취미(0.5 남짓)에 늘 밀려 하루 반 동안 다시 손대지 않았다
                 else if (t.LastWork >= 0 && w.Tick - t.LastWork < SimTime.Hours(3)) s -= 0.12f;
                 if (Life.Has(c, Habit.Procrastinator)) s -= 0.08f;
                 if (Life.Has(c, Habit.Perfectionist) || Life.Has(c, Habit.Tinkerer)) s += 0.04f;
@@ -255,7 +259,45 @@ public sealed class InfoActivity : Activity
         {
             DoneWhen = (cm, world) => (o.Position - cm.Position).LengthSquared() <= 6f || o.Dead,
         });
-        toils.Add(new GotoToilLate(cm => (o.Position - cm.Position).LengthSquared() <= 6f ? null : Cell.Dirs8.Select(d => o.Cell + d).Where(x => w.Ship.IsWalkable(x)).OrderBy(x => (x.Center - cm.Position).LengthSquared()).ThenBy(x => x.X * 1000 + x.Y).Cast<Cell?>().FirstOrDefault()));
+        toils.Add(new ChaseToil(o, SimTime.Minutes(20))); // 통합7 그새 자리를 옮겼으면 따라간다 (한 번 다시 가는 것으로는 서로 상대가 있던 자리로 엇갈려 세 시간을 헛걸음했다)
+    }
+
+    /// <summary>통합7 움직이는 사람을 따라잡는다: 1분마다 그 사람의 지금 곁 칸으로 길을 다시 잡는다 (서로 찾아가도 가운데서 만난다).</summary>
+    private sealed class ChaseToil : Toil
+    {
+        private readonly CrewMember _o;
+        private readonly int _limit;
+        private int _t;
+        public ChaseToil(CrewMember o, int limit) { _o = o; _limit = limit; }
+
+        private bool Aim(CrewMember c, World w)
+        {
+            var o = _o;
+            var cell = Cell.Dirs8.Select(d => o.Cell + d).Where(x => w.Ship.IsWalkable(x)).OrderBy(x => (x.Center - c.Position).LengthSquared()).ThenBy(x => x.X * 1000 + x.Y).Cast<Cell?>().FirstOrDefault();
+            if (cell is not Cell to) return false;
+            bool ok = Locomotion.SetDestination(c, w, to);
+            if (ok && c.Path != null && c.Path.Count > 0) c.Pose = Pose.Walking;
+            return ok;
+        }
+
+        public override void Begin(CrewMember c, World w) { _t = 0; if ((_o.Position - c.Position).LengthSquared() > 6f) Aim(c, w); }
+
+        public override ToilStatus Tick(CrewMember c, World w)
+        {
+            if (_o.Dead) return ToilStatus.Failed;
+            if ((_o.Position - c.Position).LengthSquared() <= 6f) { c.Path = null; if (c.Pose == Pose.Walking) c.Pose = Pose.Standing; return ToilStatus.Succeeded; }
+            if (++_t > _limit) return ToilStatus.Failed;
+            if (_t % SimTime.Minutes(1) == 0 || c.Path == null || c.PathBlocked) { if (!Aim(c, w)) return ToilStatus.Failed; }
+            Locomotion.Step(c, w);
+            return ToilStatus.Running;
+        }
+
+        public override void End(CrewMember c, World w)
+        {
+            c.Path = null;
+            c.Destination = null;
+            if (c.Pose == Pose.Walking) c.Pose = Pose.Standing;
+        }
     }
 
     /// <summary>물건 찾기: 마지막에 둔 곳 → 그 방 둘레 → 사물함 → 메신저에 묻기.</summary>

@@ -239,10 +239,13 @@ public static partial class Program
                 Run(w, SimTime.Hours(2));
                 var o = w.Origin;
                 int hidden = o.Finds.Count;
-                var note = o.Finds.Where(f => !f.Found && f.Kind == FindKind.Note && f.Machine >= 0).OrderBy(f => f.Id).FirstOrDefault();
+                // 통합7 막혀 버려진 구역(파쇄실)의 설비는 아무도 고치러 가지 않는다 — 고치다 찾는 장면은 사람이 드나드는 방의 쪽지로 (그런 쪽지가 없을 때만 아무거나)
+                var note = o.Finds.Where(f => !f.Found && f.Kind == FindKind.Note && f.Machine >= 0).OrderBy(f => f.Sealed || w.Ship.Rooms[f.RoomId].Abandoned ? 1 : 0).ThenBy(f => f.Id).FirstOrDefault();
                 bool found = false, diary = false, item = false;
                 if (note != null)
                 {
+                    // 통합7 쪽지가 막힌 구역(파쇄실)에 있으면 승무원이 구획을 다시 열 때까지 기다린다 — 버려진 방의 설비는 아무도 고치러 가지 않는다 (열리는 시각은 그날 일손 따라 다르다)
+                    for (int i = 0; i < 72 && w.Ship.Rooms[note.RoomId].Abandoned; i++) Run(w, SimTime.Minutes(20));
                     var m = w.Ship.Furniture[note.Machine].Machine!;
                     w.Machines.Break(m);
                     for (int i = 0; i < 36 && !note.Found; i++) Run(w, SimTime.Minutes(20));

@@ -545,7 +545,7 @@ public sealed partial class MatterSystem
                 if (PushThing(t, t.Mass * 2.5f, new Vector2(d.X, d.Y), "진동") && Matter.React(t.Mat, Element.Vibration) is Reaction.Rattle or Reaction.Crack) Impact(t, t.Spec.Tough * 1.2f, "떨어졌다");
             }
             // ── 가벼운 물건은 바람(문틈 · 환기구)을 탄다 ──
-            if (sp.Light && t.Loose && DraftAt(t.At) is Vector2 dv && dv.Length() > 0.25f && R.Chance(MathF.Min(1f, dv.Length())))
+            if (sp.Light && t.Loose && t.WetFrac < 0.3f && DraftAt(t.At) is Vector2 dv && dv.Length() > 0.25f && R.Chance(MathF.Min(1f, dv.Length()))) // 통합7 물먹은 천은 바람에 안 날린다 (히터 곁 젖은 수건이 바람에 세 칸 굴러가 버렸다)
                 PushThing(t, t.Mass * dv.Length() * 3.2f, dv, "바람");
             // ── 무중력: 떠돈다 ──
             if (Gravity < 0.2f && t.Loose)

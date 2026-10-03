@@ -706,6 +706,7 @@ public sealed class BelongingSystem
 
     internal void Stow(CrewMember c, Belonging item)
     {
+        if (item.Owner >= 0 && item.Owner != c.Id) _w.Info?.Handled(c, item); // 통합7 남의 물건을 사물함에 넣은 사람은 넣은 걸 안다 (줍자마자 넣으면 5분 눈길에 안 걸려 '누가 치웠어?'에 아무도 답하지 않았다)
         item.Holder = -1;
         item.At = null;
         item.Open = false;

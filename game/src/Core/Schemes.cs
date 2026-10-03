@@ -333,6 +333,10 @@ public sealed partial class SchemeSystem
         if (PracticeOf(s.Key) != null) return 0f;
         int tried = Tried.GetValueOrDefault(s.Key);
         v /= 1f + 0.8f * tried;
+        // 통합7 같은 갈래(모임 · 모임 · 모임)만 거듭되면 시들하다 — 이 배에서 아직 아무도 안 해 본 갈래에 더 끌린다
+        int catTried = 0;
+        foreach (var k in Tried.Keys) if (SchemeTable.Get(k)?.Cat == s.Cat) catTried++;
+        v *= catTried == 0 ? 1.3f : catTried >= 3 ? 0.8f : 1f;
         foreach (var o in All) if (o.Active && o.Spec.Key == s.Key) return 0f;
         return MathF.Max(0f, v);
     }

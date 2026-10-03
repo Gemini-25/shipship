@@ -206,7 +206,7 @@ public sealed partial class RelationSystem
             // 소문: 내가 아는 고장 기미를 그 사람은 모른다 (그 일을 할 줄 안다)
             if (!c.IsChild && w.Watch.OpenNotes.FirstOrDefault(n => n.Holders.ContainsKey(c.Id) && !n.Holders.ContainsKey(o.Id) && o.RawSkill(n.Machine.Spec.Skill) >= 0.3f) is ShiftNote note
                 && !Recently(c, o, TalkTopic.Rumor, 12))
-                Offer(o, TalkTopic.Rumor, 0.28f, $"{note.Machine.Name} 이야기");
+                Offer(o, TalkTopic.Rumor, 0.28f + (note.Machine.Spec.Critical ? 0.25f : 0f), $"{note.Machine.Name} 이야기"); // 통합7 냉각 펌프 · 산소 같은 목숨 줄 설비의 기미는 고칠 줄 아는 사람에게 꼭 전한다 (잡담에만 기대면 서른 시간 동안 아무에게도 안 가는 날이 있었다)
         }
         return best;
     }
