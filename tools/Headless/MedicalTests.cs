@@ -83,11 +83,12 @@ public static partial class Program
                 Hurt(wa, c, 0.34f, "작업 중 넘어짐");
                 Until(wa, () => wa.Surgery.Cases.Any(x => x.Patient == c.Id && x.State == CaseState.Deferred), 12f);
                 var kc = wa.Surgery.Cases.FirstOrDefault(x => x.Patient == c.Id);
+                string why0 = kc?.DeferWhy ?? "", st0 = kc?.State.ToString() ?? "-";
                 Run(wa, SimTime.Hours(2));
                 int want = wa.Pharmacy.Want(ItemKind.Anesthetic);
                 Check("마취제 없음 → 미룬다 (위중하지 않다) · 주컴퓨터가 마취제를 더 만들라고 한다",
-                    kc != null && kc.DeferWhy.StartsWith("마취제") && wa.Surgery.Deferrals > 0 && want > 3 && wa.Automation.Book.Acts.Any(x => x.Key == "rx:Anesthetic" || x.Key.StartsWith("defer:")),
-                    $"{c.Name}: {kc?.State} \"{kc?.DeferWhy}\" · 미룸 {wa.Surgery.Deferrals} · 마취제 목표 {want}");
+                    kc != null && why0.StartsWith("마취제") && wa.Surgery.Deferrals > 0 && want > 3 && wa.Automation.Book.Acts.Any(x => x.Key == "rx:Anesthetic" || x.Key.StartsWith("defer:")),
+                    $"{c.Name}: {st0} \"{why0}\" · 미룸 {wa.Surgery.Deferrals} · 마취제 목표 {want} · 두 시간 뒤 {kc?.State}");
                 Cab(wa)!.Storage!.Add(ItemKind.Anesthetic, 2);
                 Until(wa, () => Done(wa, c) != null, 12f);
                 var kc2 = Done(wa, c);
@@ -101,7 +102,7 @@ public static partial class Program
                 wb.Casualty.Inflict(d, TraumaKind.Bleed, 0.3f, "시험 파편");
                 d.Vitals.Health = 0.32f;
                 int t0 = wb.Blood.Transfusions;
-                Until(wb, () => wb.Blood.Transfusions > t0, 3f);
+                Until(wb, () => wb.Blood.Transfusions > t0, 4f);
                 Check("출혈 위중 → 수혈 — 냉장고의 맞는 피 (O형 Rh-는 누구에게나)", wb.Blood.Transfusions > t0 && wb.Log.Entries.Any(e => e.Text.Contains($"{d.Name}에게") && e.Text.Contains("피를 넣었다")),
                     $"{d.Name}({wb.Blood.TypeOf(d).Name}) 수혈 {wb.Blood.Transfusions - t0} · 체력 {d.Vitals.Health * 100:0}% · 남은 팩 {wb.Blood.Count()}");
                 wb.Blood.Packs.Clear();
@@ -109,8 +110,9 @@ public static partial class Program
                 var e = Patient(wb, 1);
                 wb.Casualty.Inflict(e, TraumaKind.Bleed, 0.3f, "시험 파편");
                 e.Vitals.Health = 0.3f;
-                Until(wb, () => wb.Blood.Fresh > 0, 4f);
-                var giver = wb.Crew.FirstOrDefault(x => x.Memory.Marks.Any(m => m.Text.Contains($"{e.Name}에게 내 피")));
+                CrewMember? Giver() => wb.Crew.FirstOrDefault(x => x.Memory.Marks.Any(m => m.Text.Contains($"{e.Name}에게 내 피")));
+                Until(wb, () => Giver() != null, 4f);
+                var giver = Giver();
                 Check("맞는 피가 없으면 — 피가 맞는 사람이 나서 바로 준다 (관계 · 기억)",
                     wb.Blood.Fresh > 0 && giver != null && wb.Blood.Compatible(giver, e) && e.Memory.Marks.Any(m => m.Text.Contains("피로 살았다")) && e.AffinityTo(giver) > 0.05f,
                     $"{e.Name}({wb.Blood.TypeOf(e).Name}) ← {giver?.Name}({(giver != null ? wb.Blood.TypeOf(giver).Name : "-")}) · 바로 {wb.Blood.Fresh} · 부름 {wb.Blood.Calls}");

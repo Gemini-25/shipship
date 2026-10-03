@@ -575,7 +575,7 @@ public sealed class SurgerySystem
         bool comp = a.Present && a.MainOnline && table.Room.DataLinked;
         // 생체 신호
         if (k.State == CaseState.Operating && k.LastWarnHealth > 1.5f) k.LastWarnHealth = pt.Vitals.Health; // 열 때의 신호를 기준으로
-        if (comp && k.State == CaseState.Operating && (pt.Vitals.Health < k.LastWarnHealth - 0.06f || pt.Vitals.Health < 0.25f && k.LastWarnHealth >= 0.25f))
+        if (comp && k.State == CaseState.Operating && (pt.Vitals.Health < k.LastWarnHealth - 0.06f || pt.Vitals.Health < 0.25f && k.LastWarnHealth >= 0.25f || w.Blood.Lost(pt) >= 0.3f && k.LastBlood < 0))
         {
             k.LastWarnHealth = pt.Vitals.Health;
             VitalWarnings++;

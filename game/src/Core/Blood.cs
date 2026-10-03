@@ -122,6 +122,14 @@ public sealed class BloodSystem
     private readonly SortedDictionary<int, float> _lost = new(), _prevHealth = new();
     /// <summary>흘린 피 (피가 나는 동안 빠진 체력의 합 — 응급 처치로 기운이 돌아도 피는 그대로다).</summary>
     public float Lost(CrewMember c) => _lost.TryGetValue(c.Id, out var x) ? x : 0f;
+    /// <summary>수혈하러 가는 사람 (한 사람에게 한 명만 — 여럿이 냉장고로 몰리지 않게).</summary>
+    private readonly SortedDictionary<int, (int by, long at)> _claims = new();
+    public bool Claimed(CrewMember pt, CrewMember by) => _claims.TryGetValue(pt.Id, out var x) && x.by != by.Id && _w.Tick - x.at < SimTime.Minutes(40) && _w.Crew.Any(c => c.Id == x.by && c.CanAct && c.Job?.Activity is TransfuseActivity);
+    public void Claim(CrewMember pt, CrewMember by) => _claims[pt.Id] = (by.Id, _w.Tick);
+    /// <summary>냉장고에서 팩을 꺼내 들고 다니는 사람 (환자가 자리를 옮겨도 다시 냉장고로 가지 않는다 — 한 시간 넘으면 미지근해져 돌려놓는다).</summary>
+    private readonly SortedDictionary<int, long> _holding = new();
+    public bool Holding(CrewMember c) => _holding.TryGetValue(c.Id, out var t) && _w.Tick - t < SimTime.Hours(1);
+    public void Hold(CrewMember c, bool on) { if (on) _holding[c.Id] = _w.Tick; else _holding.Remove(c.Id); }
     /// <summary>마지막으로 피(또는 대용제)를 받은 때.</summary>
     public long GivenAt(CrewMember c) => _lastGiven.TryGetValue(c.Id, out var t) ? t : -1_000_000;
 
@@ -454,7 +462,7 @@ public sealed class TransfuseActivity : Activity
         CrewMember? best = null;
         foreach (var pt in w.Crew)
         {
-            if (pt == c || !w.Blood.NeedsBlood(pt) || w.Surgery.OnTable(pt)) continue;
+            if (pt == c || !w.Blood.NeedsBlood(pt) || w.Surgery.OnTable(pt) || w.Blood.Claimed(pt, c)) continue;
             if (best == null || pt.Vitals.Health < best.Vitals.Health) best = pt;
         }
         return best;
@@ -475,25 +483,34 @@ public sealed class TransfuseActivity : Activity
     {
         var pt = Pick(c, w);
         if (pt == null || RadCareActivity.Near(w, dist, pt) is not Cell at) return null;
+        w.Blood.Claim(pt, c);
         var toils = Plans.DropOff(c, w, dist);
         bool have = w.Blood.PackFor(pt) != null;
         var fr = have ? w.Blood.Fridges.Where(f => f.UseSpots.Count > 0 && dist.Reachable(f.UseSpots[0])).OrderBy(f => dist.Get(f.UseSpots[0])).FirstOrDefault() : null;
-        if (fr != null) { toils.Add(new GotoToil(fr.UseSpots[0])); toils.Add(new WaitToil(SimTime.Minutes(2), Pose.Working, fr.Center)); }
+        if (fr != null && !w.Blood.Holding(c))
+        {
+            toils.Add(new GotoToil(fr.UseSpots[0]));
+            toils.Add(new WaitToil(SimTime.Minutes(2), Pose.Working, fr.Center));
+            toils.Add(new DoToil((cm, world) => { world.Blood.Hold(cm, true); return true; }));
+        }
         if (!have && w.Blood.CompatibleFor(pt) == 0) w.Blood.Call(pt, "맞는 피가 냉장고에 없다");
         toils.Add(new GotoToil(at));
+        // 환자가 그새 자리를 떴으면 따라간다 (피를 흘린 사람은 비틀거리며 돌아다니기도 한다)
         Cell? Chase(CrewMember cm) => (pt.Position - cm.Position).Length() < 2f || pt.Dead ? null
             : Cell.Dirs8.Select(x => pt.Cell + x).Where(x => w.Ship.IsWalkable(x)).OrderBy(x => (x.Center - cm.Position).LengthSquared()).ThenBy(x => x.X).ThenBy(x => x.Y).Cast<Cell?>().FirstOrDefault();
-        toils.Add(new GotoToilLate(Chase));
-        toils.Add(new WorkToil(0.2f, Skill.Medicine, pt.Position) { CanContinue = (cm, _) => !pt.Dead && (pt.Position - cm.Position).Length() < 2.4f });
+        for (int i = 0; i < 4; i++) toils.Add(new GotoToilLate(Chase));
         toils.Add(new DoToil((cm, world) =>
         {
+            if (pt.Dead || (pt.Position - cm.Position).Length() > 2.6f) return false;
             bool waiting = world.Blood.Donors.Values.Any(d => d.forId == pt.Id);
             string did = world.Blood.Transfuse(pt, cm, desperate: pt.Vitals.Health < 0.12f && !waiting);
+            world.Blood.Hold(cm, false);
             if (did == "") { world.Blood.Call(pt, "넣을 피가 없다"); return true; }
             cm.Practice(Skill.Medicine, 0.02f);
-            cm.Say(world, Persona.Say(cm, did.StartsWith("맞지") ? "다른 길이 없어. 버텨 줘" : "피 들어간다. 조금만"));
+            cm.Say(world, Persona.Say(cm, did.StartsWith("맞지") ? "다른 길이 없어. 버텨 줘" : "피 들어간다. 조금만 앉아 있어"));
             return true;
         }));
+        toils.Add(new WaitToil(SimTime.Minutes(10), Pose.Working, pt.Position)); // 주머니를 들고 곁에서 지켜본다
         return new Job(this, $"{pt.Name} 수혈", toils) { LogText = $"{pt.Name}에게 피를 넣으러 간다", TargetRoom = pt.Room, Urgent = pt.Vitals.Health < 0.25f, InterruptMargin = 0.25f };
     }
 }
