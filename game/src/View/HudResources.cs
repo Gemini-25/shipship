@@ -100,7 +100,7 @@ public partial class Hud
         var widths = Enumerable.Range(0, items.Count).Select(Width).ToList();
         float w = pad * 2 - gap + widths.Sum() + gap * items.Count;
         // 오른쪽 승무원 칸을 넘지 않게: 가장 긴 글(구조·땜질)부터 줄인다
-        float avail = Screen.X - Margin - RightColumnWidth - 12f - x0;
+        float avail = Mathf.Min(Screen.X - Margin - RightColumnWidth - 12f - x0, _plan.StatusMaxW > 0f ? _plan.StatusMaxW : float.MaxValue);
         for (int guard = 0; w > avail && guard < 8; guard++)
         {
             int i = Enumerable.Range(0, items.Count).Where(k => !items[k].compact && items[k].res == null || items[k].label is "구조" or "땜질" or "냉각수·노심" or "비축")
@@ -115,6 +115,19 @@ public partial class Hud
             widths[i] = Width(i);
             w += widths[i];
             if (widths[i] >= target + 20f) break;
+        }
+        // v17.6 그래도 넘치면 뒤쪽의 평상 칩부터 "외 n" 하나로 접는다 (경고색 칩은 남긴다 · 누르면 펼친 목록)
+        var foldedChips = new List<string>();
+        const float moreW = 46f;
+        while (w > avail && items.Count > 1)
+        {
+            int k = items.FindLastIndex(it => it.color == Palette.Text);
+            if (k < 0) k = items.Count - 1;
+            foldedChips.Insert(0, $"{items[k].label} {items[k].value}");
+            w -= widths[k] + gap;
+            items.RemoveAt(k);
+            widths.RemoveAt(k);
+            if (foldedChips.Count == 1) w += moreW + gap;
         }
         var card = new Rect2(x0, Margin, Mathf.Max(w, 60f), Ui.TopBarH);
         bool alarm = items.Any(it => it.color == Palette.Danger);
@@ -156,6 +169,18 @@ public partial class Hud
                 _tip = () => ResourceTooltip(rk2, anchor);
             }
             x += widths[i] + gap;
+        }
+        if (foldedChips.Count > 0)
+        {
+            var more = new Rect2(x - 6, card.Position.Y + 10, moreW, card.Size.Y - 20);
+            bool hv = more.HasPoint(mouse);
+            Gfx.RoundRect(this, more, hv ? Ui.Hover : new Color(1, 1, 1, 0.03f), Ui.RadiusChip, Palette.PanelBorder);
+            Gfx.TextCentered(this, Fonts.Bold, more.GetCenter(), $"+{foldedChips.Count}", Ui.TextLabel, Palette.TextDim);
+            if (hv)
+            {
+                var at = new Vector2(more.Position.X, card.End.Y + 6);
+                _tip = () => UiKit.Tooltip(this, at, Screen, "접어 둔 것", foldedChips.Select(t => new TipLine(t, Palette.TextDim)).ToList());
+            }
         }
     }
 

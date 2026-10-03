@@ -12,6 +12,15 @@ public static class Settings
     /// <summary>전체 소리 0~1.</summary>
     public static float Volume { get; set; } = 0.7f;
 
+    /// <summary>v17.6 상황 음악 (평시 · 긴장 · 위기 · 추모) 0~1.</summary>
+    public static float MusicVolume { get; set; } = 0.5f;
+    /// <summary>v17.6 배 안에서 트는 음악 (방 스피커 — 벽 · 문 너머로 먹먹하게) 0~1.</summary>
+    public static float CabinVolume { get; set; } = 0.6f;
+    /// <summary>v17.6 글자 크기 배율.</summary>
+    public static float TextScale { get => Gfx.TextScale; set => Gfx.TextScale = Mathf.Clamp(value, 0.85f, 1.3f); }
+    /// <summary>v17.6 색약 팔레트 (색과 함께 모양 · 무늬로 가른다).</summary>
+    public static bool ColorSafeOn { get => ColorSafe.On; set => ColorSafe.On = value; }
+
     /// <summary>경보·운석·문 같은 효과음.</summary>
     public static bool Effects { get; set; } = true;
 
@@ -90,6 +99,10 @@ public static class Settings
         Tutorial = cfg.GetValue("play", "tutorial", Tutorial).AsBool();
         AutoCamera = cfg.GetValue("play", "auto_camera", AutoCamera).AsBool();
         ShowAllHud = cfg.GetValue("ui", "show_all", ShowAllHud).AsBool(); // v16.2
+        MusicVolume = (float)cfg.GetValue("sound", "music", MusicVolume).AsDouble(); // v17.6
+        CabinVolume = (float)cfg.GetValue("sound", "cabin_music", CabinVolume).AsDouble();
+        TextScale = (float)cfg.GetValue("ui", "text_scale", TextScale).AsDouble();
+        ColorSafeOn = cfg.GetValue("ui", "color_safe", ColorSafeOn).AsBool();
     }
 
     public static void Save()
@@ -108,6 +121,10 @@ public static class Settings
         cfg.SetValue("play", "tutorial", Tutorial);
         cfg.SetValue("play", "auto_camera", AutoCamera);
         cfg.SetValue("ui", "show_all", ShowAllHud); // v16.2
+        cfg.SetValue("sound", "music", MusicVolume); // v17.6
+        cfg.SetValue("sound", "cabin_music", CabinVolume);
+        cfg.SetValue("ui", "text_scale", TextScale);
+        cfg.SetValue("ui", "color_safe", ColorSafeOn);
         cfg.Save(Path);
     }
 }
@@ -145,6 +162,11 @@ public partial class OptionsPanel : PanelContainer
         box.AddChild(volLabel);
         box.AddChild(vol);
         box.AddChild(Check("효과음 (경보·운석·감압·문·발소리·로봇)", Settings.Effects, on => Settings.Effects = on));
+        box.AddChild(Slider("배경 음악", Settings.MusicVolume, v => Settings.MusicVolume = v)); // v17.6
+        box.AddChild(Slider("배 안에서 트는 음악", Settings.CabinVolume, v => Settings.CabinVolume = v));
+        box.AddChild(Caption("보기"));
+        box.AddChild(Slider("글자 크기", (Settings.TextScale - 0.85f) / 0.45f, v => Settings.TextScale = 0.85f + v * 0.45f, () => $"{Settings.TextScale * 100:0}%"));
+        box.AddChild(Check("색약 팔레트 (사람은 표식 모양, 방은 바닥 무늬로도 가른다)", Settings.ColorSafeOn, on => Settings.ColorSafeOn = on));
         box.AddChild(Check("배경음 (기계음·새는 소리·불)", Settings.Ambience, on => Settings.Ambience = on));
         box.AddChild(Caption("관찰"));
         box.AddChild(Check("치명 경보가 울리면 저절로 일시정지", Settings.AutoPauseCritical, on => Settings.AutoPauseCritical = on));
@@ -314,6 +336,18 @@ public partial class OptionsPanel : PanelContainer
     }
 
     private static Label Label(string text) => new() { Text = text };
+
+    /// <summary>v17.6 이름 + 값 + 미끄럼 막대 한 묶음 (0~1).</summary>
+    private static Control Slider(string name, float value, System.Action<float> set, System.Func<string>? shown = null)
+    {
+        var box = new VBoxContainer();
+        var label = Label($"{name} {(shown != null ? shown() : $"{value * 100:0}%")}");
+        var sl = new HSlider { MinValue = 0, MaxValue = 100, Step = 5, Value = value * 100, CustomMinimumSize = new Vector2(360, 20) };
+        sl.ValueChanged += v => { set((float)v / 100f); label.Text = $"{name} {(shown != null ? shown() : $"{v:0}%")}"; Changed(); };
+        box.AddChild(label);
+        box.AddChild(sl);
+        return box;
+    }
 
     private static string CrewText(int n)
     {

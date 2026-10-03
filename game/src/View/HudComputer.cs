@@ -60,9 +60,10 @@ public partial class Hud
         // v16.24 방금 정한 제안 하나도 잠깐 남긴다 (누가 · 어디서 · 어떻게 정했는지 보이게)
         var just = a.Asks.All.LastOrDefault(p => p.State != ProposalState.Pending && p.DecidedAt >= 0 && w.Tick - p.DecidedAt < SimTime.Minutes(20));
         if (just != null) open.Add(just);
-        float h = ComputerFolded ? 44f : 150f + BrainBlockH + open.Count * (ProposalH + 6f); // v16.16 두뇌 네 줄
-        float bottom = Screen.Y - Margin - LogHeight - 10f;
-        var card = new Rect2(Margin, bottom - h, width, h);
+        // v17.6 자리는 배치 규칙이 정한다 (기록 바로 위 · 왼쪽 위 더미와 겹치면 접고, 그래도 안 되면 숨긴다)
+        if (_plan.ComputerHidden || _plan.Computer.Empty) return;
+        bool folded = ComputerFolded || _plan.ComputerFolded;
+        var card = R(_plan.Computer);
         Card(card);
         // 카드 머리를 누르면 관제 화면
         var head = new Rect2(card.Position, new Vector2(width - 64f, 40f));
@@ -76,9 +77,9 @@ public partial class Hud
         else if (a.Core.SelfSaving) state += " · 제 연산 줄임";
         Gfx.Text(this, Fonts.Bold, new Vector2(x + 34, y + 19), Fit($"{a.Voice.Call} · {AutomationSystem.LevelName(a.Level)}", width - 150, Ui.TextLabel, Fonts.Bold), Ui.TextLabel, Palette.Text);
         Gfx.Text(this, Fonts.Body, new Vector2(x + 34, y + 34), state + (a.Voice.Tone != "" ? $" · 말투 {a.Voice.Tone}" : ""), Ui.TextTiny, a.MainOnline ? Palette.Good : Palette.Danger);
-        Button(new Rect2(right - 50, y + 9, 24, 22), ComputerFolded ? "▴" : "▾", false, mouse, () => ComputerFolded = !ComputerFolded, Ui.TextSmall);
+        Button(new Rect2(right - 50, y + 9, 24, 22), folded ? "▴" : "▾", false, mouse, () => ComputerFolded = !ComputerFolded, Ui.TextSmall);
         Button(new Rect2(right - 22, y + 9, 22, 22), "Y", false, mouse, ToggleControl, Ui.TextSmall);
-        if (ComputerFolded) return;
+        if (folded) return;
         y += 44;
         // 지금 하는 일
         string now = a.NowLine;
@@ -106,27 +107,27 @@ public partial class Hud
         if (temp > 32f) for (int k = 0; k < 3; k++) { float ph = Mathf.PosMod(_time * 0.8f + k * 0.33f, 1f); DrawArc(new Vector2(tx + 52 + k * 5, y + 10 - ph * 6), 2f, Mathf.Pi, Mathf.Tau, 5, Palette.Warning.WithAlpha(1f - ph), 1f, true); }
         y += 20;
         // 모듈 아이콘 줄
+        // v17.6 줄 수를 미리 정해 아래 글줄과 겹치지 않게 (UiLayout.ComputerHeight 와 같은 셈)
         var mods = a.Modules.OrderByDescending(AutomationSystem.ModulePriority).ThenBy(m => (int)m).ToList();
-        float ix = x + 8, iy = y + 10;
+        int perRow = UiLayout.IconsPerRow(width), iconRows = UiLayout.IconRows(mods.Count, width);
         ComputerModule? hover = null;
-        foreach (var m in mods)
+        for (int i = 0; i < mods.Count && i / perRow < iconRows; i++)
         {
-            if (ix > right - 8) { ix = x + 8; iy += 19; if (iy > y + 30) break; }
-            var c = new Vector2(ix, iy);
+            var m = mods[i];
+            var c = new Vector2(x + 8 + (i % perRow) * UiLayout.CompIconStep, y + 10 + (i / perRow) * UiLayout.CompIconRow);
             ComputerIcons.Draw(this, m, c, 6.2f, ComputerIcons.StateOf(w, m), _time);
             if ((mouse - c).Length() < 8f) hover = m;
-            ix += 18;
         }
-        y += 42;
+        y += iconRows * UiLayout.CompIconRow + UiLayout.CompIconPad;
         if (hover is ComputerModule hm)
-            Gfx.Text(this, Fonts.Body, new Vector2(x, y + 2), Fit($"{AutomationSystem.ModuleName(hm)} — {AutomationSystem.ModuleNote(hm)} (부하 {AutomationSystem.ModuleLoad(hm)})", width - 28, Ui.TextTiny, Fonts.Body), Ui.TextTiny, Palette.Accent);
+            Gfx.Text(this, Fonts.Body, new Vector2(x, y + 11), Fit($"{AutomationSystem.ModuleName(hm)} — {AutomationSystem.ModuleNote(hm)} (부하 {AutomationSystem.ModuleLoad(hm)})", width - 28, Ui.TextTiny, Fonts.Body), Ui.TextTiny, Palette.Accent);
         else
         {
             var book = a.Book;
-            Gfx.Text(this, Fonts.Body, new Vector2(x, y + 2), Fit($"오늘 조치 {book.ActsToday} · 맞음 {book.RightToday} · 틀림 {book.WrongToday} · 사람 신뢰 {a.Trusts.Average() * 100:0}% · 믿음≠실제 {a.Belief.DivergedCount()}방", width - 28, Ui.TextTiny, Fonts.Body), Ui.TextTiny, Palette.TextMuted);
+            Gfx.Text(this, Fonts.Body, new Vector2(x, y + 11), Fit($"오늘 조치 {book.ActsToday} · 맞음 {book.RightToday} · 틀림 {book.WrongToday} · 사람 신뢰 {a.Trusts.Average() * 100:0}% · 믿음≠실제 {a.Belief.DivergedCount()}방", width - 28, Ui.TextTiny, Fonts.Body), Ui.TextTiny, Palette.TextMuted);
         }
-        y += 8;
-        DrawBrainBlock(x, y + 4, width - 28); // v16.16 계획 · 예측 · 권한 · 배움
+        y += UiLayout.CompBookLine;
+        DrawBrainBlock(x, y, width - 28); // v16.16 계획 · 예측 · 권한 · 배움
         y += BrainBlockH;
         // 버튼 줄
         float bx = x;
@@ -142,7 +143,7 @@ public partial class Hud
             Button(new Rect2(bx, y + 4, bw, 22), label, active, mouse, act, Ui.TextSmall);
             bx += bw + 6;
         }
-        y += 32;
+        y += UiLayout.CompButtons;
         // 제안 카드
         foreach (var p in open) { DrawProposal(new Rect2(x - 4, y, width - 20, ProposalH), p, mouse); y += ProposalH + 6f; }
         if (DecisionsOpen) DrawDecisions(new Vector2(card.End.X + 10, card.End.Y), mouse);

@@ -94,18 +94,20 @@ public partial class Hud : Control
         _tip = null;
         var mouse = GetLocalMousePosition();
         MeasureLog(); // v16.2 접힌 기록 높이 → 컴퓨터 카드가 그 바로 위에
+        PlanLayout(); // v17.6 패널 배치 규칙 (쌓고 · 모자라면 접는다 — HudLayout.cs)
 
         float topRight = DrawTopBar(mouse);
         DrawStatus(topRight + 10f, mouse);
         // v16.2 조용한 HUD: 보기 · 사고 도구는 접어 두고 열 때만
         if (!Quiet || _toolsOpen || _hazardMenu || _main.Tool != IncidentTool.None)
         {
-            float viewRight = DrawViewModes(mouse);
+            float viewRight = DrawViewPicker(mouse); // v17.6 보기 선택판 하나
             DrawIncidentTools(viewRight + 10f, mouse);
             if (Quiet) DrawToolsFoldButton(_toolsRight + 6f, mouse);
         }
         else DrawToolsFolded(mouse);
         DrawProfile();
+        DrawViewLegend(); // v17.6 보기마다 범례
 
         // v16.2 조용한 HUD: 승무원은 살펴볼 사람만 (머리글을 누르면 모두)
         // 승무원 카드가 주인공: 조용한 HUD에서 누군가를 고르면 위 칸은 줄여 카드에 자리를 준다
@@ -144,6 +146,7 @@ public partial class Hud : Control
         DrawCampaign(); // v12.9 임무
         DrawTutorial(mouse); // v12.9 첫 항해 안내
         if (_hazardMenu) DrawHazardMenu(_hazardMenuAt, mouse); // v11.2 떠 있는 메뉴는 맨 위에
+        DrawViewPickerPanel(mouse); // v17.6
         if (HelpOpen) DrawHelp(mouse); // v16.2
         _tip?.Invoke(); // v16.2 툴팁은 맨 위에
         DrawScaleFrame(); // v16.18 지금 가장 큰 사고의 규모로 화면 테두리
@@ -385,6 +388,7 @@ public partial class Hud : Control
     /// <summary>함선 지표 (처음 출발할 때 = 100): 사고와 개조를 거치며 어떤 건 떨어지고 어떤 건 오른다.</summary>
     private void DrawProfile()
     {
+        _profileSz = Vector2.Zero;
         if (_world.InitialProfile is not ShipProfile basis) return;
         if (_world.Tick % 30 == 0 || _profile == null) _profile = ShipProfile.Measure(_world).RelativeTo(basis);
         var values = _profile.Values;
@@ -402,7 +406,8 @@ public partial class Hud : Control
         // v12.4 이야기꾼: 성격·난이도·긴장·여력·다음 사고까지
         string story = StoryLine();
         titleW = Mathf.Max(titleW, Gfx.Width(Fonts.Body, story, Ui.TextTiny));
-        var card = new Rect2(Margin, Margin + 52f + 8f + 40f + 8f, 28 + Mathf.Max(widths.Sum() - 14, titleW), story.Length > 0 ? 80f : 64f);
+        var card = new Rect2(Margin, _plan.ProfileY, 28 + Mathf.Max(widths.Sum() - 14, titleW), story.Length > 0 ? 80f : 64f);
+        _profileSz = card.Size; // v17.6 배치 규칙에 알린다
         Card(card);
         Gfx.Text(this, Fonts.Body, new Vector2(card.Position.X + 14, card.Position.Y + 16), "함선 지표 · 처음 = 100", Ui.TextTiny, Palette.TextMuted);
         Gfx.TextRight(this, Fonts.Bold, new Vector2(card.End.X - 14, card.Position.Y + 16), mats, Ui.TextTiny,
@@ -459,9 +464,14 @@ public partial class Hud : Control
     private void DrawIncidentTools(float x0, Vector2 mouse)
     {
         var tools = IncidentTools.All;
-        const float bw = 74f, gap = 4f;
+        const float gap = 4f;
         float titleW = Gfx.Width(Fonts.Bold, "사고", Ui.TextSmall) + 14f;
         const float moreW = 84f;
+        // v17.6 오른쪽 칸 앞에서 멈춘다: 단추를 좁히고, 그래도 모자라면 뒤쪽 도구는 접는다 (단축키는 그대로)
+        float avail = Margin + _plan.ToolsMaxW - x0 - (14 + titleW + moreW + 14);
+        float bw = Mathf.Clamp(avail / Math.Max(1, tools.Length) - gap, 56f, 74f);
+        int fit = Math.Clamp((int)(avail / (bw + gap)), 0, tools.Length);
+        if (fit < tools.Length) tools = tools.Take(fit).ToArray();
         var card = new Rect2(x0, Margin + 52f + 8f, 14 + titleW + tools.Length * (bw + gap) + moreW + 14, 40f);
         Card(card);
         float cy = card.GetCenter().Y;

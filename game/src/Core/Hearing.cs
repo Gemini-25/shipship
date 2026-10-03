@@ -16,7 +16,7 @@ namespace ShipSim.Core;
 //  · 주 컴퓨터: 데이터선이 닿는 방의 진동 마이크로 같은 소리를 듣는다 — 오래가는 주기 잡음을 정비 권고로 올린다.
 // 소리는 1분마다 다시 모은다(가볍게). 화면은 이 정보를 소리 표시 그림으로 그린다 (View/ShipViewHearing).
 
-public enum Noise : byte { Step, Rattle, Bearing, Hiss, Crackle, Fan, Drip, Breath, Radio, Creak, DoorShut, Hum, Whistle, Tap, Voice, Sing }
+public enum Noise : byte { Step, Rattle, Bearing, Hiss, Crackle, Fan, Drip, Breath, Radio, Creak, DoorShut, Hum, Whistle, Tap, Voice, Sing, Music } // v17.6 Music: 방 스피커로 트는 음악
 
 /// <summary>소리 하나: 종류 · 방 · 자리 · 크기(0~1, 그 방 안) · 주인(사람 · 설비 · 벽 · 문 번호) · 재질/세부 · 주기(초, 0 = 고른 소리).</summary>
 public sealed class NoiseSource
@@ -50,8 +50,8 @@ public sealed class HearNote
 public sealed class HearingStats
 {
     public int Minutes, Sources, Heard, Muffled, Masked, Strange, Quieted, FanStops, Drips, StepsKnown, Creaks, Radio, Annoyed, Habituated, Advice, Doors;
-    public readonly int[] ByKind = new int[16];
-    public readonly int[] HeardKind = new int[16];
+    public readonly int[] ByKind = new int[17];
+    public readonly int[] HeardKind = new int[17];
     public string Summary() =>
         $"소리 {Sources}(종류 {ByKind.Count(x => x > 0)}) · 들음 {Heard}(종류 {HeardKind.Count(x => x > 0)} · 먹먹 {Muffled} · 가려짐 {Masked}) · 낯선 소리 {Strange} · 조용해짐 {Quieted} · 팬 멎음 {FanStops} · " +
         $"물방울 {Drips} · 발소리로 앎 {StepsKnown} · 삐걱 {Creaks} · 무전 {Radio} · 거슬림 {Annoyed} · 익숙해짐 {Habituated} · 컴퓨터 권고 {Advice} · 문 닫힘 {Doors}";
@@ -116,6 +116,12 @@ public sealed partial class HearingSystem
     {
         if (Off || c.Room is not Room r) return;
         _emitted.Add(new NoiseSource { Kind = k, Room = r.Id, At = c.Position, Level = level, Owner = c.Id, Sub = sub });
+    }
+
+    /// <summary>v17.6 사람이 아닌 소리 (방 스피커의 음악 등): 다음 1분 모음에 들어가 같은 길로 퍼진다.</summary>
+    public void EmitAt(Noise k, Room r, Vector2 at, float level, int owner, byte sub = 0)
+    {
+        if (!Off) _emitted.Add(new NoiseSource { Kind = k, Room = r.Id, At = at, Level = level, Owner = owner, Sub = sub });
     }
 
     /// <summary>이 방에서 지금 들리는 소리 (지난 1분).</summary>

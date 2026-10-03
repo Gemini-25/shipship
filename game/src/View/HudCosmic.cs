@@ -25,15 +25,17 @@ public partial class Hud
     {
         var w = _world;
         var cs = w.Cosmic;
+        _cosmicH = 0f;
         if (ControlOpen || ChronicleOpen || TechOpen || PolicyOpen || ChainOpen) return;
         var e = cs.Main;
         const float width = 344f;
-        float x = Margin, y = Margin + 52f + 8f + 40f + 22f;
+        float x = Margin, y = _plan.CosmicY; // v17.6 왼쪽 위 더미에 쌓는다
         if (e == null)
         {
             if (cs.Sky.Count == 0 && cs.Customs.Count == 0) return;
             // 지나간 뒤: 하늘에 남은 것 · 관행 한 줄
             var small = new Rect2(x, y, width, 30f);
+            _cosmicH = 30f;
             Card(small);
             string sky = cs.Sky.Count > 0 ? $"창밖: {string.Join(" · ", cs.Sky.TakeLast(2).Select(s => s.Name))}" : "";
             var vig = cs.CustomOf(CosmicCustomKind.Vigil);
@@ -46,6 +48,7 @@ public partial class Hud
         var openAsks = w.Automation.Asks.Open.Where(p => p.Key.StartsWith("cosmic:")).ToList();
         float h = _cosmicFolded ? 54f : 176f + openAsks.Count * 30f;
         var card = new Rect2(x, y, width, h);
+        _cosmicH = h;
         Card(card, e.Phase == CosmicPhase.Impact ? Tone.Danger : e.Phase == CosmicPhase.Brace ? Tone.Caution : Tone.Info);
         // 그림 (재난마다 다른 실루엣 · 움직임)
         var iconRect = new Rect2(x + 8f, y + 8f, 40f, 40f);
