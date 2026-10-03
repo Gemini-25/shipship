@@ -1179,8 +1179,9 @@ public sealed partial class WorkBoard
                     ill != null ? $"{AilmentSystem.Spec(ill.Id).Name} {w.Ailments.Severity(ill) * 100:0}% — 약" : $"어딘가 아프다 {c.Fx.Worst * 100:0}% — 진찰");
             bool bleeding = w.Casualty.Urgent(c); // v16.24 피가 나는 사람은 방금 치료받았어도 다시 · 급하게
             if (needs && w.Tick - c.Vitals.TreatedTick > SimTime.Hours(c.Vitals.Injury >= 0.3f ? 6 : 3) || bleeding)
-                Post(WorkKind.Treat, WorkTarget.OfCrew(c), (bleeding ? 1.15f : 0.6f) + MathF.Max(0.6f - c.Vitals.Health, c.Vitals.Injury * 0.5f), Skill.Medicine,
-                    c.Vitals.Injury >= 0.05f ? $"체력 {c.Vitals.Health * 100:0}% · 부상 {c.Vitals.Injury * 100:0}% ({c.Vitals.InjuryCause})" : $"체력 {c.Vitals.Health * 100:0}%");
+                Post(WorkKind.Treat, WorkTarget.OfCrew(c), (bleeding ? 1.15f : 0.6f) + MathF.Max(0.6f - c.Vitals.Health, c.Vitals.Injury * 0.5f) + w.Grades.UrgencyBonus(c), Skill.Medicine, // 위중한 사람부터
+                    (w.Grades.Now(c) is InjuryGrade g && g != InjuryGrade.None ? $"{InjuryGradeSystem.Name(g)} · " : "")
+                    + (c.Vitals.Injury >= 0.05f ? $"체력 {c.Vitals.Health * 100:0}% · 부상 {c.Vitals.Injury * 100:0}% ({c.Vitals.InjuryCause})" : $"체력 {c.Vitals.Health * 100:0}%"));
         }
 
         psc = Prof.Lap("scan.treat", psc);

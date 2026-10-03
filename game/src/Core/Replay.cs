@@ -455,6 +455,7 @@ public static class SaveGame
         w.Personal.Hash(I, F); // v18.0 · v18.1 · v18.9 옷 · 편지 · 내기
         w.Signs.Hash(I, F); w.Fittings.Hash(I, F); // 압축-마
         w.Music.Hash(I, F); w.Curios.Hash(I, F); // v17.6 음악 · v17.9 숨은 것 · 도감
+        w.Grades.Hash(I, F); // 부상 등급
         return h;
     }
 }

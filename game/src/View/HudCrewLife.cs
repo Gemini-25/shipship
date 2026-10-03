@@ -35,6 +35,17 @@ public partial class Hud
         Limb(BodyPart.RightLeg, new Vector2(cx + 6, top + 58), new Vector2(cx + 10, top + 96));
         // 오른쪽: 상처 목록과 몸이 하는 일
         float lx = x + 110, ly = y + 30;
+        // 부상 등급 (경상 · 중상 · 위중) — 맨 위 한 줄
+        var grade = _world.Grades.Now(c);
+        if (grade != InjuryGrade.None)
+        {
+            var gc = grade == InjuryGrade.Critical ? Palette.Danger : grade == InjuryGrade.Serious ? Palette.Warning : new Color("#ffd27a");
+            string gn = InjuryGradeSystem.Name(grade);
+            Gfx.Pill(this, Fonts.Bold, new Vector2(lx + Gfx.Width(Fonts.Bold, gn, Ui.TextSmall) * 0.5f + 7, ly + 6), gn, Ui.TextSmall, gc, new Color(0, 0, 0, 0.3f), gc.WithAlpha(0.5f));
+            string why = grade == InjuryGrade.Critical ? "지금 손대지 않으면 위험하다" : grade == InjuryGrade.Serious ? "치료를 받아야 낫는다" : "스스로 감고 일한다";
+            Gfx.Text(this, Fonts.Body, new Vector2(lx + Gfx.Width(Fonts.Bold, gn, Ui.TextSmall) + 22, ly + 10), Fit(why, right - lx - 60, Ui.TextSmall, Fonts.Body), Ui.TextSmall, Palette.TextDim);
+            ly += 20;
+        }
         string summary = Wounds.Summary(v);
         foreach (var part in (summary.Length > 0 ? summary : "다친 데 없음").Split(" · "))
         {

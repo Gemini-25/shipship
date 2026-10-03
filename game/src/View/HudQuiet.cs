@@ -31,8 +31,11 @@ public partial class Hud
         if (c.Mind.Panicking(now)) return ("panic", c.Mind.Frozen ? "공황 · 얼어붙음" : "공황", Tone.Danger);
         if (c.Suit is SuitState s && s.Oxygen < 0.75f) return ("suit", $"우주복 산소 {s.Oxygen:0.0}시간", Tone.Danger);
         if (c.Vitals.Oxygen < 0.85f) return ("oxygen", $"숨이 가쁘다 · 혈중 산소 {c.Vitals.Oxygen * 100:0}%", Tone.Danger);
+        // 부상 등급: 위중은 빨강 · 중상은 주황 (경상은 목록을 어지럽히지 않는다 — 카드에서 본다)
+        var grade = _world.Grades.Now(c);
+        if (grade == InjuryGrade.Critical) return ("injury", $"위중 · {_world.Grades.Detail(c)}".TrimEnd(' ', '·'), Tone.Danger);
         if (c.Vitals.Health < 0.5f) return ("health", $"체력 {c.Vitals.Health * 100:0}%", Tone.Danger);
-        if (c.Vitals.Injury > 0.3f) return ("injury", $"부상 {c.Vitals.Injury * 100:0}%" + (c.Vitals.InjuryCause != null ? $" · {c.Vitals.InjuryCause}" : ""), Tone.Caution);
+        if (grade == InjuryGrade.Serious) return ("injury", $"중상 · {_world.Grades.Detail(c)}".TrimEnd(' ', '·'), Tone.Caution);
         if (DiseaseSystem.Sick(c)) return ("sick", "아프다", Tone.Caution);
         if (c.Needs.Food < 0.12f) return ("eat", "굶주림", Tone.Caution);
         if (c.Needs.Rest < 0.1f) return ("sleep", "탈진", Tone.Caution);
