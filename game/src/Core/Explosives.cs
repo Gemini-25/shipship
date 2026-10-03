@@ -552,10 +552,10 @@ public sealed class ExplosiveSet
         {
             Stats.Vented++;
             foreach (var d in Cell.Dirs4.Prepend(new Cell(0, 0))) if (w.Ship.Grid.Kind(e.Cell + d) == TileKind.Floor) w.Fire.Ignite(e.Cell + d, 0.5f);
-            _b.Detonate(e.Cell, power * 0.25f, spec.Blast, $"{spec.Name} 불기둥 ({e.Why})", null, e.Depth, e.Handler, e);
+            _b.Detonate(e.Cell, power * 0.25f, spec.Blast, $"{spec.Name} 불기둥 — {e.Why}", null, e.Depth, e.Handler, e);
             return;
         }
-        var rec = _b.Detonate(e.Cell, power, spec.Blast, $"{spec.Name} ({e.Why})", null, e.Depth, e.Handler, e);
+        var rec = _b.Detonate(e.Cell, power, spec.Blast, $"{spec.Name} — {e.Why}", null, e.Depth, e.Handler, e);
         if (order != null && rec != null) Breached(order, e, rec);
     }
 
@@ -607,7 +607,7 @@ public sealed class ExplosiveSet
         if (e.Primed || e.Spent || _b.DepthNow >= MaxDepth) return;
         if (R.Chance(e.Spec.Pierce * MathF.Min(1f, s * 1.6f)))
         {
-            Prime(e, $"파편에 뚫렸다 ({cause})", _b.DepthNow + 1);
+            Prime(e, string.IsNullOrEmpty(cause) || cause.Contains("파편") ? "파편에 뚫렸다" : $"{cause}의 파편에 뚫렸다", _b.DepthNow + 1);
             e.FuseAt = Math.Min(e.FuseAt, _w.Tick + Math.Max(1, SimTime.Minutes(R.Range(0.05f, 0.6f))));
             _b.Stats.Chains++;
         }

@@ -86,7 +86,11 @@ public partial class Hud
         bool hot = a.FireCases.Count > 0 || a.ZoneActive || !a.MainOnline || open.Count > 0;
         var lines = WrapText(now, width - 40, Ui.TextBody);
         DrawNowGlyph(new Vector2(x + 6, y + 8), hot);
-        for (int i = 0; i < Math.Min(2, lines.Count); i++) Gfx.Text(this, Fonts.Bold, new Vector2(x + 20, y + 12 + i * 15), Fit(lines[i], width - 40, Ui.TextBody, Fonts.Bold), Ui.TextBody, hot ? Palette.Warning : Palette.Text);
+        for (int i = 0; i < Math.Min(2, lines.Count); i++)
+        {
+            string ln = i == 1 && lines.Count > 2 ? string.Join(" ", lines.Skip(1)) : lines[i]; // 두 줄을 넘으면 둘째 줄 끝에 "…"
+            Gfx.Text(this, Fonts.Bold, new Vector2(x + 20, y + 12 + i * 15), Fit(ln, width - 40, Ui.TextBody, Fonts.Bold), Ui.TextBody, hot ? Palette.Warning : Palette.Text);
+        }
         y += 34;
         // 부하 · 온도
         float load = a.Load;
