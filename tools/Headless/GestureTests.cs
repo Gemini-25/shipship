@@ -298,6 +298,7 @@ public static partial class Program
             RunE(w, SimTime.Minutes(10), () => room.Humidity = 0.95f);
             int drips0 = w.Hearing.Stats.Drips;
             bool masked = w.Hearing.In(room).Any(h => w.Hearing.Sources[h.Src].Kind == Noise.Drip && h.Masked);
+            Gather(w, ppl.Where(c => c.CanAct && c.IsAwake).ToList(), room); // 통합8 열 분 사이 다들 자리를 떴다 (밥 · 일) — 정전 때 그 방에 있는 사람들로
             room.BreakerOff = true; // 정전
             RunE(w, SimTime.Minutes(3), () => { room.Humidity = 0.95f; room.BreakerOff = true; });
             bool fanGone = !w.Hearing.Sources.Any(s => s.Kind == Noise.Fan && s.Room == room.Id);

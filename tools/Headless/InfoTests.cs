@@ -337,8 +337,12 @@ public static partial class Program
             info.OnQuarrel(v, foe, "시험 말다툼");
             float aff0 = v.AffinityTo(foe);
             SpQuiet(w, new[] { v }, SimTime.Hours(4));
+            v.Needs.Food = MathF.Max(v.Needs.Food, 0.9f); // 통합8 밥때에 걸리면 사진 앞에서 바로 식당으로 갔다 — 밥을 먹고 들른 사람으로
             Teleport(w, v, IfFloor(w, w.Ship.RoomAt(ph.Wall)!));
-            for (int i = 0; i < 240 && !ph.SeenBy.Contains(v.Id); i++) { v.NextThinkTick = Math.Min(v.NextThinkTick, w.Tick + SimTime.Minutes(3)); Run(w, SimTime.Minutes(1)); }
+            for (int i = 0; i < 240 && !ph.SeenBy.Contains(v.Id); i++)
+            {
+                v.NextThinkTick = Math.Min(v.NextThinkTick, w.Tick + SimTime.Minutes(3)); Run(w, SimTime.Minutes(1));
+            }
             Check("지나는 사람이 벽 사진 앞에 멈춰 떠올린다 — 다툰 사람과 나란히 웃던 얼굴 (마음이 풀리고 화해할 마음)",
                 ph.Views >= 1 && v.AffinityTo(foe) > aff0 && w.Brain2.Goals.Has(v, "reconcile") && v.Diary.Any(d => d.text.Contains("사진")),
                 $"본 횟수 {ph.Views} · {v.Name}→{foe.Name} {aff0:0.00}→{v.AffinityTo(foe):0.00} · 일기 \"{v.Diary.LastOrDefault(d => d.text.Contains("사진")).text}\"");

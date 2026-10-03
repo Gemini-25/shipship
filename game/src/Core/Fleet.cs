@@ -90,7 +90,7 @@ public sealed class FleetSystem
     /// <summary>다음 외벽 순찰을 찾아볼 때.</summary>
     internal long NextHullRound, NextHullCare;
 
-    private sealed class FireWatch { public int Robot; public long Since, HoldUntil; public bool Held, Seen; public int Decision; public float Foam0; }
+    private sealed class FireWatch { public int Robot; public long Since, HoldUntil; public bool Held, Seen; public int Decision; public float Foam0; public readonly HashSet<int> Saw = new(); }
 
     public FleetSystem(World w) => _w = w;
 
@@ -351,7 +351,8 @@ public sealed class FleetSystem
             if (_fire.TryGetValue(id, out var fw))
             {
                 var rb = w.Robots.Robots[fw.Robot];
-                if (!fw.Seen && (rb.Room == room || rb.Foam < fw.Foam0 - 0.01f)) { fw.Seen = true; Witness(rb, room); } // 들어갔거나 문턱에서 거품을 뿌리기 시작했다
+                // 들어갔거나 문턱에서 거품을 뿌리기 시작했다 — 통합8 그 뒤 문 앞에 닿은 사람도 로봇이 끄는 걸 본다 (사람마다 한 번)
+                if (rb.Room == room || rb.Foam < fw.Foam0 - 0.01f) { bool first = !fw.Seen; fw.Seen = true; if (first || (w.Tick & 15) == 0) Witness(rb, room, fw.Saw); }
                 bool on = rb.Operational && rb.Foam > 0.05f && (rb.FightingFire || rb.Room == room);
                 if (!on)
                 {
@@ -470,21 +471,23 @@ public sealed class FleetSystem
     }
 
     /// <summary>로봇이 먼저 불 속에 들어가는 걸 본 사람: 컴퓨터를 조금 더 믿는다 · 불을 안다.</summary>
-    private void Witness(Robot rb, Room room)
+    private void Witness(Robot rb, Room room, HashSet<int> saw)
     {
         var w = _w;
         CrewMember? first = null;
+        bool none = saw.Count == 0;
         foreach (var c in w.Crew)
         {
-            if (c.Dead || !c.IsAwake || c.IsChild) continue;
+            if (c.Dead || !c.IsAwake || c.IsChild || saw.Contains(c.Id)) continue;
             float d = MathF.Abs(c.Position.X - rb.Position.X) + MathF.Abs(c.Position.Y - rb.Position.Y);
             if (d > 9f) continue;
             w.Automation.Trusts.Change(c, 0.02f, $"{Ko.IGa(rb.Name)} 사람보다 먼저 불 속에 들어갔다", quiet: true);
             w.Brain2.Beliefs.Learn(c, Topic.Fire, room.Id, 1, BeliefSource.Seen, 0.95f);
             first ??= c;
+            saw.Add(c.Id);
             Witnessed++;
         }
-        if (first != null)
+        if (first != null && none)
             Life.Diary(w, first, Persona.Say(first, $"{Ko.IGa(rb.Name)} 먼저 {room.Name} 연기 속으로 들어갔다. 우리는 문 앞에서 기다렸다"));
     }
 

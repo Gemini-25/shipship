@@ -125,6 +125,7 @@ public static partial class Program
                 Method Outage(int round)
                 {
                     BrainPut(w, a, room, round);
+                    a.HoldUntil = w.Tick + SimTime.Minutes(2); a.HoldWhy = "그 방에서 일하던 중"; // 통합8 놓자마자 다른 방 정비로 떠나 불이 나간 걸 못 봤다 — 불이 나갈 때 그 방에 있게
                     Run(w, 2);
                     room.LightsOut = true; room.LightsOutSince = w.Tick; // 조명 고장 (차단기가 아니다)
                     Method? pick = null;
@@ -132,6 +133,7 @@ public static partial class Program
                     {
                         Run(w, SimTime.Minutes(0.5f));
                         if (w.Brain2.Plans.Current(a) is CrewPlan p && p.Kind == PlanKind.Outage) pick = p.Method;
+                        if (debug && m % 4 == 0) Console.WriteLine($"    정전{round} {m * 0.5f}분 {a.Name} {a.Job?.Label} @{a.Room?.Name} 계획 {w.Brain2.Plans.Current(a)?.Kind} · {string.Join(", ", a.LastEvaluations.Take(4).Select(e => $"{e.Activity.Id}:{e.Score:0.00}({e.Reason})"))}");
                     }
                     // 통합7 배전반이 멀면 가는 사이(30분) 시험이 먼저 불을 켜 '벌써 누가 올렸다'가 됐다 — 고른 길이 끝날 때까지 캄캄하게 둔다
                     for (int m = 0; m < 180 && (m < 50 || w.Brain2.Plans.Current(a) is CrewPlan { Kind: PlanKind.Outage }); m++) Run(w, SimTime.Minutes(0.5f));
@@ -188,8 +190,10 @@ public static partial class Program
                 BigFire(w, room, 3);
                 bool told = false;
                 string fsrc = "";
+                var cutLinks = w.Net.Links.Where(l => l.Kind == NetKind.Data && (l.Door?.RoomA == room || l.Door?.RoomB == room || l.Room == far || l.Door?.RoomA == far || l.Door?.RoomB == far)).ToList();
                 for (int m = 0; m < 120 && !told && w.Brain2.Social.AlreadyKnew == 0; m++) // 통합7 불이 통로로 번지면 본 사람이 먼저 피했다가 알리러 간다 — 스무 분으론 모자랐다
                 {
+                    foreach (var l in cutLinks) if (!l.Cut) w.Net.Hurt(l, 1f, "시험"); // 통합8 장면 내내 그 방 데이터선은 끊겨 있다 (망 잇기가 몇 분 만에 이어 경보가 닿았다)
                     Run(w, SimTime.Minutes(0.5f));
                     var fb = w.Brain2.Beliefs.Get(friend, Topic.Fire, room.Id);
                     if (fb != null && fb.Src == BeliefSource.Told) { told = true; fsrc = $"{BeliefSystem.SourceName(fb.Src)} · {w.Brain2.Beliefs.CrewById(fb.From)?.Name}"; }

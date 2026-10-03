@@ -104,6 +104,21 @@ public static partial class Program
                 foreach (var sc in w.Scenes.Scenes.Where(x => x.Kind == SceneKind.Chess).TakeLast(3)) Console.WriteLine($"   scene {sc.Id} {sc.Stage} open {sc.Open} host {sc.Host} other {sc.Other} · {string.Join(" / ", sc.Trail.TakeLast(4))}");
             }
         }
+        if (which == "equal")
+        {
+            var w = DayOne(seed, "Mirinae");
+            var hall = w.Ship.LiveRooms.Where(r => r.Type == RoomType.Corridor).OrderByDescending(r => r.Cells.Count).First();
+            int checks0 = w.Movement.Stats.DoorChecks;
+            for (int i = 0; i < SimTime.Minutes(40) && w.Flow.Stats.Equalized == 0; i++)
+            {
+                if (i % 15 == 0 && hall.Air.Pressure > 85f) { hall.VentOpen = false; float k = 84f / hall.Air.Pressure; hall.Air.O2 *= k; hall.Air.N2 *= k; }
+                if (i % 15 == 0) foreach (var n in hall.Doors.Select(d => d.RoomA == hall ? d.RoomB : d.RoomA).Where(r => r != null && r != hall && !r.Detached && r.Air.Pressure < 99f && r.Air.Pressure > 50f).Distinct().ToList()) { float k2 = 100f / n!.Air.Pressure; n.Air.O2 *= k2; n.Air.N2 *= k2; }
+                w.Step();
+                if (i % SimTime.Minutes(5) == 0)
+                    Console.WriteLine($"{SimTime.Clock(w.Tick)} hall {hall.Air.Pressure:0.0} · in hall {w.Crew.Count(c => c.Room == hall)} · doorchecks {w.Movement.Stats.DoorChecks - checks0} · readings {string.Join(",", w.Crew.Where(c => c.Gait.DoorReading != null).Select(c => c.Name + ":" + c.Gait.DoorReading))} · nbr {string.Join(",", hall.Doors.Select(d => (d.RoomA == hall ? d.RoomB : d.RoomA)?.Air.Pressure.ToString("0")))}");
+            }
+            Console.WriteLine($"equalized {w.Flow.Stats.Equalized}");
+        }
         if (which == "chess")
         {
             var w = DayOne(seed, "Hanbit");

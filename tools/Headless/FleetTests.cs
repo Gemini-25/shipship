@@ -292,15 +292,18 @@ public static partial class Program
                     Run(w, SimTime.Minutes(30));
                     // 불길 속에서 닳은 로봇이 부서진다 → 같이 일하던 사람이 아쉬워한다
                     Robot? victim = null;
-                    for (int t = 0; t < SimTime.Hours(10) && victim == null; t++)
+                    bool lit = false;
+                    // 통합8 젖은 재배실 바닥엔 불이 안 붙는다 — 불이 붙는 자리에서 일하는 로봇을 기다린다
+                    for (int t = 0; t < SimTime.Hours(10) && !lit; t++)
                     {
                         w.Step();
-                        victim = w.Robots.Robots.FirstOrDefault(x => x.Operational && !RobotsV15.Fireproof(x.Kind) && x.State == RobotState.Active && x.Path == null && x.Progress is float pv && pv < 0.5f && x.Room?.Type != RoomType.Corridor);
+                        victim = w.Robots.Robots.FirstOrDefault(x => x.Operational && !RobotsV15.Fireproof(x.Kind) && x.State == RobotState.Active && x.Path == null && x.Progress is float pv && pv < 0.5f && x.Room?.Type is not (RoomType.Corridor or RoomType.Hydroponics));
+                        if (victim == null) continue;
+                        lit = w.Fire.Ignite(victim.Cell, 0.8f);
+                        foreach (var dd in Cell.Dirs4) lit |= w.Fire.Ignite(victim.Cell + dd, 0.8f);
                     }
-                    if (victim == null) { Check("불길에 들 로봇", false); return 1; }
+                    if (victim == null || !lit) { Check("불길에 들 로봇", false, victim?.Room?.Name ?? "없음"); return 1; }
                     victim.Condition = 0.01f;
-                    bool lit = w.Fire.Ignite(victim.Cell, 0.8f);
-                    foreach (var dd in Cell.Dirs4) lit |= w.Fire.Ignite(victim.Cell + dd, 0.8f);
                     for (int t = 0; t < SimTime.Minutes(5) && !victim.Wrecked; t++) w.Step();
                     Check("불길 속에서 부서지면 아끼던 사람이 아쉬워한다", victim.Wrecked && f.Mourned >= 1 && w.History.Events.Any(e => e.Text.Contains(victim.Name) && e.Text.Contains("아쉬워한다")),
                         $"불 {lit} {w.Fire.Count} · 부서짐 {victim.Wrecked} · {victim.State} 상태 {victim.Condition:0.00} · {victim.Doing} · 아쉬움 {f.Mourned}");

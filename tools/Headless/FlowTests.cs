@@ -129,6 +129,8 @@ public static partial class Program
                 for (int i = 0; i < SimTime.Minutes(40) && w.Flow.Stats.Equalized == 0; i++)
                 {
                     if (i % 15 == 0 && hall.Air.Pressure > 85f) { hall.VentOpen = false; float k = 84f / hall.Air.Pressure; hall.Air.O2 *= k; hall.Air.N2 *= k; }
+                    // 통합8 문틈 · 덕트로 옆방 공기가 통로로 새어 몇 분이면 차가 12kPa 아래로 준다 — 옆방은 생명 유지 장치가 채우고 있다고 둔다 (차가 남아 있어야 장면이 선다)
+                    if (i % 15 == 0) foreach (var n in hall.Doors.Select(d => d.RoomA == hall ? d.RoomB : d.RoomA).Where(r => r != null && r != hall && !r.Detached && r.Air.Pressure < 99f && r.Air.Pressure > 50f).Distinct().ToList()) { float k2 = 100f / n!.Air.Pressure; n.Air.O2 *= k2; n.Air.N2 *= k2; }
                     w.Step();
                 }
                 var who = w.Crew.FirstOrDefault(c => c.Gait.DoorReading?.StartsWith("균압") == true);
