@@ -26,7 +26,7 @@ public partial class Hud
         var w = _world;
         var cs = w.Cosmic;
         _cosmicH = 0f;
-        if (ControlOpen || ChronicleOpen || TechOpen || PolicyOpen || ChainOpen) return;
+        if (ControlOpen || ChronicleOpen || TechOpen || PolicyOpen || ChainOpen || VoyageOpen) return;
         var e = cs.Main;
         const float width = 344f;
         float x = Margin, y = _plan.CosmicY; // v17.6 왼쪽 위 더미에 쌓는다
