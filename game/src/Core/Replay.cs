@@ -450,6 +450,7 @@ public static class SaveGame
         w.Maneuver.Hash(I, F); // v17.0 기동 · 충격과 고정
         w.Hearing.Hash(I, F); w.Gestures.Hash(I, F); // v17.2 소리 · 몸짓 · 버릇
         w.Tales.Hash(I, F); // v18.16 · v18.17 개인 이야기 · 대화 카드 · 로맨스
+        w.Personal.Hash(I, F); // v18.0 · v18.1 · v18.9 옷 · 편지 · 내기
         return h;
     }
 }

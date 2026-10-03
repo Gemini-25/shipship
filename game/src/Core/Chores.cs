@@ -1241,6 +1241,7 @@ public static partial class WorkPlanners
                 toils = Plans.DropOff(c, w, dist);
             }
         }
+        w.Personal.Wear.DonForFire(c, toils, o); // v18.0 방열복을 걸치고 들어간다 (남은 벌이 있으면)
         toils.Add(new GotoToil(at));
         toils.Add(new SprayToil(fire) { Water = water });
         toils.Add(new DoToil((cm, world) =>

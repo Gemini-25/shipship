@@ -21,6 +21,11 @@ public static partial class ShipGenerator
         [ShipPurpose.Hospital] = new[] { RoomType.Triage, RoomType.Quarantine, RoomType.Hyperbaric, RoomType.QuarantineLock, RoomType.Morgue, RoomType.Decon, RoomType.Lab },
         [ShipPurpose.Research] = new[] { RoomType.Lab, RoomType.Calibration, RoomType.AlgaeLab, RoomType.ElectronicsLab, RoomType.Observatory, RoomType.Archive }, // v16.22 교정실 · 조류 배양실을 꼭
         [ShipPurpose.Supply] = new[] { RoomType.Cargo, RoomType.Freezer, RoomType.DockingBay, RoomType.GasStorage, RoomType.Laundry, RoomType.ShuttleBay, RoomType.PropellantTank },
+        // v18.8 예인선(밧줄 · 집게 · 추진제) · 구조선(분류 · 소독 · 셔틀) · 급유선(추진제 · 가스 탱크) · 농업선(정원 · 버섯 · 단백질 · 종자)
+        [ShipPurpose.Tug] = new[] { RoomType.PropellantTank, RoomType.WeldingShop, RoomType.DockingBay, RoomType.DroneBay, RoomType.PartsPrep },
+        [ShipPurpose.Rescue] = new[] { RoomType.Triage, RoomType.ShuttleBay, RoomType.Decon, RoomType.EvaPrep, RoomType.Quarantine, RoomType.Shelter },
+        [ShipPurpose.Tanker] = new[] { RoomType.PropellantTank, RoomType.GasStorage, RoomType.DockingBay, RoomType.SuppressionRoom, RoomType.Cargo },
+        [ShipPurpose.Farm] = new[] { RoomType.Garden, RoomType.MushroomFarm, RoomType.ProteinFarm, RoomType.SeedVault, RoomType.AlgaeLab, RoomType.Freezer },
     };
 
     private static readonly Dictionary<ShipPurpose, string[]> PurposeNames = new()
@@ -30,6 +35,10 @@ public static partial class ShipGenerator
         [ShipPurpose.Hospital] = new[] { "보듬호", "약손호", "다솜호", "인술호", "숨결호" },
         [ShipPurpose.Research] = new[] { "궁리호", "살핌호", "별자리호", "헤아림호", "갈피호" },
         [ShipPurpose.Supply] = new[] { "나르미호", "짐꾼호", "곳간호", "두레호", "마중호" },
+        [ShipPurpose.Tug] = new[] { "끌개호", "황소호", "밧줄호", "버팀호", "억척호" },
+        [ShipPurpose.Rescue] = new[] { "손길호", "등불호", "건짐호", "닻별호", "마중물호" },
+        [ShipPurpose.Tanker] = new[] { "기름말호", "채움호", "샘물통호", "불씨호", "곳물호" },
+        [ShipPurpose.Farm] = new[] { "들녘호", "이삭호", "텃밭호", "풀무호", "씨눈호" },
     };
 
     private static string NameFor(ShipPurpose p, int seed) =>
@@ -118,7 +127,8 @@ public static partial class ShipGenerator
         (float mil, float set) = purpose switch
         {
             ShipPurpose.Mining => (0.2f, 0.5f), ShipPurpose.Colony => (0.1f, 0.3f), ShipPurpose.Hospital => (0.4f, 0.1f),
-            ShipPurpose.Research => (0.3f, 0.1f), ShipPurpose.Supply => (0.3f, 0.2f), _ => (0.25f, 0.25f),
+            ShipPurpose.Research => (0.3f, 0.1f), ShipPurpose.Supply => (0.3f, 0.2f), ShipPurpose.Tug => (0.15f, 0.5f), ShipPurpose.Rescue => (0.45f, 0.1f),
+            ShipPurpose.Tanker => (0.2f, 0.3f), ShipPurpose.Farm => (0.05f, 0.55f), _ => (0.25f, 0.25f),
         };
         float d = r.Float();
         var designer = d < mil ? ShipDesigner.Military : d < mil + set ? ShipDesigner.Settler : ShipDesigner.Civilian;
@@ -144,17 +154,23 @@ public static partial class ShipGenerator
             ShipPurpose.Hospital => new[] { (ItemKind.MedKit, 16), (ItemKind.Bandage, 20), (ItemKind.Disinfectant, 10) },
             ShipPurpose.Research => new[] { (ItemKind.Electronics, 10), (ItemKind.Sensor, 4), (ItemKind.Fiber, 6) },
             ShipPurpose.Supply => new[] { (ItemKind.Ration, 80), (ItemKind.Plate, 20), (ItemKind.Sealant, 12), (ItemKind.Filter, 10) },
+            ShipPurpose.Tug => new[] { (ItemKind.Structure, 10), (ItemKind.Plate, 10), (ItemKind.Sealant, 8) },
+            ShipPurpose.Rescue => new[] { (ItemKind.MedKit, 12), (ItemKind.Bandage, 16), (ItemKind.Ration, 30) },
+            ShipPurpose.Tanker => new[] { (ItemKind.Sealant, 10), (ItemKind.Filter, 8) },
+            ShipPurpose.Farm => new[] { (ItemKind.Seed, 40), (ItemKind.Ration, 20) },
             _ => Array.Empty<(ItemKind, int)>(),
         };
         int diff = start switch { ShipStart.New => 1, ShipStart.Used => 2, ShipStart.WarScarred => 3, _ => 4 }
-                   + (frame == ShipFrame.Spine ? 1 : 0) + (n <= 3 ? 1 : 0) - (designer == ShipDesigner.Military ? 1 : 0);
+                   + (frame is ShipFrame.Spine or ShipFrame.Patchwork ? 1 : 0) + (n <= 3 ? 1 : 0) - (designer == ShipDesigner.Military ? 1 : 0);
         string pros = frame switch
         {
-            ShipFrame.Ring => "어디든 두 갈래 길 — 한쪽이 막혀도 돌아간다", ShipFrame.Spine => "구획째 봉쇄 · 분리 — 사고가 번지지 않는다", _ => "익숙한 배치",
+            ShipFrame.Ring => "어디든 두 갈래 길 — 한쪽이 막혀도 돌아간다", ShipFrame.Spine => "구획째 봉쇄 · 분리 — 사고가 번지지 않는다",
+            ShipFrame.Wheel => "테두리와 바퀴살 — 어디서든 가운데로 빨리 모인다", ShipFrame.Cargo => "큰 화물칸 — 짐을 많이 싣는다", ShipFrame.Patchwork => "싸게 샀고 고치기 쉽다", _ => "익숙한 배치",
         } + (designer == ShipDesigner.Military ? " · 격벽과 이중 배선" : designer == ShipDesigner.Civilian ? " · 넓은 방" : " · 손에 익은 임시 개조");
         string cons = frame switch
         {
-            ShipFrame.Ring => "통로가 길다", ShipFrame.Spine => "중앙 통로가 막히면 끝까지 못 간다", _ => "가운데 통로에 사람이 몰린다",
+            ShipFrame.Ring => "통로가 길다", ShipFrame.Spine => "중앙 통로가 막히면 끝까지 못 간다",
+            ShipFrame.Wheel => "통로가 많아 지킬 문이 많다", ShipFrame.Cargo => "사는 곳이 비좁다", ShipFrame.Patchwork => "토막마다 규격이 달라 부품이 안 맞는다", _ => "가운데 통로에 사람이 몰린다",
         } + (designer == ShipDesigner.Military ? " · 비좁다" : designer == ShipDesigner.Civilian ? " · 단일 고장점 · 싼 부품" : " · 비표준 부품");
         return new ShipInfo(purpose, frame, designer, start, ShipInfos.Year - age, cargo, former, events.ToArray(), pros, cons, Math.Clamp(diff, 1, 5),
             $"{ShipInfos.Name(designer)} 설계 {ShipInfos.Name(purpose)} · {ShipInfos.Name(start)}");

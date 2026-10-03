@@ -270,8 +270,8 @@ public sealed class BelongingSystem
             if (c.Dead) continue;
             var tools = All.FirstOrDefault(b => b.Owner == c.Id && b.Kind == BelongingKind.Toolset);
             bool toolUser = c.Role is CrewRole.Technician or CrewRole.Engineer or CrewRole.Electrician;
-            c.ToolFactor = tools is { Usable: true } && (tools.At == null || tools.Holder == c.Id) && tools.BorrowedBy < 0 ? 1.04f
-                : All.Any(b => b.Kind == BelongingKind.Toolset && b.BorrowedBy == c.Id) ? 1f : toolUser ? 0.97f : 1f;
+            c.ToolFactor = tools is { Usable: true } && (tools.At == null || tools.Holder == c.Id) && tools.BorrowedBy < 0 ? w.Personal.Wear.OwnToolFeel(c) // v18.0 쓸수록 손에 붙는다
+                : All.Any(b => b.Kind == BelongingKind.Toolset && b.BorrowedBy == c.Id) ? w.Personal.Wear.BorrowFeel(c) : toolUser ? 0.97f : 1f; // v18.0 남의 공구는 어색하다
             c.Comfy = All.Any(b => b.Owner == c.Id && b.Kind == BelongingKind.Blanket && b.Usable && b.At == null && b.Holder < 0);
         }
     }
@@ -655,6 +655,7 @@ public sealed class BelongingSystem
         Life.Diary(w, win, Persona.Say(win, $"{lose.Name}에게 {Ko.EulReul(game)} 이겼다"));
         Life.Diary(w, lose, Persona.Say(lose, $"{win.Name}에게 {Ko.EulReul(game)} 졌다"));
         if (Get(g.Item) is Belonging set) Mark(set, $"{Ko.IGa(win.Name)} {Ko.EulReul(lose.Name)} 이긴 판");
+        if (g.Kind != Hobby.Chess) w.Personal.Bets.OnCardGame(win, lose); // v18.9 판돈 (초콜릿 · 당번)
     }
 
     /// <summary>판을 연다 (상대를 기다린다).</summary>

@@ -160,6 +160,7 @@ public sealed class World
     public BlackboxSystem Blackbox { get; } public InquirySystem Inquiry { get; } // v18.7 블랙박스 · 실수 숨기기 · 사고 조사
     public ValueSystem Values { get; } // v18.15 가치관 · 결정에 대한 마음 · 딜레마 · 결정 장부
     public StorySystem Tales { get; } // v18.16 · v18.17 개인 이야기 · 대화 카드 · 캠프의 밤 · 잡담 · 로맨스
+    public PersonalSystem Personal { get; } // v18.0 옷 · 안경 · v18.1 편지 · v18.9 내기 · 맞바꾸기
     public ReactSystem React { get; } // v17.8 모든 변화에 누군가 반응한다
     public HearingSystem Hearing { get; } public GestureSystem Gestures { get; } // v17.2 소리 · 듣기 · 몸짓 · 버릇
     public FleetSystem Fleet { get; } // v16.20b 로봇 · 드론 두뇌와 성능 · 주컴퓨터 함대 지휘
@@ -292,6 +293,7 @@ public sealed class World
         Blackbox = new BlackboxSystem(this); Inquiry = new InquirySystem(this); // v18.7
         Values = new ValueSystem(this); // v18.15
         Tales = new StorySystem(this); // v18.16 · v18.17
+        Personal = new PersonalSystem(this); // v18.0 · v18.1 · v18.9
         React = new ReactSystem(this); // v17.8
         Hearing = new HearingSystem(this); Gestures = new GestureSystem(this); // v17.2
         Fleet = new FleetSystem(this); // v16.20b
@@ -411,6 +413,7 @@ public sealed class World
             Culture.Update(dt); // v14.9 겪은 일이 관행이 되어 전해진다
             pf = Prof.Lap("sys.Culture", pf);
             Daily.Update(dt); // v15 사고가 아닌 날의 일상 사건
+            Personal.Update(dt); // v18.0 옷 · 보호구 · 안경 · v18.1 편지 · v18.9 내기 · 맞바꾸기
             Tales.Update(dt); // v18.16 · v18.17 개인 이야기 · 대화 카드 · 캠프의 밤 · 잡담 · 로맨스
             Maneuver.Update(dt); // v17.0 침대 끈 · 데우는 냄비 · 조각 · 화물 무게중심 · 관행
             Blackbox.Update(dt); Inquiry.Update(dt); // v18.7 블랙박스 기록 · 숨은 실수 · 죄책감 · 사고 조사 안건

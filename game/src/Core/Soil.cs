@@ -186,7 +186,7 @@ public sealed class SoilSystem
     {
         var w = _w;
         WashHands(c, "일 끝나고");
-        if (c.Soil.ClothesMax > 0.3f)
+        if (c.Soil.ClothesMax > 0.3f && w.Personal.Wear.TakeClean(c)) // v18.0 깨끗한 벌이 남아야 갈아입는다
         {
             for (int k = 0; k < Soil.Kinds; k++) c.Soil.Clothes[k] = 0f;
             c.Soil.ChangedAt = w.Tick;
@@ -208,6 +208,7 @@ public sealed class SoilSystem
         if (!ItemsV15.Use(w, ItemKind.Detergent)) Stats.NoDetergent++; // v15 세제가 없으면 물로만 (옷이 덜 깨끗해진다)
         w.Log.Add(w.Tick, LogKind.Life, $"빨래를 돌렸다 ({LaundryLoad}벌 · 물 {use:0}L)", c.Id);
         LaundryLoad = 0;
+        w.Personal.Wear.Washed(); // v18.0 갈아입을 벌이 다시 찬다
         return true;
     }
 
