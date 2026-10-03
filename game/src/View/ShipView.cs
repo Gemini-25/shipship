@@ -743,6 +743,7 @@ public partial class ShipView : Node2D
         PaintTalk(ci); // v14.4 말풍선 (목적 있는 대화 · 인수인계 · 깨우기)
         PaintSpaceOver(ci); // v17.4 줄 번호 · 새치기 · 둘이 드는 짐 · 예약 · 구경꾼 · "비켜!" · 소문
         PaintAfterOver(ci); // v17.5 악몽에 뒤척임 · 놀라 깸 · 안고 가는 침구 · 들고 가는 등
+        PaintSounds(ci); // v17.2 소리 표시 (발소리 · 베어링 · 팬 · 물방울 · 삐걱 · 무전 · 흥얼 …) · 문 너머로 넘는 소리
         PaintComputerTop(ci, mode); // v16.6 선내 방송 말풍선 · 컴퓨터가 보는 배
         PaintDrones(ci);
         PaintIncoming(ci);
@@ -1371,6 +1372,7 @@ public partial class ShipView : Node2D
             }
 
             PaintReact(ci, c, body, facing, rr, s, ZoomDetail.Shows(Zoom, Detail.CrewDot) ? 0 : lod); // v17.8 반응 몸짓 · 손전등 · 담요 · 땀 · 입김
+            PaintGestures(ci, c, body, facing, rr, s, ZoomDetail.Shows(Zoom, Detail.CrewDot) ? 0 : lod); // v17.2 손 · 시선 · 자세 · 버릇
             if (c.Job?.Current is SprayToil) PaintSpray(ci, body, facing, rr);
             PaintGait(ci, c, body, facing, rr, s);
 

@@ -316,7 +316,7 @@ public sealed partial class HearingSystem
             if (r.Detached || r.Cells.Count == 0) continue;
             var c = r.Center;
             if (r.Powered && r.DuctLinked && r.AirFlow > 0.2f && !r.BreakerOff)
-                Add(Noise.Fan, r, c, r.Type == RoomType.HvacRoom ? 0.5f : 0.22f, -1 - i, 0, 0f);
+                Add(Noise.Fan, r, r.Cells[0].Center, r.Type == RoomType.HvacRoom ? 0.5f : 0.22f, -1 - i, 0, 0f);
             if (r.Flood > 0.5f || r.Humidity > 0.85f || r.Air.Leak > 0.3f && r.Humidity > 0.6f)
                 Add(Noise.Drip, r, c + new Vector2(((i * 7) % 5 - 2) * 0.4f, ((i * 3) % 5 - 2) * 0.4f), r.Flood > 20f ? 0.16f : 0.12f, -1 - i, 0, 1.5f);
             float t = r.Air.Temperature;
