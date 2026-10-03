@@ -355,10 +355,13 @@ public sealed class CasualtySystem
         bool smoky = air != null && air.Smoke > 0.4f && c.Suit == null && !w.CrisisCrew.Masked(c);
         bool thin = air != null && air.Pressure < 60f && c.Suit == null;
         bool wet = cause.Contains("감전") && c.Room?.Humidity > 0.8f;
-        int harsh = (smoky ? 1 : 0) + (thin ? 1 : 0) + (wet ? 1 : 0) + (c.Room?.Dark == true ? 1 : 0) + (c.Needs.Rest < 0.25f ? 1 : 0); // 통합6
+        // 배 전체가 흔들리는 사고 중: 손이 모자라 혼자 서두르고, 배가 요동치고, 몇 시간째 쉬지 못한다 — 같은 일도 더 험하다
+        bool shipWide = w.Scale?.ShipWide() != null;
+        int harsh = (smoky ? 1 : 0) + (thin ? 1 : 0) + (wet ? 1 : 0) + (c.Room?.Dark == true ? 1 : 0) + (c.Needs.Rest < 0.25f ? 1 : 0) + (shipWide ? 1 : 0); // 통합6
         if (smoky) { p *= 1.6f; how = "연기 속에서 눈을 못 뜨고 " + how; }
         if (thin) { p *= 1.5f; how = "공기가 빠지는 방에서 서두르다 " + how; }
         if (wet) { p *= 1.6f; how = "젖은 바닥에서 " + how; }
+        if (shipWide) { p *= 1.8f; how = "배가 요동치는 와중에 서두르다 " + how; }
         float skill = c.SkillLevel(o.Skill);
         p *= (o.Urgency >= 0.9f ? 1.4f : 1f) * (c.Room?.Dark == true ? 1.6f : 1f) * (c.Needs.Rest < 0.25f ? 1.4f : 1f) * (1.3f - 0.6f * skill)
              * (Life.Has(c, Habit.Hasty) ? 1.3f : 1f) * (Life.Has(c, Habit.Methodical) ? 0.7f : 1f) * (c.Suit != null && !cause.Contains("감전") ? 0.5f : 1f)
