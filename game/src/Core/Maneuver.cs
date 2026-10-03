@@ -185,7 +185,7 @@ public sealed partial class ManeuverSystem
     public float CargoKg { get; private set; }
     public (int from, int to, int n)? Rebalance { get; private set; }
     public string LastHold { get; private set; } = "";
-    private long _nextTrim, _nextWarm, _nextCustom;
+    private long _nextTrim, _nextWarm;
     private int _next = 1, _nextThing = 1;
     private Burn? _burn;
     private bool _course;
