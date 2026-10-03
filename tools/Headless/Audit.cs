@@ -263,12 +263,16 @@ public static partial class Program
         sb.AppendLine();
         sb.AppendLine("목표 (사용자 결정): 보통 재해(운석우 · 화재 · 정전 · 배관 파열)는 가끔 사망 · 배 전체급은 큰 피해 · 우주급만 진짜 생존 위기.");
         sb.AppendLine();
-        sb.AppendLine("| 규모 | 사고 | 사망 | 사고당 사망 | 쓰러짐 | 사고당 쓰러짐 | 평균 시간 | 번진 것 |");
-        sb.AppendLine("|---|---|---|---|---|---|---|---|");
+        sb.AppendLine($"부상 심각도: 경상 = 한 번에 다친 양 {AuditSerious:0.00} 미만 · 중상 = 그 이상(깊은 상처는 출혈로 이어진다) · 위중 = 쓰러짐 · 사망. \"중상 이상\" = 중상 + 위중 + 사망.");
+        sb.AppendLine();
+        sb.AppendLine("| 규모 | 사고 | 사망 | 위중(쓰러짐) | 중상 | 경상 | 사고당 사망 | 사고당 중상 이상 | 사고당 다친 사람 | 평균 시간 | 번진 것 |");
+        sb.AppendLine("|---|---|---|---|---|---|---|---|---|---|---|");
         foreach (var s in ScaleTable.Scales)
         {
             var cs = c.Cases.Where(k => k.Peak == (int)s).ToList();
-            sb.AppendLine($"| {ScaleTable.Label(s)} | {cs.Count} | {cs.Sum(k => k.Deaths)} | {(cs.Count == 0 ? "-" : (cs.Sum(k => k.Deaths) / (double)cs.Count).ToString("0.000"))} | {cs.Sum(k => k.Downs)} | {(cs.Count == 0 ? "-" : (cs.Sum(k => k.Downs) / (double)cs.Count).ToString("0.00"))} | {(cs.Count == 0 ? "-" : cs.Average(k => k.Hours).ToString("0.0") + "시간")} | {cs.Count(k => k.Peak > k.Base)} |");
+            int de = cs.Sum(k => k.Deaths), dn = cs.Sum(k => k.Downs), se = cs.Sum(k => k.Serious), li = cs.Sum(k => k.Light);
+            string Per(int x, string f) => cs.Count == 0 ? "-" : (x / (double)cs.Count).ToString(f);
+            sb.AppendLine($"| {ScaleTable.Label(s)} | {cs.Count} | {de} | {dn} | {se} | {li} | {Per(de, "0.000")} | {Per(de + dn + se, "0.00")} | {Per(de + dn + se + li, "0.00")} | {(cs.Count == 0 ? "-" : cs.Average(k => k.Hours).ToString("0.0") + "시간")} | {cs.Count(k => k.Peak > k.Base)} |");
         }
         sb.AppendLine();
         var rs = c.Runs;

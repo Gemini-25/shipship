@@ -24,6 +24,7 @@ public static partial class Program
     }
 
     private const int AuditWin = 30; // 죽기 전 몇 분을 보나
+    private const float AuditSerious = 0.15f; // 이만큼 넘게 한 번에 다치면 중상 (깊은 상처는 출혈로 이어진다 — Casualty 와 같은 선)
 
     private sealed class AuditCrewTrack
     {
@@ -34,6 +35,7 @@ public static partial class Program
         public long PanicStart = -1;
         public bool Dead, Down;
         public float Inj; public bool Low; // 통합: 다친 양 · 체력 낮음
+        public int Hurt = -1; // 지금 이어지는 다친 일 (Hurts 번호)
         public string? Said;
         public int Diary;
     }
@@ -151,7 +153,14 @@ public static partial class Program
                 if (c.Dead) { tr.Dead = true; Death(c, tr, now); continue; }
                 if (c.Down && !tr.Down) _run.Downs.Add(new ADown { Hour = H(now), Tick = now, Name = c.Name, CrewId = c.Id, RoomId = c.Room?.Id ?? -1, Room = c.Room?.Name ?? "선체 밖" });
                 tr.Down = c.Down;
-                if (c.Vitals.Injury > tr.Inj + 0.001f) { string k = c.Vitals.InjuryCause ?? "?"; _run.HurtBy[k] = _run.HurtBy.GetValueOrDefault(k) + (c.Vitals.Injury - tr.Inj); }
+                if (c.Vitals.Injury > tr.Inj + 0.001f)
+                {
+                    string k = c.Vitals.InjuryCause ?? "?"; float dInj = c.Vitals.Injury - tr.Inj;
+                    _run.HurtBy[k] = _run.HurtBy.GetValueOrDefault(k) + dInj;
+                    // 30분 안에 이어 다친 것은 한 번의 다침으로 (불길 속 · 연기 속은 조금씩 계속 다친다)
+                    if (tr.Hurt >= 0 && now - _run.Hurts[tr.Hurt].Last <= SimTime.Minutes(30)) { var h = _run.Hurts[tr.Hurt]; h.Amount += dInj; h.Last = now; }
+                    else { tr.Hurt = _run.Hurts.Count; _run.Hurts.Add(new AHurt { Hour = H(now), Tick = now, Last = now, Amount = dInj, Cause = k, CrewId = c.Id, RoomId = c.Room?.Id ?? -1 }); }
+                }
                 tr.Inj = c.Vitals.Injury;
                 if (c.Vitals.Health < 0.4f && !tr.Low) { _run.LowHp++; _run.Lows.Add(new ADown { Hour = H(now), Tick = now, Name = c.Name + " · " + (c.Vitals.InjuryCause ?? "?"), CrewId = c.Id, RoomId = c.Room?.Id ?? -1, Room = c.Room?.Name ?? "선체 밖" }); }
                 tr.Low = c.Vitals.Health < 0.5f;
@@ -447,6 +456,8 @@ public static partial class Program
                 if (Attribute(d.Tick, d.CrewId, d.RoomId) is ScaleCase k) { d.Scale = (int)k.Peak; map[k].Downs++; }
             foreach (var d in _run.Lows)
                 if (Attribute(d.Tick, d.CrewId, d.RoomId) is ScaleCase k) d.Scale = (int)k.Peak;
+            foreach (var h in _run.Hurts)
+                if (Attribute(h.Tick, h.CrewId, h.RoomId) is ScaleCase k) { h.Scale = (int)k.Peak; if (h.Amount >= AuditSerious) map[k].Serious++; else map[k].Light++; }
             _run.Keys = cases.SelectMany(k => k.KeysSeen.Append(k.Key)).Distinct().OrderBy(x => x, StringComparer.Ordinal).ToList();
             // 쓰임
             foreach (var r in w.Ship.Rooms.Where(r => r.Type != RoomType.Corridor && !r.Merged).OrderBy(r => r.Id))

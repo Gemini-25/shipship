@@ -56,10 +56,16 @@ public static partial class Program
 
     private static string ScaleDowns(AuditCtx c, params IncidentScale[] s)
     {
+        var (n, de, dn, se, li) = ScaleHarm(c, s);
+        return $" · 위중(쓰러짐) {dn} · 중상 {se} · 경상 {li} (사고당 중상 이상 {(n == 0 ? 0 : (de + dn + se) / (double)n):0.00})";
+    }
+
+    /// <summary>규모별 피해: 사고 수 · 사망 · 위중(쓰러짐) · 중상 · 경상.</summary>
+    private static (int n, int deaths, int downs, int serious, int light) ScaleHarm(AuditCtx c, params IncidentScale[] s)
+    {
         var set = s.Select(x => (int)x).ToHashSet();
         var cs = c.Cases.Where(k => set.Contains(k.Peak)).ToList();
-        int d = cs.Sum(k => k.Downs);
-        return $" · 쓰러짐 {d}명 (사고당 {(cs.Count == 0 ? 0 : d / (double)cs.Count):0.00})";
+        return (cs.Count, cs.Sum(k => k.Deaths), cs.Sum(k => k.Downs), cs.Sum(k => k.Serious), cs.Sum(k => k.Light));
     }
 
     private static readonly AuditRule[] AuditRuleTable =
@@ -98,18 +104,21 @@ public static partial class Program
         }, 0.08),
         new("death.ship", "배 전체급 사고 피해", false, c =>
         {
-            var (n, d) = ScaleDeaths(c, IncidentScale.Ship);
-            double avg = n == 0 ? 0 : d / (double)n;
-            int sev = n == 0 ? 1 : avg < 0.1 ? 2 : avg > 3 ? 2 : 0;
-            return F(sev, n, avg, n == 0 ? "배 전체급 사고가 한 번도 안 났다" : $"배 전체급 {n}건 · 사망 {d}명 · 사고당 {avg:0.00}{ScaleDowns(c, IncidentScale.Ship)} ({(avg < 0.1 ? "큰 피해가 아니다" : avg > 3 ? "너무 크다" : "목표 범위")})",
-                "배 전체급은 \"큰 피해\" — 사망 0.1~3 이 목표", c.Runs.SelectMany(r => r.Cases.Where(k => k.Peak == 3).Select(k => $"{AuditCtx.Tag(r)} {Hr(k.Hour)} · {k.Name} — {k.Hours:0.0}시간 · 사망 {k.Deaths}")));
-        }, 1.0),
+            // 사망만이 아니라 부상의 심각도까지: 중상 이상(중상 · 위중 · 사망)이 사고마다 나오면 "큰 피해"
+            var (n, d, dn, se, li) = ScaleHarm(c, IncidentScale.Ship);
+            double avg = n == 0 ? 0 : d / (double)n, big = n == 0 ? 0 : (d + dn + se) / (double)n;
+            bool weak = avg < 0.1 && big < 0.5, over = avg > 3;
+            int sev = n == 0 ? 1 : weak || over ? 2 : 0;
+            return F(sev, n, big, n == 0 ? "배 전체급 사고가 한 번도 안 났다" : $"배 전체급 {n}건 · 사망 {d}명 (사고당 {avg:0.00}){ScaleDowns(c, IncidentScale.Ship)} ({(weak ? "큰 피해가 아니다" : over ? "너무 크다" : "큰 피해 — 목표 범위")})",
+                "배 전체급은 \"큰 피해\" — 사고마다 중상 이상이 0.5명쯤 나오거나 사망이 가끔 (빡빡한 선은 아니다)", c.Runs.SelectMany(r => r.Cases.Where(k => k.Peak == 3).Select(k => $"{AuditCtx.Tag(r)} {Hr(k.Hour)} · {k.Name} — {k.Hours:0.0}시간 · 사망 {k.Deaths} · 위중 {k.Downs} · 중상 {k.Serious} · 경상 {k.Light}")));
+        }, 0.5),
         new("death.cosmic", "우주급 사고 생존 위기", false, c =>
         {
-            var (n, d) = ScaleDeaths(c, IncidentScale.Cosmic);
-            double avg = n == 0 ? 0 : d / (double)n;
-            return F(n == 0 ? 0 : avg < 0.5 ? 1 : 0, n, avg, n == 0 ? "우주급 사고 없음 (이 기간 · 이 시드)" : $"우주급 {n}건 · 사망 {d}명 · 사고당 {avg:0.00}{ScaleDowns(c, IncidentScale.Cosmic)}{(avg < 0.5 ? " — 생존 위기라기엔 약하다" : "")}",
-                "우주급만 진짜 생존 위기", c.Runs.SelectMany(r => r.Cases.Where(k => k.Peak == 4).Select(k => $"{AuditCtx.Tag(r)} {Hr(k.Hour)} · {k.Name} — 사망 {k.Deaths}")));
+            var (n, d, dn, se, li) = ScaleHarm(c, IncidentScale.Cosmic);
+            double avg = n == 0 ? 0 : d / (double)n, big = n == 0 ? 0 : (d + dn + se) / (double)n;
+            bool weak = avg < 0.5 && big < 2;
+            return F(n == 0 ? 0 : weak ? 1 : 0, n, avg, n == 0 ? "우주급 사고 없음 (이 기간 · 이 시드)" : $"우주급 {n}건 · 사망 {d}명 (사고당 {avg:0.00}){ScaleDowns(c, IncidentScale.Cosmic)}{(weak ? " — 생존 위기라기엔 약하다" : "")}",
+                "우주급만 진짜 생존 위기", c.Runs.SelectMany(r => r.Cases.Where(k => k.Peak == 4).Select(k => $"{AuditCtx.Tag(r)} {Hr(k.Hour)} · {k.Name} — 사망 {k.Deaths} · 위중 {k.Downs} · 중상 {k.Serious} · 경상 {k.Light}")));
         }, 2.0),
         new("fault.repeat", "같은 고장이 짧은 시간에 반복", true, c =>
         {

@@ -17,6 +17,7 @@ public sealed class AuditRun
     public List<ADeath> Deaths = new();
     public List<ADown> Downs = new();
     public List<ADown> Lows = new(); // 통합5 체력 0.4 밑 (어디서 · 무엇 때문에 — 쓰러짐 바로 앞)
+    public List<AHurt> Hurts = new(); // 다친 일 하나하나 (30분 안에 이어 다친 것은 한 번으로) — 심각도로 나눈다
     public List<int> PanicMin = new();
     public List<ACase> Cases = new();
     public int FaultEvents;
@@ -55,10 +56,14 @@ public sealed class ADeath
 /// <summary>쓰러짐 하나 (죽음 바로 아래 단계 — 사고가 사람을 얼마나 위협했나).</summary>
 public sealed class ADown { public float Hour; public long Tick; public string Name = "", Room = ""; public int RoomId = -1, CrewId = -1, Scale = -1; }
 
+/// <summary>다친 일 하나: 얼마나 다쳤나(Injury 증가분 합)로 경상 · 중상을 가른다 (위중 = 쓰러짐 · 사망은 따로).</summary>
+public sealed class AHurt { public float Hour, Amount; public long Tick, Last; public string Cause = ""; public int RoomId = -1, CrewId = -1, Scale = -1; }
+
 public sealed class ACase
 {
     public string Key = "", Name = "", Room = "";
     public int Base, Peak, Deaths, Downs, Chain, Spread;
+    public int Light, Serious; // 이 사고로 다친 사람 — 경상 · 중상 (위중 = Downs)
     public float Hour, Hours;
 }
 
