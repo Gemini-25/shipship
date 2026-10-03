@@ -271,6 +271,7 @@ public sealed partial class AutomationSystem
             w.Log.Add(w.Tick, LogKind.Work, $"{Ko.EulReul(room.Name)} 직접 봤다 — 안에 {names}" + (wrongPeople ? " (컴퓨터는 비었다고 믿었다)" : ""), by.Id);
             foreach (var c in inside)
             {
+                if (!c.Mind.Knows.ContainsKey($"fire:{room.Id}")) MarkLog.Add(c.Memory.Marks, w.Tick, $"{room.Name}에서 불길이 이는 걸 봤다"); // 통합8 그 방에 있던 사람은 그날을 기억한다
                 c.Mind.Knows[$"fire:{room.Id}"] = (KnowSource.Seen, w.Tick, $"{room.Name} 불");
                 if (!c.Down) c.Interrupt(w);
             }

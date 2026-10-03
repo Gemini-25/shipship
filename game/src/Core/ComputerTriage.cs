@@ -324,7 +324,7 @@ public sealed class PowerTriage
             if (!remote) { bc.State = "사람에게 (배전반 데이터선이 끊겼다)"; continue; }
             if (w.Tick - fault.Since < SimTime.Minutes(0.6f) / a.Core.Speed) continue; // 원인을 본다
             bool Same((string sig, long tick) r) => r.sig == sig && w.Tick - r.tick < SimTime.Hours(2) && (sig != "?" || w.Tick - r.tick < SimTime.Minutes(30));
-            bool same = _lastReset.TryGetValue(i, out var last) && Same(last) || _prevReset.TryGetValue(i, out var prev) && Same(prev);
+            bool same = _lastReset.TryGetValue(i, out var last) && Same(last) || sig.StartsWith("p:") && _prevReset.TryGetValue(i, out var prev) && Same(prev); // 그 앞의 올림은 꽂아 둔 장비 탓일 때만 (사람 손으로 뺄 수 있는 것)
             bc.Same = same;
             if (bc.Decision < 0)
             {

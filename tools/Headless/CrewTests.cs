@@ -43,6 +43,7 @@ public static partial class Program
                 foreach (var k in new[] { ItemKind.Electronics, ItemKind.Plate })
                     w.Ship.Containers.First(f => f.Storage!.Accepts(k) && f.Storage.Free >= 3).Storage!.Add(k, 3);
                 Run(w, SimTime.Hours(30));
+                for (int h = 0; h < 18 && lost != null && !lost.Prosthetic; h++) Run(w, SimTime.Hours(1)); // 통합8 정비실 일이 밀리는 날은 서른 시간을 조금 넘긴다 — 달 때까지 (이틀 안)
                 Check("팔다리를 잃으면 의수·의족을 만들어 단다", lost != null && lost.Prosthetic,
                     $"{(lost == null ? "잃지 않음" : Wounds.PartName(lost.Part))} · {Wounds.Summary(c.Vitals)} · 손 {hand0 * 100:0}→{Wounds.HandFactor(c.Vitals) * 100:0}% · 걸음 {leg0 * 100:0}→{Wounds.LegFactor(c.Vitals) * 100:0}% · {w.Life.Stats}");
             }

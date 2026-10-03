@@ -149,6 +149,22 @@ public static partial class Program
                 }
             }
         }
+        if (which == "purge")
+        {
+            var w = DayOne(seed, "Mirinae");
+            w.Policies.Set("inertfire", 0, "시험");
+            var room = StoreRoom(w);
+            ClearRoom(w, room);
+            var c = w.Crew.First(x => x.CanAct && x.IsAwake);
+            c.EndJob(w, ToilStatus.Interrupted);
+            c.Position = room.Cells.Where(w.Ship.IsOpenFloor).First().Center; c.PreviousPosition = c.Position;
+            BigFire(w, room, 6);
+            for (int m = 0; m < 12; m++)
+            {
+                Run(w, SimTime.Minutes(1));
+                Console.WriteLine($"{m} {c.Name} @{c.Room?.Name} {c.ActivityLabel} down {c.Down} hp {c.Vitals.Health:0.00} · purging {room.Purging} fire {w.Fire.CountIn(room)} · {string.Join(", ", c.LastEvaluations.Take(3).Select(e => $"{e.Activity.Id}:{e.Score:0.00}({e.Reason})"))}");
+            }
+        }
         if (which == "chess")
         {
             var w = DayOne(seed, "Hanbit");

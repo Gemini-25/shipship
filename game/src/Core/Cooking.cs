@@ -1054,7 +1054,7 @@ public sealed class SetAsidePlateActivity : Activity
     public override (float, string) Score(CrewMember c, World w, DistanceField dist)
     {
         if (w.Cooking.RequestFor(c) is not var (x, _)) return (0f, "—");
-        return (0.72f, $"{x.Name} 몫을 남겨 둔다");
+        return (0.92f, $"{x.Name} 몫을 남겨 둔다"); // 통합8 부탁받은 한 그릇은 국이 다 떨어지기 전에 바로 (0.72로는 배우던 걸 못 놓아 남은 게 없었다)
     }
 
     private static Cell? Beside(Furniture f, World w, DistanceField dist)

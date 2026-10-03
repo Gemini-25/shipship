@@ -459,6 +459,12 @@ public static partial class Program
             Check("핵심 설비의 마지막 부품은 다음 고장 몫으로 묶어 둔다", w.Ship.CountStored(ItemKind.Filter) != 1 || a.Reserve.Now.Any(r => r.Kind == "부품" && r.What.Contains("마지막")), string.Join(" · ", a.Reserve.Now.Select(r => $"{r.Kind}:{r.What}")));
             var routine = w.Board.Open.FirstOrDefault(o => !o.Closed && CrewModelBook.Routine(o.Kind) && o.Urgency < 0.6f);
             routine ??= w.Board.All.FirstOrDefault(o => CrewModelBook.Routine(o.Kind) && o.Urgency < 0.6f);
+            // 통합8 그 순간 게시판에 잡일이 하나도 없는 날이 있다 — 예약이 걸린 동안 잡일이 올라올 때까지 (한 시간 안)
+            for (int i = 0; i < SimTime.Hours(1) && routine == null && held != null && a.Reserve.HoldsCrew(held); i++)
+            {
+                w.Step();
+                routine = w.Board.Open.FirstOrDefault(o => !o.Closed && CrewModelBook.Routine(o.Kind) && o.Urgency < 0.6f);
+            }
             float bias = held != null && routine != null ? a.CrewModel.RequestBias(held, routine) : 0f;
             Check("계획이 곧 부를 사람은 예약하고 — 그 사람은 늘 하던 잡일을 집지 않는다", held != null && routine != null && bias < 0f, $"{held?.Name ?? "없음"} · {routine?.Title ?? "잡일 없음"} · 치우침 {bias:0.00}");
             // 계획이 도는 동안 지친 기술자에겐 지금 쉬라 한다 (다음 교대 몫) — 그 사람도 잡일을 미룬다

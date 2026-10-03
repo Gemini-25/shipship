@@ -770,7 +770,7 @@ public sealed class HobbyActivity : Activity
         float workEnd = s.WorkStart + s.WorkLength;
         if (SimTime.InWindow(hour, workEnd, SimTime.HoursFromTo(workEnd, s.SleepStart))) score += 0.17f;
         if (item is { Open: true }) score += 0.12f;
-        if (item is { Progress: > 0.3f }) score += 0.4f * (item.Progress - 0.3f); // 통합8 거의 다 된 것엔 손이 간다 (마지막 한 시간을 이틀 내내 못 냈다)
+        if (item is { Progress: >= 0.75f } && BelongingSystem.Crafts(h)) score += 0.22f; // 통합8 거의 다 된 작품엔 손이 간다 (마지막 한 시간을 이틀 내내 못 냈다)
         // 남이 연 판 · 상대가 끊긴 판 앞에 앉아 기다린다 — 간다 (통합8 둘이 엇갈려 번갈아 혼자 앉았다 일어났다)
         bool waitsForMe = game != null && game.B >= 0 && w.Crew.FirstOrDefault(x => x.Id == (game.A == c.Id ? game.B : game.A)) is { } op && op.Job?.Activity is HobbyActivity && (op.Position - game.Table.Center).LengthSquared() < 9f;
         if (game != null) score += game.B < 0 && game.A != c.Id || waitsForMe ? 0.3f : 0.2f;
