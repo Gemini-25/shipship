@@ -437,8 +437,12 @@ public static partial class Program
             // 통합: 방사선 병은 며칠 뒤에 숨진다 — 그 피폭을 준 사고(태양 폭풍 · 방사선 돌발 · 우주급)로 돌린다
             ScaleCase? RadCase(long tick) => cases.Where(k => k.Start <= tick && (k.Name.Contains("태양 폭풍") || k.Name.Contains("방사선") && !k.Name.Contains("쓰러짐") || k.Peak >= IncidentScale.Cosmic))
                 .OrderByDescending(k => k.Peak).ThenByDescending(k => k.Start).FirstOrDefault();
+            // 통합6 업혀 옮겨지다 통로에서 숨진 사람: 숨진 방이 아니라 쓰러진 방 · 크게 다친 방의 사고로 (열두 시간 안)
+            ScaleCase? ByDown(long tick, int crew) =>
+                _run.Downs.Where(x => x.CrewId == crew && x.Tick <= tick && tick - x.Tick < SimTime.Hours(12)).Concat(_run.Lows.Where(x => x.CrewId == crew && x.Tick <= tick && tick - x.Tick < SimTime.Hours(12)))
+                    .OrderByDescending(x => x.Tick).Select(x => Attribute(x.Tick, x.CrewId, x.RoomId)).FirstOrDefault(k => k != null);
             foreach (var d in _run.Deaths)
-                if ((d.Cause.Contains("방사선") ? RadCase(d.Tick) ?? Attribute(d.Tick, d.CrewId, d.RoomId) : Attribute(d.Tick, d.CrewId, d.RoomId)) is ScaleCase k) { d.Scale = (int)k.Peak; d.Case = k.Name; map[k].Deaths++; }
+                if ((d.Cause.Contains("방사선") ? RadCase(d.Tick) ?? Attribute(d.Tick, d.CrewId, d.RoomId) : Attribute(d.Tick, d.CrewId, d.RoomId) ?? ByDown(d.Tick, d.CrewId)) is ScaleCase k) { d.Scale = (int)k.Peak; d.Case = k.Name; map[k].Deaths++; }
             foreach (var d in _run.Downs)
                 if (Attribute(d.Tick, d.CrewId, d.RoomId) is ScaleCase k) { d.Scale = (int)k.Peak; map[k].Downs++; }
             foreach (var d in _run.Lows)
