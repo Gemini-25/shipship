@@ -171,7 +171,7 @@ public sealed partial class InquirySystem
             else if (attendees.Contains(culprit) && !culprit.Dead)
             {
                 bool cornered = e0 >= 0.8f;
-                if (cornered && (culprit.Value is CrewValue.Rules or CrewValue.Safety || culprit.Traits.Diligence > 0.6f || s.Guilt > 0.7f))
+                if (cornered && (culprit.Value is CrewValue.Rules or CrewValue.Safety || culprit.Traits.Diligence > 0.6f || s.Guilt > 0.7f) && (!s.Ways.Contains(CoverWay.Blame) || s.Guilt > 1f))
                 {
                     late = true;
                     lines.Add(new SittingLine(culprit.Id, Persona.Say(culprit, $"맞다 — 내가 그랬다. {sp.What}. 말을 못 했다"), false, LineRole.Defense));
@@ -212,9 +212,9 @@ public sealed partial class InquirySystem
             f.Text = $"조사 결과 — {culprit?.Name ?? Name(s.Who)}의 실수: {sp.What}"
                      + (s.Confessed && s.ConfessedAt < cs.Opened ? (s.Hidden ? " · 한동안 숨겼다가 스스로 털어놓았다" : " · 바로 털어놓았다")
                         : late ? " · 조사 자리에서 털어놓았다"
-                        : f.Framed ? $" · {Name(s.Scapegoat)}에게 돌렸다가 {how}{(how.EndsWith("록") ? "으로" : "로")} 드러났다"
+                        : f.Framed ? $" · {Name(s.Scapegoat)}에게 돌렸다가 {Ko.EuRo(how)} 드러났다"
                         : wiped ? " · 기록까지 지웠지만 지운 자리로 드러났다"
-                        : $" · 숨겼다가 {how}{(how.EndsWith("록") ? "으로" : "로")} 드러났다");
+                        : $" · 숨겼다가 {Ko.EuRo(how)} 드러났다");
         }
         else if (top >= 0)
         {
@@ -286,7 +286,7 @@ public sealed partial class InquirySystem
             if (f.Right && f.Blamed == s.Who)
             {
                 if (late) { s.Confessed = true; s.ConfessedAt = w.Tick; Stats.LateConfessed++; }
-                else if (!s.Confessed) { s.Revealed = true; Stats.Revealed++; }
+                if (!early) { s.Revealed = true; Stats.Revealed++; } // 몰려서 털어놓은 것도 조사로 드러난 것
                 bool wiped = s.Wipe >= 0;
                 foreach (var o in w.Crew)
                 {

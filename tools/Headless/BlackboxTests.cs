@@ -99,7 +99,7 @@ public static partial class Program
                 $"{w.Blackbox.RoomName(w.Blackbox.RoomId)} · 줄 {w.Blackbox.Stats.Entries} · 종류 {string.Join(",", w.Blackbox.Log.Select(e => e.Kind).Distinct())}");
             var root = s.Node >= 0 ? w.Causes.Node(s.Node) : null;
             Check("실수가 몇 분 뒤 사고가 되고, 첫 고리에는 본 것만 적힌다 (이름이 없다)", s.Bit && root != null && !root.Text.Contains(sc.C.Name), root?.Text ?? "사고 없음");
-            Check("숨긴다 — 아무에게도 말하지 않고 일기에만", s.Hidden && !s.Confessed && sc.C.Diary.Any(d => d.text.Contains("아무에게도 말하지 않았다")), string.Join(" | ", sc.C.Diary.TakeLast(2).Select(d => d.text)));
+            Check("숨긴다 — 아무에게도 말하지 않고 일기에만", s.Hidden && s.Ways.Contains(CoverWay.Lie) && sc.C.Diary.Any(d => d.text.Contains("아무에게도 말하지 않았다")), sc.C.Diary.FirstOrDefault(d => d.text.Contains("아무에게도")).text);
             Check("주 컴퓨터 — 블랙박스를 읽어 마지막 정비 기록을 짚고 먼저 말하라고 권한다", s.Nudged && w.Inquiry.Stats.Nudges > 0,
                 w.Automation.Book.Acts.LastOrDefault(a => a.Key.StartsWith("slip:nudge"))?.Observe ?? "로그에만");
             Check("사고 조사 — 큰 사고 뒤 안건이 올라오고 서명이 바로 모여 자리가 열린다", sc.Sit != null && sc.Sit.Opened >= 0 && sc.Case?.Heard == true, sc.Sit != null ? $"{sc.Sit.Venue.Name} · {sc.Sit.Present.Count}명 · 줄 {sc.Sit.Script.Count}" : "자리 없음");
@@ -115,7 +115,7 @@ public static partial class Program
                 && w.History.Events.Any(e => e.Kind == HistoryKind.Lesson && e.Text.StartsWith("재발 방지")),
                 w.History.Events.LastOrDefault(e => e.Kind == HistoryKind.Lesson)?.Text ?? "");
             Check("벌은 표결로 (용서도 표결)", f?.Verdict != null && sc.Sit?.Script.Any(l => l.Role == LineRole.Speech) == true, f?.Verdict is Penalty pv ? MotionSystem.PenaltyName(pv) : "표결 없음");
-            Check("일기에 서로 다르게 남는다 (당사자 · 의장)", sc.C.Diary.Any(d => d.text.Contains("블랙박스")) && w.Crew.Any(o => o != sc.C && o.Diary.Any(d => d.text.Contains("블랙박스를 열어"))),
+            Check("일기에 서로 다르게 남는다 (당사자 · 의장)", sc.C.Diary.Any(d => d.text.Contains("조사") || d.text.Contains("블랙박스")) && w.Crew.Any(o => o != sc.C && o.Diary.Any(d => d.text.Contains("블랙박스를 열어"))),
                 sc.C.Diary.LastOrDefault().text ?? "");
         }
 
@@ -183,11 +183,13 @@ public static partial class Program
             var sc = BbRun(seed, CoverWay.Lie, SlipKind.WrongValve, wreck: false, hear: false);
             var w = sc.W; var s = sc.S;
             s.Guilt = 1.2f;
+            MotionSystem.Off = true; // 조사 회의 없이 — 스스로
             bool went = false;
             BbUntil(w, () => { went |= w.Inquiry.TaskOf(sc.C)?.Kind == CoverTaskKind.Confess && sc.C.Job?.Activity is CoverActivity; return s.Confessed; }, SimTime.TicksPerDay * 3);
             Check("죄책감이 꿈 · 일기 · 말수로 드러난다", w.Inquiry.Stats.Dreams > 0 && w.After.Minds.TryGetValue(sc.C.Id, out var am) && am.Seen.Any(x => x.Key == $"slip:{s.Id}"),
                 $"꿈거리 {w.Inquiry.Stats.Dreams} · {sc.C.Diary.LastOrDefault(d => d.text.Contains(s.MachineName)).text}");
-            Check("무거워진 사람은 찾아가서 털어놓는다", s.Confessed && w.Inquiry.Stats.LateConfessed > 0, $"{(went ? "걸어가서" : "그 자리에서")} · {sc.C.Diary.LastOrDefault().text}");
+            MotionSystem.Off = false;
+            Check("무거워진 사람은 찾아가서 털어놓는다", s.Confessed && went && w.Inquiry.Stats.LateConfessed > 0, $"{(went ? "걸어가서" : "그 자리에서")} · {sc.C.Diary.LastOrDefault().text}");
         }
 
         // ── 8) 결정론 · 성능
