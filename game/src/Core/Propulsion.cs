@@ -104,7 +104,7 @@ public sealed class PropulsionSystem
                 // 엔진은 평소 대기 중이라 전기는 연소할 때 따로 본다 — 여기선 고장·마모·단계만
                 sum += m.FaultFactor * (1f - 0.25f * m.Wear * m.Wear) * (0.6f + 0.4f * m.Condition) * Tech.Of(m).Output * Grades.Output(m.Grade);
             }
-            return sum / DesignEngines / (_w.Annex?.MassMul ?? 1f); // v16.10 증축: 가속 = 추력 ÷ 무게
+            return sum / DesignEngines / (_w.Annex?.MassMul ?? 1f) * (_w.Maneuver?.TrimMul ?? 1f); // v16.10 증축: 가속 = 추력 ÷ 무게 · v17.0 화물이 쏠리면 배가 돈다
         }
     }
 
@@ -150,6 +150,7 @@ public sealed class PropulsionSystem
         if (control <= 0f || thrust < 0.15f) { Note(m, control <= 0f ? "조종할 사람이 없어 피하지 못한다" : "엔진이 멎어 피하지 못한다"); return; }
         if (Propellant < EvadeCost) { Note(m, $"추진제가 모자라 피하지 못한다 ({Propellant:0}kg)"); return; }
         float spin = SpinUp(control, by) + _w.Expedition.ColdStartMinutes; // v16.12 멈춘 배: 식은 엔진
+        spin = _w.Maneuver?.Hold(spin, lead, by) ?? spin; // v17.0 컴퓨터가 점화를 늦춰 사람들이 붙잡을 틈을 준다
         if (lead < spin + 0.3f) { Note(m, $"너무 늦게 봤다 — 엔진을 켤 틈이 없다 ({lead:0.#}분)"); return; }
         long ignite = _w.Tick + SimTime.Minutes(spin);
         Current = new Burn

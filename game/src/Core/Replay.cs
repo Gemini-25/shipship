@@ -447,6 +447,7 @@ public static class SaveGame
         w.React.Hash(I, F); // v17.8 반응 · 몸짓 · 버티는 방법
         w.Blackbox.Hash(I, F); w.Inquiry.Hash(I, F); // v18.7 블랙박스 · 숨은 실수 · 사고 조사
         w.Values.Hash(I, F); // v18.15 가치관 · 결정에 대한 마음 · 딜레마 · 장부
+        w.Maneuver.Hash(I, F); // v17.0 기동 · 충격과 고정
         return h;
     }
 }

@@ -968,6 +968,7 @@ public sealed class CosmicSystem
         var w = _w;
         var ship = w.Ship;
         ShakeNow = MathF.Max(ShakeNow, p);
+        w.Maneuver.Shock(0.6f * p, Dir(e), null, $"{e.Spec.Name} 충격", e.Known, crew: false); // v17.0 묶지 않은 물건 · 카트 · 냄비 · 컵 (사람은 아래에서)
         foreach (var (cell, wall) in ship.Walls.ToList())
         {
             if (!wall.IsHull) continue;

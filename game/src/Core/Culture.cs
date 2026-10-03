@@ -9,7 +9,7 @@ namespace ShipSim.Core;
 // 추모일에 그 사람의 자리에 물건을 놓는다 · 신입은 처음엔 모르다가 설명을 듣고 받아들인다 ·
 // 이유를 아는 사람이 떠나고 기록도 없으면 이유는 잊히고 행동만 남는다 — 같은 설계의 배가 서로 다른 공동체가 된다.
 
-public enum CustomKind { FireCheck, Memorial, WaterThrift, HandWash, MaintainerWay, HatchBuddy, SurvivalMeal }
+public enum CustomKind { FireCheck, Memorial, WaterThrift, HandWash, MaintainerWay, HatchBuddy, SurvivalMeal, StowAway }
 
 /// <summary>한 배의 관행 하나: 언제 · 무엇 때문에 생겼고, 누가 이유를 알고, 누가 따라 하나.</summary>
 public sealed class Custom
@@ -63,6 +63,7 @@ public sealed class CultureSystem
         CustomKind.HandWash => "조리·치료 전엔 손을 꼭 씻는다",
         CustomKind.MaintainerWay => "점검은 귀부터 — 소리를 먼저 듣는다",
         CustomKind.HatchBuddy => "에어락에선 급해도 짝 점검을 한다",
+        CustomKind.StowAway => "쓰고 난 선반은 걸쇠를 걸고 카트는 끈으로 묶어 둔다 · 자기 전 침대 끈",
         _ => "고비를 넘긴 날엔 함께 먹는다",
     };
 

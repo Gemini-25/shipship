@@ -172,6 +172,7 @@ public sealed class World
     public InfoSystem Info { get; } // v17.3 개인 자리 · 못 끝낸 일 · 정보 차이 · 선내 메신저 · 사진 · 공동 장부
     public BrainSystem Brain2 { get; } // v16.15 승무원 두뇌 2.0 (믿음 · 목표 층 · 계획 · 감정 · 사회적 추론 · 배우기)
     public MatterSystem Matter { get; } // v16.4 재질 × 원소 · 칸 장 · 물건 물리
+    public ManeuverSystem Maneuver { get; } // v17.0 기동 · 충격과 고정
     public CosmicSystem Cosmic { get; } // v18.13 우주 규모 대재난 30
     public ScaleSystem Scale { get; } // v16.18 사고 · 재난 다섯 규모 (판정 · 대응 · 완급 · 연쇄 · 도감)
     public CasualtySystem Casualty { get; } // v16.24 큰 상처 뒤: 출혈 · 화상 쇼크 · 심정지 · 불붙는 순간
@@ -299,6 +300,7 @@ public sealed class World
         Info = new InfoSystem(this); // v17.3
         Brain2 = new BrainSystem(this); // v16.15
         Matter = new MatterSystem(this); // v16.4
+        Maneuver = new ManeuverSystem(this); // v17.0
         Cosmic = new CosmicSystem(this); // v18.13
         Scale = new ScaleSystem(this); // v16.18
         Casualty = new CasualtySystem(this); // v16.24
@@ -405,6 +407,7 @@ public sealed class World
             Culture.Update(dt); // v14.9 겪은 일이 관행이 되어 전해진다
             pf = Prof.Lap("sys.Culture", pf);
             Daily.Update(dt); // v15 사고가 아닌 날의 일상 사건
+            Maneuver.Update(dt); // v17.0 침대 끈 · 데우는 냄비 · 조각 · 화물 무게중심 · 관행
             Blackbox.Update(dt); Inquiry.Update(dt); // v18.7 블랙박스 기록 · 숨은 실수 · 죄책감 · 사고 조사 안건
             React.Update(dt); // v17.8 더위 · 추위 · 어둠 · 바닥 · 소리 · 냄새 · 남의 몸짓 → 말 · 몸짓 · 짧은 행동
             Schemes.Update(dt); // v18.14 장난 · 몰래 하는 일 · 규칙 어기기 · 모임 · 판 · 목소리 내기 · 혼자 하는 일
@@ -540,6 +543,7 @@ public sealed class World
         Hazards.Step();
         Sensors.Step();
         Propulsion.Step();
+        Maneuver.Step(); // v17.0 기동 예고 · 점화 순간 · 끝
         ps = Prof.Lap("step.hazards·sensors", ps);
         Board.Update();
         ps = Prof.Lap("step.Board", ps);
