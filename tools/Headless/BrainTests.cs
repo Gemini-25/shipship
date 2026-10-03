@@ -147,8 +147,10 @@ public static partial class Program
             }
 
             // ── 3) 불을 본 사람이 모르는 사람에게 알리러 간다 (경보가 닿지 않는 방) ──
+            //    통합6 불이 열린 문 너머 통로로 번지면 통로 경보가 먼저 닿는다 (장면 전제가 깨진다) — 그런 날은 다른 날에 다시 (세 번까지)
+            for (int att = 0; att < 3; att++)
             {
-                var w = BrainDay(seed, "Mirinae");
+                var w = BrainDay(seed + att * 101, "Mirinae");
                 w.Policies.Set("inertfire", 0, "시험");
                 w.Policies.Set("vacuumfire", 0, "시험");
                 w.Policies.Set("command", 0, "시험"); // 지휘 · 무전이 없는 배: 본 사람만 알릴 수 있다
@@ -169,6 +171,11 @@ public static partial class Program
                 Run(w, 3);
                 w.Brain2.Beliefs.Learn(witness, Topic.Person, friend.Id, far.Id, BeliefSource.Seen, 1f, -1, 0);
                 BrainPut(w, witness, room, 0);
+                // 통합6 본 사람은 불붙은 칸이 아니라 문 가까이에서 본다 (불길 위에 서 있으면 옷에 옮겨붙어 다치고 늦어진다 — 알리기 장면이 아니게 된다)
+                var rcs = room.Cells.Where(w.Ship.IsOpenFloor).ToList();
+                var wdoor = room.Doors.Where(d => !d.IsExternal).Select(d => d.Cell).FirstOrDefault();
+                var wspot = rcs.Skip(3).Where(x => rcs.Take(3).Min(f => Math.Abs(f.X - x.X) + Math.Abs(f.Y - x.Y)) >= 2).OrderBy(x => Math.Abs(x.X - wdoor.X) + Math.Abs(x.Y - wdoor.Y)).ThenBy(x => x.X).ThenBy(x => x.Y).FirstOrDefault(); // 문 가까이 · 불에서 두 칸 넘게
+                if (wspot != default) { witness.Position = wspot.Center; witness.PreviousPosition = witness.Position; }
                 BigFire(w, room, 3);
                 bool told = false;
                 string fsrc = "";
@@ -187,6 +194,8 @@ public static partial class Program
                 }
                 var wp = w.Brain2.Plans.Past.Concat(w.Brain2.Plans.Active).Where(p => p.Owner == witness.Id && p.Kind == PlanKind.Tell).ToList();
                 bool friendKnows = friend.Mind.Knows.ContainsKey($"fire:{room.Id}");
+                bool alarmFirst = !told && friend.Mind.Knows.TryGetValue($"fire:{room.Id}", out var fk0) && fk0.src == KnowSource.Alarm;
+                if (alarmFirst && att < 2) { Console.WriteLine($"    (불이 통로로 번져 경보가 먼저 닿았다 — 다른 날에 다시 {att + 1})"); continue; }
                 Check("알리기 — 불을 본 사람이 모르는 사람에게 알리러 간다 (경보가 안 닿는 방)",
                     w.Brain2.Social.Tells + w.Brain2.Social.AlreadyKnew > 0 && wp.Count > 0 && (told || friendKnows),
                     $"{witness.Name} → 알림 {w.Brain2.Social.Tells} (이미 앎 {w.Brain2.Social.AlreadyKnew}) · {far.Name}까지 · 계획 {string.Join(" / ", wp.SelectMany(p => p.Trail).Take(4))} · {friend.Name}: 믿음 출처 {fsrc} · Mind 앎 {friendKnows} · 설득 {w.Brain2.Social.Persuasions}");
@@ -196,6 +205,7 @@ public static partial class Program
                 var tb = w.Brain2.Beliefs.Get(toldWho, Topic.Fire, room.Id);
                 Check("사회적 추론 — 알려 준 사람은 이제 안다고 짐작한다 (그 사람의 믿음에는 출처 · 누구에게서가 남는다)", guess && tb != null && tb.Value == 1,
                     $"{witness.Name}의 짐작: {toldWho.Name}도 안다 = {guess} · {toldWho.Name}의 믿음 {(tb != null ? $"{w.Brain2.Beliefs.Describe(tb)} · {BeliefSystem.SourceName(tb.Src)}{(tb.From >= 0 ? $" ({w.Brain2.Beliefs.CrewById(tb.From)?.Name})" : "")}" : "없음")}");
+                break;
             }
 
             // ── 4) 틀린 믿음(소문) — 불이 났다고 믿는 방에 가서 보고 고친다 · 컴퓨터를 믿는 사람은 손목 단말로 먼저 고친다 ──

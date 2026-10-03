@@ -9,6 +9,26 @@ public static partial class Program
     private static int RunRiskProbe(string[] args, int seed)
     {
         if (Environment.GetEnvironmentVariable("RISK_SCENE") is string sc) { foreach (var k in sc.Split(',')) RiskScene(seed, k); return 0; }
+        if (Environment.GetEnvironmentVariable("RISK_POWER") is string pw)
+        {
+            // 통합6 정전 살피기: 배:시드:시작시:끝시 — 필수 방 전기 · 회로 고장 · 발전 · 보조 발전기
+            Storyteller.PersonaValue = 1f; Storyteller.LevelValue = 3f;
+            var ps = pw.Split(':');
+            var pwld = World.CreateDefault(int.Parse(ps[^3]), 0, string.Join(":", ps[..^3]));
+            pwld.CrewCanDie = true;
+            float h0 = float.Parse(ps[^2]), h1 = float.Parse(ps[^1]);
+            long until0 = SimTime.Hours(7 + h0);
+            while (pwld.Tick < until0) pwld.Step();
+            while (pwld.Tick < SimTime.Hours(7 + h1))
+            {
+                for (int k = 0; k < SimTime.Minutes(10); k++) pwld.Step();
+                var p = pwld.Power;
+                var dark = pwld.Ship.LiveRooms.Where(r => !r.Powered && r.PowerLinked && !r.BreakerOff && !r.PowerCut && r.Furniture.Any(f => f.Machine?.Spec.Critical == true)).Select(r => $"{r.Name}(회로 {r.Circuit})");
+                var faults = pwld.Ship.FurnitureOf(FurnitureType.PowerPanel).SelectMany(f => f.Machine!.Faults).Select(f => $"{f.Kind}@{f.Circuit}");
+                Console.WriteLine($"  {(pwld.Tick - SimTime.Hours(7)) / (float)SimTime.TicksPerHour:0.0}h 발전 {p.Delivered:0.0}/{p.Demand:0.0} 배터리 {p.BatteryPercent * 100:0}% 원자로 {p.ReactorOnline} 보조 {p.AuxRunning} 연료 {p.AuxFuel:0} · 어두운 필수 방 {string.Join(",", dark)} · 배전반 {string.Join(",", faults)} · 위기 {Crisis.Level(pwld)} {string.Join("/", Crisis.Now(pwld).Reasons)}");
+            }
+            return 0;
+        }
         if (Environment.GetEnvironmentVariable("RISK_TRACE") is string tr)
         {
             // 통합6 배 하나를 여섯 시간마다 찍는다: 기력 · 체력 · 피폭 · 잠 · 쓰러짐 · 많이 하는 일
