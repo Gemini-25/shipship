@@ -1290,9 +1290,9 @@ public sealed partial class PortableSystem
     public float DarkMistake(CrewMember c)
     {
         if (c.Suit != null || c.Room is not Room r) return 1f;
-        if (r.Dark) return 1.5f;
+        if (r.Dark) return MathF.Max(1f, 1.5f * _w.React.DarkMul(c)); // v17.8 손전등 · 화면 · 창가로 버티면 덜 틀린다
         float k = LampWorkMul(c);
-        return k <= 0.8f ? 1.4f : k < 0.9f ? 1.25f : 1f;
+        return k <= 0.8f ? MathF.Max(1f, 1.4f * _w.React.DarkMul(c)) : k < 0.9f ? 1.25f : 1f;
     }
 
     /// <summary>방 살펴보기 한 줄.</summary>

@@ -443,6 +443,7 @@ public static class SaveGame
         w.Ways.Hash(I, F); // v16.25 여러 갈래 해법
         w.Motions.Hash(I, F); // v18.18 안건 · 파벌 · 재판 · 선거
         w.Schemes.Hash(I, F); // v18.14 꾸미는 일 · 관행 · 흔적 · 빚
+        w.React.Hash(I, F); // v17.8 반응 · 몸짓 · 버티는 방법
         return h;
     }
 }

@@ -63,6 +63,7 @@ public sealed class ReactState
     internal int LastHeard = -1;
     internal int LastBrief = -1;
     internal long OddUntil = -1;
+    internal int Detours;
     internal string? OddWhat;
     public bool Moving(World w) => G != Gesture.None && w.Tick < GUntil;
 }
@@ -92,13 +93,13 @@ public sealed class ReactStats
 {
     public readonly int[] ByStir = new int[16];
     public int Lines, Repeats, Silent, Acts, ActsDone, Careful, Reckless, Sidesteps, Checks, Found, Talks, Replies, Comforts, Admired,
-        Jackets, JacketsBack, Wraps, Torches, Devices, Fixes, Huddles, Jogs, Cups, Chats, Topical, Topics, Back, Odd, Stares, Cries;
+        Detours, Jackets, JacketsBack, Wraps, Torches, Devices, Fixes, Huddles, Jogs, Cups, Chats, Topical, Topics, Back, Odd, Stares, Cries, Advice, Scans;
     public string Summary() =>
         $"반응 {ByStir.Sum()} (더위 {ByStir[0]} · 추위 {ByStir[1]} · 어둠 {ByStir[2]} · 젖은 바닥 {ByStir[3]} · 유리 {ByStir[4]} · 소리 {ByStir[5]} · 냄새 {ByStir[6]} · 연기 {ByStir[7]} · " +
         $"이상한 몸짓 {ByStir[8]} · 진동 {ByStir[9]} · 경보 {ByStir[10]} · 방송 {ByStir[11]} · 새 물건 {ByStir[12]} · 울음 {ByStir[13]} · 수다 {ByStir[14]} · 돌아옴 {ByStir[15]}) · " +
         $"말 {Lines}(되풀이 {Repeats} · 말없이 {Silent} · 지금 이야기 {Topical}) · 행동 {Acts}(끝냄 {ActsDone}) · 조심 걸음 {Careful}(무시 {Reckless}) · 돌아감 {Sidesteps} · " +
-        $"소리 확인 {Checks}(찾음 {Found}) · 말 걸기 {Talks}(대답 {Replies}) · 위로 {Comforts} · 구경 {Admired} · 겉옷 {Jackets}(다시 {JacketsBack}) · 담요 {Wraps} · 손전등 {Torches} · " +
-        $"장비 {Devices} · 조명 수리 {Fixes} · 붙기 {Huddles} · 제자리 뛰기 {Jogs} · 잔 {Cups} · 수다 {Chats}";
+        $"옆 칸으로 {Detours} · 소리 확인 {Checks}(찾음 {Found}) · 말 걸기 {Talks}(대답 {Replies}) · 위로 {Comforts} · 구경 {Admired} · 겉옷 {Jackets}(다시 {JacketsBack}) · 담요 {Wraps} · 손전등 {Torches} · " +
+        $"장비 {Devices} · 조명 수리 {Fixes} · 붙기 {Huddles} · 제자리 뛰기 {Jogs} · 잔 {Cups} · 수다 {Chats} · 이야깃거리 {Topics} · 컴퓨터 권고 {Advice} · 감지기 재확인 {Scans}";
 }
 
 public sealed partial class ReactSystem
@@ -221,13 +222,14 @@ public sealed partial class ReactSystem
             if (c.Dead || c.Away) continue;
             var s = Of(c);
             if (c.Room is Room room && !c.Outside) Body(c, s, room, dt);
-            if (c.IsMoving && c.CanAct && c.Path != null && w.Body.Marks.Count > 0 && w.Tick - s.Last[(int)Stir.Wet] > SimTime.Minutes(8)) Floor(c, s);
+            if (c.IsMoving && c.CanAct && c.Path != null && w.Body.Marks.Count > 0 && (w.Tick + c.Id) % 3 == 0) Floor(c, s);
             if (w.Tick < s.Next) continue;
             s.Next = w.Tick + LookEvery + (c.Id * 7 + (int)(w.Tick / LookEvery)) % 11;
             if (!c.CanAct || !c.IsAwake || c.Outside || c.Room is not Room r2 || c.Suit != null || c.IsChild && c.Age < 5f) continue;
             Look(c, s, r2);
         }
         Chat();
+        Mind();
         if (Notes.Count > 400) Notes.RemoveRange(0, Notes.Count - 300);
     }
 
@@ -320,6 +322,10 @@ public sealed partial class ReactSystem
             if (body.MarksAt(cell) is not CellState ms) continue;
             if (ms.V[(int)CellMark.Glass] > 0.2f && ms.V[(int)CellMark.Tape] < 0.5f)
             {
+                // 몸을 틀어 옆 칸으로 돌아간다 (앞뒤 칸과 이어지는 유리 없는 칸) — 좁아서 못 돌면 살살 밟고 간다
+                var side = Detour(path, j, j > c.PathIndex ? path[j - 1] : c.Cell);
+                if (side is Cell sc) { path[j] = sc; s.Detours++; Stats.Detours++; }
+                else if (c.Room != null && !w.Body.Cautious(c, c.Room)) { Stats.Careful++; w.Body.Careful(c, c.Room, 0.3f, "유리 조각 위를 살살 밟고 간다"); Gest(s, Gesture.Tiptoe, Long); }
                 if (!Ready(s, Stir.Glass, 15f)) return;
                 s.Last[(int)Stir.Glass] = w.Tick;
                 Stats.ByStir[(int)Stir.Glass]++;
@@ -333,8 +339,7 @@ public sealed partial class ReactSystem
                         if (o != c && o.IsMoving && o.CanAct && (o.Position - cell.Center).LengthSquared() < 9f) { warn = o; break; }
                 if (warn != null) { Gest(s, Gesture.Point, Short); Gest(Of(warn), Gesture.Sidestep, Short); }
                 Speak(c, s, Stir.Glass, warn != null ? Pool(c, Stir.Glass, true).Select(x => $"{warn.Name}, {x}").ToArray() : Pool(c, Stir.Glass, false), c.Room, "glass");
-                // 걸음이 걸렸다: 길을 다시 찾는다 (유리 칸은 비싸다)
-                if (c.Destination is Cell dest) c.NextThinkTick = Math.Min(c.NextThinkTick, w.Tick + 1);
+                if (side == null) Gest(s, Gesture.Tiptoe, Long);
                 return;
             }
             float slip = body.SlipAt(grid.Index(cell));
@@ -361,6 +366,24 @@ public sealed partial class ReactSystem
                 return;
             }
         }
+    }
+
+    private Cell? Detour(List<Cell> path, int j, Cell from)
+    {
+        var body = _w.Body;
+        var ship = _w.Ship;
+        var prev = from;
+        var next = j + 1 < path.Count ? path[j + 1] : path[j];
+        var g = path[j];
+        foreach (var d in Cell.Dirs8)
+        {
+            var cand = g + d;
+            if (cand == prev || cand == next || !ship.IsWalkable(cand) || !ship.IsOpenFloor(cand)) continue;
+            if (Math.Max(Math.Abs(cand.X - prev.X), Math.Abs(cand.Y - prev.Y)) > 1 || Math.Max(Math.Abs(cand.X - next.X), Math.Abs(cand.Y - next.Y)) > 1) continue;
+            if (body.MarksAt(cand) is CellState cs && cs.V[(int)CellMark.Glass] > 0.1f) continue;
+            return cand;
+        }
+        return null;
     }
 
     /// <summary>한 사람이 둘러본다: 가장 센 변화 하나에 반응한다.</summary>

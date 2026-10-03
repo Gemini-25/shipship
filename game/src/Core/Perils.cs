@@ -90,7 +90,7 @@ public sealed class PerilSystem
         {
             float hum = room?.Humidity ?? 0.4f;
             float work = c.Pose == Pose.Working ? 1.5f : c.IsMoving ? 1.2f : 1f;
-            h += hot / 18f * (0.7f + 0.6f * hum) * work * (1f + 0.5f * c.Vitals.Frailty) * dt;
+            h += hot / 18f * (0.7f + 0.6f * hum) * work * (1f + 0.5f * c.Vitals.Frailty) * dt * w.React.HeatMul(c); // v17.8 겉옷 · 선풍기 · 찬물이면 열이 덜 찬다
         }
         else if (h > 0f)
         {

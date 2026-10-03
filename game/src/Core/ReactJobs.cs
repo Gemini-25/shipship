@@ -200,6 +200,7 @@ public sealed partial class ReactSystem
         }
         else
         {
+            if (w.Automation.Present) { w.Board.RequestScan(); Stats.Scans++; } // 사람이 못 찾았으면 컴퓨터가 감지기를 한 번 더 훑는다
             Gest(Of(c), Gesture.Shrug, Short);
             Speak(c, Of(c), Stir.Sound, new[] { "귀를 대 봐도 모르겠네", "들렸다 안 들렸다 하네 — 나중에 다시 봐야겠다", $"{m.Name} 쪽이긴 한데…" }, c.Room, m.Name, quiet: true);
         }

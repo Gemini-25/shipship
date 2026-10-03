@@ -1353,7 +1353,7 @@ public partial class ShipView : Node2D
             ci.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
 
             float rr = c.Pose == Pose.Sitting ? radius * 0.9f : radius;
-            var facing = c.Facing.ToGodot();
+            var facing = _world.React.FaceAt(c) is System.Numerics.Vector2 rf ? rf.ToGodot() : c.Facing.ToGodot(); // v17.8 쳐다보는 쪽으로 몸을 돌린다
             if (ZoomDetail.Shows(Zoom, Detail.CrewDot)) PaintCrewDot(ci, c, body, rr, Palette.Crew(c.Id)); // v17.1 · v16.24 멀리선 점 + 색
             else PaintPuppet(ci, c, body, facing, s * (c.Pose == Pose.Sitting ? 0.92f : 1f), Puppet.Of(_world, c), lod, Palette.Crew(c.Id), c.Vitals.Health < 0.5f); // v17.1 위에서 본 인형
 
@@ -1369,6 +1369,7 @@ public partial class ShipView : Node2D
                 else ci.DrawArc(body, rr + 5f * s, a, a + 1.1f, 12, col.WithAlpha(0.65f), 2f, true);
             }
 
+            PaintReact(ci, c, body, facing, rr, s, ZoomDetail.Shows(Zoom, Detail.CrewDot) ? 0 : lod); // v17.8 반응 몸짓 · 손전등 · 담요 · 땀 · 입김
             if (c.Job?.Current is SprayToil) PaintSpray(ci, body, facing, rr);
             PaintGait(ci, c, body, facing, rr, s);
 
