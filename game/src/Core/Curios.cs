@@ -208,7 +208,7 @@ public sealed class CurioSystem
         bool fresh = Seen.Add(spec.Key);
         Finds.Add(new CurioFind(spec.Key, _w.Tick, by, room, note));
         if (Finds.Count > 400) Finds.RemoveAt(0);
-        if (fresh) _w.Log.Add(_w.Tick, LogKind.Ship, $"도감에 새 {CurioTable.ShelfName(spec.Shelf)} — {spec.Name}");
+        if (fresh && spec.Shelf != CodexShelf.People) _w.Log.Add(_w.Tick, LogKind.Ship, $"{spec.Name} — {CurioTable.ShelfName(spec.Shelf)} 모음에 넣었다");
     }
 
     // ── 창밖 · 이상 현상 ──

@@ -226,7 +226,7 @@ public partial class Main : Node2D
 
     public override void _Process(double delta)
     {
-        if (_hudFit < 2 && Hud.Plan.ShipArea.W > 1f && Camera.FollowTarget == null && ++_hudFit == 2) FitCamera(); // v17.6 패널이 자리를 잡은 뒤 배를 빈자리에
+        if (_hudFit < 2 && Hud.Plan.ShipArea.W > 1f && ++_hudFit == 2 && Camera.FollowTarget == null && Camera.Zoom == _fitZoom && Camera.Position == _fitPos) FitCamera(); // v17.6 패널이 자리를 잡은 뒤 배를 빈자리에 (인자로 옮긴 카메라는 그대로)
         if (Replaying is ReplayRunner rr)
         {
             // 불러오는 중: 한 프레임에 몇천 틱씩 빨리 감는다 (역사가 화면에서 다시 흐른다)
@@ -700,6 +700,7 @@ public partial class Main : Node2D
     }
 
     private int _hudFit;
+    private Vector2 _fitZoom, _fitPos;
 
     public void FitCamera()
     {
@@ -708,6 +709,7 @@ public partial class Main : Node2D
         var area = new Rect2(24f, Hud.TopHeight + 12f, size.X - Hud.RightColumnWidth - 64f, size.Y - Hud.TopHeight - Hud.LogHeight - 40f);
         if (Hud.Plan.ShipArea is { W: > 40f, H: > 40f } sa) area = new Rect2(sa.X, sa.Y, sa.W, sa.H);
         Camera.FitTo(ShipView.Bounds, area);
+        _fitZoom = Camera.Zoom; _fitPos = Camera.Position;
     }
 
     // ─────────────────────────────── 디버그 옵션 ───────────────────────────────
@@ -734,7 +736,7 @@ public partial class Main : Node2D
                 case "--options":
                     Options.Toggle();
                     break;
-                case "--hud": Settings.ShowAllHud = value == "all"; if (value == "help") Hud.HelpOpen = true; break; // v16.2 화면 시험: --hud=all | quiet | help
+                case "--hud": Settings.ShowAllHud = value is "all" or "safe" or "codex"; if (value == "help") Hud.HelpOpen = true; if (value == "safe") ColorSafe.On = true; if (value == "codex") Hud.ToggleCollection(); break; // v16.2 화면 시험: --hud=all | quiet | help · v17.6 safe(색약) · v17.9 codex(도감)
                 case "--episode":
                     for (int k = 0; k < int.Parse(value, CultureInfo.InvariantCulture); k++) CycleEpisode(1);
                     break;

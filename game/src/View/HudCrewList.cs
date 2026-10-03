@@ -20,7 +20,7 @@ public partial class Hud
         var groups = UiCrewList.Groups(_world, order);
         int n = _world.Crew.Count;
         bool two = n > 12;
-        float rowH = two ? 20f : n <= 8 ? 30f : 24f, headH = 20f, tRowH = 30f;
+        float rowH = two ? 20f : n <= 8 ? 30f : 22f, headH = n <= 12 ? 18f : 20f, tRowH = 30f;
         float maxH = Mathf.Max(220f, Screen.Y * 0.52f);
         int tShow = Math.Min(trouble.Count, 6);
         float GroupH(List<CrewMember> l, bool folded) => headH + (folded ? 0f : (two ? (l.Count + 1) / 2 : l.Count) * rowH);
@@ -86,7 +86,7 @@ public partial class Hud
             if (folded)
             {
                 // 접어도 얼굴은 보인다 (표정 · 표식)
-                float fx = hr.Position.X + 16 + Gfx.Width(Fonts.Bold, label, Ui.TextTiny);
+                float fx = hr.Position.X + 10 + Gfx.Width(Fonts.Bold, label, Ui.TextTiny) + 14;
                 foreach (var c in crew)
                 {
                     if (fx > hr.End.X - 24) break;
@@ -107,7 +107,7 @@ public partial class Hud
                 var row = two ? new Rect2(x0 + 8 + (i % 2) * (colW + 4), y + (i / 2) * rowH, colW, rowH - 2) : new Rect2(x0 + 8, y + i * rowH, RightColumnWidth - 16, rowH - 3);
                 RosterRowBack(row, c, mouse, false);
                 float cy = row.GetCenter().Y;
-                float fr = two ? 7f : rowH >= 30f ? 10f : 8.5f;
+                float fr = two ? 7f : rowH >= 30f ? 10f : 8f;
                 DrawFace(new Vector2(row.Position.X + fr + 4, cy), fr, c);
                 int ns = two ? Ui.TextSmall : Ui.TextSubtitle;
                 float nx = row.Position.X + fr * 2 + 10;
