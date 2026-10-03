@@ -268,7 +268,16 @@ public static partial class Program
                     }
                     bool walked = ScUntil(w, () => c.Cell == s.Spot || !s.Open, 1f);
                     bool knewBefore = c.Diary.Count(d => d.text.Contains("걸어 나왔단다")) > heard0;
-                    bool home = ScUntil(w, () => !s.Open, 2.5f);
+                    long dbgAt = 0;
+                    bool home = ScUntil(w, () =>
+                    {
+                        if (Environment.GetEnvironmentVariable("SC_DEBUG") == "1" && w.Tick >= dbgAt && s.Other >= 0 && w.Crew.FirstOrDefault(x => x.Id == s.Other) is CrewMember ed)
+                        {
+                            dbgAt = w.Tick + SimTime.Minutes(5);
+                            Console.WriteLine($"     [{SimTime.Clock(w.Tick)}] {ed.Name} {ed.Job?.Label} {ed.Pose} 거리 {(ed.Position - c.Position).Length():0.0} 잡음 {s.Holding} · " + string.Join(", ", ed.LastEvaluations.OrderByDescending(e => e.Score).Take(4).Select(e => $"{e.Activity.Id}:{e.Score:0.00}")));
+                        }
+                        return !s.Open;
+                    }, 2.5f);
                     if (s.Trail.Any(t => t.Contains("경보"))) { Run(w, SimTime.Hours(12)); continue; }
                     return (w, c, s, walked, knewBefore, home, heard0);
                 }

@@ -675,6 +675,8 @@ public sealed class DailySceneSystem
                 if (s.Other < 0 && s.ComputerAct < 0 && s.Since >= 0 && RoomById(s.RoomId) is Room hall && Sees(hall)
                     && w.Tick - s.Since >= SimTime.Minutes(w.Automation.Active(ComputerModule.Access) ? 2 : 5))
                     PageWatch(s, c, hall);
+                // 통합6 찾은 사람이 그새 잠들었으면 (자러 가던 길이었다) 다른 사람이 찾을 수 있다
+                if (s.Other >= 0 && !s.Holding && CrewOf(s.Other) is CrewMember fo && (fo.Dead || !fo.IsAwake)) { Trail(s, $"{fo.Name}: 그만 잠들었다"); s.Other = -1; }
                 // 깨어 있는 사람이 가까이 지나가면 알아챈다 (야간 당직 먼저)
                 if (s.Other < 0 && c.Cell == s.Spot)
                 {
@@ -872,6 +874,10 @@ public sealed class DailySceneSystem
     {
         var w = _w;
         (float, string, DailyScene?, Role, Concern?) best = (0f, "—", null, Role.None, null);
+        // 통합6 잠결에 걷는 사람을 찾은 사람은 문턱에 서 있어도 (방이 안 잡혀도) 곧장 데려다주러 간다
+        foreach (var sw in Scenes)
+            if (sw.Open && sw.Kind == SceneKind.Sleepwalk && sw.Other == c.Id && !sw.Holding && !c.Dead && !c.Down && c.CanAct && !c.Outside && c.IsAwake)
+                return (1.3f, $"잠결에 걷는 {CrewOf(sw.Host)?.Name} — 침대로", sw, Role.Escort, null);
         if (!Able(c) || c.Dead) return best;
         bool crisis = Crisis.Acting(w);
         float lf = w.Society.LeisureFactor;
