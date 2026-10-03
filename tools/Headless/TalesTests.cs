@@ -185,6 +185,23 @@ public static partial class Program
             bool mend = TaleUntil(w, () => st.Cards.Any(k => k.Kind == CardKind.Mend && k.Ref == l.Id), SimTime.TicksPerDay, 60);
             var km = st.Cards.LastOrDefault(k => k.Kind == CardKind.Mend && k.Ref == l.Id);
             Check("로맨스 — 고비 카드: 넘기거나 갈라선다", mend && km != null, km != null ? $"{km.Pick?.Text} — {km.Outcome} · {km.Branch} · {StorySystem.LoveName(l.Stage)}" : "");
+            // 끝 ①: 고비를 넘긴 연인이 청혼하고 배 안에서 식을 올린다 (v18.14 결혼식이 짝을 맺는다)
+            if (l.Stage != LoveStage.Lovers) { l.Stage = LoveStage.Lovers; l.Rival = -1; }
+            l.Crises = Math.Max(1, l.Crises); l.Since = w.Tick - SimTime.Hours(31); l.NextCheck = 0; Bond(a, b, 0.75f);
+            int wed0 = st.Stats.Weddings;
+            bool wed = TaleUntil(w, () => l.Stage == LoveStage.Married, SimTime.TicksPerDay * 3, 300);
+            Check("로맨스 — 결혼: 청혼 → 식 → 부부 (짝이 맺어졌다)", wed && a.Partner == b.Id && b.Partner == a.Id && st.Stats.Weddings > wed0,
+                $"{StorySystem.LoveName(l.Stage)} · 청혼 {(l.SchemeId == -2 ? "했다" : "안 했다")} · {string.Join(" / ", l.Beats.TakeLast(2).Select(x => x.text))}");
+            // 끝 ②: 다른 연인 — 두 번째 고비에서 말이 엇나가면 헤어지고, 둘 다 '끝난 사랑'을 안고 산다 · 친구들은 편을 든다
+            var c2 = p[3]; var d2 = p[4];
+            Bond(c2, d2, 0.4f);
+            var l2 = st.Crush(c2, d2); l2.Stage = LoveStage.Crisis; l2.Fails = 1; l2.Public = true;
+            foreach (var f in p.Skip(5).Take(3)) { f.Affinity[c2.Id] = 0.7f; f.Affinity[d2.Id] = 0.1f; }
+            int wh0 = st.Stats.Whispers;
+            var kb = st.Hold(CardKind.Mend, c2, d2, l2.Id, roll: 0.999f);
+            bool hb = new[] { c2, d2 }.Any(x => st.ArcOf(x)?.Spec.Key == "heartbreak");
+            Check("로맨스 — 이별: 고비에서 갈라서고 '끝난 사랑'이 새 이야기로 · 친구들이 편을 든다", l2.Stage == LoveStage.Broken && hb && st.Stats.Whispers > wh0,
+                $"{kb.Pick?.Text} — {kb.Outcome} · {kb.Branch} · 새 이야기 {hb} · 편 듦 {st.Stats.Whispers - wh0}");
         }
 
         // ── 6) 다른 카드: 공황 진정 · 다툼 중재 · 범인 추궁
