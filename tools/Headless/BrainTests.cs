@@ -170,7 +170,7 @@ public static partial class Program
                         && !r.Doors.Any(d => d.RoomA == room || d.RoomB == room) && Gap(r) >= 6).OrderBy(Gap).ThenBy(r => r.Id).First();
                 var friend = awake.Skip(1).First();
                 // 통합7 '경보가 안 닿는 방'은 친구가 있는 방이다 — 그 방 데이터선(경보 스피커 · 방송)도 끊어 둔다 (불이 통로로 번지면 통로 경보 · 컴퓨터 방송이 먼저 닿아 세 번 다 장면이 깨졌다)
-                foreach (var l in w.Net.Links.Where(l => l.Kind == NetKind.Data && (l.Door?.RoomA == far || l.Door?.RoomB == far)).ToList()) w.Net.Hurt(l, 1f, "시험");
+                foreach (var l in w.Net.Links.Where(l => l.Kind == NetKind.Data && (l.Room == far || l.Door?.RoomA == far || l.Door?.RoomB == far)).ToList()) w.Net.Hurt(l, 1f, "시험");
                 witness.Affinity[friend.Id] = 0.8f;
                 BrainPut(w, friend, far, 0);
                 friend.HoldUntil = w.Tick + SimTime.Hours(1); friend.HoldWhy = "시험 — 그 방에서 기다림";
@@ -185,7 +185,7 @@ public static partial class Program
                 BigFire(w, room, 3);
                 bool told = false;
                 string fsrc = "";
-                for (int m = 0; m < 40 && !told && w.Brain2.Social.AlreadyKnew == 0; m++)
+                for (int m = 0; m < 120 && !told && w.Brain2.Social.AlreadyKnew == 0; m++) // 통합7 불이 통로로 번지면 본 사람이 먼저 피했다가 알리러 간다 — 스무 분으론 모자랐다
                 {
                     Run(w, SimTime.Minutes(0.5f));
                     var fb = w.Brain2.Beliefs.Get(friend, Topic.Fire, room.Id);

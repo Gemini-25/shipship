@@ -1344,10 +1344,11 @@ public sealed class SpaceTidyActivity : Activity
     {
         if (w.Coop.Boxes.Count == 0 || !c.CanAct || c.IsChild || Crisis.Acting(w)) return (0f, "—");
         var b = Pick(c, w, dist, out int d);
-        if (b == null || d > 400) return (0f, "—");
+        if (b == null || d > 400 && b.By != c.Id) return (0f, "—"); // 통합7 제가 꺼내 둔 상자는 멀리 와 있어도 기억한다
         float s = 0.34f + (Life.Has(c, Habit.NeatFreak) ? 0.15f : 0f) + (b.By == c.Id ? 0.3f : 0f) + (w.Matter.InAisle(b.Item.At) ? 0.12f : 0f) - d / 3000f - (Life.Has(c, Habit.Messy) ? 0.1f : 0f)
                   + (b.Warned ? 0.15f * w.Automation.Trusts.Of(c) : 0f) // 컴퓨터가 치워 달라고 했다 (믿는 만큼)
                   + (d < 40 ? 0.2f : 0f); // 통합7 바로 곁을 지나면 눈에 걸린다 · 꺼내 둔 사람은 급한 일이 끝나면 제가 넣는다 (네 시간 동안 통로에 나와 있어도 아무도 안 넣던 것)
+        if (b.By == c.Id) s = MathF.Max(s, 0.55f); // 통합7 급한 일이 끝나면 하던 취미보다 먼저 — 구석 선반 앞이라 지나는 사람도 컴퓨터도 못 보던 것
         if (Bedtime(c, w)) s -= 0.3f;
         return (MathF.Max(0f, s), b.By == c.Id ? "내가 꺼내 둔 상자 — 되돌려 놓자" : "통로에 상자가 나와 있다");
     }
