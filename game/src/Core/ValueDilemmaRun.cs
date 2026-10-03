@@ -475,7 +475,7 @@ public sealed partial class ValueSystem
         var vec = chooseA ? spec.Vec : spec.Vec.Select(x => -x).ToArray();
         var v = Book(d, forIds ?? w.Crew.Where(c => Adult(c) && Stance(c, d).s >= 0f == chooseA).Select(c => c.Id).ToList(),
             againstIds ?? w.Crew.Where(c => Adult(c) && Stance(c, d).s >= 0f != chooseA).Select(c => c.Id).ToList());
-        React(v.Id, by, $"{spec.Name.Split(" — ")[0]} — {choice}", vec, 1f, d.Subject, spec.Side * (chooseA ? 1 : -1), voters ?? d.Voices.Select(x => x.who).ToList());
+        React(v.Id, by, $"{spec.Name.Split(" — ")[0]} 때 '{choice}'", vec, 1f, d.Subject, spec.Side * (chooseA ? 1 : -1), voters ?? d.Voices.Select(x => x.who).ToList());
         // 정한 사람의 가치관도 아주 조금 그쪽으로 굳는다
         if (P(by) is CrewMember dec) for (int i = 0; i < 4; i++) if (MathF.Abs(vec[i]) > 0.5f) Shift(dec, (Axis)i, 0.02f * MathF.Sign(vec[i]), $"{spec.Name}에서 {choice}");
         if (by == -1 && a.Present) a.Character.Nudge(0f, spec.Vec[3] * (chooseA ? 0.02f : -0.02f), $"{spec.Name} — {choice}");

@@ -319,7 +319,7 @@ public sealed partial class ValueSystem
             }
             else if (liked && s > 0.3f) w.Brain2.Emotions.Feel(c, Feeling.Pride, 0.06f, title, decider);
             if (MathF.Abs(s) > 0.4f)
-                Life.Diary(w, c, Persona.Say(c, liked ? $"{title} — {ByName(by)}{(by == -2 ? "가" : "이")} 잘 정했다. {why}" : $"{title} — 그렇게 정하면 안 됐다. {why}"));
+                Life.Diary(w, c, Persona.Say(c, liked ? $"{title} — {Ko.IGa(ByName(by))} 잘 정했다. {why}" : $"{title} — 그렇게 정하면 안 됐다. {why}"));
         }
     }
 
@@ -335,7 +335,7 @@ public sealed partial class ValueSystem
             if (_skipPolicy == ch.Id + ":" + ch.To) { _skipPolicy = ""; continue; }
             int by = ch.Yes + ch.No > 0 ? -2 : w.Command.CaptainId >= 0 ? w.Command.CaptainId : -1;
             var spec = PolicySystem.Spec(ch.Id);
-            string title = $"{spec.Name}: {spec.Options[Math.Clamp(ch.To, 0, spec.Options.Length - 1)]}";
+            string title = $"'{spec.Options[Math.Clamp(ch.To, 0, spec.Options.Length - 1)]}' 쪽으로 바꾼 {spec.Name} 방침";
             React(-1, by, title, Zero, 0f, extra: c =>
             {
                 int pref = PolicySystem.Preferred(c, ch.Id);

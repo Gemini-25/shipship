@@ -116,6 +116,7 @@ public partial class Hud
             y += 12;
         }
         if (w.Ways.WhyLine(c) is string wayWhy && Fits(14)) { Gfx.Text(this, Fonts.Body, new Vector2(x, y + 10), UiKit.Fit(wayWhy, right - x, Ui.TextSmall), Ui.TextSmall, Palette.TextDim); y += 14; } // v16.25 왜 그 방법
+        if (w.Values.CardLine(c) is string valLine && Fits(14)) { Gfx.Text(this, Fonts.Body, new Vector2(x, y + 10), UiKit.Fit(valLine, right - x, Ui.TextSmall), Ui.TextSmall, valLine.Contains("마음에 안") || valLine.Contains("안 됐다") || valLine.Contains("내리겠다") ? new Color("#ffab91") : Palette.TextDim); y += 14; } // v18.15 결정에 대한 마음 · 가치관
         y += 6;
 
         // ── 믿음: 이 사람이 아는 것 (세계와 다를 수 있다 — 어긋난 것을 먼저) ──

@@ -85,7 +85,7 @@ public sealed partial class ValueSystem
         var dec = P(v.By);
         var a = w.Automation;
         int days = (int)((w.Tick - v.Tick) / SimTime.TicksPerDay);
-        string ago = days >= 14 ? $"{days / 7}주 전" : $"{days}일 전";
+        string ago = days >= 14 ? $"{days / 7}주 전" : days >= 2 ? $"{days}일 전" : "며칠 전";
         string place = w.Voyage.Current.Kind == LegKind.Port ? w.Voyage.Current.Name : "";
         Room? mess = w.Ship.Rooms.Where(r => !r.Detached && r.Type is RoomType.Mess or RoomType.Galley or RoomType.Lounge).OrderBy(r => r.Type == RoomType.Mess ? 0 : 1).ThenBy(r => r.Id).FirstOrDefault();
         string text;
