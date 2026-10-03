@@ -82,7 +82,7 @@ public sealed class ZeroGActivity : Activity
             var toils = new List<Toil>
             {
                 new GotoToil(rs),
-                new WorkToil(0.45f, Skill.Mechanics, null) { CanContinue = (cm, world) => world.ZeroG.Weightless && world.ZeroG.NeedsRepair },
+                new WorkToil(z.Ring ? 1.4f : 1.1f, Skill.Mechanics, null) { CanContinue = (cm, world) => world.ZeroG.Weightless && world.ZeroG.NeedsRepair },
                 new DoToil((cm, world) => { world.ZeroG.Repaired(cm); return true; }),
             };
             return new Job(this, "중력 장치 수리", toils) { InterruptMargin = 0.6f, OnFinished = (cm, world, _) => { if (world.ZeroG.RepairBy == cm.Id) world.ZeroG.RepairBy = -1; } };

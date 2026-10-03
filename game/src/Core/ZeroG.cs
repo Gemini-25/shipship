@@ -105,6 +105,7 @@ public sealed partial class ZeroGSystem
     private int _next = 1, _hurtThis, _brokeThis;
     private long _nextCheck, _nextOrder, _lastVomit;
     private readonly SortedDictionary<int, long> _sparkAt = new();
+    private readonly SortedDictionary<int, Cell> _gripAt = new();
     private bool[]? _elec;
     private int _elecVer = -1;
 
@@ -316,7 +317,7 @@ public sealed partial class ZeroGSystem
             Stats.PeopleDown++;
             c.Say(w, Persona.Say(c, drift ? "으악 — 자다가 떨어졌어" : "어이쿠 — 갑자기 무거워!"));
         }
-        Drifting.Clear(); Grips.Clear();
+        Drifting.Clear(); Grips.Clear(); _gripAt.Clear();
         foreach (var p in w.Eco.Plants) p.Floating = false;
         w.Eco.OnZeroG(false);
         long mins = (w.Tick - Since) / SimTime.Minutes(1);
@@ -476,9 +477,9 @@ public sealed partial class ZeroGSystem
             foreach (var c in w.Crew)
             {
                 if (c.Dead || c.Outside || c.Room == null) continue;
-                bool moving = c.Path != null && (c.Position - c.PreviousPosition).LengthSquared() > 1e-6f;
+                bool moving = c.Path != null && c.Path.Count > 0; // 이 틱은 아직 걷기 전이다 (위치 비교 대신 길)
                 if (!moving) { if (c.Pose == Pose.Sleeping) continue; if (!Grips.ContainsKey(c.Id) && NearWall(c.Cell)) Grips[c.Id] = WallDir(c.Cell); continue; }
-                if (NearWall(c.Cell)) { if (!Grips.ContainsKey(c.Id)) Stats.Grips++; Grips[c.Id] = WallDir(c.Cell); }
+                if (NearWall(c.Cell)) { if (!_gripAt.TryGetValue(c.Id, out var gc) || gc != c.Cell) { Stats.Grips++; _gripAt[c.Id] = c.Cell; } Grips[c.Id] = WallDir(c.Cell); } // 손을 옮겨 잡을 때마다
                 else if (Grips.Remove(c.Id))
                 {
                     Stats.PushOffs++;
