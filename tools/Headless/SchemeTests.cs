@@ -63,12 +63,12 @@ public static partial class Program
             Check("밀주 — 익어 가는 술 냄새가 방에 퍼졌다", smelled > SmellSystem.Threshold(SmellKind.Foul), $"{room.Name} 냄새 {smelled:0.00}");
             Check("밀주 — 냄새를 따라온 사람이 알아챘고 반응이 갈렸다", finder != null && mo.Reactions.Count >= 1 && (mo.FoundHow.Contains("냄새") || w.Schemes.Stats.Smelled >= 1),
                 $"{finder?.Name} — {mo.FoundHow} · 반응 {string.Join(" / ", mo.Reactions.Select(r => $"{w.Crew.First(c => c.Id == r.who).Name} {r.r}"))} · 냄새로 {w.Schemes.Stats.Smelled}");
-            var m = w.Motions.Get(mo.Motion);
             SchemeUntil(w, () => mo.Stage is SchemeStage.Done or SchemeStage.Dropped, SimTime.TicksPerDay * 7, 200);
+            var m = w.Motions.Get(mo.Motion);
             var rule = w.Schemes.Rule("moonshine");
             var pr = w.Schemes.PracticeOf("moonshine");
             Check("밀주 — 회의에 올라 금지냐 '주점의 밤'이냐 표결했다", m != null && (m.Decided >= 0 || m.Stage == MotionStage.Dropped) && (rule != null),
-                m == null ? $"안건 없음 · {mo.Stage} {mo.Outcome}" : $"{m.Title} [{m.Stage}] → {mo.Outcome} · 규칙 {rule?.Text} · 표 {string.Join(" ", m.Final.Select(kv => $"{w.Crew.First(c => c.Id == kv.Key).Name}{kv.Value:+0.0;-0.0}"))}");
+                m == null ? $"안건 없음 · {mo.Stage} {mo.Outcome}" : $"{m.Title} [{m.Stage}] ({(w.Info.Chat.All.Any(x => x.Text.Contains("이참에") || x.Text.Contains("아실 분은")) ? "다 아는 비밀이라 편드는 사람이 꺼냈다" : "알린 사람이 올렸다")}) → {mo.Outcome} · 규칙 {rule?.Text} · 표 {string.Join(" ", m.Final.Select(kv => $"{w.Crew.First(c => c.Id == kv.Key).Name}{kv.Value:+0.0;-0.0}"))}");
             Check("밀주 — 결과가 배에 남았다 (관행이면 주점의 밤 · 금지면 압수한 통)", pr != null && pr.Name == "주점의 밤" || w.Schemes.Traces.Any(t => t.Scheme == mo.Id && t.State == TraceState.Seized),
                 pr != null ? $"관행 {pr.Name} · {SimTime.Clock(pr.Start)} · 따르는 사람 {pr.Followers.Count}" : string.Join(" / ", w.Schemes.Traces.Select(t => $"{t.Text}({t.State})")));
             Check("밀주 — 일기에 남았다", mechs[0].Diary.Any(d => d.text.Contains("술") || d.text.Contains("밀주")), mechs[0].Diary.LastOrDefault().text ?? "");
