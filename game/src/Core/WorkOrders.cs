@@ -1266,6 +1266,7 @@ public sealed partial class WorkBoard
 
         // ── 결정 (v7): 사람이 정해야 하는 일은 심의에 올린다 ──
         Council.Review(w, _open.Values.Where(o => seen.Contains(o.Key)).ToList());
+        psc = Prof.Lap("scan.Council", psc); // v17.7
 
         // 조건이 사라진 일은 내린다 (누가 하고 있으면 그 사람이 끝낼 때까지 둔다)
         foreach (var key in _open.Keys.ToList())

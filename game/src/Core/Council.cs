@@ -542,8 +542,13 @@ public static partial class Council
         var kind = attendees != null ? rec!.Kind : o.Alone ? MeetingKind.Emergency : o.Field ? MeetingKind.Field : MeetingKind.AdHoc;
         var item = new AgendaItem { Title = o.Title, Topic = "order:" + o.Kind };
         var final = new Dictionary<CrewMember, (float s, string why)>();
-        if (voters.Count >= 3) w.Meetings.Debate(voters, c => Opinion(w, c, o, pressure), c => c.SkillLevel(o.Skill), item, decider, final);
-        else foreach (var c in voters) { var op = Opinion(w, c, o, pressure); final[c] = op; item.Votes.Add((c.Id, op.support > 0f, op.why)); item.Speeches.Add(new Speech { Who = c.Id, For = op.support > 0f, Text = Persona.Say(c, op.why) }); }
+        Evolution.Hold(w); // v17.7 의견을 듣는 사이 개조 후보는 한 번만
+        try
+        {
+            if (voters.Count >= 3) w.Meetings.Debate(voters, c => Opinion(w, c, o, pressure), c => c.SkillLevel(o.Skill), item, decider, final);
+            else foreach (var c in voters) { var op = Opinion(w, c, o, pressure); final[c] = op; item.Votes.Add((c.Id, op.support > 0f, op.why)); item.Speeches.Add(new Speech { Who = c.Id, For = op.support > 0f, Text = Persona.Say(c, op.why) }); }
+        }
+        finally { Evolution.Release(); }
         var opinions = voters.Select(c => (who: c, op: (support: final[c].s, why: final[c].why))).ToList();
         if (rec != null) rec.Items.Add(item);
         else

@@ -62,28 +62,39 @@ public sealed class ChoresActivity : Activity
     public static float Appeal(CrewMember c, World w, WorkOrder o, DistanceField dist, out int distance)
     {
         distance = -1;
-        if (c.IsChild) return -1f; // v12.9 아이는 일하지 않는다
-        if (c.Passenger && !PassengerSystem.MayWork(c, w, o)) return -1f; // v18.6 승객은 자원봉사로 가벼운 일만
-        if (o.Target.Crew == c && o.Kind != WorkKind.Rehab) return -1f; // 자기 자신은 치료 못 함 (v11.3 재활은 제 몸을 푼다)
-        if (o.Kind == WorkKind.Drill && o.Circuit != c.Id) return -1f; // v11.0: 훈련은 제 몫만
-        if (o.Kind == WorkKind.Train && o.Circuit / 10 != c.Id) return -1f; // v11.3: 배우는 사람만
-        if (o.Kind == WorkKind.Rehab && o.Circuit != c.Id) return -1f; // v11.3: 재활은 다친 사람이
-        if (o.Kind == WorkKind.Handover && o.Circuit != c.Id) return -1f; // v12.0: 인수인계는 기록을 든 사람이
-        if (o.Kind == WorkKind.SafetyWatch && (w.Command.TeamOf(c) is not Team st || st.Watcher != c.Id || st.Worker != o.Circuit)) return -1f; // v13.1 정해진 짝만
-        // v12.0 전조 손보기는 그 기록을 아는 사람만 (직접 봤거나 · 인계받았거나 · 컴퓨터 일지로 읽었다)
-        if (o.Kind == WorkKind.PreventiveCheck && o.Target.Furniture?.Machine?.Omen?.Note is ShiftNote note && !w.Watch.Knows(note, c)) return -1f;
-        if (DecisionOnly(o.Kind)) return -1f;
-        if (!w.Minds.Aware(c, o)) return -1f; // v13.3 모르는 사고의 일은 하지 않는다
-        // v13.4 근무 박탈 · 은퇴한 노인: 급한 일 말고는 하지 않는다
-        if (o.Urgency < 0.9f && (w.Society.Suspended(c) || c.Age >= 65f && w.Policies["elders"] == 0)) return -1f;
-        // v8: 선체 밖 일은 드론이 맡을 수 있으면 드론에게 맡긴다 (드론이 없거나 멈췄을 때만 사람이 나간다)
         bool eva = NeedsEvaField(o) && o.Kind != WorkKind.Rescue;
-        if (eva && w.Drones.WillHandle(o)) return -1f;
-        if (o.MinSkill > 0f && c.SkillLevel(o.Skill) < o.MinSkill) return -1f; // 할 줄 모르는 일
+        if (Rejects(c, w, o, eva)) return -1f;
         var spot = Plans.WorkSpot(o.Target, w, dist, c);
         if (spot is not Cell s) return -1f;
         distance = dist.Get(s);
+        return AppealAt(c, w, o, distance, eva);
+    }
 
+    /// <summary>v17.7 거리장 없이 가릴 수 있는 "이 사람이 맡지 않는 일" (Appeal 의 앞부분 그대로 — 비상 · 선외 거리장을 펴기 전에 먼저 본다).</summary>
+    private static bool Rejects(CrewMember c, World w, WorkOrder o, bool eva)
+    {
+        if (c.IsChild) return true; // v12.9 아이는 일하지 않는다
+        if (c.Passenger && !PassengerSystem.MayWork(c, w, o)) return true; // v18.6 승객은 자원봉사로 가벼운 일만
+        if (o.Target.Crew == c && o.Kind != WorkKind.Rehab) return true; // 자기 자신은 치료 못 함 (v11.3 재활은 제 몸을 푼다)
+        if (o.Kind == WorkKind.Drill && o.Circuit != c.Id) return true; // v11.0: 훈련은 제 몫만
+        if (o.Kind == WorkKind.Train && o.Circuit / 10 != c.Id) return true; // v11.3: 배우는 사람만
+        if (o.Kind == WorkKind.Rehab && o.Circuit != c.Id) return true; // v11.3: 재활은 다친 사람이
+        if (o.Kind == WorkKind.Handover && o.Circuit != c.Id) return true; // v12.0: 인수인계는 기록을 든 사람이
+        if (o.Kind == WorkKind.SafetyWatch && (w.Command.TeamOf(c) is not Team st || st.Watcher != c.Id || st.Worker != o.Circuit)) return true; // v13.1 정해진 짝만
+        // v12.0 전조 손보기는 그 기록을 아는 사람만 (직접 봤거나 · 인계받았거나 · 컴퓨터 일지로 읽었다)
+        if (o.Kind == WorkKind.PreventiveCheck && o.Target.Furniture?.Machine?.Omen?.Note is ShiftNote note && !w.Watch.Knows(note, c)) return true;
+        if (DecisionOnly(o.Kind)) return true;
+        if (!w.Minds.Aware(c, o)) return true; // v13.3 모르는 사고의 일은 하지 않는다
+        // v13.4 근무 박탈 · 은퇴한 노인: 급한 일 말고는 하지 않는다
+        if (o.Urgency < 0.9f && (w.Society.Suspended(c) || c.Age >= 65f && w.Policies["elders"] == 0)) return true;
+        // v8: 선체 밖 일은 드론이 맡을 수 있으면 드론에게 맡긴다 (드론이 없거나 멈췄을 때만 사람이 나간다)
+        if (eva && w.Drones.WillHandle(o)) return true;
+        if (o.MinSkill > 0f && c.SkillLevel(o.Skill) < o.MinSkill) return true; // 할 줄 모르는 일
+        return false;
+    }
+
+    private static float AppealAt(CrewMember c, World w, WorkOrder o, int distance, bool eva)
+    {
         float skill = c.SkillLevel(o.Skill);
         float fit = 0.55f + 0.45f * skill + (CrewRoles.Owns(c.Role, o) ? 0.15f : 0f);
         float score = o.Urgency * fit;
@@ -208,12 +219,14 @@ public sealed class ChoresActivity : Activity
             if (o.MinSkill > 0f && c.SkillLevel(o.Skill) < o.MinSkill) continue;
             if (DecisionOnly(o.Kind)) continue;
             if (!w.Minds.Aware(c, o)) continue; // v13.3 모르는 사고
-            var field = dist;
-            if (NeedsEvaField(o)) field = evaField ??= EvaField(c, w);
-            else if (NeedsEmergencyField(o)) field = emergency ??= EmergencyField(c, w);
-            float s = Appeal(c, w, o, field, out _);
+            // v17.7 비상 · 선외 거리장은 이 사람이 맡을 수 있는 일이 나왔을 때만 편다 (못 맡는 일이 가장 나은 일로 남으면 그때 편다 — 같은 값)
+            int fk = NeedsEvaField(o) ? 2 : NeedsEmergencyField(o) ? 1 : 0;
+            DistanceField? field = fk == 0 ? dist : null;
+            float s;
+            if (fk != 0 && Rejects(c, w, o, fk == 2 && o.Kind != WorkKind.Rescue)) s = -1f;
+            else s = Appeal(c, w, o, field ??= fk == 2 ? evaField ??= EvaField(c, w) : emergency ??= EmergencyField(c, w), out _);
             if (s < 0f && o.Urgency < 0.9f) continue;
-            if (s > bestScore) { bestScore = s; best = o; bestField = field; }
+            if (s > bestScore) { bestScore = s; best = o; bestField = field ?? (fk == 2 ? evaField ??= EvaField(c, w) : emergency ??= EmergencyField(c, w)); }
         }
         return (best, bestScore, bestField);
     }
