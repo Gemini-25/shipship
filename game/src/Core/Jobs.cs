@@ -617,7 +617,7 @@ public static class Plans
         foreach (var s in t.Spots(w.Ship))
         {
             int d = dist.Get(s);
-            if (d < 0) continue;
+            if (d < 0 || d >= bestCost) continue; // v17.7 이미 더 가까운 칸이 있으면 누가 쓰는지 볼 것도 없다 (같은 결과)
             if (w.IsSpotTaken(s, c)) d += 500;
             if (d < bestCost) { best = s; bestCost = d; }
         }

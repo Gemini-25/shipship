@@ -54,7 +54,7 @@ public partial class Hud
     {
         var w = _world;
         var a = w.Automation;
-        if (!a.Present || ControlOpen || ChronicleOpen || TechOpen || PolicyOpen || ChainOpen) return;
+        if (!a.Present || ControlOpen || ChronicleOpen || TechOpen || PolicyOpen || ChainOpen || VoyageOpen) return;
         const float width = 318f;
         var open = a.Asks.Open.ToList();
         // v16.24 방금 정한 제안 하나도 잠깐 남긴다 (누가 · 어디서 · 어떻게 정했는지 보이게)

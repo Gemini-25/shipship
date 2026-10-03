@@ -11,6 +11,7 @@ public partial class Hud
     public bool VoyageOpen { get; set; }
     private VoyageReview? _voyage;
     private long _voyageTick = -1;
+    private float _voyageH = 420f; // 지난 프레임에 그린 내용 높이 (카드를 내용에 맞춘다)
 
     public void ToggleVoyage()
     {
@@ -31,7 +32,8 @@ public partial class Hud
         var v = _voyage;
         float x0 = Margin, y0 = Margin + 52f + 8f + 40f + 8f + 64f + 10f;
         float wdt = Mathf.Min(640f, Screen.X - RightColumnWidth - Margin * 3);
-        float height = Mathf.Min(Screen.Y - y0 - LogFullHeight - Margin - 10f, 560f);
+        float maxH = Screen.Y - y0 - LogFullHeight - Margin - 10f;
+        float height = Mathf.Min(maxH, _voyageH);
         var card = new Rect2(x0, y0, wdt, height);
         Card(card);
         float x = x0 + Ui.Pad, right = card.End.X - Ui.Pad, y = y0;
@@ -73,6 +75,21 @@ public partial class Hud
             yl += 20f;
         }
 
+        // 사진 모드로 찍은 사진 (최근 둘 — 인화지처럼)
+        if (PhotoAlbum.All.Count > 0)
+        {
+            float tw = (colW - Ui.S2) * 0.5f, th = tw * 0.6f;
+            if (yl + 32f + th + 14f < y0 + maxH)
+            {
+                yl += 8f;
+                UiKit.Header(this, x, x + colW, yl + 14f, "사진", $"{PhotoAlbum.All.Count}장", "photo");
+                yl += 24f;
+                var shots = PhotoAlbum.All.TakeLast(2).ToList();
+                for (int i = 0; i < shots.Count; i++) DrawPhotoPrint(new Rect2(x + i * (tw + Ui.S2), yl, tw, th + 14f), shots[i]);
+                yl += th + 14f;
+            }
+        }
+
         // 오른쪽: 좋은 순간 · 물건이 거친 손
         UiKit.Header(this, xr, right, yr + 14f, "좋은 순간", null, "relation");
         yr += 24f;
@@ -89,13 +106,27 @@ public partial class Hud
         yr += 24f;
         foreach (var (id, name, hands, now, marks) in v.Items)
         {
-            if (yr > card.End.Y - 40f) break;
+            if (yr > y0 + maxH - 60f) break;
             Gfx.Text(this, Fonts.Bold, new Vector2(xr + 4f, yr + 12f), UiKit.Fit(name, right - xr - 60f, Ui.TextSmall), Ui.TextSmall, Palette.Text);
             if (marks > 0) Gfx.TextRight(this, Fonts.Body, new Vector2(right, yr + 12f), $"자국 {marks}", Ui.TextTiny, Palette.TextMuted);
             Gfx.Text(this, Fonts.Body, new Vector2(xr + 4f, yr + 28f), UiKit.Fit(string.Join(" → ", hands), right - xr - 8f, Ui.TextTiny), Ui.TextTiny, Palette.TextDim);
             Gfx.Text(this, Fonts.Body, new Vector2(xr + 4f, yr + 42f), UiKit.Fit(now, right - xr - 8f, Ui.TextTiny), Ui.TextTiny, Palette.TextMuted);
             yr += 50f;
         }
+
+        _voyageH = Mathf.Max(yl, yr) + 4f - y0 + Ui.Pad;
+    }
+
+    /// <summary>사진 한 장을 흰 테두리 인화지처럼 (가운데를 잘라 틀에 맞추고 · 아래에 날과 곳).</summary>
+    private void DrawPhotoPrint(Rect2 r, PhotoAlbum.Photo p)
+    {
+        Gfx.RoundRect(this, r, new Color(0.9f, 0.9f, 0.86f, 0.92f), 3f);
+        var inner = new Rect2(r.Position + new Vector2(4f, 4f), r.Size - new Vector2(8f, 18f));
+        if (inner.Size.X < 4f || inner.Size.Y < 4f) return;
+        var ts = p.Texture.GetSize();
+        float k = Mathf.Max(inner.Size.X / ts.X, inner.Size.Y / ts.Y);
+        DrawTextureRectRegion(p.Texture, inner, new Rect2((ts - inner.Size / k) * 0.5f, inner.Size / k));
+        Gfx.Text(this, Fonts.Body, new Vector2(r.Position.X + 5f, r.End.Y - 4f), UiKit.Fit(p.Caption, r.Size.X - 10f, Ui.TextMicro), Ui.TextMicro, new Color(0.2f, 0.2f, 0.22f));
     }
 
     /// <summary>Q 로 물건을 따라가는 동안: 그 물건이 거친 손 · 남은 자국 · 지금 어디 (화면 위 가운데).</summary>
@@ -104,8 +135,12 @@ public partial class Hud
         if (_main.FollowItem < 0 || _world.Belongings.All.FirstOrDefault(b => b.Id == _main.FollowItem) is not Belonging b) return;
         var steps = WatchScenes.Trail(_world, b);
         var hands = WatchScenes.Hands(b);
-        float wdt = 360f, h = 74f + Mathf.Min(5, steps.Count) * 20f;
-        var card = new Rect2((Screen.X - wdt) * 0.5f, Margin + 52f + 8f + 40f + 12f, wdt, h);
+        int dated = steps.Count(s => s.Tick >= 0);
+        float wdt = 360f, h = 78f + Mathf.Min(5, dated > 0 ? dated : steps.Count) * 16f;
+        // 오른쪽 아래 (지도 옆 · 대화 카드 · 알림과 겹치지 않게), 자리가 모자라면 지도 위로
+        float cx = Screen.X - RightColumnWidth - Margin * 2 - wdt, cy = Screen.Y - Margin - h;
+        if (MinimapOpen && _minimapRect.Size.X > 0f && _minimapRect.End.X + Ui.S2 > cx) cy = _minimapRect.Position.Y - h - Ui.S2;
+        var card = new Rect2(cx, cy, wdt, h);
         Card(card);
         float x = card.Position.X + Ui.Pad, right = card.End.X - Ui.Pad, y = card.Position.Y;
         UiKit.CardTitle(this, x, right - 30f, y + 28f, b.Name, _world.Belongings.Where(b), "bag");
@@ -132,14 +167,7 @@ public partial class Hud
     private bool DrawAlbumPhoto(Rect2 r, int firstDay, int lastDay)
     {
         if (PhotoAlbum.For(firstDay, lastDay) is not PhotoAlbum.Photo p) return false;
-        Gfx.RoundRect(this, r, new Color(0.9f, 0.9f, 0.86f, 0.92f), 3f);
-        var inner = new Rect2(r.Position + new Vector2(4f, 4f), r.Size - new Vector2(8f, 18f));
-        var ts = p.Texture.GetSize();
-        // 가운데를 잘라 틀에 맞춘다 (늘이지 않는다)
-        float k = Mathf.Max(inner.Size.X / ts.X, inner.Size.Y / ts.Y);
-        var src = new Rect2((ts - inner.Size / k) * 0.5f, inner.Size / k);
-        DrawTextureRectRegion(p.Texture, inner, src);
-        Gfx.Text(this, Fonts.Body, new Vector2(r.Position.X + 5f, r.End.Y - 4f), UiKit.Fit(p.Caption, r.Size.X - 10f, Ui.TextMicro), Ui.TextMicro, new Color(0.2f, 0.2f, 0.22f));
+        DrawPhotoPrint(r, p); // 가운데를 잘라 틀에 맞춘다 (늘이지 않는다)
         return true;
     }
 }
