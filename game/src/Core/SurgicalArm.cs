@@ -33,6 +33,7 @@ public sealed class SurgicalArmSystem
     private readonly SortedDictionary<int, long> _refused = new();     // 수술 번호 → 마다한 때
     private readonly SortedDictionary<int, long> _orphan = new();      // 팔이 멈춰 열린 채 남은 수술 → 멈춘 때
     private readonly SortedSet<int> _assist = new();                   // 팔이 곁에서 거든 수술
+    private readonly SortedSet<int> _waitCase = new();                 // 집도할 사람이 없어 기다린 수술
     private readonly SortedDictionary<int, long> _told = new();
     private Furniture? _cur;
     public int Ops, LeadOps, AssistOps, Successes, Failures, Deaths, Stalls, Takeovers, Consents, Refusals, Calibrations, AssistOnly, Waited, Reviews;
@@ -143,7 +144,8 @@ public sealed class SurgicalArmSystem
             : guilty != null && best.Role != CrewRole.Medic ? $"{Ko.IGa(guilty.Name)} 수술대 앞에 서지 못한다 — 손이 떨린다"
             : null;
         if (why == null) return false; // 사람이 한다 (팔은 곁에서 거든다)
-        if (best == null) Waited++;
+        if (best == null && _waitCase.Add(k.Id)) Waited++;
+        if (cont && (w.Surgery.TableOf(k) is not Furniture ct || ArmIn(ct.Room) == null)) return false; // 열린 채 팔 없는 침대 — 옮길 수 없다
         var table = TableFor(k, pt);
         var arm = table != null ? ArmIn(table.Room) : null;
         if (arm == null) { if (best == null) stand = null; return false; }
@@ -463,6 +465,11 @@ public sealed class SurgicalArmSystem
             if (by != null && by != pt) a.Trusts.Change(by, -0.06f, $"{pt.Name}을 컴퓨터에 맡겼는데 잘 안 됐다", quiet: true);
             cmd.ComputerTrust = MathF.Max(0.05f, cmd.ComputerTrust - 0.03f);
             MarkLog.Add(pt.Memory.Marks, w.Tick, $"수술 팔에 맡긴 {kind}이 잘 안 됐다");
+            if (Failures >= 2 && w.Policies["computerask"] < 1)
+            {
+                Reviews++;
+                w.Meetings.Reviews.Add(("computerask", 1, $"수술 팔에 맡긴 수술이 {Failures}번 잘 안 됐다 — 칼을 맡기기 전에 묻자"));
+            }
             return;
         }
         Deaths++;

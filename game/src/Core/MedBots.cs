@@ -401,7 +401,7 @@ public sealed class MedBotSystem
             if (t.Kind == TraumaKind.Bleed && t.Rate >= 0.06f && t.Helped >= 0) _kit.Add((pt, t)); // 사람이 누르고 있다 — 키트가 있어야 멎는다
         }
         foreach (var pt in w.Crew)
-            if (!pt.Dead && !pt.Away && !pt.Outside && w.Blood.NeedsBlood(pt) && !Claimed(pt) && (pt.Down || pt.CareBed != null || w.Surgery.OnTable(pt)))
+            if (!pt.Dead && !pt.Away && !pt.Outside && w.Blood.NeedsBlood(pt) && !Claimed(pt) && (pt.Down || pt.CareBed != null || w.Surgery.OnTable(pt)) && (w.Telemed.PumpAt(pt) || Infuser(pt).hand != null)) // 넣어 줄 손(사람 · 투여 펌프)이 있을 때만
                 _blood.Add(pt);
         foreach (var f in w.Ship.FurnitureOf(FurnitureType.Ecmo))
             if (!f.Room.Detached && f.Machine is Machine m && !m.Powered && w.Organs.PatientOn(f) != null && w.Organs.Cell(f) < 0.25f && (!w.Organs.Cranked(f) || Cranking(f)))
