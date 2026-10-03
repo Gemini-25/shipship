@@ -117,6 +117,7 @@ public static partial class Program
                 var p = w.Crew.Where(c => c.CanAct && !c.IsChild && !c.Outside).OrderBy(c => c.Id).First();
                 Teleport(w, p, from);
                 w.Step();
+                if (blackout) door.Openness = 0f; // 통합8 앞서 누가 손으로 돌려 열어 둔 문이면 그냥 지나간다 — 닫힌 문 앞에서 잰다
                 Force(w, p, new Job(null, "지나가기", new List<Toil> { new GotoToil(to), new WaitToil(30, Pose.Standing) }));
                 long t0 = w.Tick;
                 var past = door.Cell + dir; // 문을 넘어선 첫 칸 (정전이면 넘자마자 배전반을 보러 가는 사람도 있다 — 지나간 때를 잰다)

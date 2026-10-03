@@ -119,7 +119,12 @@ public static partial class Program
                 ClearRoom(w, room);
                 var c = w.Crew.First(x => x.CanAct && x.IsAwake);
                 c.EndJob(w, ToilStatus.Interrupted);
-                c.Position = room.Cells.Where(w.Ship.IsOpenFloor).First().Center; c.PreviousPosition = c.Position;
+                // 통합8 불붙을 칸(앞 여섯) 위에 세우면 첫 분에 옷에 옮겨붙어 쓰러진다 — 나갈 사람이 아니게 된다. 문 가까이 · 불에서 두 칸 넘게
+                var rcs = room.Cells.Where(w.Ship.IsOpenFloor).ToList();
+                var rdoor = room.Doors.Where(d => !d.IsExternal).Select(d => d.Cell).FirstOrDefault();
+                var rspot = rcs.Skip(6).Where(x => rcs.Take(6).Min(f => Math.Abs(f.X - x.X) + Math.Abs(f.Y - x.Y)) >= 2).OrderBy(x => Math.Abs(x.X - rdoor.X) + Math.Abs(x.Y - rdoor.Y)).ThenBy(x => x.X).ThenBy(x => x.Y).FirstOrDefault();
+                if (rspot == default) rspot = rcs.Last();
+                c.Position = rspot.Center; c.PreviousPosition = c.Position;
                 BigFire(w, room, 6);
                 bool left = false, purged = false;
                 for (int m = 0; m < 30 && !purged; m++)

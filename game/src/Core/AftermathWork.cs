@@ -86,7 +86,7 @@ public sealed partial class AftermathSystem
             if (lm.Moved < 0 && w.Tick - lm.Asked < SimTime.Hours(12))
                 Consider(new AfterTask(AfterTaskKind.Lamp, shift ? 0.25f : 0.46f, "작업등 불빛이 눈부시다 — 선실의 등을 가져온다", lm));
             else if (lm.Active && lm.WantBack && lm.Carrying < 0)
-                Consider(new AfterTask(AfterTaskKind.LampBack, (shift ? 0.18f : 0.36f) + (bed ? 0.3f : 0f), "조명이 돌아왔다 — 등을 선실로 가져간다", lm));
+                Consider(new AfterTask(AfterTaskKind.LampBack, (shift ? 0.18f : 0.36f) + (bed ? 0.3f : 0f) + (lm.LitAgain >= 0 ? 0.2f * MathF.Min(1f, (w.Tick - lm.LitAgain) / (float)SimTime.Hours(8)) : 0f), "조명이 돌아왔다 — 등을 선실로 가져간다", lm)); // 통합8 머리맡 등이 없는 밤이 길어질수록 마음에 걸린다 (0.36으로는 하루 반을 미뤘다)
         }
         // 4) 불탄 그림 다시 그리기 — 그림 그리는 사람 (만든 사람이 살아 있으면 하루는 그 사람 몫) · 통합6 쉬는 시간의 붓은 다른 그림보다 이걸 먼저 든다
         if (!shift && !bed && c.Hobbies.Contains(Hobby.Painting))

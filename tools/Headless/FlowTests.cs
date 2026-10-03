@@ -64,7 +64,7 @@ public static partial class Program
                 var t = w.Net.Throughput(NetKind.Power);
                 var trunk = w.Net.Links.Where(l => l.Kind == NetKind.Power && !UtilityNet.IsRing(l) && l.Door != null && (l.Door.RoomA == src || l.Door.RoomB == src) && l.Key.EndsWith(":X")).First();
                 var splicer = w.Crew.First(c => c.CanAct && !c.IsChild);
-                trunk.Temp = true; trunk.Integrity = 0.6f; trunk.SplicedBy = splicer.Id;
+                trunk.Temp = true; trunk.Integrity = 0.75f; trunk.SplicedBy = splicer.Id; // 통합8 0.6으로 이으면 보조 간선(굵기 0.55)보다 가늘어 전기가 고리로 돌아 이음매를 안 지난다 — 그럭저럭 이은 이음매라야 많은 방을 나른다
                 Settle(w);
                 int dimmed = w.Ship.LiveRooms.Count(r => r.PowerFlow < 0.75f);
                 float peak = 0f;
@@ -129,6 +129,8 @@ public static partial class Program
                 for (int i = 0; i < SimTime.Minutes(40) && w.Flow.Stats.Equalized == 0; i++)
                 {
                     if (i % 15 == 0 && hall.Air.Pressure > 85f) { hall.VentOpen = false; float k = 84f / hall.Air.Pressure; hall.Air.O2 *= k; hall.Air.N2 *= k; }
+                    // 통합8 문틈 · 덕트로 옆방 공기가 통로로 새어 몇 분이면 차가 12kPa 아래로 준다 — 옆방은 생명 유지 장치가 채우고 있다고 둔다 (차가 남아 있어야 장면이 선다)
+                    if (i % 15 == 0) foreach (var n in hall.Doors.Select(d => d.RoomA == hall ? d.RoomB : d.RoomA).Where(r => r != null && r != hall && !r.Detached && r.Air.Pressure < 99f && r.Air.Pressure > 50f).Distinct().ToList()) { float k2 = 100f / n!.Air.Pressure; n.Air.O2 *= k2; n.Air.N2 *= k2; }
                     w.Step();
                 }
                 var who = w.Crew.FirstOrDefault(c => c.Gait.DoorReading?.StartsWith("균압") == true);

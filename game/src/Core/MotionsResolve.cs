@@ -180,7 +180,9 @@ public sealed partial class MotionSystem
                     break;
                 case MotionKind.Crisis when m.Sitting == SittingKind.Inquiry:
                 {
-                    var ev = w.History.Events.LastOrDefault(e => e.Kind is HistoryKind.Death or HistoryKind.Casualty);
+                    // 통합8 조사하자고 한 그 일의 기록 — 안건이 나오기 전 마지막 사고 (그 뒤에 앓아누운 사람 기록을 내놓았다)
+                    var ev = w.History.Events.LastOrDefault(e => e.Kind is HistoryKind.Death or HistoryKind.Casualty && e.Tick <= m.Born)
+                             ?? w.History.Events.LastOrDefault(e => e.Kind is HistoryKind.Death or HistoryKind.Casualty);
                     text = ev != null ? $"{SimTime.Clock(ev.Tick)} 기록 — {ev.Text}" : "그날 기록이 남아 있지 않습니다";
                     break;
                 }

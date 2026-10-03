@@ -165,6 +165,7 @@ public static partial class Program
         var v = w.Crew.First(c => c.CanAct);
         var m = w.Crew.Where(c => c.CanAct && c != v).Skip(1).First();
         v.Dose = 8f; m.Dose = 4.5f;
+        SpQuiet(w, new[] { v }, SimTime.Hours(5)); // 통합8 아무도 손을 못 쓰면 이렇게 된다 — 곁에서 수액을 놓으면 두 시간 안에 버틴다 (그쪽은 radcaretest가 본다)
         float h0 = m.Vitals.Health;
         int downMin = -1;
         for (int t = 0; t < SimTime.Hours(5); t++) { w.Step(); if (v.Down && downMin < 0) downMin = t / SimTime.Minutes(1); }

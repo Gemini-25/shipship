@@ -106,7 +106,7 @@ public static partial class Program
                 var w = DayOne(seed, "Hanbit");
                 Run(w, SimTime.Hours(3)); // 10시쯤 — 아침과 점심 사이
                 int crew = w.Crew.Count(c => !c.Dead);
-                foreach (var c in w.Crew) c.Needs.Food = MathF.Min(c.Needs.Food, 0.55f);
+                foreach (var c in w.Crew) c.Needs.Food = MathF.Min(c.Needs.Food, 0.45f); // 통합8 끼니 사이 출출한 정도(0.55)로는 꾸밈 · 일에 밀려 한 사람만 왔다 — 배고픈 사람들
                 int keep = crew * 2;
                 int have = w.Ship.CountStored(ItemKind.Meal);
                 if (have > keep) Life.Take(w, ItemKind.Meal, have - keep); // 식사가 모자라 조리 일감이 선다

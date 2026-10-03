@@ -122,6 +122,8 @@ public sealed class MindSystem
         var w = _w;
         c.Mind.Knows[key] = (src, w.Tick, what);
         w.Brain2.Beliefs.FromMind(c, key, src, what); // v16.15 아는 것은 믿음 장부로 모인다
+        // 통합8 불이 난 그 방에 있던 사람은 (보았든 경보로 알았든) 그날을 기억한다 — 사고 카드 · 연대기의 "누가 기억하나"
+        if (key.StartsWith("fire:") && c.Room is Room here && key == $"fire:{here.Id}") MarkLog.Add(c.Memory.Marks, w.Tick, $"{here.Name}에서 불길이 이는 걸 봤다");
         c.NextThinkTick = Math.Min(c.NextThinkTick, w.Tick + 1); // 알게 된 그 자리에서 다시 판단한다
         switch (src)
         {

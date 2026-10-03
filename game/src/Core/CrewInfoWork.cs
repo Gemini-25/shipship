@@ -67,11 +67,13 @@ public sealed class InfoActivity : Activity
                     break;
                 case InfoDo.Search:
                     if (w.Belongings.Get(i.Thing) is not Belonging b || b.Holder == c.Id || !dist.Reachable(Near(w, i.At, dist) ?? i.At)) continue;
+                    s += 0.2f * MathF.Min(1f, (w.Tick - i.Since) / (float)SimTime.Hours(2)); // 통합8 없어진 걸 알고 나면 갈수록 마음에 걸린다 (꾸밈 · 취미에 밀려 네 시간 내내 안 찾았다)
                     if (shift) s -= 0.18f;
                     if (bed) s -= 0.25f;
                     break;
                 case InfoDo.HangPhoto:
                     if (info.Photo(i.Thing) is not PhotoInfo p || p.Hung || bed) continue;
+                    if (w.Tick - i.Since < SimTime.Hours(3)) s += 0.15f; // 통합8 찍은 날 저녁에 건다 (꾸밈 · 취미에 밀려 여섯 시간을 넘겼다)
                     if (shift) s -= 0.15f;
                     if (w.Tick - i.Since > SimTime.Hours(6)) s -= 0.1f;
                     break;
@@ -111,8 +113,9 @@ public sealed class InfoActivity : Activity
             }
             var (ds, dw) = info.DishWant(c);
             if (ds > 0f && Sink(w, dist) is not null) Consider(InfoDo.Dishes, ds, dw);
-            if (info.PhotoToLook(c) is { } lp && dist.Reachable(Near(w, lp.p.Wall, dist) ?? lp.p.Wall)) Consider(InfoDo.LookPhoto, lp.s, lp.why, p: lp.p);
         }
+        // 통합8 벽 사진은 속이 상해 있어도 눈에 걸린다 (다툰 뒤가 바로 그때다) — 근무 · 잘 때만 아니면
+        if (!shift && !bed && info.PhotoToLook(c) is { } lp && dist.Reachable(Near(w, lp.p.Wall, dist) ?? lp.p.Wall)) Consider(InfoDo.LookPhoto, lp.s, lp.why, p: lp.p);
         return best;
     }
 

@@ -57,7 +57,9 @@ public sealed partial class ReactSystem
                 Speak(c, s, k, SoundLines(c, m, kind, m.Body.Room != room), room, m.Name);
                 // 궁금하면 가서 귀를 대 본다: 성실함 · 기계 솜씨 · 구경 버릇 (걱정이 많으면 남에게 말한다)
                 float go = 0.15f + 0.35f * c.Traits.Diligence + 0.3f * c.SkillLevel(Skill.Mechanics) + (Life.Has(c, Habit.Tinkerer) || Life.Has(c, Habit.Gazer) ? 0.2f : 0f) - (Life.Has(c, Habit.Procrastinator) ? 0.25f : 0f);
-                if (R.Chance(Math.Clamp(go, 0.05f, 0.85f)))
+                // 통합8 부품을 들고 고치러 가는 길이면 귀만 기울이고 하던 일로 (모터를 든 채 소리를 보러 갔다가 악기를 잡았다)
+                bool handsFull = c.Carrying != null && c.Job?.Order != null;
+                if (!busy && !handsFull && R.Chance(Math.Clamp(go, 0.05f, 0.85f)))
                     Plan(c, s, new ReactAct { Kind = ReactKind.Check, For = k, Target = m.Body.Id, Label = "무슨 소리인지 가 본다", Way = "check", Score = 0.5f + 0.15f * c.SkillLevel(Skill.Mechanics), Face = m.Body.Center, Until = w.Tick + SimTime.Minutes(45) });
                 break;
             }

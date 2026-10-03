@@ -298,6 +298,7 @@ public static partial class Program
             RunE(w, SimTime.Minutes(10), () => room.Humidity = 0.95f);
             int drips0 = w.Hearing.Stats.Drips;
             bool masked = w.Hearing.In(room).Any(h => w.Hearing.Sources[h.Src].Kind == Noise.Drip && h.Masked);
+            Gather(w, ppl.Where(c => c.CanAct && c.IsAwake).ToList(), room); // 통합8 열 분 사이 다들 자리를 떴다 (밥 · 일) — 정전 때 그 방에 있는 사람들로
             room.BreakerOff = true; // 정전
             RunE(w, SimTime.Minutes(3), () => { room.Humidity = 0.95f; room.BreakerOff = true; });
             bool fanGone = !w.Hearing.Sources.Any(s => s.Kind == Noise.Fan && s.Room == room.Id);
@@ -488,6 +489,7 @@ public static partial class Program
             Check("하루 — 버릇이 저절로 보인다 (여러 종류)", gs.Tics >= 20 && gs.ByTic.Count(x => x > 0) >= 6, $"버릇 {gs.Tics} · 종류 {gs.ByTic.Count(x => x > 0)}");
             Check("하루 — 발소리(재질별) · 옆방 발소리로 누군지 안다", hs.ByKind[(int)Noise.Step] > 0 && hs.StepsKnown >= 1, $"발소리 {hs.ByKind[(int)Noise.Step]} · 앎 {hs.StepsKnown} · 지금 재질 {stepMats}가지");
             TallyGest(w);
+            for (int h = 0; h < 24 && only == "" && (_noiseHeard.Count < 10 || _mienSeen.Count < 14 || _ticSeen.Count < 8); h++) { Run(w, SimTime.Hours(1)); TallyGest(w); } // 통합8 삐걱 · 쉭 소리는 그날 전조가 있어야 난다 — 모자라면 하루 더 지켜본다
             Console.WriteLine($"   모은 몸짓 {_mienSeen.Count}가지: {string.Join(" ", _mienSeen)}\n   들은 소리 {_noiseHeard.Count}가지: {string.Join(" ", _noiseHeard)}\n   본 버릇 {_ticSeen.Count}가지");
             if (only == "")
                 Check("이름표 없이 — 행동 · 소리 표시 종류가 충분하다 (몸짓 ≥ 14 · 소리 ≥ 10 · 버릇 ≥ 8)", _mienSeen.Count >= 14 && _noiseHeard.Count >= 10 && _ticSeen.Count >= 8,

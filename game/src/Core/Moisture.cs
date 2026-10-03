@@ -195,9 +195,11 @@ public sealed class MoistureSystem
                 w.Log.Add(w.Tick, LogKind.Ship, $"주 컴퓨터가 {room.Name} 급수 밸브를 원격으로 잠갔다 — 설비 관 이음에서 샌다");
                 w.Automation.Reason($"valve:{room.Id}", $"{room.Name} 급수 유량이 새는 쪽으로 빠진다 — 원격 밸브 잠금 (그 방은 단수) · 요청: 관 이음 고치기");
             }
-            if (w.Automation.Operator is CrewMember op2 && room.BreakerOff && Depth(room) < 0.05f && w.Fire.CountIn(room) == 0)
+            // 통합8 관제석 사람은 끊을 때와 같은 잣대로 되올린다 — 얕고 물에 선 사람이 없으면 (다 마를 때까지 기다리지 않는다)
+            if (w.Automation.Operator is CrewMember op2 && room.BreakerOff && w.Fire.CountIn(room) == 0
+                && (Depth(room) < 0.05f || Depth(room) <= 0.25f && !w.Crew.Any(c => !c.Dead && c.Room == room && c.Suit == null)))
             {
-                w.Automation.Reason($"restore:{room.Id}", $"{room.Name} 바닥이 말랐다 — 분전함 원격으로 다시 올림");
+                w.Automation.Reason($"restore:{room.Id}", Depth(room) < 0.05f ? $"{room.Name} 바닥이 말랐다 — 분전함 원격으로 다시 올림" : $"{room.Name} 바닥 물 {DepthCm(room):0}cm — 얕고 물에 선 사람이 없다, 분전함 원격으로 다시 올림 (지켜본다)");
                 Restore(room, op2);
             }
         }

@@ -133,6 +133,8 @@ public sealed class ChoresActivity : Activity
         // v12.1 인수인계는 몇 분짜리 말 — 성실한 사람일수록 넘기고 나서 쉰다 (자기 전에도)
         if (o.Kind == WorkKind.Handover) score += 0.18f + 0.22f * c.Traits.Diligence;
         // 통합: 배우기는 미룰수록 마음에 걸린다 (이틀 미루면 차 한 잔 · 책보다 앞선다) — 취미 · 일상 거리가 늘어 선배 곁에 서는 일이 밀려났다
+        // 통합8 다친 몸은 미룰수록 굳는다 — 의무관이 정한 재활은 제 몸 일이라 솜씨와 상관없이 앞에 둔다 (0.6 × 솜씨로는 순찰 · 잡일 · 밥에 밀려 엿새에 한 번도 못 했다)
+        if (o.Kind == WorkKind.Rehab && o.Target.Crew is CrewMember rc) score += 0.12f + 0.4f * MathF.Min(0.5f, rc.Vitals.Injury) + 0.2f * MathF.Min(1f, (w.Tick - o.Posted) / (float)SimTime.TicksPerDay);
         if (o.Kind == WorkKind.Train) score += 0.08f + 0.05f * c.Traits.Diligence + 0.2f * MathF.Min(1f, (w.Tick - o.Posted) / (float)(SimTime.TicksPerDay * 2));
         if (BedtimeStatic(c, w)) score -= emergency || allHands ? 0.1f : o.Kind == WorkKind.Handover ? 0.15f : 0.5f;
 
@@ -140,6 +142,8 @@ public sealed class ChoresActivity : Activity
         score -= 0.15f * c.Needs.Stress;
         // 하던 일은 마저 끝내고 싶다 (교대 시간이 돼도 바로 손을 놓지 않음) — v13.4 조를 맡았으면 조의 일이 아닌 하던 일은 덜 붙든다
         if (o.Assignee == c) score += w.Command.TeamOf(c) is Team mt && mt.Kind != TeamKind.Reserve && CommandSystem.Group(o.Kind) != mt.Kind ? 0.05f : 0.25f;
+        // 통합8 관제석에 앉았던 사람은 한 차례 조종을 마치고도 일이 남았으면 자리를 지킨다 — 물 퍼내기는 다른 손이 한다 (자리를 떠 원격으로 못 올리고 이십 분을 더 캄캄했다)
+        if (o.Kind == WorkKind.ManualControl && (o.Assignee == c || w.Automation.LastOperator == c.Id && w.Tick - w.Automation.LastOperatorTick < SimTime.Minutes(10))) score += 0.3f;
         else if (o.Robot != null) score -= 0.15f; // v10.10: 로봇이 하고 있는 일에 합류 — 더 급한 일이 없을 때만
         if (c.Vitals.Health < 0.5f) score -= 0.3f;
         // 제 치료를 기다리는 사람은 남을 치료하러 돌아다니지 않는다 (다친 사람끼리 서로 쫓으면 치료하러 온 사람이 헛걸음한다 — 성한 사람이 간다)

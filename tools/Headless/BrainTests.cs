@@ -125,6 +125,7 @@ public static partial class Program
                 Method Outage(int round)
                 {
                     BrainPut(w, a, room, round);
+                    a.HoldUntil = w.Tick + SimTime.Minutes(2); a.HoldWhy = "그 방에서 일하던 중"; // 통합8 놓자마자 다른 방 정비로 떠나 불이 나간 걸 못 봤다 — 불이 나갈 때 그 방에 있게
                     Run(w, 2);
                     room.LightsOut = true; room.LightsOutSince = w.Tick; // 조명 고장 (차단기가 아니다)
                     Method? pick = null;
@@ -132,6 +133,7 @@ public static partial class Program
                     {
                         Run(w, SimTime.Minutes(0.5f));
                         if (w.Brain2.Plans.Current(a) is CrewPlan p && p.Kind == PlanKind.Outage) pick = p.Method;
+                        if (debug && m % 4 == 0) Console.WriteLine($"    정전{round} {m * 0.5f}분 {a.Name} {a.Job?.Label} @{a.Room?.Name} 계획 {w.Brain2.Plans.Current(a)?.Kind} · {string.Join(", ", a.LastEvaluations.Take(4).Select(e => $"{e.Activity.Id}:{e.Score:0.00}({e.Reason})"))}");
                     }
                     // 통합7 배전반이 멀면 가는 사이(30분) 시험이 먼저 불을 켜 '벌써 누가 올렸다'가 됐다 — 고른 길이 끝날 때까지 캄캄하게 둔다
                     for (int m = 0; m < 180 && (m < 50 || w.Brain2.Plans.Current(a) is CrewPlan { Kind: PlanKind.Outage }); m++) Run(w, SimTime.Minutes(0.5f));
@@ -171,9 +173,12 @@ public static partial class Program
                 var friend = awake.Skip(1).First();
                 // 통합7 '경보가 안 닿는 방'은 친구가 있는 방이다 — 그 방 데이터선(경보 스피커 · 방송)도 끊어 둔다 (불이 통로로 번지면 통로 경보 · 컴퓨터 방송이 먼저 닿아 세 번 다 장면이 깨졌다)
                 foreach (var l in w.Net.Links.Where(l => l.Kind == NetKind.Data && (l.Room == far || l.Door?.RoomA == far || l.Door?.RoomB == far)).ToList()) w.Net.Hurt(l, 1f, "시험");
+                w.Automation.Speak.BreakSpeaker(far, "시험", 2f); // 통합8 무선 중계가 있으면 데이터선 없이도 방송이 닿는다 — 그 방 스피커도 고장 (본 사람이 알린 걸 컴퓨터가 1분 만에 방송해 장면이 깨졌다)
                 witness.Affinity[friend.Id] = 0.8f;
                 BrainPut(w, friend, far, 0);
                 friend.HoldUntil = w.Tick + SimTime.Hours(1); friend.HoldWhy = "시험 — 그 방에서 기다림";
+                // 통합8 '지휘' 방침 0은 사람 지휘다 (지휘가 없는 게 아니다) — 본 사람이 보고하면 조가 짜이고 조원은 무전으로 안다. 친구는 막 교대해 쉬는 사람으로 둔다 (조에 안 불린다)
+                ((Dictionary<int, long>)typeof(CommandSystem).GetField("_restUntil", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(w.Command)!)[friend.Id] = w.Tick + SimTime.Hours(2);
                 Run(w, 3);
                 w.Brain2.Beliefs.Learn(witness, Topic.Person, friend.Id, far.Id, BeliefSource.Seen, 1f, -1, 0);
                 BrainPut(w, witness, room, 0);
@@ -185,8 +190,10 @@ public static partial class Program
                 BigFire(w, room, 3);
                 bool told = false;
                 string fsrc = "";
+                var cutLinks = w.Net.Links.Where(l => l.Kind == NetKind.Data && (l.Door?.RoomA == room || l.Door?.RoomB == room || l.Room == far || l.Door?.RoomA == far || l.Door?.RoomB == far)).ToList();
                 for (int m = 0; m < 120 && !told && w.Brain2.Social.AlreadyKnew == 0; m++) // 통합7 불이 통로로 번지면 본 사람이 먼저 피했다가 알리러 간다 — 스무 분으론 모자랐다
                 {
+                    foreach (var l in cutLinks) if (!l.Cut) w.Net.Hurt(l, 1f, "시험"); // 통합8 장면 내내 그 방 데이터선은 끊겨 있다 (망 잇기가 몇 분 만에 이어 경보가 닿았다)
                     Run(w, SimTime.Minutes(0.5f));
                     var fb = w.Brain2.Beliefs.Get(friend, Topic.Fire, room.Id);
                     if (fb != null && fb.Src == BeliefSource.Told) { told = true; fsrc = $"{BeliefSystem.SourceName(fb.Src)} · {w.Brain2.Beliefs.CrewById(fb.From)?.Name}"; }
@@ -201,7 +208,7 @@ public static partial class Program
                 var wp = w.Brain2.Plans.Past.Concat(w.Brain2.Plans.Active).Where(p => p.Owner == witness.Id && p.Kind == PlanKind.Tell).ToList();
                 bool friendKnows = friend.Mind.Knows.ContainsKey($"fire:{room.Id}");
                 bool alarmFirst = !told && friend.Mind.Knows.TryGetValue($"fire:{room.Id}", out var fk0) && fk0.src is KnowSource.Alarm or KnowSource.Radio; // 통합7 방송(누가 본 걸 컴퓨터가 알렸다)이 먼저 닿아도 장면 전제가 깨진다
-                if (alarmFirst && att < 2) { Console.WriteLine($"    (경보 · 방송이 먼저 닿았다 — 다른 날에 다시 {att + 1})"); continue; }
+                if (alarmFirst && att < 2) { Console.WriteLine($"    (경보 · 방송이 먼저 닿았다 — 다른 날에 다시 {att + 1}) {friend.Mind.Knows[$"fire:{room.Id}"].Item3} {SimTime.Clock(friend.Mind.Knows[$"fire:{room.Id}"].Item2)} · {friend.Name} @{friend.Room?.Name}"); continue; }
                 Check("알리기 — 불을 본 사람이 모르는 사람에게 알리러 간다 (경보가 안 닿는 방)",
                     w.Brain2.Social.Tells + w.Brain2.Social.AlreadyKnew > 0 && wp.Count > 0 && (told || friendKnows),
                     $"{witness.Name} → 알림 {w.Brain2.Social.Tells} (이미 앎 {w.Brain2.Social.AlreadyKnew}) · {far.Name}까지 · 계획 {string.Join(" / ", wp.SelectMany(p => p.Trail).Take(4))} · {friend.Name}: 믿음 출처 {fsrc} · Mind 앎 {friendKnows} · 설득 {w.Brain2.Social.Persuasions}");
@@ -241,9 +248,13 @@ public static partial class Program
                 BrainPut(w, s2, far, 0);
                 Run(w, 2);
                 w.Brain2.Beliefs.Learn(s2, Topic.Fire, room.Id, 1, BeliefSource.Rumor, 0.85f, teller.Id);
+                s2.NextThinkTick = w.Tick + 1; // 통합8 소문을 들은 그 자리에서 다시 판단한다 (첫 사람처럼 — 들은 사람은 Mind.Hear 로 그렇게 된다) · 잡은 개조 일을 몇 시간 이어 가 장면이 안 됐다
                 int heeded0 = w.Brain2.Beliefs.NudgesHeeded;
                 bool s2reached = false;
-                for (int m = 0; m < 30; m++) { Run(w, SimTime.Minutes(0.5f)); if (s2.Room == room) s2reached = true; }
+                for (int m = 0; m < 30; m++)
+                {
+                    Run(w, SimTime.Minutes(0.5f)); if (s2.Room == room) s2reached = true;
+                }
                 var b2 = w.Brain2.Beliefs.Get(s2, Topic.Fire, room.Id);
                 Check("주 컴퓨터 — 승무원의 믿음을 짐작해 틀린 길을 손목 단말로 바로잡는다 (믿는 만큼 듣는다)",
                     w.Brain2.Beliefs.NudgesHeeded > heeded0 && b2 != null && b2.Value == 0 && !s2reached,

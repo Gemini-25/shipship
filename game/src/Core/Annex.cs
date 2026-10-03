@@ -736,6 +736,9 @@ public sealed partial class AnnexSystem
                     w.Automation.Speak.Announce(w.Automation.Voice.Style($"증축한 {Ko.EulReul(p.UseName)} 연다 — 손 비는 사람은 모이자"), RoomOf(p.RoomId), 1);
                 break;
             case AnnexStage.Opening when w.Tick >= p.OpenUntil:
+                // 통합8 둘만 와서 문을 열 수는 없다 — 셋(배에 그만큼 있으면)이 모일 때까지 몇 시간 더 기다린다 (자는 시간 · 일 사이에 겹치면 다음 교대가 들른다)
+                int able = w.Crew.Count(c => !c.Dead && c.CanAct && !c.Away);
+                if (p.Celebrated.Count < Math.Min(3, able) && w.Tick < p.OpenUntil + SimTime.Hours(6)) break;
                 Open(p);
                 break;
         }

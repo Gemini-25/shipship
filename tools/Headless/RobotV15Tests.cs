@@ -195,6 +195,7 @@ public static partial class Program
                 st.Fired = 0; st.LastKey = "fire";
                 var target = ws.Ship.LiveRooms.Where(r => r.Type == RoomType.Galley).OrderBy(r => r.Id).First();
                 ws.History.FiresByRoom[target.Id] = 2; // 불을 두 번 버텨 낸 주방
+                ws.History.Add(ws, HistoryKind.Upgrade, "불을 두 번 넘긴 주방을 고쳐 지었다", target); // 통합8 이레 사이 다른 방 개조가 끼면 앙갚음이 그 방(함교)을 노려 불 몫이 반에 걸쳤다 — 버텨 낸 주방이 가장 최근에 고친 방
                 var steady = Dist(StoryPersona.Steady);
                 var cold = Dist(StoryPersona.SlowBurn);
                 st.Fired = 8;

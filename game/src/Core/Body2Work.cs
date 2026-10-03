@@ -250,7 +250,7 @@ public sealed class JogActivity : Activity
         if (l == null || w.Tick - w.Body2.LastJog(c) < SimTime.Hours(9)) return (0f, "—");
         if (c.Needs.Rest < 0.35f || c.Needs.Food < 0.3f || c.Vitals.Health < 0.6f || Wounds.LegFactor(c.Vitals) < 0.8f || Crisis.Acting(w)) return (0f, "—");
         float gain = l.Kg - l.StartKg;
-        float want = w.Brain2.Goals.Has(c, "body:trim") ? 0.42f : Life.Has(c, Habit.GymRat) && gain > 2f ? 0.3f : 0f;
+        float want = w.Brain2.Goals.Has(c, "body:trim") ? 0.42f + (Life.Has(c, Habit.GymRat) ? 0.12f : 0f) : Life.Has(c, Habit.GymRat) && gain > 2f ? 0.3f : 0f; // 통합8 운동을 좋아하는 사람이 마음먹었으면 미루지 않는다 (0.42로는 영화 · 밤 모임에 밀려 이틀 동안 한 번도 안 뛰었다)
         if (want <= 0f) return (0f, "—");
         return (want + 0.03f * MathF.Max(0f, gain), gain > 0f ? $"몸이 {gain:0.0}kg 불었다" : "몸을 움직이기로 했다");
     }

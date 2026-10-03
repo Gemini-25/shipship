@@ -185,6 +185,12 @@ public static partial class Program
             long dbgAt = 0;
             CouncilUntil(w, () =>
             {
+                if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "1" && w.Tick >= dbgAt && trial == null)
+                {
+                    dbgAt = w.Tick + SimTime.Hours(1);
+                    var mv = w.Motions.Motive(accuser, true);
+                    Console.WriteLine($"     [{SimTime.Clock(w.Tick)}] {accuser.Name} 깨어 {accuser.IsAwake} 행동 {accuser.CanAct} {accuser.Job?.Label} · 위기 {Crisis.Acting(w)} · 열린 안건 {w.Motions.Open.Count()} (내 것 {w.Motions.Open.Count(m => m.Proposer == accuser.Id)}) · 표 금지 {w.Motions.NoVote(accuser)} · 동기 {mv?.s:0.00} · 고발됨 {th.Accused} · 사이 {accuser.AffinityTo(thief):0.00}/{w.Relations.Trust(accuser, thief):0.00} · 최근 안건 {string.Join(",", w.Motions.All.Where(m => m.Proposer == accuser.Id).Select(m => SimTime.Clock(m.Born) + m.Title))}");
+                }
                 if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "1" && w.Tick >= dbgAt && trial != null && w.Crew.FirstOrDefault(c => c.Id == trial.Proposer) is CrewMember pr)
                 {
                     dbgAt = w.Tick + SimTime.Hours(1);
@@ -238,7 +244,16 @@ public static partial class Program
             int r0 = w.Policies["risktaking"], a0 = w.Policies["autoscope"];
             var prop = adults.OrderBy(c => c.AffinityTo(cap)).ThenBy(c => c.Id).First();
             var m = w.Motions.Propose(prop, MotionKind.Confidence, SittingKind.Election, $"선장 {cap.Name} 불신임", "다들 선장을 못 믿는다", target: cap.Id);
-            CouncilUntil(w, () => m.Decided >= 0 && w.Motions.Now == null, SimTime.TicksPerDay * 2, 30);
+            long dbg4 = 0;
+            CouncilUntil(w, () =>
+            {
+                if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "1" && w.Tick >= dbg4)
+                {
+                    dbg4 = w.Tick + SimTime.Hours(2);
+                    Console.WriteLine($"     [{SimTime.Clock(w.Tick)}] {prop.Name} {prop.ActivityLabel} · {m.Stage} 서명 {m.Signers.Count}/{m.Need} 부탁 {m.Asked.Count} 거절 {m.Refused.Count} · " + string.Join(", ", prop.LastEvaluations.OrderByDescending(e => e.Score).Take(4).Select(e => $"{e.Activity.Id}:{e.Score:0.00}")));
+                }
+                return m.Decided >= 0 && w.Motions.Now == null;
+            }, SimTime.TicksPerDay * 2, 30);
             var past = w.Motions.Past.LastOrDefault(p => p.Motion == m);
             var win = w.Crew.FirstOrDefault(c => c.Id == m.Winner);
             int speeches = past?.Script.Count(l => l.Role == LineRole.Candidate) ?? 0;

@@ -24,7 +24,7 @@ public sealed class CoverActivity : Activity
             case CoverTaskKind.Tidy:
             {
                 if (room == null || room.Detached || w.Fire.CountIn(room) > 0 || room.Leaking) return (0f, "—");
-                float s = 0.6f - (OnShift(c, w) ? 0.15f : 0f);
+                float s = 0.6f - (OnShift(c, w) ? 0.15f : 0f) + 0.25f * MathF.Min(1f, (w.Tick - t.Since) / (float)SimTime.Hours(3)); // 통합8 누가 먼저 보기 전에 — 시간이 갈수록 마음이 급해진다 (반나절을 미루다 흔적을 남겼다)
                 return (s, "사고 자리를 한 번 더 둘러본다");
             }
             case CoverTaskKind.Wipe:
