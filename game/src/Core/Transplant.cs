@@ -271,7 +271,7 @@ public sealed class TransplantSystem
         w.Values.React(-1, -2, title, vec, 0.6f, voters: voters, extra: c => 0.5f * Stance(c, dead, d, waiting) * (d.Verdict > 0 ? 1f : -1f));
         foreach (var c in w.Crew)
             if (!c.Dead && dead.AffinityTo(c) + c.AffinityTo(dead) > 0.5f)
-                MarkLog.Add(c.Memory.Marks, w.Tick, d.Verdict > 0 ? $"{dead.Name}의 장기를 나누기로 했다" : $"{dead.Name}을(를) 온전히 보냈다");
+                MarkLog.Add(c.Memory.Marks, w.Tick, d.Verdict > 0 ? $"{dead.Name}의 장기를 나누기로 했다" : $"{Ko.EulReul(dead.Name)} 온전히 보냈다");
         // 주컴퓨터: 시간과 맞는 사람
         var a = w.Automation;
         if (d.Verdict > 0 && a.Present && a.MainOnline)
@@ -340,7 +340,7 @@ public sealed class TransplantSystem
             bool cold = box != null && OrganGear.Works(box);
             g.Age += h * (cold ? 1f : g.Ice ? 2f : g.Living ? 1f : 4f);
             if (box != null && !cold && g.Cooler >= 0 && w.Automation.Present && w.Automation.MainOnline && Tell(box.Id * 4 + 1, SimTime.Hours(1)))
-                w.Automation.Speak.Announce(w.Automation.Voice.Style($"{box.Room.Name} 장기 보관함이 멎었다 — {g.DonorName}의 {OrganSystem.Name(g.Organ)}이(가) 데워진다 · {Math.Max(0f, (1f - Quality(g)) < 1f ? (Limit(g.Organ) - g.Age) / 4f : 0f):0.#}시간"), box.Room, 3);
+                w.Automation.Speak.Announce(w.Automation.Voice.Style($"{box.Room.Name} 장기 보관함이 멎었다 — {g.DonorName}의 {Ko.IGa(OrganSystem.Name(g.Organ))} 데워진다 · {Math.Max(0f, (1f - Quality(g)) < 1f ? (Limit(g.Organ) - g.Age) / 4f : 0f):0.#}시간"), box.Room, 3);
             if (Quality(g) > 0f) continue;
             g.Spoiled = true;
             Stats.Spoiled++;
@@ -370,7 +370,7 @@ public sealed class TransplantSystem
             g.For = best.Id;
             Ops.Add(new OpCase { Id = ++_opIds, Kind = OpKind.Graft, Patient = best.Id, Graft = g.Id, Organ = g.Organ, Opened = w.Tick });
             var a = w.Automation;
-            string from = g.Printed ? "제 세포로 찍은" : g.Living ? $"{g.DonorName}이(가) 준" : $"{g.DonorName}의";
+            string from = g.Printed ? "제 세포로 찍은" : g.Living ? $"{Ko.IGa(g.DonorName)} 준" : $"{g.DonorName}의";
             w.Log.Add(w.Tick, LogKind.Warning, $"이식 — {best.Name} ← {from} {OrganSystem.Name(g.Organ)} (조직 {Match(g, best) * 6:0}/6)", best.Id);
             if (a.Present && a.MainOnline) a.Speak.Announce(a.Voice.Style($"이식 — {best.Name}에게 {from} {OrganSystem.Name(g.Organ)} · 조직 {Match(g, best) * 6:0}/6 · 의무실 치료 침대로"), best.Room, 2);
         }
@@ -459,7 +459,7 @@ public sealed class TransplantSystem
             Grafts.Add(g);
             Stats.Printed++;
             f.Machine.Active = false;
-            w.Log.Add(w.Tick, LogKind.Work, $"바이오 프린터 — {to?.Name ?? "누군가"}의 세포로 {OrganSystem.Name(j.Organ)}을(를) 다 찍었다");
+            w.Log.Add(w.Tick, LogKind.Work, $"바이오 프린터 — {to?.Name ?? "누군가"}의 세포로 {Ko.EulReul(OrganSystem.Name(j.Organ))} 다 찍었다");
             w.History.Add(w, HistoryKind.Upgrade, $"{f.Room.Name}에서 처음으로 장기를 찍어 냈다 — {to?.Name}의 {OrganSystem.Name(j.Organ)}", f.Room, to != null ? new[] { to } : null);
         }
         Prints.RemoveAll(j => j.Failed && w.Tick % SimTime.TicksPerDay < 20 || j.Progress >= 1f);
@@ -485,7 +485,7 @@ public sealed class TransplantSystem
         if (!ItemsV15.Use(w, ItemKind.BioInk) || !ItemsV15.Use(w, ItemKind.Nutrient)) return;
         Prints.Add(new PrintJob { Printer = f.Id, For = to.Id, Organ = o, Started = true });
         w.Log.Add(w.Tick, LogKind.Work, $"바이오 프린터에 {to.Name}의 세포를 걸었다 — {OrganSystem.Name(o)} (이틀 남짓)", by.Id);
-        MarkLog.Add(f.Machine!.Marks, w.Tick, $"{by.Name}: {to.Name}의 {OrganSystem.Name(o)}을(를) 걸었다");
+        MarkLog.Add(f.Machine!.Marks, w.Tick, $"{by.Name}: {to.Name}의 {Ko.EulReul(OrganSystem.Name(o))} 걸었다");
         by.Practice(Skill.Medicine, 0.03f);
     }
 
@@ -589,7 +589,7 @@ public sealed class TransplantSystem
         // 이식
         if (g == null) return;
         g.Used = true;
-        if (!ok) { Fail(surgeon, pt, $"{OrganSystem.Name(g.Organ)} 이식"); if (g.Living && P(g.Donor) is CrewMember ld) { ld.Needs.Stress = MathF.Min(1f, ld.Needs.Stress + 0.3f); Memory.Shake(w, ld, 0.1f, $"내 {OrganSystem.Name(g.Organ)}을(를) 받고도 {pt.Name}이(가) 버티지 못했다"); } return; }
+        if (!ok) { Fail(surgeon, pt, $"{OrganSystem.Name(g.Organ)} 이식"); if (g.Living && P(g.Donor) is CrewMember ld) { ld.Needs.Stress = MathF.Min(1f, ld.Needs.Stress + 0.3f); Memory.Shake(w, ld, 0.1f, $"내 {Ko.EulReul(OrganSystem.Name(g.Organ))} 받고도 {Ko.IGa(pt.Name)} 버티지 못했다"); } return; }
         Stats.Success++;
         int i = (int)g.Organ;
         float match = Match(g, pt);
@@ -606,7 +606,7 @@ public sealed class TransplantSystem
         }
         string organ = OrganSystem.Name(g.Organ);
         string whose = g.Printed ? $"제 세포로 찍은 {organ}" : $"{g.DonorName}의 {organ}";
-        w.Log.Add(w.Tick, LogKind.Work, $"{pt.Name} — {whose}을(를) 받았다 (조직 {match * 6:0}/6)", surgeon.Id);
+        w.Log.Add(w.Tick, LogKind.Work, $"{pt.Name} — {Ko.EulReul(whose)} 받았다 (조직 {match * 6:0}/6)", surgeon.Id);
         w.History.Add(w, HistoryKind.Bond, g.Printed ? $"{Ko.IGa(pt.Name)} 배에서 찍은 {Ko.EuRo(organ)} 다시 산다" : $"{Ko.IGa(pt.Name)} {Ko.EuRo(whose)} 산다", pt.Room, new[] { pt, surgeon });
         MarkLog.Add(pt.Memory.Marks, w.Tick, g.Printed ? $"내 세포로 찍은 {Ko.EuRo(organ)} 산다" : $"{Ko.EuRo(whose)} 산다");
         Life.Diary(w, pt, g.Printed ? $"새 {organ}. 내 것이라는데 아직 낯설다." : $"{whose}. 가끔 그 사람 생각이 난다.");
@@ -616,11 +616,11 @@ public sealed class TransplantSystem
         {
             if (g.Living)
             {
-                w.Relations.Remember(pt, donor, RelationReason.SavedMe, $"{organ}을(를) 나눠 줬다");
+                w.Relations.Remember(pt, donor, RelationReason.SavedMe, $"{Ko.EulReul(organ)} 나눠 줬다");
                 pt.ChangeAffinity(donor, 0.3f); donor.ChangeAffinity(pt, 0.2f);
                 if (!pt.Memory.Comrades.Contains(donor.Id)) pt.Memory.Comrades.Add(donor.Id);
                 if (!donor.Memory.Comrades.Contains(pt.Id)) donor.Memory.Comrades.Add(pt.Id);
-                MarkLog.Add(donor.Memory.Marks, w.Tick, $"내 {organ}이(가) {pt.Name} 안에서 일한다");
+                MarkLog.Add(donor.Memory.Marks, w.Tick, $"내 {Ko.IGa(organ)} {pt.Name} 안에서 일한다");
             }
             else
                 // 숨진 사람과 가까웠던 사람: 그 사람의 장기가 저 사람 안에 있다
@@ -630,7 +630,7 @@ public sealed class TransplantSystem
                     float close = MathF.Max(0f, c.AffinityTo(donor));
                     if (close < 0.3f) continue;
                     c.ChangeAffinity(pt, 0.2f * close);
-                    MarkLog.Add(c.Memory.Marks, w.Tick, $"{donor.Name}의 {organ}이(가) {pt.Name} 안에서 뛴다");
+                    MarkLog.Add(c.Memory.Marks, w.Tick, $"{donor.Name}의 {Ko.IGa(organ)} {pt.Name} 안에서 뛴다");
                     if (c.GriefUntil > w.Tick) c.GriefUntil = Math.Max(w.Tick, c.GriefUntil - SimTime.Hours(12));
                 }
         }

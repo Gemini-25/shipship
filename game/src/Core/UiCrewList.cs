@@ -24,12 +24,17 @@ public static class UiCrewList
         if (c.Down || c.CarriedBy != null) return new CrewTrouble(10f, "down", c.CarriedBy != null ? "업혀 간다" : "쓰러졌다");
         if (c.Vitals.Oxygen < 0.6f) return new CrewTrouble(9f + (0.6f - c.Vitals.Oxygen), "danger", $"숨이 가쁘다 (산소 {c.Vitals.Oxygen * 100:0}%)");
         if (c.Mind.Panicking(w.Tick)) return new CrewTrouble(8f, "panic", "겁에 질려 어쩔 줄 모른다");
+        // 부상 등급으로 (위중 · 중상 — 어디를 어떻게)
+        var grade = w.Grades.Now(c);
+        string what = w.Grades.Detail(c);
+        if (grade == InjuryGrade.Critical) return new CrewTrouble(9.5f, "injury", what != "" ? $"위중 · {what}" : "위중");
         float hurt = MathF.Max(c.Vitals.Injury, 1f - c.Vitals.Health);
-        if (hurt > 0.3f) return new CrewTrouble(5f + hurt * 2f, "injury", $"다쳤다 ({hurt * 100:0}%)");
+        if (grade == InjuryGrade.Serious) return new CrewTrouble(5f + hurt * 2f, "injury", what != "" ? $"중상 · {what}" : "중상");
+        if (hurt > 0.3f) return new CrewTrouble(5f + hurt * 2f, "injury", c.Vitals.Injury > 0.3f ? $"다쳤다 ({hurt * 100:0}%)" : $"기운이 없다 (체력 {c.Vitals.Health * 100:0}%)");
         if (c.Needs.Food < 0.15f) return new CrewTrouble(3f + (0.15f - c.Needs.Food) * 4f, "eat", $"몹시 배고프다 ({c.Needs.Hunger * 100:0}%)");
         if (c.Needs.Stress > 0.75f) return new CrewTrouble(2.5f + c.Needs.Stress, "stress", $"마음이 버겁다 ({c.Needs.Stress * 100:0}%)");
         if (c.Needs.Rest < 0.12f && c.Pose != Pose.Sleeping) return new CrewTrouble(2.2f + (0.12f - c.Needs.Rest) * 4f, "sleep", "몹시 지쳤다");
-        if (c.Vitals.Injury > 0.1f) return new CrewTrouble(1f, "injury", "가볍게 다쳤다");
+        if (c.Vitals.Injury > 0.1f || grade == InjuryGrade.Minor) return new CrewTrouble(1f, "injury", what != "" ? $"경상 · {what}" : "경상");
         if (c.Needs.Stress > 0.5f) return new CrewTrouble(0.8f, "stress", "조금 지쳤다");
         return new CrewTrouble(0f, "", "");
     }

@@ -577,7 +577,7 @@ public sealed partial class TechWebSystem
     private string? ContactWhy()
     {
         foreach (var s in OutsideSystem.Catalog)
-            if ((s.Group == "배" || s.Group == "만남") && s.Comms && _w.Outside.Seen.Contains(s.Id)) return $"{s.Name}과(와) 교신했다";
+            if ((s.Group == "배" || s.Group == "만남") && s.Comms && _w.Outside.Seen.Contains(s.Id)) return $"{Ko.WaGwa(s.Name)} 교신했다";
         return null;
     }
 

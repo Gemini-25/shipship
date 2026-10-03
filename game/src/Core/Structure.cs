@@ -395,7 +395,7 @@ public sealed class StructureSystem
                     foreach (var c in w.Crew.Where(c => c.Aboard == f))
                     {
                         c.Aboard = null;
-                        if (w.CrewCanDie && !c.Dead) { c.Vitals.Health = 0f; c.Vitals.InjuryCause = $"{f.Room.Name}과(와) 함께 표류"; }
+                        if (w.CrewCanDie && !c.Dead) { c.Vitals.Health = 0f; c.Vitals.InjuryCause = $"{Ko.WaGwa(f.Room.Name)} 함께 표류"; }
                         else
                         {
                             c.Position = NearestEdge(w.Ship.Rooms.Where(r => !r.Detached).Select(r => r.Center).OrderBy(p2 => (p2 - c.Position).LengthSquared()).First()).Center;

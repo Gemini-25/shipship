@@ -246,8 +246,8 @@ public sealed class InfectionSystem
         if (w.Organs.Suppressed(patient)) { p *= 1.8f; why ??= "면역억제제로 몸이 약하다"; }
         if (!R.Chance(MathF.Min(0.8f, p))) { Stats.SterileOk++; return true; }
         Stats.SterileFail++;
-        w.Ailments.Catch(patient, "woundinf", null, $"{what}이(가) 곪았다 — {why ?? "균이 들었다"}");
-        MarkLog.Add(by.Memory.Marks, w.Tick, $"{patient.Name} {what}이(가) 곪았다 ({why ?? "균"})");
+        w.Ailments.Catch(patient, "woundinf", null, $"{Ko.IGa(what)} 곪았다 — {why ?? "균이 들었다"}");
+        MarkLog.Add(by.Memory.Marks, w.Tick, $"{patient.Name} {Ko.IGa(what)} 곪았다 ({why ?? "균"})");
         if (room != null) MarkLog.Add(room.Marks, w.Tick, $"소독이 덜 됐다 — {why ?? "균"}");
         return false;
     }

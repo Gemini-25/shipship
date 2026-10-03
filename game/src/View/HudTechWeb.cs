@@ -276,7 +276,7 @@ public partial class Hud
         {
             var st = tw.ForkStates[f.Id];
             var rival = TechWeb.Find(side == 0 ? f.B : f.A)!;
-            Add(st.Side < 0 ? $"갈림길 — {f.Problem}: {rival.Name}과(와) 둘 중 하나 ({(st.PendingSince >= 0 ? "회의 안건" : "아직")})"
+            Add(st.Side < 0 ? $"갈림길 — {f.Problem}: {Ko.WaGwa(rival.Name)} 둘 중 하나 ({(st.PendingSince >= 0 ? "회의 안건" : "아직")})"
                 : st.Side == side ? $"갈림길에서 골랐다 — '{(side == 0 ? f.TitleA : f.TitleB)}' ({st.Why})" : $"갈림길에서 버렸다 — {(st.Reopened ? "다시 꺼냄 · 값 두 배" : "잠김")}", WebFork);
             if (st.Advice != "" && st.Side < 0) Add("주 컴퓨터: " + st.Advice, WebRec);
         }

@@ -103,6 +103,7 @@ public sealed class InjuryGradeSystem
         string line = $"{c.Name} — {Name(g)}" + (what != "" ? $" ({what})" : "");
         w.Log.Add(w.Tick, g >= InjuryGrade.Serious ? LogKind.Warning : LogKind.Work, line, c.Id);
         if (g < InjuryGrade.Serious) return;
+        if (c.Job?.Activity is MeetingActivity) c.Interrupt(w); // 회의 자리에서 일어나 눕는다 (치료를 기다린다)
         w.History.Add(w, HistoryKind.Casualty, $"{Ko.IGa(c.Name)} {(g == InjuryGrade.Critical ? "위중하다" : "크게 다쳤다")}" + (what != "" ? $" — {what}" : ""), c.Room, new[] { c });
         MarkLog.Add(c.Memory.Marks, w.Tick, $"{Name(g)} — {what}");
         // 곁에서 본 사람: 무섭다 (위중이면 더) — 그 방이 그 사람의 기억에 남는다

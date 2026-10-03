@@ -249,7 +249,7 @@ public sealed class MeetingSystem
     // ───────────────────────────── 정기 회의 ─────────────────────────────
 
     private List<CrewMember> Eligible() =>
-        _w.Crew.Where(c => !c.Dead && !c.IsChild && c.CanAct && c.IsAwake && !c.Outside && c.Room != null && c.Vitals.Health > 0.35f).ToList();
+        _w.Crew.Where(c => !c.Dead && !c.IsChild && c.CanAct && c.IsAwake && !c.Outside && c.Room != null && c.Vitals.Health > 0.35f && _w.Grades.Now(c) < InjuryGrade.Serious).ToList(); // 중상 · 위중은 회의에 오지 않고 누워 있는다
 
     /// <summary>v13.4 표를 던지는 사람 (수습 중인 새 승무원은 듣기만 한다).</summary>
     private List<CrewMember> Voters(List<CrewMember> attendees)
@@ -764,6 +764,7 @@ public sealed class MeetingActivity : Activity
     {
         var m = w.Meetings;
         if (!m.Summoned(c) || m.Venue is not Room v || c.Down || c.Outside) return (0f, "—");
+        if (w.Grades.Now(c) >= InjuryGrade.Serious) return (0f, "크게 다쳐 회의에 못 간다");
         if (w.Info.Chat.NotYet(c)) return (0f, "회의는 아직이라고 안다"); // v17.3 메신저를 못 봤다
         if (!v.Cells.Any(dist.Reachable)) return (0f, "회의실에 갈 수 없다");
         if (c.Job?.Activity is MeetingActivity) return (0.95f, "회의 중");
