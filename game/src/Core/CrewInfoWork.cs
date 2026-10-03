@@ -113,8 +113,9 @@ public sealed class InfoActivity : Activity
             }
             var (ds, dw) = info.DishWant(c);
             if (ds > 0f && Sink(w, dist) is not null) Consider(InfoDo.Dishes, ds, dw);
-            if (info.PhotoToLook(c) is { } lp && dist.Reachable(Near(w, lp.p.Wall, dist) ?? lp.p.Wall)) Consider(InfoDo.LookPhoto, lp.s, lp.why, p: lp.p);
         }
+        // 통합8 벽 사진은 속이 상해 있어도 눈에 걸린다 (다툰 뒤가 바로 그때다) — 근무 · 잘 때만 아니면
+        if (!shift && !bed && info.PhotoToLook(c) is { } lp && dist.Reachable(Near(w, lp.p.Wall, dist) ?? lp.p.Wall)) Consider(InfoDo.LookPhoto, lp.s, lp.why, p: lp.p);
         return best;
     }
 

@@ -137,6 +137,7 @@ public static partial class Program
             E.Vitals.Injury = 0.4f;
             D.Affinity[E.Id] = 0.5f; E.Affinity[D.Id] = 0.6f;
             BrainPut(w, D, room, 0); BrainPut(w, E, room, 1);
+            D.HoldUntil = w.Tick + SimTime.Hours(1); D.HoldWhy = "머리를 깎아 준다길래 기다린다"; // 통합8 손님이 몰래 하는 준비로 자리를 떠 가위를 든 사람이 헛걸음했다 — 그 자리에서 기다리게
             w.Body2.Notice(E, D);
             var spec = Puppet.Of(w, E);
             Check("다친 팔은 늘어뜨린다 (인형 사양)", spec.Right == ArmState.Hurt && spec.Left == ArmState.Ok, $"왼팔 {spec.Left} · 오른팔 {spec.Right}");

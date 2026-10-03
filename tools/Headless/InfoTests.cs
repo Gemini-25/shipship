@@ -337,8 +337,10 @@ public static partial class Program
             info.OnQuarrel(v, foe, "시험 말다툼");
             float aff0 = v.AffinityTo(foe);
             SpQuiet(w, new[] { v }, SimTime.Hours(4));
-            v.Needs.Food = MathF.Max(v.Needs.Food, 0.9f); // 통합8 밥때에 걸리면 사진 앞에서 바로 식당으로 갔다 — 밥을 먹고 들른 사람으로
+            v.Needs.Food = MathF.Max(v.Needs.Food, 0.9f); v.ExcusedUntil = w.Tick + SimTime.Hours(4); // 통합8 밥때 · 근무에 걸리면 사진 앞에서 바로 떠났다 — 밥을 먹고 쉬는 날 들른 사람으로
             Teleport(w, v, IfFloor(w, w.Ship.RoomAt(ph.Wall)!));
+            Run(w, 1); // 옮겨 놓은 방이 잡힌 뒤에 생각한다
+            v.EndJob(w, ToilStatus.Interrupted); v.NextThinkTick = w.Tick + 1; // 하던 일(압축기 돌리러 가던 길)을 이어 가 사진 앞을 그냥 지나쳤다
             for (int i = 0; i < 240 && !ph.SeenBy.Contains(v.Id); i++)
             {
                 v.NextThinkTick = Math.Min(v.NextThinkTick, w.Tick + SimTime.Minutes(3)); Run(w, SimTime.Minutes(1));
