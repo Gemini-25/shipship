@@ -725,6 +725,7 @@ public partial class ShipView : Node2D
         PaintBelongings(ci); // v14.3 놓인 물건 · 손에 든 취미 물건 · 음표 · 판
         PaintInfo(ci); // v17.3 컵 · 깨진 조각 · 벽 사진 · 만든 것 · 독서등 · 그릇 더미 · 당번표 · 손목 단말
         PaintManeuver(ci); // v17.0 걸쇠 · 끈 · 냄비 집게 · 떨어진 물건 · 쏟은 자국 · 빗자루
+        PaintEco(ci); // v18.2 · v18.3 · v18.4 화분 · 고양이 방석 · 밥그릇 · 바구미 포대 · 배수구 · 쓰레기통 · 합선 그을음
         PaintScenes(ci); // v16.1 진행 중 장면 (판 · 커피 · 국 자국 · 쪽지 · 스크린 · 만들다 만 소품)
         PaintSchemesFloor(ci); // v18.14 꾸미는 일 (밀주 통 · 비밀 정원 · 방송 장비 · 덮개 · 압수 상자 · 팻말 · 깃발 줄)
         PaintHairClips(ci); // v17.1 바닥에 떨어진 머리카락
@@ -736,6 +737,7 @@ public partial class ShipView : Node2D
         // 쓰러진 사람은 밑에, 업힌 사람은 업은 사람 위에
         foreach (var c in _world.Crew.OrderBy(c => c.CarriedBy != null ? 2 : c.Down ? 0 : 1)) PaintCrew(ci, c);
         PaintManeuverOver(ci); // v17.0 침대 끈 · 손잡이 쥔 손 · 컵 쥔 손 · 넘어진 사람 · 빗자루질
+        PaintZeroGOver(ci); // v18.4 떠다니는 것 · 벽 손잡이 · 멀미 · v18.2 고양이
         PaintCommandBadges(ci); // v13.1 선장 별 · 지휘자 테 · 조 배지
         PaintStations(ci); // v16.21 비상 배치 완장 · 거드는 손 · 정신 차리게 한 손
         PaintMeeting(ci); // v13.2 회의 장면 · 발언 말풍선

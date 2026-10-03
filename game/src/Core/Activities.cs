@@ -109,7 +109,7 @@ public sealed class EatActivity : Activity
             .OrderBy(f => (f.Center - box.Center).LengthSquared() + w.Coop.Queues.SeatBias(c, f) + w.After.SeatBias(c, f)) // v17.4 줄에서 다툰 사람 곁은 피하고 양보해 준 사람 곁으로 · v17.5 떠난 사람의 의자 · 구석
             .OrderBy(f => (f.Center - box.Center).LengthSquared() + w.Coop.Queues.SeatBias(c, f) + w.Info.SeatBias(c, f)) // v17.3 늘 앉던 자리 · 친한 사람 · 소음 · 조명 · 다툰 사람 · v17.4 줄에서 다툰 사람 곁은 피하고 양보해 준 사람 곁으로
             .FirstOrDefault();
-        var away = w.After.EatAway(c, seat, dist); // v17.5 묵은 그을음 냄새 · 혼자 먹기 → 다른 방 · 선실
+        var away = w.After.EatAway(c, seat, dist) ?? w.Drains.EatAway(c, seat, dist); // v17.5 묵은 그을음 냄새 · 혼자 먹기 → 다른 방 · 선실 · v18.3 하수 냄새
         if (away != null) seat = null;
 
         var toils = Plans.DropOff(c, w, dist);

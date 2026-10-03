@@ -509,12 +509,12 @@ public sealed partial class AftermathSystem
         return AltDining(c, mess, dist);
     }
 
-    private AwayPlan? AltDining(CrewMember c, Room mess, DistanceField dist)
+    internal AwayPlan? AltDining(CrewMember c, Room mess, DistanceField dist, string why = "그을음 냄새로", Func<Room, bool>? ok = null) // v18.3 하수 냄새도
     {
         var w = _w;
         int Pref(Room r) => Setups.Any(s => s.Kind == 0 && s.Room == r.Id && s.Plan != -2 && w.Tick - s.Last < SimTime.TicksPerDay) ? 0
             : r.Kind switch { RoomType.Lounge => 1, RoomType.Observatory => 2, RoomType.Chapel => 3, RoomType.Hydroponics => 4, _ => 9 };
-        foreach (var r in w.Ship.Rooms.Where(r => r != mess && !r.Detached && !r.Abandoned && !r.OffLimits && !r.Unbreathable && Pref(r) < 9 && SootFor(c, r) < SootAvoid * 0.6f)
+        foreach (var r in w.Ship.Rooms.Where(r => r != mess && !r.Detached && !r.Abandoned && !r.OffLimits && !r.Unbreathable && Pref(r) < 9 && SootFor(c, r) < SootAvoid * 0.6f && (ok == null || ok(r)))
                      .OrderBy(Pref).ThenBy(r => r.Id))
         {
             var face = r.Furniture.Where(f => f.Type is FurnitureType.Table or FurnitureType.GameTable).OrderBy(f => f.Id).Select(f => (Vector2?)f.Center).FirstOrDefault()
@@ -522,7 +522,7 @@ public sealed partial class AftermathSystem
             foreach (var f in r.Furniture.Where(f => f.Type is FurnitureType.Seat or FurnitureType.GameTable or FurnitureType.Table && f.UseSpots.Count > 0).OrderBy(f => f.Type == FurnitureType.Seat ? 0 : 1).ThenBy(f => f.Id))
                 foreach (var s in f.UseSpots)
                     if (dist.Reachable(s) && !w.IsSpotTaken(s, c) && (f.ReservedBy == null || f.ReservedBy == c))
-                        return new AwayPlan { Room = r, From = mess, Spot = s, Face = face, Why = "그을음 냄새로", Kind = 0 };
+                        return new AwayPlan { Room = r, From = mess, Spot = s, Face = face, Why = why, Kind = 0 };
             Cell? best = null;
             float bd = float.MaxValue;
             foreach (var cell in r.Cells)
@@ -531,10 +531,10 @@ public sealed partial class AftermathSystem
                 float d = (cell.Center - face).LengthSquared();
                 if (d < bd) { bd = d; best = cell; }
             }
-            if (best is Cell b) return new AwayPlan { Room = r, From = mess, Spot = b, Face = face, Why = "그을음 냄새로", Kind = 0 };
+            if (best is Cell b) return new AwayPlan { Room = r, From = mess, Spot = b, Face = face, Why = why, Kind = 0 };
         }
         if (c.Bed is Furniture bed && !bed.Room.Detached && bed.Room != mess && bed.UseSpots.Count > 0 && dist.Reachable(bed.UseSpots[0]))
-            return new AwayPlan { Room = bed.Room, From = mess, Spot = bed.UseSpots[0], Face = bed.Center, Why = "그을음 냄새로", Kind = 0 };
+            return new AwayPlan { Room = bed.Room, From = mess, Spot = bed.UseSpots[0], Face = bed.Center, Why = why, Kind = 0 };
         return null;
     }
 
@@ -568,8 +568,8 @@ public sealed partial class AftermathSystem
         {
             Stats.AwayEaters++;
             m.AwayFirst = w.Tick;
-            w.Log.Add(w.Tick, LogKind.Life, $"{p.From?.Name ?? "식당"}에 그을음 냄새가 남아 {Ko.IGa(c.Name)} 접시를 들고 {Ko.EuRo(p.Room.Name)} 갔다", c.Id);
-            Life.Diary(w, c, Persona.Say(c, $"{Ko.EunNeun(p.From?.Name ?? "식당")} 아직 탄내가 난다. {p.Room.Name}에서 먹었다"));
+            w.Log.Add(w.Tick, LogKind.Life, $"{p.From?.Name ?? "식당"}에 {(p.Why == "하수 냄새로" ? "하수 냄새가 퍼져" : "그을음 냄새가 남아")} {Ko.IGa(c.Name)} 접시를 들고 {Ko.EuRo(p.Room.Name)} 갔다", c.Id);
+            Life.Diary(w, c, Persona.Say(c, $"{Ko.EunNeun(p.From?.Name ?? "식당")} {(p.Why == "하수 냄새로" ? "하수 냄새가 진동한다" : "아직 탄내가 난다")}. {p.Room.Name}에서 먹었다"));
         }
         m.AwayWhy = "soot";
         m.AwayRoom = p.Room.Id;
