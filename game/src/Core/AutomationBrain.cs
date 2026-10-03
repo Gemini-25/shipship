@@ -168,8 +168,7 @@ public sealed partial class WorkBoard
         if (!a.Present || !a.MainOnline || a.Level < 2) return;
         if (w.Policies["controlseat"] == 1 && a.Level >= 4) return; // v13.2 방침(관제석: 컴퓨터에 맡긴다) — 컴퓨터가 III 아래로 떨어지면 누구든 앉는다
         var level = Crisis.Level(w);
-        bool trouble = level >= CrisisLevel.Alert || w.Ship.Rooms.Any(r => !r.Detached && (MoistureSystem.Depth(r) > 0.08f || r.BreakerOff || r.LockPendingUntil >= 0));
-        if (!trouble) return;
+        if (!WorkPlanners.Trouble(w)) return;
         var seat = w.Ship.FurnitureOf(FurnitureType.Console).Where(f => f.Room.Type == RoomType.Bridge && !f.Room.Detached && f.Machine is { Stopped: false }).OrderBy(f => f.Id).FirstOrDefault()
                    ?? a.ComputerBody;
         if (seat == null || seat.Room.Detached) return;
@@ -185,6 +184,9 @@ public sealed partial class WorkBoard
 public static partial class WorkPlanners
 {
     /// <summary>관제석에 앉아 30분씩 (위기가 끝날 때까지 이어서).</summary>
+    internal static bool Trouble(World w) =>
+        Crisis.Level(w) >= CrisisLevel.Alert || w.Ship.Rooms.Any(r => !r.Detached && (MoistureSystem.Depth(r) > 0.08f || r.BreakerOff || r.LockPendingUntil >= 0));
+
     private static Job? ManualControl(Activity a, WorkOrder o, CrewMember c, World w, DistanceField dist, Cell at, out string? blocked)
     {
         blocked = null;
@@ -193,7 +195,9 @@ public static partial class WorkPlanners
         toils.Add(new WorkToil(0.5f, o.Skill, at.Center) { Resume = o });
         toils.Add(new DoToil((cm, world) =>
         {
-            world.Board.Close(o); // 다음 스캔에서 아직 위기면 다시 올라온다
+            // 통합8 아직 일이 남았으면 자리를 지킨다 (닫고 다음 스캔을 기다리는 사이 물 퍼내러 갔다가 원격으로 못 올렸다)
+            if (Trouble(world)) o.Progress = 0f;
+            else world.Board.Close(o); // 다음 스캔에서 아직 위기면 다시 올라온다
             return true;
         }));
         return Wrap(a, o, c, w, "수동 조종", toils, $"관제석 수동 조종 ({AutomationSystem.LevelName(w.Automation.Level)})");
