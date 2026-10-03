@@ -369,6 +369,10 @@ public enum FurnitureType
     ReactorSimulator, NavComputer, DishWasher, AirPurifier, Autoclave, DeconShower, WashingMachine, BlackoutCurtain, NoiseDamper, WhiteNoise,
     CoffeeMachine, Projector, GameTable, Bookshelf, Aquarium, Treadmill, PlantWall, EmergencyLight, SurgeProtector, FireBlanket,
     Dehumidifier, AirlockPump, SuitDryer, SignalBooster,
+    // 압축-마 설비 30 (ModulesV18.cs)
+    Fermenter, BreadOven, SpiceRack, IceMaker, PlantRack, CatTower, PestTrap, InsectFarm, GreaseTrap, Compactor,
+    Composter, GreywaterFilter, GrabRail, CargoNet, CrashSeat, MagBootRack, ServerRack, RecorderVault, ListeningPost, MeetingBoard,
+    MemorialWall, MusicCorner, LabStill, ClothesRack, SewingMachine, EyeWash, OxygenMaskBox, HeatSuitRack, DockClampPanel, Telescope,
 }
 
 public static class FurnitureTypes
@@ -443,7 +447,7 @@ public static class FurnitureTypes
         FurnitureType.MaintCart => "정비 카트",
         FurnitureType.RobotDock => "로봇 충전대",
         FurnitureType.SupplyCache => "비상 물자함",
-        _ => ModulesV15.Name(t) ?? t.ToString(), // v15
+        _ => ModulesV15.Name(t) ?? ModulesV18.Name(t) ?? t.ToString(), // v15 · 압축-마
     };
 
     /// <summary>올라서거나 누울 수 있는 가구.</summary>

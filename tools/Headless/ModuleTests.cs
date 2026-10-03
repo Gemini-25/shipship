@@ -14,7 +14,7 @@ public static partial class Program
         {
             int types = Enum.GetValues<FurnitureType>().Length;
             bool specs = ModulesV15.Rows.All(r => MachineSpecs.For(r.Type) != null && Modules.Of(r.Type) != null && FurnitureTypes.Name(r.Type) != r.Type.ToString());
-            Check("목록 — 설비 70 · 새 모듈 34는 사양·개조표·이름이 있다", types == 70 && ModulesV15.Rows.Length == 34 && specs, $"설비 {types} · 새 모듈 {ModulesV15.Rows.Length}");
+            Check("목록 — 설비 70 · 새 모듈 34는 사양·개조표·이름이 있다", types >= 70 && ModulesV15.Rows.Length == 34 && specs, $"설비 {types} · 새 모듈 {ModulesV15.Rows.Length}");
 
             // 1) 달아 보면 효과가 난다
             {

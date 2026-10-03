@@ -37,6 +37,12 @@ public enum HazardKind
     GreaseFire, DryerFire, CableTrayFire, Smolder,
     MoldOutbreak, SeedRot, NutrientCrash, SkinFungus,
     PanicAttack, MedError,
+    // 압축-마 사고 100 (HazardsV18.cs): 새 시스템을 쓰는 사고 30 — ① 개인 ② 방 ③ 계통 ④ 배 전체 ⑤ 우주급
+    CatScratch, StaticZap, HeatExhaustion, SpaceSick, HatchFall, ScaldSpill,
+    PotFire, FermentBurst, HeaterOverload, PumpShock, DrainBackflow, WeevilSwarm, PlantTopple, MoonshineFire, PartitionFall, LockedIn, BearingWhine, MeetingBrawl,
+    GravityHiccup, ManeuverJolt, RebootGlitch, BlackboxGap, GreywaterJam, CatLost,
+    GravityFailure, DockSealFail, WreckDrift,
+    GammaFlash, TidalPull, MagnetarPulse,
 }
 
 /// <summary>사고를 어디에 거는지.</summary>
@@ -46,7 +52,7 @@ public sealed record HazardSpec(HazardKind Kind, string Name, HazardTarget Targe
 
 public static class Hazards
 {
-    public static readonly HazardSpec[] All = Base().Concat(HazardsV15.Specs).ToArray(); // v15 26 → 70
+    public static readonly HazardSpec[] All = Base().Concat(HazardsV15.Specs).Concat(HazardsV18.Specs).ToArray(); // v15 26 → 70 · 압축-마 → 100
 
     private static HazardSpec[] Base() => new HazardSpec[]
     {
@@ -189,7 +195,7 @@ public static class Hazards
             HazardKind.MicroShower => sys.MicroShower(),
             HazardKind.GasTankRupture => sys.GasTankRupture(),
             HazardKind.FreezerFailure => sys.FreezerFailure(MachineAt(w, k, at)),
-            _ => sys.V15(k, at, id), // v15 새 사고 44
+            _ => HazardsV18.Is(k) ? sys.V18(k, at, id) : sys.V15(k, at, id), // v15 새 사고 44 · 압축-마 30
         };
         if (what == null) return null;
         sys.Count[(int)k]++;

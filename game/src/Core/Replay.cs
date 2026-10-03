@@ -451,6 +451,7 @@ public static class SaveGame
         w.Hearing.Hash(I, F); w.Gestures.Hash(I, F); // v17.2 소리 · 몸짓 · 버릇
         w.Tales.Hash(I, F); // v18.16 · v18.17 개인 이야기 · 대화 카드 · 로맨스
         w.ZeroG.Hash(I, F); w.Eco.Hash(I, F); w.Drains.Hash(I, F); // v18.4 · v18.2 · v18.3
+        w.Signs.Hash(I, F); w.Fittings.Hash(I, F); // 압축-마
         return h;
     }
 }

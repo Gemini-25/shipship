@@ -107,7 +107,7 @@ public static class ShipClasses
         RoomType.FuelCell => new[] { FurnitureType.VibrationMonitor },
         RoomType.Observatory => new[] { FurnitureType.Projector },
         RoomType.WaterWallCabin => new[] { FurnitureType.BlackoutCurtain },
-        _ => Array.Empty<FurnitureType>(),
+        _ => ModulesV18.Signature(k), // 압축-마 특수 방의 새 설비
     };
 
     /// <summary>대형 · 초대형은 본래 방에도 좋은 설비를 단다 (오븐 · 커피 머신 · 게임 탁자 · 생장등).</summary>

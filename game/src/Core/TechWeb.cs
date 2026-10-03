@@ -59,7 +59,7 @@ public static class TechWeb
         => new(new EraTech(id, era, field, name, cost, fx.Length > 0 ? $"{what} ({Describe(fx)})" : what, risk, key, mul), fx);
 
     // ─────────────────────────────── 새 기술 41 ───────────────────────────────
-    public static readonly Row[] Rows =
+    private static readonly Row[] RowsBase =
     {
         // ① 핵융합로로 가는 세 분야
         T("scmagnet", 2, TechField.Power, "초전도 자석", 46f, "코일을 극저온으로 감는다", X((H(HazardKind.TrunkSag), 0.85f)), "냉매가 샌다 — 냉각 상실", H(HazardKind.CoolantLoss), 1.1f),
@@ -118,6 +118,7 @@ public static class TechWeb
         T("quickcouple", 3, TechField.Fabrication, "빠른 이음 배관", 62f, "배관을 돌려 끼워 잇는다", X(("room.risk", 0.7f))),
     };
 
+    public static readonly Row[] Rows = RowsBase.Concat(TechWebV18.Rows).ToArray(); // 압축-마 기술 30 (TechWebV18.cs)
     public static readonly EraTech[] Extra = Rows.Select(r => r.Tech).ToArray();
     /// <summary>시대 기술 70 + 새 기술 41 (회의 · 연구 흐름 · 화면이 본다).</summary>
     public static readonly EraTech[] Every = EraSystem.All.Concat(Extra).ToArray();
@@ -254,13 +255,13 @@ public static class TechWeb
         N("quickcouple", "additive", "pipe+check", "pipe.couplers"),
     };
 
-    public static readonly Dictionary<string, WebNode> Nodes = NodeList.ToDictionary(n => n.Id);
+    public static readonly Dictionary<string, WebNode> Nodes = NodeList.Concat(TechWebV18.Nodes).ToDictionary(n => n.Id); // 압축-마
     private static readonly WebNode Plain = new("", Array.Empty<string>(), "dot", "");
     public static WebNode Node(string id) => Nodes.TryGetValue(id, out var n) ? n : Plain;
     public static string Visual(EraTech t) => Node(t.Id).Visual is { Length: > 0 } v ? v : $"{t.Field.ToString().ToLowerInvariant()}.{t.Id}";
 
     // ─────────────────────────────── ② 갈림길 ───────────────────────────────
-    public static readonly TechFork[] Forks =
+    private static readonly TechFork[] ForkBase =
     {
         new("oxygen", "산소를 무엇으로 만들까", "chemox", "algaeox", "약품 산소의 배", "초록 숨의 배",
             new[] { "fire", H(HazardKind.OxygenLeak) }, new[] { H(HazardKind.WaterContamination), H(HazardKind.MoldOutbreak), H(HazardKind.Co2Spike) }),
@@ -277,12 +278,13 @@ public static class TechWeb
         new("heat", "열을 어디로 버릴까", "liquidmetal", "radiator", "은빛 핏줄의 배", "날개 단 배",
             new[] { "fire", H(HazardKind.CoolantLoss) }, new[] { H(HazardKind.MicroShower) }),
     };
+    public static readonly TechFork[] Forks = ForkBase.Concat(TechWebV18.Forks).ToArray(); // 압축-마 갈림길 2
     private static readonly Dictionary<string, (TechFork f, int side)> ForkOf =
         Forks.SelectMany(f => new[] { (f.A, (f, 0)), (f.B, (f, 1)) }).ToDictionary(x => x.Item1, x => x.Item2);
     public static (TechFork fork, int side)? ForkFor(string id) => ForkOf.TryGetValue(id, out var x) ? x : null;
 
     // ─────────────────────────────── ⑥ 부작용 연쇄 ───────────────────────────────
-    public static readonly TechChainSpec[] Chains =
+    private static readonly TechChainSpec[] ChainBase =
     {
         new("supertrunk", 20f, H(HazardKind.CoolantLoss), 1.2f, 3f, "초전도 간선 — 극저온 배관이 늘어 냉매가 새기 쉽다"),
         new("fibernet", 16f, H(HazardKind.CableTrayFire), 1.1f, 0f, "광섬유 감지망 — 케이블이 늘었다, 소화기 자리를 챙기자", CustomKind.FireCheck),
@@ -302,6 +304,7 @@ public static class TechWeb
         new("vacpack", 12f, H(HazardKind.FoodPoisoning), 1.05f, 2f, "진공 포장 — 봉지를 다시 여는 손이 늘었다", CustomKind.HandWash),
         new("plasmatorch", 12f, "fire", 1.05f, 2f, "플라스마 절단기 — 불똥이 바닥에 튄다", CustomKind.FireCheck),
     };
+    public static readonly TechChainSpec[] Chains = ChainBase.Concat(TechWebV18.Chains).ToArray(); // 압축-마 부작용 3
 
     /// <summary>사고 키 하나의 지금까지 횟수 (갈림길 약점 · 열리는 조건이 읽는다).</summary>
     public static int Incidents(World w, string key)

@@ -96,6 +96,7 @@ public static class ScaleTable
         foreach (var k in HRoom) d.TryAdd(k, IncidentScale.Room);
         foreach (var k in HSystem) d.TryAdd(k, IncidentScale.System);
         foreach (var k in HShip) d.TryAdd(k, IncidentScale.Ship);
+        foreach (var m in HazardsV18.More) d.TryAdd(m.Kind, m.Scale); // 압축-마 30 (다섯 규모에 고루)
         return d;
     }
 
@@ -105,7 +106,7 @@ public static class ScaleTable
     public static List<string> Unclassified()
     {
         var bad = new List<string>();
-        var all = HPersonal.Concat(HRoom).Concat(HSystem).Concat(HShip).ToList();
+        var all = HPersonal.Concat(HRoom).Concat(HSystem).Concat(HShip).Concat(HazardsV18.More.Select(m => m.Kind)).ToList();
         foreach (var k in Enum.GetValues<HazardKind>())
         {
             int n = all.Count(x => x == k);

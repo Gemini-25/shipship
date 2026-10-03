@@ -76,6 +76,7 @@ public static class HazardsV15
         HazardKind.FanImbalance => f.Type is FurnitureType.Scrubber or FurnitureType.OxygenGenerator or FurnitureType.HeatExchanger or FurnitureType.CoolantPump or FurnitureType.MainComputer,
         HazardKind.ShaftMisalign => f.Type is FurnitureType.EngineCore or FurnitureType.CoolantPump or FurnitureType.AuxGenerator,
         HazardKind.NutrientCrash => f.Machine?.Crop != null,
+        _ when HazardsV18.Is(k) => HazardsV18.Fits(k, f), // 압축-마
         _ => true,
     };
 }

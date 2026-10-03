@@ -172,6 +172,7 @@ public sealed partial class Storyteller
         };
         if (w.Piping.Segments.Count > 0) pool.Add(("pipe", 5f));
         foreach (var s in HazardsV15.Specs) pool.Add((s.Kind.ToString(), s.Weight * (gentle ? 0.5f : 0.8f))); // v15 새 사고 44
+        foreach (var s in HazardsV18.Specs) pool.Add((s.Kind.ToString(), s.Weight * (gentle ? 0.4f : 0.7f))); // 압축-마 새 사고 30
         foreach (var s in Hazards.All)
         {
             if (s.Kind >= HazardKind.CoolantLoss || s.Kind == HazardKind.RescueSignal) continue;
