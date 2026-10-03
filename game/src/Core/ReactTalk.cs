@@ -103,6 +103,20 @@ public sealed partial class ReactSystem
         return null;
     }
 
+    /// <summary>회의 · 안건 이름을 사람이 입에 올리는 꼴로: "구조: 구조자 안전부터 → 무조건" → "구조자 안전부터".</summary>
+    private static string? Spoken(string title)
+    {
+        string t = title;
+        int i = t.IndexOf(':');
+        if (i >= 0) t = t[(i + 1)..];
+        int j = t.IndexOf('→');
+        if (j >= 0) t = t[..j];
+        int k = t.IndexOf('(');
+        if (k > 0) t = t[..k];
+        t = t.Trim();
+        return t.Length < 2 ? null : t;
+    }
+
     /// <summary>방금 이 방에서 누가 같은 이야기를 꺼냈나 (같은 말을 줄줄이 하지 않는다).</summary>
     private bool HeardHere(Room? room, string tl)
     {
@@ -211,14 +225,14 @@ public sealed partial class ReactSystem
         // 회의 결정
         foreach (var d in w.Meetings.Decisions)
         {
-            if (w.Tick - d.Tick > day2 || d.Title.Length == 0) continue;
-            string tt = d.Title;
+            if (w.Tick - d.Tick > day2 || Spoken(d.Title) is not string tt) continue;
+            string ro = Ko.EuRo(tt)[tt.Length..];
             bool power = tt.Contains("전기") || tt.Contains("전력") || tt.Contains("조명") || tt.Contains("배터리") || tt.Contains("절전");
             bool heat = tt.Contains("온도") || tt.Contains("난방") || tt.Contains("냉방") || tt.Contains("냉각");
             int mask = all | (power ? M(Stir.Dark, Stir.Cold, Stir.Heat) : 0) | (heat ? M(Stir.Cold, Stir.Heat) : 0);
             var yes = d.Yes; var no = d.No;
             o.Add(new Topic($"dec:{d.Tick}", mask, d.Tick,
-                c => no.Contains(c.Id) ? $"회의에서 '{tt}' 정한 거, 난 지금도 반대야" : yes.Contains(c.Id) ? $"회의에서 '{tt}'로 정했잖아 — 잘한 것 같아" : $"회의에서 '{tt}'로 정했대",
+                c => no.Contains(c.Id) ? $"회의에서 '{tt}' 정한 거, 난 지금도 반대야" : yes.Contains(c.Id) ? $"회의에서 '{tt}'{ro} 정했잖아 — 잘한 것 같아" : $"회의에서 '{tt}'{ro} 정했대",
                 (a, b) => no.Contains(a.Id) ? "난 반대했었어" : yes.Contains(a.Id) ? "정했으면 지켜야지" : "난 그 회의에 없었어"));
         }
         // 재판 · 서명 안건
@@ -234,9 +248,9 @@ public sealed partial class ReactSystem
                     c => c.Id == tid ? "재판 얘기는 그만하자" : Mood(c) == 3 ? $"{tn} 재판 봤어? {v} — 너무 가볍지" : $"{tn} 재판 — {v}",
                     (a, b) => a.Id == tid ? "…그 얘긴 그만해" : a.AffinityTo(target) > 0.3f ? $"{tn}도 힘들었을 거야" : "자업자득이지"));
             }
-            else if (mo.Title.Length > 0 && mo.Title.Length < 30)
+            else if (Spoken(mo.Title) is string tt && tt.Length < 30)
             {
-                string tt = mo.Title; bool pass = mo.Passed; int who = mo.Proposer;
+                bool pass = mo.Passed; int who = mo.Proposer;
                 o.Add(new Topic($"mo:{mo.Id}", all, mo.Decided,
                     c => c.Id == who ? (pass ? $"'{tt}' 통과됐어 — 서명해 준 사람들 덕이야" : $"'{tt}'는 떨어졌어… 다음에 다시 내야지") : pass ? $"'{tt}' 통과됐대" : $"'{tt}'는 떨어졌대",
                     (a, b) => pass ? "이제 좀 달라지려나" : "아쉽게 됐네"));
