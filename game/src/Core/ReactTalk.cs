@@ -59,7 +59,7 @@ public sealed partial class ReactSystem
             line = first.Length > 0 ? first[R.Range(0, first.Length)] : second![R.Range(0, second!.Length)];
             repeat = true;
         }
-        if (!reply && TopicFor(c, s, k) is Topic tp && tp.Line(c) is string tl)
+        if (!reply && TopicFor(c, s, k) is Topic tp && tp.Line(c) is string tl && !HeardHere(room, tl))
         {
             line = line.EndsWith('?') || line.EndsWith('!') || line.EndsWith('…') ? $"{line} {tl}" : line.Contains(" — ") || tl.Contains(" — ") ? $"{line}. {tl}" : $"{line} — {tl}";
             Took(s, tp);
@@ -103,6 +103,14 @@ public sealed partial class ReactSystem
         return null;
     }
 
+    /// <summary>방금 이 방에서 누가 같은 이야기를 꺼냈나 (같은 말을 줄줄이 하지 않는다).</summary>
+    private bool HeardHere(Room? room, string tl)
+    {
+        if (room == null || !_roomSaid.TryGetValue(room.Id, out var rl)) return false;
+        foreach (var (t, l) in rl) if (_w.Tick - t < SimTime.Minutes(30) && l.EndsWith(tl)) return true;
+        return false;
+    }
+
     private void Took(ReactState s, Topic tp)
     {
         s.Keys.Add(tp.Key);
@@ -121,7 +129,8 @@ public sealed partial class ReactSystem
         foreach (var tp in list)
         {
             if ((tp.Mask & (1 << (int)k)) == 0 || s.Keys.Contains(tp.Key)) continue;
-            if (best == null || tp.Tick > best.Tick) best = tp;
+            if (best != null && tp.Tick <= best.Tick || tp.Line(c) == null) continue;
+            best = tp;
         }
         return best;
     }
@@ -266,6 +275,39 @@ public sealed partial class ReactSystem
             o.Add(new Topic($"pow:{w.Day}:{pct / 10}", all | M(Stir.Dark, Stir.Cold, Stir.Heat), w.Tick,
                 c => Mood(c) == 1 ? $"배터리가 {pct}%밖에 안 남았대 — 이러다 다 꺼지는 거 아냐" : w.Power.DeficitSince >= 0 ? "전기가 모자라서 그래 — 급한 데부터 돌린대" : $"배터리 {pct}%래",
                 (a, b) => Mood(a) == 0 ? "급한 데부터 돌리겠지" : "아껴 써야겠다"));
+        }
+        // 배 상태: 고장 난 기계가 여럿
+        int broken = 0;
+        foreach (var m in w.Ship.Machines) if (m.Faults.Count > 0) broken++;
+        if (broken >= 2)
+        {
+            int nb = broken;
+            o.Add(new Topic($"brk:{w.Day}:{nb}", all | M(Stir.Sound, Stir.Shake, Stir.Dark), w.Tick - SimTime.Hours(2),
+                c => c.Role is CrewRole.Engineer or CrewRole.Technician or CrewRole.Electrician ? (Mood(c) == 3 ? $"고장 난 게 {nb}개야 — 손이 열 개라도 모자라" : $"손볼 게 {nb}개 밀려 있어") : $"요즘 고장 난 게 {nb}개라던데",
+                (a, b) => a.Role is CrewRole.Engineer or CrewRole.Technician or CrewRole.Electrician ? "하나씩 하면 돼" : Mood(a) == 1 ? "이 배 괜찮은 거 맞지?" : "정비하는 사람들 고생이네"));
+        }
+        // 관계: 요즘 다툰 사람 · 붙어 다니는 둘 (오래된 이야기라 다른 이야깃거리가 없을 때 나온다)
+        int qn = 0, pn = 0;
+        foreach (var x in w.Crew)
+        {
+            if (x.Dead || x.Away) continue;
+            if (qn < 3 && w.Tick - x.Quarrel < SimTime.TicksPerDay && x.Quarrel > 0)
+            {
+                string xn = x.Name; int xid = x.Id; var xx = x;
+                o.Add(new Topic($"qr:{xid}:{x.Quarrel}", all | M(Stir.Odd), x.Quarrel,
+                    c => c.Id == xid ? (Mood(c) == 3 ? "어제 일은 생각하기도 싫어" : "어제 말다툼은 내가 좀 심했어") :
+                         c.AffinityTo(xx) > 0.3f ? $"{Ko.IGa(xn)} 요즘 누구랑 다퉜다던데 — 괜찮나 몰라" : Mood(c) == 3 ? $"{Ko.IGa(xn)} 또 싸웠대" : $"{Ko.IGa(xn)} 누구랑 말다툼했다며",
+                    (a, b) => a.Id == xid ? "…다 풀었어" : a.AffinityTo(xx) > 0.3f ? "내가 한번 얘기해 볼게" : "가만 둬, 알아서 풀겠지"));
+                qn++;
+            }
+            if (pn < 2 && x.Partner is int pid && pid > x.Id && Crew(pid) is CrewMember y && !y.Dead)
+            {
+                string an = x.Name, bn = y.Name; int aid = x.Id, bid = y.Id;
+                o.Add(new Topic($"pair:{aid}:{bid}:{w.Day}", all, w.Tick - SimTime.Hours(20),
+                    c => c.Id == aid || c.Id == bid ? null : Mood(c) == 2 ? $"{Ko.WaGwa(an)} {bn} 또 붙어 있더라 — 보기 좋네" : Mood(c) == 3 ? $"{Ko.WaGwa(an)} {bn}, 일할 때는 좀 떨어져 있지" : $"{Ko.WaGwa(an)} {bn} 요즘 사이좋더라",
+                    (a, b) => a.Id == aid || a.Id == bid ? "…우리 얘기야?" : Mood(a) == 3 ? "일이나 하지" : "부럽다"));
+                pn++;
+            }
         }
         // 아까 누가 어떻게 버텼나 (같이 겪은 사람의 기억)
         int seen = 0;
@@ -557,6 +599,9 @@ public sealed partial class ReactSystem
     {
         string head = text.Split(new[] { " — ", ". ", " · " }, StringSplitOptions.None)[0];
         if (head.Length > 26) head = head[..26] + "…";
+        // 인사 · 안내 말은 따라 하지 않는다
+        if (priority < 2 && (head.Contains("좋은 아침") || head.Contains("안녕") || head.Contains("수고") || head.Length < 6))
+            return Mood(c) switch { 2 => new[] { "컴퓨터도 아침 인사를 하네", "네, 좋은 아침이에요" }, 3 => new[] { "아침부터 방송이야", "알았다고" }, _ => new[] { "응, 좋은 아침", "방송 들었어?" } };
         if (priority >= 2)
             return Mood(c) == 1 ? new[] { $"'{head}'래 — 어떡해", "또 무슨 일이야?", "빨리 움직이자" } : new[] { $"'{head}'래 — 움직이자", "들었지? 가자", "방송 들었어?" };
         return Mood(c) switch
@@ -570,10 +615,13 @@ public sealed partial class ReactSystem
     private string[] BriefLines(CrewMember c, Briefing bf)
     {
         var o = new List<string>();
+        static string First(string t, string prefix) => (t.StartsWith(prefix) ? t[prefix.Length..] : t).Split(" · ")[0].Split(" — ")[0].Trim();
         foreach (var (kind, text) in bf.Lines)
         {
             if (kind == "날씨") o.Add(text.Contains("맑음") ? "오늘 날씨는 맑대" : "오늘 바깥 날씨가 안 좋대");
-            else if (kind == "정비" && text.Length < 40) o.Add($"오늘 정비 — {text}");
+            else if (kind == "정비") o.Add(text.Contains("없음") ? "오늘은 손볼 게 없대" : text.StartsWith("오늘 정비") ? $"오늘 손볼 거 — {First(text, "오늘 정비: ")}" : "정비표가 바뀌었대");
+            else if (kind == "주의" && !text.Contains("없음")) o.Add($"오늘은 {First(text, "주의할 곳: ")} 조심하래");
+            else if (kind == "물자" && text.Split(" — ")[0] is string sp && sp.EndsWith("다")) o.Add(Mood(c) == 1 ? $"{sp[..^1]}대… 괜찮을까" : $"{sp[..^1]}대");
         }
         o.Add(Mood(c) == 3 ? "아침부터 할 일이 많네" : Mood(c) == 2 ? "오늘도 좋은 아침이라네" : "오늘 할 일 정리됐네");
         return o.ToArray();

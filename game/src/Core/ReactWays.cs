@@ -58,7 +58,7 @@ public sealed partial class ReactSystem
                 // 궁금하면 가서 귀를 대 본다: 성실함 · 기계 솜씨 · 구경 버릇 (걱정이 많으면 남에게 말한다)
                 float go = 0.15f + 0.35f * c.Traits.Diligence + 0.3f * c.SkillLevel(Skill.Mechanics) + (Life.Has(c, Habit.Tinkerer) || Life.Has(c, Habit.Gazer) ? 0.2f : 0f) - (Life.Has(c, Habit.Procrastinator) ? 0.25f : 0f);
                 if (R.Chance(Math.Clamp(go, 0.05f, 0.85f)))
-                    Plan(c, s, new ReactAct { Kind = ReactKind.Check, For = k, Target = m.Body.Id, Label = "무슨 소리인지 가 본다", Way = "check", Score = 0.48f, Face = m.Body.Center, Until = w.Tick + SimTime.Minutes(30) });
+                    Plan(c, s, new ReactAct { Kind = ReactKind.Check, For = k, Target = m.Body.Id, Label = "무슨 소리인지 가 본다", Way = "check", Score = 0.5f + 0.15f * c.SkillLevel(Skill.Mechanics), Face = m.Body.Center, Until = w.Tick + SimTime.Minutes(45) });
                 break;
             }
             case Stir.Smell when arg is SmellKind sk:
@@ -71,11 +71,16 @@ public sealed partial class ReactSystem
                 break;
             }
             case Stir.Voice when arg is Broadcast b:
+            {
                 s.LastHeard = b.Id;
-                Gest(s, b.Priority >= 2 ? Gesture.Look : Gesture.Listen, Short);
+                bool go = !busy && AnswerCall(c, s, b);
+                s.Tmp = go ? "answer" : null;
+                Gest(s, go ? Gesture.Nod : b.Priority >= 2 ? Gesture.Look : Gesture.Listen, Short);
                 s.LookAt = room.Center;
-                Speak(c, s, k, VoiceLines(c, b.Text, b.Priority), room, b.Text);
+                Speak(c, s, k, go ? new[] { "내가 가 볼게", "알았어, 내가 본다", "가까우니까 내가 갈게" } : VoiceLines(c, b.Text, b.Priority), room, b.Text, reply: go);
+                s.Tmp = null;
                 break;
+            }
             case Stir.Voice when arg is Briefing bf:
                 s.LastBrief = bf.Day;
                 Gest(s, Gesture.Nod, Short);
@@ -283,10 +288,11 @@ public sealed partial class ReactSystem
     {
         var w = _w;
         long until = w.Tick + SimTime.Minutes(20);
-        if (sk is SmellKind.Cooking or SmellKind.Bread or SmellKind.Coffee)
+        if (sk is SmellKind.Cooking or SmellKind.Bread) return null; // 음식 냄새를 따라가는 건 냄새 쪽 일 (배고픈 사람이 주방으로)
+        if (sk == SmellKind.Coffee)
         {
-            bool hungry = c.Needs.Food < 0.55f || Life.Has(c, Habit.Snacker) || sk == SmellKind.Coffee && Life.Has(c, Habit.CoffeeAddict);
-            if (!hungry || room.Type is RoomType.Galley or RoomType.Mess || !R.Chance(0.55f)) return null;
+            bool hungry = Life.Has(c, Habit.CoffeeAddict) || Life.Has(c, Habit.TeaLover) || c.Needs.Rest < 0.4f;
+            if (!hungry || room.Type == RoomType.Galley || !R.Chance(0.55f)) return null;
             if (CupSpot(c) is (Cell cup, Vector2 cf))
             {
                 Plan(c, s, new ReactAct { Kind = ReactKind.Move, For = Stir.Smell, To = cup, Face = cf, Label = "냄새를 따라간다", Way = "follow_nose", Score = 0.44f, Until = until });
@@ -545,7 +551,7 @@ public sealed class ReactActivity : Activity
     {
         if (ReactSystem.Off || w.React.Peek(c)?.Pending is not ReactAct a) return (0f, "—");
         if (w.Tick > a.Until || !c.CanAct || c.Outside || c.Suit != null) { w.React.Peek(c)!.Pending = null; return (0f, "—"); }
-        if (Crisis.Acting(w) && a.For is not (Stir.Dark or Stir.Cold or Stir.Heat)) return (0f, "위기 중");
+        if (Crisis.Acting(w) && a.For is not (Stir.Dark or Stir.Cold or Stir.Heat or Stir.Smoke)) return (0f, "위기 중");
         if (c.Needs.Rest < 0.12f || c.Needs.Food < 0.12f) return (0f, "지쳤다");
         return (a.Score, a.Label);
     }

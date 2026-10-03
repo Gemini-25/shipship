@@ -69,11 +69,10 @@ public static partial class Program
             mess.PowerCut = true;
             var rs = w.React;
             CrewMember? torchMan = null; float torchMul = 0f, plainMul = 0f;
-            for (int t = 0; t < SimTime.Minutes(50); t += 20)
+            for (int t = 0; t < SimTime.Minutes(50); t += 2)
             {
-                Run(w, 20);
+                Run(w, 2);
                 if (torchMan != null) continue;
-                if (t < 200) Console.WriteLine($"   {t}: " + string.Join(" | ", five.Select(c => $"{c.Name} {c.Room?.Name} {rs.Peek(c)?.Way} {rs.Peek(c)?.TorchOn} {rs.DarkMul(c):0.0}")));
                 torchMan = five.FirstOrDefault(c => rs.Peek(c)?.TorchOn == true && c.Room == mess);
                 if (torchMan == null) continue;
                 torchMul = rs.DarkMul(torchMan);
@@ -243,7 +242,7 @@ public static partial class Program
                 Check("낯선 소리 — 덜컹거림을 듣고 쳐다본다 (그 설비 쪽 · 말)", sn.Count >= 1 && sn.Any(n => n.Gesture == Gesture.Look),
                     $"{m.Name}: {string.Join(" / ", sn.Select(n => n.Line).Where(l => l.Length > 0).Take(3))}");
                 Check("낯선 소리 — 궁금한 사람이 가서 귀를 대 보고 전조를 찾는다 (못 찾으면 컴퓨터가 감지기를 다시 훑는다)", rs.Stats.Checks >= 1 && (rs.Stats.Found >= 1 || rs.Stats.Scans >= 1 || m.Omen?.Known == true),
-                    $"확인 {rs.Stats.Checks} · 찾음 {rs.Stats.Found} · 재확인 {rs.Stats.Scans} · 알려짐 {m.Omen?.Known}");
+                    $"소리 반응 {sn.Count} · 행동 {rs.Stats.Acts}/{rs.Stats.ActsDone} · 확인 {rs.Stats.Checks} · 찾음 {rs.Stats.Found} · 재확인 {rs.Stats.Scans} · 알려짐 {m.Omen?.Known}");
             }
             else Check("낯선 소리 — 진동 전조를 낼 설비가 없다", false);
         }
@@ -279,13 +278,17 @@ public static partial class Program
                 nb.PowerCut = true;
                 fireCell = nb.Cells.Where(x => w.Ship.IsOpenFloor(x)).OrderBy(x => (x.Center - nb.Center).LengthSquared()).First();
                 w.Fire.Ignite(fireCell.Value, 0.25f);
-                for (int t = 0; t < SimTime.Minutes(30); t++) { nb.Air.Smoke = MathF.Max(nb.Air.Smoke, 0.45f); mess.Air.Smoke = MathF.Max(mess.Air.Smoke, 0.14f); w.Step(); }
+                for (int t = 0; t < SimTime.Minutes(30); t++) { nb.Air.Smoke = MathF.Max(nb.Air.Smoke, 0.45f); mess.Air.Smoke = 0.12f; w.Step(); }
             }
             var sm = rs.NotesOf(Stir.Smoke).Where(n => six.Any(c => c.Id == n.Crew)).ToList();
+            Console.WriteLine("   연기 뒤: " + string.Join(" | ", six.Select(c => $"{c.Name} {c.Room?.Name} {c.Job?.Activity?.Id}")) + $" · 위기 {Crisis.Level(w)} · 행동 {rs.Stats.Acts}/{rs.Stats.ActsDone}");
             var smWays = sm.Select(n => n.Way.Length == 0 ? "stay" : n.Way).Distinct().ToList();
             var smG = sm.Select(n => n.Gesture).Distinct().ToList();
             Check("연기 — 옆방에서 흘러든 연기에 기침하고 입을 막는다 · 누구는 출처를 찾아가고 누구는 맑은 방으로 피한다", nb != null && sm.Count >= 3 && smWays.Count >= 2 && rs.Stats.SmokeSeek + rs.Stats.SmokeFled > 0,
                 $"{nb?.Name} · 반응 {sm.Count} · {string.Join(", ", smWays)} · 몸짓 {string.Join(",", smG)} · 찾아감 {rs.Stats.SmokeSeek}(불 {rs.Stats.SmokeFound}) · 피함 {rs.Stats.SmokeFled} · 말: {string.Join(" / ", sm.Select(n => n.Line).Where(l => l.Length > 0).Take(3))}");
+            var calls = rs.NotesOf(Stir.Voice).Where(n => n.Way == "answer").ToList();
+            Check("주 컴퓨터 — 기침하는 사람들을 보고 연기가 어디서 오는지 짚어 방송한다 (감지기 꺼진 방이면 가 볼 사람을 부른다 · 누군가 대답하고 간다)", rs.Stats.SmokeAdvice > 0,
+                $"연기 안내 {rs.Stats.SmokeAdvice} · 대답 {calls.Count} · 방송: {w.Automation.Speak.Recent.Select(b => b.Text).LastOrDefault(t => t.Contains("연기")) ?? "—"}");
             Check("상호작용 — 연기를 쫓아간 사람이 감지기가 꺼진 방의 불을 먼저 본다", nb == null || rs.Stats.SmokeSeek == 0 || rs.Stats.SmokeFound > 0 && w.Fire.IsKnown(nb) || w.Fire.CountIn(nb) == 0,
                 $"찾아감 {rs.Stats.SmokeSeek} · 불 찾음 {rs.Stats.SmokeFound} · 알려짐 {(nb != null && w.Fire.IsKnown(nb))}");
         }
@@ -303,6 +306,7 @@ public static partial class Program
                 $"반응 {sh.Count} · {string.Join(", ", shWays)} · 몸짓 {string.Join(",", sh.Select(n => n.Gesture).Distinct())} · 말: {string.Join(" / ", sh.Select(n => n.Line).Where(l => l.Length > 0).Take(3))}");
             // 냄새: 주방에서 빵 굽는 냄새 · 배고픈 사람은 따라간다
             foreach (var c in six) c.Needs.Food = 0.35f;
+            Gather(w, six, room);
             for (int t = 0; t < SimTime.Minutes(20); t++) { w.Smells.Emit(room, SmellKind.Bread, 0.08f); w.Step(); }
             var sn = rs.NotesOf(Stir.Smell).Where(n => six.Any(c => c.Id == n.Crew)).ToList();
             Check("냄새 — 빵 냄새에 코를 킁킁대고 · 배고픈 사람은 냄새를 따라간다", sn.Count >= 2 && sn.Any(n => n.Gesture == Gesture.Sniff),
@@ -317,10 +321,20 @@ public static partial class Program
             // 우는 사람: 친한 사람은 곁으로 가고 · 아닌 사람은 모른 척해 준다
             var sad = six[0];
             foreach (var c in six.Skip(1).Take(2)) { c.ChangeAffinity(sad, 0.6f); }
-            for (int k = 0; k < 6; k++) { w.Brain2.Emotions.Feel(sad, Feeling.Sadness, 0.9f, "편지를 읽었다"); sad.Pose = Pose.Sitting; Run(w, SimTime.Minutes(8)); }
+            var seat = room.Cells.Where(x => w.Ship.IsOpenFloor(x) && w.Ship.IsWalkable(x)).OrderBy(x => (x.Center - room.Center).LengthSquared()).First();
+            Gather(w, six.Skip(1).ToList(), room);
+            float sadMax = 0f;
+            for (int k = 0; k < 12; k++)
+            {
+                w.Brain2.Emotions.Feel(sad, Feeling.Sadness, 0.9f, "집에서 온 편지를 읽었다");
+                Stay(w, sad, seat, Pose.Sitting);
+                sad.NextThinkTick = w.Tick + SimTime.Minutes(5);
+                sadMax = MathF.Max(sadMax, w.Brain2.Emotions.Get(sad, Feeling.Sadness));
+                Run(w, SimTime.Minutes(4));
+            }
             var cr = rs.NotesOf(Stir.Cry).Where(n => n.Crew != sad.Id).ToList();
             Check("우는 사람 — 곁의 사람이 알아보고 위로하러 가거나 모른 척해 준다", cr.Count >= 1 && (rs.Stats.Comforts > 0 || cr.Any(n => n.Line.Length > 0)),
-                $"반응 {cr.Count} · 위로 {rs.Stats.Comforts} · 말: {string.Join(" / ", cr.Select(n => n.Line).Where(l => l.Length > 0).Take(2))}");
+                $"슬픔 {sadMax:0.00} · 우는 중 {rs.Crying(sad)} · 반응 {cr.Count} · 위로 {rs.Stats.Comforts} · 말: {string.Join(" / ", cr.Select(n => n.Line).Where(l => l.Length > 0).Take(2))}");
         }
 
         // ── 8) 말이 지금을 담는다: 예보 · 회의 결정 · 최근 사고 — 같은 말 되풀이가 적다 ──
@@ -335,6 +349,9 @@ public static partial class Program
             w.History.Episodes.Add(new Episode { Id = 9001, Start = w.Tick - SimTime.Hours(20), End = w.Tick - SimTime.Hours(18), Cause = "기름 불", RoomId = gal.Id });
             var room = w.Ship.LiveRooms.First(r => r.Type == RoomType.Mess);
             var ppl = Awake(w, 6, c => -c.Traits.Sociability);
+            var fighter = w.Crew.First(c => !c.Dead && !c.IsChild && !ppl.Contains(c));
+            fighter.Quarrel = w.Tick - SimTime.Hours(2);
+            foreach (var c in ppl.Take(3)) c.ChangeAffinity(fighter, 0.5f);
             Gather(w, ppl, room);
             Run(w, 20);
             room.PowerCut = true;
@@ -344,8 +361,9 @@ public static partial class Program
             var said = rs.Notes.Where(n => n.Line.Length > 0).Select(n => n.Line).ToList();
             allLines.AddRange(said);
             bool dec = said.Any(l => l.Contains("회의")), sky = said.Any(l => l.Contains("폭풍")), ep = said.Any(l => l.Contains("기름 불"));
-            Check("말이 지금을 담는다 — 회의 결정 · 우주 날씨 예보 · 최근 사고가 대사에 나온다", (dec ? 1 : 0) + (sky ? 1 : 0) + (ep ? 1 : 0) >= 2 && rs.Stats.Topical >= 3,
-                $"회의 {dec} · 예보 {sky} · 사고 {ep} · 지금 이야기 {rs.Stats.Topical} ({rs.Stats.Topics}가지) · 예: {string.Join(" / ", said.Where(l => l.Contains(" — ")).Take(3))}");
+            bool rel = said.Any(l => l.Contains(fighter.Name) && (l.Contains("다퉜") || l.Contains("말다툼") || l.Contains("싸웠"))), brief = said.Any(l => l.Contains("아침 방송") || l.Contains("아침엔"));
+            Check("말이 지금을 담는다 — 회의 결정 · 우주 날씨 예보 · 최근 사고 · 다툰 사람 · 아침 방송이 대사에 나온다", (dec ? 1 : 0) + (sky ? 1 : 0) + (ep ? 1 : 0) + (rel ? 1 : 0) + (brief ? 1 : 0) >= 3 && rs.Stats.Topical >= 3,
+                $"회의 {dec} · 예보 {sky} · 사고 {ep} · 관계 {rel} · 아침 방송 {brief} · 지금 이야기 {rs.Stats.Topical} ({rs.Stats.Topics}가지) · 예: {string.Join(" / ", said.Where(l => l.Contains(fighter.Name) || l.Contains("회의")).Take(3))}");
             Check("수다 — 둘이 지금 이야기를 주고받는다 (한 사람이 꺼내면 상대가 제 말투로 받는다)", rs.Stats.Chats >= 1 && rs.Stats.Replies >= 1,
                 $"수다 {rs.Stats.Chats} · 예: {string.Join(" / ", rs.NotesOf(Stir.Chat).Select(n => n.Line).Take(2))}");
             Check("같은 말 되풀이가 적다 (최근 한 말 · 방금 이 방에서 남이 한 말은 피한다)", rs.Stats.Lines >= 10 && rs.Stats.Repeats <= rs.Stats.Lines / 8,
