@@ -484,6 +484,7 @@ public static class TechLookTable
         if (text.Contains("Mk.1 임시품")) return MomentKind.Mk1;
         if (text.Contains("정품 복원")) return MomentKind.Restore;
         if (text.EndsWith(": 달았다")) return MomentKind.Install;
+        if (text.EndsWith("단계로 손봤다")) return MomentKind.Upgrade; // 압축-마 기술이 새 설비 단계를 올렸다
         if (text.Contains("다시 짜 맞춤")) return MomentKind.Reassemble;
         if (text.Contains(" → "))
         {

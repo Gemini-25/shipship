@@ -88,7 +88,6 @@ public static partial class Program
                 }
                 foreach (var f in w.Ship.Furniture.Where(f => ModulesV18.Is(f.Type) && f.Machine != null)) w.Fittings.Crock[f.Id] = f.Type == FurnitureType.Fermenter ? 0.7f : 0f;
                 Run(w, SimTime.TicksPerDay * 2);
-                if (Environment.GetEnvironmentVariable("LISTDBG") == "1") foreach (var f in w.Ship.Furniture.Where(f => ModulesV18.Is(f.Type))) Console.WriteLine($"  · {f.Label} {f.Room.Name} 일함 {ModulesV18.Works(f)} 자리 {f.UseSpots.Count} 바람 {w.Fittings.Wants(f, out _)} 전기 {f.Machine?.Powered} 예약 {f.ReservedBy?.Name}");
                 var st = w.Fittings.Stats;
                 int usedKinds = w.Ship.Furniture.Count(f => ModulesV18.Is(f.Type) && w.Fittings.Used.ContainsKey(f.Id));
                 Check("설비 — 배에 달고 하루: 사람이 와서 쓴다 (김 빼기 · 빵 · 연주 · 별 보기 …)", put >= 26 && st.Uses >= 4 && usedKinds >= 3,
@@ -103,7 +102,6 @@ public static partial class Program
                 // 효과: 화분 묶음 · 선반 걸쇠 · 고양이 · 금고
                 Run(w, SimTime.Minutes(7));
                 bool netOk = st.Latched > 0 && w.Ship.FurnitureOf(FurnitureType.CargoNet).Any(n => n.Room.Furniture.Any(s => w.Maneuver.Latched.Contains(s.Id)));
-                if (Environment.GetEnvironmentVariable("LISTDBG") == "1") foreach (var n in w.Ship.FurnitureOf(FurnitureType.CargoNet)) Console.WriteLine($"  · 그물 {n.Room.Name} 일함 {ModulesV18.Works(n)} 선반 {string.Join(",", n.Room.Furniture.Select(s => $"{s.Label}:{w.Maneuver.Latched.Contains(s.Id)}"))}");
                 Check("설비 — 화물 그물은 그 방 선반 걸쇠를 건다 · 기동 충격에 덜 쏟아진다", netOk && FittingSystem.StrapMul(w) < 1f, $"걸쇠 {st.Latched} · 충격 배율 {FittingSystem.StrapMul(w):0.00}");
             }
             {
@@ -137,6 +135,44 @@ public static partial class Program
                 var need1 = ModulesV18.Need(w, FurnitureType.GreaseTrap);
                 Check("기술 — 익히면 설비 단계가 오르고(모양) · 그 사고가 줄고 · 없던 설비를 달고 싶어진다", t0 == 1 && t1 == 3 && risk1 < risk0 && need1.Item1 >= 0.35f,
                     $"발효 항아리 {Tech.Roman(t0)} → {Tech.Roman(t1)} · 터짐 배율 {risk0:0.00} → {risk1:0.00} · 기름 거름통 바람 {need0.Item1:0.00} → {need1.Item1:0.00} ({need1.Item2})");
+            }
+
+            // ═══ 흔적 그림: 사고마다 따로 (같은 모양 금지) ═══
+            {
+                var dir = FixArtViewDir();
+                var src = dir != null ? System.IO.File.ReadAllText(System.IO.Path.Combine(dir, "ShipViewTraces.cs")) : "";
+                int i0 = src.IndexOf("void DrawTrace("), i1 = src.IndexOf("void DrawOmen(");
+                var body = i0 >= 0 && i1 > i0 ? src.Substring(i0, i1 - i0) : "";
+                var ms = System.Text.RegularExpressions.Regex.Matches(body, @"case HazardKind\.(\w+):");
+                var cases = new Dictionary<string, string>();
+                for (int k = 0; k < ms.Count; k++)
+                {
+                    int a0 = ms[k].Index + ms[k].Length, a1 = k + 1 < ms.Count ? ms[k + 1].Index : body.Length;
+                    cases[ms[k].Groups[1].Value] = FixArtNormalize(System.Text.RegularExpressions.Regex.Replace(body.Substring(a0, a1 - a0), @"//[^\n]*", ""));
+                }
+                var noArt = HazardsV18.Specs.Select(s => s.Kind.ToString()).Where(k => !cases.ContainsKey(k)).ToList();
+                var same = cases.GroupBy(kv => kv.Value).Where(g => g.Count() > 1).Select(g => string.Join("=", g.Select(x => x.Key))).ToList();
+                var thin = cases.Where(kv => FixArtDrawCall.Matches(kv.Value).Count < 2).Select(kv => kv.Key).ToList();
+                Check("흔적 그림 — 새 사고 30마다 흔적 그림이 따로 있다 (같은 모양 없음 · 도형 둘 이상)", noArt.Count == 0 && same.Count == 0 && thin.Count == 0 && cases.Count == 30,
+                    $"그림 {cases.Count}" + (noArt.Count > 0 ? $" · 없음: {string.Join(",", noArt)}" : "") + (same.Count > 0 ? $" · 같음: {string.Join(" ", same)}" : "") + (thin.Count > 0 ? $" · 모자람: {string.Join(",", thin)}" : ""));
+            }
+
+            // ═══ 성능: 큰 배 하루 (새 설비 · 전조를 끄고 켜서) ═══
+            if (Environment.GetEnvironmentVariable("LISTPERF") == "1")
+            {
+                double Day(bool off)
+                {
+                    HazardSignSystem.Off = off; FittingSystem.Off = off;
+                    var w = World.CreateDefault(seed, 0, "Cheonma");
+                    Run(w, SimTime.Hours(2));
+                    var sw = System.Diagnostics.Stopwatch.StartNew();
+                    Run(w, SimTime.TicksPerDay);
+                    return sw.Elapsed.TotalSeconds;
+                }
+                double a0 = Day(true), a1 = Day(false), a2 = Day(true), a3 = Day(false);
+                HazardSignSystem.Off = false; FittingSystem.Off = false;
+                double off = (a0 + a2) / 2, on = (a1 + a3) / 2;
+                Check("성능 — 천마호 하루: 새 설비 · 전조가 시간을 크게 늘리지 않는다 (정보)", on < off * 1.15 + 0.5, $"끔 {off:0.0}초 · 켬 {on:0.0}초 ({(on / off - 1) * 100:+0;-0}%)");
             }
 
             // ═══ 결정론 ═══

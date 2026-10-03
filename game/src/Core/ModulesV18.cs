@@ -289,7 +289,7 @@ public sealed class FittingSystem
             case FurnitureType.SewingMachine:
             {
                 var b = w.Belongings.All.Where(x => x.Condition < 0.9f).OrderBy(x => x.Condition).ThenBy(x => x.Id).FirstOrDefault();
-                if (b != null) { b.Condition = MathF.Min(1f, b.Condition + 0.3f * pw); return $"{b.Name}을(를) 꿰매 고쳤다"; }
+                if (b != null) { b.Condition = MathF.Min(1f, b.Condition + 0.3f * pw); return $"{Ko.EulReul(b.Name)} 꿰매 고쳤다"; }
                 return "해진 옷깃을 꿰맸다";
             }
             case FurnitureType.Telescope: Ease(c, 0.06f); MarkLog.Add(c.Memory.Marks, w.Tick, "망원경으로 별을 보았다"); return "망원경으로 별을 보았다";

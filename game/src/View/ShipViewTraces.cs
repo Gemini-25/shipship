@@ -113,6 +113,8 @@ public partial class ShipView
                 break;
             case HazardKind.BearingWhine: // 설비 밑 기름 방울
                 for (int i = 0; i < 4; i++) ci.DrawCircle(c + new Vector2(-6f + i * 4f, 8f + h(i) * 2f), 1.2f + h(i + 4), new Color("#3a3020").WithAlpha(0.6f * a));
+                ci.DrawLine(c + new Vector2(-8f, 11f), c + new Vector2(8f, 11.5f), new Color("#3a3020").WithAlpha(0.3f * a), 1.6f, true); // 번진 기름 줄
+                FA.Dot(ci, c + new Vector2(9f, 6f), 1.2f, new Color("#8a1a1a").WithAlpha(0.7f * a)); // 기름 깡통 뚜껑
                 break;
             case HazardKind.MeetingBrawl: // 넘어진 의자 + 흩어진 종이
                 ci.DrawRect(new Rect2(c + new Vector2(-6f, -3f), new Vector2(7f, 3f)), new Color("#4a5260").WithAlpha(0.8f * a));
@@ -150,6 +152,7 @@ public partial class ShipView
                     var p = c + new Vector2((h(i) - 0.5f) * 20f, (h(i + 4) - 0.5f) * 16f);
                     for (int r = 0; r < 4; r++) ci.DrawLine(p, p + Vector2.FromAngle(r * Mathf.Pi * 0.5f + 0.4f) * 2.4f, new Color("#4a4a4a").WithAlpha(0.6f * a), 0.6f, true);
                 }
+                ci.DrawRect(new Rect2(c + new Vector2(5f, 5f), new Vector2(3f, 3.6f)), new Color("#e8e2d4").WithAlpha(0.8f * a)); // 떠다니다 내려앉은 컵
                 break;
             case HazardKind.DockSealFail: // 서리 낀 씰 고리
                 FA.Ring(ci, c, 6f, new Color("#dff4ff").WithAlpha(0.7f * a), 1.8f, 20);
@@ -161,6 +164,7 @@ public partial class ShipView
                 break;
             case HazardKind.GammaFlash: // 창에 남은 하얀 줄
                 for (int i = 0; i < 4; i++) ci.DrawLine(c + new Vector2(-8f + i * 4f, -8f), c + new Vector2(-4f + i * 4f, 8f), Colors.White.WithAlpha(0.45f * a), 0.8f, true);
+                ci.DrawCircle(c + new Vector2(2f, -2f), 3f, new Color("#fff8e0").WithAlpha(0.25f * a)); // 하얗게 탄 자리
                 break;
             case HazardKind.TidalPull: // 바닥의 당김 금 (길게 갈라진 선)
                 ci.DrawPolyline(new[] { c + new Vector2(-12f, 0f), c + new Vector2(-5f, 1f), c + new Vector2(0f, -1f), c + new Vector2(6f, 1.5f), c + new Vector2(12f, 0f) }, new Color("#1a1a1a").WithAlpha(0.6f * a), 0.8f, true);

@@ -577,7 +577,7 @@ public sealed partial class HazardSystem
                 var bowlRoom = w.Eco.Bowl is Cell bc ? ship.RoomAt(bc) ?? r : r;
                 signs.AddTrace(k, bowlRoom, w.Eco.Bowl ?? Floor(bowlRoom), cat.Favorite, SimTime.Hours(36));
                 foreach (var c in w.Crew) if (!c.Dead && EcoSystem.Fond(cat, c.Id) > 0.3f) c.Needs.Stress = MathF.Min(1f, c.Needs.Stress + 0.08f);
-                return Inc($"고양이 {cat.Name}이(가) 크게 놀라 어딘가 숨어 버렸다", bowlRoom, "고양이 실종", AlertLevel.Notice, true);
+                return Inc($"고양이 {Ko.IGa(cat.Name)} 크게 놀라 어딘가 숨어 버렸다", bowlRoom, "고양이 실종", AlertLevel.Notice, true);
             }
             // ─── ④ 배 전체 ───
             case HazardKind.GravityFailure:
@@ -757,7 +757,7 @@ public sealed class HazardSignSystem
             {
                 var pick = w.Crew.Where(c => !c.Dead && c.IsAwake && !c.IsChild && !c.Down && !c.Outside && c.Room != null)
                     .OrderBy(c => c.Job?.Activity is OmenCheckActivity ? 1 : 0).ThenBy(c => room == null ? 0f : System.Numerics.Vector2.Distance(c.Room!.Center, room.Center)).ThenBy(c => c.Id).FirstOrDefault();
-                if (pick != null) { s.Claim = pick.Id; w.Log.Add(w.Tick, LogKind.Ship, $"주컴퓨터: {pick.Name}, {(room != null ? room.Name + "의 " : "")}{more.Cause}을(를) 봐 주세요", pick.Id); }
+                if (pick != null) { s.Claim = pick.Id; w.Log.Add(w.Tick, LogKind.Ship, $"주컴퓨터: {pick.Name}, {(room != null ? room.Name + "의 " : "")}{Ko.EulReul(more.Cause)} 봐 주세요", pick.Id); }
             }
         }
         return s;
@@ -774,8 +774,8 @@ public sealed class HazardSignSystem
         Stats.Averted++;
         Witness(by, s.Kind);
         Memory.Steady(w, by, 0.03f);
-        MarkLog.Add(by.Memory.Marks, w.Tick, $"{what} — {Hazards.Name(s.Kind)}을(를) 막았다");
-        w.Log.Add(w.Tick, LogKind.Work, $"{Ko.IGa(by.Name)} {what} ({Hazards.Name(s.Kind)}을(를) 막았다)", by.Id);
+        MarkLog.Add(by.Memory.Marks, w.Tick, $"{what} — {Ko.EulReul(Hazards.Name(s.Kind))} 막았다");
+        w.Log.Add(w.Tick, LogKind.Work, $"{Ko.IGa(by.Name)} {what} ({Ko.EulReul(Hazards.Name(s.Kind))} 막았다)", by.Id);
     }
 
     public void CleanTrace(IncidentTrace t, CrewMember by)
@@ -788,7 +788,7 @@ public sealed class HazardSignSystem
             var a = _w.Soil.RoomSoil(r);
             for (int i = 0; i < a.Length; i++) a[i] = MathF.Max(0f, a[i] - 0.15f);
         }
-        _w.Log.Add(_w.Tick, LogKind.Work, $"{Ko.IGa(by.Name)} {HazardsV18.Of(t.Kind)?.Trace}을(를) 치웠다", by.Id);
+        _w.Log.Add(_w.Tick, LogKind.Work, $"{Ko.IGa(by.Name)} {Ko.EulReul(HazardsV18.Of(t.Kind)?.Trace ?? "흔적")} 치웠다", by.Id);
     }
 
     /// <summary>치울 만한 흔적 (바닥에 남은 것).</summary>
@@ -802,7 +802,7 @@ public sealed class HazardSignSystem
         if (w.Tick < _next) return;
         _next = w.Tick + SimTime.Minutes(20);
         // 흔적: 옅어진 것은 지운다
-        for (int i = Traces.Count - 1; i >= 0; i--) if (Traces[i].Cleaned && w.Tick - Traces[i].Until > 0 || w.Tick > Traces[i].Until) Traces.RemoveAt(i);
+        for (int i = Traces.Count - 1; i >= 0; i--) if (Traces[i].Cleaned || w.Tick > Traces[i].Until) Traces.RemoveAt(i);
         // 전조: 손쓴 것 · 원인이 사라진 것 · 때가 된 것
         foreach (var s in Signs)
         {
@@ -817,8 +817,8 @@ public sealed class HazardSignSystem
             if (what != null) Stats.Fired++;
         }
         Signs.RemoveAll(s => s.Done && w.Tick - s.Since > SimTime.Hours(24));
-        // 새 전조: 원인이 무르익은 것 (무작위 사고가 꺼진 배에서는 원인만 쌓이고 터지지 않는다)
-        if (HazardSystem.RandomDays <= 0f) return;
+        // 새 전조: 원인이 무르익은 것 (사고가 꺼진 배 — 무작위 사고 · 이야기꾼 모두 끔 — 에서는 원인만 쌓이고 터지지 않는다)
+        if (HazardSystem.RandomDays <= 0f && Storyteller.Persona == StoryPersona.Off) return;
         foreach (var k in HazardsV18.Specs.Select(x => x.Kind))
         {
             var (p, room, refId) = HazardsV18.Pressure(w, k);
@@ -861,7 +861,7 @@ public sealed class OmenCheckActivity : Activity
         if (Mine(c, w) is HazardSign s)
         {
             var more = HazardsV18.Of(s.Kind)!;
-            return (Crisis.Acting(w) ? 0.2f : 0.62f, $"{more.Omen} — {more.Cause}을(를) 손본다");
+            return (Crisis.Acting(w) ? 0.2f : Bedtime(c, w) ? 0.4f : 0.62f, $"{more.Omen} — {Ko.EulReul(more.Cause)} 손본다");
         }
         if (Mess(c, w) is IncidentTrace t && !OnShift(c, w) && !Bedtime(c, w)) return (0.24f, $"{HazardsV18.Of(t.Kind)!.Trace} — 치운다");
         return (0f, "—");
@@ -883,7 +883,7 @@ public sealed class OmenCheckActivity : Activity
                 new DoToil((cm, world) => { world.Signs.Resolve(sign, cm); return true; }),
             };
             var more = HazardsV18.Of(s.Kind)!;
-            return new Job(this, "낌새 살피기", toils) { LogText = $"{more.Omen} — {room.Name}의 {more.Cause}을(를) 손보러 간다", LogKind = LogKind.Work };
+            return new Job(this, "낌새 살피기", toils) { LogText = $"{more.Omen} — {room.Name}의 {Ko.EulReul(more.Cause)} 손보러 간다", LogKind = LogKind.Work };
         }
         if (Mess(c, w) is IncidentTrace t)
         {
@@ -899,7 +899,7 @@ public sealed class OmenCheckActivity : Activity
                 new WaitToil(SimTime.Minutes(15), Pose.Working, a.Center),
                 new DoToil((cm, world) => { world.Signs.CleanTrace(tr, cm); return true; }),
             };
-            return new Job(this, "흔적 치우기", toils) { LogText = $"{HazardsV18.Of(t.Kind)!.Trace}을(를) 치운다", LogKind = LogKind.Work };
+            return new Job(this, "흔적 치우기", toils) { LogText = $"{Ko.EulReul(HazardsV18.Of(t.Kind)!.Trace)} 치운다", LogKind = LogKind.Work };
         }
         return null;
     }
