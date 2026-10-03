@@ -129,6 +129,7 @@ public partial class Hud : Control
         DrawMinimap(); // v11.3
         if (MinimapOpen && !ChronicleOpen && !TechOpen && _minimapRect.Size.X > 0f) DrawVoyageBar(_minimapRect); // v12.8 항로
         DrawIncidentCards(mouse); // v12.2 사고 카드
+        DrawTalkCard(mouse); // v18.17 대화 카드 (HudTalkCard.cs)
         if (_world.Causes.Notable().Any()) DrawTimeBar(mouse); // v12.2 시간 막대
         if (CouncilOpen) DrawCouncil(mouse); // v18.18 회의록 · 안건 · 파벌 (HudCouncil.cs)
         else if (PolicyOpen) DrawPolicy(mouse); // v13.2 방침·회의 화면
