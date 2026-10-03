@@ -159,6 +159,7 @@ public sealed class World
     public SchemeSystem Schemes { get; } // v18.14 승무원이 스스로 꾸미는 일 100+
     public BlackboxSystem Blackbox { get; } public InquirySystem Inquiry { get; } // v18.7 블랙박스 · 실수 숨기기 · 사고 조사
     public ValueSystem Values { get; } // v18.15 가치관 · 결정에 대한 마음 · 딜레마 · 결정 장부
+    public StorySystem Tales { get; } // v18.16 · v18.17 개인 이야기 · 대화 카드 · 캠프의 밤 · 잡담 · 로맨스
     public ReactSystem React { get; } // v17.8 모든 변화에 누군가 반응한다
     public FleetSystem Fleet { get; } // v16.20b 로봇 · 드론 두뇌와 성능 · 주컴퓨터 함대 지휘
     public FoodSourceSystem FoodSources { get; } // v16.22 식량원 (수경 · 조류 · 단백질 · 버섯 · 정원 · 저장 · 교역 · 원정 · 발효)
@@ -289,6 +290,7 @@ public sealed class World
         Schemes = new SchemeSystem(this); // v18.14
         Blackbox = new BlackboxSystem(this); Inquiry = new InquirySystem(this); // v18.7
         Values = new ValueSystem(this); // v18.15
+        Tales = new StorySystem(this); // v18.16 · v18.17
         React = new ReactSystem(this); // v17.8
         Fleet = new FleetSystem(this); // v16.20b
         FoodSources = new FoodSourceSystem(this); Scrap = new ScrapSystem(this); // v16.22
@@ -407,6 +409,7 @@ public sealed class World
             Culture.Update(dt); // v14.9 겪은 일이 관행이 되어 전해진다
             pf = Prof.Lap("sys.Culture", pf);
             Daily.Update(dt); // v15 사고가 아닌 날의 일상 사건
+            Tales.Update(dt); // v18.16 · v18.17 개인 이야기 · 대화 카드 · 캠프의 밤 · 잡담 · 로맨스
             Maneuver.Update(dt); // v17.0 침대 끈 · 데우는 냄비 · 조각 · 화물 무게중심 · 관행
             Blackbox.Update(dt); Inquiry.Update(dt); // v18.7 블랙박스 기록 · 숨은 실수 · 죄책감 · 사고 조사 안건
             React.Update(dt); // v17.8 더위 · 추위 · 어둠 · 바닥 · 소리 · 냄새 · 남의 몸짓 → 말 · 몸짓 · 짧은 행동
