@@ -231,7 +231,7 @@ public sealed partial class InfoSystem
         float b = 0f;
         // 늘 앉던 자리 (앉을수록 조금씩)
         int n = SeatCount(c, seat);
-        if (n > 0) b -= MathF.Min(10f, 2.5f * n); // 통합7 받은 배식기가 바뀌면(거리 제곱) 몇 번 앉은 자리도 쉽게 밀렸다 — 버릇을 조금 더 세게
+        if (n > 0) b -= MathF.Min(16f, 4f * n); // 통합7 받은 배식기가 바뀌면(거리 제곱) 몇 번 앉은 자리도 쉽게 밀렸다 — 늘 앉던 자리면 네 칸쯤 더 걸어간다
         var room = seat.Room;
         foreach (var o in w.Crew)
         {
