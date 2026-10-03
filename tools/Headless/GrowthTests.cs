@@ -33,6 +33,8 @@ public static partial class Program
                     var w = DayOne(seed + i * 211, "Mirinae");
                     w.Growth.NoTraining = !train;
                     Run(w, SimTime.TicksPerDay * 20);
+                    // 통합8 스무 날째에 큰 사고가 겹쳐 다친 사람이 여럿이면 셋의 치료가 그 뒤로 밀린다 (치료 주문 8 · 의무관도 다침) — 배가 가라앉을 때까지 (이틀 안) 기다렸다가 견준다
+                    for (int k = 0; k < 48 && (Crisis.Level(w) >= CrisisLevel.Alert || w.Crew.Any(c => !c.Dead && c.Vitals.Injury > 0.2f)); k++) Run(w, SimTime.Hours(1));
                     var medic = w.Crew.First(c => c.Role == CrewRole.Medic);
                     // 의무관이 떠났다 (구조선으로 옮겨 탔다 — 시험을 위해 배에서 뺀다)
                     medic.Vitals.Health = 0f;

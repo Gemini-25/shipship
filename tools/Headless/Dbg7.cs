@@ -88,6 +88,22 @@ public static partial class Program
                 Console.WriteLine($"{SimTime.Clock(w.Tick)} grow {FoodPolicy.GrowingPerDay(w):0} soon {FoodPolicy.HarvestSoon(w, 72f):0} stock {FoodPolicy.FoodStock(w):0} beds-broken {w.Ship.FurnitureOf(FurnitureType.GrowBed).Count(b => b.Machine!.Faults.Count > 0)} days {FoodPolicy.FoodDays(w):0.00} lead {w.Automation.RationLead} leads {w.Automation.RationLeads} order {(o == null ? "-" : $"{o.Urgency:0.00} {o.Assignee?.Name} blk {o.BlockedReason}")} · cook {cook?.Name} {cook?.ActivityLabel} · crisis {Crisis.Level(w)} · asks {w.Automation.Asks.Needed("ration")}");
             }
         }
+        if (which == "bchess")
+        {
+            var w = DayOne(seed, "Hanbit");
+            var players = w.Crew.Where(c => !c.IsChild).Take(4).ToList();
+            foreach (var c in players)
+            {
+                c.Hobbies.Clear(); c.Hobbies.Add(Hobby.Chess);
+                if (!w.Belongings.Of(c).Any(b => b.Kind == BelongingKind.ChessSet)) w.Belongings.Seed2(c, BelongingKind.ChessSet);
+            }
+            for (int h = 0; h < 36; h += 3)
+            {
+                Run(w, SimTime.Hours(3));
+                Console.WriteLine($"{SimTime.Clock(w.Tick)} games: " + string.Join(" | ", w.Belongings.Games.Select(g => $"#{g.Id} {g.A}v{g.B} {g.Moves:0}/{g.Target:0} done {g.Done} scene {g.Scene}")));
+                foreach (var sc in w.Scenes.Scenes.Where(x => x.Kind == SceneKind.Chess).TakeLast(3)) Console.WriteLine($"   scene {sc.Id} {sc.Stage} open {sc.Open} host {sc.Host} other {sc.Other} · {string.Join(" / ", sc.Trail.TakeLast(4))}");
+            }
+        }
         if (which == "chess")
         {
             var w = DayOne(seed, "Hanbit");

@@ -688,6 +688,9 @@ public sealed class BelongingSystem
             // 남이 연 판 — 상대를 기다린다
             if (g.B < 0 && g.A != c.Id && CrewOf(g.A) is CrewMember host && host.Job?.Activity is HobbyActivity && (host.Position - g.Table.Center).LengthSquared() < 9f) return g;
         }
+        // 통합8 끊긴 내 판은 상대가 지금 바빠도 새 판을 벌이지 않고 그 판 앞에 앉아 기다린다 (상대가 한가해지면 와서 마저 둔다 — 새 판만 거듭 벌여 끝난 판이 없었다)
+        foreach (var g in Games)
+            if (!g.Done && g.Kind == h && g.Scene < 0 && g.B >= 0 && (g.A == c.Id || g.B == c.Id) && CrewOf(g.A == c.Id ? g.B : g.A) is { Dead: false, CanAct: true, IsAwake: true }) return g;
         return null;
     }
 
@@ -767,7 +770,10 @@ public sealed class HobbyActivity : Activity
         float workEnd = s.WorkStart + s.WorkLength;
         if (SimTime.InWindow(hour, workEnd, SimTime.HoursFromTo(workEnd, s.SleepStart))) score += 0.17f;
         if (item is { Open: true }) score += 0.12f;
-        if (game != null) score += game.B < 0 && game.A != c.Id ? 0.3f : 0.2f;
+        if (item is { Progress: > 0.3f }) score += 0.4f * (item.Progress - 0.3f); // 통합8 거의 다 된 것엔 손이 간다 (마지막 한 시간을 이틀 내내 못 냈다)
+        // 남이 연 판 · 상대가 끊긴 판 앞에 앉아 기다린다 — 간다 (통합8 둘이 엇갈려 번갈아 혼자 앉았다 일어났다)
+        bool waitsForMe = game != null && game.B >= 0 && w.Crew.FirstOrDefault(x => x.Id == (game.A == c.Id ? game.B : game.A)) is { } op && op.Job?.Activity is HobbyActivity && (op.Position - game.Table.Center).LengthSquared() < 9f;
+        if (game != null) score += game.B < 0 && game.A != c.Id || waitsForMe ? 0.3f : 0.2f;
         if (Bedtime(c, w)) score -= 0.25f;
         if (OnShift(c, w)) score -= 0.15f;
         return (MathF.Max(0f, score), $"{Persona.Of(h).Name} — {why}");
@@ -851,10 +857,10 @@ public sealed class HobbyActivity : Activity
                     world.Belongings.Sessions[cm.Id] = session;
                     world.Belongings.Stats.Sessions++;
                 }
-                if (g != null && g.B < 0) waited++;
+                if (g != null && (g.B < 0 || world.Crew.FirstOrDefault(x => x.Id == (g.A == cm.Id ? g.B : g.A)) is not { } op || (op.Position - cm.Position).LengthSquared() >= 9f)) waited++; // 통합8 끊긴 판 앞에서 상대를 기다리는 것도 센다
                 world.Belongings.Practice(cm, h, it3, g, dt);
             },
-            DoneWhen = (cm, world) => session?.Hushed == true || g != null && (g.Done || g.B < 0 && waited > SimTime.Minutes(25)),
+            DoneWhen = (cm, world) => session?.Hushed == true || g != null && (g.Done || waited > SimTime.Minutes(25)),
         });
         // 4) 뒤처리: 제자리에 둔다 (어지르는 사람은 그냥 둔다)
         if (item != null)
@@ -1030,7 +1036,10 @@ public sealed class MendActivity : Activity
         if (c.RawSkill(Skill.Mechanics) < 0.35f || OnShift(c, w) || Bedtime(c, w)) return (0f, "—");
         var b = Target(c, w);
         if (b == null) return (0f, "—");
-        return (0.2f + 0.15f * c.Traits.Sociability, $"{w.Crew.First(o => o.Id == b.Owner).Name}의 {Ko.EulReul(b.Name)} 고쳐 준다");
+        var owner = w.Crew.First(o => o.Id == b.Owner);
+        // 통합8 가까운 사람의 망가진 물건일수록 마음이 쓰인다 (0.2~0.35로는 차 · 이야기 · 꾸밈에 밀려 이틀 내내 아무도 안 말려 줬다)
+        float near = owner == c ? 0.1f : 0.3f * Math.Clamp(c.AffinityTo(owner), 0f, 1f);
+        return (0.2f + 0.15f * c.Traits.Sociability + near, $"{owner.Name}의 {Ko.EulReul(b.Name)} 고쳐 준다");
     }
 
     public override Job? Plan(CrewMember c, World w, DistanceField dist)
