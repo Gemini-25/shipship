@@ -373,6 +373,8 @@ public enum FurnitureType
     Fermenter, BreadOven, SpiceRack, IceMaker, PlantRack, CatTower, PestTrap, InsectFarm, GreaseTrap, Compactor,
     Composter, GreywaterFilter, GrabRail, CargoNet, CrashSeat, MagBootRack, ServerRack, RecorderVault, ListeningPost, MeetingBoard,
     MemorialWall, MusicCorner, LabStill, ClothesRack, SewingMachine, EyeWash, OxygenMaskBox, HeatSuitRack, DockClampPanel, Telescope,
+    // 의료 2차 — 장기 · 이식 · 감염 · 격리 (Organs.cs OrganGear)
+    Dialyzer, Ecmo, HeartPump, OrganCooler, BioPrinter, NegPressure,
 }
 
 public static class FurnitureTypes
@@ -447,7 +449,7 @@ public static class FurnitureTypes
         FurnitureType.MaintCart => "정비 카트",
         FurnitureType.RobotDock => "로봇 충전대",
         FurnitureType.SupplyCache => "비상 물자함",
-        _ => ModulesV15.Name(t) ?? ModulesV18.Name(t) ?? t.ToString(), // v15 · 압축-마
+        _ => ModulesV15.Name(t) ?? ModulesV18.Name(t) ?? OrganGear.Name(t) ?? t.ToString(), // v15 · 압축-마 · 의료 2차
     };
 
     /// <summary>올라서거나 누울 수 있는 가구.</summary>

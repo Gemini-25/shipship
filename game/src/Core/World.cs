@@ -185,6 +185,7 @@ public sealed class World
     public ScaleSystem Scale { get; } // v16.18 사고 · 재난 다섯 규모 (판정 · 대응 · 완급 · 연쇄 · 도감)
     public CasualtySystem Casualty { get; } // v16.24 큰 상처 뒤: 출혈 · 화상 쇼크 · 심정지 · 불붙는 순간
     public InjuryGradeSystem Grades { get; } // 부상 등급 (경상 · 중상 · 위중) — 기록 · 기억 · 방송 · 치료 순서
+    public OrganSystem Organs { get; } public TransplantSystem Transplant { get; } public InfectionSystem Infection { get; } // 의료 2차 장기 · 이식 · 감염 · 격리
     public PerilSystem Perils { get; } // v16.26 위험이 사람에게 닿는 길: 열사병 · 큰 피폭 · 늦게 깨는 잠
     public RadCareSystem RadCare { get; } // 통합5 방사선 병 간호 (수액 · 골수 주사 · 수혈 · 격리)
     public WaysSystem Ways { get; } // v16.25 문제마다 여러 갈래 해법
@@ -321,6 +322,7 @@ public sealed class World
         Scale = new ScaleSystem(this); // v16.18
         Casualty = new CasualtySystem(this); // v16.24
         Grades = new InjuryGradeSystem(this);
+        Organs = new OrganSystem(this); Transplant = new TransplantSystem(this); Infection = new InfectionSystem(this); // 의료 2차
         Perils = new PerilSystem(this); // v16.26
         RadCare = new RadCareSystem(this); // 통합5
         Ways = new WaysSystem(this); // v16.25
@@ -455,6 +457,7 @@ public sealed class World
             pf = Prof.Lap("sys.After", pf);
             Casualty.Update(dt); // v16.24 큰 상처 뒤 — 누르고 · 가슴을 누르고 · 컴퓨터가 부른다
             Grades.Update(dt); // 부상 등급이 바뀌는 순간 (기록 · 곁의 사람 · 주컴퓨터 방송)
+            Organs.Update(dt); Transplant.Update(dt); Infection.Update(dt); // 의료 2차 장기 · 이식 · 감염 · 격리
             Perils.Update(dt); // v16.26 열사병 · 큰 피폭
             RadCare.Update(dt); // 통합5 방사선 병 간호
             pf = Prof.Lap("sys.Casualty", pf);

@@ -15,7 +15,7 @@ public static class Modules
 {
     public sealed record Spec(FurnitureType Type, RoomType Room, int Max, (ItemKind kind, int count)[] Cost, string Note, float Bonus);
 
-    public static readonly Spec[] All = Base().Concat(ModulesV15.Specs).Concat(ModulesV18.Specs).ToArray(); // v15 새 모듈 34 · 압축-마 30
+    public static readonly Spec[] All = Base().Concat(ModulesV15.Specs).Concat(ModulesV18.Specs).Concat(OrganGear.Specs).ToArray(); // v15 새 모듈 34 · 압축-마 30 · 의료 2차
 
     private static Spec[] Base() => new Spec[]
     {
@@ -85,7 +85,7 @@ public static class Modules
                 : w.Parts.Stats.ByOrigin[(int)PartOrigin.Salvage] + w.Parts.Stats.ByOrigin[(int)PartOrigin.Handmade] >= 3 ? (0.3f, "시험 안 한 중고·손으로 만든 부품을 달았다") : (0f, ""),
             FurnitureType.Hoist => w.Parts.Stats.Strains > 0 ? (0.5f, $"무거운 부품을 들다 허리를 다친 일 {w.Parts.Stats.Strains}번") : w.Parts.Stats.HeavyLifts >= 3 ? (0.3f, $"무거운 부품을 맨손으로 {w.Parts.Stats.HeavyLifts}번") : (0f, ""),
             FurnitureType.MaintCart => w.Parts.Stats.FarRepairs >= 8 ? (0.25f, $"정비실에서 먼 수리 {w.Parts.Stats.FarRepairs}번") : (0f, ""),
-            _ => ModulesV18.Is(t) ? ModulesV18.Need(w, t) : ModulesV15.Need(w, t), // v15 · 압축-마
+            _ => OrganGear.Is(t) ? OrganGear.Need(w, t) : ModulesV18.Is(t) ? ModulesV18.Need(w, t) : ModulesV15.Need(w, t), // v15 · 압축-마 · 의료 2차
         };
     }
 
