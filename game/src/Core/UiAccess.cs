@@ -18,8 +18,8 @@ public static class UiAccess
 {
     /// <summary>사람 색 (어두운 바탕에서 읽히는 색약 안전 8색 — 밝기를 고루 벌렸다).</summary>
     public static readonly string[] SafeCrew = { "#e69f00", "#56b4e9", "#009e73", "#f0e442", "#3d8fd1", "#d55e00", "#cc79a7", "#eeeeee" };
-    /// <summary>방 색 6가지 (밝기가 서로 다르다).</summary>
-    public static readonly string[] SafeRoom = { "#e69f00", "#56b4e9", "#f0e442", "#cc79a7", "#009e73", "#8a8f99" };
+    /// <summary>방 색 7가지 (어두운 바탕에서 밝고 · 세 가지 색약 어디서든 서로 ΔE 22 넘게 갈린다).</summary>
+    public static readonly string[] SafeRoom = { "#f0e442", "#8a8f99", "#d55e00", "#3d8fd1", "#c8f0a0", "#7fd6b4", "#c08a5a" };
     /// <summary>뜻 색: 좋음 · 주의 · 위험 · 강조 (빨강-초록 대신 파랑-주황).</summary>
     public const string SafeGood = "#56b4e9", SafeWarn = "#e69f00", SafeDanger = "#d55e00", SafeAccent = "#cc79a7";
 

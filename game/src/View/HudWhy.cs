@@ -28,11 +28,11 @@ public partial class Hud
     }
 
     private static List<TipLine> WhyLines(IReadOnlyList<WhyTerm> terms) =>
-        terms.Select(t => new TipLine($"{t.Name} {t.Pct}" + (t.Note.Length > 0 ? $" · {t.Note}" : ""), t.Factor >= 1f ? Palette.Good : t.Factor < 0.7f ? Palette.Danger : Palette.Warning)).ToList();
+        terms.Where(t => t.Shown).Select(t => new TipLine($"{t.Name} {t.Pct}" + (t.Note.Length > 0 ? $" · {t.Note}" : ""), t.Factor >= 1f ? Palette.Good : t.Factor < 0.7f ? Palette.Danger : Palette.Warning)).ToList();
 
     private void WhyMachine(Machine m, Rect2 hit, Vector2 mouse) =>
-        WhyHook(hit, $"m:{m.Body.Id}", $"효율 {m.Efficiency * 100:0}% — 왜 이 값", () => WhyLines(UiWhy.Efficiency(m)), mouse);
+        WhyHook(hit, $"m:{m.Body.Id}", $"효율 {m.Efficiency * 100:0}% — 무엇이 깎았나", () => WhyLines(UiWhy.Efficiency(m)), mouse);
 
     private void WhyChip(string label, Rect2 hit, Vector2 mouse) =>
-        WhyHook(hit, $"chip:{label}", $"{label} — 왜 이 값", () => UiWhy.Chip(_world, label).Select(l => new TipLine(l, Palette.TextDim)).ToList(), mouse, hoverTip: false);
+        WhyHook(hit, $"chip:{label}", $"{label} — 까닭", () => UiWhy.Chip(_world, label).Select(l => new TipLine(l, Palette.TextDim)).ToList(), mouse, hoverTip: false);
 }

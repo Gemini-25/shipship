@@ -45,7 +45,7 @@ public sealed class HudNeeds
 public sealed class HudPlan
 {
     public UiRect TopBar, Status, Tools, Profile, Cosmic, Legend, Computer, Log, Minimap, Voyage, Right, ShipArea;
-    public bool ComputerFolded, ComputerHidden;
+    public bool ComputerFolded, ComputerHidden, CosmicFolded, CosmicHidden, LegendHidden;
     public float StatusMaxW, ToolsMaxW;
     /// <summary>왼쪽 위 더미의 자리 (그 패널이 지난 그림에 없었어도 이번에 그릴 자리).</summary>
     public float ProfileY, CosmicY, LegendY;
@@ -76,6 +76,7 @@ public sealed class HudPlan
 public static class UiLayout
 {
     public const float Margin = 16f, Gap = 8f, RightW = 324f, TopBarH = 52f, ToolsH = 40f;
+    public const float CosmicFoldH = 54f;
     public const float ComputerW = 318f, ComputerFoldH = 44f, LogW = 470f, LogFullH = 190f, VoyageH = 40f, CosmicW = 344f;
 
     // ── 주 컴퓨터 카드 속 줄 높이 (화면과 시험이 같은 값) ──
@@ -109,16 +110,7 @@ public static class UiLayout
         float ty = Margin + TopBarH + Gap;
         p.ToolsMaxW = Math.Max(0f, limit - Margin);
         p.Tools = n.Tools ? new UiRect(Margin, ty, p.ToolsMaxW, ToolsH) : default;
-        // ② 왼쪽 위 더미
-        float y = n.Tools ? ty + ToolsH + Gap : ty;
-        p.ProfileY = y;
-        if (n.ProfileH > 0f) { p.Profile = new UiRect(Margin, y, Math.Min(n.ProfileW, limit - Margin), n.ProfileH); y = p.Profile.Bottom + Gap; }
-        p.CosmicY = y;
-        if (n.CosmicH > 0f) { p.Cosmic = new UiRect(Margin, y, CosmicW, n.CosmicH); y = p.Cosmic.Bottom + Gap; }
-        p.LegendY = y;
-        if (n.LegendH > 0f) { p.Legend = new UiRect(Margin, y, n.LegendW, n.LegendH); y = p.Legend.Bottom + Gap; }
-        float stackBottom = y - Gap;
-        // ③ 아래
+        // ③ 아래 (먼저 — 위 더미가 여기까지만 내려온다)
         p.Log = new UiRect(Margin, H - Margin - n.LogH, LogW, n.LogH);
         if (n.MinimapW > 0f)
         {
@@ -126,6 +118,31 @@ public static class UiLayout
             if (p.Minimap.Right > limit) p.Minimap = default; // 좁은 화면: 지도는 접는다 (G로 다시)
             else if (n.Voyage) p.Voyage = new UiRect(p.Minimap.X, p.Minimap.Y - VoyageH - 6f, p.Minimap.W, VoyageH);
         }
+        // ② 왼쪽 위 더미: 넘치면 대재난 카드는 접고, 범례는 옆으로 · 그래도 자리가 없으면 숨긴다
+        float y = n.Tools ? ty + ToolsH + Gap : ty;
+        float stackLimit = p.Log.Y - Gap;
+        float stackTop = y, stackW = 0f;
+        p.ProfileY = y;
+        if (n.ProfileH > 0f) { p.Profile = new UiRect(Margin, y, Math.Min(n.ProfileW, limit - Margin), n.ProfileH); y = p.Profile.Bottom + Gap; stackW = Math.Max(stackW, p.Profile.W); }
+        p.CosmicY = y;
+        if (n.CosmicH > 0f)
+        {
+            float h = n.CosmicH;
+            if (y + h > stackLimit && h > CosmicFoldH) { h = CosmicFoldH; p.CosmicFolded = true; }
+            if (y + h <= stackLimit) { p.Cosmic = new UiRect(Margin, y, CosmicW, h); y = p.Cosmic.Bottom + Gap; stackW = Math.Max(stackW, CosmicW); }
+            else p.CosmicHidden = true;
+        }
+        p.LegendY = y;
+        if (n.LegendH > 0f)
+        {
+            var below = new UiRect(Margin, y, n.LegendW, n.LegendH);
+            var beside = new UiRect(Margin + stackW + Gap, stackTop, n.LegendW, n.LegendH);
+            bool Free(UiRect r) => r.Bottom <= stackLimit && r.Right <= limit && !r.Intersects(p.Voyage) && !r.Intersects(p.Minimap);
+            if (Free(below)) { p.Legend = below; y = below.Bottom + Gap; }
+            else if (Free(beside)) p.Legend = beside;
+            else p.LegendHidden = true;
+        }
+        float stackBottom = y - Gap;
         // ④ 주 컴퓨터: 기록 바로 위
         if (n.Computer)
         {

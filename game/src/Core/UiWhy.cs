@@ -12,6 +12,8 @@ public readonly record struct WhyTerm(string Name, float Factor, string Note = "
 {
     /// <summary>"−10%" · "+15%".</summary>
     public string Pct => Factor >= 1f ? $"+{(Factor - 1f) * 100f:0}%" : $"−{(1f - Factor) * 100f:0}%";
+    /// <summary>보일 만한 몫 (0.5% 넘게) — 곱에는 다 들어간다.</summary>
+    public bool Shown => MathF.Abs(Factor - 1f) >= 0.005f;
 }
 
 public static class UiWhy
@@ -22,7 +24,7 @@ public static class UiWhy
         var list = new List<WhyTerm>();
         if (!m.Powered && m.Spec.PowerDraw > 0f) { list.Add(new WhyTerm("전기 없음", 0f, m.Body.Room.Name + " 회로")); return list; }
         var room = m.Body.Room;
-        void Add(string name, float f, string note = "") { if (MathF.Abs(f - 1f) > 0.004f) list.Add(new WhyTerm(name, f, note)); }
+        void Add(string name, float f, string note = "") { if (MathF.Abs(f - 1f) > 1e-6f) list.Add(new WhyTerm(name, f, note)); }
         Add("고장", m.FaultFactor, string.Join("·", m.Faults.Take(2).Select(x => x.Name)));
         Add("등급", Grades.Output(m.Grade), Grades.Name(m.Grade));
         Add("마모", 1f - 0.25f * m.Wear * m.Wear, $"마모 {m.Wear * 100:0}%");
@@ -41,7 +43,7 @@ public static class UiWhy
 
     /// <summary>한 줄 요약: "효율 82% = 전압 −10% · 마모 −5%".</summary>
     public static string Line(string what, float value, IReadOnlyList<WhyTerm> terms) =>
-        terms.Count == 0 ? $"{what} {value * 100:0}% — 깎이는 것 없음" : $"{what} {value * 100:0}% = " + string.Join(" · ", terms.Take(4).Select(t => $"{t.Name} {t.Pct}"));
+        terms.Count(t => t.Shown) == 0 ? $"{what} {value * 100:0}% — 깎이는 것 없음" : $"{what} {value * 100:0}% = " + string.Join(" · ", terms.Where(t => t.Shown).Take(4).Select(t => $"{t.Name} {t.Pct}"));
 
     /// <summary>상태 줄 숫자의 까닭 (전력 · 배터리 · 산소 · 물 · 식량 · 작업).</summary>
     public static List<string> Chip(World w, string label)

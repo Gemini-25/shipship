@@ -183,7 +183,8 @@ public partial class Hud
         w = Mathf.Max(w, Gfx.Width(Fonts.Bold, ViewModes.Name(_main.ViewMode) + " 보기", Ui.TextSmall) + 28f);
         float h = 32f + items.Length * 20f + 6f;
         _legendSz = new Vector2(w, h);
-        var card = new Rect2(Margin, _plan.LegendY, w, h);
+        if (_plan.Legend.Empty) return; // 자리가 없으면 이번엔 숨긴다 (배치 규칙)
+        var card = new Rect2(_plan.Legend.X, _plan.Legend.Y, w, h);
         Card(card);
         ViewGlyph(_main.ViewMode, card.Position + new Vector2(18, 17), 6f, Palette.Accent);
         Gfx.Text(this, Fonts.Bold, card.Position + new Vector2(30, 21), ViewModes.Name(_main.ViewMode) + " 보기", Ui.TextSmall, Palette.TextDim);

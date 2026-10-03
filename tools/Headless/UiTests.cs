@@ -328,6 +328,7 @@ public static partial class Program
             // 6) 아이콘: 자원 · 상태 · 방 70 · 설비 70 · 기술 7이 저마다 다른 그림 (같은 틀에 글자만 바꾼 것 · 같은 파일 금지)
             IconCheck();
             UiV24Checks(seed); // v16.24 확대 3단계 · 연대기 · 사고 카드 · 제안 때 · 화면 글
+            UiV176Checks(seed); // v17.6 승무원 목록 · 색약 · 음악 · v17.9 도감
         }
         catch (Exception ex) { Console.WriteLine(ex); _fails++; }
         Console.WriteLine(_fails == 0 ? "\n✔ UI 기반 점검 모두 통과" : $"\n✘ {_fails}개 실패");
