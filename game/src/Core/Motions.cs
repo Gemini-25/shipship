@@ -283,22 +283,24 @@ public sealed partial class MotionSystem
     private void Motives()
     {
         var w = _w;
-        if (Crisis.Acting(w) || Open.Count() >= 3) return;
+        if (Crisis.Acting(w)) return;
+        // 통합7 안건 셋이 이틀씩 열려 있어도 제 눈으로 본 도둑질 고발(증인이 있다)은 낸다 — 미뤄 두면 증거가 흐려진다 (한빛호: 셋이 막혀 고발이 끝내 못 올라갔다)
+        bool full = Open.Count() >= 3;
         int slot = (int)(w.Tick / SimTime.Hours(1) % 3);
         foreach (var c in w.Crew)
         {
             if (!Adult(c) || !c.CanAct || !c.IsAwake || c.Outside || (c.Id + slot) % 3 != 0 || Busy(c) || NoVote(c)) continue;
-            if (Motive(c) is not { } mv) continue;
+            if (Motive(c, chargesOnly: full) is not { } mv) continue;
             if (!R.Chance(Math.Clamp(mv.s, 0f, 0.9f) * 0.5f)) continue;
             if (w.Tick - _lastProposed < SimTime.Hours(2) && mv.s < 0.5f) continue; // 안건이 한꺼번에 쏟아지지 않게 (급한 건 예외)
             _lastProposed = w.Tick;
             mv.make();
-            if (Open.Count() >= 3) return;
+            if (full || Open.Count() >= 3) return;
         }
     }
 
     /// <summary>이 사람이 지금 내고 싶은 안건 (가장 강한 동기 하나).</summary>
-    public (float s, Action make)? Motive(CrewMember c)
+    public (float s, Action make)? Motive(CrewMember c, bool chargesOnly = false)
     {
         var w = _w;
         (float s, Action make)? best = null;
@@ -307,6 +309,7 @@ public sealed partial class MotionSystem
         var g = GrudgeOf(c);
         // 1) 배분: 먹을 것이 줄어든다 — 배급을 줄이자 (창고를 보는 사람 · 안전 · 규칙 · 효율)
         float days = FoodPolicy.FoodDays(w);
+        if (!chargesOnly) {
         int rations = w.Policies["rations"];
         bool settled = w.Policies.SetAt("rations") < 0 || w.Tick - w.Policies.SetAt("rations") >= SimTime.TicksPerDay;
         if (rations != 3 && days < 5f && !w.Food.Disabled && !Pending("rations") && settled)
@@ -321,6 +324,7 @@ public sealed partial class MotionSystem
         {
             float s = 0.15f + 0.5f * c.Needs.Hunger + (days > 6f ? 0.15f : 0f) + (g != null && Get(g.Motion)?.Policy == "rations" ? 0.25f : 0f);
             Consider(s, () => Propose(c, MotionKind.RuleChange, SittingKind.Regular, "배급을 다시 똑같이", c.Needs.Hunger > 0.55f ? "배가 고파서 손이 떨린다" : "이제 먹을 것이 넉넉하다", "rations", 0));
+        }
         }
         // 2) 고발: 배급을 빼돌리는 걸 봤다
         foreach (var t in Thefts)
@@ -337,6 +341,7 @@ public sealed partial class MotionSystem
                 Propose(c, MotionKind.Accusation, SittingKind.Trial, $"{thief.Name} 고발 — 배급을 빼돌렸다", why, target: thief.Id, theft: tt.Id);
             });
         }
+        if (chargesOnly) return best;
         // 3) 선장 신임: 믿음이 무너졌거나 선장과 골이 깊다
         if (w.Command.Captain is CrewMember cap && cap != c && !Open.Any(m => m.Kind == MotionKind.Confidence))
         {
