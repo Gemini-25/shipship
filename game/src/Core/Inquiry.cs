@@ -97,7 +97,7 @@ public readonly record struct CoverTask(CoverTaskKind Kind, int Slip, int RoomId
 public sealed class InquiryStats
 {
     public int Slips, SelfFixed, Bites, Fires, Hidden, Confessed, LateConfessed, Tidied, Lies, Blames, Wipes, Nudges, GapsSeen,
-        Cases, Hearings, Revealed, Wrong, Unresolved, Forgiven, Punished, Rules, Reminders, Dreams, Witnessed;
+        Cases, Hearings, Revealed, Wrong, Unresolved, Forgiven, Punished, Rules, Reminders, Dreams, Witnessed, MemoryFixes;
 }
 
 public sealed partial class InquirySystem
@@ -152,7 +152,7 @@ public sealed partial class InquirySystem
         if (m == null || o.Kind is not (WorkKind.Repair or WorkKind.Maintain or WorkKind.PreventiveCheck or WorkKind.Upgrade)) return;
         bool maint = o.Kind is WorkKind.Maintain or WorkKind.PreventiveCheck;
         var (p, why) = w.Life.MistakeOdds(c, o);
-        p *= 0.3f;
+        p *= 1.2f;
         // 고를 실수 (정비면 건너뜀 · 경보 끔 · 공구 · 수리면 부품 · 공구 · 밸브)
         float r = R.Float();
         var kind = maint ? (r < 0.4f ? SlipKind.SkippedStep : r < 0.65f ? SlipKind.SilencedAlarm : SlipKind.ToolLeft)
@@ -473,6 +473,20 @@ public sealed partial class InquirySystem
                 $"조치: 그 시각 {w.Blackbox.RoomName(g.Terminal)} 위치 기록을 따로 보관함 ({near.Count}명)", "요청: 지운 분은 조사 전에 말씀해 주세요", $"box:gap:{g.Id}", SimTime.TicksPerDay);
             if (Get(g.Slip) is Slip s && P(s.Who) is CrewMember c) { c.Needs.Stress = MathF.Min(1f, c.Needs.Stress + 0.06f); s.Guilt += 0.1f; }
         }
+        // 블랙박스 ↔ 컴퓨터 기억: 방사선으로 틀어진 정비 기억을 상자의 단말 기록과 맞춰 고친다 (하루 가까이 아무도 못 짚었을 때)
+        if (a.MateOrNull is ShipMate mate)
+            foreach (var e in mate.Memory.Values)
+            {
+                if (!e.Corrupt || e.CorruptAt < 0 || w.Tick - e.CorruptAt < SimTime.Hours(20) || e.CorruptAt < w.Blackbox.FreshSince) continue;
+                if (MachineOf(e.RefId) is not Machine m) continue;
+                long old = e.Value;
+                var rec = w.Blackbox.Read(old - SimTime.Hours(1), w.Tick, x => x.Kind == BoxKind.Work && x.Ref == e.RefId);
+                if (rec == null || rec.Count > 0) continue; // 상자에도 그 무렵 정비가 있다 — 기억이 맞다
+                e.Corrupt = false; e.Fixed = w.Tick; e.Value = m.LastServiced;
+                Stats.MemoryFixes++;
+                a.Book.Add(ActKind.Check, m.Body.Room, $"블랙박스 단말 기록: {m.Name} — 기억 속 정비 {SimTime.Clock(old)} 무렵 기록 없음",
+                    "판단: 제 정비 기억 한 칸이 틀어져 있었다 (방사선 탓으로 보인다)", $"조치: 기억을 상자 기록대로 고침 · {Ko.EulReul(m.Name)} 정비표에 다시 올림", "요청: 정비표를 한 번 더 봐 주세요", $"box:mem:{e.RefId}", SimTime.TicksPerDay);
+            }
     }
 
     // ───────────────────────────── 숨기는 몸짓 (CoverActivity) ─────────────────────────────

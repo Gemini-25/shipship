@@ -192,6 +192,26 @@ public static partial class Program
             Check("무거워진 사람은 찾아가서 털어놓는다", s.Confessed && went && w.Inquiry.Stats.LateConfessed > 0, $"{(went ? "걸어가서" : "그 자리에서")} · {sc.C.Diary.LastOrDefault().text}");
         }
 
+        // ── 9) 저절로 — 며칠 사이 정비 뒤 실수가 생기고 (대개 스스로 되돌린다) · 상자가 컴퓨터의 틀어진 기억을 바로잡는다
+        if (Do("9"))
+        {
+            var w = World.CreateDefault(seed, 0, "Cheonma");
+            Run(w, SimTime.TicksPerDay);
+            var mate = w.Automation.Mate;
+            var target = w.Ship.Machines.Where(m => m.LastServiced > 0).OrderBy(m => m.Body.Id).FirstOrDefault() ?? w.Ship.Machines.First();
+            var e = mate.CorruptMemory(target);
+            for (int i = 0; i < 12; i++)
+            {
+                // 고된 사흘: 잠이 모자란 사람이 정비를 한다 (졸음은 실수를 부른다)
+                foreach (var c in w.Crew) if (!c.Dead && !c.IsChild) c.Needs.Rest = MathF.Min(c.Needs.Rest, 0.2f);
+                Run(w, SimTime.Hours(6));
+            }
+            var st = w.Inquiry.Stats;
+            Console.WriteLine($"   사흘: 실수 {st.Slips} · 스스로 되돌림 {st.SelfFixed} · 사고 {st.Bites} (불 {st.Fires}) · 숨김 {st.Hidden} · 털어놓음 {st.Confessed}+{st.LateConfessed} · 치움 {st.Tidied} · 남 탓 {st.Blames} · 지움 {st.Wipes} · 조사 {st.Cases}/{st.Hearings} · 드러남 {st.Revealed} · 틀린 결론 {st.Wrong} · 규칙 {st.Rules} · 상자 줄 {w.Blackbox.Stats.Entries} · 정비 기록 {w.Blackbox.Log.Count(x => x.Kind == BoxKind.Work)} · 실수(전체) {w.Life.Stats.Mistakes}");
+            Check("저절로 — 정비 뒤 실수가 생긴다 (스스로 되돌리거나 사고가 된다)", st.Slips >= 1, $"실수 {st.Slips}");
+            Check("블랙박스 ↔ 컴퓨터 기억 — 틀어진 정비 기억이 바로잡힌다", e == null || !e.Corrupt, e != null ? $"{e.Label} · 상자로 고침 {st.MemoryFixes} · 사람이 짚음 {mate.Corrections}" : "기억 칸 없음");
+        }
+
         // ── 8) 결정론 · 성능
         if (Do("8"))
         {

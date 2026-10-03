@@ -29,7 +29,7 @@ public sealed partial class InquirySystem
             var slip = Slips.FirstOrDefault(s => s.Bit && s.Node >= 0 && w.Causes.IncidentOf(s.Node) == inc);
             var k = w.Scale.Cases.FirstOrDefault(x => x.Root == inc.Root);
             bool big = inc.Deaths > 0 || k != null && k.Peak >= IncidentScale.System
-                       || slip != null && (slip.Fire || inc.Casualties > 0 || k == null || k.Peak >= IncidentScale.Room);
+                       || slip != null && (slip.Fire || inc.Casualties > 0 || slip.Kind == SlipKind.WrongPart || w.Ship.Rooms[slip.RoomId].Kind is RoomType.Reactor or RoomType.LifeSupport or RoomType.Power or RoomType.Engine);
             if (!big || slip == null && w.Tick < _nextCase) continue;
             OpenCase(inc, slip);
         }
