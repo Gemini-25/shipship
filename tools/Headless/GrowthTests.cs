@@ -15,7 +15,7 @@ public static partial class Program
             var w = DayOne(seed, "Mirinae");
             var before = w.Crew.ToDictionary(c => c.Id, c => c.SkillLevels.ToArray());
             Run(w, SimTime.TicksPerDay * 20);
-            var gains = w.Crew.SelectMany(c => Skills.All.Select(s => (c, s, d: c.RawSkill(s) - before[c.Id][(int)s]))).Where(x => x.d > 0.08f).OrderByDescending(x => x.d).Take(4).ToList();
+            var gains = w.Crew.Where(c => before.ContainsKey(c.Id)).SelectMany(c => Skills.All.Select(s => (c, s, d: c.RawSkill(s) - before[c.Id][(int)s]))).Where(x => x.d > 0.08f).OrderByDescending(x => x.d).Take(4).ToList(); // 통합6 스무 날 사이 새로 탄 사람(구조 · 합류)은 뺀다
             var medBackup = w.Crew.Where(c => c.Role != CrewRole.Medic).Max(c => c.RawSkill(Skill.Medicine));
             Check("배우기 — 유일한 전문가 곁에서 후배가 배운다", w.Growth.Lessons >= 5 && gains.Count > 0,
                 $"수업 {w.Growth.Lessons}번 · 고비 {w.Growth.Milestones}번 · {string.Join(", ", gains.Select(g => $"{g.c.Name} {Skills.Name(g.s)} +{g.d * 100:0}"))} · 의무관 말고 가장 나은 의료 {medBackup * 100:0}%");

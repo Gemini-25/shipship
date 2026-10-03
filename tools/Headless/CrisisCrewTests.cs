@@ -345,6 +345,7 @@ public static partial class Program
                 Run(w, 15);
                 if (woke < 0 && !p.Mind.Panicking(w.Tick)) woke = w.Tick - t0;
                 if (woke >= 0 && back < 0 && (CrResponding(p, w) || !Crisis.Acting(w))) back = w.Tick - t0; // 사고가 끝났으면 할 일이 없다
+                if (woke >= 0 && back < 0 && Environment.GetEnvironmentVariable("CR_DEBUG") == "1") Console.WriteLine($"     [{(w.Tick - t0) / 60}] {p.Name} {Doing(p, w)} 위기 {Crisis.Level(w)} 자리 {cc.Active(p)} 불 {w.Fire.Count} 부엌 산소 {w.Ship.RoomsOf(RoomType.Galley).First().Air.O2:0} 질식 {w.Ship.RoomsOf(RoomType.Galley).First().Inerting} 까닭 {string.Join("/", Crisis.Now(w).Reasons)} · " + string.Join(", ", p.LastEvaluations.OrderByDescending(e => e.Score).Take(5).Select(e => $"{e.Activity.Id}:{e.Score:0.00}")));
                 if (back >= 0) break;
             }
             float wm = woke * 60f / SimTime.TicksPerHour, bm = back * 60f / SimTime.TicksPerHour;
