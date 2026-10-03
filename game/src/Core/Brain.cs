@@ -59,6 +59,7 @@ public static class Brain
         new LendHandActivity(), new SpectateActivity(), new SpaceTidyActivity(), new CoffeeRunActivity(), // v17.4 잡아 주기 · 구경 · 통로 상자 치우기 · 커피 줄
         new InfoActivity(), // v17.3 소리 확인 · 따지기 · 해명 · 사과 · 물건 찾기 · 못 끝낸 일 · 설거지 · 사진
         new MateActivity(), // v16.27 훈련 집결 · 컴퓨터가 부탁한 안부 · 컴퓨터 개조 공사
+        new ZeroGActivity(), new EcoActivity(), // v18.4 중력 장치 수리 · 떠다니는 것 붙잡기 · v18.2 · v18.3 고양이 · 화분 · 바구미 · 배수구 · 쓰레기통
         new ManeuverActivity(), // v17.0 기동 준비 · 버티기 · 넘어졌다 일어나기 · 뒤처리 (빗자루 · 줍기 · 집게 · 점검 · 짐 옮기기)
         new ReactActivity(), // v17.8 반응에서 이어지는 짧은 행동 (장비 · 담요 · 창가 · 소리 확인 · 말 걸기 · 위로 · 구경)
         new StoryActivity(), // v18.16 · v18.17 밤 모임 · 할 말 있는 사람 찾아가기 · 이야기의 장소 · 연인 곁

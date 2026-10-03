@@ -147,6 +147,7 @@ public sealed class ScrapSystem
     public ScrapSystem(World w) => _w = w;
     /// <summary>모아 둔 고철 (판 개수로).</summary>
     public float Scrap { get; private set; }
+    public void AddScrap(float v) => Scrap += MathF.Max(0f, v); // v18.3 나눠 버린 금속 · 플라스틱
     public int Recovered, Runs;
     private int _plates = -1;
     private long _next;

@@ -14,13 +14,13 @@ namespace ShipSim.Core;
 //   물방울은 바닥 물이 되고 · 떠 있던 사람은 주저앉는다. 다치거나 많이 깨지면 배에 관행이 생긴다 (공구는 끈에 · 쓰면 바로 넣는다).
 //  전기가 끊겨 멈추면 전기가 돌아오는 순간(예고 없이) 중력이 돌아온다 — 고장이면 정비사가 고치고, 컴퓨터가 1분 전에 알린다.
 
-public enum FloatKind : byte { Wrench, Driver, Can, Book, Bottle, Plate, Bowl, PillJar, Pillow, Pot, Droplet, Sick, Article }
+public enum DriftKind : byte { Wrench, Driver, Can, Book, Bottle, Plate, Bowl, PillJar, Pillow, Pot, Droplet, Sick, Article }
 
 /// <summary>떠다니는 것 하나 (칸 좌표 · 칸/틱 속도).</summary>
-public sealed class Floater
+public sealed class Drifter
 {
     public int Id { get; init; }
-    public FloatKind Kind { get; init; }
+    public DriftKind Kind { get; init; }
     public Vector2 Pos { get; internal set; }
     public Vector2 Vel { get; internal set; }
     public float Angle { get; internal set; }
@@ -34,9 +34,9 @@ public sealed class Floater
     public float Liters { get; internal set; }
     public long Since { get; init; }
     public int ClaimedBy { get; internal set; } = -1;
-    public bool Hard => Kind is FloatKind.Wrench or FloatKind.Driver or FloatKind.Can or FloatKind.Bottle or FloatKind.PillJar or FloatKind.Pot or FloatKind.Plate or FloatKind.Bowl
-        || Kind == FloatKind.Article && Mass >= 1f;
-    public bool Wet => Kind is FloatKind.Droplet or FloatKind.Sick;
+    public bool Hard => Kind is DriftKind.Wrench or DriftKind.Driver or DriftKind.Can or DriftKind.Bottle or DriftKind.PillJar or DriftKind.Pot or DriftKind.Plate or DriftKind.Bowl
+        || Kind == DriftKind.Article && Mass >= 1f;
+    public bool Wet => Kind is DriftKind.Droplet or DriftKind.Sick;
     public string Name => ZeroGSystem.Name(Kind);
 }
 
@@ -44,7 +44,7 @@ public sealed class Floater
 public sealed class Thud
 {
     public Vector2 At { get; init; }
-    public FloatKind Kind { get; init; }
+    public DriftKind Kind { get; init; }
     public long Tick { get; init; }
     public int Hit { get; init; } = -1;
     public bool Broke { get; init; }
@@ -89,7 +89,7 @@ public sealed partial class ZeroGSystem
     public bool PowerCut { get; private set; }
     public int RepairBy { get; internal set; } = -1;
     public float RepairDone { get; internal set; }
-    public List<Floater> Floaters { get; } = new();
+    public List<Drifter> Floaters { get; } = new();
     public List<Thud> Thuds { get; } = new();
     public List<ShortMark> Shorts { get; } = new();
     /// <summary>사람마다: 멀미 · 겪은 횟수 · 붙잡은 손잡이 쪽(그림).</summary>
@@ -112,17 +112,17 @@ public sealed partial class ZeroGSystem
 
     public Room? RingRoom => _w.Ship.RoomsOf(RoomType.Centrifuge).FirstOrDefault();
 
-    public static string Name(FloatKind k) => k switch
+    public static string Name(DriftKind k) => k switch
     {
-        FloatKind.Wrench => "렌치", FloatKind.Driver => "드라이버", FloatKind.Can => "통조림", FloatKind.Book => "책", FloatKind.Bottle => "유리병",
-        FloatKind.Plate => "접시", FloatKind.Bowl => "사발", FloatKind.PillJar => "약통", FloatKind.Pillow => "베개", FloatKind.Pot => "화분",
-        FloatKind.Droplet => "물방울", FloatKind.Sick => "토사물", _ => "물건",
+        DriftKind.Wrench => "렌치", DriftKind.Driver => "드라이버", DriftKind.Can => "통조림", DriftKind.Book => "책", DriftKind.Bottle => "유리병",
+        DriftKind.Plate => "접시", DriftKind.Bowl => "사발", DriftKind.PillJar => "약통", DriftKind.Pillow => "베개", DriftKind.Pot => "화분",
+        DriftKind.Droplet => "물방울", DriftKind.Sick => "토사물", _ => "물건",
     };
 
-    private static float MassOf(FloatKind k) => k switch
+    private static float MassOf(DriftKind k) => k switch
     {
-        FloatKind.Wrench => 0.6f, FloatKind.Driver => 0.2f, FloatKind.Can => 0.45f, FloatKind.Book => 0.5f, FloatKind.Bottle => 0.6f, FloatKind.Plate => 0.4f,
-        FloatKind.Bowl => 0.3f, FloatKind.PillJar => 0.15f, FloatKind.Pillow => 0.4f, FloatKind.Pot => 1.5f, _ => 0.1f,
+        DriftKind.Wrench => 0.6f, DriftKind.Driver => 0.2f, DriftKind.Can => 0.45f, DriftKind.Book => 0.5f, DriftKind.Bottle => 0.6f, DriftKind.Plate => 0.4f,
+        DriftKind.Bowl => 0.3f, DriftKind.PillJar => 0.15f, DriftKind.Pillow => 0.4f, DriftKind.Pot => 1.5f, _ => 0.1f,
     };
 
     private CrewMember? CrewOf(int id) => id >= 0 && id < _w.Crew.Count && _w.Crew[id].Id == id ? _w.Crew[id] : _w.Crew.FirstOrDefault(c => c.Id == id);
@@ -176,20 +176,20 @@ public sealed partial class ZeroGSystem
             for (int i = 0; i < n; i++)
             {
                 var k = kinds[R.Range(0, kinds.Length)];
-                if (tether && k is FloatKind.Wrench or FloatKind.Driver && R.Chance(0.8f)) { Stats.Tethered++; continue; } // 끈에 매어 둔 공구
+                if (tether && k is DriftKind.Wrench or DriftKind.Driver && R.Chance(0.8f)) { Stats.Tethered++; continue; } // 끈에 매어 둔 공구
                 Spawn(k, f.Center + new Vector2(R.Range(-0.4f, 0.4f), R.Range(-0.4f, 0.4f)), f.Room, from: f.Id);
             }
         }
         // 침대: 끈을 안 맨 베개
         foreach (var f in w.Ship.Furniture)
             if (ManeuverSystem.Bedish(f.Type) && !f.Room.Detached && !f.Stowed && !w.Maneuver.Bunks.Contains(f.Id) && R.Chance(0.35f))
-                Spawn(FloatKind.Pillow, f.Center, f.Room, from: f.Id);
+                Spawn(DriftKind.Pillow, f.Center, f.Room, from: f.Id);
         // 바닥 물건 (v16.4): 고정 · 보관 · 깔린 것은 그대로
         foreach (var t in w.Matter.Things)
         {
             if (!t.Loose || t.Stowed || t.Spec.Flat) { if (t.Fixed) Stats.HeldFast++; continue; }
             if (w.Ship.RoomAt(t.At) is not Room r) continue;
-            Spawn(FloatKind.Article, t.At.Center + t.Off, r, article: t.Id, mass: t.Mass);
+            Spawn(DriftKind.Article, t.At.Center + t.Off, r, article: t.Id, mass: t.Mass);
             Stats.ArticlesFloated++;
         }
         // 바닥에 고인 물 → 물방울
@@ -199,13 +199,13 @@ public sealed partial class ZeroGSystem
             var c = w.Ship.Grid.CellAt(i);
             if (w.Ship.RoomAt(c) is not Room r) continue;
             int n = Math.Min(3, 1 + (int)(s.Liters / 2f));
-            for (int k = 0; k < n; k++) { var d = Spawn(FloatKind.Droplet, c.Center, r); d.Liters = MathF.Min(1.5f, s.Liters / n); }
+            for (int k = 0; k < n; k++) { var d = Spawn(DriftKind.Droplet, c.Center, r); d.Liters = MathF.Min(1.5f, s.Liters / n); }
             s.Liters = 0f;
             Stats.Droplets += n;
         }
         // 작은 화분 (v18.2)
         foreach (var p in w.Eco.Plants)
-            if (!p.Dead && !p.Fixed && w.Ship.Rooms.ElementAtOrDefault(p.RoomId) is Room pr) { Spawn(FloatKind.Pot, p.At.Center, pr, plant: p.Id); p.Floating = true; }
+            if (!p.Dead && !p.Fixed && w.Ship.Rooms.ElementAtOrDefault(p.RoomId) is Room pr) { Spawn(DriftKind.Pot, p.At.Center, pr, plant: p.Id); p.Floating = true; }
         while (Floaters.Count > 90) Floaters.RemoveAt(Floaters.Count - 1);
         // 자는 사람: 침대 끈이 없으면 떠오른다
         foreach (var c in w.Crew)
@@ -224,25 +224,25 @@ public sealed partial class ZeroGSystem
         }
     }
 
-    private static FloatKind[] Loose(FurnitureType t) => t switch
+    private static DriftKind[] Loose(FurnitureType t) => t switch
     {
-        FurnitureType.ToolWall => new[] { FloatKind.Wrench, FloatKind.Driver, FloatKind.Wrench },
-        FurnitureType.Workbench => new[] { FloatKind.Wrench, FloatKind.Driver },
-        FurnitureType.Bookshelf => new[] { FloatKind.Book },
-        FurnitureType.Shelf => new[] { FloatKind.Can, FloatKind.Bottle, FloatKind.Can, FloatKind.Book },
-        FurnitureType.SupplyCache => new[] { FloatKind.PillJar, FloatKind.Can },
-        FurnitureType.Table => new[] { FloatKind.Plate, FloatKind.Bowl },
-        FurnitureType.MedBed => new[] { FloatKind.PillJar },
-        _ => Array.Empty<FloatKind>(),
+        FurnitureType.ToolWall => new[] { DriftKind.Wrench, DriftKind.Driver, DriftKind.Wrench },
+        FurnitureType.Workbench => new[] { DriftKind.Wrench, DriftKind.Driver },
+        FurnitureType.Bookshelf => new[] { DriftKind.Book },
+        FurnitureType.Shelf => new[] { DriftKind.Can, DriftKind.Bottle, DriftKind.Can, DriftKind.Book },
+        FurnitureType.SupplyCache => new[] { DriftKind.PillJar, DriftKind.Can },
+        FurnitureType.Table => new[] { DriftKind.Plate, DriftKind.Bowl },
+        FurnitureType.MedBed => new[] { DriftKind.PillJar },
+        _ => Array.Empty<DriftKind>(),
     };
 
-    internal Floater Spawn(FloatKind k, Vector2 at, Room r, int from = -1, int article = -1, int plant = -1, float mass = -1f)
+    internal Drifter Spawn(DriftKind k, Vector2 at, Room r, int from = -1, int article = -1, int plant = -1, float mass = -1f)
     {
         float a = R.Range(0f, MathF.Tau);
-        var f = new Floater
+        var f = new Drifter
         {
             Id = _next++, Kind = k, Pos = at, Vel = new Vector2(MathF.Cos(a), MathF.Sin(a)) * R.Range(0.002f, 0.008f), Angle = R.Range(-3f, 3f), Spin = R.Range(-0.04f, 0.04f),
-            RoomId = r.Id, From = from, Article = article, Plant = plant, Mass = mass > 0f ? mass : MassOf(k), Since = _w.Tick, Liters = k == FloatKind.Droplet ? 0.3f : 0f,
+            RoomId = r.Id, From = from, Article = article, Plant = plant, Mass = mass > 0f ? mass : MassOf(k), Since = _w.Tick, Liters = k == DriftKind.Droplet ? 0.3f : 0f,
         };
         Floaters.Add(f);
         Stats.Floated++;
@@ -336,7 +336,7 @@ public sealed partial class ZeroGSystem
         foreach (var c in w.Crew) if (Queasy.TryGetValue(c.Id, out var q) && q > 0.3f) Queasy[c.Id] = q * 0.6f;
     }
 
-    private void Land(Floater f)
+    private void Land(Drifter f)
     {
         var w = _w;
         var room = w.Ship.Rooms.ElementAtOrDefault(f.RoomId);
@@ -363,7 +363,7 @@ public sealed partial class ZeroGSystem
                 NeedsSystem.AddInjury(hit.Vitals, dmg, $"중력이 돌아오는 순간 떠 있던 {Ko.IGa(f.Name)} 떨어져 맞았다");
                 Memory.Shake(w, hit, 0.05f, $"중력이 돌아오는 순간 {Ko.IGa(f.Name)} 머리 위로 떨어졌다");
                 MarkLog.Add(hit.Memory.Marks, w.Tick, $"중력이 돌아오는 순간 떠 있던 {Ko.IGa(f.Name)} 떨어져 맞았다");
-                hit.Say(w, Persona.Say(hit, f.Kind == FloatKind.Wrench ? "아악 — 렌치가!" : "아야! 뭐가 떨어졌어"));
+                hit.Say(w, Persona.Say(hit, f.Kind == DriftKind.Wrench ? "아악 — 렌치가!" : "아야! 뭐가 떨어졌어"));
                 hit.Jolt(w);
                 w.Brain2.Emotions.Feel(hit, Feeling.Fear, 0.2f, "떨어진 것에 맞았다");
                 _hurtThis++; Stats.Hurt++;
@@ -375,21 +375,21 @@ public sealed partial class ZeroGSystem
         // 무엇이 되었나
         switch (f.Kind)
         {
-            case FloatKind.Droplet or FloatKind.Sick:
-                w.Matter.Pour(cell, Material.Liquid, MathF.Max(0.2f, f.Liters), f.Kind == FloatKind.Sick ? "떠다니던 토사물이 떨어졌다" : "떠다니던 물방울이 떨어졌다");
-                if (f.Kind == FloatKind.Sick && room != null) w.Smells.Emit(room, SmellKind.Foul, 0.3f);
+            case DriftKind.Droplet or DriftKind.Sick:
+                w.Matter.Pour(cell, Material.Liquid, MathF.Max(0.2f, f.Liters), f.Kind == DriftKind.Sick ? "떠다니던 토사물이 떨어졌다" : "떠다니던 물방울이 떨어졌다");
+                if (f.Kind == DriftKind.Sick && room != null) w.Smells.Emit(room, SmellKind.Foul, 0.3f);
                 Stats.Puddles++;
                 break;
-            case FloatKind.Article:
+            case DriftKind.Article:
                 if (w.Matter.Get(f.Article) is Article a && a.CarriedBy < 0)
                 {
                     w.Matter.Place(a, cell);
                     if (a.Spec.Tough < 10f) { w.Matter.Impact(a, a.Spec.Tough * 1.5f, "중력이 돌아와 떨어졌다"); broke = a.Stage >= BreakStage.Broken; }
                 }
                 break;
-            case FloatKind.Pillow:
+            case DriftKind.Pillow:
                 break; // 푹신하다 — 그 자리에 둔다 (침대로 되돌리는 건 사람이)
-            case FloatKind.Pot:
+            case DriftKind.Pot:
                 if (w.Eco.Plants.FirstOrDefault(p => p.Id == f.Plant) is Plant pl)
                 {
                     broke = R.Chance(0.4f);
@@ -401,8 +401,8 @@ public sealed partial class ZeroGSystem
             {
                 var fk = f.Kind switch
                 {
-                    FloatKind.Wrench or FloatKind.Driver => FallenKind.Tool, FloatKind.Can => FallenKind.Can, FloatKind.Book => FallenKind.Book, FloatKind.Bottle => FallenKind.Bottle,
-                    FloatKind.Plate => FallenKind.Plate, FloatKind.Bowl => FallenKind.Bowl, _ => FallenKind.PillJar,
+                    DriftKind.Wrench or DriftKind.Driver => FallenKind.Tool, DriftKind.Can => FallenKind.Can, DriftKind.Book => FallenKind.Book, DriftKind.Bottle => FallenKind.Bottle,
+                    DriftKind.Plate => FallenKind.Plate, DriftKind.Bowl => FallenKind.Bowl, _ => FallenKind.PillJar,
                 };
                 bool fragile = fk is FallenKind.Bowl or FallenKind.Bottle or FallenKind.Plate;
                 broke = fragile && R.Chance(0.55f);
@@ -427,14 +427,14 @@ public sealed partial class ZeroGSystem
     }
 
     /// <summary>사람이 붙잡아 넣었다 (공구함 · 선반 · 수건).</summary>
-    internal void Catch(Floater f, CrewMember c)
+    internal void Catch(Drifter f, CrewMember c)
     {
         var w = _w;
         Floaters.Remove(f);
         Stats.Caught++;
-        if (f.Kind == FloatKind.Article && w.Matter.Get(f.Article) is Article a) { a.Fixed = true; w.Maneuver.Tied.Add(a.Id); w.Matter.Place(a, Cell.FromPosition(c.Position)); }
-        if (f.Kind == FloatKind.Pot && w.Eco.Plants.FirstOrDefault(p => p.Id == f.Plant) is Plant pl) { pl.Floating = false; pl.Fixed = true; pl.At = Cell.FromPosition(f.Pos); }
-        if (f.Kind is FloatKind.Wrench or FloatKind.Driver) Stats.Stowed++;
+        if (f.Kind == DriftKind.Article && w.Matter.Get(f.Article) is Article a) { a.Fixed = true; w.Maneuver.Tied.Add(a.Id); w.Matter.Place(a, Cell.FromPosition(c.Position)); }
+        if (f.Kind == DriftKind.Pot && w.Eco.Plants.FirstOrDefault(p => p.Id == f.Plant) is Plant pl) { pl.Floating = false; pl.Fixed = true; pl.At = Cell.FromPosition(f.Pos); }
+        if (f.Kind is DriftKind.Wrench or DriftKind.Driver) Stats.Stowed++;
         MarkLog.Add(c.Memory.Marks, w.Tick, $"무중력에서 떠다니던 {Ko.EulReul(f.Name)} 붙잡아 넣었다");
     }
 
@@ -524,7 +524,7 @@ public sealed partial class ZeroGSystem
         or FurnitureType.CapacitorBank or FurnitureType.NavComputer or FurnitureType.SolderStation or FurnitureType.DiagnosticScanner or FurnitureType.SurgeProtector
         or FurnitureType.AuxGenerator or FurnitureType.Fabricator or FurnitureType.ReactorSimulator or FurnitureType.SignalBooster or FurnitureType.PartTestBench;
 
-    private void Short(Floater f, Cell at)
+    private void Short(Drifter f, Cell at)
     {
         var w = _w;
         var room = w.Ship.RoomAt(at);
@@ -628,7 +628,7 @@ public sealed partial class ZeroGSystem
             {
                 _lastVomit = w.Tick;
                 Stats.Vomits++;
-                var f = Spawn(FloatKind.Sick, c.Position + c.Facing * 0.4f, r);
+                var f = Spawn(DriftKind.Sick, c.Position + c.Facing * 0.4f, r);
                 f.Liters = 0.2f;
                 w.Smells.Emit(r, SmellKind.Foul, 0.15f);
                 c.Say(w, Persona.Say(c, "우웁 —"));

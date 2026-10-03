@@ -478,6 +478,7 @@ public static class Locomotion
 
         float budget = Speed(c) * w.Movement.Manners(c, path); // v14.5 비켜서기 · 막힘 · 문 앞 확인 · 조용히 · 움찔
         budget *= w.Portable.SqueezeMul(c, path); // v16.7 통로에 세워 둔 카트를 비켜 간다
+        budget *= w.ZeroG.MoveMul(c); // v18.4 무중력: 손잡이를 잡고 벽을 따라
         budget *= w.Coop.SqueezeMul(c, path); // v17.4 펼친 부품 · 앞 상자 · 구경꾼 사이 · 좁은 문에서 카트 옮겨 싣기
         budget *= w.Gestures.StepMul(c, path); // v17.2 양손 짐으로 문 앞 · 잔 버팀 · 무릎
         if (budget <= 0f) return false;
