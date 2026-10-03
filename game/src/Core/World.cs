@@ -155,6 +155,7 @@ public sealed class World
     public FlowSystem Flow { get; } // v14.8 배관 · 배선 전달량
     public CultureSystem Culture { get; } // v14.9 배의 문화
     public DailySystem Daily { get; } // v15 일상 사건 70
+    public MusicSystem Music { get; } public CurioSystem Curios { get; } // v17.6 음악 · v17.9 숨은 것 · 도감
     public MotionSystem Motions { get; } // v18.18 승무원이 여는 회의 · 파벌 · 재판 · 선거
     public SchemeSystem Schemes { get; } // v18.14 승무원이 스스로 꾸미는 일 100+
     public BlackboxSystem Blackbox { get; } public InquirySystem Inquiry { get; } // v18.7 블랙박스 · 실수 숨기기 · 사고 조사
@@ -292,6 +293,7 @@ public sealed class World
         Flow = new FlowSystem(this);
         Culture = new CultureSystem(this);
         Daily = new DailySystem(this);
+        Music = new MusicSystem(this); Curios = new CurioSystem(this); // v17.6 · v17.9
         Motions = new MotionSystem(this); // v18.18
         Schemes = new SchemeSystem(this); // v18.14
         Blackbox = new BlackboxSystem(this); Inquiry = new InquirySystem(this); // v18.7
@@ -420,6 +422,7 @@ public sealed class World
             Culture.Update(dt); // v14.9 겪은 일이 관행이 되어 전해진다
             pf = Prof.Lap("sys.Culture", pf);
             Daily.Update(dt); // v15 사고가 아닌 날의 일상 사건
+            Music.Update(dt); Curios.Update(dt); // v17.6 상황 음악 · 방 스피커 음악 · v17.9 숨은 것 · 창밖 · 이상 현상 · 재능 · 비밀
             ZeroG.Update(dt); Eco.Update(dt); Drains.Update(dt); // v18.4 무중력 · v18.2 화분 · 바구미 · 고양이 · v18.3 배수 · 쓰레기통
             Signs.Update(dt); Fittings.Update(dt); // 압축-마 사고 전조 · 새 설비
             Tales.Update(dt); // v18.16 · v18.17 개인 이야기 · 대화 카드 · 캠프의 밤 · 잡담 · 로맨스

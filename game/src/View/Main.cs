@@ -226,6 +226,7 @@ public partial class Main : Node2D
 
     public override void _Process(double delta)
     {
+        if (_hudFit < 2 && Hud.Plan.ShipArea.W > 1f && ++_hudFit == 2 && Camera.FollowTarget == null && Camera.Zoom == _fitZoom && Camera.Position == _fitPos) FitCamera(); // v17.6 패널이 자리를 잡은 뒤 배를 빈자리에 (인자로 옮긴 카메라는 그대로)
         if (Replaying is ReplayRunner rr)
         {
             // 불러오는 중: 한 프레임에 몇천 틱씩 빨리 감는다 (역사가 화면에서 다시 흐른다)
@@ -460,7 +461,7 @@ public partial class Main : Node2D
                 case Key.K: if (key.ShiftPressed) Hud.ToggleScaleCodex(); else Hud.ToggleChain(); break; // v16.18 ⇧K 사고 도감 (규모별)
                 case Key.U: ToggleSummary(); break; // v12.8 요약 진행
                 case Key.L: ToggleHighlight(); break;
-                case Key.I: Hud.ToggleCodex(); break;
+                case Key.I: if (key.ShiftPressed) Hud.ToggleCollection(); else Hud.ToggleCodex(); break; // v17.9 ⇧I 수집 도감
                 case Key.Y: Hud.ToggleControl(); break;
                 case Key.E: if (key.ShiftPressed) Hud.ToggleCouncil(); else Hud.TogglePolicy(); break; // v13.2 방침·회의 · v18.18 ⇧E 회의록
                 case Key.G: Hud.ToggleMinimap(); break;
@@ -698,12 +699,17 @@ public partial class Main : Node2D
         if (follow) { Camera.FollowTarget = null; ToggleFollow(); }
     }
 
+    private int _hudFit;
+    private Vector2 _fitZoom, _fitPos;
+
     public void FitCamera()
     {
         var size = GetViewportRect().Size;
-        // 오른쪽 패널, 위쪽 상태 막대, 아래쪽 기록 카드를 피해서 배치
+        // 오른쪽 패널, 위쪽 상태 막대, 아래쪽 기록 카드를 피해서 배치 — v17.6 패널 배치가 정해졌으면 패널이 비운 가장 넓은 자리에
         var area = new Rect2(24f, Hud.TopHeight + 12f, size.X - Hud.RightColumnWidth - 64f, size.Y - Hud.TopHeight - Hud.LogHeight - 40f);
+        if (Hud.Plan.ShipArea is { W: > 40f, H: > 40f } sa) area = new Rect2(sa.X, sa.Y, sa.W, sa.H);
         Camera.FitTo(ShipView.Bounds, area);
+        _fitZoom = Camera.Zoom; _fitPos = Camera.Position;
     }
 
     // ─────────────────────────────── 디버그 옵션 ───────────────────────────────
@@ -730,7 +736,7 @@ public partial class Main : Node2D
                 case "--options":
                     Options.Toggle();
                     break;
-                case "--hud": Settings.ShowAllHud = value == "all"; if (value == "help") Hud.HelpOpen = true; break; // v16.2 화면 시험: --hud=all | quiet | help
+                case "--hud": Settings.ShowAllHud = value is "all" or "safe" or "codex"; if (value == "help") Hud.HelpOpen = true; if (value == "safe") ColorSafe.On = true; if (value == "codex") Hud.ToggleCollection(); break; // v16.2 화면 시험: --hud=all | quiet | help · v17.6 safe(색약) · v17.9 codex(도감)
                 case "--episode":
                     for (int k = 0; k < int.Parse(value, CultureInfo.InvariantCulture); k++) CycleEpisode(1);
                     break;

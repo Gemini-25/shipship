@@ -83,15 +83,17 @@ public partial class Hud
         Divider(x, right, dy);
         SectionTitle(x, dy + 22, "일기");
         float ey = dy + 34;
+        // v17.6 공책 한 쪽처럼: 종이 · 줄 · 여백선 · 쪽 번호 (줄에 맞춰 쓴다)
+        BookLook.Page(this, new Rect2(x - 6, ey - 2, right - x + 12, 6 * 19 + 26), Math.Max(1, c.Diary.Count / 6 + 1), true, 19f, 15f, 70f);
         foreach (var (tick, text) in c.Diary.AsEnumerable().Reverse().Take(6))
         {
-            Gfx.Text(this, Fonts.Body, new Vector2(x, ey + 12), $"{SimTime.Day(tick)}일 {SimTime.Clock(tick)}", Ui.TextSmall, Palette.TextMuted);
+            Gfx.Text(this, Fonts.Body, new Vector2(x, ey + 12), $"{SimTime.Day(tick)}일 {SimTime.Clock(tick)}", Ui.TextSmall, BookLook.InkFaint);
             string t = text;
             while (t.Length > 4 && Gfx.Width(Fonts.Body, t, Ui.TextBody) > right - x - 78) t = t[..^2] + "…";
-            Gfx.Text(this, Fonts.Body, new Vector2(x + 74, ey + 12), t, Ui.TextBody, Palette.TextDim);
+            Gfx.Text(this, Fonts.Body, new Vector2(x + 74, ey + 12), t, Ui.TextBody, BookLook.Ink);
             ey += 19;
         }
-        if (c.Diary.Count == 0) Gfx.Text(this, Fonts.Body, new Vector2(x, ey + 12), "아직 쓴 것이 없다", Ui.TextBody, Palette.TextMuted);
+        if (c.Diary.Count == 0) Gfx.Text(this, Fonts.Body, new Vector2(x + 74, ey + 12), "아직 쓴 것이 없다", Ui.TextBody, BookLook.InkDim);
     }
 
     /// <summary>v14.3 물건 탭: 가진 것 — 어디에 있나 · 상태 · 진척 · 출처와 이력 · 관계의 이유.</summary>

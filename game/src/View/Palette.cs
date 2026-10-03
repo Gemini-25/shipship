@@ -18,9 +18,12 @@ public static class Palette
     public static readonly Color TextMuted = new("#5f6879");
     public static readonly Color Panel = new(0.047f, 0.063f, 0.09f, 0.95f);
     public static readonly Color PanelBorder = new(1f, 1f, 1f, 0.07f);
-    public static readonly Color Warning = new("#ff9a6b");
-    public static readonly Color Danger = new("#ff5c6c");
-    public static readonly Color Good = new("#6ee7b7");
+    // v17.6 색약 팔레트를 켜면 뜻 색이 파랑-주황 축으로 바뀐다 (모양 · 무늬는 따로 함께 다르다)
+    private static readonly Color _warning = new("#ff9a6b"), _danger = new("#ff5c6c"), _good = new("#6ee7b7");
+    private static readonly Color _warningSafe = new(UiAccess.SafeWarn), _dangerSafe = new(UiAccess.SafeDanger), _goodSafe = new(UiAccess.SafeGood);
+    public static Color Warning => ColorSafe.On ? _warningSafe : _warning;
+    public static Color Danger => ColorSafe.On ? _dangerSafe : _danger;
+    public static Color Good => ColorSafe.On ? _goodSafe : _good;
     public static readonly Color Accent = new("#7cc4ff");
 
     public static readonly Color NeedFood = new("#f2b134");
@@ -30,7 +33,7 @@ public static class Palette
     public static readonly Color VitalHealth = new("#6ee7b7");
     public static readonly Color VitalOxygen = new("#5ec8e6");
 
-    public static Color Room(RoomType t) => t switch
+    public static Color Room(RoomType t) => ColorSafe.On ? new Color(UiAccess.RoomHex(t)) : t switch
     {
         RoomType.Corridor => new Color("#6b7486"),
         RoomType.Bridge => new Color("#5aa9e6"),
@@ -66,6 +69,7 @@ public static class Palette
     /// <summary>v10.7: 16명이 넘으면 같은 색을 밝기만 바꿔 돌려 쓴다 (30명 배에서도 겹치지 않게).</summary>
     public static Color Crew(int id)
     {
+        if (ColorSafe.On) return new Color(UiAccess.CrewHex(id)); // v17.6 색약 팔레트 (표식 모양이 함께 다르다)
         var c = CrewColors[id % CrewColors.Length];
         int round = id / CrewColors.Length;
         return round == 0 ? c : round % 2 == 1 ? c.Darkened(0.28f) : c.Lightened(0.3f);

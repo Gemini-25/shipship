@@ -25,15 +25,18 @@ public partial class Hud
     {
         var w = _world;
         var cs = w.Cosmic;
+        _cosmicH = 0f;
         if (ControlOpen || ChronicleOpen || TechOpen || PolicyOpen || ChainOpen) return;
         var e = cs.Main;
         const float width = 344f;
-        float x = Margin, y = Margin + 52f + 8f + 40f + 22f;
+        float x = Margin, y = _plan.CosmicY; // v17.6 왼쪽 위 더미에 쌓는다
         if (e == null)
         {
             if (cs.Sky.Count == 0 && cs.Customs.Count == 0) return;
             // 지나간 뒤: 하늘에 남은 것 · 관행 한 줄
             var small = new Rect2(x, y, width, 30f);
+            _cosmicH = 30f;
+            if (_plan.Cosmic.Empty) return;
             Card(small);
             string sky = cs.Sky.Count > 0 ? $"창밖: {string.Join(" · ", cs.Sky.TakeLast(2).Select(s => s.Name))}" : "";
             var vig = cs.CustomOf(CosmicCustomKind.Vigil);
@@ -45,6 +48,10 @@ public partial class Hud
         var pcol = CosmicPhaseColor(e.Phase);
         var openAsks = w.Automation.Asks.Open.Where(p => p.Key.StartsWith("cosmic:")).ToList();
         float h = _cosmicFolded ? 54f : 176f + openAsks.Count * 30f;
+        _cosmicH = h; // v17.6 펼친 높이를 알리고, 자리는 배치 규칙대로 (모자라면 접힘 · 숨김)
+        if (_plan.Cosmic.Empty) return;
+        h = _plan.Cosmic.H;
+        bool cosmicFold = _cosmicFolded || _plan.CosmicFolded;
         var card = new Rect2(x, y, width, h);
         Card(card, e.Phase == CosmicPhase.Impact ? Tone.Danger : e.Phase == CosmicPhase.Brace ? Tone.Caution : Tone.Info);
         // 그림 (재난마다 다른 실루엣 · 움직임)
@@ -71,8 +78,8 @@ public partial class Hud
         }
         else sub = $"{e.Grade} · {(e.AfterUntil - w.Tick) / (float)SimTime.TicksPerDay:0}일 동안 후유증";
         Gfx.Text(this, Fonts.Body, new Vector2(x + 56f, y + 40f), Fit(sub, width - 66f, Ui.TextSmall, Fonts.Body), Ui.TextSmall, pcol);
-        Button(new Rect2(card.End.X - 24f, y + 30f, 18f, 18f), _cosmicFolded ? "▾" : "▴", false, mouse, () => _cosmicFolded = !_cosmicFolded, Ui.TextTiny);
-        if (_cosmicFolded) return;
+        Button(new Rect2(card.End.X - 24f, y + 30f, 18f, 18f), cosmicFold ? "▾" : "▴", false, mouse, () => _cosmicFolded = !_cosmicFolded, Ui.TextTiny);
+        if (cosmicFold) return;
         float yy = y + 62f;
         float lx = x + 12f, right = card.End.X - 12f;
         // 신뢰도 막대 (컴퓨터가 믿는 정도) · 누가 봤나

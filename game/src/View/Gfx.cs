@@ -46,21 +46,25 @@ public static class Gfx
         _box.Draw(ci.GetCanvasItem(), rect);
     }
 
+    /// <summary>v17.6 글자 크기 배율 (설정 · 0.85 ~ 1.3). 화면 글은 모두 이 배율을 거친다.</summary>
+    public static float TextScale { get; set; } = 1f;
+    private static int Sz(int size) => TextScale == 1f ? size : Mathf.Max(6, Mathf.RoundToInt(size * TextScale));
+
     public static float Width(Font font, string text, int size) =>
-        font.GetStringSize(text, HorizontalAlignment.Left, -1, size).X;
+        font.GetStringSize(text, HorizontalAlignment.Left, -1, Sz(size)).X;
 
     /// <summary>세로 중앙 정렬용 기준선 보정값.</summary>
-    public static float CenterOffset(Font font, int size) => (font.GetAscent(size) - font.GetDescent(size)) * 0.5f;
+    public static float CenterOffset(Font font, int size) => (font.GetAscent(Sz(size)) - font.GetDescent(Sz(size))) * 0.5f;
 
     public static void Text(CanvasItem ci, Font font, Vector2 baseline, string text, int size, Color color) =>
-        ci.DrawString(font, baseline, text, HorizontalAlignment.Left, -1, size, color);
+        ci.DrawString(font, baseline, text, HorizontalAlignment.Left, -1, Sz(size), color);
 
     public static void TextRight(CanvasItem ci, Font font, Vector2 rightBaseline, string text, int size, Color color) =>
-        ci.DrawString(font, rightBaseline - new Vector2(Width(font, text, size), 0), text, HorizontalAlignment.Left, -1, size, color);
+        ci.DrawString(font, rightBaseline - new Vector2(Width(font, text, size), 0), text, HorizontalAlignment.Left, -1, Sz(size), color);
 
     public static void TextCentered(CanvasItem ci, Font font, Vector2 center, string text, int size, Color color) =>
         ci.DrawString(font, center + new Vector2(-Width(font, text, size) * 0.5f, CenterOffset(font, size)),
-            text, HorizontalAlignment.Left, -1, size, color);
+            text, HorizontalAlignment.Left, -1, Sz(size), color);
 
     /// <summary>알약 모양 라벨. 그린 사각형을 돌려준다.</summary>
     public static Rect2 Pill(CanvasItem ci, Font font, Vector2 center, string text, int size, Color textColor, Color bg,
