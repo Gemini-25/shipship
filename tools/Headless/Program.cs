@@ -201,6 +201,7 @@ public static partial class Program
         if (args.Contains("--computerbraintest")) return RunComputerBrainTest(seed); // v16.16
         if (args.Contains("--cosmictest")) return RunCosmicTest(seed); // v18.13 우주 대재난
         if (args.Contains("--gradetest")) return RunGradeTest(seed); // 부상 등급 (경상 · 중상 · 위중)
+        if (args.Contains("--medtest")) return RunMedicalTest(seed); // 의료 1차 수술 · 수혈 · 약 · 회복
         if (args.Contains("--evatest")) return RunEvaTest(seed); // v16.11
         if (args.Contains("--expeditiontest")) return RunExpeditionTest(seed); // v16.12
         if (args.Contains("--blasttest")) return RunBlastTest(seed); // v16.13

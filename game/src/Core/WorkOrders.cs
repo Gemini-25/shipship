@@ -564,7 +564,7 @@ public sealed partial class WorkBoard
             {
                 if (r.Station != station || !w.History.Doctrine.Knows(r)) continue;
                 int have = Have(r.Product);
-                int held = w.Board.Held(r.Product), target = Math.Max(w.History.Doctrine.Target(r), held); // v15.6 비축 임무: 모을 만큼 더 만든다
+                int held = w.Board.Held(r.Product), target = Math.Max(Math.Max(w.History.Doctrine.Target(r), held), w.Pharmacy.Want(r.Product)); // v15.6 비축 임무: 모을 만큼 더 만든다 · 의료 1차 약은 컴퓨터 예측만큼
                 float wanted = demand.GetValueOrDefault(r.Product);
                 if (have >= target && wanted <= 0f) continue;
                 if (!r.Inputs.All(x => Have(x.kind) >= x.count)) continue;
@@ -1154,6 +1154,7 @@ public sealed partial class WorkBoard
         foreach (var c in w.Crew)
         {
             if (c.Dead || c.CarriedBy != null) continue;
+            if (w.Surgery.OnTable(c)) continue; // 의료 1차 수술대 위
             // 쓰러진 사람: 치료 침대에 눕혀지기 전이면 먼저 옮긴다
             if (c.Down && c.CareBed == null)
             {

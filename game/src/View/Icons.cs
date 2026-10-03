@@ -263,6 +263,9 @@ public static class Icons
         FurnitureType.HeatSuitRack => "heat-suit-rack",
         FurnitureType.DockClampPanel => "dock-clamp-panel",
         FurnitureType.Telescope => "telescope",
+        // 의료 1차
+        FurnitureType.OperatingTable => "operating-table", FurnitureType.SurgicalLamp => "surgical-lamp", FurnitureType.AnesthesiaMachine => "anesthesia-machine",
+        FurnitureType.BloodFridge => "blood-fridge", FurnitureType.MedCabinet => "med-cabinet",
         _ => "parts",
     };
 
@@ -299,6 +302,9 @@ public static class Icons
         ItemKind.Suit => "suit",
         ItemKind.Extinguisher => "extinguisher",
         ItemKind.Fuel => "fuel",
+        // 의료 1차
+        ItemKind.Painkiller => "painkiller", ItemKind.Antibiotic => "antibiotic", ItemKind.Anesthetic => "anesthetic",
+        ItemKind.BloodSubstitute => "blood-substitute", ItemKind.MedHerb => "med-herb",
         _ => "materials",
     };
 

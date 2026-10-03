@@ -89,7 +89,15 @@ public sealed class AilmentSystem
     /// <summary>열병 포함 30가지.</summary>
     public static IEnumerable<AilmentSpec> Catalog => All.Prepend(Fever);
 
-    private static readonly Dictionary<string, AilmentSpec> ById = All.ToDictionary(a => a.Id);
+    // 의료 1차 — 수술 · 골절 뒤 후유증 · 진통제 의존 (목록 30에는 넣지 않는다 — 다쳐서 생기는 것)
+    public static readonly AilmentSpec[] Med1 =
+    {
+        new("stiffhand", "손 굳음", AilmentGroup.Body, "팔 수술 · 골절 뒤", "손가락이 굳어 세밀한 일이 굼뜨다", 10f, 0.45f, Chronic: true, Stress: 0.01f, Work: 0.3f, Cure: Cure.Exercise),
+        new("limp", "다리 절음", AilmentGroup.Body, "다리 수술 · 골절 뒤", "다리를 전다 — 걸음이 느리다", 10f, 0.45f, Chronic: true, Stress: 0.01f, Walk: 0.35f, Cure: Cure.Exercise),
+        new("pkdep", "진통제 의존", AilmentGroup.Mind, "진통제를 오래 · 자주 먹었다", "약이 떨어지면 안절부절 · 잠을 설친다", 8f, 0.4f, Chronic: true, Stress: 0.03f, Sleep: 0.2f, Cure: Cure.Company),
+    };
+
+    private static readonly Dictionary<string, AilmentSpec> ById = All.Concat(Med1).ToDictionary(a => a.Id);
     public static AilmentSpec Spec(string id) => ById.TryGetValue(id, out var s) ? s : Fever;
 
     private readonly World _w;
@@ -410,6 +418,7 @@ public sealed class AilmentSystem
         {
             a.TreatedAt = w.Tick;
             a.Treatments++;
+            a.Healed += w.Pharmacy.Treat(patient, doctor, a.Id); // 의료 1차 항생제 · 진통제 (남용 · 내성)
             if (Spec(a.Id).Cure == Cure.Bed) a.Healed += 0.3f;
             Stats.Treated++;
         }

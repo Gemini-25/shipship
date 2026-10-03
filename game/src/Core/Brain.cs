@@ -24,6 +24,7 @@ public static class Brain
         new QuarantineActivity(), // v12.6 격리실
         new RecoverActivity(),
         new RadCareActivity(), new GiveBloodActivity(), // 통합5 방사선 병 간호 · 피 나눠 주기
+        new SurgeryPatientActivity(), new SurgeryActivity(), new AssistSurgeryActivity(), new TransfuseActivity(), new DonateBloodActivity(), new WardRestActivity(), new CareRoundActivity(), // 의료 1차 수술 · 수혈 · 헌혈 · 간이침대 · 간병 순번
         new StowSuitActivity(),
         new RefillSuitActivity(),
         new EatActivity(),

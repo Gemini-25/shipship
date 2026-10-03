@@ -74,6 +74,7 @@ public sealed class PowerTriage
         }
         if (m.Body.Room.Type is RoomType.LifeSupport) r = Math.Max(r, 9);
         if (w.Automation.ReserveOrNull?.Holds(m) == true) r = Math.Max(r, 10); // v16.26 예약 (이송 중인 부상자 → 의무실)
+        if (w.Surgery.Holds(m)) r = Math.Max(r, 11); // 의료 1차 수술 중인 방 회로를 몰아준다
         return r;
     }
 

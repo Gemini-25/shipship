@@ -373,6 +373,8 @@ public enum FurnitureType
     Fermenter, BreadOven, SpiceRack, IceMaker, PlantRack, CatTower, PestTrap, InsectFarm, GreaseTrap, Compactor,
     Composter, GreywaterFilter, GrabRail, CargoNet, CrashSeat, MagBootRack, ServerRack, RecorderVault, ListeningPost, MeetingBoard,
     MemorialWall, MusicCorner, LabStill, ClothesRack, SewingMachine, EyeWash, OxygenMaskBox, HeatSuitRack, DockClampPanel, Telescope,
+    // 의료 1차
+    OperatingTable, SurgicalLamp, AnesthesiaMachine, BloodFridge, MedCabinet,
 }
 
 public static class FurnitureTypes
@@ -447,12 +449,15 @@ public static class FurnitureTypes
         FurnitureType.MaintCart => "정비 카트",
         FurnitureType.RobotDock => "로봇 충전대",
         FurnitureType.SupplyCache => "비상 물자함",
+        // 의료 1차
+        FurnitureType.OperatingTable => "수술대", FurnitureType.SurgicalLamp => "무영등", FurnitureType.AnesthesiaMachine => "마취기",
+        FurnitureType.BloodFridge => "혈액 냉장고", FurnitureType.MedCabinet => "약장",
         _ => ModulesV15.Name(t) ?? ModulesV18.Name(t) ?? t.ToString(), // v15 · 압축-마
     };
 
     /// <summary>올라서거나 누울 수 있는 가구.</summary>
     public static bool Walkable(FurnitureType t) =>
-        t is FurnitureType.Bed or FurnitureType.Seat or FurnitureType.MedBed or FurnitureType.Cot;
+        t is FurnitureType.Bed or FurnitureType.Seat or FurnitureType.MedBed or FurnitureType.Cot or FurnitureType.OperatingTable; // 의료 1차 수술대에 눕는다
 
     /// <summary>누워서 제대로 잘 수 있는 가구.</summary>
     public static bool Sleepable(FurnitureType t) => t is FurnitureType.Bed or FurnitureType.MedBed or FurnitureType.Cot;
