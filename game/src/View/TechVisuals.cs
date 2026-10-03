@@ -186,6 +186,7 @@ public partial class ShipView
         _visPlaced.Add(p);
         if (!_visRects.TryGetValue(p.Key, out var l)) _visRects[p.Key] = l = new List<Rect2>();
         l.Add(MomentRect(p)); // 익힌 순간 연출 자리 (긴 배관 · 바깥은 장치 한 곳만)
+        if (V18Keys.Contains(p.Key)) { VisV18Static(ci, p); if (p.Row.Anchor == VAnchor.Room) VisMakerPlate(ci, p); return; } // 압축-마 기술 30 (TechVisualsV18.cs)
         switch (p.Row.Anchor)
         {
             case VAnchor.Fix: VisFixStatic(ci, p); break;
@@ -255,6 +256,7 @@ public partial class ShipView
         foreach (var p in _visPlaced)
         {
             if (!p.Row.Live || !_fixView.Intersects(p.Bound)) continue;
+            if (V18Keys.Contains(p.Key)) { VisV18Live(ci, p); continue; } // 압축-마
             switch (p.Row.Anchor)
             {
                 case VAnchor.Fix: VisFixLive(ci, p); break;

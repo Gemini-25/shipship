@@ -44,6 +44,7 @@ public static partial class FixtureArt
         WorkArt(t);     // FixtureArtWork.cs — 정비 · 제작 · 채집
         CommandArt(t);  // FixtureArtCommand.cs — 지휘 · 통신 · 안전
         LeisureArt(t);  // FixtureArtLeisure.cs — 쉼 · 잠자리 환경
+        GearArt(t); GearArt2(t); // FixtureArtGear*.cs — 압축-마 새 설비 30
         return t;
     }
 
