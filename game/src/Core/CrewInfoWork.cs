@@ -49,6 +49,10 @@ public sealed class InfoActivity : Activity
                     break;
                 case InfoDo.Confront:
                     if (info.Case(i.Thing) is not CupCase k2 || k2.Explained >= 0 || k2.Accused >= 0 || Person(w, i.Other) is not { Dead: false } o || !dist.Reachable(o.Cell)) continue;
+                    // 통합7 화가 식기 전에 · 마주치면 그 자리에서 따진다 (0.5 남짓으로는 취미 · 실험에 밀려 세 시간 뒤 같은 방에 앉아서도 말을 안 꺼냈다)
+                    if (w.Tick - i.Since < SimTime.Hours(1)) s += 0.15f;
+                    s += 0.5f * w.Brain2.Emotions.Get(c, Feeling.Anger);
+                    if (o.Room == c.Room && c.Room != null) s += 0.25f;
                     if (shift) s -= 0.15f;
                     if (bed) s -= 0.2f;
                     break;
@@ -83,7 +87,7 @@ public sealed class InfoActivity : Activity
             foreach (var t in info.TodosOf(c))
             {
                 float s = 0.2f + 0.12f * t.Progress;
-                if (t.Cut) s += 0.12f; // 하다 만 것이 눈에 밟힌다
+                if (t.Cut) s += 0.25f; // 하다 만 것이 눈에 밟힌다 — 통합7 0.12로는 취미(0.5 남짓)에 늘 밀려 하루 반 동안 다시 손대지 않았다
                 else if (t.LastWork >= 0 && w.Tick - t.LastWork < SimTime.Hours(3)) s -= 0.12f;
                 if (Life.Has(c, Habit.Procrastinator)) s -= 0.08f;
                 if (Life.Has(c, Habit.Perfectionist) || Life.Has(c, Habit.Tinkerer)) s += 0.04f;

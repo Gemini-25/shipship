@@ -50,6 +50,7 @@ public sealed class CrewPlan
     public WorkOrder? Order;
     public CrewMember? For;
     public Topic FactTopic;
+    public bool Nudged; // 통합7 주 컴퓨터가 이 길에 한 번 말했다 (안 믿은 사람에게 2분마다 거듭 말하지 않는다)
     public int FactId;
     public long DarkSince = -1;
     /// <summary>부품을 손에 넣었다 (꺼냈거나 만들었다) — 다른 일 사이에 선반에 내려놓았어도 배에는 있다.</summary>
@@ -868,6 +869,12 @@ public sealed class PlanSystem
             else if (p.Kind == PlanKind.Outage && w.Tick - p.Since > SimTime.Hours(2)) Finish(c, p, false, "너무 오래 걸린다");
             else if (p.Kind is PlanKind.Fix or PlanKind.Help && (p.Order is { Closed: true } || p.Target?.Machine is Machine m && m.Faults.Count == 0) && c.Carrying?.Kind != p.Part)
                 Finish(c, p, true, "누가 벌써 고쳤다");
+            else if (p.Kind == PlanKind.Tell && w.Brain2.Beliefs.Get(c, p.FactTopic, p.FactId) is { Alarmed: true })
+            {
+                // 통합7 알리러 가는 사이 경보가 울렸다 — 다들 들었을 테니 배를 가로지르며 사람을 찾지 않는다 (한빛호 창고 불: 넷이 이십 분 동안 알리러 다녔다)
+                Finish(c, p, true, "경보가 울렸다 — 다들 들었겠지");
+                if (c.Job?.Activity is PlanActivity) c.Interrupt(w);
+            }
             else if (w.Tick - p.Since > SimTime.Hours(14)) Finish(c, p, false, "흐지부지됐다");
         }
         // 10분에 한 번 · 4분의 1씩: 부품이 없어 막힌 수리를 보고 길을 짠다

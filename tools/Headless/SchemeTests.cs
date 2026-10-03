@@ -180,14 +180,17 @@ public static partial class Program
             var den = w.Schemes.Start(SchemeTable.Get("gambling_den")!, crew[0], -1, crew[1], crew[2]);
             SchemeUntil(w, () => w.Schemes.Stats.Quarrels >= 1 || den.Over() && w.Schemes.Debts.All(d => d.Amount < 3), SimTime.TicksPerDay * 8, 200);
             // 빚이 커지기 전에 판이 막혔으면 (그것도 이 배에서 일어나는 일이다) 몰래 다시 판을 벌인다
+            int sessions = 0; // 통합7 다시 벌인 판만 세면, 앞 판의 빚으로 곧장 다툼이 나 새 판이 한 번도 안 열린 날 '판 0'이 됐다 — 벌어진 판을 모두 센다
             for (int i = 0; i < 2 && w.Schemes.Stats.Quarrels == 0 && den.Over(); i++)
             {
+                sessions += den.Sessions;
                 Console.WriteLine($"   빚이 커지기 전에 끝났다: {den.Outcome}");
                 den = w.Schemes.Start(SchemeTable.Get("gambling_den")!, crew[0], -1, crew[1], crew[2]);
                 SchemeUntil(w, () => w.Schemes.Stats.Quarrels >= 1 || den.Over() && w.Schemes.Debts.All(d => d.Amount < 3), SimTime.TicksPerDay * 8, 200);
             }
-            Check("도박판 — 밤마다 판이 벌어져 빚이 생겼다", den.Sessions >= 1 && w.Schemes.Debts.Count >= 1,
-                $"판 {den.Sessions} · 빚 {string.Join(" / ", w.Schemes.Debts.Select(d => $"{w.Crew.First(c => c.Id == d.From).Name}→{w.Crew.First(c => c.Id == d.To).Name} {d.Amount}"))}");
+            sessions += den.Sessions;
+            Check("도박판 — 밤마다 판이 벌어져 빚이 생겼다", sessions >= 1 && w.Schemes.Debts.Count >= 1,
+                $"판 {sessions} · 빚 {string.Join(" / ", w.Schemes.Debts.Select(d => $"{w.Crew.First(c => c.Id == d.From).Name}→{w.Crew.First(c => c.Id == d.To).Name} {d.Amount}"))}");
             Check("도박판 — 빚 때문에 다퉜다 (관계 · 감정이 남는다)", w.Schemes.Stats.Quarrels >= 1 && w.Relations.All.Any(m => m.Reason == RelationReason.OwesMe),
                 $"다툼 {w.Schemes.Stats.Quarrels} · {den.Stage} {den.Outcome}");
         }

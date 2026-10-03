@@ -113,7 +113,7 @@ public sealed partial class ShipOriginSystem
         List<long>? reset = null;
         foreach (var (key, (n, at, by)) in _bumps)
         {
-            if (w.Tick - at > SimTime.Hours(4)) { (drop ??= new()).Add(key); continue; } // 오래전 일은 잊는다
+            if (w.Tick - at > SimTime.Hours(12)) { (drop ??= new()).Add(key); continue; } // 오래전 일은 잊는다 — 통합7 같은 날 아침 · 저녁에 또 마주친 것도 '자꾸'다 (네 시간이면 열네 명 배에서 두 번 마주칠 일이 드물었다)
             if (n < 2) continue;
             var x = w.Crew[(int)(key >> 16)];
             var y = w.Crew[(int)(key & 0xffff)];

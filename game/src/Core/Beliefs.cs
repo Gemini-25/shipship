@@ -754,7 +754,8 @@ public sealed class BeliefSystem
         {
             if (c.Dead || !c.CanAct || c.Job?.Activity is not PlanActivity || w.Brain2.Plans.Current(c) is not CrewPlan p || p.Kind != PlanKind.CheckFire) continue;
             if (p.Room is not Room tr || !tr.DataLinked || FireIn(tr) > 0 || w.Fire.IsKnown(tr)) continue;
-            if (Get(c, Topic.Fire, tr.Id) is not Belief b || b.Value != 1 || b.Src == BeliefSource.Computer) continue;
+            if (Get(c, Topic.Fire, tr.Id) is not Belief b || b.Value != 1 || b.Src == BeliefSource.Computer || p.Nudged) continue;
+            p.Nudged = true; // 통합7 한 번 말하고 만다 — 2분마다 거듭 알려 결국 못 믿는 사람(신뢰 8%)까지 돌려세우던 것
             Nudges++;
             float trust = a.Trusts.Of(c);
             w.Log.Add(w.Tick, LogKind.Ship, $"[손목 단말] {a.Voice.Call} → {c.Name}: {tr.Name}에는 불이 없다 (감지기 · 카메라)", c.Id);

@@ -92,7 +92,7 @@ public sealed class EatActivity : Activity
         // 통합7 회의 · 훈련으로 야식 때를 놓쳤어도 꽤 배고프면 눕기 전에 요기부터 (은하호: 0.33 남기고 잠들었다가 네 시간 만에 굶주려 깨어 먼 식당까지 걸었다)
         else if (Bedtime(c, w) && c.Pose != Pose.Sleeping && hunger > 0.55f)
         {
-            score += 0.5f;
+            score += 0.7f; // 피곤한 몸의 잠(1.0 남짓)보다 앞서게 — 0.5로는 0.01 차로 누웠다 (광맥호)
             reason += " · 눕기 전에 요기";
         }
         if (src != Source.Ration && src != Source.Produce && w.Cooking.HomeCraving(c) is float home and > 0f) { score += home; reason += " · 고향 음식이 있다"; } // v16.8

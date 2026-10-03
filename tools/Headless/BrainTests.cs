@@ -104,7 +104,8 @@ public static partial class Program
                 Check("틀린 믿음 — 옛 정보로 엉뚱한 방에 가서 보고 믿음을 고친다",
                     cWentStale && corrected,
                     $"{C.Name}: {F.Name}이(가) {staleRoom.Name}에 있다고 믿음(옛 정보) → 다녀간 방 {string.Join("·", rooms.GetValueOrDefault(C.Id) ?? new())} · 고침 {cBook.Corrected} ({cBook.LastCorrectionText}) · 계획 {string.Join(" / ", cPlan.SelectMany(p => p.Trail))}");
-                Run(w, SimTime.Minutes(20));
+                // 통합7 원격으로 못 올리는 배에선 발전 쪽(27분) → 배전반 → 올리기(15분 남짓)까지 사람 발로 간다 — 올릴 때까지 (한 시간 안) 기다린다
+                for (int m = 0; m < 120 && panel.Faults.Any(f => f.Kind == FaultKind.BreakerTrip && f.Circuit == circ); m++) Run(w, SimTime.Minutes(0.5f));
                 var aPlans = w.Brain2.Plans.Past.Concat(w.Brain2.Plans.Active).Where(p => p.Owner == A.Id).ToList();
                 Check("정전 — 믿는 원인으로 움직인다 (차단기라 믿은 사람이 배전반에서 올린다 · 컴퓨터를 믿는 사람은 묻는다)",
                     !panel.Faults.Any(f => f.Kind == FaultKind.BreakerTrip && f.Circuit == circ) && (w.Brain2.Plans.Breakers > 0 || aPlans.Count > 0 || A.Job?.Order?.Kind == WorkKind.ResetBreaker),

@@ -231,7 +231,7 @@ public sealed partial class InfoSystem
         float b = 0f;
         // 늘 앉던 자리 (앉을수록 조금씩)
         int n = SeatCount(c, seat);
-        if (n > 0) b -= MathF.Min(7f, 1.6f * n);
+        if (n > 0) b -= MathF.Min(10f, 2.5f * n); // 통합7 받은 배식기가 바뀌면(거리 제곱) 몇 번 앉은 자리도 쉽게 밀렸다 — 버릇을 조금 더 세게
         var room = seat.Room;
         foreach (var o in w.Crew)
         {
@@ -947,7 +947,7 @@ public sealed partial class InfoSystem
             if (!p.Hung) continue;
             var room = w.Ship.RoomAt(p.Wall);
             if (room == null || room != c.Room && (c.Room == null || (room.Center - c.Room.Center).LengthSquared() > 400f)) continue;
-            float s = 0.1f;
+            float s = room == c.Room ? 0.25f : 0.1f; // 통합7 같은 방 벽에 걸린 사진은 지나다 눈에 걸린다 (옆방 사진보다) — 0.43 남짓으로는 네 시간 같은 방에 있어도 한 번을 안 봤다
             string why = $"{p.Caption} 사진";
             bool inIt = p.People.Contains(c.Id);
             if (inIt) s += 0.06f;
