@@ -1323,6 +1323,7 @@ public partial class ShipView : Node2D
         float s = radius / 9.5f;
         int lod = Puppet.Lod(Zoom); // v17.1 멀리선 점 + 색 · 가까이선 인형
         PaintTrauma(ci, c, p, s); // v16.24 출혈 웅덩이 · 화상 열기 · 끊긴 심전도 (몸 아래에)
+        PaintMedical(ci, c, p, s); // 의료 1차 수혈 주머니 · 수술 자국 붕대 · 굳은 손 · 지팡이 · 헌혈 솜
 
         if (c.Dead || c.Down)
         {

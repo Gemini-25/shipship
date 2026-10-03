@@ -122,6 +122,8 @@ public sealed class BloodSystem
     private readonly SortedDictionary<int, float> _lost = new(), _prevHealth = new();
     /// <summary>흘린 피 (피가 나는 동안 빠진 체력의 합 — 응급 처치로 기운이 돌아도 피는 그대로다).</summary>
     public float Lost(CrewMember c) => _lost.TryGetValue(c.Id, out var x) ? x : 0f;
+    /// <summary>마지막으로 피(또는 대용제)를 받은 때.</summary>
+    public long GivenAt(CrewMember c) => _lastGiven.TryGetValue(c.Id, out var t) ? t : -1_000_000;
 
     /// <summary>시스템 틱마다: 피가 나는 사람의 빠진 체력을 센다 (피가 멎으면 몸이 천천히 채운다).</summary>
     private void Bleeding(float dt)
