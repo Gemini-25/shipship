@@ -171,6 +171,7 @@ public sealed partial class GestureSystem
         long now = _w.Tick;
         _st.TryGetValue(c.Id, out var s);
         if (s != null) { Cup(c, s); if (s.HoldStep > now) return 0f; }
+        if (_downed.Count > 0 && KneelNear(c, s ??= Of(c))) return 0f;
         if (c.Carrying == null || c.CarryingPerson != null || c.PathIndex >= path.Count || c.Outside) return 1f;
         Door? door = null;
         for (int k = c.PathIndex; k < Math.Min(path.Count, c.PathIndex + 2); k++)
@@ -350,17 +351,37 @@ public sealed partial class GestureSystem
                 if ((o.Position - d.Position).LengthSquared() > 4.8f) continue;
                 var s = Of(o);
                 if (s.Knelt.TryGetValue(d.Id, out var t) && now - t < SimTime.Hours(2)) continue;
-                if (o.Job?.Urgent == true && o.Job.TargetRoom != room) continue;
-                s.Knelt[d.Id] = now;
-                s.LookCrew = d.Id; s.LookAt = d.Position; s.Spot = d.Position;
-                bool medic = o.Role == CrewRole.Medic || o.Quals.Contains(Qual.Medic);
-                Set(o, s, Mien.KneelBy, medic ? 60 : 35, Pick(medic ? new[] { $"{d.Name}, 들려요? 숨은 쉰다", "맥 짚어 볼게", "움직이지 마세요" } : new[] { $"{d.Name}! 내 말 들려?", "숨은 쉬어 — 정신 차려", "괜찮아? 눈 좀 떠 봐" }), d.Id, hold: true);
-                o.Facing = Vector2.Normalize(d.Position - o.Position + new Vector2(0.0001f, 0f));
-                w.Brain2.Beliefs.Learn(o, Topic.Down, d.Id, 1, BeliefSource.Seen, 1f);
-                Stats.Kneels++;
-                if (!medic) Call(o, d, room);
+                if (o.Job?.Urgent == true && o.Job.TargetRoom != room || o.IsMoving) continue; // 걷는 사람은 걸음마다 본다
+                KneelBy(o, s, d, room, 0);
             }
         }
+    }
+
+    /// <summary>걷다가 쓰러진 사람 바로 곁에 닿았다 (걸음마다 본다): 무릎을 꿇고 숨부터 살핀다 — 들것을 가져온 사람도 잠깐.</summary>
+    private bool KneelNear(CrewMember o, MannerState s)
+    {
+        if (o.CarryingPerson != null || o.Outside || o.Room is not Room room || !o.IsAwake) return false;
+        foreach (var d in _downed)
+        {
+            if (d.Room != room || d.CarriedBy != null || d.Dead || (o.Position - d.Position).LengthSquared() > 2.9f) continue;
+            if (s.Knelt.TryGetValue(d.Id, out var t) && _w.Tick - t < SimTime.Hours(2)) continue;
+            KneelBy(o, s, d, room, o.Job?.Urgent == true ? 15 : 0);
+            return true;
+        }
+        return false;
+    }
+
+    private void KneelBy(CrewMember o, MannerState s, CrewMember d, Room room, int ticks)
+    {
+        var w = _w;
+        s.Knelt[d.Id] = w.Tick;
+        s.LookCrew = d.Id; s.LookAt = d.Position; s.Spot = d.Position;
+        bool medic = o.Role == CrewRole.Medic || o.Quals.Contains(Qual.Medic);
+        Set(o, s, Mien.KneelBy, ticks > 0 ? ticks : medic ? 60 : 35, Pick(medic ? new[] { $"{d.Name}, 들려요? 숨은 쉰다", "맥 짚어 볼게", "움직이지 마세요" } : new[] { $"{d.Name}! 내 말 들려?", "숨은 쉬어 — 정신 차려", "괜찮아? 눈 좀 떠 봐" }), d.Id, hold: true);
+        o.Facing = Vector2.Normalize(d.Position - o.Position + new Vector2(0.0001f, 0f));
+        w.Brain2.Beliefs.Learn(o, Topic.Down, d.Id, 1, BeliefSource.Seen, 1f);
+        Stats.Kneels++;
+        if (!medic) Call(o, d, room);
     }
 
     /// <summary>"사람 쓰러졌어!" — 소리가 닿는 사람은 안다 (같은 방 · 열린 문 너머).</summary>

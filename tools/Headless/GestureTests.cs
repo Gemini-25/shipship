@@ -149,8 +149,9 @@ public static partial class Program
             var gs = w.Gestures;
             long turnAt = -1, wrapAt = -1, answerAt = -1;
             int answered0 = gs.Stats.Answered;
-            for (int t = 0; t < SimTime.Hours(2) && answerAt < 0; t++)
+            for (int t = 0; t < SimTime.Hours(5) && answerAt < 0; t++)
             {
+                if (t % SimTime.Minutes(40) == SimTime.Minutes(39) && gs.Stats.Addressed == 0) { Gather(w, ppl.Take(3).ToList(), room); w.React.MarkOdd(worker, t % 2 == 0 ? "혼잣말을 한다" : "벽에 대고 중얼거린다", 90f); }
                 w.Step();
                 if (worker.Pose != Pose.Working && worker.Job?.Current is WaitToil) worker.Pose = Pose.Working;
                 var m = gs.MienOf(worker);
@@ -326,9 +327,10 @@ public static partial class Program
                 room.DataLinked = false; // 감지기가 먼저 잡지 않게 (사람이 소리로 듣는 장면)
                 foreach (var c in w.Crew) if (c.Room == room && !c.Dead) Stay(w, c, next.Cells.First(x => w.Ship.IsWalkable(x)), Pose.Standing);
                 m.Omen = new Omen { Kind = OmenKind.Vibration, Fault = FaultKind.BearingWear, Cause = OmenCause.BearingWear, Since = w.Tick, Due = w.Tick + SimTime.Hours(40) };
-                var L = Awake(w, 1, c => -c.Traits.Diligence)[0];
-                var lc = next.Cells.Where(x => w.Ship.IsWalkable(x) && w.Ship.IsOpenFloor(x)).OrderBy(x => (x.Center - door.Cell.Center).Length()).Skip(1).First();
-                Stay(w, L, lc, Pose.Standing);
+                var Ls = Awake(w, 2, c => -c.SkillLevel(Skill.Mechanics) - c.Traits.Diligence);
+                var L = Ls[0];
+                var lcs = next.Cells.Where(x => w.Ship.IsWalkable(x) && w.Ship.IsOpenFloor(x)).OrderBy(x => (x.Center - door.Cell.Center).Length()).Skip(1).Take(2).ToList();
+                for (int i = 0; i < Ls.Count; i++) Stay(w, Ls[i], lcs[i % lcs.Count], Pose.Standing);
                 // 닫힌 문
                 RunE(w, SimTime.Minutes(5), () => { door.Openness = 0f; door.JammedOpen = false; });
                 var hc = w.Hearing.In(next).Where(h => w.Hearing.Sources[h.Src].Kind == Noise.Bearing && w.Hearing.Sources[h.Src].Owner == m.Body.Id).ToList();
@@ -342,8 +344,8 @@ public static partial class Program
                 RunE(w, SimTime.Minutes(2), () => { door.Openness = 1f; door.JammedOpen = true; });
                 strangeOpen = w.Hearing.Strange(L, out var heardM) && heardM == m;
                 float openPass = w.Hearing.Pass(room, next);
-                RunE(w, SimTime.Hours(2), () => { door.Openness = 1f; door.JammedOpen = true; });
-                var sn = w.React.NotesOf(Stir.Sound).Where(n => n.Crew == L.Id).ToList();
+                RunE(w, SimTime.Hours(3), () => { door.Openness = 1f; door.JammedOpen = true; });
+                var sn = w.React.NotesOf(Stir.Sound).Where(n => Ls.Any(l => l.Id == n.Crew)).ToList();
                 Check("열린 문 너머 — 들린다 (문 · 벽 층 따라 · 열린 문이 더 잘 넘는다)", strangeOpen && openPass > closedPass * 3f, $"닫힘 {closedPass:0.00} → 열림 {openPass:0.00} · 낯섦 {strangeOpen}");
                 Check("들은 소리로 — 쳐다보고 확인하러 간다", sn.Count >= 1 && w.React.Stats.Checks > checks0, $"반응 {sn.Count} · 확인 {w.React.Stats.Checks - checks0} · 찾음 {w.React.Stats.Found} · \"{sn.Select(n => n.Line).FirstOrDefault(l => l.Length > 0)}\"");
                 // 벽 층: 얇은 칸막이가 패널벽보다 소리를 더 넘긴다
