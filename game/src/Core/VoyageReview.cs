@@ -59,9 +59,18 @@ public sealed class VoyageReview
             r.People.Add((id, N(id), $"사고 때 {n}번 앞에 섰다", w.Crew.FirstOrDefault(c => c.Id == id)?.Dead == true));
         var warm = peaceEvents.SelectMany(e => e.CrewIds).GroupBy(id => id).Select(g => (id: g.Key, n: g.Count()))
             .OrderByDescending(x => x.n).ThenBy(x => x.id).FirstOrDefault(x => r.People.All(p => p.Id != x.id));
-        if (warm.n > 0) r.People.Add((warm.id, N(warm.id), $"좋은 순간마다 있었다 ({warm.n}번)", w.Crew.FirstOrDefault(c => c.Id == warm.id)?.Dead == true));
+        if (warm.n > 0) r.People.Add((warm.id, N(warm.id), warm.n > 1 ? $"좋은 순간마다 있었다 ({warm.n}번)" : "좋은 순간에 함께 있었다", w.Crew.FirstOrDefault(c => c.Id == warm.id)?.Dead == true));
 
-        foreach (var e in peaceEvents.TakeLast(4)) r.Peace.Add((e.Tick, WatchScenes.Classify(e.Text)!.Value, e.Text));
+        // 그래도 자리가 남으면: 연대기에 이름이 가장 많이 오른 사람
+        if (r.People.Count < 3)
+            foreach (var (id, n) in h.Events.SelectMany(e => e.CrewIds).GroupBy(id => id).Select(g => (id: g.Key, n: g.Count()))
+                         .Where(x => x.id >= 0 && r.People.All(p => p.Id != x.id)).OrderByDescending(x => x.n).ThenBy(x => x.id).Take(3 - r.People.Count).ToList())
+                r.People.Add((id, N(id), $"연대기에 {n}번 이름이 올랐다", w.Crew.FirstOrDefault(c => c.Id == id)?.Dead == true));
+
+        // 좋은 순간: 종류마다 가장 최근 것 하나씩 (화해만 넷이 되지 않게) → 남으면 최근 것으로 채운다
+        var picks = peaceEvents.GroupBy(e => WatchScenes.Classify(e.Text)!.Value).Select(g => g.Last()).ToList();
+        foreach (var e in peaceEvents.AsEnumerable().Reverse()) { if (picks.Count >= 4) break; if (!picks.Contains(e)) picks.Add(e); }
+        foreach (var e in picks.OrderByDescending(e => e.Tick).Take(4).OrderBy(e => e.Tick)) r.Peace.Add((e.Tick, WatchScenes.Classify(e.Text)!.Value, e.Text));
         foreach (var b in WatchScenes.Notable(w).Take(3))
             r.Items.Add((b.Id, b.Name, WatchScenes.Hands(b).Select(N).ToList(), w.Belongings.Where(b), b.Marks.Count));
         return r;

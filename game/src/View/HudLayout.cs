@@ -31,7 +31,7 @@ public partial class Hud
             W = Screen.X, H = Screen.Y, TopBarW = TopBarWidth(),
             ProfileW = _profileSz.X, ProfileH = _profileSz.Y, CosmicH = _cosmicH,
             LegendW = _legendSz.X, LegendH = _legendSz.Y,
-            Computer = a.Present && !ControlOpen && !ChronicleOpen && !TechOpen && !PolicyOpen && !ChainOpen && !CollectionOpen,
+            Computer = a.Present && !ControlOpen && !ChronicleOpen && !TechOpen && !PolicyOpen && !ChainOpen && !CollectionOpen && !VoyageOpen,
             ComputerH = ComputerFullHeight(), ComputerUserFolded = ComputerFolded,
             LogH = LogHeight, MinimapW = mm.X, MinimapH = mm.Y,
             Voyage = mm.X > 0f && _world.Voyage.TotalDays > 0f, Tools = tools,
@@ -178,7 +178,7 @@ public partial class Hud
     private void DrawViewLegend()
     {
         var items = LegendOf(_main.ViewMode);
-        if (items.Length == 0 || ControlOpen || ChronicleOpen || TechOpen || PolicyOpen || ChainOpen || CouncilOpen) { _legendSz = Vector2.Zero; return; }
+        if (items.Length == 0 || ControlOpen || ChronicleOpen || TechOpen || PolicyOpen || ChainOpen || CouncilOpen || VoyageOpen) { _legendSz = Vector2.Zero; return; }
         float w = 26f + items.Max(i => Gfx.Width(Fonts.Body, i.label, Ui.TextSmall)) + 34f;
         w = Mathf.Max(w, Gfx.Width(Fonts.Bold, ViewModes.Name(_main.ViewMode) + " 보기", Ui.TextSmall) + 28f);
         float h = 32f + items.Length * 20f + 6f;

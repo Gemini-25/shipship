@@ -84,7 +84,7 @@ public partial class Main
         _snapAt = -1;
         TakePhoto();
         TogglePhotoMode();
-        Hud.ChronicleOpen = true;
+        if (!Hud.VoyageOpen) Hud.ChronicleOpen = true; // --voyage 와 함께면 결산 카드에서 사진을 본다
     }
 
     private void PerfFrame()

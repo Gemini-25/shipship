@@ -32,7 +32,7 @@ public partial class Hud
         var w = _world;
         var st = w.Tales;
         if (StorySystem.Off || st.Cards.Count == 0) return;
-        if (CouncilOpen || PolicyOpen || ChronicleOpen || TechOpen || ControlOpen || ChainOpen || ScaleCodexOpen || HelpOpen) return;
+        if (CouncilOpen || PolicyOpen || ChronicleOpen || TechOpen || ControlOpen || ChainOpen || ScaleCodexOpen || HelpOpen || VoyageOpen) return; // v17.7 항해 결산과 겹치지 않게
         var last = st.Cards[^1];
         if (last.Id != _talkId) { _talkId = last.Id; _talkAt = _time; _talkShift = 0; _talkClosed = false; }
         bool hover = _talkRect.HasPoint(mouse);

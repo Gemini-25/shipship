@@ -34,10 +34,10 @@ public sealed class WatchScenes
     public static WatchKind? Classify(string text)
     {
         if (text.Contains("추모") || text.Contains("기리는")) return WatchKind.Memorial;
-        if (text.Contains("고백") || text.Contains("연인이 됐다")) return WatchKind.Confession;
-        if (text.Contains("화해") || text.Contains("사과했다")) return WatchKind.Reconcile;
-        if (text.Contains("선물")) return WatchKind.Gift;
-        if (text.Contains("완성")) return WatchKind.Artwork;
+        if (text.Contains("고백") || text.Contains("연인이 됐다") || text.Contains("털어놓았다")) return WatchKind.Confession;
+        if (text.Contains("화해") || text.Contains("사과했다") || text.Contains("일을 풀었다")) return WatchKind.Reconcile;
+        if (text.Contains("선물") || text.Contains("생일 카드")) return WatchKind.Gift;
+        if (text.Contains("완성") || text.Contains("원고를 다 썼다")) return WatchKind.Artwork;
         if (text.Contains("늦게 왔다")) return WatchKind.LateGuest;
         return null;
     }
