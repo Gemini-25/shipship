@@ -168,6 +168,8 @@ public sealed class World
     public FailsafeSystem Failsafe { get; } // v16.19 차압 문 · 예비 회로 · 보조 간선 · 장갑 벽 · 비상 칸막이 · 부하 차단
     public MajorIncidentSystem Major { get; } // v16.19 계통 · 배 전체 사고 (전조 → 발생 → 번짐 → 수습 → 흔적)
     public AnnexSystem Annex { get; } // v16.10 증축 (선체 바깥에 방을 새로 붙인다)
+    public DockingSystem Dock { get; } // v18.5 도킹 · 난파선 탐사 · 해체
+    public PassengerSystem Passengers { get; } // v18.6 승객
     public Body2System Body2 { get; } // v17.1 몸의 변화 (머리카락 · 수염 · 체중 · 우주복 치수 · 이발)
     public CoopSystem Coop { get; } // v17.4 공간과 협력 · 줄 서기 · 구경꾼
     public AftermathSystem After { get; } // v17.5 사고 뒤 며칠 · 꿈 · 장소의 기억
@@ -298,6 +300,7 @@ public sealed class World
         FoodSources = new FoodSourceSystem(this); Scrap = new ScrapSystem(this); // v16.22
         Failsafe = new FailsafeSystem(this); Major = new MajorIncidentSystem(this); // v16.19
         Annex = new AnnexSystem(this); // v16.10
+        Dock = new DockingSystem(this); Passengers = new PassengerSystem(this); // v18.5 · v18.6
         Body2 = new Body2System(this); // v17.1
         Coop = new CoopSystem(this); // v17.4
         After = new AftermathSystem(this); // v17.5
@@ -411,6 +414,7 @@ public sealed class World
             Culture.Update(dt); // v14.9 겪은 일이 관행이 되어 전해진다
             pf = Prof.Lap("sys.Culture", pf);
             Daily.Update(dt); // v15 사고가 아닌 날의 일상 사건
+            Dock.Update(dt); Passengers.Update(dt); // v18.5 도킹 · 난파선 · v18.6 승객
             Tales.Update(dt); // v18.16 · v18.17 개인 이야기 · 대화 카드 · 캠프의 밤 · 잡담 · 로맨스
             Maneuver.Update(dt); // v17.0 침대 끈 · 데우는 냄비 · 조각 · 화물 무게중심 · 관행
             Blackbox.Update(dt); Inquiry.Update(dt); // v18.7 블랙박스 기록 · 숨은 실수 · 죄책감 · 사고 조사 안건

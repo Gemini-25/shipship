@@ -186,7 +186,7 @@ public sealed class SocietySystem
         if (n == 0 || c.IsChild || !c.CanAct) return false;
         float hour = SimTime.HourOfDay(w.Tick);
         if (hour >= 6f) return false;
-        var watch = w.Crew.Where(x => x.CanAct && !x.IsChild && !SimTime.InWindow(hour, x.Schedule.SleepStart, x.Schedule.SleepLength))
+        var watch = w.Crew.Where(x => x.CanAct && !x.IsChild && !x.Passenger && !SimTime.InWindow(hour, x.Schedule.SleepStart, x.Schedule.SleepLength))
             .OrderByDescending(x => ChoresActivity.OnShiftStatic(x, w)).ThenBy(x => x.Id).Take(n);
         return watch.Contains(c);
     }
