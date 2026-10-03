@@ -94,6 +94,7 @@ public sealed partial class MotionSystem
                 break;
         }
         if (w.Schemes.Opinion(c, m) is { } so) t.Add(so); // v18.14 꾸민 일이 올라온 안건
+        if (w.Values.Opinion(c, m) is { } vo) t.Add(vo); // v18.15 딜레마 · 선장 결정에 대한 마음
         // 낸 사람과의 사이 · 지난 안건의 앙금 · 같은 편 · 컴퓨터 기록
         if (prop != null)
         {
@@ -149,6 +150,7 @@ public sealed partial class MotionSystem
             for (int i = ev.Count - 1; i >= 0 && w.Tick - ev[i].Tick < SimTime.TicksPerDay * d; i--) if (ev[i].Kind == k) n++;
             return n;
         }
+        if (w.Values.Advice(m) is { } va) { text = va.text; sign = va.sign; } // v18.15 딜레마: 컴퓨터의 셈
         switch (m.Policy)
         {
             case "rations":
@@ -243,6 +245,7 @@ public sealed partial class MotionSystem
         var prop = P(m.Proposer);
         string by = prop != null ? $"{Ko.IGa(prop.Name)} 서명을 모아 올린 안건" : "회의";
         if (w.Schemes.Effect(m, pass) is string se) return se; // v18.14
+        if (w.Values.Effect(m, pass) is string ve) return ve; // v18.15
         switch (m.Kind)
         {
             case MotionKind.Practice: return "관행으로 정했다";
@@ -314,6 +317,7 @@ public sealed partial class MotionSystem
         }
         Aftermath(m, voters, yes, no, pass);
         w.Schemes.Decided(m, pass); // v18.14 금지냐 정식이냐 · 재판 · 경고 → 관행 · 규칙 · 흔적
+        w.Values.Decided(m, pass, yes, no); // v18.15 딜레마를 정했다 → 배가 바뀌고 · 사람마다 반응 · 장부
     }
 
     /// <summary>배급을 줄이기로 한 안건 (이걸 어기면 결정 위반).</summary>
