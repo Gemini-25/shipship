@@ -45,10 +45,10 @@ public sealed class Outfit
 
 public sealed class WearStats
 {
-    public int HeatDons, VestDons, NoSuitFights, Rushed, PajamaRuns, Readings, Misreads, ComputerCaught, MateCaught, Missed,
+    public int HeatDons, Suiting, VestDons, NoSuitFights, Rushed, PajamaRuns, Readings, Misreads, ComputerCaught, MateCaught, Missed,
                GlassesCracked, Spares, Taped, Mended, NoThread, NoClean, LaundryAsks, Nicknames, Awkward, Mugs, MugMissed, Changes, ComputerHeatWarn;
     public string Summary() =>
-        $"방열복 {HeatDons} (없이 들어감 {NoSuitFights} · 서둘러 그냥 {Rushed}) · 조끼 {VestDons} · 잠옷 바람 {PajamaRuns} · 갈아입기 {Changes} · " +
+        $"방열복 {HeatDons} (걸치기 시작 {Suiting} · 없이 들어감 {NoSuitFights} · 서둘러 그냥 {Rushed}) · 조끼 {VestDons} · 잠옷 바람 {PajamaRuns} · 갈아입기 {Changes} · " +
         $"계기 읽기 {Readings} (잘못 {Misreads} · 컴퓨터가 잡음 {ComputerCaught} · 동료가 {MateCaught} · 놓침 {Missed}) · 안경 금 {GlassesCracked} · 예비 {Spares} · 테이프 {Taped} · " +
         $"기움 {Mended} (실 없음 {NoThread}) · 깨끗한 옷 없음 {NoClean} · 빨래 권고 {LaundryAsks} · 공구 별명 {Nicknames} · 어색 {Awkward} · 제 컵 {Mugs}/{MugMissed}";
 }
@@ -295,6 +295,7 @@ public sealed class WearSystem
         if (HeatFree <= 0) { Stats.NoSuitFights++; return; }
         int fires = order.Target.Room is Room r ? w.Fire.CountIn(r) : 0;
         if ((Life.Has(c, Habit.Hasty) || Life.Has(c, Habit.Daredevil)) && fires < 3) { Stats.Rushed++; Stats.NoSuitFights++; return; }
+        Stats.Suiting++;
         toils.Add(new WaitToil(SimTime.Minutes(1.2f), Pose.Working));
         toils.Add(new DoToil((cm, world) =>
         {

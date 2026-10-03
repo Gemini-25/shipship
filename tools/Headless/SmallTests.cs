@@ -33,13 +33,14 @@ public static partial class Program
                 $"방열복 {a.Name} 체력 −{la * 100:0.0}% · 작업복 {b.Name} −{lb * 100:0.0}% · 다칠 확률 배율 방열복 {ra:0.00} / 작업복 {rb:0.00} / 잠옷 {rs:0.00}");
 
             // 실제 불: 소화기를 들고 가는 사람이 방열복을 걸친다 · 모자라면 그냥 들어간다
-            var room = w.Ship.LiveRooms.Where(r => r.Type is RoomType.Galley or RoomType.Workshop or RoomType.Storage).OrderBy(r => r.Id).First();
+            var room = w.Ship.LiveRooms.Where(r => r.Type is RoomType.Galley or RoomType.Workshop or RoomType.Mess or RoomType.Lounge).OrderBy(r => r.Id).First();
+            foreach (var c in up.Where(c => c.Carrying == null)) c.Carrying = new ItemStack(ItemKind.Extinguisher, 1); // 소화기를 든 채 (찾으러 가는 길은 다른 시험)
             foreach (var cell in room.Cells.Where(c => w.Ship.IsOpenFloor(c)).OrderBy(c => c.Y).ThenBy(c => c.X).Take(4)) w.Fire.Ignite(cell, 0.6f);
-            int dons = wear.Stats.HeatDons;
-            for (int i = 0; i < 60 && wear.Stats.HeatDons == dons; i++) Run(w, SimTime.Minutes(1));
+            int dons = wear.Stats.HeatDons, suiting = wear.Stats.Suiting, fights = 0;
+            for (int i = 0; i < 40 && wear.Stats.HeatDons == dons; i++) { Run(w, SimTime.Minutes(1)); fights += w.Crew.Count(c => c.Job?.Order?.Kind == WorkKind.Extinguish); }
             var worn = w.Crew.Where(c => wear.Peek(c)?.Wearing == Garment.Heat).Select(c => c.Name).ToList();
             Check("불이 나면 소화기 함 옆 방열복을 걸치고 들어간다 (벌 수가 모자라면 그냥)", wear.Stats.HeatDons > dons,
-                $"걸침 {wear.Stats.HeatDons - dons} ({string.Join(", ", worn)}) · 방열복 {wear.HeatSuits}벌 · 없이 들어감 {wear.Stats.NoSuitFights} · 컴퓨터 경고 {wear.Stats.ComputerHeatWarn}");
+                $"{room.Name} 불 · 끄러 간 사람-분 {fights} · 남은 불 {w.Fire.Count} · 걸치기 시작 {wear.Stats.Suiting - suiting} · 걸침 {wear.Stats.HeatDons - dons} ({string.Join(", ", worn)}) · 방열복 {wear.HeatSuits}벌 · 없이 들어감 {wear.Stats.NoSuitFights} · 컴퓨터 경고 {wear.Stats.ComputerHeatWarn}");
         }
 
         // ② 안경이 깨진 사람이 계기 값을 잘못 읽는다 → 주 컴퓨터가 잡고 → 예비 안경으로 바꾼다
@@ -134,7 +135,7 @@ public static partial class Program
                 Check("진 내기를 갚으려고 대신 당직을 선다 (빚이 줄고 · 근무표가 바뀌고 · 사이가 좋아진다)", bets.Stats.Covers > covers && d.Amount < 3 && pair.a.CoveringUntil > 0,
                     $"{pair.a.Name}(근무 {pair.a.Schedule.WorkStart:0}시) → {pair.b.Name}(근무 {pair.b.Schedule.WorkStart:0}시) 빚 3→{d.Amount} · 대신 당직 {bets.Stats.Covers - covers} · 컴퓨터 기록 {bets.Stats.ComputerNoted}");
             }
-            Run(w, SimTime.TicksPerDay);
+            Run(w, SimTime.TicksPerDay * 3);
             var ms = w.Personal.Mail.Stats;
             Check("편지가 오가고 쉬는 시간에 답장을 쓴다 · 저녁에 같은 방 사람끼리 맞바꾼다", ms.Read > 0 && ms.Replies > 0 && bets.Stats.Barters + bets.Stats.OnCredit > 0,
                 $"편지: {ms.Summary()} / 내기: {bets.Stats.Summary()}");
