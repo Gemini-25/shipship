@@ -150,7 +150,7 @@ public static partial class Program
                         if (robotIn < 0 && w.Robots.Robots.FirstOrDefault(r => RobotsV15.Fights(r.Kind) && (r.Room == room || r.Foam < foam0[r.Id] - 0.01f)) is Robot rb) { robotIn = w.Tick; went = rb; }
                         if (crewOn < 0 && w.Crew.Any(c => !c.Dead && !inside.Contains(c.Id) && c.Room == room && c.Job?.Order?.Kind == WorkKind.Extinguish)) crewOn = w.Tick; // 밖에서 들어온 사람
                         if (Environment.GetEnvironmentVariable("FLEETDBG") == "1" && t % 60 == 0)
-                            Console.WriteLine($"    t{t} {fighter.Name} {fighter.State} {fighter.Room?.Name} 길 {(fighter.Path == null ? -1 : fighter.Path.Count - fighter.PathIndex)} 비킴 {fighter.YieldTicks} 거품 {fighter.Foam:0.00} 소화 {fighter.FightingFire} · {fighter.Doing} · 불 {w.Fire.CountIn(room)} · {room.Name} 압 {room.Air.Pressure:0} O2 {room.Air.O2:0.00} · 수순 {w.Automation.FireCases.FirstOrDefault(c => c.RoomId == room.Id)?.Status} · 질식 {w.Automation.Smothered} 로봇맡음 {f.BotOn(room)} · 가까운 사람 {w.Crew.Where(c => !c.Dead && c.IsAwake).Select(c => MathF.Abs(c.Position.X - fighter.Position.X) + MathF.Abs(c.Position.Y - fighter.Position.Y)).DefaultIfEmpty(99f).Min():0} 본 {f.Witnessed}");
+                            Console.WriteLine($"    t{t} {fighter.Name} {fighter.State} {fighter.Room?.Name} 길 {(fighter.Path == null ? -1 : fighter.Path.Count - fighter.PathIndex)} 비킴 {fighter.YieldTicks} 거품 {fighter.Foam:0.00} 소화 {fighter.FightingFire} · {fighter.Doing} · 불 {w.Fire.CountIn(room)} · {room.Name} 압 {room.Air.Pressure:0} O2 {room.Air.O2:0.00} · 수순 {w.Automation.FireCases.FirstOrDefault(c => c.RoomId == room.Id)?.Status} · 질식 {w.Automation.Smothered} 로봇맡음 {f.BotOn(room)} · 가까운 사람 {w.Crew.Where(c => !c.Dead && c.IsAwake).Select(c => MathF.Abs(c.Position.X - fighter.Position.X) + MathF.Abs(c.Position.Y - fighter.Position.Y)).DefaultIfEmpty(99f).Min():0} 본 {f.Witnessed} 화면 {w.Crew.Count(c => !c.Dead && c.IsAwake && c.Room is { Type: RoomType.Bridge or RoomType.Comms or RoomType.ServerRoom })} 데이터 {room.DataLinked} 주컴 {w.Automation.MainOnline}");
                     }
                     var dec = w.Automation.Foresee.Timeline.LastOrDefault(d => d.Kind == "불" && d.Title.Contains("누가 먼저"));
                     Check("불난 방에 사람 대신 소방 로봇이 먼저 들어간다", f.FireFirst >= 1 && robotIn >= 0 && (crewOn < 0 || robotIn <= crewOn) && dec != null && dec.Options[dec.Chosen].Key != "crew",
@@ -293,13 +293,14 @@ public static partial class Program
                     // 불길 속에서 닳은 로봇이 부서진다 → 같이 일하던 사람이 아쉬워한다
                     Robot? victim = null;
                     bool lit = false;
-                    // 통합8 재배대 칸은 바닥이 아니라 불이 안 붙는다 (로봇 곁 두 칸 안의 바닥에 붙인다) — 붙을 때까지 기다린다
+                    // 통합8 재배대 칸은 바닥이 아니라 불이 안 붙는다 — 바닥에 선 채 일하는 로봇을 기다린다
                     for (int t = 0; t < SimTime.Hours(10) && !lit; t++)
                     {
                         w.Step();
-                        victim = w.Robots.Robots.FirstOrDefault(x => x.Operational && !RobotsV15.Fireproof(x.Kind) && x.State == RobotState.Active && x.Path == null && x.Progress is float pv && pv < 0.5f && x.Room?.Type != RoomType.Corridor);
+                        victim = w.Robots.Robots.FirstOrDefault(x => x.Operational && !RobotsV15.Fireproof(x.Kind) && x.State == RobotState.Active && x.Path == null && x.Progress is float pv && pv < 0.5f && x.Room?.Type != RoomType.Corridor && w.Ship.Grid.Kind(x.Cell) == TileKind.Floor);
                         if (victim == null) continue;
-                        for (int dx = -2; dx <= 2; dx++) for (int dy = -2; dy <= 2; dy++) if (Math.Abs(dx) + Math.Abs(dy) <= 2) lit |= w.Fire.Ignite(victim.Cell + new Cell(dx, dy), 0.8f);
+                        lit = w.Fire.Ignite(victim.Cell, 0.8f);
+                        foreach (var dd in Cell.Dirs4) lit |= w.Fire.Ignite(victim.Cell + dd, 0.8f);
                     }
                     if (victim == null || !lit) { Check("불길에 들 로봇", false, victim?.Room?.Name ?? "없음"); return 1; }
                     victim.Condition = 0.01f;

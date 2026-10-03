@@ -126,7 +126,7 @@ public sealed partial class Storyteller
                 // 막을 물자가 있는 갈래만, 큰 것은 거의 없이
                 StoryPersona.Merciful => (big ? 0.05f * cap : 1f) * ready![fam],
                 // 방금 막아 낸 갈래를 다시 · 같은 것이면 더 · 잘 버틴 배엔 큰 것
-                StoryPersona.Vengeful => (fam == last ? 5f : 1f) * (key == LastKey ? 2f : 1f) * (big ? 0.4f + 1.6f * cap : 1f),
+                StoryPersona.Vengeful => (fam == last ? 8f : 1f) * (key == LastKey ? 2f : 1f) * (big ? 0.4f + 1.6f * cap : 1f), // 통합8 사고 목록이 늘어 같은 갈래 몫이 엷어졌다 (×5로는 반에 걸쳤다)
                 _ => 1f,
             };
             pool[i] = (key, wt);

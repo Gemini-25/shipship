@@ -60,6 +60,9 @@ public sealed partial class AutomationSystem
 
     /// <summary>관제석에서 수동 조종 중인 사람.</summary>
     public CrewMember? Operator { get; private set; }
+    /// <summary>통합8 마지막으로 관제석에 앉았던 사람과 그때 — 한 차례 조종을 마치고도 일이 남았으면 자리를 지킨다.</summary>
+    public int LastOperator { get; private set; } = -1;
+    public long LastOperatorTick { get; private set; } = -1;
 
     /// <summary>감압 때: 배 우선(바로 닫는다) ↔ 사람 우선(안에 사람이 있으면 카운트다운). 승무원 회의가 정한다 (v13.0 방침 "감압 격벽").</summary>
     public bool ShipFirst
@@ -93,6 +96,7 @@ public sealed partial class AutomationSystem
     {
         var w = _world;
         Operator = MainOnline ? w.Crew.FirstOrDefault(c => !c.Dead && c.CanAct && c.Job?.Order?.Kind == WorkKind.ManualControl && c.Pose == Pose.Working) : null;
+        if (Operator != null) { LastOperator = Operator.Id; LastOperatorTick = w.Tick; }
         if (!MainOnline) return;
 
         // V 지휘: 연쇄 예측 — 배터리가 언제 바닥나나, 산소가 언제 모자라나

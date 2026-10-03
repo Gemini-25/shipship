@@ -131,6 +131,24 @@ public static partial class Program
                 Console.WriteLine($"{SimTime.Clock(w.Tick)} {v.Name} down {v.Down} hp {v.Vitals.Health:0.00} stage {w.Perils.RadStage(v)} treated {w.RadCare.Treated(v)} dose {v.Dose:0.0} care {v.CareBed != null} room {v.Room?.Name} {v.ActivityLabel}");
             }
         }
+        if (which == "seat")
+        {
+            for (int k = 0; k < 2; k++)
+            {
+                var w = DayOne(seed, "Mirinae");
+                w.Automation.LevelCap = 3;
+                for (int t = 0; t < 48 && !w.Crew.Any(c => c.CanAct && c.IsAwake && c.SkillLevel(Skill.Electrical) >= 0.5f && WatchLog.OnShift(c, w)); t++) Run(w, SimTime.Minutes(30));
+                var room = w.Ship.RoomsOf(RoomType.Galley).First();
+                if (k == 1) { var lounge = w.Ship.RoomsOf(RoomType.Lounge).First(); lounge.BreakerOff = true; for (int t = 0; t < 30 && w.Automation.Operator == null; t++) Run(w, SimTime.Minutes(2)); }
+                w.Moisture.AddWater(room, room.Cells.Count * 20f * 0.18f);
+                for (int i = 0; i < 180; i++)
+                {
+                    Run(w, SimTime.Minutes(1));
+                    if (k == 0) foreach (var o in w.Board.Open.Where(o => o.Kind == WorkKind.ManualControl).ToList()) w.Board.Close(o);
+                    if (i % 10 == 0) Console.WriteLine($"k{k} {i}m powered {room.Powered} brk {room.BreakerOff} cut {room.PowerCut} depth {MoistureSystem.DepthCm(room):0.0}cm inwater {string.Join(",", w.Crew.Where(c => !c.Dead && c.Room == room).Select(c => c.Name + ":" + c.ActivityLabel))} op {w.Automation.Operator?.Name} lvl {w.Automation.Level}");
+                }
+            }
+        }
         if (which == "chess")
         {
             var w = DayOne(seed, "Hanbit");

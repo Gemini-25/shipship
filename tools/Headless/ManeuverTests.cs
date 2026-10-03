@@ -100,6 +100,7 @@ public static partial class Program
             var eatJob = Brain.Activities.OfType<EatActivity>().First().Plan(diner, w, w.Paths.Flood(diner.Cell, diner.PathProfile));
             if (eatJob != null) Force(w, diner, eatJob, SimTime.Hours(1)); else IfIdle(w, diner);
             SpQuiet(w, new[] { diner }, SimTime.Hours(3)); // 통합8 지나가던 다른 사람이 먼저 쓸어 담으면 밥 먹은 사람이 쓸 조각이 없다 — 식당엔 그 사람뿐
+            diner.ExcusedUntil = w.Tick + SimTime.Hours(3); // 밥을 먹고 당직으로 바로 돌아가면 조각을 볼 틈이 없다 — 비번인 사람
             int swept0 = ms.Stats.Swept;
             for (int t = 0; t < SimTime.Hours(3) && ms.Stats.Swept == swept0; t++) Tick();
             var sweepLog = w.Log.Entries.LastOrDefault(e => e.Text.Contains("빗자루로 깨진")).Text ?? "";

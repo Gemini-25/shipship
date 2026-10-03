@@ -142,6 +142,8 @@ public sealed class ChoresActivity : Activity
         score -= 0.15f * c.Needs.Stress;
         // 하던 일은 마저 끝내고 싶다 (교대 시간이 돼도 바로 손을 놓지 않음) — v13.4 조를 맡았으면 조의 일이 아닌 하던 일은 덜 붙든다
         if (o.Assignee == c) score += w.Command.TeamOf(c) is Team mt && mt.Kind != TeamKind.Reserve && CommandSystem.Group(o.Kind) != mt.Kind ? 0.05f : 0.25f;
+        // 통합8 관제석에 앉았던 사람은 한 차례 조종을 마치고도 일이 남았으면 자리를 지킨다 — 물 퍼내기는 다른 손이 한다 (자리를 떠 원격으로 못 올리고 이십 분을 더 캄캄했다)
+        if (o.Kind == WorkKind.ManualControl && (o.Assignee == c || w.Automation.LastOperator == c.Id && w.Tick - w.Automation.LastOperatorTick < SimTime.Minutes(10))) score += 0.3f;
         else if (o.Robot != null) score -= 0.15f; // v10.10: 로봇이 하고 있는 일에 합류 — 더 급한 일이 없을 때만
         if (c.Vitals.Health < 0.5f) score -= 0.3f;
         // 제 치료를 기다리는 사람은 남을 치료하러 돌아다니지 않는다 (다친 사람끼리 서로 쫓으면 치료하러 온 사람이 헛걸음한다 — 성한 사람이 간다)

@@ -104,6 +104,8 @@ public static partial class Program
                 Plug();
                 bool first = false;
                 for (int m = 0; m < 30 && !(first && !Tripped()); m++) { Run(w, SimTime.Minutes(1)); first |= Tripped(); }
+                // 통합8 올리자마자 설비가 한꺼번에 켜져 (기동 전류) 한 번 더 떨어지기도 한다 — 삼 분 조용할 때까지 지켜본 뒤 센다
+                for (int m = 0, calm = 0; m < 30 && calm < 3; m++) { Run(w, SimTime.Minutes(1)); calm = Tripped() ? 0 : calm + 1; }
                 int resets0 = tr.RemoteResets;
                 // 사람이 끊긴 히터를 "추워서" 다시 꽂는다 — 같은 셋
                 Plug();

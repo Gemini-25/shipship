@@ -352,7 +352,7 @@ public sealed class FleetSystem
             {
                 var rb = w.Robots.Robots[fw.Robot];
                 // 들어갔거나 문턱에서 거품을 뿌리기 시작했다 — 통합8 그 뒤 문 앞에 닿은 사람도 로봇이 끄는 걸 본다 (사람마다 한 번)
-                if (rb.Room == room || rb.Foam < fw.Foam0 - 0.01f) { bool first = !fw.Seen; fw.Seen = true; if (first || (w.Tick & 15) == 0) Witness(rb, room, fw.Saw); }
+                if (rb.Room == room || rb.Foam < fw.Foam0 - 0.01f) { fw.Seen = true; Witness(rb, room, fw.Saw); }
                 bool on = rb.Operational && rb.Foam > 0.05f && (rb.FightingFire || rb.Room == room);
                 if (!on)
                 {
@@ -483,7 +483,7 @@ public sealed class FleetSystem
             // 통합8 함교 · 통신실 화면(그 방 카메라)으로 지켜본 사람도 본 것이다 — 사람을 문 앞에 붙잡아 두면 곁에서 본 사람이 없었다
             bool screen = c.Room is { Type: RoomType.Bridge or RoomType.Comms or RoomType.ServerRoom } && room.DataLinked && w.Automation.MainOnline;
             if (d > 9f && !screen) continue;
-            w.Automation.Trusts.Change(c, 0.02f, $"{Ko.IGa(rb.Name)} 사람보다 먼저 불 속에 들어갔다", quiet: true);
+            w.Automation.Trusts.Change(c, 0.04f, $"{Ko.IGa(rb.Name)} 사람보다 먼저 불 속에 들어갔다", quiet: true); // 통합8 사람 대신 불에 든 걸 본 일은 작지 않다 (0.02는 그 사이 다른 일로 깎인 몫에 묻혔다)
             w.Brain2.Beliefs.Learn(c, Topic.Fire, room.Id, 1, BeliefSource.Seen, 0.95f);
             first ??= c;
             saw.Add(c.Id);
