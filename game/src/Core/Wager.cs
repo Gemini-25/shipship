@@ -142,35 +142,50 @@ public sealed class WagerSystem
         }
     }
 
-    /// <summary>내기 빚을 대신 당직으로 갚는다: 빌려준 사람 근무가 다가오고 빚진 사람이 쉬는 때.</summary>
+    /// <summary>
+    /// 내기 빚을 대신 당직으로 갚는다: 깨어 있을 때 "다음 네 근무는 내가 설게" 약속 → 그 근무가 시작될 때 대신 선다.
+    /// (부지런한 사람 · 당번을 건 빚 · 독촉을 받은 빚일수록 먼저 나선다 · 미루는 버릇이면 덜)
+    /// </summary>
     private void Covers()
     {
         var w = _w;
         int day = SimTime.Day(w.Tick);
         float hour = SimTime.HourOfDay(w.Tick);
+        // 약속한 근무가 다가왔다 → 대신 선다
+        for (int i = Promised.Count - 1; i >= 0; i--)
+        {
+            var (ai, bi, start, end, d) = Promised[i];
+            if (w.Tick < start - SimTime.Minutes(45)) continue;
+            Promised.RemoveAt(i);
+            if (w.Tick >= end || P(ai) is not CrewMember a || P(bi) is not CrewMember b || !Adult(a) || !Adult(b) || d.Amount <= 0) continue;
+            Cover(a, b, d, end);
+        }
         var debts = w.Schemes.Debts;
         for (int i = 0; i < debts.Count; i++)
         {
             var d = debts[i];
             if (d.Amount <= 0 || P(d.From) is not CrewMember a || P(d.To) is not CrewMember b || !Adult(a) || !Adult(b) || a == b) continue;
             if (!d.Why.Contains("내기") && !d.Why.Contains("판") && d.Amount < 3) continue;
-            if (_coverDay.TryGetValue((a.Id, b.Id), out int last) && last == day) continue;
+            if (_coverDay.TryGetValue((a.Id, b.Id), out int last) && last == day || Promised.Any(x => x.a == a.Id)) continue;
+            if (!a.IsAwake || !b.IsAwake || a.Job?.Urgent == true || OnShift(b) || a.Needs.Rest < 0.3f || a.Fx.Worst > 0.3f) continue;
             float until = SimTime.HoursFromTo(hour, b.Schedule.WorkStart);
-            bool soon = until <= 1.5f && !OnShift(b);
-            if (!soon || b.ExcusedUntil > w.Tick || a.CoveringUntil > w.Tick || OnShift(a) || !a.IsAwake) continue;
-            if (SimTime.HoursFromTo(hour, a.Schedule.WorkStart) < until + b.Schedule.WorkLength) continue; // 제 근무와 겹친다
-            if (a.Needs.Rest < 0.3f || a.Fx.Worst > 0.3f) continue;
+            if (until > 14f || b.ExcusedUntil > w.Tick) continue;
             float p = 0.35f + 0.4f * a.Traits.Diligence + (d.Why.Contains("당번") ? 0.3f : 0f) - (Life.Has(a, Habit.Procrastinator) ? 0.25f : 0f) + (d.Fights > 0 ? 0.2f : 0f);
             _coverDay[(a.Id, b.Id)] = day;
             if (!R.Chance(p)) continue;
-            Cover(a, b, d, until);
+            long start = w.Tick + SimTime.Hours(until);
+            Promised.Add((a.Id, b.Id, start, start + SimTime.Hours(b.Schedule.WorkLength), d));
+            a.Say(w, Persona.Say(a, $"{d.Why} 말이야 — {SimTime.Clock(start)} 네 근무, 내가 설게"));
+            w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(a.Name)} {d.Why}을 갚겠다며 {b.Name}의 다음 근무를 대신 서겠다고 했다", a.Id);
         }
     }
 
-    public void Cover(CrewMember a, CrewMember b, Debt d, float hoursUntil)
+    /// <summary>약속한 대신 당직 (빚진 사람 · 빌려준 사람 · 근무 시작 · 끝 · 빚).</summary>
+    public List<(int a, int b, long start, long end, Debt d)> Promised { get; } = new();
+
+    public void Cover(CrewMember a, CrewMember b, Debt d, long end)
     {
         var w = _w;
-        long end = w.Tick + SimTime.Hours(hoursUntil + b.Schedule.WorkLength);
         b.ExcusedUntil = end;
         a.CoveringUntil = end;
         DebtWatch[a.Id] = end;
@@ -180,10 +195,10 @@ public sealed class WagerSystem
         b.ChangeAffinity(a, 0.05f);
         a.ChangeAffinity(b, 0.02f);
         w.Relations.Remember(b, a, RelationReason.KeptPromise, $"{d.Why}을 대신 당직으로 갚았다");
-        a.Say(w, Persona.Say(a, "내기 진 거, 오늘 당직으로 갚을게"));
+        a.Say(w, Persona.Say(a, "약속대로 오늘 네 근무는 내가 선다"));
         b.Say(w, Persona.Say(b, "좋아, 덕분에 하루 쉰다"));
         w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(a.Name)} {b.Name} 대신 당직을 선다 — {d.Why} {before}에서 {d.Amount}로", a.Id);
-        Life.Diary(w, a, Persona.Say(a, $"{b.Name}에게 진 {Ko.EulReul(d.Why)} 당직으로 갚는다. 밤이 길겠다"));
+        Life.Diary(w, a, Persona.Say(a, $"{b.Name}에게 진 {Ko.EulReul(d.Why)} 당직으로 갚는다. 하루가 길겠다"));
         if (w.Automation.Present && w.Automation.MainOnline)
         {
             Stats.ComputerNoted++;

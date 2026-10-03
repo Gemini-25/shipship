@@ -620,6 +620,7 @@ public partial class ShipView : Node2D
         PaintNavLights(ci); // v10.9 항해등
         PaintRadiators(ci); // v9 선체 밖 방열판
         PaintExterior(ci); // v12.6 안테나·태양 날개
+        PaintHullKind(ci); // v18.8 뼈대 · 용도마다 다른 선체 바깥 (바퀴 · 컨테이너 · 덧댄 판 · 집게 · 탱크 · 온실)
         PaintCosmicUnder(ci); // v18.13 우주 대재난: 다가오는 것 · 자기력선 · 조석 · 스치는 잔해
         PaintScorch(ci);
         PaintBlastScars(ci); // v16.13 폭발 흔적 (방사형 그을음 · 깨진 조명 · 날아간 문짝 · 추모)
@@ -733,6 +734,7 @@ public partial class ShipView : Node2D
         PaintCouncilFloor(ci); // v18.18 둘러앉는 방석 · 의장 탁자 · 재판석 · 투표함 · 잔치 깃발
         PaintBlackbox(ci); // v18.7 블랙박스 상자 · 숨은 실수의 흔적 · 조사 자리의 기록 띠 · 숨긴 사람의 몸짓
         PaintValuesFloor(ci); // v18.15 딜레마 표지판 · 밀항자 자리 · 꾸린 짐 · 식당 벽 쪽지
+        PaintPersonalFloor(ci); // v18.1 밀린 편지 더미 · v18.9 맞바꾸는 물건
         // 쓰러진 사람은 밑에, 업힌 사람은 업은 사람 위에
         foreach (var c in _world.Crew.OrderBy(c => c.CarriedBy != null ? 2 : c.Down ? 0 : 1)) PaintCrew(ci, c);
         PaintManeuverOver(ci); // v17.0 침대 끈 · 손잡이 쥔 손 · 컵 쥔 손 · 넘어진 사람 · 빗자루질
@@ -1377,6 +1379,7 @@ public partial class ShipView : Node2D
 
             PaintReact(ci, c, body, facing, rr, s, ZoomDetail.Shows(Zoom, Detail.CrewDot) ? 0 : lod); // v17.8 반응 몸짓 · 손전등 · 담요 · 땀 · 입김
             PaintGestures(ci, c, body, facing, rr, s, ZoomDetail.Shows(Zoom, Detail.CrewDot) ? 0 : lod); // v17.2 손 · 시선 · 자세 · 버릇
+            PaintPersonal(ci, c, body, facing, rr, s, ZoomDetail.Shows(Zoom, Detail.CrewDot) ? 0 : lod); // v18.1 편지 · v18.9 대신 서는 당직 완장
             if (c.Job?.Current is SprayToil) PaintSpray(ci, body, facing, rr);
             PaintGait(ci, c, body, facing, rr, s);
 

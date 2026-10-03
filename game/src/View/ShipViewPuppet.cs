@@ -77,7 +77,7 @@ public partial class ShipView
         skin = skin.Lightened(ZoomDetail.Lift(ZoomDetail.Luma(skin.R, skin.G, skin.B)) * 0.5f);
         hair = hair.Lightened(ZoomDetail.Lift(ZoomDetail.Luma(hair.R, hair.G, hair.B)));
         bool suit = spec.Suit;
-        var cloth = suit ? new Color("#dfe6ee") : RoleCloth(c.Role);
+        var cloth = suit ? new Color("#dfe6ee") : WearCloth(c, RoleCloth(c.Role)); // v18.0 작업복 · 평상복 · 잠옷 · 방열복
         if (dim) cloth = cloth.Lerp(new Color("#8a8f99"), 0.35f);
         var pants = suit ? new Color("#c3ccd6") : cloth.Darkened(0.42f);
         var outline = Palette.Space.WithAlpha(0.6f);
@@ -162,6 +162,7 @@ public partial class ShipView
             if (c.Role == CrewRole.Cook) // 앞치마 끈 · 체크
                 for (int k = -2; k <= 2; k++) ci.DrawLine(new Vector2(torso.X - D * 0.7f, k * W * 0.32f), new Vector2(torso.X + D * 0.4f, k * W * 0.32f), new Color(0.75f, 0.3f, 0.3f, 0.35f), 0.5f);
             if (detail) PaintRoleMark(ci, c.Role, torso + new Vector2(-1.9f, 0f));
+            PaintWear(ci, xf, c, torso, D, W, accent, detail, t); // v18.0 옷 무늬 · 조끼 · 때 · 찢어짐
         }
         if (suit)
         {
@@ -195,6 +196,7 @@ public partial class ShipView
         // ── 머리 · 머리카락 · 수염 · 헬멧 ──
         if (suit) PaintHelmet(ci, xf, head, skin, accent, detail, t, c);
         else PaintHead(ci, xf, head, c, l, skin, hair, lod, moving ? swing : 0f, t);
+        if (!suit) PaintEyewear(ci, xf, head, c, lod); // v18.0 안경 · 보안경 · 방열복 두건
 
         ci.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
     }
@@ -221,7 +223,7 @@ public partial class ShipView
     {
         var outline = Palette.Space.WithAlpha(0.85f);
         var sleeve = pattern == OutfitPattern.Sleeves && !suit ? accent : cloth;
-        var glove = suit ? new Color("#b9c2cc") : skin;
+        var glove = suit ? new Color("#b9c2cc") : WearGlove(c, skin); // v18.0 장갑
         bool work = pose is PuppetPose.Work or PuppetPose.Kneel;
         var held = spec.Held;
         bool two = spec.TwoHands;

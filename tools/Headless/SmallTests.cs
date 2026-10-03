@@ -104,11 +104,12 @@ public static partial class Program
             k.Owed = 1;
             k.OwedSince = w.Tick;
             float sad0 = w.Brain2.Emotions.Get(c, Feeling.Sadness);
-            int diary0 = c.Diary.Count, regrets = mail.Stats.Regrets;
+            long t0 = w.Tick;
+            int regrets = mail.Stats.Regrets;
             mail.Post(c, k, News.Death, 0f);
             for (int i = 0; i < 36 && mail.Stats.Regrets == regrets; i++) Run(w, SimTime.Minutes(10));
             float sad = w.Brain2.Emotions.Get(c, Feeling.Sadness);
-            bool wrote = c.Diary.Skip(diary0).Any(d => d.text.Contains("부고"));
+            bool wrote = c.Diary.Any(d => d.tick >= t0 && d.text.Contains("부고"));
             Check("부고 소식에 슬퍼하고 일기에 남긴다 · 답장을 미뤘던 사람은 후회한다 · 컴퓨터가 근무를 덜어 준다", sad > sad0 + 0.2f && wrote && mail.Stats.Regrets > regrets && c.ExcusedUntil > w.Tick,
                 $"{c.Name}: 슬픔 {sad0:0.00}→{sad:0.00} · 일기 {wrote} · 후회 {mail.Stats.Regrets - regrets} · 위로 {mail.Stats.Comforted} · 근무 덜기 {mail.Stats.ComputerEase} · {mail.Stats.Summary()}");
         }
@@ -119,8 +120,7 @@ public static partial class Program
             Run(w, SimTime.Hours(3));
             var bets = w.Personal.Bets;
             var adults = w.Crew.Where(c => !c.Dead && !c.IsChild).OrderBy(c => c.Id).ToList();
-            var pair = adults.SelectMany(x => adults.Where(y => y != x).Select(y => (a: x, b: y)))
-                .FirstOrDefault(p => SimTime.HoursFromTo(p.b.Schedule.WorkStart, p.a.Schedule.WorkStart) >= p.b.Schedule.WorkLength + 2f);
+            var pair = (a: adults[2], b: adults[3]);
             int bet0 = bets.Stats.Bets;
             for (int i = 0; i < 20 && bets.Stats.Bets == bet0; i++) bets.OnCardGame(adults[0], adults[1]);
             Check("카드판에 초콜릿 · 당번이 걸리고 · 못 내면 빚이 된다", bets.Stats.Bets > bet0 && (bets.Stats.PaidOnSpot > 0 || w.Schemes.Debts.Any(d => d.Why.Contains("카드 내기"))),
@@ -135,7 +135,9 @@ public static partial class Program
                     $"{pair.a.Name}(근무 {pair.a.Schedule.WorkStart:0}시) → {pair.b.Name}(근무 {pair.b.Schedule.WorkStart:0}시) 빚 3→{d.Amount} · 대신 당직 {bets.Stats.Covers - covers} · 컴퓨터 기록 {bets.Stats.ComputerNoted}");
             }
             Run(w, SimTime.TicksPerDay);
-            Console.WriteLine($"   맞바꾸기: {bets.Stats.Summary()}");
+            var ms = w.Personal.Mail.Stats;
+            Check("편지가 오가고 쉬는 시간에 답장을 쓴다 · 저녁에 같은 방 사람끼리 맞바꾼다", ms.Read > 0 && ms.Replies > 0 && bets.Stats.Barters + bets.Stats.OnCredit > 0,
+                $"편지: {ms.Summary()} / 내기: {bets.Stats.Summary()}");
         }
 
         // ⑦ 모든 뼈대 × 용도 생성 배가 하루를 정상으로 넘긴다
