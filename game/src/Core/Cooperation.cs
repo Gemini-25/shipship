@@ -285,6 +285,7 @@ public sealed partial class CoopSystem
         public Cell Spot;
         public Vector2 Face;
         public bool Relevant, Urgent, SiteWork, NeedPair, Solo, Careful, Ordered, Waiting, Ended, Finished;
+        public bool Paired; public long HoldFrom = -1; // 통합7 조여 붙이는 동안만 잡아 준다
         public bool Held; // v16.24 짝이 안 와 보류 — 자리를 맡아 두지 않는다 (다른 사람 · 나중에)
         public int Phase;
         public long Until = -1, BoostUntil, WaitFrom = -1;
@@ -352,6 +353,15 @@ public sealed partial class CoopSystem
             {
                 call.HelperSeen = now;
                 m *= 1.15f + 0.03f * Math.Min(5, PairCount(c.Id, call.Helper)); // 손발이 맞는 짝일수록
+                // 통합7 무거운 부품은 자리에 맞춰 조여 붙일 때까지만 잡아 준다 — 한 시간 넘는 수리 내내 붙들려 있다 끼니때 떠나던 것
+                if (s.HoldFrom < 0) s.HoldFrom = now;
+                else if (now - s.HoldFrom >= SimTime.Minutes(20))
+                {
+                    call.Done = true; call.Outcome = "함께 조여 붙였다 — 나머지는 혼자";
+                    PairDone(c, call, now);
+                    s.Paired = true;
+                    c.Say(_w, Persona.Say(c, "됐어, 붙었다 — 고마워, 나머진 내가 할게"));
+                }
             }
             else if (now - call.HelperSeen > SimTime.Minutes(2))
             {
@@ -379,7 +389,7 @@ public sealed partial class CoopSystem
         if (face is Vector2 fv && w.Ship.FurnitureAt(Cell.FromPosition(fv)) is Furniture ff) s.F = ff;
         s.F ??= job.Target;
         bool bench = s.F != null && BenchType(s.F.Type) && !s.F.Stowed;
-        bool site = o != null && SiteKind(o.Kind) && o.Robot == null && !c.Outside && !o.External && c.Room != null;
+        bool site = o != null && SiteKind(o.Kind) && (o.Robot == null || RobotSystem.Joinable(o)) && !c.Outside && !o.External && c.Room != null; // 통합7 로봇이 맡은 정비에 사람이 손을 보태도 그 사람은 제 공구를 펼친다 (한빛호 냉각 펌프)
         if (!bench && !site) { s.Relevant = false; return s; }
         s.Relevant = true;
         s.Phase = bench ? PBench : PNeighbor;
@@ -460,7 +470,7 @@ public sealed partial class CoopSystem
             call.Done = true;
             call.Outcome = s.Order?.Closed == true ? "함께 끝냈다" : "일이 끊겼다";
         }
-        if (s.Call is { Arrived: true } pc && pc.Helper >= 0 && s.Order?.Closed == true) PairDone(c, pc, now);
+        if (s.Call is { Arrived: true } pc && pc.Helper >= 0 && s.Order?.Closed == true && !s.Paired) PairDone(c, pc, now);
         if (s.Pause is PausedFixture pa && !pa.Done && pa.Approved) Restore(pa, c, "다시 켰다 — 끝났다고 알리자 컴퓨터가 돌렸다");
         else if (s.Pause is PausedFixture p && !p.Done && !p.Approved)
         {

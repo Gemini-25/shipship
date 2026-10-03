@@ -104,7 +104,8 @@ public static partial class Program
                 bool paused = ScUntil(w, () => s.Stage == SceneStage.Paused, 0.5f);
                 float at = s.Progress;
                 // 한 사람은 불을 끄고 지쳐서 자러 간다 (돌아오지 않는다)
-                var tired = s.Joined.Where(id => id != host.Id).Select(id => w.Crew.First(c => c.Id == id)).FirstOrDefault();
+                // 통합7 막 들어와 1%만 본 사람을 고르면 '결말을 못 봤다'고 적을 만큼 본 게 없다 — 앞부분을 꽤 본 사람이 지쳐 간다
+                var tired = s.Joined.Where(id => id != host.Id).OrderByDescending(id => s.Share.TryGetValue(id, out var sv) ? sv : 0f).ThenBy(id => id).Select(id => w.Crew.First(c => c.Id == id)).FirstOrDefault();
                 if (tired != null) { tired.Needs.Rest = 0.02f; }
                 bool calm = ScUntil(w, () => !Crisis.Acting(w), 3f, 60);
                 bool resumed = ScUntil(w, () => s.Stage == SceneStage.Run, 3f);
@@ -450,11 +451,15 @@ public static partial class Program
             {
                 var w = DayOne(seed, "Mirinae");
                 var spec = Props.All.First(p => p.Source == PropSource.Craft && p.Material is ItemKind m && w.Ship.CountStored(m) > 0 && !p.Kid);
-                var maker = w.Crew.Where(c => !c.Dead && !c.IsChild && c.CanAct).OrderBy(c => c.Id).Skip(3).First();
-                ScFree(w, maker);
-                w.Scenes.Craft(maker, spec);
+                // 통합7 넷째 사람이 이미 제 소품(노래 목록판)을 만드는 중이면 새 판이 안 열리고 Last()가 남의 옛 장면을 집었다 — 손이 빈 사람이 연다
+                CrewMember? maker = null;
+                foreach (var cand in w.Crew.Where(c => !c.Dead && !c.IsChild && c.CanAct).OrderBy(c => c.Id).Skip(3))
+                {
+                    ScFree(w, cand);
+                    if (w.Scenes.Craft(cand, spec)) { maker = cand; break; }
+                }
                 var s = w.Scenes.Scenes.Last();
-                bool going = ScUntil(w, () => s.Stage == SceneStage.Run && s.Progress > 0.1f, 4f);
+                bool going = maker != null && ScUntil(w, () => s.Stage == SceneStage.Run && s.Progress > 0.1f, 4f);
                 var bench = w.Ship.Rooms[s.RoomId];
                 bench.PowerCut = true;
                 bool dark = ScUntil(w, () => s.Stage == SceneStage.Paused && s.PauseWhy == "어두움", 0.5f);

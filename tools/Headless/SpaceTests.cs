@@ -188,7 +188,7 @@ public static partial class Program
             Force(w, a, SpChore(w, a, o1)!, SimTime.Hours(3));
             Force(w, b, SpChore(w, b, o2)!, SimTime.Hours(3));
             long t0 = w.Tick;
-            for (int k = 0; k < 40 && w.Coop.Calls.Count(x => x.Caller == a.Id || x.Caller == b.Id) < 2; k++) Run(w, SimTime.Minutes(1));
+            for (int k = 0; k < 120 && w.Coop.Calls.Count(x => x.Caller == a.Id || x.Caller == b.Id) < 2; k++) Run(w, SimTime.Minutes(1)); // 통합7 부품 선반이 배 반대편이면 둘 다 부를 자리에 닿기까지 사십 분이 넘는다 (온다인: 선반 (83,23) → 냉장고) — 부를 때까지 기다린다
             var calls = w.Coop.Calls.Where(x => x.Caller == a.Id || x.Caller == b.Id).ToList();
             long cap = calls.Count > 0 ? calls.Max(x => x.Cap) : t0;
             while (w.Tick < cap + SimTime.Minutes(3)) w.Step();
@@ -217,6 +217,8 @@ public static partial class Program
             SpQuiet(w, new[] { u1, u2, u3 }, SimTime.Hours(4));
             foreach (var u in new[] { u1, u2, u3 }) Teleport(w, u, w.Ship.RoomAt(spot)!.Cells.Where(w.Ship.IsOpenFloor).OrderBy(x => (x.Center - spot.Center).LengthSquared()).Skip(1).First());
             Job BenchJob(string label, bool urgent) => new(null, label, new Toil[] { new GotoToil(spot), new WorkToil(0.8f, Skill.Mechanics, bench.Center) }) { Urgent = urgent, InterruptMargin = 9f };
+            // 통합7 셋째 사람은 급한 일을 받을 때까지 곁에 있게 한다 (스무 분 동안 자유로 두면 배 반대편까지 가 버려 여섯 분 안에 못 와 '급한 일 먼저'가 안 일어났다)
+            Force(w, u3, new Job(null, "시험: 곁에서 기다림", new Toil[] { new WaitToil(SimTime.Minutes(30), Pose.Standing) }) { InterruptMargin = 9f }, SimTime.Minutes(30));
             Force(w, u1, BenchJob("시험: 부품 깎기", false), SimTime.Hours(3));
             Run(w, SimTime.Minutes(4));
             Force(w, u2, BenchJob("시험: 부품 시험", false), SimTime.Hours(3));
@@ -414,6 +416,7 @@ public static partial class Program
             foreach (var c in curious)
             {
                 c.Habits.Remove(Habit.Loner); c.Habits.Add(Habit.Gazer); c.Habits.Add(Habit.Talker);
+                ScFree(w, c); // 통합7 다섯 중 비번이 한 명뿐인 날엔 구경꾼이 한 명이라 문 앞이 막히지 않았다 — 다섯 다 쉬는 시간으로 세운다
                 Teleport(w, c, corridor.Cells.Where(w.Ship.IsOpenFloor).OrderBy(x => (x.Center - room.Center).LengthSquared()).Skip(3 + curious.IndexOf(c)).First());
                 c.Needs.Food = 0.95f;
                 Force(w, c, new Job(null, "시험: 쉬는 중", new Toil[] { new WaitToil(SimTime.Minutes(2), Pose.Standing) }), 1);

@@ -149,6 +149,8 @@ public sealed class ChoresActivity : Activity
                 danger *= 0.35f;
             if (w.Fire.CountIn(room) > 0) danger = MathF.Max(danger, 0.5f);
             if (danger > 0.2f) score -= danger * MathF.Pow(1f - c.Traits.Bravery, 1.5f) * 1.2f;
+            // 통합7 태양 폭풍이 쏟아지는 동안 쬐는 방의 일은 목숨이 걸린 일이 아니면 지나간 뒤로 (새터호: 57% 함교에서 수리 · 수동 조종)
+            if (w.Ambience.StormPower >= 0.3f && room.Radiation >= 0.2f && o.Urgency < 0.9f) score -= 0.4f + 0.6f * room.Radiation;
 
             // v7: 무서운 방의 일은 남에게 미룬다 (급하면 덜, 성실하면 덜)
             float fear = c.Memory.FearOf(room);

@@ -169,6 +169,7 @@ public sealed partial class WorkBoard
         var seat = w.Ship.FurnitureOf(FurnitureType.Console).Where(f => f.Room.Type == RoomType.Bridge && !f.Room.Detached && f.Machine is { Stopped: false }).OrderBy(f => f.Id).FirstOrDefault()
                    ?? a.ComputerBody;
         if (seat == null || seat.Room.Detached) return;
+        if (w.Ambience.StormPower >= 0.3f && seat.Room.Radiation >= 0.2f && level < CrisisLevel.Emergency) return; // 통합7 양성자 비가 쏟아지는 관제석엔 앉히지 않는다 — 그동안은 컴퓨터에 맡긴다
         var spot = seat.UseSpots.FirstOrDefault(c => w.Ship.IsOpenFloor(c));
         if (spot == default) spot = seat.Room.Cells.FirstOrDefault(c => w.Ship.IsOpenFloor(c));
         if (spot == default) return;

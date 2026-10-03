@@ -71,6 +71,8 @@ public static partial class Program
                 Run(w, 2);
                 w.Brain2.Beliefs.Learn(C, Topic.Person, F.Id, staleRoom.Id, BeliefSource.Seen, 0.95f);
                 // 정전: 배전반 차단기가 떨어진다
+                // 통합7 V 등급 컴퓨터는 36초 만에 원격으로 올려 정전 자체가 없던 일이 됐다 (방 캄캄 False · 계획 17:01 끝) — 원격으로 못 올리는 III 등급 배로 세운다
+                w.Automation.LevelCap = 3;
                 var panel = w.Ship.FurnitureOf(FurnitureType.PowerPanel).First().Machine!;
                 panel.Faults.Add(new Fault { Kind = FaultKind.BreakerTrip, Since = w.Tick, Circuit = circ });
                 var five = new[] { A, B, C, D, E };
@@ -130,7 +132,8 @@ public static partial class Program
                         Run(w, SimTime.Minutes(0.5f));
                         if (w.Brain2.Plans.Current(a) is CrewPlan p && p.Kind == PlanKind.Outage) pick = p.Method;
                     }
-                    Run(w, SimTime.Minutes(25));
+                    // 통합7 배전반이 멀면 가는 사이(30분) 시험이 먼저 불을 켜 '벌써 누가 올렸다'가 됐다 — 고른 길이 끝날 때까지 캄캄하게 둔다
+                    for (int m = 0; m < 180 && (m < 50 || w.Brain2.Plans.Current(a) is CrewPlan { Kind: PlanKind.Outage }); m++) Run(w, SimTime.Minutes(0.5f));
                     room.LightsOut = false;
                     Run(w, SimTime.Minutes(40)); // 불이 들어오고 마음을 가라앉힌다
                     return pick ?? Method.CarryOn;

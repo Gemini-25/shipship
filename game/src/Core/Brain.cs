@@ -144,7 +144,7 @@ public static class Brain
             if (c.Job.Activity is SleepActivity or RelaxActivity or ChatActivity or WanderActivity or DutyActivity or HobbyActivity or TidyActivity or MendActivity && Crisis.Acting(w))
                 margin = System.MathF.Min(margin, 0.08f);
             // v10.5: 긴 개조·정비 중에도 굶주리면 손을 놓고 먹으러 간다 (급한 일은 예외 — 불 끄던 사람은 버틴다)
-            if (!c.Job.Urgent && c.Needs.Hunger > 0.85f && best.Activity is EatActivity) margin = 0f; // v10.10: 0.9 → 0.85 (급한 수리 뒤 끼니를 놓치던 것)
+            if ((!c.Job.Urgent || !Crisis.Acting(w)) && c.Needs.Hunger > 0.85f && best.Activity is EatActivity) margin = 0f; // 통합7 급한 수리라도 지금 불 · 경보가 없으면 굶어 가며 버티지 않는다 (부싯돌호: 원자로 수리 세 시간에 0까지) · v10.10: 0.9 → 0.85
             if (best.Score < current + margin) return;
 
             var next = PlanTimed(best.Activity, c, w, dist);

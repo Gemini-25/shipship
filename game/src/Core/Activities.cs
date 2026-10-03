@@ -65,7 +65,7 @@ public sealed class EatActivity : Activity
 
     public override (float, string) Score(CrewMember c, World w, DistanceField dist)
     {
-        var (_, _, src) = FindFood(c, w, dist);
+        var (box, _, src) = FindFood(c, w, dist);
         if (src == Source.None) return (0f, "먹을 것이 없음");
         float hunger = c.Needs.Hunger;
         float score = Curve.Smooth(hunger, 0.35f, 0.9f) * 1.1f;
@@ -100,6 +100,12 @@ public sealed class EatActivity : Activity
         if (src == Source.Produce) reason += " · 날채소뿐";
         // 자는 중에는 웬만큼 배고파서는 깨지 않는다
         if (c.Pose == Pose.Sleeping && hunger < 0.85f) score *= 0.6f;
+        // 통합7 태양 폭풍이 쏟아지는 동안 쬐는 방(식당 · 지나는 통로)으로 밥 먹으러 나가지 않는다 — 굶주리기 전엔 지나간 뒤에 (새터호: 대피소에서 나와 59% 식당으로)
+        if (w.Ambience.StormPower >= 0.3f && hunger < 0.93f && !c.Outside && (box?.Room.Radiation >= 0.2f || c.Room?.Radiation >= 0.2f))
+        {
+            score *= 0.3f;
+            reason += " · 태양 폭풍 — 지나간 뒤에 먹는다";
+        }
         return (score, reason);
     }
 
