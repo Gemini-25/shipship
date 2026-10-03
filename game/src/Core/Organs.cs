@@ -40,6 +40,8 @@ public sealed class OrganBody
     public long LastTreated { get; set; } = -1_000_000;
     public readonly long[] Meds = new long[6];     // 최근 약 쓴 때 (과용)
     public int ArrestSeen { get; set; } = -1;
+    internal readonly float[] Seen = new float[3], Pending = new float[3];
+    internal readonly string?[] PendCause = new string?[3];
     public bool Grafted => Graft[0] != -1 || Graft[1] != -1 || Graft[2] != -1 || Graft[3] != -1;
     public bool NeedsSuppress => Graft.Any(g => g >= 0);
 }
@@ -213,17 +215,36 @@ public sealed class OrganSystem
     {
         var w = _w;
         var v = c.Vitals;
-        // 다친 폐 · 가슴 (부위 상처) — 상처만큼 장기도
+        // 다친 폐 · 가슴 (부위 상처) — 새로 다친 만큼 장기도 상한다 (상처가 아물어도 장기는 그대로)
+        float lungW = 0f, chestW = 0f, shockW = 0f;
+        string? lungC = null;
         if (v.Wounds.Count > 0)
             foreach (var x in v.Wounds)
             {
                 if (x.Lost) continue;
-                float s = Wounds.Severity(v, x);
-                if (s < 0.05f) continue;
-                if (x.Part == BodyPart.Lungs && x.Kind is WoundKind.Toxic or WoundKind.Barotrauma) Toward(c, Organ.Lungs, (x.Kind == WoundKind.Toxic ? 1f : 0.9f) * s, 0.8f * h, x.Cause);
-                if (x.Part == BodyPart.Chest && x.Kind is WoundKind.Burn or WoundKind.Fracture or WoundKind.Crush or WoundKind.Radiation) Toward(c, Organ.Heart, 0.6f * s, 0.4f * h, $"가슴 {Wounds.KindName(x.Kind)}");
-                if (x.Cause.Contains("감전") || x.Cause.Contains("누전")) Toward(c, Organ.Heart, 0.55f * s, 0.5f * h, "감전");
+                float s = MathF.Min(1f, x.Weight); // 다친 양 (아물어도 줄지 않는다 — 새로 다친 만큼만 장기에)
+                if (s < 0.03f) continue;
+                if (x.Part == BodyPart.Lungs && x.Kind is WoundKind.Toxic or WoundKind.Barotrauma) { float k = (x.Kind == WoundKind.Toxic ? 1f : 0.9f) * s; if (k > lungW) { lungW = k; lungC = x.Cause; } }
+                if (x.Part == BodyPart.Chest && x.Kind is WoundKind.Burn or WoundKind.Fracture or WoundKind.Crush or WoundKind.Radiation) chestW = MathF.Max(chestW, 0.6f * s);
+                if (x.Cause.Contains("감전") || x.Cause.Contains("누전")) shockW = MathF.Max(shockW, 0.55f * s);
             }
+        if (lungW > 0f || chestW > 0f || shockW > 0f || _b.ContainsKey(c.Id))
+        {
+            var ob = Of(c);
+            // 상처가 커진 만큼 (한 번에 다 오르지 않고 몇십 분에 걸쳐 — 연기를 마신 폐가 붓는다)
+            void Add(int k, Organ o, float now, string cause)
+            {
+                if (now > ob.Seen[k]) { ob.Pending[k] += now - ob.Seen[k]; ob.PendCause[k] = cause; }
+                ob.Seen[k] = now;
+                if (ob.Pending[k] <= 0.001f) return;
+                float step = ob.Pending[k] * MathF.Min(1f, 2f * h);
+                ob.Pending[k] -= step;
+                Hurt(c, o, step, ob.PendCause[k] ?? cause);
+            }
+            Add(0, Organ.Lungs, lungW, lungC ?? "다친 폐");
+            Add(1, Organ.Heart, chestW, "가슴을 크게 다침");
+            Add(2, Organ.Heart, shockW, "감전");
+        }
         // 멎었던 심장
         if (w.Casualty.Of(c) is Trauma t && t.Kind == TraumaKind.Arrest)
         {
@@ -291,9 +312,13 @@ public sealed class OrganSystem
             float regen = o switch { Organ.Lungs => 0.03f, Organ.Heart => 0.008f, Organ.Liver => 0.07f, _ => 0.02f } * (rest ? 1.6f : 1f) * ErasV15.Mul(w, "heal");
             if (o == Organ.Lungs && ecmo) regen = 0.12f; // 폐를 쉬게 한다
             if (b.Graft[i] != -1 && d < 0.5f && b.Reject < 0.3f) regen *= 2f; // 갓 이식한 장기 — 수술 자리가 아문다
-            if (d < 0.5f || o == Organ.Lungs && ecmo) b.Dmg[i] = MathF.Max(o == Organ.Kidney && b.OneKidney ? 0.2f : 0f, d - regen * day);
+            if (d < 0.5f || o == Organ.Lungs && ecmo)
+            {
+                float floor = o == Organ.Kidney && b.OneKidney ? 0.2f : 0f;
+                b.Dmg[i] = MathF.Max(floor, d - regen * day);
+                if (b.Dmg[i] <= 0f) b.Cause[i] = null;
+            }
             else if (!supported) b.Dmg[i] = MathF.Min(1f, d + (o == Organ.Heart ? 0.03f : 0.035f) * day); // 부전 — 서서히 나빠진다
-            if (b.Dmg[i] < 0.02f && b.Graft[i] == -1 && !(o == Organ.Kidney && b.OneKidney)) { b.Dmg[i] = 0f; b.Cause[i] = null; }
         }
         // 오래 상한 폐는 심장에 짐이 된다
         if (b.Dmg[0] > 0.6f && !ecmo) Hurt(c, Organ.Heart, 0.03f * (b.Dmg[0] - 0.6f) * day * 10f, "오래 상한 폐");

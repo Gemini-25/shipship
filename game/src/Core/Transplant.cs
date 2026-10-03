@@ -86,8 +86,6 @@ public sealed class TransplantStats
 public sealed class TransplantSystem
 {
     private readonly World _w;
-    private Rng? _rng;
-    private Rng R => _rng ??= new Rng(unchecked(_w.Seed * 9001 + 6007));
     public List<OrganGraft> Grafts { get; } = new();
     public SortedDictionary<int, DonorCase> Donors { get; } = new();
     public List<OpCase> Ops { get; } = new();
@@ -97,6 +95,7 @@ public sealed class TransplantSystem
     private readonly SortedDictionary<int, long> _told = new();
     private long _next, _last = -1;
     private int _ids, _opIds;
+    public float LastChance { get; private set; } = -1f;
     public static bool Off;
 
     public TransplantSystem(World w) => _w = w;
@@ -110,7 +109,7 @@ public sealed class TransplantSystem
     {
         var r = new Rng(unchecked(_w.Seed * 31337 + c.Id * 7919 + 5));
         var t = new int[6];
-        for (int i = 0; i < 6; i++) t[i] = r.Range(0, 4);
+        for (int i = 0; i < 6; i++) t[i] = r.Range(0, 3);
         return t;
     }
 
@@ -134,7 +133,7 @@ public sealed class TransplantSystem
     /// <summary>수술이 잘 될 확률 — 한 곳에 모은다 (솜씨 · 맞는 정도 · 장기의 신선도 · 침대 · 전기 · 받는 몸 · 기술).</summary>
     public static float Chance(World w, CrewMember surgeon, CrewMember patient, OrganGraft? g, Furniture? bed, OpKind kind = OpKind.Graft)
     {
-        float p = 0.45f + 0.35f * surgeon.SkillLevel(Skill.Medicine);
+        float p = 0.55f + 0.35f * surgeon.SkillLevel(Skill.Medicine);
         if (g != null)
         {
             float match = w.Transplant.Match(g, patient);
@@ -362,7 +361,7 @@ public sealed class TransplantSystem
             {
                 if (Grafts.Any(x => !x.Gone && x != g && x.For == c.Id && x.Organ == g.Organ)) continue;
                 float m = Match(g, c);
-                if (!g.Printed && m < 0.3f) continue;
+                if (g.Living && m < 0.15f) continue;
                 float s = 2f * m + w.Organs.Dmg(c, g.Organ);
                 if (s > bs) { bs = s; best = c; }
             }
@@ -394,7 +393,7 @@ public sealed class TransplantSystem
                     if (c == rc || c.Dead || c.Away || c.IsChild || c.Down || c.Vitals.Health < 0.75f || c.Vitals.Injury > 0.15f) continue;
                     var cb = w.Organs.Peek(c);
                     if (cb != null && (cb.Dmg[(int)o] > 0.15f || o == Organ.Kidney && cb.OneKidney || o == Organ.Liver && cb.LiverPart)) continue;
-                    if (MatchOf(Tissue(c), Tissue(rc)) < 0.34f) continue;
+                    if (MatchOf(Tissue(c), Tissue(rc)) < 0.3f) continue;
                     var ov = w.Values.Of(c);
                     float will = 0.9f * c.AffinityTo(rc) + 0.35f * ov.V[(int)Axis.Mercy] + 0.2f * ov.V[(int)Axis.Commune] + 0.2f * (c.Traits.Bravery - 0.5f)
                                  + (Memory.AreComrades(c, rc) ? 0.2f : 0f) - (c.Fears.Contains(Fear.Disease) ? 0.1f : 0f);
@@ -545,7 +544,10 @@ public sealed class TransplantSystem
         var bed = w.Ship.FurnitureAt(pt.Cell) is Furniture fb && fb.Type == FurnitureType.MedBed ? fb : pt.CareBed;
         var g = GraftOf(op);
         float p = Chance(w, surgeon, pt, g, bed, op.Kind);
-        bool ok = R.Chance(p);
+        LastChance = p;
+        var roll = new Rng(unchecked(w.Seed * 9001 + op.Id * 7919 + pt.Id * 131 + (int)(w.Tick % 100000)));
+        roll.Float();
+        bool ok = roll.Chance(p); // 수술마다 따로 (순서에 묶이지 않게)
         var b = w.Organs.Of(pt);
         surgeon.Practice(Skill.Medicine, 0.06f);
         Cut(pt, op.Kind == OpKind.Take ? 0.12f : 0.1f, op.Kind == OpKind.Take ? (op.Organ == Organ.Kidney ? "신장 기증" : "간 기증") : "이식 수술");

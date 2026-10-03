@@ -167,7 +167,7 @@ public sealed class FailsafeSystem
         {
             if (m.Spec.PowerDraw <= 0f || m.Body.Room.Detached) continue;
             var e = Essentials.Of(m.Body.Type);
-            if (e == Essential.Comfort || _shedLevel >= 2 && e == Essential.Support) { m.Parked = true; ShedNow++; }
+            if ((e == Essential.Comfort || _shedLevel >= 2 && e == Essential.Support) && !_w.Organs.Guarded(m.Body)) { m.Parked = true; ShedNow++; } // 의료 2차 사람이 달린 기계는 컴퓨터가 빼 둔다
         }
     }
 

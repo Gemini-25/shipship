@@ -97,7 +97,8 @@ public sealed class InfectionSystem
             {
                 float sev = w.Ailments.Severity(inf);
                 bool untreated = inf.TreatedAt < 0 || w.Tick - inf.TreatedAt > SimTime.Hours(24);
-                if (sev > 0.35f && untreated && R.Chance(MathF.Min(0.6f, 0.05f * sev * h * (weak ? 2.5f : 1f) * (1f + c.Vitals.Frailty))))
+                float days = (w.Tick - Math.Max(inf.Since, inf.TreatedAt)) / (float)SimTime.TicksPerDay; // 오래 둘수록
+                if (sev > 0.3f && untreated && R.Chance(MathF.Min(0.6f, 0.08f * sev * h * (1f + days) * (weak ? 2.5f : 1f) * (1f + c.Vitals.Frailty))))
                 {
                     sep = w.Ailments.Catch(c, "sepsis", null, weak ? "곪은 상처 — 면역억제제로 몸이 약하다" : "곪은 상처를 오래 뒀다");
                     if (sep != null)
@@ -112,10 +113,10 @@ public sealed class InfectionSystem
             float s = w.Ailments.Severity(sep);
             if (s <= 0.05f) continue;
             // 몸 곳곳의 장기가 함께 상한다
-            w.Organs.Hurt(c, Organ.Kidney, 0.05f * s * h, "패혈증");
-            w.Organs.Hurt(c, Organ.Lungs, 0.03f * s * h, "패혈증");
-            w.Organs.Hurt(c, Organ.Liver, 0.025f * s * h, "패혈증");
-            w.Organs.Hurt(c, Organ.Heart, 0.015f * s * h, "패혈증");
+            w.Organs.Hurt(c, Organ.Kidney, 0.035f * s * h, "패혈증");
+            w.Organs.Hurt(c, Organ.Lungs, 0.02f * s * h, "패혈증");
+            w.Organs.Hurt(c, Organ.Liver, 0.015f * s * h, "패혈증");
+            w.Organs.Hurt(c, Organ.Heart, 0.01f * s * h, "패혈증");
             // 주컴퓨터: 열 · 맥박 · 숨 (생체 신호가 닿는 침대 · 의무실)
             if (!sep.Diagnosed && a.Present && a.MainOnline && c.Room is Room r && r.DataLinked && (c.CareBed != null || r.Type == RoomType.Medbay || w.Ship.FurnitureAt(c.Cell)?.Type == FurnitureType.MedBed))
             {
@@ -140,10 +141,9 @@ public sealed class InfectionSystem
             hot.Add(r.Id);
             bool neg = Negative(r);
             // 컴퓨터: 앓는 사람이 있는 방의 댐퍼를 닫는다 (음압 격리실은 닫지 않아도 된다)
-            if (comp && !neg && r.DataLinked && r.VentOpen && r.Air.CO2 < 1.0f && !r.Leaking && !r.Abandoned && !_shut.ContainsKey(r.Id))
+            if (comp && !neg && r.DataLinked && r.Air.CO2 < 1.0f && !r.Leaking && !r.Abandoned && !_shut.ContainsKey(r.Id))
             {
-                r.VentOpen = false;
-                _shut[r.Id] = w.Tick;
+                _shut[r.Id] = w.Tick; // 댐퍼 자동 제어가 닫는다 (Hull.WantVentOpen)
                 Stats.Dampers++;
                 a.Reason($"infdamper:{r.Id}", $"공기 — {r.Name} 댐퍼를 닫았다 ({c.Name} {name} · 다른 방으로 공기가 가지 않게)", SimTime.Hours(4));
             }
@@ -174,9 +174,7 @@ public sealed class InfectionSystem
             if (r == null) { _shut.Remove(id); continue; }
             bool stuffy = r.Air.CO2 > 1.4f;
             if (hot.Contains(id) && !stuffy) continue;
-            _shut.Remove(id);
-            if (r.Leaking || r.Abandoned || r.Air.Smoke > 0.2f || r.VentOpen) continue;
-            r.VentOpen = true;
+            _shut.Remove(id); // 댐퍼 자동 제어가 다시 연다
             Stats.Reopened++;
             if (comp) a.Reason($"infdamper:{r.Id}", stuffy ? $"공기 — {r.Name} 이산화탄소가 찼다 · 숨이 먼저다 — 댐퍼를 다시 열었다" : $"공기 — {r.Name} 앓는 사람이 없다 · 댐퍼를 열었다", SimTime.Hours(1));
         }
