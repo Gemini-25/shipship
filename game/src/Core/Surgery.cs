@@ -565,7 +565,7 @@ public sealed class SurgerySystem
         var a = w.Automation;
         bool comp = a.Present && a.MainOnline && table.Room.DataLinked;
         // 피가 모자라면: 보조(없으면 집도의)가 냉장고 피를 넣는다 · 없으면 부른다
-        if (k.State == CaseState.Operating && pt.Vitals.Health < 0.35f && w.Tick - k.LastBlood > SimTime.Minutes(20))
+        if (k.State == CaseState.Operating && (pt.Vitals.Health < 0.35f || w.Blood.Lost(pt) >= 0.3f && pt.Vitals.Health < 0.6f) && w.Tick - k.LastBlood > SimTime.Minutes(20))
         {
             k.LastBlood = w.Tick;
             var by = CrewOf(k.Assistant) ?? CrewOf(k.Surgeon);

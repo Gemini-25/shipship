@@ -115,11 +115,32 @@ public sealed class BloodSystem
     public bool NeedsBlood(CrewMember c)
     {
         if (c.Dead || c.Away || c.Outside) return false;
-        var t = _w.Casualty.Of(c);
-        bool lost = t is { Kind: TraumaKind.Bleed } || _w.Surgery.Internal(c) || c.Vitals.Injury > 0.25f;
-        return lost && c.Vitals.Health < 0.4f && _w.Tick - _lastGiven.GetValueOrDefault(c.Id, -1_000_000) > SimTime.Minutes(50);
+        float l = Lost(c);
+        return (l >= 0.3f || l >= 0.2f && c.Vitals.Health < 0.5f) && c.Vitals.Health < 0.95f && _w.Tick - _lastGiven.GetValueOrDefault(c.Id, -1_000_000) > SimTime.Minutes(30);
     }
     private readonly SortedDictionary<int, long> _lastGiven = new();
+    private readonly SortedDictionary<int, float> _lost = new(), _prevHealth = new();
+    /// <summary>흘린 피 (피가 나는 동안 빠진 체력의 합 — 응급 처치로 기운이 돌아도 피는 그대로다).</summary>
+    public float Lost(CrewMember c) => _lost.TryGetValue(c.Id, out var x) ? x : 0f;
+
+    /// <summary>시스템 틱마다: 피가 나는 사람의 빠진 체력을 센다 (피가 멎으면 몸이 천천히 채운다).</summary>
+    private void Bleeding(float dt)
+    {
+        var w = _w;
+        foreach (var c in w.Crew)
+        {
+            if (c.Dead) { _lost.Remove(c.Id); _prevHealth.Remove(c.Id); continue; }
+            float h = c.Vitals.Health;
+            float prev = _prevHealth.TryGetValue(c.Id, out var p) ? p : h;
+            _prevHealth[c.Id] = h;
+            var t = w.Casualty.Of(c);
+            bool bleeding = t is { Kind: TraumaKind.Bleed } || w.Surgery.Busy(c) && w.Surgery.CaseOf(c)?.Patient == c.Id;
+            float l = _lost.TryGetValue(c.Id, out var x) ? x : 0f;
+            if (bleeding) l += MathF.Max(0f, prev - h);
+            else l = MathF.Max(0f, l - 0.06f * dt);
+            if (l > 0.001f) _lost[c.Id] = MathF.Min(1f, l); else _lost.Remove(c.Id);
+        }
+    }
 
     /// <summary>
     /// 수혈한다 (by가 곁에서): 맞는 팩 → 혈액 대용제 → (desperate면) 맞지 않는 팩. 무엇을 했는지 한 줄 (아무것도 못 했으면 "").
@@ -176,7 +197,9 @@ public sealed class BloodSystem
     private void Give(CrewMember pt, float amount)
     {
         pt.Vitals.Health = MathF.Min(MathF.Max(pt.Vitals.MaxHealth, 0.3f), pt.Vitals.Health + amount);
+        _prevHealth[pt.Id] = pt.Vitals.Health;
         _lastGiven[pt.Id] = _w.Tick;
+        if (_lost.TryGetValue(pt.Id, out var l)) { l -= amount; if (l > 0.001f) _lost[pt.Id] = l; else _lost.Remove(pt.Id); }
     }
 
     /// <summary>곁에 온 사람의 피를 바로 넣는다 (냉장고에 맞는 피가 없을 때).</summary>
@@ -282,6 +305,7 @@ public sealed class BloodSystem
     public void Update(float dt)
     {
         var w = _w;
+        Bleeding(dt);
         if (w.Tick % SimTime.Minutes(10) >= World.SystemInterval) return;
         float hours = (w.Tick - (_lastCheck < 0 ? w.Tick : _lastCheck)) / (float)SimTime.TicksPerHour;
         _lastCheck = w.Tick;
@@ -292,7 +316,7 @@ public sealed class BloodSystem
                 var (forId, asked) = Donors[id];
                 var d = w.Crew.FirstOrDefault(x => x.Id == id);
                 var pt = forId >= 0 ? w.Crew.FirstOrDefault(x => x.Id == forId) : null;
-                if (d == null || !d.CanAct || forId >= 0 && (pt == null || pt.Dead || pt.Vitals.Health > 0.6f) || w.Tick - asked > SimTime.Hours(forId >= 0 ? 3 : 20)) Donors.Remove(id);
+                if (d == null || !d.CanAct || forId >= 0 && (pt == null || pt.Dead || Lost(pt) < 0.15f) || w.Tick - asked > SimTime.Hours(forId >= 0 ? 3 : 20)) Donors.Remove(id);
             }
         if (Packs.Count > 0)
         {
@@ -358,6 +382,7 @@ public sealed class BloodSystem
         I(Packs.Count);
         foreach (var p in Packs) { I(p.Id); I(p.Type.Code); I(p.Expires); F(p.Warm); }
         foreach (var kv in Donors) { I(kv.Key); I(kv.Value.forId); }
+        foreach (var kv in _lost) { I(kv.Key); F(kv.Value); }
         I(Donations); I(Transfusions); I(Fresh); I(Substitutes); I(Mismatched); I(Reactions); I(Spoiled); I(Expired);
     }
 }

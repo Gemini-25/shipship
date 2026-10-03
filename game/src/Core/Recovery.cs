@@ -68,15 +68,17 @@ public sealed class RecoverySystem
         float m = 1f;
         if (_fixed.TryGetValue(c.Id, out var t) && _w.Tick - t < SimTime.TicksPerDay * 10) m *= 1.5f;
         else if (_fracture.ContainsKey(c.Id)) m *= 0.8f; // 그냥 둔 큰 골절은 더디 붙는다
-        if (c.Job?.Activity is WardRestActivity && c.Pose == Pose.Sleeping) m *= 2.4f; // 간이침대: 침대만은 못해도 누워 쉰다
+        if (c.Job?.Activity is WardRestActivity && c.Pose == Pose.Sleeping) m *= c.Job.Target?.Type == FurnitureType.MedBed ? 3.75f : 2.4f; // 치료 침대 · 간이침대(침대만은 못해도 누워 쉰다)
         return m;
     }
 
-    /// <summary>누워야 할 사람 (위중 · 중상 · 수술 뒤 하루).</summary>
+    /// <summary>누워야 할 사람 (쓰러짐 · 위중 · 수술 뒤 하루 · 크게 다쳐 기운이 없다).</summary>
     public bool NeedsBed(CrewMember c)
     {
         if (c.Dead || c.Away || c.Outside) return false;
-        return _w.Grades.Now(c) >= InjuryGrade.Serious || PostOps.TryGetValue(c.Id, out var t) && _w.Tick - t < SimTime.TicksPerDay || c.Down;
+        if (c.Down || PostOps.TryGetValue(c.Id, out var t) && _w.Tick - t < SimTime.TicksPerDay) return true;
+        var g = _w.Grades.Now(c);
+        return g == InjuryGrade.Critical || g == InjuryGrade.Serious && (c.Vitals.Health < 0.6f || c.Vitals.Injury >= 0.45f);
     }
 
     private static bool BedOk(Furniture f) => !f.Room.Detached && !f.Stowed && f.Machine is Machine m && m.Efficiency > 0f;
@@ -318,46 +320,35 @@ public sealed class RecoverySystem
     }
 }
 
-/// <summary>치료 침대가 모자랄 때: 휴게실 · 복도의 간이침대에 눕는다.</summary>
+/// <summary>누워야 할 사람이 눕는다: 빈 치료 침대 → 모자라면 휴게실 · 복도의 간이침대.</summary>
 public sealed class WardRestActivity : Activity
 {
     public override string Id => "wardrest";
-    public override string Label => "간이침대에서 회복";
-
-    private static bool MedBedFree(CrewMember c, World w)
-    {
-        foreach (var b in w.Ship.FurnitureOf(FurnitureType.MedBed))
-            if ((b.ReservedBy == null || b.ReservedBy == c) && !b.Room.Detached && b.Machine is Machine m && m.Efficiency > 0f) return true;
-        return false;
-    }
+    public override string Label => "누워서 회복";
 
     public override (float score, string reason) Score(CrewMember c, World w, DistanceField dist)
     {
-        if (!c.CanAct || c.Outside || w.Surgery.CaseOf(c) is { Surgeon: >= 0 }) return (0f, "—");
-        float h = c.Vitals.Health, inj = c.Vitals.Injury;
+        if (!c.CanAct || c.Outside || w.Surgery.CaseOf(c) is { Surgeon: >= 0 } || !w.Recovery.NeedsBed(c)) return (0f, "—");
         bool post = w.Recovery.PostOps.TryGetValue(c.Id, out var t) && w.Tick - t < SimTime.TicksPerDay;
-        float need = MathF.Max(h < 0.75f ? (0.75f - h) * 2.2f : 0f, inj > 0.25f ? (inj - 0.25f) * 1.2f : 0f);
-        if (post) need = MathF.Max(need, 0.7f);
-        if (need <= 0f) return (0f, "—");
-        if (c.Job?.Activity is WardRestActivity) return (need + 0.05f, "간이침대에서 쉰다");
-        if (MedBedFree(c, w)) return (0f, "치료 침대가 비어 있다");
-        return (need + 0.01f, $"치료 침대가 모자라다 — 간이침대에 눕는다 (부상 {inj * 100:0}%)");
+        if (c.Job?.Activity is WardRestActivity) return (0.85f, "누워서 쉰다");
+        return (post ? 0.82f : 0.78f, post ? "수술 뒤 — 누워 있어야 한다" : $"크게 다쳤다 — 누워야 한다 (부상 {c.Vitals.Injury * 100:0}%)");
     }
 
     public override Job? Plan(CrewMember c, World w, DistanceField dist)
     {
-        var cot = w.Recovery.BedFor(c);
-        if (cot == null || cot.Type == FurnitureType.MedBed || cot.UseSpots.Count == 0 || !dist.Reachable(cot.UseSpots[0])) return null;
-        w.Recovery.Ward(c, cot);
+        var bed = w.Recovery.BedFor(c);
+        if (bed == null || bed.UseSpots.Count == 0 || !dist.Reachable(bed.UseSpots[0])) return null;
+        bool cot = bed.Type != FurnitureType.MedBed;
+        if (cot) w.Recovery.Ward(c, bed);
         var toils = Plans.DropOff(c, w, dist);
-        toils.Add(new GotoToil(cot.UseSpots[0]));
+        toils.Add(new GotoToil(bed.UseSpots[0]));
         toils.Add(new WaitToil(SimTime.Hours(8), Pose.Sleeping, minTicks: SimTime.Hours(1))
         {
-            DoneWhen = (cm, world) => cm.Vitals.Health >= MathF.Min(0.9f, cm.Vitals.MaxHealth - 0.02f) && cm.Vitals.Injury < 0.25f
-                                      && !(world.Recovery.PostOps.TryGetValue(cm.Id, out var tt) && world.Tick - tt < SimTime.TicksPerDay),
+            EveryTick = cot ? null : (cm, world) => { if (bed.Machine!.Efficiency > 0f) cm.Vitals.Health += 0.12f * world.Perils.MarrowMul(cm) / SimTime.TicksPerHour; },
+            DoneWhen = (cm, world) => !world.Recovery.NeedsBed(cm) && cm.Vitals.Health >= MathF.Min(0.85f, cm.Vitals.MaxHealth - 0.02f),
         });
-        var job = new Job(this, "간이침대에서 회복", toils) { LogText = $"{cot.Room.Name} 간이침대에 눕는다", TargetRoom = cot.Room, InterruptMargin = 0.35f };
-        return job.Reserve(cot, c);
+        var job = new Job(this, cot ? "간이침대에서 회복" : "치료 침대에서 회복", toils) { LogText = cot ? $"치료 침대가 모자라 {bed.Room.Name} 간이침대에 눕는다" : "치료 침대에 눕는다", TargetRoom = bed.Room, Target = bed, InterruptMargin = 0.35f };
+        return job.Reserve(bed, c);
     }
 }
 

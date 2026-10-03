@@ -155,12 +155,13 @@ public static partial class Program
                 var wd = DayOne(seed, "Hanbit");
                 int beds = wd.Ship.FurnitureOf(FurnitureType.MedBed).Count();
                 var hurt = Able(wd).Where(x => x.Role != CrewRole.Medic).Take(beds + 2).ToList();
-                foreach (var x in hurt) { NeedsSystem.AddInjury(x.Vitals, 0.4f, "식중독"); x.Vitals.Health = 0.45f; }
+                foreach (var x in hurt) { NeedsSystem.AddInjury(x.Vitals, 0.75f, "식중독"); x.Vitals.Health = 0.4f; }
                 Until(wd, () => wd.Recovery.CotsSpread > 0 && wd.Crew.Any(x => x.Job?.Activity is WardRestActivity), 6f);
                 var cot = wd.Ship.Furniture.FirstOrDefault(f => wd.Recovery.IsWardCot(f));
                 Check("병상 부족 — 치료 침대가 모자라 휴게실 · 복도에 간이침대를 펴고 눕는다 · 컴퓨터가 알린다",
                     cot != null && cot.Room.Type is RoomType.Lounge or RoomType.Corridor && wd.Crew.Any(x => x.Job?.Activity is WardRestActivity) && wd.Automation.Book.Acts.Any(x => x.Key == "wardbeds"),
-                    $"치료 침대 {beds} · 누운 사람 {hurt.Count} · 간이침대 {wd.Recovery.CotsSpread} ({cot?.Room.Name})");
+                    $"치료 침대 {beds} · 누운 사람 {hurt.Count} · 간이침대 {wd.Recovery.CotsSpread} ({cot?.Room.Name} {cot?.Room.Type}) · 간이침대에 누움 {wd.Crew.Count(x => x.Job?.Activity is WardRestActivity)} · 알림 {wd.Automation.Book.Acts.Any(x => x.Key == "wardbeds")} · "
+                    + string.Join(",", hurt.Select(x => $"{x.Name}:{x.Job?.Activity?.Id}:{InjuryGradeSystem.Name(wd.Grades.Now(x))}")));
                 Until(wd, () => wd.Recovery.Rounds > 0, 10f);
                 Check("간병 순번 — 돌아가며 누운 사람을 들여다본다", wd.Recovery.Rounds > 0 && wd.Recovery.Carer >= 0, $"들여다봄 {wd.Recovery.Rounds} · 순번 {wd.Crew.FirstOrDefault(x => x.Id == wd.Recovery.Carer)?.Name}");
             }
@@ -170,7 +171,7 @@ public static partial class Program
                 var wh = DayOne(seed, "Hanbit");
                 var f = Patient(wh);
                 wh.Recovery.Sequela(f, BodyPart.LeftLeg, "시험 골절 뒤");
-                Run(wh, SimTime.Minutes(5));
+                Run(wh, SimTime.Hours(6));
                 float walk = f.Fx.WalkMul, est0 = wh.Recovery.EsteemOf(f);
                 var limp = f.Ailments.FirstOrDefault(x => x.Id == "limp");
                 Until(wh, () => wh.Recovery.RehabGains > 0, 40f);
