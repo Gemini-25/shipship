@@ -135,7 +135,8 @@ public partial class Hud
         if (_main.FollowItem < 0 || _world.Belongings.All.FirstOrDefault(b => b.Id == _main.FollowItem) is not Belonging b) return;
         var steps = WatchScenes.Trail(_world, b);
         var hands = WatchScenes.Hands(b);
-        float wdt = 360f, h = 74f + Mathf.Min(5, steps.Count) * 20f;
+        int dated = steps.Count(s => s.Tick >= 0);
+        float wdt = 360f, h = 78f + Mathf.Min(5, dated > 0 ? dated : steps.Count) * 16f;
         // 오른쪽 아래 (지도 옆 · 대화 카드 · 알림과 겹치지 않게), 자리가 모자라면 지도 위로
         float cx = Screen.X - RightColumnWidth - Margin * 2 - wdt, cy = Screen.Y - Margin - h;
         if (MinimapOpen && _minimapRect.Size.X > 0f && _minimapRect.End.X + Ui.S2 > cx) cy = _minimapRect.Position.Y - h - Ui.S2;
