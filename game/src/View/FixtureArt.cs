@@ -45,6 +45,7 @@ public static partial class FixtureArt
         CommandArt(t);  // FixtureArtCommand.cs — 지휘 · 통신 · 안전
         LeisureArt(t);  // FixtureArtLeisure.cs — 쉼 · 잠자리 환경
         GearArt(t); GearArt2(t); // FixtureArtGear*.cs — 압축-마 새 설비 30
+        MedArt2(t);     // FixtureArtMed2.cs — 의료 2차 (투석기 · 인공 폐 · 인공 심장 충전대 · 장기 보관함 · 바이오 프린터 · 음압기)
         return t;
     }
 
