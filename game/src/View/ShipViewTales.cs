@@ -96,6 +96,42 @@ public partial class ShipView
                 }
             }
         }
+        // 연인들: 고비 중 질투(가시 덩굴 + 노려보는 눈길) · 부부(같은 방에 있으면 손에 낀 두 고리)
+        foreach (var lv in st.Loves)
+        {
+            if (!lv.Together) continue;
+            var la = w.Crew.FirstOrDefault(x => x.Id == lv.A); var lb = w.Crew.FirstOrDefault(x => x.Id == lv.B);
+            if (la == null || lb == null || la.Dead || lb.Dead || la.Room == null) continue;
+            if (lv.Stage == LoveStage.Crisis && lv.Rival >= 0 && w.Crew.FirstOrDefault(x => x.Id == lv.Rival) is CrewMember rv && !rv.Dead && rv.Room != null && (rv.Room == la.Room || rv.Room == lb.Room))
+            {
+                var jealous = la.AffinityTo(rv) <= lb.AffinityTo(rv) ? la : lb;
+                if (jealous.Room != rv.Room) continue;
+                var jh = CrewPx(jealous) + new Vector2(0, -CrewRadius * 2.3f);
+                var thorn = new Color(0.45f, 0.62f, 0.3f, 0.9f);
+                for (int i = 0; i < 6; i++)
+                {
+                    float a0 = i / 6f * Mathf.Tau + _time * 0.8f;
+                    var q = jh + new Vector2(Mathf.Cos(a0), Mathf.Sin(a0) * 0.6f) * 6f;
+                    ci.DrawLine(q, q + new Vector2(Mathf.Cos(a0 + 0.9f), Mathf.Sin(a0 + 0.9f)) * 3f, thorn, 1.2f, true);
+                }
+                ci.DrawArc(jh, 6f, 0, Mathf.Tau, 14, thorn.WithAlpha(0.6f), 1f, true);
+                if (close)
+                {
+                    var rp = CrewPx(rv);
+                    var dir = (rp - CrewPx(jealous)).Normalized();
+                    for (int i = 1; i < 5; i++) ci.DrawLine(CrewPx(jealous) + dir * (CrewRadius * 1.4f + i * 6f), CrewPx(jealous) + dir * (CrewRadius * 1.4f + i * 6f + 3f), new Color(0.75f, 0.85f, 0.4f, 0.35f), 1f, true);
+                }
+            }
+            else if (lv.Stage == LoveStage.Married && close && la.Room == lb.Room)
+            {
+                foreach (var m in new[] { la, lb })
+                {
+                    var hp = CrewPx(m) + new Vector2(-CrewRadius * 0.9f, CrewRadius * 0.35f);
+                    ci.DrawArc(hp + new Vector2(-1.3f, 0), 2.2f, 0, Mathf.Tau, 10, new Color(1f, 0.84f, 0.4f, 0.9f), 1f, true);
+                    ci.DrawArc(hp + new Vector2(1.3f, 0), 2.2f, 0, Mathf.Tau, 10, new Color(0.9f, 0.9f, 0.95f, 0.9f), 1f, true);
+                }
+            }
+        }
         // 막 끝난 대화의 여운 (게임 시간 20분)
         for (int i = st.Cards.Count - 1; i >= 0; i--)
         {

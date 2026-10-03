@@ -733,6 +733,7 @@ public partial class ShipView : Node2D
         PaintCouncilFloor(ci); // v18.18 둘러앉는 방석 · 의장 탁자 · 재판석 · 투표함 · 잔치 깃발
         PaintBlackbox(ci); // v18.7 블랙박스 상자 · 숨은 실수의 흔적 · 조사 자리의 기록 띠 · 숨긴 사람의 몸짓
         PaintValuesFloor(ci); // v18.15 딜레마 표지판 · 밀항자 자리 · 꾸린 짐 · 식당 벽 쪽지
+        PaintTalesFloor(ci); // v18.17 밤 모임 등불 · 둘러앉은 자리 (ShipViewTales.cs)
         // 쓰러진 사람은 밑에, 업힌 사람은 업은 사람 위에
         foreach (var c in _world.Crew.OrderBy(c => c.CarriedBy != null ? 2 : c.Down ? 0 : 1)) PaintCrew(ci, c);
         PaintManeuverOver(ci); // v17.0 침대 끈 · 손잡이 쥔 손 · 컵 쥔 손 · 넘어진 사람 · 빗자루질
@@ -742,6 +743,7 @@ public partial class ShipView : Node2D
         PaintSchemesOver(ci); // v18.14 쉿 · 귓속말 · 냄새 따라 · 팻말 · 빚 · 고른 사람이 아는 일
         PaintCouncilOver(ci); // v18.18 파벌 완장 · 서명 종이 · 손 들기 · 투표용지 · 증언 · 불만 구름 · 본 눈 · 벌 근무
         PaintValuesOver(ci); // v18.15 끄덕임 · 고개 젓기 · 금 간 별 · 엉킨 실타래
+        PaintTalesOver(ci); // v18.16 · v18.17 이야기 상징 · 대화 카드 표시 · 연인 · 질투 (ShipViewTales.cs)
         PaintMinds(ci); // v13.3 공황 · 영웅심 · 분노 · 모름
         PaintEmotions(ci); // v16.15 머리 위 감정 그림 (분노 · 두려움 · 기쁨 · 슬픔 · 수치 · 자부심)
         PaintTalk(ci); // v14.4 말풍선 (목적 있는 대화 · 인수인계 · 깨우기)
