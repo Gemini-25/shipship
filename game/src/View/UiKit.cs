@@ -180,10 +180,22 @@ public static partial class UiKit
     // ─────────────────────────── 글 ───────────────────────────
 
     /// <summary>너비를 넘으면 끝을 줄이고 "…".</summary>
+    // v17.7 성능: 줄임 · 접기 결과는 (글 · 너비 · 크기 · 글꼴)이 같으면 같다 — 바뀔 때만 다시 계산한다
+    private static readonly Dictionary<(string, float, int, Font, float), string> FitCache = new();
+    private static readonly Dictionary<(string, float, int, Font, int, float), string[]> WrapCache = new();
+
     public static string Fit(string text, float width, int size, Font? font = null)
     {
         font ??= Fonts.Body;
         if (width <= 8f) return "";
+        var key = (text, width, size, font, Gfx.TextScale);
+        if (FitCache.TryGetValue(key, out var hit)) return hit;
+        if (FitCache.Count > 8192) FitCache.Clear();
+        return FitCache[key] = FitCore(text, width, size, font);
+    }
+
+    private static string FitCore(string text, float width, int size, Font font)
+    {
         if (Gfx.Width(font, text, size) <= width) return text;
         while (text.Length > 2 && Gfx.Width(font, text + "…", size) > width) text = text[..^1];
         return text.TrimEnd() + "…";
@@ -193,6 +205,16 @@ public static partial class UiKit
     public static List<string> Wrap(string text, float width, int size, Font? font = null, int maxLines = 99)
     {
         font ??= Fonts.Body;
+        var key = (text, width, size, font, maxLines, Gfx.TextScale);
+        if (WrapCache.TryGetValue(key, out var hit)) return new List<string>(hit); // 부르는 쪽이 고쳐 써도 되게 사본
+        if (WrapCache.Count > 4096) WrapCache.Clear();
+        var made = WrapCore(text, width, size, font, maxLines);
+        WrapCache[key] = made.ToArray();
+        return made;
+    }
+
+    private static List<string> WrapCore(string text, float width, int size, Font font, int maxLines)
+    {
         var lines = new List<string>();
         var line = "";
         foreach (var word in text.Split(' '))

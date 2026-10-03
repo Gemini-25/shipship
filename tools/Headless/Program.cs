@@ -158,6 +158,7 @@ public static partial class Program
         if (args.Contains("--hazard70test")) return RunHazard70Test(seed); // v15 사고 70
         if (args.Contains("--catalogtest")) return RunCatalogTest(seed); // v15 고장·물자 70
         if (args.Contains("--moduletest")) return RunModuleTest(seed); // v15 설비 70
+        if (args.Contains("--perftest")) return RunPerfTest(seed); // v17.7
         if (args.Contains("--liststest")) return RunListsTest(seed); // 압축-마 사고 · 설비 · 기술 +30
         if (args.Contains("--hudtest")) return RunHudTest(seed); // v17.6 패널 배치 규칙
         if (args.Contains("--dbg7")) return RunDbg7(seed, args); // 임시 (통합7 살피기 — 커밋 전에 지운다)

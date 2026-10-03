@@ -254,14 +254,14 @@ public static class Evolution
         + (p.Kind == UpgradeKind.SettleDorm && c.Bed?.Room == p.Target.Room ? 0.5f : 0f);
 
     public static float PersonalScore(World w, CrewMember c, WorkOrder o) =>
-        Candidates(w).FirstOrDefault(p => p.Kind == o.Upgrade && p.Target.Key == o.Target.Key) is UpgradePlan plan ? PersonalScore(w, c, plan) : 0f;
+        Cands(w).FirstOrDefault(p => p.Kind == o.Upgrade && p.Target.Key == o.Target.Key) is UpgradePlan plan ? PersonalScore(w, c, plan) : 0f;
 
     /// <summary>
     /// 이 사람이 먼저 하고 싶은 개조. v10.2: 지금 재료로 할 수 있는 것 중에서만 — 재료가 없어 못 하는 안을 핑계로
     /// 다른 개조를 계속 막지 않는다 (운석 배가 "차라리 외벽부터"로 연결부 증설을 세 번 부결하고 외벽 보강도 못 하던 것).
     /// </summary>
     public static UpgradePlan? Favorite(World w, CrewMember c) =>
-        Candidates(w).Where(p => Affordable(w.Board, p.Cost)).OrderByDescending(p => PersonalScore(w, c, p)).FirstOrDefault();
+        Cands(w).Where(p => Affordable(w.Board, p.Cost)).OrderByDescending(p => PersonalScore(w, c, p)).FirstOrDefault();
 
     public static float Interest(CrewMember c, UpgradeKind k) => (k, c.Role) switch
     {
@@ -297,7 +297,7 @@ public static class Evolution
 
     /// <summary>이 개조안을 떠받치는 교훈의 무게 (회의의 압박).</summary>
     public static float LessonWeight(World w, WorkOrder o) =>
-        Candidates(w).FirstOrDefault(p => p.Kind == o.Upgrade && p.Target.Key == o.Target.Key)?.Score ?? 0.5f;
+        Cands(w).FirstOrDefault(p => p.Kind == o.Upgrade && p.Target.Key == o.Target.Key)?.Score ?? 0.5f;
 
     /// <summary>지금 올릴 개조안. 이미 밀고 있는 안이 있으면 그것을 유지한다.</summary>
     public static UpgradePlan? Plan(World w)
@@ -315,6 +315,14 @@ public static class Evolution
         h.PlannedUpgrade = pick?.Key;
         return pick;
     }
+
+    // v17.7 성능: 회의에서 모두의 의견을 듣는 사이(세상은 그대로다) 개조 후보를 한 번만 뽑는다 — 60명 회의가 사람마다 배 전체를 다시 훑었다
+    private static World? _holdW;
+    private static long _holdT = -1;
+    private static List<UpgradePlan>? _held;
+    internal static void Hold(World w) { _holdW = w; _holdT = w.Tick; _held = null; }
+    internal static void Release() { _holdW = null; _held = null; }
+    private static IEnumerable<UpgradePlan> Cands(World w) => _holdW == w && _holdT == w.Tick ? _held ??= Candidates(w).ToList() : Candidates(w);
 
     /// <summary>겪은 사고에서 나온 개조 후보들.</summary>
     public static IEnumerable<UpgradePlan> Candidates(World w)

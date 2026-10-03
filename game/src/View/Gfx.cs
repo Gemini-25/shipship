@@ -50,8 +50,17 @@ public static class Gfx
     public static float TextScale { get; set; } = 1f;
     private static int Sz(int size) => TextScale == 1f ? size : Mathf.Max(6, Mathf.RoundToInt(size * TextScale));
 
-    public static float Width(Font font, string text, int size) =>
-        font.GetStringSize(text, HorizontalAlignment.Left, -1, Sz(size)).X;
+    // v17.7 성능: 글자 폭은 (글꼴 · 글 · 크기)가 같으면 같다 — 매 프레임 다시 재지 않는다 (가득 차면 비운다)
+    private static readonly System.Collections.Generic.Dictionary<(Font, string, int), float> WidthCache = new();
+
+    public static float Width(Font font, string text, int size)
+    {
+        int sz = Sz(size);
+        var key = (font, text, sz);
+        if (WidthCache.TryGetValue(key, out float w)) return w;
+        if (WidthCache.Count > 16384) WidthCache.Clear();
+        return WidthCache[key] = font.GetStringSize(text, HorizontalAlignment.Left, -1, sz).X;
+    }
 
     /// <summary>세로 중앙 정렬용 기준선 보정값.</summary>
     public static float CenterOffset(Font font, int size) => (font.GetAscent(Sz(size)) - font.GetDescent(Sz(size))) * 0.5f;

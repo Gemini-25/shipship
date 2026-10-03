@@ -297,7 +297,8 @@ public partial class Hud
 
         // 현장 그림 · 단추 (오른쪽 위)
         var photo = new Rect2(right - photoW, r.Position.Y + 12f, photoW, photoH);
-        if (ch.Photo is { } ph)
+        if (DrawAlbumPhoto(photo, ch.FirstDay, ch.LastDay)) { } // v17.7 사진 모드로 찍은 그날의 사진 (HudWatch.cs)
+        else if (ch.Photo is { } ph)
         {
             string cap = $"{SimTime.Day(ph.Tick)}일 {SimTime.Clock(ph.Tick)}" + (ph.RoomId >= 0 && ph.RoomId < _world.Ship.Rooms.Count ? $" · {_world.Ship.Rooms[ph.RoomId].Name}" : "");
             UiKit.SceneFrame(this, photo, _world, ph.RoomId, ph.At, accent, cap);

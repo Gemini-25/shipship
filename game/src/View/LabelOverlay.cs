@@ -26,7 +26,9 @@ public partial class LabelOverlay : Node2D
         QueueRedraw();
     }
 
-    public override void _Draw()
+    public override void _Draw() { long fp = FrameProbe.Now; DrawLabels(); FrameProbe.Add("Labels", fp); } // v17.7 프레임 시간 재기
+
+    private void DrawLabels()
     {
         var xf = GetViewport().GetCanvasTransform();
         float zoom = xf.X.Length();

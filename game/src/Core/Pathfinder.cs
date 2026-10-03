@@ -113,7 +113,7 @@ public sealed class Pathfinder
     public int[] CellBody { get; private set; }
     /// <summary>v16.3 정비 통로 (벽 속을 기어서 지나는 칸) — 배 본체가 연다 · 로봇 · 업은 사람 · 다친 사람은 못 지난다.</summary>
     public bool[] Crawl { get; private set; }
-    public void CrawlChanged() => _hazardVersion++;
+    public void CrawlChanged() { _hazardVersion++; _passEpoch++; }
     private readonly int[] _dx = { 1, -1, 0, 0, 1, 1, -1, -1 };
     private readonly int[] _dy = { 0, 0, 1, -1, 1, -1, 1, -1 };
 
@@ -152,6 +152,7 @@ public sealed class Pathfinder
     public void Invalidate()
     {
         _structure++;
+        _passEpoch++; // v17.7
         var grid = _ship.Grid;
         _walk = new bool[_n];
         _room = new int[_n];
@@ -300,6 +301,9 @@ public sealed class Pathfinder
         }
         if (_state.Length != len || !s.AsSpan().SequenceEqual(_state))
         {
+            // v17.7 칸 통행(떼어 낸 문 · 바깥 문)이 바뀌었을 때만 통행 표를 새로 편다 — 불의 위험 · 방 상태만 바뀌면 그대로
+            if (_state.Length != len) _passEpoch++;
+            else for (int i = 0; i < nd; i++) if (((s[2 + i] ^ _state[2 + i]) & 12) != 0) { _passEpoch++; break; }
             if (_state.Length == s.Length) Array.Copy(s, _state, s.Length); else _state = (int[])s.Clone();
             _stateVersion++;
         }
@@ -338,7 +342,9 @@ public sealed class Pathfinder
     private int[] _roomAdd = Array.Empty<int>(), _doorAdd = Array.Empty<int>();
     private bool[] _roomBlocked = Array.Empty<bool>(), _doorBlocked = Array.Empty<bool>();
 
-    private int _passVersion = -1, _passFlags = -1;
+    private readonly bool[]?[] _passBy = new bool[]?[8];
+    private readonly int[] _passEpochBy = { -1, -1, -1, -1, -1, -1, -1, -1 };
+    private int _passEpoch;
     private DistanceField FloodCore(Cell start, PathProfile profile, int version = -1)
     {
         if (profile.HazardScale == 0f) profile = PathProfile.Default;
@@ -350,13 +356,17 @@ public sealed class Pathfinder
         int s = grid.Index(start);
         int startRoom = _room[s];
         // 칸: 지나갈 수 있나 (Passable과 같다)
-        if (_pass.Length != _n) { _pass = new bool[_n]; _passVersion = -1; }
         int passFlags = (profile.Eva ? 1 : 0) | (profile.Robot ? 2 : 0) | (profile.NoCrawl ? 4 : 0);
-        if (version < 0 || version != _passVersion || passFlags != _passFlags) // v16.26 칸 통행은 구조 · 문 · 정비 통로가 그대로면 같다 (판 번호가 같으면 다시 쓴다)
+        // v17.7 통행 표를 성향(선외 · 로봇 · 기지 않음)마다 따로 둔다 — 보통 길 · 선외 길 · 비상 길을 번갈아 펴도 다시 채우지 않는다
+        // (칸 통행은 구조 · 정비 통로 · 떼어 낸 문 · 바깥 문만 본다: 그것이 그대로면 같은 표)
+        var pass = _passBy[passFlags];
+        if (pass == null || pass.Length != _n || version < 0 || _passEpochBy[passFlags] != _passEpoch)
         {
-            for (int i = 0; i < _n; i++) _pass[i] = Passable(i, profile);
-            _passVersion = version; _passFlags = passFlags;
+            if (pass == null || pass.Length != _n) _passBy[passFlags] = pass = new bool[_n];
+            for (int i = 0; i < _n; i++) pass[i] = Passable(i, profile);
+            _passEpochBy[passFlags] = version < 0 ? -1 : _passEpoch;
         }
+        _pass = pass;
         // 방: 위험·공포 비용, 숨 못 쉬는 방 (StepCost·CanStep과 같은 식)
         int nr = _ship.Rooms.Count;
         if (_roomAdd.Length < nr) { _roomAdd = new int[nr]; _roomBlocked = new bool[nr]; }
@@ -471,6 +481,8 @@ public sealed class Pathfinder
         return m > int.MaxValue / 4 ? int.MaxValue : (int)m;
     }
 
+    private int[] _enter = Array.Empty<int>();
+
     private void BucketFlood(int s, int[] cost, int maxStep, float cellScale, float hazardScale, bool spotsOn)
     {
         int B = maxStep + 1;
@@ -484,9 +496,34 @@ public sealed class Pathfinder
             int b = d % B;
             _eNode[count] = node; _eNext[count] = head[b]; head[b] = count; count++; pending++;
         }
+        // v17.7 성능: 칸에 들어설 때 드는 비용(칸 성질 · 방 · 문 · 불 · 몸 · 장소의 기억)을 한 번 펴 둔다 — 이웃 여덟을 볼 때마다 다시 더하지 않는다 (같은 식 · 같은 값)
+        // -1 = 들어설 수 없다 (통행 불가 · 막힌 문 · 숨 못 쉬는 방)
+        if (_enter.Length != _n) _enter = new int[_n];
+        var enter = _enter;
+        var hz = CellHazard; var bd = CellBody;
+        var pass = _pass; var doorOf = _door; var roomOf = _room;
+        for (int i = 0; i < _n; i++)
+        {
+            if (!pass[i]) { enter[i] = -1; continue; }
+            int dr = doorOf[i];
+            if (dr >= 0 && _doorBlocked[dr]) { enter[i] = -1; continue; }
+            int r = roomOf[i];
+            if (r >= 0 && _roomBlocked[r]) { enter[i] = -1; continue; }
+            int step = 0;
+            if (_space[i]) step += PathProfile.SpaceCost;
+            if (_furniture[i]) step += FurniturePenalty;
+            if (r >= 0) step += _roomAdd[r];
+            if (dr >= 0) step += _doorAdd[dr];
+            int h = hz[i];
+            if (h > 0) step += (int)(h * cellScale * hazardScale);
+            step += bd[i]; // v16.3
+            if (spotsOn) step += _spotAdd[i]; // v17.5 장소의 기억
+            enter[i] = step;
+        }
+        var offsets = _offsets; var crawl = Crawl; var walk = _walk;
+        int n = _n, wdt = _w;
         cost[s] = 0;
         Push(s, 0);
-        var hz = CellHazard; var bd = CellBody;
         for (int dist = 0; pending > 0; dist++)
         {
             int bi = dist % B;
@@ -499,37 +536,27 @@ public sealed class Pathfinder
                 e = _eNext[e];
                 pending--;
                 if (cost[cur] != dist) continue; // 더 짧은 길로 이미 처리했다
-                int dcur = _door[cur];
+                int dcur = doorOf[cur];
+                bool crawlFrom = crawl[cur] && !walk[cur]; // CrawlIntoBarred 앞부분
                 for (int k = 0; k < 8; k++)
                 {
-                    int ni = cur + _offsets[k];
+                    int ni = cur + offsets[k];
                     // ── CanStep ──
-                    if (ni < 0 || ni >= _n || !_pass[ni]) continue;
-                    if (CrawlIntoBarred(cur, ni)) continue;
-                if (CrawlIntoBarred(cur, ni)) continue;
-                    int dr = _door[ni];
-                    if (dr >= 0 && _doorBlocked[dr]) continue;
-                    int r = _room[ni];
-                    if (r >= 0 && _roomBlocked[r]) continue;
+                    if (ni < 0 || ni >= n) continue;
+                    int ec = enter[ni];
+                    if (ec < 0) continue;
+                    if (crawlFrom && CrawlIntoBarred(cur, ni)) continue;
                     if (k >= 4)
                     {
-                        if (dcur >= 0 || dr >= 0) continue;
+                        if (dcur >= 0 || doorOf[ni] >= 0) continue;
                         int a = cur + _dx[k];
-                        int b = cur + _dy[k] * _w;
-                        if (!_pass[a] || !_pass[b] || _door[a] >= 0 || _door[b] >= 0) continue;
+                        int b = cur + _dy[k] * wdt;
+                        if (!pass[a] || !pass[b] || doorOf[a] >= 0 || doorOf[b] >= 0) continue;
                     }
                     // ── StepCost (goal 없음) ──
-                    int step = k < 4 ? Straight : Diagonal;
-                    if (_space[ni]) step += PathProfile.SpaceCost;
-                    if (_furniture[ni]) step += FurniturePenalty;
-                    if (r >= 0) step += _roomAdd[r];
-                    if (dr >= 0) step += _doorAdd[dr];
-                    int h = hz[ni];
-                    if (h > 0) step += (int)(h * cellScale * hazardScale);
-                    step += bd[ni]; // v16.3
-                    if (spotsOn) step += _spotAdd[ni]; // v17.5 장소의 기억
-                    int nd = dist + step;
-                    if (cost[ni] >= 0 && nd >= cost[ni]) continue;
+                    int nd = dist + (k < 4 ? Straight : Diagonal) + ec;
+                    int old = cost[ni];
+                    if (old >= 0 && nd >= old) continue;
                     cost[ni] = nd;
                     Push(ni, nd);
                 }

@@ -96,7 +96,7 @@ public partial class ShipView
     private void AddTechLookLayers()
     {
         _techStatic = new DrawLayer { Name = "TechLook", Painter = PaintTechStatic };
-        AddChild(_techStatic);
+        AddChild(Baked(_techStatic)); // v17.7 구워 둔다
         _techGlow = new DrawLayer { Name = "TechGlow", Painter = PaintTechGlow, Material = new CanvasItemMaterial { BlendMode = CanvasItemMaterial.BlendModeEnum.Add } };
         AddChild(_techGlow);
     }
