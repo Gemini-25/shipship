@@ -105,6 +105,7 @@ public partial class SoundSystem : Node
         Fade(_fire, fire, delta);
         ProcessComputerSound(w, delta, quiet); // v16.6 서버 랙 팬 · 방송 차임 (SoundComputer.cs)
         ProcessScaleSound(w, quiet); // v16.18 규모별 경보음 (SoundScale.cs)
+        ProcessMusic(w, delta, quiet); // v17.6 상황 음악 · 배 안에서 트는 음악 (SoundMusic.cs)
     }
 
     private void Play(AudioStreamWav stream, float db)

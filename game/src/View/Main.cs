@@ -461,7 +461,7 @@ public partial class Main : Node2D
                 case Key.K: if (key.ShiftPressed) Hud.ToggleScaleCodex(); else Hud.ToggleChain(); break; // v16.18 ⇧K 사고 도감 (규모별)
                 case Key.U: ToggleSummary(); break; // v12.8 요약 진행
                 case Key.L: ToggleHighlight(); break;
-                case Key.I: Hud.ToggleCodex(); break;
+                case Key.I: if (key.ShiftPressed) Hud.ToggleCollection(); else Hud.ToggleCodex(); break; // v17.9 ⇧I 수집 도감
                 case Key.Y: Hud.ToggleControl(); break;
                 case Key.E: if (key.ShiftPressed) Hud.ToggleCouncil(); else Hud.TogglePolicy(); break; // v13.2 방침·회의 · v18.18 ⇧E 회의록
                 case Key.G: Hud.ToggleMinimap(); break;

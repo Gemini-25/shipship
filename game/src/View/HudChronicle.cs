@@ -280,7 +280,7 @@ public partial class Hud
     {
         var peak = ch.Peak;
         var accent = peak is IncidentScale ps ? UiKit.ScaleColor(ps) : Palette.Accent;
-        Gfx.RoundRect(this, r, UiKit.Well, Ui.RadiusControl, accent.WithAlpha(0.3f));
+        BookLook.Page(this, r, _chapters.IndexOf(ch) + 1, true, 0f); // v17.6 연대기를 책 한 쪽처럼 (종이 · 제본 그늘 · 접힌 귀 · 쪽 번호)
         DrawRect(new Rect2(r.Position.X + 2f, r.Position.Y + 8f, 3f, r.Size.Y - 16f), accent.WithAlpha(0.9f));
         float x = r.Position.X + 16f, right = r.End.X - 12f, y = r.Position.Y;
         const float photoW = 132f, photoH = 100f;

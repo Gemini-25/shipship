@@ -31,7 +31,7 @@ public partial class Hud
             W = Screen.X, H = Screen.Y, TopBarW = TopBarWidth(),
             ProfileW = _profileSz.X, ProfileH = _profileSz.Y, CosmicH = _cosmicH,
             LegendW = _legendSz.X, LegendH = _legendSz.Y,
-            Computer = a.Present && !ControlOpen && !ChronicleOpen && !TechOpen && !PolicyOpen && !ChainOpen,
+            Computer = a.Present && !ControlOpen && !ChronicleOpen && !TechOpen && !PolicyOpen && !ChainOpen && !CollectionOpen,
             ComputerH = ComputerFullHeight(), ComputerUserFolded = ComputerFolded,
             LogH = LogHeight, MinimapW = mm.X, MinimapH = mm.Y,
             Voyage = mm.X > 0f && _world.Voyage.TotalDays > 0f, Tools = tools,

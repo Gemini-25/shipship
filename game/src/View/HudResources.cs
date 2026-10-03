@@ -141,6 +141,7 @@ public partial class Hud
             var hit = new Rect2(x - 6, card.Position.Y + 4, widths[i] + 12, card.Size.Y - 8);
             bool hover = hit.HasPoint(mouse);
             if (hover) Gfx.RoundRect(this, hit, Ui.HoverSoft, Ui.RadiusChip);
+            WhyChip(label, hit, mouse); // v17.6 누르면 왜 이 값
             var trend = res is ResourceKey rk0 ? _watch.Status(_world, rk0).Dir : TrendDir.Flat;
             // 화살표 색: 나빠지는 쪽이면 주의색
             bool worse = res is ResourceKey rk1 && trend != TrendDir.Flat && (trend == TrendDir.Down) == ResourceWatch.Rule(rk1).falling;

@@ -643,6 +643,7 @@ public partial class ShipView : Node2D
         PaintAnnex(ci); // v16.10 증축 (청사진 · 비계 · 골조 · 외판 · 압력계 · 배선 · 비닐 막 · 설비 · 개통식 · 새 패널)
         PaintDock(ci); // v18.5 도킹 통로 · 난파선 · 거룻배 · 압력계 · 교환 상자 · 이름판
         PaintSpaceUnder(ci); // v17.4 펼친 작업장 · 앞 상자 · 카트 옮겨 싣기 · 잠금표 · 줄 바닥 · 받는 곳
+        PaintAccessUnder(ci); // v17.6 색약 무늬 · v17.9 창밖 · 숨은 것 · 이상 현상 (ShipViewCurios.cs)
         PaintAfterUnder(ci); // v17.5 묵은 그을음 냄새 · 다른 방 쟁반 · 널어 둔 침구 · 냉장고 쪽지 · 빈 의자의 컵 · 종이꽃 · 다시 그린 그림 · 옮겨 온 등
         PaintJumpers(ci);
 
@@ -750,6 +751,7 @@ public partial class ShipView : Node2D
         PaintEmotions(ci); // v16.15 머리 위 감정 그림 (분노 · 두려움 · 기쁨 · 슬픔 · 수치 · 자부심)
         PaintTalk(ci); // v14.4 말풍선 (목적 있는 대화 · 인수인계 · 깨우기)
         PaintSpaceOver(ci); // v17.4 줄 번호 · 새치기 · 둘이 드는 짐 · 예약 · 구경꾼 · "비켜!" · 소문
+        PaintAccessOver(ci); // v17.6 방 스피커 음악 · 색약 표식
         PaintAfterOver(ci); // v17.5 악몽에 뒤척임 · 놀라 깸 · 안고 가는 침구 · 들고 가는 등
         PaintSounds(ci); // v17.2 소리 표시 (발소리 · 베어링 · 팬 · 물방울 · 삐걱 · 무전 · 흥얼 …) · 문 너머로 넘는 소리
         PaintComputerTop(ci, mode); // v16.6 선내 방송 말풍선 · 컴퓨터가 보는 배

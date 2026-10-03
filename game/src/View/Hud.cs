@@ -140,6 +140,7 @@ public partial class Hud : Control
         else if (ChronicleOpen) DrawChronicle(mouse);
         else if (TechOpen) DrawTech(mouse);
         else if (ScaleCodexOpen) DrawScaleCodex(mouse); // v16.18 사고 도감 — 규모별 (HudScale.cs)
+        else if (CollectionOpen) DrawCollection(mouse); // v17.9 수집 도감 (HudCollection.cs)
         DrawHelpCorner(mouse); // v16.2 단축키 한 줄 대신 ? 도움말 + 상황 힌트
         DrawBanners();
         DrawSummaryCard(mouse); // v12.8 요약 진행
@@ -609,103 +610,8 @@ public partial class Hud : Control
 
     // ─────────────────────────────── 오른쪽: 승무원 목록 ───────────────────────────────
 
-    private float DrawRoster(Vector2 mouse)
-    {
-        var crew = _world.Crew;
-        if (crew.Count > 12) return DrawRosterCompact(mouse);
-        // v10.1: 승무원이 많으면 줄을 좁힌다 (상세 탭이 화면 밖으로 밀려나지 않게)
-        float rowH = crew.Count <= 8 ? 36f : crew.Count <= 12 ? 28f : 24f;
-        float x0 = Screen.X - Margin - RightColumnWidth;
-        var card = new Rect2(x0, Margin, RightColumnWidth, 38f + crew.Count * rowH + 8f);
-        Card(card);
-
-        SectionTitle(x0 + 18, card.Position.Y + 24, "승무원");
-        Gfx.TextRight(this, Fonts.Body, new Vector2(card.End.X - 18, card.Position.Y + 24), $"{crew.Count}명", Ui.TextSmall, Palette.TextMuted);
-
-        for (int i = 0; i < crew.Count; i++)
-        {
-            var c = crew[i];
-            var col = Palette.Crew(c.Id);
-            var row = new Rect2(x0 + 8, card.Position.Y + 34 + i * rowH, RightColumnWidth - 16, rowH - 4);
-            bool selected = _main.SelectedCrew == c;
-            bool hover = row.HasPoint(mouse);
-            if (selected) Gfx.RoundRect(this, row, col.WithAlpha(0.1f), 8, col.WithAlpha(0.25f));
-            else if (hover) Gfx.RoundRect(this, row, new Color(1, 1, 1, 0.04f), 8);
-
-            float cy = row.GetCenter().Y;
-            DrawCircle(new Vector2(row.Position.X + 14, cy), 5f, col, true, -1f, true);
-            if (_world.Tick - c.AlertedTick < SimTime.Minutes(3) || c.Vitals.Health < 0.5f)
-                DrawCircle(new Vector2(row.Position.X + 18, cy - 4), 2.5f, Palette.Danger, true, -1f, true);
-            float nx = row.Position.X + 28;
-            Gfx.Text(this, Fonts.Bold, new Vector2(nx, cy + Gfx.CenterOffset(Fonts.Bold, Ui.TextSubtitle)), c.Name, Ui.TextSubtitle, Palette.Text);
-            nx += Gfx.Width(Fonts.Bold, c.Name, Ui.TextSubtitle) + 7;
-            Gfx.Text(this, Fonts.Body, new Vector2(nx, cy + Gfx.CenterOffset(Fonts.Body, Ui.TextSmall)), CrewRoles.Name(c.Role), Ui.TextSmall, Palette.TextMuted);
-
-            string where = c.Room?.Name ?? "";
-            float rx = row.End.X - 12;
-            float by = cy + Gfx.CenterOffset(Fonts.Body, Ui.TextBody);
-            Gfx.TextRight(this, Fonts.Body, new Vector2(rx, by), where, Ui.TextSmall, Palette.TextMuted);
-            rx -= Gfx.Width(Fonts.Body, where, Ui.TextSmall) + 6;
-            string state = c.Dead ? "사망" : c.CarriedBy != null ? "업혀 감" : c.Down ? "쓰러짐" : c.ActivityLabel;
-            var stateColor = c.Dead ? Palette.TextMuted : c.Down ? Palette.Danger : col.Lightened(0.2f);
-            Gfx.TextRight(this, Fonts.Bold, new Vector2(rx, by), state, Ui.TextBody, stateColor);
-            Icons.Draw(this, Icons.CrewState(c, _world.Tick), new Vector2(rx - Gfx.Width(Fonts.Bold, state, Ui.TextBody) - 10, cy), 13, stateColor); // v16.2
-
-            var target = c;
-            _buttons.Add((row, () => _main.Select(_main.SelectedCrew == target ? null : target)));
-        }
-        return card.End.Y;
-    }
-
-    /// <summary>v10.7: 큰 배(13명 이상) — 부서별로 묶어 두 줄로 좁게. 점 색은 사람, 왼쪽 띠 색은 부서.</summary>
-    private float DrawRosterCompact(Vector2 mouse)
-    {
-        var groups = _world.Crew.GroupBy(c => c.Role).OrderBy(g => (int)g.Key).ToList();
-        const float rowH = 19f, headH = 17f;
-        float colW = (RightColumnWidth - 20f) / 2f;
-        float height = 38f + groups.Sum(g => headH + (g.Count() + 1) / 2 * rowH) + 6f;
-        float x0 = Screen.X - Margin - RightColumnWidth;
-        var card = new Rect2(x0, Margin, RightColumnWidth, height);
-        Card(card);
-        SectionTitle(x0 + 18, card.Position.Y + 24, "승무원");
-        int alive = _world.Crew.Count(c => !c.Dead), down = _world.Crew.Count(c => c.Down && !c.Dead);
-        Gfx.TextRight(this, Fonts.Body, new Vector2(card.End.X - 18, card.Position.Y + 24),
-            $"{alive}/{_world.Crew.Count}명" + (down > 0 ? $" · 쓰러짐 {down}" : ""), Ui.TextSmall, down > 0 ? Palette.Danger : Palette.TextMuted);
-        float y = card.Position.Y + 34;
-        foreach (var g in groups)
-        {
-            var roleCol = RoleColor(g.Key);
-            Gfx.Text(this, Fonts.Bold, new Vector2(x0 + 12, y + 12), $"{CrewRoles.Name(g.Key)} {g.Count()}", Ui.TextTiny, roleCol);
-            y += headH;
-            int i = 0;
-            foreach (var c in g)
-            {
-                var col = Palette.Crew(c.Id);
-                var cell = new Rect2(x0 + 8 + (i % 2) * (colW + 4), y + (i / 2) * rowH, colW, rowH - 2);
-                bool selected = _main.SelectedCrew == c;
-                if (selected) Gfx.RoundRect(this, cell, col.WithAlpha(0.14f), 5, col.WithAlpha(0.3f));
-                else if (cell.HasPoint(mouse)) Gfx.RoundRect(this, cell, new Color(1, 1, 1, 0.05f), 5);
-                DrawRect(new Rect2(cell.Position.X, cell.Position.Y + 3, 2, cell.Size.Y - 6), roleCol.WithAlpha(0.7f));
-                float cy = cell.GetCenter().Y;
-                DrawCircle(new Vector2(cell.Position.X + 10, cy), 4f, c.Dead ? Palette.TextMuted : col, true, -1f, true);
-                if (_world.Tick - c.AlertedTick < SimTime.Minutes(3) || c.Vitals.Health < 0.5f)
-                    DrawCircle(new Vector2(cell.Position.X + 13, cy - 3), 2f, Palette.Danger, true, -1f, true);
-                Gfx.Text(this, Fonts.Bold, new Vector2(cell.Position.X + 18, cy + Gfx.CenterOffset(Fonts.Bold, Ui.TextSmall)), c.Name, Ui.TextSmall, c.Dead ? Palette.TextMuted : Palette.Text);
-                string state = c.Dead ? "사망" : c.CarriedBy != null ? "업혀 감" : c.Down ? "쓰러짐" : c.ActivityLabel;
-                float nameW = Gfx.Width(Fonts.Bold, c.Name, Ui.TextSmall);
-                float room = cell.Size.X - 26 - nameW - 14;
-                while (state.Length > 1 && Gfx.Width(Fonts.Body, state, Ui.TextTiny) > room) state = state[..^1];
-                var sc = c.Dead ? Palette.TextMuted : c.Down ? Palette.Danger : col.Lightened(0.2f);
-                Gfx.TextRight(this, Fonts.Body, new Vector2(cell.End.X - 4, cy + Gfx.CenterOffset(Fonts.Body, Ui.TextTiny)), state, Ui.TextTiny, sc);
-                Icons.Draw(this, Icons.CrewState(c, _world.Tick), new Vector2(cell.End.X - 4 - Gfx.Width(Fonts.Body, state, Ui.TextTiny) - 7, cy), 11, sc); // v16.2
-                var target = c;
-                _buttons.Add((cell, () => _main.Select(_main.SelectedCrew == target ? null : target)));
-                i++;
-            }
-            y += (g.Count() + 1) / 2 * rowH;
-        }
-        return card.End.Y;
-    }
+    /// <summary>v17.6 승무원 목록 2차 (HudCrewList.cs): 얼굴 · 상태 아이콘 · 문제 있는 사람이 위로 · 역할별 접기.</summary>
+    private float DrawRoster(Vector2 mouse) => DrawCrewList(mouse);
 
     private static Color RoleColor(CrewRole r) => r switch
     {
@@ -988,6 +894,7 @@ public partial class Hud : Control
             Row(x, right, ly + 12, "수명", m.Condition, Palette.Good, Pct(m.Condition), m.Condition < 0.4f);
             Row(x, right, ly + 34, "마모", m.Wear, Palette.Severity(m.Wear), Pct(m.Wear), m.Wear > 0.6f);
             Row(x, right, ly + 56, "효율", m.Efficiency, Palette.Accent, Pct(m.Efficiency));
+            WhyMachine(m, new Rect2(x, ly + 44, right - x, 20), mouse); // v17.6 왜 이 값
             string power = m.Spec.PowerDraw <= 0f ? "전력 소비 없음"
                 : $"{m.Demand:0.0} kW · {PowerGrid.CircuitName(f.Room.Circuit)}회로 · {(m.Powered ? "공급 중" : "끊김")}";
             Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 96), power, Ui.TextBody, m.Powered || m.Spec.PowerDraw <= 0f ? Palette.TextDim : Palette.Danger);
