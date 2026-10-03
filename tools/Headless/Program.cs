@@ -158,6 +158,7 @@ public static partial class Program
         if (args.Contains("--hazard70test")) return RunHazard70Test(seed); // v15 사고 70
         if (args.Contains("--catalogtest")) return RunCatalogTest(seed); // v15 고장·물자 70
         if (args.Contains("--moduletest")) return RunModuleTest(seed); // v15 설비 70
+        if (args.Contains("--dbg7")) return RunDbg7(seed, args); // 임시 (통합7 살피기 — 커밋 전에 지운다)
         if (args.Contains("--zerogtest")) return RunZeroGTest(seed); // v18.4 · v18.2 · v18.3
         if (args.Contains("--docktest")) return RunDockTest(seed); // v18.5 · v18.6
         if (args.Contains("--talestest")) return RunTalesTest(seed); // v18.16 · v18.17 (--storytest는 v12.4가 쓰고 있다)
