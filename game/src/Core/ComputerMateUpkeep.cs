@@ -266,7 +266,7 @@ public sealed partial class ShipMate
             {
                 s.Done = true; SlotsDone++; _due.Remove(m.Body.Id);
                 if (m.LastServiced < s.At) ServicedEarly++;
-                if (m.Omen is Omen om && om.Kind == OmenKind.Vibration)
+                if (!w.PreventionBlind && m.Omen is Omen om && om.Kind == OmenKind.Vibration) // 아무도 전조를 못 보는 배(시험)는 정비 때도 못 알아챈다
                 {
                     m.Omen = null;
                     w.Log.Add(w.Tick, LogKind.Work, $"{m.Name} 정비 중에 떨림의 원인을 찾아 손봤다 (정비표대로)");

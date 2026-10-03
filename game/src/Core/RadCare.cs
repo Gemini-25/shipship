@@ -113,8 +113,8 @@ public sealed class RadCareSystem
     {
         var w = _w;
         if (Off || w.Tick < _next) return;
-        _next = w.Tick + SimTime.Minutes(10);
-        float h = 10f / 60f;
+        _next = w.Tick + SimTime.Minutes(1); // 통합6 북적이는 방은 금방 흩어진다 — 컴퓨터는 매분 본다
+        float h = 1f / 60f;
         foreach (var c in w.Crew)
         {
             if (c.Dead || c.Away || _pt.ContainsKey(c.Id) || w.Perils.RadStage(c) < 1) continue;

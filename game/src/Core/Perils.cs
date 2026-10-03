@@ -42,6 +42,14 @@ public sealed class PerilSystem
         return null;
     }
 
+    /// <summary>통합6 골수가 무너진 몸(7Sv 넘고 고비를 못 넘김)은 저절로 · 침대에서 기운을 되찾지 못한다 (Needs 회복 배율).</summary>
+    public float MarrowMul(CrewMember c)
+    {
+        int s = RadStage(c);
+        if (s < 2 || _w.RadCare.Of(c)?.Stable == true) return 1f;
+        return s >= 3 ? 0f : _w.RadCare.Treated(c) ? 0.1f : 0.05f; // 수액 · 영양을 받으면 조금은
+    }
+
     /// <summary>위험 판단(EvacuateActivity.DangerHere): 몸에 열이 차오르면 그 방이 위험하다 (어지러워지기 전에 나간다).</summary>
     public float HeatDanger(CrewMember c)
     {
@@ -168,11 +176,13 @@ public sealed class PerilSystem
 
         // 골수 · 장 · 신경: 피폭이 클수록 빨리 무너진다 (침대에 누워 수액 · 의무실이면 느리게)
         bool care = c.CareBed != null || c.Room?.Type == RoomType.Medbay && c.Pose is Pose.Sleeping or Pose.Down;
-        float drain = stage switch { 3 => 0.5f, 2 => 0.08f + 0.03f * (d - 7f), _ => 0.012f * (d - 3f) };
-        if (care) drain *= stage == 3 ? 0.8f : 0.35f;
+        // 통합6 12Sv 넘으면 하루 안에 무너진다 — 그래도 몇 시간은 버텨 손을 쓸 틈은 있다 (곁을 지키고 · 처치를 받고도 숨진다)
+        float drain = stage switch { 3 => 0.075f + 0.025f * (d - 12f), 2 => 0.08f + 0.03f * (d - 7f), _ => 0.012f * (d - 3f) };
+        if (care) drain *= stage == 3 ? 0.8f : stage == 2 ? 0.6f : 0.35f; // 통합6 누워 있어도 골수는 다시 피를 못 만든다
         drain *= w.RadCare.DrainMul(c); // 통합5 수액 · 골수 주사 · 수혈
         c.Vitals.Health = MathF.Max(w.CrewCanDie ? 0f : 0.02f, c.Vitals.Health - drain * dt);
-        if (stage >= 2 && !c.Down && _radSince.TryGetValue(c.Id, out var at) && w.Tick - at > SimTime.Hours(stage == 3 ? 0.3f : 2.5f))
+        // 7Sv 넘고 몇 시간 — 토하고 기운이 빠져 쓰러진다 (그 전에 수액을 맞았으면 버틴다) · 12Sv 넘으면 몸이 스스로 무너질 때까지
+        if (stage == 2 && !c.Down && !w.RadCare.Treated(c) && _radSince.TryGetValue(c.Id, out var at) && w.Tick - at > SimTime.Hours(2.5f))
         {
             RadCollapses++;
             c.Vitals.InjuryCause = "방사선 병";

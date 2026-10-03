@@ -172,9 +172,9 @@ public static class NeedsSystem
         // 쓰러진 채 치료 침대에 눕혀졌으면 침대가 돌봐 준다
         bool inCare = c.Down && c.CareBed?.Machine is Machine bed && bed.Efficiency > 0f;
         if (damage > 0f) v.Health -= damage * dt;
-        else if (inCare) v.Health += 0.12f * dt;
-        else if (n.Food > 0.2f && n.Rest > 0.2f && !c.Down) v.Health += (asleep ? 0.05f : 0.02f) * (0.8f + 0.4f * c.Fitness) * dt; // v12.6 단련한 몸이 빨리 회복
-        else if (c.Down && n.Food > 0.1f) v.Health += 0.01f * dt;
+        else if (inCare) v.Health += 0.12f * w.Perils.MarrowMul(c) * dt; // 통합6 골수가 무너진 몸은 침대도 기운을 못 채운다
+        else if (n.Food > 0.2f && n.Rest > 0.2f && !c.Down) v.Health += (asleep ? 0.05f : 0.02f) * (0.8f + 0.4f * c.Fitness) * w.Perils.MarrowMul(c) * dt; // v12.6 단련한 몸이 빨리 회복
+        else if (c.Down && n.Food > 0.1f) v.Health += 0.01f * w.Perils.MarrowMul(c) * dt;
 
         // 부상은 며칠에 걸쳐 낫는다 (치료 침대에서 훨씬 빨리)
         if (damage <= 0f && v.Injury > 0f)

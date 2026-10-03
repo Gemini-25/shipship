@@ -30,8 +30,11 @@ public static partial class Program
             for (int i = 0; i < 48 * 6 && !p.Dead; i++)
             {
                 Run(w, SimTime.Minutes(10));
+                if (Environment.GetEnvironmentVariable("RADCARE_DEBUG") == "1" && i < 30)
+                    Console.WriteLine($"   [{SimTime.Clock(w.Tick)}] {p.Name} {p.Vitals.Health * 100:0}% {p.Pose}{(p.Down ? " 쓰러짐" : "")} {p.Room?.Name} 일 {p.Job?.Label} · 돌봄 {rc.Of(p)?.Carer} · "
+                        + string.Join(" | ", w.Crew.Where(c => c.Job?.Activity is RadCareActivity or GiveBloodActivity).Select(c => $"{c.Name} {c.Job!.Label} {c.Job.Current?.GetType().Name} {c.Room?.Name} {(c.Position - p.Position).Length():0.0}")));
                 if (w.Crew.Any(c => c.Job?.Activity is RadCareActivity)) sawCare = true;
-                if (w.Crew.Any(c => c.Job?.Activity is GiveBloodActivity)) sawDonor = true;
+                if (w.Crew.Any(c => c.Job?.Activity is GiveBloodActivity) || w.Log.Entries.Any(e => e.Text.Contains("곁에 소매를 걷고 앉았다"))) sawDonor = true; // 통합6 십 분 사이에 와서 받고 끝나기도 한다 (기록으로 본다)
             }
             RadCareSystem.Off = false;
             var pt = rc.Of(p);
@@ -82,10 +85,14 @@ public static partial class Program
             var others = w.Crew.Where(c => c != p && c.CanAct && !c.IsChild).Take(3).ToList();
             Teleport(w, p, cells[0]);
             for (int i = 0; i < others.Count; i++) Teleport(w, others[i], cells[2 + i]);
-            Run(w, SimTime.Minutes(12));
-            var pt = w.RadCare.Of(p);
-            bool crowd = w.Automation.Book.Acts.Any(a => a.Key == $"radcrowd:{p.Id}" && a.Act.Contains("문병"));
-            bool iso = pt != null && w.RadCare.Isolated(p, pt);
+            // 통합6 7Sv 넘은 몸은 곧 의무실(격리실)에 누우러 간다 — 격리 여부는 컴퓨터가 권고한 그 순간의 식당으로 본다
+            bool crowd = false, iso = true;
+            for (int m = 0; m < 12 && !crowd; m++)
+            {
+                Run(w, SimTime.Minutes(1));
+                crowd = w.Automation.Book.Acts.Any(a => a.Key == $"radcrowd:{p.Id}" && a.Act.Contains("문병"));
+                if (crowd && w.RadCare.Of(p) is RadPatient pt) iso = w.RadCare.Isolated(p, pt);
+            }
             Check("북적이는 방의 환자 — 컴퓨터가 문병을 줄이고 격리하라고 한다 (격리 아님)", crowd && !iso,
                 $"권고 {crowd} · 격리 {iso} · {mess.Name} 곁 {mess.Cells.Count(c => w.Crew.Any(x => x.Cell == c))}명");
         }

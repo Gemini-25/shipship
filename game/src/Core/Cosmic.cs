@@ -982,8 +982,9 @@ public sealed class CosmicSystem
             float chance = (c.Pose is Pose.Sitting or Pose.Sleeping ? 0.08f : 0.4f) * p * (Stowed(c.Room!) ? 0.5f : 1f);
             if (!R.Chance(chance)) continue;
             // v16.24 대비한 방(묶어 둠)에서 앉거나 누워 버틴 사람은 넘어지는 정도 · 대비 없이 서 있던 사람은 벽 · 설비 모서리에 내동댕이 (날아온 물건까지)
-            bool braced = Stowed(c.Room!) || c.Pose is Pose.Sitting or Pose.Sleeping || e.Known || e.Sealed || e.EarlyBrace || e.AvoidPlan != 0; // 미리 알았으면 붙잡고 버틴다 — 모르고 맞으면 크게
-            float dmg = (braced ? R.Range(0.02f, 0.06f) : R.Range(0.06f, 0.28f)) * p;
+            bool braced = Stowed(c.Room!) || c.Pose is Pose.Sitting or Pose.Sleeping; // 묶어 둔 방 · 앉거나 누워 몸을 붙인 사람
+            bool warned = e.Known || e.Sealed || e.EarlyBrace || e.AvoidPlan != 0; // 통합6 알고 있었으면 서 있어도 손잡이를 붙잡는다 — 모르고 서서 맞으면 벽 · 설비 모서리에 내동댕이
+            float dmg = (braced ? R.Range(0.02f, 0.06f) : warned ? R.Range(0.05f, 0.2f) : R.Range(0.12f, 0.42f)) * p;
             c.Vitals.Health = MathF.Max(0.02f, c.Vitals.Health - dmg * 0.8f);
             NeedsSystem.AddInjury(c.Vitals, dmg, $"{e.Spec.Name} 충격에 넘어짐");
             Memory.Shake(w, c, 0.05f, $"{e.Spec.Name} 충격에 넘어졌다");

@@ -47,7 +47,7 @@ public sealed partial class ReactSystem
             case ReactKind.Device:
             {
                 var d = w.Portable.Devices.FirstOrDefault(x => x.Id == act.Target);
-                if (d == null || !d.Stored || d.Lost || d.Broken || d.HeldBy != null || d.ClaimedBy >= 0 && d.ClaimedBy != c.Id || !dist.Reachable(d.At) || !dist.Reachable(act.To)) return null;
+                if (room == null || d == null || !d.Stored || d.Lost || d.Broken || d.HeldBy != null || d.ClaimedBy >= 0 && d.ClaimedBy != c.Id || !dist.Reachable(d.At) || !dist.Reachable(act.To)) return null;
                 var target = room!;
                 string key = act.For switch { Stir.Dark => "dark", Stir.Cold => "cold", _ => "hot" } + $":{target.Id}";
                 string why = act.For switch { Stir.Dark => target.Powered ? "조명이 나갔다" : "정전 — 캄캄하다", Stir.Cold => $"춥다 ({target.Air.Temperature:0}℃)", _ => $"덥다 ({target.Air.Temperature:0}℃)" };

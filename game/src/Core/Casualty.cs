@@ -209,7 +209,7 @@ public sealed class CasualtySystem
             if (helper != null && helped >= 2f)
             {
                 // 의료를 아는 손이거나 작은 상처면 그 자리에서 멎는다 · 깊은 상처는 눌러서 늦출 뿐 — 치료(의무실 · 의무관)까지 가야 한다
-                bool sure = helper.Role == CrewRole.Medic || helper.SkillLevel(Skill.Medicine) >= 0.5f || t.Rate < 0.15f;
+                bool sure = helper.Role == CrewRole.Medic || helper.SkillLevel(Skill.Medicine) >= 0.5f || t.Rate < (t.Kind == TraumaKind.BurnShock ? 0.06f : 0.15f); // 통합6 넓게 덴 몸은 식혀 감싸도 수액이 있어야 한다
                 if (sure)
                 {
                     Pressed++;
@@ -220,9 +220,10 @@ public sealed class CasualtySystem
                 {
                     t.Helped = helper.Id;
                     Pressed++;
-                    t.Rate *= 0.35f;
-                    helper.Say(w, Persona.Say(helper, "꽉 누르고 있어 — 의무실로 가자"));
-                    w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(helper.Name)} {c.Name}의 상처를 눌러 피를 늦췄다 — 깊어서 다 멎지는 않는다", c.Id);
+                    bool burn = t.Kind == TraumaKind.BurnShock;
+                    t.Rate *= burn ? 0.5f : 0.35f;
+                    helper.Say(w, Persona.Say(helper, burn ? "물 — 물부터 부어. 의무실로 가야 해" : "꽉 누르고 있어 — 의무실로 가자"));
+                    w.Log.Add(w.Tick, LogKind.Life, burn ? $"{Ko.IGa(helper.Name)} {c.Name}의 덴 곳을 식혀 감쌌다 — 넓게 데어 수액이 필요하다" : $"{Ko.IGa(helper.Name)} {c.Name}의 상처를 눌러 피를 늦췄다 — 깊어서 다 멎지는 않는다", c.Id);
                 }
             }
             // 작은 출혈은 저절로 멎는다 · 화상 쇼크는 천천히 준다
@@ -306,6 +307,7 @@ public sealed class CasualtySystem
         string why = t.Asleep ? "자다가 다쳐 아무도 몰랐다"
             : !t.Paged && t.Helper < 0 && (room == null || !room.DataLinked || !w.Automation.MainOnline) ? "혼자였고, 주 컴퓨터도 보지 못했다"
             : awake <= 1 ? "깨어 있는 사람이 없었다"
+            : t.Helped >= 0 && w.Crew.FirstOrDefault(o => o.Id == t.Helped) is CrewMember lay ? $"{Ko.IGa(lay.Name)} 곁에서 붙잡고 있었지만 의무관이 제때 닿지 못했다"
             : Crisis.Level(w) >= CrisisLevel.Alert ? "모두 다른 불을 끄고 있었다"
             : "아무도 제때 닿지 못했다";
         w.History.Add(w, HistoryKind.Death, $"{Ko.IGa(c.Name)} {t.Cause} 뒤 {KindWord(t.Kind)}로 숨졌다 — {why}", room, new[] { c });
@@ -341,12 +343,20 @@ public sealed class CasualtySystem
             _ => (0f, "", ""),
         };
         if (p <= 0f) return;
+        var air = c.Room?.Air;
+        bool smoky = air != null && air.Smoke > 0.4f && c.Suit == null && !w.CrisisCrew.Masked(c);
+        bool thin = air != null && air.Pressure < 60f && c.Suit == null;
+        bool wet = cause.Contains("감전") && c.Room?.Humidity > 0.8f;
+        int harsh = (smoky ? 1 : 0) + (thin ? 1 : 0) + (wet ? 1 : 0) + (c.Room?.Dark == true ? 1 : 0) + (c.Needs.Rest < 0.25f ? 1 : 0); // 통합6
+        if (smoky) { p *= 1.6f; how = "연기 속에서 눈을 못 뜨고 " + how; }
+        if (thin) { p *= 1.5f; how = "공기가 빠지는 방에서 서두르다 " + how; }
+        if (wet) { p *= 1.6f; how = "젖은 바닥에서 " + how; }
         float skill = c.SkillLevel(o.Skill);
         p *= (o.Urgency >= 0.9f ? 1.4f : 1f) * (c.Room?.Dark == true ? 1.6f : 1f) * (c.Needs.Rest < 0.25f ? 1.4f : 1f) * (1.3f - 0.6f * skill)
              * (Life.Has(c, Habit.Hasty) ? 1.3f : 1f) * (Life.Has(c, Habit.Methodical) ? 0.7f : 1f) * (c.Suit != null && !cause.Contains("감전") ? 0.5f : 1f);
         if (!R.Chance(p)) return;
         float u = R.Float();
-        bool bad = u > 0.75f, worst = u > 0.96f;
+        bool bad = u > 0.75f - 0.07f * harsh, worst = u > 0.96f - 0.05f * harsh; // 통합6 험한 자리일수록 크게
         float dmg = worst ? R.Range(0.42f, 0.65f) : bad ? R.Range(0.16f, 0.32f) : R.Range(0.04f, 0.11f);
         WorkHurts++;
         if (bad) WorkBad++;
@@ -378,8 +388,8 @@ public sealed class CasualtySystem
             {
                 if (c.Dead || c.Outside || c.Room == null) continue;
                 float d2 = (c.Position - cell.Center).LengthSquared();
-                if (d2 > 1.3f * 1.3f) continue;
                 bool asleep = c.Pose == Pose.Sleeping;
+                if (d2 > (asleep ? 1.6f * 1.6f : 1.3f * 1.3f)) continue; // 통합6 잠든 사람은 이불에 먼저 옮겨붙는다
                 // 옷 · 머리카락에 옮겨붙는다 — 깨어 있으면 물러서고, 우주복은 막는다
                 float burn = R.Range(0.08f, 0.24f) * (spread ? 0.6f : 1f) * (asleep ? 1.6f : 1f) * (c.Suit != null ? 0.25f : 1f) * (c.Job?.Order?.Kind == WorkKind.Extinguish ? 0.4f : 1f) /* 소화기를 겨누고 있던 사람은 물러설 줄 안다 */ * (1.2f - 0.4f * d2 / (1.3f * 1.3f));
                 if (burn < 0.04f) continue;
