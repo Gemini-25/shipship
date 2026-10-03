@@ -112,7 +112,14 @@ public partial class Hud
             var next = c.LastEvaluations.Where(e => e.Activity != act).OrderByDescending(e => e.Score).FirstOrDefault();
             var mine = c.LastEvaluations.FirstOrDefault(e => e.Activity == act);
             if (next.Activity != null && mine.Activity != null)
-                Gfx.Text(this, Fonts.Body, new Vector2(x, y + 6), UiKit.Fit($"이쪽으로 {mine.Score:0.00} 기울었다 — 다음은 {next.Activity.Label} {next.Score:0.00} ({next.Reason})", right - x, Ui.TextTiny), Ui.TextTiny, Palette.TextMuted);
+            {
+                // 견준 값은 숫자 대신 마음의 말로 (값 차이 = 얼마나 망설였나)
+                float gap = mine.Score - next.Score;
+                string weigh = gap >= 0.3f ? $"망설임 없이 이쪽 — {Ko.EunNeun(next.Activity.Label)} 한참 뒤였다"
+                    : gap >= 0.08f ? $"이쪽이 더 끌렸다 — {next.Activity.Label}도 떠올렸다 ({next.Reason})"
+                    : $"한참 망설였다 — {next.Activity.Label} 쪽과 거의 같았다 ({next.Reason})";
+                Gfx.Text(this, Fonts.Body, new Vector2(x, y + 6), UiKit.Fit(weigh, right - x, Ui.TextTiny), Ui.TextTiny, Palette.TextMuted);
+            }
             y += 12;
         }
         if (w.Ways.WhyLine(c) is string wayWhy && Fits(14)) { Gfx.Text(this, Fonts.Body, new Vector2(x, y + 10), UiKit.Fit(wayWhy, right - x, Ui.TextSmall), Ui.TextSmall, Palette.TextDim); y += 14; } // v16.25 왜 그 방법
