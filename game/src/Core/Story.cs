@@ -552,7 +552,7 @@ public sealed partial class StorySystem
             love = l.Stage == LoveStage.Crush ? (l.A == c.Id ? $"{Name(l.B)}에게 마음이 간다" : "")
                 : l.Secret && !l.Public ? $"{Ko.WaGwa(Name(l.Other(c.Id)))} 몰래 만나는 사이" : $"{Ko.WaGwa(Name(l.Other(c.Id)))} {LoveName(l.Stage)}";
         if (a == null) return love == "" ? null : ("", love);
-        string state = a.Active ? $"{a.Step + 1}/{a.Stages}" : StoryTable.EndName(a.End);
+        string state = a.Active ? (a.Beats.Count > 0 ? a.Beats[^1].text : "") : StoryTable.EndName(a.End); // 몇 단계인지 대신 그 사람의 지금 일
         return (a.Spec.Emblem, $"{a.Title} — {state}" + (love != "" ? $" · {love}" : ""));
     }
 

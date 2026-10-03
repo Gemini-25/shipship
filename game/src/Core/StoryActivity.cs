@@ -39,7 +39,11 @@ public sealed partial class StorySystem
         // 이야기의 장소
         if (ArcOf(c) is Arc a && a.Step + 1 < a.Spec.Steps.Length && a.Spec.Steps[a.Step + 1].Gate == ArcGate.Place && w.Tick - a.StepAt >= SimTime.Hours(a.Spec.Steps[a.Step + 1].Hours / Math.Max(0.1f, Pace) * 0.5f)
             && PlaceRoom(a, c) is Room pr)
-            return new(StoryTaskKind.Visit, (0.46f + 0.1f * a.Push) * tired, a.Title, -1, pr.Id);
+        {
+            // 미룰수록 마음에 걸린다: 문이 열린 뒤 기다린 만큼 더 무겁게 (근무 사이 짧은 틈에라도 다녀온다)
+            float waited = (w.Tick - a.StepAt) / (float)Math.Max(1L, SimTime.Hours(a.Spec.Steps[a.Step + 1].Hours / Math.Max(0.1f, Pace)));
+            return new(StoryTaskKind.Visit, (0.46f + 0.1f * a.Push + Math.Clamp(0.08f * (waited - 2f), 0f, 0.3f)) * tired, a.Title, -1, pr.Id);
+        }
         // 연인 곁에
         if (LoveOf(c) is Love lv && lv.Together && P(lv.Other(c.Id)) is CrewMember mate && mate.IsAwake && mate.CanAct && mate.Room != c.Room && mate.Room != null
             && (lv.Public || mate.Room.Kind is RoomType.Observatory or RoomType.Garden or RoomType.Lounge or RoomType.Hydroponics))

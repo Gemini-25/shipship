@@ -172,9 +172,13 @@ public sealed partial class StorySystem
         {
             var t = _talks[i];
             var s = P(t.Speaker); var l = P(t.Listener);
-            bool gone = s == null || l == null || s.Dead || l.Dead || w.Tick - t.Born > SimTime.Hours(10);
+            // 급한 말(설득 · 진정)은 반나절 안에 · 나머지는 서로 짬이 맞을 때까지 하루쯤 품고 있다
+            bool gone = s == null || l == null || s.Dead || l.Dead || w.Tick - t.Born > SimTime.Hours(t.Kind is CardKind.Persuade or CardKind.Calm ? 10 : 22);
             if (!gone && t.Kind == CardKind.Persuade && w.Schemes.Get(t.Ref) is Scheme sc && sc.Stage is not (SchemeStage.Plan or SchemeStage.Prep)) gone = true;
             if (gone) { _talks.RemoveAt(i); continue; }
+            // 중재: 한쪽이 자고 있으면 깨어 있는 다른 쪽부터 찾아간다
+            if (t.Kind == CardKind.Mediate && !l!.IsAwake && P(t.Third) is CrewMember o3 && !o3.Dead && o3.IsAwake && o3.CanAct)
+            { t = t with { Listener = t.Third, Third = t.Listener }; _talks[i] = t; l = o3; }
             // 이미 같은 방에 있으면 걸어갈 것 없이 그 자리에서
             if (s!.CanAct && l!.IsAwake && s.IsAwake && s.Room != null && s.Room == l.Room && (s.Position - l.Position).LengthSquared() < 9f && !Crisis.Acting(w)) Meet(s, t);
         }
