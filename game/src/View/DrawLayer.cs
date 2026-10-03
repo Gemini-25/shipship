@@ -7,6 +7,14 @@ namespace ShipSim.View;
 public partial class DrawLayer : Node2D
 {
     public Action<CanvasItem>? Painter { get; set; }
+    /// <summary>v17.7 다시 그린 횟수 (구워 둔 층이 다시 구울 때를 안다).</summary>
+    public int Draws { get; private set; }
 
-    public override void _Draw() => Painter?.Invoke(this);
+    public override void _Draw()
+    {
+        long t = FrameProbe.Now; // v17.7 층별 그리기 시간
+        Draws++;
+        Painter?.Invoke(this);
+        if (t != 0) FrameProbe.Add(Name, t);
+    }
 }

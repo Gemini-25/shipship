@@ -217,6 +217,7 @@ public partial class Main : Node2D
         // 실행 인자는 처음 한 번만 (F9·되감기로 장면을 다시 띄울 때 또 워프하지 않게). 화면 찍기는 매번
         ApplyCommandLine(onlyShot: _commandLineDone);
         _commandLineDone = true;
+        PerfStart(); // v17.7 --perf=N 프레임 시간
         // v12.9 첫 항해 안내: 새 항해이고, 안내를 켜 두었고, 화면 찍기가 아니면
         if (!loaded && Settings.Tutorial && !OS.GetCmdlineUserArgs().Any(a => a.StartsWith("--shot"))) Hud.CallDeferred(nameof(Hud.StartTutorial));
         if (loadError != null) ShowNotice($"저장 파일을 불러오지 못해 새 항해로 시작했다 — {loadError}");
@@ -246,7 +247,9 @@ public partial class Main : Node2D
             {
                 _accumulator -= steps;
             }
+            long fps0 = FrameProbe.Now; // v17.7
             for (int i = 0; i < steps; i++) Sim.Step();
+            FrameProbe.Add("시뮬레이션", fps0);
             Alpha = (float)_accumulator;
             WatchAlerts();
         }
@@ -259,6 +262,7 @@ public partial class Main : Node2D
         _stars.Debris = Sim.Propulsion.Zone == ZoneKind.Debris;
         _stars.Storm = Sim.Hazards.StormActive ? 1f : 0f;
 
+        PerfFrame(); // v17.7
         if (_screenshotFrames > 0 && --_screenshotFrames == 0) TakeScreenshotAndQuit();
     }
 

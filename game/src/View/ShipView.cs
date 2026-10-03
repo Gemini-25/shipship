@@ -25,6 +25,13 @@ public partial class ShipView : Node2D
 
     public Rect2 Bounds { get; private set; }
 
+    /// <summary>v17.7 드물게 바뀌는 층은 화면 확대에 맞춘 그림 한 장으로 구워 그린다 (격자 전체 + 여백).</summary>
+    internal BakedLayer Baked(DrawLayer layer) => new(layer, () =>
+    {
+        var g = _world.Ship.Grid;
+        return new Rect2(-2f * T, -2f * T, (g.Width + 4) * T, (g.Height + 4) * T);
+    }, TextureFilter);
+
     public void Init(Main main, World world)
     {
         _main = main;
@@ -34,7 +41,7 @@ public partial class ShipView : Node2D
         _lights = new DrawLayer { Name = "Lights", Painter = PaintLights, Material = new CanvasItemMaterial { BlendMode = CanvasItemMaterial.BlendModeEnum.Add } };
         _dynamic = new DrawLayer { Name = "Dynamic", Painter = PaintDynamic };
         AddLookUnder(); // v16.5a 바탕(생성기 바닥재 · 벽) · 상태 겹치기 · 흔적 — 정적 층 아래
-        AddChild(_static);
+        AddChild(Baked(_static)); // v17.7 구워 둔다 (BakedLayer.cs)
         AddFixtureFineLayer(); // v16.5c 설비 디테일 층 (가까이서만)
         AddLookLight(); // v16.5a 2D 조명: 낮은 해상도 빛 버퍼 (곱하기)
         AddTechLookLayers(); // v16.5b 기술 수준 벽 · 기술 모습 · 간접 조명 (TechLook.cs)

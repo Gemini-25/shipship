@@ -17,11 +17,13 @@ public static partial class Program
     }
 
     /// <summary>한 장면을 ticks 만큼 돌리며 틱별 시간을 잰다 → (전체 ms, 30배속 60fps 한 프레임(15틱) 평균 · 최악 ms, 지문).</summary>
+    private static double LastAllocMb; private static int LastGc;
     private static (double total, double frameAvg, double frameWorst, uint hash, double cpu) PerfRun(World w, long ticks, Action<World>? each = null)
     {
         GC.Collect();
         var times = new double[ticks];
         double freq = Stopwatch.Frequency / 1000.0;
+        long alloc0 = GC.GetTotalAllocatedBytes(); int gc0 = GC.CollectionCount(0);
         var cpu0 = Process.GetCurrentProcess().TotalProcessorTime; // 다른 일이 CPU를 나눠 쓸 때는 CPU 시간이 덜 흔들린다
         var sw = Stopwatch.StartNew();
         for (long i = 0; i < ticks; i++)
@@ -32,6 +34,7 @@ public static partial class Program
             times[i] = (Stopwatch.GetTimestamp() - t0) / freq;
         }
         sw.Stop();
+        LastAllocMb = (GC.GetTotalAllocatedBytes() - alloc0) / 1048576.0; LastGc = GC.CollectionCount(0) - gc0;
         double cpu = (Process.GetCurrentProcess().TotalProcessorTime - cpu0).TotalMilliseconds;
         const int perFrame = 30 * SimTime.TicksPerSecond / 60; // 30배속 · 60fps → 한 프레임에 15틱
         double worst = 0;
@@ -67,7 +70,7 @@ public static partial class Program
             if (prof) { Prof.Reset(); Prof.On = true; }
             var r = PerfRun(w, SimTime.TicksPerDay);
             Prof.On = false;
-            Console.WriteLine($"  {name} · 하루 {r.total / 1000:0.00}초 · CPU {r.cpu / 1000:0.00}초 (30배속 실시간 하루 = {SimTime.TicksPerDay / (30.0 * SimTime.TicksPerSecond):0}초) · 30배속 프레임당 시뮬 평균 {r.frameAvg:0.00}ms · 최악 {r.frameWorst:0.0}ms · 지문 {r.hash:x8} · 생존 {w.Crew.Count(c => !c.Dead)}/{w.Crew.Count} · 격자 {w.Ship.Grid.Width}×{w.Ship.Grid.Height} · 거리장 다시 씀 {w.Paths.FloodHits} / 새로 {w.Paths.FloodMisses}");
+            Console.WriteLine($"  {name} · 하루 {r.total / 1000:0.00}초 · CPU {r.cpu / 1000:0.00}초 (30배속 실시간 하루 = {SimTime.TicksPerDay / (30.0 * SimTime.TicksPerSecond):0}초) · 30배속 프레임당 시뮬 평균 {r.frameAvg:0.00}ms · 최악 {r.frameWorst:0.0}ms · 지문 {r.hash:x8} · 생존 {w.Crew.Count(c => !c.Dead)}/{w.Crew.Count} · 할당 {LastAllocMb:0}MB · GC {LastGc}번 · 격자 {w.Ship.Grid.Width}×{w.Ship.Grid.Height} · 거리장 다시 씀 {w.Paths.FloodHits} / 새로 {w.Paths.FloodMisses}");
             if (prof) foreach (var (key, ms, calls, _) in Prof.Report().Take(40)) Console.WriteLine($"      {key,-30} {ms,8:0}ms · {calls,8}번");
             if (Environment.GetEnvironmentVariable("PERF_SPIKE") == "1") PerfSpike(seed, disaster, LastWorstTick);
             Check($"{name} · 30배속을 따라간다 (하루 시뮬 < 30배속 실시간 하루의 절반)", Math.Min(r.total, r.cpu) < SimTime.TicksPerDay / (30.0 * SimTime.TicksPerSecond) * 1000 * 0.5, $"{r.total:0}ms · CPU {r.cpu:0}ms");

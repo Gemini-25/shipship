@@ -29,7 +29,7 @@ public partial class ShipView
         _lookBase = new DrawLayer { Name = "LookBase", Painter = PaintLookBase };
         _lookGrime = new DrawLayer { Name = "LookGrime", Painter = PaintGrime, Material = LookTextures.OverlayMaterial };
         _lookDecals = new DrawLayer { Name = "LookDecals", Painter = PaintDecals };
-        AddChild(_lookBase);
+        AddChild(Baked(_lookBase)); // v17.7 구워 둔다
         AddChild(_lookGrime);
         AddChild(_lookDecals);
     }

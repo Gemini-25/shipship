@@ -87,7 +87,9 @@ public partial class Hud : Control
         QueueRedraw();
     }
 
-    public override void _Draw()
+    public override void _Draw() { long fp = FrameProbe.Now; DrawHud(); FrameProbe.Add("Hud", fp); } // v17.7 프레임 시간 재기
+
+    private void DrawHud()
     {
         _cards.Clear();
         _buttons.Clear();
