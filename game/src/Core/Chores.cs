@@ -683,6 +683,7 @@ public static partial class WorkPlanners
             if (proc.Steps.Contains(ProcStep.Test)) hours += 0.15f;
             hours *= w.Parts.RepairFactor(m, fault.Kind, out _); // v14.6 무거운 부품(호이스트) · 정비 카트 · 비좁은 자리
         }
+        if (goal == 3) hours *= w.Gestures.Familiar(c, m, fault.Kind); // v17.2 반복 고장은 익숙한 부위부터
         toils.Add(new WorkToil(hours, m.Spec.Skill, f.Center)
         {
             Resume = goal == 3 ? o : null,

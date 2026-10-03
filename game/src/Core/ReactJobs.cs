@@ -288,6 +288,7 @@ public sealed partial class ReactSystem
     {
         Stats.Talks++;
         Speak(c, Of(c), Stir.Odd, AskLines(c, o, what), c.Room, what);
+        _w.Gestures.Addressed(o, c); // v17.2 고개부터 돌리고 하던 걸 정리한다
     }
 
     private void TalkEnd(CrewMember c, CrewMember o, string what)
@@ -308,6 +309,7 @@ public sealed partial class ReactSystem
         Gest(os, os.G == Gesture.Jog || os.G == Gesture.Huddle ? os.G : Gesture.Talk, Short);
         Speak(o, os, Stir.Odd, reply, o.Room, what, reply: true);
         Stats.Replies++;
+        w.Gestures.Answered(o, c); // v17.2
         c.ChangeAffinity(o, 0.02f);
         o.ChangeAffinity(c, 0.02f);
         c.Needs.Social = MathF.Min(1f, c.Needs.Social + 0.05f);

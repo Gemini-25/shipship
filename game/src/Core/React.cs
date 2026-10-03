@@ -411,7 +411,7 @@ public sealed partial class ReactSystem
         if (busy) { if (pick == Stir.Alarm) { s.LastAlarm = _alarmSerial; React(c, s, room, pick, arg, ppl, true); } return; }
         if (room.Air.Smoke > 0.06f && Ready(s, Stir.Smoke, 20f)) Cand(Stir.Smoke, 0.6f + MathF.Min(0.3f, room.Air.Smoke));
         if (room.Vibration > 0.45f && Ready(s, Stir.Shake, 45f)) Cand(Stir.Shake, 0.45f + 0.3f * room.Vibration);
-        if (Ready(s, Stir.Sound, 90f) && (_noisy.TryGetValue(room.Id, out var nm) || NoisyNext(room, out nm)) && nm.Omen is { Known: false }) Cand(Stir.Sound, 0.5f + 0.2f * c.Traits.Diligence, nm);
+        if (Ready(s, Stir.Sound, 90f) && (_noisy.TryGetValue(room.Id, out var nm) || NoisyNext(room, out nm) || w.Hearing.Strange(c, out nm)) && nm.Omen is { Known: false }) Cand(Stir.Sound, 0.5f + 0.2f * c.Traits.Diligence, nm);
         if (Ready(s, Stir.Smell, 60f) && w.Smells.Dominant(room, out float sv) is SmellKind sk && sv > SmellSystem.Threshold(sk) * 2.5f * SmellSystem.Nose(c)) Cand(Stir.Smell, 0.35f + MathF.Min(0.2f, sv * 0.2f), sk);
         // 방송 · 아침 브리핑
         if (w.Automation.Present)
@@ -478,7 +478,7 @@ public sealed partial class ReactSystem
         m = null!;
         if (_noisy.Count == 0) return false;
         foreach (var (nb, door) in _w.Ambience.Neighbors(room))
-            if (door && _noisy.TryGetValue(nb.Id, out var x)) { m = x; return true; }
+            if (door && _noisy.TryGetValue(nb.Id, out var x) && (HearingSystem.Off || _w.Hearing.Pass(nb, room) >= 0.3f)) { m = x; return true; } // v17.2 닫힌 문 너머는 먹먹하다
         return false;
     }
 
