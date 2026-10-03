@@ -163,7 +163,7 @@ public sealed class AilmentSystem
         if (c.Dead || Has(c, id) || c.AilmentImmune.Contains(id)) return null;
         if (_cooldown.TryGetValue((c.Id, id), out var until) && w.Tick < until) return null;
         var a = new Ailment { Id = id, Since = w.Tick, Peak = MathF.Min(1f, s.Peak * (0.75f + 0.5f * _rng.Float()) * (1.15f - 0.3f * c.Vitals.Health)), From = from?.Id ?? -1 };
-        if (id == "radiation") a.Peak = RadPeak(c); // 통합6 방사선 병의 세기는 쬔 양을 따른다 (1Sv 남짓은 메스꺼움 정도)
+        if (id == "radiation" && c.Dose > 1f) a.Peak = RadPeak(c); // 통합6 방사선 병의 세기는 쬔 양을 따른다 (1Sv 남짓은 메스꺼움 정도)
         c.Ailments.Add(a);
         Stats.Cases[id] = Stats.Cases.GetValueOrDefault(id) + 1;
         if (from != null) Stats.Spread++;
