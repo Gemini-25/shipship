@@ -12,7 +12,7 @@ public static partial class Program
     {
         "evacuate", "evasurvive", "evarescue", "suitmend", "takecover", "blastresponse", "roomcheck", "shelter", "heed", "muster",
         "cosmicevac", "cosmicshelter", "cosmicwarn", "cosmicbrace", "cosmicvigil", "quarantine", "recover", "refillsuit",
-        "station", "help", "outage", "firebelief", "open-door",
+        "station", "help", "outage", "firebelief", "open-door", "radcare", "giveblood", // 통합5 방사선 병 간호 · 피 나눠 주기
     };
 
     private static bool AuditSurv(CrewMember c)
@@ -153,7 +153,7 @@ public static partial class Program
                 tr.Down = c.Down;
                 if (c.Vitals.Injury > tr.Inj + 0.001f) { string k = c.Vitals.InjuryCause ?? "?"; _run.HurtBy[k] = _run.HurtBy.GetValueOrDefault(k) + (c.Vitals.Injury - tr.Inj); }
                 tr.Inj = c.Vitals.Injury;
-                if (c.Vitals.Health < 0.4f && !tr.Low) _run.LowHp++;
+                if (c.Vitals.Health < 0.4f && !tr.Low) { _run.LowHp++; _run.Lows.Add(new ADown { Hour = H(now), Tick = now, Name = c.Name + " · " + (c.Vitals.InjuryCause ?? "?"), CrewId = c.Id, RoomId = c.Room?.Id ?? -1, Room = c.Room?.Name ?? "선체 밖" }); }
                 tr.Low = c.Vitals.Health < 0.5f;
                 bool self = !c.Down && AuditSurv(c);
                 bool panic = c.Mind.Panicking(now);
@@ -422,13 +422,15 @@ public static partial class Program
             }
             ScaleCase? Attribute(long tick, int crewId, int roomId)
             {
+                // 통합5: 그 사람 · 그 방에 직접 닿은 사고를 먼저 (며칠 끄는 배 전체급 사고가 그 사이 방 하나의 사고로 다친 사람까지 다 가져가지 않게)
                 ScaleCase? best = null;
+                bool bestDirect = false;
                 foreach (var k in cases)
                 {
                     if (k.Start > tick || (k.End >= 0 && tick > k.End + SimTime.Hours(1))) continue;
-                    bool hit = k.CrewId == crewId || (roomId >= 0 && (k.RoomId == roomId || k.Rooms.Contains(roomId))) || k.Peak >= IncidentScale.Ship;
-                    if (!hit) continue;
-                    if (best == null || k.Peak > best.Peak || (k.Peak == best.Peak && k.Start > best.Start)) best = k;
+                    bool direct = k.CrewId == crewId || (roomId >= 0 && (k.RoomId == roomId || k.Rooms.Contains(roomId)));
+                    if (!direct && k.Peak < IncidentScale.Ship) continue;
+                    if (best == null || direct && !bestDirect || direct == bestDirect && (k.Peak > best.Peak || (k.Peak == best.Peak && k.Start > best.Start))) { best = k; bestDirect = direct; }
                 }
                 return best;
             }
@@ -439,6 +441,8 @@ public static partial class Program
                 if ((d.Cause.Contains("방사선") ? RadCase(d.Tick) ?? Attribute(d.Tick, d.CrewId, d.RoomId) : Attribute(d.Tick, d.CrewId, d.RoomId)) is ScaleCase k) { d.Scale = (int)k.Peak; d.Case = k.Name; map[k].Deaths++; }
             foreach (var d in _run.Downs)
                 if (Attribute(d.Tick, d.CrewId, d.RoomId) is ScaleCase k) { d.Scale = (int)k.Peak; map[k].Downs++; }
+            foreach (var d in _run.Lows)
+                if (Attribute(d.Tick, d.CrewId, d.RoomId) is ScaleCase k) d.Scale = (int)k.Peak;
             _run.Keys = cases.SelectMany(k => k.KeysSeen.Append(k.Key)).Distinct().OrderBy(x => x, StringComparer.Ordinal).ToList();
             // 쓰임
             foreach (var r in w.Ship.Rooms.Where(r => r.Type != RoomType.Corridor && !r.Merged).OrderBy(r => r.Id))

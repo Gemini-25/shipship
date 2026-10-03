@@ -170,6 +170,7 @@ public sealed class PerilSystem
         bool care = c.CareBed != null || c.Room?.Type == RoomType.Medbay && c.Pose is Pose.Sleeping or Pose.Down;
         float drain = stage switch { 3 => 0.5f, 2 => 0.08f + 0.03f * (d - 7f), _ => 0.012f * (d - 3f) };
         if (care) drain *= stage == 3 ? 0.8f : 0.35f;
+        drain *= w.RadCare.DrainMul(c); // 통합5 수액 · 골수 주사 · 수혈
         c.Vitals.Health = MathF.Max(w.CrewCanDie ? 0f : 0.02f, c.Vitals.Health - drain * dt);
         if (stage >= 2 && !c.Down && _radSince.TryGetValue(c.Id, out var at) && w.Tick - at > SimTime.Hours(stage == 3 ? 0.3f : 2.5f))
         {
@@ -208,7 +209,7 @@ public sealed class PerilSystem
         int awake = w.Crew.Count(o => !o.Dead && o != c && o.Pose != Pose.Sleeping && o.CanAct);
         string why = cause == "열사병"
             ? (w.Crew.Any(o => !o.Dead && o != c && o.Room == c.Room && o.CanAct) ? "곁에 있던 사람도 열기에 버티지 못했다" : awake <= 1 ? "깨어 있는 사람이 없었다" : "뜨거운 방에서 아무도 끌어내지 못했다")
-            : c.Outside ? "선체 밖에서 쬐었다" : "피할 곳에 닿지 못하고 쬐었다";
+            : w.RadCare.DeathNote(c) ?? (c.Outside ? "선체 밖에서 쬐었다" : "피할 곳에 닿지 못하고 쬐었다"); // 통합5 손을 써 봤는지
         w.History.Add(w, HistoryKind.Death, $"{Ko.IGa(c.Name)} {cause}으로 숨졌다 — {why}", c.Room, new[] { c });
         foreach (var o in w.Crew)
             if (!o.Dead && o != c && o.AffinityTo(c) > 0.3f) MarkLog.Add(o.Memory.Marks, w.Tick, $"{c.Name} — {cause} · {why}");

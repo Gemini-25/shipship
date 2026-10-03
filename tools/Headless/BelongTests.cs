@@ -108,7 +108,13 @@ public static partial class Program
                 Run(w, SimTime.Hours(2));
                 bool ruined = !book.Usable;
                 foreach (var c in w.Crew.Where(c => c != owner)) c.ChangeAffinity(owner, 0.5f);
-                Run(w, SimTime.Hours(40));
+                if (Environment.GetEnvironmentVariable("BELONG_DEBUG") == "1")
+                    for (int k = 0; k < 20; k++)
+                    {
+                        Run(w, SimTime.Hours(2));
+                        Console.WriteLine($"   [{SimTime.Clock(w.Tick)}] 책 {book.Condition:0.00} 쥔 {book.Holder} · " + string.Join(" | ", w.Crew.Where(c => c.RawSkill(Skill.Mechanics) >= 0.35f).Select(c => $"{c.Name} {c.Job?.Label} 호감 {c.AffinityTo(owner):0.00} · " + string.Join(",", c.LastEvaluations.Take(3).Select(e => $"{e.Activity.Id}:{e.Score:0.00}")) + $" · mend {c.LastEvaluations.FirstOrDefault(e => e.Activity.Id == "mend").Score:0.00}")));
+                    }
+                else Run(w, SimTime.Hours(40));
                 var st = w.Belongings.Stats;
                 Check("망가짐 — 물에 젖은 물건을 주인이 알게 되고, 친구가 말려(고쳐) 준다", ruined && st.Noticed >= 1 && st.Mended >= 1,
                     $"{owner.Name}의 {book.Name} 상태 {book.Condition * 100:0}% · 앎 {st.Noticed} · 고침 {st.Mended} · 이력 {string.Join(" / ", book.Marks.Select(m => m.Text))} · 관계의 이유: {string.Join(", ", w.Relations.All.Where(m => m.Who == owner.Id).Select(m => $"{w.Crew.First(c => c.Id == m.About).Name} — {m.Text}"))}");

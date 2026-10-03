@@ -16,6 +16,7 @@ public sealed class AuditRun
     public float ErrorHour = -1f;
     public List<ADeath> Deaths = new();
     public List<ADown> Downs = new();
+    public List<ADown> Lows = new(); // 통합5 체력 0.4 밑 (어디서 · 무엇 때문에 — 쓰러짐 바로 앞)
     public List<int> PanicMin = new();
     public List<ACase> Cases = new();
     public int FaultEvents;
