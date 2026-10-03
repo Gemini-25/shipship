@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://b3m8x2p6qmush"
-path="res://.godot/imported/room-mushroom.svg-7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d.ctex"
+path="res://.godot/imported/room-mushroom.svg-c6e203a3dbbc4c78617765bc6698d429.ctex"
 metadata={
 "vram_texture": false
 }
@@ -11,7 +11,7 @@ metadata={
 [deps]
 
 source_file="res://assets/icons/room-mushroom.svg"
-dest_files=["res://.godot/imported/room-mushroom.svg-7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d.ctex"]
+dest_files=["res://.godot/imported/room-mushroom.svg-c6e203a3dbbc4c78617765bc6698d429.ctex"]
 
 [params]
 
