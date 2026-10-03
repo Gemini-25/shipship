@@ -26,7 +26,7 @@ public sealed partial class HearingSystem
             foreach (var h in _room[r.Id])
             {
                 var s = Sources[h.Src];
-                if (s.Owner == c.Id || h.Masked) continue;
+                if (s.Personal && s.Owner == c.Id || h.Masked) continue;
                 float lv = h.Level * Sense(c, s.Kind);
                 if (lv < Audible) { if (h.Muffled && h.Level >= Audible * 0.4f) Stats.Muffled++; continue; }
                 Stats.Heard++;
@@ -37,7 +37,7 @@ public sealed partial class HearingSystem
                     int mins = ear.Minutes.TryGetValue(s.Key, out var mm) ? mm + 1 : 1;
                     ear.Minutes[s.Key] = mins;
                     if (mins == HabitMinutes) Stats.Habituated++;
-                    if (mins == 20 && _steady.TryGetValue(s.Key, out var st) && !st.Heard.Contains(c.Id)) st.Heard.Add(c.Id);
+                    if (mins == 6 && _steady.TryGetValue(s.Key, out var st) && !st.Heard.Contains(c.Id)) st.Heard.Add(c.Id); // 몇 분 넘게 들었다
                     if (s.Kind is Noise.Bearing or Noise.Rattle or Noise.Hiss or Noise.Crackle && mins < HabitMinutes) annoy += lv * (h.Muffled ? 0.5f : 1f);
                 }
                 if (!c.IsAwake) continue;

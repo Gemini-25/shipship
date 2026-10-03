@@ -49,11 +49,12 @@ public sealed class MannerState
     public long WrapUntil { get; internal set; } = -1;
     public int GlanceAt { get; internal set; } = -1;
     public long GlanceUntil { get; internal set; } = -1;
-    internal long NextTic, HighSince = -1, LowSince = -1, CupNext, NextLine, AddrAt = -1, KnownUntil = -1, TicAdvised = -1_000_000;
+    internal long NextTic, HighSince = -1, LowSince = -1, CupNext, CupCheck, LastStepAt = -10, NextLine, AddrAt = -1, KnownUntil = -1, TicAdvised = -1_000_000;
     internal int DoorDone = -1, KnownMachine = -1, Glances;
     internal long DoorAt = -1;
     internal string KnownPart = "";
     internal float LastSpeed;
+    internal bool HasCup;
     internal Vector2 LastPos;
     internal Toil? LastToil;
     internal string? PendingReply;
@@ -100,7 +101,7 @@ public sealed partial class GestureSystem
     private readonly Dictionary<int, MannerState> _st = new();
     public GestureStats Stats { get; } = new();
     public List<GestNote> Notes { get; } = new();
-    private readonly List<CrewMember> _cups = new(), _downed = new();
+    private readonly List<CrewMember> _downed = new();
     private readonly Dictionary<(int, int, ItemKind?), int> _fixed = new();
 
     public GestureSystem(World w) => _w = w;
@@ -169,7 +170,7 @@ public sealed partial class GestureSystem
         if (Off) return 1f;
         long now = _w.Tick;
         _st.TryGetValue(c.Id, out var s);
-        if (s != null && s.HoldStep > now) return 0f;
+        if (s != null) { Cup(c, s); if (s.HoldStep > now) return 0f; }
         if (c.Carrying == null || c.CarryingPerson != null || c.PathIndex >= path.Count || c.Outside) return 1f;
         Door? door = null;
         for (int k = c.PathIndex; k < Math.Min(path.Count, c.PathIndex + 2); k++)
@@ -184,7 +185,7 @@ public sealed partial class GestureSystem
         float bd = 20f;
         foreach (var o in _w.Crew)
         {
-            if (o == c || !o.CanAct || !o.IsAwake || o.IsChild || o.Outside || o.Carrying != null || o.CarryingPerson != null || o.Job?.Urgent == true || o.Room != c.Room && o.Room != beyond) continue;
+            if (o == c || !o.CanAct || !o.IsAwake || o.IsChild || o.Outside || o.IsMoving || o.Carrying != null || o.CarryingPerson != null || o.Job?.Urgent == true || o.Room == null || o.Room != c.Room && o.Room != beyond && (o.Position - door.Cell.Center).LengthSquared() > 4f) continue;
             float d2 = (o.Position - door.Cell.Center).LengthSquared();
             if (d2 < bd) { bd = d2; helper = o; }
         }
@@ -269,29 +270,30 @@ public sealed partial class GestureSystem
 
     // ───────────────────────────── 틱 ─────────────────────────────
 
+    /// <summary>성능 측정 (Stopwatch 틱).</summary>
+    public static long UpdateTicks;
+
     public void Update(float dt)
     {
         if (Off) return;
+        long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
+        Tick();
+        UpdateTicks += System.Diagnostics.Stopwatch.GetTimestamp() - t0;
+    }
+
+    // 시스템 틱은 15틱마다 온다 (World.SystemInterval): 사람마다 30틱에 한 번 본다. 잔 · 문은 걸음마다(StepMul).
+    private void Tick()
+    {
         var w = _w;
         long now = w.Tick;
-        if (now % 25 == 0)
-        {
-            _cups.Clear(); _downed.Clear();
-            foreach (var c in w.Crew)
-            {
-                if (c.Dead || c.Away) continue;
-                if (c.Down) { _downed.Add(c); continue; }
-                if (c.IsMoving && HoldsCup(c)) _cups.Add(c);
-            }
-            Chats();
-            ResumeTalks();
-        }
-        Cups();
-        if (_downed.Count > 0 && now % 5 == 0) Kneel();
-        int slot = (int)(now % 25);
+        _downed.Clear();
+        foreach (var c in w.Crew) if (c.Down && !c.Dead && !c.Away) _downed.Add(c);
+        if (_downed.Count > 0) Kneel();
+        long half = now / World.SystemInterval;
+        if (half % 2 == 0) { Chats(); ResumeTalks(); }
         foreach (var c in w.Crew)
         {
-            if (c.Id % 25 != slot || c.Dead || c.Away) continue;
+            if ((c.Id + half) % 2 != 0 || c.Dead || c.Away) continue;
             Look(c);
         }
     }
@@ -299,15 +301,18 @@ public sealed partial class GestureSystem
     private bool HoldsCup(CrewMember c) =>
         Puppet.HeldOf(_w, c) == HeldThing.Cup || _w.React.Peek(c) is ReactState rs && _w.Tick < rs.CupUntil;
 
-    /// <summary>뜨거운 잔을 들고 가다 갑자기 멈춤 → 버팀 · 흘림.</summary>
-    private void Cups()
+    /// <summary>뜨거운 잔을 들고 가다 갑자기 멈춤 → 버팀 · 흘림 (걸음마다 — 지난 걸음은 갔는데 이번엔 못 갔다).</summary>
+    private void Cup(CrewMember c, MannerState s)
     {
         long now = _w.Tick;
-        foreach (var c in _cups)
+        if (now >= s.CupCheck) { s.CupCheck = now + 20; s.HasCup = HoldsCup(c); }
+        float speed = (c.Position - s.LastPos).Length();
+        bool stopped = s.LastSpeed > 0.05f && speed < 0.005f && s.LastStepAt == now - 1;
+        s.LastSpeed = s.LastStepAt == now - 1 ? speed : 0f;
+        s.LastPos = c.Position;
+        s.LastStepAt = now;
+        if (!s.HasCup || !stopped || now < s.CupNext) return;
         {
-            var s = Of(c);
-            float speed = (c.Position - s.LastPos).Length();
-            if (s.LastSpeed > 0.05f && speed < 0.005f && c.IsMoving && now >= s.CupNext && s.LastPos != Vector2.Zero)
             {
                 s.CupNext = now + SimTime.Minutes(4);
                 float spill = 0.2f + 0.3f * (1f - c.Traits.Calm) + (Life.Has(c, Habit.Hasty) ? 0.2f : 0f) + (c.Job?.Urgent == true ? 0.2f : 0f) + 0.3f * c.Vitals.Injury - (Life.Has(c, Habit.Methodical) ? 0.15f : 0f);
@@ -328,8 +333,6 @@ public sealed partial class GestureSystem
                     Stats.Steadied++;
                 }
             }
-            s.LastSpeed = speed;
-            s.LastPos = c.Position;
         }
     }
 
@@ -393,7 +396,7 @@ public sealed partial class GestureSystem
         if (working && cur != s.LastToil)
         {
             var arm = Puppet.Arm(c, s.LeftHanded ? BodyPart.LeftArm : BodyPart.RightArm);
-            if (arm is ArmState.Hurt or ArmState.Lost && Puppet.HeldOf(w, c) is HeldThing.Tool or HeldThing.Scissors or HeldThing.MedKit)
+            if (arm is ArmState.Hurt or ArmState.Lost)
             {
                 Set(c, s, Mien.SwapGrip, 40, now >= s.NextLine ? Pick(new[] { s.LeftHanded ? "오른손으로 해야겠다" : "왼손으로 해야겠다", "이쪽 손은 영 어색하네", "아야 — 손 바꿔야지" }) : "");
                 s.NextLine = now + SimTime.Hours(4);
@@ -420,7 +423,7 @@ public sealed partial class GestureSystem
     private void Lamp(CrewMember c, MannerState s)
     {
         var w = _w;
-        if (c.Room is not Room room || !room.Dark || w.Tick < s.MUntil && s.M == Mien.LampCarry) return;
+        if (c.Room is not Room room || room.Powered && !room.LightsOut || w.Tick < s.MUntil && s.M == Mien.LampCarry) return; // 천장 조명이 꺼졌다 (비상등만으론 손이 안 보인다)
         var work = c.Position + c.Facing * 0.8f;
         foreach (var d in w.Portable.Devices)
         {
@@ -468,7 +471,7 @@ public sealed partial class GestureSystem
         }
         if (senior == null) { s.GlanceUntil = -1; return; }
         if (s.GlanceAt != senior.Id || _w.Tick >= s.GlanceUntil) { s.GlanceAt = senior.Id; s.Glances = 0; Stats.ByMien[(int)Mien.GlanceGauge]++; Stats.ByMien[(int)Mien.GlanceSenior]++; }
-        s.GlanceUntil = _w.Tick + 30;
+        s.GlanceUntil = _w.Tick + 50;
         s.Glances++;
         Stats.Glances += 2;
         if (s.Glances % 3 != 0) return;

@@ -28,7 +28,9 @@ public sealed class NoiseSource
     public int Owner { get; init; } = -1;
     public byte Sub { get; init; }
     public float Period { get; init; }
-    public long Key => ((long)Kind << 40) | ((long)(Owner + 1) << 8) | Sub;
+    public long Key => ((long)Kind << 48) | ((long)(uint)Owner << 8) | Sub;
+    /// <summary>사람이 내는 소리 (자기 소리는 안 센다).</summary>
+    public bool Personal => Kind is Noise.Step or Noise.Breath or Noise.Voice or Noise.Radio or Noise.Hum or Noise.Whistle or Noise.Tap or Noise.Sing;
     public bool Steady => Kind is Noise.Rattle or Noise.Bearing or Noise.Hiss or Noise.Crackle or Noise.Fan or Noise.Drip;
 }
 
@@ -203,6 +205,7 @@ public sealed partial class HearingSystem
     public void Update(float dt)
     {
         if (Off || _w.Tick < _next) return;
+        long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
         _next = _w.Tick + Every;
         Stats.Minutes++;
         Collect();
@@ -210,7 +213,10 @@ public sealed partial class HearingSystem
         Listen();
         Vanished();
         Computer();
+        UpdateTicks += System.Diagnostics.Stopwatch.GetTimestamp() - t0;
     }
+    /// <summary>성능 측정 (Stopwatch 틱).</summary>
+    public static long UpdateTicks;
 
     private void Rebuild()
     {
