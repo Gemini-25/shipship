@@ -153,7 +153,7 @@ public static partial class Program
                 tr.Down = c.Down;
                 if (c.Vitals.Injury > tr.Inj + 0.001f) { string k = c.Vitals.InjuryCause ?? "?"; _run.HurtBy[k] = _run.HurtBy.GetValueOrDefault(k) + (c.Vitals.Injury - tr.Inj); }
                 tr.Inj = c.Vitals.Injury;
-                if (c.Vitals.Health < 0.4f && !tr.Low) _run.LowHp++;
+                if (c.Vitals.Health < 0.4f && !tr.Low) { _run.LowHp++; _run.Lows.Add(new ADown { Hour = H(now), Tick = now, Name = c.Name + " · " + (c.Vitals.InjuryCause ?? "?"), CrewId = c.Id, RoomId = c.Room?.Id ?? -1, Room = c.Room?.Name ?? "선체 밖" }); }
                 tr.Low = c.Vitals.Health < 0.5f;
                 bool self = !c.Down && AuditSurv(c);
                 bool panic = c.Mind.Panicking(now);
@@ -441,6 +441,8 @@ public static partial class Program
                 if ((d.Cause.Contains("방사선") ? RadCase(d.Tick) ?? Attribute(d.Tick, d.CrewId, d.RoomId) : Attribute(d.Tick, d.CrewId, d.RoomId)) is ScaleCase k) { d.Scale = (int)k.Peak; d.Case = k.Name; map[k].Deaths++; }
             foreach (var d in _run.Downs)
                 if (Attribute(d.Tick, d.CrewId, d.RoomId) is ScaleCase k) { d.Scale = (int)k.Peak; map[k].Downs++; }
+            foreach (var d in _run.Lows)
+                if (Attribute(d.Tick, d.CrewId, d.RoomId) is ScaleCase k) d.Scale = (int)k.Peak;
             _run.Keys = cases.SelectMany(k => k.KeysSeen.Append(k.Key)).Distinct().OrderBy(x => x, StringComparer.Ordinal).ToList();
             // 쓰임
             foreach (var r in w.Ship.Rooms.Where(r => r.Type != RoomType.Corridor && !r.Merged).OrderBy(r => r.Id))
