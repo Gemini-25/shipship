@@ -462,6 +462,9 @@ public sealed partial class InfoSystem
     public Cell Believed(Belonging b) => _seen.TryGetValue(b.Id, out var v) ? v.at : _w.Belongings.Home(b);
     public (int who, Cell at, long t)? Spotted(Belonging b) => _spot.TryGetValue(b.Id, out var v) ? v : null;
 
+    /// <summary>통합7 남의 물건을 손으로 옮겼다 (사물함에 넣기 등) — 그 사람이 마지막으로 본 사람이다.</summary>
+    internal void Handled(CrewMember c, Belonging b) => _spot[b.Id] = (c.Id, c.Cell, _w.Tick);
+
     /// <summary>5분마다: 같은 방에서 눈에 띈 물건 — 주인은 "거기 있다"고 알고, 남은 "봤다"고 안다.</summary>
     private void ObserveThings()
     {

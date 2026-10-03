@@ -872,7 +872,7 @@ public sealed class PlanSystem
             else if (p.Kind == PlanKind.Tell && w.Brain2.Beliefs.Get(c, p.FactTopic, p.FactId) is { Alarmed: true })
             {
                 // 통합7 알리러 가는 사이 경보가 울렸다 — 다들 들었을 테니 배를 가로지르며 사람을 찾지 않는다 (한빛호 창고 불: 넷이 이십 분 동안 알리러 다녔다)
-                Finish(c, p, true, "경보가 울렸다 — 다들 들었겠지");
+                Finish(c, p, true, "경보가 울렸다 — 다들 들었겠지", quiet: true); // 해낸 일은 아니다 (뿌듯함 없이 접는다)
                 if (c.Job?.Activity is PlanActivity) c.Interrupt(w);
             }
             else if (w.Tick - p.Since > SimTime.Hours(14)) Finish(c, p, false, "흐지부지됐다");
