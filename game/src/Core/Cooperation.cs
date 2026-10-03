@@ -170,6 +170,7 @@ public sealed partial class CoopSystem
     private readonly Dictionary<int, DugBox> _digging = new();
     private readonly Dictionary<long, long> _holds = new();
     private readonly Dictionary<int, int> _holdN = new(); // v16.24 짝을 못 구해 보류한 횟수 (일마다)
+    private readonly HashSet<int> _fitted = new(); // 통합8 둘이 조여 붙인 무거운 부품 (일마다) — 다시 잡아 줄 사람을 부르지 않는다
     private readonly Dictionary<long, long> _passed = new();
     private int _nextId = 1;
     private byte[] _slow = Array.Empty<byte>();
@@ -259,6 +260,7 @@ public sealed partial class CoopSystem
         UpdatePaused(now);
         Transfers.RemoveAll(t => t.Until < now - SimTime.Minutes(10));
         if (_holdN.Count > 16) foreach (var k in _holdN.Keys.Where(id => !w.Board.OpenUnsorted.Any(x => x.Id == id)).ToList()) _holdN.Remove(k);
+        if (_fitted.Count > 16) _fitted.RemoveWhere(id => !w.Board.OpenUnsorted.Any(x => x.Id == id));
         foreach (var (k, until) in _holds.ToList())
         {
             if (until <= now) { _holds.Remove(k); continue; }
@@ -360,6 +362,7 @@ public sealed partial class CoopSystem
                     call.Done = true; call.Outcome = "함께 조여 붙였다 — 나머지는 혼자";
                     PairDone(c, call, now);
                     s.Paired = true;
+                    if (s.Order != null) _fitted.Add(s.Order.Id);
                     c.Say(_w, Persona.Say(c, "됐어, 붙었다 — 고마워, 나머진 내가 할게"));
                 }
             }
@@ -907,7 +910,9 @@ public sealed partial class CoopSystem
         {
             var fault = m.Faults.FirstOrDefault(x => x.Kind == o.Fault && x.Circuit == o.Circuit);
             // 무거운 새 부품을 들고 왔을 때 (긴급 우회 · 부분 수리는 들어 올릴 것이 없다) — 호이스트가 있으면 매달아 든다
-            return fault != null && PartsSystem.Heavy(fault.Spec.Part) && c.Carrying?.Kind == fault.Spec.Part && Modules.Working(_w, FurnitureType.Hoist) == 0;
+            // 통합8 이미 둘이 조여 붙인 부품이면 다시 부르지 않는다 (일을 다시 잡을 때마다 새로 불러 아무도 없으면 보류 — 27%에서 손을 뗐다)
+            return fault != null && PartsSystem.Heavy(fault.Spec.Part) && c.Carrying?.Kind == fault.Spec.Part && Modules.Working(_w, FurnitureType.Hoist) == 0 && !_fitted.Contains(o.Id)
+                   && (o.Assignee == null || o.Assignee == c); // 거드는 사람은 따로 부르지 않는다 (맡은 사람이 부른다)
         }
         return o.Kind is WorkKind.ReplacePanel or WorkKind.RepairDoor;
     }

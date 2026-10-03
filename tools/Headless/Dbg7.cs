@@ -162,7 +162,7 @@ public static partial class Program
                 Run(w, SimTime.Minutes(1));
                 call ??= w.Coop.Calls.FirstOrDefault(x => x.Caller == c.Id);
                 var h = call == null || call.Helper < 0 ? null : w.Crew.First(x => x.Id == call.Helper);
-                if (call != null) Console.WriteLine($"{SimTime.Clock(w.Tick)} {c.Name} {c.Cell} {c.ActivityLabel} [{c.Job?.Current?.GetType().Name}] · call arrived {call.Arrived} done {call.Done} {call.Outcome} · H {h?.Name} {h?.Cell} {h?.ActivityLabel} [{h?.Job?.Activity?.GetType().Name}/{h?.Job?.Current?.GetType().Name}] spot {call.Spot}");
+                if (k % 6 == 0) Console.WriteLine($"{SimTime.Clock(w.Tick)} {c.Name} {c.Cell} {c.ActivityLabel} [{c.Job?.Current?.GetType().Name}] · call {call?.Arrived} {call?.Done} {call?.Outcome} calls {string.Join(";", w.Coop.Calls.Where(x => x.OrderId == o.Id).Select(x => $"{x.Id}:c{x.Caller}:{x.Outcome}"))} job {c.Job?.GetHashCode()} prog {o.Progress:0.00} oid {o.Id} asg {o.Assignee?.Name} blk {o.BlockedReason} · H {h?.Name} {h?.Cell} {h?.ActivityLabel} [{h?.Job?.Activity?.GetType().Name}/{h?.Job?.Current?.GetType().Name}] spot {call?.Spot}");
             }
         }
         if (which == "nohelp")

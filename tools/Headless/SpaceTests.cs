@@ -135,9 +135,10 @@ public static partial class Program
             float aff = c.AffinityTo(other);
             Run(w, SimTime.Minutes(10));
             Force(w, c, SpChore(w, c, o)!, SimTime.Hours(4));
-            for (int k = 0; k < 30 && w.Coop.Stats.Confused == 0; k++) Run(w, SimTime.Minutes(2));
+            int confused0 = w.Coop.Stats.Confused; // 통합8 다른 사람이 제 자리에서 먼저 헷갈린 날이 있다 — 이 사람이 헷갈릴 때까지
+            for (int k = 0; k < 30 && w.Coop.Stats.Confused == confused0; k++) Run(w, SimTime.Minutes(2));
             var conf = w.Log.Entries.LastOrDefault(e => e.CrewId == c.Id && e.Text.Contains("헷갈려")).Text;
-            Check("누가 건드린 자리로 돌아오면 헷갈린다 (느려짐 · 건드린 사람에게 서운함)", w.Coop.Stats.Confused >= 1 && conf != null && c.AffinityTo(other) < aff,
+            Check("누가 건드린 자리로 돌아오면 헷갈린다 (느려짐 · 건드린 사람에게 서운함)", w.Coop.Stats.Confused > confused0 && conf != null && c.AffinityTo(other) < aff,
                 $"헷갈림 {w.Coop.Stats.Confused} · \"{conf}\" · {c.Name}→{other.Name} {aff:0.00} → {c.AffinityTo(other):0.00}");
             Skip1b:;
         }
