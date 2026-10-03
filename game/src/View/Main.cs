@@ -247,14 +247,19 @@ public partial class Main : Node2D
             {
                 _accumulator -= steps;
             }
-            long fps0 = FrameProbe.Now; // v17.7
-            for (int i = 0; i < steps; i++) Sim.Step();
+            long fps0 = FrameProbe.Now, sb0 = System.Diagnostics.Stopwatch.GetTimestamp(); // v17.7
+            for (int i = 0; i < steps; i++)
+            {
+                Sim.Step();
+                if ((i & 3) == 3 && System.Diagnostics.Stopwatch.GetElapsedTime(sb0).TotalMilliseconds > SimBudgetMs) { _accumulator = 0; break; } // v17.7 MainPerf.cs
+            }
             FrameProbe.Add("시뮬레이션", fps0);
             Alpha = (float)_accumulator;
             WatchAlerts();
         }
 
         UpdateHighlight(delta); // v12.2 하이라이트 모드 · 자동 카메라
+        UpdateObservers(); // v17.7 평화로운 장면 · 물건 따라가기 (MainWatch.cs)
         UpdateHover();
         _stars.CameraPosition = Camera.Position;
         // v12.2 운항: 별이 뒤로 흐른다 (배속에 비례, 회피 기동 연소 중엔 더 빠르게), 잔해 지대에선 잔해가 지나간다
@@ -439,6 +444,7 @@ public partial class Main : Node2D
 
         if (e is InputEventKey { Pressed: true, Echo: false } key)
         {
+            if (PhotoKey(key)) { GetViewport().SetInputAsHandled(); return; } // v17.7 사진 모드 (MainWatch.cs)
             switch (key.Keycode)
             {
                 case Key.Space: TogglePause(); break;
@@ -454,14 +460,16 @@ public partial class Main : Node2D
                 case Key.Escape:
                     if (Tool != IncidentTool.None) Tool = IncidentTool.None;
                     else if (!Hud.CloseHazardMenu()) ClearSelection();
+                    StopFollowItem(); // v17.7
                     break;
+                case Key.Q: CycleFollowItem(key.ShiftPressed ? -1 : 1); break; // v17.7 물건 따라가기
                 case Key.Z: ToggleTool(IncidentTool.SmallMeteor); break;
                 case Key.X: ToggleTool(IncidentTool.BigMeteor); break;
                 case Key.M: ToggleTool(IncidentTool.HugeMeteor); break;
                 case Key.C: ToggleTool(IncidentTool.Fire); break;
                 case Key.B: ToggleTool(IncidentTool.Break); break;
                 case Key.P: ToggleTool(IncidentTool.PipeBurst); break;
-                case Key.J: Hud.ToggleChronicle(); break;
+                case Key.J: if (key.ShiftPressed) Hud.ToggleVoyage(); else Hud.ToggleChronicle(); break; // v17.7 ⇧J 항해 결산
                 case Key.K: if (key.ShiftPressed) Hud.ToggleScaleCodex(); else Hud.ToggleChain(); break; // v16.18 ⇧K 사고 도감 (규모별)
                 case Key.U: ToggleSummary(); break; // v12.8 요약 진행
                 case Key.L: ToggleHighlight(); break;

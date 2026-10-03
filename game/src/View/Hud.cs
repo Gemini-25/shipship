@@ -134,6 +134,7 @@ public partial class Hud : Control
         if (MinimapOpen && !ChronicleOpen && !TechOpen && _minimapRect.Size.X > 0f) DrawVoyageBar(_minimapRect); // v12.8 항로
         DrawIncidentCards(mouse); // v12.2 사고 카드
         DrawTalkCard(mouse); // v18.17 대화 카드 (HudTalkCard.cs)
+        DrawItemTrail(mouse); // v17.7 따라가는 물건이 거친 손 (HudWatch.cs)
         if (_world.Causes.Notable().Any()) DrawTimeBar(mouse); // v12.2 시간 막대
         if (CouncilOpen) DrawCouncil(mouse); // v18.18 회의록 · 안건 · 파벌 (HudCouncil.cs)
         else if (PolicyOpen) DrawPolicy(mouse); // v13.2 방침·회의 화면
@@ -143,6 +144,7 @@ public partial class Hud : Control
         else if (TechOpen) DrawTech(mouse);
         else if (ScaleCodexOpen) DrawScaleCodex(mouse); // v16.18 사고 도감 — 규모별 (HudScale.cs)
         else if (CollectionOpen) DrawCollection(mouse); // v17.9 수집 도감 (HudCollection.cs)
+        else if (VoyageOpen) DrawVoyage(mouse); // v17.7 항해 결산 (HudWatch.cs)
         DrawHelpCorner(mouse); // v16.2 단축키 한 줄 대신 ? 도움말 + 상황 힌트
         DrawBanners();
         DrawSummaryCard(mouse); // v12.8 요약 진행

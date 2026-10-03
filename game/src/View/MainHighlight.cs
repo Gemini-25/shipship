@@ -72,6 +72,7 @@ public partial class Main
         if (Sim.Tick < _hotUntilTick || serious) _calmSinceTick = -1;
         else if (_calmSinceTick < 0) _calmSinceTick = Sim.Tick;
         int want = Sim.Tick < _hotUntilTick ? 0 : serious ? 1 : Sim.Tick - _calmSinceTick < SimTime.Hours(1) ? 2 : 3;
+        want = WatchSpeed(want); // v17.7 평화로운 장면은 잠깐 3배속으로 (MainWatch.cs)
         if (want != SpeedIndex) SpeedIndex = want; // 일시정지는 건드리지 않는다
     }
 }

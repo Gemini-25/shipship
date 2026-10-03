@@ -40,12 +40,14 @@ public partial class ShipView : Node2D
         _static = new DrawLayer { Name = "Static", Painter = PaintStatic };
         _lights = new DrawLayer { Name = "Lights", Painter = PaintLights, Material = new CanvasItemMaterial { BlendMode = CanvasItemMaterial.BlendModeEnum.Add } };
         _dynamic = new DrawLayer { Name = "Dynamic", Painter = PaintDynamic };
+        _dynUnder = new DrawLayer { Name = "DynamicUnder", Painter = PaintDynamicUnder }; // v17.7
         AddLookUnder(); // v16.5a 바탕(생성기 바닥재 · 벽) · 상태 겹치기 · 흔적 — 정적 층 아래
         AddChild(Baked(_static)); // v17.7 구워 둔다 (BakedLayer.cs)
         AddFixtureFineLayer(); // v16.5c 설비 디테일 층 (가까이서만)
         AddLookLight(); // v16.5a 2D 조명: 낮은 해상도 빛 버퍼 (곱하기)
         AddTechLookLayers(); // v16.5b 기술 수준 벽 · 기술 모습 · 간접 조명 (TechLook.cs)
         AddChild(_lights); // v10: 천장 조명이 바닥에 떨어뜨리는 빛 (더하기 섞기)
+        AddChild(_dynUnder);
         AddChild(_dynamic);
         AddLookOver(); // v16.5a 입자 (김 · 물방울 · 불꽃 · 연기 · 먼지 · 결로)
         BuildOutlines();
@@ -63,8 +65,13 @@ public partial class ShipView : Node2D
         UpdateLook((float)delta); // v16.5a 확대 단계 · 겹치기 지문 · 빛 버퍼 · 입자
         UpdateTechLook(); // v16.5b 미감 세트 · 익힌 기술 · 개조 칸이 바뀌면 다시 그린다
         _dynamic.QueueRedraw();
+        // v17.7 멀리서 볼 때 아래쪽 장식은 두세 프레임에 한 번 (가까이서는 매 프레임)
+        float z = Zoom;
+        if (++_underFrame % (z >= 0.8f ? 1 : z >= 0.4f ? 2 : 3) == 0) _dynUnder.QueueRedraw();
         _lights.QueueRedraw();
     }
+    private DrawLayer _dynUnder = null!;
+    private int _underFrame;
 
     /// <summary>선체가 바뀌었을 때(사고, 개조) 호출.</summary>
     public void RedrawStatic() { RedrawLook(); _static.QueueRedraw(); _fixFine?.QueueRedraw(); } // v16.5c 디테일 층도
@@ -618,11 +625,12 @@ public partial class ShipView : Node2D
 
     // ═══════════════════════════════ 동적 레이어 ═══════════════════════════════
 
-    private void PaintDynamic(CanvasItem ci)
+    /// <summary>
+    /// v17.7 동적 층 아래쪽 (배 바깥 · 흔적 · 바닥 상태 · 물건 · 설비 움직임): 사람이 없는 장식이라 멀리서 볼 때는 두세 프레임에 한 번만 다시 그린다.
+    /// </summary>
+    private void PaintDynamicUnder(CanvasItem ci)
     {
         var ship = _world.Ship;
-        var mode = _main.ViewMode;
-
         PaintFragments(ci); // 떨어져 나가 떠다니는 방 (우주선 밖이라 맨 아래)
         PaintNavLights(ci); // v10.9 항해등
         PaintRadiators(ci); // v9 선체 밖 방열판
@@ -635,6 +643,12 @@ public partial class ShipView : Node2D
         PaintMatter(ci); // v16.4 물건 · 쏟은 액체 · 열기 · 전기 불꽃 · 바람 · 가루 (재질 · 상태마다 다른 그림)
         PaintWays(ci); // v16.25 급한 대로 쓴 갈래의 흔적 (매트리스 마개 · 벌린 문 · 젖은 수건 · 호스 · 속 빈 설비 …)
         foreach (var f in ship.Furniture.Where(f => !f.Stowed && !f.Room.Detached)) PaintFurnitureLife(ci, f);
+    }
+
+    private void PaintDynamic(CanvasItem ci)
+    {
+        var ship = _world.Ship;
+        var mode = _main.ViewMode;
         PaintTierBadges(ci); // v10.8
         PaintTechLookLive(ci); // v16.5b 움직이는 기술 모습 · 설치 · 업그레이드 순간
         PaintRoomProps(ci); // v15.8 소품·장식 (어두운 방은 아래에서 함께 어두워진다)

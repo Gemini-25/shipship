@@ -80,7 +80,67 @@ public static partial class Program
         uint H() { var w = PerfShip(seed, true); for (int i = 0; i < SimTime.Hours(6); i++) w.Step(); return SaveGame.StateHash(w); }
         uint a = H(), b = H();
         Check("결정론 · 60명 복합 재난 6시간 지문 두 번 같다", a == b, $"{a:x8} / {b:x8}");
-        Console.WriteLine($"  지문(60명 · 복합 재난 · 6시간) {a:x8}");
+        Console.WriteLine($"  지문(60명 · 복합 재난 · 6시간) {a:x8}" + (seed == 7 ? (a == 0xd030e585u ? " · 성능 손보기 전(4818fe9)과 같다" : " · 4818fe9 때는 d030e585") : ""));
+
+        // 카메라가 있든 없든 같은 역사: 관찰 카메라 · 물건 따라가기 · 항해 결산이 매 틱 세상을 읽어도 지문이 같다
+        var eye = new WatchScenes();
+        int seen = 0, reviews = 0;
+        var cw = PerfShip(seed, true);
+        for (int i = 0; i < SimTime.Hours(6); i++)
+        {
+            cw.Step();
+            seen += eye.Poll(cw).Count;
+            if (i % 300 == 0) { foreach (var it in WatchScenes.Notable(cw).Take(3)) { WatchScenes.Trail(cw, it); WatchScenes.PositionOf(cw, it); } }
+            if (i % 1500 == 0) { VoyageReview.Build(cw); reviews++; }
+        }
+        uint cam = SaveGame.StateHash(cw);
+        Check("카메라 유무와 무관 · 관찰 카메라 · 물건 따라가기 · 항해 결산이 읽어도 같은 지문", cam == a, $"{cam:x8} / {a:x8} · 장면 {seen} · 결산 {reviews}");
+        WatchChecks(seed);
         return _fails == 0 ? 0 : 1;
+    }
+
+    /// <summary>관찰 도구 장면: 평화로운 장면을 잡고 · 물건이 거친 손을 잇고 · 항해 결산이 한 장으로 모인다.</summary>
+    private static void WatchChecks(int seed)
+    {
+        var w = DayOne(seed, "Hanbit");
+        var eye = new WatchScenes();
+        eye.Poll(w); // 지금까지는 건너뛴다
+        var a = w.Crew[0]; var b = w.Crew[1]; var c = w.Crew[2];
+        // 선물: 연대기에 적힌 장면은 방 · 사람과 함께 잡힌다
+        w.History.Add(w, HistoryKind.Bond, $"{Ko.IGa(a.Name)} 직접 깎은 나무 새를 {b.Name}에게 선물했다", a.Room, new[] { a, b });
+        // 화해 · 고백 · 추모 (하루 기록 · 연대기)
+        w.Log.Add(w.Tick, LogKind.Life, $"{b.Name}에게 컵 일로 의심한 걸 사과했다", c.Id);
+        w.Log.Add(w.Tick, LogKind.Life, $"{Ko.WaGwa(a.Name)} {c.Name} — 연인이 됐다", a.Id);
+        w.History.Add(w, HistoryKind.Death, $"식당에서 {Ko.EulReul(c.Name)} 추모했다 — 5명이 모였다", a.Room);
+        var shots = eye.Poll(w);
+        Check("관찰 카메라 · 선물을 잡는다 (방 · 사람 · 자리)", shots.Any(x => x.Kind == WatchKind.Gift && x.At != null && x.Who.Contains(a.Id) && x.Who.Contains(b.Id)), string.Join(" / ", shots.Select(x => x.Kind + ":" + x.Text)));
+        Check("관찰 카메라 · 화해 · 고백 · 추모도 잡는다", shots.Any(x => x.Kind == WatchKind.Reconcile) && shots.Any(x => x.Kind == WatchKind.Confession) && shots.Any(x => x.Kind == WatchKind.Memorial));
+        Check("관찰 카메라 · 같은 장면을 두 번 잡지 않는다", eye.Poll(w).Count == 0);
+        // 늦게 온 관객: 함께하는 장면의 기록에서
+        Run(w, SimTime.Hours(30));
+        eye.Poll(w);
+        var scene = w.Scenes.Scenes.LastOrDefault();
+        if (scene != null)
+        {
+            scene.Trail.Add($"{SimTime.Clock(w.Tick)} {b.Name}: 늦게 왔다 (40% 지나서)");
+            var late = eye.Poll(w);
+            Check("관찰 카메라 · 늦게 온 관객을 그 사람 자리로", late.Any(x => x.Kind == WatchKind.LateGuest && x.Who.Contains(b.Id) && x.At != null), string.Join(" / ", late.Select(x => x.Text)));
+        }
+        else Check("관찰 카메라 · 하루 반 동안 함께하는 장면이 열렸다", false, "장면 없음");
+        // 물건 따라가기: 만든 사람 → 준 사람 → 임자 → 빌려 간 사람, 지금 든 사람 자리
+        var item = w.Belongings.All.First(x => x.Owner == b.Id);
+        item.From = a.Id; item.BorrowedBy = c.Id; item.Holder = c.Id;
+        var hands = WatchScenes.Hands(item);
+        var trail = WatchScenes.Trail(w, item);
+        Check("물건 따라가기 · 거친 손 (준 사람 → 임자 → 빌려 간 사람)", hands.IndexOf(a.Id) >= 0 && hands.IndexOf(a.Id) < hands.IndexOf(b.Id) && hands.IndexOf(b.Id) < hands.IndexOf(c.Id), string.Join("→", hands));
+        Check("물건 따라가기 · 지금 든 사람의 자리 · 내력 끝은 '지금'", WatchScenes.PositionOf(w, item) == c.Position && trail[^1].Text.StartsWith("지금"), trail[^1].Text);
+        Check("물건 따라가기 · 선물 받은 물건은 따라가 볼 만한 물건", WatchScenes.Notable(w).Contains(item));
+        // 항해 결산: 큰 사고 · 사람 · 좋은 순간 · 물건
+        Scenarios.Apply(w, "combo", out _);
+        Run(w, SimTime.Hours(4));
+        var v = VoyageReview.Build(w);
+        Check("항해 결산 · 큰 사고 · 좋은 순간 · 물건 내력이 한 장에", v.Big.Count > 0 && v.Peace.Count > 0 && v.Items.Count > 0 && v.Items.Any(i => i.Hands.Count >= 3),
+            $"사고 {v.Big.Count} · 순간 {v.Peace.Count} · 물건 {v.Items.Count} · 사람 {v.People.Count}");
+        Check("항해 결산 · 사람 (떠난 사람 · 앞에 선 사람 · 좋은 순간의 사람)", v.People.Count > 0, string.Join(" / ", v.People.Select(p => p.Name + ":" + p.Why)));
     }
 }

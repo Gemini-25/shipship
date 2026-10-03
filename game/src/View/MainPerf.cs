@@ -10,6 +10,12 @@ namespace ShipSim.View;
 //   godot -- --ship=Saeteo --crew=60 --warp=6 --speed=3 --scenario=chaos --perf=300 --shot=a.png
 public partial class Main
 {
+    /// <summary>
+    /// 한 프레임에 시뮬레이션이 쓸 수 있는 시간. 넘으면 밀린 틱을 버린다 — 느린 프레임 → 더 많은 틱 → 더 느린 프레임으로 번지지 않게
+    /// (틱 순서는 그대로라 결과는 같고, 무거운 순간에만 배속이 잠깐 준다).
+    /// </summary>
+    private const double SimBudgetMs = 25.0;
+
     private int _perfLeft = -1, _perfFrames;
     private ulong _perfLastUs;
     private readonly List<double> _perfMs = new();
@@ -48,6 +54,7 @@ public partial class Main
     private void PerfStart()
     {
         if (OS.GetCmdlineUserArgs().Contains("--nobake")) BakedLayer.Enabled = false; // 구워 두지 않고 예전처럼 (비교용)
+        WatchArgs();
         var arg = OS.GetCmdlineUserArgs().FirstOrDefault(a => a.StartsWith("--perf="));
         if (arg == null || !int.TryParse(arg[7..], NumberStyles.Integer, CultureInfo.InvariantCulture, out int n) || n <= 0) return;
         _perfFrames = n;
@@ -55,8 +62,34 @@ public partial class Main
         if (_screenshotFrames >= 0 && _screenshotFrames < _perfLeft + 2) _screenshotFrames = _perfLeft + 2;
     }
 
+    // 화면 시험: --photo (사진 모드) · --snapat=N (N 프레임에 찍고 연대기를 연다) · --follow (물건 따라가기) · --voyage (항해 결산)
+    private int _snapAt = -1;
+    private void WatchArgs()
+    {
+        var args = OS.GetCmdlineUserArgs();
+        if (args.Contains("--photo")) TogglePhotoMode();
+        if (args.Contains("--follow")) CycleFollowItem(1);
+        if (args.Contains("--voyage")) Hud.ToggleVoyage();
+        if (args.FirstOrDefault(a => a.StartsWith("--snapat=")) is string sa && int.TryParse(sa[9..], out int n))
+        {
+            if (!PhotoMode) TogglePhotoMode();
+            _snapAt = n;
+            if (_screenshotFrames >= 0 && _screenshotFrames < n + 15) _screenshotFrames = n + 15;
+        }
+    }
+
+    private void SnapStep()
+    {
+        if (_snapAt < 0 || --_snapAt > 0) return;
+        _snapAt = -1;
+        TakePhoto();
+        TogglePhotoMode();
+        Hud.ChronicleOpen = true;
+    }
+
     private void PerfFrame()
     {
+        SnapStep();
         CensusStep();
         if (_perfLeft < 0) return;
         ulong now = Time.GetTicksUsec();
