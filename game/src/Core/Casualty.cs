@@ -381,6 +381,28 @@ public sealed class CasualtySystem
         }
     }
 
+    // ───────────── 통합6 불길을 뚫고 지나간 사람 ─────────────
+    private readonly Dictionary<int, Cell> _crossed = new();
+    public int Crossings;
+
+    /// <summary>불이 붙은 칸을 지나가거나 그 칸에 갇혔다: 옷 · 머리카락에 옮겨붙는다 (한 칸에 한 번 · 소화기를 겨눈 사람은 덜).</summary>
+    public void CrossFire(CrewMember c, Cell cell, float inten)
+    {
+        var w = _w;
+        if (c.Dead || c.Outside || _crossed.TryGetValue(c.Id, out var last) && last == cell) return;
+        _crossed[c.Id] = cell;
+        bool fighting = c.Job?.Order?.Kind == WorkKind.Extinguish;
+        float burn = (0.08f + 0.22f * inten) * (fighting ? 0.4f : 1f) * (c.Pose == Pose.Sleeping || c.Down ? 1.5f : 1f);
+        if (burn < 0.06f) return;
+        Crossings++;
+        c.Vitals.Health = MathF.Max(0.02f, c.Vitals.Health - burn * 0.6f);
+        string how = c.Pose == Pose.Sleeping || c.Down ? "누운 자리까지 불길이 번졌다" : fighting ? "불길이 확 덮쳤다" : "불길을 뚫고 지나가다 옷에 불이 옮겨붙었다";
+        NeedsSystem.AddInjury(c.Vitals, burn, "불길에 덴 화상");
+        MarkLog.Add(c.Memory.Marks, w.Tick, $"{how} ({c.Room?.Name ?? "?"})");
+        Memory.Frighten(w, c, c.Room, 0.3f, how);
+        w.Log.Add(w.Tick, LogKind.Warning, $"{Ko.IGa(c.Name)} {how} ({c.Room?.Name ?? "?"} · 체력 {c.Vitals.Health * 100:0}%)", c.Id);
+    }
+
     // ───────────── 불붙는 순간 곁에 있던 사람 ─────────────
 
     private void Ignitions()

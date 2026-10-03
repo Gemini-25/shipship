@@ -1141,9 +1141,9 @@ public sealed class CosmicSystem
                 {
                     var r = rooms[i];
                     if (r.Detached) continue;
-                    // 통합 · 통합6: 바깥 방은 예전의 다섯 배 남짓 (시간당 1~2Sv — 몇 시간이면 방사선 병) · 물벽은 거의 다 막고(90%), 대피소는 한 번 더 막는다 (0.15 × 0.35) · 숨지 못한 사람 · 선체 밖이 위험하다
+                    // 통합 · 통합6: 바깥 방은 예전의 네 배 남짓 (시간당 1~2Sv — 몇 시간이면 방사선 병) · 물벽은 거의 다 막고(90%), 대피소는 한 번 더 막는다 (0.15 × 0.35) · 숨지 못한 사람 · 선체 밖이 위험하다
                     float shield = (RoomCatalog.Tags(r.Kind) & RoomTag.Shielded) != 0 ? 0.35f : 1f;
-                    float v = 5f * rp * w.Ambience.Exposure(r) * (0.6f + 0.4f * Facing(r, e, center.Value)) * (1f - 0.9f * Water(r)) * shield;
+                    float v = 4f * rp * w.Ambience.Exposure(r) * (0.6f + 0.4f * Facing(r, e, center.Value)) * (1f - 0.9f * Water(r)) * shield;
                     if (v > _rad[i]) _rad[i] = v;
                 }
                 OutsideRad = MathF.Max(OutsideRad, 10f * rp); // 통합: 우주급은 정말 생존을 건다 — 선체 밖은 시간당 수 Sv (선외 작업 중이면 바로 들어와야 산다)

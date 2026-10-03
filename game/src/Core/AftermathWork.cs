@@ -88,7 +88,7 @@ public sealed partial class AftermathSystem
             else if (lm.Active && lm.WantBack && lm.Carrying < 0)
                 Consider(new AfterTask(AfterTaskKind.LampBack, (shift ? 0.18f : 0.36f) + (bed ? 0.3f : 0f), "조명이 돌아왔다 — 등을 선실로 가져간다", lm));
         }
-        // 4) 불탄 그림 다시 그리기 — 그림 그리는 사람 (만든 사람이 살아 있으면 하루는 그 사람 몫)
+        // 4) 불탄 그림 다시 그리기 — 그림 그리는 사람 (만든 사람이 살아 있으면 하루는 그 사람 몫) · 통합6 쉬는 시간의 붓은 다른 그림보다 이걸 먼저 든다
         if (!shift && !bed && c.Hobbies.Contains(Hobby.Painting))
             foreach (var bp in Burned)
             {
@@ -97,7 +97,7 @@ public sealed partial class AftermathSystem
                 var maker = Crew(bp.Maker);
                 if (maker != null && !maker.Dead && maker != c && w.Tick - bp.Tick < SimTime.Hours(34)) continue;
                 if (WalkNear(bp.At, dist) is not Cell ps) continue;
-                Consider(new AfterTask(AfterTaskKind.Repaint, 0.3f + (c.Habits.Contains(Habit.Homesick) ? 0.06f : 0f) + (maker != null && maker.Dead ? 0.08f : 0f),
+                Consider(new AfterTask(AfterTaskKind.Repaint, 0.5f + (c.Habits.Contains(Habit.Homesick) ? 0.06f : 0f) + (maker != null && maker.Dead ? 0.08f : 0f),
                     maker != null && maker.Dead ? $"{maker.Name}의 {bp.Name} — 불에 탔다, 이어 그린다" : $"불에 탄 {Ko.EulReul(bp.Name)} 다시 그린다", bp, pr, ps));
             }
         _pick[c.Id] = (w.Tick, best);

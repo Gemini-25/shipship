@@ -260,6 +260,7 @@ public sealed class FailsafeSystem
                 }
                 _latched[d.Id] = w.Tick;
                 _failNoted.Remove(d.Id);
+                foreach (var c in w.Crew) if (!c.Dead && !c.Outside && c.Cell == d.Cell) Pinned(c, d, low); // 통합6 문틀에 서 있던 사람이 끼었다
                 d.Locked = true;
                 d.Openness = MathF.Min(d.Openness, 0.25f); // 압력에 떠밀려 쾅 닫힌다
                 Latches++;
@@ -293,6 +294,26 @@ public sealed class FailsafeSystem
             w.Log.Add(w.Tick, LogKind.Ship, text);
             w.Automation.Reason("fs:latch:" + low.Id, $"{low.Name} 감압 — 차압 문이 저절로 닫혀 옆 구획이 버틴다 · {highs[0].Name} {P(highs[0]):0}kPa 유지 · 구멍을 막으면 기압이 맞춰져 풀린다", SimTime.Minutes(30));
         }
+    }
+
+    public int Pins;
+
+    /// <summary>통합6 압력에 떠밀려 쾅 닫히는 문에 끼었다: 갈비 · 다리가 눌린다 — 누가 문을 비집어 빼 줄 때까지 (몇 분) 꼼짝 못 한다.</summary>
+    private void Pinned(CrewMember c, Door d, Room low)
+    {
+        var w = _w;
+        Pins++;
+        float hit = 0.22f + 0.2f * MathF.Min(1f, MathF.Abs(P(d.RoomA!) - P(d.RoomB!)) / 60f);
+        c.Vitals.Health = MathF.Max(0.02f, c.Vitals.Health - hit * 0.6f);
+        NeedsSystem.AddInjury(c.Vitals, hit, "차압 문에 끼임");
+        c.EndJob(w, ToilStatus.Interrupted);
+        c.HoldUntil = w.Tick + SimTime.Minutes(8);
+        c.HoldWhy = "차압 문에 끼어 꼼짝 못 한다";
+        c.Say(w, Persona.Say(c, "문 — 문이 안 열려! 다리가…"));
+        MarkLog.Add(c.Memory.Marks, w.Tick, $"차압 문에 끼었다 ({low.Name} 감압)");
+        Memory.Frighten(w, c, low, 0.45f, "차압 문에 끼었다");
+        w.RaiseAlert($"{Ko.IGa(c.Name)} {low.Name} 차압 문에 끼었다", low, AlertLevel.Critical, shipWide: true);
+        w.History.Add(w, HistoryKind.Casualty, $"{Ko.IGa(c.Name)} 감압으로 쾅 닫힌 {low.Name} 차압 문에 끼었다", low, new[] { c });
     }
 
     /// <summary>문이 쾅 닫히는 것을 본 사람: 저쪽이 샌다고 믿고 그 방을 무서워한다 · 같은 방에 있던 사람은 버텨 준 배에 마음이 놓인다.</summary>

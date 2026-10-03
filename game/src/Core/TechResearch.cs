@@ -517,6 +517,11 @@ public sealed partial class TechWebSystem
             lead.Vitals.Health = MathF.Max(0.05f, lead.Vitals.Health - hurt * 0.7f);
             NeedsSystem.AddInjury(lead.Vitals, hurt, hc);
             w.Log.Add(w.Tick, LogKind.Warning, $"{Ko.IGa(lead.Name)} 실험대 앞에서 다쳤다 — {hc} ({room.Name})", lead.Id);
+            if (kind is BlastKind.Arc && R.Chance(MathF.Min(0.6f, 0.22f * (tired ? 1.4f : 1f) * (ignored ? 1.5f : 1f) * (x.Style == ResearchStyle.Bold ? 1.4f : 1f) * (room.Humidity > 0.7f ? 1.5f : 1f))))
+            {
+                w.Casualty.Inflict(lead, TraumaKind.Arrest, 0.6f, hc); // 통합6 방전이 손에서 가슴을 지났다
+                MarkLog.Add(room.Marks, w.Tick, $"{Ko.IGa(lead.Name)} 축전기 방전에 쓰러졌다" + (alone ? " (혼자였다)" : ""));
+            }
         }
         lead.Needs.Stress = MathF.Min(1f, lead.Needs.Stress + 0.12f);
         Memory.Frighten(w, lead, room, 0.25f, $"실험 사고 — {t.Name}");

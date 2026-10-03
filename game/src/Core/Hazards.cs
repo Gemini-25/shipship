@@ -826,7 +826,7 @@ public sealed partial class HazardSystem
             var r = roomOf(pool[i]);
             int n = 0;
             foreach (var c in w.Crew) if (!c.Dead && c.Room == r && (c.IsAwake || sleepers && c.Pose == Pose.Sleeping)) n++;
-            sum += wt[i] = 1f + 1.5f * Math.Min(3, n);
+            sum += wt[i] = 1f + 2.5f * Math.Min(3, n); // 통합6 쓰는 방일수록 더 (사고는 대개 손이 닿는 데서 난다)
         }
         float x = rr.Float() * sum;
         for (int i = 0; i < pool.Count; i++) { x -= wt[i]; if (x <= 0f) return pool[i]; }
@@ -860,6 +860,13 @@ public sealed partial class HazardSystem
             {
                 var room = prefer != null && rooms.Contains(prefer) ? prefer : Busy(rooms, r => r, rr, sleepers: true); // 통합: 불도 대개 쓰는 방에서 난다 (조리 · 용접 · 전기 기구 · 잠든 방의 충전기)
                 var floor = room.Cells.Where(ship.IsOpenFloor).ToList();
+                var users = w.Crew.Where(c => !c.Dead && c.Room == room).OrderBy(c => c.Id).ToList();
+                if (users.Count > 0 && rr.Chance(0.6f)) // 통합6 쓰는 사람 곁 (머리맡 충전기 · 전열기 · 조리대 · 공구)
+                {
+                    var u = users[rr.Range(0, users.Count)];
+                    var near = floor.Where(x => Math.Abs(x.X - u.Cell.X) + Math.Abs(x.Y - u.Cell.Y) is >= 1 and <= 2).ToList();
+                    if (near.Count > 0) floor = near;
+                }
                 if (floor.Count == 0 || !Incidents.Fire(w, floor[rr.Range(0, floor.Count)])) return null;
                 string what = $"화재({room.Name})";
                 w.History.NoteCause(w, what);

@@ -469,7 +469,7 @@ public sealed partial class ReactSystem
     {
         _noisy.Clear();
         foreach (var m in _w.Ship.Machines)
-            if (m.Omen is { Known: false } && m.Body.Room is Room r && !_noisy.ContainsKey(r.Id)) _noisy[r.Id] = m;
+            if (!_w.PreventionBlind && m.Omen is { Known: false } && m.Body.Room is Room r && !_noisy.ContainsKey(r.Id)) _noisy[r.Id] = m;
     }
 
     /// <summary>옆방 소리 (문이 열려 있으면 들린다).</summary>

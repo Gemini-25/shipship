@@ -119,6 +119,6 @@ public static partial class Program
             if (m % 3 == 0 || v.Down)
                 Console.WriteLine($"   {SimTime.Clock(w.Tick)} {v.Name} 체력 {v.Vitals.Health * 100:0}% 산소 {v.Vitals.Oxygen * 100:0}% 부상 {v.Vitals.Injury * 100:0}% {v.Pose} {(v.Down ? "쓰러짐" : "")} {r?.Name} 연기 {r?.Air.Smoke:0.00} 기압 {r?.Air.Pressure:0} 불 {(r != null ? w.Fire.CountIn(r) : 0)} 일 {v.Job?.Label} · 배 불 {w.Fire.Count} · 곁 {w.Crew.Count(o => o != v && !o.Dead && o.Room == r)}");
         }
-        Console.WriteLine($"   끝: {(v.Dead ? "숨짐 " + v.Vitals.InjuryCause : "살았다")} · " + string.Join(" / ", w.History.Events.TakeLast(4).Select(h => h.Text)));
+        Console.WriteLine($"   끝: 불꽃 {w.Casualty.Flashes} · 불길 {w.Casualty.Crossings} · {(v.Dead ? "숨짐 " + v.Vitals.InjuryCause : "살았다")} · " + string.Join(" / ", w.History.Events.TakeLast(4).Select(h => h.Text)));
     }
 }

@@ -35,17 +35,17 @@ public static partial class Program
                     Run(w, SimTime.Minutes(10));
                     if (dbg && i % 36 == 0) Console.WriteLine($"     [{(prepared ? "대비" : "못 함")} {SimTime.Clock(w.Tick)}] " + string.Join(" | ", w.Crew.Select(c => $"{c.Name} {c.Dose:0.0}Sv {(c.Dead ? "숨짐" : $"{c.Vitals.Health * 100:0}% {c.Room?.Name}")}")));
                 }
-                return (w.Crew.Count(c => c.Dead), w.Crew.Count(c => c.Dose >= 2f), w.Crew.Max(c => c.Dose),
+                return (w.Crew.Count(c => c.Dead), w.Crew.Count(c => c.Dose >= 1f), w.Crew.Max(c => c.Dose),
                     string.Join(", ", w.Crew.Select(c => $"{c.Name} {c.Dose:0.0}Sv{(c.Dead ? "†" : "")}")));
             }
             var ready = Nova(true);
             var bare = Nova(false);
-            Console.WriteLine($"  {Kind} — 대비한 배: 사망 {ready.dead} · 2Sv 넘음 {ready.sick} ({ready.who})");
-            Console.WriteLine($"  {Kind} — 대비 못 한 배: 사망 {bare.dead} · 2Sv 넘음 {bare.sick} ({bare.who})");
-            // 통합6 계기 없이는 토하고서야(2Sv 남짓) 안다 — 대비 못 한 배는 절반 넘게 방사선 병(토함 · 피가 줄어듦)을 앓거나 누가 숨진다
+            Console.WriteLine($"  {Kind} — 대비한 배: 사망 {ready.dead} · 방사선 병(1Sv 넘음) {ready.sick} ({ready.who})");
+            Console.WriteLine($"  {Kind} — 대비 못 한 배: 사망 {bare.dead} · 방사선 병(1Sv 넘음) {bare.sick} ({bare.who})");
+            // 통합6 계기 없이는 토하고서야(2.5Sv 남짓) 안다 — 대비 못 한 배는 절반 넘게 방사선 병(1Sv 넘음 · 구역질 · 피가 줄어듦)을 앓거나 누가 숨진다 · 대비한 배는 아무도 앓지 않는다
             Check("우주급 — 대비 못 한 배는 진짜 생존 위기 (크게 쬔 사람 · 숨진 사람)", bare.dead >= 1 || bare.sick * 2 >= 6,
-                $"사망 {bare.dead} · 2Sv 넘음 {bare.sick} · 최대 {bare.maxDose:0.0}Sv");
-            Check("우주급 — 대비한 배는 버틴다 (못 한 배보다 덜 죽고 덜 쬔다)", ready.dead < Math.Max(1, bare.dead) && ready.maxDose < bare.maxDose,
+                $"사망 {bare.dead} · 방사선 병 {bare.sick} · 최대 {bare.maxDose:0.0}Sv");
+            Check("우주급 — 대비한 배는 버틴다 (못 한 배보다 덜 죽고 덜 쬔다)", ready.dead < Math.Max(1, bare.dead) && ready.maxDose < bare.maxDose && ready.sick < bare.sick,
                 $"사망 {ready.dead} ↔ {bare.dead} · 최대 {ready.maxDose:0.0} ↔ {bare.maxDose:0.0}Sv");
         }
 

@@ -210,6 +210,7 @@ public sealed class FireSystem
                 if (dx * dx + dy * dy > 1.6f * 1.6f) continue;
                 float protect = c.Suit != null ? 0.3f : 1f;
                 float near = dx * dx + dy * dy < 0.6f * 0.6f ? 2.2f : 1f; // 통합: 불길 한가운데 (누운 자리 · 갇힌 자리)는 몇 분이면 깊게 덴다
+                if (near > 1f && intensity >= 0.4f) w.Casualty.CrossFire(c, cell, intensity * protect); // 통합6 불길을 뚫고 지나갔다
                 c.Vitals.Health -= 0.5f * near * intensity * dt * protect;
                 NeedsSystem.AddInjury(c.Vitals, 0.3f * near * intensity * dt * protect, "화상");
             }
