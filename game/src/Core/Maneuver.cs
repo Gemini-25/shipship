@@ -523,7 +523,9 @@ public sealed partial class ManeuverSystem
             w.Info.OnTable.Remove(id);
             m.CupsFell++; Stats.CupsFell++;
             var room = w.Ship.RoomAt(tc.Spot);
-            if (R.Chance(0.55f + 0.4f * g))
+            // 금속 · 타일 바닥이면 거의 깨지고, 러그 · 고무 매트 위면 대개 멀쩡하다
+            bool soft = w.Body.FloorAt(tc.Spot) is Material.Fabric or Material.Rubber || w.Matter.RugAt(tc.Spot) != null || w.Matter.MatAt(tc.Spot);
+            if (R.Chance(soft ? 0.2f : 0.86f + 0.1f * g))
             {
                 w.Info.Break(cup, tc.Spot, why);
                 m.Broken++; Stats.CupsBroken++; Stats.Broken++;
@@ -818,7 +820,7 @@ public sealed partial class ManeuverSystem
             foreach (var id in Latched.ToList()) if (R.Chance(0.15f)) Latched.Remove(id);
         Warm(dt);
         Thanks();
-        if (w.Tick >= _nextTrim) { _nextTrim = w.Tick + SimTime.Hours(1); Trim(); }
+        if (w.Tick >= _nextTrim) { _nextTrim = w.Tick + SimTime.Hours(1); Trim(); Broom(); }
         if (w.Tick >= _nextWarm) { _nextWarm = w.Tick + SimTime.Hours(1); NightSoup(); }
         UpdateTicks += System.Diagnostics.Stopwatch.GetTimestamp() - t0;
     }
@@ -878,7 +880,7 @@ public sealed partial class ManeuverSystem
         {
             if (x.Plate < 0 || !x.Kept) continue;
             var p = x.Dish;
-            if (p == null || !p.Eaten) continue;
+            if (p == null || !p.Found) continue; // 이름표를 읽는 순간 안다
             var who = CrewOf(x.For);
             var cook = CrewOf(x.KeptBy >= 0 ? x.KeptBy : x.Cook);
             x.Plate = -2;
@@ -886,7 +888,7 @@ public sealed partial class ManeuverSystem
             Stats.Thanked++;
             w.Relations.Remember(who, cook, RelationReason.SavedMyThing, "기동 경보 속에서도 내 몫 수프 냄비를 붙잡아 뒀다");
             who.ChangeAffinity(cook, 0.05f);
-            string line = Persona.Say(who, $"{cook.Name}, 기동 때 냄비 붙잡아 줬다며. 식었어도 맛있었어 — 고마워");
+            string line = Persona.Say(who, $"{cook.Name}, 기동 때 냄비 붙잡아 줬다며. 식었어도 이게 어디야 — 고마워");
             if (cook.Room == who.Room && cook.IsAwake) { who.Say(w, line); cook.Say(w, Persona.Say(cook, "쏟았으면 오늘 밤 굶을 뻔했지")); }
             else w.Info.Chat.Post(who, ChatKind.Thanks, line);
             Life.Diary(w, who, Persona.Say(who, $"이름표 붙은 식은 수프. 회피 기동 때 {Ko.IGa(cook.Name)} 집게를 물려 지켜 낸 냄비였다고 한다"));

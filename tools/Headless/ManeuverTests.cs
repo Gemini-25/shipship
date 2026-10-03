@@ -108,10 +108,11 @@ public static partial class Program
             if (mech.Job != null) mech.EndJob(w, ToilStatus.Interrupted);
             mech.NextThinkTick = w.Tick + 1;
             mech.Needs.Food = 0.12f;
-            for (int t = 0; t < SimTime.Hours(8) && plate != null && !(plate.Eaten && ms.Stats.Thanked > 0); t++) Tick();
+            mech.Needs.Rest = MathF.Max(mech.Needs.Rest, 0.85f); // 밤일을 막 끝낸 참 — 먹고 잔다
+            for (int t = 0; t < SimTime.Hours(8) && plate != null && !(plate.Found && ms.Stats.Thanked > 0 && (plate.Eaten || t > SimTime.Hours(1))); t++) Tick();
             var mem = w.Relations.Of(mech, cook).FirstOrDefault(x => x.Text.Contains("수프 냄비"));
-            Check("늦게 온 정비사가 식은 수프가 제 몫인 걸 알고 고마워한다 (관계 · 일기)", plate is { Found: true, Eaten: true } && tempAtFind is >= 0f and < 45f && ms.Stats.Thanked >= 1 && mem != null,
-                $"찾을 때 {tempAtFind:0}℃ · 고맙다 {ms.Stats.Thanked} · 기억 \"{mem?.Text}\" · 일기 \"{mech.Diary.LastOrDefault().text}\"");
+            Check("늦게 온 정비사가 식은 수프가 제 몫인 걸 알고 고마워한다 (관계 · 일기)", plate is { Found: true } && tempAtFind is >= 0f and < 45f && ms.Stats.Thanked >= 1 && mem != null,
+                $"접시 찾음 {plate?.Found} · 먹음 {plate?.Eaten} · 상함 {plate?.Spoiled} · {mech.Name}({mech.ActivityLabel} · 배고픔 {mech.Needs.Food:0.00}) · 찾을 때 {tempAtFind:0}℃ · 고맙다 {ms.Stats.Thanked} · 기억 \"{mem?.Text}\" · 일기 \"{mech.Diary.LastOrDefault().text}\"");
             Console.WriteLine($"   {ms.Stats.Line()}");
         }
 
