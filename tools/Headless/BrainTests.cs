@@ -224,7 +224,7 @@ public static partial class Program
                 w.Brain2.Beliefs.Learn(s1, Topic.Fire, room.Id, 1, BeliefSource.Rumor, 0.85f, teller.Id);
                 s1.NextThinkTick = w.Tick + 1;
                 bool reached = false;
-                for (int m = 0; m < 40 && !reached; m++) { Run(w, SimTime.Minutes(0.5f)); if (s1.Room == room) reached = true; }
+                for (int m = 0; m < 120 && !reached; m++) { Run(w, SimTime.Minutes(0.5f)); if (s1.Room == room) reached = true; } // 통합7 창고가 배 반대편이면 스무 분에 못 닿는다 — 닿을 때까지 (한 시간 안)
                 Run(w, SimTime.Minutes(3));
                 var b1 = w.Brain2.Beliefs.Get(s1, Topic.Fire, room.Id);
                 var (ok, bad) = w.Brain2.Learning.Tally(s1, Method.CheckFire);

@@ -32,7 +32,18 @@ public sealed partial class SchemeSystem
     private float FreeHour(Scheme s)
     {
         float h0 = SessionHour(s.Spec);
-        if (s.Spec.Fate != Fate.Club) return h0;
+        if (s.Spec.Fate != Fate.Club)
+        {
+            // 통합7 밤 판(해적 방송 · 도박 · 밀회 …)도 꾸민 사람이 잠들거나 당직인 시각엔 못 연다 — 늦은 저녁 안에서 꾸민 사람이 깨어 있는 때로 (한빛호: 22시에 자는 DJ라 나흘 동안 한 번도 못 틀었다)
+            if (P(s.Lead) is not CrewMember ld || FreeAt(ld, h0)) return h0;
+            foreach (var d in new[] { -1f, -2f, 1f, -3f, -4f })
+            {
+                float h = (h0 + d + 24f) % 24f;
+                if (h < 17f && h > 2f) continue;
+                if (FreeAt(ld, h)) return h;
+            }
+            return h0;
+        }
         if (s.SessionHourSet >= 0f) return s.SessionHourSet;
         bool Clash(float h)
         {

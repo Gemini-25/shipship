@@ -357,7 +357,12 @@ public sealed partial class MatterSystem
                 w.Log.Add(w.Tick, LogKind.Work, $"통로를 막은 {Ko.EulReul(t.Name)} 창고로 치웠다", c.Id);
                 break;
         }
-        if (heeded) { Stats.HeededWarns++; t.Flagged = false; }
+        if (heeded)
+        {
+            Stats.HeededWarns++; t.Flagged = false;
+            // 통합7 컴퓨터가 짚은 히터 곁 천을 널려고(말리려고) 들고 갔어도 열에서 떼어 놓은 것이다 (전엔 '치움'으로 안 셌다)
+            if (task != "Heat" && task != "Smolder" && _carryFrom.TryGetValue(t.Id, out var from0) && Math.Max(Math.Abs(from0.X - to.X), Math.Abs(from0.Y - to.Y)) >= 2) Stats.MovedFromHeat++;
+        }
         return true;
     }
 

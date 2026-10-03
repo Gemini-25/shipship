@@ -259,7 +259,45 @@ public sealed class InfoActivity : Activity
         {
             DoneWhen = (cm, world) => (o.Position - cm.Position).LengthSquared() <= 6f || o.Dead,
         });
-        toils.Add(new GotoToilLate(cm => (o.Position - cm.Position).LengthSquared() <= 6f ? null : Cell.Dirs8.Select(d => o.Cell + d).Where(x => w.Ship.IsWalkable(x)).OrderBy(x => (x.Center - cm.Position).LengthSquared()).ThenBy(x => x.X * 1000 + x.Y).Cast<Cell?>().FirstOrDefault()));
+        toils.Add(new ChaseToil(o, SimTime.Minutes(20))); // 통합7 그새 자리를 옮겼으면 따라간다 (한 번 다시 가는 것으로는 서로 상대가 있던 자리로 엇갈려 세 시간을 헛걸음했다)
+    }
+
+    /// <summary>통합7 움직이는 사람을 따라잡는다: 1분마다 그 사람의 지금 곁 칸으로 길을 다시 잡는다 (서로 찾아가도 가운데서 만난다).</summary>
+    private sealed class ChaseToil : Toil
+    {
+        private readonly CrewMember _o;
+        private readonly int _limit;
+        private int _t;
+        public ChaseToil(CrewMember o, int limit) { _o = o; _limit = limit; }
+
+        private bool Aim(CrewMember c, World w)
+        {
+            var o = _o;
+            var cell = Cell.Dirs8.Select(d => o.Cell + d).Where(x => w.Ship.IsWalkable(x)).OrderBy(x => (x.Center - c.Position).LengthSquared()).ThenBy(x => x.X * 1000 + x.Y).Cast<Cell?>().FirstOrDefault();
+            if (cell is not Cell to) return false;
+            bool ok = Locomotion.SetDestination(c, w, to);
+            if (ok && c.Path != null && c.Path.Count > 0) c.Pose = Pose.Walking;
+            return ok;
+        }
+
+        public override void Begin(CrewMember c, World w) { _t = 0; if ((_o.Position - c.Position).LengthSquared() > 6f) Aim(c, w); }
+
+        public override ToilStatus Tick(CrewMember c, World w)
+        {
+            if (_o.Dead) return ToilStatus.Failed;
+            if ((_o.Position - c.Position).LengthSquared() <= 6f) { c.Path = null; if (c.Pose == Pose.Walking) c.Pose = Pose.Standing; return ToilStatus.Succeeded; }
+            if (++_t > _limit) return ToilStatus.Failed;
+            if (_t % SimTime.Minutes(1) == 0 || c.Path == null || c.PathBlocked) { if (!Aim(c, w)) return ToilStatus.Failed; }
+            Locomotion.Step(c, w);
+            return ToilStatus.Running;
+        }
+
+        public override void End(CrewMember c, World w)
+        {
+            c.Path = null;
+            c.Destination = null;
+            if (c.Pose == Pose.Walking) c.Pose = Pose.Standing;
+        }
     }
 
     /// <summary>물건 찾기: 마지막에 둔 곳 → 그 방 둘레 → 사물함 → 메신저에 묻기.</summary>

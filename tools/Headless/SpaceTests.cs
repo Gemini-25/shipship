@@ -421,6 +421,9 @@ public static partial class Program
                 c.Needs.Food = 0.95f;
                 Force(w, c, new Job(null, "시험: 쉬는 중", new Toil[] { new WaitToil(SimTime.Minutes(2), Pose.Standing) }), 1);
             }
+            // 통합7 소화 가스 방침이면 사람은 문을 닫고 가스를 기다린다 (한빛호 창고: 15분 동안 아무도 소화기를 들고 오지 않아 비집을 사람이 없었다) — 사람이 끄러 가는 배로 세운다
+            w.Policies.Set("inertfire", 0, "시험");
+            w.Policies.Set("vacuumfire", 0, "시험");
             foreach (var fc in room.Cells.Where(w.Ship.IsOpenFloor).OrderBy(x => (x.Center - room.Center).LengthSquared()).Take(3)) Incidents.Fire(w, fc);
             int maxWatch = 0; bool squeezed = false; int peakCost = 0;
             var cs = w.Coop.Crowds;

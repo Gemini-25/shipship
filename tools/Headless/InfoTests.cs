@@ -100,7 +100,7 @@ public static partial class Program
             }
             var sorry = w.Relations.Of(finder, owner).FirstOrDefault(m => m.Reason == RelationReason.Apologized);
             Check("본 사람이 \"충격에 떨어졌다\"고 해명 → 주인이 사과한다 (오해가 풀리고 몰아붙인 사람의 신용은 깎인다)",
-                k.ExplainedBy == witness.Id && k.Apologized >= 0 && sorry != null && blame!.Revealed && info.Cred(owner) < info.Cred(witness),
+                k.ExplainedBy == witness.Id && k.Apologized >= 0 && sorry != null && blame is { Revealed: true } && info.Cred(owner) < info.Cred(witness),
                 $"해명 {(k.ExplainedBy >= 0 ? w.Crew[k.ExplainedBy].Name : k.ExplainedBy.ToString())} {(k.Explained >= 0 ? SimTime.Clock(k.Explained) : "-")} · 사과 {(k.Apologized >= 0 ? SimTime.Clock(k.Apologized) : "-")} · 신용 주인 {info.Cred(owner):0.00} / 본 사람 {info.Cred(witness):0.00} · {IfLog(w, owner.Id, "사과")}");
             Check("주인은 깨진 컵을 붙일 일을 못 끝낸 일로 품는다 (두뇌 중기 목표)", info.Todos.Any(t => t.Kind == TodoKind.MendCup && t.Item == cup.Id),
                 string.Join(" · ", info.TodosOf(owner).Select(t => InfoSystem.TodoText(t, w))));
