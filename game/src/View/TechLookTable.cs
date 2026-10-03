@@ -431,6 +431,13 @@ public static class TechLookTable
         K(FurnitureType.AnesthesiaMachine, Improv.HoseClamp, Trim.GlassFace, 0x8ad0ffff, "tank@.2,.7", "gauges@.7,.2 pipeloop@.5,.8", "screen@.7,.3 filter@.2,.3"),
         K(FurnitureType.BloodFridge, Improv.DripCan, Trim.EdgeGlow, 0xff5a5aff, "glass@.5,.5", "fins@.5,.95 gauges@.85,.1", "cells@.15,.15 holo@.5,.4"),
         K(FurnitureType.MedCabinet, Improv.Shim, Trim.Pinstripe, 0x7ae0a0ff, "drawers@.5,.8", "glass@.5,.35 lamp@.5,.05", "chip@.9,.5 shroud@.5,.5"),
+        // 의료 2차
+        K(FurnitureType.Dialyzer, Improv.HoseClamp, Trim.GlassFace, 0x6ef0b0ff, "filter@.9,.6", "pipeloop@.6,.7 screen@.5,.25", "pod@.3,.85 chip@.85,.15"),
+        K(FurnitureType.Ecmo, Improv.TapedScreen, Trim.EdgeGlow, 0xff6a6aff, "tank@.9,.15", "coil@.5,.85 gauges@.2,.35", "core@.62,.5 holo@.2,.2"),
+        K(FurnitureType.HeartPump, Improv.JumperWire, Trim.Pinstripe, 0xff8a9aff, "cells@.5,.65", "lamp@.5,.08 cables@.3,.9", "field@.5,.32 chip@.9,.9"),
+        K(FurnitureType.OrganCooler, Improv.DuctTape, Trim.Anodized, 0xbfe6ffff, "fins@.83,.7", "glass@.45,.5 vents@.2,.95", "shroud@.45,.5 strip@.5,.96"),
+        K(FurnitureType.BioPrinter, Improv.ZipTies, Trim.HaloRing, 0xe86a9aff, "arm@.5,.24", "lamp@.12,.45 drawers@.75,.88", "holo@.5,.4 rail@.5,.95"),
+        K(FurnitureType.NegPressure, Improv.BoltedFan, Trim.Chevron, 0x5fb0ffff, "filter@.78,.4", "rotor@.36,.5 hood@.78,.05", "field@.36,.5 plating@.9,.9"),
     };
 
     private static Dictionary<FurnitureType, TierKit>? _kits;

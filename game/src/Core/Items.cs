@@ -52,6 +52,8 @@ public enum ItemKind
     Vitamin, Gloves, Rag, CellPack, Thread, Paint, Desiccant, Mesh,
     // 의료 1차
     Painkiller, Antibiotic, Anesthetic, BloodSubstitute, MedHerb,
+    // 의료 2차 — 면역억제제 · 투석액 · 세포 잉크
+    Immunosuppressant, Dialysate, BioInk,
 }
 
 /// <summary>재료 등급 (리뷰어 안: 원료 → 기본 수리재 → 일반 부품 → 고급 부품).</summary>
@@ -87,6 +89,10 @@ public static class ItemKinds
         ItemKind.PowerController => "전력 제어기",
         ItemKind.Sensor => "센서",
         ItemKind.ReactorControl => "원자로 제어부",
+        // 의료 2차
+        ItemKind.Immunosuppressant => "면역억제제",
+        ItemKind.Dialysate => "투석액",
+        ItemKind.BioInk => "세포 잉크",
         _ => ItemsV15.Name(k) ?? k.ToString(), // v15
     };
 

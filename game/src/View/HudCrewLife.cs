@@ -56,6 +56,7 @@ public partial class Hud
         Gfx.Text(this, Fonts.Body, new Vector2(lx, ly + 14), $"손 {hand * 100:0}% · 걸음 {leg * 100:0}% · 숨 {100f / lung:0}%", Ui.TextBody, Palette.TextDim);
         ly += 18;
         if (c.Dose > 0.05f) { Gfx.Text(this, Fonts.Body, new Vector2(lx, ly + 14), $"방사선 {c.Dose:0.00}Sv" + (c.Dose > 1f ? " — 몸이 상한다" : ""), Ui.TextBody, c.Dose > 1f ? Palette.Danger : Palette.TextDim); ly += 18; }
+        if (_world.Organs.Line(c) is string organs) { Gfx.Text(this, Fonts.Body, new Vector2(lx, ly + 14), Fit(organs, right - lx, Ui.TextBody, Fonts.Body), Ui.TextBody, Palette.Warning); ly += 18; } // 의료 2차 진단된 장기 · 기계 · 이식
         Gfx.Text(this, Fonts.Body, new Vector2(lx, ly + 14), $"체력 단련 {c.Fitness * 100:0}%", Ui.TextBody, Palette.TextDim);
         if (_world.Body2.Line(c) is string bodyLine) { ly += 18; Gfx.Text(this, Fonts.Body, new Vector2(lx, ly + 14), bodyLine, Ui.TextBody, _world.Body2.Peek(c) is { Tight: true } or { Loose: true } ? Palette.Warning : Palette.TextDim); } // v17.1 몸무게 · 우주복 · 머리
         // v14.1 앓는 것 (진단 전이면 "어딘가 아프다")

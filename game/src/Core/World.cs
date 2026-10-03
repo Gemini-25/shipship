@@ -186,6 +186,7 @@ public sealed class World
     public CasualtySystem Casualty { get; } // v16.24 큰 상처 뒤: 출혈 · 화상 쇼크 · 심정지 · 불붙는 순간
     public InjuryGradeSystem Grades { get; } // 부상 등급 (경상 · 중상 · 위중) — 기록 · 기억 · 방송 · 치료 순서
     public SurgerySystem Surgery { get; } public BloodSystem Blood { get; } public PharmacySystem Pharmacy { get; } public RecoverySystem Recovery { get; } // 의료 1차 수술 · 피 · 약 · 회복
+    public OrganSystem Organs { get; } public TransplantSystem Transplant { get; } public InfectionSystem Infection { get; } // 의료 2차 장기 · 이식 · 감염 · 격리
     public PerilSystem Perils { get; } // v16.26 위험이 사람에게 닿는 길: 열사병 · 큰 피폭 · 늦게 깨는 잠
     public RadCareSystem RadCare { get; } // 통합5 방사선 병 간호 (수액 · 골수 주사 · 수혈 · 격리)
     public WaysSystem Ways { get; } // v16.25 문제마다 여러 갈래 해법
@@ -323,6 +324,7 @@ public sealed class World
         Casualty = new CasualtySystem(this); // v16.24
         Grades = new InjuryGradeSystem(this);
         Surgery = new SurgerySystem(this); Blood = new BloodSystem(this); Pharmacy = new PharmacySystem(this); Recovery = new RecoverySystem(this); // 의료 1차
+        Organs = new OrganSystem(this); Transplant = new TransplantSystem(this); Infection = new InfectionSystem(this); // 의료 2차
         Perils = new PerilSystem(this); // v16.26
         RadCare = new RadCareSystem(this); // 통합5
         Ways = new WaysSystem(this); // v16.25
@@ -443,6 +445,8 @@ public sealed class World
             RoomUse.Update(dt); RoomPlans.Update(dt); // v16.17 쓰임 → 용도 · 승무원 안건 → 회의 → 공사
             Cosmic.Update(dt); // v18.13 우주 대재난: 예보 · 대비 · 본 사건 · 후유증
             pf = Prof.Lap("sys.Daily", pf);
+            Organs.Update(dt); Transplant.Update(dt); Infection.Update(dt); // 의료 2차 장기 · 이식 · 감염 · 격리
+            pf = Prof.Lap("sys.Organs", pf);
             Personal.Update(dt); // v18.0 옷 · 보호구 · 안경 · v18.1 편지 · v18.9 내기 · 맞바꾸기
             pf = Prof.Lap("sys.Personal", pf);
             Dock.Update(dt); Passengers.Update(dt); // v18.5 도킹 · 난파선 · v18.6 승객

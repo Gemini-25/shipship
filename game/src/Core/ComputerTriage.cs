@@ -66,6 +66,7 @@ public sealed class PowerTriage
         switch (m.Body.Type)
         {
             case FurnitureType.MainComputer: return 12; // 컴퓨터는 자기 절전으로 스스로 줄인다
+            case FurnitureType.Dialyzer or FurnitureType.Ecmo or FurnitureType.HeartPump or FurnitureType.OrganCooler or FurnitureType.BioPrinter: if (w.Organs.Guarded(m.Body)) return 12; break; // 의료 2차
             case FurnitureType.MedBed: if (w.Crew.Any(c => !c.Dead && (c.Down || c.CareBed == m.Body))) r = 11; break;
             case FurnitureType.SensorArray: if (w.Sensors.Incoming.Count > 0) r = 10; break;
             case FurnitureType.EngineCore: if (w.Propulsion.Current != null) r = 11; break;

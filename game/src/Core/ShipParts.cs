@@ -375,6 +375,8 @@ public enum FurnitureType
     MemorialWall, MusicCorner, LabStill, ClothesRack, SewingMachine, EyeWash, OxygenMaskBox, HeatSuitRack, DockClampPanel, Telescope,
     // 의료 1차
     OperatingTable, SurgicalLamp, AnesthesiaMachine, BloodFridge, MedCabinet,
+    // 의료 2차 — 장기 · 이식 · 감염 · 격리 (Organs.cs OrganGear)
+    Dialyzer, Ecmo, HeartPump, OrganCooler, BioPrinter, NegPressure,
 }
 
 public static class FurnitureTypes
@@ -453,6 +455,7 @@ public static class FurnitureTypes
         FurnitureType.OperatingTable => "수술대", FurnitureType.SurgicalLamp => "무영등", FurnitureType.AnesthesiaMachine => "마취기",
         FurnitureType.BloodFridge => "혈액 냉장고", FurnitureType.MedCabinet => "약장",
         _ => ModulesV15.Name(t) ?? ModulesV18.Name(t) ?? t.ToString(), // v15 · 압축-마
+        _ => ModulesV15.Name(t) ?? ModulesV18.Name(t) ?? OrganGear.Name(t) ?? t.ToString(), // v15 · 압축-마 · 의료 2차
     };
 
     /// <summary>올라서거나 누울 수 있는 가구.</summary>

@@ -487,6 +487,7 @@ public sealed class PowerGrid
                                     || (m.Active && m.Body.Type == FurnitureType.Refinery))
                 ? 8 : m.Spec.Priority;
             if (_world.Surgery.Holds(m)) prio = 11; // 의료 1차 수술 중인 방 — 무영등 · 마취기 · 냉장고부터
+            if (_world.Organs.Guarded(m.Body)) prio = 11; // 의료 2차 사람이 달린 기계 — 컴퓨터가 회로를 지킨다
             consumers.Add((prio, m.Demand * ComputerV15.IdleKwMul(_world, m), mc, on => mm.Powered = on)); // v15.9 전력 분배: 쉬는 설비 대기 전력
         }
         // 같은 우선순위는 설계도 순서대로 (안정 정렬). v9.2: 자동화가 꺼지면 우선순위를 모른다 — 먼저 붙은 것부터 받는다

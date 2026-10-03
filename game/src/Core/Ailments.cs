@@ -84,6 +84,13 @@ public sealed class AilmentSystem
         new("insomnia", "불면증", AilmentGroup.Mind, "하루 넘게 높은 스트레스", "잠들지 못한다 — 자도 덜 쉰다", 4f, 0.5f, Chronic: true, Stress: 0.01f, Sleep: 0.4f, Cure: Cure.Company),
         new("depression", "우울증", AilmentGroup.Mind, "낮은 사기 · 슬픔 · 깊은 상처", "아무것도 하기 싫다 — 손이 느리다", 8f, 0.5f, Chronic: true, Stress: 0.02f, Work: 0.25f, Sleep: 0.15f, Cure: Cure.Company),
         new("ptsd", "외상 후 스트레스", AilmentGroup.Mind, "아주 무서운 일을 겪음 (긴장 60% 넘음)", "악몽 · 작은 일에도 놀란다 — 공황이 잦다", 10f, 0.5f, Chronic: true, Stress: 0.02f, Sleep: 0.2f, Panic: 1.2f, Cure: Cure.Company),
+        // 의료 2차 — 장기가 상해 생기는 것 (OrganSystem 이 세기를 맞춘다 · 약으로는 낫지 않는다 — 기계 · 이식 · 시간)
+        new("lungfail", "폐 부전", AilmentGroup.Body, "연기 · 유독 가스 · 감압 · 폐렴 · 큰 피폭으로 상한 폐", "숨이 차다 — 조금만 걸어도 헐떡인다", 999f, 0.6f, Chronic: true, Rest: 0.07f, Stress: 0.02f, Work: 0.3f, Walk: 0.35f, Health: 0.03f, Cure: Cure.None),
+        new("heartfail", "심부전", AilmentGroup.Body, "멎었던 심장 · 감전 · 가슴을 크게 다침 · 오래 상한 폐", "쉽게 지치고 발목이 붓는다 — 가슴이 두근거린다", 999f, 0.6f, Chronic: true, Rest: 0.06f, Stress: 0.02f, Work: 0.25f, Walk: 0.35f, Health: 0.03f, Cure: Cure.None),
+        new("liverfail", "간부전", AilmentGroup.Body, "식중독 · 약을 너무 많이 씀 · 큰 피폭", "눈이 누렇고 가렵다 — 기운이 없다", 999f, 0.6f, Chronic: true, Rest: 0.05f, Stress: 0.03f, Work: 0.25f, Walk: 0.1f, Health: 0.03f, Cure: Cure.None),
+        new("kidneyfail", "신부전", AilmentGroup.Body, "탈수 · 결석 · 쇼크 · 식중독 · 약 · 큰 피폭", "얼굴과 다리가 붓고 메스껍다 — 투석을 거르면 정신이 흐려진다", 999f, 0.6f, Chronic: true, Rest: 0.05f, Stress: 0.02f, Work: 0.2f, Walk: 0.25f, Health: 0.02f, Sleep: 0.15f, Cure: Cure.None),
+        new("sepsis", "패혈증", AilmentGroup.Body, "곪은 상처를 오래 둠 · 수술 부위 감염 · 면역억제제", "고열 · 오한 · 숨이 가쁘다 — 몸 곳곳의 장기가 상한다", 6f, 0.8f, Chronic: true, Rest: 0.1f, Stress: 0.04f, Work: 0.5f, Walk: 0.4f, Health: 0.08f, Panic: 0.15f, Cure: Cure.Medic),
+        new("rejection", "거부반응", AilmentGroup.Body, "이식받은 장기를 몸이 밀어낸다 (면역억제제를 거르면)", "열 · 이식 부위가 붓고 아프다", 999f, 0.5f, Chronic: true, Rest: 0.04f, Stress: 0.03f, Work: 0.15f, Health: 0.02f, Cure: Cure.None),
     };
 
     /// <summary>열병 포함 30가지.</summary>

@@ -266,6 +266,13 @@ public static class Icons
         // 의료 1차
         FurnitureType.OperatingTable => "operating-table", FurnitureType.SurgicalLamp => "surgical-lamp", FurnitureType.AnesthesiaMachine => "anesthesia-machine",
         FurnitureType.BloodFridge => "blood-fridge", FurnitureType.MedCabinet => "med-cabinet",
+        // 의료 2차
+        FurnitureType.Dialyzer => "dialyzer",
+        FurnitureType.Ecmo => "ecmo",
+        FurnitureType.HeartPump => "heart-pump",
+        FurnitureType.OrganCooler => "organ-cooler",
+        FurnitureType.BioPrinter => "bio-printer",
+        FurnitureType.NegPressure => "neg-pressure",
         _ => "parts",
     };
 
@@ -305,6 +312,10 @@ public static class Icons
         // 의료 1차
         ItemKind.Painkiller => "painkiller", ItemKind.Antibiotic => "antibiotic", ItemKind.Anesthetic => "anesthetic",
         ItemKind.BloodSubstitute => "blood-substitute", ItemKind.MedHerb => "med-herb",
+        // 의료 2차
+        ItemKind.Immunosuppressant => "immunosuppressant",
+        ItemKind.Dialysate => "dialysate",
+        ItemKind.BioInk => "bio-ink",
         _ => "materials",
     };
 

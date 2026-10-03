@@ -457,6 +457,7 @@ public static class SaveGame
         w.Music.Hash(I, F); w.Curios.Hash(I, F); // v17.6 음악 · v17.9 숨은 것 · 도감
         w.Grades.Hash(I, F); // 부상 등급
         w.Surgery.Hash(I, F); w.Blood.Hash(I, F); w.Pharmacy.Hash(I, F); w.Recovery.Hash(I, F); // 의료 1차
+        w.Organs.Hash(I, F); w.Transplant.Hash(I, F); w.Infection.Hash(I, F); // 의료 2차
         return h;
     }
 }
