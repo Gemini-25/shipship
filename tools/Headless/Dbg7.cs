@@ -53,6 +53,22 @@ public static partial class Program
             foreach (var b in w.Volatile.Blasts) Console.WriteLine($"{SimTime.Clock(b.Tick)} d{b.Tick / SimTime.TicksPerDay} {w.Ship.RoomAt(b.At)?.Name} {b.Power:0.00} {b.Cause}");
             foreach (var h in w.History.Events.Where(h => w.Volatile.Blasts.Count > 0 && h.Tick > w.Volatile.Blasts[0].Tick - SimTime.Hours(3) && h.Tick <= w.Volatile.Blasts[0].Tick + SimTime.Minutes(5))) Console.WriteLine($"  {SimTime.Clock(h.Tick)} {h.Text}");
         }
+        if (which == "stall")
+        {
+            var w = DayOne(seed, "Kestrel"); w.CrewCanDie = true;
+            var d = w.Ship.Doors.Where(x => !x.IsExternal && x.RoomA != null && x.RoomB != null && !x.MotorBroken).OrderBy(x => x.Id).First();
+            var solo = w.Crew.Where(c => c.CanAct).OrderByDescending(c => c.SkillLevel(Skill.Engineering)).First();
+            foreach (var o in w.Crew.Where(o => o != solo)) o.Away = true;
+            w.Fixtures.BreakDoor(d, "구동기 모터 탐");
+            w.Board.RequestScan();
+            for (int m = 0; m < 14 * 60 && d.MotorBroken; m += 20)
+            {
+                Run(w, SimTime.Minutes(20));
+                var o = w.Board.All.FirstOrDefault(o => o.Kind == WorkKind.RepairDoor && !o.Closed);
+                var dist = w.Paths.Flood(solo.Cell, solo.PathProfile);
+                Console.WriteLine($"{SimTime.Clock(w.Tick)} {solo.Name} {solo.ActivityLabel} · order {(o == null ? "-" : $"u{o.Urgency:0.00} asg {o.Assignee?.Name} blk {o.BlockedReason} until {(o.BlockedUntil > w.Tick ? SimTime.Clock(o.BlockedUntil) : "-")} prog {o.Progress:0.00} ap {ChoresActivity.Appeal(solo, w, o, dist, out _):0.00} av {w.Board.AvailableTo(solo).Contains(o)}")} · ev[{string.Join(", ", solo.LastEvaluations.Take(3).Select(e => $"{e.Activity?.Label} {e.Score:0.00}"))}] solos {w.Coop.Stats.Solos} holds {w.Coop.Stats.Holds}");
+            }
+        }
         if (which == "chess")
         {
             var w = DayOne(seed, "Hanbit");

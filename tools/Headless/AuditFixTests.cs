@@ -80,7 +80,8 @@ public static partial class Program
         int releases = 0;
         CrewMember? last = null;
         WorkOrder? order = null;
-        for (int m = 0; m < 14 * 60 && d.MotorBroken; m++)
+        // 통합8 서두를 일이 아니라 비번엔 손대지 않는다 (배우기 · 실험 뒤로 미루다 오후에야 잡으면 두 번째 시도는 다음 근무) — 하루 반을 기다린다
+        for (int m = 0; m < 36 * 60 && d.MotorBroken; m++)
         {
             Run(w, SimTime.Minutes(1));
             order ??= w.Board.All.FirstOrDefault(o => o.Kind == WorkKind.RepairDoor && !o.Closed);

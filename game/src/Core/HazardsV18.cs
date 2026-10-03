@@ -716,8 +716,10 @@ public sealed class HazardSignSystem
     public bool HasSeen(CrewMember c, HazardKind k) => Seen.Contains(SeenKey(c.Id, k));
     internal void Witness(CrewMember c, HazardKind k) { if (HazardsV18.Is(k)) Seen.Add(SeenKey(c.Id, k)); }
 
-    public void AddTrace(HazardKind k, Room r, Cell at, int who, long life)
+    public void AddTrace(HazardKind k, Room? r, Cell at, int who, long life)
     {
+        r ??= _w.Ship.RoomAt(at); // 통합8 문간에 선 사람은 방이 없다 (c.Room!) — 그 칸의 방으로, 그것도 없으면 흔적을 남기지 않는다
+        if (r == null) return;
         Traces.Add(new IncidentTrace { Id = _nextId++, Kind = k, RoomId = r.Id, At = at, Tick = _w.Tick, Until = _w.Tick + life, Who = who });
         Stats.Traces++;
         MarkLog.Add(r.Marks, _w.Tick, $"{Hazards.Name(k)} — {HazardsV18.Of(k)?.Trace}");
