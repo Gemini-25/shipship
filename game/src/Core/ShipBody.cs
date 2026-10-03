@@ -973,7 +973,7 @@ public sealed class BodyUpkeepActivity : Activity
         foreach (var (i, s) in b.Marks)
         {
             var cell = w.Ship.Grid.CellAt(i);
-            if (s.V[(int)CellMark.Glass] > 0.2f) Consider(Task.Glass, cell, cell, 0.45f);
+            if (s.V[(int)CellMark.Glass] > 0.2f) { if (!w.Maneuver.Leaves(cell)) Consider(Task.Glass, cell, cell, 0.45f); } // v17.0 식탁 밑 기동 조각은 밥 먹은 사람이 빗자루로
             else if (s.V[(int)CellMark.Oil] > 0.3f) Consider(Task.Oil, cell, cell, 0.3f);
             else if (s.V[(int)CellMark.Soot] > 0.4f && w.Fire.Count == 0) Consider(Task.Soot, cell, cell, 0.18f); // 불 꺼진 뒤 그을음 닦기
             else if (s.V[(int)CellMark.Wet] > 0.4f && b.SlipAt(i) > 0.35f && w.Ship.RoomAt(cell) is Room wr && MoistureSystem.Depth(wr) <= 0.004f)
