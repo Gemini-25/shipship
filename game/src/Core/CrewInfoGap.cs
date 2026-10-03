@@ -539,7 +539,8 @@ public sealed partial class InfoSystem
         var w = _w;
         Found(c, b, "사물함에 들어 있었다. 누가 치워 줬나 보다", false);
         Stats.Tidied++;
-        if (Chat.CannotRead(c) == null)
+        // 통합7 제 단말을 침실에 두고 왔거나 손이 바빠도 사물함 곁 벽 단말로는 물을 수 있다 (자거나 쓰러졌으면 못 묻는다)
+        if (Chat.CannotRead(c) is not string cant || cant.StartsWith("단말") || cant.StartsWith("손이"))
         {
             bool messy = Life.Has(c, Habit.Messy) || Life.Has(c, Habit.ShortTempered);
             Chat.Post(c, ChatKind.Ask, messy ? ShipChat.Voice(c, $"내 {b.Name} 누가 치웠어? 하던 거였는데", $"제 {b.Name} 누가 치우셨나요? 쓰던 중이었습니다")

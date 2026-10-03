@@ -43,6 +43,14 @@ public sealed partial class MatterSystem
             t.ClaimedBy = -1;
             _carryJob.Remove(t.Id);
             Place(t, at);
+            // 통합7 컴퓨터가 짚은 히터 곁 천을 들고 가다 다른 일로 손을 놓았어도, 열에서 두 칸 넘게 떼어 놓았으면 경고는 지킨 것이다
+            if (t.Flagged && c != null && _carryFrom.TryGetValue(t.Id, out var from) && Math.Max(Math.Abs(from.X - at.X), Math.Abs(from.Y - at.Y)) >= 2 && !Hot(t))
+            {
+                t.Flagged = false;
+                Stats.HeededWarns++;
+                Stats.MovedFromHeat++;
+                w.Log.Add(w.Tick, LogKind.Work, $"{Ko.EulReul(t.Name)} 열에서 떼어 내려놓았다", c.Id);
+            }
         }
     }
 

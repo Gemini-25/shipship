@@ -226,9 +226,11 @@ public sealed partial class ShipOriginSystem
         if (Rough < 0.55f || w.Culture.Of(CustomKind.MaintainerWay) != null) return;
         int faults = w.Ship.Machines.Sum(m => m.FaultCount) - _faults0;
         var walkers = w.Crew.Where(c => !c.Dead && RoundsBy(c) >= 2).OrderBy(c => c.Id).ToList();
-        if (faults < 2 || walkers.Count < 2) return;
+        // 통합7 한 바퀴 돌며 먼저 잡아 고장이 안 난 것도 겪은 일이다 (잘 막을수록 고장 수가 모자라 관행이 안 생기던 것)
+        if (faults + Stats.RoundFixes < 2 || walkers.Count < 2) return;
         var hero = walkers.OrderByDescending(c => RoundsBy(c)).ThenByDescending(c => c.RawSkill(Skill.Mechanics)).First();
-        var cu = w.Culture.Adopt(CustomKind.MaintainerWay, $"고물 배 — 고장이 {faults}번 나는 동안 {Ko.IGa(hero.Name)} 아침마다 한 바퀴 돌며 소리로 먼저 찾았다", hero.Name);
+        var cu = w.Culture.Adopt(CustomKind.MaintainerWay, faults >= 2 ? $"고물 배 — 고장이 {faults}번 나는 동안 {Ko.IGa(hero.Name)} 아침마다 한 바퀴 돌며 소리로 먼저 찾았다"
+            : $"고물 배 — {Ko.IGa(hero.Name)} 아침마다 한 바퀴 돌며 고장 날 곳 {Stats.RoundFixes}군데를 소리로 먼저 찾아 손봤다", hero.Name);
         cu.Followers.Clear(); cu.Knowers.Clear();
         foreach (var c in walkers) { cu.Followers.Add(c.Id); cu.Knowers.Add(c.Id); }
         Stats.CultureBorn++;
