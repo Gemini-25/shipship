@@ -10,7 +10,7 @@ public static partial class Program
     {
         _fails = 0;
         float p0 = Storyteller.PersonaValue, l0 = Storyteller.LevelValue;
-        Console.WriteLine($"로봇·드론 25 · 이야기꾼 8 점검 (v15.7) · 시드 {seed}\n");
+        Console.WriteLine($"로봇·드론 27 · 이야기꾼 8 점검 (v15.7) · 시드 {seed}\n");
         try
         {
             // 0) 목록
@@ -241,7 +241,7 @@ public static partial class Program
         }
         catch (Exception e) { Console.WriteLine(e); _fails++; }
         finally { Storyteller.PersonaValue = p0; Storyteller.LevelValue = l0; }
-        Console.WriteLine(_fails == 0 ? "\n✔ 로봇·드론 25 · 이야기꾼 8 점검 모두 통과" : $"\n✘ {_fails}개 실패");
+        Console.WriteLine(_fails == 0 ? "\n✔ 로봇·드론 27 · 이야기꾼 8 점검 모두 통과" : $"\n✘ {_fails}개 실패");
         return _fails == 0 ? 0 : 1;
     }
 
