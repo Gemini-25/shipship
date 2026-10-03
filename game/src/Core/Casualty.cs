@@ -166,6 +166,7 @@ public sealed class CasualtySystem
         long now = w.Tick;
         float min = (now - t.Since) / (float)SimTime.TicksPerHour * 60f;
         // 치료받았다 · 치료 침대 · 업혀 가는 사람이 누르고 있다
+        if (w.Surgery.Internal(t)) { w.Surgery.TendInternal(c, t, dt); return; } // 의료 1차 배 속 출혈은 누르거나 침대로는 못 멎는다 — 개복해야
         if (c.Vitals.TreatedTick >= t.Since && t.Kind != TraumaKind.Arrest) { Stop(c, t, "치료로 멎었다", null); return; }
         if (c.CareBed?.Machine is Machine bed && bed.Efficiency > 0f) { if (t.Kind == TraumaKind.Arrest) Revived++; Stop(c, t, t.Kind == TraumaKind.Arrest ? "치료 침대가 심장을 다시 뛰게 했다" : "치료 침대에서 멎었다", null); return; }
         // 걸을 수 있으면 의무실까지 가서 스스로 감싼다 (걷지 못하는 사람 · 갇힌 사람 · 멀리 있는 사람은 못 한다)

@@ -38,7 +38,7 @@ public sealed partial class WorkBoard
         foreach (var c in w.Growth.NoRehab ? new List<CrewMember>() : alive)
         {
             var v = c.Vitals;
-            if (v.Injury < 0.12f && v.Scar <= v.ScarFloor + 0.005f) continue;
+            if (v.Injury < 0.12f && v.Scar <= v.ScarFloor + 0.005f && !w.Recovery.NeedsRehab(c)) continue; // 의료 1차 손이 굳음 · 다리 절음도
             if (v.Injury > 0.55f || v.Health < 0.45f || c.CareBed != null) continue; // 아직 누워 있어야 한다
             if (v.Injury >= 0.3f && v.TreatedTick <= 0) continue; // 치료가 먼저 (가벼운 부상은 바로 재활)
             if (w.Tick - c.LastRehab < SimTime.Hours(20)) continue;
@@ -85,7 +85,7 @@ public sealed partial class WorkBoard
 
     /// <summary>재활할 곳: 의무실 → 휴게실.</summary>
     internal static Room? RehabRoom(World w) =>
-        w.Ship.RoomsOf(RoomType.Medbay).Concat(w.Ship.RoomsOf(RoomType.Lounge))
+        w.Ship.Rooms.Where(r => r.Kind == RoomType.Gym).Concat(w.Ship.RoomsOf(RoomType.Medbay)).Concat(w.Ship.RoomsOf(RoomType.Lounge)) // 의료 1차 체육관부터
             .FirstOrDefault(r => !r.Detached && !r.Abandoned && !r.OffLimits && !r.Leaking && Atmosphere.Danger(r) < 0.1f && w.Fire.CountIn(r) == 0);
 }
 

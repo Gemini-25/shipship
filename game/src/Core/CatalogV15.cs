@@ -92,6 +92,9 @@ public static class ItemsV15
         (ItemKind.Vitamin, "비타민", ItemTier.Supply), (ItemKind.Gloves, "작업 장갑", ItemTier.Supply), (ItemKind.Rag, "걸레", ItemTier.Supply),
         (ItemKind.CellPack, "예비 셀", ItemTier.Supply), (ItemKind.Thread, "실", ItemTier.Supply), (ItemKind.Paint, "페인트", ItemTier.Supply),
         (ItemKind.Desiccant, "제습제", ItemTier.Supply), (ItemKind.Mesh, "철망", ItemTier.Supply),
+        // 의료 1차
+        (ItemKind.Painkiller, "진통제", ItemTier.Supply), (ItemKind.Antibiotic, "항생제", ItemTier.Supply), (ItemKind.Anesthetic, "마취제", ItemTier.Supply),
+        (ItemKind.BloodSubstitute, "혈액 대용제", ItemTier.Supply), (ItemKind.MedHerb, "약초", ItemTier.Supply),
     };
 
     public static string? Name(ItemKind k) => Rows.Where(r => r.k == k).Select(r => r.name).FirstOrDefault();
@@ -139,6 +142,12 @@ public static class ItemsV15
         new(ItemKind.Bandage, In((ItemKind.Produce, 2)), 0.5f, Skill.Medicine, Station.Workbench, 0, Yield: 2),
         new(ItemKind.Rag, In((ItemKind.Produce, 1)), 0.3f, Skill.Mechanics, Station.Workbench, 0, Yield: 2),
         new(ItemKind.Mesh, In((ItemKind.MetalOre, 1)), 0.5f, Skill.Mechanics, Station.Refinery, 0),
+        // 의료 1차 — 재배실 채소에서 약초를 고르고 · 약초로 진통제 · 항생제 · 원료로 마취제 · 혈액 대용제 (목표는 PharmacySystem.Want가 올린다)
+        new(ItemKind.MedHerb, In((ItemKind.Produce, 2)), 0.5f, Skill.Botany, Station.Workbench, 0, Yield: 2),
+        new(ItemKind.Painkiller, In((ItemKind.MedHerb, 1)), 0.6f, Skill.Medicine, Station.Workbench, 0, MinSkill: 0.2f, Yield: 2),
+        new(ItemKind.Antibiotic, In((ItemKind.MedHerb, 2), (ItemKind.Carbon, 1)), 1.2f, Skill.Medicine, Station.Workbench, 0, MinSkill: 0.35f),
+        new(ItemKind.Anesthetic, In((ItemKind.Carbon, 1), (ItemKind.Ice, 1)), 1f, Skill.Medicine, Station.Refinery, 0, MinSkill: 0.3f),
+        new(ItemKind.BloodSubstitute, In((ItemKind.Ice, 2), (ItemKind.Silicate, 1)), 1f, Skill.Medicine, Station.Refinery, 0, MinSkill: 0.25f),
     };
 
     /// <summary>처음 싣는 양 (빈 선반 자리만큼 — 모자라면 그때 만든다).</summary>

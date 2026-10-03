@@ -369,6 +369,7 @@ public static partial class WorkPlanners
     private static Job? ChangeCourse(Activity a, WorkOrder o, CrewMember c, World w, DistanceField dist, Cell at, out string? blocked)
     {
         blocked = null;
+        if (w.Surgery.BurnHeld) { blocked = "수술이 끝날 때까지 점화를 미뤘다"; return null; } // 의료 1차
         var to = (ZoneKind)o.Circuit;
         var toils = Plans.DropOff(c, w, dist);
         toils.Add(new GotoToil(at));

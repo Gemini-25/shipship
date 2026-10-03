@@ -50,6 +50,8 @@ public enum ItemKind
     Membrane, Thermostat, Diode, Spring, Hose, Clamp, Gear, Bushing, Fiber, Lamp, Thermocouple, Solenoid,
     Solvent, Tape, Glue, Nutrient, Seed, Soap, Detergent, Disinfectant, Bandage, Coffee, TeaLeaf, Spice,
     Vitamin, Gloves, Rag, CellPack, Thread, Paint, Desiccant, Mesh,
+    // 의료 1차
+    Painkiller, Antibiotic, Anesthetic, BloodSubstitute, MedHerb,
 }
 
 /// <summary>재료 등급 (리뷰어 안: 원료 → 기본 수리재 → 일반 부품 → 고급 부품).</summary>

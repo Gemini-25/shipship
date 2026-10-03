@@ -425,6 +425,12 @@ public static class TechLookTable
         K(FurnitureType.HeatSuitRack, Improv.Rope, Trim.Anodized, 0xd8a830ff, "quilt@.15,.4", "tank@.2,.85 fins@.8,.6", "shroud@.45,.4 coil@.9,.1"),
         K(FurnitureType.DockClampPanel, Improv.JumperWire, Trim.HaloRing, 0x5ec8e6ff, "valve@.4,.5", "holo@.4,.5 gauges@.15,.15", "field@.5,.5 plating@.9,.9"),
         K(FurnitureType.Telescope, Improv.Shim, Trim.GlassFace, 0x9ac8ffff, "rotor@.5,.62", "screen@.2,.75 antenna@.8,.2", "dish@.8,.2 core@.5,.62"),
+        // 의료 1차
+        K(FurnitureType.OperatingTable, Improv.Rope, Trim.Chevron, 0x9ae8d8ff, "cushion@.5,.5", "arm@.1,.5 screen@.9,.15", "holo@.5,.2 rail@.5,.95"),
+        K(FurnitureType.SurgicalLamp, Improv.JumperWire, Trim.HaloRing, 0xfff4d8ff, "lamp@.5,.5", "arm@.5,.9 glass@.5,.5", "field@.5,.5 cells@.9,.9"),
+        K(FurnitureType.AnesthesiaMachine, Improv.HoseClamp, Trim.GlassFace, 0x8ad0ffff, "tank@.2,.7", "gauges@.7,.2 pipeloop@.5,.8", "screen@.7,.3 filter@.2,.3"),
+        K(FurnitureType.BloodFridge, Improv.DripCan, Trim.EdgeGlow, 0xff5a5aff, "glass@.5,.5", "fins@.5,.95 gauges@.85,.1", "cells@.15,.15 holo@.5,.4"),
+        K(FurnitureType.MedCabinet, Improv.Shim, Trim.Pinstripe, 0x7ae0a0ff, "drawers@.5,.8", "glass@.5,.35 lamp@.5,.05", "chip@.9,.5 shroud@.5,.5"),
     };
 
     private static Dictionary<FurnitureType, TierKit>? _kits;
