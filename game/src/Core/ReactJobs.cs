@@ -11,6 +11,22 @@ namespace ShipSim.Core;
 
 public sealed partial class ReactSystem
 {
+    /// <summary>연기 · 탄내를 쫓아 도착: 불이 보이면 소리치고 (그 방 불은 이제 알려진다 — 불 쪽이 맡는다) · 연기만 짙으면 그렇다고 말한다.</summary>
+    private void Arrived(CrewMember cm, ReactState st, ReactAct act)
+    {
+        var w = _w;
+        if (cm.Room is not Room at) return;
+        st.LookAt = act.Face == default ? at.Center : act.Face;
+        if (act.Way == "smoke_seek") Stats.SmokeSeek++;
+        int fires = w.Fire.CountIn(at);
+        string[] pool;
+        if (fires > 0) { Stats.SmokeFound++; Gest(st, Gesture.Call, Short); pool = new[] { $"{at.Name}에 불이야!", "불이다 — 여기야, 여기!", "불 났어! 소화기 가져와!" }; }
+        else if (at.Air.Smoke > 0.08f) { Gest(st, Gesture.Cough, Short); pool = new[] { "여기서 나는 것 같은데…", "연기가 여기 더 짙어", "불은 안 보이는데 연기가 이쪽이야" }; }
+        else if (act.Way == "burnt_check") { Gest(st, Gesture.Sniff, Short); pool = at.Type == RoomType.Galley ? new[] { "누가 냄비를 올려놓고 갔네", "바닥이 눌었다 — 불은 껐어", "다 탔네, 아깝다" } : new[] { "여기는 아닌가 봐" }; }
+        else { Gest(st, Gesture.Shrug, Short); pool = new[] { "여기는 아니네", "벌써 빠졌나 봐", "이상하다, 아무것도 없는데" }; }
+        Speak(cm, st, act.For, pool, at, "", quiet: fires == 0);
+    }
+
     internal Job? MakeJob(Activity a, CrewMember c, ReactState s, ReactAct act, DistanceField dist)
     {
         var w = _w;
@@ -22,6 +38,8 @@ public sealed partial class ReactSystem
             Stir.Dark => room != null && (room.Dark || PortableSystem.Unlit(room)),
             Stir.Cold => (c.Room?.Air.Temperature ?? 20f) < 18.5f,
             Stir.Heat => (c.Room?.Air.Temperature ?? 20f) > 25f,
+            Stir.Smoke => act.Way == "smoke_leave" && room != null && room.Air.Smoke > 0.04f,
+            Stir.Smell => act.Way == "foul_leave",
             _ => true,
         };
         switch (act.Kind)
@@ -65,8 +83,11 @@ public sealed partial class ReactSystem
                 var g = act.Way switch
                 {
                     "window" => Gesture.Window, "screen" => Gesture.Screen, "huddle" => Gesture.Huddle, "heater" => Gesture.RubHands,
-                    "fan" => Gesture.FanSelf, "follow" => Gesture.Look, "warm_room" => Gesture.RubHands, _ => Gesture.WipeBrow,
+                    "fan" => Gesture.FanSelf, "follow" => Gesture.Look, "warm_room" => Gesture.RubHands,
+                    "smoke_seek" => Gesture.Look, "smoke_leave" or "foul_leave" => Gesture.CoverNose, "follow_nose" or "burnt_check" => Gesture.Sniff, _ => Gesture.WipeBrow,
                 };
+                // 연기를 쫓아간 사람 · 냄새를 따라간 사람은 잠깐 보고 끝 · 피한 사람은 원래 방이 맑아질 때까지
+                int stay = act.Way switch { "smoke_seek" or "burnt_check" => SimTime.Minutes(3), "follow_nose" => SimTime.Minutes(8), _ => SimTime.Minutes(25) };
                 int target = act.Target;
                 bool sit = act.Way is "huddle" or "warm_room" or "cool_room";
                 toils.Add(new DoToil((cm, world) =>
@@ -76,9 +97,11 @@ public sealed partial class ReactSystem
                     Gest(st, g, SimTime.Minutes(25));
                     st.LookAt = act.Face == default ? null : act.Face;
                     if (act.Way is "warm_room" or "cool_room") { st.Way = act.Way; st.WayFor = act.For; st.WaySince = world.Tick; }
+                    if (act.Way is "smoke_seek" or "burnt_check") Arrived(cm, st, act);
+                    if (act.Way == "smoke_leave") Stats.SmokeFled++;
                     return true;
                 }));
-                toils.Add(new WaitToil(SimTime.Minutes(25), sit ? Pose.Sitting : Pose.Standing, act.Face == default ? null : act.Face, SimTime.Minutes(4))
+                toils.Add(new WaitToil(stay, sit ? Pose.Sitting : Pose.Standing, act.Face == default ? null : act.Face, SimTime.Minutes(4))
                 {
                     DoneWhen = (cm, world) => !StillBad(world) || act.Way == "huddle" && (Crew(target) is not CrewMember o || o.IsMoving || !o.CanAct),
                     EveryTick = (cm, world) => { var st = Of(cm); if (world.Tick + 2 > st.GUntil) st.GUntil = world.Tick + 3; },

@@ -87,6 +87,55 @@ public sealed partial class ReactSystem
                     Stats.Advice++;
                 }
             }
+        SmokeMind();
+    }
+
+    /// <summary>기침하는 사람이 여럿인데 그 방엔 불이 없다: 연기가 어디서 오는지 옆방을 짚고 (감지기가 꺼진 방이면) 가 볼 사람을 부른다.</summary>
+    private readonly Dictionary<int, int> _smokeCalls = new();
+
+    /// <summary>"가 봐 주세요" 방송을 들은 사람: 대담하거나 성실한 사람 하나가 그 방으로 간다 (나머지는 들은 척만).</summary>
+    private bool AnswerCall(CrewMember c, ReactState s, Broadcast b)
+    {
+        if (!_smokeCalls.TryGetValue(b.Id, out int rid) || rid < 0 || rid >= _w.Ship.Rooms.Count) return false;
+        var src = _w.Ship.Rooms[rid];
+        if (c.Room == src || c.Traits.Bravery + c.Traits.Diligence < 0.9f || Life.Has(c, Habit.Procrastinator) || FreeNear(src, src.Center) is not Cell sc) return false;
+        _smokeCalls[b.Id] = -1;
+        Plan(c, s, new ReactAct { Kind = ReactKind.Move, For = Stir.Smoke, To = sc, Face = src.Center, Target = src.Id, Label = $"방송 듣고 {src.Name}에 가 본다", Way = "smoke_seek", Score = 0.6f, Until = _w.Tick + SimTime.Minutes(30) });
+        return true;
+    }
+
+    private void SmokeMind()
+    {
+        var w = _w;
+        var a = w.Automation;
+        Dictionary<int, int>? cough = null;
+        for (int k = Notes.Count - 1; k >= 0; k--)
+        {
+            var n = Notes[k];
+            if (w.Tick - n.Tick > SimTime.Minutes(20)) break;
+            if (n.Stir != Stir.Smoke || n.Room < 0) continue;
+            cough ??= new();
+            cough[n.Room] = cough.GetValueOrDefault(n.Room) + 1;
+        }
+        if (cough == null) return;
+        var ship = w.Ship;
+        for (int i = 0; i < ship.Rooms.Count; i++)
+        {
+            int nc = cough.GetValueOrDefault(i);
+            var room = ship.Rooms[i];
+            if (nc < 2 || !room.DataLinked || w.Fire.CountIn(room) > 0 || !Due(100000 + i)) continue;
+            var src = Smokier(room);
+            bool blind = src != null && (!src.Powered || !src.DataLinked);
+            string where = src != null ? $"{src.Name} 쪽에서 연기가 들어옵니다" : "연기가 어디서 오는지 아직 모릅니다";
+            string ask = blind ? $"{src!.Name} 감지기가 꺼져 있습니다 — 손 비는 분이 가 봐 주세요" : "문을 닫고 입을 가리세요";
+            if (a.Book.Add(ActKind.Advice, room, $"{room.Name} — 기침하는 사람 {nc}명", "어딘가 타고 있을 수 있다", "연기 안내 방송", src?.Name ?? "환기", $"react:smoke:{i}", SimTime.Hours(1), 50f) != null)
+            {
+                var b = a.Speak.Announce($"{room.Name}에 {where} — {ask}", room, blind ? 1 : 0);
+                if (b != null && blind) _smokeCalls[b.Id] = src!.Id; // 들은 사람 하나가 가 본다
+                Stats.Advice++;
+                Stats.SmokeAdvice++;
+            }
+        }
     }
 
     private bool Due(int key)
