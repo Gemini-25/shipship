@@ -155,8 +155,13 @@ public sealed partial class ValueSystem
                 return sci == null ? null : (sci.Id, -1, $"{Ko.IGa(sci.Name)} 해 보고 싶은 실험이 있다 — 잘되면 배가 나아지고 잘못되면 불꽃이 튄다", 0);
             }
             case "trust_machine":
+            {
                 if (!w.Automation.Present || w.Automation.Trusts.Spread() < 0.3f || !R.Chance(0.06f)) return null;
-                return (-1, -1, "컴퓨터는 이쪽, 현장 사람들은 저쪽이라 한다", 0);
+                var worn = w.Ship.Machines.Where(m => m.Condition < 0.6f).OrderBy(m => m.Condition).FirstOrDefault();
+                string what = worn != null ? $"{worn.Name} — 컴퓨터는 지금 세우자 하고, 현장 사람들은 이번 항로까지 버틴다고 한다"
+                    : "항로 — 컴퓨터는 먼 길로 돌자 하고, 조타 쪽 사람들은 지름길이 낫다고 한다";
+                return (-1, worn?.Body.Room.Id ?? -1, what, 0);
+            }
             case "ration_who":
             {
                 if (FoodPolicy.FoodDays(w) > 3f || w.Policies["rations"] is 1 or 2) return null;
@@ -199,7 +204,8 @@ public sealed partial class ValueSystem
             {
                 float h = SimTime.HourOfDay(w.Tick);
                 if (h is > 4f and < 22f || ad.Average(c => c.Needs.Rest) > 0.45f || !R.Chance(0.04f)) return null;
-                return (-1, -1, "고장 난 설비가 아침까지 버틸지 모른다", 0);
+                var worn = w.Ship.Machines.Where(m => m.Condition < 0.5f).OrderBy(m => m.Condition).FirstOrDefault();
+                return (-1, worn?.Body.Room.Id ?? -1, worn != null ? $"{Ko.IGa(worn.Name)} 아침까지 버틸지 모른다" : "삐걱대는 설비가 아침까지 버틸지 모른다", 0);
             }
             case "refugees":
                 if (leg != LegKind.Port || w.Crew.Count(c => !c.Dead) >= World.MaxCrew - 1 || !R.Chance(0.25f)) return null;
@@ -254,7 +260,11 @@ public sealed partial class ValueSystem
             else if (d.Stage == 1)
             {
                 var m = d.Motion >= 0 ? w.Motions.Get(d.Motion) : null;
-                if (m == null || m.Stage == MotionStage.Dropped || w.Tick - d.Raised > SimTime.TicksPerDay * 2 && m.Stage != MotionStage.Sitting) DecideNow(d);
+                if (m == null || m.Stage == MotionStage.Dropped || w.Tick - d.Raised > SimTime.TicksPerDay * 2 && m.Stage != MotionStage.Sitting)
+                {
+                    if (m != null && m.Stage is MotionStage.Signing or MotionStage.Ready) m.Stage = MotionStage.Dropped; // 회의를 기다릴 수 없어 선장이 정한다
+                    DecideNow(d);
+                }
             }
         }
     }

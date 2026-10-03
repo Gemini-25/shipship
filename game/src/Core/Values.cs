@@ -72,7 +72,18 @@ public sealed partial class ValueSystem
     private readonly SortedDictionary<int, Outlook> _o = new();
     public ValueStats Stats { get; } = new();
     private long _next, _nextSlow, _nextDay;
-    private long _policySeen = -1, _decisionSeen = -1, _motionSeen = -1;
+    private int _policySeen;
+    private long _decisionSeen = -1, _motionSeen = -1;
+    private int _decisionSeenN, _motionSeenN, _motionCount;
+
+    /// <summary>같은 틱에 여럿이 생겨도 하나도 빠뜨리지 않고 새것만 (틱 순서 · 같은 틱 안에서는 순번).</summary>
+    private static bool Fresh(long tick, ref long seen, ref int seenN, ref int atSeen)
+    {
+        if (tick < seen) return false;
+        if (tick == seen) { atSeen++; if (atSeen <= seenN) return false; seenN++; return true; }
+        seen = tick; seenN = 1; atSeen = 1;
+        return true;
+    }
 
     public ValueSystem(World w) => _w = w;
 
@@ -328,12 +339,13 @@ public sealed partial class ValueSystem
     {
         var w = _w;
         // 방침: 바라던 쪽으로 바뀌면 좋아하고, 지키고 싶던 쪽이 바뀌면 싫어한다
-        foreach (var ch in w.Policies.Changes)
+        for (int pi = _policySeen; pi < w.Policies.Changes.Count; pi++)
         {
-            if (ch.Tick <= _policySeen) continue;
-            _policySeen = ch.Tick;
+            var ch = w.Policies.Changes[pi];
+            _policySeen = pi + 1;
             if (_skipPolicy == ch.Id + ":" + ch.To) { _skipPolicy = ""; continue; }
-            int by = ch.Yes + ch.No > 0 ? -2 : w.Command.CaptainId >= 0 ? w.Command.CaptainId : -1;
+            if (ch.Why.Contains("관찰자") || ch.Why.Contains("시험")) continue;
+            int by = ch.Why.Contains("주 컴퓨터") ? -1 : ch.Yes + ch.No > 0 || ch.Why.Contains("회의") || w.Command.CaptainId < 0 ? -2 : w.Command.CaptainId;
             var spec = PolicySystem.Spec(ch.Id);
             string title = $"'{spec.Options[Math.Clamp(ch.To, 0, spec.Options.Length - 1)]}' 쪽으로 바꾼 {spec.Name} 방침";
             React(-1, by, title, Zero, 0f, extra: c =>
@@ -343,20 +355,22 @@ public sealed partial class ValueSystem
             });
         }
         // 위기 때 지시 (문 닫기 · 버리기 · 배급 · 항로) — 선장 · 지휘자가 정한 것
+        int kd = 0;
         foreach (var d in w.Meetings.Decisions)
         {
-            if (d.Tick <= _decisionSeen) continue;
-            _decisionSeen = d.Tick;
+            if (!Fresh(d.Tick, ref _decisionSeen, ref _decisionSeenN, ref kd)) continue;
             if (!d.Topic.StartsWith("order:") && d.Topic != "cosmic:avoid") continue;
             var vec = OrderVec(d.Topic);
             if (vec == null) continue;
             React(-1, d.Decider >= 0 ? d.Decider : -1, d.Title, vec, 0.6f, voters: d.Yes.Concat(d.No).ToList());
         }
         // 회의 안건: 진 쪽은 회의에 서운하고, 이긴 쪽은 회의를 믿는다 (앙금은 회의 쪽이 따로 남긴다)
-        foreach (var m in w.Motions.All)
+        int km = 0, decided = w.Motions.Stats.Passed + w.Motions.Stats.Failed;
+        if (decided == _motionCount) return;
+        _motionCount = decided;
+        foreach (var m in w.Motions.All.Where(x => x.Decided >= 0).OrderBy(x => x.Decided).ThenBy(x => x.Id))
         {
-            if (m.Decided <= _motionSeen) continue;
-            _motionSeen = m.Decided;
+            if (!Fresh(m.Decided, ref _motionSeen, ref _motionSeenN, ref km)) continue;
             foreach (var kv in m.Final)
                 if (P(kv.Key) is CrewMember c && !c.Dead && MathF.Abs(kv.Value) > 0.25f)
                 {
@@ -364,6 +378,15 @@ public sealed partial class ValueSystem
                     bool won = (kv.Value > 0f) == m.Passed;
                     o.Council = Math.Clamp(o.Council + (won ? 0.06f : -0.08f), -1f, 1f);
                 }
+            // 재판의 벌: 규칙을 중히 여기는 사람은 엄한 벌을, 동정이 깊은 사람은 너그러운 결정을 반긴다
+            if (m.Kind == MotionKind.Accusation && P(m.Target) is CrewMember acc && OfMotion(m) == null)
+            {
+                bool harsh = m.Passed && m.Verdict is Penalty.RationCut or Penalty.Privilege or Penalty.ExtraDuty;
+                var vec = harsh ? new[] { 0.2f, 0.2f, 0.9f, -0.7f } : new[] { 0f, 0.2f, -0.6f, 0.8f };
+                React(-1, -2, $"{acc.Name} 재판 — {(m.Passed ? MotionSystem.PenaltyName(m.Verdict) : "죄를 묻지 않았다")}", vec, 0.6f, acc.Id, harsh ? -1 : 1);
+                if (!harsh && Peek(acc) is Outlook ao) Shift(acc, Axis.Mercy, 0.04f, "용서받았다");
+                else if (harsh) Shift(acc, Axis.Rule, -0.04f, "벌을 받았다");
+            }
         }
     }
 

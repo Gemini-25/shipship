@@ -41,7 +41,7 @@ public static partial class Program
             if (ppl.Count > 0 && eff.Count > 0)
                 Check("가치관: '사람 먼저'가 '효율 먼저'보다 동정 쪽", ppl.Average(c => vs.Of(c).V[3]) > eff.Average(c => vs.Of(c).V[3]), $"{ppl.Average(c => vs.Of(c).V[3]):0.00} / {eff.Average(c => vs.Of(c).V[3]):0.00}");
             var line = vs.CardLine(ad[0]);
-            Check("카드: 수치 없이 사람 말로", line != null && !line.Any(char.IsDigit) && !line.Contains("가치관") && !line.Contains("승인"), line ?? "-");
+            Check("카드: 수치 없이 사람 말로", line != null && !System.Text.RegularExpressions.Regex.IsMatch(line, @"\d%|\d\.\d|[+-]\d") && !line.Contains("가치관") && !line.Contains("승인"), line ?? "-");
         }
 
         // ── 2) 구조 신호를 외면 → 동정 높은 사람이 싫어함 → 몇 주 뒤 기항지에서 생존자를 만나 배 안 분위기가 바뀐다
@@ -242,6 +242,19 @@ public static partial class Program
                 Check("며칠 뒤 컴퓨터가 맞았는지 돌아온다", v.Returned && v.ReturnText.Length > 0, v.ReturnText);
                 Check("돌아온 결과가 컴퓨터 성격을 민다", MathF.Abs(w.Automation.Character.Caution - c0) > 0.01f, $"{c0:+0.00;-0.00} → {w.Automation.Character.Caution:+0.00;-0.00}");
             }
+        }
+
+        // ── 8) 저절로: 열흘 항해에서 딜레마가 생기고 · 정해지고 · 사람들이 반응한다
+        if (Do("8"))
+        {
+            var w = DayOne(seed, "Hanbit");
+            for (int day = 0; day < 10; day++) Run(w, SimTime.TicksPerDay);
+            var vs = w.Values;
+            foreach (var d in vs.Dilemmas) Console.WriteLine($"   · {SimTime.Clock(d.Raised)} {d.Spec.Name} — {d.Detail} → {vs.ByName(d.By)}: {d.Choice} (단계 {d.Stage})");
+            Console.WriteLine($"   {vs.Stats.Line()}");
+            Check("저절로 생긴 딜레마가 정해졌다", vs.Dilemmas.Any(d => d.Stage == 2), $"{vs.Dilemmas.Count}건");
+            Check("사람마다 반응이 쌓였다", vs.Stats.Likes > 0 && vs.Stats.Dislikes > 0, vs.Stats.Line());
+            Check("가치관이 겪은 일로 조금씩 움직였다", vs.Stats.Shifts > 0, $"{vs.Stats.Shifts}");
         }
 
         // ── 7) 결정론 · 성능
