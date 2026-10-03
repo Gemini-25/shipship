@@ -258,7 +258,7 @@ public static partial class Program
                 }
                 double t0 = Math.Min(Day(true), Day(true)), t1 = Math.Min(Day(false), Day(false));
                 double own = StorySystem.UpdateTicks * 1.0 / Stopwatch.Frequency;
-                Console.WriteLine($"   성능 (30인 하루): 끔 {t0:0.0}초 · 켬 {t1:0.0}초 ({(t1 / t0 - 1) * 100:+0;-0}%) · 이 시스템 틱 {own * 1000:0}ms");
+                Console.WriteLine($"   성능 (30인 하루): 끔 {t0:0.0}초 · 켬 {t1:0.0}초 ({(t1 / t0 - 1) * 100:+0;-0;0}%) · 이 시스템 틱 {own * 1000:0}ms");
                 Check("성능 · 30인 배 하루 ±10%", t1 < t0 * 1.10, $"{t0:0.0} → {t1:0.0}초");
             }
         }
