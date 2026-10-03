@@ -149,6 +149,7 @@ public sealed class WorkToil : Toil
     private float _needed;
 
     public Func<CrewMember, World, bool>? CanContinue { get; init; }
+    public Skill Skill => _skill; // v17.2 몸짓 (신입의 시선)
 
     /// <summary>
     /// 긴 작업(부품 제작, 패널 교체)은 끼니·잠·교대로 끊겨도 진척이 작업 목록에 남아, 다음 사람이 이어서 한다.
@@ -478,6 +479,7 @@ public static class Locomotion
         float budget = Speed(c) * w.Movement.Manners(c, path); // v14.5 비켜서기 · 막힘 · 문 앞 확인 · 조용히 · 움찔
         budget *= w.Portable.SqueezeMul(c, path); // v16.7 통로에 세워 둔 카트를 비켜 간다
         budget *= w.Coop.SqueezeMul(c, path); // v17.4 펼친 부품 · 앞 상자 · 구경꾼 사이 · 좁은 문에서 카트 옮겨 싣기
+        budget *= w.Gestures.StepMul(c, path); // v17.2 양손 짐으로 문 앞 · 잔 버팀 · 무릎
         if (budget <= 0f) return false;
         path = c.Path ?? path; // 돌아가는 길로 바꿨을 수 있다
         bool repathed = false;

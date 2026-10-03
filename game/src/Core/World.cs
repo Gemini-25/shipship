@@ -160,6 +160,7 @@ public sealed class World
     public BlackboxSystem Blackbox { get; } public InquirySystem Inquiry { get; } // v18.7 블랙박스 · 실수 숨기기 · 사고 조사
     public ValueSystem Values { get; } // v18.15 가치관 · 결정에 대한 마음 · 딜레마 · 결정 장부
     public ReactSystem React { get; } // v17.8 모든 변화에 누군가 반응한다
+    public HearingSystem Hearing { get; } public GestureSystem Gestures { get; } // v17.2 소리 · 듣기 · 몸짓 · 버릇
     public FleetSystem Fleet { get; } // v16.20b 로봇 · 드론 두뇌와 성능 · 주컴퓨터 함대 지휘
     public FoodSourceSystem FoodSources { get; } // v16.22 식량원 (수경 · 조류 · 단백질 · 버섯 · 정원 · 저장 · 교역 · 원정 · 발효)
     public ScrapSystem Scrap { get; } // v16.22 고철 되살리기 (재활용실 · 파쇄실)
@@ -290,6 +291,7 @@ public sealed class World
         Blackbox = new BlackboxSystem(this); Inquiry = new InquirySystem(this); // v18.7
         Values = new ValueSystem(this); // v18.15
         React = new ReactSystem(this); // v17.8
+        Hearing = new HearingSystem(this); Gestures = new GestureSystem(this); // v17.2
         Fleet = new FleetSystem(this); // v16.20b
         FoodSources = new FoodSourceSystem(this); Scrap = new ScrapSystem(this); // v16.22
         Failsafe = new FailsafeSystem(this); Major = new MajorIncidentSystem(this); // v16.19
@@ -420,6 +422,8 @@ public sealed class World
             RoomUse.Update(dt); RoomPlans.Update(dt); // v16.17 쓰임 → 용도 · 승무원 안건 → 회의 → 공사
             Cosmic.Update(dt); // v18.13 우주 대재난: 예보 · 대비 · 본 사건 · 후유증
             pf = Prof.Lap("sys.Daily", pf);
+            Hearing.Update(dt); Gestures.Update(dt); // v17.2 소리 정보 · 듣기 · 손 · 시선 · 자세 · 버릇 · 끊긴 대화
+            pf = Prof.Lap("sys.Hearing", pf);
             Values.Update(dt); // v18.15 가치관 · 결정에 대한 반응 · 딜레마 · 늦게 돌아오는 결과
             pf = Prof.Lap("sys.Values", pf);
             Ways.Update(dt); // v16.25 문제마다 여러 갈래 해법

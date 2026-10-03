@@ -31,6 +31,7 @@ public static class Puppet
         if (w.Body.Crawling(c)) return PuppetPose.Crawl;
         if (c.Pose == Pose.Sleeping) return PuppetPose.Sleep;
         if (c.Pose == Pose.Sitting) return PuppetPose.Sit;
+        if (w.Gestures.Kneeling(c)) return PuppetPose.Kneel; // v17.2 쓰러진 사람 곁에 무릎
         if (c.IsMoving || c.Pose == Pose.Walking)
             return c.Job?.Urgent == true || c.Dashing || c.Job?.Activity is JogActivity or EvacuateActivity or PanicActivity ? PuppetPose.Run : PuppetPose.Walk;
         if (c.Pose == Pose.Working)

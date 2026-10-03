@@ -235,6 +235,7 @@ public sealed partial class RelationSystem
             o.HoldUntil = w.Tick + SimTime.Minutes(20);
             o.HoldWhy = $"{Ko.IGa(c.Name)} 말을 걸어왔다";
             o.NextThinkTick = w.Tick;
+            w.Gestures.Addressed(o, c); // v17.2
         }
         switch (t)
         {
