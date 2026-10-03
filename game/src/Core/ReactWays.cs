@@ -553,7 +553,8 @@ public sealed class ReactActivity : Activity
         if (w.Tick > a.Until || !c.CanAct || c.Outside || c.Suit != null) { w.React.Peek(c)!.Pending = null; return (0f, "—"); }
         if (Crisis.Acting(w) && a.For is not (Stir.Dark or Stir.Cold or Stir.Heat or Stir.Smoke)) return (0f, "위기 중");
         if (c.Needs.Rest < 0.12f || c.Needs.Food < 0.12f) return (0f, "지쳤다");
-        return (a.Score, a.Label);
+        // 몇 분짜리 일이라 하던 평소 일보다는 앞서고, 급한 일 · 위험 · 굶주림보다는 뒤에 (다른 일 점수 폭에 맞춘다)
+        return (a.Score * 1.6f, a.Label);
     }
 
     public override Job? Plan(CrewMember c, World w, DistanceField dist)

@@ -125,14 +125,18 @@ public sealed partial class ReactSystem
         float p = k == Stir.Chat ? 1f : 0.3f + 0.25f * c.Traits.Sociability + (Life.Has(c, Habit.Talker) ? 0.15f : 0f);
         if (!R.Chance(p)) return null;
         var list = Topics();
-        Topic? best = null;
+        // 가장 최근 이야기 셋 가운데 하나 (맨 앞이 잘 나오지만 늘 같은 이야기만 하지는 않는다)
+        Topic? a = null, b = null, d = null;
         foreach (var tp in list)
         {
-            if ((tp.Mask & (1 << (int)k)) == 0 || s.Keys.Contains(tp.Key)) continue;
-            if (best != null && tp.Tick <= best.Tick || tp.Line(c) == null) continue;
-            best = tp;
+            if ((tp.Mask & (1 << (int)k)) == 0 || s.Keys.Contains(tp.Key) || tp.Line(c) == null) continue;
+            if (a == null || tp.Tick > a.Tick) { d = b; b = a; a = tp; }
+            else if (b == null || tp.Tick > b.Tick) { d = b; b = tp; }
+            else if (d == null || tp.Tick > d.Tick) d = tp;
         }
-        return best;
+        if (a == null || b == null) return a;
+        float r = R.Float();
+        return r < 0.5f ? a : r < 0.8f || d == null ? b : d;
     }
 
     // ───────────────────────────── 지금 이야기 ─────────────────────────────
@@ -598,8 +602,10 @@ public sealed partial class ReactSystem
     private string[] VoiceLines(CrewMember c, string text, int priority)
     {
         string head = text.Split(new[] { " — ", ". ", " · " }, StringSplitOptions.None)[0];
-        if (head.Length > 26) head = head[..26] + "…";
         // 인사 · 안내 말은 따라 하지 않는다
+        if (head.Length > 20 || head.Contains('(') || head.Contains(':'))
+            return priority >= 2 ? (Mood(c) == 1 ? new[] { "또 무슨 일이야?", "빨리 움직이자" } : new[] { "들었지? 가자", "방송 들었어?" })
+                : Mood(c) switch { 2 => new[] { "컴퓨터가 또 잔소리하네", "네네, 알겠습니다" }, 3 => new[] { "또 방송이야", "알았다고" }, _ => new[] { "응, 알았어", "방송 들었어?", "그렇대" } };
         if (priority < 2 && (head.Contains("좋은 아침") || head.Contains("안녕") || head.Contains("수고") || head.Length < 6))
             return Mood(c) switch { 2 => new[] { "컴퓨터도 아침 인사를 하네", "네, 좋은 아침이에요" }, 3 => new[] { "아침부터 방송이야", "알았다고" }, _ => new[] { "응, 좋은 아침", "방송 들었어?" } };
         if (priority >= 2)

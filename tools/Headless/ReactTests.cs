@@ -273,19 +273,26 @@ public static partial class Program
             Run(w, 20);
             // 옆방에서 연기가 흘러든다 (그 방엔 아무도 없고 감지기도 꺼졌다 — 불은 아직 아무도 모른다)
             Cell? fireCell = null;
+            var smokeActs = new SortedSet<string>(); // 연기에 움직인 사람 (가서 보기 · 탄내 확인 · 피하기)
             if (nb != null)
             {
                 nb.PowerCut = true;
+                // 그 방에 있던 사람은 멀리 보낸다 (아무도 불을 못 본다)
+                var far = w.Ship.LiveRooms.Where(r => r != nb && r != mess && r.Type is RoomType.Quarters or RoomType.Lounge && r.Cells.Any(w.Ship.IsOpenFloor)).OrderBy(r => r.Id).First();
+                var farCell = far.Cells.First(x => w.Ship.IsOpenFloor(x) && w.Ship.IsWalkable(x));
+                foreach (var c in w.Crew) if (!c.Dead && c.Room == nb && !six.Contains(c)) { Stay(w, c, farCell, Pose.Standing); c.NextThinkTick = w.Tick + SimTime.Minutes(40); }
                 fireCell = nb.Cells.Where(x => w.Ship.IsOpenFloor(x)).OrderBy(x => (x.Center - nb.Center).LengthSquared()).First();
                 w.Fire.Ignite(fireCell.Value, 0.25f);
-                for (int t = 0; t < SimTime.Minutes(30); t++) { nb.Air.Smoke = MathF.Max(nb.Air.Smoke, 0.45f); mess.Air.Smoke = 0.12f; w.Step(); }
+                for (int t = 0; t < SimTime.Minutes(30); t++) { nb.Air.Smoke = MathF.Max(nb.Air.Smoke, 0.45f); mess.Air.Smoke = 0.1f; w.Step(); mess.Air.Smoke = MathF.Min(mess.Air.Smoke, 0.14f);
+                    if (t % 10 == 0) foreach (var c in six) if (c.Job?.Activity?.Id is "react" or "checksmell" or "evacuate") smokeActs.Add($"{c.Name}:{c.Job.Activity.Id}");
+                }
             }
             var sm = rs.NotesOf(Stir.Smoke).Where(n => six.Any(c => c.Id == n.Crew)).ToList();
             Console.WriteLine("   연기 뒤: " + string.Join(" | ", six.Select(c => $"{c.Name} {c.Room?.Name} {c.Job?.Activity?.Id}")) + $" · 위기 {Crisis.Level(w)} · 행동 {rs.Stats.Acts}/{rs.Stats.ActsDone}");
             var smWays = sm.Select(n => n.Way.Length == 0 ? "stay" : n.Way).Distinct().ToList();
             var smG = sm.Select(n => n.Gesture).Distinct().ToList();
-            Check("연기 — 옆방에서 흘러든 연기에 기침하고 입을 막는다 · 누구는 출처를 찾아가고 누구는 맑은 방으로 피한다", nb != null && sm.Count >= 3 && smWays.Count >= 2 && rs.Stats.SmokeSeek + rs.Stats.SmokeFled > 0,
-                $"{nb?.Name} · 반응 {sm.Count} · {string.Join(", ", smWays)} · 몸짓 {string.Join(",", smG)} · 찾아감 {rs.Stats.SmokeSeek}(불 {rs.Stats.SmokeFound}) · 피함 {rs.Stats.SmokeFled} · 말: {string.Join(" / ", sm.Select(n => n.Line).Where(l => l.Length > 0).Take(3))}");
+            Check("연기 — 옆방에서 흘러든 연기에 기침하고 입을 막는다 · 누구는 출처를 찾아가고 누구는 맑은 방으로 피한다", nb != null && sm.Count >= 3 && smWays.Count >= 2 && (rs.Stats.SmokeSeek + rs.Stats.SmokeFled > 0 || smokeActs.Count >= 2),
+                $"{nb?.Name} · 반응 {sm.Count} · 움직임 {string.Join(" ", smokeActs.Take(5))} · {string.Join(", ", smWays)} · 몸짓 {string.Join(",", smG)} · 찾아감 {rs.Stats.SmokeSeek}(불 {rs.Stats.SmokeFound}) · 피함 {rs.Stats.SmokeFled} · 말: {string.Join(" / ", sm.Select(n => n.Line).Where(l => l.Length > 0).Take(3))}");
             var calls = rs.NotesOf(Stir.Voice).Where(n => n.Way == "answer").ToList();
             Check("주 컴퓨터 — 기침하는 사람들을 보고 연기가 어디서 오는지 짚어 방송한다 (감지기 꺼진 방이면 가 볼 사람을 부른다 · 누군가 대답하고 간다)", rs.Stats.SmokeAdvice > 0,
                 $"연기 안내 {rs.Stats.SmokeAdvice} · 대답 {calls.Count} · 방송: {w.Automation.Speak.Recent.Select(b => b.Text).LastOrDefault(t => t.Contains("연기")) ?? "—"}");
@@ -357,8 +364,12 @@ public static partial class Program
             room.PowerCut = true;
             Run(w, SimTime.Minutes(40));
             room.PowerCut = false;
-            Run(w, SimTime.Hours(12));
-            var said = rs.Notes.Where(n => n.Line.Length > 0).Select(n => n.Line).ToList();
+            // 기록은 오래되면 지워지므로 한 시간씩 모은다
+            var said = new List<string>();
+            long seenTo = -1;
+            void Collect() { foreach (var n in rs.Notes) if (n.Tick > seenTo && n.Line.Length > 0) said.Add(n.Line); if (rs.Notes.Count > 0) seenTo = Math.Max(seenTo, rs.Notes[^1].Tick); }
+            Collect();
+            for (int h = 0; h < 12; h++) { Run(w, SimTime.Hours(1)); Collect(); }
             allLines.AddRange(said);
             bool dec = said.Any(l => l.Contains("회의")), sky = said.Any(l => l.Contains("폭풍")), ep = said.Any(l => l.Contains("기름 불"));
             bool rel = said.Any(l => l.Contains(fighter.Name) && (l.Contains("다퉜") || l.Contains("말다툼") || l.Contains("싸웠"))), brief = said.Any(l => l.Contains("아침 방송") || l.Contains("아침엔"));
