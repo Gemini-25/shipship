@@ -129,6 +129,7 @@ public sealed partial class InquirySystem
 
         // ② 본 사람 · ③ 흔적 · ④ 당사자
         bool late = false, blamed = false;
+        f.Owned = s?.Confessed == true;
         if (s != null && sp != null && culprit != null)
         {
             string when = SimTime.Clock(s.Tick);
@@ -207,10 +208,10 @@ public sealed partial class InquirySystem
         else if (top == s.Who)
         {
             f.Right = true;
-            f.Hid = s.Hidden && !(s.Confessed && s.ConfessedAt < cs.Opened);
+            f.Hid = s.Hidden && !f.Owned;
             f.Framed = blamed || s.Scapegoat >= 0 && s.Ways.Contains(CoverWay.Blame) && f.Hid;
             f.Text = $"조사 결과 — {culprit?.Name ?? Name(s.Who)}의 실수: {sp.What}"
-                     + (s.Confessed && s.ConfessedAt < cs.Opened ? (s.Hidden ? " · 한동안 숨겼다가 스스로 털어놓았다" : " · 바로 털어놓았다")
+                     + (f.Owned ? (s.Hidden ? " · 한동안 숨겼다가 스스로 털어놓았다" : " · 바로 털어놓았다")
                         : late ? " · 조사 자리에서 털어놓았다"
                         : f.Framed ? $" · {Name(s.Scapegoat)}에게 돌렸다가 {Ko.EuRo(how)} 드러났다"
                         : wiped ? " · 기록까지 지웠지만 지운 자리로 드러났다"
@@ -229,7 +230,7 @@ public sealed partial class InquirySystem
         var acc = P(f.Blamed);
         if (s != null && acc != null && !acc.Dead && voters.Count >= 2)
         {
-            bool early = s.Confessed && s.ConfessedAt < cs.Opened && f.Right;
+            bool early = f.Owned && f.Right;
             var inc = w.Causes.IncidentOf(s.Node);
             (float, string) Sev(CrewMember c)
             {
@@ -282,7 +283,7 @@ public sealed partial class InquirySystem
         var acc = P(f.Blamed);
         if (s != null && sp != null && culprit != null)
         {
-            bool early = s.Confessed && s.ConfessedAt < cs.Opened;
+            bool early = f.Owned;
             if (f.Right && f.Blamed == s.Who)
             {
                 if (late) { s.Confessed = true; s.ConfessedAt = w.Tick; Stats.LateConfessed++; }
@@ -291,7 +292,7 @@ public sealed partial class InquirySystem
                 foreach (var o in w.Crew)
                 {
                     if (o == culprit || !Adult(o)) continue;
-                    float d = early ? -0.005f : late ? -0.03f : -0.07f;
+                    float d = early ? (s.Hidden ? -0.02f : -0.005f) : late ? -0.03f : -0.07f;
                     if (f.Framed) d -= 0.06f;
                     if (wiped && !early) d -= 0.03f;
                     d *= o.Value == CrewValue.Rules ? 1.3f : o.Value == CrewValue.People ? 0.7f : 1f;

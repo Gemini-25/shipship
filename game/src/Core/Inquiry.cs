@@ -84,6 +84,8 @@ public sealed class Finding
     public bool GapSeen { get; set; }
     public bool Hid { get; set; }
     public bool Framed { get; set; }
+    /// <summary>조사 자리 전에 스스로 털어놓았다.</summary>
+    public bool Owned { get; set; }
     public string Text { get; set; } = "";
     public string Rule { get; set; } = "";
     public Penalty? Verdict { get; set; }
@@ -378,6 +380,16 @@ public sealed partial class InquirySystem
         {
             goat.Needs.Stress = MathF.Max(0f, goat.Needs.Stress - 0.04f);
             w.Relations.Remember(goat, c, RelationReason.BlamedMe, "제 실수를 나에게 돌렸다가 털어놓았다");
+        }
+        if (Cases.FirstOrDefault(k => k.Slip == s.Id && k.Finding is { Right: false }) is { Finding: Finding wf } && P(wf.Blamed) is CrewMember wrong)
+        {
+            // 엉뚱한 사람이 쓴 탓이 풀린다 — 카드의 원인도 고쳐 적는다
+            wf.Text = $"조사 결과 — {wrong.Name}의 실수로 결론났다가 {Ko.IGa(c.Name)} 털어놓았다: {sp.What}";
+            wf.Right = true;
+            wf.Blamed = c.Id;
+            wrong.Needs.Stress = MathF.Max(0f, wrong.Needs.Stress - 0.08f);
+            foreach (var o in w.Crew) if (o != wrong && o != c && Adult(o)) o.ChangeAffinity(wrong, 0.04f);
+            Life.Diary(w, wrong, $"{Ko.IGa(c.Name)} 털어놓았다. 이제야 다들 나를 똑바로 본다.");
         }
         w.History.Add(w, HistoryKind.Memory, $"{Ko.IGa(c.Name)} {s.MachineName} 일을 털어놓았다 — {sp.What}" + (s.Hidden ? " (한동안 숨겼다)" : ""), w.Ship.Rooms[s.RoomId], new[] { c });
         w.Society.Punish(c, $"실수를 털어놓았다 ({sp.What})", light: true);
