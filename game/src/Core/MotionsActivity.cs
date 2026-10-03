@@ -70,6 +70,7 @@ public sealed class SittingActivity : Activity
         if (!s.Venue.Cells.Any(dist.Reachable)) return (0f, "회의 자리에 갈 수 없다");
         if (c.Job?.Activity is SittingActivity) return (0.96f, MotionSystem.SittingName(s.Kind));
         float score = 0.86f + 0.08f * c.Traits.Diligence + (c.Id == s.Motion.Target ? 0.05f : 0f);
+        if (MathF.Abs(s.Motion.Initial.TryGetValue(c.Id, out var op0) ? op0 : mo.Opinion(c, s.Motion).Item1) >= 0.3f) score += 0.12f; // 통합7 내 몫이 걸린 안건(배급을 줄이자에 배고픈 사람)엔 배가 고파도 먼저 간다 — 끼니에 밀려 반대할 사람이 빠진 채 표결하던 것
         // 원망이 깊은 사람은 늦게 온다
         if (mo.GrudgeOf(c) is Grudge g && g.Against == s.Motion.Proposer) score -= 0.1f;
         return (score, $"{MotionSystem.SittingName(s.Kind)} — {s.Venue.Name}에 모인다");

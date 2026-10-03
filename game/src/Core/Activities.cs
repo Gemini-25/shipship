@@ -90,7 +90,7 @@ public sealed class EatActivity : Activity
             reason += " · 자기 전 야식";
         }
         // 통합7 회의 · 훈련으로 야식 때를 놓쳤어도 꽤 배고프면 눕기 전에 요기부터 (은하호: 0.33 남기고 잠들었다가 네 시간 만에 굶주려 깨어 먼 식당까지 걸었다)
-        else if (Bedtime(c, w) && c.Pose != Pose.Sleeping && hunger > 0.45f)
+        else if (Bedtime(c, w) && c.Pose != Pose.Sleeping && hunger > 0.45f && !(w.Motions.Now != null && w.Motions.Summoned(c))) // 회의에 불렸으면 회의부터 (끝나고 먹는다)
         {
             score = MathF.Max(score + 0.7f, 1.1f); // 피곤한 몸의 잠(1.0 남짓)보다 앞서게 — 0.5로는 0.01 차로 누웠다 (광맥호) · 여덟 시간 자면 0.33이 빠진다: 반 넘게 비었으면 먹고 눕는다 (보금자리호: 0.45로 누워 새벽에 굶주려 깼다)
             reason += " · 눕기 전에 요기";
