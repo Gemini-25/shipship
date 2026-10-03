@@ -205,6 +205,15 @@ public static partial class Program
                 thief.Value = CrewValue.Freedom;
                 var s = w.Schemes.Start(SchemeTable.Get("ration_skim")!, thief);
                 SchemeUntil(w, () => s.ComputerKnows || s.Over(), SimTime.TicksPerDay * 4, 200);
+                // 컴퓨터가 맞춰 보기 전에 사람이 먼저 봤으면 (그것도 이 배에서 일어나는 일이다) 다른 사람이 또 빼돌린다
+                for (int i = 0; i < 2 && !s.ComputerKnows && s.Skimmed == 0; i++)
+                {
+                    Console.WriteLine($"   사람이 먼저 봤다: {w.Crew.FirstOrDefault(c => c.Id == s.Finder)?.Name}({s.FoundHow}) · {s.Stage}");
+                    thief = w.Crew.Where(c => !c.Dead && !c.IsChild && c.Id != w.Command.CaptainId && !s.Knew(c.Id)).OrderBy(c => c.Id).First();
+                    thief.Value = CrewValue.Freedom;
+                    s = w.Schemes.Start(SchemeTable.Get("ration_skim")!, thief);
+                    SchemeUntil(w, () => s.ComputerKnows || s.Over(), SimTime.TicksPerDay * 4, 200);
+                }
                 Console.WriteLine($"   빼돌리기 [{caution:+0.0;-0.0}]: {s.Stage} 진척 {s.Progress:0.00} · 빼돌림 {s.Skimmed} · 찾은 사람 {w.Crew.FirstOrDefault(c => c.Id == s.Finder)?.Name}({s.FoundHow}) · 창고 비상식량 {w.Ship.CountStored(ItemKind.Ration)} 식사 {w.Ship.CountStored(ItemKind.Meal)} 채소 {w.Ship.CountStored(ItemKind.Produce)} · {s.Outcome}");
                 return (s, w);
             }

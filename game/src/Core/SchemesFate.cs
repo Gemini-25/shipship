@@ -233,14 +233,16 @@ public sealed partial class SchemeSystem
         };
     }
 
-    private void ProposeVote(Scheme s, CrewMember lead, CrewMember by)
+    private void ProposeVote(Scheme s, CrewMember lead, CrewMember by, bool open = false)
     {
         var w = _w;
         var spec = s.Spec;
         string legit = LegitName(spec);
         if (!s.KnowsWho(by.Id)) s.Knows[by.Id] = KnowHow.Saw;
         string where = RoomOf(s)?.Name ?? "배 안";
-        var post = w.Info.Chat.Post(by, ChatKind.Notice, ShipChat.Voice(by, $"{where}에서 {spec.Name} 판이 나왔다. 회의에 올린다", $"{where}에서 {Ko.IGa(spec.Name)} 나왔습니다. 회의에서 정하겠습니다"));
+        var post = open // 눈감아 주던 사람이 먼저 꺼낸다
+            ? w.Info.Chat.Post(by, ChatKind.Notice, ShipChat.Voice(by, $"{where} {spec.Name}, 이제 다들 알잖아. 이참에 회의에서 {Ko.EuRo(legit)} 정하자", $"{where}의 {spec.Name}, 아실 분은 다 아시죠. 회의에서 {Ko.EuRo(legit)} 정했으면 합니다"))
+            : w.Info.Chat.Post(by, ChatKind.Notice, ShipChat.Voice(by, $"{where}에서 {spec.Name} 판이 나왔다. 회의에 올린다", $"{where}에서 {Ko.IGa(spec.Name)} 나왔습니다. 회의에서 정하겠습니다"));
         foreach (var c in w.Crew) if (Adult(c) && !s.Knew(c.Id) && w.Info.Chat.HasRead(c, post.Id)) s.Knows[c.Id] = KnowHow.Chat;
         if (MotionSystem.Off || lead.Dead)
         {
@@ -255,8 +257,8 @@ public sealed partial class SchemeSystem
         s.Stage = SchemeStage.Vote;
         Stats.Votes++;
         foreach (int id in s.Crew.ToList()) if (id != lead.Id && P(id) is { Dead: false }) w.Motions.Cosign(m, id);
-        w.Log.Add(w.Tick, LogKind.Ship, $"{Ko.IGa(by.Name)} 알렸다 — {spec.Name} · 회의에서 금지냐 {Ko.EuRo(legit)} 하느냐를 정한다", by.Id);
-        Life.Diary(w, lead, $"{Ko.IGa(by.Name)} {Ko.EulReul(spec.Name)} 알렸다. 들킨 김에 회의에 올렸다 — {legit}.");
+        w.Log.Add(w.Tick, LogKind.Ship, open ? $"{Ko.IGa(by.Name)} 꺼냈다 — 다 아는 {spec.Name} · 회의에서 금지냐 {Ko.EuRo(legit)} 하느냐를 정한다" : $"{Ko.IGa(by.Name)} 알렸다 — {spec.Name} · 회의에서 금지냐 {Ko.EuRo(legit)} 하느냐를 정한다", by.Id);
+        Life.Diary(w, lead, open ? $"{Ko.IGa(by.Name)} 회의에 올리자고 했다. 어차피 다 아는 {spec.Name} — {legit}." : $"{Ko.IGa(by.Name)} {Ko.EulReul(spec.Name)} 알렸다. 들킨 김에 회의에 올렸다 — {legit}.");
     }
 
     private void Accuse(Scheme s, CrewMember lead, CrewMember by, string why)

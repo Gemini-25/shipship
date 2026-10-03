@@ -45,14 +45,24 @@ public sealed partial class SchemeSystem
             }
             return false;
         }
-        foreach (var d in new[] { 0f, -1.5f, 1.5f, -3f, -4.5f, 3f, -6f })
+        // 올 만한 사람(회원 · 좋아할 사람)이 근무도 잠도 아닌 시각을 고른다 · 겹치면 덜 고른다
+        var fans = new List<CrewMember>();
+        foreach (var c in _w.Crew) if (Adult(c) && (s.Crew.Contains(c.Id) || Interest(c, s.Spec) > 0.3f)) fans.Add(c);
+        float best = h0, bv = float.MinValue;
+        foreach (var d in new[] { 0f, -1.5f, 1.5f, -3f, -4.5f, 3f, -6f, -9f })
         {
             float h = h0 + d;
             if (h < 7f || h > 22.5f) continue;
-            if (!Clash(h)) return s.SessionHourSet = h;
+            float v = (Clash(h) ? -1.5f : 0f) - MathF.Abs(d) * 0.05f;
+            foreach (var c in fans) if (FreeAt(c, h)) v += s.Crew.Contains(c.Id) ? 1f : 0.6f;
+            if (v > bv) { bv = v; best = h; }
         }
-        return s.SessionHourSet = h0;
+        return s.SessionHourSet = best;
     }
+
+    private static bool FreeAt(CrewMember c, float h) =>
+        !SimTime.InWindow(h, c.Schedule.WorkStart, c.Schedule.WorkLength) && !SimTime.InWindow(h, c.Schedule.SleepStart, c.Schedule.SleepLength)
+        && !SimTime.InWindow((h + 1f) % 24f, c.Schedule.SleepStart, c.Schedule.SleepLength);
 
     // ───────────────────────────── 시간마다 ─────────────────────────────
 
@@ -141,6 +151,19 @@ public sealed partial class SchemeSystem
             foreach (var f in room.Furniture) if (f.Machine is Machine mc) { mc.Wear = MathF.Min(1f, mc.Wear + 0.012f); break; }
         // 이끄는 사람의 마음: 하는 동안 덜 지루하다
         foreach (int id in s.Crew) if (P(id) is CrewMember c && !c.Dead) SetBored(c, Bored(c) - 0.01f);
+        // 다 아는 비밀: 눈감아 준 사람이 셋을 넘으면 편드는 사람이 "이참에 정식으로" 회의에 올린다
+        if (spec.Fate == Fate.Vote && s.Stage == SchemeStage.Live && R.Chance(0.12f))
+        {
+            CrewMember? fan = null; int knew = 0; float fv = 0.15f;
+            foreach (var (id, r) in s.Reactions)
+            {
+                if (r is not (Stance.Join or Stance.Cover) || P(id) is not { Dead: false } o || !o.IsAwake || !s.KnowsWho(id)) continue;
+                knew++;
+                float v = Approve(o, s).v;
+                if (v > fv || v == fv && fan != null && o.Id < fan.Id) { fv = v; fan = o; }
+            }
+            if (knew >= 3 && fan != null) { ProposeVote(s, lead, fan, open: true); return; }
+        }
         // 오래 아무도 모르면: 개인 일은 그대로 자리 잡고, 판은 제풀에 그만둔다
         long age = w.Tick - s.Since;
         if (spec.Fate is Fate.Keep or Fate.Adopt && age > SimTime.TicksPerDay * 6) { Mark(s, TraceState.Kept, spec.Name); End(s, SchemeStage.Done, "아무도 모른 채 그대로 있다"); }
@@ -237,7 +260,13 @@ public sealed partial class SchemeSystem
         s.SessionAt = s.SessionEnd = -1;
         if (spec.Fate == Fate.Club)
         {
-            if (came.Count >= 3) s.Sessions++; else s.Weak++;
+            if (came.Count >= 3) s.Sessions++;
+            else if (++s.Weak < 3) // 사람이 적게 왔다: 다들 되는 시각으로 옮겨 본다
+            {
+                float was = s.SessionHourSet;
+                s.SessionHourSet = -1f;
+                if (FreeHour(s) != was) w.Info.Chat.Post(lead, ChatKind.Notice, ShipChat.Voice(lead, $"{spec.Name} — 시간 바꿔요, 이제 {SimTime.Clock(SimTime.Hours(s.SessionHourSet))}", $"{spec.Name} — {SimTime.Clock(SimTime.Hours(s.SessionHourSet))}로 옮깁니다"));
+            }
             Gathered(came, 0.12f, spec.Name);
             foreach (var c in came) if (!s.Crew.Contains(c.Id) && s.Crew.Count < 10) { s.Crew.Add(c.Id); s.Knows[c.Id] = KnowHow.Part; }
             if (s.Sessions >= 3)
@@ -247,7 +276,7 @@ public sealed partial class SchemeSystem
                 End(s, SchemeStage.Done, "관행이 됐다");
                 w.Info.Chat.Post(lead, ChatKind.Notice, ShipChat.Voice(lead, $"{LegitName(spec)} — 이제 이틀마다 해요", $"{LegitName(spec)} — 이제 이틀마다 합니다"));
             }
-            else if (s.Weak >= 2) End(s, SchemeStage.Dropped, "사람이 안 와서 흐지부지됐다");
+            else if (s.Weak >= 3) End(s, SchemeStage.Dropped, "사람이 안 와서 흐지부지됐다");
             return;
         }
         if (came.Count == 0) return;
