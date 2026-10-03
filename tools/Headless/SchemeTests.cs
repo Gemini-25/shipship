@@ -130,8 +130,9 @@ public static partial class Program
             var crew = w.Crew.Where(c => !c.Dead && !c.IsChild).OrderBy(c => c.Id).ToList();
             var gardener = crew[5]; gardener.Hobbies.Add(Hobby.Gardening);
             var g = w.Schemes.Start(SchemeTable.Get("secret_garden")!, gardener);
-            SchemeUntil(w, () => g.Stage != SchemeStage.Prep, SimTime.TicksPerDay * 6, 100);
-            Check("비밀 정원 — 창고 구석에서 몰래 키웠다", g.Stage is SchemeStage.Live or SchemeStage.Done, $"{w.Schemes.RoomOf(g)?.Name} · {g.Stage} · 진척 {g.Progress:0.00} · {g.Outcome}");
+            w.Schemes.SetBored(gardener, 0.8f); // 고향 생각 · 지루함이 정원을 꾸미게 한다
+            SchemeUntil(w, () => g.Stage != SchemeStage.Prep, SimTime.TicksPerDay * 8, 100);
+            Check("비밀 정원 — 창고 구석에서 몰래 키웠다", g.Stage is SchemeStage.Live or SchemeStage.Done, $"{w.Schemes.RoomOf(g)?.Name} · {g.Stage} · 진척 {g.Progress:0.00} · 손 멈춤 {w.Schemes.Stats.Hid} · 지루함 {w.Schemes.Bored(gardener):0.00} · {g.Outcome}");
             Run(w, SimTime.Hours(2));
             // 다른 사람이 먼저 보고 일러 치워졌으면 (그것도 이 배에서 일어나는 일이다) 한 번 더 키운다
             if (!g.Active) { Console.WriteLine($"   먼저 들켰다: {g.Outcome}"); g = w.Schemes.Start(SchemeTable.Get("secret_garden")!, gardener); }

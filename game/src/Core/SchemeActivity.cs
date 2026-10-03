@@ -96,7 +96,7 @@ public sealed partial class SchemeSystem
             if (s.Stage != SchemeStage.Prep || s.Progress >= 1f || !s.Crew.Contains(c.Id)) continue;
             if (s.Spec.Fate == Fate.Laugh && s.Lead != c.Id) continue;
             bool secret = s.Spec.Secrecy >= 0.45f;
-            return new(SchemeTaskKind.Work, s.Id, -1, s.RoomId, s.Spot, -1, 0.4f + 0.25f * Bored(c) + (late && secret ? 0.08f : 0f), secret ? $"{s.Spec.Name} — 몰래" : $"{s.Spec.Name} 준비");
+            return new(SchemeTaskKind.Work, s.Id, -1, s.RoomId, s.Spot, -1, 0.4f + 0.25f * Bored(c) + 0.1f * Interest(c, s.Spec) + (late && secret ? 0.08f : 0f), secret ? $"{s.Spec.Name} — 몰래" : $"{s.Spec.Name} 준비");
         }
         return Idle;
     }

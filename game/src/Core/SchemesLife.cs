@@ -75,7 +75,7 @@ public sealed partial class SchemeSystem
                 break;
             case SchemeStage.Prep:
                 if (s.Progress >= 1f) Ready(s, lead);
-                else if (w.Tick - s.Since > SimTime.TicksPerDay * 6) End(s, SchemeStage.Dropped, "손이 안 가서 흐지부지됐다");
+                else if (w.Tick - Math.Max(s.Since, s.Stopped) > SimTime.TicksPerDay * 3 || w.Tick - s.Since > SimTime.TicksPerDay * 12) End(s, SchemeStage.Dropped, "손이 안 가서 흐지부지됐다"); // 사흘 손을 안 대면 · 아무리 길어도 열이틀
                 break;
             case SchemeStage.Live:
                 Living(s, lead);
