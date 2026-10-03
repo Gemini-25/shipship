@@ -36,6 +36,8 @@ public sealed class Maneuver
     public Vector2 Dir { get; init; }
     public string Why { get; init; } = "";
     public bool Announced { get; internal set; }
+    /// <summary>방송은 없었지만 경보로 알았다 (운석 경보에 몸을 숙였다).</summary>
+    public bool Forewarned { get; internal set; }
     public bool Hit { get; internal set; }
     public bool Over { get; internal set; }
     public List<int> Knew { get; } = new();
@@ -271,6 +273,7 @@ public sealed partial class ManeuverSystem
         if (Recent.Count > 20) Recent.RemoveAt(0);
         Stats.Shocks++;
         if (!warned) Stats.Unwarned++;
+        m.Forewarned = warned;
         Moment(m, crew);
         // 기동이 걸려 있지 않으면 곧바로 뒤처리 (기동 중이면 기동이 끝날 때 함께)
         if (Pending is not { Over: false }) { Pending = m; Finish(m); }
@@ -283,9 +286,9 @@ public sealed partial class ManeuverSystem
         var w = _w;
         string when = minutes >= 1.5f ? $"{MathF.Round(minutes):0}분 뒤" : minutes >= 0.75f ? "1분 뒤" : "30초 뒤";
         var risks = new List<string>();
-        if (w.Ship.FurnitureOf(FurnitureType.Stove).Any(PotOn)) risks.Add("불 위 냄비는 고정");
+        if (w.Ship.FurnitureOf(FurnitureType.Stove).Any(PotOn)) risks.Add("불 위 냄비는 집게로 고정하고");
         if (w.Portable.Devices.Any(d => d.Kind == PortableKind.Heater && d.Placed && d.On)) risks.Add("이동식 히터는 끄고");
-        risks.Add("선반을 잠그고");
+        risks.Add("선반은 걸쇠를 걸고");
         string trim = TrimMul < 0.93f ? $". 화물이 한쪽으로 쏠려 배가 둔하다 (추력 {TrimMul * 100:0}퍼센트)" : "";
         string text = $"{when} {m.Talk}. {string.Join(", ", risks)}, 자리에 앉거나 손잡이를 잡아 주십시오{trim}";
         var b = w.Automation.Speak.Announce(w.Automation.Voice.Style(text), null, minutes < 1.5f ? 2 : 1);
@@ -557,7 +560,7 @@ public sealed partial class ManeuverSystem
                 float slip = w.Body.Mark(c.Cell, CellMark.Wet) * 0.5f + w.Body.Mark(c.Cell, CellMark.Oil) + w.Body.Mark(c.Cell, CellMark.Frost) * 0.6f;
                 bool heavy = !Lowered.Contains(c.Id) && (c.Carrying is { Count: >= 2 } || c.CarryingPerson != null || w.Portable.Devices.Any(d => d.HeldBy == c && d.Spec.Weight >= 2));
                 float steady = 0.25f * c.SkillLevel(Skill.Piloting) + 0.15f * MathF.Min(3, Felt.GetValueOrDefault(c.Id)) / 3f + (c.Pose == Pose.Working ? 0.1f : 0f) - (c.Age > 60f ? 0.15f : 0f) - 0.3f * c.Vitals.Injury;
-                float p = Math.Clamp((g - 0.15f) * 1.5f * (1f + slip) * (heavy ? 1.5f : 1f) * (1f - steady) * (m.Announced && m.Knew.Contains(c.Id) ? 0.8f : 1.2f), 0f, 0.95f);
+                float p = Math.Clamp((g - 0.15f) * 1.5f * (1f + slip) * (heavy ? 1.5f : 1f) * (1f - steady) * (m.Announced && m.Knew.Contains(c.Id) || m.Forewarned ? 0.8f : 1.2f), 0f, 0.95f);
                 if (!R.Chance(p)) { m.Safe++; continue; }
                 Fall(m, c, push, heavy, slip, why, fromBed: false);
             }
@@ -700,8 +703,8 @@ public sealed partial class ManeuverSystem
         var w = _w;
         var bed = BedUnder(c);
         if (bed != null && Bunks.Contains(bed.Id)) { m.Safe++; Stats.SleepersSafe++; MarkLog.Add(c.Memory.Marks, w.Tick, "자는 사이 배가 밀렸지만 침대 끈이 잡아 줬다"); return; }
-        if (m.G < 0.3f) { if (m.G > 0.2f) c.Jolt(w); return; }
-        if (!R.Chance(Math.Clamp((m.G - 0.25f) * 1.4f, 0f, 0.9f))) { c.Jolt(w); return; }
+        if (m.G < 0.4f) { if (m.G > 0.2f) c.Jolt(w); return; } // 침대 난간이 웬만한 건 잡는다
+        if (!R.Chance(Math.Clamp((m.G - 0.35f) * 1.2f, 0f, 0.8f))) { c.Jolt(w); return; }
         Stats.SleepersThrown++; m.Thrown++;
         Fall(m, c, push, false, 0f, "자다가 배가 밀릴 때", fromBed: true);
     }
@@ -712,7 +715,7 @@ public sealed partial class ManeuverSystem
         bool hurt = R.Chance(0.15f + (heavy ? 0.25f : 0f) + (m.G > 0.6f ? 0.2f : 0f) + (c.Age > 60f ? 0.15f : 0f) + slip * 0.2f);
         if (hurt)
         {
-            float dmg = R.Range(0.03f, 0.1f) * (0.6f + m.G);
+            float dmg = fromBed ? R.Range(0.02f, 0.05f) : R.Range(0.02f, 0.07f) * (0.5f + m.G); // 멍 · 삔 손목 정도 (크게 다치는 건 날아온 것 · 파편 쪽)
             NeedsSystem.AddInjury(c.Vitals, dmg, fromBed ? "자다가 침대에서 떨어졌다" : heavy ? "짐을 든 채 넘어졌다" : "배가 밀릴 때 넘어졌다");
             Memory.Shake(w, c, 0.04f, "배가 밀릴 때 넘어져 다쳤다");
             m.Hurt++; Stats.Hurt++;
