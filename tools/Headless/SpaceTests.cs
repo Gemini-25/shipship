@@ -186,6 +186,7 @@ public static partial class Program
             var a = SpWorker(w, Skill.Mechanics);
             var b = SpWorker(w, Skill.Mechanics, a);
             a.Habits.Remove(Habit.Hasty); a.Habits.Add(Habit.Methodical); // 꼼꼼한 사람은 보류
+            foreach (var x in w.Crew) if (x.Job?.Order == o1 || x.Job?.Order == o2) x.EndJob(w, ToilStatus.Interrupted); // 통합8 먼저 집어 든 사람이 있으면 내려놓는다 (그 사람이 보류된 일을 그대로 이어 했다)
             Force(w, a, SpChore(w, a, o1)!, SimTime.Hours(3));
             Force(w, b, SpChore(w, b, o2)!, SimTime.Hours(3));
             long t0 = w.Tick;
