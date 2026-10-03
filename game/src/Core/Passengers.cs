@@ -28,6 +28,9 @@ public sealed class PassengerInfo
     public string Gripe { get; set; } = "";
     public string LastGripe { get; set; } = "";
     public int Heard { get; set; }
+    /// <summary>들어 준 불만은 하루 동안 덜 거슬린다 (담요 · 귀마개 · 매트).</summary>
+    public string Eased { get; set; } = "";
+    public long EasedUntil { get; set; } = -1;
     public int Brushed { get; set; }
     /// <summary>생김 (짐 · 옷 · 모자 · 무늬 — 그림이 승객마다 다르다).</summary>
     public int Look { get; init; }
@@ -150,19 +153,32 @@ public sealed class PassengerSystem
             }
             float chance = 0.4f * MathF.Pow(1f - c.Traits.Calm, 1.2f) * (p.Volunteer ? 0.15f : 1f) * (told ? 0.7f : 1f) * (c.Fears.Contains(Fear.Fire) ? 1.6f : 1f);
             if (!R.Chance(chance)) continue;
-            var m = c.Mind;
-            m.Panics++;
-            m.Frozen = c.Traits.Bravery < 0.5f && R.Chance(0.6f);
-            m.PanicUntil = w.Tick + SimTime.Minutes(m.Frozen ? 6f + 4f * R.Float() : 4f + 3f * R.Float());
-            p.PanicAt = w.Tick;
-            Stats.Panics++;
-            c.EndJob(w, ToilStatus.Interrupted);
-            c.NextThinkTick = w.Tick;
-            c.Needs.Stress = MathF.Min(1f, c.Needs.Stress + 0.1f);
-            w.Log.Add(w.Tick, LogKind.Warning, m.Frozen ? "불길 앞에서 공황 — 얼어붙었다 (배를 처음 타 본 승객)" : "불길 앞에서 공황 — 정신없이 달아난다", c.Id);
-            MarkLog.Add(c.Memory.Marks, w.Tick, "불길 앞에서 공황에 빠졌다");
-            Version++;
+            Panic(c, c.Traits.Bravery < 0.5f && R.Chance(0.6f));
         }
+    }
+
+    /// <summary>승객이 공황에 빠진다 (얼어붙거나 달아난다) — 곁의 자원봉사 승객이 바로 알아챈다.</summary>
+    public void Panic(CrewMember c, bool frozen)
+    {
+        var w = _w;
+        if (Of(c) is not PassengerInfo p) return;
+        var m = c.Mind;
+        m.Panics++;
+        m.Frozen = frozen;
+        m.PanicUntil = w.Tick + SimTime.Minutes(frozen ? 8f + 4f * R.Float() : 5f + 3f * R.Float());
+        p.PanicAt = w.Tick;
+        Stats.Panics++;
+        c.EndJob(w, ToilStatus.Interrupted);
+        c.NextThinkTick = w.Tick;
+        c.Needs.Stress = MathF.Min(1f, c.Needs.Stress + 0.1f);
+        w.Log.Add(w.Tick, LogKind.Warning, frozen ? "불길 앞에서 공황 — 얼어붙었다 (배를 처음 타 본 승객)" : "불길 앞에서 공황 — 정신없이 달아난다", c.Id);
+        MarkLog.Add(c.Memory.Marks, w.Tick, "불길 앞에서 공황에 빠졌다");
+        foreach (var q in All.Values)
+        {
+            var v = w.Crew[q.Id];
+            if (q.Volunteer && v != c && v.CanAct && v.IsAwake && (v.Position - c.Position).LengthSquared() < 400f) v.NextThinkTick = w.Tick; // 비명을 듣는다
+        }
+        Version++;
     }
 
     internal Room? SafeRoom(CrewMember c)
@@ -171,6 +187,9 @@ public sealed class PassengerSystem
         return w.Ship.LiveRooms.Where(r => !r.Detached && Atmosphere.Danger(r) <= 0.1f && !r.Leaking && w.Fire.CountIn(r) == 0 && r != c.Room)
             .OrderBy(r => r.Type is RoomType.Mess or RoomType.Lounge ? 0 : 1).ThenBy(r => (r.Center - c.Position).LengthSquared()).ThenBy(r => r.Id).FirstOrDefault();
     }
+
+    /// <summary>이끌어야 할 사람: 공황 중이거나, 막 공황에서 깼는데 아직 불 곁에 있다.</summary>
+    public bool NeedsLead(CrewMember o) => o.Mind.Panicking(_w.Tick) || Of(o) is PassengerInfo q && q.PanicAt >= 0 && _w.Tick - q.PanicAt < SimTime.Minutes(12) && q.LedBy < 0 && _w.Fire.AnyWithin(o.Cell, 6f);
 
     /// <summary>이끌 사람: 공황에 빠진 사람 (승객 먼저 · 가까운 사람).</summary>
     public CrewMember? LeadTarget(CrewMember v, DistanceField dist)
@@ -181,9 +200,9 @@ public sealed class PassengerSystem
         float bs = float.MaxValue;
         foreach (var o in w.Crew)
         {
-            if (o == v || o.Dead || o.Down || o.Outside || !o.Mind.Panicking(w.Tick) || _follow.ContainsKey(o.Id) || !dist.Reachable(o.Cell)) continue;
+            if (o == v || o.Dead || o.Down || o.Outside || !NeedsLead(o) || _follow.ContainsKey(o.Id) || !dist.Reachable(o.Cell)) continue;
             if (_follow.Values.Any(f => f.who == o.Id)) continue;
-            float d = dist.Get(o.Cell) + (o.Passenger ? 0f : 6f);
+            float d = dist.Get(o.Cell) / 10f + (o.Passenger ? 0f : 6f); // 칸 수
             if (d > 30f || d >= bs) continue;
             bs = d; best = o;
         }
@@ -200,7 +219,7 @@ public sealed class PassengerSystem
     internal bool TakeHand(CrewMember v, CrewMember o, Cell dest, PassengerActivity act)
     {
         var w = _w;
-        if (!o.Mind.Panicking(w.Tick) || (v.Position - o.Position).Length() > 2.5f) return false;
+        if (!NeedsLead(o) || (v.Position - o.Position).Length() > 4f) return false;
         var room = w.Ship.RoomAt(dest);
         o.Mind.PanicUntil = w.Tick;
         o.Mind.Frozen = false;
@@ -226,12 +245,12 @@ public sealed class PassengerSystem
 
     // ─────────────────────────────── 마음 · 불만 ───────────────────────────────
 
-    private string Gripes(CrewMember c, out int n)
+    private string Gripes(CrewMember c, PassengerInfo p, out int n)
     {
         var w = _w;
         int k = 0;
         string first = "";
-        void G(bool on, string s) { if (!on) return; k++; if (first == "") first = s; }
+        void G(bool on, string s) { if (!on || s == p.Eased && w.Tick < p.EasedUntil) return; k++; if (first == "") first = s; }
         int hour = (int)(w.Tick % SimTime.TicksPerDay / SimTime.TicksPerHour);
         bool night = hour >= 23 || hour < 6;
         G(c.Bed == null || c.Bed.Type != FurnitureType.Bed, "침대");
@@ -251,10 +270,10 @@ public sealed class PassengerSystem
         var w = _w;
         var c = w.Crew[p.Id];
         if (c.Dead || c.Away) return;
-        string g = Gripes(c, out int n);
+        string g = Gripes(c, p, out int n);
         float care = 0f;
         foreach (var o in w.Crew) if (!o.Passenger && !o.Dead && o.AffinityTo(c) > 0.3f) care += 0.004f; // 챙겨 주는 승무원
-        p.Content = Math.Clamp(p.Content + (n == 0 ? 0.015f : -0.018f * n) + MathF.Min(0.02f, care) + (p.Volunteer ? 0.005f : 0f), 0f, 1f);
+        p.Content = Math.Clamp(p.Content + (n == 0 ? 0.008f : -0.006f * n) + MathF.Min(0.02f, care) + (p.Volunteer ? 0.005f : 0f), 0f, 1f);
         if (p.Gripe == "" && n > 0 && p.Content < 0.4f && w.Tick >= p.NextGripe && !c.Mind.Panicking(w.Tick)) { p.Gripe = g; Version++; }
     }
 
@@ -291,6 +310,7 @@ public sealed class PassengerSystem
         {
             string fix = g switch { "침대" => "간이침대에 매트를 하나 더 깔아 주겠다", "추위" => "담요를 갖다주겠다", "소음" => "귀마개를 주겠다", "배고픔" => "남은 끼니를 데워 주겠다", "심심함" => "저녁에 카드 치러 오라고 했다", _ => "괜찮다고, 우리가 보고 있다고 했다" };
             p.Content = MathF.Min(1f, p.Content + 0.25f);
+            p.Eased = g; p.EasedUntil = w.Tick + SimTime.TicksPerDay;
             p.Heard++;
             Stats.Heard++;
             c.Affinity[to.Id] = MathF.Min(1f, c.AffinityTo(to) + 0.12f);
@@ -312,7 +332,7 @@ public sealed class PassengerSystem
             Life.Diary(w, c, Persona.Say(c, $"{Ko.EunNeun(to.Name)} 내 말을 듣는 둥 마는 둥 했다"));
         }
         // 주컴퓨터: 같은 불만이 쌓이면 장부에 적고 길을 낸다
-        if (ComputerOn && GripeCount[g] >= 2)
+        if (ComputerOn && (GripeCount[g] >= 2 || Stats.Complaints >= 2))
         {
             string remedy = g switch { "침대" => "빈 선실 정리 · 간이침대 매트", "추위" => "승객 방 온도 2도 올리기", "더위" => "승객 방 환기량 올리기", "소음" => "밤 소음 작업 미루기", "어둠" => "승객 방 조명 먼저", "배고픔" => "승객 끼니 따로 챙기기", "경보" => "승객에게 상황 먼저 알리기", _ => "저녁 모임에 승객도" };
             var act = w.Automation.Book.Add(ActKind.Advice, c.Room, $"승객 불만: {g} {GripeCount[g]}번", $"{c.Name} 외 — 쌓이면 승객끼리 들고일어난다", remedy, "", "pax:" + g, SimTime.Hours(6));
@@ -330,7 +350,7 @@ public sealed class PassengerSystem
         {
             if (q.Id == v.Id || q.Content > 0.4f) continue;
             var o = w.Crew[q.Id];
-            if (!o.Dead && o.IsAwake && !o.Outside && dist.Reachable(o.Cell) && dist.Get(o.Cell) < 40f) return o;
+            if (!o.Dead && o.IsAwake && !o.Outside && dist.Reachable(o.Cell) && dist.Get(o.Cell) < 400) return o;
         }
         return null;
     }
@@ -369,11 +389,11 @@ public sealed class PassengerActivity : Activity
         var ps = w.Passengers;
         if (PassengerSystem.Off || ps.All.Count == 0 || !c.CanAct) return (0f, "—");
         if (ps.Following(c) is { } f) return (4f, $"{w.Crew[f.who].Name}의 손을 잡고 따라간다");
-        if (c.Job?.Activity == this) return (c.Job.Label == "공황에 빠진 사람 이끌기" ? 3.5f : 0.7f, c.Job.Label);
+        if (c.Job?.Activity == this) return (c.Job.Label == "공황에 빠진 사람 이끌기" ? 3.7f : 0.7f, c.Job.Label);
         if (!c.Passenger || ps.Of(c) is not PassengerInfo p) return (0f, "—");
-        if (ps.LeadTarget(c, dist) is CrewMember o) return (3.5f, $"{Ko.IGa(o.Name)} 공황에 빠졌다 — 손을 잡아 이끈다");
+        if (ps.LeadTarget(c, dist) is CrewMember o) return (3.7f, $"{Ko.IGa(o.Name)} 공황에 빠졌다 — 손을 잡아 이끈다");
         if (p.Gripe != "" && !Crisis.Acting(w) && ps.GripeTarget(c, dist) is CrewMember t) return (0.62f, $"따지러 간다 ({p.Gripe}) — {t.Name}");
-        if (p.Volunteer && !Crisis.Acting(w) && ps.ComfortTarget(c, dist) is CrewMember q) return (0.42f, $"{Ko.EulReul(q.Name)} 달래러 간다");
+        if (p.Volunteer && !Crisis.Acting(w) && ps.ComfortTarget(c, dist) is CrewMember q) return (ps.Of(q)!.Content < 0.25f ? 0.58f : 0.42f, $"{Ko.EulReul(q.Name)} 달래러 간다");
         return (0f, "—");
     }
 
@@ -386,7 +406,7 @@ public sealed class PassengerActivity : Activity
             var near = w.Ship.IsOpenFloor(dest + new Cell(1, 0)) ? dest + new Cell(1, 0) : dest;
             var toils = new List<Toil>
             {
-                new GotoToil(o.Cell, cm => o.Mind.Panicking(w.Tick)),
+                new GotoToil(o.Cell, cm => w.Passengers.NeedsLead(o)),
                 new DoToil((cm, world) => world.Passengers.TakeHand(cm, o, dest, this)),
                 new GotoToil(near),
                 new WaitToil(SimTime.Minutes(8), Pose.Standing, dest.Center),

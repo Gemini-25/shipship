@@ -12,8 +12,11 @@ public static partial class Program
     {
         _fails = 0;
         Console.WriteLine($"도킹 · 난파선 · 승객 점검 (v18.5 · v18.6) · 시드 {seed}\n");
+        string? only = Environment.GetEnvironmentVariable("DOCKONLY"); // 고칠 때 한 장면만
+        bool Sec(char k) => only == null || only.Contains(k);
 
         // ── 1) 난파선: 기밀 확인 → 탐사 → 기록 → 추모 → 해체 ──
+        if (Sec('1'))
         {
             var w = DayOne(seed, "Hanbit");
             int h0 = w.Ship.Grid.Height;
@@ -59,8 +62,8 @@ public static partial class Program
                     Console.WriteLine($"     [{e.Tick / 25}분] {(e.CrewId >= 0 ? w.Crew[e.CrewId].Name : "")}: {e.Text}");
         }
 
-        if (Environment.GetEnvironmentVariable("DOCKDBG") == "1") return _fails;
         // ── 2) 시험을 건너뛰고 열면: 고리 옆이 샌다 → 기존 대응 ──
+        if (Sec('2'))
         {
             var w = DayOne(seed, "Hanbit");
             var v = w.Dock.Arrive(DockKind.Wreck, "벨라호")!;
@@ -73,6 +76,7 @@ public static partial class Program
         }
 
         // ── 3) 거룻배: 기압 맞추기 · 물자 교환 · 같이 손보기 · 손님 ──
+        if (Sec('3'))
         {
             var w = DayOne(seed, "Hanbit");
             int crew0 = w.Crew.Count;
@@ -86,6 +90,7 @@ public static partial class Program
         }
 
         // ── 4) 승객: 불 앞에서 공황 → 자원봉사 승객이 이끈다 · 불만 ──
+        if (Sec('4'))
         {
             var w = DayOne(seed, "Hanbit");
             var mess = w.Ship.LiveRooms.First(r => r.Type is RoomType.Mess or RoomType.Lounge);
@@ -95,7 +100,9 @@ public static partial class Program
             var helper = w.Passengers.Board(at[^1], "하늬 기항지", rescued: false, volunteer: true)!;
             Check("승객은 일을 하지 않는다 (당직 · 비상 배치에서 빠진다)", a.Passenger && !w.CrisisCrew.Bill.Of.ContainsKey(a.Id), $"{a.Name} · {helper.Name}");
             Run(w, SimTime.Minutes(5));
-            w.Fire.Ignite(at[Math.Min(2, at.Count - 1)], 0.7f);
+            var fireAt = (a.Room ?? room).Cells.Where(c => w.Ship.IsOpenFloor(c) && c != a.Cell).OrderBy(c => Math.Abs(c.X - a.Cell.X) + Math.Abs(c.Y - a.Cell.Y)).First();
+            bool lit = w.Fire.Ignite(fireAt, 0.7f);
+            Console.WriteLine($"   불: {lit} · {a.Room?.Name} · 봉사자 {helper.Room?.Name}");
             long t0 = w.Tick;
             bool forced = false;
             while (w.Tick - t0 < SimTime.Hours(1))
@@ -104,13 +111,14 @@ public static partial class Program
                 if (!forced && w.Tick - t0 > SimTime.Minutes(12) && w.Passengers.Stats.Panics == 0)
                 {
                     forced = true; // 운이 좋아 아무도 공황에 빠지지 않았으면 — 장면을 만든다
-                    a.Mind.PanicUntil = w.Tick + SimTime.Minutes(8); a.Mind.Frozen = true;
-                    w.Passengers.Of(a)!.PanicAt = w.Tick;
+                    w.Passengers.Panic(a, true);
                 }
+                if (Environment.GetEnvironmentVariable("DOCKDBG") == "1" && (w.Tick - t0) % SimTime.Minutes(2) == 0 && w.Passengers.Stats.Panics > 0 && w.Tick - t0 < SimTime.Minutes(30))
+                    Console.WriteLine($"     {(w.Tick - t0) / 25}분 봉사자 {helper.Job?.Label} [{string.Join(", ", (helper.LastEvaluations ?? Array.Empty<Evaluation>()).Take(3).Select(e => e.Activity.Id + ":" + e.Score.ToString("0.00") + " " + e.Reason))}] · {a.Name} 공황 {a.Mind.Panicking(w.Tick)} 거리 {(a.Position - helper.Position).Length():0.0}");
                 if (w.Passengers.Stats.Led > 0 && w.Tick - t0 > SimTime.Minutes(30)) break;
             }
             var ps = w.Passengers.Stats;
-            Check("훈련 없는 승객이 불 앞에서 공황", ps.Panics >= 1 || forced && a.Mind.Panics >= 0, $"공황 {ps.Panics}{(forced ? " (꾸밈)" : "")} · 방송 {ps.Broadcasts}");
+            Check("훈련 없는 승객이 불 앞에서 공황", ps.Panics >= 1 && !forced, $"공황 {ps.Panics}{(forced ? " (꾸밈)" : "")} · 방송 {ps.Broadcasts}");
             Check("자원봉사 승객이 공황에 빠진 사람의 손을 잡고 이끌었다", ps.Led >= 1 && w.Passengers.Of(helper)!.Led >= 1, $"이끔 {ps.Led}");
             var led = w.Crew.Where(c => w.Passengers.Of(c)?.LedBy == helper.Id).FirstOrDefault();
             Check("이끌린 사람은 공황이 가라앉고 안전한 방으로 · 정이 생겼다", led != null && !led.Mind.Panicking(w.Tick) && led.AffinityTo(helper) > 0.2f && w.Fire.CountIn(led.Room ?? room) == 0, $"{led?.Name} → {led?.Room?.Name} · 정 {led?.AffinityTo(helper):0.00}");
@@ -124,12 +132,13 @@ public static partial class Program
             Check("승객 불만 (승무원을 찾아가 따졌다 · 들어 주거나 흘려듣는다)", ps.Complaints >= 1 && ps.Heard + ps.Brushed >= 1, $"불만 {ps.Complaints} · 들어 줌 {ps.Heard} · 흘림 {ps.Brushed} · {pa.LastGripe}");
             Check("자원봉사 승객이 마음 상한 승객을 달랬다", ps.Comforts >= 1 || pa.Content > 0.3f, $"달램 {ps.Comforts} · 마음 {pa.Content:0.00}");
             // 같은 불만이 또 쌓이면 주컴퓨터가 길을 낸다
-            pa.Content = 0.1f; pa.NextGripe = w.Tick;
+            pa.Content = 0.1f; pa.NextGripe = w.Tick; pa.EasedUntil = w.Tick; // 담요로 달랜 지 하루가 지났다
             Run(w, SimTime.Hours(4));
             Check("같은 불만이 쌓이면 주컴퓨터가 장부에 적는다", ps.Advices >= 1 || ps.Complaints >= 2 && w.Automation.Book.Acts.Any(x => x.Observe.StartsWith("승객 불만")), $"제안 {ps.Advices} · 불만 {ps.Complaints}");
         }
 
         // ── 5) 결정론 ──
+        if (Sec('5'))
         {
             uint H() { var w = World.CreateDefault(seed, 0, "Hanbit"); Run(w, SimTime.TicksPerDay + SimTime.Hours(6)); return SaveGame.StateHash(w); }
             uint H2()
@@ -147,6 +156,7 @@ public static partial class Program
         }
 
         // ── 6) 성능: 30인 배 하루 ──
+        if (Sec('6'))
         {
             double Day(bool off)
             {
