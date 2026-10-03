@@ -25,7 +25,7 @@ public sealed class Ailment
 {
     public string Id { get; init; } = "";
     public long Since { get; init; }
-    public float Peak { get; init; }
+    public float Peak { get; set; } // 통합6 방사선 병은 쬔 양이 늘면 함께 오른다
     /// <summary>나은 만큼 (날) — 쉬고 · 눕고 · 약을 쓰고 · 먹고 · 움직이고 · 곁에 누가 있으면 쌓인다.</summary>
     public float Healed { get; set; }
     public bool Diagnosed { get; set; }
@@ -123,6 +123,9 @@ public sealed class AilmentSystem
     // ───────────────────────────── 앓는 정도 ─────────────────────────────
 
     /// <summary>앓는 정도 0~1. 옮는 병·급한 병은 오르다 내리고, 오래가는 병은 나은 만큼만 준다.</summary>
+    /// <summary>통합6 방사선 병 세기: 쬔 양에 따라 (1Sv 0.1 · 2Sv 0.23 · 3Sv 0.39 · 4Sv 0.54 · 5Sv 넘으면 0.7) — 몸이 약하면 조금 더.</summary>
+    public static float RadPeak(CrewMember c) => 0.7f * Math.Clamp((c.Dose - 0.5f) / 4.5f, 0.15f, 1f) * (1.15f - 0.15f * c.Vitals.Health);
+
     public float Severity(Ailment a)
     {
         var s = Spec(a.Id);
@@ -160,6 +163,7 @@ public sealed class AilmentSystem
         if (c.Dead || Has(c, id) || c.AilmentImmune.Contains(id)) return null;
         if (_cooldown.TryGetValue((c.Id, id), out var until) && w.Tick < until) return null;
         var a = new Ailment { Id = id, Since = w.Tick, Peak = MathF.Min(1f, s.Peak * (0.75f + 0.5f * _rng.Float()) * (1.15f - 0.3f * c.Vitals.Health)), From = from?.Id ?? -1 };
+        if (id == "radiation") a.Peak = RadPeak(c); // 통합6 방사선 병의 세기는 쬔 양을 따른다 (1Sv 남짓은 메스꺼움 정도)
         c.Ailments.Add(a);
         Stats.Cases[id] = Stats.Cases.GetValueOrDefault(id) + 1;
         if (from != null) Stats.Spread++;
@@ -256,6 +260,7 @@ public sealed class AilmentSystem
                 foreach (var (id, p, why) in Risks(c))
                     if (_rng.Chance(MathF.Min(0.9f, p * rollDt))) Catch(c, id, null, why);
             if (c.Ailments.Count == 0) { c.Fx = default; continue; }
+            if (roll && c.Dose > 1f && c.Ailments.FirstOrDefault(x => x.Id == "radiation") is Ailment ra) ra.Peak = MathF.Max(ra.Peak, RadPeak(c)); // 통합6 폭풍이 이어지면 더 아프다
             Symptoms(c, dt);
             Heal(c, dt);
             Spread(c, dt);

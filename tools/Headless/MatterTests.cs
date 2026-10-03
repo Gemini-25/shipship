@@ -363,6 +363,7 @@ public static partial class Program
             var floater = m.Add(ArticleKind.PaperStack, cells.Where(c => !m.Any(c)).ElementAt(2), "시험");
             ObjectPhysics.Push(w, floater, 0.6f, Vector2.UnitY, "시험 — 툭");
             var f0 = floater.At;
+            if (Environment.GetEnvironmentVariable("MATTER_DEBUG") == "1") { Console.WriteLine($"   무중력 시작 {f0} 속도 {floater.Vel} 방 {room.Name}"); for (int k = 0; k < 8; k++) { Run(w, SimTime.Minutes(0.5f)); Console.WriteLine($"   {k} {floater.At} 속도 {floater.Vel} 든 사람 {floater.CarriedBy} 떠돎 {m.Stats.Drifted}"); } } else
             Run(w, SimTime.Minutes(4));
             bool drift = m.Stats.Drifted >= 1 || floater.At != f0;
             ObjectPhysics.SetGravity(w, 1f);

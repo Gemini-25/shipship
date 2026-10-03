@@ -42,6 +42,8 @@ public static partial class Program
             foreach (var f in w.Ship.FurnitureOf(FurnitureType.GrowBed).Where((_, i) => i % 3 != 0)) f.Machine!.Crop = null; // 작물 셋 중 둘이 시들었다
             // 일하는 사람 절반은 배가 고프다
             foreach (var c in w.Crew.Where(c => !c.Dead && !c.IsChild && c.Id % 2 == 0)) c.Needs.Food = 0.3f;
+            // 통합6 두 무리를 분명히 세운다 (그날그날 배고픔 · 일정으로 표가 한쪽으로 쏠리지 않게): 배고픈 쪽은 자유를, 창고를 걱정하는 쪽은 안전을 중히 여긴다
+            foreach (var c in w.Crew.Where(c => !c.Dead && !c.IsChild)) c.Value = c.Id % 2 == 0 ? CrewValue.Freedom : CrewValue.Safety;
             int walked = 0;
             var asked = new HashSet<int>();
             long readyAt = -1;
@@ -51,7 +53,8 @@ public static partial class Program
             {
                 Run(w, 60);
                 rat ??= w.Motions.All.FirstOrDefault(m => m.Policy == "rations" && m.To == 3);
-                if (i % 60 == 0) foreach (var c in w.Crew.Where(c => !c.Dead && !c.IsChild && c.Id % 2 == 0)) c.Needs.Food = MathF.Min(c.Needs.Food, 0.35f); // 요즘 몫이 적어 늘 배가 고프다
+                foreach (var c in w.Crew.Where(c => !c.Dead && !c.IsChild && c.Id % 2 == 0)) c.Needs.Food = MathF.Min(c.Needs.Food, 0.35f); // 요즘 몫이 적어 늘 배가 고프다 (통합6 먹고 와도 금방 — 회의 때도 배고픈 채로)
+                foreach (var c in w.Crew.Where(c => !c.Dead && !c.IsChild && c.Id % 2 == 1)) c.Needs.Food = MathF.Max(c.Needs.Food, 0.8f); // 통합6 다른 쪽은 아직 배가 부르다 (창고만 걱정한다)
                 if (rat == null) { if (i % 30 == 0) TrimFood(w, 3.5f); continue; }
                 foreach (var c in w.Crew) if (c.Job?.Activity is PetitionActivity) { walked++; asked.Add(c.Id); }
                 if (readyAt < 0 && rat.Stage != MotionStage.Signing) { readyAt = w.Tick; signersAtReady = rat.Signers.Count; }
@@ -162,10 +165,20 @@ public static partial class Program
             foreach (var o in there) w.Motions.See(o, th);
             var accuser = w.Crew.First(c => c.Id == th.Witnesses.OrderBy(id => w.Crew.First(c => c.Id == id).AffinityTo(thief)).First());
             accuser.ChangeAffinity(thief, -0.4f);
+            accuser.Value = CrewValue.Rules; accuser.Needs.Food = MathF.Max(accuser.Needs.Food, 0.8f); // 통합6 본 사람은 정한 몫을 지켜야 한다고 믿는다 (1번 장면의 배고픈 무리에서 뽑혀도 고발할 까닭이 분명하게)
             foreach (var c in adults.Where(c => c != thief && c != accuser)) c.ChangeAffinity(thief, -0.15f);
             w.Motions.Quiet = false;
             Motion? trial = null;
-            CouncilUntil(w, () => (trial ??= w.Motions.All.FirstOrDefault(m => m.Kind == MotionKind.Accusation && m.Target == thief.Id)) != null && trial.Decided >= 0 && w.Motions.Now == null, SimTime.TicksPerDay * 2, 30);
+            long dbgAt = 0;
+            CouncilUntil(w, () =>
+            {
+                if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "1" && w.Tick >= dbgAt && trial != null && w.Crew.FirstOrDefault(c => c.Id == trial.Proposer) is CrewMember pr)
+                {
+                    dbgAt = w.Tick + SimTime.Hours(1);
+                    Console.WriteLine($"     [{SimTime.Clock(w.Tick)}] {pr.Name} {pr.Job?.Label} · {trial.Stage} 서명 {trial.Signers.Count}/{trial.Need} 부탁 {trial.Asked.Count} · " + string.Join(", ", pr.LastEvaluations.OrderByDescending(e => e.Score).Take(4).Select(e => $"{e.Activity.Id}:{e.Score:0.00}")));
+                }
+                return (trial ??= w.Motions.All.FirstOrDefault(m => m.Kind == MotionKind.Accusation && m.Target == thief.Id)) != null && trial.Decided >= 0 && w.Motions.Now == null;
+            }, SimTime.TicksPerDay * 2, 30);
             var past = w.Motions.Past.LastOrDefault(p => p.Motion == trial);
             var witLines = past?.Script.Where(l => l.Role is LineRole.Witness or LineRole.Accuser).ToList() ?? new();
             bool onlySaw = witLines.Count > 0 && witLines.All(l => th.Witnesses.Contains(l.Who) || nat != null && nat.Witnesses.Contains(l.Who));
@@ -241,6 +254,8 @@ public static partial class Program
                 string.Join(" / ", w.Motions.All.Take(6).Select(m => $"{m.Title} [{m.Stage}{(m.Decided >= 0 ? " " + m.Outcome : "")}]")));
             Run(w, SimTime.TicksPerDay * 3);
             Console.WriteLine($"   엿새: {st.Line()}");
+            // 통합6 안건이 잦은 배는 파벌이 다음 안건마다 다시 뭉쳐 오래 간다 — 나흘 더 (한동안 같이 설 일이 없으면 흩어진다)
+            for (int d = 0; d < 4 && !w.Motions.Factions.Any(f => f.Gone); d++) Run(w, SimTime.TicksPerDay);
             var gone = w.Motions.Factions.Where(f => f.Gone).ToList();
             Check("파벌은 생겼다 흩어진다 — 다음 안건에서 갈라서거나 한동안 같이 설 일이 없으면", st.FactionsBorn >= 1 && gone.Count >= 1,
                 string.Join(" / ", w.Motions.Factions.Select(f => $"{f.Name}{(f.Gone ? $" (흩어짐: {f.GoneWhy})" : $" (이김 {f.Wins} · 짐 {f.Losses})")}")));

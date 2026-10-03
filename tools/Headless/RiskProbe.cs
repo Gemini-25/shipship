@@ -9,6 +9,24 @@ public static partial class Program
     private static int RunRiskProbe(string[] args, int seed)
     {
         if (Environment.GetEnvironmentVariable("RISK_SCENE") is string sc) { foreach (var k in sc.Split(',')) RiskScene(seed, k); return 0; }
+        if (Environment.GetEnvironmentVariable("RISK_TRACE") is string tr)
+        {
+            // 통합6 배 하나를 여섯 시간마다 찍는다: 기력 · 체력 · 피폭 · 잠 · 쓰러짐 · 많이 하는 일
+            Storyteller.PersonaValue = 1f; Storyteller.LevelValue = 3f;
+            var parts = tr.Split(':');
+            var tw = World.CreateDefault(int.Parse(parts[1]), 0, parts[0]);
+            tw.CrewCanDie = true;
+            for (int h = 0; h < 240; h += 6)
+            {
+                for (int k = 0; k < SimTime.Hours(6); k++) tw.Step();
+                var live = tw.Crew.Where(c => !c.Dead).ToList();
+                if (live.Count == 0) break;
+                var top = live.GroupBy(c => c.Job?.Label ?? "-").OrderByDescending(g => g.Count()).Take(4).Select(g => $"{g.Key}×{g.Count()}");
+                var ail = live.SelectMany(c => tw.Ailments.Line(c).Split(" · ")).Where(x => x.Length > 0).GroupBy(x => x).OrderByDescending(g => g.Count()).Take(3).Select(g => $"{g.Key}×{g.Count()}");
+                Console.WriteLine($"  {h + 6,3}h 산 {live.Count} 기력 {live.Average(c => c.Needs.Rest):0.00} 체력 {live.Average(c => c.Vitals.Health):0.00}(최저 {live.Min(c => c.Vitals.Health):0.00}) 부상 {live.Average(c => c.Vitals.Injury):0.00} 피폭 최대 {live.Max(c => c.Dose):0.0} 잠 {live.Count(c => c.Pose == Pose.Sleeping)} 쓰러짐 {live.Count(c => c.Down)} 배 {live.Average(c => c.Needs.Food):0.00} · {string.Join(", ", top)} · 병 {string.Join(", ", ail)}");
+            }
+            return 0;
+        }
         Storyteller.PersonaValue = 1f;
         Storyteller.LevelValue = 3f;
         string ships = Environment.GetEnvironmentVariable("RISK_SHIPS") ?? "Hanbit,Eunha,Cheonma";
