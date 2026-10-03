@@ -27,6 +27,8 @@ public sealed class PetitionActivity : Activity
         bool urgent = m.Sitting == SittingKind.Emergency;
         if (Bedtime(c, w) && !urgent) return (0f, "서명은 내일 받는다");
         float s = 0.5f + 0.12f * c.Traits.Sociability + (urgent ? 0.25f : 0f) + (m.Signers.Count + 1 >= m.Need ? 0.08f : 0f);
+        // 통합8 서명 기한이 다가올수록 마음이 급해진다 (일상 거리 · 꾸밈에 밀려 이틀 동안 서명 하나 못 받고 안건이 흐지부지됐다)
+        if (m.Deadline > m.Born) s += 0.25f * Math.Clamp((w.Tick - m.Born) / (float)(m.Deadline - m.Born), 0f, 1f);
         if (OnShift(c, w) && !urgent) s -= 0.22f;
         if (w.Motions.NextAsk(c, m) is not CrewMember o) return (0f, "서명을 부탁할 사람이 없다");
         return (s, $"'{m.Title}' — {o.Name}에게 서명을 받으러 간다 ({m.Signers.Count}/{m.Need})");

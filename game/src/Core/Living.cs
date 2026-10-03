@@ -106,7 +106,7 @@ public sealed partial class WorkBoard
         float below = w.Policies["rations"] == 3 ? 4f : 2f; // v13.2 방침(식량 배급: 줄인다) — 나흘치 아래면 미리
         below = MathF.Max(below, w.Automation.RationLead); // v16.6 식단 계획 모듈 — 바닥나는 날을 먼저 보고 하루 앞당긴다
         if (!f.Rationing && days < below && (grow < need * 1.05f || FoodPolicy.FoodStock(w) + FoodPolicy.HarvestSoon(w, below * 24f) < need * below)) // 통합: 재배대가 많아도 이 기간 안에 거둘 것이 모자라면
-            post(WorkKind.Ration, WorkTarget.Of(board), 0.6f + MathF.Min(0.3f, (2f - days) * 0.2f), Skill.Cooking,
+            post(WorkKind.Ration, WorkTarget.Of(board), 0.6f + MathF.Min(0.3f, (below - days) * 0.2f), Skill.Cooking, // 통합8 급함은 붙이기로 한 기준에서 잰다 (방침 · 식단 계획으로 미리 붙일 때 이틀치에서 재면 0.5 아래로 떨어져 아무도 안 붙였다)
                 $"먹을 것 {days:0.0}일치 ({FoodPolicy.FoodStock(w):0}끼 · {crew}명) · 재배대가 하루 {grow:0}끼를 대는데 {need:0}끼를 먹는다");
         if (f.Rationing && f.PlentySince >= 0 && w.Tick - f.PlentySince > SimTime.Hours(12) && (w.Policies["rations"] != 3 || days > 6f))
             post(WorkKind.EndRation, WorkTarget.Of(board), 0.35f, Skill.Cooking, $"먹을 것 {days:0.0}일치 — 열두 시간째 넉넉하다");

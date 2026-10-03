@@ -178,7 +178,16 @@ public static partial class Program
         bool urgent = boss != null && pu.State != ProposalState.Pending && pu.DecidedAt < pu.Deadline && pu.Trail.Any(t => t.Text.Contains("급"));
         // ② 함장이 단말 앞에 있으면: 본 때를 적고 몇 분 뒤 정한다 (기한보다 먼저)
         boss = ProposalTiming.Boss(w);
-        bool atDesk = boss != null && RunUntil(w, () => ProposalTiming.AtTerminal(boss) && w.Meetings.Session == null && !w.Scale.OpenCases.Any(k => k.Big), SimTime.Hours(20), SimTime.Minutes(5));
+        bool atDesk = boss != null && RunUntil(w, () => ProposalTiming.AtTerminal(boss) && w.Meetings.Session == null && !w.Scale.OpenCases.Any(k => k.Big), SimTime.Hours(6), SimTime.Minutes(5));
+        // 통합8 함장이 반나절 넘게 단말 방에 안 들르는 날도 있다 (함장이 과학자 · 일거리가 늘었다) — 그런 날은 함교 단말 앞에 앉힌다 (장면을 세운다)
+        if (!atDesk && boss != null && w.Ship.Rooms.FirstOrDefault(r => r.Kind == RoomType.Bridge && r.Cells.Any(w.Ship.IsOpenFloor)) is Room bridge)
+        {
+            RunUntil(w, () => w.Meetings.Session == null && !w.Scale.OpenCases.Any(k => k.Big) && boss.IsAwake, SimTime.Hours(12), SimTime.Minutes(5));
+            BrainPut(w, boss, bridge, 0);
+            boss.HoldUntil = w.Tick + SimTime.Minutes(40); boss.HoldWhy = "함교 단말 앞";
+            Run(w, 2);
+            atDesk = ProposalTiming.AtTerminal(boss);
+        }
         var pt = a.Asks.Propose("ui24:desk", "vent", room, "창고 환기 줄이기", "먼지가 많다", "필터가 덜 막힌다", 60f, 0);
         Run(w, SimTime.Minutes(ProposalTiming.ThinkMinutes + 2f));
         bool desk = atDesk && pt.State != ProposalState.Pending && pt.DecidedAt < pt.Deadline && pt.SeenAt >= 0

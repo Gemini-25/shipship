@@ -244,7 +244,7 @@ public static partial class Program
                     Scenarios.LimitStock(w, ItemKind.Produce, 0);
                     int want = (int)(crew * FoodPolicy.MealsPerPersonDay * 2.7f) - (int)FoodPolicy.FoodStock(w);
                     foreach (var box in w.Ship.Containers) if (want > 0 && box.Storage!.Accepts(ItemKind.Ration)) want -= box.Storage.Add(ItemKind.Ration, want);
-                    foreach (var bed in w.Ship.FurnitureOf(FurnitureType.GrowBed).Where((_, i) => i % 4 != 0).ToList()) { bed.Machine!.Crop!.Growth = 0.05f; w.Machines.Break(bed.Machine, FaultKind.Wrecked); }
+                    foreach (var bed in w.Ship.FurnitureOf(FurnitureType.GrowBed).Where((_, i) => i % 6 != 0).ToList()) { bed.Machine!.Crop!.Growth = 0.05f; w.Machines.Break(bed.Machine, FaultKind.Wrecked); } // 통합8 넷에 하나만 남기면 한 대만 고쳐도 재배가 먹는 양을 넘어 배급이 필요 없어졌다 — 여섯에 하나
                     if (plan) w.Automation.Install(ComputerModule.MealPlan);
                     else w.Automation.Remove(ComputerModule.MealPlan); // v16.20 첫날부터 다 있다 — 없는 배는 떼어 내서 견준다
                     return w;

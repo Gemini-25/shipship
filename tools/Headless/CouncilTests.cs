@@ -244,7 +244,16 @@ public static partial class Program
             int r0 = w.Policies["risktaking"], a0 = w.Policies["autoscope"];
             var prop = adults.OrderBy(c => c.AffinityTo(cap)).ThenBy(c => c.Id).First();
             var m = w.Motions.Propose(prop, MotionKind.Confidence, SittingKind.Election, $"선장 {cap.Name} 불신임", "다들 선장을 못 믿는다", target: cap.Id);
-            CouncilUntil(w, () => m.Decided >= 0 && w.Motions.Now == null, SimTime.TicksPerDay * 2, 30);
+            long dbg4 = 0;
+            CouncilUntil(w, () =>
+            {
+                if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "1" && w.Tick >= dbg4)
+                {
+                    dbg4 = w.Tick + SimTime.Hours(2);
+                    Console.WriteLine($"     [{SimTime.Clock(w.Tick)}] {prop.Name} {prop.ActivityLabel} · {m.Stage} 서명 {m.Signers.Count}/{m.Need} 부탁 {m.Asked.Count} 거절 {m.Refused.Count} · " + string.Join(", ", prop.LastEvaluations.OrderByDescending(e => e.Score).Take(4).Select(e => $"{e.Activity.Id}:{e.Score:0.00}")));
+                }
+                return m.Decided >= 0 && w.Motions.Now == null;
+            }, SimTime.TicksPerDay * 2, 30);
             var past = w.Motions.Past.LastOrDefault(p => p.Motion == m);
             var win = w.Crew.FirstOrDefault(c => c.Id == m.Winner);
             int speeches = past?.Script.Count(l => l.Role == LineRole.Candidate) ?? 0;

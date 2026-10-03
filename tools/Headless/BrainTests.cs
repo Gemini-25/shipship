@@ -244,12 +244,12 @@ public static partial class Program
                 BrainPut(w, s2, far, 0);
                 Run(w, 2);
                 w.Brain2.Beliefs.Learn(s2, Topic.Fire, room.Id, 1, BeliefSource.Rumor, 0.85f, teller.Id);
+                s2.NextThinkTick = w.Tick + 1; // 통합8 소문을 들은 그 자리에서 다시 판단한다 (첫 사람처럼 — 들은 사람은 Mind.Hear 로 그렇게 된다) · 잡은 개조 일을 몇 시간 이어 가 장면이 안 됐다
                 int heeded0 = w.Brain2.Beliefs.NudgesHeeded;
                 bool s2reached = false;
                 for (int m = 0; m < 30; m++)
                 {
                     Run(w, SimTime.Minutes(0.5f)); if (s2.Room == room) s2reached = true;
-                    if (debug && m % 2 == 0) { var p2 = w.Brain2.Plans.Current(s2); var bb = w.Brain2.Beliefs.Get(s2, Topic.Fire, room.Id); Console.WriteLine($"    s2 {m * 0.5f}분 {s2.Job?.Label} [{s2.Job?.Activity?.GetType().Name}] @{s2.Room?.Name} 계획 {p2?.Kind} {p2?.Room?.Name} 말함 {p2?.Nudged} · 믿음 {(bb != null ? w.Brain2.Beliefs.Describe(bb) + " " + bb.Conf.ToString("0.00") : "-")} · 창고 데이터 {room.DataLinked} 불앎 {w.Fire.IsKnown(room)} 알림 {w.Brain2.Beliefs.Nudges}"); }
                 }
                 var b2 = w.Brain2.Beliefs.Get(s2, Topic.Fire, room.Id);
                 Check("주 컴퓨터 — 승무원의 믿음을 짐작해 틀린 길을 손목 단말로 바로잡는다 (믿는 만큼 듣는다)",

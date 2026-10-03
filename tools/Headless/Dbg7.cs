@@ -69,6 +69,25 @@ public static partial class Program
                 Console.WriteLine($"{SimTime.Clock(w.Tick)} {solo.Name} {solo.ActivityLabel} · order {(o == null ? "-" : $"u{o.Urgency:0.00} asg {o.Assignee?.Name} blk {o.BlockedReason} until {(o.BlockedUntil > w.Tick ? SimTime.Clock(o.BlockedUntil) : "-")} prog {o.Progress:0.00} ap {ChoresActivity.Appeal(solo, w, o, dist, out _):0.00} av {w.Board.AvailableTo(solo).Contains(o)}")} · ev[{string.Join(", ", solo.LastEvaluations.Take(3).Select(e => $"{e.Activity?.Label} {e.Score:0.00}"))}] solos {w.Coop.Stats.Solos} holds {w.Coop.Stats.Holds}");
             }
         }
+        if (which == "ration")
+        {
+            var w = DayOne(seed, "Hanbit");
+            int crew = w.Crew.Count(c => !c.Dead);
+            Scenarios.LimitStock(w, ItemKind.Meal, crew);
+            Scenarios.LimitStock(w, ItemKind.Ration, 0);
+            Scenarios.LimitStock(w, ItemKind.Produce, 0);
+            int want = (int)(crew * FoodPolicy.MealsPerPersonDay * 2.7f) - (int)FoodPolicy.FoodStock(w);
+            foreach (var box in w.Ship.Containers) if (want > 0 && box.Storage!.Accepts(ItemKind.Ration)) want -= box.Storage.Add(ItemKind.Ration, want);
+            foreach (var bed in w.Ship.FurnitureOf(FurnitureType.GrowBed).Where((_, i) => i % 6 != 0).ToList()) { bed.Machine!.Crop!.Growth = 0.05f; w.Machines.Break(bed.Machine, FaultKind.Wrecked); }
+            w.Automation.Install(ComputerModule.MealPlan);
+            for (int h = 0; h < 20 && !w.Food.Rationing; h++)
+            {
+                Run(w, SimTime.Hours(1));
+                var o = w.Board.All.FirstOrDefault(o => o.Kind == WorkKind.Ration && !o.Closed);
+                var cook = w.Crew.FirstOrDefault(c => c.Role == CrewRole.Cook);
+                Console.WriteLine($"{SimTime.Clock(w.Tick)} grow {FoodPolicy.GrowingPerDay(w):0} soon {FoodPolicy.HarvestSoon(w, 72f):0} stock {FoodPolicy.FoodStock(w):0} beds-broken {w.Ship.FurnitureOf(FurnitureType.GrowBed).Count(b => b.Machine!.Faults.Count > 0)} days {FoodPolicy.FoodDays(w):0.00} lead {w.Automation.RationLead} leads {w.Automation.RationLeads} order {(o == null ? "-" : $"{o.Urgency:0.00} {o.Assignee?.Name} blk {o.BlockedReason}")} · cook {cook?.Name} {cook?.ActivityLabel} · crisis {Crisis.Level(w)} · asks {w.Automation.Asks.Needed("ration")}");
+            }
+        }
         if (which == "chess")
         {
             var w = DayOne(seed, "Hanbit");

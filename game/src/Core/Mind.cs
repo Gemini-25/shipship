@@ -125,7 +125,11 @@ public sealed class MindSystem
         c.NextThinkTick = Math.Min(c.NextThinkTick, w.Tick + 1); // 알게 된 그 자리에서 다시 판단한다
         switch (src)
         {
-            case KnowSource.Seen: Sightings++; break;
+            case KnowSource.Seen:
+                Sightings++;
+                // 통합8 제 방에서 불길이 이는 걸 본 사람은 그날을 기억한다 (사고 카드 · 연대기의 "누가 기억하나")
+                if (key.StartsWith("fire:") && c.Room is Room here && key == $"fire:{here.Id}") MarkLog.Add(c.Memory.Marks, w.Tick, $"{here.Name}에서 불길이 이는 걸 봤다");
+                break;
             case KnowSource.Alarm: Alarms++; break;
             case KnowSource.Radio:
                 Radios++;
