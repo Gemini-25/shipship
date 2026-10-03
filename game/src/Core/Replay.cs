@@ -458,6 +458,7 @@ public static class SaveGame
         w.Grades.Hash(I, F); // 부상 등급
         w.Surgery.Hash(I, F); w.Blood.Hash(I, F); w.Pharmacy.Hash(I, F); w.Recovery.Hash(I, F); // 의료 1차
         w.Organs.Hash(I, F); w.Transplant.Hash(I, F); w.Infection.Hash(I, F); // 의료 2차
+        w.SurgArm.Hash(I, F); w.MedBots.Hash(I, F); w.Telemed.Hash(I, F); // 의료 3차
         return h;
     }
 }

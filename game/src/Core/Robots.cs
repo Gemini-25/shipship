@@ -14,6 +14,8 @@ public enum RobotKind
     Safety,     // 방재: 순찰(불·사고 전조 발견), 소화 거품
     // v15.7 새 로봇 11 (RobotsV15.cs): 위 넷의 행동을 그대로 쓰고 특기(맡는 일·속도·배터리·고장률)만 다르다
     Courier, Tanker, Stocker, Lineman, Assistant, Overhauler, Harvester, Tender, Sentry, Firefighter, Utility,
+    // 의료 3차 (MedBots.cs): 들것 로봇 · 간호 로봇
+    Stretcher, Nurse,
 }
 
 public enum RobotState
@@ -755,12 +757,14 @@ public sealed partial class RobotSystem
         bool work = w.Board.OpenForRobot().Any(o => CanDo(r.Kind, o.Kind));
         bool assist = RobotsV15.Assists(r.Kind) && w.Crew.Any(c => c.CanAct && c.Helper == null && c.Job?.Order is WorkOrder jo && Assistable(jo.Kind) && c.Job.Current is WorkToil);
         bool patrol = RobotsV15.Patrols(r.Kind) && w.Tick >= r.NextPatrol && r.Battery > 0.7f;
-        if (!fire && !work && !assist && !patrol) { if (!r.AtDock) GoHome(r, null); return; }
+        bool med = w.MedBots.Wants(r); // 의료 3차 쓰러진 사람 · 피 · 손 펌프 · 소독
+        if (!fire && !work && !assist && !patrol && !med) { if (!r.AtDock) GoHome(r, null); return; }
 
         var dist = w.Paths.Flood(r.Cell, Profile);
 
         // 방재 로봇: 불이 먼저
         if (RobotsV15.Fights(r.Kind) && r.Foam > 0.15f && PlanFire(r, dist)) return;
+        if (med && w.MedBots.Plan(r, dist)) return; // 의료 3차 위중한 사람부터
 
         WorkOrder? best = null;
         Cell bestSpot = default;
@@ -1031,7 +1035,7 @@ public sealed partial class RobotSystem
         if (what != null) _world.Log.Add(_world.Tick, LogKind.Work, $"{r.Name}: {what}");
     }
 
-    private void Begin(Robot r, List<RobotStep> steps, string what)
+    internal void Begin(Robot r, List<RobotStep> steps, string what)
     {
         r.Homing = false;
         r.Steps = steps;

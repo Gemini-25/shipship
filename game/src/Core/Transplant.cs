@@ -152,6 +152,7 @@ public sealed class TransplantSystem
         if (w.Eras.Has("regenmed")) p += 0.05f;
         if (surgeon.Needs.Rest < 0.2f) p -= 0.1f;
         p += w.Surgery.RoomFactor(surgeon, bed?.Room ?? patient.Room); // 의료 1차 수술실 사정 (집도의 마음 · 수술대 · 무영등 · 멸균)
+        p += w.SurgArm.Factor(bed?.Room ?? patient.Room, surgeon); // 의료 3차 수술 로봇 팔이 곁에서 거든다 (수술과 같은 함수)
         return Math.Clamp(p, 0.05f, 0.95f);
     }
 

@@ -98,6 +98,8 @@ public sealed class SurgerySystem
     };
 
     private CrewMember? CrewOf(int id) { foreach (var c in _w.Crew) if (c.Id == id) return c; return null; }
+    private float Sk(CrewMember? s) => s?.SkillLevel(Skill.Medicine) ?? _w.SurgArm.ArmSkill(); // 의료 3차 집도의가 없으면 수술 팔의 손
+    private static string Who(CrewMember? s) => s?.Name ?? "수술 팔";
     public SurgeryCase? CaseOf(CrewMember c) { foreach (var k in Cases) if (k.Patient == c.Id) return k; return null; }
     public bool Busy(CrewMember c) { foreach (var k in Cases) if (k.State is CaseState.Prep or CaseState.Operating && (k.Surgeon == c.Id || k.Assistant == c.Id || k.Patient == c.Id)) return true; return false; }
     public int WaitingFor(ItemKind k) { int n = 0; foreach (var x in Cases) if (x.State == CaseState.Deferred && x.DeferWhy.StartsWith("마취제")) n++; return k == ItemKind.Anesthetic ? n : 0; }
@@ -134,7 +136,7 @@ public sealed class SurgerySystem
         if (Cases.Count == 0) return false;
         foreach (var k in Cases)
             if (k.State is CaseState.Prep or CaseState.Operating && TableOf(k) is Furniture t && t.Room == m.Body.Room
-                && m.Body.Type is FurnitureType.OperatingTable or FurnitureType.SurgicalLamp or FurnitureType.AnesthesiaMachine or FurnitureType.Autoclave or FurnitureType.MedBed or FurnitureType.BloodFridge)
+                && m.Body.Type is FurnitureType.OperatingTable or FurnitureType.SurgicalLamp or FurnitureType.AnesthesiaMachine or FurnitureType.Autoclave or FurnitureType.MedBed or FurnitureType.BloodFridge or FurnitureType.SurgicalArm) // 의료 3차 팔
                 return true;
         return false;
     }
@@ -302,6 +304,7 @@ public sealed class SurgerySystem
         {
             if (k.State is CaseState.Deferred or CaseState.Done) continue;
             var pt = CrewOf(k.Patient)!;
+            if (w.SurgArm.Leads(k)) continue; // 의료 3차 수술 팔이 집도한다
             if (k.Surgeon >= 0 && CrewOf(k.Surgeon) is CrewMember s0 && s0.CanAct && !s0.Outside) continue;
             k.Surgeon = -1;
             bool cont = k.State != CaseState.Waiting; // 손을 놓은 수술을 이어받는다
@@ -310,6 +313,8 @@ public sealed class SurgerySystem
                                           && w.Grades.Now(c) < InjuryGrade.Serious && (c.Role == CrewRole.Medic || c.SkillLevel(Skill.Medicine) >= (crit ? 0.15f : 0.3f)))
                 .Select(c => (c, s: c.SkillLevel(Skill.Medicine) + (c.Role == CrewRole.Medic ? 0.25f : 0f) - (c.Needs.Rest < 0.3f ? 0.2f : 0f) - 0.35f * Guilt.GetValueOrDefault(c.Id) + 0.08f * Confidence.GetValueOrDefault(c.Id)))
                 .OrderByDescending(x => x.s).ThenBy(x => x.c.Id).ToList();
+            if (w.SurgArm.Claim(k, pt, cands.Count > 0 ? cands[0].c : null, cont, out var stand)) continue; // 의료 3차 사람이 없거나 · 지쳤거나 · 물러서면 컴퓨터가 팔로
+            if (cands.Count == 0 && stand != null) cands.Add((stand, 0f)); // 의료 3차 컴퓨터를 마다했다 — 손이 덜 익은 사람이라도
             if (cands.Count == 0) continue;
             var pick = cands[0].c;
             // 손을 놓친 기억 — 다른 사람이 있으면 물러선다
@@ -410,7 +415,7 @@ public sealed class SurgerySystem
     // ───────────── 수술 (집도의의 손 — SurgeryToil이 한 틱씩) ─────────────
 
     /// <summary>수술 한 틱. Running · Succeeded(끝) · Failed(손을 놓았다 — 다시 잡는다).</summary>
-    internal ToilStatus Step(SurgeryCase k, CrewMember s)
+    internal ToilStatus Step(SurgeryCase k, CrewMember? s) // 의료 3차 s == null: 수술 팔이 집도
     {
         var w = _w;
         if (k.State == CaseState.Done || k.State == CaseState.Deferred) return ToilStatus.Succeeded;
@@ -418,7 +423,7 @@ public sealed class SurgerySystem
         if (pt == null || pt.Dead) { Close(k, "수술대 위에서 숨졌다", false); return ToilStatus.Succeeded; }
         var table = TableOf(k);
         if (table == null) return ToilStatus.Failed;
-        if ((s.Position - table.Center).Length() > 2.7f) return ToilStatus.Failed;
+        if (s != null && (s.Position - table.Center).Length() > 2.7f) return ToilStatus.Failed;
         bool lying = table.Cells.Contains(pt.Cell) && pt.CarriedBy == null;
         if (!lying)
         {
@@ -430,7 +435,7 @@ public sealed class SurgerySystem
             k.State = CaseState.Prep; k.Phase = 0; k.PhaseTicks = 0; k.Started = w.Tick;
             table.ReservedBy = pt;
             if (pt.CareBed != null && pt.CareBed != table) { if (pt.CareBed.ReservedBy == pt) pt.CareBed.ReservedBy = null; pt.CareBed = null; }
-            w.Log.Add(w.Tick, LogKind.Work, $"{Ko.IGa(s.Name)} {pt.Name} {KindName(k.Kind)}을 시작한다" + (CrewOf(k.Assistant) is CrewMember asx ? $" (보조 {asx.Name})" : " (혼자)"), s.Id);
+            w.Log.Add(w.Tick, LogKind.Work, $"{Ko.IGa(Who(s))} {pt.Name} {KindName(k.Kind)}을 시작한다" + (CrewOf(k.Assistant) is CrewMember asx ? $" (보조 {asx.Name})" : " (혼자)"), s?.Id ?? pt.Id);
         }
         k.PhaseTicks++;
         switch (k.Phase)
@@ -444,7 +449,7 @@ public sealed class SurgerySystem
                 if (k.PhaseTicks < SimTime.Minutes(5)) return ToilStatus.Running;
                 if (!Anesthetize(k, pt, s)) return ToilStatus.Succeeded;
                 k.Phase = 2; k.PhaseTicks = 0; k.State = CaseState.Operating;
-                k.NeedTicks = SimTime.Hours(Hours(k.Kind)) * (1.5f - 0.7f * s.SkillLevel(Skill.Medicine));
+                k.NeedTicks = SimTime.Hours(Hours(k.Kind)) * (1.5f - 0.7f * Sk(s));
                 if (k.Kind == SurgeryKind.Salvage) Decide(k, pt, s);
                 Forecast(k, pt);
                 return ToilStatus.Running;
@@ -467,7 +472,7 @@ public sealed class SurgerySystem
         else { k.Sterile = 0.45f; k.Notes.Add("끓인 물로만"); }
     }
 
-    private bool Anesthetize(SurgeryCase k, CrewMember pt, CrewMember s)
+    private bool Anesthetize(SurgeryCase k, CrewMember pt, CrewMember? s)
     {
         var w = _w;
         if (w.Pharmacy.Take(ItemKind.Anesthetic)) { k.Anesthesia = true; return true; }
@@ -481,8 +486,8 @@ public sealed class SurgerySystem
         k.NoAnesthesia = true; NoAnesthesiaOps++;
         pt.Needs.Stress = MathF.Min(1f, pt.Needs.Stress + 0.5f);
         Memory.Frighten(w, pt, pt.Room, 0.2f, "마취 없이 수술을 받았다");
-        MarkLog.Add(s.Memory.Marks, w.Tick, $"{pt.Name}을 마취 없이 열었다 — 비명이 귀에 남는다");
-        w.Log.Add(w.Tick, LogKind.Warning, $"마취제가 없다 — {Ko.IGa(s.Name)} {pt.Name}을 마취 없이 연다 (기다리면 숨진다)", s.Id);
+        if (s != null) MarkLog.Add(s.Memory.Marks, w.Tick, $"{pt.Name}을 마취 없이 열었다 — 비명이 귀에 남는다");
+        w.Log.Add(w.Tick, LogKind.Warning, $"마취제가 없다 — {Ko.IGa(Who(s))} {pt.Name}을 마취 없이 연다 (기다리면 숨진다)", s?.Id ?? pt.Id);
         if (w.Automation.Present && w.Automation.MainOnline)
             w.Automation.Book.Add(ActKind.Advice, pt.Room, "마취제 0 · 위중", "기다리면 숨진다", "마취 없이 하는 것을 막지 않았다 — 꽉 붙잡으라고 했다", "", $"noanes:{k.Id}", SimTime.Hours(1));
         return true;
@@ -503,12 +508,12 @@ public sealed class SurgerySystem
     }
 
     /// <summary>팔다리 살리기냐 절단이냐: 다친 지 오래 · 몸이 약함 · 솜씨 · 컴퓨터 의견.</summary>
-    private void Decide(SurgeryCase k, CrewMember pt, CrewMember s)
+    private void Decide(SurgeryCase k, CrewMember pt, CrewMember? s)
     {
         var w = _w;
         float hours = (w.Tick - (w.Casualty.Done.Concat(w.Casualty.Open).Where(t => t.CrewId == pt.Id).Select(t => t.Since).DefaultIfEmpty(k.Opened).Max())) / (float)SimTime.TicksPerHour;
         float sev = pt.Vitals.Wounds.Where(x => x.Part == k.Part && !x.Lost).Select(x => Wounds.Severity(pt.Vitals, x)).DefaultIfEmpty(0f).Max();
-        float keep = s.SkillLevel(Skill.Medicine) * 0.6f + (pt.Vitals.Health > 0.4f ? 0.25f : -0.1f) - (hours > 12f ? 0.3f : 0f) - (sev > 0.7f ? 0.25f : 0f) + (Light(k) >= 2f ? 0.05f : -0.1f);
+        float keep = Sk(s) * 0.6f + (pt.Vitals.Health > 0.4f ? 0.25f : -0.1f) - (hours > 12f ? 0.3f : 0f) - (sev > 0.7f ? 0.25f : 0f) + (Light(k) >= 2f ? 0.05f : -0.1f);
         string comp = "";
         if (w.Automation.Present && w.Automation.MainOnline)
         {
@@ -518,8 +523,8 @@ public sealed class SurgerySystem
                 comp, "", $"salvage:{k.Id}", SimTime.Hours(2));
         }
         if (keep >= 0.25f) { k.Decision = "살린다"; Salvages++; }
-        else { k.Kind = SurgeryKind.Amputate; k.Decision = "자른다"; k.NeedTicks = SimTime.Hours(Hours(k.Kind)) * (1.5f - 0.7f * s.SkillLevel(Skill.Medicine)); }
-        w.Log.Add(w.Tick, LogKind.Work, $"{Ko.IGa(s.Name)} {pt.Name}의 {Wounds.PartName(k.Part)} — {k.Decision}" + (comp != "" ? $" ({comp})" : ""), s.Id);
+        else { k.Kind = SurgeryKind.Amputate; k.Decision = "자른다"; k.NeedTicks = SimTime.Hours(Hours(k.Kind)) * (1.5f - 0.7f * Sk(s)); }
+        w.Log.Add(w.Tick, LogKind.Work, $"{Ko.IGa(Who(s))} {pt.Name}의 {Wounds.PartName(k.Part)} — {k.Decision}" + (comp != "" ? $" ({comp})" : ""), s?.Id ?? pt.Id);
     }
 
     /// <summary>주컴퓨터: 이 수술에 피가 얼마나 들지 (시작할 때).</summary>
@@ -538,7 +543,7 @@ public sealed class SurgerySystem
         if (packs > have) w.Blood.Call(pt, $"수술 중 피 {packs}팩이 들 것");
     }
 
-    private void Operate(SurgeryCase k, CrewMember pt, CrewMember s, Furniture table)
+    private void Operate(SurgeryCase k, CrewMember pt, CrewMember? s, Furniture table)
     {
         var w = _w;
         k.OpTicks++;
@@ -551,13 +556,13 @@ public sealed class SurgerySystem
         if (hold) k.HoldTicks++;
         if (w.ZeroG.Weightless && w.ZeroG.RingRoom != table.Room) k.ZeroGTicks++;
         // 피: 수술 중에도 빠진다 (빛이 없고 · 서툴면 더)
-        float loss = Loss(k.Kind) * (light <= 0f ? 1.6f : 1f) * (1.3f - 0.5f * s.SkillLevel(Skill.Medicine)) / SimTime.TicksPerHour;
+        float loss = Loss(k.Kind) * (light <= 0f ? 1.6f : 1f) * (1.3f - 0.5f * Sk(s)) / SimTime.TicksPerHour;
         if (!k.Anesthesia && (CrewOf(k.Assistant) is not CrewMember)) loss *= 1.2f; // 붙잡아 줄 사람 없이 마취 없이
         if (FurnitureAt(table.Room, FurnitureType.AnesthesiaMachine) is Furniture am && am.Machine is Machine mm && !mm.Powered && k.Anesthesia && CrewOf(k.Assistant) == null)
             loss += 0.02f / SimTime.TicksPerHour; // 마취기가 멎었는데 손으로 짜 줄 사람이 없다
         pt.Vitals.Health = MathF.Max(0f, pt.Vitals.Health - loss);
         if (hold) return;
-        float speed = Wounds.HandFactor(s.Vitals) * (s.Needs.Rest < 0.2f ? 0.8f : 1f) * (light <= 0f ? 0.6f : 1f) * (CrewOf(k.Assistant) is CrewMember ax && (ax.Position - table.Center).Length() < 2.8f ? 1.15f : 1f);
+        float speed = (s != null ? Wounds.HandFactor(s.Vitals) * (s.Needs.Rest < 0.2f ? 0.8f : 1f) : _w.SurgArm.Pace()) * (light <= 0f ? 0.6f : 1f) * (CrewOf(k.Assistant) is CrewMember ax && (ax.Position - table.Center).Length() < 2.8f ? 1.15f : 1f);
         k.Progress = MathF.Min(1f, k.Progress + speed / MathF.Max(1f, k.NeedTicks));
         if (k.Progress >= 1f) { k.Phase = 3; k.PhaseTicks = 0; }
     }
@@ -662,19 +667,20 @@ public sealed class SurgerySystem
     }
 
     /// <summary>성공할 가망 (지금 사정으로).</summary>
-    public float Odds(SurgeryCase k, CrewMember s)
+    public float Odds(SurgeryCase k, CrewMember? s) // 의료 3차 s == null: 수술 팔이 집도
     {
         var w = _w;
         var pt = CrewOf(k.Patient);
         float op = MathF.Max(1f, k.OpTicks);
-        float q = 0.5f + 0.4f * s.SkillLevel(Skill.Medicine) + Ease(k.Kind);
+        float q = 0.5f + 0.4f * Sk(s) + Ease(k.Kind);
         if (CrewOf(k.Assistant) is CrewMember ax) q += 0.06f + (ax.SkillLevel(Skill.Medicine) >= 0.4f || ax.Role == CrewRole.Medic ? 0.04f : 0f);
         q -= 0.3f * (k.DarkTicks / op) + 0.06f * (k.BatteryTicks / op);
         q += (k.Sterile - 0.7f) * 0.2f;
-        if (s.Needs.Rest < 0.3f) q -= 0.1f;
-        if (s.Needs.Stress > 0.7f) q -= 0.06f;
-        q -= 0.18f * Guilt.GetValueOrDefault(s.Id);
-        q += 0.06f * Confidence.GetValueOrDefault(s.Id);
+        if (s != null && s.Needs.Rest < 0.3f) q -= 0.1f;
+        if (s != null && s.Needs.Stress > 0.7f) q -= 0.06f;
+        q -= 0.18f * Guilt.GetValueOrDefault(s?.Id ?? -1);
+        q += 0.06f * Confidence.GetValueOrDefault(s?.Id ?? -1);
+        q += w.SurgArm.Factor(TableOf(k)?.Room, s); // 의료 3차 수술 로봇 팔 (집도 · 보조 — 이식과 같은 함수)
         q -= (TableOf(k)?.Type == FurnitureType.OperatingTable ? 0.07f : 0.15f) * (k.ZeroGTicks / op); // 수술대에는 묶는 띠가 있다
         q -= MathF.Min(0.25f, 0.04f * k.ShakeTicks / SimTime.Minutes(1));
         if (k.NoAnesthesia) q -= 0.15f;
@@ -683,7 +689,7 @@ public sealed class SurgerySystem
         return Math.Clamp(q, 0.05f, 0.97f);
     }
 
-    private void Finish(SurgeryCase k, CrewMember pt, CrewMember s)
+    private void Finish(SurgeryCase k, CrewMember pt, CrewMember? s)
     {
         var w = _w;
         Operations++;
@@ -725,7 +731,7 @@ public sealed class SurgerySystem
             if (limb && k.Kind is SurgeryKind.Fracture or SurgeryKind.Salvage or SurgeryKind.Graft && R.Chance((clean ? 0.15f : 0.55f) + (k.Kind == SurgeryKind.Salvage ? 0.25f : 0f)))
                 w.Recovery.Sequela(pt, k.Part, $"{KindName(k.Kind)} 뒤");
             k.Outcome = clean ? "깨끗이 끝났다" : "되었다 — 흉이 남는다";
-            Remember(k, pt, s, true, false);
+            if (s != null) Remember(k, pt, s, true, false);
         }
         else
         {
@@ -746,7 +752,7 @@ public sealed class SurgerySystem
                 else k.Outcome = "더 나빠졌다";
                 if (Wounds.IsArm(k.Part) || Wounds.IsLeg(k.Part)) w.Recovery.Sequela(pt, k.Part, $"{KindName(k.Kind)}이 잘 안 됐다");
             }
-            Remember(k, pt, s, false, fatal);
+            if (s != null) Remember(k, pt, s, false, fatal);
         }
         // 곪을까: 멸균이 모자랄수록 · 예방 항생제(아낄 때는 큰 수술만)
         if (!pt.Dead && v.Health > 0f)
@@ -764,10 +770,11 @@ public sealed class SurgerySystem
         }
         k.Success = ok;
         if (TableOf(k) is Furniture t && t.ReservedBy == pt) t.ReservedBy = null;
-        string line = $"{pt.Name} {KindName(k.Kind)} — {k.Outcome} (집도 {s.Name} · 가망 {p * 100:0}%" + (k.Notes.Count > 0 ? $" · {string.Join(" · ", k.Notes.Distinct())}" : "") + ")";
-        w.Log.Add(w.Tick, ok ? LogKind.Work : LogKind.Warning, line, s.Id);
+        string line = $"{pt.Name} {KindName(k.Kind)} — {k.Outcome} (집도 {Who(s)} · 가망 {p * 100:0}%" + (k.Notes.Count > 0 ? $" · {string.Join(" · ", k.Notes.Distinct())}" : "") + ")";
+        w.Log.Add(w.Tick, ok ? LogKind.Work : LogKind.Warning, line, s?.Id ?? pt.Id);
         if (k.Kind is not SurgeryKind.Suture || !ok)
-            w.History.Add(w, HistoryKind.Casualty, $"{Ko.IGa(s.Name)} {pt.Name}의 {KindName(k.Kind)}을 했다 — {k.Outcome}" + (scarText != "" && ok ? $" ({scarText})" : ""), pt.Room, new[] { s, pt });
+            w.History.Add(w, HistoryKind.Casualty, $"{Ko.IGa(Who(s))} {pt.Name}의 {KindName(k.Kind)}을 했다 — {k.Outcome}" + (scarText != "" && ok ? $" ({scarText})" : ""), pt.Room, s != null ? new[] { s, pt } : new[] { pt });
+        w.SurgArm.Finished(k, pt, s, ok, fatal); // 의료 3차 팔이 겪은 수술 · 신뢰 · 기억 · 회의 안건
         Close(k, k.Outcome, ok);
     }
 
@@ -1037,7 +1044,7 @@ public sealed class SurgeryPatientActivity : Activity
     {
         if (!c.CanAct || c.Outside) return (0f, "—");
         var k = w.Surgery.CaseOf(c);
-        if (k == null || k.Surgeon < 0 || k.State is CaseState.Deferred or CaseState.Done || w.Surgery.TableOf(k) == null) return (0f, "—");
+        if (k == null || k.Surgeon < 0 && !w.SurgArm.Leads(k) || k.State is CaseState.Deferred or CaseState.Done || w.Surgery.TableOf(k) == null) return (0f, "—"); // 의료 3차 팔이 집도해도 눕는다
         return (1.5f, $"{SurgerySystem.KindName(k.Kind)} — 수술대로");
     }
 
@@ -1051,7 +1058,7 @@ public sealed class SurgeryPatientActivity : Activity
         toils.Add(new GotoToil(cell));
         toils.Add(new WaitToil(SimTime.Hours(6), Pose.Sleeping)
         {
-            DoneWhen = (cm, world) => k.State is CaseState.Done or CaseState.Deferred || k.Surgeon < 0 && k.State == CaseState.Waiting,
+            DoneWhen = (cm, world) => k.State is CaseState.Done or CaseState.Deferred || k.Surgeon < 0 && k.State == CaseState.Waiting && !world.SurgArm.Leads(k),
         });
         var job = new Job(this, SurgerySystem.KindName(k.Kind), toils) { LogText = "수술대에 눕는다", TargetRoom = table.Room, InterruptMargin = 0.8f };
         return job.Reserve(table, c);

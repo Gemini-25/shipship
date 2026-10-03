@@ -84,6 +84,7 @@ public static class Essentials
             or FurnitureType.NutrientDoser or FurnitureType.PartTestBench or FurnitureType.Hoist or FurnitureType.Oven or FurnitureType.LedPanel
             or FurnitureType.SuitLocker or FurnitureType.SuitDryer or FurnitureType.Lathe or FurnitureType.SolderStation or FurnitureType.ReactorSimulator => Essential.Support,
         FurnitureType.Dialyzer or FurnitureType.Ecmo or FurnitureType.HeartPump or FurnitureType.OrganCooler or FurnitureType.NegPressure => Essential.Support, // 의료 2차
+        FurnitureType.SurgicalArm => Essential.Support, // 의료 3차
         _ => Essential.Comfort,
     };
 

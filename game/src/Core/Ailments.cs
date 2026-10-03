@@ -425,7 +425,7 @@ public sealed class AilmentSystem
         {
             a.TreatedAt = w.Tick;
             a.Treatments++;
-            a.Healed += w.Pharmacy.Treat(patient, doctor, a.Id); // 의료 1차 항생제 · 진통제 (남용 · 내성)
+            a.Healed += w.Pharmacy.Treat(patient, doctor, a.Id) * w.Telemed.Diagnose(patient, doctor, a.Id); // 의료 1차 항생제 · 진통제 (남용 · 내성) · 의료 3차 컴퓨터가 생체 신호로 짚어 준다
             if (Spec(a.Id).Cure == Cure.Bed) a.Healed += 0.3f;
             Stats.Treated++;
         }

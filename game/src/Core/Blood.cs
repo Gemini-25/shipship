@@ -462,7 +462,7 @@ public sealed class TransfuseActivity : Activity
         CrewMember? best = null;
         foreach (var pt in w.Crew)
         {
-            if (pt == c || !w.Blood.NeedsBlood(pt) || w.Surgery.OnTable(pt) || w.Blood.Claimed(pt, c)) continue;
+            if (pt == c || !w.Blood.NeedsBlood(pt) || w.Surgery.OnTable(pt) || w.Blood.Claimed(pt, c) || w.MedBots.Claimed(pt)) continue; // 의료 3차 간호 로봇이 피를 가지러 갔다
             if (best == null || pt.Vitals.Health < best.Vitals.Health) best = pt;
         }
         return best;

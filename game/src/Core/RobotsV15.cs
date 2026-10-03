@@ -105,6 +105,17 @@ public static class RobotsV15
             C((ItemKind.Motor, 1), (ItemKind.Electronics, 1), (ItemKind.Plate, 2)),
             w => w.History.Deaths >= 1 ? (0.45f, "사람을 잃어 손이 모자라다")
                 : w.History.Collapses >= 2 ? (0.25f, $"쓰러진 일 {w.History.Collapses}번") : No),
+        // 의료 3차 (MedBots.cs) — 일은 작업 목록이 아니라 주컴퓨터가 위중한 사람부터 맡긴다
+        new(RobotKind.Stretcher, "들것 로봇", RobotKind.Hauler, J(), 0.08f, 1.2f, 0.9f, 1.2f,
+            "쓰러진 사람을 들것에 실어 치료 침대 · 수술대로 · 가는 길에 상처를 누른다",
+            C((ItemKind.Motor, 2), (ItemKind.Plate, 2), (ItemKind.Bearing, 1)),
+            w => w.MedBots.LateRescues >= 1 ? (0.5f, $"쓰러진 사람을 늦게 옮겼다 ({w.MedBots.LateRescues}번)")
+                : w.History.Collapses >= 2 ? (0.3f, $"쓰러진 일 {w.History.Collapses}번") : No),
+        new(RobotKind.Nurse, "간호 로봇", RobotKind.Hauler, J(), 0.085f, 0.9f, 0.9f, 1.1f,
+            "피 · 약 · 구급 키트 나르기 · 상처 누르기 · 인공 폐 손 펌프 · 격리실 소독",
+            C((ItemKind.Motor, 1), (ItemKind.Electronics, 1), (ItemKind.Sensor, 1), (ItemKind.Pump, 1)),
+            w => w.Blood.Transfusions + w.Organs.Stats.Cranked >= 3 ? (0.4f, $"수혈 · 손 펌프 {w.Blood.Transfusions + w.Organs.Stats.Cranked}번")
+                : w.Infection.Stats.Isolated >= 1 ? (0.3f, "격리실을 썼다") : No),
     };
 
     public static readonly DroneRow[] Flyers =
