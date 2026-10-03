@@ -71,8 +71,8 @@ public sealed class CommandSystem
         var w = _w;
         CaptainId = c.Id;
         Style = StyleOf(c);
-        w.History.Add(w, HistoryKind.Decision, $"{Ko.IGa(c.Name)} 선장이 되었다 ({StyleName(Style)}) — {why}", null, new[] { c }, log: true);
-        Life.Diary(w, c, $"선장을 맡았다 — {why}.");
+        w.History.Add(w, HistoryKind.Decision, $"{Ko.IGa(c.Name)} 함장이 되었다 ({StyleName(Style)}) — {why}", null, new[] { c }, log: true);
+        Life.Diary(w, c, $"함장을 맡았다 — {why}.");
     }
 
     // ── 현장 지휘 ──
@@ -109,7 +109,7 @@ public sealed class CommandSystem
             CaptainsLost++;
             Trust = 0.5f;
             var acting = Council.Decider(w, true);
-            if (acting != null) Appoint(acting, "선장이 숨져 지휘 순서대로 대신 맡았다");
+            if (acting != null) Appoint(acting, "함장이 숨져 지휘 순서대로 대신 맡았다");
         }
 
         var level = Crisis.Level(w);
@@ -401,16 +401,16 @@ public sealed class CommandSystem
         var w = _w;
         var cap = Captain!;
         NoConfidence++;
-        var item = new AgendaItem { Title = $"선장 {cap.Name} 불신임", Topic = "captain" };
+        var item = new AgendaItem { Title = $"함장 {cap.Name} 불신임", Topic = "captain" };
         (float, string) Opinion(CrewMember c)
         {
             if (c == cap) return (-1f, "끝까지 맡겠다");
             var terms = new List<(float v, string why)>
             {
-                (0.45f - Trust, Trust < 0.2f ? "아무도 선장을 믿지 않는다" : "믿음이 무너졌다"),
-                (-0.5f * c.AffinityTo(cap), c.AffinityTo(cap) > 0.2f ? "선장 편이다" : "선장과 사이가 나쁘다"),
-                (m.Guilt(cap) > 0.2f ? 0.15f : 0f, "선장이 정한 일로 사람이 죽었다"),
-                (c.Value == CrewValue.Rules ? -0.1f : 0f, "선장을 함부로 바꾸면 안 된다"),
+                (0.45f - Trust, Trust < 0.2f ? "아무도 함장을 믿지 않는다" : "믿음이 무너졌다"),
+                (-0.5f * c.AffinityTo(cap), c.AffinityTo(cap) > 0.2f ? "함장 편이다" : "함장과 사이가 나쁘다"),
+                (m.Guilt(cap) > 0.2f ? 0.15f : 0f, "함장이 정한 일로 사람이 죽었다"),
+                (c.Value == CrewValue.Rules ? -0.1f : 0f, "함장을 함부로 바꾸면 안 된다"),
             };
             float s = terms.Sum(t => t.v);
             return (s, s > 0f ? terms.Where(t => t.v > 0f).OrderByDescending(t => t.v).First().why : terms.Where(t => t.v <= 0f).OrderBy(t => t.v).Select(t => t.why).DefaultIfEmpty("그대로 두자").First());
@@ -420,7 +420,7 @@ public sealed class CommandSystem
         bool pass = yes.Count >= need;
         item.Passed = pass;
         item.Outcome = pass ? "가결" : "부결";
-        w.History.Add(w, HistoryKind.Decision, $"정기 회의: 선장 {cap.Name} 불신임 — 찬성 {yes.Count} · 필요 {need} → {(pass ? "가결" : "부결")} (신뢰 {Trust * 100:0}%)"
+        w.History.Add(w, HistoryKind.Decision, $"정기 회의: 함장 {cap.Name} 불신임 — 찬성 {yes.Count} · 필요 {need} → {(pass ? "가결" : "부결")} (신뢰 {Trust * 100:0}%)"
             + (item.FlippedBy != null ? $" · {item.FlippedBy}의 설득으로 뒤집혔다" : ""), null, voters, log: true);
         m.Split(yes, no);
         if (!pass) { Trust = MathF.Min(1f, Trust + 0.08f); return item; }
@@ -454,10 +454,10 @@ public sealed class CommandSystem
         if (old != null)
         {
             old.Needs.Stress = MathF.Min(1f, old.Needs.Stress + 0.15f);
-            Life.Diary(w, old, "선장 자리를 내려놓았다.");
+            Life.Diary(w, old, "함장 자리를 내려놓았다.");
         }
         Trust = 0.6f;
-        Appoint(pick, $"새 선장 ({how})");
+        Appoint(pick, $"새 함장 ({how})");
     }
 }
 

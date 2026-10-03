@@ -372,7 +372,7 @@ public sealed class TechWebStats
         Advices, Followed, Ignored, ForkAdvices, Experiments, Successes, Failures, Accidents, Breakthroughs, Interrupts, Resumed, Collabs,
         Notes, NotesBurned, NotesRead, RelicStudies, Warnings, Heeded, Shaken, Avoided;
     public override string ToString() =>
-        $"드러남 {Reveals}(조합 {Combos} · 조건 {Gates} · 유물 {Relics} · 교류 {Contacts}) · 갈림길 표결 {ForkVotes} · 선장 판단 {ForkJudged} · 익혀서 정함 {ForkLearned} · 다시 꺼냄 {Reopens} · "
+        $"드러남 {Reveals}(조합 {Combos} · 조건 {Gates} · 유물 {Relics} · 교류 {Contacts}) · 갈림길 표결 {ForkVotes} · 함장 판단 {ForkJudged} · 익혀서 정함 {ForkLearned} · 다시 꺼냄 {Reopens} · "
         + $"부작용 {Chains}(관행 {Customs}) · 컴퓨터 추천 {Advices}(따름 {Followed} · 안 따름 {Ignored}) · 갈림길 조언 {ForkAdvices} · "
         + $"실험 {Experiments}(성공 {Successes} · 실패 {Failures} · 사고 {Accidents} · 돌파구 {Breakthroughs}) · 중단 {Interrupts} · 재개 {Resumed} · 협업 {Collabs} · "
         + $"노트 {Notes}(읽음 {NotesRead} · 탐 {NotesBurned}) · 유물 연구 {RelicStudies} · 실험 경고 {Warnings}(들음 {Heeded}) · 놀란 연구자 {Shaken} · 실험실 피함 {Avoided}";

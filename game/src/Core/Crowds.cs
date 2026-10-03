@@ -297,7 +297,7 @@ public sealed class CrowdSystem
             if (r < rank) { rank = r; chief = c; }
         }
         if (chief == null || rank >= 9) return;
-        string title = rank switch { 0 => "지휘자 ", 1 => "선장 ", 2 => "당직 ", _ => "" };
+        string title = rank switch { 0 => "지휘자 ", 1 => "함장 ", 2 => "당직 ", _ => "" };
         s.ShoutLine = rank <= 2 ? "비켜! 현장 비워!" : Life.Has(chief, Habit.ShortTempered) ? "비켜! 길 막지 마!" : "비켜 줘! 지나가야 해!";
         chief.Say(w, Persona.Say(chief, s.ShoutLine));
         s.ShoutAt = now; s.Shouter = chief.Id; s.Shouts++;

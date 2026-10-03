@@ -185,13 +185,13 @@ public sealed partial class MotionSystem
     public static string KindName(MotionKind k) => k switch
     {
         MotionKind.Grievance => "불만", MotionKind.Proposal => "제안", MotionKind.Accusation => "고발", MotionKind.Celebration => "축하",
-        MotionKind.Crisis => "위기 대응", MotionKind.RuleChange => "규칙 바꾸기", MotionKind.Confidence => "선장 신임", MotionKind.Punishment => "처벌",
+        MotionKind.Crisis => "위기 대응", MotionKind.RuleChange => "규칙 바꾸기", MotionKind.Confidence => "함장 신임", MotionKind.Punishment => "처벌",
         MotionKind.Allocation => "배분", MotionKind.Crew => "원정 인선", _ => "새 관행",
     };
 
     public static string SittingName(SittingKind k) => k switch
     {
-        SittingKind.Emergency => "긴급 회의", SittingKind.Trial => "재판", SittingKind.Election => "선장 선거",
+        SittingKind.Emergency => "긴급 회의", SittingKind.Trial => "재판", SittingKind.Election => "함장 선거",
         SittingKind.Inquiry => "사고 조사", SittingKind.Feast => "잔치 의논", _ => "정기 회의",
     };
 
@@ -346,8 +346,8 @@ public sealed partial class MotionSystem
                       - (c.Value == CrewValue.Rules ? 0.15f : 0f);
             if (trust < 0.5f || aff < -0.3f)
             {
-                string why = w.Meetings.Guilt(cap) > 0.2f ? "선장이 정한 일로 사람이 다쳤다" : aff < -0.3f ? "선장은 우리 말을 듣지 않는다" : "다들 선장을 못 믿는다";
-                Consider(s, () => Propose(c, MotionKind.Confidence, SittingKind.Election, $"선장 {cap.Name} 불신임", why, target: cap.Id));
+                string why = w.Meetings.Guilt(cap) > 0.2f ? "함장이 정한 일로 사람이 다쳤다" : aff < -0.3f ? "함장은 우리 말을 듣지 않는다" : "다들 함장을 못 믿는다";
+                Consider(s, () => Propose(c, MotionKind.Confidence, SittingKind.Election, $"함장 {cap.Name} 불신임", why, target: cap.Id));
             }
         }
         // 4) 규칙 바꾸기 · 위기 대응 · 컴퓨터 권한 (그 사람의 몸과 가치관이 바라는 쪽)
@@ -453,7 +453,7 @@ public sealed partial class MotionSystem
     {
         ("privacy", 0) => "공간은 다 같이 쓰자", ("privacy", _) => "개인 공간을 지켜 주자",
         ("nightwatch", 0) => "야간 당직을 한 명 세우자", ("nightwatch", 1) => "야간 당직을 두 명으로", ("nightwatch", _) => "밤에는 컴퓨터에 맡기자",
-        ("conflict", 0) => "다툼은 누가 가운데 서서 풀자", ("conflict", 1) => "다툼은 선장이 정하자", ("conflict", _) => "다툼은 당사자끼리 풀자",
+        ("conflict", 0) => "다툼은 누가 가운데 서서 풀자", ("conflict", 1) => "다툼은 함장이 정하자", ("conflict", _) => "다툼은 당사자끼리 풀자",
         ("violations", 0) => "규칙을 어기면 경고만", ("violations", 1) => "규칙을 어기면 근무에서 빼자", ("violations", _) => "규칙 위반을 따지지 말자",
         ("memorial", 0) => "기념일마다 떠난 사람 이름을 부르자", ("memorial", _) => "추모는 조용히 하자",
         ("leisure", 0) => "일부터 하자", ("leisure", 1) => "일과 쉼을 반반으로", ("leisure", _) => "쉬는 시간을 보장하자",
@@ -465,7 +465,7 @@ public sealed partial class MotionSystem
     {
         ("privacy", 1) => "남의 침대에 걸터앉는 사람이 있다", ("privacy", _) => "다 같이 쓰면 자리가 남는다",
         ("nightwatch", 2) => "밤엔 컴퓨터가 더 잘 본다", ("nightwatch", _) => "밤에 아무도 안 보면 불안하다",
-        ("conflict", 0) => "다투면 누가 가운데 서 줘야 한다", ("conflict", 1) => "선장이 정하면 빨리 끝난다", ("conflict", _) => "어른끼리 알아서 한다",
+        ("conflict", 0) => "다투면 누가 가운데 서 줘야 한다", ("conflict", 1) => "함장이 정하면 빨리 끝난다", ("conflict", _) => "어른끼리 알아서 한다",
         ("violations", 0) => "한 번 실수로 근무까지 빼는 건 심하다", ("violations", 1) => "말로 해서는 안 바뀐다", ("violations", _) => "서로 감시하는 배는 싫다",
         ("memorial", 0) => "떠난 사람 이름을 불러야 한다", ("memorial", _) => "조용히 기억하는 게 낫다",
         ("leisure", 0) => "일이 밀렸다", ("leisure", 1) => "쉬어야 오래 간다", ("leisure", _) => "쉬는 시간은 지켜 줘야 한다",

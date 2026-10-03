@@ -382,7 +382,7 @@ public sealed class LifeSystem
                     lose.ChangeAffinity(cap, -0.06f);
                     win.ChangeAffinity(lose, 0.05f); lose.ChangeAffinity(win, 0.05f);
                     Stats.Mediations++;
-                    w.Log.Add(w.Tick, LogKind.Life, $"선장 {Ko.IGa(cap.Name)} {win.Name}의 손을 들어 줬다 ({Ko.EunNeun(lose.Name)} 서운하다)", cap.Id);
+                    w.Log.Add(w.Tick, LogKind.Life, $"함장 {Ko.IGa(cap.Name)} {win.Name}의 손을 들어 줬다 ({Ko.EunNeun(lose.Name)} 서운하다)", cap.Id);
                     continue;
                 }
                 // 중재: 그 자리에 사교적인 사람이 있으면 바로 달랜다 (그냥 둔다면 아무도 나서지 않는다)
