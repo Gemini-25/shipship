@@ -89,6 +89,12 @@ public sealed class EatActivity : Activity
             score += 0.3f;
             reason += " · 자기 전 야식";
         }
+        // 통합7 회의 · 훈련으로 야식 때를 놓쳤어도 꽤 배고프면 눕기 전에 요기부터 (은하호: 0.33 남기고 잠들었다가 네 시간 만에 굶주려 깨어 먼 식당까지 걸었다)
+        else if (Bedtime(c, w) && c.Pose != Pose.Sleeping && hunger > 0.55f)
+        {
+            score += 0.5f;
+            reason += " · 눕기 전에 요기";
+        }
         if (src != Source.Ration && src != Source.Produce && w.Cooking.HomeCraving(c) is float home and > 0f) { score += home; reason += " · 고향 음식이 있다"; } // v16.8
         if (src == Source.Ration) reason += " · 비상식량뿐";
         if (src == Source.Produce) reason += " · 날채소뿐";
@@ -106,8 +112,7 @@ public sealed class EatActivity : Activity
         var seat = w.Ship.RoomsOf(RoomType.Mess).Where(r => !r.OffLimits).SelectMany(r => r.Furniture)
             .Where(f => f.Type == FurnitureType.Seat && f.ReservedBy == null && dist.Reachable(f.UseSpots[0])
                         && !w.IsSpotTaken(f.UseSpots[0], c))
-            .OrderBy(f => (f.Center - box.Center).LengthSquared() + w.Coop.Queues.SeatBias(c, f) + w.After.SeatBias(c, f)) // v17.4 줄에서 다툰 사람 곁은 피하고 양보해 준 사람 곁으로 · v17.5 떠난 사람의 의자 · 구석
-            .OrderBy(f => (f.Center - box.Center).LengthSquared() + w.Coop.Queues.SeatBias(c, f) + w.Info.SeatBias(c, f)) // v17.3 늘 앉던 자리 · 친한 사람 · 소음 · 조명 · 다툰 사람 · v17.4 줄에서 다툰 사람 곁은 피하고 양보해 준 사람 곁으로
+            .OrderBy(f => (f.Center - box.Center).LengthSquared() + w.Coop.Queues.SeatBias(c, f) + w.Info.SeatBias(c, f) + w.After.SeatBias(c, f)) // 통합7 두 줄로 나뉘어 뒤 줄이 앞 줄(v17.5 떠난 사람의 의자 · 구석)을 덮던 것을 하나로 · v17.3 늘 앉던 자리 · 친한 사람 · 소음 · 조명 · 다툰 사람 · v17.4 줄에서 다툰 사람 곁은 피하고 양보해 준 사람 곁으로
             .FirstOrDefault();
         var away = w.After.EatAway(c, seat, dist) ?? w.Drains.EatAway(c, seat, dist); // v17.5 묵은 그을음 냄새 · 혼자 먹기 → 다른 방 · 선실 · v18.3 하수 냄새
         if (away != null) seat = null;

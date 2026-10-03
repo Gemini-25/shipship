@@ -900,7 +900,7 @@ public sealed class DailySceneSystem
             {
                 case SceneKind.Chess:
                     if (s.Stage == SceneStage.Run && s.Here.Contains(c.Id) && (s.Host == c.Id || s.Other == c.Id)) { Offer(MathF.Max(leisure, 0.45f) + 0.15f, "판에 빠져 있다", s, s.Host == c.Id ? Role.Host : Role.Join); break; } // 통합6 두던 판은 취미 · 잡담 때문에 중간에 일어나지 않는다
-                    if (s.Host == c.Id) Offer(leisure, s.Stage == SceneStage.Paused ? "끊긴 판으로 돌아간다" : s.Game < 0 ? "체스판을 가져와 편다" : "판 앞에서 상대를 기다린다", s, Role.Host);
+                    if (s.Host == c.Id) Offer(leisure + (s.Stage == SceneStage.Gather && (_w.Tick - s.Opened < SimTime.Hours(1) || s.Here.Contains(s.Other)) ? 0.25f : 0f), s.Stage == SceneStage.Paused ? "끊긴 판으로 돌아간다" : s.Game < 0 ? "체스판을 가져와 편다" : "판 앞에서 상대를 기다린다", s, Role.Host); // 통합7 청한 사람도 약속을 지킨다 — 상대를 불러 놓고 실험 · 꾸미는 일로 두 시간을 비우지 않는다
                     else if (s.Other == c.Id) Offer(leisure + (s.Stage == SceneStage.Gather && _w.Tick - s.Opened < SimTime.Hours(1) ? 0.25f : 0f), s.Stage == SceneStage.Paused ? $"{Ko.WaGwa(CrewOf(s.Host)?.Name)} 두던 판으로" : $"{CrewOf(s.Host)?.Name}의 체스 청 — 곧 간다고 했다", s, Role.Join); // 받아들였으면 약속이다 (한 시간 안엔 더 끌린다)
                     else if (s.Other < 0 && s.Game >= 0 && c.Room?.Id == s.RoomId && !c.IsChild && (c.Hobbies.Contains(Hobby.Chess) || c.Traits.Calm > 0.6f) && !Busy(c))
                         Offer(leisure - 0.05f, $"{Ko.IGa(CrewOf(s.Host)?.Name)} 펴 둔 판 — 상대가 없다", s, Role.Join);
