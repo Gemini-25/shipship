@@ -194,8 +194,6 @@ public static partial class Program
                 string.Join(" / ", rc.Memory.Marks.TakeLast(2).Select(m => m.Text)));
     }
 
-    private static float Transplant_Chance(World w, CrewMember s, CrewMember p) => TransplantSystem.Chance(w, s, p, w.Transplant.Grafts.FirstOrDefault(), w.Ship.FurnitureOf(FurnitureType.MedBed).FirstOrDefault());
-
     // 5) 거부반응 · 면역억제제
     private static void OgReject(int seed)
     {
