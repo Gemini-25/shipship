@@ -140,8 +140,10 @@ public static partial class Program
             var w = DayOne(seed, "Hanbit");
             Run(w, SimTime.TicksPerDay * 5);
             float hot = w.Ship.Machines.Select(m => m.Heat).DefaultIfEmpty(0f).Max();
-            Check("평소 운항 — 저절로 터지지 않는다", w.Volatile.Stats.Explosions == 0 && hot < 0.72f,
-                $"폭발 {w.Volatile.Stats.Explosions} · 가장 뜨거운 설비 {hot * 100:0}%");
+            // 통합8 실험 사고 · 불이 옮겨 붙어 달군 소화기처럼 다른 사고에서 이어진 폭발(연쇄 2단 이상)은 "저절로"가 아니다 — 처음 터진 것만 센다
+            var roots = w.Blast.Recent.Where(b => b.Power >= 0.12f && b.Depth == 0).ToList();
+            Check("평소 운항 — 저절로 터지지 않는다", roots.Count == 0 && hot < 0.72f,
+                $"폭발 {w.Volatile.Stats.Explosions} (저절로 {roots.Count}{(roots.Count > 0 ? " — " + string.Join(", ", roots.Select(b => b.Cause)) : "")}) · 연쇄 {string.Join(", ", w.Blast.Recent.Where(b => b.Depth > 0).Select(b => b.Cause))} · 가장 뜨거운 설비 {hot * 100:0}%");
         }
 
         // ── 11) 결정론 ──

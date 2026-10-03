@@ -64,7 +64,7 @@ public static partial class Program
                 var t = w.Net.Throughput(NetKind.Power);
                 var trunk = w.Net.Links.Where(l => l.Kind == NetKind.Power && !UtilityNet.IsRing(l) && l.Door != null && (l.Door.RoomA == src || l.Door.RoomB == src) && l.Key.EndsWith(":X")).First();
                 var splicer = w.Crew.First(c => c.CanAct && !c.IsChild);
-                trunk.Temp = true; trunk.Integrity = 0.6f; trunk.SplicedBy = splicer.Id;
+                trunk.Temp = true; trunk.Integrity = 0.75f; trunk.SplicedBy = splicer.Id; // 통합8 0.6으로 이으면 보조 간선(굵기 0.55)보다 가늘어 전기가 고리로 돌아 이음매를 안 지난다 — 그럭저럭 이은 이음매라야 많은 방을 나른다
                 Settle(w);
                 int dimmed = w.Ship.LiveRooms.Count(r => r.PowerFlow < 0.75f);
                 float peak = 0f;

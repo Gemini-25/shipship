@@ -133,6 +133,8 @@ public sealed class ChoresActivity : Activity
         // v12.1 인수인계는 몇 분짜리 말 — 성실한 사람일수록 넘기고 나서 쉰다 (자기 전에도)
         if (o.Kind == WorkKind.Handover) score += 0.18f + 0.22f * c.Traits.Diligence;
         // 통합: 배우기는 미룰수록 마음에 걸린다 (이틀 미루면 차 한 잔 · 책보다 앞선다) — 취미 · 일상 거리가 늘어 선배 곁에 서는 일이 밀려났다
+        // 통합8 다친 몸은 미룰수록 굳는다 — 의무관이 정한 재활은 제 몸 일이라 솜씨와 상관없이 앞에 둔다 (0.6 × 솜씨로는 순찰 · 잡일 · 밥에 밀려 엿새에 한 번도 못 했다)
+        if (o.Kind == WorkKind.Rehab && o.Target.Crew is CrewMember rc) score += 0.12f + 0.4f * MathF.Min(0.5f, rc.Vitals.Injury) + 0.2f * MathF.Min(1f, (w.Tick - o.Posted) / (float)SimTime.TicksPerDay);
         if (o.Kind == WorkKind.Train) score += 0.08f + 0.05f * c.Traits.Diligence + 0.2f * MathF.Min(1f, (w.Tick - o.Posted) / (float)(SimTime.TicksPerDay * 2));
         if (BedtimeStatic(c, w)) score -= emergency || allHands ? 0.1f : o.Kind == WorkKind.Handover ? 0.15f : 0.5f;
 

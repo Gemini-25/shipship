@@ -67,16 +67,17 @@ public static partial class Program
                     var w = World.CreateDefault(seed, 0, key);
                     Run(w, SimTime.Hours(1));
                     Hazards.Apply(w, HazardKind.SolarStorm, default, -1);
+                    typeof(HazardSystem).GetProperty("StormPeak")!.SetValue(w.Hazards, 0.7f); // 통합8 폭풍마다 세기가 다르다 (v16.26) — 두 배를 같은 세기로 견준다
                     Run(w, SimTime.Hours(1));
                     if (args_Print) Console.WriteLine($"   {key}: " + string.Join(", ", w.Crew.Select(c => $"{c.Name}@{c.Room?.Name}({c.Room?.Radiation:0.00}) {c.Job?.Label}")));
                     Run(w, SimTime.Hours(3));
                     return w.Crew.Where(c => !c.Dead).Average(c => c.Dose);
                 }
                 string gen = ShipGenerator.KeyFor(12, seed);
-                float withShelter = Dose(gen), without = Dose("Hanbit");
+                float withShelter = Dose(gen), without = Dose("Kestrel"); // 통합8 한빛호에도 대피소가 생겼다 — 대피소 없는 배는 제비호
                 var w2 = World.CreateDefault(seed, 0, gen);
                 bool has = w2.Ship.KindOf(RoomType.Shelter).Any();
-                Check("태양 폭풍 — 대피소가 있으면 덜 쬔다", has && withShelter < without, $"대피소 있는 배 평균 {withShelter:0.00} Sv · 없는 한빛호 {without:0.00} Sv");
+                Check("태양 폭풍 — 대피소가 있으면 덜 쬔다", has && withShelter < without, $"대피소 있는 배 평균 {withShelter:0.00} Sv · 없는 제비호 {without:0.00} Sv");
             }
             // 6) 격리실: 격리실이 있으면 덜 옮는다
             {

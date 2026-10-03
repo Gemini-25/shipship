@@ -9,6 +9,50 @@ public static partial class Program
     private static int RunDbg7(int seed, string[] args)
     {
         string which = args.SkipWhile(a => a != "--dbg7").Skip(1).FirstOrDefault() ?? "chess";
+        if (which == "storm")
+        {
+            foreach (var key in new[] { ShipGenerator.KeyFor(12, seed), "Hanbit" })
+            {
+                var w = World.CreateDefault(seed, 0, key);
+                Run(w, SimTime.Hours(1));
+                Hazards.Apply(w, HazardKind.SolarStorm, default, -1);
+                Run(w, SimTime.Hours(1));
+                foreach (var r in w.Ship.Rooms.Where(r => r.Type == RoomType.Shelter || r.Name.Contains("통로")))
+                    Console.WriteLine($"{key} {r.Name} rad {r.Radiation:0.00} storm {w.Ambience.StormPower:0.00} exp {w.Ambience.Exposure(r):0.00} win {w.Body.OpenWindows(r)} cosmic {w.Cosmic.Radiation(r):0.00} cells {r.Cells.Count} tags {RoomCatalog.Tags(r.Kind)}");
+            }
+        }
+        if (which == "shel")
+        {
+            foreach (var t in ShipCatalog.All) { var w = World.CreateDefault(seed, 0, t.Key); Console.WriteLine($"{t.Key} {t.Name} crew {w.Crew.Count} shelter {w.Ship.KindOf(RoomType.Shelter).Count()} storage {w.Ship.KindOf(RoomType.Storage).Count()}"); }
+        }
+        if (which == "splice")
+        {
+            var w = DayOne(seed, "Mirinae");
+            w.Net.Update(0f); w.Flow.Update(0.01f);
+            var src = w.Net.SourceRoom(NetKind.Power)!;
+            var trunk = w.Net.Links.Where(l => l.Kind == NetKind.Power && !UtilityNet.IsRing(l) && l.Door != null && (l.Door.RoomA == src || l.Door.RoomB == src) && l.Key.EndsWith(":X")).First();
+            var splicer = w.Crew.First(c => c.CanAct && !c.IsChild);
+            trunk.Temp = true; trunk.Integrity = float.Parse(Environment.GetEnvironmentVariable("INTEG") ?? "0.75"); trunk.SplicedBy = splicer.Id;
+            w.Net.Update(0f); w.Flow.Update(0.01f);
+            for (int m = 0; m < 12 * 60 && trunk.Temp; m++)
+            {
+                Run(w, SimTime.Minutes(1));
+                if (m % 5 == 0)
+                {
+                    var o = w.Board.Open.FirstOrDefault(o => o.Kind == WorkKind.RepairNet && o.Circuit == trunk.Id);
+                    Console.WriteLine($"{SimTime.Clock(w.Tick)} heat {w.Flow.SpliceHeat(trunk):0.00} int {trunk.Integrity:0.00} order {(o == null ? "-" : $"{o.Urgency:0.00} {o.Assignee?.Name} {o.Assignee?.Job?.Label}")} crisis {Crisis.Level(w)}");
+                }
+            }
+            Console.WriteLine($"{SimTime.Clock(w.Tick)} temp {trunk.Temp}");
+        }
+        if (which == "boom")
+        {
+            var w = DayOne(seed, "Hanbit");
+            for (int d = 0; d < 5 * 24 * 12 && w.Volatile.Blasts.Count == 0; d++) Run(w, SimTime.Minutes(5));
+            foreach (var l in w.Log.Entries.Where(l => l.Tick > w.Tick - SimTime.Hours(2))) Console.WriteLine($"  L {SimTime.Clock(l.Tick)} {l.Text}");
+            foreach (var b in w.Volatile.Blasts) Console.WriteLine($"{SimTime.Clock(b.Tick)} d{b.Tick / SimTime.TicksPerDay} {w.Ship.RoomAt(b.At)?.Name} {b.Power:0.00} {b.Cause}");
+            foreach (var h in w.History.Events.Where(h => w.Volatile.Blasts.Count > 0 && h.Tick > w.Volatile.Blasts[0].Tick - SimTime.Hours(3) && h.Tick <= w.Volatile.Blasts[0].Tick + SimTime.Minutes(5))) Console.WriteLine($"  {SimTime.Clock(h.Tick)} {h.Text}");
+        }
         if (which == "chess")
         {
             var w = DayOne(seed, "Hanbit");
