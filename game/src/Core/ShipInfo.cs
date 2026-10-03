@@ -8,10 +8,10 @@ namespace ShipSim.Core;
 // 기존 배(제비 · 미리내 · 한빛 · 은하 · 천마)와 옛 생성 키("gen:인원:시드")는 내력이 없다 — 예전 그대로 돈다.
 
 /// <summary>배의 용도: 방 고르기와 기본 방의 크기를 바꾼다.</summary>
-public enum ShipPurpose { General, Mining, Colony, Hospital, Research, Supply, Courier }
+public enum ShipPurpose { General, Mining, Colony, Hospital, Research, Supply, Courier, Tug, Rescue, Tanker, Farm } // v18.8 예인선 · 구조선 · 급유선 · 농업선
 
 /// <summary>배의 뼈대: 통로가 어떻게 이어지나.</summary>
-public enum ShipFrame { Linear, Ring, Spine, Twin, Cargo, Patchwork, Courier }
+public enum ShipFrame { Linear, Ring, Spine, Twin, Cargo, Patchwork, Courier, Wheel } // v18.8 바퀴형
 
 /// <summary>설계사: 군용(격벽 · 이중 배선 · 좁음) · 민간(넓음 · 단일 고장점 · 싼 부품) · 개척민(비표준 · 임시 개조).</summary>
 public enum ShipDesigner { Civilian, Military, Settler }
@@ -36,13 +36,14 @@ public static class ShipInfos
     public static string Name(ShipPurpose p) => p switch
     {
         ShipPurpose.Mining => "채굴선", ShipPurpose.Colony => "이민선", ShipPurpose.Hospital => "병원선", ShipPurpose.Research => "연구선",
-        ShipPurpose.Supply => "보급선", ShipPurpose.Courier => "우편선", _ => "일반선",
+        ShipPurpose.Supply => "보급선", ShipPurpose.Courier => "우편선",
+        ShipPurpose.Tug => "예인선", ShipPurpose.Rescue => "구조선", ShipPurpose.Tanker => "급유선", ShipPurpose.Farm => "농업선", _ => "일반선",
     };
 
     public static string Name(ShipFrame f) => f switch
     {
         ShipFrame.Ring => "고리형", ShipFrame.Spine => "척추형", ShipFrame.Twin => "쌍동선", ShipFrame.Cargo => "화물선형",
-        ShipFrame.Patchwork => "누더기형", ShipFrame.Courier => "소형 쾌속", _ => "직선형",
+        ShipFrame.Patchwork => "누더기형", ShipFrame.Courier => "소형 쾌속", ShipFrame.Wheel => "바퀴형", _ => "직선형",
     };
 
     public static string FrameNote(ShipFrame f) => f switch
@@ -53,6 +54,7 @@ public static class ShipInfos
         ShipFrame.Cargo => "가운데 큰 화물칸 · 생활 구역은 뒤쪽에 작게",
         ShipFrame.Patchwork => "시대가 다른 선체 토막을 이어 붙였다 — 통로 폭이 제각각",
         ShipFrame.Courier => "엔진이 배의 절반 · 비좁다",
+        ShipFrame.Wheel => "테두리 통로가 한 바퀴 돌고, 가운데 굴대에서 바퀴살 통로가 갈라진다",
         _ => "엔진실 → 층마다 방 줄 → 뱃머리 함교",
     };
 
@@ -86,8 +88,9 @@ public static class ShipInfos
 
     public static string CargoText(ShipInfo i) => i.CargoItems.Length == 0 ? "없음" : string.Join(" · ", i.CargoItems.Select(c => $"{ItemKinds.Name(c.kind)} {c.count}"));
 
-    public static readonly ShipPurpose[] GenPurposes = { ShipPurpose.General, ShipPurpose.Mining, ShipPurpose.Colony, ShipPurpose.Hospital, ShipPurpose.Research, ShipPurpose.Supply };
-    public static readonly ShipFrame[] GenFrames = { ShipFrame.Linear, ShipFrame.Ring, ShipFrame.Spine };
+    public static readonly ShipPurpose[] GenPurposes = { ShipPurpose.General, ShipPurpose.Mining, ShipPurpose.Colony, ShipPurpose.Hospital, ShipPurpose.Research, ShipPurpose.Supply,
+        ShipPurpose.Tug, ShipPurpose.Rescue, ShipPurpose.Tanker, ShipPurpose.Farm }; // v18.8
+    public static readonly ShipFrame[] GenFrames = { ShipFrame.Linear, ShipFrame.Ring, ShipFrame.Spine, ShipFrame.Wheel, ShipFrame.Cargo, ShipFrame.Patchwork }; // v18.8
 
     public static string Key(ShipPurpose p) => p.ToString().ToLowerInvariant();
     public static string Key(ShipFrame f) => f.ToString().ToLowerInvariant();

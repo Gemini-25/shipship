@@ -452,6 +452,7 @@ public static class SaveGame
         w.Tales.Hash(I, F); // v18.16 · v18.17 개인 이야기 · 대화 카드 · 로맨스
         w.ZeroG.Hash(I, F); w.Eco.Hash(I, F); w.Drains.Hash(I, F); // v18.4 · v18.2 · v18.3
         w.Dock.Hash(I, F); w.Passengers.Hash(I, F); // v18.5 도킹 · 난파선 · v18.6 승객
+        w.Personal.Hash(I, F); // v18.0 · v18.1 · v18.9 옷 · 편지 · 내기
         return h;
     }
 }

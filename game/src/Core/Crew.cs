@@ -487,6 +487,7 @@ public sealed class CrewMember
     internal void EndJob(World world, ToilStatus status)
     {
         if (Job != null) world.Belongings.OnJobEnded(this, Job, status); // v14.3 공구를 두고 나오기 · 빌린 공구 돌려놓기
+        if (Job != null) world.Personal.Wear.OnJobEnded(this, Job, status); // v18.0 고친 설비 계기 읽기 (흐린 눈은 잘못 적는다)
         Dashing = false;
         EvaMode = false; // 밖에 있으면 Outside로 돌아올 길은 열려 있다
         // 업고 가던 사람이 있으면 그 자리에 내려놓는다

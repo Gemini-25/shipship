@@ -160,6 +160,7 @@ public static partial class Program
         if (args.Contains("--moduletest")) return RunModuleTest(seed); // v15 설비 70
         if (args.Contains("--zerogtest")) return RunZeroGTest(seed); // v18.4 · v18.2 · v18.3
         if (args.Contains("--docktest")) return RunDockTest(seed); // v18.5 · v18.6
+        if (args.Contains("--smalltest")) return RunSmallTest(seed); // 압축-라 v18.0 · v18.1 · v18.8 · v18.9
         if (args.Contains("--talestest")) return RunTalesTest(seed); // v18.16 · v18.17 (--storytest는 v12.4가 쓰고 있다)
         if (args.Contains("--maneuvertest")) return RunManeuverTest(seed); // v17.0
         if (args.Contains("--gesturetest")) return RunGestureTest(seed); // v17.2

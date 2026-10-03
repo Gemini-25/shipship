@@ -361,7 +361,8 @@ public sealed class CasualtySystem
         if (wet) { p *= 1.6f; how = "젖은 바닥에서 " + how; }
         float skill = c.SkillLevel(o.Skill);
         p *= (o.Urgency >= 0.9f ? 1.4f : 1f) * (c.Room?.Dark == true ? 1.6f : 1f) * (c.Needs.Rest < 0.25f ? 1.4f : 1f) * (1.3f - 0.6f * skill)
-             * (Life.Has(c, Habit.Hasty) ? 1.3f : 1f) * (Life.Has(c, Habit.Methodical) ? 0.7f : 1f) * (c.Suit != null && !cause.Contains("감전") ? 0.5f : 1f);
+             * (Life.Has(c, Habit.Hasty) ? 1.3f : 1f) * (Life.Has(c, Habit.Methodical) ? 0.7f : 1f) * (c.Suit != null && !cause.Contains("감전") ? 0.5f : 1f)
+             * w.Personal.Wear.RiskMul(c, cause); // v18.0 방열복 · 장갑 · 보안경 · 잠옷 · 흐린 눈
         if (!R.Chance(p)) return;
         float u = R.Float();
         bool bad = u > 0.75f - 0.07f * harsh, worst = u > 0.96f - 0.05f * harsh; // 통합6 험한 자리일수록 크게
@@ -370,6 +371,7 @@ public sealed class CasualtySystem
         if (bad) WorkBad++;
         c.Vitals.Health = MathF.Max(0.02f, c.Vitals.Health - dmg * (worst ? 1.1f : 0.7f));
         NeedsSystem.AddInjury(c.Vitals, dmg, cause);
+        w.Personal.Wear.Hurt(c, cause, bad); // v18.0 찢어진 옷 · 금 간 안경
         string where = c.Room?.Name ?? "?";
         w.Log.Add(w.Tick, bad ? LogKind.Warning : LogKind.Work, $"{c.Name}: {o.Title} — {how}" + (bad ? $" (체력 {c.Vitals.Health * 100:0}%)" : ""), c.Id);
         MarkLog.Add(c.Memory.Marks, w.Tick, $"{o.Title} 하다 {how} ({where})");
@@ -392,7 +394,7 @@ public sealed class CasualtySystem
         if (c.Dead || c.Outside || _crossed.TryGetValue(c.Id, out var last) && last == cell) return;
         _crossed[c.Id] = cell;
         bool fighting = c.Job?.Order?.Kind == WorkKind.Extinguish;
-        float burn = (0.08f + 0.22f * inten) * (fighting ? 0.4f : 1f) * (c.Pose == Pose.Sleeping || c.Down ? 1.5f : 1f);
+        float burn = (0.08f + 0.22f * inten) * (fighting ? 0.4f : 1f) * (c.Pose == Pose.Sleeping || c.Down ? 1.5f : 1f) * w.Personal.Wear.HeatMul(c); // v18.0 방열복은 막고 잠옷은 잘 붙는다
         if (burn < 0.06f) return;
         Crossings++;
         c.Vitals.Health = MathF.Max(0.02f, c.Vitals.Health - burn * 0.6f);

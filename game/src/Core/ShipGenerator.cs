@@ -417,7 +417,8 @@ public static partial class ShipGenerator
     private static (string ascii, string note, string name) Build(int n, int seed, int attempt, ShipPurpose purpose = ShipPurpose.General, ShipFrame frame = ShipFrame.Linear, int hDelta = 0)
     {
         var rng = new Rng(unchecked(seed * 7919 + attempt * 104729 + n));
-        bool ring = frame == ShipFrame.Ring; // v16.9 고리형: 위아래 통로를 양 끝에서 이어 한 바퀴
+        bool wheel = frame == ShipFrame.Wheel; // v18.8 바퀴형: 고리 + 가운데 바퀴살 통로
+        bool ring = frame == ShipFrame.Ring || wheel; // v16.9 고리형: 위아래 통로를 양 끝에서 이어 한 바퀴
         int H = n <= 4 ? 5 : n <= 6 ? 6 : n <= 12 ? 7 : 8;
         if (hDelta != 0) H = Math.Clamp(H + hDelta, n > 6 ? 6 : 5, 9); // v16.9 군용은 좁고 민간은 넓다
         int K = ring || n <= 12 ? 3 : 4;
@@ -436,6 +437,7 @@ public static partial class ShipGenerator
             legend.Append('@').Append(ch).Append('=').Append(extras[i].Kind).Append('\n');
             specialRooms.Add(SpecialRoom(extras[i], ch, H));
         }
+        if (frame == ShipFrame.Cargo) foreach (var r in specialRooms.Where(r => r.Special == RoomType.Cargo)) r.Widen(4 + n / 4); // v18.8 화물선형: 화물칸이 크다
 
         var bands = Enumerable.Range(0, K).Select(_ => new List<GRoom>()).ToList();
         bands[0].AddRange(new[] { Reactor(n, H), Cooling(pumps, H), PowerRoom(Math.Max(2, 2 * Ceil(n, 6)), H), Workshop(Sized(purpose, 'w', n), H) });
@@ -456,7 +458,7 @@ public static partial class ShipGenerator
         int Width(int b)
         {
             var rooms = bands[b].Concat(b == 0 ? tail0 : Enumerable.Empty<GRoom>()).ToList();
-            return rooms.Sum(r => r.W) + rooms.Count - 1 + (inner.Contains(b) ? 3 : 0);
+            return rooms.Sum(r => r.W) + rooms.Count - 1 + (inner.Contains(b) ? wheel ? 6 : 3 : 0);
         }
         int gmBand = inner[^1];
         bands[gmBand].Add(galley);
@@ -494,6 +496,10 @@ public static partial class ShipGenerator
         foreach (var band in bands) foreach (var r in band) Furnish(r);
         var spineAt = new Dictionary<int, int>();
         foreach (int b in inner) spineAt[b] = ring ? 0 : Math.Max(b == 1 ? 2 : 1, bands[b].Count / 2); // 고리형: 왼쪽 끝에서 위아래 통로를 잇는다
+        var spokeAt = new Dictionary<int, int>(); // v18.8 바퀴형: 가운데 바퀴살
+        if (wheel) foreach (int b in inner) spokeAt[b] = Math.Max(2, bands[b].Count / 2);
+        if (frame == ShipFrame.Patchwork) Patch(bands[0], 0, rng); // v18.8 누더기형: 바깥 줄 방을 들쭉날쭉 이어 붙인 선체 토막처럼
+        if (frame == ShipFrame.Patchwork) Patch(bands[K - 1], H - 1, rng);
 
         // ── 좌표 ──
         var bandY = Enumerable.Range(0, K).Select(b => 1 + b * (H + 4)).ToArray();
@@ -512,7 +518,7 @@ public static partial class ShipGenerator
             var pos = new List<(GRoom?, int)>();
             for (int i = 0; i < bands[b].Count; i++)
             {
-                if (spineAt.TryGetValue(b, out int si) && i == si) { pos.Add((null, x)); x += 3; }
+                if (spineAt.TryGetValue(b, out int si) && i == si || spokeAt.TryGetValue(b, out int sk) && i == sk) { pos.Add((null, x)); x += 3; }
                 pos.Add((bands[b][i], x));
                 x += bands[b][i].W + 1;
             }
