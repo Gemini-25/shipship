@@ -99,6 +99,7 @@ public static partial class Program
             Run(w, 2);
             var eatJob = Brain.Activities.OfType<EatActivity>().First().Plan(diner, w, w.Paths.Flood(diner.Cell, diner.PathProfile));
             if (eatJob != null) Force(w, diner, eatJob, SimTime.Hours(1)); else IfIdle(w, diner);
+            SpQuiet(w, new[] { diner }, SimTime.Hours(3)); // 통합8 지나가던 다른 사람이 먼저 쓸어 담으면 밥 먹은 사람이 쓸 조각이 없다 — 식당엔 그 사람뿐
             int swept0 = ms.Stats.Swept;
             for (int t = 0; t < SimTime.Hours(3) && ms.Stats.Swept == swept0; t++) Tick();
             var sweepLog = w.Log.Entries.LastOrDefault(e => e.Text.Contains("빗자루로 깨진")).Text ?? "";
@@ -175,8 +176,9 @@ public static partial class Program
             }
             var cu = w.Culture.Of(CustomKind.StowAway);
             int latched0 = ms.Latched.Count;
-            Run(w, SimTime.Hours(10));
             int shelves = w.Ship.Furniture.Count(f => ManeuverSystem.Shelfish(f.Type) && !f.Room.Detached);
+            // 통합8 쓰고 난 선반에만 거니 선반 반에 걸리기까지 열 시간이 빠듯하다 (14/30) — 반에 걸릴 때까지 (하루 안)
+            for (int h = 0; h < 24 && (h < 10 || ms.Latched.Count < shelves / 2); h++) Run(w, SimTime.Hours(1));
             int dropsBefore = ms.Stats.Dropped;
             ms.Shock(0.8f, new Vector2(-1, 0), null, "운석 충돌", warned: false);
             int after = ms.Stats.Dropped - dropsBefore;

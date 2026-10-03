@@ -119,6 +119,18 @@ public static partial class Program
             }
             Console.WriteLine($"equalized {w.Flow.Stats.Equalized}");
         }
+        if (which == "rad")
+        {
+            var w = DayOne(seed, "Hanbit"); w.CrewCanDie = true;
+            var v = w.Crew.First(c => c.CanAct);
+            v.Dose = 8f;
+            foreach (var f in w.Ship.Furniture.Where(f => f.Storage != null)) f.Storage!.Take(ItemKind.MedKit, 999);
+            for (int h = 0; h < 10; h++)
+            {
+                Run(w, SimTime.Minutes(30));
+                Console.WriteLine($"{SimTime.Clock(w.Tick)} {v.Name} down {v.Down} hp {v.Vitals.Health:0.00} stage {w.Perils.RadStage(v)} treated {w.RadCare.Treated(v)} dose {v.Dose:0.0} care {v.CareBed != null} room {v.Room?.Name} {v.ActivityLabel}");
+            }
+        }
         if (which == "chess")
         {
             var w = DayOne(seed, "Hanbit");

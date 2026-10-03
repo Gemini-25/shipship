@@ -127,7 +127,8 @@ public static partial class Program
                     if (m < 6 && !victim.Down) victim.Vitals.Oxygen = MathF.Min(victim.Vitals.Oxygen, 0.1f); // 숨이 막혀 쓰러진다 (경보가 돈다)
                     heroic |= hero.Mind.Heroic(w.Tick) && hero.Mind.HeroFor == victim.Id;
                     if (debug) Console.WriteLine($"      {SimTime.Clock(w.Tick)} {victim.Name} 쓰러짐 {victim.Down} 방 {victim.Room?.Name} 압력 {victim.Room?.Air.Pressure:0} · {hero.Name} 깸 {hero.IsAwake} 앎 [{string.Join(",", hero.Mind.Knows.Keys)}] 관계 {hero.AffinityTo(victim):0.00} 일 {hero.Job?.Label} 대시 {hero.Dashing} · 공황 {hero.Mind.Panicking(w.Tick)} · 영웅 {hero.Mind.HeroUntil} · 새는가 {victim.Room?.Leaking} 위험 {(victim.Room != null ? Atmosphere.Danger(victim.Room) : -1):0.00} · 대담 {hero.Traits.Bravery:0.00}");
-                    dashed |= hero.Dashing && hero.Job?.Order?.Kind == WorkKind.Rescue || victim.CarriedBy == hero;
+                    dashed |= hero.Dashing && hero.Job?.Order?.Kind == WorkKind.Rescue || victim.CarriedBy == hero
+                              || hero.Job?.Order?.Kind == WorkKind.Rescue && hero.Room == victim.Room && victim.Down; // 통합8 들것(구조 방법)으로 둘이 들어도 우주복 없이 그 방에 뛰어든 것이다 (들것은 업지 않는다)
                 }
                 Check("영웅심 — 용감한 사람은 가까운 사람이 쓰러진 걸 알면 우주복 없이도 뛰어든다", heroic && dashed,
                     $"{hero.Name}(대담 {hero.Traits.Bravery:0.00}) → {victim.Name}: 영웅심 {(heroic ? "있음" : "없음")} · 뛰어듦 {(dashed ? "예" : "아니오")} · 영웅심 {w.Minds.Heroics}번");

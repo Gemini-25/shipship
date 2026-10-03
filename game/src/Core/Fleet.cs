@@ -480,7 +480,9 @@ public sealed class FleetSystem
         {
             if (c.Dead || !c.IsAwake || c.IsChild || saw.Contains(c.Id)) continue;
             float d = MathF.Abs(c.Position.X - rb.Position.X) + MathF.Abs(c.Position.Y - rb.Position.Y);
-            if (d > 9f) continue;
+            // 통합8 함교 · 통신실 화면(그 방 카메라)으로 지켜본 사람도 본 것이다 — 사람을 문 앞에 붙잡아 두면 곁에서 본 사람이 없었다
+            bool screen = c.Room is { Type: RoomType.Bridge or RoomType.Comms or RoomType.ServerRoom } && room.DataLinked && w.Automation.MainOnline;
+            if (d > 9f && !screen) continue;
             w.Automation.Trusts.Change(c, 0.02f, $"{Ko.IGa(rb.Name)} 사람보다 먼저 불 속에 들어갔다", quiet: true);
             w.Brain2.Beliefs.Learn(c, Topic.Fire, room.Id, 1, BeliefSource.Seen, 0.95f);
             first ??= c;

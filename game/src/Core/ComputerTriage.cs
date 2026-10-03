@@ -42,6 +42,7 @@ public sealed class PowerTriage
     public string Plan { get; private set; } = "";
     public List<BreakerCase> Cases { get; } = new();
     private readonly Dictionary<int, (string sig, long tick)> _lastReset = new();
+    private readonly Dictionary<int, (string sig, long tick)> _prevReset = new(); // 통합8 그 앞의 올림 — 사이에 기동 전류로 한 번 더 떨어져도 같은 원인을 알아본다
     public int LowPower;
     private bool _ownBrownout;
     private long _lowAnnounced = -1;
@@ -322,7 +323,8 @@ public sealed class PowerTriage
             foreach (var o in w.Board.Open.Where(o => o.Kind == WorkKind.ResetBreaker && o.Circuit == i && o.Assignee == null).ToList()) w.Board.Close(o); // 원인을 볼 동안 사람은 올리러 가지 않는다
             if (!remote) { bc.State = "사람에게 (배전반 데이터선이 끊겼다)"; continue; }
             if (w.Tick - fault.Since < SimTime.Minutes(0.6f) / a.Core.Speed) continue; // 원인을 본다
-            bool same = _lastReset.TryGetValue(i, out var last) && last.sig == sig && w.Tick - last.tick < SimTime.Hours(2) && (sig != "?" || w.Tick - last.tick < SimTime.Minutes(30));
+            bool Same((string sig, long tick) r) => r.sig == sig && w.Tick - r.tick < SimTime.Hours(2) && (sig != "?" || w.Tick - r.tick < SimTime.Minutes(30));
+            bool same = _lastReset.TryGetValue(i, out var last) && Same(last) || _prevReset.TryGetValue(i, out var prev) && Same(prev);
             bc.Same = same;
             if (bc.Decision < 0)
             {
@@ -416,6 +418,7 @@ public sealed class PowerTriage
         bc.Open = false;
         RemoteResets++;
         a.Command.Close(bc.Decision, why);
+        if (_lastReset.TryGetValue(i, out var was) && was.sig != bc.Sig) _prevReset[i] = was;
         _lastReset[i] = (bc.Sig, w.Tick);
         string cut = bc.Cut.Count > 0 ? string.Join(" · ", bc.Cut.GroupBy(x => x).OrderBy(g => g.Key).Select(g => g.Count() > 1 ? $"{g.Key} {g.Count()}대" : $"{g.Key} 하나")) : "";
         a.Command.Line(CmdTarget.Breaker, i, panelRoom, $"{PowerGrid.CircuitName(i)} 회로 차단기 올림", why + (cut != "" ? $" · 끊은 것: {cut}" : ""), 0.9f, 5f, bc.Decision);
