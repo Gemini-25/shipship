@@ -796,7 +796,7 @@ public sealed class World
         if (c.Room == null) return;
         float danger = EvacuateActivity.DangerHere(c, this);
         // 자다가도: 연기 냄새·숨 막힘·추위·열기에 깬다 (일산화탄소는 모른다 — 그래서 위험하다)
-        if (c.Pose == Pose.Sleeping && (c.Room.Air.Smoke > 0.15f || c.Room.Air.O2 < 16.5f || c.Room.Air.Temperature < 8f || c.Room.Air.Temperature > 40f || c.Room.Air.Toxin > 0.1f)
+        if (c.Pose == Pose.Sleeping && (c.Room.Air.Smoke > 0.15f || c.Room.Air.O2 < 16.5f || c.Room.Air.Temperature < 8f || c.Room.Air.Temperature > 40f || c.Room.Air.Toxin > 0.1f || c.Dose >= 3f && c.Room.Radiation > 0.2f)
             && Perils.WakesFromSleep(c)) // v16.26 냄새만으로는 잘 안 깬다 (몸이 느끼는 것은 깨운다)
             c.Jolt(this);
         if (!c.InHazard && danger > 0.25f)

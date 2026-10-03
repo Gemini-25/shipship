@@ -29,6 +29,8 @@ public sealed class Trauma
     public long HelperSince { get; set; } = -1;
     public int Helper { get; set; } = -1;
     public long HelperSeen { get; set; } = -1; // 통합: 돕던 사람을 마지막으로 곁에서 본 때 (구급상자를 가지러 한두 걸음 떨어져도 이어서 돕는다)
+    public long FirstHelpAt { get; set; } = -1; // 통합6 처음 곁에 사람이 닿은 때 (늦었는지 남긴다)
+    public int FirstHelper { get; set; } = -1;
     public bool Paged { get; set; }           // 컴퓨터가 불렀다
     public int Tries { get; set; }            // 가슴 압박 시도
     public bool Closed { get; set; }
@@ -173,6 +175,7 @@ public sealed class CasualtySystem
         {
             if (t.Helper != helper.Id) { t.Helper = helper.Id; t.HelperSince = now; }
             t.HelperSeen = now;
+            if (t.FirstHelpAt < 0) { t.FirstHelpAt = now; t.FirstHelper = helper.Id; }
         }
         else if (t.Helper >= 0 && now - t.HelperSeen <= SimTime.Minutes(1) && w.Crew.FirstOrDefault(o => o.Id == t.Helper) is { CanAct: true } back && (back.Position - c.Position).LengthSquared() < 4f * 4f)
             helper = back; // 통합: 잠깐 자리를 비웠다 (문턱 · 몸을 돌림 · 구급상자) — 누르던 손을 처음부터 다시 세지 않는다
@@ -304,8 +307,13 @@ public sealed class CasualtySystem
         var w = _w;
         var room = t.RoomId >= 0 && t.RoomId < w.Ship.Rooms.Count ? w.Ship.Rooms[t.RoomId] : c.Room;
         int awake = w.Crew.Count(o => !o.Dead && o != c && o.Pose != Pose.Sleeping && o.CanAct);
-        string why = t.Asleep ? "자다가 다쳐 아무도 몰랐다"
-            : !t.Paged && t.Helper < 0 && (room == null || !room.DataLinked || !w.Automation.MainOnline) ? "혼자였고, 주 컴퓨터도 보지 못했다"
+        // 통합6 처음 곁에 닿은 사람이 언제였나 — 아무도 안 왔나 · 늦게 왔나
+        float late = t.FirstHelpAt >= 0 ? (t.FirstHelpAt - t.Since) / (float)SimTime.TicksPerHour * 60f : -1f;
+        var first = t.FirstHelper >= 0 ? w.Crew.FirstOrDefault(o => o.Id == t.FirstHelper) : null;
+        string why = t.Asleep && t.FirstHelpAt < 0 ? "자다가 다쳐 아무도 몰랐다"
+            : t.FirstHelpAt < 0 && !t.Paged ? "혼자였고, 주 컴퓨터도 보지 못했다"
+            : t.FirstHelpAt < 0 ? "주 컴퓨터가 불렀지만 아무도 닿지 못했다"
+            : first != null && late >= (t.Kind == TraumaKind.Arrest ? 4f : 20f) ? $"{Ko.IGa(first.Name)} {late:0}분 만에 닿았지만 늦었다"
             : awake <= 1 ? "깨어 있는 사람이 없었다"
             : t.Helped >= 0 && w.Crew.FirstOrDefault(o => o.Id == t.Helped) is CrewMember lay ? $"{Ko.IGa(lay.Name)} 곁에서 붙잡고 있었지만 의무관이 제때 닿지 못했다"
             : Crisis.Level(w) >= CrisisLevel.Alert ? "모두 다른 불을 끄고 있었다"

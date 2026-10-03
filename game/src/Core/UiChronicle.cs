@@ -95,6 +95,7 @@ public static class ChronicleBook
                 foreach (var fid in mc.Furn) if (!things.Contains(fid)) things.Add(fid);
             }
             at ??= RoomCenter(w, k.RoomId);
+            at ??= k.CrewId >= 0 && w.Crew.FirstOrDefault(x => x.Id == k.CrewId) is CrewMember who ? who.Position : ShipCenter(w); // 통합6 배 전체 · 우주급 사고는 배 한가운데로
             list.Add(new ChronMark(k.Start, k.End, k.Peak, "case", CaseTitle(w, k), k.RoomId, crew.ToArray(), at, k.Id, k.Root, things.ToArray()));
         }
         // 2) 역사의 큰 줄: 죽음 · 이정표 · 결정 · 전우 · 개조
@@ -143,6 +144,14 @@ public static class ChronicleBook
     }
 
     private static Room? RoomOf(World w, int id) => id >= 0 && id < w.Ship.Rooms.Count ? w.Ship.Rooms[id] : null;
+
+    private static Vector2? ShipCenter(World w)
+    {
+        float x = 0, y = 0;
+        int n = 0;
+        foreach (var r in w.Ship.Rooms) { if (r.Detached) continue; foreach (var c in r.Cells) { x += c.X; y += c.Y; n++; } }
+        return n == 0 ? null : new Vector2(x / n + 0.5f, y / n + 0.5f);
+    }
 
     private static Vector2? RoomCenter(World w, int id)
     {

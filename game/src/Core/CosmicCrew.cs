@@ -32,6 +32,10 @@ internal static class CosmicCrew
     public static bool NeedsShelter(CosmicSpec s) => s.Has(CosmicFx.Radiation) || s.Has(CosmicFx.Shock) || s.Has(CosmicFx.Heat) && s.Has(CosmicFx.Plasma);
 
     /// <summary>이 사람에게 지금 숨을 이유가 있나 (아는 것 · 믿는 것 · 실제로 쬐는 것).</summary>
+    /// <summary>통합6 계기 없이 방사선을 알아채는 길: 내 몸이 토하고 어지럽다 · 같은 방 누가 쓰러지듯 토한다.</summary>
+    public static bool RadFelt(CrewMember c, World w) =>
+        c.Dose >= 2f || c.Room != null && w.Crew.Any(o => o != c && !o.Dead && o.Room == c.Room && o.Dose >= 2.5f);
+
     public static (CosmicEvent? e, float urgency, string why) ShelterCall(CrewMember c, World w)
     {
         var cs = w.Cosmic;
@@ -39,6 +43,14 @@ internal static class CosmicCrew
         {
             if (e.Phase is not (CosmicPhase.Brace or CosmicPhase.Impact) || !NeedsShelter(e.Spec) || !cs.Knows(c, e)) continue;
             bool burning = cs.FxNow(e, CosmicFx.Radiation) > 0f || cs.FxNow(e, CosmicFx.Shock) > 0f || cs.FxNow(e, CosmicFx.Heat) > 0f;
+            // 통합6 예보 없이 몸으로 겪은 재난 (주 컴퓨터도 없다): 다음 피해가 언제 오는지 모른다 — 방사선은 보이지도 들리지도 않아
+            //       토하고 어지러워져야(2Sv 남짓) 그제야 숨는다. 충격 · 열기는 바로 느낀다
+            if (e.KnownBy == "몸으로" && !w.Automation.MainOnline)
+            {
+                bool felt = cs.FxNow(e, CosmicFx.Shock) > 0f || cs.FxNow(e, CosmicFx.Heat) > 0f || cs.FxNow(e, CosmicFx.Radiation) > 0f && RadFelt(c, w);
+                if (!felt) continue;
+                burning = true;
+            }
             long harm = cs.NextHarm(e);
             if (harm == long.MaxValue) continue;
             float lead = cs.Follows(c, CosmicCustomKind.Drill) ? 1.6f : 1f;
@@ -121,8 +133,10 @@ public sealed class CosmicShelterActivity : Activity
         var (e, urg, why) = CosmicCrew.ShelterCall(c, w);
         if (e == null) return (0f, "—");
         if (CosmicEvacuateActivity.Emptying(c.Room!, w)) return (0f, "먼저 비우는 구획에서 나간다"); // 가장 가까운 안전한 방으로 (구획 비우기) — 대피소까지 파편 줄을 따라 걷지 않게
-        if (w.Cosmic.RelExposure(c.Room!) <= 0.32f && !CosmicEvacuateActivity.InLine(c.Room!, w)) return (0.9f + 0.1f * urg, $"{why} — 여기서 기다린다");
-        return (0.85f + 0.3f * urg + (w.Cosmic.Follows(c, CosmicCustomKind.Drill) ? 0.1f : 0f), $"{why} — 대피");
+        // 통합6 쏟아지는 동안엔 밥 · 잠 · 회의 때문에 바깥 방으로 나가지 않는다 (대피소에서 먹고 존다)
+        float pour = urg >= 1f ? 0.35f : 0f;
+        if (w.Cosmic.RelExposure(c.Room!) <= 0.32f && !CosmicEvacuateActivity.InLine(c.Room!, w)) return (0.9f + 0.1f * urg + pour, $"{why} — 여기서 기다린다");
+        return (0.85f + 0.3f * urg + pour + (w.Cosmic.Follows(c, CosmicCustomKind.Drill) ? 0.1f : 0f), $"{why} — 대피");
     }
 
     public override Job? Plan(CrewMember c, World w, DistanceField dist)

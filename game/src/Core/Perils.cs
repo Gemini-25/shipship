@@ -66,6 +66,7 @@ public sealed class PerilSystem
     {
         var air = c.Room!.Air;
         if (air.O2 < 16.5f || air.Temperature < 8f || air.Temperature > 40f || air.Toxin > 0.1f) return true;
+        if (c.Dose >= 3f && c.Room.Radiation > 0.2f) return true; // 통합6 쬔 몸이 뒤집혀 토하다 깬다 (그 전엔 모른다)
         if (air.Smoke <= 0.15f) return false;
         float p = (0.004f + 0.03f * (air.Smoke - 0.15f)) * (c.Needs.Fatigue > 0.7f ? 0.4f : 1f) * (c.DeepAsleep ? 0.3f : 1f);
         if (R.Chance(p)) { LateWakes++; return true; }
