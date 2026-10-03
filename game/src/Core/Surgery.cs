@@ -361,12 +361,21 @@ public sealed class SurgerySystem
 
     // ───────────── 수술실 설비 (켜고 끄기 · 비상 배터리) ─────────────
 
+    private readonly List<Furniture> _gear = new();
+    private int _gearCount = -1;
+
     private void Machines()
     {
         var w = _w;
-        foreach (var f in w.Ship.Furniture)
+        if (_gearCount != w.Ship.Furniture.Count) // 설비가 늘거나 줄 때만 다시 모은다
         {
-            if (f.Type is not (FurnitureType.OperatingTable or FurnitureType.SurgicalLamp or FurnitureType.AnesthesiaMachine) || f.Machine is not Machine m) continue;
+            _gearCount = w.Ship.Furniture.Count;
+            _gear.Clear();
+            foreach (var f in w.Ship.Furniture) if (f.Type is FurnitureType.OperatingTable or FurnitureType.SurgicalLamp or FurnitureType.AnesthesiaMachine) _gear.Add(f);
+        }
+        foreach (var f in _gear)
+        {
+            if (f.Machine is not Machine m) continue;
             bool on = false;
             foreach (var k in Cases) if (k.State is CaseState.Prep or CaseState.Operating && TableOf(k)?.Room == f.Room) on = true;
             m.Active = on;
@@ -564,6 +573,16 @@ public sealed class SurgerySystem
         if (pt == null || pt.Dead || table == null) return;
         var a = w.Automation;
         bool comp = a.Present && a.MainOnline && table.Room.DataLinked;
+        // 생체 신호
+        if (k.State == CaseState.Operating && k.LastWarnHealth > 1.5f) k.LastWarnHealth = pt.Vitals.Health; // 열 때의 신호를 기준으로
+        if (comp && k.State == CaseState.Operating && (pt.Vitals.Health < k.LastWarnHealth - 0.06f || pt.Vitals.Health < 0.25f && k.LastWarnHealth >= 0.25f))
+        {
+            k.LastWarnHealth = pt.Vitals.Health;
+            VitalWarnings++;
+            a.Speak.Announce(a.Voice.Style($"{pt.Name} 혈압이 떨어집니다 — 체력 {pt.Vitals.Health * 100:0}%" + (w.Blood.CompatibleFor(pt) > 0 ? " · 피를 넣으십시오" : " · 맞는 피가 없습니다")), table.Room, 3);
+            a.Book.Add(ActKind.Alarm, table.Room, $"{pt.Name} 생체 신호 — 체력 {pt.Vitals.Health * 100:0}% · 맥이 빠르다", "피가 빠지고 있다",
+                "혈압이 떨어진다고 알렸다", "", $"vital:{k.Id}:{(int)(pt.Vitals.Health * 10)}", SimTime.Minutes(10));
+        }
         // 피가 모자라면: 보조(없으면 집도의)가 냉장고 피를 넣는다 · 없으면 부른다
         if (k.State == CaseState.Operating && (pt.Vitals.Health < 0.35f || w.Blood.Lost(pt) >= 0.3f && pt.Vitals.Health < 0.6f) && w.Tick - k.LastBlood > SimTime.Minutes(20))
         {
@@ -572,18 +591,6 @@ public sealed class SurgerySystem
             string did = w.Blood.Transfuse(pt, by, desperate: pt.Vitals.Health < 0.1f && !w.Blood.Donors.Values.Any(d => d.forId == pt.Id));
             if (did != "") { k.Bloods++; k.Notes.Add(did); }
             else w.Blood.Call(pt, "수술 중 피가 모자라다");
-        }
-        // 생체 신호
-        if (comp && k.State == CaseState.Operating && (pt.Vitals.Health < k.LastWarnHealth - 0.08f || pt.Vitals.Health < 0.25f && k.LastWarnHealth >= 0.25f))
-        {
-            k.LastWarnHealth = pt.Vitals.Health;
-            if (pt.Vitals.Health < 0.45f)
-            {
-                VitalWarnings++;
-                a.Speak.Announce(a.Voice.Style($"{pt.Name} 혈압이 떨어집니다 — 체력 {pt.Vitals.Health * 100:0}%" + (w.Blood.CompatibleFor(pt) > 0 ? " · 피를 넣으십시오" : " · 맞는 피가 없습니다")), table.Room, 3);
-                a.Book.Add(ActKind.Alarm, table.Room, $"{pt.Name} 생체 신호 — 체력 {pt.Vitals.Health * 100:0}% · 맥이 빠르다", "피가 빠지고 있다",
-                    "혈압이 떨어진다고 알렸다", "", $"vital:{k.Id}:{(int)(pt.Vitals.Health * 10)}", SimTime.Minutes(10));
-            }
         }
         // 정전: 수술실 설비에 전기가 안 들어온다 → 몰아준다 (Holds가 우선순위를 올린다) · 무영등은 비상 배터리로
         var lamp = FurnitureAt(table.Room, FurnitureType.SurgicalLamp);

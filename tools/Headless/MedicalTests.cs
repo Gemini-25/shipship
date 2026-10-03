@@ -190,6 +190,7 @@ public static partial class Program
                 var tr = wi.Casualty.Of(g);
                 if (tr != null && !wi.Surgery.Internal(tr)) wi.Surgery.MarkInternalFor(tr);
                 g.Vitals.TreatedTick = wi.Tick;
+                g.Vitals.Health = 0.5f;
                 Run(wi, SimTime.Minutes(3));
                 bool still = wi.Casualty.Of(g) != null;
                 // 항로를 바꿀 때가 되었다 (공기 탱크가 줄었다 · 잔해 지대)
@@ -207,8 +208,8 @@ public static partial class Program
                 Check("주컴퓨터 — 수술 중 항로 점화를 미루자고 함장에게 제안 → 받으면 점화가 미뤄진다",
                     prop != null && heldNow && wi.Surgery.BurnHolds > 0 && wi.Log.Entries.Any(x => x.Text.Contains("항로 점화를 미뤘다")),
                     $"제안 {wi.Surgery.BurnProposals} \"{prop?.Title}\" · 미룸 {heldNow} · 그사이 항로 변경 {wi.Propulsion.Transfers - tr0}");
-                Check("주컴퓨터 — 생체 신호 · 수술 순서 · 수술 기록", wi.Surgery.BleedForecasts > 0 && (wi.Surgery.VitalWarnings > 0 || wi.Automation.Book.Acts.Any(x => x.Key.StartsWith("bleedfc:"))),
-                    $"예측 {wi.Surgery.BleedForecasts} · 혈압 경고 {wi.Surgery.VitalWarnings}");
+                Check("주컴퓨터 — 생체 신호를 본다 (\"혈압이 떨어집니다\") · 출혈량을 예측한다", wi.Surgery.BleedForecasts > 0 && wi.Surgery.VitalWarnings > 0 && wi.Log.Entries.Any(x => x.Text.Contains("혈압이 떨어집니다")),
+                    $"예측 {wi.Surgery.BleedForecasts} · 혈압 경고 {wi.Surgery.VitalWarnings} · 수혈 {kg?.Bloods}");
             }
 
             // ── 9) 집도의의 기억: 잃은 사람이 있으면 수술대 앞에 서지 못한다 (다른 사람이 있으면 물러선다) ──
@@ -228,7 +229,37 @@ public static partial class Program
                 else Check("집도의의 기억 — (의료를 아는 사람이 하나뿐인 배: 건너뜀)", true);
             }
 
-            // ── 10) 결정론 ──
+            // ── 10) 수술 순서 · 냉장고 · 약 기한 · 약 만들기 ──
+            {
+                var wo = DayOne(seed, "Hanbit");
+                var p1 = Patient(wo); var p2 = Patient(wo, 1);
+                NeedsSystem.AddInjury(p1.Vitals, 0.34f, "작업 중 넘어짐");
+                NeedsSystem.AddInjury(p2.Vitals, 0.42f, "작업 중 넘어짐");
+                Run(wo, SimTime.Minutes(1));
+                p1.Vitals.TreatedTick = wo.Tick; p2.Vitals.TreatedTick = wo.Tick;
+                Until(wo, () => wo.Surgery.LastOrder != "", 1f);
+                Check("주컴퓨터 — 수술을 기다리는 사람이 둘이면 순서를 권한다", wo.Surgery.LastOrder.Contains(p1.Name) && wo.Surgery.LastOrder.Contains(p2.Name), $"\"{wo.Surgery.LastOrder}\"");
+                // 냉장고 전기가 끊기면 피가 상한다
+                var fr = wo.Ship.FurnitureOf(FurnitureType.BloodFridge).First();
+                int sp0 = wo.Blood.Spoiled, packs0 = wo.Blood.Count();
+                fr.Room.PowerCut = true;
+                Run(wo, SimTime.Hours(6));
+                fr.Room.PowerCut = false;
+                Check("혈액 냉장고 — 전기가 끊겨 미지근하면 피가 상한다 · 컴퓨터가 상하기 전에 알린다", packs0 > 0 && wo.Blood.Spoiled > sp0 && wo.Automation.Book.Acts.Any(x => x.Key == "bloodcold"),
+                    $"팩 {packs0} → 상함 {wo.Blood.Spoiled - sp0}");
+                // 약 기한이 지나면 버리고 → 컴퓨터가 예측해 → 재배실 채소로 약초 · 약초로 진통제를 만든다
+                Run(wo, SimTime.Hours(2));
+                wo.Pharmacy.Age(ItemKind.Painkiller, SimTime.TicksPerDay * 61);
+                Until(wo, () => wo.Pharmacy.ExpiredCount > 0, 3f);
+                int left = wo.Pharmacy.Stock(ItemKind.Painkiller);
+                for (int i = 0; i < 3; i++) wo.Pharmacy.Used(ItemKind.Painkiller);
+                Until(wo, () => wo.Pharmacy.Stock(ItemKind.Painkiller) > 0, 36f);
+                Check("약 — 기한이 지나면 버린다 · 컴퓨터가 남은 날을 예측해 더 만들게 한다 · 재배실 채소 → 약초 → 진통제",
+                    wo.Pharmacy.ExpiredCount > 0 && left == 0 && wo.Pharmacy.Forecasts > 0 && wo.Pharmacy.Stock(ItemKind.Painkiller) > 0,
+                    $"버림 {wo.Pharmacy.ExpiredCount} · 남음 {left} → {wo.Pharmacy.Stock(ItemKind.Painkiller)} · 예측 {wo.Pharmacy.Forecasts} · 목표 {wo.Pharmacy.Want(ItemKind.Painkiller)} · 약초 {wo.Pharmacy.Stock(ItemKind.MedHerb)}");
+            }
+
+            // ── 11) 결정론 ──
             uint H() { var x = World.CreateDefault(seed, 0, "Hanbit"); Run(x, SimTime.TicksPerDay + SimTime.Hours(6)); return SaveGame.StateHash(x); }
             uint h1 = H(), h2 = H();
             Check("결정론 — 같은 시드면 같은 배 (수술 · 피 · 약 · 회복 포함)", h1 == h2, $"{h1:x8} / {h2:x8}");

@@ -251,6 +251,7 @@ public sealed class RadCareSystem
         {
             p.BloodAt = now; p.Bloods++; Transfusions++;
             p.LastDonor = d.Id; p.Donor = -1;
+            _w.Blood.LastGave[d.Id] = now; // 의료 1차 여드레는 다시 헌혈하지 않는다
             c.Vitals.Health = MathF.Min(c.Vitals.MaxHealth, c.Vitals.Health + 0.12f);
             d.Vitals.Health = MathF.Max(0.3f, d.Vitals.Health - 0.1f);
             d.Needs.Rest = MathF.Max(0f, d.Needs.Rest - 0.15f);

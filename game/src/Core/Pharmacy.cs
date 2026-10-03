@@ -161,6 +161,14 @@ public sealed class PharmacySystem
         _uses.GetValueOrDefault(k)?.RemoveAll(t => t < w.Tick - SimTime.TicksPerDay * 3);
     }
 
+    /// <summary>시험 · 장면: 이 약의 묶음이 그만큼 먼저 들어왔던 것으로 (기한을 당긴다).</summary>
+    public void Age(ItemKind k, long ticks)
+    {
+        Reconcile(k);
+        if (!_batches.TryGetValue(k, out var b)) return;
+        for (int i = 0; i < b.Count; i++) b[i] = (b[i].n, b[i].exp - ticks);
+    }
+
     /// <summary>다음 기한이 언제인가 (없으면 -1).</summary>
     public long NextExpiry(ItemKind k) => _batches.TryGetValue(k, out var b) && b.Count > 0 ? b[0].exp : -1;
 
