@@ -34,13 +34,15 @@ public sealed partial class DockingSystem
             case DockStage.Open or DockStage.Salvage when v.Wreck:
             {
                 if (c.Vitals.Injury > 0.35f || c.Needs.Fatigue > 0.85f || InsideCount(v) >= 3) break;
+                // 멀쩡한 우주복이 없으면 (찢긴 판에 다 상했다) 수리를 기다린다
+                if (c.Suit == null && w.EvaRisk.DamagedSuits.Count > 0 && w.Ship.CountStored(ItemKind.Suit) - w.EvaRisk.DamagedSuits.Count < 2) return (Task.None, -1, 0f, "멀쩡한 우주복이 모자라다 — 수리부터");
                 float fear = (c.Fears.Contains(Fear.Dark) ? 0.15f : 0f) + (c.Fears.Contains(Fear.Spacewalk) || c.Fears.Contains(Fear.Vacuum) ? 0.25f : 0f) + (c.Fears.Contains(Fear.Death) ? 0.1f : 0f);
-                var sr = v.Rooms.Where(r => !r.Searched && r.SearchBy < 0).OrderBy(r => r.HazardKnown ? 1 : 0).ThenBy(r => Math.Abs(r.Spot.X - v.DockX)).FirstOrDefault();
-                if (sr != null) return (Task.Search, sr.Id, 0.52f + 0.15f * c.Traits.Bravery - fear, $"{v.Name} {sr.Name}을 뒤진다 (어둠 · 진공)");
+                var sr = v.Rooms.Where(r => !r.Searched && r.SearchBy < 0 && !Shy(c, r)).OrderBy(r => r.HazardKnown ? 1 : 0).ThenBy(r => Math.Abs(r.Spot.X - v.DockX)).FirstOrDefault();
+                if (sr != null) return (Task.Search, sr.Id, 0.52f + 0.15f * c.Traits.Bravery - fear, $"{v.Name} {Ko.EulReul(sr.Name)} 뒤진다 (어둠 · 진공)");
                 // 컴퓨터가 흔들리는 격벽을 말렸으면 그 방은 자르지 않는다
-                var cr = v.Rooms.Where(r => r.Searched && !r.Gone && !r.Collapsed && r.CutBy < 0 && !(r.Hazard == 2 && r.HazardKnown && ComputerOn))
+                var cr = v.Rooms.Where(r => r.Searched && !r.Gone && !r.Collapsed && r.CutBy < 0 && !Shy(c, r) && !(r.Hazard == 2 && r.HazardKnown && ComputerOn))
                     .OrderBy(r => r.HazardKnown ? 1 : 0).ThenBy(r => r.Id).FirstOrDefault();
-                if (cr != null) return (Task.Cut, cr.Id, 0.46f + 0.2f * mech - fear, $"{v.Name} {cr.Name}을 잘라 온다");
+                if (cr != null) return (Task.Cut, cr.Id, 0.46f + 0.2f * mech - fear, $"{v.Name} {Ko.EulReul(cr.Name)} 잘라 온다");
                 break;
             }
         }
@@ -116,7 +118,7 @@ public sealed partial class DockingSystem
                 Stats.Trips++;
                 return new Job(act, search ? "난파선 뒤지기 (우주복)" : "난파선 자르기 (우주복)", toils)
                 {
-                    LogText = search ? $"우주복을 입고 {v.Name} {r.Name}으로 — 헬멧 등 하나로" : $"절단기를 들고 {v.Name} {r.Name}으로", LogKind = LogKind.Work, InterruptMargin = 0.5f,
+                    LogText = search ? $"우주복을 입고 {v.Name} {Ko.EuRo(r.Name)} — 헬멧 등 하나로" : $"절단기를 들고 {v.Name} {Ko.EuRo(r.Name)}", LogKind = LogKind.Work, InterruptMargin = 0.5f,
                 };
             }
         }

@@ -145,11 +145,15 @@ public sealed partial class DockingSystem
     private long _next;
     public static bool Off;
     public static long UpdateTicks;
+    /// <summary>시험용: 난파선 위험이 얼마나 잦은가 (1 = 보통).</summary>
+    public static float HazardMul = 1f;
     public List<DockVisit> Visits { get; } = new();
     public DockStats Stats { get; } = new();
     public int Version { get; private set; }
     /// <summary>EVA로 들고 오는 것 (사람 → 방 번호 · 조각 수).</summary>
     private readonly SortedDictionary<int, (int visit, int room, int pieces, bool survivor)> _carry = new();
+    /// <summary>탈 사람 (사람 목록을 도는 중에 늘리지 않게 다음 틱에 태운다).</summary>
+    private readonly List<(int visit, Cell at, bool rescued, int by)> _board = new();
 
     public DockingSystem(World w) { _w = w; }
 
@@ -189,7 +193,7 @@ public sealed partial class DockingSystem
         Stats.Docked++;
         if (v.Wreck) { Stats.Wrecks++; Fill(v); } else Stats.Ships++;
         var room = HatchRoom(v);
-        string what = v.Wreck ? $"난파선 {v.Name} — 신호 없음 · 에어락 아래에 붙였다" : $"{v.Name}{(v.Name.EndsWith("배") ? "가" : "이")} 에어락 아래에 붙었다";
+        string what = v.Wreck ? $"난파선 {v.Name} — 신호 없음 · 에어락 아래에 붙였다" : $"{Ko.IGa(v.Name)} 에어락 아래에 붙었다";
         w.RaiseAlert(what + " · 기밀부터 확인한다", room, AlertLevel.Notice, shipWide: true);
         w.History.Add(w, HistoryKind.Decision, v.Wreck ? $"{v.Name}에 붙었다 — 선체는 차갑고 불빛 하나 없다" : $"{Ko.WaGwa(v.Name)} 도킹했다", room, log: true);
         if (ComputerOn)
@@ -235,7 +239,7 @@ public sealed partial class DockingSystem
             w.Body.GrowCells();
             w.Paths.Grow();
             w.Structure.Touch();
-            w.Log.Add(w.Tick, LogKind.Ship, $"{v.Name}{(v.Wreck ? "을" : "를")} 아래에 붙였다 — 선외 작업 구역이 {need}줄 넓어졌다");
+            w.Log.Add(w.Tick, LogKind.Ship, $"{Ko.EulReul(v.Name)} 아래에 붙였다 — 선외 작업 구역이 {need}줄 넓어졌다");
         }
         if (!v.Wreck) return true;
         // 방 셋: 칸막이 두 줄 (가운데 줄에 구멍)
@@ -342,6 +346,9 @@ public sealed partial class DockingSystem
         Open(v, c);
     }
 
+    /// <summary>시험 없이 바로 연다 (급할 때 · 시험).</summary>
+    public void OpenNow(DockVisit v) { if (v.Stage == DockStage.Seal) Open(v, null); }
+
     /// <summary>문을 연다 (다른 배: 기압을 맞춘 뒤 · 난파선: 통로로 나갈 길이 열린다).</summary>
     private void Open(DockVisit v, CrewMember? by)
     {
@@ -372,7 +379,7 @@ public sealed partial class DockingSystem
         v.Opened = w.Tick;
         v.LeaveAt = w.Tick + (v.Wreck ? SimTime.TicksPerDay * 2 : SimTime.Hours(8));
         w.Log.Add(w.Tick, LogKind.Ship, v.Wreck ? $"{v.Name} — 도킹 통로가 열렸다 (진공 · 어둠)" : $"{v.Name} — 해치를 열었다 · 저쪽 사람들이 건너온다", by?.Id ?? -1);
-        if (!v.Wreck) BoardGuests(v);
+        if (!v.Wreck) _board.Add((v.Id, default, false, -1));
         Version++;
     }
 
@@ -405,6 +412,7 @@ public sealed partial class DockingSystem
         if (Off || w.Tick < _next) return;
         _next = w.Tick + SimTime.Minutes(1);
         long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
+        if (_board.Count > 0) BoardNow();
         if (Active is DockVisit v)
         {
             switch (v.Stage)
@@ -441,13 +449,13 @@ public sealed partial class DockingSystem
             if (c.Fears.Contains(Fear.Dark)) c.Needs.Stress = MathF.Min(1f, c.Needs.Stress + 0.01f);
             bool moving = c.IsMoving;
             // 어둠: 헬멧 등만으로는 발밑 잔해가 안 보인다
-            if (moving && R.Chance(r.HazardKnown ? 0.004f : 0.012f))
+            if (moving && R.Chance((r.HazardKnown ? 0.004f : 0.012f) * HazardMul))
             {
                 Stats.DarkTrips++;
                 w.EvaRisk.HitPerson(c, 0.05f, c.Position + new Vector2(0.5f, 0f), "어둠 속 잔해에 걸렸다");
                 MarkLog.Add(c.Memory.Marks, w.Tick, $"{v.Name} 어둠 속에서 잔해에 걸렸다");
             }
-            if (r.Hazard == 1 && R.Chance(r.HazardKnown ? 0.01f : 0.03f))
+            if (r.Hazard == 1 && R.Chance((r.HazardKnown ? 0.003f : 0.01f) * HazardMul))
             {
                 Stats.Hurts++;
                 w.EvaRisk.HitPerson(c, 0.12f, r.Spot.Center, "찢긴 판 모서리");
@@ -467,9 +475,14 @@ public sealed partial class DockingSystem
         if (v.Stage == DockStage.Salvage && v.Rooms.All(r => r.Gone || r.Collapsed) || w.Tick > v.LeaveAt) Leave(v);
     }
 
+    /// <summary>다친 방은 한동안 피한다 (사람 → 방 · 언제까지).</summary>
+    private readonly SortedDictionary<int, (int room, long until)> _shy = new();
+    public bool Shy(CrewMember c, WreckRoom r) => _shy.TryGetValue(c.Id, out var s) && s.room == r.Id && _w.Tick < s.until;
+
     private void Know(DockVisit v, WreckRoom r, CrewMember c, string what)
     {
         var w = _w;
+        _shy[c.Id] = (r.Id, w.Tick + SimTime.Hours(8));
         MarkLog.Add(c.Memory.Marks, w.Tick, $"{v.Name} {r.Name}: {what}");
         if (r.HazardKnown) return;
         r.HazardKnown = true;
@@ -543,7 +556,7 @@ public sealed partial class DockingSystem
             if (got > 0) v.Trades.Add($"{ItemKinds.Name(k)} {got}");
         }
         Stats.Trades++;
-        w.Log.Add(w.Tick, LogKind.Work, $"{v.Name}{(v.Name.EndsWith("배") ? "와" : "과")} 물자를 바꿨다 — {string.Join(" · ", give.Select(ItemKinds.Name))}을 주고 {string.Join(" · ", v.Trades)}", c.Id);
+        w.Log.Add(w.Tick, LogKind.Work, $"{Ko.WaGwa(v.Name)} 물자를 바꿨다 — {Ko.EulReul(string.Join(" · ", give.Select(ItemKinds.Name)))} 주고 {string.Join(" · ", v.Trades)}", c.Id);
         Version++;
     }
 
@@ -556,6 +569,25 @@ public sealed partial class DockingSystem
             if (put >= n) break;
         }
         return put;
+    }
+
+    private void BoardNow()
+    {
+        var w = _w;
+        foreach (var (vid, at, rescued, by) in _board.ToList())
+        {
+            var v = Visits[vid];
+            if (!rescued) { BoardGuests(v); continue; }
+            var c = w.Crew[by];
+            var p = w.Passengers.Board(at, v.Name, rescued: true);
+            if (p == null) continue;
+            Stats.Survivors++;
+            v.Boarded.Add(p.Id);
+            p.Affinity[c.Id] = 0.6f;
+            c.Affinity[p.Id] = MathF.Min(1f, c.AffinityTo(p) + 0.3f);
+            w.History.Add(w, HistoryKind.Bond, $"{v.Name}의 수면 캡슐에서 {Ko.EulReul(p.Name)} 데려왔다 ({c.Name})", null, new[] { c, p }, log: true);
+        }
+        _board.Clear();
     }
 
     private void BoardGuests(DockVisit v)
@@ -599,8 +631,8 @@ public sealed partial class DockingSystem
             rec.FoundAt = w.Tick;
             Stats.Records++;
             lines.Add($"{rec.Role} {rec.Who}의 {LastRecord.KindName(rec.Kind)}");
-            MarkLog.Add(c.Memory.Marks, w.Tick, $"{v.Name} {r.Name}에서 {rec.Who}의 {LastRecord.KindName(rec.Kind)}을 찾았다");
-            Life.Diary(w, c, Persona.Say(c, $"{v.Name}에서 {rec.Who}의 {LastRecord.KindName(rec.Kind)}을 찾았다. 헬멧 등으로 비춰 읽었다 — \"{rec.Text}\""));
+            MarkLog.Add(c.Memory.Marks, w.Tick, $"{v.Name} {r.Name}에서 {rec.Who}의 {Ko.EulReul(LastRecord.KindName(rec.Kind))} 찾았다");
+            Life.Diary(w, c, Persona.Say(c, $"{v.Name}에서 {rec.Who}의 {Ko.EulReul(LastRecord.KindName(rec.Kind))} 찾았다. 헬멧 등으로 비춰 읽었다 — \"{rec.Text}\""));
             c.Needs.Stress = MathF.Min(1f, c.Needs.Stress + 0.05f);
         }
         int pieces = 0;
@@ -615,8 +647,8 @@ public sealed partial class DockingSystem
         else if (R.Chance(0.6f)) pieces = 1;
         (int visit, int room, int pieces, bool survivor) cur = _carry.TryGetValue(c.Id, out var had) ? had : (v.Id, r.Id, 0, false);
         _carry[c.Id] = (v.Id, r.Id, cur.pieces + pieces, cur.survivor || survivor);
-        if (lines.Count > 0) w.Log.Add(w.Tick, LogKind.Life, $"{v.Name} {r.Name}을 뒤졌다 — {string.Join(" · ", lines)}", c.Id);
-        else w.Log.Add(w.Tick, LogKind.Life, $"{v.Name} {r.Name}을 뒤졌다 — 얼어붙은 컵 · 떠다니는 종이 · 쓸 만한 건 별로 없다", c.Id);
+        if (lines.Count > 0) w.Log.Add(w.Tick, LogKind.Life, $"{v.Name} {Ko.EulReul(r.Name)} 뒤졌다 — {string.Join(" · ", lines)}", c.Id);
+        else w.Log.Add(w.Tick, LogKind.Life, $"{v.Name} {Ko.EulReul(r.Name)} 뒤졌다 — 얼어붙은 컵 · 떠다니는 종이 · 쓸 만한 건 별로 없다", c.Id);
         Version++;
     }
 
@@ -626,7 +658,7 @@ public sealed partial class DockingSystem
         r.CutBy = c.Id;
         r.CutWork = MathF.Min(1f, r.CutWork + (0.7f + 0.5f * c.RawSkill(Skill.Mechanics)) / SimTime.Minutes(40));
         // 흔들리는 격벽 · 얼어붙은 연료관: 자르는 중에 터진다
-        if (r.Hazard == 2 && !r.Collapsed && R.Chance(r.HazardKnown ? 0.0015f : 0.004f))
+        if (r.Hazard == 2 && !r.Collapsed && R.Chance((r.HazardKnown ? 0.0015f : 0.004f) * HazardMul))
         {
             r.Collapsed = true;
             Stats.Collapses++;
@@ -635,7 +667,7 @@ public sealed partial class DockingSystem
             Know(v, r, c, "자르던 격벽이 무너졌다");
             w.History.Add(w, HistoryKind.Casualty, $"{v.Name} {r.Name} — 자르던 격벽이 무너져 {Ko.IGa(c.Name)} 깔렸다", null, new[] { c }, log: true);
         }
-        else if (r.Hazard == 3 && R.Chance(r.HazardKnown ? 0.002f : 0.006f))
+        else if (r.Hazard == 3 && R.Chance((r.HazardKnown ? 0.002f : 0.006f) * HazardMul))
         {
             Stats.Hurts++;
             w.EvaRisk.HitPerson(c, 0.1f, r.Spot.Center, "얼어붙은 연료관 불꽃");
@@ -681,17 +713,7 @@ public sealed partial class DockingSystem
         Stats.Pieces += got.pieces;
         if (lines.Count > 0) w.Log.Add(w.Tick, LogKind.Work, $"{v.Name}에서 잘라 온 것을 창고에 넣었다 — {string.Join(" · ", lines)}", c.Id);
         foreach (var rec in v.Records.Where(x => x.FoundBy == c.Id && !x.Home)) rec.Home = true;
-        if (got.survivor && w.Ship.RoomAt(c.Cell) != null)
-        {
-            var p = w.Passengers.Board(c.Cell, v.Name, rescued: true);
-            if (p != null)
-            {
-                Stats.Survivors++;
-                v.Boarded.Add(p.Id);
-                p.Affinity[c.Id] = 0.6f;
-                w.History.Add(w, HistoryKind.Bond, $"{v.Name}의 수면 캡슐에서 {Ko.EulReul(p.Name)} 데려왔다 ({c.Name})", null, new[] { c, p }, log: true);
-            }
-        }
+        if (got.survivor && w.Ship.RoomAt(c.Cell) != null) _board.Add((v.Id, c.Cell, true, c.Id));
         // 기록을 가져왔으면 저녁에 다 같이 읽는다
         if (v.Records.Any(x => x.Home) && v.MemorialAt < 0) ScheduleMemorial(v);
         Version++;
@@ -718,7 +740,7 @@ public sealed partial class DockingSystem
         v.Stage = DockStage.Gone;
         v.StageSince = w.Tick;
         string got = v.Salvaged.Count > 0 ? " · " + string.Join(" · ", v.Salvaged.Select(kv => $"{ItemKinds.Name(kv.Key)} {kv.Value}")) : "";
-        w.Log.Add(w.Tick, LogKind.Ship, v.Wreck ? $"{v.Name}에서 떨어졌다{got}" : $"{v.Name}{(v.Name.EndsWith("배") ? "가" : "이")} 떠났다");
+        w.Log.Add(w.Tick, LogKind.Ship, v.Wreck ? $"{v.Name}에서 떨어졌다{got}" : $"{Ko.IGa(v.Name)} 떠났다");
         Version++;
     }
 
@@ -789,7 +811,7 @@ public sealed partial class DockingSystem
             foreach (var r in v.Rooms) { F(r.Search); I(r.Cut); I(r.Collapsed ? 1 : 0); }
             foreach (var kv in v.Salvaged) { I((int)kv.Key); I(kv.Value); }
         }
-        I(_carry.Count);
+        I(_carry.Count); I(_board.Count);
         I(Stats.Items); I(Stats.Hurts); I(Stats.Guests);
     }
 }

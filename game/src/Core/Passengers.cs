@@ -144,7 +144,7 @@ public sealed class PassengerSystem
                     _fireCall = w.Tick;
                     Stats.Broadcasts++;
                     var safe = SafeRoom(c);
-                    w.Automation.Speak.Announce(w.Automation.Voice.Style($"승객은 {safe?.Name ?? "식당"}으로 — 낮게 · 벽을 짚고 · 승무원 말을 따를 것"), c.Room, 2);
+                    w.Automation.Speak.Announce(w.Automation.Voice.Style($"승객은 {Ko.EuRo(safe?.Name ?? "식당")} — 낮게 · 벽을 짚고 · 승무원 말을 따를 것"), c.Room, 2);
                 }
                 told = true;
             }
@@ -216,9 +216,9 @@ public sealed class PassengerSystem
         // 본 사람들은 그 사람을 다시 본다
         foreach (var x in w.Crew)
             if (x != v && x != o && !x.Dead && x.IsAwake && x.Room != null && x.Room == v.Room) x.Affinity[v.Id] = MathF.Min(1f, x.AffinityTo(v) + 0.08f);
-        v.Say(w, Persona.Say(v, $"{o.Name}, 내 손 잡아요 — {room!.Name}으로 가요. 천천히"));
-        w.Log.Add(w.Tick, LogKind.Warning, $"공황에 빠진 {Ko.EulReul(o.Name)} 손잡아 {room.Name}으로 이끈다", v.Id);
-        w.History.Add(w, HistoryKind.Bond, $"불이 난 날 — 승객 {Ko.IGa(v.Name)} 공황에 빠진 {Ko.EulReul(o.Name)} 이끌고 {room.Name}으로 나왔다", room, new[] { v, o }, log: false);
+        v.Say(w, Persona.Say(v, $"{o.Name}, 내 손 잡아요 — {Ko.EuRo(room!.Name)} 가요. 천천히"));
+        w.Log.Add(w.Tick, LogKind.Warning, $"공황에 빠진 {Ko.EulReul(o.Name)} 손잡아 {Ko.EuRo(room.Name)} 이끈다", v.Id);
+        w.History.Add(w, HistoryKind.Bond, $"불이 난 날 — 승객 {Ko.IGa(v.Name)} 공황에 빠진 {Ko.EulReul(o.Name)} 이끌고 {Ko.EuRo(room.Name)} 나왔다", room, new[] { v, o }, log: false);
         MarkLog.Add(v.Memory.Marks, w.Tick, $"불길 속에서 {Ko.EulReul(o.Name)} 이끌었다");
         Version++;
         return true;
