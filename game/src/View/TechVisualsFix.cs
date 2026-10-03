@@ -29,6 +29,18 @@ public partial class ShipView
         float m = Mathf.Min(b.Size.X, b.Size.Y);
         switch (p.Key)
         {
+            case "medbay.surgarm": // 의료 3차 수술 로봇 기술: 기둥 곁에 접힌 가는 둘째 팔 · 두 손가락 미세 집게
+            {
+                var s0 = Q(b, 0.78f, 0.62f);
+                var e0 = s0 + new Vector2(-m * 0.18f, -m * 0.22f);
+                ci.DrawLine(s0, e0, new Color("#eef2f6"), 1.4f, true);
+                ci.DrawLine(e0, e0 + new Vector2(m * 0.12f, -m * 0.06f), new Color("#eef2f6"), 1f, true);
+                ci.DrawCircle(s0, 1.4f, new Color("#2b3442"), true, -1f, true);
+                var g = e0 + new Vector2(m * 0.12f, -m * 0.06f);
+                ci.DrawLine(g, g + new Vector2(2.2f, -1.2f), FA.Chrome, 0.7f, true);
+                ci.DrawLine(g, g + new Vector2(2.2f, 1.0f), FA.Chrome, 0.7f, true);
+                break;
+            }
             case "console.checklist":
             {
                 // 점검표 판: 갈색 판 · 흰 종이 · 쇠 집게 · 체크 세 줄

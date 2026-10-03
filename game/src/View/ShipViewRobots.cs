@@ -34,6 +34,8 @@ public partial class ShipView
         RobotKind.Sentry => new Color("#e88a4a"),
         RobotKind.Firefighter => new Color("#c8302a"),
         RobotKind.Utility => new Color("#a8a29a"),
+        // 의료 3차
+        RobotKind.Stretcher => new Color("#e86a5a"), RobotKind.Nurse => new Color("#4fc8b8"),
         _ => new Color("#cccccc"),
     };
 
@@ -224,6 +226,7 @@ public partial class ShipView
         ci.DrawCircle(p + new Vector2(2.5f, 3f), 9.5f, new Color(0, 0, 0, 0.3f), true, -1f, true);
 
         ci.DrawSetTransform(p, angle, Vector2.One);
+        if (!PaintMedBot(ci, r, body, col, moving, working, t, dead)) // 의료 3차 들것 · 간호 로봇은 제 몸 (ShipViewMedBots.cs)
         switch (RobotsV15.Base(r.Kind)) // v15.7 새 로봇은 원형의 몸에 특기 표식
         {
             case RobotKind.Hauler: PaintHauler(ci, r, body, col, moving, t); break;

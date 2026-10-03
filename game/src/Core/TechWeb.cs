@@ -116,6 +116,8 @@ public static class TechWeb
         //   방 공사
         T("modularfit", 2, TechField.Fabrication, "조립식 고정구", 36f, "설비를 볼트 넷으로 뗐다 붙인다", X(("room.hours", 0.75f))),
         T("quickcouple", 3, TechField.Fabrication, "빠른 이음 배관", 62f, "배관을 돌려 끼워 잇는다", X(("room.risk", 0.7f))),
+        // 의료 3차 — 수술 로봇 (SurgicalArm.cs: 팔의 손 +15% · 그 기술이 있으면 팔을 들이자는 말이 나온다)
+        T("surgbot", 3, TechField.Medical, "수술 로봇", 68f, "주컴퓨터가 수술 팔로 칼을 잡는다 — 떨지 않는 손", X(), "팔이 어긋난다 — 투약 · 수술 실수", nameof(HazardKind.MedError), 1.15f),
     };
 
     public static readonly Row[] Rows = RowsBase.Concat(TechWebV18.Rows).ToArray(); // 압축-마 기술 30 (TechWebV18.cs)
@@ -253,6 +255,7 @@ public static class TechWeb
         N("watchdog", "rcd labnotes", "eye+check", "server.watchdog"),
         N("modularfit", "toolboard", "hex+bolt", "floor.mounts"),
         N("quickcouple", "additive", "pipe+check", "pipe.couplers"),
+        N("surgbot", "cobotarm telemed", "hand+plus", "medbay.surgarm"), // 의료 3차
     };
 
     public static readonly Dictionary<string, WebNode> Nodes = NodeList.Concat(TechWebV18.Nodes).ToDictionary(n => n.Id); // 압축-마

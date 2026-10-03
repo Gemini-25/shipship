@@ -237,7 +237,7 @@ public sealed class SurgicalArmSystem
             w.Log.Add(w.Tick, LogKind.Life, d == pt ? $"{pt.Name}: 수술 팔은 싫다 — 사람이 해 달라 ({reason})" : $"{d.Name}: {pt.Name} {kind}은 사람이 한다 ({reason})", d.Id);
             MarkLog.Add(d.Memory.Marks, w.Tick, $"수술 팔을 마다했다 — {reason}");
             if (a.Present && a.MainOnline)
-                a.Book.Add(ActKind.Advice, pt.Room, $"{pt.Name} {kind} — {why}", $"{d.Name}이(가) 팔을 마다했다 ({reason})", "사람에게 맡긴다 — 곁에서 거들기만 한다", "", $"armrefuse:{k.Id}", SimTime.Hours(6));
+                a.Book.Add(ActKind.Advice, pt.Room, $"{pt.Name} {kind} — {why}", $"{Ko.IGa(d.Name)} 팔을 마다했다 ({reason})", "사람에게 맡긴다 — 곁에서 거들기만 한다", "", $"armrefuse:{k.Id}", SimTime.Hours(6));
         }
         return yes;
     }
@@ -494,6 +494,21 @@ public sealed class SurgicalArmSystem
         by.Practice(Skill.Electrical, 0.03f);
         w.Log.Add(w.Tick, LogKind.Work, $"{Ko.IGa(by.Name)} 수술 팔을 다시 맞췄다 — 기준점 다섯 곳", by.Id);
         if (arm.Machine != null) MarkLog.Add(arm.Machine.Marks, w.Tick, $"{by.Name}: 교정");
+    }
+
+    /// <summary>화면: 팔이 지금 무엇을 하나 (0 쉼 · 1 거듦 · 2 집도 · 3 멈춤) · 뻗는 곳(수술대). 읽기만 한다.</summary>
+    public (int mode, Vector2? at) PoseOf(Furniture arm)
+    {
+        var w = _w;
+        bool works = Works(arm, out _);
+        foreach (var k in w.Surgery.Cases)
+        {
+            if (k.State is not (CaseState.Prep or CaseState.Operating) || w.Surgery.TableOf(k) is not Furniture t || t.Room != arm.Room) continue;
+            if (!works) return (3, t.Center);
+            return (_lead.ContainsKey(k.Id) ? 2 : 1, t.Center);
+        }
+        foreach (var kv in _lead) if (kv.Value.Arm == arm.Id && works) return (1, null); // 환자를 기다린다
+        return (works ? 0 : 3, null);
     }
 
     /// <summary>시험 · 장면: 팔을 어긋나게 한다.</summary>

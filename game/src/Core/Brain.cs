@@ -26,6 +26,7 @@ public static class Brain
         new RadCareActivity(), new GiveBloodActivity(), // 통합5 방사선 병 간호 · 피 나눠 주기
         new SurgeryPatientActivity(), new SurgeryActivity(), new AssistSurgeryActivity(), new TransfuseActivity(), new DonateBloodActivity(), new WardRestActivity(), new CareRoundActivity(), // 의료 1차 수술 · 수혈 · 헌혈 · 간이침대 · 간병 순번
         new CrankActivity(), new OrganCareActivity(), new HarvestActivity(), new TransplantOpActivity(), new SurgeryWaitActivity(), new OrganSupportActivity(), new PumpChargeActivity(), new IsolateActivity(), new DoseActivity(), new PrintActivity(), // 의료 2차
+        new CalibrateArmActivity(), // 의료 3차 수술 팔 교정
         new StowSuitActivity(),
         new RefillSuitActivity(),
         new EatActivity(),

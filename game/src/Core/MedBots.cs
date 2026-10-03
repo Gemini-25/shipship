@@ -140,7 +140,7 @@ public sealed class MedBotSystem
         Orders++;
         var a = w.Automation;
         if (a.Present && a.CoreOnline && a.Level >= 5)
-            a.Book.Add(ActKind.Plan, where, why, $"{r.Name}이(가) 가장 가깝다 · 위중한 사람부터", $"{r.Name}: {what}", "", $"medbot:{r.Id}:{(int)pick}:{target}", SimTime.Minutes(30));
+            a.Book.Add(ActKind.Plan, where, why, $"{Ko.IGa(r.Name)} 가장 가깝다 · 위중한 사람부터", $"{r.Name}: {what}", "", $"medbot:{r.Id}:{(int)pick}:{target}", SimTime.Minutes(30));
         return true;
     }
 
@@ -266,7 +266,7 @@ public sealed class MedBotSystem
             {
                 if (!world.Blood.NeedsBlood(pt) || pt.Dead) return false;
                 bool have = world.Blood.CompatibleFor(pt) > 0 || world.Pharmacy.Stock(ItemKind.BloodSubstitute) > 0;
-                if (!have) { world.Blood.Call(pt, $"{rb.Name}이(가) 냉장고를 열었는데 맞는 피가 없다"); return false; }
+                if (!have) { world.Blood.Call(pt, $"{Ko.IGa(rb.Name)} 냉장고를 열었는데 맞는 피가 없다"); return false; }
                 _holding.Add(rb.Id);
                 _claim[pt.Id] = (rb.Id, world.Tick);
                 return true;
@@ -284,8 +284,8 @@ public sealed class MedBotSystem
                 string did = world.Blood.Transfuse(pt, hand, false);
                 if (did == "") return false;
                 Transfused++;
-                world.Log.Add(world.Tick, LogKind.Work, hand != null ? $"{Ko.IGa(hand.Name)} {rb.Name}이(가) 가져온 피를 {pt.Name}에게 넣었다 ({did})"
-                    : $"주컴퓨터가 침대 투여 펌프로 {rb.Name}이(가) 가져온 피를 {pt.Name}에게 넣었다 ({did})", pt.Id);
+                world.Log.Add(world.Tick, LogKind.Work, hand != null ? $"{Ko.IGa(hand.Name)} {Ko.IGa(rb.Name)} 가져온 피를 {pt.Name}에게 넣었다 ({did})"
+                    : $"주컴퓨터가 침대 투여 펌프로 {Ko.IGa(rb.Name)} 가져온 피를 {pt.Name}에게 넣었다 ({did})", pt.Id);
                 MarkLog.Add(rb.Marks, world.Tick, $"{pt.Name}에게 피를 날랐다");
                 return true;
             }),
@@ -308,10 +308,10 @@ public sealed class MedBotSystem
             var (hand, _) = Infuser(pt);
             if (hand != null)
             {
-                world.Casualty.StopBy(pt, t, $"{Ko.IGa(hand.Name)} {rb.Name}이(가) 가져온 구급 키트로 피를 멎게 했다");
+                world.Casualty.StopBy(pt, t, $"{Ko.IGa(hand.Name)} {Ko.IGa(rb.Name)} 가져온 구급 키트로 피를 멎게 했다");
                 pt.ChangeAffinity(hand, 0.06f);
                 hand.Practice(Skill.Medicine, 0.02f);
-                MarkLog.Add(hand.Memory.Marks, world.Tick, $"{rb.Name}이(가) 가져온 키트로 {pt.Name}의 피를 멎게 했다");
+                MarkLog.Add(hand.Memory.Marks, world.Tick, $"{Ko.IGa(rb.Name)} 가져온 키트로 {pt.Name}의 피를 멎게 했다");
             }
             else if (t.Rate < 0.22f) { Stopped++; world.Casualty.StopBy(pt, t, $"{Ko.IGa(rb.Name)} 구급 키트의 지혈대로 피를 멎게 했다"); }
             else t.Rate *= 0.5f;
@@ -363,7 +363,7 @@ public sealed class MedBotSystem
             if (pt == null || pt.Dead) continue;
             Dropped++;
             pt.LaidSafe = false;
-            w.Log.Add(w.Tick, LogKind.Warning, $"{r?.Name ?? "들것 로봇"}이(가) 멈췄다 — {Ko.EulReul(pt.Name)} {pt.Room?.Name ?? "그 자리"}에 내려놓았다 · 사람이 옮겨야 한다", pt.Id);
+            w.Log.Add(w.Tick, LogKind.Warning, $"{Ko.IGa(r?.Name ?? "들것 로봇")} 멈췄다 — {Ko.EulReul(pt.Name)} {pt.Room?.Name ?? "그 자리"}에 내려놓았다 · 사람이 옮겨야 한다", pt.Id);
             if (w.Automation.Present && w.Automation.CoreOnline)
                 w.Automation.Speak.Announce(w.Automation.Voice.Style($"{pt.Room?.Name} — 들것 로봇이 섰습니다. {pt.Name}을 사람이 옮겨 주십시오"), pt.Room, 3);
             w.Board.RequestScan();

@@ -161,6 +161,7 @@ public static class TechLookTable
         V("exterior.pdlaser", VAnchor.Exterior, "외판 레이저 포탑 · 쓸고 가는 붉은 빔", live: true),
         V("engine.magnozzle", VAnchor.Exterior, "노즐을 감은 자기 코일 고리", live: true),
         R("medbay.vat", "재생 배양관 (분홍 액 · 거품)", true, RoomType.Medbay, RoomType.Lab, RoomType.Triage),
+        F("medbay.surgarm", FurnitureType.SurgicalArm, "팔 끝 두 손가락 미세 집게 · 곁에 가는 둘째 팔", true), // 의료 3차
         // ── 4 성간 준비 ──
         V("hull.centrifuge", VAnchor.Exterior, "배를 두른 회전 고리 (돈다)", live: true),
         V("machine.nano", VAnchor.Machines, "설비 위를 기는 은빛 나노 점", every: 1, live: true),
@@ -438,6 +439,8 @@ public static class TechLookTable
         K(FurnitureType.OrganCooler, Improv.DuctTape, Trim.Anodized, 0xbfe6ffff, "fins@.83,.7", "glass@.45,.5 vents@.2,.95", "shroud@.45,.5 strip@.5,.96"),
         K(FurnitureType.BioPrinter, Improv.ZipTies, Trim.HaloRing, 0xe86a9aff, "arm@.5,.24", "lamp@.12,.45 drawers@.75,.88", "holo@.5,.4 rail@.5,.95"),
         K(FurnitureType.NegPressure, Improv.BoltedFan, Trim.Chevron, 0x5fb0ffff, "filter@.78,.4", "rotor@.36,.5 hood@.78,.05", "field@.36,.5 plating@.9,.9"),
+        // 의료 3차
+        K(FurnitureType.SurgicalArm, Improv.ZipTies, Trim.HaloRing, 0x5dff9aff, "arm@.5,.5", "screen@.2,.86 cables@.5,.95", "holo@.5,.3 chip@.84,.2"),
     };
 
     private static Dictionary<FurnitureType, TierKit>? _kits;

@@ -32,7 +32,7 @@ public static partial class Program
                 bool icons = every.Select(t => TechWeb.Node(t.Id).Icon).Distinct().Count() == every.Length;
                 bool visuals = every.Select(TechWeb.Visual).Distinct().Count() == every.Length;
                 Check("그물 — 시대 기술 70 + 새 41 · 선행은 같거나 앞 시대 · 고리 없이 모두 닿는다 · 아이콘과 배 모습 열쇠가 기술마다 다르다",
-                    allNodes && EraSystem.All.Length == 70 && every.Length == 141 && badPre.Count == 0 && reach.Count == every.Length && icons && visuals && cross * 2 >= withPre,
+                    allNodes && EraSystem.All.Length == 70 && every.Length == 142 && badPre.Count == 0 && reach.Count == every.Length && icons && visuals && cross * 2 >= withPre,
                     $"마디 {TechWeb.Nodes.Count} · 선행 있는 기술 {withPre} (그중 분야를 넘는 것 {cross}) · 닿는 기술 {reach.Count}/{every.Length}" + (badPre.Count > 0 ? $" · 잘못 {string.Join(",", badPre)}" : ""));
                 var gates = TechWeb.Nodes.Values.Where(n => n.Gate != null).Select(n => n.Gate!.Kind).Distinct().Count();
                 int combos = TechWeb.Nodes.Values.Count(n => n.Combo != null);

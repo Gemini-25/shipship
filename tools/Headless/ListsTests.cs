@@ -114,7 +114,7 @@ public static partial class Program
             // ═══ 기술 30 ═══
             {
                 var rows = TechWebV18.Rows;
-                bool nodes = rows.All(r => TechWeb.Nodes.ContainsKey(r.Tech.Id)) && TechWeb.Every.Length == 141;
+                bool nodes = rows.All(r => TechWeb.Nodes.ContainsKey(r.Tech.Id)) && TechWeb.Every.Length == 142;
                 int hidden = TechWebV18.Nodes.Count(n => n.Hidden), combos = TechWebV18.Nodes.Count(n => n.Combo != null), gates = TechWebV18.Nodes.Count(n => n.Gate != null);
                 bool lifts = ModulesV18.Rows.All(r => TechWebV18.Lifts.Any(l => l.type == r.Type));
                 Check("기술 — 30가지 · 그물에 걸린다 · 갈림길 2 · 숨은 기술 · 사고로 열리는 것 · 모든 새 설비가 기술로 단계가 오른다", rows.Length == 30 && nodes && TechWebV18.Forks.Length == 2 && hidden >= 3 && combos >= 3 && gates >= 2 && lifts,
