@@ -63,12 +63,12 @@ public static partial class Program
             Check("밀주 — 익어 가는 술 냄새가 방에 퍼졌다", smelled > SmellSystem.Threshold(SmellKind.Foul), $"{room.Name} 냄새 {smelled:0.00}");
             Check("밀주 — 냄새를 따라온 사람이 알아챘고 반응이 갈렸다", finder != null && mo.Reactions.Count >= 1 && (mo.FoundHow.Contains("냄새") || w.Schemes.Stats.Smelled >= 1),
                 $"{finder?.Name} — {mo.FoundHow} · 반응 {string.Join(" / ", mo.Reactions.Select(r => $"{w.Crew.First(c => c.Id == r.who).Name} {r.r}"))} · 냄새로 {w.Schemes.Stats.Smelled}");
-            var m = w.Motions.Get(mo.Motion);
             SchemeUntil(w, () => mo.Stage is SchemeStage.Done or SchemeStage.Dropped, SimTime.TicksPerDay * 7, 200);
+            var m = w.Motions.Get(mo.Motion);
             var rule = w.Schemes.Rule("moonshine");
             var pr = w.Schemes.PracticeOf("moonshine");
             Check("밀주 — 회의에 올라 금지냐 '주점의 밤'이냐 표결했다", m != null && (m.Decided >= 0 || m.Stage == MotionStage.Dropped) && (rule != null),
-                m == null ? $"안건 없음 · {mo.Stage} {mo.Outcome}" : $"{m.Title} [{m.Stage}] → {mo.Outcome} · 규칙 {rule?.Text} · 표 {string.Join(" ", m.Final.Select(kv => $"{w.Crew.First(c => c.Id == kv.Key).Name}{kv.Value:+0.0;-0.0}"))}");
+                m == null ? $"안건 없음 · {mo.Stage} {mo.Outcome}" : $"{m.Title} [{m.Stage}] ({(w.Info.Chat.All.Any(x => x.Text.Contains("이참에") || x.Text.Contains("아실 분은")) ? "다 아는 비밀이라 편드는 사람이 꺼냈다" : "알린 사람이 올렸다")}) → {mo.Outcome} · 규칙 {rule?.Text} · 표 {string.Join(" ", m.Final.Select(kv => $"{w.Crew.First(c => c.Id == kv.Key).Name}{kv.Value:+0.0;-0.0}"))}");
             Check("밀주 — 결과가 배에 남았다 (관행이면 주점의 밤 · 금지면 압수한 통)", pr != null && pr.Name == "주점의 밤" || w.Schemes.Traces.Any(t => t.Scheme == mo.Id && t.State == TraceState.Seized),
                 pr != null ? $"관행 {pr.Name} · {SimTime.Clock(pr.Start)} · 따르는 사람 {pr.Followers.Count}" : string.Join(" / ", w.Schemes.Traces.Select(t => $"{t.Text}({t.State})")));
             Check("밀주 — 일기에 남았다", mechs[0].Diary.Any(d => d.text.Contains("술") || d.text.Contains("밀주")), mechs[0].Diary.LastOrDefault().text ?? "");
@@ -112,6 +112,13 @@ public static partial class Program
             var dj = crew[3]; var mate = crew[4];
             var r = w.Schemes.Start(SchemeTable.Get("pirate_radio")!, dj, -1, mate);
             SchemeUntil(w, () => r.Sessions >= 1 || r.Over(), SimTime.TicksPerDay * 4, 100);
+            // 첫 방송 전에 들켜 끝났으면 (그것도 이 배에서 일어나는 일이다) 둘이 다시 판을 벌인다
+            for (int i = 0; i < 2 && r.Sessions == 0 && r.Over(); i++)
+            {
+                Console.WriteLine($"   첫 방송 전에 끝났다: {r.Outcome}");
+                r = w.Schemes.Start(SchemeTable.Get("pirate_radio")!, dj, -1, mate);
+                SchemeUntil(w, () => r.Sessions >= 1 || r.Over(), SimTime.TicksPerDay * 4, 100);
+            }
             int part = r.Knows.Count(k => k.Value == KnowHow.Part), heard = r.Knows.Count(k => k.Value == KnowHow.Heard);
             int none = crew.Count(c => !r.Knew(c.Id));
             Check("해적 방송 — 밤 방송이 나갔다", r.Sessions >= 1, $"{r.Stage} · 모임 {r.Sessions} · {r.Outcome}");
@@ -130,8 +137,9 @@ public static partial class Program
             var crew = w.Crew.Where(c => !c.Dead && !c.IsChild).OrderBy(c => c.Id).ToList();
             var gardener = crew[5]; gardener.Hobbies.Add(Hobby.Gardening);
             var g = w.Schemes.Start(SchemeTable.Get("secret_garden")!, gardener);
-            SchemeUntil(w, () => g.Stage != SchemeStage.Prep, SimTime.TicksPerDay * 6, 100);
-            Check("비밀 정원 — 창고 구석에서 몰래 키웠다", g.Stage is SchemeStage.Live or SchemeStage.Done, $"{w.Schemes.RoomOf(g)?.Name} · {g.Stage} · 진척 {g.Progress:0.00} · {g.Outcome}");
+            w.Schemes.SetBored(gardener, 0.8f); // 고향 생각 · 지루함이 정원을 꾸미게 한다
+            SchemeUntil(w, () => g.Stage != SchemeStage.Prep, SimTime.TicksPerDay * 8, 100);
+            Check("비밀 정원 — 창고 구석에서 몰래 키웠다", g.Stage is SchemeStage.Live or SchemeStage.Done, $"{w.Schemes.RoomOf(g)?.Name} · {g.Stage} · 진척 {g.Progress:0.00} · 손 멈춤 {w.Schemes.Stats.Hid} · 지루함 {w.Schemes.Bored(gardener):0.00} · {g.Outcome}");
             Run(w, SimTime.Hours(2));
             // 다른 사람이 먼저 보고 일러 치워졌으면 (그것도 이 배에서 일어나는 일이다) 한 번 더 키운다
             if (!g.Active) { Console.WriteLine($"   먼저 들켰다: {g.Outcome}"); g = w.Schemes.Start(SchemeTable.Get("secret_garden")!, gardener); }
@@ -170,7 +178,14 @@ public static partial class Program
             var crew = w.Crew.Where(c => !c.Dead && !c.IsChild).OrderBy(c => c.Id).ToList();
             foreach (var c in crew.Take(3)) { c.Habits.Add(Habit.ShortTempered); if (!c.Hobbies.Contains(Hobby.Cards)) c.Hobbies.Add(Hobby.Cards); }
             var den = w.Schemes.Start(SchemeTable.Get("gambling_den")!, crew[0], -1, crew[1], crew[2]);
-            SchemeUntil(w, () => w.Schemes.Stats.Quarrels >= 1, SimTime.TicksPerDay * 8, 200);
+            SchemeUntil(w, () => w.Schemes.Stats.Quarrels >= 1 || den.Over() && w.Schemes.Debts.All(d => d.Amount < 3), SimTime.TicksPerDay * 8, 200);
+            // 빚이 커지기 전에 판이 막혔으면 (그것도 이 배에서 일어나는 일이다) 몰래 다시 판을 벌인다
+            for (int i = 0; i < 2 && w.Schemes.Stats.Quarrels == 0 && den.Over(); i++)
+            {
+                Console.WriteLine($"   빚이 커지기 전에 끝났다: {den.Outcome}");
+                den = w.Schemes.Start(SchemeTable.Get("gambling_den")!, crew[0], -1, crew[1], crew[2]);
+                SchemeUntil(w, () => w.Schemes.Stats.Quarrels >= 1 || den.Over() && w.Schemes.Debts.All(d => d.Amount < 3), SimTime.TicksPerDay * 8, 200);
+            }
             Check("도박판 — 밤마다 판이 벌어져 빚이 생겼다", den.Sessions >= 1 && w.Schemes.Debts.Count >= 1,
                 $"판 {den.Sessions} · 빚 {string.Join(" / ", w.Schemes.Debts.Select(d => $"{w.Crew.First(c => c.Id == d.From).Name}→{w.Crew.First(c => c.Id == d.To).Name} {d.Amount}"))}");
             Check("도박판 — 빚 때문에 다퉜다 (관계 · 감정이 남는다)", w.Schemes.Stats.Quarrels >= 1 && w.Relations.All.Any(m => m.Reason == RelationReason.OwesMe),
@@ -190,6 +205,15 @@ public static partial class Program
                 thief.Value = CrewValue.Freedom;
                 var s = w.Schemes.Start(SchemeTable.Get("ration_skim")!, thief);
                 SchemeUntil(w, () => s.ComputerKnows || s.Over(), SimTime.TicksPerDay * 4, 200);
+                // 컴퓨터가 맞춰 보기 전에 사람이 먼저 봤으면 (그것도 이 배에서 일어나는 일이다) 다른 사람이 또 빼돌린다
+                for (int i = 0; i < 2 && !s.ComputerKnows && s.Skimmed == 0; i++)
+                {
+                    Console.WriteLine($"   사람이 먼저 봤다: {w.Crew.FirstOrDefault(c => c.Id == s.Finder)?.Name}({s.FoundHow}) · {s.Stage}");
+                    thief = w.Crew.Where(c => !c.Dead && !c.IsChild && c.Id != w.Command.CaptainId && !s.Knew(c.Id)).OrderBy(c => c.Id).First();
+                    thief.Value = CrewValue.Freedom;
+                    s = w.Schemes.Start(SchemeTable.Get("ration_skim")!, thief);
+                    SchemeUntil(w, () => s.ComputerKnows || s.Over(), SimTime.TicksPerDay * 4, 200);
+                }
                 Console.WriteLine($"   빼돌리기 [{caution:+0.0;-0.0}]: {s.Stage} 진척 {s.Progress:0.00} · 빼돌림 {s.Skimmed} · 찾은 사람 {w.Crew.FirstOrDefault(c => c.Id == s.Finder)?.Name}({s.FoundHow}) · 창고 비상식량 {w.Ship.CountStored(ItemKind.Ration)} 식사 {w.Ship.CountStored(ItemKind.Meal)} 채소 {w.Ship.CountStored(ItemKind.Produce)} · {s.Outcome}");
                 return (s, w);
             }

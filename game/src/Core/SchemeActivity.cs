@@ -96,9 +96,17 @@ public sealed partial class SchemeSystem
             if (s.Stage != SchemeStage.Prep || s.Progress >= 1f || !s.Crew.Contains(c.Id)) continue;
             if (s.Spec.Fate == Fate.Laugh && s.Lead != c.Id) continue;
             bool secret = s.Spec.Secrecy >= 0.45f;
-            return new(SchemeTaskKind.Work, s.Id, -1, s.RoomId, s.Spot, -1, 0.4f + 0.25f * Bored(c) + (late && secret ? 0.08f : 0f), secret ? $"{s.Spec.Name} — 몰래" : $"{s.Spec.Name} 준비");
+            if (secret && Strangers(s, c)) continue; // 모르는 사람이 그 방에 있으면 빌 때를 기다린다
+            return new(SchemeTaskKind.Work, s.Id, -1, s.RoomId, s.Spot, -1, 0.4f + 0.25f * Bored(c) + 0.1f * Interest(c, s.Spec) + (late && secret ? 0.08f : 0f), secret ? $"{s.Spec.Name} — 몰래" : $"{s.Spec.Name} 준비");
         }
         return Idle;
+    }
+
+    private bool Strangers(Scheme s, CrewMember c)
+    {
+        foreach (var o in Here(RoomOf(s)))
+            if (o != c && o.IsAwake && Adult(o) && !s.KnowsWho(o.Id) && !s.Crew.Contains(o.Id)) return true;
+        return false;
     }
 
     private CrewMember? NextRecruit(Scheme s, CrewMember lead)
