@@ -341,8 +341,8 @@ public static partial class Program
                 // 문을 열어 둔다
                 int checks0 = w.React.Stats.Checks;
                 bool strangeOpen = false;
-                RunE(w, SimTime.Minutes(2), () => { door.Openness = 1f; door.JammedOpen = true; });
-                strangeOpen = w.Hearing.Strange(L, out var heardM) && heardM == m;
+                RunE(w, SimTime.Minutes(2), () => { door.Openness = 1f; door.JammedOpen = true; if (w.Hearing.In(next).Any(h => w.Hearing.Sources[h.Src].Kind == Noise.Bearing && w.Hearing.Sources[h.Src].Owner == m.Body.Id && !h.Muffled && h.Level * w.Hearing.Sense(L, Noise.Bearing) >= HearingSystem.Audible)) strangeOpen = true; });
+                strangeOpen |= w.Hearing.Strange(L, out var heardM) && heardM == m;
                 float openPass = w.Hearing.Pass(room, next);
                 RunE(w, SimTime.Hours(3), () => { door.Openness = 1f; door.JammedOpen = true; });
                 var sn = w.React.NotesOf(Stir.Sound).Where(n => Ls.Any(l => l.Id == n.Crew)).ToList();

@@ -177,7 +177,7 @@ public sealed partial class HearingSystem
     public bool Strange(CrewMember c, out Machine m)
     {
         m = null!;
-        if (Off || c.Room is not Room r || r.Id >= _room.Length) return false;
+        if (Off || _w.PreventionBlind || c.Room is not Room r || r.Id >= _room.Length) return false; // 시험: 감지 · 순찰을 가린 배는 소리로도 먼저 찾지 않는다
         float best = 0f;
         foreach (var h in _room[r.Id])
         {

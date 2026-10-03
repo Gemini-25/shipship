@@ -52,7 +52,7 @@ public sealed partial class HearingSystem
                         Stats.Drips++;
                         break;
                     case Noise.Step when s.Room != r.Id && now >= ear.NextStep && Person(s.Owner) is CrewMember o && !h.Muffled && (c.AffinityTo(o) >= 0.2f || o.Role == c.Role || o.Partner == c.Id):
-                        ear.NextStep = now + SimTime.Minutes(15);
+                        ear.NextStep = now + SimTime.Minutes(30);
                         w.Brain2.Beliefs.Learn(c, Topic.Person, o.Id, s.Room, BeliefSource.Guess, 0.45f);
                         Stats.StepsKnown++;
                         if (R.Chance(0.15f)) Line(c, ear, Noise.Step, s.Room, o.Name, new[] { $"{o.Name} 발소리네", $"저 걸음은 {o.Name}이야", $"{Ko.IGa(o.Name)} 오나 보다" });
@@ -149,7 +149,7 @@ public sealed partial class HearingSystem
         if (w.Tick < _nextPc) return;
         _nextPc = w.Tick + SimTime.Minutes(15);
         var a = w.Automation;
-        if (!a.Present || !a.CoreOnline) return;
+        if (!a.Present || !a.CoreOnline || w.PreventionBlind) return;
         foreach (var key in _steady.Keys.OrderBy(k => k).ToList())
         {
             var st = _steady[key];

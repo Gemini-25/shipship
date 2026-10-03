@@ -451,6 +451,7 @@ public sealed partial class GestureSystem
             if (d.Kind != PortableKind.WorkLamp || !d.Placed || !d.Running || d.User != null && d.User != c || w.Portable.RoomOf(d) != room) continue;
             float far = (d.At.Center - work).Length();
             if (far <= d.Spec.LightRadius * 0.6f || far > 9f) continue;
+            if (LitForOthers(d, c)) continue; // 남이 그 불빛 아래 있다 (식탁 · 다른 일) — 가져가지 않는다
             Cell? best = null;
             float bs = float.MaxValue;
             var wc = Cell.FromPosition(work);
@@ -472,6 +473,14 @@ public sealed partial class GestureSystem
             w.Portable.Stats.LampMoves++;
             return;
         }
+    }
+
+    private bool LitForOthers(PortableDevice d, CrewMember c)
+    {
+        float r2 = d.Spec.LightRadius * d.Spec.LightRadius;
+        foreach (var o in _w.Crew)
+            if (o != c && !o.Dead && !o.IsMoving && o.Room != null && (o.Position - d.At.Center).LengthSquared() < r2) return true;
+        return false;
     }
 
     /// <summary>신입: 계기와 선배 얼굴을 번갈아 본다 · 선배가 끄덕이면 손이 덜 떨린다.</summary>
