@@ -112,6 +112,13 @@ public static partial class Program
             var dj = crew[3]; var mate = crew[4];
             var r = w.Schemes.Start(SchemeTable.Get("pirate_radio")!, dj, -1, mate);
             SchemeUntil(w, () => r.Sessions >= 1 || r.Over(), SimTime.TicksPerDay * 4, 100);
+            // 첫 방송 전에 들켜 끝났으면 (그것도 이 배에서 일어나는 일이다) 둘이 다시 판을 벌인다
+            for (int i = 0; i < 2 && r.Sessions == 0 && r.Over(); i++)
+            {
+                Console.WriteLine($"   첫 방송 전에 끝났다: {r.Outcome}");
+                r = w.Schemes.Start(SchemeTable.Get("pirate_radio")!, dj, -1, mate);
+                SchemeUntil(w, () => r.Sessions >= 1 || r.Over(), SimTime.TicksPerDay * 4, 100);
+            }
             int part = r.Knows.Count(k => k.Value == KnowHow.Part), heard = r.Knows.Count(k => k.Value == KnowHow.Heard);
             int none = crew.Count(c => !r.Knew(c.Id));
             Check("해적 방송 — 밤 방송이 나갔다", r.Sessions >= 1, $"{r.Stage} · 모임 {r.Sessions} · {r.Outcome}");
@@ -171,7 +178,14 @@ public static partial class Program
             var crew = w.Crew.Where(c => !c.Dead && !c.IsChild).OrderBy(c => c.Id).ToList();
             foreach (var c in crew.Take(3)) { c.Habits.Add(Habit.ShortTempered); if (!c.Hobbies.Contains(Hobby.Cards)) c.Hobbies.Add(Hobby.Cards); }
             var den = w.Schemes.Start(SchemeTable.Get("gambling_den")!, crew[0], -1, crew[1], crew[2]);
-            SchemeUntil(w, () => w.Schemes.Stats.Quarrels >= 1, SimTime.TicksPerDay * 8, 200);
+            SchemeUntil(w, () => w.Schemes.Stats.Quarrels >= 1 || den.Over() && w.Schemes.Debts.All(d => d.Amount < 3), SimTime.TicksPerDay * 8, 200);
+            // 빚이 커지기 전에 판이 막혔으면 (그것도 이 배에서 일어나는 일이다) 몰래 다시 판을 벌인다
+            for (int i = 0; i < 2 && w.Schemes.Stats.Quarrels == 0 && den.Over(); i++)
+            {
+                Console.WriteLine($"   빚이 커지기 전에 끝났다: {den.Outcome}");
+                den = w.Schemes.Start(SchemeTable.Get("gambling_den")!, crew[0], -1, crew[1], crew[2]);
+                SchemeUntil(w, () => w.Schemes.Stats.Quarrels >= 1 || den.Over() && w.Schemes.Debts.All(d => d.Amount < 3), SimTime.TicksPerDay * 8, 200);
+            }
             Check("도박판 — 밤마다 판이 벌어져 빚이 생겼다", den.Sessions >= 1 && w.Schemes.Debts.Count >= 1,
                 $"판 {den.Sessions} · 빚 {string.Join(" / ", w.Schemes.Debts.Select(d => $"{w.Crew.First(c => c.Id == d.From).Name}→{w.Crew.First(c => c.Id == d.To).Name} {d.Amount}"))}");
             Check("도박판 — 빚 때문에 다퉜다 (관계 · 감정이 남는다)", w.Schemes.Stats.Quarrels >= 1 && w.Relations.All.Any(m => m.Reason == RelationReason.OwesMe),
