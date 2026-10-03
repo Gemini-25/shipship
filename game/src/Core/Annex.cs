@@ -234,7 +234,7 @@ public sealed partial class AnnexSystem
     {
         var ship = _w.Ship;
         var g = ship.Grid;
-        bool Void(int x, int yy) => g.Kind(new Cell(x, yy)) == TileKind.Void;
+        bool Void(int x, int yy) => g.Kind(new Cell(x, yy)) == TileKind.Void && !_w.Dock.Blocks(new Cell(x, yy)); // v18.5 붙은 배 자리는 비켜
         // 붙는 외벽: 선체 벽 (문 · 해치가 아닌)
         for (int x = x0 - 1; x <= x1 + 1; x++)
         {

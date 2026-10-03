@@ -187,7 +187,7 @@ public sealed partial class CrisisCrewSystem
     private string Draw(CrewMember? by, string why)
     {
         var w = _w;
-        var people = w.Crew.Where(c => !c.Dead && !c.IsChild && !c.Away).ToList();
+        var people = w.Crew.Where(c => !c.Dead && !c.IsChild && !c.Away && !c.Passenger).ToList(); // v18.6 승객은 배치표에 없다
         var old = new Dictionary<int, StationRole>(Bill.Of);
         Bill.Of.Clear();
         Bill.Order.Clear();

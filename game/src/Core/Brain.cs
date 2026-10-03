@@ -11,6 +11,7 @@ public static class Brain
     public static readonly Activity[] Activities =
     {
         new PanicActivity(), // v13.3 공황 (얼어붙거나 달아난다)
+        new PassengerActivity(), new DockActivity(), // v18.6 승객 (이끌기 · 따지기 · 달래기) · v18.5 도킹 (기밀 · 교환 · 같이 손보기 · 난파선 · 추모)
         new EvacuateActivity(),
         new EvaSurviveActivity(), new EvaRescueActivity(), new SuitMendActivity(), // v16.11 선외 생존(표류 · 패치 · 그늘) · 구조 EVA · 에어락 마중 · 우주복 수리
         new TakeCoverActivity(), new BlastResponseActivity(), new BlastingActivity(), // v16.13 쉭 소리에 몸을 피함 · 구조 · 조사 · 옮기기 · 항아리 · 추모 · 폭파

@@ -641,6 +641,7 @@ public partial class ShipView : Node2D
         PaintResearch(ci); // v16.14 실험대 장치 (분야마다) · 연구 노트 · 사고 그을음 · 돌파구 반짝임 · 보안경 · 돋보기
         PaintRoomWork(ci); // v16.17 방 공사 (분리 · 상자 · 손수레 · 골조 · 놓을 자리) · 쓰임 원판 · 헷갈림 · 땀
         PaintAnnex(ci); // v16.10 증축 (청사진 · 비계 · 골조 · 외판 · 압력계 · 배선 · 비닐 막 · 설비 · 개통식 · 새 패널)
+        PaintDock(ci); // v18.5 도킹 통로 · 난파선 · 거룻배 · 압력계 · 교환 상자 · 이름판
         PaintSpaceUnder(ci); // v17.4 펼친 작업장 · 앞 상자 · 카트 옮겨 싣기 · 잠금표 · 줄 바닥 · 받는 곳
         PaintAfterUnder(ci); // v17.5 묵은 그을음 냄새 · 다른 방 쟁반 · 널어 둔 침구 · 냉장고 쪽지 · 빈 의자의 컵 · 종이꽃 · 다시 그린 그림 · 옮겨 온 등
         PaintJumpers(ci);
@@ -736,6 +737,7 @@ public partial class ShipView : Node2D
         PaintValuesFloor(ci); // v18.15 딜레마 표지판 · 밀항자 자리 · 꾸린 짐 · 식당 벽 쪽지
         // 쓰러진 사람은 밑에, 업힌 사람은 업은 사람 위에
         foreach (var c in _world.Crew.OrderBy(c => c.CarriedBy != null ? 2 : c.Down ? 0 : 1)) PaintCrew(ci, c);
+        PaintDockOver(ci); // v18.5 헬멧 등 · v18.6 승객 차림 · 이끄는 손
         PaintManeuverOver(ci); // v17.0 침대 끈 · 손잡이 쥔 손 · 컵 쥔 손 · 넘어진 사람 · 빗자루질
         PaintZeroGOver(ci); // v18.4 떠다니는 것 · 벽 손잡이 · 멀미 · v18.2 고양이
         PaintCommandBadges(ci); // v13.1 선장 별 · 지휘자 테 · 조 배지

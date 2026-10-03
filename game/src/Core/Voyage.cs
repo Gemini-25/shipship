@@ -161,10 +161,12 @@ public sealed class VoyageSystem
                 w.RaiseAlert($"기항지 도착 — {leg.Name}({VoyageV15.PortOf(leg.Name).Name}) · 교역과 보급, 새 사람", null, AlertLevel.Notice, shipWide: true);
                 w.History.Add(w, HistoryKind.Decision, $"{leg.Name}에 닿았다", null, log: true);
                 Trade(leg);
+                w.Dock.OnPort(leg); // v18.5 거룻배 도킹 · 손님
                 break;
             case LegKind.Derelict:
                 w.RaiseAlert($"{leg.Name} — 건질 것이 있는지 본다", null, AlertLevel.Notice, shipWide: true);
                 Salvage(leg);
+                w.Dock.OnDerelict(leg); // v18.5 난파선에 붙어 들어가 본다
                 break;
             case LegKind.AsteroidBelt:
                 w.Space.SetMean(PropulsionSystem.ZoneDensity(w.Propulsion.Zone) * MiningMul); // 돌이 많다 — 채집이 좋다

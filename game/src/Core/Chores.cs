@@ -63,6 +63,7 @@ public sealed class ChoresActivity : Activity
     {
         distance = -1;
         if (c.IsChild) return -1f; // v12.9 아이는 일하지 않는다
+        if (c.Passenger && !PassengerSystem.MayWork(c, w, o)) return -1f; // v18.6 승객은 자원봉사로 가벼운 일만
         if (o.Target.Crew == c && o.Kind != WorkKind.Rehab) return -1f; // 자기 자신은 치료 못 함 (v11.3 재활은 제 몸을 푼다)
         if (o.Kind == WorkKind.Drill && o.Circuit != c.Id) return -1f; // v11.0: 훈련은 제 몫만
         if (o.Kind == WorkKind.Train && o.Circuit / 10 != c.Id) return -1f; // v11.3: 배우는 사람만

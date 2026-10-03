@@ -208,7 +208,10 @@ public sealed class CrewMember
     public long LastRehab { get; set; } = -1_000_000;
 
     /// <summary>v11.2: 탈출 캡슐에서 건져 태운 사람.</summary>
-    public bool Rescued { get; init; }
+    public bool Rescued { get; internal set; } // v18.6 기항지 손님은 구조된 사람이 아니다
+
+    /// <summary>v18.6 승객: 배 일을 하지 않는다 (Passengers).</summary>
+    public bool Passenger { get; internal set; }
 
     /// <summary>v11.2: 균이 든 식사를 먹었다 — 이 틱에 탈이 난다 (-1이면 없음).</summary>
     public long PoisonAt { get; set; } = -1;
