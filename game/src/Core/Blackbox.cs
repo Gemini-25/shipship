@@ -298,6 +298,14 @@ public sealed class BlackboxSystem
         return last.Where(kv => kv.Value == room).Select(kv => kv.Key).ToList();
     }
 
+    /// <summary>그 시각 그 사람이 있던 방 (위치 기록 · 없으면 -1).</summary>
+    public int WhereWas(int who, long at)
+    {
+        int r = -1;
+        foreach (var e in _log) { if (e.Tick > at) break; if (e.Kind == BoxKind.Place && e.Who == who) r = e.Room; }
+        return r;
+    }
+
     public string RoomName(int id) => id >= 0 && id < _w.Ship.Rooms.Count ? _w.Ship.Rooms[id].Name : id == -2 ? "선외" : "어딘가";
     private string CrewName(int id) => _w.Crew.FirstOrDefault(c => c.Id == id)?.Name ?? "누군가";
     private string ThingName(int fid) => _w.Ship.Furniture.FirstOrDefault(f => f.Id == fid)?.Label ?? "설비";

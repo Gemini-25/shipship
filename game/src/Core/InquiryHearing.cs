@@ -180,13 +180,15 @@ public sealed partial class InquirySystem
                 else if (P(s.Scapegoat) is CrewMember goat && !goat.Dead)
                 {
                     blamed = true;
-                    lines.Add(new SittingLine(culprit.Id, Persona.Say(culprit, $"마지막으로 만진 건 {goat.Name}다 — 나는 아니다"), false, LineRole.Accuser));
+                    lines.Add(new SittingLine(culprit.Id, Persona.Say(culprit, $"마지막으로 만진 건 {Ko.IGa(goat.Name)} 아닌가 — 나는 아니다"), false, LineRole.Accuser));
                     Add(goat.Id, 0.5f + 0.6f * Cred(culprit));
                     bool touched = read && (bx.Read(s.Tick - SimTime.Hours(36), s.Tick, e => e.Kind == BoxKind.Work && e.Ref == s.Machine && e.Who == goat.Id)?.Count ?? 0) > 0;
                     if (touched) Add(goat.Id, 0.3f);
                     bool alibi = read && !bx.WhoWasIn(s.RoomId, s.Tick).Contains(goat.Id);
                     if (attendees.Contains(goat))
                         lines.Add(new SittingLine(goat.Id, Persona.Say(goat, alibi ? $"{when}에 나는 그 방에 없었다 — 위치 기록을 봐라" : "나는 아니다 — 그날 그 설비에 손대지 않았다"), false, LineRole.Defense));
+                    else if (alibi && online)
+                        lines.Add(new SittingLine(-1, "주 컴퓨터: " + w.Automation.Manner.Speak($"위치 기록 — {when}에 {goat.Name}님은 {bx.RoomName(bx.WhereWas(goat.Id, s.Tick))}에 있었습니다"), false, LineRole.Computer));
                     Add(goat.Id, alibi ? -1.2f : -0.3f * Cred(goat));
                     if (alibi) f.Basis.Add("위치 기록");
                 }

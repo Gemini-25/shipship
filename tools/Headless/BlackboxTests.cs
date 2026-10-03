@@ -135,7 +135,7 @@ public static partial class Program
             var sc = blame = BbRun(seed, CoverWay.Blame, SlipKind.SkippedStep, wreck: false);
             Console.WriteLine($"   [남 탓] {sc.C.Name} → {sc.Goat.Name} · {sc.Script}");
             Check("남 탓 — 같은 설비를 만졌거나 미운 사람의 이름을 댄다", sc.S.Scapegoat == sc.Goat.Id && sc.Goat.Diary.Any(d => d.text.Contains("내 탓")), $"탓 {sc.W.Crew.FirstOrDefault(x => x.Id == sc.S.Scapegoat)?.Name}");
-            Check("탓을 들은 사람은 위치 기록으로 변론한다 (그 시각 그 방에 없었다)", sc.Sit?.Script.Any(l => l.Who == sc.Goat.Id && l.Role == LineRole.Defense && l.Text.Contains("위치 기록")) == true, sc.Script);
+            Check("탓을 들은 사람은 위치 기록으로 변론한다 (그 시각 그 방에 없었다)", sc.Sit?.Script.Any(l => (l.Who == sc.Goat.Id && l.Role == LineRole.Defense || l.Role == LineRole.Computer && l.Text.Contains(sc.Goat.Name)) && l.Text.Contains("위치 기록")) == true, sc.Script);
             Check("남 탓이 들킨다", sc.F?.Right == true && sc.F.Framed && sc.F.Blamed == sc.C.Id, sc.F?.Text ?? "");
             if (hide != null) Check("남 탓을 했다가 들키면 더 크게 잃는다", sc.Loss > hide.Loss * 1.2f, $"남 탓 {sc.Loss:0.000} · 숨김 {hide.Loss:0.000}");
             Check("뒤집어씌운 일은 당한 사람이 기억한다", sc.W.Relations.All.Any(r => r.Who == sc.Goat.Id && r.About == sc.C.Id && r.Reason == RelationReason.FramedMe), $"{sc.Goat.Name} → {sc.C.Name} 호감 {sc.Goat.AffinityTo(sc.C):+0.00;-0.00}");
