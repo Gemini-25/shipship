@@ -158,6 +158,7 @@ public sealed class World
     public MotionSystem Motions { get; } // v18.18 승무원이 여는 회의 · 파벌 · 재판 · 선거
     public SchemeSystem Schemes { get; } // v18.14 승무원이 스스로 꾸미는 일 100+
     public BlackboxSystem Blackbox { get; } public InquirySystem Inquiry { get; } // v18.7 블랙박스 · 실수 숨기기 · 사고 조사
+    public ValueSystem Values { get; } // v18.15 가치관 · 결정에 대한 마음 · 딜레마 · 결정 장부
     public ReactSystem React { get; } // v17.8 모든 변화에 누군가 반응한다
     public FleetSystem Fleet { get; } // v16.20b 로봇 · 드론 두뇌와 성능 · 주컴퓨터 함대 지휘
     public FoodSourceSystem FoodSources { get; } // v16.22 식량원 (수경 · 조류 · 단백질 · 버섯 · 정원 · 저장 · 교역 · 원정 · 발효)
@@ -286,6 +287,7 @@ public sealed class World
         Motions = new MotionSystem(this); // v18.18
         Schemes = new SchemeSystem(this); // v18.14
         Blackbox = new BlackboxSystem(this); Inquiry = new InquirySystem(this); // v18.7
+        Values = new ValueSystem(this); // v18.15
         React = new ReactSystem(this); // v17.8
         Fleet = new FleetSystem(this); // v16.20b
         FoodSources = new FoodSourceSystem(this); Scrap = new ScrapSystem(this); // v16.22
@@ -415,6 +417,8 @@ public sealed class World
             RoomUse.Update(dt); RoomPlans.Update(dt); // v16.17 쓰임 → 용도 · 승무원 안건 → 회의 → 공사
             Cosmic.Update(dt); // v18.13 우주 대재난: 예보 · 대비 · 본 사건 · 후유증
             pf = Prof.Lap("sys.Daily", pf);
+            Values.Update(dt); // v18.15 가치관 · 결정에 대한 반응 · 딜레마 · 늦게 돌아오는 결과
+            pf = Prof.Lap("sys.Values", pf);
             Ways.Update(dt); // v16.25 문제마다 여러 갈래 해법
             pf = Prof.Lap("sys.Ways", pf);
             After.Update(dt); // v17.5 사고 뒤 며칠 (그을음 냄새 · 젖은 침구 · 냉장고 · 개인 조명 · 빈자리) · 꿈 · 장소의 기억
