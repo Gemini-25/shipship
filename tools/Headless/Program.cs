@@ -160,6 +160,7 @@ public static partial class Program
         if (args.Contains("--moduletest")) return RunModuleTest(seed); // v15 설비 70
         if (args.Contains("--radcaretest")) return RunRadCareTest(seed); // 통합5 방사선 병 간호
         if (args.Contains("--risktest")) return RunRiskTest(seed); // 통합5 위험 수준 (보통 재해 · 배 전체급 · 우주급)
+        if (args.Contains("--reacttest")) return RunReactTest(seed); // v17.8
         if (args.Contains("--schemetest")) return RunSchemeTest(seed); // v18.14
         if (args.Contains("--counciltest")) return RunCouncilTest(seed); // v18.18
         if (args.Contains("--computercrewtest")) return RunComputerCrewTest(seed); // v16.27
