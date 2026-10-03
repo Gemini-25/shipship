@@ -195,6 +195,21 @@ public partial class ShipView
                 ci.DrawLine(body - f * rr * 1.3f + sd * (rr + k), body - f * rr * 1.3f - sd * (rr - k), new Color(1, 1, 1, 0.3f), 0.8f * s, true);
                 break;
             }
+            case Gesture.Kneel:
+            {
+                // 몸을 낮춰 웅크린다: 무릎 두 개가 앞으로 · 한 손은 바닥을 짚고 · 몸통 둘레에 낮은 그림자 테
+                ci.DrawCircle(body + f * rr * 0.9f + sd * rr * 0.45f, rr * 0.38f, RoleCloth(c.Role).Darkened(0.2f), true, -1f, true);
+                ci.DrawCircle(body + f * rr * 0.9f - sd * rr * 0.45f, rr * 0.38f, RoleCloth(c.Role).Darkened(0.2f), true, -1f, true);
+                ci.DrawLine(body + sd * rr * 0.7f, body + sd * rr * 1.5f + f * rr * 0.4f, RoleCloth(c.Role), 2.2f * s, true);
+                ci.DrawCircle(body + sd * rr * 1.5f + f * rr * 0.4f, 1.5f * s, hand, true, -1f, true);
+                if (lod >= 1)
+                {
+                    ci.DrawArc(body, rr * 1.45f, 0f, Mathf.Tau, 20, new Color(0f, 0f, 0f, 0.22f), 1.4f * s, true);
+                    float k = Mathf.Sin(t * 18f) * 0.8f * s;
+                    ci.DrawLine(head - f * rr * 0.9f + sd * (rr * 0.5f + k), head - f * rr * 0.9f - sd * (rr * 0.5f - k), new Color(1, 1, 1, 0.25f), 0.7f * s, true);
+                }
+                break;
+            }
             case Gesture.CoverEars:
             {
                 ci.DrawCircle(head + sd * rr * 0.8f, 1.7f * s, hand, true, -1f, true);

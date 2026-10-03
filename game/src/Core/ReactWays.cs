@@ -31,13 +31,24 @@ public sealed partial class ReactSystem
             case Stir.Cold: s.Ep[(int)k] = true; Cope(c, s, room, k, ppl); break;
             case Stir.Heat: s.Ep[(int)k] = true; Cope(c, s, room, k, ppl); break;
             case Stir.Smoke:
-                Gest(s, R.Chance(0.5f) ? Gesture.Cough : Gesture.CoverNose, Short);
-                Speak(c, s, k, Pool(c, k, w.Fire.CountIn(room) > 0), room, "");
+            {
+                bool fire = w.Fire.CountIn(room) > 0;
+                string? how = fire || busy ? null : SmokeAct(c, s, room);
+                s.Tmp = how;
+                Gest(s, how == "smoke_seek" ? Gesture.Look : R.Chance(0.5f) ? Gesture.Cough : Gesture.CoverNose, how == null ? Long : Short);
+                Speak(c, s, k, Pool(c, k, fire), room, "", wayLine: how == null ? null : ActLines(c, how));
+                s.Tmp = null;
                 break;
+            }
             case Stir.Shake:
-                Gest(s, Gesture.Brace, Short);
-                Speak(c, s, k, Pool(c, k, false), room, "");
+            {
+                string how = ShakeAct(c, s, room);
+                s.Tmp = how;
+                Gest(s, how switch { "crouch" => Gesture.Kneel, "shrug" => Gesture.Shrug, "shake_check" => Gesture.Listen, _ => Gesture.Brace }, how == "crouch" ? Long : Short);
+                Speak(c, s, k, how == "shrug" ? ActLines(c, how) : Pool(c, k, false), room, "", wayLine: how is "crouch" or "shake_check" ? ActLines(c, how) : null);
+                s.Tmp = null;
                 break;
+            }
             case Stir.Sound when arg is Machine m:
             {
                 Gest(s, Gesture.Look, Short);
@@ -51,9 +62,14 @@ public sealed partial class ReactSystem
                 break;
             }
             case Stir.Smell when arg is SmellKind sk:
+            {
+                string? how = SmellAct(c, s, room, sk);
+                s.Tmp = how;
                 Gest(s, sk is SmellKind.Burnt or SmellKind.Foul ? Gesture.CoverNose : Gesture.Sniff, Short);
-                Speak(c, s, k, SmellLines(c, sk), room, SmellSystem.Name(sk));
+                Speak(c, s, k, SmellLines(c, sk), room, SmellSystem.Name(sk), wayLine: how == null ? null : ActLines(c, how));
+                s.Tmp = null;
                 break;
+            }
             case Stir.Voice when arg is Broadcast b:
                 s.LastHeard = b.Id;
                 Gest(s, b.Priority >= 2 ? Gesture.Look : Gesture.Listen, Short);
@@ -220,6 +236,120 @@ public sealed partial class ReactSystem
     }
 
     /// <summary>방 안 빈 바닥 (어떤 점에서 가까운 순).</summary>
+    // ───────────────────────────── 연기 · 흔들림 · 냄새: 사람마다 다른 행동 ─────────────────────────────
+
+    /// <summary>연기 (눈앞에 불은 없다): 대담하거나 불을 다뤄 본 사람은 연기 나는 쪽을 찾아 나서고 · 겁 많거나 몸이 약한 사람은 맑은 옆방으로 피하고 · 나머지는 소매로 입을 막고 버틴다.</summary>
+    private string? SmokeAct(CrewMember c, ReactState s, Room room)
+    {
+        var w = _w;
+        var t = c.Traits;
+        bool fireman = c.Background is Background.Firefighter or Background.SafetyInspector or Background.Soldier;
+        float seek = 0.1f + 0.4f * t.Bravery + 0.25f * t.Diligence + (fireman ? 0.4f : 0f) - (Life.Has(c, Habit.Worrier) ? 0.25f : 0f);
+        float leave = 0.15f + 0.45f * (1f - t.Bravery) + (Life.Has(c, Habit.Worrier) ? 0.25f : 0f) + (c.Vitals.Health < 0.7f ? 0.2f : 0f);
+        long until = w.Tick + SimTime.Minutes(20);
+        if (seek >= leave && Smokier(room) is Room src && FreeNear(src, src.Center) is Cell sc && R.Chance(Math.Clamp(seek, 0.1f, 0.9f)))
+        {
+            Plan(c, s, new ReactAct { Kind = ReactKind.Move, For = Stir.Smoke, To = sc, Face = src.Center, Target = src.Id, Label = $"연기 나는 {src.Name} 쪽을 살핀다", Way = "smoke_seek", Score = 0.52f, Until = until });
+            return "smoke_seek";
+        }
+        if (leave > seek && Clear(room) is Room cl && FreeNear(cl, cl.Center) is Cell cc && R.Chance(Math.Clamp(leave, 0.1f, 0.9f)))
+        {
+            Plan(c, s, new ReactAct { Kind = ReactKind.Move, For = Stir.Smoke, To = cc, Target = cl.Id, Label = $"{cl.Name}으로 피한다", Way = "smoke_leave", Score = 0.5f, Until = until });
+            return "smoke_leave";
+        }
+        return null;
+    }
+
+    /// <summary>흔들림: 기계를 아는 사람은 어디서 떨리는지 귀를 대러 가고 · 겁 많은 사람은 몸을 낮춰 붙잡고 · 대담한 사람은 어깨만 으쓱한다.</summary>
+    private string ShakeAct(CrewMember c, ReactState s, Room room)
+    {
+        var w = _w;
+        var t = c.Traits;
+        float mech = c.SkillLevel(Skill.Mechanics) + (c.Role is CrewRole.Engineer or CrewRole.Technician ? 0.3f : 0f) + (Life.Has(c, Habit.Tinkerer) ? 0.2f : 0f);
+        if (mech > 0.45f && !c.IsMoving && Shaker(room) is Machine m && R.Chance(0.4f + 0.4f * t.Diligence))
+        {
+            Plan(c, s, new ReactAct { Kind = ReactKind.Check, For = Stir.Shake, Target = m.Body.Id, Label = $"{m.Name} 쪽 떨림을 살핀다", Way = "shake_check", Score = 0.47f, Face = m.Body.Center, Until = w.Tick + SimTime.Minutes(25) });
+            s.LookAt = m.Body.Center;
+            Stats.ShakeCheck++;
+            return "shake_check";
+        }
+        if (Life.Has(c, Habit.Worrier) || t.Bravery < 0.3f || c.Fears.Contains(Fear.Vacuum)) { Stats.Crouch++; return "crouch"; }
+        if (Life.Has(c, Habit.Daredevil) || t.Bravery > 0.75f) return "shrug";
+        return "brace";
+    }
+
+    /// <summary>냄새: 배고픈 사람은 음식 냄새를 따라 주방으로 · 요리하는 사람 · 꼼꼼한 사람은 탄내의 출처를 보러 · 코가 예민하거나 투덜이는 고약한 냄새를 피해 옆방으로.</summary>
+    private string? SmellAct(CrewMember c, ReactState s, Room room, SmellKind sk)
+    {
+        var w = _w;
+        long until = w.Tick + SimTime.Minutes(20);
+        if (sk is SmellKind.Cooking or SmellKind.Bread or SmellKind.Coffee)
+        {
+            bool hungry = c.Needs.Food < 0.55f || Life.Has(c, Habit.Snacker) || sk == SmellKind.Coffee && Life.Has(c, Habit.CoffeeAddict);
+            if (!hungry || room.Type is RoomType.Galley or RoomType.Mess || !R.Chance(0.55f)) return null;
+            if (CupSpot(c) is (Cell cup, Vector2 cf))
+            {
+                Plan(c, s, new ReactAct { Kind = ReactKind.Move, For = Stir.Smell, To = cup, Face = cf, Label = "냄새를 따라간다", Way = "follow_nose", Score = 0.44f, Until = until });
+                Stats.Nose++;
+                return "follow_nose";
+            }
+            return null;
+        }
+        if (sk == SmellKind.Burnt)
+        {
+            if (c.Role != CrewRole.Cook && c.Traits.Diligence < 0.55f || !R.Chance(0.6f)) return null;
+            var g = w.Ship.LiveRooms.FirstOrDefault(r => r.Type == RoomType.Galley && r != room && !r.OffLimits);
+            if (g != null && FreeNear(g, g.Center) is Cell gc)
+            {
+                Plan(c, s, new ReactAct { Kind = ReactKind.Move, For = Stir.Smell, To = gc, Face = g.Center, Target = g.Id, Label = "탄내 나는 데를 보러 간다", Way = "burnt_check", Score = 0.5f, Until = until });
+                Stats.Nose++;
+                return "burnt_check";
+            }
+            return null;
+        }
+        if (sk == SmellKind.Foul && (SmellSystem.Nose(c) > 1.1f || Life.Has(c, Habit.Grumbler) || Life.Has(c, Habit.NeatFreak)) && Clear(room) is Room cl && FreeNear(cl, cl.Center) is Cell cc && R.Chance(0.5f))
+        {
+            Plan(c, s, new ReactAct { Kind = ReactKind.Move, For = Stir.Smell, To = cc, Target = cl.Id, Label = $"{cl.Name}으로 피한다", Way = "foul_leave", Score = 0.42f, Until = until });
+            Stats.NoseFled++;
+            return "foul_leave";
+        }
+        return null;
+    }
+
+    /// <summary>문으로 이어진 옆방 가운데 연기가 더 짙은 방 (연기가 그쪽에서 온다).</summary>
+    private Room? Smokier(Room room)
+    {
+        Room? best = null;
+        float bs = room.Air.Smoke + 0.02f;
+        foreach (var (nb, door) in _w.Ambience.Neighbors(room))
+            if (door && !nb.OffLimits && nb.Air.Pressure > 70f && nb.Air.Smoke > bs) { bs = nb.Air.Smoke; best = nb; }
+        return best;
+    }
+
+    /// <summary>문으로 이어진 옆방 가운데 공기가 맑은 방.</summary>
+    private Room? Clear(Room room)
+    {
+        Room? best = null;
+        float bs = MathF.Min(0.04f, room.Air.Smoke * 0.5f);
+        foreach (var (nb, door) in _w.Ambience.Neighbors(room))
+            if (door && !nb.OffLimits && !nb.Abandoned && nb.Air.Pressure > 70f && nb.Air.Smoke <= bs && nb.Air.Temperature is > 12f and < 30f) { bs = nb.Air.Smoke; best = nb; }
+        return best;
+    }
+
+    /// <summary>이 방에서 가장 떨리는 돌아가는 기계.</summary>
+    private Machine? Shaker(Room room)
+    {
+        Machine? best = null;
+        float bv = -1f;
+        foreach (var m in _w.Ship.Machines)
+        {
+            if (m.Body.Room != room || !m.Active || m.Faults.Count > 0) continue;
+            float v = (m.Omen?.Kind == OmenKind.Vibration ? 1f : 0f) + m.Wear;
+            if (v > bv) { bv = v; best = m; }
+        }
+        return best;
+    }
+
     internal Cell? FreeNear(Room room, Vector2 at, int skip = 0)
     {
         Cell? best = null;

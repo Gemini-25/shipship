@@ -65,6 +65,7 @@ public sealed class ReactState
     internal long OddUntil = -1;
     internal int Detours;
     internal string? OddWhat;
+    internal string? Tmp; // 이번 반응에서 고른 행동 (기록용 — 오래 쓰는 방법이 아니다)
     public bool Moving(World w) => G != Gesture.None && w.Tick < GUntil;
 }
 
@@ -93,13 +94,15 @@ public sealed class ReactStats
 {
     public readonly int[] ByStir = new int[16];
     public int Lines, Repeats, Silent, Acts, ActsDone, Careful, Reckless, Sidesteps, Checks, Found, Talks, Replies, Comforts, Admired,
-        Detours, Jackets, JacketsBack, Wraps, Torches, Devices, Fixes, Huddles, Jogs, Cups, Chats, Topical, Topics, Back, Odd, Stares, Cries, Advice, Scans;
+        Detours, Jackets, JacketsBack, Wraps, Torches, Devices, Fixes, Huddles, Jogs, Cups, Chats, Topical, Topics, Back, Odd, Stares, Cries, Advice, Scans,
+        SmokeSeek, SmokeFled, SmokeFound, ShakeCheck, Crouch, Nose, NoseFled;
     public string Summary() =>
         $"반응 {ByStir.Sum()} (더위 {ByStir[0]} · 추위 {ByStir[1]} · 어둠 {ByStir[2]} · 젖은 바닥 {ByStir[3]} · 유리 {ByStir[4]} · 소리 {ByStir[5]} · 냄새 {ByStir[6]} · 연기 {ByStir[7]} · " +
         $"이상한 몸짓 {ByStir[8]} · 진동 {ByStir[9]} · 경보 {ByStir[10]} · 방송 {ByStir[11]} · 새 물건 {ByStir[12]} · 울음 {ByStir[13]} · 수다 {ByStir[14]} · 돌아옴 {ByStir[15]}) · " +
         $"말 {Lines}(되풀이 {Repeats} · 말없이 {Silent} · 지금 이야기 {Topical}) · 행동 {Acts}(끝냄 {ActsDone}) · 조심 걸음 {Careful}(무시 {Reckless}) · 돌아감 {Sidesteps} · " +
         $"옆 칸으로 {Detours} · 소리 확인 {Checks}(찾음 {Found}) · 말 걸기 {Talks}(대답 {Replies}) · 위로 {Comforts} · 구경 {Admired} · 겉옷 {Jackets}(다시 {JacketsBack}) · 담요 {Wraps} · 손전등 {Torches} · " +
-        $"장비 {Devices} · 조명 수리 {Fixes} · 붙기 {Huddles} · 제자리 뛰기 {Jogs} · 잔 {Cups} · 수다 {Chats} · 이야깃거리 {Topics} · 컴퓨터 권고 {Advice} · 감지기 재확인 {Scans}";
+        $"장비 {Devices} · 조명 수리 {Fixes} · 붙기 {Huddles} · 제자리 뛰기 {Jogs} · 잔 {Cups} · 수다 {Chats} · 이야깃거리 {Topics} · 컴퓨터 권고 {Advice} · 감지기 재확인 {Scans} · " +
+        $"연기 쫓기 {SmokeSeek}(불 찾음 {SmokeFound}) · 연기 피하기 {SmokeFled} · 흔들림 확인 {ShakeCheck} · 웅크림 {Crouch} · 냄새 따라 {Nose} · 냄새 피하기 {NoseFled}";
 }
 
 public sealed partial class ReactSystem

@@ -11,9 +11,22 @@ public static partial class Program
     private static readonly HashSet<string> ColdWaysIds = new() { "blanket", "heater", "heater_fetch", "jog", "huddle", "cup", "warm_room", "hug" };
     private static readonly HashSet<string> HeatWaysIds = new() { "jacket", "fan", "fan_fetch", "fanself", "cup", "cool_room", "wipe" };
 
+    private static World? _lastReact;
+    private static readonly int[] _reactKinds = new int[16];
+
+    /// <summary>앞 장면의 반응 종류를 모은다 (어떤 변화에 반응했나).</summary>
+    private static void TallyReact()
+    {
+        if (_lastReact == null) return;
+        for (int i = 0; i < 16; i++) _reactKinds[i] += _lastReact.React.Stats.ByStir[i];
+        _lastReact = null;
+    }
+
     private static World ReactDay(int seed)
     {
+        TallyReact();
         var w = DayOne(seed, "Hanbit");
+        _lastReact = w;
         RunUntilHour(w, 10f);
         return w;
     }
@@ -34,9 +47,9 @@ public static partial class Program
         }
     }
 
-    private static void Hold(World w, Room room, float temp, int ticks)
+    private static void Hold(World w, Room room, float temp, int ticks, Action? every = null)
     {
-        for (int t = 0; t < ticks; t++) { room.Air.Temperature = temp; w.Step(); }
+        for (int t = 0; t < ticks; t++) { room.Air.Temperature = temp; w.Step(); if (every != null && t % 20 == 0) every(); }
     }
 
     private static int RunReactTest(int seed)
@@ -44,6 +57,7 @@ public static partial class Program
         _fails = 0;
         Console.WriteLine($"모든 변화에 누군가 반응한다 (v17.8) · 시드 {seed}\n");
         var allLines = new List<string>();
+        Array.Clear(_reactKinds); _lastReact = null;
 
         // ── 1) 같은 정전에 다섯 사람이 다섯 가지로 ──
         {
@@ -53,8 +67,18 @@ public static partial class Program
             Gather(w, five, mess);
             Run(w, 20);
             mess.PowerCut = true;
-            Run(w, SimTime.Minutes(50));
             var rs = w.React;
+            CrewMember? torchMan = null; float torchMul = 0f, plainMul = 0f;
+            for (int t = 0; t < SimTime.Minutes(50); t += 20)
+            {
+                Run(w, 20);
+                if (torchMan != null) continue;
+                if (t < 200) Console.WriteLine($"   {t}: " + string.Join(" | ", five.Select(c => $"{c.Name} {c.Room?.Name} {rs.Peek(c)?.Way} {rs.Peek(c)?.TorchOn} {rs.DarkMul(c):0.0}")));
+                torchMan = five.FirstOrDefault(c => rs.Peek(c)?.TorchOn == true && c.Room == mess);
+                if (torchMan == null) continue;
+                torchMul = rs.DarkMul(torchMan);
+                plainMul = five.Where(c => rs.Peek(c)?.Way is null or "wait" or "feel").Select(c => rs.DarkMul(c)).DefaultIfEmpty(1f).Max();
+            }
             var first = five.Select(c => rs.NotesOf(Stir.Dark).FirstOrDefault(n => n.Crew == c.Id)).ToList();
             var ways = first.Where(n => n.Way.Length > 0).Select(n => n.Way).ToList();
             int distinct = ways.Distinct().Count();
@@ -87,9 +111,8 @@ public static partial class Program
                 $"{distinct}가지 — {string.Join(" · ", detail)}");
             Check("정전 — 말과 몸짓 · 행동이 상황에 맞는다 (캄캄함에 대한 말 · 고른 방법대로 움직임)", fit && acted >= 4,
                 $"맞음 {acted}/5 · 말 {lines.Count}: {string.Join(" / ", lines.Take(4))}");
-            var torchMan = five.FirstOrDefault(c => rs.Peek(c)?.TorchOn == true);
-            Check("상호작용 — 손전등을 켠 사람은 캄캄한 데서 덜 틀린다 (실수 배율)", torchMan == null || w.Portable.DarkMistake(torchMan) < 1.5f,
-                torchMan == null ? "손전등 고른 사람 없음" : $"{torchMan.Name} {w.Portable.DarkMistake(torchMan):0.00}");
+            Check("상호작용 — 손전등을 켠 사람은 캄캄한 데서 덜 틀린다 (실수 배율)", torchMan != null && torchMul < plainMul || torchMan == null && !ways.Contains("torch"),
+                torchMan == null ? "손전등 고른 사람 없음" : $"{torchMan.Name} 손전등 {torchMul:0.00} · 맨손 {plainMul:0.00}");
             mess.PowerCut = false;
             Run(w, SimTime.Minutes(20));
             Check("불이 들어오면 방법을 거둔다 (손전등을 끄고 한마디)", five.All(c => rs.Peek(c)?.WayFor != Stir.Dark || rs.Peek(c)?.Way == null),
@@ -102,17 +125,19 @@ public static partial class Program
             var room = w.Ship.LiveRooms.FirstOrDefault(r => r.Type == RoomType.Lounge) ?? w.Ship.LiveRooms.First(r => r.Type == RoomType.Mess);
             var ppl = Awake(w, 4, c => -c.Id);
             Gather(w, ppl, room);
-            Hold(w, room, 32f, SimTime.Minutes(45));
             var rs = w.React;
-            int sweaty = ppl.Count(c => rs.Peek(c)?.Sweat > 0);
+            var sweatSeen = new HashSet<int>();
+            float heatMulMin = 1f; // 겉옷 · 선풍기 · 찬물로 열이 덜 차는 순간
+            Hold(w, room, 32f, SimTime.Minutes(45), () => { foreach (var c in ppl) { if (rs.Peek(c)?.Sweat > 0) sweatSeen.Add(c.Id); if (c.Room == room) heatMulMin = MathF.Min(heatMulMin, rs.HeatMul(c)); } });
+            int sweaty = sweatSeen.Count;
+            Console.WriteLine("   " + string.Join(" | ", ppl.Select(c => $"{c.Name} {c.Room?.Name} {c.Room?.Air.Temperature:0} 땀{rs.Peek(c)?.Sweat} {rs.Peek(c)?.Way} {c.Job?.Activity?.Id}")));
             var ways = rs.NotesOf(Stir.Heat).Select(n => n.Way).Where(x => x.Length > 0).ToList();
-            var jack = ppl.FirstOrDefault(c => rs.Peek(c)?.JacketOff == true);
             var lines = rs.NotesOf(Stir.Heat).Where(n => n.Line.Length > 0).Select(n => n.Line).ToList();
             allLines.AddRange(lines);
             Check("더위 — 땀이 나고 (몸에 보인다) 사람마다 다르게 식힌다 (겉옷 · 선풍기 · 손부채 · 찬물 · 시원한 방)", sweaty >= 3 && ways.Count >= 3 && ways.All(HeatWaysIds.Contains) && ways.Distinct().Count() >= 2,
                 $"땀 {sweaty}/{ppl.Count} · {string.Join(", ", ways)} · 말: {string.Join(" / ", lines.Take(3))}");
-            Check("더위 — 겉옷을 벗어 허리에 묶거나 선풍기를 가져온다 · 그만큼 열이 덜 찬다", jack != null && rs.HeatMul(jack) < 1f || rs.Stats.Devices > 0 || ways.Contains("fan"),
-                $"겉옷 {rs.Stats.Jackets} · 장비 {rs.Stats.Devices} · 배율 {(jack == null ? "—" : rs.HeatMul(jack).ToString("0.00"))}");
+            Check("더위 — 겉옷을 벗어 허리에 묶거나 선풍기를 가져온다 · 그만큼 열이 덜 찬다", (rs.Stats.Jackets > 0 || rs.Stats.Devices > 0) && heatMulMin < 1f,
+                $"겉옷 {rs.Stats.Jackets} · 장비 {rs.Stats.Devices} · 가장 낮은 배율 {heatMulMin:0.00} · 행동 {rs.Stats.Acts}/{rs.Stats.ActsDone}");
             Hold(w, room, 21f, SimTime.Minutes(40));
             Check("식으면 다시 입는다", rs.Stats.JacketsBack > 0 || rs.Stats.Jackets == 0, $"다시 입음 {rs.Stats.JacketsBack}/{rs.Stats.Jackets}");
         }
@@ -125,9 +150,11 @@ public static partial class Program
             // 친한 둘: 붙어 앉을 사이
             ppl[0].ChangeAffinity(ppl[1], 0.6f); ppl[1].ChangeAffinity(ppl[0], 0.6f);
             Gather(w, ppl, room);
-            Hold(w, room, 11f, SimTime.Minutes(60));
             var rs = w.React;
-            int shiv = ppl.Count(c => rs.Peek(c)?.Shiver > 0 || rs.Peek(c)?.Wrapped == true);
+            var shivSeen = new HashSet<int>();
+            Hold(w, room, 11f, SimTime.Minutes(60), () => { foreach (var c in ppl) if (rs.Peek(c)?.Shiver > 0 || rs.Peek(c)?.Wrapped == true) shivSeen.Add(c.Id); });
+            int shiv = shivSeen.Count;
+            Console.WriteLine("   " + string.Join(" | ", ppl.Select(c => $"{c.Name} {c.Room?.Name} {c.Room?.Air.Temperature:0} 떨{rs.Peek(c)?.Shiver} {rs.Peek(c)?.Way} {c.Job?.Activity?.Id}")));
             var ways = rs.NotesOf(Stir.Cold).Select(n => n.Way).Where(x => x.Length > 0).ToList();
             var lines = rs.NotesOf(Stir.Cold).Where(n => n.Line.Length > 0).Select(n => n.Line).ToList();
             allLines.AddRange(lines);
@@ -236,6 +263,66 @@ public static partial class Program
                 $"쳐다봄 {rs.Stats.Stares} · 말 걸기 {rs.Stats.Talks} · 대답 {rs.Stats.Replies} · {string.Join(" / ", on.Select(n => n.Line).Concat(replies.Select(n => n.Line)).Where(l => l.Length > 0).Take(3))}");
         }
 
+        // ── 7b) 연기 · 흔들림 · 냄새 · 새 물건 · 우는 사람 — 사람마다 다른 행동 ──
+        {
+            var w = ReactDay(seed);
+            var rs = w.React;
+            var mess = w.Ship.LiveRooms.First(r => r.Type == RoomType.Mess);
+            var nb = w.Ambience.Neighbors(mess).Where(x => x.Item2 && !x.Item1.OffLimits && x.Item1.Air.Pressure > 70f).Select(x => x.Item1).OrderBy(r => r.Id).FirstOrDefault();
+            var six = Awake(w, 6, c => c.Id % 5);
+            Gather(w, six, mess);
+            Run(w, 20);
+            // 옆방에서 연기가 흘러든다 (그 방엔 아무도 없고 감지기도 꺼졌다 — 불은 아직 아무도 모른다)
+            Cell? fireCell = null;
+            if (nb != null)
+            {
+                nb.PowerCut = true;
+                fireCell = nb.Cells.Where(x => w.Ship.IsOpenFloor(x)).OrderBy(x => (x.Center - nb.Center).LengthSquared()).First();
+                w.Fire.Ignite(fireCell.Value, 0.25f);
+                for (int t = 0; t < SimTime.Minutes(30); t++) { nb.Air.Smoke = MathF.Max(nb.Air.Smoke, 0.45f); mess.Air.Smoke = MathF.Max(mess.Air.Smoke, 0.14f); w.Step(); }
+            }
+            var sm = rs.NotesOf(Stir.Smoke).Where(n => six.Any(c => c.Id == n.Crew)).ToList();
+            var smWays = sm.Select(n => n.Way.Length == 0 ? "stay" : n.Way).Distinct().ToList();
+            var smG = sm.Select(n => n.Gesture).Distinct().ToList();
+            Check("연기 — 옆방에서 흘러든 연기에 기침하고 입을 막는다 · 누구는 출처를 찾아가고 누구는 맑은 방으로 피한다", nb != null && sm.Count >= 3 && smWays.Count >= 2 && rs.Stats.SmokeSeek + rs.Stats.SmokeFled > 0,
+                $"{nb?.Name} · 반응 {sm.Count} · {string.Join(", ", smWays)} · 몸짓 {string.Join(",", smG)} · 찾아감 {rs.Stats.SmokeSeek}(불 {rs.Stats.SmokeFound}) · 피함 {rs.Stats.SmokeFled} · 말: {string.Join(" / ", sm.Select(n => n.Line).Where(l => l.Length > 0).Take(3))}");
+            Check("상호작용 — 연기를 쫓아간 사람이 감지기가 꺼진 방의 불을 먼저 본다", nb == null || rs.Stats.SmokeSeek == 0 || rs.Stats.SmokeFound > 0 && w.Fire.IsKnown(nb) || w.Fire.CountIn(nb) == 0,
+                $"찾아감 {rs.Stats.SmokeSeek} · 불 찾음 {rs.Stats.SmokeFound} · 알려짐 {(nb != null && w.Fire.IsKnown(nb))}");
+        }
+        {
+            var w = ReactDay(seed);
+            var rs = w.React;
+            var room = w.Ship.LiveRooms.First(r => r.Type == RoomType.Mess);
+            var six = Awake(w, 6, c => -c.Id);
+            Gather(w, six, room);
+            Run(w, 20);
+            for (int t = 0; t < SimTime.Minutes(15); t++) { room.Vibration = 0.85f; w.Step(); }
+            var sh = rs.NotesOf(Stir.Shake).Where(n => six.Any(c => c.Id == n.Crew)).ToList();
+            var shWays = sh.Select(n => n.Way.Length == 0 ? "?" : n.Way).Distinct().ToList();
+            Check("흔들림 — 몸을 버티고 · 겁 많은 사람은 웅크리고 · 대담한 사람은 으쓱하고 · 기계를 아는 사람은 떨림을 살피러 간다", sh.Count >= 3 && shWays.Count >= 2,
+                $"반응 {sh.Count} · {string.Join(", ", shWays)} · 몸짓 {string.Join(",", sh.Select(n => n.Gesture).Distinct())} · 말: {string.Join(" / ", sh.Select(n => n.Line).Where(l => l.Length > 0).Take(3))}");
+            // 냄새: 주방에서 빵 굽는 냄새 · 배고픈 사람은 따라간다
+            foreach (var c in six) c.Needs.Food = 0.35f;
+            for (int t = 0; t < SimTime.Minutes(20); t++) { w.Smells.Emit(room, SmellKind.Bread, 0.08f); w.Step(); }
+            var sn = rs.NotesOf(Stir.Smell).Where(n => six.Any(c => c.Id == n.Crew)).ToList();
+            Check("냄새 — 빵 냄새에 코를 킁킁대고 · 배고픈 사람은 냄새를 따라간다", sn.Count >= 2 && sn.Any(n => n.Gesture == Gesture.Sniff),
+                $"반응 {sn.Count} · {string.Join(", ", sn.Select(n => n.Way.Length == 0 ? "—" : n.Way).Distinct())} · 따라감 {rs.Stats.Nose} · 말: {string.Join(" / ", sn.Select(n => n.Line).Where(l => l.Length > 0).Take(3))}");
+            // 새 벽화: 다른 사람이 그린 그림이 걸렸다 → 구경 · 칭찬
+            var painter = w.Crew.First(c => !c.Dead && !six.Contains(c) && !c.IsChild);
+            var pic = w.Props.Place(Props.Get("landscape"), room, painter, "취미로 그림");
+            Run(w, SimTime.Minutes(40));
+            var nv = rs.NotesOf(Stir.Novel).ToList();
+            Check("새 그림 — 걸린 그림을 알아보고 들여다본다 (그린 사람 이야기)", pic != null && nv.Count >= 2 && nv.Any(n => n.Gesture == Gesture.Admire),
+                $"반응 {nv.Count} · 구경 {rs.Stats.Admired} · 말: {string.Join(" / ", nv.Select(n => n.Line).Where(l => l.Length > 0).Take(3))}");
+            // 우는 사람: 친한 사람은 곁으로 가고 · 아닌 사람은 모른 척해 준다
+            var sad = six[0];
+            foreach (var c in six.Skip(1).Take(2)) { c.ChangeAffinity(sad, 0.6f); }
+            for (int k = 0; k < 6; k++) { w.Brain2.Emotions.Feel(sad, Feeling.Sadness, 0.9f, "편지를 읽었다"); sad.Pose = Pose.Sitting; Run(w, SimTime.Minutes(8)); }
+            var cr = rs.NotesOf(Stir.Cry).Where(n => n.Crew != sad.Id).ToList();
+            Check("우는 사람 — 곁의 사람이 알아보고 위로하러 가거나 모른 척해 준다", cr.Count >= 1 && (rs.Stats.Comforts > 0 || cr.Any(n => n.Line.Length > 0)),
+                $"반응 {cr.Count} · 위로 {rs.Stats.Comforts} · 말: {string.Join(" / ", cr.Select(n => n.Line).Where(l => l.Length > 0).Take(2))}");
+        }
+
         // ── 8) 말이 지금을 담는다: 예보 · 회의 결정 · 최근 사고 — 같은 말 되풀이가 적다 ──
         {
             var w = ReactDay(seed);
@@ -288,6 +375,12 @@ public static partial class Program
             Run(w, SimTime.TicksPerDay * 2);
             Console.WriteLine($"  보통 이틀: {w.React.Stats.Summary()}");
             Check("보통 날에도 누군가 반응한다 (작은 반응이 하루에 여럿)", w.React.Stats.ByStir.Sum() >= 5, $"{w.React.Stats.ByStir.Sum()}");
+            TallyReact();
+            for (int i = 0; i < 16; i++) _reactKinds[i] += w.React.Stats.ByStir[i];
+            var kinds = Enum.GetValues<Stir>().Where(k => _reactKinds[(int)k] > 0).ToList();
+            var none = Enum.GetValues<Stir>().Where(k => _reactKinds[(int)k] == 0).ToList();
+            Check("반응 종류 — 더위 · 추위 · 어둠 · 바닥 · 유리 · 소리 · 냄새 · 연기 · 몸짓 · 진동 · 경보 · 방송 · 새 물건 · 울음 · 수다 · 돌아옴", kinds.Count >= 15,
+                $"{kinds.Count}/16 · " + string.Join(" ", kinds.Select(k => $"{k}{_reactKinds[(int)k]}")) + (none.Count > 0 ? $" · 없음: {string.Join(",", none)}" : ""));
         }
         {
             uint H() { var w = World.CreateDefault(seed, 0, "Hanbit"); Run(w, SimTime.TicksPerDay + SimTime.Hours(6)); return SaveGame.StateHash(w); }

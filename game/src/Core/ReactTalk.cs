@@ -45,7 +45,7 @@ public sealed partial class ReactSystem
         if (!c.IsAwake || c.Down || pool.Length == 0 && (wayLine == null || wayLine.Length == 0) || !R.Chance(Math.Clamp(talk, 0.25f, 1f)))
         {
             Stats.Silent++;
-            Notes.Add(new ReactNote(w.Tick, c.Id, k, s.Way ?? "", s.G, "", room?.Id ?? -1));
+            Notes.Add(new ReactNote(w.Tick, c.Id, k, s.Tmp ?? s.Way ?? "", s.G, "", room?.Id ?? -1));
             return;
         }
         var first = wayLine != null && wayLine.Length > 0 && (pool.Length == 0 || R.Chance(0.7f)) ? wayLine : pool;
@@ -61,7 +61,7 @@ public sealed partial class ReactSystem
         }
         if (!reply && TopicFor(c, s, k) is Topic tp && tp.Line(c) is string tl)
         {
-            line = $"{line} — {tl}";
+            line = line.EndsWith('?') || line.EndsWith('!') || line.EndsWith('…') ? $"{line} {tl}" : line.Contains(" — ") || tl.Contains(" — ") ? $"{line}. {tl}" : $"{line} — {tl}";
             Took(s, tp);
             Stats.Topical++;
         }
@@ -82,7 +82,7 @@ public sealed partial class ReactSystem
         c.Say(w, Persona.Say(c, line));
         Stats.Lines++;
         if (repeat) Stats.Repeats++;
-        Notes.Add(new ReactNote(w.Tick, c.Id, k, s.Way ?? "", s.G, line, room?.Id ?? -1));
+        Notes.Add(new ReactNote(w.Tick, c.Id, k, s.Tmp ?? s.Way ?? "", s.G, line, room?.Id ?? -1));
     }
 
     /// <summary>내가 최근에 하지 않았고, 이 방에서 방금 남이 하지 않은 말.</summary>
@@ -174,7 +174,23 @@ public sealed partial class ReactSystem
             {
                 var (kind, text) = bf.Lines[i];
                 if (kind == "날씨" || text.Length > 46) continue;
-                int mask = all | (kind == "정비" ? M(Stir.Sound, Stir.Shake) : kind == "주의" ? M(Stir.Alarm, Stir.Smoke, Stir.Dark) : 0);
+                // 아무 일 없다던 방송: 일이 터졌을 때만 꺼낸다 ("손볼 데 없다더니")
+                if (text.Contains("없음"))
+                {
+                    if (kind is not ("정비" or "주의")) continue;
+                    bool fix = kind == "정비";
+                    o.Add(new Topic($"brief:{bf.Day}:{i}", fix ? M(Stir.Sound, Stir.Shake) : M(Stir.Alarm, Stir.Smoke, Stir.Dark), bf.Tick,
+                        c => Mood(c) switch
+                        {
+                            3 => fix ? "아침엔 손볼 데 하나 없다더니, 이거 봐" : "아침엔 조심할 데 없다더니, 이거 봐",
+                            2 => fix ? "아침 방송은 손볼 데 없다던데 — 방송이 거짓말을 하네" : "아침 방송은 오늘 조용하댔는데",
+                            1 => fix ? "아침엔 정비할 데 없다고 했잖아…" : "아침엔 아무 일 없을 거라더니…",
+                            _ => fix ? "아침 방송엔 정비할 데가 없었는데" : "아침 방송엔 조심할 데가 없었는데",
+                        },
+                        (a, b) => Mood(a) == 0 ? "방송도 모르는 게 있지" : "그러게 말이야"));
+                    continue;
+                }
+                int mask = all | (kind == "정비" ? M(Stir.Sound, Stir.Shake) : kind == "주의" ? M(Stir.Alarm, Stir.Smoke) : 0);
                 string t = text;
                 o.Add(new Topic($"brief:{bf.Day}:{i}", mask, bf.Tick, c => Mood(c) == 3 ? $"아침 방송에서 그러던데 — {t}. 또 일이네" : $"아침 방송에서 그러던데 — {t}",
                     (a, b) => Mood(a) == 0 ? "그럼 오늘 안에 해 두자" : "나도 들었어"));
@@ -451,6 +467,33 @@ public sealed partial class ReactSystem
     };
 
     private string[] OpenLines(CrewMember c, Stir k, Room room) => Pool(c, k, false);
+
+    /// <summary>연기 · 흔들림 · 냄새에 이어지는 행동의 한마디 (말투마다).</summary>
+    private string[] ActLines(CrewMember c, string id) => (id, Mood(c)) switch
+    {
+        ("smoke_seek", 1) => new[] { "어디서 나는 거지… 가 봐야겠어", "연기가 저쪽에서 와 — 확인만 할게" },
+        ("smoke_seek", 2) => new[] { "누가 고기 굽나? 가 보자", "연기 따라가면 범인이 나오겠지" },
+        ("smoke_seek", 3) => new[] { "또 어디서 태워 먹었어 — 가 본다", "아무도 안 보면 내가 봐야지" },
+        ("smoke_seek", _) => new[] { "연기가 저쪽에서 들어와 — 보고 올게", "어디서 나는지 확인하자", "문 쪽에서 들어오네, 가 볼게" },
+        ("smoke_leave", 1) => new[] { "숨 막혀… 나가 있을래", "여기 있으면 안 될 것 같아" },
+        ("smoke_leave", 2) => new[] { "훈제되기 전에 나간다", "난 공기 좋은 데로 피신" },
+        ("smoke_leave", 3) => new[] { "이래서야 숨을 쉬겠어? 나간다", "환기 안 해? 난 나가 있을게" },
+        ("smoke_leave", _) => new[] { "옆방으로 나가 있자", "공기 맑은 데로 가자", "여기선 숨쉬기 힘들다" },
+        ("crouch", 2) => new[] { "어이쿠, 놀이기구도 아니고", "바닥이랑 친해지는 중" },
+        ("crouch", _) => new[] { "뭐야, 왜 흔들려…", "붙잡아! 뭐라도 붙잡아", "몸 낮춰" },
+        ("shrug", 2) => new[] { "오, 마사지 기능인가", "배가 기지개 켜나 봐" },
+        ("shrug", 3) => new[] { "또 흔들리네, 지겹다", "이 배는 하루도 조용할 날이 없어" },
+        ("shrug", _) => new[] { "이 정도야 뭐", "좀 흔들렸네", "별일 아니야" },
+        ("shake_check", 1) => new[] { "저 기계에서 나는 떨림 같은데… 봐야겠어", "베어링 아니야? 확인해 보자" },
+        ("shake_check", _) => new[] { "이건 기계 떨림이야 — 가 볼게", "어디서 떠는지 손 대 보면 알지", "축이 흔들리는 소리 같은데" },
+        ("follow_nose", 2) => new[] { "냄새가 날 부른다 — 간다", "코가 먼저 가네" },
+        ("follow_nose", 3) => new[] { "냄새만 풍기고 안 주면 반칙이지", "배고파 죽겠는데 — 가 봐야지" },
+        ("follow_nose", _) => new[] { "냄새 따라 가 볼까", "주방에 뭐 있나 보러 가야지", "한 입만 얻어먹자" },
+        ("burnt_check", _) => new[] { "탄내 — 주방 불 꺼졌나 봐야겠다", "뭐 올려놓고 나온 사람 없어? 가 볼게", "타는 냄새는 그냥 두면 안 돼" },
+        ("foul_leave", 3) => new[] { "이 냄새 맡으면서는 못 있어", "누가 치우기 전엔 안 들어온다" },
+        ("foul_leave", _) => new[] { "잠깐 나가 있을게", "숨 좀 쉬고 올게", "코가 아파서 못 있겠다" },
+        _ => Array.Empty<string>(),
+    };
 
     private string[] WayLines(CrewMember c, Stir k, string id, ReactAct? act) => id switch
     {
