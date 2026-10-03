@@ -542,6 +542,20 @@ public sealed partial class StorySystem
         }
     }
 
+    /// <summary>승무원 카드의 한 줄: 지금 이야기(상징 · 몇 단계) · 마음이 가는 사람.</summary>
+    public (string emblem, string text)? CardLine(CrewMember c)
+    {
+        var a = ArcOf(c) ?? Arcs.LastOrDefault(x => x.Who == c.Id && _w.Tick - x.EndedAt < SimTime.TicksPerDay);
+        var l = LoveOf(c);
+        string love = "";
+        if (l != null)
+            love = l.Stage == LoveStage.Crush ? (l.A == c.Id ? $"{Name(l.B)}에게 마음이 간다" : "")
+                : l.Secret && !l.Public ? $"{Ko.WaGwa(Name(l.Other(c.Id)))} 몰래 만나는 사이" : $"{Ko.WaGwa(Name(l.Other(c.Id)))} {LoveName(l.Stage)}";
+        if (a == null) return love == "" ? null : ("", love);
+        string state = a.Active ? $"{a.Step + 1}/{a.Stages}" : StoryTable.EndName(a.End);
+        return (a.Spec.Emblem, $"{a.Title} — {state}" + (love != "" ? $" · {love}" : ""));
+    }
+
     // ───────────────────────────── 지문 ─────────────────────────────
 
     public void Hash(Action<long> I, Action<float> F)
