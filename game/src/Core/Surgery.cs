@@ -644,6 +644,23 @@ public sealed class SurgerySystem
 
     // ───────────── 결과 ─────────────
 
+    /// <summary>수술실 사정 (다른 수술 — 이식 · 장기 — 도 같은 몫을 받는다): 집도의의 죄책감 · 자신감 · 수술대 · 무영등 · 멸균.</summary>
+    public float RoomFactor(CrewMember s, Room? r)
+    {
+        float q = -0.18f * Guilt.GetValueOrDefault(s.Id) + 0.06f * Confidence.GetValueOrDefault(s.Id);
+        if (r == null) return q - 0.1f;
+        bool table = false, lamp = false, sterile = false;
+        foreach (var f in r.Furniture)
+        {
+            bool on = f.Machine is Machine m && m.Powered && m.Efficiency > 0.3f;
+            if (f.Type == FurnitureType.OperatingTable && on) table = true;
+            else if (f.Type == FurnitureType.SurgicalLamp && on) lamp = true;
+            else if (f.Type == FurnitureType.Autoclave && on) sterile = true;
+        }
+        q += (table ? 0.05f : -0.04f) + (lamp ? 0.03f : r.Powered ? 0f : -0.12f) + (sterile ? 0.03f : 0f);
+        return q;
+    }
+
     /// <summary>성공할 가망 (지금 사정으로).</summary>
     public float Odds(SurgeryCase k, CrewMember s)
     {

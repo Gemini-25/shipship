@@ -36,7 +36,7 @@ public sealed class PharmacySystem
 
     public PharmacySystem(World w) => _w = w;
 
-    public static bool Bacterial(string id) => id is "pneumonia" or "woundinf" or "pinkeye" or "foodpoison";
+    public static bool Bacterial(string id) => id is "pneumonia" or "woundinf" or "pinkeye" or "foodpoison" or "sepsis"; // 의료 2차 패혈증도 항생제로
     public static bool Viral(string id) => id is "cold" or "fever" or "gastro";
     public static bool Painful(string id) => id is "toothache" or "backpain" or "arthritis" or "kidneystone" or "chemburn" or "stiffhand" or "limp";
 

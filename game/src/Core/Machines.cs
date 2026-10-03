@@ -292,7 +292,6 @@ public static class MachineSpecs
         new MachineSpec(FurnitureType.SurgicalLamp, 0.4f, 7, 50f, Skill.Electrical, null, 0.3f, false, new[] { FaultKind.LightFailure, FaultKind.WiringFault }),
         new MachineSpec(FurnitureType.AnesthesiaMachine, 0.3f, 8, 45f, Skill.Mechanics, ItemKind.Filter, 0.4f, false, new[] { FaultKind.SensorDrift, FaultKind.Jam }),
         new MachineSpec(FurnitureType.BloodFridge, 0.3f, 8, 40f, Skill.Electrical, null, 0.4f, false, new[] { FaultKind.CompressorFail, FaultKind.ThermostatFault }),
-    }.Concat(ModulesV15.Machines).Concat(ModulesV18.Machines).Select(FaultsV15.Extend).ToDictionary(s => s.Type); // v15 새 모듈 34 · 설비마다 새 고장을 덧붙인다
     }.Concat(ModulesV15.Machines).Concat(ModulesV18.Machines).Concat(OrganGear.Machines).Select(FaultsV15.Extend).ToDictionary(s => s.Type); // v15 새 모듈 34 · 설비마다 새 고장을 덧붙인다
 
     public static MachineSpec? For(FurnitureType t) => Table.TryGetValue(t, out var s) ? s : null;

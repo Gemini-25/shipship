@@ -454,7 +454,6 @@ public static class FurnitureTypes
         // 의료 1차
         FurnitureType.OperatingTable => "수술대", FurnitureType.SurgicalLamp => "무영등", FurnitureType.AnesthesiaMachine => "마취기",
         FurnitureType.BloodFridge => "혈액 냉장고", FurnitureType.MedCabinet => "약장",
-        _ => ModulesV15.Name(t) ?? ModulesV18.Name(t) ?? t.ToString(), // v15 · 압축-마
         _ => ModulesV15.Name(t) ?? ModulesV18.Name(t) ?? OrganGear.Name(t) ?? t.ToString(), // v15 · 압축-마 · 의료 2차
     };
 

@@ -151,6 +151,7 @@ public sealed class TransplantSystem
         p -= 0.1f * patient.Vitals.Frailty;
         if (w.Eras.Has("regenmed")) p += 0.05f;
         if (surgeon.Needs.Rest < 0.2f) p -= 0.1f;
+        p += w.Surgery.RoomFactor(surgeon, bed?.Room ?? patient.Room); // 의료 1차 수술실 사정 (집도의 마음 · 수술대 · 무영등 · 멸균)
         return Math.Clamp(p, 0.05f, 0.95f);
     }
 
@@ -757,9 +758,9 @@ public sealed class SurgeryWaitActivity : Activity
 }
 
 /// <summary>의무관: 이식 · 인공 심장 · 산 사람에게서 떼기 — 치료 침대에 누운 사람을 수술한다.</summary>
-public sealed class SurgeryActivity : Activity
+public sealed class TransplantOpActivity : Activity
 {
-    public override string Id => "surgery";
+    public override string Id => "transplantop";
     public override string Label => "수술";
 
     private static (OpCase? op, CrewMember? pt) Pick(CrewMember c, World w)

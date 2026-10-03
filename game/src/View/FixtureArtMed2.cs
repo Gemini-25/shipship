@@ -22,8 +22,8 @@ public static partial class FixtureArt
         t[FurnitureType.NegPressure] = new(NegBody, NegLife, NegFine, Look.Grind, 0.5f, 0.5f);
     }
 
-    private static readonly Color MBody = new("#e9eef2"), MTrim = new("#9fb3c4"), MBlood = new("#c0262e"), MVein = new("#6e1018"), MDialysate = new("#e8d78a");
-    private static readonly Color MO2 = new("#2f9a58"), MScreen = new("#0c1a20"), MWave = new("#6ef0b0"), MFrost = new("#d8f0ff"), MInkA = new("#e86a9a"), MInkB = new("#f2c94c");
+    private static readonly Color MBody = new("#e9eef2"), MTrim = new("#9fb3c4"), M2Blood = new("#c0262e"), MVein = new("#6e1018"), MDialysate = new("#e8d78a");
+    private static readonly Color M2O2 = new("#2f9a58"), MScreen = new("#0c1a20"), MWave = new("#6ef0b0"), MFrost = new("#d8f0ff"), MInkA = new("#e86a9a"), MInkB = new("#f2c94c");
     private static readonly Color MTissue = new("#c8576a"), MHepa = new("#d9d2c0"), MNegRed = new("#ff4d5a"), MNegBlue = new("#5fb0ff");
 
     private static bool On2(in Fix x) => x.M != null && x.M.Powered && x.M.Faults.Count == 0;
@@ -62,7 +62,7 @@ public static partial class FixtureArt
         Line(ci, x.P(0.2f, 0.04f), x.P(0.8f, 0.04f), Chrome, x.Px(1f)); // 주머니 거는 대
         Box(ci, x.Q(0.24f, 0.0f, 0.4f, 0.12f), MDialysate.WithAlpha(0.8f), 1.5f, Chrome); // 투석액 주머니
         if (x.Tier >= 2) Box(ci, x.Q(0.6f, 0.0f, 0.76f, 0.12f), MDialysate.WithAlpha(0.6f), 1.5f, Chrome); // II: 둘째 주머니
-        Pipe(ci, x.P(0.32f, 0.62f), x.P(0.86f, 0.7f), x.Px(1.2f), MBlood, false);
+        Pipe(ci, x.P(0.32f, 0.62f), x.P(0.86f, 0.7f), x.Px(1.2f), M2Blood, false);
         Pipe(ci, x.P(0.68f, 0.62f), x.P(0.86f, 0.48f), x.Px(1.2f), MVein, false);
         foreach (float u in new[] { 0.16f, 0.84f }) Dot(ci, x.P(u, 0.97f), x.Px(1.4f), Rubber); // 바퀴
         if (x.Tier >= 3) Box(ci, x.Q(0.12f, 0.78f, 0.4f, 0.9f), new Color("#2a5a8a"), 1f); // III: 물 정화 칸
@@ -101,7 +101,7 @@ public static partial class FixtureArt
             float u = Mathf.Clamp(1f - (x.W.Organs.Peek(pt)?.Uremia ?? 0f), 0f, 1f);
             ci.DrawRect(new Rect2(x.P(0.18f, 0.39f), new Vector2(x.Lu * 0.64f * u, x.Px(1.2f))), MWave.WithAlpha(0.7f));
         }
-        Tubes(x, x.P(0.86f, 0.6f), MBlood, MVein, run ? 1f : 0f);
+        Tubes(x, x.P(0.86f, 0.6f), M2Blood, MVein, run ? 1f : 0f);
     }
 
     private static void DialFine(in Fix x)
@@ -125,8 +125,8 @@ public static partial class FixtureArt
         Ring(ci, x.P(0.62f, 0.5f), x.Px(4.5f), Steel4, x.Px(0.5f));
         Dot(ci, x.P(0.3f, 0.72f), x.Px(3.6f), Steel1); // 원심 펌프 머리
         Ring(ci, x.P(0.3f, 0.72f), x.Px(3.6f), Chrome, x.Px(0.8f));
-        Can(ci, x.P(0.9f, 0.15f), x.Px(2.6f), MO2, Chrome); // 산소 병
-        Pipe(ci, x.P(0.9f, 0.18f), x.P(0.68f, 0.4f), x.Px(0.9f), MO2.Lightened(0.3f), false);
+        Can(ci, x.P(0.9f, 0.15f), x.Px(2.6f), M2O2, Chrome); // 산소 병
+        Pipe(ci, x.P(0.9f, 0.18f), x.P(0.68f, 0.4f), x.Px(0.9f), M2O2.Lightened(0.3f), false);
         Line(ci, x.P(0.97f, 0.62f), x.P(0.97f, 0.82f), Chrome, x.Px(1.4f)); // 손 펌프 축
         foreach (float u in new[] { 0.1f, 0.9f }) Dot(ci, x.P(u, 0.95f), x.Px(1.5f), Rubber);
         if (x.Tier >= 2) Box(ci, x.Q(0.42f, 0.78f, 0.6f, 0.88f), new Color("#a83a2a"), 1f); // II: 피 데우는 칸
@@ -146,10 +146,10 @@ public static partial class FixtureArt
             for (int k = 0; k < 6; k++)
             {
                 float r = x.Px(1f + k * 0.9f);
-                Ring(ci, c0, r, MVein.Lerp(MBlood.Lightened(0.15f), k / 5f).WithAlpha(0.7f), x.Px(0.8f));
+                Ring(ci, c0, r, MVein.Lerp(M2Blood.Lightened(0.15f), k / 5f).WithAlpha(0.7f), x.Px(0.8f));
             }
             float sweep = Mathf.PosMod(x.T * 1.5f, Mathf.Tau);
-            ci.DrawArc(c0, x.Px(5.5f), sweep, sweep + 1.2f, 10, MBlood.Lightened(0.3f).WithAlpha(0.6f), x.Px(1f), true);
+            ci.DrawArc(c0, x.Px(5.5f), sweep, sweep + 1.2f, 10, M2Blood.Lightened(0.3f).WithAlpha(0.6f), x.Px(1f), true);
         }
         Fan(ci, x.P(0.3f, 0.72f), x.Px(2.8f), 3, run ? x.T * (crank && !On2(x) ? 4f : 14f) : 0.3f, run ? Chrome : Steel4, x.Px(0.8f)); // 원심 펌프
         // 손 펌프 손잡이
@@ -168,13 +168,13 @@ public static partial class FixtureArt
         }
         if (OnCell(x)) Led(ci, x.P(0.1f, 0.55f), Amber, 0.5f + 0.5f * Pulse(x.T, 6f), x.Px(1.4f));
         else if (pt != null && !run) Led(ci, x.P(0.1f, 0.55f), Danger, Pulse(x.T, 9f) > 0.5f ? 1f : 0.1f, x.Px(1.6f)); // 멎었다
-        Tubes(x, c0, MBlood.Lightened(0.15f), MVein, run ? (crank && !On2(x) ? 0.5f : 1f) : 0f);
+        Tubes(x, c0, M2Blood.Lightened(0.15f), MVein, run ? (crank && !On2(x) ? 0.5f : 1f) : 0f);
     }
 
     private static void EcmoFine(in Fix x)
     {
         var ci = x.Ci;
-        Tag(ci, x.P(0.9f, 0.32f), "O₂", 3, MO2.Lightened(0.4f));
+        Tag(ci, x.P(0.9f, 0.32f), "O₂", 3, M2O2.Lightened(0.4f));
         Bolts(ci, x.Q(0.05f, 0.2f, 0.95f, 0.9f), 1.2f, 0.35f);
         for (int k = 0; k < 3; k++) Line(ci, x.P(0.55f + k * 0.07f, 0.66f), x.P(0.55f + k * 0.07f, 0.7f), Chrome.WithAlpha(0.6f), x.Px(0.4f)); // 집게
     }
@@ -208,7 +208,7 @@ public static partial class FixtureArt
         }
         // 맥박 등: 펌프가 도는 사람이 곁에 있으면 그 박자로
         float beat = Mathf.PosMod(x.T * 1.6f, 1f);
-        Led(ci, x.P(0.5f, 0.08f), MBlood.Lightened(0.3f), x.On ? (beat < 0.12f || beat > 0.3f && beat < 0.4f ? 1f : 0.2f) * x.Glow : 0.05f, x.Px(1.3f));
+        Led(ci, x.P(0.5f, 0.08f), M2Blood.Lightened(0.3f), x.On ? (beat < 0.12f || beat > 0.3f && beat < 0.4f ? 1f : 0.2f) * x.Glow : 0.05f, x.Px(1.3f));
         if (charging && u != null) Cable(ci, x.P(0.71f, 0.86f), ShipView.ToPx(u.Position), x.Px(5f), new Color("#d8dde4"), x.Px(0.9f));
     }
 

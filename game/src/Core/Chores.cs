@@ -253,6 +253,7 @@ public sealed class ChoresActivity : Activity
 
     public override (float, string) Score(CrewMember c, World w, DistanceField dist)
     {
+        if (w.Organs.Peek(c)?.Hooked == true) return (0f, "기계에 몸을 맡기고 있다"); // 투석 · 인공 폐 · 인공 심장에 달린 사람은 비상 일에도 일어나지 않는다
         var (o, s, _) = Best(c, w, dist);
         if (o == null) return (0f, "할 작업 없음");
         return (MathF.Max(0f, s), $"{o.Title} ({o.Detail})");
