@@ -70,7 +70,7 @@ public sealed partial class InfoSystem
         return Math.Clamp(b, 0.2f, 0.9f);
     }
 
-    private void CredAdd(CrewMember c, float d) { _cred[c.Id] = Math.Clamp(Cred(c) + d, 0.05f, 0.95f); if (d < 0f) Stats.CredDrops++; }
+    public void CredAdd(CrewMember c, float d) { _cred[c.Id] = Math.Clamp(Cred(c) + d, 0.05f, 0.95f); if (d < 0f) Stats.CredDrops++; }
 
     // ───────────────────────────── 식탁의 컵 ─────────────────────────────
 

@@ -244,6 +244,7 @@ public sealed class LifeSystem
     {
         var w = _w;
         if (c.Dead || o.Kind is WorkKind.Train or WorkKind.Rehab or WorkKind.Handover) return;
+        w.Inquiry.Worked(c, o); // v18.7 블랙박스 단말 기록 · 드물게 숨은 실수
         var (p, why) = MistakeOdds(c, o);
         if (!w.Rng.Chance(p)) return;
         Stats.Mistakes++;

@@ -207,6 +207,7 @@ public sealed partial class MotionSystem
         lines.Add(new SittingLine(chair.Id, Persona.Say(chair, prop != null ? $"{Ko.IGa(prop.Name)} 서명 {m.Signers.Count}장을 모아 올린 안건이다 — {m.Title}" : m.Title), true, LineRole.Chair));
         if (m.Kind == MotionKind.Accusation) apply = Trial(m, voters, attendees, chair, item, lines);
         else if (m.Kind == MotionKind.Confidence) apply = Election(m, voters, chair, item, lines);
+        else if (w.Inquiry.Hear(m, voters, attendees, chair, item, lines) is { } heard) apply = heard; // v18.7 사고 조사: 블랙박스 · 증언 · 흔적
         else apply = Vote(m, voters, chair, item, lines);
         m.Stage = MotionStage.Decided;
         m.Decided = w.Tick;

@@ -730,6 +730,7 @@ public partial class ShipView : Node2D
         PaintRobots(ci); // v10.10 선내 로봇 (사람 밑에)
         PaintFleetLinks(ci); // v16.20b 견인 줄 · 같이 드는 들것 · 고치는 불꽃 · 명령선 · 잔해
         PaintCouncilFloor(ci); // v18.18 둘러앉는 방석 · 의장 탁자 · 재판석 · 투표함 · 잔치 깃발
+        PaintBlackbox(ci); // v18.7 블랙박스 상자 · 숨은 실수의 흔적 · 조사 자리의 기록 띠 · 숨긴 사람의 몸짓
         // 쓰러진 사람은 밑에, 업힌 사람은 업은 사람 위에
         foreach (var c in _world.Crew.OrderBy(c => c.CarriedBy != null ? 2 : c.Down ? 0 : 1)) PaintCrew(ci, c);
         PaintCommandBadges(ci); // v13.1 선장 별 · 지휘자 테 · 조 배지
