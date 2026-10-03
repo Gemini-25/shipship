@@ -105,7 +105,7 @@ public sealed class OrganSystem
     public static bool Off;
     public static bool NoGuard; // 시험: 주컴퓨터가 회로를 지키지 않으면
     private long _next, _last = -1;
-    private bool _seeded;
+    private bool _seeded, _short;
 
     public OrganSystem(World w) => _w = w;
 
@@ -203,12 +203,22 @@ public sealed class OrganSystem
     {
         _seeded = true;
         var w = _w;
-        var shelf = w.Ship.Furniture.Where(f => f.Type == FurnitureType.Shelf && f.Storage != null && !f.Room.Detached)
-            .OrderBy(f => f.Room.Type == RoomType.Medbay ? 0 : f.Room.Type == RoomType.Storage ? 1 : 2).ThenBy(f => f.Id).FirstOrDefault();
-        if (shelf == null) return;
-        shelf.Storage!.Add(ItemKind.Immunosuppressant, 6);
-        shelf.Storage.Add(ItemKind.Dialysate, 6);
-        if (w.Ship.Rooms.Any(r => r.Type == RoomType.Lab && !r.Detached)) shelf.Storage.Add(ItemKind.BioInk, 2);
+        Stock(w, ItemKind.Immunosuppressant, 6);
+        Stock(w, ItemKind.Dialysate, 6);
+        if (w.Ship.Rooms.Any(r => r.Type == RoomType.Lab && !r.Detached)) Stock(w, ItemKind.BioInk, 2);
+    }
+
+    /// <summary>선반에 넣는다 (의무실 → 창고 → 그 밖 · 자리가 남는 곳부터).</summary>
+    public static int Stock(World w, ItemKind k, int n)
+    {
+        int put = 0;
+        foreach (var f in w.Ship.Furniture.Where(f => f.Type == FurnitureType.Shelf && f.Storage != null && !f.Room.Detached)
+                     .OrderBy(f => f.Room.Type == RoomType.Medbay ? 0 : f.Room.Type == RoomType.Storage ? 1 : 2).ThenBy(f => f.Id))
+        {
+            if (put >= n) break;
+            put += f.Storage!.Add(k, n - put);
+        }
+        return put;
     }
 
     private void Causes(CrewMember c, float h)
@@ -399,12 +409,15 @@ public sealed class OrganSystem
         foreach (var b in _b.Values)
             if (b.Hooked && Machine(b) is Furniture f && f.Room.DataLinked) _guard.Add(f.Id);
         foreach (var id in w.Transplant.Guarded()) _guard.Add(id);
-        if (_guard.Count > before && w.Power.Brownout || _guard.Count > before && w.Power.DeficitSince >= 0)
+        bool short_ = w.Power.Brownout || w.Power.DeficitSince >= 0 || w.Failsafe.ShedNow > 0 || !w.Power.ReactorOnline;
+        if (short_ && _guard.Count > 0 && (!_short || _guard.Count > before))
         {
             Stats.Guards++;
             var f = w.Ship.Furniture[_guard.Max];
             a.Reason($"organguard:{f.Id}", $"전기가 모자라다 — {f.Room.Name} {f.Name}에 사람이 달려 있다 · 그 회로는 끝까지 지키고 다른 것부터 내린다", SimTime.Hours(2));
+            if (Tell(f.Id * 8 + 4, SimTime.Hours(2))) a.Speak.Announce(a.Voice.Style($"전기가 모자라다 — {f.Room.Name} {f.Name} 회로는 끝까지 지킨다 · 다른 것부터 내린다"), f.Room, 2);
         }
+        _short = short_ && _guard.Count > 0;
     }
 
     public void Hook(CrewMember c, Furniture f, CrewMember? by)
@@ -732,7 +745,7 @@ public sealed class PumpChargeActivity : Activity
 
     public override (float, string) Score(CrewMember c, World w, DistanceField dist)
     {
-        if (!c.CanAct || c.Outside || w.Organs.Peek(c) is not { Pump: true } b || b.PumpCharge > 0.35f) return (0f, "—");
+        if (!c.CanAct || c.Outside || w.Organs.Peek(c) is not { Pump: true } b || b.PumpCharge > (c.Job?.Activity is PumpChargeActivity ? 0.97f : 0.35f)) return (0f, "—");
         if (Dock(w, dist) == null) return (0f, "충전대가 멎었다");
         return (b.PumpCharge < 0.15f ? 1.1f : 0.8f, $"심장 전지 {b.PumpCharge * 100:0}% — 충전대로");
     }

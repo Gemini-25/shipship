@@ -52,6 +52,8 @@ public static partial class Program
             OgReject(seed);
             OgSepsis(seed);
             OgIsolate(seed);
+            OgLiving(seed);
+            OgPumpPrint(seed);
             uint H() { var w = World.CreateDefault(seed, 0, "Hanbit"); Run(w, SimTime.TicksPerDay + SimTime.Hours(6)); return SaveGame.StateHash(w); }
             uint h1 = H(), h2 = H();
             Check("결정론 — 같은 시드 하루 반 지문이 같다", h1 == h2, $"{h1:x8} / {h2:x8}");
@@ -271,6 +273,87 @@ public static partial class Program
         Check("댐퍼 — 앓는 사람이 떠나면 (또는 숨이 차면) 컴퓨터가 다시 연다 · 음압 격리실은 닫지 않는다",
             !went || w.Infection.Stats.Reopened > 0 && ward.VentOpen && Infection_Negative(ward),
             $"다시 엶 {w.Infection.Stats.Reopened} · {ward.Name} 환기 {ward.VentOpen} · 음압 {Infection_Negative(ward)} · {w.Infection.Stats.Line()}");
+    }
+
+    // 8) 산 사람의 기증 — 가까운 사람이 신장 하나를 내놓는다 (희생 · 관계 · 기억)
+    private static void OgLiving(int seed)
+    {
+        var w = DayOne(seed, "Hanbit");
+        var crew = OgCrew(w);
+        var medic = crew.FirstOrDefault(OrganCareActivity.Medic) ?? crew[0];
+        medic.SkillLevels[(int)Skill.Medicine] = 1f;
+        var rc = crew.Last(c => c != medic);
+        var t = w.Transplant;
+        var giver = crew.Where(c => c != medic && c != rc).OrderByDescending(c => TransplantSystem.MatchOf(t.Tissue(c), t.Tissue(rc))).ThenBy(c => c.Id).First();
+        giver.ChangeAffinity(rc, 0.9f);
+        w.Values.Of(giver).V[(int)Axis.Mercy] = 0.8f;
+        w.Organs.Hurt(rc, Organ.Kidney, 0.9f, "결석");
+        Run(w, SimTime.Minutes(20));
+        foreach (var a in rc.Ailments) a.Diagnosed = true;
+        bool offered = OgRunUntil(w, SimTime.Hours(2), () => t.Stats.Offers > 0);
+        Check("산 사람의 기증 — 조직이 맞고 가까운 사람이 스스로 나선다 (기록 · 연대기)", offered && w.History.Events.Any(h => h.Text.Contains(giver.Name) && h.Text.Contains("주겠다고")),
+            $"{giver.Name} → {rc.Name} · 조직 {TransplantSystem.MatchOf(t.Tissue(giver), t.Tissue(rc)) * 6:0}/6 · 나섬 {t.Stats.Offers} · {t.Stats.Line()}");
+        bool done = OgRunUntil(w, SimTime.Hours(48), () => t.Stats.Living > 0 && (t.Stats.Success > 0 || t.Stats.Failed > 0));
+        var gb = w.Organs.Peek(giver);
+        Check("산 사람의 기증 — 떼어 준 사람은 신장이 하나 · 받은 사람과 깊이 이어진다 · 기억에 남는다",
+            done && gb is { OneKidney: true } && giver.Memory.Marks.Any(m => m.Text.Contains("신장 하나")) && (t.Stats.Success == 0 || rc.AffinityTo(giver) > 0.2f),
+            $"떼기 {t.Stats.Living} · 이식 성공 {t.Stats.Success} 실패 {t.Stats.Failed} · {giver.Name} 신장 하나 {gb?.OneKidney} · {rc.Name}→{giver.Name} {rc.AffinityTo(giver):0.00}");
+    }
+
+    // 9) 인공 심장 (충전) · 손 펌프 (인공 폐 전원이 끊겼다) · 배양 장기 (바이오 프린터)
+    private static void OgPumpPrint(int seed)
+    {
+        var w = DayOne(seed, "Hanbit");
+        var crew = OgCrew(w);
+        var bed = w.Ship.FurnitureOf(FurnitureType.MedBed).OrderBy(f => f.Id).First();
+        var dock = OgPut(w, FurnitureType.HeartPump, bed) ?? OgPutRoom(w, FurnitureType.HeartPump, bed.Room);
+        var medic = crew.FirstOrDefault(OrganCareActivity.Medic) ?? crew[0];
+        medic.SkillLevels[(int)Skill.Medicine] = 1f;
+        var h = crew.First(c => c != medic);
+        w.Organs.Hurt(h, Organ.Heart, 0.88f, "멎었던 심장");
+        Run(w, SimTime.Minutes(20));
+        foreach (var a in h.Ailments) a.Diagnosed = true;
+        long t0 = w.Tick;
+        bool pump = OgRunUntil(w, SimTime.Hours(30), () =>
+        {
+            return w.Organs.Peek(h)?.Pump == true || w.Transplant.Stats.Failed > 0;
+        });
+        var hb = w.Organs.Of(h);
+        Check("인공 심장 — 심장이 버티지 못하면 의무관이 가슴에 펌프를 단다", pump, $"펌프 {hb.Pump} · 수술 {w.Transplant.Stats.Ops} 실패 {w.Transplant.Stats.Failed} · 심장 {hb.Dmg[1] * 100:0}%");
+        if (hb.Pump)
+        {
+            hb.PumpCharge = 0.3f;
+            bool charged = OgRunUntil(w, SimTime.Hours(4), () => hb.PumpCharge >= 0.95f);
+            Check("인공 심장 — 전지가 줄면 스스로 충전대에 앉아 채운다", charged, $"전지 {hb.PumpCharge * 100:0}% · {h.Name} {h.Job?.Label} · 충전대 {dock?.Name}");
+        }
+        // 손 펌프: 인공 폐에 매달린 사람 · 기계 전선이 끊겼다
+        var w2 = DayOne(seed, "Hanbit");
+        var bed2 = w2.Ship.FurnitureOf(FurnitureType.MedBed).OrderBy(f => f.Id).First();
+        var ecmo = OgPut(w2, FurnitureType.Ecmo, bed2)!;
+        var p = OgCrew(w2).First(c => !OrganCareActivity.Medic(c));
+        NeedsSystem.AddInjury(p.Vitals, 0.9f, "유독 가스");
+        OgRunUntil(w2, SimTime.Hours(14), () => w2.Organs.Peek(p)?.Hooked == true);
+        ecmo.Machine!.Feed = 0f;
+        bool crank = OgRunUntil(w2, SimTime.Hours(3), () => w2.Organs.Stats.Cranked > 0);
+        Check("손 펌프 — 인공 폐 전선이 끊기면 내장 전지로 돌고 · 바닥나면 곁의 사람이 손으로 돌린다 · 주컴퓨터가 알린다",
+            w2.Organs.Peek(p)?.Hooked == true && w2.Organs.Stats.PowerLost > 0 && crank && w2.Log.Entries.Any(e => e.Text.Contains("인공 폐") && e.Text.Contains("전원이 끊겼다")),
+            $"연결 {w2.Organs.Peek(p)?.Hooked} · 끊김 {w2.Organs.Stats.PowerLost} · 손 펌프 {w2.Organs.Stats.Cranked} · 산소 {p.Vitals.Oxygen:0.00}");
+        // 배양 장기: 기술 · 세포 잉크 · 양액 → 받을 사람의 세포로
+        var w3 = DayOne(seed, "Hanbit");
+        w3.Eras.Known.Add("regenmed");
+        var c3 = OgCrew(w3);
+        var lab = w3.Ship.Rooms.FirstOrDefault(r => r.Type == RoomType.Lab && !r.Detached) ?? w3.Ship.FurnitureOf(FurnitureType.MedBed).First().Room;
+        var printer = OgPutRoom(w3, FurnitureType.BioPrinter, lab);
+        OrganSystem.Stock(w3, ItemKind.BioInk, 2); OrganSystem.Stock(w3, ItemKind.Nutrient, 2);
+        c3[0].SkillLevels[(int)Skill.Botany] = 0.8f;
+        var lv = c3[^1];
+        w3.Organs.Hurt(lv, Organ.Liver, 0.85f, "약을 너무 많이 썼다");
+        bool started = OgRunUntil(w3, SimTime.Hours(6), () => w3.Transplant.Prints.Count > 0);
+        bool printed = OgRunUntil(w3, SimTime.Hours(48), () => w3.Transplant.Stats.Printed > 0, SimTime.Hours(1));
+        var pg = w3.Transplant.Grafts.FirstOrDefault(g => g.Printed);
+        Check("배양 장기 — 재생 의학을 알고 잉크가 있으면 받을 사람의 세포로 장기를 찍고 · 몸이 밀어내지 않는다 (조직 6/6)",
+            printer != null && started && printed && pg != null && pg.For == lv.Id && w3.Transplant.Match(pg, lv) >= 1f,
+            $"프린터 {printer?.Room.Name} · 시작 {started} · 다 찍음 {printed} · 받을 사람 {pg?.For} ({lv.Id}) · {w3.Transplant.Stats.Line()}");
     }
 
     private static bool Infection_Negative(Room r) => InfectionSystem.Negative(r);

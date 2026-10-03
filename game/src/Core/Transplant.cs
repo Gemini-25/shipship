@@ -700,7 +700,7 @@ public sealed class HarvestActivity : Activity
     {
         if (!c.CanAct || c.Outside || c.IsChild || c.Pose == Pose.Sleeping || !OrganCareActivity.Medic(c) || Body(c, w) is not CrewMember dead) return (0f, "—");
         if (dead.Room is Room r && Atmosphere.Danger(r) > 0.3f) return (0f, "들어갈 수 없는 방");
-        return (1.0f, $"{dead.Name}의 장기 — 시간이 없다");
+        return (1.15f, $"{dead.Name}의 장기 — 시간이 없다");
     }
 
     public override Job? Plan(CrewMember c, World w, DistanceField dist)
@@ -734,8 +734,9 @@ public sealed class SurgeryWaitActivity : Activity
 
     public override (float, string) Score(CrewMember c, World w, DistanceField dist)
     {
-        if (!c.CanAct || c.Outside || Mine(c, w) is not OpCase op || w.Transplant.InPlace(c)) return (0f, "—");
-        return (op.Kind == OpKind.Take ? 0.9f : 1.0f, op.Kind == OpKind.Take ? "떼어 줄 수술 — 치료 침대로" : "수술 — 치료 침대로");
+        if (!c.CanAct || c.Outside || Mine(c, w) is not OpCase op) return (0f, "—");
+        if (w.Transplant.InPlace(c) && c.Job?.Activity is not SurgeryWaitActivity) return (0f, "이미 누웠다");
+        return (op.Kind == OpKind.Graft ? 1.1f : 0.98f, op.Kind == OpKind.Take ? "떼어 줄 수술 — 치료 침대로" : "수술 — 치료 침대로");
     }
 
     public override Job? Plan(CrewMember c, World w, DistanceField dist)
@@ -778,7 +779,7 @@ public sealed class SurgeryActivity : Activity
         if (!c.CanAct || c.Outside || c.IsChild || c.Pose == Pose.Sleeping || !OrganCareActivity.Medic(c)) return (0f, "—");
         var (op, pt) = Pick(c, w);
         if (op == null || pt == null) return (0f, "—");
-        return (0.98f, $"{pt.Name} 수술 — " + (op.Kind == OpKind.Pump ? "인공 심장" : op.Kind == OpKind.Take ? "떼어 낸다" : OrganSystem.Name(op.Organ) + " 이식"));
+        return (op.Kind == OpKind.Graft ? 1.2f : 1.1f, $"{pt.Name} 수술 — " + (op.Kind == OpKind.Pump ? "인공 심장" : op.Kind == OpKind.Take ? "떼어 낸다" : OrganSystem.Name(op.Organ) + " 이식"));
     }
 
     public override Job? Plan(CrewMember c, World w, DistanceField dist)
