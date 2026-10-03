@@ -16,7 +16,8 @@ public static partial class Program
             var newFaults = Enum.GetValues<FaultKind>().Where(k => k >= FaultKind.GasketLeak).ToList();
             var onMachine = newFaults.Where(k => Enum.GetValues<FurnitureType>().Any(t => MachineSpecs.For(t)?.FaultKinds.Contains(k) == true)).ToList();
             var noName = Enum.GetValues<ItemKind>().Where(k => ItemKinds.Name(k) == k.ToString()).ToList();
-            Check("목록 — 고장 70 · 물자 70 · 새 고장은 모두 어떤 설비에 붙고 이름이 있다", faults == 70 && items == 70 && onMachine.Count == newFaults.Count && noName.Count == 0,
+            // 의료 1 · 2차 물자 +8 (진통제 · 항생제 · 마취제 · 혈액 대용제 · 약초 · 면역억제제 · 투석액 · 세포 잉크)
+            Check("목록 — 고장 70 · 물자 78 · 새 고장은 모두 어떤 설비에 붙고 이름이 있다", faults == 70 && items == 78 && onMachine.Count == newFaults.Count && noName.Count == 0,
                 $"고장 {faults} · 물자 {items} · 설비에 붙은 새 고장 {onMachine.Count}/{newFaults.Count}" + (noName.Count > 0 ? $" · 이름 없음: {string.Join(",", noName)}" : ""));
 
             // 1) 새 고장을 하나씩 걸고 이틀 — 부품이 없으면 만들어서라도 고친다

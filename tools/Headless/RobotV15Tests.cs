@@ -25,8 +25,9 @@ public static partial class Program
                                && Enum.GetValues<DroneKind>().All(k => k <= DroneKind.Build || RobotsV15.Flyer(k) != null);
                 bool tuned = Tuning.Entries.Any(e => e.Key == "story.persona" && e.Max >= (int)StoryPersona.Vengeful)
                              && Enum.GetValues<StoryPersona>().All(p => p == StoryPersona.Off || Storyteller.PersonaName(p) != "끔");
-                Check("목록 — 로봇·드론 25 (새 17은 원형을 쓰고 특기가 모두 다르다) · 이야기꾼 8", robots + drones == 25 && RobotsV15.KindCount == 25
-                      && RobotsV15.Bots.Length + RobotsV15.Flyers.Length == 17 && named && covered && specs.Distinct().Count() == specs.Count && personas == 8 && tuned,
+                // 의료 3차: 들것 로봇 · 간호 로봇 +2 (25 → 27 · 새 17 → 19)
+                Check("목록 — 로봇·드론 27 (새 19는 원형을 쓰고 특기가 모두 다르다) · 이야기꾼 8", robots + drones == 27 && RobotsV15.KindCount == 27
+                      && RobotsV15.Bots.Length + RobotsV15.Flyers.Length == 19 && named && covered && specs.Distinct().Count() == specs.Count && personas == 8 && tuned,
                     $"로봇 {robots} · 드론 {drones} · 새 {RobotsV15.Bots.Length}+{RobotsV15.Flyers.Length} · 특기 겹침 {specs.Count - specs.Distinct().Count()} · 이야기꾼 {personas}" +
                     (named ? "" : " · 이름·원형 빠짐") + (covered ? "" : " · 표에 없는 종류") + (tuned ? "" : " · 설정 범위 모자람"));
             }

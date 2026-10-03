@@ -150,7 +150,8 @@ public sealed class SurgerySystem
         var room = w.Ship.Rooms.Where(r => !r.Detached && r.Type == RoomType.Medbay).OrderByDescending(r => r.Cells.Count).ThenBy(r => r.Id).FirstOrDefault();
         if (room == null) return;
         Cell? tableCell = room.Furniture.FirstOrDefault(f => f.Type == FurnitureType.OperatingTable)?.Cells[0];
-        var order = new[] { FurnitureType.OperatingTable, FurnitureType.SurgicalLamp, FurnitureType.AnesthesiaMachine, FurnitureType.Autoclave, FurnitureType.BloodFridge, FurnitureType.MedCabinet };
+        var order = new List<FurnitureType> { FurnitureType.OperatingTable, FurnitureType.SurgicalLamp, FurnitureType.AnesthesiaMachine, FurnitureType.Autoclave, FurnitureType.BloodFridge, FurnitureType.MedCabinet };
+        if (w.Crew.Count >= 20) order.Insert(3, FurnitureType.SurgicalArm); // 의료 3차 큰 배는 처음부터 수술 로봇 팔이 수술대 곁에
         foreach (var t in order)
         {
             if (room.Furniture.Any(f => f.Type == t)) continue;
@@ -159,7 +160,7 @@ public sealed class SurgerySystem
             Cell at;
             if (t == FurnitureType.OperatingTable)
                 at = cells.OrderByDescending(c => Cell.Dirs4.Count(d => w.Ship.IsOpenFloor(c + d) && w.Ship.RoomAt(c + d) == room)).ThenBy(c => c.Y).ThenBy(c => c.X).First();
-            else if (tableCell is Cell tc && t is FurnitureType.SurgicalLamp or FurnitureType.AnesthesiaMachine)
+            else if (tableCell is Cell tc && t is FurnitureType.SurgicalLamp or FurnitureType.AnesthesiaMachine or FurnitureType.SurgicalArm)
                 at = cells.Where(c => c != tc).OrderBy(c => Math.Max(Math.Abs(c.X - tc.X), Math.Abs(c.Y - tc.Y))).ThenBy(c => c.Y).ThenBy(c => c.X).First();
             else at = cells.OrderBy(c => c.Y).ThenBy(c => c.X).First();
             var f = w.Ship.AddFurniture(t, at);
