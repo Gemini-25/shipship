@@ -32,6 +32,7 @@ public static class Brain
         new PatrolActivity(), // v13.4 야간 당직
         new DutyActivity(),
         new MeetingActivity(), // v13.2 정기 회의
+        new CoverActivity(), // v18.7 흔적 치우기 · 기록 지우기 · 털어놓으러 가기
         new SchemeActivity(), // v18.14 꾸미는 일 (몰래 준비 · 귓속말 · 확인 · 모임 · 관행 · 일손 놓기)
         new SittingActivity(), new PetitionActivity(), new PenaltyDutyActivity(), new SneakFoodActivity(), new FeastActivity(), // v18.18 따로 연 회의 · 서명 받기 · 벌 근무 · 몰래 꺼내 먹기 · 잔치
         new VisitActivity(), // v12.7 문병

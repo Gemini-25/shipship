@@ -54,6 +54,7 @@ public sealed class IncidentStory
         };
 
         // ① 원인
+        if (w.Inquiry.FindingFor(inc.Root) is string found) s.Cause.Add(found); // v18.7 조사 결과 · 털어놓은 실수
         if (mc != null) s.Cause.Add(mc.Spec.Cause);
         s.Cause.Add(root.Text);
         if (root.Kind != CauseKind.Hazard || mc == null) s.Cause.Add($"갈래: {ScaleTable.CauseName(root.Kind)}");

@@ -18,6 +18,7 @@ public enum RelationReason
     FreeRide, ClearedMyName, // v17.3 공동 장부에 이름이 없다 · 오해를 풀어 줬다
     BackedMe, VotedAgainstMe, TestifiedAgainstMe, ForgaveMe, // v18.18 서명해 줬다 · 반대편에 섰다 · 나에게 불리한 증언 · 용서하자고 했다
     PrankedMe, LaughedTogether, KeptMySecret, ToldOnMe, OwesMe, // v18.14 나를 놀렸다 · 같이 웃었다 · 비밀을 지켜 줬다 · 일러바쳤다 · 빚을 안 갚는다
+    LiedToUs, FramedMe, OwnedUp, // v18.7 실수를 숨겼다 · 나에게 뒤집어씌웠다 · 먼저 털어놓았다
 }
 
 public sealed class RelationMemory
@@ -52,6 +53,7 @@ public sealed partial class RelationSystem
         RelationReason.FreeRide => -0.1f, RelationReason.ClearedMyName => 0.15f, // v17.3
         RelationReason.BackedMe => 0.08f, RelationReason.VotedAgainstMe => -0.08f, RelationReason.TestifiedAgainstMe => -0.2f, RelationReason.ForgaveMe => 0.2f, // v18.18
         RelationReason.PrankedMe => -0.12f, RelationReason.LaughedTogether => 0.12f, RelationReason.KeptMySecret => 0.18f, RelationReason.ToldOnMe => -0.22f, RelationReason.OwesMe => -0.15f, // v18.14
+        RelationReason.LiedToUs => -0.25f, RelationReason.FramedMe => -0.5f, RelationReason.OwnedUp => 0.12f, // v18.7
         _ => 0f,
     };
 
@@ -67,6 +69,7 @@ public sealed partial class RelationSystem
         RelationReason.FreeRide => "궂은일은 남에게 미룬다", RelationReason.ClearedMyName => "내 누명을 벗겨 줬다",
         RelationReason.BackedMe => "내 안건에 서명해 줬다", RelationReason.VotedAgainstMe => "회의에서 반대편에 섰다", RelationReason.TestifiedAgainstMe => "나에게 불리한 말을 했다", RelationReason.ForgaveMe => "나를 용서하자고 했다", // v18.18
         RelationReason.PrankedMe => "나를 놀림감으로 삼았다", RelationReason.LaughedTogether => "같이 웃었다", RelationReason.KeptMySecret => "내 비밀을 지켜 줬다", RelationReason.ToldOnMe => "나를 일러바쳤다", RelationReason.OwesMe => "빚을 안 갚는다", // v18.14
+        RelationReason.LiedToUs => "실수를 숨겼다", RelationReason.FramedMe => "제 실수를 나에게 뒤집어씌웠다", RelationReason.OwnedUp => "제 실수를 털어놓았다", // v18.7
         _ => "약속을 지켰다",
     };
 

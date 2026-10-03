@@ -158,6 +158,7 @@ public static partial class Program
         if (args.Contains("--hazard70test")) return RunHazard70Test(seed); // v15 사고 70
         if (args.Contains("--catalogtest")) return RunCatalogTest(seed); // v15 고장·물자 70
         if (args.Contains("--moduletest")) return RunModuleTest(seed); // v15 설비 70
+        if (args.Contains("--blackboxtest")) return RunBlackboxTest(seed); // v18.7
         if (args.Contains("--radcaretest")) return RunRadCareTest(seed); // 통합5 방사선 병 간호
         if (args.Contains("--risktest")) return RunRiskTest(seed); // 통합5 위험 수준 (보통 재해 · 배 전체급 · 우주급)
         if (args.Contains("--reacttest")) return RunReactTest(seed); // v17.8

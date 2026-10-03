@@ -205,6 +205,7 @@ public sealed partial class MotionSystem
     /// <summary>재판에서 배급을 깎인 사람이 한 끼에 받는 몫 (1 = 그대로).</summary>
     public float MealShare(CrewMember c) => _rationCut.TryGetValue(c.Id, out var r) && r.until > _w.Tick ? r.share : 1f;
     /// <summary>특권을 박탈당해 서명 · 표결을 못 한다.</summary>
+    public void Sentence(CrewMember c, Penalty p, int motion) { if (p == Penalty.ExtraDuty) Duty[c.Id] = (2f, _w.Tick + SimTime.Hours(36), motion); else if (p == Penalty.RationCut) _rationCut[c.Id] = (_w.Tick + SimTime.TicksPerDay * 3, 0.7f); else if (p == Penalty.Privilege) _noVote[c.Id] = _w.Tick + SimTime.TicksPerDay * 3; } // v18.7 사고 조사의 벌
     public bool NoVote(CrewMember c) => _noVote.TryGetValue(c.Id, out var t) && t > _w.Tick;
     public Grudge? GrudgeOf(CrewMember c) => Grudges.FirstOrDefault(g => g.Who == c.Id && g.Until > _w.Tick);
     public Faction? FactionOf(CrewMember c) => Factions.FirstOrDefault(f => !f.Gone && f.Members.Contains(c.Id));
