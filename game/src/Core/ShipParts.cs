@@ -377,6 +377,8 @@ public enum FurnitureType
     OperatingTable, SurgicalLamp, AnesthesiaMachine, BloodFridge, MedCabinet,
     // 의료 2차 — 장기 · 이식 · 감염 · 격리 (Organs.cs OrganGear)
     Dialyzer, Ecmo, HeartPump, OrganCooler, BioPrinter, NegPressure,
+    // 의료 3차 — 수술 로봇 팔 (SurgicalArm.cs)
+    SurgicalArm,
 }
 
 public static class FurnitureTypes

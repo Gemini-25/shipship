@@ -76,6 +76,9 @@ public static class OrganGear
             0.8f, 3, Skill.Electrical, F(FaultKind.NozzleClog, FaultKind.CalibrationLoss), w => w.Organs.Stats.Cases > 0 && TransplantSystem.PrintTech(w) ? (0.5f, "장기를 기다리는 사람 · 세포를 찍는 법을 안다") : No),
         new(FurnitureType.NegPressure, "음압기", RoomType.Medbay, C((ItemKind.Fan, 2), (ItemKind.Filter, 2), (ItemKind.Hose, 1)), "방 공기를 걸러 빼내 문 밖으로 균이 새지 않는다",
             0.7f, 5, Skill.Mechanics, F(FaultKind.FanFail, FaultKind.FilterClogged), w => w.Disease.Stats.Infections + w.Infection.Stats.Airborne >= 2 ? (0.5f, "병이 방을 넘어 옮았다") : No),
+        // 의료 3차 — 수술 로봇 팔 (SurgicalArm.cs): 수술대 곁에 서서 주컴퓨터가 집도하거나 거든다
+        new(FurnitureType.SurgicalArm, "수술 로봇 팔", RoomType.Medbay, C((ItemKind.Motor, 2), (ItemKind.Electronics, 2), (ItemKind.Sensor, 2), (ItemKind.Cable, 1)), "주컴퓨터가 칼을 잡는다 — 의무관이 없거나 손이 떨릴 때 · 곁에서 거들면 손이 흔들리지 않는다",
+            0.9f, 7, Skill.Electrical, F(FaultKind.CalibrationLoss, FaultKind.SensorDrift, FaultKind.Jam), w => w.SurgArm.Need()),
     };
 
     private static readonly Dictionary<FurnitureType, Row> ByType = Rows.ToDictionary(r => r.Type);
@@ -456,6 +459,9 @@ public sealed class OrganSystem
         else if (f.Type == FurnitureType.Ecmo) c.Vitals.Oxygen = MathF.Max(c.Vitals.Oxygen, f.Machine!.Powered || Cell(f) > 0f ? 0.95f : 0.8f);
     }
 
+    public void CrankBot(Robot r, Furniture f) { if (!Cranked(f)) { Stats.Cranked++; _w.Log.Add(_w.Tick, LogKind.Work, $"{r.Name}: {f.Name} 손 펌프를 돌린다"); } _crank[f.Id] = _w.Tick; } // 의료 3차 로봇이 돌린다
+    public void Eco(Furniture f, float back) { if (_cell.TryGetValue(f.Id, out var v) && v < 1f) _cell[f.Id] = MathF.Min(1f, v + back); } // 의료 3차 컴퓨터가 원격으로 낮춰 전지를 아낀다
+
     public void Crank(CrewMember by, Furniture f)
     {
         if (!_crank.ContainsKey(f.Id) || _w.Tick - _crank[f.Id] > SimTime.Minutes(5)) { Stats.Cranked++; _w.Log.Add(_w.Tick, LogKind.Work, $"{f.Name} 손 펌프를 돌린다", by.Id); }
@@ -710,7 +716,7 @@ public sealed class CrankActivity : Activity
     {
         foreach (var b in w.Organs.Bodies)
             if (b.Hooked && w.Organs.Machine(b) is Furniture f && f.Type == FurnitureType.Ecmo && !f.Machine!.Powered && w.Organs.Cell(f) < 0.25f && b.Crew != c.Id
-                && (c.Room == f.Room || c.Room != null && (c.Position - f.Center).Length() < 14f)) return f;
+                && (c.Room == f.Room || c.Room != null && (c.Position - f.Center).Length() < 14f) && !w.MedBots.Cranking(f)) return f; // 의료 3차 로봇이 돌리면 사람은 손을 뗀다
         return null;
     }
 

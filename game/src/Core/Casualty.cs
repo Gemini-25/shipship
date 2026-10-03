@@ -277,6 +277,8 @@ public sealed class CasualtySystem
         w.Board.RequestScan();
     }
 
+    public void StopBy(CrewMember c, Trauma t, string how) => Stop(c, t, how, null); // 의료 3차 로봇 · 컴퓨터가 멎게 했다
+
     private void Stop(CrewMember c, Trauma t, string how, CrewMember? by)
     {
         var w = _w;
