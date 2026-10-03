@@ -15,7 +15,8 @@ public sealed class HaircutActivity : Activity
     /// <summary>머리를 맡길 만큼 한가한가 (쉬는 · 서성이는 · 이야기하는 · 취미 중).</summary>
     public static bool Available(CrewMember o, World w) =>
         o.IsAwake && o.CanAct && !o.Outside && o.Room != null && o.Vitals.Health > 0.4f && o.Job?.Urgent != true
-        && o.Job?.Activity is RelaxActivity or WanderActivity or ChatActivity or HobbyActivity or HoldActivity or SchemeActivity or null // 통합6 쉬는 시간에 꾸미는 일(소식지 · 깜짝 준비)도 잠깐 내려놓고 앉을 수 있다
+        && (o.Job?.Activity is RelaxActivity or WanderActivity or ChatActivity or HobbyActivity or HoldActivity or SchemeActivity or null
+            || o.Mind.Goal == GoalTier.Life && o.Job?.Activity is not (SleepActivity or EatActivity or RecoverActivity or SceneActivity) && !w.Society.OnNightWatch(o)) // 통합6 쉬는 시간의 일(꾸미는 일 · 실험 · 운동 · 퍼즐)도 잠깐 내려놓고 앉을 수 있다 — 잠 · 끼니 · 치료 · 함께하는 장면은 아니다
         && w.Body2.SessionOf(o) == null;
 
     private static (CrewMember? who, float value, string why) Pick(CrewMember c, World w, DistanceField dist)
