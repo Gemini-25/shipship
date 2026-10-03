@@ -79,9 +79,15 @@ public partial class Hud
         // v13.0 방침 (회의가 정한다)
         SectionTitle(x, ly + 14, "방침");
         // 두 칸으로 (이름 · 지금 값 — 최근에 바뀐 것은 밝게) · v13.2 컴퓨터에 걸린 재난·지휘 방침만 (전부는 E 방침·회의 화면)
-        Gfx.TextRight(this, Fonts.Body, new Vector2(right, ly + 14), "전부 보기: E", Ui.TextTiny, Palette.TextMuted);
         float colW = (right - x - 44) / 2f;
-        var shown = PolicySystem.All.Where(p => p.Area != "자원" && p.Id is not ("election" or "noconfidence" or "minutes")).ToArray();
+        var pool = PolicySystem.All.Where(p => p.Area != "자원" && p.Id is not ("election" or "noconfidence" or "minutes")).ToList();
+        // 카드 안에 들어가는 만큼만 — 아래 칸(지휘 · 감지기 · 판단 근거) 자리를 먼저 떼어 두고, 최근에 바뀐 방침부터
+        float below = 120f + 18f * a.FireCases.Count + 20f * w.Ship.Rooms.Count(r => r.LockPendingUntil >= 0) + (a.ZoneActive ? 18f : 0f)
+            + (w.Command.Active ? 15f * (w.Command.Teams.Count + 1) : 0f) + (w.Policies.Changes.Count > 0 ? 15f : 0f);
+        int fitRows = Math.Max(0, (int)((card.End.Y - ly - 14f - below) / 15f));
+        var shown = pool.OrderByDescending(p => w.Policies.Changes.LastOrDefault(c => c.Id == p.Id)?.Tick ?? -1).Take(fitRows * 2).ToArray();
+        if (shown.Length < pool.Count) shown = pool.Where(shown.Contains).ToArray(); // 고른 것은 원래 차례대로
+        Gfx.TextRight(this, Fonts.Body, new Vector2(right, ly + 14), shown.Length == 0 ? $"{pool.Count}개 — 전부 보기: E" : shown.Length < pool.Count ? $"최근 바뀐 {shown.Length}개 · 전부 {pool.Count}개는 E" : "전부 보기: E", Ui.TextTiny, Palette.TextMuted);
         for (int i = 0; i < shown.Length; i++)
         {
             var p = shown[i];
@@ -92,6 +98,7 @@ public partial class Hud
             Gfx.Text(this, Fonts.Bold, new Vector2(px + 86, ly + 14), w.Policies.Option(p.Id), Ui.TextSmall, recent ? Palette.Accent : Palette.Text);
             if (i % 2 == 1 || i == shown.Length - 1) ly += 15;
         }
+        if (shown.Length == 0) ly += 4;
         if (w.Policies.Changes.LastOrDefault() is PolicyChange lc)
         {
             Gfx.Text(this, Fonts.Body, new Vector2(x + 44, ly + 14), Fit($"최근: {SimTime.Day(lc.Tick)}일 {PolicySystem.Spec(lc.Id).Name} → {PolicySystem.Spec(lc.Id).Options[lc.To]} — {lc.Why}" + (lc.Yes + lc.No > 0 ? $" (찬성 {lc.Yes} · 반대 {lc.No})" : ""), right - x - 48, Ui.TextTiny, Fonts.Body), Ui.TextTiny, Palette.TextMuted);

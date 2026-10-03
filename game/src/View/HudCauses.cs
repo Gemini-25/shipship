@@ -273,6 +273,8 @@ public partial class Hud
         float x0 = computer ? Margin + ComputerCardWidth + Ui.Gap : Margin, x1 = Screen.X - RightColumnWidth - Margin * 2;
         if (x1 - x0 < 160f) return;
         float y = Screen.Y - Margin - LogFullHeight - 28f;
+        // 지도 위 항로 띠가 떠 있으면 그 위로 비켜 선다
+        if (MinimapOpen && _minimapRect.Size.X > 0f) y = Mathf.Min(y, _minimapRect.Position.Y - 46f - 26f);
         var strip = new Rect2(x0, y, x1 - x0, 20f);
         long now = _world.Tick;
         long span = System.Math.Min(SimTime.TicksPerDay * 3, System.Math.Max(SimTime.Hours(6), now - _world.History.FoundedTick));

@@ -118,6 +118,8 @@ public partial class Hud
 
     // ─────────────────────────── 보기 · 사고 도구 (접힘) ───────────────────────────
 
+    private float _foldedToolsW = 240f; // 지난 그림에서 잰 접힌 칩 너비 (배치 계산용)
+
     /// <summary>조용한 HUD: 보기 모드 · 사고 도구 막대를 한 장으로 접어 둔다 (누르면 펼침).</summary>
     private void DrawToolsFolded(Vector2 mouse)
     {
@@ -125,6 +127,7 @@ public partial class Hud
         bool special = _main.ViewMode != ViewMode.Normal || _main.SecondaryView != null;
         float w1 = 14 + 18 + Gfx.Width(Fonts.Bold, $"보기 · {mode}", Ui.TextBody) + 22;
         float w2 = 14 + 18 + Gfx.Width(Fonts.Bold, "사고 도구", Ui.TextBody) + 22;
+        _foldedToolsW = w1 + w2 + 20;
         var card = new Rect2(Margin, Margin + Ui.TopBarH + 8f, w1 + w2 + 20, 40f);
         Card(card);
         var b1 = new Rect2(card.Position.X + 6, card.Position.Y + 6, w1, 28);

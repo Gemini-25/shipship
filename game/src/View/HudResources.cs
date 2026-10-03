@@ -103,14 +103,23 @@ public partial class Hud
         float avail = Mathf.Min(Screen.X - Margin - RightColumnWidth - 12f - x0, _plan.StatusMaxW > 0f ? _plan.StatusMaxW : float.MaxValue);
         for (int guard = 0; w > avail && guard < 8; guard++)
         {
-            int i = Enumerable.Range(0, items.Count).Where(k => !items[k].compact && items[k].res == null || items[k].label is "구조" or "땜질" or "냉각수·노심" or "비축")
+            // 짧은 숫자(전력 122/131 kW 같은 것)는 자르면 뜻이 틀어진다 — 긴 글만 줄이고, 나머지는 아래에서 "외 n"으로 접는다
+            int i = Enumerable.Range(0, items.Count).Where(k => (!items[k].compact && items[k].res == null || items[k].label is "구조" or "땜질" or "냉각수·노심" or "비축") && items[k].value.TrimEnd('…').Length > 10)
                 .OrderByDescending(k => widths[k]).DefaultIfEmpty(-1).First();
             if (i < 0) break;
             var it = items[i];
             float target = Mathf.Max(60f, widths[i] - (w - avail));
-            string value = it.value;
-            while (value.Length > 4 && Gfx.Width(Fonts.Bold, value + "…", Ui.TextLabel) > target) value = value[..^1];
-            items[i] = it with { value = value.TrimEnd(' ', '·') + "…" };
+            // 한 번 줄인 글을 또 줄일 때 "…"가 쌓이지 않게 떼고 시작한다. " · " 마디째 떼어 낼 수 있으면 그게 먼저.
+            string value = it.value.TrimEnd('…');
+            bool cut = false;
+            while (value.Contains(" · ") && Gfx.Width(Fonts.Bold, value, Ui.TextLabel) > target) { value = value[..value.LastIndexOf(" · ")]; cut = true; }
+            if (Gfx.Width(Fonts.Bold, value, Ui.TextLabel) > target)
+            {
+                while (value.Length > 4 && Gfx.Width(Fonts.Bold, value + "…", Ui.TextLabel) > target) value = value[..^1];
+                value = value.TrimEnd(' ', '·') + "…";
+            }
+            else if (!cut) value = value.TrimEnd(' ', '·') + "…";
+            items[i] = it with { value = value };
             w -= widths[i];
             widths[i] = Width(i);
             w += widths[i];

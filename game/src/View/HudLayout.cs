@@ -28,7 +28,7 @@ public partial class Hud
         bool tools = !Quiet || _toolsOpen || _hazardMenu || _main.Tool != IncidentTool.None;
         var n = new HudNeeds
         {
-            W = Screen.X, H = Screen.Y, TopBarW = TopBarWidth(),
+            W = Screen.X, H = Screen.Y, TopBarW = TopBarWidth(), FoldedToolsW = tools ? 0f : _foldedToolsW,
             ProfileW = _profileSz.X, ProfileH = _profileSz.Y, CosmicH = _cosmicH,
             LegendW = _legendSz.X, LegendH = _legendSz.Y,
             Computer = a.Present && !ControlOpen && !ChronicleOpen && !TechOpen && !PolicyOpen && !ChainOpen && !CollectionOpen && !VoyageOpen,

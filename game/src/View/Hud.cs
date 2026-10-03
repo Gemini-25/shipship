@@ -1379,9 +1379,12 @@ public partial class Hud : Control
             Gfx.RoundRect(this, new Rect2(row.Position.X + 6, row.Position.Y + 6, 3, row.Size.Y - 12), uc, 1.5f);
             string oi = o.Target.Furniture is Furniture of ? Icons.Furniture(of.Type) : o.Target.CurrentRoom is Room orr ? Icons.Room(orr.Kind) : "work";
             Icons.Draw(this, oi, new Vector2(x + 9, ry + 11), 14, uc); // v16.2 대상마다 고유 아이콘
-            Gfx.Text(this, Fonts.Bold, new Vector2(x + 22, ry + 15), o.Title, Ui.TextBody, Palette.Text);
+            // 오른쪽 칸(맡은 사람 · 긴급도)을 덮지 않게 제목과 설명을 자른다
+            string tag = o.Assignee is CrewMember ta ? ta.Name : $"긴급도 {o.Urgency:0.00}";
+            float tagW = Gfx.Width(o.Assignee != null ? Fonts.Bold : Fonts.Body, tag, Ui.TextSmall) + (o.Assignee != null ? 22 : 10);
+            Gfx.Text(this, Fonts.Bold, new Vector2(x + 22, ry + 15), UiKit.Fit(o.Title, right - tagW - (x + 22), Ui.TextBody, Fonts.Bold), Ui.TextBody, Palette.Text);
             string detail = o.BlockedUntil > _world.Tick && o.BlockedReason != null ? $"보류 — {o.BlockedReason}" : o.Detail;
-            Gfx.Text(this, Fonts.Body, new Vector2(x + 22, ry + 30), detail, Ui.TextSmall, o.BlockedUntil > _world.Tick ? Palette.Warning : Palette.TextMuted);
+            Gfx.Text(this, Fonts.Body, new Vector2(x + 22, ry + 30), Clip(detail, right - tagW - (x + 22), Ui.TextSmall), Ui.TextSmall, o.BlockedUntil > _world.Tick ? Palette.Warning : Palette.TextMuted);
             if (o.Assignee is CrewMember a)
                 Gfx.Pill(this, Fonts.Bold, new Vector2(right - Gfx.Width(Fonts.Bold, a.Name, Ui.TextSmall) * 0.5f - 7, ry + 17), a.Name, Ui.TextSmall,
                     Palette.Crew(a.Id), new Color(0, 0, 0, 0.3f), Palette.Crew(a.Id).WithAlpha(0.4f));

@@ -298,9 +298,9 @@ public sealed class ComputerApps
     {
         var w = _w;
         var a = w.Automation;
-        string zone = w.Propulsion.Zone.ToString();
+        string zone = PropulsionSystem.ZoneName(w.Propulsion.Zone);
         int fires = a.FireCases.Count, acts = a.Book.ActsToday;
-        string text = $"{w.Day}일 {w.Clock} — 승무원 {w.Crew.Count(c => !c.Dead)}명 · 물 {w.Water.Level:0}L · 배터리 {w.Power.BatteryCharge:0}kWh · 위기 {Crisis.Name(Crisis.Level(w))} · 오늘 자동 조치 {acts}건" + (fires > 0 ? $" · 불 {fires}곳 대응 중" : "") + (zone != "" ? $" · 구간 {zone}" : "");
+        string text = $"{w.Day}일 {w.Clock} — 승무원 {w.Crew.Count(c => !c.Dead)}명 · 물 {w.Water.Level:0}L · 배터리 {w.Power.BatteryCharge:0}kWh · 위기 {Crisis.Name(Crisis.Level(w))} · 오늘 자동 조치 {acts}건" + (fires > 0 ? $" · 불 {fires}곳 대응 중" : "") + (zone != "" ? $" · {zone}" : "");
         Logbook.Add((w.Tick, text));
         if (Logbook.Count > 60) Logbook.RemoveAt(0);
         a.Book.Today.Logs++;

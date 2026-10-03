@@ -177,7 +177,7 @@ public sealed partial class WorkBoard
         if (spot == default) spot = seat.Room.Cells.FirstOrDefault(c => w.Ship.IsOpenFloor(c));
         if (spot == default) return;
         post(WorkKind.ManualControl, WorkTarget.AtCell(spot, seat.Room), level >= CrisisLevel.Emergency ? 0.9f : 0.75f, Skill.Electrical,
-            $"관제석 수동 조종 — 컴퓨터(등급 {AutomationSystem.LevelName(a.Level)})보다 좁게 끊고 빨리 되돌린다", minSkill: 0.45f);
+            $"사람 손으로 — 컴퓨터({AutomationSystem.LevelName(a.Level)})보다 좁게 끊고 빨리 되돌린다", minSkill: 0.45f);
     }
 }
 

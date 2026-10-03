@@ -23,6 +23,8 @@ public sealed class HudNeeds
 {
     public float W = 1600f, H = 900f;
     public float TopBarW = 560f;
+    /// <summary>조용한 HUD에서 접어 둔 보기 · 사고 도구 칩 너비 (0 = 없음). 도구 막대가 펼쳐져 있으면 쓰지 않는다.</summary>
+    public float FoldedToolsW;
     /// <summary>함선 지표 카드 (0 = 안 보임).</summary>
     public float ProfileW, ProfileH;
     /// <summary>우주 대재난 카드 (0 = 없음).</summary>
@@ -109,7 +111,8 @@ public static class UiLayout
         p.Status = p.StatusMaxW >= 60f ? new UiRect(sx, Margin, p.StatusMaxW, TopBarH) : default;
         float ty = Margin + TopBarH + Gap;
         p.ToolsMaxW = Math.Max(0f, limit - Margin);
-        p.Tools = n.Tools ? new UiRect(Margin, ty, p.ToolsMaxW, ToolsH) : default;
+        p.Tools = n.Tools ? new UiRect(Margin, ty, p.ToolsMaxW, ToolsH)
+            : n.FoldedToolsW > 0f ? new UiRect(Margin, ty, Math.Min(n.FoldedToolsW, p.ToolsMaxW), ToolsH) : default; // 접힌 칩도 배가 덮지 않게
         // ③ 아래 (먼저 — 위 더미가 여기까지만 내려온다)
         p.Log = new UiRect(Margin, H - Margin - n.LogH, LogW, n.LogH);
         if (n.MinimapW > 0f)
@@ -119,7 +122,8 @@ public static class UiLayout
             else if (n.Voyage) p.Voyage = new UiRect(p.Minimap.X, p.Minimap.Y - VoyageH - 6f, p.Minimap.W, VoyageH);
         }
         // ② 왼쪽 위 더미: 넘치면 대재난 카드는 접고, 범례는 옆으로 · 그래도 자리가 없으면 숨긴다
-        float y = n.Tools ? ty + ToolsH + Gap : ty;
+        bool toolsRow = !p.Tools.Empty;
+        float y = toolsRow ? ty + ToolsH + Gap : ty;
         float stackLimit = p.Log.Y - Gap;
         float stackTop = y, stackW = 0f;
         p.ProfileY = y;
@@ -147,7 +151,7 @@ public static class UiLayout
         if (n.Computer)
         {
             float bottom = p.Log.Y - 10f;
-            float room = bottom - Math.Max(stackBottom + Gap, ty + (n.Tools ? ToolsH + Gap : 0f));
+            float room = bottom - Math.Max(stackBottom + Gap, ty + (toolsRow ? ToolsH + Gap : 0f));
             float full = n.ComputerUserFolded ? ComputerFoldH : n.ComputerH;
             if (full <= room) p.Computer = new UiRect(Margin, bottom - full, ComputerW, full);
             else if (ComputerFoldH <= room) { p.Computer = new UiRect(Margin, bottom - ComputerFoldH, ComputerW, ComputerFoldH); p.ComputerFolded = true; }
