@@ -75,6 +75,8 @@ public sealed partial class Drone
     internal int PatrolIndex { get; set; }
 
     public string Doing { get; internal set; } = "대기";
+    /// <summary>원정대를 따라 배를 떠나 있다 (거치대가 비어 Lost로 두지만 잃은 게 아니다 — 돌아오면 Docked).</summary>
+    public bool OnTrip { get; internal set; }
     public float FlightHours { get; internal set; }
     public int Sorties { get; internal set; }
     public List<Mark> Marks { get; } = new();

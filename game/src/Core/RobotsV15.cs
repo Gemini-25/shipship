@@ -142,7 +142,7 @@ public static class RobotsV15
             "떨어진 방·드론 끌어오기 · 느리게 날지만 1.7배 세게 끈다",
             C((ItemKind.Motor, 2), (ItemKind.Electronics, 1), (ItemKind.Plate, 1)),
             w => w.Ship.Rooms.Any(r => r.Detached && !r.Merged) ? (0.45f, "방을 떠나보낸 적이 있다")
-                : w.Drones.Drones.Any(d => d.State is DroneState.Adrift or DroneState.Lost) ? (0.3f, "드론을 잃어 봤다") : No) { Tow = 1.7f },
+                : w.Drones.Drones.Any(d => !d.OnTrip && d.State is DroneState.Adrift or DroneState.Lost) ? (0.3f, "드론을 잃어 봤다") : No) { Tow = 1.7f },
         new(DroneKind.Rigger, "골조 드론", DroneKind.Build, J(WorkKind.RebuildFrame, WorkKind.InstallTruss, WorkKind.RepairJoint), 0.14f, 0.19f, 0.6f, 0.7f,
             "골조 다시 세우기 · 임시 트러스 · 연결부 · 튼튼하고 손이 빠르다",
             C((ItemKind.Motor, 1), (ItemKind.Electronics, 1), (ItemKind.Structure, 1)),

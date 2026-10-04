@@ -598,7 +598,10 @@ public sealed class PipeNetwork
         w.Board.RequestScan();
     }
 
-    public void Patch(PipeSegment s, float skill, CrewMember who)
+    public void Patch(PipeSegment s, float skill, CrewMember who) => Patch(s, skill, who.Name, who);
+
+    /// <summary>로봇도 막는다 (무인 · 로봇이 먼저 — 사람 손이 없을 때).</summary>
+    public void Patch(PipeSegment s, float skill, string by, CrewMember? who = null)
     {
         var w = _world;
         s.BeforePatch = s.Integrity;
@@ -606,8 +609,8 @@ public sealed class PipeNetwork
         s.PatchQuality = Math.Clamp(0.5f + 0.45f * skill + w.Rng.Range(-0.1f, 0.1f), 0.3f, 0.98f);
         s.Patches++;
         Version++;
-        MarkLog.Add(s.Marks, w.Tick, $"{Ko.IGa(who.Name)} 실링폼 클램프로 임시 밀봉 (품질 {s.PatchQuality * 100:0}%)");
-        w.History.Add(w, HistoryKind.Response, $"{Ko.IGa(who.Name)} {Ko.EulReul(s.Name)} 실링폼 클램프로 임시로 막았다", w.Ship.RoomAt(s.LeakAt), new[] { who }, s.LeakAt);
+        MarkLog.Add(s.Marks, w.Tick, $"{Ko.IGa(by)} 실링폼 클램프로 임시 밀봉 (품질 {s.PatchQuality * 100:0}%)");
+        w.History.Add(w, HistoryKind.Response, $"{Ko.IGa(by)} {Ko.EulReul(s.Name)} 실링폼 클램프로 임시로 막았다", w.Ship.RoomAt(s.LeakAt), who != null ? new[] { who } : null, s.LeakAt);
         w.Board.RequestScan();
     }
 

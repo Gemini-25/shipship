@@ -502,7 +502,7 @@ public sealed partial class CrisisCrewSystem
         {
             if (CrewSig() == _crewSig) _stale = false; // 돌아왔다 — 그대로 둔다
             else if (!_stale) { _stale = true; _staleSince = w.Tick; }
-            else if (w.Tick - _staleSince > SimTime.TicksPerDay && w.Command.Captain is CrewMember cap1 && !Crisis.Acting(w))
+            else if (w.Tick - _staleSince > SimTime.TicksPerDay && w.Command.Captain is CrewMember { CanAct: true } cap1 && !Crisis.Acting(w)) // 배를 떠난 함장(원정 · 하선)은 고치지 못한다 — 전엔 사람이 다 떠난 배에서 15분마다 "혼자 고쳤다"
             {
                 string text = Draw(cap1, "함장 혼자");
                 w.Log.Add(w.Tick, LogKind.Ship, $"회의가 열리지 않아 {Ko.IGa(cap1.Name)} 혼자 비상 배치표를 고쳤다 — {text}");

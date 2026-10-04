@@ -100,6 +100,7 @@ public sealed partial class AutomationSystem
     public void Update(float dt)
     {
         var w = _world;
+        TrackUnattended(); // 사람이 없으면 로봇이 손일을 맡는다 (주 컴퓨터가 없어도 로봇은 제 판단으로)
         if (!Present) return;
         var m = Computer;
 
@@ -135,6 +136,7 @@ public sealed partial class AutomationSystem
             w.Board.RequestScan();
         }
         if (!main) OfflineHours += dt;
+        RemoteHands(); // 보조 발전기 원격 시동 (Unattended.cs)
         V16(dt); // v16.0 ④ · v16.6 다섯 칸 기록 · 믿는 배 · 제안 · 신뢰 · 연산 자원 · 방송 · 새 모듈
         Think(dt); // v12.5 등급·수동 조종·예측·방침
         Respond(dt); // v13.0 대응 수순 (화재 · 공기 구역)

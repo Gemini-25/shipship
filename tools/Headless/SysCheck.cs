@@ -32,7 +32,7 @@ public static partial class Program
 
             // ① 평상시 N일
             int rj0 = w.Robots.JobsDone, ds0 = w.Drones.Sorties, dj0 = w.Drones.JobsDone;
-            int lost0 = w.Drones.Drones.Count(d => d.State is DroneState.Lost), rlost0 = w.Robots.Robots.Count(r => r.State == RobotState.Lost);
+            int lost0 = w.Drones.Drones.Count(d => d.State is DroneState.Lost && !d.OnTrip), rlost0 = w.Robots.Robots.Count(r => r.State == RobotState.Lost);
             var last = w.Robots.Robots.ToDictionary(r => r.Id, r => (pos: r.Position, since: w.Tick, doing: r.Doing));
             var stuck = new Dictionary<int, string>();
             int offlineMin = 0, badAirMin = 0;
@@ -63,7 +63,13 @@ public static partial class Program
             }
             int rjobs = w.Robots.JobsDone - rj0, dsort = w.Drones.Sorties - ds0, djobs = w.Drones.JobsDone - dj0;
             int faulty = w.Robots.Robots.Count(r => !r.Operational), dfaulty = w.Drones.Drones.Count(d => !d.Operational);
-            int dlost = w.Drones.Drones.Count(d => d.State is DroneState.Lost) - lost0, rlost = w.Robots.Robots.Count(r => r.State == RobotState.Lost) - rlost0;
+            int dlost = w.Drones.Drones.Count(d => d.State is DroneState.Lost && !d.OnTrip) - lost0, rlost = w.Robots.Robots.Count(r => r.State == RobotState.Lost) - rlost0;
+            if (args.Contains("--dronedebug") && (dlost > 0 || dfaulty > 0))
+            {
+                foreach (var d in w.Drones.Drones) Console.WriteLine($"     드론 {d.Name} {d.KindName} {d.State} · {d.Doing} · 배터리 {d.Battery:0.00}");
+                var dn = w.Drones.Drones.Select(d => d.Name).ToList();
+                foreach (var e in w.Log.Entries.Where(e => dn.Any(n => e.Text.Contains(n)) || e.Text.Contains("떠내려") || e.Text.Contains("드론")).TakeLast(40)) Console.WriteLine($"     {SimTime.Clock(e.Tick)} d{e.Tick / SimTime.TicksPerDay} {e.Text}");
+            }
             var (bKwh, bCap) = a.Review.BatteryBelief();
             float realCap = w.Power.BatteryCapacity;
             float batErr = realCap > 1f ? MathF.Abs(bCap - realCap) / realCap : 0f;
@@ -164,6 +170,11 @@ public static partial class Program
                     }
                     if (fireAt >= 0 && fireOutAt < 0 && w.Fire.Count == 0) fireOutAt = w.Tick;
                     if (wentDown && a.MainOnline && core.Faults.All(f => f.Kind != FaultKind.StorageFault)) backAt = w.Tick;
+                    if (args.Contains("--compdebug") && t % SimTime.Hours(2) == 0)
+                    {
+                        var os = w.Board.Open.Where(o => o.Target.Furniture == core.Body).Select(o => $"{o.Kind}/{o.Title}/{o.Assignee?.Name ?? "-"}/막힘 {(o.BlockedUntil > w.Tick ? "예" : "아니오")}");
+                        Console.WriteLine($"     +{(w.Tick - tB) / (float)SimTime.TicksPerHour:0}h 켜짐 {a.MainOnline} · 예비 {a.Core.BackupCore} · 같은 기계 {a.Computer == core} · 고장 {string.Join(",", core.Faults.Select(f => $"{f.Kind}단계{f.Stage}"))} · 전자 부품 {w.Ship.CountStored(ItemKind.Electronics)} · 일감 {string.Join(" | ", os)}");
+                    }
                 }
                 // 고쳐진 뒤에도 불이 남았으면 마저 지켜본다
                 for (int t = 0; t < SimTime.Hours(4) && fireAt >= 0 && fireOutAt < 0; t += SimTime.Minutes(1)) { Run(w, SimTime.Minutes(1)); if (w.Fire.Count == 0) fireOutAt = w.Tick; }

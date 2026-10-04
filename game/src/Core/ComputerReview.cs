@@ -58,7 +58,7 @@ public sealed class ComputerReview
     /// <summary>예측이 크게 빗나간 횟수 (연속) — 셋이면 ⑥이 비교를 뗀다.</summary>
     public int MissStreak { get; set; }
     // 배터리 방전 추적: 시작 % · 시작 틱 · 실제로 나간 에너지 · 그때 예측한 분
-    private float _bStart = -1f, _bOut, _bPred, _bDrain, _bCells, _bBank, _bHours; // _bCells · _bBank: 방전 동안 셀 · 모듈 이름표의 시간 평균 (도중에 셀이 고장 나면 그만큼)
+    private float _bStart = -1f, _bOut, _bPred, _bDrain, _bCells, _bBank, _bHours, _bPlate0; // _bCells · _bBank: 방전 동안 셀 · 모듈 이름표의 시간 평균 (도중에 셀이 고장 나면 그만큼)
     private long _bTick, _bQuiet, _bLast;
     public float LastPredMin { get; private set; } = -1f;
     public float LastActualMin { get; private set; } = -1f;
@@ -93,13 +93,14 @@ public sealed class ComputerReview
             if (drain > 0.5f && p.BatteryPercent > 0.25f && Nameplate() > 0f)
             {
                 _bStart = p.BatteryPercent; _bTick = w.Tick; _bLast = w.Tick; _bOut = 0f; _bDrain = drain; _bQuiet = 0;
-                _bCells = 0f; _bBank = 0f; _bHours = 0f;
+                _bCells = 0f; _bBank = 0f; _bHours = 0f; _bPlate0 = Nameplate();
                 _bPred = 0.15f * BatteryBelief().cap / drain * 60f; // 15%p 떨어지는 데 몇 분
                 BatteryLine = $"배터리 {p.BatteryPercent * 100:0}% · {drain:0.#}kW씩 — 15%p 떨어지는 데 {_bPred:0}분으로 본다";
             }
             return;
         }
         if (p.BatteryPercent > _bStart + 0.02f) { _bStart = -1f; return; } // 재는 도중에 %가 올랐다 (충전 · 셀 교체 · 용량이 바뀜) — 처음부터 다시 잰다
+        if (MathF.Abs(Nameplate() - _bPlate0) > 0.03f * MathF.Max(1f, _bPlate0)) { _bStart = -1f; return; } // 재는 도중에 셀이 고쳐지거나 · 고장 나거나 · 모듈이 붙었다 — 같은 전기에 %만 뛰어 용량을 엉뚱하게 배운다 (보듬호: 셀 140→180이 되자 7분에 32%p "떨어져" 이름표의 8%로 믿었다)
         float dth = (w.Tick - _bLast) / (float)SimTime.TicksPerHour;
         _bOut += drain * dth; // 실제로 흐른 시간만큼 (시스템 틱 간격) · 중간에 잠깐 충전되면 그만큼 뺀다 (방전만 세면 용량을 부풀려 믿는다)
         _bCells += CellPlate() * dth; _bBank += BankKwh() * dth; _bHours += dth;

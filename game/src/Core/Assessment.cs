@@ -119,7 +119,7 @@ public static class Assessment
         else if (weak > 0) partial.Add($"약해진 연결부 {weak}");
         int trusses = ship.Rooms.Where(r => !r.Detached).Sum(r => r.Joints.Count(j => j.Truss && !j.Broken));
         if (trusses > 0) partial.Add($"임시 트러스 {trusses}");
-        var badDrones = w.Drones.Drones.Where(d => d.Wrecked || d.Faulty || d.State is DroneState.Adrift or DroneState.Lost).ToList();
+        var badDrones = w.Drones.Drones.Where(d => !d.OnTrip && (d.Wrecked || d.Faulty || d.State is DroneState.Adrift or DroneState.Lost)).ToList(); // 원정에 따라 나간 드론은 잃은 게 아니다
         if (badDrones.Count > 0) partial.Add($"드론 {string.Join("·", badDrones.Select(d => $"{d.Name} {(d.State == DroneState.Lost ? "잃음" : d.State == DroneState.Adrift ? "표류" : d.Wrecked ? "부서짐" : "고장")}"))}");
         var outside = w.Crew.Where(c => !c.Dead && c.Outside).ToList();
         if (outside.Count > 0) longTerm.Add($"선체 밖에 남은 사람 ({string.Join("·", outside.Select(c => c.Name))})");

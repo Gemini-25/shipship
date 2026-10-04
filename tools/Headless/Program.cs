@@ -90,6 +90,7 @@ public static partial class Program
         if (args.Contains("--bench")) return RunBench(days, seed);
         if (args.Contains("--profile")) return RunProfile(seed, args); // v14.2
         if (args.Contains("--syscheck")) return RunSysCheck(seed, args); // 모든 배 — 주컴퓨터 · 로봇 · 드론 실제 점검
+        if (args.Contains("--unmanned")) return RunUnmanned(seed, args); // 사람이 모두 떠난 배 — 주컴퓨터 · 로봇 · 드론만으로
         if (args.Contains("--ships")) return RunShips(days, seed, args.FirstOrDefault(a => a.StartsWith("--only="))?[7..].Split(',')); // v19 --only=Key,Key (그 배만)
         if (args.Contains("--bigships")) return RunBigShips(days, seed, args);
         if (args.Contains("--tiers")) return RunTierRecovery(seed, args);

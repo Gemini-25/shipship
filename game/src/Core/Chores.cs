@@ -67,7 +67,9 @@ public sealed class ChoresActivity : Activity
         var spot = Plans.WorkSpot(o.Target, w, dist, c);
         if (spot is not Cell s) return -1f;
         distance = dist.Get(s);
-        return AppealAt(c, w, o, distance, eva);
+        float ap = AppealAt(c, w, o, distance, eva);
+        if (ap > 0f && o.Urgency < 1f && w.Robots.HandsFree(o)) ap *= 0.5f; // 로봇이 먼저 — 맡을 로봇이 놀고 있으면 급한 일이 아니면 로봇에게 미룬다 (Unattended.cs)
+        return ap;
     }
 
     /// <summary>v17.7 거리장 없이 가릴 수 있는 "이 사람이 맡지 않는 일" (Appeal 의 앞부분 그대로 — 비상 · 선외 거리장을 펴기 전에 먼저 본다).</summary>

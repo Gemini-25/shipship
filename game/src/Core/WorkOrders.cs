@@ -955,6 +955,13 @@ public sealed partial class WorkBoard
                 }
                 float u = m.Spec.Critical ? 0.95f : fault.Spec.OutputFactor <= 0f ? 0.7f : 0.55f;
                 if (fault.Circuit == 0) u = 1.05f;
+                // 주 컴퓨터가 멎었다: 예비 연산기도 없으면 배 전체가 손 조작이다 (바로 비상) · 예비가 붙잡아도 예측 · 함대 판단이 쉬니 오래 멎을수록 급해진다
+                // (파발호: 혼자 남은 조종사가 예비 연산기만 믿고 하루 넘게 잠 · 별 사진 · 손 조작만 — 주 컴퓨터는 끝내 꺼진 채)
+                if (m == _world.Automation.Computer && !_world.Automation.MainOnline && fault.Stage == 0)
+                {
+                    float off = (w.Tick - _world.Automation.OfflineSince) / (float)SimTime.TicksPerHour;
+                    u = MathF.Max(u, _world.Automation.Core.BackupCore ? MathF.Min(0.9f, 0.7f + 0.04f * off) : 0.95f);
+                }
                 // 임시로라도 살려 놓았으면 덜 급하다 (완전 수리는 여유 있을 때)
                 if (fault.Kind == FaultKind.Wrecked) u = m.Spec.Critical ? 1.0f : 0.5f;
                 if (fault.Kind == FaultKind.GasLeak) u = 0.92f; // v11.2 새는 가스는 방 하나를 통째로 못 쓰게 한다

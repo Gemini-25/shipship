@@ -252,7 +252,7 @@ public sealed class ComputerProbe
         // 사람이 가서 보기: 오래 걸리지만 셋을 다 가린다 (정정해 준 적 있는 사람이면 더 믿는다)
         // 아무도 못 갔으면 한 번 더 — 다른 사람에게 (모르는 채로 덜 확실한 결론을 내지 않는다)
         bool retry = c.Tries.Count(x => x.Key == "crew") == 1 && c.Tries.Any(x => x.Key == "crew" && x.Result == "아무도 못 갔다");
-        if (!done.Contains("crew") || retry)
+        if ((!done.Contains("crew") || retry) && !a.Unattended) // 배에 사람이 없으면 가서 볼 사람도 없다 — 있는 계기로 가린다
         {
             float crewCost = 25f + (a.Recovery.Plans.Any(p => p.Open && p.Problem == "냉각") ? 10f : 0f); // 걸어가는 시간 + 하던 일을 놓는 값
             float g = Entropy(c.H.Select(h => h.P)) * 0.85f;

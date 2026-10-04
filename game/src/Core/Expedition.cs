@@ -1016,6 +1016,7 @@ public sealed class ExpeditionSystem
         if (t.DroneId >= 0 && w.Drones.Drones.FirstOrDefault(d => d.Id == t.DroneId) is Drone dr && dr.State == DroneState.Docked && dr.Operational)
         {
             dr.State = DroneState.Lost; // 원정에 따라 나갔다 (거치대가 빈다)
+            dr.OnTrip = true;
             dr.StateSince = w.Tick;
             dr.Doing = $"원정 — {t.Site.Name}";
         }
@@ -1353,6 +1354,7 @@ public sealed class ExpeditionSystem
         ReturnGear(t);
         if (t.DroneId >= 0 && w.Drones.Drones.FirstOrDefault(d => d.Id == t.DroneId) is Drone dr)
         {
+            dr.OnTrip = false; // 돌아왔거나, 원정지에 두고 와서 이제 정말 잃었다
             if (!t.DroneLost) { dr.State = DroneState.Docked; dr.StateSince = w.Tick; dr.Position = dr.DockPosition; dr.Battery = 0.25f; dr.Condition = MathF.Max(0.2f, dr.Condition - 0.15f); dr.Doing = "대기"; dr.Sorties++; }
             else
             {

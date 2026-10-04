@@ -754,7 +754,7 @@ public sealed partial class RobotSystem
         if (r.AtDock && w.Tick < r.NextDecide) return;
         r.NextDecide = w.Tick + SimTime.Minutes(2);
         bool fire = RobotsV15.Fights(r.Kind) && r.Foam > 0.15f && w.Fire.Count > 0;
-        bool work = w.Board.OpenForRobot().Any(o => CanDo(r.Kind, o.Kind));
+        bool work = w.Board.OpenForRobot().Any(o => CanDo(r.Kind, o.Kind) || Stands(r, o)); // 무인 운항: 사람 몫의 손일도
         bool assist = RobotsV15.Assists(r.Kind) && w.Crew.Any(c => c.CanAct && c.Helper == null && c.Job?.Order is WorkOrder jo && Assistable(jo.Kind) && c.Job.Current is WorkToil);
         bool patrol = RobotsV15.Patrols(r.Kind) && w.Tick >= r.NextPatrol && r.Battery > 0.7f;
         bool med = w.MedBots.Wants(r); // 의료 3차 쓰러진 사람 · 피 · 손 펌프 · 소독
@@ -771,7 +771,7 @@ public sealed partial class RobotSystem
         float bestScore = float.MinValue;
         foreach (var o in w.Board.OpenForRobot())
         {
-            if (!CanDo(r.Kind, o.Kind) || !RobotsV15.Takes(r.Kind, o)) continue;
+            if (!(CanDo(r.Kind, o.Kind) || Stands(r, o)) || !RobotsV15.Takes(r.Kind, o)) continue;
             // 원자로 정비는 사람 몫 (제어봉·계측을 손보는 기관 일이다)
             if (o.Kind == WorkKind.Maintain && o.Target.Furniture?.Type == FurnitureType.ReactorCore) continue;
             // v11.2 병충해는 사람 눈과 손으로 (로봇 분무기는 잎 뒷면의 벌레를 못 본다)
@@ -840,6 +840,7 @@ public sealed partial class RobotSystem
     {
         blocked = null;
         var w = _world;
+        if (!CanDo(r.Kind, o.Kind)) return PlanHands(r, o, at, dist, out blocked); // 무인 운항 — 사람 몫의 손일 (Unattended.cs)
         var steps = new List<RobotStep>();
         switch (o.Kind)
         {
