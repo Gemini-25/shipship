@@ -174,10 +174,16 @@ public static partial class Program
             var a = w.Automation;
             foreach (var b in w.Ship.FurnitureOf(FurnitureType.Battery)) b.Machine!.Condition = 0.15f; // 낡은 배터리
             foreach (var p in w.Ship.FurnitureOf(FurnitureType.CoolantPump)) w.Machines.Break(p.Machine!, FaultKind.PumpSeized); // 냉각을 잃어 원자로가 선다
-            for (int i = 0; i < SimTime.Hours(9) && a.Review.Values.BatterySamples == 0; i++) w.Step();
+            for (int i = 0; i < SimTime.Hours(9) && a.Review.Values.BatterySamples == 0; i++)
+            {
+                w.Step();
+                foreach (var b in w.Ship.FurnitureOf(FurnitureType.Battery)) if (b.Machine!.Faults.Count > 0) b.Machine.Faults.Clear(); // 낡았지만 고장은 안 난 배터리 — 닳은 몫만 잰다 (고장은 컴퓨터가 계기로 안다)
+                if (Environment.GetEnvironmentVariable("BATDBG") != null && i % SimTime.Minutes(10) == 0)
+                    Console.WriteLine($"      {SimTime.Clock(w.Tick)} {w.Power.BatteryPercent * 100:0.0}% 충전 {w.Power.BatteryCharge:0.0}/{w.Power.BatteryCapacity:0.0} 흐름 {w.Power.BatteryFlow:0.0} 원자로 {(w.Power.ReactorOnline ? "켜짐" : "꺼짐")} 한도 {w.Power.ReactorLimit:0} 보조 {w.Power.AuxRunning}");
+            }
             float factor = a.Review.Values.BatteryFactor;
             float real = w.Power.BatteryCapacity / MathF.Max(1f, a.Review.Nameplate());
-            Console.WriteLine($"    배터리: {a.Review.BatteryLine} · 실제/이름표 {real:0.00}");
+            Console.WriteLine($"    배터리: {a.Review.BatteryLine} · 실제/이름표 {real:0.00} · 셀 " + string.Join(" ", w.Ship.FurnitureOf(FurnitureType.Battery).Select(b => $"[{PowerGrid.BatteryKwh(b):0}kWh 상태 {b.Machine!.Condition:0.00} 고장 {b.Machine.FaultFactor:0.00}{(b.Machine.Parked ? " 뗌" : "")}]")));
             Check("배터리 예측이 틀렸다 (이름표를 믿었다)", a.Review.LastPredMin > 0f && MathF.Abs(a.Review.LastActualMin - a.Review.LastPredMin) > 0.2f * a.Review.LastPredMin, $"{a.Review.LastPredMin:0}분 예상 → {a.Review.LastActualMin:0}분");
             Check("다음 예측은 이 배의 실제 용량을 쓴다", a.Review.Values.BatterySamples > 0 && MathF.Abs(a.Review.BatteryBelief().cap - w.Power.BatteryCapacity) < 0.25f * w.Power.BatteryCapacity,
                 $"믿는 용량 {a.Review.BatteryBelief().cap:0}kWh · 실제 {w.Power.BatteryCapacity:0}kWh (비율 {factor:0.00})");

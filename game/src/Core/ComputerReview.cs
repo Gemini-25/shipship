@@ -58,7 +58,7 @@ public sealed class ComputerReview
     /// <summary>예측이 크게 빗나간 횟수 (연속) — 셋이면 ⑥이 비교를 뗀다.</summary>
     public int MissStreak { get; set; }
     // 배터리 방전 추적: 시작 % · 시작 틱 · 실제로 나간 에너지 · 그때 예측한 분
-    private float _bStart = -1f, _bOut, _bPred, _bDrain;
+    private float _bStart = -1f, _bOut, _bPred, _bDrain, _bCells, _bBank, _bHours; // _bCells · _bBank: 방전 동안 셀 · 모듈 이름표의 시간 평균 (도중에 셀이 고장 나면 그만큼)
     private long _bTick, _bQuiet, _bLast;
     public float LastPredMin { get; private set; } = -1f;
     public float LastActualMin { get; private set; } = -1f;
@@ -68,12 +68,16 @@ public sealed class ComputerReview
 
     // ───────────── 배터리: 컴퓨터가 믿는 용량 ─────────────
 
-    /// <summary>이름표 용량 (kWh).</summary>
-    public float Nameplate() => _w.Ship.FurnitureOf(FurnitureType.Battery).Where(f => !f.Machine!.Parked).Sum(PowerGrid.BatteryKwh);
-    /// <summary>컴퓨터가 믿는 남은 kWh · 전체 (계기 % × 이름표 × 배운 비율).</summary>
+    /// <summary>셀 이름표 용량 (kWh) — 고장 난 셀은 컴퓨터가 계기로 알므로 그만큼 뺀다 (닳은 정도는 모른다 · 재서 배운다).</summary>
+    private float CellPlate() => _w.Ship.FurnitureOf(FurnitureType.Battery).Where(f => !f.Machine!.Parked).Sum(f => PowerGrid.BatteryKwh(f) * f.Machine!.FaultFactor);
+    /// <summary>축전 모듈 몫 (닳지 않는다).</summary>
+    private float BankKwh() => Modules.Bonus(_w, FurnitureType.CapacitorBank);
+    /// <summary>이름표 용량 (kWh) — 셀(고장 뺀) + 축전 모듈.</summary>
+    public float Nameplate() => CellPlate() + BankKwh();
+    /// <summary>컴퓨터가 믿는 남은 kWh · 전체 (계기 % × (셀 이름표 × 배운 비율 + 축전 모듈)).</summary>
     public (float kwh, float cap) BatteryBelief()
     {
-        float cap = Nameplate() * Values.BatteryFactor;
+        float cap = CellPlate() * Values.BatteryFactor + BankKwh();
         return (_w.Power.BatteryPercent * cap, cap);
     }
     /// <summary>이 소모량이면 배터리가 바닥까지 몇 분 (믿는 용량으로).</summary>
@@ -89,12 +93,16 @@ public sealed class ComputerReview
             if (drain > 0.5f && p.BatteryPercent > 0.25f && Nameplate() > 0f)
             {
                 _bStart = p.BatteryPercent; _bTick = w.Tick; _bLast = w.Tick; _bOut = 0f; _bDrain = drain; _bQuiet = 0;
-                _bPred = 0.15f * Nameplate() * Values.BatteryFactor / drain * 60f; // 15%p 떨어지는 데 몇 분
+                _bCells = 0f; _bBank = 0f; _bHours = 0f;
+                _bPred = 0.15f * BatteryBelief().cap / drain * 60f; // 15%p 떨어지는 데 몇 분
                 BatteryLine = $"배터리 {p.BatteryPercent * 100:0}% · {drain:0.#}kW씩 — 15%p 떨어지는 데 {_bPred:0}분으로 본다";
             }
             return;
         }
-        _bOut += MathF.Max(0f, drain) * (w.Tick - _bLast) / (float)SimTime.TicksPerHour; // 실제로 흐른 시간만큼 (시스템 틱 간격)
+        if (p.BatteryPercent > _bStart + 0.02f) { _bStart = -1f; return; } // 재는 도중에 %가 올랐다 (충전 · 셀 교체 · 용량이 바뀜) — 처음부터 다시 잰다
+        float dth = (w.Tick - _bLast) / (float)SimTime.TicksPerHour;
+        _bOut += drain * dth; // 실제로 흐른 시간만큼 (시스템 틱 간격) · 중간에 잠깐 충전되면 그만큼 뺀다 (방전만 세면 용량을 부풀려 믿는다)
+        _bCells += CellPlate() * dth; _bBank += BankKwh() * dth; _bHours += dth;
         _bLast = w.Tick;
         if (drain < 0.2f) { if (++_bQuiet > 10) _bStart = -1f; return; }
         _bQuiet = 0;
@@ -104,11 +112,12 @@ public sealed class ComputerReview
         float actualMin = (w.Tick - _bTick) / (float)SimTime.Minutes(1);
         float drop = _bStart - p.BatteryPercent;
         float implied = _bOut / MathF.Max(0.01f, drop);
-        float ratio = Math.Clamp(implied / MathF.Max(1f, Nameplate()), 0.08f, 1.3f);
+        float cellsAvg = _bHours > 0f ? _bCells / _bHours : CellPlate(), bankAvg = _bHours > 0f ? _bBank / _bHours : BankKwh();
+        float ratio = Math.Clamp((implied - bankAvg) / MathF.Max(1f, cellsAvg), 0.08f, 1.3f); // 셀 몫만 배운다 (고장 · 모듈은 이미 안다)
         float before = Values.BatteryFactor;
         // 같은 소모량으로 고쳐 본 예측 (평균 소모 기준)
         float avgDrain = _bOut / MathF.Max(0.01f, actualMin / 60f);
-        float predAvg = 0.15f * Nameplate() * before / MathF.Max(0.05f, avgDrain) * 60f;
+        float predAvg = 0.15f * (cellsAvg * before + bankAvg) / MathF.Max(0.05f, avgDrain) * 60f;
         Values.BatteryFactor = Math.Clamp(Values.BatterySamples == 0 ? ratio : before * 0.4f + ratio * 0.6f, 0.08f, 1.2f); // 처음 잰 값은 그대로 믿는다
         Values.BatterySamples++;
         LastPredMin = predAvg;

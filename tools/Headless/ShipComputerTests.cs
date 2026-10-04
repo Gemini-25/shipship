@@ -115,6 +115,8 @@ public static partial class Program
                 {
                     Run(w, World.SystemInterval);
                     held = Tripped() && tr.SameCauseHolds >= 1 && tr.RemoteResets == resets0 && !w.Board.Open.Any(o => o.Kind == WorkKind.ResetBreaker && o.Circuit == circ);
+                    if (Environment.GetEnvironmentVariable("SC_DBG") == "1")
+                        Console.WriteLine($"      붙잡기 {SimTime.Clock(w.Tick)} 떨어짐 {Tripped()} · 같은 원인 {tr.SameCauseHolds} · 원격 {tr.RemoteResets}/{resets0} · 사람 일감 {string.Join(",", w.Board.Open.Where(o => o.Kind == WorkKind.ResetBreaker && o.Circuit == circ).Select(o => o.Assignee?.Name ?? "?"))}");
                 }
                 var hold = tr.Cases.LastOrDefault(x => x.Circuit == circ && x.State == "보류");
                 string order = a.Command.Lines.LastOrDefault(l => l.Target == CmdTarget.Crew)?.What ?? "";

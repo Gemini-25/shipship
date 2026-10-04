@@ -17,6 +17,7 @@ public static class Brain
         new TakeCoverActivity(), new BlastResponseActivity(), new BlastingActivity(), // v16.13 쉭 소리에 몸을 피함 · 구조 · 조사 · 옮기기 · 항아리 · 추모 · 폭파
         new WayActivity(), // v16.25 여러 갈래 해법 (고른 갈래 · 나중에 제대로)
         new CheckRoomActivity(), // v16.6 컴퓨터 확인 요청 (직접 가서 보고 쓰러진 사람을 데려 나온다)
+        new DoorGuardActivity(), // 소방 로봇이 먼저 들어간 불 — 컴퓨터가 고른 한 사람이 문 앞에서 대기 (Fleet.cs)
         new ShelterActivity(), // v12.6 태양 폭풍
         new HeedBroadcastActivity(), // v16.6 대피 방송을 들은 사람만 미리 대피소로 (ComputerLinks.cs)
         new MusterActivity(), // v16.18 배 전체 사고 — 전원 소집 · 점호 (ScalePlan.cs)

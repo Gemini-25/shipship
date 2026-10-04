@@ -130,7 +130,7 @@ public sealed class InjuryGradeSystem
         if (text == _lastCastText && w.Tick - _lastCast < SimTime.Minutes(20)) return;
         _lastCast = w.Tick; _lastCastText = text;
         Broadcasts++;
-        a.Speak.Announce(a.Voice.Style($"다친 사람 — {text}"), seen[0].Room, crit > 0 ? 3 : 2);
+        a.Speak.Announce(a.Voice.Style($"다친 사람 — {text}"), seen[0].Room, crit > 0 ? 2 : 1); // 위중이 있을 때만 하던 일을 멈추게 한다 (중상만이면 알리기만 — 치료 일감이 이미 앞선다)
     }
 
     /// <summary>치료 일감의 급함에 더하는 몫 — 위중한 사람부터.</summary>

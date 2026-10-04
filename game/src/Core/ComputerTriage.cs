@@ -344,6 +344,7 @@ public sealed class PowerTriage
                 {
                     bc.State = "보류";
                     Holds++;
+                    foreach (var o in w.Board.Open.Where(o => o.Kind == WorkKind.ResetBreaker && o.Circuit == i).ToList()) w.Board.Close(o); // 이미 올리러 가던 사람의 일감도 거둔다 (가 봐야 배전반 앞에서 돌아선다)
                     if (same) SameCauseHolds++;
                     Instruct(bc, panelF.Room);
                 }

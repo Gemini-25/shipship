@@ -189,14 +189,14 @@ public static class Prevention
         switch (how)
         {
             case "감지기": st.BySensor++; break;
-            case "당직" or "옆방에서 들음": st.ByCrew++; break;
+            case "당직" or "옆방에서 들음" or "소리를 듣고 확인": st.ByCrew++; break; // 소리를 따라가 귀를 대 본 것도 사람 귀
             case "로봇": st.ByRobot++; break;
             default: st.ByRounds++; break;
         }
         float hours = (o.Due - w.Tick) / (float)SimTime.TicksPerHour;
         string who = how switch
         {
-            "감지기" => "감지기가 잡았다", "당직" => $"{Ko.IGa(by!.Name)} 알아챘다", "옆방에서 들음" => $"{Ko.IGa(by!.Name)} 옆방에서 소리를 듣고 알아챘다",
+            "감지기" => "감지기가 잡았다", "당직" => $"{Ko.IGa(by!.Name)} 알아챘다", "옆방에서 들음" => $"{Ko.IGa(by!.Name)} 옆방에서 소리를 듣고 알아챘다", "소리를 듣고 확인" => $"{Ko.IGa(by!.Name)} 소리를 따라가 확인했다",
             "로봇" => $"{Ko.IGa(byName ?? "로봇")} 순찰하다 찾았다", _ => $"{Ko.IGa(byName ?? by?.Name ?? "?")} 순찰하다 찾았다",
         };
         MarkLog.Add(m.Marks, w.Tick, $"전조: {Name(o.Kind)} ({who})");

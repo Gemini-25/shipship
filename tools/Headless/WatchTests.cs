@@ -130,7 +130,7 @@ public static partial class Program
                         }
                         Run(w, SimTime.Minutes(1));
                     }
-                    heard = pump.Omen?.Note is ShiftNote n && n.How is "당직" or "옆방에서 들음" || pump.Omen == null && w.Watch.Notes.Any(x => x.Machine == pump && x.How != "감지기");
+                    heard = pump.Omen?.Note is ShiftNote n && n.How is "당직" or "옆방에서 들음" or "소리를 듣고 확인" || pump.Omen == null && w.Watch.Notes.Any(x => x.Machine == pump && x.How != "감지기");
                 }
                 Check("오래된 측정값 — 컴퓨터가 멎어도 현장에서 소리를 듣는다", offline && age > 2.5f && heard,
                     $"펌프 마지막 측정 {age:0.0}시간 전 · 세 시간 뒤 주 컴퓨터 {(offline ? "멎음" : "켜짐")} · 소리로 찾음 {(heard ? "예" : "아니오")} · " +

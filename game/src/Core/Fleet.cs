@@ -90,7 +90,7 @@ public sealed class FleetSystem
     /// <summary>다음 외벽 순찰을 찾아볼 때.</summary>
     internal long NextHullRound, NextHullCare;
 
-    private sealed class FireWatch { public int Robot; public long Since, HoldUntil; public bool Held, Seen; public int Decision; public float Foam0; public readonly HashSet<int> Saw = new(); }
+    private sealed class FireWatch { public int Robot; public long Since, HoldUntil; public bool Held, Seen; public int Decision; public float Foam0; public readonly HashSet<int> Saw = new(); public int Guard = -1, GuardTries; public Cell GuardSpot; }
 
     public FleetSystem(World w) => _w = w;
 
@@ -352,7 +352,8 @@ public sealed class FleetSystem
             {
                 var rb = w.Robots.Robots[fw.Robot];
                 // 들어갔거나 문턱에서 거품을 뿌리기 시작했다 — 통합8 그 뒤 문 앞에 닿은 사람도 로봇이 끄는 걸 본다 (사람마다 한 번)
-                if (rb.Room == room || rb.Foam < fw.Foam0 - 0.01f) { fw.Seen = true; Witness(rb, room, fw.Saw); }
+                if (rb.Room == room || rb.Foam < fw.Foam0 - 0.01f) { fw.Seen = true; Witness(rb, room, fw); }
+                if (fw.Held && (fw.Guard < 0 || w.Crew.FirstOrDefault(x => x.Id == fw.Guard) is not { CanAct: true, Outside: false })) { if (fw.Guard >= 0) EndGuard(fw, "문 앞을 지키던 사람이 움직일 수 없다"); if (fw.GuardTries < 2) PostGuard(room, fw); } // 문 앞 대기 사람이 쓰러지면 한 번 더 고른다
                 bool on = rb.Operational && rb.Foam > 0.05f && (rb.FightingFire || rb.Room == room);
                 if (!on)
                 {
@@ -364,7 +365,7 @@ public sealed class FleetSystem
                     continue;
                 }
                 if (fw.Held && w.Tick < fw.HoldUntil) Hold(room, true);
-                else if (fw.Held) { fw.Held = false; Hold(room, false); }
+                else if (fw.Held) { fw.Held = false; Hold(room, false); EndGuard(fw, "기다리는 시간이 지났다 — 사람도 들어간다"); }
                 continue;
             }
             if (_decided.TryGetValue($"fire:{id}", out long t0) && w.Tick - t0 < SimTime.Minutes(6)) continue;
@@ -414,7 +415,7 @@ public sealed class FleetSystem
         bool hold = dec.Pick.Key == "robot";
         var fw = new FireWatch { Robot = best.Id, Since = w.Tick, Held = hold, HoldUntil = w.Tick + SimTime.Minutes(bestEta + 8f), Decision = dec.Id, Foam0 = best.Foam };
         _fire[room.Id] = fw;
-        if (hold) { StandBack(room, best); Hold(room, true); }
+        if (hold) { StandBack(room, best); Hold(room, true); PostGuard(room, fw); }
         FireFirst++;
         best.Mind.Say($"주 컴퓨터가 보냈다 — 사람보다 먼저 {room.Name} 불로 ({dec.Reason})", w.Tick);
         Line(CmdTarget.Robot, best.Id, room, $"{best.Name}: {room.Name} 불 — " + (hold ? "사람보다 먼저" : "사람과 함께"), dec.Reason, 0.95f, 20f, dec.Id);
@@ -441,6 +442,56 @@ public sealed class FleetSystem
         }
     }
 
+    /// <summary>"문 앞에서 기다려라"의 실제: 가까운 한 사람이 문 앞에 서서 로봇을 지켜본다 — 로봇이 물러나면 바로 이어 들어간다.</summary>
+    private void PostGuard(Room room, FireWatch fw)
+    {
+        var w = _w;
+        fw.GuardTries++;
+        var spots = new List<Cell>();
+        foreach (var d in room.Doors)
+        {
+            if (d.Removed || d.Welded || d.IsExternal) continue;
+            foreach (var dir in Cell.Dirs4)
+            {
+                var o = d.Cell + dir;
+                if (w.Ship.RoomAt(o) is Room orr && orr != room && !orr.Detached && !orr.Leaking && w.Ship.IsWalkable(o) && w.Ship.DoorAt(o) == null && w.Ship.FurnitureAt(o) == null) { spots.Add(o); break; }
+            }
+        }
+        if (spots.Count == 0) return;
+        CrewMember? who = null;
+        Cell at = default;
+        int best = 41; // 배 반대편 사람은 부르지 않는다
+        foreach (var c in w.Crew)
+        {
+            if (!c.CanAct || !c.IsAwake || c.IsChild || c.Outside || c.Room == null || c.Room == room || c.Job is { Urgent: true }) continue;
+            foreach (var sp in spots)
+            {
+                int d = Math.Abs(c.Cell.X - sp.X) + Math.Abs(c.Cell.Y - sp.Y);
+                if (d < best) { best = d; who = c; at = sp; }
+            }
+        }
+        if (who == null) return;
+        fw.Guard = who.Id;
+        fw.GuardSpot = at;
+        who.Interrupt(w);
+        Line(CmdTarget.Crew, who.Id, room, $"{who.Name}: {room.Name} 문 앞에서 대기", "로봇이 물러나면 바로 이어 들어간다", 0.8f, 20f, fw.Decision);
+    }
+
+    private void EndGuard(FireWatch fw, string result)
+    {
+        if (fw.Guard < 0) return;
+        CloseLine(CmdTarget.Crew, fw.Guard, result);
+        fw.Guard = -1;
+    }
+
+    /// <summary>문 앞 대기를 맡은 사람이면 그 방과 설 자리.</summary>
+    public (Room room, Cell spot)? GuardOf(CrewMember c)
+    {
+        foreach (var (id, fw) in _fire)
+            if (fw.Guard == c.Id && fw.Held) return (_w.Ship.Rooms[id], fw.GuardSpot);
+        return null;
+    }
+
     /// <summary>이 방 불에 소방 로봇이 가 있다 (화재 대응 수순이 소화조로 셈한다).</summary>
     public bool BotOn(Room room) => !Off && _fire.TryGetValue(room.Id, out var fw) && _w.Robots.Robots[fw.Robot] is var rb && rb.Operational && rb.Foam > 0.05f && rb.FightingFire;
 
@@ -457,6 +508,7 @@ public sealed class FleetSystem
     {
         if (!_fire.TryGetValue(roomId, out var fw)) return;
         Method("fire:robot", ok);
+        EndGuard(fw, ok ? "로봇이 껐다 — 문 앞에서 지켜봤다" : "로봇이 물러났다 — 사람 손으로");
         if (ok && fw.Held) Hold(_w.Ship.Rooms[roomId], false);
     }
 
@@ -465,15 +517,17 @@ public sealed class FleetSystem
         foreach (var (id, fw) in _fire)
         {
             if (fw.Held) Hold(_w.Ship.Rooms[id], false);
+            EndGuard(fw, why ?? "불이 꺼졌다");
             if (why != null) _w.Log.Add(_w.Tick, LogKind.Warning, $"{_w.Ship.Rooms[id].Name}: {why}");
         }
         _fire.Clear();
     }
 
     /// <summary>로봇이 먼저 불 속에 들어가는 걸 본 사람: 컴퓨터를 조금 더 믿는다 · 불을 안다.</summary>
-    private void Witness(Robot rb, Room room, HashSet<int> saw)
+    private void Witness(Robot rb, Room room, FireWatch fw)
     {
         var w = _w;
+        var saw = fw.Saw;
         CrewMember? first = null;
         bool none = saw.Count == 0;
         foreach (var c in w.Crew)
@@ -482,7 +536,8 @@ public sealed class FleetSystem
             float d = MathF.Abs(c.Position.X - rb.Position.X) + MathF.Abs(c.Position.Y - rb.Position.Y);
             // 통합8 함교 · 통신실 화면(그 방 카메라)으로 지켜본 사람도 본 것이다 — 사람을 문 앞에 붙잡아 두면 곁에서 본 사람이 없었다
             bool screen = c.Room is { Type: RoomType.Bridge or RoomType.Comms or RoomType.ServerRoom } && room.DataLinked && w.Automation.MainOnline;
-            if (d > 9f && !screen) continue;
+            bool door = c.Id == fw.Guard && Math.Abs(c.Cell.X - fw.GuardSpot.X) + Math.Abs(c.Cell.Y - fw.GuardSpot.Y) <= 1; // 문 앞에 선 사람은 문틈으로 본다 (큰 방이면 로봇이 9칸 넘게 떨어져 있어도)
+            if (d > 9f && !screen && !door) continue;
             w.Automation.Trusts.Change(c, 0.04f, $"{Ko.IGa(rb.Name)} 사람보다 먼저 불 속에 들어갔다", quiet: true); // 통합8 사람 대신 불에 든 걸 본 일은 작지 않다 (0.02는 그 사이 다른 일로 깎인 몫에 묻혔다)
             w.Brain2.Beliefs.Learn(c, Topic.Fire, room.Id, 1, BeliefSource.Seen, 0.95f);
             first ??= c;
@@ -647,5 +702,36 @@ public sealed class FleetSystem
     {
         I(Tier); I(FireFirst); I(Tows); I(Fixes); I(Seals); I(SealFails); I(Reliefs); I(Fetches); I(Reroutes); I(Yields); I(Lifts); I(Tests); I(TestFails);
         I(Waits); I(Retreats); I(Wrecks); I(Dodges); I(HullJobs); I(HullRounds); I(Tunes); I(Hits.Count); I(DroneTask.Count); I(Carry.Count); I(_fire.Count);
+    }
+}
+
+/// <summary>"문 앞에서 기다려라" — 소방 로봇이 먼저 들어간 불: 주 컴퓨터가 고른 한 사람이 문 앞에 서서 지켜본다 (로봇이 물러나면 이어 들어간다).</summary>
+public sealed class DoorGuardActivity : Activity
+{
+    public override string Id => "doorguard";
+    public override string Label => "문 앞 대기";
+
+    public override (float, string) Score(CrewMember c, World w, DistanceField dist)
+    {
+        if (w.Fire.Count == 0 || c.Down || c.Outside || w.Fleet.GuardOf(c) is not { } g) return (0f, "—");
+        return (1.05f, $"주 컴퓨터 — {g.room.Name} 문 앞에서 대기 (소방 로봇이 먼저 들어갔다)");
+    }
+
+    public override Job? Plan(CrewMember c, World w, DistanceField dist)
+    {
+        if (w.Fleet.GuardOf(c) is not { } g || dist.Get(g.spot) < 0) return null;
+        var room = g.room;
+        return new Job(this, "문 앞 대기", new List<Toil>
+        {
+            new GotoToil(g.spot),
+            new WaitToil(SimTime.Minutes(20), Pose.Standing, room.Center) { DoneWhen = (cm, world) => world.Fleet.GuardOf(cm) == null },
+        })
+        {
+            LogText = $"{room.Name} 문 앞에서 소방 로봇을 지켜본다 — 물러나면 이어 들어간다",
+            LogKind = LogKind.Work,
+            TargetRoom = room,
+            Urgent = true,
+            InterruptMargin = 0.3f,
+        };
     }
 }

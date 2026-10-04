@@ -195,14 +195,16 @@ public static partial class Program
                 var b = w.Body;
                 var pharm = w.Ship.LiveRooms.Where(r => r.Kind == RoomType.Storage && r.Doors.Count >= 1 && r.Cells.Count >= 4 && r.DataLinked).OrderBy(r => r.Doors.Count).ThenBy(r => r.Id).First();
                 b.SetZone(pharm, AccessZone.Medicine, LockKind.Card);
-                var p = w.Crew.Where(c => c.CanAct && !c.IsChild && c.Role != CrewRole.Medic && c.Id != w.Command.CaptainId && c.Room != pharm && !c.Outside)
+                var p = w.Crew.Where(c => c.CanAct && !c.IsChild && c.Role != CrewRole.Medic && c.Id != w.Command.CaptainId && c.Room != pharm && !c.Outside
+                                          && w.Grades.Now(c) == InjuryGrade.None && w.Casualty.Of(c) == null && c.Vitals.Health > 0.6f) // 멀쩡한 사람이 약을 가지러 간다 (이미 위중한 사람은 눕는 게 맞다)
                     .OrderBy(c => (c.Position - pharm.Center).LengthSquared()).First();
-                p.Vitals.Injury = 0.35f;
+                p.Vitals.Injury = 0.2f; p.Vitals.InjuryCause = "배탈"; // 배탈로 앓는다 — 약을 가지러 간다 (베인 상처면 출혈이 따라와 눕는다 — 그게 맞다)
                 float tr0 = a.Trusts.Of(p);
                 var inside = pharm.Cells.Where(c => w.Ship.IsOpenFloor(c)).OrderBy(c => (c.Center - pharm.Center).LengthSquared()).First();
                 Force(w, p, new Job(null, "약 가지러", new List<Toil> { new GotoToil(inside), new WaitToil(10, Pose.Standing) }));
                 bool reached = false;
                 for (int t = 0; t < SimTime.Minutes(30) && !reached; t++) { w.Step(); reached = p.Room == pharm; if (p.Job == null) break; }
+                if (Environment.GetEnvironmentVariable("ACCDBG") != null) Console.WriteLine($"    [디버그] {p.Name} 일 {p.Job?.Label ?? "없음"} · 방 {p.Room?.Name} · 등급 {InjuryGradeSystem.Name(w.Grades.Now(p))} · 외상 {w.Casualty.Of(p)?.Kind.ToString() ?? "-"} · 쓰러짐 {p.Down} · 마지막 기록 {string.Join(" / ", w.Log.Entries.Where(e => e.CrewId == p.Id).TakeLast(4).Select(e => e.Text))} · 방송 {string.Join(" / ", w.Log.Entries.Where(e => e.Text.Contains("다친 사람")).TakeLast(2).Select(e => SimTime.Clock(e.Tick) + " " + e.Text))}");
                 var line = w.Log.Entries.LastOrDefault(e => e.Text.Contains("원격으로 열었다")).Text;
                 var act = a.Book.Acts.LastOrDefault(x => x.Kind == ActKind.Door);
                 Check("출입 관리 × 문 — 다친 사람이 잠긴 약품고 앞에 서면 컴퓨터가 원격으로 연다 (사람을 부르지 않는다 · 신뢰 ↑ · 다섯 칸 기록)",
