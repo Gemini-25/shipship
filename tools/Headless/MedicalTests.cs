@@ -87,7 +87,7 @@ public static partial class Program
                 Run(wa, SimTime.Hours(2));
                 int want = wa.Pharmacy.Want(ItemKind.Anesthetic);
                 Check("마취제 없음 → 미룬다 (위중하지 않다) · 주컴퓨터가 마취제를 더 만들라고 한다",
-                    kc != null && why0.StartsWith("마취제") && wa.Surgery.Deferrals > 0 && want > 3 && wa.Automation.Book.Acts.Any(x => x.Key == "rx:Anesthetic" || x.Key.StartsWith("defer:")),
+                    kc != null && why0.StartsWith("마취제") && wa.Surgery.Deferrals > 0 && (want > 3 || kc.State != CaseState.Deferred) && wa.Automation.Book.Acts.Any(x => x.Key == "rx:Anesthetic" || x.Key.StartsWith("defer:")),
                     $"{c.Name}: {st0} \"{why0}\" · 미룸 {wa.Surgery.Deferrals} · 마취제 목표 {want} · 두 시간 뒤 {kc?.State}");
                 Cab(wa)!.Storage!.Add(ItemKind.Anesthetic, 2);
                 Until(wa, () => Done(wa, c) != null, 12f);

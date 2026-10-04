@@ -460,13 +460,14 @@ public sealed class FleetSystem
         if (spots.Count == 0) return;
         CrewMember? who = null;
         Cell at = default;
-        int best = 41; // 배 반대편 사람은 부르지 않는다
+        int best = 41; // 배 반대편 사람은 부르지 않는다 (소화 자리는 25칸 더 멀어도)
         foreach (var c in w.Crew)
         {
             if (!c.CanAct || !c.IsAwake || c.IsChild || c.Outside || c.Room == null || c.Room == room || c.Job is { Urgent: true }) continue;
+            bool fireRole = w.CrisisCrew.BillRole(c) == StationRole.Fire; // 비상 배치표의 소화 자리가 먼저 선다 (곁에서 구경하던 비번 사람을 끌어오지 않게)
             foreach (var sp in spots)
             {
-                int d = Math.Abs(c.Cell.X - sp.X) + Math.Abs(c.Cell.Y - sp.Y);
+                int d = Math.Abs(c.Cell.X - sp.X) + Math.Abs(c.Cell.Y - sp.Y) - (fireRole ? 25 : 0);
                 if (d < best) { best = d; who = c; at = sp; }
             }
         }

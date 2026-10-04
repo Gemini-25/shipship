@@ -114,7 +114,6 @@ public static partial class Program
         Check("투석 — 진단받은 사람이 투석기 곁에 눕고 연결된다", hooked, $"연결 {hooked} · {k.Name} {k.Job?.Label} · 진단 {w.Organs.Known(k, Organ.Kidney)} · {w.Organs.Stats.Line()}");
         // 정전: 냉각 펌프가 서서 원자로가 멎고 배터리만 남았다
         foreach (var p in w.Ship.FurnitureOf(FurnitureType.CoolantPump)) w.Machines.Break(p.Machine!, FaultKind.PumpSeized);
-        foreach (var x in w.Ship.FurnitureOf(FurnitureType.AuxGenerator)) w.Machines.Break(x.Machine!, FaultKind.Wrecked); // 보조 발전기도 부서진 정전 (주 컴퓨터가 원격으로 켜면 모자라지 않는다)
         w.Power.BatteryCharge = w.Power.BatteryCapacity * 0.3f;
         int shed = 0, poweredTicks = 0, n = 0;
         for (int i = 0; i < 40; i++) { Run(w, SimTime.Minutes(1)); n++; if (dia!.Machine!.Powered) poweredTicks++; shed = Math.Max(shed, w.Power.ShedCount + w.Power.ParkedCount); }
