@@ -81,7 +81,10 @@ public static class Hull
         !r.Leaking && !w.Fire.IsKnown(r) && !r.Abandoned && !r.Detached && !r.VentSealed && !w.Structure.DuctOpen && !w.Sensors.Sealing(r)
         && !r.Purging && !r.Inerting && !w.Automation.KeepDamperShut(r) // v13.0 소화 대응 중
         && w.Hazards.GasSource(r) == null // v11.2: 가스가 새는 방은 막아 둔다 (막고 나면 열어 세정기로 걸러 낸다)
-        && !w.Infection.Shut(r); // 의료 2차 옮는 병을 앓는 사람의 방
+        && !(w.Infection.Shut(r) && !Stale(r)); // 의료 2차 옮는 병을 앓는 사람의 방 — 숨 쉴 공기가 먼저: 탁해지면 열어 세정기로 걸러 낸다 (여럿이 자는 침실 · 격리실이 CO₂로 찼다)
+
+    /// <summary>사람이 숨 쉬기 나빠진 공기 (열린 댐퍼는 충분히 맑아질 때까지 연 채로 — 열고 닫기를 되풀이하지 않게).</summary>
+    public static bool Stale(Room r) => r.Air.CO2 > (r.VentOpen ? 0.6f : 1.2f) || r.Air.O2 < (r.VentOpen ? 19.6f : 18.6f);
 
     /// <summary>실제로 새는 넓이 (봉합하면 0).</summary>
     public static float EffectiveBreach(WallState w) => w.Patched ? 0f : w.Breach;

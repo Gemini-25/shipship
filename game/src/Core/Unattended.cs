@@ -357,8 +357,7 @@ public sealed partial class RobotSystem
                     rb.Cargo = new ItemStack(product, rc.Yield);
                     world.Adapt.PartsMade += rc.Yield;
                     world.Board.Close(o);
-                    world.Log.Add(world.Tick, LogKind.Work, $"{rb.Name}: {ItemKinds.Name(product)} {rc.Yield}개를 만들었다 ({string.Join(" · ", rc.Inputs.Select(x => $"{ItemKinds.Name(x.kind)} {x.count}"))})");
-                    Hand($"작업대에서 {Ko.EulReul(ItemKinds.Name(product))} 만들었다");
+                    Hand($"{(f.Type == FurnitureType.Refinery ? "정제기" : "작업대")}에서 {ItemKinds.Name(product)} {rc.Yield}개를 만들었다 ({string.Join(" · ", rc.Inputs.Select(x => $"{ItemKinds.Name(x.kind)} {x.count}"))})");
                     return true;
                 }));
                 return steps;

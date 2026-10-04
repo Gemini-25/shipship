@@ -14,6 +14,7 @@ using ShipSim.Core;
 /// </summary>
 public static partial class Program
 {
+    private static int _airShown;
     private static int RunSysCheck(int seed, string[] args)
     {
         var only = args.FirstOrDefault(a => a.StartsWith("--only="))?[7..].Split(',');
@@ -58,6 +59,8 @@ public static partial class Program
                     if (air.O2 < worstO2) { worstO2 = air.O2; worstAir = $"{room.Name} {SimTime.Clock(w.Tick)}"; }
                     worstCO2 = MathF.Max(worstCO2, air.CO2);
                     bad |= air.O2 < 17f || air.CO2 > 1.5f || air.Temperature < 10f || air.Temperature > 35f;
+                    if (args.Contains("--airdebug") && (air.CO2 > 1.5f || air.O2 < 17f) && _airShown++ < 8)
+                        Console.WriteLine($"     공기: {room.Name} {SimTime.Clock(w.Tick)} CO2 {air.CO2:0.00} O2 {air.O2:0.0} · 사람 {w.Crew.Count(c => !c.Dead && c.Room == room)} · 환기 {Atmosphere.Vented(room)}(댐퍼 {room.VentOpen} 덕트 {room.DuctLinked} 원함 {Hull.WantVentOpen(w, room)} 감염 {w.Infection.Shut(room)} 소화 {w.Automation.KeepDamperShut(room)} 봉 {room.VentSealed} 가스 {w.Hazards.GasSource(room) != null} 걸림 {room.DamperJammed}/{room.DamperStuck} 자동 {w.Automation.DampersIn(room)}) · 전기 {room.Powered} · 공기망 {room.AirFlow:0.00} · 부피 {room.Volume:0} · 정화 {w.Air.CO2Scrubbed:0.0}/능력 {w.Air.O2Capacity:0.0}");
                 }
                 if (bad) badAirMin += 10;
             }
@@ -134,6 +137,9 @@ public static partial class Program
                     foreach (var kv in w.Ship.Walls.Where(kv => Hull.EffectiveBreach(kv.Value) > 0.01f))
                         Console.WriteLine($"     열린 벽 {kv.Key} · 구멍 {kv.Value.Breach:0.00} · 뼈대 잃음 {kv.Value.FrameLost} · 땜 {kv.Value.Patched} · 방 {string.Join("/", Cell.Dirs4.Select(d => w.Ship.RoomAt(kv.Key + d)?.Name).Where(n => n != null).Distinct())}");
                     foreach (var d in w.Drones.Drones) Console.WriteLine($"     드론 {d.Name} {d.KindName} {d.State} · {d.Doing} · 배터리 {d.Battery:0.00}");
+                    foreach (var kv in w.Ship.Walls.Where(kv => Hull.EffectiveBreach(kv.Value) > 0.01f))
+                        if (Hull.InsideRoom(w.Ship, kv.Key) is Room ir)
+                            Console.WriteLine($"     안쪽 방 {ir.Name}: 포기 {ir.Abandoned} · 되살림 {ir.Restoring} · 금지 {ir.OffLimits} · 기압 {ir.Air.Pressure:0} · 실링폼 {w.Ship.CountStored(ItemKind.Sealant)} 금속판 {w.Ship.CountStored(ItemKind.Plate)} · 일감 {string.Join(" | ", w.Board.All.Where(o => !o.Closed && o.Target.CurrentRoom == ir).Select(o => $"{o.Kind}/{o.Urgency:0.00}/{o.Assignee?.Name ?? o.Robot?.Name ?? o.Drone?.Name ?? "-"}"))}");
                 }
                 compHole = Said(tAll);
                 dodged = w.Log.Entries.Count(e => e.Tick >= tAll && e.Text.StartsWith("회피 기동 성공 — ") && e.Text.Contains("로 오던 운석이 비껴갔다"));
@@ -173,7 +179,7 @@ public static partial class Program
                     if (args.Contains("--compdebug") && t % SimTime.Hours(2) == 0)
                     {
                         var os = w.Board.Open.Where(o => o.Target.Furniture == core.Body).Select(o => $"{o.Kind}/{o.Title}/{o.Assignee?.Name ?? "-"}/막힘 {(o.BlockedUntil > w.Tick ? "예" : "아니오")}");
-                        Console.WriteLine($"     +{(w.Tick - tB) / (float)SimTime.TicksPerHour:0}h 켜짐 {a.MainOnline} · 예비 {a.Core.BackupCore} · 같은 기계 {a.Computer == core} · 고장 {string.Join(",", core.Faults.Select(f => $"{f.Kind}단계{f.Stage}"))} · 전자 부품 {w.Ship.CountStored(ItemKind.Electronics)} · 일감 {string.Join(" | ", os)}");
+                        Console.WriteLine($"     +{(w.Tick - tB) / (float)SimTime.TicksPerHour:0}h 켜짐 {a.MainOnline} · 전기 {core.Powered} 효율 {core.Efficiency:0.00}(고장 {core.FaultFactor:0.00} 등급 {Grades.Output(core.Grade):0.00} 마모 {core.Wear:0.00} 열 {core.Heat:0.00} 분말 {core.Fouled:0.00} 전압 {core.Body.Room.PowerFlow:0.00} 막는것 {w.Flow.Share(NetKind.Power, core.Body.Room).Why} {w.Flow.Share(NetKind.Power, core.Body.Room).Limit?.Key} 간선일감 {w.Board.Open.Count(o => o.Kind == WorkKind.RepairNet)}/{w.Board.Open.Where(o => o.Kind == WorkKind.RepairNet).Select(o => o.Assignee?.Name ?? "-").FirstOrDefault()}) 멈춤 {core.Stopped} 내림 {core.Parked} 상태 {core.Condition:0.00} 온도 {core.Body.Room.Air.Temperature:0} 재부팅 {a.Rebooting} 회로 {core.Body.Room.Powered} · 예비 {a.Core.BackupCore} · 같은 기계 {a.Computer == core} · 고장 {string.Join(",", core.Faults.Select(f => $"{f.Kind}단계{f.Stage}"))} · 전자 부품 {w.Ship.CountStored(ItemKind.Electronics)} · 일감 {string.Join(" | ", os)}");
                     }
                 }
                 // 고쳐진 뒤에도 불이 남았으면 마저 지켜본다

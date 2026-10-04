@@ -298,7 +298,7 @@ public partial class Main : Node2D
     {
         if (Sim.AlertSerial == _seenAlert) return;
         // 새로 울린 경보 중 가장 무거운 것 (치명이 뒤따른 경고에 묻히지 않게)
-        var fresh = Sim.Alerts.Where(a => a.Serial > _seenAlert).ToList();
+        var fresh = Sim.Alerts.Where(a => a.Serial > _seenAlert && Sim.Tick - a.Tick < SimTime.Minutes(10)).ToList(); // 건너뛰기 · 빨리 감기 동안 지나간 경보로는 멈추지 않는다
         _seenAlert = Sim.AlertSerial;
         var last = fresh.LastOrDefault(a => a.Level == AlertLevel.Critical);
         if (last == null) return;

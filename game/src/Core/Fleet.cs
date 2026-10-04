@@ -560,7 +560,7 @@ public sealed class FleetSystem
         if (w.Drones.Drones.Count == 0 || DroneSystem.Hatch(w) == null || !w.Automation.DroneControl) return;
         List<WorkOrder>? list = null;
         foreach (var o in w.Board.All)
-            if (o.Kind == WorkKind.SealBreach && !o.Closed && o.Assignee == null && o.Drone == null && o.Target.Kind == TargetKind.Wall && o.Target.Room is Room rr && !rr.Abandoned)
+            if (o.Kind == WorkKind.SealBreach && !o.Closed && o.Assignee == null && o.Drone == null && o.Target.Kind == TargetKind.Wall && o.Target.Room is Room rr && (!rr.Abandoned || w.Sensors.Alarm == null && w.Hazards.Shower.Count == 0)) // 포기한 구획도 조용할 때 밖에서 막는다 (드론은 방에 들어가지 않는다 — 되찾기 일감이 올라온 구멍만)
                 (list ??= new()).Add(o);
         if (list == null) return;
         foreach (var o in list.OrderByDescending(o => o.Urgency).ThenBy(o => o.Id))

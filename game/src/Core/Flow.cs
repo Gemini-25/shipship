@@ -55,7 +55,9 @@ public sealed partial class UtilityNet
         var sources = Sources(k);
         if (sources.Count == 0 || _nodes == 0) return result;
         if (_designVersion != Version) { Design(); _designVersion = Version; }
-        var (best, doors, via) = Route(k, sources, Cap);
+        // 길은 깔 때와 같은 규칙으로 (끊긴 토막만 피하고 · 보조 간선은 주 간선이 끊겼을 때만) — 굵기로 길을 고르면
+        // 평소 길 한 토막이 조금만 상하거나 임시로 이어도 배 전체가 "평소 0"인 토막으로 몰려 전압이 바닥났다 (주 컴퓨터가 고쳐도 못 켜지던 것)
+        var (best, doors, via) = Route(k, sources, l => Cap(l) <= 0f ? 0f : IsRing(l) ? 0.5f : 1f);
         // 한 토막을 지나는 방 수 (방마다 공급원까지 거슬러 올라가며)
         var load = new Dictionary<NetLink, int>();
         foreach (var (node, room) in _hubs)
