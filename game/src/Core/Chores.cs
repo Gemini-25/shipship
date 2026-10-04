@@ -68,7 +68,7 @@ public sealed class ChoresActivity : Activity
         if (spot is not Cell s) return -1f;
         distance = dist.Get(s);
         float ap = AppealAt(c, w, o, distance, eva);
-        if (ap > 0f && o.Urgency < 1f && w.Robots.HandsFree(o)) ap *= 0.5f; // 로봇이 먼저 — 맡을 로봇이 놀고 있으면 급한 일이 아니면 로봇에게 미룬다 (Unattended.cs)
+        if (ap > 0f && o.Urgency < 1f && w.Robots.HandsFree(o) && !(w.CrisisCrew.ActiveRoles.TryGetValue(c.Id, out var role) && CrisisCrewSystem.RoleFor(o) == role)) ap *= 0.5f; // 로봇이 먼저 — 맡을 로봇이 놀고 있으면 급한 일이 아니면 로봇에게 미룬다 (Unattended.cs) · 비상 배치표로 그 자리에 선 사람은 제 몫을 한다
         return ap;
     }
 

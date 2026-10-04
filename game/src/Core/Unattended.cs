@@ -35,7 +35,7 @@ public sealed partial class AutomationSystem
         var w = _world;
         if (!Present || !CoreOnline || w.Tick < _auxTryAt || w.Power.AuxRunning) return;
         var o = w.Board.Open.FirstOrDefault(x => x.Kind == WorkKind.StartAux && x.Assignee == null && x.Robot == null);
-        if (o == null) return;
+        if (o == null || o.Target.Furniture is not Furniture aux || !aux.Room.DataLinked) return; // 발전기 방 데이터선이 끊겼으면 원격으로 못 켠다 — 로봇 · 사람이 손으로
         _auxTryAt = w.Tick + SimTime.Minutes(4);
         if (!w.Rng.Chance(0.75f)) { w.Log.Add(w.Tick, LogKind.Ship, $"{Voice.Call}: 보조 발전기 원격 시동 — 걸리지 않았다 · 4분 뒤 다시"); return; }
         w.Power.StartAux();
@@ -333,5 +333,22 @@ public sealed partial class RobotSystem
             }
         }
         return null;
+    }
+}
+
+/// <summary>시험 · 화면: 승무원이 모두 배를 떠난다 (하던 일은 내려놓고 · 들고 있던 것은 선반에) — 주 컴퓨터 · 로봇 · 드론만 남는다.</summary>
+public static class Unmanned
+{
+    public static int Leave(World w, string why = "모두 배를 비웠다")
+    {
+        int n = 0;
+        foreach (var c in w.Crew.Where(c => !c.Dead && !c.Away).ToList())
+        {
+            c.EndJob(w, ToilStatus.Interrupted);
+            if (c.Carrying is ItemStack held) { VoyageV15.Put(w, held.Kind, held.Count); c.Carrying = null; }
+            w.Values.Depart(c, why);
+            n++;
+        }
+        return n;
     }
 }

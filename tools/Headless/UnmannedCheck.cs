@@ -25,14 +25,7 @@ public static partial class Program
             var a = w.Automation;
             string name = w.Ship.Name;
             // 모두 배를 떠난다 (하던 일은 내려놓는다 — 맡은 일감이 사람에게 묶여 남지 않게)
-            int crew = 0;
-            foreach (var c in w.Crew.Where(c => !c.Dead && !c.Away).ToList())
-            {
-                c.EndJob(w, ToilStatus.Interrupted);
-                if (c.Carrying is ItemStack held) { VoyageV15.Put(w, held.Kind, held.Count); c.Carrying = null; } // 들고 있던 것은 선반에
-                w.Values.Depart(c, "모두 배를 비웠다");
-                crew++;
-            }
+            int crew = Unmanned.Leave(w);
             long t0 = w.Tick;
             int rj0 = w.Robots.JobsDone, rb0 = w.Robots.Breakdowns, ds0 = w.Drones.Sorties, dj0 = w.Drones.JobsDone;
             int machines = w.Ship.Machines.Count();

@@ -876,6 +876,9 @@ public partial class Main : Node2D
                 case "--death":
                     Player.AllowDeath(Sim, true);
                     break;
+                case "--leave": // 무인 운항 화면: 승무원이 모두 배를 떠난다 (주 컴퓨터 · 로봇 · 드론만 남는다)
+                    Unmanned.Leave(Sim);
+                    break;
                 case "--scarcity":
                     // 예비 부품·케이블·퓨즈·연료통을 바닥내고 소모품도 조금만 (v5 적응 시험)
                     Player.Scarcity(Sim);
