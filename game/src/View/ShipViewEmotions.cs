@@ -93,7 +93,7 @@ public static class EmotionGlyphs
                         float r = j % 2 == 0 ? s : s * 0.28f;
                         star[j] = c0 + new Vector2(Mathf.Cos(th), Mathf.Sin(th)) * r;
                     }
-                    ci.DrawColoredPolygon(star, col.WithAlpha(alpha * (0.6f + 0.4f * tw)));
+                    if (s >= 0.6f) ci.DrawColoredPolygon(star, col.WithAlpha(alpha * (0.6f + 0.4f * tw))); // 깜빡여 거의 사라질 때는 건너뛴다 (너무 작은 별은 다각형 나누기가 실패한다)
                     if (detail) ci.DrawCircle(c0, s * 0.18f, new Color(1, 1, 1, alpha * tw));
                 }
                 break;

@@ -33,7 +33,7 @@ public sealed partial class EcoSystem
             if (p.Health <= 0f) { PlantDies(p, room); continue; }
             if (p.Stage == 0 && p.RoomId < calm.Length) calm[p.RoomId] = true;
             // 돌보는 사람
-            if (CrewOf(p.Carer) is not CrewMember carer || carer.Dead) p.Carer = PickCarer(p);
+            if (CrewOf(p.Carer) is not CrewMember carer || carer.Dead || carer.Away) p.Carer = PickCarer(p);
             // 컴퓨터: 흙이 바싹 마른 지 오래 — 돌보는 사람에게
             if (p.Water < 0.1f && w.Tick - p.Watered > SimTime.Hours(30) && (p.Hinted < 0 || w.Tick - p.Hinted > SimTime.TicksPerDay) && w.Automation.CoreOnline)
             {
@@ -54,7 +54,7 @@ public sealed partial class EcoSystem
         CrewMember? best = null; float bs = float.MinValue;
         foreach (var c in w.Crew)
         {
-            if (c.Dead || c.IsChild && c.Age < 6f) continue;
+            if (c.Dead || c.Away || c.IsChild && c.Age < 6f) continue;
             float s = c.SkillLevel(Skill.Botany) + 0.5f * c.Traits.Diligence + (c.Bed?.Room.Id == p.RoomId ? 0.4f : 0f) + ((c.Id * 31 + p.Id * 17) % 10) * 0.02f
                       - 0.15f * Plants.Count(x => x.Carer == c.Id && x != p);
             if (s > bs) { bs = s; best = c; }

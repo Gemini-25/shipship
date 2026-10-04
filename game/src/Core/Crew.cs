@@ -344,6 +344,9 @@ public sealed class CrewMember
     /// <summary>v16.12 원정 중 — 배에 없다 (배 위 시스템이 건너뛴다).</summary>
     public bool Away { get; internal set; }
 
+    /// <summary>기항지 등에서 아예 내렸다 (Away도 켜져 있다 — 다시 돌아오지 않는다).</summary>
+    public bool LeftShip { get; internal set; }
+
     /// <summary>다른 승무원에 대한 호감 -1~1 (Id로 찾음).</summary>
     public Dictionary<int, float> Affinity { get; } = new();
 
@@ -425,7 +428,7 @@ public sealed class CrewMember
     public int Drills { get; set; }
     public bool Drilled(World w) => w.Tick < DrilledUntil;
 
-    public string ActivityLabel => Job?.Label ?? "대기";
+    public string ActivityLabel => LeftShip ? "배를 떠남" : Away ? "원정 중" : Job?.Label ?? "대기";
     public bool IsMoving => Path != null;
     public bool IsAwake => Pose is not (Pose.Sleeping or Pose.Down) && !Dead && !Away;
 

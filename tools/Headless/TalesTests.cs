@@ -210,7 +210,9 @@ public static partial class Program
             var w = DayOne(seed, "Hanbit");
             var st = w.Tales; st.NoSeeds = true;
             var p = w.Crew.Where(c => !c.Dead && !c.IsChild).OrderBy(c => c.Id).ToList();
-            var x = p.First(c => c.Room != null && c.IsAwake && p.Any(o => o != c && o.Room == c.Room && o.IsAwake)) ;
+            CrewMember? Pair() => p.FirstOrDefault(c => c.Room != null && c.IsAwake && p.Any(o => o != c && o.Room == c.Room && o.IsAwake));
+            for (int i = 0; i < 48 && Pair() == null; i++) Run(w, SimTime.Minutes(10)); // 모두 잠든 시각이면 같은 방에 깬 두 사람이 생길 때까지
+            var x = Pair()!;
             x.Mind.PanicUntil = w.Tick + SimTime.Minutes(6);
             Run(w, SimTime.Minutes(2));
             var kp = st.Cards.LastOrDefault(k => k.Kind == CardKind.Calm && k.Listener == x.Id);

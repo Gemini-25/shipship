@@ -36,7 +36,7 @@ public partial class Hud
         var card = new Rect2(x0, Margin, RightColumnWidth, Total());
         Card(card);
         SectionTitle(x0 + 18, card.Position.Y + 24, "승무원");
-        int alive = _world.Crew.Count(c => !c.Dead);
+        int alive = _world.Crew.Count(c => !c.Dead && !c.LeftShip);
         string head = trouble.Count > 0 ? $"{alive}/{n}명 · 살펴볼 {trouble.Count}" : $"{alive}/{n}명";
         Gfx.TextRight(this, Fonts.Body, new Vector2(card.End.X - 18, card.Position.Y + 24), head, Ui.TextSmall, trouble.Count > 0 ? Palette.Warning : Palette.TextMuted);
         float y = card.Position.Y + 36;
@@ -111,10 +111,10 @@ public partial class Hud
                 DrawFace(new Vector2(row.Position.X + fr + 4, cy), fr, c);
                 int ns = two ? Ui.TextSmall : Ui.TextSubtitle;
                 float nx = row.Position.X + fr * 2 + 10;
-                Gfx.Text(this, Fonts.Bold, new Vector2(nx, cy + Gfx.CenterOffset(Fonts.Bold, ns)), c.Name, ns, c.Dead ? Palette.TextMuted : Palette.Text);
+                Gfx.Text(this, Fonts.Bold, new Vector2(nx, cy + Gfx.CenterOffset(Fonts.Bold, ns)), c.Name, ns, c.Dead || c.LeftShip ? Palette.TextMuted : Palette.Text);
                 float nw = Gfx.Width(Fonts.Bold, c.Name, ns);
                 string state = c.Dead ? "사망" : c.ActivityLabel;
-                var sc = c.Dead ? Palette.TextMuted : Palette.Crew(c.Id).Lightened(0.2f);
+                var sc = c.Dead || c.LeftShip ? Palette.TextMuted : Palette.Crew(c.Id).Lightened(0.2f);
                 int ss = two ? Ui.TextTiny : Ui.TextBody;
                 float room = row.End.X - 6 - (nx + nw + 22);
                 if (!two && c.Room != null && room > 150)

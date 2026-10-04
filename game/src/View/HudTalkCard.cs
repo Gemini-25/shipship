@@ -34,7 +34,7 @@ public partial class Hud
         if (StorySystem.Off || st.Cards.Count == 0) return;
         if (CouncilOpen || PolicyOpen || ChronicleOpen || TechOpen || ControlOpen || ChainOpen || ScaleCodexOpen || HelpOpen || VoyageOpen) return; // v17.7 항해 결산과 겹치지 않게
         var last = st.Cards[^1];
-        if (last.Id != _talkId) { _talkId = last.Id; _talkAt = _time; _talkShift = 0; _talkClosed = false; }
+        if (last.Id != _talkId) { _talkId = last.Id; _talkAt = _time; _talkShift = 0; _talkClosed = w.Tick - last.Tick > SimTime.Minutes(30); } // 화면을 처음 볼 때(건너뛰기 · 불러오기) 지난 대화는 띄우지 않는다
         bool hover = _talkRect.HasPoint(mouse);
         if (_talkClosed || _time - _talkAt > 16f && !hover && _talkShift == 0) { _talkRect = new Rect2(); return; }
         int idx = Math.Clamp(st.Cards.Count - 1 - _talkShift, 0, st.Cards.Count - 1);
@@ -45,7 +45,7 @@ public partial class Hud
         var tone = TalkColor(k.Kind);
 
         float W = 610f, rowH = 30f;
-        float H = 44f + 92f + k.Options.Count * rowH + 70f;
+        float H = 44f + 104f + k.Options.Count * rowH + 70f;
         float x0 = Mathf.Clamp((Screen.X - RightColumnWidth) * 0.5f - W * 0.5f + 150f, Margin + 290f, Screen.X - RightColumnWidth - W - Margin * 2);
         // 위쪽 알림 띠(두 줄까지) 아래에서 — 알림이 대화 카드 머리를 덮지 않게
         float y0 = MathF.Min(Margin + 52f + 8f + 40f + 26f + 76f, Screen.Y - H - LogHeight - Margin - 12f);
@@ -97,7 +97,7 @@ public partial class Hud
         Gfx.Text(this, Fonts.Body, new Vector2(mx, py + 34), $"{li.Name}에게 {Ko.EunNeun(sp.Name)} {(rel >= 0.5f ? "아주 가까운 사람" : rel >= 0.2f ? "가까운 사람" : rel <= -0.3f ? "껄끄러운 사람" : "그냥 동료")}", Ui.TextTiny, Palette.TextMuted);
 
         // ── 선택지
-        float oy = y0 + 44f + 92f;
+        float oy = y0 + 44f + 104f; // 초상 아래 이름 · 출신 두 줄 밑에서 (출신 줄이 첫 선택지와 겹치지 않게)
         bool picked = age > 1.2f;
         for (int i = 0; i < k.Options.Count; i++)
         {

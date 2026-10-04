@@ -113,12 +113,16 @@ public partial class Main : Node2D
 
     public ulong NoticeFrame { get; private set; }
 
-    public void ShowNotice(string text)
+    public void ShowNotice(string text, bool gameTimed = false)
     {
         Notice = text;
         NoticeMsec = Time.GetTicksMsec();
         NoticeFrame = Engine.GetProcessFrames();
+        NoticeTick = gameTimed && Sim != null ? Sim.Tick : -1;
     }
+
+    /// <summary>사건 알림이 나온 게임 시각 (-1: 시각과 상관없는 안내) — 건너뛰기로 게임 시간이 한참 흘렀으면 지난 사건 알림은 내린다.</summary>
+    public long NoticeTick { get; private set; } = -1;
 
     private Starfield _stars = null!;
     private double _accumulator;
@@ -301,9 +305,9 @@ public partial class Main : Node2D
         if (Settings.AutoPauseCritical)
         {
             Paused = true;
-            ShowNotice($"치명 경보 — 저절로 멈췄다: {last.Text}" + (last.Room != null ? " · N: 그곳으로" : ""));
+            ShowNotice($"치명 경보 — 저절로 멈췄다: {last.Text}" + (last.Room != null ? " · N: 그곳으로" : ""), true);
         }
-        else if (Settings.EventToasts && last.Room != null) ShowNotice($"{last.Text} · N: 그곳으로");
+        else if (Settings.EventToasts && last.Room != null) ShowNotice($"{last.Text} · N: 그곳으로", true);
     }
 
     /// <summary>N: 가장 최근 경보가 난 곳으로.</summary>
@@ -840,13 +844,20 @@ public partial class Main : Node2D
                     var room = Sim.Ship.Rooms.FirstOrDefault(r => r.Type.ToString() == bits[0]);
                     if (room == null) break;
                     if (parts[0] == "--fire")
-                        Player.Fire(Sim, room.Cells.First(Sim.Ship.IsOpenFloor));
+                    {
+                        if (room.Cells.Any(Sim.Ship.IsOpenFloor)) Player.Fire(Sim, room.Cells.First(Sim.Ship.IsOpenFloor));
+                    }
                     else
                     {
                         float size = bits.Length > 1 ? float.Parse(bits[1], CultureInfo.InvariantCulture) : 0.35f;
-                        var hull = Sim.Ship.Walls.Where(kv => kv.Value.IsHull && Hull.InsideRoom(Sim.Ship, kv.Key) == room).Select(kv => kv.Key).ToList();
-                        var wall = hull.OrderBy(c => Mathf.Abs(c.Y - room.Center.Y) + Mathf.Abs(c.X - room.Center.X) * 0.3f).First();
-                        Player.Meteor(Sim, Cell.Dirs4.Select(d => wall + d).First(c => Sim.Ship.RoomAt(c) == room), size);
+                        System.Collections.Generic.List<Cell> HullOf(Room rm) => Sim.Ship.Walls.Where(kv => kv.Value.IsHull && Hull.InsideRoom(Sim.Ship, kv.Key) == rm).Select(kv => kv.Key).ToList();
+                        // 그 종류의 방 가운데 바깥 벽에 닿은 방 (안쪽 방에는 운석이 바로 못 들어온다)
+                        var hull = HullOf(room);
+                        if (hull.Count == 0 && Sim.Ship.Rooms.Where(r => r.Type == room.Type && r != room).Select(r => (r, h: HullOf(r))).FirstOrDefault(x => x.h.Count > 0) is var (alt, ah) && alt != null) { room = alt; hull = ah; }
+                        var wall = hull.OrderBy(c => Mathf.Abs(c.Y - room.Center.Y) + Mathf.Abs(c.X - room.Center.X) * 0.3f).Cast<Cell?>().FirstOrDefault();
+                        var hit = wall is Cell wc ? Cell.Dirs4.Select(d => wc + d).Cast<Cell?>().FirstOrDefault(c => Sim.Ship.RoomAt(c!.Value) == room) : null;
+                        if (hit is Cell hc) Player.Meteor(Sim, hc, size);
+                        else GD.PushWarning($"--meteor: {bits[0]} 방이 바깥 벽에 닿지 않아 운석을 떨어뜨리지 않았다");
                     }
                     break;
                 }

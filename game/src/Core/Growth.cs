@@ -33,7 +33,7 @@ public sealed partial class WorkBoard
     private void ScanGrowth(Poster post)
     {
         var w = _world;
-        var alive = w.Crew.Where(c => !c.Dead && !c.Down).ToList();
+        var alive = w.Crew.Where(c => !c.Dead && !c.Down && !c.Away).ToList(); // 배에 없는 사람(원정 · 하선)은 빼고
         // ── 재활 ──
         foreach (var c in w.Growth.NoRehab ? new List<CrewMember>() : alive)
         {

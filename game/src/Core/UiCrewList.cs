@@ -21,6 +21,7 @@ public static class UiCrewList
     public static CrewTrouble Of(World w, CrewMember c)
     {
         if (c.Dead) return new CrewTrouble(-1f, "dead", "세상을 떠났다");
+        if (c.LeftShip) return new CrewTrouble(-1f, "left", "배를 떠났다");
         if (c.Down || c.CarriedBy != null) return new CrewTrouble(10f, "down", c.CarriedBy != null ? "업혀 간다" : "쓰러졌다");
         if (c.Vitals.Oxygen < 0.6f) return new CrewTrouble(9f + (0.6f - c.Vitals.Oxygen), "danger", $"숨이 가쁘다 (산소 {c.Vitals.Oxygen * 100:0}%)");
         if (c.Mind.Panicking(w.Tick)) return new CrewTrouble(8f, "panic", "겁에 질려 어쩔 줄 모른다");
@@ -44,7 +45,7 @@ public static class UiCrewList
     {
         var all = w.Crew.Select(c => (c, t: Of(w, c))).ToList();
         return all.OrderByDescending(x => x.t.Any ? 1 : 0).ThenByDescending(x => x.t.Any ? x.t.Score : 0f)
-            .ThenBy(x => x.c.Dead ? 1 : 0).ThenBy(x => (int)x.c.Role).ThenBy(x => x.c.Id).ToList();
+            .ThenBy(x => x.c.Dead || x.c.LeftShip ? 1 : 0).ThenBy(x => (int)x.c.Role).ThenBy(x => x.c.Id).ToList();
     }
 
     /// <summary>역할 묶음 (문제 없는 사람만 · 접을 수 있게).</summary>

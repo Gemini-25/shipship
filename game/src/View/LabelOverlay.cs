@@ -130,6 +130,7 @@ public partial class LabelOverlay : Node2D
 
         foreach (var c in _world.Crew)
         {
+            if (c.Away && !c.Dead) continue; // 배에 없는 사람 (원정 · 하선) — 배 밖 빈 자리에 이름표를 띄우지 않는다
             var col = Palette.Crew(c.Id);
             bool selected = c == _main.SelectedCrew;
             bool hovered = c == _main.HoveredCrew;

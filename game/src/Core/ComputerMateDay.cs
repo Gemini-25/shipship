@@ -33,7 +33,7 @@ public sealed partial class ShipMate
         var w = _w;
         int day = SimTime.Day(w.Tick);
         float h = Hour(w.Tick);
-        if (day != _briefDay && h >= 7f && h < 11f && !Crisis.Acting(w)) { _briefDay = day; Brief(day); }
+        if (day != _briefDay && h >= 7f && h < 11f && !Crisis.Acting(w) && !w.Automation.Unattended) { _briefDay = day; Brief(day); }
         if (day != _eveDay && h >= 21f) { _eveDay = day; Evening(day); }
     }
 
@@ -67,7 +67,7 @@ public sealed partial class ShipMate
         var plan = new List<string>();
         if (NextDrill is DrillRun nd && SimTime.Day(nd.Start) == day) plan.Add($"{Hour(nd.Start):0}시 {nd.Kind} 훈련");
         if (w.Expedition.Current is Trip tr && tr.Phase is TripPhase.Gathering) plan.Add($"원정대 출발 ({tr.Site.Name})");
-        if (a.Apps.Roster.FirstOrDefault(r => r.Day == day && r.Duty == "야간 당직") is DutySlot ds && Crew(ds.CrewId) is CrewMember dc) plan.Add($"야간 당직 {dc.Name}");
+        if (a.Apps.Roster.FirstOrDefault(r => r.Day == day && r.Duty == "야간 당직") is DutySlot ds && Crew(ds.CrewId) is CrewMember { Dead: false, Away: false } dc) plan.Add($"야간 당직 {dc.Name}");
         if (plan.Count > 0) b.Lines.Add(("일정", "오늘 일정: " + string.Join(" · ", plan)));
         // 물자
         if (Supplies.Where(s => s.Open).OrderBy(s => s.DaysLeft).FirstOrDefault() is SupplyPlan sp)

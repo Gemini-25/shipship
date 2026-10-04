@@ -88,6 +88,14 @@ public static partial class Program
                 foreach (var m in w.Ship.Machines.Where(m => m.Faults.Count > 0))
                     foreach (var f in m.Faults) Console.WriteLine($"     고장 {m.Name}: {f.Kind} · 부품 {string.Join("+", f.Materials.Select(x => $"{ItemKinds.Name(x.kind)}{x.count}(배에 {w.Ship.CountStored(x.kind)})"))} · 일감 {string.Join(" ", w.Board.All.Where(o => !o.Closed && o.Target.Furniture == m.Body).Select(o => $"{o.Kind}/{(o.Robot?.Name ?? "-")}/{(o.BlockedUntil > w.Tick ? "막힘" : "")}{o.Detail}"))}");
             }
+            static bool Ending(string t) => t.Contains("말았다") || t.Contains("못했다") || t.Contains("접었다") || t.Contains("끝을 보지"); // 떠나며 접힌 일의 마무리 기록은 괜찮다
+            // 떠난 사람이 배 위에 있는 것처럼 나오는 기록 (떠난 뒤 1분부터)
+            var ghosts = w.Log.Entries.Where(e => e.Tick > t0 + SimTime.Minutes(1) && e.CrewId >= 0 && e.CrewId < w.Crew.Count && w.Crew[e.CrewId].LeftShip && !Ending(e.Text)).Select(e => e.Text).ToList();
+            if (ghosts.Count > 0)
+            {
+                problems.Add($"{name}: 떠난 사람 기록 {ghosts.Count}줄");
+                foreach (var g in ghosts.Distinct().Take(args.Contains("--ghosts") ? 30 : 6)) Console.WriteLine($"     유령 기록: {g}");
+            }
             int faultyEnd = w.Ship.Machines.Count(m => m.Faults.Count > 0);
             var critBroken = crit.Where(m => m.Faults.Count > 0).Select(m => m.Name).ToList();
             int rjobs = w.Robots.JobsDone - rj0, rbreak = w.Robots.Breakdowns - rb0, dsort = w.Drones.Sorties - ds0, djobs = w.Drones.JobsDone - dj0;

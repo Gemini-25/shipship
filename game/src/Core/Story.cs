@@ -80,7 +80,7 @@ public sealed partial class StorySystem
     public StorySystem(World w) => _w = w;
 
     private CrewMember? P(int id) { if (id < 0) return null; foreach (var c in _w.Crew) if (c.Id == id) return c; return null; }
-    private static bool Adult(CrewMember c) => !c.Dead && !c.IsChild;
+    private static bool Adult(CrewMember c) => !c.Dead && !c.IsChild && !c.Away;
     private string Name(int id) => P(id)?.Name ?? "누군가";
     /// <summary>이름 + 랑/이랑.</summary>
     private static string Rang(string n) => Ko.WaGwa(n).EndsWith("과") ? n + "이랑" : n + "랑";
@@ -174,7 +174,8 @@ public sealed partial class StorySystem
             if (!a.Active) continue;
             var c = P(a.Who);
             if (c == null || c.Dead) { a.End = ArcEnd.Failed; a.EndedAt = w.Tick; a.Ending = "끝을 보지 못했다"; continue; }
-            if (crisis) continue;
+            if (c.LeftShip) { a.End = ArcEnd.Failed; a.EndedAt = w.Tick; a.Ending = "배를 떠나며 끝을 보지 못했다"; continue; }
+            if (crisis || c.Away) continue; // 원정 중: 돌아올 때까지 멈춘다
             Gate(a, c);
         }
     }

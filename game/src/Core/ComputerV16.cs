@@ -119,7 +119,7 @@ public sealed class ComputerApps
     public void MakeRoster(int day)
     {
         var w = _w;
-        var crew = w.Crew.Where(c => !c.Dead && !c.IsChild && !c.Down).OrderBy(c => c.Id).ToList();
+        var crew = w.Crew.Where(c => !c.Dead && !c.Away && !c.IsChild && !c.Down).OrderBy(c => c.Id).ToList();
         if (crew.Count == 0) return;
         Roster.RemoveAll(s => s.Day < day - 2);
         var load = crew.ToDictionary(c => c.Id, c => Roster.Count(s => s.CrewId == c.Id));

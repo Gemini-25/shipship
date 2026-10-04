@@ -1406,7 +1406,7 @@ public partial class Hud : Control
             UiKit.Banner(this, new Vector2(cx, y), $"불러오는 중 — 같은 항해 번호에서 역사를 다시 돌린다 {Pct(rr.Progress)} · {_world.Day}일차", Tone.Info, pulse, "clock");
             y += 36f;
         }
-        if (_main.Notice is string notice && (Time.GetTicksMsec() - _main.NoticeMsec < 6000 || Engine.GetProcessFrames() - _main.NoticeFrame < 120))
+        if (_main.Notice is string notice && (Time.GetTicksMsec() - _main.NoticeMsec < 6000 || Engine.GetProcessFrames() - _main.NoticeFrame < 120) && (_main.NoticeTick < 0 || _world.Tick - _main.NoticeTick < SimTime.Hours(1)))
         {
             UiKit.Banner(this, new Vector2(cx, y), notice, Tone.Good, 1f, "info");
             y += 36f;

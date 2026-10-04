@@ -67,7 +67,7 @@ public partial class Hud
         }
         foreach (var c in _world.Crew)
         {
-            if (c.Dead) continue;
+            if (c.Dead || c.Away) continue;
             var p = M(ShipView.ToPx(c.Position));
             DrawCircle(p, c == _main.SelectedCrew ? 3f : 1.8f, c.Down ? Palette.Danger : Palette.Crew(c.Id), true, -1f, true);
         }

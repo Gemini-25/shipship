@@ -646,6 +646,7 @@ public sealed partial class ValueSystem
         if (c.Dead || c.Away) return;
         c.Interrupt(w);
         c.Away = true;
+        c.LeftShip = true;
         c.Position = new System.Numerics.Vector2(-90f - c.Id * 1.5f, -90f);
         c.PreviousPosition = c.Position;
         c.Room = null;

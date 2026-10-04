@@ -75,6 +75,13 @@ public partial class Hud
             Gfx.Text(this, Fonts.Body, new Vector2(ax + 17, y + 16), UiKit.Fit(here.Name, right - ax - 17, Ui.TextBody), Ui.TextBody, Palette.TextDim);
         }
         y += 26;
+        if (c.LeftShip) // 배를 떠난 사람: 배 위의 목표 · 이유 · 몸 상태는 더 알 수 없다 — 한 줄로 줄인다
+        {
+            Gfx.Text(this, Fonts.Body, new Vector2(x, y + 10), UiKit.Fit("배에서 내렸다 — 지금 하는 일과 몸 상태는 더 알 수 없다", right - x, Ui.TextSmall), Ui.TextSmall, Palette.TextMuted);
+            y += 18;
+            _crewCardH = y - cardTop + 50f;
+            return;
+        }
 
         // ── 목표: 층 배지 + 까닭 ──
         if (!c.Dead)
@@ -326,7 +333,7 @@ public partial class Hud
     /// <summary>지금 눈여겨볼 사람: 살펴볼 까닭이 있는 사람 → 급한 일을 하는 사람 → 12초마다 돌아가며 (◀ ▶로 넘김).</summary>
     private CrewMember? SpotlightCrew()
     {
-        var live = _world.Crew.Where(c => !c.Dead).OrderBy(c => c.Id).ToList();
+        var live = _world.Crew.Where(c => !c.Dead && !c.Away).OrderBy(c => c.Id).ToList();
         if (live.Count == 0) return null;
         var flagged = live.Where(c => Attention(c) is var a && a is { } at && Ui.IsAlarm(at.tone)).ToList();
         var urgent = live.Where(c => c.Job?.Urgent == true && !flagged.Contains(c)).ToList();
