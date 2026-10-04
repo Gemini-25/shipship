@@ -570,7 +570,7 @@ public sealed partial class WorkBoard
                 if (!r.Inputs.All(x => Have(x.kind) >= x.count)) continue;
                 // 수리가 기다리는 재료는 재고 채우기용 제작에 쓰지 않는다 (뜯어 온 부품이 엉뚱한 데 쓰이지 않게)
                 if (wanted <= 0f && r.Inputs.Any(x => demand.GetValueOrDefault(x.kind) > 0f)) continue;
-                if (r.MinSkill > 0f && !w.Crew.Any(c => !c.Dead && !c.Down && c.SkillLevel(r.Skill) >= r.MinSkill)) continue;
+                if (r.MinSkill > 0f && !w.Crew.Any(c => !c.Dead && !c.Down && !c.Away && c.SkillLevel(r.Skill) >= r.MinSkill)) continue;
                 float u;
                 string why;
                 if (r.FromProduce)

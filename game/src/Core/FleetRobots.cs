@@ -344,8 +344,9 @@ public sealed partial class RobotSystem
         float bd = float.MaxValue;
         foreach (var r in Robots)
         {
-            if (r == b || !Spare(r, cmd) || !(RobotsV15.Assists(r.Kind) || RobotsV15.Base(r.Kind) == RobotKind.Maintainer)) continue;
-            float d = Far(r.Position, b.Position) + (Free(r) ? 0f : 20f);
+            bool natural = RobotsV15.Assists(r.Kind) || RobotsV15.Base(r.Kind) == RobotKind.Maintainer;
+            if (r == b || !Spare(r, cmd) || !natural && !(w.Automation.Unattended && r.Kind is not (RobotKind.Stretcher or RobotKind.Nurse))) continue; // 무인 운항: 정비 로봇이 멈추면 다른 로봇이 주 컴퓨터 안내로
+            float d = Far(r.Position, b.Position) + (Free(r) ? 0f : 20f) + (natural ? 0f : 40f);
             if (d < bd) { bd = d; best = r; }
         }
         if (best == null) return;
@@ -373,7 +374,8 @@ public sealed partial class RobotSystem
         if (near is not Cell at) return;
         if (best.State == RobotState.Active) Release(best);
         steps.Add(new RGoto(at));
-        steps.Add(new RWork(FaultHours(fault) * 0.9f, null, b.Position));
+        bool trained = RobotsV15.Assists(best.Kind) || RobotsV15.Base(best.Kind) == RobotKind.Maintainer;
+        steps.Add(new RWork(FaultHours(fault) * (trained ? 0.9f : 1.6f), null, b.Position));
         steps.Add(new RDo((rb, world) => world.Robots.FixedBy(rb, b, parts)));
         steps.Add(new RTest(b));
         best.Fixing = b;

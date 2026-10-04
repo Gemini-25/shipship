@@ -393,6 +393,11 @@ public sealed partial class DroneSystem
     {
         var w = _world;
         Waiting.Clear();
+        // 밖에서 막을 파공이 있는데 봉합 드론 거치대에 금속판(2)도 실링폼도 모자라다 — 보급을 서두르게 한다 (작은 배에선 이게 없으면 구멍이 그대로 남는다)
+        if (!FleetSystem.Off && w.Board.Open.Any(o => o.Kind == WorkKind.SealBreach && o.Drone == null && o.Assignee == null)
+            && Drones.Where(d => CanSeal(d.Kind) && d.Operational).ToList() is { Count: > 0 } sealers
+            && sealers.All(d => d.Dock.Storage!.Count(ItemKind.Plate) < 2 && d.Dock.Storage.Count(ItemKind.Sealant) == 0))
+        { Waiting.Add(ItemKind.Plate); Waiting.Add(ItemKind.Sealant); }
         if (Manual) ManualUntil = w.Tick + SimTime.Minutes(15); // v9.2: 사람이 콘솔에 앉아 있다
         var docksCharging = new HashSet<Furniture>();
         foreach (var d in Drones)

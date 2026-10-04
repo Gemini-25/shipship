@@ -44,6 +44,25 @@ public sealed partial class AutomationSystem
         w.Log.Add(w.Tick, LogKind.Ship, $"{Voice.Call}: 보조 발전기를 원격으로 켰다 ({o.Detail})");
     }
 
+    /// <summary>무인 운항: 사람이 정해야 하는 배관 결정(본관 잠그기 · 새는 채로 돌리기)을 주 컴퓨터가 대신 정한다 —
+    /// 올라온 지 10분 지나도 정할 사람이 없으면. 잠그면 원자로가 서지만 로봇이 때우고 다시 열 수 있다.</summary>
+    private void DecideAlone()
+    {
+        var w = _world;
+        if (!Unattended || !Present || !CoreOnline) return;
+        foreach (var o in w.Board.Open.Where(x => x.Kind is WorkKind.IsolateMain or WorkKind.LimpMain && x.Assignee == null && w.Tick - x.Posted >= SimTime.Minutes(10)).ToList())
+        {
+            if (o.Target.Pipe is not PipeSegment s) continue;
+            if (o.Kind == WorkKind.IsolateMain) s.IsolateApproved = true; else s.LimpApproved = true;
+            w.Board.Close(o);
+            w.Board.RequestScan();
+            UnattendedFixes++;
+            string what = o.Kind == WorkKind.IsolateMain ? $"{s.Name} 밸브를 잠그고 고친다 (원자로가 선다 — 냉각수가 다 새는 것보다 낫다)" : $"{s.Name}을 새는 채로 열어 냉각수를 부어 가며 돌린다";
+            w.Log.Add(w.Tick, LogKind.Ship, $"{Voice.Call}: 정할 사람이 없다 — {what}");
+            w.History.Add(w, HistoryKind.Decision, $"주 컴퓨터가 혼자 정했다: {what}", s.ValveRoom);
+        }
+    }
+
     private void TrackUnattended()
     {
         var w = _world;
@@ -78,7 +97,7 @@ public sealed partial class RobotSystem
     public static bool Carrier(RobotKind k) => k is RobotKind.Hauler or RobotKind.Courier or RobotKind.Tanker or RobotKind.Stocker or RobotKind.Utility;
     /// <summary>로봇이 맡을 수 있는 사람 몫의 손일 (종류만).</summary>
     public static bool HandWork(WorkKind k) => k is WorkKind.ResetBreaker or WorkKind.StartAux or WorkKind.CloseValve or WorkKind.OpenValve or WorkKind.Refuel or WorkKind.RefillCoolant
-        or WorkKind.Repair or WorkKind.Reline or WorkKind.Rewire or WorkKind.PatchPipe or WorkKind.RestartReactor;
+        or WorkKind.Repair or WorkKind.Reline or WorkKind.Rewire or WorkKind.PatchPipe or WorkKind.RestartReactor or WorkKind.StockDock or WorkKind.Fabricate;
 
     /// <summary>이 로봇이 사람 몫의 손일을 맡을 수 있나.</summary>
     private bool Stands(Robot r, WorkOrder o)
@@ -86,16 +105,23 @@ public sealed partial class RobotSystem
         var w = _world;
         if (HandsOff || !HandWork(o.Kind) || r.Kind is RobotKind.Stretcher or RobotKind.Nurse) return false;
         if (o.Kind is WorkKind.ResetBreaker or WorkKind.StartAux or WorkKind.CloseValve or WorkKind.OpenValve) return true;
+        if (o.Kind == WorkKind.StockDock) return w.Automation.Unattended; // 운반 로봇이 없는 작은 배: 드론이 외벽을 막을 금속판을 거치대에 (아무 로봇이나 나른다)
         if (o.Kind is WorkKind.Refuel or WorkKind.RefillCoolant) return Carrier(r.Kind) || Fixer(r.Kind);
-        if (!Fixer(r.Kind)) return false;
+        // 무인 운항: 정비 로봇이 모자라면 다른 로봇도 주 컴퓨터 안내로 가벼운 수리를 (무거운 부품 없이 · 느리고 자주 헛짚는다)
+        if (!Fixer(r.Kind)) return o.Kind == WorkKind.Repair && w.Automation.Unattended && RepairOk(o) && o.Target.Furniture?.Machine?.Faults.FirstOrDefault(x => x.Kind == o.Fault && x.Circuit == o.Circuit) is Fault lf && !lf.Materials.Any(x => PartsSystem.Heavy(x.kind));
         return o.Kind switch
         {
             WorkKind.Reline or WorkKind.Rewire or WorkKind.PatchPipe => true,
             WorkKind.RestartReactor => w.Automation.CoreOnline && w.Automation.Unattended, // 노심을 다루는 일 — 사람 기관사가 있으면 사람이 (로봇은 느리고 자주 헛짚는다) · 아무도 없을 때 주 컴퓨터가 절차를 짚어 주면
             WorkKind.Repair => RepairOk(o),
+            WorkKind.Fabricate => w.Automation.Unattended && FabOk(o) is not null, // 무인 운항: 작업대에서 간단한 부품을 (주 컴퓨터가 도면을 짚어 준다)
             _ => false,
         };
     }
+
+    /// <summary>로봇이 작업대 · 정제기에서 만들 수 있는 것: 숙련이 필요 없는 것 (재료를 넣고 주 컴퓨터가 짚어 주는 대로).</summary>
+    private static Recipe? FabOk(WorkOrder o) =>
+        o.Product is ItemKind p && o.Target.Furniture is Furniture st && Recipes.For(p, st.Type == FurnitureType.Refinery ? Station.Refinery : Station.Workbench) is Recipe r && r.MinSkill <= 0f ? r : null;
 
     /// <summary>로봇이 혼자 할 수 있는 수리: 파손 아님 · 부품 한 가지까지 · 무거운 부품(모터 · 펌프 · 제어부)은 둘이 잡고 다는 일이라 사람이 있으면 사람 짝에게 (아무도 없을 때만 로봇이 지그로).</summary>
     private bool RepairOk(WorkOrder o) =>
@@ -300,6 +326,43 @@ public sealed partial class RobotSystem
                 }));
                 return steps;
             }
+            case WorkKind.Fabricate:
+            {
+                if (FabOk(o) is not Recipe rc) { blocked = "로봇이 만들 수 없는 것"; return null; }
+                if (f.Machine!.Efficiency <= 0f) { blocked = f.Machine.Powered ? $"{f.Name} 멈춤" : $"{f.Name}에 전기가 없다"; return null; }
+                if (!rc.Inputs.All(x => w.Ship.CountStored(x.kind) >= x.count)) { blocked = "재료 부족"; return null; }
+                var (main, mainN) = rc.Inputs[0];
+                var (box, spot) = Nearest(w, dist, b => b.Storage!.Count(main) >= mainN);
+                if (box == null) { blocked = $"{ItemKinds.Name(main)} 없음"; return null; }
+                var product = rc.Product;
+                steps.Add(new RGoto(spot));
+                steps.Add(new RTake(box, main, mainN));
+                steps.Add(new RGoto(at));
+                steps.Add(new RWork(rc.Hours * 1.5f / MathF.Max(0.4f, f.Machine.Efficiency), o, f.Center)); // 사람보다 느리다
+                steps.Add(new RDo((rb, world) =>
+                {
+                    if (o.Closed) return true;
+                    if (rb.Cargo is not ItemStack held || held.Kind != main || held.Count < mainN) return false;
+                    // 나머지 재료는 작업대 곁 선반에서 (부품 준비실 · 작업대 서랍) — 없으면 들고 온 것을 도로 들고 간다
+                    if (!rc.Inputs.Skip(1).All(x => world.Ship.CountStored(x.kind) >= x.count)) { o.BlockedUntil = world.Tick + SimTime.Minutes(30); o.BlockedReason = "재료 부족"; return true; }
+                    foreach (var (k, n) in rc.Inputs.Skip(1))
+                    {
+                        int left = n;
+                        foreach (var c in world.Ship.Containers.Where(c => !c.Room.Detached && c.Type != FurnitureType.DroneDock).OrderBy(c => (c.Center - f.Center).LengthSquared()))
+                        {
+                            if (left <= 0) break;
+                            left -= c.Storage!.Take(k, left);
+                        }
+                    }
+                    rb.Cargo = new ItemStack(product, rc.Yield);
+                    world.Adapt.PartsMade += rc.Yield;
+                    world.Board.Close(o);
+                    world.Log.Add(world.Tick, LogKind.Work, $"{rb.Name}: {ItemKinds.Name(product)} {rc.Yield}개를 만들었다 ({string.Join(" · ", rc.Inputs.Select(x => $"{ItemKinds.Name(x.kind)} {x.count}"))})");
+                    Hand($"작업대에서 {Ko.EulReul(ItemKinds.Name(product))} 만들었다");
+                    return true;
+                }));
+                return steps;
+            }
             case WorkKind.Repair:
             {
                 var m = f.Machine!;
@@ -316,7 +379,8 @@ public sealed partial class RobotSystem
                     steps.Add(new RTake(box, kind, count));
                 }
                 steps.Add(new RGoto(at));
-                steps.Add(new RWork(fault.Spec.RepairHours * (1f - 0.25f * fault.Stage) * 1.4f, o, f.Center)); // 사람보다 느리다
+                bool trained = Fixer(r.Kind);
+                steps.Add(new RWork(fault.Spec.RepairHours * (1f - 0.25f * fault.Stage) * (trained ? 1.4f : 2.2f), o, f.Center)); // 사람보다 느리다 · 수리 로봇이 아니면 더
                 steps.Add(new RDo((rb, world) =>
                 {
                     if (o.Closed || !m.Faults.Contains(fault)) { world.Board.Close(o); return true; }
@@ -326,7 +390,7 @@ public sealed partial class RobotSystem
                         if (rb.Cargo is not ItemStack held || held.Kind != mats[0].kind || held.Count < need) return false;
                         rb.Cargo = held.Count > need ? new ItemStack(held.Kind, held.Count - need) : null;
                     }
-                    if (world.Rng.Chance(0.12f)) { o.Progress = 0f; Done(rb, $"{m.Name} 수리를 헛짚었다 — 처음부터 다시"); return true; }
+                    if (world.Rng.Chance(trained ? 0.12f : 0.25f)) { o.Progress = 0f; Done(rb, $"{m.Name} 수리를 헛짚었다 — 처음부터 다시"); return true; }
                     m.Faults.Remove(fault);
                     m.Condition = MathF.Min(1f, m.Condition + 0.01f);
                     m.Wear = MathF.Min(m.Wear, 0.35f);

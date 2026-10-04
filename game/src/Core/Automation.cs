@@ -137,6 +137,7 @@ public sealed partial class AutomationSystem
         }
         if (!main) OfflineHours += dt;
         RemoteHands(); // 보조 발전기 원격 시동 (Unattended.cs)
+        DecideAlone(); // 무인 운항: 사람이 정할 배관 결정을 컴퓨터가 (Unattended.cs)
         V16(dt); // v16.0 ④ · v16.6 다섯 칸 기록 · 믿는 배 · 제안 · 신뢰 · 연산 자원 · 방송 · 새 모듈
         Think(dt); // v12.5 등급·수동 조종·예측·방침
         Respond(dt); // v13.0 대응 수순 (화재 · 공기 구역)

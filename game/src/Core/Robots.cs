@@ -507,6 +507,8 @@ public sealed partial class RobotSystem
     }
 
     public static bool DockWorking(Robot r) => DockWorking(r.Dock);
+    /// <summary>충전대에 전기가 없을 때 급한 일을 하러 나갈 수 있는 최소 배터리.</summary>
+    public const float DeadDockReserve = 0.12f;
     public static bool DockWorking(Furniture dock) => dock.Machine is Machine m && m.Powered && !m.Stopped && !dock.Room.Detached;
 
     // ─────────────────────────────── 매 틱: 움직임·단계 ───────────────────────────────
@@ -654,10 +656,12 @@ public sealed partial class RobotSystem
                         else r.Doing = $"{FaultName(df)} — 사람이 고쳐야 한다" + (WhyNotSelf(r) is string why ? $" ({why})" : !DockWorking(r) ? " (충전대에 전기가 없어 스스로 못 고친다)" : "");
                         break;
                     }
-                    if (!DockWorking(r) && r.Battery < 0.3f) { r.Doing = r.Dock.Machine!.Powered ? "충전대 멈춤 — 충전 못 함" : "충전대에 전기가 없다 — 충전 못 함"; break; }
-                    if (r.Battery < 0.35f) { r.Doing = $"충전 {r.Battery * 100:0}%"; break; }
+                    // 충전대가 죽었으면 기다려도 차지 않는다 — 남은 배터리로 급한 일만 하러 나간다 (돌아올 만큼은 남긴다)
+                    bool deadDock = !DockWorking(r);
+                    if (deadDock && r.Battery < DeadDockReserve) { r.Doing = r.Dock.Machine!.Powered ? "충전대 멈춤 — 충전 못 함" : "충전대에 전기가 없다 — 충전 못 함"; break; }
+                    if (!deadDock && r.Battery < 0.35f) { r.Doing = $"충전 {r.Battery * 100:0}%"; break; }
                     Decide(r);
-                    if (r.State == RobotState.Docked) r.Doing = r.Battery < 0.99f && DockWorking(r) ? $"충전 {r.Battery * 100:0}% · 대기" : "대기";
+                    if (r.State == RobotState.Docked) r.Doing = r.Battery < 0.99f && !deadDock ? $"충전 {r.Battery * 100:0}% · 대기" : deadDock && r.Battery < 0.35f ? $"충전대에 전기가 없다 — 배터리 {r.Battery * 100:0}% · 급한 일만" : "대기";
                     break;
                 }
                 case RobotState.Active:
@@ -748,7 +752,8 @@ public sealed partial class RobotSystem
         if (r.Disabled || r.Fault != null || r.Dock.Room.Detached) return;
         // 충전대가 떨어져 나갔거나 포기한 구획이면 나가지 않는다
         if (r.Dock.Room.Abandoned || r.Dock.Room.OffLimits) { if (!r.AtDock) GoHome(r, null); return; }
-        float reserve = r.AtDock ? 0.35f : ReturnCost(r) + 0.18f;
+        bool frugal = r.AtDock && !DockWorking(r) && r.Battery < 0.35f; // 죽은 충전대: 급한 일만
+        float reserve = r.AtDock ? (frugal ? DeadDockReserve : 0.35f) : ReturnCost(r) + 0.18f;
         if (r.Battery < reserve) { if (!r.AtDock) GoHome(r, "충전하러"); return; }
         // 충전대에서 기다릴 때는 2분에 한 번만 생각한다 (거리장은 비싸다)
         if (r.AtDock && w.Tick < r.NextDecide) return;
@@ -772,6 +777,7 @@ public sealed partial class RobotSystem
         foreach (var o in w.Board.OpenForRobot())
         {
             if (!(CanDo(r.Kind, o.Kind) || Stands(r, o)) || !RobotsV15.Takes(r.Kind, o)) continue;
+            if (frugal && o.Urgency < 0.7f) continue;
             // 원자로 정비는 사람 몫 (제어봉·계측을 손보는 기관 일이다)
             if (o.Kind == WorkKind.Maintain && o.Target.Furniture?.Type == FurnitureType.ReactorCore) continue;
             // v11.2 병충해는 사람 눈과 손으로 (로봇 분무기는 잎 뒷면의 벌레를 못 본다)
@@ -840,7 +846,7 @@ public sealed partial class RobotSystem
     {
         blocked = null;
         var w = _world;
-        if (!CanDo(r.Kind, o.Kind)) return PlanHands(r, o, at, dist, out blocked); // 무인 운항 — 사람 몫의 손일 (Unattended.cs)
+        if (!CanDo(r.Kind, o.Kind) && o.Kind != WorkKind.StockDock) return PlanHands(r, o, at, dist, out blocked); // 무인 운항 — 사람 몫의 손일 (Unattended.cs)
         var steps = new List<RobotStep>();
         switch (o.Kind)
         {
