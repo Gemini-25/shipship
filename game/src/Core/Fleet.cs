@@ -63,6 +63,8 @@ public sealed class FleetSystem
 
     /// <summary>시험용: 함대 지휘 · 두뇌 · 단계를 모두 끈다 (전/후 비교).</summary>
     public static bool Off;
+    /// <summary>시험: 소방 로봇이 먼저 들어간 불에 문 앞 대기를 세우지 않는다 (구경꾼만 보는 장면 등).</summary>
+    public static bool NoDoorGuard;
 
     public int Tier { get; private set; } = 1;
     /// <summary>평시 · 경계 · 비상 (사고 규모 · 위기 · 불 · 운석 경보).</summary>
@@ -447,6 +449,7 @@ public sealed class FleetSystem
     {
         var w = _w;
         fw.GuardTries++;
+        if (NoDoorGuard) return;
         var spots = new List<Cell>();
         foreach (var d in room.Doors)
         {

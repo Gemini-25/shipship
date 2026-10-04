@@ -424,6 +424,7 @@ public static partial class Program
                 Force(w, c, new Job(null, "시험: 쉬는 중", new Toil[] { new WaitToil(SimTime.Minutes(2), Pose.Standing) }), 1);
             }
             // 통합7 소화 가스 방침이면 사람은 문을 닫고 가스를 기다린다 (한빛호 창고: 15분 동안 아무도 소화기를 들고 오지 않아 비집을 사람이 없었다) — 사람이 끄러 가는 배로 세운다
+            FleetSystem.NoDoorGuard = true; // 구경꾼만 보는 장면 — 소방 로봇이 먼저 들어간 불의 문 앞 대기는 끈다 (문 앞 자리를 먼저 차지해 구경꾼 무리가 서지 않는다)
             w.Policies.Set("inertfire", 0, "시험");
             w.Policies.Set("vacuumfire", 0, "시험");
             foreach (var fc in room.Cells.Where(w.Ship.IsOpenFloor).OrderBy(x => (x.Center - room.Center).LengthSquared()).Take(3)) Incidents.Fire(w, fc);
@@ -441,6 +442,7 @@ public static partial class Program
             Console.WriteLine($"   구경 {cs.Stats.Line()}");
             Check("사고 현장 문 앞에 구경꾼이 몰려 길을 막는다 (길찾기 비용 · 비집고 지나는 대응자)", maxWatch >= 2 && peakCost > 0 && (squeezed || cs.Stats.Shouts > 0),
                 $"가장 많을 때 {maxWatch}명 · 구경꾼 칸 비용 {peakCost} · 비집음 {cs.Stats.Squeezes} · 현장 {cs.Stats.Scenes}");
+            FleetSystem.NoDoorGuard = false;
             var shout = w.Log.Entries.LastOrDefault(e => e.Text.Contains("비켜")).Text;
             Check("책임자(지휘 · 당직 · 대응자)가 \"비켜!\" — 구경꾼이 물러난다", cs.Stats.Shouts >= 1 && cs.Stats.Obeyed + cs.Stats.ComputerShoos >= 1 && shout != null,
                 $"\"비켜!\" {cs.Stats.Shouts} · 물러남 {cs.Stats.Obeyed} · 버팀 {cs.Stats.Ignored} · 컴퓨터 방송 {cs.Stats.ComputerCalls} · \"{shout}\"");
