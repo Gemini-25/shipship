@@ -90,11 +90,16 @@ public sealed partial class RobotSystem
         {
             WorkKind.Reline or WorkKind.Rewire or WorkKind.PatchPipe => true,
             WorkKind.RestartReactor => w.Automation.CoreOnline, // 주 컴퓨터가 제어봉 절차를 짚어 줄 때만
-            WorkKind.Repair => o.Target.Furniture?.Machine?.Faults.FirstOrDefault(x => x.Kind == o.Fault && x.Circuit == o.Circuit) is Fault f
-                               && f.Kind != FaultKind.Wrecked && f.Materials.Select(x => x.kind).Distinct().Count() <= 1,
+            WorkKind.Repair => RepairOk(o),
             _ => false,
         };
     }
+
+    /// <summary>로봇이 혼자 할 수 있는 수리: 파손 아님 · 부품 한 가지까지 · 무거운 부품(모터 · 펌프 · 제어부)은 둘이 잡고 다는 일이라 사람이 있으면 사람 짝에게 (아무도 없을 때만 로봇이 지그로).</summary>
+    private bool RepairOk(WorkOrder o) =>
+        o.Target.Furniture?.Machine?.Faults.FirstOrDefault(x => x.Kind == o.Fault && x.Circuit == o.Circuit) is Fault f
+        && f.Kind != FaultKind.Wrecked && f.Materials.Select(x => x.kind).Distinct().Count() <= 1
+        && (_world.Automation.Unattended || !f.Materials.Any(x => PartsSystem.Heavy(x.kind)));
 
     private long _freeTick = -1;
     private readonly HashSet<WorkKind> _freeKinds = new();
@@ -116,7 +121,7 @@ public sealed partial class RobotSystem
                 if (Fixer(r.Kind)) { _freeKinds.Add(WorkKind.Repair); _freeKinds.Add(WorkKind.Reline); _freeKinds.Add(WorkKind.Rewire); _freeKinds.Add(WorkKind.PatchPipe); if (w.Automation.CoreOnline) _freeKinds.Add(WorkKind.RestartReactor); }
             }
         }
-        return _freeKinds.Contains(o.Kind);
+        return _freeKinds.Contains(o.Kind) && (o.Kind != WorkKind.Repair || RepairOk(o));
     }
 
     /// <summary>사람 몫의 손일 단계 (사람보다 느리다).</summary>
