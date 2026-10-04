@@ -30,6 +30,9 @@ public static class ShipCatalog
         // v16.9 대표 배 6척 (손으로 그린 배 · 뼈대 · 용도 · 설계사 · 시작 상태가 저마다 다르다)
         ShipBlueprints.SaeteoShip, ShipBlueprints.BusitdolShip, ShipBlueprints.BodeumShip,
         ShipBlueprints.NareumiShip, ShipBlueprints.TtaemjilShip, ShipBlueprints.PabalShip,
+        // v19 모양 있는 새 배 여덟 척 (화살촉 · 망치머리 · 원반 · 삼지창 · 가오리 · 고래 · 잠자리 · 쐐기)
+        ShipBlueprints.SonggolmaeShip, ShipBlueprints.GwisangeoShip, ShipBlueprints.BoreumdalShip, ShipBlueprints.SamjichangShip,
+        ShipBlueprints.GaoriShip, ShipBlueprints.GoraeShip, ShipBlueprints.JamjariShip, ShipBlueprints.HanulShip,
     };
 
     public static ShipTemplate Default => All[1];

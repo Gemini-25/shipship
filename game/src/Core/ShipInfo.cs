@@ -11,7 +11,7 @@ namespace ShipSim.Core;
 public enum ShipPurpose { General, Mining, Colony, Hospital, Research, Supply, Courier, Tug, Rescue, Tanker, Farm } // v18.8 예인선 · 구조선 · 급유선 · 농업선
 
 /// <summary>배의 뼈대: 통로가 어떻게 이어지나.</summary>
-public enum ShipFrame { Linear, Ring, Spine, Twin, Cargo, Patchwork, Courier, Wheel } // v18.8 바퀴형
+public enum ShipFrame { Linear, Ring, Spine, Twin, Cargo, Patchwork, Courier, Wheel, Arrow, Hammerhead, Saucer, Trident, Manta, Whale, Dragonfly, Wedge } // v18.8 바퀴형 · v19 모양 있는 배 여덟
 
 /// <summary>설계사: 군용(격벽 · 이중 배선 · 좁음) · 민간(넓음 · 단일 고장점 · 싼 부품) · 개척민(비표준 · 임시 개조).</summary>
 public enum ShipDesigner { Civilian, Military, Settler }
@@ -43,7 +43,9 @@ public static class ShipInfos
     public static string Name(ShipFrame f) => f switch
     {
         ShipFrame.Ring => "고리형", ShipFrame.Spine => "척추형", ShipFrame.Twin => "쌍동선", ShipFrame.Cargo => "화물선형",
-        ShipFrame.Patchwork => "누더기형", ShipFrame.Courier => "소형 쾌속", ShipFrame.Wheel => "바퀴형", _ => "직선형",
+        ShipFrame.Patchwork => "누더기형", ShipFrame.Courier => "소형 쾌속", ShipFrame.Wheel => "바퀴형",
+        ShipFrame.Arrow => "화살촉형", ShipFrame.Hammerhead => "망치머리형", ShipFrame.Saucer => "원반형", ShipFrame.Trident => "삼지창형",
+        ShipFrame.Manta => "가오리형", ShipFrame.Whale => "고래형", ShipFrame.Dragonfly => "잠자리형", ShipFrame.Wedge => "쐐기형", _ => "직선형",
     };
 
     public static string FrameNote(ShipFrame f) => f switch
@@ -55,6 +57,14 @@ public static class ShipInfos
         ShipFrame.Patchwork => "시대가 다른 선체 토막을 이어 붙였다 — 통로 폭이 제각각",
         ShipFrame.Courier => "엔진이 배의 절반 · 비좁다",
         ShipFrame.Wheel => "테두리 통로가 한 바퀴 돌고, 가운데 굴대에서 바퀴살 통로가 갈라진다",
+        ShipFrame.Arrow => "뒤로 젖힌 날개 · 꼬리 홈의 엔진 · 바늘처럼 모이는 뱃머리 — 날개 끝 방은 좁다",
+        ShipFrame.Hammerhead => "엔진 블록 · 가는 척추 · 앞머리를 가로지르는 망치 — 척추가 막히면 앞뒤가 끊긴다",
+        ShipFrame.Saucer => "둥근 원반(거주) · 가는 목 · 기관 선체 · 기둥에 매단 나셀 — 목 하나로 이어진다",
+        ShipFrame.Trident => "뒤 몸통에서 앞으로 뻗은 갈래 셋 — 갈래 끝은 멀고, 갈래 사이는 우주",
+        ShipFrame.Manta => "넓게 펼친 날개 안이 재배실 — 날개 통로가 층층이, 날개 끝은 멀다",
+        ShipFrame.Whale => "둥글고 큰 몸통 · 가는 꼬리 통로 끝 지느러미에 엔진 — 꼬리 통로 하나로 엔진에 닿는다",
+        ShipFrame.Dragonfly => "가는 몸통 · 둥근 머리 · 날개 넷 — 몸통이 가늘어 심장부가 선체 바로 안쪽",
+        ShipFrame.Wedge => "거대한 쐐기 — 축 통로에서 바깥으로 갈수록 짧은 방 띠 · 뒷면 가득 엔진",
         _ => "엔진실 → 층마다 방 줄 → 뱃머리 함교",
     };
 

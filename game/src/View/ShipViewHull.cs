@@ -259,8 +259,10 @@ public partial class ShipView
             ci.DrawCircle(p, 4.5f, c.WithAlpha(0.35f * a), true, -1f, true);
             ci.DrawCircle(p, 2.2f, c.Lightened(0.4f).WithAlpha(a), true, -1f, true);
         }
-        Lamp(_finTop, PortLight, slow);
-        Lamp(_finBottom, StarboardLight, slow);
+        var port = _finTop; var star = _finBottom;
+        if (_world.Origin.Info is ShipInfo si && Shaped(si.Frame)) { BuildEdges(); port = Extreme(true) + new Vector2(-T * 0.6f, -6f); star = Extreme(false) + new Vector2(-T * 0.6f, 6f); } // v19 모양 있는 배: 맨 위 · 맨 아래 선체 끝
+        Lamp(port, PortLight, slow);
+        Lamp(star, StarboardLight, slow);
         float strobe = Mathf.PosMod(_time, 1.6f) < 0.12f ? 1f : 0.15f;
         Lamp(_noseTip, Colors.White, strobe);
     }

@@ -80,7 +80,7 @@ public static partial class Program
         Console.WriteLine($"배 종류 점검 (v16.9) · 시드 {seed}\n");
         try
         {
-            // 1) 대표 배 6척: 뼈대가 저마다 다르고, 필수 설비가 다 있고, 모든 방에 길이 닿는다
+            // 1) 대표 배 6척 + v19 모양 있는 배 8척: 뼈대가 저마다 다르고, 필수 설비가 다 있고, 모든 방에 길이 닿는다
             if (On(1))
             {
                 var mine = ShipCatalog.All.Where(t => !t.Legacy).ToList();
@@ -94,7 +94,7 @@ public static partial class Program
                     var cut = Unreached(ship);
                     if (cut.Count > 0) bad.Add($"{t.Name}: {string.Join(",", cut)}에 길 없음");
                 }
-                Check("대표 배 6척 — 뼈대 여섯 · 필수 설비 · 모든 방에 길", mine.Count == 6 && frames == 6 && bad.Count == 0,
+                Check("대표 배 14척 — 뼈대 열넷 · 필수 설비 · 모든 방에 길", mine.Count == 14 && frames == 14 && bad.Count == 0,
                     string.Join(" · ", mine.Select(t => $"{t.Name}({ShipInfos.Name(t.Meta.Frame)} {ShipInfos.Name(t.Meta.Purpose)} {t.Crew}인)")) + (bad.Count > 0 ? " · " + string.Join(" / ", bad) : ""));
                 var crews = ShipCatalog.All.Select(t => t.Crew).ToList();
                 Check("크기 공백 — 2 · 8~9 · 40인 배가 있다 (60인은 생성)", crews.Contains(2) && crews.Any(c => c is 8 or 9) && crews.Any(c => c >= 40), string.Join(",", crews.OrderBy(c => c)));

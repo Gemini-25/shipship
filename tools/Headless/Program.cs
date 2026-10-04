@@ -38,35 +38,38 @@ public static partial class Program
     }
 
     /// <summary>v10.4: 템플릿마다 설계 인원으로 무사고 N일 — 굶주림·물·산소·전력이 버티나, 틱/초.</summary>
-    private static int RunShips(int days, int seed)
+    private static int RunShips(int days, int seed, string[]? only = null)
     {
         Console.WriteLine($"배 크기 템플릿 · 무사고 {days}일 · 시드 {seed}");
         int bad = 0;
-        foreach (var t in ShipCatalog.All)
+        foreach (var t in ShipCatalog.All.Where(t => only == null || only.Contains(t.Key)))
         {
             var w = World.CreateDefault(seed, 0, t.Key);
             w.CrewCanDie = true;
             long end = w.Tick + (long)days * SimTime.TicksPerDay;
             var watch = System.Diagnostics.Stopwatch.StartNew();
             float minFood = 1f, minO2 = 99f, minBattery = 1f, minWater = 1e9f, maxDemand = 0f;
+            string minO2Room = "";
             long starving = 0;
             while (w.Tick < end)
             {
                 w.Step();
                 if (w.Tick % World.SystemInterval != 0) continue;
                 foreach (var c in w.Crew.Where(c => !c.Dead)) { minFood = MathF.Min(minFood, c.Needs.Food); if (c.Needs.Food <= 0.02f) starving++; }
-                foreach (var r in w.Ship.Rooms.Where(r => !r.Detached)) minO2 = MathF.Min(minO2, r.Air.O2);
+                foreach (var r in w.Ship.Rooms.Where(r => !r.Detached)) if (r.Air.O2 < minO2) { minO2 = r.Air.O2; minO2Room = $"{r.Name}#{r.Id}@{SimTime.Clock(w.Tick)}"; }
                 minBattery = MathF.Min(minBattery, w.Power.BatteryPercent);
                 minWater = MathF.Min(minWater, w.Water.Level);
                 maxDemand = MathF.Max(maxDemand, w.Power.Demand);
             }
             watch.Stop();
+            if (Environment.GetEnvironmentVariable("SHIPLOG") is string grep)
+                foreach (var e in w.Log.Entries.Where(e => e.Text.Contains(grep))) Console.WriteLine($"    {SimTime.Day(e.Tick)}일 {SimTime.Clock(e.Tick)} {e.Text}");
             var ship = w.Ship;
             int dead = w.Crew.Count(c => c.Dead);
             bool ok = dead == 0 && minO2 > 18f && starving < 20 && minBattery > 0.2f;
             if (!ok) bad++;
             Console.WriteLine($"  {(ok ? "✔" : "✘")} {t.Name}({t.Key}) {w.Crew.Count}명 · 방 {ship.Rooms.Count} · 설비 {ship.Machines.Count()} · 격자 {ship.Grid.Width}×{ship.Grid.Height} · " +
-                              $"원자로 {w.Power.ReactorRated:0}kW(최대 수요 {maxDemand:0}) · 냉각 {w.Piping.CoolingKw:0}kW · 최저 배터리 {minBattery * 100:0}% · 최저 산소 {minO2:0.0}kPa · 최저 포만 {minFood * 100:0}% · " +
+                              $"원자로 {w.Power.ReactorRated:0}kW(최대 수요 {maxDemand:0}) · 냉각 {w.Piping.CoolingKw:0}kW · 최저 배터리 {minBattery * 100:0}% · 최저 산소 {minO2:0.0}kPa({minO2Room}) · 최저 포만 {minFood * 100:0}% · " +
                               $"굶주림 {starving}회 · 물 {minWater:0}/{w.Water.Capacity:0}L · 사망 {dead} · 연구 {w.Research:0} · {days * SimTime.TicksPerDay / Math.Max(0.001, watch.Elapsed.TotalSeconds):N0}틱/초");
         }
         return bad == 0 ? 0 : 1;
@@ -86,7 +89,7 @@ public static partial class Program
             Console.WriteLine($"수치 파일: {Tuning.Load(System.IO.File.ReadAllText(tf.Split('=', 2)[1]))}개 적용");
         if (args.Contains("--bench")) return RunBench(days, seed);
         if (args.Contains("--profile")) return RunProfile(seed, args); // v14.2
-        if (args.Contains("--ships")) return RunShips(days, seed);
+        if (args.Contains("--ships")) return RunShips(days, seed, args.FirstOrDefault(a => a.StartsWith("--only="))?[7..].Split(',')); // v19 --only=Key,Key (그 배만)
         if (args.Contains("--bigships")) return RunBigShips(days, seed, args);
         if (args.Contains("--tiers")) return RunTierRecovery(seed, args);
         if (args.Contains("--docks")) return RunDocks();

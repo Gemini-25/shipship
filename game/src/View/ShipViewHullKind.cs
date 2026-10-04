@@ -42,6 +42,11 @@ public partial class ShipView
         float t = _time;
         var metal = new Color("#6f7888");
         var dark = new Color("#3c434f");
+        if (Shaped(info.Frame)) // v19 모양 있는 배: 실제 선체 가장자리를 따라 그린다 (상자 기준 장식은 뱃머리 것만)
+        {
+            PaintShapeKind(ci, info);
+            if (info.Purpose is not (ShipPurpose.Mining or ShipPurpose.Tug)) return;
+        }
         switch (info.Frame)
         {
             case ShipFrame.Wheel:
