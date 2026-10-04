@@ -11,7 +11,7 @@ namespace ShipSim.Core;
 //   · 누구든(의료 로봇 빼고): 차단기 올리기 · 보조 발전기 시동 손잡이 · 밸브 잠그기/열기
 //   · 운반 계열(운반 · 배식 · 급수 · 적재 · 잡역) + 정비 계열: 보조 발전기 급유 · 냉각수 보충
 //   · 정비 계열(정비 · 배선 · 정밀 정비 · 조수 · 잡역): 설비 수리(부품 한 가지까지 · 파손은 빼고) · 관 이음 · 전선 다시 걸기 · 배관 임시 밀봉 ·
-//     원자로 재기동(주 컴퓨터가 절차를 짚어 줄 때)
+//     원자로 재기동(아무도 없을 때 · 주 컴퓨터가 절차를 짚어 줄 때) · 무거운 부품 수리(아무도 없을 때 · 지그로)
 //  사람보다 느리고(손이 서툴다) 가끔 헛손질한다. 쓸 만한 로봇이 놀고 있으면 사람은 급한 일(1.0 넘게)이 아니면 로봇에게 미룬다.
 //  무인 운항: 배에 손을 쓸 사람이 없으면 주 컴퓨터가 "가서 볼 사람"을 찾지 않는다.
 //  (사람이 다 떠난 배: 운석이 냉각 관을 뚫어 냉각수가 빠지자 원자로가 멎었고, 보조 발전기를 켤 손도 급유할 손도 없어 이틀 넘게 정전 · 주 컴퓨터도 꺼졌다)
@@ -89,7 +89,7 @@ public sealed partial class RobotSystem
         return o.Kind switch
         {
             WorkKind.Reline or WorkKind.Rewire or WorkKind.PatchPipe => true,
-            WorkKind.RestartReactor => w.Automation.CoreOnline, // 주 컴퓨터가 제어봉 절차를 짚어 줄 때만
+            WorkKind.RestartReactor => w.Automation.CoreOnline && w.Automation.Unattended, // 노심을 다루는 일 — 사람 기관사가 있으면 사람이 (로봇은 느리고 자주 헛짚는다) · 아무도 없을 때 주 컴퓨터가 절차를 짚어 주면
             WorkKind.Repair => RepairOk(o),
             _ => false,
         };
@@ -118,7 +118,7 @@ public sealed partial class RobotSystem
                 if (r.Kind is RobotKind.Stretcher or RobotKind.Nurse) continue;
                 _freeKinds.Add(WorkKind.ResetBreaker); _freeKinds.Add(WorkKind.StartAux); _freeKinds.Add(WorkKind.CloseValve); _freeKinds.Add(WorkKind.OpenValve);
                 if (Carrier(r.Kind) || Fixer(r.Kind)) { _freeKinds.Add(WorkKind.Refuel); _freeKinds.Add(WorkKind.RefillCoolant); }
-                if (Fixer(r.Kind)) { _freeKinds.Add(WorkKind.Repair); _freeKinds.Add(WorkKind.Reline); _freeKinds.Add(WorkKind.Rewire); _freeKinds.Add(WorkKind.PatchPipe); if (w.Automation.CoreOnline) _freeKinds.Add(WorkKind.RestartReactor); }
+                if (Fixer(r.Kind)) { _freeKinds.Add(WorkKind.Repair); _freeKinds.Add(WorkKind.Reline); _freeKinds.Add(WorkKind.Rewire); _freeKinds.Add(WorkKind.PatchPipe); if (w.Automation.CoreOnline && w.Automation.Unattended) _freeKinds.Add(WorkKind.RestartReactor); }
             }
         }
         return _freeKinds.Contains(o.Kind) && (o.Kind != WorkKind.Repair || RepairOk(o));

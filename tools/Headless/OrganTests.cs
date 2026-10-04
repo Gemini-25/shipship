@@ -114,16 +114,23 @@ public static partial class Program
         Check("투석 — 진단받은 사람이 투석기 곁에 눕고 연결된다", hooked, $"연결 {hooked} · {k.Name} {k.Job?.Label} · 진단 {w.Organs.Known(k, Organ.Kidney)} · {w.Organs.Stats.Line()}");
         // 정전: 냉각 펌프가 서서 원자로가 멎고 배터리만 남았다
         foreach (var p in w.Ship.FurnitureOf(FurnitureType.CoolantPump)) w.Machines.Break(p.Machine!, FaultKind.PumpSeized);
-        CutAuxData(w); // 보조 발전기 방 데이터선도 끊긴 정전 — 주 컴퓨터가 원격으로 켜면 모자라지 않는다 (사람이 손으로 켜러 간다)
         w.Power.BatteryCharge = w.Power.BatteryCapacity * 0.3f;
         int shed = 0, poweredTicks = 0, n = 0;
-        for (int i = 0; i < 40; i++) { Run(w, SimTime.Minutes(1)); n++; if (dia!.Machine!.Powered) poweredTicks++; shed = Math.Max(shed, w.Power.ShedCount + w.Power.ParkedCount); }
+        for (int i = 0; i < 40; i++) { Run(w, SimTime.Minutes(1)); n++; if (dia!.Machine!.Powered) poweredTicks++; shed = Math.Max(shed, w.Power.ShedCount + w.Power.ParkedCount + w.Failsafe.ShedLevel); } // 부하 차단 계전기가 먼저 내렸으면 그것도 "다른 것부터"
+        if (Environment.GetEnvironmentVariable("OG_DBG") == "1")
+            foreach (var e in w.Log.Entries.Where(e => e.Tick >= w.Tick - SimTime.Minutes(41)).Where(e => e.Text.Contains("원자로") || e.Text.Contains("계전기") || e.Text.Contains("펌프") || e.Text.Contains("보조") || e.Text.Contains("전기")).Take(25))
+                Console.WriteLine($"     {SimTime.Clock(e.Tick)} {e.Text}");
         bool guarded = w.Organs.Guarded(dia!);
         var reason = w.Log.Entries.LastOrDefault(e => e.Text.Contains("주 컴퓨터") && e.Text.Contains(dia.Name));
         Check("정전 — 투석 중인 투석기 회로를 주컴퓨터가 지킨다 (전기를 몰아주고 다른 것을 먼저 내린다)", guarded && poweredTicks >= n * 3 / 4 && shed > 0,
             $"지킴 {guarded} · 켜져 있던 분 {poweredTicks}/{n} · 내린 설비 {shed} · 공급 {w.Power.Delivered:0.#}/{w.Power.Demand:0.#}kW · \"{reason.Text}\"");
         Run(w, SimTime.Hours(5));
         var kb = w.Organs.Of(k);
+        if (Environment.GetEnvironmentVariable("OG_DBG") == "1")
+        {
+            Console.WriteLine($"     {k.Name} 연결 {kb.Hooked} · 일 {k.Job?.Label} · 방 {k.Room?.Name} · 투석기 켜짐 {dia!.Machine!.Powered} 고장 {string.Join(",", dia.Machine.Faults.Select(f => f.Kind))} · 원자로 {w.Power.ReactorOnline} 보조 {w.Power.AuxRunning} 배터리 {w.Power.BatteryPercent:0.00} · 펌프 고장 {w.Ship.FurnitureOf(FurnitureType.CoolantPump).Count(p => p.Machine!.Faults.Count > 0)}");
+            foreach (var e in w.Log.Entries.Where(e => e.CrewId == k.Id || e.Text.Contains("투석")).TakeLast(12)) Console.WriteLine($"     {SimTime.Clock(e.Tick)} {e.Text}");
+        }
         Check("투석 — 노폐물을 걸러 낸다 (세션이 끝나면 기계에서 뗀다)", kb.Uremia < 0.3f && w.Organs.Stats.Sessions + (kb.Hooked ? 1 : 0) >= 1,
             $"노폐물 {kb.Uremia:0.00} · 투석 {w.Organs.Stats.Sessions} · 멈춤 {w.Organs.Stats.Aborted}");
         // 견줌: 컴퓨터가 지키지 않으면 (같은 정전) — 투석기가 먼저 꺼진다
