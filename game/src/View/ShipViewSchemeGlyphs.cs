@@ -104,7 +104,8 @@ public partial class ShipView
         void R(float x0, float y0, float x1, float y1, Color col) { var a = V(x0, y1); var b = V(x1, y0); ci.DrawRect(new Rect2(new Vector2(Mathf.Min(a.X, b.X), Mathf.Min(a.Y, b.Y)), new Vector2(Mathf.Abs(b.X - a.X), Mathf.Abs(b.Y - a.Y))), col); }
         void E(float x, float y, float rx, float ry, Color col) => ci.DrawColoredPolygon(Ellipse(V(x, y), Mathf.Max(0.6f, rx * w), Mathf.Max(0.6f, ry * h), 12), col);
         void C(float x, float y, float r, Color col) => ci.DrawCircle(V(x, y), Mathf.Max(0.5f, r * s), col);
-        void P(Color col, params Vector2[] pts) => ci.DrawColoredPolygon(pts, col);
+        void P(Color col, params Vector2[] pts) { if (Area(pts) >= 0.3f) ci.DrawColoredPolygon(pts, col); } // 멀리서 아주 작게 그리면 점이 겹쳐 삼각분할이 깨진다 (Godot 오류 · 어차피 안 보인다) — 건너뛴다
+        static float Area(Vector2[] q) { float a = 0f; for (int i = 0; i < q.Length; i++) { var u = q[i]; var z = q[(i + 1) % q.Length]; a += u.X * z.Y - z.X * u.Y; } return Mathf.Abs(a) * 0.5f; }
         var white = new Color(1, 1, 1, 0.8f * alpha);
         var ink = new Color(0.1f, 0.1f, 0.12f, 0.85f * alpha);
         switch (g.S)

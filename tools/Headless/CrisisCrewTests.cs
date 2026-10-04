@@ -486,12 +486,14 @@ public static partial class Program
         var harsh = new[] { "harsh", "harsh@Mirinae" };
         if (Environment.GetEnvironmentVariable("CR_LEVEL") is string lv) Storyteller.LevelValue = float.Parse(lv);
         Console.WriteLine($"\n  측정 · 시드 {string.Join(",", seeds)} · 난이도 {Storyteller.LevelName(Storyteller.Level)} · 장면마다 6시간");
+        RobotSystem.HandsOff = true; // 사람의 위기 행동만 견준다 — 로봇 손일 · 원격 시동이 양쪽 다 발전기를 켜면 차이가 가려진다
         CrisisCrewSystem.Off = true;
         var b0 = MeasureBundle(seeds, normal, 6f);
         var b1 = MeasureBundle(seeds, harsh, 6f);
         CrisisCrewSystem.Off = false;
         var a0 = MeasureBundle(seeds, normal, 6f);
         var a1 = MeasureBundle(seeds, harsh, 6f);
+        RobotSystem.HandsOff = false;
         PrintBundle("전 · 예전 승무원", b0.Concat(b1).ToList());
         PrintBundle("후", a0.Concat(a1).ToList());
         CrisisRun Sum(IEnumerable<(string scene, CrisisRun sum, int runs)> rows)

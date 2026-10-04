@@ -33,7 +33,7 @@ public sealed partial class AutomationSystem
     private void RemoteHands()
     {
         var w = _world;
-        if (!Present || !CoreOnline || w.Tick < _auxTryAt || w.Power.AuxRunning) return;
+        if (RobotSystem.HandsOff || !Present || !CoreOnline || w.Tick < _auxTryAt || w.Power.AuxRunning) return;
         var o = w.Board.Open.FirstOrDefault(x => x.Kind == WorkKind.StartAux && x.Assignee == null && x.Robot == null);
         if (o == null || o.Target.Furniture is not Furniture aux || !aux.Room.DataLinked) return; // 발전기 방 데이터선이 끊겼으면 원격으로 못 켠다 — 로봇 · 사람이 손으로
         _auxTryAt = w.Tick + SimTime.Minutes(4);
@@ -69,6 +69,8 @@ public sealed partial class AutomationSystem
 
 public sealed partial class RobotSystem
 {
+    /// <summary>시험: 로봇 손일 · 주 컴퓨터 원격 시동을 끈다 (사람의 위기 행동만 견주는 측정).</summary>
+    public static bool HandsOff;
     /// <summary>로봇이 사람 몫의 손일을 해낸 수.</summary>
     public int HandsDone { get; private set; }
 
@@ -82,7 +84,7 @@ public sealed partial class RobotSystem
     private bool Stands(Robot r, WorkOrder o)
     {
         var w = _world;
-        if (!HandWork(o.Kind) || r.Kind is RobotKind.Stretcher or RobotKind.Nurse) return false;
+        if (HandsOff || !HandWork(o.Kind) || r.Kind is RobotKind.Stretcher or RobotKind.Nurse) return false;
         if (o.Kind is WorkKind.ResetBreaker or WorkKind.StartAux or WorkKind.CloseValve or WorkKind.OpenValve) return true;
         if (o.Kind is WorkKind.Refuel or WorkKind.RefillCoolant) return Carrier(r.Kind) || Fixer(r.Kind);
         if (!Fixer(r.Kind)) return false;
@@ -107,7 +109,7 @@ public sealed partial class RobotSystem
     public bool HandsFree(WorkOrder o)
     {
         var w = _world;
-        if (!HandWork(o.Kind)) return false;
+        if (HandsOff || !HandWork(o.Kind)) return false;
         if (_freeTick != w.Tick)
         {
             _freeTick = w.Tick;
