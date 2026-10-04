@@ -61,8 +61,8 @@ public static partial class Program
                 CrewMember? worker = null, watcher = null;
                 bool atDoor = false;
                 World w = null!; Room store = null!;
-                // 연기가 우주복 보관함 가는 길을 막아 짝이 늦으면 불이 먼저 꺼진다 — 배 둘까지
-                for (int attempt = 0; attempt < 2 && !atDoor; attempt++)
+                // 연기가 우주복 보관함 가는 길을 막아 짝이 늦으면 불이 먼저 꺼진다 · 일꾼이 연기를 피해 먼저 대피하기도 한다 — 배 셋까지
+                for (int attempt = 0; attempt < 3 && !atDoor; attempt++)
                 {
                 w = CrisisShip(seed + attempt * 13, 0);
                 store = StoreRoom(w);
