@@ -82,6 +82,12 @@ public static partial class Program
             if (args.Contains("--udebug"))
                 foreach (var e in w.Log.Entries.Where(e => e.Tick >= t0 && (e.Text.Contains("사람이 없다") || e.Text.Contains("무인") || e.Text.Contains("재기동") || e.Text.Contains("보조 발전기"))).Take(40))
                     Console.WriteLine($"     ~ +{(e.Tick - t0) / (float)SimTime.TicksPerHour:0.0}h {e.Text}");
+            if (args.Contains("--whyfix"))
+            {
+                Console.WriteLine($"     로봇 {string.Join(", ", w.Robots.Robots.Select(r => $"{r.Name}({r.Kind}{(RobotSystem.Fixer(r.Kind) ? "·수리" : "")})"))}");
+                foreach (var m in w.Ship.Machines.Where(m => m.Faults.Count > 0))
+                    foreach (var f in m.Faults) Console.WriteLine($"     고장 {m.Name}: {f.Kind} · 부품 {string.Join("+", f.Materials.Select(x => $"{ItemKinds.Name(x.kind)}{x.count}(배에 {w.Ship.CountStored(x.kind)})"))} · 일감 {string.Join(" ", w.Board.All.Where(o => !o.Closed && o.Target.Furniture == m.Body).Select(o => $"{o.Kind}/{(o.Robot?.Name ?? "-")}/{(o.BlockedUntil > w.Tick ? "막힘" : "")}{o.Detail}"))}");
+            }
             int faultyEnd = w.Ship.Machines.Count(m => m.Faults.Count > 0);
             var critBroken = crit.Where(m => m.Faults.Count > 0).Select(m => m.Name).ToList();
             int rjobs = w.Robots.JobsDone - rj0, rbreak = w.Robots.Breakdowns - rb0, dsort = w.Drones.Sorties - ds0, djobs = w.Drones.JobsDone - dj0;
