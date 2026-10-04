@@ -219,7 +219,7 @@ public partial class Main : Node2D
         _commandLineDone = true;
         PerfStart(); // v17.7 --perf=N 프레임 시간
         // v12.9 첫 항해 안내: 새 항해이고, 안내를 켜 두었고, 화면 찍기가 아니면
-        if (!loaded && Settings.Tutorial && !OS.GetCmdlineUserArgs().Any(a => a.StartsWith("--shot"))) Hud.CallDeferred(nameof(Hud.StartTutorial));
+        if (!loaded && Settings.Tutorial && !OS.GetCmdlineUserArgs().Any(a => a.StartsWith("--shot")) && string.IsNullOrEmpty(Engine.GetWriteMoviePath())) Hud.CallDeferred(nameof(Hud.StartTutorial)); // 화면 찍기 · 영상 녹화 때는 첫 항해 안내를 띄우지 않는다
         if (loadError != null) ShowNotice($"저장 파일을 불러오지 못해 새 항해로 시작했다 — {loadError}");
     }
 
