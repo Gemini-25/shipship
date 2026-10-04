@@ -4,10 +4,12 @@ using System.Linq;
 using ShipSim.Core;
 
 /// <summary>
-/// 모든 배에서 주컴퓨터 · 로봇 · 드론이 실제로 일하나 (--syscheck [--only=Key,Key]).
-///   ① 평상시 하루: 로봇이 한 일 · 멈춰 선 로봇 (일하러 나가서 세 시간 넘게 제자리) · 드론 출격 · 주컴퓨터가 켜져 있나
+/// 모든 배에서 주컴퓨터 · 로봇 · 드론이 실제로 일하나 (--syscheck [--only=Key,Key] [--days=N]).
+///   ① 평상시 N일 (기본 1): 로봇이 한 일 · 멈춰 선 로봇 (일하러 나가서 세 시간 넘게 제자리) · 드론 출격 · 잃은 드론 ·
+///      주컴퓨터가 켜져 있나 · 사람이 있는 방 공기(산소 · 이산화탄소 · 온도) · 주컴퓨터가 아는 배터리 용량과 실제
 ///   ② 주방 불: 주컴퓨터가 알아채고 알리나 · 방재 로봇 출동 · 꺼지기까지
-///   ③ 창고 외벽 운석: 구멍이 막히기까지 · 드론 출격 · 주컴퓨터가 알리나
+///   ③ 외벽 운석: 방까지 구멍이 나면 막히기까지 · 드론 출격 · 주컴퓨터가 알리나 (구멍이 안 나면 다른 방에 다시 — 세 번까지)
+///   ④ 주컴퓨터 고장(저장장치): 사람이 고쳐 다시 켜기까지 · 꺼진 동안 난 불도 꺼지나 · 꺼진 동안 로봇이 일하나
 /// 배마다 한 줄 + 문제 목록. 문제가 있으면 1.
 /// </summary>
 public static partial class Program
@@ -15,8 +17,9 @@ public static partial class Program
     private static int RunSysCheck(int seed, string[] args)
     {
         var only = args.FirstOrDefault(a => a.StartsWith("--only="))?[7..].Split(',');
+        int days = int.TryParse(args.FirstOrDefault(a => a.StartsWith("--days="))?[7..], out var dd) ? Math.Max(1, dd) : 1;
         var keys = ShipCatalog.All.Select(t => t.Key).Where(k => only == null || only.Contains(k)).ToList();
-        Console.WriteLine($"주컴퓨터 · 로봇 · 드론 — 모든 배 실제 점검 · 시드 {seed} · {keys.Count}척\n");
+        Console.WriteLine($"주컴퓨터 · 로봇 · 드론 — 모든 배 실제 점검 · 시드 {seed} · 평상시 {days}일 · {keys.Count}척\n");
         var problems = new List<string>();
         foreach (var key in keys)
         {
@@ -25,13 +28,17 @@ public static partial class Program
             var a = w.Automation;
             int robots = w.Robots.Robots.Count, drones = w.Drones.Drones.Count;
             bool online0 = a.Present && a.MainOnline;
+            int Said(long t0) => w.Log.Entries.Where(e => e.Tick >= t0).Count(e => e.Text.Contains("주 컴퓨터") || e.Text.Contains(a.Voice.Call) || e.Text.Contains("[방송]"));
 
-            // ① 평상시 하루
+            // ① 평상시 N일
             int rj0 = w.Robots.JobsDone, ds0 = w.Drones.Sorties, dj0 = w.Drones.JobsDone;
+            int lost0 = w.Drones.Drones.Count(d => d.State is DroneState.Lost), rlost0 = w.Robots.Robots.Count(r => r.State == RobotState.Lost);
             var last = w.Robots.Robots.ToDictionary(r => r.Id, r => (pos: r.Position, since: w.Tick, doing: r.Doing));
             var stuck = new Dictionary<int, string>();
-            int offlineMin = 0;
-            for (int m = 0; m < 24 * 6; m++)
+            int offlineMin = 0, badAirMin = 0;
+            float worstO2 = 99f, worstCO2 = 0f;
+            string worstAir = "";
+            for (int m = 0; m < days * 24 * 6; m++)
             {
                 Run(w, SimTime.Minutes(10));
                 if (!a.MainOnline) offlineMin += 10;
@@ -43,9 +50,23 @@ public static partial class Program
                     if (w.Tick - l.since > SimTime.Hours(3) && !stuck.ContainsKey(r.Id))
                         stuck[r.Id] = $"{r.Name}({r.KindName}) {r.Room?.Name ?? "?"} · {r.Doing}";
                 }
+                bool bad = false;
+                foreach (var room in w.Ship.LiveRooms)
+                {
+                    if (!w.Crew.Any(c => !c.Dead && !c.Outside && c.Room == room)) continue; // 사람이 있는 방만 (비운 방 · 닫은 방은 빼고)
+                    var air = room.Air;
+                    if (air.O2 < worstO2) { worstO2 = air.O2; worstAir = $"{room.Name} {SimTime.Clock(w.Tick)}"; }
+                    worstCO2 = MathF.Max(worstCO2, air.CO2);
+                    bad |= air.O2 < 17f || air.CO2 > 1.5f || air.Temperature < 10f || air.Temperature > 35f;
+                }
+                if (bad) badAirMin += 10;
             }
             int rjobs = w.Robots.JobsDone - rj0, dsort = w.Drones.Sorties - ds0, djobs = w.Drones.JobsDone - dj0;
             int faulty = w.Robots.Robots.Count(r => !r.Operational), dfaulty = w.Drones.Drones.Count(d => !d.Operational);
+            int dlost = w.Drones.Drones.Count(d => d.State is DroneState.Lost) - lost0, rlost = w.Robots.Robots.Count(r => r.State == RobotState.Lost) - rlost0;
+            var (bKwh, bCap) = a.Review.BatteryBelief();
+            float realCap = w.Power.BatteryCapacity;
+            float batErr = realCap > 1f ? MathF.Abs(bCap - realCap) / realCap : 0f;
 
             // ② 주방 불
             var galley = w.Ship.RoomsOf(RoomType.Galley).FirstOrDefault(r => !r.Detached);
@@ -62,7 +83,7 @@ public static partial class Program
                     Run(w, SimTime.Minutes(1));
                     if (w.Fire.Count == 0) outAt = w.Tick;
                 }
-                compFire = w.Log.Entries.Where(e => e.Tick >= t0).Count(e => e.Text.Contains("주 컴퓨터") || e.Text.Contains(a.Voice.Call) || e.Text.Contains("[방송]"));
+                compFire = Said(t0);
                 if (args.Contains("--firedebug")) { Console.WriteLine($"     컴퓨터 이름 '{a.Voice.Call}'"); foreach (var e in w.Log.Entries.Where(e => e.Tick >= t0).Take(40)) Console.WriteLine($"     {SimTime.Clock(e.Tick)} [{e.Kind}] {e.Text}"); }
                 fireOut = outAt > 0;
                 fireRes = fireOut ? $"{(outAt - t0) / (float)SimTime.Minutes(1):0}분" : "4시간 넘게 탐";
@@ -70,55 +91,114 @@ public static partial class Program
             }
             int fought = w.Robots.FiresFought - ff0;
 
-            // ③ 창고 외벽 운석 (창고 · 화물칸 · 정비실 순)
-            var outer = new[] { RoomType.Storage, RoomType.Cargo, RoomType.Workshop, RoomType.Hydroponics }
-                .SelectMany(t => w.Ship.LiveRooms.Where(r => r.Kind == t)).FirstOrDefault();
+            // ③ 외벽 운석 — 방까지 구멍이 안 나면 다른 바깥 방에 다시 (세 번까지)
+            var outers = new[] { RoomType.Storage, RoomType.Cargo, RoomType.Workshop, RoomType.Hydroponics, RoomType.Quarters, RoomType.Lounge }
+                .SelectMany(t => w.Ship.LiveRooms.Where(r => r.Kind == t)).Where(r => w.Ship.Walls.Any(kv => kv.Value.IsHull && Hull.InsideRoom(w.Ship, kv.Key) == r)).Distinct().Take(3).ToList();
             string holeRes = "대상 없음";
-            int dsort2 = 0, compHole = 0;
+            int dsort2 = 0, compHole = 0, throws = 0, dodged = 0;
             bool sealedOk = true;
-            if (outer != null)
+            if (outers.Count > 0)
             {
                 int dsB = w.Drones.Sorties;
-                var target = Scenarios.OuterTarget(w, outer);
-                Player.Meteor(w, target, 1f);
-                long t0 = w.Tick, hitAt = -1, shutAt = -1;
-                for (int t = 0; t < SimTime.Hours(14) && shutAt < 0; t += SimTime.Minutes(5))
+                long tAll = w.Tick, hitAt = -1, shutAt = -1;
+                int OpenHoles() => w.Ship.Walls.Count(kv => Hull.EffectiveBreach(kv.Value) > 0.01f && Cell.Dirs4.Any(d => w.Ship.RoomAt(kv.Key + d) is Room rr && !rr.Detached)); // 방으로 새는 구멍만 (방에 안 닿은 모서리 긁힘은 빼고) · 미세 누출(4%)도 구멍이다
+                foreach (var outer in outers)
                 {
-                    Run(w, SimTime.Minutes(5));
-                    int open = w.Ship.Walls.Count(kv => Hull.EffectiveBreach(kv.Value) > 0.05f && Cell.Dirs4.Any(d => w.Ship.RoomAt(kv.Key + d) is Room rr && !rr.Detached)); // 방으로 새는 구멍만 (방에 안 닿은 모서리 긁힘은 빼고)
-                    if (hitAt < 0 && open > 0) hitAt = w.Tick;
-                    if (hitAt >= 0 && open == 0) shutAt = w.Tick;
+                    throws++;
+                    Player.Meteor(w, Scenarios.OuterTarget(w, outer), 1f);
+                    // 1분마다 본다 (컴퓨터 · 사람이 몇 분 안에 막으면 5분 간격으로는 못 봤다)
+                    for (int t = 0; t < SimTime.Minutes(50) && hitAt < 0; t += SimTime.Minutes(1)) { Run(w, SimTime.Minutes(1)); if (OpenHoles() > 0) hitAt = w.Tick; }
+                    if (Environment.GetEnvironmentVariable("HOLEDBG") == "1")
+                    {
+                        var tg = Scenarios.OuterTarget(w, outer);
+                        foreach (var kv in w.Ship.Walls.Where(kv => kv.Value.IsHull && (kv.Key.Center - tg.Center).Length() < 4f))
+                            Console.WriteLine($"     {outer.Name} 벽 {kv.Key} 구멍 {kv.Value.Breach:0.00} 실효 {Hull.EffectiveBreach(kv.Value):0.00} 땜 {kv.Value.Patched} 강도 {kv.Value.Integrity:0.00}");
+                        foreach (var e in w.Log.Entries.Where(e => e.Tick >= tAll).Where(e => e.Text.Contains("운석") || e.Text.Contains("파공") || e.Text.Contains("구멍")).Take(12)) Console.WriteLine($"     {SimTime.Clock(e.Tick)} {e.Text}");
+                    }
+                    if (hitAt >= 0) break;
+                }
+                for (int t = 0; t < SimTime.Hours(14) && hitAt >= 0 && shutAt < 0; t += SimTime.Minutes(1))
+                {
+                    Run(w, SimTime.Minutes(1));
+                    if (OpenHoles() == 0) shutAt = w.Tick;
                 }
                 dsort2 = w.Drones.Sorties - dsB;
-                if (args.Contains("--holedebug") && shutAt < 0)
+                if (args.Contains("--holedebug") && hitAt >= 0 && shutAt < 0)
                 {
-                    foreach (var kv in w.Ship.Walls.Where(kv => Hull.EffectiveBreach(kv.Value) > 0.05f))
+                    foreach (var kv in w.Ship.Walls.Where(kv => Hull.EffectiveBreach(kv.Value) > 0.01f))
                         Console.WriteLine($"     열린 벽 {kv.Key} · 구멍 {kv.Value.Breach:0.00} · 뼈대 잃음 {kv.Value.FrameLost} · 땜 {kv.Value.Patched} · 방 {string.Join("/", Cell.Dirs4.Select(d => w.Ship.RoomAt(kv.Key + d)?.Name).Where(n => n != null).Distinct())}");
-                    foreach (var o in w.Board.Open.Where(o => o.Kind.ToString() is var k && (k.Contains("Hull") || k.Contains("Breach") || k.Contains("Weld") || k.Contains("Patch") || k.Contains("Eva"))))
-                        Console.WriteLine($"     일감 {o.Kind} · {o.Detail} · 사람 {(o.Assignee?.Name ?? "-")} · 드론 {(o.Drone?.Name ?? "-")} · 막힘 {(o.BlockedUntil > w.Tick ? "예" : "아니오")}");
                     foreach (var d in w.Drones.Drones) Console.WriteLine($"     드론 {d.Name} {d.KindName} {d.State} · {d.Doing} · 배터리 {d.Battery:0.00}");
-                    foreach (var e in w.Log.Entries.Where(e => e.Tick >= t0).Where(e => e.Text.Contains("구멍") || e.Text.Contains("외벽") || e.Text.Contains("용접") || e.Text.Contains("드론")).TakeLast(15)) Console.WriteLine($"     {SimTime.Clock(e.Tick)} {e.Text}");
                 }
-                compHole = w.Log.Entries.Where(e => e.Tick >= t0).Count(e => e.Text.Contains("주 컴퓨터") || e.Text.Contains(a.Voice.Call) || e.Text.Contains("[방송]"));
+                compHole = Said(tAll);
+                dodged = w.Log.Entries.Count(e => e.Tick >= tAll && e.Text.StartsWith("회피 기동 성공 — ") && e.Text.Contains("로 오던 운석이 비껴갔다"));
                 sealedOk = hitAt < 0 || shutAt > 0;
-                holeRes = hitAt < 0 ? "구멍 안 남" : shutAt > 0 ? $"{(shutAt - hitAt) / (float)SimTime.Minutes(1):0}분에 막음" : "14시간 넘게 열림";
+                holeRes = hitAt < 0 ? $"{throws}번 던져도 방까지 안 뚫림" : shutAt > 0 ? $"{(shutAt - hitAt) / (float)SimTime.Minutes(1):0}분에 막음" : "14시간 넘게 열림";
+                if (throws > 1 && hitAt >= 0) holeRes += $"({throws}번째)";
+                Run(w, SimTime.Hours(1));
+            }
+
+            // ④ 주컴퓨터 고장 — 저장장치 오류 (부품: 전자 부품 · 사람 손으로 고친다)
+            string downRes = "주컴퓨터 없음";
+            bool backOk = true, downFireOk = true;
+            int downJobs = 0, compDown = 0;
+            string downFire = "-";
+            if (a.Computer is Machine core)
+            {
+                long tB = w.Tick, backAt = -1;
+                int rjB = w.Robots.JobsDone;
+                w.Machines.Break(core, FaultKind.StorageFault);
+                bool wentDown = false, fireLit = false;
+                long fireAt = -1, fireOutAt = -1;
+                var fireRoom = w.Ship.LiveRooms.Where(r => r.Type is RoomType.Workshop or RoomType.Storage or RoomType.Lounge && r != galley).OrderBy(r => r.Id).FirstOrDefault()
+                               ?? w.Ship.LiveRooms.Where(r => r.Type != RoomType.Corridor && r.Type != RoomType.Reactor && r != galley && r.Cells.Count(w.Ship.IsOpenFloor) >= 4).OrderBy(r => r.Id).FirstOrDefault();
+                for (int t = 0; t < SimTime.Hours(24) && backAt < 0; t += SimTime.Minutes(1))
+                {
+                    Run(w, SimTime.Minutes(1));
+                    wentDown |= !a.MainOnline;
+                    // 꺼진 지 20분 뒤 다른 방에 불 (자동 화재 대응 없이 사람 · 로봇이 끄나)
+                    if (!fireLit && wentDown && w.Tick - tB >= SimTime.Minutes(20) && fireRoom != null)
+                    {
+                        var fs = fireRoom.Cells.Where(w.Ship.IsOpenFloor).OrderBy(c => (c.Center - fireRoom.Center).LengthSquared()).FirstOrDefault();
+                        fireLit = Player.Fire(w, fs);
+                        if (fireLit) fireAt = w.Tick;
+                    }
+                    if (fireAt >= 0 && fireOutAt < 0 && w.Fire.Count == 0) fireOutAt = w.Tick;
+                    if (wentDown && a.MainOnline && core.Faults.All(f => f.Kind != FaultKind.StorageFault)) backAt = w.Tick;
+                }
+                // 고쳐진 뒤에도 불이 남았으면 마저 지켜본다
+                for (int t = 0; t < SimTime.Hours(4) && fireAt >= 0 && fireOutAt < 0; t += SimTime.Minutes(1)) { Run(w, SimTime.Minutes(1)); if (w.Fire.Count == 0) fireOutAt = w.Tick; }
+                downJobs = w.Robots.JobsDone - rjB;
+                compDown = Said(tB);
+                backOk = !wentDown || backAt > 0;
+                downFireOk = fireAt < 0 || fireOutAt > 0;
+                downFire = fireAt < 0 ? "안 붙음" : fireOutAt > 0 ? $"{(fireOutAt - fireAt) / (float)SimTime.Minutes(1):0}분" : "안 꺼짐";
+                downRes = !wentDown ? "안 꺼짐(예비가 붙잡음)" : backAt > 0 ? $"{(backAt - tB) / (float)SimTime.TicksPerHour:0.0}시간 만에 고침" : "24시간 넘게 꺼짐";
             }
             int dead = w.Crew.Count(c => c.Dead);
 
-            Console.WriteLine($"{name,-6} 로봇 {robots,2} · 드론 {drones,2} · 주컴퓨터 {(online0 ? "켜짐" : "없음/꺼짐")}{(offlineMin > 0 ? $"(꺼진 {offlineMin}분)" : "")} | " +
-                              $"하루 로봇 일 {rjobs,3} · 멈춰 선 로봇 {stuck.Count} · 고장 {faulty} · 드론 출격 {dsort,2}/일 {djobs,2} · 드론 고장 {dfaulty} | " +
-                              $"불 {fireRes} (컴퓨터 {compFire} · 로봇 {fought}) | 운석 {holeRes} (드론 {dsort2} · 컴퓨터 {compHole}) · 사망 {dead}");
+            Console.WriteLine($"{name,-6} 로봇 {robots,2} · 드론 {drones,2} · 주컴퓨터 {(online0 ? "켜짐" : "없음/꺼짐")}{(offlineMin > 0 ? $"(꺼진 {offlineMin}분)" : "")}");
+            Console.WriteLine($"       평상시 {days}일: 로봇 일 {rjobs} · 멈춤 {stuck.Count} · 고장 {faulty} · 잃음 {rlost} | 드론 출격 {dsort}/일 {djobs} · 고장 {dfaulty} · 잃음 {dlost} | " +
+                              $"공기 나쁨 {badAirMin}분 (가장 낮은 산소 {worstO2:0.0}kPa {worstAir} · 이산화탄소 최고 {worstCO2:0.00}) | 배터리 컴퓨터 {bCap:0}kWh / 실제 {realCap:0}kWh");
+            Console.WriteLine($"       불 {fireRes} (컴퓨터 {compFire} · 로봇 {fought}) | 운석 {holeRes} (피함 {dodged} · 드론 {dsort2} · 컴퓨터 {compHole}) | " +
+                              $"주컴퓨터 고장 {downRes} · 그동안 불 {downFire} · 로봇 일 {downJobs} · 알림 {compDown} | 사망 {dead}");
             foreach (var s in stuck.Values) Console.WriteLine($"     멈춤: {s}");
             void P(bool bad, string what) { if (bad) problems.Add($"{name}: {what}"); }
             P(!online0, "주컴퓨터 없음/꺼짐");
+            P(offlineMin > 60, $"평상시에 주컴퓨터가 {offlineMin}분 꺼졌다");
             P(robots == 0, "로봇 없음");
             P(drones == 0, "드론 없음");
-            P(robots > 0 && rjobs == 0, "로봇이 하루 동안 한 일이 없다");
+            P(robots > 0 && rjobs == 0, "로봇이 평상시에 한 일이 없다");
             P(stuck.Count > 0, $"멈춰 선 로봇 {stuck.Count}");
+            P(rlost > 0 || dlost > 0, $"평상시에 잃은 로봇 {rlost} · 드론 {dlost}");
+            P(badAirMin > 60, $"사람이 있는 방 공기가 {badAirMin}분 나빴다");
+            P(batErr > 0.35f, $"주컴퓨터가 아는 배터리 용량이 실제와 {batErr * 100:0}% 다르다");
             P(!fireOut, "불이 안 꺼진다");
             P(galley != null && compFire == 0, "불에 주컴퓨터가 아무 말이 없다");
             P(!sealedOk, "외벽 구멍이 안 막힌다");
-            P(outer != null && compHole == 0, "운석에 주컴퓨터가 아무 말이 없다");
+            P(outers.Count > 0 && compHole == 0, "운석에 주컴퓨터가 아무 말이 없다");
+            P(!backOk, "고장 난 주컴퓨터를 하루 안에 못 고친다");
+            P(!downFireOk, "주컴퓨터가 꺼진 동안 난 불이 안 꺼진다");
+            P(dead > 0, $"사망 {dead}");
         }
         Console.WriteLine(problems.Count == 0 ? "\n✔ 문제 없음" : $"\n✘ 문제 {problems.Count}\n  " + string.Join("\n  ", problems));
         return problems.Count == 0 ? 0 : 1;
