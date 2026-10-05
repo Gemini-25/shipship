@@ -1406,8 +1406,10 @@ public partial class Hud : Control
             UiKit.Banner(this, new Vector2(cx, y), $"불러오는 중 — 같은 항해 번호에서 역사를 다시 돌린다 {Pct(rr.Progress)} · {_world.Day}일차", Tone.Info, pulse, "clock");
             y += 36f;
         }
+        string? shownNotice = null;
         if (_main.Notice is string notice && (Time.GetTicksMsec() - _main.NoticeMsec < 6000 || Engine.GetProcessFrames() - _main.NoticeFrame < 120) && (_main.NoticeTick < 0 || _world.Tick - _main.NoticeTick < SimTime.Hours(1)))
         {
+            shownNotice = notice;
             UiKit.Banner(this, new Vector2(cx, y), notice, Tone.Good, 1f, "info");
             y += 36f;
         }
@@ -1424,7 +1426,7 @@ public partial class Hud : Control
             y += 36f;
         }
         var alert = _world.Alerts.LastOrDefault();
-        if (alert != null && alert.Level >= AlertLevel.Warning && _world.Tick - alert.Tick < SimTime.Hours(1))
+        if (alert != null && alert.Level >= AlertLevel.Warning && _world.Tick - alert.Tick < SimTime.Hours(1) && !(shownNotice?.Contains(alert.Text) ?? false)) // 같은 경보를 안내 띠가 이미 보여 주면 겹쳐 띄우지 않는다
         {
             float pulse = 0.7f + 0.3f * Mathf.Sin(_time * 5f);
             UiKit.Banner(this, new Vector2(cx, y), $"경보 · {alert.Text}", alert.Level == AlertLevel.Critical ? Tone.Danger : Tone.Caution, pulse, "alert");
