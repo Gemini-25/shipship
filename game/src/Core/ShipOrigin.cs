@@ -38,6 +38,8 @@ public sealed class HiddenFind
     public int Machine { get; init; } = -1;
     public bool TipUsed { get; set; }
     public bool Found { get; set; }
+    /// <summary>정비 로봇이 일하다 먼저 꺼내 두었다 (로봇 이름) — 그 방에 들르는 사람이 집어 든다.</summary>
+    public string? SpottedBy { get; set; }
     public long FoundAt { get; set; } = -1;
     public int FoundBy { get; set; } = -1;
     /// <summary>막힌 구역 안에 있다 (다시 열어야 찾는다).</summary>
@@ -405,12 +407,40 @@ public sealed partial class ShipOriginSystem
                 int reach = w.Culture.Follows(c, CustomKind.MaintainerWay) || RoundsToday(c) ? 5 : 3; // v16.9 소리부터 듣는 사람 · 한 바퀴 도는 사람은 패널 틈을 더 잘 본다
                 if (working && d <= reach || f.Sealed && d <= 4) { who = c; break; }
             }
+            if (who == null && f.SpottedBy != null)
+                who = w.Crew.FirstOrDefault(c => Able(c) && !c.IsChild && c.IsAwake && c.Room == room); // 로봇이 꺼내 둔 것: 들른 사람이 본다
             if (who == null) continue;
             Found(f, who);
         }
     }
 
-    private void Found(HiddenFind f, CrewMember c)
+    /// <summary>로봇이 설비 패널을 열었다 (수리 · 정비) — 그 설비 뒤에 숨은 쪽지 · 술병은 로봇이 읽지 않고 꺼내 두고 알린다.
+    /// 그 방에 들르는 사람이 집어 든다 (로봇이 먼저 고치는 배에서도 이야기는 사람에게 간다).</summary>
+    internal void PanelOpened(Furniture fu, Robot rb)
+    {
+        var w = _w;
+        foreach (var f in Finds)
+        {
+            if (f.Found || f.SpottedBy != null || f.Kind == FindKind.Graffiti || f.Machine != fu.Id || fu.Room.Abandoned) continue;
+            f.SpottedBy = rb.Name;
+            w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(rb.Name)} {fu.Room.Name} {fu.Label} 패널 뒤에서 오래된 {Ko.EulReul(f.KindName)} 찾아 꺼냈다 (읽지 않고 사람에게 건넨다)");
+            if (rb.Steps == null) continue;
+            // 일을 마치면 가장 가까운 깨어 있는 사람에게 건넨다 (못 만나면 그 방에 두고 간다 — 들른 사람이 본다)
+            CrewMember? Nearest(Robot r) => w.Crew.Where(c => Able(c) && !c.IsChild && c.IsAwake && c.Room != null && !c.Room.Abandoned)
+                .OrderBy(c => (c.Position - r.Position).LengthSquared()).FirstOrDefault();
+            rb.Steps.Add(new RGoto(r => Nearest(r)?.Cell));
+            rb.Steps.Add(new RDo((r, world) =>
+            {
+                if (f.Found) return true;
+                var c = Nearest(r);
+                if (c == null || (c.Position - r.Position).Length() > 3f) return true;
+                Found(f, c, $"{Ko.IGa(r.Name)} {fu.Room.Name} 패널 뒤에서 꺼내 온");
+                return true;
+            }));
+        }
+    }
+
+    private void Found(HiddenFind f, CrewMember c, string? handed = null)
     {
         var w = _w;
         f.Found = true;
@@ -419,18 +449,20 @@ public sealed partial class ShipOriginSystem
         f.Knows.Add(c.Id);
         Stats.Found++;
         var room = w.Ship.Rooms[f.RoomId];
-        string how = f.Sealed ? "다시 연 구역을 둘러보다" : f.Kind == FindKind.Graffiti ? "패널을 떼어 내다" : "정비하다 패널 뒤에서";
+        string how = handed ?? (f.SpottedBy != null ? $"{Ko.IGa(f.SpottedBy)} 꺼내 둔" : f.Sealed ? "다시 연 구역을 둘러보다" : f.Kind == FindKind.Graffiti ? "패널을 떼어 내다" : "정비하다 패널 뒤에서");
         string what = f.Kind switch
         {
             FindKind.Note => $"전 승무원 {f.Author}의 쪽지를 찾았다 — {f.Text}",
             FindKind.Bottle => $"{Ko.IGa(f.Author)} 숨겨 둔 술병을 찾았다 — {f.Text}",
             _ => $"벽 낙서를 찾았다 — {f.Text}",
         };
-        w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(c.Name)} {room.Name}에서 {how} {what}", c.Id);
+        if (handed != null) what = what.Replace("찾았다", "받았다");
+        w.Log.Add(w.Tick, LogKind.Life, handed != null ? $"{Ko.IGa(c.Name)} {handed} {what}" : $"{Ko.IGa(c.Name)} {room.Name}에서 {how} {what}", c.Id);
         w.History.Add(w, HistoryKind.Memory, $"{Ko.IGa(c.Name)} {room.Name}에서 {what}", room, new[] { c });
         MarkLog.Add(room.Marks, w.Tick, $"{c.Name}: {f.KindName} 발견");
         Life.Diary(w, c, Persona.Say(c, f.Kind switch
         {
+            FindKind.Note when f.SpottedBy != null => $"{Ko.IGa(f.SpottedBy)} {room.Name} 패널 뒤에서 꺼낸 쪽지를 읽었다. {f.Author}라는 사람이 쓴 것. {f.Text} — 이 배에도 우리 전에 살던 사람들이 있었다.",
             FindKind.Note => $"{room.Name} 패널 뒤에서 {f.Author}라는 사람의 쪽지를 찾았다. {f.Text} — 이 배에도 우리 전에 살던 사람들이 있었다.",
             FindKind.Bottle => $"{Ko.IGa(f.Author)} 숨겨 둔 술을 찾았다. 오늘 저녁에 다 같이 나눠야겠다.",
             _ => $"{room.Name} 벽에 낙서가 있었다. {f.Text} — 웃음이 났다.",

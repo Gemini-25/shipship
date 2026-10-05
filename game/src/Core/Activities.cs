@@ -41,18 +41,26 @@ public sealed class EatActivity : Activity
 
     private static (Furniture? box, Cell spot, Source src) FindFood(CrewMember c, World w, DistanceField dist)
     {
-        var (d, ds) = Plans.NearestContainer(w, dist, c, f =>
-            f.Type == FurnitureType.MealDispenser && f.Storage!.Count(ItemKind.Meal) > 0 && f.Machine!.Efficiency > 0f);
-        if (d != null) return (d, ds, Source.Dispenser);
-        var (fr, fs) = Plans.NearestContainer(w, dist, c, f =>
-            f.Type == FurnitureType.Fridge && f.Storage!.Count(ItemKind.Meal) > 0);
-        if (fr != null) return (fr, fs, Source.Fridge);
-        var (r, rs) = Plans.NearestContainer(w, dist, c, f => f.Storage!.Count(ItemKind.Ration) > 0);
-        if (r != null) return (r, rs, Source.Ration);
+        // 배식기 → 냉장고 식사 → 비상식량 → 날채소 순으로 고르되, 걸음도 따진다: 큰 고리형 배에서 배 반대편 배식기까지
+        // 한 시간 반을 걸어 굶주린 채 닿았다 (보금자리호 · 새터호) — 많이 배고프면 가까운 비상식량부터 뜯는다
+        float hunger = c.Needs.Hunger;
+        Furniture? best = null; Cell bestSpot = default; Source bestSrc = Source.None; int bestCost = int.MaxValue;
+        void Try((Furniture? box, Cell spot) found, Source src, int penalty)
+        {
+            if (found.box == null) return;
+            int cost = dist.Get(found.spot) + penalty;
+            if (cost < bestCost) { best = found.box; bestSpot = found.spot; bestSrc = src; bestCost = cost; }
+        }
+        Try(Plans.NearestContainer(w, dist, c, f =>
+            f.Type == FurnitureType.MealDispenser && f.Storage!.Count(ItemKind.Meal) > 0 && f.Machine!.Efficiency > 0f), Source.Dispenser, 0);
+        Try(Plans.NearestContainer(w, dist, c, f =>
+            f.Type == FurnitureType.Fridge && f.Storage!.Count(ItemKind.Meal) > 0), Source.Fridge, 50);
+        if (best == null || bestCost > 400) // 식사가 가까이 있으면 비상식량은 보지 않는다
+            Try(Plans.NearestContainer(w, dist, c, f => f.Storage!.Count(ItemKind.Ration) > 0), Source.Ration, hunger > 0.7f ? 300 : 1200);
         // 마지막 수단: 조리할 수 없고 비상식량도 떨어졌으면 채소를 날로 (v7에서 고침: 전에는 채소가 쌓여 있는데 굶었다)
-        var (p, ps) = Plans.NearestContainer(w, dist, c, f => f.Type == FurnitureType.Fridge && f.Storage!.Count(ItemKind.Produce) > 0);
-        if (p != null) return (p, ps, Source.Produce);
-        return (null, default, Source.None);
+        if (best == null || hunger > 0.85f && bestCost > 600)
+            Try(Plans.NearestContainer(w, dist, c, f => f.Type == FurnitureType.Fridge && f.Storage!.Count(ItemKind.Produce) > 0), Source.Produce, best == null ? 0 : 600);
+        return (best, bestSpot, bestSrc);
     }
 
     /// <summary>끼니때인가 (기상 후 0.5h · 6h · 11.5h 전후, 조금이라도 출출하면) — 냄새를 따라가는 것도 끼니를 찾아가는 것이다.</summary>
@@ -65,10 +73,12 @@ public sealed class EatActivity : Activity
 
     public override (float, string) Score(CrewMember c, World w, DistanceField dist)
     {
-        var (box, _, src) = FindFood(c, w, dist);
+        var (box, spot, src) = FindFood(c, w, dist);
         if (src == Source.None) return (0f, "먹을 것이 없음");
         float hunger = c.Needs.Hunger;
-        float score = Curve.Smooth(hunger, 0.35f, 0.9f) * 1.1f;
+        // 먹을 데가 멀면 가는 동안 더 배고파질 만큼 일찍 나선다 (큰 고리형 배: 배식기까지 한 시간 — 도착하면 바닥이었다)
+        float walkH = Math.Max(0, dist.Get(spot)) / 1400f;
+        float score = Curve.Smooth(MathF.Min(1f, hunger + walkH * NeedsSystem.FoodDecayAwake), 0.35f, 0.9f) * 1.1f;
         string reason = hunger > 0.8f ? "몹시 배고픔" : hunger > 0.5f ? "배고픔" : "아직 배부름";
         // 굶어 쓰러질 지경이면 자다가도 깬다 (사고 뒤 끼니를 놓친 채 잠든 경우)
         if (hunger > 0.93f)
@@ -99,7 +109,9 @@ public sealed class EatActivity : Activity
         if (src == Source.Ration) reason += " · 비상식량뿐";
         if (src == Source.Produce) reason += " · 날채소뿐";
         // 자는 중에는 웬만큼 배고파서는 깨지 않는다
-        if (c.Pose == Pose.Sleeping && hunger < 0.85f) score *= 0.6f;
+        if (c.Pose == Pose.Sleeping && hunger < 0.85f && c.Job?.Activity is null or SleepActivity) score *= 0.6f; // 치료 침대에 누운 환자는 잠이 아니다 — 끼니를 거르면 일어나 먹는다 (새터호: 85%까지 누워 있다 굶주려 일어났다)
+        // 받아 든 끼니는 다 먹는다 — 배가 차 갈수록 점수가 떨어져 반쯤 먹고 악기로 돌아갔다가, 그대로 잠들어 새벽에 굶주려 깼다 (부싯돌호)
+        if (c.Job?.Activity is EatActivity && c.Needs.Food < 0.95f) { score = MathF.Max(score, 0.9f); reason += " · 먹던 끼니"; }
         // 통합7 태양 폭풍이 쏟아지는 동안 쬐는 방(식당 · 지나는 통로)으로 밥 먹으러 나가지 않는다 — 굶주리기 전엔 지나간 뒤에 (새터호: 대피소에서 나와 59% 식당으로)
         if (w.Ambience.StormPower >= 0.3f && hunger < 0.93f && !c.Outside && (box?.Room.Radiation >= 0.2f || c.Room?.Radiation >= 0.2f))
         {
@@ -120,7 +132,9 @@ public sealed class EatActivity : Activity
                         && !w.IsSpotTaken(f.UseSpots[0], c))
             .OrderBy(f => (f.Center - box.Center).LengthSquared() + w.Coop.Queues.SeatBias(c, f) + w.Info.SeatBias(c, f) + w.After.SeatBias(c, f)) // 통합7 두 줄로 나뉘어 뒤 줄이 앞 줄(v17.5 떠난 사람의 의자 · 구석)을 덮던 것을 하나로 · v17.3 늘 앉던 자리 · 친한 사람 · 소음 · 조명 · 다툰 사람 · v17.4 줄에서 다툰 사람 곁은 피하고 양보해 준 사람 곁으로
             .FirstOrDefault();
-        var away = w.After.EatAway(c, seat, dist) ?? w.Drains.EatAway(c, seat, dist); // v17.5 묵은 그을음 냄새 · 혼자 먹기 → 다른 방 · 선실 · v18.3 하수 냄새
+        bool starving = c.Needs.Hunger > 0.9f;
+        if (starving) seat = null; // 굶주렸으면 받아 든 자리에서 바로 먹는다 (식판을 들고 먼 식당 자리까지 가다 0이 됐다 — 새터호)
+        var away = starving ? null : w.After.EatAway(c, seat, dist) ?? w.Drains.EatAway(c, seat, dist); // v17.5 묵은 그을음 냄새 · 혼자 먹기 → 다른 방 · 선실 · v18.3 하수 냄새
         if (away != null) seat = null;
 
         var toils = Plans.DropOff(c, w, dist);

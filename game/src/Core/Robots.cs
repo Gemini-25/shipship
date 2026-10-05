@@ -874,6 +874,7 @@ public sealed partial class RobotSystem
                     m.Wear = used ? 0.12f : MathF.Max(0.35f, m.Wear - 0.2f);
                     m.LastServiced = world.Tick;
                     m.ServiceCount++;
+                    world.Origin.PanelOpened(f, rb);
                     world.Board.Close(o);
                     Done(rb, used ? null : $"{Ko.EulReul(m.Name)} 임시 정비했다 (소모품 없음)");
                     return true;

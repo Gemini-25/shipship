@@ -168,9 +168,16 @@ public static partial class Program
                 Teleport(w, A, side1.Value); Teleport(w, B, nearA); Teleport(w, L, side2.Value);
                 w.Step();
                 Job Talk(CrewMember partner) => new Job(null, "대화", new List<Toil> { new WaitToil(SimTime.Hours(2), Pose.Standing, partner.Position) { EveryTick = (cm, _) => { cm.TalkingTo = partner; } } });
+                // 장면 동안 주컴퓨터의 비상 훈련 · 승무원 재판이 걸리면 셋이 다 불려 나간다 (난수 흐름에 따라 이 90분과 겹쳤다) — 둘 다 장면 뒤로
+                string skip0 = ShipMate.Skip;
+                bool motions0 = MotionSystem.Off;
+                ShipMate.Skip = skip0 + "a";
+                MotionSystem.Off = true;
                 Force(w, A, Talk(B)); Force(w, B, Talk(A));
                 Force(w, L, new Job(null, "책 읽기", new List<Toil> { new WaitToil(SimTime.Hours(2), Pose.Standing) }));
                 for (int t = 0; t < SimTime.Hours(1.5f) && !b.Heard.Any(h => h.Listener == L.Id); t++) w.Step();
+                ShipMate.Skip = skip0;
+                MotionSystem.Off = motions0;
                 var mem = b.Heard.LastOrDefault(h => h.Listener == L.Id);
                 detail += $" · {A.Name}·{B.Name} 대화 → 엿들은 {L.Name}: {(mem != null ? $"{SimTime.Clock(mem.Tick)} \"{mem.What}\"" : "없음")} · 엿들음 {b.Stats.Overheard}";
                 Check("엿듣기 — 옆 선실 대화가 얇은 칸막이로 새어 엿듣고, 기억에 남는다", thin && mem != null, detail);

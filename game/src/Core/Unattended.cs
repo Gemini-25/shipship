@@ -412,6 +412,7 @@ public sealed partial class RobotSystem
                     world.Board.Close(o);
                     MarkLog.Add(m.Marks, world.Tick, $"{rb.Name}: {fault.Spec.Name} 수리");
                     Hand($"{m.Name}의 {Ko.EulReul(fault.Spec.Name)} 고쳤다");
+                    world.Origin.PanelOpened(f, rb);
                     return true;
                 }));
                 steps.Add(new RTest(m, "fix:hands")); // 고친 뒤 시험 가동
