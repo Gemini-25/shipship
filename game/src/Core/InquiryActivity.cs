@@ -31,7 +31,8 @@ public sealed class CoverActivity : Activity
             {
                 if (room == null || room.Detached) return (0f, "—");
                 int others = w.Crew.Count(o => o != c && !o.Dead && o.IsAwake && o.Room == room);
-                float s = 0.52f - 0.12f * MathF.Min(3, others) - (OnShift(c, w) ? 0.15f : 0f);
+                float s = 0.52f - 0.12f * MathF.Min(3, others) - (OnShift(c, w) ? 0.15f : 0f)
+                          + 0.25f * MathF.Min(1f, (w.Tick - t.Since) / (float)SimTime.Hours(4)); // 누가 먼저 기록을 들여다보기 전에 — 미룰수록 마음이 급해진다 (벌 근무 · 회의 · 훈련에 밀려 하루를 넘겼다)
                 return (MathF.Max(0f, s), "단말에서 정비 기록을 본다");
             }
             case CoverTaskKind.Confess:

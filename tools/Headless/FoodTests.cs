@@ -66,7 +66,7 @@ public static partial class Program
                 Run(w, SimTime.Minutes(20));
                 var stove = w.Ship.FurnitureOf(FurnitureType.Stove).First();
                 w.Cooking.ForceNext = "vegsoup";
-                w.Cooking.OnCooked(cook, stove, 6);
+                w.Cooking.OnCooked(cook, stove, 8); // 넉넉히 — 배가 고프면 일찍 먹으러 오니 여섯 그릇은 덜어 두기 전에 바닥났다
                 var soup = w.Cooking.Batches.Last(x => !x.Jar);
                 Plate? plate = null;
                 string how = "자연";
@@ -81,7 +81,8 @@ public static partial class Program
                     // 아무도 식당에 없었다 — 조리사에게 덜어 두게 한다 (장면을 꾸민다)
                     how = "부탁";
                     if (soup.Portions <= 0) { w.Cooking.ForceNext = "vegsoup"; w.Cooking.OnCooked(cook, stove, 6); soup = w.Cooking.Batches.Last(x => !x.Jar); }
-                    var saver = w.Crew.Where(c => c != mech && c.CanAct && !c.IsChild).OrderByDescending(c => c == cook).First();
+                    // 손이 빈 사람에게 (조리사가 배우기 · 수리에 붙어 있으면 두 시간을 넘겼다)
+                    var saver = w.Crew.Where(c => c != mech && c.CanAct && !c.IsChild && c.IsAwake).OrderByDescending(c => c.Job?.Order == null).ThenByDescending(c => c == cook).ThenBy(c => c.Id).First();
                     w.Cooking.AskToSave(saver, mech, soup);
                     for (int m = 0; m < 120 && plate == null; m++) { Run(w, SimTime.Minutes(1)); plate = w.Cooking.Plates.FirstOrDefault(p => p.For == mech.Id); }
                     dbg = $" · 맡긴 사람 {saver.Name}({saver.ActivityLabel}) · 남은 {soup.Portions}";
@@ -221,7 +222,7 @@ public static partial class Program
                 var head = w.Cooking.HeadCook!;
                 var appr = w.Cooking.Apprentice!;
                 Run(w, SimTime.TicksPerDay); // 다들 조리사의 맛에 익숙해진다
-                appr.SkillLevels[(int)Skill.Cooking] = MathF.Max(0.05f, head.RawSkill(Skill.Cooking) - 0.35f); // 아직 배우는 중
+                appr.SkillLevels[(int)Skill.Cooking] = MathF.Max(0.05f, head.RawSkill(Skill.Cooking) - 0.5f); // 아직 배우는 중 (0.35 차이는 맛 차이가 알아챌 문턱 0.08에 걸려 끼니 순서에 따라 갈렸다)
                 NeedsSystem.AddInjury(head.Vitals, 0.6f, "주방 화상");
                 int cover0 = w.Cooking.Stats.CoverCooks, taste0 = w.Cooking.Stats.TasteNoticed;
                 long hurtAt = w.Tick;
