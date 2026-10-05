@@ -383,6 +383,12 @@ public sealed class SmellSystem
             return;
         }
         if (w.Portable.SmellFound(c, room)) { Stats.Found++; _resolved[c.Id] = (w.Tick, 1f); return; } // v16.7 이동식 장비 (먼지 타는 히터 · 뜨거운 콘센트)
+        if (w.After.StaleSoot(room) > 0.05f) // 불 끈 자리의 그을음
+        {
+            _resolved[c.Id] = (w.Tick, 1f);
+            w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(c.Name)} 탄 냄새를 따라와 보니 {room.Name} 불 끈 자리의 그을음 냄새였다", c.Id);
+            return;
+        }
         // 여기가 가장 진한데 아무것도 없다 — 어디서 흘러온 냄새다
         if (Source(c, SmellKind.Burnt) == room)
         {
@@ -537,7 +543,8 @@ public sealed class CheckSmellActivity : Activity
         if (w.Smells.Smelled(c, SmellKind.Burnt, SimTime.Minutes(20)) is not SmellSystem.Sniff s) return null;
         if (w.Smells.Resolved(c, s.Strength)) return null;
         var t = w.Smells.Likely(c, SmellKind.Burnt); // 문간마다 맡아 보며 더 진한 쪽으로 (갈피를 못 잡으면 주방부터)
-        if (t == null || w.Fire.IsKnown(t) || t.OffLimits || Atmosphere.Danger(t) > 0.6f) return null; // 이미 알려진 불은 대응하는 일로
+        if (t == null || w.Fire.KnownNear(t) || t.OffLimits || Atmosphere.Danger(t) > 0.6f) return null; // 이미 알려진 불은 대응하는 일로
+        if ((w.After.StaleSoot(t) > 0.05f || w.Fire.JustOutNear(t, SimTime.Hours(2))) && w.Fire.CountIn(t) == 0 && w.Cooking.ScorchingIn(t) == null) return null; // 불 끈 자리의 그을음 냄새 — 다들 안다 (꺼진 뒤 대여섯이 우르르 확인하러 가던 것)
         return (t, s.Strength);
     }
 

@@ -282,7 +282,7 @@ public sealed class WorkOrder
         WorkKind.Maintain => $"{Target.Label} 정비",
         WorkKind.Harvest => $"{Target.Label} 수확",
         WorkKind.Tend => $"{Target.Label} 돌보기",
-        WorkKind.Cook => "식사 조리",
+        WorkKind.Cook => $"{Target.Label}에서 식사 조리", // 조리대가 여럿이면 동시에 — 어느 조리대인지 (같은 제목이 줄줄이 보였다)
         WorkKind.Restock => $"{Target.Label} 채우기",
         WorkKind.SealBreach => $"{Target.Label} 파공 봉합",
         WorkKind.RepairHull => $"{Target.Label} 수리",

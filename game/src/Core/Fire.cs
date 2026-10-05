@@ -43,6 +43,14 @@ public sealed class FireSystem
     public int Count => _fires.Count;
     public float At(Cell c) => _fires.TryGetValue(c, out var v) ? v : 0f;
     public bool IsKnown(Room r) => _knownRooms.Contains(r.Id);
+    /// <summary>알려진 불이 이 방이나 문 하나 건너에 있다 (번져 온 연기 · 탄내는 그 불의 것).</summary>
+    public bool KnownNear(Room r) => IsKnown(r) || r.Doors.Any(d => d.RoomA != null && IsKnown(d.RoomA) || d.RoomB != null && IsKnown(d.RoomB));
+    /// <summary>알려진 불을 마지막으로 다 끈 때 (탄 냄새가 남아도 다들 까닭을 안다).</summary>
+    public long LastOut { get; private set; } = -1;
+    public int LastOutRoom { get; private set; } = -1;
+    /// <summary>이 방(또는 문 하나 건너)에서 방금 불을 껐다 — 그쪽 탄 냄새는 그 불 냄새다.</summary>
+    public bool JustOutNear(Room r, long within) =>
+        LastOut >= 0 && _world.Tick - LastOut < within && (r.Id == LastOutRoom || r.Doors.Any(d => d.RoomA?.Id == LastOutRoom || d.RoomB?.Id == LastOutRoom));
 
     /// <summary>v16.26 열린 문 곁(두 칸 안)에 깨어 선 사람이 문 너머로 연기가 쏟아지는 걸 본다 (탄 냄새를 따라와 문을 연 사람 · 작은 방은 연기가 금방 차 들어가지 못한다).</summary>
     private CrewMember? DoorWitness(Room room)
@@ -258,6 +266,7 @@ public sealed class FireSystem
             if (burning.Contains(room)) continue;
             _knownRooms.Remove(id);
             _knownSince.Remove(id);
+            LastOut = w.Tick; LastOutRoom = id;
             w.Log.Add(w.Tick, LogKind.Ship, $"{room.Name} 불을 다 껐다");
         }
     }

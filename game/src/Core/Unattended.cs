@@ -97,7 +97,7 @@ public sealed partial class RobotSystem
     public static bool Carrier(RobotKind k) => k is RobotKind.Hauler or RobotKind.Courier or RobotKind.Tanker or RobotKind.Stocker or RobotKind.Utility;
     /// <summary>로봇이 맡을 수 있는 사람 몫의 손일 (종류만).</summary>
     public static bool HandWork(WorkKind k) => k is WorkKind.ResetBreaker or WorkKind.StartAux or WorkKind.CloseValve or WorkKind.OpenValve or WorkKind.Refuel or WorkKind.RefillCoolant
-        or WorkKind.Repair or WorkKind.Reline or WorkKind.Rewire or WorkKind.PatchPipe or WorkKind.RestartReactor or WorkKind.StockDock or WorkKind.Fabricate;
+        or WorkKind.Repair or WorkKind.Reline or WorkKind.Rewire or WorkKind.PatchPipe or WorkKind.RestartReactor or WorkKind.StockDock or WorkKind.Fabricate or WorkKind.PreventiveCheck;
 
     /// <summary>이 로봇이 사람 몫의 손일을 맡을 수 있나.</summary>
     private bool Stands(Robot r, WorkOrder o)
@@ -108,6 +108,7 @@ public sealed partial class RobotSystem
         if (o.Kind == WorkKind.StockDock) return w.Automation.Unattended; // 운반 로봇이 없는 작은 배: 드론이 외벽을 막을 금속판을 거치대에 (아무 로봇이나 나른다)
         if (o.Kind is WorkKind.Refuel or WorkKind.RefillCoolant) return Carrier(r.Kind) || Fixer(r.Kind);
         // 무인 운항: 정비 로봇이 모자라면 다른 로봇도 주 컴퓨터 안내로 가벼운 수리를 (무거운 부품 없이 · 느리고 자주 헛짚는다)
+        if (o.Kind == WorkKind.PreventiveCheck) return o.Target.Kind == TargetKind.Room && (Fixer(r.Kind) || RobotsV15.Patrols(r.Kind)); // 방 순찰: 수리 로봇이 쉴 때 센서로 둘러본다 (설비 전조 손보기는 사람 몫)
         if (!Fixer(r.Kind)) return o.Kind == WorkKind.Repair && w.Automation.Unattended && RepairOk(o) && o.Target.Furniture?.Machine?.Faults.FirstOrDefault(x => x.Kind == o.Fault && x.Circuit == o.Circuit) is Fault lf && !lf.Materials.Any(x => PartsSystem.Heavy(x.kind));
         return o.Kind switch
         {
@@ -146,10 +147,11 @@ public sealed partial class RobotSystem
                 if (r.Kind is RobotKind.Stretcher or RobotKind.Nurse) continue;
                 _freeKinds.Add(WorkKind.ResetBreaker); _freeKinds.Add(WorkKind.StartAux); _freeKinds.Add(WorkKind.CloseValve); _freeKinds.Add(WorkKind.OpenValve);
                 if (Carrier(r.Kind) || Fixer(r.Kind)) { _freeKinds.Add(WorkKind.Refuel); _freeKinds.Add(WorkKind.RefillCoolant); }
+                if (Fixer(r.Kind) || RobotsV15.Patrols(r.Kind)) _freeKinds.Add(WorkKind.PreventiveCheck);
                 if (Fixer(r.Kind)) { _freeKinds.Add(WorkKind.Repair); _freeKinds.Add(WorkKind.Reline); _freeKinds.Add(WorkKind.Rewire); _freeKinds.Add(WorkKind.PatchPipe); if (w.Automation.CoreOnline && w.Automation.Unattended) _freeKinds.Add(WorkKind.RestartReactor); }
             }
         }
-        return _freeKinds.Contains(o.Kind) && (o.Kind != WorkKind.Repair || RepairOk(o));
+        return _freeKinds.Contains(o.Kind) && (o.Kind != WorkKind.Repair || RepairOk(o)) && (o.Kind != WorkKind.PreventiveCheck || o.Target.Kind == TargetKind.Room);
     }
 
     /// <summary>사람 몫의 손일 단계 (사람보다 느리다).</summary>
@@ -213,6 +215,20 @@ public sealed partial class RobotSystem
                 float added = world.Piping.Refill(30f);
                 world.Board.Close(o);
                 Hand($"냉각수를 {added:0}L 보충했다 ({world.Piping.CoolantFraction * 100:0}%)");
+                return true;
+            }));
+            return steps;
+        }
+        if (o.Kind == WorkKind.PreventiveCheck && o.Target.Room is Room pr)
+        {
+            steps.Add(new RGoto(at));
+            steps.Add(new RWork(0.2f, o, pr.Center));
+            steps.Add(new RDo((rb, world) =>
+            {
+                if (o.Closed) return true;
+                Prevention.Inspect(world, pr, rb.Name, robot: true);
+                world.Board.Close(o);
+                Done(rb, null);
                 return true;
             }));
             return steps;

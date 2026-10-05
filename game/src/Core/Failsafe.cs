@@ -48,6 +48,7 @@ public sealed class FailsafeSystem
     private readonly HashSet<int> _alt = new(), _altPrev = new();
     private long _altTick = -1;
     private int _shedLevel;
+    private bool _deficitShed; // 원자로가 도는데 모자라서 내렸다 (배터리가 조금 찰 때까지 둔다)
     private long _nextRing;
 
     public int Latches, Unlatches, LatchFails, DamperCloses, PartitionDeploys, Transfers, RingRooms, ArmorWalls, Partitions, ShedEvents, RingCarried, Calmed, Believed;
@@ -145,14 +146,20 @@ public sealed class FailsafeSystem
     {
         if (Durability.Legacy) return;
         var p = _w.Power;
-        bool onBattery = !p.ReactorOnline || p.LowPowerMode || p.BatteryFlow < -1f && p.BatteryPercent < 0.6f; // 원자로가 멈췄거나 모자라 배터리가 빠진다
+        bool reactorOff = !p.ReactorOnline || p.LowPowerMode;
+        bool onBattery = reactorOff || p.BatteryFlow < -1f && p.BatteryPercent < 0.6f; // 원자로가 멈췄거나 모자라 배터리가 빠진다
         float b = p.BatteryPercent;
-        int want = !onBattery ? (b > 0.7f || p.ReactorRamp >= 1f ? 0 : _shedLevel) : b < 0.3f || _shedLevel >= 1 && p.ShedCount > 0 ? 2 : b < 0.6f || p.ShedCount > 0 ? Math.Max(1, _shedLevel) : _shedLevel; // 배터리가 바닥나거나 한 번에 낼 세기가 모자라면 (방이 꺼지기 전에)
-        if (!onBattery && p.ReactorRamp >= 1f && p.BatteryFlow >= 0f) want = 0;
+        if (reactorOff) _deficitShed = false; // 원자로가 서면 돌아오는 대로 푼다
+        // 원자로가 도는데 모자라서 내렸으면 배터리가 조금 찰 때까지 둔다 — 내리자마자 흐름이 플러스가 되어 바로 올리고, 또 모자라 내리고 (1분마다 되풀이하던 것)
+        bool settled = !_deficitShed || b > 0.65f;
+        int want = !onBattery ? (b > 0.7f || p.ReactorRamp >= 1f && settled ? 0 : _shedLevel) : b < 0.3f || _shedLevel >= 1 && p.ShedCount > 0 ? 2 : b < 0.6f || p.ShedCount > 0 ? Math.Max(1, _shedLevel) : _shedLevel; // 배터리가 바닥나거나 한 번에 낼 세기가 모자라면 (방이 꺼지기 전에)
+        if (!onBattery && p.ReactorRamp >= 1f && p.BatteryFlow >= 0f && settled) want = 0;
         if (want != _shedLevel)
         {
             int before = _shedLevel;
             _shedLevel = want;
+            if (before == 0 && want > 0) _deficitShed = !reactorOff;
+            if (want == 0) _deficitShed = false;
             ShedEvents++;
             string text = want == 0 ? "부하 차단 계전기 해제 — 주 전력이 돌아와 내렸던 설비를 다시 켠다"
                 : want == 1 ? $"부하 차단 계전기 1단 — 배터리 {b * 100:0}% · 급하지 않은 설비부터 내린다 (생명유지 · 주 컴퓨터는 그대로)"

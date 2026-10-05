@@ -37,7 +37,7 @@ public static partial class Program
             var last = w.Robots.Robots.ToDictionary(r => r.Id, r => (pos: r.Position, since: w.Tick, doing: r.Doing));
             var stuck = new Dictionary<int, string>();
             int offlineMin = 0, badAirMin = 0;
-            float worstO2 = 99f, worstCO2 = 0f;
+            float worstO2 = 99f, worstCO2 = 0f, batLow = 1f; int shortMin = 0, shed0 = w.Failsafe.ShedEvents;
             string worstAir = "";
             for (int m = 0; m < days * 24 * 6; m++)
             {
@@ -63,8 +63,11 @@ public static partial class Program
                         Console.WriteLine($"     공기: {room.Name} {SimTime.Clock(w.Tick)} CO2 {air.CO2:0.00} O2 {air.O2:0.0} · 사람 {w.Crew.Count(c => !c.Dead && c.Room == room)} · 환기 {Atmosphere.Vented(room)}(댐퍼 {room.VentOpen} 덕트 {room.DuctLinked} 원함 {Hull.WantVentOpen(w, room)} 감염 {w.Infection.Shut(room)} 소화 {w.Automation.KeepDamperShut(room)} 봉 {room.VentSealed} 가스 {w.Hazards.GasSource(room) != null} 걸림 {room.DamperJammed}/{room.DamperStuck} 자동 {w.Automation.DampersIn(room)}) · 전기 {room.Powered} · 공기망 {room.AirFlow:0.00} · 부피 {room.Volume:0} · 정화 {w.Air.CO2Scrubbed:0.0}/능력 {w.Air.O2Capacity:0.0}");
                 }
                 if (bad) badAirMin += 10;
+                batLow = MathF.Min(batLow, w.Power.BatteryPercent);
+                // 고장 처리 중(배전반 고장 · 임시 배선 · 죽은 회로)은 빼고 — 평소 전기가 모자란 배만 잡는다
+                if (w.Power.ShedCount > 0 && !w.Power.Jumpers.Any(j => j.Active) && w.Power.CircuitLive.All(x => x) && !w.Ship.FurnitureOf(FurnitureType.PowerPanel).Any(f => f.Machine!.Faults.Count > 0)) { shortMin += 10; if (args.Contains("--powerdebug") && shortMin <= 120) Console.WriteLine($"     전기: {SimTime.Day(w.Tick)}일 {SimTime.Clock(w.Tick)} 못 받음 {w.Power.ShedCount} · 수요 {w.Power.Demand:0}kW · 원자로 {(w.Power.ReactorOnline ? "돎" : "멈춤")} 한도 {w.Power.ReactorLimit:0}kW · 배터리 {w.Power.BatteryPercent * 100:0}% 흐름 {w.Power.BatteryFlow:0} · 계전기 {w.Failsafe.ShedLevel} · 꺼진 방 {w.Ship.LiveRooms.Count(r => !r.Powered)} · 끊긴 회로 {string.Join("", Enumerable.Range(0, PowerGrid.CircuitCount).Where(i => !w.Power.CircuitFed[i]).Select(PowerGrid.CircuitName))} · 죽은 회로 {string.Join("", Enumerable.Range(0, PowerGrid.CircuitCount).Where(i => !w.Power.CircuitLive[i]).Select(PowerGrid.CircuitName))} · 임시 배선 {string.Join(",", w.Power.Jumpers.Where(j => j.Active).Select(j => $"{PowerGrid.CircuitName(j.From)}→{PowerGrid.CircuitName(j.To)} {j.Load:0}/{j.Capacity:0}kW"))} · 배터리 용량 {w.Power.BatteryCapacity:0}kWh · 고장 {string.Join(",", w.Ship.Machines.Where(m => m.Faults.Count > 0).Select(m => $"{m.Name}:{string.Join("/", m.Faults.Select(f => $"{f.Kind}[{string.Join("+", f.Materials.Select(x => $"{ItemKinds.Name(x.kind)}{x.count}(배에 {w.Ship.CountStored(x.kind)})"))}]"))}"))}{(w.Board.Open.FirstOrDefault(o => o.Target.Furniture?.Type == FurnitureType.PowerPanel && o.Assignee != null)?.Assignee is CrewMember pa ? $" · 맡은 사람 {pa.Name} {pa.Room?.Name} {pa.Job?.Label} {pa.Job?.Current?.GetType().Name} 진행 {w.Board.Open.First(o => o.Assignee == pa).Progress:0.00} 칸 {pa.Cell} 길 {pa.PathIndex}/{pa.Path?.Count} 목적 {pa.Destination} 걸음 {pa.Gait.Line(pa, w) ?? "-"} 막힘 {pa.Gait.Blocked} 손 {pa.Carrying?.Kind} 깸 {pa.IsAwake} 기력 {pa.Needs.Rest:0.00} 방전기 {pa.Room?.Powered}" : "")} · 일감 {string.Join(" | ", w.Board.Open.Where(o => o.Target.Furniture?.Type == FurnitureType.PowerPanel || o.Kind is WorkKind.ResetBreaker or WorkKind.RestoreCircuit).Select(o => $"{o.Title}/{o.Assignee?.Name ?? o.Robot?.Name ?? "-"}{(o.BlockedUntil > w.Tick ? "/막힘 " + o.BlockedReason : "")}"))}"); }
             }
-            int rjobs = w.Robots.JobsDone - rj0, dsort = w.Drones.Sorties - ds0, djobs = w.Drones.JobsDone - dj0;
+            int shedN = w.Failsafe.ShedEvents - shed0, rjobs = w.Robots.JobsDone - rj0, dsort = w.Drones.Sorties - ds0, djobs = w.Drones.JobsDone - dj0;
             int faulty = w.Robots.Robots.Count(r => !r.Operational), dfaulty = w.Drones.Drones.Count(d => !d.Operational);
             int dlost = w.Drones.Drones.Count(d => d.State is DroneState.Lost && !d.OnTrip) - lost0, rlost = w.Robots.Robots.Count(r => r.State == RobotState.Lost) - rlost0;
             if (args.Contains("--dronedebug") && (dlost > 0 || dfaulty > 0))
@@ -195,10 +198,14 @@ public static partial class Program
 
             Console.WriteLine($"{name,-6} 로봇 {robots,2} · 드론 {drones,2} · 주컴퓨터 {(online0 ? "켜짐" : "없음/꺼짐")}{(offlineMin > 0 ? $"(꺼진 {offlineMin}분)" : "")}");
             Console.WriteLine($"       평상시 {days}일: 로봇 일 {rjobs} · 멈춤 {stuck.Count} · 고장 {faulty} · 잃음 {rlost} | 드론 출격 {dsort}/일 {djobs} · 고장 {dfaulty} · 잃음 {dlost} | " +
-                              $"공기 나쁨 {badAirMin}분 (가장 낮은 산소 {worstO2:0.0}kPa {worstAir} · 이산화탄소 최고 {worstCO2:0.00}) | 배터리 컴퓨터 {bCap:0}kWh / 실제 {realCap:0}kWh");
+                              $"공기 나쁨 {badAirMin}분 (가장 낮은 산소 {worstO2:0.0}kPa {worstAir} · 이산화탄소 최고 {worstCO2:0.00}) | 배터리 컴퓨터 {bCap:0}kWh / 실제 {realCap:0}kWh · 평상시 배터리 최저 {batLow * 100:0}% · 전기 못 받은 설비 있던 시간 {shortMin}분 · 부하 차단 계전기 {shedN}번");
             Console.WriteLine($"       불 {fireRes} (컴퓨터 {compFire} · 로봇 {fought}) | 운석 {holeRes} (피함 {dodged} · 드론 {dsort2} · 컴퓨터 {compHole}) | " +
                               $"주컴퓨터 고장 {downRes} · 그동안 불 {downFire} · 로봇 일 {downJobs} · 알림 {compDown} | 사망 {dead}");
             foreach (var s in stuck.Values) Console.WriteLine($"     멈춤: {s}");
+            // 순찰: 설비가 있는 방인데 이틀 넘게 아무도 안 본 방 (순찰 로봇이 없는 배)
+            var unseen = w.Ship.LiveRooms.Where(r => !r.Abandoned && !r.OffLimits && r.Type != RoomType.Corridor && r.Furniture.Any(f => f.Machine != null))
+                .Select(r => (r, h: (w.Tick - w.RoomsInspected.GetValueOrDefault(r.Id, w.StartTickOf)) / (float)SimTime.TicksPerHour)).Where(x => x.h > 48f).ToList();
+            if (unseen.Count > 0 && !w.Robots.Robots.Any(r => RobotsV15.Patrols(r.Kind) && r.Operational)) Console.WriteLine($"     순찰 못 받은 방: {string.Join(", ", unseen.Select(x => $"{x.r.Name} {x.h:0}시간"))}");
             void P(bool bad, string what) { if (bad) problems.Add($"{name}: {what}"); }
             P(!online0, "주컴퓨터 없음/꺼짐");
             P(offlineMin > 60, $"평상시에 주컴퓨터가 {offlineMin}분 꺼졌다");
@@ -208,6 +215,9 @@ public static partial class Program
             P(stuck.Count > 0, $"멈춰 선 로봇 {stuck.Count}");
             P(rlost > 0 || dlost > 0, $"평상시에 잃은 로봇 {rlost} · 드론 {dlost}");
             P(badAirMin > 60, $"사람이 있는 방 공기가 {badAirMin}분 나빴다");
+            P(shedN > days * 12, $"부하 차단 계전기가 {shedN}번 내렸다 올렸다 (되풀이)");
+            P(batLow < 0.2f, $"평상시에 배터리가 {batLow * 100:0}%까지 떨어졌다");
+            P(shortMin > 60, $"평상시에 전기를 못 받은 설비가 {shortMin}분 있었다");
             P(batErr > 0.35f, $"주컴퓨터가 아는 배터리 용량이 실제와 {batErr * 100:0}% 다르다");
             P(!fireOut, "불이 안 꺼진다");
             P(galley != null && compFire == 0, "불에 주컴퓨터가 아무 말이 없다");

@@ -28,6 +28,8 @@ public sealed class SurgeryCase
     public string Why { get; init; } = "";
     public int Surgeon { get; set; } = -1;
     public int Assistant { get; set; } = -1;
+    /// <summary>보조가 실제로 수술대 곁에 있던 시간 (이름만 올린 보조 — 자고 있거나 오는 중 — 는 거들지 못한다).</summary>
+    public int AssistTicks { get; set; }
     public int Table { get; set; } = -1;          // 수술대 (없으면 치료 침대)
     public int Phase { get; set; }                // 0 손 씻기 · 1 마취 · 2 수술 · 3 닫기
     public int PhaseTicks { get; set; }
@@ -101,6 +103,9 @@ public sealed class SurgerySystem
     private float Sk(CrewMember? s) => s?.SkillLevel(Skill.Medicine) ?? _w.SurgArm.ArmSkill(); // 의료 3차 집도의가 없으면 수술 팔의 손
     private static string Who(CrewMember? s) => s?.Name ?? "수술 팔";
     public SurgeryCase? CaseOf(CrewMember c) { foreach (var k in Cases) if (k.Patient == c.Id) return k; return null; }
+    /// <summary>수술대 곁에 와 있는 보조.</summary>
+    private CrewMember? AssistNear(SurgeryCase k, Furniture table) => CrewOf(k.Assistant) is CrewMember a && !a.Dead && !a.Down && (a.Position - table.Center).Length() < 2.8f ? a : null;
+
     public bool Busy(CrewMember c) { foreach (var k in Cases) if (k.State is CaseState.Prep or CaseState.Operating && (k.Surgeon == c.Id || k.Assistant == c.Id || k.Patient == c.Id)) return true; return false; }
     public int WaitingFor(ItemKind k) { int n = 0; foreach (var x in Cases) if (x.State == CaseState.Deferred && x.DeferWhy.StartsWith("마취제")) n++; return k == ItemKind.Anesthetic ? n : 0; }
     public Furniture? TableOf(SurgeryCase k) => k.Table >= 0 && k.Table < _w.Ship.Furniture.Count ? _w.Ship.Furniture[k.Table] : null;
@@ -328,7 +333,8 @@ public sealed class SurgerySystem
             }
             k.Surgeon = pick.Id;
             var helper = w.Crew.Where(c => c != pt && c != pick && c.CanAct && !c.Outside && !c.IsChild && !Busy(c) && !Cases.Any(x => x.Surgeon == c.Id || x.Assistant == c.Id) && w.Grades.Now(c) < InjuryGrade.Serious)
-                .OrderByDescending(c => c.SkillLevel(Skill.Medicine) + (c.Role == CrewRole.Medic ? 0.2f : 0f) + 0.1f * pick.AffinityTo(c)).ThenBy(c => c.Id).FirstOrDefault();
+                .OrderBy(c => c.Pose == Pose.Sleeping ? 1 : 0) // 깨어 있는 사람부터 (자는 사람을 보조로 적어 두면 오지 않는다)
+                .ThenByDescending(c => c.SkillLevel(Skill.Medicine) + (c.Role == CrewRole.Medic ? 0.2f : 0f) + 0.1f * pick.AffinityTo(c)).ThenBy(c => c.Id).FirstOrDefault();
             if (!(k.Assistant >= 0 && CrewOf(k.Assistant) is CrewMember a0 && a0.CanAct && a0 != pick)) k.Assistant = helper?.Id ?? -1;
             if (!cont) k.Table = PickTable(pt)?.Id ?? -1;
             if (cont) w.Log.Add(w.Tick, LogKind.Warning, $"{Ko.IGa(pick.Name)} {pt.Name} 수술을 이어받는다", pick.Id);
@@ -433,10 +439,10 @@ public sealed class SurgerySystem
         }
         if (k.State == CaseState.Waiting)
         {
-            k.State = CaseState.Prep; k.Phase = 0; k.PhaseTicks = 0; k.Started = w.Tick;
+            k.State = CaseState.Prep; k.Phase = 0; k.PhaseTicks = 0; k.Started = w.Tick; k.AssistTicks = 0;
             table.ReservedBy = pt;
             if (pt.CareBed != null && pt.CareBed != table) { if (pt.CareBed.ReservedBy == pt) pt.CareBed.ReservedBy = null; pt.CareBed = null; }
-            w.Log.Add(w.Tick, LogKind.Work, $"{Ko.IGa(Who(s))} {pt.Name} {KindName(k.Kind)}을 시작한다" + (CrewOf(k.Assistant) is CrewMember asx ? $" (보조 {asx.Name})" : " (혼자)"), s?.Id ?? pt.Id);
+            w.Log.Add(w.Tick, LogKind.Work, $"{Ko.IGa(Who(s))} {pt.Name} {KindName(k.Kind)}을 시작한다" + (AssistNear(k, table) is CrewMember asx ? $" (보조 {asx.Name})" : CrewOf(k.Assistant) is CrewMember asw ? $" (보조 {Ko.EulReul(asw.Name)} 기다리지 않고)" : " (혼자)"), s?.Id ?? pt.Id);
         }
         k.PhaseTicks++;
         switch (k.Phase)
@@ -558,12 +564,14 @@ public sealed class SurgerySystem
         if (w.ZeroG.Weightless && w.ZeroG.RingRoom != table.Room) k.ZeroGTicks++;
         // 피: 수술 중에도 빠진다 (빛이 없고 · 서툴면 더)
         float loss = Loss(k.Kind) * (light <= 0f ? 1.6f : 1f) * (1.3f - 0.5f * Sk(s)) / SimTime.TicksPerHour;
-        if (!k.Anesthesia && (CrewOf(k.Assistant) is not CrewMember)) loss *= 1.2f; // 붙잡아 줄 사람 없이 마취 없이
-        if (FurnitureAt(table.Room, FurnitureType.AnesthesiaMachine) is Furniture am && am.Machine is Machine mm && !mm.Powered && k.Anesthesia && CrewOf(k.Assistant) == null)
+        var near = AssistNear(k, table);
+        if (near != null) k.AssistTicks++;
+        if (!k.Anesthesia && near == null) loss *= 1.2f; // 붙잡아 줄 사람 없이 마취 없이
+        if (FurnitureAt(table.Room, FurnitureType.AnesthesiaMachine) is Furniture am && am.Machine is Machine mm && !mm.Powered && k.Anesthesia && near == null)
             loss += 0.02f / SimTime.TicksPerHour; // 마취기가 멎었는데 손으로 짜 줄 사람이 없다
         pt.Vitals.Health = MathF.Max(0f, pt.Vitals.Health - loss);
         if (hold) return;
-        float speed = (s != null ? Wounds.HandFactor(s.Vitals) * (s.Needs.Rest < 0.2f ? 0.8f : 1f) : _w.SurgArm.Pace()) * (light <= 0f ? 0.6f : 1f) * (CrewOf(k.Assistant) is CrewMember ax && (ax.Position - table.Center).Length() < 2.8f ? 1.15f : 1f);
+        float speed = (s != null ? Wounds.HandFactor(s.Vitals) * (s.Needs.Rest < 0.2f ? 0.8f : 1f) : _w.SurgArm.Pace()) * (light <= 0f ? 0.6f : 1f) * (near != null ? 1.15f : 1f);
         k.Progress = MathF.Min(1f, k.Progress + speed / MathF.Max(1f, k.NeedTicks));
         if (k.Progress >= 1f) { k.Phase = 3; k.PhaseTicks = 0; }
     }
@@ -593,7 +601,7 @@ public sealed class SurgerySystem
         if (k.State == CaseState.Operating && (pt.Vitals.Health < 0.35f || w.Blood.Lost(pt) >= 0.3f && pt.Vitals.Health < 0.6f) && w.Tick - k.LastBlood > SimTime.Minutes(20))
         {
             k.LastBlood = w.Tick;
-            var by = CrewOf(k.Assistant) ?? CrewOf(k.Surgeon);
+            var by = AssistNear(k, table) ?? CrewOf(k.Surgeon);
             string did = w.Blood.Transfuse(pt, by, desperate: pt.Vitals.Health < 0.1f && !w.Blood.Donors.Values.Any(d => d.forId == pt.Id));
             if (did != "") { k.Bloods++; k.Notes.Add(did); }
             else w.Blood.Call(pt, "수술 중 피가 모자라다");
@@ -674,7 +682,7 @@ public sealed class SurgerySystem
         var pt = CrewOf(k.Patient);
         float op = MathF.Max(1f, k.OpTicks);
         float q = 0.5f + 0.4f * Sk(s) + Ease(k.Kind);
-        if (CrewOf(k.Assistant) is CrewMember ax) q += 0.06f + (ax.SkillLevel(Skill.Medicine) >= 0.4f || ax.Role == CrewRole.Medic ? 0.04f : 0f);
+        if (CrewOf(k.Assistant) is CrewMember ax && k.AssistTicks > 0) q += (0.06f + (ax.SkillLevel(Skill.Medicine) >= 0.4f || ax.Role == CrewRole.Medic ? 0.04f : 0f)) * MathF.Min(1f, k.AssistTicks / op); // 곁에 있던 만큼만
         q -= 0.3f * (k.DarkTicks / op) + 0.06f * (k.BatteryTicks / op);
         q += (k.Sterile - 0.7f) * 0.2f;
         if (s != null && s.Needs.Rest < 0.3f) q -= 0.1f;
