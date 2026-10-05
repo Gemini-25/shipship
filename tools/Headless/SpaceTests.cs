@@ -289,6 +289,7 @@ public static partial class Program
             while (inv.Free < 3 && inv.Contents.FirstOrDefault(x => x.kind != ItemKind.Motor) is { count: > 0 } x0) inv.Take(x0.kind, 1);
             inv.Add(ItemKind.Motor, 1);
             var c = SpWorker(w, Skill.Mechanics);
+            Teleport(w, c, shelf.UseSpots[0]); // 장면은 선반 앞에서 — 배 반대편에서 걸어오면 40분을 다 썼다 (시각마다 있는 곳이 달라 갈렸다)
             Force(w, c, new Job(null, "시험: 모터 꺼내기", new Toil[] { new GotoToil(shelf.UseSpots[0]), new TakeToil(shelf, ItemKind.Motor, 1), new WaitToil(SimTime.Minutes(5), Pose.Standing) }), SimTime.Hours(1));
             bool sawBox = false;
             for (int k = 0; k < 40 && c.Carrying?.Kind != ItemKind.Motor; k++) { Run(w, SimTime.Minutes(1)); sawBox |= w.Coop.Boxes.Any(b => b.ShelfId == shelf.Id); }
