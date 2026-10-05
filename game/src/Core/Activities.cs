@@ -197,6 +197,8 @@ public sealed class SleepActivity : Activity
         float fatigue = c.Needs.Fatigue;
         string reason = fatigue > 0.85f ? "탈진 직전" : fatigue > 0.6f ? "피곤함" : "기력 충분";
         bool ownBed = c.Bed != null && dist.Reachable(c.Bed.UseSpots[0]);
+        // 침대가 멀면 가는 동안 더 지칠 만큼 일찍 눕는다 (큰 고리형 배: 침대까지 한 시간 — 가다가 통로에서 쓰러져 잤다)
+        if (ownBed && c.Pose != Pose.Sleeping) fatigue = MathF.Min(1f, fatigue + dist.Get(c.Bed!.UseSpots[0]) / 1400f * NeedsSystem.RestDecayAwake * 2f);
         if (!ownBed) reason += " · 침대에 갈 수 없어 다른 데서";
         if (Bedtime(c, w))
             return (0.5f + Curve.Smooth(fatigue, 0.1f, 0.6f) * 0.5f, reason + " · 취침 시간");

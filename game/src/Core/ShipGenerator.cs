@@ -134,6 +134,11 @@ public static partial class ShipGenerator
         return r;
     }
 
+    /// <summary>이 인원부터는 식당을 둘로 나눠 배 양쪽에 둔다 — 한 곳에 몰면 반대편 사람이 한 시간을 걸어 굶주린 채 닿았다 (60인 고리형).</summary>
+    private const int TwoMessCrew = 30;
+    /// <summary>큰 배의 둘째 식당 몫 (배식기 · 식탁).</summary>
+    private static int SecondMess(int n) => n >= TwoMessCrew ? n * 2 / 5 : 0;
+
     private static GRoom Mess(int n, int H)
     {
         int disp = Math.Max(2, Ceil(n, 4)), tables = Math.Max(2, Ceil(n, 4));
@@ -451,7 +456,8 @@ public static partial class ShipGenerator
         var jitter = pool.ToDictionary(r => r, _ => rng.Range(0f, 2.5f));
         pool = pool.OrderBy(r => -(r.W + jitter[r])).ToList();
         var galley = Galley(n, H);
-        var mess = Mess(n, H);
+        var mess = Mess(n - SecondMess(n), H);
+        var mess2 = SecondMess(n) > 0 ? Mess(SecondMess(n), H) : null;
         var ratio = new float[K];
         for (int b = 0; b < K; b++) ratio[b] = b == 0 || b == K - 1 ? 0.85f : 1f;
         var inner = Enumerable.Range(1, K - 2).ToList();
@@ -463,6 +469,7 @@ public static partial class ShipGenerator
         int gmBand = inner[^1];
         bands[gmBand].Add(galley);
         bands[gmBand].Add(mess);
+        if (mess2 != null) bands[gmBand].Add(mess2);
         foreach (var r in pool)
         {
             int bestB = 0;
@@ -473,6 +480,14 @@ public static partial class ShipGenerator
                 if (v < best) { best = v; bestB = b; }
             }
             bands[bestB].Add(r);
+        }
+        if (mess2 != null)
+        {
+            // 둘째 식당은 주방에서 먼 쪽 끝에 (주방 옆 식당과 배 반대편을 나눠 맡는다)
+            var gb = bands[gmBand];
+            gb.Remove(mess2);
+            int gi = gb.IndexOf(galley);
+            if (gb.Take(gi).Sum(r => r.W) >= gb.Skip(gi + 1).Sum(r => r.W)) gb.Insert(0, mess2); else gb.Add(mess2);
         }
         bands[0].AddRange(tail0);
 

@@ -230,7 +230,7 @@ public static partial class ShipGenerator
             (new() { Reactor(n, H), Cooling(pumps, H), PowerRoom(Math.Max(2, 2 * Ceil(n, 6)), H) }, true),
             (new() { Life(n, H), hydro[0] }, false),
             (new() { Workshop(Sized(purpose, 'w', n), H), Storage(Sized(purpose, 's', n), H) }, null),
-            (new() { Galley(n, H), Mess(n, H) }, null),
+            (new() { Galley(n, H), Mess(n - SecondMess(n), H) }, null),
             (new() { Medbay(Sized(purpose, 'h', n), H), Lounge(Sized(purpose, 'g', n), H) }, null),
         };
         foreach (var hy in hydro.Skip(1)) mods.Add((new() { hy }, null));
@@ -244,6 +244,9 @@ public static partial class ShipGenerator
             mods.Add((sp.Skip(i).Take(k).ToList(), null));
             i += k;
         }
+        var galleyMod = mods.First(m => m.rooms.Any(r => r.Label == 'j')).rooms; // 주방 모듈
+        List<GRoom>? mess2Mod = SecondMess(n) > 0 ? new() { Mess(SecondMess(n), H) } : null;
+        if (mess2Mod != null) mods.Add((mess2Mod, (bool?)null));
         mods.Add((new() { Airlock(n, H), CommsRoom(H) }, false));
         foreach (var (rooms, _) in mods) foreach (var r in rooms) Furnish(r);
 
@@ -257,6 +260,14 @@ public static partial class ShipGenerator
         // 공용 모듈(기관 · 생명유지 · 에어락)은 먼저, 나머지는 시드에 따라 섞어 짧은 쪽에
         var order = mods.Where(m => m.top != null).ToList();
         var restMods = mods.Where(m => m.top == null).OrderBy(_ => rng.Float()).ToList();
+        if (mess2Mod != null)
+        {
+            // 큰 배: 둘째 식당은 주방 모듈에서 먼 쪽 끝에 (등뼈를 따라 앞뒤로 나눠 맡는다)
+            var m2 = restMods.First(m => m.rooms == mess2Mod);
+            restMods.Remove(m2);
+            int gi = restMods.FindIndex(m => m.rooms == galleyMod);
+            if (gi < restMods.Count / 2) restMods.Add(m2); else restMods.Insert(0, m2);
+        }
         var airlock = order[^1];
         order.RemoveAt(order.Count - 1);
         order.AddRange(restMods);

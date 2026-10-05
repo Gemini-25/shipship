@@ -18,7 +18,7 @@ public sealed partial class MotionSystem
         var w = _w;
         bool Ok(Room r) => !r.Abandoned && !r.Detached && !r.OffLimits && !r.Leaking && Atmosphere.Danger(r) < 0.1f && w.Fire.CountIn(r) == 0;
         return w.Ship.RoomsOf(RoomType.MeetingRoom).FirstOrDefault(Ok)
-               ?? w.Ship.RoomsOf(RoomType.Mess).FirstOrDefault(Ok)
+               ?? w.Ship.RoomsOf(RoomType.Mess).Where(Ok).OrderByDescending(r => r.Cells.Count).FirstOrDefault() // 큰 배는 식당이 둘 — 넓은 쪽에 모인다
                ?? w.Ship.RoomsOf(RoomType.Lounge).FirstOrDefault(Ok);
     }
 
