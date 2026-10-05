@@ -154,7 +154,7 @@ public sealed class EcoActivity : Activity
         if (cat.Hint >= 0 && (cat.HintHeard || cat.Favorite != c.Id)) Add(e.RoomOf(cat.Hint));
         foreach (var id in cat.KnownHides) Add(e.RoomOf(id));
         Add(c.Bed?.Room);
-        foreach (var r in w.Ship.Rooms.Where(r => r.Kind is RoomType.Quarters or RoomType.Storage or RoomType.Laundry or RoomType.PrivateCabins or RoomType.Cargo).OrderBy(r => (r.Cells[0].Center - c.Position).LengthSquared()).ThenBy(r => r.Id)) Add(r);
+        foreach (var r in w.Ship.Rooms.Where(r => r.Cells.Count > 0 && r.Kind is RoomType.Quarters or RoomType.Storage or RoomType.Laundry or RoomType.PrivateCabins or RoomType.Cargo).OrderBy(r => (r.Cells[0].Center - c.Position).LengthSquared()).ThenBy(r => r.Id)) Add(r);
         if (order.Count == 0) { cat.Searched.Clear(); return null; }
         cat.SearchBy = c.Id;
         var toils = new List<Toil>();
