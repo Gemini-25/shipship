@@ -148,13 +148,25 @@ public partial class OptionsPanel : PanelContainer
         };
         style.SetBorderWidthAll(1);
         AddThemeStyleboxOverride("panel", style);
-        CustomMinimumSize = new Vector2(420, 0);
-
-        var box = new VBoxContainer();
+        // 창이 화면보다 크면 위(제목 · 소리)와 아래(새 항해 · 닫기)가 화면 밖으로 잘렸다 —
+        // 머리와 바닥은 고정하고 가운데만 스크롤 · 창 크기는 화면에 맞춘다 (Layout)
+        var outer = new VBoxContainer();
+        outer.AddThemeConstantOverride("separation", 10);
+        AddChild(outer);
+        var head = new HBoxContainer();
+        var title = Title($"설정 · ShipSim v{ProjectSettings.GetSetting("application/config/version", "")}"); // v11.3 버전 표기
+        title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        title.ClipText = true;
+        head.AddChild(title);
+        var x = new Button { Text = "✕", Flat = true, TooltipText = "닫기 (O)" };
+        x.Pressed += () => Toggle();
+        head.AddChild(x);
+        outer.AddChild(head);
+        _scroll = new ScrollContainer { HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, SizeFlagsVertical = SizeFlags.ExpandFill };
+        outer.AddChild(_scroll);
+        var box = _box = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         box.AddThemeConstantOverride("separation", 10);
-        AddChild(box);
-
-        box.AddChild(Title($"설정 · ShipSim v{ProjectSettings.GetSetting("application/config/version", "")}")); // v11.3 버전 표기
+        _scroll.AddChild(box);
         box.AddChild(Caption("소리"));
         var vol = new HSlider { MinValue = 0, MaxValue = 100, Step = 5, Value = Settings.Volume * 100, CustomMinimumSize = new Vector2(360, 24) };
         var volLabel = Label($"전체 소리 {Settings.Volume * 100:0}%");
@@ -253,7 +265,7 @@ public partial class OptionsPanel : PanelContainer
         {
             tuneScroll.Visible = !tuneScroll.Visible;
             tuneToggle.Text = tuneScroll.Visible ? "밸런스 수치 ▾" : "밸런스 수치 ▸";
-            if (Visible) Position = (GetViewportRect().Size - GetCombinedMinimumSize()) * 0.5f;
+            if (Visible) Callable.From(Layout).CallDeferred();
         };
         var spins = new System.Collections.Generic.List<(ShipSim.Core.TuningEntry e, SpinBox spin)>();
         foreach (var e in ShipSim.Core.Tuning.Entries)
@@ -287,7 +299,45 @@ public partial class OptionsPanel : PanelContainer
 
         var close = new Button { Text = "닫기 (O)" };
         close.Pressed += () => Toggle();
-        box.AddChild(close);
+        outer.AddChild(close);
+        Wrap(box);
+    }
+
+    private ScrollContainer _scroll = null!;
+    private VBoxContainer _box = null!;
+    private bool _hooked;
+
+    /// <summary>긴 항목 글이 창을 넓혀 옆으로 잘리지 않게: 체크 · 글은 줄바꿈, 고르기 상자는 창 폭에 맞춰 자른다.</summary>
+    private static void Wrap(Node n)
+    {
+        foreach (var ch in n.GetChildren())
+        {
+            switch (ch)
+            {
+                case OptionButton ob: ob.FitToLongestItem = false; ob.ClipText = true; ob.CustomMinimumSize = new Vector2(0, ob.CustomMinimumSize.Y); ob.SizeFlagsHorizontal = SizeFlags.ExpandFill; ob.TooltipText = "펼쳐서 고른다"; break;
+                case CheckBox cb: cb.AutowrapMode = TextServer.AutowrapMode.WordSmart; cb.SizeFlagsHorizontal = SizeFlags.ExpandFill; break;
+                case Godot.Label l when l.GetParent() is not HBoxContainer: l.AutowrapMode = TextServer.AutowrapMode.WordSmart; l.SizeFlagsHorizontal = SizeFlags.ExpandFill; break;
+                case HSlider hs: hs.CustomMinimumSize = new Vector2(0, hs.CustomMinimumSize.Y); hs.SizeFlagsHorizontal = SizeFlags.ExpandFill; break;
+            }
+            if (ch is not ScrollContainer) Wrap(ch);
+        }
+    }
+
+    /// <summary>창 크기를 화면에 맞춘다: 폭은 최대 620 · 높이는 내용만큼(넘치면 스크롤) · 화면 가운데.</summary>
+    private void Layout()
+    {
+        var vp = GetViewportRect().Size;
+        const float margin = 16f;
+        float w = System.MathF.Min(620f, vp.X - 2f * margin);
+        float chrome = 36f + 10f * 2f + 44f + 40f; // 안쪽 여백 · 간격 · 머리 · 바닥
+        float want = _box.GetCombinedMinimumSize().Y;
+        float body = System.MathF.Max(120f, System.MathF.Min(want, vp.Y - 2f * margin - chrome));
+        _scroll.CustomMinimumSize = new Vector2(w - 44f, body);
+        CustomMinimumSize = new Vector2(w, 0f);
+        Size = Vector2.Zero; // 내용에 맞춰 다시 잰다
+        var size = GetCombinedMinimumSize();
+        Size = size;
+        Position = new Vector2(System.MathF.Max(margin, (vp.X - size.X) * 0.5f), System.MathF.Max(margin, (vp.Y - size.Y) * 0.5f));
     }
 
     private OptionButton _random = null!;
@@ -309,8 +359,9 @@ public partial class OptionsPanel : PanelContainer
             _persona.Selected = (int)ShipSim.Core.Storyteller.Persona;
             _level.Selected = ShipSim.Core.Storyteller.Level - 1;
             _mode.Selected = (int)ShipSim.Core.CampaignSystem.ModeValue;
-            var vp = GetViewportRect().Size;
-            Position = (vp - GetCombinedMinimumSize()) * 0.5f;
+            if (!_hooked) { GetViewport().SizeChanged += () => { if (Visible) Layout(); }; _hooked = true; }
+            _scroll.ScrollVertical = 0;
+            Layout();
         }
     }
 
