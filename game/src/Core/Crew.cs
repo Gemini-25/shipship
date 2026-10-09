@@ -481,6 +481,7 @@ public sealed class CrewMember
     internal void StartJob(Job job, World world, Evaluation? why)
     {
         Job = job;
+        world.LifeWatch.OnJobStarted(this, job); // v19 끊긴 식사 · 잠을 무엇이 끊었나
         world.Belongings.OnJobStarted(this, job); // v14.3 공구 빌리기·되찾기
         world.RoomUse.OnJobStarted(this, job); // v16.17 옮긴 설비의 옛 자리로 가다 헷갈린다 · 보관함 드나듦
         JobReason = why?.Reason;
@@ -517,6 +518,7 @@ public sealed class CrewMember
         Helper = null;
         if (Job == null) return;
         var job = Job;
+        world.LifeWatch.OnJobEnded(this, job, status); // v19 식사 · 잠이 끊겼나
         job.Release(this, world);
         LastActivityId = job.Activity?.Id;
         Job = null;

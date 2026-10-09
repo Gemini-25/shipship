@@ -357,6 +357,8 @@ public sealed class Job
     }
 
     public Toil? Current => _index >= 0 && _index < _toils.Count ? _toils[_index] : null;
+    /// <summary>v19 실패한 단계 (끊긴 끼니를 적을 때 — 어디서 막혔나).</summary>
+    public Toil? FailedAt { get; private set; }
     internal IReadOnlyList<Toil> Toils => _toils; // v16.17 이 일이 손댈 보관함 (옛 자리 습관)
 
     /// <summary>뒤에 단계를 덧붙인다 (예: EVA를 마치고 에어락으로 돌아온다).</summary>
@@ -399,7 +401,7 @@ public sealed class Job
             if (status == ToilStatus.Running) return ToilStatus.Running;
 
             _toils[_index].End(c, w);
-            if (status != ToilStatus.Succeeded) { _index = _toils.Count; return status; }
+            if (status != ToilStatus.Succeeded) { FailedAt = _toils[_index]; _index = _toils.Count; return status; }
 
             _index++;
             if (_index >= _toils.Count) return ToilStatus.Succeeded;

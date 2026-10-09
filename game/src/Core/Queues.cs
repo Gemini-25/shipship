@@ -578,6 +578,8 @@ public sealed class QueueToil : Toil
     private bool _serving, _arrivedOnce, _ok = true;
     private Cell _slot = new(-9999, -9999);
     internal ServiceQueue? Queue => _q;
+    /// <summary>v19 줄에서 왜 빠졌나 (끊긴 끼니 기록).</summary>
+    public string? FailWhy { get; private set; }
 
     public QueueToil(QueueKind kind, Furniture? f, Cell spot)
     {
@@ -609,17 +611,18 @@ public sealed class QueueToil : Toil
         var qs = w.Coop.Queues;
         if (_serving)
         {
-            if (!_ok) return ToilStatus.Failed;
+            if (!_ok) { FailWhy = "받는 칸에 갈 길이 없다"; return ToilStatus.Failed; }
             if (c.Path == null || Locomotion.Step(c, w)) { c.Pose = Pose.Standing; Locomotion.Face(c, q.Toward); return ToilStatus.Succeeded; }
+            if (c.PathBlocked) FailWhy = "받는 칸 길이 막혔다";
             return c.PathBlocked ? ToilStatus.Failed : ToilStatus.Running;
         }
         int idx = q.Line.IndexOf(c.Id);
         if (idx < 0)
         {
-            if (qs.Deferred(c)) return ToilStatus.Failed; // 컴퓨터가 나중에 오라 했다
+            if (qs.Deferred(c)) { FailWhy = "컴퓨터가 나중에 오라 했다"; return ToilStatus.Failed; } // 컴퓨터가 나중에 오라 했다
             if (qs.Join(c, q)) { GoServe(c, w); return ToilStatus.Running; }
             idx = q.Line.IndexOf(c.Id);
-            if (idx < 0) return ToilStatus.Failed;
+            if (idx < 0) { FailWhy = "줄에 못 섰다"; return ToilStatus.Failed; }
         }
         if (qs.TryServe(c, q)) { c.Path = null; GoServe(c, w); return ToilStatus.Running; }
         var slot = q.SlotCell(idx);
@@ -638,7 +641,7 @@ public sealed class QueueToil : Toil
         if (c.Pose == Pose.Walking) c.Pose = Pose.Standing;
         Locomotion.Face(c, q.Spot.Center);
         if (!_arrivedOnce) { _arrivedOnce = true; qs.OnArrive(c, q); }
-        else if (w.Tick % 25 == c.Id % 25 && qs.Waiting(c, q, Math.Max(0, q.Line.IndexOf(c.Id)))) return ToilStatus.Failed;
+        else if (w.Tick % 25 == c.Id % 25 && qs.Waiting(c, q, Math.Max(0, q.Line.IndexOf(c.Id)))) { FailWhy = "줄이 길어 포기"; return ToilStatus.Failed; }
         return ToilStatus.Running;
     }
 

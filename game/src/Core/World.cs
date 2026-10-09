@@ -135,6 +135,9 @@ public sealed class World
 
     /// <summary>v10.10 자원 장부: 공기·실링폼·냉각수·금속판·물·식량이 하루마다, 사고마다 얼마나 들어오고 나갔나.</summary>
     public ResourceLedger Ledger { get; } = new();
+    /// <summary>v19 굶주림 · 탈진 원인 기록 (기록만 — 상태를 바꾸지 않는다).</summary>
+    public LifeWatch LifeWatch => _lifeWatch ??= new LifeWatch(this);
+    private LifeWatch? _lifeWatch;
 
     /// <summary>v11.0 예방: 사고 전조를 몇 번 냈고, 누가 알아챘고, 몇 번 막고 몇 번 놓쳤나.</summary>
     public PreventionStats Precursors { get; } = new();
@@ -568,6 +571,7 @@ public sealed class World
             Comms.SystemUpdate(dt);
             pf = Prof.Lap("sys.Comms", pf);
             Ledger.Sample(this, dt);
+            LifeWatch.Update();
             pf = Prof.Lap("sys.Ledger", pf);
             CheckShip();
             pf = Prof.Lap("sys.CheckShip", pf);
