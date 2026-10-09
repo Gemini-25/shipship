@@ -156,7 +156,7 @@ public sealed partial class MotionSystem
             case "rations":
             {
                 var f = a.Outlook.Get("food");
-                float grow = FoodPolicy.GrowingPerDay(w), need = w.Crew.Count(c => !c.Dead) * FoodPolicy.MealsPerPersonDay;
+                float grow = FoodPolicy.GrowingPerDay(w), need = w.Aboard * FoodPolicy.MealsPerPersonDay;
                 bool shortRun = f != null ? f.DaysToShort < 30f : grow < need;
                 float later = days / FoodPolicy.RationDecay - days;
                 string head = $"식량 {days:0.#}일치 · 재배 하루 {grow:0}끼 · 먹는 양 하루 {need:0}끼";

@@ -227,6 +227,12 @@ public static partial class Program
         if (args.Contains("--robot15test")) return RunRobotV15Test(seed); // v15.7 로봇·드론 27(의료 3차 +2) · 이야기꾼 8
         if (args.Contains("--campaign15test")) return RunCampaign15Test(seed); // v15.6
         if (args.Contains("--replaycheck")) return RunReplayCheck(seed);
+        if (args.Contains("--detcheck") || args.Contains("--dethash")) // 결정론: 같은 시드 → 같은 틱에 같은 상태
+        {
+            int dh = int.TryParse(args.FirstOrDefault(a => a.StartsWith("--hours="))?[8..], out var hh) ? hh : 24;
+            string? ds = args.FirstOrDefault(a => a.StartsWith("--ship="))?[7..];
+            return args.Contains("--detcheck") ? RunDetCheck(seed, dh, ds) : RunDetHash(seed, dh, ds);
+        }
         if (args.Contains("--deathtrace")) return RunDeathTrace(Math.Max(1, days), seed);
         if (args.Contains("--stressprobe")) return RunStressProbe(Math.Max(1, days), seed);
         if (args.Contains("--campaignrun")) return RunCampaignLong(Math.Max(1, days), seed, shipArg ?? "Mirinae", args.FirstOrDefault(a => a.StartsWith("--from="))?[7..]);

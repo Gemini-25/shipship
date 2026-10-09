@@ -317,7 +317,7 @@ public sealed class ShipPlanner
             case "엄격 절수":
             {
                 float mul = option == "절수" ? 0.75f : 0.55f;
-                float crewUse = w.Crew.Count(c => !c.Dead) * WaterSystem.CrewLitersPerHour;
+                float crewUse = WaterSystem.Drinkers(w) * WaterSystem.CrewLitersPerHour;
                 float rate = f.Rate + crewUse * (1f - mul);
                 float d2 = rate >= -1e-4f ? 99f : (f.Estimate - f.Short) / -rate / 24f;
                 return d2 >= 30f ? $"물이 줄지 않는다 (하루 {rate * 24f:+0;-0}L)" : $"부족이 {f.DaysToShort:0.0}일 → {d2:0.0}일 뒤로";

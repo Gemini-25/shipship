@@ -50,6 +50,10 @@ public sealed class World
     public long Tick { get; private set; }
     public Ship Ship { get; }
     public List<CrewMember> Crew { get; } = new();
+    /// <summary>배에 속한 사람 (죽지 않았고 배를 떠나지 않았다 — 원정대 포함): 식량 계획 · 예측.</summary>
+    public int Aboard => Crew.Count(c => !c.Dead && !c.LeftShip);
+    /// <summary>지금 배 안에 있는 사람 (원정대 · 떠난 사람 빼고): 숨 · 물 · 배급.</summary>
+    public int OnBoard => Crew.Count(c => !c.Dead && !c.LeftShip && !c.Away);
     public Pathfinder Paths { get; }
 
     /// <summary>v10.1 통신실: 장거리 센서와 다가오는 운석.</summary>

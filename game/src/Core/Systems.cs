@@ -37,6 +37,9 @@ public sealed class WaterSystem
 
     public float Level { get; set; } = 300f;
     public float Capacity { get; set; } = 400f;
+
+    /// <summary>본선 물을 마시는 사람: 배를 떠난 사람 · 원정 중인 사람(챙겨 간 물통을 마신다)은 빼고.</summary>
+    public static int Drinkers(World w) => w.OnBoard;
     public float Produced { get; private set; }
     public float Consumed { get; private set; }
 
@@ -45,10 +48,10 @@ public sealed class WaterSystem
         float produce = w.Ship.FurnitureOf(FurnitureType.WaterRecycler).Sum(f => f.Machine!.Efficiency * f.Machine.Rating) * RecyclerLitersPerHour * ErasV15.Mul(w, "water"); // v15.5 증류·광합성
         // v13.2 방침(물): 아끼면 샤워·세탁을 줄이고, 엄격하면 마실 만큼만 (대신 날카로워진다)
         int wp = w.Policies["water"];
-        float consume = w.Crew.Count(c => !c.Dead) * CrewLitersPerHour * (wp == 1 ? 0.75f : wp == 2 ? 0.55f : 1f);
+        float consume = Drinkers(w) * CrewLitersPerHour * (wp == 1 ? 0.75f : wp == 2 ? 0.55f : 1f);
         if (wp > 0)
             foreach (var c in w.Crew)
-                if (!c.Dead && c.IsAwake) c.Needs.Stress = MathF.Min(1f, c.Needs.Stress + (wp == 2 ? 0.004f : 0.0015f) * dt);
+                if (!c.Dead && !c.Away && c.IsAwake) c.Needs.Stress = MathF.Min(1f, c.Needs.Stress + (wp == 2 ? 0.004f : 0.0015f) * dt);
         foreach (var bed in w.Ship.FurnitureOf(FurnitureType.GrowBed))
             if (bed.Machine!.Efficiency > 0f && bed.Machine.Crop is { Ripe: false } && w.Piping.WaterTo(bed.Room)) consume += BedLitersPerHour * FoodChain.BedSize(bed);
         consume *= ComputerV15.WaterUseMul(w); // v15.9 물 관리

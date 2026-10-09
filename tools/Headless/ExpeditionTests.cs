@@ -127,6 +127,9 @@ public static partial class Program
                 Check("출발 — 셋이 우주복을 입고 에어락으로 걸어 나가 배에서 사라진다", gone && team.Count == 3 && team.All(c => c.Away && c.Room == null && !c.CanAct && !c.IsAwake),
                     $"{string.Join("·", team.Select(c => c.Name))} · {t.Phase} · 장비 {ExpeditionSystem.GearText(t)}");
                 Check("빈 장비 걸이 — 우주복이 배에서 셋 줄었다 · 장비는 재고에서", t.SuitsAtCall - t.SuitsLeft == team.Count && team.All(c => c.Suit != null) && t.Gear.Count >= 2, $"배의 우주복 {t.SuitsAtCall}→{t.SuitsLeft} · {ExpeditionSystem.GearText(t)}");
+                int ashore0 = w.Crew.Count(c => !c.Dead && !c.LeftShip);
+                Check("물 — 원정대는 챙겨 간 물을 마시고 본선 물에서 빠진다", t.Gear.GetValueOrDefault("마실 물") > 0 && WaterSystem.Drinkers(w) == ashore0 - team.Count,
+                    $"마실 물 {t.Gear.GetValueOrDefault("마실 물")}L · 본선 물을 마시는 사람 {WaterSystem.Drinkers(w)}/{ashore0}");
                 var subs = w.Crew.Where(c => !c.Dead && !c.Away && c.CoveringUntil > w.Tick).ToList();
                 Check("당직이 밀린다 — 남은 사람이 근무를 대신 선다 · 야간 당직에 원정대는 없다", subs.Count > 0 && team.All(c => !w.Society.OnNightWatch(c)),
                     string.Join(" · ", t.Members.Where(m => m.CoveredBy >= 0).Select(m => $"{w.Crew[m.Id].Name}→{w.Crew[m.CoveredBy].Name}")));
@@ -147,6 +150,11 @@ public static partial class Program
                 bool back = RunUntil(w, () => x.Current == null, SimTime.TicksPerDay * 6);
                 Check("귀환 — 재료를 들고 에어락으로 돌아온다 · 전리품이 쌓인다", back && team.All(c => !c.Away && c.Room != null) && t.LootTotal > 0 && (x.Spoils.Count > 0 || x.Stats.Hauled > 0),
                     $"{t.Site.Name} · {x.LootText(t)} · 쌓인 것 {x.SpoilsCount} · 우주복 {string.Join("/", t.Members.Select(m => TripMember.Stage(m.SuitDamage)))}");
+                var leaver = w.Crew.First(c => !c.Dead && !c.Away && !team.Contains(c));
+                int drinkBack = WaterSystem.Drinkers(w);
+                leaver.LeftShip = true; int drinkLeft = WaterSystem.Drinkers(w); leaver.LeftShip = false;
+                Check("물 — 돌아오면 다시 본선 물을 마시고 · 배를 떠난 사람은 빠진다", back && drinkBack == w.Crew.Count(c => !c.Dead && !c.LeftShip) && drinkLeft == drinkBack - 1,
+                    $"본선 물을 마시는 사람 {drinkBack} · 한 사람이 떠나면 {drinkLeft}");
                 bool bonded = pairs.All(q => q.a.AffinityTo(q.b) > q.aff) && w.Relations.All.Any(r => r.Reason == RelationReason.SharedHardship && team.Any(c => c.Id == r.Who));
                 Check("함께 고생한 사이 — 서로 가까워지고 · 까닭이 남는다", bonded, string.Join(" · ", pairs.Select(q => $"{q.a.Name}→{q.b.Name} {q.aff:0.00}→{q.a.AffinityTo(q.b):0.00}")));
                 Check("기억 · 일기 · 연대기 · 칭호", team.All(c => c.Memory.Marks.Any(m => m.Text.StartsWith("원정에서 돌아왔다"))) && w.History.Events.Any(e => e.Text.StartsWith("원정대 귀환")) && team.Any(c => x.Led(c) >= 1),

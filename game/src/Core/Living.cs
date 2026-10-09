@@ -50,7 +50,7 @@ public sealed class FoodPolicy
     /// <summary>지금 먹을 것이 며칠치인가 (산 사람 수로).</summary>
     public static float FoodDays(World w)
     {
-        int crew = w.Crew.Count(c => !c.Dead);
+        int crew = w.Aboard; // 배를 떠난 사람은 세지 않는다
         if (crew == 0) return 99f;
         return FoodStock(w) / (crew * MealsPerPersonDay);
     }
@@ -80,7 +80,7 @@ public sealed class FoodPolicy
 
     public void Update(World w, float dt)
     {
-        if (Rationing) RationHours += dt * w.Crew.Count(c => !c.Dead);
+        if (Rationing) RationHours += dt * w.OnBoard;
         float days = FoodDays(w);
         if (days > 4f) { if (PlentySince < 0) PlentySince = w.Tick; }
         else PlentySince = -1;

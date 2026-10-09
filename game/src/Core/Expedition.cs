@@ -873,6 +873,8 @@ public sealed class ExpeditionSystem
         if (site.Spec.Cutter || site.Kind is SiteKind.Debris) TakeGear(t, "절단기", 1, n => w.Ship.FurnitureOf(FurnitureType.Workbench).Any() ? Take(ItemKind.CellPack, n, keep: 0) : 0);
         TakeGear(t, "식량", team.Count * nd, n => { int got = Take(ItemKind.Ration, n, keep: Math.Max(1, Alive - team.Count)); return got + Take(ItemKind.Meal, n - got, keep: Alive - team.Count); });
         TakeGear(t, "구급 키트", 1, n => Take(ItemKind.MedKit, n, keep: 1));
+        // 마실 물: 원정 날수만큼 탱크에서 물통에 (본선은 원정대 몫을 마시지 않는다 · 남은 물은 돌아와 되붓는다)
+        TakeGear(t, "마실 물", (int)MathF.Ceiling(team.Count * nd * 24f * WaterSystem.CrewLitersPerHour), n => { float give = MathF.Min(n, MathF.Max(0f, w.Water.Level - 25f)); w.Water.Level -= give; return (int)give; });
         if (site.Dist <= 1.6f && w.Drones.Drones.Where(d => d.Operational && d.State == DroneState.Docked && d.Battery > 0.6f).OrderBy(d => d.Kind is DroneKind.Tow or DroneKind.Tug or DroneKind.Scout ? 0 : 1).ThenBy(d => d.Id).FirstOrDefault() is Drone dr)
         {
             t.DroneId = dr.Id;
@@ -1430,6 +1432,14 @@ public sealed class ExpeditionSystem
         Back("절단기", ItemKind.CellPack);
         Back("식량", ItemKind.Ration);
         Back("구급 키트", ItemKind.MedKit);
+        // 마실 물: 나가 있던 동안 마신 만큼 빼고 탱크에 되붓는다
+        int water = t.Gear.GetValueOrDefault("마실 물");
+        if (water > 0)
+        {
+            float hours = t.Departed >= 0 ? (w.Tick - t.Departed) / (float)SimTime.TicksPerHour : 0f;
+            float drank = t.Members.Count(m => m.Boarded) * hours * WaterSystem.CrewLitersPerHour;
+            w.Water.Level = MathF.Min(w.Water.Capacity, w.Water.Level + MathF.Max(0f, water - drank));
+        }
         int o2 = t.Gear.GetValueOrDefault("산소통");
         if (o2 > 0) w.Air.Reserve = MathF.Min(w.Air.ReserveCapacity, w.Air.Reserve + o2 * 60f * (t.Phase == TripPhase.Back ? 0.5f : 1f));
     }

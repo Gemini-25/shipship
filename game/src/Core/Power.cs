@@ -294,7 +294,7 @@ public sealed class PowerGrid
         var living = ship.Rooms.Where(r => !r.Abandoned && !r.Detached).ToList();
         float vol = living.Sum(r => r.Volume);
         float avgO2 = vol > 0 ? living.Sum(r => r.Air.O2 * r.Volume) / vol : 0f;
-        int breathers = w.Crew.Count(c => !c.Dead);
+        int breathers = w.OnBoard; // 원정대 · 떠난 사람은 배의 공기를 마시지 않는다
         if (gens.Count >= 2)
         {
             var spare = gens.OrderBy(f => f.Machine!.FaultFactor * (0.6f + 0.4f * f.Machine.Condition)).ThenByDescending(f => f.Id).First();

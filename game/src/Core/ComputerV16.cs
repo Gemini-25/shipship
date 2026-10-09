@@ -144,7 +144,7 @@ public sealed class ComputerApps
         Menu.Add($"아침: {(produce > 4 ? "채소죽" : rations > 0 ? "배급 비스킷" : "물에 불린 곡물")}");
         Menu.Add($"점심: {(meals > 3 ? "어제 만든 찜 (먼저 먹는다)" : produce > 0 ? "수경 채소 볶음" : "배급 식량")}");
         Menu.Add($"저녁: {(ripe > 0 ? "갓 딴 채소 국" : produce > 2 ? "채소 조림" : "배급 식량 데움")}");
-        if (rations + meals + produce < w.Crew.Count(c => !c.Dead) * 3) Menu.Add("메모: 남은 식량이 사흘 치가 안 된다 — 양을 줄였다");
+        if (rations + meals + produce < w.Aboard * 3) Menu.Add("메모: 남은 식량이 사흘 치가 안 된다 — 양을 줄였다");
         w.Automation.Book.Today.Meals += 3;
     }
 

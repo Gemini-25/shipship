@@ -120,7 +120,7 @@ public sealed class ShipForecast
         new("water", "물", "L", w => w.Water.Level, w => w.Water.Capacity * 0.15f, w => w.Water.Capacity, w => w.Water.Produced - w.Water.Consumed,
             w => RoomOf(w, FurnitureType.WaterRecycler), 12f),
         new("food", "식량", "일치", w => FoodPolicy.FoodDays(w), w => 2f, w => float.MaxValue,
-            w => (FoodPolicy.GrowingPerDay(w) / MathF.Max(1f, w.Crew.Count(c => !c.Dead) * FoodPolicy.MealsPerPersonDay) - 1f) / 24f,
+            w => (FoodPolicy.GrowingPerDay(w) / MathF.Max(1f, w.Aboard * FoodPolicy.MealsPerPersonDay) - 1f) / 24f,
             w => RoomOf(w, FurnitureType.Fridge), 0.4f),
         new("o2", "산소", "%", w => AvgO2(w, false), w => 18.5f, w => 23f, w => 0f, w => null, 0.6f, w => AvgO2(w, true)),
         new("power", "배터리", "kWh", w => w.Power.BatteryCharge, w => w.Power.BatteryCapacity * 0.15f, w => w.Power.BatteryCapacity, w => w.Power.BatteryFlow,
