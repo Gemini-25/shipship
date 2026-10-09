@@ -74,7 +74,14 @@ public static partial class Program
         string? what;
         if (kind == "None") what = "대조"; // 아무 일도 걸지 않는다 (평소 사망 · 구멍)
         else if (Enum.TryParse<HazardKind>(kind, out var hk)) what = Hazards.Apply(w, hk, default, -1);
-        else if (Enum.TryParse<CosmicKind>(kind, out var ck)) { w.Cosmic.Force(ck, leadHours: 1f); what = kind; }
+        else if (Enum.TryParse<CosmicKind>(kind, out var ck))
+        {
+            // SHOWER_LEAD=natural: 실제 게임처럼 예보 시간을 표의 범위에서 · 끝날 때까지 (도착 + 단계 + 6시간) 지켜본다
+            bool natural = Environment.GetEnvironmentVariable("SHOWER_LEAD") == "natural";
+            var ce = w.Cosmic.Force(ck, natural ? null : 1f);
+            if (natural) hours = Math.Max(hours, (int)MathF.Ceiling((ce.Arrive - w.Tick) / (float)SimTime.TicksPerHour + ce.Spec.Span + 6f));
+            what = kind;
+        }
         else return null;
         if (what == null) return null;
         var r = new ShowerResult { Crew0 = crew0 };
