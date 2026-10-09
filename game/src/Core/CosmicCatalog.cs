@@ -77,11 +77,11 @@ public static class CosmicCatalog
     {
         // ─── 별 ───
         new(CosmicKind.Supernova, "supernova", "초신성 폭발", CosmicGroup.Star, 30f, 60f, "천문 관측 — 무너지는 별의 중성미자",
-            new[] { S(0f, 1f, L | B, 1f, "하늘이 하얗게 탔다"), S(18f, 10f, R, 0.85f, "방사선 파도가 닿았다"), S(30f, 0.6f, K | H, 0.7f, "충격파 앞머리가 배를 때렸다", close: true) },
+            new[] { S(0f, 1f, L | B, 1f, "하늘이 하얗게 탔다"), S(18f, 12f, R, 1.2f, "방사선 파도가 닿았다"), S(30f, 0.6f, K | H, 0.7f, "충격파 앞머리가 배를 때렸다", close: true) },
             false, 0f, "#fff6e0", "#ff7ad0", "하얀 섬광 → 퍼지는 고리 → 분홍·하늘빛 성운",
             CosmicRemnant.Nebula, "하늘에 새 성운 · 방사선 병 · 삭은 회로", "대피소 · 물벽 · 물자 옮기기 · 선외 작업 중단", 0.5f),
         new(CosmicKind.GammaBurst, "gammaburst", "감마선 폭발", CosmicGroup.Star, 2f, 8f, "중력계 — 먼 별의 붕괴 떨림",
-            new[] { S(0f, 0.5f, R | E | L, 1f, "보랏빛 줄기가 배를 꿰뚫었다"), S(0.5f, 3f, R, 0.3f, "잔광이 남았다") },
+            new[] { S(0f, 0.5f, R | E | L, 4f, "보랏빛 줄기가 배를 꿰뚫었다"), S(0.5f, 3f, R, 0.3f, "잔광이 남았다") },
             false, 0f, "#b48cff", "#ffffff", "보랏빛 줄기 · 잔광 꼬리",
             CosmicRemnant.Streak, "잔광 줄기 · 방사선 병 · 전자 장비 고장", "대피소 · 민감 장비 끄기", 0.35f),
         new(CosmicKind.SuperFlare, "superflare", "초대형 항성 플레어", CosmicGroup.Star, 6f, 16f, "태양 관측 — 흑점이 꼬인다",
@@ -123,14 +123,14 @@ public static class CosmicCatalog
         // ─── 천체 충돌 ───
         new(CosmicKind.BigAsteroid, "bigasteroid", "큰 소행성 충돌 경로", CosmicGroup.Body, 12f, 30f, "레이더 · 광학 — 궤적 계산",
             new[] { S(0f, 0.08f, X | K, 1f, "큰 소행성이 들이받았다") },
-            true, 0.8f, "#8b7a66", "#ffcf8a", "다가오는 거대한 바위 · 회피 궤적 · 충돌 구획",
+            true, 2.0f, "#8b7a66", "#ffcf8a", "다가오는 거대한 바위 · 회피 궤적 · 충돌 구획",
             CosmicRemnant.Streak, "버린 구획 · 파편 띠", "회피 기동(추진제) · 안 되면 구획 비우고 봉쇄", 1.0f),
         new(CosmicKind.CometCore, "cometcore", "혜성 핵 근접 가스 분출", CosmicGroup.Body, 10f, 28f, "광학 — 밝아지는 코마",
             new[] { S(0f, 5f, D | B | P, 0.6f, "혜성 핵이 가스를 뿜는다 — 얼음 알갱이 비") },
             true, 0.6f, "#9be7ff", "#ffe9a8", "혜성 핵 · 곧은 푸른 이온 꼬리 · 휜 먼지 꼬리 · 분출 줄기",
             CosmicRemnant.GlowCloud, "먼지 덮인 센서 · 외판 자국", "항로 비키기 · 선외 작업 중단", 0.9f),
         new(CosmicKind.PlanetRing, "ring", "행성 고리 통과", CosmicGroup.Body, 6f, 18f, "항법 계산 — 고리면",
-            new[] { S(0f, 2f, D, 0.9f, "고리면을 지난다 — 얼음 입자 폭풍") },
+            new[] { S(0f, 3f, D, 1.5f, "고리면을 지난다 — 얼음 입자 폭풍 · 연속 회피 기동") },
             true, 0.5f, "#e6d3a3", "#c9a66b", "가로지르는 고리 띠 · 빽빽한 입자 폭풍",
             CosmicRemnant.None, "외판 자국 · 창 금", "항로 비키기 · 회피 기동 준비", 1.0f),
         new(CosmicKind.ShatteredPlanet, "shattered", "행성 파괴 잔해 구름", CosmicGroup.Body, 20f, 50f, "광학 — 빛나는 파편",
@@ -151,7 +151,7 @@ public static class CosmicCatalog
             CosmicRemnant.None, "골조 피로 · 외판 자국", "항로 비키기 · 흔들림 대비 고정", 0.5f),
         // ─── 인공 ───
         new(CosmicKind.ReactorBlast, "reactorblast", "다른 배 원자로 폭발", CosmicGroup.Artificial, 0.5f, 3f, "교신 — 조난 신호와 경고",
-            new[] { S(0f, 0.15f, L | K | R, 0.8f, "멀리서 배 하나가 터졌다 — 충격파"), S(0.15f, 4f, R, 0.35f, "낙진 구름이 지나간다") },
+            new[] { S(0f, 0.15f, L | K | R, 1f, "멀리서 배 하나가 터졌다 — 충격파"), S(0.15f, 4f, R, 0.5f, "낙진 구름이 지나간다") },
             false, 0f, "#7cff6b", "#ffffff", "먼 배 실루엣 → 초록 섬광 · 퍼지는 충격파 · 빛나는 잔해",
             CosmicRemnant.Wreck, "빛나는 잔해 · 방사선", "대피소 · 흔들림 대비 고정", 0.8f),
         new(CosmicKind.StationCollapse, "station", "정거장 붕괴", CosmicGroup.Artificial, 6f, 18f, "교신 — 붕괴 경보 방송",
@@ -180,7 +180,7 @@ public static class CosmicCatalog
             CosmicRemnant.None, "버린 구획 · 외판", "회피 기동 · 안 되면 구획 비우고 봉쇄", 0.7f),
         new(CosmicKind.PirateFleet, "pirates", "해적 함대", CosmicGroup.Artificial, 6f, 20f, "교신 감청 — 낯선 호출 부호",
             new[] { S(0f, 3f, A | E | B, 0.6f, "해적 함대가 쏘아 댄다 — 전파 방해") },
-            true, 0.8f, "#ff3b3b", "#ffd166", "쐐기꼴 배 넷 · 빨간 불 · 예광탄",
+            true, 1.2f, "#ff3b3b", "#ffd166", "쐐기꼴 배 넷 · 빨간 불 · 예광탄",
             CosmicRemnant.None, "외판 파공 · 전자 장비 · 두려움", "항로 비키기(도망) · 민감 장비 끄기", 0.7f),
         // ─── 이상 현상 ───
         new(CosmicKind.DarkNebula, "darknebula", "암흑 성운", CosmicGroup.Anomaly, 24f, 60f, "광학 — 별이 하나둘 사라진다",

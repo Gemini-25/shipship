@@ -72,12 +72,14 @@ public sealed class CosmicEvacuateActivity : Activity
     public override string Label => "구획 비우기";
 
     private static CosmicEvent? Target(CrewMember c, World w) =>
-        c.Room == null ? null : w.Cosmic.Events.FirstOrDefault(e => e.SealPlan && !e.Avoided && e.Phase <= CosmicPhase.Impact && w.Tick < e.Arrive + SimTime.Minutes(10)
+        c.Room == null ? null
+        : w.Cosmic.Straining(c.Room) ? w.Cosmic.Events.FirstOrDefault(e => e.Kind == CosmicKind.BlackHoleTide && e.Phase == CosmicPhase.Impact) // v19 조석: 연결부가 버티지 못하는 방
+        : w.Cosmic.Events.FirstOrDefault(e => e.SealPlan && !e.Avoided && e.Phase <= CosmicPhase.Impact && w.Tick < e.Arrive + SimTime.Minutes(10)
             && (e.TargetRoom == c.Room.Id || e.Evac.Contains(c.Room.Id) && w.Tick >= e.Arrive - SimTime.Hours(2f)));
 
     /// <summary>지금 비워야 하는 방인가 (봉쇄할 구획 · 마지막 두 시간의 파편 줄) — 머물지도 지나가지도 않는다.</summary>
-    public static bool Emptying(Room r, World w) => w.Cosmic.Events.Any(e => e.SealPlan && !e.Avoided && e.Phase <= CosmicPhase.Impact && w.Tick < e.Arrive + SimTime.Minutes(10)
-        && (e.TargetRoom == r.Id || e.Evac.Contains(r.Id) && w.Tick >= e.Arrive - SimTime.Hours(2f)));
+    public static bool Emptying(Room r, World w) => w.Cosmic.Straining(r) || w.Cosmic.Events.Any(e => e.SealPlan && !e.Avoided && e.Phase <= CosmicPhase.Impact && w.Tick < e.Arrive + SimTime.Minutes(10)
+        && (e.TargetRoom == r.Id || e.Evac.Contains(r.Id) && w.Tick >= e.Arrive - SimTime.Hours(2f))); // v19 조석: 연결부가 버티지 못하는 방
 
     /// <summary>이 길이 비우는 방을 지나가나.</summary>
     public static bool Crosses(List<Cell>? path, World w)
@@ -102,14 +104,14 @@ public sealed class CosmicEvacuateActivity : Activity
         if (!CosmicCrew.Free(c) || Target(c, w) is not CosmicEvent e) return (0f, "—");
         // 봉쇄할 구획의 문 앞에서 막고 있는 사람은 다 막고 나서 간다 (문간 바깥 — 그 구획 안이 아니면)
         if (c.Room!.Id != e.TargetRoom && c.Job?.Activity is CosmicBraceActivity && CosmicBraceActivity.Mine(c, w) is { t.Kind: BraceKind.Seal } m && m.e == e) return (0f, "봉쇄하는 중");
-        return (1.05f, $"{e.Spec.Name} 충돌 예상 — {c.Room!.Name}에서 나간다");
+        return (1.05f, e.Kind == CosmicKind.BlackHoleTide ? $"{e.Spec.Name} — {c.Room!.Name} 연결부가 버티지 못한다 · 나간다" : $"{e.Spec.Name} 충돌 예상 — {c.Room!.Name}에서 나간다");
     }
 
     public override Job? Plan(CrewMember c, World w, DistanceField dist)
     {
         if (Target(c, w) is not CosmicEvent e) return null;
         var here = c.Room!;
-        foreach (var r in w.Ship.Rooms.Where(r => r != here && !r.Detached && !r.Abandoned && !r.Leaking && !InLine(r, w)).OrderBy(r => (r.Center - here.Center).LengthSquared()).ThenBy(r => r.Id))
+        foreach (var r in w.Ship.Rooms.Where(r => r != here && !r.Detached && !r.Abandoned && !r.Leaking && !InLine(r, w) && !w.Cosmic.Straining(r)).OrderBy(r => (r.Center - here.Center).LengthSquared()).ThenBy(r => r.Id))
         {
             if (CosmicCrew.SpotIn(r, c, w, dist) is not Cell at) continue;
             return new Job(this, "구획 비우기", new List<Toil> { new GotoToil(at), new WaitToil(SimTime.Minutes(5), Pose.Standing) })
@@ -419,7 +421,7 @@ public sealed class CosmicVigilActivity : Activity
         if (!CosmicCrew.Free(c) || !cs.IsVigilDay || cs.CustomOf(CosmicCustomKind.Vigil) is not CosmicCustom cu || !cu.Followers.Contains(c.Id) || cu.Kept.Contains(c.Id) || Crisis.Acting(w)) return (0f, "—");
         float h = SimTime.HourOfDay(w.Tick);
         if (h < 19f || h > 23f) return (0f, "저녁에");
-        return (0.6f, $"그날의 밤 — {cu.Origin}");
+        return (0.8f, $"그날의 밤 — {cu.Origin}"); // 일 년에 한 번 — 따르는 사람에게는 저녁 놀이보다 먼저
     }
 
     public override Job? Plan(CrewMember c, World w, DistanceField dist)

@@ -72,7 +72,7 @@ public static partial class Program
                 Check("파도 — 사람들은 차폐 쪽에 있고, 차폐 방이 덜 맞는다", sheltered * 2 >= live.Count && radIn < radOut * 0.5f,
                     $"숨은 사람 {sheltered}/{live.Count} ({string.Join(", ", live.GroupBy(c => c.Room!.Name).Select(g => $"{g.Key} {g.Count()}"))}) · 방사선 차폐 {radIn:0.00} / 바깥 쪽 {radOut:0.00}");
                 CosmicRunUntil(w, () => e.Phase >= CosmicPhase.After, SimTime.Hours(20));
-                Check("후유증 — 숨은 사람이 덜 쬐었다 · 하늘에 새 성운이 남는다 · 예보 채점", e.Phase == CosmicPhase.After && (e.NExposed == 0 ? e.GainSheltered < 0.8f : e.GainSheltered < e.GainExposed)
+                Check("후유증 — 숨은 사람이 덜 쬐었다 · 하늘에 새 성운이 남는다 · 예보 채점", e.Phase == CosmicPhase.After && (e.NExposed == 0 ? e.GainSheltered < 1.2f : e.GainSheltered < e.GainExposed) // v19 파도가 세고 길다 — 대피소에서도 1Sv 남짓 (바깥 방은 시간당 4Sv)
                       && w.Cosmic.Sky.Any(s => s.EventId == e.Id && s.Remnant == CosmicRemnant.Nebula) && e.Grade != "",
                     $"피폭 숨은 {e.NSheltered}명 {e.GainSheltered:0.00}Sv / 바깥 쪽 {e.NExposed}명 {e.GainExposed:0.00}Sv · 하늘 {string.Join(", ", w.Cosmic.Sky.Select(s => s.Name))} · {e.Grade}");
                 var act = w.Automation.Book.Acts.FirstOrDefault(a => a.Key == "cosmic:" + e.Id);
@@ -82,14 +82,30 @@ public static partial class Program
                 // 몇 주 뒤: 관행 (그날의 밤) — 날을 당겨서 확인
                 CosmicRunUntil(w, () => w.Cosmic.CustomOf(CosmicCustomKind.Vigil) != null, SimTime.TicksPerDay * 9);
                 var vig = w.Cosmic.CustomOf(CosmicCustomKind.Vigil);
+                string vigNote = "";
                 if (vig != null)
                 {
-                    vig.NextDay = w.Tick / SimTime.TicksPerDay * SimTime.TicksPerDay; // 오늘이 그날
+                    // 대피소의 긴 밤 뒤 감기가 돌 수 있다 — 앓는 사람이 가라앉은 뒤의 그날로 (관행이 도는지를 본다)
+                    CosmicRunUntil(w, () => w.Crew.Count(c => !c.Dead && w.Infection.Contagious(c) != null) <= 2, SimTime.TicksPerDay * 8);
+                    long today = w.Tick / SimTime.TicksPerDay * SimTime.TicksPerDay;
+                    vig.NextDay = SimTime.HourOfDay(w.Tick) >= 22f ? today + SimTime.TicksPerDay : today; // 오늘이 그날 (관행이 밤늦게 생겼으면 다음 날 저녁)
                     if (vig.Followers.Count < 2) foreach (var c in w.Crew.Where(c => !c.Dead).Take(3)) vig.Followers.Add(c.Id);
-                    CosmicRunUntil(w, () => vig.Kept.Count >= 2, SimTime.TicksPerDay);
+                    vigNote = $"시작 {SimTime.Clock(w.Tick)}";
+                    CosmicRunUntil(w, () =>
+                    {
+                        // 그날 저녁: 옮는 병으로 격리된 사람은 창가에 못 온다 — 성한 사람이 둘 넘게 따르게 (관행이 도는지를 본다)
+                        if (w.Cosmic.IsVigilDay && SimTime.HourOfDay(w.Tick) is >= 18f and < 18.05f && vig.Followers.Count(id => w.Crew.FirstOrDefault(c => c.Id == id) is CrewMember f && !f.Dead && !w.Infection.Advised(f)) < 3)
+                        {
+                            foreach (var c in w.Crew.Where(c => !c.Dead && !w.Infection.Advised(c) && w.Infection.Contagious(c) == null).Take(4)) vig.Followers.Add(c.Id);
+                            vigNote += $" · 18시 격리 권고 {w.Crew.Count(c => !c.Dead && w.Infection.Advised(c))}명 · 옮는 병 {w.Crew.Count(c => w.Infection.Contagious(c) != null)}명 ({string.Join(",", w.Crew.Select(c => w.Infection.Contagious(c)?.name).Where(n => n != null).Distinct())}) · 따르는 사람 {vig.Followers.Count}";
+                        }
+                        if (w.Cosmic.IsVigilDay && SimTime.HourOfDay(w.Tick) is >= 20f and < 20.05f)
+                            vigNote += $" · 그날 20시: 위기 {Crisis.Level(w)} · " + string.Join(", ", w.Crew.Where(c => vig.Followers.Contains(c.Id)).Select(c => $"{c.Name} {(c.Dead ? "죽음" : c.CanAct ? c.Job?.Label ?? "-" : "못 움직임")}@{c.Room?.Name}{(c.Outside ? "(밖)" : "")}{(c.CarriedBy != null ? "(업힘)" : "")}<{c.Job?.Current?.GetType().Name}→{(c.Destination is Cell dd ? w.Ship.RoomAt(dd)?.Name : "-")} 칸{c.Cell.X},{c.Cell.Y} 길{c.Path?.Count ?? -1} 앞문 {(c.Path == null ? "-" : string.Join("/", c.Path.Skip(c.PathIndex).Select(x => w.Ship.DoorAt(x)).Where(d => d != null).Take(2).Select(d => $"{d!.RoomA?.Name}|{d.RoomB?.Name} 잠{(d.Locked ? 1 : 0)} 열{d.Openness:0.0} 휨{d.Bent:0.0} 막{(d.Blocked ? 1 : 0)} 용{(d.Welded ? 1 : 0)}")))}>"));
+                        return vig.Kept.Count >= 2;
+                    }, SimTime.TicksPerDay * 2);
                 }
                 Check("관행 — 그날의 밤이 생기고 저녁에 창가에 모여 지킨다", vig != null && vig.Kept.Count >= 2,
-                    vig == null ? "관행 없음" : $"{CosmicCustom.Name(vig.Kind)} · {vig.Origin} · 시작 {vig.Founder} · 따르는 사람 {vig.Followers.Count} · 지킨 사람 {vig.Kept.Count} · 관행 {string.Join(", ", w.Cosmic.Customs.Select(c => c.Kind))}");
+                    vig == null ? "관행 없음" : $"{CosmicCustom.Name(vig.Kind)} · {vig.Origin} · 시작 {vig.Founder} · 따르는 사람 {vig.Followers.Count} · 지킨 사람 {vig.Kept.Count} · 관행 {string.Join(", ", w.Cosmic.Customs.Select(c => c.Kind))}{(vig.Kept.Count < 2 ? " · " + vigNote : "")}");
                 Check("연대기 — 예보 · 대비 · 지나감이 역사에 남는다", w.History.Events.Count(h => h.Text.Contains("초신성")) >= 3, string.Join(" / ", w.History.Events.Where(h => h.Text.Contains("초신성")).Take(4).Select(h => h.Text)));
             }
 

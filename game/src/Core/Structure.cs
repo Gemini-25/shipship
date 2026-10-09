@@ -322,6 +322,16 @@ public sealed class StructureSystem
     {
         var w = _world;
         CountFrames();
+        // 떨어져 나간 방의 댐퍼는 전기가 없어 못 움직인다 — 주 컴퓨터(또는 예비 제어기)가 배 쪽 환기관 분기 밸브를 원격으로 닫는다.
+        // 그대로 두면 배 전체 댐퍼가 닫힌 채라 사람이 모인 방에 이산화탄소가 차오른다
+        if (DuctOpen && w.Automation.Present && w.Automation.Dampers)
+            foreach (var r in w.Ship.Rooms)
+            {
+                if (!r.Detached || !r.VentOpen || w.Tick - r.AbandonedSince < SimTime.Minutes(4)) continue;
+                r.VentOpen = false;
+                w.Log.Add(w.Tick, LogKind.Ship, $"주 컴퓨터가 떨어져 나간 {r.Name} 쪽 환기관 분기 밸브를 닫았다");
+                w.Automation.Book.Add(ActKind.Damper, r, $"{r.Name} 쪽 환기관이 우주로 열림", "환기망을 되살리려고", "환기관 분기 밸브 원격 폐쇄", "", "ductvalve:" + r.Id, SimTime.Minutes(10), 6f);
+            }
         bool duct = w.Ship.Rooms.Any(r => r.Detached && r.VentOpen);
         if (duct != DuctOpen)
         {

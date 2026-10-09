@@ -37,6 +37,7 @@ public sealed class PerilSystem
     public string? DeathCause(CrewMember c)
     {
         if (c.Vitals.Oxygen < 0.4f) return null; // 숨이 막혀 죽었다 (질식이 먼저)
+        if (c.Suit == null && c.Room?.Air.CO2 > 4f && c.Vitals.Injury < 0.4f) return "이산화탄소 중독"; // 환기가 끊긴 방에서 탁한 공기에
         if (_stroke.ContainsKey(c.Id) && HeatOf(c) > 0.5f) return "열사병";
         if (c.Vitals.InjuryCause == "방사선 병" || RadStage(c) >= 2 && c.Vitals.Injury < 0.3f) return "방사선 병";
         return null;

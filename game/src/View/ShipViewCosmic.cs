@@ -1085,12 +1085,113 @@ public partial class ShipView
 
     private readonly Dictionary<int, (int stages, float at)> _cosmicFront = new();
 
+    /// <summary>v19 고유 장면: 감마선 줄기와 그늘 · 암흑 시간의 손전등 · 해적을 막은 문 · 조석 균열 · 낙진을 뒤집어쓴 사람.</summary>
+    private void PaintCosmicScenes(CanvasItem ci)
+    {
+        var w = _world;
+        var cs = w.Cosmic;
+        foreach (var e in cs.Events)
+        {
+            if (e.Ghost || e.Phase == CosmicPhase.Done) continue;
+            switch (e.Kind)
+            {
+                case CosmicKind.GammaBurst when e.Phase is CosmicPhase.Brace or CosmicPhase.Impact:
+                {
+                    float pulse = 0.7f + 0.3f * Mathf.Sin(_time * 3f);
+                    foreach (var room in w.Ship.Rooms)
+                    {
+                        if (room.Detached) continue;
+                        float sh = cs.Shade(room, e);
+                        var rect = RoomRect(room);
+                        if (sh > 0.45f) ci.Box(rect, new Color(0.7f, 0.45f, 1f, (0.06f + 0.12f * sh) * pulse), true); // 줄기가 닿는 방
+                        else if (sh < 0.15f && room.Type != RoomType.Corridor)
+                        {
+                            ci.Box(rect, new Color(0f, 0f, 0.05f, 0.22f), true);
+                            Gfx.TextCentered(ci, Fonts.Bold, rect.GetCenter(), "그늘", 13, new Color("#b48cff"));
+                        }
+                    }
+                    var c = ShipCenterPx();
+                    float half = Bounds.Size.Length() * 0.5f;
+                    var dir = new Vector2(Mathf.Cos(e.Side), Mathf.Sin(e.Side));
+                    // 줄기가 들어오는 쪽: 굵은 보랏빛 화살
+                    var from = c + dir * half * 1.15f;
+                    ci.DrawLine(from, c + dir * half * 0.8f, new Color("#b48cff").WithAlpha(0.8f * pulse), 8f, true);
+                    // 돌리는 중: 지금 향 → 돌릴 향으로 호
+                    if (e.SceneChoice == 4 && !float.IsNaN(e.TurnTo))
+                    {
+                        float a0 = e.Side, a1 = e.TurnTo;
+                        float d = Mathf.Wrap(a1 - a0, -Mathf.Pi, Mathf.Pi);
+                        ci.Arc(c, half * 0.95f, a0, a0 + d, 24, new Color("#ffd166"), 3f, true);
+                        var tip = c + new Vector2(Mathf.Cos(a0 + d), Mathf.Sin(a0 + d)) * half * 0.95f;
+                        ci.Circle(tip, 6f, new Color("#ffd166"), true, -1f, true);
+                    }
+                    break;
+                }
+                case CosmicKind.MagnetarStorm when e.DarkUntil >= 0:
+                {
+                    // 암흑 시간: 배 전체가 어둡고 사람마다 손전등 빛
+                    ci.Box(Bounds.Grow(T * 2f), new Color(0f, 0f, 0.03f, 0.5f), true);
+                    foreach (var c in w.Crew)
+                    {
+                        if (c.Dead || c.Outside || c.Room == null) continue;
+                        var p = CrewPx(c);
+                        var f = new Vector2(c.Facing.X, c.Facing.Y);
+                        if (f.LengthSquared() < 0.01f) f = Vector2.Right;
+                        f = f.Normalized();
+                        var side = new Vector2(-f.Y, f.X);
+                        ci.Poly(new[] { p, p + f * T * 3.4f + side * T * 1.3f, p + f * T * 3.4f - side * T * 1.3f }, new Color(1f, 0.95f, 0.7f, 0.2f));
+                        ci.Circle(p, T * 0.7f, new Color(1f, 0.95f, 0.7f, 0.14f));
+                    }
+                    break;
+                }
+                case CosmicKind.PirateFleet:
+                    foreach (var t in e.Tasks.Where(t => t.Kind == BraceKind.Barricade && t.Done && t.RoomId >= 0 && t.RoomId < w.Ship.Rooms.Count))
+                        foreach (var d in w.Ship.Rooms[t.RoomId].Doors.Where(d => !d.IsExternal))
+                        {
+                            var r = CellRect(d.Cell).Grow(-T * 0.08f);
+                            ci.DrawLine(r.Position, r.End, new Color("#8a6a3a"), 4f, true);
+                            ci.DrawLine(new Vector2(r.End.X, r.Position.Y), new Vector2(r.Position.X, r.End.Y), new Color("#8a6a3a"), 4f, true);
+                        }
+                    break;
+                case CosmicKind.BlackHoleTide when e.Phase == CosmicPhase.Impact:
+                    foreach (var room in w.Ship.Rooms)
+                    {
+                        if (room.Detached) continue;
+                        foreach (var j in room.Joints)
+                        {
+                            if (j.Broken || j.Strength >= 0.6f) continue;
+                            var p = CellRect(j.Cell).GetCenter();
+                            float k = 1f - j.Strength / 0.6f;
+                            var pts = new Vector2[6];
+                            for (int i = 0; i < 6; i++) pts[i] = p + new Vector2((i - 2.5f) * T * 0.22f, (i % 2 == 0 ? -1f : 1f) * T * 0.18f * (0.5f + k));
+                            ci.Polyline(pts, new Color(1f, 0.35f, 0.25f, 0.5f + 0.5f * k), 2f, true);
+                        }
+                    }
+                    break;
+            }
+        }
+        // 낙진을 뒤집어쓴 사람: 초록 반짝임 (제염 전까지)
+        foreach (var (id, lv) in cs.Contaminated)
+        {
+            var c = w.Crew.FirstOrDefault(x => x.Id == id);
+            if (c == null || c.Dead || c.Room == null) continue;
+            var p = CrewPx(c);
+            int b = (int)(_time * 8f);
+            for (int i = 0; i < 6; i++)
+            {
+                var q = p + new Vector2(CosmicArt.N(b + id, i) - 0.5f, CosmicArt.N(b + id, i + 9) - 0.5f) * T * 1.3f;
+                ci.Circle(q, 1.7f, new Color(0.55f, 1f, 0.3f, 0.85f * lv));
+            }
+        }
+    }
+
     /// <summary>배 위: 방사선 반짝임 · 물벽 · 물자 · 묶음 · 꺼 둔 설비 · 봉쇄 · 충격파 앞머리 · 펄스 번개.</summary>
     private void PaintCosmicOver(CanvasItem ci)
     {
         var w = _world;
         var cs = w.Cosmic;
         if (cs.Events.Count == 0) return;
+        PaintCosmicScenes(ci); // v19 고유 장면
         bool any = cs.Events.Any(e => e.Phase != CosmicPhase.Done);
         // 방마다
         foreach (var room in w.Ship.Rooms)

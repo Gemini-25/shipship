@@ -25,6 +25,8 @@ public sealed class DoorBody
     public long NoHoldUntil { get; set; } = -1;
     /// <summary>패킹 1 = 새것 · 0.25 아래면 미세 누출.</summary>
     public float Gasket { get; set; } = 1f;
+    /// <summary>옆 벽의 가장 낮았던 강도 (새로 찌그러질 때만 문틀이 다시 휜다 — 펴 놓은 문틀이 같은 상처로 또 휘지 않게).</summary>
+    public float WallSeen { get; set; } = 1f;
     public bool Whistling { get; set; }
     public bool SensorBroken { get; set; }
     public bool IndicatorBroken { get; set; }
@@ -521,17 +523,19 @@ public sealed partial class BodySystem
             if (db.OpenSince >= 0 && now - db.OpenSince > SimTime.Minutes(10) && now - db.ComplainedAt > SimTime.Hours(1) && ra != null && rb != null) Complain(d, db, ra, rb);
 
             // 옆 벽이 찌그러졌다 → 문틀이 휜다
-            if (slow && d.Bent < 0.5f)
+            if (slow)
             {
                 var perp = d.ConnectsVertically ? new[] { new Cell(1, 0), new Cell(-1, 0) } : new[] { new Cell(0, 1), new Cell(0, -1) };
+                float low = 1f;
                 foreach (var p in perp)
-                    if (ship.WallAt(d.Cell + p) is WallState ws && ws.Integrity < 0.6f)
-                    {
-                        d.Bent = 0.6f;
-                        Stats.Bents++;
-                        w.Log.Add(now, LogKind.Warning, $"충격에 {d.RoomA?.Name ?? "?"}·{d.RoomB?.Name ?? "?"} 사이 문틀이 휘었다 — 끝까지 닫히지 않는다");
-                        break;
-                    }
+                    if (ship.WallAt(d.Cell + p) is WallState ws) low = MathF.Min(low, ws.Integrity);
+                if (d.Bent < 0.5f && low < 0.6f && low < db.WallSeen - 0.05f)
+                {
+                    d.Bent = 0.6f;
+                    Stats.Bents++;
+                    w.Log.Add(now, LogKind.Warning, $"충격에 {d.RoomA?.Name ?? "?"}·{d.RoomB?.Name ?? "?"} 사이 문틀이 휘었다 — 끝까지 닫히지 않는다");
+                }
+                db.WallSeen = low;
             }
         }
         if (slow)

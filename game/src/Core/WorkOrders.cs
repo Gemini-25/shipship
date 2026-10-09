@@ -1087,6 +1087,17 @@ public sealed partial class WorkBoard
         // ── v9.4 문 구동기: 망가진 문은 손으로 천천히 열리고 격벽이 저절로 잠기지 않는다 ──
         foreach (var d in ship.Doors)
         {
+            // 휜 문틀: 끝까지 안 닫혀 한쪽이 빠진 방(새는 방 · 다시 붙인 진공 구획)이면 틈으로 배 공기가 계속 샌다 — 펴고 금속판으로 덧댄다
+            if (d.Bent > 0.3f && !d.Removed && !d.IsExternal && !d.JammedOpen && d.RoomA is Room ba && d.RoomB is Room bb && !ba.Detached && !bb.Detached)
+            {
+                var lo = ba.Air.Pressure < bb.Air.Pressure ? ba : bb;
+                var hi = lo == ba ? bb : ba;
+                if (!hi.Abandoned && hi.Air.Pressure - lo.Air.Pressure > 15f)
+                {
+                    Post(WorkKind.RepairDoor, WorkTarget.OfDoor(d), 1.1f, Skill.Mechanics, $"문틀이 휘어 {lo.Name} 쪽으로 공기가 샌다 — 펴고 금속판으로 덧댄다 (금속판 1)");
+                    continue;
+                }
+            }
             // 임시 구동기 문은 모터가 넉넉해지면 정식으로 간다
             if (d.MotorMk1 && !d.MotorBroken && !d.Removed && ship.CountStored(ItemKind.Motor) >= 2)
                 Post(WorkKind.RepairDoor, WorkTarget.OfDoor(d), 0.2f, Skill.Mechanics, "모터가 생겼다 — 임시 구동기를 떼고 정식으로");

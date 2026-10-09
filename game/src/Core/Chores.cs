@@ -1688,6 +1688,28 @@ public static partial class WorkPlanners
     {
         blocked = null;
         var d = o.Target.Door!;
+        if (d.Bent > 0.3f && !d.JammedOpen)
+        {
+            // 휜 문틀: 지렛대로 펴고 틈에 금속판을 덧대 끝까지 닫히게 한다
+            var plate = new[] { (ItemKind.Plate, 1) };
+            var ptoils = FetchAll(c, w, dist, plate);
+            if (ptoils == null) { blocked = "금속판 없음"; return null; }
+            ptoils.Add(new GotoToil(at));
+            ptoils.Add(new WorkToil(0.4f, Skill.Mechanics, d.Cell.Center) { Resume = o });
+            ptoils.Add(new DoToil((cm, world) =>
+            {
+                if (d.Bent > 0.3f)
+                {
+                    if (!UseAll(cm, plate)) return false;
+                    d.Bent = 0.2f;
+                    cm.Stats.Repairs++;
+                    world.Log.Add(world.Tick, LogKind.Work, $"휜 문틀을 펴고 금속판으로 틈을 덧댔다 ({d.RoomA?.Name}·{d.RoomB?.Name})", cm.Id);
+                }
+                if (!d.MotorBroken) world.Board.Close(o);
+                return true;
+            }));
+            return Wrap(a, o, c, w, "문틀 펴기", ptoils, $"{o.Title} ({o.Detail})");
+        }
         bool motor = w.Ship.CountStored(ItemKind.Motor) >= 1;
         if (!d.MotorBroken && !(d.MotorMk1 && motor)) { w.Board.Close(o); return null; }
         var cost = motor ? new[] { (ItemKind.Motor, 1) } : new[] { (ItemKind.Cable, 1), (ItemKind.Plate, 1) };

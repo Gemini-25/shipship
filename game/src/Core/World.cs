@@ -725,7 +725,7 @@ public sealed class World
         Board.RequestScan();
 
         // 역사: 쓰러진 곳은 무서운 곳이 되고, 긴장이 남는다
-        string why = c.Vitals.Oxygen < 0.3f ? "숨이 막혀" : c.Vitals.InjuryCause ?? "기력이 다해";
+        string why = c.Vitals.Oxygen < 0.3f ? "숨이 막혀" : c.Suit == null && c.Room?.Air.CO2 > 4f ? "탁한 공기에" : c.Vitals.InjuryCause ?? "기력이 다해";
         History.Collapses++;
         if (History.Current != null) History.Current.Collapses++;
         if (c.Room != null)

@@ -612,6 +612,7 @@ public sealed class Door
 
     internal void Update()
     {
+        if (Removed) { Openness = 0f; _requested = false; _override = false; return; } // 떼어 낸 문 (그 자리는 벽 · 우주) — 휜 문틀 틈으로 다시 열리지 않는다
         if ((JammedOpen || Blocked) && !Removed)
         {
             Openness = MathF.Min(1f, Openness + 0.05f);

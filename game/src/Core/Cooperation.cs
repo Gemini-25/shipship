@@ -914,7 +914,7 @@ public sealed partial class CoopSystem
             return fault != null && PartsSystem.Heavy(fault.Spec.Part) && c.Carrying?.Kind == fault.Spec.Part && Modules.Working(_w, FurnitureType.Hoist) == 0 && !_fitted.Contains(o.Id)
                    && (o.Assignee == null || o.Assignee == c); // 거드는 사람은 따로 부르지 않는다 (맡은 사람이 부른다)
         }
-        return o.Kind is WorkKind.ReplacePanel or WorkKind.RepairDoor;
+        return o.Kind is WorkKind.ReplacePanel || o.Kind == WorkKind.RepairDoor && !(o.Target.Door?.Bent > 0.3f); // 휜 문틀 펴기는 혼자 (지렛대 · 덧댐판)
     }
 
     /// <summary>짝 단계: 1 = 시작 · 0 = 기다림 · -1 = 보류 (그만둔다).</summary>

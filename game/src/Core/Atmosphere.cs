@@ -177,7 +177,7 @@ public sealed class Atmosphere
         // 4) 열린 문: 두 방이 섞인다
         foreach (var d in ship.Doors)
         {
-            if (d.Openness < 0.05f || d.RoomA == null || d.RoomB == null) continue;
+            if (d.Removed || d.Openness < 0.05f || d.RoomA == null || d.RoomB == null) continue;
             Mix(d.RoomA, d.RoomB, 0.25f * d.Openness);
         }
 

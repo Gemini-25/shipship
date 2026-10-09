@@ -13,7 +13,7 @@ namespace ShipSim.Core;
 
 public enum CosmicPhase { Forecast, Brace, Impact, After, Done }
 
-public enum BraceKind { WaterWall, Supplies, Shutters, PowerDown, Stow, Seal, Fold, Insulate, Pilot, Restart }
+public enum BraceKind { WaterWall, Supplies, Shutters, PowerDown, Stow, Seal, Fold, Insulate, Pilot, Restart, Barricade, Decon, Logbook } // v19 막기 · 제염 · 빈 시간 적기 (CosmicScenes.cs)
 
 /// <summary>대비 일 하나 (사람이 가서 한다).</summary>
 public sealed class BraceTask
@@ -34,7 +34,7 @@ public sealed class BraceTask
 }
 
 /// <summary>우주 대재난 하나.</summary>
-public sealed class CosmicEvent
+public sealed partial class CosmicEvent
 {
     public int Id { get; init; }
     public CosmicKind Kind { get; init; }
@@ -130,7 +130,7 @@ public sealed class CosmicStats
     public int Spawned, Forecasts, Ghosts, BraceDone, Sheltered, Warned, Woken, Avoided, AvoidFailed, Sealed, Strikes, EmpKills, Latent, Vigils, Looks, Votes, Proposals;
 }
 
-public sealed class CosmicSystem
+public sealed partial class CosmicSystem
 {
     private readonly World _w;
     private Rng? _rng;
@@ -214,19 +214,25 @@ public sealed class CosmicSystem
     /// <summary>얼마나 쬐는 방인가 0~1 (바깥 노출 · 물벽 · 차폐).</summary>
     public float RelExposure(Room r)
     {
-        float e = _w.Ambience.Exposure(r) * (1f - 0.6f * Water(r));
-        if ((RoomCatalog.Tags(r.Kind) & RoomTag.Shielded) != 0) e *= 0.15f;
+        bool gamma = GammaNow() is not null;
+        float e = _w.Ambience.Exposure(r) * (1f - (gamma ? 0.5f : 0.6f) * Water(r));
+        if ((RoomCatalog.Tags(r.Kind) & RoomTag.Shielded) != 0) e *= gamma ? 0.6f : 0.15f; // 감마선 줄기는 대피소 벽도 뚫는다
         e *= TechWeb.Mul(_w, "cosmic.expose"); // v16.14 폭풍 대피 차폐
+        foreach (var ev in Events) if (ev.Kind == CosmicKind.GammaBurst && !ev.Ghost && ev.Phase is CosmicPhase.Brace or CosmicPhase.Impact)
+            e *= Shade(r, ev) * (0.6f + 0.4f * Facing(r, ev, ShipCenter())); // v19 감마선: 줄기 그늘 · 줄기 쪽을 마주 보는 방 (방패가 되는 무거운 방 자체는 쬔다)
         return e;
     }
+
+    private CosmicEvent? GammaNow() => Events.FirstOrDefault(ev => ev.Kind == CosmicKind.GammaBurst && !ev.Ghost && ev.Phase is CosmicPhase.Brace or CosmicPhase.Impact);
 
     /// <summary>숨을 곳 (차폐 → 물벽 → 배 안쪽).</summary>
     public List<Room> Refuges()
     {
         var live = _w.Ship.Rooms.Where(r => !r.Detached && !r.OffLimits && !r.Leaking && !r.Abandoned && r.Type != RoomType.Corridor).ToList();
+        if (GammaNow() != null) return live.OrderBy(RelExposure).ThenBy(r => r.Id).Take(4).ToList(); // v19 감마선: 대피소보다 줄기 그늘 (무거운 설비 뒤)
         var list = live.Where(r => (RoomCatalog.Tags(r.Kind) & RoomTag.Shielded) != 0).OrderBy(r => r.Id).ToList();
         list.AddRange(live.Where(r => !list.Contains(r) && Water(r) >= 0.4f).OrderBy(r => r.Id));
-        list.AddRange(live.Where(r => !list.Contains(r)).OrderBy(r => _w.Ambience.Exposure(r)).ThenBy(r => r.Id).Take(2));
+        list.AddRange(live.Where(r => !list.Contains(r)).OrderBy(RelExposure).ThenBy(r => r.Id).Take(2)); // v19 감마선 그늘도 센다
         return list;
     }
 
@@ -255,7 +261,7 @@ public sealed class CosmicSystem
         if (s.CloseOnly && !e.Close) return 0f;
         if (!e.Avoided) return e.Power * s.Power;
         bool contact = (s.Fx & (CosmicFx.Strike | CosmicFx.Debris | CosmicFx.Hostile | CosmicFx.Tidal | CosmicFx.Shock)) != 0;
-        return contact ? 0f : e.Power * s.Power * 0.25f;
+        return e.Power * s.Power * GrazeOf(e, contact); // v19 비켜도 가장자리는 닿는다
     }
 
     private long StageAt(CosmicEvent e, int i) => e.Arrive + SimTime.Hours(e.Spec.Stages[i].At);
@@ -572,10 +578,13 @@ public sealed class CosmicSystem
         float cost = AvoidCost(e);
         w.Propulsion.Propellant = MathF.Max(0f, w.Propulsion.Propellant - cost);
         e.FuelSpent = cost;
+        Delay(e, cost); // v19 연소한 만큼 늦어진다
         foreach (var m in w.Propulsion.Engines) m.Wear = MathF.Min(1f, m.Wear + 0.03f);
         var (control, by, who) = w.Propulsion.Control();
         float leadLeft = e.HoursTo(w.Tick, e.Arrive);
         float p = Math.Clamp(control * MathF.Min(1f, w.Propulsion.Thrust / 0.6f) * (0.55f + 0.45f * Math.Clamp(leadLeft / 6f, 0f, 1f)) + 0.15f, 0f, 0.97f);
+        if (e.Kind == CosmicKind.PirateFleet) p *= 0.5f; // v19 해적은 빠르다 — 따돌리기 어렵다
+        if (leadLeft < 0f) p *= e.Spec.Has(CosmicFx.Strike) ? 0f : 0.35f; // v19 닿은 뒤에야 끝난 연소: 들이받는 것은 이미 맞았다 · 나머지는 반쯤 빠져나올 뿐
         if (R.Chance(p))
         {
             e.Avoided = true;
@@ -629,8 +638,20 @@ public sealed class CosmicSystem
         bool rad = spec.Has(CosmicFx.Radiation) || spec.Has(CosmicFx.Heat) && spec.Has(CosmicFx.Plasma);
         if (rad && refuges.Count > 0)
         {
-            foreach (var r in refuges.Take(e.EarlyBrace ? 2 : 1)) AddTask(e, BraceKind.WaterWall, r.Id, -1, 0.4f, $"{r.Name} 물벽 채우기 (물주머니)");
-            AddTask(e, BraceKind.Supplies, refuges[0].Id, -1, 0.3f, $"{refuges[0].Name}에 물 · 먹을 것 · 약 옮기기");
+            // v19 모두가 들어갈 만큼: 대피소가 좁으면 그다음 안쪽 방에도 물벽 (넘친 사람이 바깥 방에서 쬐지 않게) — 길게 쏟아지는 것은 물 · 먹을 것도 그 방에
+            int crew = w.Crew.Count(c => !c.Dead && !c.Away);
+            bool longPour = spec.Stages.Any(s => (s.Fx & CosmicFx.Radiation) != 0 && s.Hours >= 4f);
+            var cands = refuges.Concat(ship.Rooms.Where(r => !r.Detached && !r.OffLimits && !r.Leaking && !r.Abandoned && r.Type != RoomType.Corridor && !refuges.Contains(r)
+                && r.Type is not (RoomType.Engine or RoomType.Reactor)).OrderBy(RelExposure).ThenBy(r => r.Id)).ToList();
+            int cap = 0, walls = 0, want = e.EarlyBrace ? 2 : 1;
+            foreach (var r in cands)
+            {
+                if (walls >= 4 || walls >= want && cap >= crew) break;
+                AddTask(e, BraceKind.WaterWall, r.Id, -1, 0.4f, $"{r.Name} 물벽 채우기 (물주머니)");
+                if (walls == 0 || longPour) AddTask(e, BraceKind.Supplies, r.Id, -1, 0.3f, $"{r.Name}에 물 · 먹을 것 · 약 옮기기");
+                cap += Math.Max(3, r.Cells.Count / 2);
+                walls++;
+            }
         }
         // 관측창 덮개: 컴퓨터가 있으면 한꺼번에 내린다, 없으면 사람이 방마다
         if (spec.Has(CosmicFx.Light) || rad || spec.Has(CosmicFx.Debris) || spec.Has(CosmicFx.Plasma))
@@ -668,12 +689,14 @@ public sealed class CosmicSystem
         if (spec.Has(CosmicFx.Nav) || spec.Has(CosmicFx.Blind) && spec.Has(CosmicFx.Debris))
             if (ship.RoomsOf(RoomType.Bridge).FirstOrDefault() is Room br) AddTask(e, BraceKind.Pilot, br.Id, -1, 0.3f, "손 조종 준비 (항법 먹통 대비)");
         if (e.SealPlan && e.TargetRoom >= 0) AddTask(e, BraceKind.Seal, e.TargetRoom, -1, 0.35f, $"{ship.Rooms[e.TargetRoom].Name} 비우고 봉쇄");
+        ScenePlan(e); // v19 고유 장면의 대비 일
     }
 
     /// <summary>지금 맡을 수 있는 대비 일.</summary>
     public bool Open(CosmicEvent e, BraceTask t)
     {
         if (t.Done || t.By >= 0) return false;
+        if (t.Kind is BraceKind.Logbook or BraceKind.Decon) return true; // v19 지나간 뒤의 일
         if (t.Kind == BraceKind.Restart) return e.Phase == CosmicPhase.After || e.Phase == CosmicPhase.Done;
         if (e.Phase != CosmicPhase.Brace && !(e.Phase == CosmicPhase.Impact && _w.Tick < NextHarm(e))) return false;
         if (t.Last && _w.Tick < PredictedHarm(e) - SimTime.Hours(1f)) return false;
@@ -694,7 +717,7 @@ public sealed class CosmicSystem
             case BraceKind.WaterWall:
             {
                 if (room == null) return false;
-                float take = MathF.Min(60f, MathF.Max(0f, w.Water.Level - 60f)); // 마실 물은 남긴다
+                float take = MathF.Min(80f, MathF.Max(0f, w.Water.Level - 60f)); // 마실 물은 남긴다 · v19 한 방을 다 두를 만큼
                 w.Water.Level -= take;
                 _waterUsed += take;
                 _water[room.Id] = MathF.Min(1f, Water(room) + take / 80f);
@@ -722,6 +745,21 @@ public sealed class CosmicSystem
             }
             case BraceKind.Stow: if (room != null) { _stowed.Add(room.Id); MarkLog.Add(room.Marks, w.Tick, $"{c.Name}: 흔들림 대비로 물건을 묶었다"); } break;
             case BraceKind.Fold: _folded = true; break;
+            case BraceKind.Barricade: // v19 해적: 에어락 안쪽 문을 막는다
+                if (room == null) return false;
+                foreach (var d in room.Doors.Where(d => !d.IsExternal)) d.Locked = true;
+                MarkLog.Add(room.Marks, w.Tick, $"{c.Name}: 해적 대비로 안쪽 문을 쇠막대로 막았다");
+                break;
+            case BraceKind.Decon: // v19 낙진을 씻어 낸다
+                foreach (int id in e.SceneSurvivors) _contam.Remove(id);
+                w.History.Add(w, HistoryKind.Response, $"{Ko.IGa(c.Name)} 탈출정 생존자들을 제염했다 — 이제 곁에 가도 된다", room, new[] { c }, log: true);
+                e.SceneLine = "생존자 제염 끝";
+                break;
+            case BraceKind.Logbook: // v19 깨어난 컴퓨터에게 빈 시간을 적어 준다
+                foreach (var o in w.Crew.Where(o => !o.Dead)) w.Automation.Trusts.Change(o, 0.02f, "꺼져 있던 시간을 함께 메웠다", quiet: true);
+                w.History.Add(w, HistoryKind.Recovery, $"{Ko.IGa(c.Name)} 암흑 시간 동안의 일을 주 컴퓨터에 적어 넣었다 — 빈 기억이 메워졌다", room, new[] { c }, log: true);
+                e.SceneLine = "빈 기억을 메웠다";
+                break;
             case BraceKind.Insulate: if (room != null) _insulated.Add(room.Id); break;
             case BraceKind.Pilot: _pilot = c.Id; break;
             case BraceKind.Seal:
@@ -788,6 +826,7 @@ public sealed class CosmicSystem
         if (hourly) Refine(e);
         DecideAvoid(e);
         Burn(e);
+        SceneBefore(e); // v19 고유 장면: 미리 정할 것
         switch (e.Phase)
         {
             case CosmicPhase.Forecast:
@@ -811,6 +850,7 @@ public sealed class CosmicSystem
                 if (w.Tick >= e.AfterUntil) Close(e);
                 break;
         }
+        SceneTick(e, dt, hourly); // v19 고유 장면
         // 맡았다가 손 놓은 일은 다시 내놓는다
         foreach (var t in e.Tasks)
             if (!t.Done && t.By >= 0 && (w.Crew.FirstOrDefault(c => c.Id == t.By) is not CrewMember c || c.Dead || c.Job?.Activity is not CosmicBraceActivity || w.Tick - t.ClaimedAt > SimTime.Hours(3f)))
@@ -852,7 +892,8 @@ public sealed class CosmicSystem
     public static string KindName(BraceKind k) => k switch
     {
         BraceKind.WaterWall => "물벽", BraceKind.Supplies => "물자", BraceKind.Shutters => "덮개", BraceKind.PowerDown => "장비 끄기", BraceKind.Stow => "고정",
-        BraceKind.Seal => "봉쇄", BraceKind.Fold => "바깥 설비 접기", BraceKind.Insulate => "보온", BraceKind.Pilot => "손 조종", _ => "다시 켜기",
+        BraceKind.Seal => "봉쇄", BraceKind.Fold => "바깥 설비 접기", BraceKind.Insulate => "보온", BraceKind.Pilot => "손 조종",
+        BraceKind.Barricade => "에어락 막기", BraceKind.Decon => "제염", BraceKind.Logbook => "빈 시간 적기", _ => "다시 켜기",
     };
 
     private void GhostEnd(CosmicEvent e)
@@ -907,6 +948,7 @@ public sealed class CosmicSystem
         var w = _w;
         var s = e.Spec.Stages[i];
         float p = Eff(e, s);
+        SceneStage(e, i); // v19 고유 장면
         if (p <= 0f && !(e.Avoided && (s.Fx & CosmicFx.Strike) != 0)) return;
         string text = e.Avoided && p < 0.3f ? $"{e.Spec.Name} — 비켜 간 자리에서 약하게: {s.Text}" : $"{e.Spec.Name} — {s.Text}";
         w.RaiseAlert(text, e.TargetRoom >= 0 && (s.Fx & CosmicFx.Strike) != 0 ? w.Ship.Rooms[e.TargetRoom] : null, p >= 0.5f ? AlertLevel.Critical : AlertLevel.Warning, shipWide: true);
@@ -1059,7 +1101,8 @@ public sealed class CosmicSystem
         ShakeNow = MathF.Max(ShakeNow, 1f);
         if (e.Avoided)
         {
-            w.History.Add(w, HistoryKind.Response, $"{e.Spec.Name} — 바로 곁을 스쳐 지나갔다 (항로를 바꾼 덕)", log: true);
+            w.History.Add(w, HistoryKind.Response, $"{e.Spec.Name} — 바로 곁을 스쳐 지나갔다 (항로를 바꾼 덕) · 스친 충격", log: true);
+            Shock(e, p, center); // v19 비켜도 스친 충격은 온다
             return;
         }
         if (e.TargetRoom < 0) return;
@@ -1074,6 +1117,7 @@ public sealed class CosmicSystem
         }
         Stats.Strikes++;
         foreach (var c in w.Crew.Where(c => !c.Dead && c.Room == room)) Memory.Frighten(w, c, room, 0.5f, $"{Ko.IGa(e.Spec.Name)} 들이받았다");
+        TearOff(e); // v19 큰 소행성: 그 구획을 잃는다
         w.History.Add(w, HistoryKind.Damage, $"{Ko.IGa(e.Spec.Name)} {Ko.EulReul(room.Name)} 들이받았다" + (e.Sealed ? " — 비우고 봉쇄해 둔 구획이라 다친 사람은 없다" : ""), room, log: true);
     }
 
@@ -1142,8 +1186,11 @@ public sealed class CosmicSystem
                     var r = rooms[i];
                     if (r.Detached) continue;
                     // 통합 · 통합6: 바깥 방은 예전의 네 배 남짓 (시간당 1~2Sv — 몇 시간이면 방사선 병) · 물벽은 거의 다 막고(90%), 대피소는 한 번 더 막는다 (0.15 × 0.35) · 숨지 못한 사람 · 선체 밖이 위험하다
-                    float shield = (RoomCatalog.Tags(r.Kind) & RoomTag.Shielded) != 0 ? 0.35f : 1f;
-                    float v = 4f * rp * w.Ambience.Exposure(r) * (0.6f + 0.4f * Facing(r, e, center.Value)) * (1f - 0.9f * Water(r)) * shield;
+                    // v19 감마선 줄기: 대피소 · 물벽을 뚫고 온다 (막는 건 배를 돌려 무거운 설비 뒤에 숨는 것) — 그늘이 없으면 바깥 방은 30분에 치사량
+                    bool gamma = e.Kind == CosmicKind.GammaBurst;
+                    float shield = (RoomCatalog.Tags(r.Kind) & RoomTag.Shielded) != 0 ? (gamma ? 0.6f : 0.35f) : 1f;
+                    float v = 4f * rp * w.Ambience.Exposure(r) * (0.6f + 0.4f * Facing(r, e, center.Value)) * (1f - (gamma ? 0.5f : 0.9f) * Water(r)) * shield;
+                    if (gamma) v *= (StageActive(e, 0) ? 4.5f : 1f) * Shade(r, e); // 줄기(첫 30분)는 몇 배 · 잔광은 그대로 · 줄기 그늘 (무거운 설비 뒤)
                     if (v > _rad[i]) _rad[i] = v;
                 }
                 OutsideRad = MathF.Max(OutsideRad, 10f * rp); // 통합: 우주급은 정말 생존을 건다 — 선체 밖은 시간당 수 Sv (선외 작업 중이면 바로 들어와야 산다)
@@ -1152,6 +1199,7 @@ public sealed class CosmicSystem
             if (bp > 0f) sensor = MathF.Min(sensor, MathF.Max(0.08f, 0.6f - 0.55f * bp));
             if (FxNow(e, CosmicFx.Light) > 0f) sensor = MathF.Min(sensor, 0.3f);
         }
+        Contamination(_rad); // v19 낙진을 뒤집어쓴 생존자
         SensorMul = sensor;
         NoEva = noEva;
     }
@@ -1164,7 +1212,8 @@ public sealed class CosmicSystem
             var (_, ev, size, hostile) = _launch[0];
             _launch.RemoveAt(0);
             var e = Events.FirstOrDefault(x => x.Id == ev);
-            if (e == null || e.Avoided) continue;
+            if (e == null || e.Avoided && !R.Chance(GrazeOf(e, true))) continue; // v19 비켜도 가장자리 몇 개는 온다
+            if (e.Kind == CosmicKind.PlanetRing && R.Chance(RingDodge())) continue; // v19 고리: 조종사가 피한다 (지치면 놓친다)
             var center = ShipCenter();
             var hull = w.Ship.Rooms.Where(r => !r.Detached && r.Type != RoomType.Corridor && w.Ambience.Exposure(r) > 0.5f).OrderByDescending(r => Facing(r, e, center) + R.Float() * 0.6f).ThenBy(r => r.Id).ToList();
             if (hull.Count == 0) continue;
@@ -1282,6 +1331,7 @@ public sealed class CosmicSystem
         e.Phase = CosmicPhase.After;
         e.PhaseSince = w.Tick;
         e.AfterUntil = w.Tick + SimTime.Hours(24f * R.Range(10f, 20f));
+        SceneAfter(e); // v19 고유 장면
         var live = w.Crew.Where(c => !c.Dead).ToList();
         // 대피소 vs 바깥 쪽: 실제로 얼마나 더 쬐었나
         foreach (var (id, dose, sh0) in e.Snap)
