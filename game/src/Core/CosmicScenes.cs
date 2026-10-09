@@ -85,6 +85,7 @@ public sealed partial class CosmicSystem
             case CosmicKind.GammaBurst: TurnDecision(e); break;
             case CosmicKind.PirateFleet: PirateDecision(e); break;
         }
+        Scene2Before(e); // 2단계 22종
     }
 
     /// <summary>단계가 시작되는 순간.</summary>
@@ -97,6 +98,7 @@ public sealed partial class CosmicSystem
             case CosmicKind.PlanetRing when i == 0: e.SceneNext = _w.Tick + SimTime.Minutes(R.Range(3f, 6f)); break;
             case CosmicKind.PirateFleet when i == 0 && e.SceneChoice is 0 or 3 && !e.Avoided: e.SceneNext = _w.Tick + SimTime.Minutes(R.Range(50f, 80f)); break;
         }
+        Scene2Stage(e, i);
     }
 
     /// <summary>시스템 틱마다 (모든 단계).</summary>
@@ -111,6 +113,7 @@ public sealed partial class CosmicSystem
             case CosmicKind.PirateFleet: BoardTick(e); break;
             case CosmicKind.ReactorBlast: PodTick(e); break;
         }
+        Scene2Tick(e, dt, hourly);
     }
 
     /// <summary>재난이 지나간 순간 (후유증으로 넘어갈 때).</summary>
@@ -118,6 +121,7 @@ public sealed partial class CosmicSystem
     {
         var w = _w;
         if (e.Kind == CosmicKind.BlackHoleTide) _strain.Clear();
+        Scene2After(e);
         switch (e.Kind)
         {
             case CosmicKind.MagnetarStorm: if (e.DarkUntil > w.Tick) LightsBack(e); break;
@@ -136,6 +140,7 @@ public sealed partial class CosmicSystem
         if (e.Kind == CosmicKind.PirateFleet && e.SceneChoice is 0 or 3)
             foreach (var air in w.Ship.RoomsOf(RoomType.Airlock).Where(r => !r.Detached).OrderBy(r => r.Id).Take(2))
                 AddTask(e, BraceKind.Barricade, air.Id, -1, 0.5f, $"{air.Name} 안쪽 문 막기 (쇠막대 · 용접)");
+        Scene2Plan(e);
     }
 
     // ───────────────────────────── 감마선: 배를 방패로 ─────────────────────────────

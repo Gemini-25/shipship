@@ -1168,6 +1168,9 @@ public partial class ShipView
                         }
                     }
                     break;
+                default:
+                    PaintCosmicScenes2(ci, e); // v19 2단계 22종
+                    break;
             }
         }
         // 낙진을 뒤집어쓴 사람: 초록 반짝임 (제염 전까지)

@@ -1019,6 +1019,14 @@ public partial class Main : Node2D
                     Player.Hazard(Sim, hk, at, hid);
                     break;
                 }
+                case "--cosmic":
+                {
+                    // v19 화면 확인용: --cosmic=PulsarBeam:0.5 (우주급 재난 · 몇 시간 뒤 도착 — 기록된다)
+                    var bits = value.Split(':');
+                    if (Enum.TryParse<CosmicKind>(bits[0], out var ck))
+                        Player.Cosmic(Sim, ck, bits.Length > 1 ? float.Parse(bits[1], CultureInfo.InvariantCulture) : 1f);
+                    break;
+                }
                 case "--airlow":
                     // v11.2 화면 확인용: 공기 탱크를 그 비율로 (조난 신호 장면) — 기록되지 않는다
                     Sim.Air.Reserve = Sim.Air.ReserveCapacity * float.Parse(value, CultureInfo.InvariantCulture);

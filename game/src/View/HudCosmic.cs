@@ -153,6 +153,7 @@ public partial class Hud
             case BraceKind.Barricade: DrawLine(c - new Vector2(3.5f, 3.5f), c + new Vector2(3.5f, 3.5f), col, 1.5f); DrawLine(c + new Vector2(-3.5f, 3.5f), c + new Vector2(3.5f, -3.5f), col, 1.5f); this.Box(new Rect2(c - new Vector2(3.5f, 3.5f), new Vector2(7f, 7f)), col, false, 1f); break;
             case BraceKind.Decon: for (int i = -1; i <= 1; i++) this.Circle(c + new Vector2(i * 2.4f, 1.5f + (i & 1)), 1.1f, col, true, -1f, true); DrawLine(c + new Vector2(-3.5f, -3f), c + new Vector2(3.5f, -3f), col, 1f); break;
             case BraceKind.Logbook: this.Box(new Rect2(c - new Vector2(3f, 4f), new Vector2(6f, 8f)), col, false, 1f); for (int i = -1; i <= 1; i++) DrawLine(c + new Vector2(-1.8f, i * 2f), c + new Vector2(1.8f, i * 2f), col, 1f); break;
+            case BraceKind.Rig: DrawLine(c + new Vector2(-3.5f, 3.5f), c + new Vector2(2f, -2f), col, 1.5f); this.Arc(c + new Vector2(2.2f, -2.2f), 1.8f, Mathf.Pi * 0.75f, Mathf.Pi * 2.25f, 8, col, 1f, true); break;
             case BraceKind.Pilot: this.Arc(c, 3.2f, 0f, Mathf.Tau, 12, col, 1f, true); DrawLine(c - new Vector2(3.2f, 0), c + new Vector2(3.2f, 0), col, 1f); DrawLine(c, c + new Vector2(0, 3.2f), col, 1f); break;
         }
     }

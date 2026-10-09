@@ -51,6 +51,13 @@ internal static class CosmicCrew
                 if (!felt) continue;
                 burning = true;
             }
+            // v19 펄서: 빔 사이엔 움직인다 (다음 빔 4분 전에 엎드린다)
+            if (e.Kind == CosmicKind.PulsarBeam && e.Phase == CosmicPhase.Impact && cs.FxNow(e, CosmicFx.Radiation) > 0f && !cs.PulseNow(e))
+            {
+                float wait = cs.PulseWait(e);
+                if (wait > 4f) continue;
+                return (e, 1f, $"{e.Spec.Name} — {wait:0}분 뒤 다음 빔");
+            }
             long harm = cs.NextHarm(e);
             if (harm == long.MaxValue) continue;
             float lead = cs.Follows(c, CosmicCustomKind.Drill) ? 1.6f : 1f;
@@ -74,11 +81,12 @@ public sealed class CosmicEvacuateActivity : Activity
     private static CosmicEvent? Target(CrewMember c, World w) =>
         c.Room == null ? null
         : w.Cosmic.Straining(c.Room) ? w.Cosmic.Events.FirstOrDefault(e => e.Kind == CosmicKind.BlackHoleTide && e.Phase == CosmicPhase.Impact) // v19 조석: 연결부가 버티지 못하는 방
+        : w.Cosmic.Scorching(c.Room) ? w.Cosmic.Events.FirstOrDefault(e => e.Kind == CosmicKind.FusionRunaway && e.Phase is CosmicPhase.Brace or CosmicPhase.Impact) // v19 배기 불꽃이 스칠 쪽
         : w.Cosmic.Events.FirstOrDefault(e => e.SealPlan && !e.Avoided && e.Phase <= CosmicPhase.Impact && w.Tick < e.Arrive + SimTime.Minutes(10)
             && (e.TargetRoom == c.Room.Id || e.Evac.Contains(c.Room.Id) && w.Tick >= e.Arrive - SimTime.Hours(2f)));
 
     /// <summary>지금 비워야 하는 방인가 (봉쇄할 구획 · 마지막 두 시간의 파편 줄) — 머물지도 지나가지도 않는다.</summary>
-    public static bool Emptying(Room r, World w) => w.Cosmic.Straining(r) || w.Cosmic.Events.Any(e => e.SealPlan && !e.Avoided && e.Phase <= CosmicPhase.Impact && w.Tick < e.Arrive + SimTime.Minutes(10)
+    public static bool Emptying(Room r, World w) => w.Cosmic.Straining(r) || w.Cosmic.Scorching(r) || w.Cosmic.Events.Any(e => e.SealPlan && !e.Avoided && e.Phase <= CosmicPhase.Impact && w.Tick < e.Arrive + SimTime.Minutes(10)
         && (e.TargetRoom == r.Id || e.Evac.Contains(r.Id) && w.Tick >= e.Arrive - SimTime.Hours(2f))); // v19 조석: 연결부가 버티지 못하는 방
 
     /// <summary>이 길이 비우는 방을 지나가나.</summary>
@@ -104,14 +112,15 @@ public sealed class CosmicEvacuateActivity : Activity
         if (!CosmicCrew.Free(c) || Target(c, w) is not CosmicEvent e) return (0f, "—");
         // 봉쇄할 구획의 문 앞에서 막고 있는 사람은 다 막고 나서 간다 (문간 바깥 — 그 구획 안이 아니면)
         if (c.Room!.Id != e.TargetRoom && c.Job?.Activity is CosmicBraceActivity && CosmicBraceActivity.Mine(c, w) is { t.Kind: BraceKind.Seal } m && m.e == e) return (0f, "봉쇄하는 중");
-        return (1.05f, e.Kind == CosmicKind.BlackHoleTide ? $"{e.Spec.Name} — {c.Room!.Name} 연결부가 버티지 못한다 · 나간다" : $"{e.Spec.Name} 충돌 예상 — {c.Room!.Name}에서 나간다");
+        return (1.05f, e.Kind == CosmicKind.BlackHoleTide ? $"{e.Spec.Name} — {c.Room!.Name} 연결부가 버티지 못한다 · 나간다"
+            : e.Kind == CosmicKind.FusionRunaway ? $"{e.Spec.Name} — 배기 불꽃이 스칠 쪽 · {c.Room!.Name}에서 나간다" : $"{e.Spec.Name} 충돌 예상 — {c.Room!.Name}에서 나간다");
     }
 
     public override Job? Plan(CrewMember c, World w, DistanceField dist)
     {
         if (Target(c, w) is not CosmicEvent e) return null;
         var here = c.Room!;
-        foreach (var r in w.Ship.Rooms.Where(r => r != here && !r.Detached && !r.Abandoned && !r.Leaking && !InLine(r, w) && !w.Cosmic.Straining(r)).OrderBy(r => (r.Center - here.Center).LengthSquared()).ThenBy(r => r.Id))
+        foreach (var r in w.Ship.Rooms.Where(r => r != here && !r.Detached && !r.Abandoned && !r.Leaking && !InLine(r, w) && !w.Cosmic.Straining(r) && !w.Cosmic.Scorching(r)).OrderBy(r => (r.Center - here.Center).LengthSquared()).ThenBy(r => r.Id))
         {
             if (CosmicCrew.SpotIn(r, c, w, dist) is not Cell at) continue;
             return new Job(this, "구획 비우기", new List<Toil> { new GotoToil(at), new WaitToil(SimTime.Minutes(5), Pose.Standing) })
@@ -216,6 +225,9 @@ public sealed class CosmicBraceActivity : Activity
         if (first.t == null) return (0f, "—");
         var (e, t) = first;
         if (t.Kind == BraceKind.Restart) return (0.55f, $"{e.Spec.Name} 지나감 — 꺼 둔 장비를 다시 켠다");
+        // v19 닥친 뒤의 장면 일 (관측 · 창 갈기 · 방전 막대): 급하지 않다 — 불 · 구멍 · 경보가 있으면 뒤로 (미리내호: 공기가 새는 동안 관측만 하러 갔다)
+        if (t.Late && e.Phase >= CosmicPhase.Impact)
+            return Crisis.Acting(w) || w.Ship.Rooms.Any(r => r.Leaking && !r.Detached && !r.Abandoned) ? (0.04f, $"{e.Spec.Name} — {t.Label} (비상이 끝나면)") : (0.32f, $"{e.Spec.Name} — {t.Label}");
         var cs = w.Cosmic;
         float hours = e.HoursTo(w.Tick, e.Predicted);
         float urg = Math.Clamp(1f - hours / MathF.Max(1f, cs.BraceLead(e)), 0f, 1f);

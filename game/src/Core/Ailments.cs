@@ -104,7 +104,13 @@ public sealed class AilmentSystem
         new("pkdep", "진통제 의존", AilmentGroup.Mind, "진통제를 오래 · 자주 먹었다", "약이 떨어지면 안절부절 · 잠을 설친다", 8f, 0.4f, Chronic: true, Stress: 0.03f, Sleep: 0.2f, Cure: Cure.Company),
     };
 
-    private static readonly Dictionary<string, AilmentSpec> ById = All.Concat(Med1).ToDictionary(a => a.Id);
+    // v19 우주급 재난이 남기는 것 (목록 30에는 넣지 않는다)
+    public static readonly AilmentSpec[] Cosmic1 =
+    {
+        new("flashblind", "섬광 실명", AilmentGroup.Body, "반물질 · 핵 섬광을 맨눈으로", "앞이 하얗다 — 더듬어 걷고 손일이 굼뜨다", 1.5f, 0.6f, Stress: 0.03f, Work: 0.5f, Walk: 0.4f, Cure: Cure.Rest),
+    };
+
+    private static readonly Dictionary<string, AilmentSpec> ById = All.Concat(Med1).Concat(Cosmic1).ToDictionary(a => a.Id);
     public static AilmentSpec Spec(string id) => ById.TryGetValue(id, out var s) ? s : Fever;
 
     private readonly World _w;

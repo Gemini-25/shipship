@@ -410,7 +410,7 @@ public sealed partial class WorkBoard
 
     public IEnumerable<WorkOrder> AvailableTo(CrewMember c) =>
         _open.Values.Where(o => !o.Closed && (o.Assignee == null || o.Assignee == c) && o.Drone == null && (o.Robot == null || RobotSystem.Joinable(o))
-                                && o.BlockedUntil <= _world.Tick && Council.Cleared(o));
+                                && (o.BlockedUntil <= _world.Tick || SuitBlock(o) && c.Suit is { Oxygen: > 0.5f }) && Council.Cleared(o)); // v19 우주복이 없어 미룬 일은 우주복을 입은 사람이 바로 맡는다 (맨몸인 사람이 미룰 때마다 15분씩 모두에게 막혔다)
 
     /// <summary>드론이 맡을 수 있는 열린 일 (v8).</summary>
     internal IEnumerable<WorkOrder> OpenFor(Drone d) =>

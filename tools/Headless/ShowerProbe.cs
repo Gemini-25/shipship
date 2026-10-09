@@ -75,6 +75,7 @@ public static partial class Program
         int breaches0 = w.Ship.Walls.Sum(kv => kv.Value.Breaches), seals0 = w.Ship.Walls.Sum(kv => kv.Value.Seals);
         long start = w.Tick;
         string? what;
+        long arrive = start;
         if (kind == "None") what = "대조"; // 아무 일도 걸지 않는다 (평소 사망 · 구멍)
         else if (Enum.TryParse<HazardKind>(kind, out var hk)) what = Hazards.Apply(w, hk, default, -1);
         else if (Enum.TryParse<CosmicKind>(kind, out var ck))
@@ -83,6 +84,7 @@ public static partial class Program
             bool natural = Environment.GetEnvironmentVariable("SHOWER_LEAD") == "natural";
             if (float.TryParse(Environment.GetEnvironmentVariable("SHOWER_PROPELLANT"), out var prop)) w.Propulsion.Propellant = prop; // 추진제가 바닥난 배 (비키기 · 자세 제어 못 함)
             var ce = w.Cosmic.Force(ck, natural ? null : 1f);
+            arrive = ce.Arrive;
             if (natural) hours = Math.Max(hours, (int)MathF.Ceiling((ce.Arrive - w.Tick) / (float)SimTime.TicksPerHour + ce.Spec.Span + (float.TryParse(Environment.GetEnvironmentVariable("SHOWER_AFTER"), out var af) ? af : 6f)));
             what = kind;
         }
@@ -155,6 +157,13 @@ public static partial class Program
                     Console.WriteLine("        거치대: " + string.Join(" / ", w.Ship.FurnitureOf(FurnitureType.DroneDock).Select(f => $"실링폼{f.Storage?.Count(ItemKind.Sealant)} 금속판{f.Storage?.Count(ItemKind.Plate)}")) + $" · 배 실링폼 {w.Ship.CountStored(ItemKind.Sealant)} 금속판 {w.Ship.CountStored(ItemKind.Plate)}");
                     Console.WriteLine("        봉합 일감: " + string.Join(" / ", w.Board.All.Where(o => o.Kind == WorkKind.SealBreach && !o.Closed).Select(o => $"{o.Target.Room?.Name} 급{o.Urgency:0.00} 사람:{o.Assignee?.Name ?? "-"} 드론:{o.Drone?.Name ?? "-"}")));
                 }
+                if (Environment.GetEnvironmentVariable("SHOWER_CREW") == "1")
+                {
+                    Console.WriteLine("        사람: " + string.Join(" / ", w.Crew.Where(c => !c.Dead).Select(c => $"{c.Name}@{c.Room?.Name}:{(c.Down ? "쓰러짐 " : "")}{c.Job?.Label ?? "-"}<{c.Job?.Activity?.Id}> 산소{c.Vitals.Oxygen:0.00} 기력{c.Needs.Rest:0.00}{(c.Suit != null ? " 우주복" : "")} 왜:{c.JobReason}")));
+                    Console.WriteLine("        보급 일감: " + string.Join(" / ", w.Board.All.Where(o => !o.Closed && o.Kind is WorkKind.StockDock).Select(o => $"{o.Target.CurrentRoom?.Name} {o.Product} 급{o.Urgency:0.00} 사람:{o.Assignee?.Name ?? "-"} 로봇:{o.Robot?.Name ?? "-"} 막힘:{o.BlockedReason}")));
+                    foreach (var c in w.Crew.Where(c => !c.Dead && !c.Down).Take(2))
+                        Console.WriteLine($"        {c.Name} 판단: " + string.Join(" · ", (c.LastEvaluations ?? (IReadOnlyList<Evaluation>)Array.Empty<Evaluation>()).Take(4).Select(e => $"{e.Activity.Id} {e.Score:0.00} ({e.Reason})")));
+                }
                 if (Environment.GetEnvironmentVariable("SHOWER_WALLS") is string wr)
                     foreach (var (cell, wall) in w.Ship.Walls)
                         if (Hull.EffectiveBreach(wall) > 0f && (wr == "*" || wall.IsHull && Cell.Dirs4.Any(d => w.Ship.RoomAt(cell + d)?.Name == wr)))
@@ -197,6 +206,8 @@ public static partial class Program
         r.Avoided = w.Cosmic.Events.Any(e => e.Avoided);
         r.Scene = string.Join(" | ", w.Cosmic.Events.Select(e => $"선택 {e.SceneChoice} · 횟수 {e.SceneCount} · 늘어남 {e.Stretch:0.00} · 어긋남 {e.DriftMin:0}분 · 생존자 {e.SceneSurvivors.Count} · 장면일 {string.Join(",", e.Tasks.Where(t => t.Kind is BraceKind.Barricade or BraceKind.Decon or BraceKind.Logbook).Select(t => $"{CosmicSystem.KindName(t.Kind)}{(t.Done ? "✓" : "")}"))} · 대비 {e.Tasks.Count(t => t.Done)}/{e.Tasks.Count}{(Environment.GetEnvironmentVariable("SHOWER_TASKS") == "1" ? " [" + string.Join(",", e.Tasks.Select(t => t.Label + (t.Done ? "✓" : "✗"))) + "]" : "")}"))
             + " · 기록: " + string.Join(" / ", w.History.Events.Where(h => h.Tick >= start && (h.Text.Contains("해적") || h.Text.Contains("탈출정") || h.Text.Contains("돌렸다") || h.Text.Contains("떼어") || h.Text.Contains("뜯어") || h.Text.Contains("암흑") || h.Text.Contains("블랙홀") || h.Text.Contains("제염") || h.Text.Contains("주 컴퓨터에 적어"))).Select(h => h.Text).Distinct().Take(6));
+        if (Environment.GetEnvironmentVariable("SHOWER_HIST") == "1")
+            r.Scene += " · 연대기: " + string.Join(" / ", w.History.Events.Where(h => h.Tick >= arrive - SimTime.Hours(3) && h.Kind is not (HistoryKind.Bond or HistoryKind.Memory or HistoryKind.Lesson or HistoryKind.Maintenance)).Select(h => $"{SimTime.Clock(h.Tick)} {h.Text}").Distinct().Take(24));
         r.Fuel = w.Cosmic.Events.Sum(e => e.FuelSpent);
         r.Seals = w.Ship.Walls.Sum(kv => kv.Value.Seals) - seals0;
         if (verbose)

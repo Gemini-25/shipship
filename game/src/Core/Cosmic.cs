@@ -13,7 +13,7 @@ namespace ShipSim.Core;
 
 public enum CosmicPhase { Forecast, Brace, Impact, After, Done }
 
-public enum BraceKind { WaterWall, Supplies, Shutters, PowerDown, Stow, Seal, Fold, Insulate, Pilot, Restart, Barricade, Decon, Logbook } // v19 막기 · 제염 · 빈 시간 적기 (CosmicScenes.cs)
+public enum BraceKind { WaterWall, Supplies, Shutters, PowerDown, Stow, Seal, Fold, Insulate, Pilot, Restart, Barricade, Decon, Logbook, Rig } // v19 막기 · 제염 · 빈 시간 적기 (CosmicScenes.cs)
 
 /// <summary>대비 일 하나 (사람이 가서 한다).</summary>
 public sealed class BraceTask
@@ -31,6 +31,8 @@ public sealed class BraceTask
     public bool Done { get; set; }
     public string DoneBy { get; set; } = "";
     public long DoneAt { get; set; } = -1;
+    /// <summary>v19 지나간 뒤에도 열려 있는 장면 일 (젖빛 창 갈기 · 관측).</summary>
+    public bool Late { get; init; }
 }
 
 /// <summary>우주 대재난 하나.</summary>
@@ -696,7 +698,7 @@ public sealed partial class CosmicSystem
     public bool Open(CosmicEvent e, BraceTask t)
     {
         if (t.Done || t.By >= 0) return false;
-        if (t.Kind is BraceKind.Logbook or BraceKind.Decon) return true; // v19 지나간 뒤의 일
+        if (t.Kind is BraceKind.Logbook or BraceKind.Decon || t.Late) return true; // v19 지나간 뒤의 일
         if (t.Kind == BraceKind.Restart) return e.Phase == CosmicPhase.After || e.Phase == CosmicPhase.Done;
         if (e.Phase != CosmicPhase.Brace && !(e.Phase == CosmicPhase.Impact && _w.Tick < NextHarm(e))) return false;
         if (t.Last && _w.Tick < PredictedHarm(e) - SimTime.Hours(1f)) return false;
@@ -725,6 +727,7 @@ public sealed partial class CosmicSystem
                 break;
             }
             case BraceKind.Supplies: if (room != null) _supplied.Add(room.Id); break;
+            case BraceKind.Rig: RigDone(t, c); break; // v19 장면 준비 (CosmicScenes2.cs)
             case BraceKind.Shutters: if (room != null) _shut.Add(room.Id); break;
             case BraceKind.PowerDown:
             {
@@ -808,6 +811,7 @@ public sealed partial class CosmicSystem
         if (!Active.Any(e => e.Phase <= CosmicPhase.Impact))
         {
             if (_shut.Count > 0 || _stowed.Count > 0 || _insulated.Count > 0 || _folded || _pilot >= 0 || _supplied.Count > 0) { _shut.Clear(); _stowed.Clear(); _insulated.Clear(); _supplied.Clear(); _folded = false; _pilot = -1; }
+            Scene2Reset(); // v19 장면 준비 (덮개 · 관 비움 · 덧댐 · 오류 정정 · 방전 막대)
             if (_water.Count > 0 && hourly)
             {
                 // 물벽 물은 천천히 탱크로 돌려 붓는다 (조금은 버린다)
@@ -893,7 +897,7 @@ public sealed partial class CosmicSystem
     {
         BraceKind.WaterWall => "물벽", BraceKind.Supplies => "물자", BraceKind.Shutters => "덮개", BraceKind.PowerDown => "장비 끄기", BraceKind.Stow => "고정",
         BraceKind.Seal => "봉쇄", BraceKind.Fold => "바깥 설비 접기", BraceKind.Insulate => "보온", BraceKind.Pilot => "손 조종",
-        BraceKind.Barricade => "에어락 막기", BraceKind.Decon => "제염", BraceKind.Logbook => "빈 시간 적기", _ => "다시 켜기",
+        BraceKind.Barricade => "에어락 막기", BraceKind.Decon => "제염", BraceKind.Logbook => "빈 시간 적기", BraceKind.Rig => "장면 준비", _ => "다시 켜기",
     };
 
     private void GhostEnd(CosmicEvent e)
@@ -970,7 +974,7 @@ public sealed partial class CosmicSystem
         if ((s.Fx & CosmicFx.Shock) != 0) Shock(e, p, center);
         if ((s.Fx & CosmicFx.Emp) != 0) Emp(e, p);
         if ((s.Fx & CosmicFx.Strike) != 0) Strike(e, p, center);
-        if ((s.Fx & (CosmicFx.Debris | CosmicFx.Hostile)) != 0 && p > 0f)
+        if ((s.Fx & (CosmicFx.Debris | CosmicFx.Hostile)) != 0 && p > 0f && e.Kind != CosmicKind.MineField) // v19 기뢰는 하나하나 장면으로
         {
             bool hostile = (s.Fx & CosmicFx.Hostile) != 0;
             int n = Math.Min(14, (int)MathF.Round((hostile ? 2f : 2.6f) * s.Hours * p) + 1);
@@ -1191,6 +1195,7 @@ public sealed partial class CosmicSystem
                     float shield = (RoomCatalog.Tags(r.Kind) & RoomTag.Shielded) != 0 ? (gamma ? 0.6f : 0.35f) : 1f;
                     float v = 4f * rp * w.Ambience.Exposure(r) * (0.6f + 0.4f * Facing(r, e, center.Value)) * (1f - (gamma ? 0.5f : 0.9f) * Water(r)) * shield;
                     if (gamma) v *= (StageActive(e, 0) ? 4.5f : 1f) * Shade(r, e); // 줄기(첫 30분)는 몇 배 · 잔광은 그대로 · 줄기 그늘 (무거운 설비 뒤)
+                    if (e.Kind == CosmicKind.PulsarBeam) v *= PulseNow(e) ? 1.8f : 0.03f; // v19 펄서: 빔이 지나갈 때만
                     if (v > _rad[i]) _rad[i] = v;
                 }
                 OutsideRad = MathF.Max(OutsideRad, 10f * rp); // 통합: 우주급은 정말 생존을 건다 — 선체 밖은 시간당 수 Sv (선외 작업 중이면 바로 들어와야 산다)
@@ -1219,7 +1224,11 @@ public sealed partial class CosmicSystem
             if (hull.Count == 0) continue;
             var room = hull[0];
             var target = room.Cells[R.Range(0, room.Cells.Count)];
-            if (w.Sensors.Launch(target, size) != null) e.Hits++;
+            if (w.Sensors.Launch(target, size) != null)
+            {
+                e.Hits++;
+                if (e.Kind == CosmicKind.ShatteredPlanet && R.Chance(0.35f)) { Ignite(room); e.Fires++; } // v19 달아오른 파편이 불을 붙인다
+            }
         }
     }
 

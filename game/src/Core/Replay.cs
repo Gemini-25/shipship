@@ -135,6 +135,13 @@ public static class Player
         return Hazards.Apply(w, kind, at, id);
     }
 
+    /// <summary>v19: 우주급 재난을 건다 (화면 확인 · 관찰자) — 몇 시간 뒤 도착. 기록되어 불러오기가 같은 틱에 같은 재난을 건다.</summary>
+    public static CosmicEvent Cosmic(World w, CosmicKind kind, float leadHours)
+    {
+        Record(w, "cosmic", $"{kind} {leadHours.ToString("R", Inv)}");
+        return w.Cosmic.Force(kind, leadHours, source: "관찰자");
+    }
+
     /// <summary>불러올 때: 기록된 일을 그대로 다시 한다 (다시 기록도 된다 → 불러온 뒤 또 저장할 수 있다).</summary>
     public static void Apply(World w, PlayerCommand cmd)
     {
@@ -166,6 +173,9 @@ public static class Player
             }
             case "breaktype":
                 BreakAll(w, a[0], a.Length > 1 && a[1] == "1", a.Length > 2 ? Enum.Parse<FaultKind>(a[2]) : null);
+                break;
+            case "cosmic":
+                Cosmic(w, Enum.Parse<CosmicKind>(a[0]), float.Parse(a[1], Inv));
                 break;
             case "hazard":
                 Hazard(w, Enum.Parse<HazardKind>(a[0]), new Cell(int.Parse(a[1], Inv), int.Parse(a[2], Inv)), a.Length > 3 ? int.Parse(a[3], Inv) : -1);
