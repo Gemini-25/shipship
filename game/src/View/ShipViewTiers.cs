@@ -35,10 +35,10 @@ public partial class ShipView
                 {
                     float ph = Mathf.PosMod(t * (0.25f + 0.05f * k) + k * 0.37f, 1f);
                     var p = new Vector2(tank.Position.X + tank.Size.X * (0.15f + 0.7f * Hash(f.Id, k, 3)), tank.End.Y - tank.Size.Y * ph);
-                    ci.DrawCircle(p, 1.2f + 1.3f * Hash(f.Id, k, 4), new Color("#c8ffb0").WithAlpha(0.7f * (1f - ph) * a), true, -1f, true);
+                    ci.Circle(p, 1.2f + 1.3f * Hash(f.Id, k, 4), new Color("#c8ffb0").WithAlpha(0.7f * (1f - ph) * a), true, -1f, true);
                 }
                 float sw = Mathf.Sin(t * 0.7f) * 4f;
-                ci.DrawArc(c + new Vector2(sw, 0), tank.Size.Y * 0.28f, 0.3f, 2.6f, 16, new Color("#3fb24e").WithAlpha(0.5f * a), 2f, true);
+                ci.Arc(c + new Vector2(sw, 0), tank.Size.Y * 0.28f, 0.3f, 2.6f, 16, new Color("#3fb24e").WithAlpha(0.5f * a), 2f, true);
                 break;
             }
             case FurnitureType.OxygenGenerator:
@@ -47,7 +47,7 @@ public partial class ShipView
                 var tube = new Rect2(c.X - 6, r.Position.Y + 7, 12, r.Size.Y - 14);
                 Gfx.RoundRect(ci, tube, new Color("#2a1a12"), 5, new Color("#ff9a5c").WithAlpha(0.8f * a), 1);
                 float glow = 0.5f + 0.5f * Mathf.Sin(t * 2.2f);
-                ci.DrawRect(tube.Grow(-3f), new Color("#ff7a3c").WithAlpha((0.25f + 0.25f * glow) * a));
+                ci.Box(tube.Grow(-3f), new Color("#ff7a3c").WithAlpha((0.25f + 0.25f * glow) * a));
                 for (int k = 0; k < 5; k++)
                 {
                     float y = tube.Position.Y + 4 + k * (tube.Size.Y - 8) / 4f;
@@ -59,13 +59,13 @@ public partial class ShipView
             {
                 // 폐쇄 순환: 파랗게 도는 흐름 고리
                 float rad = Mathf.Min(r.Size.X, r.Size.Y) * 0.32f;
-                ci.DrawArc(c, rad, 0f, Mathf.Tau, 32, new Color("#3a8fd9").WithAlpha(0.35f * a), 3f, true);
+                ci.Arc(c, rad, 0f, Mathf.Tau, 32, new Color("#3a8fd9").WithAlpha(0.35f * a), 3f, true);
                 for (int k = 0; k < 3; k++)
                 {
                     float ang = (on ? t * 1.6f : 0f) + k * Mathf.Tau / 3f;
-                    ci.DrawArc(c, rad, ang, ang + 0.7f, 10, new Color("#9ad0ff").WithAlpha(0.9f * a), 3f, true);
+                    ci.Arc(c, rad, ang, ang + 0.7f, 10, new Color("#9ad0ff").WithAlpha(0.9f * a), 3f, true);
                     var tip = c + Vector2.FromAngle(ang + 0.7f) * rad;
-                    ci.DrawCircle(tip, 2.2f, new Color("#d8f0ff").WithAlpha(a), true, -1f, true);
+                    ci.Circle(tip, 2.2f, new Color("#d8f0ff").WithAlpha(a), true, -1f, true);
                 }
                 break;
             }
@@ -73,7 +73,7 @@ public partial class ShipView
             {
                 // 증기 압축: 도는 압축기와 김
                 var hub = new Vector2(r.End.X - 12, r.Position.Y + 12);
-                ci.DrawCircle(hub, 7f, new Color("#1a2330"), true, -1f, true);
+                ci.Circle(hub, 7f, new Color("#1a2330"), true, -1f, true);
                 for (int k = 0; k < 4; k++)
                 {
                     var d = Vector2.FromAngle((on ? t * 7f : 0.3f) + k * Mathf.Pi / 2f);
@@ -83,7 +83,7 @@ public partial class ShipView
                     for (int k = 0; k < 3; k++)
                     {
                         float ph = Mathf.PosMod(t * 0.6f + k / 3f, 1f);
-                        ci.DrawCircle(hub + new Vector2(Mathf.Sin(t + k) * 3f, -8f - 14f * ph), 2f + 3f * ph, new Color(1, 1, 1, 0.25f * (1f - ph)), true, -1f, true);
+                        ci.Circle(hub + new Vector2(Mathf.Sin(t + k) * 3f, -8f - 14f * ph), 2f + 3f * ph, new Color(1, 1, 1, 0.25f * (1f - ph)), true, -1f, true);
                     }
                 break;
             }
@@ -95,7 +95,7 @@ public partial class ShipView
                 {
                     float ph = Mathf.PosMod(t * 0.5f + k * 0.13f, 1f);
                     var p = new Vector2(r.Position.X + 6 + (r.Size.X - 12) * Hash(f.Id, k, 7), r.End.Y - 5 - 8f * ph);
-                    ci.DrawCircle(p, 2f + 3f * ph, new Color(0.85f, 0.95f, 1f, 0.18f * (1f - ph)), true, -1f, true);
+                    ci.Circle(p, 2f + 3f * ph, new Color(0.85f, 0.95f, 1f, 0.18f * (1f - ph)), true, -1f, true);
                 }
                 ci.DrawLine(new Vector2(r.Position.X + 5, r.End.Y - 4), new Vector2(r.End.X - 5, r.End.Y - 4), new Color("#9fb4cc").WithAlpha(0.6f), 1.2f);
                 break;
@@ -105,8 +105,8 @@ public partial class ShipView
                 // LED 광원 막대 (보랏빛)
                 float pulse = 0.7f + 0.3f * Mathf.Sin(t * 1.5f);
                 var bar = new Rect2(r.Position.X + 4, r.Position.Y + 2, r.Size.X - 8, 3);
-                ci.DrawRect(bar, new Color("#c77dff").WithAlpha(0.85f * pulse * a));
-                ci.DrawRect(new Rect2(bar.Position.X, bar.End.Y, bar.Size.X, 10), new Color("#c77dff").WithAlpha(0.08f * pulse * a));
+                ci.Box(bar, new Color("#c77dff").WithAlpha(0.85f * pulse * a));
+                ci.Box(new Rect2(bar.Position.X, bar.End.Y, bar.Size.X, 10), new Color("#c77dff").WithAlpha(0.08f * pulse * a));
                 break;
             }
             case FurnitureType.Battery when m.Tier >= 3:
@@ -114,9 +114,9 @@ public partial class ShipView
                 // 초전도 저장고: 서리 낀 파란 고리
                 float rad = Mathf.Min(r.Size.X, r.Size.Y) * 0.3f;
                 for (int k = 0; k < 2; k++)
-                    ci.DrawArc(c, rad - k * 4f, (on ? t * (k == 0 ? 0.8f : -1.1f) : 0f), (on ? t * (k == 0 ? 0.8f : -1.1f) : 0f) + 4.5f, 24,
+                    ci.Arc(c, rad - k * 4f, (on ? t * (k == 0 ? 0.8f : -1.1f) : 0f), (on ? t * (k == 0 ? 0.8f : -1.1f) : 0f) + 4.5f, 24,
                         new Color("#a8e6ff").WithAlpha(0.75f * a), 2f, true);
-                ci.DrawCircle(c, rad * 0.4f, new Color("#e8fbff").WithAlpha(0.35f * a), true, -1f, true);
+                ci.Circle(c, rad * 0.4f, new Color("#e8fbff").WithAlpha(0.35f * a), true, -1f, true);
                 break;
             }
             case FurnitureType.Battery:
@@ -128,7 +128,7 @@ public partial class ShipView
                 {
                     var cell = new Rect2(r.Position.X + 6 + k * (r.Size.X - 12) / cells, r.Position.Y + 6, (r.Size.X - 12) / cells - 2, 5);
                     bool lit = charge > (k + 0.5f) / cells;
-                    ci.DrawRect(cell, (lit ? new Color("#5fe0d0") : new Color("#1d2b30")).WithAlpha(lit ? 0.85f * a : 0.8f));
+                    ci.Box(cell, (lit ? new Color("#5fe0d0") : new Color("#1d2b30")).WithAlpha(lit ? 0.85f * a : 0.8f));
                 }
                 break;
             }
@@ -137,13 +137,13 @@ public partial class ShipView
                 // 적층 제조기: 층이 쌓이는 출력물과 노즐
                 float prog = on && m.Active ? Mathf.PosMod(t * 0.15f, 1f) : 0.4f;
                 var bed = new Rect2(c.X - 9, r.End.Y - 8, 18, 3);
-                ci.DrawRect(bed, new Color("#2f3a48"));
+                ci.Box(bed, new Color("#2f3a48"));
                 int layers = 1 + (int)(prog * 6);
                 for (int k = 0; k < layers; k++)
-                    ci.DrawRect(new Rect2(c.X - 7 + k * 0.5f, bed.Position.Y - 2 - k * 2, 14 - k, 2), new Color("#e0b64a").WithAlpha(0.8f));
+                    ci.Box(new Rect2(c.X - 7 + k * 0.5f, bed.Position.Y - 2 - k * 2, 14 - k, 2), new Color("#e0b64a").WithAlpha(0.8f));
                 var nozzle = new Vector2(c.X - 6 + 12 * Mathf.PosMod(t * 1.3f, 1f), bed.Position.Y - 3 - layers * 2);
                 ci.DrawLine(new Vector2(nozzle.X, r.Position.Y + 4), nozzle, new Color("#8b949e"), 1f);
-                ci.DrawCircle(nozzle, 1.6f, new Color("#ffb070").WithAlpha(on ? 1f : 0.3f), true, -1f, true);
+                ci.Circle(nozzle, 1.6f, new Color("#ffb070").WithAlpha(on ? 1f : 0.3f), true, -1f, true);
                 break;
             }
             case FurnitureType.Workbench:
@@ -151,18 +151,18 @@ public partial class ShipView
                 // CNC 공작기: 오가는 가공 머리와 레이저 점
                 float x = r.Position.X + 8 + (r.Size.X - 16) * (0.5f + 0.5f * Mathf.Sin(on && m.Active ? t * 2f : 0f));
                 ci.DrawLine(new Vector2(r.Position.X + 5, r.Position.Y + 6), new Vector2(r.End.X - 5, r.Position.Y + 6), new Color("#5a6678"), 2f);
-                ci.DrawRect(new Rect2(x - 3, r.Position.Y + 4, 6, 6), new Color("#9fb4cc"));
-                if (on && m.Active) ci.DrawCircle(new Vector2(x, r.Position.Y + 14), 1.5f, new Color("#ff5a5a"), true, -1f, true);
+                ci.Box(new Rect2(x - 3, r.Position.Y + 4, 6, 6), new Color("#9fb4cc"));
+                if (on && m.Active) ci.Circle(new Vector2(x, r.Position.Y + 14), 1.5f, new Color("#ff5a5a"), true, -1f, true);
                 break;
             }
             case FurnitureType.CoolantPump when m.Tier >= 3:
-                ci.DrawArc(c, Mathf.Min(r.Size.X, r.Size.Y) * 0.42f, 0f, Mathf.Tau, 28, new Color("#b8f0ff").WithAlpha((0.35f + 0.2f * Mathf.Sin(t * 2f)) * a), 2f, true);
+                ci.Arc(c, Mathf.Min(r.Size.X, r.Size.Y) * 0.42f, 0f, Mathf.Tau, 28, new Color("#b8f0ff").WithAlpha((0.35f + 0.2f * Mathf.Sin(t * 2f)) * a), 2f, true);
                 break;
             case FurnitureType.CoolantPump:
             {
                 // 고압 펌프: 압력계
                 var g = new Vector2(r.Position.X + 8, r.Position.Y + 8);
-                ci.DrawCircle(g, 4.5f, new Color("#e8e8e8"), true, -1f, true);
+                ci.Circle(g, 4.5f, new Color("#e8e8e8"), true, -1f, true);
                 float needle = on ? -2.2f + 1.6f * (0.7f + 0.1f * Mathf.Sin(t * 5f)) : -2.4f;
                 ci.DrawLine(g, g + Vector2.FromAngle(needle) * 3.5f, new Color("#c0392b"), 1.2f, true);
                 break;
@@ -186,7 +186,7 @@ public partial class ShipView
             {
                 // 연료전지: 쌓인 셀
                 for (int k = 0; k < 5; k++)
-                    ci.DrawRect(new Rect2(r.Position.X + r.Size.X * 0.35f + k * 5, r.Position.Y + 6, 3, r.Size.Y - 12),
+                    ci.Box(new Rect2(r.Position.X + r.Size.X * 0.35f + k * 5, r.Position.Y + 6, 3, r.Size.Y - 12),
                         new Color("#4aa3ff").WithAlpha((_world.Power.AuxRunning ? 0.7f : 0.25f) * (0.7f + 0.3f * Mathf.Sin(t * 3f + k))));
                 break;
             }
@@ -197,7 +197,7 @@ public partial class ShipView
                     for (int x = 0; x < 4; x++)
                     {
                         bool blink = Hash(f.Id, x + y * 4, (int)(t * 3f)) > 0.5f;
-                        ci.DrawCircle(new Vector2(r.Position.X + 8 + x * (r.Size.X - 16) / 3f, r.Position.Y + 8 + y * (r.Size.Y - 16) / 2f), 1.4f,
+                        ci.Circle(new Vector2(r.Position.X + 8 + x * (r.Size.X - 16) / 3f, r.Position.Y + 8 + y * (r.Size.Y - 16) / 2f), 1.4f,
                             (blink && on ? new Color("#7fffd4") : new Color("#24403a")), true, -1f, true);
                     }
                 break;
@@ -209,7 +209,7 @@ public partial class ShipView
                     for (int x = 0; x < 3; x++)
                     {
                         float ph = Mathf.Sin(t * 4f - (x + y) * 0.9f);
-                        ci.DrawRect(new Rect2(r.Position.X + 6 + x * 6, r.Position.Y + 6 + y * 6, 4, 4), new Color("#7fb2ff").WithAlpha((0.3f + 0.5f * Mathf.Max(0f, ph)) * a));
+                        ci.Box(new Rect2(r.Position.X + 6 + x * 6, r.Position.Y + 6 + y * 6, 4, 4), new Color("#7fb2ff").WithAlpha((0.3f + 0.5f * Mathf.Max(0f, ph)) * a));
                     }
                 break;
             }
@@ -217,7 +217,7 @@ public partial class ShipView
             {
                 // 이온 추진기: 푸른 이온 빛 (연소할 때 세게)
                 bool burn = _world.Propulsion.Burning || _world.Propulsion.CourseBurnVisible;
-                ci.DrawCircle(c, Mathf.Min(r.Size.X, r.Size.Y) * 0.22f, new Color("#6cc8ff").WithAlpha((burn ? 0.7f : 0.2f) * a * (0.8f + 0.2f * Mathf.Sin(t * 9f))), true, -1f, true);
+                ci.Circle(c, Mathf.Min(r.Size.X, r.Size.Y) * 0.22f, new Color("#6cc8ff").WithAlpha((burn ? 0.7f : 0.2f) * a * (0.8f + 0.2f * Mathf.Sin(t * 9f))), true, -1f, true);
                 break;
             }
         }

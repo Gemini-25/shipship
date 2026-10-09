@@ -41,7 +41,7 @@ public static class TechIcons
         var l = new Vector2[pts.Length + 1];
         Array.Copy(pts, l, pts.Length);
         l[^1] = pts[0];
-        ci.DrawPolyline(l, col, w, true);
+        ci.Polyline(l, col, w, true);
     }
 
     /// <summary>분야 실루엣 (채움 · 테두리).</summary>
@@ -117,8 +117,8 @@ public static class TechIcons
         var pts = FramePoints(t.Field, c, r);
         var bg = new Color(0.05f, 0.06f, 0.09f, 0.95f * alpha);
         var fill = state == 1 ? fc.WithAlpha(0.92f * alpha) : state == 2 ? fc.WithAlpha(0.07f * alpha) : fc.WithAlpha(0.18f * alpha);
-        ci.DrawColoredPolygon(pts, bg);
-        ci.DrawColoredPolygon(pts, fill);
+        ci.Poly(pts, bg);
+        ci.Poly(pts, fill);
         Outline(ci, pts, fc.WithAlpha((state == 2 ? 0.45f : 0.95f) * alpha), state == 1 ? 1.6f : 1.3f);
         if (t.Field == TechField.Computing) // 칩 다리
             for (int i = -1; i <= 1; i++)
@@ -136,9 +136,9 @@ public static class TechIcons
         {
             var b = c + new Vector2(r * 0.62f, r * 0.62f);
             float br = r * 0.36f;
-            ci.DrawCircle(b, br, bg, true, -1f, true);
-            ci.DrawCircle(b, br, fc.WithAlpha((state == 1 ? 0.6f : 0.25f) * alpha), true, -1f, true);
-            ci.DrawArc(b, br, 0f, Mathf.Tau, 16, fc.WithAlpha(0.9f * alpha), 1f, true);
+            ci.Circle(b, br, bg, true, -1f, true);
+            ci.Circle(b, br, fc.WithAlpha((state == 1 ? 0.6f : 0.25f) * alpha), true, -1f, true);
+            ci.Arc(b, br, 0f, Mathf.Tau, 16, fc.WithAlpha(0.9f * alpha), 1f, true);
             Glyph(ci, parts[1], b, br * 0.62f, state == 1 ? new Color(0.06f, 0.07f, 0.1f, alpha) : fc.Lightened(0.3f).WithAlpha(alpha), MathF.Max(0.9f, r * 0.07f));
         }
     }
@@ -148,10 +148,10 @@ public static class TechIcons
     {
         Vector2 P(float x, float y) => c + new Vector2(x * s, y * s);
         void L(float x0, float y0, float x1, float y1) => ci.DrawLine(P(x0, y0), P(x1, y1), col, w, true);
-        void Arc(float x, float y, float rr, float a0, float a1) => ci.DrawArc(P(x, y), rr * s, a0, a1, 18, col, w, true);
-        void Poly(params float[] xy) { var p = new Vector2[xy.Length / 2]; for (int i = 0; i < p.Length; i++) p[i] = P(xy[i * 2], xy[i * 2 + 1]); ci.DrawColoredPolygon(p, col); }
-        void Line(params float[] xy) { var p = new Vector2[xy.Length / 2]; for (int i = 0; i < p.Length; i++) p[i] = P(xy[i * 2], xy[i * 2 + 1]); ci.DrawPolyline(p, col, w, true); }
-        void Dot(float x, float y, float rr) => ci.DrawCircle(P(x, y), rr * s, col, true, -1f, true);
+        void Arc(float x, float y, float rr, float a0, float a1) => ci.Arc(P(x, y), rr * s, a0, a1, 18, col, w, true);
+        void Poly(params float[] xy) { var p = new Vector2[xy.Length / 2]; for (int i = 0; i < p.Length; i++) p[i] = P(xy[i * 2], xy[i * 2 + 1]); ci.Poly(p, col); }
+        void Line(params float[] xy) { var p = new Vector2[xy.Length / 2]; for (int i = 0; i < p.Length; i++) p[i] = P(xy[i * 2], xy[i * 2 + 1]); ci.Polyline(p, col, w, true); }
+        void Dot(float x, float y, float rr) => ci.Circle(P(x, y), rr * s, col, true, -1f, true);
         switch (id)
         {
             case "flame": Poly(0f, -1f, 0.45f, -0.25f, 0.6f, 0.35f, 0.3f, 0.85f, -0.3f, 0.85f, -0.6f, 0.35f, -0.4f, -0.1f, -0.15f, 0.1f); break;
@@ -171,7 +171,7 @@ public static class TechIcons
             case "plus": L(-0.75f, 0f, 0.75f, 0f); L(0f, -0.75f, 0f, 0.75f); break;
             case "wrench": L(-0.7f, 0.7f, 0.2f, -0.2f); Arc(0.42f, -0.42f, 0.35f, -2.2f, 2.0f); break;
             case "hex": Outline(ci, Ngon(c, s * 0.8f, 6), col, w); Dot(0f, 0f, 0.18f); break;
-            case "wave": { var p = new Vector2[13]; for (int i = 0; i < 13; i++) { float x = -0.9f + 1.8f * i / 12f; p[i] = P(x, 0.45f * Mathf.Sin(x * 3.6f)); } ci.DrawPolyline(p, col, w, true); break; }
+            case "wave": { var p = new Vector2[13]; for (int i = 0; i < 13; i++) { float x = -0.9f + 1.8f * i / 12f; p[i] = P(x, 0.45f * Mathf.Sin(x * 3.6f)); } ci.Polyline(p, col, w, true); break; }
             case "eye": Arc(0f, 0.55f, 0.95f, -2.55f, -0.6f); Arc(0f, -0.55f, 0.95f, 0.6f, 2.55f); Dot(0f, 0f, 0.25f); break;
             case "leaf": Poly(0f, -0.95f, 0.5f, -0.45f, 0.55f, 0.2f, 0f, 0.85f, -0.55f, 0.2f, -0.5f, -0.45f); L(0f, -0.6f, 0f, 0.95f); break;
             case "atom":
@@ -180,7 +180,7 @@ public static class TechIcons
                 {
                     var p = new Vector2[17];
                     for (int i = 0; i < 17; i++) { float a = Mathf.Tau * i / 16f; p[i] = c + new Vector2(Mathf.Cos(a) * s * 0.9f, Mathf.Sin(a) * s * 0.32f).Rotated(k * Mathf.Pi / 3f); }
-                    ci.DrawPolyline(p, col, w * 0.8f, true);
+                    ci.Polyline(p, col, w * 0.8f, true);
                 }
                 Dot(0f, 0f, 0.18f);
                 break;
@@ -202,7 +202,7 @@ public static class TechIcons
             {
                 var p = new Vector2[10];
                 for (int i = 0; i < 10; i++) { float a = -Mathf.Pi / 2f + Mathf.Pi * i / 5f; p[i] = c + Vector2.FromAngle(a) * s * (i % 2 == 0 ? 0.95f : 0.4f); }
-                ci.DrawColoredPolygon(p, col);
+                ci.Poly(p, col);
                 break;
             }
             case "heart": Dot(-0.32f, -0.2f, 0.36f); Dot(0.32f, -0.2f, 0.36f); Poly(-0.66f, -0.05f, 0.66f, -0.05f, 0f, 0.8f); break;
@@ -236,8 +236,8 @@ public static class TechIcons
     /// <summary>자물쇠 (잠김 · 조건).</summary>
     public static void Lock(CanvasItem ci, Vector2 c, float s, Color col)
     {
-        ci.DrawArc(c + new Vector2(0f, -s * 0.25f), s * 0.42f, Mathf.Pi, Mathf.Tau, 12, col, MathF.Max(1f, s * 0.18f), true);
+        ci.Arc(c + new Vector2(0f, -s * 0.25f), s * 0.42f, Mathf.Pi, Mathf.Tau, 12, col, MathF.Max(1f, s * 0.18f), true);
         Gfx.RoundRect(ci, new Rect2(c + new Vector2(-s * 0.6f, -s * 0.25f), new Vector2(s * 1.2f, s * 0.95f)), col, s * 0.15f);
-        ci.DrawCircle(c + new Vector2(0f, s * 0.2f), s * 0.14f, new Color(0, 0, 0, 0.7f), true, -1f, true);
+        ci.Circle(c + new Vector2(0f, s * 0.2f), s * 0.14f, new Color(0, 0, 0, 0.7f), true, -1f, true);
     }
 }

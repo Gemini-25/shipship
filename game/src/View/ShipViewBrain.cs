@@ -37,7 +37,7 @@ public partial class ShipView
             var room = w.Ship.Rooms[L.RoomId];
             if (room.Detached) continue;
             var c = ToPx(room.Center) + new Vector2(-T * 0.8f, -T * 0.5f);
-            ci.DrawCircle(c, 9f, new Color(0.1f, 0.04f, 0.04f, 0.8f), true, -1f, true);
+            ci.Circle(c, 9f, new Color(0.1f, 0.04f, 0.04f, 0.8f), true, -1f, true);
             BrainIcons.Learned(ci, c + new Vector2(0, 3f), 6f, "계기", false, _time);
             ci.DrawLine(c + new Vector2(-6f, -6f), c + new Vector2(6f, 6f), Palette.Danger.WithAlpha(0.7f), 1.2f, true); // 금 간 유리
             if (Zoom > 0.9f) Gfx.TextCentered(ci, Fonts.Bold, c + new Vector2(0, 16f), $"{m.Name} 계기 의심 {L.Reliability * 100:0}%", 8, Palette.Danger);
@@ -47,10 +47,10 @@ public partial class ShipView
         if (motion != null && (w.Ship.RoomsOf(RoomType.MeetingRoom).FirstOrDefault() ?? w.Ship.RoomsOf(RoomType.Mess).FirstOrDefault()) is Room hall)
         {
             var c = ToPx(hall.Center) + new Vector2(T * 0.9f, -T * 0.6f + Mathf.Sin(_time * 2f) * 1.5f);
-            ci.DrawCircle(c, 11f, new Color(0.04f, 0.08f, 0.12f, 0.85f), true, -1f, true);
-            ci.DrawArc(c, 11f, 0f, Mathf.Tau, 24, BrainIcons.Auth.WithAlpha(0.7f), 1.2f, true);
+            ci.Circle(c, 11f, new Color(0.04f, 0.08f, 0.12f, 0.85f), true, -1f, true);
+            ci.Arc(c, 11f, 0f, Mathf.Tau, 24, BrainIcons.Auth.WithAlpha(0.7f), 1.2f, true);
             BrainIcons.PlanBoard(ci, c, 5.5f, a.Planner.PlanOf(motion.Key)?.Mode ?? "대책", false, _time);
-            for (int k = 0; k < ShipPlanner.MaxAttempts; k++) ci.DrawCircle(c + new Vector2(-6f + k * 6f, 15f), 1.8f, k < motion.Attempt ? BrainIcons.Auth : new Color(1, 1, 1, 0.15f), true, -1f, true);
+            for (int k = 0; k < ShipPlanner.MaxAttempts; k++) ci.Circle(c + new Vector2(-6f + k * 6f, 15f), 1.8f, k < motion.Attempt ? BrainIcons.Auth : new Color(1, 1, 1, 0.15f), true, -1f, true);
             if (Zoom > 0.8f) Gfx.TextCentered(ci, Fonts.Bold, c + new Vector2(0, 25f), $"컴퓨터 안건: {motion.Option} ({motion.Arg})", 9, BrainIcons.Auth);
         }
     }

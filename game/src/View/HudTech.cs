@@ -111,9 +111,9 @@ public partial class Hud
             for (int i = 0; i < spec.Max * rooms; i++)
             {
                 var c = new Vector2(x + nameW + 8 + i * 16, cy);
-                if (i < working) DrawCircle(c, 5f, new Color("#8fd65a"), true, -1f, true);
-                else if (i < have) DrawCircle(c, 5f, Palette.Warning, true, -1f, true);
-                else DrawArc(c, 5f, 0, Mathf.Tau, 16, new Color(1, 1, 1, 0.25f), 1f, true);
+                if (i < working) this.Circle(c, 5f, new Color("#8fd65a"), true, -1f, true);
+                else if (i < have) this.Circle(c, 5f, Palette.Warning, true, -1f, true);
+                else this.Arc(c, 5f, 0, Mathf.Tau, 16, new Color(1, 1, 1, 0.25f), 1f, true);
             }
             Gfx.Text(this, Fonts.Body, new Vector2(x + nameW + 16 + spec.Max * rooms * 16, cy + Gfx.CenterOffset(Fonts.Body, Ui.TextSmall)),
                 $"{spec.Note} · {string.Join(" + ", spec.Cost.Select(k => $"{ItemKinds.Name(k.kind)} {k.count}"))}", Ui.TextSmall, Palette.TextMuted);

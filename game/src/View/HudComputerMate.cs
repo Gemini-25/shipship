@@ -46,9 +46,9 @@ public partial class Hud
             {
                 var row = new Rect2(cell.Position.X + 2, cell.Position.Y + 13 + k * 11, cell.Size.X - 4, 9);
                 var col = s.Done ? Palette.Good : s.Missed ? Palette.Danger : s.RiskLate > 0.25f ? Palette.Warning : new Color("#f4c430");
-                DrawRect(row, col.WithAlpha(0.15f));
+                this.Box(row, col.WithAlpha(0.15f));
                 // 남은 수명 막대 (짧을수록 꽉 찬다)
-                DrawRect(new Rect2(row.Position, new Vector2(row.Size.X * Mathf.Clamp(1f - s.LifeLo / 7f, 0.05f, 1f), 2)), col);
+                this.Box(new Rect2(row.Position, new Vector2(row.Size.X * Mathf.Clamp(1f - s.LifeLo / 7f, 0.05f, 1f), 2)), col);
                 Gfx.Text(this, Fonts.Body, new Vector2(row.Position.X + 1, row.End.Y - 1), Fit($"{s.Hour:0}시 {s.Machine}", row.Size.X - 2, Ui.TextMicro, Fonts.Body), Ui.TextMicro, s.Done ? Palette.TextMuted : Palette.Text);
                 k++;
             }
@@ -99,7 +99,7 @@ public partial class Hud
         foreach (var p in m.Promises.AsEnumerable().Reverse().Take(3))
         {
             var col = p.Broken > p.Kept ? Palette.Danger : p.Kept > 0 ? Palette.Good : Palette.TextDim;
-            DrawCircle(new Vector2(rx + 4, ry + 8), 3f, col);
+            this.Circle(new Vector2(rx + 4, ry + 8), 3f, col);
             Gfx.Text(this, Fonts.Body, new Vector2(rx + 12, ry + 11), Fit($"\"{p.Text}\" — 들은 사람 {p.Heard.Count} · 지킴 {p.Kept} · 어김 {p.Broken}", colW - 12, Ui.TextTiny, Fonts.Body), Ui.TextTiny, Palette.Text);
             ry += 14;
         }
@@ -138,8 +138,8 @@ public partial class Hud
 
     private void DrawMateBar(Vector2 p, float wdt, float v, string label)
     {
-        DrawRect(new Rect2(p, new Vector2(wdt, 6)), new Color(1, 1, 1, 0.08f));
-        DrawRect(new Rect2(p, new Vector2(wdt * Mathf.Clamp(v, 0f, 1f), 6)), v >= 0.35f ? Palette.Warning : Palette.Good);
+        this.Box(new Rect2(p, new Vector2(wdt, 6)), new Color(1, 1, 1, 0.08f));
+        this.Box(new Rect2(p, new Vector2(wdt * Mathf.Clamp(v, 0f, 1f), 6)), v >= 0.35f ? Palette.Warning : Palette.Good);
         Gfx.Text(this, Fonts.Body, new Vector2(p.X, p.Y + 16), $"{label} {v * 100:0}%", Ui.TextMicro, Palette.TextDim);
     }
 
@@ -148,11 +148,11 @@ public partial class Hud
         var col = kind switch { "정비" => new Color("#c8ced8"), "날씨" => new Color("#ffd166"), "주의" => new Color("#f4c430"), "일정" => new Color("#9fd8ff"), _ => new Color("#c9a26b") };
         switch (kind)
         {
-            case "정비": DrawLine(c + new Vector2(-3, 3), c + new Vector2(2, -2), col, 1.4f, true); DrawArc(c + new Vector2(2.5f, -2.5f), 2f, 0.6f, 5.2f, 8, col, 1.2f, true); break;
-            case "날씨": DrawCircle(c, 2.4f, col); break;
-            case "주의": DrawPolyline(new[] { c + new Vector2(0, -4), c + new Vector2(4, 3), c + new Vector2(-4, 3), c + new Vector2(0, -4) }, col, 1.2f, true); break;
-            case "일정": DrawArc(c, 3.5f, 0f, Mathf.Tau, 14, col, 1f, true); DrawLine(c, c + new Vector2(0, -2.5f), col, 1f, true); break;
-            default: DrawRect(new Rect2(c + new Vector2(-3.5f, -3), new Vector2(7, 6)), col, false, 1f); break;
+            case "정비": DrawLine(c + new Vector2(-3, 3), c + new Vector2(2, -2), col, 1.4f, true); this.Arc(c + new Vector2(2.5f, -2.5f), 2f, 0.6f, 5.2f, 8, col, 1.2f, true); break;
+            case "날씨": this.Circle(c, 2.4f, col); break;
+            case "주의": this.Polyline(new[] { c + new Vector2(0, -4), c + new Vector2(4, 3), c + new Vector2(-4, 3), c + new Vector2(0, -4) }, col, 1.2f, true); break;
+            case "일정": this.Arc(c, 3.5f, 0f, Mathf.Tau, 14, col, 1f, true); DrawLine(c, c + new Vector2(0, -2.5f), col, 1f, true); break;
+            default: this.Box(new Rect2(c + new Vector2(-3.5f, -3), new Vector2(7, 6)), col, false, 1f); break;
         }
     }
 }

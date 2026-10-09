@@ -79,7 +79,7 @@ public partial class Hud
             bool hh = hr.HasPoint(mouse);
             if (hh) Gfx.RoundRect(this, hr, Ui.HoverSoft, 5);
             var rc = RoleColor(role);
-            DrawRect(new Rect2(hr.Position.X + 2, hr.Position.Y + 4, 2, hr.Size.Y - 8), rc.WithAlpha(0.8f));
+            this.Box(new Rect2(hr.Position.X + 2, hr.Position.Y + 4, 2, hr.Size.Y - 8), rc.WithAlpha(0.8f));
             string label = $"{CrewRoles.Name(role)} {crew.Count}";
             Gfx.Text(this, Fonts.Bold, new Vector2(hr.Position.X + 10, hr.GetCenter().Y + Gfx.CenterOffset(Fonts.Bold, Ui.TextTiny)), label, Ui.TextTiny, rc);
             Gfx.TextRight(this, Fonts.Body, new Vector2(hr.End.X - 6, hr.GetCenter().Y + Gfx.CenterOffset(Fonts.Body, Ui.TextTiny)), folded ? "▸" : "▾", Ui.TextTiny, Palette.TextMuted);
@@ -160,16 +160,16 @@ public partial class Hud
         var look = ZoomDetail.Face(_world, cm);
         var skin = SkinTones[(cm.Id * 7 + 3) % SkinTones.Length];
         if (cm.Dead) skin = skin.Darkened(0.5f).Lerp(new Color("#5f6879"), 0.6f);
-        DrawCircle(c, r + 1.6f, col.WithAlpha(cm.Dead ? 0.35f : 0.9f), true, -1f, true);
-        DrawCircle(c, r, skin, true, -1f, true);
+        this.Circle(c, r + 1.6f, col.WithAlpha(cm.Dead ? 0.35f : 0.9f), true, -1f, true);
+        this.Circle(c, r, skin, true, -1f, true);
         // 머리 (네 가지 모양)
         var hair = new Color("#2b2320").Lerp(col, 0.25f);
         switch (cm.Id % 4)
         {
-            case 0: DrawArc(c, r * 0.82f, Mathf.Pi * 1.05f, Mathf.Pi * 1.95f, 10, hair, r * 0.38f, true); break;
-            case 1: DrawColoredPolygon(new[] { c + new Vector2(-r, -r * 0.1f), c + new Vector2(-r * 0.6f, -r * 0.95f), c + new Vector2(r * 0.7f, -r * 0.9f), c + new Vector2(r * 0.2f, -r * 0.45f) }, hair); break;
-            case 2: DrawArc(c, r * 0.85f, Mathf.Pi * 1.1f, Mathf.Pi * 1.9f, 10, hair, r * 0.3f, true); DrawCircle(c + new Vector2(0, -r * 1.05f), r * 0.32f, hair, true, -1f, true); break;
-            default: DrawArc(c, r * 0.9f, Mathf.Pi * 0.95f, Mathf.Pi * 2.05f, 12, hair, r * 0.22f, true); break;
+            case 0: this.Arc(c, r * 0.82f, Mathf.Pi * 1.05f, Mathf.Pi * 1.95f, 10, hair, r * 0.38f, true); break;
+            case 1: this.Poly(new[] { c + new Vector2(-r, -r * 0.1f), c + new Vector2(-r * 0.6f, -r * 0.95f), c + new Vector2(r * 0.7f, -r * 0.9f), c + new Vector2(r * 0.2f, -r * 0.45f) }, hair); break;
+            case 2: this.Arc(c, r * 0.85f, Mathf.Pi * 1.1f, Mathf.Pi * 1.9f, 10, hair, r * 0.3f, true); this.Circle(c + new Vector2(0, -r * 1.05f), r * 0.32f, hair, true, -1f, true); break;
+            default: this.Arc(c, r * 0.9f, Mathf.Pi * 0.95f, Mathf.Pi * 2.05f, 12, hair, r * 0.22f, true); break;
         }
         var ink = new Color("#1b1a22");
         float ex = r * 0.36f, ey = -r * 0.05f, lw = Mathf.Max(1f, r * 0.13f);
@@ -177,36 +177,36 @@ public partial class Hud
         switch (look)
         {
             case FaceLook.Asleep:
-                DrawArc(L, r * 0.16f, 0f, Mathf.Pi, 5, ink, lw, true); DrawArc(R2, r * 0.16f, 0f, Mathf.Pi, 5, ink, lw, true);
+                this.Arc(L, r * 0.16f, 0f, Mathf.Pi, 5, ink, lw, true); this.Arc(R2, r * 0.16f, 0f, Mathf.Pi, 5, ink, lw, true);
                 DrawLine(M + new Vector2(-r * 0.12f, 0), M + new Vector2(r * 0.12f, 0), ink, lw, true); break;
             case FaceLook.Pain:
-                DrawPolyline(new[] { L + new Vector2(-r * 0.15f, -r * 0.1f), L + new Vector2(r * 0.1f, 0), L + new Vector2(-r * 0.15f, r * 0.1f) }, ink, lw, true);
-                DrawPolyline(new[] { R2 + new Vector2(r * 0.15f, -r * 0.1f), R2 + new Vector2(-r * 0.1f, 0), R2 + new Vector2(r * 0.15f, r * 0.1f) }, ink, lw, true);
-                DrawPolyline(new[] { M + new Vector2(-r * 0.25f, 0), M + new Vector2(-r * 0.08f, -r * 0.08f), M + new Vector2(r * 0.08f, r * 0.04f), M + new Vector2(r * 0.25f, -r * 0.04f) }, ink, lw, true); break;
+                this.Polyline(new[] { L + new Vector2(-r * 0.15f, -r * 0.1f), L + new Vector2(r * 0.1f, 0), L + new Vector2(-r * 0.15f, r * 0.1f) }, ink, lw, true);
+                this.Polyline(new[] { R2 + new Vector2(r * 0.15f, -r * 0.1f), R2 + new Vector2(-r * 0.1f, 0), R2 + new Vector2(r * 0.15f, r * 0.1f) }, ink, lw, true);
+                this.Polyline(new[] { M + new Vector2(-r * 0.25f, 0), M + new Vector2(-r * 0.08f, -r * 0.08f), M + new Vector2(r * 0.08f, r * 0.04f), M + new Vector2(r * 0.25f, -r * 0.04f) }, ink, lw, true); break;
             case FaceLook.Fear:
-                DrawCircle(L, r * 0.13f, ink, true, -1f, true); DrawCircle(R2, r * 0.13f, ink, true, -1f, true);
+                this.Circle(L, r * 0.13f, ink, true, -1f, true); this.Circle(R2, r * 0.13f, ink, true, -1f, true);
                 DrawLine(L + new Vector2(-r * 0.15f, -r * 0.3f), L + new Vector2(r * 0.12f, -r * 0.4f), ink, lw, true); DrawLine(R2 + new Vector2(r * 0.15f, -r * 0.3f), R2 + new Vector2(-r * 0.12f, -r * 0.4f), ink, lw, true);
-                DrawArc(M, r * 0.14f, 0f, Mathf.Tau, 8, ink, lw, true); break;
+                this.Arc(M, r * 0.14f, 0f, Mathf.Tau, 8, ink, lw, true); break;
             case FaceLook.Angry:
-                DrawCircle(L, r * 0.1f, ink, true, -1f, true); DrawCircle(R2, r * 0.1f, ink, true, -1f, true);
+                this.Circle(L, r * 0.1f, ink, true, -1f, true); this.Circle(R2, r * 0.1f, ink, true, -1f, true);
                 DrawLine(L + new Vector2(-r * 0.18f, -r * 0.32f), L + new Vector2(r * 0.15f, -r * 0.18f), ink, lw, true); DrawLine(R2 + new Vector2(r * 0.18f, -r * 0.32f), R2 + new Vector2(-r * 0.15f, -r * 0.18f), ink, lw, true);
                 DrawLine(M + new Vector2(-r * 0.22f, 0), M + new Vector2(r * 0.22f, 0), ink, lw, true); break;
             case FaceLook.Sad:
-                DrawCircle(L, r * 0.1f, ink, true, -1f, true); DrawCircle(R2, r * 0.1f, ink, true, -1f, true);
-                DrawArc(M + new Vector2(0, r * 0.2f), r * 0.24f, Mathf.Pi * 1.15f, Mathf.Pi * 1.85f, 6, ink, lw, true);
-                DrawCircle(R2 + new Vector2(r * 0.05f, r * 0.25f), r * 0.07f, new Color("#7cc4ff"), true, -1f, true); break;
+                this.Circle(L, r * 0.1f, ink, true, -1f, true); this.Circle(R2, r * 0.1f, ink, true, -1f, true);
+                this.Arc(M + new Vector2(0, r * 0.2f), r * 0.24f, Mathf.Pi * 1.15f, Mathf.Pi * 1.85f, 6, ink, lw, true);
+                this.Circle(R2 + new Vector2(r * 0.05f, r * 0.25f), r * 0.07f, new Color("#7cc4ff"), true, -1f, true); break;
             case FaceLook.Tired:
                 DrawLine(L + new Vector2(-r * 0.14f, 0), L + new Vector2(r * 0.14f, 0), ink, lw, true); DrawLine(R2 + new Vector2(-r * 0.14f, 0), R2 + new Vector2(r * 0.14f, 0), ink, lw, true);
                 DrawLine(M + new Vector2(-r * 0.15f, 0), M + new Vector2(r * 0.15f, r * 0.03f), ink, lw, true); break;
             case FaceLook.Worry:
-                DrawCircle(L, r * 0.1f, ink, true, -1f, true); DrawCircle(R2, r * 0.1f, ink, true, -1f, true);
+                this.Circle(L, r * 0.1f, ink, true, -1f, true); this.Circle(R2, r * 0.1f, ink, true, -1f, true);
                 DrawLine(L + new Vector2(-r * 0.15f, -r * 0.22f), L + new Vector2(r * 0.15f, -r * 0.32f), ink, lw, true); DrawLine(R2 + new Vector2(r * 0.15f, -r * 0.22f), R2 + new Vector2(-r * 0.15f, -r * 0.32f), ink, lw, true);
-                DrawPolyline(new[] { M + new Vector2(-r * 0.18f, r * 0.02f), M + new Vector2(0, -r * 0.05f), M + new Vector2(r * 0.18f, r * 0.02f) }, ink, lw, true); break;
+                this.Polyline(new[] { M + new Vector2(-r * 0.18f, r * 0.02f), M + new Vector2(0, -r * 0.05f), M + new Vector2(r * 0.18f, r * 0.02f) }, ink, lw, true); break;
             case FaceLook.Smile:
-                DrawCircle(L, r * 0.1f, ink, true, -1f, true); DrawCircle(R2, r * 0.1f, ink, true, -1f, true);
-                DrawArc(M + new Vector2(0, -r * 0.18f), r * 0.26f, Mathf.Pi * 0.15f, Mathf.Pi * 0.85f, 6, ink, lw, true); break;
+                this.Circle(L, r * 0.1f, ink, true, -1f, true); this.Circle(R2, r * 0.1f, ink, true, -1f, true);
+                this.Arc(M + new Vector2(0, -r * 0.18f), r * 0.26f, Mathf.Pi * 0.15f, Mathf.Pi * 0.85f, 6, ink, lw, true); break;
             default:
-                DrawCircle(L, r * 0.1f, ink, true, -1f, true); DrawCircle(R2, r * 0.1f, ink, true, -1f, true);
+                this.Circle(L, r * 0.1f, ink, true, -1f, true); this.Circle(R2, r * 0.1f, ink, true, -1f, true);
                 DrawLine(M + new Vector2(-r * 0.16f, 0), M + new Vector2(r * 0.16f, 0), ink, lw, true); break;
         }
         if (ColorSafe.On && r >= 6f) ColorSafe.DrawMark(this, cm.Id, c + new Vector2(r * 0.85f, r * 0.75f), Mathf.Max(3f, r * 0.42f), col, Palette.Panel);

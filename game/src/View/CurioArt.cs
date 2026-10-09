@@ -70,14 +70,14 @@ public static class CurioArt
                 {
                     var pts = cmd.Pts.Select(P).ToArray();
                     if (pts.Length >= 3 && found) TryPoly(ci, pts, fill);
-                    ci.DrawPolyline(pts.Append(pts[0]).ToArray(), edge, lw * 0.8f, true);
+                    ci.Polyline(pts.Append(pts[0]).ToArray(), edge, lw * 0.8f, true);
                     break;
                 }
-                case Op.PolyLine: { var pts = cmd.Pts.Select(P).ToArray(); ci.DrawPolyline(pts.Append(pts[0]).ToArray(), edge, lw, true); break; }
-                case Op.Line: ci.DrawPolyline(cmd.Pts.Select(P).ToArray(), edge, lw, true); break;
-                case Op.Disc: if (found) ci.DrawCircle(P(cmd.Pts[0]), cmd.R * size, fill, true, -1f, true); ci.DrawArc(P(cmd.Pts[0]), cmd.R * size, 0, Mathf.Tau, 18, edge, lw * 0.7f, true); break;
-                case Op.Ring: ci.DrawArc(P(cmd.Pts[0]), cmd.R * size, 0, Mathf.Tau, 22, edge, lw, true); break;
-                case Op.Arc: ci.DrawArc(P(cmd.Pts[0]), cmd.R * size, Mathf.DegToRad(cmd.A0) + rot, Mathf.DegToRad(cmd.A1) + rot, 16, edge, lw, true); break;
+                case Op.PolyLine: { var pts = cmd.Pts.Select(P).ToArray(); ci.Polyline(pts.Append(pts[0]).ToArray(), edge, lw, true); break; }
+                case Op.Line: ci.Polyline(cmd.Pts.Select(P).ToArray(), edge, lw, true); break;
+                case Op.Disc: if (found) ci.Circle(P(cmd.Pts[0]), cmd.R * size, fill, true, -1f, true); ci.Arc(P(cmd.Pts[0]), cmd.R * size, 0, Mathf.Tau, 18, edge, lw * 0.7f, true); break;
+                case Op.Ring: ci.Arc(P(cmd.Pts[0]), cmd.R * size, 0, Mathf.Tau, 22, edge, lw, true); break;
+                case Op.Arc: ci.Arc(P(cmd.Pts[0]), cmd.R * size, Mathf.DegToRad(cmd.A0) + rot, Mathf.DegToRad(cmd.A1) + rot, 16, edge, lw, true); break;
             }
         }
     }
@@ -85,7 +85,7 @@ public static class CurioArt
     private static void TryPoly(CanvasItem ci, Vector2[] pts, Color col)
     {
         // 꼬인 다각형은 그리기에서 실패하므로 삼각분할이 되는 것만 채운다
-        if (Geometry2D.TriangulatePolygon(pts).Length >= 3) ci.DrawColoredPolygon(pts, col);
+        if (Geometry2D.TriangulatePolygon(pts).Length >= 3) ci.Poly(pts, col);
     }
 
     /// <summary>도감 칸마다 다른 액자: 사진(필름 구멍) · 표본(핀 꽂은 이름표) · 유물(받침대) · 사람들(둥근 초상 틀).</summary>
@@ -98,22 +98,22 @@ public static class CurioArt
                 Gfx.RoundRect(ci, r, new Color(0.03f, 0.035f, 0.05f, 0.9f), 4f, edge);
                 for (float x = r.Position.X + 6; x < r.End.X - 6; x += 10)
                 {
-                    ci.DrawRect(new Rect2(x, r.Position.Y + 3, 5, 4), new Color(1, 1, 1, 0.08f));
-                    ci.DrawRect(new Rect2(x, r.End.Y - 7, 5, 4), new Color(1, 1, 1, 0.08f));
+                    ci.Box(new Rect2(x, r.Position.Y + 3, 5, 4), new Color(1, 1, 1, 0.08f));
+                    ci.Box(new Rect2(x, r.End.Y - 7, 5, 4), new Color(1, 1, 1, 0.08f));
                 }
                 break;
             case CodexShelf.Specimen:
                 Gfx.RoundRect(ci, r, new Color(0.09f, 0.1f, 0.08f, 0.9f), 3f, edge);
-                ci.DrawCircle(new Vector2(r.GetCenter().X, r.Position.Y + 7), 3f, tone.WithAlpha(0.7f), true, -1f, true);
-                ci.DrawRect(new Rect2(r.Position.X + 8, r.End.Y - 12, r.Size.X - 16, 6), new Color(1, 1, 1, 0.07f));
+                ci.Circle(new Vector2(r.GetCenter().X, r.Position.Y + 7), 3f, tone.WithAlpha(0.7f), true, -1f, true);
+                ci.Box(new Rect2(r.Position.X + 8, r.End.Y - 12, r.Size.X - 16, 6), new Color(1, 1, 1, 0.07f));
                 break;
             case CodexShelf.Relic:
                 Gfx.RoundRect(ci, r, new Color(0.06f, 0.06f, 0.08f, 0.9f), 6f, edge);
-                ci.DrawColoredPolygon(new[] { new Vector2(r.Position.X + 12, r.End.Y - 6), new Vector2(r.End.X - 12, r.End.Y - 6), new Vector2(r.End.X - 20, r.End.Y - 14), new Vector2(r.Position.X + 20, r.End.Y - 14) }, new Color(1, 1, 1, 0.07f));
+                ci.Poly(new[] { new Vector2(r.Position.X + 12, r.End.Y - 6), new Vector2(r.End.X - 12, r.End.Y - 6), new Vector2(r.End.X - 20, r.End.Y - 14), new Vector2(r.Position.X + 20, r.End.Y - 14) }, new Color(1, 1, 1, 0.07f));
                 break;
             default:
                 Gfx.RoundRect(ci, r, new Color(0.06f, 0.055f, 0.08f, 0.9f), 8f, edge);
-                ci.DrawArc(r.GetCenter(), Mathf.Min(r.Size.X, r.Size.Y) * 0.44f, 0, Mathf.Tau, 32, tone.WithAlpha(0.25f), 2f, true);
+                ci.Arc(r.GetCenter(), Mathf.Min(r.Size.X, r.Size.Y) * 0.44f, 0, Mathf.Tau, 32, tone.WithAlpha(0.25f), 2f, true);
                 break;
         }
     }

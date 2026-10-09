@@ -173,8 +173,8 @@ public static partial class UiKit
         }
         var pts = new Vector2[s.Count];
         for (int i = 0; i < s.Count; i++) pts[i] = P(s[i]);
-        ci.DrawPolyline(pts, color, 1.5f, true);
-        ci.DrawCircle(pts[^1], 2.5f, color, true, -1f, true);
+        ci.Polyline(pts, color, 1.5f, true);
+        ci.Circle(pts[^1], 2.5f, color, true, -1f, true);
     }
 
     // ─────────────────────────── 글 ───────────────────────────

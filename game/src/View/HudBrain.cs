@@ -95,14 +95,14 @@ public partial class Hud
     {
         switch (s)
         {
-            case BeliefSource.Seen: DrawCircle(p, 3.2f, col); DrawCircle(p, 1.3f, new Color(0.05f, 0.06f, 0.09f)); break;
+            case BeliefSource.Seen: this.Circle(p, 3.2f, col); this.Circle(p, 1.3f, new Color(0.05f, 0.06f, 0.09f)); break;
             case BeliefSource.Alarm or BeliefSource.Broadcast or BeliefSource.Radio:
-                DrawArc(p + new Vector2(-2, 0), 2f, -0.9f, 0.9f, 6, col, 1f, true); DrawArc(p + new Vector2(-2, 0), 4f, -0.8f, 0.8f, 8, col, 1f, true); break;
+                this.Arc(p + new Vector2(-2, 0), 2f, -0.9f, 0.9f, 6, col, 1f, true); this.Arc(p + new Vector2(-2, 0), 4f, -0.8f, 0.8f, 8, col, 1f, true); break;
             case BeliefSource.Told:
-                DrawCircle(p, 3f, col.WithAlpha(0.6f)); DrawColoredPolygon(new[] { p + new Vector2(-1, 2), p + new Vector2(-4, 5), p + new Vector2(1, 3) }, col.WithAlpha(0.6f)); break;
-            case BeliefSource.Computer: DrawRect(new Rect2(p - new Vector2(3, 3), new Vector2(6, 6)), col, false, 1.2f); break;
-            case BeliefSource.Guess: for (int i = 0; i < 6; i++) DrawCircle(p + new Vector2(Mathf.Cos(i * 1.05f), Mathf.Sin(i * 1.05f)) * 3f, 0.6f, col); break;
-            default: DrawArc(p, 3f, 0, Mathf.Tau, 12, col, 1f, true); break;
+                this.Circle(p, 3f, col.WithAlpha(0.6f)); this.Poly(new[] { p + new Vector2(-1, 2), p + new Vector2(-4, 5), p + new Vector2(1, 3) }, col.WithAlpha(0.6f)); break;
+            case BeliefSource.Computer: this.Box(new Rect2(p - new Vector2(3, 3), new Vector2(6, 6)), col, false, 1.2f); break;
+            case BeliefSource.Guess: for (int i = 0; i < 6; i++) this.Circle(p + new Vector2(Mathf.Cos(i * 1.05f), Mathf.Sin(i * 1.05f)) * 3f, 0.6f, col); break;
+            default: this.Arc(p, 3f, 0, Mathf.Tau, 12, col, 1f, true); break;
         }
     }
 }

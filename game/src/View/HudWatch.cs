@@ -57,7 +57,7 @@ public partial class Hud
         foreach (var (tick, text, scale, open) in v.Big)
         {
             var col = UiKit.ScaleColor(scale);
-            DrawCircle(new Vector2(x + 6f, yl + 8f), 4f, col);
+            this.Circle(new Vector2(x + 6f, yl + 8f), 4f, col);
             Gfx.Text(this, Fonts.Bold, new Vector2(x + 16f, yl + 12f), $"{SimTime.Day(tick)}일", Ui.TextSmall, Palette.TextMuted);
             Gfx.Text(this, Fonts.Body, new Vector2(x + 50f, yl + 12f), UiKit.Fit(text + (open ? " (아직)" : ""), colW - 50f, Ui.TextSmall), Ui.TextSmall, Palette.Text);
             yl += 20f;

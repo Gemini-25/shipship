@@ -53,11 +53,11 @@ public partial class ShipView
     {
         var l = _world.Body2.Peek(c);
         var cloth = c.Suit != null ? new Color("#dfe6ee") : RoleCloth(c.Role);
-        ci.DrawCircle(p, radius * 0.95f, Palette.Space.WithAlpha(0.85f), true, -1f, true);
-        ci.DrawCircle(p, radius * 0.8f, cloth, true, -1f, true);
-        ci.DrawArc(p, radius * 0.8f, 0f, Mathf.Tau, 20, accent, Mathf.Max(1.5f, radius * 0.22f), true);
+        ci.Circle(p, radius * 0.95f, Palette.Space.WithAlpha(0.85f), true, -1f, true);
+        ci.Circle(p, radius * 0.8f, cloth, true, -1f, true);
+        ci.Arc(p, radius * 0.8f, 0f, Mathf.Tau, 20, accent, Mathf.Max(1.5f, radius * 0.22f), true);
         var f = c.Facing.ToGodot();
-        ci.DrawCircle(p + f * radius * 0.18f, radius * 0.36f, c.Suit != null ? new Color("#1c2a3e") : l?.Style == HairStyle.Bald ? SkinColor(l, c.Id) : HairColor(l), true, -1f, true);
+        ci.Circle(p + f * radius * 0.18f, radius * 0.36f, c.Suit != null ? new Color("#1c2a3e") : l?.Style == HairStyle.Bald ? SkinColor(l, c.Id) : HairColor(l), true, -1f, true);
     }
 
     /// <summary>선 · 걷는 · 뛰는 · 앉은 · 무릎 꿇은 · 일하는 인형.</summary>
@@ -138,7 +138,7 @@ public partial class ShipView
             {
                 ci.DrawLine(new Vector2(-6.6f, -2.2f), new Vector2(-3.6f, -2.2f), new Color("#4c5560"), 0.6f);
                 ci.DrawLine(new Vector2(-6.6f, 2.2f), new Vector2(-3.6f, 2.2f), new Color("#4c5560"), 0.6f);
-                ci.DrawCircle(new Vector2(-5.1f, 0f), 0.9f, (c.Suit!.Oxygen < 0.75f ? Palette.Warning : Palette.Good).WithAlpha(0.6f + 0.4f * Mathf.Sin(t * 4f)), true, -1f, true);
+                ci.Circle(new Vector2(-5.1f, 0f), 0.9f, (c.Suit!.Oxygen < 0.75f ? Palette.Warning : Palette.Good).WithAlpha(0.6f + 0.4f * Mathf.Sin(t * 4f)), true, -1f, true);
             }
         }
 
@@ -175,7 +175,7 @@ public partial class ShipView
                         ci.DrawLine(new Vector2(torso.X - 1.2f + j * 1.1f, k * (W - 0.4f)), new Vector2(torso.X - 0.8f + j * 1.1f, k * (W - 1.8f)), new Color(0.9f, 0.3f, 0.25f, 0.85f), 0.45f, true);
             else if (detail && spec.Misfit <= -Body2System.FitWarnKg)
                 for (int j = 0; j < 3; j++) // 헐렁하다: 몸통에 주름이 진다
-                    ci.DrawArc(torso + new Vector2(-1.6f + j * 1.2f, 0f), W * 0.55f, -0.7f, 0.7f, 6, new Color(0.45f, 0.5f, 0.58f, 0.8f), 0.45f, true);
+                    ci.Arc(torso + new Vector2(-1.6f + j * 1.2f, 0f), W * 0.55f, -0.7f, 0.7f, 6, new Color(0.45f, 0.5f, 0.58f, 0.8f), 0.45f, true);
         }
 
         // ── 팔 · 손 · 든 것 ──
@@ -185,11 +185,11 @@ public partial class ShipView
         var head = new Vector2(1.2f + lean, 0f);
         if (!suit)
         {
-            ci.DrawArc(head, 3.6f, Mathf.Pi * 0.55f, Mathf.Pi * 1.45f, 10, accent, 1.2f, true);
+            ci.Arc(head, 3.6f, Mathf.Pi * 0.55f, Mathf.Pi * 1.45f, 10, accent, 1.2f, true);
             if (pattern == OutfitPattern.Scarf && lod >= 1)
             {
                 float sw = Mathf.Sin(t * 3f + c.Id) * (moving ? 1.2f : 0.3f);
-                ci.DrawPolyline(new[] { new Vector2(-2.6f, 2f), new Vector2(-5f, 2.6f + sw * 0.5f), new Vector2(-7.4f, 2.2f + sw) }, accent, 1.5f, true);
+                ci.Polyline(new[] { new Vector2(-2.6f, 2f), new Vector2(-5f, 2.6f + sw * 0.5f), new Vector2(-7.4f, 2.2f + sw) }, accent, 1.5f, true);
             }
         }
 
@@ -207,15 +207,15 @@ public partial class ShipView
         switch (role)
         {
             case CrewRole.Medic:
-                ci.DrawRect(new Rect2(at.X - 0.35f, at.Y - 1.1f, 0.7f, 2.2f), new Color("#e05050"));
-                ci.DrawRect(new Rect2(at.X - 1.1f, at.Y - 0.35f, 2.2f, 0.7f), new Color("#e05050"));
+                ci.Box(new Rect2(at.X - 0.35f, at.Y - 1.1f, 0.7f, 2.2f), new Color("#e05050"));
+                ci.Box(new Rect2(at.X - 1.1f, at.Y - 0.35f, 2.2f, 0.7f), new Color("#e05050"));
                 break;
-            case CrewRole.Engineer: ci.DrawArc(at, 1f, 0f, Mathf.Tau, 8, mk, 0.5f, true); for (int k = 0; k < 6; k++) { float a = k * Mathf.Tau / 6f; ci.DrawLine(at + new Vector2(Mathf.Cos(a), Mathf.Sin(a)), at + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * 1.5f, mk, 0.45f); } break;
-            case CrewRole.Pilot: ci.DrawPolyline(new[] { at + new Vector2(-0.6f, -1.6f), at + new Vector2(0.6f, 0f), at + new Vector2(-0.6f, 1.6f) }, mk, 0.55f, true); break;
-            case CrewRole.Technician: ci.DrawLine(at + new Vector2(-1f, -1f), at + new Vector2(1f, 1f), mk, 0.55f); ci.DrawArc(at + new Vector2(1.1f, 1.1f), 0.6f, 0f, Mathf.Tau * 0.7f, 6, mk, 0.45f, true); break;
-            case CrewRole.Botanist: ci.DrawArc(at, 1.2f, -2.2f, 0.6f, 8, new Color("#bff0a0"), 0.6f, true); ci.DrawLine(at + new Vector2(-0.8f, 0.8f), at + new Vector2(0.8f, -0.8f), new Color("#bff0a0"), 0.4f); break;
-            case CrewRole.Electrician: ci.DrawPolyline(new[] { at + new Vector2(-1.2f, -0.7f), at + new Vector2(0.1f, 0.2f), at + new Vector2(-0.3f, -0.2f), at + new Vector2(1.2f, 0.7f) }, new Color("#ffe066"), 0.55f, true); break;
-            default: ci.DrawCircle(at, 1f, new Color(1f, 1f, 1f, 0.6f), true, -1f, true); break;
+            case CrewRole.Engineer: ci.Arc(at, 1f, 0f, Mathf.Tau, 8, mk, 0.5f, true); for (int k = 0; k < 6; k++) { float a = k * Mathf.Tau / 6f; ci.DrawLine(at + new Vector2(Mathf.Cos(a), Mathf.Sin(a)), at + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * 1.5f, mk, 0.45f); } break;
+            case CrewRole.Pilot: ci.Polyline(new[] { at + new Vector2(-0.6f, -1.6f), at + new Vector2(0.6f, 0f), at + new Vector2(-0.6f, 1.6f) }, mk, 0.55f, true); break;
+            case CrewRole.Technician: ci.DrawLine(at + new Vector2(-1f, -1f), at + new Vector2(1f, 1f), mk, 0.55f); ci.Arc(at + new Vector2(1.1f, 1.1f), 0.6f, 0f, Mathf.Tau * 0.7f, 6, mk, 0.45f, true); break;
+            case CrewRole.Botanist: ci.Arc(at, 1.2f, -2.2f, 0.6f, 8, new Color("#bff0a0"), 0.6f, true); ci.DrawLine(at + new Vector2(-0.8f, 0.8f), at + new Vector2(0.8f, -0.8f), new Color("#bff0a0"), 0.4f); break;
+            case CrewRole.Electrician: ci.Polyline(new[] { at + new Vector2(-1.2f, -0.7f), at + new Vector2(0.1f, 0.2f), at + new Vector2(-0.3f, -0.2f), at + new Vector2(1.2f, 0.7f) }, new Color("#ffe066"), 0.55f, true); break;
+            default: ci.Circle(at, 1f, new Color(1f, 1f, 1f, 0.6f), true, -1f, true); break;
         }
     }
 
@@ -267,21 +267,21 @@ public partial class ShipView
                 // 굽힌 팔: 위팔 · 아래팔 두 토막 + 둥근 팔꿈치 (모서리가 뾰족하지 않게)
                 ci.DrawLine(shoulder, e, outline, 3.6f, true); ci.DrawLine(e, hand, outline, 3.6f, true);
                 ci.DrawLine(shoulder, e, armCol, 2.6f, true); ci.DrawLine(e, hand, armCol, 2.6f, true);
-                ci.DrawCircle(e, 1.3f, armCol, true, -1f, true);
+                ci.Circle(e, 1.3f, armCol, true, -1f, true);
             }
             else
             {
                 ci.DrawLine(shoulder, hand, outline, 3.6f, true);
                 ci.DrawLine(shoulder, hand, armCol, 2.6f, true);
             }
-            if (state == ArmState.Prosthetic && lod >= 2) ci.DrawCircle(shoulder.Lerp(hand, 0.5f), 0.7f, new Color("#5f6873"), true, -1f, true);
+            if (state == ArmState.Prosthetic && lod >= 2) ci.Circle(shoulder.Lerp(hand, 0.5f), 0.7f, new Color("#5f6873"), true, -1f, true);
             if (state == ArmState.Hurt)
             {
                 // 붕대 · 팔걸이 (반대쪽 어깨로 건 천)
                 ci.DrawLine(shoulder.Lerp(hand, 0.45f) + new Vector2(-0.9f, 0f), shoulder.Lerp(hand, 0.45f) + new Vector2(0.9f, 0f), new Color("#f2f2ee"), 1.1f, true);
                 if (lod >= 2) ci.DrawLine(hand + new Vector2(0.4f, 0f), new Vector2(-0.5f, -k * W * 0.7f), new Color(0.95f, 0.95f, 0.92f, 0.85f), 0.9f, true);
             }
-            if (lod >= 2 || state != ArmState.Ok) ci.DrawCircle(hand, 1.35f, state == ArmState.Prosthetic ? new Color("#7c8590") : glove, true, -1f, true);
+            if (lod >= 2 || state != ArmState.Ok) ci.Circle(hand, 1.35f, state == ArmState.Prosthetic ? new Color("#7c8590") : glove, true, -1f, true);
         }
         if (held == HeldThing.None || held == HeldThing.Person) return;
         var at = two ? new Vector2(7.2f, 0f) : work ? new Vector2(6.6f, holdSide * 2.4f) : new Vector2(5.1f, holdSide * W * 0.75f);
@@ -302,7 +302,7 @@ public partial class ShipView
                 var tip = at + dir * 4.2f;
                 ci.DrawLine(at, tip, outline, 1.8f, true);
                 ci.DrawLine(at, tip, new Color("#aeb6bf"), 1.1f, true);
-                ci.DrawArc(tip + dir * 0.6f, 1f, dir.Angle() + 0.9f, dir.Angle() + Mathf.Tau - 0.9f, 8, new Color("#aeb6bf"), 0.9f, true);
+                ci.Arc(tip + dir * 0.6f, 1f, dir.Angle() + 0.9f, dir.Angle() + Mathf.Tau - 0.9f, 8, new Color("#aeb6bf"), 0.9f, true);
                 break;
             }
             case HeldThing.Scissors:
@@ -313,21 +313,21 @@ public partial class ShipView
                 {
                     var d = new Vector2(Mathf.Cos(snip * k), Mathf.Sin(snip * k));
                     ci.DrawLine(at, at + d * 3.6f, new Color("#dfe4ea"), 0.7f, true);
-                    ci.DrawArc(at - d * 0.9f, 0.6f, 0f, Mathf.Tau, 8, new Color("#d0465a"), 0.45f, true);
+                    ci.Arc(at - d * 0.9f, 0.6f, 0f, Mathf.Tau, 8, new Color("#d0465a"), 0.45f, true);
                 }
                 if (detail)
                 {
                     var comb = new Vector2(at.X - 0.4f, -side * 3.2f);
-                    ci.DrawRect(new Rect2(comb.X - 0.3f, comb.Y - 1.4f, 0.6f, 2.8f), new Color("#2b2b30"));
+                    ci.Box(new Rect2(comb.X - 0.3f, comb.Y - 1.4f, 0.6f, 2.8f), new Color("#2b2b30"));
                     for (int j = 0; j < 5; j++) ci.DrawLine(comb + new Vector2(0.3f, -1.2f + j * 0.6f), comb + new Vector2(1f, -1.2f + j * 0.6f), new Color("#2b2b30"), 0.25f);
                 }
                 break;
             }
             case HeldThing.Cup:
-                ci.DrawCircle(at, 1.6f, outline, true, -1f, true);
-                ci.DrawCircle(at, 1.3f, accent.Lightened(0.25f), true, -1f, true);
-                ci.DrawCircle(at, 0.9f, new Color("#5a3a22"), true, -1f, true);
-                ci.DrawArc(at + new Vector2(0f, side * 1.5f), 0.6f, 0f, Mathf.Tau, 8, accent.Lightened(0.25f), 0.4f, true);
+                ci.Circle(at, 1.6f, outline, true, -1f, true);
+                ci.Circle(at, 1.3f, accent.Lightened(0.25f), true, -1f, true);
+                ci.Circle(at, 0.9f, new Color("#5a3a22"), true, -1f, true);
+                ci.Arc(at + new Vector2(0f, side * 1.5f), 0.6f, 0f, Mathf.Tau, 8, accent.Lightened(0.25f), 0.4f, true);
                 if (detail)
                     for (int j = 0; j < 2; j++)
                     {
@@ -344,12 +344,12 @@ public partial class ShipView
                 bool produce = c.Carrying?.Kind == ItemKind.Produce;
                 Gfx.RoundRect(ci, new Rect2(at.X - 2.6f, at.Y - 3.6f, 5.2f, 7.2f), produce ? new Color("#8a6a3e") : new Color("#7b6a58"), 0.6f, outline);
                 if (produce)
-                    for (int j = 0; j < 5; j++) ci.DrawCircle(at + new Vector2(-1.4f + (j % 3) * 1.4f, -2f + (j / 3) * 2.2f), 0.75f, new Color("#7fcf55"), true, -1f, true);
+                    for (int j = 0; j < 5; j++) ci.Circle(at + new Vector2(-1.4f + (j % 3) * 1.4f, -2f + (j / 3) * 2.2f), 0.75f, new Color("#7fcf55"), true, -1f, true);
                 else
                 {
                     ci.DrawLine(at + new Vector2(-2.6f, -3.6f), at + new Vector2(2.6f, 3.6f), new Color("#a8957c"), 0.5f);
                     ci.DrawLine(at + new Vector2(-2.6f, 3.6f), at + new Vector2(2.6f, -3.6f), new Color("#a8957c"), 0.5f);
-                    if (detail && c.Carrying is ItemStack st) ci.DrawRect(new Rect2(at.X - 0.9f, at.Y - 0.9f, 1.8f, 1.8f), Palette.Item(st.Kind));
+                    if (detail && c.Carrying is ItemStack st) ci.Box(new Rect2(at.X - 0.9f, at.Y - 0.9f, 1.8f, 1.8f), Palette.Item(st.Kind));
                 }
                 break;
             }
@@ -358,9 +358,9 @@ public partial class ShipView
                 // 빨간 통 (몸 옆) · 검은 호스 · 노즐은 앞으로
                 var can = new Vector2(at.X - 2.4f, at.Y + side * 0.8f);
                 Gfx.RoundRect(ci, new Rect2(can.X - 2.4f, can.Y - 1.2f, 4.8f, 2.4f), new Color("#d23b2f"), 1.1f, outline);
-                ci.DrawRect(new Rect2(can.X + 1.8f, can.Y - 0.6f, 0.8f, 1.2f), new Color("#2a2a2a"));
-                ci.DrawPolyline(new[] { can + new Vector2(2.6f, 0f), at + new Vector2(0.5f, -side * 0.6f), at + new Vector2(2.8f, 0f) }, new Color("#1c1c1c"), 0.6f, true);
-                if (detail) ci.DrawRect(new Rect2(can.X - 0.6f, can.Y - 1.2f, 0.5f, 2.4f), new Color("#f5d547"));
+                ci.Box(new Rect2(can.X + 1.8f, can.Y - 0.6f, 0.8f, 1.2f), new Color("#2a2a2a"));
+                ci.Polyline(new[] { can + new Vector2(2.6f, 0f), at + new Vector2(0.5f, -side * 0.6f), at + new Vector2(2.8f, 0f) }, new Color("#1c1c1c"), 0.6f, true);
+                if (detail) ci.Box(new Rect2(can.X - 0.6f, can.Y - 1.2f, 0.5f, 2.4f), new Color("#f5d547"));
                 break;
             }
             case HeldThing.Mop:
@@ -374,24 +374,24 @@ public partial class ShipView
                 break;
             }
             case HeldThing.Plate:
-                ci.DrawCircle(at, 2.5f, outline, true, -1f, true);
-                ci.DrawCircle(at, 2.2f, new Color("#f1efe8"), true, -1f, true);
-                ci.DrawCircle(at + new Vector2(-0.5f, -0.4f), 0.9f, new Color("#e0a040"), true, -1f, true);
-                ci.DrawCircle(at + new Vector2(0.7f, 0.5f), 0.7f, new Color("#7cc05a"), true, -1f, true);
+                ci.Circle(at, 2.5f, outline, true, -1f, true);
+                ci.Circle(at, 2.2f, new Color("#f1efe8"), true, -1f, true);
+                ci.Circle(at + new Vector2(-0.5f, -0.4f), 0.9f, new Color("#e0a040"), true, -1f, true);
+                ci.Circle(at + new Vector2(0.7f, 0.5f), 0.7f, new Color("#7cc05a"), true, -1f, true);
                 if (detail) ci.DrawLine(at + new Vector2(-1.8f, 1.6f), at + new Vector2(1.4f, 2.6f), new Color("#c9ced6"), 0.4f, true);
                 break;
             case HeldThing.MedKit:
                 Gfx.RoundRect(ci, new Rect2(at.X - 1.9f, at.Y - 1.5f, 3.8f, 3f), new Color("#f4f4f2"), 0.5f, outline);
-                ci.DrawRect(new Rect2(at.X - 0.3f, at.Y - 1f, 0.6f, 2f), new Color("#d33a3a"));
-                ci.DrawRect(new Rect2(at.X - 1f, at.Y - 0.3f, 2f, 0.6f), new Color("#d33a3a"));
+                ci.Box(new Rect2(at.X - 0.3f, at.Y - 1f, 0.6f, 2f), new Color("#d33a3a"));
+                ci.Box(new Rect2(at.X - 1f, at.Y - 0.3f, 2f, 0.6f), new Color("#d33a3a"));
                 break;
             case HeldThing.Cable:
-                ci.DrawArc(at, 1.8f, 0f, Mathf.Tau, 14, new Color("#e08a2a"), 0.7f, true);
-                ci.DrawArc(at, 1.1f, 0f, Mathf.Tau, 12, new Color("#e08a2a"), 0.6f, true);
+                ci.Arc(at, 1.8f, 0f, Mathf.Tau, 14, new Color("#e08a2a"), 0.7f, true);
+                ci.Arc(at, 1.1f, 0f, Mathf.Tau, 12, new Color("#e08a2a"), 0.6f, true);
                 break;
             case HeldThing.Suit:
                 Gfx.RoundRect(ci, new Rect2(at.X - 2.4f, at.Y - 3.4f, 4.8f, 6.8f), new Color("#dfe6ee"), 1.2f, outline);
-                ci.DrawCircle(at + new Vector2(0.8f, 0f), 1.3f, new Color("#1c2a3e"), true, -1f, true);
+                ci.Circle(at + new Vector2(0.8f, 0f), 1.3f, new Color("#1c2a3e"), true, -1f, true);
                 break;
             case HeldThing.Packet:
                 Gfx.RoundRect(ci, new Rect2(at.X - 1.5f, at.Y - 1f, 3f, 2f), new Color("#c9ced6"), 0.3f, outline);
@@ -428,8 +428,8 @@ public partial class ShipView
                 var b = a + new Vector2(-L, sway);
                 ci.DrawLine(a, b, outline, 2.9f, true);
                 ci.DrawLine(a, b, hair, 2.1f, true);
-                ci.DrawCircle(b, 1.2f, hair, true, -1f, true);
-                if (lod >= 1) ci.DrawCircle(a + new Vector2(-0.4f, 0f), 0.75f, Palette.Crew(c.Id), true, -1f, true); // 머리끈
+                ci.Circle(b, 1.2f, hair, true, -1f, true);
+                if (lod >= 1) ci.Circle(a + new Vector2(-0.4f, 0f), 0.75f, Palette.Crew(c.Id), true, -1f, true); // 머리끈
                 break;
             }
             case HairStyle.Braid:
@@ -443,24 +443,24 @@ public partial class ShipView
                 Oval(ci, xf, head + new Vector2(-0.8f, 0f), R + 0.6f + shag * 0.5f, R + 1.6f + shag * 0.8f, hair.Darkened(0.06f));
                 break;
         }
-        ci.DrawCircle(head, R + 0.55f, outline, true, -1f, true);
-        ci.DrawCircle(head, R, skin, true, -1f, true);
+        ci.Circle(head, R + 0.55f, outline, true, -1f, true);
+        ci.Circle(head, R, skin, true, -1f, true);
         if (detail)
         {
             Oval(ci, xf, head + new Vector2(0.1f, R - 0.1f), 0.7f, 0.5f, skin.Darkened(0.1f)); // 귀
             Oval(ci, xf, head + new Vector2(0.1f, -R + 0.1f), 0.7f, 0.5f, skin.Darkened(0.1f));
-            ci.DrawCircle(head + new Vector2(R - 0.2f, 0f), 0.55f, skin.Darkened(0.12f), true, -1f, true); // 코끝
+            ci.Circle(head + new Vector2(R - 0.2f, 0f), 0.55f, skin.Darkened(0.12f), true, -1f, true); // 코끝
         }
         // 수염: 얼굴 앞쪽 가장자리 (길이만큼 두껍게 · 짧으면 거뭇한 그림자)
         if (l is { Stubbly: true } && l.BeardMm > 0.6f)
         {
             float th = Mathf.Clamp(l.BeardMm * 0.16f, 0.5f, 2.8f);
             var bc = l.BeardMm < 3f ? hair.WithAlpha(0.35f) : hair.Darkened(0.05f);
-            ci.DrawArc(head, R - th * 0.5f + 0.3f, -1.05f, 1.05f, 12, bc, th, true);
+            ci.Arc(head, R - th * 0.5f + 0.3f, -1.05f, 1.05f, 12, bc, th, true);
         }
         if (style == HairStyle.Bald)
         {
-            if (c.Age > 40f) ci.DrawArc(head + new Vector2(-0.4f, 0f), R - 0.3f, Mathf.Pi * 0.55f, Mathf.Pi * 1.45f, 10, hair, 1f, true); // 뒤통수 테
+            if (c.Age > 40f) ci.Arc(head + new Vector2(-0.4f, 0f), R - 0.3f, Mathf.Pi * 0.55f, Mathf.Pi * 1.45f, 10, hair, 1f, true); // 뒤통수 테
             if (detail) Oval(ci, xf, head + new Vector2(-0.6f, -1.2f), 1.3f, 0.7f, new Color(1f, 1f, 1f, 0.35f));
             PaintFace(ci, head, c, lod, t, 1.2f);
             return;
@@ -484,8 +484,8 @@ public partial class ShipView
             if (uneven > 0.05f && Mathf.Sin(a) > 0.2f) r -= uneven * 1.3f * Mathf.Sin(a) + (j % 3 == 0 ? uneven * 0.7f : 0f); // 삐뚤빼뚤: 한쪽이 짧고 들쭉날쭉
             pts[j] = capC + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r;
         }
-        ci.DrawColoredPolygon(pts, style == HairStyle.Buzz ? hair.WithAlpha(0.8f) : hair);
-        if (lod >= 1) ci.DrawPolyline(Close(pts), hair.Lightened(0.22f).WithAlpha(0.5f), 0.35f, true); // 머리 윤곽 (어두운 머리도 몸과 갈린다)
+        ci.Poly(pts, style == HairStyle.Buzz ? hair.WithAlpha(0.8f) : hair);
+        if (lod >= 1) ci.Polyline(Close(pts), hair.Lightened(0.22f).WithAlpha(0.5f), 0.35f, true); // 머리 윤곽 (어두운 머리도 몸과 갈린다)
         switch (style)
         {
             case HairStyle.Side when lod >= 1:
@@ -495,16 +495,16 @@ public partial class ShipView
                 for (int j = 0; j < (detail ? 10 : 6); j++)
                 {
                     float a = j * Mathf.Tau / (detail ? 10 : 6) + 0.3f;
-                    ci.DrawCircle(capC + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * (r0 - 0.4f), 1.3f + 0.25f * Mathf.Min(shag, 2f), hair.Lightened(0.08f), true, -1f, true);
+                    ci.Circle(capC + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * (r0 - 0.4f), 1.3f + 0.25f * Mathf.Min(shag, 2f), hair.Lightened(0.08f), true, -1f, true);
                 }
                 break;
             case HairStyle.Bun:
-                ci.DrawCircle(head + new Vector2(-R + 0.2f, 0f), 2.3f, outline, true, -1f, true);
-                ci.DrawCircle(head + new Vector2(-R + 0.2f, 0f), 1.9f, hair.Lightened(0.06f), true, -1f, true);
+                ci.Circle(head + new Vector2(-R + 0.2f, 0f), 2.3f, outline, true, -1f, true);
+                ci.Circle(head + new Vector2(-R + 0.2f, 0f), 1.9f, hair.Lightened(0.06f), true, -1f, true);
                 if (detail) ci.DrawLine(head + new Vector2(-R - 1.6f, -1.6f), head + new Vector2(-R + 1.8f, 1.4f), new Color("#c9a86a"), 0.4f, true); // 비녀
                 break;
             case HairStyle.Buzz when detail:
-                for (int j = 0; j < 7; j++) ci.DrawCircle(capC + new Vector2(Mathf.Cos(j * 2.4f), Mathf.Sin(j * 2.4f)) * (j * 0.45f), 0.25f, hair.Darkened(0.25f), true, -1f, true);
+                for (int j = 0; j < 7; j++) ci.Circle(capC + new Vector2(Mathf.Cos(j * 2.4f), Mathf.Sin(j * 2.4f)) * (j * 0.45f), 0.25f, hair.Darkened(0.25f), true, -1f, true);
                 break;
         }
         if (detail && style is not HairStyle.Buzz)
@@ -540,8 +540,8 @@ public partial class ShipView
             case FaceLook.Tired:
                 ci.DrawLine(eyeL - new Vector2(0f, 0.38f), eyeL + new Vector2(0f, 0.38f), ink, 0.42f, true);
                 ci.DrawLine(eyeR - new Vector2(0f, 0.38f), eyeR + new Vector2(0f, 0.38f), ink, 0.42f, true);
-                ci.DrawCircle(eyeL + new Vector2(0.15f, 0f), 0.16f, ink, true, -1f, true);
-                ci.DrawCircle(eyeR + new Vector2(0.15f, 0f), 0.16f, ink, true, -1f, true);
+                ci.Circle(eyeL + new Vector2(0.15f, 0f), 0.16f, ink, true, -1f, true);
+                ci.Circle(eyeR + new Vector2(0.15f, 0f), 0.16f, ink, true, -1f, true);
                 break;
             case FaceLook.Pain:
                 // 질끈: > <
@@ -554,13 +554,13 @@ public partial class ShipView
             case FaceLook.Fear:
                 foreach (var p in new[] { eyeL, eyeR })
                 {
-                    ci.DrawCircle(p, 0.42f, new Color(0.97f, 0.97f, 0.95f), true, -1f, true);
-                    ci.DrawCircle(p + new Vector2(0.12f, 0f), 0.2f, ink, true, -1f, true);
+                    ci.Circle(p, 0.42f, new Color(0.97f, 0.97f, 0.95f), true, -1f, true);
+                    ci.Circle(p + new Vector2(0.12f, 0f), 0.2f, ink, true, -1f, true);
                 }
                 break;
             default:
                 if (blink) { Closed(eyeL); Closed(eyeR); }
-                else { ci.DrawCircle(eyeL, 0.27f, ink, true, -1f, true); ci.DrawCircle(eyeR, 0.27f, ink, true, -1f, true); }
+                else { ci.Circle(eyeL, 0.27f, ink, true, -1f, true); ci.Circle(eyeR, 0.27f, ink, true, -1f, true); }
                 break;
         }
         // 눈썹 (화 · 걱정 · 두려움만 — 기울기로)
@@ -578,9 +578,9 @@ public partial class ShipView
         var mouth = head + new Vector2(2.55f, 0f);
         switch (e)
         {
-            case FaceLook.Smile: ci.DrawArc(head + new Vector2(1.85f, 0f), 0.85f, -0.85f, 0.85f, 8, ink, 0.3f, true); break;
-            case FaceLook.Sad: ci.DrawArc(head + new Vector2(3.35f, 0f), 0.8f, Mathf.Pi - 0.7f, Mathf.Pi + 0.7f, 8, ink, 0.3f, true); break;
-            case FaceLook.Fear: ci.DrawCircle(mouth, 0.33f, ink, true, -1f, true); break;
+            case FaceLook.Smile: ci.Arc(head + new Vector2(1.85f, 0f), 0.85f, -0.85f, 0.85f, 8, ink, 0.3f, true); break;
+            case FaceLook.Sad: ci.Arc(head + new Vector2(3.35f, 0f), 0.8f, Mathf.Pi - 0.7f, Mathf.Pi + 0.7f, 8, ink, 0.3f, true); break;
+            case FaceLook.Fear: ci.Circle(mouth, 0.33f, ink, true, -1f, true); break;
             case FaceLook.Pain:
             case FaceLook.Angry: ci.DrawLine(mouth - new Vector2(0f, 0.55f), mouth + new Vector2(0f, 0.55f), ink, 0.34f, true); break;
             case FaceLook.Asleep: break;
@@ -592,15 +592,15 @@ public partial class ShipView
     {
         bool low = c.Suit is SuitState su && su.Oxygen < 0.75f;
         float blink = low ? 0.5f + 0.5f * Mathf.Sin(t * 8f) : 1f;
-        ci.DrawCircle(head, 5.2f, Palette.Space.WithAlpha(0.7f), true, -1f, true);
-        ci.DrawCircle(head, 4.8f, (low ? Palette.Warning : new Color("#dfe6ee")).WithAlpha(0.95f * blink), true, -1f, true);
-        ci.DrawCircle(head + new Vector2(0.6f, 0f), 3.7f, new Color("#1c2a3e"), true, -1f, true);
-        ci.DrawCircle(head + new Vector2(0.2f, 0f), 2.2f, skin.WithAlpha(0.28f), true, -1f, true); // 유리 너머 얼굴
-        ci.DrawArc(head + new Vector2(0.6f, 0f), 2.9f, -1.2f, -0.2f, 8, new Color(1f, 1f, 1f, 0.6f), 0.8f, true);
+        ci.Circle(head, 5.2f, Palette.Space.WithAlpha(0.7f), true, -1f, true);
+        ci.Circle(head, 4.8f, (low ? Palette.Warning : new Color("#dfe6ee")).WithAlpha(0.95f * blink), true, -1f, true);
+        ci.Circle(head + new Vector2(0.6f, 0f), 3.7f, new Color("#1c2a3e"), true, -1f, true);
+        ci.Circle(head + new Vector2(0.2f, 0f), 2.2f, skin.WithAlpha(0.28f), true, -1f, true); // 유리 너머 얼굴
+        ci.Arc(head + new Vector2(0.6f, 0f), 2.9f, -1.2f, -0.2f, 8, new Color(1f, 1f, 1f, 0.6f), 0.8f, true);
         if (detail)
         {
-            ci.DrawCircle(head + new Vector2(-2.8f, -3.2f), 0.6f, accent, true, -1f, true); // 개인 색 헬멧 등
-            ci.DrawCircle(head + new Vector2(-2.8f, 3.2f), 0.6f, accent, true, -1f, true);
+            ci.Circle(head + new Vector2(-2.8f, -3.2f), 0.6f, accent, true, -1f, true); // 개인 색 헬멧 등
+            ci.Circle(head + new Vector2(-2.8f, 3.2f), 0.6f, accent, true, -1f, true);
         }
     }
 
@@ -629,20 +629,20 @@ public partial class ShipView
                 var st = Puppet.Arm(c, k > 0 ? BodyPart.RightArm : BodyPart.LeftArm);
                 if (st == ArmState.Lost) continue;
                 ci.DrawLine(new Vector2(3f, k * 5.6f * wf), new Vector2(-3.4f, k * 6.4f * wf), cloth.Darkened(0.1f), 2.4f, true);
-                ci.DrawCircle(new Vector2(-3.8f, k * 6.4f * wf), 1.2f, skin, true, -1f, true);
+                ci.Circle(new Vector2(-3.8f, k * 6.4f * wf), 1.2f, skin, true, -1f, true);
             }
         }
         var head = new Vector2(blanket ? 6.5f : 8.6f, 0f);
         if (l != null && l.Style is HairStyle.Long or HairStyle.Bob or HairStyle.Braid or HairStyle.Ponytail && !dead)
             Oval(ci, xf, head + new Vector2(1.6f, 0f), 3.2f + Mathf.Min(l.HairCm, 50f) * 0.05f, 4.8f, hair.Darkened(0.1f)); // 베개에 퍼진 머리
-        ci.DrawCircle(head, 4.8f, outline, true, -1f, true);
-        ci.DrawCircle(head, 4.3f, skin, true, -1f, true);
+        ci.Circle(head, 4.8f, outline, true, -1f, true);
+        ci.Circle(head, 4.3f, skin, true, -1f, true);
         if (l == null || l.Style != HairStyle.Bald)
         {
             float r0 = 4.4f + Mathf.Min(l?.Shag ?? 0f, 2f) * 0.6f;
             Oval(ci, xf, head + new Vector2(1.2f, 0f), r0 * 0.8f, r0, hair);
         }
-        if (l is { Stubbly: true } && l.BeardMm > 2f) ci.DrawArc(head, 3.6f, Mathf.Pi - 1f, Mathf.Pi + 1f, 10, hair.WithAlpha(0.6f), Mathf.Clamp(l.BeardMm * 0.15f, 0.5f, 2.4f), true);
+        if (l is { Stubbly: true } && l.BeardMm > 2f) ci.Arc(head, 3.6f, Mathf.Pi - 1f, Mathf.Pi + 1f, 10, hair.WithAlpha(0.6f), Mathf.Clamp(l.BeardMm * 0.15f, 0.5f, 2.4f), true);
         ci.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
     }
 
@@ -668,17 +668,17 @@ public partial class ShipView
             var sh = new Vector2(2.4f, k * 4.2f);
             var elbow = sh + new Vector2(2.8f - 2.2f * stroke * k, k * 2.2f);
             var hand = elbow + new Vector2(2.4f, -k * 1.4f);
-            ci.DrawPolyline(new[] { sh, elbow, hand }, outline, 3.2f, true);
-            ci.DrawPolyline(new[] { sh, elbow, hand }, cloth, 2.3f, true);
-            ci.DrawCircle(hand, 1.2f, skin, true, -1f, true);
+            ci.Polyline(new[] { sh, elbow, hand }, outline, 3.2f, true);
+            ci.Polyline(new[] { sh, elbow, hand }, cloth, 2.3f, true);
+            ci.Circle(hand, 1.2f, skin, true, -1f, true);
         }
         Oval(ci, xf, new Vector2(-2f, 0f), 6.6f, 4.8f, outline);
         Oval(ci, xf, new Vector2(-2f, 0f), 6f, 4.2f, cloth);
         var head = new Vector2(6.6f, 0f);
-        ci.DrawCircle(head, 4.3f, outline, true, -1f, true);
-        ci.DrawCircle(head, 3.8f, skin, true, -1f, true);
+        ci.Circle(head, 4.3f, outline, true, -1f, true);
+        ci.Circle(head, 3.8f, skin, true, -1f, true);
         if (l == null || l.Style != HairStyle.Bald) Oval(ci, xf, head + new Vector2(-0.8f, 0f), 3.6f + Mathf.Min(l?.Shag ?? 0f, 2f) * 0.5f, 3.9f + Mathf.Min(l?.Shag ?? 0f, 2f) * 0.5f, hair);
-        ci.DrawCircle(head + new Vector2(2.6f, 0f), 1.1f, new Color(1f, 0.95f, 0.7f), true, -1f, true); // 머리등
+        ci.Circle(head + new Vector2(2.6f, 0f), 1.1f, new Color(1f, 0.95f, 0.7f), true, -1f, true); // 머리등
         ci.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
     }
 

@@ -35,7 +35,11 @@ public static class Gfx
 {
     private static StyleBoxFlat? _box;
 
-    public static void RoundRect(CanvasItem ci, Rect2 rect, Color fill, float radius, Color? border = null, int borderWidth = 1)
+    public static void RoundRect(CanvasItem ci, Rect2 rect, Color fill, float radius, Color? border = null, int borderWidth = 1) =>
+        FastDraw.RoundRect(ci, rect, fill, radius, border, borderWidth); // 60프레임: 상자 그림(15µs) 대신 사각형 + 원 그림 모서리 (1µs)
+
+    /// <summary>예전 상자 그림 (비교용).</summary>
+    public static void RoundRectStyle(CanvasItem ci, Rect2 rect, Color fill, float radius, Color? border = null, int borderWidth = 1)
     {
         _box ??= new StyleBoxFlat { AntiAliasing = true, CornerDetail = 6 };
         _box.BgColor = fill;

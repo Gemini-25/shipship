@@ -252,12 +252,15 @@ public partial class Main : Node2D
                 _accumulator -= steps;
             }
             long fps0 = FrameProbe.Now, sb0 = System.Diagnostics.Stopwatch.GetTimestamp(); // v17.7
+            int done = 0;
             for (int i = 0; i < steps; i++)
             {
                 Sim.Step();
-                if ((i & 3) == 3 && System.Diagnostics.Stopwatch.GetElapsedTime(sb0).TotalMilliseconds > SimBudgetMs) { _accumulator = 0; break; } // v17.7 MainPerf.cs
+                done++;
+                if ((i & 3) == 3 && System.Diagnostics.Stopwatch.GetElapsedTime(sb0).TotalMilliseconds > _simBudget) { _accumulator = 0; break; } // v17.7 MainPerf.cs
             }
             FrameProbe.Add("시뮬레이션", fps0);
+            FitSimBudget(delta, System.Diagnostics.Stopwatch.GetElapsedTime(sb0).TotalMilliseconds, done);
             Alpha = (float)_accumulator;
             WatchAlerts();
         }
@@ -424,6 +427,7 @@ public partial class Main : Node2D
 
     public override void _UnhandledInput(InputEvent e)
     {
+        if (e is InputEventKey or InputEventMouseButton) Hud.QueueRedraw(); // 단축키 · 고르기는 HUD 에 바로 보인다
         if (e is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } click)
         {
             var world = GetGlobalMousePosition();

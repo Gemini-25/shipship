@@ -99,7 +99,7 @@ public static partial class FixtureArt
         if (run && x.W != null && pt != null) // 걸러지는 양
         {
             float u = Mathf.Clamp(1f - (x.W.Organs.Peek(pt)?.Uremia ?? 0f), 0f, 1f);
-            ci.DrawRect(new Rect2(x.P(0.18f, 0.39f), new Vector2(x.Lu * 0.64f * u, x.Px(1.2f))), MWave.WithAlpha(0.7f));
+            ci.Box(new Rect2(x.P(0.18f, 0.39f), new Vector2(x.Lu * 0.64f * u, x.Px(1.2f))), MWave.WithAlpha(0.7f));
         }
         Tubes(x, x.P(0.86f, 0.6f), M2Blood, MVein, run ? 1f : 0f);
     }
@@ -149,7 +149,7 @@ public static partial class FixtureArt
                 Ring(ci, c0, r, MVein.Lerp(M2Blood.Lightened(0.15f), k / 5f).WithAlpha(0.7f), x.Px(0.8f));
             }
             float sweep = Mathf.PosMod(x.T * 1.5f, Mathf.Tau);
-            ci.DrawArc(c0, x.Px(5.5f), sweep, sweep + 1.2f, 10, M2Blood.Lightened(0.3f).WithAlpha(0.6f), x.Px(1f), true);
+            ci.Arc(c0, x.Px(5.5f), sweep, sweep + 1.2f, 10, M2Blood.Lightened(0.3f).WithAlpha(0.6f), x.Px(1f), true);
         }
         Fan(ci, x.P(0.3f, 0.72f), x.Px(2.8f), 3, run ? x.T * (crank && !On2(x) ? 4f : 14f) : 0.3f, run ? Chrome : Steel4, x.Px(0.8f)); // 원심 펌프
         // 손 펌프 손잡이
@@ -163,7 +163,7 @@ public static partial class FixtureArt
         if (run || x.M?.Powered == true)
         {
             float f = run ? (On2(x) ? 0.85f : crank ? 0.5f : 0.7f) : 0.05f;
-            ci.DrawRect(new Rect2(scr.Position + new Vector2(0f, scr.Size.Y * 0.6f), new Vector2(scr.Size.X * f, scr.Size.Y * 0.25f)), (crank ? WarnYellow : MWave).WithAlpha(0.8f));
+            ci.Box(new Rect2(scr.Position + new Vector2(0f, scr.Size.Y * 0.6f), new Vector2(scr.Size.X * f, scr.Size.Y * 0.25f)), (crank ? WarnYellow : MWave).WithAlpha(0.8f));
             Line(ci, scr.Position + new Vector2(0f, scr.Size.Y * 0.35f), scr.Position + new Vector2(scr.Size.X * (0.5f + 0.4f * Pulse(x.T, 2f)), scr.Size.Y * 0.35f), MWave.WithAlpha(0.6f * x.Glow), x.Px(0.6f));
         }
         if (OnCell(x)) Led(ci, x.P(0.1f, 0.55f), Amber, 0.5f + 0.5f * Pulse(x.T, 6f), x.Px(1.4f));
@@ -204,7 +204,7 @@ public static partial class FixtureArt
             var r = x.Q(0.2f + k * 0.36f, 0.17f, 0.44f + k * 0.36f, 0.47f);
             float fill = charging ? Mathf.Clamp(b!.PumpCharge + (k == 1 ? -0.2f : 0f), 0.05f, 1f) : x.M?.Powered == true ? 1f : 0.1f;
             float h = r.Size.Y * fill;
-            ci.DrawRect(new Rect2(r.Position.X, r.End.Y - h, r.Size.X, h), (fill < 0.3f ? Amber : Good).WithAlpha(charging ? 0.55f + 0.3f * Pulse(x.T + k, 3f) : 0.35f * x.Glow));
+            ci.Box(new Rect2(r.Position.X, r.End.Y - h, r.Size.X, h), (fill < 0.3f ? Amber : Good).WithAlpha(charging ? 0.55f + 0.3f * Pulse(x.T + k, 3f) : 0.35f * x.Glow));
         }
         // 맥박 등: 펌프가 도는 사람이 곁에 있으면 그 박자로
         float beat = Mathf.PosMod(x.T * 1.6f, 1f);
@@ -250,7 +250,7 @@ public static partial class FixtureArt
                 else if (g.Organ == Organ.Lungs) { Dot(ci, p + new Vector2(-x.Px(1.1f), 0f), x.Px(1.4f), col); Dot(ci, p + new Vector2(x.Px(1.1f), 0f), x.Px(1.4f), col); }
                 else Dot(ci, p, x.Px(g.Organ == Organ.Liver ? 2.2f : 1.8f), col);
                 float q = x.W.Transplant.Quality(g);
-                ci.DrawRect(new Rect2(p + new Vector2(-x.Px(3f), x.Px(3.4f)), new Vector2(x.Px(6f) * q, x.Px(0.8f))), (q > 0.4f ? Good : Danger).WithAlpha(0.8f));
+                ci.Box(new Rect2(p + new Vector2(-x.Px(3f), x.Px(3.4f)), new Vector2(x.Px(6f) * q, x.Px(0.8f))), (q > 0.4f ? Good : Danger).WithAlpha(0.8f));
                 slot++;
             }
         // 서리: 차가우면 반짝 · 꺼지면 녹아 물방울
@@ -311,7 +311,7 @@ public static partial class FixtureArt
         float drop = (bed.Y - x.Px(1.1f) * (layers + 1)) - nozzle.Y;
         if (run) { Line(ci, nozzle, nozzle + new Vector2(0f, drop), MInkA.WithAlpha(0.5f), x.Px(0.4f)); Dot(ci, nozzle + new Vector2(0f, drop), x.Px(0.6f), MInkA); }
         var scr = x.Q(0.62f, 0.85f, 0.86f, 0.91f);
-        if (x.M?.Powered == true) ci.DrawRect(new Rect2(scr.Position, new Vector2(scr.Size.X * prog, scr.Size.Y)), (run ? MWave : Steel4).WithAlpha(0.8f * x.Glow));
+        if (x.M?.Powered == true) ci.Box(new Rect2(scr.Position, new Vector2(scr.Size.X * prog, scr.Size.Y)), (run ? MWave : Steel4).WithAlpha(0.8f * x.Glow));
         if (job != null && !On2(x)) Led(ci, x.P(0.9f, 0.12f), Danger, Pulse(x.T, 7f) > 0.5f ? 1f : 0.15f, x.Px(1.4f)); // 세포가 식는다
     }
 

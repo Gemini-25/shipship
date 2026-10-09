@@ -26,11 +26,11 @@ public partial class ShipView : Node2D
     public Rect2 Bounds { get; private set; }
 
     /// <summary>v17.7 드물게 바뀌는 층은 화면 확대에 맞춘 그림 한 장으로 구워 그린다 (격자 전체 + 여백).</summary>
-    internal BakedLayer Baked(DrawLayer layer) => new(layer, () =>
+    internal BakedLayer Baked(DrawLayer layer, int margin = 2, int maxTex = 8192) => new(layer, () =>
     {
         var g = _world.Ship.Grid;
-        return new Rect2(-2f * T, -2f * T, (g.Width + 4) * T, (g.Height + 4) * T);
-    }, TextureFilter);
+        return new Rect2(-margin * T, -margin * T, (g.Width + 2 * margin) * T, (g.Height + 2 * margin) * T);
+    }, TextureFilter, maxTex);
 
     public void Init(Main main, World world)
     {
@@ -40,14 +40,20 @@ public partial class ShipView : Node2D
         _static = new DrawLayer { Name = "Static", Painter = PaintStatic };
         _lights = new DrawLayer { Name = "Lights", Painter = PaintLights, Material = new CanvasItemMaterial { BlendMode = CanvasItemMaterial.BlendModeEnum.Add } };
         _dynamic = new DrawLayer { Name = "Dynamic", Painter = PaintDynamic };
-        _dynUnder = new DrawLayer { Name = "DynamicUnder", Painter = PaintDynamicUnder }; // v17.7
         AddLookUnder(); // v16.5a 바탕(생성기 바닥재 · 벽) · 상태 겹치기 · 흔적 — 정적 층 아래
         AddChild(Baked(_static)); // v17.7 구워 둔다 (BakedLayer.cs)
         AddFixtureFineLayer(); // v16.5c 설비 디테일 층 (가까이서만)
         AddLookLight(); // v16.5a 2D 조명: 낮은 해상도 빛 버퍼 (곱하기)
         AddTechLookLayers(); // v16.5b 기술 수준 벽 · 기술 모습 · 간접 조명 (TechLook.cs)
         AddChild(_lights); // v10: 천장 조명이 바닥에 떨어뜨리는 빛 (더하기 섞기)
-        AddChild(_dynUnder);
+        // 60프레임: 사람을 따라 움직이지 않는 그림은 조각으로 나눠 돌아가며 다시 그리고 한 장씩 구워 둔다 (배 밖 멀리 가는 것만 그대로)
+        AddPart("DynamicFar", PaintDynamicFar, -1); // 떨어져 나간 방 · 다가오는 재난 (구운 그림 밖)
+        AddPart("DynamicUnder", PaintDynamicUnder, 16); // v17.7 배 바깥 · 흔적 · 바닥 상태 · 물건
+        AddPart("Fixtures0", ci => PaintFixtureLifePart(ci, 0, 2), 6); // 설비 움직임 (반씩)
+        AddPart("Fixtures1", ci => PaintFixtureLifePart(ci, 1, 2), 6);
+        AddPart("SlowFloor", PaintSlowFloor, 6); // 소품 · 폭발성 물건 · 음식 · 어두운 방 · 이동식 장비 · 공사 · 겹쳐 보기 · 물
+        AddPart("SlowFrame", PaintSlowFrame, 6); // 벽 · 관 · 망 · 이음 · 표지 · 장갑 · 방 상태
+        AddPart("SlowMarks", PaintSlowMarks, 6); // 주컴퓨터 · 정비 꼬리표 · 고장 표시 · 바닥 흔적
         AddChild(_dynamic);
         AddLookOver(); // v16.5a 입자 (김 · 물방울 · 불꽃 · 연기 · 먼지 · 결로)
         BuildOutlines();
@@ -65,18 +71,56 @@ public partial class ShipView : Node2D
         UpdateLook((float)delta); // v16.5a 확대 단계 · 겹치기 지문 · 빛 버퍼 · 입자
         UpdateTechLook(); // v16.5b 미감 세트 · 익힌 기술 · 개조 칸이 바뀌면 다시 그린다
         _dynamic.QueueRedraw();
-        // v17.7 멀리서 볼 때 아래쪽 장식은 두세 프레임에 한 번 (가까이서는 매 프레임)
-        float z = Zoom;
-        if (++_underFrame % (z >= 0.8f ? 1 : z >= 0.4f ? 2 : 3) == 0) _dynUnder.QueueRedraw();
+        RedrawParts(delta);
         _lights.QueueRedraw();
     }
-    private DrawLayer _dynUnder = null!;
-    private int _underFrame;
+
+    // ─────────── 60프레임: 나눠 그리는 층 ───────────
+    // 사람이 없는 장식 · 바닥 · 설비 · 관 · 표지는 초당 15~30번이면 충분하다 (멀수록 드물게).
+    // 조각마다 지난번 든 시간을 알고, 한 프레임에 예산(4ms)만큼만 가장 오래 기다린 조각부터 다시 그린다 — 한 프레임에 몰려 튀지 않게.
+    private sealed class Part
+    {
+        public DrawLayer Layer = null!;
+        public double Since = 1e9;
+    }
+    private readonly List<Part> _slowParts = new(), _slowOrder = new();
+    private const double PartBudgetMs = 4.0;
+    private (ViewMode, ViewMode?) _partMode;
+
+    private void AddPart(string name, System.Action<CanvasItem> painter, int bakeMargin)
+    {
+        var layer = new DrawLayer { Name = name, Painter = painter };
+        _slowParts.Add(new Part { Layer = layer });
+        if (bakeMargin < 0) AddChild(layer);
+        else AddChild(Baked(layer, bakeMargin, 3072));
+    }
+
+    private void RedrawParts(double delta)
+    {
+        float z = Zoom;
+        double every = z >= 0.8f ? 1.0 / 30.0 : z >= 0.4f ? 1.0 / 20.0 : 1.0 / 15.0;
+        var mode = (_main.ViewMode, _main.SecondaryView);
+        if (mode != _partMode) { _partMode = mode; foreach (var p in _slowParts) p.Since = 1e9; } // 보기를 바꾸면 바로
+        foreach (var p in _slowParts) p.Since += delta;
+        _slowOrder.Clear();
+        _slowOrder.AddRange(_slowParts);
+        _slowOrder.Sort((a, b) => b.Since.CompareTo(a.Since));
+        double spent = 0;
+        foreach (var p in _slowOrder)
+        {
+            if (p.Since < every) break;
+            if (spent > 0 && spent + p.Layer.LastMs > PartBudgetMs) break;
+            p.Layer.QueueRedraw();
+            p.Since = 0;
+            spent += p.Layer.LastMs;
+        }
+    }
 
     /// <summary>선체가 바뀌었을 때(사고, 개조) 호출.</summary>
     public void RedrawStatic() { RedrawLook(); _static.QueueRedraw(); _fixFine?.QueueRedraw(); } // v16.5c 디테일 층도
 
     public static Rect2 CellRect(Cell c) => new(c.X * T, c.Y * T, T, T);
+    private CrewMember? CrewById(int id) { foreach (var c in _world.Crew) if (c.Id == id) return c; return null; }
     public static Rect2 FurnitureRect(Furniture f) => new(f.MinX * T, f.MinY * T, f.Width * T, f.Height * T);
     public static Vector2 ToPx(System.Numerics.Vector2 v) => new(v.X * T, v.Y * T);
     public static Cell CellAtPx(Vector2 px) => new(Mathf.FloorToInt(px.X / T), Mathf.FloorToInt(px.Y / T));
@@ -217,13 +261,13 @@ public partial class ShipView : Node2D
             var r = CellRect(c);
             float x0 = r.Position.X, y0 = r.Position.Y, x1 = r.End.X, y1 = r.End.Y;
             if (g.Kind(c + new Cell(0, -1)) == TileKind.Wall)
-                ci.DrawPolygon(new[] { new Vector2(x0, y0), new Vector2(x1, y0), new Vector2(x1, y0 + w), new Vector2(x0, y0 + w) }, new[] { dark, dark, clear, clear });
+                ci.Polygon(new[] { new Vector2(x0, y0), new Vector2(x1, y0), new Vector2(x1, y0 + w), new Vector2(x0, y0 + w) }, new[] { dark, dark, clear, clear });
             if (g.Kind(c + new Cell(-1, 0)) == TileKind.Wall)
-                ci.DrawPolygon(new[] { new Vector2(x0, y0), new Vector2(x0 + w, y0), new Vector2(x0 + w, y1), new Vector2(x0, y1) }, new[] { dark, clear, clear, dark });
+                ci.Polygon(new[] { new Vector2(x0, y0), new Vector2(x0 + w, y0), new Vector2(x0 + w, y1), new Vector2(x0, y1) }, new[] { dark, clear, clear, dark });
             if (g.Kind(c + new Cell(1, 0)) == TileKind.Wall)
-                ci.DrawPolygon(new[] { new Vector2(x1 - w, y0), new Vector2(x1, y0), new Vector2(x1, y1), new Vector2(x1 - w, y1) }, new[] { clear, dark * 0.7f, dark * 0.7f, clear });
+                ci.Polygon(new[] { new Vector2(x1 - w, y0), new Vector2(x1, y0), new Vector2(x1, y1), new Vector2(x1 - w, y1) }, new[] { clear, dark * 0.7f, dark * 0.7f, clear });
             if (g.Kind(c + new Cell(0, 1)) == TileKind.Wall)
-                ci.DrawPolygon(new[] { new Vector2(x0, y1 - w), new Vector2(x1, y1 - w), new Vector2(x1, y1), new Vector2(x0, y1) }, new[] { clear, clear, dark * 0.7f, dark * 0.7f });
+                ci.Polygon(new[] { new Vector2(x0, y1 - w), new Vector2(x1, y1 - w), new Vector2(x1, y1), new Vector2(x0, y1) }, new[] { clear, clear, dark * 0.7f, dark * 0.7f });
         }
     }
 
@@ -302,11 +346,11 @@ public partial class ShipView : Node2D
                     pts[i + 1] = lamp + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * reach;
                     cols[i + 1] = new Color(color.R, color.G, color.B, 0f);
                 }
-                ci.DrawPolygon(pts, cols);
+                ci.Polygon(pts, cols);
             }
             float pulse = 0.55f + 0.45f * Mathf.Abs(Mathf.Sin(_time * 3.6f + room.Id));
-            ci.DrawCircle(lamp, T * 0.42f, new Color(color.R, color.G, color.B, 0.35f * pulse));
-            ci.DrawCircle(lamp, T * 0.18f, new Color(1f, 0.85f, 0.8f, 0.8f * pulse));
+            ci.Circle(lamp, T * 0.42f, new Color(color.R, color.G, color.B, 0.35f * pulse));
+            ci.Circle(lamp, T * 0.18f, new Color(1f, 0.85f, 0.8f, 0.8f * pulse));
         }
     }
 
@@ -321,10 +365,10 @@ public partial class ShipView : Node2D
             var r = CellRect(c);
             bool wallAbove = g.Kind(c + new Cell(0, -1)) == TileKind.Wall;
             bool wallBelow = g.Kind(c + new Cell(0, 1)) == TileKind.Wall;
-            if (wallAbove && c.X % 2 == 0) ci.DrawRect(new Rect2(r.Position.X + 10, r.Position.Y + 3, 12, 2), Palette.Accent.WithAlpha(0.28f));
-            if (wallBelow && c.X % 2 == 0) ci.DrawRect(new Rect2(r.Position.X + 10, r.End.Y - 5, 12, 2), Palette.Accent.WithAlpha(0.28f));
+            if (wallAbove && c.X % 2 == 0) ci.Box(new Rect2(r.Position.X + 10, r.Position.Y + 3, 12, 2), Palette.Accent.WithAlpha(0.28f));
+            if (wallBelow && c.X % 2 == 0) ci.Box(new Rect2(r.Position.X + 10, r.End.Y - 5, 12, 2), Palette.Accent.WithAlpha(0.28f));
             if (!wallBelow && room == ship.RoomAt(c + new Cell(0, 1)) && c.X % 2 == 1)
-                ci.DrawRect(new Rect2(r.Position.X + 8, r.End.Y - 1, 16, 2), accent.WithAlpha(0.2f));
+                ci.Box(new Rect2(r.Position.X + 8, r.End.Y - 1, 16, 2), accent.WithAlpha(0.2f));
         }
     }
 
@@ -357,7 +401,7 @@ public partial class ShipView : Node2D
                 var s0 = r.Grow(-7f);
                 Gfx.RoundRect(ci, s0, new Color("#2f3747"), 6, new Color("#46506a"));
                 Gfx.RoundRect(ci, s0.Grow(-3f), new Color("#3a4459").Lerp(accent, 0.12f), 4);
-                ci.DrawRect(new Rect2(s0.Position.X + 3, s0.Position.Y + 1.5f, s0.Size.X - 6, 3), new Color("#56627a"));
+                ci.Box(new Rect2(s0.Position.X + 3, s0.Position.Y + 1.5f, s0.Size.X - 6, 3), new Color("#56627a"));
                 break;
             }
             case FurnitureType.Table:
@@ -373,14 +417,14 @@ public partial class ShipView : Node2D
                     var p = new Vector2(t0.Position.X + t0.Size.X * fx, t0.GetCenter().Y + (k % 2 == 0 ? -4f : 4f) * Mathf.Min(1f, t0.Size.Y / 24f));
                     if (f.Room.Type == RoomType.Galley)
                     {
-                        ci.DrawRect(new Rect2(p - new Vector2(5, 3), new Vector2(10, 6)), new Color("#6b5a3a"));
+                        ci.Box(new Rect2(p - new Vector2(5, 3), new Vector2(10, 6)), new Color("#6b5a3a"));
                         ci.DrawLine(p + new Vector2(-4, 0), p + new Vector2(4, 0), new Color("#9aa6b5"), 1f);
                     }
                     else
                     {
-                        ci.DrawCircle(p, 4f, new Color("#c9d1dc").WithAlpha(0.8f), true, -1f, true);
-                        ci.DrawCircle(p, 2.2f, new Color("#8894a8"), true, -1f, true);
-                        ci.DrawCircle(p + new Vector2(6f, -3f), 1.6f, new Color("#e0b64a").WithAlpha(0.8f), true, -1f, true);
+                        ci.Circle(p, 4f, new Color("#c9d1dc").WithAlpha(0.8f), true, -1f, true);
+                        ci.Circle(p, 2.2f, new Color("#8894a8"), true, -1f, true);
+                        ci.Circle(p + new Vector2(6f, -3f), 1.6f, new Color("#e0b64a").WithAlpha(0.8f), true, -1f, true);
                     }
                 }
                 break;
@@ -394,10 +438,10 @@ public partial class ShipView : Node2D
                           : dir.Y < 0 ? new Rect2(r.Position.X + 7, r.Position.Y + 5, r.Size.X - 14, 3)
                           : dir.X > 0 ? new Rect2(r.End.X - 8, r.Position.Y + 7, 3, r.Size.Y - 14)
                           : new Rect2(r.Position.X + 5, r.Position.Y + 7, 3, r.Size.Y - 14);
-                ci.DrawRect(strip, accent.WithAlpha(0.85f));
+                ci.Box(strip, accent.WithAlpha(0.85f));
                 // v10.9: 메뉴 화면과 버튼
                 var sc = r.Grow(-9f);
-                ci.DrawRect(sc, new Color("#0b1f29"));
+                ci.Box(sc, new Color("#0b1f29"));
                 ci.DrawLine(sc.Position + new Vector2(2, 3), new Vector2(sc.End.X - 3, sc.Position.Y + 3), accent.WithAlpha(0.5f), 1f);
                 ci.DrawLine(sc.Position + new Vector2(2, 6), new Vector2(sc.End.X - 6, sc.Position.Y + 6), accent.WithAlpha(0.3f), 1f);
                 break;
@@ -408,10 +452,10 @@ public partial class ShipView : Node2D
                 var b0 = r.Grow(-3f);
                 Gfx.RoundRect(ci, b0, new Color("#11161e"), 5, new Color("#2f3a4b"));
                 var scr = new Rect2(b0.Position.X + 4, b0.Position.Y + 4, b0.Size.X - 8, b0.Size.Y * 0.48f);
-                ci.DrawRect(scr, new Color("#0b1f29"));
-                ci.DrawRect(scr, new Color("#2b4c63"), false, 1f);
+                ci.Box(scr, new Color("#0b1f29"));
+                ci.Box(scr, new Color("#2b4c63"), false, 1f);
                 for (int k = 0; k < 4; k++)
-                    ci.DrawRect(new Rect2(b0.Position.X + 5 + k * (b0.Size.X - 10) / 4f, b0.End.Y - 8, (b0.Size.X - 10) / 4f - 2, 3), new Color("#3a4454"));
+                    ci.Box(new Rect2(b0.Position.X + 5 + k * (b0.Size.X - 10) / 4f, b0.End.Y - 8, (b0.Size.X - 10) / 4f - 2, 3), new Color("#3a4454"));
                 break;
             }
 
@@ -420,8 +464,8 @@ public partial class ShipView : Node2D
                 // v10.8: 큰 배의 원자로(4×4~6×6)는 그만큼 크게
                 float rs = Mathf.Min(r.Size.X, r.Size.Y) / (3f * T);
                 Gfx.RoundRect(ci, r.Grow(-4f), new Color("#1d1912"), 18, new Color("#4a3f22"), 2);
-                ci.DrawCircle(center, 30f * rs, new Color("#28221a"), true, -1f, true);
-                ci.DrawArc(center, 30f * rs, 0f, Mathf.Tau, 48, new Color("#4a3f22"), 1.5f, true);
+                ci.Circle(center, 30f * rs, new Color("#28221a"), true, -1f, true);
+                ci.Arc(center, 30f * rs, 0f, Mathf.Tau, 48, new Color("#4a3f22"), 1.5f, true);
                 for (int k = 0; k < 4; k++)
                 {
                     var d = Vector2.FromAngle(Mathf.Pi * 0.25f + k * Mathf.Pi * 0.5f);
@@ -434,18 +478,18 @@ public partial class ShipView : Node2D
                 // v10.9: 터빈 — 동심원 케이싱과 날개, 연료 공급관
                 Gfx.RoundRect(ci, r.Grow(-4f), new Color("#1f1716"), 10, new Color("#4b302b"), 2);
                 float rad = Mathf.Min(r.Size.X, r.Size.Y) * 0.38f;
-                ci.DrawCircle(center, rad, new Color("#150f0e"), true, -1f, true);
-                ci.DrawArc(center, rad, 0f, Mathf.Tau, 40, new Color("#5a3a33"), 2.5f, true);
-                ci.DrawArc(center, rad * 0.7f, 0f, Mathf.Tau, 32, new Color("#3a2724"), 1.5f, true);
+                ci.Circle(center, rad, new Color("#150f0e"), true, -1f, true);
+                ci.Arc(center, rad, 0f, Mathf.Tau, 40, new Color("#5a3a33"), 2.5f, true);
+                ci.Arc(center, rad * 0.7f, 0f, Mathf.Tau, 32, new Color("#3a2724"), 1.5f, true);
                 for (int k = 0; k < 10; k++)
                 {
                     var d = Vector2.FromAngle(k * Mathf.Tau / 10f);
                     var d2 = Vector2.FromAngle(k * Mathf.Tau / 10f + 0.35f);
                     ci.DrawLine(center + d * rad * 0.28f, center + d2 * rad * 0.92f, new Color("#4b302b"), 2f, true);
                 }
-                ci.DrawCircle(center, rad * 0.22f, new Color("#3a2724"), true, -1f, true);
+                ci.Circle(center, rad * 0.22f, new Color("#3a2724"), true, -1f, true);
                 for (int k = 0; k < 8; k++)
-                    ci.DrawCircle(center + Vector2.FromAngle(k * Mathf.Tau / 8f + 0.2f) * (rad + 5f), 1.5f, new Color("#6b4a3f"), true, -1f, true);
+                    ci.Circle(center + Vector2.FromAngle(k * Mathf.Tau / 8f + 0.2f) * (rad + 5f), 1.5f, new Color("#6b4a3f"), true, -1f, true);
                 ci.DrawLine(new Vector2(r.End.X - 6, r.Position.Y + 8), new Vector2(r.End.X - 6, r.End.Y - 8), new Color("#6b4a3f"), 3f);
                 break;
             }
@@ -455,31 +499,31 @@ public partial class ShipView : Node2D
                 foreach (float fy in new[] { 0.28f, 0.72f })
                 {
                     var p = new Vector2(center.X, r.Position.Y + r.Size.Y * fy);
-                    ci.DrawCircle(p, 12f, new Color("#163130"), true, -1f, true);
-                    ci.DrawArc(p, 12f, 0f, Mathf.Tau, 32, accent.WithAlpha(0.4f), 1.5f, true);
+                    ci.Circle(p, 12f, new Color("#163130"), true, -1f, true);
+                    ci.Arc(p, 12f, 0f, Mathf.Tau, 32, accent.WithAlpha(0.4f), 1.5f, true);
                 }
                 break;
 
             case FurnitureType.Workbench:
                 Gfx.RoundRect(ci, r.Grow(-3f), new Color("#2c261d"), 4, new Color("#54482f"));
-                ci.DrawRect(new Rect2(r.Position.X + 10, r.Position.Y + 10, 12, 4), new Color("#8a7550"));
-                ci.DrawRect(new Rect2(r.Position.X + 32, r.Position.Y + 8, 4, 15), new Color("#6b5a3a"));
-                ci.DrawCircle(new Vector2(r.End.X - 18, center.Y), 4.5f, new Color("#5d6b7a"), true, -1f, true);
+                ci.Box(new Rect2(r.Position.X + 10, r.Position.Y + 10, 12, 4), new Color("#8a7550"));
+                ci.Box(new Rect2(r.Position.X + 32, r.Position.Y + 8, 4, 15), new Color("#6b5a3a"));
+                ci.Circle(new Vector2(r.End.X - 18, center.Y), 4.5f, new Color("#5d6b7a"), true, -1f, true);
                 // v10.9: 바이스, 렌치·드라이버, 작업 조명
                 Gfx.RoundRect(ci, new Rect2(r.Position.X + 8, r.End.Y - 12, 14, 7), new Color("#4a5566"), 2, new Color("#6a7486"));
                 ci.DrawLine(new Vector2(r.Position.X + 44, r.Position.Y + 9), new Vector2(r.Position.X + 56, r.Position.Y + 19), new Color("#9aa6b5"), 2f, true);
-                ci.DrawCircle(new Vector2(r.Position.X + 44, r.Position.Y + 9), 2.5f, new Color("#9aa6b5"), false, 1.2f, true);
+                ci.Circle(new Vector2(r.Position.X + 44, r.Position.Y + 9), 2.5f, new Color("#9aa6b5"), false, 1.2f, true);
                 ci.DrawLine(new Vector2(r.Position.X + 60, r.End.Y - 8), new Vector2(r.Position.X + 70, r.End.Y - 14), new Color("#c0392b"), 2.5f, true);
                 ci.DrawLine(new Vector2(r.Position.X + 70, r.End.Y - 14), new Vector2(r.Position.X + 75, r.End.Y - 17), new Color("#9aa6b5"), 1f, true);
-                ci.DrawCircle(new Vector2(r.End.X - 8, r.Position.Y + 8), 3f, new Color("#f5d547").WithAlpha(0.6f), true, -1f, true);
+                ci.Circle(new Vector2(r.End.X - 8, r.Position.Y + 8), 3f, new Color("#f5d547").WithAlpha(0.6f), true, -1f, true);
                 break;
 
             case FurnitureType.Shelf:
             {
                 // v10.9: 기둥과 선반 판
                 Gfx.RoundRect(ci, r.Grow(-2f), new Color("#1b2029"), 3, new Color("#2b3341"));
-                ci.DrawRect(new Rect2(r.Position.X + 3, r.Position.Y + 3, 2.5f, r.Size.Y - 6), new Color("#3a4454"));
-                ci.DrawRect(new Rect2(r.End.X - 5.5f, r.Position.Y + 3, 2.5f, r.Size.Y - 6), new Color("#3a4454"));
+                ci.Box(new Rect2(r.Position.X + 3, r.Position.Y + 3, 2.5f, r.Size.Y - 6), new Color("#3a4454"));
+                ci.Box(new Rect2(r.End.X - 5.5f, r.Position.Y + 3, 2.5f, r.Size.Y - 6), new Color("#3a4454"));
                 for (int k = 1; k < 3; k++)
                     ci.DrawLine(new Vector2(r.Position.X + 4, r.Position.Y + r.Size.Y * k / 3f), new Vector2(r.End.X - 4, r.Position.Y + r.Size.Y * k / 3f), new Color("#303a4a"), 1.5f);
                 break;
@@ -491,26 +535,26 @@ public partial class ShipView : Node2D
                 Gfx.RoundRect(ci, frame, new Color("#241c20"), 6, accent.WithAlpha(0.35f));
                 Gfx.RoundRect(ci, new Rect2(frame.Position.X + 4, frame.Position.Y + 4, frame.Size.X - 8, 8), new Color(0.95f, 0.9f, 0.92f, 0.55f), 3);
                 var cc = new Vector2(center.X, center.Y + 8);
-                ci.DrawRect(new Rect2(cc.X - 1.5f, cc.Y - 6, 3, 12), accent.WithAlpha(0.75f));
-                ci.DrawRect(new Rect2(cc.X - 6, cc.Y - 1.5f, 12, 3), accent.WithAlpha(0.75f));
+                ci.Box(new Rect2(cc.X - 1.5f, cc.Y - 6, 3, 12), accent.WithAlpha(0.75f));
+                ci.Box(new Rect2(cc.X - 6, cc.Y - 1.5f, 12, 3), accent.WithAlpha(0.75f));
                 break;
             }
             case FurnitureType.CoolantPump:
             {
                 // 벽으로 이어지는 배관
-                ci.DrawRect(new Rect2(center.X - 5, r.Position.Y - 4, 10, r.Size.Y * 0.5f), new Color("#223440"));
-                ci.DrawRect(new Rect2(center.X - 5, r.Position.Y - 4, 10, 3), new Color("#35505f"));
-                ci.DrawCircle(center, 24f, new Color("#122029"), true, -1f, true);
-                ci.DrawArc(center, 24f, 0f, Mathf.Tau, 48, new Color("#2d5263"), 2.5f, true);
-                ci.DrawArc(center, 17f, 0f, Mathf.Tau, 40, new Color("#1f3a47"), 1.5f, true);
+                ci.Box(new Rect2(center.X - 5, r.Position.Y - 4, 10, r.Size.Y * 0.5f), new Color("#223440"));
+                ci.Box(new Rect2(center.X - 5, r.Position.Y - 4, 10, 3), new Color("#35505f"));
+                ci.Circle(center, 24f, new Color("#122029"), true, -1f, true);
+                ci.Arc(center, 24f, 0f, Mathf.Tau, 48, new Color("#2d5263"), 2.5f, true);
+                ci.Arc(center, 17f, 0f, Mathf.Tau, 40, new Color("#1f3a47"), 1.5f, true);
                 break;
             }
             case FurnitureType.PowerPanel:
                 Gfx.RoundRect(ci, r.Grow(-3f), new Color("#1b2029"), 4, new Color("#4a4a36"), 2);
-                ci.DrawRect(new Rect2(r.Position.X + 6, r.End.Y - 9, r.Size.X - 12, 2), new Color("#f5d547").WithAlpha(0.35f));
+                ci.Box(new Rect2(r.Position.X + 6, r.End.Y - 9, r.Size.X - 12, 2), new Color("#f5d547").WithAlpha(0.35f));
                 // v10.9: 회로별 색 띠와 통풍 틈
                 for (int k = 0; k < PowerGrid.CircuitCount; k++)
-                    ci.DrawRect(new Rect2(r.Position.X + 8 + k * (r.Size.X - 16) / PowerGrid.CircuitCount, r.Position.Y + 5, (r.Size.X - 16) / PowerGrid.CircuitCount - 4, 2), CircuitColors[k].WithAlpha(0.6f));
+                    ci.Box(new Rect2(r.Position.X + 8 + k * (r.Size.X - 16) / PowerGrid.CircuitCount, r.Position.Y + 5, (r.Size.X - 16) / PowerGrid.CircuitCount - 4, 2), CircuitColors[k].WithAlpha(0.6f));
                 for (int k = 0; k < 6; k++)
                     ci.DrawLine(new Vector2(r.End.X - 22 + k * 3, r.End.Y - 16), new Vector2(r.End.X - 22 + k * 3, r.End.Y - 11), new Color("#0a0d12"), 1.2f);
                 break;
@@ -537,29 +581,29 @@ public partial class ShipView : Node2D
                 // v10.9: 둥근 여과 탱크, 막 고리, 관 이음, 압력계
                 Gfx.RoundRect(ci, r.Grow(-4f), new Color("#122029"), 10, new Color("#2b4c63"), 2);
                 float rad = Mathf.Min(r.Size.X, r.Size.Y) * 0.3f;
-                ci.DrawCircle(center, rad, new Color("#0c151c"), true, -1f, true);
-                ci.DrawArc(center, rad, 0f, Mathf.Tau, 32, new Color("#3f6f88"), 2f, true);
-                ci.DrawArc(center, rad * 0.62f, 0f, Mathf.Tau, 24, new Color("#1f3a47"), 1.5f, true);
-                ci.DrawArc(center, rad * 0.8f, 3.6f, 5.0f, 10, new Color(1, 1, 1, 0.18f), 1.5f, true);
-                ci.DrawRect(new Rect2(r.Position.X + 3, center.Y - 3, 7, 6), new Color("#35505f"));
-                ci.DrawRect(new Rect2(r.End.X - 10, center.Y - 3, 7, 6), new Color("#35505f"));
+                ci.Circle(center, rad, new Color("#0c151c"), true, -1f, true);
+                ci.Arc(center, rad, 0f, Mathf.Tau, 32, new Color("#3f6f88"), 2f, true);
+                ci.Arc(center, rad * 0.62f, 0f, Mathf.Tau, 24, new Color("#1f3a47"), 1.5f, true);
+                ci.Arc(center, rad * 0.8f, 3.6f, 5.0f, 10, new Color(1, 1, 1, 0.18f), 1.5f, true);
+                ci.Box(new Rect2(r.Position.X + 3, center.Y - 3, 7, 6), new Color("#35505f"));
+                ci.Box(new Rect2(r.End.X - 10, center.Y - 3, 7, 6), new Color("#35505f"));
                 var gp = new Vector2(r.End.X - 10, r.Position.Y + 10);
-                ci.DrawCircle(gp, 4f, new Color("#d8dee8"), true, -1f, true);
+                ci.Circle(gp, 4f, new Color("#d8dee8"), true, -1f, true);
                 ci.DrawLine(gp, gp + new Vector2(2.5f, -2f), new Color("#c0392b"), 1f, true);
                 break;
             }
 
             case FurnitureType.Stove:
                 Gfx.RoundRect(ci, r.Grow(-3f), new Color("#262220"), 5, new Color("#4a3f35"));
-                ci.DrawArc(new Vector2(r.Position.X + r.Size.X * 0.28f, center.Y), 8f, 0f, Mathf.Tau, 24, new Color("#3f3733"), 2f, true);
-                ci.DrawArc(new Vector2(r.Position.X + r.Size.X * 0.72f, center.Y), 8f, 0f, Mathf.Tau, 24, new Color("#3f3733"), 2f, true);
+                ci.Arc(new Vector2(r.Position.X + r.Size.X * 0.28f, center.Y), 8f, 0f, Mathf.Tau, 24, new Color("#3f3733"), 2f, true);
+                ci.Arc(new Vector2(r.Position.X + r.Size.X * 0.72f, center.Y), 8f, 0f, Mathf.Tau, 24, new Color("#3f3733"), 2f, true);
                 break;
 
             case FurnitureType.Fridge:
                 Gfx.RoundRect(ci, r.Grow(-3f), new Color("#2a313b"), 5, new Color("#6b7788"));
                 ci.DrawLine(new Vector2(center.X, r.Position.Y + 6), new Vector2(center.X, r.End.Y - 6), new Color("#6b7788").WithAlpha(0.6f), 1.5f);
-                ci.DrawRect(new Rect2(center.X - 6, center.Y - 5, 2, 10), new Color("#9aa6b5"));
-                ci.DrawRect(new Rect2(center.X + 4, center.Y - 5, 2, 10), new Color("#9aa6b5"));
+                ci.Box(new Rect2(center.X - 6, center.Y - 5, 2, 10), new Color("#9aa6b5"));
+                ci.Box(new Rect2(center.X + 4, center.Y - 5, 2, 10), new Color("#9aa6b5"));
                 break;
 
             case FurnitureType.AuxGenerator:
@@ -588,9 +632,9 @@ public partial class ShipView : Node2D
                 Gfx.RoundRect(ci, r.Grow(-3f), new Color("#141a24"), 5, new Color("#3a4a66"), 2);
                 var c0 = r.GetCenter();
                 float rad = Mathf.Min(r.Size.X, r.Size.Y) * 0.36f;
-                ci.DrawCircle(c0, rad, new Color("#0b1119"), true, -1f, true);
-                ci.DrawArc(c0, rad, 0f, Mathf.Tau, 32, new Color("#4b5f80"), 2f, true);
-                ci.DrawArc(c0, rad * 0.55f, 0f, Mathf.Tau, 24, new Color("#26344a"), 1f, true);
+                ci.Circle(c0, rad, new Color("#0b1119"), true, -1f, true);
+                ci.Arc(c0, rad, 0f, Mathf.Tau, 32, new Color("#4b5f80"), 2f, true);
+                ci.Arc(c0, rad * 0.55f, 0f, Mathf.Tau, 24, new Color("#26344a"), 1f, true);
                 ci.DrawLine(c0 + new Vector2(-rad, 0), c0 + new Vector2(rad, 0), new Color("#1d2838"), 1f);
                 ci.DrawLine(c0 + new Vector2(0, -rad), c0 + new Vector2(0, rad), new Color("#1d2838"), 1f);
                 break;
@@ -603,7 +647,7 @@ public partial class ShipView : Node2D
                 for (int k = 0; k < 2; k++)
                 {
                     var rack = new Rect2(r.Position.X + 6 + k * half, r.Position.Y + 6, half - 9, r.Size.Y - 12);
-                    ci.DrawRect(rack, new Color("#0c0f15"));
+                    ci.Box(rack, new Color("#0c0f15"));
                     for (int row = 0; row < 6; row++)
                         ci.DrawLine(new Vector2(rack.Position.X + 2, rack.Position.Y + 5 + row * (rack.Size.Y - 8) / 5f),
                             new Vector2(rack.End.X - 2, rack.Position.Y + 5 + row * (rack.Size.Y - 8) / 5f), new Color("#232b3a"), 1f);
@@ -615,8 +659,8 @@ public partial class ShipView : Node2D
             {
                 Gfx.RoundRect(ci, r.Grow(-3f), new Color("#1f2530"), 5, new Color("#3a4455"));
                 var head = new Vector2(center.X, r.Position.Y + 16);
-                ci.DrawCircle(head, 7f, new Color("#d8dee8").WithAlpha(0.55f), true, -1f, true);
-                ci.DrawCircle(head + new Vector2(0, 1), 4f, new Color("#2a3a50"), true, -1f, true);
+                ci.Circle(head, 7f, new Color("#d8dee8").WithAlpha(0.55f), true, -1f, true);
+                ci.Circle(head + new Vector2(0, 1), 4f, new Color("#2a3a50"), true, -1f, true);
                 Gfx.RoundRect(ci, new Rect2(center.X - 8, r.Position.Y + 25, 16, r.Size.Y - 32), new Color("#d8dee8").WithAlpha(0.35f), 5);
                 break;
             }
@@ -631,40 +675,57 @@ public partial class ShipView : Node2D
     private void PaintDynamicUnder(CanvasItem ci)
     {
         var ship = _world.Ship;
-        PaintFragments(ci); // 떨어져 나가 떠다니는 방 (우주선 밖이라 맨 아래)
         PaintNavLights(ci); // v10.9 항해등
         PaintRadiators(ci); // v9 선체 밖 방열판
         PaintExterior(ci); // v12.6 안테나·태양 날개
         PaintHullKind(ci); // v18.8 뼈대 · 용도마다 다른 선체 바깥 (바퀴 · 컨테이너 · 덧댄 판 · 집게 · 탱크 · 온실)
-        PaintCosmicUnder(ci); // v18.13 우주 대재난: 다가오는 것 · 자기력선 · 조석 · 스치는 잔해
         PaintScorch(ci);
         PaintBlastScars(ci); // v16.13 폭발 흔적 (방사형 그을음 · 깨진 조명 · 날아간 문짝 · 추모)
         PaintBody(ci); // v16.3 칸 상태 · 열린 뚜껑 · 닳은 길 · 뗀 패널 · 관측창 · 문 잠금 · 벽 장착물
         PaintMatter(ci); // v16.4 물건 · 쏟은 액체 · 열기 · 전기 불꽃 · 바람 · 가루 (재질 · 상태마다 다른 그림)
         PaintWays(ci); // v16.25 급한 대로 쓴 갈래의 흔적 (매트리스 마개 · 벌린 문 · 젖은 수건 · 호스 · 속 빈 설비 …)
-        foreach (var f in ship.Furniture.Where(f => !f.Stowed && !f.Room.Detached)) PaintFurnitureLife(ci, f);
     }
 
-    private void PaintDynamic(CanvasItem ci)
+    /// <summary>설비 움직임 (n 조각 중 k 번째 — 설비는 겹치지 않아 나눠 그려도 같다).</summary>
+    private void PaintFixtureLifePart(CanvasItem ci, int k, int n)
+    {
+        int i = 0;
+        foreach (var f in _world.Ship.Furniture)
+        {
+            if (i++ % n != k || f.Stowed || f.Room.Detached) continue;
+            PaintFurnitureLife(ci, f);
+        }
+    }
+
+    /// <summary>배 밖 멀리까지 가는 것 (떨어져 나간 방 · 다가오는 재난) — 구운 그림 밖이라 그대로 그린다.</summary>
+    private void PaintDynamicFar(CanvasItem ci)
+    {
+        PaintFragments(ci); // 떨어져 나가 떠다니는 방 (우주선 밖이라 맨 아래)
+        PaintCosmicUnder(ci); // v18.13 우주 대재난: 다가오는 것 · 자기력선 · 조석 · 스치는 잔해
+    }
+
+    /// <summary>
+    /// 사람 · 로봇을 따라 움직이지 않는 동적 그림 ① 바닥 (소품 · 물건 · 어두운 방 · 이동식 장비 · 공사 · 겹쳐 보기 · 물): 초당 15~30번 다시 그려 한 장으로 굽는다.
+    /// </summary>
+    private void PaintSlowFloor(CanvasItem ci)
     {
         var ship = _world.Ship;
         var mode = _main.ViewMode;
         PaintTierBadges(ci); // v10.8
         PaintTechLookLive(ci); // v16.5b 움직이는 기술 모습 · 설치 · 업그레이드 순간
         PaintRoomProps(ci); // v15.8 소품·장식 (어두운 방은 아래에서 함께 어두워진다)
-        PaintExplosives(ci); // v16.13 폭발성 물건 23종 (달아오름 · 쉭 · 카운트다운 · 잔해)
+        PaintExplosives(ci, false); // v16.13 폭발성 물건 23종 (달아오름 · 쉭 · 카운트다운 · 잔해) — 들고 가는 것은 위 층
         PaintFood(ci, mode); // v16.8 냄비 · 항아리 · 남겨 둔 접시 · 냄새 (읽기만)
 
         // 정전된 방은 어둡게 (v9.4: 조명이 나간 방도)
         foreach (var room in ship.LiveRooms)
             if (room.Dark)
-                foreach (var c in room.Cells) ci.DrawRect(CellRect(c), new Color(0, 0, 0, room.Powered ? 0.36f : 0.42f));
-        PaintPortable(ci); // v16.7 이동식 장비 (작업등 빛 웅덩이 · 케이블 · 호스 · 장비마다 다른 그림)
+                foreach (var c in room.Cells) ci.Box(CellRect(c), new Color(0, 0, 0, room.Powered ? 0.36f : 0.42f));
+        PaintPortable(ci, false); // v16.7 이동식 장비 (작업등 빛 웅덩이 · 케이블 · 호스 · 장비마다 다른 그림) — 든 것은 위 층
         PaintResearch(ci); // v16.14 실험대 장치 (분야마다) · 연구 노트 · 사고 그을음 · 돌파구 반짝임 · 보안경 · 돋보기
         PaintRoomWork(ci); // v16.17 방 공사 (분리 · 상자 · 손수레 · 골조 · 놓을 자리) · 쓰임 원판 · 헷갈림 · 땀
         PaintAnnex(ci); // v16.10 증축 (청사진 · 비계 · 골조 · 외판 · 압력계 · 배선 · 비닐 막 · 설비 · 개통식 · 새 패널)
-        PaintDock(ci); // v18.5 도킹 통로 · 난파선 · 거룻배 · 압력계 · 교환 상자 · 이름판
-        PaintSpaceUnder(ci); // v17.4 펼친 작업장 · 앞 상자 · 카트 옮겨 싣기 · 잠금표 · 줄 바닥 · 받는 곳
+        PaintSpaceUnder(ci, false); // v17.4 펼친 작업장 · 앞 상자 · 잠금표 · 줄 바닥 · 받는 곳 (카트 옮겨 싣기는 위 층)
         PaintAccessUnder(ci); // v17.6 색약 무늬 · v17.9 창밖 · 숨은 것 · 이상 현상 (ShipViewCurios.cs)
         PaintAfterUnder(ci); // v17.5 묵은 그을음 냄새 · 다른 방 쟁반 · 널어 둔 침구 · 냉장고 쪽지 · 빈 의자의 컵 · 종이꽃 · 다시 그린 그림 · 옮겨 온 등
         PaintJumpers(ci);
@@ -684,8 +745,13 @@ public partial class ShipView : Node2D
         }
 
         PaintWater(ci); // v12.3 바닥 물·결로·분전함 차단
-        PaintSmoke(ci);
-        PaintToxin(ci); // v11.2 유독 가스
+    }
+
+    /// <summary>② 뼈대: 벽 · 관 · 망 · 이음 · 변천 · 홀로그램 · 통신 · 인과 사슬 · 규모 · 장갑 · 방 상태 · 표지판.</summary>
+    private void PaintSlowFrame(CanvasItem ci)
+    {
+        var ship = _world.Ship;
+        var mode = _main.ViewMode;
         PaintWalls(ci);
         PaintPipes(ci, mode == ViewMode.Pipes); // v9: 벽·바닥 밑을 지나는 관 (배관 보기에서는 굵게)
         PaintNet(ci, mode); // v12.1 배 전체 망 (간선·급수관·덕트)
@@ -693,11 +759,6 @@ public partial class ShipView : Node2D
         PaintJoints(ci, mode == ViewMode.Structure);
         PaintEvolution(ci);
         if (mode == ViewMode.Trace) PaintTraceMarks(ci);
-        PaintVenting(ci);
-        PaintResponse(ci); // v13.0 진공·질식 소화 · 대피 카운트다운 · 공기 구역
-        PaintFires(ci);
-        PaintCosmicOver(ci); // v18.13 방사선 반짝임 · 물벽 · 꺼 둔 설비 · 봉쇄 · 충격파 앞머리
-        foreach (var d in ship.Doors) if (!d.Removed) PaintDoor(ci, d); // v10.12 걷은 칸막이 문 · 떨어져 나간 방의 문은 벽이 됐다
         PaintHoloTable(ci); // v11.2 함교 홀로그램
         PaintComms(ci); // v11.2 보급·탈출 캡슐, 송신 파동
         PaintCauseChain(ci); // v12.2 고른 사고의 인과 사슬
@@ -706,8 +767,51 @@ public partial class ShipView : Node2D
         PaintDampers(ci, mode == ViewMode.Air);
         PaintRoomStates(ci);
         PaintRoomSigns(ci); // v16.17 승무원이 붙인 이름 표지판 (나무 · 놋쇠 · 칠판 · 법랑)
+    }
+
+    /// <summary>③ 표시: 주컴퓨터 세계 · 정비 꼬리표 · 고장 표시 · 바닥에 남은 것.</summary>
+    private void PaintSlowMarks(CanvasItem ci)
+    {
+        var ship = _world.Ship;
         PaintComputerWorld(ci); // v16.6 서버 랙 · 조작 빛 흐름 · 스피커 · 콘솔 경고 · 홀로그램 정보판 (ShipViewComputer.cs)
         PaintMateWorld(ci); // v16.27 늘린 장비 · 설치 장면 · 정찰 · 훈련 깃발 · 정비 꼬리표 · 식당 화면 · 딜레마 · 안부 쪽지 · 날씨 표지 · 기억 검사 (ShipViewMate.cs)
+
+        foreach (var f in ship.Furniture)
+        {
+            if (f.Stowed || f.Room.Detached || f.Machine is not Machine m) continue;
+            if (m.Grade == MachineGrade.Mk1 && !FixtureArt.Has(f.Type)) PaintMk1(ci, f, m); // v16.5b 표에 있는 설비는 FixtureArtTier 가 종류마다 손질을 그린다
+            if (m.Has(FaultKind.Wrecked)) PaintWrecked(ci, f);
+            if (m.Faults.Count == 0) continue;
+            if (m.Has(FaultKind.Stripped)) PaintStripped(ci, f, m); // 뜯긴 설비는 경고 대신 조용한 흔적
+            else PaintFaultMarker(ci, f, m);
+        }
+        PaintManeuver(ci); // v17.0 걸쇠 · 끈 · 냄비 집게 · 떨어진 물건 · 쏟은 자국 · 빗자루
+        PaintEco(ci); // v18.2 · v18.3 · v18.4 화분 · 고양이 방석 · 밥그릇 · 바구미 포대 · 배수구 · 쓰레기통 · 합선 그을음
+        PaintSchemesFloor(ci); // v18.14 꾸미는 일 (밀주 통 · 비밀 정원 · 방송 장비 · 덮개 · 압수 상자 · 팻말 · 깃발 줄)
+        PaintHairClips(ci); // v17.1 바닥에 떨어진 머리카락
+        PaintValuesFloor(ci); // v18.15 딜레마 표지판 · 밀항자 자리 · 꾸린 짐 · 식당 벽 쪽지
+        PaintTalesFloor(ci); // v18.17 밤 모임 등불 · 둘러앉은 자리 (ShipViewTales.cs)
+        PaintIncidentTraces(ci); // 압축-마 새 사고 30의 흔적 · 무르익은 원인의 낌새 (ShipViewTraces.cs)
+    }
+
+    /// <summary>매 프레임: 사람 · 로봇 · 드론과 그들이 든 것 · 불 · 연기 · 문 · 고른 것.</summary>
+    private void PaintDynamic(CanvasItem ci)
+    {
+        var ship = _world.Ship;
+        var mode = _main.ViewMode;
+        PaintMatterCarried(ci); // v16.4 손에 든 물건
+        PaintExplosives(ci, true); // 들고 가는 폭발성 물건
+        PaintPortable(ci, true); // v16.7 사람이 든 이동식 장비 · 몸에 가린 작업등 그림자
+        PaintDock(ci); // v18.5 도킹 통로 · 난파선 · 거룻배 · 압력계 · 교환 상자 · 이름판
+        PaintSpaceUnder(ci, true); // v17.4 카트 옮겨 싣기
+        PaintSmoke(ci);
+        PaintToxin(ci); // v11.2 유독 가스
+        PaintVenting(ci);
+        PaintResponse(ci); // v13.0 진공·질식 소화 · 대피 카운트다운 · 공기 구역
+        PaintFires(ci);
+        PaintCosmicOver(ci); // v18.13 방사선 반짝임 · 물벽 · 꺼 둔 설비 · 봉쇄 · 충격파 앞머리
+        foreach (var d in ship.Doors) if (!d.Removed) PaintDoor(ci, d); // v10.12 걷은 칸막이 문 · 떨어져 나간 방의 문은 벽이 됐다
+        PaintComputerAsks(ci); // v16.16 사람 곁의 부탁 · 쉼 · 의심하는 계기
 
         if (_main.HoveredRoom is Room hr && hr != _main.SelectedRoom && !hr.Detached)
             PaintOutline(ci, hr, Palette.Room(hr.Kind).WithAlpha(0.35f), false);
@@ -718,21 +822,11 @@ public partial class ShipView : Node2D
         if (_main.SelectedFurniture is Furniture sf)
             Gfx.RoundRect(ci, FurnitureRect(sf).Grow(2f + Mathf.Sin(_time * 4f)), new Color(1, 1, 1, 0.04f), 7, new Color(1, 1, 1, 0.85f), 2);
 
-        foreach (var f in ship.Furniture.Where(f => !f.Stowed && !f.Room.Detached))
-        {
-            if (f.Machine is not Machine m) continue;
-            if (m.Grade == MachineGrade.Mk1 && !FixtureArt.Has(f.Type)) PaintMk1(ci, f, m); // v16.5b 표에 있는 설비는 FixtureArtTier 가 종류마다 손질을 그린다
-            if (m.Has(FaultKind.Wrecked)) PaintWrecked(ci, f);
-            if (m.Faults.Count == 0) continue;
-            if (m.Has(FaultKind.Stripped)) PaintStripped(ci, f, m); // 뜯긴 설비는 경고 대신 조용한 흔적
-            else PaintFaultMarker(ci, f, m);
-        }
-
         if (_main.SelectedCrew is CrewMember sel) PaintPath(ci, sel);
         if (_main.SelectedRobot is Robot sr2 && sr2.State != RobotState.Lost)
         {
             var rp = RobotPx(sr2);
-            ci.DrawArc(rp, 14f + Mathf.Sin(_time * 4f), 0f, Mathf.Tau, 32, new Color(1, 1, 1, 0.85f), 1.6f, true);
+            ci.Arc(rp, 14f + Mathf.Sin(_time * 4f), 0f, Mathf.Tau, 32, new Color(1, 1, 1, 0.85f), 1.6f, true);
             if (sr2.Path is { Count: > 0 } rpath)
             {
                 var prev = rp;
@@ -744,23 +838,16 @@ public partial class ShipView : Node2D
                 }
             }
         }
-        else if (_main.HoveredRobot is Robot hr2) ci.DrawArc(RobotPx(hr2), 13f, 0f, Mathf.Tau, 28, new Color(1, 1, 1, 0.35f), 1.2f, true);
+        else if (_main.HoveredRobot is Robot hr2) ci.Arc(RobotPx(hr2), 13f, 0f, Mathf.Tau, 28, new Color(1, 1, 1, 0.35f), 1.2f, true);
         PaintTethers(ci);
         PaintBelongings(ci); // v14.3 놓인 물건 · 손에 든 취미 물건 · 음표 · 판
         PaintInfo(ci); // v17.3 컵 · 깨진 조각 · 벽 사진 · 만든 것 · 독서등 · 그릇 더미 · 당번표 · 손목 단말
-        PaintManeuver(ci); // v17.0 걸쇠 · 끈 · 냄비 집게 · 떨어진 물건 · 쏟은 자국 · 빗자루
-        PaintEco(ci); // v18.2 · v18.3 · v18.4 화분 · 고양이 방석 · 밥그릇 · 바구미 포대 · 배수구 · 쓰레기통 · 합선 그을음
         PaintScenes(ci); // v16.1 진행 중 장면 (판 · 커피 · 국 자국 · 쪽지 · 스크린 · 만들다 만 소품)
-        PaintSchemesFloor(ci); // v18.14 꾸미는 일 (밀주 통 · 비밀 정원 · 방송 장비 · 덮개 · 압수 상자 · 팻말 · 깃발 줄)
-        PaintHairClips(ci); // v17.1 바닥에 떨어진 머리카락
         PaintRobots(ci); // v10.10 선내 로봇 (사람 밑에)
         PaintFleetLinks(ci); // v16.20b 견인 줄 · 같이 드는 들것 · 고치는 불꽃 · 명령선 · 잔해
         PaintCouncilFloor(ci); // v18.18 둘러앉는 방석 · 의장 탁자 · 재판석 · 투표함 · 잔치 깃발
         PaintBlackbox(ci); // v18.7 블랙박스 상자 · 숨은 실수의 흔적 · 조사 자리의 기록 띠 · 숨긴 사람의 몸짓
-        PaintValuesFloor(ci); // v18.15 딜레마 표지판 · 밀항자 자리 · 꾸린 짐 · 식당 벽 쪽지
-        PaintTalesFloor(ci); // v18.17 밤 모임 등불 · 둘러앉은 자리 (ShipViewTales.cs)
         PaintPersonalFloor(ci); // v18.1 밀린 편지 더미 · v18.9 맞바꾸는 물건
-        PaintIncidentTraces(ci); // 압축-마 새 사고 30의 흔적 · 무르익은 원인의 낌새 (ShipViewTraces.cs)
         // 쓰러진 사람은 밑에, 업힌 사람은 업은 사람 위에
         foreach (var c in _world.Crew.OrderBy(c => c.CarriedBy != null ? 2 : c.Down ? 0 : 1)) PaintCrew(ci, c);
         PaintDockOver(ci); // v18.5 헬멧 등 · v18.6 승객 차림 · 이끄는 손
@@ -813,14 +900,14 @@ public partial class ShipView : Node2D
                 float load = Mathf.Clamp(_world.Power.ReactorOutput / Mathf.Max(1f, _world.Power.ReactorRated), 0.05f, 1f);
                 float pulse = 0.5f + 0.5f * Mathf.Sin(t * (1f + load));
                 var hot = _world.Power.ReactorTemperature > 380f ? Palette.Danger : accent;
-                ci.DrawCircle(center, 26f * rs, hot.WithAlpha((0.04f + 0.05f * pulse) * load + 0.02f), true, -1f, true);
-                ci.DrawCircle(center, 19f * rs, hot.WithAlpha((0.1f + 0.06f * pulse) * load + 0.03f), true, -1f, true);
-                ci.DrawCircle(center, (7f + 6f * load + 1.5f * pulse) * rs, hot.WithAlpha(0.9f), true, -1f, true);
-                ci.DrawCircle(center, 5f * rs, new Color(1f, 0.95f, 0.84f, 0.95f), true, -1f, true);
+                ci.Circle(center, 26f * rs, hot.WithAlpha((0.04f + 0.05f * pulse) * load + 0.02f), true, -1f, true);
+                ci.Circle(center, 19f * rs, hot.WithAlpha((0.1f + 0.06f * pulse) * load + 0.03f), true, -1f, true);
+                ci.Circle(center, (7f + 6f * load + 1.5f * pulse) * rs, hot.WithAlpha(0.9f), true, -1f, true);
+                ci.Circle(center, 5f * rs, new Color(1f, 0.95f, 0.84f, 0.95f), true, -1f, true);
                 float a = t * 0.7f * load;
-                ci.DrawArc(center, 24f * rs, a, a + 1.3f, 20, hot.WithAlpha(0.6f), 2f, true);
-                ci.DrawArc(center, 24f * rs, a + Mathf.Pi, a + Mathf.Pi + 1.3f, 20, hot.WithAlpha(0.6f), 2f, true);
-                if (m is { Tier: 2 }) ci.DrawArc(center, 33f * rs, 0f, Mathf.Tau, 48, Hud.TierColor(2).WithAlpha(0.35f), 1.5f, true); // 개량형: 보강 링
+                ci.Arc(center, 24f * rs, a, a + 1.3f, 20, hot.WithAlpha(0.6f), 2f, true);
+                ci.Arc(center, 24f * rs, a + Mathf.Pi, a + Mathf.Pi + 1.3f, 20, hot.WithAlpha(0.6f), 2f, true);
+                if (m is { Tier: 2 }) ci.Arc(center, 33f * rs, 0f, Mathf.Tau, 48, Hud.TierColor(2).WithAlpha(0.35f), 1.5f, true); // 개량형: 보강 링
                 break;
             }
             case FurnitureType.EngineCore:
@@ -838,11 +925,11 @@ public partial class ShipView : Node2D
                 {
                     float len = T * (burn ? 3.4f : 0.5f) * flicker * (0.4f + 0.6f * Mathf.Max(0.3f, prop.Thrust));
                     var plume = new[] { new Vector2(x0, y0), new Vector2(x0, y1), new Vector2(x0 - len, yc + h * 0.12f), new Vector2(x0 - len, yc - h * 0.12f) };
-                    ci.DrawPolygon(plume, new[] { accent.WithAlpha(0.5f), accent.WithAlpha(0.5f), accent.WithAlpha(0f), accent.WithAlpha(0f) });
+                    ci.Polygon(plume, new[] { accent.WithAlpha(0.5f), accent.WithAlpha(0.5f), accent.WithAlpha(0f), accent.WithAlpha(0f) });
                     float len2 = len * 0.55f;
                     var core = new[] { new Vector2(x0, yc - h * 0.25f), new Vector2(x0, yc + h * 0.25f), new Vector2(x0 - len2, yc + 2f), new Vector2(x0 - len2, yc - 2f) };
                     var hotc = new Color(1f, 0.86f, 0.72f);
-                    ci.DrawPolygon(core, new[] { hotc.WithAlpha(0.75f), hotc.WithAlpha(0.75f), hotc.WithAlpha(0f), hotc.WithAlpha(0f) });
+                    ci.Polygon(core, new[] { hotc.WithAlpha(0.75f), hotc.WithAlpha(0.75f), hotc.WithAlpha(0f), hotc.WithAlpha(0f) });
                 }
                 if (power > 0f) ci.DrawLine(new Vector2(x0, y0 - 2f), new Vector2(x0, y1 + 2f), accent.Lightened(0.3f).WithAlpha((burn ? 0.8f : 0.25f) * flicker), 2f); // 노즐 끝이 달아오른다
                 if (burn)
@@ -851,10 +938,10 @@ public partial class ShipView : Node2D
                     for (int k = 0; k < 4; k++)
                     {
                         float ph = (t * 3f + k * 0.25f) % 1f;
-                        ci.DrawCircle(new Vector2(x0 - T * 3.4f * ph, yc + (k % 2 == 0 ? -1f : 1f) * h * 0.2f * ph), 3f + 7f * ph, new Color(1f, 0.8f, 0.6f, 0.25f * (1f - ph)), true, -1f, true);
+                        ci.Circle(new Vector2(x0 - T * 3.4f * ph, yc + (k % 2 == 0 ? -1f : 1f) * h * 0.2f * ph), 3f + 7f * ph, new Color(1f, 0.8f, 0.6f, 0.25f * (1f - ph)), true, -1f, true);
                     }
                 }
-                ci.DrawRect(new Rect2(r.Position.X + 8, r.Position.Y + 10, 6, r.Size.Y - 20), accent.WithAlpha(power * (0.35f + 0.25f * flicker)));
+                ci.Box(new Rect2(r.Position.X + 8, r.Position.Y + 10, 6, r.Size.Y - 20), accent.WithAlpha(power * (0.35f + 0.25f * flicker)));
                 break;
             }
             case FurnitureType.SensorArray:
@@ -876,10 +963,10 @@ public partial class ShipView : Node2D
                     {
                         var d = new Vector2(-inc.Direction.X, -inc.Direction.Y);
                         float far = Mathf.Clamp(inc.MinutesLeft(_world.Tick) / SensorSystem.ApproachMinutes, 0.15f, 1f);
-                        ci.DrawCircle(c0 + d * rad * far, 2.2f, Palette.Danger.WithAlpha(0.6f + 0.4f * Mathf.Sin(t * 8f)), true, -1f, true);
+                        ci.Circle(c0 + d * rad * far, 2.2f, Palette.Danger.WithAlpha(0.6f + 0.4f * Mathf.Sin(t * 8f)), true, -1f, true);
                     }
                 }
-                else if (Mathf.Sin(t * 3f) > 0f) ci.DrawCircle(c0, 2.5f, Palette.Danger, true, -1f, true);
+                else if (Mathf.Sin(t * 3f) > 0f) ci.Circle(c0, 2.5f, Palette.Danger, true, -1f, true);
                 break;
             }
             case FurnitureType.MainComputer:
@@ -895,14 +982,14 @@ public partial class ShipView : Node2D
                     float blink = Hash(f.Id * 7 + k, row * 3 + led, 11);
                     bool on = online ? Mathf.Sin(t * (3f + 5f * blink) + blink * 9f) > -0.2f : led == 0 && row == 0 && Mathf.Sin(t * 4f) > 0f;
                     var col = online ? (blink > 0.8f ? new Color("#ffd166") : new Color("#5fd0c8")) : Palette.Danger;
-                    if (on) ci.DrawCircle(p, 1.4f, col.WithAlpha(online ? 0.85f : 0.9f), true, -1f, true);
+                    if (on) ci.Circle(p, 1.4f, col.WithAlpha(online ? 0.85f : 0.9f), true, -1f, true);
                 }
                 float heat = Mathf.Clamp((f.Room.Air.Temperature - 28f) / 12f, 0f, 1f);
                 if (heat > 0.05f)
                     for (int k = 0; k < 4; k++)
                     {
                         float ph = Mathf.PosMod(t * 0.7f + k * 0.25f, 1f);
-                        ci.DrawCircle(new Vector2(r.Position.X + r.Size.X * (0.2f + 0.2f * k), r.Position.Y + r.Size.Y * (1f - ph)),
+                        ci.Circle(new Vector2(r.Position.X + r.Size.X * (0.2f + 0.2f * k), r.Position.Y + r.Size.Y * (1f - ph)),
                             3f + 6f * ph, new Color("#ff8a4a").WithAlpha(0.18f * heat * (1f - ph)), true, -1f, true);
                     }
                 break;
@@ -910,14 +997,14 @@ public partial class ShipView : Node2D
             case FurnitureType.Console:
             {
                 var screen = r.Grow(-8f);
-                if (!alive) { ci.DrawRect(screen, new Color("#0b0e13")); break; }
-                ci.DrawRect(screen, accent.WithAlpha(0.2f + 0.08f * Mathf.Sin(t * 2.1f)));
+                if (!alive) { ci.Box(screen, new Color("#0b0e13")); break; }
+                ci.Box(screen, accent.WithAlpha(0.2f + 0.08f * Mathf.Sin(t * 2.1f)));
                 float sy = screen.Position.Y + Mathf.PosMod(t * 7f, screen.Size.Y);
                 ci.DrawLine(new Vector2(screen.Position.X, sy), new Vector2(screen.End.X, sy), accent.WithAlpha(0.55f), 1f);
                 for (int k = 0; k < 3; k++)
                 {
                     float bh = 2f + 4f * (0.5f + 0.5f * Mathf.Sin(t * (1.3f + k * 0.7f) + k));
-                    ci.DrawRect(new Rect2(screen.Position.X + 3 + k * 5, screen.End.Y - 2 - bh, 3, bh), accent.WithAlpha(0.7f));
+                    ci.Box(new Rect2(screen.Position.X + 3 + k * 5, screen.End.Y - 2 - bh, 3, bh), accent.WithAlpha(0.7f));
                 }
                 break;
             }
@@ -928,7 +1015,7 @@ public partial class ShipView : Node2D
                 {
                     var p = new Vector2(center.X, r.Position.Y + r.Size.Y * fy);
                     float pulse = 0.5f + 0.5f * Mathf.Sin(t * 1.8f + k * 1.9f);
-                    ci.DrawCircle(p, 6f + 2f * pulse * eff, accent.WithAlpha((0.25f + 0.25f * pulse) * eff + 0.05f), true, -1f, true);
+                    ci.Circle(p, 6f + 2f * pulse * eff, accent.WithAlpha((0.25f + 0.25f * pulse) * eff + 0.05f), true, -1f, true);
                     k++;
                 }
                 if (!alive) break;
@@ -937,7 +1024,7 @@ public partial class ShipView : Node2D
                     float travel = r.Size.Y - 18f;
                     float y = r.End.Y - 9f - Mathf.PosMod(t * 12f * eff + b * travel / 3f, travel);
                     float x = r.Position.X + 10f + b * (r.Size.X - 20f) / 2f;
-                    ci.DrawCircle(new Vector2(x, y), 1.8f, accent.WithAlpha(0.45f), true, -1f, true);
+                    ci.Circle(new Vector2(x, y), 1.8f, accent.WithAlpha(0.45f), true, -1f, true);
                 }
                 break;
             }
@@ -950,7 +1037,7 @@ public partial class ShipView : Node2D
                     var d = Vector2.FromAngle(spin + k * Mathf.Tau / 3f);
                     ci.DrawLine(center + d * 4f, center + d * 15f, col.WithAlpha(alive ? 0.75f : 0.5f), 3f, true);
                 }
-                ci.DrawCircle(center, 4.5f, col.WithAlpha(0.9f), true, -1f, true);
+                ci.Circle(center, 4.5f, col.WithAlpha(0.9f), true, -1f, true);
                 break;
             }
             case FurnitureType.PowerPanel:
@@ -968,7 +1055,7 @@ public partial class ShipView : Node2D
                     var col = manualOff ? Palette.TextMuted : jumpered ? JumperColor : live ? Palette.Good : Palette.Danger;
                     float blink = live || manualOff || jumpered ? 1f : 0.5f + 0.5f * Mathf.Sin(_time * 8f);
                     bool up = live && !manualOff || jumpered;
-                    ci.DrawRect(new Rect2(x - 2.5f, up ? sw.Position.Y + 2 : sw.End.Y - 6, 5, 4), col.WithAlpha(blink));
+                    ci.Box(new Rect2(x - 2.5f, up ? sw.Position.Y + 2 : sw.End.Y - 6, 5, 4), col.WithAlpha(blink));
                 }
                 break;
             }
@@ -982,16 +1069,16 @@ public partial class ShipView : Node2D
                     var cell = bars == 1 ? new Rect2(r.Position.X + 11, r.Position.Y + 8, 10, r.Size.Y - 16)
                         : new Rect2(r.Position.X + 11 + k * 15, r.Position.Y + 11, 9, r.Size.Y - 22);
                     float h = cell.Size.Y * charge;
-                    ci.DrawRect(new Rect2(cell.Position.X, cell.End.Y - h, cell.Size.X, h), col.WithAlpha(0.55f));
+                    ci.Box(new Rect2(cell.Position.X, cell.End.Y - h, cell.Size.X, h), col.WithAlpha(0.55f));
                 }
                 if (_world.Power.BatteryFlow < -0.1f)
-                    ci.DrawCircle(new Vector2(r.End.X - 9, r.Position.Y + 9), 2.5f, Palette.Warning.WithAlpha(0.5f + 0.5f * Mathf.Sin(_time * 6f)), true, -1f, true);
+                    ci.Circle(new Vector2(r.End.X - 9, r.Position.Y + 9), 2.5f, Palette.Warning.WithAlpha(0.5f + 0.5f * Mathf.Sin(_time * 6f)), true, -1f, true);
                 break;
             }
             case FurnitureType.GrowBed when m?.Crop is CropState crop:
             {
                 // 생장등
-                if (alive) ci.DrawRect(new Rect2(r.Position.X + 5, r.Position.Y + 4, r.Size.X - 10, 2), new Color("#d77cff").WithAlpha(0.35f + 0.1f * Mathf.Sin(t)));
+                if (alive) ci.Box(new Rect2(r.Position.X + 5, r.Position.Y + 4, r.Size.X - 10, 2), new Color("#d77cff").WithAlpha(0.35f + 0.1f * Mathf.Sin(t)));
                 int plants = f.Width * 2;
                 for (int k = 0; k < plants; k++)
                 {
@@ -1000,10 +1087,10 @@ public partial class ShipView : Node2D
                     float size = 2f + 6f * crop.Growth;
                     float sway = Mathf.Sin(_time * 1.3f + k) * 0.6f;
                     var leaf = new Color("#5fae3e").Lerp(new Color("#8fd65a"), crop.Care) * (alive ? 1f : 0.6f);
-                    ci.DrawCircle(new Vector2(x + sway, y), size, leaf.WithAlpha(0.9f), true, -1f, true);
-                    ci.DrawCircle(new Vector2(x + sway - size * 0.3f, y - size * 0.3f), size * 0.5f, leaf.Lightened(0.25f).WithAlpha(0.8f), true, -1f, true);
+                    ci.Circle(new Vector2(x + sway, y), size, leaf.WithAlpha(0.9f), true, -1f, true);
+                    ci.Circle(new Vector2(x + sway - size * 0.3f, y - size * 0.3f), size * 0.5f, leaf.Lightened(0.25f).WithAlpha(0.8f), true, -1f, true);
                     if (crop.Ripe && (k % 2 == 0))
-                        ci.DrawCircle(new Vector2(x + sway + 2, y + 1), 2.2f, new Color("#ff8a5c"), true, -1f, true);
+                        ci.Circle(new Vector2(x + sway + 2, y + 1), 2.2f, new Color("#ff8a5c"), true, -1f, true);
                 }
                 PaintBlight(ci, f, crop); // v11.2
                 break;
@@ -1013,7 +1100,7 @@ public partial class ShipView : Node2D
                 var tank = new Rect2(r.Position.X + 12, r.Position.Y + 10, r.Size.X - 24, r.Size.Y - 20);
                 float level = _world.Water.Level / _world.Water.Capacity;
                 float h = tank.Size.Y * level;
-                ci.DrawRect(new Rect2(tank.Position.X + 2, tank.End.Y - h, tank.Size.X - 4, h), new Color("#3a8fd9").WithAlpha(0.55f));
+                ci.Box(new Rect2(tank.Position.X + 2, tank.End.Y - h, tank.Size.X - 4, h), new Color("#3a8fd9").WithAlpha(0.55f));
                 if (alive)
                 {
                     float wy = tank.End.Y - h + 1.5f * Mathf.Sin(_time * 2f);
@@ -1027,27 +1114,27 @@ public partial class ShipView : Node2D
                 foreach (float fx in new[] { 0.28f, 0.72f })
                 {
                     var p = new Vector2(r.Position.X + r.Size.X * fx, center.Y);
-                    ci.DrawCircle(p, 8f, new Color("#ff7a3c").WithAlpha(0.25f * pulse), true, -1f, true);
-                    ci.DrawArc(p, 8f, 0f, Mathf.Tau, 24, new Color("#ff9a5c").WithAlpha(0.9f * pulse), 2f, true);
+                    ci.Circle(p, 8f, new Color("#ff7a3c").WithAlpha(0.25f * pulse), true, -1f, true);
+                    ci.Arc(p, 8f, 0f, Mathf.Tau, 24, new Color("#ff9a5c").WithAlpha(0.9f * pulse), 2f, true);
                 }
                 break;
             }
             case FurnitureType.Fridge:
             {
                 var led = alive ? Palette.Good : Palette.Danger;
-                ci.DrawCircle(new Vector2(r.End.X - 8, r.Position.Y + 8), 2f, led.WithAlpha(0.85f), true, -1f, true);
+                ci.Circle(new Vector2(r.End.X - 8, r.Position.Y + 8), 2f, led.WithAlpha(0.85f), true, -1f, true);
                 float fill = f.Storage!.Total / (float)f.Storage.Capacity;
-                ci.DrawRect(new Rect2(r.Position.X + 6, r.End.Y - 7, (r.Size.X - 12) * fill, 2), Palette.Item(ItemKind.Produce).WithAlpha(0.7f));
+                ci.Box(new Rect2(r.Position.X + 6, r.End.Y - 7, (r.Size.X - 12) * fill, 2), Palette.Item(ItemKind.Produce).WithAlpha(0.7f));
                 PaintTaint(ci, f); // v11.2
                 break;
             }
             case FurnitureType.MealDispenser:
             {
                 float pulse = 0.5f + 0.5f * Mathf.Sin(t * 2.5f);
-                ci.DrawCircle(new Vector2(r.End.X - 8, r.Position.Y + 8), 2f, (alive ? accent : Palette.Danger).WithAlpha(0.4f + 0.5f * pulse), true, -1f, true);
+                ci.Circle(new Vector2(r.End.X - 8, r.Position.Y + 8), 2f, (alive ? accent : Palette.Danger).WithAlpha(0.4f + 0.5f * pulse), true, -1f, true);
                 int meals = f.Storage!.Count(ItemKind.Meal);
                 for (int k = 0; k < System.Math.Min(5, (meals + 3) / 4); k++)
-                    ci.DrawRect(new Rect2(r.Position.X + 7 + k * 4, r.Position.Y + 9, 3, 6), Palette.Item(ItemKind.Meal).WithAlpha(0.8f));
+                    ci.Box(new Rect2(r.Position.X + 7 + k * 4, r.Position.Y + 9, 3, 6), Palette.Item(ItemKind.Meal).WithAlpha(0.8f));
                 PaintTaint(ci, f); // v11.2
                 break;
             }
@@ -1065,7 +1152,7 @@ public partial class ShipView : Node2D
                 // 걸려 있는 우주복 수만큼 불이 켜진다
                 int suits = f.Storage!.Count(ItemKind.Suit);
                 for (int k = 0; k < f.Storage.Capacity; k++)
-                    ci.DrawCircle(new Vector2(r.Position.X + 8 + k * 6, r.End.Y - 7), 2f,
+                    ci.Circle(new Vector2(r.Position.X + 8 + k * 6, r.End.Y - 7), 2f,
                         (k < suits ? Palette.Good : Palette.TextMuted).WithAlpha(0.85f), true, -1f, true);
                 break;
             }
@@ -1102,9 +1189,9 @@ public partial class ShipView : Node2D
             // 임시로 살려 둔 설비: 깜빡이지 않는 노란 게이지 (몇 %로 돌고 있는지)
             var gp = new Vector2(r.End.X - 4, r.Position.Y + 4);
             float frac = m.Faults.Min(x => Fault.StageFloor(x.Stage));
-            ci.DrawCircle(gp, 6f, new Color("#1a160c"), true, -1f, true);
-            ci.DrawArc(gp, 4.5f, -Mathf.Pi / 2f, -Mathf.Pi / 2f + Mathf.Tau * frac, 16, new Color("#f5d547"), 2.5f, true);
-            ci.DrawArc(gp, 6f, 0f, Mathf.Tau, 16, new Color("#f5d547").WithAlpha(0.6f), 1f, true);
+            ci.Circle(gp, 6f, new Color("#1a160c"), true, -1f, true);
+            ci.Arc(gp, 4.5f, -Mathf.Pi / 2f, -Mathf.Pi / 2f + Mathf.Tau * frac, 16, new Color("#f5d547"), 2.5f, true);
+            ci.Arc(gp, 6f, 0f, Mathf.Tau, 16, new Color("#f5d547").WithAlpha(0.6f), 1f, true);
             return;
         }
         float blink = 0.55f + 0.45f * Mathf.Sin(_time * 6f);
@@ -1113,16 +1200,16 @@ public partial class ShipView : Node2D
         Gfx.RoundRect(ci, r.Grow(1f), new Color(0, 0, 0, 0f), 6, col.WithAlpha(0.7f * blink), 2);
         var p = new Vector2(r.End.X - 2, r.Position.Y + 2);
         var tri = new[] { p + new Vector2(0, -8), p + new Vector2(7, 5), p + new Vector2(-7, 5) };
-        ci.DrawColoredPolygon(tri, col.WithAlpha(blink));
-        ci.DrawRect(new Rect2(p.X - 0.8f, p.Y - 3.5f, 1.6f, 4.5f), new Color("#1a1010"));
-        ci.DrawRect(new Rect2(p.X - 0.8f, p.Y + 2f, 1.6f, 1.5f), new Color("#1a1010"));
+        ci.Poly(tri, col.WithAlpha(blink));
+        ci.Box(new Rect2(p.X - 0.8f, p.Y - 3.5f, 1.6f, 4.5f), new Color("#1a1010"));
+        ci.Box(new Rect2(p.X - 0.8f, p.Y + 2f, 1.6f, 1.5f), new Color("#1a1010"));
     }
 
     // ── 보기 모드 오버레이 ──
 
     private void FillRoom(CanvasItem ci, Room room, Color color)
     {
-        foreach (var c in room.Cells) ci.DrawRect(CellRect(c), color);
+        foreach (var c in room.Cells) ci.Box(CellRect(c), color);
     }
 
     /// <summary>v9.3 저출력 운영으로 사람이 내려 둔 설비 (고장·정전과 구별되는 차분한 파랑).</summary>
@@ -1156,9 +1243,9 @@ public partial class ShipView : Node2D
                 : !_world.Power.CircuitLive[circuit] ? JumperColor
                 : Palette.Good;
             var p = new Vector2(r.Position.X + 6, r.Position.Y + 6);
-            ci.DrawCircle(p, 4.5f, new Color("#0b0e13"), true, -1f, true);
+            ci.Circle(p, 4.5f, new Color("#0b0e13"), true, -1f, true);
             var bolt = new[] { p + new Vector2(1, -3.5f), p + new Vector2(-2, 0.5f), p + new Vector2(0.2f, 0.5f), p + new Vector2(-1, 3.5f), p + new Vector2(2, -0.5f), p + new Vector2(-0.2f, -0.5f) };
-            ci.DrawColoredPolygon(bolt, col);
+            ci.Poly(bolt, col);
             if (m.Parked) ci.DrawLine(p + new Vector2(-5f, 5f), p + new Vector2(5f, -5f), ParkedColor, 1.5f, true);
         }
     }
@@ -1214,13 +1301,13 @@ public partial class ShipView : Node2D
             Gfx.RoundRect(ci, r, col.WithAlpha(0.22f), 5, col.WithAlpha(0.85f), 2);
             // 수명 막대
             var bar = new Rect2(r.Position.X + 3, r.End.Y - 5, r.Size.X - 6, 3);
-            ci.DrawRect(bar, new Color(0, 0, 0, 0.6f));
-            ci.DrawRect(new Rect2(bar.Position, new Vector2(bar.Size.X * m.Condition, bar.Size.Y)), new Color(1, 1, 1, 0.7f));
+            ci.Box(bar, new Color(0, 0, 0, 0.6f));
+            ci.Box(new Rect2(bar.Position, new Vector2(bar.Size.X * m.Condition, bar.Size.Y)), new Color(1, 1, 1, 0.7f));
         }
         foreach (var (cell, wall) in _world.Ship.Walls)
         {
             if (wall.Integrity >= 0.999f) continue;
-            ci.DrawRect(CellRect(cell), Palette.Severity(1f - wall.Integrity).WithAlpha(0.5f));
+            ci.Box(CellRect(cell), Palette.Severity(1f - wall.Integrity).WithAlpha(0.5f));
         }
     }
 
@@ -1239,9 +1326,9 @@ public partial class ShipView : Node2D
         void Band(float from, float len, Color c)
         {
             if (d.ConnectsVertically)
-                ci.DrawRect(new Rect2(r.Position.X + from, r.GetCenter().Y - th * 0.5f, len, th), c);
+                ci.Box(new Rect2(r.Position.X + from, r.GetCenter().Y - th * 0.5f, len, th), c);
             else
-                ci.DrawRect(new Rect2(r.GetCenter().X - th * 0.5f, r.Position.Y + from, th, len), c);
+                ci.Box(new Rect2(r.GetCenter().X - th * 0.5f, r.Position.Y + from, th, len), c);
         }
 
         Band(0f, 3f, Palette.WallEdge);
@@ -1270,14 +1357,14 @@ public partial class ShipView : Node2D
             for (float s = 3f; s < T - 3f; s += 6f) Band(s, 3f, (((int)(s / 6f) & 1) == 0 ? Palette.Danger : new Color("#f5d547")).WithAlpha(0.75f * pulse));
             var c = r.GetCenter();
             Gfx.RoundRect(ci, new Rect2(c.X - 4.5f, c.Y - 2f, 9f, 7f), new Color("#1a0d10"), 1.5f, Palette.Danger);
-            ci.DrawArc(c + new Vector2(0, -2f), 3f, Mathf.Pi, Mathf.Tau, 10, Palette.Danger, 1.5f, true);
+            ci.Arc(c + new Vector2(0, -2f), 3f, Mathf.Pi, Mathf.Tau, 10, Palette.Danger, 1.5f, true);
         }
         // v9.4 문 구동기: 망가지면 주황 톱니(손으로만), 임시 구동기면 노란 점
         if (d.MotorBroken && !d.Removed)
         {
             var c = r.GetCenter() + (d.ConnectsVertically ? new Vector2(T * 0.32f, -T * 0.32f) : new Vector2(T * 0.32f, -T * 0.32f));
-            ci.DrawCircle(c, 5f, new Color("#1a120c"), true, -1f, true);
-            ci.DrawArc(c, 3.6f, 0f, Mathf.Tau, 12, new Color("#f0883e"), 1.6f, true);
+            ci.Circle(c, 5f, new Color("#1a120c"), true, -1f, true);
+            ci.Arc(c, 3.6f, 0f, Mathf.Tau, 12, new Color("#f0883e"), 1.6f, true);
             for (int i = 0; i < 6; i++)
             {
                 float ang = i * Mathf.Tau / 6f;
@@ -1286,13 +1373,13 @@ public partial class ShipView : Node2D
             ci.DrawLine(c + new Vector2(-4f, 4f), c + new Vector2(4f, -4f), Palette.Danger, 1.4f, true);
         }
         else if (d.MotorMk1 && !d.Removed)
-            ci.DrawCircle(r.GetCenter() + new Vector2(T * 0.32f, -T * 0.32f), 2.6f, new Color("#f5d547"), true, -1f, true);
+            ci.Circle(r.GetCenter() + new Vector2(T * 0.32f, -T * 0.32f), 2.6f, new Color("#f5d547"), true, -1f, true);
     }
 
     private void PaintOutline(CanvasItem ci, Room room, Color color, bool fill)
     {
         if (fill)
-            foreach (var c in room.Cells) ci.DrawRect(CellRect(c), color.WithAlpha(0.05f));
+            foreach (var c in room.Cells) ci.Box(CellRect(c), color.WithAlpha(0.05f));
         foreach (var (a, b) in Outline(room)) ci.DrawLine(a, b, color, 2f);
     }
 
@@ -1308,8 +1395,8 @@ public partial class ShipView : Node2D
             prev = p;
         }
         var dp = ToPx(dest.Center);
-        ci.DrawArc(dp, 7f, 0f, Mathf.Tau, 24, color, 1.5f, true);
-        ci.DrawCircle(dp, 2.5f, color, true, -1f, true);
+        ci.Arc(dp, 7f, 0f, Mathf.Tau, 24, color, 1.5f, true);
+        ci.Circle(dp, 2.5f, color, true, -1f, true);
     }
 
     private void PaintCrew(CanvasItem ci, CrewMember c)
@@ -1338,9 +1425,9 @@ public partial class ShipView : Node2D
             {
                 Gfx.RoundRect(ci, new Rect2(lie.X - 13f * s, lie.Y - 6f * s, 26f * s, 12f * s), Palette.Space.WithAlpha(0.8f), 6f * s);
                 Gfx.RoundRect(ci, new Rect2(lie.X - 12f * s, lie.Y - 5f * s, 24f * s, 10f * s), body, 5f * s);
-                ci.DrawCircle(lie + new Vector2(-8f * s, 0f), 5.5f * s, body.Lightened(0.25f), true, -1f, true);
+                ci.Circle(lie + new Vector2(-8f * s, 0f), 5.5f * s, body.Lightened(0.25f), true, -1f, true);
             }
-            if (c.Suit != null) ci.DrawArc(lie + new Vector2(-8f * s, 0f), 6f * s, 0f, Mathf.Tau, 16, new Color("#dfe6ee"), 1.5f, true);
+            if (c.Suit != null) ci.Arc(lie + new Vector2(-8f * s, 0f), 6f * s, 0f, Mathf.Tau, 16, new Color("#dfe6ee"), 1.5f, true);
             if (c.Dead)
             {
                 ci.DrawLine(lie + new Vector2(-11, -5) * s, lie + new Vector2(-5, 5) * s, new Color("#1a1c22"), 1.8f, true);
@@ -1350,9 +1437,9 @@ public partial class ShipView : Node2D
             {
                 float blink = 0.5f + 0.5f * Mathf.Sin(_time * 5f);
                 var cp = lie + new Vector2(9f * s, -9f * s);
-                ci.DrawCircle(cp, 5.5f, Palette.Danger.WithAlpha(0.35f + 0.5f * blink), true, -1f, true);
-                ci.DrawRect(new Rect2(cp.X - 1f, cp.Y - 3.5f, 2f, 7f), Colors.White);
-                ci.DrawRect(new Rect2(cp.X - 3.5f, cp.Y - 1f, 7f, 2f), Colors.White);
+                ci.Circle(cp, 5.5f, Palette.Danger.WithAlpha(0.35f + 0.5f * blink), true, -1f, true);
+                ci.Box(new Rect2(cp.X - 1f, cp.Y - 3.5f, 2f, 7f), Colors.White);
+                ci.Box(new Rect2(cp.X - 3.5f, cp.Y - 1f, 7f, 2f), Colors.White);
             }
         }
         else if (_world.Body.Crawling(c))
@@ -1367,8 +1454,8 @@ public partial class ShipView : Node2D
             if (lod >= 1) PaintPuppetLying(ci, c, p + new Vector2(0f, 1.5f), s * 0.85f, false, true); // v17.1 베개 위 머리 · 머리카락
             else
             {
-                ci.DrawCircle(head, 8.5f * s, Palette.Space.WithAlpha(0.8f), true, -1f, true);
-                ci.DrawCircle(head, 7f * s, col, true, -1f, true);
+                ci.Circle(head, 8.5f * s, Palette.Space.WithAlpha(0.8f), true, -1f, true);
+                ci.Circle(head, 7f * s, col, true, -1f, true);
             }
         }
         else
@@ -1388,7 +1475,7 @@ public partial class ShipView : Node2D
             var body = p + new Vector2(0f, bob) + sway + (slump ? c.Facing.ToGodot() * 1.6f + new Vector2(0f, 1.2f) : Vector2.Zero);
 
             ci.DrawSetTransform(p + new Vector2(0f, 8f * s), 0f, new Vector2(1f, 0.42f));
-            ci.DrawCircle(Vector2.Zero, 10f * s, new Color(0f, 0f, 0f, 0.4f), true, -1f, true);
+            ci.Circle(Vector2.Zero, 10f * s, new Color(0f, 0f, 0f, 0.4f), true, -1f, true);
             ci.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
 
             float rr = c.Pose == Pose.Sitting ? radius * 0.9f : radius;
@@ -1402,10 +1489,10 @@ public partial class ShipView : Node2D
                 float prog = c.Job?.Current?.Progress ?? -1f;
                 if (prog >= 0f)
                 {
-                    ci.DrawArc(body, rr + 5f * s, -Mathf.Pi / 2f, -Mathf.Pi / 2f + Mathf.Tau * prog, 32, col.WithAlpha(0.85f), 2.2f, true);
-                    ci.DrawArc(body, rr + 5f * s, 0f, Mathf.Tau, 32, col.WithAlpha(0.15f), 2.2f, true);
+                    ci.Arc(body, rr + 5f * s, -Mathf.Pi / 2f, -Mathf.Pi / 2f + Mathf.Tau * prog, 32, col.WithAlpha(0.85f), 2.2f, true);
+                    ci.Arc(body, rr + 5f * s, 0f, Mathf.Tau, 32, col.WithAlpha(0.15f), 2.2f, true);
                 }
-                else ci.DrawArc(body, rr + 5f * s, a, a + 1.1f, 12, col.WithAlpha(0.65f), 2f, true);
+                else ci.Arc(body, rr + 5f * s, a, a + 1.1f, 12, col.WithAlpha(0.65f), 2f, true);
             }
 
             PaintReact(ci, c, body, facing, rr, s, ZoomDetail.Shows(Zoom, Detail.CrewDot) ? 0 : lod); // v17.8 반응 몸짓 · 손전등 · 담요 · 땀 · 입김
@@ -1424,9 +1511,9 @@ public partial class ShipView : Node2D
         }
 
         if (selected)
-            ci.DrawArc(p, radius + 5.5f + Mathf.Sin(_time * 4f), 0f, Mathf.Tau, 48, new Color(1, 1, 1, 0.9f), 1.5f, true);
+            ci.Arc(p, radius + 5.5f + Mathf.Sin(_time * 4f), 0f, Mathf.Tau, 48, new Color(1, 1, 1, 0.9f), 1.5f, true);
         else if (hovered)
-            ci.DrawArc(p, radius + 4.5f, 0f, Mathf.Tau, 48, new Color(1, 1, 1, 0.4f), 1.5f, true);
+            ci.Arc(p, radius + 4.5f, 0f, Mathf.Tau, 48, new Color(1, 1, 1, 0.4f), 1.5f, true);
     }
 
     public CrewMember? PickCrew(Vector2 worldPx)

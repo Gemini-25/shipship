@@ -140,17 +140,17 @@ public partial class Hud
     {
         switch (m)
         {
-            case ViewMode.Normal: DrawRect(new Rect2(c.X - s, c.Y - s * 0.6f, s * 2f, s * 1.2f), col, false, 1.3f); DrawLine(c + new Vector2(-s, 0), c + new Vector2(s, 0), col, 1f); break;
-            case ViewMode.Power: DrawPolyline(new[] { c + new Vector2(s * 0.2f, -s), c + new Vector2(-s * 0.5f, s * 0.1f), c + new Vector2(s * 0.3f, s * 0.1f), c + new Vector2(-s * 0.2f, s) }, col, 1.6f, true); break;
-            case ViewMode.Air: for (int k = 0; k < 3; k++) DrawArc(c + new Vector2(0, (k - 1) * s * 0.6f), s * 0.8f, Mathf.Pi * 1.1f, Mathf.Pi * 1.9f, 8, col, 1.2f, true); break;
-            case ViewMode.Temperature: DrawRect(new Rect2(c.X - 1.5f, c.Y - s, 3f, s * 1.4f), col, false, 1.2f); DrawCircle(c + new Vector2(0, s * 0.6f), s * 0.4f, col, true, -1, true); break;
-            case ViewMode.Condition: DrawArc(c, s * 0.8f, 0, Mathf.Tau, 14, col, 1.3f, true); DrawLine(c, c + Vector2.FromAngle(-0.9f) * s * 0.7f, col, 1.5f, true); break;
-            case ViewMode.Trace: for (int k = 0; k < 3; k++) DrawCircle(c + new Vector2((k - 1) * s * 0.7f, (k % 2) * s * 0.5f - s * 0.2f), s * 0.25f, col, true, -1, true); break;
-            case ViewMode.Structure: DrawPolyline(new[] { c + new Vector2(-s, s * 0.7f), c + new Vector2(0, -s * 0.7f), c + new Vector2(s, s * 0.7f), c + new Vector2(-s, s * 0.7f) }, col, 1.3f, true); DrawLine(c + new Vector2(0, -s * 0.7f), c + new Vector2(0, s * 0.7f), col, 1f); break;
-            case ViewMode.Pipes: DrawPolyline(new[] { c + new Vector2(-s, -s * 0.4f), c + new Vector2(0, -s * 0.4f), c + new Vector2(0, s * 0.4f), c + new Vector2(s, s * 0.4f) }, col, 2.2f, true); break;
-            case ViewMode.Sensors: DrawCircle(c, s * 0.25f, col, true, -1, true); DrawArc(c, s * 0.6f, -0.8f, 0.8f, 6, col, 1.2f, true); DrawArc(c, s, -0.8f, 0.8f, 8, col, 1.2f, true); break;
-            case ViewMode.Ambience: DrawPolyline(Enumerable.Range(0, 9).Select(k => c + new Vector2(-s + k * s / 4f, Mathf.Sin(k * 1.4f) * s * 0.5f)).ToArray(), col, 1.3f, true); break;
-            case ViewMode.Belief: DrawArc(c, s * 0.8f, Mathf.Pi * 1.15f, Mathf.Pi * 1.85f, 8, col, 1.3f, true); DrawArc(c, s * 0.8f, Mathf.Pi * 0.15f, Mathf.Pi * 0.85f, 8, col, 1.3f, true); DrawCircle(c, s * 0.3f, col, true, -1, true); break;
+            case ViewMode.Normal: this.Box(new Rect2(c.X - s, c.Y - s * 0.6f, s * 2f, s * 1.2f), col, false, 1.3f); DrawLine(c + new Vector2(-s, 0), c + new Vector2(s, 0), col, 1f); break;
+            case ViewMode.Power: this.Polyline(new[] { c + new Vector2(s * 0.2f, -s), c + new Vector2(-s * 0.5f, s * 0.1f), c + new Vector2(s * 0.3f, s * 0.1f), c + new Vector2(-s * 0.2f, s) }, col, 1.6f, true); break;
+            case ViewMode.Air: for (int k = 0; k < 3; k++) this.Arc(c + new Vector2(0, (k - 1) * s * 0.6f), s * 0.8f, Mathf.Pi * 1.1f, Mathf.Pi * 1.9f, 8, col, 1.2f, true); break;
+            case ViewMode.Temperature: this.Box(new Rect2(c.X - 1.5f, c.Y - s, 3f, s * 1.4f), col, false, 1.2f); this.Circle(c + new Vector2(0, s * 0.6f), s * 0.4f, col, true, -1, true); break;
+            case ViewMode.Condition: this.Arc(c, s * 0.8f, 0, Mathf.Tau, 14, col, 1.3f, true); DrawLine(c, c + Vector2.FromAngle(-0.9f) * s * 0.7f, col, 1.5f, true); break;
+            case ViewMode.Trace: for (int k = 0; k < 3; k++) this.Circle(c + new Vector2((k - 1) * s * 0.7f, (k % 2) * s * 0.5f - s * 0.2f), s * 0.25f, col, true, -1, true); break;
+            case ViewMode.Structure: this.Polyline(new[] { c + new Vector2(-s, s * 0.7f), c + new Vector2(0, -s * 0.7f), c + new Vector2(s, s * 0.7f), c + new Vector2(-s, s * 0.7f) }, col, 1.3f, true); DrawLine(c + new Vector2(0, -s * 0.7f), c + new Vector2(0, s * 0.7f), col, 1f); break;
+            case ViewMode.Pipes: this.Polyline(new[] { c + new Vector2(-s, -s * 0.4f), c + new Vector2(0, -s * 0.4f), c + new Vector2(0, s * 0.4f), c + new Vector2(s, s * 0.4f) }, col, 2.2f, true); break;
+            case ViewMode.Sensors: this.Circle(c, s * 0.25f, col, true, -1, true); this.Arc(c, s * 0.6f, -0.8f, 0.8f, 6, col, 1.2f, true); this.Arc(c, s, -0.8f, 0.8f, 8, col, 1.2f, true); break;
+            case ViewMode.Ambience: this.Polyline(Enumerable.Range(0, 9).Select(k => c + new Vector2(-s + k * s / 4f, Mathf.Sin(k * 1.4f) * s * 0.5f)).ToArray(), col, 1.3f, true); break;
+            case ViewMode.Belief: this.Arc(c, s * 0.8f, Mathf.Pi * 1.15f, Mathf.Pi * 1.85f, 8, col, 1.3f, true); this.Arc(c, s * 0.8f, Mathf.Pi * 0.15f, Mathf.Pi * 0.85f, 8, col, 1.3f, true); this.Circle(c, s * 0.3f, col, true, -1, true); break;
         }
     }
 
@@ -203,10 +203,10 @@ public partial class Hud
         switch (s)
         {
             case Swatch.Hatch: for (float k = -r.Size.Y; k < r.Size.X; k += 4f) DrawLine(new Vector2(r.Position.X + Mathf.Max(0, k), r.End.Y - Mathf.Max(0, -k)), new Vector2(r.Position.X + Mathf.Min(r.Size.X, k + r.Size.Y), r.Position.Y + Mathf.Max(0, k + r.Size.Y - r.Size.X)), c, 1f); break;
-            case Swatch.Dots: for (int i = 0; i < 3; i++) for (int j = 0; j < 2; j++) DrawCircle(r.Position + new Vector2(4 + i * 5, 4 + j * 5), 1.3f, c, true, -1, true); break;
-            case Swatch.Ring: DrawArc(r.GetCenter(), 4f, 0, Mathf.Tau, 12, c, 1.4f, true); break;
-            case Swatch.Wave: DrawPolyline(Enumerable.Range(0, 7).Select(k => new Vector2(r.Position.X + 2 + k * 2.4f, r.GetCenter().Y + Mathf.Sin(k * 1.6f) * 3f)).ToArray(), c, 1.3f, true); break;
-            case Swatch.Bar: DrawRect(new Rect2(r.Position.X + 3, r.GetCenter().Y - 1.5f, r.Size.X - 6, 3), c); break;
+            case Swatch.Dots: for (int i = 0; i < 3; i++) for (int j = 0; j < 2; j++) this.Circle(r.Position + new Vector2(4 + i * 5, 4 + j * 5), 1.3f, c, true, -1, true); break;
+            case Swatch.Ring: this.Arc(r.GetCenter(), 4f, 0, Mathf.Tau, 12, c, 1.4f, true); break;
+            case Swatch.Wave: this.Polyline(Enumerable.Range(0, 7).Select(k => new Vector2(r.Position.X + 2 + k * 2.4f, r.GetCenter().Y + Mathf.Sin(k * 1.6f) * 3f)).ToArray(), c, 1.3f, true); break;
+            case Swatch.Bar: this.Box(new Rect2(r.Position.X + 3, r.GetCenter().Y - 1.5f, r.Size.X - 6, 3), c); break;
             case Swatch.Cross: DrawLine(r.Position + new Vector2(4, 2), r.End - new Vector2(4, 2), c, 1.5f, true); DrawLine(new Vector2(r.Position.X + 4, r.End.Y - 2), new Vector2(r.End.X - 4, r.Position.Y + 2), c, 1.5f, true); break;
             case Swatch.Line: DrawLine(new Vector2(r.Position.X + 2, r.GetCenter().Y), new Vector2(r.End.X - 2, r.GetCenter().Y), c, 2f, true); break;
         }

@@ -27,19 +27,19 @@ public partial class Hud
         var col = LevelColor(a.Level);
         var hex = new Vector2[6];
         for (int k = 0; k < 6; k++) hex[k] = c + Vector2.FromAngle(k * Mathf.Tau / 6f + Mathf.Pi / 6f) * r;
-        DrawColoredPolygon(hex, new Color("#0b1119"));
-        DrawPolyline(hex.Append(hex[0]).ToArray(), col.WithAlpha(0.9f), 1.6f, true);
+        this.Poly(hex, new Color("#0b1119"));
+        this.Polyline(hex.Append(hex[0]).ToArray(), col.WithAlpha(0.9f), 1.6f, true);
         if (a.Rebooting)
         {
             float frac = 1f - (a.RebootUntil - _world.Tick) / (float)SimTime.Minutes(4);
-            DrawArc(c, r + 3f, -Mathf.Pi / 2f, -Mathf.Pi / 2f + Mathf.Tau * Mathf.Clamp(frac, 0f, 1f), 24, Palette.Warning, 2f, true);
+            this.Arc(c, r + 3f, -Mathf.Pi / 2f, -Mathf.Pi / 2f + Mathf.Tau * Mathf.Clamp(frac, 0f, 1f), 24, Palette.Warning, 2f, true);
             float sp = _time * 6f;
-            DrawArc(c, r - 3f, sp, sp + 1.2f, 8, Palette.Warning.WithAlpha(0.8f), 1.4f, true);
+            this.Arc(c, r - 3f, sp, sp + 1.2f, 8, Palette.Warning.WithAlpha(0.8f), 1.4f, true);
         }
         else if (a.MainOnline)
         {
             float sp = _time * 0.8f;
-            for (int k = 0; k < 3; k++) DrawArc(c, r + 3f, sp + k * Mathf.Tau / 3f, sp + k * Mathf.Tau / 3f + 0.7f, 6, col.WithAlpha(0.55f), 1.2f, true);
+            for (int k = 0; k < 3; k++) this.Arc(c, r + 3f, sp + k * Mathf.Tau / 3f, sp + k * Mathf.Tau / 3f + 0.7f, 6, col.WithAlpha(0.55f), 1.2f, true);
         }
         Gfx.TextCentered(this, Fonts.Bold, c, Roman(a.Level), a.Level >= 4 ? 13 : 12, a.MainOnline ? col : Palette.Danger);
         if (!a.MainOnline && !a.Rebooting)
@@ -100,7 +100,7 @@ public partial class Hud
             float f0 = k / 12f;
             var seg = new Rect2(x + 30 + k * 9.5f, y + 2, 7.5f, 10);
             var sc = f0 < 0.6f ? Palette.Good : f0 < 0.85f ? new Color("#f2c66d") : Palette.Danger;
-            DrawRect(seg, load > f0 ? sc.WithAlpha(0.85f) : new Color(1, 1, 1, 0.06f));
+            this.Box(seg, load > f0 ? sc.WithAlpha(0.85f) : new Color(1, 1, 1, 0.06f));
         }
         Gfx.Text(this, Fonts.Body, new Vector2(x + 148, y + 11), $"{load * 100:0}%" + (a.Suspended.Count > 0 ? $" · {a.Suspended.Count}개 쉼" : ""), Ui.TextTiny, load > 0.9f ? Palette.Danger : Palette.TextDim);
         var room = a.Computer?.Body.Room;
@@ -108,7 +108,7 @@ public partial class Hud
         float tx = x + 222;
         DrawThermo(new Vector2(tx, y + 7), temp);
         Gfx.Text(this, Fonts.Body, new Vector2(tx + 10, y + 11), $"{temp:0}℃", Ui.TextTiny, temp > AutomationSystem.OverheatC - 3f ? Palette.Danger : Palette.TextDim);
-        if (temp > 32f) for (int k = 0; k < 3; k++) { float ph = Mathf.PosMod(_time * 0.8f + k * 0.33f, 1f); DrawArc(new Vector2(tx + 52 + k * 5, y + 10 - ph * 6), 2f, Mathf.Pi, Mathf.Tau, 5, Palette.Warning.WithAlpha(1f - ph), 1f, true); }
+        if (temp > 32f) for (int k = 0; k < 3; k++) { float ph = Mathf.PosMod(_time * 0.8f + k * 0.33f, 1f); this.Arc(new Vector2(tx + 52 + k * 5, y + 10 - ph * 6), 2f, Mathf.Pi, Mathf.Tau, 5, Palette.Warning.WithAlpha(1f - ph), 1f, true); }
         y += 20;
         // 모듈 아이콘 줄
         // v17.6 줄 수를 미리 정해 아래 글줄과 겹치지 않게 (UiLayout.ComputerHeight 와 같은 셈)
@@ -160,13 +160,13 @@ public partial class Hud
         if (hot)
         {
             float a = 0.55f + 0.45f * Mathf.Sin(_time * 7f);
-            DrawColoredPolygon(new[] { c + new Vector2(0, -6), c + new Vector2(6, 5), c + new Vector2(-6, 5) }, Palette.Warning.WithAlpha(a));
+            this.Poly(new[] { c + new Vector2(0, -6), c + new Vector2(6, 5), c + new Vector2(-6, 5) }, Palette.Warning.WithAlpha(a));
             Gfx.TextCentered(this, Fonts.Bold, c + new Vector2(0, 1), "!", Ui.TextMicro, new Color("#0b1119"));
         }
         else
         {
-            DrawArc(c, 5f, 0f, Mathf.Tau, 16, Palette.Good.WithAlpha(0.4f), 1f, true);
-            DrawCircle(c + Vector2.FromAngle(_time * 2f) * 5f, 1.6f, Palette.Good, true, -1f, true);
+            this.Arc(c, 5f, 0f, Mathf.Tau, 16, Palette.Good.WithAlpha(0.4f), 1f, true);
+            this.Circle(c + Vector2.FromAngle(_time * 2f) * 5f, 1.6f, Palette.Good, true, -1f, true);
         }
     }
 
@@ -177,8 +177,8 @@ public partial class Hud
         Gfx.RoundRect(this, tube, new Color("#0b1119"), 2, new Color("#5f6879"), 1);
         float f = Mathf.Clamp((temp - 15f) / 30f, 0f, 1f);
         var col = temp > AutomationSystem.OverheatC - 3f ? Palette.Danger : temp > 30f ? Palette.Warning : Palette.Accent;
-        DrawRect(new Rect2(top.X - 1, top.Y + 6 - 11 * f, 2, 11 * f), col);
-        DrawCircle(new Vector2(top.X, top.Y + 7), 3f, col, true, -1f, true);
+        this.Box(new Rect2(top.X - 1, top.Y + 6 - 11 * f, 2, 11 * f), col);
+        this.Circle(new Vector2(top.X, top.Y + 7), 3f, col, true, -1f, true);
         float over = top.Y + 6 - 11 * Mathf.Clamp((AutomationSystem.OverheatC - 15f) / 30f, 0f, 1f);
         DrawLine(new Vector2(top.X + 3, over), new Vector2(top.X + 6, over), Palette.Danger, 1f);
     }
@@ -200,10 +200,10 @@ public partial class Hud
         // 기한 고리 (정했으면 받음 ✔ · 거절 ✘)
         var rc = new Vector2(r.End.X - 20, r.Position.Y + 20);
         float left = Mathf.Clamp((p.Deadline - w.Tick) / (float)Math.Max(1, p.Deadline - p.Tick), 0f, 1f);
-        DrawArc(rc, 11f, 0f, Mathf.Tau, 24, new Color(1, 1, 1, 0.08f), 3f, true);
+        this.Arc(rc, 11f, 0f, Mathf.Tau, 24, new Color(1, 1, 1, 0.08f), 3f, true);
         if (pending)
         {
-            DrawArc(rc, 11f, -Mathf.Pi / 2f, -Mathf.Pi / 2f + Mathf.Tau * left, 24, left < 0.3f ? Palette.Danger : Palette.Warning, 3f, true);
+            this.Arc(rc, 11f, -Mathf.Pi / 2f, -Mathf.Pi / 2f + Mathf.Tau * left, 24, left < 0.3f ? Palette.Danger : Palette.Warning, 3f, true);
             Gfx.TextCentered(this, Fonts.Bold, rc, $"{(p.Deadline - w.Tick) / (float)SimTime.Minutes(1):0}", Ui.TextMicro, Palette.Text);
         }
         else Icons.Draw(this, p.Accepted ? "target" : "close", rc, Ui.IconS, tone);
@@ -211,12 +211,12 @@ public partial class Hud
         var ic = new Vector2(r.Position.X + 16, r.Position.Y + 18);
         if (p.Kind == "vacuum")
         {
-            DrawRect(new Rect2(ic - new Vector2(8, 7), new Vector2(12, 14)), new Color(1, 1, 1, 0.08f));
-            DrawRect(new Rect2(ic - new Vector2(8, 7), new Vector2(12, 14)), Palette.Warning, false, 1f);
+            this.Box(new Rect2(ic - new Vector2(8, 7), new Vector2(12, 14)), new Color(1, 1, 1, 0.08f));
+            this.Box(new Rect2(ic - new Vector2(8, 7), new Vector2(12, 14)), Palette.Warning, false, 1f);
             for (int k = 0; k < 3; k++) { float ph = Mathf.PosMod(_time * 1.5f + k * 0.33f, 1f); DrawLine(ic + new Vector2(4 + ph * 8, -4 + k * 4), ic + new Vector2(7 + ph * 8, -4 + k * 4), Palette.Accent.WithAlpha(1f - ph), 1.2f); }
         }
         else if (p.Kind == "inert")
-            for (int k = 0; k < 4; k++) DrawCircle(ic + new Vector2(-5 + k * 4, Mathf.Sin(_time * 2f + k) * 2f), 3.2f, new Color("#9fb3ff").WithAlpha(0.6f), true, -1f, true);
+            for (int k = 0; k < 4; k++) this.Circle(ic + new Vector2(-5 + k * 4, Mathf.Sin(_time * 2f + k) * 2f), 3.2f, new Color("#9fb3ff").WithAlpha(0.6f), true, -1f, true);
         else ComputerIcons.Draw(this, ComputerModule.Preempt, ic, 6f, ComputerIcons.State.On, _time);
         Gfx.Text(this, Fonts.Bold, new Vector2(x, r.Position.Y + 17), Fit(p.Title, r.Size.X - 74, Ui.TextLabel, Fonts.Bold), Ui.TextLabel, pending ? Palette.Warning : Palette.Text);
         Gfx.Text(this, Fonts.Body, new Vector2(x, r.Position.Y + 32), Fit($"왜: {p.Basis} → {p.Effect}", r.Size.X - 74, Ui.TextTiny, Fonts.Body), Ui.TextTiny, Palette.TextDim);
@@ -406,9 +406,9 @@ public partial class Hud
         for (int d = 0; d <= 30; d++)
             pts[d] = new Vector2(r.Position.X + 6 + (r.Size.X - 12) * d / 30f, r.End.Y - 14 - (r.Size.Y - 22) * Mathf.Clamp(apps.WaterForecast[d] / Mathf.Max(1f, capacity), 0f, 1f));
         var fill = new List<Vector2>(pts) { new(pts[30].X, r.End.Y - 14), new(pts[0].X, r.End.Y - 14) };
-        DrawColoredPolygon(fill.ToArray(), NetWaterColor.WithAlpha(0.18f));
-        DrawPolyline(pts, NetWaterColor, 1.6f, true);
-        DrawCircle(pts[0], 2.6f, Colors.White, true, -1f, true);
+        this.Poly(fill.ToArray(), NetWaterColor.WithAlpha(0.18f));
+        this.Polyline(pts, NetWaterColor, 1.6f, true);
+        this.Circle(pts[0], 2.6f, Colors.White, true, -1f, true);
         if (apps.WaterEmptyDay >= 0)
         {
             var e = pts[apps.WaterEmptyDay];
@@ -484,8 +484,8 @@ public partial class Hud
             float conf = f.Skill(pr.Key);
             // 믿음 고리
             var rc = new Vector2(lx + 8, ly + 9);
-            DrawArc(rc, 7f, 0f, Mathf.Tau, 18, Palette.TextMuted.WithAlpha(0.4f), 1.5f, true);
-            DrawArc(rc, 7f, -Mathf.Pi / 2f, -Mathf.Pi / 2f + Mathf.Tau * conf, 18, conf >= 0.6f ? Palette.Good : conf >= 0.4f ? Palette.Accent : Palette.Warning, 2f, true);
+            this.Arc(rc, 7f, 0f, Mathf.Tau, 18, Palette.TextMuted.WithAlpha(0.4f), 1.5f, true);
+            this.Arc(rc, 7f, -Mathf.Pi / 2f, -Mathf.Pi / 2f + Mathf.Tau * conf, 18, conf >= 0.6f ? Palette.Good : conf >= 0.4f ? Palette.Accent : Palette.Warning, 2f, true);
             Gfx.Text(this, Fonts.Bold, new Vector2(lx + 20, ly + 13), Fit(pr.Name, 76, Ui.TextTiny, Fonts.Bold), Ui.TextTiny, Palette.Text);
             if (p == null) { Gfx.Text(this, Fonts.Body, new Vector2(lx + 100, ly + 13), "재는 중 (세 시간 모아야 추세)", Ui.TextTiny, Palette.TextMuted); ly += 22; continue; }
             // 막대: 지금(채움) → 예측(테) · 문턱 선
@@ -493,11 +493,11 @@ public partial class Hud
             float thr = lo > float.MinValue / 2 ? lo : hi < float.MaxValue / 2 ? hi : p.Now;
             float span = MathF.Max(MathF.Max(MathF.Abs(p.Now), MathF.Abs(p.Value)), MathF.Abs(thr)) * 1.25f + 0.001f;
             var bar = new Rect2(lx + 100, ly + 4, colW - 200, 10);
-            DrawRect(bar, new Color(1, 1, 1, 0.05f));
+            this.Box(bar, new Color(1, 1, 1, 0.05f));
             float nx = Mathf.Clamp(p.Now / span, 0f, 1f), vx = Mathf.Clamp(p.Value / span, 0f, 1f), tx = Mathf.Clamp(thr / span, 0f, 1f);
             bool bad = p.Value < lo || p.Value > hi;
-            DrawRect(new Rect2(bar.Position, new Vector2(bar.Size.X * nx, bar.Size.Y)), Palette.Accent.WithAlpha(0.55f));
-            DrawRect(new Rect2(bar.Position.X + bar.Size.X * MathF.Min(nx, vx), bar.Position.Y + 2, bar.Size.X * MathF.Abs(vx - nx), bar.Size.Y - 4), (bad ? Palette.Danger : Palette.Good).WithAlpha(0.6f));
+            this.Box(new Rect2(bar.Position, new Vector2(bar.Size.X * nx, bar.Size.Y)), Palette.Accent.WithAlpha(0.55f));
+            this.Box(new Rect2(bar.Position.X + bar.Size.X * MathF.Min(nx, vx), bar.Position.Y + 2, bar.Size.X * MathF.Abs(vx - nx), bar.Size.Y - 4), (bad ? Palette.Danger : Palette.Good).WithAlpha(0.6f));
             DrawLine(new Vector2(bar.Position.X + bar.Size.X * vx, bar.Position.Y - 2), new Vector2(bar.Position.X + bar.Size.X * vx, bar.End.Y + 2), bad ? Palette.Danger : Palette.Text, 1.5f);
             DrawLine(new Vector2(bar.Position.X + bar.Size.X * tx, bar.Position.Y - 3), new Vector2(bar.Position.X + bar.Size.X * tx, bar.End.Y + 3), Palette.Warning, 1f);
             Gfx.Text(this, Fonts.Body, new Vector2(bar.End.X + 6, ly + 13), Fit($"{p.Now:0.#} → {p.Value:0.#}{p.Unit}", 92, Ui.TextTiny, Fonts.Body), Ui.TextTiny, bad ? Palette.Danger : Palette.TextDim);
@@ -505,7 +505,7 @@ public partial class Hud
             float dx = lx + 100;
             foreach (var g in f.Graded.Where(q => q.Key == pr.Key).Reverse().Take(12))
             {
-                DrawCircle(new Vector2(dx + 3, ly + 19), 2f, g.Hit == true ? Palette.Good : Palette.Danger, true, -1f, true);
+                this.Circle(new Vector2(dx + 3, ly + 19), 2f, g.Hit == true ? Palette.Good : Palette.Danger, true, -1f, true);
                 dx += 7;
             }
             ly += 26;
@@ -516,7 +516,7 @@ public partial class Hud
         foreach (var it in f.Plan.AsEnumerable().Reverse().Take(8))
         {
             var col = it.State == "예정" ? Palette.Accent : Palette.TextMuted;
-            DrawRect(new Rect2(rx, ry + 3, 4, 12), col);
+            this.Box(new Rect2(rx, ry + 3, 4, 12), col);
             Gfx.Text(this, Fonts.Bold, new Vector2(rx + 10, ry + 12), Fit($"{SimTime.Clock(it.Tick)} {it.Goal} — {it.Action}", colW - 10, Ui.TextTiny, Fonts.Bold), Ui.TextTiny, Palette.Text);
             Gfx.Text(this, Fonts.Body, new Vector2(rx + 10, ry + 25), Fit($"[{it.State}] {it.Why}", colW - 10, Ui.TextTiny, Fonts.Body), Ui.TextTiny, Palette.TextDim);
             ry += 30;

@@ -62,8 +62,8 @@ public static partial class FixtureArt
                     break;
                 case Look.Heat:
                     // 열 변색: 금빛 → 푸른 띠 (뜨거워졌다 식은 쇠)
-                    ci.DrawArc(e, x.Px(5f + 2f * ws), 0f, Mathf.Tau, 20, TemperGold.WithAlpha(0.18f + 0.07f * ws), x.Px(2.2f), true);
-                    ci.DrawArc(e, x.Px(8f + 2.5f * ws), 0f, Mathf.Tau, 24, TemperBlue.WithAlpha(0.12f + 0.05f * ws), x.Px(1.8f), true);
+                    ci.Arc(e, x.Px(5f + 2f * ws), 0f, Mathf.Tau, 20, TemperGold.WithAlpha(0.18f + 0.07f * ws), x.Px(2.2f), true);
+                    ci.Arc(e, x.Px(8f + 2.5f * ws), 0f, Mathf.Tau, 24, TemperBlue.WithAlpha(0.12f + 0.05f * ws), x.Px(1.8f), true);
                     Dot(ci, e, x.Px(3f + ws), Soot.WithAlpha(0.18f + 0.06f * ws));
                     break;
                 case Look.Leak:
@@ -77,7 +77,7 @@ public static partial class FixtureArt
                         Line(ci, top, top + new Vector2(dx * 0.15f, len), (i % 2 == 0 ? Rust : RustLight).WithAlpha(0.35f + 0.12f * ws), x.Px(1.2f));
                         Dot(ci, top + new Vector2(dx * 0.15f, len), x.Px(1.3f), Rust.WithAlpha(0.4f + 0.1f * ws));
                     }
-                    if (a.Fault == Look.Steam) ci.DrawArc(e, x.Px(4f + ws), Mathf.Pi * 1.1f, Mathf.Pi * 1.9f, 10, Mineral.WithAlpha(0.3f + 0.08f * ws), x.Px(1.4f), true);
+                    if (a.Fault == Look.Steam) ci.Arc(e, x.Px(4f + ws), Mathf.Pi * 1.1f, Mathf.Pi * 1.9f, 10, Mineral.WithAlpha(0.3f + 0.08f * ws), x.Px(1.4f), true);
                     else Dot(ci, e + new Vector2(0f, x.Px(3f)), x.Px(2f + ws), Rust.WithAlpha(0.14f + 0.05f * ws)); // 녹 번진 얼룩
                     break;
                 case Look.Grind:
@@ -85,8 +85,8 @@ public static partial class FixtureArt
                 {
                     // 기름때: 번들거리는 검은 얼룩과 가장자리 반사 · 갈리던 곳엔 쇳가루
                     ci.DrawSetTransform(e, Hash(x.Id, 0, 208) * Mathf.Pi, new Vector2(1f, 0.55f));
-                    ci.DrawCircle(Vector2.Zero, x.Px(3f + 1.8f * ws), Oil.WithAlpha(0.28f + 0.08f * ws), true, -1f, true);
-                    ci.DrawArc(Vector2.Zero, x.Px(2.4f + 1.4f * ws), Mathf.Pi * 1.15f, Mathf.Pi * 1.45f, 6, new Color(1, 1, 1, 0.14f), 1f, true);
+                    ci.Circle(Vector2.Zero, x.Px(3f + 1.8f * ws), Oil.WithAlpha(0.28f + 0.08f * ws), true, -1f, true);
+                    ci.Arc(Vector2.Zero, x.Px(2.4f + 1.4f * ws), Mathf.Pi * 1.15f, Mathf.Pi * 1.45f, 6, new Color(1, 1, 1, 0.14f), 1f, true);
                     ci.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
                     if (a.Fault == Look.Grind)
                         for (int i = 0; i < 2 * ws; i++)
@@ -104,8 +104,8 @@ public static partial class FixtureArt
                     {
                         var p = front + new Vector2(Hash(x.Id, i, 211) - 0.5f, Hash(x.Id, i, 212) - 0.5f) * x.Px(12f);
                         ci.DrawSetTransform(p, Hash(x.Id, i, 213) * Mathf.Pi, new Vector2(1f, 0.7f));
-                        ci.DrawArc(Vector2.Zero, x.Px(2f), 0f, Mathf.Tau, 10, new Color(1, 1, 1, 0.06f + 0.02f * ws), 0.8f, true);
-                        ci.DrawArc(Vector2.Zero, x.Px(1.1f), 0f, Mathf.Tau, 8, new Color(1, 1, 1, 0.05f + 0.02f * ws), 0.7f, true);
+                        ci.Arc(Vector2.Zero, x.Px(2f), 0f, Mathf.Tau, 10, new Color(1, 1, 1, 0.06f + 0.02f * ws), 0.8f, true);
+                        ci.Arc(Vector2.Zero, x.Px(1.1f), 0f, Mathf.Tau, 8, new Color(1, 1, 1, 0.05f + 0.02f * ws), 0.7f, true);
                         ci.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
                     }
                     for (int i = 0; i < 3 * ws; i++)
@@ -115,7 +115,7 @@ public static partial class FixtureArt
                 case Look.Gas:
                     // 누런 잔여물: 새던 이음매 둘레에 테가 겹겹이 앉았다
                     for (int i = 0; i < ws; i++)
-                        ci.DrawArc(e, x.Px(3f + i * 2.5f), Hash(x.Id, i, 216) * Mathf.Tau, Hash(x.Id, i, 216) * Mathf.Tau + Mathf.Pi * (1.2f + 0.5f * Hash(x.Id, i, 217)), 12, Residue.WithAlpha(0.32f - i * 0.05f), x.Px(1.3f), true);
+                        ci.Arc(e, x.Px(3f + i * 2.5f), Hash(x.Id, i, 216) * Mathf.Tau, Hash(x.Id, i, 216) * Mathf.Tau + Mathf.Pi * (1.2f + 0.5f * Hash(x.Id, i, 217)), 12, Residue.WithAlpha(0.32f - i * 0.05f), x.Px(1.3f), true);
                     Dot(ci, e, x.Px(1.6f + 0.6f * ws), Residue.WithAlpha(0.3f));
                     break;
             }
@@ -127,7 +127,7 @@ public static partial class FixtureArt
                 bool frontEdge = i % 3 != 2;
                 var p = frontEdge ? x.C + x.Front * ((Mathf.Abs(x.Front.X) > 0.5f ? x.B.Size.X : x.B.Size.Y) * 0.5f - 1f) + new Vector2(Mathf.Abs(x.Front.Y), Mathf.Abs(x.Front.X)) * (u - 0.5f) * (Mathf.Abs(x.Front.X) > 0.5f ? x.B.Size.Y : x.B.Size.X) * 0.9f
                     : x.P(u, Hash(x.Id, i, 219) > 0.5f ? 0.02f : 0.98f);
-                ci.DrawRect(new Rect2(p - new Vector2(1f, 0.6f), new Vector2(1.4f + 1.6f * Hash(x.Id, i, 220), 1.2f)), ChipMetal.WithAlpha(0.45f));
+                ci.Box(new Rect2(p - new Vector2(1f, 0.6f), new Vector2(1.4f + 1.6f * Hash(x.Id, i, 220), 1.2f)), ChipMetal.WithAlpha(0.45f));
             }
         }
 
@@ -147,8 +147,8 @@ public static partial class FixtureArt
                 // 찌그러짐: 반달 그림자 + 밝은 테 (빛이 왼쪽 위에서)
                 var dp = x.P(0.2f + 0.6f * Hash(x.Id, 1, 225), 0.25f + 0.5f * Hash(x.Id, 1, 226));
                 float r = x.Px(3f + 0.6f * ss);
-                ci.DrawArc(dp, r, Mathf.Pi * 0.1f, Mathf.Pi * 0.9f, 10, new Color(0, 0, 0, 0.35f), x.Px(1.6f), true);
-                ci.DrawArc(dp, r, Mathf.Pi * 1.1f, Mathf.Pi * 1.9f, 10, new Color(1, 1, 1, 0.12f), x.Px(1f), true);
+                ci.Arc(dp, r, Mathf.Pi * 0.1f, Mathf.Pi * 0.9f, 10, new Color(0, 0, 0, 0.35f), x.Px(1.6f), true);
+                ci.Arc(dp, r, Mathf.Pi * 1.1f, Mathf.Pi * 1.9f, 10, new Color(1, 1, 1, 0.12f), x.Px(1f), true);
             }
             if (ss >= 4) // 다시 박은 나사 하나 (색이 다르다)
                 Bolt(ci, x.P(0.08f + 0.84f * Hash(x.Id, 2, 227), 0.1f), 0.9f);
@@ -208,7 +208,7 @@ public static partial class FixtureArt
                 }
                 case Look.Flicker:
                     // 펑 하고 나가는 화면: 흰 번쩍임 → 가운데로 줄어드는 선
-                    ci.DrawRect(new Rect2(e - new Vector2(x.Px(9f), x.Px(6f) * k), new Vector2(x.Px(18f), x.Px(12f) * k + 1f)), NoiseWhite.WithAlpha(0.5f * k));
+                    ci.Box(new Rect2(e - new Vector2(x.Px(9f), x.Px(6f) * k), new Vector2(x.Px(18f), x.Px(12f) * k + 1f)), NoiseWhite.WithAlpha(0.5f * k));
                     break;
                 case Look.Jam:
                 {
@@ -223,11 +223,11 @@ public static partial class FixtureArt
         // 고치는 중: 쓰는 사람이 붙어 일하면 점검창이 열리고, 고장 모양에 맞는 연장이 보인다
         if (x.User is not CrewMember fixer || fixer.Pose != Pose.Working) return;
         var hatch = new Rect2(e - new Vector2(x.Px(5f), x.Px(4f)), new Vector2(x.Px(10f), x.Px(8f)));
-        ci.DrawRect(hatch, new Color(0.02f, 0.02f, 0.03f, 0.75f));
+        ci.Box(hatch, new Color(0.02f, 0.02f, 0.03f, 0.75f));
         Line(ci, hatch.Position, new Vector2(hatch.End.X, hatch.Position.Y), Steel4.WithAlpha(0.8f), 1f);
         // 연 덮개가 옆으로 젖혀졌다
         var lid = new Rect2(new Vector2(hatch.End.X + 1f, hatch.Position.Y - 1f), new Vector2(x.Px(3f), hatch.Size.Y + 2f));
-        ci.DrawRect(lid, Steel3);
+        ci.Box(lid, Steel3);
         if (x.Lod == 0) return;
         float t = x.T;
         switch (a.Fault)
@@ -267,7 +267,7 @@ public static partial class FixtureArt
                 var pivot = hatch.GetCenter();
                 var tip = pivot + Vector2.FromAngle(ang) * x.Px(10f);
                 Line(ci, pivot, tip, Chrome, x.Px(1.8f));
-                ci.DrawArc(pivot, x.Px(2.2f), ang + 0.6f, ang + Mathf.Tau - 0.6f, 10, Chrome, x.Px(1.2f), true);
+                ci.Arc(pivot, x.Px(2.2f), ang + 0.6f, ang + Mathf.Tau - 0.6f, 10, Chrome, x.Px(1.2f), true);
                 break;
             }
             case Look.Flicker:

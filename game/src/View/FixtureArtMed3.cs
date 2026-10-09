@@ -33,7 +33,7 @@ public static partial class FixtureArt
         for (int k = 0; k < 12; k++)
         {
             float a0 = k * Mathf.Tau / 12f;
-            ci.DrawArc(c, r + x.Px(0.6f), a0, a0 + Mathf.Tau / 12f, 4, k % 2 == 0 ? ArmHazard : Rubber, x.Px(1.6f), true);
+            ci.Arc(c, r + x.Px(0.6f), a0, a0 + Mathf.Tau / 12f, 4, k % 2 == 0 ? ArmHazard : Rubber, x.Px(1.6f), true);
         }
         Dot(ci, c, r - x.Px(0.4f), Steel3);
         Ring(ci, c, r - x.Px(1.6f), Chrome, x.Px(1f));
@@ -129,7 +129,7 @@ public static partial class FixtureArt
         if (mode == 1) // 카메라 불빛 원뿔
         {
             var cone = new[] { tip, tip + (dir + side * 0.35f) * x.Px(9f), tip + (dir - side * 0.35f) * x.Px(9f) };
-            ci.DrawColoredPolygon(cone, ArmCam.WithAlpha(0.12f + 0.06f * Pulse(x.T, 2f)));
+            ci.Poly(cone, ArmCam.WithAlpha(0.12f + 0.06f * Pulse(x.T, 2f)));
             Dot(ci, tip, x.Px(1.4f), ArmCam);
         }
         else if (mode == 2) // 초록 조준선 · 칼끝 반짝
@@ -169,7 +169,7 @@ public static partial class FixtureArt
                 prev = p;
             }
         }
-        else if (mode == 1) ci.DrawRect(new Rect2(scr.Position, new Vector2(scr.Size.X * (0.5f + 0.5f * Pulse(x.T, 1.2f)), x.Px(0.8f))), ArmCam.WithAlpha(0.7f));
+        else if (mode == 1) ci.Box(new Rect2(scr.Position, new Vector2(scr.Size.X * (0.5f + 0.5f * Pulse(x.T, 1.2f)), x.Px(0.8f))), ArmCam.WithAlpha(0.7f));
         else if (mode == 0) Led(ci, led, ArmData, 0.25f + 0.35f * Pulse(x.T, 1.1f), x.Px(1.1f));
         // 겪은 수술 — 기둥 둘레 눈금
         int n = Mathf.Min(ops, 16);

@@ -75,15 +75,15 @@ public partial class ShipView
                     for (int i = 0; i < 4; i++)
                     {
                         var (a, b) = edges[(int)Mathf.PosMod(_time * 3f + i * 7 + id, edges.Count)];
-                        ci.DrawCircle(a.Lerp(b, Mathf.PosMod(_time * 0.7f + i * 0.31f, 1f)), 2f, Colors.White.WithAlpha(0.8f));
+                        ci.Circle(a.Lerp(b, Mathf.PosMod(_time * 0.7f + i * 0.31f, 1f)), 2f, Colors.White.WithAlpha(0.8f));
                     }
             }
             // 규모 아이콘을 사건이 시작된 방 위에
             if (k.RoomId >= 0 && k.RoomId < _world.Ship.Rooms.Count && !_world.Ship.Rooms[k.RoomId].Detached)
             {
                 var c = ToPx(_world.Ship.Rooms[k.RoomId].Center) + new Vector2(0, -T * 0.9f);
-                ci.DrawCircle(c, 11f, new Color(0.04f, 0.05f, 0.08f, 0.85f));
-                ci.DrawArc(c, 11f, 0, Mathf.Tau, 20, col.WithAlpha(0.85f), 1.5f, true);
+                ci.Circle(c, 11f, new Color(0.04f, 0.05f, 0.08f, 0.85f));
+                ci.Arc(c, 11f, 0, Mathf.Tau, 20, col.WithAlpha(0.85f), 1.5f, true);
                 Hud.ScaleIcon(ci, k.Now, c, 14f, col, _time);
             }
             // 배 전체 소집: 모일 곳에 깃발 + 점호 인원
@@ -93,7 +93,7 @@ public partial class ShipView
                 var pole = m + new Vector2(-6f, 10f);
                 ci.DrawLine(pole, pole + new Vector2(0, -26f), new Color("#d8dee9"), 2f, true);
                 float wave = Mathf.Sin(_time * 4f) * 2f;
-                ci.DrawColoredPolygon(new[] { pole + new Vector2(0, -26f), pole + new Vector2(16f, -22f + wave), pole + new Vector2(0, -16f) }, col);
+                ci.Poly(new[] { pole + new Vector2(0, -26f), pole + new Vector2(16f, -22f + wave), pole + new Vector2(0, -16f) }, col);
                 string label = k.MusterDone ? $"점호 끝 {k.Mustered.Count}" : $"점호 {k.Mustered.Count}";
                 Gfx.TextCentered(ci, Fonts.Bold, m + new Vector2(4f, 22f), label, 11, col.Lerp(Colors.White, 0.3f));
             }

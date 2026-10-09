@@ -9,12 +9,16 @@ public partial class DrawLayer : Node2D
     public Action<CanvasItem>? Painter { get; set; }
     /// <summary>v17.7 다시 그린 횟수 (구워 둔 층이 다시 구울 때를 안다).</summary>
     public int Draws { get; private set; }
+    /// <summary>지난번 그리는 데 든 시간 (ms) — 나눠 그리는 층의 프레임 예산.</summary>
+    public double LastMs { get; private set; }
 
     public override void _Draw()
     {
         long t = FrameProbe.Now; // v17.7 층별 그리기 시간
+        long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
         Draws++;
         Painter?.Invoke(this);
         if (t != 0) FrameProbe.Add(Name, t);
+        LastMs = System.Diagnostics.Stopwatch.GetElapsedTime(t0).TotalMilliseconds;
     }
 }

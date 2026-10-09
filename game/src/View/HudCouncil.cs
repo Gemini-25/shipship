@@ -77,9 +77,9 @@ public partial class Hud
             {
                 var p = new Vector2(x + 10 + i * 13, y + 44);
                 bool signed = i < m.Signers.Count;
-                DrawRect(new Rect2(p, 10, 13), signed ? new Color(0.93f, 0.91f, 0.84f) : new Color(0.93f, 0.91f, 0.84f, 0.15f));
-                if (signed) DrawPolyline(new[] { p + new Vector2(2, 9), p + new Vector2(4, 7), p + new Vector2(6, 10), p + new Vector2(8, 7) }, new Color(0.15f, 0.3f, 0.7f), 1f);
-                else DrawRect(new Rect2(p, 10, 13), new Color(0.93f, 0.91f, 0.84f, 0.4f), false, 1f);
+                this.Box(new Rect2(p, 10, 13), signed ? new Color(0.93f, 0.91f, 0.84f) : new Color(0.93f, 0.91f, 0.84f, 0.15f));
+                if (signed) this.Polyline(new[] { p + new Vector2(2, 9), p + new Vector2(4, 7), p + new Vector2(6, 10), p + new Vector2(8, 7) }, new Color(0.15f, 0.3f, 0.7f), 1f);
+                else this.Box(new Rect2(p, 10, 13), new Color(0.93f, 0.91f, 0.84f, 0.4f), false, 1f);
             }
             string state = m.Stage == MotionStage.Ready ? (m.Sitting == SittingKind.Regular ? "다음 정기 회의에" : $"{MotionSystem.SittingName(m.Sitting)} 소집") : $"{SimTime.Day(m.Deadline)}일 {SimTime.Clock(m.Deadline)}까지";
             Gfx.TextRight(this, Fonts.Body, new Vector2(right - 8, y + 56), $"{m.Signers.Count}/{m.Need} · {state}", Ui.TextTiny, Palette.TextMuted);
@@ -97,8 +97,8 @@ public partial class Hud
             if (m.Item is AgendaItem it && it.Yes + it.No > 0)
             {
                 float bw = 60, bx = right - bw;
-                DrawRect(new Rect2(bx, y + 22, bw, 4), new Color(1, 1, 1, 0.08f));
-                DrawRect(new Rect2(bx, y + 22, bw * it.Yes / (it.Yes + it.No), 4), m.Kind == MotionKind.Accusation ? new Color(1f, 0.6f, 0.35f) : Palette.Good);
+                this.Box(new Rect2(bx, y + 22, bw, 4), new Color(1, 1, 1, 0.08f));
+                this.Box(new Rect2(bx, y + 22, bw * it.Yes / (it.Yes + it.No), 4), m.Kind == MotionKind.Accusation ? new Color(1f, 0.6f, 0.35f) : Palette.Good);
             }
             y += 34;
         }
@@ -140,8 +140,8 @@ public partial class Hud
             Gfx.Text(this, Fonts.Bold, new Vector2(x, y + 12), UiKit.Fit(result, right - x, Ui.TextBody, Fonts.Bold), Ui.TextBody, m.Passed ? Palette.Good : Palette.Warning);
             y += 18;
             int n = Math.Max(1, it.Yes + it.No);
-            DrawRect(new Rect2(x, y, right - x, 6), new Color(1, 1, 1, 0.08f));
-            DrawRect(new Rect2(x, y, (right - x) * it.Yes / n, 6), m.Kind == MotionKind.Accusation ? new Color(1f, 0.6f, 0.35f) : Palette.Good);
+            this.Box(new Rect2(x, y, right - x, 6), new Color(1, 1, 1, 0.08f));
+            this.Box(new Rect2(x, y, (right - x) * it.Yes / n, 6), m.Kind == MotionKind.Accusation ? new Color(1f, 0.6f, 0.35f) : Palette.Good);
             Gfx.Text(this, Fonts.Body, new Vector2(x, y + 18), m.Kind == MotionKind.Accusation ? $"엄하게 {it.Yes} · 너그럽게 {it.No}" : $"찬성 {it.Yes} · 반대 {it.No}" + (it.FlippedBy != null ? $" · {it.FlippedBy}의 말에 뒤집혔다" : ""), Ui.TextTiny, Palette.TextMuted);
             y += 26;
         }
@@ -168,7 +168,7 @@ public partial class Hud
             if (y > bottom - 120) break;
             var col = ShipView.FactionColor(f);
             if (f.Gone) col = col.Lerp(Palette.TextMuted, 0.6f);
-            DrawRect(new Rect2(x, y + 4, 3, 30), col);
+            this.Box(new Rect2(x, y + 4, 3, 30), col);
             ShipView.FactionGlyph(this, f, new Vector2(x + 14, y + 12), 5f, col);
             Gfx.Text(this, Fonts.Bold, new Vector2(x + 26, y + 16), f.Name, Ui.TextBody, f.Gone ? Palette.TextMuted : Palette.Text);
             Gfx.TextRight(this, Fonts.Body, new Vector2(right, y + 16), f.Gone ? "흩어짐" : $"이김 {f.Wins} · 짐 {f.Losses}", Ui.TextTiny, Palette.TextMuted);

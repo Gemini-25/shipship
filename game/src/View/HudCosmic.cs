@@ -56,11 +56,11 @@ public partial class Hud
         Card(card, e.Phase == CosmicPhase.Impact ? Tone.Danger : e.Phase == CosmicPhase.Brace ? Tone.Caution : Tone.Info);
         // 그림 (재난마다 다른 실루엣 · 움직임)
         var iconRect = new Rect2(x + 8f, y + 8f, 40f, 40f);
-        DrawRect(iconRect, new Color(0.01f, 0.015f, 0.03f, 1f), true);
+        this.Box(iconRect, new Color(0.01f, 0.015f, 0.03f, 1f), true);
         var ic = iconRect.GetCenter();
         float near = CosmicSky.Near(w, e), hit = CosmicSky.Hit(w, e);
         CosmicArt.Draw(this, e.Kind, ic, 22f * CosmicIconScale(e.Kind), _time, MathF.Max(0.7f, near), MathF.Min(0.6f, hit), iconRect, ic + new Vector2(30f, 10f), e.Id * 97 + 13);
-        DrawRect(iconRect, pcol.WithAlpha(0.6f), false, 1.5f);
+        this.Box(iconRect, pcol.WithAlpha(0.6f), false, 1.5f);
         // 머리: 이름 · 우주급 · 단계
         Gfx.Text(this, Fonts.Bold, new Vector2(x + 56f, y + 22f), Fit(spec.Name, width - 170f, Ui.TextSubtitle, Fonts.Bold), Ui.TextSubtitle, Palette.Text);
         Gfx.Pill(this, Fonts.Bold, new Vector2(x + width - 96f, y + 18f), CosmicCatalog.Scale, Ui.TextTiny, new Color("#ffd166"), new Color(0.12f, 0.08f, 0.02f, 0.9f), new Color("#ffd166").WithAlpha(0.5f), 7f, 3f);
@@ -101,8 +101,8 @@ public partial class Hud
         {
             var r = new Rect2(bx, yy - 5f, 12f, 12f);
             var col = t.Done ? Palette.Good : t.By >= 0 ? Palette.Warning : new Color(1f, 1f, 1f, 0.15f);
-            DrawRect(r, col.WithAlpha(t.Done ? 0.85f : 0.5f), t.Done || t.By >= 0);
-            if (!t.Done && t.By < 0) DrawRect(r, col, false, 1f);
+            this.Box(r, col.WithAlpha(t.Done ? 0.85f : 0.5f), t.Done || t.By >= 0);
+            if (!t.Done && t.By < 0) this.Box(r, col, false, 1f);
             BraceGlyph(t.Kind, r.GetCenter(), t.Done ? new Color(0.02f, 0.05f, 0.04f) : Palette.Text);
             if (r.HasPoint(mouse)) Gfx.Text(this, Fonts.Body, new Vector2(lx, yy + 22f), Fit($"{t.Label}{(t.Done ? $" ✓ {t.DoneBy}" : t.By >= 0 ? " — 하는 중" : "")}", width - 24f, Ui.TextTiny, Fonts.Body), Ui.TextTiny, Palette.Warning);
             bx += 14f;
@@ -140,16 +140,16 @@ public partial class Hud
     {
         switch (k)
         {
-            case BraceKind.WaterWall: DrawCircle(c + new Vector2(0, 1.5f), 2.6f, col, true, -1f, true); DrawColoredPolygon(new[] { c + new Vector2(0, -4f), c + new Vector2(2.4f, 0.5f), c + new Vector2(-2.4f, 0.5f) }, col); break;
-            case BraceKind.Supplies: DrawRect(new Rect2(c - new Vector2(3.5f, 3f), new Vector2(7f, 6f)), col, false, 1f); DrawLine(c - new Vector2(0, 2f), c + new Vector2(0, 2f), col, 1f); break;
+            case BraceKind.WaterWall: this.Circle(c + new Vector2(0, 1.5f), 2.6f, col, true, -1f, true); this.Poly(new[] { c + new Vector2(0, -4f), c + new Vector2(2.4f, 0.5f), c + new Vector2(-2.4f, 0.5f) }, col); break;
+            case BraceKind.Supplies: this.Box(new Rect2(c - new Vector2(3.5f, 3f), new Vector2(7f, 6f)), col, false, 1f); DrawLine(c - new Vector2(0, 2f), c + new Vector2(0, 2f), col, 1f); break;
             case BraceKind.Shutters: for (int i = -1; i <= 1; i++) DrawLine(c + new Vector2(-3.5f, i * 2.2f), c + new Vector2(3.5f, i * 2.2f), col, 1f); break;
-            case BraceKind.PowerDown: DrawArc(c, 3.2f, -Mathf.Pi * 0.3f, Mathf.Pi * 1.3f, 10, col, 1f, true); DrawLine(c - new Vector2(0, 4f), c, col, 1f); break;
-            case BraceKind.Restart: DrawArc(c, 3.2f, 0f, Mathf.Pi * 1.5f, 10, col, 1f, true); DrawLine(c + new Vector2(3.2f, 0), c + new Vector2(3.2f, -2.5f), col, 1f); break;
+            case BraceKind.PowerDown: this.Arc(c, 3.2f, -Mathf.Pi * 0.3f, Mathf.Pi * 1.3f, 10, col, 1f, true); DrawLine(c - new Vector2(0, 4f), c, col, 1f); break;
+            case BraceKind.Restart: this.Arc(c, 3.2f, 0f, Mathf.Pi * 1.5f, 10, col, 1f, true); DrawLine(c + new Vector2(3.2f, 0), c + new Vector2(3.2f, -2.5f), col, 1f); break;
             case BraceKind.Stow: DrawLine(c - new Vector2(3.5f, 3.5f), c + new Vector2(3.5f, 3.5f), col, 1f); DrawLine(c + new Vector2(-3.5f, 3.5f), c + new Vector2(3.5f, -3.5f), col, 1f); break;
             case BraceKind.Seal: for (int i = -1; i <= 1; i++) DrawLine(c + new Vector2(i * 2.5f - 1.5f, 3.5f), c + new Vector2(i * 2.5f + 1.5f, -3.5f), col, 1.2f); break;
             case BraceKind.Fold: DrawLine(c + new Vector2(-3.5f, 3f), c + new Vector2(0, -3f), col, 1f); DrawLine(c + new Vector2(0, -3f), c + new Vector2(3.5f, 3f), col, 1f); break;
-            case BraceKind.Insulate: DrawArc(c + new Vector2(-1.8f, 0), 1.8f, 0f, Mathf.Pi, 5, col, 1f, true); DrawArc(c + new Vector2(1.8f, 0), 1.8f, 0f, Mathf.Pi, 5, col, 1f, true); break;
-            case BraceKind.Pilot: DrawArc(c, 3.2f, 0f, Mathf.Tau, 12, col, 1f, true); DrawLine(c - new Vector2(3.2f, 0), c + new Vector2(3.2f, 0), col, 1f); DrawLine(c, c + new Vector2(0, 3.2f), col, 1f); break;
+            case BraceKind.Insulate: this.Arc(c + new Vector2(-1.8f, 0), 1.8f, 0f, Mathf.Pi, 5, col, 1f, true); this.Arc(c + new Vector2(1.8f, 0), 1.8f, 0f, Mathf.Pi, 5, col, 1f, true); break;
+            case BraceKind.Pilot: this.Arc(c, 3.2f, 0f, Mathf.Tau, 12, col, 1f, true); DrawLine(c - new Vector2(3.2f, 0), c + new Vector2(3.2f, 0), col, 1f); DrawLine(c, c + new Vector2(0, 3.2f), col, 1f); break;
         }
     }
 }

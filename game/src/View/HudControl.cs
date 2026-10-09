@@ -54,7 +54,7 @@ public partial class Hud
             bool on = level >= i;
             var r = new Rect2(x, ly, right - x, 22);
             if (level == i) Gfx.RoundRect(this, r, Palette.Accent.WithAlpha(0.1f), 5);
-            DrawCircle(new Vector2(x + 8, ly + 11), 4f, on ? Palette.Good : Palette.TextMuted.WithAlpha(0.4f), true, -1f, true);
+            this.Circle(new Vector2(x + 8, ly + 11), 4f, on ? Palette.Good : Palette.TextMuted.WithAlpha(0.4f), true, -1f, true);
             Gfx.Text(this, Fonts.Bold, new Vector2(x + 20, ly + 15), AutomationSystem.LevelName(i), Ui.TextBody, on ? Palette.Text : Palette.TextMuted);
             Gfx.Text(this, Fonts.Body, new Vector2(x + 120, ly + 15), Fit(can[i - 1], right - x - 124, Ui.TextSmall, Fonts.Body), Ui.TextSmall, on ? Palette.TextDim : Palette.TextMuted.WithAlpha(0.6f));
             ly += 22;
@@ -72,7 +72,7 @@ public partial class Hud
             var r = new Rect2(mx, ly + 12, wl, 17);
             Gfx.RoundRect(this, r, on ? Palette.Good.WithAlpha(0.18f) : new Color(1, 1, 1, 0.03f), 4, on ? Palette.Good.WithAlpha(0.6f) : Palette.TextMuted.WithAlpha(0.3f), 1);
             Gfx.Text(this, Fonts.Body, new Vector2(mx + 7, ly + 25), label, Ui.TextSmall, on ? Palette.Text : Palette.TextMuted);
-            for (int g = 0; g < a.Core.Grade(mod); g++) DrawCircle(new Vector2(mx + wl - 4 - g * 4, ly + 15), 1.3f, new Color("#f2c66d"), true, -1f, true); // v16.20 겪은 일로 다듬은 만큼
+            for (int g = 0; g < a.Core.Grade(mod); g++) this.Circle(new Vector2(mx + wl - 4 - g * 4, ly + 15), 1.3f, new Color("#f2c66d"), true, -1f, true); // v16.20 겪은 일로 다듬은 만큼
             mx += wl + 6;
         }
         ly += 34;

@@ -64,25 +64,25 @@ public partial class ShipPreview : Control
             float w = (x1 - x0 + 1) * k, h = (y1 - y0 + 1) * k;
             var o = new Vector2(pad + (size.X - 2 * pad - w) * 0.5f, top + (bottom - top - h) * 0.5f);
             // 우주 쪽 은은한 빛
-            DrawRect(new Rect2(o - new Vector2(4, 4), new Vector2(w + 8, h + 8)), new Color(0.35f, 0.55f, 0.8f, 0.04f));
+            this.Box(new Rect2(o - new Vector2(4, 4), new Vector2(w + 8, h + 8)), new Color(0.35f, 0.55f, 0.8f, 0.04f));
             for (int i = 0; i < ship.Grid.CellCount; i++)
             {
                 var c = ship.Grid.CellAt(i);
                 var kind = ship.Grid.Kind(c);
                 if (kind == TileKind.Void) continue;
                 var cell = new Rect2(o + new Vector2((c.X - x0) * k, (c.Y - y0) * k), new Vector2(k + 0.3f, k + 0.3f));
-                if (kind == TileKind.Wall) { DrawRect(cell, new Color("#2b3442")); continue; }
-                if (kind == TileKind.Door) { DrawRect(cell, new Color("#56657a")); continue; }
+                if (kind == TileKind.Wall) { this.Box(cell, new Color("#2b3442")); continue; }
+                if (kind == TileKind.Door) { this.Box(cell, new Color("#56657a")); continue; }
                 var room = ship.RoomAt(c);
                 var col = room == null || room.Type == RoomType.Corridor ? new Color("#3a4250") : Palette.Room(room.Kind).Darkened(0.35f);
                 if (ship.Grid.FurnitureId(c) >= 0) col = col.Lightened(0.25f);
-                DrawRect(cell, col);
+                this.Box(cell, col);
             }
             foreach (var room in ship.Rooms.Where(x => x.Type is RoomType.Reactor or RoomType.Power || x.Kind == RoomType.ComputerRoom))
             {
                 var rr = new Rect2(o + new Vector2((room.MinX - x0) * k, (room.MinY - y0) * k), new Vector2((room.MaxX - room.MinX + 1) * k, (room.MaxY - room.MinY + 1) * k));
                 var edge = room.Kind == RoomType.ComputerRoom ? new Color("#6fd6e8") : room.Type == RoomType.Reactor ? new Color("#ff9a4a") : new Color("#eed65a");
-                DrawRect(rr.Grow(0.5f), edge.WithAlpha(0.9f), false, 1.2f);
+                this.Box(rr.Grow(0.5f), edge.WithAlpha(0.9f), false, 1.2f);
             }
             var (rooms, kinds) = ShipClasses.Count(ship);
             Gfx.TextRight(this, Fonts.Body, new Vector2(size.X - pad, 24), $"방 {rooms} · 종류 {kinds} · 구획 {Mathf.Max(1, ship.Compartments)}", Ui.TextSmall, Palette.TextMuted);

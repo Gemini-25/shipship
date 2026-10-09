@@ -58,7 +58,7 @@ public partial class LabelOverlay : Node2D
                 else
                 {
                     p = xf * _main.ShipView.RoomLabelAnchor(room);
-                    DrawCircle(p + new Vector2(4f, 0f), 2.5f, accent.WithAlpha(focus ? 1f : 0.75f), true, -1f, true);
+                    this.Circle(p + new Vector2(4f, 0f), 2.5f, accent.WithAlpha(focus ? 1f : 0.75f), true, -1f, true);
                     Gfx.Text(this, Fonts.Bold, p + new Vector2(11f, Gfx.CenterOffset(Fonts.Bold, size)), room.Name, size,
                         accent.WithAlpha(focus ? 1f : 0.7f));
                     // 용도가 바뀐 방: 원래 이름 옆에 지금 쓰임새
@@ -141,7 +141,7 @@ public partial class LabelOverlay : Node2D
             if (_world.Tick - c.AlertedTick < SimTime.Minutes(3))
             {
                 var ap = head + new Vector2(-14f, -8f);
-                DrawCircle(ap, 7f, Palette.Danger, true, -1f, true);
+                this.Circle(ap, 7f, Palette.Danger, true, -1f, true);
                 Gfx.TextCentered(this, Fonts.Bold, ap, "!", 11, Colors.White);
             }
 
@@ -163,11 +163,11 @@ public partial class LabelOverlay : Node2D
                 var bp = head + new Vector2(16f, -10f);
                 var bubble = new Rect2(bp.X - 13f, bp.Y - 8f, 26f, 16f);
                 Gfx.RoundRect(this, bubble, new Color(0.92f, 0.94f, 0.98f, 0.92f), 8);
-                DrawColoredPolygon(new[] { bp + new Vector2(-8f, 6f), bp + new Vector2(-2f, 7f), bp + new Vector2(-12f, 12f) }, new Color(0.92f, 0.94f, 0.98f, 0.92f));
+                this.Poly(new[] { bp + new Vector2(-8f, 6f), bp + new Vector2(-2f, 7f), bp + new Vector2(-12f, 12f) }, new Color(0.92f, 0.94f, 0.98f, 0.92f));
                 for (int k = 0; k < 3; k++)
                 {
                     float up = Mathf.Max(0f, Mathf.Sin(_time * 5f - k * 0.8f)) * 2f;
-                    DrawCircle(bp + new Vector2(-6f + k * 6f, -up), 1.8f, new Color("#2a3140"), true, -1f, true);
+                    this.Circle(bp + new Vector2(-6f + k * 6f, -up), 1.8f, new Color("#2a3140"), true, -1f, true);
                 }
             }
 
@@ -183,7 +183,7 @@ public partial class LabelOverlay : Node2D
             else if (!c.Dead && c.GriefUntil > _world.Tick && c.Pose != Pose.Sleeping)
             {
                 float t = Mathf.PosMod(_time * 0.6f + c.Id * 0.3f, 1f);
-                DrawCircle(head + new Vector2(6f, 2f + t * 8f), 1.8f, new Color("#9fc4ff").WithAlpha(1f - t), true, -1f, true);
+                this.Circle(head + new Vector2(6f, 2f + t * 8f), 1.8f, new Color("#9fc4ff").WithAlpha(1f - t), true, -1f, true);
             }
 
             if (ZoomDetail.Shows(zoom, Detail.NameTag) && !c.Dead && c.CarriedBy == null) PaintNameTag(c, xf, col, selected || hovered); // v16.24 가까이: 이름표
@@ -219,7 +219,7 @@ public partial class LabelOverlay : Node2D
             float size = Mathf.Clamp(Mathf.Min(w, h) * 0.45f, 10f, 30f);
             var sev = Severity.Of(_world, room);
             var col = sev == RoomSeverity.Critical ? Palette.Danger : Palette.Room(room.Kind).Lightened(0.15f);
-            DrawCircle(c, size * 0.72f, new Color(0.02f, 0.03f, 0.05f, 0.55f), true, -1f, true);
+            this.Circle(c, size * 0.72f, new Color(0.02f, 0.03f, 0.05f, 0.55f), true, -1f, true);
             Icons.Draw(this, Icons.Room(room.Kind), c, size, col.WithAlpha(0.9f));
         }
     }
@@ -233,7 +233,7 @@ public partial class LabelOverlay : Node2D
         float w = Gfx.Width(Fonts.Body, name, Ui.TextTiny) + 14f;
         var tag = new Rect2(at.X - w * 0.5f, at.Y - 7f, w, 13f);
         Gfx.RoundRect(this, tag, new Color(0.03f, 0.04f, 0.06f, focus ? 0.92f : 0.7f), 4f, col.WithAlpha(focus ? 0.8f : 0.35f));
-        DrawCircle(new Vector2(tag.Position.X + 5f, at.Y - 0.5f), 2f, col, true, -1f, true);
+        this.Circle(new Vector2(tag.Position.X + 5f, at.Y - 0.5f), 2f, col, true, -1f, true);
         Gfx.Text(this, Fonts.Body, new Vector2(tag.Position.X + 9f, at.Y + Gfx.CenterOffset(Fonts.Body, Ui.TextTiny) - 0.5f), name, Ui.TextTiny,
             focus ? Palette.Text : Palette.TextDim);
     }

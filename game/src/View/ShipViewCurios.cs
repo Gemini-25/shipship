@@ -47,7 +47,7 @@ public partial class ShipView
                 if (spec.Kind == CurioKind.Graffiti) CurioArt.Draw(ci, spec, c + new Vector2(0, -T * 0.25f), T * 0.32f, true, _time, 0.55f);
                 else
                 {
-                    ci.DrawCircle(c, T * 0.3f, new Color(spec.Color).WithAlpha(0.08f), true, -1f, true);
+                    ci.Circle(c, T * 0.3f, new Color(spec.Color).WithAlpha(0.08f), true, -1f, true);
                     CurioArt.Draw(ci, spec, c, T * 0.22f, true, _time);
                 }
             }
@@ -78,7 +78,7 @@ public partial class ShipView
                         float ph = Mathf.PosMod(_time * 0.25f + i * 0.13f, 1f);
                         var cell = room.Cells[(i * 7) % room.Cells.Count];
                         var d = ToPx(cell.Center) + new Vector2(0, T * 0.4f - ph * T * 1.2f);
-                        ci.DrawCircle(d, 2.2f, new Color("#5ec8e6").WithAlpha(0.8f * fade * (1f - ph)), true, -1f, true);
+                        ci.Circle(d, 2.2f, new Color("#5ec8e6").WithAlpha(0.8f * fade * (1f - ph)), true, -1f, true);
                     }
                     break;
                 case "frost_fern":
@@ -89,11 +89,11 @@ public partial class ShipView
                     }
                     break;
                 case "warm_spot":
-                    for (int k = 0; k < 3; k++) { float ph = Mathf.PosMod(_time * 0.5f + k / 3f, 1f); ci.DrawArc(rc, T * (0.2f + ph), 0, Mathf.Tau, 24, new Color("#ff7a5c").WithAlpha(0.5f * (1f - ph) * fade), 1.5f, true); }
+                    for (int k = 0; k < 3; k++) { float ph = Mathf.PosMod(_time * 0.5f + k / 3f, 1f); ci.Arc(rc, T * (0.2f + ph), 0, Mathf.Tau, 24, new Color("#ff7a5c").WithAlpha(0.5f * (1f - ph) * fade), 1.5f, true); }
                     break;
                 case "afterglow":
-                    ci.DrawCircle(rc, T * 1.4f, new Color("#ffe8a0").WithAlpha(0.06f * fade + 0.04f * Mathf.Sin(_time * 1.3f) * fade), true, -1f, true);
-                    ci.DrawCircle(rc, T * 0.5f, new Color("#ffe8a0").WithAlpha(0.12f * fade), true, -1f, true);
+                    ci.Circle(rc, T * 1.4f, new Color("#ffe8a0").WithAlpha(0.06f * fade + 0.04f * Mathf.Sin(_time * 1.3f) * fade), true, -1f, true);
+                    ci.Circle(rc, T * 0.5f, new Color("#ffe8a0").WithAlpha(0.12f * fade), true, -1f, true);
                     break;
                 case "empty_steps":
                     for (int i = 0; i < 6; i++)
@@ -102,21 +102,21 @@ public partial class ShipView
                         if (ph > 0.5f) continue;
                         var cell = room.Cells[(i * 3 + (int)(_time * 0.6f) * 3) % room.Cells.Count];
                         var o = ToPx(cell.Center) + new Vector2(i % 2 == 0 ? -3 : 3, 0);
-                        ci.DrawColoredPolygon(new[] { o + new Vector2(-2, -4), o + new Vector2(2, -4), o + new Vector2(2.5f, 3), o + new Vector2(-2.5f, 3) }, new Color("#9aa3b5").WithAlpha(0.5f * (1f - ph * 2f) * fade));
+                        ci.Poly(new[] { o + new Vector2(-2, -4), o + new Vector2(2, -4), o + new Vector2(2.5f, 3), o + new Vector2(-2.5f, 3) }, new Color("#9aa3b5").WithAlpha(0.5f * (1f - ph * 2f) * fade));
                     }
                     break;
                 case "old_voice":
-                    for (int k = 1; k <= 3; k++) ci.DrawArc(rc, T * 0.35f * k, -0.7f, 0.7f, 10, new Color("#6ee7b7").WithAlpha((0.5f + 0.4f * Mathf.Sin(_time * 9f + k)) * fade * 0.6f), 1.4f, true);
+                    for (int k = 1; k <= 3; k++) ci.Arc(rc, T * 0.35f * k, -0.7f, 0.7f, 10, new Color("#6ee7b7").WithAlpha((0.5f + 0.4f * Mathf.Sin(_time * 9f + k)) * fade * 0.6f), 1.4f, true);
                     break;
                 case "spinning_needle":
-                    ci.DrawArc(rc, T * 0.45f, 0, Mathf.Tau, 20, new Color("#f2b134").WithAlpha(0.5f * fade), 1.2f, true);
+                    ci.Arc(rc, T * 0.45f, 0, Mathf.Tau, 20, new Color("#f2b134").WithAlpha(0.5f * fade), 1.2f, true);
                     ci.DrawLine(rc, rc + Vector2.FromAngle(_time * 7f) * T * 0.42f, new Color("#f2b134").WithAlpha(0.9f * fade), 2f, true);
                     break;
                 case "lone_door":
                     foreach (var d in room.Doors.Take(1))
                     {
                         var dp = ToPx(d.Cell.Center);
-                        ci.DrawRect(new Rect2(dp - new Vector2(T * 0.5f, T * 0.5f), new Vector2(T, T)), new Color("#aab3c5").WithAlpha(0.18f * fade * (0.5f + 0.5f * Mathf.Sin(_time * 2f))), true);
+                        ci.Box(new Rect2(dp - new Vector2(T * 0.5f, T * 0.5f), new Vector2(T, T)), new Color("#aab3c5").WithAlpha(0.18f * fade * (0.5f + 0.5f * Mathf.Sin(_time * 2f))), true);
                     }
                     break;
             }
@@ -134,15 +134,15 @@ public partial class ShipView
             var room = ship.Rooms[t.Room];
             var sp = ToPx(t.At) + new Vector2(0, -T * 0.42f);
             var box = new Rect2(sp - new Vector2(T * 0.22f, T * 0.12f), new Vector2(T * 0.44f, T * 0.24f));
-            ci.DrawRect(box, new Color("#1b2230"), true);
-            ci.DrawRect(box, new Color("#5f6879"), false, 1f);
-            for (int k = 0; k < 3; k++) ci.DrawCircle(box.Position + new Vector2(T * (0.09f + k * 0.13f), T * 0.12f), T * 0.04f, new Color("#8d93a6"), true, -1f, true);
+            ci.Box(box, new Color("#1b2230"), true);
+            ci.Box(box, new Color("#5f6879"), false, 1f);
+            for (int k = 0; k < 3; k++) ci.Circle(box.Position + new Vector2(T * (0.09f + k * 0.13f), T * 0.12f), T * 0.04f, new Color("#8d93a6"), true, -1f, true);
             var col = t.Memorial ? new Color("#9fb4ff") : Palette.Crew(Math.Max(0, t.By)).Lightened(0.2f);
             float loud = t.Loud;
             for (int k = 0; k < 3; k++)
             {
                 float ph = Mathf.PosMod(_time * 0.7f + k / 3f, 1f);
-                ci.DrawArc(sp, T * (0.4f + ph * 2.2f * loud * 2f), 0.2f, Mathf.Pi - 0.2f, 16, col.WithAlpha(0.35f * (1f - ph)), 1.2f, true);
+                ci.Arc(sp, T * (0.4f + ph * 2.2f * loud * 2f), 0.2f, Mathf.Pi - 0.2f, 16, col.WithAlpha(0.35f * (1f - ph)), 1.2f, true);
             }
             for (int k = 0; k < 2; k++)
             {
@@ -160,7 +160,7 @@ public partial class ShipView
             var p = CrewPx(c) + new Vector2(0, -T * 0.9f);
             float a = Mathf.Clamp(level * 3f, 0.15f, 0.6f);
             var pts = Enumerable.Range(0, 7).Select(i => p + new Vector2(-T * 0.25f + i * T * 0.083f, Mathf.Sin(_time * 3f + i) * 1.5f)).ToArray();
-            ci.DrawPolyline(pts, new Color("#9aa3b5").WithAlpha(a), 1.2f, true);
+            ci.Polyline(pts, new Color("#9aa3b5").WithAlpha(a), 1.2f, true);
         }
         // 색약 팔레트: 사람마다 표식 (모양 + 채움)
         if (ColorSafe.On)
@@ -177,12 +177,12 @@ public partial class ShipView
     {
         switch (genre % 6)
         {
-            case 0: ci.DrawCircle(p, s * 0.6f, col, true, -1f, true); ci.DrawLine(p + new Vector2(s * 0.55f, 0), p + new Vector2(s * 0.55f, -s * 2f), col, 1.2f, true); break;
-            case 1: ci.DrawCircle(p, s * 0.55f, col, true, -1f, true); ci.DrawLine(p + new Vector2(s * 0.5f, 0), p + new Vector2(s * 0.5f, -s * 2f), col, 1.2f, true); ci.DrawLine(p + new Vector2(s * 0.5f, -s * 2f), p + new Vector2(s * 1.2f, -s * 1.4f), col, 1.2f, true); break;
-            case 2: ci.DrawCircle(p, s * 0.5f, col, true, -1f, true); ci.DrawCircle(p + new Vector2(s * 1.3f, -s * 0.3f), s * 0.5f, col, true, -1f, true); ci.DrawLine(p + new Vector2(s * 0.45f, -s * 1.8f), p + new Vector2(s * 1.75f, -s * 2.1f), col, 1.6f, true); break;
-            case 3: ci.DrawRect(new Rect2(p - new Vector2(s * 0.5f, s * 0.5f), new Vector2(s, s)), col, true); ci.DrawLine(p + new Vector2(s * 0.5f, 0), p + new Vector2(s * 0.5f, -s * 2f), col, 1.2f, true); break;
-            case 4: ci.DrawArc(p, s * 0.6f, 0, Mathf.Tau, 10, col, 1.2f, true); ci.DrawLine(p + new Vector2(s * 0.6f, 0), p + new Vector2(s * 0.6f, -s * 2f), col, 1.2f, true); break;
-            default: for (int k = 0; k < 3; k++) ci.DrawCircle(p + new Vector2(k * s * 0.8f, -k * s * 0.3f), s * 0.35f, col, true, -1f, true); break;
+            case 0: ci.Circle(p, s * 0.6f, col, true, -1f, true); ci.DrawLine(p + new Vector2(s * 0.55f, 0), p + new Vector2(s * 0.55f, -s * 2f), col, 1.2f, true); break;
+            case 1: ci.Circle(p, s * 0.55f, col, true, -1f, true); ci.DrawLine(p + new Vector2(s * 0.5f, 0), p + new Vector2(s * 0.5f, -s * 2f), col, 1.2f, true); ci.DrawLine(p + new Vector2(s * 0.5f, -s * 2f), p + new Vector2(s * 1.2f, -s * 1.4f), col, 1.2f, true); break;
+            case 2: ci.Circle(p, s * 0.5f, col, true, -1f, true); ci.Circle(p + new Vector2(s * 1.3f, -s * 0.3f), s * 0.5f, col, true, -1f, true); ci.DrawLine(p + new Vector2(s * 0.45f, -s * 1.8f), p + new Vector2(s * 1.75f, -s * 2.1f), col, 1.6f, true); break;
+            case 3: ci.Box(new Rect2(p - new Vector2(s * 0.5f, s * 0.5f), new Vector2(s, s)), col, true); ci.DrawLine(p + new Vector2(s * 0.5f, 0), p + new Vector2(s * 0.5f, -s * 2f), col, 1.2f, true); break;
+            case 4: ci.Arc(p, s * 0.6f, 0, Mathf.Tau, 10, col, 1.2f, true); ci.DrawLine(p + new Vector2(s * 0.6f, 0), p + new Vector2(s * 0.6f, -s * 2f), col, 1.2f, true); break;
+            default: for (int k = 0; k < 3; k++) ci.Circle(p + new Vector2(k * s * 0.8f, -k * s * 0.3f), s * 0.35f, col, true, -1f, true); break;
         }
     }
 }

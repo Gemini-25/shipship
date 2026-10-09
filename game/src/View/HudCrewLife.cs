@@ -22,13 +22,13 @@ public partial class Hud
         {
             var lost = LostOf(p);
             if (lost == null) { DrawLine(a, b, WoundColor(Sev(p)), 6f, true); return; }
-            if (lost.Prosthetic) { DrawLine(a, b, new Color("#9aa7b8"), 5f, true); DrawCircle(b, 2.5f, new Color("#cfd8e3")); return; }
+            if (lost.Prosthetic) { DrawLine(a, b, new Color("#9aa7b8"), 5f, true); this.Circle(b, 2.5f, new Color("#cfd8e3")); return; }
             DrawDashedLine(a, b, new Color(1, 1, 1, 0.3f), 2f, 4f);
         }
-        DrawCircle(new Vector2(cx, top + 10), 9f, WoundColor(Sev(BodyPart.Head)), true, -1f, true);
+        this.Circle(new Vector2(cx, top + 10), 9f, WoundColor(Sev(BodyPart.Head)), true, -1f, true);
         var chest = new Rect2(cx - 11, top + 22, 22, 34);
-        DrawRect(chest, WoundColor(MathF.Max(Sev(BodyPart.Chest), Sev(BodyPart.Lungs))));
-        if (Sev(BodyPart.Lungs) > 0.05f) { DrawCircle(chest.GetCenter() + new Vector2(-5, -4), 4f, new Color("#ff9aa2").WithAlpha(0.8f)); DrawCircle(chest.GetCenter() + new Vector2(5, -4), 4f, new Color("#ff9aa2").WithAlpha(0.8f)); }
+        this.Box(chest, WoundColor(MathF.Max(Sev(BodyPart.Chest), Sev(BodyPart.Lungs))));
+        if (Sev(BodyPart.Lungs) > 0.05f) { this.Circle(chest.GetCenter() + new Vector2(-5, -4), 4f, new Color("#ff9aa2").WithAlpha(0.8f)); this.Circle(chest.GetCenter() + new Vector2(5, -4), 4f, new Color("#ff9aa2").WithAlpha(0.8f)); }
         Limb(BodyPart.LeftArm, new Vector2(cx - 14, top + 26), new Vector2(cx - 26, top + 56));
         Limb(BodyPart.RightArm, new Vector2(cx + 14, top + 26), new Vector2(cx + 26, top + 56));
         Limb(BodyPart.LeftLeg, new Vector2(cx - 6, top + 58), new Vector2(cx - 10, top + 96));
@@ -162,7 +162,7 @@ public partial class Hud
         for (int i = 0; i < people.Count; i++)
         {
             bool me = people[i] == sel;
-            DrawCircle(pos[i], me ? 6f : 4f, Palette.Crew(people[i].Id), true, -1f, true);
+            this.Circle(pos[i], me ? 6f : 4f, Palette.Crew(people[i].Id), true, -1f, true);
             if (_world.Tick - people[i].Quarrel < SimTime.Hours(6)) Gfx.TextCentered(this, Fonts.Bold, pos[i] + new Vector2(0, -10), "!", Ui.TextSmall, Palette.Danger);
         }
         var st = _world.Life.Stats;

@@ -132,7 +132,7 @@ public partial class Hud
         }
         var openCh = _chapters.FirstOrDefault(c => c.FirstDay == (_chronOpenDay < 0 ? _chapters.LastOrDefault()?.FirstDay ?? -1 : _chronOpenDay));
         if (openCh != null)
-            DrawRect(new Rect2(X(openCh.Start), strip.Position.Y + 2f, Mathf.Max(2f, X(openCh.End) - X(openCh.Start)), strip.Size.Y - 4f), Palette.Accent.WithAlpha(0.07f));
+            this.Box(new Rect2(X(openCh.Start), strip.Position.Y + 2f, Mathf.Max(2f, X(openCh.End) - X(openCh.Start)), strip.Size.Y - 4f), Palette.Accent.WithAlpha(0.07f));
         DrawLine(new Vector2(strip.Position.X + 8f, baseY), new Vector2(strip.End.X - 8f, baseY), Ui.PanelEdge, 1f);
 
         ChronMark? hover = null;
@@ -147,8 +147,8 @@ public partial class Hud
                 float ex = Mathf.Max(mx + 3f, X(m.End >= 0 ? m.End : _world.Tick));
                 var col = UiKit.ScaleColor(s);
                 var bar = new Rect2(mx, baseY - bh, ex - mx, bh);
-                DrawRect(bar, col.WithAlpha(m.End < 0 ? 0.95f : 0.75f));
-                if (s >= IncidentScale.Ship) DrawRect(bar.Grow(1.5f), col.WithAlpha(0.5f), false, 1f);
+                this.Box(bar, col.WithAlpha(m.End < 0 ? 0.95f : 0.75f));
+                if (s >= IncidentScale.Ship) this.Box(bar.Grow(1.5f), col.WithAlpha(0.5f), false, 1f);
                 hit = bar.Grow(3f);
             }
             else
@@ -254,7 +254,7 @@ public partial class Hud
         bool hover = r.HasPoint(mouse);
         if (hover) Gfx.RoundRect(this, r, Ui.HoverSoft, Ui.RadiusControl);
         var peak = ch.Peak;
-        if (peak is IncidentScale ps) DrawRect(new Rect2(r.Position.X + 2f, r.Position.Y + 6f, 3f, r.Size.Y - 12f), UiKit.ScaleColor(ps));
+        if (peak is IncidentScale ps) this.Box(new Rect2(r.Position.X + 2f, r.Position.Y + 6f, 3f, r.Size.Y - 12f), UiKit.ScaleColor(ps));
         float x = r.Position.X + 14f, right = r.End.X - 8f;
         Gfx.Text(this, Fonts.Bold, new Vector2(x, r.Position.Y + 19f), ch.Week ? $"{(ch.FirstDay - 1) / 7 + 1}주" : $"{ch.FirstDay}일", Ui.TextSmall, Palette.TextMuted);
         float dotsW = UiKit.ScaleDots(this, new Vector2(x, r.Position.Y + 34f), ch.ByScale);
@@ -281,7 +281,7 @@ public partial class Hud
         var peak = ch.Peak;
         var accent = peak is IncidentScale ps ? UiKit.ScaleColor(ps) : Palette.Accent;
         BookLook.Page(this, r, _chapters.IndexOf(ch) + 1, true, 0f); // v17.6 연대기를 책 한 쪽처럼 (종이 · 제본 그늘 · 접힌 귀 · 쪽 번호)
-        DrawRect(new Rect2(r.Position.X + 2f, r.Position.Y + 8f, 3f, r.Size.Y - 16f), accent.WithAlpha(0.9f));
+        this.Box(new Rect2(r.Position.X + 2f, r.Position.Y + 8f, 3f, r.Size.Y - 16f), accent.WithAlpha(0.9f));
         float x = r.Position.X + 16f, right = r.End.X - 12f, y = r.Position.Y;
         const float photoW = 132f, photoH = 100f;
         float textRight = right - photoW - Ui.S3;

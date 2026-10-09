@@ -62,12 +62,12 @@ public static partial class FixtureArt
         const int size = 5;
         float tw = Gfx.Width(Fonts.Bold, text, size) + 4f;
         var plate = new Rect2(r.Position.X + 2f, r.End.Y - 9f, tw, 7f);
-        ci.DrawRect(plate.Grow(0.6f), new Color("#0a0d12"));
-        ci.DrawRect(plate, new Color("#0f1a14"));
+        ci.Box(plate.Grow(0.6f), new Color("#0a0d12"));
+        ci.Box(plate, new Color("#0f1a14"));
         if (!lit) return;
         var col = level == 2 ? DigitBad : level == 1 ? DigitWarn : DigitOk;
         float blink = level == 2 ? 0.55f + 0.45f * Mathf.Sin(t * 6f) : 1f;
-        ci.DrawRect(plate, col.WithAlpha(0.08f * blink));
+        ci.Box(plate, col.WithAlpha(0.08f * blink));
         Gfx.Text(ci, Fonts.Bold, new Vector2(plate.Position.X + 2f, plate.End.Y - 1.2f), text, size, col.WithAlpha(0.95f * blink));
     }
 
@@ -97,8 +97,8 @@ public static partial class FixtureArt
         for (int i = 0; i < ss; i++)
         {
             var c = x.P(0.1f + 0.8f * Hash(x.Id, i, 621), 0.1f + 0.8f * Hash(x.Id, i, 622));
-            ci.DrawArc(c, x.Px(1.6f), 0.4f, 2.6f, 6, new Color(0f, 0f, 0f, 0.35f), 0.7f, true);
-            ci.DrawArc(c, x.Px(1.6f), 3.5f, 5.6f, 6, new Color(1f, 1f, 1f, 0.12f), 0.5f, true);
+            ci.Arc(c, x.Px(1.6f), 0.4f, 2.6f, 6, new Color(0f, 0f, 0f, 0.35f), 0.7f, true);
+            ci.Arc(c, x.Px(1.6f), 3.5f, 5.6f, 6, new Color(1f, 1f, 1f, 0.12f), 0.5f, true);
         }
         // 손본 자리: 고쳐 쓴 설비는 한 귀퉁이 나사만 새것 (반짝)
         if (m.Condition < 0.9f && ss <= 2 && b.Size.X > 10f)

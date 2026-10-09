@@ -160,9 +160,9 @@ public partial class PhotoFrame : Control
     {
         var s = Size;
         float h = s.Y * Bar * Mathf.SmoothStep(0f, 1f, Open);
-        DrawRect(new Rect2(0, 0, s.X, h), Colors.Black);
-        DrawRect(new Rect2(0, s.Y - h, s.X, h), Colors.Black);
-        if (Flash > 0f) DrawRect(new Rect2(0, h, s.X, s.Y - 2 * h), new Color(1, 1, 1, 0.55f * Flash));
+        this.Box(new Rect2(0, 0, s.X, h), Colors.Black);
+        this.Box(new Rect2(0, s.Y - h, s.X, h), Colors.Black);
+        if (Flash > 0f) this.Box(new Rect2(0, h, s.X, s.Y - 2 * h), new Color(1, 1, 1, 0.55f * Flash));
     }
 }
 

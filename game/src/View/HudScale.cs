@@ -38,8 +38,8 @@ public partial class Hud
             case IncidentScale.Personal:
             {
                 // 머리 + 어깨 (사람 하나)
-                ci.DrawCircle(c + new Vector2(0, -h * 0.38f), h * 0.3f, col);
-                ci.DrawArc(c + new Vector2(0, h * 0.62f), h * 0.62f, Mathf.Pi * 1.08f, Mathf.Pi * 1.92f, 12, col, lw * 1.4f, true);
+                ci.Circle(c + new Vector2(0, -h * 0.38f), h * 0.3f, col);
+                ci.Arc(c + new Vector2(0, h * 0.62f), h * 0.62f, Mathf.Pi * 1.08f, Mathf.Pi * 1.92f, 12, col, lw * 1.4f, true);
                 break;
             }
             case IncidentScale.Room:
@@ -51,7 +51,7 @@ public partial class Hud
                 ci.DrawLine(r.End, r.End - new Vector2(r.Size.X, 0), col, lw, true);
                 ci.DrawLine(r.Position + new Vector2(r.Size.X, 0), r.Position + new Vector2(r.Size.X, r.Size.Y * 0.35f), col, lw, true); // 문틈
                 ci.DrawLine(r.End - new Vector2(0, r.Size.Y * 0.2f), r.End, col, lw, true);
-                ci.DrawCircle(c + new Vector2(-h * 0.1f, h * 0.15f), h * 0.18f, col.WithAlpha(0.85f));
+                ci.Circle(c + new Vector2(-h * 0.1f, h * 0.15f), h * 0.18f, col.WithAlpha(0.85f));
                 break;
             }
             case IncidentScale.System:
@@ -64,9 +64,9 @@ public partial class Hud
                 ci.DrawLine(a, d, col, lw, true);
                 ci.DrawLine(b, d, col, lw, true);
                 float blink = 0.55f + 0.45f * Mathf.Sin(t * 6f);
-                ci.DrawCircle(a, h * 0.24f, col);
-                ci.DrawCircle(b, h * 0.24f, col);
-                ci.DrawCircle(d, h * 0.28f, col.WithAlpha(blink));
+                ci.Circle(a, h * 0.24f, col);
+                ci.Circle(b, h * 0.24f, col);
+                ci.Circle(d, h * 0.28f, col.WithAlpha(blink));
                 break;
             }
             case IncidentScale.Ship:
@@ -77,9 +77,9 @@ public partial class Hud
                     c + new Vector2(h * 0.95f, 0), c + new Vector2(h * 0.35f, -h * 0.45f), c + new Vector2(-h * 0.7f, -h * 0.45f),
                     c + new Vector2(-h * 0.85f, -h * 0.2f), c + new Vector2(-h * 0.85f, h * 0.2f), c + new Vector2(-h * 0.7f, h * 0.45f), c + new Vector2(h * 0.35f, h * 0.45f),
                 };
-                ci.DrawColoredPolygon(pts, col.WithAlpha(0.35f));
+                ci.Poly(pts, col.WithAlpha(0.35f));
                 for (int i = 0; i < pts.Length; i++) ci.DrawLine(pts[i], pts[(i + 1) % pts.Length], col, lw, true);
-                ci.DrawRect(new Rect2(c + new Vector2(h * 0.05f, -h * 0.2f), new Vector2(h * 0.28f, h * 0.4f)), col);
+                ci.Box(new Rect2(c + new Vector2(h * 0.05f, -h * 0.2f), new Vector2(h * 0.28f, h * 0.4f)), col);
                 float flick = 0.6f + 0.4f * Mathf.Sin(t * 11f);
                 ci.DrawLine(c + new Vector2(-h * 0.9f, 0), c + new Vector2(-h * (1.05f + 0.15f * flick), 0), col.WithAlpha(flick), lw * 1.5f, true);
                 break;
@@ -94,8 +94,8 @@ public partial class Hud
                     float len = i % 2 == 0 ? h * 0.95f : h * 0.6f;
                     ci.DrawLine(c + Vector2.FromAngle(ang) * h * 0.22f, c + Vector2.FromAngle(ang) * len, col, lw, true);
                 }
-                ci.DrawCircle(c, h * 0.2f, col);
-                ci.DrawArc(c, h * 0.5f, 0, Mathf.Tau, 18, col.WithAlpha(0.5f), lw * 0.8f, true);
+                ci.Circle(c, h * 0.2f, col);
+                ci.Arc(c, h * 0.5f, 0, Mathf.Tau, 18, col.WithAlpha(0.5f), lw * 0.8f, true);
                 break;
             }
         }
@@ -129,7 +129,7 @@ public partial class Hud
                 {
                     float u = Mathf.PosMod(_time * 0.12f + i / 6f, 1f);
                     var p = PerimeterPoint(card.Grow(2f), u);
-                    DrawCircle(p, 1.6f + 0.8f * Mathf.Sin(_time * 5f + i), Colors.White.WithAlpha(0.8f));
+                    this.Circle(p, 1.6f + 0.8f * Mathf.Sin(_time * 5f + i), Colors.White.WithAlpha(0.8f));
                 }
                 break;
         }
@@ -142,14 +142,14 @@ public partial class Hud
         Gfx.Text(this, Fonts.Bold, pill.Position + new Vector2(18f, 11f), label, Ui.TextMicro, col);
         // 규모가 오른 지 얼마 안 됐으면 위로 화살 (번지는 중)
         if (inc.Open && k.Steps.Count > 1 && _world.Tick - k.Steps[^1].Tick < SimTime.Minutes(20) && k.Steps[^1].To > k.Steps[^1].From)
-            DrawColoredPolygon(new[] { pill.End + new Vector2(6, -9), pill.End + new Vector2(2, -3), pill.End + new Vector2(10, -3) }, col.WithAlpha(0.6f + 0.4f * pulse));
+            this.Poly(new[] { pill.End + new Vector2(6, -9), pill.End + new Vector2(2, -3), pill.End + new Vector2(10, -3) }, col.WithAlpha(0.6f + 0.4f * pulse));
         // 컴퓨터가 교훈으로 한 칸 높여 대비했다: 겹친 꺾쇠 + "대비 ③" (배지 왼쪽)
         if (k.Steps.Count > 0 && k.Guess > k.Steps[0].To)
         {
             var gc = ScaleColor(k.Guess);
             var at = new Vector2(pill.Position.X - 4f, pill.Position.Y + 9f);
             for (int i = 0; i < 2; i++)
-                DrawPolyline(new[] { at + new Vector2(-10f, 3f - i * 4f), at + new Vector2(-6f, -1f - i * 4f), at + new Vector2(-2f, 3f - i * 4f) }, gc.WithAlpha(0.9f - 0.3f * i), 1.4f, true);
+                this.Polyline(new[] { at + new Vector2(-10f, 3f - i * 4f), at + new Vector2(-6f, -1f - i * 4f), at + new Vector2(-2f, 3f - i * 4f) }, gc.WithAlpha(0.9f - 0.3f * i), 1.4f, true);
             Gfx.TextRight(this, Fonts.Bold, at + new Vector2(-13f, 3f), $"대비 {ScaleTable.Mark(k.Guess)}", Ui.TextMicro, gc);
         }
     }
@@ -172,11 +172,11 @@ public partial class Hud
         for (int i = 0; i < seg; i++)
         {
             float a0 = i * Mathf.Tau / seg + gap * 0.5f, a1 = (i + 1) * Mathf.Tau / seg - gap * 0.5f;
-            DrawArc(new Vector2(ix, cy), r + 3.5f, a0 - Mathf.Pi * 0.5f, a1 - Mathf.Pi * 0.5f, 8, col.WithAlpha(0.85f), 1.3f, true);
+            this.Arc(new Vector2(ix, cy), r + 3.5f, a0 - Mathf.Pi * 0.5f, a1 - Mathf.Pi * 0.5f, 8, col.WithAlpha(0.85f), 1.3f, true);
         }
         var k = ChainIncident != null ? _world.Scale.CaseOf(ChainIncident) : null;
         if (k != null && k.Steps.Any(st => st.Node == n.Id && st.To > st.From))
-            DrawColoredPolygon(new[] { new Vector2(ix + r + 5f, cy - r - 6f), new Vector2(ix + r + 1.5f, cy - r - 0.5f), new Vector2(ix + r + 8.5f, cy - r - 0.5f) }, col);
+            this.Poly(new[] { new Vector2(ix + r + 5f, cy - r - 6f), new Vector2(ix + r + 1.5f, cy - r - 0.5f), new Vector2(ix + r + 8.5f, cy - r - 0.5f) }, col);
     }
 
     /// <summary>사슬 머리: 규모 단계 (② → ③ → ④) · 판정한 쪽 · 부른 사람.</summary>
@@ -190,8 +190,8 @@ public partial class Hud
         {
             var s = steps[i];
             var col = ScaleColor(s);
-            DrawCircle(new Vector2(cx - 8f, y0 + 48f), 9f, col.WithAlpha(0.16f));
-            DrawArc(new Vector2(cx - 8f, y0 + 48f), 9f, 0, Mathf.Tau, 18, col.WithAlpha(0.8f), 1.2f, true);
+            this.Circle(new Vector2(cx - 8f, y0 + 48f), 9f, col.WithAlpha(0.16f));
+            this.Arc(new Vector2(cx - 8f, y0 + 48f), 9f, 0, Mathf.Tau, 18, col.WithAlpha(0.8f), 1.2f, true);
             ScaleIcon(this, s, new Vector2(cx - 8f, y0 + 48f), 11f, col, _time);
             cx -= 20f;
             if (i > 0) { Gfx.Text(this, Fonts.Bold, new Vector2(cx - 6f, y0 + 52f), "›", Ui.TextSmall, Palette.TextMuted); cx -= 10f; }
@@ -235,7 +235,7 @@ public partial class Hud
                 for (int i = 0; i < 4; i++)
                 {
                     float inset = i * 4f + 2f;
-                    DrawRect(new Rect2(inset, inset, sz.X - inset * 2, sz.Y - inset * 2), col.WithAlpha((0.6f - i * 0.13f) * (0.55f + 0.45f * pulse)), false, 3f);
+                    this.Box(new Rect2(inset, inset, sz.X - inset * 2, sz.Y - inset * 2), col.WithAlpha((0.6f - i * 0.13f) * (0.55f + 0.45f * pulse)), false, 3f);
                 }
                 ScaleBanner(k, col, pulse);
                 break;
@@ -246,7 +246,7 @@ public partial class Hud
                 for (int i = 0; i < 6; i++)
                 {
                     float inset = i * 5f + 1f;
-                    DrawRect(new Rect2(inset, inset, sz.X - inset * 2, sz.Y - inset * 2), col.WithAlpha(0.32f - i * 0.05f), false, 4f);
+                    this.Box(new Rect2(inset, inset, sz.X - inset * 2, sz.Y - inset * 2), col.WithAlpha(0.32f - i * 0.05f), false, 4f);
                 }
                 var edge = new Rect2(10, 10, sz.X - 20, sz.Y - 20);
                 for (int i = 0; i < 24; i++)
@@ -254,7 +254,7 @@ public partial class Hud
                     float u = Mathf.PosMod(_time * 0.03f + i / 24f, 1f);
                     var p = PerimeterPoint(edge, u);
                     float tw = 0.5f + 0.5f * Mathf.Sin(_time * 4f + i * 1.7f);
-                    DrawCircle(p, 1.2f + 1.6f * tw, Colors.White.WithAlpha(0.35f + 0.55f * tw));
+                    this.Circle(p, 1.2f + 1.6f * tw, Colors.White.WithAlpha(0.35f + 0.55f * tw));
                 }
                 ScaleBanner(k, col, pulse);
                 break;
@@ -307,8 +307,8 @@ public partial class Hud
             Gfx.RoundRect(this, row, col.WithAlpha(0.05f), 8f, col.WithAlpha(0.25f));
             // 아이콘 칸
             var ic = new Vector2(x + 26f, y + 28f);
-            DrawCircle(ic, 19f, col.WithAlpha(0.14f));
-            DrawArc(ic, 19f, 0, Mathf.Tau, 24, col.WithAlpha(0.7f), 1.5f, true);
+            this.Circle(ic, 19f, col.WithAlpha(0.14f));
+            this.Arc(ic, 19f, 0, Mathf.Tau, 24, col.WithAlpha(0.7f), 1.5f, true);
             ScaleIcon(this, s, ic, 24f, col, _time);
             int seen = sc.Experienced(s);
             Gfx.Text(this, Fonts.Bold, new Vector2(x + 54f, y + 20f), $"{ScaleTable.Label(s)} — {ScaleTable.Response(s)}", Ui.TextTitle, col.Lerp(Palette.Text, 0.25f));
@@ -332,8 +332,8 @@ public partial class Hud
                 {
                     var lc = ScaleColor(ls);
                     var lp = new Vector2(tx + tw - 9f, ty - 9f);
-                    DrawPolyline(new[] { lp + new Vector2(-3f, 2f), lp, lp + new Vector2(3f, 2f) }, lc, 1.3f, true);
-                    DrawPolyline(new[] { lp + new Vector2(-3f, 5f), lp + new Vector2(0f, 3f), lp + new Vector2(3f, 5f) }, lc.WithAlpha(0.6f), 1.2f, true);
+                    this.Polyline(new[] { lp + new Vector2(-3f, 2f), lp, lp + new Vector2(3f, 2f) }, lc, 1.3f, true);
+                    this.Polyline(new[] { lp + new Vector2(-3f, 5f), lp + new Vector2(0f, 3f), lp + new Vector2(3f, 5f) }, lc.WithAlpha(0.6f), 1.2f, true);
                 }
                 tx += tw;
                 shown++;

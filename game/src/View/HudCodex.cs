@@ -156,8 +156,8 @@ public partial class Hud
             var col = st.Broken ? Palette.Danger : st.Hidden ? Palette.Warning.WithAlpha(0.6f) : st.Health < 0.45f ? Palette.Warning : st.Health < 0.75f ? Palette.Text.WithAlpha(0.8f) : Palette.Good;
             // 지시선 (부품이 몸통에서 떨어져 나온 듯)
             DrawLine(new Vector2(body.End.X, cy), new Vector2(x + 30, cy), Palette.PanelBorder.Lightened(0.3f), 1f);
-            DrawCircle(new Vector2(x + 32, cy), 3f, col, true, -1f, true);
-            if (st.Broken || st.Health < 0.45f) DrawCircle(new Vector2(x + 32, cy), 5.5f + Mathf.Sin(_time * 5f + i), col.WithAlpha(0.18f), true, -1f, true);
+            this.Circle(new Vector2(x + 32, cy), 3f, col, true, -1f, true);
+            if (st.Broken || st.Health < 0.45f) this.Circle(new Vector2(x + 32, cy), 5.5f + Mathf.Sin(_time * 5f + i), col.WithAlpha(0.18f), true, -1f, true);
             Gfx.Text(this, Fonts.Body, new Vector2(x + 40, cy + 4), parts[i].Name, Ui.TextBody, Palette.TextDim);
             Gfx.Bar(this, new Rect2(x + 124, cy - 3, 50, 5), st.Health, col);
             Gfx.TextRight(this, Fonts.Body, new Vector2(right, cy + 4), Fit(st.Text, right - x - 184, Ui.TextSmall, Fonts.Body), Ui.TextSmall, col);

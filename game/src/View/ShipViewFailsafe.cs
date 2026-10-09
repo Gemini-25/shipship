@@ -34,12 +34,12 @@ public partial class ShipView
             if (wall.Armor >= 0.999f) continue;
             var r = CellRect(cell);
             bool heavy = wall.Armor <= 0.55f;
-            ci.DrawRect(r.Grow(-2f), ArmorPlate.WithAlpha(heavy ? 0.55f : 0.35f), false, heavy ? 2.4f : 1.4f);
+            ci.Box(r.Grow(-2f), ArmorPlate.WithAlpha(heavy ? 0.55f : 0.35f), false, heavy ? 2.4f : 1.4f);
             if (!near) continue;
             ci.DrawLine(r.Position + new Vector2(4, T - 4), r.Position + new Vector2(T - 4, 4), ArmorEdge.WithAlpha(0.35f), 1.2f, true);
             if (heavy) ci.DrawLine(r.Position + new Vector2(4, 4), r.Position + new Vector2(T - 4, T - 4), ArmorEdge.WithAlpha(0.25f), 1.2f, true);
             foreach (var p in new[] { new Vector2(5, 5), new Vector2(T - 5, T - 5), new Vector2(T - 5, 5), new Vector2(5, T - 5) })
-                if (heavy || p.X == p.Y) ci.DrawCircle(r.Position + p, 1.4f, ArmorEdge.WithAlpha(0.7f), true, -1f, true);
+                if (heavy || p.X == p.Y) ci.Circle(r.Position + p, 1.4f, ArmorEdge.WithAlpha(0.7f), true, -1f, true);
         }
 
         // ── 선체 속 보조 간선: 두 가닥 구리 줄 + 고정 클램프 (전력 보기에서는 진하게) ──
@@ -57,7 +57,7 @@ public partial class ShipView
                 var n = (p1 - p0).Normalized().Orthogonal() * 1.6f;
                 ci.DrawLine(p0 + n, p1 + n, col.WithAlpha(a), 1.3f, true);
                 ci.DrawLine(p0 - n, p1 - n, col.Darkened(0.25f).WithAlpha(a), 1.3f, true);
-                if (i % 3 == 0) ci.DrawRect(new Rect2(p0 - new Vector2(2.5f, 2.5f), new Vector2(5f, 5f)), ArmorEdge.WithAlpha(a * 0.9f), false, 1f);
+                if (i % 3 == 0) ci.Box(new Rect2(p0 - new Vector2(2.5f, 2.5f), new Vector2(5f, 5f)), ArmorEdge.WithAlpha(a * 0.9f), false, 1f);
             }
         }
 
@@ -88,7 +88,7 @@ public partial class ShipView
             {
                 // 붉은 걸쇠 막대 + 낮은 쪽으로 쏠린 공기 화살 + 압력계
                 ci.DrawLine(c - along * (T * 0.42f), c + along * (T * 0.42f), LatchRed.WithAlpha(0.9f), 3f, true);
-                for (int k = -1; k <= 1; k += 2) ci.DrawCircle(c + along * (T * 0.42f) * k, 2.2f, LatchRed, true, -1f, true);
+                for (int k = -1; k <= 1; k += 2) ci.Circle(c + along * (T * 0.42f) * k, 2.2f, LatchRed, true, -1f, true);
                 var low = d.RoomA != null && d.RoomB != null && d.RoomA.Air.Pressure < d.RoomB.Air.Pressure ? d.RoomA : d.RoomB;
                 if (low != null)
                 {
@@ -104,8 +104,8 @@ public partial class ShipView
                 if (near)
                 {
                     var g = c - across * (T * 0.32f) + along * (T * 0.3f);
-                    ci.DrawCircle(g, 4.2f, new Color("#1b1f27"), true, -1f, true);
-                    ci.DrawArc(g, 4.2f, 0f, Mathf.Tau, 14, ArmorEdge, 1f, true);
+                    ci.Circle(g, 4.2f, new Color("#1b1f27"), true, -1f, true);
+                    ci.Arc(g, 4.2f, 0f, Mathf.Tau, 14, ArmorEdge, 1f, true);
                     float dp = d.RoomA != null && d.RoomB != null ? Mathf.Abs(d.RoomA.Air.Pressure - d.RoomB.Air.Pressure) : 0f;
                     float ang = Mathf.Pi * (0.75f + 1.5f * Mathf.Clamp(dp / 100f, 0f, 1f));
                     ci.DrawLine(g, g + new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * 3.4f, LatchRed, 1.1f, true);
@@ -115,7 +115,7 @@ public partial class ShipView
             {
                 // 못 닫힌 문: 틈으로 빨려 나가는 공기 줄기 + 주황 깜빡임
                 float blink = 0.5f + 0.5f * Mathf.Sin(_time * 7f);
-                ci.DrawRect(r.Grow(-4f), Palette.Warning.WithAlpha(0.25f + 0.35f * blink), false, 2f);
+                ci.Box(r.Grow(-4f), Palette.Warning.WithAlpha(0.25f + 0.35f * blink), false, 2f);
                 for (int k = 0; k < 4; k++)
                 {
                     float ph = Mathf.PosMod(_time * 2.2f + k * 0.25f, 1f);
@@ -142,10 +142,10 @@ public partial class ShipView
                 {
                     var fr = FurnitureRect(m.Body);
                     var p = new Vector2(fr.Position.X + 6f, fr.End.Y - 6f);
-                    ci.DrawCircle(p, 4.5f, new Color("#1b1f27").WithAlpha(0.85f), true, -1f, true);
+                    ci.Circle(p, 4.5f, new Color("#1b1f27").WithAlpha(0.85f), true, -1f, true);
                     ci.DrawLine(p + new Vector2(-3, 1.5f), p + new Vector2(-0.5f, 1.5f), ArmorEdge, 1f, true);
                     ci.DrawLine(p + new Vector2(-0.5f, 1.5f), p + new Vector2(2.5f, -2f), ArmorEdge, 1f, true); // 열린 칼날
-                    ci.DrawCircle(p + new Vector2(3f, 1.5f), 0.9f, new Color("#5a3a3a"), true, -1f, true); // 꺼진 표시등
+                    ci.Circle(p + new Vector2(3f, 1.5f), 0.9f, new Color("#5a3a3a"), true, -1f, true); // 꺼진 표시등
                 }
             }
     }
@@ -164,7 +164,7 @@ public partial class ShipView
             var dir = wide ? new Vector2(0, 1) : new Vector2(1, 0);
             ci.DrawLine(a, a + dir * 9f, membrane.WithAlpha(0.45f), 4f, true);
             ci.DrawLine(a, a + dir * 9f, ArmorEdge.WithAlpha(0.6f), 1f, true);
-            ci.DrawCircle(a, 2f, HazardYellow.WithAlpha(0.7f), true, -1f, true);
+            ci.Circle(a, 2f, HazardYellow.WithAlpha(0.7f), true, -1f, true);
             return;
         }
         // 펼친 막: 방 가운데를 가로질러 · 구멍 쪽(새는 쪽)으로 부풀어 흔들린다
@@ -177,9 +177,9 @@ public partial class ShipView
             float sway = Mathf.Sin(t * Mathf.Pi) * (bulge + 1.5f * Mathf.Sin(_time * 3f + t * 6f));
             pts[i] = wide ? new Vector2((x0 + x1) * 0.5f + sway, y0 + t * (y1 - y0)) : new Vector2(x0 + t * (x1 - x0), (y0 + y1) * 0.5f + sway);
         }
-        ci.DrawPolyline(pts, membrane.WithAlpha(0.75f), 3f, true);
-        ci.DrawPolyline(pts, HazardYellow.WithAlpha(0.6f), 1f, true);
-        for (int i = 1; i < n; i += 3) ci.DrawCircle(pts[i], 1.6f, ArmorEdge, true, -1f, true); // 고정 고리
+        ci.Polyline(pts, membrane.WithAlpha(0.75f), 3f, true);
+        ci.Polyline(pts, HazardYellow.WithAlpha(0.6f), 1f, true);
+        for (int i = 1; i < n; i += 3) ci.Circle(pts[i], 1.6f, ArmorEdge, true, -1f, true); // 고정 고리
     }
 
     /// <summary>예비 회로로 넘어간 방: 구석의 전환 스위치 칼날이 둘째 접점에 붙어 호박색으로 깜빡.</summary>
@@ -187,12 +187,12 @@ public partial class ShipView
     {
         var p = new Vector2(room.MinX * T + 10f, room.MinY * T + 10f);
         float blink = 0.6f + 0.4f * Mathf.Sin(_time * 4f);
-        ci.DrawRect(new Rect2(p - new Vector2(7, 7), new Vector2(14, 14)), new Color("#1b1f27").WithAlpha(0.85f));
-        ci.DrawRect(new Rect2(p - new Vector2(7, 7), new Vector2(14, 14)), ArmorEdge.WithAlpha(0.7f), false, 1f);
+        ci.Box(new Rect2(p - new Vector2(7, 7), new Vector2(14, 14)), new Color("#1b1f27").WithAlpha(0.85f));
+        ci.Box(new Rect2(p - new Vector2(7, 7), new Vector2(14, 14)), ArmorEdge.WithAlpha(0.7f), false, 1f);
         var pivot = p + new Vector2(-4, 4);
-        ci.DrawCircle(p + new Vector2(4, -4), 1.4f, new Color("#5a5f6a"), true, -1f, true);      // 주 접점 (꺼짐)
-        ci.DrawCircle(p + new Vector2(4, 3), 1.6f, new Color("#ffb347").WithAlpha(blink), true, -1f, true); // 예비 접점 (붙음)
+        ci.Circle(p + new Vector2(4, -4), 1.4f, new Color("#5a5f6a"), true, -1f, true);      // 주 접점 (꺼짐)
+        ci.Circle(p + new Vector2(4, 3), 1.6f, new Color("#ffb347").WithAlpha(blink), true, -1f, true); // 예비 접점 (붙음)
         ci.DrawLine(pivot, p + new Vector2(4, 3), new Color("#ffb347"), 1.4f, true);
-        ci.DrawCircle(pivot, 1.3f, ArmorEdge, true, -1f, true);
+        ci.Circle(pivot, 1.3f, ArmorEdge, true, -1f, true);
     }
 }

@@ -29,7 +29,7 @@ public partial class ShipView
                 case 0 when age < 24f:
                 {
                     float a = 1f - age / 24f;
-                    ci.DrawCircle(c, T * 0.9f, new Color(0.05f, 0.04f, 0.03f, 0.35f * a), true, -1f, true);
+                    ci.Circle(c, T * 0.9f, new Color(0.05f, 0.04f, 0.03f, 0.35f * a), true, -1f, true);
                     for (int k = 0; k < 9; k++)
                     {
                         float ang = k * 0.7f + m.At.X;
@@ -40,7 +40,7 @@ public partial class ShipView
                         for (int k = 0; k < 6; k++)
                         {
                             var g = c + new Vector2(((k * 53) % 21 - 10) * 1.6f, ((k * 29) % 17 - 8) * 1.6f);
-                            ci.DrawColoredPolygon(new[] { g, g + new Vector2(3f, 1f), g + new Vector2(1f, 3.5f) }, new Color(0.75f, 0.9f, 1f, 0.55f * a));
+                            ci.Poly(new[] { g, g + new Vector2(3f, 1f), g + new Vector2(1f, 3.5f) }, new Color(0.75f, 0.9f, 1f, 0.55f * a));
                         }
                     break;
                 }
@@ -61,7 +61,7 @@ public partial class ShipView
                     for (int k = 0; k < 3; k++)
                     {
                         float ph = Mathf.PosMod(_time * 0.5f + k * 0.33f, 1f);
-                        ci.DrawCircle(c + new Vector2(k * 4f - 4f, -T * 0.3f - ph * T * 0.5f), 3f + 4f * ph, new Color(0.6f, 0.6f, 0.62f, 0.35f * a * (1f - ph)), true, -1f, true);
+                        ci.Circle(c + new Vector2(k * 4f - 4f, -T * 0.3f - ph * T * 0.5f), 3f + 4f * ph, new Color(0.6f, 0.6f, 0.62f, 0.35f * a * (1f - ph)), true, -1f, true);
                     }
                     break;
                 }
@@ -87,8 +87,8 @@ public partial class ShipView
             if (x.Progress > 0f)
             {
                 var top = new Vector2(c.X, r.Position.Y - 5f);
-                ci.DrawArc(top, 6f, 0f, Mathf.Tau, 18, new Color(1, 1, 1, 0.15f), 2f, true);
-                ci.DrawArc(top, 6f, -Mathf.Pi / 2f, -Mathf.Pi / 2f + Mathf.Tau * x.Progress, 18, x.Paused ? new Color("#f2c230") : TechIcons.FieldColor(t.Field), 2.2f, true);
+                ci.Arc(top, 6f, 0f, Mathf.Tau, 18, new Color(1, 1, 1, 0.15f), 2f, true);
+                ci.Arc(top, 6f, -Mathf.Pi / 2f, -Mathf.Pi / 2f + Mathf.Tau * x.Progress, 18, x.Paused ? new Color("#f2c230") : TechIcons.FieldColor(t.Field), 2.2f, true);
             }
             // 사람
             foreach (int id in new[] { x.Lead, x.Partner })
@@ -100,21 +100,21 @@ public partial class ShipView
                 if (Zoom > 0.6f)
                 {
                     var b = p + new Vector2(0f, -T * 0.95f);
-                    ci.DrawCircle(b, 8.5f, new Color(0.05f, 0.06f, 0.09f, 0.85f), true, -1f, true);
+                    ci.Circle(b, 8.5f, new Color(0.05f, 0.06f, 0.09f, 0.85f), true, -1f, true);
                     TechIcons.Draw(ci, t, b, 7f, 0);
                 }
                 var style = id == x.Lead ? x.Style : tw.StyleOf(cm);
                 if (style == ResearchStyle.Cautious && fine) // 보안경
                 {
                     var g = p + new Vector2(0f, -T * 0.32f);
-                    ci.DrawRect(new Rect2(g + new Vector2(-6f, -2f), new Vector2(12f, 4f)), new Color(0.55f, 0.85f, 1f, 0.75f));
+                    ci.Box(new Rect2(g + new Vector2(-6f, -2f), new Vector2(12f, 4f)), new Color(0.55f, 0.85f, 1f, 0.75f));
                     ci.DrawLine(g + new Vector2(-7f, 0f), g + new Vector2(7f, 0f), new Color(0.1f, 0.12f, 0.15f, 0.9f), 1f, true);
                 }
                 else if (style == ResearchStyle.Bold && fine) // 땀 · 서두름
                 {
                     float ph = Mathf.PosMod(_time * 1.6f + id * 0.3f, 1f);
                     var d = p + new Vector2(7f, -T * 0.4f + ph * 7f);
-                    ci.DrawCircle(d, 1.6f, new Color(0.55f, 0.82f, 1f, 0.85f * (1f - ph)), true, -1f, true);
+                    ci.Circle(d, 1.6f, new Color(0.55f, 0.82f, 1f, 0.85f * (1f - ph)), true, -1f, true);
                 }
                 // 유물 살펴보기: 돋보기
                 if (x.Relic && !x.RelicSeen && id == x.Lead && TechWeb.Node(t.Id).Gate is TechGate gate && tw.RelicFor(gate.Key) is PlacedProp relic
@@ -131,12 +131,12 @@ public partial class ShipView
     {
         var paper = n.Kind == 0 ? new Color("#f2d64b") : new Color("#e9e4d6");
         var rect = new Rect2(c + new Vector2(-5f, -4f), new Vector2(10f, 8f));
-        ci.DrawRect(new Rect2(rect.Position + new Vector2(1.5f, 1.5f), rect.Size), new Color(0, 0, 0, 0.35f));
-        ci.DrawRect(rect, paper);
+        ci.Box(new Rect2(rect.Position + new Vector2(1.5f, 1.5f), rect.Size), new Color(0, 0, 0, 0.35f));
+        ci.Box(rect, paper);
         if (n.Kind == 3) // 그을린 가장자리
         {
-            ci.DrawRect(new Rect2(rect.Position, new Vector2(rect.Size.X, 2f)), new Color(0.15f, 0.1f, 0.06f, 0.8f));
-            ci.DrawRect(new Rect2(rect.End - new Vector2(3f, 3f), new Vector2(3f, 3f)), new Color(0.1f, 0.07f, 0.05f, 0.9f));
+            ci.Box(new Rect2(rect.Position, new Vector2(rect.Size.X, 2f)), new Color(0.15f, 0.1f, 0.06f, 0.8f));
+            ci.Box(new Rect2(rect.End - new Vector2(3f, 3f), new Vector2(3f, 3f)), new Color(0.1f, 0.07f, 0.05f, 0.9f));
         }
         if (fine)
             for (int i = 0; i < 3; i++) ci.DrawLine(rect.Position + new Vector2(1.5f, 2f + i * 2f), rect.Position + new Vector2(rect.Size.X - 2f, 2f + i * 2f), new Color(0.3f, 0.3f, 0.4f, 0.5f), 0.6f);
@@ -160,8 +160,8 @@ public partial class ShipView
         switch (f)
         {
             case TechField.Power:
-                ci.DrawRect(new Rect2(c + new Vector2(-s * 0.7f, s * 0.2f), new Vector2(s * 1.4f, s * 0.35f)), dark);
-                for (int i = 0; i < 5; i++) ci.DrawArc(c + new Vector2(-s * 0.4f + i * s * 0.2f, 0f), s * 0.22f, 0f, Mathf.Tau, 10, new Color("#c9853a"), 1.6f, true);
+                ci.Box(new Rect2(c + new Vector2(-s * 0.7f, s * 0.2f), new Vector2(s * 1.4f, s * 0.35f)), dark);
+                for (int i = 0; i < 5; i++) ci.Arc(c + new Vector2(-s * 0.4f + i * s * 0.2f, 0f), s * 0.22f, 0f, Mathf.Tau, 10, new Color("#c9853a"), 1.6f, true);
                 if (running) for (int i = 0; i < 3; i++) { var a = c + new Vector2(s * 0.6f, -s * 0.2f); var b = a + Vector2.FromAngle(t * 9f + i * 2.1f) * s * 0.5f; ci.DrawLine(a, b, new Color(0.7f, 0.9f, 1f, 0.9f), 1.2f, true); }
                 break;
             case TechField.Cooling:
@@ -170,33 +170,33 @@ public partial class ShipView
                     var p = c + new Vector2(-s * 0.5f + i * s * 0.5f, 0f);
                     Gfx.RoundRect(ci, new Rect2(p + new Vector2(-s * 0.12f, -s * 0.5f), new Vector2(s * 0.24f, s * 0.9f)), new Color(0.75f, 0.9f, 1f, 0.55f), 2f, new Color(0.9f, 0.97f, 1f, 0.9f));
                 }
-                if (running) for (int i = 0; i < 3; i++) { float ph = Mathf.PosMod(t * 0.7f + i * 0.33f, 1f); ci.DrawCircle(c + new Vector2(i * 4f - 4f, -s * 0.6f - ph * s), 2f + 3f * ph, new Color(1f, 1f, 1f, 0.4f * (1f - ph)), true, -1f, true); }
+                if (running) for (int i = 0; i < 3; i++) { float ph = Mathf.PosMod(t * 0.7f + i * 0.33f, 1f); ci.Circle(c + new Vector2(i * 4f - 4f, -s * 0.6f - ph * s), 2f + 3f * ph, new Color(1f, 1f, 1f, 0.4f * (1f - ph)), true, -1f, true); }
                 break;
             case TechField.Life:
                 TechIcons.Glyph(ci, "flask", c, s * 0.75f, new Color(0.85f, 0.95f, 1f, 0.9f), 1.3f);
-                if (running) for (int i = 0; i < 4; i++) { float ph = Mathf.PosMod(t * 1.2f + i * 0.25f, 1f); ci.DrawCircle(c + new Vector2(Mathf.Sin(i * 2.3f) * s * 0.25f, s * 0.4f - ph * s * 0.9f), 1.3f, fc.WithAlpha(0.9f * (1f - ph)), true, -1f, true); }
+                if (running) for (int i = 0; i < 4; i++) { float ph = Mathf.PosMod(t * 1.2f + i * 0.25f, 1f); ci.Circle(c + new Vector2(Mathf.Sin(i * 2.3f) * s * 0.25f, s * 0.4f - ph * s * 0.9f), 1.3f, fc.WithAlpha(0.9f * (1f - ph)), true, -1f, true); }
                 break;
             case TechField.Food:
-                ci.DrawCircle(c, s * 0.6f, new Color(0.85f, 0.9f, 0.85f, 0.35f), true, -1f, true);
-                ci.DrawArc(c, s * 0.6f, 0f, Mathf.Tau, 18, new Color(0.9f, 0.95f, 0.9f, 0.8f), 1.2f, true);
-                for (int i = 0; i < 4; i++) { var p = c + Vector2.FromAngle(i * 1.6f) * s * 0.3f; float h = running ? 0.25f + 0.1f * Mathf.Sin(t * 2f + i) : 0.25f; ci.DrawLine(p, p + new Vector2(0f, -s * h), new Color("#6fbf4a"), 1.4f, true); ci.DrawCircle(p + new Vector2(1.5f, -s * h), 1.6f, new Color("#8fd65a"), true, -1f, true); }
+                ci.Circle(c, s * 0.6f, new Color(0.85f, 0.9f, 0.85f, 0.35f), true, -1f, true);
+                ci.Arc(c, s * 0.6f, 0f, Mathf.Tau, 18, new Color(0.9f, 0.95f, 0.9f, 0.8f), 1.2f, true);
+                for (int i = 0; i < 4; i++) { var p = c + Vector2.FromAngle(i * 1.6f) * s * 0.3f; float h = running ? 0.25f + 0.1f * Mathf.Sin(t * 2f + i) : 0.25f; ci.DrawLine(p, p + new Vector2(0f, -s * h), new Color("#6fbf4a"), 1.4f, true); ci.Circle(p + new Vector2(1.5f, -s * h), 1.6f, new Color("#8fd65a"), true, -1f, true); }
                 break;
             case TechField.Hull:
-                ci.DrawRect(new Rect2(c + new Vector2(-s * 0.7f, -s * 0.15f), new Vector2(s * 0.25f, s * 0.5f)), steel);
-                ci.DrawRect(new Rect2(c + new Vector2(s * 0.45f, -s * 0.15f), new Vector2(s * 0.25f, s * 0.5f)), steel);
-                ci.DrawRect(new Rect2(c + new Vector2(-s * 0.45f, -s * 0.05f), new Vector2(s * 0.9f, s * 0.3f)), new Color("#b4bfcc"));
-                if (running) ci.DrawPolyline(new[] { c + new Vector2(0f, -s * 0.05f), c + new Vector2(s * 0.08f, s * 0.05f), c + new Vector2(-s * 0.04f, s * 0.15f), c + new Vector2(s * 0.05f, s * 0.25f) }, new Color(0.1f, 0.1f, 0.12f), 1.2f, true);
+                ci.Box(new Rect2(c + new Vector2(-s * 0.7f, -s * 0.15f), new Vector2(s * 0.25f, s * 0.5f)), steel);
+                ci.Box(new Rect2(c + new Vector2(s * 0.45f, -s * 0.15f), new Vector2(s * 0.25f, s * 0.5f)), steel);
+                ci.Box(new Rect2(c + new Vector2(-s * 0.45f, -s * 0.05f), new Vector2(s * 0.9f, s * 0.3f)), new Color("#b4bfcc"));
+                if (running) ci.Polyline(new[] { c + new Vector2(0f, -s * 0.05f), c + new Vector2(s * 0.08f, s * 0.05f), c + new Vector2(-s * 0.04f, s * 0.15f), c + new Vector2(s * 0.05f, s * 0.25f) }, new Color(0.1f, 0.1f, 0.12f), 1.2f, true);
                 break;
             case TechField.Medical:
-                ci.DrawRect(new Rect2(c + new Vector2(-s * 0.4f, s * 0.35f), new Vector2(s * 0.8f, s * 0.15f)), dark);
+                ci.Box(new Rect2(c + new Vector2(-s * 0.4f, s * 0.35f), new Vector2(s * 0.8f, s * 0.15f)), dark);
                 ci.DrawLine(c + new Vector2(-s * 0.2f, s * 0.35f), c + new Vector2(s * 0.1f, -s * 0.5f), steel, 3f, true);
-                ci.DrawCircle(c + new Vector2(s * 0.1f, -s * 0.5f), s * 0.15f, dark, true, -1f, true);
-                ci.DrawRect(new Rect2(c + new Vector2(-s * 0.15f, s * 0.05f), new Vector2(s * 0.5f, s * 0.08f)), new Color(0.8f, 0.9f, 1f, running ? 0.9f : 0.5f));
+                ci.Circle(c + new Vector2(s * 0.1f, -s * 0.5f), s * 0.15f, dark, true, -1f, true);
+                ci.Box(new Rect2(c + new Vector2(-s * 0.15f, s * 0.05f), new Vector2(s * 0.5f, s * 0.08f)), new Color(0.8f, 0.9f, 1f, running ? 0.9f : 0.5f));
                 break;
             case TechField.Computing:
-                ci.DrawRect(new Rect2(c + new Vector2(-s * 0.7f, -s * 0.45f), new Vector2(s * 1.4f, s * 0.9f)), new Color("#1d4d2e"));
+                ci.Box(new Rect2(c + new Vector2(-s * 0.7f, -s * 0.45f), new Vector2(s * 1.4f, s * 0.9f)), new Color("#1d4d2e"));
                 for (int i = 0; i < 4; i++) ci.DrawLine(c + new Vector2(-s * 0.6f, -s * 0.3f + i * s * 0.2f), c + new Vector2(s * 0.6f, -s * 0.3f + i * s * 0.2f), new Color("#c9a24a").WithAlpha(0.6f), 0.8f);
-                for (int i = 0; i < 4; i++) ci.DrawCircle(c + new Vector2(-s * 0.45f + i * s * 0.3f, s * 0.3f), 1.6f, running && ((int)(t * 6f) + i) % 3 == 0 ? new Color("#7cff9a") : new Color(0.2f, 0.3f, 0.2f), true, -1f, true);
+                for (int i = 0; i < 4; i++) ci.Circle(c + new Vector2(-s * 0.45f + i * s * 0.3f, s * 0.3f), 1.6f, running && ((int)(t * 6f) + i) % 3 == 0 ? new Color("#7cff9a") : new Color(0.2f, 0.3f, 0.2f), true, -1f, true);
                 break;
             case TechField.Robotics:
             {
@@ -206,36 +206,36 @@ public partial class ShipView
                 var j3 = j2 + Vector2.FromAngle(-0.2f - a) * s * 0.5f;
                 ci.DrawLine(j1, j2, new Color("#f2994a"), 3f, true);
                 ci.DrawLine(j2, j3, new Color("#f2994a"), 2.4f, true);
-                ci.DrawCircle(j1, 2.5f, dark, true, -1f, true);
-                ci.DrawCircle(j2, 2f, dark, true, -1f, true);
+                ci.Circle(j1, 2.5f, dark, true, -1f, true);
+                ci.Circle(j2, 2f, dark, true, -1f, true);
                 ci.DrawLine(j3, j3 + new Vector2(3f, -2f), steel, 1.2f, true);
                 ci.DrawLine(j3, j3 + new Vector2(3f, 2f), steel, 1.2f, true);
                 break;
             }
             case TechField.Propulsion:
-                ci.DrawColoredPolygon(new[] { c + new Vector2(-s * 0.5f, -s * 0.25f), c + new Vector2(s * 0.1f, -s * 0.15f), c + new Vector2(s * 0.1f, s * 0.15f), c + new Vector2(-s * 0.5f, s * 0.25f) }, steel);
-                if (running) { float fl = 0.5f + 0.3f * Mathf.Sin(t * 30f); ci.DrawColoredPolygon(new[] { c + new Vector2(s * 0.1f, -s * 0.12f), c + new Vector2(s * (0.3f + 0.5f * fl), 0f), c + new Vector2(s * 0.1f, s * 0.12f) }, new Color(0.45f, 0.75f, 1f, 0.9f)); }
+                ci.Poly(new[] { c + new Vector2(-s * 0.5f, -s * 0.25f), c + new Vector2(s * 0.1f, -s * 0.15f), c + new Vector2(s * 0.1f, s * 0.15f), c + new Vector2(-s * 0.5f, s * 0.25f) }, steel);
+                if (running) { float fl = 0.5f + 0.3f * Mathf.Sin(t * 30f); ci.Poly(new[] { c + new Vector2(s * 0.1f, -s * 0.12f), c + new Vector2(s * (0.3f + 0.5f * fl), 0f), c + new Vector2(s * 0.1f, s * 0.12f) }, new Color(0.45f, 0.75f, 1f, 0.9f)); }
                 break;
             case TechField.Sensors:
             {
                 Gfx.RoundRect(ci, new Rect2(c + new Vector2(-s * 0.7f, -s * 0.45f), new Vector2(s * 1.4f, s * 0.9f)), dark, 2f, steel);
                 var pts = new Vector2[16];
                 for (int i = 0; i < 16; i++) { float xx = -0.6f + 1.2f * i / 15f; pts[i] = c + new Vector2(xx * s, (running ? Mathf.Sin(xx * 9f + t * 6f) * 0.25f : 0f) * s); }
-                ci.DrawPolyline(pts, new Color("#5ef0a0"), 1.1f, true);
+                ci.Polyline(pts, new Color("#5ef0a0"), 1.1f, true);
                 break;
             }
             case TechField.Fabrication:
-                ci.DrawColoredPolygon(new[] { c + new Vector2(-s * 0.4f, -s * 0.3f), c + new Vector2(s * 0.4f, -s * 0.3f), c + new Vector2(s * 0.3f, s * 0.35f), c + new Vector2(-s * 0.3f, s * 0.35f) }, new Color("#4a4f57"));
-                ci.DrawRect(new Rect2(c + new Vector2(-s * 0.32f, -s * 0.3f), new Vector2(s * 0.64f, s * 0.12f)), running ? new Color(1f, 0.45f + 0.15f * Mathf.Sin(t * 5f), 0.15f) : new Color("#6b3a22"));
+                ci.Poly(new[] { c + new Vector2(-s * 0.4f, -s * 0.3f), c + new Vector2(s * 0.4f, -s * 0.3f), c + new Vector2(s * 0.3f, s * 0.35f), c + new Vector2(-s * 0.3f, s * 0.35f) }, new Color("#4a4f57"));
+                ci.Box(new Rect2(c + new Vector2(-s * 0.32f, -s * 0.3f), new Vector2(s * 0.64f, s * 0.12f)), running ? new Color(1f, 0.45f + 0.15f * Mathf.Sin(t * 5f), 0.15f) : new Color("#6b3a22"));
                 break;
             case TechField.Habitat:
                 TechIcons.Glyph(ci, "house", c, s * 0.7f, new Color("#e6a8d7"), 1.2f);
-                if (running) ci.DrawCircle(c + new Vector2(0f, s * 0.15f), 2f, new Color(1f, 0.9f, 0.6f, 0.6f + 0.4f * Mathf.Sin(t * 3f)), true, -1f, true);
+                if (running) ci.Circle(c + new Vector2(0f, s * 0.15f), 2f, new Color(1f, 0.9f, 0.6f, 0.6f + 0.4f * Mathf.Sin(t * 3f)), true, -1f, true);
                 break;
             default: // 방어
-                ci.DrawArc(c, s * 0.6f, 0f, Mathf.Tau, 18, new Color("#d9dde3"), 1.4f, true);
-                ci.DrawArc(c, s * 0.35f, 0f, Mathf.Tau, 14, new Color("#c0392b"), 1.4f, true);
-                if (running) ci.DrawCircle(c + new Vector2(Mathf.Sin(t * 3f) * s * 0.2f, Mathf.Cos(t * 2.3f) * s * 0.2f), 1.8f, new Color(1f, 0.2f, 0.2f), true, -1f, true);
+                ci.Arc(c, s * 0.6f, 0f, Mathf.Tau, 18, new Color("#d9dde3"), 1.4f, true);
+                ci.Arc(c, s * 0.35f, 0f, Mathf.Tau, 14, new Color("#c0392b"), 1.4f, true);
+                if (running) ci.Circle(c + new Vector2(Mathf.Sin(t * 3f) * s * 0.2f, Mathf.Cos(t * 2.3f) * s * 0.2f), 1.8f, new Color(1f, 0.2f, 0.2f), true, -1f, true);
                 break;
         }
         if (paused) // 덮개

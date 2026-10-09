@@ -54,20 +54,20 @@ public partial class ShipView
                 var hub = b.GetCenter();
                 float rad = Mathf.Max(b.Size.X, b.Size.Y) * 0.58f;
                 float spin = t * 0.04f;
-                ci.DrawArc(hub, rad, 0f, Mathf.Tau, 96, metal.WithAlpha(0.55f), 7f, true);
-                ci.DrawArc(hub, rad - 6f, 0f, Mathf.Tau, 96, dark.WithAlpha(0.5f), 2f, true);
+                ci.Arc(hub, rad, 0f, Mathf.Tau, 96, metal.WithAlpha(0.55f), 7f, true);
+                ci.Arc(hub, rad - 6f, 0f, Mathf.Tau, 96, dark.WithAlpha(0.5f), 2f, true);
                 for (int i = 0; i < 12; i++) // 테두리 마디 (도는 게 보인다)
                 {
                     var a = Vector2.FromAngle(spin + i * Mathf.Tau / 12f);
                     ci.DrawLine(hub + a * (rad - 4f), hub + a * (rad + 4f), new Color("#9aa3b2"), 2f, true);
-                    if (i % 3 == 0) ci.DrawCircle(hub + a * (rad + 5f), 2.2f, Mathf.PosMod(t + i, 2f) < 0.15f ? new Color("#7cf0a0") : dark, true, -1f, true);
+                    if (i % 3 == 0) ci.Circle(hub + a * (rad + 5f), 2.2f, Mathf.PosMod(t + i, 2f) < 0.15f ? new Color("#7cf0a0") : dark, true, -1f, true);
                 }
                 for (int i = 0; i < 4; i++) // 바퀴살 (선체 뒤로 비친다)
                 {
                     var a = Vector2.FromAngle(spin + Mathf.Pi / 4f + i * Mathf.Pi / 2f);
                     ci.DrawLine(hub + a * T * 1.5f, hub + a * (rad - 7f), metal.WithAlpha(0.35f), 5f, true);
                 }
-                ci.DrawCircle(hub, T * 1.2f, dark.WithAlpha(0.4f), true, -1f, true); // 굴대
+                ci.Circle(hub, T * 1.2f, dark.WithAlpha(0.4f), true, -1f, true); // 굴대
                 break;
             }
             case ShipFrame.Ring:
@@ -104,10 +104,10 @@ public partial class ShipView
                     for (float x = b.Position.X + T * 3f; x < b.End.X - T * 3f; x += T * 2.2f, i++)
                     {
                         var r = new Rect2(x, y, T * 2f, T);
-                        ci.DrawRect(r, box[(i * 7 + (int)(y / T)) % box.Length]);
+                        ci.Box(r, box[(i * 7 + (int)(y / T)) % box.Length]);
                         for (float gx = x + 4f; gx < x + T * 2f - 2f; gx += 5f) ci.DrawLine(new Vector2(gx, y + 2f), new Vector2(gx, y + T - 2f), new Color(0, 0, 0, 0.22f), 1f); // 골판
-                        ci.DrawRect(r, dark, false, 1.2f);
-                        ci.DrawCircle(new Vector2(x + 3f, y + T * 0.5f), 1.6f, new Color("#d8d8d8"), true, -1f, true); // 고정 쇠
+                        ci.Box(r, dark, false, 1.2f);
+                        ci.Circle(new Vector2(x + 3f, y + T * 0.5f), 1.6f, new Color("#d8d8d8"), true, -1f, true); // 고정 쇠
                     }
                 }
                 break;
@@ -122,15 +122,15 @@ public partial class ShipView
                     float x = b.Position.X + T * 2f + (h % 1000) / 1000f * (b.Size.X - T * 6f);
                     float w = T * (1.2f + h / 1000 % 3 * 0.6f);
                     var r = new Rect2(x, top ? b.Position.Y + T * 0.15f : b.End.Y - T * 0.85f, w, T * 0.7f);
-                    ci.DrawRect(r, plate[h / 7 % plate.Length].WithAlpha(0.9f));
+                    ci.Box(r, plate[h / 7 % plate.Length].WithAlpha(0.9f));
                     for (float rx = r.Position.X + 3f; rx < r.End.X - 1f; rx += 6f) // 리벳
                     {
-                        ci.DrawCircle(new Vector2(rx, r.Position.Y + 2.5f), 0.9f, new Color("#c9c1b0"), true, -1f, true);
-                        ci.DrawCircle(new Vector2(rx, r.End.Y - 2.5f), 0.9f, new Color("#c9c1b0"), true, -1f, true);
+                        ci.Circle(new Vector2(rx, r.Position.Y + 2.5f), 0.9f, new Color("#c9c1b0"), true, -1f, true);
+                        ci.Circle(new Vector2(rx, r.End.Y - 2.5f), 0.9f, new Color("#c9c1b0"), true, -1f, true);
                     }
                     var seam = new Vector2[6];
                     for (int k = 0; k < 6; k++) seam[k] = new Vector2(r.End.X + (k % 2) * 2f, r.Position.Y + k * r.Size.Y / 5f); // 용접 자국
-                    ci.DrawPolyline(seam, new Color("#d08a3a").WithAlpha(0.8f), 1f, true);
+                    ci.Polyline(seam, new Color("#d08a3a").WithAlpha(0.8f), 1f, true);
                 }
                 break;
             }
@@ -146,14 +146,14 @@ public partial class ShipView
                     var a = nose + new Vector2(0f, k * T * 0.8f);
                     var m = a + new Vector2(T * 1.4f, k * T * 0.5f);
                     var tip = m + new Vector2(T * 0.9f, -k * T * 0.7f);
-                    ci.DrawPolyline(new[] { a, m, tip }, new Color("#d9a31e"), 5f, true);
-                    ci.DrawCircle(m, 3.5f, dark, true, -1f, true);
+                    ci.Polyline(new[] { a, m, tip }, new Color("#d9a31e"), 5f, true);
+                    ci.Circle(m, 3.5f, dark, true, -1f, true);
                 }
                 var drum = nose + new Vector2(-T * 0.8f, -b.Size.Y * 0.5f + T * 0.3f);
-                ci.DrawCircle(drum, T * 0.45f, new Color("#5b4632"), true, -1f, true);
-                for (int i = 1; i <= 3; i++) ci.DrawArc(drum, T * 0.12f * i, 0f, Mathf.Tau, 14, new Color("#c9b48a"), 1f, true);
+                ci.Circle(drum, T * 0.45f, new Color("#5b4632"), true, -1f, true);
+                for (int i = 1; i <= 3; i++) ci.Arc(drum, T * 0.12f * i, 0f, Mathf.Tau, 14, new Color("#c9b48a"), 1f, true);
                 float sag = Mathf.Sin(t * 0.8f) * 6f;
-                ci.DrawPolyline(new[] { drum, drum + new Vector2(T * 1.5f, T * 0.8f + sag), nose + new Vector2(T * 2.3f, 0f) }, new Color("#c9b48a"), 1.4f, true);
+                ci.Polyline(new[] { drum, drum + new Vector2(T * 1.5f, T * 0.8f + sag), nose + new Vector2(T * 2.3f, 0f) }, new Color("#c9b48a"), 1.4f, true);
                 break;
             }
             case ShipPurpose.Rescue:
@@ -162,9 +162,9 @@ public partial class ShipView
                 for (float x = b.Position.X + T * 3f; x < b.End.X - T * 2f; x += 12f)
                     ci.DrawLine(new Vector2(x, b.Position.Y + T * 0.95f), new Vector2(x + 7f, b.Position.Y + T * 0.15f), new Color("#d23c3c").WithAlpha(0.85f), 4f, true);
                 var bea = new Vector2(b.GetCenter().X, b.Position.Y - 4f);
-                ci.DrawCircle(bea, 4f, new Color("#ff9a3c"), true, -1f, true);
+                ci.Circle(bea, 4f, new Color("#ff9a3c"), true, -1f, true);
                 float ang = t * 4f;
-                ci.DrawColoredPolygon(new[] { bea, bea + Vector2.FromAngle(ang - 0.3f) * 46f, bea + Vector2.FromAngle(ang + 0.3f) * 46f }, new Color(1f, 0.6f, 0.2f, 0.18f));
+                ci.Poly(new[] { bea, bea + Vector2.FromAngle(ang - 0.3f) * 46f, bea + Vector2.FromAngle(ang + 0.3f) * 46f }, new Color(1f, 0.6f, 0.2f, 0.18f));
                 break;
             }
             case ShipPurpose.Tanker:
@@ -174,10 +174,10 @@ public partial class ShipView
                 for (int i = 0; i < n; i++)
                 {
                     var c = new Vector2(b.Position.X + T * 3f + i * (b.Size.X - T * 6f) / Mathf.Max(1, n - 1), b.End.Y + T * 0.9f);
-                    ci.DrawCircle(c, T * 0.95f, new Color("#9fb0bf"), true, -1f, true);
-                    ci.DrawArc(c, T * 0.95f, 0f, Mathf.Tau, 24, dark, 1.5f, true);
+                    ci.Circle(c, T * 0.95f, new Color("#9fb0bf"), true, -1f, true);
+                    ci.Arc(c, T * 0.95f, 0f, Mathf.Tau, 24, dark, 1.5f, true);
                     ci.DrawLine(c + new Vector2(-T * 0.9f, 0f), c + new Vector2(T * 0.9f, 0f), dark.WithAlpha(0.6f), 1.5f);
-                    ci.DrawArc(c, T * 0.6f, -2.4f, -1.6f, 8, new Color(1f, 1f, 1f, 0.6f + 0.3f * Mathf.Sin(t * 1.5f + i)), 1.5f, true);
+                    ci.Arc(c, T * 0.6f, -2.4f, -1.6f, 8, new Color(1f, 1f, 1f, 0.6f + 0.3f * Mathf.Sin(t * 1.5f + i)), 1.5f, true);
                 }
                 break;
             }
@@ -188,9 +188,9 @@ public partial class ShipView
                 for (int i = 0; i < n; i++)
                 {
                     var c = new Vector2(b.Position.X + T * 3.5f + i * (b.Size.X - T * 7f) / Mathf.Max(1, n - 1), b.Position.Y + T * 0.2f);
-                    ci.DrawCircle(c, T * 1.1f, new Color(0.45f, 0.85f, 0.5f, 0.18f + 0.05f * Mathf.Sin(t + i)), true, -1f, true);
-                    ci.DrawArc(c, T * 1.1f, Mathf.Pi, Mathf.Tau, 18, new Color("#bfe8ff").WithAlpha(0.7f), 1.5f, true);
-                    for (int k = -1; k <= 1; k++) ci.DrawColoredPolygon(new[] { c + new Vector2(k * 9f, 0f), c + new Vector2(k * 9f - 4f, -10f), c + new Vector2(k * 9f + 4f, -10f) }, new Color("#5fae4e"));
+                    ci.Circle(c, T * 1.1f, new Color(0.45f, 0.85f, 0.5f, 0.18f + 0.05f * Mathf.Sin(t + i)), true, -1f, true);
+                    ci.Arc(c, T * 1.1f, Mathf.Pi, Mathf.Tau, 18, new Color("#bfe8ff").WithAlpha(0.7f), 1.5f, true);
+                    for (int k = -1; k <= 1; k++) ci.Poly(new[] { c + new Vector2(k * 9f, 0f), c + new Vector2(k * 9f - 4f, -10f), c + new Vector2(k * 9f + 4f, -10f) }, new Color("#5fae4e"));
                     ci.DrawLine(c + new Vector2(-T * 1.1f, 0f), c + new Vector2(T * 1.1f, 0f), metal, 2f);
                 }
                 break;
@@ -198,7 +198,7 @@ public partial class ShipView
             case ShipPurpose.Mining:
             {
                 var tip = nose + new Vector2(T * 1.8f, 0f);
-                ci.DrawColoredPolygon(new[] { nose + new Vector2(0f, -T * 0.7f), tip, nose + new Vector2(0f, T * 0.7f) }, new Color("#8a7a5c"));
+                ci.Poly(new[] { nose + new Vector2(0f, -T * 0.7f), tip, nose + new Vector2(0f, T * 0.7f) }, new Color("#8a7a5c"));
                 for (int i = 0; i < 4; i++)
                 {
                     float u = Mathf.PosMod(i * 0.25f + t * 0.5f, 1f);
@@ -213,16 +213,16 @@ public partial class ShipView
                     var c = new Vector2(b.Position.X + b.Size.X * (0.35f + i * 0.15f), b.Position.Y - 2f);
                     float ang = -Mathf.Pi / 2f + Mathf.Sin(t * 0.3f + i) * 0.4f;
                     ci.DrawLine(c, c + Vector2.FromAngle(ang) * 9f, metal, 2f, true);
-                    ci.DrawArc(c + Vector2.FromAngle(ang) * 12f, 6f, ang + Mathf.Pi - 1f, ang + Mathf.Pi + 1f, 10, new Color("#c8d0dc"), 2f, true);
+                    ci.Arc(c + Vector2.FromAngle(ang) * 12f, 6f, ang + Mathf.Pi - 1f, ang + Mathf.Pi + 1f, 10, new Color("#c8d0dc"), 2f, true);
                 }
                 break;
             case ShipPurpose.Hospital:
                 for (float x = b.Position.X + T * 4f; x < b.End.X - T * 3f; x += T * 6f)
                 {
                     var c = new Vector2(x, b.Position.Y + T * 0.55f);
-                    ci.DrawRect(new Rect2(c - new Vector2(10f, 8f), new Vector2(20f, 16f)), new Color("#e9edf2").WithAlpha(0.85f));
-                    ci.DrawRect(new Rect2(c - new Vector2(2.5f, 6f), new Vector2(5f, 12f)), new Color("#d23c3c"));
-                    ci.DrawRect(new Rect2(c - new Vector2(6f, 2.5f), new Vector2(12f, 5f)), new Color("#d23c3c"));
+                    ci.Box(new Rect2(c - new Vector2(10f, 8f), new Vector2(20f, 16f)), new Color("#e9edf2").WithAlpha(0.85f));
+                    ci.Box(new Rect2(c - new Vector2(2.5f, 6f), new Vector2(5f, 12f)), new Color("#d23c3c"));
+                    ci.Box(new Rect2(c - new Vector2(6f, 2.5f), new Vector2(12f, 5f)), new Color("#d23c3c"));
                 }
                 break;
         }

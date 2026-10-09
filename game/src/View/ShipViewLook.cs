@@ -64,7 +64,7 @@ public partial class ShipView
         for (int i = 0; i < g.CellCount; i++)
         {
             var c = g.CellAt(i);
-            if (g.Kind(c) != TileKind.Void) ci.DrawRect(CellRect(c).Grow(3f), Palette.HullRim);
+            if (g.Kind(c) != TileKind.Void) ci.Box(CellRect(c).Grow(3f), Palette.HullRim);
         }
         if (LookOn) PaintLookCells(ci);
         else PaintLegacyCells(ci);
@@ -82,14 +82,14 @@ public partial class ShipView
             switch (g.Kind(c))
             {
                 case TileKind.Wall:
-                    ci.DrawRect(r, Palette.Wall);
+                    ci.Box(r, Palette.Wall);
                     if (Textures.Wall != null) ci.DrawTextureRectRegion(Textures.Wall, r, Variant(c), new Color(1, 1, 1, 0.9f));
                     break;
                 case TileKind.Floor:
                 {
                     var room = ship.RoomAt(c);
                     if (room == null) break;
-                    ci.DrawRect(r, Palette.RoomFloor(room.Kind));
+                    ci.Box(r, Palette.RoomFloor(room.Kind));
                     var (tex, alpha) = Textures.Floor(room.Type);
                     if (tex != null) ci.DrawTextureRectRegion(tex, r, Variant(c), new Color(1, 1, 1, alpha));
                     break;
@@ -98,7 +98,7 @@ public partial class ShipView
                 {
                     var door = ship.DoorAt(c);
                     var room = door?.RoomA ?? door?.RoomB;
-                    ci.DrawRect(r, room != null ? Palette.RoomFloor(room.Kind) : Palette.Floor);
+                    ci.Box(r, room != null ? Palette.RoomFloor(room.Kind) : Palette.Floor);
                     if (Textures.Plate != null) ci.DrawTextureRectRegion(Textures.Plate, r, Variant(c), new Color(1, 1, 1, 0.8f));
                     break;
                 }

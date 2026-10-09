@@ -90,7 +90,7 @@ public partial class ShipView
             foreach (var c in cells)
             {
                 var a = CellRect(c).GetCenter();
-                ci.DrawCircle(a, radius, col, true, -1f, true);
+                ci.Circle(a, radius, col, true, -1f, true);
                 foreach (var d in Half8)
                     if (cells.Contains(c + d)) ci.DrawLine(a, CellRect(c + d).GetCenter(), col, radius * 2f, true);
             }
@@ -116,7 +116,7 @@ public partial class ShipView
                 var ax = new Vector2(left ? r.End.X : r.Position.X, corner.Y);
                 var ay = new Vector2(corner.X, up ? r.End.Y : r.Position.Y);
                 var outDiag = new Vector2(left ? -1 : 1, up ? -1 : 1).Normalized();
-                ci.DrawColoredPolygon(new[] { corner + outDiag * 2f, ax + outDiag * 1.5f, ay + outDiag * 1.5f }, SkinInner);
+                ci.Poly(new[] { corner + outDiag * 2f, ax + outDiag * 1.5f, ay + outDiag * 1.5f }, SkinInner);
                 ci.DrawLine(ax, ay, Palette.WallEdge, 2f, true);
                 ci.DrawLine(ax + outDiag * 7f, ay + outDiag * 7f, new Color(1, 1, 1, (up || left) ? 0.1f : 0.04f), 1f, true);
                 continue;
@@ -146,8 +146,8 @@ public partial class ShipView
                 // 리벳
                 var mid = (edgeA + edgeB) * 0.5f + outDir * 4.5f;
                 var side = horiz ? new Vector2(T * 0.3f, 0f) : new Vector2(0f, T * 0.3f);
-                ci.DrawCircle(mid - side, 1f, new Color("#566377"), true, -1f, true);
-                ci.DrawCircle(mid + side, 1f, new Color("#566377"), true, -1f, true);
+                ci.Circle(mid - side, 1f, new Color("#566377"), true, -1f, true);
+                ci.Circle(mid + side, 1f, new Color("#566377"), true, -1f, true);
             }
         }
     }
@@ -165,8 +165,8 @@ public partial class ShipView
             var rect = new Rect2(center - size * 0.5f, size);
             bool lit = room.Powered && !room.LightsOut && !room.Abandoned;
             var glass = lit ? Glass.Lerp(GlassLit, canopy ? 0.35f : 0.25f) : Glass;
-            ci.DrawRect(rect.Grow(2f), new Color("#5a6679"));
-            ci.DrawRect(rect, glass);
+            ci.Box(rect.Grow(2f), new Color("#5a6679"));
+            ci.Box(rect, glass);
             // 반사 (유리 위쪽 가장자리)
             var g0 = horiz ? new Vector2(rect.Position.X + 2, rect.Position.Y + 2) : new Vector2(rect.Position.X + 2, rect.Position.Y + 2);
             var g1 = horiz ? new Vector2(rect.End.X - (canopy ? 2 : 8), rect.Position.Y + 2) : new Vector2(rect.Position.X + 2, rect.End.Y - (canopy ? 2 : 8));
@@ -193,7 +193,7 @@ public partial class ShipView
             float half = canopy ? T * 0.5f : T * 0.35f, reach = canopy ? T * 1.1f : T * 0.8f;
             var col = canopy ? new Color(0.35f, 0.75f, 1f, 0.16f) : new Color(1f, 0.85f, 0.6f, 0.12f);
             var clear = new Color(col.R, col.G, col.B, 0f);
-            ci.DrawPolygon(new[] { baseCenter - across * half, baseCenter + across * half, baseCenter + across * half * 1.8f + outDir * reach, baseCenter - across * half * 1.8f + outDir * reach },
+            ci.Polygon(new[] { baseCenter - across * half, baseCenter + across * half, baseCenter + across * half * 1.8f + outDir * reach, baseCenter - across * half * 1.8f + outDir * reach },
                 new[] { col, col, clear, clear });
         }
     }
@@ -208,8 +208,8 @@ public partial class ShipView
             float y0 = f.MinY * T + 8f, y1 = (f.MaxY + 1) * T - 8f;
             float xe = xw - NozzleLen - 10f;
             var bell = new[] { new Vector2(xw, y0 + 4f), new Vector2(xw, y1 - 4f), new Vector2(xe, y1 + 6f), new Vector2(xe, y0 - 6f) };
-            ci.DrawColoredPolygon(bell, new Color("#1a1f28"));
-            ci.DrawPolyline(new[] { bell[0], bell[3], bell[2], bell[1] }, new Color("#56627a"), 2f, true);
+            ci.Poly(bell, new Color("#1a1f28"));
+            ci.Polyline(new[] { bell[0], bell[3], bell[2], bell[1] }, new Color("#56627a"), 2f, true);
             // 냉각 고리
             for (int k = 1; k <= 3; k++)
             {
@@ -233,8 +233,8 @@ public partial class ShipView
             float yb = dir < 0 ? (eng.MinY - 1) * T + 4f : (eng.MaxY + 2) * T - 4f;
             var tip = new Vector2(x0 - T * 1.2f, yb + dir * span);
             var fin = new[] { new Vector2(x0 + T * 0.4f, yb), new Vector2(x1 + T * 0.6f, yb), new Vector2(x0 + T * 0.9f, yb + dir * span), tip };
-            ci.DrawColoredPolygon(fin, SkinOuter);
-            ci.DrawPolyline(new[] { fin[0], fin[3], fin[2], fin[1] }, SkinEdge, 3f, true);
+            ci.Poly(fin, SkinOuter);
+            ci.Polyline(new[] { fin[0], fin[3], fin[2], fin[1] }, SkinEdge, 3f, true);
             // 줄무늬 (뒤쪽 가장자리)
             var s0 = fin[0].Lerp(fin[3], 0.55f);
             var s1 = fin[1].Lerp(fin[2], 0.55f);
@@ -255,9 +255,9 @@ public partial class ShipView
         float slow = 0.55f + 0.45f * Mathf.Sin(_time * 2f);
         void Lamp(Vector2 p, Color c, float a)
         {
-            ci.DrawCircle(p, 9f, c.WithAlpha(0.12f * a), true, -1f, true);
-            ci.DrawCircle(p, 4.5f, c.WithAlpha(0.35f * a), true, -1f, true);
-            ci.DrawCircle(p, 2.2f, c.Lightened(0.4f).WithAlpha(a), true, -1f, true);
+            ci.Circle(p, 9f, c.WithAlpha(0.12f * a), true, -1f, true);
+            ci.Circle(p, 4.5f, c.WithAlpha(0.35f * a), true, -1f, true);
+            ci.Circle(p, 2.2f, c.Lightened(0.4f).WithAlpha(a), true, -1f, true);
         }
         var port = _finTop; var star = _finBottom;
         if (_world.Origin.Info is ShipInfo si && Shaped(si.Frame)) { BuildEdges(); port = Extreme(true) + new Vector2(-T * 0.6f, -6f); star = Extreme(false) + new Vector2(-T * 0.6f, 6f); } // v19 모양 있는 배: 맨 위 · 맨 아래 선체 끝

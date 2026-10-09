@@ -56,7 +56,7 @@ public static partial class FixtureArt
                 Knob(ci, x.P(0.97f, 0.12f), 1.6f, 0.4f, new Color("#c0392b"));
                 break;
             case CropKind.Mushroom: // 봉지마다 접종 날짜 꼬리표
-                for (int i = 0; i < Bags(x); i++) ci.DrawRect(new Rect2(x.P(0.08f + 0.84f * i / Mathf.Max(1, Bags(x) - 1), 0.78f) - new Vector2(1.5f, 0f), new Vector2(3f, 2f)), new Color("#f2e6a0").WithAlpha(0.7f));
+                for (int i = 0; i < Bags(x); i++) ci.Box(new Rect2(x.P(0.08f + 0.84f * i / Mathf.Max(1, Bags(x) - 1), 0.78f) - new Vector2(1.5f, 0f), new Vector2(3f, 2f)), new Color("#f2e6a0").WithAlpha(0.7f));
                 break;
             case CropKind.Protein: // 압력계 · 시료 꼭지
                 Gauge(ci, x.P(0.5f, 0.15f), 2.2f, 0.55f, new Color("#e05050"));
@@ -88,7 +88,7 @@ public static partial class FixtureArt
             var r = new Rect2(new Vector2(Mathf.Min(top.X, bot.X) - 2.2f, Mathf.Min(top.Y, bot.Y) - 1f), new Vector2(Mathf.Abs(bot.X - top.X) + 4.4f, Mathf.Abs(bot.Y - top.Y) + 2f));
             Box(ci, r, new Color("#0c1512"), 2, new Color("#8fb8a8").WithAlpha(0.55f));
         }
-        ci.DrawRect(x.Q(0.02f, 0.94f, 0.98f, 0.98f), new Color("#d8e8ff").WithAlpha(0.25f)); // 백색 조명 띠
+        ci.Box(x.Q(0.02f, 0.94f, 0.98f, 0.98f), new Color("#d8e8ff").WithAlpha(0.25f)); // 백색 조명 띠
     }
 
     private static void AlgaeLife(in Fix x)
@@ -116,7 +116,7 @@ public static partial class FixtureArt
                     Dot(ci, p + new Vector2(Mathf.Sin(x.T * 3f + i) * 0.5f, 0f), 0.7f, new Color(1, 1, 1, 0.55f * (1f - ph)));
                 }
         }
-        if (alive) ci.DrawRect(x.Q(0.02f, 0.94f, 0.98f, 0.98f), new Color("#e8f4ff").WithAlpha(0.35f + 0.1f * Mathf.Sin(x.T * 0.8f)) * x.Glow);
+        if (alive) ci.Box(x.Q(0.02f, 0.94f, 0.98f, 0.98f), new Color("#e8f4ff").WithAlpha(0.35f + 0.1f * Mathf.Sin(x.T * 0.8f)) * x.Glow);
         PaintCropMarks(x, crop);
     }
 
@@ -161,7 +161,7 @@ public static partial class FixtureArt
                 var cap = (crop.Care < 0.4f ? CapTan.Darkened(0.3f) : CapTan.Lerp(CapPale, 0.3f + 0.3f * Hash(x.Id, i, k))) * (alive ? 1f : 0.75f);
                 Line(ci, stem, stem + new Vector2(side * r * 0.6f, 0f), CapPale.WithAlpha(0.8f), 0.9f);
                 var p = stem + new Vector2(side * r * 0.8f, 0f);
-                ci.DrawCircle(p, r, cap, true, -1f, true);
+                ci.Circle(p, r, cap, true, -1f, true);
                 if (x.Lod > 0) Line(ci, p + new Vector2(-r * 0.7f, r * 0.2f), p + new Vector2(r * 0.7f, r * 0.2f), Gill.WithAlpha(0.6f), 0.6f); // 주름
             }
             if (crop.Blight > 0.1f) Dot(ci, c + new Vector2(0f, 2f), 1.4f, new Color("#3a6a3a").WithAlpha(0.7f)); // 푸른곰팡이
@@ -194,10 +194,10 @@ public static partial class FixtureArt
         for (int i = 0; i < n; i++)
         {
             var c = x.P((i + 0.5f) / n, 0.5f);
-            ci.DrawCircle(c, rad, Steel.Darkened(0.35f), true, -1f, true);
+            ci.Circle(c, rad, Steel.Darkened(0.35f), true, -1f, true);
             Ring(ci, c, rad, Steel, 1.6f);
             Ring(ci, c, rad * 0.62f, SteelDark, 1.2f); // 들여다보는 창 테
-            ci.DrawArc(c, rad * 0.85f, 3.6f, 5f, 10, new Color(1, 1, 1, 0.2f), 1.2f, true);
+            ci.Arc(c, rad * 0.85f, 3.6f, 5f, 10, new Color(1, 1, 1, 0.2f), 1.2f, true);
             if (i < n - 1) Pipe(ci, c + new Vector2(rad, 0f), x.P((i + 1.5f) / n, 0.5f) - new Vector2(rad, 0f), 1.4f, Steel, false);
         }
         Pipe(ci, x.P(0.02f, 0.15f), x.P(0.98f, 0.15f), 1.2f, new Color("#a07a4a"), false); // 양분관
@@ -215,7 +215,7 @@ public static partial class FixtureArt
         {
             var c = x.P((i + 0.5f) / n, 0.5f);
             float level = 0.25f + 0.7f * crop.Growth;
-            ci.DrawCircle(c, rad * Mathf.Sqrt(level), cult.WithAlpha(0.85f), true, -1f, true);
+            ci.Circle(c, rad * Mathf.Sqrt(level), cult.WithAlpha(0.85f), true, -1f, true);
             if (alive) // 교반기 날개
             {
                 float a = x.T * 2.2f + i;
@@ -258,7 +258,7 @@ public static partial class FixtureArt
             float sway = Mathf.Sin(x.T * 1.1f + i) * 0.5f;
             var leaf = Leaf.Lerp(LeafLight, crop.Care) * (alive ? 1f : 0.65f);
             if (i == 0) // 바질: 넓은 잎 넷
-                for (int k = 0; k < 4; k++) ci.DrawCircle(c + Vector2.FromAngle(k * 1.57f + 0.4f) * (1.5f + 2f * g) + new Vector2(sway, 0f), 1f + 1.6f * g, leaf, true, -1f, true);
+                for (int k = 0; k < 4; k++) ci.Circle(c + Vector2.FromAngle(k * 1.57f + 0.4f) * (1.5f + 2f * g) + new Vector2(sway, 0f), 1f + 1.6f * g, leaf, true, -1f, true);
             else if (i == 1) // 민트: 작은 잎 여럿
                 for (int k = 0; k < 7; k++) Dot(ci, c + new Vector2(Hash(x.Id, k, 21) * 6f - 3f, Hash(x.Id, k, 22) * 6f - 3f) * (0.4f + 0.6f * g) + new Vector2(sway, 0f), 0.6f + 0.9f * g, leaf.Lightened(0.15f));
             else // 부추: 가는 줄기
@@ -271,6 +271,6 @@ public static partial class FixtureArt
     /// <summary>병충해 · 마름 표시 (모든 재배대 공통 상태).</summary>
     private static void PaintCropMarks(in Fix x, CropState crop)
     {
-        if (crop.DryHours > 8f) x.Ci.DrawRect(x.Q(0.02f, 0.02f, 0.98f, 0.98f), new Color("#a08040").WithAlpha(Mathf.Min(0.25f, crop.DryHours / 120f)));
+        if (crop.DryHours > 8f) x.Ci.Box(x.Q(0.02f, 0.02f, 0.98f, 0.98f), new Color("#a08040").WithAlpha(Mathf.Min(0.25f, crop.DryHours / 120f)));
     }
 }

@@ -52,7 +52,7 @@ public partial class Hud
         var rect = new Rect2(x0, y0, W, H);
         _talkRect = rect;
         UiKit.Panel(this, rect);
-        DrawRect(new Rect2(x0, y0 + 10, 3, H - 20), tone.WithAlpha(0.85f));
+        this.Box(new Rect2(x0, y0 + 10, 3, H - 20), tone.WithAlpha(0.85f));
         float x = x0 + 18, right = rect.End.X - 18;
 
         // ── 머리: 갈래 · 제목 · 자리 · 시각 · 넘기기
@@ -88,12 +88,12 @@ public partial class Hud
         Gfx.Text(this, Fonts.Body, new Vector2(mx, py - 26), UiKit.Fit(k.Scene, mr - mx, Ui.TextSmall), Ui.TextSmall, Palette.TextDim);
         var bub = new Rect2(mx, py - 16, mr - mx, 26);
         Gfx.RoundRect(this, bub, new Color(1, 1, 1, 0.06f), 8f, tone.WithAlpha(0.35f));
-        DrawColoredPolygon(new[] { new Vector2(mx, py - 6), new Vector2(mx - 8, py + 2), new Vector2(mx, py + 4) }, new Color(1, 1, 1, 0.06f));
+        this.Poly(new[] { new Vector2(mx, py - 6), new Vector2(mx - 8, py + 2), new Vector2(mx, py + 4) }, new Color(1, 1, 1, 0.06f));
         Gfx.Text(this, Fonts.Body, new Vector2(mx + 8, py + 2), UiKit.Fit($"“{k.Opening}”", mr - mx - 16, Ui.TextBody), Ui.TextBody, Palette.Text);
         float rel = Mathf.Clamp(li.AffinityTo(sp), -1f, 1f);
         float cx = (mx + mr) * 0.5f;
-        DrawRect(new Rect2(mx, py + 20, mr - mx, 3), new Color(1, 1, 1, 0.07f));
-        DrawRect(new Rect2(cx, py + 20, (mr - mx) * 0.5f * rel, 3), rel >= 0 ? Palette.Good.WithAlpha(0.8f) : Palette.Danger.WithAlpha(0.8f));
+        this.Box(new Rect2(mx, py + 20, mr - mx, 3), new Color(1, 1, 1, 0.07f));
+        this.Box(new Rect2(cx, py + 20, (mr - mx) * 0.5f * rel, 3), rel >= 0 ? Palette.Good.WithAlpha(0.8f) : Palette.Danger.WithAlpha(0.8f));
         Gfx.Text(this, Fonts.Body, new Vector2(mx, py + 34), $"{li.Name}에게 {Ko.EunNeun(sp.Name)} {(rel >= 0.5f ? "아주 가까운 사람" : rel >= 0.2f ? "가까운 사람" : rel <= -0.3f ? "껄끄러운 사람" : "그냥 동료")}", Ui.TextTiny, Palette.TextMuted);
 
         // ── 선택지
@@ -110,18 +110,18 @@ public partial class Hud
             {
                 // 자물쇠
                 var lc = new Vector2(x + 12, oy + 14);
-                DrawRect(new Rect2(lc + new Vector2(-4, -1), new Vector2(8, 7)), Palette.TextMuted);
-                DrawArc(lc + new Vector2(0, -2), 3f, Mathf.Pi, Mathf.Tau, 8, Palette.TextMuted, 1.4f, true);
+                this.Box(new Rect2(lc + new Vector2(-4, -1), new Vector2(8, 7)), Palette.TextMuted);
+                this.Arc(lc + new Vector2(0, -2), 3f, Mathf.Pi, Mathf.Tau, 8, Palette.TextMuted, 1.4f, true);
             }
-            else if (chosen) DrawColoredPolygon(new[] { new Vector2(x + 7, oy + 8), new Vector2(x + 15, oy + 13.5f), new Vector2(x + 7, oy + 19) }, tone);
+            else if (chosen) this.Poly(new[] { new Vector2(x + 7, oy + 8), new Vector2(x + 15, oy + 13.5f), new Vector2(x + 7, oy + 19) }, tone);
             Gfx.Text(this, Fonts.Bold, new Vector2(x + 22, oy + 13), UiKit.Fit(o.Text, 250, Ui.TextSmall, Fonts.Bold), Ui.TextSmall, tc);
             Gfx.Text(this, Fonts.Body, new Vector2(x + 22, oy + 24), UiKit.Fit(o.Open ? $"“{o.Say}”" : o.Lock, 250, Ui.TextMicro), Ui.TextMicro, o.Open ? Palette.TextDim : Palette.TextMuted.Darkened(0.1f));
             if (o.Open)
             {
                 float bx = x + 285, bw = 110;
-                DrawRect(new Rect2(bx, oy + 8, bw, 6), new Color(1, 1, 1, 0.07f));
+                this.Box(new Rect2(bx, oy + 8, bw, 6), new Color(1, 1, 1, 0.07f));
                 var bc = o.Chance >= 0.6f ? Palette.Good : o.Chance >= 0.35f ? Palette.NeedFood : Palette.Danger;
-                DrawRect(new Rect2(bx, oy + 8, bw * o.Chance, 6), bc.WithAlpha(0.85f));
+                this.Box(new Rect2(bx, oy + 8, bw * o.Chance, 6), bc.WithAlpha(0.85f));
                 if (chosen && resolved) DrawLine(new Vector2(bx + bw * k.Roll, oy + 5), new Vector2(bx + bw * k.Roll, oy + 17), Palette.Text, 1.5f, true); // 굴린 눈
                 Gfx.Text(this, Fonts.Bold, new Vector2(bx + bw + 6, oy + 15), $"{o.Chance * 100:0}%", Ui.TextSmall, bc);
                 // 근거: 솜씨 · 관계 · 기분 · 상황

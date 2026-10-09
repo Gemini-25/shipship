@@ -56,8 +56,8 @@ public static partial class FixtureArt
                     ci.DrawLine(c, c + new Vector2(sx * L, 0f), dark, 2.2f);
                     ci.DrawLine(c, c + new Vector2(0f, sy * L), dark, 2.2f);
                     ci.DrawLine(c + new Vector2(sx * 0.6f, sy * 0.6f), c + new Vector2(sx * L, sy * 0.6f), edge.WithAlpha(0.35f), 0.7f);
-                    ci.DrawCircle(c + new Vector2(sx * L * 0.65f, sy * 0.9f), 0.8f, edge.Lightened(0.2f), true, -1f, true);
-                    ci.DrawCircle(c + new Vector2(sx * 0.9f, sy * L * 0.65f), 0.8f, edge.Lightened(0.2f), true, -1f, true);
+                    ci.Circle(c + new Vector2(sx * L * 0.65f, sy * 0.9f), 0.8f, edge.Lightened(0.2f), true, -1f, true);
+                    ci.Circle(c + new Vector2(sx * 0.9f, sy * L * 0.65f), 0.8f, edge.Lightened(0.2f), true, -1f, true);
                 }
                 break;
             }
@@ -94,14 +94,14 @@ public static partial class FixtureArt
         {
             case 2:
                 Gfx.RoundRect(ci, x.R.Grow(-1.2f), new Color(0, 0, 0, 0f), 4, Hud.TierColor(2).WithAlpha(0.35f), 1); // 받침 테
-                ci.DrawColoredPolygon(new[] { x.P(0.04f, 0.02f), x.P(0.96f, 0.02f), x.P(0.96f, 0.07f), x.P(0.04f, 0.07f) }, Hud.TierColor(2).WithAlpha(0.45f));
+                ci.Poly(new[] { x.P(0.04f, 0.02f), x.P(0.96f, 0.02f), x.P(0.96f, 0.07f), x.P(0.04f, 0.07f) }, Hud.TierColor(2).WithAlpha(0.45f));
                 break;
             case 3:
             {
                 // 커진 받침: 몸체 둘레 여백까지 티타늄 받침대가 차지한다
                 Gfx.RoundRect(ci, x.R.Grow(-0.8f), new Color(0, 0, 0, 0f), 5, new Color("#8a96a6").WithAlpha(0.7f), 2);
                 var b = x.B;
-                ci.DrawPolygon(new[] { b.Position, new Vector2(b.End.X, b.Position.Y), new Vector2(b.Position.X, b.End.Y) },
+                ci.Polygon(new[] { b.Position, new Vector2(b.End.X, b.Position.Y), new Vector2(b.Position.X, b.End.Y) },
                     new[] { new Color(1, 1, 1, 0.09f), new Color(1, 1, 1, 0.02f), new Color(1, 1, 1, 0.02f) });
                 ci.DrawLine(x.P(0.03f, 0.03f), x.P(0.97f, 0.03f), new Color("#dfe6ee").WithAlpha(0.45f), 1f);
                 ci.DrawLine(x.P(0.03f, 0.03f), x.P(0.03f, 0.97f), new Color("#dfe6ee").WithAlpha(0.3f), 1f);
@@ -155,7 +155,7 @@ public static partial class FixtureArt
                 break;
             case TierPart.Pod:
                 Dot(ci, p, 2.8f * s, Steel1);
-                ci.DrawArc(p, 2.8f * s, 0f, Mathf.Tau, 14, Chrome, 0.8f, true);
+                ci.Arc(p, 2.8f * s, 0f, Mathf.Tau, 14, Chrome, 0.8f, true);
                 Dot(ci, p + new Vector2(-0.7f, -0.7f) * s, 0.9f * s, glow.WithAlpha(0.6f));
                 break;
             case TierPart.Cables:
@@ -228,15 +228,15 @@ public static partial class FixtureArt
             {
                 var hex = new Vector2[7];
                 for (int k = 0; k < 7; k++) hex[k] = p + Vector2.FromAngle(k * Mathf.Tau / 6f) * 3.4f * s;
-                ci.DrawColoredPolygon(hex[..6], new Color("#0a0c12"));
-                ci.DrawPolyline(hex, glow.WithAlpha(0.6f), 0.9f, true);
+                ci.Poly(hex[..6], new Color("#0a0c12"));
+                ci.Polyline(hex, glow.WithAlpha(0.6f), 0.9f, true);
                 Dot(ci, p, 1.2f * s, glow.Darkened(0.4f));
                 break;
             }
             case TierPart.Holo:
                 Dot(ci, p, 2.4f * s, Steel1);
-                ci.DrawArc(p, 2.4f * s, 0f, Mathf.Tau, 12, glow.WithAlpha(0.6f), 0.7f, true);
-                ci.DrawArc(p, 1.2f * s, 0f, Mathf.Tau, 8, glow.WithAlpha(0.4f), 0.5f, true);
+                ci.Arc(p, 2.4f * s, 0f, Mathf.Tau, 12, glow.WithAlpha(0.6f), 0.7f, true);
+                ci.Arc(p, 1.2f * s, 0f, Mathf.Tau, 8, glow.WithAlpha(0.4f), 0.5f, true);
                 break;
             case TierPart.Field:
                 foreach (var cpt in new[] { x.P(0.04f, 0.06f), x.P(0.96f, 0.06f), x.P(0.04f, 0.94f), x.P(0.96f, 0.94f) })
@@ -264,7 +264,7 @@ public static partial class FixtureArt
             {
                 var r = new Rect2(p - new Vector2(5f, 3.5f) * s, new Vector2(10f, 7f) * s);
                 Box(ci, r, x.Accent.Darkened(0.35f).WithAlpha(0.85f), 3f * s);
-                ci.DrawRect(r.Grow(-1.2f * s), new Color(1, 1, 1, 0.15f), false, 0.5f);
+                ci.Box(r.Grow(-1.2f * s), new Color(1, 1, 1, 0.15f), false, 0.5f);
                 break;
             }
             case TierPart.Lamp:
@@ -272,7 +272,7 @@ public static partial class FixtureArt
                 var head = p + across * (pa.V < 0.5f ? 1f : -1f) * 3f * s + along * 3f * s;
                 Line(ci, p, head, Steel4, 1f);
                 Dot(ci, p, 1.2f * s, Steel3);
-                ci.DrawColoredPolygon(new[] { head - along * 1.6f * s, head + along * 1.6f * s, head + along * 2.4f * s + across * 1.6f * s, head - along * 2.4f * s + across * 1.6f * s }, new Color("#c8a050"));
+                ci.Poly(new[] { head - along * 1.6f * s, head + along * 1.6f * s, head + along * 2.4f * s + across * 1.6f * s, head - along * 2.4f * s + across * 1.6f * s }, new Color("#c8a050"));
                 break;
             }
             case TierPart.Drawers:
@@ -295,7 +295,7 @@ public static partial class FixtureArt
             {
                 var dir = across * (pa.V < 0.5f ? -1f : 1f);
                 float ang = dir.Angle();
-                ci.DrawArc(p, 3.6f * s, ang - 1.1f, ang + 1.1f, 10, Chrome, 1.4f, true);
+                ci.Arc(p, 3.6f * s, ang - 1.1f, ang + 1.1f, 10, Chrome, 1.4f, true);
                 Line(ci, p, p + dir * 3f * s, Steel4, 0.8f);
                 Dot(ci, p + dir * 3f * s, 0.7f * s, glow);
                 break;
@@ -318,7 +318,7 @@ public static partial class FixtureArt
             case TierPart.Quilt:
             {
                 var r = new Rect2(x.P(0.35f, 0.15f), Vector2.Zero).Expand(x.P(0.9f, 0.85f));
-                ci.DrawRect(r, x.Accent.Darkened(0.2f).WithAlpha(0.45f));
+                ci.Box(r, x.Accent.Darkened(0.2f).WithAlpha(0.45f));
                 for (float d = 0f; d < r.Size.X + r.Size.Y; d += 4f * s)
                 {
                     ci.DrawLine(new Vector2(r.Position.X + d, r.Position.Y), new Vector2(r.Position.X, r.Position.Y + d), new Color(1, 1, 1, 0.12f), 0.5f);
@@ -372,7 +372,7 @@ public static partial class FixtureArt
         {
             var hex = new Vector2[6];
             for (int k = 0; k < 6; k++) hex[k] = bp + Vector2.FromAngle(k * Mathf.Tau / 6f) * 1.3f * s;
-            ci.DrawColoredPolygon(hex, new Color("#8a929e"));
+            ci.Poly(hex, new Color("#8a929e"));
             Dot(ci, bp, 0.5f * s, new Color("#30343a"));
         }
         ci.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
@@ -383,7 +383,7 @@ public static partial class FixtureArt
                 for (int k = 0; k < 2; k++)
                 {
                     ci.DrawSetTransform(e + new Vector2(k * 2f - 1f, 0f) * s, (k == 0 ? 0.6f : -0.55f) + tilt, Vector2.One);
-                    ci.DrawRect(new Rect2(new Vector2(-7f, -1.5f) * s, new Vector2(14f, 3f) * s), new Color("#b8bcc4").WithAlpha(0.9f));
+                    ci.Box(new Rect2(new Vector2(-7f, -1.5f) * s, new Vector2(14f, 3f) * s), new Color("#b8bcc4").WithAlpha(0.9f));
                     for (int w = 0; w < 4; w++) ci.DrawLine(new Vector2(-5f + w * 3.4f, -1.5f) * s, new Vector2(-4.4f + w * 3.4f, 1.5f) * s, new Color(0, 0, 0, 0.15f), 0.5f);
                 }
                 ci.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
@@ -440,7 +440,7 @@ public static partial class FixtureArt
             case Improv.Shim:
             {
                 var c = new Vector2(x.R.End.X - 3f, x.R.End.Y - 1f);
-                ci.DrawColoredPolygon(new[] { c, c + new Vector2(-7f, 0f), c + new Vector2(0f, -3f) }, new Color("#b8905a"));
+                ci.Poly(new[] { c, c + new Vector2(-7f, 0f), c + new Vector2(0f, -3f) }, new Color("#b8905a"));
                 ci.DrawLine(c + new Vector2(-7f, 0f), c + new Vector2(0f, -3f), new Color("#6a4a2a"), 0.6f);
                 ci.DrawLine(x.P(0.02f, 0.98f), x.P(0.98f, 0.93f), new Color(0, 0, 0, 0.3f), 0.8f);
                 break;
@@ -450,7 +450,7 @@ public static partial class FixtureArt
                 var o = x.P(0.5f, 0.35f);
                 for (int k = 0; k < 4; k++) Line(ci, o, o + Vector2.FromAngle(k * 1.7f + 0.3f) * (4f + 3f * Hash(x.Id, k, 481)) * s, new Color(1, 1, 1, 0.55f), 0.5f);
                 ci.DrawSetTransform(o, 0.15f, Vector2.One);
-                ci.DrawRect(new Rect2(new Vector2(-6f, -1.2f) * s, new Vector2(12f, 2.4f) * s), new Color("#e8e0b0").WithAlpha(0.7f));
+                ci.Box(new Rect2(new Vector2(-6f, -1.2f) * s, new Vector2(12f, 2.4f) * s), new Color("#e8e0b0").WithAlpha(0.7f));
                 ci.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
                 break;
             }
@@ -484,9 +484,9 @@ public static partial class FixtureArt
             {
                 ci.DrawSetTransform(e + x.V * 2f, -tilt, Vector2.One);
                 var cb = new Rect2(new Vector2(-4.5f, -3f) * s, new Vector2(9f, 6f) * s);
-                ci.DrawRect(cb, new Color("#a8844f"));
+                ci.Box(cb, new Color("#a8844f"));
                 for (float yy = cb.Position.Y + 1f; yy < cb.End.Y; yy += 1.4f) ci.DrawLine(new Vector2(cb.Position.X, yy), new Vector2(cb.End.X, yy), new Color(0, 0, 0, 0.12f), 0.4f);
-                ci.DrawPolyline(new[] { new Vector2(-3f, 0f) * s, new Vector2(-1f, -1.4f) * s, new Vector2(1f, 0.8f) * s, new Vector2(3f, -1f) * s }, new Color("#1a1a1a").WithAlpha(0.7f), 0.6f, true);
+                ci.Polyline(new[] { new Vector2(-3f, 0f) * s, new Vector2(-1f, -1.4f) * s, new Vector2(1f, 0.8f) * s, new Vector2(3f, -1f) * s }, new Color("#1a1a1a").WithAlpha(0.7f), 0.6f, true);
                 ci.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
                 break;
             }
@@ -513,7 +513,7 @@ public static partial class FixtureArt
             {
                 var o = new Vector2(b.End.X - 7f, b.End.Y - 9f); // 오른쪽 아래 (위는 단계 딱지 자리)
                 for (int k = 0; k < 2; k++)
-                    ci.DrawPolyline(new[] { o + new Vector2(-3f, 1.5f + k * 2.6f), o + new Vector2(0f, -1f + k * 2.6f), o + new Vector2(3f, 1.5f + k * 2.6f) }, glow, 1.2f, true);
+                    ci.Polyline(new[] { o + new Vector2(-3f, 1.5f + k * 2.6f), o + new Vector2(0f, -1f + k * 2.6f), o + new Vector2(3f, 1.5f + k * 2.6f) }, glow, 1.2f, true);
                 break;
             }
             case Trim.GlassFace:
@@ -523,7 +523,7 @@ public static partial class FixtureArt
                 break;
             }
             case Trim.Anodized:
-                ci.DrawColoredPolygon(new[] { x.P(0.02f, 0.88f), x.P(0.98f, 0.88f), x.P(0.98f, 0.98f), x.P(0.02f, 0.98f) }, glow.Darkened(0.2f).WithAlpha(0.55f));
+                ci.Poly(new[] { x.P(0.02f, 0.88f), x.P(0.98f, 0.88f), x.P(0.98f, 0.98f), x.P(0.02f, 0.98f) }, glow.Darkened(0.2f).WithAlpha(0.55f));
                 ci.DrawLine(x.P(0.02f, 0.88f), x.P(0.98f, 0.88f), Colors.White.WithAlpha(0.25f), 0.6f);
                 break;
             case Trim.Pinstripe:
@@ -589,7 +589,7 @@ public static partial class FixtureArt
             }
             case TierPart.Screen:
                 if (!x.Lit) break;
-                ci.DrawRect(new Rect2(p - new Vector2(4f, 2.6f) * s, new Vector2(8f, 5.2f) * s), glow.WithAlpha(0.12f + 0.08f * Pulse(x.T, 3f)));
+                ci.Box(new Rect2(p - new Vector2(4f, 2.6f) * s, new Vector2(8f, 5.2f) * s), glow.WithAlpha(0.12f + 0.08f * Pulse(x.T, 3f)));
                 Line(ci, p + new Vector2(-3.4f, Mathf.Sin(x.T * 2f) * 1.6f) * s, p + new Vector2(3.4f, Mathf.Sin(x.T * 2f + 1.5f) * 1.6f) * s, glow.WithAlpha(0.8f), 0.6f);
                 break;
             case TierPart.Rotor:
@@ -605,8 +605,8 @@ public static partial class FixtureArt
                 var top = p - new Vector2(0f, 6f * s);
                 var cube = new[] { new Vector2(-3f * sx, -2f), new Vector2(3f * sx, -2f), new Vector2(3f * sx, 2f), new Vector2(-3f * sx, 2f), new Vector2(-3f * sx, -2f) };
                 for (int k = 0; k < cube.Length; k++) cube[k] = top + cube[k] * s;
-                ci.DrawPolyline(cube, glow.WithAlpha(0.7f * x.Glow), 0.7f, true);
-                ci.DrawColoredPolygon(new[] { p, top + new Vector2(-3f, 2f) * s, top + new Vector2(3f, 2f) * s }, glow.WithAlpha(0.08f * x.Glow));
+                ci.Polyline(cube, glow.WithAlpha(0.7f * x.Glow), 0.7f, true);
+                ci.Poly(new[] { p, top + new Vector2(-3f, 2f) * s, top + new Vector2(3f, 2f) * s }, glow.WithAlpha(0.08f * x.Glow));
                 break;
             }
             case TierPart.Field:
@@ -614,7 +614,7 @@ public static partial class FixtureArt
                 if (!x.Lit) break;
                 float rad = Mathf.Max(x.B.Size.X, x.B.Size.Y) * 0.55f;
                 float a0 = x.T * 0.9f;
-                for (int k = 0; k < 3; k++) ci.DrawArc(x.C, rad, a0 + k * Mathf.Tau / 3f, a0 + k * Mathf.Tau / 3f + 1.1f, 10, glow.WithAlpha(0.45f * x.Glow), 1f, true);
+                for (int k = 0; k < 3; k++) ci.Arc(x.C, rad, a0 + k * Mathf.Tau / 3f, a0 + k * Mathf.Tau / 3f + 1.1f, 10, glow.WithAlpha(0.45f * x.Glow), 1f, true);
                 break;
             }
             case TierPart.Rail:
@@ -628,7 +628,7 @@ public static partial class FixtureArt
             {
                 if (!x.Lit) break;
                 var head = p + across * (pa.V < 0.5f ? 1f : -1f) * 3f * s + along * 3f * s;
-                ci.DrawColoredPolygon(new[] { head - along * 2f * s, head + along * 2f * s, head + along * 5f * s + across * 7f * s, head - along * 5f * s + across * 7f * s }, new Color(1f, 0.95f, 0.8f, 0.1f * x.Glow));
+                ci.Poly(new[] { head - along * 2f * s, head + along * 2f * s, head + along * 5f * s + across * 7f * s, head - along * 5f * s + across * 7f * s }, new Color(1f, 0.95f, 0.8f, 0.1f * x.Glow));
                 break;
             }
             case TierPart.Antenna:
@@ -656,7 +656,7 @@ public static partial class FixtureArt
                 if (!shaky) break;
                 var tip = e + Vector2.FromAngle(0.6f) * 7f * x.S;
                 float flap = Mathf.Sin(x.T * (x.St == State.Fault ? 14f : 5f)) * 2f;
-                ci.DrawColoredPolygon(new[] { tip, tip + new Vector2(3f, flap), tip + new Vector2(1f, 2.5f + flap * 0.5f) }, new Color("#c8ccd2").WithAlpha(0.9f));
+                ci.Poly(new[] { tip, tip + new Vector2(3f, flap), tip + new Vector2(1f, 2.5f + flap * 0.5f) }, new Color("#c8ccd2").WithAlpha(0.9f));
                 break;
             }
             case Improv.JumperWire:
@@ -683,7 +683,7 @@ public static partial class FixtureArt
                 if (shaky) Line(ci, x.P(0.42f, 1.02f), x.P(0.42f, 1.02f) + new Vector2(Mathf.Sin(x.T * 3f) * 2f, 4f), new Color("#a8844f"), 1f);
                 break;
             case Improv.TapedScreen:
-                if (x.Lit && Hash(x.Id, (int)(x.T * 8f), 484) > 0.85f) ci.DrawRect(new Rect2(x.P(0.5f, 0.35f) - new Vector2(5f, 3f), new Vector2(10f, 6f)), NoiseWhite.WithAlpha(0.2f));
+                if (x.Lit && Hash(x.Id, (int)(x.T * 8f), 484) > 0.85f) ci.Box(new Rect2(x.P(0.5f, 0.35f) - new Vector2(5f, 3f), new Vector2(10f, 6f)), NoiseWhite.WithAlpha(0.2f));
                 break;
             case Improv.WeldBead:
                 if (x.St == State.Fault) Dot(ci, x.P(0.5f, 0.52f), 3f, Ember.WithAlpha(0.2f + 0.15f * Pulse(x.T, 3f)));

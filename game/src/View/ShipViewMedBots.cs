@@ -33,14 +33,14 @@ public partial class ShipView
         foreach (float x in new[] { -9f, -2f, 5f })
             foreach (float y in new[] { -8.2f, 6.4f })
             {
-                ci.DrawRect(new Rect2(x, y, 3.6f, 1.8f), wheel);
+                ci.Box(new Rect2(x, y, 3.6f, 1.8f), wheel);
                 if (moving) ci.DrawLine(new Vector2(x + (t * 18f) % 3.6f, y), new Vector2(x + (t * 18f) % 3.6f, y + 1.8f), new Color("#3a3f48"), 0.8f);
             }
         Gfx.RoundRect(ci, new Rect2(-11f, -6.6f, 21f, 13.2f), body * dim, 3, col.Lightened(0.2f) * dim);
         // 들것 (천 · 띠 둘 · 머리 쪽 붉은 십자)
         var bed = new Rect2(-9.5f, -4.6f, 15.5f, 9.2f);
-        ci.DrawRect(bed, MbCanvas * dim);
-        ci.DrawRect(bed, MbCanvas.Darkened(0.35f) * dim, false, 0.8f);
+        ci.Box(bed, MbCanvas * dim);
+        ci.Box(bed, MbCanvas.Darkened(0.35f) * dim, false, 0.8f);
         foreach (float x in new[] { -5.5f, 1f }) ci.DrawLine(new Vector2(x, -4.6f), new Vector2(x, 4.6f), (loaded ? MbStrap.Lightened(0.15f) : MbStrap) * dim, loaded ? 1.6f : 1f);
         ci.DrawLine(new Vector2(3.4f, -1.8f), new Vector2(3.4f, 1.8f), MbCross * dim, 1.4f);
         ci.DrawLine(new Vector2(1.6f, 0f), new Vector2(5.2f, 0f), MbCross * dim, 1.4f);
@@ -51,14 +51,14 @@ public partial class ShipView
         // 뒤쪽 경광등 (실었거나 달릴 때 돈다)
         bool spin = loaded || moving && task != MedTask.None;
         var bp = new Vector2(-9.5f, 0f);
-        ci.DrawCircle(bp, 1.8f, (spin && Mathf.Sin(t * 9f) > 0f ? MbCross : Colors.White).WithAlpha(spin ? 0.95f : 0.4f) * dim, true, -1f, true);
+        ci.Circle(bp, 1.8f, (spin && Mathf.Sin(t * 9f) > 0f ? MbCross : Colors.White).WithAlpha(spin ? 0.95f : 0.4f) * dim, true, -1f, true);
         if (spin) ci.DrawLine(bp, bp + new Vector2(Mathf.Cos(t * 8f), Mathf.Sin(t * 8f)) * 6f, MbCross.WithAlpha(0.3f), 2f, true);
         // 누름 판 (앞으로 나와 눌린다)
         if (task == MedTask.Press && working)
         {
             float push = 1.5f + 1.2f * Mathf.Abs(Mathf.Sin(t * 2.2f));
             ci.DrawLine(new Vector2(8f, 0f), new Vector2(9.5f + push, 0f), new Color("#c8d0da") * dim, 1.4f, true);
-            ci.DrawRect(new Rect2(9.5f + push, -2.2f, 1.6f, 4.4f), MbWhite * dim);
+            ci.Box(new Rect2(9.5f + push, -2.2f, 1.6f, 4.4f), MbWhite * dim);
         }
     }
 
@@ -68,21 +68,21 @@ public partial class ShipView
         if (task == MedTask.Disinfect && working)
         {
             float a = 0.18f + 0.12f * Mathf.Sin(t * 6f);
-            ci.DrawCircle(Vector2.Zero, 13f + 1.5f * Mathf.Sin(t * 3f), MbUv.WithAlpha(a), true, -1f, true);
+            ci.Circle(Vector2.Zero, 13f + 1.5f * Mathf.Sin(t * 3f), MbUv.WithAlpha(a), true, -1f, true);
         }
         // 바퀴 셋 (밑에 숨은 공 바퀴)
-        foreach (float a in new[] { 0f, 2.1f, 4.2f }) ci.DrawCircle(new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * 7.6f, 1.4f, new Color("#16191e"), true, -1f, true);
-        ci.DrawCircle(Vector2.Zero, 8.5f, MbWhite * dim, true, -1f, true);
-        ci.DrawArc(Vector2.Zero, 8.5f, 0f, Mathf.Tau, 28, MbTeal * dim, 1.2f, true);
+        foreach (float a in new[] { 0f, 2.1f, 4.2f }) ci.Circle(new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * 7.6f, 1.4f, new Color("#16191e"), true, -1f, true);
+        ci.Circle(Vector2.Zero, 8.5f, MbWhite * dim, true, -1f, true);
+        ci.Arc(Vector2.Zero, 8.5f, 0f, Mathf.Tau, 28, MbTeal * dim, 1.2f, true);
         // 서랍 여섯 (둘레)
         for (int k = 0; k < 6; k++)
         {
             float a0 = k * Mathf.Tau / 6f + 0.1f;
-            ci.DrawArc(Vector2.Zero, 6.6f, a0, a0 + Mathf.Tau / 6f - 0.2f, 5, (k % 2 == 0 ? MbTeal.Darkened(0.2f) : MbTeal.Lightened(0.25f)) * dim, 1.6f, true);
+            ci.Arc(Vector2.Zero, 6.6f, a0, a0 + Mathf.Tau / 6f - 0.2f, 5, (k % 2 == 0 ? MbTeal.Darkened(0.2f) : MbTeal.Lightened(0.25f)) * dim, 1.6f, true);
         }
         // 가운데 돔 · 푸른 십자 (일할 때 숨 쉬듯)
         float glow = working ? 0.7f + 0.3f * Mathf.Sin(t * 4f) : 0.45f;
-        ci.DrawCircle(Vector2.Zero, 3.6f, new Color("#1c2a36") * dim, true, -1f, true);
+        ci.Circle(Vector2.Zero, 3.6f, new Color("#1c2a36") * dim, true, -1f, true);
         ci.DrawLine(new Vector2(-2.2f, 0f), new Vector2(2.2f, 0f), MbBlue.WithAlpha(glow) * dim, 1.3f, true);
         ci.DrawLine(new Vector2(0f, -2.2f), new Vector2(0f, 2.2f), MbBlue.WithAlpha(glow) * dim, 1.3f, true);
         // 앞 팔 · 손에 든 것
@@ -94,7 +94,7 @@ public partial class ShipView
                 float push = working ? 1.2f * Mathf.Abs(Mathf.Sin(t * 2.4f)) : 0f;
                 var hand = new Vector2(11f + push, 1f);
                 ci.DrawLine(sh, hand, new Color("#c8d0da") * dim, 1.4f, true);
-                ci.DrawRect(new Rect2(hand.X, hand.Y - 2f, 2.2f, 4f), MbWhite * dim); // 거즈 판
+                ci.Box(new Rect2(hand.X, hand.Y - 2f, 2.2f, 4f), MbWhite * dim); // 거즈 판
                 break;
             }
             case MedTask.Blood when _world.MedBots.Holding(r):
@@ -108,7 +108,7 @@ public partial class ShipView
             }
             case MedTask.Kit when _world.MedBots.Holding(r) || r.Cargo is ItemStack { Kind: ItemKind.MedKit }:
             {
-                ci.DrawRect(new Rect2(7f, -2.6f, 5f, 4.4f), MbKit * dim);
+                ci.Box(new Rect2(7f, -2.6f, 5f, 4.4f), MbKit * dim);
                 ci.DrawLine(new Vector2(9.5f, -1.8f), new Vector2(9.5f, 1f), Colors.White * dim, 0.9f);
                 ci.DrawLine(new Vector2(8.1f, -0.4f), new Vector2(10.9f, -0.4f), Colors.White * dim, 0.9f);
                 break;
@@ -118,7 +118,7 @@ public partial class ShipView
                 var hub = new Vector2(10f, 0f);
                 float a = working ? t * 6f : 0f;
                 ci.DrawLine(sh, hub, new Color("#c8d0da") * dim, 1.4f, true);
-                ci.DrawCircle(hub, 1.2f, new Color("#3d4757") * dim, true, -1f, true);
+                ci.Circle(hub, 1.2f, new Color("#3d4757") * dim, true, -1f, true);
                 ci.DrawLine(hub, hub + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * 3.2f, new Color("#ffb347") * dim, 1.2f, true);
                 break;
             }

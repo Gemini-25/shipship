@@ -29,13 +29,13 @@ public static class BookLook
         {
             float a = 0.10f * (1f - i / 6f);
             float x = bindLeft ? r.Position.X + 1f + i * 2f : r.End.X - 3f - i * 2f;
-            ci.DrawRect(new Rect2(x, r.Position.Y + 3f, 2f, r.Size.Y - 6f), new Color(0, 0, 0, a));
+            ci.Box(new Rect2(x, r.Position.Y + 3f, 2f, r.Size.Y - 6f), new Color(0, 0, 0, a));
         }
         // 접힌 귀 (바깥 아래)
         float k = 12f;
         var c = bindLeft ? new Vector2(r.End.X, r.End.Y) : new Vector2(r.Position.X, r.End.Y);
         float s = bindLeft ? -1f : 1f;
-        ci.DrawColoredPolygon(new[] { c + new Vector2(s * k, 0), c + new Vector2(0, -k), c + new Vector2(s * k, -k) }, new Color(0.2f, 0.185f, 0.16f, 1f));
+        ci.Poly(new[] { c + new Vector2(s * k, 0), c + new Vector2(0, -k), c + new Vector2(s * k, -k) }, new Color(0.2f, 0.185f, 0.16f, 1f));
         ci.DrawLine(c + new Vector2(s * k, 0), c + new Vector2(0, -k), PaperEdge, 1f);
         if (pageNo > 0) Gfx.TextCentered(ci, Fonts.Body, new Vector2(r.GetCenter().X, r.End.Y - 8f), $"— {pageNo} —", Ui.TextMicro, InkFaint);
     }

@@ -28,7 +28,7 @@ public partial class ShipView
             {
                 // 고른 용접 비드: 겹친 비늘 호 + 열 변색 띠
                 ci.DrawLine(new Vector2(-16f, 14f), new Vector2(16f, 14f), new Color("#c8a050").WithAlpha(0.18f), 4f);
-                for (float x = -15f; x < 16f; x += 2.6f) ci.DrawArc(new Vector2(x, 14f), 1.6f, -Mathf.Pi * 0.5f, Mathf.Pi * 0.5f, 5, new Color("#b8c0cc").WithAlpha(0.7f), 0.8f, true);
+                for (float x = -15f; x < 16f; x += 2.6f) ci.Arc(new Vector2(x, 14f), 1.6f, -Mathf.Pi * 0.5f, Mathf.Pi * 0.5f, 5, new Color("#b8c0cc").WithAlpha(0.7f), 0.8f, true);
                 break;
             }
             case "hull.coilring":
@@ -57,15 +57,15 @@ public partial class ShipView
                         var o = new Vector2(-12f + i * 8f + row * 4f, -4f + row * 7f);
                         var hex = new Vector2[7];
                         for (int k = 0; k < 7; k++) hex[k] = o + Vector2.FromAngle(k * Mathf.Tau / 6f + Mathf.Pi / 6f) * 3.6f;
-                        ci.DrawColoredPolygon(hex[..6], new Color("#d89a30").WithAlpha(0.35f));
-                        ci.DrawPolyline(hex, new Color("#f0c060").WithAlpha(0.6f), 0.6f, true);
+                        ci.Poly(hex[..6], new Color("#d89a30").WithAlpha(0.35f));
+                        ci.Polyline(hex, new Color("#f0c060").WithAlpha(0.6f), 0.6f, true);
                     }
                 break;
             }
             case "hull.ribs":
             {
                 // 탄소 섬유 늑골: 외판을 가로지르는 검은 띠 · 짜임 무늬
-                ci.DrawRect(RR(-3.5f, -16f, 3.5f, 24f), new Color("#14161a"));
+                ci.Box(RR(-3.5f, -16f, 3.5f, 24f), new Color("#14161a"));
                 for (float y = -15f; y < 23f; y += 2f)
                 {
                     ci.DrawLine(new Vector2(-3f, y), new Vector2(0f, y + 1f), new Color(1, 1, 1, 0.12f), 0.6f);
@@ -82,11 +82,11 @@ public partial class ShipView
                 {
                     var pts = new Vector2[9];
                     for (int i = 0; i < 9; i++) pts[i] = new Vector2(-16f + i * 4f, 10f + k * 4f + Mathf.Sin(i * 1.4f + k) * 1.2f);
-                    ci.DrawPolyline(pts, new Color("#d8e0ea").WithAlpha(0.55f - k * 0.1f), 1f, true);
+                    ci.Polyline(pts, new Color("#d8e0ea").WithAlpha(0.55f - k * 0.1f), 1f, true);
                 }
                 // 판을 잡은 집게 둘 (형상이 돌아오는 기준점)
-                ci.DrawRect(RR(-15.5f, 8f, -13.5f, 20f), FA.Steel4);
-                ci.DrawRect(RR(13.5f, 8f, 15.5f, 20f), FA.Steel4);
+                ci.Box(RR(-15.5f, 8f, -13.5f, 20f), FA.Steel4);
+                ci.Box(RR(13.5f, 8f, 15.5f, 20f), FA.Steel4);
                 break;
             }
             case "hull.phase":
@@ -106,7 +106,7 @@ public partial class ShipView
                 // 납판: 둔한 청회색 · 볼트 넷 · 찍힌 글씨 자리
                 FA.Box(ci, RR(-14f, 4f, 14f, 20f), new Color("#5a6470"), 1f, new Color("#2a3038"));
                 FA.Bolts(ci, RR(-14f, 4f, 14f, 20f), 2.2f, 0.9f);
-                ci.DrawRect(RR(-5f, 9f, 5f, 15f), new Color(0, 0, 0, 0.18f), false, 0.7f);
+                ci.Box(RR(-5f, 9f, 5f, 15f), new Color(0, 0, 0, 0.18f), false, 0.7f);
                 break;
             }
             case "hull.thickplate":
@@ -122,8 +122,8 @@ public partial class ShipView
             case "hull.wreckalloy":
             {
                 // 난파선 합금 덧판: 청동빛 · 비뚤어진 판 · 옛 글씨 토막 · 리벳
-                ci.DrawColoredPolygon(new[] { new Vector2(-11f, 3f), new Vector2(12f, 5f), new Vector2(10f, 20f), new Vector2(-12f, 18f) }, new Color("#8a6a3a"));
-                ci.DrawPolyline(new[] { new Vector2(-11f, 3f), new Vector2(12f, 5f), new Vector2(10f, 20f), new Vector2(-12f, 18f), new Vector2(-11f, 3f) }, new Color("#c8a060"), 0.8f, true);
+                ci.Poly(new[] { new Vector2(-11f, 3f), new Vector2(12f, 5f), new Vector2(10f, 20f), new Vector2(-12f, 18f) }, new Color("#8a6a3a"));
+                ci.Polyline(new[] { new Vector2(-11f, 3f), new Vector2(12f, 5f), new Vector2(10f, 20f), new Vector2(-12f, 18f), new Vector2(-11f, 3f) }, new Color("#c8a060"), 0.8f, true);
                 for (int i = 0; i < 4; i++) ci.DrawLine(new Vector2(-7f + i * 3.5f, 9f), new Vector2(-7f + i * 3.5f + (i % 2) * 1.5f, 13f), new Color("#3a2a14"), 0.9f);
                 foreach (var rv in new[] { new Vector2(-9f, 5f), new Vector2(9f, 7f), new Vector2(8f, 18f), new Vector2(-10f, 16f) }) FA.Dot(ci, rv, 0.9f, new Color("#d8b880"));
                 break;
@@ -136,7 +136,7 @@ public partial class ShipView
                     for (int j = 0; j < 3; j++)
                     {
                         var o = new Vector2(-7f + i * 3.5f + (j % 2) * 1.75f, 7f + j * 3.2f);
-                        ci.DrawArc(o, 1.4f, 0f, Mathf.Tau, 6, col.Lightened(0.2f).WithAlpha(0.6f), 0.5f, true);
+                        ci.Arc(o, 1.4f, 0f, Mathf.Tau, 6, col.Lightened(0.2f).WithAlpha(0.6f), 0.5f, true);
                     }
                 break;
             }
@@ -215,7 +215,7 @@ public partial class ShipView
                 foreach (float f in new[] { 0.35f, 0.65f })
                 {
                     var o = HullAt(l + wdt * f, -1);
-                    ci.DrawRect(new Rect2(o + new Vector2(-6f, -3f), new Vector2(12f, 3f)), FA.Steel3);
+                    ci.Box(new Rect2(o + new Vector2(-6f, -3f), new Vector2(12f, 3f)), FA.Steel3);
                     ci.DrawLine(o + new Vector2(-5f, -3f), o + new Vector2(-6f, -7f), FA.Steel4, 1.2f);
                     ci.DrawLine(o + new Vector2(5f, -3f), o + new Vector2(6f, -7f), FA.Steel4, 1.2f);
                     FA.Led(ci, o + new Vector2(0f, -1.5f), col, 0.6f, 0.8f);
@@ -228,8 +228,8 @@ public partial class ShipView
                 foreach (var (x, side) in new[] { (l + wdt * 0.12f, -1), (r - wdt * 0.12f, -1), (l + wdt * 0.12f, 1), (r - wdt * 0.12f, 1) })
                 {
                     var o = HullAt(x, side);
-                    ci.DrawRect(new Rect2(o - new Vector2(4f, 3f), new Vector2(8f, 6f)), FA.Steel2);
-                    ci.DrawRect(new Rect2(o - new Vector2(4f, 3f), new Vector2(8f, 6f)), FA.Steel4, false, 0.8f);
+                    ci.Box(new Rect2(o - new Vector2(4f, 3f), new Vector2(8f, 6f)), FA.Steel2);
+                    ci.Box(new Rect2(o - new Vector2(4f, 3f), new Vector2(8f, 6f)), FA.Steel4, false, 0.8f);
                     ci.DrawLine(o + new Vector2(0f, side * 3f), o + new Vector2(0f, side * 6f), FA.Chrome, 2f);
                     ci.DrawLine(o + new Vector2(-4f, 0f), o + new Vector2(-6.5f, 0f), FA.Chrome, 1.6f);
                     ci.DrawLine(o + new Vector2(4f, 0f), o + new Vector2(6.5f, 0f), FA.Chrome, 1.6f);
@@ -242,9 +242,9 @@ public partial class ShipView
                 foreach (int side in new[] { -1, 1 })
                 {
                     var o = HullAt(mid + wdt * 0.1f, side);
-                    ci.DrawArc(o, 6f, side < 0 ? Mathf.Pi : 0f, side < 0 ? Mathf.Tau : Mathf.Pi, 12, FA.Steel4, 2f, true);
-                    ci.DrawCircle(o, 4f, FA.Steel2, true, -1f, true);
-                    ci.DrawCircle(o, 1.6f, new Color("#ff5c4c").WithAlpha(0.7f), true, -1f, true);
+                    ci.Arc(o, 6f, side < 0 ? Mathf.Pi : 0f, side < 0 ? Mathf.Tau : Mathf.Pi, 12, FA.Steel4, 2f, true);
+                    ci.Circle(o, 4f, FA.Steel2, true, -1f, true);
+                    ci.Circle(o, 1.6f, new Color("#ff5c4c").WithAlpha(0.7f), true, -1f, true);
                 }
                 break;
             }
@@ -261,8 +261,8 @@ public partial class ShipView
                         float x = Mathf.Lerp(xw, xe, k / 4f);
                         float spread = Mathf.Lerp(0f, 10f, k / 4f) + 4f;
                         ci.DrawSetTransform(new Vector2(x, (y0 + y1) * 0.5f), 0f, new Vector2(0.28f, 1f));
-                        ci.DrawArc(Vector2.Zero, (y1 - y0) * 0.5f + spread, 0f, Mathf.Tau, 28, Cu, 3f, true);
-                        ci.DrawArc(Vector2.Zero, (y1 - y0) * 0.5f + spread, 3.6f, 5.4f, 10, Cu.Lightened(0.4f), 1f, true);
+                        ci.Arc(Vector2.Zero, (y1 - y0) * 0.5f + spread, 0f, Mathf.Tau, 28, Cu, 3f, true);
+                        ci.Arc(Vector2.Zero, (y1 - y0) * 0.5f + spread, 3.6f, 5.4f, 10, Cu.Lightened(0.4f), 1f, true);
                         ci.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
                     }
                 }
@@ -273,8 +273,8 @@ public partial class ShipView
                 // 배를 두른 회전 고리: 세로로 선 띠 (위아래로 외판 밖까지) · 바퀴살 자국
                 float rx = 18f, ry = (b - t) * 0.5f + 34f;
                 ci.DrawSetTransform(new Vector2(mid, cy), 0f, new Vector2(rx / ry, 1f));
-                ci.DrawArc(Vector2.Zero, ry, 0f, Mathf.Tau, 64, new Color("#2a303a"), 9f * ry / rx * 0.35f, true);
-                ci.DrawArc(Vector2.Zero, ry, 0f, Mathf.Tau, 64, col.WithAlpha(0.35f), 1.2f, true);
+                ci.Arc(Vector2.Zero, ry, 0f, Mathf.Tau, 64, new Color("#2a303a"), 9f * ry / rx * 0.35f, true);
+                ci.Arc(Vector2.Zero, ry, 0f, Mathf.Tau, 64, col.WithAlpha(0.35f), 1.2f, true);
                 ci.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
                 break;
             }
@@ -282,9 +282,9 @@ public partial class ShipView
             {
                 // 뱃머리 이온 편향 고리: 굵은 호 · 방출 마디 다섯
                 var o = _noseTip;
-                ci.DrawArc(o, 24f, -1.1f, 1.1f, 20, FA.Steel3, 4f, true);
-                ci.DrawArc(o, 24f, -1.1f, 1.1f, 20, col.WithAlpha(0.6f), 1f, true);
-                for (int i = 0; i < 5; i++) ci.DrawCircle(o + Vector2.FromAngle(-1f + i * 0.5f) * 24f, 2f, new Color("#9fd8ff"), true, -1f, true);
+                ci.Arc(o, 24f, -1.1f, 1.1f, 20, FA.Steel3, 4f, true);
+                ci.Arc(o, 24f, -1.1f, 1.1f, 20, col.WithAlpha(0.6f), 1f, true);
+                for (int i = 0; i < 5; i++) ci.Circle(o + Vector2.FromAngle(-1f + i * 0.5f) * 24f, 2f, new Color("#9fd8ff"), true, -1f, true);
                 break;
             }
             case "exterior.radiator":
@@ -295,8 +295,8 @@ public partial class ShipView
                     var root = HullAt(l + wdt * 0.42f, side);
                     float len = 54f;
                     var poly = new[] { root + new Vector2(-16f, 0f), root + new Vector2(16f, 0f), root + new Vector2(10f, side * len), root + new Vector2(-24f, side * len) };
-                    ci.DrawColoredPolygon(poly, new Color("#2a2420"));
-                    ci.DrawPolyline(poly.Append(poly[0]).ToArray(), new Color("#6a5a4a"), 1f, true);
+                    ci.Poly(poly, new Color("#2a2420"));
+                    ci.Polyline(poly.Append(poly[0]).ToArray(), new Color("#6a5a4a"), 1f, true);
                     for (int k = 1; k < 7; k++)
                     {
                         float f = k / 7f;
@@ -318,8 +318,8 @@ public partial class ShipView
                 // 거품을 붙드는 왜곡 발진기 넷 (외판 위 · 아래 · 앞 · 뒤)
                 foreach (var o in new[] { HullAt(mid, -1), HullAt(mid, 1), _noseTip, new Vector2(l - 6f, cy) })
                 {
-                    ci.DrawCircle(o, 3.2f, FA.Steel2, true, -1f, true);
-                    ci.DrawArc(o, 3.2f, 0f, Mathf.Tau, 12, col.WithAlpha(0.8f), 1f, true);
+                    ci.Circle(o, 3.2f, FA.Steel2, true, -1f, true);
+                    ci.Arc(o, 3.2f, 0f, Mathf.Tau, 12, col.WithAlpha(0.8f), 1f, true);
                 }
                 break;
             }
@@ -332,7 +332,7 @@ public partial class ShipView
                     var o = h.L(0f, 32f);
                     var hex = new Vector2[7];
                     for (int k = 0; k < 7; k++) hex[k] = o + Vector2.FromAngle(k * Mathf.Tau / 6f) * 6f;
-                    ci.DrawPolyline(hex, col.WithAlpha(0.18f), 0.7f, true);
+                    ci.Polyline(hex, col.WithAlpha(0.18f), 0.7f, true);
                     if (h.K % 6 == 0) FA.Dot(ci, h.L(0f, 25f), 1.6f, col.WithAlpha(0.7f)); // 역장 투사기
                 }
                 break;
@@ -344,7 +344,7 @@ public partial class ShipView
                 {
                     var o = _noseTip + new Vector2(38f + k * 16f, 0f);
                     ci.DrawSetTransform(o, 0f, new Vector2(0.35f, 1f));
-                    ci.DrawArc(Vector2.Zero, 26f + k * 6f, 0f, Mathf.Tau, 32, col.WithAlpha(0.35f - k * 0.08f), 2.4f, true);
+                    ci.Arc(Vector2.Zero, 26f + k * 6f, 0f, Mathf.Tau, 32, col.WithAlpha(0.35f - k * 0.08f), 2.4f, true);
                     ci.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
                 }
                 FA.Dot(ci, _noseTip + new Vector2(54f, 0f), 1.4f, Colors.White.WithAlpha(0.5f)); // 초점
@@ -360,7 +360,7 @@ public partial class ShipView
                     var h = _hullSegs[(int)(FA.Hash(g, 3, 470) * _hullSegs.Count) % _hullSegs.Count];
                     for (int k = 0; k < 4; k++) FA.Dot(ci, h.L((k - 1.5f) * 3f, 26f + (k % 2) * 2f), 1.1f, new Color("#f2994a"));
                     var hatch = h.L(-8f, 22f);
-                    ci.DrawRect(new Rect2(hatch - new Vector2(2f, 2f), new Vector2(4f, 4f)), FA.Steel3); // 떼가 드나드는 작은 문
+                    ci.Box(new Rect2(hatch - new Vector2(2f, 2f), new Vector2(4f, 4f)), FA.Steel3); // 떼가 드나드는 작은 문
                 }
                 break;
             }
@@ -369,7 +369,7 @@ public partial class ShipView
                 // 잔해 탐지 접시 (아래 외판 · 뱃머리 쪽): 기둥 · 접시
                 var o = HullAt(r - wdt * 0.2f, 1);
                 ci.DrawLine(o, o + new Vector2(0f, 8f), FA.Steel4, 1.6f);
-                ci.DrawArc(o + new Vector2(0f, 12f), 6f, Mathf.Pi * 1.1f, Mathf.Pi * 1.9f, 10, FA.Chrome, 2f, true);
+                ci.Arc(o + new Vector2(0f, 12f), 6f, Mathf.Pi * 1.1f, Mathf.Pi * 1.9f, 10, FA.Chrome, 2f, true);
                 FA.Dot(ci, o + new Vector2(0f, 8.5f), 1.2f, col);
                 break;
             }
@@ -383,9 +383,9 @@ public partial class ShipView
                 ci.DrawLine(hub, e2, FA.Steel3, 3f);
                 ci.DrawLine(hub, e1, col.WithAlpha(0.35f), 0.8f);
                 ci.DrawLine(hub, e2, col.WithAlpha(0.35f), 0.8f);
-                ci.DrawRect(new Rect2(hub - new Vector2(3f, 3f), new Vector2(6f, 6f)), FA.Steel4);
-                ci.DrawRect(new Rect2(e1 - new Vector2(1.5f, 3f), new Vector2(3f, 6f)), FA.Chrome);
-                ci.DrawRect(new Rect2(e2 - new Vector2(3f, 1.5f), new Vector2(6f, 3f)), FA.Chrome);
+                ci.Box(new Rect2(hub - new Vector2(3f, 3f), new Vector2(6f, 6f)), FA.Steel4);
+                ci.Box(new Rect2(e1 - new Vector2(1.5f, 3f), new Vector2(3f, 6f)), FA.Chrome);
+                ci.Box(new Rect2(e2 - new Vector2(3f, 1.5f), new Vector2(6f, 3f)), FA.Chrome);
                 break;
             }
         }
@@ -408,7 +408,7 @@ public partial class ShipView
                 {
                     float a = tm * 0.15f + k * Mathf.Tau / 3f;
                     var o = new Vector2(mid + Mathf.Cos(a) * rx, cy + Mathf.Sin(a) * ry);
-                    ci.DrawColoredPolygon(new[] { o + new Vector2(0f, -3f), o + new Vector2(3f, 0f), o + new Vector2(0f, 3f), o + new Vector2(-3f, 0f) }, new Color("#c8d0dc"));
+                    ci.Poly(new[] { o + new Vector2(0f, -3f), o + new Vector2(3f, 0f), o + new Vector2(0f, 3f), o + new Vector2(-3f, 0f) }, new Color("#c8d0dc"));
                     for (int j = 0; j < 4; j++) FA.Dot(ci, o + Vector2.FromAngle(j * Mathf.Pi / 2f + Mathf.Pi / 4f) * 4f, 1.2f, new Color(1, 1, 1, 0.35f));
                     FA.Led(ci, o, col, Mathf.PosMod(tm * 2f + k, 1f) < 0.2f ? 1f : 0.2f, 0.8f);
                 }
@@ -448,7 +448,7 @@ public partial class ShipView
                     float x = Mathf.Lerp(xw, xe, k / 4f);
                     float spread = Mathf.Lerp(0f, 10f, k / 4f) + 4f;
                     ci.DrawSetTransform(new Vector2(x, (y0 + y1) * 0.5f), 0f, new Vector2(0.28f, 1f));
-                    ci.DrawArc(Vector2.Zero, (y1 - y0) * 0.5f + spread, 0f, Mathf.Tau, 28, new Color("#8ad0ff").WithAlpha(burn ? 0.8f : 0.3f), 1.6f, true);
+                    ci.Arc(Vector2.Zero, (y1 - y0) * 0.5f + spread, 0f, Mathf.Tau, 28, new Color("#8ad0ff").WithAlpha(burn ? 0.8f : 0.3f), 1.6f, true);
                     ci.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
                 }
                 break;
@@ -475,7 +475,7 @@ public partial class ShipView
                     var a0 = o + Vector2.FromAngle(-1f + i * 0.5f) * 24f;
                     var a1 = o + Vector2.FromAngle(-1f + (i + 1) * 0.5f) * 24f;
                     var m0 = (a0 + a1) * 0.5f + (a0 - o).Normalized() * (4f + 3f * FA.Hash(i, (int)(tm * 20f), 472));
-                    ci.DrawPolyline(new[] { a0, m0, a1 }, new Color("#9fd8ff").WithAlpha(0.85f), 1f, true);
+                    ci.Polyline(new[] { a0, m0, a1 }, new Color("#9fd8ff").WithAlpha(0.85f), 1f, true);
                 }
                 break;
             }
@@ -488,7 +488,7 @@ public partial class ShipView
                     float len = 54f;
                     var poly = new[] { root + new Vector2(-16f, 0f), root + new Vector2(16f, 0f), root + new Vector2(10f, side * len), root + new Vector2(-24f, side * len) };
                     var hot = new Color("#ff6a2a").WithAlpha(0.08f + 0.28f * load);
-                    ci.DrawPolygon(poly, new[] { hot, hot, hot.WithAlpha(0.02f), hot.WithAlpha(0.02f) });
+                    ci.Polygon(poly, new[] { hot, hot, hot.WithAlpha(0.02f), hot.WithAlpha(0.02f) });
                 }
                 break;
             }
@@ -497,12 +497,12 @@ public partial class ShipView
                 float rx = wdt * 0.5f + 70f, ry = (b - t) * 0.5f + 56f;
                 float q = Mathf.PosMod(tm * 0.2f, 1f);
                 ci.DrawSetTransform(new Vector2(mid, cy), 0f, new Vector2(1f, ry / rx));
-                ci.DrawArc(Vector2.Zero, rx * (0.85f + 0.15f * q), 0f, Mathf.Tau, 64, col.WithAlpha(0.25f * (1f - q)), 1.5f, true);
+                ci.Arc(Vector2.Zero, rx * (0.85f + 0.15f * q), 0f, Mathf.Tau, 64, col.WithAlpha(0.25f * (1f - q)), 1.5f, true);
                 ci.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
                 for (int k = 0; k < 3; k++)
                 {
                     float a = tm * 0.3f + k * 2.1f;
-                    ci.DrawArc(new Vector2(mid + Mathf.Cos(a) * rx, cy + Mathf.Sin(a) * ry), 8f, a + 1.2f, a + 2.4f, 6, Colors.White.WithAlpha(0.3f), 1f, true);
+                    ci.Arc(new Vector2(mid + Mathf.Cos(a) * rx, cy + Mathf.Sin(a) * ry), 8f, a + 1.2f, a + 2.4f, 6, Colors.White.WithAlpha(0.3f), 1f, true);
                 }
                 break;
             }
@@ -518,7 +518,7 @@ public partial class ShipView
                     var o = h.L(0f, 32f);
                     var hex = new Vector2[7];
                     for (int k = 0; k < 7; k++) hex[k] = o + Vector2.FromAngle(k * Mathf.Tau / 6f) * 6f;
-                    ci.DrawPolyline(hex, col.Lightened(0.3f).WithAlpha(0.7f * (1f - d / 40f)), 1f, true);
+                    ci.Polyline(hex, col.Lightened(0.3f).WithAlpha(0.7f * (1f - d / 40f)), 1f, true);
                 }
                 break;
             }
@@ -554,7 +554,7 @@ public partial class ShipView
                 var o = HullAt(r - wdt * 0.2f, 1) + new Vector2(0f, 12f);
                 float a = Mathf.Pi / 2f + Mathf.Sin(tm * 0.5f) * 0.9f;
                 var poly = new[] { o, o + Vector2.FromAngle(a - 0.25f) * 120f, o + Vector2.FromAngle(a + 0.25f) * 120f };
-                ci.DrawPolygon(poly, new[] { col.WithAlpha(0.18f), col.WithAlpha(0f), col.WithAlpha(0f) });
+                ci.Polygon(poly, new[] { col.WithAlpha(0.18f), col.WithAlpha(0f), col.WithAlpha(0f) });
                 break;
             }
             case "sensor.gravwave":
@@ -594,7 +594,7 @@ public partial class ShipView
                 }
                 var bo = pts[0] + Perp(pts, 0) * 7f;
                 FA.Box(ci, new Rect2(bo - new Vector2(2.2f, 3.5f), new Vector2(4.4f, 7f)), col.WithAlpha(0.7f), 1.5f, Colors.White.WithAlpha(0.5f));
-                ci.DrawRect(new Rect2(bo - new Vector2(1.4f, 4.6f), new Vector2(2.8f, 1.4f)), new Color("#2a2a2a"));
+                ci.Box(new Rect2(bo - new Vector2(1.4f, 4.6f), new Vector2(2.8f, 1.4f)), new Color("#2a2a2a"));
                 break;
             }
             case "pipe.heatpipe":
@@ -602,8 +602,8 @@ public partial class ShipView
                 // 나란히 가는 구리 열 파이프 + 핀
                 var off = new Vector2[pts.Length];
                 for (int i = 0; i < pts.Length; i++) off[i] = pts[i] + Perp(pts, i) * 4f;
-                ci.DrawPolyline(off, Cu.Darkened(0.3f), 2.4f, true);
-                ci.DrawPolyline(off, Cu, 1.4f, true);
+                ci.Polyline(off, Cu.Darkened(0.3f), 2.4f, true);
+                ci.Polyline(off, Cu, 1.4f, true);
                 for (int i = 0; i < off.Length; i += 2)
                 {
                     var n = Perp(pts, i);
@@ -625,8 +625,8 @@ public partial class ShipView
             case "pipe.liquidmetal":
             {
                 // 은빛 액체 금속 덧관
-                ci.DrawPolyline(pts, new Color("#d8e0ea").WithAlpha(0.5f), 3f, true);
-                ci.DrawPolyline(pts, new Color("#ffffff").WithAlpha(0.35f), 0.8f, true);
+                ci.Polyline(pts, new Color("#d8e0ea").WithAlpha(0.5f), 3f, true);
+                ci.Polyline(pts, new Color("#ffffff").WithAlpha(0.35f), 0.8f, true);
                 break;
             }
             case "pipe.couplers":
@@ -660,7 +660,7 @@ public partial class ShipView
                 var o = pts[i].Lerp(pts[i + 1], fi - i);
                 var d = (pts[i + 1] - pts[i]).Normalized();
                 var n = new Vector2(-d.Y, d.X);
-                ci.DrawColoredPolygon(new[] { o - d * 3f - n * 2f, o + d * 3f - n * 2f, o + d * 3f + n * 2f, o - d * 3f + n * 2f }, new Color("#f2994a"));
+                ci.Poly(new[] { o - d * 3f - n * 2f, o + d * 3f - n * 2f, o + d * 3f + n * 2f, o - d * 3f + n * 2f }, new Color("#f2994a"));
                 for (int k = -1; k <= 1; k += 2) { ci.DrawLine(o + d * k * 2f + n * 2f, o + d * k * 2.6f + n * 3.6f, FA.Steel4, 0.6f); ci.DrawLine(o + d * k * 2f - n * 2f, o + d * k * 2.6f - n * 3.6f, FA.Steel4, 0.6f); }
                 FA.Led(ci, o + d * 3f * Mathf.Sign(Mathf.Cos(_time * 0.25f + p.K * 1.3f)), new Color("#fff0c0"), 0.8f, 0.7f);
                 break;
@@ -706,7 +706,7 @@ public partial class ShipView
             case "wall.fiber":
             {
                 // 광섬유 감지망: 가는 청록 선
-                ci.DrawPolyline(pts, col.WithAlpha(0.35f), 0.7f, true);
+                ci.Polyline(pts, col.WithAlpha(0.35f), 0.7f, true);
                 foreach (var o in pts) FA.Dot(ci, o, 0.6f, col.WithAlpha(0.5f));
                 break;
             }
@@ -773,7 +773,7 @@ public partial class ShipView
                 // 창에서 쏟아지는 하늘빛
                 FaceXf(ci, p.Face);
                 var sky = new Color("#9ad0ff");
-                ci.DrawPolygon(new[] { new Vector2(-13f, 4f), new Vector2(13f, 4f), new Vector2(18f, 26f), new Vector2(-18f, 26f) }, new[] { sky.WithAlpha(0.12f), sky.WithAlpha(0.12f), sky.WithAlpha(0f), sky.WithAlpha(0f) });
+                ci.Polygon(new[] { new Vector2(-13f, 4f), new Vector2(13f, 4f), new Vector2(18f, 26f), new Vector2(-18f, 26f) }, new[] { sky.WithAlpha(0.12f), sky.WithAlpha(0.12f), sky.WithAlpha(0f), sky.WithAlpha(0f) });
                 NoXf(ci);
                 break;
             }
@@ -782,7 +782,7 @@ public partial class ShipView
                 float br = 0.5f + 0.5f * Mathf.Sin(_time * 0.7f + p.Face.Floor.X * 0.4f + p.Face.Floor.Y * 0.3f);
                 FaceXf(ci, p.Face);
                 var teal = new Color("#5fe0d0");
-                ci.DrawPolygon(new[] { new Vector2(-16f, -4f), new Vector2(16f, -4f), new Vector2(16f, 12f), new Vector2(-16f, 12f) }, new[] { teal.WithAlpha(0.14f * br + 0.04f), teal.WithAlpha(0.14f * br + 0.04f), teal.WithAlpha(0f), teal.WithAlpha(0f) });
+                ci.Polygon(new[] { new Vector2(-16f, -4f), new Vector2(16f, -4f), new Vector2(16f, 12f), new Vector2(-16f, 12f) }, new[] { teal.WithAlpha(0.14f * br + 0.04f), teal.WithAlpha(0.14f * br + 0.04f), teal.WithAlpha(0f), teal.WithAlpha(0f) });
                 NoXf(ci);
                 break;
             }

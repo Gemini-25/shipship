@@ -82,7 +82,7 @@ public partial class Hud
             else if (row.HasPoint(mouse)) Gfx.RoundRect(this, row, Ui.HoverSoft, 6);
             float cy = row.GetCenter().Y;
             Icons.Draw(this, icon, new Vector2(row.Position.X + 12, cy), Ui.IconM, Ui.Of(tone));
-            DrawCircle(new Vector2(row.Position.X + 28, cy), 3.5f, Palette.Crew(c.Id), true, -1f, true);
+            this.Circle(new Vector2(row.Position.X + 28, cy), 3.5f, Palette.Crew(c.Id), true, -1f, true);
             Gfx.Text(this, Fonts.Bold, new Vector2(row.Position.X + 36, cy + Gfx.CenterOffset(Fonts.Bold, Ui.TextBody)), c.Name, Ui.TextBody, Palette.Text);
             float nx = row.Position.X + 36 + Gfx.Width(Fonts.Bold, c.Name, Ui.TextBody) + 8;
             Gfx.TextRight(this, Fonts.Body, new Vector2(row.End.X - 8, cy + Gfx.CenterOffset(Fonts.Body, Ui.TextSmall)), UiKit.Fit(text, row.End.X - 8 - nx, Ui.TextSmall), Ui.TextSmall, Ui.Of(tone));
@@ -306,7 +306,7 @@ void fragment() {
         for (int i = 0; i < 5; i++)
         {
             float inset = i * 3f + 1.5f;
-            DrawRect(new Rect2(inset, inset, s.X - inset * 2, s.Y - inset * 2), col.WithAlpha(_pauseFade * (0.55f - i * 0.1f)), false, 3f);
+            this.Box(new Rect2(inset, inset, s.X - inset * 2, s.Y - inset * 2), col.WithAlpha(_pauseFade * (0.55f - i * 0.1f)), false, 3f);
         }
         float L = 34f, t = 4f;
         var cc = col.WithAlpha(_pauseFade * 0.95f);

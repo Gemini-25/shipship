@@ -57,6 +57,7 @@ public partial class Hud : Control
 
     public override void _GuiInput(InputEvent e)
     {
+        if (e is InputEventMouseButton or InputEventKey) QueueRedraw();
         if (e is InputEventMouseButton { Pressed: true } wheel && (ScrollChronicle(wheel) || ScrollChain(wheel) || ScrollLog(wheel)))
         {
             AcceptEvent();
@@ -84,8 +85,13 @@ public partial class Hud : Control
         if (Size != Screen) Size = Screen;
         _watch.Sample(_world); // v16.2 자원 추세 (10분마다, 읽기만)
         UpdatePauseTint((float)delta);
-        QueueRedraw();
+        // 60프레임: 글자가 많아 무겁다 — 마우스가 움직이면 바로, 아니면 초당 20번 (누르면 _GuiInput 에서 바로)
+        var mouse = GetLocalMousePosition();
+        _redrawClock += delta;
+        if (mouse != _lastMouse || _redrawClock >= 0.05) { _lastMouse = mouse; _redrawClock = 0; QueueRedraw(); }
     }
+    private double _redrawClock;
+    private Vector2 _lastMouse = new(-1f, -1f);
 
     public override void _Draw() { long fp = FrameProbe.Now; DrawHud(); FrameProbe.Add("Hud", fp); } // v17.7 프레임 시간 재기
 
@@ -226,8 +232,8 @@ public partial class Hud : Control
 
         var status = _main.Paused ? Palette.Warning : Palette.Good;
         float pulse = 0.5f + 0.5f * Mathf.Sin(_time * 3f);
-        DrawCircle(new Vector2(x + 4, cy), 7f, status.WithAlpha(0.12f + 0.12f * pulse), true, -1f, true);
-        DrawCircle(new Vector2(x + 4, cy), 3.5f, status, true, -1f, true);
+        this.Circle(new Vector2(x + 4, cy), 7f, status.WithAlpha(0.12f + 0.12f * pulse), true, -1f, true);
+        this.Circle(new Vector2(x + 4, cy), 3.5f, status, true, -1f, true);
         x += 16;
         Gfx.Text(this, Fonts.Bold, new Vector2(x, cy + Gfx.CenterOffset(Fonts.Bold, Ui.TextTitle)), name, Ui.TextTitle, Palette.Text);
         x += nameW + 20;
@@ -248,6 +254,13 @@ public partial class Hud : Control
             bool active = i == 0 ? _main.Paused : !_main.Paused && _main.SpeedIndex == i - 1;
             int speed = i - 1;
             Button(rect, labels[i], active, mouse, i == 0 ? _main.TogglePause : () => _main.SetSpeed(speed));
+        }
+        // 60프레임: 계산이 따라가지 못해 배속이 줄었으면 고른 단추 밑에 실제 배속
+        float want = Main.Speeds[_main.SpeedIndex];
+        if (!_main.Paused && _main.ActualSpeed < want * 0.85f)
+        {
+            var under = new Vector2(x + (_main.SpeedIndex + 1) * (btnW + btnGap) + btnW * 0.5f, card.End.Y - 6f);
+            Gfx.TextCentered(this, Fonts.Body, under, $"실제 {_main.ActualSpeed:0.#}×", Ui.TextMicro, Palette.Warning);
         }
         // v12.2 하이라이트 모드: 배속을 저절로
         var auto = new Rect2(x + labels.Length * (btnW + btnGap) + 4, cy - 14f, 52f, 28f);
@@ -512,7 +525,7 @@ public partial class Hud : Control
                 active ? Palette.Danger : hover ? Palette.Text : Palette.TextDim);
             // 무작위 사고가 켜져 있으면 작은 표시등
             if (HazardSystem.RandomDays > 0f)
-                DrawCircle(new Vector2(rect.End.X - 6, rect.Position.Y + 6), 3f, Palette.Danger.WithAlpha(0.6f + 0.4f * Mathf.Sin(_time * 3f)), true, -1f, true);
+                this.Circle(new Vector2(rect.End.X - 6, rect.Position.Y + 6), 3f, Palette.Danger.WithAlpha(0.6f + 0.4f * Mathf.Sin(_time * 3f)), true, -1f, true);
             _buttons.Add((rect, () => _hazardMenu = !_hazardMenu));
         }
         _hazardMenuAt = new Vector2(x0, card.End.Y + 6f);
@@ -645,8 +658,8 @@ public partial class Hud : Control
         float x = x0 + 18, right = card.End.X - 18;
 
         // 머리글
-        DrawCircle(new Vector2(x + 8, y + 26), 8f, col, true, -1f, true);
-        DrawCircle(new Vector2(x + 8, y + 26) + c.Facing.ToGodot() * 3.5f, 3f, col.Lightened(0.6f), true, -1f, true);
+        this.Circle(new Vector2(x + 8, y + 26), 8f, col, true, -1f, true);
+        this.Circle(new Vector2(x + 8, y + 26) + c.Facing.ToGodot() * 3.5f, 3f, col.Lightened(0.6f), true, -1f, true);
         Gfx.Text(this, Fonts.Bold, new Vector2(x + 26, y + 31), c.Name, Ui.TextHeading, Palette.Text);
         Gfx.Text(this, Fonts.Body, new Vector2(x + 26 + Gfx.Width(Fonts.Bold, c.Name, Ui.TextHeading) + 8, y + 31),
             CrewRoles.Name(c.Role), Ui.TextBody, Palette.TextDim);
@@ -782,10 +795,10 @@ public partial class Hud : Control
                 bool sleep = SimTime.InWindow(hh + 0.5f, c.Schedule.SleepStart, c.Schedule.SleepLength);
                 bool work = SimTime.InWindow(hh + 0.5f, c.Schedule.WorkStart, c.Schedule.WorkLength);
                 if (!sleep && !work) continue;
-                DrawRect(new Rect2(sx + sw * hh / 24f, sy + 1, sw / 24f - 1, 8), sleep ? new Color("#5c7cfa").WithAlpha(0.6f) : new Color("#69db7c").WithAlpha(0.55f));
+                this.Box(new Rect2(sx + sw * hh / 24f, sy + 1, sw / 24f - 1, 8), sleep ? new Color("#5c7cfa").WithAlpha(0.6f) : new Color("#69db7c").WithAlpha(0.55f));
             }
             float mh = w.Meetings.Hour;
-            DrawRect(new Rect2(sx + sw * mh / 24f, sy - 2, 2, 14), new Color("#ffd43b"));
+            this.Box(new Rect2(sx + sw * mh / 24f, sy - 2, 2, 14), new Color("#ffd43b"));
             float now = SimTime.HourOfDay(w.Tick);
             DrawLine(new Vector2(sx + sw * now / 24f, sy - 3), new Vector2(sx + sw * now / 24f, sy + 13), Palette.Text, 1.5f);
         }
@@ -823,7 +836,7 @@ public partial class Hud : Control
         if (rels.Count > 6) rels = rels.OrderByDescending(r => MathF.Abs(r.Item2)).Take(6).OrderByDescending(r => r.Item2).ToList();
         foreach (var (who, value) in rels)
         {
-            DrawCircle(new Vector2(x + 5, ry + 10), 4f, Palette.Crew(who.Id), true, -1f, true);
+            this.Circle(new Vector2(x + 5, ry + 10), 4f, Palette.Crew(who.Id), true, -1f, true);
             Gfx.Text(this, Fonts.Bold, new Vector2(x + 16, ry + 15), who.Name, Ui.TextLabel, Palette.Text);
             string word = value > 0.5f ? "각별함" : value > 0.25f ? "친함" : value > -0.05f ? "보통" : value > -0.3f ? "서먹함" : "불편함";
             // -1~1 막대 (가운데가 0)
@@ -832,7 +845,7 @@ public partial class Hud : Control
             float mid = bar.Position.X + bar.Size.X * 0.5f;
             float len = bar.Size.X * 0.5f * Mathf.Abs(value);
             var vc = value >= 0 ? Palette.Good : Palette.Danger;
-            DrawRect(value >= 0 ? new Rect2(mid, bar.Position.Y, len, bar.Size.Y) : new Rect2(mid - len, bar.Position.Y, len, bar.Size.Y), vc.WithAlpha(0.8f));
+            this.Box(value >= 0 ? new Rect2(mid, bar.Position.Y, len, bar.Size.Y) : new Rect2(mid - len, bar.Position.Y, len, bar.Size.Y), vc.WithAlpha(0.8f));
             DrawLine(new Vector2(mid, bar.Position.Y - 2), new Vector2(mid, bar.End.Y + 2), new Color(1, 1, 1, 0.25f), 1f);
             Gfx.TextRight(this, Fonts.Body, new Vector2(right, ry + 15), word, Ui.TextBody, value >= 0.25f ? Palette.Good : value < -0.05f ? Palette.Warning : Palette.TextDim);
             // v14.4 왜 그런 사이인가 (그 사람의 기억 — 오해일 수도 있다)
@@ -915,7 +928,7 @@ public partial class Hud : Control
             }
             foreach (var fault in m.Faults)
             {
-                DrawCircle(new Vector2(x + 4, ly + 10), 3.5f, Palette.Danger, true, -1f, true);
+                this.Circle(new Vector2(x + 4, ly + 10), 3.5f, Palette.Danger, true, -1f, true);
                 Gfx.Text(this, Fonts.Bold, new Vector2(x + 14, ly + 15), fault.Name, Ui.TextBody, Palette.Danger);
                 var mats = fault.Materials;
                 string need = mats.Length > 0 ? string.Join(" + ", mats.Select(x => x.count > 1 ? $"{ItemKinds.Name(x.kind)} {x.count}" : ItemKinds.Name(x.kind))) + " 필요" : "부품 불필요";
@@ -946,7 +959,7 @@ public partial class Hud : Control
             }
             foreach (var (kind, count) in inv.Contents)
             {
-                DrawRect(new Rect2(x, ly + 6, 8, 8), Palette.Item(kind));
+                this.Box(new Rect2(x, ly + 6, 8, 8), Palette.Item(kind));
                 Gfx.Text(this, Fonts.Body, new Vector2(x + 16, ly + 15), ItemKinds.Name(kind), Ui.TextBody, Palette.TextDim);
                 Gfx.TextRight(this, Fonts.Bold, new Vector2(right, ly + 15), $"{count}", Ui.TextBody, Palette.Text);
                 ly += 20;

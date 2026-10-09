@@ -47,8 +47,8 @@ public partial class ShipView
                 float k = Mathf.Sin(t * 5f);
                 var hp = head + f * rr * 0.55f + sd * rr * 0.5f * k;
                 ci.DrawLine(body + sd * rr * 0.8f, hp, hand.Darkened(0.2f), 2.2f * s, true);
-                ci.DrawCircle(hp, 1.6f * s, hand, true, -1f, true);
-                for (int i = 0; i < 2; i++) ci.DrawCircle(hp - sd * (3f + i * 2.5f) * s + f * (1f + i) * s, 0.9f * s, RxSweat, true, -1f, true);
+                ci.Circle(hp, 1.6f * s, hand, true, -1f, true);
+                for (int i = 0; i < 2; i++) ci.Circle(hp - sd * (3f + i * 2.5f) * s + f * (1f + i) * s, 0.9f * s, RxSweat, true, -1f, true);
                 break;
             }
             case Gesture.FanSelf:
@@ -56,9 +56,9 @@ public partial class ShipView
                 // 펼친 손바닥이 얼굴 앞에서 부채질 (부채꼴 잔상)
                 float a0 = f.Angle() + Mathf.Pi * 0.5f + Mathf.Sin(t * 14f) * 0.5f;
                 var hp = head + f * rr * 0.9f + sd * rr * 0.4f;
-                ci.DrawArc(hp, rr * 0.6f, a0 - 0.5f, a0 + 0.5f, 8, hand.WithAlpha(0.5f), 2.6f * s, true);
-                ci.DrawArc(hp, rr * 0.9f, a0 - 0.4f, a0 + 0.4f, 8, new Color(1, 1, 1, 0.25f), 1f * s, true);
-                ci.DrawCircle(hp, 1.4f * s, hand, true, -1f, true);
+                ci.Arc(hp, rr * 0.6f, a0 - 0.5f, a0 + 0.5f, 8, hand.WithAlpha(0.5f), 2.6f * s, true);
+                ci.Arc(hp, rr * 0.9f, a0 - 0.4f, a0 + 0.4f, 8, new Color(1, 1, 1, 0.25f), 1f * s, true);
+                ci.Circle(hp, 1.4f * s, hand, true, -1f, true);
                 break;
             }
             case Gesture.ShedJacket:
@@ -78,8 +78,8 @@ public partial class ShipView
                 var cl = RoleCloth(c.Role).Darkened(0.15f);
                 ci.DrawLine(body + sd * rr * 0.7f, body + f * rr * 0.55f - sd * rr * 0.45f, cl, 2.6f * s, true);
                 ci.DrawLine(body - sd * rr * 0.7f, body + f * rr * 0.65f + sd * rr * 0.45f, cl.Lightened(0.08f), 2.6f * s, true);
-                ci.DrawCircle(body + f * rr * 0.55f - sd * rr * 0.5f, 1.3f * s, hand, true, -1f, true);
-                ci.DrawCircle(body + f * rr * 0.65f + sd * rr * 0.5f, 1.3f * s, hand, true, -1f, true);
+                ci.Circle(body + f * rr * 0.55f - sd * rr * 0.5f, 1.3f * s, hand, true, -1f, true);
+                ci.Circle(body + f * rr * 0.65f + sd * rr * 0.5f, 1.3f * s, hand, true, -1f, true);
                 break;
             }
             case Gesture.RubHands:
@@ -87,9 +87,9 @@ public partial class ShipView
                 // 두 손을 모아 비비고 입김을 분다
                 float k = Mathf.Sin(t * 18f) * 1.2f * s;
                 var hp = body + f * rr * 0.95f;
-                ci.DrawCircle(hp + sd * (1.4f * s + k), 1.4f * s, hand, true, -1f, true);
-                ci.DrawCircle(hp - sd * (1.4f * s + k), 1.4f * s, hand.Darkened(0.1f), true, -1f, true);
-                ci.DrawCircle(hp + f * (2.5f + Mathf.PosMod(t * 3f, 3f)) * s, (1f + Mathf.PosMod(t * 3f, 3f) * 0.4f) * s, RxBreath, true, -1f, true);
+                ci.Circle(hp + sd * (1.4f * s + k), 1.4f * s, hand, true, -1f, true);
+                ci.Circle(hp - sd * (1.4f * s + k), 1.4f * s, hand.Darkened(0.1f), true, -1f, true);
+                ci.Circle(hp + f * (2.5f + Mathf.PosMod(t * 3f, 3f)) * s, (1f + Mathf.PosMod(t * 3f, 3f) * 0.4f) * s, RxBreath, true, -1f, true);
                 break;
             }
             case Gesture.Torch:
@@ -99,8 +99,8 @@ public partial class ShipView
             {
                 // 손목 단말 · 콘솔 화면의 푸른 빛이 손과 얼굴을 비춘다
                 var wp = body + f * rr * 0.8f - sd * rr * 0.55f;
-                ci.DrawRect(new Rect2(wp - new Vector2(1.6f, 1.1f) * s, new Vector2(3.2f, 2.2f) * s), new Color("#7fd0ff"));
-                ci.DrawCircle(wp, rr * 1.1f, new Color(0.45f, 0.75f, 1f, 0.12f + 0.04f * Mathf.Sin(t * 2f)), true, -1f, true);
+                ci.Box(new Rect2(wp - new Vector2(1.6f, 1.1f) * s, new Vector2(3.2f, 2.2f) * s), new Color("#7fd0ff"));
+                ci.Circle(wp, rr * 1.1f, new Color(0.45f, 0.75f, 1f, 0.12f + 0.04f * Mathf.Sin(t * 2f)), true, -1f, true);
                 break;
             }
             case Gesture.FeelWall:
@@ -120,7 +120,7 @@ public partial class ShipView
                 for (int i = 0; i < 3; i++)
                 {
                     var fp = body - f * rr * (1.2f + i * 0.7f) + sd * (i % 2 == 0 ? 1.5f : -1.5f) * s;
-                    ci.DrawCircle(fp, 0.9f * s, new Color(0.2f, 0.2f, 0.22f, 0.35f - i * 0.08f), true, -1f, true);
+                    ci.Circle(fp, 0.9f * s, new Color(0.2f, 0.2f, 0.22f, 0.35f - i * 0.08f), true, -1f, true);
                 }
                 break;
             }
@@ -129,8 +129,8 @@ public partial class ShipView
                 // 몸을 틀어 비켜 가는 휜 화살표 (쳐다보는 곳 = 유리)
                 var to = look ?? body + f * rr * 2f;
                 var mid = (body + to) * 0.5f + sd * rr * 1.4f;
-                ci.DrawPolyline(new[] { body + f * rr * 0.8f, mid, to + sd * rr * 1.2f + f * rr }, new Color(1f, 0.85f, 0.4f, 0.5f), 1.2f * s, true);
-                ci.DrawArc(to, rr * 0.5f, 0f, Mathf.Tau, 10, new Color(0.8f, 0.95f, 1f, 0.45f), 0.8f * s, true);
+                ci.Polyline(new[] { body + f * rr * 0.8f, mid, to + sd * rr * 1.2f + f * rr }, new Color(1f, 0.85f, 0.4f, 0.5f), 1.2f * s, true);
+                ci.Arc(to, rr * 0.5f, 0f, Mathf.Tau, 10, new Color(0.8f, 0.95f, 1f, 0.45f), 0.8f * s, true);
                 break;
             }
             case Gesture.Look or Gesture.Stare:
@@ -153,27 +153,27 @@ public partial class ShipView
             {
                 // 손을 귀에 대고, 소리 나는 쪽에서 오는 물결
                 var ear = head + sd * rr * 0.75f;
-                ci.DrawArc(ear, 2.2f * s, f.Angle() - 1.2f, f.Angle() + 1.2f, 8, hand, 1.4f * s, true);
+                ci.Arc(ear, 2.2f * s, f.Angle() - 1.2f, f.Angle() + 1.2f, 8, hand, 1.4f * s, true);
                 var src = look ?? head + f * rr * 3f;
                 var dir = (src - ear).LengthSquared() > 1e-3f ? (src - ear).Normalized() : f;
                 for (int i = 0; i < 3; i++)
                 {
                     float ph = Mathf.PosMod(t * 1.6f + i * 0.33f, 1f);
-                    ci.DrawArc(ear + dir * rr * (0.9f + ph * 1.6f), rr * (0.3f + ph * 0.5f), dir.Angle() + Mathf.Pi - 0.6f, dir.Angle() + Mathf.Pi + 0.6f, 8, new Color(1f, 1f, 0.8f, 0.5f * (1f - ph)), 0.9f * s, true);
+                    ci.Arc(ear + dir * rr * (0.9f + ph * 1.6f), rr * (0.3f + ph * 0.5f), dir.Angle() + Mathf.Pi - 0.6f, dir.Angle() + Mathf.Pi + 0.6f, 8, new Color(1f, 1f, 0.8f, 0.5f * (1f - ph)), 0.9f * s, true);
                 }
                 break;
             }
             case Gesture.CoverNose or Gesture.Sniff:
             {
                 var nose = head + f * rr * 0.75f;
-                if (g == Gesture.CoverNose) ci.DrawCircle(nose, 2f * s, hand, true, -1f, true);
+                if (g == Gesture.CoverNose) ci.Circle(nose, 2f * s, hand, true, -1f, true);
                 // 냄새 물결 (킁킁이면 코로 빨려 들고, 막으면 앞에서 흩어진다)
                 for (int i = 0; i < 3; i++)
                 {
                     float ph = Mathf.PosMod(t * 0.9f + i * 0.33f, 1f);
                     float dist = g == Gesture.Sniff ? (1f - ph) * rr * 2f + rr * 0.5f : rr * 1.2f + ph * rr;
                     var p0 = nose + f * dist + sd * (i - 1) * 2.2f * s;
-                    ci.DrawPolyline(new[] { p0 - sd * 1.5f * s, p0 + f * 1f * s, p0 + sd * 1.5f * s }, new Color(0.75f, 0.85f, 0.55f, 0.55f * (1f - ph * 0.6f)), 0.8f * s, true);
+                    ci.Polyline(new[] { p0 - sd * 1.5f * s, p0 + f * 1f * s, p0 + sd * 1.5f * s }, new Color(0.75f, 0.85f, 0.55f, 0.55f * (1f - ph * 0.6f)), 0.8f * s, true);
                 }
                 break;
             }
@@ -181,9 +181,9 @@ public partial class ShipView
             {
                 // 기침: 주먹을 입에 대고 작은 구름이 튄다
                 var mouth = head + f * rr * 0.8f;
-                ci.DrawCircle(mouth + sd * 1.2f * s, 1.5f * s, hand, true, -1f, true);
+                ci.Circle(mouth + sd * 1.2f * s, 1.5f * s, hand, true, -1f, true);
                 float ph = Mathf.PosMod(t * 2.2f, 1f);
-                for (int i = 0; i < 3; i++) ci.DrawCircle(mouth + f * (2f + ph * 5f + i * 1.5f) * s + sd * (i - 1) * 1.4f * s, (1.1f + ph) * s, new Color(0.7f, 0.7f, 0.72f, 0.45f * (1f - ph)), true, -1f, true);
+                for (int i = 0; i < 3; i++) ci.Circle(mouth + f * (2f + ph * 5f + i * 1.5f) * s + sd * (i - 1) * 1.4f * s, (1.1f + ph) * s, new Color(0.7f, 0.7f, 0.72f, 0.45f * (1f - ph)), true, -1f, true);
                 break;
             }
             case Gesture.Brace:
@@ -198,13 +198,13 @@ public partial class ShipView
             case Gesture.Kneel:
             {
                 // 몸을 낮춰 웅크린다: 무릎 두 개가 앞으로 · 한 손은 바닥을 짚고 · 몸통 둘레에 낮은 그림자 테
-                ci.DrawCircle(body + f * rr * 0.9f + sd * rr * 0.45f, rr * 0.38f, RoleCloth(c.Role).Darkened(0.2f), true, -1f, true);
-                ci.DrawCircle(body + f * rr * 0.9f - sd * rr * 0.45f, rr * 0.38f, RoleCloth(c.Role).Darkened(0.2f), true, -1f, true);
+                ci.Circle(body + f * rr * 0.9f + sd * rr * 0.45f, rr * 0.38f, RoleCloth(c.Role).Darkened(0.2f), true, -1f, true);
+                ci.Circle(body + f * rr * 0.9f - sd * rr * 0.45f, rr * 0.38f, RoleCloth(c.Role).Darkened(0.2f), true, -1f, true);
                 ci.DrawLine(body + sd * rr * 0.7f, body + sd * rr * 1.5f + f * rr * 0.4f, RoleCloth(c.Role), 2.2f * s, true);
-                ci.DrawCircle(body + sd * rr * 1.5f + f * rr * 0.4f, 1.5f * s, hand, true, -1f, true);
+                ci.Circle(body + sd * rr * 1.5f + f * rr * 0.4f, 1.5f * s, hand, true, -1f, true);
                 if (lod >= 1)
                 {
-                    ci.DrawArc(body, rr * 1.45f, 0f, Mathf.Tau, 20, new Color(0f, 0f, 0f, 0.22f), 1.4f * s, true);
+                    ci.Arc(body, rr * 1.45f, 0f, Mathf.Tau, 20, new Color(0f, 0f, 0f, 0.22f), 1.4f * s, true);
                     float k = Mathf.Sin(t * 18f) * 0.8f * s;
                     ci.DrawLine(head - f * rr * 0.9f + sd * (rr * 0.5f + k), head - f * rr * 0.9f - sd * (rr * 0.5f - k), new Color(1, 1, 1, 0.25f), 0.7f * s, true);
                 }
@@ -212,10 +212,10 @@ public partial class ShipView
             }
             case Gesture.CoverEars:
             {
-                ci.DrawCircle(head + sd * rr * 0.8f, 1.7f * s, hand, true, -1f, true);
-                ci.DrawCircle(head - sd * rr * 0.8f, 1.7f * s, hand, true, -1f, true);
+                ci.Circle(head + sd * rr * 0.8f, 1.7f * s, hand, true, -1f, true);
+                ci.Circle(head - sd * rr * 0.8f, 1.7f * s, hand, true, -1f, true);
                 float ph = Mathf.PosMod(t * 2f, 1f);
-                ci.DrawArc(head, rr * (1.3f + ph * 0.8f), 0f, Mathf.Tau, 20, new Color(1f, 0.35f, 0.3f, 0.35f * (1f - ph)), 1f * s, true);
+                ci.Arc(head, rr * (1.3f + ph * 0.8f), 0f, Mathf.Tau, 20, new Color(1f, 0.35f, 0.3f, 0.35f * (1f - ph)), 1f * s, true);
                 break;
             }
             case Gesture.Admire:
@@ -239,8 +239,8 @@ public partial class ShipView
                 var dir = (to - body).LengthSquared() > 1e-3f ? (to - body).Normalized() : sd;
                 var shoulder = body + dir * rr * Mathf.Min(1.9f, (to - body).Length() / rr);
                 ci.DrawLine(body + dir * rr * 0.5f, shoulder, RoleCloth(c.Role).Lightened(0.05f), 2.4f * s, true);
-                ci.DrawCircle(shoulder, 1.5f * s, hand, true, -1f, true);
-                if (g == Gesture.Huddle) ci.DrawCircle((body + to) * 0.5f, rr * 1.3f, new Color(1f, 0.6f, 0.3f, 0.08f + 0.03f * Mathf.Sin(t * 2f)), true, -1f, true);
+                ci.Circle(shoulder, 1.5f * s, hand, true, -1f, true);
+                if (g == Gesture.Huddle) ci.Circle((body + to) * 0.5f, rr * 1.3f, new Color(1f, 0.6f, 0.3f, 0.08f + 0.03f * Mathf.Sin(t * 2f)), true, -1f, true);
                 break;
             }
             case Gesture.Point or Gesture.Call:
@@ -256,7 +256,7 @@ public partial class ShipView
             {
                 // 제자리 뛰기: 무릎이 번갈아 올라오고 발밑에 먼지 · 움직임 선
                 float k = Mathf.Sin(t * 16f);
-                ci.DrawCircle(body + f * rr * 0.5f + sd * rr * 0.4f * (k > 0 ? 1 : -1), 1.6f * s, RoleCloth(c.Role).Darkened(0.4f), true, -1f, true);
+                ci.Circle(body + f * rr * 0.5f + sd * rr * 0.4f * (k > 0 ? 1 : -1), 1.6f * s, RoleCloth(c.Role).Darkened(0.4f), true, -1f, true);
                 for (int i = -1; i <= 1; i += 2) ci.DrawLine(body - f * rr * 1.2f + sd * i * rr * 0.5f, body - f * rr * (1.5f + 0.3f * Mathf.Abs(k)) + sd * i * rr * 0.5f, new Color(1, 1, 1, 0.3f), 0.8f * s, true);
                 break;
             }
@@ -266,7 +266,7 @@ public partial class ShipView
                 float ph = Mathf.PosMod(t * 1.2f, 1f);
                 for (int i = -1; i <= 1; i += 2) ci.DrawLine(head + f * rr * 0.55f + sd * i * rr * 0.3f, head + f * rr * (0.55f - ph * 0.6f) + sd * i * rr * 0.35f, new Color(0.6f, 0.82f, 1f, 0.8f), 0.9f * s, true);
                 float hv = Mathf.Abs(Mathf.Sin(t * 6f)) * 1.2f * s;
-                ci.DrawArc(body - f * hv, rr * 0.95f, f.Angle() + 1.2f, f.Angle() + Mathf.Pi - 1.2f, 6, new Color(0, 0, 0, 0.25f), 1f * s, true);
+                ci.Arc(body - f * hv, rr * 0.95f, f.Angle() + 1.2f, f.Angle() + Mathf.Pi - 1.2f, 6, new Color(0, 0, 0, 0.25f), 1f * s, true);
                 break;
             }
             case Gesture.Talk:
@@ -276,31 +276,31 @@ public partial class ShipView
                 for (int i = 0; i < 3; i++)
                 {
                     float ph = Mathf.PosMod(t * 2.4f + i * 0.33f, 1f);
-                    ci.DrawArc(mouth, (1.5f + ph * 3f) * s, f.Angle() - 0.5f, f.Angle() + 0.5f, 5, new Color(1, 1, 1, 0.5f * (1f - ph)), 0.7f * s, true);
+                    ci.Arc(mouth, (1.5f + ph * 3f) * s, f.Angle() - 0.5f, f.Angle() + 0.5f, 5, new Color(1, 1, 1, 0.5f * (1f - ph)), 0.7f * s, true);
                 }
                 break;
             }
             case Gesture.Shrug:
             {
                 float up = Mathf.Sin(Mathf.Min(1f, age * 4f) * Mathf.Pi) * 1.5f * s;
-                for (int i = -1; i <= 1; i += 2) ci.DrawArc(body + sd * i * rr * 0.7f - f * up, rr * 0.35f, f.Angle() + Mathf.Pi * 0.5f * i - 0.9f, f.Angle() + Mathf.Pi * 0.5f * i + 0.9f, 6, new Color(1, 1, 1, 0.4f), 0.8f * s, true);
+                for (int i = -1; i <= 1; i += 2) ci.Arc(body + sd * i * rr * 0.7f - f * up, rr * 0.35f, f.Angle() + Mathf.Pi * 0.5f * i - 0.9f, f.Angle() + Mathf.Pi * 0.5f * i + 0.9f, 6, new Color(1, 1, 1, 0.4f), 0.8f * s, true);
                 break;
             }
             case Gesture.Window:
             {
                 // 창가: 차가운 별빛이 몸을 비춘다 (몇 점이 반짝)
-                ci.DrawCircle(body, rr * 1.4f, new Color(0.6f, 0.7f, 1f, 0.1f + 0.03f * Mathf.Sin(t)), true, -1f, true);
+                ci.Circle(body, rr * 1.4f, new Color(0.6f, 0.7f, 1f, 0.1f + 0.03f * Mathf.Sin(t)), true, -1f, true);
                 for (int i = 0; i < 4; i++)
                 {
                     float a = i * 1.7f + t * 0.2f;
-                    ci.DrawCircle(body + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * rr * 1.2f, 0.6f * s, new Color(0.85f, 0.9f, 1f, 0.6f + 0.3f * Mathf.Sin(t * 3f + i)), true, -1f, true);
+                    ci.Circle(body + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * rr * 1.2f, 0.6f * s, new Color(0.85f, 0.9f, 1f, 0.6f + 0.3f * Mathf.Sin(t * 3f + i)), true, -1f, true);
                 }
                 break;
             }
             case Gesture.Nod:
             {
                 float k = Mathf.Abs(Mathf.Sin(t * 8f)) * 1.5f * s;
-                ci.DrawArc(head + f * (rr * 0.2f + k), rr * 0.5f, f.Angle() - 0.6f, f.Angle() + 0.6f, 6, new Color(1, 1, 1, 0.3f), 0.8f * s, true);
+                ci.Arc(head + f * (rr * 0.2f + k), rr * 0.5f, f.Angle() - 0.6f, f.Angle() + 0.6f, 6, new Color(1, 1, 1, 0.3f), 0.8f * s, true);
                 break;
             }
             case Gesture.Cup:
@@ -323,12 +323,12 @@ public partial class ShipView
         {
             float wdt = 0.28f + k * 0.12f;
             var pts = new[] { hp, hp + dir.Rotated(-wdt) * len * (1f - k * 0.12f), hp + dir * len * (1.04f - k * 0.1f), hp + dir.Rotated(wdt) * len * (1f - k * 0.12f) };
-            ci.DrawColoredPolygon(pts, RxTorchBeam.WithAlpha(0.13f - k * 0.035f));
+            ci.Poly(pts, RxTorchBeam.WithAlpha(0.13f - k * 0.035f));
         }
         if (lod == 0) return;
         ci.DrawLine(hp - dir * 2.6f, hp + dir * 1.2f, new Color("#3a3d44"), 2.4f, true);
         ci.DrawLine(hp + dir * 1.2f, hp + dir * 1.9f, new Color("#9aa0aa"), 2.9f, true);
-        ci.DrawCircle(hp + dir * 2.1f, 1.1f, RxTorchBeam, true, -1f, true);
+        ci.Circle(hp + dir * 2.1f, 1.1f, RxTorchBeam, true, -1f, true);
     }
 
     /// <summary>둘러쓴 담요: 어깨부터 등까지 덮는 천 · 누빈 줄 · 테두리 (사람마다 다른 색).</summary>
@@ -341,7 +341,7 @@ public partial class ShipView
             b + f * rr * 0.35f + sd * rr * 1.05f, b + f * rr * 0.55f, b + f * rr * 0.35f - sd * rr * 1.05f,
             b - f * rr * 0.9f - sd * rr * 1.15f, b - f * rr * 1.25f, b - f * rr * 0.9f + sd * rr * 1.15f,
         };
-        ci.DrawColoredPolygon(pts, col.WithAlpha(0.92f));
+        ci.Poly(pts, col.WithAlpha(0.92f));
         if (lod == 0) return;
         var line = col.Lightened(0.3f).WithAlpha(0.7f);
         for (int i = 0; i < pts.Length; i++) ci.DrawLine(pts[i], pts[(i + 1) % pts.Length], col.Darkened(0.35f), 1f, true);
@@ -357,10 +357,10 @@ public partial class ShipView
     private void PaintTiedJacket(CanvasItem ci, CrewMember c, Vector2 body, Vector2 f, Vector2 sd, float rr)
     {
         var cl = RoleCloth(c.Role).Darkened(0.25f);
-        ci.DrawArc(body - f * rr * 0.15f, rr * 0.95f, f.Angle() + 0.4f, f.Angle() + Mathf.Tau - 0.4f, 14, cl, 2.2f, true);
+        ci.Arc(body - f * rr * 0.15f, rr * 0.95f, f.Angle() + 0.4f, f.Angle() + Mathf.Tau - 0.4f, 14, cl, 2.2f, true);
         var knot = body + f * rr * 0.75f;
-        ci.DrawCircle(knot + sd * 1.3f, 1.4f, cl.Lightened(0.1f), true, -1f, true);
-        ci.DrawCircle(knot - sd * 1.3f, 1.4f, cl.Lightened(0.1f), true, -1f, true);
+        ci.Circle(knot + sd * 1.3f, 1.4f, cl.Lightened(0.1f), true, -1f, true);
+        ci.Circle(knot - sd * 1.3f, 1.4f, cl.Lightened(0.1f), true, -1f, true);
         ci.DrawLine(knot, knot + f * 3f + sd * 1.5f, cl, 1.4f, true);
     }
 
@@ -372,8 +372,8 @@ public partial class ShipView
         {
             float ph = lv >= 3 ? Mathf.PosMod(t * 0.7f + i * 0.27f, 1f) : 0f;
             var p = head + f * rr * (0.3f - ph * 0.8f) + sd * rr * (i % 2 == 0 ? 0.55f : -0.55f) * (1f + i * 0.15f);
-            ci.DrawCircle(p, 0.9f + 0.15f * lv, RxSweat, true, -1f, true);
-            if (lod >= 2) ci.DrawCircle(p - f * 0.3f + sd * 0.3f, 0.35f, new Color(1, 1, 1, 0.9f), true, -1f, true);
+            ci.Circle(p, 0.9f + 0.15f * lv, RxSweat, true, -1f, true);
+            if (lod >= 2) ci.Circle(p - f * 0.3f + sd * 0.3f, 0.35f, new Color(1, 1, 1, 0.9f), true, -1f, true);
         }
     }
 
@@ -383,9 +383,9 @@ public partial class ShipView
         float k = Mathf.Sin(t * (28f + lv * 6f)) * 0.6f * lv;
         if (lod >= 1)
             for (int i = -1; i <= 1; i += 2)
-                ci.DrawPolyline(new[] { body + sd * i * (rr * 1.1f + k) - f * rr * 0.5f, body + sd * i * (rr * 1.25f - k) - f * rr * 0.1f, body + sd * i * (rr * 1.1f + k) + f * rr * 0.3f }, new Color(0.8f, 0.9f, 1f, 0.45f), 0.7f, true);
+                ci.Polyline(new[] { body + sd * i * (rr * 1.1f + k) - f * rr * 0.5f, body + sd * i * (rr * 1.25f - k) - f * rr * 0.1f, body + sd * i * (rr * 1.1f + k) + f * rr * 0.3f }, new Color(0.8f, 0.9f, 1f, 0.45f), 0.7f, true);
         float ph = Mathf.PosMod(t * (0.5f + 0.15f * lv), 1f);
-        ci.DrawCircle(head + f * rr * (0.9f + ph * 1.4f), rr * (0.18f + ph * 0.25f), RxBreath.WithAlpha(0.5f * (1f - ph)), true, -1f, true);
+        ci.Circle(head + f * rr * (0.9f + ph * 1.4f), rr * (0.18f + ph * 0.25f), RxBreath.WithAlpha(0.5f * (1f - ph)), true, -1f, true);
     }
 
     /// <summary>손에 든 잔: 따뜻한 차는 머그와 김, 찬물은 유리컵과 물방울.</summary>
@@ -393,21 +393,21 @@ public partial class ShipView
     {
         if (warm)
         {
-            ci.DrawCircle(at, rr * 0.28f, new Color("#e9e2d4"), true, -1f, true);
-            ci.DrawCircle(at, rr * 0.2f, new Color("#7a4a2a"), true, -1f, true);
-            ci.DrawArc(at + new Vector2(rr * 0.3f, 0), rr * 0.12f, -1.4f, 1.4f, 6, new Color("#e9e2d4"), 0.8f, true);
+            ci.Circle(at, rr * 0.28f, new Color("#e9e2d4"), true, -1f, true);
+            ci.Circle(at, rr * 0.2f, new Color("#7a4a2a"), true, -1f, true);
+            ci.Arc(at + new Vector2(rr * 0.3f, 0), rr * 0.12f, -1.4f, 1.4f, 6, new Color("#e9e2d4"), 0.8f, true);
             for (int i = 0; i < 2; i++)
             {
                 float ph = Mathf.PosMod(t * 0.8f + i * 0.5f, 1f);
                 var p = at + new Vector2(Mathf.Sin(ph * 6f + i) * 1.2f, -rr * (0.3f + ph * 0.8f));
-                ci.DrawCircle(p, 0.8f + ph, new Color(1, 1, 1, 0.35f * (1f - ph)), true, -1f, true);
+                ci.Circle(p, 0.8f + ph, new Color(1, 1, 1, 0.35f * (1f - ph)), true, -1f, true);
             }
         }
         else
         {
-            ci.DrawArc(at, rr * 0.25f, 0f, Mathf.Tau, 12, new Color(0.85f, 0.95f, 1f, 0.8f), 0.8f, true);
-            ci.DrawCircle(at, rr * 0.2f, new Color(0.55f, 0.8f, 1f, 0.45f), true, -1f, true);
-            ci.DrawCircle(at + new Vector2(rr * 0.22f, rr * 0.05f), 0.45f, new Color(1, 1, 1, 0.8f), true, -1f, true);
+            ci.Arc(at, rr * 0.25f, 0f, Mathf.Tau, 12, new Color(0.85f, 0.95f, 1f, 0.8f), 0.8f, true);
+            ci.Circle(at, rr * 0.2f, new Color(0.55f, 0.8f, 1f, 0.45f), true, -1f, true);
+            ci.Circle(at + new Vector2(rr * 0.22f, rr * 0.05f), 0.45f, new Color(1, 1, 1, 0.8f), true, -1f, true);
         }
     }
 }

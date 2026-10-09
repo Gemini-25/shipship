@@ -49,27 +49,27 @@ public partial class Hud
             foreach (var c in room.Cells)
             {
                 var p = M(new Vector2(c.X * t, c.Y * t));
-                DrawRect(new Rect2(p, new Vector2(Mathf.Max(1f, t * scale), Mathf.Max(1f, t * scale))), col);
+                this.Box(new Rect2(p, new Vector2(Mathf.Max(1f, t * scale), Mathf.Max(1f, t * scale))), col);
             }
         }
         // 날아오는 운석: 들어올 외벽
         foreach (var m in _world.Sensors.Incoming)
         {
             var p = M(ShipView.ToPx(m.Entry.Center));
-            DrawArc(p, 3f + 1.5f * Mathf.Sin(_time * 8f), 0f, Mathf.Tau, 12, Palette.Danger, 1.2f, true);
+            this.Arc(p, 3f + 1.5f * Mathf.Sin(_time * 8f), 0f, Mathf.Tau, 12, Palette.Danger, 1.2f, true);
         }
         // 로봇 · 승무원
         foreach (var r in _world.Robots.Robots)
         {
             if (r.State == RobotState.Lost) continue;
             var p = M(ShipView.ToPx(r.Position));
-            DrawRect(new Rect2(p - new Vector2(1.2f, 1.2f), new Vector2(2.4f, 2.4f)), ShipView.RobotColor(r.Kind).WithAlpha(0.9f));
+            this.Box(new Rect2(p - new Vector2(1.2f, 1.2f), new Vector2(2.4f, 2.4f)), ShipView.RobotColor(r.Kind).WithAlpha(0.9f));
         }
         foreach (var c in _world.Crew)
         {
             if (c.Dead || c.Away) continue;
             var p = M(ShipView.ToPx(c.Position));
-            DrawCircle(p, c == _main.SelectedCrew ? 3f : 1.8f, c.Down ? Palette.Danger : Palette.Crew(c.Id), true, -1f, true);
+            this.Circle(p, c == _main.SelectedCrew ? 3f : 1.8f, c.Down ? Palette.Danger : Palette.Crew(c.Id), true, -1f, true);
         }
         // 지금 보는 영역
         var cam = _main.Camera;
@@ -77,7 +77,7 @@ public partial class Hud
         var vr = new Rect2(M(cam.Position - view * 0.5f), view * scale);
         var clip = new Rect2(origin, size);
         vr = vr.Intersection(clip);
-        if (vr.Size.X > 0 && vr.Size.Y > 0) DrawRect(vr, new Color(1, 1, 1, 0.6f), false, 1f);
+        if (vr.Size.X > 0 && vr.Size.Y > 0) this.Box(vr, new Color(1, 1, 1, 0.6f), false, 1f);
         var area = new Rect2(origin, size);
         _buttons.Add((area, () =>
         {

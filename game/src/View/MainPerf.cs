@@ -16,6 +16,25 @@ public partial class Main
     /// </summary>
     private const double SimBudgetMs = 25.0;
 
+    /// <summary>
+    /// 60프레임: 이번 프레임에 시뮬레이션이 쓸 수 있는 시간 (6 ~ 25ms). 프레임을 놓치면서 시뮬레이션이 시간을 많이 썼으면 줄이고,
+    /// 60프레임에 맞으면 조금씩 늘린다 — 큰 배를 빠른 배속으로 볼 때 화면이 끊기는 대신 배속이 조금 준다 (상단에 실제 배속).
+    /// </summary>
+    private double _simBudget = SimBudgetMs;
+    private double _tickRate = -1;
+
+    /// <summary>지난 몇 초 동안 실제로 흐른 배속 (밀린 틱을 버리면 고른 배속보다 느리다).</summary>
+    public float ActualSpeed { get; private set; } = 1f;
+
+    private void FitSimBudget(double delta, double simMs, int ticks)
+    {
+        if (delta > 1.0 / 55.0 && simMs > 4.0) _simBudget = Math.Max(6.0, _simBudget * 0.85);
+        else if (delta < 1.0 / 58.0) _simBudget = Math.Min(SimBudgetMs, _simBudget + 0.25);
+        double rate = ticks / Math.Max(1e-4, delta);
+        _tickRate = _tickRate < 0 ? rate : _tickRate * 0.97 + rate * 0.03;
+        ActualSpeed = (float)(_tickRate / ShipSim.Core.SimTime.TicksPerSecond / (SlowMotion ? 0.3 : 1.0));
+    }
+
     private int _perfLeft = -1, _perfFrames;
     private ulong _perfLastUs;
     private readonly List<double> _perfMs = new();
@@ -106,8 +125,8 @@ public partial class Main
         FrameProbe.On = false;
         var s = _perfMs.OrderBy(x => x).ToArray();
         double P(double q) => s.Length == 0 ? 0 : s[Math.Min(s.Length - 1, (int)(q * s.Length))];
-        GD.Print($"프레임 {s.Length}개 · {Speeds[SpeedIndex]}배속 · 승무원 {Sim.Crew.Count}명 · 평균 {s.DefaultIfEmpty(0).Average():0.0}ms · 중앙 {P(0.5):0.0}ms · p95 {P(0.95):0.0}ms · 최대 {s.DefaultIfEmpty(0).Max():0.0}ms · {1000.0 / Math.Max(0.1, s.DefaultIfEmpty(0).Average()):0}fps · 그리기 호출 {_perfCalls / Math.Max(1, s.Length):0} · 도형 {_perfPrims / Math.Max(1, s.Length):0} · 물체 {_perfObjs / Math.Max(1, s.Length):0}");
-        foreach (var (key, ms, calls) in FrameProbe.Report(s.Length).Take(40))
+        GD.Print($"프레임 {s.Length}개 · {Speeds[SpeedIndex]}배속 · 확대 {Camera.Zoom.X:0.00} · 승무원 {Sim.Crew.Count}명 · 평균 {s.DefaultIfEmpty(0).Average():0.0}ms · 중앙 {P(0.5):0.0}ms · p95 {P(0.95):0.0}ms · 최대 {s.DefaultIfEmpty(0).Max():0.0}ms · {1000.0 / Math.Max(0.1, s.DefaultIfEmpty(0).Average()):0}fps · 그리기 호출 {_perfCalls / Math.Max(1, s.Length):0} · 도형 {_perfPrims / Math.Max(1, s.Length):0} · 물체 {_perfObjs / Math.Max(1, s.Length):0}");
+        foreach (var (key, ms, calls) in FrameProbe.Report(s.Length).Take(70))
             GD.Print($"  프레임 · {key,-16} {ms,6:0.00}ms/프레임 · {calls}번");
         _perfLeft = -1;
     }

@@ -86,10 +86,10 @@ public partial class Hud
         float ups = core.Ups < 0 ? core.UpsCapacity : core.Ups;
         var uCol = core.OnUps ? Palette.Warning : Palette.TextDim;
         var cell = new Rect2(cx, cy - 6, 22, 11);
-        DrawRect(cell, new Color(1, 1, 1, 0.05f));
-        DrawRect(new Rect2(cell.Position, new Vector2(cell.Size.X * Mathf.Clamp(ups / Mathf.Max(1f, core.UpsCapacity), 0f, 1f), cell.Size.Y)), uCol.WithAlpha(core.OnUps ? 0.6f + 0.3f * Mathf.Sin(_time * 5f) : 0.7f));
-        DrawRect(cell, uCol, false, 1f);
-        DrawRect(new Rect2(cell.End.X, cy - 3, 2, 5), uCol);
+        this.Box(cell, new Color(1, 1, 1, 0.05f));
+        this.Box(new Rect2(cell.Position, new Vector2(cell.Size.X * Mathf.Clamp(ups / Mathf.Max(1f, core.UpsCapacity), 0f, 1f), cell.Size.Y)), uCol.WithAlpha(core.OnUps ? 0.6f + 0.3f * Mathf.Sin(_time * 5f) : 0.7f));
+        this.Box(cell, uCol, false, 1f);
+        this.Box(new Rect2(cell.End.X, cy - 3, 2, 5), uCol);
         string upsText = $"비상 전지 {ups:0}분" + (core.OnUps ? " · 쓰는 중" : "");
         Gfx.Text(this, Fonts.Body, new Vector2(cx + 28, cy + 4), upsText, 10, uCol);
         cx += 32 + Gfx.Width(Fonts.Body, upsText, 10) + 12;
@@ -116,36 +116,36 @@ public partial class Hud
     private void DrawRack(Vector2 c, Color col, bool on, float pace)
     {
         var r = new Rect2(c - new Vector2(6, 7), new Vector2(12, 14));
-        DrawRect(r, new Color(0.08f, 0.1f, 0.14f, 0.9f));
-        DrawRect(r, col.WithAlpha(0.7f), false, 1f);
+        this.Box(r, new Color(0.08f, 0.1f, 0.14f, 0.9f));
+        this.Box(r, col.WithAlpha(0.7f), false, 1f);
         for (int k = 0; k < 3; k++)
         {
             DrawLine(new Vector2(r.Position.X + 2, r.Position.Y + 3.5f + k * 4), new Vector2(r.End.X - 4, r.Position.Y + 3.5f + k * 4), col.WithAlpha(0.35f), 1f);
             float blink = on ? 0.5f + 0.5f * Mathf.Sin(_time * 6f * pace + k * 1.7f) : 0.15f;
-            DrawCircle(new Vector2(r.End.X - 2.5f, r.Position.Y + 3.5f + k * 4), 1f, col.WithAlpha(blink), true, -1f, true);
+            this.Circle(new Vector2(r.End.X - 2.5f, r.Position.Y + 3.5f + k * 4), 1f, col.WithAlpha(blink), true, -1f, true);
         }
     }
 
     /// <summary>데이터선 고리: 실선 몫(데이터선) · 점선 몫(무선) · 나머지 빈칸.</summary>
     private void DrawRing(Vector2 c, float rad, float linked, float wireless)
     {
-        DrawArc(c, rad, 0f, Mathf.Tau, 24, new Color(1, 1, 1, 0.08f), 2f, true);
+        this.Arc(c, rad, 0f, Mathf.Tau, 24, new Color(1, 1, 1, 0.08f), 2f, true);
         float a0 = -Mathf.Pi / 2f, a1 = a0 + Mathf.Tau * linked;
-        if (linked > 0f) DrawArc(c, rad, a0, a1, 24, CmdRemote, 2f, true);
+        if (linked > 0f) this.Arc(c, rad, a0, a1, 24, CmdRemote, 2f, true);
         int n = (int)(wireless * 12f);
-        for (int k = 0; k < n; k++) { float t = a1 + (k + 0.5f) / 12f * Mathf.Tau; DrawCircle(c + new Vector2(Mathf.Cos(t), Mathf.Sin(t)) * rad, 0.9f, Palette.Warning, true, -1f, true); }
-        DrawCircle(c, 1.6f, CmdRemote.WithAlpha(0.6f + 0.4f * Mathf.Sin(_time * 3f)), true, -1f, true);
+        for (int k = 0; k < n; k++) { float t = a1 + (k + 0.5f) / 12f * Mathf.Tau; this.Circle(c + new Vector2(Mathf.Cos(t), Mathf.Sin(t)) * rad, 0.9f, Palette.Warning, true, -1f, true); }
+        this.Circle(c, 1.6f, CmdRemote.WithAlpha(0.6f + 0.4f * Mathf.Sin(_time * 3f)), true, -1f, true);
     }
 
     /// <summary>성격 두 축 점: 가로 신중(왼쪽)↔과감(오른쪽) · 세로 사람 우선(위)↔배 우선(아래).</summary>
     private void DrawTemper(Vector2 c, float caution, float people)
     {
         var box = new Rect2(c - new Vector2(6, 6), new Vector2(12, 12));
-        DrawRect(box, new Color(1, 1, 1, 0.04f));
+        this.Box(box, new Color(1, 1, 1, 0.04f));
         DrawLine(new Vector2(c.X, box.Position.Y), new Vector2(c.X, box.End.Y), new Color(1, 1, 1, 0.12f), 1f);
         DrawLine(new Vector2(box.Position.X, c.Y), new Vector2(box.End.X, c.Y), new Color(1, 1, 1, 0.12f), 1f);
         var p = c + new Vector2(Mathf.Clamp(-caution, -1f, 1f) * 5f, Mathf.Clamp(-people, -1f, 1f) * 5f);
-        DrawCircle(p, 2.2f, CmdHands, true, -1f, true);
+        this.Circle(p, 2.2f, CmdHands, true, -1f, true);
     }
 
     // ───────────────────────── 컴퓨터가 믿는 배 ─────────────────────────
@@ -178,20 +178,20 @@ public partial class Hud
             float sx = 0, sy = 0;
             foreach (var c in room.Cells)
             {
-                DrawRect(new Rect2(P(c.X, c.Y), new Vector2(Mathf.Max(1f, s - 0.4f), Mathf.Max(1f, s - 0.4f))), col);
+                this.Box(new Rect2(P(c.X, c.Y), new Vector2(Mathf.Max(1f, s - 0.4f), Mathf.Max(1f, s - 0.4f))), col);
                 sx += c.X; sy += c.Y;
             }
             var mid = P(sx / room.Cells.Count + 0.5f, sy / room.Cells.Count + 0.5f);
             centers[room.Id] = mid;
             if (room.Type == RoomType.Corridor) continue;
             // 닿는 길: 무선만이면 작은 전파 · 못 보면 물음표
-            if (reach == 1) for (int k = 1; k <= 2; k++) DrawArc(mid + new Vector2(0, 3), 2.5f * k, -Mathf.Pi * 0.8f, -Mathf.Pi * 0.2f, 6, Palette.Warning.WithAlpha(0.8f), 1f, true);
+            if (reach == 1) for (int k = 1; k <= 2; k++) this.Arc(mid + new Vector2(0, 3), 2.5f * k, -Mathf.Pi * 0.8f, -Mathf.Pi * 0.2f, 6, Palette.Warning.WithAlpha(0.8f), 1f, true);
             else if (reach == 0) Gfx.TextCentered(this, Fonts.Bold, mid, "?", 9, Palette.TextMuted);
             // 믿는 사람 수 (점) · 믿음≠실제 (깜빡이는 표)
             int ppl = Math.Min(6, b.People);
-            for (int k = 0; k < ppl; k++) DrawCircle(mid + new Vector2((k - (ppl - 1) * 0.5f) * 3.2f, -4f), 1.2f, Palette.Text.WithAlpha(0.85f), true, -1f, true);
+            for (int k = 0; k < ppl; k++) this.Circle(mid + new Vector2((k - (ppl - 1) * 0.5f) * 3.2f, -4f), 1.2f, Palette.Text.WithAlpha(0.85f), true, -1f, true);
             if (reach > 0 && a.Belief.Diverged(room, out _)) Gfx.TextCentered(this, Fonts.Bold, mid + new Vector2(0, 5), "≠", 10, Palette.Danger.WithAlpha(0.6f + 0.4f * Mathf.Sin(_time * 7f)));
-            else if (b.Fault != SensorFault.None) DrawCircle(mid + new Vector2(5, 4), 1.6f, Palette.Warning, true, -1f, true);
+            else if (b.Fault != SensorFault.None) this.Circle(mid + new Vector2(5, 4), 1.6f, Palette.Warning, true, -1f, true);
         }
         DrawPlanMarks(centers); // v16.26 끊긴 구역 · 계획 걸음
         // 컴퓨터실: 칩
@@ -213,7 +213,7 @@ public partial class Hud
             var mid = (from + to) * 0.5f + (to - from).Orthogonal().Normalized() * Mathf.Min(14f, (to - from).Length() * 0.18f) * (i % 2 == 0 ? 1f : -1f);
             var pts = new Vector2[13];
             for (int k = 0; k <= 12; k++) { float t = k / 12f; pts[k] = (1 - t) * (1 - t) * from + 2 * (1 - t) * t * mid + t * t * to; }
-            if (o.Remote) DrawPolyline(pts, col.WithAlpha(alpha * 0.55f), 1.2f, true);
+            if (o.Remote) this.Polyline(pts, col.WithAlpha(alpha * 0.55f), 1.2f, true);
             else for (int k = 0; k < 12; k += 2) DrawLine(pts[k], pts[k + 1], col.WithAlpha(alpha * 0.6f), 1.2f, true);
             // 흐르는 빛 (열린 명령만)
             if (o.Open)
@@ -221,7 +221,7 @@ public partial class Hud
                 float ph = Mathf.PosMod(_time * 0.7f + i * 0.13f, 1f);
                 int seg = Math.Min(11, (int)(ph * 12f));
                 float f = ph * 12f - seg;
-                DrawCircle(pts[seg].Lerp(pts[seg + 1], f), 1.8f, col, true, -1f, true);
+                this.Circle(pts[seg].Lerp(pts[seg + 1], f), 1.8f, col, true, -1f, true);
             }
             CommandIcons.Draw(this, o.Target, to + new Vector2(0, -9), 3.4f, col.WithAlpha(Mathf.Max(0.4f, alpha)), _time);
         }
@@ -273,7 +273,7 @@ public partial class Hud
             DrawSourceGlyph(new Vector2(box.Position.X + 10, box.Position.Y + sh * 0.5f), i, col, on);
             Gfx.Text(this, Fonts.Bold, new Vector2(box.Position.X + 22, box.Position.Y + 12), name, 10, Palette.Text);
             Gfx.Text(this, Fonts.Body, new Vector2(box.Position.X + 22, box.Position.Y + 24), Fit(value, sw - 26, 9, Fonts.Body), 9, col);
-            DrawRect(new Rect2(box.Position.X + 4, box.End.Y - 3, (sw - 8) * Mathf.Clamp(frac, 0f, 1f), 2), col.WithAlpha(0.6f));
+            this.Box(new Rect2(box.Position.X + 4, box.End.Y - 3, (sw - 8) * Mathf.Clamp(frac, 0f, 1f), 2), col.WithAlpha(0.6f));
             var a0 = new Vector2(box.End.X, box.Position.Y + sh * 0.5f);
             FlowLine(a0, new Vector2(busX, a0.Y), col, on);
         }
@@ -306,10 +306,10 @@ public partial class Hud
             Gfx.Text(this, Fonts.Bold, new Vector2(tx, ty + 4), tiers[t], 10, tc[t]);
             float bx = tx + 30, bw = Mathf.Max(10f, tw - 30);
             var bar = new Rect2(bx, ty - 3, bw, 7);
-            DrawRect(bar, new Color(1, 1, 1, 0.05f));
+            this.Box(bar, new Color(1, 1, 1, 0.05f));
             if (total > 0)
             {
-                DrawRect(new Rect2(bar.Position, new Vector2(bw * tierOn[t] / total, 7)), tc[t].WithAlpha(0.65f));
+                this.Box(new Rect2(bar.Position, new Vector2(bw * tierOn[t] / total, 7)), tc[t].WithAlpha(0.65f));
                 for (int k = 0; k < tierOff[t]; k++) // 끈 것: 빗금 칸
                 {
                     float fx = bx + bw * (tierOn[t] + k) / total;
@@ -334,7 +334,7 @@ public partial class Hud
         for (int k = 0; k < 2; k++)
         {
             float ph = Mathf.PosMod(_time * 0.9f + k * 0.5f + a.Y * 0.013f, 1f);
-            DrawCircle(a.Lerp(b, ph), 1.5f, col, true, -1f, true);
+            this.Circle(a.Lerp(b, ph), 1.5f, col, true, -1f, true);
         }
     }
 
@@ -349,17 +349,17 @@ public partial class Hud
                     float rot = (on ? _time * 1.2f : 0f) + k * Mathf.Pi / 3f;
                     var pts = new Vector2[13];
                     for (int j = 0; j <= 12; j++) { float t = j / 12f * Mathf.Tau; var e = new Vector2(Mathf.Cos(t) * 6f, Mathf.Sin(t) * 2.2f); pts[j] = c + e.Rotated(rot); }
-                    DrawPolyline(pts, col.WithAlpha(0.8f), 1f, true);
+                    this.Polyline(pts, col.WithAlpha(0.8f), 1f, true);
                 }
-                DrawCircle(c, 1.8f, col, true, -1f, true);
+                this.Circle(c, 1.8f, col, true, -1f, true);
                 break;
             case 1:
-                DrawRect(new Rect2(c - new Vector2(4, 6), new Vector2(8, 12)), col, false, 1f);
-                DrawRect(new Rect2(c + new Vector2(-2, -8), new Vector2(4, 2)), col);
-                for (int k = 0; k < 3; k++) DrawRect(new Rect2(c + new Vector2(-2.5f, 3 - k * 3.5f), new Vector2(5, 2)), col.WithAlpha(on && k == (int)(_time * 3f) % 3 ? 0.3f : 0.8f));
+                this.Box(new Rect2(c - new Vector2(4, 6), new Vector2(8, 12)), col, false, 1f);
+                this.Box(new Rect2(c + new Vector2(-2, -8), new Vector2(4, 2)), col);
+                for (int k = 0; k < 3; k++) this.Box(new Rect2(c + new Vector2(-2.5f, 3 - k * 3.5f), new Vector2(5, 2)), col.WithAlpha(on && k == (int)(_time * 3f) % 3 ? 0.3f : 0.8f));
                 break;
             default:
-                DrawArc(c, 6f, 0f, Mathf.Tau, 16, col.WithAlpha(0.7f), 1f, true);
+                this.Arc(c, 6f, 0f, Mathf.Tau, 16, col.WithAlpha(0.7f), 1f, true);
                 for (int k = 0; k < 3; k++) { float t = (on ? _time * 8f : 0.3f) + k * Mathf.Tau / 3f; DrawLine(c, c + new Vector2(Mathf.Cos(t), Mathf.Sin(t)) * 5f, col, 1.4f, true); }
                 break;
         }
@@ -368,7 +368,7 @@ public partial class Hud
     /// <summary>떨어진 차단기 손잡이 (아래로 꺾임).</summary>
     private void DrawBreakerGlyph(Vector2 c, Color col)
     {
-        DrawRect(new Rect2(c - new Vector2(3, 5), new Vector2(6, 10)), col, false, 1f);
+        this.Box(new Rect2(c - new Vector2(3, 5), new Vector2(6, 10)), col, false, 1f);
         DrawLine(c, c + new Vector2(0, 4).Rotated(0.5f + 0.15f * Mathf.Sin(_time * 6f)), col, 1.6f, true);
     }
 
@@ -398,7 +398,7 @@ public partial class Hud
             float need = 16f + 13f * d.Options.Count + 13f;
             if (y + need > r.End.Y - 2) break;
             var rc = d.Score == 1 ? Palette.Good : d.Score == -1 ? Palette.Danger : d.Score == 2 ? Palette.TextDim : Palette.Accent;
-            DrawRect(new Rect2(x - 4, y + 3, 2, need - 6), rc.WithAlpha(0.7f));
+            this.Box(new Rect2(x - 4, y + 3, 2, need - 6), rc.WithAlpha(0.7f));
             Gfx.Text(this, Fonts.Body, new Vector2(x, y + 12), $"{SimTime.Day(d.Tick)}일 {SimTime.Clock(d.Tick)}", 9, Palette.TextMuted);
             DrawKindGlyph(new Vector2(x + 66, y + 8), d.Kind, rc);
             Gfx.Text(this, Fonts.Bold, new Vector2(x + 76, y + 12), Fit(d.Title + (d.Rank > 0 ? $" ({d.Rank}번째)" : "") + (d.By != "" && d.By != "주 컴퓨터" ? $" · {d.By}" : ""), right - x - 76, 10, Fonts.Bold), 10, Palette.Text);
@@ -410,12 +410,12 @@ public partial class Hud
                 var o = d.Options[k];
                 bool pick = k == d.Chosen;
                 var oc = !o.Allowed ? Palette.TextMuted : pick ? CmdRemote : Palette.TextDim;
-                if (pick) DrawColoredPolygon(new[] { new Vector2(x + 2, y + 4), new Vector2(x + 8, y + 7.5f), new Vector2(x + 2, y + 11) }, CmdRemote);
+                if (pick) this.Poly(new[] { new Vector2(x + 2, y + 4), new Vector2(x + 8, y + 7.5f), new Vector2(x + 2, y + 11) }, CmdRemote);
                 Gfx.Text(this, pick ? Fonts.Bold : Fonts.Body, new Vector2(x + 12, y + 11), Fit(o.Name, (right - x) * 0.3f, 9, Fonts.Body), 9, oc);
                 float bx = x + 12 + (right - x) * 0.3f + 4;
                 var bar = new Rect2(bx, y + 4, barW, 6);
-                DrawRect(bar, new Color(1, 1, 1, 0.04f));
-                if (o.Allowed) DrawRect(new Rect2(bar.Position, new Vector2(barW * Mathf.Clamp(o.Score / max, 0.02f, 1f), 6)), oc.WithAlpha(pick ? 0.85f : 0.45f));
+                this.Box(bar, new Color(1, 1, 1, 0.04f));
+                if (o.Allowed) this.Box(new Rect2(bar.Position, new Vector2(barW * Mathf.Clamp(o.Score / max, 0.02f, 1f), 6)), oc.WithAlpha(pick ? 0.85f : 0.45f));
                 else for (int j = 0; j < 8; j++) DrawLine(new Vector2(bx + j * barW / 8f, y + 10), new Vector2(bx + j * barW / 8f + 4, y + 4), Palette.TextMuted.WithAlpha(0.5f), 1f);
                 string tail = o.Allowed ? $"다칠 사람 {o.People:0.#} · 잃는 것 {o.Ship:0.##}" : o.Blocked;
                 Gfx.Text(this, Fonts.Body, new Vector2(bx + barW + 6, y + 11), Fit(tail, right - bx - barW - 6, 9, Fonts.Body), 9, oc);
@@ -434,16 +434,16 @@ public partial class Hud
         {
             case "구멍 막기": // v16.25 막을 방법 견줌
             case "파공":
-                DrawArc(c, 4.5f, 0f, Mathf.Tau, 14, col, 1.2f, true);
-                DrawPolyline(new[] { c + new Vector2(-2, -4), c + new Vector2(0, -1), c + new Vector2(-1, 1), c + new Vector2(2, 4) }, col, 1.2f, true);
+                this.Arc(c, 4.5f, 0f, Mathf.Tau, 14, col, 1.2f, true);
+                this.Polyline(new[] { c + new Vector2(-2, -4), c + new Vector2(0, -1), c + new Vector2(-1, 1), c + new Vector2(2, 4) }, col, 1.2f, true);
                 break;
             case "불 끄기": // v16.25 끌 방법 견줌
             case "불":
                 float f = Mathf.Sin(_time * 9f) * 0.8f;
-                DrawColoredPolygon(new[] { c + new Vector2(0, -5 + f), c + new Vector2(3.5f, 1), c + new Vector2(0, 4), c + new Vector2(-3.5f, 1) }, col.WithAlpha(0.85f));
+                this.Poly(new[] { c + new Vector2(0, -5 + f), c + new Vector2(3.5f, 1), c + new Vector2(0, 4), c + new Vector2(-3.5f, 1) }, col.WithAlpha(0.85f));
                 break;
             case "정전":
-                DrawPolyline(new[] { c + new Vector2(1.5f, -5), c + new Vector2(-2, 0.5f), c + new Vector2(1.5f, 0.5f), c + new Vector2(-1.5f, 5) }, col, 1.4f, true);
+                this.Polyline(new[] { c + new Vector2(1.5f, -5), c + new Vector2(-2, 0.5f), c + new Vector2(1.5f, 0.5f), c + new Vector2(-1.5f, 5) }, col, 1.4f, true);
                 break;
             default:
                 DrawBreakerGlyph(c, col);
@@ -486,85 +486,85 @@ internal static class CommandIcons
         switch (t)
         {
             case CmdTarget.Valve: // 나비 밸브: 원 + 나비꼴 + 손잡이
-                ci.DrawArc(c, 3.6f * k, 0f, Mathf.Tau, 12, col, 1f, true);
-                ci.DrawColoredPolygon(new[] { c + new Vector2(-3, -2) * k, c, c + new Vector2(-3, 2) * k }, col);
-                ci.DrawColoredPolygon(new[] { c + new Vector2(3, -2) * k, c, c + new Vector2(3, 2) * k }, col);
+                ci.Arc(c, 3.6f * k, 0f, Mathf.Tau, 12, col, 1f, true);
+                ci.Poly(new[] { c + new Vector2(-3, -2) * k, c, c + new Vector2(-3, 2) * k }, col);
+                ci.Poly(new[] { c + new Vector2(3, -2) * k, c, c + new Vector2(3, 2) * k }, col);
                 ci.DrawLine(c + new Vector2(0, -3.6f) * k, c + new Vector2(0, -6) * k, col, 1f);
                 break;
             case CmdTarget.Door: // 문: 두 짝 사이 틈
-                ci.DrawRect(new Rect2(c - new Vector2(4, 5) * k, new Vector2(3.4f, 10) * k), col, false, 1f);
-                ci.DrawRect(new Rect2(c + new Vector2(0.6f, -5) * k, new Vector2(3.4f, 10) * k), col, false, 1f);
+                ci.Box(new Rect2(c - new Vector2(4, 5) * k, new Vector2(3.4f, 10) * k), col, false, 1f);
+                ci.Box(new Rect2(c + new Vector2(0.6f, -5) * k, new Vector2(3.4f, 10) * k), col, false, 1f);
                 break;
             case CmdTarget.Damper: // 댐퍼: 사각 덕트 안 비스듬한 날 셋
-                ci.DrawRect(new Rect2(c - new Vector2(4.5f, 4) * k, new Vector2(9, 8) * k), col, false, 1f);
+                ci.Box(new Rect2(c - new Vector2(4.5f, 4) * k, new Vector2(9, 8) * k), col, false, 1f);
                 for (int i = -1; i <= 1; i++) ci.DrawLine(c + new Vector2(-3, i * 2.5f - 1) * k, c + new Vector2(3, i * 2.5f + 1) * k, col, 1f);
                 break;
             case CmdTarget.Breaker: // 차단기: 몸통 + 올린 손잡이
-                ci.DrawRect(new Rect2(c - new Vector2(3, 5) * k, new Vector2(6, 10) * k), col, false, 1f);
+                ci.Box(new Rect2(c - new Vector2(3, 5) * k, new Vector2(6, 10) * k), col, false, 1f);
                 ci.DrawLine(c, c + new Vector2(0, -4).Rotated(-0.4f) * k, col, 1.6f);
                 break;
             case CmdTarget.Circuit: // 회로: 지그재그 선
-                ci.DrawPolyline(new[] { c + new Vector2(-5, 0) * k, c + new Vector2(-3, -3) * k, c + new Vector2(-1, 3) * k, c + new Vector2(1, -3) * k, c + new Vector2(3, 3) * k, c + new Vector2(5, 0) * k }, col, 1f, true);
+                ci.Polyline(new[] { c + new Vector2(-5, 0) * k, c + new Vector2(-3, -3) * k, c + new Vector2(-1, 3) * k, c + new Vector2(1, -3) * k, c + new Vector2(3, 3) * k, c + new Vector2(5, 0) * k }, col, 1f, true);
                 break;
             case CmdTarget.Outlet: // 콘센트: 둥근 판 + 구멍 둘
-                ci.DrawArc(c, 4.2f * k, 0f, Mathf.Tau, 12, col, 1f, true);
-                ci.DrawCircle(c + new Vector2(-1.6f, 0) * k, 0.9f * k, col, true, -1f, true);
-                ci.DrawCircle(c + new Vector2(1.6f, 0) * k, 0.9f * k, col, true, -1f, true);
+                ci.Arc(c, 4.2f * k, 0f, Mathf.Tau, 12, col, 1f, true);
+                ci.Circle(c + new Vector2(-1.6f, 0) * k, 0.9f * k, col, true, -1f, true);
+                ci.Circle(c + new Vector2(1.6f, 0) * k, 0.9f * k, col, true, -1f, true);
                 break;
             case CmdTarget.Generator: // 발전기: 원 + 사인 곡선
-                ci.DrawArc(c, 4.5f * k, 0f, Mathf.Tau, 14, col, 1f, true);
+                ci.Arc(c, 4.5f * k, 0f, Mathf.Tau, 14, col, 1f, true);
                 var sp = new Vector2[9];
                 for (int i = 0; i <= 8; i++) { float f = i / 8f; sp[i] = c + new Vector2((f - 0.5f) * 6f, -Mathf.Sin(f * Mathf.Tau + time * 4f) * 1.8f) * k; }
-                ci.DrawPolyline(sp, col, 1f, true);
+                ci.Polyline(sp, col, 1f, true);
                 break;
             case CmdTarget.Reactor: // 원자로: 육각 + 가운데 점
                 var hex = new Vector2[7];
                 for (int i = 0; i <= 6; i++) { float a = i / 6f * Mathf.Tau; hex[i] = c + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * 4.6f * k; }
-                ci.DrawPolyline(hex, col, 1f, true);
-                ci.DrawCircle(c, 1.5f * k, col, true, -1f, true);
+                ci.Polyline(hex, col, 1f, true);
+                ci.Circle(c, 1.5f * k, col, true, -1f, true);
                 break;
             case CmdTarget.Battery:
-                ci.DrawRect(new Rect2(c - new Vector2(3, 4.5f) * k, new Vector2(6, 9) * k), col, false, 1f);
-                ci.DrawRect(new Rect2(c + new Vector2(-1.2f, -5.8f) * k, new Vector2(2.4f, 1.3f) * k), col);
+                ci.Box(new Rect2(c - new Vector2(3, 4.5f) * k, new Vector2(6, 9) * k), col, false, 1f);
+                ci.Box(new Rect2(c + new Vector2(-1.2f, -5.8f) * k, new Vector2(2.4f, 1.3f) * k), col);
                 break;
             case CmdTarget.Machine: // 설비: 톱니
-                ci.DrawArc(c, 3f * k, 0f, Mathf.Tau, 12, col, 1.2f, true);
+                ci.Arc(c, 3f * k, 0f, Mathf.Tau, 12, col, 1.2f, true);
                 for (int i = 0; i < 6; i++) { float a = i / 6f * Mathf.Tau + time * 0.5f; ci.DrawLine(c + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * 3f * k, c + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * 4.8f * k, col, 1.4f); }
                 break;
             case CmdTarget.Room: // 분전함: 상자 + 번개
-                ci.DrawRect(new Rect2(c - new Vector2(4, 4) * k, new Vector2(8, 8) * k), col, false, 1f);
-                ci.DrawPolyline(new[] { c + new Vector2(1, -3) * k, c + new Vector2(-1.2f, 0.3f) * k, c + new Vector2(1, 0.3f) * k, c + new Vector2(-1, 3) * k }, col, 1f, true);
+                ci.Box(new Rect2(c - new Vector2(4, 4) * k, new Vector2(8, 8) * k), col, false, 1f);
+                ci.Polyline(new[] { c + new Vector2(1, -3) * k, c + new Vector2(-1.2f, 0.3f) * k, c + new Vector2(1, 0.3f) * k, c + new Vector2(-1, 3) * k }, col, 1f, true);
                 break;
             case CmdTarget.Crew: // 사람: 머리 + 어깨
-                ci.DrawCircle(c + new Vector2(0, -2.6f) * k, 1.8f * k, col, true, -1f, true);
-                ci.DrawArc(c + new Vector2(0, 3.6f) * k, 3.4f * k, Mathf.Pi, Mathf.Tau, 8, col, 1.4f, true);
+                ci.Circle(c + new Vector2(0, -2.6f) * k, 1.8f * k, col, true, -1f, true);
+                ci.Arc(c + new Vector2(0, 3.6f) * k, 3.4f * k, Mathf.Pi, Mathf.Tau, 8, col, 1.4f, true);
                 break;
             case CmdTarget.Robot: // 로봇: 네모 머리 + 안테나 + 눈
-                ci.DrawRect(new Rect2(c - new Vector2(3.5f, 2.5f) * k, new Vector2(7, 6) * k), col, false, 1f);
+                ci.Box(new Rect2(c - new Vector2(3.5f, 2.5f) * k, new Vector2(7, 6) * k), col, false, 1f);
                 ci.DrawLine(c + new Vector2(0, -2.5f) * k, c + new Vector2(0, -5) * k, col, 1f);
-                ci.DrawCircle(c + new Vector2(0, -5.3f) * k, 0.8f * k, col.WithAlpha(0.5f + 0.5f * Mathf.Sin(time * 5f)), true, -1f, true);
-                ci.DrawCircle(c + new Vector2(-1.4f, 0.5f) * k, 0.7f * k, col, true, -1f, true);
-                ci.DrawCircle(c + new Vector2(1.4f, 0.5f) * k, 0.7f * k, col, true, -1f, true);
+                ci.Circle(c + new Vector2(0, -5.3f) * k, 0.8f * k, col.WithAlpha(0.5f + 0.5f * Mathf.Sin(time * 5f)), true, -1f, true);
+                ci.Circle(c + new Vector2(-1.4f, 0.5f) * k, 0.7f * k, col, true, -1f, true);
+                ci.Circle(c + new Vector2(1.4f, 0.5f) * k, 0.7f * k, col, true, -1f, true);
                 break;
             case CmdTarget.Drone: // 드론: X 팔 + 날개 넷
                 ci.DrawLine(c + new Vector2(-3.5f, -3.5f) * k, c + new Vector2(3.5f, 3.5f) * k, col, 1f);
                 ci.DrawLine(c + new Vector2(-3.5f, 3.5f) * k, c + new Vector2(3.5f, -3.5f) * k, col, 1f);
                 foreach (var d in new[] { new Vector2(-1, -1), new Vector2(1, -1), new Vector2(-1, 1), new Vector2(1, 1) })
-                    ci.DrawArc(c + d * 3.8f * k, 1.6f * k, time * 12f, time * 12f + Mathf.Pi * 1.2f, 6, col, 1f, true);
+                    ci.Arc(c + d * 3.8f * k, 1.6f * k, time * 12f, time * 12f + Mathf.Pi * 1.2f, 6, col, 1f, true);
                 break;
             case CmdTarget.Broadcast: // 방송: 스피커 + 퍼지는 호
-                ci.DrawColoredPolygon(new[] { c + new Vector2(-4, -1.5f) * k, c + new Vector2(-2, -1.5f) * k, c + new Vector2(0.5f, -4) * k, c + new Vector2(0.5f, 4) * k, c + new Vector2(-2, 1.5f) * k, c + new Vector2(-4, 1.5f) * k }, col);
-                for (int i = 1; i <= 2; i++) ci.DrawArc(c + new Vector2(0.5f, 0) * k, (1.8f + i * 1.6f) * k, -0.8f, 0.8f, 6, col.WithAlpha(0.5f + 0.5f * Mathf.Sin(time * 4f - i)), 1f, true);
+                ci.Poly(new[] { c + new Vector2(-4, -1.5f) * k, c + new Vector2(-2, -1.5f) * k, c + new Vector2(0.5f, -4) * k, c + new Vector2(0.5f, 4) * k, c + new Vector2(-2, 1.5f) * k, c + new Vector2(-4, 1.5f) * k }, col);
+                for (int i = 1; i <= 2; i++) ci.Arc(c + new Vector2(0.5f, 0) * k, (1.8f + i * 1.6f) * k, -0.8f, 0.8f, 6, col.WithAlpha(0.5f + 0.5f * Mathf.Sin(time * 4f - i)), 1f, true);
                 break;
             case CmdTarget.Terminal: // 개인 단말: 세운 판 + 진동 선
-                ci.DrawRect(new Rect2(c - new Vector2(2.4f, 4.2f) * k, new Vector2(4.8f, 8.4f) * k), col, false, 1f);
+                ci.Box(new Rect2(c - new Vector2(2.4f, 4.2f) * k, new Vector2(4.8f, 8.4f) * k), col, false, 1f);
                 float jig = Mathf.Sin(time * 20f) * 0.6f;
                 ci.DrawLine(c + new Vector2(-4 + jig, -2) * k, c + new Vector2(-4 + jig, 2) * k, col.WithAlpha(0.6f), 1f);
                 ci.DrawLine(c + new Vector2(4 - jig, -2) * k, c + new Vector2(4 - jig, 2) * k, col.WithAlpha(0.6f), 1f);
                 break;
             default: // 주 컴퓨터 자신: 칩 + 다리
-                ci.DrawRect(new Rect2(c - new Vector2(3.5f, 3.5f) * k, new Vector2(7, 7) * k), col, false, 1.2f);
-                ci.DrawRect(new Rect2(c - new Vector2(1.5f, 1.5f) * k, new Vector2(3, 3) * k), col.WithAlpha(0.5f + 0.5f * Mathf.Sin(time * 3f)));
+                ci.Box(new Rect2(c - new Vector2(3.5f, 3.5f) * k, new Vector2(7, 7) * k), col, false, 1.2f);
+                ci.Box(new Rect2(c - new Vector2(1.5f, 1.5f) * k, new Vector2(3, 3) * k), col.WithAlpha(0.5f + 0.5f * Mathf.Sin(time * 3f)));
                 for (int i = -1; i <= 1; i++)
                 {
                     ci.DrawLine(c + new Vector2(i * 2f, -3.5f) * k, c + new Vector2(i * 2f, -5.2f) * k, col, 1f);

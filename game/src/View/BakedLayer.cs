@@ -10,7 +10,7 @@ namespace ShipSim.View;
 /// </summary>
 public partial class BakedLayer : Node2D
 {
-    private const int MaxTex = 8192;
+    private readonly int _maxTex;
 
     private readonly DrawLayer _layer;
     private readonly Func<Rect2> _bounds;
@@ -25,9 +25,11 @@ public partial class BakedLayer : Node2D
     /// <summary>끄면 예전처럼 그린다 (비교 · 시험용).</summary>
     public static bool Enabled = true;
 
-    public BakedLayer(DrawLayer layer, Func<Rect2> bounds, TextureFilterEnum filter)
+    /// <param name="maxTex">그림 한 장의 최대 크기 (넘으면 그대로 그린다) — 자주 다시 굽는 층은 작게.</param>
+    public BakedLayer(DrawLayer layer, Func<Rect2> bounds, TextureFilterEnum filter, int maxTex = 8192)
     {
         _layer = layer;
+        _maxTex = maxTex;
         _bounds = bounds;
         Name = layer.Name + "Baked";
         _vp = new SubViewport
@@ -49,7 +51,7 @@ public partial class BakedLayer : Node2D
         if (b.Size.X < 1f || b.Size.Y < 1f) return;
         float zoom = GetViewport().GetCanvasTransform().X.Length();
         float q = MathF.Max(0.02f, zoom);
-        float cap = MaxTex / MathF.Max(b.Size.X, b.Size.Y);
+        float cap = _maxTex / MathF.Max(b.Size.X, b.Size.Y);
         bool wantLive = !Enabled || q > cap;
         if (wantLive != _live) { SetLive(wantLive); _scale = -1f; }
         if (_live) return;

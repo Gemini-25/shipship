@@ -56,7 +56,7 @@ public partial class ShipView
                 if (detail)
                 {
                     Gfx.RoundRect(ci, new Rect2(torso.X + D * 0.15f, -W * 0.42f, 1.6f, 1.9f), new Color(0, 0, 0, 0.18f), 0.3f);
-                    ci.DrawCircle(new Vector2(torso.X + D * 0.15f + 0.8f, -W * 0.42f + 0.4f), 0.22f, ink, true, -1f, true);
+                    ci.Circle(new Vector2(torso.X + D * 0.15f + 0.8f, -W * 0.42f + 0.4f), 0.22f, ink, true, -1f, true);
                 }
                 break;
             case Garment.Casual:
@@ -64,23 +64,23 @@ public partial class ShipView
                 var deco = new Color(1f, 1f, 1f, 0.35f);
                 switch (o.Taste % 6)
                 {
-                    case 0: for (int k = -2; k <= 2; k++) ci.DrawPolyline(new[] { new Vector2(torso.X - D * 0.6f, k * 1.4f), new Vector2(torso.X, k * 1.4f + 0.5f), new Vector2(torso.X + D * 0.6f, k * 1.4f) }, deco, 0.35f, true); break;
+                    case 0: for (int k = -2; k <= 2; k++) ci.Polyline(new[] { new Vector2(torso.X - D * 0.6f, k * 1.4f), new Vector2(torso.X, k * 1.4f + 0.5f), new Vector2(torso.X + D * 0.6f, k * 1.4f) }, deco, 0.35f, true); break;
                     case 1:
                         for (int k = -2; k <= 2; k++) ci.DrawLine(new Vector2(torso.X - D * 0.7f, k * W * 0.3f), new Vector2(torso.X + D * 0.7f, k * W * 0.3f), deco, 0.3f);
                         for (int j = -1; j <= 1; j++) ci.DrawLine(new Vector2(torso.X + j * D * 0.4f, -W * 0.8f), new Vector2(torso.X + j * D * 0.4f, W * 0.8f), deco, 0.3f);
                         break;
                     case 2: for (int j = -1; j <= 1; j++) ci.DrawLine(new Vector2(torso.X + j * D * 0.4f, -W * 0.85f), new Vector2(torso.X + j * D * 0.4f, W * 0.85f), deco, 0.6f); break;
-                    case 3: for (int k = -2; k <= 2; k++) for (int j = -1; j <= 1; j++) ci.DrawCircle(new Vector2(torso.X + j * D * 0.45f, k * W * 0.32f), 0.35f, deco, true, -1f, true); break;
-                    case 4: ci.DrawPolyline(new[] { new Vector2(torso.X + D * 0.9f, -W * 0.35f), new Vector2(torso.X + D * 0.2f, 0f), new Vector2(torso.X + D * 0.9f, W * 0.35f) }, deco, 0.6f, true); break;
-                    default: for (int k = -1; k <= 1; k++) ci.DrawCircle(new Vector2(torso.X + D * 0.55f, k * 1.6f), 0.45f, deco, true, -1f, true); break;
+                    case 3: for (int k = -2; k <= 2; k++) for (int j = -1; j <= 1; j++) ci.Circle(new Vector2(torso.X + j * D * 0.45f, k * W * 0.32f), 0.35f, deco, true, -1f, true); break;
+                    case 4: ci.Polyline(new[] { new Vector2(torso.X + D * 0.9f, -W * 0.35f), new Vector2(torso.X + D * 0.2f, 0f), new Vector2(torso.X + D * 0.9f, W * 0.35f) }, deco, 0.6f, true); break;
+                    default: for (int k = -1; k <= 1; k++) ci.Circle(new Vector2(torso.X + D * 0.55f, k * 1.6f), 0.45f, deco, true, -1f, true); break;
                 }
                 break;
             case Garment.Sleep:
                 // 물방울 무늬 · 헐렁한 깃
                 for (int k = -2; k <= 2; k++)
                     for (int j = -1; j <= 1; j++)
-                        if ((k + j) % 2 == 0) ci.DrawCircle(new Vector2(torso.X + j * D * 0.45f, k * W * 0.33f), 0.5f, new Color(1f, 1f, 1f, 0.55f), true, -1f, true);
-                ci.DrawArc(torso + new Vector2(D * 0.7f, 0f), W * 0.45f, Mathf.Pi * 0.6f, Mathf.Pi * 1.4f, 10, new Color(1f, 1f, 1f, 0.6f), 0.6f, true);
+                        if ((k + j) % 2 == 0) ci.Circle(new Vector2(torso.X + j * D * 0.45f, k * W * 0.33f), 0.5f, new Color(1f, 1f, 1f, 0.55f), true, -1f, true);
+                ci.Arc(torso + new Vector2(D * 0.7f, 0f), W * 0.45f, Mathf.Pi * 0.6f, Mathf.Pi * 1.4f, 10, new Color(1f, 1f, 1f, 0.6f), 0.6f, true);
                 break;
             case Garment.Heat:
                 // 은빛 누빔 (마름모 격자) · 움직이는 광택
@@ -101,9 +101,9 @@ public partial class ShipView
                 for (int i = 0; i < 3; i++)
                 {
                     float a0 = i * Mathf.Tau / 3f - Mathf.Pi / 2f;
-                    ci.DrawColoredPolygon(new[] { tc, tc + Vector2.FromAngle(a0 - 0.45f) * 1.6f, tc + Vector2.FromAngle(a0 + 0.45f) * 1.6f }, new Color("#1c1c1c"));
+                    ci.Poly(new[] { tc, tc + Vector2.FromAngle(a0 - 0.45f) * 1.6f, tc + Vector2.FromAngle(a0 + 0.45f) * 1.6f }, new Color("#1c1c1c"));
                 }
-                ci.DrawCircle(tc, 0.35f, new Color("#e0b12f"), true, -1f, true);
+                ci.Circle(tc, 0.35f, new Color("#e0b12f"), true, -1f, true);
                 break;
         }
         // 때: 기름 · 분진 · 그을음 얼룩 (사람마다 자리가 다르다)
@@ -126,8 +126,8 @@ public partial class ShipView
             float side = c.Id % 2 == 0 ? -1f : 1f;
             var pts = new Vector2[5];
             for (int i = 0; i < 5; i++) pts[i] = new Vector2(torso.X - D * 0.5f + i * D * 0.25f, side * (W * 0.8f - (i % 2) * 0.9f));
-            ci.DrawPolyline(pts, new Color("#e6b896"), 0.5f, true);
-            ci.DrawPolyline(pts, ink, 0.2f, true);
+            ci.Polyline(pts, new Color("#e6b896"), 0.5f, true);
+            ci.Polyline(pts, ink, 0.2f, true);
         }
     }
 
@@ -139,15 +139,15 @@ public partial class ShipView
         float t = _time;
         if (o.Wearing == Garment.Heat)
         {
-            ci.DrawCircle(head, 3.9f, new Color("#c9ccd2"), true, -1f, true);
-            ci.DrawArc(head, 3.9f, 0f, Mathf.Tau, 16, new Color("#8d929b"), 0.4f, true);
+            ci.Circle(head, 3.9f, new Color("#c9ccd2"), true, -1f, true);
+            ci.Arc(head, 3.9f, 0f, Mathf.Tau, 16, new Color("#8d929b"), 0.4f, true);
             Gfx.RoundRect(ci, new Rect2(head.X + 1.6f, -1.9f, 1.9f, 3.8f), new Color("#b8902e"), 0.6f);
             ci.DrawLine(new Vector2(head.X + 2.0f, -1.5f), new Vector2(head.X + 2.0f, -0.3f + Mathf.Sin(t * 2f) * 0.4f), new Color(1f, 0.95f, 0.7f, 0.7f), 0.35f, true);
             return;
         }
         if (o.Goggles)
         {
-            ci.DrawArc(head, 3.5f, 0f, Mathf.Tau, 18, new Color("#3a3f48"), 0.7f, true);
+            ci.Arc(head, 3.5f, 0f, Mathf.Tau, 18, new Color("#3a3f48"), 0.7f, true);
             Gfx.RoundRect(ci, new Rect2(head.X + 2.2f, -2.1f, 1.4f, 4.2f), new Color("#d08a2a").WithAlpha(0.85f), 0.5f);
             ci.DrawLine(new Vector2(head.X + 2.5f, -1.6f), new Vector2(head.X + 2.5f, -0.6f), new Color(1f, 1f, 1f, 0.6f), 0.3f, true);
             return;
@@ -159,16 +159,16 @@ public partial class ShipView
         for (int k = -1; k <= 1; k += 2)
         {
             var lens = new Vector2(fx, k * 1.15f);
-            ci.DrawCircle(lens, 0.75f, new Color(0.75f, 0.85f, 0.95f, 0.45f), true, -1f, true);
-            ci.DrawArc(lens, 0.75f, 0f, Mathf.Tau, 10, frame, 0.25f, true);
+            ci.Circle(lens, 0.75f, new Color(0.75f, 0.85f, 0.95f, 0.45f), true, -1f, true);
+            ci.Arc(lens, 0.75f, 0f, Mathf.Tau, 10, frame, 0.25f, true);
             ci.DrawLine(new Vector2(fx - 0.6f, k * 2.3f), new Vector2(head.X - 0.5f, k * 3.1f), frame, 0.25f, true); // 다리
         }
         if (o.Eyes == Specs.Cracked) // 한쪽 알에 번개 금
-            ci.DrawPolyline(new[] { new Vector2(fx - 0.4f, 0.6f), new Vector2(fx + 0.1f, 1.0f), new Vector2(fx - 0.2f, 1.3f), new Vector2(fx + 0.4f, 1.8f) }, new Color(1f, 1f, 1f, 0.9f), 0.2f, true);
+            ci.Polyline(new[] { new Vector2(fx - 0.4f, 0.6f), new Vector2(fx + 0.1f, 1.0f), new Vector2(fx - 0.2f, 1.3f), new Vector2(fx + 0.4f, 1.8f) }, new Color(1f, 1f, 1f, 0.9f), 0.2f, true);
         else if (o.Eyes == Specs.Taped) // 콧등에 감은 흰 테이프
             Gfx.RoundRect(ci, new Rect2(fx - 0.7f, -0.45f, 1.0f, 0.9f), new Color("#f2efe4"), 0.15f);
         else if (Mathf.PosMod(t + c.Id * 0.37f, 4f) < 0.25f)
-            ci.DrawCircle(new Vector2(fx + 0.2f, -1.4f), 0.25f, new Color(1f, 1f, 1f, 0.9f), true, -1f, true); // 알이 반짝
+            ci.Circle(new Vector2(fx + 0.2f, -1.4f), 0.25f, new Color(1f, 1f, 1f, 0.9f), true, -1f, true); // 알이 반짝
     }
 
     /// <summary>사람 곁: 읽는 편지 · 쓰는 답장 · 내기 빚으로 대신 서는 당직의 완장.</summary>
@@ -186,14 +186,14 @@ public partial class ShipView
             PaintLetter(ci, at, f, s, News.Hello, 1f);
             var tip = at + side * (Mathf.Sin(_time * 5f + c.Id) * 2.2f * s) + f * 1.5f * s;
             ci.DrawLine(tip, tip + (side * 0.5f - f).Normalized() * 5f * s, new Color("#2d3b6a"), 1.3f * s, true); // 펜
-            ci.DrawCircle(tip, 0.6f * s, new Color("#111"), true, -1f, true);
+            ci.Circle(tip, 0.6f * s, new Color("#111"), true, -1f, true);
         }
         if (p.Bets.DebtWatch.TryGetValue(c.Id, out long until) && until > _world.Tick && c.CoveringUntil > _world.Tick)
         {
             // 대신 서는 당직: 왼팔에 노란 완장 (줄 두 개)
             var arm = body + side * rr * 0.85f - f * rr * 0.1f;
             var band = new[] { arm - f * 2f * s - side * 1.2f * s, arm + f * 2f * s - side * 1.2f * s, arm + f * 2f * s + side * 1.2f * s, arm - f * 2f * s + side * 1.2f * s };
-            ci.DrawColoredPolygon(band, new Color("#f2c84b"));
+            ci.Poly(band, new Color("#f2c84b"));
             ci.DrawLine(arm - f * 2f * s, arm + f * 2f * s, new Color("#7a5a12"), 0.6f * s, true);
         }
     }
@@ -205,7 +205,7 @@ public partial class ShipView
         float w = 5.5f * s, h = 7f * s;
         Vector2 P(float u, float v) => at + side * u * w + f * v * h; // u: −0.5~0.5 · v: −0.5~0.5
         var paper = kind == News.Parcel ? new Color("#b07a43") : new Color("#f4efe2");
-        ci.DrawColoredPolygon(new[] { P(-0.5f, -0.5f), P(0.5f, -0.5f), P(0.5f, 0.5f), P(-0.5f, 0.5f) }, paper);
+        ci.Poly(new[] { P(-0.5f, -0.5f), P(0.5f, -0.5f), P(0.5f, 0.5f), P(-0.5f, 0.5f) }, paper);
         var ink = new Color(0.25f, 0.27f, 0.32f, 0.7f);
         switch (kind)
         {
@@ -214,15 +214,15 @@ public partial class ShipView
                 ci.DrawLine(P(-0.5f, 0f), P(0.5f, 0f), new Color("#e8dcc0"), 0.8f * s, true);
                 return;
             case News.Death: // 검은 띠 테두리
-                ci.DrawPolyline(new[] { P(-0.5f, -0.5f), P(0.5f, -0.5f), P(0.5f, 0.5f), P(-0.5f, 0.5f), P(-0.5f, -0.5f) }, new Color("#111"), 1.1f * s, true);
+                ci.Polyline(new[] { P(-0.5f, -0.5f), P(0.5f, -0.5f), P(0.5f, 0.5f), P(-0.5f, 0.5f), P(-0.5f, -0.5f) }, new Color("#111"), 1.1f * s, true);
                 break;
             case News.Wedding: // 분홍 리본
-                ci.DrawColoredPolygon(new[] { P(0f, 0.38f), P(-0.3f, 0.2f), P(-0.3f, 0.5f) }, new Color("#f08bb0"));
-                ci.DrawColoredPolygon(new[] { P(0f, 0.38f), P(0.3f, 0.2f), P(0.3f, 0.5f) }, new Color("#f08bb0"));
+                ci.Poly(new[] { P(0f, 0.38f), P(-0.3f, 0.2f), P(-0.3f, 0.5f) }, new Color("#f08bb0"));
+                ci.Poly(new[] { P(0f, 0.38f), P(0.3f, 0.2f), P(0.3f, 0.5f) }, new Color("#f08bb0"));
                 break;
             case News.Birth: // 작은 발자국 둘
-                ci.DrawCircle(P(-0.15f, 0.3f), 0.55f * s, new Color("#7fb3e6"), true, -1f, true);
-                ci.DrawCircle(P(0.15f, 0.36f), 0.55f * s, new Color("#f2a0bf"), true, -1f, true);
+                ci.Circle(P(-0.15f, 0.3f), 0.55f * s, new Color("#7fb3e6"), true, -1f, true);
+                ci.Circle(P(0.15f, 0.36f), 0.55f * s, new Color("#f2a0bf"), true, -1f, true);
                 break;
             case News.Ill: // 붉은 십자
                 ci.DrawLine(P(0.25f, 0.2f), P(0.25f, 0.45f), new Color("#d23c3c"), 0.9f * s, true);
@@ -262,8 +262,8 @@ public partial class ShipView
                 var c0 = basePos + off;
                 var dx = Vector2.FromAngle(rot) * 7f;
                 var dy = Vector2.FromAngle(rot + Mathf.Pi / 2f) * 4.5f;
-                ci.DrawColoredPolygon(new[] { c0 - dx - dy, c0 + dx - dy, c0 + dx + dy, c0 - dx + dy }, i % 3 == 0 ? new Color("#efe6cf") : new Color("#f6f1e4"));
-                ci.DrawPolyline(new[] { c0 - dx - dy, c0, c0 + dx - dy }, new Color(0.4f, 0.4f, 0.45f, 0.6f), 0.6f, true); // 봉투 뚜껑
+                ci.Poly(new[] { c0 - dx - dy, c0 + dx - dy, c0 + dx + dy, c0 - dx + dy }, i % 3 == 0 ? new Color("#efe6cf") : new Color("#f6f1e4"));
+                ci.Polyline(new[] { c0 - dx - dy, c0, c0 + dx - dy }, new Color(0.4f, 0.4f, 0.45f, 0.6f), 0.6f, true); // 봉투 뚜껑
             }
             ci.DrawLine(basePos + new Vector2(0f, 5f), basePos + new Vector2(0f, -n * 2.2f - 4f), new Color("#b5523f"), 1.2f, true); // 고무줄
         }
@@ -295,17 +295,17 @@ public partial class ShipView
                 ci.DrawLine(at + new Vector2(-4f, 0f), at + new Vector2(4f, 0f), new Color("#3b2214"), 0.6f);
                 break;
             case Goods.Coffee: // 접힌 윗단의 커피 봉지
-                ci.DrawColoredPolygon(new[] { at + new Vector2(-3f, -4f), at + new Vector2(3f, -4f), at + new Vector2(3.6f, 4f), at + new Vector2(-3.6f, 4f) }, new Color("#b98b5a"));
+                ci.Poly(new[] { at + new Vector2(-3f, -4f), at + new Vector2(3f, -4f), at + new Vector2(3.6f, 4f), at + new Vector2(-3.6f, 4f) }, new Color("#b98b5a"));
                 ci.DrawLine(at + new Vector2(-3f, -2.6f), at + new Vector2(3f, -2.6f), new Color("#6b4b2a"), 0.8f);
-                ci.DrawCircle(at + new Vector2(0f, 1f), 1.2f, new Color("#4a2e18"), true, -1f, true);
+                ci.Circle(at + new Vector2(0f, 1f), 1.2f, new Color("#4a2e18"), true, -1f, true);
                 break;
             case Goods.Tea: // 초록 주머니 · 잎
-                ci.DrawCircle(at, 3.2f, new Color("#5e8f4e"), true, -1f, true);
-                ci.DrawColoredPolygon(new[] { at + new Vector2(-1.5f, 0.5f), at + new Vector2(0f, -1.8f), at + new Vector2(1.5f, 0.5f), at + new Vector2(0f, 1.2f) }, new Color("#b9e08f"));
+                ci.Circle(at, 3.2f, new Color("#5e8f4e"), true, -1f, true);
+                ci.Poly(new[] { at + new Vector2(-1.5f, 0.5f), at + new Vector2(0f, -1.8f), at + new Vector2(1.5f, 0.5f), at + new Vector2(0f, 1.2f) }, new Color("#b9e08f"));
                 ci.DrawLine(at + new Vector2(0f, -3.2f), at + new Vector2(0f, -5f), new Color("#e8e2c8"), 0.6f, true);
                 break;
             default: // 새 양말 (ㄴ자)
-                ci.DrawColoredPolygon(new[] { at + new Vector2(-1.5f, -4f), at + new Vector2(1.2f, -4f), at + new Vector2(1.2f, 1.5f), at + new Vector2(3.5f, 1.5f), at + new Vector2(3.5f, 4f), at + new Vector2(-1.5f, 4f) }, new Color("#d9dde6"));
+                ci.Poly(new[] { at + new Vector2(-1.5f, -4f), at + new Vector2(1.2f, -4f), at + new Vector2(1.2f, 1.5f), at + new Vector2(3.5f, 1.5f), at + new Vector2(3.5f, 4f), at + new Vector2(-1.5f, 4f) }, new Color("#d9dde6"));
                 ci.DrawLine(at + new Vector2(-1.5f, -3f), at + new Vector2(1.2f, -3f), new Color("#c05050"), 0.8f);
                 break;
         }

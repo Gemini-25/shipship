@@ -203,10 +203,10 @@ public partial class ShipView
                 {
                     case FrameStyle.Riveted:
                         foreach (var d in new[] { new Vector2(2.5f, 2.5f), new Vector2(-2.5f, 2.5f), new Vector2(2.5f, -2.5f), new Vector2(-2.5f, -2.5f) })
-                            ci.DrawCircle(r.Position + d, 0.9f, fast.WithAlpha(0.45f), true, -1f, true);
+                            ci.Circle(r.Position + d, 0.9f, fast.WithAlpha(0.45f), true, -1f, true);
                         break;
                     case FrameStyle.Seamed:
-                        ci.DrawCircle(r.Position + new Vector2(3f, 3f), 0.8f, fast.WithAlpha(0.4f), true, -1f, true);
+                        ci.Circle(r.Position + new Vector2(3f, 3f), 0.8f, fast.WithAlpha(0.4f), true, -1f, true);
                         break;
                     default:
                         ci.DrawLine(r.Position + new Vector2(1f, 1f), r.Position + new Vector2(T * 0.6f, 1f), new Color(1, 1, 1, 0.06f + 0.06f * s.Gloss), 1f);
@@ -227,11 +227,11 @@ public partial class ShipView
             case FrameStyle.Riveted:
             {
                 // 벽 쪽 띠: 덧댄 철판 + 리벳 줄
-                ci.DrawColoredPolygon(f.Quad(-half, -7f, half, -1f), panel.WithAlpha(0.55f));
+                ci.Poly(f.Quad(-half, -7f, half, -1f), panel.WithAlpha(0.55f));
                 for (float a = -half + s.RivetStep * 0.5f; a < half; a += s.RivetStep)
                 {
-                    ci.DrawCircle(f.L(a, -4f), 1.1f, edge.Lightened(0.15f), true, -1f, true);
-                    ci.DrawCircle(f.L(a + 0.4f, -3.6f), 0.5f, new Color(0, 0, 0, 0.5f), true, -1f, true);
+                    ci.Circle(f.L(a, -4f), 1.1f, edge.Lightened(0.15f), true, -1f, true);
+                    ci.Circle(f.L(a + 0.4f, -3.6f), 0.5f, new Color(0, 0, 0, 0.5f), true, -1f, true);
                 }
                 // 벗겨진 칠: 붉은 밑칠이 드러난 얼룩
                 if (FixtureArt.Hash(h, 1, 401) < s.Peel)
@@ -244,8 +244,8 @@ public partial class ShipView
                         float rr = 2.2f + 2.2f * FixtureArt.Hash(h, k, 402);
                         pts[k] = f.L(a0 + Mathf.Cos(ang) * rr * 1.6f, -4f + Mathf.Sin(ang) * rr * 0.7f);
                     }
-                    ci.DrawColoredPolygon(pts, TechLook.C(s.Primer).WithAlpha(0.75f));
-                    ci.DrawPolyline(pts.Append(pts[0]).ToArray(), new Color(0.85f, 0.85f, 0.8f, 0.35f), 0.8f, true);
+                    ci.Poly(pts, TechLook.C(s.Primer).WithAlpha(0.75f));
+                    ci.Polyline(pts.Append(pts[0]).ToArray(), new Color(0.85f, 0.85f, 0.8f, 0.35f), 0.8f, true);
                 }
                 // 바닥 모서리 줄무늬 철판 (킥 플레이트)
                 for (float a = -half + 2f; a < half - 2f; a += 5f)
@@ -257,43 +257,43 @@ public partial class ShipView
                     var b = f.L(half, -8.5f);
                     FixtureArt.Cable(ci, a, b, 0.9f, new Color("#2a2420"), 1.6f);
                     FixtureArt.Cable(ci, a + f.Nm * 1.6f, b + f.Nm * 1.6f, 0.6f, new Color("#7a3a22"), 1.1f);
-                    ci.DrawRect(new Rect2(f.L(-half, -10f), new Vector2(2.2f, 2.2f)), new Color("#9aa3b5"));
+                    ci.Box(new Rect2(f.L(-half, -10f), new Vector2(2.2f, 2.2f)), new Color("#9aa3b5"));
                 }
                 break;
             }
             case FrameStyle.Seamed:
             {
-                ci.DrawColoredPolygon(f.Quad(-half, -6f, half, -1f), panel.WithAlpha(0.5f));
+                ci.Poly(f.Quad(-half, -6f, half, -1f), panel.WithAlpha(0.5f));
                 // 이음매 (칸 두 개 반마다) + 나사 둘
                 if ((f.Floor.X + f.Floor.Y) % 3 == 0)
                 {
                     ci.DrawLine(f.L(-half + 1f, -6f), f.L(-half + 1f, -1f), new Color(0, 0, 0, 0.45f), 1f);
-                    ci.DrawCircle(f.L(-half + 4f, -4.5f), 0.9f, edge, true, -1f, true);
-                    ci.DrawCircle(f.L(-half + 4f, -2.2f), 0.9f, edge, true, -1f, true);
+                    ci.Circle(f.L(-half + 4f, -4.5f), 0.9f, edge, true, -1f, true);
+                    ci.Circle(f.L(-half + 4f, -2.2f), 0.9f, edge, true, -1f, true);
                 }
                 // 방 색 띠
                 ci.DrawLine(f.L(-half, -2.2f), f.L(half, -2.2f), Palette.Room(f.Room.Kind).WithAlpha(0.35f), 1.4f);
                 // 덮개 씌운 배선 트레이
                 if (s.Wires == WireStyle.Tray && !f.Hull)
                 {
-                    ci.DrawColoredPolygon(f.Quad(-half, -11f, half, -7.5f), new Color("#3a4250"));
+                    ci.Poly(f.Quad(-half, -11f, half, -7.5f), new Color("#3a4250"));
                     ci.DrawLine(f.L(-half, -11f), f.L(half, -11f), edge.WithAlpha(0.5f), 0.8f);
-                    if (f.Floor.X % 2 == 0) ci.DrawCircle(f.L(0f, -9.2f), 0.8f, edge, true, -1f, true);
+                    if (f.Floor.X % 2 == 0) ci.Circle(f.L(0f, -9.2f), 0.8f, edge, true, -1f, true);
                 }
                 // 고무 걸레받이
-                ci.DrawColoredPolygon(f.Quad(-half, 0f, half, 2.2f), new Color(0.07f, 0.08f, 0.1f, 0.6f));
+                ci.Poly(f.Quad(-half, 0f, half, 2.2f), new Color(0.07f, 0.08f, 0.1f, 0.6f));
                 break;
             }
             default:
             {
                 // 이음매 없는 판: 광택 띠 · 둥근 안쪽 모서리 · 평평한 점검창 (배선은 안 보인다)
-                ci.DrawColoredPolygon(f.Quad(-half, -6f, half, -0.5f), panel.Lightened(0.08f).WithAlpha(0.45f));
+                ci.Poly(f.Quad(-half, -6f, half, -0.5f), panel.Lightened(0.08f).WithAlpha(0.45f));
                 ci.DrawLine(f.L(-half, -4.6f), f.L(half, -4.6f), new Color(1, 1, 1, 0.08f + 0.1f * s.Gloss), 1.2f);
                 ci.DrawLine(f.L(-half, -0.8f), f.L(half, -0.8f), TechLook.C(s.Trim).WithAlpha(0.55f), 1f);
                 if (FixtureArt.Hash(h, 3, 403) < 0.12f)
                 {
                     var q = f.Quad(-5f, -5.5f, 5f, -1.5f);
-                    ci.DrawPolyline(q.Append(q[0]).ToArray(), new Color(1, 1, 1, 0.12f), 0.8f, true);
+                    ci.Polyline(q.Append(q[0]).ToArray(), new Color(1, 1, 1, 0.12f), 0.8f, true);
                 }
                 break;
             }
@@ -323,7 +323,7 @@ public partial class ShipView
                     var b = f.L(11f, 3.5f);
                     ci.DrawLine(a, b, light.WithAlpha(0.55f * fl), 2.2f, true);
                     var poly = new[] { f.L(-13f, 2f), f.L(13f, 2f), f.L(20f, 26f), f.L(-20f, 26f) };
-                    ci.DrawPolygon(poly, new[] { light.WithAlpha(0.16f * fl), light.WithAlpha(0.16f * fl), light.WithAlpha(0f), light.WithAlpha(0f) });
+                    ci.Polygon(poly, new[] { light.WithAlpha(0.16f * fl), light.WithAlpha(0.16f * fl), light.WithAlpha(0f), light.WithAlpha(0f) });
                     break;
                 }
                 case LampStyle.LedStrip:
@@ -331,14 +331,14 @@ public partial class ShipView
                     if ((f.Floor.X + f.Floor.Y) % s.LampEvery != 0) break;
                     ci.DrawLine(f.L(-6f, 1.5f), f.L(6f, 1.5f), light.WithAlpha(0.6f), 1.4f, true);
                     var poly = new[] { f.L(-8f, 1f), f.L(8f, 1f), f.L(12f, 15f), f.L(-12f, 15f) };
-                    ci.DrawPolygon(poly, new[] { light.WithAlpha(0.12f), light.WithAlpha(0.12f), light.WithAlpha(0f), light.WithAlpha(0f) });
+                    ci.Polygon(poly, new[] { light.WithAlpha(0.12f), light.WithAlpha(0.12f), light.WithAlpha(0f), light.WithAlpha(0f) });
                     break;
                 }
                 default:
                 {
                     // 간접 조명: 벽과 바닥 사이 이어진 은은한 띠
                     var poly = new[] { f.L(-16f, 0f), f.L(16f, 0f), f.L(16f, 9f), f.L(-16f, 9f) };
-                    ci.DrawPolygon(poly, new[] { light.WithAlpha(0.13f * s.Glow), light.WithAlpha(0.13f * s.Glow), light.WithAlpha(0f), light.WithAlpha(0f) });
+                    ci.Polygon(poly, new[] { light.WithAlpha(0.13f * s.Glow), light.WithAlpha(0.13f * s.Glow), light.WithAlpha(0f), light.WithAlpha(0f) });
                     break;
                 }
             }

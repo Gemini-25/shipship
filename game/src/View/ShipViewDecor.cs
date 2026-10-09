@@ -99,8 +99,8 @@ public partial class ShipView
             case Prop.Vent:
             {
                 var r = Plate(18f, 7f);
-                ci.DrawRect(r.Grow(1f), dark);
-                ci.DrawRect(r, new Color("#262d39"));
+                ci.Box(r.Grow(1f), dark);
+                ci.Box(r, new Color("#262d39"));
                 for (int k = 1; k < 5; k++)
                 {
                     float f = k / 5f;
@@ -112,37 +112,37 @@ public partial class ShipView
             case Prop.Panel:
             {
                 var r = Plate(16f, 6f);
-                ci.DrawRect(r.Grow(1f), dark);
-                ci.DrawRect(r, new Color("#3a4454"));
+                ci.Box(r.Grow(1f), dark);
+                ci.Box(r, new Color("#3a4454"));
                 var led = r.GetCenter() - (vert ? new Vector2(0, 4) : new Vector2(4, 0));
-                ci.DrawCircle(led, 1.3f, new Color("#6ee7b7"), true, -1f, true);
-                ci.DrawCircle(led + (vert ? new Vector2(0, 4) : new Vector2(4, 0)), 1.3f, new Color("#ffd166"), true, -1f, true);
+                ci.Circle(led, 1.3f, new Color("#6ee7b7"), true, -1f, true);
+                ci.Circle(led + (vert ? new Vector2(0, 4) : new Vector2(4, 0)), 1.3f, new Color("#ffd166"), true, -1f, true);
                 break;
             }
             case Prop.Extinguisher:
             {
                 var q = c + inward * 3f;
-                ci.DrawCircle(q + new Vector2(1, 1.5f), 4.2f, new Color(0, 0, 0, 0.4f), true, -1f, true);
-                ci.DrawCircle(q, 4f, new Color("#c0392b"), true, -1f, true);
-                ci.DrawCircle(q - new Vector2(1.2f, 1.2f), 1.5f, new Color("#ff8a7a"), true, -1f, true);
+                ci.Circle(q + new Vector2(1, 1.5f), 4.2f, new Color(0, 0, 0, 0.4f), true, -1f, true);
+                ci.Circle(q, 4f, new Color("#c0392b"), true, -1f, true);
+                ci.Circle(q - new Vector2(1.2f, 1.2f), 1.5f, new Color("#ff8a7a"), true, -1f, true);
                 ci.DrawLine(q, q - inward * 5f, new Color("#1a1a1a"), 1.5f);
                 break;
             }
             case Prop.Gauge:
             {
                 var q = c + inward * 3f;
-                ci.DrawCircle(q, 5.5f, dark, true, -1f, true);
-                ci.DrawCircle(q, 4.5f, new Color("#d8dee8"), true, -1f, true);
+                ci.Circle(q, 5.5f, dark, true, -1f, true);
+                ci.Circle(q, 4.5f, new Color("#d8dee8"), true, -1f, true);
                 float a = -2.2f + H3(wall.X, wall.Y, 5) * 2.8f;
                 ci.DrawLine(q, q + Vector2.FromAngle(a) * 3.5f, new Color("#c0392b"), 1f, true);
-                ci.DrawArc(q, 4.5f, 0.3f, 1.2f, 6, new Color("#c0392b"), 1f, true);
+                ci.Arc(q, 4.5f, 0.3f, 1.2f, 6, new Color("#c0392b"), 1f, true);
                 break;
             }
             case Prop.Hazard:
             {
                 var r = Plate(20f, 6f);
-                ci.DrawRect(r.Grow(1f), dark);
-                ci.DrawRect(r, new Color("#e0b64a"));
+                ci.Box(r.Grow(1f), dark);
+                ci.Box(r, new Color("#e0b64a"));
                 for (int k = 0; k < 5; k++)
                 {
                     float f = (k + 0.5f) / 5f;
@@ -155,20 +155,20 @@ public partial class ShipView
             case Prop.Locker:
             {
                 var r = Plate(22f, 9f);
-                ci.DrawRect(r.Grow(1f), dark);
-                ci.DrawRect(r, new Color("#3b4760").Lerp(Palette.Room(room.Kind), 0.15f));
+                ci.Box(r.Grow(1f), dark);
+                ci.Box(r, new Color("#3b4760").Lerp(Palette.Room(room.Kind), 0.15f));
                 var mid = r.GetCenter();
                 if (vert) ci.DrawLine(new Vector2(r.Position.X, mid.Y), new Vector2(r.End.X, mid.Y), dark, 1f);
                 else ci.DrawLine(new Vector2(mid.X, r.Position.Y), new Vector2(mid.X, r.End.Y), dark, 1f);
-                ci.DrawCircle(mid + (vert ? new Vector2(0, -3) : new Vector2(-3, 0)), 0.9f, new Color("#9aa6b5"), true, -1f, true);
-                ci.DrawCircle(mid + (vert ? new Vector2(0, 3) : new Vector2(3, 0)), 0.9f, new Color("#9aa6b5"), true, -1f, true);
+                ci.Circle(mid + (vert ? new Vector2(0, -3) : new Vector2(-3, 0)), 0.9f, new Color("#9aa6b5"), true, -1f, true);
+                ci.Circle(mid + (vert ? new Vector2(0, 3) : new Vector2(3, 0)), 0.9f, new Color("#9aa6b5"), true, -1f, true);
                 break;
             }
             case Prop.Screen:
             {
                 var r = Plate(20f, 5f);
-                ci.DrawRect(r.Grow(1.5f), dark);
-                ci.DrawRect(r, new Color("#0f2a36"));
+                ci.Box(r.Grow(1.5f), dark);
+                ci.Box(r, new Color("#0f2a36"));
                 var glow = room.Type is RoomType.Bridge or RoomType.Comms ? new Color("#6ee7b7") : new Color("#7fb2ff");
                 for (int k = 0; k < 3; k++)
                 {
@@ -181,29 +181,29 @@ public partial class ShipView
             case Prop.Plant:
             {
                 var q = c + inward * 5f;
-                ci.DrawCircle(q, 5f, new Color("#4a3a2a"), true, -1f, true);
+                ci.Circle(q, 5f, new Color("#4a3a2a"), true, -1f, true);
                 for (int k = 0; k < 5; k++)
                 {
                     var d = Vector2.FromAngle(k * 1.25f + H3(wall.X, wall.Y, 2) * 3f);
-                    ci.DrawCircle(q + d * 3.5f, 3.2f, new Color("#3f8f4a").Lerp(new Color("#8fd65a"), H3(wall.X, wall.Y, k)), true, -1f, true);
+                    ci.Circle(q + d * 3.5f, 3.2f, new Color("#3f8f4a").Lerp(new Color("#8fd65a"), H3(wall.X, wall.Y, k)), true, -1f, true);
                 }
                 break;
             }
             case Prop.MedBox:
             {
                 var r = Plate(14f, 8f);
-                ci.DrawRect(r.Grow(1f), dark);
-                ci.DrawRect(r, new Color("#e8ecf2"));
+                ci.Box(r.Grow(1f), dark);
+                ci.Box(r, new Color("#e8ecf2"));
                 var m = r.GetCenter();
-                ci.DrawRect(new Rect2(m - new Vector2(1.2f, 3.5f), new Vector2(2.4f, 7f)), new Color("#d64545"));
-                ci.DrawRect(new Rect2(m - new Vector2(3.5f, 1.2f), new Vector2(7f, 2.4f)), new Color("#d64545"));
+                ci.Box(new Rect2(m - new Vector2(1.2f, 3.5f), new Vector2(2.4f, 7f)), new Color("#d64545"));
+                ci.Box(new Rect2(m - new Vector2(3.5f, 1.2f), new Vector2(7f, 2.4f)), new Color("#d64545"));
                 break;
             }
             case Prop.ToolBoard:
             {
                 var r = Plate(26f, 6f);
-                ci.DrawRect(r.Grow(1f), dark);
-                ci.DrawRect(r, new Color("#4a4030"));
+                ci.Box(r.Grow(1f), dark);
+                ci.Box(r, new Color("#4a4030"));
                 for (int k = 0; k < 4; k++)
                 {
                     float f = (k + 0.5f) / 4f;
@@ -216,21 +216,21 @@ public partial class ShipView
             case Prop.Sign:
             {
                 var r = Plate(20f, 9f);
-                ci.DrawRect(r.Grow(1f), dark);
-                ci.DrawRect(r, Palette.Room(room.Kind).Darkened(0.45f));
-                ci.DrawRect(r, Palette.Room(room.Kind).WithAlpha(0.8f), false, 1f);
+                ci.Box(r.Grow(1f), dark);
+                ci.Box(r, Palette.Room(room.Kind).Darkened(0.45f));
+                ci.Box(r, Palette.Room(room.Kind).WithAlpha(0.8f), false, 1f);
                 Gfx.TextCentered(ci, Fonts.Bold, r.GetCenter(), $"{RoomCode(room.Kind)}-{room.Id + 1}", 6, new Color("#e6edf3"));
                 break;
             }
             case Prop.Tank:
             {
                 var q = c + inward * 6f;
-                ci.DrawCircle(q + new Vector2(1, 1.5f), 7f, new Color(0, 0, 0, 0.35f), true, -1f, true);
-                ci.DrawCircle(q, 6.5f, new Color("#2c3a44"), true, -1f, true);
-                ci.DrawArc(q, 6.5f, 0f, Mathf.Tau, 20, new Color("#6a7a88"), 1.5f, true);
-                ci.DrawArc(q, 4f, 3.6f, 5.2f, 8, new Color(1, 1, 1, 0.3f), 1.2f, true);
+                ci.Circle(q + new Vector2(1, 1.5f), 7f, new Color(0, 0, 0, 0.35f), true, -1f, true);
+                ci.Circle(q, 6.5f, new Color("#2c3a44"), true, -1f, true);
+                ci.Arc(q, 6.5f, 0f, Mathf.Tau, 20, new Color("#6a7a88"), 1.5f, true);
+                ci.Arc(q, 4f, 3.6f, 5.2f, 8, new Color(1, 1, 1, 0.3f), 1.2f, true);
                 var liquid = room.Type == RoomType.Hydroponics ? new Color("#8fd65a") : room.Type == RoomType.Cooling ? new Color("#5fd0c8") : new Color("#8fd3ff");
-                ci.DrawCircle(q, 2.2f, liquid.WithAlpha(0.8f), true, -1f, true);
+                ci.Circle(q, 2.2f, liquid.WithAlpha(0.8f), true, -1f, true);
                 break;
             }
             case Prop.Pipe:
@@ -262,8 +262,8 @@ public partial class ShipView
             if (room.Type != RoomType.Corridor && g.Kind(room.DamperSpot) == TileKind.Floor)
             {
                 var r = CellRect(room.DamperSpot).Grow(-7f);
-                ci.DrawRect(r.Grow(1f), new Color("#07090d"));
-                ci.DrawRect(r, new Color("#1c222c"));
+                ci.Box(r.Grow(1f), new Color("#07090d"));
+                ci.Box(r, new Color("#1c222c"));
                 for (int k = 1; k < 6; k++) ci.DrawLine(new Vector2(r.Position.X + r.Size.X * k / 6f, r.Position.Y + 1), new Vector2(r.Position.X + r.Size.X * k / 6f, r.End.Y - 1), new Color("#07090d"), 1.5f);
             }
             switch (room.Type)
@@ -273,8 +273,8 @@ public partial class ShipView
                     foreach (var c in room.Cells.Where(c => ship.IsOpenFloor(c) && H3(c.X, c.Y, 21) < 0.06f))
                     {
                         var q = CellRect(c).GetCenter();
-                        ci.DrawCircle(q, 4.5f, new Color("#0a0d12"), true, -1f, true);
-                        ci.DrawArc(q, 4.5f, 0f, Mathf.Tau, 16, new Color("#3a4454"), 1f, true);
+                        ci.Circle(q, 4.5f, new Color("#0a0d12"), true, -1f, true);
+                        ci.Arc(q, 4.5f, 0f, Mathf.Tau, 16, new Color("#3a4454"), 1f, true);
                         ci.DrawLine(q - new Vector2(3, 0), q + new Vector2(3, 0), new Color("#3a4454"), 1f);
                         ci.DrawLine(q - new Vector2(0, 3), q + new Vector2(0, 3), new Color("#3a4454"), 1f);
                     }

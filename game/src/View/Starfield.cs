@@ -94,7 +94,7 @@ public partial class Starfield : Node2D
                     pts[i] = new Vector2(x, y);
                     pts[n * 2 - 1 - i] = new Vector2(x, y + h);
                 }
-                DrawColoredPolygon(pts, col.WithAlpha(0.11f * _storm));
+                this.Poly(pts, col.WithAlpha(0.11f * _storm));
             }
         }
 
@@ -107,8 +107,8 @@ public partial class Starfield : Node2D
             var color = new Color(s.Tint.R, s.Tint.G, s.Tint.B, a);
             float streak = Mathf.Min(26f, _cruise * 0.05f * s.Depth * s.Depth);
             if (streak > 1.5f) DrawLine(new Vector2(x, y), new Vector2(x + streak, y), color.WithAlpha(a * 0.55f), s.Size * 0.8f, true); // 빨리 갈 때 별이 늘어진다
-            if (s.Size < 1.1f) DrawRect(new Rect2(x, y, 1f, 1f), color);
-            else DrawCircle(new Vector2(x, y), s.Size * 0.6f, color, true, -1f, true);
+            if (s.Size < 1.1f) this.Box(new Rect2(x, y, 1f, 1f), color);
+            else this.Circle(new Vector2(x, y), s.Size * 0.6f, color, true, -1f, true);
         }
         // v12.2 잔해 지대: 크고 작은 잔해가 앞에서 뒤로 지나간다 (돌면서)
         if (Debris)
@@ -123,7 +123,7 @@ public partial class Starfield : Node2D
                 float rot = _time * (0.3f + i * 0.05f) + i;
                 var pts = new Vector2[5];
                 for (int k = 0; k < 5; k++) pts[k] = c + new Vector2(Mathf.Cos(rot + k * 1.26f), Mathf.Sin(rot + k * 1.26f)) * r * (0.7f + 0.3f * Mathf.PosMod(i * k * 0.37f, 1f));
-                DrawColoredPolygon(pts, new Color(0.42f, 0.40f, 0.38f, 0.35f + 0.4f * depth));
+                this.Poly(pts, new Color(0.42f, 0.40f, 0.38f, 0.35f + 0.4f * depth));
             }
         }
     }
@@ -131,6 +131,6 @@ public partial class Starfield : Node2D
     private void DrawNebula(Vector2 center, float radius, Color color)
     {
         for (int k = 0; k < 6; k++)
-            DrawCircle(center, radius * (1f - k * 0.14f), new Color(color.R, color.G, color.B, 0.035f), true, -1f, true);
+            this.Circle(center, radius * (1f - k * 0.14f), new Color(color.R, color.G, color.B, 0.035f), true, -1f, true);
     }
 }

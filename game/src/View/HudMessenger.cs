@@ -67,7 +67,7 @@ public partial class Hud
             // 읽은 사람 수 · 고른 사람이 아직 안 읽었으면 점
             int read = chat.ReadCount(m);
             Gfx.TextRight(this, Fonts.Body, new Vector2(bubble.End.X - 6, bubble.End.Y - 4), $"{read}", 8, Palette.TextMuted);
-            if (sel != null && !mine && !chat.HasRead(sel, m.Id)) DrawCircle(new Vector2(bubble.Position.X - 6, bubble.Position.Y + bubble.Size.Y * 0.5f), 2.6f, Palette.Accent);
+            if (sel != null && !mine && !chat.HasRead(sel, m.Id)) this.Circle(new Vector2(bubble.Position.X - 6, bubble.Position.Y + bubble.Size.Y * 0.5f), 2.6f, Palette.Accent);
             y += H(m);
         }
     }

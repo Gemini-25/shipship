@@ -27,14 +27,14 @@ public static class CosmicArt
 
     public static void Glow(CanvasItem ci, Vector2 c, float r, Color col, int layers = 6, float alpha = 0.1f)
     {
-        for (int i = 0; i < layers; i++) ci.DrawCircle(c, r * (1f - i / (float)layers), A(col, alpha), true, -1f, true);
+        for (int i = 0; i < layers; i++) ci.Circle(c, r * (1f - i / (float)layers), A(col, alpha), true, -1f, true);
     }
 
     public static void Star(CanvasItem ci, Vector2 c, float r, Color col, float spikes = 1f)
     {
         Glow(ci, c, r * 3.2f, col, 5, 0.07f);
-        ci.DrawCircle(c, r, col, true, -1f, true);
-        ci.DrawCircle(c, r * 0.5f, Colors.White, true, -1f, true);
+        ci.Circle(c, r, col, true, -1f, true);
+        ci.Circle(c, r * 0.5f, Colors.White, true, -1f, true);
         if (spikes <= 0f) return;
         for (int i = 0; i < 4; i++)
         {
@@ -75,7 +75,7 @@ public static class CosmicArt
             float a = i * Mathf.Tau / n;
             pts[i] = c + P(a, r * (1f + wobble * (N(seed, i % n) - 0.5f) * 2f));
         }
-        ci.DrawPolyline(pts, col, width, true);
+        ci.Polyline(pts, col, width, true);
     }
 
     private static void Bolt(CanvasItem ci, Vector2 from, Vector2 to, Color col, float width, int seed, int segs = 7, float jag = 0.18f)
@@ -89,7 +89,7 @@ public static class CosmicArt
             float off = i == 0 || i == segs ? 0f : (N(seed, i) - 0.5f) * 2f * jag * d.Length();
             pts[i] = from + d * u + nrm * off;
         }
-        ci.DrawPolyline(pts, col, width, true);
+        ci.Polyline(pts, col, width, true);
     }
 
     /// <summary>
@@ -131,7 +131,7 @@ public static class CosmicArt
             {
                 // 보랏빛 한 줄기 — 배를 꿰뚫고 반대편 끝까지
                 float flick = 0.7f + 0.3f * N((int)(t * 30f), seed);
-                ci.DrawCircle(c, s * 0.08f * (0.6f + flick * 0.4f), a, true, -1f, true);
+                ci.Circle(c, s * 0.08f * (0.6f + flick * 0.4f), a, true, -1f, true);
                 Glow(ci, c, s * 0.3f, a, 4, 0.08f + 0.1f * near);
                 if (hit > 0f)
                 {
@@ -142,7 +142,7 @@ public static class CosmicArt
                     for (int i = 0; i < 16; i++) // 꼬리 잔광 알갱이
                     {
                         float u = Mathf.PosMod(N(seed, i) + t * 0.3f, 1f);
-                        ci.DrawCircle(c + dir * diag * u + side * (N(seed, i + 40) - 0.5f) * 30f, 1.5f, A(b, 0.6f * hit), true, -1f, true);
+                        ci.Circle(c + dir * diag * u + side * (N(seed, i + 40) - 0.5f) * 30f, 1.5f, A(b, 0.6f * hit), true, -1f, true);
                     }
                 }
                 break;
@@ -151,8 +151,8 @@ public static class CosmicArt
             {
                 // 커다란 주황 별 가장자리 · 쌀알 무늬 · 솟구치는 플라스마 고리
                 float R = s * 1.1f;
-                ci.DrawCircle(c, R, a.Darkened(0.15f), true, -1f, true);
-                for (int i = 0; i < 26; i++) ci.DrawCircle(c + P(N(seed, i) * Mathf.Tau, R * N(seed, i + 30) * 0.92f), R * 0.08f, A(b, 0.35f), true, -1f, true);
+                ci.Circle(c, R, a.Darkened(0.15f), true, -1f, true);
+                for (int i = 0; i < 26; i++) ci.Circle(c + P(N(seed, i) * Mathf.Tau, R * N(seed, i + 30) * 0.92f), R * 0.08f, A(b, 0.35f), true, -1f, true);
                 Glow(ci, c, R * 1.5f, a, 5, 0.06f);
                 for (int i = 0; i < 3; i++)
                 {
@@ -167,8 +167,8 @@ public static class CosmicArt
                         float u = j / 15f;
                         pts[j] = (1 - u) * (1 - u) * foot1 + 2 * u * (1 - u) * (top + P(ang + Mathf.Pi / 2f, h * 0.4f)) + u * u * foot2;
                     }
-                    ci.DrawPolyline(pts, A(b, 0.85f), 3f, true);
-                    ci.DrawPolyline(pts, A(Colors.White, 0.4f), 1f, true);
+                    ci.Polyline(pts, A(b, 0.85f), 3f, true);
+                    ci.Polyline(pts, A(Colors.White, 0.4f), 1f, true);
                 }
                 if (hit > 0f) Ring(ci, c, R * (1.3f + 0.8f * Mathf.PosMod(t * 0.3f, 1f)), A(a, 0.5f * hit), 3f, seed, 0.03f);
                 break;
@@ -179,11 +179,11 @@ public static class CosmicArt
                 Star(ci, c, s * 0.12f, a, 0.5f);
                 float bubble = s * (0.3f + 1.3f * near);
                 var center = c + dir * bubble * 0.8f;
-                for (int i = 0; i < 4; i++) ci.DrawColoredPolygon(Blob(center, bubble * (1f - i * 0.18f), seed + i, 18, 0.12f, t * 0.05f), A(a, 0.07f));
+                for (int i = 0; i < 4; i++) ci.Poly(Blob(center, bubble * (1f - i * 0.18f), seed + i, 18, 0.12f, t * 0.05f), A(a, 0.07f));
                 for (int i = 0; i < 7; i++) // 실가닥
                 {
                     float ang = dir.Angle() + (i - 3) * 0.25f;
-                    ci.DrawArc(center - dir * bubble * 0.2f, bubble * (0.7f + 0.05f * i), ang - 0.6f, ang + 0.6f, 12, A(a.Lightened(0.2f), 0.25f), 1.2f, true);
+                    ci.Arc(center - dir * bubble * 0.2f, bubble * (0.7f + 0.05f * i), ang - 0.6f, ang + 0.6f, 12, A(a.Lightened(0.2f), 0.25f), 1.2f, true);
                 }
                 if (hit > 0f)
                     for (int band = 0; band < 3; band++)
@@ -196,15 +196,15 @@ public static class CosmicArt
                             float x = area.Position.X + area.Size.X * j / 29f;
                             pts[j] = new Vector2(x, baseY + Mathf.Sin(x * 0.01f + t * 0.6f + band) * 30f);
                         }
-                        ci.DrawPolyline(pts, A(col, 0.25f * hit), 18f, true);
-                        ci.DrawPolyline(pts, A(col, 0.5f * hit), 2f, true);
+                        ci.Polyline(pts, A(col, 0.25f * hit), 18f, true);
+                        ci.Polyline(pts, A(col, 0.5f * hit), 2f, true);
                     }
                 break;
             }
             case CosmicKind.PulsarBeam:
             {
                 // 작게 빛나는 점 · 돌아가는 두 줄기 등대 빔
-                ci.DrawCircle(c, s * 0.07f, b, true, -1f, true);
+                ci.Circle(c, s * 0.07f, b, true, -1f, true);
                 Glow(ci, c, s * 0.25f, a, 4, 0.1f);
                 float ang = t * 2.6f;
                 for (int sgn = -1; sgn <= 1; sgn += 2)
@@ -213,7 +213,7 @@ public static class CosmicArt
                     float len = s * (1.4f + 2f * hit) + (hit > 0f ? diag * 0.6f : 0f);
                     var tip = c + d * len;
                     var w = new Vector2(-d.Y, d.X) * len * 0.06f;
-                    ci.DrawColoredPolygon(new[] { c, tip + w, tip - w }, A(a, 0.18f + 0.25f * hit));
+                    ci.Poly(new[] { c, tip + w, tip - w }, A(a, 0.18f + 0.25f * hit));
                     ci.DrawLine(c, tip, A(b, 0.5f), 1.5f, true);
                 }
                 float facing = Mathf.Abs(P(ang, 1f).Dot(dir));
@@ -238,9 +238,9 @@ public static class CosmicArt
                             float rr = Li * Mathf.Sin(th) * Mathf.Sin(th) * (1f + 0.05f * Mathf.Sin(t * 3f + i + j * 0.4f) * hit);
                             pts[j] = c + new Vector2(sgn * rr * Mathf.Sin(th), rr * Mathf.Cos(th)).Rotated(rot);
                         }
-                        ci.DrawPolyline(pts, A(i % 2 == 0 ? a : b, 0.25f + 0.25f * hit), 1.4f, true);
+                        ci.Polyline(pts, A(i % 2 == 0 ? a : b, 0.25f + 0.25f * hit), 1.4f, true);
                         int q = (int)(Mathf.PosMod(t * 8f + i * 3, 24f));
-                        ci.DrawCircle(pts[q], 2f, A(Colors.White, 0.6f), true, -1f, true);
+                        ci.Circle(pts[q], 2f, A(Colors.White, 0.6f), true, -1f, true);
                     }
                 }
                 break;
@@ -248,13 +248,13 @@ public static class CosmicArt
             case CosmicKind.NeutronStar:
             {
                 // 작고 시린 푸른 점 · 아인슈타인 고리 · 일그러진 별빛
-                ci.DrawCircle(c, s * 0.05f, a, true, -1f, true);
+                ci.Circle(c, s * 0.05f, a, true, -1f, true);
                 Glow(ci, c, s * 0.2f, b, 5, 0.1f + 0.1f * Mathf.Abs(Mathf.Sin(t * 5f)));
-                ci.DrawArc(c, s * 0.42f, 0f, Mathf.Tau, 48, A(a, 0.45f), 1.5f, true);
+                ci.Arc(c, s * 0.42f, 0f, Mathf.Tau, 48, A(a, 0.45f), 1.5f, true);
                 for (int i = 0; i < 6; i++)
                 {
                     float ang = N(seed, i) * Mathf.Tau;
-                    ci.DrawArc(c, s * (0.5f + 0.25f * N(seed, i + 9)), ang, ang + 0.25f, 6, A(Colors.White, 0.6f), 1.2f, true); // 렌즈에 늘어진 별
+                    ci.Arc(c, s * (0.5f + 0.25f * N(seed, i + 9)), ang, ang + 0.25f, 6, A(Colors.White, 0.6f), 1.2f, true); // 렌즈에 늘어진 별
                 }
                 if (hit > 0f) for (int i = 0; i < 3; i++) Ring(ci, toward, 40f + 30f * i + 10f * Mathf.Sin(t * 2f), A(b, 0.15f * hit), 1.5f, seed + i, 0.02f);
                 break;
@@ -266,17 +266,17 @@ public static class CosmicArt
                 for (int i = 0; i < 4; i++)
                 {
                     var ell = Ellipse(c, R * (2.6f - 0.3f * i), R * (0.55f - 0.06f * i), -0.25f, 48);
-                    ci.DrawPolyline(ell, A(b.Lerp(new Color("#fff1c2"), i / 4f), 0.35f + 0.1f * i), 3f - 0.5f * i, true);
+                    ci.Polyline(ell, A(b.Lerp(new Color("#fff1c2"), i / 4f), 0.35f + 0.1f * i), 3f - 0.5f * i, true);
                 }
-                ci.DrawCircle(c, R, new Color("#020203"), true, -1f, true);
-                ci.DrawArc(c, R * 1.08f, 0f, Mathf.Tau, 48, A(new Color("#ffd27a"), 0.8f), 1.5f, true);
+                ci.Circle(c, R, new Color("#020203"), true, -1f, true);
+                ci.Arc(c, R * 1.08f, 0f, Mathf.Tau, 48, A(new Color("#ffd27a"), 0.8f), 1.5f, true);
                 var top = Ellipse(c, R * 1.6f, R * 1.3f, -0.25f, 24, Mathf.Pi * 1.05f, Mathf.Pi * 1.95f);
-                ci.DrawPolyline(top, A(b, 0.6f), 2f, true);
+                ci.Polyline(top, A(b, 0.6f), 2f, true);
                 for (int i = 0; i < 18; i++)
                 {
                     float ang = N(seed, i) * Mathf.Tau + t * (0.4f / (1f + N(seed, i + 3) * 3f));
                     float rr = R * (1.8f + 2.5f * N(seed, i + 20));
-                    ci.DrawArc(c, rr, ang, ang + 0.3f * (R * 3f / rr), 5, A(Colors.White, 0.5f), 1f, true);
+                    ci.Arc(c, rr, ang, ang + 0.3f * (R * 3f / rr), 5, A(Colors.White, 0.5f), 1f, true);
                 }
                 if (hit > 0f) for (int i = 0; i < 5; i++) ci.DrawLine(toward - dir * (30f + 10f * i), toward - dir * (70f + 10f * i), A(b, 0.2f * hit), 1f, true);
                 break;
@@ -285,11 +285,11 @@ public static class CosmicArt
             {
                 // 화면 가장자리를 채우는 붉은 거성 표면 · 대류 덩어리 → 붉은 안개 (앞 층)
                 float R = s * 2.4f;
-                ci.DrawCircle(c, R, A(a.Darkened(0.35f), 0.85f), true, -1f, true);
+                ci.Circle(c, R, A(a.Darkened(0.35f), 0.85f), true, -1f, true);
                 for (int i = 0; i < 30; i++)
                 {
                     var p = c + P(N(seed, i) * Mathf.Tau + t * 0.01f, R * Mathf.Sqrt(N(seed, i + 50)) * 0.95f);
-                    ci.DrawColoredPolygon(Blob(p, R * 0.09f, seed + i, 8, 0.3f, t * 0.1f), A(b, 0.25f + 0.15f * Mathf.Sin(t + i)));
+                    ci.Poly(Blob(p, R * 0.09f, seed + i, 8, 0.3f, t * 0.1f), A(b, 0.25f + 0.15f * Mathf.Sin(t + i)));
                 }
                 Glow(ci, c, R * 1.3f, a, 6, 0.05f + 0.05f * hit);
                 break;
@@ -301,8 +301,8 @@ public static class CosmicArt
                 Star(ci, big, s * 0.3f, b, 0.3f);
                 float u = Mathf.Clamp(near * 1.1f, 0f, 1f);
                 var small = big + side * s * 0.6f * (1f - 2f * u);
-                ci.DrawCircle(small, s * 0.26f, A(new Color("#0a0f20"), 0.92f), true, -1f, true);
-                ci.DrawArc(small, s * 0.27f, 0f, Mathf.Tau, 32, A(a, 0.9f), 2f, true);
+                ci.Circle(small, s * 0.26f, A(new Color("#0a0f20"), 0.92f), true, -1f, true);
+                ci.Arc(small, s * 0.27f, 0f, Mathf.Tau, 32, A(a, 0.9f), 2f, true);
                 Glow(ci, small, s * 0.4f, a, 3, 0.08f);
                 break;
             }
@@ -325,15 +325,15 @@ public static class CosmicArt
                 // 다가오는 거대한 바위 · 크레이터 · 배로 오는 궤적 (비키면 휜다)
                 float R = s * 0.45f;
                 var rock = Blob(c, R, seed, 16, 0.22f, t * 0.05f);
-                ci.DrawColoredPolygon(rock, a.Darkened(0.2f));
-                ci.DrawPolyline(rock.Append(rock[0]).ToArray(), A(b, 0.5f), 1.5f, true);
+                ci.Poly(rock, a.Darkened(0.2f));
+                ci.Polyline(rock.Append(rock[0]).ToArray(), A(b, 0.5f), 1.5f, true);
                 for (int i = 0; i < 6; i++)
                 {
                     var p = c + P(N(seed, i + 3) * Mathf.Tau + t * 0.05f, R * 0.6f * N(seed, i + 11));
-                    ci.DrawCircle(p, R * (0.08f + 0.1f * N(seed, i)), a.Darkened(0.45f), true, -1f, true);
-                    ci.DrawArc(p, R * (0.08f + 0.1f * N(seed, i)), -2.4f, -0.6f, 6, A(b, 0.6f), 1f, true);
+                    ci.Circle(p, R * (0.08f + 0.1f * N(seed, i)), a.Darkened(0.45f), true, -1f, true);
+                    ci.Arc(p, R * (0.08f + 0.1f * N(seed, i)), -2.4f, -0.6f, 6, A(b, 0.6f), 1f, true);
                 }
-                ci.DrawArc(c, R * 1.02f, dir.Angle() - 1.2f, dir.Angle() + 1.2f, 16, A(b, 0.7f), 2f, true); // 볕 받는 쪽
+                ci.Arc(c, R * 1.02f, dir.Angle() - 1.2f, dir.Angle() + 1.2f, 16, A(b, 0.7f), 2f, true); // 볕 받는 쪽
                 ci.DrawDashedLine(c + dir * R * 1.2f, toward, A(Palette.Danger, 0.5f * near), 1.5f, 8f);
                 break;
             }
@@ -347,10 +347,10 @@ public static class CosmicArt
                     float u = i / 17f;
                     ci.DrawLine(c + away * s * 2.4f * u, c + away * s * 2.4f * (u + 0.06f), A(a, 0.5f * (1f - u)), 3f * (1f - u) + 1f, true);
                     var dust = c + away.Rotated(0.35f * u) * s * 1.8f * u + side * s * 0.3f * u * u;
-                    ci.DrawCircle(dust, R * (0.6f + 2f * u), A(b, 0.08f * (1f - u)), true, -1f, true);
+                    ci.Circle(dust, R * (0.6f + 2f * u), A(b, 0.08f * (1f - u)), true, -1f, true);
                 }
                 Glow(ci, c, R * 4f, a, 5, 0.1f);
-                ci.DrawColoredPolygon(Blob(c, R, seed, 9, 0.35f, t * 0.2f), new Color("#6b7380"));
+                ci.Poly(Blob(c, R, seed, 9, 0.35f, t * 0.2f), new Color("#6b7380"));
                 for (int i = 0; i < 4; i++)
                 {
                     float ang = dir.Angle() + (N(seed, i) - 0.5f) * 1.2f;
@@ -364,7 +364,7 @@ public static class CosmicArt
             {
                 // 줄무늬 행성 · 화면을 가르는 고리 띠 · 빽빽한 얼음 알갱이
                 float R = s * 0.9f;
-                ci.DrawCircle(c, R, a.Darkened(0.1f), true, -1f, true);
+                ci.Circle(c, R, a.Darkened(0.1f), true, -1f, true);
                 for (int i = -4; i <= 4; i++)
                 {
                     float y = i * R * 0.2f;
@@ -372,14 +372,14 @@ public static class CosmicArt
                     ci.DrawLine(c + new Vector2(-hw, y), c + new Vector2(hw, y), A(b, 0.5f), R * 0.07f, true);
                 }
                 var ring = Ellipse(c, R * 2.3f, R * 0.35f, -0.2f, 64);
-                ci.DrawPolyline(ring, A(a.Lightened(0.3f), 0.7f), R * 0.12f, true);
-                ci.DrawPolyline(ring, A(b, 0.6f), R * 0.03f, true);
+                ci.Polyline(ring, A(a.Lightened(0.3f), 0.7f), R * 0.12f, true);
+                ci.Polyline(ring, A(b, 0.6f), R * 0.03f, true);
                 int n = (int)(20 + 120 * hit);
                 for (int i = 0; i < n; i++)
                 {
                     float u = Mathf.PosMod(N(seed, i) + t * (0.05f + 0.2f * hit), 1f);
                     var p = hit > 0f ? area.Position + new Vector2(u * area.Size.X, area.Size.Y * (0.35f + 0.3f * N(seed, i + 7))) : ring[(int)(u * 63)];
-                    ci.DrawCircle(p, 1f + N(seed, i + 3) * 1.5f, A(Colors.White, 0.55f), true, -1f, true);
+                    ci.Circle(p, 1f + N(seed, i + 3) * 1.5f, A(Colors.White, 0.55f), true, -1f, true);
                 }
                 break;
             }
@@ -391,14 +391,14 @@ public static class CosmicArt
                 {
                     var off = P(i * Mathf.Tau / 4f + 0.4f, R * (0.15f + 0.1f * near + 0.03f * Mathf.Sin(t * 0.2f + i)));
                     var chunk = Blob(c + off, R * 0.55f, seed + i, 10, 0.25f, i);
-                    ci.DrawColoredPolygon(chunk, b.Lightened(0.05f * i));
-                    ci.DrawPolyline(chunk.Append(chunk[0]).ToArray(), A(a, 0.9f), 2f, true);
+                    ci.Poly(chunk, b.Lightened(0.05f * i));
+                    ci.Polyline(chunk.Append(chunk[0]).ToArray(), A(a, 0.9f), 2f, true);
                 }
                 Glow(ci, c, R * 0.3f, a, 4, 0.25f);
                 for (int i = 0; i < 30; i++)
                 {
                     var p = c + P(N(seed, i) * Mathf.Tau + t * 0.03f, R * (1f + 1.2f * N(seed, i + 40)));
-                    ci.DrawCircle(p, 1.2f + 2f * N(seed, i + 2), A(a, 0.7f), true, -1f, true);
+                    ci.Circle(p, 1.2f + 2f * N(seed, i + 2), A(a, 0.7f), true, -1f, true);
                 }
                 break;
             }
@@ -406,16 +406,16 @@ public static class CosmicArt
             {
                 // 궤도 선 · 부서지는 위성 · 충돌 불꽃 사슬
                 var orbit = Ellipse(c, s * 1.4f, s * 0.5f, 0.3f, 64);
-                ci.DrawPolyline(orbit, A(a, 0.3f), 1f, true);
+                ci.Polyline(orbit, A(a, 0.3f), 1f, true);
                 for (int i = 0; i < 9; i++)
                 {
                     int idx = (int)Mathf.PosMod(i * 7 + t * 4f, 64f);
                     var p = orbit[idx];
-                    ci.DrawRect(new Rect2(p - new Vector2(3, 2), new Vector2(6, 4)), a, true);
+                    ci.Box(new Rect2(p - new Vector2(3, 2), new Vector2(6, 4)), a, true);
                     ci.DrawLine(p - new Vector2(8, 0), p + new Vector2(8, 0), A(new Color("#4a7ab8"), 0.8f), 2f, true);
                     if (N(i, (int)(t * 3f)) < 0.15f + 0.3f * (near + hit)) Glow(ci, p, 10f, b, 3, 0.25f);
                 }
-                for (int i = 0; i < 30; i++) ci.DrawCircle(orbit[(int)Mathf.PosMod(N(seed, i) * 64f + t * 6f, 64f)] + P(N(seed, i + 5) * Mathf.Tau, 6f), 1f, A(Colors.White, 0.5f), true, -1f, true);
+                for (int i = 0; i < 30; i++) ci.Circle(orbit[(int)Mathf.PosMod(N(seed, i) * 64f + t * 6f, 64f)] + P(N(seed, i + 5) * Mathf.Tau, 6f), 1f, A(Colors.White, 0.5f), true, -1f, true);
                 break;
             }
             case CosmicKind.HyperDust:
@@ -436,14 +436,14 @@ public static class CosmicArt
             {
                 // 별을 가리는 검은 원반 · 푸른 테두리 · 작은 위성
                 float R = s * 0.8f;
-                ci.DrawCircle(c, R * 1.06f, A(b, 0.25f), true, -1f, true);
-                ci.DrawCircle(c, R, a, true, -1f, true);
-                ci.DrawArc(c, R * 1.01f, dir.Angle() - 1.6f, dir.Angle() + 1.6f, 32, A(b, 0.8f), 2f, true);
+                ci.Circle(c, R * 1.06f, A(b, 0.25f), true, -1f, true);
+                ci.Circle(c, R, a, true, -1f, true);
+                ci.Arc(c, R * 1.01f, dir.Angle() - 1.6f, dir.Angle() + 1.6f, 32, A(b, 0.8f), 2f, true);
                 for (int i = 0; i < 3; i++)
                 {
                     var p = c + P(t * (0.2f + 0.1f * i) + i * 2f, R * (1.4f + 0.3f * i));
-                    ci.DrawCircle(p, R * 0.06f, new Color("#8a8f99"), true, -1f, true);
-                    ci.DrawArc(p, R * 0.06f, dir.Angle() - 1.5f, dir.Angle() + 1.5f, 8, A(Colors.White, 0.6f), 1f, true);
+                    ci.Circle(p, R * 0.06f, new Color("#8a8f99"), true, -1f, true);
+                    ci.Arc(p, R * 0.06f, dir.Angle() - 1.5f, dir.Angle() + 1.5f, 8, A(Colors.White, 0.6f), 1f, true);
                 }
                 break;
             }
@@ -453,16 +453,16 @@ public static class CosmicArt
                 if (hit <= 0f)
                 {
                     var hull = new[] { c + new Vector2(-s * 0.3f, -s * 0.05f), c + new Vector2(s * 0.25f, -s * 0.05f), c + new Vector2(s * 0.32f, 0f), c + new Vector2(s * 0.25f, s * 0.05f), c + new Vector2(-s * 0.3f, s * 0.05f) };
-                    ci.DrawColoredPolygon(hull, new Color("#5a6070"));
-                    ci.DrawRect(new Rect2(c + new Vector2(-s * 0.36f, -s * 0.09f), new Vector2(s * 0.1f, s * 0.04f)), new Color("#4a5060"), true);
-                    ci.DrawRect(new Rect2(c + new Vector2(-s * 0.36f, s * 0.05f), new Vector2(s * 0.1f, s * 0.04f)), new Color("#4a5060"), true);
-                    if (Mathf.PosMod(t, 0.6f) < 0.3f) ci.DrawCircle(c + new Vector2(-s * 0.05f, 0), s * 0.03f + 4f * near, A(a, 0.9f), true, -1f, true); // 경고등
+                    ci.Poly(hull, new Color("#5a6070"));
+                    ci.Box(new Rect2(c + new Vector2(-s * 0.36f, -s * 0.09f), new Vector2(s * 0.1f, s * 0.04f)), new Color("#4a5060"), true);
+                    ci.Box(new Rect2(c + new Vector2(-s * 0.36f, s * 0.05f), new Vector2(s * 0.1f, s * 0.04f)), new Color("#4a5060"), true);
+                    if (Mathf.PosMod(t, 0.6f) < 0.3f) ci.Circle(c + new Vector2(-s * 0.05f, 0), s * 0.03f + 4f * near, A(a, 0.9f), true, -1f, true); // 경고등
                 }
                 else
                 {
                     Glow(ci, c, s * (0.6f + hit), a, 7, 0.12f * hit);
                     Ring(ci, c, s * (0.5f + 1.5f * Mathf.PosMod(t * 0.25f, 1f)), A(a, 0.6f * hit), 3f, seed, 0.05f);
-                    for (int i = 0; i < 20; i++) ci.DrawCircle(c + P(N(seed, i) * Mathf.Tau, s * (0.3f + N(seed, i + 4)) * (0.6f + Mathf.PosMod(t * 0.1f, 1f))), 2f, A(a.Lightened(0.3f), 0.8f), true, -1f, true);
+                    for (int i = 0; i < 20; i++) ci.Circle(c + P(N(seed, i) * Mathf.Tau, s * (0.3f + N(seed, i + 4)) * (0.6f + Mathf.PosMod(t * 0.1f, 1f))), 2f, A(a.Lightened(0.3f), 0.8f), true, -1f, true);
                 }
                 break;
             }
@@ -476,18 +476,18 @@ public static class CosmicArt
                 {
                     float a0 = rot + i * Mathf.Tau / 6f;
                     var off = P(a0 + Mathf.Pi / 6f, R * spread * (0.5f + N(seed, i)));
-                    ci.DrawArc(c + off, R, a0 + 0.05f, a0 + Mathf.Tau / 6f - 0.05f, 8, a, R * 0.12f, true);
+                    ci.Arc(c + off, R, a0 + 0.05f, a0 + Mathf.Tau / 6f - 0.05f, 8, a, R * 0.12f, true);
                     ci.DrawLine(c + off * 0.5f, c + off + P(a0 + Mathf.Pi / 6f, R * 0.95f), A(a.Darkened(0.2f), 0.9f), 2f, true);
-                    if (Mathf.PosMod(t + i * 0.3f, 1.2f) < 0.3f) ci.DrawCircle(c + off + P(a0 + 0.5f, R), 2.5f, b, true, -1f, true);
+                    if (Mathf.PosMod(t + i * 0.3f, 1.2f) < 0.3f) ci.Circle(c + off + P(a0 + 0.5f, R), 2.5f, b, true, -1f, true);
                 }
-                ci.DrawCircle(c, R * 0.18f, a.Lightened(0.1f), true, -1f, true);
+                ci.Circle(c, R * 0.18f, a.Lightened(0.1f), true, -1f, true);
                 break;
             }
             case CosmicKind.AntimatterBreach:
             {
                 // 하얀·분홍 점 → 별 모양 빛살 · 겹 고리
                 float pl = 0.6f + 0.4f * Mathf.Sin(t * 12f);
-                ci.DrawCircle(c, s * 0.04f * (1f + pl * near), b, true, -1f, true);
+                ci.Circle(c, s * 0.04f * (1f + pl * near), b, true, -1f, true);
                 if (hit > 0f)
                 {
                     Glow(ci, c, s * 1.6f * hit, Colors.White, 8, 0.1f * hit);
@@ -502,7 +502,7 @@ public static class CosmicArt
                 var head = c + side * (near - 0.5f) * s * 2f;
                 float len = s * (1.5f + 2.5f * near) + diag * 0.4f * hit;
                 for (int i = 0; i < 5; i++) ci.DrawLine(head, head - side * len + dir * Mathf.Sin(t * 3f + i) * 6f, A(i == 0 ? Colors.White : a, 0.5f / (i + 1) + 0.1f), 2f + 5f * i, true);
-                ci.DrawColoredPolygon(new[] { head + side * 10f, head - side * 8f + dir * 5f, head - side * 8f - dir * 5f }, new Color("#c8ccd6"));
+                ci.Poly(new[] { head + side * 10f, head - side * 8f + dir * 5f, head - side * 8f - dir * 5f }, new Color("#c8ccd6"));
                 break;
             }
             case CosmicKind.MineField:
@@ -512,9 +512,9 @@ public static class CosmicArt
                 {
                     var p = c + P(N(seed, i) * Mathf.Tau, s * (0.2f + 1.1f * N(seed, i + 20))) + P(t * 0.3f + i, 3f);
                     float mr = 5f + 4f * N(seed, i + 6);
-                    ci.DrawCircle(p, mr, b, true, -1f, true);
+                    ci.Circle(p, mr, b, true, -1f, true);
                     for (int j = 0; j < 6; j++) ci.DrawLine(p + P(j * Mathf.Tau / 6f + i, mr), p + P(j * Mathf.Tau / 6f + i, mr * 1.6f), b.Lightened(0.2f), 1.5f, true);
-                    if (Mathf.PosMod(t * 1.3f + N(seed, i), 1f) < 0.25f) ci.DrawCircle(p, 2f, a, true, -1f, true);
+                    if (Mathf.PosMod(t * 1.3f + N(seed, i), 1f) < 0.25f) ci.Circle(p, 2f, a, true, -1f, true);
                     if (hit > 0f && N(i, (int)(t * 2f)) < 0.08f * hit) Glow(ci, p, 26f, new Color("#ffb347"), 5, 0.25f);
                 }
                 break;
@@ -522,10 +522,10 @@ public static class CosmicArt
             case CosmicKind.OrbitalEmp:
             {
                 // 충전하는 궤도 포대 (판 · 접시 · 날개) → 퍼지는 청록 구
-                ci.DrawRect(new Rect2(c - new Vector2(s * 0.12f, s * 0.06f), new Vector2(s * 0.24f, s * 0.12f)), new Color("#59606e"), true);
-                ci.DrawRect(new Rect2(c + new Vector2(-s * 0.42f, -s * 0.04f), new Vector2(s * 0.26f, s * 0.08f)), new Color("#24467a"), true);
-                ci.DrawRect(new Rect2(c + new Vector2(s * 0.16f, -s * 0.04f), new Vector2(s * 0.26f, s * 0.08f)), new Color("#24467a"), true);
-                ci.DrawArc(c + dir * s * 0.1f, s * 0.12f, dir.Angle() - 1.2f, dir.Angle() + 1.2f, 10, new Color("#c8ccd6"), 2.5f, true);
+                ci.Box(new Rect2(c - new Vector2(s * 0.12f, s * 0.06f), new Vector2(s * 0.24f, s * 0.12f)), new Color("#59606e"), true);
+                ci.Box(new Rect2(c + new Vector2(-s * 0.42f, -s * 0.04f), new Vector2(s * 0.26f, s * 0.08f)), new Color("#24467a"), true);
+                ci.Box(new Rect2(c + new Vector2(s * 0.16f, -s * 0.04f), new Vector2(s * 0.26f, s * 0.08f)), new Color("#24467a"), true);
+                ci.Arc(c + dir * s * 0.1f, s * 0.12f, dir.Angle() - 1.2f, dir.Angle() + 1.2f, 10, new Color("#c8ccd6"), 2.5f, true);
                 Glow(ci, c + dir * s * 0.14f, s * (0.08f + 0.2f * near), a, 4, 0.1f + 0.2f * near * Mathf.Abs(Mathf.Sin(t * 6f)));
                 if (hit > 0f) for (int i = 0; i < 3; i++) Ring(ci, c, s * 0.3f + diag * 0.5f * Mathf.PosMod(t * 0.5f + i / 3f, 1f), A(a, 0.4f * hit), 3f, seed + i, 0.01f);
                 break;
@@ -537,14 +537,14 @@ public static class CosmicArt
                 var fwd = dir;
                 var nrm = side;
                 var bow = c + fwd * L * 0.5f;
-                ci.DrawColoredPolygon(new[] { c - fwd * L * 0.5f + nrm * L * 0.12f, bow + nrm * L * 0.12f, bow + fwd * L * 0.08f, bow - nrm * L * 0.12f, c - fwd * L * 0.5f - nrm * L * 0.12f }, b);
+                ci.Poly(new[] { c - fwd * L * 0.5f + nrm * L * 0.12f, bow + nrm * L * 0.12f, bow + fwd * L * 0.08f, bow - nrm * L * 0.12f, c - fwd * L * 0.5f - nrm * L * 0.12f }, b);
                 for (int i = 0; i < 6; i++)
                 {
                     var p = c - fwd * L * 0.4f + fwd * L * 0.14f * i;
                     var col = new[] { new Color("#d1495b"), new Color("#edae49"), new Color("#00798c"), new Color("#30638e") }[i % 4];
-                    ci.DrawColoredPolygon(new[] { p + nrm * L * 0.1f, p + nrm * L * 0.1f + fwd * L * 0.12f, p - nrm * L * 0.1f + fwd * L * 0.12f, p - nrm * L * 0.1f }, col.Darkened(0.2f));
+                    ci.Poly(new[] { p + nrm * L * 0.1f, p + nrm * L * 0.1f + fwd * L * 0.12f, p - nrm * L * 0.1f + fwd * L * 0.12f, p - nrm * L * 0.1f }, col.Darkened(0.2f));
                 }
-                if (Mathf.PosMod(t, 1f) < 0.5f) { ci.DrawCircle(bow + nrm * L * 0.12f, 2.5f, new Color("#ff4d4d"), true, -1f, true); ci.DrawCircle(bow - nrm * L * 0.12f, 2.5f, new Color("#4dff88"), true, -1f, true); }
+                if (Mathf.PosMod(t, 1f) < 0.5f) { ci.Circle(bow + nrm * L * 0.12f, 2.5f, new Color("#ff4d4d"), true, -1f, true); ci.Circle(bow - nrm * L * 0.12f, 2.5f, new Color("#4dff88"), true, -1f, true); }
                 ci.DrawDashedLine(bow, toward, A(a, 0.5f * near), 1.5f, 10f);
                 break;
             }
@@ -555,8 +555,8 @@ public static class CosmicArt
                 {
                     var p = c + side * (i - 1.5f) * s * 0.35f - dir * Mathf.Abs(i - 1.5f) * s * 0.15f;
                     float L = s * 0.18f;
-                    ci.DrawColoredPolygon(new[] { p + dir * L, p - dir * L * 0.6f + side * L * 0.5f, p - dir * L * 0.3f, p - dir * L * 0.6f - side * L * 0.5f }, new Color("#3a3f4a"));
-                    ci.DrawCircle(p - dir * L * 0.5f, 2.5f + Mathf.Sin(t * 9f + i), a, true, -1f, true);
+                    ci.Poly(new[] { p + dir * L, p - dir * L * 0.6f + side * L * 0.5f, p - dir * L * 0.3f, p - dir * L * 0.6f - side * L * 0.5f }, new Color("#3a3f4a"));
+                    ci.Circle(p - dir * L * 0.5f, 2.5f + Mathf.Sin(t * 9f + i), a, true, -1f, true);
                     if (hit > 0f && Mathf.PosMod(t * 2f + i * 0.37f, 1f) < 0.5f)
                     {
                         float u = Mathf.PosMod(t * 2f + i * 0.37f, 1f) * 2f;
@@ -574,8 +574,8 @@ public static class CosmicArt
                 {
                     var p = c + P(N(seed, i) * Mathf.Tau, R * 0.45f * N(seed, i + 10)) + dir * R * 0.3f * hit;
                     var blob = Blob(p, R * (0.45f + 0.2f * N(seed, i + 4)), seed + i, 14, 0.25f, t * 0.01f);
-                    ci.DrawColoredPolygon(blob, A(a, 0.9f));
-                    ci.DrawPolyline(blob.Append(blob[0]).ToArray(), A(b, 0.35f), 2f, true);
+                    ci.Poly(blob, A(a, 0.9f));
+                    ci.Polyline(blob.Append(blob[0]).ToArray(), A(b, 0.35f), 2f, true);
                 }
                 break;
             }
@@ -604,8 +604,8 @@ public static class CosmicArt
                         float u = j / 19f;
                         pts[j] = c + side * (u - 0.5f) * s * 2.2f + dir * (Mathf.Sin(u * 5f + i + t * 0.3f) * s * 0.15f + (i - 4) * s * 0.07f);
                     }
-                    ci.DrawPolyline(pts, A(a, 0.1f), 8f, true);
-                    ci.DrawPolyline(pts, A(b, 0.35f), 1.2f, true);
+                    ci.Polyline(pts, A(a, 0.1f), 8f, true);
+                    ci.Polyline(pts, A(b, 0.35f), 1.2f, true);
                 }
                 int bucket = (int)(t * 6f);
                 if (N(bucket, seed) < 0.3f + 0.6f * hit)
@@ -624,11 +624,11 @@ public static class CosmicArt
                     float rr = s * 0.2f + (s * 1.5f + diag * hit) * u;
                     var pts = new Vector2[65];
                     for (int j = 0; j <= 64; j++) { float ang = j * Mathf.Tau / 64f; pts[j] = c + P(ang, rr * (1f + 0.04f * Mathf.Sin(ang * 2f + t * 2f))); }
-                    ci.DrawPolyline(pts, A(i % 2 == 0 ? a : b, 0.35f * (1f - u)), 2f, true);
+                    ci.Polyline(pts, A(i % 2 == 0 ? a : b, 0.35f * (1f - u)), 2f, true);
                 }
-                ci.DrawCircle(c, s * 0.05f, b, true, -1f, true);
-                ci.DrawCircle(c + P(t * 5f, s * 0.08f), s * 0.03f, a, true, -1f, true);
-                ci.DrawCircle(c - P(t * 5f, s * 0.08f), s * 0.03f, a, true, -1f, true);
+                ci.Circle(c, s * 0.05f, b, true, -1f, true);
+                ci.Circle(c + P(t * 5f, s * 0.08f), s * 0.03f, a, true, -1f, true);
+                ci.Circle(c - P(t * 5f, s * 0.08f), s * 0.03f, a, true, -1f, true);
                 break;
             }
         }
@@ -646,18 +646,18 @@ public static class CosmicArt
                 {
                     float ang = N(seed, i) * Mathf.Tau;
                     float rr = r * (0.75f + 0.35f * N(seed, i + 40));
-                    ci.DrawArc(c, rr, ang, ang + 0.4f + 0.5f * N(seed, i + 9), 10, A(i % 3 == 0 ? a : b, 0.35f * fade), 1.5f + 2f * N(seed, i + 2), true);
+                    ci.Arc(c, rr, ang, ang + 0.4f + 0.5f * N(seed, i + 9), 10, A(i % 3 == 0 ? a : b, 0.35f * fade), 1.5f + 2f * N(seed, i + 2), true);
                 }
                 for (int i = 0; i < 10; i++) Glow(ci, c + P(N(seed, i + 70) * Mathf.Tau, r * (0.8f + 0.2f * N(seed, i + 80))), r * 0.06f, b, 3, 0.25f * fade);
-                ci.DrawCircle(c, 1.5f, A(Colors.White, 0.8f * fade), true, -1f, true);
+                ci.Circle(c, 1.5f, A(Colors.White, 0.8f * fade), true, -1f, true);
                 break;
             case CosmicRemnant.GlowCloud:
-                for (int i = 0; i < 5; i++) ci.DrawColoredPolygon(Blob(c + P(N(seed, i) * Mathf.Tau, r * 0.3f), r * (0.4f + 0.2f * N(seed, i + 3)), seed + i, 14, 0.2f, t * 0.005f), A(i % 2 == 0 ? a : b, 0.07f * fade));
-                for (int i = 0; i < 12; i++) ci.DrawCircle(c + P(N(seed, i + 20) * Mathf.Tau, r * N(seed, i + 30)), 1f, A(Colors.White, (0.4f + 0.4f * Mathf.Sin(t + i)) * fade), true, -1f, true);
+                for (int i = 0; i < 5; i++) ci.Poly(Blob(c + P(N(seed, i) * Mathf.Tau, r * 0.3f), r * (0.4f + 0.2f * N(seed, i + 3)), seed + i, 14, 0.2f, t * 0.005f), A(i % 2 == 0 ? a : b, 0.07f * fade));
+                for (int i = 0; i < 12; i++) ci.Circle(c + P(N(seed, i + 20) * Mathf.Tau, r * N(seed, i + 30)), 1f, A(Colors.White, (0.4f + 0.4f * Mathf.Sin(t + i)) * fade), true, -1f, true);
                 break;
             case CosmicRemnant.Ring:
                 var ring = Ellipse(c, r, r * 0.3f, 0.3f, 64);
-                for (int i = 0; i < 64; i += 2) ci.DrawCircle(ring[i] + P(N(seed, i) * Mathf.Tau, 2f), 1.2f, A(i % 4 == 0 ? a : b, 0.6f * fade), true, -1f, true);
+                for (int i = 0; i < 64; i += 2) ci.Circle(ring[i] + P(N(seed, i) * Mathf.Tau, 2f), 1.2f, A(i % 4 == 0 ? a : b, 0.6f * fade), true, -1f, true);
                 break;
             case CosmicRemnant.Streak:
                 var d = P(N(seed, 1) * Mathf.Tau, r);
@@ -668,16 +668,16 @@ public static class CosmicArt
                 for (int i = 0; i < 9; i++)
                 {
                     var p = c + P(N(seed, i) * Mathf.Tau + t * 0.01f, r * 0.6f * N(seed, i + 5));
-                    ci.DrawColoredPolygon(Blob(p, 3f + 4f * N(seed, i + 8), seed + i, 5, 0.4f, t * 0.1f + i), A(new Color("#5a6070"), fade));
-                    ci.DrawCircle(p, 1.5f, A(a, (0.5f + 0.5f * Mathf.Sin(t * 2f + i)) * fade), true, -1f, true);
+                    ci.Poly(Blob(p, 3f + 4f * N(seed, i + 8), seed + i, 5, 0.4f, t * 0.1f + i), A(new Color("#5a6070"), fade));
+                    ci.Circle(p, 1.5f, A(a, (0.5f + 0.5f * Mathf.Sin(t * 2f + i)) * fade), true, -1f, true);
                 }
                 break;
             case CosmicRemnant.Bubble:
-                ci.DrawArc(c, r, 0f, Mathf.Tau, 64, A(a, 0.2f * fade), 2f, true);
-                ci.DrawArc(c, r * 0.94f, -1f, 1.4f, 24, A(b, 0.4f * fade), 3f, true);
+                ci.Arc(c, r, 0f, Mathf.Tau, 64, A(a, 0.2f * fade), 2f, true);
+                ci.Arc(c, r * 0.94f, -1f, 1.4f, 24, A(b, 0.4f * fade), 3f, true);
                 break;
             case CosmicRemnant.Scar:
-                for (int i = 0; i < 3; i++) ci.DrawArc(c, r * (0.6f + 0.15f * i), -2.6f + 0.1f * i, -0.5f, 20, A(i == 1 ? b : a, (0.15f + 0.05f * Mathf.Sin(t + i)) * fade), 6f, true);
+                for (int i = 0; i < 3; i++) ci.Arc(c, r * (0.6f + 0.15f * i), -2.6f + 0.1f * i, -0.5f, 20, A(i == 1 ? b : a, (0.15f + 0.05f * Mathf.Sin(t + i)) * fade), 6f, true);
                 break;
         }
     }
@@ -831,8 +831,8 @@ public partial class CosmicSky : Node2D
         {
             if (e.Phase != CosmicPhase.Impact || e.Ghost) continue;
             float hit = Hit(w, e);
-            DrawRect(area, CosmicArt.A(new Color(e.Spec.Hex), 0.05f * hit), true);
-            if (e.Kind is CosmicKind.BinaryEclipse) DrawRect(area, new Color(0.01f, 0.02f, 0.06f, 0.5f * hit), true); // 하늘이 어두워진다
+            this.Box(area, CosmicArt.A(new Color(e.Spec.Hex), 0.05f * hit), true);
+            if (e.Kind is CosmicKind.BinaryEclipse) this.Box(area, new Color(0.01f, 0.02f, 0.06f, 0.5f * hit), true); // 하늘이 어두워진다
         }
     }
 }
@@ -864,11 +864,11 @@ public partial class CosmicFlash : Node2D
         {
             var spec = CosmicCatalog.Spec(_kickKind);
             float f = Mathf.Clamp(1f - since / 1.2f, 0f, 1f);
-            if (spec.Has(CosmicFx.Light) || spec.Has(CosmicFx.Emp)) DrawRect(area, CosmicArt.A(new Color(spec.Hex).Lerp(Colors.White, 0.6f), 0.75f * f * f), true);
+            if (spec.Has(CosmicFx.Light) || spec.Has(CosmicFx.Emp)) this.Box(area, CosmicArt.A(new Color(spec.Hex).Lerp(Colors.White, 0.6f), 0.75f * f * f), true);
             if (spec.Has(CosmicFx.Shock) || spec.Has(CosmicFx.Strike) || spec.Has(CosmicFx.Quake))
             {
                 float rr = size.Length() * since / 1.6f;
-                DrawArc(size / 2f, rr, 0f, Mathf.Tau, 96, CosmicArt.A(new Color(spec.Hex2), 0.5f * (1f - since / 2.5f)), 18f * (1f - since / 2.5f) + 2f, true);
+                this.Arc(size / 2f, rr, 0f, Mathf.Tau, 96, CosmicArt.A(new Color(spec.Hex2), 0.5f * (1f - since / 2.5f)), 18f * (1f - since / 2.5f) + 2f, true);
             }
         }
         foreach (var e in w.Cosmic.Events)
@@ -885,15 +885,15 @@ public partial class CosmicFlash : Node2D
                 {
                     float y = CosmicArt.N(bucket, i) * size.Y;
                     float x = CosmicArt.N(bucket, i + 100) * size.X;
-                    DrawRect(new Rect2(x - 200f, y, 400f * CosmicArt.N(bucket, i + 200) + 40f, 1f + 3f * CosmicArt.N(bucket, i + 300)), new Color(0.8f, 1f, 1f, 0.15f * k), true);
+                    this.Box(new Rect2(x - 200f, y, 400f * CosmicArt.N(bucket, i + 200) + 40f, 1f + 3f * CosmicArt.N(bucket, i + 300)), new Color(0.8f, 1f, 1f, 0.15f * k), true);
                 }
-                if (CosmicArt.N(bucket, 7) < 0.2f * k) DrawRect(area, new Color(0f, 1f, 0.9f, 0.05f), true);
+                if (CosmicArt.N(bucket, 7) < 0.2f * k) this.Box(area, new Color(0f, 1f, 0.9f, 0.05f), true);
             }
             if (e.Kind == CosmicKind.RedGiantShell)
             {
                 float h = cs.FxNow(e, CosmicFx.Heat);
-                DrawRect(area, new Color(0.6f, 0.08f, 0.02f, 0.28f * h), true);
-                for (int i = 0; i < 10; i++) DrawColoredPolygon(CosmicArt.Blob(new Vector2(CosmicArt.N(i, 1) * size.X, CosmicArt.N(i, 2) * size.Y) + CosmicArt.P(t * 0.1f + i, 40f), size.Y * 0.25f, i, 12, 0.3f, t * 0.02f), new Color(0.9f, 0.2f, 0.05f, 0.05f * h));
+                this.Box(area, new Color(0.6f, 0.08f, 0.02f, 0.28f * h), true);
+                for (int i = 0; i < 10; i++) this.Poly(CosmicArt.Blob(new Vector2(CosmicArt.N(i, 1) * size.X, CosmicArt.N(i, 2) * size.Y) + CosmicArt.P(t * 0.1f + i, 40f), size.Y * 0.25f, i, 12, 0.3f, t * 0.02f), new Color(0.9f, 0.2f, 0.05f, 0.05f * h));
             }
             if (e.Kind == CosmicKind.BinaryEclipse)
             {
@@ -910,13 +910,13 @@ public partial class CosmicFlash : Node2D
             if (e.Kind == CosmicKind.DarkNebula)
             {
                 float bl = cs.FxNow(e, CosmicFx.Blind);
-                DrawRect(area, new Color(0.02f, 0.01f, 0.04f, 0.35f * bl), true);
+                this.Box(area, new Color(0.02f, 0.01f, 0.04f, 0.35f * bl), true);
             }
             if (e.Kind == CosmicKind.CosmicRayShower)
             {
                 float r = cs.FxNow(e, CosmicFx.Radiation);
                 int bucket = (int)(t * 15f);
-                for (int i = 0; i < (int)(25 * r); i++) DrawCircle(new Vector2(CosmicArt.N(bucket, i) * size.X, CosmicArt.N(bucket, i + 50) * size.Y), 1.5f, new Color(0.7f, 1f, 0.85f, 0.9f), true, -1f, true);
+                for (int i = 0; i < (int)(25 * r); i++) this.Circle(new Vector2(CosmicArt.N(bucket, i) * size.X, CosmicArt.N(bucket, i + 50) * size.Y), 1.5f, new Color(0.7f, 1f, 0.85f, 0.9f), true, -1f, true);
             }
         }
     }
@@ -1024,17 +1024,17 @@ public partial class ShipView
                     {
                         float R = T * 3.5f;
                         var rock = CosmicArt.Blob(p, R, e.Id * 13, 16, 0.22f, _time * 0.2f);
-                        ci.DrawColoredPolygon(rock, new Color("#6b5d4d"));
-                        for (int i = 0; i < 5; i++) ci.DrawCircle(p + CosmicArt.P(CosmicArt.N(e.Id, i) * Mathf.Tau + _time * 0.2f, R * 0.55f * CosmicArt.N(e.Id, i + 5)), R * 0.15f, new Color("#4a4036"), true, -1f, true);
-                        ci.DrawArc(p, R, (-dir).Angle() - 1.2f, (-dir).Angle() + 1.2f, 16, new Color("#ffcf8a"), 3f, true);
+                        ci.Poly(rock, new Color("#6b5d4d"));
+                        for (int i = 0; i < 5; i++) ci.Circle(p + CosmicArt.P(CosmicArt.N(e.Id, i) * Mathf.Tau + _time * 0.2f, R * 0.55f * CosmicArt.N(e.Id, i + 5)), R * 0.15f, new Color("#4a4036"), true, -1f, true);
+                        ci.Arc(p, R, (-dir).Angle() - 1.2f, (-dir).Angle() + 1.2f, 16, new Color("#ffcf8a"), 3f, true);
                     }
                     else
                     {
                         var fwd = -dir;
                         float L = T * 9f;
-                        ci.DrawColoredPolygon(new[] { p - fwd * L * 0.5f + side * T, p + fwd * L * 0.4f + side * T, p + fwd * L * 0.5f, p + fwd * L * 0.4f - side * T, p - fwd * L * 0.5f - side * T }, new Color("#4a4f5c"));
-                        for (int i = 0; i < 6; i++) ci.DrawRect(new Rect2(p - fwd * L * 0.4f + fwd * L * 0.13f * i - new Vector2(T * 0.5f, T * 0.5f), new Vector2(T, T)), new[] { new Color("#d1495b"), new Color("#edae49"), new Color("#00798c") }[i % 3], true);
-                        if (Mathf.PosMod(_time, 1f) < 0.5f) ci.DrawCircle(p + fwd * L * 0.5f, 5f, new Color("#ffb000"), true, -1f, true);
+                        ci.Poly(new[] { p - fwd * L * 0.5f + side * T, p + fwd * L * 0.4f + side * T, p + fwd * L * 0.5f, p + fwd * L * 0.4f - side * T, p - fwd * L * 0.5f - side * T }, new Color("#4a4f5c"));
+                        for (int i = 0; i < 6; i++) ci.Box(new Rect2(p - fwd * L * 0.4f + fwd * L * 0.13f * i - new Vector2(T * 0.5f, T * 0.5f), new Vector2(T, T)), new[] { new Color("#d1495b"), new Color("#edae49"), new Color("#00798c") }[i % 3], true);
+                        if (Mathf.PosMod(_time, 1f) < 0.5f) ci.Circle(p + fwd * L * 0.5f, 5f, new Color("#ffb000"), true, -1f, true);
                     }
                 }
             }
@@ -1049,7 +1049,7 @@ public partial class ShipView
                         float th = j * Mathf.Tau / 39f;
                         pts[j] = c + new Vector2(Mathf.Cos(th) * half * (0.7f + 0.25f * i), Mathf.Sin(th) * half * (0.25f + 0.1f * i) * (1f + 0.1f * Mathf.Sin(_time * 3f + i + th * 2f))).Rotated(e.Side);
                     }
-                    ci.DrawPolyline(pts, CosmicArt.A(new Color(i % 2 == 0 ? "#c46cff" : "#ff4fd8"), 0.35f * hit), 2f, true);
+                    ci.Polyline(pts, CosmicArt.A(new Color(i % 2 == 0 ? "#c46cff" : "#ff4fd8"), 0.35f * hit), 2f, true);
                 }
             // 조석: 배가 길게 당겨진다 (양 끝 화살)
             if (e.Spec.Has(CosmicFx.Tidal) && w.Cosmic.FxNow(e, CosmicFx.Tidal) > 0f)
@@ -1059,7 +1059,7 @@ public partial class ShipView
                         float pull = 0.5f + 0.5f * Mathf.Sin(_time * 1.5f + i);
                         var basePt = c + dir * sgn * (half * 0.9f + i * T * 1.4f + pull * T);
                         ci.DrawLine(basePt, basePt + dir * sgn * T * 1.6f, CosmicArt.A(new Color(e.Spec.Hex2), 0.6f * hit), 3f, true);
-                        ci.DrawColoredPolygon(new[] { basePt + dir * sgn * T * 2.2f, basePt + dir * sgn * T * 1.4f + side * T * 0.5f, basePt + dir * sgn * T * 1.4f - side * T * 0.5f }, CosmicArt.A(new Color(e.Spec.Hex2), 0.6f * hit));
+                        ci.Poly(new[] { basePt + dir * sgn * T * 2.2f, basePt + dir * sgn * T * 1.4f + side * T * 0.5f, basePt + dir * sgn * T * 1.4f - side * T * 0.5f }, CosmicArt.A(new Color(e.Spec.Hex2), 0.6f * hit));
                     }
             // 잔해 · 먼지 · 고리 알갱이가 배 곁을 스친다
             if (w.Cosmic.FxNow(e, CosmicFx.Debris | CosmicFx.Plasma) > 0f)
@@ -1116,10 +1116,10 @@ public partial class ShipView
                 float th = T * 0.28f * (0.5f + 0.5f * water);
                 var inner = rect.Grow(-T * 0.08f);
                 var col = new Color(0.3f, 0.6f, 1f, 0.35f + 0.2f * water);
-                ci.DrawRect(new Rect2(inner.Position, new Vector2(inner.Size.X, th)), col, true);
-                ci.DrawRect(new Rect2(inner.Position + new Vector2(0, inner.Size.Y - th), new Vector2(inner.Size.X, th)), col, true);
-                ci.DrawRect(new Rect2(inner.Position, new Vector2(th, inner.Size.Y)), col, true);
-                ci.DrawRect(new Rect2(inner.Position + new Vector2(inner.Size.X - th, 0), new Vector2(th, inner.Size.Y)), col, true);
+                ci.Box(new Rect2(inner.Position, new Vector2(inner.Size.X, th)), col, true);
+                ci.Box(new Rect2(inner.Position + new Vector2(0, inner.Size.Y - th), new Vector2(inner.Size.X, th)), col, true);
+                ci.Box(new Rect2(inner.Position, new Vector2(th, inner.Size.Y)), col, true);
+                ci.Box(new Rect2(inner.Position + new Vector2(inner.Size.X - th, 0), new Vector2(th, inner.Size.Y)), col, true);
                 for (float x = inner.Position.X; x < inner.End.X; x += T * 0.5f)
                 {
                     float y = inner.Position.Y + th * 0.5f + Mathf.Sin(x * 0.2f + _time * 2f) * th * 0.25f;
@@ -1131,8 +1131,8 @@ public partial class ShipView
                 for (int i = 0; i < 2; i++)
                 {
                     var bx = new Rect2(rect.End - new Vector2(T * (0.9f + 0.7f * i), T * 0.9f), new Vector2(T * 0.6f, T * 0.6f));
-                    ci.DrawRect(bx, new Color("#c9a66b"), true);
-                    ci.DrawRect(bx, new Color("#6b5636"), false, 1f);
+                    ci.Box(bx, new Color("#c9a66b"), true);
+                    ci.Box(bx, new Color("#6b5636"), false, 1f);
                     ci.DrawLine(bx.Position + new Vector2(bx.Size.X / 2f, 3f), bx.Position + new Vector2(bx.Size.X / 2f, bx.Size.Y - 3f), i == 0 ? Palette.Danger : new Color("#5ec8e6"), 2f);
                     ci.DrawLine(bx.Position + new Vector2(3f, bx.Size.Y / 2f), bx.Position + new Vector2(bx.Size.X - 3f, bx.Size.Y / 2f), i == 0 ? Palette.Danger : new Color("#5ec8e6"), 2f);
                 }
@@ -1142,11 +1142,11 @@ public partial class ShipView
                     var r2 = new Rect2(corner + new Vector2(T * 0.1f, T * 0.1f), new Vector2(T * 0.4f, T * 0.4f));
                     ci.DrawLine(r2.Position, r2.End, new Color("#e0b84c"), 2f, true);
                     ci.DrawLine(new Vector2(r2.End.X, r2.Position.Y), new Vector2(r2.Position.X, r2.End.Y), new Color("#e0b84c"), 2f, true);
-                    ci.DrawRect(new Rect2(r2.GetCenter() - new Vector2(2, 2), new Vector2(4, 4)), new Color("#8d96a8"), true);
+                    ci.Box(new Rect2(r2.GetCenter() - new Vector2(2, 2), new Vector2(4, 4)), new Color("#8d96a8"), true);
                 }
             if (any && cs.Insulated(room)) // 보온: 벽을 따라 누빈 담요 무늬
                 for (float x = rect.Position.X + T * 0.2f; x < rect.End.X - T * 0.2f; x += T * 0.4f)
-                    ci.DrawArc(new Vector2(x, rect.Position.Y + T * 0.2f), T * 0.15f, 0f, Mathf.Pi, 6, new Color("#d98c5f"), 2f, true);
+                    ci.Arc(new Vector2(x, rect.Position.Y + T * 0.2f), T * 0.15f, 0f, Mathf.Pi, 6, new Color("#d98c5f"), 2f, true);
         }
         // 꺼 둔 설비: 어둡게 · 전원 표시(동그라미에 세로줄) · 다시 켤 차례면 깜빡
         foreach (int id in cs.SafedIds)
@@ -1154,11 +1154,11 @@ public partial class ShipView
             var f = w.Ship.Furniture.FirstOrDefault(x => x.Id == id);
             if (f == null || f.Room.Detached) continue;
             var r = FurnitureRect(f);
-            ci.DrawRect(r, new Color(0f, 0f, 0.02f, 0.55f), true);
+            ci.Box(r, new Color(0f, 0f, 0.02f, 0.55f), true);
             bool restart = cs.Events.Any(e => e.Tasks.Any(t => t.Kind == BraceKind.Restart && t.FurnitureId == id && !t.Done));
             var col = restart && Mathf.PosMod(_time, 1f) < 0.5f ? Palette.Warning : new Color("#9aa3b5");
             var cc = r.GetCenter();
-            ci.DrawArc(cc, T * 0.25f, -Mathf.Pi * 0.35f, Mathf.Pi * 1.35f, 16, col, 2f, true);
+            ci.Arc(cc, T * 0.25f, -Mathf.Pi * 0.35f, Mathf.Pi * 1.35f, 16, col, 2f, true);
             ci.DrawLine(cc - new Vector2(0, T * 0.32f), cc, col, 2f, true);
         }
         foreach (var e in cs.Events)
@@ -1187,7 +1187,7 @@ public partial class ShipView
                 }
                 else
                 {
-                    ci.DrawRect(rect, CosmicArt.A(Palette.Danger, 0.5f + 0.3f * Mathf.Sin(_time * 5f)), false, 3f);
+                    ci.Box(rect, CosmicArt.A(Palette.Danger, 0.5f + 0.3f * Mathf.Sin(_time * 5f)), false, 3f);
                     foreach (var d in room.Doors)
                     {
                         var dp = CellRect(d.Cell).GetCenter();
@@ -1210,7 +1210,7 @@ public partial class ShipView
                         var p1 = rect.Position + new Vector2(Mathf.Min(rect.Size.X, k + rect.Size.Y), Mathf.Min(rect.Size.Y, rect.Size.X - k));
                         ci.DrawLine(p0, p1, new Color(1f, 0.55f, 0.2f, 0.18f), 3f, true);
                     }
-                    ci.DrawRect(rect, new Color(1f, 0.55f, 0.2f, 0.45f), false, 1.5f);
+                    ci.Box(rect, new Color(1f, 0.55f, 0.2f, 0.45f), false, 1.5f);
                 }
             if (e.Phase != CosmicPhase.Impact) continue;
             var dir = new Vector2(Mathf.Cos(e.Side), Mathf.Sin(e.Side));
@@ -1241,7 +1241,7 @@ public partial class ShipView
                     var p1 = r.Position + new Vector2(CosmicArt.N(bucket, f.Id + 5) * r.Size.X, r.Size.Y);
                     var pts = new Vector2[6];
                     for (int j = 0; j < 6; j++) pts[j] = p0.Lerp(p1, j / 5f) + new Vector2((CosmicArt.N(bucket + j, f.Id) - 0.5f) * T * 0.6f, 0f);
-                    ci.DrawPolyline(pts, new Color(0.6f, 1f, 1f, 0.9f), 1.5f, true);
+                    ci.Polyline(pts, new Color(0.6f, 1f, 1f, 0.9f), 1.5f, true);
                 }
             }
         }

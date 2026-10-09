@@ -149,7 +149,7 @@ public partial class ShipView
                 float y = -(t * 10f + u * 7f) * scale;
                 pts[j] = top + new Vector2(x0 + Mathf.Sin(_time * 2.2f + u * 4f + i + seed) * 2.2f * scale * (0.4f + u), y);
             }
-            ci.DrawPolyline(pts, new Color(1f, 1f, 1f, 0.42f * heat * (1f - t)), 1.6f * scale, true);
+            ci.Polyline(pts, new Color(1f, 1f, 1f, 0.42f * heat * (1f - t)), 1.6f * scale, true);
         }
     }
 
@@ -160,7 +160,7 @@ public partial class ShipView
             float t = Mathf.PosMod(_time * rate + Hash01(seed, i), 1f);
             var p = c + new Vector2((Hash01(seed + 7, i) - 0.5f) * 1.5f * r, (Hash01(seed + 3, i) - 0.5f) * 1.5f * r);
             float br = (0.18f + 0.22f * t) * r;
-            ci.DrawArc(p, br, 0f, Mathf.Tau, 10, col.Lightened(0.35f).WithAlpha(0.9f * (1f - t)), 1f, true);
+            ci.Arc(p, br, 0f, Mathf.Tau, 10, col.Lightened(0.35f).WithAlpha(0.9f * (1f - t)), 1f, true);
         }
     }
 
@@ -170,7 +170,7 @@ public partial class ShipView
         {
             float a = _time * (3.1f + i) + i * 2.1f + seed;
             var p = c + new Vector2(Mathf.Sin(a) * r, Mathf.Sin(a * 2f) * r * 0.5f - r * 0.6f); // 8자로 맴돈다
-            ci.DrawCircle(p, 1.1f, new Color(0.08f, 0.08f, 0.08f, 0.9f), true, -1f, true);
+            ci.Circle(p, 1.1f, new Color(0.08f, 0.08f, 0.08f, 0.9f), true, -1f, true);
             ci.DrawLine(p + new Vector2(-1.4f, -0.8f), p + new Vector2(1.4f, -0.8f), new Color(0.85f, 0.9f, 1f, 0.5f * Mathf.Abs(Mathf.Sin(_time * 40f + i))), 0.8f);
         }
     }
@@ -183,14 +183,14 @@ public partial class ShipView
             float x = c.X + (i == 0 ? -3f : 3f);
             for (int j = 0; j < 5; j++)
                 pts[j] = new Vector2(x + ((j & 1) == 0 ? -1.5f : 1.5f) + Mathf.Sin(_time * 3f + seed + i) * 0.8f, c.Y - j * h / 4f);
-            ci.DrawPolyline(pts, FogFoul.WithAlpha(0.8f * a), 1.2f, true);
+            ci.Polyline(pts, FogFoul.WithAlpha(0.8f * a), 1.2f, true);
         }
     }
 
     private void DrawBurnerGlow(CanvasItem ci, Vector2 c, float r, float power)
     {
         float pulse = 0.75f + 0.25f * Mathf.Sin(_time * 7f);
-        ci.DrawCircle(c, r, new Color(1f, 0.45f, 0.15f, 0.22f * power * pulse), true, -1f, true);
+        ci.Circle(c, r, new Color(1f, 0.45f, 0.15f, 0.22f * power * pulse), true, -1f, true);
         for (int i = 0; i < 10; i++) // 화구 불꽃 고리
         {
             var d = Vector2.FromAngle(i * Mathf.Tau / 10f);
@@ -206,49 +206,49 @@ public partial class ShipView
         if (spoiled) food = food.Lerp(new Color("#6f7d3a"), 0.6f);
         else if (heat < 0.15f) food = food.Darkened(0.18f); // 식으면 탁해진다
         var shadow = new Color(0f, 0f, 0f, 0.3f);
-        ci.DrawCircle(c + new Vector2(1.5f, 2f), s * 1.05f, shadow, true, -1f, true);
+        ci.Circle(c + new Vector2(1.5f, 2f), s * 1.05f, shadow, true, -1f, true);
         switch (r.Kind)
         {
             case DishKind.Soup or DishKind.Noodle or DishKind.Porridge:
             {
                 // 국 냄비: 강철 몸통 · 밝은 테 · 양쪽 손잡이
-                ci.DrawRect(new Rect2(c.X - s * 1.35f, c.Y - s * 0.18f, s * 0.35f, s * 0.36f), FdSteelDark);
-                ci.DrawRect(new Rect2(c.X + s, c.Y - s * 0.18f, s * 0.35f, s * 0.36f), FdSteelDark);
-                ci.DrawCircle(c, s, FdSteel, true, -1f, true);
-                ci.DrawArc(c, s, 0f, Mathf.Tau, 24, FdSteel.Lightened(0.35f), 1.2f, true);
-                ci.DrawCircle(c, s * 0.8f, food, true, -1f, true);
+                ci.Box(new Rect2(c.X - s * 1.35f, c.Y - s * 0.18f, s * 0.35f, s * 0.36f), FdSteelDark);
+                ci.Box(new Rect2(c.X + s, c.Y - s * 0.18f, s * 0.35f, s * 0.36f), FdSteelDark);
+                ci.Circle(c, s, FdSteel, true, -1f, true);
+                ci.Arc(c, s, 0f, Mathf.Tau, 24, FdSteel.Lightened(0.35f), 1.2f, true);
+                ci.Circle(c, s * 0.8f, food, true, -1f, true);
                 if (r.Kind == DishKind.Noodle)
                     for (int i = 0; i < 3; i++) // 면발 물결
                     {
                         var pts = new Vector2[7];
                         for (int j = 0; j < 7; j++) pts[j] = c + new Vector2((j - 3) * s * 0.2f, (i - 1) * s * 0.28f + Mathf.Sin(j * 1.6f + i + (cooking ? _time * 4f : 0f)) * s * 0.08f);
-                        ci.DrawPolyline(pts, new Color("#f4e3a1"), 1.2f, true);
+                        ci.Polyline(pts, new Color("#f4e3a1"), 1.2f, true);
                     }
                 else if (r.Kind == DishKind.Porridge)
-                    ci.DrawArc(c, s * 0.45f, 0.4f, 2.6f, 10, food.Lightened(0.3f), 1f, true); // 저은 자국
+                    ci.Arc(c, s * 0.45f, 0.4f, 2.6f, 10, food.Lightened(0.3f), 1f, true); // 저은 자국
                 else
                     for (int i = 0; i < 5; i++) // 건더기
-                        ci.DrawCircle(c + new Vector2((Hash01(seed, i) - 0.5f) * s, (Hash01(seed, i + 9) - 0.5f) * s), s * 0.11f,
+                        ci.Circle(c + new Vector2((Hash01(seed, i) - 0.5f) * s, (Hash01(seed, i + 9) - 0.5f) * s), s * 0.11f,
                             i % 2 == 0 ? new Color("#4e9a3a") : new Color("#e07a3a"), true, -1f, true);
                 if (cooking && r.Kind == DishKind.Soup && fine)
                 {
                     // 뚜껑이 반쯤 걸쳐 들썩인다
                     float lift = Mathf.Abs(Mathf.Sin(_time * 9f)) * 1.2f;
-                    ci.DrawArc(c + new Vector2(s * 0.3f, -lift), s * 0.95f, -1.9f, 0.4f, 14, FdSteel.Lightened(0.2f), 2.2f, true);
-                    ci.DrawCircle(c + new Vector2(s * 0.55f, -s * 0.45f - lift), s * 0.12f, FdSteelDark, true, -1f, true);
+                    ci.Arc(c + new Vector2(s * 0.3f, -lift), s * 0.95f, -1.9f, 0.4f, 14, FdSteel.Lightened(0.2f), 2.2f, true);
+                    ci.Circle(c + new Vector2(s * 0.55f, -s * 0.45f - lift), s * 0.12f, FdSteelDark, true, -1f, true);
                 }
                 if (cooking || heat > 0.75f) Bubbles(ci, c, s * 0.7f, food, seed, r.Kind == DishKind.Porridge ? 0.5f : 1.4f, r.Kind == DishKind.Porridge ? 2 : 4);
-                else if (heat < 0.15f && fine) ci.DrawArc(c, s * 0.55f, 0.2f, 2.2f, 10, new Color(1f, 1f, 1f, 0.18f), 1f, true); // 식은 막
+                else if (heat < 0.15f && fine) ci.Arc(c, s * 0.55f, 0.2f, 2.2f, 10, new Color(1f, 1f, 1f, 0.18f), 1f, true); // 식은 막
                 break;
             }
             case DishKind.Stew:
             {
                 // 뚝배기: 두꺼운 흙 테 · 받침 · 붉게 끓는 거품
-                ci.DrawCircle(c, s * 1.12f, FdClay.Darkened(0.3f), true, -1f, true);
-                ci.DrawCircle(c, s, FdClay, true, -1f, true);
-                ci.DrawArc(c, s * 0.92f, 0f, Mathf.Tau, 24, FdClayRim, 2.2f, true);
-                ci.DrawCircle(c, s * 0.74f, food, true, -1f, true);
-                if (fine) for (int i = 0; i < 3; i++) ci.DrawRect(new Rect2(c + new Vector2((i - 1) * s * 0.35f - s * 0.1f, (Hash01(seed, i) - 0.5f) * s * 0.6f), new Vector2(s * 0.2f, s * 0.16f)), new Color("#f2e6c9")); // 두부
+                ci.Circle(c, s * 1.12f, FdClay.Darkened(0.3f), true, -1f, true);
+                ci.Circle(c, s, FdClay, true, -1f, true);
+                ci.Arc(c, s * 0.92f, 0f, Mathf.Tau, 24, FdClayRim, 2.2f, true);
+                ci.Circle(c, s * 0.74f, food, true, -1f, true);
+                if (fine) for (int i = 0; i < 3; i++) ci.Box(new Rect2(c + new Vector2((i - 1) * s * 0.35f - s * 0.1f, (Hash01(seed, i) - 0.5f) * s * 0.6f), new Vector2(s * 0.2f, s * 0.16f)), new Color("#f2e6c9")); // 두부
                 if (cooking || heat > 0.6f) Bubbles(ci, c, s * 0.6f, food, seed, 1.9f, 5);
                 break;
             }
@@ -256,17 +256,17 @@ public partial class ShipView
             {
                 // 웍: 넓고 얕은 검은 쇠 · 긴 자루 · 튀는 밥알
                 ci.DrawLine(c + new Vector2(s * 1.1f, 0f), c + new Vector2(s * 2.1f, -s * 0.25f), new Color("#3b2a22"), 2.4f, true);
-                ci.DrawCircle(c, s * 1.15f, FdIron, true, -1f, true);
-                ci.DrawArc(c, s * 1.15f, 0f, Mathf.Tau, 24, FdIron.Lightened(0.25f), 1f, true);
-                ci.DrawCircle(c, s * 0.82f, food, true, -1f, true);
+                ci.Circle(c, s * 1.15f, FdIron, true, -1f, true);
+                ci.Arc(c, s * 1.15f, 0f, Mathf.Tau, 24, FdIron.Lightened(0.25f), 1f, true);
+                ci.Circle(c, s * 0.82f, food, true, -1f, true);
                 if (r.Id == "bibim")
                     for (int i = 0; i < 5; i++) // 비빔밥 고명 다섯 갈래
-                        ci.DrawColoredPolygon(new[] { c, c + Vector2.FromAngle(i * Mathf.Tau / 5f) * s * 0.8f, c + Vector2.FromAngle((i + 1) * Mathf.Tau / 5f) * s * 0.8f },
+                        ci.Poly(new[] { c, c + Vector2.FromAngle(i * Mathf.Tau / 5f) * s * 0.8f, c + Vector2.FromAngle((i + 1) * Mathf.Tau / 5f) * s * 0.8f },
                             new[] { new Color("#3f8f3a"), new Color("#e8c13a"), new Color("#c0392b"), new Color("#7a4a2a"), new Color("#f2efe6") }[i]);
                 for (int i = 0; i < 7; i++)
                 {
                     float hop = cooking ? Mathf.Max(0f, Mathf.Sin(_time * 8f + i * 1.3f)) * s * 0.5f : 0f;
-                    ci.DrawCircle(c + new Vector2((Hash01(seed, i) - 0.5f) * s * 1.2f, (Hash01(seed + 5, i) - 0.5f) * s * 1.2f - hop), 0.9f, new Color("#fbf6e9"), true, -1f, true);
+                    ci.Circle(c + new Vector2((Hash01(seed, i) - 0.5f) * s * 1.2f, (Hash01(seed + 5, i) - 0.5f) * s * 1.2f - hop), 0.9f, new Color("#fbf6e9"), true, -1f, true);
                 }
                 break;
             }
@@ -274,34 +274,34 @@ public partial class ShipView
             {
                 // 프라이팬: 검은 원판 · 자루 · 노릇한 전 · 지글거리는 기름 튐
                 ci.DrawLine(c + new Vector2(-s * 1.05f, 0f), c + new Vector2(-s * 2.2f, s * 0.2f), new Color("#3a3a40"), 2.6f, true);
-                ci.DrawCircle(c, s * 1.05f, FdIron, true, -1f, true);
-                ci.DrawCircle(c, s * 0.82f, food, true, -1f, true);
-                for (int i = 0; i < 6; i++) ci.DrawCircle(c + new Vector2((Hash01(seed, i) - 0.5f) * s * 1.1f, (Hash01(seed, i + 4) - 0.5f) * s * 1.1f), s * 0.09f, food.Darkened(0.35f), true, -1f, true);
+                ci.Circle(c, s * 1.05f, FdIron, true, -1f, true);
+                ci.Circle(c, s * 0.82f, food, true, -1f, true);
+                for (int i = 0; i < 6; i++) ci.Circle(c + new Vector2((Hash01(seed, i) - 0.5f) * s * 1.1f, (Hash01(seed, i + 4) - 0.5f) * s * 1.1f), s * 0.09f, food.Darkened(0.35f), true, -1f, true);
                 if (r.Id == "pancake") for (int i = 0; i < 3; i++) ci.DrawLine(c + new Vector2(-s * 0.4f, (i - 1) * s * 0.3f), c + new Vector2(s * 0.4f, (i - 1) * s * 0.3f + 0.6f), new Color("#4e9a3a"), 1.2f); // 부추
                 if (cooking)
                     for (int i = 0; i < 4; i++)
                     {
                         float t = Mathf.PosMod(_time * 2.5f + i * 0.27f, 1f);
                         var d = Vector2.FromAngle(i * 1.7f + 0.3f);
-                        ci.DrawCircle(c + d * s * (0.8f + 0.6f * t), 0.8f, new Color(1f, 0.95f, 0.6f, 1f - t), true, -1f, true);
+                        ci.Circle(c + d * s * (0.8f + 0.6f * t), 0.8f, new Color(1f, 0.95f, 0.6f, 1f - t), true, -1f, true);
                     }
                 break;
             }
             case DishKind.Dumpling:
             {
                 // 찜기: 대나무 결 · 찌는 동안 뚜껑 · 열면 주름 만두
-                ci.DrawCircle(c, s * 1.1f, FdBambooDark, true, -1f, true);
-                ci.DrawCircle(c, s, FdBamboo, true, -1f, true);
+                ci.Circle(c, s * 1.1f, FdBambooDark, true, -1f, true);
+                ci.Circle(c, s, FdBamboo, true, -1f, true);
                 if (cooking)
                 {
                     for (int i = -3; i <= 3; i++) ci.DrawLine(c + new Vector2(i * s * 0.26f, -s * 0.9f * Mathf.Cos(i * 0.4f)), c + new Vector2(i * s * 0.26f, s * 0.9f * Mathf.Cos(i * 0.4f)), FdBambooDark, 0.8f);
-                    ci.DrawArc(c, s * 0.5f, 0f, Mathf.Tau, 16, FdBambooDark, 0.8f, true);
+                    ci.Arc(c, s * 0.5f, 0f, Mathf.Tau, 16, FdBambooDark, 0.8f, true);
                 }
                 else
                     for (int i = 0; i < 4; i++)
                     {
                         var p = c + Vector2.FromAngle(i * Mathf.Tau / 4f + 0.6f) * s * 0.45f;
-                        ci.DrawColoredPolygon(Ell(p, s * 0.32f, s * 0.22f, 12, i * 0.8f), food);
+                        ci.Poly(Ell(p, s * 0.32f, s * 0.22f, 12, i * 0.8f), food);
                         if (fine) for (int j = -1; j <= 1; j++) ci.DrawLine(p + new Vector2(j * s * 0.1f, -s * 0.12f), p + new Vector2(j * s * 0.12f, s * 0.02f), food.Darkened(0.25f), 0.7f); // 주름
                     }
                 break;
@@ -314,18 +314,18 @@ public partial class ShipView
                     for (int i = 0; i < 3; i++)
                     {
                         var p = c + new Vector2((i - 1) * s * 0.8f, 0f);
-                        ci.DrawColoredPolygon(Ell(p, s * 0.34f, s * 0.7f, 14), food);
-                        ci.DrawColoredPolygon(Ell(p + new Vector2(-s * 0.06f, -s * 0.1f), s * 0.2f, s * 0.45f, 10), food.Lightened(0.18f));
+                        ci.Poly(Ell(p, s * 0.34f, s * 0.7f, 14), food);
+                        ci.Poly(Ell(p + new Vector2(-s * 0.06f, -s * 0.1f), s * 0.2f, s * 0.45f, 10), food.Lightened(0.18f));
                         for (int j = -1; j <= 1; j++) ci.DrawLine(p + new Vector2(-s * 0.18f, j * s * 0.3f - s * 0.08f), p + new Vector2(s * 0.18f, j * s * 0.3f + s * 0.08f), food.Darkened(0.35f), 1f, true); // 칼집
                     }
                 else
                 {
-                    ci.DrawCircle(c, s * 0.8f, food, true, -1f, true);
-                    ci.DrawArc(c, s * 0.8f, 0f, Mathf.Tau, 20, food.Lightened(0.25f), 1.2f, true);
+                    ci.Circle(c, s * 0.8f, food, true, -1f, true);
+                    ci.Arc(c, s * 0.8f, 0f, Mathf.Tau, 20, food.Lightened(0.25f), 1.2f, true);
                     for (int i = 0; i < 6; i++) ci.DrawLine(c, c + Vector2.FromAngle(i * Mathf.Tau / 6f) * s * 0.8f, food.Darkened(0.3f), 0.8f, true);
-                    if (r.Id == "tteok") for (int i = 0; i < 4; i++) ci.DrawCircle(c + Vector2.FromAngle(i * 1.57f + 0.4f) * s * 0.45f, s * 0.12f, new Color("#f2a6b8"), true, -1f, true);
+                    if (r.Id == "tteok") for (int i = 0; i < 4; i++) ci.Circle(c + Vector2.FromAngle(i * 1.57f + 0.4f) * s * 0.45f, s * 0.12f, new Color("#f2a6b8"), true, -1f, true);
                 }
-                if (cooking) ci.DrawRect(new Rect2(c - new Vector2(s * 1.3f, s * 0.95f), new Vector2(s * 2.6f, s * 1.9f)), new Color(1f, 0.6f, 0.2f, 0.12f + 0.08f * Mathf.Sin(_time * 3f))); // 오븐의 열기
+                if (cooking) ci.Box(new Rect2(c - new Vector2(s * 1.3f, s * 0.95f), new Vector2(s * 2.6f, s * 1.9f)), new Color(1f, 0.6f, 0.2f, 0.12f + 0.08f * Mathf.Sin(_time * 3f))); // 오븐의 열기
                 break;
             }
             default:
@@ -334,7 +334,7 @@ public partial class ShipView
         }
         if (spoiled)
         {
-            for (int i = 0; i < 5; i++) ci.DrawCircle(c + new Vector2((Hash01(seed, i + 20) - 0.5f) * s, (Hash01(seed, i + 30) - 0.5f) * s), s * 0.13f, new Color("#d8e6c0").WithAlpha(0.8f), true, -1f, true); // 곰팡이
+            for (int i = 0; i < 5; i++) ci.Circle(c + new Vector2((Hash01(seed, i + 20) - 0.5f) * s, (Hash01(seed, i + 30) - 0.5f) * s), s * 0.13f, new Color("#d8e6c0").WithAlpha(0.8f), true, -1f, true); // 곰팡이
             Flies(ci, c, s * 1.2f, seed);
             Stink(ci, c + new Vector2(0f, -s), s * 1.2f, 1f, seed);
         }
@@ -345,17 +345,17 @@ public partial class ShipView
     private void DrawBurningPot(CanvasItem ci, Vector2 c, float s, float scorch, int seed, bool fine)
     {
         DrawBurnerGlow(ci, c, s * 1.25f, 1f);
-        ci.DrawCircle(c, s * (1.15f + 0.1f * Mathf.Sin(_time * 5f)), new Color(1f, 0.3f, 0.05f, 0.25f + 0.35f * scorch), true, -1f, true);
-        ci.DrawCircle(c, s, FdSteel.Lerp(new Color("#1b1714"), scorch), true, -1f, true);
-        ci.DrawCircle(c, s * 0.78f, new Color("#3a2416").Lerp(new Color("#0d0b0a"), scorch), true, -1f, true);
-        if (fine) for (int i = 0; i < 6; i++) ci.DrawArc(c, s * (0.3f + 0.08f * i), Hash01(seed, i) * 6f, Hash01(seed, i) * 6f + 1.2f, 6, new Color(0f, 0f, 0f, 0.6f), 1f, true); // 눌어붙은 자국
+        ci.Circle(c, s * (1.15f + 0.1f * Mathf.Sin(_time * 5f)), new Color(1f, 0.3f, 0.05f, 0.25f + 0.35f * scorch), true, -1f, true);
+        ci.Circle(c, s, FdSteel.Lerp(new Color("#1b1714"), scorch), true, -1f, true);
+        ci.Circle(c, s * 0.78f, new Color("#3a2416").Lerp(new Color("#0d0b0a"), scorch), true, -1f, true);
+        if (fine) for (int i = 0; i < 6; i++) ci.Arc(c, s * (0.3f + 0.08f * i), Hash01(seed, i) * 6f, Hash01(seed, i) * 6f + 1.2f, 6, new Color(0f, 0f, 0f, 0.6f), 1f, true); // 눌어붙은 자국
         int puffs = 3 + (int)(scorch * 5f);
         for (int i = 0; i < puffs; i++)
         {
             float t = Mathf.PosMod(_time * 0.45f + i / (float)puffs, 1f);
             var p = c + new Vector2(Mathf.Sin(_time * 1.3f + i * 2.1f) * (3f + 6f * t), -s * 0.6f - t * 26f);
             float pr = (2.5f + 6f * t) * (0.7f + 0.5f * scorch);
-            ci.DrawCircle(p, pr, new Color(0.18f, 0.16f, 0.15f, (0.55f + 0.3f * scorch) * (1f - t)), true, -1f, true);
+            ci.Circle(p, pr, new Color(0.18f, 0.16f, 0.15f, (0.55f + 0.3f * scorch) * (1f - t)), true, -1f, true);
         }
         if (scorch > 0.65f)
             for (int i = 0; i < 4; i++) // 냄비 가에 불꽃이 핀다
@@ -363,7 +363,7 @@ public partial class ShipView
                 var d = Vector2.FromAngle(i * Mathf.Tau / 4f + _time * 0.7f);
                 var b = c + d * s;
                 float hgt = 3f + 3f * Mathf.Abs(Mathf.Sin(_time * 13f + i * 3f));
-                ci.DrawColoredPolygon(new[] { b - d.Orthogonal() * 1.8f, b + d.Orthogonal() * 1.8f, b + d * hgt }, new Color(1f, 0.55f + 0.3f * Mathf.Sin(_time * 20f + i), 0.1f, 0.9f));
+                ci.Poly(new[] { b - d.Orthogonal() * 1.8f, b + d.Orthogonal() * 1.8f, b + d * hgt }, new Color(1f, 0.55f + 0.3f * Mathf.Sin(_time * 20f + i), 0.1f, 0.9f));
             }
     }
 
@@ -371,7 +371,7 @@ public partial class ShipView
     private void DrawJar(CanvasItem ci, DishRecipe r, Vector2 c, float s, float progress, bool spoiled, float left, bool fine, int seed)
     {
         var food = spoiled ? new Color("#6f7d3a") : FoodColor(r);
-        ci.DrawColoredPolygon(Ell(c + new Vector2(1.5f, s * 1.1f), s * 0.9f, s * 0.25f, 12), new Color(0f, 0f, 0f, 0.3f));
+        ci.Poly(Ell(c + new Vector2(1.5f, s * 1.1f), s * 0.9f, s * 0.25f, 12), new Color(0f, 0f, 0f, 0.3f));
         if (r.Kind == DishKind.Ferment)
         {
             // 옹기: 불룩한 몸 · 좁은 입 · 뚜껑 · 반들한 빛
@@ -380,31 +380,31 @@ public partial class ShipView
                 c + new Vector2(-s * 0.45f, -s), c + new Vector2(s * 0.45f, -s), c + new Vector2(s * 0.95f, -s * 0.35f), c + new Vector2(s, s * 0.3f),
                 c + new Vector2(s * 0.6f, s * 1.05f), c + new Vector2(-s * 0.6f, s * 1.05f), c + new Vector2(-s, s * 0.3f), c + new Vector2(-s * 0.95f, -s * 0.35f),
             };
-            ci.DrawColoredPolygon(body, FdOnggi);
-            ci.DrawPolyline(new[] { body[0], body[7], body[6], body[5], body[4], body[3], body[2], body[1], body[0] }, FdOnggi.Lightened(0.25f), 1f, true);
-            ci.DrawArc(c + new Vector2(-s * 0.35f, -s * 0.15f), s * 0.5f, 3.4f, 4.4f, 8, new Color(1f, 1f, 1f, 0.35f), 1.2f, true); // 유약 빛
+            ci.Poly(body, FdOnggi);
+            ci.Polyline(new[] { body[0], body[7], body[6], body[5], body[4], body[3], body[2], body[1], body[0] }, FdOnggi.Lightened(0.25f), 1f, true);
+            ci.Arc(c + new Vector2(-s * 0.35f, -s * 0.15f), s * 0.5f, 3.4f, 4.4f, 8, new Color(1f, 1f, 1f, 0.35f), 1.2f, true); // 유약 빛
             if (fine) ci.DrawLine(c + new Vector2(-s * 0.8f, s * 0.2f), c + new Vector2(s * 0.8f, s * 0.2f), FdOnggi.Darkened(0.3f), 1f); // 띠 무늬
-            ci.DrawRect(new Rect2(c.X - s * 0.55f, c.Y - s * 1.2f, s * 1.1f, s * 0.28f), FdOnggi.Darkened(0.2f)); // 뚜껑
-            ci.DrawCircle(c + new Vector2(0f, -s * 1.3f), s * 0.14f, FdOnggi.Lightened(0.15f), true, -1f, true);
+            ci.Box(new Rect2(c.X - s * 0.55f, c.Y - s * 1.2f, s * 1.1f, s * 0.28f), FdOnggi.Darkened(0.2f)); // 뚜껑
+            ci.Circle(c + new Vector2(0f, -s * 1.3f), s * 0.14f, FdOnggi.Lightened(0.15f), true, -1f, true);
             // 얼마나 남았나: 입구에 비치는 김치 빛
-            ci.DrawRect(new Rect2(c.X - s * 0.4f, c.Y - s * 0.98f, s * 0.8f * left, s * 0.12f), food);
+            ci.Box(new Rect2(c.X - s * 0.4f, c.Y - s * 0.98f, s * 0.8f * left, s * 0.12f), food);
         }
         else
         {
             // 유리병: 투명한 몸 · 쇠 뚜껑 띠 · 안의 절임 조각
             var jar = new Rect2(c - new Vector2(s * 0.7f, s), new Vector2(s * 1.4f, s * 2f));
-            ci.DrawRect(jar, FdGlass.WithAlpha(0.35f));
+            ci.Box(jar, FdGlass.WithAlpha(0.35f));
             float fill = Mathf.Clamp(left, 0.1f, 1f);
             var liquid = new Rect2(jar.Position.X, jar.End.Y - jar.Size.Y * 0.85f * fill, jar.Size.X, jar.Size.Y * 0.85f * fill);
-            ci.DrawRect(liquid, food.WithAlpha(0.55f));
+            ci.Box(liquid, food.WithAlpha(0.55f));
             for (int i = 0; i < 4; i++)
             {
                 var p = new Vector2(liquid.Position.X + liquid.Size.X * Hash01(seed, i), liquid.Position.Y + liquid.Size.Y * Hash01(seed, i + 3));
-                ci.DrawCircle(p, s * 0.22f, food.Lightened(0.25f), true, -1f, true);
-                if (fine) ci.DrawArc(p, s * 0.14f, 0f, Mathf.Tau, 8, food.Darkened(0.3f), 0.7f, true); // 오이 씨 테
+                ci.Circle(p, s * 0.22f, food.Lightened(0.25f), true, -1f, true);
+                if (fine) ci.Arc(p, s * 0.14f, 0f, Mathf.Tau, 8, food.Darkened(0.3f), 0.7f, true); // 오이 씨 테
             }
-            ci.DrawRect(jar, FdGlass.WithAlpha(0.8f), false, 1f);
-            ci.DrawRect(new Rect2(jar.Position.X - 1f, jar.Position.Y - s * 0.3f, jar.Size.X + 2f, s * 0.32f), new Color("#c0c7cf"));
+            ci.Box(jar, FdGlass.WithAlpha(0.8f), false, 1f);
+            ci.Box(new Rect2(jar.Position.X - 1f, jar.Position.Y - s * 0.3f, jar.Size.X + 2f, s * 0.32f), new Color("#c0c7cf"));
             ci.DrawLine(jar.Position + new Vector2(2f, 3f), jar.Position + new Vector2(2f, jar.Size.Y - 3f), new Color(1f, 1f, 1f, 0.45f), 1f); // 유리 빛
         }
         if (spoiled) { Flies(ci, c, s * 1.3f, seed); Stink(ci, c + new Vector2(0f, -s * 1.3f), s, 1f, seed); return; }
@@ -414,11 +414,11 @@ public partial class ShipView
             for (int i = 0; i < 3; i++)
             {
                 float t = Mathf.PosMod(_time * 0.6f + i / 3f + Hash01(seed, i), 1f);
-                ci.DrawArc(c + new Vector2((i - 1) * s * 0.35f, -s * 1.4f - t * s * 1.2f), s * (0.1f + 0.12f * t), 0f, Mathf.Tau, 8, new Color(1f, 0.95f, 0.85f, 0.7f * (1f - t)), 0.8f, true);
+                ci.Arc(c + new Vector2((i - 1) * s * 0.35f, -s * 1.4f - t * s * 1.2f), s * (0.1f + 0.12f * t), 0f, Mathf.Tau, 8, new Color(1f, 0.95f, 0.85f, 0.7f * (1f - t)), 0.8f, true);
             }
-            ci.DrawArc(c + new Vector2(s * 1.1f, -s * 1.1f), s * 0.32f, -Mathf.Pi / 2f, -Mathf.Pi / 2f + Mathf.Tau * progress, 12, new Color("#ffd166"), 1.2f, true);
+            ci.Arc(c + new Vector2(s * 1.1f, -s * 1.1f), s * 0.32f, -Mathf.Pi / 2f, -Mathf.Pi / 2f + Mathf.Tau * progress, 12, new Color("#ffd166"), 1.2f, true);
         }
-        else ci.DrawArc(c, s * 1.25f, 0f, Mathf.Tau, 20, new Color(1f, 0.85f, 0.4f, 0.35f + 0.15f * Mathf.Sin(_time * 2f + seed)), 1f, true); // 다 익었다
+        else ci.Arc(c, s * 1.25f, 0f, Mathf.Tau, 20, new Color(1f, 0.85f, 0.4f, 0.35f + 0.15f * Mathf.Sin(_time * 2f + seed)), 1f, true); // 다 익었다
     }
 
     /// <summary>냉장고의 보관 통: 뚜껑 걸쇠 · 요리 색 띠 (상하면 부풀고 초록).</summary>
@@ -427,10 +427,10 @@ public partial class ShipView
         var box = new Rect2(c - new Vector2(s, s * 0.7f), new Vector2(s * 2f, s * 1.4f));
         float bulge = spoiled ? 1.2f + 0.4f * Mathf.Sin(_time * 1.5f) : 0f;
         Gfx.RoundRect(ci, box.Grow(bulge), new Color("#dfe7ee").WithAlpha(0.9f), 2f, new Color("#8aa0b4"), 1);
-        ci.DrawRect(new Rect2(box.Position.X + 1f, box.Position.Y + box.Size.Y * 0.45f, box.Size.X - 2f, box.Size.Y * 0.5f), (spoiled ? new Color("#6f7d3a") : FoodColor(r)).WithAlpha(0.8f));
-        ci.DrawRect(new Rect2(box.Position.X - 0.5f, box.Position.Y - 1.2f, box.Size.X + 1f, 2f), new Color("#4f86c6")); // 뚜껑
-        if (fine) { ci.DrawRect(new Rect2(box.Position.X + 1f, box.Position.Y - 2f, 1.5f, 3f), new Color("#2f5d8c")); ci.DrawRect(new Rect2(box.End.X - 2.5f, box.Position.Y - 2f, 1.5f, 3f), new Color("#2f5d8c")); } // 걸쇠
-        ci.DrawCircle(c + new Vector2(s * 0.9f, -s * 0.9f), 1.4f, new Color(0.7f, 0.9f, 1f, 0.6f + 0.3f * Mathf.Sin(_time * 1.2f + seed)), true, -1f, true); // 서리
+        ci.Box(new Rect2(box.Position.X + 1f, box.Position.Y + box.Size.Y * 0.45f, box.Size.X - 2f, box.Size.Y * 0.5f), (spoiled ? new Color("#6f7d3a") : FoodColor(r)).WithAlpha(0.8f));
+        ci.Box(new Rect2(box.Position.X - 0.5f, box.Position.Y - 1.2f, box.Size.X + 1f, 2f), new Color("#4f86c6")); // 뚜껑
+        if (fine) { ci.Box(new Rect2(box.Position.X + 1f, box.Position.Y - 2f, 1.5f, 3f), new Color("#2f5d8c")); ci.Box(new Rect2(box.End.X - 2.5f, box.Position.Y - 2f, 1.5f, 3f), new Color("#2f5d8c")); } // 걸쇠
+        ci.Circle(c + new Vector2(s * 0.9f, -s * 0.9f), 1.4f, new Color(0.7f, 0.9f, 1f, 0.6f + 0.3f * Mathf.Sin(_time * 1.2f + seed)), true, -1f, true); // 서리
         if (spoiled) Flies(ci, c, s * 1.4f, seed);
     }
 
@@ -439,7 +439,7 @@ public partial class ShipView
     {
         int n = Math.Min(made, 12);
         for (int i = 0; i < n; i++)
-            ci.DrawCircle(c + new Vector2((i - (n - 1) * 0.5f) * 2.6f, 0f), 0.9f, i < left ? new Color("#f2b134") : new Color(1f, 1f, 1f, 0.2f), true, -1f, true);
+            ci.Circle(c + new Vector2((i - (n - 1) * 0.5f) * 2.6f, 0f), 0.9f, i < left ? new Color("#f2b134") : new Color(1f, 1f, 1f, 0.2f), true, -1f, true);
     }
 
     /// <summary>남겨 둔 접시: 흰 접시 · 요리 · 덮은 랩의 빛 · 받을 사람 색 띠 이름표 (확대하면 이름) · 따뜻하면 김.</summary>
@@ -447,30 +447,30 @@ public partial class ShipView
     {
         var r = p.Spec;
         float heat = Mathf.Clamp((p.Temp - 30f) / 55f, 0f, 1f);
-        ci.DrawCircle(c + new Vector2(1f, 1.5f), s * 1.05f, new Color(0f, 0f, 0f, 0.28f), true, -1f, true);
-        ci.DrawCircle(c, s, new Color("#eef1f4"), true, -1f, true);
-        ci.DrawArc(c, s * 0.82f, 0f, Mathf.Tau, 20, new Color("#c9d1da"), 0.8f, true);
+        ci.Circle(c + new Vector2(1f, 1.5f), s * 1.05f, new Color(0f, 0f, 0f, 0.28f), true, -1f, true);
+        ci.Circle(c, s, new Color("#eef1f4"), true, -1f, true);
+        ci.Arc(c, s * 0.82f, 0f, Mathf.Tau, 20, new Color("#c9d1da"), 0.8f, true);
         if (!p.Eaten)
         {
             var food = p.Spoiled ? new Color("#6f7d3a") : heat < 0.15f ? FoodColor(r).Darkened(0.15f) : FoodColor(r);
-            if (r.Kind is DishKind.Bread or DishKind.Cake) ci.DrawColoredPolygon(Ell(c, s * 0.42f, s * 0.6f, 12, 0.5f), food);
-            else if (r.Kind is DishKind.Dumpling) for (int i = 0; i < 3; i++) ci.DrawColoredPolygon(Ell(c + Vector2.FromAngle(i * 2.1f) * s * 0.35f, s * 0.28f, s * 0.18f, 10, i), food);
-            else { ci.DrawCircle(c, s * 0.62f, food, true, -1f, true); if (r.Kind is DishKind.Soup or DishKind.Stew) ci.DrawCircle(c, s * 0.3f, food.Lightened(0.2f), true, -1f, true); }
-            if (fine) ci.DrawArc(c, s * 0.9f, -2.6f, -1.2f, 8, new Color(1f, 1f, 1f, 0.55f), 1f, true); // 덮어 둔 랩
-            if (p.Reheating) for (int i = 0; i < 3; i++) ci.DrawArc(c, s * (1.1f + 0.25f * Mathf.PosMod(_time * 2f + i / 3f, 1f)), -0.6f, 0.6f, 6, new Color(1f, 0.7f, 0.3f, 0.6f), 1f, true); // 데우는 중
+            if (r.Kind is DishKind.Bread or DishKind.Cake) ci.Poly(Ell(c, s * 0.42f, s * 0.6f, 12, 0.5f), food);
+            else if (r.Kind is DishKind.Dumpling) for (int i = 0; i < 3; i++) ci.Poly(Ell(c + Vector2.FromAngle(i * 2.1f) * s * 0.35f, s * 0.28f, s * 0.18f, 10, i), food);
+            else { ci.Circle(c, s * 0.62f, food, true, -1f, true); if (r.Kind is DishKind.Soup or DishKind.Stew) ci.Circle(c, s * 0.3f, food.Lightened(0.2f), true, -1f, true); }
+            if (fine) ci.Arc(c, s * 0.9f, -2.6f, -1.2f, 8, new Color(1f, 1f, 1f, 0.55f), 1f, true); // 덮어 둔 랩
+            if (p.Reheating) for (int i = 0; i < 3; i++) ci.Arc(c, s * (1.1f + 0.25f * Mathf.PosMod(_time * 2f + i / 3f, 1f)), -0.6f, 0.6f, 6, new Color(1f, 0.7f, 0.3f, 0.6f), 1f, true); // 데우는 중
             if (p.Spoiled) Flies(ci, c, s * 1.3f, p.Id);
             else Steam(ci, c + new Vector2(0f, -s * 0.5f), heat, p.Id, 0.6f);
         }
-        else for (int i = 0; i < 4; i++) ci.DrawCircle(c + new Vector2((Hash01(p.Id, i) - 0.5f) * s, (Hash01(p.Id, i + 5) - 0.5f) * s), 0.7f, FoodColor(r).Darkened(0.2f), true, -1f, true); // 다 먹은 접시의 부스러기
+        else for (int i = 0; i < 4; i++) ci.Circle(c + new Vector2((Hash01(p.Id, i) - 0.5f) * s, (Hash01(p.Id, i + 5) - 0.5f) * s), 0.7f, FoodColor(r).Darkened(0.2f), true, -1f, true); // 다 먹은 접시의 부스러기
         // 이름표: 접시 가에 기대 세운 쪽지 · 받을 사람 색 띠 · 찾았으면 비스듬히 넘어간다
         var tagAt = c + new Vector2(s * 0.9f, -s * 0.9f);
         float tilt = p.Found ? 0.5f : -0.15f;
         var ax = Vector2.FromAngle(tilt);
         var ay = ax.Orthogonal();
         var tag = new[] { tagAt, tagAt + ax * 9f, tagAt + ax * 9f + ay * 6f, tagAt + ay * 6f };
-        ci.DrawColoredPolygon(tag, FdPaper);
-        ci.DrawColoredPolygon(new[] { tagAt, tagAt + ax * 2.6f, tagAt + ax * 2.6f + ay * 6f, tagAt + ay * 6f }, Palette.Crew(p.For));
-        ci.DrawPolyline(new[] { tag[0], tag[1], tag[2], tag[3], tag[0] }, new Color(0.3f, 0.25f, 0.15f, 0.7f), 0.6f, true);
+        ci.Poly(tag, FdPaper);
+        ci.Poly(new[] { tagAt, tagAt + ax * 2.6f, tagAt + ax * 2.6f + ay * 6f, tagAt + ay * 6f }, Palette.Crew(p.For));
+        ci.Polyline(new[] { tag[0], tag[1], tag[2], tag[3], tag[0] }, new Color(0.3f, 0.25f, 0.15f, 0.7f), 0.6f, true);
         ci.DrawLine(c + new Vector2(s * 0.6f, -s * 0.6f), tagAt + ay * 3f, new Color(0.4f, 0.4f, 0.4f, 0.6f), 0.5f); // 묶은 끈
         var who = p.For >= 0 && p.For < _world.Crew.Count ? _world.Crew[p.For].Name : "";
         if (name && who.Length > 0)
@@ -482,8 +482,8 @@ public partial class ShipView
     /// <summary>먹는 사람 머리 위의 작은 그릇 (김이 나면 따뜻한 것, 없으면 식은 채).</summary>
     private void DrawBowl(CanvasItem ci, DishRecipe r, Vector2 c, float s, float heat, int seed)
     {
-        ci.DrawColoredPolygon(new[] { c + new Vector2(-s, 0f), c + new Vector2(s, 0f), c + new Vector2(s * 0.6f, s * 0.8f), c + new Vector2(-s * 0.6f, s * 0.8f) }, new Color("#e9edf2"));
-        ci.DrawColoredPolygon(Ell(c, s, s * 0.32f, 12), FoodColor(r));
+        ci.Poly(new[] { c + new Vector2(-s, 0f), c + new Vector2(s, 0f), c + new Vector2(s * 0.6f, s * 0.8f), c + new Vector2(-s * 0.6f, s * 0.8f) }, new Color("#e9edf2"));
+        ci.Poly(Ell(c, s, s * 0.32f, 12), FoodColor(r));
         Steam(ci, c + new Vector2(0f, -1f), heat, seed, 0.45f);
     }
 
@@ -496,7 +496,7 @@ public partial class ShipView
         float sway = 0.8f * Mathf.Sin(_time * 1.6f + seed);
         var top = foot + new Vector2(sway, -9f);
         ci.DrawLine(foot, top, FdBambooDark, 0.9f, true);
-        ci.DrawColoredPolygon(new[] { top, top + new Vector2(7f, 1.6f), top + new Vector2(0f, 3.6f) }, FdPaper);
+        ci.Poly(new[] { top, top + new Vector2(7f, 1.6f), top + new Vector2(0f, 3.6f) }, FdPaper);
         int k = 0;
         foreach (var c in _world.Crew)
         {
@@ -515,7 +515,7 @@ public partial class ShipView
             var d = Vector2.FromAngle(a + 1.2f + Mathf.Sin(_time * 3f + i) * 0.5f);
             var col = new Color(0.45f, 0.85f, 0.25f, 0.85f);
             if (i % 2 == 0) { ci.DrawLine(p - d * 1.6f, p + d * 1.6f, col, 1.1f, true); ci.DrawLine(p + d * 1.6f, p + d * 2.4f + d.Orthogonal() * Mathf.Sin(_time * 9f + i), col.WithAlpha(0.5f), 0.5f, true); } // 막대균과 꼬리
-            else { ci.DrawCircle(p, 0.8f, col, true, -1f, true); ci.DrawCircle(p + d * 1.3f, 0.6f, col, true, -1f, true); } // 알균 둘
+            else { ci.Circle(p, 0.8f, col, true, -1f, true); ci.Circle(p + d * 1.3f, 0.6f, col, true, -1f, true); } // 알균 둘
         }
     }
 
@@ -527,14 +527,14 @@ public partial class ShipView
             var box = new Rect2(at - new Vector2(4.5f, 3f), new Vector2(9f, 6f));
             Gfx.RoundRect(ci, box, new Color("#2b2418"), 1.2f, new Color("#f2a93b"), 1);
             float blink = Mathf.PosMod(_time * 1.6f + seed * 0.1f, 1f) < 0.5f ? 1f : 0.3f;
-            ci.DrawCircle(box.Position + new Vector2(2f, 2f), 0.9f, new Color(1f, 0.66f, 0.2f, blink), true, -1f, true);
+            ci.Circle(box.Position + new Vector2(2f, 2f), 0.9f, new Color(1f, 0.66f, 0.2f, blink), true, -1f, true);
             for (int i = 0; i < 2; i++) ci.DrawLine(box.Position + new Vector2(3.6f, 1.8f + i * 2f), box.Position + new Vector2(8f - i * 1.5f, 1.8f + i * 2f), new Color(1f, 0.8f, 0.4f, 0.85f), 0.7f); // 글줄
             if (fine) Gfx.TextCentered(ci, Fonts.Body, at + new Vector2(0f, -5f), "먼저", 5, new Color("#f2a93b"));
         }
         else
         {
             var pts = new[] { at + new Vector2(-4f, -2.5f), at + new Vector2(-1f, -3.2f), at + new Vector2(3.8f, -2f), at + new Vector2(4.2f, 2.6f), at + new Vector2(0.5f, 3.2f), at + new Vector2(-3.6f, 2.2f) };
-            ci.DrawColoredPolygon(pts, new Color("#9aa0a6").WithAlpha(0.8f));
+            ci.Poly(pts, new Color("#9aa0a6").WithAlpha(0.8f));
             ci.DrawLine(at + new Vector2(-2.5f, -1.5f), at + new Vector2(2.5f, 1.8f), new Color(0.35f, 0.35f, 0.38f, 0.8f), 0.6f); // 구김
             ci.DrawLine(at + new Vector2(-2f, 1.6f), at + new Vector2(2.6f, -1.4f), new Color(0.35f, 0.35f, 0.38f, 0.8f), 0.6f);
         }
@@ -545,13 +545,13 @@ public partial class ShipView
     {
         var cyan = new Color("#5fd3f3");
         float t = Mathf.PosMod(_time * 1.2f + seed * 0.13f, 1f);
-        ci.DrawArc(c, 4f + 6f * t, 0f, Mathf.Tau, 20, cyan.WithAlpha(0.7f * (1f - t)), 1f, true); // 맥박
-        ci.DrawColoredPolygon(new[] { c + new Vector2(-5f, 0f), c + new Vector2(0f, -3f), c + new Vector2(5f, 0f), c + new Vector2(0f, 3f) }, new Color("#14303a"));
-        ci.DrawCircle(c, 1.8f, cyan, true, -1f, true);
-        ci.DrawCircle(c + new Vector2(-0.6f, -0.6f), 0.5f, Colors.White, true, -1f, true);
+        ci.Arc(c, 4f + 6f * t, 0f, Mathf.Tau, 20, cyan.WithAlpha(0.7f * (1f - t)), 1f, true); // 맥박
+        ci.Poly(new[] { c + new Vector2(-5f, 0f), c + new Vector2(0f, -3f), c + new Vector2(5f, 0f), c + new Vector2(0f, 3f) }, new Color("#14303a"));
+        ci.Circle(c, 1.8f, cyan, true, -1f, true);
+        ci.Circle(c + new Vector2(-0.6f, -0.6f), 0.5f, Colors.White, true, -1f, true);
         float sy = Mathf.Sin(_time * 4f) * 2.6f;
         ci.DrawLine(c + new Vector2(-4f, sy), c + new Vector2(4f, sy), cyan.WithAlpha(0.6f), 0.6f); // 주사선
-        if (fine) for (int i = 0; i < 3; i++) ci.DrawArc(c + new Vector2(6f, -4f), 1.5f + i * 1.6f, -1.1f, 0.2f, 5, cyan.WithAlpha(0.5f + 0.3f * Mathf.Sin(_time * 5f - i)), 0.6f, true); // 부르는 전파
+        if (fine) for (int i = 0; i < 3; i++) ci.Arc(c + new Vector2(6f, -4f), 1.5f + i * 1.6f, -1.1f, 0.2f, 5, cyan.WithAlpha(0.5f + 0.3f * Mathf.Sin(_time * 5f - i)), 0.6f, true); // 부르는 전파
     }
 
     /// <summary>이동식 히터 앞에서 데운 그릇: 아래로 주황 열 물결이 일렁인다.</summary>
@@ -562,7 +562,7 @@ public partial class ShipView
             var pts = new Vector2[6];
             for (int j = 0; j < pts.Length; j++)
                 pts[j] = c + new Vector2(-4f + j * 1.6f, i * 1.6f + Mathf.Sin(_time * 6f + j + i + seed) * 0.7f);
-            ci.DrawPolyline(pts, new Color(1f, 0.55f, 0.2f, 0.65f - 0.18f * i), 0.8f, true);
+            ci.Polyline(pts, new Color(1f, 0.55f, 0.2f, 0.65f - 0.18f * i), 0.8f, true);
         }
     }
 
@@ -599,7 +599,7 @@ public partial class ShipView
                         float u = j / (float)(pts.Length - 1);
                         pts[j] = new Vector2(x0 + Mathf.Sin(u * 5f + _time * 0.9f + i) * 9f, box.End.Y - 6f - (box.Size.Y - 12f) * Mathf.Clamp(t * 0.7f + u * 0.3f, 0f, 1f));
                     }
-                    ci.DrawPolyline(pts, FogBread.WithAlpha(MathF.Min(1f, bread * 2.2f) * 0.75f * baseA * Mathf.Sin(t * Mathf.Pi)), 3.2f, true);
+                    ci.Polyline(pts, FogBread.WithAlpha(MathF.Min(1f, bread * 2.2f) * 0.75f * baseA * Mathf.Sin(t * Mathf.Pi)), 3.2f, true);
                 }
             }
             // 요리: 주황 짧은 김 가닥이 여럿, 빠르게
@@ -610,7 +610,7 @@ public partial class ShipView
                 {
                     float t = Mathf.PosMod(_time * 0.3f + i * 0.37f + Hash01(seed + 2, i), 1f);
                     var p = new Vector2(box.Position.X + box.Size.X * (0.1f + 0.8f * Hash01(seed + 3, i)), box.End.Y - 6f - (box.Size.Y - 12f) * t);
-                    ci.DrawArc(p + new Vector2(Mathf.Sin(_time * 2.5f + i) * 3f, 0f), 3.5f + 3f * t, 3.6f, 5.8f, 8, FogCook.WithAlpha(MathF.Min(1f, cook * 2.5f) * 0.7f * baseA * (1f - t)), 2f, true);
+                    ci.Arc(p + new Vector2(Mathf.Sin(_time * 2.5f + i) * 3f, 0f), 3.5f + 3f * t, 3.6f, 5.8f, 8, FogCook.WithAlpha(MathF.Min(1f, cook * 2.5f) * 0.7f * baseA * (1f - t)), 2f, true);
                 }
             }
             // 탄내: 잿빛 연기 덩이가 옆으로 흐르고 그을음 알갱이가 떨어진다
@@ -621,9 +621,9 @@ public partial class ShipView
                 {
                     float t = Mathf.PosMod(_time * 0.08f + i / (float)n, 1f);
                     var p = new Vector2(box.Position.X + box.Size.X * t, box.Position.Y + box.Size.Y * (0.2f + 0.5f * Hash01(seed + 4, i)) + Mathf.Sin(_time + i) * 4f);
-                    ci.DrawCircle(p, 6f + 8f * burnt + 2f * Mathf.Sin(_time * 1.7f + i), FogBurnt.WithAlpha(MathF.Min(1f, burnt * 2f) * 0.32f * baseA * Mathf.Sin(t * Mathf.Pi)), true, -1f, true);
+                    ci.Circle(p, 6f + 8f * burnt + 2f * Mathf.Sin(_time * 1.7f + i), FogBurnt.WithAlpha(MathF.Min(1f, burnt * 2f) * 0.32f * baseA * Mathf.Sin(t * Mathf.Pi)), true, -1f, true);
                     float f = Mathf.PosMod(_time * 0.5f + Hash01(seed + 5, i), 1f);
-                    ci.DrawRect(new Rect2(p.X + 4f, p.Y + f * 18f, 1.4f, 1.4f), new Color(0.1f, 0.08f, 0.07f, MathF.Min(1f, burnt * 3f) * baseA * (1f - f)));
+                    ci.Box(new Rect2(p.X + 4f, p.Y + f * 18f, 1.4f, 1.4f), new Color(0.1f, 0.08f, 0.07f, MathF.Min(1f, burnt * 3f) * baseA * (1f - f)));
                 }
             }
             // 악취: 바닥 가까이 초록 얼룩 · 지그재그 · 파리
@@ -634,7 +634,7 @@ public partial class ShipView
                 {
                     var p = new Vector2(box.Position.X + box.Size.X * (0.15f + 0.7f * Hash01(seed + 6, i)), box.End.Y - 8f - 6f * Hash01(seed + 7, i));
                     float pulse = 0.8f + 0.2f * Mathf.Sin(_time * 1.3f + i);
-                    ci.DrawColoredPolygon(Ell(p, 9f * pulse, 4f * pulse, 14, 0.2f * i), FogFoul.WithAlpha(MathF.Min(1f, foul * 2f) * 0.22f * baseA));
+                    ci.Poly(Ell(p, 9f * pulse, 4f * pulse, 14, 0.2f * i), FogFoul.WithAlpha(MathF.Min(1f, foul * 2f) * 0.22f * baseA));
                     Stink(ci, p + new Vector2(0f, -4f), 12f, MathF.Min(1f, foul * 2f) * baseA, seed + i);
                     if (foul > 0.25f) Flies(ci, p + new Vector2(0f, -8f), 6f, seed + i);
                 }
@@ -653,10 +653,10 @@ public partial class ShipView
                         float a = u * 9f + _time * 1.4f + i;
                         pts[j] = b0 + new Vector2(Mathf.Cos(a) * (2f + 5f * u), -u * (box.Size.Y * 0.55f));
                     }
-                    ci.DrawPolyline(pts, FogCoffee.WithAlpha(MathF.Min(1f, coffee * 2.5f) * 0.6f * baseA), 1.6f, true);
+                    ci.Polyline(pts, FogCoffee.WithAlpha(MathF.Min(1f, coffee * 2.5f) * 0.6f * baseA), 1.6f, true);
                     float f = Mathf.PosMod(_time * 0.2f + Hash01(seed + 9, i), 1f);
                     var bean = b0 + new Vector2(Mathf.Sin(_time + i) * 6f, -f * box.Size.Y * 0.6f);
-                    ci.DrawColoredPolygon(Ell(bean, 1.8f, 1.2f, 10, 0.6f + i), new Color("#4a2c1a").WithAlpha((1f - f) * baseA));
+                    ci.Poly(Ell(bean, 1.8f, 1.2f, 10, 0.6f + i), new Color("#4a2c1a").WithAlpha((1f - f) * baseA));
                     ci.DrawLine(bean + Vector2.FromAngle(0.6f + i) * -1.2f, bean + Vector2.FromAngle(0.6f + i) * 1.2f, new Color("#c8955f").WithAlpha((1f - f) * baseA), 0.5f); // 원두 홈
                 }
             }

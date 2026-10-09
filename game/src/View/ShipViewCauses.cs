@@ -44,7 +44,7 @@ public partial class ShipView
             var tip = Q(0.97f);
             var back = (Q(0.97f) - Q(0.9f)).Normalized();
             var side = new Vector2(-back.Y, back.X);
-            ci.DrawColoredPolygon(new[] { tip + back * 2f, tip - back * 7f + side * 4f, tip - back * 7f - side * 4f }, col.WithAlpha(alpha));
+            ci.Poly(new[] { tip + back * 2f, tip - back * 7f + side * 4f, tip - back * 7f - side * 4f }, col.WithAlpha(alpha));
         }
         // 2) 고리 점: 열린 것은 맥박, 풀린 것은 고리, 복구는 초록 테
         foreach (int id in inc.Nodes)
@@ -57,14 +57,14 @@ public partial class ShipView
             if (n.Open)
             {
                 float pulse = 0.5f + 0.5f * Mathf.Sin(_time * 5f + id);
-                ci.DrawCircle(c, r + 6f + 4f * pulse, col.WithAlpha(0.12f + 0.1f * pulse));
-                ci.DrawCircle(c, r, col.WithAlpha(0.95f));
-                ci.DrawArc(c, r + 1.5f, 0, Mathf.Tau, 20, new Color(0, 0, 0, 0.6f), 1.2f, true);
+                ci.Circle(c, r + 6f + 4f * pulse, col.WithAlpha(0.12f + 0.1f * pulse));
+                ci.Circle(c, r, col.WithAlpha(0.95f));
+                ci.Arc(c, r + 1.5f, 0, Mathf.Tau, 20, new Color(0, 0, 0, 0.6f), 1.2f, true);
             }
             else
             {
-                ci.DrawCircle(c, r, new Color(0.04f, 0.06f, 0.08f, 0.85f));
-                ci.DrawArc(c, r, 0, Mathf.Tau, 20, col.WithAlpha(0.7f), 1.6f, true);
+                ci.Circle(c, r, new Color(0.04f, 0.06f, 0.08f, 0.85f));
+                ci.Arc(c, r, 0, Mathf.Tau, 20, col.WithAlpha(0.7f), 1.6f, true);
                 if (n.Lasting) // 되돌렸다: 작은 체크
                 {
                     ci.DrawLine(c + new Vector2(-3, 0), c + new Vector2(-1, 2.5f), Palette.Good, 1.6f, true);

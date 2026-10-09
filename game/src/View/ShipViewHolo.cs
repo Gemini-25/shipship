@@ -40,16 +40,16 @@ public partial class ShipView
         if (HoloSpot() is not Cell c) return;
         var center = new Vector2((c.X + 1) * T, (c.Y + 1) * T);
         float r = T * 0.92f;
-        ci.DrawCircle(center + new Vector2(2, 3), r, new Color(0, 0, 0, 0.3f), true, -1f, true);
-        ci.DrawCircle(center, r, new Color("#0b1119"), true, -1f, true);
-        ci.DrawArc(center, r, 0f, Mathf.Tau, 48, new Color("#2c3a4d"), 2f, true);
-        ci.DrawArc(center, r * 0.72f, 0f, Mathf.Tau, 40, new Color("#1c2735"), 1.5f, true);
+        ci.Circle(center + new Vector2(2, 3), r, new Color(0, 0, 0, 0.3f), true, -1f, true);
+        ci.Circle(center, r, new Color("#0b1119"), true, -1f, true);
+        ci.Arc(center, r, 0f, Mathf.Tau, 48, new Color("#2c3a4d"), 2f, true);
+        ci.Arc(center, r * 0.72f, 0f, Mathf.Tau, 40, new Color("#1c2735"), 1.5f, true);
         // 투사기 눈 여섯 개
         for (int k = 0; k < 6; k++)
         {
             var d = Vector2.FromAngle(k * Mathf.Tau / 6f + 0.26f);
-            ci.DrawCircle(center + d * r * 0.86f, 2.2f, new Color("#0f1a26"), true, -1f, true);
-            ci.DrawCircle(center + d * r * 0.86f, 1.2f, new Color("#3b6c8f"), true, -1f, true);
+            ci.Circle(center + d * r * 0.86f, 2.2f, new Color("#0f1a26"), true, -1f, true);
+            ci.Circle(center + d * r * 0.86f, 1.2f, new Color("#3b6c8f"), true, -1f, true);
         }
     }
 
@@ -69,7 +69,7 @@ public partial class ShipView
         {
             var d = Vector2.FromAngle(k * Mathf.Tau / 6f + 0.26f);
             float a = powered ? 0.55f + 0.35f * Mathf.Sin(_time * 3f + k) : 0.08f;
-            ci.DrawCircle(center + d * r * 0.86f, 1.6f, cyan.WithAlpha(a), true, -1f, true);
+            ci.Circle(center + d * r * 0.86f, 1.6f, cyan.WithAlpha(a), true, -1f, true);
         }
         if (!powered) return;
         // 컴퓨터가 꺼지면 모형이 지지직거린다 (손으로 띄운 정적 도면만)
@@ -79,9 +79,9 @@ public partial class ShipView
 
         // 빛기둥 (패드에서 위로)
         var top = center + new Vector2(0, -T * 0.55f);
-        ci.DrawColoredPolygon(new[] { center + new Vector2(-r * 0.8f, 0), center + new Vector2(r * 0.8f, 0), top + new Vector2(T * 1.7f, 0), top + new Vector2(-T * 1.7f, 0) },
+        ci.Poly(new[] { center + new Vector2(-r * 0.8f, 0), center + new Vector2(r * 0.8f, 0), top + new Vector2(T * 1.7f, 0), top + new Vector2(-T * 1.7f, 0) },
             cyan.WithAlpha(0.08f * flicker));
-        ci.DrawCircle(center, r * 0.7f, cyan.WithAlpha(0.06f * flicker), true, -1f, true);
+        ci.Circle(center, r * 0.7f, cyan.WithAlpha(0.06f * flicker), true, -1f, true);
 
         // 모형: 배 전체를 가로 2.6칸 폭으로 줄이고, 위로 눌러 비스듬히
         var ship = _world.Ship;
@@ -107,13 +107,13 @@ public partial class ShipView
             var a = P(new Vector2(room.MinX * T, room.MinY * T));
             var e = P(new Vector2((room.MaxX + 1) * T, (room.MaxY + 1) * T));
             var rr = new Rect2(a, e - a);
-            ci.DrawRect(rr, col.WithAlpha((room.Type == RoomType.Corridor ? 0.12f : 0.3f) * flicker * pulse));
-            ci.DrawRect(rr, col.WithAlpha(0.85f * flicker * pulse), false, 1f);
+            ci.Box(rr, col.WithAlpha((room.Type == RoomType.Corridor ? 0.12f : 0.3f) * flicker * pulse));
+            ci.Box(rr, col.WithAlpha(0.85f * flicker * pulse), false, 1f);
         }
         // 선체 윤곽 (빛나는 테)
         var hullA = P(b.Position);
         var hullE = P(b.End);
-        ci.DrawRect(new Rect2(hullA, hullE - hullA).Grow(2f), cyan.WithAlpha(0.35f * flicker), false, 1.2f);
+        ci.Box(new Rect2(hullA, hullE - hullA).Grow(2f), cyan.WithAlpha(0.35f * flicker), false, 1.2f);
         // 엔진 연소: 모형 뒤쪽 엔진 자리에서 불꽃
         if (_world.Propulsion.Burning || _world.Propulsion.CourseBurnVisible)
             foreach (var f in ship.FurnitureOf(FurnitureType.EngineCore))
@@ -132,8 +132,8 @@ public partial class ShipView
             var dir = new Vector2(m.Direction.X, m.Direction.Y * squash).Normalized();
             var at = entry - dir * (6f + 26f * left);
             ci.DrawDashedLine(at, entry, Palette.Danger.WithAlpha(0.45f * flicker), 1f, 2.5f);
-            ci.DrawCircle(at, 1.5f + m.Size * 1.5f, Palette.Danger.WithAlpha(0.95f * flicker), true, -1f, true);
-            ci.DrawArc(entry, 3f + 1.5f * Mathf.Sin(_time * 8f), 0f, Mathf.Tau, 16, Palette.Danger.WithAlpha(0.7f * flicker), 1f, true);
+            ci.Circle(at, 1.5f + m.Size * 1.5f, Palette.Danger.WithAlpha(0.95f * flicker), true, -1f, true);
+            ci.Arc(entry, 3f + 1.5f * Mathf.Sin(_time * 8f), 0f, Mathf.Tau, 16, Palette.Danger.WithAlpha(0.7f * flicker), 1f, true);
         }
         // 잔해 지대: 모형 둘레에 떠도는 입자
         if (_world.Propulsion.Zone == ZoneKind.Debris)
@@ -141,7 +141,7 @@ public partial class ShipView
             {
                 float ph = _time * (0.15f + 0.03f * (k % 5)) + k * 0.91f;
                 var p = top + new Vector2(Mathf.Cos(ph) * width * 0.62f, Mathf.Sin(ph * 1.3f) * width * 0.3f);
-                ci.DrawCircle(p, 0.9f, new Color("#c9b48a").WithAlpha(0.7f * flicker), true, -1f, true);
+                ci.Circle(p, 0.9f, new Color("#c9b48a").WithAlpha(0.7f * flicker), true, -1f, true);
             }
         // 태양 폭풍: 보라 잡음 줄
         if (storm)

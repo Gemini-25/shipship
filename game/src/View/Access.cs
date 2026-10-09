@@ -20,17 +20,17 @@ public static class ColorSafe
         var mark = UiAccess.Mark(id);
         var fill = UiAccess.Fill(id);
         var pts = Shape(mark, c, r);
-        if (fill == MarkFill.Solid) ci.DrawColoredPolygon(pts, col);
-        else ci.DrawColoredPolygon(pts, bg);
+        if (fill == MarkFill.Solid) ci.Poly(pts, col);
+        else ci.Poly(pts, bg);
         var ring = pts.Append(pts[0]).ToArray();
-        ci.DrawPolyline(ring, col, Mathf.Max(1f, r * 0.22f), true);
+        ci.Polyline(ring, col, Mathf.Max(1f, r * 0.22f), true);
         if (fill == MarkFill.Half)
         {
             // 아래 절반만 채운다
             var half = pts.Where(p => p.Y >= c.Y - 0.01f).Append(new Vector2(c.X + r, c.Y)).Append(new Vector2(c.X - r, c.Y)).ToArray();
-            if (half.Length >= 3) { var hull = Hull(half); if (hull.Length >= 3) ci.DrawColoredPolygon(hull, col); }
+            if (half.Length >= 3) { var hull = Hull(half); if (hull.Length >= 3) ci.Poly(hull, col); }
         }
-        else if (fill == MarkFill.Dot) ci.DrawCircle(c, r * 0.3f, col, true, -1f, true);
+        else if (fill == MarkFill.Dot) ci.Circle(c, r * 0.3f, col, true, -1f, true);
     }
 
     private static Vector2[] Shape(CrewMark m, Vector2 c, float r)
@@ -74,12 +74,12 @@ public static class ColorSafe
             case Weave.Hatch: Diag(ci, r, col, step, false); break;
             case Weave.BackHatch: Diag(ci, r, col, step, true); break;
             case Weave.CrossHatch: Diag(ci, r, col, step * 1.4f, false); Diag(ci, r, col, step * 1.4f, true); break;
-            case Weave.Dots: for (float y = y0 + step * 0.5f; y < y1; y += step) for (float x = x0 + step * 0.5f; x < x1; x += step) ci.DrawCircle(new Vector2(x, y), step * 0.12f, col, true, -1f, true); break;
+            case Weave.Dots: for (float y = y0 + step * 0.5f; y < y1; y += step) for (float x = x0 + step * 0.5f; x < x1; x += step) ci.Circle(new Vector2(x, y), step * 0.12f, col, true, -1f, true); break;
             case Weave.Vertical: for (float x = x0 + step * 0.5f; x < x1; x += step) ci.DrawLine(new Vector2(x, y0), new Vector2(x, y1), col, 1f); break;
             case Weave.Horizontal: for (float y = y0 + step * 0.5f; y < y1; y += step) ci.DrawLine(new Vector2(x0, y), new Vector2(x1, y), col, 1f); break;
             case Weave.Checker:
                 for (float y = y0; y < y1; y += step) for (float x = x0; x < x1; x += step)
-                    if (((int)((x - x0) / step) + (int)((y - y0) / step)) % 2 == 0) ci.DrawRect(new Rect2(x, y, Mathf.Min(step, x1 - x), Mathf.Min(step, y1 - y)), col.WithAlpha(col.A * 0.5f));
+                    if (((int)((x - x0) / step) + (int)((y - y0) / step)) % 2 == 0) ci.Box(new Rect2(x, y, Mathf.Min(step, x1 - x), Mathf.Min(step, y1 - y)), col.WithAlpha(col.A * 0.5f));
                 break;
             case Weave.Wave:
                 for (float y = y0 + step * 0.5f; y < y1; y += step)
@@ -87,7 +87,7 @@ public static class ColorSafe
                     int n = Mathf.Max(2, (int)((x1 - x0) / (step * 0.25f)));
                     var pts = new Vector2[n + 1];
                     for (int i = 0; i <= n; i++) { float x = x0 + (x1 - x0) * i / n; pts[i] = new Vector2(x, y + Mathf.Sin((x - x0) / step * Mathf.Tau) * step * 0.18f); }
-                    ci.DrawPolyline(pts, col, 1f, true);
+                    ci.Polyline(pts, col, 1f, true);
                 }
                 break;
             case Weave.Zigzag:
@@ -95,10 +95,10 @@ public static class ColorSafe
                 {
                     var pts = new System.Collections.Generic.List<Vector2>();
                     for (float x = x0; x <= x1; x += step * 0.5f) pts.Add(new Vector2(x, y + ((int)((x - x0) / (step * 0.5f)) % 2 == 0 ? -1 : 1) * step * 0.2f));
-                    if (pts.Count >= 2) ci.DrawPolyline(pts.ToArray(), col, 1f, true);
+                    if (pts.Count >= 2) ci.Polyline(pts.ToArray(), col, 1f, true);
                 }
                 break;
-            case Weave.Rings: for (float y = y0 + step * 0.5f; y < y1; y += step) for (float x = x0 + step * 0.5f; x < x1; x += step) ci.DrawArc(new Vector2(x, y), step * 0.28f, 0, Mathf.Tau, 10, col, 1f, true); break;
+            case Weave.Rings: for (float y = y0 + step * 0.5f; y < y1; y += step) for (float x = x0 + step * 0.5f; x < x1; x += step) ci.Arc(new Vector2(x, y), step * 0.28f, 0, Mathf.Tau, 10, col, 1f, true); break;
             case Weave.Bricks:
                 for (float y = y0; y < y1; y += step * 0.5f)
                 {

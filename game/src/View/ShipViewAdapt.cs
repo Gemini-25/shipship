@@ -43,8 +43,8 @@ public partial class ShipView
     {
         var r = FurnitureRect(f).Grow(-5f);
         var hole = new Rect2(r.Position.X + r.Size.X * 0.2f, r.Position.Y + r.Size.Y * 0.2f, r.Size.X * 0.6f, r.Size.Y * 0.55f);
-        ci.DrawRect(hole, new Color(0.02f, 0.02f, 0.03f, 0.85f));
-        ci.DrawRect(hole, new Color("#5a606b").WithAlpha(0.8f), false, 1f);
+        ci.Box(hole, new Color(0.02f, 0.02f, 0.03f, 0.85f));
+        ci.Box(hole, new Color("#5a606b").WithAlpha(0.8f), false, 1f);
         // 끊어진 전선 몇 가닥
         Color[] wires = { new("#c85a3c"), new("#d8b64a"), new("#5a8fc8") };
         for (int k = 0; k < 3; k++)
@@ -53,7 +53,7 @@ public partial class ShipView
             var a = new Vector2(x, hole.Position.Y + 1);
             var b = a + new Vector2(k % 2 == 0 ? 3f : -3f, hole.Size.Y * (0.45f + 0.15f * k));
             ci.DrawLine(a, b, wires[k].WithAlpha(0.8f), 1.3f, true);
-            ci.DrawCircle(b, 1.3f, wires[k].Lightened(0.3f), true, -1f, true);
+            ci.Circle(b, 1.3f, wires[k].Lightened(0.3f), true, -1f, true);
         }
         // 떼어 낸 덮개가 옆에 기대 있다
         var cover = new Rect2(r.End.X - r.Size.X * 0.35f, r.End.Y - 6f, r.Size.X * 0.4f, 5f);
@@ -63,8 +63,8 @@ public partial class ShipView
         DashedRect(ci, o, new Color("#9aa3b5").WithAlpha(0.45f), 5f, 4f);
         // 모서리 표시: 빈 상자 (부품을 꺼냈다)
         var p = new Vector2(FurnitureRect(f).End.X - 5, FurnitureRect(f).Position.Y + 5);
-        ci.DrawCircle(p, 6f, new Color("#171a20"), true, -1f, true);
-        ci.DrawRect(new Rect2(p.X - 3.5f, p.Y - 2f, 7f, 5f), new Color("#9aa3b5"), false, 1.2f);
+        ci.Circle(p, 6f, new Color("#171a20"), true, -1f, true);
+        ci.Box(new Rect2(p.X - 3.5f, p.Y - 2f, 7f, 5f), new Color("#9aa3b5"), false, 1.2f);
         ci.DrawLine(new Vector2(p.X - 3.5f, p.Y - 2f), new Vector2(p.X - 1f, p.Y - 4.5f), new Color("#9aa3b5"), 1.2f);
     }
 
@@ -137,22 +137,22 @@ public partial class ShipView
                 // 정격을 넘겨 달아오른다
                 float heat = Mathf.Clamp((j.Load / j.Capacity - 1f) * 4f, 0.2f, 1f);
                 float pulse = 0.5f + 0.5f * Mathf.Sin(_time * 5f + i);
-                ci.DrawPolyline(pts, Palette.Danger.WithAlpha(0.25f * heat * pulse + 0.1f), 9f, true);
+                ci.Polyline(pts, Palette.Danger.WithAlpha(0.25f * heat * pulse + 0.1f), 9f, true);
                 col = col.Lerp(new Color("#ff4a2c"), heat * pulse);
             }
-            ci.DrawPolyline(pts, new Color(0, 0, 0, 0.45f), width + 2f, true);
-            ci.DrawPolyline(pts, col, width, true);
+            ci.Polyline(pts, new Color(0, 0, 0, 0.45f), width + 2f, true);
+            ci.Polyline(pts, col, width, true);
             // 절연 테이프 감은 자리
             foreach (int k in new[] { 5, 11 })
-                ci.DrawCircle(pts[k], 2.6f, j.Burnt ? new Color("#15110f") : new Color("#e6e1d3").WithAlpha(0.85f), true, -1f, true);
+                ci.Circle(pts[k], 2.6f, j.Burnt ? new Color("#15110f") : new Color("#e6e1d3").WithAlpha(0.85f), true, -1f, true);
             // 스위치 쪽 집게
-            ci.DrawCircle(a, 3f, col.Darkened(0.2f), true, -1f, true);
-            ci.DrawCircle(b, 3f, col.Darkened(0.2f), true, -1f, true);
+            ci.Circle(a, 3f, col.Darkened(0.2f), true, -1f, true);
+            ci.Circle(b, 3f, col.Darkened(0.2f), true, -1f, true);
             if (j.Burnt)
             {
                 // 탄 자국
-                ci.DrawCircle(sag, 7f, new Color(0.05f, 0.04f, 0.03f, 0.55f), true, -1f, true);
-                ci.DrawCircle(sag + new Vector2(4, -2), 4f, new Color(0.08f, 0.06f, 0.05f, 0.5f), true, -1f, true);
+                ci.Circle(sag, 7f, new Color(0.05f, 0.04f, 0.03f, 0.55f), true, -1f, true);
+                ci.Circle(sag + new Vector2(4, -2), 4f, new Color(0.08f, 0.06f, 0.05f, 0.5f), true, -1f, true);
             }
         }
     }

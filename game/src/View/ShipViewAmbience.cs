@@ -36,7 +36,7 @@ public partial class ShipView
                 for (int i = 0; i < rings; i++)
                 {
                     float t = (_time * 0.6f + i / (float)rings) % 1f;
-                    ci.DrawArc(c, 6f + maxR * t, 0, Mathf.Tau, 32, NoiseCol.WithAlpha(MathF.Min(1f, room.Noise * 1.6f) * (1f - t)), 3f, true);
+                    ci.Arc(c, 6f + maxR * t, 0, Mathf.Tau, 32, NoiseCol.WithAlpha(MathF.Min(1f, room.Noise * 1.6f) * (1f - t)), 3f, true);
                 }
             }
             // 진동: 바닥을 가로지르는 떨리는 선
@@ -49,7 +49,7 @@ public partial class ShipView
                     float x = box.Position.X + 4f + (box.Size.X - 8f) * i / (pts.Length - 1);
                     pts[i] = new Vector2(x, y + ((i & 1) == 0 ? -1f : 1f) * 8f * room.Vibration * (0.7f + 0.3f * Mathf.Sin(_time * 30f + i)));
                 }
-                ci.DrawPolyline(pts, VibCol.WithAlpha(0.5f + 0.5f * room.Vibration), 3f, true);
+                ci.Polyline(pts, VibCol.WithAlpha(0.5f + 0.5f * room.Vibration), 3f, true);
             }
             // 냄새: 위로 피어오르는 아지랑이
             if (room.Smell > 0.06f)
@@ -60,7 +60,7 @@ public partial class ShipView
                     float t = (_time * 0.25f + i * 0.37f) % 1f;
                     float x = box.Position.X + box.Size.X * (0.2f + 0.6f * ((i * 0.618f) % 1f));
                     float y = box.End.Y - 8f - (box.Size.Y - 16f) * t;
-                    ci.DrawArc(new Vector2(x + 5f * Mathf.Sin(_time * 2f + i), y), 6f + 4f * t, 0.3f, Mathf.Pi - 0.3f, 10, SmellCol.WithAlpha(MathF.Min(1f, room.Smell * 2f) * (1f - t)), 3f, true);
+                    ci.Arc(new Vector2(x + 5f * Mathf.Sin(_time * 2f + i), y), 6f + 4f * t, 0.3f, Mathf.Pi - 0.3f, 10, SmellCol.WithAlpha(MathF.Min(1f, room.Smell * 2f) * (1f - t)), 3f, true);
                 }
             }
         }

@@ -36,27 +36,27 @@ public partial class Hud
         switch (k)
         {
             case FixKind.Remote: // 마름모 + 전파 호
-                DrawColoredPolygon(new[] { c + new Vector2(0, -4), c + new Vector2(4, 0), c + new Vector2(0, 4), c + new Vector2(-4, 0) }, col.WithAlpha(0.85f));
-                for (int i = 1; i <= 2; i++) DrawArc(c + new Vector2(2, -2), 2.5f + 2.2f * i, -1.4f, -0.1f, 6, col.WithAlpha(live ? 0.4f + 0.4f * Mathf.Sin(_time * 6f - i) : 0.5f), 1f, true);
+                this.Poly(new[] { c + new Vector2(0, -4), c + new Vector2(4, 0), c + new Vector2(0, 4), c + new Vector2(-4, 0) }, col.WithAlpha(0.85f));
+                for (int i = 1; i <= 2; i++) this.Arc(c + new Vector2(2, -2), 2.5f + 2.2f * i, -1.4f, -0.1f, 6, col.WithAlpha(live ? 0.4f + 0.4f * Mathf.Sin(_time * 6f - i) : 0.5f), 1f, true);
                 break;
             case FixKind.Hands: // 머리 + 어깨 + 렌치 자루
-                DrawCircle(c + new Vector2(0, -2.6f), 2f, col, true, -1f, true);
-                DrawArc(c + new Vector2(0, 4.2f), 4f, Mathf.Pi * 1.1f, Mathf.Pi * 1.9f, 8, col, 1.6f, true);
+                this.Circle(c + new Vector2(0, -2.6f), 2f, col, true, -1f, true);
+                this.Arc(c + new Vector2(0, 4.2f), 4f, Mathf.Pi * 1.1f, Mathf.Pi * 1.9f, 8, col, 1.6f, true);
                 DrawLine(c + new Vector2(3.2f, 1.5f), c + new Vector2(5.5f, -1.5f), col.WithAlpha(0.8f), 1.2f, true);
                 break;
             case FixKind.Test: // 계기 반원 + 흔들리는 바늘
-                DrawArc(c + new Vector2(0, 2), 4.5f, Mathf.Pi, Mathf.Tau, 10, col, 1.2f, true);
+                this.Arc(c + new Vector2(0, 2), 4.5f, Mathf.Pi, Mathf.Tau, 10, col, 1.2f, true);
                 float a = Mathf.Pi * 1.5f + (live ? 0.6f * Mathf.Sin(_time * 4f) : 0.3f);
                 DrawLine(c + new Vector2(0, 2), c + new Vector2(0, 2) + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * 4f, col, 1.3f, true);
                 break;
             case FixKind.Watch: // 눈
-                DrawArc(c + new Vector2(0, 3.5f), 5f, Mathf.Pi * 1.2f, Mathf.Pi * 1.8f, 8, col, 1.2f, true);
-                DrawArc(c + new Vector2(0, -3.5f), 5f, Mathf.Pi * 0.2f, Mathf.Pi * 0.8f, 8, col, 1.2f, true);
-                DrawCircle(c, live ? 1.3f + 0.4f * Mathf.Sin(_time * 3f) : 1.3f, col, true, -1f, true);
+                this.Arc(c + new Vector2(0, 3.5f), 5f, Mathf.Pi * 1.2f, Mathf.Pi * 1.8f, 8, col, 1.2f, true);
+                this.Arc(c + new Vector2(0, -3.5f), 5f, Mathf.Pi * 0.2f, Mathf.Pi * 0.8f, 8, col, 1.2f, true);
+                this.Circle(c, live ? 1.3f + 0.4f * Mathf.Sin(_time * 3f) : 1.3f, col, true, -1f, true);
                 break;
             default: // 모래시계
-                DrawColoredPolygon(new[] { c + new Vector2(-3, -4.5f), c + new Vector2(3, -4.5f), c, }, col.WithAlpha(0.8f));
-                DrawColoredPolygon(new[] { c, c + new Vector2(3, 4.5f), c + new Vector2(-3, 4.5f) }, col.WithAlpha(live ? 0.3f + 0.5f * Mathf.PosMod(_time * 0.5f, 1f) : 0.4f));
+                this.Poly(new[] { c + new Vector2(-3, -4.5f), c + new Vector2(3, -4.5f), c, }, col.WithAlpha(0.8f));
+                this.Poly(new[] { c, c + new Vector2(3, 4.5f), c + new Vector2(-3, 4.5f) }, col.WithAlpha(live ? 0.3f + 0.5f * Mathf.PosMod(_time * 0.5f, 1f) : 0.4f));
                 break;
         }
     }
@@ -68,24 +68,24 @@ public partial class Hud
         switch (s)
         {
             case FixState.Done:
-                DrawCircle(c, 6.5f, col.WithAlpha(0.22f), true, -1f, true);
-                DrawPolyline(new[] { c + new Vector2(-3, 0), c + new Vector2(-1, 2.5f), c + new Vector2(3.5f, -2.5f) }, col, 1.6f, true);
+                this.Circle(c, 6.5f, col.WithAlpha(0.22f), true, -1f, true);
+                this.Polyline(new[] { c + new Vector2(-3, 0), c + new Vector2(-1, 2.5f), c + new Vector2(3.5f, -2.5f) }, col, 1.6f, true);
                 break;
             case FixState.Run:
-                DrawArc(c, 6.5f, 0f, Mathf.Tau, 16, col.WithAlpha(0.25f), 1.2f, true);
-                DrawArc(c, 6.5f, -Mathf.Pi / 2f, -Mathf.Pi / 2f + Mathf.Tau * Mathf.Clamp(frac, 0.04f, 1f), 16, col, 2f, true);
-                DrawCircle(c + new Vector2(Mathf.Cos(_time * 3f), Mathf.Sin(_time * 3f)) * 6.5f, 1.3f, col, true, -1f, true);
+                this.Arc(c, 6.5f, 0f, Mathf.Tau, 16, col.WithAlpha(0.25f), 1.2f, true);
+                this.Arc(c, 6.5f, -Mathf.Pi / 2f, -Mathf.Pi / 2f + Mathf.Tau * Mathf.Clamp(frac, 0.04f, 1f), 16, col, 2f, true);
+                this.Circle(c + new Vector2(Mathf.Cos(_time * 3f), Mathf.Sin(_time * 3f)) * 6.5f, 1.3f, col, true, -1f, true);
                 break;
             case FixState.Failed:
-                DrawCircle(c, 6.5f, col.WithAlpha(0.18f), true, -1f, true);
+                this.Circle(c, 6.5f, col.WithAlpha(0.18f), true, -1f, true);
                 DrawLine(c + new Vector2(-3, -3), c + new Vector2(3, 3), col, 1.6f, true);
                 DrawLine(c + new Vector2(3, -3), c + new Vector2(-3, 3), col, 1.6f, true);
                 break;
             case FixState.Skipped:
-                for (int i = 0; i < 8; i += 2) DrawArc(c, 6.5f, i * Mathf.Tau / 8f, (i + 1) * Mathf.Tau / 8f, 3, col, 1f, true);
+                for (int i = 0; i < 8; i += 2) this.Arc(c, 6.5f, i * Mathf.Tau / 8f, (i + 1) * Mathf.Tau / 8f, 3, col, 1f, true);
                 break;
             default:
-                DrawArc(c, 6.5f, 0f, Mathf.Tau, 16, col.WithAlpha(0.6f), 1f, true);
+                this.Arc(c, 6.5f, 0f, Mathf.Tau, 16, col.WithAlpha(0.6f), 1f, true);
                 break;
         }
     }
@@ -97,7 +97,7 @@ public partial class Hud
         {
             case "보고":
                 Gfx.RoundRect(this, new Rect2(c - new Vector2(5, 4), new Vector2(10, 7)), col.WithAlpha(0.25f), 2, col);
-                DrawColoredPolygon(new[] { c + new Vector2(-2, 3), c + new Vector2(1, 3), c + new Vector2(-3, 6) }, col);
+                this.Poly(new[] { c + new Vector2(-2, 3), c + new Vector2(1, 3), c + new Vector2(-3, 6) }, col);
                 break;
             case "예측":
                 for (int i = -2; i <= 2; i++)
@@ -107,13 +107,13 @@ public partial class Hud
                 }
                 break;
             case "계산":
-                DrawColoredPolygon(new[] { c + new Vector2(0, -5), c + new Vector2(5, 0), c + new Vector2(0, 5), c + new Vector2(-5, 0) }, col.WithAlpha(0.2f));
+                this.Poly(new[] { c + new Vector2(0, -5), c + new Vector2(5, 0), c + new Vector2(0, 5), c + new Vector2(-5, 0) }, col.WithAlpha(0.2f));
                 Gfx.TextCentered(this, Fonts.Bold, c + new Vector2(0, 0.5f), "?", 8, col);
                 break;
             default: // 센서
-                DrawArc(c + new Vector2(0, 2), 4.5f, Mathf.Pi, Mathf.Tau, 10, col, 1.1f, true);
+                this.Arc(c + new Vector2(0, 2), 4.5f, Mathf.Pi, Mathf.Tau, 10, col, 1.1f, true);
                 DrawLine(c + new Vector2(0, 2), c + new Vector2(3, -1.5f), col, 1.3f, true);
-                DrawCircle(c + new Vector2(0, 2), 1f, col, true, -1f, true);
+                this.Circle(c + new Vector2(0, 2), 1f, col, true, -1f, true);
                 break;
         }
     }
@@ -134,8 +134,8 @@ public partial class Hud
     private void FreshBand(Rect2 row, float f, Color col)
     {
         if (f <= 0.01f) return;
-        DrawRect(row, col.WithAlpha(0.14f * f));
-        DrawRect(new Rect2(row.Position, new Vector2(2.5f, row.Size.Y)), col.WithAlpha(0.9f * f));
+        this.Box(row, col.WithAlpha(0.14f * f));
+        this.Box(new Rect2(row.Position, new Vector2(2.5f, row.Size.Y)), col.WithAlpha(0.9f * f));
     }
 
     private static string ProblemIcon(string problem) => problem switch { "냉각" => "coolant", "문" => "room-airlock", _ => "wrench" };
@@ -200,7 +200,7 @@ public partial class Hud
             var col = StepColor(s.State);
             var band = new Rect2(x - 4, cy - rowH * 0.5f + 1, right - x + 8, rowH - 2);
             FreshBand(band, Fresh($"step:{p.Id}:{i}", $"{s.State}|{s.Waiting}"), col);
-            if (cur) DrawRect(band, PlanCyan.WithAlpha(0.05f));
+            if (cur) this.Box(band, PlanCyan.WithAlpha(0.05f));
             DrawStepState(new Vector2(lineX, cy), s.State, frac);
             DrawStepKind(new Vector2(lineX + 18, cy), s.Act.Kind, col, s.State == FixState.Run);
             string range = s.Max - s.Min < 1.5f ? $"{s.Min:0}분" : $"{s.Min:0}~{s.Max:0}분";
@@ -208,10 +208,10 @@ public partial class Hud
             float bx = lineX + 28 + (right - x) * 0.31f, bw = (right - x) * 0.22f;
             // 범위 띠: 최소~최대 (옅게) · 걸린 시간 (막대) · 최대를 넘기면 끝에 노란 점
             float scale = bw / Mathf.Max(1f, s.Max * 1.15f);
-            DrawRect(new Rect2(bx, cy - 3, bw, 6), Ui.Track);
-            DrawRect(new Rect2(bx + s.Min * scale, cy - 3, Mathf.Max(1f, (s.Max - s.Min) * scale), 6), col.WithAlpha(0.2f));
-            if (took > 0f) DrawRect(new Rect2(bx, cy - 1.5f, Mathf.Min(bw, took * scale), 3), col.WithAlpha(0.85f));
-            if (s.State == FixState.Run && took > s.Max) DrawCircle(new Vector2(bx + bw, cy), 2.2f, Palette.Warning, true, -1f, true);
+            this.Box(new Rect2(bx, cy - 3, bw, 6), Ui.Track);
+            this.Box(new Rect2(bx + s.Min * scale, cy - 3, Mathf.Max(1f, (s.Max - s.Min) * scale), 6), col.WithAlpha(0.2f));
+            if (took > 0f) this.Box(new Rect2(bx, cy - 1.5f, Mathf.Min(bw, took * scale), 3), col.WithAlpha(0.85f));
+            if (s.State == FixState.Run && took > s.Max) this.Circle(new Vector2(bx + bw, cy), 2.2f, Palette.Warning, true, -1f, true);
             string tail = s.State == FixState.Wait && s.Waiting != "" ? s.Waiting : s.Note != "" ? s.Note : s.Waiting;
             Gfx.Text(this, Fonts.Body, new Vector2(bx + bw + 6, cy + 4), Fit(range + (tail != "" ? " · " + tail : ""), right - bx - bw - 6, Ui.TextTiny, Fonts.Body), Ui.TextTiny, s.State == FixState.Failed ? Palette.Danger : Palette.TextMuted);
         }
@@ -248,11 +248,11 @@ public partial class Hud
                 if (y + 13 > r.End.Y - 2) break;
                 bool pick = o.Key == p.OptionKey;
                 var oc = !o.Allowed ? Palette.TextMuted : pick ? PlanCyan : Palette.TextDim;
-                if (pick) DrawColoredPolygon(new[] { new Vector2(x, y + 4), new Vector2(x + 6, y + 7.5f), new Vector2(x, y + 11) }, PlanCyan);
+                if (pick) this.Poly(new[] { new Vector2(x, y + 4), new Vector2(x + 6, y + 7.5f), new Vector2(x, y + 11) }, PlanCyan);
                 Gfx.Text(this, pick ? Fonts.Bold : Fonts.Body, new Vector2(x + 10, y + 11), Fit(o.Name, (right - x) * 0.32f, Ui.TextTiny, Fonts.Body), Ui.TextTiny, oc);
                 float bx = x + 12 + (right - x) * 0.32f, bw = (right - x) * 0.2f;
-                DrawRect(new Rect2(bx, y + 4, bw, 6), Ui.Track);
-                if (o.Allowed) DrawRect(new Rect2(bx, y + 4, bw * Mathf.Clamp(o.Score / max, 0.03f, 1f), 6), oc.WithAlpha(pick ? 0.8f : 0.4f));
+                this.Box(new Rect2(bx, y + 4, bw, 6), Ui.Track);
+                if (o.Allowed) this.Box(new Rect2(bx, y + 4, bw * Mathf.Clamp(o.Score / max, 0.03f, 1f), 6), oc.WithAlpha(pick ? 0.8f : 0.4f));
                 else for (int j = 0; j < 6; j++) DrawLine(new Vector2(bx + j * bw / 6f, y + 10), new Vector2(bx + j * bw / 6f + 4, y + 4), Palette.TextMuted.WithAlpha(0.5f), 1f);
                 string tail = !o.Allowed ? o.Blocked : (o.PeakMax > 0f ? $"노심 최고 {o.PeakMax:0}℃ · " : "") + (o.BatteryKwh > 0.5f ? $"배터리 {o.BatteryKwh:0}kWh · " : "") + $"{o.Min:0}~{o.Max:0}분";
                 Gfx.Text(this, Fonts.Body, new Vector2(bx + bw + 6, y + 11), Fit(tail, right - bx - bw - 6, Ui.TextTiny, Fonts.Body), Ui.TextTiny, oc);
@@ -281,22 +281,22 @@ public partial class Hud
         }
         else if (s.Moved)
         {
-            DrawRect(new Rect2(c + new Vector2(-7, -5), new Vector2(4, 10)), col.WithAlpha(0.35f));
-            DrawRect(new Rect2(c + new Vector2(3, -5), new Vector2(4, 10)), col);
+            this.Box(new Rect2(c + new Vector2(-7, -5), new Vector2(4, 10)), col.WithAlpha(0.35f));
+            this.Box(new Rect2(c + new Vector2(3, -5), new Vector2(4, 10)), col);
             float t = Mathf.PosMod(_time * 1.2f, 1f);
             DrawLine(c + new Vector2(-2.5f, 0), c + new Vector2(2, 0), col, 1.2f, true);
-            DrawColoredPolygon(new[] { c + new Vector2(2.5f, -2), c + new Vector2(2.5f, 2), c + new Vector2(4f, 0) }, col);
-            DrawCircle(c + new Vector2(-2.5f + 4.5f * t, 0), 0.9f, Palette.Text, true, -1f, true);
+            this.Poly(new[] { c + new Vector2(2.5f, -2), c + new Vector2(2.5f, 2), c + new Vector2(4f, 0) }, col);
+            this.Circle(c + new Vector2(-2.5f + 4.5f * t, 0), 0.9f, Palette.Text, true, -1f, true);
         }
         else if (s.Hot)
         {
             DrawLine(c + new Vector2(-2, -5), c + new Vector2(-2, 2), col, 2f, true);
-            DrawCircle(c + new Vector2(-2, 3.5f), 2.2f, col, true, -1f, true);
+            this.Circle(c + new Vector2(-2, 3.5f), 2.2f, col, true, -1f, true);
             for (int i = 0; i < 2; i++)
             {
                 float ph = _time * 3f + i * 1.7f;
                 var p0 = c + new Vector2(2.5f + i * 2.5f, 4);
-                DrawPolyline(new[] { p0, p0 + new Vector2(Mathf.Sin(ph) * 1.2f, -3), p0 + new Vector2(-Mathf.Sin(ph) * 1.2f, -6), p0 + new Vector2(Mathf.Sin(ph) * 1.2f, -9) }, col.WithAlpha(0.7f), 1f, true);
+                this.Polyline(new[] { p0, p0 + new Vector2(Mathf.Sin(ph) * 1.2f, -3), p0 + new Vector2(-Mathf.Sin(ph) * 1.2f, -6), p0 + new Vector2(Mathf.Sin(ph) * 1.2f, -9) }, col.WithAlpha(0.7f), 1f, true);
             }
         }
         else if (s.Crowded)
@@ -304,22 +304,22 @@ public partial class Hud
             for (int i = 0; i < 3; i++)
             {
                 float wdt = i == 0 ? 11f + 1.5f * Mathf.Sin(_time * 6f) : 9f - i;
-                DrawRect(new Rect2(c + new Vector2(-6, -5 + i * 4), new Vector2(wdt, 2.5f)), i == 0 ? Palette.Danger : col.WithAlpha(0.8f));
+                this.Box(new Rect2(c + new Vector2(-6, -5 + i * 4), new Vector2(wdt, 2.5f)), i == 0 ? Palette.Danger : col.WithAlpha(0.8f));
             }
             DrawLine(c + new Vector2(4, -6), c + new Vector2(4, 6), col.WithAlpha(0.6f), 1f);
         }
         else if (s.Sight < 0.8f)
         {
-            DrawArc(c + new Vector2(0, 3f), 5.5f, Mathf.Pi * 1.2f, Mathf.Pi * 1.8f, 8, col, 1.2f, true);
+            this.Arc(c + new Vector2(0, 3f), 5.5f, Mathf.Pi * 1.2f, Mathf.Pi * 1.8f, 8, col, 1.2f, true);
             DrawLine(c + new Vector2(-5, 0), c + new Vector2(5, 0), col, 1.2f, true);
-            DrawArc(c + new Vector2(0, 0), 1.6f, Mathf.Pi, Mathf.Tau, 6, col, 1.2f, true);
+            this.Arc(c + new Vector2(0, 0), 1.6f, Mathf.Pi, Mathf.Tau, 6, col, 1.2f, true);
             for (int i = 0; i < 3; i++) DrawLine(c + new Vector2(-3 + i * 3, 1), c + new Vector2(-3.5f + i * 3, 3), col.WithAlpha(0.5f), 1f);
         }
         else
         {
             Gfx.RoundRect(this, new Rect2(c + new Vector2(-4, -6), new Vector2(8, 12)), col.WithAlpha(0.15f), 1.5f, col.WithAlpha(0.8f));
             for (int i = 0; i < 3; i++)
-                DrawCircle(c + new Vector2(1.5f, -3.5f + i * 3.5f), 0.9f, (Mathf.PosMod(_time * 2f, 3f) >= i && Mathf.PosMod(_time * 2f, 3f) < i + 1 ? Palette.Good : col.WithAlpha(0.4f)), true, -1f, true);
+                this.Circle(c + new Vector2(1.5f, -3.5f + i * 3.5f), 0.9f, (Mathf.PosMod(_time * 2f, 3f) >= i && Mathf.PosMod(_time * 2f, 3f) < i + 1 ? Palette.Good : col.WithAlpha(0.4f)), true, -1f, true);
         }
     }
 
@@ -383,7 +383,7 @@ public partial class Hud
             if (!centers.TryGetValue(z.RoomId, out var c)) continue;
             var col = PlanMint;
             Gfx.RoundRect(this, new Rect2(c + new Vector2(-6, -12), new Vector2(12, 8)), col.WithAlpha(0.18f), 2, col);
-            DrawCircle(c + new Vector2(3, -8), 1.3f, col.WithAlpha(0.4f + 0.6f * Mathf.PosMod(_time * 1.5f + z.RoomId * 0.3f, 1f)), true, -1f, true);
+            this.Circle(c + new Vector2(3, -8), 1.3f, col.WithAlpha(0.4f + 0.6f * Mathf.PosMod(_time * 1.5f + z.RoomId * 0.3f, 1f)), true, -1f, true);
             DrawLine(c + new Vector2(-10, -8), c + new Vector2(-7, -8), col.WithAlpha(0.7f), 1f);
             DrawLine(c + new Vector2(-13, -6), c + new Vector2(-11, -10), Palette.Danger.WithAlpha(0.8f), 1.2f);
         }
@@ -397,7 +397,7 @@ public partial class Hud
                 float ang = -Mathf.Pi / 2f + Mathf.Tau * i / n;
                 var at = c + new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * 9f;
                 var s = p.Steps[i];
-                DrawCircle(at, i == p.Cur ? 1.9f + 0.5f * Mathf.Sin(_time * 5f) : 1.4f, StepColor(s.State).WithAlpha(s.State == FixState.Wait ? 0.5f : 0.95f), true, -1f, true);
+                this.Circle(at, i == p.Cur ? 1.9f + 0.5f * Mathf.Sin(_time * 5f) : 1.4f, StepColor(s.State).WithAlpha(s.State == FixState.Wait ? 0.5f : 0.95f), true, -1f, true);
             }
         }
     }

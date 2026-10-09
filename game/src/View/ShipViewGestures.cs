@@ -40,13 +40,13 @@ public partial class ShipView
                 // 바닥에 내려놓은 짐 상자 (널빤지 무늬 · 모서리) + 숙인 두 팔
                 var bp = spot ?? body + f * rr * 1.1f;
                 var bx = new Rect2(bp - new Vector2(4.2f, 3.4f) * s, new Vector2(8.4f, 6.8f) * s);
-                ci.DrawRect(bx, new Color("#9c7a4c"));
-                ci.DrawRect(bx, new Color("#5e4526"), false, 1f * s);
+                ci.Box(bx, new Color("#9c7a4c"));
+                ci.Box(bx, new Color("#5e4526"), false, 1f * s);
                 ci.DrawLine(bx.Position + new Vector2(0, bx.Size.Y * 0.5f), bx.Position + new Vector2(bx.Size.X, bx.Size.Y * 0.5f), new Color("#5e4526"), 0.8f * s);
                 var cl = RoleCloth(c.Role).Darkened(0.2f);
                 ci.DrawLine(body + sd * rr * 0.6f, bp + sd * 3f * s, cl, 2.2f * s, true);
                 ci.DrawLine(body - sd * rr * 0.6f, bp - sd * 3f * s, cl, 2.2f * s, true);
-                if (age > 0.4f) ci.DrawCircle(head + f * rr * 0.9f, 1.2f * s, GsHand, true, -1f, true); // 버튼을 누르는 손
+                if (age > 0.4f) ci.Circle(head + f * rr * 0.9f, 1.2f * s, GsHand, true, -1f, true); // 버튼을 누르는 손
                 break;
             }
             case Mien.AskDoor:
@@ -54,8 +54,8 @@ public partial class ShipView
                 // 턱으로 문을 가리키며 말한다: 턱 끝 호 + 말 물결 (문 쪽)
                 var to = gaze is Vector2 gz ? (gz - head).Normalized() : f;
                 for (int i = 0; i < 2; i++)
-                    ci.DrawArc(head + to * (rr * 0.7f + i * 3f * s), (2f + i * 1.6f) * s, to.Angle() - 0.7f, to.Angle() + 0.7f, 8, new Color(1, 1, 1, 0.7f - i * 0.25f), 1.1f * s, true);
-                ci.DrawArc(head + to * rr * 0.35f, rr * 0.35f, to.Angle() - 0.4f, to.Angle() + 0.4f, 6, GsHand.Darkened(0.3f), 1.2f * s, true);
+                    ci.Arc(head + to * (rr * 0.7f + i * 3f * s), (2f + i * 1.6f) * s, to.Angle() - 0.7f, to.Angle() + 0.7f, 8, new Color(1, 1, 1, 0.7f - i * 0.25f), 1.1f * s, true);
+                ci.Arc(head + to * rr * 0.35f, rr * 0.35f, to.Angle() - 0.4f, to.Angle() + 0.4f, 6, GsHand.Darkened(0.3f), 1.2f * s, true);
                 break;
             }
             case Mien.HoldDoor:
@@ -65,7 +65,7 @@ public partial class ShipView
                 var dir = (to - body).Normalized();
                 var palm = body + dir * Mathf.Min((to - body).Length() - 2f * s, rr * 1.8f);
                 ci.DrawLine(body + sd * rr * 0.5f * hs, palm, RoleCloth(c.Role).Darkened(0.15f), 2.4f * s, true);
-                ci.DrawCircle(palm, 1.8f * s, GsHand, true, -1f, true);
+                ci.Circle(palm, 1.8f * s, GsHand, true, -1f, true);
                 var pn = new Vector2(-dir.Y, dir.X);
                 for (int i = -1; i <= 1; i++) ci.DrawLine(palm + pn * i * 1.1f * s, palm + pn * i * 1.1f * s + dir * 2.2f * s, GsHand.Darkened(0.1f), 0.9f * s, true);
                 break;
@@ -75,9 +75,9 @@ public partial class ShipView
                 // 잔을 앞으로 쭉 내밀고 다른 손으로 받친다 (출렁 호)
                 var cp = body + f * rr * 1.4f + sd * rr * 0.2f * hs;
                 PaintMug(ci, cp, s, f, 0f);
-                ci.DrawCircle(cp - f * 1.6f * s, 1.3f * s, GsHand, true, -1f, true);
+                ci.Circle(cp - f * 1.6f * s, 1.3f * s, GsHand, true, -1f, true);
                 float k = Mathf.Sin(t * 22f) * 0.35f;
-                ci.DrawArc(cp, 3.6f * s, f.Angle() - 1.2f + k, f.Angle() + 1.2f + k, 8, new Color(1, 1, 1, 0.5f), 0.8f * s, true);
+                ci.Arc(cp, 3.6f * s, f.Angle() - 1.2f + k, f.Angle() + 1.2f + k, 8, new Color(1, 1, 1, 0.5f), 0.8f * s, true);
                 break;
             }
             case Mien.CupSpill:
@@ -88,12 +88,12 @@ public partial class ShipView
                 for (int i = 0; i < 3; i++)
                 {
                     var dp = cp + f * (2.5f + i * 1.8f + age * 4f) * s + sd * (i - 1) * 2.2f * s;
-                    ci.DrawCircle(dp, (1f - i * 0.2f) * s, GsCoffee.Lightened(0.15f), true, -1f, true);
+                    ci.Circle(dp, (1f - i * 0.2f) * s, GsCoffee.Lightened(0.15f), true, -1f, true);
                 }
                 if (spot is Vector2 pd)
                 {
                     ci.DrawSetTransform(pd, 0f, new Vector2(1f, 0.55f));
-                    ci.DrawCircle(Vector2.Zero, 5.5f * s * (0.6f + 0.4f * age), GsCoffee.WithAlpha(0.55f), true, -1f, true);
+                    ci.Circle(Vector2.Zero, 5.5f * s * (0.6f + 0.4f * age), GsCoffee.WithAlpha(0.55f), true, -1f, true);
                     ci.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
                 }
                 break;
@@ -102,12 +102,12 @@ public partial class ShipView
             {
                 // 두 손에 든 작업등 (몸체 · 손잡이) + 빛 부채 + 옛 자리에서 끌어온 점선
                 var lp = body + f * rr * 1.1f;
-                ci.DrawRect(new Rect2(lp - new Vector2(2.4f, 1.8f) * s, new Vector2(4.8f, 3.6f) * s), new Color("#d7a52a"));
-                ci.DrawArc(lp - f * 2f * s, 2.2f * s, f.Angle() + 2.2f, f.Angle() + 4.1f, 8, new Color("#3b3b3b"), 1f * s, true);
+                ci.Box(new Rect2(lp - new Vector2(2.4f, 1.8f) * s, new Vector2(4.8f, 3.6f) * s), new Color("#d7a52a"));
+                ci.Arc(lp - f * 2f * s, 2.2f * s, f.Angle() + 2.2f, f.Angle() + 4.1f, 8, new Color("#3b3b3b"), 1f * s, true);
                 var pts = new[] { lp, lp + f.Rotated(-0.45f) * rr * 2.4f, lp + f.Rotated(0.45f) * rr * 2.4f };
-                ci.DrawColoredPolygon(pts, GsLamp.WithAlpha(0.22f + 0.05f * Mathf.Sin(t * 3f)));
-                ci.DrawCircle(lp + sd * 2.6f * s, 1.2f * s, GsHand, true, -1f, true);
-                ci.DrawCircle(lp - sd * 2.6f * s, 1.2f * s, GsHand, true, -1f, true);
+                ci.Poly(pts, GsLamp.WithAlpha(0.22f + 0.05f * Mathf.Sin(t * 3f)));
+                ci.Circle(lp + sd * 2.6f * s, 1.2f * s, GsHand, true, -1f, true);
+                ci.Circle(lp - sd * 2.6f * s, 1.2f * s, GsHand, true, -1f, true);
                 if (spot is Vector2 old) PaintDots(ci, old, lp, GsLamp.WithAlpha(0.5f), s);
                 break;
             }
@@ -118,8 +118,8 @@ public partial class ShipView
                 var nose = head + to * rr * 0.55f;
                 ci.DrawLine(head + to * rr * 0.25f, nose, GsHand.Darkened(0.35f), 1.2f * s, true);
                 var en = new Vector2(-to.Y, to.X);
-                ci.DrawCircle(head + to * rr * 0.32f + en * 1.4f * s, 0.7f * s, new Color("#1d1817"), true, -1f, true);
-                ci.DrawCircle(head + to * rr * 0.32f - en * 1.4f * s, 0.7f * s, new Color("#1d1817"), true, -1f, true);
+                ci.Circle(head + to * rr * 0.32f + en * 1.4f * s, 0.7f * s, new Color("#1d1817"), true, -1f, true);
+                ci.Circle(head + to * rr * 0.32f - en * 1.4f * s, 0.7f * s, new Color("#1d1817"), true, -1f, true);
                 break;
             }
             case Mien.WrapUp:
@@ -131,7 +131,7 @@ public partial class ShipView
                 var tp = from.Lerp(belt, k);
                 ci.DrawLine(body + sd * rr * 0.5f * hs, tp, RoleCloth(c.Role).Darkened(0.15f), 2.2f * s, true);
                 PaintWrench(ci, tp, (belt - from).Normalized(), s);
-                ci.DrawRect(new Rect2(belt - new Vector2(2f, 1.2f) * s, new Vector2(4f, 2.4f) * s), new Color("#4a3a2a"), false, 0.9f * s);
+                ci.Box(new Rect2(belt - new Vector2(2f, 1.2f) * s, new Vector2(4f, 2.4f) * s), new Color("#4a3a2a"), false, 0.9f * s);
                 break;
             }
             case Mien.KneelBy:
@@ -140,11 +140,11 @@ public partial class ShipView
                 if (spot is Vector2 dp)
                 {
                     ci.DrawLine(body + sd * rr * 0.5f * hs, dp - (dp - body).Normalized() * 3f * s, RoleCloth(c.Role).Darkened(0.15f), 2.2f * s, true);
-                    ci.DrawCircle(dp - (dp - body).Normalized() * 3f * s, 1.6f * s, GsHand, true, -1f, true);
+                    ci.Circle(dp - (dp - body).Normalized() * 3f * s, 1.6f * s, GsHand, true, -1f, true);
                     var p0 = dp + new Vector2(-6f, -9f) * s;
                     float ph = Mathf.PosMod(t * 1.6f, 1f);
                     var line = new[] { p0, p0 + new Vector2(3f, 0) * s, p0 + new Vector2(4.2f, -3f) * s, p0 + new Vector2(5.4f, 2.5f) * s, p0 + new Vector2(6.6f, 0) * s, p0 + new Vector2(12f, 0) * s };
-                    ci.DrawPolyline(line, new Color(1f, 0.45f, 0.45f, 0.4f + 0.5f * (1f - ph)), 1.1f * s, true);
+                    ci.Polyline(line, new Color(1f, 0.45f, 0.45f, 0.4f + 0.5f * (1f - ph)), 1.1f * s, true);
                 }
                 break;
             }
@@ -153,8 +153,8 @@ public partial class ShipView
                 // 계기를 본다: 점선 눈길 + 작은 눈금판 (바늘이 떤다)
                 var to = gaze ?? head + f * rr * 1.5f;
                 PaintDots(ci, head + f * rr * 0.4f, to, GsGaze, s);
-                ci.DrawCircle(to, 3f * s, new Color(0.1f, 0.12f, 0.14f, 0.85f), true, -1f, true);
-                ci.DrawArc(to, 3f * s, 0f, Mathf.Tau, 14, new Color("#c8d4dc"), 0.8f * s, true);
+                ci.Circle(to, 3f * s, new Color(0.1f, 0.12f, 0.14f, 0.85f), true, -1f, true);
+                ci.Arc(to, 3f * s, 0f, Mathf.Tau, 14, new Color("#c8d4dc"), 0.8f * s, true);
                 float na = -2.4f + 1.4f + Mathf.Sin(t * 9f) * 0.3f;
                 ci.DrawLine(to, to + Vector2.FromAngle(na) * 2.4f * s, new Color("#ff8a3a"), 0.8f * s, true);
                 break;
@@ -167,8 +167,8 @@ public partial class ShipView
                     var d = (to - head).Normalized();
                     PaintDots(ci, head + d * rr * 0.4f, to - d * rr * 0.6f, GsGaze, s);
                     var en = new Vector2(-d.Y, d.X);
-                    ci.DrawArc(head + d * rr * 0.3f + en * 1.5f * s, 1.3f * s, d.Angle() - 2.4f, d.Angle() - 0.8f, 5, new Color("#3b2a20"), 0.8f * s, true);
-                    ci.DrawArc(head + d * rr * 0.3f - en * 1.5f * s, 1.3f * s, d.Angle() + 0.8f, d.Angle() + 2.4f, 5, new Color("#3b2a20"), 0.8f * s, true);
+                    ci.Arc(head + d * rr * 0.3f + en * 1.5f * s, 1.3f * s, d.Angle() - 2.4f, d.Angle() - 0.8f, 5, new Color("#3b2a20"), 0.8f * s, true);
+                    ci.Arc(head + d * rr * 0.3f - en * 1.5f * s, 1.3f * s, d.Angle() + 0.8f, d.Angle() + 2.4f, 5, new Color("#3b2a20"), 0.8f * s, true);
                 }
                 break;
             }
@@ -177,8 +177,8 @@ public partial class ShipView
                 // 끄덕임: 머리 앞 위아래 짧은 호 둘 (움직임)
                 float k = Mathf.Sin(t * 10f);
                 var p = head + f * rr * (0.6f + 0.15f * k);
-                ci.DrawArc(p, 2.4f * s, f.Angle() - 0.8f, f.Angle() + 0.8f, 6, new Color(1, 1, 1, 0.75f), 1f * s, true);
-                ci.DrawArc(p + f * 2f * s, 2.4f * s, f.Angle() - 0.8f, f.Angle() + 0.8f, 6, new Color(1, 1, 1, 0.4f), 1f * s, true);
+                ci.Arc(p, 2.4f * s, f.Angle() - 0.8f, f.Angle() + 0.8f, 6, new Color(1, 1, 1, 0.75f), 1f * s, true);
+                ci.Arc(p + f * 2f * s, 2.4f * s, f.Angle() - 0.8f, f.Angle() + 0.8f, 6, new Color(1, 1, 1, 0.4f), 1f * s, true);
                 break;
             }
             case Mien.SwapGrip:
@@ -188,7 +188,7 @@ public partial class ShipView
                 PaintWrench(ci, oh, f, s);
                 var a0 = body + f * rr * 0.9f + sd * rr * 0.7f * hs;
                 var mid = body + f * rr * 1.6f;
-                ci.DrawPolyline(new[] { a0, a0.Lerp(mid, 0.5f) + f * 1.5f * s, mid, mid.Lerp(oh, 0.5f) + f * 1.5f * s, oh + sd * 2f * s * hs }, new Color(1f, 0.85f, 0.4f, 0.8f), 1f * s, true);
+                ci.Polyline(new[] { a0, a0.Lerp(mid, 0.5f) + f * 1.5f * s, mid, mid.Lerp(oh, 0.5f) + f * 1.5f * s, oh + sd * 2f * s * hs }, new Color(1f, 0.85f, 0.4f, 0.8f), 1f * s, true);
                 var tip = oh + sd * 2f * s * hs;
                 var back = (mid - oh).Normalized();
                 ci.DrawLine(tip, tip + back.Rotated(0.6f) * 2f * s, new Color(1f, 0.85f, 0.4f, 0.8f), 1f * s, true);
@@ -202,7 +202,7 @@ public partial class ShipView
                 {
                     int n = 10;
                     for (int i = 0; i < n; i += 2)
-                        ci.DrawArc(kp, 4.2f * s, i * Mathf.Tau / n + t * 0.4f, (i + 1) * Mathf.Tau / n + t * 0.4f, 3, GsChalk, 1f * s, true);
+                        ci.Arc(kp, 4.2f * s, i * Mathf.Tau / n + t * 0.4f, (i + 1) * Mathf.Tau / n + t * 0.4f, 3, GsChalk, 1f * s, true);
                     var d = (kp - body).Normalized();
                     var fp = kp - d * 5f * s;
                     ci.DrawLine(body + sd * rr * 0.5f * hs, fp, RoleCloth(c.Role).Darkened(0.15f), 2f * s, true);
@@ -214,9 +214,9 @@ public partial class ShipView
             {
                 // 이어 가는 말꼬리: 말풍선 꼬리에서 뒤로 말린 화살 + 점 셋
                 var bp = head - sd * rr * 1.1f - f * rr * 0.6f;
-                ci.DrawArc(bp, 3.6f * s, 0f, Mathf.Tau, 14, new Color(1, 1, 1, 0.8f), 1f * s, true);
-                for (int i = -1; i <= 1; i++) ci.DrawCircle(bp + new Vector2(i * 1.4f * s, 0), 0.55f * s, new Color(1, 1, 1, 0.9f), true, -1f, true);
-                ci.DrawArc(bp + new Vector2(4.6f, 2.2f) * s, 2f * s, 0.2f, 3.6f, 8, new Color(0.7f, 0.9f, 1f, 0.8f), 0.9f * s, true);
+                ci.Arc(bp, 3.6f * s, 0f, Mathf.Tau, 14, new Color(1, 1, 1, 0.8f), 1f * s, true);
+                for (int i = -1; i <= 1; i++) ci.Circle(bp + new Vector2(i * 1.4f * s, 0), 0.55f * s, new Color(1, 1, 1, 0.9f), true, -1f, true);
+                ci.Arc(bp + new Vector2(4.6f, 2.2f) * s, 2f * s, 0.2f, 3.6f, 8, new Color(0.7f, 0.9f, 1f, 0.8f), 0.9f * s, true);
                 break;
             }
             case Mien.Hum:
@@ -229,7 +229,7 @@ public partial class ShipView
                 if (gaze is Vector2 to)
                 {
                     var mid = (head + to) * 0.5f + new Vector2(0, -8f * s);
-                    ci.DrawPolyline(new[] { head + new Vector2(0, -6f * s), mid, to + new Vector2(0, -6f * s) }, GsNote.WithAlpha(0.35f), 0.9f * s, true);
+                    ci.Polyline(new[] { head + new Vector2(0, -6f * s), mid, to + new Vector2(0, -6f * s) }, GsNote.WithAlpha(0.35f), 0.9f * s, true);
                 }
                 break;
             }
@@ -239,7 +239,7 @@ public partial class ShipView
                 var to = gaze is Vector2 gz ? (gz - head).Normalized() : f;
                 var hp = body + to * rr * 1.2f;
                 ci.DrawLine(body + sd * rr * 0.5f * hs, hp, RoleCloth(c.Role).Darkened(0.15f), 2f * s, true);
-                ci.DrawCircle(hp, 1.5f * s, GsHand, true, -1f, true);
+                ci.Circle(hp, 1.5f * s, GsHand, true, -1f, true);
                 var en = new Vector2(-to.Y, to.X);
                 ci.DrawLine(head + to * rr * 0.3f + en * 2.2f * s, head + to * rr * 0.4f + en * 0.6f * s, new Color("#3b2a20"), 0.9f * s, true);
                 ci.DrawLine(head + to * rr * 0.3f - en * 2.2f * s, head + to * rr * 0.4f - en * 0.6f * s, new Color("#3b2a20"), 0.9f * s, true);
@@ -262,10 +262,10 @@ public partial class ShipView
             {
                 // 손가락 위에서 도는 펜
                 var hp = body + f * rr * 0.8f + sd * rr * 0.6f * hs;
-                ci.DrawCircle(hp, 1.3f * s, hand, true, -1f, true);
+                ci.Circle(hp, 1.3f * s, hand, true, -1f, true);
                 var a = Vector2.FromAngle(t * 9f);
                 ci.DrawLine(hp - a * 2.6f * s, hp + a * 2.6f * s, new Color("#2f5fb0"), 0.9f * s, true);
-                ci.DrawCircle(hp + a * 2.6f * s, 0.45f * s, new Color("#d0d0d0"), true, -1f, true);
+                ci.Circle(hp + a * 2.6f * s, 0.45f * s, new Color("#d0d0d0"), true, -1f, true);
                 break;
             }
             case Tic.LegBounce:
@@ -274,7 +274,7 @@ public partial class ShipView
                 var fp = body - f * rr * 0.2f + sd * rr * 0.45f;
                 float k = Mathf.Sin(t * 28f) * 1.2f * s;
                 for (int i = 0; i < 3; i++) ci.DrawLine(fp + f * (i * 1.4f) * s + new Vector2(0, k), fp + f * (i * 1.4f) * s + new Vector2(0, k + 1.6f * s), new Color(1, 1, 1, 0.55f), 0.8f * s, true);
-                ci.DrawCircle(fp + new Vector2(0, k), 1.2f * s, new Color("#2a2a2a"), true, -1f, true);
+                ci.Circle(fp + new Vector2(0, k), 1.2f * s, new Color("#2a2a2a"), true, -1f, true);
                 break;
             }
             case Tic.NailBite:
@@ -282,19 +282,19 @@ public partial class ShipView
                 // 입에 댄 손 + 깨문 손톱 초승달 (불안)
                 var mp = head + f * rr * 0.5f;
                 ci.DrawLine(body + sd * rr * 0.6f * hs, mp, cl, 2.2f * s, true);
-                ci.DrawCircle(mp, 1.5f * s, hand, true, -1f, true);
-                ci.DrawArc(mp + f * 1.2f * s, 1f * s, f.Angle() - 1.2f, f.Angle() + 1.2f, 5, new Color("#f0f0f0"), 0.7f * s, true);
-                ci.DrawArc(head, rr * 0.75f, -1.2f + Mathf.Sin(t * 6f) * 0.2f, -0.6f, 5, new Color(1f, 0.5f, 0.4f, 0.5f), 0.8f * s, true);
+                ci.Circle(mp, 1.5f * s, hand, true, -1f, true);
+                ci.Arc(mp + f * 1.2f * s, 1f * s, f.Angle() - 1.2f, f.Angle() + 1.2f, 5, new Color("#f0f0f0"), 0.7f * s, true);
+                ci.Arc(head, rr * 0.75f, -1.2f + Mathf.Sin(t * 6f) * 0.2f, -0.6f, 5, new Color(1f, 0.5f, 0.4f, 0.5f), 0.8f * s, true);
                 break;
             }
             case Tic.Whistle:
             {
                 // 오므린 입 (작은 동그라미) + 흘러나가는 물결선
                 var mp = head + f * rr * 0.55f;
-                ci.DrawCircle(mp, 0.9f * s, new Color("#7a3a32"), false, 0.6f * s, true);
+                ci.Circle(mp, 0.9f * s, new Color("#7a3a32"), false, 0.6f * s, true);
                 var pts = new Vector2[8];
                 for (int i = 0; i < 8; i++) pts[i] = mp + f * (1.5f + i * 1.3f) * s + sd * Mathf.Sin(t * 8f + i * 1.1f) * 1.2f * s;
-                ci.DrawPolyline(pts, new Color(0.8f, 0.95f, 1f, 0.6f), 0.8f * s, true);
+                ci.Polyline(pts, new Color(0.8f, 0.95f, 1f, 0.6f), 0.8f * s, true);
                 break;
             }
             case Tic.HairTouch:
@@ -302,8 +302,8 @@ public partial class ShipView
                 // 머리를 쓰는 손 + 손가락 사이 말린 머리칼 (스트레스면 쥐어뜯는다)
                 var hp = head - f * rr * 0.1f + sd * rr * 0.55f * hs;
                 ci.DrawLine(body + sd * rr * 0.6f * hs, hp, cl, 2.2f * s, true);
-                ci.DrawCircle(hp, 1.6f * s, hand, true, -1f, true);
-                ci.DrawArc(hp + sd * 1.4f * s * hs, 1.6f * s, t * 3f, t * 3f + 4.2f, 8, new Color("#3b2a20"), 0.8f * s, true);
+                ci.Circle(hp, 1.6f * s, hand, true, -1f, true);
+                ci.Arc(hp + sd * 1.4f * s * hs, 1.6f * s, t * 3f, t * 3f + 4.2f, 8, new Color("#3b2a20"), 0.8f * s, true);
                 if (stressed) for (int i = 0; i < 2; i++) ci.DrawLine(hp + new Vector2(-1.5f + i * 3f, -2f) * s, hp + new Vector2(-2f + i * 4f, -3.6f) * s, new Color(1f, 0.5f, 0.4f, 0.6f), 0.7f * s, true);
                 break;
             }
@@ -311,8 +311,8 @@ public partial class ShipView
             {
                 // 맞댄 두 주먹 + 딱 하는 불똥 선
                 var hp = body + f * rr * 0.95f;
-                ci.DrawCircle(hp + sd * 1.3f * s, 1.5f * s, hand, true, -1f, true);
-                ci.DrawCircle(hp - sd * 1.3f * s, 1.5f * s, hand.Darkened(0.1f), true, -1f, true);
+                ci.Circle(hp + sd * 1.3f * s, 1.5f * s, hand, true, -1f, true);
+                ci.Circle(hp - sd * 1.3f * s, 1.5f * s, hand.Darkened(0.1f), true, -1f, true);
                 if (Mathf.PosMod(t * 2f, 1f) < 0.3f)
                     for (int i = 0; i < 4; i++) { var d = Vector2.FromAngle(i * Mathf.Pi / 2f + 0.4f); ci.DrawLine(hp + d * 2.4f * s, hp + d * 3.6f * s, new Color(1f, 1f, 0.8f, 0.8f), 0.7f * s, true); }
                 break;
@@ -324,9 +324,9 @@ public partial class ShipView
             {
                 // 손가락 톡톡: 손 곁의 점 셋이 차례로 튄다
                 var hp = body + f * rr * 0.85f + sd * rr * 0.5f * hs;
-                ci.DrawCircle(hp, 1.4f * s, hand, true, -1f, true);
+                ci.Circle(hp, 1.4f * s, hand, true, -1f, true);
                 int on = (int)(t * 8f) % 3;
-                for (int i = 0; i < 3; i++) ci.DrawCircle(hp + f * 2.6f * s + sd * (i - 1) * 1.4f * s, (i == on ? 0.8f : 0.45f) * s, new Color(1, 1, 1, i == on ? 0.9f : 0.4f), true, -1f, true);
+                for (int i = 0; i < 3; i++) ci.Circle(hp + f * 2.6f * s + sd * (i - 1) * 1.4f * s, (i == on ? 0.8f : 0.45f) * s, new Color(1, 1, 1, i == on ? 0.9f : 0.4f), true, -1f, true);
                 break;
             }
             case Tic.RubNeck:
@@ -334,8 +334,8 @@ public partial class ShipView
                 // 목 뒤로 넘긴 손 + 주무르는 짧은 호
                 var np = head - f * rr * 0.55f;
                 ci.DrawLine(body + sd * rr * 0.6f * hs, np + sd * 1f * s * hs, cl, 2.2f * s, true);
-                ci.DrawCircle(np, 1.5f * s, hand, true, -1f, true);
-                ci.DrawArc(np, 2.8f * s, -f.Angle() + t * 5f, -f.Angle() + t * 5f + 1.2f, 5, new Color(1, 1, 1, 0.45f), 0.7f * s, true);
+                ci.Circle(np, 1.5f * s, hand, true, -1f, true);
+                ci.Arc(np, 2.8f * s, -f.Angle() + t * 5f, -f.Angle() + t * 5f + 1.2f, 5, new Color(1, 1, 1, 0.45f), 0.7f * s, true);
                 break;
             }
             case Tic.CollarTug:
@@ -345,14 +345,14 @@ public partial class ShipView
                 var tug = Mathf.Abs(Mathf.Sin(t * 5f)) * 1.4f * s;
                 ci.DrawLine(cp + sd * 1.8f * s, cp + f * (2f * s + tug), new Color("#f0ece0"), 1f * s, true);
                 ci.DrawLine(cp - sd * 1.8f * s, cp + f * (2f * s + tug), new Color("#f0ece0"), 1f * s, true);
-                ci.DrawCircle(cp + f * (2.2f * s + tug), 1.2f * s, hand, true, -1f, true);
+                ci.Circle(cp + f * (2.2f * s + tug), 1.2f * s, hand, true, -1f, true);
                 break;
             }
             case Tic.LipBite:
             {
                 // 깨문 아랫입술 (붉은 짧은 호) + 턱의 긴장 선
                 var mp = head + f * rr * 0.5f;
-                ci.DrawArc(mp, 1.4f * s, f.Angle() + 0.6f, f.Angle() + 2.5f, 6, new Color("#b0413a"), 1f * s, true);
+                ci.Arc(mp, 1.4f * s, f.Angle() + 0.6f, f.Angle() + 2.5f, 6, new Color("#b0413a"), 1f * s, true);
                 ci.DrawLine(mp + sd * 2.2f * s, mp + sd * 2.6f * s - f * 1.2f * s, new Color(1f, 0.5f, 0.4f, 0.5f), 0.7f * s, true);
                 ci.DrawLine(mp - sd * 2.2f * s, mp - sd * 2.6f * s - f * 1.2f * s, new Color(1f, 0.5f, 0.4f, 0.5f), 0.7f * s, true);
                 break;
@@ -363,8 +363,8 @@ public partial class ShipView
                 float k = 0.8f + 0.2f * Mathf.Sin(t * 2f);
                 ci.DrawLine(body + sd * rr * 0.5f, body + (sd + f * 0.3f) * rr * 1.7f * k, cl, 2.2f * s, true);
                 ci.DrawLine(body - sd * rr * 0.5f, body + (-sd + f * 0.3f) * rr * 1.7f * k, cl, 2.2f * s, true);
-                ci.DrawCircle(body + (sd + f * 0.3f) * rr * 1.7f * k, 1.3f * s, hand, true, -1f, true);
-                ci.DrawCircle(body + (-sd + f * 0.3f) * rr * 1.7f * k, 1.3f * s, hand, true, -1f, true);
+                ci.Circle(body + (sd + f * 0.3f) * rr * 1.7f * k, 1.3f * s, hand, true, -1f, true);
+                ci.Circle(body + (-sd + f * 0.3f) * rr * 1.7f * k, 1.3f * s, hand, true, -1f, true);
                 break;
             }
         }
@@ -375,27 +375,27 @@ public partial class ShipView
         var d = f.Rotated(tilt);
         var n = new Vector2(-d.Y, d.X);
         var pts = new[] { at - n * 1.8f * s - d * 1.6f * s, at + n * 1.8f * s - d * 1.6f * s, at + n * 1.8f * s + d * 1.6f * s, at - n * 1.8f * s + d * 1.6f * s };
-        ci.DrawColoredPolygon(pts, new Color("#e9e4da"));
-        ci.DrawCircle(at + d * 1.6f * s, 1.5f * s, GsCoffee, true, -1f, true);
-        ci.DrawArc(at + n * 2.4f * s, 1f * s, n.Angle() - 1.5f, n.Angle() + 1.5f, 5, new Color("#c9c2b4"), 0.7f * s, true);
-        if (tilt < 0.1f) ci.DrawArc(at + d * 3.4f * s, 1.2f * s, d.Angle() - 0.8f, d.Angle() + 0.8f, 4, new Color(1, 1, 1, 0.4f), 0.6f * s, true); // 김
+        ci.Poly(pts, new Color("#e9e4da"));
+        ci.Circle(at + d * 1.6f * s, 1.5f * s, GsCoffee, true, -1f, true);
+        ci.Arc(at + n * 2.4f * s, 1f * s, n.Angle() - 1.5f, n.Angle() + 1.5f, 5, new Color("#c9c2b4"), 0.7f * s, true);
+        if (tilt < 0.1f) ci.Arc(at + d * 3.4f * s, 1.2f * s, d.Angle() - 0.8f, d.Angle() + 0.8f, 4, new Color(1, 1, 1, 0.4f), 0.6f * s, true); // 김
     }
 
     private static void PaintWrench(CanvasItem ci, Vector2 at, Vector2 dir, float s)
     {
         var d = dir.LengthSquared() > 1e-4f ? dir.Normalized() : Vector2.Right;
         ci.DrawLine(at - d * 2.6f * s, at + d * 2f * s, new Color("#9aa4ad"), 1.1f * s, true);
-        ci.DrawArc(at + d * 2.6f * s, 1.1f * s, d.Angle() - 2.2f, d.Angle() + 2.2f, 6, new Color("#9aa4ad"), 0.9f * s, true);
-        ci.DrawCircle(at - d * 1.6f * s, 0.9f * s, GsHand, true, -1f, true);
+        ci.Arc(at + d * 2.6f * s, 1.1f * s, d.Angle() - 2.2f, d.Angle() + 2.2f, 6, new Color("#9aa4ad"), 0.9f * s, true);
+        ci.Circle(at - d * 1.6f * s, 0.9f * s, GsHand, true, -1f, true);
     }
 
     private static void PaintNote(CanvasItem ci, Vector2 at, float s, Color col, bool two)
     {
-        ci.DrawCircle(at, 1.3f * s, col, true, -1f, true);
+        ci.Circle(at, 1.3f * s, col, true, -1f, true);
         ci.DrawLine(at + new Vector2(1.2f, 0) * s, at + new Vector2(1.2f, -4.5f) * s, col, 0.8f * s, true);
         if (!two) { ci.DrawLine(at + new Vector2(1.2f, -4.5f) * s, at + new Vector2(3f, -3.2f) * s, col, 0.8f * s, true); return; }
         var b = at + new Vector2(4f, 0.8f) * s;
-        ci.DrawCircle(b, 1.3f * s, col, true, -1f, true);
+        ci.Circle(b, 1.3f * s, col, true, -1f, true);
         ci.DrawLine(b + new Vector2(1.2f, 0) * s, b + new Vector2(1.2f, -4.5f) * s, col, 0.8f * s, true);
         ci.DrawLine(at + new Vector2(1.2f, -4.5f) * s, b + new Vector2(1.2f, -4.5f) * s, col, 1.2f * s, true);
     }
@@ -404,6 +404,6 @@ public partial class ShipView
     {
         float len = (b - a).Length();
         int n = Mathf.Clamp((int)(len / (3f * s)), 1, 24);
-        for (int i = 1; i <= n; i++) ci.DrawCircle(a.Lerp(b, i / (float)(n + 1)), 0.55f * s, col, true, -1f, true);
+        for (int i = 1; i <= n; i++) ci.Circle(a.Lerp(b, i / (float)(n + 1)), 0.55f * s, col, true, -1f, true);
     }
 }

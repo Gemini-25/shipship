@@ -41,8 +41,8 @@ public partial class ShipView
                 float ph = Mathf.PosMod(_time * 0.12f + i * 0.37f, 1f);
                 var p = c + new Vector2(Mathf.Sin(_time * 0.5f + i) * 5f, -ph * 14f);
                 float a = s * 0.35f * Mathf.Sin(ph * Mathf.Pi);
-                ci.DrawArc(p, 3f + 4f * ph, ph * 4f, ph * 4f + 4.2f, 10, AfSoot.WithAlpha(a), 1.4f, true);
-                ci.DrawArc(p + new Vector2(3f, -2f), 2f + 3f * ph, -ph * 3f, -ph * 3f + 3.5f, 8, AfSoot.WithAlpha(a * 0.7f), 1f, true);
+                ci.Arc(p, 3f + 4f * ph, ph * 4f, ph * 4f + 4.2f, 10, AfSoot.WithAlpha(a), 1.4f, true);
+                ci.Arc(p + new Vector2(3f, -2f), 2f + 3f * ph, -ph * 3f, -ph * 3f + 3.5f, 8, AfSoot.WithAlpha(a * 0.7f), 1f, true);
             }
         }
         // 다른 방에서 먹은 자리: 쟁반
@@ -54,8 +54,8 @@ public partial class ShipView
             var c = CellRect(at).GetCenter() + new Vector2(6f, 5f);
             var tray = new Rect2(c - new Vector2(6f, 4f), new Vector2(12f, 8f));
             Gfx.RoundRect(ci, tray, new Color(0.62f, 0.66f, 0.7f, a), 2f, new Color(0.3f, 0.32f, 0.36f, a));
-            ci.DrawCircle(c + new Vector2(-1.5f, 0f), 2.6f, new Color(0.95f, 0.95f, 0.92f, a));
-            ci.DrawCircle(c + new Vector2(-1.5f, 0f), 1.4f, new Color(0.78f, 0.6f, 0.35f, a * 0.8f));
+            ci.Circle(c + new Vector2(-1.5f, 0f), 2.6f, new Color(0.95f, 0.95f, 0.92f, a));
+            ci.Circle(c + new Vector2(-1.5f, 0f), 1.4f, new Color(0.78f, 0.6f, 0.35f, a * 0.8f));
             ci.DrawLine(c + new Vector2(3f, -2.5f), c + new Vector2(3.5f, 2.5f), new Color(0.82f, 0.84f, 0.86f, a), 0.9f, true);
         }
         // 빨랫줄 고리 (흔적) · 널어 둔 침구
@@ -104,11 +104,11 @@ public partial class ShipView
             float flick = 0.92f + 0.08f * Mathf.Sin(_time * 7f + lm.Id);
             if (dark)
             {
-                for (int k = 4; k >= 1; k--) ci.DrawCircle(c, T * 0.55f * k, AfWarm.WithAlpha(0.07f * flick));
-                ci.DrawCircle(c, 5f, AfWarm.WithAlpha(0.5f * flick));
+                for (int k = 4; k >= 1; k--) ci.Circle(c, T * 0.55f * k, AfWarm.WithAlpha(0.07f * flick));
+                ci.Circle(c, 5f, AfWarm.WithAlpha(0.5f * flick));
             }
             // 전선이 탁자 모서리로 늘어진다
-            ci.DrawPolyline(new[] { c + new Vector2(2f, 4f), c + new Vector2(7f, 9f), c + new Vector2(13f, 9f) }, AfInk.WithAlpha(0.6f), 0.8f, true);
+            ci.Polyline(new[] { c + new Vector2(2f, 4f), c + new Vector2(7f, 9f), c + new Vector2(13f, 9f) }, AfInk.WithAlpha(0.6f), 0.8f, true);
         }
     }
 
@@ -131,8 +131,8 @@ public partial class ShipView
         foreach (float dx in new[] { -9f, 9f })
         {
             var p = c + new Vector2(dx, 0f);
-            ci.DrawCircle(p, 1.6f, new Color(0.62f, 0.64f, 0.68f, a));
-            ci.DrawArc(p + new Vector2(0f, 2f), 1.8f, 0f, Mathf.Pi, 6, new Color(0.45f, 0.47f, 0.5f, a), 0.9f, true);
+            ci.Circle(p, 1.6f, new Color(0.62f, 0.64f, 0.68f, a));
+            ci.Arc(p + new Vector2(0f, 2f), 1.8f, 0f, Mathf.Pi, 6, new Color(0.45f, 0.47f, 0.5f, a), 0.9f, true);
         }
     }
 
@@ -159,8 +159,8 @@ public partial class ShipView
             float wave = Mathf.Sin(u * Mathf.Tau * 1.5f + _time * 0.8f + l.Id) * 1.4f;
             pts[n * 2 - 1 - i] = top + dir * (depth + wave) + side * sway * u;
         }
-        ci.DrawColoredPolygon(pts, col.WithAlpha(0.92f));
-        ci.DrawPolyline(pts.Skip(n).Append(pts[0]).ToArray(), col.Darkened(0.35f).WithAlpha(0.8f), 0.7f, true);
+        ci.Poly(pts, col.WithAlpha(0.92f));
+        ci.Polyline(pts.Skip(n).Append(pts[0]).ToArray(), col.Darkened(0.35f).WithAlpha(0.8f), 0.7f, true);
         // 줄무늬 (침구 무늬)
         for (int k = 1; k < 4; k++)
         {
@@ -171,7 +171,7 @@ public partial class ShipView
         foreach (float u in new[] { 0.15f, 0.85f })
         {
             var p = a.Lerp(b, u);
-            ci.DrawRect(new Rect2(p - new Vector2(1f, 1.5f), new Vector2(2f, 3.5f)), new Color(0.75f, 0.55f, 0.3f));
+            ci.Box(new Rect2(p - new Vector2(1f, 1.5f), new Vector2(2f, 3.5f)), new Color(0.75f, 0.55f, 0.3f));
         }
         // 젖었으면 물방울이 떨어진다
         if (wet > 0.25f && fine)
@@ -179,16 +179,16 @@ public partial class ShipView
             {
                 float ph = Mathf.PosMod(_time * 0.9f + k * 0.33f + l.Id * 0.1f, 1f);
                 var p = a.Lerp(b, 0.25f + 0.25f * k) + dir * (depth + 1f + ph * 8f);
-                ci.DrawCircle(p, 0.9f, new Color(0.55f, 0.75f, 0.95f, 0.8f * (1f - ph) * wet));
+                ci.Circle(p, 0.9f, new Color(0.55f, 0.75f, 0.95f, 0.8f * (1f - ph) * wet));
             }
     }
 
     private void AfNote(CanvasItem ci, Vector2 c, int thrown, int kept, bool fine)
     {
         var r = new Rect2(c - new Vector2(5f, 6f), new Vector2(10f, 12f));
-        ci.DrawRect(r, AfPaper);
-        ci.DrawRect(r, new Color(0.55f, 0.52f, 0.45f, 0.8f), false, 0.6f);
-        ci.DrawRect(new Rect2(r.Position + new Vector2(2.5f, -1.5f), new Vector2(5f, 2.6f)), AfTape.WithAlpha(0.85f)); // 테이프
+        ci.Box(r, AfPaper);
+        ci.Box(r, new Color(0.55f, 0.52f, 0.45f, 0.8f), false, 0.6f);
+        ci.Box(new Rect2(r.Position + new Vector2(2.5f, -1.5f), new Vector2(5f, 2.6f)), AfTape.WithAlpha(0.85f)); // 테이프
         for (int i = 0; i < 3; i++) ci.DrawLine(r.Position + new Vector2(1.5f, 3.5f + i * 2.4f), r.Position + new Vector2(8.5f - i, 3.5f + i * 2.4f), AfInk.WithAlpha(0.55f), 0.5f);
         int x = Mathf.Min(thrown, 3);
         for (int i = 0; i < x; i++)
@@ -197,21 +197,21 @@ public partial class ShipView
             ci.DrawLine(p - new Vector2(0.9f, 0.9f), p + new Vector2(0.9f, 0.9f), AfRed, 0.7f, true);
             ci.DrawLine(p + new Vector2(-0.9f, 0.9f), p + new Vector2(0.9f, -0.9f), AfRed, 0.7f, true);
         }
-        if (kept > 0 && fine) ci.DrawArc(r.End - new Vector2(2f, 2f), 1.2f, 0f, Mathf.Tau, 6, new Color(0.3f, 0.6f, 0.35f), 0.6f, true);
+        if (kept > 0 && fine) ci.Arc(r.End - new Vector2(2f, 2f), 1.2f, 0f, Mathf.Tau, 6, new Color(0.3f, 0.6f, 0.35f), 0.6f, true);
     }
 
     private void AfCup(CanvasItem ci, Vector2 c, int id)
     {
         var body = new Rect2(c - new Vector2(2.6f, 2.8f), new Vector2(5.2f, 5.6f));
-        ci.DrawRect(body, new Color(0.9f, 0.88f, 0.82f));
-        ci.DrawRect(body, new Color(0.35f, 0.33f, 0.3f, 0.8f), false, 0.6f);
-        ci.DrawArc(c + new Vector2(3.4f, 0f), 1.6f, -Mathf.Pi / 2f, Mathf.Pi / 2f, 6, new Color(0.35f, 0.33f, 0.3f, 0.9f), 0.8f, true);
+        ci.Box(body, new Color(0.9f, 0.88f, 0.82f));
+        ci.Box(body, new Color(0.35f, 0.33f, 0.3f, 0.8f), false, 0.6f);
+        ci.Arc(c + new Vector2(3.4f, 0f), 1.6f, -Mathf.Pi / 2f, Mathf.Pi / 2f, 6, new Color(0.35f, 0.33f, 0.3f, 0.9f), 0.8f, true);
         ci.DrawLine(body.Position + new Vector2(0.6f, 1f), body.Position + new Vector2(4.6f, 1f), new Color(0.35f, 0.22f, 0.12f, 0.8f), 0.8f); // 비어 있지 않은 컵
         float ph = Mathf.PosMod(_time * 0.25f + id * 0.17f, 1f);
         if (ph < 0.35f) // 아주 가끔 김
         {
             float a = Mathf.Sin(ph / 0.35f * Mathf.Pi) * 0.45f;
-            ci.DrawArc(c + new Vector2(0f, -5f - ph * 10f), 1.5f, 0f, Mathf.Pi, 5, new Color(1f, 1f, 1f, a), 0.7f, true);
+            ci.Arc(c + new Vector2(0f, -5f - ph * 10f), 1.5f, 0f, Mathf.Pi, 5, new Color(1f, 1f, 1f, a), 0.7f, true);
         }
     }
 
@@ -222,9 +222,9 @@ public partial class ShipView
         for (int k = 0; k < 5; k++)
         {
             float ang = k * Mathf.Tau / 5f;
-            ci.DrawCircle(c + new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * 2f, 1.5f, petal);
+            ci.Circle(c + new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * 2f, 1.5f, petal);
         }
-        ci.DrawCircle(c, 1.1f, new Color(0.95f, 0.85f, 0.4f));
+        ci.Circle(c, 1.1f, new Color(0.95f, 0.85f, 0.4f));
         // 접은 종이 자국
         ci.DrawLine(c + new Vector2(-2.5f, -0.5f), c + new Vector2(2.5f, 0.5f), petal.Darkened(0.25f), 0.4f);
     }
@@ -233,8 +233,8 @@ public partial class ShipView
     {
         // 그을린 귀퉁이 (일부러 남긴 것)
         var corner = c + new Vector2(-5.5f, -4.5f);
-        ci.DrawColoredPolygon(new[] { corner, corner + new Vector2(5f, 0f), corner + new Vector2(0f, 4.5f) }, new Color(0.12f, 0.08f, 0.05f, 0.85f));
-        ci.DrawPolyline(new[] { corner + new Vector2(5f, 0f), corner + new Vector2(3.4f, 1.6f), corner + new Vector2(2.2f, 2.4f), corner + new Vector2(0f, 4.5f) }, new Color(0.45f, 0.25f, 0.1f, 0.8f), 0.6f, true);
+        ci.Poly(new[] { corner, corner + new Vector2(5f, 0f), corner + new Vector2(0f, 4.5f) }, new Color(0.12f, 0.08f, 0.05f, 0.85f));
+        ci.Polyline(new[] { corner + new Vector2(5f, 0f), corner + new Vector2(3.4f, 1.6f), corner + new Vector2(2.2f, 2.4f), corner + new Vector2(0f, 4.5f) }, new Color(0.45f, 0.25f, 0.1f, 0.8f), 0.6f, true);
         // 새 붓자국
         var h = Mathf.PosMod(rp.Prop * 0.29f, 1f);
         for (int k = 0; k < 3; k++)
@@ -247,9 +247,9 @@ public partial class ShipView
         {
             // 서명 둘: 떠난 사람 · 이어 그린 사람
             var s0 = c + new Vector2(1.5f, 3.6f);
-            ci.DrawPolyline(new[] { s0, s0 + new Vector2(0.8f, -0.8f), s0 + new Vector2(1.6f, 0f), s0 + new Vector2(2.4f, -0.8f) }, Palette.Crew(rp.Maker).WithAlpha(0.9f), 0.5f, true);
+            ci.Polyline(new[] { s0, s0 + new Vector2(0.8f, -0.8f), s0 + new Vector2(1.6f, 0f), s0 + new Vector2(2.4f, -0.8f) }, Palette.Crew(rp.Maker).WithAlpha(0.9f), 0.5f, true);
             var s1 = s0 + new Vector2(0f, 1.4f);
-            ci.DrawPolyline(new[] { s1, s1 + new Vector2(1f, -0.6f), s1 + new Vector2(2f, 0.2f), s1 + new Vector2(3f, -0.5f) }, Palette.Crew(rp.Painter).WithAlpha(0.9f), 0.5f, true);
+            ci.Polyline(new[] { s1, s1 + new Vector2(1f, -0.6f), s1 + new Vector2(2f, 0.2f), s1 + new Vector2(3f, -0.5f) }, Palette.Crew(rp.Painter).WithAlpha(0.9f), 0.5f, true);
         }
     }
 
@@ -273,7 +273,7 @@ public partial class ShipView
                 for (int k = 0; k < 3; k++)
                 {
                     var q = p + new Vector2(-rad * 0.9f + k * rad * 0.9f, rad * 0.55f + Mathf.Sin(t + k) * 1.5f);
-                    ci.DrawArc(q, rad * 0.45f, Mathf.Pi * 1.1f, Mathf.Pi * 1.9f, 6, new Color(0.75f, 0.78f, 0.9f, 0.55f), 1f, true);
+                    ci.Arc(q, rad * 0.45f, Mathf.Pi * 1.1f, Mathf.Pi * 1.9f, 6, new Color(0.75f, 0.78f, 0.9f, 0.55f), 1f, true);
                 }
                 float jit = Mathf.Sin(t * 3f) * 1.2f;
                 ci.DrawLine(p + new Vector2(rad + 1f, -2f + jit), p + new Vector2(rad + 4f, -4f + jit), new Color(0.9f, 0.9f, 1f, 0.45f), 0.8f, true);
@@ -282,7 +282,7 @@ public partial class ShipView
             {
                 // 놀라 일어나 앉았다: 머리가 위로 · 숨 고르는 짧은 선
                 var head = p + new Vector2(0f, -rad * 0.9f);
-                ci.DrawCircle(head, rad * 0.42f, Palette.Crew(c.Id).WithAlpha(0.85f));
+                ci.Circle(head, rad * 0.42f, Palette.Crew(c.Id).WithAlpha(0.85f));
                 for (int k = -1; k <= 1; k++)
                     ci.DrawLine(head + new Vector2(k * 3f, -rad * 0.55f), head + new Vector2(k * 4.5f, -rad * 0.95f), new Color(1f, 1f, 1f, 0.6f), 0.8f, true);
             }
@@ -304,8 +304,8 @@ public partial class ShipView
             var h = ToPx(who.Position) + new Vector2(-rad * 0.85f, rad * 0.1f);
             // 들고 가는 독서등 (갓 · 기둥 · 늘어진 전선)
             ci.DrawLine(h + new Vector2(0f, 4f), h + new Vector2(0f, -1f), AfInk, 1f, true);
-            ci.DrawColoredPolygon(new[] { h + new Vector2(-3f, -1f), h + new Vector2(3f, -1f), h + new Vector2(2f, -4.5f), h + new Vector2(-2f, -4.5f) }, AfWarm);
-            ci.DrawPolyline(new[] { h + new Vector2(0f, 4f), h + new Vector2(2f, 7f), h + new Vector2(-1f, 9f) }, AfInk.WithAlpha(0.7f), 0.7f, true);
+            ci.Poly(new[] { h + new Vector2(-3f, -1f), h + new Vector2(3f, -1f), h + new Vector2(2f, -4.5f), h + new Vector2(-2f, -4.5f) }, AfWarm);
+            ci.Polyline(new[] { h + new Vector2(0f, 4f), h + new Vector2(2f, 7f), h + new Vector2(-1f, 9f) }, AfInk.WithAlpha(0.7f), 0.7f, true);
         }
     }
 }

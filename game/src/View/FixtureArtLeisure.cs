@@ -70,7 +70,7 @@ public static partial class FixtureArt
             var tint = BeamWhite.Lerp(frame < 0.33f ? new Color("#9ac8ff") : frame < 0.66f ? new Color("#ffc89a") : new Color("#b0ffb8"), 0.35f);
             float flick = 0.85f + 0.15f * Mathf.Sin(x.T * 23f);
             float len = ShipView.T * 2.6f;
-            ci.DrawPolygon(new[] { lens - side * 2f, lens + side * 2f, lens + f * len + side * 18f, lens + f * len - side * 18f },
+            ci.Polygon(new[] { lens - side * 2f, lens + side * 2f, lens + f * len + side * 18f, lens + f * len - side * 18f },
                 new[] { tint.WithAlpha(0.3f * flick * x.Glow), tint.WithAlpha(0.3f * flick * x.Glow), tint.WithAlpha(0f), tint.WithAlpha(0f) }); // 빛 원뿔
             Dot(ci, lens, 2f, tint.WithAlpha(x.Glow));
             if (x.Lod > 0)
@@ -101,22 +101,22 @@ public static partial class FixtureArt
         float rr = Mathf.Min(x.B.Size.X, x.B.Size.Y) * 0.52f;
         var oct = new Vector2[8];
         for (int k = 0; k < 8; k++) oct[k] = x.C + Vector2.FromAngle(Mathf.Pi / 8f + k * Mathf.Tau / 8f) * rr;
-        ci.DrawColoredPolygon(oct, Wood); // 나무 테
+        ci.Poly(oct, Wood); // 나무 테
         var felt = new Vector2[8];
         for (int k = 0; k < 8; k++) felt[k] = x.C + Vector2.FromAngle(Mathf.Pi / 8f + k * Mathf.Tau / 8f) * (rr - 2.5f);
-        ci.DrawColoredPolygon(felt, FeltGreen); // 펠트
+        ci.Poly(felt, FeltGreen); // 펠트
         float cell = rr * 0.28f;
         for (int i = 0; i < 4; i++) // 가운데 판
             for (int j = 0; j < 4; j++)
-                if ((i + j) % 2 == 0) ci.DrawRect(new Rect2(x.C + new Vector2((i - 2) * cell * 0.5f, (j - 2) * cell * 0.5f), new Vector2(cell * 0.5f, cell * 0.5f)), new Color("#e8e2d4").WithAlpha(0.7f));
+                if ((i + j) % 2 == 0) ci.Box(new Rect2(x.C + new Vector2((i - 2) * cell * 0.5f, (j - 2) * cell * 0.5f), new Vector2(cell * 0.5f, cell * 0.5f)), new Color("#e8e2d4").WithAlpha(0.7f));
         for (int k = 0; k < 3; k++) // 칩 더미
         {
             var p = x.C + Vector2.FromAngle(k * 2.1f + 0.4f) * rr * 0.62f;
             for (int s = 0; s < 3; s++) Dot(ci, p + new Vector2(0f, -s * 0.8f), 1.8f, (k == 0 ? new Color("#c0392b") : k == 1 ? new Color("#2a5aa8") : new Color("#e8e2d4")).Darkened(s * 0.08f));
         }
         var card = x.C + new Vector2(rr * 0.5f, -rr * 0.3f); // 카드 두 장
-        ci.DrawRect(new Rect2(card, new Vector2(2.5f, 3.5f)), Colors.White);
-        ci.DrawRect(new Rect2(card + new Vector2(1.5f, 1f), new Vector2(2.5f, 3.5f)), new Color("#f0e8e0"));
+        ci.Box(new Rect2(card, new Vector2(2.5f, 3.5f)), Colors.White);
+        ci.Box(new Rect2(card + new Vector2(1.5f, 1f), new Vector2(2.5f, 3.5f)), new Color("#f0e8e0"));
     }
 
     private static void GameTableLife(in Fix x)
@@ -132,7 +132,7 @@ public static partial class FixtureArt
             var p = x.C + new Vector2(-rr * 0.5f + k * 4f, rr * 0.35f) + (roll < 0.2f ? new Vector2(roll * 20f, -Mathf.Sin(roll * 15f) * 2f) : Vector2.Zero);
             var d = Vector2.FromAngle(a) * 1.6f;
             var n = new Vector2(-d.Y, d.X);
-            ci.DrawColoredPolygon(new[] { p - d - n, p + d - n, p + d + n, p - d + n }, Colors.White);
+            ci.Poly(new[] { p - d - n, p + d - n, p + d + n, p - d + n }, Colors.White);
             if (x.Lod > 0) Dot(ci, p, 0.5f, new Color("#1a1a1a"));
         }
         if (players > 0 && x.Lod == 2) Dot(ci, x.C + Vector2.FromAngle(x.T) * rr * 0.62f, 0.7f, Colors.White.WithAlpha(0.5f)); // 칩 반짝
@@ -155,7 +155,7 @@ public static partial class FixtureArt
         for (int row = 0; row < 3; row++)
         {
             float v0 = 0.08f + row * 0.31f, v1 = v0 + 0.27f;
-            ci.DrawRect(x.Q(0.04f, v1, 0.96f, v1 + 0.03f), Wood.Lightened(0.1f)); // 선반 판
+            ci.Box(x.Q(0.04f, v1, 0.96f, v1 + 0.03f), Wood.Lightened(0.1f)); // 선반 판
             float u = 0.05f;
             int i = 0;
             while (u < 0.9f) // 책등 (두께 · 높이 · 색이 다르다)
@@ -164,13 +164,13 @@ public static partial class FixtureArt
                 float h = 0.6f + Hash(x.Id, row * 20 + i, 122) * 0.4f;
                 if (u + w > 0.94f) break;
                 var col = SpineColors[(int)(Hash(x.Id, row * 20 + i, 123) * SpineColors.Length) % SpineColors.Length];
-                ci.DrawRect(x.Q(u, v1 - (v1 - v0) * h, u + w - 0.008f, v1), col);
+                ci.Box(x.Q(u, v1 - (v1 - v0) * h, u + w - 0.008f, v1), col);
                 u += w;
                 i++;
                 if (Hash(x.Id, row * 20 + i, 124) > 0.85f) u += 0.05f; // 빈틈
             }
         }
-        ci.DrawRect(x.Q(0.88f, 0.1f, 0.94f, 0.35f), new Color("#6a6f79")); // 북엔드
+        ci.Box(x.Q(0.88f, 0.1f, 0.94f, 0.35f), new Color("#6a6f79")); // 북엔드
         Dot(ci, x.P(0.12f, 0.05f), 2.2f, new Color("#7a4a2a")); // 화분
         Dot(ci, x.P(0.12f, 0.03f), 2f, Leaf);
     }
@@ -183,7 +183,7 @@ public static partial class FixtureArt
             int row = (int)(Hash(x.Id, (int)(x.T * 0.01f), 125) * 3f);
             float v1 = 0.08f + row * 0.31f + 0.27f;
             float u = 0.3f + Hash(x.Id, row, 126) * 0.4f;
-            ci.DrawRect(x.Q(u, v1 - 0.22f, u + 0.06f, v1), new Color("#120c08"));
+            ci.Box(x.Q(u, v1 - 0.22f, u + 0.06f, v1), new Color("#120c08"));
         }
         if (x.Lod == 2) // 빛 속 먼지 한 톨
         {
@@ -206,12 +206,12 @@ public static partial class FixtureArt
         var ci = x.Ci;
         Box(ci, x.B, new Color("#1a1e24"), 3, new Color("#6a7080"), 2); // 테
         var tank = x.B.Grow(-2.5f);
-        ci.DrawRect(tank, AquaWater);
+        ci.Box(tank, AquaWater);
         for (int i = 0; i < 22; i++) // 자갈
             Dot(ci, tank.Position + new Vector2(Hash(x.Id, i, 131), Hash(x.Id, i, 132)) * tank.Size, 0.6f + 0.6f * Hash(x.Id, i, 133), new Color("#c8b890").Darkened(Hash(x.Id, i, 134) * 0.4f).WithAlpha(0.7f));
         Dot(ci, tank.Position + tank.Size * new Vector2(0.75f, 0.7f), 3f, new Color("#5a6270")); // 바위
         Dot(ci, tank.Position + tank.Size * new Vector2(0.68f, 0.78f), 2f, new Color("#4a5260"));
-        ci.DrawRect(new Rect2(tank.End - new Vector2(6f, 5f), new Vector2(5f, 4f)), new Color("#2a2e36")); // 여과기
+        ci.Box(new Rect2(tank.End - new Vector2(6f, 5f), new Vector2(5f, 4f)), new Color("#2a2e36")); // 여과기
         Dot(ci, tank.Position + new Vector2(4f, tank.Size.Y - 4f), 1.4f, new Color("#8a929e")); // 기포석
     }
 
@@ -225,7 +225,7 @@ public static partial class FixtureArt
             var root = tank.Position + new Vector2(tank.Size.X * (0.2f + k * 0.15f), tank.Size.Y * 0.85f);
             var pts = new Vector2[4];
             for (int i = 0; i < 4; i++) pts[i] = root + new Vector2(Mathf.Sin(x.T * 1.2f + i * 0.8f + k) * i * 0.8f, -i * tank.Size.Y * 0.14f);
-            ci.DrawPolyline(pts, Leaf.WithAlpha(0.85f), 1.2f, true);
+            ci.Polyline(pts, Leaf.WithAlpha(0.85f), 1.2f, true);
         }
         int fish = x.Lod == 0 ? 2 : 4;
         for (int k = 0; k < fish; k++) // 물고기
@@ -236,10 +236,10 @@ public static partial class FixtureArt
             float dir = Mathf.Cos(a) >= 0f ? 1f : -1f;
             var col = FishColors[k % FishColors.Length];
             ci.DrawSetTransform(p, 0f, new Vector2(1f, 0.55f));
-            ci.DrawCircle(Vector2.Zero, 2f, col, true, -1f, true);
+            ci.Circle(Vector2.Zero, 2f, col, true, -1f, true);
             ci.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
             float wag = Mathf.Sin(x.T * 9f + k) * 0.8f;
-            ci.DrawColoredPolygon(new[] { p - new Vector2(dir * 1.6f, 0f), p - new Vector2(dir * 3.6f, -1.6f + wag), p - new Vector2(dir * 3.6f, 1.6f + wag) }, col.Darkened(0.2f));
+            ci.Poly(new[] { p - new Vector2(dir * 1.6f, 0f), p - new Vector2(dir * 3.6f, -1.6f + wag), p - new Vector2(dir * 3.6f, 1.6f + wag) }, col.Darkened(0.2f));
         }
         if (x.On)
             for (int k = 0; k < (x.Lod == 0 ? 1 : 3); k++) // 기포
@@ -247,8 +247,8 @@ public static partial class FixtureArt
                 float ph = Mathf.PosMod(x.T * 0.5f + k / 3f, 1f);
                 Dot(ci, tank.Position + new Vector2(4f + Mathf.Sin(ph * 10f) * 1f, tank.Size.Y - 4f - ph * tank.Size.Y * 0.85f), 0.6f + ph * 0.5f, Colors.White.WithAlpha(0.6f * (1f - ph)));
             }
-        if (murky) ci.DrawRect(tank, new Color("#5a6a3a").WithAlpha(0.35f)); // 여과기가 막혀 물이 흐리다
-        else if (x.Lit) ci.DrawRect(new Rect2(tank.Position, new Vector2(tank.Size.X, 2f)), new Color("#bfe8ff").WithAlpha(0.25f * x.Glow)); // 위 조명
+        if (murky) ci.Box(tank, new Color("#5a6a3a").WithAlpha(0.35f)); // 여과기가 막혀 물이 흐리다
+        else if (x.Lit) ci.Box(new Rect2(tank.Position, new Vector2(tank.Size.X, 2f)), new Color("#bfe8ff").WithAlpha(0.25f * x.Glow)); // 위 조명
     }
 
     private static void AquariumFine(in Fix x)
@@ -271,7 +271,7 @@ public static partial class FixtureArt
         Line(ci, x.P(0.22f, 0.85f), x.P(0.98f, 0.85f), Chrome.WithAlpha(0.7f), 1.4f);
         Box(ci, x.Q(0.0f, 0.1f, 0.2f, 0.9f), new Color("#2a2e36"), 2, new Color("#6a7080")); // 모터 덮개 · 계기
         Line(ci, x.P(0.2f, 0.02f), x.P(0.2f, 0.98f), new Color("#8a929e"), 2f); // 손잡이
-        ci.DrawRect(x.Q(0.04f, 0.3f, 0.16f, 0.7f), GlassDark); // 계기 화면
+        ci.Box(x.Q(0.04f, 0.3f, 0.16f, 0.7f), GlassDark); // 계기 화면
     }
 
     private static void TreadmillLife(in Fix x)
@@ -290,7 +290,7 @@ public static partial class FixtureArt
             for (int k = 0; k < 3; k++) // 속도 막대
             {
                 bool on = runner ? (int)(x.T * 2f) % 3 >= k : k == 0;
-                ci.DrawRect(x.Q(0.06f, 0.62f - k * 0.12f, 0.14f, 0.68f - k * 0.12f), (on ? Good : new Color("#1a2a22")).WithAlpha(x.Glow));
+                ci.Box(x.Q(0.06f, 0.62f - k * 0.12f, 0.14f, 0.68f - k * 0.12f), (on ? Good : new Color("#1a2a22")).WithAlpha(x.Glow));
             }
             if (runner) Led(ci, x.P(0.1f, 0.22f), Danger, Pulse(x.T, 7f), 0.8f); // 심박
         }
@@ -321,7 +321,7 @@ public static partial class FixtureArt
         Dot(ci, x.P(1.0f, 0.08f), 1.6f, Brass);
         Dot(ci, x.P(0.02f, 0.6f), 1.2f, Brass); // 묶는 고리
         Dot(ci, x.P(0.98f, 0.6f), 1.2f, Brass);
-        ci.DrawRect(x.Q(0.04f, 0.14f, 0.96f, 0.92f), new Color("#0a0c14").WithAlpha(0.35f)); // 창 자리 그늘
+        ci.Box(x.Q(0.04f, 0.14f, 0.96f, 0.92f), new Color("#0a0c14").WithAlpha(0.35f)); // 창 자리 그늘
     }
 
     private static void CurtainLife(in Fix x)
@@ -338,10 +338,10 @@ public static partial class FixtureArt
                 float u = s == 0 ? a * span : 1f - a * span;
                 float w = span / (folds / 2) * 0.55f;
                 var col = (k % 2 == 0 ? CurtainCloth : CurtainCloth.Lightened(0.12f));
-                ci.DrawRect(x.Q(u - w + sway, 0.1f, u + w + sway, closed ? 0.95f : 0.8f), col); // 주름
+                ci.Box(x.Q(u - w + sway, 0.1f, u + w + sway, closed ? 0.95f : 0.8f), col); // 주름
             }
         if (!closed && x.Lod > 0) // 열려 있으면 가운데로 빛이 든다
-            ci.DrawRect(x.Q(0.2f, 0.14f, 0.8f, 0.9f), new Color("#d8e8ff").WithAlpha(0.05f));
+            ci.Box(x.Q(0.2f, 0.14f, 0.8f, 0.9f), new Color("#d8e8ff").WithAlpha(0.05f));
         for (int k = 0; k < 6; k++) Dot(ci, x.P(closed ? 0.04f + k * 0.18f : (k < 3 ? 0.02f + k * 0.05f : 0.88f + (k - 3) * 0.05f), 0.08f), 0.9f, Brass); // 봉 고리
     }
 
@@ -358,10 +358,10 @@ public static partial class FixtureArt
     private static void DamperBody(in Fix x)
     {
         var ci = x.Ci;
-        ci.DrawRect(new Rect2(x.R.Position.X + 3f, x.R.Position.Y + 1f, x.R.Size.X - 6f, 2f), new Color("#3a4454")); // 붙이는 띠
+        ci.Box(new Rect2(x.R.Position.X + 3f, x.R.Position.Y + 1f, x.R.Size.X - 6f, 2f), new Color("#3a4454")); // 붙이는 띠
         Box(ci, x.B, new Color("#2a2a32"), 2, new Color("#4a4a56"), 2);
         foreach (var p in new[] { x.B.Position, new Vector2(x.B.End.X - 3f, x.B.Position.Y), new Vector2(x.B.Position.X, x.B.End.Y - 3f), x.B.End - new Vector2(3f, 3f) })
-            ci.DrawRect(new Rect2(p, new Vector2(3f, 3f)), new Color("#5a5a66")); // 모서리 집게
+            ci.Box(new Rect2(p, new Vector2(3f, 3f)), new Color("#5a5a66")); // 모서리 집게
         int n = 4;
         float cw = x.B.Size.X / n, chh = x.B.Size.Y / n;
         for (int i = 0; i < n; i++)
@@ -372,10 +372,10 @@ public static partial class FixtureArt
                 var tr = c + new Vector2(cw * 0.45f, -chh * 0.45f);
                 var bl = c + new Vector2(-cw * 0.45f, chh * 0.45f);
                 var br = c + new Vector2(cw * 0.45f, chh * 0.45f);
-                ci.DrawColoredPolygon(new[] { tl, tr, c }, new Color("#4a4a58"));
-                ci.DrawColoredPolygon(new[] { tl, c, bl }, new Color("#3e3e4a"));
-                ci.DrawColoredPolygon(new[] { tr, br, c }, new Color("#24242c"));
-                ci.DrawColoredPolygon(new[] { bl, c, br }, new Color("#1c1c22"));
+                ci.Poly(new[] { tl, tr, c }, new Color("#4a4a58"));
+                ci.Poly(new[] { tl, c, bl }, new Color("#3e3e4a"));
+                ci.Poly(new[] { tr, br, c }, new Color("#24242c"));
+                ci.Poly(new[] { bl, c, br }, new Color("#1c1c22"));
             }
     }
 
@@ -390,7 +390,7 @@ public static partial class FixtureArt
         {
             float ph = Mathf.PosMod(x.T * 0.7f + k / 3f, 1f);
             float a = Mathf.Atan2(-x.Front.Y, -x.Front.X);
-            ci.DrawArc(src, (1f - ph) * x.B.Size.X * 0.9f + 2f, a - 0.6f, a + 0.6f, 8, new Color("#c8c8ff").WithAlpha(0.35f * noise * ph), 1f, true);
+            ci.Arc(src, (1f - ph) * x.B.Size.X * 0.9f + 2f, a - 0.6f, a + 0.6f, 8, new Color("#c8c8ff").WithAlpha(0.35f * noise * ph), 1f, true);
         }
     }
 

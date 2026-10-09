@@ -43,8 +43,8 @@ public partial class ShipView
                 for (int k = 0; k < 3; k++)
                 {
                     float ph = Mathf.PosMod(_time * 0.8f + k / 3f, 1f);
-                    ci.DrawArc(c, T * (0.6f + 2.2f * ph), -0.9f, 0.9f, 20, col.WithAlpha(0.7f * (1f - ph)), 1.5f, true);
-                    ci.DrawArc(c, T * (0.6f + 2.2f * ph), Mathf.Pi - 0.9f, Mathf.Pi + 0.9f, 20, col.WithAlpha(0.7f * (1f - ph)), 1.5f, true);
+                    ci.Arc(c, T * (0.6f + 2.2f * ph), -0.9f, 0.9f, 20, col.WithAlpha(0.7f * (1f - ph)), 1.5f, true);
+                    ci.Arc(c, T * (0.6f + 2.2f * ph), Mathf.Pi - 0.9f, Mathf.Pi + 0.9f, 20, col.WithAlpha(0.7f * (1f - ph)), 1.5f, true);
                 }
             }
         }
@@ -61,11 +61,11 @@ public partial class ShipView
             center - along * len * 0.5f - side * wid * 0.5f, center + along * len * 0.35f - side * wid * 0.5f,
             center + along * len * 0.55f, center + along * len * 0.35f + side * wid * 0.5f, center - along * len * 0.5f + side * wid * 0.5f,
         };
-        ci.DrawColoredPolygon(pts, new Color("#2a2f38").WithAlpha(alpha));
+        ci.Poly(pts, new Color("#2a2f38").WithAlpha(alpha));
         for (int i = 0; i < pts.Length; i++) ci.DrawLine(pts[i], pts[(i + 1) % pts.Length], accent.WithAlpha(0.9f * alpha), 1.5f, true);
         // 도킹 고리와 깜박이는 표시등
         ci.DrawLine(center - along * len * 0.5f, center - along * len * 0.78f, new Color("#8b949e").WithAlpha(alpha), 3f);
-        ci.DrawCircle(center + side * wid * 0.25f, 2.2f, accent.WithAlpha((0.5f + 0.5f * Mathf.Sin(_time * 5f)) * alpha), true, -1f, true);
+        ci.Circle(center + side * wid * 0.25f, 2.2f, accent.WithAlpha((0.5f + 0.5f * Mathf.Sin(_time * 5f)) * alpha), true, -1f, true);
         Gfx.TextCentered(ci, Fonts.Bold, center + along * len * 0.9f + new Vector2(0, 4), label, 10, accent.WithAlpha(alpha));
         _ = ang;
     }

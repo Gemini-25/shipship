@@ -141,30 +141,30 @@ public static class InfoArt
         {
             case 0: // 키 큰 머그
                 r = new Rect2(c.X - s * 0.45f, c.Y - s * 0.65f, s * 0.9f, s * 1.3f);
-                ci.DrawRect(r, body);
-                ci.DrawArc(c + new Vector2(hs * s * 0.62f, 0f), s * 0.32f, -Mathf.Pi / 2f, Mathf.Pi / 2f, 8, body.Darkened(0.2f), 1.4f, true);
+                ci.Box(r, body);
+                ci.Arc(c + new Vector2(hs * s * 0.62f, 0f), s * 0.32f, -Mathf.Pi / 2f, Mathf.Pi / 2f, 8, body.Darkened(0.2f), 1.4f, true);
                 break;
             case 1: // 받침 있는 찻잔
             {
                 ci.DrawLine(new Vector2(c.X - s * 0.8f, c.Y + s * 0.5f), new Vector2(c.X + s * 0.8f, c.Y + s * 0.5f), body.Darkened(0.3f), 1.6f, true);
                 var bowl = new[] { new Vector2(c.X - s * 0.6f, c.Y - s * 0.35f), new Vector2(c.X + s * 0.6f, c.Y - s * 0.35f), new Vector2(c.X + s * 0.4f, c.Y + s * 0.4f), new Vector2(c.X - s * 0.4f, c.Y + s * 0.4f) };
-                ci.DrawColoredPolygon(bowl, body);
-                ci.DrawArc(c + new Vector2(hs * s * 0.62f, -s * 0.02f), s * 0.22f, -Mathf.Pi / 2f, Mathf.Pi / 2f, 6, body.Darkened(0.2f), 1.2f, true);
+                ci.Poly(bowl, body);
+                ci.Arc(c + new Vector2(hs * s * 0.62f, -s * 0.02f), s * 0.22f, -Mathf.Pi / 2f, Mathf.Pi / 2f, 6, body.Darkened(0.2f), 1.2f, true);
                 r = new Rect2(c.X - s * 0.6f, c.Y - s * 0.35f, s * 1.2f, s * 0.75f);
                 break;
             }
             case 2: // 법랑 캠핑 컵 (검은 테 · 이 빠진 자국)
                 r = new Rect2(c.X - s * 0.55f, c.Y - s * 0.45f, s * 1.1f, s * 0.95f);
-                ci.DrawRect(r, body.Lightened(0.35f));
+                ci.Box(r, body.Lightened(0.35f));
                 ci.DrawLine(new Vector2(r.Position.X, r.Position.Y), new Vector2(r.End.X, r.Position.Y), ink, 1.3f);
-                ci.DrawCircle(new Vector2(r.Position.X + s * 0.3f, r.Position.Y + 0.6f), 0.9f, ink);
-                ci.DrawArc(c + new Vector2(hs * s * 0.72f, -s * 0.05f), s * 0.28f, -Mathf.Pi / 2f, Mathf.Pi / 2f, 8, ink.WithAlpha(0.7f), 1.1f, true);
+                ci.Circle(new Vector2(r.Position.X + s * 0.3f, r.Position.Y + 0.6f), 0.9f, ink);
+                ci.Arc(c + new Vector2(hs * s * 0.72f, -s * 0.05f), s * 0.28f, -Mathf.Pi / 2f, Mathf.Pi / 2f, 8, ink.WithAlpha(0.7f), 1.1f, true);
                 break;
             default: // 뚜껑 달린 텀블러
             {
                 var poly = new[] { new Vector2(c.X - s * 0.42f, c.Y - s * 0.7f), new Vector2(c.X + s * 0.42f, c.Y - s * 0.7f), new Vector2(c.X + s * 0.3f, c.Y + s * 0.7f), new Vector2(c.X - s * 0.3f, c.Y + s * 0.7f) };
-                ci.DrawColoredPolygon(poly, body);
-                ci.DrawRect(new Rect2(c.X - s * 0.47f, c.Y - s * 0.85f, s * 0.94f, s * 0.22f), body.Darkened(0.35f));
+                ci.Poly(poly, body);
+                ci.Box(new Rect2(c.X - s * 0.47f, c.Y - s * 0.85f, s * 0.94f, s * 0.22f), body.Darkened(0.35f));
                 r = new Rect2(c.X - s * 0.4f, c.Y - s * 0.6f, s * 0.8f, s * 1.2f);
                 break;
             }
@@ -177,10 +177,10 @@ public static class InfoArt
                 for (int i = 1; i <= 2; i++) { float y = r.Position.Y + r.Size.Y * i / 3f; ci.DrawLine(new Vector2(r.Position.X + 0.5f, y), new Vector2(r.End.X - 0.5f, y), pat, 1f); }
                 break;
             case 1:
-                for (int i = 0; i < 4; i++) ci.DrawCircle(new Vector2(r.Position.X + r.Size.X * (0.25f + 0.5f * (i % 2)), r.Position.Y + r.Size.Y * (0.3f + 0.4f * (i / 2))), 0.8f, pat);
+                for (int i = 0; i < 4; i++) ci.Circle(new Vector2(r.Position.X + r.Size.X * (0.25f + 0.5f * (i % 2)), r.Position.Y + r.Size.Y * (0.3f + 0.4f * (i / 2))), 0.8f, pat);
                 break;
             case 2:
-                ci.DrawRect(new Rect2(r.Position.X, r.Position.Y + r.Size.Y * 0.4f, r.Size.X, r.Size.Y * 0.22f), pat);
+                ci.Box(new Rect2(r.Position.X, r.Position.Y + r.Size.Y * 0.4f, r.Size.X, r.Size.Y * 0.22f), pat);
                 break;
             default:
                 Star(ci, r.GetCenter(), s * 0.3f, pat);
@@ -193,7 +193,7 @@ public static class InfoArt
             {
                 float t = (time * 0.6f + i * 0.5f + b.Id * 0.13f) % 1f;
                 var p0 = c + new Vector2(-1.5f + 3f * i + Mathf.Sin(t * 6f + i) * 1.5f, -s * 0.9f - t * 7f);
-                ci.DrawCircle(p0, 1.2f + t, new Color(1f, 1f, 1f, 0.25f * (1f - t) * steam));
+                ci.Circle(p0, 1.2f + t, new Color(1f, 1f, 1f, 0.25f * (1f - t) * steam));
             }
     }
 
@@ -210,7 +210,7 @@ public static class InfoArt
             int segs = 4;
             int shown = Math.Max(1, (int)Math.Ceiling(segs * Math.Clamp(progress, 0f, 1f)));
             for (int i = 0; i <= shown; i++) pts.Add(c + new Vector2(-s * 0.5f + s * i / segs, y0 + (H(id, k * 10 + i) - 0.5f) * s * 0.4f));
-            if (pts.Count >= 2) ci.DrawPolyline(pts.ToArray(), gold, 0.9f, true);
+            if (pts.Count >= 2) ci.Polyline(pts.ToArray(), gold, 0.9f, true);
         }
     }
 
@@ -236,9 +236,9 @@ public static class InfoArt
                 float a = rot + Mathf.Tau * j / corners + (H(i, j + b.Id) - 0.5f) * 0.8f;
                 poly[j] = p + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * sz * (0.6f + 0.6f * H(j, i + k.Id));
             }
-            ci.DrawColoredPolygon(poly, i % 3 == 0 ? body.Lightened(0.35f) : body);
+            ci.Poly(poly, i % 3 == 0 ? body.Lightened(0.35f) : body);
             ci.DrawLine(poly[0], poly[1], new Color(1f, 1f, 1f, 0.6f), 0.7f, true); // 유약이 반짝인다
-            if (i == 0) ci.DrawArc(p + new Vector2(sz * 0.9f, 0f), sz * 0.7f, -Mathf.Pi / 2f, Mathf.Pi / 2f, 6, body.Darkened(0.2f), 1.2f, true); // 손잡이가 붙은 조각
+            if (i == 0) ci.Arc(p + new Vector2(sz * 0.9f, 0f), sz * 0.7f, -Mathf.Pi / 2f, Mathf.Pi / 2f, 6, body.Darkened(0.2f), 1.2f, true); // 손잡이가 붙은 조각
         }
         // 깨진 순간: 짧게 튀는 선
         if (ageSec >= 0f && ageSec < 1.4f)
@@ -260,7 +260,7 @@ public static class InfoArt
             float a = Mathf.Tau * i / pts.Length;
             pts[i] = c + new Vector2(Mathf.Cos(a), Mathf.Sin(a) * 0.7f) * r * (0.7f + 0.5f * H(seed, i));
         }
-        ci.DrawColoredPolygon(pts, col);
+        ci.Poly(pts, col);
     }
 
     private static void Star(CanvasItem ci, Vector2 c, float r, Color col)
@@ -272,7 +272,7 @@ public static class InfoArt
             float rr = i % 2 == 0 ? r : r * 0.45f;
             pts[i] = c + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * rr;
         }
-        ci.DrawColoredPolygon(pts, col);
+        ci.Poly(pts, col);
     }
 
     // ───────────────────────────── 사진 ─────────────────────────────
@@ -282,8 +282,8 @@ public static class InfoArt
     {
         int frame = p.Taker % 4;
         var fcol = frame switch { 0 => new Color(0.55f, 0.37f, 0.2f), 1 => new Color(0.12f, 0.12f, 0.14f), 2 => new Color(0.92f, 0.9f, 0.86f), _ => new Color(0.78f, 0.62f, 0.3f) };
-        ci.DrawRect(r.Grow(1.6f), new Color(0f, 0f, 0f, 0.35f));
-        ci.DrawRect(r.Grow(1.2f), fcol);
+        ci.Box(r.Grow(1.6f), new Color(0f, 0f, 0f, 0.35f));
+        ci.Box(r.Grow(1.2f), fcol);
         var img = r.Grow(-0.6f);
         bool window = p.Scene == PhotoScene.Window;
         var bg = window ? new Color(0.04f, 0.05f, 0.12f) : p.Place switch
@@ -294,20 +294,20 @@ public static class InfoArt
             RoomType.Bridge => new Color(0.2f, 0.28f, 0.45f),
             _ => new Color(0.5f, 0.55f, 0.6f),
         };
-        ci.DrawRect(img, bg);
+        ci.Box(img, bg);
         if (window)
         {
             // 별 · 성운 (사진마다 다른 하늘)
             var neb = Color.FromHsv(H(p.Id, 3), 0.6f, 0.8f, 0.45f);
             DrawBlob(ci, img.Position + img.Size * new Vector2(0.35f + 0.3f * H(p.Id, 1), 0.45f), img.Size.Y * 0.32f, neb, p.Id);
             DrawBlob(ci, img.Position + img.Size * new Vector2(0.6f, 0.55f + 0.2f * H(p.Id, 2)), img.Size.Y * 0.2f, neb.Lightened(0.3f).WithAlpha(0.35f), p.Id + 5);
-            for (int i = 0; i < 12; i++) ci.DrawRect(new Rect2(img.Position + img.Size * new Vector2(H(p.Id, i + 10), H(p.Id, i + 30)), new Vector2(0.8f, 0.8f)), new Color(1f, 1f, 0.95f, 0.5f + 0.5f * H(i, p.Id)));
+            for (int i = 0; i < 12; i++) ci.Box(new Rect2(img.Position + img.Size * new Vector2(H(p.Id, i + 10), H(p.Id, i + 30)), new Vector2(0.8f, 0.8f)), new Color(1f, 1f, 0.95f, 0.5f + 0.5f * H(i, p.Id)));
         }
         else
         {
             // 바닥 · 식탁 선
             float floorY = img.Position.Y + img.Size.Y * 0.72f;
-            ci.DrawRect(new Rect2(img.Position.X, floorY, img.Size.X, img.End.Y - floorY), bg.Darkened(0.25f));
+            ci.Box(new Rect2(img.Position.X, floorY, img.Size.X, img.End.Y - floorY), bg.Darkened(0.25f));
             int n = Math.Max(1, p.People.Length);
             for (int i = 0; i < p.People.Length; i++)
             {
@@ -316,10 +316,10 @@ public static class InfoArt
                 float x = img.Position.X + img.Size.X * (i + 0.5f) / n;
                 float y = floorY - img.Size.Y * (0.08f + 0.06f * ((i + p.Id) % 2));
                 float hr = Math.Max(1.1f, img.Size.Y * 0.11f);
-                ci.DrawArc(new Vector2(x, y + hr * 2.1f), hr * 1.5f, Mathf.Pi, Mathf.Tau, 8, pc, hr * 1.2f);
-                ci.DrawCircle(new Vector2(x, y), hr, new Color(0.93f, 0.8f, 0.68f));
-                ci.DrawArc(new Vector2(x, y - hr * 0.1f), hr, Mathf.Pi * 1.05f, Mathf.Tau * 0.97f, 6, Hair(id), hr * 0.7f);
-                if (p.Scene == PhotoScene.Work) ci.DrawArc(new Vector2(x, y - hr * 0.3f), hr * 1.05f, Mathf.Pi, Mathf.Tau, 6, new Color(0.98f, 0.8f, 0.2f), hr * 0.6f); // 안전모
+                ci.Arc(new Vector2(x, y + hr * 2.1f), hr * 1.5f, Mathf.Pi, Mathf.Tau, 8, pc, hr * 1.2f);
+                ci.Circle(new Vector2(x, y), hr, new Color(0.93f, 0.8f, 0.68f));
+                ci.Arc(new Vector2(x, y - hr * 0.1f), hr, Mathf.Pi * 1.05f, Mathf.Tau * 0.97f, 6, Hair(id), hr * 0.7f);
+                if (p.Scene == PhotoScene.Work) ci.Arc(new Vector2(x, y - hr * 0.3f), hr * 1.05f, Mathf.Pi, Mathf.Tau, 6, new Color(0.98f, 0.8f, 0.2f), hr * 0.6f); // 안전모
                 if (w.Crew.FirstOrDefault(c => c.Id == id) is { Dead: true } && detail) ci.DrawLine(new Vector2(x - hr, y - hr * 1.6f), new Vector2(x + hr, y - hr * 1.6f), new Color(0f, 0f, 0f, 0.6f), 0.6f);
             }
             switch (p.Scene)
@@ -327,34 +327,34 @@ public static class InfoArt
                 case PhotoScene.Birthday:
                 {
                     var cake = new Rect2(img.GetCenter().X - img.Size.X * 0.14f, floorY - img.Size.Y * 0.08f, img.Size.X * 0.28f, img.Size.Y * 0.16f);
-                    ci.DrawRect(cake, new Color(0.98f, 0.94f, 0.88f));
-                    ci.DrawRect(new Rect2(cake.Position.X, cake.Position.Y + cake.Size.Y * 0.45f, cake.Size.X, cake.Size.Y * 0.18f), new Color(0.9f, 0.4f, 0.5f));
+                    ci.Box(cake, new Color(0.98f, 0.94f, 0.88f));
+                    ci.Box(new Rect2(cake.Position.X, cake.Position.Y + cake.Size.Y * 0.45f, cake.Size.X, cake.Size.Y * 0.18f), new Color(0.9f, 0.4f, 0.5f));
                     for (int i = 0; i < 3; i++)
                     {
                         float cx = cake.Position.X + cake.Size.X * (0.25f + 0.25f * i);
                         ci.DrawLine(new Vector2(cx, cake.Position.Y), new Vector2(cx, cake.Position.Y - 2f), new Color(0.5f, 0.75f, 0.95f), 0.6f);
-                        ci.DrawCircle(new Vector2(cx, cake.Position.Y - 2.6f), 0.7f + 0.2f * Mathf.Sin(time * 9f + i), new Color(1f, 0.85f, 0.3f));
+                        ci.Circle(new Vector2(cx, cake.Position.Y - 2.6f), 0.7f + 0.2f * Mathf.Sin(time * 9f + i), new Color(1f, 0.85f, 0.3f));
                     }
-                    for (int i = 0; i < 5; i++) ci.DrawRect(new Rect2(img.Position + img.Size * new Vector2(H(p.Id, i), 0.08f + 0.2f * H(i, p.Id)), new Vector2(1f, 1f)), Color.FromHsv(H(i, 7), 0.7f, 1f)); // 종이 꽃가루
+                    for (int i = 0; i < 5; i++) ci.Box(new Rect2(img.Position + img.Size * new Vector2(H(p.Id, i), 0.08f + 0.2f * H(i, p.Id)), new Vector2(1f, 1f)), Color.FromHsv(H(i, 7), 0.7f, 1f)); // 종이 꽃가루
                     break;
                 }
                 case PhotoScene.Meal:
                     ci.DrawLine(new Vector2(img.Position.X, floorY - 1f), new Vector2(img.End.X, floorY - 1f), new Color(0.45f, 0.3f, 0.18f), 1.4f);
                     break;
                 case PhotoScene.Work:
-                    ci.DrawCircle(img.Position + img.Size * new Vector2(0.85f, 0.25f), 1.4f + 0.6f * Mathf.Sin(time * 5f), new Color(1f, 0.9f, 0.5f, 0.8f)); // 용접 불꽃
+                    ci.Circle(img.Position + img.Size * new Vector2(0.85f, 0.25f), 1.4f + 0.6f * Mathf.Sin(time * 5f), new Color(1f, 0.9f, 0.5f, 0.8f)); // 용접 불꽃
                     break;
                 default:
-                    ci.DrawRect(new Rect2(img.Position.X + img.Size.X * 0.1f, img.Position.Y + img.Size.Y * 0.12f, img.Size.X * 0.8f, 0.8f), bg.Lightened(0.3f)); // 벽의 띠
+                    ci.Box(new Rect2(img.Position.X + img.Size.X * 0.1f, img.Position.Y + img.Size.Y * 0.12f, img.Size.X * 0.8f, 0.8f), bg.Lightened(0.3f)); // 벽의 띠
                     break;
             }
         }
         // 가장자리를 조금 어둡게 · 반사
-        ci.DrawRect(new Rect2(img.Position, new Vector2(img.Size.X, 1f)), new Color(0f, 0f, 0f, 0.18f));
+        ci.Box(new Rect2(img.Position, new Vector2(img.Size.X, 1f)), new Color(0f, 0f, 0f, 0.18f));
         ci.DrawLine(img.Position + new Vector2(img.Size.X * 0.6f, 0f), img.Position + new Vector2(img.Size.X, img.Size.Y * 0.4f), new Color(1f, 1f, 1f, 0.12f), 1.4f);
         // 떠난 사람이 있는 사진: 액자 귀퉁이에 검은 리본
         if (p.People.Any(id => w.Crew.FirstOrDefault(c => c.Id == id) is { Dead: true }))
-            ci.DrawColoredPolygon(new[] { r.Position + new Vector2(-1.2f, -1.2f), r.Position + new Vector2(4f, -1.2f), r.Position + new Vector2(-1.2f, 4f) }, new Color(0.05f, 0.05f, 0.05f));
+            ci.Poly(new[] { r.Position + new Vector2(-1.2f, -1.2f), r.Position + new Vector2(4f, -1.2f), r.Position + new Vector2(-1.2f, 4f) }, new Color(0.05f, 0.05f, 0.05f));
     }
 
     private static Color Hair(int id) => (id * 7 % 5) switch { 0 => new Color(0.1f, 0.08f, 0.06f), 1 => new Color(0.35f, 0.22f, 0.12f), 2 => new Color(0.75f, 0.6f, 0.35f), 3 => new Color(0.55f, 0.55f, 0.58f), _ => new Color(0.6f, 0.25f, 0.15f) };
@@ -372,33 +372,33 @@ public static class InfoArt
         void Part(int idx, int total, Action<Color> draw) { draw(idx < Mathf.CeilToInt(progress * total - 0.001f) || progress >= 1f ? solid : ghost); }
         if (name.Contains("탐사선"))
         {
-            Part(0, 4, col => ci.DrawColoredPolygon(new[] { c + new Vector2(0, -s), c + new Vector2(s * 0.35f, -s * 0.3f), c + new Vector2(s * 0.35f, s * 0.6f), c + new Vector2(-s * 0.35f, s * 0.6f), c + new Vector2(-s * 0.35f, -s * 0.3f) }, col));
-            Part(1, 4, col => ci.DrawColoredPolygon(new[] { c + new Vector2(-s * 0.35f, s * 0.2f), c + new Vector2(-s * 0.75f, s * 0.75f), c + new Vector2(-s * 0.35f, s * 0.6f) }, col));
-            Part(2, 4, col => ci.DrawColoredPolygon(new[] { c + new Vector2(s * 0.35f, s * 0.2f), c + new Vector2(s * 0.75f, s * 0.75f), c + new Vector2(s * 0.35f, s * 0.6f) }, col));
-            Part(3, 4, col => ci.DrawCircle(c + new Vector2(0, -s * 0.2f), s * 0.16f, col == ghost ? ghost : new Color(0.6f, 0.85f, 1f)));
+            Part(0, 4, col => ci.Poly(new[] { c + new Vector2(0, -s), c + new Vector2(s * 0.35f, -s * 0.3f), c + new Vector2(s * 0.35f, s * 0.6f), c + new Vector2(-s * 0.35f, s * 0.6f), c + new Vector2(-s * 0.35f, -s * 0.3f) }, col));
+            Part(1, 4, col => ci.Poly(new[] { c + new Vector2(-s * 0.35f, s * 0.2f), c + new Vector2(-s * 0.75f, s * 0.75f), c + new Vector2(-s * 0.35f, s * 0.6f) }, col));
+            Part(2, 4, col => ci.Poly(new[] { c + new Vector2(s * 0.35f, s * 0.2f), c + new Vector2(s * 0.75f, s * 0.75f), c + new Vector2(s * 0.35f, s * 0.6f) }, col));
+            Part(3, 4, col => ci.Circle(c + new Vector2(0, -s * 0.2f), s * 0.16f, col == ghost ? ghost : new Color(0.6f, 0.85f, 1f)));
         }
         else if (name.Contains("화물선"))
         {
-            Part(0, 4, col => ci.DrawRect(new Rect2(c.X - s, c.Y - s * 0.2f, s * 2f, s * 0.55f), col));
-            for (int i = 0; i < 3; i++) { int ii = i; Part(1 + i, 4, col => ci.DrawRect(new Rect2(c.X - s * 0.8f + ii * s * 0.55f, c.Y - s * 0.6f, s * 0.45f, s * 0.38f), col == ghost ? ghost : Color.FromHsv(H(seed, ii), 0.55f, 0.85f))); }
+            Part(0, 4, col => ci.Box(new Rect2(c.X - s, c.Y - s * 0.2f, s * 2f, s * 0.55f), col));
+            for (int i = 0; i < 3; i++) { int ii = i; Part(1 + i, 4, col => ci.Box(new Rect2(c.X - s * 0.8f + ii * s * 0.55f, c.Y - s * 0.6f, s * 0.45f, s * 0.38f), col == ghost ? ghost : Color.FromHsv(H(seed, ii), 0.55f, 0.85f))); }
         }
         else if (name.Contains("등대"))
         {
-            Part(0, 3, col => ci.DrawColoredPolygon(new[] { c + new Vector2(-s * 0.3f, s * 0.8f), c + new Vector2(s * 0.3f, s * 0.8f), c + new Vector2(s * 0.18f, -s * 0.5f), c + new Vector2(-s * 0.18f, -s * 0.5f) }, col == ghost ? ghost : new Color(0.95f, 0.95f, 0.92f)));
-            Part(1, 3, col => { for (int i = 0; i < 2; i++) ci.DrawRect(new Rect2(c.X - s * 0.27f + i * s * 0.03f, c.Y + s * (0.05f + 0.35f * i), s * 0.54f - i * s * 0.06f, s * 0.14f), col == ghost ? ghost : new Color(0.85f, 0.2f, 0.2f)); });
-            Part(2, 3, col => ci.DrawCircle(c + new Vector2(0, -s * 0.65f), s * 0.18f, col == ghost ? ghost : new Color(1f, 0.9f, 0.4f, 0.7f + 0.3f * Mathf.Sin(time * 2f + seed))));
+            Part(0, 3, col => ci.Poly(new[] { c + new Vector2(-s * 0.3f, s * 0.8f), c + new Vector2(s * 0.3f, s * 0.8f), c + new Vector2(s * 0.18f, -s * 0.5f), c + new Vector2(-s * 0.18f, -s * 0.5f) }, col == ghost ? ghost : new Color(0.95f, 0.95f, 0.92f)));
+            Part(1, 3, col => { for (int i = 0; i < 2; i++) ci.Box(new Rect2(c.X - s * 0.27f + i * s * 0.03f, c.Y + s * (0.05f + 0.35f * i), s * 0.54f - i * s * 0.06f, s * 0.14f), col == ghost ? ghost : new Color(0.85f, 0.2f, 0.2f)); });
+            Part(2, 3, col => ci.Circle(c + new Vector2(0, -s * 0.65f), s * 0.18f, col == ghost ? ghost : new Color(1f, 0.9f, 0.4f, 0.7f + 0.3f * Mathf.Sin(time * 2f + seed))));
         }
         else if (name.Contains("정거장"))
         {
-            Part(0, 3, col => ci.DrawArc(c, s * 0.8f, 0f, Mathf.Tau, 18, col, 1.6f, true));
+            Part(0, 3, col => ci.Arc(c, s * 0.8f, 0f, Mathf.Tau, 18, col, 1.6f, true));
             Part(1, 3, col => { for (int i = 0; i < 3; i++) { float a = i * Mathf.Tau / 3f; ci.DrawLine(c, c + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * s * 0.8f, col, 1f); } });
-            Part(2, 3, col => ci.DrawCircle(c, s * 0.25f, col));
+            Part(2, 3, col => ci.Circle(c, s * 0.25f, col));
         }
         else if (name.Contains("범선"))
         {
-            Part(0, 3, col => ci.DrawColoredPolygon(new[] { c + new Vector2(-s, s * 0.2f), c + new Vector2(s, s * 0.2f), c + new Vector2(s * 0.6f, s * 0.6f), c + new Vector2(-s * 0.6f, s * 0.6f) }, col == ghost ? ghost : new Color(0.55f, 0.35f, 0.2f)));
+            Part(0, 3, col => ci.Poly(new[] { c + new Vector2(-s, s * 0.2f), c + new Vector2(s, s * 0.2f), c + new Vector2(s * 0.6f, s * 0.6f), c + new Vector2(-s * 0.6f, s * 0.6f) }, col == ghost ? ghost : new Color(0.55f, 0.35f, 0.2f)));
             Part(1, 3, col => ci.DrawLine(c + new Vector2(0, s * 0.2f), c + new Vector2(0, -s), ink, 1f));
-            Part(2, 3, col => ci.DrawColoredPolygon(new[] { c + new Vector2(0.5f, -s * 0.9f), c + new Vector2(s * 0.75f, s * 0.05f), c + new Vector2(0.5f, s * 0.05f) }, col == ghost ? ghost : new Color(0.96f, 0.94f, 0.88f)));
+            Part(2, 3, col => ci.Poly(new[] { c + new Vector2(0.5f, -s * 0.9f), c + new Vector2(s * 0.75f, s * 0.05f), c + new Vector2(0.5f, s * 0.05f) }, col == ghost ? ghost : new Color(0.96f, 0.94f, 0.88f)));
         }
         else if (name.Contains("장갑"))
         {
@@ -408,8 +408,8 @@ public static class InfoArt
                 Part(g, 2, col =>
                 {
                     var o = c + new Vector2((gg - 0.5f) * s * 0.9f, 0f);
-                    ci.DrawRect(new Rect2(o.X - s * 0.3f, o.Y - s * 0.2f, s * 0.6f, s * 0.7f), col);
-                    ci.DrawCircle(o + new Vector2(gg == 0 ? -s * 0.35f : s * 0.35f, 0f), s * 0.15f, col);
+                    ci.Box(new Rect2(o.X - s * 0.3f, o.Y - s * 0.2f, s * 0.6f, s * 0.7f), col);
+                    ci.Circle(o + new Vector2(gg == 0 ? -s * 0.35f : s * 0.35f, 0f), s * 0.15f, col);
                     for (int i = 0; i < 3; i++) ci.DrawLine(new Vector2(o.X - s * 0.25f, o.Y + s * 0.1f * i), new Vector2(o.X + s * 0.25f, o.Y + s * 0.1f * i), col.Darkened(0.25f), 0.6f); // 뜨개 결
                 });
             }
@@ -417,29 +417,29 @@ public static class InfoArt
         else if (name.Contains("나무 새"))
         {
             Part(0, 2, col => DrawBlob(ci, c, s * 0.6f, col == ghost ? ghost : new Color(0.7f, 0.5f, 0.3f), seed));
-            Part(1, 2, col => { ci.DrawColoredPolygon(new[] { c + new Vector2(s * 0.5f, -s * 0.2f), c + new Vector2(s * 0.9f, -s * 0.1f), c + new Vector2(s * 0.5f, 0f) }, col == ghost ? ghost : new Color(0.55f, 0.38f, 0.2f)); ci.DrawCircle(c + new Vector2(s * 0.3f, -s * 0.25f), 0.7f, ink); });
+            Part(1, 2, col => { ci.Poly(new[] { c + new Vector2(s * 0.5f, -s * 0.2f), c + new Vector2(s * 0.9f, -s * 0.1f), c + new Vector2(s * 0.5f, 0f) }, col == ghost ? ghost : new Color(0.55f, 0.38f, 0.2f)); ci.Circle(c + new Vector2(s * 0.3f, -s * 0.25f), 0.7f, ink); });
         }
         else if (name.Contains("악보") || name.Contains("책갈피"))
         {
-            Part(0, 2, col => ci.DrawRect(new Rect2(c.X - s * 0.45f, c.Y - s * 0.7f, s * 0.9f, s * 1.4f), col == ghost ? ghost : new Color(0.96f, 0.93f, 0.85f)));
+            Part(0, 2, col => ci.Box(new Rect2(c.X - s * 0.45f, c.Y - s * 0.7f, s * 0.9f, s * 1.4f), col == ghost ? ghost : new Color(0.96f, 0.93f, 0.85f)));
             Part(1, 2, col =>
             {
                 if (name.Contains("악보")) for (int i = 0; i < 4; i++) ci.DrawLine(new Vector2(c.X - s * 0.35f, c.Y - s * 0.4f + i * s * 0.25f), new Vector2(c.X + s * 0.35f, c.Y - s * 0.4f + i * s * 0.25f), ink.WithAlpha(0.6f), 0.5f);
-                else ci.DrawCircle(c + new Vector2(0, -s * 0.2f), s * 0.25f, col == ghost ? ghost : new Color(0.85f, 0.35f, 0.5f));
+                else ci.Circle(c + new Vector2(0, -s * 0.2f), s * 0.25f, col == ghost ? ghost : new Color(0.85f, 0.35f, 0.5f));
             });
         }
         else if (name.Contains("오르골"))
         {
-            Part(0, 2, col => ci.DrawRect(new Rect2(c.X - s * 0.6f, c.Y - s * 0.3f, s * 1.2f, s * 0.8f), col == ghost ? ghost : new Color(0.6f, 0.4f, 0.25f)));
-            Part(1, 2, col => { ci.DrawLine(c + new Vector2(s * 0.6f, 0f), c + new Vector2(s * 0.9f, -s * 0.2f), new Color(0.8f, 0.75f, 0.5f), 1.2f); if (col != ghost) ci.DrawCircle(c + new Vector2(0, -s * 0.5f - 2f * Mathf.Abs(Mathf.Sin(time * 2f))), 0.9f, new Color(1f, 0.95f, 0.7f, 0.7f)); });
+            Part(0, 2, col => ci.Box(new Rect2(c.X - s * 0.6f, c.Y - s * 0.3f, s * 1.2f, s * 0.8f), col == ghost ? ghost : new Color(0.6f, 0.4f, 0.25f)));
+            Part(1, 2, col => { ci.DrawLine(c + new Vector2(s * 0.6f, 0f), c + new Vector2(s * 0.9f, -s * 0.2f), new Color(0.8f, 0.75f, 0.5f), 1.2f); if (col != ghost) ci.Circle(c + new Vector2(0, -s * 0.5f - 2f * Mathf.Abs(Mathf.Sin(time * 2f))), 0.9f, new Color(1f, 0.95f, 0.7f, 0.7f)); });
         }
         else // 기관실 축소 모형
         {
-            Part(0, 3, col => ci.DrawRect(new Rect2(c.X - s * 0.8f, c.Y - s * 0.4f, s * 1.6f, s * 0.9f), col));
+            Part(0, 3, col => ci.Box(new Rect2(c.X - s * 0.8f, c.Y - s * 0.4f, s * 1.6f, s * 0.9f), col));
             Part(1, 3, col => { ci.DrawLine(c + new Vector2(-s * 0.6f, -s * 0.4f), c + new Vector2(-s * 0.6f, -s * 0.8f), new Color(0.75f, 0.75f, 0.8f), 1.2f); ci.DrawLine(c + new Vector2(-s * 0.6f, -s * 0.8f), c + new Vector2(s * 0.3f, -s * 0.8f), new Color(0.75f, 0.75f, 0.8f), 1.2f); });
-            Part(2, 3, col => ci.DrawCircle(c + new Vector2(s * 0.3f, 0f), s * 0.25f, col == ghost ? ghost : new Color(0.4f, 0.9f, 0.6f, 0.6f + 0.4f * Mathf.Sin(time * 3f))));
+            Part(2, 3, col => ci.Circle(c + new Vector2(s * 0.3f, 0f), s * 0.25f, col == ghost ? ghost : new Color(0.4f, 0.9f, 0.6f, 0.6f + 0.4f * Mathf.Sin(time * 3f))));
         }
-        if (progress < 1f) ci.DrawArc(c, s * 1.15f, -Mathf.Pi / 2f, -Mathf.Pi / 2f + Mathf.Tau * progress, 16, tint.WithAlpha(0.35f), 0.8f, true);
+        if (progress < 1f) ci.Arc(c, s * 1.15f, -Mathf.Pi / 2f, -Mathf.Pi / 2f + Mathf.Tau * progress, 16, tint.WithAlpha(0.35f), 0.8f, true);
     }
 
     // ───────────────────────────── 독서등 ─────────────────────────────
@@ -448,23 +448,23 @@ public static class InfoArt
     public static void Lamp(CanvasItem ci, Vector2 p, bool fixedLamp, bool on, float time, int seed, float progress)
     {
         var metal = new Color(0.62f, 0.64f, 0.68f);
-        ci.DrawCircle(p, 2.6f, metal.Darkened(0.3f));
+        ci.Circle(p, 2.6f, metal.Darkened(0.3f));
         var arm = new[] { p, p + new Vector2(2f, -5f), p + new Vector2(6f, -6f) };
-        ci.DrawPolyline(arm, metal, 1.1f, true);
+        ci.Polyline(arm, metal, 1.1f, true);
         var head = p + new Vector2(6f, -6f);
-        ci.DrawColoredPolygon(new[] { head + new Vector2(-2f, -1.5f), head + new Vector2(2.5f, -1f), head + new Vector2(3.5f, 2.5f), head + new Vector2(-1f, 2.5f) }, fixedLamp ? new Color(0.25f, 0.45f, 0.35f) : new Color(0.45f, 0.42f, 0.4f));
+        ci.Poly(new[] { head + new Vector2(-2f, -1.5f), head + new Vector2(2.5f, -1f), head + new Vector2(3.5f, 2.5f), head + new Vector2(-1f, 2.5f) }, fixedLamp ? new Color(0.25f, 0.45f, 0.35f) : new Color(0.45f, 0.42f, 0.4f));
         if (!fixedLamp)
         {
             // 테이프 감은 자리 (고치는 만큼 테이프가 늘어난다)
             int tapes = 1 + (int)(progress * 3f);
             for (int i = 0; i < tapes; i++) ci.DrawLine(p + new Vector2(0.6f + i * 0.8f, -1.5f - i * 1.3f), p + new Vector2(2.2f + i * 0.8f, -1.1f - i * 1.3f), new Color(0.95f, 0.95f, 0.85f), 1.2f);
             float flick = Mathf.Sin(time * 17f + seed) * Mathf.Sin(time * 5.3f + seed * 1.7f);
-            if (on && flick > 0.35f) ci.DrawCircle(head + new Vector2(0.8f, 2.4f), 1.1f, new Color(1f, 0.9f, 0.6f, 0.8f));
+            if (on && flick > 0.35f) ci.Circle(head + new Vector2(0.8f, 2.4f), 1.1f, new Color(1f, 0.9f, 0.6f, 0.8f));
             return;
         }
         if (!on) return;
-        ci.DrawColoredPolygon(new[] { head + new Vector2(-1f, 2.5f), head + new Vector2(3.5f, 2.5f), head + new Vector2(9f, 14f), head + new Vector2(-6f, 14f) }, new Color(1f, 0.85f, 0.55f, 0.13f));
-        ci.DrawCircle(head + new Vector2(1.2f, 2.6f), 1.3f, new Color(1f, 0.92f, 0.7f, 0.95f));
+        ci.Poly(new[] { head + new Vector2(-1f, 2.5f), head + new Vector2(3.5f, 2.5f), head + new Vector2(9f, 14f), head + new Vector2(-6f, 14f) }, new Color(1f, 0.85f, 0.55f, 0.13f));
+        ci.Circle(head + new Vector2(1.2f, 2.6f), 1.3f, new Color(1f, 0.92f, 0.7f, 0.95f));
     }
 
     // ───────────────────────────── 개수대 · 당번표 · 단말 ─────────────────────────────
@@ -481,16 +481,16 @@ public static class InfoArt
             for (int i = 0; i < here; i++, k++)
             {
                 var c = b + new Vector2((k % 3 - 1) * 0.6f, -i * 1.5f);
-                ci.DrawRect(new Rect2(c.X - 2.8f, c.Y - 0.7f, 5.6f, 1.4f), k % 4 == 3 ? new Color(0.75f, 0.85f, 0.95f) : new Color(0.95f, 0.95f, 0.92f));
+                ci.Box(new Rect2(c.X - 2.8f, c.Y - 0.7f, 5.6f, 1.4f), k % 4 == 3 ? new Color(0.75f, 0.85f, 0.95f) : new Color(0.95f, 0.95f, 0.92f));
                 ci.DrawLine(new Vector2(c.X - 2.8f, c.Y + 0.7f), new Vector2(c.X + 2.8f, c.Y + 0.7f), new Color(0.4f, 0.5f, 0.6f, 0.6f), 0.5f);
             }
         }
-        if (n >= 6) ci.DrawArc(p + new Vector2(5f, -n * 0.5f - 2f), 1.4f, 0f, Mathf.Tau, 8, new Color(0.7f, 0.5f, 0.3f), 1f); // 꼭대기에 얹힌 컵
+        if (n >= 6) ci.Arc(p + new Vector2(5f, -n * 0.5f - 2f), 1.4f, 0f, Mathf.Tau, 8, new Color(0.7f, 0.5f, 0.3f), 1f); // 꼭대기에 얹힌 컵
         if (!washing) return;
         for (int i = 0; i < 6; i++)
         {
             float t = (time * 0.7f + i * 0.17f) % 1f;
-            ci.DrawArc(p + new Vector2(-4f + i * 1.6f + Mathf.Sin(t * 8f + i) * 1.2f, -2f - t * 9f), 0.8f + t * 0.8f, 0f, Mathf.Tau, 8, new Color(1f, 1f, 1f, 0.6f * (1f - t)), 0.6f, true);
+            ci.Arc(p + new Vector2(-4f + i * 1.6f + Mathf.Sin(t * 8f + i) * 1.2f, -2f - t * 9f), 0.8f + t * 0.8f, 0f, Mathf.Tau, 8, new Color(1f, 1f, 1f, 0.6f * (1f - t)), 0.6f, true);
         }
     }
 
@@ -499,14 +499,14 @@ public static class InfoArt
     {
         int rows = Math.Min(7, ids.Count);
         var r = new Rect2(c.X - 6f, c.Y - 2f - rows * 1.6f, 12f, 4f + rows * 3.2f);
-        ci.DrawRect(r.Grow(0.6f), new Color(0f, 0f, 0f, 0.25f));
-        ci.DrawRect(r, new Color(0.97f, 0.95f, 0.86f));
-        ci.DrawCircle(new Vector2(r.GetCenter().X, r.Position.Y + 0.8f), 1f, new Color(0.85f, 0.2f, 0.2f));
+        ci.Box(r.Grow(0.6f), new Color(0f, 0f, 0f, 0.25f));
+        ci.Box(r, new Color(0.97f, 0.95f, 0.86f));
+        ci.Circle(new Vector2(r.GetCenter().X, r.Position.Y + 0.8f), 1f, new Color(0.85f, 0.2f, 0.2f));
         for (int i = 0; i < rows; i++)
         {
             float y = r.Position.Y + 2.5f + i * 3.2f;
-            if (ids[i] == today) ci.DrawRect(new Rect2(r.Position.X + 0.5f, y - 0.6f, r.Size.X - 1f, 2.6f), new Color(1f, 0.9f, 0.4f, 0.6f));
-            ci.DrawRect(new Rect2(r.Position.X + 1.2f, y, 2f, 1.4f), Palette.Crew(ids[i]));
+            if (ids[i] == today) ci.Box(new Rect2(r.Position.X + 0.5f, y - 0.6f, r.Size.X - 1f, 2.6f), new Color(1f, 0.9f, 0.4f, 0.6f));
+            ci.Box(new Rect2(r.Position.X + 1.2f, y, 2f, 1.4f), Palette.Crew(ids[i]));
             if (detail) ci.DrawLine(new Vector2(r.Position.X + 4f, y + 0.7f), new Vector2(r.End.X - 1.5f, y + 0.7f), new Color(0.3f, 0.3f, 0.35f, 0.6f), 0.5f);
         }
     }
@@ -514,9 +514,9 @@ public static class InfoArt
     /// <summary>손목 단말 화면: 작은 판 · 푸른 빛이 얼굴 쪽으로.</summary>
     public static void Tablet(CanvasItem ci, Vector2 p, Color band, float time)
     {
-        ci.DrawCircle(p, 6f, new Color(0.5f, 0.8f, 1f, 0.07f));
-        ci.DrawRect(new Rect2(p.X - 2.2f, p.Y - 1.6f, 4.4f, 3.2f), new Color(0.08f, 0.1f, 0.14f));
-        ci.DrawRect(new Rect2(p.X - 1.7f, p.Y - 1.1f, 3.4f, 2.2f), new Color(0.55f, 0.85f, 1f, 0.75f + 0.15f * Mathf.Sin(time * 3f)));
+        ci.Circle(p, 6f, new Color(0.5f, 0.8f, 1f, 0.07f));
+        ci.Box(new Rect2(p.X - 2.2f, p.Y - 1.6f, 4.4f, 3.2f), new Color(0.08f, 0.1f, 0.14f));
+        ci.Box(new Rect2(p.X - 1.7f, p.Y - 1.1f, 3.4f, 2.2f), new Color(0.55f, 0.85f, 1f, 0.75f + 0.15f * Mathf.Sin(time * 3f)));
         ci.DrawLine(new Vector2(p.X - 1.2f, p.Y - 0.3f), new Vector2(p.X + 0.8f, p.Y - 0.3f), new Color(1f, 1f, 1f, 0.7f), 0.4f);
         ci.DrawLine(new Vector2(p.X - 1.2f, p.Y + 0.4f), new Vector2(p.X + 0.2f, p.Y + 0.4f), new Color(1f, 1f, 1f, 0.5f), 0.4f);
         ci.DrawLine(new Vector2(p.X - 2.2f, p.Y + 1.6f), new Vector2(p.X + 2.2f, p.Y + 1.6f), band, 0.8f);

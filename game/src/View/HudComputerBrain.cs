@@ -80,8 +80,8 @@ public partial class Hud
                 Gfx.Text(this, Fonts.Body, new Vector2(lx + 114, ly + 13), Fit(f.Line, colW - 220, Ui.TextTiny, Fonts.Body), Ui.TextTiny, f.DaysToShort <= 4f ? Palette.Warning : Palette.TextDim);
                 // 계기 믿음 다이얼
                 var dc = new Vector2(lx + colW - 96, ly + 10);
-                DrawArc(dc, 6f, Mathf.Pi, Mathf.Tau, 12, new Color(1, 1, 1, 0.1f), 2f, true);
-                DrawArc(dc, 6f, Mathf.Pi, Mathf.Pi + Mathf.Pi * L.Reliability, 12, L.Suspect ? Palette.Danger : Palette.Good, 2f, true);
+                this.Arc(dc, 6f, Mathf.Pi, Mathf.Tau, 12, new Color(1, 1, 1, 0.1f), 2f, true);
+                this.Arc(dc, 6f, Mathf.Pi, Mathf.Pi + Mathf.Pi * L.Reliability, 12, L.Suspect ? Palette.Danger : Palette.Good, 2f, true);
                 Gfx.Text(this, Fonts.Body, new Vector2(dc.X + 9, ly + 13), Fit(f.DeadReckon ? "흐름 셈" : f.Stale ? "낡은 값" : $"계기 {L.Reliability * 100:0}%", 80, Ui.TextMicro, Fonts.Body), Ui.TextMicro, L.Suspect ? Palette.Danger : Palette.TextMuted);
             }
             ly += 16;
@@ -103,7 +103,7 @@ public partial class Hud
         {
             if (ly > card.End.Y - 20) break;
             var col = s.Kind switch { "정비" => new Color("#e8b84a"), "쉼" => BrainIcons.Rest, "당번" => Palette.Accent, "교정" => Palette.Danger, "회의" => BrainIcons.Auth, _ => Palette.TextDim };
-            DrawRect(new Rect2(lx, ly + 3, 4, 10), col);
+            this.Box(new Rect2(lx, ly + 3, 4, 10), col);
             string who = s.CrewId >= 0 ? w.Crew.FirstOrDefault(c => c.Id == s.CrewId)?.Name ?? "" : "";
             Gfx.Text(this, Fonts.Body, new Vector2(lx + 8, ly + 12), Fit($"[{s.Kind}] {s.What}" + (who != "" ? $" — {who}" : ""), colW - 8, Ui.TextTiny, Fonts.Body), Ui.TextTiny, Palette.Text);
             ly += 14;
@@ -137,7 +137,7 @@ public partial class Hud
         foreach (var p in pl.Pitches.AsEnumerable().Reverse().Take(4))
         {
             var col = p.State is "통과" or "받음" or "실행" ? Palette.Good : p.State is "부결" or "거절" ? Palette.Danger : p.Open ? Palette.Warning : Palette.TextDim;
-            for (int k = 0; k < ShipPlanner.MaxAttempts; k++) DrawCircle(new Vector2(rx + 4 + k * 7, ry + 8), 2.4f, k < p.Attempt ? col : new Color(1, 1, 1, 0.1f), true, -1f, true);
+            for (int k = 0; k < ShipPlanner.MaxAttempts; k++) this.Circle(new Vector2(rx + 4 + k * 7, ry + 8), 2.4f, k < p.Attempt ? col : new Color(1, 1, 1, 0.1f), true, -1f, true);
             Gfx.Text(this, Fonts.Body, new Vector2(rx + 26, ry + 11), Fit($"{p.Option} [{p.Arg} · {p.Via}] {p.State}" + (p.Yes + p.No > 0 ? $" (찬 {p.Yes} · 반 {p.No})" : "") + $" — {p.Basis}", colW - 26, Ui.TextTiny, Fonts.Body), Ui.TextTiny, col);
             ry += 14;
         }
@@ -157,7 +157,7 @@ public partial class Hud
             var p0 = new Vector2(rx + 16, ry + 12 - mk.TrustBefore * 10);
             var p1 = new Vector2(rx + 26, ry + 12 - mk.TrustLow * 10);
             var p2 = new Vector2(rx + 36, ry + 12 - mk.TrustAfter * 10);
-            DrawPolyline(new[] { p0, p1, p2 }, Palette.Warning, 1.2f, true);
+            this.Polyline(new[] { p0, p1, p2 }, Palette.Warning, 1.2f, true);
             Gfx.Text(this, Fonts.Body, new Vector2(rx + 42, ry + 11), Fit($"{mk.What} · {mk.TrustBefore * 100:0}→{mk.TrustLow * 100:0}→{mk.TrustAfter * 100:0}%", colW - 42, Ui.TextTiny, Fonts.Body), Ui.TextTiny, Palette.Warning);
             ry += 14;
         }

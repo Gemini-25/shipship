@@ -58,7 +58,7 @@ public static partial class FixtureArt
             float u = 0.52f + k * 0.14f + (Hash(x.Id, k, 1) - 0.5f) * 0.04f;
             var pts = new Vector2[5];
             for (int i = 0; i < 5; i++) pts[i] = x.P(u + Mathf.Sin(i * 1.7f + k) * 0.018f, 0.1f + 0.8f * i / 4f);
-            ci.DrawPolyline(pts, bc.Darkened(0.35f), 1f, true);
+            ci.Polyline(pts, bc.Darkened(0.35f), 1f, true);
         }
         // 개인 소품: 주인마다 다르다 (책 · 사진 · 인형)
         int kind = o != null ? (int)(Hash(o.Id, 7, 2) * 3f) : -1;
@@ -66,13 +66,13 @@ public static partial class FixtureArt
         if (kind == 0)
         {
             var b = new Rect2(sp - new Vector2(3.5f, 2.5f), new Vector2(7f, 5f));
-            ci.DrawRect(b, new Color("#a0523a"));
+            ci.Box(b, new Color("#a0523a"));
             ci.DrawLine(b.Position + new Vector2(3.5f, 0f), b.Position + new Vector2(3.5f, 5f), new Color("#e8e2d4"), 0.8f);
         }
         else if (kind == 1)
         {
-            ci.DrawRect(new Rect2(x.P(0.03f, 0.75f) - new Vector2(2.5f, 2.5f), new Vector2(5f, 5f)), new Color("#c8b27a"));
-            ci.DrawRect(new Rect2(x.P(0.03f, 0.75f) - new Vector2(1.5f, 1.5f), new Vector2(3f, 3f)), new Color("#4a6a8a"));
+            ci.Box(new Rect2(x.P(0.03f, 0.75f) - new Vector2(2.5f, 2.5f), new Vector2(5f, 5f)), new Color("#c8b27a"));
+            ci.Box(new Rect2(x.P(0.03f, 0.75f) - new Vector2(1.5f, 1.5f), new Vector2(3f, 3f)), new Color("#4a6a8a"));
         }
         else if (kind == 2)
         {
@@ -101,7 +101,7 @@ public static partial class FixtureArt
         var ci = x.Ci;
         Bolts(ci, x.B, 2.2f, 0.8f);
         for (int i = 0; i < 9; i++) Dot(ci, x.P(0.09f + i * 0.1f, 0.09f), 0.45f, new Color(1, 1, 1, 0.25f)); // 바느질
-        ci.DrawRect(new Rect2(x.P(0.24f, 0.78f) - new Vector2(1f, 1f), new Vector2(2f, 3f)), new Color("#e8e2d4")); // 베개 꼬리표
+        ci.Box(new Rect2(x.P(0.24f, 0.78f) - new Vector2(1f, 1f), new Vector2(2f, 3f)), new Color("#e8e2d4")); // 베개 꼬리표
         if (x.F.Owner is CrewMember o && o.Name.Length > 0) Tag(ci, x.P(0.93f, 0.5f), o.Name[..1], 6, new Color(1, 1, 1, 0.55f));
     }
 
@@ -122,12 +122,12 @@ public static partial class FixtureArt
         Line(ci, x.P(0.0f, 0.9f), x.P(1f, 0.9f), new Color("#8a8f99"), 1.5f);
         foreach (float u in new[] { 0.32f, 0.6f }) // 끈과 버클
         {
-            ci.DrawRect(x.Q(u, 0.12f, u + 0.035f, 0.88f), new Color("#2a2a24"));
-            ci.DrawRect(x.Q(u - 0.01f, 0.44f, u + 0.045f, 0.56f), new Color("#9aa3b5"));
+            ci.Box(x.Q(u, 0.12f, u + 0.035f, 0.88f), new Color("#2a2a24"));
+            ci.Box(x.Q(u - 0.01f, 0.44f, u + 0.045f, 0.56f), new Color("#9aa3b5"));
         }
         var bc = x.F.Owner != null ? Palette.Crew(x.F.Owner.Id).Darkened(0.45f) : new Color("#3a3f4a");
         Box(ci, x.Q(0.78f, 0.16f, 0.95f, 0.84f), bc, 3); // 말아 둔 담요
-        ci.DrawArc(x.P(0.95f, 0.5f), x.Lv * 0.16f, 0f, Mathf.Tau, 12, bc.Lightened(0.25f), 1f, true);
+        ci.Arc(x.P(0.95f, 0.5f), x.Lv * 0.16f, 0f, Mathf.Tau, 12, bc.Lightened(0.25f), 1f, true);
         if (x.F.Improved) Box(ci, x.Q(0.06f, 0.2f, 0.2f, 0.8f), new Color(0.85f, 0.86f, 0.9f, 0.7f), 3); // 손본 간이침대: 베개가 있다
     }
 
@@ -138,7 +138,7 @@ public static partial class FixtureArt
         var top = x.P(0.0f, 0.3f);
         var tip = top + Vector2.FromAngle(Mathf.Pi * 0.5f + sway) * 5f;
         Line(x.Ci, top, tip, new Color("#9aa3b5"), 0.8f);
-        x.Ci.DrawRect(new Rect2(tip - new Vector2(1.5f, 0f), new Vector2(3f, 2.5f)), x.F.Owner != null ? Palette.Crew(x.F.Owner.Id) : new Color("#c8b27a"));
+        x.Ci.Box(new Rect2(tip - new Vector2(1.5f, 0f), new Vector2(3f, 2.5f)), x.F.Owner != null ? Palette.Crew(x.F.Owner.Id) : new Color("#c8b27a"));
     }
 
     private static void CotFine(in Fix x)
@@ -208,7 +208,7 @@ public static partial class FixtureArt
             float v = 0.12f + k * 0.15f;
             var pts = new Vector2[4];
             for (int i = 0; i < 4; i++) pts[i] = x.P(0.06f + i * 0.29f, v + (Hash(x.Id, k * 4 + i, 3) - 0.5f) * 0.05f);
-            ci.DrawPolyline(pts, (galley ? new Color(1, 1, 1, 0.04f) : new Color("#3a3226")), 1f, true);
+            ci.Polyline(pts, (galley ? new Color(1, 1, 1, 0.04f) : new Color("#3a3226")), 1f, true);
         }
         Line(ci, new Vector2(top.Position.X + 7, top.Position.Y + 2.5f), new Vector2(top.End.X - 7, top.Position.Y + 2.5f), new Color(1, 1, 1, 0.08f), 1.5f);
         int n = Mathf.Max(1, (int)(x.Lu / 24f));
@@ -342,7 +342,7 @@ public static partial class FixtureArt
         {
             var p = x.P(u, 0.48f);
             Dot(ci, p, rr, new Color("#17130f"));
-            for (int i = 1; i <= 3; i++) ci.DrawArc(p, rr * i / 3.4f, 0f, Mathf.Tau, 16, new Color("#3f3733"), 1.2f, true); // 코일
+            for (int i = 1; i <= 3; i++) ci.Arc(p, rr * i / 3.4f, 0f, Mathf.Tau, 16, new Color("#3f3733"), 1.2f, true); // 코일
             for (int s = 0; s < 4; s++) // 냄비 받침
             {
                 var d = Vector2.FromAngle(Mathf.Pi * 0.25f + s * Mathf.Pi * 0.5f);
@@ -365,7 +365,7 @@ public static partial class FixtureArt
             {
                 float fl = 0.65f + 0.35f * Mathf.Sin(x.T * (6f + k)) * (x.St == State.Fault ? Hash(x.Id, (int)(x.T * 9f) + k, 4) : 1f);
                 Dot(ci, p, rr + 2f, Burner.WithAlpha(0.18f * fl * x.Glow));
-                for (int i = 1; i <= 3; i++) ci.DrawArc(p, rr * i / 3.4f, 0f, Mathf.Tau, 16, Burner.Lightened(0.15f * i).WithAlpha(0.85f * fl * x.Glow), 1.4f, true);
+                for (int i = 1; i <= 3; i++) ci.Arc(p, rr * i / 3.4f, 0f, Mathf.Tau, 16, Burner.Lightened(0.15f * i).WithAlpha(0.85f * fl * x.Glow), 1.4f, true);
                 Led(ci, x.P(0.14f + k * 0.24f, 0.9f), Danger, 0.8f * x.Glow, 0.8f);
             }
             else if (x.St == State.Standby) Dot(ci, p + new Vector2(rr * 0.6f, 0f), 0.9f, new Color("#5fa8ff").WithAlpha(0.5f + 0.3f * Pulse(x.T + k, 3f))); // 대기: 파란 점화 불씨
@@ -394,7 +394,7 @@ public static partial class FixtureArt
         // 뒤쪽 응축 코일 (지그재그)
         var pts = new Vector2[12];
         for (int i = 0; i < 12; i++) pts[i] = x.P(0.06f + i * 0.08f, i % 2 == 0 ? 0.02f : 0.08f);
-        ci.DrawPolyline(pts, new Color("#3a4250"), 1f, true);
+        ci.Polyline(pts, new Color("#3a4250"), 1f, true);
         // 성에 (가장자리 흰 점)
         for (int i = 0; i < 16; i++)
         {
@@ -402,8 +402,8 @@ public static partial class FixtureArt
             Dot(ci, x.P(0.04f + u * 0.92f, v), 0.6f + Hash(x.Id, i, 14) * 0.6f, FrostBlue.WithAlpha(0.35f));
         }
         // 자석 메모 (색 쪽지)
-        ci.DrawRect(new Rect2(x.P(0.12f, 0.3f), new Vector2(4f, 4f)), new Color("#e8d27a"));
-        ci.DrawRect(new Rect2(x.P(0.78f, 0.55f), new Vector2(3.5f, 4.5f)), new Color("#7ac8e8"));
+        ci.Box(new Rect2(x.P(0.12f, 0.3f), new Vector2(4f, 4f)), new Color("#e8d27a"));
+        ci.Box(new Rect2(x.P(0.78f, 0.55f), new Vector2(3.5f, 4.5f)), new Color("#7ac8e8"));
         Box(ci, x.Q(0.06f, 0.62f, 0.2f, 0.82f), GlassDark, 1); // 온도 표시창
     }
 
@@ -413,10 +413,10 @@ public static partial class FixtureArt
         var disp = x.Q(0.06f, 0.62f, 0.2f, 0.82f);
         float temp = x.On ? 3f : x.St == State.Fault ? 9f : 14f;
         var tc = temp < 6f ? FrostBlue : temp < 10f ? Amber : Danger;
-        if (x.Lit || x.St == State.Off) ci.DrawRect(disp.Grow(-1f), tc.WithAlpha(0.25f + 0.5f * Mathf.Max(x.Glow, 0.3f)));
+        if (x.Lit || x.St == State.Off) ci.Box(disp.Grow(-1f), tc.WithAlpha(0.25f + 0.5f * Mathf.Max(x.Glow, 0.3f)));
         Led(ci, new Vector2(x.B.End.X - 4, x.B.Position.Y + 4), x.On ? Good : Danger, x.On ? 0.85f : 0.5f + 0.5f * Pulse(x.T, 5f), 1.1f);
         float fill = x.F.Storage is Inventory inv && inv.Capacity > 0 ? inv.Total / (float)inv.Capacity : 0f;
-        ci.DrawRect(new Rect2(x.P(0.25f, 0.9f), new Vector2((x.Lu * 0.5f) * fill, 1.6f)), Palette.Item(ItemKind.Produce).WithAlpha(0.7f));
+        ci.Box(new Rect2(x.P(0.25f, 0.9f), new Vector2((x.Lu * 0.5f) * fill, 1.6f)), Palette.Item(ItemKind.Produce).WithAlpha(0.7f));
         if (x.On && x.Lod > 0) // 압축기 떨림
             for (int i = 0; i < 3; i++)
             {
@@ -432,7 +432,7 @@ public static partial class FixtureArt
         {
             var f = x.Front;
             var a = x.C + f * (x.Lv * 0.5f);
-            ci.DrawColoredPolygon(new[] { a - x.U * x.Lu * 0.3f, a + x.U * x.Lu * 0.3f, a + x.U * x.Lu * 0.38f + f * 10f, a - x.U * x.Lu * 0.38f + f * 10f }, FrostBlue.WithAlpha(0.12f));
+            ci.Poly(new[] { a - x.U * x.Lu * 0.3f, a + x.U * x.Lu * 0.3f, a + x.U * x.Lu * 0.38f + f * 10f, a - x.U * x.Lu * 0.38f + f * 10f }, FrostBlue.WithAlpha(0.12f));
         }
     }
 
@@ -464,7 +464,7 @@ public static partial class FixtureArt
         var strip = x.C - f * 9.5f;
         Knob(ci, strip - side * 6f, 2.2f, 0.6f, new Color("#3a3430"));
         Knob(ci, strip + side * 6f, 2.2f, 2.2f, new Color("#3a3430"));
-        ci.DrawRect(new Rect2(strip - new Vector2(2.5f, 1.5f), new Vector2(5f, 3f)), GlassDark); // 타이머
+        ci.Box(new Rect2(strip - new Vector2(2.5f, 1.5f), new Vector2(5f, 3f)), GlassDark); // 타이머
     }
 
     private static void OvenLife(in Fix x)
@@ -474,11 +474,11 @@ public static partial class FixtureArt
         var win = new Rect2(x.C + f * 3f - new Vector2(7f, 7f) + f.Abs() * 2f, new Vector2(14f, 14f) - f.Abs() * 6f);
         if (x.Lit)
         {
-            ci.DrawRect(win, Burner.WithAlpha(0.22f * x.Glow));
+            ci.Box(win, Burner.WithAlpha(0.22f * x.Glow));
             Fan(ci, win.GetCenter(), Mathf.Min(win.Size.X, win.Size.Y) * 0.4f, 3, x.Ang(5f), Burner.Lightened(0.3f).WithAlpha(0.55f * x.Glow), 1f); // 대류 팬
         }
         var strip = x.C - f * 9.5f;
-        if (x.Lit) ci.DrawRect(new Rect2(strip - new Vector2(2f, 1f), new Vector2(4f, 2f)), Danger.WithAlpha((Mathf.PosMod(x.T, 1f) < 0.6f ? 0.9f : 0.3f) * x.Glow));
+        if (x.Lit) ci.Box(new Rect2(strip - new Vector2(2f, 1f), new Vector2(4f, 2f)), Danger.WithAlpha((Mathf.PosMod(x.T, 1f) < 0.6f ? 0.9f : 0.3f) * x.Glow));
         if (x.On && x.Lod > 0) Shimmer(ci, new Rect2(x.C - f * 12f - new Vector2(6f, 2f), new Vector2(12f, 4f)), x.T, 0.5f);
     }
 
@@ -503,7 +503,7 @@ public static partial class FixtureArt
         {
             var p = tub.Position + new Vector2(tub.Size.X * (0.2f + k * 0.2f), tub.Size.Y * 0.3f);
             ci.DrawSetTransform(p, 0f, new Vector2(0.35f, 1f));
-            ci.DrawCircle(Vector2.Zero, 4f, new Color("#c9d1dc").WithAlpha(0.75f), true, -1f, true);
+            ci.Circle(Vector2.Zero, 4f, new Color("#c9d1dc").WithAlpha(0.75f), true, -1f, true);
             ci.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
         }
         for (int k = 0; k < 3; k++) Dot(ci, tub.Position + new Vector2(tub.Size.X * (0.25f + k * 0.25f), tub.Size.Y * 0.75f), 1.6f, new Color("#9aa6b5").WithAlpha(0.6f)); // 컵
@@ -535,7 +535,7 @@ public static partial class FixtureArt
         Bolts(ci, x.B, 2f, 0.6f);
         Dot(ci, new Vector2(x.B.End.X - 4.5f, x.B.End.Y - 4.5f), 1.6f, new Color("#0a0d12")); // 배수구
         Ring(ci, new Vector2(x.B.End.X - 4.5f, x.B.End.Y - 4.5f), 1.6f, Chrome.WithAlpha(0.5f), 0.6f, 10);
-        ci.DrawRect(new Rect2(x.B.Position + new Vector2(3f, 3f), new Vector2(4f, 3f)), new Color("#5fa8d0").WithAlpha(0.6f)); // 세제 칸
+        ci.Box(new Rect2(x.B.Position + new Vector2(3f, 3f), new Vector2(4f, 3f)), new Color("#5fa8d0").WithAlpha(0.6f)); // 세제 칸
     }
 
     // ─────────────── 커피 머신 ───────────────
@@ -610,8 +610,8 @@ public static partial class FixtureArt
             for (int i = 0; i < 6; i++)
                 Line(ci, x.P(0.12f + i * 0.13f, s == 0 ? 0.06f : 0.94f), x.P(0.18f + i * 0.13f, s == 0 ? 0.06f : 0.94f), Chrome.WithAlpha(0.8f), 1.2f);
         var cross = x.P(0.9f, 0.5f);
-        ci.DrawRect(new Rect2(cross - new Vector2(1.2f, 3.5f), new Vector2(2.4f, 7f)), new Color("#e05a5a"));
-        ci.DrawRect(new Rect2(cross - new Vector2(3.5f, 1.2f), new Vector2(7f, 2.4f)), new Color("#e05a5a"));
+        ci.Box(new Rect2(cross - new Vector2(1.2f, 3.5f), new Vector2(2.4f, 7f)), new Color("#e05a5a"));
+        ci.Box(new Rect2(cross - new Vector2(3.5f, 1.2f), new Vector2(7f, 2.4f)), new Color("#e05a5a"));
         // 모니터 팔 (머리 쪽 바깥) · 링거 봉
         var mon = x.R.Position + new Vector2(x.Wide ? 1f : x.R.Size.X - 9f, 1f);
         Box(ci, new Rect2(mon, new Vector2(8f, 6f)), new Color("#0f1418"), 1.5f, new Color("#4a5566"));
@@ -635,9 +635,9 @@ public static partial class FixtureArt
                 float spike = patient && ph > 0.45f && ph < 0.55f ? (ph < 0.5f ? -1f : 0.6f) : 0f;
                 pts[i] = new Vector2(mon.Position.X + u * mon.Size.X, mon.GetCenter().Y + spike * 2f);
             }
-            ci.DrawPolyline(pts, (patient ? Ecg : x.Accent).WithAlpha(0.9f * x.Glow), 0.7f, true);
+            ci.Polyline(pts, (patient ? Ecg : x.Accent).WithAlpha(0.9f * x.Glow), 0.7f, true);
         }
-        else ci.DrawRect(mon, new Color("#05080a"));
+        else ci.Box(mon, new Color("#05080a"));
         // 링거 방울: 사람이 누워 있을 때만
         if (patient && x.Lod > 0)
         {
@@ -664,9 +664,9 @@ public static partial class FixtureArt
         Box(ci, x.Q(0.0f, 0.3f, 1.0f, 0.7f), new Color("#c9d1dc").WithAlpha(0.6f), 3, new Color("#7a8494")); // 눕는 판
         float rr = Mathf.Min(x.B.Size.X, x.B.Size.Y) * 0.42f;
         Dot(ci, x.C + new Vector2(1.5f, 2f), rr + 1f, Shadow);
-        ci.DrawArc(x.C, rr - 2.5f, 0f, Mathf.Tau, 32, new Color("#e3e8ec"), 5f, true); // 고리 갠트리
-        ci.DrawArc(x.C, rr, 0f, Mathf.Tau, 32, new Color("#7a8494"), 1f, true);
-        ci.DrawArc(x.C, rr - 5f, 0f, Mathf.Tau, 32, new Color("#5a6474"), 1f, true);
+        ci.Arc(x.C, rr - 2.5f, 0f, Mathf.Tau, 32, new Color("#e3e8ec"), 5f, true); // 고리 갠트리
+        ci.Arc(x.C, rr, 0f, Mathf.Tau, 32, new Color("#7a8494"), 1f, true);
+        ci.Arc(x.C, rr - 5f, 0f, Mathf.Tau, 32, new Color("#5a6474"), 1f, true);
         Dot(ci, x.C, rr - 6f, new Color("#10161c")); // 가운데 구멍
         Box(ci, x.Q(0.25f, 0.4f, 0.75f, 0.6f), new Color("#c9d1dc").WithAlpha(0.5f), 1.5f); // 구멍 속 판
         Box(ci, new Rect2(x.B.End - new Vector2(7f, 5f), new Vector2(6f, 4f)), new Color("#141a22"), 1, new Color("#3a4454")); // 조작판
@@ -680,7 +680,7 @@ public static partial class FixtureArt
             for (int k = 0; k < 2; k++)
             {
                 float a = x.Ang(3f) + k * Mathf.Pi;
-                ci.DrawArc(x.C, rr, a, a + 0.8f, 8, new Color("#7fd4ff").WithAlpha(0.8f * x.Glow), 2.2f, true);
+                ci.Arc(x.C, rr, a, a + 0.8f, 8, new Color("#7fd4ff").WithAlpha(0.8f * x.Glow), 2.2f, true);
             }
         if (x.On && (x.User != null || x.Occupant != null)) // 훑는 레이저 선
         {
@@ -709,7 +709,7 @@ public static partial class FixtureArt
         Can(ci, x.C, rr, new Color("#8a96a4"), new Color("#c8d0da")); // 압력 용기
         Ring(ci, x.C, rr * 0.82f, new Color("#5a6474"), 1f);
         for (int k = 0; k < 12; k++) Dot(ci, x.C + Vector2.FromAngle(k * Mathf.Tau / 12f) * rr * 0.9f, 0.7f, new Color("#3a4454")); // 둘레 볼트
-        ci.DrawArc(x.C, rr * 0.45f, 0f, Mathf.Tau, 16, new Color("#2a303a"), 1.6f, true); // 잠금 핸들 바퀴
+        ci.Arc(x.C, rr * 0.45f, 0f, Mathf.Tau, 16, new Color("#2a303a"), 1.6f, true); // 잠금 핸들 바퀴
         for (int k = 0; k < 4; k++) Line(ci, x.C, x.C + Vector2.FromAngle(k * Mathf.Pi / 2f + 0.4f) * rr * 0.45f, new Color("#2a303a"), 1.4f);
         Dot(ci, x.C, 1.6f, new Color("#c0392b"));
         Dot(ci, new Vector2(x.B.End.X - 3.5f, x.B.Position.Y + 3.5f), 1.6f, Brass); // 안전 밸브
@@ -720,7 +720,7 @@ public static partial class FixtureArt
         var ci = x.Ci;
         float rr = Mathf.Min(x.B.Size.X, x.B.Size.Y) * 0.38f;
         float cycle = Mathf.PosMod(x.T * 0.05f * Mathf.Max(0.2f, x.Spin), 1f);
-        if (x.Lit) ci.DrawArc(x.C, rr + 1.6f, -Mathf.Pi / 2f, -Mathf.Pi / 2f + Mathf.Tau * cycle, 24, (cycle < 0.8f ? Amber : Good).WithAlpha(0.8f * x.Glow), 1.4f, true); // 멸균 진행 고리
+        if (x.Lit) ci.Arc(x.C, rr + 1.6f, -Mathf.Pi / 2f, -Mathf.Pi / 2f + Mathf.Tau * cycle, 24, (cycle < 0.8f ? Amber : Good).WithAlpha(0.8f * x.Glow), 1.4f, true); // 멸균 진행 고리
         Gauge(ci, new Vector2(x.B.Position.X + 4f, x.B.Position.Y + 4f), 3f, x.On ? Mathf.Clamp(cycle * 1.6f, 0f, 1f) : 0f, new Color("#c0392b"));
         if (x.On && x.Lod > 0 && Mathf.PosMod(x.T * 0.17f, 1f) < 0.12f) // 안전 밸브가 가끔 김을 뺀다
         {
@@ -752,7 +752,7 @@ public static partial class FixtureArt
             float u0 = (float)k / n, u1 = (float)(k + 1) / n;
             if (k > 0) Line(ci, x.P(u0, 0.08f), x.P(u0, 0.95f), new Color("#141820"), 1.2f); // 칸막이
             var hook = x.P((u0 + u1) * 0.5f, 0.12f);
-            ci.DrawArc(hook + x.V * 1.5f, 1.4f, 0f, Mathf.Pi, 6, Chrome, 0.8f, true); // 걸이
+            ci.Arc(hook + x.V * 1.5f, 1.4f, 0f, Mathf.Pi, 6, Chrome, 0.8f, true); // 걸이
             var slot = x.Q(u0 + 0.06f / n, 0.22f, u1 - 0.06f / n, 0.92f);
             Box(ci, slot, new Color(0, 0, 0, 0f), 3, new Color("#2a3240")); // 빈 자리 테두리
         }
@@ -773,9 +773,9 @@ public static partial class FixtureArt
                 var helm = x.P(u, 0.36f);
                 float hr = Mathf.Min(x.Lu / n, x.Lv) * 0.22f;
                 Box(ci, x.Q(u - 0.3f / n, 0.42f, u + 0.3f / n, 0.88f), new Color("#d8dee8").WithAlpha(0.75f), 3); // 몸통
-                ci.DrawRect(x.Q(u - 0.08f / n, 0.5f, u + 0.08f / n, 0.6f), new Color("#e0763a").WithAlpha(0.8f)); // 가슴 띠
+                ci.Box(x.Q(u - 0.08f / n, 0.5f, u + 0.08f / n, 0.6f), new Color("#e0763a").WithAlpha(0.8f)); // 가슴 띠
                 Dot(ci, helm, hr, new Color("#e8ecf2").WithAlpha(0.85f)); // 헬멧
-                ci.DrawArc(helm, hr * 0.62f, 0.3f, 2.8f, 8, new Color("#d4a640"), 1.6f, true); // 금빛 바이저
+                ci.Arc(helm, hr * 0.62f, 0.3f, 2.8f, 8, new Color("#d4a640"), 1.6f, true); // 금빛 바이저
                 if (x.Lod == 2) Dot(ci, helm + new Vector2(-hr * 0.3f, -hr * 0.3f), 0.8f, Colors.White.WithAlpha(0.5f + 0.4f * Pulse(x.T + k, 1.3f)));
             }
             Led(ci, x.P(u, 0.97f) - x.V * 2f, k < suits ? Good : Palette.TextMuted, 0.85f, 1f);
@@ -798,16 +798,16 @@ public static partial class FixtureArt
         foreach (var c in x.F.Cells)
         {
             var cr = ShipView.CellRect(c).Grow(-3f);
-            ci.DrawRect(cr, new Color("#20262f"));
+            ci.Box(cr, new Color("#20262f"));
             for (int i = 0; i < 4; i++) for (int j = 0; j < 4; j++) // 타공판
                 Dot(ci, cr.Position + new Vector2((i + 0.5f) * cr.Size.X / 4f, (j + 0.5f) * cr.Size.Y / 4f), 0.7f, new Color("#12161c"));
-            ci.DrawRect(new Rect2(cr.Position.X, cr.End.Y - 2f, cr.Size.X, 2f), new Color("#3a4454")); // 선반 앞턱
+            ci.Box(new Rect2(cr.Position.X, cr.End.Y - 2f, cr.Size.X, 2f), new Color("#3a4454")); // 선반 앞턱
         }
         foreach (var p in new[] { x.R.Position + new Vector2(2, 2), new Vector2(x.R.End.X - 6, x.R.Position.Y + 2), new Vector2(x.R.Position.X + 2, x.R.End.Y - 6), x.R.End - new Vector2(6, 6) })
-            ci.DrawRect(new Rect2(p, new Vector2(4f, 4f)), new Color("#3a4454")); // 기둥
+            ci.Box(new Rect2(p, new Vector2(4f, 4f)), new Color("#3a4454")); // 기둥
         Line(ci, x.R.Position + new Vector2(4f, 6f), new Vector2(x.R.Position.X + 4f, x.R.End.Y - 6f), new Color("#2e3746"), 1.2f); // 옆 버팀대
         Line(ci, new Vector2(x.R.End.X - 4f, x.R.Position.Y + 6f), x.R.End - new Vector2(4f, 6f), new Color("#2e3746"), 1.2f);
-        ci.DrawRect(new Rect2(x.R.Position.X + 6f, x.R.End.Y - 3.5f, x.R.Size.X - 12f, 1.5f), WarnYellow.WithAlpha(0.35f)); // 바닥 걸림 띠
+        ci.Box(new Rect2(x.R.Position.X + 6f, x.R.End.Y - 3.5f, x.R.Size.X - 12f, 1.5f), WarnYellow.WithAlpha(0.35f)); // 바닥 걸림 띠
     }
 
     private static readonly Color[] CrateTints = { new("#3a4250"), new("#4a3e30"), new("#2c4440"), new("#3d3548") };
@@ -855,7 +855,7 @@ public static partial class FixtureArt
         foreach (var c in x.F.Cells)
         {
             var cr = ShipView.CellRect(c).Grow(-3f);
-            ci.DrawRect(new Rect2(cr.GetCenter().X - 3f, cr.End.Y - 1.8f, 6f, 1.5f), Cream.WithAlpha(0.55f)); // 칸 딱지
+            ci.Box(new Rect2(cr.GetCenter().X - 3f, cr.End.Y - 1.8f, 6f, 1.5f), Cream.WithAlpha(0.55f)); // 칸 딱지
         }
         Bolts(ci, x.R.Grow(-2f), 2f, 0.6f);
     }
@@ -866,14 +866,14 @@ public static partial class FixtureArt
     {
         var ci = x.Ci;
         var r = x.R.Grow(-4f);
-        ci.DrawRect(new Rect2(r.Position.X + 3f, r.Position.Y - 1.5f, r.Size.X - 6f, 2f), new Color("#3a4454")); // 벽 받침
+        ci.Box(new Rect2(r.Position.X + 3f, r.Position.Y - 1.5f, r.Size.X - 6f, 2f), new Color("#3a4454")); // 벽 받침
         Box(ci, r, new Color("#6a2c16"), 4, new Color("#e0763a"), 2);
         var win = new Rect2(r.Position.X + 3, r.Position.Y + 3, r.Size.X - 6, r.Size.Y * 0.55f);
         Glass(ci, win, new Color("#1a1c22"), 1.5f);
         var cross = new Vector2(r.GetCenter().X, r.End.Y - 5.5f);
-        ci.DrawRect(new Rect2(cross.X - 3.5f, cross.Y - 1f, 7f, 2f), new Color("#f2efe8"));
-        ci.DrawRect(new Rect2(cross.X - 1f, cross.Y - 3.5f, 2f, 7f), new Color("#f2efe8"));
-        ci.DrawRect(new Rect2(r.End.X - 4, r.GetCenter().Y - 3, 2, 6), new Color("#c9cfd8")); // 손잡이
+        ci.Box(new Rect2(cross.X - 3.5f, cross.Y - 1f, 7f, 2f), new Color("#f2efe8"));
+        ci.Box(new Rect2(cross.X - 1f, cross.Y - 3.5f, 2f, 7f), new Color("#f2efe8"));
+        ci.Box(new Rect2(r.End.X - 4, r.GetCenter().Y - 3, 2, 6), new Color("#c9cfd8")); // 손잡이
         Line(ci, new Vector2(r.End.X - 3f, r.GetCenter().Y + 3f), new Vector2(r.End.X - 1f, r.End.Y - 2f), new Color("#c0392b"), 0.8f); // 봉인 줄
     }
 
@@ -890,7 +890,7 @@ public static partial class FixtureArt
             int n = Mathf.Min(inv.Count(k), 3);
             total += n;
             for (int i = 0; i < n && px + w <= win.End.X; i++, px += w + 1f)
-                ci.DrawRect(new Rect2(px, win.End.Y - win.Size.Y * 0.8f, w, win.Size.Y * 0.8f), col);
+                ci.Box(new Rect2(px, win.End.Y - win.Size.Y * 0.8f, w, win.Size.Y * 0.8f), col);
         }
         Items(ItemKind.Sealant, new Color("#e9c948"), 2.5f);
         Items(ItemKind.MedKit, new Color("#f2f2f2"), 3f);

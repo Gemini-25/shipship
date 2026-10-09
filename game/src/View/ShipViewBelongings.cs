@@ -60,42 +60,42 @@ public partial class ShipView
             case BelongingKind.Book or BelongingKind.Journal or BelongingKind.Sketchbook:
                 if (open)
                 {
-                    ci.DrawRect(new Rect2(c.X - s, c.Y - s * 0.6f, s, s * 1.2f), paper);
-                    ci.DrawRect(new Rect2(c.X, c.Y - s * 0.6f, s, s * 1.2f), paper.Darkened(0.08f));
+                    ci.Box(new Rect2(c.X - s, c.Y - s * 0.6f, s, s * 1.2f), paper);
+                    ci.Box(new Rect2(c.X, c.Y - s * 0.6f, s, s * 1.2f), paper.Darkened(0.08f));
                     ci.DrawLine(new Vector2(c.X, c.Y - s * 0.6f), new Vector2(c.X, c.Y + s * 0.6f), tint, 1f);
                 }
-                else { ci.DrawRect(new Rect2(c.X - s * 0.6f, c.Y - s * 0.8f, s * 1.2f, s * 1.6f), tint); ci.DrawRect(new Rect2(c.X - s * 0.6f, c.Y - s * 0.8f, s * 0.3f, s * 1.6f), ink); }
+                else { ci.Box(new Rect2(c.X - s * 0.6f, c.Y - s * 0.8f, s * 1.2f, s * 1.6f), tint); ci.Box(new Rect2(c.X - s * 0.6f, c.Y - s * 0.8f, s * 0.3f, s * 1.6f), ink); }
                 break;
             case BelongingKind.Instrument:
-                ci.DrawCircle(c + new Vector2(-s * 0.3f, s * 0.3f), s * 0.6f, new Color(0.7f, 0.45f, 0.25f, alpha));
+                ci.Circle(c + new Vector2(-s * 0.3f, s * 0.3f), s * 0.6f, new Color(0.7f, 0.45f, 0.25f, alpha));
                 ci.DrawLine(c + new Vector2(-s * 0.2f, s * 0.1f), c + new Vector2(s * 0.9f, -s * 0.9f), ink, 1.4f);
                 break;
             case BelongingKind.ChessSet or BelongingKind.Puzzle:
                 for (int i = 0; i < 2; i++)
                 for (int j = 0; j < 2; j++)
-                    ci.DrawRect(new Rect2(c.X - s + i * s, c.Y - s + j * s, s, s), (i + j) % 2 == 0 ? paper : ink);
+                    ci.Box(new Rect2(c.X - s + i * s, c.Y - s + j * s, s, s), (i + j) % 2 == 0 ? paper : ink);
                 break;
             case BelongingKind.Cards:
-                ci.DrawRect(new Rect2(c.X - s * 0.8f, c.Y - s * 0.6f, s, s * 1.3f), paper);
-                ci.DrawRect(new Rect2(c.X - s * 0.2f, c.Y - s * 0.4f, s, s * 1.3f), new Color(0.85f, 0.2f, 0.25f, alpha));
+                ci.Box(new Rect2(c.X - s * 0.8f, c.Y - s * 0.6f, s, s * 1.3f), paper);
+                ci.Box(new Rect2(c.X - s * 0.2f, c.Y - s * 0.4f, s, s * 1.3f), new Color(0.85f, 0.2f, 0.25f, alpha));
                 break;
             case BelongingKind.Artwork:
-                ci.DrawRect(new Rect2(c.X - s * 1.1f, c.Y - s * 0.9f, s * 2.2f, s * 1.8f), new Color(0.75f, 0.6f, 0.3f, alpha));
-                ci.DrawRect(new Rect2(c.X - s * 0.8f, c.Y - s * 0.6f, s * 1.6f, s * 1.2f), tint.Lightened(0.3f));
+                ci.Box(new Rect2(c.X - s * 1.1f, c.Y - s * 0.9f, s * 2.2f, s * 1.8f), new Color(0.75f, 0.6f, 0.3f, alpha));
+                ci.Box(new Rect2(c.X - s * 0.8f, c.Y - s * 0.6f, s * 1.6f, s * 1.2f), tint.Lightened(0.3f));
                 break;
             case BelongingKind.Toolset or BelongingKind.ModelKit:
-                ci.DrawRect(new Rect2(c.X - s, c.Y - s * 0.5f, s * 2f, s * 1.1f), k == BelongingKind.Toolset ? new Color(0.95f, 0.55f, 0.15f, alpha) : tint);
+                ci.Box(new Rect2(c.X - s, c.Y - s * 0.5f, s * 2f, s * 1.1f), k == BelongingKind.Toolset ? new Color(0.95f, 0.55f, 0.15f, alpha) : tint);
                 ci.DrawLine(new Vector2(c.X - s * 0.4f, c.Y - s * 0.5f), new Vector2(c.X - s * 0.4f, c.Y - s), ink, 1.2f);
                 ci.DrawLine(new Vector2(c.X + s * 0.4f, c.Y - s * 0.5f), new Vector2(c.X + s * 0.4f, c.Y - s), ink, 1.2f);
                 ci.DrawLine(new Vector2(c.X - s * 0.4f, c.Y - s), new Vector2(c.X + s * 0.4f, c.Y - s), ink, 1.2f);
                 break;
             case BelongingKind.Mug or BelongingKind.TeaSet:
-                ci.DrawRect(new Rect2(c.X - s * 0.5f, c.Y - s * 0.6f, s, s * 1.2f), tint);
-                ci.DrawArc(c + new Vector2(s * 0.6f, 0f), s * 0.35f, -Mathf.Pi / 2, Mathf.Pi / 2, 8, tint, 1.2f);
+                ci.Box(new Rect2(c.X - s * 0.5f, c.Y - s * 0.6f, s, s * 1.2f), tint);
+                ci.Arc(c + new Vector2(s * 0.6f, 0f), s * 0.35f, -Mathf.Pi / 2, Mathf.Pi / 2, 8, tint, 1.2f);
                 break;
             default:
-                ci.DrawCircle(c, s * 0.6f, tint);
-                ci.DrawArc(c, s * 0.6f, 0f, Mathf.Tau, 12, ink, 1f);
+                ci.Circle(c, s * 0.6f, tint);
+                ci.Arc(c, s * 0.6f, 0f, Mathf.Tau, 12, ink, 1f);
                 break;
         }
     }
@@ -113,7 +113,7 @@ public partial class ShipView
             float fade = Mathf.Clamp((c.SaidUntil - w.Tick) / (float)SimTime.Minutes(1), 0f, 1f);
             var rect = new Rect2(p.X - bw / 2, p.Y - 10, bw, 16);
             Gfx.RoundRect(ci, rect, new Color(0.96f, 0.95f, 0.9f, 0.92f * fade), 6, Palette.Crew(c.Id).WithAlpha(0.9f * fade), 1);
-            ci.DrawColoredPolygon(new[] { new Vector2(p.X - 4, p.Y + 6), new Vector2(p.X + 4, p.Y + 6), new Vector2(p.X, p.Y + 11) }, new Color(0.96f, 0.95f, 0.9f, 0.92f * fade));
+            ci.Poly(new[] { new Vector2(p.X - 4, p.Y + 6), new Vector2(p.X + 4, p.Y + 6), new Vector2(p.X, p.Y + 11) }, new Color(0.96f, 0.95f, 0.9f, 0.92f * fade));
             Gfx.Text(ci, Fonts.Body, new Vector2(p.X - bw / 2 + 6, p.Y + 2), t, 10, new Color(0.1f, 0.1f, 0.14f, fade));
         }
     }

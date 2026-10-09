@@ -64,8 +64,8 @@ public partial class ShipView
                 var j0 = room.Joints[0];
                 var p = CellRect(j0.Cell).GetCenter() + new Vector2(j0.Out.X, j0.Out.Y) * T * 0.95f;
                 float pulse = 0.55f + 0.45f * Mathf.Sin(_time * 3f);
-                ci.DrawCircle(p, 7f, new Color(0.1f, 0.08f, 0.02f, 0.85f), true, -1f, true);
-                ci.DrawArc(p, 7f, 0f, Mathf.Tau, 20, JointWarn.WithAlpha(pulse), 1.5f, true);
+                ci.Circle(p, 7f, new Color(0.1f, 0.08f, 0.02f, 0.85f), true, -1f, true);
+                ci.Arc(p, 7f, 0f, Mathf.Tau, 20, JointWarn.WithAlpha(pulse), 1.5f, true);
                 Gfx.TextCentered(ci, Fonts.Bold, p, "?", 10, JointWarn.WithAlpha(pulse));
             }
         }
@@ -116,12 +116,12 @@ public partial class ShipView
         ci.DrawLine(plateA, plateB, col.WithAlpha(a), 3.5f, true);
         if (!j.Released)
             foreach (var bolt in new[] { face - side * len * 0.28f, face + side * len * 0.28f })
-                ci.DrawCircle(bolt, 1.6f, new Color(0.95f, 0.97f, 1f, 0.8f * a), true, -1f, true);
+                ci.Circle(bolt, 1.6f, new Color(0.95f, 0.97f, 1f, 0.8f * a), true, -1f, true);
         // 약해진 곳은 브래킷을 따라 금
         if (k < 0.7f && !j.Released)
             ci.DrawLine(face - side * 2f + outDir * 3f, face + side * 3f - outDir * 1f, new Color(0.05f, 0.03f, 0.02f, 0.85f * a), 1.2f, true);
         if (emphasize && k < 0.7f)
-            ci.DrawArc(face, len * 0.75f, 0f, Mathf.Tau, 20, col.WithAlpha(0.35f + 0.25f * Mathf.Sin(_time * 4f)), 1.2f, true);
+            ci.Arc(face, len * 0.75f, 0f, Mathf.Tau, 20, col.WithAlpha(0.35f + 0.25f * Mathf.Sin(_time * 4f)), 1.2f, true);
     }
 
     // ─────────────────────────────── 떨어져 나간 방 ───────────────────────────────
@@ -143,12 +143,12 @@ public partial class ShipView
             ci.DrawSetTransform(pos, ang, Vector2.One);
 
             // 그림자처럼 번진 테두리 (선체 테두리 대신)
-            foreach (var c in room.Cells) ci.DrawRect(CellRect(c).Grow(3f), Palette.HullRim.WithAlpha(0.8f));
-            foreach (var (cell, _) in f.WallCells) ci.DrawRect(CellRect(cell).Grow(3f), Palette.HullRim.WithAlpha(0.8f));
+            foreach (var c in room.Cells) ci.Box(CellRect(c).Grow(3f), Palette.HullRim.WithAlpha(0.8f));
+            foreach (var (cell, _) in f.WallCells) ci.Box(CellRect(cell).Grow(3f), Palette.HullRim.WithAlpha(0.8f));
             foreach (var c in room.Cells)
             {
                 var r = CellRect(c);
-                ci.DrawRect(r, Palette.RoomFloor(room.Kind).Darkened(0.25f));
+                ci.Box(r, Palette.RoomFloor(room.Kind).Darkened(0.25f));
                 if (LookOn) { ci.DrawTextureRectRegion(LookTextures.Floors[(int)LookSpec.Floor(Materials.FloorFor(room.Kind), room.Kind, false)]!, r, LookTextures.Region(c), new Color(0.62f, 0.64f, 0.7f)); continue; } // v16.5a 떨어져 나간 방도 같은 바닥재 (빛이 꺼져 어둡다)
                 var (tex, alpha) = Textures.Floor(room.Type);
                 if (tex != null) ci.DrawTextureRectRegion(tex, r, Variant(c), new Color(1, 1, 1, alpha * 0.7f));
@@ -156,16 +156,16 @@ public partial class ShipView
             foreach (var (cell, wall) in f.WallCells)
             {
                 var r = CellRect(cell);
-                ci.DrawRect(r, Palette.Wall);
+                ci.Box(r, Palette.Wall);
                 if (LookOn) ci.DrawTextureRectRegion(LookTextures.Walls[(int)LookSpec.WallLook.Hull]!, r, LookTextures.Region(cell), new Color(0.7f, 0.72f, 0.78f)); // v16.5a
                 else if (Textures.Wall != null) ci.DrawTextureRectRegion(Textures.Wall, r, Variant(cell), new Color(1, 1, 1, 0.85f));
                 if (wall.StageIndex > 0) PaintWallDamage(ci, cell, wall);
             }
             foreach (var d in f.Doors)
-                ci.DrawRect(CellRect(d.Cell), Palette.Wall.Lightened(0.08f));
+                ci.Box(CellRect(d.Cell), Palette.Wall.Lightened(0.08f));
             foreach (var fu in room.Furniture) PaintFurniture(ci, fu);
             // 진공: 차갑게 가라앉은 색
-            foreach (var c in room.Cells) ci.DrawRect(CellRect(c), new Color(0.02f, 0.04f, 0.08f, 0.2f));
+            foreach (var c in room.Cells) ci.Box(CellRect(c), new Color(0.02f, 0.04f, 0.08f, 0.2f));
 
             // 뜯겨 나간 가장자리: 원래 이웃과 맞닿았던 쪽 (조각에 벽이 없는 바닥 가장자리)
             var walls = new HashSet<Cell>(f.WallCells.Select(x => x.cell));
@@ -212,7 +212,7 @@ public partial class ShipView
             {
                 var fc = Px(f.Center);
                 ci.DrawLine(p, fc.Lerp(p, 0.15f), TetherColor.WithAlpha(0.7f), 1.5f, true);
-                ci.DrawCircle(fc.Lerp(p, 0.15f), 3f, TetherColor, true, -1f, true);
+                ci.Circle(fc.Lerp(p, 0.15f), 3f, TetherColor, true, -1f, true);
             }
             if (d.Fetching is Drone x && d.State == DroneState.Towing)
                 ci.DrawLine(p, Px(x.Position), TetherColor.WithAlpha(0.7f), 1.2f, true);
@@ -221,7 +221,7 @@ public partial class ShipView
                 var tgt = CellRect(d.Order.Target.Cell).GetCenter();
                 float flick = 0.5f + 0.5f * Mathf.Sin(_time * 23f + d.Id);
                 ci.DrawLine(p, tgt, new Color("#ffcf7a").WithAlpha(0.35f + 0.4f * flick), 1.5f, true);
-                ci.DrawCircle(tgt, 3f + 2f * flick, new Color("#fff1c2").WithAlpha(0.8f * flick), true, -1f, true);
+                ci.Circle(tgt, 3f + 2f * flick, new Color("#fff1c2").WithAlpha(0.8f * flick), true, -1f, true);
             }
 
             // 몸체: 종류마다 다른 드론 (v16.20b — ShipViewFleet.cs) · 다친 곳 · 단계
@@ -230,18 +230,18 @@ public partial class ShipView
             // 상태 불빛
             Color led = d.Wrecked ? Palette.TextMuted : d.Faulty ? Palette.Danger : adrift ? Palette.Danger : d.Battery < 0.3f ? Palette.Warning : Palette.Good;
             float blink = adrift || d.Faulty ? 0.3f + 0.7f * Mathf.Abs(Mathf.Sin(_time * 4f)) : 1f;
-            ci.DrawCircle(p, 1.8f, led.WithAlpha(blink), true, -1f, true);
+            ci.Circle(p, 1.8f, led.WithAlpha(blink), true, -1f, true);
             // 배터리 (밖에 있거나 충전 중일 때)
             if (!docked || d.Battery < 0.99f)
             {
                 var bar = new Rect2(p.X - 7f, p.Y + size + 3f, 14f, 2.5f);
-                ci.DrawRect(bar, new Color(0, 0, 0, 0.7f));
-                ci.DrawRect(new Rect2(bar.Position, new Vector2(bar.Size.X * Mathf.Clamp(d.Battery, 0f, 1f), bar.Size.Y)),
+                ci.Box(bar, new Color(0, 0, 0, 0.7f));
+                ci.Box(new Rect2(bar.Position, new Vector2(bar.Size.X * Mathf.Clamp(d.Battery, 0f, 1f), bar.Size.Y)),
                     (d.Battery < 0.3f ? Palette.Warning : Palette.Good).WithAlpha(0.9f));
             }
             // 짐 (자재)
             if (d.Cargo.Length > 0)
-                ci.DrawRect(new Rect2(p.X - 2.5f, p.Y - size - 5f, 5f, 4f), Palette.Item(d.Cargo[0].kind));
+                ci.Box(new Rect2(p.X - 2.5f, p.Y - size - 5f, 5f, 4f), Palette.Item(d.Cargo[0].kind));
         }
     }
 
@@ -262,9 +262,9 @@ public partial class ShipView
                 float t = k / (pts.Length - 1f);
                 pts[k] = (1 - t) * (1 - t) * h + 2 * (1 - t) * t * mid + t * t * p;
             }
-            ci.DrawPolyline(pts, TetherColor.WithAlpha(0.55f), 1.3f, true);
+            ci.Polyline(pts, TetherColor.WithAlpha(0.55f), 1.3f, true);
             // 우주복 헬멧 빛
-            ci.DrawArc(p, CrewRadius + 3f, 0f, Mathf.Tau, 24, new Color("#cfe8ff").WithAlpha(0.45f), 1.2f, true);
+            ci.Arc(p, CrewRadius + 3f, 0f, Mathf.Tau, 24, new Color("#cfe8ff").WithAlpha(0.45f), 1.2f, true);
         }
     }
 
@@ -283,13 +283,13 @@ public partial class ShipView
         }
         foreach (var (cell, wall) in _world.Ship.Walls)
             if (wall.IsHull && wall.FrameLost)
-                ci.DrawRect(CellRect(cell).Grow(2f), Palette.Danger.WithAlpha(0.5f + 0.3f * Mathf.Sin(_time * 4f)), false, 2f);
+                ci.Box(CellRect(cell).Grow(2f), Palette.Danger.WithAlpha(0.5f + 0.3f * Mathf.Sin(_time * 4f)), false, 2f);
         foreach (var d in _world.Drones.Drones)
         {
             if (d.State is DroneState.Docked or DroneState.Lost or DroneState.Adrift) continue;
             var col = DroneColor(d.Kind).WithAlpha(0.35f);
             for (int k = d.RouteIndex; k < d.Route.Count; k += 2)
-                ci.DrawCircle(Px(d.Route[k]), 1.5f, col, true, -1f, true);
+                ci.Circle(Px(d.Route[k]), 1.5f, col, true, -1f, true);
         }
     }
 
@@ -303,9 +303,9 @@ public partial class ShipView
         for (int k = 0; k < 3; k++)
         {
             var c = new Vector2(r.GetCenter().X, r.Position.Y + r.Size.Y * (k + 0.5f) / 3f);
-            ci.DrawArc(c, 7f, 0f, Mathf.Tau, 20, new Color("#2c3a4a"), 1.5f, true);
+            ci.Arc(c, 7f, 0f, Mathf.Tau, 20, new Color("#2c3a4a"), 1.5f, true);
         }
         // 충전 단자
-        ci.DrawRect(new Rect2(r.Position.X + 2f, r.Position.Y + 3f, 3f, r.Size.Y - 6f), new Color("#6fd3b0").WithAlpha(0.35f));
+        ci.Box(new Rect2(r.Position.X + 2f, r.Position.Y + 3f, 3f, r.Size.Y - 6f), new Color("#6fd3b0").WithAlpha(0.35f));
     }
 }

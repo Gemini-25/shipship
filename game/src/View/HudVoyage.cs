@@ -31,12 +31,12 @@ public partial class Hud
             var leg = v.Legs[i];
             float x0 = x + w * acc / total, x1 = x + w * (acc + leg.Days) / total;
             var col = LegColor(leg.Kind).WithAlpha(i < v.Index ? 0.35f : 0.9f);
-            DrawRect(new Rect2(x0 + 0.5f, y - 3f, MathF.Max(1f, x1 - x0 - 1f), 6f), col);
-            if (leg.Kind is LegKind.Port or LegKind.Derelict) DrawCircle(new Vector2((x0 + x1) / 2f, y), 4f, col);
+            this.Box(new Rect2(x0 + 0.5f, y - 3f, MathF.Max(1f, x1 - x0 - 1f), 6f), col);
+            if (leg.Kind is LegKind.Port or LegKind.Derelict) this.Circle(new Vector2((x0 + x1) / 2f, y), 4f, col);
             acc += leg.Days;
         }
         float px = x + w * v.DoneDays / total;
-        DrawCircle(new Vector2(px, y), 5f, v.Drifting ? Palette.Danger : Colors.White);
+        this.Circle(new Vector2(px, y), 5f, v.Drifting ? Palette.Danger : Colors.White);
         DrawLine(new Vector2(px, y - 9f), new Vector2(px, y + 9f), Colors.White.WithAlpha(0.6f), 1f);
         var cur = v.Current;
         float left = cur.Days - v.Progress;

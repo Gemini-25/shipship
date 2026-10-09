@@ -75,7 +75,7 @@ public partial class Hud
         Item(c => TechIcons.Draw(this, demo, c, 7f, 0), "고를 수 있음");
         Item(c => TechIcons.Draw(this, demo, c, 7f, 2, 0.8f), "선행 · 조건 대기");
         Item(c => { TechIcons.Draw(this, demo, c, 7f, 3); TechIcons.Lock(this, c, 4f, Palette.Danger); }, "갈림길에서 버림");
-        Item(c => { DrawArc(c, 7f, 0, Mathf.Tau, 14, WebGold.WithAlpha(0.7f), 1f, true); Gfx.TextCentered(this, Fonts.Bold, c + new Vector2(0, 3.5f), "?", Ui.TextTiny, WebGold); }, "숨은 기술의 기척");
+        Item(c => { this.Arc(c, 7f, 0, Mathf.Tau, 14, WebGold.WithAlpha(0.7f), 1f, true); Gfx.TextCentered(this, Fonts.Bold, c + new Vector2(0, 3.5f), "?", Ui.TextTiny, WebGold); }, "숨은 기술의 기척");
         Item(c => { DrawDashed(c - new Vector2(7, 0), c + new Vector2(7, 0), WebFork, 1.4f, 3f); }, "갈림길");
         Item(c => TechIcons.Glyph(this, "chip", c, 5f, WebRec, 1.2f), "컴퓨터 추천");
         Item(c => TechIcons.Glyph(this, "flask", c, 5f, Palette.Warning, 1.2f), "실험 중");
@@ -100,7 +100,7 @@ public partial class Hud
             float t = i / 16f, u = 1f - t;
             pts[i] = u * u * u * a + 3f * u * u * t * c1 + 3f * u * t * t * c2 + t * t * t * b;
         }
-        if (!dashed) { DrawPolyline(pts, col, w, true); return; }
+        if (!dashed) { this.Polyline(pts, col, w, true); return; }
         for (int i = 0; i < 16; i += 2) DrawLine(pts[i], pts[i + 1], col, w, true);
     }
 
@@ -127,7 +127,7 @@ public partial class Hud
             var (era, name, need) = EraSystem.Eras[i];
             var col = new Rect2(map.Position.X + labelW + i * colW, map.Position.Y, colW, map.Size.Y);
             bool open = w.Research >= need;
-            DrawRect(new Rect2(col.Position + new Vector2(1, headH), col.Size - new Vector2(2, headH)), new Color(1, 1, 1, open ? (i % 2 == 0 ? 0.025f : 0.015f) : 0.005f));
+            this.Box(new Rect2(col.Position + new Vector2(1, headH), col.Size - new Vector2(2, headH)), new Color(1, 1, 1, open ? (i % 2 == 0 ? 0.025f : 0.015f) : 0.005f));
             string head = $"{era}. {name}";
             while (head.Length > 3 && Gfx.Width(Fonts.Bold, head, Ui.TextTiny) > colW - 6) head = head[..^1];
             Gfx.TextCentered(this, Fonts.Bold, new Vector2(col.GetCenter().X, map.Position.Y + 10f), head, Ui.TextTiny, open ? (era == e.Era ? Palette.Accent : Palette.TextDim) : Palette.TextMuted);
@@ -136,9 +136,9 @@ public partial class Hud
         for (int j = 0; j < fields.Length; j++)
         {
             float y = map.Position.Y + headH + j * rowH;
-            if (j % 2 == 1) DrawRect(new Rect2(map.Position.X, y, map.Size.X, rowH), new Color(1, 1, 1, 0.012f));
+            if (j % 2 == 1) this.Box(new Rect2(map.Position.X, y, map.Size.X, rowH), new Color(1, 1, 1, 0.012f));
             var fc = TechIcons.FieldColor(fields[j]);
-            DrawRect(new Rect2(map.Position.X, y + 3, 2.5f, rowH - 6), fc.WithAlpha(0.7f));
+            this.Box(new Rect2(map.Position.X, y + 3, 2.5f, rowH - 6), fc.WithAlpha(0.7f));
             Gfx.Text(this, Fonts.Bold, new Vector2(map.Position.X + 7, y + rowH * 0.5f + Gfx.CenterOffset(Fonts.Bold, Ui.TextTiny)), EraSystem.Fields(fields[j]), Ui.TextTiny, fc.Lightened(0.1f));
         }
         // 자리: 같은 칸(시대 × 분야)에 여럿이면 가로로 나눈다
@@ -186,7 +186,7 @@ public partial class Hud
             float blink = pending ? 0.55f + 0.45f * Mathf.Sin(Time.GetTicksMsec() / 260f) : 0.7f;
             DrawDashed(a, b, WebFork.WithAlpha((st.Side >= 0 ? 0.35f : 0.6f) * blink), pending ? 2f : 1.3f, 4f);
             var m = (a + b) * 0.5f;
-            DrawCircle(m, 5.5f, new Color(0.06f, 0.06f, 0.1f, 0.95f), true, -1f, true);
+            this.Circle(m, 5.5f, new Color(0.06f, 0.06f, 0.1f, 0.95f), true, -1f, true);
             DrawLine(m + new Vector2(0, 3.5f), m, WebFork, 1.4f, true);
             DrawLine(m, m + new Vector2(-3f, -3.5f), WebFork, 1.4f, true);
             DrawLine(m, m + new Vector2(3f, -3.5f), WebFork, 1.4f, true);
@@ -202,7 +202,7 @@ public partial class Hud
             {
                 if (!Hinted(t)) continue;
                 DrawDashed(c + new Vector2(-r, -r), c + new Vector2(r, -r), WebGold.WithAlpha(0.35f), 1f, 2.5f);
-                for (int k = 0; k < 10; k++) { float a0 = Mathf.Tau * k / 10f; DrawArc(c, r * 0.9f, a0, a0 + 0.3f, 4, WebGold.WithAlpha(0.55f), 1f, true); }
+                for (int k = 0; k < 10; k++) { float a0 = Mathf.Tau * k / 10f; this.Arc(c, r * 0.9f, a0, a0 + 0.3f, 4, WebGold.WithAlpha(0.55f), 1f, true); }
                 Gfx.TextCentered(this, Fonts.Bold, c + new Vector2(0, r * 0.35f), "?", (int)MathF.Max(9f, r * 1.1f), WebGold.WithAlpha(0.85f));
                 if ((mouse - c).LengthSquared() < r * r) { hover = t; hoverAt = c; }
                 continue;
@@ -214,16 +214,16 @@ public partial class Hud
             else if (!known && TechWeb.Node(t.Id).Gate is TechGate g && !tw.GateMet(t))
             {
                 var bc = c + new Vector2(-r * 0.75f, -r * 0.75f);
-                DrawCircle(bc, r * 0.34f, new Color(0.08f, 0.08f, 0.1f, 0.95f), true, -1f, true);
+                this.Circle(bc, r * 0.34f, new Color(0.08f, 0.08f, 0.1f, 0.95f), true, -1f, true);
                 TechIcons.Glyph(this, TechIcons.GateGlyph(g.Kind), bc, r * 0.22f, Palette.Warning, 1f);
             }
             if (TechWeb.ForkFor(t.Id) is var (f, side) && tw.ForkStates[f.Id].Side == side)
                 TechIcons.Glyph(this, "star", c + new Vector2(0f, -r * 1.15f), r * 0.32f, WebGold, 1f);
             if (e.Project == t.Id)
             {
-                DrawArc(c, r * 1.32f, 0f, Mathf.Tau, 28, Palette.Warning.WithAlpha(0.25f + 0.35f * pulse), 1.4f, true);
+                this.Arc(c, r * 1.32f, 0f, Mathf.Tau, 28, Palette.Warning.WithAlpha(0.25f + 0.35f * pulse), 1.4f, true);
                 float frac = Mathf.Clamp(e.Progress / MathF.Max(1f, tw.CostOf(t)), 0f, 1f);
-                DrawArc(c, r * 1.32f, -Mathf.Pi / 2f, -Mathf.Pi / 2f + Mathf.Tau * frac, 28, Palette.Warning, 2.4f, true);
+                this.Arc(c, r * 1.32f, -Mathf.Pi / 2f, -Mathf.Pi / 2f + Mathf.Tau * frac, 28, Palette.Warning, 2.4f, true);
             }
             if (tw.RecTech == t.Id && !known) TechIcons.Glyph(this, "chip", c + new Vector2(r * 1.05f, -r * 0.95f), r * 0.32f, WebRec, 1f);
             if (tw.Trial?.Tech == t.Id) TechIcons.Glyph(this, "flask", c + new Vector2(-r * 1.05f, r * 0.9f), r * 0.34f, Palette.Warning, 1f);
@@ -231,7 +231,7 @@ public partial class Hud
         }
         if (hover != null)
         {
-            DrawArc(hoverAt, r * 1.5f, 0f, Mathf.Tau, 24, Palette.Text.WithAlpha(0.6f), 1.2f, true);
+            this.Arc(hoverAt, r * 1.5f, 0f, Mathf.Tau, 24, Palette.Text.WithAlpha(0.6f), 1.2f, true);
             var ht = hover;
             var at = hoverAt + new Vector2(r + 6f, -r);
             _tip = () => UiKit.Tooltip(this, at, Screen, WebTitle(ht), WebLines(ht));

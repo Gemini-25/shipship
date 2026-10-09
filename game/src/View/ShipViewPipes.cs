@@ -61,7 +61,7 @@ public partial class ShipView
                 // 선체로 이어지는 받침
                 ci.DrawLine(new Vector2(r.GetCenter().X, r.End.Y), new Vector2(r.GetCenter().X, r.End.Y + 4f), new Color("#3a4455"), 2f);
                 var body = new Rect2(r.Position.X + 1.5f, r.Position.Y + T * 0.3f, r.Size.X - 3f, T * 0.62f);
-                ci.DrawRect(body, new Color("#2a3240").Lerp(new Color("#1a1414"), 1f - cond));
+                ci.Box(body, new Color("#2a3240").Lerp(new Color("#1a1414"), 1f - cond));
                 for (int k = 0; k < 5; k++)
                 {
                     float x = body.Position.X + 2f + k * (body.Size.X - 4f) / 4f;
@@ -69,7 +69,7 @@ public partial class ShipView
                     if (cond < 0.7f && Hash(c.X, c.Y, k) < 1f - cond) fin = new Color("#3a2f2f");
                     ci.DrawLine(new Vector2(x, body.Position.Y + 1f), new Vector2(x, body.End.Y - 1f), fin, 1.5f);
                 }
-                ci.DrawRect(body, new Color("#5a6678").WithAlpha(0.8f), false, 1f);
+                ci.Box(body, new Color("#5a6678").WithAlpha(0.8f), false, 1f);
                 if (cond < 0.7f)
                 {
                     // 부서진 판: 금과 휘어진 모서리
@@ -109,12 +109,12 @@ public partial class ShipView
             var body = dead ? col.Darkened(0.55f) : col;
             // v10.9: 금속 관 — 그림자, 관 몸통(유체 색이 비친 강철), 윗면 광택
             if (s.Role == PipeRole.HotLeg && PipeFlowing(s) && heat > 0.1f)
-                ci.DrawPolyline(pts, HotPipe.WithAlpha(0.1f * heat), width + 10f, true); // 고온관의 열기
-            ci.DrawPolyline(pts.Select(p => p + new Vector2(1.5f, 2f)).ToArray(), new Color(0f, 0f, 0f, alpha * 0.45f), width + 2f, true);
-            ci.DrawPolyline(pts, new Color("#0a0d12").WithAlpha(alpha), width + 2f, true);
+                ci.Polyline(pts, HotPipe.WithAlpha(0.1f * heat), width + 10f, true); // 고온관의 열기
+            ci.Polyline(pts.Select(p => p + new Vector2(1.5f, 2f)).ToArray(), new Color(0f, 0f, 0f, alpha * 0.45f), width + 2f, true);
+            ci.Polyline(pts, new Color("#0a0d12").WithAlpha(alpha), width + 2f, true);
             var metal = body.Darkened(0.3f).Lerp(new Color("#6a7486"), 0.3f);
-            ci.DrawPolyline(pts, metal.WithAlpha(alpha), width, true);
-            ci.DrawPolyline(pts.Select(p => p + new Vector2(-0.6f, -0.8f)).ToArray(), body.Lightened(0.35f).WithAlpha(alpha * 0.55f), Mathf.Max(1f, width * 0.3f), true);
+            ci.Polyline(pts, metal.WithAlpha(alpha), width, true);
+            ci.Polyline(pts.Select(p => p + new Vector2(-0.6f, -0.8f)).ToArray(), body.Lightened(0.35f).WithAlpha(alpha * 0.55f), Mathf.Max(1f, width * 0.3f), true);
             // 플랜지(세 칸마다)와 벽 관통부 칼라
             for (int i = 1; i < pts.Length - 1; i++)
             {
@@ -123,8 +123,8 @@ public partial class ShipView
                 if (ship.Grid.Kind(path[i]) == TileKind.Wall)
                 {
                     var q = pts[i];
-                    ci.DrawRect(new Rect2(q - new Vector2(width + 3f, width + 3f), new Vector2(2 * width + 6f, 2 * width + 6f)), new Color("#0a0d12").WithAlpha(alpha));
-                    ci.DrawRect(new Rect2(q - new Vector2(width + 2f, width + 2f), new Vector2(2 * width + 4f, 2 * width + 4f)), new Color("#3c4658").WithAlpha(alpha), false, 1.5f);
+                    ci.Box(new Rect2(q - new Vector2(width + 3f, width + 3f), new Vector2(2 * width + 6f, 2 * width + 6f)), new Color("#0a0d12").WithAlpha(alpha));
+                    ci.Box(new Rect2(q - new Vector2(width + 2f, width + 2f), new Vector2(2 * width + 4f, 2 * width + 4f)), new Color("#3c4658").WithAlpha(alpha), false, 1.5f);
                 }
                 else if (i % 3 == 0 && Mathf.Abs(dir.Dot((pts[i] - pts[i - 1]).Normalized())) > 0.9f)
                 {
@@ -173,8 +173,8 @@ public partial class ShipView
             if (s.Patched)
             {
                 var p = CellRect(s.LeakAt).GetCenter() + off;
-                ci.DrawRect(new Rect2(p - new Vector2(4f, 4f), new Vector2(8f, 8f)), new Color("#e0b64a").WithAlpha(0.95f));
-                ci.DrawRect(new Rect2(p - new Vector2(4f, 4f), new Vector2(8f, 8f)), new Color("#6b5520"), false, 1f);
+                ci.Box(new Rect2(p - new Vector2(4f, 4f), new Vector2(8f, 8f)), new Color("#e0b64a").WithAlpha(0.95f));
+                ci.Box(new Rect2(p - new Vector2(4f, 4f), new Vector2(8f, 8f)), new Color("#6b5520"), false, 1f);
             }
             // 끊어진 곳: 붉은 X
             if (s.Severed)
@@ -196,9 +196,9 @@ public partial class ShipView
                     var dir = Vector2.Up.Rotated((Hash(s.Id, k, 5) - 0.5f) * 2.2f);
                     var q = p + dir * T * (0.3f + 1.2f * strength) * ph;
                     if (s.IsCoolant)
-                        ci.DrawCircle(q, 3f + 9f * ph * (0.4f + strength), new Color(0.95f, 0.97f, 1f, 0.55f * (1f - ph)), true, -1f, true);
+                        ci.Circle(q, 3f + 9f * ph * (0.4f + strength), new Color(0.95f, 0.97f, 1f, 0.55f * (1f - ph)), true, -1f, true);
                     else
-                        ci.DrawCircle(q + new Vector2(0f, T * 0.6f * ph * ph), 1.6f, WaterPipe.WithAlpha(0.8f * (1f - ph)), true, -1f, true);
+                        ci.Circle(q + new Vector2(0f, T * 0.6f * ph * ph), 1.6f, WaterPipe.WithAlpha(0.8f * (1f - ph)), true, -1f, true);
                 }
             }
             if (torn && path.Count >= 1)
@@ -209,7 +209,7 @@ public partial class ShipView
                 {
                     if (!Cell.Dirs4.Any(d => ship.RoomAt(endCell + d)?.Detached == true || ship.Grid.Kind(endCell + d) == TileKind.Void)) continue;
                     var q = CellRect(endCell).GetCenter() + off2;
-                    ci.DrawCircle(q, width * 0.9f, new Color("#1a1f28"), true, -1f, true);
+                    ci.Circle(q, width * 0.9f, new Color("#1a1f28"), true, -1f, true);
                     for (int k = 0; k < 4; k++)
                         ci.DrawLine(q, q + Vector2.FromAngle(k * 1.7f + 0.4f) * (width + 3f), Palette.Danger.WithAlpha(0.7f), 1.2f, true);
                 }
@@ -220,24 +220,24 @@ public partial class ShipView
         {
             var v = CellRect(s.ValveCell).GetCenter() + PipeOffset(s) * 0.5f;
             float r = focus ? 6.5f : 5f;
-            ci.DrawCircle(v + new Vector2(1.5f, 2f), r + 2f, new Color(0f, 0f, 0f, 0.45f), true, -1f, true);
-            ci.DrawCircle(v, r + 1.5f, new Color("#0a0d12"), true, -1f, true);
-            ci.DrawArc(v, r, 0f, Mathf.Tau, 24, new Color("#9aa6b5"), 2f, true);
+            ci.Circle(v + new Vector2(1.5f, 2f), r + 2f, new Color(0f, 0f, 0f, 0.45f), true, -1f, true);
+            ci.Circle(v, r + 1.5f, new Color("#0a0d12"), true, -1f, true);
+            ci.Arc(v, r, 0f, Mathf.Tau, 24, new Color("#9aa6b5"), 2f, true);
             float rot = s.Closed ? Mathf.Pi * 0.25f : 0f;
             for (int k = 0; k < 4; k++)
             {
                 var d = Vector2.FromAngle(rot + k * Mathf.Pi * 0.5f);
                 ci.DrawLine(v + d * 1.5f, v + d * (r - 0.5f), new Color("#6f7b8e"), 1.3f, true);
             }
-            ci.DrawCircle(v, 1.8f, PipeColor(s), true, -1f, true);
+            ci.Circle(v, 1.8f, PipeColor(s), true, -1f, true);
             var lamp = s.Closed ? (s.Bypass > 0f ? BypassColor : Palette.Danger) : Palette.Good;
-            ci.DrawCircle(v + new Vector2(r + 3f, -r - 1f), 1.8f, lamp, true, -1f, true);
+            ci.Circle(v + new Vector2(r + 3f, -r - 1f), 1.8f, lamp, true, -1f, true);
         }
         // 냉각수 보충구
         if (focus && net.Built)
         {
             var p = CellRect(net.FillPort).GetCenter();
-            ci.DrawRect(new Rect2(p - new Vector2(4f, 4f), new Vector2(8f, 8f)), WaterPipe.WithAlpha(0.8f), false, 1.5f);
+            ci.Box(new Rect2(p - new Vector2(4f, 4f), new Vector2(8f, 8f)), WaterPipe.WithAlpha(0.8f), false, 1.5f);
         }
     }
 
@@ -295,7 +295,7 @@ public partial class ShipView
         if (s == null) return;
         var off = PipeOffset(s);
         var pts = s.Path.Select(c => CellRect(c).GetCenter() + off).ToArray();
-        ci.DrawPolyline(pts, Palette.Danger.WithAlpha(0.5f * pulse), 7f, true);
-        ci.DrawCircle(CellRect(at).GetCenter() + off, 6f, Palette.Danger.WithAlpha(0.8f), false, 2f, true);
+        ci.Polyline(pts, Palette.Danger.WithAlpha(0.5f * pulse), 7f, true);
+        ci.Circle(CellRect(at).GetCenter() + off, 6f, Palette.Danger.WithAlpha(0.8f), false, 2f, true);
     }
 }

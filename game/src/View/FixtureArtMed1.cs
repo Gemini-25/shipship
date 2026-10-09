@@ -86,9 +86,9 @@ public static partial class FixtureArt
         // 덮개: 수술하는 동안 초록 천 (준비 땐 접힌 채 발치에)
         if (k.State == CaseState.Operating)
         {
-            ci.DrawRect(x.Q(0.22f, 0.14f, 0.98f, 0.86f), MDrape.WithAlpha(0.72f));
+            ci.Box(x.Q(0.22f, 0.14f, 0.98f, 0.86f), MDrape.WithAlpha(0.72f));
             var hole = x.P(k.Part == BodyPart.Head ? 0.12f : k.Part is BodyPart.LeftLeg or BodyPart.RightLeg ? 0.78f : 0.48f, 0.5f);
-            ci.DrawRect(new Rect2(hole - new Vector2(x.Px(2.5f), x.Px(2f)), new Vector2(x.Px(5f), x.Px(4f))), new Color("#d89a8a").WithAlpha(0.8f)); // 여는 자리
+            ci.Box(new Rect2(hole - new Vector2(x.Px(2.5f), x.Px(2f)), new Vector2(x.Px(5f), x.Px(4f))), new Color("#d89a8a").WithAlpha(0.8f)); // 여는 자리
             if (x.Lod > 0) // 기구 쟁반 반짝임
                 for (int i = 0; i < 3; i++)
                 {
@@ -98,12 +98,12 @@ public static partial class FixtureArt
             // 진행 띠 (발치)
             Line(ci, x.P(0.05f, 0.92f), x.P(0.05f + 0.9f * k.Progress, 0.92f), Good.WithAlpha(0.8f), x.Px(1.2f));
         }
-        else ci.DrawRect(x.Q(0.8f, 0.16f, 0.95f, 0.84f), MDrape.WithAlpha(0.6f)); // 접힌 덮개
+        else ci.Box(x.Q(0.8f, 0.16f, 0.95f, 0.84f), MDrape.WithAlpha(0.6f)); // 접힌 덮개
         // 모니터 심전도 (빨라지면 · 피가 모자라면 붉게)
         bool low = pt != null && pt.Vitals.Health < 0.35f;
         if (x.Lit || k.State == CaseState.Operating)
         {
-            ci.DrawRect(mon, new Color("#05080a"));
+            ci.Box(mon, new Color("#05080a"));
             var pts = new Vector2[7];
             float beat = low ? 2.2f : 1.2f;
             for (int i = 0; i < 7; i++)
@@ -112,7 +112,7 @@ public static partial class FixtureArt
                 float spike = ph > 0.45f && ph < 0.55f ? (ph < 0.5f ? -1f : 0.6f) : 0f;
                 pts[i] = new Vector2(mon.Position.X + u * mon.Size.X, mon.GetCenter().Y + spike * x.Px(1.6f));
             }
-            ci.DrawPolyline(pts, (low ? Danger : Ecg).WithAlpha(0.9f), 0.6f, true);
+            ci.Polyline(pts, (low ? Danger : Ecg).WithAlpha(0.9f), 0.6f, true);
         }
         if (low) Led(ci, mon.End + new Vector2(x.Px(1f), 0f), Danger, Mathf.PosMod(x.T * 2f, 1f) < 0.5f ? 1f : 0.2f, x.Px(1.1f));
         // 수혈 중이면 링거 봉에 붉은 주머니
@@ -178,12 +178,12 @@ public static partial class FixtureArt
             var pool = ShipView.FurnitureRect(tf).GetCenter();
             var dir = pool - head;
             var side = new Vector2(-dir.Y, dir.X).Normalized() * x.Px(battery ? 5f : 8f);
-            ci.DrawColoredPolygon(new[] { head + side * 0.6f, head - side * 0.6f, pool - side * 1.4f, pool + side * 1.4f }, col.WithAlpha(battery ? 0.07f : 0.12f));
-            ci.DrawCircle(pool, x.Px(battery ? 6f : 10f), col.WithAlpha(battery ? 0.08f : 0.14f));
+            ci.Poly(new[] { head + side * 0.6f, head - side * 0.6f, pool - side * 1.4f, pool + side * 1.4f }, col.WithAlpha(battery ? 0.07f : 0.12f));
+            ci.Circle(pool, x.Px(battery ? 6f : 10f), col.WithAlpha(battery ? 0.08f : 0.14f));
         }
         if (battery) // 배터리 칸 (40분 → 4칸)
             for (int i = 0; i < 4; i++)
-                ci.DrawRect(new Rect2(x.P(0.7f, 0.9f) + new Vector2(i * x.Px(2.2f), 0f), new Vector2(x.Px(1.8f), x.Px(2.4f))), (charge > i * 10f ? Amber : new Color("#3a2a10")).WithAlpha(0.9f));
+                ci.Box(new Rect2(x.P(0.7f, 0.9f) + new Vector2(i * x.Px(2.2f), 0f), new Vector2(x.Px(1.8f), x.Px(2.4f))), (charge > i * 10f ? Amber : new Color("#3a2a10")).WithAlpha(0.9f));
     }
 
     private static void OrLampFine(in Fix x)
@@ -207,7 +207,7 @@ public static partial class FixtureArt
         Can(ci, x.P(0.2f, 0.74f), x.Px(2.6f), MO2, MO2.Darkened(0.3f)); // 산소통
         for (int i = 0; i < 3; i++) Glass(ci, x.Q(0.56f + i * 0.1f, 0.18f, 0.62f + i * 0.1f, 0.58f), new Color("#cfe8f0"), 1f); // 유량계 유리관
         // 주름관 고리 + 호흡 주머니 자리
-        ci.DrawArc(x.P(0.62f, 0.78f), x.Px(4.5f), 0f, Mathf.Pi * 1.5f, 14, new Color("#3a5a7a"), x.Px(1.6f), true);
+        ci.Arc(x.P(0.62f, 0.78f), x.Px(4.5f), 0f, Mathf.Pi * 1.5f, 14, new Color("#3a5a7a"), x.Px(1.6f), true);
         Dot(ci, x.P(0.88f, 0.74f), x.Px(2.6f), MBag);
     }
 
@@ -231,12 +231,12 @@ public static partial class FixtureArt
         if (x.Lit && x.Lod > 0) // CO2 파형 창
         {
             var scr = x.Q(0.32f, 0.62f, 0.52f, 0.86f);
-            ci.DrawRect(scr, new Color("#05080a"));
+            ci.Box(scr, new Color("#05080a"));
             if (use && !hand)
             {
                 var pts = new Vector2[6];
                 for (int i = 0; i < 6; i++) { float u = i / 5f, ph = Mathf.PosMod(u - x.T * 0.4f, 1f); pts[i] = new Vector2(scr.Position.X + u * scr.Size.X, scr.End.Y - scr.Size.Y * (ph < 0.5f ? 0.75f : 0.2f)); }
-                ci.DrawPolyline(pts, Amber.WithAlpha(0.9f), 0.6f, true);
+                ci.Polyline(pts, Amber.WithAlpha(0.9f), 0.6f, true);
             }
         }
         if (hand) Led(ci, x.P(0.5f, 0.12f), Danger, Mathf.PosMod(x.T, 1f) < 0.5f ? 0.9f : 0.2f, x.Px(1f)); // 전기 없음 — 손으로 짠다
@@ -261,7 +261,7 @@ public static partial class FixtureArt
         for (int i = 1; i < 4; i++) Line(ci, x.P(0.12f, 0.1f + i * 0.17f), x.P(0.88f, 0.1f + i * 0.17f), MSteel.Darkened(0.2f), 0.8f); // 선반
         // 핏방울 표지
         var d = x.P(0.3f, 0.88f);
-        ci.DrawColoredPolygon(new[] { d + new Vector2(0f, -x.Px(3.2f)), d + new Vector2(x.Px(2f), x.Px(0.4f)), d + new Vector2(0f, x.Px(2f)), d + new Vector2(-x.Px(2f), x.Px(0.4f)) }, MBlood);
+        ci.Poly(new[] { d + new Vector2(0f, -x.Px(3.2f)), d + new Vector2(x.Px(2f), x.Px(0.4f)), d + new Vector2(0f, x.Px(2f)), d + new Vector2(-x.Px(2f), x.Px(0.4f)) }, MBlood);
         Box(ci, x.Q(0.5f, 0.82f, 0.88f, 0.94f), new Color("#0a0f12"), 1f); // 온도 창
         Line(ci, x.P(0.92f, 0.2f), x.P(0.92f, 0.6f), Chrome, x.Px(1.2f)); // 손잡이
     }
@@ -282,7 +282,7 @@ public static partial class FixtureArt
                 var r = x.Q(0.16f + col * 0.18f, 0.12f + row * 0.17f, 0.3f + col * 0.18f, 0.25f + row * 0.17f);
                 Box(ci, r, (p.Warm > 1f ? MBlood.Darkened(0.3f) : MBlood).WithAlpha(0.92f), 1f, MBloodHi.WithAlpha(0.6f));
                 var band = p.Type.Group switch { BloodGroup.O => Colors.White, BloodGroup.A => new Color("#5a9ae0"), BloodGroup.B => new Color("#e0c040"), _ => new Color("#c070e0") };
-                ci.DrawRect(new Rect2(r.Position, new Vector2(r.Size.X, Mathf.Max(1f, r.Size.Y * 0.22f))), band.WithAlpha(p.Type.Neg ? 0.5f : 0.95f));
+                ci.Box(new Rect2(r.Position, new Vector2(r.Size.X, Mathf.Max(1f, r.Size.Y * 0.22f))), band.WithAlpha(p.Type.Neg ? 0.5f : 0.95f));
                 i++;
             }
         // 온도 창: 차가우면 초록 4° · 미지근하면 붉게 깜빡
@@ -292,7 +292,7 @@ public static partial class FixtureArt
             var c = cold ? Good : Danger;
             float a = cold ? 0.9f : Mathf.PosMod(x.T * 1.5f, 1f) < 0.5f ? 1f : 0.2f;
             if (x.Lod > 0) Tag(ci, win.GetCenter(), cold ? "4°" : "!°", 5, c.WithAlpha(a));
-            else ci.DrawRect(win.Grow(-1f), c.WithAlpha(0.5f * a));
+            else ci.Box(win.Grow(-1f), c.WithAlpha(0.5f * a));
         }
         if (cold && x.Lit && x.Lod > 0) // 서리 · 압축기 숨
         {
@@ -320,8 +320,8 @@ public static partial class FixtureArt
         for (int i = 1; i < 3; i++) Line(ci, x.P(0.06f, 0.08f + i * 0.27f), x.P(0.94f, 0.08f + i * 0.27f), MWood.Lightened(0.2f), 0.8f);
         // 초록 십자
         var c = x.P(0.5f, 0.02f);
-        ci.DrawRect(new Rect2(c - new Vector2(x.Px(0.8f), x.Px(0.2f)), new Vector2(x.Px(1.6f), x.Px(3.4f))), MO2);
-        ci.DrawRect(new Rect2(c + new Vector2(-x.Px(1.7f), x.Px(0.8f)), new Vector2(x.Px(3.4f), x.Px(1.4f))), MO2);
+        ci.Box(new Rect2(c - new Vector2(x.Px(0.8f), x.Px(0.2f)), new Vector2(x.Px(1.6f), x.Px(3.4f))), MO2);
+        ci.Box(new Rect2(c + new Vector2(-x.Px(1.7f), x.Px(0.8f)), new Vector2(x.Px(3.4f), x.Px(1.4f))), MO2);
     }
 
     private static void CabinetLife(in Fix x)
@@ -335,7 +335,7 @@ public static partial class FixtureArt
         CabRow(x, st, 2, ItemKind.MedHerb, 4, 0.04f, MHerb, 3);
         CabRow(x, st, 2, ItemKind.MedKit, 3, 0.5f, new Color("#e05a5a"), 0);
         if (x.User != null) // 누가 문을 열었다 — 유리문이 젖혀진다
-            ci.DrawRect(x.Q(0.52f, 0.08f, 0.94f, 0.9f), new Color("#d8eef0").WithAlpha(0.25f));
+            ci.Box(x.Q(0.52f, 0.08f, 0.94f, 0.9f), new Color("#d8eef0").WithAlpha(0.25f));
     }
 
     /// <summary>약장 한 칸: 재고만큼 병 · 앰플 · 주머니 · 다발.</summary>

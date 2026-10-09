@@ -102,7 +102,7 @@ public partial class Hud
             DrawScaleBadge(rect, inc); // v16.18 규모 배지 · 규모별 테두리
             // 왼쪽 띠: 진행 중이면 맥박
             float pulse = inc.Open ? 0.65f + 0.35f * Mathf.Sin(_time * 4f) : 1f;
-            DrawRect(new Rect2(rect.Position + new Vector2(0, 8), new Vector2(3, h - 16)), sev.WithAlpha(pulse));
+            this.Box(new Rect2(rect.Position + new Vector2(0, 8), new Vector2(3, h - 16)), sev.WithAlpha(pulse));
             float x = rect.Position.X + 14;
             string title = root.Text;
             Gfx.Text(this, Fonts.Bold, new Vector2(x, rect.Position.Y + 19), Fit(title, w - 120, Ui.TextLabel, Fonts.Bold), Ui.TextLabel, Palette.Text);
@@ -181,7 +181,7 @@ public partial class Hud
         foreach (var k in inc.Nodes.Select(i => log.Node(i).Kind).Distinct().OrderBy(k => (int)k))
         {
             string lab = KindLabel(k);
-            DrawCircle(new Vector2(lx + 4, y0 + 76), 3.5f, KindColor(k), true, -1f, true);
+            this.Circle(new Vector2(lx + 4, y0 + 76), 3.5f, KindColor(k), true, -1f, true);
             Gfx.Text(this, Fonts.Body, new Vector2(lx + 11, y0 + 80), lab, Ui.TextTiny, Palette.TextMuted);
             lx += 16 + Gfx.Width(Fonts.Body, lab, Ui.TextTiny);
             if (lx > right - 170) break;
@@ -225,14 +225,14 @@ public partial class Hud
             }
             bool isOpen = n.Open;
             float r = n.Depth == 0 ? 5.5f : 4f;
-            if (isOpen) DrawCircle(new Vector2(ix, cy), r + 3f + 1.5f * Mathf.Sin(_time * 5f + n.Id), col.WithAlpha(0.18f), true, -1f, true);
+            if (isOpen) this.Circle(new Vector2(ix, cy), r + 3f + 1.5f * Mathf.Sin(_time * 5f + n.Id), col.WithAlpha(0.18f), true, -1f, true);
             if (n.Kind == CauseKind.Recovery)
             {
-                DrawArc(new Vector2(ix, cy), 4.5f, 0.6f, Mathf.Tau - 0.3f, 12, col, 1.6f, true);
+                this.Arc(new Vector2(ix, cy), 4.5f, 0.6f, Mathf.Tau - 0.3f, 12, col, 1.6f, true);
                 DrawLine(new Vector2(ix + 3.4f, cy - 3.8f), new Vector2(ix + 5.6f, cy - 1.2f), col, 1.6f, true);
             }
-            else if (n.Lasting && !isOpen) DrawArc(new Vector2(ix, cy), r, 0, Mathf.Tau, 14, col, 1.5f, true);
-            else DrawCircle(new Vector2(ix, cy), r, col, true, -1f, true);
+            else if (n.Lasting && !isOpen) this.Arc(new Vector2(ix, cy), r, 0, Mathf.Tau, 14, col, 1.5f, true);
+            else this.Circle(new Vector2(ix, cy), r, col, true, -1f, true);
             DrawNodeScale(n, ix, cy, r); // v16.18 고리의 규모 · 오른 자리 ▲
             float tx = ix + 12;
             Gfx.Text(this, Fonts.Body, new Vector2(tx, cy + 4), SimTime.Clock(n.Tick), Ui.TextTiny, Palette.TextMuted);
@@ -301,8 +301,8 @@ public partial class Hud
             var col = ScaleBarColor(inc) ?? (inc.Deaths > 0 ? Palette.Danger : inc.Open ? Palette.Warning : Palette.Good.WithAlpha(0.8f)); // v16.18 규모 색
             var r = new Rect2(a, strip.Position.Y + 6, b - a, 8);
             bool sel = ChainIncident == inc;
-            DrawRect(r, col.WithAlpha(sel ? 1f : 0.7f));
-            if (sel) DrawRect(r.Grow(2f), Palette.Accent, false, 1f);
+            this.Box(r, col.WithAlpha(sel ? 1f : 0.7f));
+            if (sel) this.Box(r.Grow(2f), Palette.Accent, false, 1f);
             var hit = r.Grow(3f);
             if (hit.HasPoint(mouse)) hover = inc;
             var captured = inc;

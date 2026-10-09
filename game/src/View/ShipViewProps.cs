@@ -54,35 +54,35 @@ public partial class ShipView
             {
                 var r = Plate(10f, 8f);
                 bool memorial = p.Spec.Id is "memorial" or "qualframe";
-                ci.DrawRect(r.Grow(1.2f), memorial ? ink : wood);
-                ci.DrawRect(r, memorial ? new Color(0.85f, 0.85f, 0.82f, a) : tint);
+                ci.Box(r.Grow(1.2f), memorial ? ink : wood);
+                ci.Box(r, memorial ? new Color(0.85f, 0.85f, 0.82f, a) : tint);
                 if (p.Spec.Id == "memorial") ci.DrawLine(r.Position, r.Position + new Vector2(4f, 0f) + new Vector2(0f, 4f), ink, 1.5f, true); // 검은 리본
-                ci.DrawRect(r.Grow(1.2f), maker, false, 0.8f);
+                ci.Box(r.Grow(1.2f), maker, false, 0.8f);
                 break;
             }
             case PropShape.Poster or PropShape.Board:
             {
                 var r = Plate(11f, 7f);
-                ci.DrawRect(r, p.Spec.Shape == PropShape.Board ? new Color(0.62f, 0.5f, 0.36f, a) : tint);
+                ci.Box(r, p.Spec.Shape == PropShape.Board ? new Color(0.62f, 0.5f, 0.36f, a) : tint);
                 for (int k = 0; k < 3; k++)
                 {
                     var o = r.Position + r.Size * new Vector2(0.25f + 0.25f * k, 0.5f);
-                    ci.DrawRect(new Rect2(o - new Vector2(1.5f, 1.5f), new Vector2(3f, 3f)), new Color(0.95f, 0.93f, 0.85f, 0.85f * a));
+                    ci.Box(new Rect2(o - new Vector2(1.5f, 1.5f), new Vector2(3f, 3f)), new Color(0.95f, 0.93f, 0.85f, 0.85f * a));
                 }
-                ci.DrawRect(r, maker, false, 0.8f);
+                ci.Box(r, maker, false, 0.8f);
                 break;
             }
             case PropShape.Map:
             {
                 var r = Plate(12f, 8f);
-                ci.DrawRect(r, new Color(0.2f, 0.26f, 0.38f, a));
+                ci.Box(r, new Color(0.2f, 0.26f, 0.38f, a));
                 ci.DrawLine(r.Position + new Vector2(2, r.Size.Y - 2), r.End - new Vector2(2, r.Size.Y - 2), new Color(1f, 0.85f, 0.4f, a), 1f, true);
-                ci.DrawCircle(r.End - new Vector2(2, r.Size.Y - 2), 1.2f, new Color(1f, 0.85f, 0.4f, a));
+                ci.Circle(r.End - new Vector2(2, r.Size.Y - 2), 1.2f, new Color(1f, 0.85f, 0.4f, a));
                 break;
             }
             case PropShape.Clock:
-                ci.DrawCircle(c, 4.5f, new Color(0.92f, 0.9f, 0.84f, a));
-                ci.DrawArc(c, 4.5f, 0f, Mathf.Tau, 16, ink, 1f, true);
+                ci.Circle(c, 4.5f, new Color(0.92f, 0.9f, 0.84f, a));
+                ci.Arc(c, 4.5f, 0f, Mathf.Tau, 16, ink, 1f, true);
                 ci.DrawLine(c, c + Vector2.Up.Rotated(_time * 0.05f) * 3.5f, ink, 1f, true);
                 ci.DrawLine(c, c + Vector2.Up.Rotated(_time * 0.6f) * 4f, new Color(0.8f, 0.2f, 0.2f, a), 0.8f, true);
                 break;
@@ -90,25 +90,25 @@ public partial class ShipView
             {
                 var pole = c + (vert ? new Vector2(0, -5f) : new Vector2(-5f, 0));
                 float wave = Mathf.Sin(_time * 2f + p.Id) * 1.2f;
-                ci.DrawColoredPolygon(new[] { pole, pole + new Vector2(9f, 2f + wave), pole + new Vector2(0f, 6f) }, tint);
+                ci.Poly(new[] { pole, pole + new Vector2(9f, 2f + wave), pole + new Vector2(0f, 6f) }, tint);
                 ci.DrawLine(pole + new Vector2(0, -1f), pole + new Vector2(0, 8f), ink, 1f, true);
                 break;
             }
             case PropShape.Shelf:
             {
                 var r = Plate(12f, 5f);
-                ci.DrawRect(r, wood);
+                ci.Box(r, wood);
                 for (int k = 0; k < 3; k++)
-                    ci.DrawRect(new Rect2(r.Position + r.Size * new Vector2(0.15f + 0.28f * k, 0.15f), new Vector2(2.5f, 2.5f)), Color.FromHsv(PropHue(p.Id + k), 0.5f, 0.9f, a));
+                    ci.Box(new Rect2(r.Position + r.Size * new Vector2(0.15f + 0.28f * k, 0.15f), new Vector2(2.5f, 2.5f)), Color.FromHsv(PropHue(p.Id + k), 0.5f, 0.9f, a));
                 break;
             }
             case PropShape.Plaque:
             {
                 var r = Plate(10f, 6f);
                 bool scorch = p.Spec.Id == "scorch";
-                ci.DrawRect(r, scorch ? new Color(0.22f, 0.2f, 0.18f, a) : new Color(0.75f, 0.65f, 0.35f, a));
-                if (scorch) ci.DrawCircle(r.GetCenter(), 2.2f, new Color(0.05f, 0.04f, 0.03f, 0.8f * a)); // 그을음
-                ci.DrawRect(r, ink, false, 0.8f);
+                ci.Box(r, scorch ? new Color(0.22f, 0.2f, 0.18f, a) : new Color(0.75f, 0.65f, 0.35f, a));
+                if (scorch) ci.Circle(r.GetCenter(), 2.2f, new Color(0.05f, 0.04f, 0.03f, 0.8f * a)); // 그을음
+                ci.Box(r, ink, false, 0.8f);
                 break;
             }
             case PropShape.Lights:
@@ -120,21 +120,21 @@ public partial class ShipView
                 for (int k = 0; k <= 4; k++)
                 {
                     float tw = 0.6f + 0.4f * Mathf.Sin(_time * 3f + k * 1.7f + p.Id);
-                    ci.DrawCircle(from + step * k, 1.4f, Color.FromHsv(PropHue(k), 0.5f, 1f, tw * a));
+                    ci.Circle(from + step * k, 1.4f, Color.FromHsv(PropHue(k), 0.5f, 1f, tw * a));
                 }
                 break;
             }
             case PropShape.Pot:
-                ci.DrawColoredPolygon(new[] { c + new Vector2(-3.5f, 1f), c + new Vector2(3.5f, 1f), c + new Vector2(2.5f, 5f), c + new Vector2(-2.5f, 5f) }, new Color(0.7f, 0.4f, 0.28f, a));
-                ci.DrawCircle(c + new Vector2(-2f, -1.5f), 2.6f, leaf);
-                ci.DrawCircle(c + new Vector2(2f, -2f), 2.4f, leaf);
-                ci.DrawCircle(c + new Vector2(0f, -4f), 2.4f, leaf.Lightened(0.15f));
+                ci.Poly(new[] { c + new Vector2(-3.5f, 1f), c + new Vector2(3.5f, 1f), c + new Vector2(2.5f, 5f), c + new Vector2(-2.5f, 5f) }, new Color(0.7f, 0.4f, 0.28f, a));
+                ci.Circle(c + new Vector2(-2f, -1.5f), 2.6f, leaf);
+                ci.Circle(c + new Vector2(2f, -2f), 2.4f, leaf);
+                ci.Circle(c + new Vector2(0f, -4f), 2.4f, leaf.Lightened(0.15f));
                 break;
             case PropShape.Rug:
             {
                 var r = new Rect2(c - new Vector2(9f, 6f), new Vector2(18f, 12f));
                 Gfx.RoundRect(ci, r, tint.WithAlpha(0.55f * a), 3f, maker.WithAlpha(0.6f * a), 1);
-                ci.DrawRect(r.Grow(-3.5f), Color.FromHsv(PropHue(p.Id + 3), 0.35f, 0.7f, 0.45f * a), false, 1f);
+                ci.Box(r.Grow(-3.5f), Color.FromHsv(PropHue(p.Id + 3), 0.35f, 0.7f, 0.45f * a), false, 1f);
                 break;
             }
             case PropShape.Cushion:
@@ -143,17 +143,17 @@ public partial class ShipView
             case PropShape.Lamp:
             {
                 float glow = 0.18f + 0.06f * Mathf.Sin(_time * 1.3f + p.Id);
-                ci.DrawCircle(c, 8f, new Color(1f, 0.85f, 0.5f, glow * a));
+                ci.Circle(c, 8f, new Color(1f, 0.85f, 0.5f, glow * a));
                 ci.DrawLine(c + new Vector2(0, 4f), c + new Vector2(0, -1f), ink, 1f, true);
-                ci.DrawColoredPolygon(new[] { c + new Vector2(-3f, -1f), c + new Vector2(3f, -1f), c + new Vector2(2f, -4f), c + new Vector2(-2f, -4f) }, new Color(1f, 0.88f, 0.6f, a));
+                ci.Poly(new[] { c + new Vector2(-3f, -1f), c + new Vector2(3f, -1f), c + new Vector2(2f, -4f), c + new Vector2(-2f, -4f) }, new Color(1f, 0.88f, 0.6f, a));
                 break;
             }
             case PropShape.Candle:
             {
                 float fl = 0.75f + 0.25f * Mathf.Sin(_time * 9f + p.Id * 2.1f);
-                ci.DrawCircle(c, 6f, new Color(1f, 0.75f, 0.35f, 0.18f * fl * a));
-                ci.DrawRect(new Rect2(c + new Vector2(-1.5f, -1f), new Vector2(3f, 5f)), new Color(0.95f, 0.93f, 0.88f, a));
-                ci.DrawCircle(c + new Vector2(0, -2.2f), 1.3f * fl, new Color(1f, 0.8f, 0.35f, a));
+                ci.Circle(c, 6f, new Color(1f, 0.75f, 0.35f, 0.18f * fl * a));
+                ci.Box(new Rect2(c + new Vector2(-1.5f, -1f), new Vector2(3f, 5f)), new Color(0.95f, 0.93f, 0.88f, a));
+                ci.Circle(c + new Vector2(0, -2.2f), 1.3f * fl, new Color(1f, 0.8f, 0.35f, a));
                 break;
             }
             case PropShape.Mobile:
@@ -165,33 +165,33 @@ public partial class ShipView
                 {
                     var hang = c + bar * k;
                     ci.DrawLine(hang, hang + new Vector2(0, 3f + (k + 1)), ink.WithAlpha(0.5f * a), 0.6f, true);
-                    ci.DrawCircle(hang + new Vector2(0, 3.5f + (k + 1)), 1.4f, Color.FromHsv(PropHue(p.Id + k + 2), 0.5f, 0.95f, a));
+                    ci.Circle(hang + new Vector2(0, 3.5f + (k + 1)), 1.4f, Color.FromHsv(PropHue(p.Id + k + 2), 0.5f, 0.95f, a));
                 }
                 break;
             }
             case PropShape.Trophy:
-                ci.DrawColoredPolygon(new[] { c + new Vector2(-3.5f, -4f), c + new Vector2(3.5f, -4f), c + new Vector2(1.2f, 0.5f), c + new Vector2(-1.2f, 0.5f) }, new Color(0.95f, 0.78f, 0.3f, a));
-                ci.DrawRect(new Rect2(c + new Vector2(-2.5f, 2f), new Vector2(5f, 2f)), new Color(0.6f, 0.45f, 0.2f, a));
+                ci.Poly(new[] { c + new Vector2(-3.5f, -4f), c + new Vector2(3.5f, -4f), c + new Vector2(1.2f, 0.5f), c + new Vector2(-1.2f, 0.5f) }, new Color(0.95f, 0.78f, 0.3f, a));
+                ci.Box(new Rect2(c + new Vector2(-2.5f, 2f), new Vector2(5f, 2f)), new Color(0.6f, 0.45f, 0.2f, a));
                 ci.DrawLine(c + new Vector2(0, 0.5f), c + new Vector2(0, 2f), new Color(0.95f, 0.78f, 0.3f, a), 1.2f);
                 break;
             case PropShape.Tank:
             {
                 var r = new Rect2(c - new Vector2(5f, 3.5f), new Vector2(10f, 7f));
-                ci.DrawRect(r, new Color(0.3f, 0.6f, 0.85f, 0.55f * a));
+                ci.Box(r, new Color(0.3f, 0.6f, 0.85f, 0.55f * a));
                 float fx = Mathf.Sin(_time * 0.8f + p.Id) * 3f;
-                ci.DrawCircle(r.GetCenter() + new Vector2(fx, 0.5f), 1.3f, new Color(1f, 0.55f, 0.25f, a));
-                ci.DrawRect(r, new Color(0.8f, 0.9f, 1f, 0.7f * a), false, 0.8f);
+                ci.Circle(r.GetCenter() + new Vector2(fx, 0.5f), 1.3f, new Color(1f, 0.55f, 0.25f, a));
+                ci.Box(r, new Color(0.8f, 0.9f, 1f, 0.7f * a), false, 0.8f);
                 break;
             }
             case PropShape.Model:
-                ci.DrawColoredPolygon(new[] { c + new Vector2(-5f, 1.5f), c + new Vector2(3f, 1.5f), c + new Vector2(5f, 0f), c + new Vector2(3f, -1.5f), c + new Vector2(-5f, -1.5f) },
+                ci.Poly(new[] { c + new Vector2(-5f, 1.5f), c + new Vector2(3f, 1.5f), c + new Vector2(5f, 0f), c + new Vector2(3f, -1.5f), c + new Vector2(-5f, -1.5f) },
                     p.Spec.Id == "zenstone" ? new Color(0.55f, 0.55f, 0.58f, a) : new Color(0.75f, 0.78f, 0.82f, a));
                 ci.DrawLine(c + new Vector2(-3f, 2.5f), c + new Vector2(3f, 2.5f), wood, 1.2f);
                 break;
             default: // Box
-                ci.DrawRect(new Rect2(c - new Vector2(4f, 3f), new Vector2(8f, 6f)), tint);
-                ci.DrawCircle(c + new Vector2(1.5f, 0f), 1.5f, ink);
-                ci.DrawRect(new Rect2(c - new Vector2(4f, 3f), new Vector2(8f, 6f)), maker, false, 0.8f);
+                ci.Box(new Rect2(c - new Vector2(4f, 3f), new Vector2(8f, 6f)), tint);
+                ci.Circle(c + new Vector2(1.5f, 0f), 1.5f, ink);
+                ci.Box(new Rect2(c - new Vector2(4f, 3f), new Vector2(8f, 6f)), maker, false, 0.8f);
                 break;
         }
     }

@@ -118,9 +118,9 @@ public partial class ShipView
 
     private void Lamp(CanvasItem ci, Vector2 p, Color c, float a, float size = 1f)
     {
-        ci.DrawCircle(p, 8f * size, c.WithAlpha(0.12f * a), true, -1f, true);
-        ci.DrawCircle(p, 4f * size, c.WithAlpha(0.35f * a), true, -1f, true);
-        ci.DrawCircle(p, 1.9f * size, c.Lightened(0.4f).WithAlpha(a), true, -1f, true);
+        ci.Circle(p, 8f * size, c.WithAlpha(0.12f * a), true, -1f, true);
+        ci.Circle(p, 4f * size, c.WithAlpha(0.35f * a), true, -1f, true);
+        ci.Circle(p, 1.9f * size, c.Lightened(0.4f).WithAlpha(a), true, -1f, true);
     }
 
     /// <summary>엔진 코어 뒤 은은한 불꽃 (원자로가 돌 때만 · 천천히 숨쉰다).</summary>
@@ -138,7 +138,7 @@ public partial class ShipView
             {
                 float len = T * (0.9f + k * 0.55f) * pulse, w = half * (1.15f - k * 0.18f);
                 var col = new Color(0.45f + 0.1f * (4 - k), 0.72f + 0.06f * (4 - k), 1f, 0.07f + 0.05f * (4 - k));
-                ci.DrawColoredPolygon(new[] { new Vector2(x, mid - w), new Vector2(x - len, mid), new Vector2(x, mid + w) }, col);
+                ci.Poly(new[] { new Vector2(x, mid - w), new Vector2(x - len, mid), new Vector2(x, mid + w) }, col);
             }
         }
     }
@@ -166,8 +166,8 @@ public partial class ShipView
                     var line = EdgeLine(tx, x1, top, 4f);
                     if (line.Count > 1)
                     {
-                        ci.DrawPolyline(line.ToArray(), new Color("#c0392b").WithAlpha(0.85f), 3f, true);
-                        ci.DrawPolyline(line.Select(p => p + new Vector2(0f, top ? -4f : 4f)).ToArray(), new Color("#d8dee8").WithAlpha(0.35f), 1.2f, true);
+                        ci.Polyline(line.ToArray(), new Color("#c0392b").WithAlpha(0.85f), 3f, true);
+                        ci.Polyline(line.Select(p => p + new Vector2(0f, top ? -4f : 4f)).ToArray(), new Color("#d8dee8").WithAlpha(0.35f), 1.2f, true);
                     }
                     if (lit) Lamp(ci, tip + new Vector2(-T * 0.2f, top ? -6f : 6f), Colors.White, Mathf.PosMod(t + (top ? 0f : 0.15f), 1.4f) < 0.1f ? 1f : 0.12f);
                 }
@@ -189,7 +189,7 @@ public partial class ShipView
                     var mast = end + new Vector2(0f, dir * T * 0.9f);
                     ci.DrawLine(end, mast, metal, 3f, true);
                     float ang = (top ? -Mathf.Pi / 2f : Mathf.Pi / 2f) + sweep;
-                    ci.DrawArc(mast + Vector2.FromAngle(ang) * 6f, 13f, ang + Mathf.Pi - 1.15f, ang + Mathf.Pi + 1.15f, 14, new Color("#c8d0dc"), 3f, true);
+                    ci.Arc(mast + Vector2.FromAngle(ang) * 6f, 13f, ang + Mathf.Pi - 1.15f, ang + Mathf.Pi + 1.15f, 14, new Color("#c8d0dc"), 3f, true);
                     ci.DrawLine(mast, mast + Vector2.FromAngle(ang) * 14f, metal.Lightened(0.2f), 1.5f, true);
                     if (lit) Lamp(ci, mast + Vector2.FromAngle(ang) * 15f, new Color("#7cf0a0"), Mathf.PosMod(t * 0.8f + (top ? 0f : 0.5f), 1f) < 0.2f ? 1f : 0.25f, 0.7f);
                 }
@@ -217,7 +217,7 @@ public partial class ShipView
                 float rr = (cy1 - cy0) * 0.5f;
                 var c = new Vector2(cx1 - rr, (cy0 + cy1) * 0.5f);
                 float rad = rr + 9f;
-                ci.DrawArc(c, rad, 0f, Mathf.Tau, 120, dark.WithAlpha(0.6f), 2f, true);
+                ci.Arc(c, rad, 0f, Mathf.Tau, 120, dark.WithAlpha(0.6f), 2f, true);
                 int n = 40;
                 float run = Mathf.PosMod(t * 0.35f, 1f) * n;
                 for (int i = 0; i < n; i++)
@@ -225,7 +225,7 @@ public partial class ShipView
                     var p = c + Vector2.FromAngle(i * Mathf.Tau / n) * rad;
                     float d = Mathf.PosMod(i - run, n);
                     float a = d < 4f ? 1f - d / 4f : 0.12f;
-                    if (lit) ci.DrawCircle(p, 2.2f, new Color("#9fe3ff").WithAlpha(0.25f + 0.75f * a), true, -1f, true);
+                    if (lit) ci.Circle(p, 2.2f, new Color("#9fe3ff").WithAlpha(0.25f + 0.75f * a), true, -1f, true);
                 }
                 // 나셀 (배 뒤쪽 절반의 맨 위 · 맨 아래): 바깥 가장자리 푸른 빛줄 · 앞끝 붉은 흡입구
                 foreach (bool top in new[] { true, false })
@@ -240,8 +240,8 @@ public partial class ShipView
                     if (line.Count > 1)
                     {
                         float glow = lit ? 0.55f + 0.25f * Mathf.Sin(t * 2.2f + (top ? 0f : 1f)) : 0.15f;
-                        ci.DrawPolyline(line.ToArray(), new Color(0.35f, 0.75f, 1f, 0.25f * glow), 9f, true);
-                        ci.DrawPolyline(line.ToArray(), new Color(0.6f, 0.9f, 1f, glow), 2.5f, true);
+                        ci.Polyline(line.ToArray(), new Color(0.35f, 0.75f, 1f, 0.25f * glow), 9f, true);
+                        ci.Polyline(line.ToArray(), new Color(0.6f, 0.9f, 1f, glow), 2.5f, true);
                     }
                     var nose = new Vector2((nx1 + 1) * T + 2f, (row + (top ? 2.5f : -1.5f)) * T);
                     if (lit) Lamp(ci, nose, new Color("#ff5a3c"), 0.7f + 0.3f * Mathf.Sin(t * 4f), 1.4f);
@@ -267,7 +267,7 @@ public partial class ShipView
                         var hub = basep + new Vector2(T * 0.6f, dir * T * 0.45f);
                         ci.DrawLine(hub, hub + Vector2.FromAngle(ang) * 9f, new Color("#a99a7a"), 3f, true);
                     }
-                    ci.DrawCircle(basep + new Vector2(T * 0.6f, dir * T * 0.45f), 4f, dark, true, -1f, true);
+                    ci.Circle(basep + new Vector2(T * 0.6f, dir * T * 0.45f), 4f, dark, true, -1f, true);
                 }
                 break;
             }
@@ -291,7 +291,7 @@ public partial class ShipView
                     {
                         if (Mathf.Abs(line[i].Y - axis) < T * 13f || !NearEdge(line[i], top)) continue;
                         float a = 0.3f + 0.3f * Mathf.Sin(t * 1.4f + i * 0.35f);
-                        if (lit) ci.DrawCircle(line[i], 2f, new Color(0.45f, 0.95f, 0.85f, a), true, -1f, true);
+                        if (lit) ci.Circle(line[i], 2f, new Color(0.45f, 0.95f, 0.85f, a), true, -1f, true);
                     }
                 }
                 // 뿔 끝: 축 가까운 줄 중 가장 앞으로 튀어나온 칸 (위 · 아래)
@@ -317,13 +317,13 @@ public partial class ShipView
                     for (int i = 0; i < line.Count; i += 4)
                     {
                         if (Mathf.Abs(line[i].Y - axis) < T * 8f || !NearEdge(line[i], top)) continue; // 가는 꼬리 통로 · 오목한 곳은 건너뛴다
-                        if (lit) ci.DrawCircle(line[i], 2.6f, new Color(1f, 0.82f, 0.55f, 0.35f + 0.2f * Mathf.Sin(t * 0.7f + i)), true, -1f, true);
-                        ci.DrawArc(line[i], 3.6f, 0f, Mathf.Tau, 10, dark, 1f, true);
+                        if (lit) ci.Circle(line[i], 2.6f, new Color(1f, 0.82f, 0.55f, 0.35f + 0.2f * Mathf.Sin(t * 0.7f + i)), true, -1f, true);
+                        ci.Arc(line[i], 3.6f, 0f, Mathf.Tau, 10, dark, 1f, true);
                     }
                 }
                 // 꼬리 지느러미 뒤 은은한 빛
                 var fl = new Vector2(x0 * T - T * 0.5f, axis);
-                if (lit) for (int k = 3; k >= 1; k--) ci.DrawCircle(fl, T * (0.9f + k * 0.8f), new Color(0.4f, 0.7f, 1f, 0.05f), true, -1f, true);
+                if (lit) for (int k = 3; k >= 1; k--) ci.Circle(fl, T * (0.9f + k * 0.8f), new Color(0.4f, 0.7f, 1f, 0.05f), true, -1f, true);
                 break;
             }
             case ShipFrame.Dragonfly:
@@ -365,8 +365,8 @@ public partial class ShipView
                             poly.Add(along + new Vector2(w, 0f));
                         }
                         float shimmer = 0.10f + 0.04f * Mathf.Sin(t * 1.7f + wi);
-                        ci.DrawColoredPolygon(poly.ToArray(), new Color(0.6f, 0.85f, 1f, shimmer));
-                        ci.DrawPolyline(poly.Append(poly[0]).ToArray(), new Color(0.75f, 0.9f, 1f, 0.35f), 1.2f, true);
+                        ci.Poly(poly.ToArray(), new Color(0.6f, 0.85f, 1f, shimmer));
+                        ci.Polyline(poly.Append(poly[0]).ToArray(), new Color(0.75f, 0.9f, 1f, 0.35f), 1.2f, true);
                         for (int v = -2; v <= 2; v++) // 잎맥
                             ci.DrawLine(c0 + new Vector2(v * wide * 0.25f, 0f), tip + new Vector2(v * wide * 0.08f, -dir * len * 0.08f * System.Math.Abs(v)), new Color(0.75f, 0.9f, 1f, 0.22f), 1f, true);
                         for (int h = 1; h <= 4; h++)
@@ -385,7 +385,7 @@ public partial class ShipView
                     var p1 = head + new Vector2(-T * 0.6f, s * T * 0.9f);
                     var p2 = p1 + new Vector2(T * 1.2f, s * T * 0.9f + sway);
                     var p3 = p2 + new Vector2(T * 0.9f, s * T * 0.2f + sway);
-                    ci.DrawPolyline(new[] { p1, p2, p3 }, metal, 2f, true);
+                    ci.Polyline(new[] { p1, p2, p3 }, metal, 2f, true);
                     if (lit) Lamp(ci, p3, new Color("#ffcf6b"), 0.6f + 0.4f * Mathf.Sin(t * 2.4f + s), 0.6f);
                 }
                 break;
@@ -403,7 +403,7 @@ public partial class ShipView
                         if (!NearEdge(line[i], top)) continue;
                         float d = run - i;
                         float a = d >= 0f && d < 9f ? 1f - d / 9f : 0.1f;
-                        if (lit) ci.DrawCircle(line[i], 2f, new Color(1f, 1f, 1f, 0.2f + 0.8f * a), true, -1f, true);
+                        if (lit) ci.Circle(line[i], 2f, new Color(1f, 1f, 1f, 0.2f + 0.8f * a), true, -1f, true);
                     }
                 }
                 // 뒷면 엔진의 푸른 띠
@@ -425,7 +425,7 @@ public partial class ShipView
                 var p = Extreme(top) + new Vector2(T * 0.8f, top ? -3f : 3f);
                 float ang = (top ? -Mathf.Pi / 2f : Mathf.Pi / 2f) + Mathf.Sin(t * 0.3f + (top ? 0 : 1)) * 0.4f;
                 ci.DrawLine(p, p + Vector2.FromAngle(ang) * 9f, metal, 2f, true);
-                ci.DrawArc(p + Vector2.FromAngle(ang) * 12f, 6f, ang + Mathf.Pi - 1f, ang + Mathf.Pi + 1f, 10, new Color("#c8d0dc"), 2f, true);
+                ci.Arc(p + Vector2.FromAngle(ang) * 12f, 6f, ang + Mathf.Pi - 1f, ang + Mathf.Pi + 1f, 10, new Color("#c8d0dc"), 2f, true);
             }
         }
         if (info.Purpose == ShipPurpose.Farm)
@@ -435,9 +435,9 @@ public partial class ShipView
             {
                 var c = line[i];
                 if (!NearEdge(c, true)) continue;
-                ci.DrawCircle(c, T * 0.8f, new Color(0.45f, 0.85f, 0.5f, 0.18f + 0.05f * Mathf.Sin(t + i)), true, -1f, true);
-                ci.DrawArc(c, T * 0.8f, Mathf.Pi, Mathf.Tau, 16, new Color("#bfe8ff").WithAlpha(0.7f), 1.5f, true);
-                for (int k = -1; k <= 1; k++) ci.DrawColoredPolygon(new[] { c + new Vector2(k * 7f, 0f), c + new Vector2(k * 7f - 3f, -8f), c + new Vector2(k * 7f + 3f, -8f) }, new Color("#5fae4e"));
+                ci.Circle(c, T * 0.8f, new Color(0.45f, 0.85f, 0.5f, 0.18f + 0.05f * Mathf.Sin(t + i)), true, -1f, true);
+                ci.Arc(c, T * 0.8f, Mathf.Pi, Mathf.Tau, 16, new Color("#bfe8ff").WithAlpha(0.7f), 1.5f, true);
+                for (int k = -1; k <= 1; k++) ci.Poly(new[] { c + new Vector2(k * 7f, 0f), c + new Vector2(k * 7f - 3f, -8f), c + new Vector2(k * 7f + 3f, -8f) }, new Color("#5fae4e"));
             }
         }
     }

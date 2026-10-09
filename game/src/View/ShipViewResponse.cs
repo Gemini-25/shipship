@@ -37,7 +37,7 @@ public partial class ShipView
                 for (int k = 0; k < 6; k++)
                 {
                     float ph = Mathf.PosMod(_time * 2.2f + k / 6f, 1f);
-                    ci.DrawCircle(hole + outward * (T * (0.4f + 2.2f * ph)), T * (0.15f + 0.35f * ph), new Color(0.9f, 0.95f, 1f, 0.6f * strength * (1f - ph)), true, -1f, true);
+                    ci.Circle(hole + outward * (T * (0.4f + 2.2f * ph)), T * (0.15f + 0.35f * ph), new Color(0.9f, 0.95f, 1f, 0.6f * strength * (1f - ph)), true, -1f, true);
                 }
             }
             // 질식 소화: 푸른 흰 안개가 방을 채운다 (산소가 낮을수록 짙다)
@@ -48,7 +48,7 @@ public partial class ShipView
                 {
                     float h = Hash(c.X, c.Y, 320);
                     float wob = 0.6f + 0.4f * Mathf.Sin(_time * 0.8f + h * 6.28f);
-                    ci.DrawCircle(CellRect(c).GetCenter() + new Vector2(Mathf.Sin(_time * 0.5f + h * 9f) * 4f, Mathf.Cos(_time * 0.4f + h * 7f) * 3f),
+                    ci.Circle(CellRect(c).GetCenter() + new Vector2(Mathf.Sin(_time * 0.5f + h * 9f) * 4f, Mathf.Cos(_time * 0.4f + h * 7f) * 3f),
                         T * (0.55f + 0.25f * h), new Color(0.7f, 0.85f, 1f, 0.09f * thick * wob), true, -1f, true);
                 }
             }
@@ -115,12 +115,12 @@ public partial class ShipView
                     float rr = i % 2 == 0 ? 5.2f : 2.3f;
                     pts[i] = sp + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * rr;
                 }
-                ci.DrawColoredPolygon(pts, new Color(1f, 0.82f, 0.3f));
+                ci.Poly(pts, new Color(1f, 0.82f, 0.3f));
             }
             if (!cmd.Active) continue;
             // 현장 지휘자: 노란 테가 돈다
             if (cmd.Commander == c)
-                ci.DrawArc(p, r + 4f, _time * 3f, _time * 3f + Mathf.Pi * 1.4f, 20, new Color(1f, 0.85f, 0.35f, 0.9f), 2f, true);
+                ci.Arc(p, r + 4f, _time * 3f, _time * 3f + Mathf.Pi * 1.4f, 20, new Color(1f, 0.85f, 0.35f, 0.9f), 2f, true);
             if (cmd.TeamOf(c) is not Team t || t.Kind == TeamKind.Reserve) continue;
             bool watcher = t.Watcher == c.Id;
             var col = TeamColor(t.Kind);
@@ -171,7 +171,7 @@ public partial class ShipView
         var rect = new Rect2(p.X - bw / 2, p.Y - 22, bw, 22);
         var edge = pro ? new Color(0.5f, 1f, 0.6f, 0.9f) : new Color(1f, 0.45f, 0.4f, 0.9f);
         Gfx.RoundRect(ci, rect, new Color(0.08f, 0.09f, 0.12f, 0.92f), 8, edge, 1);
-        ci.DrawColoredPolygon(new[] { new Vector2(p.X - 5, p.Y), new Vector2(p.X + 5, p.Y), new Vector2(p.X, p.Y + 7) }, new Color(0.08f, 0.09f, 0.12f, 0.92f));
+        ci.Poly(new[] { new Vector2(p.X - 5, p.Y), new Vector2(p.X + 5, p.Y), new Vector2(p.X, p.Y + 7) }, new Color(0.08f, 0.09f, 0.12f, 0.92f));
         Gfx.Text(ci, Fonts.Body, new Vector2(rect.Position.X + 8, rect.Position.Y + 16), line, 12, new Color(0.95f, 0.96f, 1f));
     }
 }

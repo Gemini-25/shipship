@@ -32,7 +32,7 @@ public partial class ShipView
             float a = focus ? 0.85f : strong ? 0.22f : 0.55f;
             float wdt = focus ? 2.4f : 1.3f;
             var pts = l.Cells.Select(c => CellRect(c).GetCenter() + off).ToArray();
-            if (pts.Length == 1) { ci.DrawCircle(pts[0], wdt, col.WithAlpha(a)); continue; }
+            if (pts.Length == 1) { ci.Circle(pts[0], wdt, col.WithAlpha(a)); continue; }
             for (int i = 0; i + 1 < pts.Length; i++)
             {
                 if (l.Cut && i == pts.Length / 2 - (pts.Length > 2 ? 0 : 0))
@@ -50,9 +50,9 @@ public partial class ShipView
                             ci.DrawLine(mid, mid + new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * (3f + 4f * ph), new Color(1f, 0.9f, 0.5f, 0.9f - ph), 1f, true);
                         }
                     else if (l.Kind == NetKind.Water)
-                        ci.DrawCircle(mid + new Vector2(0, 2f + 6f * ph), 1.4f, NetWater.WithAlpha(0.8f - 0.6f * ph));
+                        ci.Circle(mid + new Vector2(0, 2f + 6f * ph), 1.4f, NetWater.WithAlpha(0.8f - 0.6f * ph));
                     else if (l.Kind == NetKind.Air)
-                        ci.DrawArc(mid, 2f + 5f * ph, 0f, Mathf.Pi, 6, NetAir.WithAlpha(0.6f - 0.5f * ph), 1f, true);
+                        ci.Arc(mid, 2f + 5f * ph, 0f, Mathf.Pi, 6, NetAir.WithAlpha(0.6f - 0.5f * ph), 1f, true);
                     ci.DrawLine(mid + new Vector2(-3, -3), mid + new Vector2(3, 3), Palette.Danger.WithAlpha(0.9f), 1.5f, true);
                     ci.DrawLine(mid + new Vector2(-3, 3), mid + new Vector2(3, -3), Palette.Danger.WithAlpha(0.9f), 1.5f, true);
                     continue;
@@ -70,7 +70,7 @@ public partial class ShipView
                 float ph = Mathf.PosMod(_time * (l.Kind == NetKind.Power ? 1.8f : 0.9f) + l.Id * 0.13f, 1f);
                 int seg = Mathf.Min(pts.Length - 2, (int)(ph * (pts.Length - 1)));
                 float u = ph * (pts.Length - 1) - seg;
-                ci.DrawCircle(pts[seg].Lerp(pts[seg + 1], u), 1.6f, Colors.White.WithAlpha(0.7f));
+                ci.Circle(pts[seg].Lerp(pts[seg + 1], u), 1.6f, Colors.White.WithAlpha(0.7f));
             }
         }
         // 이 보기에서 망이 끊겨 못 받는 방: 테두리 빗금

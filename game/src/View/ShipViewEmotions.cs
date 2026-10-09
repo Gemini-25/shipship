@@ -39,7 +39,7 @@ public static class EmotionGlyphs
                     float ang = k * Mathf.Pi / 2f + Mathf.Pi / 4f;
                     var dir = new Vector2(Mathf.Cos(ang), Mathf.Sin(ang));
                     var c0 = center + jit + dir * s * 0.55f;
-                    ci.DrawArc(c0, s * 0.42f, ang + Mathf.Pi * 0.75f, ang + Mathf.Pi * 1.25f, 8, col, Mathf.Max(1.4f, s * 0.2f), true);
+                    ci.Arc(c0, s * 0.42f, ang + Mathf.Pi * 0.75f, ang + Mathf.Pi * 1.25f, 8, col, Mathf.Max(1.4f, s * 0.2f), true);
                 }
                 if (detail)
                     for (int k = 0; k < 3; k++)
@@ -65,15 +65,15 @@ public static class EmotionGlyphs
                     drop[k] = c0 + new Vector2(Mathf.Sin(th) * r * 0.75f, -Mathf.Cos(th) * r);
                 }
                 drop[0] = c0 + new Vector2(0, -size * 0.95f);
-                ci.DrawColoredPolygon(drop, col.WithAlpha(alpha * 0.85f));
-                if (detail) ci.DrawCircle(c0 + new Vector2(-size * 0.15f, size * 0.05f), size * 0.12f, new Color(1, 1, 1, alpha * 0.8f));
+                ci.Poly(drop, col.WithAlpha(alpha * 0.85f));
+                if (detail) ci.Circle(c0 + new Vector2(-size * 0.15f, size * 0.05f), size * 0.12f, new Color(1, 1, 1, alpha * 0.8f));
                 for (int k = 0; k < 3; k++)
                 {
                     var pts = new Vector2[6];
                     for (int j = 0; j < 6; j++)
                         pts[j] = center + new Vector2(-size * 1.05f - k * size * 0.28f, -size * 0.6f + j * size * 0.24f)
                                  + new Vector2(Mathf.Sin(j * 2.1f + a * 20f + k) * size * 0.1f, 0f);
-                    ci.DrawPolyline(pts, col.WithAlpha(alpha * (0.8f - k * 0.2f)), Mathf.Max(1f, size * 0.1f), true);
+                    ci.Polyline(pts, col.WithAlpha(alpha * (0.8f - k * 0.2f)), Mathf.Max(1f, size * 0.1f), true);
                 }
                 break;
             }
@@ -97,7 +97,7 @@ public static class EmotionGlyphs
                     var sc = col.WithAlpha(alpha * (0.6f + 0.4f * tw));
                     if (s >= 0.3f)
                         for (int j = 0; j < 8; j++) ci.DrawPrimitive(new[] { c0, star[j], star[(j + 1) % 8] }, new[] { sc, sc, sc }, null);
-                    if (detail) ci.DrawCircle(c0, s * 0.18f, new Color(1, 1, 1, alpha * tw));
+                    if (detail) ci.Circle(c0, s * 0.18f, new Color(1, 1, 1, alpha * tw));
                 }
                 break;
             }
@@ -105,10 +105,10 @@ public static class EmotionGlyphs
             {
                 // 비구름 (둥근 셋) + 빗방울이 떨어진다
                 var cloud = col.Darkened(0.15f);
-                ci.DrawCircle(center + new Vector2(-size * 0.45f, 0), size * 0.42f, cloud);
-                ci.DrawCircle(center + new Vector2(size * 0.05f, -size * 0.2f), size * 0.55f, cloud);
-                ci.DrawCircle(center + new Vector2(size * 0.55f, size * 0.02f), size * 0.38f, cloud);
-                ci.DrawRect(new Rect2(center.X - size * 0.8f, center.Y, size * 1.55f, size * 0.38f), cloud);
+                ci.Circle(center + new Vector2(-size * 0.45f, 0), size * 0.42f, cloud);
+                ci.Circle(center + new Vector2(size * 0.05f, -size * 0.2f), size * 0.55f, cloud);
+                ci.Circle(center + new Vector2(size * 0.55f, size * 0.02f), size * 0.38f, cloud);
+                ci.Box(new Rect2(center.X - size * 0.8f, center.Y, size * 1.55f, size * 0.38f), cloud);
                 int drops = detail ? 4 : 2;
                 for (int k = 0; k < drops; k++)
                 {
@@ -127,7 +127,7 @@ public static class EmotionGlyphs
                     var c0 = center + dip + new Vector2(side * size * 0.7f, size * 0.6f);
                     var oval = new Vector2[10];
                     for (int j = 0; j < 10; j++) { float th = j / 10f * Mathf.Tau; oval[j] = c0 + new Vector2(Mathf.Cos(th) * size * 0.42f, Mathf.Sin(th) * size * 0.22f); }
-                    ci.DrawColoredPolygon(oval, col.WithAlpha(alpha * 0.55f));
+                    ci.Poly(oval, col.WithAlpha(alpha * 0.55f));
                     if (detail)
                         for (int j = -1; j <= 1; j++)
                             ci.DrawLine(c0 + new Vector2(j * size * 0.18f - size * 0.08f, size * 0.12f), c0 + new Vector2(j * size * 0.18f + size * 0.08f, -size * 0.12f), col.Darkened(0.2f).WithAlpha(alpha), 1f, true);
@@ -135,7 +135,7 @@ public static class EmotionGlyphs
                 for (int j = 0; j < 3; j++)
                 {
                     float on = Mathf.PosMod(a * 1.2f - j * 0.25f, 1f) < 0.7f ? 1f : 0.3f;
-                    ci.DrawCircle(center + dip + new Vector2((j - 1) * size * 0.35f, -size * 0.45f), size * 0.1f, col.WithAlpha(alpha * on));
+                    ci.Circle(center + dip + new Vector2((j - 1) * size * 0.35f, -size * 0.45f), size * 0.1f, col.WithAlpha(alpha * on));
                 }
                 break;
             }
@@ -149,16 +149,16 @@ public static class EmotionGlyphs
                     c0 + new Vector2(-size * 0.8f, size * 0.35f), c0 + new Vector2(-size * 0.8f, -size * 0.2f), c0 + new Vector2(-size * 0.4f, size * 0.05f),
                     c0 + new Vector2(0f, -size * 0.55f), c0 + new Vector2(size * 0.4f, size * 0.05f), c0 + new Vector2(size * 0.8f, -size * 0.2f), c0 + new Vector2(size * 0.8f, size * 0.35f),
                 };
-                ci.DrawColoredPolygon(crown, col.WithAlpha(alpha * 0.9f));
+                ci.Poly(crown, col.WithAlpha(alpha * 0.9f));
                 if (detail)
                 {
-                    foreach (var tip in new[] { crown[1], crown[3], crown[5] }) ci.DrawCircle(tip, size * 0.1f, new Color(1f, 0.95f, 0.8f, alpha));
+                    foreach (var tip in new[] { crown[1], crown[3], crown[5] }) ci.Circle(tip, size * 0.1f, new Color(1f, 0.95f, 0.8f, alpha));
                     float sweep = Mathf.PosMod(a * 0.7f, 1.6f) - 0.3f;
                     var g0 = c0 + new Vector2(-size * 0.8f + sweep * size, size * 0.35f);
                     ci.DrawLine(g0, g0 + new Vector2(size * 0.35f, -size * 0.55f), new Color(1, 1, 1, alpha * 0.7f * Mathf.Clamp(1f - Mathf.Abs(sweep - 0.5f), 0f, 1f)), Mathf.Max(1f, size * 0.12f), true);
                 }
                 var chev = new[] { c0 + new Vector2(-size * 0.4f, -size * 0.75f), c0 + new Vector2(0f, -size * 1.05f), c0 + new Vector2(size * 0.4f, -size * 0.75f) };
-                ci.DrawPolyline(chev, col.WithAlpha(alpha * 0.8f), Mathf.Max(1.2f, size * 0.14f), true);
+                ci.Polyline(chev, col.WithAlpha(alpha * 0.8f), Mathf.Max(1.2f, size * 0.14f), true);
                 break;
             }
         }
@@ -189,7 +189,7 @@ public partial class ShipView
             if (!detail)
             {
                 // 멀리서: 색 테를 두른 작은 실루엣
-                ci.DrawCircle(at, size * 0.9f, new Color(0.05f, 0.06f, 0.09f, 0.55f * alpha));
+                ci.Circle(at, size * 0.9f, new Color(0.05f, 0.06f, 0.09f, 0.55f * alpha));
                 EmotionGlyphs.Draw(ci, d.f, at, size * 0.75f, _time, phase, speed, alpha, false);
                 continue;
             }

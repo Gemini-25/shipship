@@ -337,7 +337,7 @@ public static partial class FixtureArt
                 var puddle = e + new Vector2(0f, x.Px(6f));
                 float grow = 0.6f + 0.4f * Mathf.Sin(t * 0.4f);
                 ci.DrawSetTransform(puddle, 0f, new Vector2(1f, 0.45f));
-                ci.DrawCircle(Vector2.Zero, x.Px(5f) * (0.6f + 0.6f * strength) * grow, LeakBlue.WithAlpha(0.35f), true, -1f, true);
+                ci.Circle(Vector2.Zero, x.Px(5f) * (0.6f + 0.6f * strength) * grow, LeakBlue.WithAlpha(0.35f), true, -1f, true);
                 ci.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
                 if (far) break;
                 for (int i = 0; i < 2; i++)
@@ -361,7 +361,7 @@ public static partial class FixtureArt
                 var box = new Rect2(e - new Vector2(x.Px(7f), x.Px(5f)), new Vector2(x.Px(14f), x.Px(10f)));
                 if (Hash(x.Id, (int)(t * 14f), 72) > 0.55f)
                 {
-                    ci.DrawRect(box, NoiseWhite.WithAlpha(0.18f * strength));
+                    ci.Box(box, NoiseWhite.WithAlpha(0.18f * strength));
                     if (!far)
                         for (int i = 0; i < 3; i++)
                         {
@@ -375,7 +375,7 @@ public static partial class FixtureArt
             {
                 // 덜컥이며 갈리는 소리: 떨림 선과 주황 쇳가루
                 float j = Mathf.Sin(t * 37f) * 1.2f * strength;
-                ci.DrawArc(e + new Vector2(j, 0f), x.Px(6f), 0f, Mathf.Tau, 12, Amber.WithAlpha(0.5f), 1f, true);
+                ci.Arc(e + new Vector2(j, 0f), x.Px(6f), 0f, Mathf.Tau, 12, Amber.WithAlpha(0.5f), 1f, true);
                 if (far) break;
                 for (int i = 0; i < 4; i++)
                 {
@@ -486,8 +486,8 @@ public static partial class FixtureArt
 
     internal static float Pulse(float t, float speed) => 0.5f + 0.5f * Mathf.Sin(t * speed);
 
-    internal static void Dot(CanvasItem ci, Vector2 p, float r, Color c) => ci.DrawCircle(p, r, c, true, -1f, true);
-    internal static void Ring(CanvasItem ci, Vector2 p, float r, Color c, float w = 1f, int n = 24) => ci.DrawArc(p, r, 0f, Mathf.Tau, n, c, w, true);
+    internal static void Dot(CanvasItem ci, Vector2 p, float r, Color c) => ci.Circle(p, r, c, true, -1f, true);
+    internal static void Ring(CanvasItem ci, Vector2 p, float r, Color c, float w = 1f, int n = 24) => ci.Arc(p, r, 0f, Mathf.Tau, n, c, w, true);
     internal static void Line(CanvasItem ci, Vector2 a, Vector2 b, Color c, float w = 1f) => ci.DrawLine(a, b, c, w, true);
     internal static void Box(CanvasItem ci, Rect2 r, Color fill, float rad, Color? edge = null, int bw = 1) => Gfx.RoundRect(ci, r, fill, rad, edge, bw);
 
@@ -503,7 +503,7 @@ public static partial class FixtureArt
     /// <summary>나사 머리: 둥근 머리 + 홈.</summary>
     internal static void Bolt(CanvasItem ci, Vector2 p, float s = 1f)
     {
-        ci.DrawCircle(p, 1.4f * s, new Color("#6b7486"), true, -1f, true);
+        ci.Circle(p, 1.4f * s, new Color("#6b7486"), true, -1f, true);
         ci.DrawLine(p + new Vector2(-0.9f, -0.5f) * s, p + new Vector2(0.9f, 0.5f) * s, new Color("#2a303a"), 0.7f, true);
     }
 
@@ -547,26 +547,26 @@ public static partial class FixtureArt
     {
         if (face)
         {
-            ci.DrawCircle(p, r, new Color("#d8dee8"), true, -1f, true);
-            ci.DrawArc(p, r, 0f, Mathf.Tau, 16, new Color("#2a303a"), 1f, true);
-            ci.DrawArc(p, r * 0.75f, Mathf.Pi * 0.1f, Mathf.Pi * 0.45f, 6, new Color("#c0392b"), 1f, true);
+            ci.Circle(p, r, new Color("#d8dee8"), true, -1f, true);
+            ci.Arc(p, r, 0f, Mathf.Tau, 16, new Color("#2a303a"), 1f, true);
+            ci.Arc(p, r * 0.75f, Mathf.Pi * 0.1f, Mathf.Pi * 0.45f, 6, new Color("#c0392b"), 1f, true);
         }
         float a = Mathf.Pi * 0.75f + Mathf.Clamp(frac, 0f, 1f) * Mathf.Pi * 1.5f;
         ci.DrawLine(p, p + Vector2.FromAngle(a) * r * 0.85f, needle, 1f, true);
-        ci.DrawCircle(p, 0.9f, new Color("#2a303a"), true, -1f, true);
+        ci.Circle(p, 0.9f, new Color("#2a303a"), true, -1f, true);
     }
 
     /// <summary>명판 (얇은 판 + 글씨 자리 줄).</summary>
     internal static void Plate(CanvasItem ci, Rect2 r, Color c)
     {
-        ci.DrawRect(r, c);
+        ci.Box(r, c);
         ci.DrawLine(r.Position + new Vector2(1.5f, r.Size.Y * 0.5f), new Vector2(r.End.X - 1.5f, r.Position.Y + r.Size.Y * 0.5f), new Color(0, 0, 0, 0.45f), 1f);
     }
 
     /// <summary>경고 빗금 (노랑 · 검정).</summary>
     internal static void Stripes(CanvasItem ci, Rect2 r, float step = 6f)
     {
-        ci.DrawRect(r, WarnBlack);
+        ci.Box(r, WarnBlack);
         float lean = r.Size.Y * 0.6f;
         for (float x = r.Position.X + 1f; x + lean < r.End.X; x += step)
             ci.DrawLine(new Vector2(x, r.End.Y - 0.5f), new Vector2(x + lean, r.Position.Y + 0.5f), WarnYellow.WithAlpha(0.8f), step * 0.4f);
@@ -593,22 +593,22 @@ public static partial class FixtureArt
             float a = ang + k * Mathf.Tau / blades;
             ci.DrawLine(p + Vector2.FromAngle(a) * r * 0.25f, p + Vector2.FromAngle(a + sweep) * r, c, w, true);
         }
-        ci.DrawCircle(p, r * 0.22f, c.Lightened(0.2f), true, -1f, true);
+        ci.Circle(p, r * 0.22f, c.Lightened(0.2f), true, -1f, true);
     }
 
     /// <summary>빛나는 점 (번짐 포함).</summary>
     internal static void Led(CanvasItem ci, Vector2 p, Color c, float a, float r = 1.5f)
     {
-        if (a <= 0.02f) { ci.DrawCircle(p, r, new Color(0.08f, 0.09f, 0.11f), true, -1f, true); return; }
-        ci.DrawCircle(p, r * 2.6f, c.WithAlpha(0.16f * a), true, -1f, true);
-        ci.DrawCircle(p, r, c.WithAlpha(Mathf.Clamp(a, 0f, 1f)), true, -1f, true);
+        if (a <= 0.02f) { ci.Circle(p, r, new Color(0.08f, 0.09f, 0.11f), true, -1f, true); return; }
+        ci.Circle(p, r * 2.6f, c.WithAlpha(0.16f * a), true, -1f, true);
+        ci.Circle(p, r, c.WithAlpha(Mathf.Clamp(a, 0f, 1f)), true, -1f, true);
     }
 
     /// <summary>돌림 손잡이 (눈금 표시).</summary>
     internal static void Knob(CanvasItem ci, Vector2 p, float r, float ang, Color c)
     {
-        ci.DrawCircle(p, r, c, true, -1f, true);
-        ci.DrawArc(p, r, 0f, Mathf.Tau, 12, c.Darkened(0.4f), 1f, true);
+        ci.Circle(p, r, c, true, -1f, true);
+        ci.Arc(p, r, 0f, Mathf.Tau, 12, c.Darkened(0.4f), 1f, true);
         ci.DrawLine(p, p + Vector2.FromAngle(ang) * r * 0.9f, new Color(1, 1, 1, 0.7f), 1f, true);
     }
 
@@ -622,16 +622,16 @@ public static partial class FixtureArt
             float s = k / 6f;
             pts[k] = a.Lerp(b, s) + n * sag * 4f * s * (1f - s);
         }
-        ci.DrawPolyline(pts, c, w, true);
+        ci.Polyline(pts, c, w, true);
     }
 
     /// <summary>둥근 통 (위에서 본 원통: 테 + 뚜껑 + 광택).</summary>
     internal static void Can(CanvasItem ci, Vector2 p, float r, Color body, Color rim)
     {
-        ci.DrawCircle(p + new Vector2(1.2f, 1.6f), r, new Color(0, 0, 0, 0.3f), true, -1f, true);
-        ci.DrawCircle(p, r, body, true, -1f, true);
-        ci.DrawArc(p, r, 0f, Mathf.Tau, 24, rim, 1.2f, true);
-        ci.DrawArc(p, r * 0.7f, Mathf.Pi * 1.05f, Mathf.Pi * 1.55f, 8, new Color(1, 1, 1, 0.18f), 1.2f, true);
+        ci.Circle(p + new Vector2(1.2f, 1.6f), r, new Color(0, 0, 0, 0.3f), true, -1f, true);
+        ci.Circle(p, r, body, true, -1f, true);
+        ci.Arc(p, r, 0f, Mathf.Tau, 24, rim, 1.2f, true);
+        ci.Arc(p, r * 0.7f, Mathf.Pi * 1.05f, Mathf.Pi * 1.55f, 8, new Color(1, 1, 1, 0.18f), 1.2f, true);
     }
 
     /// <summary>글씨 (가까이서만 쓰는 작은 표식).</summary>

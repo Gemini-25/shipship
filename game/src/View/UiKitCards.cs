@@ -108,7 +108,7 @@ public static partial class UiKit
             foreach (var wl in wrap)
             {
                 if (y > r.End.Y - 6f) break;
-                if (wl == wrap[0]) ci.DrawCircle(new Vector2(x + 2.5f, y - 4f), 1.6f, found ? accent.WithAlpha(0.7f) : Palette.TextMuted, true, -1f, true);
+                if (wl == wrap[0]) ci.Circle(new Vector2(x + 2.5f, y - 4f), 1.6f, found ? accent.WithAlpha(0.7f) : Palette.TextMuted, true, -1f, true);
                 Gfx.Text(ci, Fonts.Body, new Vector2(x + 10f, y), wl, Ui.TextSmall, found ? Palette.Text.WithAlpha(0.9f) : Palette.TextMuted);
                 y += 15f;
             }
@@ -125,7 +125,7 @@ public static partial class UiKit
     {
         var lines = Wrap($"“{text}”", right - x - 14f, Ui.TextBody, Fonts.Body, maxLines);
         float h = 16f + lines.Count * 16f;
-        ci.DrawRect(new Rect2(x, y + 2f, 2.5f, h - 4f), color.WithAlpha(0.8f));
+        ci.Box(new Rect2(x, y + 2f, 2.5f, h - 4f), color.WithAlpha(0.8f));
         Gfx.Text(ci, Fonts.Bold, new Vector2(x + 10f, y + 12f), who, Ui.TextSmall, color);
         if (role != "") Gfx.Text(ci, Fonts.Body, new Vector2(x + 16f + Gfx.Width(Fonts.Bold, who, Ui.TextSmall), y + 12f), role, Ui.TextTiny, Palette.TextMuted);
         for (int i = 0; i < lines.Count; i++)
@@ -169,7 +169,7 @@ public static partial class UiKit
             var col = end ? Ui.Of(last) : Palette.TextDim;
             var dot = new Vector2(x + 4f, y + 7f);
             if (!end) ci.DrawLine(dot + new Vector2(0, 4f), dot + new Vector2(0, 16f), Ui.PanelEdge.Lightened(0.2f), 1f);
-            ci.DrawCircle(dot, end ? 3.5f : 2.5f, col, true, -1f, true);
+            ci.Circle(dot, end ? 3.5f : 2.5f, col, true, -1f, true);
             string clock = SimTime.Clock(steps[i].Tick);
             Gfx.Text(ci, Fonts.Body, new Vector2(x + 14f, y + 11f), clock, Ui.TextTiny, Palette.TextMuted);
             float tx = x + 18f + Gfx.Width(Fonts.Body, clock, Ui.TextTiny);
@@ -190,7 +190,7 @@ public static partial class UiKit
             for (int n = 0; n < System.Math.Min(byScale[s], 6); n++)
             {
                 float r = 2.5f + s * 0.6f;
-                ci.DrawCircle(new Vector2(x + r, leftCenter.Y), r, ScaleColor((IncidentScale)s), true, -1f, true);
+                ci.Circle(new Vector2(x + r, leftCenter.Y), r, ScaleColor((IncidentScale)s), true, -1f, true);
                 x += r * 2f + 2f;
             }
         }
@@ -207,7 +207,7 @@ public static partial class UiKit
     {
         Gfx.RoundRect(ci, r, new Color(0.9f, 0.9f, 0.86f, 0.9f), 3f);
         var inner = new Rect2(r.Position + new Vector2(4f, 4f), r.Size - new Vector2(8f, 18f));
-        ci.DrawRect(inner, new Color(0.05f, 0.06f, 0.08f));
+        ci.Box(inner, new Color(0.05f, 0.06f, 0.08f));
         Room? room = roomId >= 0 && roomId < w.Ship.Rooms.Count ? w.Ship.Rooms[roomId] : null;
         if (room != null && room.Cells.Count > 0)
         {
@@ -222,18 +222,18 @@ public static partial class UiKit
                     var cell = new Cell(x, y);
                     if (w.Ship.RoomAt(cell) is not Room rr) continue;
                     var col = Palette.Room(rr.Kind).Darkened(rr == room ? 0.35f : 0.7f);
-                    ci.DrawRect(new Rect2(off + new Vector2(x - minX, y - minY) * cs, new Vector2(cs - 0.6f, cs - 0.6f)), col);
+                    ci.Box(new Rect2(off + new Vector2(x - minX, y - minY) * cs, new Vector2(cs - 0.6f, cs - 0.6f)), col);
                 }
             foreach (var f in w.Ship.Furniture)
             {
                 if (f.Room != room) continue;
-                ci.DrawRect(new Rect2(off + new Vector2(f.MinX - minX, f.MinY - minY) * cs, new Vector2(f.Width, f.Height) * cs - new Vector2(1f, 1f)), new Color(0.75f, 0.78f, 0.82f, 0.55f));
+                ci.Box(new Rect2(off + new Vector2(f.MinX - minX, f.MinY - minY) * cs, new Vector2(f.Width, f.Height) * cs - new Vector2(1f, 1f)), new Color(0.75f, 0.78f, 0.82f, 0.55f));
             }
             if (at is System.Numerics.Vector2 p && p.X >= minX && p.X <= maxX + 1 && p.Y >= minY && p.Y <= maxY + 1)
             {
                 var pp = off + new Vector2(p.X - minX, p.Y - minY) * cs;
-                ci.DrawCircle(pp, Mathf.Max(3f, cs * 0.9f), mark.WithAlpha(0.35f), true, -1f, true);
-                ci.DrawCircle(pp, Mathf.Max(1.6f, cs * 0.4f), mark, true, -1f, true);
+                ci.Circle(pp, Mathf.Max(3f, cs * 0.9f), mark.WithAlpha(0.35f), true, -1f, true);
+                ci.Circle(pp, Mathf.Max(1.6f, cs * 0.4f), mark, true, -1f, true);
             }
         }
         else Icons.Draw(ci, "photo", inner.GetCenter(), Mathf.Min(inner.Size.X, inner.Size.Y) * 0.4f, new Color(0.4f, 0.42f, 0.46f));

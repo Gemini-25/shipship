@@ -233,7 +233,7 @@ public partial class Hud
             y += 24;
             foreach (var (who, value, word, why) in rels)
             {
-                DrawCircle(new Vector2(x + 5, y + 8), 4f, Palette.Crew(who.Id), true, -1f, true);
+                this.Circle(new Vector2(x + 5, y + 8), 4f, Palette.Crew(who.Id), true, -1f, true);
                 Gfx.Text(this, Fonts.Bold, new Vector2(x + 14, y + 12), who.Name, Ui.TextBody, Palette.Text);
                 var tone = value >= 0.25f ? Tone.Good : value < -0.05f ? Tone.Caution : Tone.Disabled;
                 var br = UiKit.Badge(this, new Vector2(x + 18 + Gfx.Width(Fonts.Bold, who.Name, Ui.TextBody), y + 8), word, tone);
@@ -363,7 +363,7 @@ public partial class Hud
         // 머리: 이름 · 역할 · ◀ ▶ (누르면 그 사람 큰 카드)
         var head = new Rect2(x0 + 6, y + 6, RightColumnWidth - 12 - 56, 30);
         if (head.HasPoint(mouse)) Gfx.RoundRect(this, head, Ui.HoverSoft, Ui.RadiusControl);
-        DrawCircle(new Vector2(x + 6, y + 21), 6f, col, true, -1f, true);
+        this.Circle(new Vector2(x + 6, y + 21), 6f, col, true, -1f, true);
         Gfx.Text(this, Fonts.Bold, new Vector2(x + 18, y + 26), c.Name, Ui.TextTitle, Palette.Text);
         float nx = x + 18 + Gfx.Width(Fonts.Bold, c.Name, Ui.TextTitle) + 8;
         Gfx.Text(this, Fonts.Body, new Vector2(nx, y + 26), UiKit.Fit(attention is { } a2 ? a2.text : _world.CrisisCrew.BillRole(c) is var br && br != StationRole.None ? $"{CrewRoles.Name(c.Role)} · 비상 {CrisisCrewSystem.RoleName(br)}" : CrewRoles.Name(c.Role), head.End.X - nx - 4, Ui.TextSmall), Ui.TextSmall,

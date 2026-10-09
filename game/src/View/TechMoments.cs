@@ -35,7 +35,7 @@ public partial class ShipView
             {
                 if (!ship.IsOpenFloor(c)) continue;
                 var rc = CellRect(c);
-                ci.DrawRect(rc, shine.WithAlpha(0.06f * f));
+                ci.Box(rc, shine.WithAlpha(0.06f * f));
                 ci.DrawLine(rc.Position + new Vector2(1f, 1f), new Vector2(rc.End.X - 1f, rc.Position.Y + 1f), new Color(1, 1, 1, 0.16f * f), 1f);
                 ci.DrawLine(rc.Position + new Vector2(1f, 1f), new Vector2(rc.Position.X + 1f, rc.End.Y - 1f), new Color(1, 1, 1, 0.1f * f), 1f);
                 ci.DrawLine(new Vector2(rc.Position.X + 1f, rc.End.Y - 1f), rc.End - new Vector2(1f, 1f), new Color(0, 0, 0, 0.2f * f), 1f);
@@ -47,10 +47,10 @@ public partial class ShipView
             if (_roomFaces.TryGetValue(r.Id, out var faces))
                 foreach (var face in faces)
                 {
-                    ci.DrawColoredPolygon(face.Quad(-15.5f, -7f, 15.5f, -0.5f), TechLook.Light.Lerp(new Color(0.8f, 0.85f, 0.9f), 0.5f).WithAlpha(0.22f * f));
+                    ci.Poly(face.Quad(-15.5f, -7f, 15.5f, -0.5f), TechLook.Light.Lerp(new Color(0.8f, 0.85f, 0.9f), 0.5f).WithAlpha(0.22f * f));
                     ci.DrawLine(face.L(-15.5f, -6.5f), face.L(15.5f, -6.5f), new Color(1, 1, 1, 0.3f * f), 1f);
                     if (f > 0.7f && FixtureArt.Hash(face.Floor.X, face.Floor.Y, 410) < 0.3f)
-                        ci.DrawColoredPolygon(new[] { face.L(12f, -6.5f), face.L(15.5f, -6.5f), face.L(15.5f, -2.5f) }, new Color(1, 1, 1, 0.45f * (f - 0.7f) / 0.3f));
+                        ci.Poly(new[] { face.L(12f, -6.5f), face.L(15.5f, -6.5f), face.L(15.5f, -2.5f) }, new Color(1, 1, 1, 0.45f * (f - 0.7f) / 0.3f));
                 }
             // 낡아 가는 표: 긁힘 · 손때 (새것일수록 적다)
             int scuffs = (int)(age * 9f);
@@ -140,7 +140,7 @@ public partial class ShipView
                 {
                     var b = p - new Vector2(sx * 3f, sy * 3f);
                     float just = Mathf.Clamp(1f - (e * 4f - k - 0.5f) * 2f, 0f, 1f);
-                    ci.DrawCircle(b, 1.4f + just * 2f, new Color(1f, 1f, 0.85f, 0.4f + 0.6f * just), true, -1f, true);
+                    ci.Circle(b, 1.4f + just * 2f, new Color(1f, 1f, 0.85f, 0.4f + 0.6f * just), true, -1f, true);
                 }
             }
             var g = r.Grow(5f);
@@ -166,8 +166,8 @@ public partial class ShipView
                 : d < 2f * r.Size.X + r.Size.Y ? new Vector2(r.End.X - (d - r.Size.X - r.Size.Y), r.End.Y)
                 : new Vector2(r.Position.X, r.End.Y - (d - 2f * r.Size.X - r.Size.Y));
             float flick = 0.7f + 0.3f * FixtureArt.Hash(id, (int)(time * 30f), 420);
-            ci.DrawCircle(p, 7f * flick, new Color(1f, 0.9f, 0.6f, 0.18f), true, -1f, true);
-            ci.DrawCircle(p, 2.2f, new Color(1f, 1f, 0.95f, 0.95f), true, -1f, true);
+            ci.Circle(p, 7f * flick, new Color(1f, 0.9f, 0.6f, 0.18f), true, -1f, true);
+            ci.Circle(p, 2.2f, new Color(1f, 1f, 0.95f, 0.95f), true, -1f, true);
             for (int k = 0; k < 6; k++)
             {
                 var dir = Vector2.FromAngle(FixtureArt.Hash(id, (int)(time * 20f) * 7 + k, 421) * Mathf.Tau);
@@ -178,7 +178,7 @@ public partial class ShipView
             {
                 float fp = Mathf.PosMod(time * 1.8f + k * 0.25f, 1f);
                 var fall = p + new Vector2((FixtureArt.Hash(id, k, 423) - 0.5f) * 10f * fp, 14f * fp * fp);
-                ci.DrawCircle(fall, 0.9f, new Color("#ff8a3c").WithAlpha(1f - fp), true, -1f, true);
+                ci.Circle(fall, 0.9f, new Color("#ff8a3c").WithAlpha(1f - fp), true, -1f, true);
             }
         }
         // ③ 첫 점등: 세 번 떨다 켜지고 빛 고리가 퍼진다 + 종류 표시
@@ -188,7 +188,7 @@ public partial class ShipView
             bool on = q > 0.42f || Mathf.PosMod(q * 14f, 2f) > 1.1f;
             if (on) Gfx.RoundRect(ci, r, col.WithAlpha(0.08f + 0.22f * (1f - q)), 4);
             float rad = Mathf.Max(r.Size.X, r.Size.Y) * 0.5f + q * 22f;
-            if (q > 0.42f) ci.DrawArc(c, rad, 0f, Mathf.Tau, 40, col.WithAlpha(0.75f * (1f - q)), 2f, true);
+            if (q > 0.42f) ci.Arc(c, rad, 0f, Mathf.Tau, 40, col.WithAlpha(0.75f * (1f - q)), 2f, true);
             float a = Mathf.Clamp((q - 0.4f) * 3f, 0f, 1f) * (1f - Mathf.Clamp((q - 0.85f) * 6.6f, 0f, 1f));
             if (a <= 0f) return;
             var top = new Vector2(c.X, r.Position.Y - 6f - q * 6f);
@@ -198,31 +198,31 @@ public partial class ShipView
                     for (int k = 0; k < 2; k++)
                     {
                         var t0 = top + new Vector2(0f, -k * 4f);
-                        ci.DrawPolyline(new[] { t0 + new Vector2(-4f, 3f), t0, t0 + new Vector2(4f, 3f) }, col.WithAlpha(a), 1.6f, true);
+                        ci.Polyline(new[] { t0 + new Vector2(-4f, 3f), t0, t0 + new Vector2(4f, 3f) }, col.WithAlpha(a), 1.6f, true);
                     }
                     break;
                 case MomentKind.Mk3: // 네 갈래 반짝임
                     ci.DrawLine(top + new Vector2(-5f, 0f), top + new Vector2(5f, 0f), col.WithAlpha(a), 1.4f, true);
                     ci.DrawLine(top + new Vector2(0f, -5f), top + new Vector2(0f, 5f), col.WithAlpha(a), 1.4f, true);
-                    ci.DrawCircle(top, 1.6f, Colors.White.WithAlpha(a), true, -1f, true);
+                    ci.Circle(top, 1.6f, Colors.White.WithAlpha(a), true, -1f, true);
                     break;
                 case MomentKind.Mk1: // 테이프 롤
-                    ci.DrawArc(top, 3.5f, 0f, Mathf.Tau, 14, col.WithAlpha(a), 2f, true);
+                    ci.Arc(top, 3.5f, 0f, Mathf.Tau, 14, col.WithAlpha(a), 2f, true);
                     ci.DrawLine(top + new Vector2(3.5f, 0f), top + new Vector2(8f, 3f), col.WithAlpha(a), 2f, true);
                     break;
                 case MomentKind.Restore: // 체크
-                    ci.DrawPolyline(new[] { top + new Vector2(-4f, 0f), top + new Vector2(-1f, 3f), top + new Vector2(5f, -3f) }, col.WithAlpha(a), 1.8f, true);
+                    ci.Polyline(new[] { top + new Vector2(-4f, 0f), top + new Vector2(-1f, 3f), top + new Vector2(5f, -3f) }, col.WithAlpha(a), 1.8f, true);
                     break;
                 case MomentKind.Reassemble: // 맞물린 화살표
-                    ci.DrawArc(top, 4f, 0.3f, 2.8f, 8, col.WithAlpha(a), 1.4f, true);
-                    ci.DrawArc(top, 4f, 3.4f, 5.9f, 8, col.WithAlpha(a), 1.4f, true);
+                    ci.Arc(top, 4f, 0.3f, 2.8f, 8, col.WithAlpha(a), 1.4f, true);
+                    ci.Arc(top, 4f, 3.4f, 5.9f, 8, col.WithAlpha(a), 1.4f, true);
                     break;
                 case MomentKind.Learned: // 퍼지는 점 여섯
                     for (int k = 0; k < 6; k++)
-                        ci.DrawCircle(c + Vector2.FromAngle(k * Mathf.Tau / 6f + q) * rad * 0.8f, 1.5f, col.WithAlpha(a), true, -1f, true);
+                        ci.Circle(c + Vector2.FromAngle(k * Mathf.Tau / 6f + q) * rad * 0.8f, 1.5f, col.WithAlpha(a), true, -1f, true);
                     break;
                 default: // 플러그
-                    ci.DrawRect(new Rect2(top - new Vector2(3f, 2f), new Vector2(6f, 4f)), col.WithAlpha(a));
+                    ci.Box(new Rect2(top - new Vector2(3f, 2f), new Vector2(6f, 4f)), col.WithAlpha(a));
                     ci.DrawLine(top + new Vector2(-1.5f, -2f), top + new Vector2(-1.5f, -5f), col.WithAlpha(a), 1f);
                     ci.DrawLine(top + new Vector2(1.5f, -2f), top + new Vector2(1.5f, -5f), col.WithAlpha(a), 1f);
                     break;

@@ -118,7 +118,7 @@ public partial class Hud
         foreach (var ep in h.Episodes)
         {
             float a = X(ep.Start), b = Mathf.Max(a + 3f, X(ep.End < 0 ? _world.Tick : ep.End));
-            DrawRect(new Rect2(a, strip.Position.Y + 5, b - a, 8), Palette.Danger.WithAlpha(ep.Deaths > 0 ? 0.9f : 0.55f));
+            this.Box(new Rect2(a, strip.Position.Y + 5, b - a, 8), Palette.Danger.WithAlpha(ep.Deaths > 0 ? 0.9f : 0.55f));
         }
         foreach (var e in h.Events)
         {
@@ -126,18 +126,18 @@ public partial class Hud
             switch (e.Kind)
             {
                 case HistoryKind.Upgrade:
-                    DrawColoredPolygon(new[] { new Vector2(ex, strip.Position.Y + 14), new Vector2(ex + 4, strip.Position.Y + 18), new Vector2(ex, strip.Position.Y + 22), new Vector2(ex - 4, strip.Position.Y + 18) }, KindColor(e.Kind));
+                    this.Poly(new[] { new Vector2(ex, strip.Position.Y + 14), new Vector2(ex + 4, strip.Position.Y + 18), new Vector2(ex, strip.Position.Y + 22), new Vector2(ex - 4, strip.Position.Y + 18) }, KindColor(e.Kind));
                     break;
                 case HistoryKind.Decision:
-                    DrawCircle(new Vector2(ex, strip.Position.Y + 18), 2.2f, KindColor(e.Kind), true, -1f, true);
+                    this.Circle(new Vector2(ex, strip.Position.Y + 18), 2.2f, KindColor(e.Kind), true, -1f, true);
                     break;
                 case HistoryKind.Lesson:
                 case HistoryKind.Bond:
-                    DrawRect(new Rect2(ex - 1, strip.Position.Y + 14, 2, 8), KindColor(e.Kind));
+                    this.Box(new Rect2(ex - 1, strip.Position.Y + 14, 2, 8), KindColor(e.Kind));
                     break;
                 case HistoryKind.Death:
-                    DrawRect(new Rect2(ex - 0.75f, strip.Position.Y + 3, 1.5f, 11), Colors.White);
-                    DrawRect(new Rect2(ex - 3, strip.Position.Y + 6, 6, 1.5f), Colors.White);
+                    this.Box(new Rect2(ex - 0.75f, strip.Position.Y + 3, 1.5f, 11), Colors.White);
+                    this.Box(new Rect2(ex - 3, strip.Position.Y + 6, 6, 1.5f), Colors.White);
                     break;
             }
         }
@@ -169,7 +169,7 @@ public partial class Hud
             bool hover = row.HasPoint(mouse);
             if (hover) Gfx.RoundRect(this, row, new Color(1, 1, 1, 0.05f), 6);
             if (e.Kind is HistoryKind.Recovery or HistoryKind.Death or HistoryKind.Upgrade or HistoryKind.Lesson)
-                DrawRect(new Rect2(x - 8, ly + 3, 2, rowH - 6), KindColor(e.Kind));
+                this.Box(new Rect2(x - 8, ly + 3, 2, rowH - 6), KindColor(e.Kind));
             Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 15), $"{SimTime.Day(e.Tick)}일 {SimTime.Clock(e.Tick)}", Ui.TextSmall, Palette.TextMuted);
             var kc = KindColor(e.Kind);
             Gfx.Pill(this, Fonts.Bold, new Vector2(x + 88, ly + 11), KindName(e.Kind), Ui.TextTiny, kc, kc.WithAlpha(0.12f), kc.WithAlpha(0.35f), 6f, 2f);
@@ -248,7 +248,7 @@ public partial class Hud
         foreach (var (id, n) in shared)
         {
             var o = _world.Crew[id];
-            DrawCircle(new Vector2(x + 5, ly + 10), 4f, Palette.Crew(o.Id), true, -1f, true);
+            this.Circle(new Vector2(x + 5, ly + 10), 4f, Palette.Crew(o.Id), true, -1f, true);
             Gfx.Text(this, Fonts.Bold, new Vector2(x + 16, ly + 15), o.Name, Ui.TextBody, Palette.Text);
             bool comrade = m.Comrades.Contains(id);
             Gfx.TextRight(this, Fonts.Body, new Vector2(right, ly + 15), comrade ? $"전우 · {n}번" : $"{n}번", Ui.TextSmall, comrade ? Palette.Good : Palette.TextDim);

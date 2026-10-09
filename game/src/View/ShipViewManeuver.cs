@@ -134,7 +134,7 @@ internal static class ManeuverArt
     {
         var a = new Vector2[pts.Length];
         for (int i = 0; i < pts.Length; i++) a[i] = at + R(pts[i], ang);
-        ci.DrawColoredPolygon(a, c);
+        ci.Poly(a, c);
     }
     private static float Hash(int n) { uint x = (uint)n * 2654435761u; x ^= x >> 13; x *= 0x5bd1e995; x ^= x >> 15; return (x & 0xffff) / 65535f; }
 
@@ -146,7 +146,7 @@ internal static class ManeuverArt
         if (!on)
         {
             // 풀린 걸쇠: 옆에 매달린 고리만 (가까이서)
-            ci.DrawArc(new Vector2(r.End.X - 4f, c.Y), 2.6f, 0f, Mathf.Tau, 10, SteelDark, 1.2f, true);
+            ci.Arc(new Vector2(r.End.X - 4f, c.Y), 2.6f, 0f, Mathf.Tau, 10, SteelDark, 1.2f, true);
             return;
         }
         float tilt = loose ? 0.18f : 0f;
@@ -157,9 +157,9 @@ internal static class ManeuverArt
                 int n = Mathf.Max(3, (int)(wdt / 9f));
                 var pts = new Vector2[n + 1];
                 for (int i = 0; i <= n; i++) pts[i] = new Vector2(r.Position.X + 3f + (wdt - 6f) * i / n, c.Y + (i % 2 == 0 ? -hgt * 0.18f : hgt * 0.18f) + (loose ? i * 1.5f : 0f));
-                ci.DrawPolyline(pts, Bungee, 2f, true);
-                ci.DrawArc(pts[0], 2.2f, 0.5f, 5.5f, 8, SteelDark, 1.4f, true);
-                ci.DrawArc(pts[^1], 2.2f, -2.6f, 2.6f, 8, SteelDark, 1.4f, true);
+                ci.Polyline(pts, Bungee, 2f, true);
+                ci.Arc(pts[0], 2.2f, 0.5f, 5.5f, 8, SteelDark, 1.4f, true);
+                ci.Arc(pts[^1], 2.2f, -2.6f, 2.6f, 8, SteelDark, 1.4f, true);
                 break;
             }
             case FurnitureType.ToolWall: // 공구마다 작은 집게
@@ -168,7 +168,7 @@ internal static class ManeuverArt
                 for (int i = 0; i < n; i++)
                 {
                     var p = new Vector2(r.Position.X + 6f + (wdt - 12f) * i / Mathf.Max(1, n - 1), c.Y + (i % 2 == 0 ? -3f : 3f));
-                    ci.DrawRect(new Rect2(p - new Vector2(2.4f, 1.6f), new Vector2(4.8f, 3.2f)), Hazard);
+                    ci.Box(new Rect2(p - new Vector2(2.4f, 1.6f), new Vector2(4.8f, 3.2f)), Hazard);
                     ci.DrawLine(p + new Vector2(-2.4f, 1.6f), p + new Vector2(-1f, 4f), SteelDark, 1f, true);
                     ci.DrawLine(p + new Vector2(2.4f, 1.6f), p + new Vector2(1f, 4f), SteelDark, 1f, true);
                 }
@@ -177,17 +177,17 @@ internal static class ManeuverArt
             case FurnitureType.Fridge: // 문 손잡이 걸쇠 (레버를 내렸다)
             {
                 var p = new Vector2(r.End.X - 5f, c.Y);
-                ci.DrawRect(new Rect2(p - new Vector2(2f, 6f), new Vector2(4f, 12f)), SteelDark);
+                ci.Box(new Rect2(p - new Vector2(2f, 6f), new Vector2(4f, 12f)), SteelDark);
                 ci.DrawLine(p, p + R(new Vector2(0f, 7f), loose ? -0.6f : 0f), Hazard, 2.4f, true);
-                ci.DrawCircle(p, 1.6f, Buckle);
+                ci.Circle(p, 1.6f, Buckle);
                 break;
             }
             case FurnitureType.SupplyCache: // 상자 끈 X자 · 버클
             {
                 ci.DrawLine(r.Position + new Vector2(3, 3), r.End - new Vector2(3, 3), Web, 3f, true);
                 ci.DrawLine(new Vector2(r.End.X - 3, r.Position.Y + 3), new Vector2(r.Position.X + 3, r.End.Y - 3), Web, 3f, true);
-                ci.DrawRect(new Rect2(c - new Vector2(3f, 2.5f), new Vector2(6f, 5f)), Buckle);
-                ci.DrawRect(new Rect2(c - new Vector2(3f, 2.5f), new Vector2(6f, 5f)), SteelDark, false, 1f);
+                ci.Box(new Rect2(c - new Vector2(3f, 2.5f), new Vector2(6f, 5f)), Buckle);
+                ci.Box(new Rect2(c - new Vector2(3f, 2.5f), new Vector2(6f, 5f)), SteelDark, false, 1f);
                 break;
             }
             default: // 선반: 앞을 가로지르는 쇠막대 · 양 끝 브래킷 · 노랑-검정 걸쇠 탭
@@ -196,12 +196,12 @@ internal static class ManeuverArt
                 var b = new Vector2(r.End.X - 3f, c.Y + hgt * 0.22f + (loose ? wdt * tilt : 0f));
                 ci.DrawLine(a, b, SteelDark, 3.2f, true);
                 ci.DrawLine(a, b, Steel, 1.6f, true);
-                ci.DrawRect(new Rect2(a - new Vector2(2f, 3f), new Vector2(4f, 6f)), SteelDark);
-                if (!loose) ci.DrawRect(new Rect2(b - new Vector2(2f, 3f), new Vector2(4f, 6f)), SteelDark);
+                ci.Box(new Rect2(a - new Vector2(2f, 3f), new Vector2(4f, 6f)), SteelDark);
+                if (!loose) ci.Box(new Rect2(b - new Vector2(2f, 3f), new Vector2(4f, 6f)), SteelDark);
                 var tab = a.Lerp(b, 0.5f);
-                ci.DrawRect(new Rect2(tab - new Vector2(3.5f, 2.5f), new Vector2(7f, 5f)), Hazard);
+                ci.Box(new Rect2(tab - new Vector2(3.5f, 2.5f), new Vector2(7f, 5f)), Hazard);
                 if (close) { ci.DrawLine(tab + new Vector2(-3.5f, 2.5f), tab + new Vector2(-0.5f, -2.5f), Colors.Black, 1f); ci.DrawLine(tab + new Vector2(0.5f, 2.5f), tab + new Vector2(3.5f, -2.5f), Colors.Black, 1f); }
-                if (close) { ci.DrawCircle(a, 0.9f, Buckle); if (!loose) ci.DrawCircle(b, 0.9f, Buckle); }
+                if (close) { ci.Circle(a, 0.9f, Buckle); if (!loose) ci.Circle(b, 0.9f, Buckle); }
                 break;
             }
         }
@@ -213,11 +213,11 @@ internal static class ManeuverArt
         var half = new Vector2(T * 0.32f, T * 0.22f);
         ci.DrawLine(at + new Vector2(-half.X, -half.Y * 0.4f), at + new Vector2(half.X, -half.Y * 0.4f), Web, 2.6f, true);
         ci.DrawLine(at + new Vector2(-half.X, half.Y * 0.4f), at + new Vector2(half.X, half.Y * 0.4f), Web, 2.6f, true);
-        ci.DrawRect(new Rect2(at + new Vector2(half.X * 0.3f, -half.Y * 0.4f - 2f), new Vector2(5f, 4f)), Buckle);
+        ci.Box(new Rect2(at + new Vector2(half.X * 0.3f, -half.Y * 0.4f - 2f), new Vector2(5f, 4f)), Buckle);
         var ring = at + wall * T * 0.75f;
         ci.DrawLine(at + wall * T * 0.25f, ring, WebEdge, 2f, true);
-        ci.DrawArc(ring, 3f, 0f, Mathf.Tau, 12, Steel, 1.6f, true);
-        if (close) ci.DrawCircle(ring - wall * 1.5f, 1.4f, SteelDark);
+        ci.Arc(ring, 3f, 0f, Mathf.Tau, 12, Steel, 1.6f, true);
+        if (close) ci.Circle(ring - wall * 1.5f, 1.4f, SteelDark);
     }
 
     public static void Skid(CanvasItem ci, Vector2 from, Vector2 to)
@@ -234,7 +234,7 @@ internal static class ManeuverArt
     {
         // 옆으로 누운 몸통 · 바닥을 향한 열선의 붉은 빛 · 그을린 부채꼴
         float ang = Hash(id) > 0.5f ? 1.45f : -1.45f;
-        ci.DrawCircle(at + new Vector2(0, 5f), 9f, new Color(0.1f, 0.07f, 0.05f, 0.35f));
+        ci.Circle(at + new Vector2(0, 5f), 9f, new Color(0.1f, 0.07f, 0.05f, 0.35f));
         Poly(ci, at, ang, new Color(0.55f, 0.52f, 0.48f), new Vector2(-6f, -8f), new Vector2(6f, -8f), new Vector2(6f, 8f), new Vector2(-6f, 8f));
         for (int i = -1; i <= 1; i++) ci.DrawLine(at + R(new Vector2(-4f, i * 4f), ang), at + R(new Vector2(4f, i * 4f), ang), new Color(0.25f, 0.22f, 0.2f), 1f);
         ci.DrawLine(at + R(new Vector2(-6f, 8f), ang), at + R(new Vector2(6f, 8f), ang), new Color(1f, 0.35f, 0.1f, 0.4f + 0.2f * Mathf.Sin(time * 3f)), 1.6f);
@@ -243,17 +243,17 @@ internal static class ManeuverArt
     public static void SwitchOff(CanvasItem ci, Vector2 at)
     {
         var p = at + new Vector2(7f, -8f);
-        ci.DrawRect(new Rect2(p, new Vector2(4f, 6f)), new Color(0.15f, 0.15f, 0.15f));
-        ci.DrawRect(new Rect2(p + new Vector2(0.8f, 3.4f), new Vector2(2.4f, 2f)), new Color(0.75f, 0.75f, 0.75f));
+        ci.Box(new Rect2(p, new Vector2(4f, 6f)), new Color(0.15f, 0.15f, 0.15f));
+        ci.Box(new Rect2(p + new Vector2(0.8f, 3.4f), new Vector2(2.4f, 2f)), new Color(0.75f, 0.75f, 0.75f));
     }
 
     // ── 화구 위 냄비 ──
     public static void Pot(CanvasItem ci, Vector2 at, bool steaming, bool clamped, float time, bool close)
     {
-        ci.DrawCircle(at, 9.5f, new Color(0.24f, 0.25f, 0.27f));
-        ci.DrawCircle(at, 7.6f, new Color(0.78f, 0.45f, 0.18f)); // 국물
-        for (int i = 0; i < 5; i++) ci.DrawCircle(at + new Vector2(Mathf.Cos(i * 1.7f) * 4f, Mathf.Sin(i * 2.3f) * 4f), 1.2f, i % 2 == 0 ? new Color(0.35f, 0.6f, 0.25f) : new Color(0.95f, 0.6f, 0.2f));
-        ci.DrawArc(at, 9.5f, 0f, Mathf.Tau, 24, new Color(0.55f, 0.57f, 0.6f), 1.4f, true);
+        ci.Circle(at, 9.5f, new Color(0.24f, 0.25f, 0.27f));
+        ci.Circle(at, 7.6f, new Color(0.78f, 0.45f, 0.18f)); // 국물
+        for (int i = 0; i < 5; i++) ci.Circle(at + new Vector2(Mathf.Cos(i * 1.7f) * 4f, Mathf.Sin(i * 2.3f) * 4f), 1.2f, i % 2 == 0 ? new Color(0.35f, 0.6f, 0.25f) : new Color(0.95f, 0.6f, 0.2f));
+        ci.Arc(at, 9.5f, 0f, Mathf.Tau, 24, new Color(0.55f, 0.57f, 0.6f), 1.4f, true);
         ci.DrawLine(at + new Vector2(-9.5f, 0f), at + new Vector2(-13f, 0f), SteelDark, 2.4f); // 손잡이
         ci.DrawLine(at + new Vector2(9.5f, 0f), at + new Vector2(13f, 0f), SteelDark, 2.4f);
         if (steaming)
@@ -261,16 +261,16 @@ internal static class ManeuverArt
             {
                 float ph = (time * 0.7f + i * 0.33f) % 1f;
                 var b = at + new Vector2(-5f + i * 5f, -8f - ph * 12f);
-                ci.DrawArc(b, 2.2f + ph * 2f, 0f, Mathf.Pi, 6, new Color(1, 1, 1, 0.35f * (1f - ph)), 1.2f, true);
+                ci.Arc(b, 2.2f + ph * 2f, 0f, Mathf.Pi, 6, new Color(1, 1, 1, 0.35f * (1f - ph)), 1.2f, true);
             }
         if (!clamped) return;
         // 집게 두 짝 (냄비 테를 물고 화구 틀에 걸린다) · 나비 너트
         foreach (var s in new[] { -1f, 1f })
         {
             var p = at + new Vector2(0f, s * 10.5f);
-            ci.DrawArc(p, 3.6f, s > 0 ? Mathf.Pi : 0f, s > 0 ? Mathf.Tau : Mathf.Pi, 8, Hazard, 2.2f, true);
+            ci.Arc(p, 3.6f, s > 0 ? Mathf.Pi : 0f, s > 0 ? Mathf.Tau : Mathf.Pi, 8, Hazard, 2.2f, true);
             ci.DrawLine(p, p + new Vector2(0f, s * 4.5f), SteelDark, 2f);
-            if (close) { ci.DrawLine(p + new Vector2(-2.5f, s * 4.5f), p + new Vector2(2.5f, s * 4.5f), Steel, 1.6f); ci.DrawCircle(p + new Vector2(0, s * 4.5f), 1f, SteelDark); }
+            if (close) { ci.DrawLine(p + new Vector2(-2.5f, s * 4.5f), p + new Vector2(2.5f, s * 4.5f), Steel, 1.6f); ci.Circle(p + new Vector2(0, s * 4.5f), 1f, SteelDark); }
         }
     }
 
@@ -278,14 +278,14 @@ internal static class ManeuverArt
     {
         Poly(ci, at, ang + (loose ? 0.4f : 0f), Web, new Vector2(-8f, -1.6f), new Vector2(8f, -1.6f), new Vector2(8f, 1.6f), new Vector2(-8f, 1.6f));
         var hook = at + R(new Vector2(8.5f, 0f), ang);
-        ci.DrawArc(hook, 2.2f, -1.2f, 4.2f, 8, Steel, 1.3f, true); // 고리
+        ci.Arc(hook, 2.2f, -1.2f, 4.2f, 8, Steel, 1.3f, true); // 고리
     }
 
     // ── 떨어진 물건 (종류마다) ──
     public static void Fallen(CanvasItem ci, Vector2 at, float ang, FallenKind k, bool broken, int id, bool close)
     {
         float h = Hash(id);
-        ci.DrawCircle(at + new Vector2(1.5f, 2f), 5f, new Color(0, 0, 0, 0.18f));
+        ci.Circle(at + new Vector2(1.5f, 2f), 5f, new Color(0, 0, 0, 0.18f));
         switch (k)
         {
             case FallenKind.Can: // 옆으로 누운 통조림 · 라벨 띠 · 테
@@ -304,8 +304,8 @@ internal static class ManeuverArt
                 var rim = k == FallenKind.Bowl ? new Color(0.25f, 0.42f, 0.75f) : new Color(0.65f, 0.55f, 0.35f);
                 if (!broken)
                 {
-                    if (k == FallenKind.Bowl) { ci.DrawCircle(at, 5.5f, white); ci.DrawArc(at, 5.5f, 0f, Mathf.Tau, 16, rim, 1.4f, true); ci.DrawCircle(at, 2.5f, new Color(0.85f, 0.84f, 0.8f)); }
-                    else { ci.DrawCircle(at, 6.5f, white); ci.DrawArc(at, 4.6f, 0f, Mathf.Tau, 16, rim, 0.9f, true); }
+                    if (k == FallenKind.Bowl) { ci.Circle(at, 5.5f, white); ci.Arc(at, 5.5f, 0f, Mathf.Tau, 16, rim, 1.4f, true); ci.Circle(at, 2.5f, new Color(0.85f, 0.84f, 0.8f)); }
+                    else { ci.Circle(at, 6.5f, white); ci.Arc(at, 4.6f, 0f, Mathf.Tau, 16, rim, 0.9f, true); }
                     break;
                 }
                 for (int i = 0; i < 4; i++)
@@ -353,9 +353,9 @@ internal static class ManeuverArt
                 var a = at + R(new Vector2(-7f, 0f), ang);
                 var b = at + R(new Vector2(5f, 0f), ang);
                 ci.DrawLine(a, b, Steel, 2.6f, true);
-                ci.DrawArc(b + R(new Vector2(2.2f, 0f), ang), 3f, ang + 0.7f, ang + Mathf.Tau - 0.7f, 10, Steel, 2.2f, true);
-                ci.DrawCircle(a, 2.2f, Steel);
-                if (close) ci.DrawCircle(a, 0.9f, SteelDark);
+                ci.Arc(b + R(new Vector2(2.2f, 0f), ang), 3f, ang + 0.7f, ang + Mathf.Tau - 0.7f, 10, Steel, 2.2f, true);
+                ci.Circle(a, 2.2f, Steel);
+                if (close) ci.Circle(a, 0.9f, SteelDark);
                 break;
             }
             default: // 약통 (주황 몸 · 흰 뚜껑)
@@ -378,23 +378,23 @@ internal static class ManeuverArt
             case SplashKind.Soup: // 주황 국물 웅덩이가 밀린 쪽으로 번진다 · 건더기
             {
                 var col = new Color(0.78f, 0.42f, 0.14f, 0.55f * fade);
-                ci.DrawCircle(at, s * 0.7f, col);
-                ci.DrawCircle(at + d * s * 0.7f, s * 0.5f, col);
-                ci.DrawCircle(at + d * s * 1.25f + d.Orthogonal() * s * 0.25f, s * 0.3f, col);
+                ci.Circle(at, s * 0.7f, col);
+                ci.Circle(at + d * s * 0.7f, s * 0.5f, col);
+                ci.Circle(at + d * s * 1.25f + d.Orthogonal() * s * 0.25f, s * 0.3f, col);
                 for (int i = 0; i < (close ? 9 : 4); i++)
                 {
                     float h = Hash((int)seed + i * 31);
                     var p = at + d * s * (h * 1.3f) + d.Orthogonal() * s * (Hash((int)seed + i * 7) - 0.5f) * 0.9f;
-                    ci.DrawRect(new Rect2(p, new Vector2(2f, 2f)), i % 3 == 0 ? new Color(0.3f, 0.6f, 0.25f, fade) : i % 3 == 1 ? new Color(0.95f, 0.65f, 0.2f, fade) : new Color(0.9f, 0.85f, 0.7f, fade));
+                    ci.Box(new Rect2(p, new Vector2(2f, 2f)), i % 3 == 0 ? new Color(0.3f, 0.6f, 0.25f, fade) : i % 3 == 1 ? new Color(0.95f, 0.65f, 0.2f, fade) : new Color(0.9f, 0.85f, 0.7f, fade));
                 }
                 break;
             }
             case SplashKind.Water:
             {
                 var col = new Color(0.55f, 0.75f, 0.95f, 0.35f * fade);
-                ci.DrawCircle(at, s * 0.6f, col);
-                ci.DrawCircle(at + d * s * 0.6f, s * 0.4f, col);
-                ci.DrawArc(at, s * 0.6f, -0.6f, 0.9f, 8, new Color(1, 1, 1, 0.3f * fade), 1f, true);
+                ci.Circle(at, s * 0.6f, col);
+                ci.Circle(at + d * s * 0.6f, s * 0.4f, col);
+                ci.Arc(at, s * 0.6f, -0.6f, 0.9f, 8, new Color(1, 1, 1, 0.3f * fade), 1f, true);
                 break;
             }
             default: // 흩어진 알약 (캡슐 두 색)
@@ -437,7 +437,7 @@ internal static class ManeuverArt
         var o = n.Orthogonal();
         Poly(ci, foot, 0f, new Color(0.8f, 0.68f, 0.35f), -o * 2.5f, o * 2.5f, o * 5f + n * 5f, -o * 5f + n * 5f);
         if (working)
-            for (int i = 0; i < 3; i++) ci.DrawCircle(foot + n * 6f + o * (i - 1) * 3f + new Vector2(sw * 3f, 0), 0.9f, new Color(0.85f, 0.9f, 0.95f, 0.7f)); // 쓸려 가는 조각
+            for (int i = 0; i < 3; i++) ci.Circle(foot + n * 6f + o * (i - 1) * 3f + new Vector2(sw * 3f, 0), 0.9f, new Color(0.85f, 0.9f, 0.95f, 0.7f)); // 쓸려 가는 조각
     }
 
     // ── 사람 위 ──
@@ -453,8 +453,8 @@ internal static class ManeuverArt
             ci.DrawLine(a, b, Web, 3f, true);
             ci.DrawLine(a, b, WebEdge, 0.8f, true);
             var mid = a.Lerp(b, 0.5f);
-            ci.DrawRect(new Rect2(mid - new Vector2(2.6f, 2.6f), new Vector2(5.2f, 5.2f)), Buckle);
-            if (close) ci.DrawRect(new Rect2(mid - new Vector2(1.2f, 1.2f), new Vector2(2.4f, 2.4f)), SteelDark);
+            ci.Box(new Rect2(mid - new Vector2(2.6f, 2.6f), new Vector2(5.2f, 5.2f)), Buckle);
+            if (close) ci.Box(new Rect2(mid - new Vector2(1.2f, 1.2f), new Vector2(2.4f, 2.4f)), SteelDark);
         }
     }
 
@@ -469,13 +469,13 @@ internal static class ManeuverArt
         // 팔 · 쥔 손
         var grip = edge - toward * 4f + o * (straining ? Mathf.Sin(time * 9f) * 1.2f : 0f);
         ci.DrawLine(who, grip, sleeve, 3f, true);
-        ci.DrawCircle(grip, 2.6f, Skin);
+        ci.Circle(grip, 2.6f, Skin);
     }
 
     public static void CupHand(CanvasItem ci, Vector2 cup, float time)
     {
-        ci.DrawArc(cup, 6.5f, -2.2f, 0.6f, 10, Skin, 3f, true); // 감싼 손가락
-        ci.DrawCircle(cup + new Vector2(5.5f, -3f), 2.2f, Skin);
+        ci.Arc(cup, 6.5f, -2.2f, 0.6f, 10, Skin, 3f, true); // 감싼 손가락
+        ci.Circle(cup + new Vector2(5.5f, -3f), 2.2f, Skin);
     }
 
     public static void Tumble(CanvasItem ci, Vector2 at, Vector2 dir, bool hurt, bool fromBed, float age, bool up, float time)
@@ -494,10 +494,10 @@ internal static class ManeuverArt
         for (int i = 0; i < 5; i++)
         {
             float a = i * 1.26f + age * 2f;
-            ci.DrawCircle(at + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * (8f + age * 10f), 2.4f + age * 2f, new Color(0.75f, 0.72f, 0.66f, 0.35f * fade));
+            ci.Circle(at + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * (8f + age * 10f), 2.4f + age * 2f, new Color(0.75f, 0.72f, 0.66f, 0.35f * fade));
         }
         // 손바닥을 짚은 자국
-        ci.DrawCircle(at + d * 9f + d.Orthogonal() * 4f, 2f, new Color(Skin, 0.9f));
+        ci.Circle(at + d * 9f + d.Orthogonal() * 4f, 2f, new Color(Skin, 0.9f));
         if (hurt) // 아픈 별 (머리 위를 돈다)
             for (int i = 0; i < 3; i++)
             {
@@ -511,10 +511,10 @@ internal static class ManeuverArt
     public static void CarryCrate(CanvasItem ci, Vector2 at, int id)
     {
         var p = at + new Vector2(0f, -6f);
-        ci.DrawRect(new Rect2(p - new Vector2(6f, 5f), new Vector2(12f, 9f)), new Color(0.42f, 0.46f, 0.38f));
-        ci.DrawRect(new Rect2(p - new Vector2(6f, 5f), new Vector2(12f, 9f)), new Color(0.2f, 0.22f, 0.18f), false, 1f);
+        ci.Box(new Rect2(p - new Vector2(6f, 5f), new Vector2(12f, 9f)), new Color(0.42f, 0.46f, 0.38f));
+        ci.Box(new Rect2(p - new Vector2(6f, 5f), new Vector2(12f, 9f)), new Color(0.2f, 0.22f, 0.18f), false, 1f);
         ci.DrawLine(p + new Vector2(-6f, -1f), p + new Vector2(6f, -1f), new Color(0.2f, 0.22f, 0.18f), 1f);
-        ci.DrawCircle(p + new Vector2(-6.5f, 2f), 2f, Skin);
-        ci.DrawCircle(p + new Vector2(6.5f, 2f), 2f, Skin);
+        ci.Circle(p + new Vector2(-6.5f, 2f), 2f, Skin);
+        ci.Circle(p + new Vector2(6.5f, 2f), 2f, Skin);
     }
 }

@@ -163,26 +163,26 @@ public partial class ShipView
                 if (a.DistanceTo(b) < 1f) continue;
                 ci.DrawLine(a, b, new Color("#0c1016").WithAlpha(0.7f), 2.5f);
                 ci.DrawLine(a, b, col.WithAlpha(0.35f), 1f);
-                ci.DrawCircle(b, 1.8f, col.WithAlpha(0.6f), true, -1f, true);
+                ci.Circle(b, 1.8f, col.WithAlpha(0.6f), true, -1f, true);
             }
             if (rw.Bundle is Vector2 panel)
             {
                 // 배전반 → 분전함: 굵은 다발
                 var mid = new Vector2(rw.Normal.X != 0 ? panel.X : rw.Box.X, rw.Normal.X != 0 ? rw.Box.Y : panel.Y);
                 var pts = new[] { rw.Box, mid, panel };
-                ci.DrawPolyline(pts, new Color("#0c1016"), 9f, true);
+                ci.Polyline(pts, new Color("#0c1016"), 9f, true);
                 for (int k = 0; k < PowerGrid.CircuitCount; k++)
                 {
                     var off = (rw.Normal.X != 0 ? new Vector2(0, 1) : new Vector2(1, 0)) * (-2.4f + k * 1.6f);
-                    ci.DrawPolyline(pts.Select(p => p + off).ToArray(), WireColor(k).WithAlpha(0.8f), 1.2f, true);
+                    ci.Polyline(pts.Select(p => p + off).ToArray(), WireColor(k).WithAlpha(0.8f), 1.2f, true);
                 }
             }
             // 분전함: 벽에 붙은 작은 상자, 회로 표시등
             var box = new Rect2(rw.Box - new Vector2(6f, 5f), new Vector2(12f, 10f));
-            ci.DrawRect(box.Grow(1f), new Color("#0a0d12"));
-            ci.DrawRect(box, new Color("#2c3544"));
-            ci.DrawRect(new Rect2(box.Position + new Vector2(2, 2), new Vector2(8, 2)), new Color("#46526a"));
-            ci.DrawCircle(box.GetCenter() + new Vector2(0, 2f), 1.8f, rw.Room.Powered ? col : new Color("#3a1a1a"), true, -1f, true);
+            ci.Box(box.Grow(1f), new Color("#0a0d12"));
+            ci.Box(box, new Color("#2c3544"));
+            ci.Box(new Rect2(box.Position + new Vector2(2, 2), new Vector2(8, 2)), new Color("#46526a"));
+            ci.Circle(box.GetCenter() + new Vector2(0, 2f), 1.8f, rw.Room.Powered ? col : new Color("#3a1a1a"), true, -1f, true);
         }
     }
 }
