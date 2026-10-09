@@ -414,14 +414,17 @@ public sealed partial class WorkBoard
 
     /// <summary>드론이 맡을 수 있는 열린 일 (v8).</summary>
     internal IEnumerable<WorkOrder> OpenFor(Drone d) =>
-        _open.Values.Where(o => !o.Closed && o.Assignee == null && o.Drone == null && o.Robot == null && o.BlockedUntil <= _world.Tick && Council.Cleared(o));
+        _open.Values.Where(o => !o.Closed && o.Assignee == null && o.Drone == null && o.Robot == null && (o.BlockedUntil <= _world.Tick || SuitBlock(o)) && Council.Cleared(o));
 
     /// <summary>v10.10: 선내 로봇이 맡을 수 있는 열린 일 (사람이 맡지 않은 것).</summary>
     internal IEnumerable<WorkOrder> OpenForRobot() =>
-        _open.Values.Where(o => !o.Closed && o.Assignee == null && o.Drone == null && o.Robot == null && o.BlockedUntil <= _world.Tick && Council.Cleared(o))
+        _open.Values.Where(o => !o.Closed && o.Assignee == null && o.Drone == null && o.Robot == null && (o.BlockedUntil <= _world.Tick || SuitBlock(o)) && Council.Cleared(o))
             .OrderByDescending(o => o.Urgency).ThenBy(o => o.Id);
 
     public IEnumerable<WorkOrder> All => _open.Values;
+
+    /// <summary>강화: 사람에게 우주복이 없어 미룬 일 — 숨을 쉬지 않는 드론 · 로봇은 맡을 수 있다.</summary>
+    private static bool SuitBlock(WorkOrder o) => o.BlockedReason is string b && b.Contains("우주복");
 
     public void Close(WorkOrder o)
     {
@@ -1012,9 +1015,13 @@ public sealed partial class WorkBoard
         foreach (var (cell, wall) in ship.Walls)
         {
             if (!wall.IsHull || (wall.Breach <= 0f && wall.Integrity >= 0.6f && !wall.Patched)) continue;
-            if (wall.FrameLost) continue; // 구조 연결 상실: 밖에서 골조부터 (ScanStructure)
             var inside = Hull.InsideRoom(ship, cell);
+            // 강화: 모서리 외벽 칸은 맞닿은 방 모두로 샌다 — 그 벽이 '속한' 방을 버렸어도 옆 방(통로 등)이 살아 있으면 그 방을 위해 막는다
+            if (wall.Breach > 0f && !wall.Patched && (inside == null || inside.Abandoned || inside.Jettison != null || inside.Wreck)
+                && LiveNeighbor(ship, cell) is Room live) inside = live;
             if (inside == null || inside.Jettison != null || inside.Wreck) continue;
+            // 구조 연결 상실: 골조는 밖에서 다시 세운다 (ScanStructure) — 강화: 그동안 살아 있는 방이면 금속판 덮개로 임시 봉합
+            if (wall.FrameLost && (wall.Patched || inside.Abandoned)) continue;
             var t = WorkTarget.OfWall(cell, inside);
             if (wall.Breach > 0f && !wall.Patched)
             {
@@ -1035,6 +1042,8 @@ public sealed partial class WorkBoard
                             Post(WorkKind.SealBreach, t, vital != null ? 0.85f : 0.42f, Skill.Mechanics,
                                 $"포기한 구획 되찾기 — 실링폼이 없어 금속판을 덧대 용접 · {wall.Stage} · 우주복 필요");
                 }
+                else if (wall.FrameLost)
+                    Post(WorkKind.SealBreach, t, 1.3f, Skill.Mechanics, "골조가 뜯긴 큰 구멍 — 금속판 덮개로 임시 봉합 (골조는 밖에서 다시) · 우주복 필요");
                 else
                     Post(WorkKind.SealBreach, t, big ? 1.25f : 0.95f, Skill.Mechanics,
                         $"{wall.Stage} {wall.Breach * 100:0}% · 실링폼 {Hull.SealantFor(wall)}개" + (inside.Unbreathable ? " · 우주복 필요" : ""));
@@ -1044,6 +1053,14 @@ public sealed partial class WorkBoard
                 Post(WorkKind.RepairHull, t, wall.Patched ? 0.5f : 0.35f, Skill.Mechanics,
                     wall.Patched ? "임시 봉합 → 용접 수리" : $"{wall.Stage} (강도 {wall.Integrity * 100:0}%)");
             }
+        }
+
+        static Room? LiveNeighbor(Ship ship, Cell cell)
+        {
+            Room? best = null;
+            foreach (var d in Cell.Dirs4)
+                if (ship.RoomAt(cell + d) is Room r && !r.Abandoned && !r.Detached && r.Jettison == null && !r.Wreck && (best == null || r.Type == RoomType.Corridor)) best = r;
+            return best;
         }
 
         // ── 구획 포기와 재개방 (비상 규정: 막을 수 없으면 격리하고, 되찾을 수 있으면 다시 연다) ──

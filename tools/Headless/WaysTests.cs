@@ -170,6 +170,7 @@ public static partial class Program
         {
             Run(w, SimTime.Minutes(1));
             if (w.Ways.Follows.Any(f => f.Kind == 0 && f.Done >= 0 && f.At == wallCell)) fixedAt = w.Tick;
+            if (WaysSystem.Debug && m % 30 == 0) Console.WriteLine($"   [매트리스] {m}분 벽 파공{wall.Breach:0.00} 봉합{wall.Patched} {wall.PatchQuality:0.00} 마개 {w.Ways.Plugs.Count(p => p.Wall == wallCell && !p.Gone)} 실링폼 {w.Ship.CountStored(ItemKind.Sealant)} 나중일 {string.Join(",", w.Ways.Follows.Where(f => f.At == wallCell).Select(f => $"{f.Kind}:{f.Done}:{f.Claimed}"))} 일감 {string.Join(",", w.Board.All.Where(o => o.Target.Cell == wallCell).Select(o => $"{o.Kind}:{o.Assignee?.Name}:{o.Drone?.Name}:{o.BlockedReason}"))} · {string.Join(",", w.Crew.Where(c => c.Job?.Activity is WayActivity).Select(c => c.Name + ":" + c.Job!.Label))}");
         }
         var fol = w.Ways.Follows.FirstOrDefault(f => f.Kind == 0 && f.At == wallCell);
         Check("나중에 매트리스를 떼고 실링폼으로 제대로 막는다", fixedAt >= 0 && wall.Patched && wall.PatchQuality >= 0.5f && !w.Ways.Plugs.Any(p => p.Wall == wallCell && !p.Gone) && bare,

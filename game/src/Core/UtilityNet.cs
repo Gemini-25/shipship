@@ -243,7 +243,7 @@ public sealed partial class UtilityNet
 
     /// <summary>시스템 틱: 망을 다시 짜고, 공급원에서 닿는 방을 표시한다.</summary>
     /// <summary>공급원에서 닿는 분기점들 (assumeFixed 토막은 이어진 셈 치고) — 상태를 바꾸지 않는다.</summary>
-    private HashSet<int> Reach(NetKind k, List<Room> sources, NetLink? assumeFixed = null)
+    private HashSet<int> Reach(NetKind k, List<Room> sources, IReadOnlyCollection<NetLink>? assumeFixed = null)
     {
         var reach = new HashSet<int>();
         var q = new Queue<int>();
@@ -260,7 +260,7 @@ public sealed partial class UtilityNet
             if (n < 0 || n >= adj.Length) continue;
             foreach (var l in adj[n])
             {
-                if (l.Cut && l != assumeFixed || l.Room.Detached) continue;
+                if (l.Cut && (assumeFixed == null || !assumeFixed.Contains(l)) || l.Room.Detached) continue;
                 int other = l.NodeA == n ? l.NodeB : l.NodeA;
                 if (reach.Add(other)) q.Enqueue(other);
             }
@@ -386,15 +386,41 @@ public sealed partial class UtilityNet
     }
 
     /// <summary>끊긴 토막이 고쳐지면 다시 닿는 방들 (이 토막만 이으면).</summary>
-    public List<Room> Downstream(NetLink link)
+    public List<Room> Downstream(NetLink link) => Downstream(new[] { link });
+
+    /// <summary>끊긴 토막들(다발)을 다 이으면 다시 닿는 방들.</summary>
+    public List<Room> Downstream(IReadOnlyCollection<NetLink> links)
     {
         EnsureBuilt();
-        if (!link.Cut) return new List<Room>();
+        var link = links.FirstOrDefault(l => l.Cut);
+        if (link == null) return new List<Room>();
         var sources = Sources(link.Kind);
         if (sources.Count == 0) return new List<Room>();
         var now = Reach(link.Kind, sources);
-        var fixedReach = Reach(link.Kind, sources, link);
+        var fixedReach = Reach(link.Kind, sources, links);
         return _hubs.Where(h => fixedReach.Contains(h.node) && !now.Contains(h.node)).Select(h => h.room).ToList();
+    }
+
+    /// <summary>
+    /// 강화: 이 토막과 한 다발 — 같은 방 · 같은 망 · 같은 까닭으로 끊긴 토막들.
+    /// 방 분기점에 모인 간선(큰 통로는 문마다 수십 가닥)은 파편 한 번에 함께 끊긴다 — 잇는 것도 분기점에서 한 번에.
+    /// </summary>
+    public List<NetLink> Bundle(NetLink l) =>
+        l.Cut ? Links.Where(x => x.Cut && x.Room == l.Room && x.Kind == l.Kind && x.Cause == l.Cause).ToList() : new List<NetLink> { l };
+
+    /// <summary>토막(끊긴 다발이면 다발 전체)을 잇는다. 이은 토막 수.</summary>
+    public int Mend(NetLink l, float integrity, bool temp, int by)
+    {
+        var group = Bundle(l);
+        foreach (var x in group)
+        {
+            x.Integrity = integrity;
+            x.SplicedBy = by;
+            x.Temp = temp;
+            if (temp) Stats.TempRepairs++; else Stats.Repairs++;
+        }
+        Update(0f);
+        return group.Count;
     }
 
     public static bool Fed(NetKind k, Room r) => k switch { NetKind.Power => r.PowerLinked, NetKind.Water => r.WaterLinked, NetKind.Data => r.DataLinked, _ => r.DuctLinked };
@@ -409,16 +435,22 @@ public sealed partial class WorkBoard
     {
         var w = _world;
         var net = w.Net;
-        foreach (var l in net.Links.Where(l => l.Integrity < 0.55f || l.Temp && (Crisis.Level(w) < CrisisLevel.Emergency || w.Flow.Hot(l))).OrderBy(l => l.Integrity).Take(10))
+        var bundled = new HashSet<(int, NetKind, string?)>();
+        int posted = 0;
+        foreach (var l in net.Links.Where(l => l.Integrity < 0.55f || l.Temp && (Crisis.Level(w) < CrisisLevel.Emergency || w.Flow.Hot(l))).OrderBy(l => l.Integrity))
         {
+            if (posted >= 10) break;
             if (l.Room.Detached || l.Room.Abandoned || l.Room.OffLimits) continue;
+            if (l.Cut && !bundled.Add((l.Room.Id, l.Kind, l.Cause))) continue; // 강화: 한 다발은 일감 하나로 (분기점에서 한 번에 잇는다)
+            posted++;
+            var group = l.Cut ? net.Bundle(l) : null;
             var spot = l.Cells.FirstOrDefault(c => w.Ship.IsWalkable(c));
             if (spot == default) spot = l.Cells[l.Cells.Count / 2];
-            var down = l.Cut ? net.Downstream(l) : new List<Room>();
+            var down = group != null ? net.Downstream(group) : new List<Room>();
             bool vital = down.Any(r => r.Type is RoomType.LifeSupport or RoomType.Reactor or RoomType.Cooling or RoomType.Medbay or RoomType.Bridge or RoomType.Power or RoomType.Hydroponics);
             float u = l.Cut ? (l.Kind == NetKind.Power ? 0.85f : l.Kind == NetKind.Air ? 0.75f : l.Kind == NetKind.Data ? 0.55f : 0.6f) + (vital ? 0.2f : 0f) + 0.03f * down.Count : l.Temp ? (w.Flow.Hot(l) ? 0.75f : 0.3f) : 0.4f; // v14.8 달아오른 임시 이음은 급하다
             string detail = l.Cut
-                ? $"{UtilityNet.Name(l.Kind)} 끊김 ({l.Cause}) — {(down.Count > 0 ? string.Join("·", down.Select(r => r.Name)) + (l.Kind == NetKind.Power ? " 정전" : l.Kind == NetKind.Water ? " 단수" : l.Kind == NetKind.Data ? " 감지기·원격 제어 끊김" : " 환기 끊김") : "다른 길로 돈다")}"
+                ? $"{UtilityNet.Name(l.Kind)} 끊김 ({l.Cause}){(group!.Count > 1 ? $" · {group.Count}가닥 한 다발" : "")} — {(down.Count > 0 ? string.Join("·", down.Select(r => r.Name)) + (l.Kind == NetKind.Power ? " 정전" : l.Kind == NetKind.Water ? " 단수" : l.Kind == NetKind.Data ? " 감지기·원격 제어 끊김" : " 환기 끊김") : "다른 길로 돈다")}"
                 : l.Temp ? (w.Flow.Hot(l) ? $"임시로 이은 {Ko.IGa(UtilityNet.Name(l.Kind))} 달아오른다 (접촉 저항) → 제대로 다시" : $"임시로 이은 {UtilityNet.Name(l.Kind)} → 제대로 다시") : $"{UtilityNet.Name(l.Kind)} 상함 ({l.Integrity * 100:0}%)";
             post(WorkKind.RepairNet, WorkTarget.AtCell(spot, l.Room), MathF.Min(1.15f, u), l.Kind is NetKind.Power or NetKind.Data ? Skill.Electrical : Skill.Mechanics, detail, circuit: l.Id);
         }
@@ -445,20 +477,17 @@ public static partial class WorkPlanners
         var toils = have ? FetchAll(c, w, dist, new[] { (item, 1) }) : Plans.DropOff(c, w, dist);
         if (toils == null) { temp = true; toils = Plans.DropOff(c, w, dist); }
         toils.Add(new GotoToil(at));
-        toils.Add(new WorkToil(temp ? 0.25f : 0.5f, o.Skill, at.Center) { Resume = o });
+        int strands = w.Net.Bundle(l).Count;
+        toils.Add(new WorkToil((temp ? 0.25f : 0.5f) + 0.03f * Math.Min(10, strands - 1), o.Skill, at.Center) { Resume = o }); // 강화: 다발이면 조금 더 걸린다
         toils.Add(new DoToil((cm, world) =>
         {
             if (!temp && !UseAll(cm, new[] { (item, 1) })) return false;
             world.Board.Close(o);
             bool wasCut = l.Cut;
             bool tape = temp && l.Kind is NetKind.Power or NetKind.Data && ItemsV15.Use(world, ItemKind.Tape); // v15 절연 테이프로 감으면 덜 달아오른다
-            l.Integrity = temp ? (tape ? 0.72f : 0.6f) : 1f;
-            l.SplicedBy = temp ? cm.Id : -1; // v14.8
-            l.Temp = temp;
-            if (temp) world.Net.Stats.TempRepairs++; else world.Net.Stats.Repairs++;
-            world.Net.Update(0f);
+            int n = world.Net.Mend(l, temp ? (tape ? 0.72f : 0.6f) : 1f, temp, temp ? cm.Id : -1); // v14.8 · 강화: 끊긴 다발은 한 번에
             MarkLog.Add(l.Room.Marks, world.Tick, $"{cm.Name}: {UtilityNet.Name(l.Kind)} {(temp ? "임시로 이음" : "다시 이음")}");
-            world.Log.Add(world.Tick, LogKind.Work, $"{l.Room.Name} {Ko.EulReul(UtilityNet.Name(l.Kind))} {(temp ? "임시로 이었다 — 나중에 제대로" : "다시 이었다")}", cm.Id);
+            world.Log.Add(world.Tick, LogKind.Work, $"{l.Room.Name} {Ko.EulReul(UtilityNet.Name(l.Kind))}{(n > 1 ? $" {n}가닥" : "")} {(temp ? "임시로 이었다 — 나중에 제대로" : "다시 이었다")}", cm.Id);
             if (wasCut) world.History.Add(world, HistoryKind.Response, $"{Ko.IGa(cm.Name)} 끊긴 {l.Room.Name} {Ko.EulReul(UtilityNet.Name(l.Kind))} {(temp ? "임시로 " : "")}이었다", l.Room, new[] { cm });
             return true;
         }));

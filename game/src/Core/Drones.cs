@@ -223,7 +223,7 @@ public sealed partial class DroneSystem
         WorkKind.ReleaseJoint => 0.2f,
         WorkKind.Retrieve => 0.15f,
         WorkKind.RepairRadiator => 0.6f,
-        WorkKind.SealBreach => 0.5f, // v16.20b 밖에서 파공 막기
+        WorkKind.SealBreach => 0.25f, // v16.20b 밖에서 파공 막기 · 강화: 실링폼 분사기로 15분
         WorkKind.RepairHull => 0.9f, // v16.20b 밖에서 외벽 용접
         _ => 0.05f,
     };
@@ -257,8 +257,8 @@ public sealed partial class DroneSystem
         foreach (var dock in docks)
         {
             dock.Storage!.Add(ItemKind.Structure, 2);
-            dock.Storage.Add(ItemKind.Plate, 2);
-            dock.Storage.Add(ItemKind.Sealant, 1);
+            dock.Storage.Add(ItemKind.Plate, 6); // 강화: 파공 서너 번 몫 (칸 12개를 꽉 채운다)
+            dock.Storage.Add(ItemKind.Sealant, 4);
         }
     }
 
@@ -720,7 +720,7 @@ public sealed partial class DroneSystem
                 d.State = DroneState.Working;
                 d.StateSince = w.Tick;
                 d.WorkDone = 0f;
-                d.WorkNeeded = d.Order != null ? WorkHours(d.Order.Kind) * RobotsV15.Work(d.Kind) * w.Fleet.Work : d.HullCare != null ? WorkHours(WorkKind.RepairHull) * RobotsV15.Work(d.Kind) * w.Fleet.Work : 0.1f; // v15.7 손이 빠른 드론 · v16.20b 공구 등급 · 외벽 순찰 용접
+                d.WorkNeeded = d.Order != null ? WorkHours(d.Order.Kind) * RobotsV15.Work(d.Kind) * w.Fleet.Work * (d.Order.Kind == WorkKind.SealBreach ? SealSlow(d.Kind) : 1f) : d.HullCare != null ? WorkHours(WorkKind.RepairHull) * RobotsV15.Work(d.Kind) * w.Fleet.Work : 0.1f; // v15.7 손이 빠른 드론 · v16.20b 공구 등급 · 외벽 순찰 용접
                 FleetCarry(d); // v16.20b 교대: 앞 드론이 한 만큼 이어서
                 return;
             case DroneState.Towing:

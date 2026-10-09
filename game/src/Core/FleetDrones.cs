@@ -13,6 +13,9 @@ public sealed partial class DroneSystem
 {
     public static bool CanSeal(DroneKind k) => RobotsV15.Base(k) is DroneKind.Repair or DroneKind.Build;
 
+    /// <summary>강화: 파공은 모든 드론이 실링폼 분사기로 막는다 — 수리 · 건설 드론이 빠르고, 견인 드론은 조금, 검사 드론은 더 느리다.</summary>
+    public static float SealSlow(DroneKind k) => RobotsV15.Base(k) switch { DroneKind.Repair or DroneKind.Build => 1f, DroneKind.Tow => 1.3f, _ => 1.7f };
+
     internal float FleetReturnCost(Drone d) => ReturnCost(d);
 
     /// <summary>시험용: 드론을 선체 밖에 멈춰 떠다니게 한다.</summary>
@@ -36,27 +39,44 @@ public sealed partial class DroneSystem
     }
 
     /// <summary>싣고 갈 것: 실링폼(빠르다) · 금속판 두 장(오래간다) — 둘 다 있으면 잘 통한 쪽.</summary>
-    private (ItemKind kind, int count)[]? SealKit(Drone d, WallState wall)
+    private (ItemKind kind, int count)[]? SealKit(Drone d, WallState wall) => SealKit(d, wall, out _);
+
+    /// <summary>싣고 갈 것과 꺼낼 거치대 (강화: 제 거치대가 비었으면 같은 방 이웃 거치대에서).</summary>
+    private (ItemKind kind, int count)[]? SealKit(Drone d, WallState wall, out Furniture from)
+    {
+        from = d.Dock;
+        var kit = SealKitAt(d.Dock, wall);
+        if (kit != null) return kit;
+        foreach (var other in _world.Ship.FurnitureOf(FurnitureType.DroneDock))
+        {
+            if (other == d.Dock || other.Room != d.Dock.Room || other.Storage == null) continue;
+            kit = SealKitAt(other, wall);
+            if (kit != null) { from = other; return kit; }
+        }
+        return null;
+    }
+
+    private (ItemKind kind, int count)[]? SealKitAt(Furniture dock, WallState wall)
     {
         int s = Hull.SealantFor(wall);
-        bool hs = d.Dock.Storage!.Count(ItemKind.Sealant) >= s, hp = d.Dock.Storage.Count(ItemKind.Plate) >= 2;
+        bool hs = !wall.FrameLost && dock.Storage!.Count(ItemKind.Sealant) >= s, hp = dock.Storage!.Count(ItemKind.Plate) >= 2; // 강화: 골조가 뜯긴 구멍은 실링폼이 못 버틴다 — 금속판 덮개만
         if (hs && hp) return _world.Fleet.Rate("seal:sealant") + 0.1f >= _world.Fleet.Rate("seal:plate") ? new[] { (ItemKind.Sealant, s) } : new[] { (ItemKind.Plate, 2) };
         return hs ? new[] { (ItemKind.Sealant, s) } : hp ? new[] { (ItemKind.Plate, 2) } : null;
     }
 
-    private float SealHours(Drone d) => WorkHours(WorkKind.SealBreach) * RobotsV15.Work(d.Kind) * _world.Fleet.Work;
+    private float SealHours(Drone d) => WorkHours(WorkKind.SealBreach) * RobotsV15.Work(d.Kind) * _world.Fleet.Work * SealSlow(d.Kind);
 
     /// <summary>이 파공에 보낼 드론 (가장 빨리 닿는 · 배터리 · 자재).</summary>
     internal (Drone? d, float eta, string why) FleetSealer(WorkOrder o, Vector2 at)
     {
         var w = _world;
         if (w.Ship.WallAt(o.Target.Cell) is not WallState wall) return (null, 0f, "벽이 없다");
-        string why = "밖에 나갈 수 있는 수리 · 건설 드론이 없다";
+        string why = "밖에 나갈 수 있는 드론이 없다";
         Drone? best = null;
         float bestEta = float.MaxValue;
         foreach (var d in Drones)
         {
-            if (!CanSeal(d.Kind) || !d.Operational || d.State != DroneState.Docked || w.Fleet.DroneTask.ContainsKey(d.Id) || d.Hurt.Swell > 0f) continue;
+            if (!d.Operational || d.State != DroneState.Docked || w.Fleet.DroneTask.ContainsKey(d.Id) || d.Hurt.Swell > 0f || d.Fetching != null) continue;
             if (SealKit(d, wall) == null) { why = "거치대에 실링폼도 금속판도 없다"; continue; }
             float hours = SealHours(d);
             float cost = TripCost(d, at, hours);
@@ -90,7 +110,7 @@ public sealed partial class DroneSystem
                 d.Doing = $"운석이 지나가길 기다린다 — {o.Target.Room!.Name} 파공으로 나갈 차례";
                 return true;
             }
-            var kit = SealKit(d, wall);
+            var kit = SealKit(d, wall, out var kitDock);
             float cost = TripCost(d, at, SealHours(d));
             float wait = d.Battery >= cost ? 0f : (cost - d.Battery) / ChargePerHour * 60f;
             if (kit == null || wait > 25f)
@@ -102,7 +122,7 @@ public sealed partial class DroneSystem
                 return false;
             }
             if (d.Battery < cost) { d.Doing = $"충전 {d.Battery * 100:0}% — 파공까지 {cost * 100:0}% 필요"; return true; }
-            foreach (var (k, n) in kit) d.Dock.Storage!.Take(k, n);
+            foreach (var (k, n) in kit) kitDock.Storage!.Take(k, n);
             d.Cargo = kit;
             d.Order = o;
             Launch(d, at, $"{o.Target.Room!.Name} 파공 — 밖에서 막는다");
@@ -348,7 +368,7 @@ public sealed partial class DroneSystem
             GoHome(d);
             return;
         }
-        float fail = (plate ? 0.06f : 0.16f - 0.03f * (f.Tier - 1)) + (wall.Breach >= 0.25f ? 0.06f : 0f) + 0.3f * (1f - d.Hurt.Arm);
+        float fail = (plate ? 0.04f : 0.08f - 0.02f * (f.Tier - 1)) + (wall.Breach >= 0.25f ? 0.04f : 0f) + 0.3f * (1f - d.Hurt.Arm); // 강화: 분사기 · 덧판 고정쇠
         d.Cargo = Array.Empty<(ItemKind, int)>();
         if (f.Rng.Chance(fail))
         {
@@ -357,10 +377,18 @@ public sealed partial class DroneSystem
             MarkLog.Add(wall.Marks, w.Tick, $"{d.Name}: 밖에서 {(plate ? "덧댄 금속판" : "실링폼")}이 붙지 않았다");
             w.Log.Add(w.Tick, LogKind.Warning, $"{d.Name}: {room.Name} 파공에 밖에서 {(plate ? "덧댄 금속판이 들떴다" : "뿌린 실링폼이 날려 갔다")} — 다시 해야 한다");
             d.Mind.Say($"{(plate ? "금속판" : "실링폼")}이 붙지 않았다 — 다음엔 다른 방법", w.Tick);
+            f.Forget(o); // 강화: 곧바로 다시 견준다 (12분 기다리지 않는다)
             GoHome(d);
             return;
         }
-        if (plate)
+        if (plate && wall.FrameLost)
+        {
+            // 강화: 골조가 뜯긴 구멍 — 금속판 덮개로 임시 봉합 (골조는 건설 드론이 밖에서 다시 세운다)
+            wall.Patched = true;
+            wall.PatchQuality = 0.7f;
+            wall.Seals++;
+        }
+        else if (plate)
         {
             wall.MaxIntegrity = MathF.Max(0.25f, wall.MaxIntegrity - 0.05f);
             wall.Integrity = MathF.Max(wall.Integrity, wall.MaxIntegrity * 0.85f);

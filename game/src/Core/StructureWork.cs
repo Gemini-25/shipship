@@ -87,7 +87,7 @@ public static class ExternalWork
 public sealed partial class WorkBoard
 {
     /// <summary>거치대 자재칸 목표 (드론마다 한 번은 나갈 수 있게).</summary>
-    private static readonly (ItemKind kind, int target)[] DockStock = { (ItemKind.Structure, 2), (ItemKind.Plate, 2), (ItemKind.Sealant, 1) };
+    private static readonly (ItemKind kind, int target, int full)[] DockStock = { (ItemKind.Structure, 2, 2), (ItemKind.Plate, 2, 6), (ItemKind.Sealant, 1, 4) }; // 강화 full: 구멍이 열렸거나 창고가 넉넉하면 파공 서너 번 몫까지
 
     /// <summary>v9.3: 사람이 맡을 일이 이 재료가 없어 멈춰 있다.</summary>
     private bool CrewWaitsFor(ItemKind kind)
@@ -211,7 +211,7 @@ public sealed partial class WorkBoard
         foreach (var dock in ship.FurnitureOf(FurnitureType.DroneDock))
         {
             if (dock.Room.Detached) continue;
-            foreach (var (kind, _) in DockStock)
+            foreach (var (kind, _, _) in DockStock)
             {
                 int inDock = dock.Storage!.Count(kind);
                 if (inDock == 0 || ship.CountStored(kind) > 0 || !CrewWaitsFor(kind)) continue;
@@ -219,17 +219,20 @@ public sealed partial class WorkBoard
                     $"선반에 {ItemKinds.Name(kind)} 없음 · 거치대에 {inDock}개 · 사람이 할 일이 기다린다", product: kind);
             }
         }
+        bool holes = _open.Values.Any(o => o.Kind == WorkKind.SealBreach && !o.Closed); // 강화: 구멍이 열려 있으면 드론 자재가 급하다
         foreach (var dock in ship.FurnitureOf(FurnitureType.DroneDock))
         {
-            foreach (var (kind, target) in DockStock)
+            foreach (var (kind, normal, full) in DockStock)
             {
                 int have = dock.Storage!.Count(kind);
-                if (have >= target || CrewWaitsFor(kind)) continue;
                 int spare = ship.CountStored(kind);
+                int target = holes || spare >= 10 ? full : normal; // 평소에는 승무원 몫을 거치대로 빼 가지 않는다
+                if (have >= target || CrewWaitsFor(kind)) continue;
                 bool waiting = drones.Waiting.Contains(kind);
-                if (spare < (waiting ? 1 : 4)) continue; // 승무원 몫(비상용·개조)을 남긴다
-                post(WorkKind.StockDock, WorkTarget.Of(dock), waiting ? 0.75f : 0.2f + 0.08f * (target - have), Skill.Mechanics,
-                    $"{ItemKinds.Name(kind)} {have}/{target}" + (waiting ? " · 드론이 자재를 기다린다" : ""), product: kind);
+                bool rush = holes && kind is ItemKind.Sealant or ItemKind.Plate && have < 2; // 강화: 구멍이 열렸는데 거치대가 비어 간다
+                if (spare < (waiting ? 1 : rush ? 3 : 4)) continue; // 승무원 몫(비상용·개조)을 남긴다 — 마지막 것은 드론이 기다릴 때만
+                post(WorkKind.StockDock, WorkTarget.Of(dock), waiting || rush ? (holes ? 0.9f : 0.75f) : 0.2f + 0.08f * (target - have), Skill.Mechanics,
+                    $"{ItemKinds.Name(kind)} {have}/{target}" + (waiting ? " · 드론이 자재를 기다린다" : rush ? " · 구멍이 열렸다 — 드론 몫" : ""), product: kind);
             }
         }
 

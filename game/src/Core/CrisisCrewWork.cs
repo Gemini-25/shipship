@@ -333,10 +333,15 @@ public sealed class HelpActivity : Activity
     {
         if (CrisisCrewSystem.Off) return (0f, "—");
         if (c.Job?.Activity is HelpActivity && w.CrisisCrew.HelpingOrder(c) >= 0)
-            return c.Room is Room hr && (hr.EvacuateBy >= 0 || hr.Purging || hr.Inerting) ? (0f, "비우는 방") : (0.95f, "거드는 중");
+            return c.Room is Room hr && (hr.EvacuateBy >= 0 || hr.Purging || hr.Inerting) ? (0f, "비우는 방")
+                : Airless(c, c.Job.TargetRoom) ? (0f, "공기가 빠진 방 — 우주복 없이는 못 거든다") : (0.95f, "거드는 중");
         var (o, s, why) = w.CrisisCrew.HelpPick(c, dist);
+        if (o != null && Airless(c, o.Target.CurrentRoom)) return (0f, "공기가 빠진 방 — 우주복 없이는 못 거든다");
         return o == null ? (0f, "거들 일 없음") : (s, why);
     }
+
+    /// <summary>강화: 맨몸으로 거들러 들어가면 안 되는 방 (우주복을 입은 사람을 따라 들어가 쓰러진다).</summary>
+    internal static bool Airless(CrewMember c, Room? r) => r != null && c.Suit is not { Oxygen: > 0.1f } && WorkPlanners.Unsafe(r);
 
     public override Job? Plan(CrewMember c, World w, DistanceField dist)
     {
@@ -418,6 +423,7 @@ public sealed class AssistToil : Toil
         _elapsed++;
         if (_crowded || _o.Closed || _lead.Dead || _lead.Down || _lead.Job?.Order != _o) return ToilStatus.Succeeded;
         if (c.Room is Room cr && (cr.EvacuateBy >= 0 || cr.Purging || cr.Inerting)) return ToilStatus.Succeeded; // 소화 경보 — 비우는 방에서 나간다
+        if (HelpActivity.Airless(c, c.Room)) return ToilStatus.Succeeded; // 강화: 공기가 빠졌다 — 맨몸이면 물러난다
         // 통합: 이끄는 사람도 일터도 곁에 없다 (그 사람이 아직 가는 중이었다) — 손을 떼고 일터로 다시 간다
         if (_elapsed % 25 == 0 && (c.Position - _lead.Position).LengthSquared() > 16f && (c.Position - _o.Target.Center).LengthSquared() > 16f) return ToilStatus.Succeeded;
         if (_elapsed % 30 == 0) Locomotion.Face(c, _o.Target.Center);

@@ -24,8 +24,9 @@ public sealed class DistanceField
 /// 길을 고르는 사람의 성향. "갈 수는 있는데 가고 싶지는 않다"를 표현한다.
 /// 겁 많은 사람은 위험 비용을 크게 느끼고, 급한 일을 맡은 책임감 있는 사람은 덜 느낀다.
 /// </summary>
-public readonly record struct PathProfile(float HazardScale = 1f, bool Suit = false, bool Responder = false, float[]? Fear = null, bool Eva = false, bool Robot = false, bool NoCrawl = false, int[]? Spots = null, int Who = -1)
+public readonly record struct PathProfile(float HazardScale = 1f, bool Suit = false, bool Responder = false, float[]? Fear = null, bool Eva = false, bool Robot = false, bool NoCrawl = false, int[]? Spots = null, int Who = -1, bool Fleeing = false)
 {
+    // 강화 Fleeing: 대피하는 사람 — 급하지만 대응자가 아니다 (새는 방을 지름길로 지나지 않는다)
     // Who: 길을 고르는 사람 (출입 통제 문 권한을 따진다 · -1 = 따지지 않음 — 급한 일은 비상 해제 손잡이로 지나간다)
     /// <summary>선체 밖 한 칸을 지나는 추가 비용 (손으로 짚어 가며 느리게).</summary>
     public const int SpaceCost = 14;
@@ -297,7 +298,7 @@ public sealed class Pathfinder
         {
             var r = _ship.Rooms[i];
             s[2 + nd + i * 2] = r.HazardCost;
-            s[3 + nd + i * 2] = (r.Unbreathable ? 1 : 0) | (r.Abandoned ? 2 : 0);
+            s[3 + nd + i * 2] = (r.Unbreathable ? 1 : 0) | (r.Abandoned ? 2 : 0) | (Draining(r) ? 4 : 0) | (r.Air.Pressure < 60f ? 8 : 0); // 강화: 공기가 빠지는 방 — 맨몸 통행 · 빠져나가는 비상 개방
         }
         if (_state.Length != len || !s.AsSpan().SequenceEqual(_state))
         {
@@ -318,7 +319,7 @@ public sealed class Pathfinder
         int version = StateVersion();
         int si = grid.InBounds(start) ? grid.Index(start) : -1;
         int bar = MarkBarred(profile, si >= 0 ? _room[si] : -1);
-        var key = (si, profile.HazardScale, (profile.Suit ? 1 : 0) | (profile.Responder ? 2 : 0) | (profile.Eva ? 4 : 0) | (profile.Robot ? 8 : 0) | (profile.NoCrawl ? 16 : 0), bar);
+        var key = (si, profile.HazardScale, (profile.Suit ? 1 : 0) | (profile.Responder ? 2 : 0) | (profile.Eva ? 4 : 0) | (profile.Robot ? 8 : 0) | (profile.NoCrawl ? 16 : 0) | (profile.Fleeing ? 32 : 0), bar);
         if (_floods.TryGetValue(key, out var e) && e.Version == version && SameFear(e.Fear, profile.Fear) && SameSpots(e.Spots, profile.Spots))
         {
             FloodHits++;
@@ -379,7 +380,7 @@ public sealed class Pathfinder
             if (profile.Fear is { } fear && r < fear.Length && fear[r] > 0.05f)
                 add += (int)(fear[r] * PathProfile.FearCost * (profile.Responder ? 0.4f : 1f));
             _roomAdd[r] = add;
-            _roomBlocked[r] = !profile.Suit && !profile.Robot && r != startRoom && room.Unbreathable;
+            _roomBlocked[r] = !profile.Suit && !profile.Robot && r != startRoom && (room.Unbreathable || Draining(room) && (room.Air.Pressure < 60f || (!profile.Responder || profile.Fleeing) && !Desperate(startRoom))); // 강화: 새는 방은 맨몸으로 지나다니지 않는다 (막으러 · 구하러 가는 사람만)
         }
         // 문: 잠긴 격벽을 못 지나는가, 전기 없는 문·잠긴 문 비용
         int nd0 = _ship.Doors.Count;
@@ -397,7 +398,7 @@ public sealed class Pathfinder
             {
                 bool leaving = !profile.Robot && ((door.RoomA?.Id ?? -1) == startRoom || (door.RoomB?.Id ?? -1) == startRoom); // v16.20b 로봇은 잠긴 격벽을 못 연다 (나가는 길이어도)
                 bool sealedOff = (door.RoomA?.Abandoned ?? false) || (door.RoomB?.Abandoned ?? false);
-                blocked = !leaving && !profile.Suit && (sealedOff || !profile.Responder);
+                blocked = !leaving && !Escaping(door, profile, startRoom) && !profile.Suit && (sealedOff || !profile.Responder);
                 if (door.Welded && !profile.Suit) blocked = true; // 용접한 격벽은 비상 개방이 안 된다 (잘라야 한다 — 우주복 입고)
             }
             _doorBlocked[d] = blocked;
@@ -564,6 +565,26 @@ public sealed class Pathfinder
         }
     }
 
+    /// <summary>
+    /// 강화: 공기가 새는 방에서 빠져나가는 사람은 가는 길의 잠긴 격벽(새지 않는 방 사이 · 버린 구획이 아닌)을 비상 개방으로 지난다 —
+    /// 이웃 방들이 예방으로 잠겨 첫 문만 열리면 먼 길로 돌다 숨이 막힌다.
+    /// </summary>
+    private bool Escaping(Door door, PathProfile profile, int startRoom)
+    {
+        if (profile.Robot || startRoom < 0 || startRoom >= _ship.Rooms.Count || !Draining(_ship.Rooms[startRoom]) || door.Welded) return false;
+        var a = door.RoomA;
+        var b = door.RoomB;
+        if (a == null || b == null || a.Abandoned || b.Abandoned) return false;
+        return !Draining(a) || !Draining(b);
+    }
+
+    // 60kPa 아래로 빠진 방은 급한 일(구조 · 깨우기 · 우주복 가지러)이어도 맨몸으로 지나지 않는다 — 우주복을 입고 들어간다
+    /// <summary>강화: 공기가 눈에 띄게 빠지는 방 (기압이 떨어졌거나 구멍이 크다 — 실금 같은 미세 누출은 평소대로 지나다닌다).</summary>
+    public static bool Draining(Room r) => r.Leaking && (r.Air.Pressure < 90f || r.BreachArea >= 0.25f);
+
+    /// <summary>강화: 숨쉬기 힘든 방(60kPa 아래)에서 나가는 길 — 조금 새는 방(60kPa 넘게)이라도 지나서 빠져나간다.</summary>
+    private bool Desperate(int startRoom) => startRoom >= 0 && startRoom < _ship.Rooms.Count && (_ship.Rooms[startRoom].Unbreathable || _ship.Rooms[startRoom].Air.Pressure < 60f);
+
     private bool CanStep(int from, int k, int to, PathProfile profile, int startRoom)
     {
         // 설계도 둘레에 빈 여백이 있으므로 이웃 인덱스가 배열 밖으로 나가지 않는다
@@ -578,13 +599,13 @@ public sealed class Pathfinder
             var door = _ship.Doors[dr];
             bool leaving = !profile.Robot && ((door.RoomA?.Id ?? -1) == startRoom || (door.RoomB?.Id ?? -1) == startRoom); // v16.20b 로봇은 잠긴 격벽을 못 연다 (나가는 길이어도)
             bool sealedOff = (door.RoomA?.Abandoned ?? false) || (door.RoomB?.Abandoned ?? false);
-            if (!leaving && !profile.Suit && (sealedOff || !profile.Responder)) return false;
+            if (!leaving && !Escaping(door, profile, startRoom) && !profile.Suit && (sealedOff || !profile.Responder)) return false;
             if (door.Welded && !profile.Suit) return false; // 용접한 격벽은 비상 개방이 안 된다
         }
         if (!profile.Suit && !profile.Robot) // v10.10: 로봇은 숨을 쉬지 않는다 (진공도 지나간다 — 잠긴 격벽은 못 연다)
         {
             int r = _room[to];
-            if (r >= 0 && r != startRoom && _ship.Rooms[r].Unbreathable) return false;
+            if (r >= 0 && r != startRoom && (_ship.Rooms[r].Unbreathable || Draining(_ship.Rooms[r]) && (_ship.Rooms[r].Air.Pressure < 60f || (!profile.Responder || profile.Fleeing) && !Desperate(startRoom)))) return false;
         }
         if (k < 4) return true;
         if (_door[from] >= 0 || _door[to] >= 0) return false;

@@ -411,6 +411,13 @@ public sealed partial class RobotSystem
 
     /// <summary>로봇의 길: 숨 쉴 필요가 없어 진공도 지나가지만, 잠긴 격벽은 열지 못한다 (나가는 쪽만).</summary>
     public static readonly PathProfile Profile = new(0.3f, false, false, null, false, Robot: true);
+    /// <summary>강화: 급한 일(0.9 이상)을 맡은 로봇 — 주 컴퓨터가 잠긴 격벽을 잠깐 열어 준다 (양쪽 방이 새지 않을 때).</summary>
+    public static readonly PathProfile UrgentProfile = Profile with { Responder = true };
+    private static bool Rushes(World w, WorkOrder? o) => o is { Urgency: >= 0.9f } && w.Automation.Present && w.Automation.MainOnline && !FleetSystem.Off;
+    private static PathProfile ProfileOf(Robot r, World w) => Rushes(w, r.Order) ? UrgentProfile : Profile;
+    /// <summary>주 컴퓨터가 이 로봇에게 잠긴 격벽을 열어 주나 (용접 · 새는 방 · 버린 구획은 안 연다 — 봉쇄가 풀린 게 아니다).</summary>
+    private static bool ComputerOpens(Robot r, Door d, World w) =>
+        Rushes(w, r.Order) && !d.Welded && d.RoomA is Room a && d.RoomB is Room b && !a.Leaking && !b.Leaking && !a.Abandoned && !b.Abandoned && !a.Detached && !b.Detached;
 
     internal World World => _world;
 
@@ -564,7 +571,7 @@ public sealed partial class RobotSystem
 
     internal static bool SetDestination(Robot r, World w, Cell goal)
     {
-        var path = w.Paths.Find(r.Cell, goal, Profile);
+        var path = w.Paths.Find(r.Cell, goal, ProfileOf(r, w));
         if (path == null) { r.Path = null; return false; }
         r.Path = path;
         r.PathIndex = 0;
@@ -582,11 +589,11 @@ public sealed partial class RobotSystem
         while (budget > 0f && r.PathIndex < path.Count)
         {
             for (int k = r.PathIndex; k < Math.Min(path.Count, r.PathIndex + 2); k++)
-                if (w.Ship.DoorAt(path[k]) is Door ahead && !ahead.Locked) ahead.Request();
+                if (w.Ship.DoorAt(path[k]) is Door ahead) { if (!ahead.Locked) ahead.Request(); else if (ComputerOpens(r, ahead, w)) ahead.RequestOverride(); }
             var next = path[r.PathIndex];
             if (w.Fleet.GiveWay(r, next)) break; // v16.20b 급히 지나가는 사람에게 길을 비켜 준다
             var door = w.Ship.DoorAt(next);
-            if (Locomotion.Blocked(w.Ship, next) || (door != null && door.Locked && (!Leaving(r, door) || !FleetSystem.Off))) // v16.20b 잠긴 격벽은 로봇이 못 연다 — 다른 길로
+            if (Locomotion.Blocked(w.Ship, next) || (door != null && door.Locked && !ComputerOpens(r, door, w) && (!Leaving(r, door) || !FleetSystem.Off))) // v16.20b 잠긴 격벽은 로봇이 못 연다 — 다른 길로 (강화: 급한 일이면 주 컴퓨터가 연다)
             {
                 var goal = r.Goal ?? path[^1];
                 if (repathed || !SetDestination(r, w, goal)) { r.Path = null; return false; }
@@ -774,6 +781,7 @@ public sealed partial class RobotSystem
         WorkOrder? best = null;
         Cell bestSpot = default;
         float bestScore = float.MinValue;
+        DistanceField? udist = null, bestField = null;
         foreach (var o in w.Board.OpenForRobot())
         {
             if (!(CanDo(r.Kind, o.Kind) || Stands(r, o)) || !RobotsV15.Takes(r.Kind, o)) continue;
@@ -784,13 +792,15 @@ public sealed partial class RobotSystem
             if (o.Kind == WorkKind.Tend && o.Target.Furniture?.Machine?.Crop is { Blight: > 0f }) continue;
             if (o.Target.CurrentRoom is Room room && (room.Abandoned || room.OffLimits || w.Fire.CountIn(room) > 0 || !w.Fleet.MayEnter(r, room))) continue; // v16.20b 견딜 수 없는 방
             if (!w.Fleet.Allowed(r, o)) continue; // v16.20b 비상 — 급하지 않은 일은 미룬다
-            if (Spot(r, o, dist) is not Cell spot) continue;
-            float score = o.Urgency - dist.Get(spot) / 9000f + w.Automation.Command.Bias(r, o); // v16.20 컴퓨터 명령 (ComputerCommand.Order)
-            if (score > bestScore) { bestScore = score; best = o; bestSpot = spot; }
+            var field = dist;
+            if (Rushes(w, o)) field = udist ??= w.Paths.Flood(r.Cell, UrgentProfile); // 강화: 급한 일은 잠긴 격벽 너머도 (주 컴퓨터가 연다)
+            if (Spot(r, o, field) is not Cell spot) continue;
+            float score = o.Urgency - field.Get(spot) / 9000f + w.Automation.Command.Bias(r, o); // v16.20 컴퓨터 명령 (ComputerCommand.Order)
+            if (score > bestScore) { bestScore = score; best = o; bestSpot = spot; bestField = field; }
         }
         if (best != null)
         {
-            var steps = Plan(r, best, bestSpot, dist, out string? blocked);
+            var steps = Plan(r, best, bestSpot, bestField!, out string? blocked);
             if (steps != null && !w.Fleet.Affords(r, best, steps, bestSpot)) { if (!r.AtDock) GoHome(r, "남은 일에 배터리가 모자라"); return; } // v16.20b 남은 일 · 거리 계산
             if (steps != null)
             {

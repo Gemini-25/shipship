@@ -265,7 +265,10 @@ public sealed class ComputerForesee
         var w = _w;
         var a = w.Automation;
         if (AutomationSystem.Ship20Off || !a.CoreOnline || !d.Powered || !low.DataLinked || low.Detached) return false;
-        if (low.LockPendingUntil < 0 && !HoldOpen(low)) { _holdNoted.Remove(low.Id); return false; }
+        // 강화: 잠근 뒤에도 안에 맨몸으로 깨어 있는 사람이 있으면 — 나오는 사람 앞에서 문이 쾅 닫히지 않게 붙잡는다
+        bool trapped = low.Leaking && w.Crew.Any(c => !c.Dead && !c.Down && c.Suit == null && !c.Outside && c.Room == low
+            && (c.Cell == d.Cell || MathF.Abs(c.Cell.X - d.Cell.X) + MathF.Abs(c.Cell.Y - d.Cell.Y) <= 3));
+        if (low.LockPendingUntil < 0 && !HoldOpen(low) && !trapped) { _holdNoted.Remove(low.Id); return false; }
         if (_holdNoted.Add(low.Id))
         {
             DoorHolds++;

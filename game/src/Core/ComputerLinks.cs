@@ -51,6 +51,7 @@ public sealed partial class AutomationSystem
         // 태양 폭풍(기존 Hazards)이 시작되면 같은 길로: 대피 방송 (들은 사람만 먼저 움직인다)
         if (w.Hazards.StormActive && !_stormSeen) { _stormSeen = true; CosmicHit("태양 폭풍", CosmicFx.Radiation, 0.5f); }
         else if (!w.Hazards.StormActive) _stormSeen = false;
+        DebrisWatch(); // 강화: 운석이 쏟아지면 안쪽 방으로 (MeteorShelter.cs)
         if (w.Tick < _linkNext) return;
         _linkNext = w.Tick + SimTime.Minutes(5);
         DoorSensors();
@@ -107,7 +108,7 @@ public sealed partial class AutomationSystem
         var inner = db.Inner >= 0 && db.Inner < w.Ship.Rooms.Count ? w.Ship.Rooms[db.Inner] : null;
         if (inner == null || inner.Detached || !inner.DataLinked) return false;
         // 제 방송으로 보낸 대피소가 잠겨 있으면 컴퓨터가 연다 (출입 관리 모듈이 없어도 — 제 말에 책임진다)
-        bool shelter = ShelterCall && inner == ShelterRoom() && Speak.Ordered(c, "shelter", SimTime.Hours(1)) != null;
+        bool shelter = ShelterCall && IsShelter(inner) && Speak.Ordered(c, "shelter", SimTime.Hours(1)) != null;
         if (!shelter && !Active(ComputerModule.Access)) return false;
         string zone = DoorBody.ZoneName(db.Zone);
         string? why = db.Zone switch
@@ -305,17 +306,18 @@ public sealed class HeedBroadcastActivity : Activity
         var b = a.Speak.Ordered(c, "shelter", SimTime.Hours(1));
         if (b == null) return (0f, "대피 방송을 못 들었다");
         if (!a.Trusts.Obeys(c)) return (0f, "컴퓨터 방송 — 믿지 않는다");
-        var (shelter, _) = Facilities.Best(w.Ship, "shelter", r => !r.Detached && !r.OffLimits && !r.Leaking);
+        var shelter = a.ShelterFor(c, dist); // 강화: 운석이면 가장 가까운 안쪽 방
         if (shelter == null) return (0f, "대피소가 없다");
         // 믿는 만큼 급하다: 컴퓨터를 믿는 사람은 밥숟가락을 놓고 가고, 반신반의하는 사람은 하던 일을 마치고 간다
         float urge = 0.8f + 0.5f * a.Trusts.Of(c);
-        if (c.Room == shelter) return c.Job?.Activity is HeedBroadcastActivity ? (urge, "방송대로 대피소에서 기다린다") : (0f, "이미 대피소");
+        if (c.Room == shelter) return c.Job?.Activity is HeedBroadcastActivity ? (urge, "방송대로 대피소에서 기다린다")
+            : a.DebrisShelterActive ? (urge * 0.85f, "운석이 지나갈 때까지 안쪽 방에 머문다") : (0f, "이미 대피소"); // 강화: 운석 대피는 끝날 때까지
         return (urge, $"방송 — {b.Text}");
     }
 
     public override Job? Plan(CrewMember c, World w, DistanceField dist)
     {
-        var (shelter, _) = Facilities.Best(w.Ship, "shelter", r => !r.Detached && !r.OffLimits && !r.Leaking);
+        var shelter = w.Automation.ShelterFor(c, dist);
         if (shelter == null) return null;
         if (c.Room == shelter) return new Job(this, "방송대로 대피", new List<Toil> { new WaitToil(SimTime.Minutes(20), Pose.Sitting) }) { TargetRoom = shelter };
         Cell? best = null;

@@ -500,9 +500,12 @@ public static partial class WorkPlanners
     public static bool Hostile(Room r) =>
         Unsafe(r) || r.Air.O2 < 17f || r.Leaking && (r.Air.Pressure < 92f || !r.VentOpen || !r.DuctLinked);
 
+    /// <summary>강화: 공기가 새면서 이미 85kPa 아래로 떨어진 방 — 맨몸으로 구하러 들어가면 구한 사람과 함께 쓰러진다 (우주복부터).</summary>
+    public static bool DroppingLeak(Room r) => r.Leaking && r.Air.Pressure < 85f;
+
     private static bool NeedsSuit(WorkOrder o, CrewMember c, World w, Cell at)
     {
-        if (o.Target.CurrentRoom is Room r && (WorkKinds.IsEmergency(o.Kind) ? Unsafe(r) : Hostile(r))) return true; // v11.2 유독 가스 · v12.9.1 산소가 묽거나 새는 채 닫힌 방
+        if (o.Target.CurrentRoom is Room r && (WorkKinds.IsEmergency(o.Kind) ? Unsafe(r) || DroppingLeak(r) : Hostile(r))) return true; // v11.2 유독 가스 · v12.9.1 산소가 묽거나 새는 채 닫힌 방
         if (w.Ship.RoomAt(at) is Room ar && ar.Unbreathable) return true;
         // 우주복 없이 (비상 개방만 하고) 갈 수 있는지
         var profile = new PathProfile(c.PathProfile.HazardScale, false, o.Urgency >= 0.9f);
@@ -594,7 +597,7 @@ public static partial class WorkPlanners
     private static string Cost((ItemKind kind, int count)[] needs) => string.Join(" + ", needs.Select(x => $"{ItemKinds.Name(x.kind)} {x.count}"));
 
     /// <summary>우주복 보관함에서 우주복을 꺼내 입는다. 이미 입고 있으면 아무것도 안 한다.</summary>
-    private static bool SuitUp(CrewMember c, World w, DistanceField dist, List<Toil> toils, bool allowDash = true)
+    private static bool SuitUp(CrewMember c, World w, DistanceField dist, List<Toil> toils, bool allowDash = true, bool dash = true)
     {
         if (c.Suit is { Oxygen: > 1f }) return true;
         // v12.9.1 급하지 않은 일은 마지막 한 벌을 남겨 둔다 (봉합·구조하러 갈 사람의 몫)
@@ -621,7 +624,10 @@ public static partial class WorkPlanners
         bool reachable = w.Paths.Find(c.Cell, spot, new PathProfile(c.PathProfile.HazardScale, false, true)) != null;
         if (!reachable)
         {
-            if (c.Traits.Bravery < 0.55f || !allowDash) return false; // v12.9.1 급하지 않은 일로는 진공에 뛰어들지 않는다
+            if (c.Traits.Bravery < 0.55f || !allowDash || !dash) return false; // v12.9.1 급하지 않은 일로는 진공에 뛰어들지 않는다
+            // 강화: 숨을 참고 버틸 만큼 짧은 진공 구간일 때만 (긴 통로를 건너다 쓰러져 구하러 온 사람까지 쓰러지던 것)
+            var dashPath = w.Paths.Find(c.Cell, spot, new PathProfile(c.PathProfile.HazardScale, true, true));
+            if (dashPath == null || dashPath.Count(x => w.Ship.RoomAt(x) is Room xr && (xr.Unbreathable || xr.Air.Pressure < 50f)) > 10) return false;
             toils.Add(new DoToil((cm, world) =>
             {
                 cm.Dashing = true;
@@ -1077,9 +1083,11 @@ public static partial class WorkPlanners
         bool needSuit = room.Unbreathable || room.Air.Pressure < 60f || wall.Breach >= 0.25f;
 
         var toils = Plans.DropOff(c, w, dist);
-        if (needSuit && !SuitUp(c, w, dist, toils)) { blocked = "우주복 없음"; return null; }
+        // 강화: 밖에서 막을 드론이 있으면 우주복을 가지러 진공에 숨 참고 뛰어들지는 않는다 (사람 구하기와 다르다)
+        bool dash = !(w.Drones.Has(DroneKind.Repair) || w.Drones.Has(DroneKind.Build));
+        if (needSuit && !SuitUp(c, w, dist, toils, dash: dash)) { blocked = "우주복 없음"; return null; }
         // v12.2 실링폼이 없으면 금속판을 덧대 용접한다 (느리지만 막은 뒤 다시 새지 않는다 — 진공에서도 된다)
-        if (w.Ship.CountStored(ItemKind.Sealant) < sealant && w.Ship.CountStored(ItemKind.Plate) >= 2)
+        if ((wall.FrameLost || w.Ship.CountStored(ItemKind.Sealant) < sealant) && w.Ship.CountStored(ItemKind.Plate) >= 2) // 강화: 골조가 뜯긴 구멍은 금속판 덮개부터
             return PlateWeld(a, o, c, w, dist, at, toils, wall, room, cell, needSuit, out blocked);
         if (Fetch(c, w, dist, ItemKind.Sealant, sealant, toils) == null) { blocked = "실링폼 없음"; return null; }
         toils.Add(new GotoToil(at));
@@ -1129,6 +1137,18 @@ public static partial class WorkPlanners
             Consume(cm, ItemKind.Plate, 2);
             float skill = cm.SkillLevel(Skill.Mechanics);
             cm.Practice(Skill.Mechanics, 0.05f);
+            if (wall.FrameLost)
+            {
+                // 강화: 골조가 뜯긴 구멍 — 금속판 덮개로 임시 봉합 (골조는 밖에서 다시 세운다)
+                wall.Patched = true;
+                wall.PatchQuality = 0.6f + 0.2f * skill;
+                wall.Seals++;
+                MarkLog.Add(wall.Marks, world.Tick, $"{cm.Name}: 금속판 덮개로 임시 봉합");
+                world.History.Add(world, HistoryKind.Response, $"{Ko.IGa(cm.Name)} 골조가 뜯긴 {room.Name} 구멍을 금속판 덮개로 막았다", room, new[] { cm }, cell);
+                world.Board.Close(o);
+                world.Log.Add(world.Tick, LogKind.Work, $"{room.Name} 큰 구멍을 금속판 덮개로 임시로 막았다", cm.Id);
+                return true;
+            }
             wall.MaxIntegrity = MathF.Max(0.25f, wall.MaxIntegrity - Hull.WeldFatigue(skill));
             wall.Integrity = MathF.Max(wall.Integrity, wall.MaxIntegrity * (0.8f + 0.12f * skill));
             wall.Breach = Hull.BreachFromIntegrity(wall.Integrity);

@@ -46,7 +46,7 @@ public static partial class Program
     private static string FixArtNormalize(string body) =>
         Regex.Replace(Regex.Replace(body, @"//[^\n]*", ""), @"\s+", "");
 
-    private static readonly Regex FixArtDrawCall = new(@"\b(Box|Dot|Ring|Line|Pipe|Can|Glass|Gauge|Knob|Cable|Vents|Grille|Bevel|Fan|Stripes|Plate|Bolts?|Led|Tag|Shimmer|DrawRect|DrawCircle|DrawArc|DrawLine|DrawPolyline|DrawColoredPolygon|DrawPolygon|RoundRect)\s*\(");
+    private static readonly Regex FixArtDrawCall = new(@"\b(Box|Dot|Ring|Line|Pipe|Can|Glass|Gauge|Knob|Cable|Vents|Grille|Bevel|Fan|Stripes|Plate|Bolts?|Led|Tag|Shimmer|DrawRect|DrawCircle|DrawArc|DrawLine|DrawPolyline|DrawColoredPolygon|DrawPolygon|RoundRect|Circle|Arc|Poly|Polyline|Polygon)\s*\(");
 
     private static int RunFixArtCheck(int seed)
     {

@@ -563,10 +563,12 @@ public sealed class FleetSystem
             if (o.Kind == WorkKind.SealBreach && !o.Closed && o.Assignee == null && o.Drone == null && o.Target.Kind == TargetKind.Wall && o.Target.Room is Room rr && (!rr.Abandoned || w.Sensors.Alarm == null && w.Hazards.Shower.Count == 0)) // 포기한 구획도 조용할 때 밖에서 막는다 (드론은 방에 들어가지 않는다 — 되찾기 일감이 올라온 구멍만)
                 (list ??= new()).Add(o);
         if (list == null) return;
-        foreach (var o in list.OrderByDescending(o => o.Urgency).ThenBy(o => o.Id))
+        // 강화: 사람이 있는 방 · 아직 공기가 남은 방 · 통로(배를 잇는 방)부터 — 이미 진공이 된 빈 방은 뒤로
+        foreach (var o in list.OrderByDescending(BreachPriority).ThenBy(o => o.Id))
         {
             string key = $"seal:{o.Target.Cell.X},{o.Target.Cell.Y}";
             if (_decided.TryGetValue(key, out long t0) && w.Tick - t0 < SimTime.Minutes(12)) continue;
+            Preempt(o);
             if (w.Drones.WallSpot(o) is not Vector2 at) continue;
             if (w.Ship.WallAt(o.Target.Cell) is not WallState wall) continue;
             _decided[key] = w.Tick;
@@ -584,11 +586,48 @@ public sealed class FleetSystem
             };
             var dec = w.Automation.Foresee.Fleet("파공", room, $"{room.Name} 외벽 파공 {wall.Breach * 100:0}% — 누가 막나", opts);
             dec.Grader = (world, dd) => wall.Breach <= 0f || wall.Patched ? (1, "맞았다 — 막혔다") : null;
-            if (dec.Pick.Key != "drone" || d == null) continue;
+            if (d == null) { _decided[key] = w.Tick - SimTime.Minutes(10); continue; } // 강화: 쉬는 드론이 없으면 2분 뒤 다시 본다 (12분이 아니라)
+            if (dec.Pick.Key != "drone") continue;
             DroneTask[d.Id] = o.Id;
             o.Drone = d;
             d.Mind.Say($"주 컴퓨터가 보냈다 — {room.Name} 파공을 밖에서 ({dec.Reason})", w.Tick);
             Line(CmdTarget.Drone, d.Id, room, $"{d.Name}: {room.Name} 파공 — 밖에서 막기", dec.Reason, 0.95f, 40f, dec.Id, o.Id);
+        }
+    }
+
+    /// <summary>강화: 파공 순서 — 사람이 있는 방 · 공기가 남은 방 · 통로 · 이웃 방에 사람이 있는 방이 먼저.</summary>
+    private float BreachPriority(WorkOrder o)
+    {
+        var w = _w;
+        if (o.Target.Room is not Room r) return o.Urgency;
+        int inside = 0, near = 0;
+        foreach (var c in w.Crew)
+        {
+            if (c.Dead || c.Away || c.Room == null) continue;
+            if (c.Room == r) inside++;
+            else if (r.Doors.Any(d => d.RoomA == c.Room || d.RoomB == c.Room)) near++;
+        }
+        float air = Math.Clamp(r.Air.Pressure / 60f, 0f, 1f); // 아직 지킬 공기가 있다
+        bool hub = r.Type == RoomType.Corridor || r.Doors.Count(d => !d.IsExternal && !d.Removed) >= 3;
+        return o.Urgency + MathF.Min(3f, inside * 0.6f) + MathF.Min(1f, near * 0.15f) + 0.8f * air + (hub ? 0.5f : 0f) - (r.Abandoned ? 1f : 0f);
+    }
+
+    /// <summary>강화: 더 급한 파공이 비어 있는데 아직 거치대에 있는 드론이 덜 급한 파공을 맡고 있으면 돌린다.</summary>
+    private void Preempt(WorkOrder urgent)
+    {
+        var w = _w;
+        float pu = BreachPriority(urgent);
+        foreach (var d in w.Drones.Drones)
+        {
+            if (d.State != DroneState.Docked || !DroneTask.TryGetValue(d.Id, out int oid)) continue;
+            WorkOrder? held = null;
+            foreach (var o in w.Board.All) if (o.Id == oid) { held = o; break; }
+            if (held == null || held == urgent || held.Kind != WorkKind.SealBreach || BreachPriority(held) + 0.8f > pu) continue;
+            DroneTask.Remove(d.Id);
+            if (held.Drone == d) held.Drone = null;
+            Forget(held);
+            d.Mind.Say($"{held.Target.Room?.Name} 파공은 뒤로 — {urgent.Target.Room?.Name} 쪽이 더 급하다", w.Tick);
+            return;
         }
     }
 

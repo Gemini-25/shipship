@@ -44,6 +44,27 @@ public sealed class Atmosphere
     /// <summary>환기망에 연결된 방 (전기 + 댐퍼 열림).</summary>
     public static bool Vented(Room r) => r.Powered && r.VentOpen && r.DuctLinked;
 
+    /// <summary>강화: 비상 재가압 배율 (주 컴퓨터가 탱크 밸브를 활짝 연다).</summary>
+    public const float EmergencyRefillMul = 6f;
+    private readonly System.Collections.Generic.HashSet<int> _occupied = new();
+    private bool Occupied(Room r) => _occupied.Contains(r.Id);
+
+    /// <summary>사람이 있는 (새지 않는) 방이 85kPa 아래인가 — 주 컴퓨터가 있고 탱크가 15% 넘게 남았을 때만.</summary>
+    private bool EmergencyRefill()
+    {
+        _occupied.Clear();
+        var a = _world.Automation;
+        if (!a.Present || !a.MainOnline || Reserve < ReserveCapacity * 0.15f) return false;
+        bool low = false;
+        foreach (var c in _world.Crew)
+        {
+            if (c.Dead || c.Away || c.Outside || c.Room is not Room r) continue;
+            _occupied.Add(r.Id);
+            if (!r.Leaking && r.Air.Pressure < 85f) low = true;
+        }
+        return low;
+    }
+
     public Atmosphere(World world) => _world = world;
 
     /// <summary>환기관 흐름 세기: 팬이 도는 방 1, 전기가 없어 수동으로만 흐르는 방 0.35.</summary>
@@ -98,22 +119,26 @@ public sealed class Atmosphere
 
         // 2-b) 재가압: 기압이 모자란 방에 공기 탱크에서 채운다 (새는 방에는 안 넣는다)
         float refillEff = ship.FurnitureOf(FurnitureType.OxygenGenerator).Select(f => f.Machine!.Efficiency).DefaultIfEmpty(0f).Max();
-        float refillBudget = MathF.Min(Reserve, RefillRate * MathF.Max(0.3f, refillEff) * dtHours);
-        if (refillEff > 0f && refillBudget > 0f)
+        // 강화: 주 컴퓨터 비상 재가압 — 사람이 있는 (새지 않는) 방이 85kPa 아래면 탱크 밸브를 활짝 연다 · 사람 있는 방부터
+        //   (평소 속도로는 이웃 방이 65kPa에서 몇 시간 머물러, 새는 방에서 나온 사람이 갈 곳이 없다)
+        bool emergency = EmergencyRefill();
+        float refillBudget = MathF.Min(Reserve, RefillRate * (emergency ? EmergencyRefillMul : 1f) * MathF.Max(emergency ? 1f : 0.3f, refillEff) * dtHours);
+        if ((refillEff > 0f || emergency) && refillBudget > 0f)
         {
             // v13.0 공기 구역: 탱크가 절반 아래면 지킬 구역부터 채운다
             bool zoneOnly = _world.Automation.ZoneActive && Reserve < ReserveCapacity * 0.5f;
             bool Fill(Room r) => Vented(r) && !r.Leaking && (!zoneOnly || _world.Automation.InZone(r));
+            float Want(Room r) => MathF.Max(0f, 99f - r.Air.Pressure) * r.Volume * (emergency && Occupied(r) ? 3f : 1f);
             float need = 0f;
             foreach (var r in ship.Rooms)
-                if (Fill(r)) need += MathF.Max(0f, 99f - r.Air.Pressure) * r.Volume;
+                if (Fill(r)) need += Want(r);
             if (need > 1f)
             {
                 float give = MathF.Min(refillBudget, need);
                 foreach (var r in ship.Rooms)
                 {
                     if (!Fill(r)) continue;
-                    float share = give * MathF.Max(0f, 99f - r.Air.Pressure) * r.Volume / need / r.Volume;
+                    float share = MathF.Min(give * Want(r) / need / r.Volume, MathF.Max(0f, 99f - r.Air.Pressure));
                     r.Air.N2 += share * 0.79f;
                     r.Air.O2 += share * 0.21f;
                 }

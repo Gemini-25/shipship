@@ -280,6 +280,7 @@ public static partial class Program
                 foreach (var p in w.Ship.FurnitureOf(FurnitureType.CoolantPump)) w.Machines.Break(p.Machine!, FaultKind.PumpSeized);
                 w.Power.BatteryCharge = w.Power.BatteryCapacity * 0.45f;
                 CutAuxData(w);
+                foreach (var r in w.Robots.Robots) r.Disabled = true; // 원격 불가 장면: 정비 로봇이 데이터선을 이어 원격 기동이 되면 장면이 아니다 (사람 손을 본다)
                 long t0 = w.Tick;
                 float bat = -1f;
                 while (w.Tick - t0 < SimTime.Hours(5) && !w.Power.AuxRunning) Run(w, 15);

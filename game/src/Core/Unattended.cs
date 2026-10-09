@@ -97,7 +97,7 @@ public sealed partial class RobotSystem
     public static bool Carrier(RobotKind k) => k is RobotKind.Hauler or RobotKind.Courier or RobotKind.Tanker or RobotKind.Stocker or RobotKind.Utility;
     /// <summary>로봇이 맡을 수 있는 사람 몫의 손일 (종류만).</summary>
     public static bool HandWork(WorkKind k) => k is WorkKind.ResetBreaker or WorkKind.StartAux or WorkKind.CloseValve or WorkKind.OpenValve or WorkKind.Refuel or WorkKind.RefillCoolant
-        or WorkKind.Repair or WorkKind.Reline or WorkKind.Rewire or WorkKind.PatchPipe or WorkKind.RestartReactor or WorkKind.StockDock or WorkKind.Fabricate or WorkKind.PreventiveCheck;
+        or WorkKind.Repair or WorkKind.Reline or WorkKind.Rewire or WorkKind.PatchPipe or WorkKind.RestartReactor or WorkKind.StockDock or WorkKind.Fabricate or WorkKind.PreventiveCheck or WorkKind.RepairNet;
 
     /// <summary>이 로봇이 사람 몫의 손일을 맡을 수 있나.</summary>
     private bool Stands(Robot r, WorkOrder o)
@@ -105,7 +105,7 @@ public sealed partial class RobotSystem
         var w = _world;
         if (HandsOff || !HandWork(o.Kind) || r.Kind is RobotKind.Stretcher or RobotKind.Nurse) return false;
         if (o.Kind is WorkKind.ResetBreaker or WorkKind.StartAux or WorkKind.CloseValve or WorkKind.OpenValve) return true;
-        if (o.Kind == WorkKind.StockDock) return w.Automation.Unattended; // 운반 로봇이 없는 작은 배: 드론이 외벽을 막을 금속판을 거치대에 (아무 로봇이나 나른다)
+        if (o.Kind == WorkKind.StockDock) return w.Automation.Unattended || o.Urgency >= 0.9f; // 운반 로봇이 없는 작은 배: 드론이 외벽을 막을 금속판을 거치대에 (아무 로봇이나 나른다) · 강화: 구멍이 열려 드론이 자재를 기다리면 언제나
         if (o.Kind is WorkKind.Refuel or WorkKind.RefillCoolant) return Carrier(r.Kind) || Fixer(r.Kind);
         // 무인 운항: 정비 로봇이 모자라면 다른 로봇도 주 컴퓨터 안내로 가벼운 수리를 (무거운 부품 없이 · 느리고 자주 헛짚는다)
         if (o.Kind == WorkKind.PreventiveCheck) return o.Target.Kind == TargetKind.Room && (Fixer(r.Kind) || RobotsV15.Patrols(r.Kind)); // 방 순찰: 수리 로봇이 쉴 때 센서로 둘러본다 (설비 전조 손보기는 사람 몫)
@@ -113,6 +113,7 @@ public sealed partial class RobotSystem
         return o.Kind switch
         {
             WorkKind.Reline or WorkKind.Rewire or WorkKind.PatchPipe => true,
+            WorkKind.RepairNet => o.Urgency >= 0.75f || w.Automation.Unattended, // 강화: 끊겨 방들이 정전 · 환기 끊김이면 정비 로봇이 잇는다 (공기가 빠진 방에서도)
             WorkKind.RestartReactor => w.Automation.CoreOnline && w.Automation.Unattended, // 노심을 다루는 일 — 사람 기관사가 있으면 사람이 (로봇은 느리고 자주 헛짚는다) · 아무도 없을 때 주 컴퓨터가 절차를 짚어 주면
             WorkKind.Repair => RepairOk(o),
             WorkKind.Fabricate => w.Automation.Unattended && FabOk(o) is not null, // 무인 운항: 작업대에서 간단한 부품을 (주 컴퓨터가 도면을 짚어 준다)
@@ -229,6 +230,31 @@ public sealed partial class RobotSystem
                 Prevention.Inspect(world, pr, rb.Name, robot: true);
                 world.Board.Close(o);
                 Done(rb, null);
+                return true;
+            }));
+            return steps;
+        }
+        if (o.Kind == WorkKind.RepairNet && w.Net.Links.FirstOrDefault(x => x.Id == o.Circuit) is NetLink nl)
+        {
+            // 강화: 끊긴 간선 — 자재가 있으면 제대로, 없으면 임시로 잇는다 (사람보다 느리다)
+            var item = nl.Kind is NetKind.Power or NetKind.Data ? ItemKind.Cable : ItemKind.Plate;
+            ItemKind? need = null;
+            var (box, spot) = Nearest(w, dist, b => b.Storage!.Count(item) > 0);
+            if (box != null) { need = item; steps.Add(new RGoto(spot)); steps.Add(new RTake(box, item, 1)); }
+            else if (!nl.Cut) { blocked = $"{ItemKinds.Name(item)} 없음"; return null; }
+            steps.Add(new RGoto(at));
+            steps.Add(new RWork((need != null ? 0.75f : 0.35f) + 0.04f * Math.Min(10, w.Net.Bundle(nl).Count - 1), o, at.Center));
+            ItemKind? used = need;
+            steps.Add(new RDo((rb, world) =>
+            {
+                if (o.Closed) return true;
+                if (used is ItemKind it) { if (rb.Cargo?.Kind != it) return false; rb.Cargo = rb.Cargo.Value.Count > 1 ? new ItemStack(it, rb.Cargo.Value.Count - 1) : null; }
+                world.Board.Close(o);
+                bool temp = used == null, wasCut = nl.Cut;
+                int n = world.Net.Mend(nl, temp ? 0.6f : 1f, temp, -1);
+                MarkLog.Add(nl.Room.Marks, world.Tick, $"{rb.Name}: {UtilityNet.Name(nl.Kind)} {(temp ? "임시로 이음" : "다시 이음")}");
+                if (wasCut) world.History.Add(world, HistoryKind.Response, $"{Ko.IGa(rb.Name)} 끊긴 {nl.Room.Name} {Ko.EulReul(UtilityNet.Name(nl.Kind))} {(temp ? "임시로 " : "")}이었다", nl.Room);
+                Hand($"{nl.Room.Name} {Ko.EulReul(UtilityNet.Name(nl.Kind))}{(n > 1 ? $" {n}가닥" : "")} {(temp ? "임시로 이었다" : "다시 이었다")}");
                 return true;
             }));
             return steps;

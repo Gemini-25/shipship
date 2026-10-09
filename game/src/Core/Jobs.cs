@@ -509,6 +509,14 @@ public static class Locomotion
                 repathed = true;
                 continue;
             }
+            // 강화: 가는 사이 앞 방의 공기가 빠졌다 — 맨몸이면 들어서지 않고 멈춰 다시 생각한다 (출발할 때 정한 길을 그대로 걷다 쓰러지던 것)
+            if (c.Suit is not { Oxygen: > 0.1f } && !c.Dashing && w.Ship.RoomAt(next) is Room nr && nr != c.Room
+                && (nr.Unbreathable || nr.Air.Pressure < 50f) && (c.Room == null || c.Room.Air.Pressure > nr.Air.Pressure + 10f))
+            {
+                c.Path = null;
+                c.PathBlocked = true;
+                return false;
+            }
             var door = w.Ship.DoorAt(next);
             if (door != null && door.Openness < 0.8f) break;
 

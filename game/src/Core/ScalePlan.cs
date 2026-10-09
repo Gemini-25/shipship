@@ -213,6 +213,8 @@ public sealed partial class ScaleSystem
     {
         var w = _w;
         bool Ok(Room r) => !r.Detached && !r.OffLimits && !r.Leaking && !k.Rooms.Contains(r.Id) && r.Type != RoomType.Corridor && w.Fire.CountIn(r) == 0;
+        // 강화: 운석이 쏟아지는 중이면 외벽에 닿지 않은 방에 모인다
+        if (w.Automation.DebrisShelterActive && w.Automation.DebrisShelters.FirstOrDefault(Ok) is Room inner) return inner;
         // 방사선 사고는 대피소에 모인다 (선반 · 물벽 뒤)
         if (k.Key is nameof(HazardKind.SolarStorm) or nameof(HazardKind.RadiationBurst) && Facilities.Best(w.Ship, "shelter", Ok).room is Room shelter) return shelter;
         foreach (var t in new[] { RoomType.Bridge, RoomType.Mess, RoomType.Lounge })
