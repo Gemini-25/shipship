@@ -198,19 +198,22 @@ public sealed partial class SchemeSystem
     {
         var w = _w;
         _recentDeath = w.Crew.Any(o => o.Dead && o.DiedAt >= 0 && w.Tick - o.DiedAt < SimTime.TicksPerDay * 6);
+        long pt = Prof.Now;
         Boredom();
-        if (!NoMotives) Motives();
+        pt = Prof.Lap("schemes.boredom", pt); // 동기 따지기는 2분마다 (Minute)
         foreach (var s in All.ToList())
         {
             if (!s.Active) continue;
             if (P(s.Lead) is not { Dead: false } lead) { End(s, SchemeStage.Dropped, "꾸민 사람이 없다"); continue; }
             Advance(s, lead);
         }
+        pt = Prof.Lap("schemes.advance", pt);
         Leaks();
         PracticesHour();
         DebtsHour();
         ComputerHour();
         Groves();
+        Prof.Lap("schemes.rest", pt);
         int day = SimTime.Day(w.Tick);
         if (day != _lastDay) { _lastDay = day; NewDay(); }
         if (All.Count > 160) All.RemoveAt(All.FindIndex(x => !x.Active) is int i && i >= 0 ? i : 0);
@@ -218,9 +221,12 @@ public sealed partial class SchemeSystem
         if (Debts.Count > 60) Debts.RemoveAt(0);
     }
 
+    private int _motiveSlot;
+
     private void Minute()
     {
         var w = _w;
+        if (!NoMotives) Motives();
         foreach (var l in _inRoom.Values) l.Clear();
         foreach (var c in w.Crew)
         {
@@ -387,11 +393,11 @@ public sealed partial class SchemeSystem
         int cap = Math.Max(4, adults / 3);
         int Busy() { int n = 0; foreach (var s in All) if (s.Active && s.Stage != SchemeStage.Vote) n++; return n; } // 회의를 기다리는 일은 세지 않는다
         if (Busy() >= cap) return;
-        int slot = (int)(w.Tick / SimTime.Hours(1) % 2);
+        int slot = _motiveSlot++ % 60; // v19 60프레임: 2분마다 예순 몫 중 하나 (정각에 절반을 한꺼번에 따져 16ms 멈췄다)
         var top = new List<(SchemeSpec s, float v)>(4);
         foreach (var c in w.Crew)
         {
-            if (!Adult(c) || !c.CanAct || !c.IsAwake || c.Outside || (c.Id + slot) % 2 != 0) continue;
+            if (!Adult(c) || !c.CanAct || !c.IsAwake || c.Outside || (c.Id + slot) % 60 != 0) continue;
             if (_ledAt.TryGetValue(c.Id, out var led) && w.Tick - led < SimTime.TicksPerDay * 2) continue;
             if (LeadOf(c) != null) continue;
             top.Clear();

@@ -268,7 +268,7 @@ public partial class Hud
         var sz = Screen;
         string head = $"{ScaleTable.Label(k.Now)} — {ScaleTable.Response(k.Now)}";
         string sub = k.Broadcast.Length > 0 ? k.Broadcast : k.Name;
-        float w = Mathf.Clamp(Mathf.Max(Gfx.Width(Fonts.Bold, head, Ui.TextTitle), Gfx.Width(Fonts.Body, sub, Ui.TextSmall)) + 70f, 300f, sz.X * 0.6f);
+        float w = Mathf.Clamp(Mathf.Max(Gfx.Width(Fonts.Bold, head, Ui.TextTitle), Gfx.Width(Fonts.Body, sub, Ui.TextSmall)) + 70f, MathF.Min(300f, sz.X * 0.6f), sz.X * 0.6f); // v19 아주 좁은 창: 최소가 최대를 넘으면 예외로 HUD 가 통째로 안 그려졌다
         var r = new Rect2(sz.X * 0.5f - w * 0.5f, Ui.TopBarH + 14f, w, 44f);
         Gfx.RoundRect(this, r, new Color(0.06f, 0.03f, 0.05f, 0.93f), 10f, col.WithAlpha(0.6f + 0.4f * pulse), 2);
         // 위험 줄무늬 (배 전체) · 별가루 (우주급)

@@ -8,9 +8,9 @@ namespace ShipSim.Core;
 // 말투(Persona.Say)는 이 뒤에 입혀지므로 사람마다 다른 맛은 그대로다. 글만 바꾼다 (결정론과 상관없다).
 public static class DiaryWords
 {
-    private static readonly Regex Paren = new(@"\s*\([^()]*\)", RegexOptions.Compiled);
-    private static readonly Regex Believed = new(@"(\S+(?: \S+)?) 줄 알았는데 — ", RegexOptions.Compiled);
-    private static readonly Regex Done = new(@"(확인|수리|점검|정리|청소|보고|교대|치료|설치|준비|대피|정비|배달|운반|소독|환기|차단|복구) — 해냈다", RegexOptions.Compiled);
+    private static readonly Regex Paren = new(@"\s*\([^()]*\)");
+    private static readonly Regex Believed = new(@"(\S+(?: \S+)?) 줄 알았는데 — ");
+    private static readonly Regex Done = new(@"(확인|수리|점검|정리|청소|보고|교대|치료|설치|준비|대피|정비|배달|운반|소독|환기|차단|복구) — 해냈다");
 
     /// <summary>메모 끝말 · 지난 일 · 꾸밈꼴 · 앞말에 조사를 붙이나(주어가 앞말).</summary>
     private static readonly (string memo, string past, string adn, bool subj)[] Ends =
@@ -37,7 +37,7 @@ public static class DiaryWords
     private static Regex[] BuildEnds()
     {
         var r = new Regex[Ends.Length];
-        for (int i = 0; i < Ends.Length; i++) r[i] = new Regex(@"(\S+) " + Regex.Escape(Ends[i].memo) + @"(?=[.,]|$)", RegexOptions.Compiled);
+        for (int i = 0; i < Ends.Length; i++) r[i] = new Regex(@"(\S+) " + Regex.Escape(Ends[i].memo) + @"(?=[.,]|$)");
         return r;
     }
 

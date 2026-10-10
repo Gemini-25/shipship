@@ -88,9 +88,12 @@ public partial class Hud : Control
         // 60프레임: 글자가 많아 무겁다 — 마우스가 움직이면 바로, 아니면 초당 20번 (누르면 _GuiInput 에서 바로)
         var mouse = GetLocalMousePosition();
         _redrawClock += delta;
-        if (mouse != _lastMouse || _redrawClock >= 0.05) { _lastMouse = mouse; _redrawClock = 0; QueueRedraw(); }
+        // v19 60프레임: 저절로 다시 그릴 때는 세 프레임 중 HUD 몫 프레임에만 (나눠 그리는 배 그림과 같은 프레임에 겹치지 않게 — ShipView.RedrawParts)
+        if (mouse != _lastMouse || _redrawClock >= 0.05 && Engine.GetProcessFrames() % 3 == HudPhase) { _lastMouse = mouse; _redrawClock = 0; QueueRedraw(); }
     }
     private double _redrawClock;
+    /// <summary>v19 HUD가 저절로 다시 그리는 프레임 (세 프레임 중 하나).</summary>
+    public const ulong HudPhase = 0;
     private Vector2 _lastMouse = new(-1f, -1f);
 
     public override void _Draw() { long fp = FrameProbe.Now; DrawHud(); FrameProbe.Add("Hud", fp); } // v17.7 프레임 시간 재기
@@ -101,9 +104,11 @@ public partial class Hud : Control
         _buttons.Clear();
         _tip = null;
         var mouse = GetLocalMousePosition();
+        long _hp = FrameProbe.Now; // v19 HUD 패널별 시간 (--perf)
         MeasureLog(); // v16.2 접힌 기록 높이 → 컴퓨터 카드가 그 바로 위에
         PlanLayout(); // v17.6 패널 배치 규칙 (쌓고 · 모자라면 접는다 — HudLayout.cs)
 
+        FrameProbe.Add("hud.layout0", _hp); _hp = FrameProbe.Now;
         float topRight = DrawTopBar(mouse);
         DrawStatus(topRight + 10f, mouse);
         // v16.2 조용한 HUD: 보기 · 사고 도구는 접어 두고 열 때만
@@ -114,13 +119,16 @@ public partial class Hud : Control
             if (Quiet) DrawToolsFoldButton(_toolsRight + 6f, mouse);
         }
         else DrawToolsFolded(mouse);
+        FrameProbe.Add("hud.layout", _hp); _hp = FrameProbe.Now;
         DrawProfile();
         DrawViewLegend(); // v17.6 보기마다 범례
 
         // v16.2 조용한 HUD: 승무원은 살펴볼 사람만 (머리글을 누르면 모두)
         // 승무원 카드가 주인공: 조용한 HUD에서 누군가를 고르면 위 칸은 줄여 카드에 자리를 준다
+        FrameProbe.Add("hud.top", _hp); _hp = FrameProbe.Now;
         float y = Quiet && !_rosterOpen ? DrawCrewSummary(mouse, _main.SelectedCrew != null ? 2 : 6) : DrawRoster(mouse);
         if (Quiet && _rosterOpen) DrawRosterFold(y, mouse);
+        FrameProbe.Add("hud.profile", _hp); _hp = FrameProbe.Now;
         float room = Screen.Y - y - 10f - Margin - 40f; // 오른쪽 아래 ? 단추 · 힌트 자리
         if (_main.SelectedCrew is CrewMember crew) DrawCrewInspector(crew, y + 10f, mouse);
         else if (_main.SelectedRobot is Robot robot) DrawRobotInspector(robot, y + 10f, room);
@@ -133,15 +141,21 @@ public partial class Hud : Control
             if (!Quiet || _workOpen || _world.Board.Open.Any(o => o.Urgency >= 0.9f)) DrawWorkBoard(sy + 10f, Screen.Y - sy - 20f - Margin - 40f, mouse); // 조용한 HUD: 긴급 작업만 떠오른다
         }
 
+        FrameProbe.Add("hud.crew", _hp); _hp = FrameProbe.Now;
         DrawComputerCard(mouse); // v16.0 ④ 주컴퓨터 상시 카드 (HudComputer.cs)
+        FrameProbe.Add("hud.inspector", _hp); _hp = FrameProbe.Now;
         DrawCosmicPanel(mouse); // v18.13 우주 대재난 예보 (HudCosmic.cs)
+        FrameProbe.Add("hud.computer", _hp); _hp = FrameProbe.Now;
         DrawLog(mouse);
+        FrameProbe.Add("hud.cosmic", _hp); _hp = FrameProbe.Now;
         DrawMinimap(); // v11.3
         if (MinimapOpen && !ChronicleOpen && !TechOpen && _minimapRect.Size.X > 0f) DrawVoyageBar(_minimapRect); // v12.8 항로
+        FrameProbe.Add("hud.log", _hp); _hp = FrameProbe.Now;
         DrawIncidentCards(mouse); // v12.2 사고 카드
         DrawTalkCard(mouse); // v18.17 대화 카드 (HudTalkCard.cs)
         DrawItemTrail(mouse); // v17.7 따라가는 물건이 거친 손 (HudWatch.cs)
         if (_world.Causes.Notable().Any()) DrawTimeBar(mouse); // v12.2 시간 막대
+        FrameProbe.Add("hud.minimap", _hp); _hp = FrameProbe.Now;
         if (CouncilOpen) DrawCouncil(mouse); // v18.18 회의록 · 안건 · 파벌 (HudCouncil.cs)
         else if (PolicyOpen) DrawPolicy(mouse); // v13.2 방침·회의 화면
         else if (ControlOpen) DrawControl(mouse); // v12.5 관제 화면
@@ -151,6 +165,7 @@ public partial class Hud : Control
         else if (ScaleCodexOpen) DrawScaleCodex(mouse); // v16.18 사고 도감 — 규모별 (HudScale.cs)
         else if (CollectionOpen) DrawCollection(mouse); // v17.9 수집 도감 (HudCollection.cs)
         else if (VoyageOpen) DrawVoyage(mouse); // v17.7 항해 결산 (HudWatch.cs)
+        FrameProbe.Add("hud.cards", _hp); _hp = FrameProbe.Now;
         DrawHelpCorner(mouse); // v16.2 단축키 한 줄 대신 ? 도움말 + 상황 힌트
         DrawBanners();
         DrawSummaryCard(mouse); // v12.8 요약 진행
@@ -160,8 +175,10 @@ public partial class Hud : Control
         DrawViewPickerPanel(mouse); // v17.6
         if (HelpOpen) DrawHelp(mouse); // v16.2
         _tip?.Invoke(); // v16.2 툴팁은 맨 위에
+        FrameProbe.Add("hud.screens", _hp); _hp = FrameProbe.Now;
         DrawScaleFrame(); // v16.18 지금 가장 큰 사고의 규모로 화면 테두리
         DrawPauseFrame(); // v16.2 일시정지 테두리
+        FrameProbe.Add("hud.rest", _hp);
     }
 
     // ─────────────────────────────── 공통 ───────────────────────────────

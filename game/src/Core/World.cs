@@ -398,10 +398,13 @@ public sealed class World
     public int Day => SimTime.Day(Tick);
     public string Clock => SimTime.Clock(Tick);
 
+    private int _thinksThisTick; // v19 60프레임: 이번 틱에 정기 재판단한 사람 수
+
     /// <summary>한 틱 진행. 순서: 우주선 시스템 → 작업 목록 → 승무원(욕구 → 판단 → 작업) → 문.</summary>
     public void Step()
     {
         Tick++;
+        _thinksThisTick = 0;
         foreach (var c in Crew) c.PreviousPosition = c.Position;
 
         if (Tick % SystemInterval == 0)
@@ -436,23 +439,41 @@ public sealed class World
             pf = Prof.Lap("sys.Soil", pf);
             Culture.Update(dt); // v14.9 겪은 일이 관행이 되어 전해진다
             pf = Prof.Lap("sys.Culture", pf);
+            long pd = Prof.Now; // v19 60프레임: 일상 묶음 안에서 무엇이 튀나
             Daily.Update(dt); // v15 사고가 아닌 날의 일상 사건
+            pd = Prof.Lap("daily.Daily", pd);
             Music.Update(dt); Curios.Update(dt); // v17.6 상황 음악 · 방 스피커 음악 · v17.9 숨은 것 · 창밖 · 이상 현상 · 재능 · 비밀
+            pd = Prof.Lap("daily.Music", pd);
             ZeroG.Update(dt); Eco.Update(dt); Drains.Update(dt); // v18.4 무중력 · v18.2 화분 · 바구미 · 고양이 · v18.3 배수 · 쓰레기통
+            pd = Prof.Lap("daily.ZeroG", pd);
             Signs.Update(dt); Fittings.Update(dt); // 압축-마 사고 전조 · 새 설비
+            pd = Prof.Lap("daily.Signs", pd);
             Tales.Update(dt); // v18.16 · v18.17 개인 이야기 · 대화 카드 · 캠프의 밤 · 잡담 · 로맨스
+            pd = Prof.Lap("daily.Tales", pd);
             Maneuver.Update(dt); // v17.0 침대 끈 · 데우는 냄비 · 조각 · 화물 무게중심 · 관행
+            pd = Prof.Lap("daily.Maneuver", pd);
             Blackbox.Update(dt); Inquiry.Update(dt); // v18.7 블랙박스 기록 · 숨은 실수 · 죄책감 · 사고 조사 안건
+            pd = Prof.Lap("daily.Blackbox", pd);
             React.Update(dt); // v17.8 더위 · 추위 · 어둠 · 바닥 · 소리 · 냄새 · 남의 몸짓 → 말 · 몸짓 · 짧은 행동
+            pd = Prof.Lap("daily.React", pd);
             Schemes.Update(dt); // v18.14 장난 · 몰래 하는 일 · 규칙 어기기 · 모임 · 판 · 목소리 내기 · 혼자 하는 일
+            pd = Prof.Lap("daily.Schemes", pd);
             Motions.Update(dt); // v18.18 안건 · 서명 · 회의 · 파벌 · 재판 · 선거
+            pd = Prof.Lap("daily.Motions", pd);
             Info.Update(dt); // v17.3 자리 · 못 끝낸 일 · 깨진 컵 · 메신저 · 사진 · 장부
+            pd = Prof.Lap("daily.Info", pd);
             Fleet.Update(dt); // v16.20b 함대 지휘 · 로봇 · 드론 두뇌
+            pd = Prof.Lap("daily.Fleet", pd);
             Failsafe.Update(dt); Major.Update(dt); // v16.19 차압 문 · 예비 회로 · 칸막이 · 큰 사고
+            pd = Prof.Lap("daily.Failsafe", pd);
             Annex.Update(dt); // v16.10 증축: 제안 → 회의 → 골조 · 외판 · 가압 · 배선 · 내장 · 개통
+            pd = Prof.Lap("daily.Annex", pd);
             TechWeb.Update(dt); // v16.14 기술 그물: 조건 · 조합 · 갈림길 · 부작용 · 실험 차례
+            pd = Prof.Lap("daily.TechWeb", pd);
             RoomUse.Update(dt); RoomPlans.Update(dt); // v16.17 쓰임 → 용도 · 승무원 안건 → 회의 → 공사
+            pd = Prof.Lap("daily.RoomUse", pd);
             Cosmic.Update(dt); // v18.13 우주 대재난: 예보 · 대비 · 본 사건 · 후유증
+            pd = Prof.Lap("daily.Cosmic", pd);
             pf = Prof.Lap("sys.Daily", pf);
             Organs.Update(dt); Transplant.Update(dt); Infection.Update(dt); // 의료 2차 장기 · 이식 · 감염 · 격리
             pf = Prof.Lap("sys.Organs", pf);
@@ -653,8 +674,11 @@ public sealed class World
             if ((Tick + c.Id) % 15 == 0 && c.Job?.Activity is not EvacuateActivity && (EvacuateActivity.Breathless(c, this) || c.Room is { EvacuateBy: >= 0 })) c.NextThinkTick = Tick;
 
             pc = Prof.Lap("crew.checks", pc);
-            if (c.Job == null || Tick >= c.NextThinkTick)
+            // v19 60프레임: 한 틱에 생각할 사람이 몰리면 (교대 · 끼니때) 정기 재판단은 8명까지 — 나머지는 다음 틱에 (할 일이 없거나 숨이 찬 사람은 바로)
+            if (c.Job != null && Tick >= c.NextThinkTick && _thinksThisTick >= 8 && !EvacuateActivity.Breathless(c, this) && c.Room is not { EvacuateBy: >= 0 }) c.NextThinkTick = Tick + 1;
+            else if (c.Job == null || Tick >= c.NextThinkTick)
             {
+                _thinksThisTick++;
                 Brain.Think(c, this);
                 c.NextThinkTick = Tick + Brain.ThinkInterval + Rng.Range(0, SimTime.Minutes(4));
                 pc = Prof.Lap("crew.think", pc);

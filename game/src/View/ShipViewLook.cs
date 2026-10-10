@@ -13,6 +13,10 @@ namespace ShipSim.View;
 public partial class ShipView
 {
     private DrawLayer? _lookBase, _lookGrime, _lookDecals;
+    // v19 60프레임: 겹치기 종류마다 층을 나눠 바뀐 것만 다시 그린다 (불이 번질 때 일곱 가지를 모두 다시 그려 큰 배에서 한 번에 24ms)
+    private DrawLayer[] _grimeK = Array.Empty<DrawLayer>();
+    private ulong[] _grimeSigK = Array.Empty<ulong>();
+    private ulong _decalSig;
     private float _grimeTimer;
     private ulong _grimeSig;
     private LookSpec.Lod _lookLod = LookSpec.Lod.Mid;
@@ -27,7 +31,15 @@ public partial class ShipView
     {
         LookTextures.Load();
         _lookBase = new DrawLayer { Name = "LookBase", Painter = PaintLookBase };
-        _lookGrime = new DrawLayer { Name = "LookGrime", Painter = PaintGrime, Material = LookTextures.OverlayMaterial };
+        _lookGrime = new DrawLayer { Name = "LookGrime", Painter = _ => { }, Material = LookTextures.OverlayMaterial };
+        _grimeK = new DrawLayer[_ov.Length];
+        _grimeSigK = new ulong[_ov.Length];
+        for (int k = 0; k < _ov.Length; k++)
+        {
+            int kk = k;
+            _grimeK[k] = new DrawLayer { Name = "LookGrime" + k, Painter = ci => PaintGrime(ci, kk), UseParentMaterial = true };
+            _lookGrime.AddChild(_grimeK[k]); // 섞기(재질)는 부모 층을 따른다 — 그리는 차례도 예전 그대로 (종류 순)
+        }
         _lookDecals = new DrawLayer { Name = "LookDecals", Painter = PaintDecals };
         AddChild(Baked(_lookBase)); // v17.7 구워 둔다
         AddChild(_lookGrime);
@@ -37,7 +49,7 @@ public partial class ShipView
     /// <summary>Init: 입자 층 (맨 위) · 빛 버퍼는 AddLookLight.</summary>
     private void AddLookOver() => AddParticleLayers();
 
-    private void RedrawLook() { _lookBase?.QueueRedraw(); _grimeSig = 0; _grimeTimer = 0f; }
+    private void RedrawLook() { Stagger(_lookBase); _grimeSig = 0; Array.Clear(_grimeSigK); _decalSig = 0; _grimeTimer = 0f; }
 
     /// <summary>_Process: 확대 단계 · 겹치기 지문 · 빛 버퍼 · 입자.</summary>
     private void UpdateLook(float dt)
@@ -233,30 +245,27 @@ public partial class ShipView
 
         BuildDecals(rough);
 
-        // 지문: 양을 16단계로 묶어 바뀐 칸이 있을 때만 다시 그린다
-        ulong sig = 1469598103934665603UL;
+        // 지문: 양을 16단계로 묶어 바뀐 칸이 있을 때만 다시 그린다 (종류마다 따로 — 바뀐 종류만)
         for (int k = 0; k < _ov.Length; k++)
         {
+            ulong sig = 1469598103934665603UL;
             var a = _ov[k];
             for (int i = 0; i < n; i++)
             {
                 int q = (int)(a[i] * 16f);
                 if (q != 0) sig = (sig ^ ((ulong)(i * 8 + k) | ((ulong)q << 40))) * 1099511628211UL;
             }
+            sig ^= (ulong)n << 48;
+            if (k < _grimeSigK.Length && sig != _grimeSigK[k]) { _grimeSigK[k] = sig; Stagger(_grimeK[k]); } // 한 프레임에 하나씩
         }
-        foreach (var d in _decalList) sig = (sig ^ (ulong)((int)d.d * 7919 + (int)d.at.X * 31 + (int)d.at.Y * 131 + (int)(d.tint.A * 16f))) * 1099511628211UL;
-        sig ^= (ulong)n << 48;
-        if (sig != _grimeSig)
-        {
-            _grimeSig = sig;
-            _lookGrime.QueueRedraw();
-            _lookDecals?.QueueRedraw();
-        }
+        ulong ds = 1469598103934665603UL ^ ((ulong)n << 48);
+        foreach (var d in _decalList) ds = (ds ^ (ulong)((int)d.d * 7919 + (int)d.at.X * 31 + (int)d.at.Y * 131 + (int)(d.tint.A * 16f))) * 1099511628211UL;
+        if (ds != _decalSig) { _decalSig = ds; _lookDecals?.QueueRedraw(); }
     }
 
     private static bool Floorish(ShipGrid g, Cell c) => g.Kind(c) is TileKind.Floor or TileKind.Door;
 
-    private void PaintGrime(CanvasItem ci)
+    private void PaintGrime(CanvasItem ci, int k)
     {
         if (!LookOn) return;
         var g = _world.Ship.Grid;
@@ -266,17 +275,23 @@ public partial class ShipView
         var pts = new Vector2[4];
         var cols = new Color[4];
         var uvs = new Vector2[4];
-        for (int k = 0; k < _ov.Length; k++)
         {
             var tex = LookTextures.Overlays[k];
             var a = _ov[k];
-            if (tex == null || a == null || a.Length != n) continue;
-            bool any = false;
-            for (int i = 0; i < n && !any; i++) any = a[i] > 0.01f;
-            if (!any) continue;
+            if (tex == null || a == null || a.Length != n) return;
+            // v19 값이 있는 칸의 범위만 훑는다 (웅덩이 · 그을음은 몇 방에 몰려 있다)
+            int x0 = int.MaxValue, y0 = int.MaxValue, x1 = -1, y1 = -1;
+            for (int i = 0; i < n; i++)
+            {
+                if (a[i] <= 0.01f) continue;
+                var cc = g.CellAt(i);
+                if (cc.X < x0) x0 = cc.X; if (cc.X > x1) x1 = cc.X; if (cc.Y < y0) y0 = cc.Y; if (cc.Y > y1) y1 = cc.Y;
+            }
+            if (x1 < 0) return;
+            x0 = Math.Max(0, x0 - 1); y0 = Math.Max(0, y0 - 1); x1 = Math.Min(W - 1, x1 + 1); y1 = Math.Min(H - 1, y1 + 1);
             // 꼭짓점 양: 둘레 네 칸(바닥만)의 최댓값과 평균을 반씩 — 웅덩이가 칸 경계를 넘어 부드럽게 이어진다
-            for (int y = 0; y <= H; y++)
-            for (int x = 0; x <= W; x++)
+            for (int y = y0; y <= y1 + 1; y++)
+            for (int x = x0; x <= x1 + 1; x++)
             {
                 float mx = 0f, sum = 0f;
                 int cnt = 0;
@@ -290,9 +305,11 @@ public partial class ShipView
                 }
                 _corner[y * (W + 1) + x] = cnt == 0 ? 0f : 0.5f * mx + 0.5f * sum / cnt;
             }
-            for (int i = 0; i < n; i++)
+            for (int cy = y0; cy <= y1; cy++)
+            for (int cx = x0; cx <= x1; cx++)
             {
-                var c = g.CellAt(i);
+                var c = new Cell(cx, cy);
+                int i = g.Index(c);
                 if (!Floorish(g, c)) continue;
                 float c00 = _corner[c.Y * (W + 1) + c.X], c10 = _corner[c.Y * (W + 1) + c.X + 1],
                     c11 = _corner[(c.Y + 1) * (W + 1) + c.X + 1], c01 = _corner[(c.Y + 1) * (W + 1) + c.X];

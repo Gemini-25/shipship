@@ -128,7 +128,7 @@ public partial class ShipView
             _techActive = TechLookTable.Active(w);
             if (_techSig != int.MinValue && levelChanged) RedrawStatic(); // 설비 테두리도 세트를 따른다
             _techSig = sig;
-            _techStatic.QueueRedraw();
+            Stagger(_techStatic); // v19 한 프레임에 하나씩 (ShipView.RedrawStaggered)
         }
         _techGlow!.QueueRedraw(); // 간접 조명 · 형광등 떨림 · 기술 빛 (가벼운 층 — 매 프레임)
     }

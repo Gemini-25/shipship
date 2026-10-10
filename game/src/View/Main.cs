@@ -274,6 +274,7 @@ public partial class Main : Node2D
         _stars.Debris = Sim.Propulsion.Zone == ZoneKind.Debris;
         _stars.Storm = Sim.Hazards.StormActive ? 1f : 0f;
 
+        PacedGc(); // v19 60프레임
         PerfFrame(); // v17.7
         if (_screenshotFrames > 0 && --_screenshotFrames == 0) TakeScreenshotAndQuit();
     }

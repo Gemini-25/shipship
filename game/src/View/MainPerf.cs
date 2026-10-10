@@ -35,7 +35,22 @@ public partial class Main
         ActualSpeed = (float)(_tickRate / ShipSim.Core.SimTime.TicksPerSecond / (SlowMotion ? 0.3 : 1.0));
     }
 
+    // v19 60프레임: 쓰레기 치우기(GC)를 잘게 — 기본 설정은 몇 초마다 한 번 크게 치워 40~60ms씩 멈췄다.
+    //   8MB를 새로 쓸 때마다 젊은 세대만 짧게(1~2ms) 치운다 (시뮬레이션 결과에는 닿지 않는다 — 기억 정리일 뿐).
+    private const long GcStepBytes = 8L << 20;
+    private long _gcMark;
+
+    private void PacedGc()
+    {
+        long a = GC.GetTotalAllocatedBytes(false);
+        if (_gcMark == 0) { _gcMark = a; return; }
+        if (a - _gcMark < GcStepBytes) return;
+        GC.Collect(0, GCCollectionMode.Forced, blocking: true, compacting: false);
+        _gcMark = GC.GetTotalAllocatedBytes(false);
+    }
+
     private int _perfLeft = -1, _perfFrames;
+    private (int g0, int g1, int g2, TimeSpan pause, long alloc) _gc0;
     private ulong _perfLastUs;
     private readonly List<double> _perfMs = new();
     private double _perfCalls, _perfPrims, _perfObjs;
@@ -112,6 +127,7 @@ public partial class Main
         CensusStep();
         if (_perfLeft < 0) return;
         ulong now = Time.GetTicksUsec();
+        FrameProbe.EndFrame(); // v19 지난 프레임에 우리 코드가 쓴 CPU
         if (_perfLeft <= _perfFrames && _perfLastUs > 0)
         {
             _perfMs.Add((now - _perfLastUs) / 1000.0);
@@ -120,14 +136,19 @@ public partial class Main
             _perfObjs += Performance.GetMonitor(Performance.Monitor.RenderTotalObjectsInFrame);
         }
         _perfLastUs = now;
-        if (_perfLeft == _perfFrames + 1) { FrameProbe.Reset(); FrameProbe.On = true; }
+        if (_perfLeft == _perfFrames + 1) { FrameProbe.Reset(); FrameProbe.On = true; _gc0 = (GC.CollectionCount(0), GC.CollectionCount(1), GC.CollectionCount(2), GC.GetTotalPauseDuration(), GC.GetTotalAllocatedBytes()); }
         if (--_perfLeft > 0) return;
         FrameProbe.On = false;
         var s = _perfMs.OrderBy(x => x).ToArray();
         double P(double q) => s.Length == 0 ? 0 : s[Math.Min(s.Length - 1, (int)(q * s.Length))];
         GD.Print($"프레임 {s.Length}개 · {Speeds[SpeedIndex]}배속 · 확대 {Camera.Zoom.X:0.00} · 승무원 {Sim.Crew.Count}명 · 평균 {s.DefaultIfEmpty(0).Average():0.0}ms · 중앙 {P(0.5):0.0}ms · p95 {P(0.95):0.0}ms · 최대 {s.DefaultIfEmpty(0).Max():0.0}ms · {1000.0 / Math.Max(0.1, s.DefaultIfEmpty(0).Average()):0}fps · 그리기 호출 {_perfCalls / Math.Max(1, s.Length):0} · 도형 {_perfPrims / Math.Max(1, s.Length):0} · 물체 {_perfObjs / Math.Max(1, s.Length):0}");
-        foreach (var (key, ms, calls) in FrameProbe.Report(s.Length).Take(70))
-            GD.Print($"  프레임 · {key,-16} {ms,6:0.00}ms/프레임 · {calls}번");
+        var cpu = FrameProbe.FrameMs.OrderBy(x => x).ToArray();
+        double C(double q) => cpu.Length == 0 ? 0 : cpu[Math.Min(cpu.Length - 1, (int)(q * cpu.Length))];
+        GD.Print($"GC · 0세대 {GC.CollectionCount(0) - _gc0.g0} · 1세대 {GC.CollectionCount(1) - _gc0.g1} · 2세대 {GC.CollectionCount(2) - _gc0.g2} · 멈춘 시간 {(GC.GetTotalPauseDuration() - _gc0.pause).TotalMilliseconds:0}ms · 할당 {(GC.GetTotalAllocatedBytes() - _gc0.alloc) / 1e6 / Math.Max(1, s.Length):0.00}MB/프레임 · 힙 {GC.GetTotalMemory(false) / 1e6:0}MB");
+        GD.Print($"우리 코드 CPU · 프레임 {cpu.Length}개 · 평균 {cpu.DefaultIfEmpty(0).Average():0.0}ms · 중앙 {C(0.5):0.0}ms · p95 {C(0.95):0.0}ms · p99 {C(0.99):0.0}ms · 최대 {cpu.DefaultIfEmpty(0).Max():0.0}ms · 12ms 넘은 프레임 {cpu.Count(x => x > 12):0}");
+        foreach (var sf in FrameProbe.SlowFrames) GD.Print("  느린 프레임 · " + sf);
+        foreach (var (key, ms, calls, max, kb) in FrameProbe.Report(s.Length).Take(70))
+            GD.Print($"  프레임 · {key,-16} {ms,6:0.00}ms/프레임 · {calls}번 · 최대 {max:0.0}ms · 할당 {kb:0.0}KB/프레임");
         _perfLeft = -1;
     }
 }

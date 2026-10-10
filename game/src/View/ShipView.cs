@@ -72,6 +72,7 @@ public partial class ShipView : Node2D
         UpdateTechLook(); // v16.5b 미감 세트 · 익힌 기술 · 개조 칸이 바뀌면 다시 그린다
         _dynamic.QueueRedraw();
         RedrawParts(delta);
+        RedrawStaggered();
         _lights.QueueRedraw();
     }
 
@@ -106,10 +107,12 @@ public partial class ShipView : Node2D
         _slowOrder.AddRange(_slowParts);
         _slowOrder.Sort((a, b) => b.Since.CompareTo(a.Since));
         double spent = 0;
+        // v19 60프레임: HUD가 다시 그리는 프레임에는 조각을 거의 그리지 않는다 (둘이 겹친 프레임이 16ms를 넘었다)
+        double budget = Engine.GetProcessFrames() % 3 == Hud.HudPhase ? 0.8 : PartBudgetMs;
         foreach (var p in _slowOrder)
         {
             if (p.Since < every) break;
-            if (spent > 0 && spent + p.Layer.LastMs > PartBudgetMs) break;
+            if (spent + p.Layer.LastMs > budget && (spent > 0 || budget < PartBudgetMs && p.Since < every * 3)) break;
             p.Layer.QueueRedraw();
             p.Since = 0;
             spent += p.Layer.LastMs;
@@ -117,7 +120,18 @@ public partial class ShipView : Node2D
     }
 
     /// <summary>선체가 바뀌었을 때(사고, 개조) 호출.</summary>
-    public void RedrawStatic() { RedrawLook(); _static.QueueRedraw(); _fixFine?.QueueRedraw(); } // v16.5c 디테일 층도
+    public void RedrawStatic() { RedrawLook(); Stagger(_static); Stagger(_fixFine); } // v16.5c 디테일 층도
+
+    // v19 60프레임: 구조가 바뀌면 다시 구울 무거운 층(벽 · 바닥 · 기술 모습 · 설비 디테일)을 한 프레임에 하나씩 — HUD 프레임은 비켜서
+    //   (운석이 선체를 바꿀 때마다 넷을 한 프레임에 다시 그려 40ms 멈췄다)
+    private readonly List<CanvasItem> _staggered = new();
+    private void Stagger(CanvasItem? ci) { if (ci != null && !_staggered.Contains(ci)) _staggered.Add(ci); }
+    private void RedrawStaggered()
+    {
+        if (_staggered.Count == 0 || Engine.GetProcessFrames() % 3 == Hud.HudPhase) return;
+        _staggered[0].QueueRedraw();
+        _staggered.RemoveAt(0);
+    }
 
     public static Rect2 CellRect(Cell c) => new(c.X * T, c.Y * T, T, T);
     private CrewMember? CrewById(int id) { foreach (var c in _world.Crew) if (c.Id == id) return c; return null; }

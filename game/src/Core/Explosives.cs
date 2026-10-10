@@ -213,9 +213,14 @@ public sealed class ExplosiveSet
 
     private readonly List<(string key, ExplosiveKind kind, Cell cell, float amount, bool inside, int container, ItemKind? item, int mount, int device, int batch)> _want = new();
 
+    // v19 60프레임: 맞추기를 해시로 (60인 배는 목록을 겹겹이 훑어 30분마다 8ms 멈췄다 — 결과는 같다)
+    private readonly HashSet<string> _wantKeys = new();
+    private readonly HashSet<Cell> _taken = new();
+    private bool _takenValid;
+
     private void Want(string key, ExplosiveKind kind, Cell cell, float amount, bool inside = false, int container = -1, ItemKind? item = null, int mount = -1, int device = -1, int batch = -1)
     {
-        foreach (var x in _want) if (x.key == key) return;
+        if (!_wantKeys.Add(key)) return;
         _want.Add((key, kind, cell, amount, inside, container, item, mount, device, batch));
     }
 
@@ -229,7 +234,8 @@ public sealed class ExplosiveSet
                 var c = fc + d;
                 if (cands.Contains(c) || !ship.IsOpenFloor(c) || f.UseSpots.Contains(c) || ship.RoomAt(c) != f.Room) continue;
                 bool taken = false;
-                foreach (var e in All) if (!e.Spent && e.Cell == c) { taken = true; break; }
+                if (_takenValid) taken = _taken.Contains(c);
+                else foreach (var e in All) if (!e.Spent && e.Cell == c) { taken = true; break; }
                 if (!taken) cands.Add(c);
             }
         return cands.Count > 0 ? cands[Math.Abs(salt) % cands.Count] : f.Cells[0];
@@ -250,6 +256,10 @@ public sealed class ExplosiveSet
         var w = _w;
         var ship = w.Ship;
         _want.Clear();
+        _wantKeys.Clear();
+        _taken.Clear();
+        foreach (var e in All) if (!e.Spent) _taken.Add(e.Cell);
+        _takenValid = true;
         // 1) 보관함 재고
         foreach (var f in ship.Containers)
         {
@@ -335,13 +345,16 @@ public sealed class ExplosiveSet
                 Want($"jar:{b.Id}", ExplosiveKind.FermentJar, anchor != null ? SpotNear(anchor, b.Id * 5) : SpotIn(jr, b.Id), 0.5f, batch: b.Id);
             }
 
+        _takenValid = false;
         // 맞추기
         var keep = new HashSet<string>();
+        var live = new Dictionary<string, Explosive>();
+        foreach (var a in All) if (!a.Spent && a.Key != null) live.TryAdd(a.Key, a); // 같은 열쇠면 앞의 것 (예전 FirstOrDefault 와 같다)
         foreach (var x in _want)
         {
             keep.Add(x.key);
             if (_gone.TryGetValue(x.key, out var until) && until > w.Tick) continue;
-            var e = All.FirstOrDefault(a => a.Key == x.key && !a.Spent);
+            var e = live.GetValueOrDefault(x.key);
             if (e == null)
             {
                 e = new Explosive
@@ -365,8 +378,10 @@ public sealed class ExplosiveSet
     public void Update(float dt)
     {
         var w = _w;
-        if (w.Tick >= _nextSync) { _nextSync = w.Tick + SimTime.Minutes(30); Sync(); }
-        if (w.Tick >= _nextScan) { _nextScan = w.Tick + SimTime.Minutes(15); Scan(); }
+        if (_nextSync == 0) { _nextSync = w.Tick + SimTime.Minutes(7); _nextScan = w.Tick + SimTime.Minutes(4); } // v19 60프레임: 정각 일과 겹치지 않게 어긋나게
+        long pt = Prof.Now;
+        if (w.Tick >= _nextSync) { _nextSync = w.Tick + SimTime.Minutes(30); Sync(); pt = Prof.Lap("explo.sync", pt); }
+        if (w.Tick >= _nextScan) { _nextScan = w.Tick + SimTime.Minutes(15); Scan(); pt = Prof.Lap("explo.scan", pt); }
         var ship = w.Ship;
         for (int i = 0; i < All.Count; i++)
         {

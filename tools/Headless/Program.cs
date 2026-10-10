@@ -177,6 +177,7 @@ public static partial class Program
         if (args.Contains("--radcaretest")) return RunRadCareTest(seed); // 통합5 방사선 병 간호
         if (args.Contains("--risktest")) return RunRiskTest(seed); // 통합5 위험 수준 (보통 재해 · 배 전체급 · 우주급)
         if (args.Contains("--riskprobe")) return RunRiskProbe(args, seed); // 통합6 위험 수준 살피기
+        if (args.Contains("--tickspikes")) return RunTickSpikes(days, seed, args); // v19 60프레임: 튀는 틱
         if (args.Contains("--lifeprobe")) return RunLifeProbe(days, seed, args); // v19 굶주림 · 탈진 원인 · 고정 비교 지표
         if (args.Contains("--showerprobe")) return RunShowerProbe(seed); // 운석 피해 살피기 (사망 · 구멍 · 드론)
         if (args.Contains("--reacttest")) return RunReactTest(seed); // v17.8

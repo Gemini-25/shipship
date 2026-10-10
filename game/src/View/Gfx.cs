@@ -12,6 +12,9 @@ public static class Fonts
     {
         Body = LoadOrSystem("res://assets/fonts/Pretendard-Medium.otf", 500);
         Bold = LoadOrSystem("res://assets/fonts/Pretendard-Bold.otf", 700);
+        // v19 60프레임: 글꼴이 모양 잡아 둔 줄을 64줄만 기억해 HUD(한 프레임 수백 줄)가 매 프레임 모든 글을 다시 모양 잡았다 — 넉넉히
+        Body.SetCacheCapacity(3072, 64);
+        Bold.SetCacheCapacity(2048, 64);
         ThemeDB.FallbackFont = Body;
     }
 

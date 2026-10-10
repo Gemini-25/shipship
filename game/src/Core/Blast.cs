@@ -1061,11 +1061,15 @@ public sealed partial class BlastSystem
             }
             d.JammedOpen = true;
         }
+        long pt = Prof.Now;
         Late();
+        pt = Prof.Lap("blast.late", pt);
         Items.Update(dt);
+        pt = Prof.Lap("blast.items", pt);
         if (w.Tick < _nextSlow) return;
         _nextSlow = w.Tick + SimTime.Minutes(10);
         Aftermath();
+        Prof.Lap("blast.aftermath", pt);
     }
 
     /// <summary>폭발 뒤 (10분마다): 흔적이 옅어지고, 죽은 사람이 있으면 추모 자리가 된다.</summary>

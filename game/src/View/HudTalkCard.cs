@@ -46,7 +46,7 @@ public partial class Hud
 
         float W = 610f, rowH = 30f;
         float H = 44f + 104f + k.Options.Count * rowH + 70f;
-        float x0 = Mathf.Clamp((Screen.X - RightColumnWidth) * 0.5f - W * 0.5f + 150f, Margin + 290f, Screen.X - RightColumnWidth - W - Margin * 2);
+        float x0 = Mathf.Clamp((Screen.X - RightColumnWidth) * 0.5f - W * 0.5f + 150f, Margin + 290f, MathF.Max(Margin + 290f, Screen.X - RightColumnWidth - W - Margin * 2)); // v19 좁은 창
         // 위쪽 알림 띠(두 줄까지) 아래에서 — 알림이 대화 카드 머리를 덮지 않게
         float y0 = MathF.Min(Margin + 52f + 8f + 40f + 26f + 76f, Screen.Y - H - LogHeight - Margin - 12f);
         var rect = new Rect2(x0, y0, W, H);

@@ -33,6 +33,7 @@ public sealed class BrainSystem
         Emotions = new EmotionSystem(w);
         Goals = new GoalSystem(w);
         Plans = new PlanSystem(w);
+        DiaryWords.Plain("오늘은 좋은 날이었다 — 정비 — 해냈다."); // v19 60프레임: 일기 말다듬기를 미리 준비 (첫 일기 날 밤 한 틱이 30ms 멈췄다) — 결과는 버린다
         Social = new SocialMind(w);
         Learning = new LearningSystem(w);
     }
@@ -104,11 +105,12 @@ public sealed class BrainSystem
     private void DiaryTime()
     {
         var w = _w;
-        if (w.Tick % (World.SystemInterval * 20) != 0 || SimTime.HourOfDay(w.Tick) < 21.5f) return;
-        int day = w.Day;
+        if (SimTime.HourOfDay(w.Tick) < 21.5f) return;
+        int day = w.Day, left = 4; // v19 60프레임: 한 번에 넷씩 (60인 배는 일기를 한 틱에 몰아 써 40ms 멈췄다)
         foreach (var c in w.Crew)
         {
             if (c.Dead || c.Away || c.IsChild || _diaryDay.GetValueOrDefault(c.Id, -1) == day) continue;
+            if (left-- <= 0) break;
             _diaryDay[c.Id] = day;
             if (Line(c) is string line) { Life.Diary(w, c, Persona.Say(c, line)); Diaries++; }
             Emotions.NewDay(c);
