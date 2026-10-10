@@ -225,7 +225,8 @@ public static partial class Program
             var ist = w.Blast.Items.Stats;
             bool warned = tank.WarnedAt >= 0;
             string risk = tank.RiskWhy;
-            for (int i = 0; i < SimTime.Hours(6) && !tank.Moved; i++) w.Step();
+            // v19 '옮김' 표시는 제자리를 벗어났다는 뜻 — 들고 가다 일이 끊겨 조리대 곁에 내려놓아도 붙는다. 안전한 곳에 내려놓기를 끝낼 때까지 본다
+            for (int i = 0; i < SimTime.Hours(6) && !(tank.Moved && tank.Carried < 0 && tank.Risk <= 0f); i++) w.Step(); // 내려놓기를 끝내면 위험 0
             float dist = (tank.Cell.Center - stove.Center).Length();
             Check("주 컴퓨터 — 조리대 곁 산소통을 읽고 경고 · 제안", warned && risk.Contains("곁"),
                 $"경고 {ist.ComputerWarnings} · 제안 {ist.Proposals} · 위험 {tank.Risk * 100:0}% \"{risk}\"");

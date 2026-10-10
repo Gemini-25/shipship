@@ -135,8 +135,9 @@ public static partial class Program
                 w.Scale.NodeScale(floodNode) == IncidentScale.Room && w.Scale.NodeScale(outage) == IncidentScale.System && scram >= 0 && w.Scale.NodeScale(scram) == IncidentScale.Ship,
                 $"누수 {w.Scale.NodeScale(floodNode)} · 정전 {w.Scale.NodeScale(outage)} · 원자로 정지 {(scram >= 0 ? w.Scale.NodeScale(scram)?.ToString() : "없음")}");
             var halted = w.Crew.Where(c => c.LastEvaluations.Any(e => e.Reason.Contains("일상을 멈춘다"))).Select(c => c.Name).ToList();
-            Check("승무원이 배 전체를 느낀다 — 모이고 · 두려워하고 · 일상을 멈춘다", k.Mustered.Count >= 2 && k.Feared.Count >= 2 && w.Scale.Halts > 0,
-                $"점호 {k.Mustered.Count}명 · 두려움 {k.Feared.Count}명 · 일상 멈춤 {w.Scale.Halts}번 ({string.Join("·", halted.Take(4))}) · 모일 곳 {(k.MusterRoom >= 0 ? w.Ship.Rooms[k.MusterRoom].Name : "-")}");
+            // v19 일을 잡은 사람(작업 · 거들기)은 점호에서 빠진다 — 소집 때 거들 일이 열려 있었는지에 따라 점호가 1 ~ 4명으로 갈렸다 → 점호가 섰고 · 점호 + 현장이 셋 넘게
+            Check("승무원이 배 전체를 느낀다 — 모이고 · 두려워하고 · 일상을 멈춘다", k.Mustered.Count >= 1 && k.Mustered.Count + k.StageResponders[3] >= 3 && k.Feared.Count >= 2 && w.Scale.Halts > 0,
+                $"점호 {k.Mustered.Count}명 · 현장 {k.StageResponders[3]}명 · 두려움 {k.Feared.Count}명 · 일상 멈춤 {w.Scale.Halts}번 ({string.Join("·", halted.Take(4))}) · 모일 곳 {(k.MusterRoom >= 0 ? w.Ship.Rooms[k.MusterRoom].Name : "-")}");
             // ⑥ 도감
             bool codex = w.Scale.SeenOf("cause:Flood") >= 1 && w.Scale.SeenOf("cause:Outage") >= 1 && w.Scale.SeenOf("cause:Scram") >= 1 && w.Scale.Experienced(IncidentScale.Ship) >= 1
                          && ScaleTable.Scales.All(s => Codex.Incidents(s).Any());

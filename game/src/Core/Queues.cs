@@ -96,6 +96,13 @@ public sealed class QueueSystem
 
     // ───────────────────────────── 줄 찾기 · 만들기 ─────────────────────────────
 
+    /// <summary>v19 이 설비 앞 줄에 몇 명 서 있나 (줄을 만들지 않고 본다 — 끼니 고르기가 쓴다).</summary>
+    public int LineAt(QueueKind kind, Furniture f)
+    {
+        foreach (var q in All) if (q.Kind == kind && q.FurnitureId == f.Id) return q.Line.Count + (q.Serving >= 0 ? 1 : 0);
+        return 0;
+    }
+
     public ServiceQueue For(QueueKind kind, Furniture? f, Cell spot)
     {
         var w = _w;

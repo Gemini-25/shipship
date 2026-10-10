@@ -44,11 +44,14 @@ public sealed class EatActivity : Activity
         // 배식기 → 냉장고 식사 → 비상식량 → 날채소 순으로 고르되, 걸음도 따진다: 큰 고리형 배에서 배 반대편 배식기까지
         // 한 시간 반을 걸어 굶주린 채 닿았다 (보금자리호 · 새터호) — 많이 배고프면 가까운 비상식량부터 뜯는다
         float hunger = c.Needs.Hunger;
+        // v19 태양 폭풍 속: 쬐는 방의 배식기 · 냉장고는 뒤로 미루고 비상식량을 꺼리지 않는다 (조리가 멈춰 식사가 바닥나는데 빈 배식기 줄에 몰려 굶었다 — 60인 배 폭풍 하루 굶주림 120사람·시간)
+        bool storm = w.Ambience.StormPower >= 0.3f;
         Furniture? best = null; Cell bestSpot = default; Source bestSrc = Source.None; int bestCost = int.MaxValue;
         void Try((Furniture? box, Cell spot) found, Source src, int penalty)
         {
             if (found.box == null) return;
-            int cost = dist.Get(found.spot) + penalty;
+            int cost = dist.Get(found.spot) + penalty + (storm && found.box.Room.Radiation >= 0.2f ? 900 : 0);
+            if (src == Source.Dispenser) cost += 60 * w.Coop.Queues.LineAt(QueueKind.Meal, found.box); // v19 줄 한 사람 ≈ 2.5분 걸음 — 몰린 배식기 대신 한산한 곳 · 비상식량으로
             if (cost < bestCost) { best = found.box; bestSpot = found.spot; bestSrc = src; bestCost = cost; }
         }
         Try(Plans.NearestContainer(w, dist, c, f =>
@@ -56,8 +59,8 @@ public sealed class EatActivity : Activity
         if (best == null || bestCost > 300) // 배식기가 가까우면 냉장고는 보지 않는다 (사람마다 생각할 때마다 찾는다 — 30인 배 하루가 11% 느려졌다)
             Try(Plans.NearestContainer(w, dist, c, f =>
                 f.Type == FurnitureType.Fridge && f.Storage!.Count(ItemKind.Meal) > 0), Source.Fridge, 50);
-        if (best == null || bestCost > 400) // 식사가 가까이 있으면 비상식량은 보지 않는다
-            Try(Plans.NearestContainer(w, dist, c, f => f.Storage!.Count(ItemKind.Ration) > 0), Source.Ration, hunger > 0.7f ? 300 : 1200);
+        if (best == null || bestCost > 400 || storm) // 식사가 가까이 있으면 비상식량은 보지 않는다 (폭풍 속은 늘 본다)
+            Try(Plans.NearestContainer(w, dist, c, f => f.Storage!.Count(ItemKind.Ration) > 0), Source.Ration, storm ? 0 : hunger > 0.7f ? 300 : 1200);
         // 마지막 수단: 조리할 수 없고 비상식량도 떨어졌으면 채소를 날로 (v7에서 고침: 전에는 채소가 쌓여 있는데 굶었다)
         if (best == null || hunger > 0.85f && bestCost > 600)
             Try(Plans.NearestContainer(w, dist, c, f => f.Type == FurnitureType.Fridge && f.Storage!.Count(ItemKind.Produce) > 0), Source.Produce, best == null ? 0 : 600);
@@ -70,6 +73,21 @@ public sealed class EatActivity : Activity
         if (c.Needs.Hunger <= 0.3f) return false;
         float sinceWake = SimTime.HoursFromTo(c.Schedule.WakeHour, Hour(w));
         return MathF.Abs(sinceWake - 0.5f) < 0.75f || MathF.Abs(sinceWake - 6f) < 0.75f || MathF.Abs(sinceWake - 11.5f) < 0.75f;
+    }
+
+    private static readonly float[] MealHours = { 0.5f, 6f, 11.5f, 24.5f };
+
+    /// <summary>v19 끼니 앞 채우기: 이 사람이 앞으로 hours 안에 끼니를 먹으러 오겠나 (끼니때 · 그때의 배고픔 · 이미 배고픈 사람).</summary>
+    public static bool MealSoon(CrewMember c, World w, float hours)
+    {
+        if (c.Needs.Hunger > 0.6f) return true;
+        float sinceWake = SimTime.HoursFromTo(c.Schedule.WakeHour, Hour(w));
+        foreach (float m in MealHours)
+        {
+            float d = m - sinceWake;
+            if (d >= -0.75f && d <= hours + 0.75f && c.Needs.Hunger + MathF.Max(0f, d) * NeedsSystem.FoodDecayAwake > 0.3f) return true;
+        }
+        return false;
     }
 
     public override (float, string) Score(CrewMember c, World w, DistanceField dist)
@@ -203,9 +221,12 @@ public sealed class SleepActivity : Activity
         // 침대가 멀면 가는 동안 더 지칠 만큼 일찍 눕는다 (큰 고리형 배: 침대까지 한 시간 — 가다가 통로에서 쓰러져 잤다)
         if (ownBed && c.Pose != Pose.Sleeping) fatigue = MathF.Min(1f, fatigue + dist.Get(c.Bed!.UseSpots[0]) / 1400f * NeedsSystem.RestDecayAwake * 2f);
         if (!ownBed) reason += " · 침대에 갈 수 없어 다른 데서";
+        // v19 먹던 끼니는 다 먹고 눕는다 — 반쯤 먹고 잠들어 새벽에 배고파 깼다 (60인 배 사흘 22번) · 탈진 직전이면 그대로 눕는다
+        float meal = c.Job?.Activity is EatActivity or SavedPlateActivity && c.Needs.Food < 0.95f && c.Needs.Fatigue < 0.92f ? 0.55f : 1f;
+        if (meal < 1f) reason += " · 먹던 것부터";
         if (Bedtime(c, w))
-            return (0.5f + Curve.Smooth(fatigue, 0.1f, 0.6f) * 0.5f, reason + " · 취침 시간");
-        return (MathF.Max(0f, Curve.Smooth(fatigue, 0.6f, 0.95f) - 0.05f), reason);
+            return ((0.5f + Curve.Smooth(fatigue, 0.1f, 0.6f) * 0.5f) * meal, reason + " · 취침 시간");
+        return (MathF.Max(0f, Curve.Smooth(fatigue, 0.6f, 0.95f) - 0.05f) * meal, reason);
     }
 
     /// <summary>

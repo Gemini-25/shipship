@@ -128,7 +128,9 @@ public static partial class Program
             var pa = w.Passengers.Of(a)!;
             pa.Content = 0.15f; pa.NextGripe = w.Tick;
             var pb = w.Passengers.Of(helper)!;
-            Run(w, SimTime.Hours(4));
+            // v19 불 뒤엔 다친 몸을 누이고 · 끼니부터 먹고 · 경보 중엔 따지지 않는다 — 네 시간 안에 못 가기도 했다 → 경보가 가라앉은 뒤 여덟 시간까지
+            for (int k = 0; k < SimTime.Hours(2) && Crisis.Acting(w); k++) w.Step();
+            for (int k = 0; k < 16 && !(ps.Complaints >= 1 && ps.Heard + ps.Brushed >= 1); k++) Run(w, SimTime.Minutes(30));
             Check("승객 불만 (승무원을 찾아가 따졌다 · 들어 주거나 흘려듣는다)", ps.Complaints >= 1 && ps.Heard + ps.Brushed >= 1, $"불만 {ps.Complaints} · 들어 줌 {ps.Heard} · 흘림 {ps.Brushed} · {pa.LastGripe}");
             Check("자원봉사 승객이 마음 상한 승객을 달랬다", ps.Comforts >= 1 || pa.Content > 0.3f, $"달램 {ps.Comforts} · 마음 {pa.Content:0.00}");
             // 같은 불만이 또 쌓이면 주컴퓨터가 길을 낸다

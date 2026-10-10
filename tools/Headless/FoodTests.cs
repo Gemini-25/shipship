@@ -221,6 +221,7 @@ public static partial class Program
                 var w = DayOne(seed, "Mirinae");
                 var head = w.Cooking.HeadCook!;
                 var appr = w.Cooking.Apprentice!;
+                Scenarios.LimitStock(w, ItemKind.Meal, w.Crew.Count); // v19 보존식이 넉넉하면 첫날 냄비가 거의 없어 '늘 먹던 맛'이 조리사 맛으로 잡히지 않았다 (끼니 44번이 보존식)
                 Run(w, SimTime.TicksPerDay); // 다들 조리사의 맛에 익숙해진다
                 appr.SkillLevels[(int)Skill.Cooking] = MathF.Max(0.05f, head.RawSkill(Skill.Cooking) - 0.5f); // 아직 배우는 중 (0.35 차이는 맛 차이가 알아챌 문턱 0.08에 걸려 끼니 순서에 따라 갈렸다)
                 NeedsSystem.AddInjury(head.Vitals, 0.6f, "주방 화상");

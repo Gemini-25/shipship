@@ -241,7 +241,7 @@ Godot 실행 인자의 `--` 뒤에 붙입니다 (에디터: 프로젝트 설정 
 | `--photo` · `--follow` · `--voyage` · `--snapat=N` | 사진 모드 · 물건 따라가기 · 항해 결산 · N 프레임에 사진 |
 | `--summary=일수` | 시작하자마자 요약 진행 |
 | `--shot=out.png` (`--frames=N`) | 몇 프레임 뒤 화면을 PNG로 저장하고 종료 |
-| `--perf=N` · `--census` · `--nobake` | 프레임 시간 재기 · 그리는 것 세기 · 구워 둔 그림 끄기(비교용) |
+| `--perf=N` · `--census` · `--nobake` | 프레임 시간 재기 (구간별 시간 · 할당 · 12ms 넘은 프레임의 내역 · GC) · 그리는 것 세기 · 구워 둔 그림 끄기(비교용). 엔진 인자 `--fixed-fps 60` 과 함께 쓰면 그래픽 카드가 없는 곳에서도 60프레임 일정 그대로 게임 코드의 CPU 시간을 잰다 |
 
 **사고 걸기 (화면 시험용)**
 
@@ -305,7 +305,8 @@ dotnet bin/Release/net8.0/Headless.dll 1 7 --braintest   # 시험 하나 (앞 �
 | `--shipdesigntest` · `--annextest` · `--roomtest` | 배 설계와 크기 등급 / 증축 / 방은 승무원이 정한다 |
 | `--hudtest` · `--uitest` | 화면 배치 규칙 |
 | `--perftest` | 60인 배 · 복합 재난 성능 |
-| `3 1 --lifeprobe [--ship=Saeteo] [--crew=60] [--incidents=fixed\|natural\|none]` | 생활 측정 — 굶주림 원인(생산 · 배송 · 접근 · 행동) · 탈진 원인 · 식사 · 수면이 끊긴 횟수와 이유 · 배식기 보충 시간 · 긴급 일 대기 |
+| `4 3 --tickspikes [--ship=Saeteo] [--crew=60] [--warm=10] [--cosmic=Kessler:0.3]` | 60프레임 점검 — 가장 느린 틱들과 그 틱의 구간별 시간 · 쓰레기 치우기(GC) |
+| `3 1 --lifeprobe [--ship=Saeteo] [--crew=60] [--incidents=fixed\|natural\|none\|storm]` | 생활 측정 — 굶주림 원인(생산 · 배송 · 접근 · 행동) · 탈진 원인 · 식사 · 수면이 끊긴 횟수와 이유 · 배식기 보충 시간 · 긴급 일 대기 |
 | `--savetest` | 저장 · 불러오기가 같은 역사를 내는지 |
 | `--scenario=all` | 사고 시험 장면 전부를 한 줄씩 (결과를 완전 복구 / 부분 복구 / 장기 장애 / 실패로 분류) |
 

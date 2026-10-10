@@ -955,7 +955,7 @@ public sealed partial class RobotSystem
             case WorkKind.Restock:
             {
                 var dispenser = o.Target.Furniture!;
-                int want = Math.Min(12, dispenser.Storage!.Free);
+                int want = Math.Min(16, dispenser.Storage!.Free); // v19 끼니 앞 채우기 (12 → 16)
                 var (fridge, fridgeSpot) = Nearest(w, dist, f => f.Type == FurnitureType.Fridge && f.Storage!.Count(ItemKind.Meal) > 0);
                 if (fridge == null || want <= 0) { blocked = "냉장고에 식사 없음"; return null; }
                 steps.Add(new RGoto(fridgeSpot));

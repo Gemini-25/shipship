@@ -75,17 +75,25 @@ public static partial class Program
             }
             // 5) 습관 — 하루를 보내면 걱정 많고 비관적인 사람이 낙천가보다 더 지친다
             {
-                float Stress(params Habit[] hs)
+                // v19 한 사람 · 두 배를 견주면 그날 일(습관마다 하루가 달리 흘러 사고 · 사건이 섞인다)에 따라 뒤집혔다 (1.1 ↔ 1.2%)
+                //   → 한 배에서 어른을 번갈아 두 무리로 나눠 같은 하루를 겪게 하고 (두 번 돌려 무리를 맞바꾼다 — 사람 차이를 지운다)
+                //   · 배급 중인 날 (깨어 있는 동안 스트레스가 쌓여 습관 배율이 드러난다)
+                float gSum = 0f, sSum = 0f;
+                int per = 0;
+                foreach (int flip in new[] { 0, 1 })
                 {
-                    var w = DayOne(seed, "Mirinae");
-                    var c = w.Crew.First(x => x.CanAct);
-                    c.Habits.Clear(); c.Habits.AddRange(hs);
-                    float sum = 0f;
-                    for (int h = 0; h < 24; h++) { Run(w, SimTime.Hours(1)); sum += c.Needs.Stress; }
-                    return sum / 24f;
+                    var w = DayOne(seed, "Hanbit");
+                    w.Food.Disabled = true; w.Food.Rationing = true;
+                    var all = w.Crew.Where(x => x.CanAct && !x.IsChild).OrderBy(x => x.Id).ToList();
+                    var gloomyC = all.Where((_, i) => i % 2 == flip).ToList();
+                    var sunnyC = all.Where((_, i) => i % 2 != flip).ToList();
+                    per = gloomyC.Count;
+                    foreach (var c in gloomyC) { c.Habits.Clear(); c.Habits.AddRange(new[] { Habit.Worrier, Habit.Pessimist }); }
+                    foreach (var c in sunnyC) { c.Habits.Clear(); c.Habits.AddRange(new[] { Habit.Optimist, Habit.TeaLover }); }
+                    for (int h = 0; h < 24; h++) { Run(w, SimTime.Hours(1)); gSum += gloomyC.Average(c => c.Needs.Stress); sSum += sunnyC.Average(c => c.Needs.Stress); }
                 }
-                float gloomy = Stress(Habit.Worrier, Habit.Pessimist), sunny = Stress(Habit.Optimist, Habit.TeaLover);
-                Check("습관 — 걱정·비관은 더 지치고, 낙천가·차 애호가는 덜 지친다", gloomy > sunny, $"하루 평균 스트레스: 걱정+비관 {gloomy * 100:0.0}% · 낙천가+차 {sunny * 100:0.0}%");
+                float gloomy = gSum / 48f, sunny = sSum / 48f;
+                Check("습관 — 걱정·비관은 더 지치고, 낙천가·차 애호가는 덜 지친다", gloomy > sunny, $"하루 평균 스트레스: 걱정+비관 {gloomy * 100:0.0}% · 낙천가+차 {sunny * 100:0.0}% ({per}명씩 · 무리를 맞바꿔 두 번)");
             }
             // 6) 습관 — 부딪히는 습관 (정리광↔어지르기, 완벽주의↔서두름, 투덜이↔낙천가) · 다혈질은 더, 참을성은 덜
             {

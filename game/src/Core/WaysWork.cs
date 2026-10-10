@@ -29,7 +29,12 @@ public sealed class WayActivity : Activity
         if (WaysSystem.Off) return (0f, "—");
         if (ways.TryOf(c) is WayTry t) return (t.Helper ? 2.3f : 2.4f, t.Why.Length > 0 ? t.Why : t.Way.Name);
         if (c.Down || Crisis.Acting(w) || c.IsChild || ways.Follows.Count == 0) return (0f, "—");
-        if (ways.FollowFor(c) is WayFollow f) return (0.42f + (c.Stations.Contains(f.RoomId >= 0 && f.RoomId < w.Ship.Rooms.Count ? w.Ship.Rooms[f.RoomId].Kind : RoomType.Storage) ? 0.1f : 0f), f.Text);
+        if (ways.FollowFor(c) is WayFollow f)
+        {
+            // v19 임시 마개가 닳을수록 서두른다 (봉합 0.5 → 0, 떨어지기 직전 0.3 → +0.5) — 0.42에 머물러 매트리스가 떨어져 나갈 때까지 아무도 안 잡기도 했다
+            float wear = f.Kind == 0 && w.Ship.WallAt(f.At) is WallState fw && fw.Patched ? Math.Clamp((0.5f - fw.PatchQuality) * 2.5f, 0f, 0.5f) : 0f;
+            return (0.42f + wear + (c.Stations.Contains(f.RoomId >= 0 && f.RoomId < w.Ship.Rooms.Count ? w.Ship.Rooms[f.RoomId].Kind : RoomType.Storage) ? 0.1f : 0f), wear > 0.1f ? f.Text + " · 임시 마개가 닳는다" : f.Text);
+        }
         return (0f, "—");
     }
 

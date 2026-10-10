@@ -333,7 +333,9 @@ public static partial class Program
                 var lcs = next.Cells.Where(x => w.Ship.IsWalkable(x) && w.Ship.IsOpenFloor(x)).OrderBy(x => (x.Center - door.Cell.Center).Length()).Skip(1).Take(2).ToList();
                 for (int i = 0; i < Ls.Count; i++) Stay(w, Ls[i], lcs[i % lcs.Count], Pose.Standing);
                 // 닫힌 문
-                RunE(w, SimTime.Minutes(5), () => { door.Openness = 0f; door.JammedOpen = false; });
+                // v19 두 방 사이 문을 모두 닫고 잠근다 — 재는 순간 누가 지나가며 열거나 다른 문이 열려 있으면 '닫힌 문'이 아니었다
+                var between = w.Ship.Doors.Where(d => d.RoomA == room && d.RoomB == next || d.RoomA == next && d.RoomB == room).ToList();
+                RunE(w, SimTime.Minutes(5), () => { foreach (var d in between) { d.Openness = 0f; d.JammedOpen = false; d.Locked = true; } });
                 var hc = w.Hearing.In(next).Where(h => w.Hearing.Sources[h.Src].Kind == Noise.Bearing && w.Hearing.Sources[h.Src].Owner == m.Body.Id).ToList();
                 float closedPass = w.Hearing.Pass(room, next);
                 bool strangeClosed = w.Hearing.Strange(L, out _);
@@ -342,6 +344,7 @@ public static partial class Program
                 // 문을 열어 둔다
                 int checks0 = w.React.Stats.Checks;
                 bool strangeOpen = false;
+                foreach (var d in between) d.Locked = false;
                 RunE(w, SimTime.Minutes(2), () => { door.Openness = 1f; door.JammedOpen = true; if (w.Hearing.In(next).Any(h => w.Hearing.Sources[h.Src].Kind == Noise.Bearing && w.Hearing.Sources[h.Src].Owner == m.Body.Id && !h.Muffled && h.Level * w.Hearing.Sense(L, Noise.Bearing) >= HearingSystem.Audible)) strangeOpen = true; });
                 strangeOpen |= w.Hearing.Strange(L, out var heardM) && heardM == m;
                 float openPass = w.Hearing.Pass(room, next);

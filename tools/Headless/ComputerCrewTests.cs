@@ -231,6 +231,10 @@ public static partial class Program
             sad.Value = CrewValue.Freedom;
             Life.Diary(w, sad, "그냥 좀 그래… 잠이 안 온다");
             w.Brain2.Emotions.Feel(sad, Feeling.Sadness, 0.4f, "시험");
+            // 겉으로 드러날 만큼은 아니게 (슬픔 0.55 · 외로움이 크면 일기 없이도 '말수가 줄었다'로 보인다 — 그날 지낸 일에 따라 갈렸다)
+            float sv = w.Brain2.Emotions.Get(sad, Feeling.Sadness);
+            if (sv > 0.45f) w.Brain2.Emotions.Feel(sad, Feeling.Sadness, 0.45f - sv, "");
+            sad.Needs.Social = MathF.Max(sad.Needs.Social, 0.5f);
             sad.Needs.Stress = 0.7f;
             w.Automation.Character.Nudge(0f, 0.8f, "시험 — 사람을 먼저 챙긴다");
             mate.SnoopBoost = 1f;

@@ -968,7 +968,7 @@ public static partial class WorkPlanners
     {
         blocked = null;
         var dispenser = o.Target.Furniture!;
-        int want = Math.Min(10, dispenser.Storage!.Free);
+        int want = Math.Min(16, dispenser.Storage!.Free); // v19 끼니 앞 채우기 (10 → 16)
         var (fridge, fridgeSpot) = Plans.NearestContainer(w, dist, c, f => f.Type == FurnitureType.Fridge && f.Storage!.Count(ItemKind.Meal) > 0);
         if (fridge == null || want <= 0) { blocked = "냉장고에 식사 없음"; return null; }
 
@@ -1393,6 +1393,12 @@ public static partial class WorkPlanners
         toils.Add(new WorkToil(0.5f, Skill.Mechanics, room.DamperSpot.Center));
         toils.Add(new DoToil((cm, world) =>
         {
+            if (!room.Leaking) // v19 가는 사이 누가 (매트리스 · 판으로) 막았다 — 숨 쉬는 방을 용접해 버리지 않는다 (막힌 침실이 '포기한 구획'으로 남아 뒷손질이 멈췄다)
+            {
+                world.Board.Close(o);
+                world.Log.Add(world.Tick, LogKind.Work, $"{room.Name} — 그사이 구멍이 막혀 격벽을 용접하지 않았다", cm.Id);
+                return true;
+            }
             room.Abandoned = true;
             room.AbandonedSince = world.Tick;
             room.AbandonReason = o.Detail;

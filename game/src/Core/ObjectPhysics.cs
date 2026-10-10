@@ -498,6 +498,7 @@ public sealed partial class MatterSystem
                     float smoke = (2.5f + 60f / MathF.Max(4f, room.Volume)) * (0.5f + t.Char) * h;
                     air.Smoke = MathF.Min(1f, air.Smoke + smoke);
                     air.Toxin = MathF.Min(1f, air.Toxin + 0.2f * Matter.ToxicSmoke(t.Mat, sp.Electronic) * smoke);
+                    w.Smells.Emit(room, SmellKind.Burnt, 0.12f + 0.4f * t.Char); // v19 연기가 옅어도 그을는 천은 탄내가 난다 (전엔 방 연기 2%를 넘어야 냄새가 났다)
                     // 다 그을리면 불꽃이 인다 (산소가 있으면)
                     if (t.Char > 0.6f && air.O2 > 14f && R.Chance(MathF.Min(0.9f, 1.2f * ign * h * 60f / 10f)) && w.Fire.Ignite(t.At, 0.2f))
                     {

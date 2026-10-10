@@ -164,9 +164,10 @@ public sealed class SmellSystem
             Array.Copy(_lvl, grown, Math.Min(_lvl.Length, n));
             _lvl = grown; _src = new float[n]; _tmp = new float[n];
         }
-        Array.Clear(_src);
         Sources();
         for (int i = 0; i < n; i++) if (_src[i] > _lvl[i]) _lvl[i] += (_src[i] - _lvl[i]) * MathF.Min(1f, h * 8f);
+        // v19 지난 갱신 뒤로 바깥(폭발 · 배수구 · 위험 · 오븐 · 구토)에서 낸 냄새도 이번에 함께 든다 — 전엔 갱신 첫머리에 지워 한 번도 닿지 않았다
+        Array.Clear(_src);
         // 문: 열린 만큼 섞인다 (닫힌 문 틈으로도 조금)
         Array.Copy(_lvl, _tmp, n);
         foreach (var d in w.Ship.Doors)
@@ -444,6 +445,7 @@ public sealed class FollowSmellActivity : Activity
     private static (SmellKind kind, Room target)? Pick(CrewMember c, World w)
     {
         if (!c.IsAwake || c.Down || c.IsChild || c.Outside || c.Job?.Urgent == true || w.Smells.GatheredRecently(c)) return null;
+        if (c.Job?.Activity is EatActivity or SavedPlateActivity or SharedMealActivity) return null; // v19 먹던 끼니를 두고 냄새를 따라 나섰다 (60인 배 사흘 22번)
         foreach (var k in Follow)
         {
             if (k == SmellKind.Coffee && c.Needs.Fatigue < 0.35f && c.Traits.Sociability < 0.6f) continue; // 커피 냄새는 졸린 사람 · 어울리길 좋아하는 사람이

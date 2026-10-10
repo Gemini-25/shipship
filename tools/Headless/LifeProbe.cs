@@ -6,6 +6,7 @@ using ShipSim.Core;
 // v19 2묶음: 생활 측정 — 같은 배 · 시드 · 인원 · 사고로 굶주림 · 탈진의 원인과 고정 비교 지표를 잰다.
 //   days 시드 --lifeprobe [--ship=Saeteo] [--crew=60] [--incidents=fixed|natural|none]
 //     fixed: 이틀마다 같은 시각에 같은 무작위 사고 (시드에서 나온 차례 그대로) · natural: 게임처럼 평균 3일에 한 번 · none: 사고 없음
+//     storm: 둘째 날 아침 같은 시각에 태양 폭풍
 public static partial class Program
 {
     private static int RunLifeProbe(int days, int seed, string[] args)
@@ -32,6 +33,9 @@ public static partial class Program
                 what.Add($"{w.Day}일 {SimTime.Clock(w.Tick)} " + Scenarios.RandomIncident(w, rng));
                 next += 2L * SimTime.TicksPerDay;
             }
+            // storm: 둘째 날 아침 끼니 무렵 태양 폭풍 (같은 시각 · 같은 세기 — 폭풍 속 식사 · 잠 비교)
+            if (mode == "storm" && w.Tick == next - SimTime.TicksPerDay + SimTime.Hours(23))
+                what.Add($"{w.Day}일 {SimTime.Clock(w.Tick)} " + Hazards.Apply(w, HazardKind.SolarStorm, default, -1));
             if (w.Tick % SimTime.Minutes(5) != 0) continue;
             foreach (var c in w.Crew)
             {

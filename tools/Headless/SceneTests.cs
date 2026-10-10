@@ -120,7 +120,7 @@ public static partial class Program
                 Run(w, SimTime.Minutes(10));
                 bool frozen = MathF.Abs(s.Progress - atCut) < 0.001f;
                 room.PowerCut = false;
-                bool lit = ScUntil(w, () => s.Stage == SceneStage.Run || !s.Open, 0.5f);
+                bool lit = ScUntil(w, () => s.Stage == SceneStage.Run || !s.Open, 3f); // v19 다들 잔치 의논(고비를 넘긴 날 함께 먹기)에 갔다가 돌아와 다시 튼다 — 반 시간으로는 모자랐다
                 foreach (var id in s.Here.ToList()) if (w.Crew.FirstOrDefault(c => c.Id == id) is CrewMember v) ScFree(w, v); // 남은 사람은 끝까지 볼 만큼 배부르고 기운 있다
                 Check("정전 — 영사기가 꺼져 멈췄다가, 전기가 돌아오면 그 자리부터 · 영화 소리는 옆방까지 번진다", !s.Open || cut && frozen && lit && noiseNb > 0.1f,
                     $"정전 멈춤 {cut} · 멈춘 동안 진척 그대로 {frozen} ({atCut:P0}) · 다시 {lit} · 옆방 {nb?.Name} 소음 {noiseNb:0.00} · {s.Trail.LastOrDefault(t => t.Contains("전기"))}");
@@ -419,6 +419,7 @@ public static partial class Program
                 bool secret = !card.Readers.Contains(who.Id);
                 int signed = card.Signers.Count;
                 var board = w.Scenes.RosterBoard();
+                for (int k = 0; k < 120 && who.Room == null; k++) w.Step(); // v19 문간을 지나는 중이면 (어느 방도 아니다) 방에 들어설 때까지
                 card.Given = true; card.At = who.Cell; card.RoomId = who.Room!.Id;
                 w.Scenes.Read(card, who);
                 bool joy = who.Diary.Any(d => d.text.Contains("생일 카드"));

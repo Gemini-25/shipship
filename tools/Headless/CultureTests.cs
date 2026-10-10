@@ -92,7 +92,8 @@ public static partial class Program
                 b.Water.Level = b.Water.Capacity * 0.8f; // 기항지에서 물을 다시 채웠다 — 그래도 아낀다
                 Run(a, SimTime.Hours(14));
                 // 손이 더러워질 때마다 (몇 시간 간격으로 기름일) — 씻을 기회가 한두 번뿐이면 난수 흐름에 따라 0번이 되기도 했다
-                for (int k = 0; k < 4; k++) { foreach (var c in b.Crew) c.Soil.Hands[(int)SoilKind.Oil] = 0.6f; Run(b, SimTime.Hours(3.5f)); }
+                // v19 기름때 0.6이면 씻기 점수가 0.27 — 한가할 때만 씻어 열네 시간에 0 ~ 1번으로 갈렸다 → 손이 시커멓게 (0.9)
+                for (int k = 0; k < 4; k++) { foreach (var c in b.Crew) c.Soil.Hands[(int)SoilKind.Oil] = 0.9f; Run(b, SimTime.Hours(3.5f)); }
                 string A = string.Join(", ", a.Culture.Customs.Select(x => CultureSystem.Name(x.Kind)));
                 string B = string.Join(", ", b.Culture.Customs.Select(x => CultureSystem.Name(x.Kind)));
                 // v16.14 뒤로는 물 배에서도 실험 사고(축전기 방전 · 용접 불똥)로 불이 날 수 있다 — 그러면 그 배도 소화기 관행이 맞다.

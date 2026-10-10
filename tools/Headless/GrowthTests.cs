@@ -59,7 +59,8 @@ public static partial class Program
                         // 치료 한 번에 준 부상 (치료한 사람의 솜씨가 정한다: 0.06 + 0.14 × 의료)
                         for (int j = 0; j < hurt.Count; j++)
                         {
-                            if (hurt[j].Vitals.TreatedTick == w.Tick) { qual += prevInj[j] - hurt[j].Vitals.Injury; count++; }
+                            // v19 남은 부상이 한 번에 줄 수 있는 양(0.2)보다 작으면 누가 해도 다 낫는다 — 솜씨가 드러나지 않아 자주 치료한 배가 손해를 봤다 → 큰 부상일 때만 센다
+                            if (hurt[j].Vitals.TreatedTick == w.Tick && prevInj[j] >= 0.2f) { qual += prevInj[j] - hurt[j].Vitals.Injury; count++; }
                             prevInj[j] = hurt[j].Vitals.Injury;
                         }
                         if (first < 0 && hurt.Any(c => c.Vitals.TreatedTick > start)) first = w.Tick;
@@ -85,13 +86,14 @@ public static partial class Program
 
         // ── 3) 재활과 후유증: 크게 다친 사람은 후유증이 남고, 재활하면 부상이 빨리 낫고 후유증이 절반까지 준다 ──
         {
-            float injA = 0f, injB = 0f, scarA = 0f, scarB = 0f, floorA = 0f, inj6A = 0f, inj6B = 0f;
+            float injA = 0f, injB = 0f, scarA = 0f, scarB = 0f, floorA = 0f, inj6A = 0f, inj6B = 0f, inj3A = 0f, inj3B = 0f;
             foreach (bool rehab in new[] { true, false })
             {
                 var w = DayOne(seed, "Mirinae");
                 w.Growth.NoRehab = !rehab;
                 w.Growth.NoFirstAid = true; // v15 키트 없는 응급 처치도 빼고
                 w.Ailments.Disabled = true; // v14.4 재활만 견준다 (상처 감염으로 누워 버리면 재활할 틈이 없다)
+                w.Policies.Set("expedition", 2, "시험: 원정 없이"); // v19 부상 31%로 재활하던 사람이 원정대로 나가 사흘 동안 배에 없었다 (원정 자격은 부상 35% 미만)
                 // 치료 운을 빼고 재활만 견준다 (구급 키트가 없으면 둘 다 저절로 낫는다)
                 foreach (var f in w.Ship.Furniture.Where(f => f.Storage != null)) f.Storage!.Take(ItemKind.MedKit, 999);
                 var c = w.Crew.First(x => x.Role == CrewRole.Technician);
@@ -100,15 +102,20 @@ public static partial class Program
                 c.Vitals.TreatedTick = w.Tick; // 처음 치료는 받았다 (재활은 치료 뒤에 — 그 뒤로는 키트가 없다)
                 float scar0 = c.Vitals.Scar;
                 // 빨리 낫나는 사흘째 부상으로 (엿새면 둘 다 다 낫는다), 후유증은 엿새째로
-                Run(w, SimTime.TicksPerDay * 3);
-                float inj3 = c.Vitals.Injury;
-                Run(w, SimTime.TicksPerDay * 3);
-                if (rehab) { injA = inj3; inj6A = c.Vitals.Injury; scarA = c.Vitals.Scar; floorA = c.Vitals.ScarFloor; }
-                else { injB = inj3; inj6B = c.Vitals.Injury; scarB = c.Vitals.Scar; }
+                // v19 빨리 낫나는 엿새 동안의 평균 부상으로 (사흘째 한 시점은 그사이 잠 · 침대에서 쉰 시간에 따라 크게 흔들렸다 — 같은 배 16 ~ 40%)
+                float inj3 = 0f, mean = 0f;
+                for (int k = 1; k <= 24; k++)
+                {
+                    Run(w, SimTime.Hours(6));
+                    mean += c.Vitals.Injury / 24f;
+                    if (k == 12) inj3 = c.Vitals.Injury;
+                }
+                if (rehab) { injA = mean; inj3A = inj3; inj6A = c.Vitals.Injury; scarA = c.Vitals.Scar; floorA = c.Vitals.ScarFloor; }
+                else { injB = mean; inj3B = inj3; inj6B = c.Vitals.Injury; scarB = c.Vitals.Scar; }
                 Console.WriteLine($"    {(rehab ? "재활하는 배" : "재활 없는 배")}: {c.Name} 부상 70% → 사흘째 {inj3 * 100:0.0}% → 엿새째 {c.Vitals.Injury * 100:0}% · 후유증 {scar0 * 100:0}% → {c.Vitals.Scar * 100:0}% (바닥 {c.Vitals.ScarFloor * 100:0}%) · 재활 {c.Stats.RehabSessions}번");
             }
-            Check("재활·후유증 — 재활하면 빨리 낫고, 후유증은 절반까지만", (injA < injB || injA <= injB && inj6A < inj6B) && scarA < scarB && scarA >= floorA - 1e-4f && floorA > 0f,
-                $"사흘째 부상 {injA * 100:0.0} ↔ {injB * 100:0.0}% · 엿새째 후유증 {scarA * 100:0} ↔ {scarB * 100:0}%");
+            Check("재활·후유증 — 재활하면 빨리 낫고, 후유증은 절반까지만", injA < injB && scarA < scarB && scarA >= floorA - 1e-4f && floorA > 0f,
+                $"엿새 평균 부상 {injA * 100:0.0} ↔ {injB * 100:0.0}% (사흘째 {inj3A * 100:0.0} ↔ {inj3B * 100:0.0}% · 엿새째 {inj6A * 100:0} ↔ {inj6B * 100:0}%) · 엿새째 후유증 {scarA * 100:0} ↔ {scarB * 100:0}%");
         }
 
         // ── 4) 결정론 ──

@@ -232,6 +232,7 @@ public static partial class Program
             for (int k = 0; k < SimTime.TicksPerDay * 2; k++)
             {
                 w.Step();
+                foreach (var x in new[] { P, Q }) { x.InfectedAt = -1; x.Ailments.RemoveAll(a => AilmentSystem.Spec(a.Id).Spread > 0f); } // v19 운동하기로 한 사람이 감기로 이틀 내내 격리돼 한 번도 못 달렸다 — 먹는 양 · 운동만 견준다
                 if (debug && k % SimTime.Hours(2) == 0)
                 {
                     var dq = w.Paths.Flood(Q.Cell, Q.PathProfile);

@@ -65,6 +65,7 @@ public static partial class Program
                 foreach (var o in adults) if (o != timid) timid.ChangeAffinity(o, 0.7f);
 
                 // (a) 주 컴퓨터 예측: 수리재가 조금씩 줄어든다 → 바닥나기 전에 알린다
+                w.Policies.Set("expedition", 2, "시험: 바닥나기 전엔 예측만 본다"); // v19 수리재가 줄 때 바닥나기 전에 원정을 먼저 꺼내 이 항목이 보는 차례(바닥 → 정지 → 제안)가 갈렸다
                 StripRepair(w, leavePlates: 8);
                 for (int i = 0; i < 6 && x.Stats.Forecasts == 0; i++) { Run(w, SimTime.Hours(3)); Life.Take(w, ItemKind.Plate, 1); }
                 Run(w, SimTime.Hours(2));
@@ -75,6 +76,7 @@ public static partial class Program
                     string.Join(" / ", x.Sites.Take(4).Select(s => $"{s.Name}({s.Spec.Name}) {s.CompScore:0.0}: {s.CompNote}")));
 
                 // (b) 바닥 → 정지
+                w.Policies.Set("expedition", 0, "시험: 회의·함장에게 맡김");
                 StripRepair(w);
                 bool halted = RunUntil(w, () => x.Halted, SimTime.Hours(10));
                 Check("재료 바닥 → 배가 멈춘다 (엔진 정지 · 사유 · 연대기)", halted && x.HaltCat == MatCat.Repair && w.History.Events.Any(e => e.Text.StartsWith("엔진을 껐다")),

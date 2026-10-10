@@ -30,7 +30,7 @@ public sealed class LifeWatch
     public readonly Dictionary<string, float> HungerWhy = new(), TiredWhy = new();
     public int MealBreaks, SleepBreaks;
     /// <summary>줄 끝에 받으려는데 배식기가 비었다 (식당 이름별).</summary>
-    public readonly Dictionary<string, int> EmptyAtTake = new();
+    public readonly Dictionary<string, int> EmptyAtTake = new(), EmptyAtTakeWhy = new();
     public readonly Dictionary<string, int> MealBreakWhy = new(), SleepBreakWhy = new();
     /// <summary>배식기 보충: 요청(6인분 아래 · 냉장고에 있음)부터 채워지기까지 (분).</summary>
     public readonly List<float> RestockMinutes = new();
@@ -56,7 +56,18 @@ public sealed class LifeWatch
         if (job.Activity is EatActivity && c.Needs.Food < 0.9f)
         {
             _pendingBreak[c.Id] = (true, _w.Tick, (status == ToilStatus.Failed ? "실패 " : "") + Where(job.Current ?? job.FailedAt, c));
-            if (status == ToilStatus.Failed && job.FailedAt is TakeToil && job.TargetRoom is Room r) EmptyAtTake[r.Name] = EmptyAtTake.GetValueOrDefault(r.Name) + 1;
+            if (status == ToilStatus.Failed && job.FailedAt is TakeToil tt && job.TargetRoom is Room r)
+            {
+                EmptyAtTake[r.Name] = EmptyAtTake.GetValueOrDefault(r.Name) + 1;
+                var f = tt.From;
+                int n = f.Storage?.Count(ItemKind.Meal) ?? -1;
+                var order = _w.Board.OpenUnsorted.FirstOrDefault(o => o.Kind == WorkKind.Restock && o.Target.Furniture == f);
+                string why = c.Carrying is ItemStack held && held.Kind != ItemKind.Meal ? $"다른 것을 들고 있었다 ({held.Kind})"
+                    : n > 0 ? $"남아 있었다 ({n})"
+                    : order == null ? "비었는데 채우기 일이 없다" + (_w.Ship.FurnitureOf(FurnitureType.Fridge).Sum(x => x.Storage!.Count(ItemKind.Meal)) == 0 ? " (냉장고도 빔)" : "")
+                    : order.Robot != null ? "비었다 · 로봇이 채우러 오는 중" : order.Assignee != null ? "비었다 · 사람이 채우러 오는 중" : "비었다 · 채우기 일을 아무도 안 맡음";
+                EmptyAtTakeWhy[why] = EmptyAtTakeWhy.GetValueOrDefault(why) + 1;
+            }
         }
         else if (job.Activity is SleepActivity && c.Needs.Rest < 0.6f)
             _pendingBreak[c.Id] = (false, _w.Tick, c.Pose == Pose.Sleeping ? "자다가" : "자러 가다가");
@@ -228,7 +239,7 @@ public sealed class LifeWatch
              + $"탈진 {TiredHours:0.#}사람·시간 (" + string.Join(" · ", TiredKinds.Select((k, i) => $"{k} {TiredKindHours[i]:0.#}")) + ")\n"
              + $"   갈래: {Top(TiredWhy, 8)}\n"
              + $"식사 중단 {MealBreaks} ({TopI(MealBreakWhy, 8)})\n수면 중단 {SleepBreaks} ({TopI(SleepBreakWhy, 8)})\n"
-             + (EmptyAtTake.Count > 0 ? $"받으려니 빈 배식기: {TopI(EmptyAtTake, 6)}\n" : "")
+             + (EmptyAtTake.Count > 0 ? $"받으려니 빈 배식기: {TopI(EmptyAtTake, 6)} · 왜: {TopI(EmptyAtTakeWhy, 6)}\n" : "")
              + $"배식기 보충 {rs.Count}번 · 평균 {(rs.Count > 0 ? rs.Average() : 0):0}분 · 최대 {(rs.Count > 0 ? rs.Max() : 0):0}분 · 냉장고엔 있는데 빈 배식기 {EmptyDispenserHours:0.#}대·시간\n"
              + $"긴급 일 {UrgentSeen}건 · 20분 넘게 맡을 이 없이 기다림 {UrgentLate}건 (그때 식사 · 휴식 · 잠 중 평균 {(UrgentLate > 0 ? UrgentLateLifeCrew / (float)UrgentLate : 0):0.#}명) · 기다림 평균 {(UrgentWaitMinutes.Count > 0 ? UrgentWaitMinutes.Average() : 0):0}분";
     }

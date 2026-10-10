@@ -1240,13 +1240,28 @@ public sealed partial class WorkBoard
             si++;
         }
         int fridgeMeals = ship.FurnitureOf(FurnitureType.Fridge).Sum(f => f.Storage!.Count(ItemKind.Meal));
+        // v19 끼니 앞 채우기: 다음 한 시간 안에 끼니때가 오는 사람을 가까운 배식기마다 세어 그만큼(+2) 미리 채운다
+        //   60인 배 사흘: 줄 맨 앞에서 받으려니 비어 있던 것 66번 · 냉장고엔 있는데 빈 배식기 3.9대·시간 (6인분 아래로 떨어져야 채웠다)
+        var rush = new Dictionary<int, int>();
+        var liveDisp = ship.FurnitureOf(FurnitureType.MealDispenser).Where(d => !d.Room.Detached && !d.Room.Abandoned).ToList();
+        if (liveDisp.Count > 0 && fridgeMeals > 0)
+            foreach (var c in w.Crew)
+            {
+                if (c.Dead || c.LeftShip || c.Away || c.Outside || !EatActivity.MealSoon(c, w, 1f)) continue;
+                Furniture? near = null;
+                float bd = float.MaxValue;
+                foreach (var d in liveDisp) { float dd = (d.Center - c.Position).LengthSquared(); if (dd < bd) { bd = dd; near = d; } }
+                if (near != null) rush[near.Id] = rush.GetValueOrDefault(near.Id) + 1;
+            }
         foreach (var d in ship.FurnitureOf(FurnitureType.MealDispenser))
         {
             int n = d.Storage!.Count(ItemKind.Meal);
+            int soon = rush.GetValueOrDefault(d.Id);
+            int want = Math.Clamp(soon + 2, 6, d.Storage.Capacity);
             // 냉장고를 비워 들고 가는 중이면 (누가 맡아 나르는 중) 일은 그대로 있다 — 안 그러면 조건이 사라진 일로 보여 로봇이 도중에 손을 놓는다
             bool underway = fridgeMeals == 0 && n < 6 && _open.Values.Any(o => o.Kind == WorkKind.Restock && o.Target.Furniture == d && (o.Robot != null || o.Assignee != null));
-            if (n < 6 && (fridgeMeals > 0 || underway))
-                Post(WorkKind.Restock, WorkTarget.Of(d), 0.35f + 0.3f * (1f - n / 6f), Skill.Cooking, $"{n}인분 남음");
+            if (n < want && (fridgeMeals > 0 || underway))
+                Post(WorkKind.Restock, WorkTarget.Of(d), 0.35f + 0.3f * (1f - n / (float)want) + (soon > n ? 0.15f : 0f), Skill.Cooking, soon > 0 ? $"{n}인분 남음 · 곧 {soon}명" : $"{n}인분 남음");
         }
 
         // ── 제작과 정제 (v6): 작업대(부품·소모품)와 정제기(원료 → 기본 수리재), 얼음 → 공기 탱크 ──

@@ -232,7 +232,8 @@ public static partial class Program
             long warn = -1, dryT = -1, charT = -1, alarm = -1, seal = -1, smell = -1, doused = -1, unseal = -1;
             int sniff0 = w.Smells.Stats.BurntSniffs + w.Smells.Stats.Checks;
             CrewMember? responder = null;
-            for (int t = 0; t < SimTime.Hours(4) && (unseal < 0 || doused < 0); t++)
+            // v19 문이 다시 열린 뒤 탄내가 옆방으로 번지는 것까지 20분 더 본다 (닫힌 문 너머로는 0.004쯤만 샌다 — 들어간 사람이 냄새 갱신 때 마침 방에 있어야 통과했다)
+            for (int t = 0; t < SimTime.Hours(4) && (unseal < 0 || doused < 0 || smell < 0 && w.Tick - unseal < SimTime.Minutes(20)); t++)
             {
                 w.Step();
                 if (warn < 0 && towel.Flagged) warn = w.Tick;

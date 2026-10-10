@@ -248,7 +248,7 @@ public static partial class Program
     {
         int shocks = 0, safe = 0, runs = 0;
         var notes = new List<string>();
-        for (int i = 0; i < 8 && (shocks == 0 || safe == 0); i++)
+        for (int i = 0; i < 16 && (shocks == 0 || safe == 0); i++) // v19 감전은 55%쯤 — 여덟 번으로는 운에 갈렸다 (기준판도 여덟째에 한 번)
         {
             var w = WyShip(seed + 31 * i, i % 2 == 0 ? "Hanbit" : "Eunha");
             WyNoFireGear(w);

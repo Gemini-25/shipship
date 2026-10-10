@@ -44,6 +44,7 @@ public static partial class Program
             Force(w, cook, new Job(null, "시험: 화구 앞", new Toil[] { new WaitToil(SimTime.Hours(1), Pose.Working, stove.Center) }), SimTime.Hours(1));
             ms.Warm(cook, stove, mech, soup);
             var heater = w.Portable.Devices.First(d => d.Kind == PortableKind.Heater);
+            heater.Dust = 0f; // v19 그날 쌓인 먼지가 타며 탄내가 나면 히터 곁 사람이 냄새를 쫓아 자리를 떴다 (먼지 탄내는 이동식 장비 시험이 본다)
             var hcell = MvFloor(w, kitchen, stove.Center + new Vector2(2.5f, 1f));
             w.Portable.PlaceNow(heater, hcell, helper, "cold:" + kitchen.Id, outlet: kitchen);
             Teleport(w, helper, MvFloor(w, kitchen, hcell.Center + new Vector2(1f, 0f)));

@@ -186,6 +186,7 @@ public static partial class Program
             var a = SpWorker(w, Skill.Mechanics);
             var b = SpWorker(w, Skill.Mechanics, a);
             a.Habits.Remove(Habit.Hasty); a.Habits.Add(Habit.Methodical); // 꼼꼼한 사람은 보류
+            foreach (var x in new[] { a, b }) { x.Needs.Food = 1f; x.Needs.Rest = 1f; } // v19 부품을 가지러 먼 길을 가는 사이 배가 고파 밥 먹으러 가면 부르지 못한 채 끝났다 (그날 아침을 언제 먹었는지에 따라 갈렸다)
             foreach (var x in w.Crew) if (x.Job?.Order == o1 || x.Job?.Order == o2) x.EndJob(w, ToilStatus.Interrupted); // 통합8 먼저 집어 든 사람이 있으면 내려놓는다 (그 사람이 보류된 일을 그대로 이어 했다)
             Force(w, a, SpChore(w, a, o1)!, SimTime.Hours(3));
             Force(w, b, SpChore(w, b, o2)!, SimTime.Hours(3));

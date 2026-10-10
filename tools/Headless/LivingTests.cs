@@ -63,7 +63,7 @@ public static partial class Program
             var b = Hungry(seed, "Hanbit", noRation: true);
             float daysA = FoodPolicy.FoodDays(a);
             bool decided = false;
-            float starvA = 0f, starvB = 0f;
+            float starvA = 0f, starvB = 0f, keepA = 0f, keepB = 0f;
             for (int t = 0; t < SimTime.TicksPerDay * 4; t++)
             {
                 a.Step(); b.Step();
@@ -72,10 +72,12 @@ public static partial class Program
                 float dt = World.SystemInterval / (float)SimTime.TicksPerHour;
                 starvA += a.Crew.Count(c => !c.Dead && c.Needs.Food < 0.05f) * dt;
                 starvB += b.Crew.Count(c => !c.Dead && c.Needs.Food < 0.05f) * dt;
+                keepA += FoodPolicy.FoodDays(a) * dt / 96f; keepB += FoodPolicy.FoodDays(b) * dt / 96f;
             }
             var vote = a.History.Events.FirstOrDefault(e => e.Kind == HistoryKind.Decision && e.Text.Contains("배급"));
-            Check("배급 — 이틀치 아래면 회의로 정하고, 덜 굶는다", decided && starvA < starvB,
-                $"처음 {daysA:0.0}일치 · 배급 {(decided ? $"{a.Food.Rationings}번" : "안 함")} · 굶주림 {starvA:0} ↔ 배급 없는 배 {starvB:0}사람·시간" +
+            // v19 부서진 재배대를 고치고 수확해 두 배 모두 거의 굶지 않는다 (예전엔 굶주림 0.x ↔ 0 차이로 갈렸다) — 배급의 몫은 먹을 것이 더 오래 가는 것
+            Check("배급 — 이틀치 아래면 회의로 정하고, 덜 굶고 먹을 것이 더 오래 간다", decided && starvA <= starvB && keepA > keepB,
+                $"처음 {daysA:0.0}일치 · 배급 {(decided ? $"{a.Food.Rationings}번" : "안 함")} · 굶주림 {starvA:0.0} ↔ 배급 없는 배 {starvB:0.0}사람·시간 · 나흘 평균 남은 먹을 것 {keepA:0.0} ↔ {keepB:0.0}일치" +
                 (vote != null ? $" · {vote.Text}" : ""));
         }
 

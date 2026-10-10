@@ -314,7 +314,7 @@ public static partial class Program
             // 냄새: 주방에서 빵 굽는 냄새 · 배고픈 사람은 따라간다
             foreach (var c in six) c.Needs.Food = 0.35f;
             Gather(w, six, room);
-            for (int t = 0; t < SimTime.Minutes(20); t++) { w.Smells.Emit(room, SmellKind.Bread, 0.08f); w.Step(); }
+            for (int t = 0; t < SimTime.Minutes(20); t++) { w.Smells.Emit(room, SmellKind.Bread, 0.6f); w.Step(); } // 빵 굽는 화구 곁만큼 (0.9) — 전엔 0.08을 뿌렸는데 갱신 때 지워져 우연히 나던 다른 냄새로 통과했다
             var sn = rs.NotesOf(Stir.Smell).Where(n => six.Any(c => c.Id == n.Crew)).ToList();
             Check("냄새 — 빵 냄새에 코를 킁킁대고 · 배고픈 사람은 냄새를 따라간다", sn.Count >= 2 && sn.Any(n => n.Gesture == Gesture.Sniff),
                 $"반응 {sn.Count} · {string.Join(", ", sn.Select(n => n.Way.Length == 0 ? "—" : n.Way).Distinct())} · 따라감 {rs.Stats.Nose} · 말: {string.Join(" / ", sn.Select(n => n.Line).Where(l => l.Length > 0).Take(3))}");
