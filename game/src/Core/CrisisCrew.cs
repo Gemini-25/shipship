@@ -56,6 +56,8 @@ public sealed partial class CrisisCrewSystem
     private readonly HashSet<int> _drillDue = new();
     private readonly HashSet<StationRole> _need = new();
     private long _crisisSince = -1, _calmSince = -1, _staleSince = -1, _auxCallAt = -1;
+    /// <summary>v19 이번 비상이 시작된 때 (30분 잠잠해야 끝난다) · 없으면 -1.</summary>
+    public long CrisisSince => _crisisSince;
     private string _crewSig = "";
     private bool _stale = true;
 

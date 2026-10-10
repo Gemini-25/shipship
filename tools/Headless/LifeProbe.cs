@@ -30,6 +30,8 @@ public static partial class Program
         bool daily = args.Contains("--daily"), trace = Environment.GetEnvironmentVariable("LP_TRACE") == "1";
         long dayStart = w.Tick;
         float h0 = 0f, t0 = 0f; int mb0 = 0, sb0 = 0, ex0 = 0;
+        Dictionary<string, float> sbw0 = new(), tw0 = new(), crisisWhy = new();
+        int crisisMin = 0, acuteMin = 0;
         while (w.Tick < end)
         {
             w.Step();
@@ -38,6 +40,15 @@ public static partial class Program
                 var lw0 = w.LifeWatch;
                 var live = w.Crew.Where(c => !c.Dead && !c.LeftShip).ToList();
                 Console.WriteLine($"  {(w.Tick - dayStart) / SimTime.TicksPerDay}일째: 굶주림 {lw0.HungryHours - h0:0.#} · 탈진 {lw0.TiredHours - t0:0.#}사람·시간 · 식사 중단 {lw0.MealBreaks - mb0} · 잠 중단 {lw0.SleepBreaks - sb0} · 탈진번 {exhaustedEp - ex0} · 포만 평균 {live.Average(c => c.Needs.Food):0.00} · 기력 평균 {live.Average(c => c.Needs.Rest):0.00} · 산 사람 {live.Count} · 식사 {w.Board.Have(ItemKind.Meal)}인분");
+                // 그날 잠을 끊은 것 · 지친 까닭 · 겪은 사고 (앞날과의 차이)
+                string Delta(Dictionary<string, float> now, Dictionary<string, float> was) => string.Join(" · ", now.Select(kv => (kv.Key, d: kv.Value - was.GetValueOrDefault(kv.Key))).Where(x => x.d > 0.05f).OrderByDescending(x => x.d).Take(4).Select(x => $"{x.Key} {x.d:0.#}"));
+                var sbw = lw0.SleepBreakWhy.ToDictionary(kv => kv.Key, kv => (float)kv.Value);
+                var evs = w.History.Events.Where(h => h.Kind == HistoryKind.Incident && h.Tick > w.Tick - SimTime.TicksPerDay).Select(h => h.Text).Take(4);
+                var lowRoom = w.Crew.Where(c => !c.Dead && c.Room != null && c.Suit == null).Select(c => c.Room!).Distinct().OrderBy(r => r.Air.O2).FirstOrDefault();
+                Console.WriteLine($"     비상 {crisisMin / 60f:0.#}시간 (오래 끈 {acuteMin / 60f:0.#}) · {string.Join(" · ", crisisWhy.OrderByDescending(kv => kv.Value).Take(4).Select(kv => $"{kv.Key} {kv.Value:0.#}"))} · 산소 발생 {w.Air.O2Capacity:0.00} · 탱크 {w.Air.Reserve:0}/{w.Air.ReserveCapacity:0} · 가장 낮은 방 {lowRoom?.Name} O2 {lowRoom?.Air.O2:0.0} CO2 {lowRoom?.Air.CO2:0.00} ({w.Crew.Count(c => !c.Dead && c.Room == lowRoom)}명 · 환기 {(lowRoom == null ? "-" : $"{(lowRoom.Powered ? "전기" : "정전")}/{(lowRoom.VentOpen ? "댐퍼 열림" : "댐퍼 닫힘")}/{(lowRoom.DuctLinked ? "관 연결" : "관 없음")}")}) · 환기 안 되는 방 {string.Join(",", w.Ship.LiveRooms.Where(r => r.Type != RoomType.Corridor && !Atmosphere.Vented(r)).Select(r => r.Name).Take(6))}");
+                crisisMin = 0; acuteMin = 0; crisisWhy.Clear();
+                Console.WriteLine($"     잠 끊김 {Delta(sbw, sbw0)} | 지침 {Delta(lw0.TiredWhy, tw0)} | 사고 {string.Join(" / ", evs)}");
+                sbw0 = sbw; tw0 = new Dictionary<string, float>(lw0.TiredWhy);
                 h0 = lw0.HungryHours; t0 = lw0.TiredHours; mb0 = lw0.MealBreaks; sb0 = lw0.SleepBreaks; ex0 = exhaustedEp;
             }
             if (mode == "fixed" && w.Tick == next)
@@ -54,6 +65,11 @@ public static partial class Program
                 w.Hazards.StormUntil = w.Tick + SimTime.Hours(9);
             }
             if (w.Tick % SimTime.Minutes(5) != 0) continue;
+            if (daily && Crisis.Acting(w))
+            {
+                crisisMin += 5; if (Crisis.Chronic(w)) acuteMin += 5;
+                foreach (var why in Crisis.Now(w).Reasons) crisisWhy[why.Split(' ')[0]] = crisisWhy.GetValueOrDefault(why.Split(' ')[0]) + 5f / 60f;
+            }
             if (trace && w.Tick % SimTime.Minutes(30) == 0 && (w.Ambience.StormPower > 0.05f || w.Crew.Count(c => !c.Dead && c.Needs.Food < 0.15f) > 3))
             {
                 var ship2 = w.Ship;

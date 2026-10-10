@@ -455,6 +455,7 @@ public sealed partial class HazardSystem
                 Saw(r, 0.12f, "몰래 둔 통에서 불");
                 if (sch != null) foreach (var cid in sch.Crew) if (w.Crew.FirstOrDefault(x => x.Id == cid) is CrewMember who) { who.Needs.Stress = MathF.Min(1f, who.Needs.Stress + 0.2f); MarkLog.Add(who.Memory.Marks, w.Tick, "몰래 담그던 통에서 불이 났다"); }
                 signs.AddTrace(k, r, cell, sch?.Lead ?? -1, SimTime.Hours(48));
+                if (sch != null) w.Schemes.Exposed(sch, "통에서 불이 나 들통났다 — 증류 통을 치웠다"); // v19 같은 통이 다시 불을 내지 않는다
                 return Inc($"{r.Name} 구석의 증류 통에서 불이 붙었다 — 달큰한 알코올 냄새", r, $"밀주 통 불({r.Name})", AlertLevel.Critical, true);
             }
             case HazardKind.PartitionFall:

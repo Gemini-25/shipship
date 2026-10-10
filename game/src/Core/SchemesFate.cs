@@ -206,6 +206,20 @@ public sealed partial class SchemeSystem
         Life.Diary(w, lead, $"{Ko.IGa(by.Name)} {Ko.EulReul(s.Spec.Name)} 알았는데 그냥 두라고 했다.");
     }
 
+    /// <summary>v19 몰래 하던 일이 사고를 냈다 (밀주 통 불): 들통나 치운다 — 같은 통이 반나절마다 불을 내 배가 비상에서 헤어나지 못했다.</summary>
+    public void Exposed(Scheme s, string why)
+    {
+        if (!s.Active) return;
+        Stats.Removed++;
+        Mark(s, TraceState.Removed, $"{s.Spec.Name} — {why}");
+        End(s, SchemeStage.Done, why);
+        if (P(s.Lead) is CrewMember lead)
+        {
+            lead.Needs.Stress = MathF.Min(1f, lead.Needs.Stress + 0.1f);
+            Life.Diary(_w, lead, $"{why}. 다시는 못 하겠다.");
+        }
+    }
+
     private void Remove(Scheme s, CrewMember by, string why)
     {
         var w = _w;

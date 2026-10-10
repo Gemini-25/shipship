@@ -115,15 +115,23 @@ public sealed class EatActivity : Activity
         return false;
     }
 
+    /// <summary>v19 방금 점수를 매긴 사람(ArriveFor)이 먹을 데에 닿을 때의 배고픔 — 자다 깨는 문턱은 걸음까지 친다 (Brain.Think).</summary>
+    internal static float Arrive;
+    internal static int ArriveFor = -1;
+
     public override (float, string) Score(CrewMember c, World w, DistanceField dist)
     {
+        ArriveFor = -1;
         if (c.Job?.Activity is SavedPlateActivity) return (0f, "남겨 둔 접시로 가는 중"); // 이미 먹으러 가는 길 — 굶주림 문턱을 넘었다고 배식기로 돌아서지 않는다
         var (box, spot, src) = FindFood(c, w, dist);
         if (src == Source.None) return (0f, "먹을 것이 없음");
         float hunger = c.Needs.Hunger;
         // 먹을 데가 멀면 가는 동안 더 배고파질 만큼 일찍 나선다 (큰 고리형 배: 배식기까지 한 시간 — 도착하면 바닥이었다)
         float walkH = Math.Max(0, dist.Get(spot)) / 1400f;
-        float score = Curve.Smooth(MathF.Min(1f, hunger + walkH * NeedsSystem.FoodDecayAwake), 0.35f, 0.9f) * 1.1f;
+        float arrive = MathF.Min(1f, hunger + walkH * NeedsSystem.FoodDecayAwake);
+        float wake = walkH > 0.3f ? arrive : hunger; // 자다 깨는 문턱은 먹을 데가 20분 넘게 멀 때만 걸음을 친다 (큰 고리형 배)
+        Arrive = wake; ArriveFor = c.Id;
+        float score = Curve.Smooth(arrive, 0.35f, 0.9f) * 1.1f;
         string reason = hunger > 0.8f ? "몹시 배고픔" : hunger > 0.5f ? "배고픔" : "아직 배부름";
         // 굶어 쓰러질 지경이면 자다가도 깬다 (사고 뒤 끼니를 놓친 채 잠든 경우)
         if (hunger > 0.93f)
@@ -154,7 +162,8 @@ public sealed class EatActivity : Activity
         if (src == Source.Ration) reason += " · 비상식량뿐";
         if (src == Source.Produce) reason += " · 날채소뿐";
         // 자는 중에는 웬만큼 배고파서는 깨지 않는다
-        if (c.Pose == Pose.Sleeping && hunger < 0.85f && c.Job?.Activity is null or SleepActivity) score *= 0.6f; // 치료 침대에 누운 환자는 잠이 아니다 — 끼니를 거르면 일어나 먹는다 (새터호: 85%까지 누워 있다 굶주려 일어났다)
+        //   v19 걸음까지 쳐서: 식당이 한 시간 거리면 그만큼 일찍 깬다 (60인 배 하루: 0.85에 깨어 걷다 닿을 때 5%)
+        if (c.Pose == Pose.Sleeping && wake < 0.85f && c.Job?.Activity is null or SleepActivity) score *= 0.6f; // 치료 침대에 누운 환자는 잠이 아니다 — 끼니를 거르면 일어나 먹는다 (새터호: 85%까지 누워 있다 굶주려 일어났다)
         // 받아 든 끼니는 다 먹는다 — 배가 차 갈수록 점수가 떨어져 반쯤 먹고 악기로 돌아갔다가, 그대로 잠들어 새벽에 굶주려 깼다 (부싯돌호)
         // 0.65(+ 끼어들기 여유 0.35): 악기 · 취미는 못 끼어들고 탄내 확인 같은 반응은 끼어든다 (0.9였을 땐 주방에서 먹다 탄내를 맡고도 계속 먹었다)
         if (c.Job?.Activity is EatActivity && c.Needs.Food < 0.95f) { score = MathF.Max(score, 0.65f); reason += " · 먹던 끼니"; }
@@ -279,6 +288,44 @@ public sealed class SleepActivity : Activity
         bool storm = w.Ambience.StormPower >= 0.3f;
         // v19 태양 폭풍 속엔 쬐는 침실로 자러 가지 않는다 (지금 있는 곳보다 더 쬐는 방) — 자러 가다 대피로 되돌아온 것 60인 배 폭풍 한나절 23번
         bool Off(Room r) => r.OffLimits || r.Abandoned || CosmicEvacuateActivity.InLine(r, w) || storm && r != c.Room && r.Radiation >= 0.2f && r.Radiation > (c.Room?.Radiation ?? 0f); // v18.13 비우고 봉쇄한 구획 · 파편이 지나갈 방에서는 자지 않는다
+        // v19 옮는 병으로 열이 나면 격리실에서 잔다 — 제 침대로 자러 갔다가 격리실로 불려 가기를 하루 수십 번 되풀이했다
+        if (!c.Outside && DiseaseSystem.Sick(c) && w.Disease.Severity(c) >= 0.08f && QuarantineActivity.Ward(w) is Room ward && !Off(ward) && (c.Room == ward || !QuarantineActivity.Full(w, ward, c)))
+        {
+            foreach (var cell in ward.Cells)
+                if ((w.Ship.IsOpenFloor(cell) || w.Ship.FurnitureAt(cell)?.Type == FurnitureType.MedBed) && dist.Reachable(cell) && !w.IsSpotTaken(cell, c)) return (cell, ward, "격리실에서");
+        }
+        // v19 제 침대까지 걸어가면 기력이 바닥날 만큼 지쳤으면 (큰 고리형 배: 식당에서 침실까지 한 시간) 가까운 잠자리에 눕는다 —
+        //   주인이 잘 때가 아닌 빈 침대 · 간이침대, 없으면 휴게실 · 식당 같은 안전한 방 바닥 (60인 배 하루: 휴식 8%에 제 침대로 걷다 통로에서 3%)
+        if (!storm && c.Needs.Rest < 0.15f && c.Bed != null && !Off(c.Bed.Room) && dist.Reachable(c.Bed.UseSpots[0])
+            && c.Needs.Rest - dist.Get(c.Bed.UseSpots[0]) / 1100f * NeedsSystem.RestDecayAwake < 0.06f)
+        {
+            float far = dist.Get(c.Bed.UseSpots[0]) * 0.5f, nd = far;
+            Cell spot = default;
+            Room? where = null;
+            bool onBed = false;
+            void Bed(Furniture b)
+            {
+                if (b == c.Bed || b.ReservedBy != null || Off(b.Room) || b.Owner is CrewMember o && !o.Dead && (o.Job?.Activity is SleepActivity || Bedtime(o, w))) return;
+                var u = b.UseSpots[0];
+                if (!dist.Reachable(u) || w.IsSpotTaken(u, c)) return;
+                float d = dist.Get(u);
+                if (d < nd) { nd = d; spot = u; where = b.Room; onBed = true; }
+            }
+            foreach (var b in w.Ship.FurnitureOf(FurnitureType.Bed)) Bed(b);
+            foreach (var b in w.Ship.FurnitureOf(FurnitureType.Cot)) Bed(b);
+            foreach (var type in new[] { RoomType.Lounge, RoomType.Mess, RoomType.Medbay, RoomType.Bridge, RoomType.Workshop })
+            foreach (var room in w.Ship.RoomsOf(type))
+            {
+                if (Off(room) || room.Leaking || Atmosphere.Danger(room) > 0.1f) continue;
+                foreach (var cell in room.Cells)
+                {
+                    if (!(w.Ship.IsOpenFloor(cell) || w.Ship.FurnitureAt(cell)?.Type == FurnitureType.Seat) || !dist.Reachable(cell) || w.IsSpotTaken(cell, c)) continue;
+                    float d = dist.Get(cell) + 150f; // 비슷하면 침대
+                    if (d < nd) { nd = d; spot = cell; where = room; onBed = false; }
+                }
+            }
+            if (where != null) return (spot, where, onBed ? "탈진 직전 — 침실이 멀어 가까운 빈 침대에서" : $"탈진 직전 — 침실이 멀어 {where.Name}에서");
+        }
         if (c.Bed != null && !Off(c.Bed.Room) && dist.Reachable(c.Bed.UseSpots[0])) return (c.Bed.UseSpots[0], c.Bed.Room, "");
         if (storm && c.Room is Room here && !Off(here) && here.Radiation < 0.2f || storm && c.Job?.Activity is ShelterActivity && c.Room is Room sh && !Off(sh))
         {
@@ -847,12 +894,21 @@ public sealed class QuarantineActivity : Activity
     public override string Id => "quarantine";
     public override string Label => "격리";
 
-    private static Room? Ward(World w) => Facilities.Best(w.Ship, "quarantine", r => !r.Detached && !r.OffLimits && !r.Leaking) is (Room r, >= 1f) ? r : null;
+    internal static Room? Ward(World w) => Facilities.Best(w.Ship, "quarantine", r => !r.Detached && !r.OffLimits && !r.Leaking) is (Room r, >= 1f) ? r : null;
+
+    /// <summary>v19 격리실 정원: 바닥 두 칸에 한 사람 (전염병 때 스물넷이 몰려 산소가 17% 아래로 — 음압 방은 환기가 약하다). 차면 침실에서 앓는다.</summary>
+    internal static bool Full(World w, Room ward, CrewMember c)
+    {
+        int cap = Math.Max(2, ward.Cells.Count(w.Ship.IsOpenFloor) / 2 + ward.Furniture.Count(f => f.Type == FurnitureType.MedBed));
+        return w.Crew.Count(o => o != c && !o.Dead && o.Room == ward) >= cap;
+    }
 
     public override (float, string) Score(CrewMember c, World w, DistanceField dist)
     {
         if (c.Outside || c.Room == null || !DiseaseSystem.Sick(c) || w.Disease.Severity(c) < 0.08f) return (0f, "—");
         if (Ward(w) is not Room ward) return (0f, "격리실 없음");
+        if (c.Job?.Activity is SleepActivity && c.Job.TargetRoom == ward) return (0f, "격리실에서 잔다"); // v19 격리실에서 자거나 자러 가는 중 — '격리'로 바꾸려 깨우거나 붙들지 않는다
+        if (c.Room != ward && Full(w, ward, c)) return (0f, "격리실이 찼다 — 제 자리에서 앓는다");
         return c.Room == ward ? (0.9f, "격리실에서 앓는다") : (0.95f, "열이 난다 — 격리실로");
     }
 

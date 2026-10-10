@@ -228,6 +228,11 @@ public static class Crisis
     /// <summary>위기 판단이 켜져 있고 비상 이상인지.</summary>
     public static bool Acting(World w) => !Disabled && Level(w) >= CrisisLevel.Emergency;
 
+    /// <summary>v19 오래 끄는 비상: 세 시간 넘게 이어졌다 (냉각 펌프 하나 · 쓰러진 사람 · 답답한 방 하나로 며칠 가기도 한다).
+    /// 이때는 교대로 쉰다 — 지친 사람은 자고 · 곧장 깨우지 않는다 (60인 배 열흘: 다 같이 버티다 모두 쓰러지고 식사가 바닥났다).
+    /// 막 터진 사고는 예전처럼 모두가 나선다.</summary>
+    public static bool Chronic(World w) => Acting(w) && w.CrisisCrew.CrisisSince >= 0 && w.Tick - w.CrisisCrew.CrisisSince > SimTime.Hours(3);
+
     /// <summary>
     /// 위기 때 쉬는 일(잠·휴식·수다·산책·당직·배고프지 않은 끼니)을 얼마나 미루나. 탈진 직전이면 쪽잠은 잔다.
     /// 사람마다 다르다: 성실한 사람은 더 버티고, 겁 많고 당황한 사람은 숨어 쉬기도 한다 (기계가 아니다).
@@ -254,6 +259,8 @@ public static class Crisis
         {
             case SleepActivity:
                 if (c.Needs.Fatigue >= 0.9f) { note = "탈진 직전 — 쪽잠"; return 0.8f; }
+                // v19 오래 끄는 비상: 지친 사람은 교대로 잔다 — 다 같이 버티다 모두 쓰러졌다 (60인 배 열흘)
+                if (!survival && Chronic(w) && c.Needs.Fatigue >= 0.55f) { note = "비상이 길다 — 교대로 잔다"; return 0.9f; }
                 note = "비상 — 잠을 미룬다";
                 return (survival ? 0.12f : 0.3f) * (1.3f - 0.6f * grit);
             case RelaxActivity or ChatActivity or WanderActivity or HobbyActivity or TidyActivity or MendActivity or ReachOutActivity or InspectActivity:
@@ -279,6 +286,7 @@ public sealed partial class WorkBoard
         var w = _world;
         var level = Crisis.Level(w);
         if (Crisis.Disabled || level < CrisisLevel.Emergency) return;
+        if (level < CrisisLevel.Survival && Crisis.Chronic(w)) return; // v19 오래 끄는 비상에는 잠든 동료를 흔들어 깨우지 않는다 (교대로 쉰다)
         foreach (var c in w.Crew)
         {
             if (c.Dead || c.Down || c.Pose != Pose.Sleeping) continue;

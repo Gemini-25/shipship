@@ -83,6 +83,15 @@ public static class Brain
     /// <summary>판단 횟수 (성능 점검용).</summary>
     public static long ThinkCount;
 
+    /// <summary>v19 지쳐 잠든 사람을 깨우지 않는 일: 사교 · 취미 · 휴식 · 문병 · 당직 · 답장 · 꾸미는 일 · 이야기 · 일상 장면 · 원정 마중 · 무전 (원정 출발은 깨운다) ·
+    /// 격리 (격리실이 차 침실에서 앓던 사람을 깨워 옮기기를 하루 수십 번 — 깨어 있을 때 옮긴다).</summary>
+    private static bool Leisure(Evaluation e) => e.Activity switch
+    {
+        LetterActivity or SchemeActivity or StoryActivity or SceneActivity or QuarantineActivity => true,
+        ExpeditionActivity => !e.Reason.StartsWith("원정 출발"),
+        _ => BrainSystem.Cat(e.Activity) is ActCat.Social or ActCat.Hobby or ActCat.Rest or ActCat.Care or ActCat.Duty,
+    };
+
     private static Job? PlanTimed(Activity a, CrewMember c, World w, DistanceField dist)
     {
         long t = Prof.Now;
@@ -131,6 +140,18 @@ public static class Brain
                 if (e.Activity == c.Job.Activity) { current = e.Score; break; }
 
             var best = evals[0];
+            // v19 비상 중 지쳐 잠든 사람에게는 문병 · 답장 · 취미 · 수다 같은 일이 떠오르지 않는다 (위기 대응 · 굶주림 · 일은 그대로 깨운다)
+            //   비상에는 잠이 쉽게 깨는데(아래) — 60인 배 열흘: 며칠 이어진 비상 동안 그런 일에 잠이 하루 수백 번 끊겨 모두 지쳤고 · 일손이 끊겨 식사가 바닥났다
+            if (c.Job.Activity is SleepActivity && c.Pose == Pose.Sleeping && c.Needs.Rest < 0.6f && Crisis.Acting(w))
+                foreach (var e in evals)
+                    if (!Leisure(e)) { best = e; break; }
+            // v19 비상이 아닐 때 탈진 직전이면 하던 일을 놓고 눕는다 — 수리 · 당직은 다른 사람 · 로봇이 잇는다 (배고프면 먹고 나서)
+            //   60인 배 하루: 배전반 수리를 네 시간 붙든 끝에 휴식 12% · 먹고 한 시간 걸어 침대에 닿을 때 3%
+            bool spent = false;
+            if (c.Needs.Rest < 0.1f && !c.Outside && c.Job.Activity is not (SleepActivity or EatActivity or SavedPlateActivity) && best.Activity is not EatActivity
+                && (!c.Job.Urgent || c.Job.Activity is ChoresActivity or DutyActivity) && !Crisis.Acting(w))
+                foreach (var e in evals)
+                    if (e.Activity is SleepActivity) { if (e.Score > 0.5f) { best = e; spent = true; } break; }
             if (best.Activity == c.Job.Activity)
             {
                 // 같은 "작업"이라도 훨씬 급한 일이 올라오면 하던 정비를 내려놓고 간다
@@ -148,11 +169,13 @@ public static class Brain
             // 손에 익은 일을 절반 넘게 했으면 더 버틴다
             float margin = c.Job.InterruptMargin + (c.Job.Current is WorkToil { Progress: > 0.4f } ? 0.2f : 0f);
             // 위기에는 쉬던 사람(잠·휴식·수다)이 금방 일어난다
-            if (c.Job.Activity is SleepActivity or RelaxActivity or ChatActivity or WanderActivity or DutyActivity or HobbyActivity or TidyActivity or MendActivity && Crisis.Acting(w))
+            if (c.Job.Activity is SleepActivity or RelaxActivity or ChatActivity or WanderActivity or DutyActivity or HobbyActivity or TidyActivity or MendActivity && Crisis.Acting(w)
+                && !(c.Job.Activity is SleepActivity && c.Pose == Pose.Sleeping && c.Needs.Rest < 0.6f && Crisis.Chronic(w))) // v19 오래 끄는 비상에는 지친 잠을 곧장 깨우지 않는다 (교대)
                 margin = System.MathF.Min(margin, 0.08f);
             // v10.5: 긴 개조·정비 중에도 굶주리면 손을 놓고 먹으러 간다 (급한 일은 예외 — 불 끄던 사람은 버틴다)
-            if ((!c.Job.Urgent || !Crisis.Acting(w)) && c.Needs.Hunger > 0.85f && best.Activity is EatActivity) margin = 0f; // 통합7 급한 수리라도 지금 불 · 경보가 없으면 굶어 가며 버티지 않는다 (부싯돌호: 원자로 수리 세 시간에 0까지) · v10.10: 0.9 → 0.85
-            if (best.Score < current + margin) return;
+            float hungerAt = EatActivity.ArriveFor == c.Id ? System.MathF.Max(c.Needs.Hunger, EatActivity.Arrive) : c.Needs.Hunger; // v19 먹을 데까지 걷는 동안 더 배고파진다
+            if ((!c.Job.Urgent || !Crisis.Acting(w)) && hungerAt > 0.85f && best.Activity is EatActivity) margin = 0f; // 통합7 급한 수리라도 지금 불 · 경보가 없으면 굶어 가며 버티지 않는다 (부싯돌호: 원자로 수리 세 시간에 0까지) · v10.10: 0.9 → 0.85
+            if (!spent && best.Score < current + margin) return;
 
             var next = PlanTimed(best.Activity, c, w, dist);
             if (next == null) return;
