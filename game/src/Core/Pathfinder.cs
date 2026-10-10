@@ -258,9 +258,9 @@ public sealed class Pathfinder
     private int[] _spotAdd = Array.Empty<int>();
     /// <summary>v17.5 장소의 기억: 그 사람이 피하는 칸의 비용 (급한 일로 달려갈 때는 40%만).</summary>
     private static int SpotCost(int[] sp, int i, bool responder) { for (int k = 0; k < sp.Length; k += 2) if (sp[k] == i) return responder ? sp[k + 1] * 2 / 5 : sp[k + 1]; return 0; }
-    private readonly Dictionary<(int start, float scale, int flags, int bar), FloodEntry> _floods = new();
-    public int FloodHits { get; private set; }
-    public int FloodMisses { get; private set; }
+    [NotSaved] private readonly Dictionary<(int start, float scale, int flags, int bar), FloodEntry> _floods = new(); // 상태 저장: 캐시
+    [field: NotSaved] public int FloodHits { get; private set; } // 캐시 통계 (상태 저장에 넣지 않는다)
+    [field: NotSaved] public int FloodMisses { get; private set; }
 
     private int[] _hazardSeen = Array.Empty<int>();
 

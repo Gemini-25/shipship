@@ -237,8 +237,8 @@ public sealed class Ship
             if (!f.Room.Detached && !f.Stowed) n += f.Storage!.Count(k);
         return n;
     }
-    private readonly List<Furniture> _stored = new();
-    private int _storedCount = -1, _storedVer = -1;
+    [NotSaved] private readonly List<Furniture> _stored = new(); // 상태 저장: 캐시 (불러오면 다시 모은다)
+    [NotSaved] private int _storedCount = -1, _storedVer = -1;
 }
 
 /// <summary>텍스트 설계도 → Ship.</summary>

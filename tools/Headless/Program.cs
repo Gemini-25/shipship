@@ -261,6 +261,12 @@ public static partial class Program
             return RunStructureGate(int.TryParse(args.FirstOrDefault(a => a.StartsWith("--runs="))?.Split('=')[1], out var rn) ? rn : 20, seed);
         if (args.FirstOrDefault(a => a.StartsWith("--gate")) is string gate)
             return RunGate(days, seed, gate.Contains('=') ? gate.Split('=')[1] : "order", quiet);
+        if (args.Contains("--snaptest")) // 상태 저장: 통째로 찍고 되살려 나란히
+            return RunSnapTest(seed, int.TryParse(args.FirstOrDefault(a => a.StartsWith("--hours="))?[8..], out var sth) ? sth : 6,
+                int.TryParse(args.FirstOrDefault(a => a.StartsWith("--after="))?[8..], out var sta) ? sta : 3,
+                args.FirstOrDefault(a => a.StartsWith("--ship="))?[7..], args.FirstOrDefault(a => a.StartsWith("--snapfile="))?[11..]);
+        if (args.FirstOrDefault(a => a.StartsWith("--snapload=")) is string sl)
+            return RunSnapLoad(sl[11..], int.TryParse(args.FirstOrDefault(a => a.StartsWith("--after="))?[8..], out var sla) ? sla : 3);
         if (args.FirstOrDefault(a => a.StartsWith("--savetest")) is string st)
             return RunSaveTest(days, seed, st.Contains('=') ? st.Split('=')[1] : null);
         if (args.FirstOrDefault(a => a.StartsWith("--load=")) is string ld)

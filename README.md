@@ -198,7 +198,7 @@ godot --headless --path game --export-release "Windows Desktop" ../build/windows
 | L | 하이라이트: 평온하면 빠르게, 일이 나면 1배속으로 그 현장에 |
 | U | 요약 진행: 평온한 날은 화면 없이 감고, 큰 일이 나면 멈춰 한 장으로 요약 |
 | F2 | 사진 모드 (Enter · PrintScreen 찍기, Esc 나가기 — `user://photos`에 저장) |
-| F5 / F9 | 저장 / 불러오기 |
+| F5 / F9 | 저장 / 불러오기 (그 자리 상태를 통째로 — 판이 바뀌어 맞지 않으면 기록을 처음부터 다시 돌린다) · ⇧F9 자동 저장 불러오기 (5분마다 저절로 저장) |
 | O | 설정 (소리 · 음악 · 색약 · 글자 크기 · 새 항해: 배와 승무원 수) |
 | ? 또는 F1 | 도움말 |
 | Esc | 사고 도구 취소 / 메뉴 닫기 / 선택 해제 |
@@ -221,7 +221,7 @@ Godot 실행 인자의 `--` 뒤에 붙입니다 (에디터: 프로젝트 설정 
 | `--seed=11` | 시드 (같은 시드 = 같은 역사) |
 | `--ship=Hanbit` | 배. `Kestrel` · `Mirinae` · `Hanbit` · `Eunha` · `Cheonma` · `Saeteo` · `Busitdol` · `Bodeum` · `Nareumi` · `Ttaemjil` · `Pabal` · `Songgolmae` · `Gwisangeo` · `Boreumdal` · `Samjichang` · `Gaori` · `Gorae` · `Jamjari` · `Hanul`, 생성 배는 `gen:용도:뼈대:인원:시드` (예 `gen:mining:ring:10:3`). `--crew` 없이 주면 그 배의 설계 인원 |
 | `--crew=10` | 승무원 수 |
-| `--load=경로` | 저장한 항해를 불러와 시작 · `--save=경로` 지금까지를 저장 |
+| `--load=경로` | 저장한 항해를 불러와 시작 (`.snap`이면 그 자리 상태에서 바로) · `--save=경로` 지금까지를 저장 (기록 `.txt` + 상태 `.snap`) |
 | `--death` / `--nodeath` | 승무원 사망 켜기 / 끄기 |
 | `--scarcity` | 부품이 바닥난 채로 시작 |
 | `--history=60:10` | 60일 동안 10일마다 무작위 사고를 겪은 배로 시작 |
@@ -308,6 +308,7 @@ dotnet bin/Release/net8.0/Headless.dll 1 7 --braintest   # 시험 하나 (앞 �
 | `4 3 --tickspikes [--ship=Saeteo] [--crew=60] [--warm=10] [--cosmic=Kessler:0.3]` | 60프레임 점검 — 가장 느린 틱들과 그 틱의 구간별 시간 · 쓰레기 치우기(GC) |
 | `3 1 --lifeprobe [--ship=Saeteo] [--crew=60] [--incidents=fixed\|natural\|none\|storm] [--daily]` | 생활 측정 — 굶주림 원인(생산 · 배송 · 접근 · 행동) · 탈진 원인 · 식사 · 수면이 끊긴 횟수와 이유 · 배식기 보충 시간 · 긴급 일 대기 · 손일을 로봇 · 사람 누가 얼마 만에 끝냈나 · 피폭 (storm은 센 태양 폭풍 아홉 시간으로 고정 · `--daily`는 하루마다 한 줄) |
 | `--savetest` | 저장 · 불러오기가 같은 역사를 내는지 |
+| `1 7 --snaptest [--hours=6] [--after=3] [--ship=Saeteo]` | 상태 저장 — 세계를 통째로 찍고 되살려 원래 세계와 나란히 돌린다 (되살린 지문 · 다시 찍은 바이트 · 1분마다 지문 · 끝에 찍은 바이트가 모두 같아야 한다 · `--snapfile=경로`로 남기고 `--snapload=경로`로 다른 프로세스에서 이어 돌리기) |
 | `--scenario=all` | 사고 시험 장면 전부를 한 줄씩 (결과를 완전 복구 / 부분 복구 / 장기 장애 / 실패로 분류) |
 
 전체 목록은 `tools/Headless/Program.cs` 의 `Main` 에 있습니다. 긴 회귀를 한 번에 돌리려면 `tools/regress.sh [출력 폴더] [동시에 돌릴 수]`.

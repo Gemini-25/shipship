@@ -145,12 +145,31 @@ public partial class Main : Node2D
             if (arg.StartsWith("--seed=") && int.TryParse(arg[7..], out var sd)) seed = sd;
             if (arg.StartsWith("--crew=") && int.TryParse(arg[7..], out var cr)) crew = cr;
             if (arg.StartsWith("--ship=")) shipArg = ShipCatalog.Find(arg[7..])?.Key;
-            if (!_commandLineDone && arg.StartsWith("--load=") && System.IO.File.Exists(arg[7..])) _pendingLoad ??= System.IO.File.ReadAllText(arg[7..]);
+            if (!_commandLineDone && arg.StartsWith("--load=") && System.IO.File.Exists(arg[7..]))
+            {
+                string lp = arg[7..];
+                if (lp.EndsWith(".snap", StringComparison.OrdinalIgnoreCase))
+                {
+                    // v19 상태 저장: 그 자리에서 이어 간다 (맞지 않으면 곁의 기록 .txt를 다시 돌린다)
+                    _pendingSnap ??= System.IO.File.ReadAllBytes(lp);
+                    string tp = System.IO.Path.ChangeExtension(lp, ".txt");
+                    if (System.IO.File.Exists(tp)) _pendingLoad ??= System.IO.File.ReadAllText(tp);
+                }
+                else _pendingLoad ??= System.IO.File.ReadAllText(lp);
+            }
             if (arg.StartsWith("--shot=")) shot = true;
         }
         string? loadError = null;
         bool loaded = false;
-        if (_pendingLoad != null)
+        bool snapped = false;
+        if (TrySnapshot(out _snapFallback) is World restored)
+        {
+            // v19 찍어 둔 상태를 그대로 되살린다 (기록을 다시 돌리지 않는다)
+            Sim = restored;
+            loaded = snapped = true;
+            _pendingLoad = null;
+        }
+        if (!loaded && _pendingLoad != null)
         {
             // v10.3: 망가진 저장 파일이면 새 항해로 시작하고 까닭을 알린다 (예전에는 장면이 멈췄다)
             try
@@ -218,6 +237,14 @@ public partial class Main : Node2D
         _seenAlert = Sim.AlertSerial;
 
         FitCamera();
+        if (snapped)
+        {
+            // v19 상태 저장을 되살렸다: 멈춘 채로 (명령줄 --speed면 바로 이어 간다)
+            Paused = true;
+            ShowNotice($"불러왔다 — {Sim.Day}일차 {Sim.Clock} · 저장한 그 자리에서 이어 간다 (Space로 재생)");
+        }
+        // v19 자동 저장: 화면 찍기 · 영상 녹화 · 성능 재기 실행에서는 하지 않는다 (--autosave=초로 켜고 간격을 정한다)
+        _noAutoSave = OS.GetCmdlineUserArgs().Any(a => a.StartsWith("--shot") || a.StartsWith("--perf")) || !string.IsNullOrEmpty(Engine.GetWriteMoviePath());
         // 실행 인자는 처음 한 번만 (F9·되감기로 장면을 다시 띄울 때 또 워프하지 않게). 화면 찍기는 매번
         ApplyCommandLine(onlyShot: _commandLineDone);
         _commandLineDone = true;
@@ -225,7 +252,11 @@ public partial class Main : Node2D
         // v12.9 첫 항해 안내: 새 항해이고, 안내를 켜 두었고, 화면 찍기가 아니면
         if (!loaded && Settings.Tutorial && !OS.GetCmdlineUserArgs().Any(a => a.StartsWith("--shot")) && string.IsNullOrEmpty(Engine.GetWriteMoviePath())) Hud.CallDeferred(nameof(Hud.StartTutorial)); // 화면 찍기 · 영상 녹화 때는 첫 항해 안내를 띄우지 않는다
         if (loadError != null) ShowNotice($"저장 파일을 불러오지 못해 새 항해로 시작했다 — {loadError}");
+        if (!_noAutoSave) StateSave.Warm(); // 첫 자동 저장이 한 프레임에 몰리지 않게 (띄울 때 한 번)
     }
+
+    /// <summary>상태 저장을 되살리지 못해 기록을 다시 돌릴 때 그 까닭 (불러오기가 끝나면 알린다).</summary>
+    private static string? _snapFallback;
 
     private static bool _commandLineDone;
 
@@ -237,6 +268,7 @@ public partial class Main : Node2D
             // 불러오는 중: 한 프레임에 몇천 틱씩 빨리 감는다 (역사가 화면에서 다시 흐른다)
             FinishReplay(rr.Advance(9000));
         }
+        else if (StepSave()) { } // v19 상태 저장: 찍는 동안(1초 남짓) 세계만 멈추고 화면은 그린다
         else if (StepSummary()) { WatchAlerts(); } // v12.8 요약 진행: 화면 없이 빨리 감는다
         else if (!Paused)
         {
@@ -274,6 +306,7 @@ public partial class Main : Node2D
         _stars.Debris = Sim.Propulsion.Zone == ZoneKind.Debris;
         _stars.Storm = Sim.Hazards.StormActive ? 1f : 0f;
 
+        AutoSaveTick(); // v19 자동 저장 (5분마다)
         PacedGc(); // v19 60프레임
         PerfFrame(); // v17.7
         if (_screenshotFrames > 0 && --_screenshotFrames == 0) TakeScreenshotAndQuit();
@@ -288,7 +321,9 @@ public partial class Main : Node2D
         else
         {
             bool ok = Replaying.Verified;
-            ShowNotice(ok ? $"불러왔다 — {Sim.Day}일차 {Sim.Clock} · 저장할 때와 같은 역사" : "불러왔다 — 저장할 때와 역사가 어긋난다 (다른 판에서 저장한 파일?)");
+            ShowNotice((ok ? $"불러왔다 — {Sim.Day}일차 {Sim.Clock} · 저장할 때와 같은 역사" : "불러왔다 — 저장할 때와 역사가 어긋난다 (다른 판에서 저장한 파일?)")
+                       + (_snapFallback != null ? $" · 상태 저장은 쓰지 못해 기록을 처음부터 다시 돌렸다 ({_snapFallback})" : ""));
+            _snapFallback = null;
         }
         Replaying = null;
         Paused = true;
@@ -362,10 +397,14 @@ public partial class Main : Node2D
 
     // ─────────────────────────────── 저장·불러오기 ───────────────────────────────
 
-    public void SaveGame(string? path = null)
+    /// <summary>F5: 기록(.txt)과 상태(.snap)를 함께 남긴다. now면 그 자리에서 다 쓴다 (명령줄 --save) — 아니면 프레임마다 나눠 찍는다.</summary>
+    public void SaveGame(string? path = null, bool now = false)
     {
         path ??= SavePath;
+        string snap = System.IO.Path.ChangeExtension(path, ".snap");
+        if (!now) { BeginSave(snap, path, auto: false); return; }
         System.IO.File.WriteAllText(path, Core.SaveGame.Write(Sim));
+        System.IO.File.WriteAllBytes(snap, StateSave.Write(Sim));
         ShowNotice($"저장했다 — {Sim.Day}일차 {Sim.Clock} · 관찰자 기록 {Sim.Commands.Count}줄 · 항해 번호 {Sim.Seed}");
         GD.Print($"saved: {path}");
     }
@@ -379,9 +418,10 @@ public partial class Main : Node2D
         GetTree().CallDeferred(SceneTree.MethodName.ReloadCurrentScene);
     }
 
-    public void LoadGame(string? path = null)
+    public void LoadGame(string? path = null, string? snapPath = null)
     {
         path ??= SavePath;
+        snapPath ??= System.IO.Path.ChangeExtension(path, ".snap");
         if (!System.IO.File.Exists(path)) { ShowNotice("저장한 게임이 없다 (F5로 저장)"); return; }
         // v10.3: 읽기·해석에 실패하면 지금 게임을 그대로 두고 까닭을 알린다
         string text;
@@ -396,6 +436,19 @@ public partial class Main : Node2D
             return;
         }
         _pendingLoad = text;
+        // v19 같은 때 찍은 상태가 곁에 있으면 그것부터 (항해 번호 · 틱이 기록과 같을 때만)
+        _pendingSnap = null;
+        try
+        {
+            if (System.IO.File.Exists(snapPath))
+            {
+                var bytes = System.IO.File.ReadAllBytes(snapPath);
+                var info = StateSave.Peek(bytes);
+                var data = Core.SaveGame.Parse(text);
+                if (info.Seed == data.Seed && info.Tick == data.Tick) _pendingSnap = bytes;
+            }
+        }
+        catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException or FormatException) { _pendingSnap = null; }
         GetTree().ReloadCurrentScene();
     }
 
@@ -488,7 +541,7 @@ public partial class Main : Node2D
                 case Key.G: Hud.ToggleMinimap(); break;
                 case Key.T: if (key.ShiftPressed) Hud.ToggleTechWeb(); else Hud.ToggleTech(); break; // v16.14 Shift+T 기술 지도
                 case Key.F5: SaveGame(); break;
-                case Key.F9: LoadGame(); break;
+                case Key.F9: if (key.ShiftPressed) LoadAutoSave(); else LoadGame(); break; // v19 ⇧F9 자동 저장
                 case Key.O: Options.Toggle(); break;
                 case Key.N: JumpToLatestAlert(); break;
                 case Key.Bracketleft: CycleEpisode(-1); break;
@@ -914,8 +967,15 @@ public partial class Main : Node2D
                     break;
                 }
                 case "--save":
-                    SaveGame(value.Length > 0 ? value : null);
+                    SaveGame(value.Length > 0 ? value : null, now: true);
                     break;
+                case "--autosave": // v19 자동 저장 간격 (초, 0이면 끈다)
+                {
+                    float sec = float.Parse(value, CultureInfo.InvariantCulture);
+                    _noAutoSave = sec <= 0f;
+                    _autoEveryMsec = (ulong)(Math.Max(1f, sec) * 1000f);
+                    break;
+                }
                 case "--chronicle":
                     Hud.ChronicleOpen = true;
                     break;

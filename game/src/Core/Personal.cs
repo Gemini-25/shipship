@@ -26,7 +26,7 @@ public sealed class PersonalSystem
     }
 
     /// <summary>이 묶음이 쓴 시간 (밀리초 · 성능 시험).</summary>
-    public double Ms { get; private set; }
+    [field: NotSaved] public double Ms { get; private set; } // 성능 측정 (상태 저장에 넣지 않는다)
 
     public void Update(float dt)
     {
