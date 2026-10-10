@@ -1,0 +1,125 @@
+using System;
+using System.Linq;
+using Godot;
+using ShipSim.Core;
+
+namespace ShipSim.View;
+
+// v12.8 항로 막대(지도 위): 구간을 색으로, 배의 자리, 다음 구간까지 · 목적지 · 시대와 지금 연구.
+// 요약 진행 카드: 빨리 감는 동안 무엇이 있었는지 한 장으로.
+public partial class Hud
+{
+    public static Color LegColor(LegKind k) => k switch
+    {
+        LegKind.AsteroidBelt => new Color("#c9a66b"), LegKind.Nebula => new Color("#b58cff"), LegKind.RadiationBelt => new Color("#f5d547"),
+        LegKind.Derelict => new Color("#8d93a6"), LegKind.Port => new Color("#6ee7b7"),
+        _ when VoyageV15.Spec(k) is LegSpec s => new Color(s.Hex), // v15.4 새 구간
+        _ => new Color("#3d4b63"),
+    };
+
+    private void DrawVoyageBar(Rect2 minimap)
+    {
+        var v = _world.Voyage;
+        float total = v.TotalDays;
+        if (total <= 0f) return;
+        var bar = new Rect2(minimap.Position.X, minimap.Position.Y - 46f, minimap.Size.X, 40f);
+        Gfx.RoundRect(this, bar, new Color(0.04f, 0.05f, 0.08f, 0.88f), 8f, new Color(1, 1, 1, 0.08f));
+        float x = bar.Position.X + 10f, w = bar.Size.X - 20f, y = bar.Position.Y + 22f;
+        float acc = 0f;
+        for (int i = 0; i < v.Legs.Count; i++)
+        {
+            var leg = v.Legs[i];
+            float x0 = x + w * acc / total, x1 = x + w * (acc + leg.Days) / total;
+            var col = LegColor(leg.Kind).WithAlpha(i < v.Index ? 0.35f : 0.9f);
+            this.Box(new Rect2(x0 + 0.5f, y - 3f, MathF.Max(1f, x1 - x0 - 1f), 6f), col);
+            if (leg.Kind is LegKind.Port or LegKind.Derelict) this.Circle(new Vector2((x0 + x1) / 2f, y), 4f, col);
+            acc += leg.Days;
+        }
+        float px = x + w * v.DoneDays / total;
+        this.Circle(new Vector2(px, y), 5f, v.Drifting ? Palette.Danger : Colors.White);
+        DrawLine(new Vector2(px, y - 9f), new Vector2(px, y + 9f), Colors.White.WithAlpha(0.6f), 1f);
+        var cur = v.Current;
+        float left = cur.Days - v.Progress;
+        var next = v.Index + 1 < v.Legs.Count ? v.Legs[v.Index + 1] : null;
+        string head = $"{v.Number}번째 항해 · {v.Origin} → {v.Destination} · 지금 {VoyageSystem.KindName(cur.Kind)}" + (cur.Kind != LegKind.Cruise ? $"({cur.Name})" : "")
+                      + (next != null ? $" · {left:0.0}일 뒤 {VoyageSystem.KindName(next.Kind)}" : "") + (v.Drifting ? " · 표류 중" : "");
+        Gfx.Text(this, Fonts.Body, new Vector2(bar.Position.X + 10f, bar.Position.Y + 13f), UiKit.Fit(head, bar.Size.X - 20f, Ui.TextSmall, Fonts.Body), Ui.TextSmall, v.Drifting ? Palette.Danger : Palette.TextDim);
+        var e = _world.Eras;
+        string era = $"{EraSystem.EraName(e.Era)} · " + (EraSystem.Find(e.Project) is EraTech pt ? $"연구 {pt.Name} {e.Progress / _world.TechWeb.CostOf(pt) * 100:0}%" : "연구할 것 없음"); // v16 통합: 그물 새 기술(Extra)도 찾는다 (All 만 보면 예외)
+        Gfx.TextRight(this, Fonts.Body, new Vector2(bar.End.X - 10f, bar.Position.Y + 36f), era, Ui.TextTiny, Palette.TextMuted);
+    }
+
+    // ── 요약 진행 ──
+    public string[]? SummaryLines { get; set; }
+    public long SummaryShownAt { get; set; } = -1;
+
+    private void DrawSummaryCard(Vector2 mouse)
+    {
+        if (SummaryLines == null) return;
+        float w = 460f, h = 60f + SummaryLines.Length * 22f;
+        var card = new Rect2((Screen.X - w) / 2f, Screen.Y * 0.22f, w, h);
+        Card(card);
+        Gfx.Text(this, Fonts.Bold, card.Position + new Vector2(20, 32), "빨리 감기", Ui.TextLarge, Palette.Text);
+        Button(new Rect2(card.End.X - 74, card.Position.Y + 12, 58, 26), "닫기", false, mouse, () => SummaryLines = null, Ui.TextSmall);
+        float y = card.Position.Y + 58;
+        foreach (var line in SummaryLines)
+        {
+            Gfx.Text(this, Fonts.Body, new Vector2(card.Position.X + 20, y + 10), line, Ui.TextLabel, line.StartsWith("멈춤") ? Palette.Warning : Palette.TextDim);
+            y += 22f;
+        }
+    }
+}
+
+public partial class Hud
+{
+    /// <summary>v12.8 시대 기술 카드: 여섯 시대 — 익힌 것 · 연구 중 · 고를 수 있는 것 · 아직 잠긴 시대. 효과와 위험을 함께.</summary>
+    private void DrawEraCard(Rect2 techCard)
+    {
+        var e = _world.Eras;
+        float x0 = techCard.End.X + 10f, w = MathF.Min(380f, Screen.X - RightColumnWidth - Margin * 2 - x0);
+        if (w < 240f) return;
+        // v15.5 기술 70: 다 안 들어가면 잠긴 시대는 머리줄 하나로, 그래도 넘치면 익힌 기술은 시대마다 한 줄로 접는다
+        int Lines(bool fl, bool fk) => EraSystem.Eras.Sum(q => 1 + (fl && _world.Research < q.research ? 0
+            : EraSystem.All.Count(t => t.Era == q.era && !(fk && e.Known.Contains(t.Id))) + (fk && EraSystem.All.Any(t => t.Era == q.era && e.Known.Contains(t.Id)) ? 1 : 0)));
+        bool foldLocked = 70f + Lines(false, false) * 19f > techCard.Size.Y;
+        bool foldKnown = foldLocked && 70f + Lines(true, false) * 19f > techCard.Size.Y;
+        float rows = Lines(foldLocked, foldKnown);
+        float h = MathF.Min(techCard.Size.Y, 70f + rows * 19f);
+        var card = new Rect2(x0, techCard.Position.Y, w, h);
+        Card(card);
+        float x = x0 + 14f, right = card.End.X - 14f, y = card.Position.Y + 28f;
+        Gfx.Text(this, Fonts.Bold, new Vector2(x, y), $"시대 기술 — {EraSystem.EraName(e.Era)}", Ui.TextTitle, Palette.Text);
+        y += 18f;
+        Gfx.Text(this, Fonts.Body, new Vector2(x, y), e.Project != null ? $"연구 중: {EraSystem.Find(e.Project)?.Name} ({e.ProjectWhy})" : "고를 연구가 없다", Ui.TextSmall, Palette.TextDim);
+        y += 8f;
+        foreach (var (era, name, need) in EraSystem.Eras)
+        {
+            y += 19f;
+            if (y > card.End.Y - 10f) break;
+            bool open = _world.Research >= need;
+            Gfx.Text(this, Fonts.Bold, new Vector2(x, y), $"{era}. {name}" + (open ? "" : $" — 연구가 {need:0}만큼 쌓이면 열린다") + (!open && foldLocked ? $" · 기술 {EraSystem.All.Count(t => t.Era == era)}개" : ""), Ui.TextBody, open ? Palette.Accent : Palette.TextMuted);
+            if (!open && foldLocked) continue;
+            if (foldKnown && EraSystem.All.Where(t => t.Era == era && e.Known.Contains(t.Id)).Select(t => t.Name).ToList() is { Count: > 0 } learned)
+            {
+                y += 19f;
+                if (y > card.End.Y - 10f) break;
+                string line = $"✓ 익힘 {learned.Count}: " + string.Join(", ", learned);
+                while (line.Length > 6 && Gfx.Width(Fonts.Body, line, Ui.TextSmall) > right - x - 8f) line = line[..^2] + "…";
+                Gfx.Text(this, Fonts.Body, new Vector2(x + 8, y), line, Ui.TextSmall, Palette.Good);
+            }
+            foreach (var t in EraSystem.All.Where(t => t.Era == era))
+            {
+                if (foldKnown && e.Known.Contains(t.Id)) continue;
+                y += 19f;
+                if (y > card.End.Y - 10f) break;
+                bool known = e.Known.Contains(t.Id), cur = e.Project == t.Id;
+                string mark = known ? "✓" : cur ? "▶" : open ? "·" : " ";
+                var col = known ? Palette.Good : cur ? Palette.Warning : open ? Palette.TextDim : Palette.TextMuted.WithAlpha(0.6f);
+                Gfx.Text(this, Fonts.Body, new Vector2(x + 8, y), $"{mark} {t.Name}", Ui.TextBody, col);
+                string note = cur ? $"{e.Progress / t.Cost * 100:0}% · {t.Effect}" : t.Effect + (t.Risk != "없음" ? $" · 위험: {t.Risk}" : "");
+                while (note.Length > 6 && Gfx.Width(Fonts.Body, note, Ui.TextTiny) > right - x - 130f) note = note[..^2] + "…";
+                Gfx.Text(this, Fonts.Body, new Vector2(x + 128, y), note, Ui.TextTiny, known && t.Risk != "없음" ? Palette.Warning.WithAlpha(0.8f) : Palette.TextMuted);
+            }
+        }
+    }
+}

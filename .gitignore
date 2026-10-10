@@ -1,0 +1,14 @@
+# Godot
+game/.godot/
+game/.mono/
+*.translation
+
+# .NET
+bin/
+obj/
+*.user
+.vs/
+.idea/
+build/
+
+__pycache__/

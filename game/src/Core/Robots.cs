@@ -1,0 +1,1428 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Numerics;
+
+namespace ShipSim.Core;
+
+/// <summary>선내 로봇 종류 (v10.10).</summary>
+public enum RobotKind
+{
+    Hauler,     // 운반: 배식기 채우기, 드론 거치대 보급, 물통 나르기, 비상 물자 나르기
+    Maintainer, // 정비: 정기 정비, 조명 갈기, 사람 옆에서 거들기 (긴 수리·제작이 빨라진다)
+    Gardener,   // 재배: 작물 돌보기, 수확해 냉장고로
+    Safety,     // 방재: 순찰(불·사고 전조 발견), 소화 거품
+    // v15.7 새 로봇 11 (RobotsV15.cs): 위 넷의 행동을 그대로 쓰고 특기(맡는 일·속도·배터리·고장률)만 다르다
+    Courier, Tanker, Stocker, Lineman, Assistant, Overhauler, Harvester, Tender, Sentry, Firefighter, Utility,
+    // 의료 3차 (MedBots.cs): 들것 로봇 · 간호 로봇
+    Stretcher, Nurse,
+}
+
+public enum RobotState
+{
+    Docked,   // 충전대에서 충전·대기
+    Active,   // 일하러 다니는 중 (걷기·일하기)
+    Stalled,  // 멈춤 (배터리 방전·고장) — 사람이 고치거나 끌고 와야 한다
+    Towed,    // 사람이 끌고 가는 중
+    Lost,     // 방째로 떨어져 나가 잃었다
+}
+
+/// <summary>로봇 고장 (고치는 데 드는 부품·시간이 다르다).</summary>
+public enum RobotFault
+{
+    // 가벼운 고장: 충전대로 느리게 돌아가 스스로 진단하고 고친다 (상태가 임계점 위일 때)
+    Sensor, Jam, Overheat,
+    // 심한 고장: 사람이 부품을 들고 와서 고쳐야 한다
+    Drive, Controller, Cell, Scorched,
+}
+
+/// <summary>
+/// 선내 로봇 한 대 (v10.10). 드론이 선체 밖을 돌보듯, 로봇은 선체 안의 반복되는 일을 맡는다.
+/// 충전대에서 전기를 받아야 움직이고, 닳으면 고장 나고, 멈추면 사람이 고치거나 끌고 와야 한다 —
+/// 로봇이 멈추면 그 일은 다시 작업 목록으로 돌아가 사람이 한다. 한가한 정비 로봇은 긴 일을 하는 사람 옆에서 거든다.
+/// </summary>
+public sealed partial class Robot
+{
+    public int Id { get; init; }
+    public RobotKind Kind { get; init; }
+    public string Name { get; init; } = "";
+    /// <summary>v12.5 이 한 대의 버릇.</summary>
+    public Quirk Quirk => Quirks.Of(Id, (int)Kind + 10);
+    public Furniture Dock { get; init; } = null!;
+    public int Slot { get; init; }
+
+    public Vector2 Position { get; set; }
+    public Vector2 PreviousPosition { get; set; }
+    public Vector2 Facing { get; set; } = new(0, 1);
+    public Cell Cell => Cell.FromPosition(Position);
+    public Room? Room { get; internal set; }
+
+    /// <summary>떨어져 나간 조각에 실려 떠내려가는 중.</summary>
+    public Fragment? Aboard { get; set; }
+    public System.Numerics.Vector2 AboardAt { get; set; }
+
+    public RobotState State { get; internal set; }
+    public long StateSince { get; internal set; }
+
+    /// <summary>배터리 0~1 (가득 차면 일곱 시간쯤 움직인다).</summary>
+    public float Battery { get; set; } = 1f;
+
+    /// <summary>상태 0~1 (닳으면 고장이 잦아진다. 사람이 정비하면 돌아온다).</summary>
+    public float Condition { get; set; } = 1f;
+
+    /// <summary>고장 (null이면 멀쩡하다).</summary>
+    public RobotFault? Fault { get; internal set; }
+
+    /// <summary>시험용: 꺼 둔 로봇 (로봇 없는 배와 견줄 때).</summary>
+    public bool Disabled { get; set; }
+
+    /// <summary>방재 로봇의 소화 거품 0~1 (충전대에서 다시 찬다).</summary>
+    public float Foam { get; set; } = 1f;
+
+    /// <summary>맡은 일.</summary>
+    public WorkOrder? Order { get; internal set; }
+
+    /// <summary>옆에서 거드는 사람 (정비 로봇).</summary>
+    public CrewMember? Helping { get; internal set; }
+
+    /// <summary>끌고 가는 사람.</summary>
+    public CrewMember? TowedBy { get; internal set; }
+
+    /// <summary>싣고 다니는 것.</summary>
+    public ItemStack? Cargo { get; internal set; }
+
+    /// <summary>v11.2: 싣고 있는 식사 중 균이 든 것.</summary>
+    public int CarryTaint { get; set; }
+
+    public string Doing { get; internal set; } = "대기";
+
+    internal List<RobotStep>? Steps { get; set; }
+    internal int StepIndex { get; set; }
+    internal List<Cell>? Path { get; set; }
+    internal int PathIndex { get; set; }
+    internal Cell? Goal { get; set; }
+    internal long IdleSince { get; set; }
+    /// <summary>다음에 일을 고를 틱 (충전대에서 기다릴 때 너무 자주 생각하지 않게).</summary>
+    internal long NextDecide { get; set; }
+    /// <summary>충전대로 돌아가는 중 (배터리 점검으로 다시 되돌리지 않게).</summary>
+    internal bool Homing { get; set; }
+    /// <summary>불 끄러 가는 중 (방재 로봇).</summary>
+    internal bool FightingFire { get; set; }
+    internal long NextPatrol { get; set; }
+
+    // ── 기록 ──
+    public float ActiveHours { get; internal set; }
+    public float AssistHours { get; internal set; }
+    public int JobsDone { get; internal set; }
+    public int Breakdowns { get; internal set; }
+    public int Fetched { get; internal set; }
+    /// <summary>사람이 정비한 뒤 스스로 고친 횟수 (세 번이 넘으면 사람이 봐야 한다).</summary>
+    public int SelfRepairs { get; internal set; }
+    public int SelfRepairsTotal { get; internal set; }
+    /// <summary>충전대에서 스스로 고치는 진척 (시간).</summary>
+    public float SelfRepairDone { get; internal set; }
+    public List<Mark> Marks { get; } = new();
+
+    public bool AtDock => State == RobotState.Docked;
+    public bool Operational => !Disabled && Fault == null && State is RobotState.Docked or RobotState.Active && !Dock.Room.Detached;
+    public Vector2 DockPosition => Dock.Cells[Math.Min(Slot, Dock.Cells.Count - 1)].Center;
+    public string KindName => RobotSystem.KindName(Kind);
+
+    /// <summary>지금 하는 단계의 진척 (화면).</summary>
+    public float? Progress => Steps != null && StepIndex < Steps.Count ? Steps[StepIndex].Progress : null;
+}
+
+// ─────────────────────────────── 로봇의 작은 단계 (승무원의 Toil과 같은 생각) ───────────────────────────────
+
+internal abstract class RobotStep
+{
+    public virtual void Begin(Robot r, World w) { }
+    public abstract ToilStatus Tick(Robot r, World w);
+    public virtual float? Progress => null;
+    public virtual bool Moving => false;
+}
+
+internal sealed class RGoto : RobotStep
+{
+    private readonly Func<Robot, Cell?> _pick;
+    private bool _ok;
+    public RGoto(Cell target) => _pick = _ => target;
+    public RGoto(Func<Robot, Cell?> pick) => _pick = pick;
+    public override bool Moving => true;
+
+    public override void Begin(Robot r, World w)
+    {
+        _ok = true;
+        if (_pick(r) is not Cell goal) { r.Path = null; return; }
+        _ok = RobotSystem.SetDestination(r, w, goal);
+    }
+
+    public override ToilStatus Tick(Robot r, World w)
+    {
+        if (!_ok) return ToilStatus.Failed;
+        return RobotSystem.Move(r, w) switch { true => ToilStatus.Succeeded, false when r.Path == null => ToilStatus.Failed, _ => ToilStatus.Running };
+    }
+}
+
+internal sealed class RTake : RobotStep
+{
+    private readonly Furniture _from;
+    private readonly ItemKind _kind;
+    private readonly int _count;
+    private readonly bool _partialOk;
+    public RTake(Furniture from, ItemKind kind, int count, bool partialOk = false) { _from = from; _kind = kind; _count = count; _partialOk = partialOk; }
+    internal ItemKind Kind => _kind;
+
+    public override ToilStatus Tick(Robot r, World w)
+    {
+        if (_from.Storage == null || (r.Cargo is ItemStack held && held.Kind != _kind)) return ToilStatus.Failed;
+        if (!_partialOk && _from.Storage.Count(_kind) < _count) return ToilStatus.Failed;
+        int got = _from.Storage.Take(_kind, _count);
+        if (got <= 0) return ToilStatus.Failed;
+        r.CarryTaint += _from.Storage.LastTainted;
+        r.Cargo = new ItemStack(_kind, (r.Cargo?.Count ?? 0) + got);
+        return ToilStatus.Succeeded;
+    }
+}
+
+internal sealed class RPut : RobotStep
+{
+    private readonly Furniture _into;
+    public RPut(Furniture into) => _into = into;
+
+    public override ToilStatus Tick(Robot r, World w)
+    {
+        if (r.Cargo is not ItemStack held || _into.Storage == null) return ToilStatus.Succeeded;
+        int put = _into.Storage.Add(held.Kind, held.Count);
+        if (held.Kind == ItemKind.Meal && r.CarryTaint > 0)
+        {
+            int t = Math.Min(put, r.CarryTaint);
+            _into.Storage.Taint(t);
+            r.CarryTaint -= t;
+        }
+        r.Cargo = held.Count - put > 0 ? new ItemStack(held.Kind, held.Count - put) : null;
+        return ToilStatus.Succeeded;
+    }
+}
+
+internal sealed class RWork : RobotStep
+{
+    private readonly float _hours;
+    private readonly WorkOrder? _shared;
+    private readonly Vector2? _face;
+    private float _done, _needed;
+    public Func<Robot, World, bool>? CanContinue { get; init; }
+    public RWork(float hours, WorkOrder? shared, Vector2? face) { _hours = hours; _shared = shared; _face = face; }
+    internal float Hours => _hours;
+    public override float? Progress => _shared != null ? _shared.Progress : _needed > 0 ? _done / _needed : 0f;
+
+    public override void Begin(Robot r, World w)
+    {
+        _needed = SimTime.Hours(_hours) * RobotSystem.WorkFactor(r.Kind) * w.Fleet.Work; // v16.20b 공구 등급
+        if (_face is Vector2 f && (f - r.Position).LengthSquared() > 0.0001f) r.Facing = Vector2.Normalize(f - r.Position);
+    }
+
+    public override ToilStatus Tick(Robot r, World w)
+    {
+        if (CanContinue != null && !CanContinue(r, w)) return ToilStatus.Failed;
+        // 사람과 같은 일을 하면 진척을 함께 쓴다 (누가 먼저 끝내든 한 번만 끝난다)
+        if (_shared != null)
+        {
+            if (_shared.Closed) return ToilStatus.Failed;
+            _shared.Progress = MathF.Min(1f, _shared.Progress + 1f / MathF.Max(1f, _needed));
+            return _shared.Progress >= 1f ? ToilStatus.Succeeded : ToilStatus.Running;
+        }
+        _done += 1f;
+        return _done >= _needed ? ToilStatus.Succeeded : ToilStatus.Running;
+    }
+}
+
+internal sealed class RDo : RobotStep
+{
+    private readonly Func<Robot, World, bool> _action;
+    public RDo(Func<Robot, World, bool> action) => _action = action;
+    public override ToilStatus Tick(Robot r, World w) => _action(r, w) ? ToilStatus.Succeeded : ToilStatus.Failed;
+}
+
+/// <summary>사람 옆에 서서 거든다: 그 사람이 긴 일(WorkToil)을 하는 동안만.</summary>
+internal sealed class RAssist : RobotStep
+{
+    private readonly CrewMember _who;
+    private readonly Job _job;
+    public RAssist(CrewMember who, Job job) { _who = who; _job = job; }
+
+    public override void Begin(Robot r, World w)
+    {
+        r.Helping = _who;
+        _who.Helper = r;
+        r.Doing = $"{Ko.EulReul(_who.Name)} 거든다 — {_job.Order?.Title ?? _job.Label}";
+        w.Log.Add(w.Tick, LogKind.Work, $"{Ko.IGa(r.Name)} 옆에서 부품을 잡아 주고 공구를 건넨다 ({_job.Order?.Title ?? _job.Label})", _who.Id);
+    }
+
+    public override ToilStatus Tick(Robot r, World w)
+    {
+        if (_who.Job != _job || !_who.CanAct || _who.Helper != r) return ToilStatus.Succeeded;
+        if (_job.Current is not WorkToil) return (_job.Current is GotoToil or GotoToilLate) ? ToilStatus.Succeeded : ToilStatus.Running;
+        if ((_who.Position - r.Position).LengthSquared() > 2.6f * 2.6f) return ToilStatus.Succeeded; // 사람이 자리를 옮겼다
+        if ((_who.Position - r.Position).LengthSquared() > 0.0001f) r.Facing = Vector2.Normalize(_who.Position - r.Position);
+        r.AssistHours += 1f / SimTime.TicksPerHour;
+        return ToilStatus.Running;
+    }
+}
+
+/// <summary>불 옆에서 소화 거품을 뿌린다 (방재 로봇). 곁에 불이 없거나 거품이 떨어지면 끝.</summary>
+internal sealed class RSpray : RobotStep
+{
+    public override ToilStatus Tick(Robot r, World w)
+    {
+        Cell? nearest = null;
+        float best = 2.6f * 2.6f;
+        foreach (var (cell, _) in w.Fire.Fires)
+        {
+            float d = (cell.Center - r.Position).LengthSquared();
+            if (d < best) { best = d; nearest = cell; }
+        }
+        if (nearest is not Cell aim || r.Foam <= 0.01f) return ToilStatus.Succeeded;
+        r.Facing = Vector2.Normalize(aim.Center - r.Position + new Vector2(0.0001f, 0f));
+        w.Fire.Suppress(aim, 1.4f, RobotsV15.FoamRate(r.Kind) / SimTime.TicksPerHour); // v15.7 소방 로봇은 더 세게·오래
+        r.Foam = MathF.Max(0f, r.Foam - 1f / (RobotsV15.FoamHours(r.Kind) * SimTime.TicksPerHour));
+        return ToilStatus.Running;
+    }
+}
+
+// ─────────────────────────────── 로봇 체계 ───────────────────────────────
+
+public sealed partial class RobotSystem
+{
+    private readonly World _world;
+    public List<Robot> Robots { get; } = new();
+
+    public int JobsDone { get; private set; }
+    public int Breakdowns { get; private set; }
+    public int Stalls { get; private set; }
+    public int FiresFought { get; private set; }
+    public int Patrols { get; private set; }
+
+    /// <summary>1틱에 움직이는 칸 수 (사람 0.1).</summary>
+    public static float Speed(RobotKind k) => k switch { RobotKind.Hauler => 0.085f, RobotKind.Safety => 0.09f, RobotKind.Maintainer or RobotKind.Gardener => 0.075f, _ => RobotsV15.Speed(k) };
+
+    /// <summary>같은 일에 드는 시간 배율 (사람의 보통 솜씨 = 1). 로봇은 꾸준하지만 느리다.</summary>
+    public static float WorkFactor(RobotKind k) => k switch { RobotKind.Gardener => 1.25f, RobotKind.Maintainer => 1.4f, RobotKind.Hauler or RobotKind.Safety => 1.3f, _ => RobotsV15.Work(k) };
+
+    /// <summary>시간당 배터리 소모: 움직일 때 · 일할 때 · 밖에서 기다릴 때.</summary>
+    public const float DrainMove = 0.15f, DrainWork = 0.17f, DrainIdle = 0.03f, DrainSpray = 0.3f;
+    public const float ChargePerHour = 0.3f;
+    public const float FoamRate = 11f;      // 시간당 불 줄이는 양 (소화기 든 사람 10~16)
+    public const float FoamHours = 0.6f;    // 가득 찬 거품으로 뿌릴 수 있는 시간
+    public const float FoamRefillPerHour = 0.5f;
+
+    /// <summary>사람 옆에서 거들면 그 사람의 긴 일이 이만큼 빨라진다.</summary>
+    public const float AssistBonus = 0.35f;
+
+    public static string KindName(RobotKind k) => k switch
+    {
+        RobotKind.Hauler => "운반 로봇",
+        RobotKind.Maintainer => "정비 로봇",
+        RobotKind.Gardener => "재배 로봇",
+        RobotKind.Safety => "방재 로봇",
+        _ => RobotsV15.Bot(k)?.Name ?? k.ToString(),
+    };
+
+    public static string FaultName(RobotFault f) => f switch
+    {
+        RobotFault.Drive => "구동 모터 고장",
+        RobotFault.Sensor => "주행 센서 오차",
+        RobotFault.Controller => "제어기 오류",
+        RobotFault.Cell => "배터리 셀 열화",
+        RobotFault.Scorched => "열에 그을림",
+        RobotFault.Jam => "바퀴에 이물질 걸림",
+        RobotFault.Overheat => "구동 모터 과열",
+        _ => f.ToString(),
+    };
+
+    /// <summary>스스로 고칠 수 있는 가벼운 고장.</summary>
+    public static bool Minor(RobotFault f) => f is RobotFault.Sensor or RobotFault.Jam or RobotFault.Overheat;
+
+    /// <summary>이 아래로 닳은 로봇은 가벼운 고장도 스스로 못 고친다 (임계점).</summary>
+    public const float SelfRepairFloor = 0.35f;
+
+    /// <summary>사람 정비 없이 스스로 고칠 수 있는 횟수.</summary>
+    public const int SelfRepairLimit = 3;
+
+    /// <summary>스스로 고치는 데 걸리는 시간 (충전대에서, 전기가 있어야).</summary>
+    public static float SelfRepairHours(RobotFault f) => f switch { RobotFault.Sensor => 0.5f, RobotFault.Jam => 0.3f, RobotFault.Overheat => 0.8f, _ => 1f };
+
+    /// <summary>지금 이 로봇이 이 고장을 스스로 고칠 수 있나 (가벼운 고장 · 임계점 위 · 횟수 안).</summary>
+    public static bool CanSelfRepair(Robot r) =>
+        r.Fault is RobotFault f && Minor(f) && r.Condition >= SelfRepairFloor && r.SelfRepairs < SelfRepairLimit && !r.Dock.Room.Detached;
+
+    /// <summary>스스로 못 고치는 까닭 (고칠 수 있으면 null).</summary>
+    public static string? WhyNotSelf(Robot r) =>
+        r.Fault is not RobotFault f ? null
+        : !Minor(f) ? "심한 고장"
+        : r.Condition < SelfRepairFloor ? $"상태 {r.Condition * 100:0}% — 임계점({SelfRepairFloor * 100:0}%)을 넘었다"
+        : r.SelfRepairs >= SelfRepairLimit ? $"사람 정비 없이 {r.SelfRepairs}번 스스로 고쳤다 — 더는 못 믿는다"
+        : null;
+
+    /// <summary>고장을 고치는 데 드는 부품 (없으면 빈 배열 — 다시 맞추기만).</summary>
+    public static (ItemKind kind, int count)[] FaultParts(RobotFault f) => f switch
+    {
+        RobotFault.Drive => new[] { (ItemKind.Motor, 1) },
+        RobotFault.Controller => new[] { (ItemKind.Electronics, 1) },
+        RobotFault.Cell => new[] { (ItemKind.PowerController, 1) },
+        RobotFault.Scorched => new[] { (ItemKind.Cable, 1), (ItemKind.Plate, 1) },
+        _ => Array.Empty<(ItemKind, int)>(),
+    };
+
+    /// <summary>부품이 없을 때 임시로 되살리는 재료 (느리고 금방 다시 닳는다).</summary>
+    public static (ItemKind kind, int count)[] MakeshiftParts(RobotFault f) => f switch
+    {
+        RobotFault.Drive => new[] { (ItemKind.Cable, 1), (ItemKind.Bearing, 1) },
+        RobotFault.Controller => new[] { (ItemKind.Cable, 2) },
+        RobotFault.Cell => new[] { (ItemKind.Cable, 1), (ItemKind.Electronics, 1) },
+        _ => Array.Empty<(ItemKind, int)>(),
+    };
+
+    public static float FaultHours(RobotFault f) => f switch
+    {
+        RobotFault.Drive => 1.2f, RobotFault.Sensor => 0.4f, RobotFault.Controller => 0.8f, RobotFault.Cell => 1f, RobotFault.Scorched => 1f,
+        RobotFault.Jam => 0.25f, RobotFault.Overheat => 0.5f, _ => 1f,
+    };
+
+    public static Skill FaultSkill(RobotFault f) => f is RobotFault.Drive or RobotFault.Scorched or RobotFault.Jam or RobotFault.Overheat ? Skill.Mechanics : Skill.Electrical;
+
+    /// <summary>로봇이 맡는 작업 목록의 일.</summary>
+    public static bool CanDo(RobotKind k, WorkKind w) => k switch
+    {
+        RobotKind.Hauler => w is WorkKind.Restock or WorkKind.StockDock or WorkKind.CarryWater or WorkKind.StockCache or WorkKind.StowCot or WorkKind.RefillPropellant or WorkKind.ShelterFood,
+        RobotKind.Maintainer => w is WorkKind.Maintain or WorkKind.FixLights,
+        RobotKind.Gardener => w is WorkKind.Tend or WorkKind.Harvest,
+        _ => RobotsV15.CanDo(k, w),
+    };
+
+    /// <summary>사람이 로봇이 하는 일에 합류할 수 있는 일 (같은 진척을 함께 채운다).</summary>
+    public static bool Joinable(WorkOrder o) => o.Robot != null && o.Kind is WorkKind.Maintain or WorkKind.Tend or WorkKind.Harvest;
+
+    /// <summary>정비 로봇이 옆에서 거들 수 있는 사람의 일 (오래 걸리는 손일).</summary>
+    public static bool Assistable(WorkKind k) =>
+        k is WorkKind.Repair or WorkKind.Fabricate or WorkKind.Upgrade or WorkKind.ReplacePanel or WorkKind.InstallSubstitute or WorkKind.RestoreGrade
+            or WorkKind.RepairHull or WorkKind.ReplacePipe or WorkKind.LayBypass or WorkKind.BuildWorkshop or WorkKind.BuildComputer or WorkKind.RepairDoor
+            or WorkKind.Maintain or WorkKind.MeltIce or WorkKind.ServiceDrone or WorkKind.PatchPipe or WorkKind.PreventiveCheck;
+
+    /// <summary>로봇의 길: 숨 쉴 필요가 없어 진공도 지나가지만, 잠긴 격벽은 열지 못한다 (나가는 쪽만).</summary>
+    public static readonly PathProfile Profile = new(0.3f, false, false, null, false, Robot: true);
+    /// <summary>강화: 급한 일(0.9 이상)을 맡은 로봇 — 주 컴퓨터가 잠긴 격벽을 잠깐 열어 준다 (양쪽 방이 새지 않을 때).</summary>
+    public static readonly PathProfile UrgentProfile = Profile with { Responder = true };
+    private static bool Rushes(World w, WorkOrder? o) => o is { Urgency: >= 0.9f } && w.Automation.Present && w.Automation.MainOnline && !FleetSystem.Off;
+    private static PathProfile ProfileOf(Robot r, World w) => Rushes(w, r.Order) ? UrgentProfile : Profile;
+    /// <summary>주 컴퓨터가 이 로봇에게 잠긴 격벽을 열어 주나 (용접 · 새는 방 · 버린 구획은 안 연다 — 봉쇄가 풀린 게 아니다).</summary>
+    private static bool ComputerOpens(Robot r, Door d, World w) =>
+        Rushes(w, r.Order) && !d.Welded && d.RoomA is Room a && d.RoomB is Room b && !a.Leaking && !b.Leaking && !a.Abandoned && !b.Abandoned && !a.Detached && !b.Detached;
+
+    internal World World => _world;
+
+    public RobotSystem(World world)
+    {
+        _world = world;
+        // 충전대는 설계도에 그리지 않고, 배를 띄울 때 방마다 길을 막지 않는 벽가에 단다 (한 칸에 한 대)
+        var kinds = world.Ship.FurnitureOf(FurnitureType.RobotDock).Any() ? null : InstallDocks(world);
+        var docks = world.Ship.FurnitureOf(FurnitureType.RobotDock).OrderBy(f => f.Id).ToList();
+        var plan = new List<(Furniture dock, int slot, RobotKind kind)>();
+        foreach (var dock in docks)
+            for (int s = 0; s < dock.Cells.Count; s++)
+                plan.Add((dock, s, kinds != null && kinds.TryGetValue(dock, out var k) ? k : dock.Room.Type switch
+                {
+                    RoomType.Workshop => s % 2 == 0 ? RobotKind.Maintainer : RobotKind.Safety,
+                    RoomType.Hydroponics => RobotKind.Gardener,
+                    _ => RobotKind.Hauler,
+                }));
+        foreach (var (dock, slot, kind) in plan)
+        {
+            int same = plan.Count(p => p.kind == kind);
+            int nth = Robots.Count(x => x.Kind == kind) + 1;
+            var r = new Robot
+            {
+                Id = Robots.Count, Kind = kind, Dock = dock, Slot = slot,
+                Name = same > 1 ? $"{KindName(kind)} {nth}" : KindName(kind),
+                Condition = world.Rng.Range(0.85f, 1f),
+            };
+            r.Position = r.DockPosition;
+            r.PreviousPosition = r.Position;
+            r.Room = dock.Room;
+            r.NextPatrol = world.Tick + SimTime.Hours(1 + r.Id % 3);
+            Robots.Add(r);
+        }
+    }
+
+    /// <summary>배 크기(침대 수)에 맞춘 로봇 구성.</summary>
+    public static RobotKind[] Complement(int beds) => beds switch
+    {
+        <= 4 => new[] { RobotKind.Maintainer, RobotKind.Gardener },
+        <= 6 => new[] { RobotKind.Maintainer, RobotKind.Gardener, RobotKind.Hauler },
+        <= 12 => new[] { RobotKind.Maintainer, RobotKind.Safety, RobotKind.Gardener, RobotKind.Hauler, RobotKind.Hauler },
+        <= 20 => new[] { RobotKind.Maintainer, RobotKind.Safety, RobotKind.Maintainer, RobotKind.Gardener, RobotKind.Hauler, RobotKind.Hauler, RobotKind.Gardener },
+        _ => new[] { RobotKind.Maintainer, RobotKind.Safety, RobotKind.Maintainer, RobotKind.Gardener, RobotKind.Gardener, RobotKind.Hauler, RobotKind.Hauler, RobotKind.Hauler, RobotKind.Safety },
+    };
+
+    /// <summary>로봇 종류마다 충전대를 둘 방 (먼저 것부터, 자리가 없으면 다음).</summary>
+    internal static RoomType[] HomeRooms(RobotKind k) => k switch
+    {
+        RobotKind.Maintainer or RobotKind.Safety => new[] { RoomType.Workshop, RoomType.Storage, RoomType.Corridor },
+        RobotKind.Gardener => new[] { RoomType.Hydroponics, RoomType.Galley, RoomType.Storage, RoomType.Corridor },
+        _ => new[] { RoomType.Storage, RoomType.Galley, RoomType.Mess, RoomType.Lounge, RoomType.Corridor },
+    };
+
+    private static Dictionary<Furniture, RobotKind> InstallDocks(World w)
+    {
+        var ship = w.Ship;
+        var result = new Dictionary<Furniture, RobotKind>();
+        int beds = ship.Furniture.Count(f => f.Type == FurnitureType.Bed);
+        foreach (var kind in Complement(beds))
+        {
+            foreach (var type in HomeRooms(kind))
+            {
+                Cell? spot = null;
+                foreach (var room in ship.RoomsOf(type).OrderBy(r => r.Id))
+                {
+                    var cells = Adaptation.FreeCells(w, room)
+                        .Where(c => Cell.Dirs4.Any(d => ship.Grid.Kind(c + d) == TileKind.Wall))           // 벽가에
+                        .Where(c => Cell.Dirs4.Any(d => ship.IsOpenFloor(c + d) && ship.RoomAt(c + d) == room)) // 앞에 설 자리
+                        .OrderBy(c => c.Y).ThenBy(c => c.X);
+                    foreach (var c in cells)
+                        if (Adaptation.SafeToBlock(w, room, c)) { spot = c; break; }
+                    if (spot != null) break;
+                }
+                if (spot is not Cell at) continue;
+                var dock = ship.AddFurniture(FurnitureType.RobotDock, at);
+                result[dock] = kind;
+                break;
+            }
+        }
+        if (result.Count > 0) w.Paths.Invalidate();
+        return result;
+    }
+
+    public string Summary
+    {
+        get
+        {
+            int ok = Robots.Count(r => r.Operational);
+            int busy = Robots.Count(r => r.State == RobotState.Active);
+            int down = Robots.Count(r => r.Fault != null || r.State is RobotState.Stalled or RobotState.Towed);
+            return $"{ok}/{Robots.Count}" + (busy > 0 ? $" · 일 {busy}" : "") + (down > 0 ? $" · 멈춤 {down}" : "") + $" · 한 일 {JobsDone}";
+        }
+    }
+
+    public static bool DockWorking(Robot r) => DockWorking(r.Dock);
+    /// <summary>충전대에 전기가 없을 때 급한 일을 하러 나갈 수 있는 최소 배터리.</summary>
+    public const float DeadDockReserve = 0.12f;
+    public static bool DockWorking(Furniture dock) => dock.Machine is Machine m && m.Powered && !m.Stopped && !dock.Room.Detached;
+
+    // ─────────────────────────────── 매 틱: 움직임·단계 ───────────────────────────────
+
+    public void Step()
+    {
+        var w = _world;
+        foreach (var r in Robots)
+        {
+            r.PreviousPosition = r.Position;
+            if (r.Aboard is Fragment rf) { r.Position = StructureSystem.OnFragment(rf, r.AboardAt); continue; } // 조각에 실려 간다
+            switch (r.State)
+            {
+                case RobotState.Docked:
+                    r.Position = r.DockPosition;
+                    break;
+                case RobotState.Towed:
+                    if (TowedByBot(r)) break; // v16.20b 다른 로봇이 끌고 간다
+                    if (r.TowedBy is not CrewMember c || !c.CanAct || c.Job?.Order?.Target.Robot != r)
+                    {
+                        // 끌던 사람이 손을 놓았다 — 그 자리에 선다
+                        r.TowedBy = null;
+                        SetState(r, RobotState.Stalled);
+                        break;
+                    }
+                    r.Position = c.Position - c.Facing * 0.55f;
+                    break;
+                case RobotState.Active:
+                    if (r.Steps == null) break;
+                    RunSteps(r, w);
+                    break;
+            }
+            if (r.State != RobotState.Lost) r.Room = w.Ship.RoomAt(r.Cell) ?? (r.AtDock ? r.Dock.Room : r.Room);
+        }
+    }
+
+    private void RunSteps(Robot r, World w)
+    {
+        var steps = r.Steps!;
+        for (int guard = 0; guard < 6; guard++)
+        {
+            if (r.StepIndex >= steps.Count) { FinishTask(r, true); return; }
+            var s = steps[r.StepIndex];
+            var st = s.Tick(r, w);
+            if (st == ToilStatus.Running) return;
+            if (st != ToilStatus.Succeeded) { FinishTask(r, false); return; }
+            r.StepIndex++;
+            if (r.StepIndex >= steps.Count) { FinishTask(r, true); return; }
+            steps[r.StepIndex].Begin(r, w);
+            if (steps[r.StepIndex].Moving || steps[r.StepIndex] is RWork or RAssist or RSpray) return;
+        }
+    }
+
+    internal static bool SetDestination(Robot r, World w, Cell goal)
+    {
+        var path = w.Paths.Find(r.Cell, goal, ProfileOf(r, w));
+        if (path == null) { r.Path = null; return false; }
+        r.Path = path;
+        r.PathIndex = 0;
+        r.Goal = goal;
+        return true;
+    }
+
+    /// <summary>한 틱 이동. 도착하면 true, 길이 끊겨 못 가면 false + Path = null.</summary>
+    internal static bool Move(Robot r, World w)
+    {
+        var path = r.Path;
+        if (path == null) return true;
+        float budget = Speed(r.Kind) * r.Quirk.Speed * (r.Fault == null && r.Battery > 0.02f ? 1f : 0.5f) * w.Fleet.Speed(r); // v16.20b 단계 · 아껴 쓰기 · 같이 들기
+        bool repathed = false;
+        while (budget > 0f && r.PathIndex < path.Count)
+        {
+            for (int k = r.PathIndex; k < Math.Min(path.Count, r.PathIndex + 2); k++)
+                if (w.Ship.DoorAt(path[k]) is Door ahead) { if (!ahead.Locked) ahead.Request(); else if (ComputerOpens(r, ahead, w)) ahead.RequestOverride(); }
+            var next = path[r.PathIndex];
+            if (w.Fleet.GiveWay(r, next)) break; // v16.20b 급히 지나가는 사람에게 길을 비켜 준다
+            var door = w.Ship.DoorAt(next);
+            if (Locomotion.Blocked(w.Ship, next) || (door != null && door.Locked && !ComputerOpens(r, door, w) && (!Leaving(r, door) || !FleetSystem.Off))) // v16.20b 잠긴 격벽은 로봇이 못 연다 — 다른 길로 (강화: 급한 일이면 주 컴퓨터가 연다)
+            {
+                var goal = r.Goal ?? path[^1];
+                if (repathed || !SetDestination(r, w, goal)) { r.Path = null; return false; }
+                w.Fleet.Rerouted(r, next, door); // v16.20b 막힌 곳을 배우고 다른 길로
+                path = r.Path!;
+                repathed = true;
+                continue;
+            }
+            if (door != null && door.Openness < 0.8f) break;
+            var delta = next.Center - r.Position;
+            float dist = delta.Length();
+            if (dist > 0.0001f) r.Facing = delta / dist;
+            if (dist <= budget)
+            {
+                r.Position = next.Center;
+                budget -= dist;
+                r.PathIndex++;
+            }
+            else
+            {
+                r.Position += delta / dist * budget;
+                budget = 0f;
+            }
+        }
+        if (r.PathIndex >= path.Count) { r.Path = null; return true; }
+        return false;
+    }
+
+    private static bool Leaving(Robot r, Door d) => d.RoomA == r.Room || d.RoomB == r.Room;
+
+    // ─────────────────────────────── 시스템 틱: 배터리·고장·판단 ───────────────────────────────
+
+    public void SystemUpdate(float dt)
+    {
+        var w = _world;
+        var charging = new HashSet<Furniture>();
+        foreach (var r in Robots)
+        {
+            if (r.State == RobotState.Lost) continue;
+            if (r.Aboard != null) continue; // 조각에 실려 떠내려가는 중 (아무것도 못 한다)
+            // 방째로 떨어져 나갔다
+            if (r.Room is Room here && here.Detached)
+            {
+                Lose(r, here);
+                continue;
+            }
+            switch (r.State)
+            {
+                case RobotState.Docked:
+                {
+                    if (DockWorking(r))
+                    {
+                        float eff = r.Dock.Machine!.Efficiency;
+                        if (r.Battery < 1f) { r.Battery = MathF.Min(MaxCharge(r), r.Battery + ChargePerHour * eff * dt); charging.Add(r.Dock); }
+                        if (RobotsV15.Fights(r.Kind) && r.Foam < 1f) { r.Foam = MathF.Min(1f, r.Foam + FoamRefillPerHour * eff * dt); charging.Add(r.Dock); }
+                    }
+                    if (r.Disabled) { r.Doing = "꺼 둠"; break; }
+                    if (r.Fault is RobotFault df)
+                    {
+                        // 가벼운 고장: 충전대에서 스스로 진단·수리 (전기가 있어야)
+                        if (CanSelfRepair(r) && DockWorking(r))
+                        {
+                            r.SelfRepairDone += dt;
+                            r.Doing = $"{FaultName(df)} — 스스로 고치는 중 {Math.Min(99, (int)(r.SelfRepairDone / SelfRepairHours(df) * 100))}%";
+                            if (r.SelfRepairDone >= SelfRepairHours(df)) SelfRepaired(r, df);
+                        }
+                        else r.Doing = $"{FaultName(df)} — 사람이 고쳐야 한다" + (WhyNotSelf(r) is string why ? $" ({why})" : !DockWorking(r) ? " (충전대에 전기가 없어 스스로 못 고친다)" : "");
+                        break;
+                    }
+                    // 충전대가 죽었으면 기다려도 차지 않는다 — 남은 배터리로 급한 일만 하러 나간다 (돌아올 만큼은 남긴다)
+                    bool deadDock = !DockWorking(r);
+                    if (deadDock && r.Battery < DeadDockReserve) { r.Doing = r.Dock.Machine!.Powered ? "충전대 멈춤 — 충전 못 함" : "충전대에 전기가 없다 — 충전 못 함"; break; }
+                    if (!deadDock && r.Battery < 0.35f) { r.Doing = $"충전 {r.Battery * 100:0}%"; break; }
+                    Decide(r);
+                    if (r.State == RobotState.Docked) r.Doing = r.Battery < 0.99f && !deadDock ? $"충전 {r.Battery * 100:0}% · 대기" : deadDock && r.Battery < 0.35f ? $"충전대에 전기가 없다 — 배터리 {r.Battery * 100:0}% · 급한 일만" : "대기";
+                    break;
+                }
+                case RobotState.Active:
+                {
+                    bool working = r.Steps != null && r.StepIndex < r.Steps.Count && r.Steps[r.StepIndex] is RWork or RAssist or RSpray;
+                    bool moving = r.Path != null;
+                    float drain = r.Steps != null && r.StepIndex < r.Steps.Count && r.Steps[r.StepIndex] is RSpray ? DrainSpray
+                        : moving ? DrainMove : working ? DrainWork : DrainIdle;
+                    r.Battery = MathF.Max(0f, r.Battery - drain * RobotsV15.Drain(r.Kind) * Durability.RobotDrain * w.Fleet.Drain(r) * dt); // v15.7 배터리 크기 · v16.19 큰 셀 · v16.20b 셀 등급 · 아껴 쓰기
+                    r.ActiveHours += dt;
+                    r.Condition = MathF.Max(0f, r.Condition - (working || moving ? 0.008f : 0.002f) * Durability.RobotWear * dt);
+                    // 가벼운 고장으로 충전대에 돌아가는 중 (느리게): 길이 막히면 그 자리에 멈춘다
+                    if (r.Fault is RobotFault lf)
+                    {
+                        r.Doing = $"{FaultName(lf)} — 스스로 고치러 충전대로 (느리게)";
+                        if (r.Steps == null) Stall(r, $"{FaultName(lf)} — 충전대로 갈 길이 막혔다");
+                        else if (r.Battery <= 0.001f) Stall(r, "배터리가 바닥났다");
+                        break;
+                    }
+                    // 불 곁에서 그을리거나, 닳아서 고장
+                    if (w.Fire.AnyWithin(r.Cell, 1.2f) && !RobotsV15.Fireproof(r.Kind) && w.Rng.Chance(0.6f * Durability.RobotScorch * w.Fleet.Hurt * dt)) { Break(r, RobotFault.Scorched); break; } // v16.19 방열 외피
+                    if (w.Fire.AnyWithin(r.Cell, 0.8f) && RobotsV15.Fireproof(r.Kind)) r.Condition = MathF.Max(0f, r.Condition - 0.05f * RobotsV15.HeatWear(r.Kind) * dt);
+                    float wearRisk = (0.0025f + 0.045f * (1f - r.Condition) * (1f - r.Condition)) * RobotsV15.Fault(r.Kind) * Durability.RobotFault * w.Fleet.FaultMul; // v16.20b 외피 등급 · v15.7 고장률 · v16.19 재조정
+                    if (w.Rng.Chance(wearRisk * dt)) { Break(r, PickFault(r)); break; }
+                    if (r.Battery <= 0.001f) { Stall(r, "배터리가 바닥났다"); break; }
+                    // 맡은 일이 사라졌으면 (누가 끝냈거나 조건이 없어졌다) 손을 놓는다
+                    if (r.Order != null && (r.Order.Closed || w.Tick - r.Order.LastSeen > SimTime.Minutes(12)))
+                    {
+                        Abort(r, null);
+                        break;
+                    }
+                    // 배터리가 모자라면 돌아간다 (돌아갈 만큼 남기고) — 맡은 일이든, 사람을 거들든, 순찰이든
+                    if (!r.Homing && r.Steps != null && r.Battery < ReturnCost(r) + 0.05f) { Abort(r, "배터리가 모자라 충전대로 돌아간다"); break; }
+                    // 방재 로봇: 순찰·귀환 중에도 불이 나면 그쪽으로 (거품이 있을 때)
+                    if (RobotsV15.Fights(r.Kind) && !r.FightingFire && w.Fire.Count > 0 && r.Foam > 0.15f && r.Battery > ReturnCost(r) + 0.15f)
+                    {
+                        var fireDist = w.Paths.Flood(r.Cell, Profile);
+                        var keep = (r.Steps, r.StepIndex, r.Doing, r.Homing);
+                        r.Steps = null;
+                        r.Homing = false;
+                        if (!PlanFire(r, fireDist)) (r.Steps, r.StepIndex, r.Doing, r.Homing) = keep;
+                        break;
+                    }
+                    if (r.Steps == null) Decide(r);
+                    break;
+                }
+                case RobotState.Stalled:
+                    r.Doing = r.Fault != null ? $"{FaultName(r.Fault.Value)} — 멈춰 섰다 ({r.Room?.Name ?? "?"})" : $"방전 — 멈춰 섰다 ({r.Room?.Name ?? "?"})";
+                    break;
+            }
+        }
+        foreach (var dock in w.Ship.FurnitureOf(FurnitureType.RobotDock))
+            if (dock.Machine != null) dock.Machine.Active = charging.Contains(dock);
+    }
+
+    /// <summary>배터리 셀이 열화하면 끝까지 차지 않는다.</summary>
+    private static float MaxCharge(Robot r) => 0.55f + 0.45f * MathF.Min(1f, 0.3f + r.Condition);
+
+    private RobotFault PickFault(Robot r)
+    {
+        float x = _world.Rng.Float();
+        // 닳을수록 심한 고장 쪽으로 기운다
+        float minor = 0.6f * (0.4f + 0.6f * r.Condition);
+        if (x < minor) { float y = x / minor; return y < 0.45f ? RobotFault.Sensor : y < 0.72f ? RobotFault.Jam : RobotFault.Overheat; }
+        float z = (x - minor) / (1f - minor);
+        return z < 0.45f ? RobotFault.Drive : z < 0.72f ? RobotFault.Controller : RobotFault.Cell;
+    }
+
+    /// <summary>충전대까지 돌아가는 데 드는 배터리 (곧은 거리 × 2 — 통로를 돌아가고 문 앞에서 기다린다 — 에 여유).</summary>
+    private static float ReturnCost(Robot r)
+    {
+        float dist = MathF.Abs(r.DockPosition.X - r.Position.X) + MathF.Abs(r.DockPosition.Y - r.Position.Y);
+        dist = dist * 1.4f + 6f;
+        return dist / (Speed(r.Kind) * SimTime.TicksPerHour) * DrainMove * RobotsV15.Drain(r.Kind) + 0.03f;
+    }
+
+    private void SetState(Robot r, RobotState s)
+    {
+        r.State = s;
+        r.StateSince = _world.Tick;
+    }
+
+    // ─────────────────────────────── 일 고르기 ───────────────────────────────
+
+    private void Decide(Robot r)
+    {
+        var w = _world;
+        if (r.Disabled || r.Fault != null || r.Dock.Room.Detached) return;
+        // 충전대가 떨어져 나갔거나 포기한 구획이면 나가지 않는다
+        if (r.Dock.Room.Abandoned || r.Dock.Room.OffLimits) { if (!r.AtDock) GoHome(r, null); return; }
+        bool frugal = r.AtDock && !DockWorking(r) && r.Battery < 0.35f; // 죽은 충전대: 급한 일만
+        float reserve = r.AtDock ? (frugal ? DeadDockReserve : 0.35f) : ReturnCost(r) + 0.18f;
+        if (r.Battery < reserve) { if (!r.AtDock) GoHome(r, "충전하러"); return; }
+        // 충전대에서 기다릴 때는 2분에 한 번만 생각한다 (거리장은 비싸다)
+        if (r.AtDock && w.Tick < r.NextDecide) return;
+        r.NextDecide = w.Tick + SimTime.Minutes(2);
+        bool fire = RobotsV15.Fights(r.Kind) && r.Foam > 0.15f && w.Fire.Count > 0;
+        bool work = w.Board.OpenForRobot().Any(o => CanDo(r.Kind, o.Kind) || Stands(r, o)); // 무인 운항: 사람 몫의 손일도
+        bool assist = RobotsV15.Assists(r.Kind) && w.Crew.Any(c => c.CanAct && c.Helper == null && c.Job?.Order is WorkOrder jo && Assistable(jo.Kind) && c.Job.Current is WorkToil);
+        bool patrol = RobotsV15.Patrols(r.Kind) && w.Tick >= r.NextPatrol && r.Battery > 0.7f;
+        bool med = w.MedBots.Wants(r); // 의료 3차 쓰러진 사람 · 피 · 손 펌프 · 소독
+        if (!fire && !work && !assist && !patrol && !med) { if (!r.AtDock) GoHome(r, null); return; }
+
+        var dist = w.Paths.Flood(r.Cell, Profile);
+
+        // 방재 로봇: 불이 먼저
+        if (RobotsV15.Fights(r.Kind) && r.Foam > 0.15f && PlanFire(r, dist)) return;
+        if (med && w.MedBots.Plan(r, dist)) return; // 의료 3차 위중한 사람부터
+
+        WorkOrder? best = null;
+        Cell bestSpot = default;
+        float bestScore = float.MinValue;
+        DistanceField? udist = null, bestField = null;
+        foreach (var o in w.Board.OpenForRobot())
+        {
+            if (!(CanDo(r.Kind, o.Kind) || Stands(r, o)) || !RobotsV15.Takes(r.Kind, o)) continue;
+            if (frugal && o.Urgency < 0.7f) continue;
+            // 원자로 정비는 사람 몫 (제어봉·계측을 손보는 기관 일이다)
+            if (o.Kind == WorkKind.Maintain && o.Target.Furniture?.Type == FurnitureType.ReactorCore) continue;
+            // v11.2 병충해는 사람 눈과 손으로 (로봇 분무기는 잎 뒷면의 벌레를 못 본다)
+            if (o.Kind == WorkKind.Tend && o.Target.Furniture?.Machine?.Crop is { Blight: > 0f }) continue;
+            if (o.Target.CurrentRoom is Room room && (room.Abandoned || room.OffLimits || w.Fire.CountIn(room) > 0 || !w.Fleet.MayEnter(r, room))) continue; // v16.20b 견딜 수 없는 방
+            if (!w.Fleet.Allowed(r, o)) continue; // v16.20b 비상 — 급하지 않은 일은 미룬다
+            var field = dist;
+            if (Rushes(w, o)) field = udist ??= w.Paths.Flood(r.Cell, UrgentProfile); // 강화: 급한 일은 잠긴 격벽 너머도 (주 컴퓨터가 연다)
+            if (Spot(r, o, field) is not Cell spot) continue;
+            float score = o.Urgency - field.Get(spot) / 9000f + w.Automation.Command.Bias(r, o); // v16.20 컴퓨터 명령 (ComputerCommand.Order)
+            if (score > bestScore) { bestScore = score; best = o; bestSpot = spot; bestField = field; }
+        }
+        if (best != null)
+        {
+            var steps = Plan(r, best, bestSpot, bestField!, out string? blocked);
+            if (steps != null && !w.Fleet.Affords(r, best, steps, bestSpot)) { if (!r.AtDock) GoHome(r, "남은 일에 배터리가 모자라"); return; } // v16.20b 남은 일 · 거리 계산
+            if (steps != null)
+            {
+                w.Fleet.Chose(r, best, steps); // v16.20b 판단 이유 · 단계
+                best.Robot = r;
+                r.Order = best;
+                Begin(r, steps, best.Title);
+                return;
+            }
+            if (blocked != null) w.Board.Block(best, null, 0.25f);
+        }
+
+        if (RobotsV15.Assists(r.Kind) && TryAssist(r, dist)) return;
+        if (RobotsV15.Patrols(r.Kind) && w.Tick >= r.NextPatrol && r.Battery > 0.7f && PlanPatrol(r, dist)) return;
+        if (!r.AtDock) GoHome(r, null);
+    }
+
+    /// <summary>로봇이 일할 칸 (사람이 선 자리는 피하고, 가장 가까운 곳).</summary>
+    private Cell? Spot(Robot r, WorkOrder o, DistanceField dist)
+    {
+        Cell? best = null;
+        int bestCost = int.MaxValue;
+        foreach (var s in o.Target.Spots(_world.Ship))
+        {
+            int d = dist.Get(s);
+            if (d < 0) continue;
+            if (_world.Crew.Any(c => !c.Dead && c.Cell == s)) d += 300;
+            if (Robots.Any(x => x != r && x.State == RobotState.Active && x.Cell == s)) d += 300;
+            if (d < bestCost) { best = s; bestCost = d; }
+        }
+        return best;
+    }
+
+    private static (Furniture? box, Cell spot) Nearest(World w, DistanceField dist, Func<Furniture, bool> match)
+    {
+        Furniture? best = null;
+        Cell bestSpot = default;
+        int bestCost = int.MaxValue;
+        foreach (var f in w.Ship.Containers)
+        {
+            if (!match(f)) continue;
+            foreach (var s in f.UseSpots)
+            {
+                int d = dist.Get(s);
+                if (d < 0 || d >= bestCost) continue;
+                best = f; bestSpot = s; bestCost = d;
+            }
+        }
+        return (best, bestSpot);
+    }
+
+    private List<RobotStep>? Plan(Robot r, WorkOrder o, Cell at, DistanceField dist, out string? blocked)
+    {
+        blocked = null;
+        var w = _world;
+        if (!CanDo(r.Kind, o.Kind) && o.Kind != WorkKind.StockDock) return PlanHands(r, o, at, dist, out blocked); // 무인 운항 — 사람 몫의 손일 (Unattended.cs)
+        var steps = new List<RobotStep>();
+        switch (o.Kind)
+        {
+            case WorkKind.Maintain:
+            {
+                var f = o.Target.Furniture!;
+                var m = f.Machine!;
+                bool full = !Adaptation.Rationed(w, m);
+                if (full && m.Spec.ServiceItem is ItemKind item)
+                {
+                    var (box, spot) = Nearest(w, dist, b => b.Storage!.Count(item) > 0);
+                    if (box == null) full = false;
+                    else { steps.Add(new RGoto(spot)); steps.Add(new RTake(box, item, 1)); }
+                }
+                steps.Add(new RGoto(at));
+                steps.Add(new RWork(m.Spec.ServiceHours * (full ? 1f : 0.6f), o, f.Center));
+                steps.Add(new RTest(m, full ? "maint:full" : "maint:temp")); // v16.20b 고친 뒤 시험 가동
+                bool fullService = full;
+                steps.Add(new RDo((rb, world) =>
+                {
+                    if (o.Closed) return true;
+                    // 소모품이 드는 설비는 소모품을 써야 제대로 된 정비다 (없으면 점검·청소만)
+                    bool used = fullService && m.Spec.ServiceItem == null;
+                    if (fullService && m.Spec.ServiceItem is ItemKind it && rb.Cargo?.Kind == it) { rb.Cargo = rb.Cargo.Value.Count > 1 ? new ItemStack(it, rb.Cargo.Value.Count - 1) : null; used = true; }
+                    m.Wear = used ? 0.12f : MathF.Max(0.35f, m.Wear - 0.2f);
+                    m.LastServiced = world.Tick;
+                    m.ServiceCount++;
+                    world.Origin.PanelOpened(f, rb);
+                    world.Board.Close(o);
+                    Done(rb, used ? null : $"{Ko.EulReul(m.Name)} 임시 정비했다 (소모품 없음)");
+                    return true;
+                }));
+                return steps;
+            }
+            case WorkKind.FixLights:
+            {
+                var room = o.Target.Room!;
+                var (box, spot) = Nearest(w, dist, b => b.Storage!.Count(ItemKind.Cable) > 0);
+                if (box == null) { blocked = "케이블 없음"; return null; }
+                steps.Add(new RGoto(spot));
+                steps.Add(new RTake(box, ItemKind.Cable, 1));
+                steps.Add(new RGoto(at));
+                steps.Add(new RWork(0.6f, null, room.Center));
+                steps.Add(new RDo((rb, world) =>
+                {
+                    if (rb.Cargo?.Kind != ItemKind.Cable) return false;
+                    rb.Cargo = null;
+                    room.LightsOut = false;
+                    world.Board.Close(o);
+                    Done(rb, $"{room.Name} 조명을 갈았다");
+                    return true;
+                }));
+                return steps;
+            }
+            case WorkKind.Tend:
+            {
+                var bed = o.Target.Furniture!;
+                var crop = bed.Machine!.Crop!;
+                steps.Add(new RGoto(at));
+                steps.Add(new RWork(0.3f, o, bed.Center));
+                steps.Add(new RDo((rb, world) =>
+                {
+                    if (o.Closed) return true;
+                    crop.Care = MathF.Max(crop.Care, RobotsV15.Care(rb.Kind)); // v15.7 돌봄 로봇은 끝까지
+                    world.Board.Close(o);
+                    Done(rb, null);
+                    return true;
+                }));
+                return steps;
+            }
+            case WorkKind.Harvest:
+            {
+                var bed = o.Target.Furniture!;
+                var crop = bed.Machine!.Crop!;
+                int expected = FoodChain.HarvestYield + 3;
+                var (fridge, fridgeSpot) = Nearest(w, dist, f => f.Type == FurnitureType.Fridge && f.Storage!.Free >= expected);
+                if (fridge == null) { blocked = "냉장고가 가득 참"; return null; }
+                steps.Add(new RGoto(at));
+                steps.Add(new RWork(0.35f, o, bed.Center));
+                steps.Add(new RDo((rb, world) =>
+                {
+                    if (o.Closed || !crop.Ripe) return true;
+                    // 로봇 솜씨는 보통 사람쯤 (0.5)
+                    int yield = Math.Max(1, (int)MathF.Round(FoodChain.HarvestYield * FoodChain.BedSize(bed) * RobotsV15.Yield(rb.Kind) * (0.8f + 0.2f * bed.Machine!.Condition) * FoodSourceSystem.YieldMul(bed))); // v15.7 수확 로봇은 덜 흘린다 · v16.22 재배실마다
+                    world.FoodSources.Harvested(bed, yield); // v16.22
+                    crop.Growth = 0f;
+                    rb.Cargo = new ItemStack(ItemKind.Produce, yield);
+                    world.Board.Close(o);
+                    Done(rb, $"{bed.Label}에서 채소 {yield}개를 거뒀다");
+                    return true;
+                }));
+                steps.Add(new RGoto(_ => r.Cargo != null ? fridgeSpot : null));
+                steps.Add(new RPut(fridge));
+                return steps;
+            }
+            case WorkKind.Restock:
+            {
+                var dispenser = o.Target.Furniture!;
+                int want = Math.Min(16, dispenser.Storage!.Free); // v19 끼니 앞 채우기 (12 → 16)
+                var (fridge, fridgeSpot) = Nearest(w, dist, f => f.Type == FurnitureType.Fridge && f.Storage!.Count(ItemKind.Meal) > 0);
+                if (fridge == null || want <= 0) { blocked = "냉장고에 식사 없음"; return null; }
+                steps.Add(new RGoto(fridgeSpot));
+                steps.Add(new RTake(fridge, ItemKind.Meal, want, partialOk: true));
+                steps.Add(new RGoto(at));
+                steps.Add(new RPut(dispenser));
+                steps.Add(new RDo((rb, world) => { world.Board.Close(o); Done(rb, null); return true; }));
+                steps.Add(new RGoto(_ => r.Cargo != null ? fridgeSpot : null));
+                steps.Add(new RPut(fridge));
+                return steps;
+            }
+            case WorkKind.StockDock:
+            {
+                var dock = o.Target.Furniture!;
+                var kind = o.Product ?? ItemKind.Structure;
+                int want = Math.Min((kind == ItemKind.Sealant ? 1 : 2) - dock.Storage!.Count(kind), dock.Storage.Free);
+                var (shelf, shelfSpot) = Nearest(w, dist, f => f.Type == FurnitureType.Shelf && f.Storage!.Count(kind) > 0);
+                if (shelf == null || want <= 0) { blocked = $"{ItemKinds.Name(kind)} 없음"; return null; }
+                steps.Add(new RGoto(shelfSpot));
+                steps.Add(new RTake(shelf, kind, want, partialOk: true));
+                steps.Add(new RGoto(at));
+                steps.Add(new RPut(dock));
+                steps.Add(new RDo((rb, world) => { world.Board.Close(o); Done(rb, $"{dock.Label}에 {Ko.EulReul(ItemKinds.Name(kind))} 실었다"); return true; }));
+                steps.Add(new RGoto(_ => r.Cargo != null ? shelfSpot : null));
+                steps.Add(new RPut(shelf));
+                return steps;
+            }
+            case WorkKind.StowCot:
+            {
+                var cot = o.Target.Furniture!;
+                steps.Add(new RGoto(at));
+                steps.Add(new RWork(0.3f, null, cot.Center));
+                steps.Add(new RDo((rb, world) =>
+                {
+                    if (cot.Owner != null || cot.Stowed) { world.Board.Close(o); return true; }
+                    var room = cot.Room;
+                    world.Ship.Stow(cot);
+                    world.Paths.Invalidate();
+                    world.Structure.Touch();
+                    world.Adapt.CotsStowed++;
+                    world.Board.Close(o);
+                    if (!room.Furniture.Any(f => f.Type == FurnitureType.Cot) && room.Purpose != null && room.Purpose.StartsWith("임시 침실"))
+                    {
+                        if (!room.FormerPurposes.Contains("임시 침실")) room.FormerPurposes.Add("임시 침실");
+                        room.Purpose = null;
+                        MarkLog.Add(room.Marks, world.Tick, $"{rb.Name}: 마지막 간이침대를 접었다 — 원래 {room.Name}으로");
+                    }
+                    Done(rb, $"{room.Name}의 빈 간이침대를 접어 창고로 옮겼다");
+                    return true;
+                }));
+                return steps;
+            }
+            case WorkKind.RefillPropellant:
+            {
+                var tap = Logistics.WaterTap(w);
+                var tapSpot = tap?.UseSpots.Where(dist.Reachable).OrderBy(dist.Get).Cast<Cell?>().FirstOrDefault();
+                if (tap == null || tapSpot is not Cell ts) { blocked = "물꼭지에 갈 수 없음"; return null; }
+                float liters = 0f;
+                steps.Add(new RGoto(ts));
+                steps.Add(new RWork(0.06f, null, tap.Center));
+                steps.Add(new RDo((rb, world) =>
+                {
+                    var p = world.Propulsion;
+                    liters = MathF.Min(30f, MathF.Min(p.Capacity - p.Propellant, world.Water.Level - world.Water.Capacity * 0.4f));
+                    if (liters < 1f) return false;
+                    world.Water.Level -= liters;
+                    return true;
+                }));
+                steps.Add(new RGoto(at));
+                steps.Add(new RWork(0.2f, null, o.Target.Center));
+                steps.Add(new RDo((rb, world) =>
+                {
+                    world.Propulsion.Propellant = MathF.Min(world.Propulsion.Capacity, world.Propulsion.Propellant + liters);
+                    world.Board.Close(o);
+                    Done(rb, $"엔진 추진제 탱크에 물 {liters:0}L를 부었다");
+                    return true;
+                }));
+                return steps;
+            }
+            case WorkKind.CarryWater:
+                return Logistics.RobotCarryWater(this, r, o, at, dist, out blocked);
+            case WorkKind.StockCache:
+                return Logistics.RobotStockCache(this, r, o, at, dist, out blocked);
+            case WorkKind.ShelterFood:
+                return Logistics.RobotShelterFood(this, r, o, at, dist, out blocked);
+        }
+        return null;
+    }
+
+    internal static (Furniture? box, Cell spot) NearestFor(World w, DistanceField dist, Func<Furniture, bool> match) => Nearest(w, dist, match);
+
+    /// <summary>한 일을 기록한다.</summary>
+    internal void Done(Robot r, string? what)
+    {
+        r.JobsDone++;
+        JobsDone++;
+        if (what != null) _world.Log.Add(_world.Tick, LogKind.Work, $"{r.Name}: {what}");
+    }
+
+    internal void Begin(Robot r, List<RobotStep> steps, string what)
+    {
+        r.Homing = false;
+        r.Steps = steps;
+        r.StepIndex = 0;
+        r.Doing = what;
+        if (r.AtDock) SetState(r, RobotState.Active);
+        steps[0].Begin(r, _world);
+    }
+
+    /// <summary>일이 끝났다 (성공이든 실패든): 짐은 둘 곳에 두고, 다음 일을 찾는다.</summary>
+    private void FinishTask(Robot r, bool ok)
+    {
+        var w = _world;
+        bool wasHome = r.Homing;
+        r.Homing = false;
+        r.FightingFire = false;
+        if (r.Order is WorkOrder o)
+        {
+            if (o.Robot == r) o.Robot = null;
+            if (!ok && !o.Closed) w.Board.Block(o, null, 0.1f);
+        }
+        if (r.Helping is CrewMember h && h.Helper == r) h.Helper = null;
+        r.Helping = null;
+        r.Order = null;
+        r.Steps = null;
+        r.Path = null;
+        if (r.State == RobotState.Docked || wasHome) return;
+        if (r.Cargo != null) { StowCargo(r); return; }
+        r.IdleSince = w.Tick;
+        Decide(r);
+    }
+
+    /// <summary>들고 있는 걸 둘 곳에 두고 온다 (없으면 충전대 옆 선반, 그것도 없으면 그 자리에 내려놓는다 — 사라지지 않게 가까운 보관함에).</summary>
+    private void StowCargo(Robot r)
+    {
+        var w = _world;
+        var held = r.Cargo!.Value;
+        var dist = w.Paths.Flood(r.Cell, Profile);
+        var (box, spot) = Nearest(w, dist, f => f.Storage!.Accepts(held.Kind) && f.Storage.Free > 0);
+        if (box == null)
+        {
+            foreach (var f in w.Ship.Containers)
+            {
+                int put = f.Storage!.Add(held.Kind, held.Count);
+                held = new ItemStack(held.Kind, held.Count - put);
+                if (held.Count <= 0) break;
+            }
+            r.Cargo = null;
+            GoHome(r, null);
+            return;
+        }
+        Begin(r, new List<RobotStep> { new RGoto(spot), new RPut(box) }, $"{held} 두러 간다");
+    }
+
+    /// <summary>하던 일을 내려놓는다 (진척은 작업 목록에 남는다). why가 있으면 기록.</summary>
+    public void Abort(Robot r, string? why)
+    {
+        var w = _world;
+        r.FightingFire = false;
+        if (r.Order is WorkOrder o && o.Robot == r) o.Robot = null;
+        if (r.Helping is CrewMember h && h.Helper == r) h.Helper = null;
+        r.Helping = null;
+        r.Order = null;
+        r.Steps = null;
+        r.Path = null;
+        if (why != null) w.Log.Add(w.Tick, LogKind.Warning, $"{r.Name}: {why}");
+        if (r.State != RobotState.Active) return;
+        if (r.Cargo != null && r.Battery > 0.05f) { StowCargo(r); return; }
+        GoHome(r, why != null ? "충전하러" : null);
+    }
+
+    /// <summary>v16.20 주 컴퓨터 명령 (ComputerCommand.Order): 거들기 · 순찰 · 귀환 · 덜 급한 일을 내려놓고 바로 다시 고른다 (불 끄는 중 · 짐을 든 채는 끝내고).</summary>
+    internal void Redirect(Robot r, float priority)
+    {
+        r.NextDecide = Math.Min(r.NextDecide, _world.Tick);
+        if (r.State != RobotState.Active || r.FightingFire || r.Cargo != null) return;
+        if (r.Order is WorkOrder now && now.Urgency >= priority) return; // 더 급한 일을 하는 중
+        if (r.Order is WorkOrder o && o.Robot == r) o.Robot = null;
+        if (r.Helping is CrewMember h && h.Helper == r) h.Helper = null;
+        r.Helping = null;
+        r.Order = null;
+        r.Steps = null;
+        r.Path = null;
+        r.Homing = false;
+        Decide(r);
+    }
+
+    private void GoHome(Robot r, string? why)
+    {
+        var w = _world;
+        if (r.AtDock || r.State != RobotState.Active) return;
+        var spots = r.Dock.UseSpots.Where(s => w.Ship.IsWalkable(s)).ToList();
+        if (spots.Count == 0) spots = r.Dock.Cells.SelectMany(c => Cell.Dirs4.Select(d => c + d)).Where(w.Ship.IsWalkable).ToList();
+        var dist = w.Paths.Flood(r.Cell, Profile);
+        var spot = spots.Where(s => dist.Reachable(s)).OrderBy(s => dist.Get(s)).Cast<Cell?>().FirstOrDefault();
+        if (spot is not Cell at)
+        {
+            r.Doing = "충전대로 가는 길이 막혔다 — 기다린다";
+            r.Steps = null;
+            return;
+        }
+        r.Steps = new List<RobotStep>
+        {
+            new RGoto(at),
+            new RDo((rb, world) =>
+            {
+                rb.Position = rb.DockPosition;
+                rb.Path = null;
+                rb.Homing = false;
+                SetState(rb, RobotState.Docked);
+                rb.Doing = "대기";
+                return true;
+            }),
+        };
+        r.Homing = true;
+        r.StepIndex = 0;
+        r.Doing = "충전대로" + (why != null ? $" ({why})" : "");
+        r.Steps[0].Begin(r, w);
+    }
+
+    // ─────────────────────────────── 거들기 · 불 · 순찰 ───────────────────────────────
+
+    private bool TryAssist(Robot r, DistanceField dist)
+    {
+        var w = _world;
+        CrewMember? who = null;
+        Cell spot = default;
+        int bestCost = int.MaxValue;
+        foreach (var c in w.Crew)
+        {
+            if (!c.CanAct || c.Helper != null || c.Outside || c.Job?.Order is not WorkOrder o || !Assistable(o.Kind)) continue;
+            if (c.Job.Current is not WorkToil wt || (wt.Progress ?? 0f) > 0.85f) continue;
+            if (c.Room == null || c.Room.Abandoned || w.Fire.CountIn(c.Room) > 0) continue;
+            foreach (var d in Cell.Dirs8)
+            {
+                var s = c.Cell + d;
+                if (!w.Ship.IsOpenFloor(s) || w.Ship.RoomAt(s) != c.Room) continue;
+                if (w.Crew.Any(x => !x.Dead && x.Cell == s) || Robots.Any(x => x != r && x.Cell == s && x.State == RobotState.Active)) continue;
+                int dd = dist.Get(s);
+                if (dd < 0 || dd >= bestCost) continue;
+                bestCost = dd; who = c; spot = s;
+            }
+        }
+        if (who == null || bestCost > 900) return false;
+        var job = who.Job!;
+        Begin(r, new List<RobotStep> { new RGoto(spot), new RAssist(who, job) }, $"{Ko.EulReul(who.Name)} 거들러 간다");
+        return true;
+    }
+
+    private bool PlanFire(Robot r, DistanceField dist)
+    {
+        var w = _world;
+        Cell? best = null;
+        int bestCost = int.MaxValue;
+        foreach (var (cell, _) in w.Fire.Fires)
+        {
+            var room = w.Ship.RoomAt(cell);
+            if (room == null || room.Detached || room.Abandoned) continue;
+            foreach (var d in Cell.Dirs8)
+            {
+                var s = cell + d;
+                if (!w.Ship.IsWalkable(s) || w.Fire.At(s) > 0f) continue;
+                int dd = dist.Get(s);
+                if (dd < 0 || dd >= bestCost) continue;
+                bestCost = dd; best = s;
+            }
+        }
+        if (best is not Cell at) return false;
+        FiresFought++;
+        r.FightingFire = true;
+        var room0 = w.Ship.RoomAt(at);
+        Begin(r, new List<RobotStep>
+        {
+            new RGoto(at),
+            new RSpray(),
+            new RDo((rb, world) => { Done(rb, $"{room0?.Name ?? "?"} 불에 거품을 뿌렸다 (거품 {rb.Foam * 100:0}%)"); return true; }),
+        }, $"{room0?.Name ?? "?"} 불 끄러 간다");
+        return true;
+    }
+
+    /// <summary>방재 로봇의 순찰: 설비가 있는 방을 몇 곳 돌며 들여다본다 (불·사고 전조를 먼저 본다).</summary>
+    private bool PlanPatrol(Robot r, DistanceField dist)
+    {
+        var w = _world;
+        var rooms = w.Ship.LiveRooms
+            .Where(x => !x.Abandoned && !x.OffLimits && x.Type != RoomType.Corridor && x.Furniture.Any(f => f.Machine != null))
+            .OrderBy(x => w.Robots.LastPatrolled.GetValueOrDefault(x.Id, -1_000_000) - w.Fleet.Hot(x)) // v16.20b 자주 고장 나는 곳 먼저
+            .ThenBy(x => x.Id)
+            .Take(RobotsV15.PatrolRooms(r.Kind)).ToList();
+        var steps = new List<RobotStep>();
+        foreach (var room in rooms)
+        {
+            var spot = room.Cells.Where(w.Ship.IsOpenFloor).Where(dist.Reachable).OrderBy(c => (c.Center - room.Center).LengthSquared()).Cast<Cell?>().FirstOrDefault();
+            if (spot is not Cell s) continue;
+            steps.Add(new RGoto(s));
+            steps.Add(new RWork(0.1f, null, room.Center));
+            var inspected = room;
+            steps.Add(new RDo((rb, world) => { world.Robots.Inspect(rb, inspected); return true; }));
+        }
+        if (steps.Count == 0) return false;
+        r.NextPatrol = w.Tick + SimTime.Hours(RobotsV15.PatrolHours(r.Kind));
+        Patrols++;
+        Begin(r, steps, "순찰 — " + string.Join(" · ", rooms.Select(x => x.Name)));
+        if (w.Fleet.Lesson(rooms[0]) is string lesson) r.Mind.Say(lesson, w.Tick); // v16.20b 배운 것: 자주 고장 나는 곳을 먼저
+        return true;
+    }
+
+    /// <summary>방마다 마지막으로 순찰한 틱.</summary>
+    public Dictionary<int, long> LastPatrolled { get; } = new();
+
+    /// <summary>순찰로 방을 들여다봤다: 모르던 불을 알리고, 사고 전조를 찾는다 (v11.0).</summary>
+    internal void Inspect(Robot r, Room room)
+    {
+        var w = _world;
+        LastPatrolled[room.Id] = w.Tick;
+        Prevention.Inspect(w, room, r.Name, robot: true);
+    }
+
+    /// <summary>불을 본 로봇 (방재 로봇이면 경보가 없어도 알린다).</summary>
+    public Robot? Witness(Room room) =>
+        Robots.FirstOrDefault(r => r.Operational && r.State == RobotState.Active && r.Room == room && RobotsV15.Base(r.Kind) == RobotKind.Safety);
+
+    // ─────────────────────────────── 시험용 ───────────────────────────────
+
+    /// <summary>시험·화면 확인용: 로봇을 고장 낸다.</summary>
+    public void ForceFault(Robot r, RobotFault f) => Break(r, f);
+
+    /// <summary>시험·화면 확인용: 로봇을 그 칸에서 방전된 채 멈춰 세운다.</summary>
+    public void ForceStall(Robot r, Cell at)
+    {
+        DropTask(r);
+        r.Position = at.Center;
+        r.PreviousPosition = r.Position;
+        r.Room = _world.Ship.RoomAt(at);
+        r.Battery = 0f;
+        SetState(r, RobotState.Active);
+        Stall(r, "배터리가 바닥났다 (시험)");
+    }
+
+    // ─────────────────────────────── 고장 · 멈춤 · 잃음 ───────────────────────────────
+
+    private void Break(Robot r, RobotFault f)
+    {
+        var w = _world;
+        r.Fault = f;
+        r.SelfRepairDone = 0f;
+        r.Breakdowns++;
+        Breakdowns++;
+        MarkLog.Add(r.Marks, w.Tick, $"{FaultName(f)} ({r.Room?.Name ?? "?"})");
+        w.Fleet.Learn(r.Room, FaultName(f)); // v16.20b 자주 고장 나는 곳
+        if (CanSelfRepair(r))
+        {
+            // 가벼운 고장: 하던 일은 작업 목록에 두고, 느리게 충전대로 돌아가 스스로 고친다
+            w.Log.Add(w.Tick, LogKind.Warning, $"{r.Name} {FaultName(f)} — 스스로 고치러 충전대로 (느리게)" + (r.Order != null ? $" · {Ko.EunNeun(r.Order.Title)} 작업 목록으로" : ""));
+            DropTask(r);
+            if (r.State == RobotState.Active) GoHome(r, "자가 수리하러");
+            return;
+        }
+        if (Minor(f)) w.Log.Add(w.Tick, LogKind.Warning, $"{r.Name}: {WhyNotSelf(r)} — 사람이 고쳐야 한다");
+        w.Log.Add(w.Tick, LogKind.Warning, $"{r.Name} {FaultName(f)} — {r.Room?.Name ?? "?"}에 멈춰 섰다" + (r.Order != null ? $" (하던 일 {Ko.EunNeun(r.Order.Title)} 작업 목록으로)" : ""));
+        DropTask(r);
+        SetState(r, RobotState.Stalled);
+        w.Board.RequestScan();
+        FleetBroke(r); // v16.20b 동료 로봇이 바로 나선다 (사람보다 먼저 닿으면)
+    }
+
+    private void Stall(Robot r, string why)
+    {
+        var w = _world;
+        Stalls++;
+        MarkLog.Add(r.Marks, w.Tick, $"{why} ({r.Room?.Name ?? "?"})");
+        w.Log.Add(w.Tick, LogKind.Warning, $"{r.Name}: {why} — {r.Room?.Name ?? "?"}에 멈춰 섰다");
+        DropTask(r);
+        SetState(r, RobotState.Stalled);
+        w.Board.RequestScan();
+    }
+
+    /// <summary>일을 놓는다 (진척은 작업 목록에, 짐은 가까운 보관함에 — 사람이 가져간 셈).</summary>
+    private void DropTask(Robot r)
+    {
+        var w = _world;
+        if (r.Order is WorkOrder o && o.Robot == r) o.Robot = null;
+        if (r.Helping is CrewMember h && h.Helper == r) h.Helper = null;
+        r.Helping = null;
+        r.Order = null;
+        r.Steps = null;
+        r.Path = null;
+        if (r.Cargo is ItemStack held)
+        {
+            int left = held.Count;
+            foreach (var f in w.Ship.Containers.OrderBy(f => (f.Center - r.Position).LengthSquared()))
+            {
+                left -= f.Storage!.Add(held.Kind, left);
+                if (left <= 0) break;
+            }
+            r.Cargo = null;
+        }
+    }
+
+    private void Lose(Robot r, Room room)
+    {
+        var w = _world;
+        DropTask(r);
+        r.TowedBy = null;
+        SetState(r, RobotState.Lost);
+        r.Doing = $"{Ko.WaGwa(room.Name)} 함께 떨어져 나갔다";
+        MarkLog.Add(r.Marks, w.Tick, $"{Ko.WaGwa(room.Name)} 함께 떨어져 나갔다");
+        w.History.Add(w, HistoryKind.Damage, $"{Ko.IGa(r.Name)} {Ko.WaGwa(room.Name)} 함께 떨어져 나갔다", room, log: true);
+    }
+
+    // ─────────────────────────────── 사람이 하는 일 (수리·끌어오기·정비) ───────────────────────────────
+
+    /// <summary>충전대에서 스스로 고쳤다 (조금 닳는다).</summary>
+    private void SelfRepaired(Robot r, RobotFault f)
+    {
+        var w = _world;
+        r.Fault = null;
+        r.SelfRepairDone = 0f;
+        r.SelfRepairs++;
+        r.SelfRepairsTotal++;
+        SelfRepairs++;
+        r.Condition = MathF.Max(0f, r.Condition - 0.02f);
+        MarkLog.Add(r.Marks, w.Tick, $"스스로 고쳤다 ({FaultName(f)} · 사람 정비 뒤 {r.SelfRepairs}번째)");
+        w.Log.Add(w.Tick, LogKind.Work, $"{r.Name}: {Ko.EulReul(FaultName(f))} 자가 진단으로 고쳤다 ({r.SelfRepairs}/{SelfRepairLimit})");
+    }
+
+    public int SelfRepairs { get; private set; }
+
+    /// <summary>사람이 고쳤다.</summary>
+    internal void Repaired(Robot r, CrewMember by, bool makeshift)
+    {
+        var w = _world;
+        var f = r.Fault;
+        r.Fault = null;
+        r.SelfRepairDone = 0f;
+        if (!makeshift) r.SelfRepairs = 0; // 사람이 제대로 봤다
+        r.Condition = MathF.Max(r.Condition, makeshift ? 0.45f : 0.85f);
+        MarkLog.Add(r.Marks, w.Tick, $"{Ko.IGa(by.Name)} {(makeshift ? "임시로 " : "")}고쳤다 ({(f is RobotFault ff ? FaultName(ff) : "")})");
+        if (r.State == RobotState.Stalled)
+        {
+            if (r.Battery > 0.08f) { SetState(r, RobotState.Active); GoHome(r, "고쳐져 충전대로"); }
+        }
+    }
+
+    /// <summary>사람이 충전대까지 끌고 왔다.</summary>
+    internal void Returned(Robot r)
+    {
+        r.TowedBy = null;
+        r.Position = r.DockPosition;
+        r.Path = null;
+        r.Steps = null;
+        r.Fetched++;
+        SetState(r, RobotState.Docked);
+        r.Doing = r.Fault != null ? $"{FaultName(r.Fault.Value)} — 수리를 기다린다" : "충전";
+    }
+
+    internal void StartTow(Robot r, CrewMember c)
+    {
+        r.TowedBy = c;
+        SetState(r, RobotState.Towed);
+        r.Doing = $"{Ko.IGa(c.Name)} 충전대로 끌고 간다";
+    }
+
+    internal void Serviced(Robot r)
+    {
+        r.Condition = 0.97f;
+        r.SelfRepairs = 0;
+        MarkLog.Add(r.Marks, _world.Tick, "정비 (윤활·조임·센서 청소)");
+    }
+}

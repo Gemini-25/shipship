@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Godot 없이 시뮬레이션 코어만 빌드해서 돌리는 콘솔 프로그램 -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RollForward>Major</RollForward>
+    <Nullable>enable</Nullable>
+    <LangVersion>12</LangVersion>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../game/src/Core/**/*.cs" Link="Core/%(RecursiveDir)%(Filename)%(Extension)" />
+    <!-- v16.5a 재질 그림 점검(lookcheck): 텍스처 생성기 · 재질 그림 표 (Godot 없이 컴파일되는 것만) -->
+    <Compile Include="../texgen/TexGen*.cs;../texgen/Png.cs" Link="TexGen/%(Filename)%(Extension)" />
+    <Compile Include="../../game/src/View/LookSpec.cs" Link="View/LookSpec.cs" />
+    <Compile Include="../../game/src/View/TechLookTable.cs" Link="View/TechLookTable.cs" /><!-- v16.5b 그림 표 (Godot 없이) -->
+  </ItemGroup>
+</Project>
