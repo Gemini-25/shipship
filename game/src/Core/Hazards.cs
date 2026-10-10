@@ -252,10 +252,10 @@ public sealed partial class HazardSystem
     public int ShowerNode { get; private set; } = -1;
 
     // 태양 폭풍
-    public long StormUntil { get; private set; } = -1;
+    public long StormUntil { get; internal set; } = -1;
     public long StormSince { get; private set; } = -1;
     /// <summary>v16.26 이번 폭풍의 처음 세 시간 양성자 세기 (보통 0.45~0.8 · 센 것 1~1.6).</summary>
-    public float StormPeak { get; private set; } = 0.6f;
+    public float StormPeak { get; internal set; } = 0.6f;
     public bool StormActive => _w.Tick < StormUntil;
     public float StormHoursLeft => StormActive ? (StormUntil - _w.Tick) / (float)SimTime.TicksPerHour : 0f;
     public int StormGlitches { get; private set; }

@@ -54,17 +54,42 @@ public sealed class EatActivity : Activity
             if (src == Source.Dispenser) cost += 60 * w.Coop.Queues.LineAt(QueueKind.Meal, found.box); // v19 줄 한 사람 ≈ 2.5분 걸음 — 몰린 배식기 대신 한산한 곳 · 비상식량으로
             if (cost < bestCost) { best = found.box; bestSpot = found.spot; bestSrc = src; bestCost = cost; }
         }
+        // 남은 그릇보다 받으러 가는 사람이 많으면 그곳은 없는 셈 친다 — 60인 배 사흘: 세 그릇 남은 냉장고로 여럿이 몰려 늦게 온 사람이 빈손으로 돌아선 것 43번
+        var headed = Headed(w, c);
+        int Left(Furniture f) => f.Storage!.Count(ItemKind.Meal) - (headed?.GetValueOrDefault(f.Id) ?? 0);
         Try(Plans.NearestContainer(w, dist, c, f =>
-            f.Type == FurnitureType.MealDispenser && f.Storage!.Count(ItemKind.Meal) > 0 && f.Machine!.Efficiency > 0f), Source.Dispenser, 0);
+            f.Type == FurnitureType.MealDispenser && f.Machine!.Efficiency > 0f && Left(f) > 0), Source.Dispenser, 0);
         if (best == null || bestCost > 300) // 배식기가 가까우면 냉장고는 보지 않는다 (사람마다 생각할 때마다 찾는다 — 30인 배 하루가 11% 느려졌다)
             Try(Plans.NearestContainer(w, dist, c, f =>
-                f.Type == FurnitureType.Fridge && f.Storage!.Count(ItemKind.Meal) > 0), Source.Fridge, 50);
+                f.Type == FurnitureType.Fridge && Left(f) > 0), Source.Fridge, 50);
         if (best == null || bestCost > 400 || storm) // 식사가 가까이 있으면 비상식량은 보지 않는다 (폭풍 속은 늘 본다)
-            Try(Plans.NearestContainer(w, dist, c, f => f.Storage!.Count(ItemKind.Ration) > 0), Source.Ration, storm ? 0 : hunger > 0.7f ? 300 : 1200);
+            Try(Plans.NearestContainer(w, dist, c, f => f.Storage!.Count(ItemKind.Ration) - (headed?.GetValueOrDefault(f.Id) ?? 0) > 0), Source.Ration, storm ? 0 : hunger > 0.7f ? 300 : 1200);
         // 마지막 수단: 조리할 수 없고 비상식량도 떨어졌으면 채소를 날로 (v7에서 고침: 전에는 채소가 쌓여 있는데 굶었다)
         if (best == null || hunger > 0.85f && bestCost > 600)
             Try(Plans.NearestContainer(w, dist, c, f => f.Type == FurnitureType.Fridge && f.Storage!.Count(ItemKind.Produce) > 0), Source.Produce, best == null ? 0 : 600);
         return (best, bestSpot, bestSrc);
+    }
+
+    /// <summary>v19 태양 폭풍 속에 더 쬐는 방의 식사를 받으러 잠깐 다녀오나: 배가 꽤 고프고 · 그 방이 잠깐 들를 만하다 (15분이면 0.1Sv 남짓).</summary>
+    private static bool Dash(CrewMember c, Furniture? box, float hunger) =>
+        box != null && box.Room.Radiation >= 0.2f && box.Room.Radiation < 0.8f && hunger >= 0.7f;
+
+    /// <summary>보관함마다 식사 · 비상식량을 받으러 가는 중인 사람 수 (나는 빼고 · 아직 받지 않은 사람만). 아무도 없으면 null.</summary>
+    private static Dictionary<int, int>? Headed(World w, CrewMember self)
+    {
+        Dictionary<int, int>? d = null;
+        foreach (var o in w.Crew)
+        {
+            if (o == self || o.Job is not { Activity: EatActivity } j || j.TargetRoom == null) continue;
+            foreach (var f in j.TargetRoom.Furniture)
+                if (f.Storage != null && j.PendingTake(f))
+                {
+                    d ??= new();
+                    d[f.Id] = d.GetValueOrDefault(f.Id) + 1;
+                    break;
+                }
+        }
+        return d;
     }
 
     /// <summary>끼니때인가 (기상 후 0.5h · 6h · 11.5h 전후, 조금이라도 출출하면) — 냄새를 따라가는 것도 끼니를 찾아가는 것이다.</summary>
@@ -134,10 +159,19 @@ public sealed class EatActivity : Activity
         // 0.65(+ 끼어들기 여유 0.35): 악기 · 취미는 못 끼어들고 탄내 확인 같은 반응은 끼어든다 (0.9였을 땐 주방에서 먹다 탄내를 맡고도 계속 먹었다)
         if (c.Job?.Activity is EatActivity && c.Needs.Food < 0.95f) { score = MathF.Max(score, 0.65f); reason += " · 먹던 끼니"; }
         // 통합7 태양 폭풍이 쏟아지는 동안 쬐는 방(식당 · 지나는 통로)으로 밥 먹으러 나가지 않는다 — 굶주리기 전엔 지나간 뒤에 (새터호: 대피소에서 나와 59% 식당으로)
-        if (w.Ambience.StormPower >= 0.3f && hunger < 0.93f && !c.Outside && (box?.Room.Radiation >= 0.2f || c.Room?.Radiation >= 0.2f))
+        bool storm = w.Ambience.StormPower >= 0.3f;
+        // v19 받으러 가는 길 · 줄 · 받아 오는 길에 쬐는 방을 지나면 서두른다 (대피 행동이 끼어들어 끼니가 끊긴 것 60인 배 폭풍 한나절 270번 — 센 곳에서는 그래도 피한다)
+        if (storm && c.Job?.Activity is EatActivity && c.Room?.Radiation >= 0.2f) { score = MathF.Max(score, 1.2f); reason += " · 쬐는 곳 — 얼른"; }
+        // 더 쬐는 곳으로 먹으러 가는 것만 따진다 (대피소마저 쬐는 센 폭풍에 대피소 선반의 비상식량까지 미뤘다)
+        if (storm && !c.Outside && box != null && box.Room.Radiation >= 0.2f && box.Room.Radiation > (c.Room?.Radiation ?? 0f) + 0.05f)
         {
-            score *= 0.3f;
-            reason += " · 태양 폭풍 — 지나간 뒤에 먹는다";
+            // v19 폭풍이 누그러져 쬐는 식당이 견딜 만하면 배고픈 사람은 얼른 받아 와 대피소에서 먹는다 (60인 배: 약해진 폭풍 여섯 시간 — 배식기 96인분을 두고 스무 명이 굶주렸다)
+            if (Dash(c, box, hunger)) reason += " · 태양 폭풍 — 얼른 받아 와 안에서 먹는다";
+            else if (hunger < 0.93f)
+            {
+                score *= 0.3f;
+                reason += " · 태양 폭풍 — 지나간 뒤에 먹는다";
+            }
         }
         return (score, reason);
     }
@@ -148,7 +182,8 @@ public sealed class EatActivity : Activity
         if (box == null) return null;
         var kind = src switch { Source.Ration => ItemKind.Ration, Source.Produce => ItemKind.Produce, _ => ItemKind.Meal };
 
-        var seat = w.Ship.RoomsOf(RoomType.Mess).Where(r => !r.OffLimits).SelectMany(r => r.Furniture)
+        bool hot = w.Ambience.StormPower >= 0.3f; // v19 태양 폭풍 속: 대피소에서 받은 비상식량을 들고 쬐는 식당 자리까지 가지 않는다
+        var seat = w.Ship.RoomsOf(RoomType.Mess).Where(r => !r.OffLimits && !(hot && r.Radiation >= 0.2f)).SelectMany(r => r.Furniture)
             .Where(f => f.Type == FurnitureType.Seat && f.ReservedBy == null && dist.Reachable(f.UseSpots[0])
                         && !w.IsSpotTaken(f.UseSpots[0], c))
             .OrderBy(f => (f.Center - box.Center).LengthSquared() + w.Coop.Queues.SeatBias(c, f) + w.Info.SeatBias(c, f) + w.After.SeatBias(c, f)) // 통합7 두 줄로 나뉘어 뒤 줄이 앞 줄(v17.5 떠난 사람의 의자 · 구석)을 덮던 것을 하나로 · v17.3 늘 앉던 자리 · 친한 사람 · 소음 · 조명 · 다툰 사람 · v17.4 줄에서 다툰 사람 곁은 피하고 양보해 준 사람 곁으로
@@ -158,10 +193,15 @@ public sealed class EatActivity : Activity
         var away = starving ? null : w.After.EatAway(c, seat, dist) ?? w.Drains.EatAway(c, seat, dist); // v17.5 묵은 그을음 냄새 · 혼자 먹기 → 다른 방 · 선실 · v18.3 하수 냄새
         if (away != null) seat = null;
 
+        // v19 폭풍 속 받아 오기: 쬐는 식당에서는 받기만 하고 있던 자리로 돌아와 먹는다
+        Cell? back = hot && box.Room.Radiation >= 0.2f && box.Room != c.Room && (c.Room?.Radiation ?? 0f) + 0.05f < box.Room.Radiation ? c.Cell : null;
+        if (back != null) { seat = null; away = null; }
+        bool grab = hot && kind is ItemKind.Ration or ItemKind.Produce; // 폭풍 속 대피소 선반의 비상식량은 줄 없이 집어 간다 (60인 배 폭풍: 대피소 선반 앞 줄에서 굶주린 것 140사람·시간)
+
         var toils = Plans.DropOff(c, w, dist);
-        toils.Add(new QueueToil(QueueKind.Meal, box, spot)); // v17.4 배식 줄
+        if (!grab) toils.Add(new QueueToil(QueueKind.Meal, box, spot)); // v17.4 배식 줄
         toils.Add(new GotoToil(spot));
-        toils.Add(new WaitToil(SimTime.Minutes(2), Pose.Standing, box.Center));
+        toils.Add(new WaitToil(SimTime.Minutes(grab ? 0.3f : 2f), Pose.Standing, box.Center));
         toils.Add(new TakeToil(box, kind, 1));
         toils.Add(new DoToil((cm, world) =>
         {
@@ -174,7 +214,8 @@ public sealed class EatActivity : Activity
             if (kind == ItemKind.Ration) world.FoodSources.Note(FoodSrc.Stored, 1); // v16.22 저장 식량을 뜯었다
             return true;
         }));
-        toils.AddRange(w.Cooking.ReheatToils()); // v16.8 식었으면 데운다 (전기가 모자라면 그냥)
+        if (back is Cell b) toils.Add(new GotoToil(b));
+        else toils.AddRange(w.Cooking.ReheatToils()); // v16.8 식었으면 데운다 (전기가 모자라면 그냥)
         toils.AddRange(w.After.PauseToils(c, seat, dist)); // v17.5 떠난 사람의 빈자리 앞에서 잠깐
         if (seat != null) toils.Add(new GotoToilLate(cm => w.Coop.Queues.SeatFor(cm, seat))); // v17.4 받고 나서 다시 본다 (방금 다툰 사람 곁이면 떨어진 자리로)
         if (away != null) toils.AddRange(w.After.AwayToils(away)); // v17.5
@@ -184,7 +225,7 @@ public sealed class EatActivity : Activity
         bool ration = kind is ItemKind.Ration or ItemKind.Produce;
         float fill = (kind == ItemKind.Produce ? 0.5f : ration ? 0.7f : 0.95f) * w.Motions.MealShare(c); // v18.18 재판에서 배급을 깎였다
         int eatTicks = SimTime.Minutes(ration ? 10 : 25);
-        toils.Add(new WaitToil(eatTicks + SimTime.Minutes(8), seat != null || away != null ? Pose.Sitting : Pose.Standing,
+        toils.Add(new WaitToil(eatTicks + SimTime.Minutes(8), seat != null || away != null || back != null || hot && box.Room.Radiation < 0.2f ? Pose.Sitting : Pose.Standing,
             away?.Face ?? table?.Center ?? box.Center, minTicks: SimTime.Minutes(ration ? 8 : 15))
         {
             EveryTick = (cm, _) =>
@@ -235,8 +276,18 @@ public sealed class SleepActivity : Activity
     /// </summary>
     private static (Cell spot, Room? room, string how)? FindBed(CrewMember c, World w, DistanceField dist)
     {
-        bool Off(Room r) => r.OffLimits || r.Abandoned || CosmicEvacuateActivity.InLine(r, w); // v18.13 비우고 봉쇄한 구획 · 파편이 지나갈 방에서는 자지 않는다
+        bool storm = w.Ambience.StormPower >= 0.3f;
+        // v19 태양 폭풍 속엔 쬐는 침실로 자러 가지 않는다 (지금 있는 곳보다 더 쬐는 방) — 자러 가다 대피로 되돌아온 것 60인 배 폭풍 한나절 23번
+        bool Off(Room r) => r.OffLimits || r.Abandoned || CosmicEvacuateActivity.InLine(r, w) || storm && r != c.Room && r.Radiation >= 0.2f && r.Radiation > (c.Room?.Radiation ?? 0f); // v18.13 비우고 봉쇄한 구획 · 파편이 지나갈 방에서는 자지 않는다
         if (c.Bed != null && !Off(c.Bed.Room) && dist.Reachable(c.Bed.UseSpots[0])) return (c.Bed.UseSpots[0], c.Bed.Room, "");
+        if (storm && c.Room is Room here && !Off(here) && here.Radiation < 0.2f || storm && c.Job?.Activity is ShelterActivity && c.Room is Room sh && !Off(sh))
+        {
+            var room = c.Room!;
+            foreach (var bed in room.Furniture)
+                if (bed.Type == FurnitureType.Bed && bed.ReservedBy == null && dist.Reachable(bed.UseSpots[0]) && !w.IsSpotTaken(bed.UseSpots[0], c)) return (bed.UseSpots[0], room, $"태양 폭풍 — {room.Name} 침대에서");
+            foreach (var cell in room.Cells)
+                if (w.Ship.IsOpenFloor(cell) && dist.Reachable(cell) && !w.IsSpotTaken(cell, c)) return (cell, room, $"태양 폭풍 — {room.Name} 바닥에서");
+        }
         foreach (var bed in w.Ship.FurnitureOf(FurnitureType.Bed))
         {
             var s = bed.UseSpots[0];
@@ -741,6 +792,9 @@ public sealed class ShelterActivity : Activity
     public override string Id => "shelter";
     public override string Label => "방사선 대피";
 
+    /// <summary>v19 대피한 채 눈을 붙인다: 지쳤거나 잘 시간이면 (예전엔 기력 35% 아래에서만 — 아홉 시간 폭풍에 대피소에서 밤을 새웠다).</summary>
+    private static bool Doze(CrewMember c, World w) => c.Needs.Rest < 0.5f || Bedtime(c, w) && c.Needs.Rest < 0.9f;
+
     public override (float, string) Score(CrewMember c, World w, DistanceField dist)
     {
         if (c.Outside || c.Room == null || w.Ambience.StormPower < 0.3f) return (0f, "—");
@@ -755,7 +809,7 @@ public sealed class ShelterActivity : Activity
     {
         // 이미 덜 쬐는 곳: 그 자리에서 기다린다 (졸리면 앉은 채 존다)
         if (c.Room is Room here && here.Radiation < 0.2f)
-            return new Job(this, "방사선 대피", new List<Toil> { new WaitToil(SimTime.Minutes(30), c.Needs.Rest < 0.35f ? Pose.Sleeping : Pose.Sitting) }) { TargetRoom = here };
+            return new Job(this, "방사선 대피", new List<Toil> { new WaitToil(SimTime.Minutes(30), Doze(c, w) ? Pose.Sleeping : Pose.Sitting) }) { TargetRoom = here };
         var (shelter, factor) = Facilities.Best(w.Ship, "shelter", r => !r.Detached && !r.OffLimits && !r.Leaking);
         var rooms = shelter != null ? new List<Room> { shelter } : new List<Room>();
         rooms.AddRange(w.Ship.Rooms.Where(r => !r.Detached && !r.OffLimits && !r.Leaking && r != c.Room && r.Radiation < c.Room!.Radiation - 0.1f).OrderBy(r => r.Radiation));
@@ -772,7 +826,7 @@ public sealed class ShelterActivity : Activity
             }
             if (best is not Cell target) continue;
             string why = room == shelter && factor >= 1f ? "대피소로" : room == shelter ? $"{room.Name} 선반 뒤로 (대피소가 없다)" : $"안쪽 {Ko.EuRo(room.Name)}";
-            return new Job(this, "방사선 대피", new List<Toil> { new GotoToil(target), new WaitToil(SimTime.Minutes(40), Pose.Sitting) })
+            return new Job(this, "방사선 대피", new List<Toil> { new GotoToil(target), new WaitToil(SimTime.Minutes(40), Doze(c, w) ? Pose.Sleeping : Pose.Sitting) })
             {
                 LogText = $"태양 폭풍 — {why}",
                 LogKind = LogKind.Warning,

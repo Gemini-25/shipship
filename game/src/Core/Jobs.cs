@@ -361,6 +361,14 @@ public sealed class Job
     public Toil? FailedAt { get; private set; }
     internal IReadOnlyList<Toil> Toils => _toils; // v16.17 이 일이 손댈 보관함 (옛 자리 습관)
 
+    /// <summary>아직 이 보관함에서 꺼내지 않았는데 꺼낼 단계가 남아 있다 (받으러 가는 중).</summary>
+    internal bool PendingTake(Furniture box)
+    {
+        for (int i = System.Math.Max(0, _index); i < _toils.Count; i++)
+            if (_toils[i] is TakeToil t && t.From == box) return true;
+        return false;
+    }
+
     /// <summary>뒤에 단계를 덧붙인다 (예: EVA를 마치고 에어락으로 돌아온다).</summary>
     internal void Append(IEnumerable<Toil> toils)
     {

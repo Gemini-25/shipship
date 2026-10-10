@@ -258,6 +258,8 @@ public sealed class ChoresActivity : Activity
         if (w.Organs.Peek(c)?.Hooked == true) return (0f, "기계에 몸을 맡기고 있다"); // 투석 · 인공 폐 · 인공 심장에 달린 사람은 비상 일에도 일어나지 않는다
         var (o, s, _) = Best(c, w, dist);
         if (o == null) return (0f, "할 작업 없음");
+        // v19 위중한 사람의 치료는 휴식 · 독서 · 문병이 미루지 못한다 — 동료를 잃은 배: 치료할 줄 아는 사람이 슬픔에 끌려 쉬는 동안 위중한 환자 치료가 40시간 밀렸다
+        if (o.Kind == WorkKind.Treat && o.Urgency >= 1.1f && s > 0f) return (s * 1.5f, $"{o.Title} ({o.Detail}) · 위중 — 손을 놓을 수 없다"); // 곱해서 올린다 — 솜씨 좋은 사람이 먼저 (아무나 먼저 생각한 사람이 맡지 않게)
         return (MathF.Max(0f, s), $"{o.Title} ({o.Detail})");
     }
 
@@ -474,6 +476,7 @@ public static partial class WorkPlanners
             WorkKind.ServiceRobot => ServiceRobot(activity, o, c, w, dist, at, out blocked),
             WorkKind.CarryWater => CarryWater(activity, o, c, w, dist, at, out blocked),
             WorkKind.StockCache => StockCache(activity, o, c, w, dist, at, out blocked),
+            WorkKind.ShelterFood => ShelterFood(activity, o, c, w, dist, at, out blocked),
             WorkKind.RemoveJumper => RemoveJumper(activity, o, c, w, dist, at, out blocked),
             WorkKind.StowCot => StowCot(activity, o, c, w, dist, at, out blocked),
             WorkKind.Recycle => RecycleMachine(activity, o, c, w, dist, at, out blocked),

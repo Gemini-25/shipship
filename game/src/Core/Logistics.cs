@@ -221,6 +221,49 @@ public static class Logistics
     /// <summary>창고에 남겨 둘 최소량 (비상 물자함으로 다 빼 가지 않게).</summary>
     public static int Keep(ItemKind k) => k switch { ItemKind.Sealant => 4, ItemKind.MedKit => 2, ItemKind.Extinguisher => 1, _ => 0 };
 
+    /// <summary>v19 대피소 식량: 진짜 대피소(물탱크 · 식량 상자로 두른 방)의 선반 — 자리가 남은 첫 선반 (매번 같은 선반 · 일감이 이리저리 옮겨 다니지 않게). 대피소가 없으면 null (창고 선반 뒤에 숨는 배는 창고에 이미 있다).</summary>
+    public static Furniture? ShelterShelf(World w)
+    {
+        var (room, factor) = Facilities.Best(w.Ship, "shelter", r => !r.Detached && !r.OffLimits && !r.Leaking);
+        if (room == null || factor < 1f) return null;
+        foreach (var f in room.Furniture)
+            if (f.Type == FurnitureType.Shelf && f.Storage != null && f.Storage.Accepts(ItemKind.Ration) && f.Storage.Free > 0) return f;
+        return null;
+    }
+
+    /// <summary>태양 폭풍 중 대피소에 둘 비상식량: 숨은 사람 수만큼(+5) — 남은 걸 다 털어서라도. 폭풍이 아니면 0 (평시엔 창고에 둔다).</summary>
+    public static int ShelterTarget(World w, Room shelter)
+    {
+        if (w.Ambience.StormPower < 0.3f) return 0;
+        int hiding = 0;
+        foreach (var c in w.Crew)
+            if (!c.Dead && !c.LeftShip && !c.Away && c.Room == shelter) hiding++;
+        return Math.Min(w.Ship.CountStored(ItemKind.Ration), hiding + 5);
+    }
+
+    /// <summary>대피소 밖 선반의 비상식량 (가까운 것부터 가져온다).</summary>
+    public static bool RationSource(Furniture f, Room shelter) => f.Type == FurnitureType.Shelf && f.Room != shelter && f.Storage!.Count(ItemKind.Ration) > 0;
+
+    internal static List<RobotStep>? RobotShelterFood(RobotSystem sys, Robot r, WorkOrder o, Cell at, DistanceField dist, out string? blocked)
+    {
+        blocked = null;
+        var w = sysWorld(sys);
+        var shelf = o.Target.Furniture!;
+        int want = Math.Min(Math.Min(16, shelf.Storage!.Free), ShelterTarget(w, shelf.Room) - shelf.Room.Furniture.Sum(f => f.Storage?.Count(ItemKind.Ration) ?? 0));
+        var (src, srcSpot) = RobotSystem.NearestFor(w, dist, f => RationSource(f, shelf.Room));
+        if (src == null || want <= 0) { blocked = "가져올 비상식량 없음"; return null; }
+        return new List<RobotStep>
+        {
+            new RGoto(srcSpot),
+            new RTake(src, ItemKind.Ration, want, partialOk: true),
+            new RGoto(at),
+            new RPut(shelf),
+            new RDo((rb, world) => { world.Board.Close(o); world.Robots.Done(rb, $"{shelf.Room.Name}에 비상식량을 쌓았다"); return true; }),
+            new RGoto(_ => r.Cargo != null ? srcSpot : null),
+            new RPut(src),
+        };
+    }
+
     /// <summary>비상 물자함 수 (창고 밖에 나눠 둔 것).</summary>
     public static int Caches(World w) => w.Ship.FurnitureOf(FurnitureType.SupplyCache).Count();
 
@@ -367,6 +410,16 @@ public sealed partial class WorkBoard
                 post(WorkKind.StockCache, WorkTarget.Of(cache), u, Skill.Mechanics,
                     $"{ItemKinds.Name(kind)} {cache.Storage!.Count(kind)}/{want + cache.Storage.Count(kind)} · 비축 방침 {Logistics.ModeName(w.Ledger.Mode)}", product: kind);
             }
+        }
+
+        // ── v19 대피소 식량: 60인 배 폭풍 여덟 시간 — 쉰 명이 대피소에서 굶주리는 동안 배식기 95인분 · 비상식량 57개가 쬐는 식당 · 창고에 있었다 ──
+        if (w.Ambience.StormPower >= 0.3f && Logistics.ShelterShelf(w) is Furniture ss)
+        {
+            var shelter = ss.Room;
+            int have = shelter.Furniture.Sum(f => f.Storage?.Count(ItemKind.Ration) ?? 0);
+            if (have < Logistics.ShelterTarget(w, shelter) && ss.Storage!.Free > 0 && ship.Furniture.Any(f => Logistics.RationSource(f, shelter)))
+                post(WorkKind.ShelterFood, WorkTarget.Of(ss), 0.85f, Skill.Mechanics,
+                    $"태양 폭풍 — {shelter.Name}에 {w.Crew.Count(c => !c.Dead && c.Room == shelter)}명 · 비상식량 {have}개", product: ItemKind.Ration);
         }
 
         // ── 사고 뒤 정리: 제 회로가 살아난 지 두 시간 넘은 임시 배선은 걷어 케이블을 되찾는다 (흔적은 남는다) ──

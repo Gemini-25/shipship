@@ -200,12 +200,14 @@ public static partial class Program
             }, SimTime.TicksPerDay * 2, 30);
             var past = w.Motions.Past.LastOrDefault(p => p.Motion == trial);
             var witLines = past?.Script.Where(l => l.Role is LineRole.Witness or LineRole.Accuser).ToList() ?? new();
-            bool onlySaw = witLines.Count > 0 && witLines.All(l => th.Witnesses.Contains(l.Who) || nat != null && nat.Witnesses.Contains(l.Who));
-            bool others = past != null && past.Script.Where(l => l.Who >= 0 && !th.Witnesses.Contains(l.Who) && l.Role is LineRole.Hearsay).All(l => l.Text.Contains("못") || l.Text.Contains("들은"));
-            Check("고발 — 그 자리에서 본 사람이 스스로 고발하고 서명을 모아 재판을 연다", trial != null && th.Witnesses.Contains(trial.Proposer) && past != null,
+            // v19 도둑이 그 뒤로 또 꺼내 먹다 다른 사람 눈에 띄기도 한다 — 그 도둑의 어느 절도든 본 사람이면 '본 사람'이다
+            bool Saw(int who) => w.Motions.Thefts.Any(t => t.Thief == thief.Id && t.Witnesses.Contains(who));
+            bool onlySaw = witLines.Count > 0 && witLines.All(l => Saw(l.Who));
+            bool others = past != null && past.Script.Where(l => l.Who >= 0 && !Saw(l.Who) && l.Role is LineRole.Hearsay).All(l => l.Text.Contains("못") || l.Text.Contains("들은"));
+            Check("고발 — 그 자리에서 본 사람이 스스로 고발하고 서명을 모아 재판을 연다", trial != null && Saw(trial.Proposer) && past != null,
                 trial != null ? $"{w.Crew.First(c => c.Id == trial.Proposer).Name} → {trial.Title} · 서명 {trial.Signers.Count}/{trial.Need} (부탁 {trial.Asked.Count - 2} · 거절 {trial.Refused.Count} · {trial.Stage}) · {(past != null ? $"{past.Venue.Name} 재판 · {past.Present.Count}명" : "재판 안 열림")}" : "고발 없음");
             Check("증언 — 본 사람만 '봤다'고 증언하고, 못 본 사람은 들은 말뿐이다", onlySaw && others,
-                $"본 사람 {string.Join("·", th.Witnesses.Select(id => w.Crew.First(c => c.Id == id).Name))} · 증언 {witLines.Count}줄 ({string.Join(" / ", witLines.Select(l => w.Crew.First(c => c.Id == l.Who).Name))})");
+                $"본 사람 {string.Join("·", w.Motions.Thefts.Where(t => t.Thief == thief.Id).SelectMany(t => t.Witnesses).Distinct().Select(id => w.Crew.First(c => c.Id == id).Name))} · 증언 {witLines.Count}줄 ({string.Join(" / ", witLines.Select(l => w.Crew.First(c => c.Id == l.Who).Name))})");
             if (past != null) minutes.Add("[재판] " + string.Join(" / ", past.Script.Select(l => $"{(l.Who < 0 ? "주 컴퓨터" : w.Crew.First(c => c.Id == l.Who).Name)}: {l.Text}")) + $" → {trial!.Outcome}");
             var mem = w.Relations.All.Where(x => x.Who == thief.Id && x.Reason is RelationReason.TestifiedAgainstMe or RelationReason.ForgaveMe).ToList();
             Check("처벌 — 표결로 벌을 정하고 (용서 · 경고 · 근무 추가 · 배급 감소 · 특권 박탈), 처벌받은 사람과의 사이가 바뀐다",

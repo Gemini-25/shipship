@@ -52,8 +52,8 @@ public static class RobotsV15
     public static readonly BotRow[] Bots =
     {
         // ── 운반 원형 ──
-        new(RobotKind.Courier, "배식 로봇", RobotKind.Hauler, J(WorkKind.Restock), 0.105f, 1.3f, 1f, 1.1f,
-            "배식기 채우기만 · 빠르지만 배터리가 작다",
+        new(RobotKind.Courier, "배식 로봇", RobotKind.Hauler, J(WorkKind.Restock, WorkKind.ShelterFood), 0.105f, 1.3f, 1f, 1.1f,
+            "배식기 채우기 · 폭풍 때 대피소로 비상식량 · 빠르지만 배터리가 작다",
             C((ItemKind.Motor, 1), (ItemKind.Electronics, 1), (ItemKind.Plate, 1)),
             w => Evolution.StarvedHours(w) > 2f ? (0.4f, $"굶주린 {Evolution.StarvedHours(w):0}사람·시간") : No),
         new(RobotKind.Tanker, "급수 로봇", RobotKind.Hauler, J(WorkKind.CarryWater, WorkKind.RefillPropellant), 0.07f, 0.65f, 0.8f, 1.25f,
@@ -61,7 +61,7 @@ public static class RobotsV15
             C((ItemKind.Motor, 1), (ItemKind.Pump, 1), (ItemKind.Plate, 1)),
             w => Crops(w).Any(c => c.DryHours > 4f) ? (0.4f, "재배대가 말랐다")
                 : w.Propulsion.Capacity > 0f && w.Propulsion.Propellant < 0.35f * w.Propulsion.Capacity ? (0.25f, "추진제가 바닥나 간다") : No),
-        new(RobotKind.Stocker, "적재 로봇", RobotKind.Hauler, J(WorkKind.StockDock, WorkKind.StockCache, WorkKind.StowCot), 0.08f, 1f, 0.55f, 1.2f,
+        new(RobotKind.Stocker, "적재 로봇", RobotKind.Hauler, J(WorkKind.StockDock, WorkKind.StockCache, WorkKind.StowCot, WorkKind.ShelterFood), 0.08f, 1f, 0.55f, 1.2f,
             "드론 자재 보급 · 비상 물자함 · 간이침대 접기 · 튼튼하다",
             C((ItemKind.Motor, 1), (ItemKind.Bearing, 1), (ItemKind.Plate, 1)),
             w => w.Drones.Waiting.Count > 0 ? (0.35f, "드론이 자재를 기다렸다")
@@ -100,7 +100,7 @@ public static class RobotsV15
             C((ItemKind.Motor, 1), (ItemKind.Pump, 1), (ItemKind.Extinguisher, 1)),
             w => w.History.Fires >= 2 ? (0.45f, $"불이 {ShipHistory.Times(w.History.Fires)} 났다") : No) { Fight = true, FoamRate = 16f, FoamHours = 1f, HeatWear = 0.5f },
         // ── 여럿을 섞은 원형 (운반 몸) ──
-        new(RobotKind.Utility, "잡역 로봇", RobotKind.Hauler, J(WorkKind.Restock, WorkKind.Tend, WorkKind.FixLights, WorkKind.StowCot), 0.075f, 1f, 1.1f, 1.6f,
+        new(RobotKind.Utility, "잡역 로봇", RobotKind.Hauler, J(WorkKind.Restock, WorkKind.Tend, WorkKind.FixLights, WorkKind.StowCot, WorkKind.ShelterFood), 0.075f, 1f, 1.1f, 1.6f,
             "배식기 · 작물 돌보기 · 조명 · 간이침대 — 무엇이든 하지만 서툴다",
             C((ItemKind.Motor, 1), (ItemKind.Electronics, 1), (ItemKind.Plate, 2)),
             w => w.History.Deaths >= 1 ? (0.45f, "사람을 잃어 손이 모자라다")

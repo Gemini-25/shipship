@@ -306,7 +306,7 @@ dotnet bin/Release/net8.0/Headless.dll 1 7 --braintest   # 시험 하나 (앞 �
 | `--hudtest` · `--uitest` | 화면 배치 규칙 |
 | `--perftest` | 60인 배 · 복합 재난 성능 |
 | `4 3 --tickspikes [--ship=Saeteo] [--crew=60] [--warm=10] [--cosmic=Kessler:0.3]` | 60프레임 점검 — 가장 느린 틱들과 그 틱의 구간별 시간 · 쓰레기 치우기(GC) |
-| `3 1 --lifeprobe [--ship=Saeteo] [--crew=60] [--incidents=fixed\|natural\|none\|storm]` | 생활 측정 — 굶주림 원인(생산 · 배송 · 접근 · 행동) · 탈진 원인 · 식사 · 수면이 끊긴 횟수와 이유 · 배식기 보충 시간 · 긴급 일 대기 |
+| `3 1 --lifeprobe [--ship=Saeteo] [--crew=60] [--incidents=fixed\|natural\|none\|storm] [--daily]` | 생활 측정 — 굶주림 원인(생산 · 배송 · 접근 · 행동) · 탈진 원인 · 식사 · 수면이 끊긴 횟수와 이유 · 배식기 보충 시간 · 긴급 일 대기 · 손일을 로봇 · 사람 누가 얼마 만에 끝냈나 · 피폭 (storm은 센 태양 폭풍 아홉 시간으로 고정 · `--daily`는 하루마다 한 줄) |
 | `--savetest` | 저장 · 불러오기가 같은 역사를 내는지 |
 | `--scenario=all` | 사고 시험 장면 전부를 한 줄씩 (결과를 완전 복구 / 부분 복구 / 장기 장애 / 실패로 분류) |
 

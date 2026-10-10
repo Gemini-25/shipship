@@ -179,6 +179,28 @@ public static partial class WorkPlanners
         return Wrap(a, o, c, w, "비상 물자", toils, o.Title);
     }
 
+    /// <summary>v19 대피소 식량: 창고 선반의 비상식량을 대피소 선반으로. 폭풍 속에 쬐는 창고로 가지는 않는다 (그건 로봇 몫).</summary>
+    private static Job? ShelterFood(Activity a, WorkOrder o, CrewMember c, World w, DistanceField dist, Cell at, out string? blocked)
+    {
+        blocked = null;
+        var shelf = o.Target.Furniture!;
+        // 로봇이 기본 — 나를 수 있는 로봇이 있으면 사람은 쬐는 창고로 가지 않는다 (없을 때만 사람이 나선다)
+        if (w.Robots.Robots.Any(r => r.Operational && RobotSystem.CanDo(r.Kind, WorkKind.ShelterFood))) { blocked = "로봇이 나른다"; return null; }
+        bool storm = w.Ambience.StormPower >= 0.3f;
+        int want = Math.Min(Math.Min(16, shelf.Storage!.Free), Logistics.ShelterTarget(w, shelf.Room) - shelf.Room.Furniture.Sum(f => f.Storage?.Count(ItemKind.Ration) ?? 0));
+        var (src, spot) = Plans.NearestContainer(w, dist, c, f => Logistics.RationSource(f, shelf.Room) && !(storm && f.Room.Radiation >= 0.2f));
+        if (src == null || want <= 0) { blocked = storm ? "태양 폭풍 — 비상식량이 쬐는 방에 있다" : "가져올 비상식량 없음"; return null; }
+        var toils = Plans.DropOff(c, w, dist);
+        toils.Add(new GotoToil(spot));
+        toils.Add(new TakeToil(src, ItemKind.Ration, want, partialOk: true));
+        toils.Add(new GotoToil(at));
+        toils.Add(new PutToil(shelf));
+        toils.Add(new DoToil((_, world) => { world.Board.Close(o); return true; }));
+        toils.Add(new GotoToil(spot, cm => cm.Carrying != null));
+        toils.Add(new PutToil(src));
+        return Wrap(a, o, c, w, "대피소 식량", toils, o.Title);
+    }
+
     /// <summary>임시 배선 걷기: 배전반에서 풀어 케이블을 되찾는다 (탄 배선은 못 되찾는다). 흔적은 남는다.</summary>
     private static Job? RemoveJumper(Activity a, WorkOrder o, CrewMember c, World w, DistanceField dist, Cell at, out string? blocked)
     {

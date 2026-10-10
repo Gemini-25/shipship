@@ -394,7 +394,7 @@ public sealed partial class RobotSystem
     /// <summary>로봇이 맡는 작업 목록의 일.</summary>
     public static bool CanDo(RobotKind k, WorkKind w) => k switch
     {
-        RobotKind.Hauler => w is WorkKind.Restock or WorkKind.StockDock or WorkKind.CarryWater or WorkKind.StockCache or WorkKind.StowCot or WorkKind.RefillPropellant,
+        RobotKind.Hauler => w is WorkKind.Restock or WorkKind.StockDock or WorkKind.CarryWater or WorkKind.StockCache or WorkKind.StowCot or WorkKind.RefillPropellant or WorkKind.ShelterFood,
         RobotKind.Maintainer => w is WorkKind.Maintain or WorkKind.FixLights,
         RobotKind.Gardener => w is WorkKind.Tend or WorkKind.Harvest,
         _ => RobotsV15.CanDo(k, w),
@@ -1039,6 +1039,8 @@ public sealed partial class RobotSystem
                 return Logistics.RobotCarryWater(this, r, o, at, dist, out blocked);
             case WorkKind.StockCache:
                 return Logistics.RobotStockCache(this, r, o, at, dist, out blocked);
+            case WorkKind.ShelterFood:
+                return Logistics.RobotShelterFood(this, r, o, at, dist, out blocked);
         }
         return null;
     }

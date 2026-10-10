@@ -84,6 +84,8 @@ public sealed class BrainSystem
         float g = Goals.Tilt(c, cat);
         float e = Emotions.Tilt(c, cat);
         float m = g * e;
+        // v19 급한 일(중상자 치료 · 위기 대응)은 슬픔 · 두려움이 크게 막지 못한다 — 동료를 잃고 슬픈 대신 치료자가 중상자 치료를 17시간 미루고 쉬었다 · 위중하면 조금도 깎지 않는다
+        if (cat is ActCat.Work or ActCat.Care && m < 1f) m = score >= 1.3f ? 1f : score >= 0.8f ? MathF.Max(m, 0.9f) : m;
         if (MathF.Abs(m - 1f) < 0.01f) return;
         score *= m;
         Tilts++;

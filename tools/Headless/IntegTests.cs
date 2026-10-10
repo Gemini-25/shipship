@@ -364,11 +364,11 @@ public static partial class Program
             if (shelter != null) Put(w, s0, shelter);
             w.Hazards.StartStorm();
             typeof(HazardSystem).GetProperty("StormPeak")!.SetValue(w.Hazards, 3.5f); // 센 폭풍 (2.2~4) 위쪽
-            for (int t = 0; t < SimTime.Hours(3); t += 25)
+            for (int t = 0; t < SimTime.Hours(3); t += 5) // v19 25틱마다 데려다 놓으면 그 사이 걸어 나간 만큼 덜 쬔다 (걸음이 빠르면 시험이 흔들렸다) — 자리를 지킨다는 뜻대로 촘촘히
             {
                 if (v.Room != outer) { Put(w, v, outer); v.Room = outer; } // 자리를 지켜야 하는 사람 (수동 조종 · 손을 놓지 못하는 수리)
                 if (shelter != null && s0.Room != shelter) { Put(w, s0, shelter); s0.Room = shelter; }
-                Run(w, 25);
+                Run(w, 5);
             }
             Check("센 태양 폭풍 — 바깥 방에 붙들린 사람은 세 시간이면 방사선 병 (4Sv 넘게) · 대피소는 막는다",
                 v.Dose >= 4f && (shelter == null || s0.Dose < v.Dose * 0.3f) && w.Ailments.Has(v, "radiation"),

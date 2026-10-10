@@ -26,7 +26,8 @@ public static partial class Program
             float treatedA = 0f, treatedB = 0f, healA = 0f, healB = 0f, earlyA = 0f, earlyB = 0f;
             float qualA = 0f, qualB = 0f;
             int countA = 0, countB = 0;
-            int runs = 3;
+            var firstA = new System.Collections.Generic.List<float>(); var firstB = new System.Collections.Generic.List<float>();
+            int runs = 8; // v19 셋으로는 스무 날 동안 갈린 역사의 운(누가 남아 치료하나 — 타고난 솜씨)이 훈련보다 컸다 — 여덟 번 견준다
             for (int i = 0; i < runs; i++)
                 foreach (bool train in new[] { true, false })
                 {
@@ -74,14 +75,17 @@ public static partial class Program
                     }
                     float heal = inj0 - hurt.Sum(c => c.Vitals.Injury);
                     float hrs = first < 0 ? 48f : (first - start) / (float)SimTime.TicksPerHour;
-                    if (train) { treatedA += hrs; healA += heal; earlyA += early; qualA += qual; countA += count; }
-                    else { treatedB += hrs; healB += heal; earlyB += early; qualB += qual; countB += count; }
+                    if (train) { treatedA += hrs; healA += heal; earlyA += early; qualA += qual; countA += count; firstA.Add(hrs); }
+                    else { treatedB += hrs; healB += heal; earlyB += early; qualB += qual; countB += count; firstB.Add(hrs); }
                     Console.WriteLine($"    시드 {seed + i * 211} {(train ? "배운 배" : "안 배운 배")}: 의무관 말고 가장 나은 의료 {w.Crew.Where(c => !c.Dead).Max(c => c.RawSkill(Skill.Medicine)) * 100:0}% · 첫 치료 {hrs:0.0}시간 · 치료 {count}번(한 번에 {(count > 0 ? qual / count : 0f) * 100:0}%p) · 12시간 안에 나은 부상 {early * 100:0}%p · 이틀 동안 {heal * 100:0}%p");
                 }
             // 치료 한 번의 질(솜씨가 정한다)이 낫고 첫 치료가 늦지 않다. 나은 부상의 합은 자연 치유·재활·부상 크기의 운이 섞여 참고로만 적는다
             float qa = countA > 0 ? qualA / countA : 0f, qb = countB > 0 ? qualB / countB : 0f;
-            Check("핵심 인력이 빠져도 — 배운 배가 더 잘 치료한다", qa > qb && treatedA <= treatedB + 0.25f * runs,
-                $"치료 한 번에 {qa * 100:0.0} ↔ {qb * 100:0.0}%p · 첫 치료 평균 {treatedA / runs:0.0} ↔ {treatedB / runs:0.0}시간 · 12시간 안에 나은 부상 합 {earlyA * 100:0} ↔ {earlyB * 100:0}%p · 이틀 {healA * 100:0} ↔ {healB * 100:0}%p");
+            // v19 첫 치료는 가운데값으로 견준다 — 스무 날 사이 식량난에 빠진 배 하나(의사까지 굶주려 48시간 치료 없음)가 평균을 통째로 뒤집었다
+            static float Median(System.Collections.Generic.List<float> x) { var o = x.OrderBy(v => v).ToList(); int n = o.Count; return n == 0 ? 0f : n % 2 == 1 ? o[n / 2] : (o[n / 2 - 1] + o[n / 2]) / 2f; }
+            float ma = Median(firstA), mb = Median(firstB);
+            Check("핵심 인력이 빠져도 — 배운 배가 더 잘 치료한다", qa > qb && ma <= mb + 0.25f,
+                $"치료 한 번에 {qa * 100:0.0} ↔ {qb * 100:0.0}%p · 첫 치료 가운데값 {ma:0.0} ↔ {mb:0.0}시간 (평균 {treatedA / runs:0.0} ↔ {treatedB / runs:0.0}) · 12시간 안에 나은 부상 합 {earlyA * 100:0} ↔ {earlyB * 100:0}%p · 이틀 {healA * 100:0} ↔ {healB * 100:0}%p");
         }
 
         // ── 3) 재활과 후유증: 크게 다친 사람은 후유증이 남고, 재활하면 부상이 빨리 낫고 후유증이 절반까지 준다 ──

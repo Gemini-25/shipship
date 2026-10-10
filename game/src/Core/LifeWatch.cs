@@ -38,6 +38,19 @@ public sealed class LifeWatch
     /// <summary>긴급 일(급함 0.8↑)이 맡을 사람 · 로봇 없이 20분 넘게 기다린 건수 · 그때 식사 · 휴식 · 잠 중이던 사람 수의 합.</summary>
     public int UrgentSeen, UrgentLate, UrgentLateLifeCrew;
     public readonly List<float> UrgentWaitMinutes = new();
+    public readonly Dictionary<string, int> UrgentLateKinds = new();
+
+    /// <summary>v19 손일 (로봇 · 사람 둘 다 하는 일): 올라와서 끝나기까지 (분) — 마지막에 누가 쥐었나로 나눈다.</summary>
+    public readonly List<float> HandByRobot = new(), HandByHuman = new();
+    /// <summary>v19 로봇에게 미룬 채(쓸 로봇이 논다 — 사람은 의욕을 반으로) 아무도 안 잡은 시간 · 20분 넘게 그랬던 일감.</summary>
+    public float DeferWaitHours;
+    public int DeferLate;
+    public readonly Dictionary<string, int> DeferLateKinds = new();
+    /// <summary>v19 손일 종류별: (건수, 잡히기까지 분 합, 잡힌 뒤 끝나기까지 분 합, 급함 합).</summary>
+    public readonly Dictionary<string, (int n, float wait, float work, float urg)> HandKinds = new();
+    private readonly Dictionary<int, (long posted, bool robot, string kind, long claimed, float urg)> _hand = new();
+    private readonly Dictionary<int, long> _deferSince = new();
+    private readonly HashSet<int> _deferLate = new();
 
     private readonly Dictionary<int, long> _jobStart = new();
     private readonly Dictionary<int, (bool meal, long tick, string how)> _pendingBreak = new();
@@ -66,6 +79,7 @@ public sealed class LifeWatch
                     : n > 0 ? $"남아 있었다 ({n})"
                     : order == null ? "비었는데 채우기 일이 없다" + (_w.Ship.FurnitureOf(FurnitureType.Fridge).Sum(x => x.Storage!.Count(ItemKind.Meal)) == 0 ? " (냉장고도 빔)" : "")
                     : order.Robot != null ? "비었다 · 로봇이 채우러 오는 중" : order.Assignee != null ? "비었다 · 사람이 채우러 오는 중" : "비었다 · 채우기 일을 아무도 안 맡음";
+                if (f.Type != FurnitureType.MealDispenser) why = $"{f.Name} " + why;
                 EmptyAtTakeWhy[why] = EmptyAtTakeWhy.GetValueOrDefault(why) + 1;
             }
         }
@@ -150,11 +164,42 @@ public sealed class LifeWatch
             if (c.Needs.Rest < TiredBelow) Tired(c, dt);
         }
 
+        // v19 손일: 누가 끝냈고 얼마나 걸렸나 · 로봇에게 미룬 채 비어 있던 시간
+        var openIds = new HashSet<int>();
+        foreach (var o in w.Board.OpenUnsorted)
+        {
+            if (!RobotSystem.HandWork(o.Kind)) continue;
+            openIds.Add(o.Id);
+            bool had = _hand.TryGetValue(o.Id, out var h);
+            bool robot = had && h.robot;
+            if (o.Robot != null) robot = true; else if (o.Assignee != null) robot = false;
+            long claimed = had ? h.claimed : -1;
+            if (claimed < 0 && (o.Robot != null || o.Assignee != null)) claimed = w.Tick;
+            _hand[o.Id] = (o.Posted, robot, WorkKinds.Name(o.Kind), claimed, MathF.Max(had ? h.urg : 0f, o.Urgency));
+            bool idle = o.Assignee == null && o.Robot == null && o.BlockedUntil <= w.Tick;
+            if (idle && o.Urgency < 1f && w.Robots.HandsFree(o))
+            {
+                DeferWaitHours += dt;
+                if (!_deferSince.ContainsKey(o.Id)) _deferSince[o.Id] = w.Tick;
+                if (w.Tick - _deferSince[o.Id] > SimTime.Minutes(20) && _deferLate.Add(o.Id)) { DeferLate++; Note(DeferLateKinds, WorkKinds.Name(o.Kind)); }
+            }
+            else _deferSince.Remove(o.Id);
+        }
+        foreach (var id in _hand.Keys.Where(id => !openIds.Contains(id)).ToList())
+        {
+            var (posted, robot, kind, claimed, urg) = _hand[id];
+            _hand.Remove(id); _deferSince.Remove(id);
+            (robot ? HandByRobot : HandByHuman).Add((w.Tick - posted) / (float)SimTime.Minutes(1));
+            float wait = ((claimed >= 0 ? claimed : w.Tick) - posted) / (float)SimTime.Minutes(1), work = claimed >= 0 ? (w.Tick - claimed) / (float)SimTime.Minutes(1) : 0f;
+            var k = HandKinds.GetValueOrDefault(kind);
+            HandKinds[kind] = (k.n + 1, k.wait + wait, k.work + work, k.urg + urg);
+        }
+
         // 긴급 일: 맡을 사람 · 로봇 없이 기다린 시간
         int life = -1;
         foreach (var o in w.Board.OpenUnsorted)
         {
-            if (o.Urgency < 0.8f) continue;
+            if (o.Urgency < 0.8f || o.Kind == WorkKind.Upgrade) continue; // 평시 개조는 점수가 높아도 급한 일이 아니다
             if (_urgentSeen.Add(o.Id)) UrgentSeen++;
             bool waiting = o.Assignee == null && o.Robot == null && o.BlockedUntil <= w.Tick;
             if (!waiting) { if (_urgentWaitStart.Remove(o.Id, out var st)) UrgentWaitMinutes.Add((w.Tick - st) / (float)SimTime.Minutes(1)); continue; }
@@ -162,6 +207,7 @@ public sealed class LifeWatch
             if (w.Tick - _urgentWaitStart[o.Id] > SimTime.Minutes(20) && _urgentLate.Add(o.Id))
             {
                 UrgentLate++;
+                Note(UrgentLateKinds, WorkKinds.Name(o.Kind));
                 if (life < 0) life = alive.Count(c => !c.Down && Leisure(c.Job));
                 UrgentLateLifeCrew += life;
             }
@@ -169,6 +215,7 @@ public sealed class LifeWatch
     }
 
     private void Note(Dictionary<string, float> d, string k, float dt) => d[k] = d.GetValueOrDefault(k) + dt;
+    private static void Note(Dictionary<string, int> d, string k) => d[k] = d.GetValueOrDefault(k) + 1;
 
     private void Hunger(CrewMember c, float dt, bool scarce, bool central, List<(Furniture f, int n, bool ok)> dispensers, int edible)
     {
@@ -241,6 +288,8 @@ public sealed class LifeWatch
              + $"식사 중단 {MealBreaks} ({TopI(MealBreakWhy, 8)})\n수면 중단 {SleepBreaks} ({TopI(SleepBreakWhy, 8)})\n"
              + (EmptyAtTake.Count > 0 ? $"받으려니 빈 배식기: {TopI(EmptyAtTake, 6)} · 왜: {TopI(EmptyAtTakeWhy, 6)}\n" : "")
              + $"배식기 보충 {rs.Count}번 · 평균 {(rs.Count > 0 ? rs.Average() : 0):0}분 · 최대 {(rs.Count > 0 ? rs.Max() : 0):0}분 · 냉장고엔 있는데 빈 배식기 {EmptyDispenserHours:0.#}대·시간\n"
-             + $"긴급 일 {UrgentSeen}건 · 20분 넘게 맡을 이 없이 기다림 {UrgentLate}건 (그때 식사 · 휴식 · 잠 중 평균 {(UrgentLate > 0 ? UrgentLateLifeCrew / (float)UrgentLate : 0):0.#}명) · 기다림 평균 {(UrgentWaitMinutes.Count > 0 ? UrgentWaitMinutes.Average() : 0):0}분";
+             + $"손일 로봇 {HandByRobot.Count}건 · 평균 {(HandByRobot.Count > 0 ? HandByRobot.Average() : 0):0}분 ↔ 사람 {HandByHuman.Count}건 · 평균 {(HandByHuman.Count > 0 ? HandByHuman.Average() : 0):0}분 · 로봇에게 미룬 채 빈 일감 {DeferWaitHours:0.#}일감·시간 (20분 넘게 {DeferLate}건{(DeferLate > 0 ? ": " + TopI(DeferLateKinds, 5) : "")})\n"
+             + $"   손일 갈래 (건수 · 잡히기까지 · 잡힌 뒤 · 급함): {string.Join(" · ", HandKinds.OrderByDescending(kv => kv.Value.wait + kv.Value.work).Take(6).Select(kv => $"{kv.Key} {kv.Value.n}건 {kv.Value.wait / kv.Value.n:0}+{kv.Value.work / kv.Value.n:0}분 ({kv.Value.urg / kv.Value.n:0.00})"))}\n"
+             + $"긴급 일 {UrgentSeen}건 · 20분 넘게 맡을 이 없이 기다림 {UrgentLate}건 (그때 식사 · 휴식 · 잠 중 평균 {(UrgentLate > 0 ? UrgentLateLifeCrew / (float)UrgentLate : 0):0.#}명) · 기다림 평균 {(UrgentWaitMinutes.Count > 0 ? UrgentWaitMinutes.Average() : 0):0}분{(UrgentLateKinds.Count > 0 ? " (" + string.Join(" · ", UrgentLateKinds.Select(k => $"{k.Key} {k.Value}")) + ")" : "")}";
     }
 }

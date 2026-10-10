@@ -65,6 +65,8 @@ public enum WorkKind
     ManualControl,
     // v13.1 2인 1조: 문 밖에서 지킨다
     SafetyWatch,
+    // v19 대피소 식량: 태양 폭풍 중 로봇이 쬐는 창고의 비상식량을 대피소 선반으로 나른다
+    ShelterFood,
 }
 
 public static class WorkKinds
@@ -144,6 +146,7 @@ public static class WorkKinds
         WorkKind.ServiceRobot => "로봇 정비",
         WorkKind.CarryWater => "물통 나르기",
         WorkKind.StockCache => "비상 물자 채우기",
+        WorkKind.ShelterFood => "대피소 식량",
         WorkKind.RemoveJumper => "임시 배선 철거",
         WorkKind.StowCot => "간이침대 치우기",
         WorkKind.Recycle => "부품 재활용",
@@ -351,6 +354,7 @@ public sealed class WorkOrder
         WorkKind.ServiceRobot => $"{Target.Label} 정비",
         WorkKind.CarryWater => $"{Target.Label}에 물통으로 물 나르기",
         WorkKind.StockCache => $"{Target.Label}에 {ItemKinds.Name(Product ?? ItemKind.Sealant)} 채우기 (비상 물자)",
+        WorkKind.ShelterFood => $"{Target.Furniture?.Room.Name ?? Target.Label} 선반에 비상식량 쌓기",
         WorkKind.RemoveJumper => $"{PowerGrid.CircuitName(Circuit)} 회로 임시 배선 걷기",
         WorkKind.StowCot => $"{Target.Label} 접어 창고로",
         WorkKind.Recycle => $"{Target.Label}에서 {ItemKinds.Name(Product ?? ItemKind.Plate)} 되살리기 (재활용)",
