@@ -79,6 +79,7 @@ public sealed class ChoresActivity : Activity
         if (c.Passenger && !PassengerSystem.MayWork(c, w, o)) return true; // v18.6 승객은 자원봉사로 가벼운 일만
         if (o.Target.Crew == c && o.Kind != WorkKind.Rehab) return true; // 자기 자신은 치료 못 함 (v11.3 재활은 제 몸을 푼다)
         if (o.Kind == WorkKind.Drill && o.Circuit != c.Id) return true; // v11.0: 훈련은 제 몫만
+        if (WorkPlanners.RobotFirst(w, o)) return true; // v19 물 순환: 로봇이 맡을 일 — 한 시간 넘게 아무 로봇도 안 맡으면 사람이
         if (o.Kind == WorkKind.Train && o.Circuit / 10 != c.Id) return true; // v11.3: 배우는 사람만
         if (o.Kind == WorkKind.Rehab && o.Circuit != c.Id) return true; // v11.3: 재활은 다친 사람이
         if (o.Kind == WorkKind.Handover && o.Circuit != c.Id) return true; // v12.0: 인수인계는 기록을 든 사람이
@@ -477,6 +478,10 @@ public static partial class WorkPlanners
             WorkKind.CarryWater => CarryWater(activity, o, c, w, dist, at, out blocked),
             WorkKind.StockCache => StockCache(activity, o, c, w, dist, at, out blocked),
             WorkKind.ShelterFood => ShelterFood(activity, o, c, w, dist, at, out blocked),
+            WorkKind.FlushMain => FlushMain(activity, o, c, w, dist, at, out blocked), // v19 물 순환
+            WorkKind.ClearMain => ClearMain(activity, o, c, w, dist, at, out blocked),
+            WorkKind.SetBucket => SetBucket(activity, o, c, w, dist, at, out blocked),
+            WorkKind.EmptyBucket => EmptyBucket(activity, o, c, w, dist, at, out blocked),
             WorkKind.RemoveJumper => RemoveJumper(activity, o, c, w, dist, at, out blocked),
             WorkKind.StowCot => StowCot(activity, o, c, w, dist, at, out blocked),
             WorkKind.Recycle => RecycleMachine(activity, o, c, w, dist, at, out blocked),

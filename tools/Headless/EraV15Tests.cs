@@ -62,11 +62,11 @@ public static partial class Program
                 float ra0 = a.Research, rb0 = b.Research;
                 Run(a, SimTime.Hours(1));
                 Run(b, SimTime.Hours(1));
-                float water = b.Water.Produced / MathF.Max(1e-4f, a.Water.Produced);
+                float water = b.Water.RecycleCapacity / MathF.Max(1e-4f, a.Water.RecycleCapacity);
                 float o2 = b.Air.O2Capacity / MathF.Max(1e-4f, a.Air.O2Capacity);
                 float research = (b.Research - rb0) / MathF.Max(1e-4f, a.Research - ra0);
                 Check("시뮬 — 정수기 물 회수 ×1.12 · 산소 발생 ×1.08 · 연구 ×1.1", Near(water, 1.12f, 0.01f) && Near(o2, 1.08f, 0.01f) && Near(research, 1.1f, 0.01f),
-                    $"물 {a.Water.Produced:0.00} → {b.Water.Produced:0.00} L/h (×{water:0.000}) · 산소 {a.Air.O2Capacity:0.0} → {b.Air.O2Capacity:0.0} (×{o2:0.000}) · 연구 {a.Research - ra0:0.00} → {b.Research - rb0:0.00} (×{research:0.000})");
+                    $"물 {a.Water.RecycleCapacity:0.00} → {b.Water.RecycleCapacity:0.00} L/h (×{water:0.000}) · 산소 {a.Air.O2Capacity:0.0} → {b.Air.O2Capacity:0.0} (×{o2:0.000}) · 연구 {a.Research - ra0:0.00} → {b.Research - rb0:0.00} (×{research:0.000})");
 
                 // 설비 한 번 돌리기: 마모 증가 · 작물 성장 (설비마다 비율, 가운데 값)
                 var la = a.Ship.Machines.ToList();

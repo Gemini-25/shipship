@@ -157,7 +157,7 @@ public static partial class Program
                 // 생명유지실 정수기를 모두 세운다 → 정수실만으로 물이 난다
                 foreach (var f in w.Ship.FurnitureOf(FurnitureType.WaterRecycler).Where(f => f.Room.Special == null).ToList()) w.Machines.Break(f.Machine!, FaultKind.PumpSeized);
                 Run(w, SimTime.Minutes(10));
-                float backup = w.Water.Produced;
+                float backup = w.Water.RecycleCapacity;
                 Check("기반 시설 방 — 정수실·배터리실·공조실이 망에 이어져 일한다", all && linked && roomBatteries >= 4 && backup > 0.5f,
                     $"{string.Join(", ", kinds.Select(k => RoomCatalog.Of(k)!.Name))} · 망 {(linked ? "이어짐" : "끊김")} · 배터리실 축전지 {roomBatteries} · 생명유지실 정수기가 다 서도 물 {backup:0.0}L/h");
                 int small = World.CreateDefault(seed, 0, ShipGenerator.KeyFor(6, seed)).Ship.Rooms.Count(r => kinds.Contains(r.Kind));

@@ -127,6 +127,8 @@ public static partial class Program
         if (args.Contains("--robottest")) return RunRobotTest(seed);
         if (args.Contains("--hazardtest")) return RunHazardTest(seed);
         if (args.Contains("--livingtest")) return RunLivingTest(seed);
+        if (args.Contains("--watertest")) return RunWaterTest(seed); // v19 물 순환
+        if (args.Contains("--waterprobe")) return RunWaterProbe(seed, shipArg ?? "Mirinae", days * 24);
         if (args.Contains("--remodeltest")) return RunRemodelTest(seed);
         if (args.Contains("--commstest")) return RunOutsideCommsTest(seed);
         if (args.Contains("--growthtest")) return RunGrowthTest(seed);

@@ -26,6 +26,8 @@ public sealed class Drain
     public bool Noticed { get; internal set; }
     public int ClaimedBy { get; internal set; } = -1;
     public long Cleared { get; internal set; } = -1;
+    /// <summary>v19 회수관이 막혀 올라온 역류 (배수구는 멀쩡하다 — 뚫어도 금방 다시).</summary>
+    public bool MainBack { get; internal set; }
 }
 
 public sealed class Bin
@@ -217,6 +219,21 @@ public sealed class DrainSystem
         foreach (var c in w.Crew) if (!c.Dead && c.Room == room && c.IsAwake) { c.Say(w, Persona.Say(c, "어어, 배수구에서 물이 올라와!")); c.Jolt(w); break; }
     }
 
+    /// <summary>v19 회수관이 막혀 이 배수구로 회색물이 올라온다.</summary>
+    internal void MainBackup(Drain d)
+    {
+        if (d.Backflow) return;
+        d.MainBack = true;
+        BackUp(d, _w.Ship.Rooms[d.RoomId]);
+    }
+
+    /// <summary>v19 회수관을 뚫었다: 그 탓에 올라오던 배수구는 물이 빠진다.</summary>
+    internal void MainCleared(Drain d)
+    {
+        d.MainBack = false;
+        if (d.Clog < 1f) d.Backflow = false;
+    }
+
     /// <summary>시험 · 사건용: 이 배수구가 막힌다.</summary>
     public void ForceClog(Drain d, float food) { d.Clog = 1f; d.Food = food; var room = _w.Ship.Rooms[d.RoomId]; if (!d.Backflow) BackUp(d, room); }
 
@@ -225,8 +242,10 @@ public sealed class DrainSystem
     {
         var w = _w;
         var room = w.Ship.Rooms[d.RoomId];
-        bool food = d.Food > 0.4f, back = d.Backflow;
-        d.Clog = 0f; d.Food = 0f; d.Backflow = false; d.Warned = false; d.Noticed = false; d.ClaimedBy = -1; d.Cleared = w.Tick; d.Stink *= 0.5f;
+        bool food = d.Food > 0.4f, back = d.Backflow, main = d.MainBack;
+        d.Clog = 0f; d.Food = 0f; d.Backflow = false; d.MainBack = false; d.Warned = false; d.Noticed = false; d.ClaimedBy = -1; d.Cleared = w.Tick; d.Stink *= 0.5f;
+        // v19 회수관 탓이면 뚫어도 안쪽이 그대로 — 곧 다시 올라온다
+        if (main && w.Water.Pass < 0.4f) { w.Water.ClearedInVain(); c.Say(w, Persona.Say(c, "뚫었는데… 안쪽에서 물이 안 빠지는 것 같은데")); }
         Stats.Cleared++;
         Toss(room, 0.1f, food);
         MarkLog.Add(c.Memory.Marks, w.Tick, $"{room.Name} {Name(d.Kind)}를 뚫었다");

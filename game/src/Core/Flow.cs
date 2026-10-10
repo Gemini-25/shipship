@@ -375,6 +375,7 @@ public sealed class FlowSystem
         bool dis = ItemsV15.Use(w, ItemKind.Disinfectant); // v15 소독약이 있으면 물을 절반만
         float use = MathF.Min(w.Water.Level, dis ? 10f : 20f);
         w.Water.Level -= use;
+        w.Water.Drain(use); // v19 씻어 낸 물은 오수 탱크로
         WaterQuality = 1f;
         Stats.Flushes++;
         w.Log.Add(w.Tick, LogKind.Work, $"급수관을 씻어 냈다 (역류 · 물 {use:0}L 버림)", c.Id);

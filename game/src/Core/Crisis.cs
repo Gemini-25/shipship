@@ -202,6 +202,8 @@ public static class Crisis
             // 먹을 것은 굶기 전까지는 뒤로
             case WorkKind.Cook or WorkKind.Restock or WorkKind.Harvest or WorkKind.Tend: return o.Urgency >= 0.8f ? 0.5f : 0.2f;
             case WorkKind.ShelterFood: return o.Urgency >= 0.8f ? 0.7f : 0.1f; // 폭풍 속 대피소에 먹을 것을 — 숨은 사람들이 굶기 전에
+            case WorkKind.FlushMain or WorkKind.SetBucket or WorkKind.EmptyBucket: return 0.1f; // v19 물 순환은 비상이 지나간 뒤에
+            case WorkKind.ClearMain: return 0.3f;
             case WorkKind.Distress or WorkKind.RadarWatch or WorkKind.PilotDrones: return 0.7f;
             // 평시의 일
             case WorkKind.Maintain or WorkKind.PreventiveCheck or WorkKind.Upgrade or WorkKind.Fabricate or WorkKind.Train or WorkKind.Rehab or WorkKind.Calibrate

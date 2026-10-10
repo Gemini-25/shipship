@@ -28,6 +28,7 @@ public partial class ShipView
     /// <param name="held">참이면 사람이 든 장비 · 몸에 가린 그림자만 (매 프레임 층), 거짓이면 놓인 · 보관된 장비 (느린 층).</param>
     private void PaintPortable(CanvasItem ci, bool held)
     {
+        PaintWaterBuckets(ci, held); // v19 임시 회수통
         var ps = _world.Portable;
         if (ps.Devices.Count == 0) return;
         bool fine = Zoom > 1.15f;
@@ -207,6 +208,44 @@ public partial class ShipView
     }
 
     private static Color Dm(Color c, float k) => new(c.R * k, c.G * k, c.B * k, c.A);
+
+    private static readonly Color PtPail = new("#5d7486"), PtPailRim = new("#9fb3c2"), PtGrey = new("#8a9a7b");
+
+    /// <summary>v19 임시 회수통: 배수구 밑에 받친 통 (오수 높이가 보인다) · 들고 가면 사람 · 로봇 곁에.</summary>
+    private void PaintWaterBuckets(CanvasItem ci, bool held)
+    {
+        var w = _world;
+        foreach (var b in w.Water.Buckets)
+        {
+            System.Numerics.Vector2 at;
+            if (b.Placed)
+            {
+                if (held) continue;
+                at = b.At.Center;
+            }
+            else
+            {
+                if (!held) continue;
+                var c = b.HeldBy >= 0 ? w.Crew.Find(x => x.Id == b.HeldBy) : null;
+                var r = b.RobotBy >= 0 ? w.Robots.Robots.Find(x => x.Id == b.RobotBy) : null;
+                if (c != null) at = c.Position + new System.Numerics.Vector2(0.3f, 0.14f);
+                else if (r != null) at = r.Position + new System.Numerics.Vector2(0f, -0.25f);
+                else continue;
+            }
+            var p = ToPx(at);
+            float s = T * (b.Placed ? 0.3f : 0.24f);
+            // 통: 아래가 좁은 사다리꼴 · 테 · 손잡이
+            var body = new[] { p + new Vector2(-s * 0.8f, -s * 0.6f), p + new Vector2(s * 0.8f, -s * 0.6f), p + new Vector2(s * 0.6f, s * 0.8f), p + new Vector2(-s * 0.6f, s * 0.8f) };
+            ci.DrawColoredPolygon(body, PtPail);
+            // 오수 높이 (위에서 내려다본 수면: 통 안쪽 원이 차오른다)
+            float fill = Mathf.Clamp(b.Fill / ShipSim.Core.WaterBucket.Cap, 0f, 1f);
+            if (fill > 0.02f) ci.Circle(p + new Vector2(0f, -s * 0.05f), s * (0.25f + 0.45f * fill), PtGrey.WithAlpha(0.85f), true, -1f, true);
+            ci.DrawLine(p + new Vector2(-s * 0.85f, -s * 0.6f), p + new Vector2(s * 0.85f, -s * 0.6f), PtPailRim, 1.6f, true);
+            ci.Arc(p + new Vector2(0f, -s * 0.6f), s * 0.75f, Mathf.Pi, Mathf.Tau, 10, PtPailRim.WithAlpha(0.8f), 1f, true);
+            // 거의 찼으면 테두리에 물방울 (비울 때)
+            if (fill > 0.85f) ci.Circle(p + new Vector2(s * 0.9f, -s * 0.2f + 2f * Mathf.Sin(_time * 3f + b.Id)), 1.3f, PtWater.WithAlpha(0.8f), true, -1f, true);
+        }
+    }
 
     /// <summary>창고 충전 받침: 어두운 받침 + 충전 표시등 (충전 중엔 호박색으로 깜빡 · 다 차면 초록).</summary>
     private void PaintDock(CanvasItem ci, PortableDevice d, Vector2 p, float s)

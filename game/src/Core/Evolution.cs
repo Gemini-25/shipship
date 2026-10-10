@@ -56,7 +56,7 @@ public static class Evolution
     public const int MaxGrowBeds = 6;
 
     /// <summary>v10.1: 재배대 하나를 더 먹일 물이 남지 않는다 (재생기가 만드는 물보다 쓰는 물이 많거나 거의 같다).</summary>
-    public static bool WaterShort(World w) => w.Water.Produced - w.Water.Consumed < WaterSystem.BedLitersPerHour * 0.5f;
+    public static bool WaterShort(World w) => w.Water.RecycleCapacity - w.Water.Consumed < WaterSystem.BedLitersPerHour * 0.5f; // 정수기가 거를 수 있는 양이 쓰는 양을 못 따라간다
 
     /// <summary>v10.1: 굶주린 사람·시간 (누적). 식량이 모자랐던 배의 교훈.</summary>
     public static float StarvedHours(World w) => w.Crew.Sum(c => c.Stats.TicksStarving) / (float)SimTime.TicksPerHour

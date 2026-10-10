@@ -173,6 +173,7 @@ public sealed class SoilSystem
         bool partial = WaterShort || thrift;
         if (thrift) w.Culture.Stats.ThriftWashes++;
         float use = partial ? 0.3f : 1f;
+        w.Water.Drain(MathF.Min(use, w.Water.Level) * 0.95f); // v19 씻은 물은 샤워 홈통으로
         w.Water.Level = MathF.Max(0f, w.Water.Level - use);
         Stats.WaterUsed += use;
         for (int k = 0; k < Soil.Kinds; k++) c.Soil.Hands[k] *= partial ? 0.35f : soap ? 0.08f : 0.25f;
@@ -202,6 +203,7 @@ public sealed class SoilSystem
         if (LaundryLoad == 0) return false;
         if (WaterShort && LaundryLoad < 10) { Stats.LaundryDeferred++; return false; }
         float use = 4f * LaundryLoad * ModulesV15.LaundryWaterMul(w); // v15 세탁기면 물 절반
+        w.Water.Drain(MathF.Min(use, w.Water.Level) * 0.95f); // v19 빨래 물은 세탁 배수관으로
         w.Water.Level = MathF.Max(0f, w.Water.Level - use);
         Stats.WaterUsed += use;
         Stats.LaundryRuns++;

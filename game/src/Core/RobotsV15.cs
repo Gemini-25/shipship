@@ -100,7 +100,7 @@ public static class RobotsV15
             C((ItemKind.Motor, 1), (ItemKind.Pump, 1), (ItemKind.Extinguisher, 1)),
             w => w.History.Fires >= 2 ? (0.45f, $"불이 {ShipHistory.Times(w.History.Fires)} 났다") : No) { Fight = true, FoamRate = 16f, FoamHours = 1f, HeatWear = 0.5f },
         // ── 여럿을 섞은 원형 (운반 몸) ──
-        new(RobotKind.Utility, "잡역 로봇", RobotKind.Hauler, J(WorkKind.Restock, WorkKind.Tend, WorkKind.FixLights, WorkKind.StowCot, WorkKind.ShelterFood), 0.075f, 1f, 1.1f, 1.6f,
+        new(RobotKind.Utility, "잡역 로봇", RobotKind.Hauler, J(WorkKind.Restock, WorkKind.Tend, WorkKind.FixLights, WorkKind.StowCot, WorkKind.ShelterFood, WorkKind.EmptyBucket, WorkKind.FlushMain), 0.075f, 1f, 1.1f, 1.6f,
             "배식기 · 작물 돌보기 · 조명 · 간이침대 — 무엇이든 하지만 서툴다",
             C((ItemKind.Motor, 1), (ItemKind.Electronics, 1), (ItemKind.Plate, 2)),
             w => w.History.Deaths >= 1 ? (0.45f, "사람을 잃어 손이 모자라다")

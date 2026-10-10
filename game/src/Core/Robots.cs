@@ -394,8 +394,8 @@ public sealed partial class RobotSystem
     /// <summary>로봇이 맡는 작업 목록의 일.</summary>
     public static bool CanDo(RobotKind k, WorkKind w) => k switch
     {
-        RobotKind.Hauler => w is WorkKind.Restock or WorkKind.StockDock or WorkKind.CarryWater or WorkKind.StockCache or WorkKind.StowCot or WorkKind.RefillPropellant or WorkKind.ShelterFood,
-        RobotKind.Maintainer => w is WorkKind.Maintain or WorkKind.FixLights,
+        RobotKind.Hauler => w is WorkKind.Restock or WorkKind.StockDock or WorkKind.CarryWater or WorkKind.StockCache or WorkKind.StowCot or WorkKind.RefillPropellant or WorkKind.ShelterFood or WorkKind.EmptyBucket,
+        RobotKind.Maintainer => w is WorkKind.Maintain or WorkKind.FixLights or WorkKind.FlushMain or WorkKind.ClearMain,
         RobotKind.Gardener => w is WorkKind.Tend or WorkKind.Harvest,
         _ => RobotsV15.CanDo(k, w),
     };
@@ -889,6 +889,41 @@ public sealed partial class RobotSystem
                     Done(rb, used ? null : $"{Ko.EulReul(m.Name)} 임시 정비했다 (소모품 없음)");
                     return true;
                 }));
+                return steps;
+            }
+            case WorkKind.FlushMain or WorkKind.ClearMain: // v19 물 순환: 회수관 역세척 · 뚫기
+            {
+                var f = o.Target.Furniture!;
+                bool clear = o.Kind == WorkKind.ClearMain;
+                steps.Add(new RGoto(at));
+                steps.Add(new RWork(clear ? 1.5f : 1f, o, f.Center));
+                steps.Add(new RDo((rb, world) =>
+                {
+                    if (o.Closed) return true;
+                    if (clear) world.Water.Cleared(world, rb.Name); else world.Water.Flushed(world, rb.Name);
+                    world.Board.Close(o);
+                    Done(rb, null);
+                    return true;
+                }));
+                return steps;
+            }
+            case WorkKind.EmptyBucket: // v19 임시 회수통을 정수기에 붓는다
+            {
+                var b = w.Water.Buckets.FirstOrDefault(x => x.Id == o.Circuit);
+                var rec = WaterSystem.Recycler(w);
+                if (b == null || !b.Placed) { blocked = "회수통 없음"; return null; }
+                if (rec == null || !dist.Reachable(rec.UseSpots[0])) { blocked = "정수기에 갈 수 없다"; return null; }
+                steps.Add(new RGoto(b.At));
+                steps.Add(new RDo((rb, world) => { if (!b.Placed) return false; b.RobotBy = rb.Id; return true; }));
+                steps.Add(new RGoto(rec.UseSpots[0]));
+                steps.Add(new RDo((rb, world) =>
+                {
+                    world.Water.PourBucket(b);
+                    if (world.Water.Pass >= 0.85f) { world.Water.RemoveBucket(b); b.RobotBy = -1; }
+                    return true;
+                }));
+                steps.Add(new RGoto(b.At));
+                steps.Add(new RDo((rb, world) => { b.RobotBy = -1; world.Board.Close(o); Done(rb, null); return true; }));
                 return steps;
             }
             case WorkKind.FixLights:

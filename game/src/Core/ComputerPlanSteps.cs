@@ -622,6 +622,7 @@ internal sealed class DoorBackStep : FixAction
 {
     private readonly int _door, _low;
     private readonly List<int> _locked = new();
+    private readonly HashSet<int> _woken = new(); // 한 번씩만 깨운다 — 그 방이 위험한 게 아니라 다시 누운 사람을 2분마다 깨우면 열두 시간 내내 못 잔다 (새터호 침실 하룻밤 잠 끊김 600번)
     public DoorBackStep(int door, int low) { _door = door; _low = low; }
     public override string Name => "한 겹 뒤 문 닫기";
     public override (float min, float max) Span(World w, FixCase c) => (1f, 3f);
@@ -639,7 +640,7 @@ internal sealed class DoorBackStep : FixAction
         if (w.Tick - s.Mark > SimTime.Minutes(2))
         {
             s.Mark = w.Tick;
-            foreach (var c in inside) w.Automation.Command.Wake(c, $"{high.Name} 문을 닫아야 한다 — 나와 주십시오", high);
+            foreach (var c in inside) if (c.Pose == Pose.Sleeping && _woken.Add(c.Id)) w.Automation.Command.Wake(c, $"{high.Name} 문을 닫아야 한다 — 나와 주십시오", high);
         }
         return $"{high.Name}에 {inside.Count}명 — 먼저 내보낸다";
     }

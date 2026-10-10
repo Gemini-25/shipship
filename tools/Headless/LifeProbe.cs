@@ -47,6 +47,9 @@ public static partial class Program
                 var lowRoom = w.Crew.Where(c => !c.Dead && c.Room != null && c.Suit == null).Select(c => c.Room!).Distinct().OrderBy(r => r.Air.O2).FirstOrDefault();
                 Console.WriteLine($"     비상 {crisisMin / 60f:0.#}시간 (오래 끈 {acuteMin / 60f:0.#}) · {string.Join(" · ", crisisWhy.OrderByDescending(kv => kv.Value).Take(4).Select(kv => $"{kv.Key} {kv.Value:0.#}"))} · 산소 발생 {w.Air.O2Capacity:0.00} · 탱크 {w.Air.Reserve:0}/{w.Air.ReserveCapacity:0} · 가장 낮은 방 {lowRoom?.Name} O2 {lowRoom?.Air.O2:0.0} CO2 {lowRoom?.Air.CO2:0.00} ({w.Crew.Count(c => !c.Dead && c.Room == lowRoom)}명 · 환기 {(lowRoom == null ? "-" : $"{(lowRoom.Powered ? "전기" : "정전")}/{(lowRoom.VentOpen ? "댐퍼 열림" : "댐퍼 닫힘")}/{(lowRoom.DuctLinked ? "관 연결" : "관 없음")}")}) · 환기 안 되는 방 {string.Join(",", w.Ship.LiveRooms.Where(r => r.Type != RoomType.Corridor && !Atmosphere.Vented(r)).Select(r => r.Name).Take(6))}");
                 crisisMin = 0; acuteMin = 0; crisisWhy.Clear();
+                var recs = w.Ship.FurnitureOf(FurnitureType.WaterRecycler).ToList();
+                Console.WriteLine($"     물 {w.Water.Level:0}/{w.Water.Capacity:0}L · 오수 {w.Water.Grey:0}/{w.Water.GreyCapacity:0}L · 정수 {w.Water.Produced:0.0}L/h · 씀 {w.Water.Consumed:0.0}L/h · 오수 유입 {w.Water.Inflow:0.0}L/h · 회수관 {w.Water.Pass * 100:0}% (찌꺼기 {w.Water.Sludge:0.00}) · 정수기 {recs.Count}대 효율 {(recs.Count > 0 ? recs.Average(f => f.Machine!.Efficiency) : 0f):0.00} 놀림 {w.Water.Starved * 100:0}%");
+                Console.WriteLine($"     물 순환 누적: {w.Water.Loop.Line()}");
                 Console.WriteLine($"     잠 끊김 {Delta(sbw, sbw0)} | 지침 {Delta(lw0.TiredWhy, tw0)} | 사고 {string.Join(" / ", evs)}");
                 sbw0 = sbw; tw0 = new Dictionary<string, float>(lw0.TiredWhy);
                 h0 = lw0.HungryHours; t0 = lw0.TiredHours; mb0 = lw0.MealBreaks; sb0 = lw0.SleepBreaks; ex0 = exhaustedEp;

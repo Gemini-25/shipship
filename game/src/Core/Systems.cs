@@ -29,34 +29,44 @@ public static class FoodChain
 }
 
 /// <summary>물. 정수기가 되살리고, 재배대와 사람이 쓴다. 배관 안에 있으니 우주선 단위로 둔다.</summary>
-public sealed class WaterSystem
+public sealed partial class WaterSystem
 {
     public static float RecyclerLitersPerHour = 3.4f;
     public static float BedLitersPerHour = 0.45f;
     public static float CrewLitersPerHour = 0.12f;
 
-    public float Level { get; set; } = 300f;
+    public float Level { get; set; } = 400f; // v19 가득 싣고 떠난다 (예전엔 정수기가 첫날 채웠다 — 이제 정수기는 돌아온 물만 거른다)
     public float Capacity { get; set; } = 400f;
 
     /// <summary>본선 물을 마시는 사람: 배를 떠난 사람 · 원정 중인 사람(챙겨 간 물통을 마신다)은 빼고.</summary>
     public static int Drinkers(World w) => w.OnBoard;
+    /// <summary>정수기가 실제로 깨끗한 물로 돌려놓는 양 (L/h, 한 시간쯤 평균) — 오수가 들어오는 만큼.</summary>
     public float Produced { get; private set; }
+    /// <summary>정수기가 거를 수 있는 양 (L/h) — 오수가 넉넉할 때.</summary>
+    public float RecycleCapacity { get; private set; }
     public float Consumed { get; private set; }
 
     public void Update(World w, float dt)
     {
-        float produce = w.Ship.FurnitureOf(FurnitureType.WaterRecycler).Sum(f => f.Machine!.Efficiency * f.Machine.Rating) * RecyclerLitersPerHour * ErasV15.Mul(w, "water"); // v15.5 증류·광합성
+        // 정수기가 한 시간에 거를 수 있는 양 (v15.5 증류·광합성) — v19 실제로 거르는 양은 오수 탱크에 든 만큼 (WaterLoop.cs)
+        float cap = w.Ship.FurnitureOf(FurnitureType.WaterRecycler).Sum(f => f.Machine!.Efficiency * f.Machine.Rating) * RecyclerLitersPerHour * ErasV15.Mul(w, "water");
         // v13.2 방침(물): 아끼면 샤워·세탁을 줄이고, 엄격하면 마실 만큼만 (대신 날카로워진다)
         int wp = w.Policies["water"];
-        float consume = Drinkers(w) * CrewLitersPerHour * (wp == 1 ? 0.75f : wp == 2 ? 0.55f : 1f);
+        float crew = Drinkers(w) * CrewLitersPerHour * (wp == 1 ? 0.75f : wp == 2 ? 0.55f : 1f);
         if (wp > 0)
             foreach (var c in w.Crew)
                 if (!c.Dead && !c.Away && c.IsAwake) c.Needs.Stress = MathF.Min(1f, c.Needs.Stress + (wp == 2 ? 0.004f : 0.0015f) * dt);
+        float beds = 0f;
         foreach (var bed in w.Ship.FurnitureOf(FurnitureType.GrowBed))
-            if (bed.Machine!.Efficiency > 0f && bed.Machine.Crop is { Ripe: false } && w.Piping.WaterTo(bed.Room)) consume += BedLitersPerHour * FoodChain.BedSize(bed);
-        consume *= ComputerV15.WaterUseMul(w); // v15.9 물 관리
-        consume *= w.Automation.Planner.HeedWaterMul; // v16.16 예측 방송을 믿는 사람은 스스로 아낀다
-        Produced = produce;
+            if (bed.Machine!.Efficiency > 0f && bed.Machine.Crop is { Ripe: false } && w.Piping.WaterTo(bed.Room)) beds += BedLitersPerHour * FoodChain.BedSize(bed);
+        float mul = ComputerV15.WaterUseMul(w) * w.Automation.Planner.HeedWaterMul; // v15.9 물 관리 · v16.16 예측 방송을 믿는 사람은 스스로 아낀다
+        crew *= mul;
+        beds *= mul;
+        float consume = crew + beds;
+        float produce = Cycle(w, dt, crew, beds, cap, consume); // v19 물 순환: 쓴 물 → 오수 → 회수관 → 오수 탱크 → 정수기
+        RecycleCapacity = cap;
+        Produced += (produce - Produced) * MathF.Min(1f, dt); // 한 시간쯤 평균 (오수는 3분마다 몰려 들어와 틱마다 들쭉날쭉하다)
+        Produced = MathF.Min(Produced, cap * Yield); // 정수기가 멎으면 바로 0
         Consumed = consume;
         Level = Math.Clamp(Level + (produce - consume) * dt, 0f, Capacity);
     }

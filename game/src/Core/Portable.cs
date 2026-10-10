@@ -467,7 +467,7 @@ public sealed partial class PortableSystem
                         float take = MathF.Min(room.Flood, 360f * supply * dt); // 시간당 360L (양동이 둘쯤의 몫 — 사람이 퍼내는 것과 함께)
                         room.Flood -= take;
                         float back = take * 0.8f;
-                        w.Water.Level = MathF.Min(w.Water.Capacity, w.Water.Level + back);
+                        w.Water.Drain(back); // v19 양수기로 퍼낸 물도 오수 탱크로
                         w.Moisture.Stats.Pumped += take;
                         w.Moisture.Stats.Recovered += back;
                         Stats.PumpedL += take;

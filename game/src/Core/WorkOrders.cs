@@ -67,6 +67,8 @@ public enum WorkKind
     SafetyWatch,
     // v19 대피소 식량: 태양 폭풍 중 로봇이 쬐는 창고의 비상식량을 대피소 선반으로 나른다
     ShelterFood,
+    // v19 물 순환: 회수관 역세척 · 뚫기 · 임시 회수통 놓기 · 비우기
+    FlushMain, ClearMain, SetBucket, EmptyBucket,
 }
 
 public static class WorkKinds
@@ -147,6 +149,10 @@ public static class WorkKinds
         WorkKind.CarryWater => "물통 나르기",
         WorkKind.StockCache => "비상 물자 채우기",
         WorkKind.ShelterFood => "대피소 식량",
+        WorkKind.FlushMain => "회수관 역세척",
+        WorkKind.ClearMain => "회수관 뚫기",
+        WorkKind.SetBucket => "임시 회수통",
+        WorkKind.EmptyBucket => "회수통 비우기",
         WorkKind.RemoveJumper => "임시 배선 철거",
         WorkKind.StowCot => "간이침대 치우기",
         WorkKind.Recycle => "부품 재활용",
@@ -355,6 +361,10 @@ public sealed class WorkOrder
         WorkKind.CarryWater => $"{Target.Label}에 물통으로 물 나르기",
         WorkKind.StockCache => $"{Target.Label}에 {ItemKinds.Name(Product ?? ItemKind.Sealant)} 채우기 (비상 물자)",
         WorkKind.ShelterFood => $"{Target.Furniture?.Room.Name ?? Target.Label} 선반에 비상식량 쌓기",
+        WorkKind.FlushMain => "정수기로 가는 회수관 역세척",
+        WorkKind.ClearMain => "막힌 회수관 뚫기",
+        WorkKind.SetBucket => $"{Target.Room?.Name} 배수구 밑에 임시 회수통 받치기",
+        WorkKind.EmptyBucket => $"{Target.Room?.Name} 임시 회수통을 정수기에 붓기",
         WorkKind.RemoveJumper => $"{PowerGrid.CircuitName(Circuit)} 회로 임시 배선 걷기",
         WorkKind.StowCot => $"{Target.Label} 접어 창고로",
         WorkKind.Recycle => $"{Target.Label}에서 {ItemKinds.Name(Product ?? ItemKind.Plate)} 되살리기 (재활용)",
@@ -1286,6 +1296,7 @@ public sealed partial class WorkBoard
         ScanRobots(Post); // v10.10 선내 로봇 (수리·끌어오기·정비)
         psc = Prof.Lap("scan.Robots", psc);
         ScanRecovery(Post); // v10.10 자원 회복 (물통·비상 물자·정리)
+        ScanWaterLoop(Post); // v19 물 순환 (회수관 · 임시 회수통)
         psc = Prof.Lap("scan.Recovery", psc);
         ScanPrevention(Post); // v11.0 예방과 안전
         psc = Prof.Lap("scan.Prevention", psc);

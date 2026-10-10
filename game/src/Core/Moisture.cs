@@ -335,7 +335,7 @@ public static partial class WorkPlanners
             float take = MathF.Min(room.Flood, (90f + 40f * cm.SkillLevel(Skill.Mechanics)) * (world.History.Doctrine.FloodDrill ? 1.5f : 1f));
             room.Flood -= take;
             float back = take * 0.7f;
-            world.Water.Level += back;
+            world.Water.Drain(back); // v19 퍼낸 물은 더럽다 — 오수 탱크로 (정수기가 거른다)
             world.Moisture.Stats.Pumped += take;
             world.Moisture.Stats.Recovered += back;
             if (MoistureSystem.Depth(room) < 0.06f) world.Board.Close(o);
