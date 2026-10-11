@@ -50,6 +50,51 @@ public partial class ShipView
         DotBlit(ci, key, () => DotProps.Wall(dp, side, accent, liquid, seed, code), at);
     }
 
+    /// <summary>도트 장비 한 장 (발이 p 조금 아래 · 픽셀에 맞춘다).</summary>
+    private void PaintDotGear(CanvasItem ci, DotGearKind kind, bool on, int frame, int level, int dir, bool broken, int extra, Vector2 p, Color mod)
+    {
+        var e = Dots.Get(DotTex.Key(10, (int)kind, on ? 1 : 0, frame, level, dir, broken ? 1 : 0, extra), () => DotGear.Gear(kind, on, frame, level, dir, broken, extra));
+        if (e is not { W: > 0 }) return;
+        var at = new Vector2(Mathf.Round(p.X - e.W / 2f), Mathf.Round(p.Y - e.H + 9f));
+        ci.DrawTextureRect(Zoom >= 0.999f ? e.Crisp : e.Tex, new Rect2(at, e.W, e.H), false, mod);
+    }
+
+    /// <summary>이동식 장비 (도트): 충전 받침 · 몸체(켜짐 · 장면 · 잔량 · 겨눈 쪽 · 고장 · 카트 짐과 경고 띠).</summary>
+    private void PaintDotDevice(CanvasItem ci, PortableDevice d, Vector2 p, float dim, Room? room)
+    {
+        var kind = d.Kind switch
+        {
+            PortableKind.WorkLamp => DotGearKind.Lamp, PortableKind.Heater => DotGearKind.Heater, PortableKind.Fan => DotGearKind.Fan,
+            PortableKind.Purifier => DotGearKind.Purifier, PortableKind.Battery => DotGearKind.Battery, PortableKind.Pump => DotGearKind.Pump,
+            _ => DotGearKind.Cart,
+        };
+        var mod = new Color(dim, dim, dim);
+        if (d.Stored)
+        {
+            int led = d.Capacity <= 0f ? 0 : d.Charging ? (Mathf.Sin(_time * 4f + d.Id) > 0f ? 1 : 2) : 3;
+            PaintDotGear(ci, DotGearKind.Dock, false, 0, led, 0, false, 0, p + new Vector2(0, 2), mod);
+        }
+        bool on = d.Running;
+        int frame = on ? (int)(_time * 10f + d.Id) & 3 : 0;
+        int extra = 0;
+        if (kind == DotGearKind.Cart)
+        {
+            frame = d.HeldBy is { IsMoving: true } ? (int)(_time * 10f) & 1 : 0;
+            bool loaded = _world.Portable.Devices.Exists(x => x.OnCart == d);
+            if (!loaded && d.Placed && !d.Stored) extra |= 1;
+            if (d.Placed && room is { Type: RoomType.Corridor }) extra |= 2;
+        }
+        int level = d.Capacity > 0f ? (int)MathF.Ceiling(Math.Clamp(d.ChargeFrac, 0f, 1f) * 4f) : 4;
+        int dir = 1;
+        if (kind == DotGearKind.Lamp)
+        {
+            var aim = d.Aim != System.Numerics.Vector2.Zero ? ToPx(d.Aim) - p : new Vector2(1f, 0.2f);
+            dir = Mathf.Abs(aim.X) >= Mathf.Abs(aim.Y) ? (aim.X >= 0 ? 0 : 2) : (aim.Y >= 0 ? 1 : 3);
+            if (on && d.ChargeFrac < 0.1f && d.Plug == PortablePlug.None && Mathf.Sin(_time * 13f + d.Id) > 0.4f) on = false; // 잔량이 바닥나면 깜빡
+        }
+        PaintDotGear(ci, kind, on, frame, level, dir, d.Broken, extra, p, mod);
+    }
+
     /// <summary>바닥 꾸밈 (도트): 환기 격자 · 배수구 · 식탁 밑 깔개 · 침대 발치 매트 · 노심 · 엔진 둘레 경고 띠. 그렸으면 true.</summary>
     private bool PaintDotFloorDecor(CanvasItem ci)
     {

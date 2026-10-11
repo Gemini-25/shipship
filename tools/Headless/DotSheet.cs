@@ -50,6 +50,7 @@ public static class DotSheet
             "bots" => Bots(),
             "tiles" => Tiles(),
             "props" => Props(),
+            "gear" => Gear(),
             "fixtures" => Fixtures(Arg(args, "--dotstate=") ?? "on"),
             _ => People(),
         };
@@ -154,6 +155,24 @@ public static class DotSheet
             img.Fill(x, y + DotMachines.RiseOf(t), w * 32, h * 32, Rgba.Hex("#3a404b"));
             img.Draw(body, x, y); img.Draw(life, x, y);
         }
+        return img;
+    }
+
+    // ───────────────────────────── 이동식 장비 ─────────────────────────────
+
+    private static Img Gear()
+    {
+        var kinds = (DotGearKind[])Enum.GetValues(typeof(DotGearKind));
+        var img = new Img(kinds.Length * 38 + 8, 4 * 30 + 8);
+        img.Fill(0, 0, img.W, img.H, Rgba.Hex("#3a404b"));
+        for (int i = 0; i < kinds.Length; i++)
+            for (int r = 0; r < 4; r++)
+            {
+                var k = kinds[i];
+                bool on = r % 2 == 1, broken = r == 3;
+                int level = k == DotGearKind.Dock ? r : r + 1;
+                img.Draw(DotGear.Gear(k, on, r, level, r, broken, r == 2 ? 3 : 1), 4 + i * 38, 4 + r * 30);
+            }
         return img;
     }
 

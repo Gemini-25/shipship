@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Godot;
+using ShipSim.Art;
 using ShipSim.Core;
 
 namespace ShipSim.View;
@@ -189,6 +190,9 @@ public partial class ShipView
         var p = ToPx(d.Position);
         float s = T * 0.36f * (d.HeldBy != null ? 0.72f : d.Stored ? 0.85f : 1f);
         float dim = room is { Dark: true } && !d.Running ? 0.55f : 1f;
+        if (DotCrew) PaintDotDevice(ci, d, p, dim, room); // 도트 (ShipViewDotProps)
+        else
+        {
         if (d.Stored) PaintDock(ci, d, p, s);
         switch (d.Kind)
         {
@@ -200,7 +204,8 @@ public partial class ShipView
             case PortableKind.Pump: PaintPumpBody(ci, d, p, s, dim, fine, room); break;
             case PortableKind.Cart: PaintCartBody(ci, d, p, s, dim, fine, room); break;
         }
-        if (d.Broken) PaintBrokenDevice(ci, d, p, s);
+        }
+        if (d.Broken) PaintBrokenDevice(ci, d, p, s, DotCrew);
         if (d.Forgotten && !d.Running && fine) // 잊고 둔 장비: 먼지 앉은 점
             for (int k = 0; k < 4; k++) ci.Circle(p + new Vector2(-s * 0.6f + k * s * 0.4f, -s * 0.9f + (k % 2) * 2f), 0.9f, new Color(0.75f, 0.72f, 0.66f, 0.55f), true, -1f, true);
         if (w.Portable.Flagged(d)) // 주 컴퓨터가 짚은 장비: 위에 깜빡이는 경고 고리
@@ -233,6 +238,8 @@ public partial class ShipView
                 else continue;
             }
             var p = ToPx(at);
+            float fill0 = Mathf.Clamp(b.Fill / ShipSim.Core.WaterBucket.Cap, 0f, 1f);
+            if (DotCrew) { PaintDotGear(ci, DotGearKind.Pail, false, 0, (int)MathF.Ceiling(fill0 * 4f), 1, false, 0, p, Colors.White); continue; } // 도트 회수통
             float s = T * (b.Placed ? 0.3f : 0.24f);
             // 통: 아래가 좁은 사다리꼴 · 테 · 손잡이
             var body = new[] { p + new Vector2(-s * 0.8f, -s * 0.6f), p + new Vector2(s * 0.8f, -s * 0.6f), p + new Vector2(s * 0.6f, s * 0.8f), p + new Vector2(-s * 0.6f, s * 0.8f) };
@@ -564,9 +571,9 @@ public partial class ShipView
     }
 
     /// <summary>고장: 금 간 선 · 연기 · 가끔 튀는 불꽃 (젖어서 고장 나면 물방울).</summary>
-    private void PaintBrokenDevice(CanvasItem ci, PortableDevice d, Vector2 p, float s)
+    private void PaintBrokenDevice(CanvasItem ci, PortableDevice d, Vector2 p, float s, bool dot = false)
     {
-        ci.Polyline(new[] { p + new Vector2(-s * 0.5f, -s * 0.4f), p + new Vector2(-s * 0.1f, -s * 0.05f), p + new Vector2(-s * 0.3f, s * 0.15f), p + new Vector2(s * 0.3f, s * 0.45f) },
+        if (!dot) ci.Polyline(new[] { p + new Vector2(-s * 0.5f, -s * 0.4f), p + new Vector2(-s * 0.1f, -s * 0.05f), p + new Vector2(-s * 0.3f, s * 0.15f), p + new Vector2(s * 0.3f, s * 0.45f) },
             new Color(0.05f, 0.05f, 0.06f, 0.9f), 1.2f, true);
         float ph = (_time * 0.5f + d.Id * 0.21f) % 1f;
         ci.Circle(p + new Vector2(2f * Mathf.Sin(ph * 5f), -s * 0.6f - ph * s * 1.4f), 2f + 3f * ph, new Color(0.25f, 0.25f, 0.27f, 0.5f * (1f - ph)), true, -1f, true);
