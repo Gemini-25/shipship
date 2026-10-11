@@ -103,7 +103,8 @@ public static class WaysTable
         Snag.ToxicGas => "tox", Snag.CommsDown => "comms", Snag.CargoLoose => "cargo", _ => s.ToString().ToLowerInvariant(),
     };
 
-    public static readonly Way[] All =
+    /// <summary>손으로 적은 갈래.</summary>
+    private static readonly Way[] Hand =
     {
         // ── 불 ──
         W(Snag.Fire, "ext", "소화기로 끈다", WayBy.Crew, WayFx.Existing, 8, 0.85f, 0.25f, WayLook.None) with { Order = WorkKind.Extinguish, Item = ItemKind.Extinguisher, Book = true, Line = "소화기부터", Side = "분말이 설비를 덮는다" },
@@ -282,6 +283,9 @@ public static class WaysTable
         W(Snag.Clog, "cloth", "천을 겹쳐 임시 필터를 끼운다", WayBy.Crew, WayFx.Improvise, 12, 0.45f, 0f, WayLook.Improvised) with { Things = Cloth, Later = "제 필터로 바꾼다", Line = "천 세 겹이면 거른다" },
         W(Snag.Clog, "bypass", "우회관을 단다", WayBy.Crew, WayFx.Existing, 40, 0.7f, 0.05f, WayLook.None) with { Order = WorkKind.LayBypass },
     };
+
+    /// <summary>손으로 적은 갈래 + 물건 성질로 저절로 생긴 조합 갈래 (WaysCombo).</summary>
+    public static readonly Way[] All = Hand.Concat(WaysCombo.Generate(Hand)).ToArray();
 
     private static readonly Dictionary<Snag, Way[]> _of = All.GroupBy(x => x.Snag).ToDictionary(g => g.Key, g => g.ToArray());
     private static readonly Dictionary<string, Way> _id = All.ToDictionary(x => x.Id);

@@ -133,6 +133,8 @@ public static partial class Program
         if (args.Contains("--knowprobe")) return RunKnowProbe(seed, days, shipArg); // v19 정보 경계 (평소 묻기 빈도)
         if (args.Contains("--coordtest")) return RunCoordTest(seed); // v19 계획 조율
         if (args.Contains("--coordprobe")) return RunCoordProbe(seed, days, shipArg); // v19 계획 조율 (평소 끼어드는 빈도)
+        if (args.Contains("--combolist")) return RunComboList(); // v19 해법 조합 (물건 성질로 생긴 갈래 목록)
+        if (args.Contains("--combotest")) return RunComboTest(seed); // v19 해법 조합
         if (args.Contains("--heatprobe")) return RunHeatProbe(seed, days, shipArg); // v19 열 (days 자리는 시간)
         if (args.Contains("--waterprobe")) return RunWaterProbe(seed, shipArg ?? "Mirinae", days * 24);
         if (args.Contains("--remodeltest")) return RunRemodelTest(seed);

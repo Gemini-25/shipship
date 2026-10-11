@@ -77,6 +77,19 @@ public static class WaysWork
         return best;
     }
 
+    /// <summary>방 안에서 미끄러지는 짐 (괼 물건 말고) — 가장 빠른 것부터.</summary>
+    private static Article? Cargo(World w, Room? room, int not)
+    {
+        if (room == null) return null;
+        Article? best = null;
+        foreach (var a in w.Matter.Things)
+        {
+            if (a.Id == not || !a.Loose || a.Fixed || a.CarriedBy >= 0 || a.Mass < 3f || w.Ship.RoomAt(a.At) != room) continue;
+            if (best == null || a.Vel.LengthSquared() > best.Vel.LengthSquared()) best = a;
+        }
+        return best;
+    }
+
     private static Cell? FurnSpot(World w, DistanceField dist, CrewMember c, Furniture f) => Plans.WorkSpot(f, w, dist, c);
 
     private static Cell? NearestFire(World w, Room room, CrewMember c)
@@ -298,6 +311,7 @@ public static class WaysWork
                     // 두드림 · 불빛 · 뛰어 전한 말: 옆방 사람이 알아듣고 온다
                     foreach (var o in world.Crew) if (o != cm && o.CanAct && Math.Abs(o.Cell.X - cm.Cell.X) + Math.Abs(o.Cell.Y - cm.Cell.Y) < 14) o.Interrupt(world);
                     if (k.Snag == Snag.Trapped) k.NextChoose = world.Tick;
+                    if (WaysCombo.Is(way) && artId >= 0 && world.Matter.Get(artId) is Article knocker && knocker.CarriedBy == cm.Id) world.Matter.Place(knocker, cm.Cell);
                     world.Ways.Finish(t, true, way.Id switch { "trap.knock" => "옆방에서 두드림을 들었다", "comms.runner" => "직접 뛰어가 전했다", _ => "" }, cm);
                     return true;
                 }));
@@ -346,6 +360,7 @@ public static class WaysWork
                 var pt = w.Crew.FirstOrDefault(x => x.Id == k.CrewId);
                 if (pt == null || !pt.Down || pt.Dead) { why = "벌써 옮겼다"; return null; }
                 if (way.Fx == WayFx.Cart && furn != null && FurnSpot(w, dist, c, furn) is Cell cs) { toils.Add(new GotoToil(cs)); toils.Add(Work(1f, Skill.Mechanics, furn.Cells[0])); }
+                if (artId >= 0 && !TakeThing(w, dist, c, artId, toils)) { why = "끌 판이 없다"; return null; } // v19 해법 조합: 러그 · 고무 매트를 끌판으로
                 if (Spot(w, dist, c, pt.Cell) is not Cell ps) { why = "다친 사람에게 못 간다"; return null; }
                 var dest = SafeSpot(w, dist, c, pt);
                 if (dest is not Cell dc) { why = "옮길 곳이 없다"; return null; }
@@ -365,18 +380,19 @@ public static class WaysWork
                     world.Ways.AddMark(new WayMark { Look = way.Look == WayLook.None ? WayLook.Stretcher : way.Look, At = pt.Cell, RoomId = pt.Room?.Id ?? -1, Since = world.Tick, Try = t.Id, Who = cm.Id, Until = world.Tick + SimTime.Hours(2) });
                     return true;
                 }));
-                float boost = way.Fx switch { WayFx.Stretcher => 1.45f, WayFx.Cart => 1.55f, _ => 1.7f };
+                float boost = WaysCombo.Is(way) ? 1.1f + 0.5f * way.Power : way.Fx switch { WayFx.Stretcher => 1.45f, WayFx.Cart => 1.55f, _ => 1.7f };
                 toils.Add(new CarryGotoToil(dc, boost));
                 toils.Add(new DoToil((cm, world) =>
                 {
                     if (cm.CarryingPerson != pt) return false;
                     pt.CarriedBy = null; cm.CarryingPerson = null;
                     pt.Position = dc.Center; pt.PreviousPosition = dc.Center; pt.Room = world.Ship.RoomAt(dc);
+                    if (artId >= 0 && world.Matter.Get(artId) is Article sled && sled.CarriedBy == cm.Id) world.Matter.Place(sled, dc); // 끌판은 거기 둔다
                     var bed = world.Ship.FurnitureOf(FurnitureType.MedBed).FirstOrDefault(b => b.UseSpots.Contains(dc));
                     if (bed != null && (bed.ReservedBy == null || bed.ReservedBy == pt)) { bed.ReservedBy = pt; pt.CareBed = bed; } else pt.LaidSafe = true;
                     cm.Stats.Rescues++;
                     pt.ChangeAffinity(cm, 0.2f);
-                    world.Relations.Remember(pt, cm, RelationReason.SavedMe, way.Fx == WayFx.Stretcher ? "들것에 실어 옮겨 줬다" : way.Fx == WayFx.Cart ? "수레에 눕혀 옮겨 줬다" : "띄워 밀어 옮겨 줬다");
+                    world.Relations.Remember(pt, cm, RelationReason.SavedMe, WaysCombo.Is(way) ? $"{Ko.EuRo(t.Thing)} 끌어 옮겨 줬다" : way.Fx == WayFx.Stretcher ? "들것에 실어 옮겨 줬다" : way.Fx == WayFx.Cart ? "수레에 눕혀 옮겨 줬다" : "띄워 밀어 옮겨 줬다");
                     world.Ways.Finish(t, true, $"{Ko.EulReul(pt.Name)} {(bed != null ? "치료 침대로" : Ko.EuRo(pt.Room?.Name ?? "?"))} 옮겼다", cm);
                     return true;
                 }));
@@ -491,12 +507,13 @@ public static class WaysWork
             {
                 Cell target = k.At;
                 if (furn != null) target = furn.Cells[0];
-                if (artId >= 0 && way.Fx is not (WayFx.Strap or WayFx.Wedge) && !TakeThing(w, dist, c, artId, toils)) { why = "물건이 없다"; return null; }
+                bool combo = WaysCombo.Is(way);
+                if (artId >= 0 && (way.Fx is not (WayFx.Strap or WayFx.Wedge) || combo) && !TakeThing(w, dist, c, artId, toils)) { why = "물건이 없다"; return null; }
                 if (way.Item is ItemKind it2 && !Fetch(c, w, dist, it2, way.ItemCount, toils)) { why = $"{ItemKinds.Name(it2)} 없음"; return null; }
                 if (way.Item2 is ItemKind k2 && !FetchKit(c, w, dist, k2, toils)) { why = $"{ItemKinds.Name(k2)} 없음"; return null; }
                 Room? goal = way.Fx == WayFx.Gather ? GatherRoom(w, k, room) : null;
                 if (goal != null) target = goal.Cells.FirstOrDefault(w.Ship.IsOpenFloor);
-                if (way.Fx is WayFx.Strap or WayFx.Wedge && artId >= 0 && w.Matter.Get(artId) is Article cargo) target = cargo.At;
+                if (way.Fx is WayFx.Strap or WayFx.Wedge && (combo ? Cargo(w, room, artId) : artId >= 0 ? w.Matter.Get(artId) : null) is Article cargo) target = cargo.At;
                 if ((furn != null && goal == null ? FurnSpot(w, dist, c, furn) : Spot(w, dist, c, target)) is not Cell s) { why = "갈 수가 없다"; return null; }
                 toils.Add(new GotoToil(s));
                 toils.Add(Work(minutes, way.Skill, target));
@@ -518,6 +535,11 @@ public static class WaysWork
             liters = 40f;
             if (src.Type == FurnitureType.GrowBed && src.Machine?.Crop is CropState crop) { crop.DryHours += 8f; crop.Care = MathF.Max(0f, crop.Care - 0.25f); ways.AddFollow(new WayFollow { Id = ways.NextFollow(), WayId = t.WayId, Text = $"{src.Name} 양액 다시 채우기", Kind = 5, FurnId = src.Id, RoomId = src.Room.Id, At = src.Cells[0], Since = w.Tick }); }
             else w.Water.Level = MathF.Max(0f, w.Water.Level - liters);
+        }
+        else if (w.Matter.Get(artId) is Article ice && ice.Mat == Material.Ice)
+        {
+            liters = ice.Spec.Mass * 0.9f; // v19 해법 조합: 얼음 덩어리를 던져 넣었다 — 녹으며 불을 덮는다
+            w.Matter.Remove(ice);
         }
         else if (w.Matter.Get(artId) is Article jug)
         {
@@ -693,6 +715,14 @@ public static class WaysWork
         {
             case WayFx.Strap or WayFx.Wedge:
             {
+                if (WaysCombo.Is(way))
+                {
+                    var load = Cargo(w, r, artId);
+                    if (load != null) { load.Vel = default; load.Fixed = true; }
+                    if (artId >= 0 && w.Matter.Get(artId) is Article chock && chock.CarriedBy == c.Id) w.Matter.Place(chock, load?.At ?? at);
+                    res = load != null ? $"{Ko.EulReul(t.Thing)} {load.Name} 밑에 괴었다" : $"{Ko.EulReul(t.Thing)} 괴어 두었다";
+                    break;
+                }
                 if (artId >= 0 && w.Matter.Get(artId) is Article cargo) { cargo.Vel = default; cargo.Fixed = true; }
                 if (way.Item is ItemKind it) Use(c, it, way.ItemCount);
                 res = way.Fx == WayFx.Strap ? "케이블로 동여맸다" : "숟가락을 바퀴 밑에 끼웠다";
@@ -741,6 +771,18 @@ public static class WaysWork
                 break;
             default:
                 if (r != null) ways.ApplyGen(r, way, c);
+                if (WaysCombo.Is(way) && artId >= 0 && w.Matter.Get(artId) is Article used && used.CarriedBy == c.Id)
+                {
+                    w.Matter.Place(used, at); // 감싼 매트 · 문틈의 종이 · 덮은 상자 · 깔고 앉은 상자는 그 자리에 남는다
+                    res = way.Snag switch
+                    {
+                        Snag.Cold => $"{Ko.EulReul(t.Thing)} 두르고 깔고 앉았다",
+                        Snag.Spark => $"{Ko.EuRo(t.Thing)} 튀는 선을 덮었다",
+                        Snag.Overheat => $"{Ko.EuRo(t.Thing)} 식혔다",
+                        Snag.Leak => $"{Ko.EuRo(t.Thing)} 감싸 조였다",
+                        _ => $"{Ko.EuRo(t.Thing)} 문틈을 막았다",
+                    };
+                }
                 if (way.Id == "heat.off" && r != null && r.Furniture.Select(f => f.Machine).Where(m => m is { Active: true, Powered: true }).OrderByDescending(m => m!.Spec.PowerDraw).FirstOrDefault() is Machine hot)
                 {
                     hot.Active = false;

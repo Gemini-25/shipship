@@ -141,6 +141,8 @@ public readonly record struct WayPast(long Tick, Snag Snag, string WayId, string
 public sealed class WaysStats
 {
     public int Cases, Chosen, Defied, Done, Failed, Customs, Follows, FollowsDone, Shocks, PlugsFell, Noticed, ComputerActs, Robots;
+    /// <summary>v19 해법 조합: 표에 없던 물건 쓰임이 이 배에서 처음 통한 횟수 ("저걸 저렇게 쓰네?").</summary>
+    public int Combos, ComboUses;
     public readonly int[] BySnag = new int[20];
 }
 
@@ -889,6 +891,8 @@ public sealed partial class WaysSystem
                     if (d < fd && d < (way.Fx is WayFx.Pry or WayFx.Cut or WayFx.Lathe or WayFx.Pedal or WayFx.RobotBattery ? 140 : 46)) { fd = d; bf = f; }
                 }
             if (best == null && bf == null) return No(way.Near.Length > 0 ? $"{WaysRules.FromFurniture(way.Near[0]).name}{(Ko.IGa(WaysRules.FromFurniture(way.Near[0]).name)[^1..])} 근처에 없다" : $"{ArticleSpecs.Of(way.Things[0]).Name}{(Ko.IGa(ArticleSpecs.Of(way.Things[0]).Name)[^1..])} 근처에 없다");
+            if (best != null && way.Snag == Snag.Spark && WaysCombo.Is(way) && (best.WetFrac > 0.2f || best.Contents > 0.1f && best.Spec.Holds == Material.Liquid))
+                return No($"{Ko.IGa(best.Name)} 젖어 있다 — 전기가 통한다"); // v19 해법 조합: 젖은 천은 절연이 아니다
             if (best != null && (bf == null || bd <= fd))
             {
                 art = best.Id; thing = best.Name; mat = best.Mat; bulk = WaysRules.Bulk(best.Kind); travel = bd / 3f;
@@ -1170,6 +1174,21 @@ public sealed partial class WaysSystem
         {
             c.Stats.Emergencies++;
             w.History.Add(w, HistoryKind.Response, $"{Ko.IGa(c.Name)} {where} {WaysTable.Name(way.Snag)} — {way.Name}{(t.Thing.Length > 0 && !way.Name.Contains(t.Thing) ? $" ({t.Thing})" : "")}{(result.Length > 0 ? $" · {result}" : "")}", room, new[] { c });
+            // v19 해법 조합: 표에 없던 물건 쓰임이 이 배에서 처음 통했다 — 본 사람들이 놀란다 · 컴퓨터도 갈래 장부에 적는다
+            if (WaysCombo.Is(way))
+            {
+                Stats.ComboUses++;
+                if (p.Ok == 1)
+                {
+                    Stats.Combos++;
+                    var saw = w.Crew.Where(o => o != c && !o.Dead && o.CanAct && o.IsAwake && o.Room != null && o.Room == c.Room).OrderBy(o => o.Id).Take(3).ToList();
+                    foreach (var o in saw) { o.Say(w, Persona.Say(o, "저걸 저렇게 쓰네?")); MarkLog.Add(o.Memory.Marks, w.Tick, $"{c.Name}: {way.Name} — 저걸 저렇게 쓰네"); }
+                    string thing = t.Thing.Length > 0 ? t.Thing : way.Name;
+                    w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(c.Name)} {Ko.EuRo(thing)} {WaysTable.Name(way.Snag)}{(Ko.EulReul(WaysTable.Name(way.Snag))[^1..])} 풀었다 ({WaysCombo.Name(WaysCombo.VerbOf(way) ?? Verb.Block)})" + (saw.Count > 0 ? $" — {string.Join("·", saw.Select(o => o.Name))}: \"저걸 저렇게 쓰네?\"" : ""), c.Id);
+                    w.History.Add(w, HistoryKind.Lesson, $"{Ko.EuRo(thing)} {WaysTable.Name(way.Snag)}{(Ko.EulReul(WaysTable.Name(way.Snag))[^1..])} 풀 수 있다 — {c.Name}이 처음 해 보였다", room, saw.Prepend(c));
+                    if (w.Automation.CoreOnline) w.Log.Add(w.Tick, LogKind.Ship, $"{w.Automation.Voice.Call}: 새 갈래를 적어 둡니다 — {WaysTable.Name(way.Snag)}: {way.Name}");
+                }
+            }
             // 관행: 두 번 넘게 잘 통했고 실패보다 훨씬 많으면 이 배의 방식이 된다
             if (!p.Custom && p.Ok >= 2 && p.Ok > p.Bad * 2 && !way.Book && way.Fx is not (WayFx.Signal or WayFx.Gather or WayFx.Ration))
             {
