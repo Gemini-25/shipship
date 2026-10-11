@@ -7,10 +7,24 @@ namespace ShipSim.View;
 public partial class CameraRig : Camera2D
 {
     public const float MinZoom = 0.15f; // v10.7: 30인용 배(191칸)도 한 화면에
-    public const float MaxZoom = 3f;
+    public const float MaxZoom = 4f; // 도트: 1 · 2 · 3 · 4배는 도트 하나가 화면 점 정수 개 (또렷하게)
     private const float KeyPanSpeed = 900f;
 
     private bool _dragging;
+    private float _zoomTarget = -1f;
+    private Vector2 _zoomAnchor;
+
+    /// <summary>휠 한 칸 위: 1배 이상이면 다음 정수배, 그 아래면 조금씩 (1배를 넘지 않게).</summary>
+    public static float StepUp(float z) => z >= 0.999f ? Mathf.Min(MaxZoom, Mathf.Floor(z + 0.001f) + 1f) : Mathf.Min(1f, z * 1.2f);
+    /// <summary>휠 한 칸 아래: 1배보다 크면 아래 정수배, 그 아래면 조금씩.</summary>
+    public static float StepDown(float z) => z > 1.001f ? Mathf.Max(1f, Mathf.Ceil(z - 0.001f) - 1f) : Mathf.Max(MinZoom, z / 1.2f);
+
+    private void ZoomStep(bool up, Vector2 screenPos)
+    {
+        float from = _zoomTarget > 0f ? _zoomTarget : Zoom.X;
+        _zoomTarget = up ? StepUp(from) : StepDown(from);
+        _zoomAnchor = screenPos;
+    }
     private float _shake;
     private float _shakeTime;
 
@@ -28,11 +42,11 @@ public partial class CameraRig : Camera2D
                 _dragging = mb.Pressed;
                 break;
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelUp } up:
-                ZoomAt(1.15f, up.Position);
+                ZoomStep(true, up.Position);
                 GetViewport().SetInputAsHandled();
                 break;
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelDown } down:
-                ZoomAt(1f / 1.15f, down.Position);
+                ZoomStep(false, down.Position);
                 GetViewport().SetInputAsHandled();
                 break;
             case InputEventMouseMotion motion when _dragging:
@@ -57,6 +71,15 @@ public partial class CameraRig : Camera2D
         {
             Position += move.Normalized() * KeyPanSpeed * dt / Zoom.X;
             FollowTarget = null;
+        }
+
+        if (_zoomTarget > 0f)
+        {
+            // 목표 배율로 부드럽게 다가가다 마지막에 딱 맞춘다 (정수배에서 도트가 고르게)
+            float z = Zoom.X;
+            float nz = Mathf.Exp(Mathf.Lerp(Mathf.Log(z), Mathf.Log(_zoomTarget), 1f - Mathf.Exp(-dt * 16f)));
+            if (Mathf.Abs(nz - _zoomTarget) < 0.004f) { nz = _zoomTarget; _zoomTarget = -1f; }
+            ZoomAt(nz / z, _zoomAnchor);
         }
 
         if (FollowTarget?.Invoke() is Vector2 target)

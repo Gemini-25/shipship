@@ -135,7 +135,7 @@ public partial class LabelOverlay : Node2D
             bool selected = c == _main.SelectedCrew;
             bool hovered = c == _main.HoveredCrew;
             float r = _main.ShipView.CrewRadius;
-            var head = xf * (_main.ShipView.CrewPx(c) + new Vector2(0f, -r - 4f));
+            var head = xf * (_main.ShipView.CrewPx(c) + _main.ShipView.HeadLift(c, -r - 4f)); // 도트 사람은 키가 커서 머리 위가 더 높다
 
             // 경보를 막 들었으면 느낌표
             if (_world.Tick - c.AlertedTick < SimTime.Minutes(3))
@@ -228,7 +228,7 @@ public partial class LabelOverlay : Node2D
     private void PaintNameTag(CrewMember c, Transform2D xf, Color col, bool focus)
     {
         float r = _main.ShipView.CrewRadius;
-        var at = xf * (_main.ShipView.CrewPx(c) + new Vector2(0f, r + 7f));
+        var at = xf * (_main.ShipView.CrewPx(c) + new Vector2(0f, ShipView.DotCrew && !ZoomDetail.Shows(_zoom, Detail.CrewDot) ? 19f : r + 7f)); // 도트 사람은 발 아래
         string name = c.Name;
         float w = Gfx.Width(Fonts.Body, name, Ui.TextTiny) + 14f;
         var tag = new Rect2(at.X - w * 0.5f, at.Y - 7f, w, 13f);

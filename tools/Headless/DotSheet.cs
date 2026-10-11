@@ -15,6 +15,17 @@ public static class DotSheet
         string path = Arg(args, "--dotsheet=") ?? "dotsheet.png";
         int scale = int.TryParse(Arg(args, "--dotscale="), out var s) ? s : 4;
         string what = Arg(args, "--dotwhat=") ?? "people";
+        if (what == "speed")
+        {
+            var cast0 = Cast();
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            int n = 0;
+            for (int rep = 0; rep < 40; rep++)
+                foreach (var l in cast0)
+                    for (int f = 0; f < 4; f++) { var dd = DotPeople.Draw(l, (DotFacing)f, DotPose.Walk, rep & 3); var im = dd.ToImg(); n += im.W; }
+            Console.WriteLine($"사람 한 장면 그리기: {sw.Elapsed.TotalMilliseconds * 1000 / (40 * cast0.Count * 4):0} µs");
+            return 0;
+        }
         Img img = what switch
         {
             "scene" => Scene(),
@@ -41,7 +52,7 @@ public static class DotSheet
         new() { Female = true, Age = DotAge.Elder, Skin = 2, HairRamp = Ramps.HairWhite, Hair = DotHair.Bun, Cloth = Ramps.ClothGreen, Accent = Ramps.ClothPurple, Badge = 5, Cane = true, Glasses = true, Seed = 4 },
         new() { Female = false, Age = DotAge.Child, Skin = 4, HairRamp = Ramps.HairBlack, Hair = DotHair.Curly, Accent = Ramps.ClothYellow, Pattern = 1, Seed = 5 },
         new() { Female = true, Age = DotAge.Teen, Build = DotBuild.Thin, Skin = 5, HairRamp = Ramps.HairDark, Hair = DotHair.Bob, Cloth = Ramps.ClothPurple, Accent = Ramps.ClothTeal, Casual = true, Pattern = 4, Seed = 6 },
-        new() { Female = false, Age = DotAge.Adult, Build = DotBuild.Strong, Skin = 2, HairRamp = Ramps.HairBlonde, Hair = DotHair.Side, Cloth = Ramps.ClothTeal, Accent = Ramps.ClothOrange, Badge = 4, Beard = true, Hurt = DotHurt.HeadWrap | DotHurt.SlingL | DotHurt.CastLegL | DotHurt.Bleed, Seed = 7 },
+        new() { Female = false, Age = DotAge.Adult, Build = DotBuild.Strong, Skin = 2, HairRamp = Ramps.HairBlonde, Hair = DotHair.Side, Cloth = Ramps.ClothTeal, Accent = Ramps.ClothOrange, Badge = 4, Beard = true, Hurt = DotHurt.HeadWrap | DotHurt.SlingL | DotHurt.CastLegR | DotHurt.Bleed, Seed = 7 },
         new() { Female = true, Age = DotAge.Adult, Skin = 3, HairRamp = Ramps.HairTeal, Hair = DotHair.Long, Cloth = Ramps.ClothPurple, Accent = Ramps.ClothGreen, Badge = 6, Hurt = DotHurt.MetalArmR | DotHurt.Burn | DotHurt.EyePatch, Seed = 8 },
         new() { Female = false, Age = DotAge.Elder, Build = DotBuild.Thin, Skin = 0, HairRamp = Ramps.HairGrey, Hair = DotHair.Receding, Cloth = Ramps.ClothBeige, Accent = Ramps.ClothNavy, Casual = true, Pattern = 3, Beard = true, Seed = 9 },
         new() { Female = true, Age = DotAge.Adult, Skin = 4, HairRamp = Ramps.HairBlack, Hair = DotHair.Braid, Cloth = Ramps.ClothOrange, Accent = Ramps.ClothBlue, Badge = 1, Hurt = DotHurt.Sick | DotHurt.Sweat, Seed = 10 },
@@ -55,7 +66,7 @@ public static class DotSheet
         int fw = DotPeople.FW, fh = DotPeople.FH, pad = 2;
         // 1줄: 12명 앞모습 · 2줄: 같은 12명 옆 · 3줄: 뒤 · 4줄: 첫 사람 걷기(앞 4 · 옆 4) · 앉기 · 일하기 · 들기 · 웅크림
         int cols = cast.Count;
-        var img = new Img(cols * (fw + pad) + pad, 4 * (fh + pad) + pad);
+        var img = new Img(cols * (fw + pad) + pad, 5 * (fh + pad) + pad);
         for (int i = 0; i < cols; i++)
         {
             Put(img, DotPeople.Draw(cast[i], DotFacing.S), i, 0);
@@ -72,6 +83,17 @@ public static class DotSheet
         var box = cast[6]; var k2 = box.Held; var h2 = box.Hurt; box.Held = DotHeld.Box; box.Hurt = DotHurt.None;
         Put(img, DotPeople.Draw(box, DotFacing.S, DotPose.Carry), c++, 3); box.Held = k2; box.Hurt = h2;
         Put(img, DotPeople.Draw(cast[2], DotFacing.S, DotPose.Cower), c++, 3);
+        // 5줄: 왼팔을 잃고 오른다리 깁스 (앞 · 동 · 서 · 뒤 — 좌우가 맞는지) · 오른팔 의수 · 우주복 셋 · 무릎 · 잠든 얼굴 · 숨짐
+        var t = new PersonLook { Female = false, Skin = 2, HairRamp = Ramps.HairBrown, Hair = DotHair.Crop, Cloth = Ramps.ClothTeal, Accent = Ramps.ClothRed, Badge = 4, Hurt = DotHurt.NoArmL | DotHurt.CastLegR, Seed = 21 };
+        c = 0;
+        foreach (var f in new[] { DotFacing.S, DotFacing.E, DotFacing.W, DotFacing.N }) Put(img, DotPeople.Draw(t, f), c++, 4);
+        var m = new PersonLook { Female = true, Skin = 4, HairRamp = Ramps.HairBlack, Hair = DotHair.Bob, Cloth = Ramps.ClothPurple, Accent = Ramps.ClothYellow, Badge = 6, Hurt = DotHurt.MetalArmR | DotHurt.NoLegL, Seed = 22 };
+        Put(img, DotPeople.Draw(m, DotFacing.S), c++, 4); Put(img, DotPeople.Draw(m, DotFacing.E), c++, 4);
+        var suit = cast[0]; suit.Suit = true;
+        Put(img, DotPeople.Draw(suit, DotFacing.S), c++, 4); Put(img, DotPeople.Draw(suit, DotFacing.E, DotPose.Walk, 1), c++, 4); Put(img, DotPeople.Draw(suit, DotFacing.N), c++, 4); suit.Suit = false;
+        Put(img, DotPeople.Draw(cast[1], DotFacing.S, DotPose.Kneel), c++, 4);
+        var sl = cast[4]; sl.EyesClosed = true; Put(img, DotPeople.Draw(sl, DotFacing.S), c++, 4); sl.EyesClosed = false;
+        var dead = cast[9]; dead.Dead = true; dead.EyesClosed = true; Put(img, DotPeople.Draw(dead, DotFacing.S), c++, 4); dead.Dead = false; dead.EyesClosed = false;
         return img;
     }
 

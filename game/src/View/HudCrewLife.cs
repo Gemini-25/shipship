@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using Godot;
+using ShipSim.Art;
 using ShipSim.Core;
 
 namespace ShipSim.View;
@@ -25,6 +26,25 @@ public partial class Hud
             if (lost.Prosthetic) { DrawLine(a, b, new Color("#9aa7b8"), 5f, true); this.Circle(b, 2.5f, new Color("#cfd8e3")); return; }
             DrawDashedLine(a, b, new Color(1, 1, 1, 0.3f), 2f, 4f);
         }
+        if (ShipView.DotCrew && _main.ShipView.Portrait(c, out var look) is Texture2D dotTex)
+        {
+            // 도트 앞모습 2배 (붕대 · 깁스 · 의수 · 화상이 그대로) + 부위 점
+            var at = new Vector2(cx - DotPeople.FW, top - 6f);
+            DrawRect(new Rect2(at - new Vector2(3, 3), DotPeople.FW * 2 + 6, DotPeople.FH * 2 - 6), new Color(0.05f, 0.06f, 0.09f, 0.6f));
+            DrawTextureRect(dotTex, new Rect2(at, DotPeople.FW * 2, DotPeople.FH * 2), false);
+            var anchors = DotPeople.Anchors(look);
+            float pulse = 0.6f + 0.4f * Mathf.Sin(_time * 4f);
+            foreach (var wd in v.Wounds)
+            {
+                if (!wd.Lost && Wounds.Severity(v, wd) < 0.03f) continue;
+                var (ax, ay) = anchors[(int)wd.Part];
+                var p = at + new Vector2(ax + 0.5f, ay + 0.5f) * 2f;
+                this.Circle(p, 4.5f, new Color(0, 0, 0, 0.55f), true, -1f, true);
+                this.Circle(p, 3.2f, WoundColor(v, wd).WithAlpha(wd.Lost ? 0.9f : pulse), true, -1f, true);
+            }
+        }
+        else
+        {
         this.Circle(new Vector2(cx, top + 10), 9f, WoundColor(Sev(BodyPart.Head)), true, -1f, true);
         var chest = new Rect2(cx - 11, top + 22, 22, 34);
         this.Box(chest, WoundColor(MathF.Max(Sev(BodyPart.Chest), Sev(BodyPart.Lungs))));
@@ -33,6 +53,7 @@ public partial class Hud
         Limb(BodyPart.RightArm, new Vector2(cx + 14, top + 26), new Vector2(cx + 26, top + 56));
         Limb(BodyPart.LeftLeg, new Vector2(cx - 6, top + 58), new Vector2(cx - 10, top + 96));
         Limb(BodyPart.RightLeg, new Vector2(cx + 6, top + 58), new Vector2(cx + 10, top + 96));
+        }
         // 오른쪽: 상처 목록과 몸이 하는 일
         float lx = x + 110, ly = y + 30;
         // 부상 등급 (경상 · 중상 · 위중) — 맨 위 한 줄

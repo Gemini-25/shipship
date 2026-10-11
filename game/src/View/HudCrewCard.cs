@@ -190,6 +190,9 @@ public partial class Hud
             y += 46;
         }
 
+        // ── 몸 상태: 도트 앞모습 · 부위 점 · 상처 목록 (HudCrewBody.cs) ──
+        if (ShipView.DotCrew) y = DrawBodyState(c, x, right, y, Fits);
+
         // ── 잘하는 기술 3 (기술마다 고유 아이콘) ──
         if (!c.Dead && Fits(24))
         {

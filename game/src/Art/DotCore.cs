@@ -45,6 +45,25 @@ public static class Ramps
     }
 
     public static int Count(int ramp) => All[ramp].Length;
+
+    private static readonly Dictionary<uint, int> Derived = new();
+
+    /// <summary>색 하나에서 5단 색표를 만든다 (어두운 쪽은 푸르게, 밝은 쪽은 따뜻하게) — 승무원 개인 색 등. 같은 색이면 같은 색표.</summary>
+    public static int Derive(byte r, byte g, byte b)
+    {
+        uint key = (uint)(r << 16 | g << 8 | b);
+        lock (Derived)
+        {
+            if (Derived.TryGetValue(key, out int id)) return id;
+            var mid = new Rgba(r, g, b);
+            var cool = new Rgba(20, 24, 48); var warm = new Rgba(255, 246, 220);
+            var ramp = new[] { Rgba.Lerp(mid, cool, 0.72f), Rgba.Lerp(mid, cool, 0.42f), mid, Rgba.Lerp(mid, warm, 0.32f), Rgba.Lerp(mid, warm, 0.62f) };
+            All.Add(ramp);
+            id = All.Count - 1;
+            Derived[key] = id;
+            return id;
+        }
+    }
     public static Rgba Get(int ramp, int shade)
     {
         var r = All[ramp];
@@ -65,6 +84,9 @@ public static class Ramps
     /// <summary>앓는 사람의 피부 (창백하고 푸르스름).</summary>
     public static readonly int SickSkin = Add("#2f3a35", "#5f716a", "#8fa59b", "#b7cbc0", "#d8e6dd");
     public static readonly int FrostSkin = Add("#1d2a44", "#34507a", "#5a7fae", "#8eb0d6", "#c4dbf0");
+    public static readonly int DeadSkin = Add("#2a2a2e", "#4f4f55", "#7a7a80", "#a2a2a6", "#c4c4c6");
+    /// <summary>우주복 (흰 천 · 회색 주름).</summary>
+    public static readonly int SuitWhite = Add("#3c4048", "#7d838e", "#bcc2ca", "#e4e8ec", "#fbfcfd");
 
     // ── 머리카락 (4단) ──
     public static readonly int HairBlack = Add("#0e0b0f", "#1f181c", "#33282a", "#4a3b39");

@@ -813,6 +813,7 @@ public partial class ShipView : Node2D
     {
         var ship = _world.Ship;
         var mode = _main.ViewMode;
+        DotFrameStart(); // 도트 사람: 이 프레임에 새로 그릴 장면 수
         PaintMatterCarried(ci); // v16.4 손에 든 물건
         PaintExplosives(ci, true); // 들고 가는 폭발성 물건
         PaintPortable(ci, true); // v16.7 사람이 든 이동식 장비 · 몸에 가린 작업등 그림자
@@ -1434,7 +1435,9 @@ public partial class ShipView : Node2D
             var lie = c.CarriedBy is CrewMember carrier
                 ? CrewPx(carrier) + new Vector2(-carrier.Facing.Y, carrier.Facing.X).Normalized() * 13f * s
                 : p;
-            if (lod >= 1) PaintPuppetLying(ci, c, lie, s * 0.9f, c.Dead, false); // v17.1 누운 인형
+            bool dot = lod >= 1 && DotCrew && PaintDotLying(ci, c, lie, false); // 도트 사람 (누움)
+            if (dot) { }
+            else if (lod >= 1) PaintPuppetLying(ci, c, lie, s * 0.9f, c.Dead, false); // v17.1 누운 인형
             else
             {
                 Gfx.RoundRect(ci, new Rect2(lie.X - 13f * s, lie.Y - 6f * s, 26f * s, 12f * s), Palette.Space.WithAlpha(0.8f), 6f * s);
@@ -1442,12 +1445,12 @@ public partial class ShipView : Node2D
                 ci.Circle(lie + new Vector2(-8f * s, 0f), 5.5f * s, body.Lightened(0.25f), true, -1f, true);
             }
             if (c.Suit != null) ci.Arc(lie + new Vector2(-8f * s, 0f), 6f * s, 0f, Mathf.Tau, 16, new Color("#dfe6ee"), 1.5f, true);
-            if (c.Dead)
+            if (c.Dead && !dot)
             {
                 ci.DrawLine(lie + new Vector2(-11, -5) * s, lie + new Vector2(-5, 5) * s, new Color("#1a1c22"), 1.8f, true);
                 ci.DrawLine(lie + new Vector2(-5, -5) * s, lie + new Vector2(-11, 5) * s, new Color("#1a1c22"), 1.8f, true);
             }
-            else
+            else if (!c.Dead)
             {
                 float blink = 0.5f + 0.5f * Mathf.Sin(_time * 5f);
                 var cp = lie + new Vector2(9f * s, -9f * s);
@@ -1458,9 +1461,11 @@ public partial class ShipView : Node2D
         }
         else if (_world.Body.Crawling(c))
         {
-            if (lod >= 1) PaintPuppetCrawl(ci, c, p, s * 0.85f); // v17.1 기는 인형
+            if (lod >= 1 && DotCrew && PaintDotLying(ci, c, p, true)) { } // 도트 사람 (기어감)
+            else if (lod >= 1) PaintPuppetCrawl(ci, c, p, s * 0.85f); // v17.1 기는 인형
             else PaintCrawler(ci, c, p, col, s); // v16.3 정비 통로 속: 엎드려 기는 몸
         }
+        else if (c.Pose == Pose.Sleeping && lod >= 1 && DotCrew && PaintDotSleeping(ci, c, p)) { } // 도트 사람 (베개 위 머리 · 담요)
         else if (c.Pose == Pose.Sleeping)
         {
             Gfx.RoundRect(ci, new Rect2(p.X - 10f, p.Y + 1f, 20f, 26f), col.Darkened(0.35f).WithAlpha(0.95f), 8);
@@ -1495,6 +1500,7 @@ public partial class ShipView : Node2D
             float rr = c.Pose == Pose.Sitting ? radius * 0.9f : radius;
             var facing = _world.React.FaceAt(c) is System.Numerics.Vector2 rf ? rf.ToGodot() : c.Facing.ToGodot(); // v17.8 쳐다보는 쪽으로 몸을 돌린다
             if (ZoomDetail.Shows(Zoom, Detail.CrewDot)) PaintCrewDot(ci, c, body, rr, Palette.Crew(c.Id)); // v17.1 · v16.24 멀리선 점 + 색
+            else if (DotCrew && PaintDotStanding(ci, c, body + new Vector2(0f, 10f), facing, Puppet.Of(_world, c))) { } // 도트 사람 (발이 몸 중심 아래)
             else PaintPuppet(ci, c, body, facing, s * (c.Pose == Pose.Sitting ? 0.92f : 1f), Puppet.Of(_world, c), lod, Palette.Crew(c.Id), c.Vitals.Health < 0.5f); // v17.1 위에서 본 인형
 
             if (c.Pose == Pose.Working)
@@ -1532,9 +1538,11 @@ public partial class ShipView : Node2D
 
     public CrewMember? PickCrew(Vector2 worldPx)
     {
-        float reach = CrewRadius + 5f;
+        bool dot = DotCrew && !ZoomDetail.Shows(Zoom, Detail.CrewDot);
+        float reach = CrewRadius + (dot ? 9f : 5f);
+        var lift = dot ? new Vector2(0f, -8f) : Vector2.Zero; // 도트 사람: 몸 가운데는 발보다 위
         return _world.Crew
-            .Select(c => (c, d: CrewPx(c).DistanceTo(worldPx)))
+            .Select(c => (c, d: (CrewPx(c) + lift).DistanceTo(worldPx)))
             .Where(x => x.d < reach)
             .OrderBy(x => x.d)
             .Select(x => x.c)

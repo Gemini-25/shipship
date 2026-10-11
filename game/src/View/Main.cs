@@ -1119,6 +1119,7 @@ public partial class Main : Node2D
                 case "--pause":
                     Paused = true;
                     break;
+                case "--nodot": ShipView.DotCrew = false; break; // 예전 인형으로 (도트 사람 비교 · 성능 측정)
                 case "--puppets": if (PuppetGallery.Setup(Sim) is Vector2 pg) Camera.Position = pg; break; // v17.1 인형 화면 확인 (자세 · 든 것 · 머리 · 우주복)
                 case "--tab":
                     Hud.CrewTab = int.Parse(value, CultureInfo.InvariantCulture);
