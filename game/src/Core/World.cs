@@ -20,6 +20,7 @@ public sealed class AdaptationLog
     public int Refined;
     public int IceMelted;
     public int Substitutes;
+    public int ExtraOxygen; // v19 정원보다 많이 타 산소 발생기를 하나 더 짰다
     public int Restored;
     public int Rebuilt;
     public int PanelsReplaced;

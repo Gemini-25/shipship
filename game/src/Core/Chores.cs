@@ -2127,18 +2127,20 @@ public static partial class WorkPlanners
     {
         blocked = null;
         var room = o.Target.Room!;
+        bool extra = o.Circuit == 1; // v19 하나 더 (정원보다 많이 탔다)
         // 다른 사람이 이미 하나 짰으면 (방이 바뀌어 일감이 둘로 갈렸어도) 더 짜지 않는다 — 전기가 없어 안 도는 건 발생기가 없는 게 아니다
         static bool HaveOne(World world) => world.Ship.FurnitureOf(FurnitureType.OxygenGenerator).Any(f => !f.Stowed && !f.Room.Detached && !f.Room.Abandoned
                                                                                                         && !f.Machine!.Has(FaultKind.Wrecked) && !f.Machine.Has(FaultKind.Stripped));
-        if (HaveOne(w)) { blocked = "이미 산소 발생기가 있다"; return null; }
+        bool Done(World world) => extra ? world.Air.ShortSince < 0 : HaveOne(world);
+        if (Done(w)) { if (extra) w.Board.Close(o); blocked = "이미 산소 발생기가 있다"; return null; }
         var cost = new[] { (ItemKind.PowerController, 1), (ItemKind.Cable, 2), (ItemKind.Plate, 2) };
         var toils = FetchAll(c, w, dist, cost);
         if (toils == null) { blocked = $"재료 부족 ({Cost(cost)})"; return null; }
         toils.Add(new GotoToil(at));
-        toils.Add(new WorkToil(2.5f, Skill.Mechanics, room.Center) { Resume = o, CanContinue = (cm, world) => !HaveOne(world) });
+        toils.Add(new WorkToil(2.5f, Skill.Mechanics, room.Center) { Resume = o, CanContinue = (cm, world) => !Done(world) });
         toils.Add(new DoToil((cm, world) =>
         {
-            if (HaveOne(world)) { world.Board.Close(o); return true; }
+            if (Done(world)) { world.Board.Close(o); return true; }
             if (Adaptation.BenchCell(world, room) is not Cell spot) return false;
             if (!UseAll(cm, cost)) return false;
             var gen = world.Ship.AddFurniture(FurnitureType.OxygenGenerator, spot);
@@ -2147,15 +2149,16 @@ public static partial class WorkPlanners
             world.Paths.Invalidate();
             world.Structure.Touch();
             world.Adapt.Substitutes++;
+            if (extra) world.Adapt.ExtraOxygen++;
             MarkLog.Add(room.Marks, world.Tick, "임시 산소 발생기");
             MarkLog.Add(gen.Machine.Marks, world.Tick, $"{Ko.IGa(cm.Name)} 전해조를 손으로 엮어 짰다");
-            world.History.Add(world, HistoryKind.Adaptation, $"{Ko.IGa(cm.Name)} {room.Name} 한쪽에 임시 산소 발생기를 짰다 — 몫은 작지만 숨은 쉰다", room, new[] { cm });
-            world.RaiseAlert($"{room.Name}에 임시 산소 발생기 — 몫은 작지만 숨은 쉰다", room, AlertLevel.Notice, shipWide: true);
+            world.History.Add(world, HistoryKind.Adaptation, extra ? $"{Ko.IGa(cm.Name)} {room.Name}에 산소 발생기를 하나 더 짰다 — {world.Aboard}명이 숨 쉴 몫" : $"{Ko.IGa(cm.Name)} {room.Name} 한쪽에 임시 산소 발생기를 짰다 — 몫은 작지만 숨은 쉰다", room, new[] { cm });
+            world.RaiseAlert(extra ? $"{room.Name}에 산소 발생기를 하나 더 — {world.Aboard}명이 숨 쉴 몫" : $"{room.Name}에 임시 산소 발생기 — 몫은 작지만 숨은 쉰다", room, AlertLevel.Notice, shipWide: true);
             world.Board.Close(o);
             world.Board.RequestScan();
             return true;
         }));
-        return Wrap(a, o, c, w, "임시 산소 발생기", toils, $"{room.Name}에 임시 산소 발생기를 짜러 간다", LogKind.Warning);
+        return Wrap(a, o, c, w, extra ? "산소 발생기 하나 더" : "임시 산소 발생기", toils, extra ? $"{room.Name}에 산소 발생기를 하나 더 짜러 간다" : $"{room.Name}에 임시 산소 발생기를 짜러 간다", LogKind.Warning);
     }
 
     /// <summary>v9.2: 주 컴퓨터를 잃은 배가 다른 방 한쪽에 임시 제어 컴퓨터를 짠다 (콘솔 부품을 엮은 Mk.1).</summary>

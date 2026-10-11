@@ -37,6 +37,13 @@ public sealed class Atmosphere
     /// <summary>v11.1: 돌아가는 산소 발생기가 하나도 없어진 때 (-1이면 있다).</summary>
     public long NoGeneratorSince { get; private set; } = -1;
 
+    /// <summary>v19 숨 쉬는 양 (사람 수 × 한 사람 몫) · 발생기들이 멀쩡할 때 낼 수 있는 양 (고장 · 정전은 빼고 설계 몫만).</summary>
+    public float Breathing { get; private set; }
+    public float RatedCapacity { get; private set; }
+    /// <summary>v19 설계 몫이 숨 쉬는 양에 못 미친 때 (정원보다 많이 탔다 · -1이면 넉넉하다).</summary>
+    public long ShortSince { get; private set; } = -1;
+    internal bool ShortAnnounced;
+
     /// <summary>공기 탱크 잔량 (kPa·칸). 72칸 방을 한 번 채우는 데 약 7,300.</summary>
     public float Reserve { get; set; } = 26000f;
     public float ReserveCapacity { get; internal set; } = 26000f;
@@ -98,6 +105,17 @@ public sealed class Atmosphere
         bool anyGen = ship.FurnitureOf(FurnitureType.OxygenGenerator).Any(f => !f.Stowed && !f.Room.Detached && !f.Room.Abandoned && !f.Machine!.Has(FaultKind.Wrecked));
         if (anyGen) NoGeneratorSince = -1;
         else if (NoGeneratorSince < 0) NoGeneratorSince = _world.Tick;
+        // v19 정원보다 많이 타면 발생기 몫이 숨 쉬는 양을 못 따라간다 — 고장 · 정전이 아니라 설계 몫이 모자란 것 (WorkOrders: 발생기를 하나 더)
+        int breathers = 0;
+        foreach (var c in _world.Crew) if (!c.Dead && !c.LeftShip && !c.Away) breathers++;
+        Breathing = Breathing <= 0f ? breathers * BreathO2 : Breathing + (breathers * BreathO2 - Breathing) * MathF.Min(1f, dtHours / 2f); // 두 시간쯤 평균 (선외 · 도킹으로 잠깐 드나드는 사람에 흔들리지 않게)
+        float rated = 0f;
+        foreach (var f in ship.FurnitureOf(FurnitureType.OxygenGenerator))
+            if (!f.Stowed && !f.Room.Detached && !f.Room.Abandoned && !f.Machine!.Has(FaultKind.Wrecked) && !f.Machine.Has(FaultKind.Stripped))
+                rated += f.Machine.Rating * Grades.Output(f.Machine.Grade);
+        RatedCapacity = rated * GeneratorCapacity * (1f + Modules.Bonus(_world, FurnitureType.Scrubber)) * ErasV15.Mul(_world, "o2");
+        if (anyGen && RatedCapacity < Breathing) { if (ShortSince < 0) ShortSince = _world.Tick; }
+        else if (!anyGen || RatedCapacity >= Breathing * 1.03f) { ShortSince = -1; ShortAnnounced = false; }
         float budget = capacity * dtHours;
         float needO2 = 0f, needCO2 = 0f;
         foreach (var r in ship.Rooms)

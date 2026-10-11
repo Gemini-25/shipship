@@ -11,7 +11,7 @@ public static partial class Program
     private static int RunWaterTest(int seed)
     {
         _fails = 0;
-        Console.WriteLine($"물 순환 점검 (v19) · 시드 {seed}\n");
+        Console.WriteLine($"물 · 산소 순환 점검 (v19) · 시드 {seed}\n");
         WaterSystem.NoComputer = false;
         WaterSystem.HoldClear = false;
 
@@ -115,7 +115,38 @@ public static partial class Program
             WaterSystem.HoldClear = false;
         }
 
-        Console.WriteLine(_fails == 0 ? "\n✔ 물 순환" : $"\n✘ {_fails}개 실패");
+        // 6) 산소: 정원보다 많이 타면 발생기 몫이 숨 쉬는 양을 못 따라간다 → 하나 더 짠다 (정원대로면 짜지 않는다)
+        {
+            var w = World.CreateDefault(seed, 60, "Saeteo");
+            float breathe0 = 0f, rated0 = 0f;
+            Run(w, SimTime.Hours(1));
+            breathe0 = w.Air.Breathing; rated0 = w.Air.RatedCapacity;
+            long t0 = w.Tick, built = -1;
+            for (int i = 0; i < 30 && built < 0; i++)
+            {
+                Run(w, SimTime.Hours(1));
+                if (w.Adapt.ExtraOxygen > 0) built = w.Tick;
+            }
+            Run(w, SimTime.Hours(6));
+            float low = w.Ship.LiveRooms.Where(r => w.Crew.Any(c => !c.Dead && c.Room == r)).Select(r => r.Air.O2).DefaultIfEmpty(21f).Min();
+            Check("산소 — 60명이 탄 새터호: 발생기 몫이 숨 쉬는 양을 못 따라가면 발생기를 하나 더 짠다", built >= 0 && w.Air.RatedCapacity >= w.Air.Breathing && low >= 19f,
+                $"숨 {breathe0:0} · 발생기 몫 {rated0:0} → {w.Air.RatedCapacity:0} · 하나 더 {H(built, t0)} ({w.Adapt.ExtraOxygen}대) · 사람 있는 방 가장 낮은 산소 {low:0.0}%"
+                + (built < 0 ? $" · 전력 제어기 {w.Ship.CountStored(ItemKind.PowerController)} 케이블 {w.Ship.CountStored(ItemKind.Cable)} 금속판 {w.Ship.CountStored(ItemKind.Plate)} · 일 {string.Join(", ", w.Board.Open.Where(o => o.Kind == WorkKind.BuildOxygen).Select(o => $"{o.Urgency:0.00}/{o.Assignee?.Name ?? "-"}/{o.BlockedReason ?? "-"}"))}" : ""));
+            var v = World.CreateDefault(seed, 0, "Saeteo");
+            Run(v, SimTime.Hours(24));
+            Check("산소 — 정원(40명)이면 짓지 않는다", v.Adapt.ExtraOxygen == 0 && v.Air.ShortSince < 0, $"숨 {v.Air.Breathing:0} · 발생기 몫 {v.Air.RatedCapacity:0} · 하나 더 {v.Adapt.ExtraOxygen}대");
+            // 모든 배가 정원대로면 발생기 몫이 넉넉하다 (설계가 숨 쉬는 양을 못 따라가는 배가 없다)
+            var tight = new System.Collections.Generic.List<string>();
+            foreach (var t in ShipCatalog.All)
+            {
+                var x = World.CreateDefault(seed, 0, t.Key);
+                Run(x, SimTime.Minutes(30));
+                if (x.Air.RatedCapacity < x.Air.Breathing * 1.03f) tight.Add($"{x.Ship.Name} {x.Air.RatedCapacity:0}/{x.Air.Breathing:0}");
+            }
+            Check("산소 — 어느 배든 정원대로 타면 발생기 몫이 숨 쉬는 양보다 넉넉하다", tight.Count == 0, tight.Count == 0 ? $"{ShipCatalog.All.Count()}척 모두" : string.Join(", ", tight));
+        }
+
+        Console.WriteLine(_fails == 0 ? "\n✔ 물 · 산소 순환" : $"\n✘ {_fails}개 실패");
         return _fails == 0 ? 0 : 1;
     }
 

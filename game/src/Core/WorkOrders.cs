@@ -879,6 +879,21 @@ public sealed partial class WorkBoard
                     $"산소 발생기를 모두 잃은 지 {(w.Tick - w.Air.NoGeneratorSince) / (float)SimTime.TicksPerHour:0}시간 → 전력 제어기 1 + 케이블 2 + 금속판 2로 임시 산소 발생기 (Mk.1)");
         }
 
+        // ── v19 산소 발생기 하나 더: 정원보다 많이 타 발생기 몫이 숨 쉬는 양을 여섯 시간 넘게 못 따라가면 (고장이 아니라 설계 몫이 모자라다) ──
+        if (w.Air.ShortSince >= 0 && w.Tick - w.Air.ShortSince > SimTime.Hours(6) && w.Adapt.ExtraOxygen < 3
+            && Have(ItemKind.PowerController) >= 1 && Have(ItemKind.Cable) >= 2 && Have(ItemKind.Plate) >= 2
+            && (ship.FurnitureOf(FurnitureType.OxygenGenerator).Select(f => f.Room).FirstOrDefault(r => !r.Detached && !r.Abandoned && Adaptation.BenchCell(w, r) != null)
+                ?? Adaptation.ComputerTarget(w)) is Room genRoom) // 발생기 방이 꽉 찼으면 배전실 · 정비실 · 창고 한쪽에
+        {
+            post(WorkKind.BuildOxygen, WorkTarget.OfRoom(genRoom), 0.6f, Skill.Mechanics,
+                $"숨 쉬는 양 {w.Air.Breathing:0} · 발생기 몫 {w.Air.RatedCapacity:0} ({w.Aboard}명) → 전력 제어기 1 + 케이블 2 + 금속판 2로 산소 발생기 하나 더", circuit: 1);
+            if (!w.Air.ShortAnnounced && w.Automation.CoreOnline)
+            {
+                w.Air.ShortAnnounced = true;
+                w.Automation.Speak.Announce(w.Automation.Voice.Style($"{w.Aboard}명이 숨 쉬는 양을 산소 발생기가 따라가지 못합니다 — {genRoom.Name}에 발생기를 하나 더 짜 주십시오."), genRoom, 1);
+            }
+        }
+
         // ── v10.1 레이더 감시: 주 컴퓨터가 꺼져 궤적 계산이 없으면, 센서가 살아 있는 동안 사람이 통신실 화면을 지킨다 ──
         //    (운석이 오면 몇 분 전에라도 방향을 알 수 있다 — 대신 일손 하나가 묶인다)
         if (!w.Automation.MainOnline && w.Sensors.Online && w.Sensors.CommsRoom is Room comms && !comms.Abandoned && !comms.Leaking && !comms.OffLimits
