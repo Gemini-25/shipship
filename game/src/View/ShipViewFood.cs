@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Godot;
+using ShipSim.Art;
 using ShipSim.Core;
 
 namespace ShipSim.View;
@@ -121,6 +122,22 @@ public partial class ShipView
 
     private static float Hash01(int a, int b) => Mathf.PosMod(Mathf.Sin(a * 12.9898f + b * 78.233f) * 43758.547f, 1f);
 
+    /// <summary>도트 그릇 한 장을 c 가운데에 (ShipSim.Art.DotFood).</summary>
+    private void DotDishAt(CanvasItem ci, DotDish k, DishRecipe r, DishState st, int fill, int seed, Vector2 c)
+    {
+        var fc = FoodColor(r);
+        DotDishAt(ci, k, Ramps.Derive((byte)(fc.R * 255), (byte)(fc.G * 255), (byte)(fc.B * 255)), st, fill, seed, c);
+    }
+
+    private void DotDishAt(CanvasItem ci, DotDish k, int food, DishState st, int fill, int seed, Vector2 c)
+    {
+        int frame = st == DishState.Cooking ? (int)(_time * 6f + seed) & 3 : 0;
+        int sd = seed & 7;
+        var e = Dots.Get(DotTex.Key(11, (int)k, food, (int)st, frame, fill, sd), () => DotFood.Dish(k, food, st, frame, fill, sd));
+        if (e is not { W: > 0 }) return;
+        ci.DrawTextureRect(Zoom >= 0.999f ? e.Crisp : e.Tex, new Rect2(new Vector2(Mathf.Round(c.X - e.W / 2f), Mathf.Round(c.Y - e.H / 2f)), e.W, e.H), false);
+    }
+
     /// <summary>요리마다의 색 (국물 · 빵 · 소스).</summary>
     private static Color FoodColor(DishRecipe r) => r.Id switch
     {
@@ -205,6 +222,19 @@ public partial class ShipView
         var food = FoodColor(r);
         if (spoiled) food = food.Lerp(new Color("#6f7d3a"), 0.6f);
         else if (heat < 0.15f) food = food.Darkened(0.18f); // 식으면 탁해진다
+        if (DotCrew && r.Kind is not (DishKind.Side or DishKind.Ferment or DishKind.Pickle)) // 도트 그릇
+        {
+            var dk = r.Kind switch
+            {
+                DishKind.Stew => DotDish.Ttuk, DishKind.Rice => DotDish.Wok, DishKind.Pan => DotDish.Pan, DishKind.Dumpling => DotDish.Steamer,
+                DishKind.Bread => DotDish.Tray, DishKind.Cake => DotDish.Cake, _ => DotDish.Pot,
+            };
+            var dst = spoiled ? DishState.Spoiled : cooking ? DishState.Cooking : heat < 0.15f ? DishState.Cold : DishState.Warm;
+            DotDishAt(ci, dk, r, dst, 4, seed, c);
+            if (spoiled) { Flies(ci, c, s * 1.2f, seed); Stink(ci, c + new Vector2(0f, -s), s * 1.2f, 1f, seed); }
+            else Steam(ci, c + new Vector2(0f, -s * 0.7f), cooking ? 1f : heat, seed, s / 10f);
+            return;
+        }
         var shadow = new Color(0f, 0f, 0f, 0.3f);
         ci.Circle(c + new Vector2(1.5f, 2f), s * 1.05f, shadow, true, -1f, true);
         switch (r.Kind)
@@ -346,9 +376,13 @@ public partial class ShipView
     {
         DrawBurnerGlow(ci, c, s * 1.25f, 1f);
         ci.Circle(c, s * (1.15f + 0.1f * Mathf.Sin(_time * 5f)), new Color(1f, 0.3f, 0.05f, 0.25f + 0.35f * scorch), true, -1f, true);
+        if (DotCrew) DotDishAt(ci, DotDish.Pot, Ramps.Char, DishState.Burnt, 4, seed, c); // 도트: 검게 탄 냄비
+        else
+        {
         ci.Circle(c, s, FdSteel.Lerp(new Color("#1b1714"), scorch), true, -1f, true);
         ci.Circle(c, s * 0.78f, new Color("#3a2416").Lerp(new Color("#0d0b0a"), scorch), true, -1f, true);
         if (fine) for (int i = 0; i < 6; i++) ci.Arc(c, s * (0.3f + 0.08f * i), Hash01(seed, i) * 6f, Hash01(seed, i) * 6f + 1.2f, 6, new Color(0f, 0f, 0f, 0.6f), 1f, true); // 눌어붙은 자국
+        }
         int puffs = 3 + (int)(scorch * 5f);
         for (int i = 0; i < puffs; i++)
         {
@@ -371,6 +405,9 @@ public partial class ShipView
     private void DrawJar(CanvasItem ci, DishRecipe r, Vector2 c, float s, float progress, bool spoiled, float left, bool fine, int seed)
     {
         var food = spoiled ? new Color("#6f7d3a") : FoodColor(r);
+        if (DotCrew) DotDishAt(ci, r.Kind == DishKind.Ferment ? DotDish.Onggi : DotDish.Glass, r, spoiled ? DishState.Spoiled : DishState.Warm, (int)MathF.Ceiling(Mathf.Clamp(left, 0f, 1f) * 4f), seed, c); // 도트 항아리 · 유리병
+        else
+        {
         ci.Poly(Ell(c + new Vector2(1.5f, s * 1.1f), s * 0.9f, s * 0.25f, 12), new Color(0f, 0f, 0f, 0.3f));
         if (r.Kind == DishKind.Ferment)
         {
@@ -407,6 +444,7 @@ public partial class ShipView
             ci.Box(new Rect2(jar.Position.X - 1f, jar.Position.Y - s * 0.3f, jar.Size.X + 2f, s * 0.32f), new Color("#c0c7cf"));
             ci.DrawLine(jar.Position + new Vector2(2f, 3f), jar.Position + new Vector2(2f, jar.Size.Y - 3f), new Color(1f, 1f, 1f, 0.45f), 1f); // 유리 빛
         }
+        }
         if (spoiled) { Flies(ci, c, s * 1.3f, seed); Stink(ci, c + new Vector2(0f, -s * 1.3f), s, 1f, seed); return; }
         if (progress < 1f)
         {
@@ -424,6 +462,12 @@ public partial class ShipView
     /// <summary>냉장고의 보관 통: 뚜껑 걸쇠 · 요리 색 띠 (상하면 부풀고 초록).</summary>
     private void DrawTub(CanvasItem ci, DishRecipe r, Vector2 c, float s, bool spoiled, bool fine, int seed)
     {
+        if (DotCrew) // 도트 보관 통
+        {
+            DotDishAt(ci, DotDish.Tub, r, spoiled ? DishState.Spoiled : DishState.Cold, 4, seed, c);
+            if (spoiled) Flies(ci, c, s * 1.4f, seed);
+            return;
+        }
         var box = new Rect2(c - new Vector2(s, s * 0.7f), new Vector2(s * 2f, s * 1.4f));
         float bulge = spoiled ? 1.2f + 0.4f * Mathf.Sin(_time * 1.5f) : 0f;
         Gfx.RoundRect(ci, box.Grow(bulge), new Color("#dfe7ee").WithAlpha(0.9f), 2f, new Color("#8aa0b4"), 1);
@@ -447,10 +491,19 @@ public partial class ShipView
     {
         var r = p.Spec;
         float heat = Mathf.Clamp((p.Temp - 30f) / 55f, 0f, 1f);
+        if (DotCrew) DotDishAt(ci, DotDish.Plate, r, p.Spoiled ? DishState.Spoiled : heat < 0.15f ? DishState.Cold : DishState.Warm, p.Eaten ? 0 : 4, p.Id, c); // 도트 접시
+        else
+        {
         ci.Circle(c + new Vector2(1f, 1.5f), s * 1.05f, new Color(0f, 0f, 0f, 0.28f), true, -1f, true);
         ci.Circle(c, s, new Color("#eef1f4"), true, -1f, true);
         ci.Arc(c, s * 0.82f, 0f, Mathf.Tau, 20, new Color("#c9d1da"), 0.8f, true);
-        if (!p.Eaten)
+        }
+        if (!p.Eaten && DotCrew)
+        {
+            if (p.Spoiled) Flies(ci, c, s * 1.3f, p.Id);
+            else Steam(ci, c + new Vector2(0f, -s * 0.5f), heat, p.Id, 0.6f);
+        }
+        else if (!p.Eaten)
         {
             var food = p.Spoiled ? new Color("#6f7d3a") : heat < 0.15f ? FoodColor(r).Darkened(0.15f) : FoodColor(r);
             if (r.Kind is DishKind.Bread or DishKind.Cake) ci.Poly(Ell(c, s * 0.42f, s * 0.6f, 12, 0.5f), food);
@@ -461,7 +514,7 @@ public partial class ShipView
             if (p.Spoiled) Flies(ci, c, s * 1.3f, p.Id);
             else Steam(ci, c + new Vector2(0f, -s * 0.5f), heat, p.Id, 0.6f);
         }
-        else for (int i = 0; i < 4; i++) ci.Circle(c + new Vector2((Hash01(p.Id, i) - 0.5f) * s, (Hash01(p.Id, i + 5) - 0.5f) * s), 0.7f, FoodColor(r).Darkened(0.2f), true, -1f, true); // 다 먹은 접시의 부스러기
+        else if (!DotCrew) for (int i = 0; i < 4; i++) ci.Circle(c + new Vector2((Hash01(p.Id, i) - 0.5f) * s, (Hash01(p.Id, i + 5) - 0.5f) * s), 0.7f, FoodColor(r).Darkened(0.2f), true, -1f, true); // 다 먹은 접시의 부스러기
         // 이름표: 접시 가에 기대 세운 쪽지 · 받을 사람 색 띠 · 찾았으면 비스듬히 넘어간다
         var tagAt = c + new Vector2(s * 0.9f, -s * 0.9f);
         float tilt = p.Found ? 0.5f : -0.15f;
@@ -482,8 +535,12 @@ public partial class ShipView
     /// <summary>먹는 사람 머리 위의 작은 그릇 (김이 나면 따뜻한 것, 없으면 식은 채).</summary>
     private void DrawBowl(CanvasItem ci, DishRecipe r, Vector2 c, float s, float heat, int seed)
     {
+        if (DotCrew) DotDishAt(ci, DotDish.Bowl, r, heat > 0.1f ? DishState.Warm : DishState.Cold, 4, seed, c + new Vector2(0f, 2f)); // 도트 공기
+        else
+        {
         ci.Poly(new[] { c + new Vector2(-s, 0f), c + new Vector2(s, 0f), c + new Vector2(s * 0.6f, s * 0.8f), c + new Vector2(-s * 0.6f, s * 0.8f) }, new Color("#e9edf2"));
         ci.Poly(Ell(c, s, s * 0.32f, 12), FoodColor(r));
+        }
         Steam(ci, c + new Vector2(0f, -1f), heat, seed, 0.45f);
     }
 

@@ -1,5 +1,6 @@
 using System.Linq;
 using Godot;
+using ShipSim.Art;
 using ShipSim.Core;
 
 namespace ShipSim.View;
@@ -18,6 +19,7 @@ public partial class ShipView
             var col = Palette.Crew(b.Maker >= 0 ? b.Maker : b.Owner);
             float a = b.Usable ? 1f : 0.45f;
             var c0 = r.GetCenter() + new Vector2((b.Id % 3 - 1) * 5f, (b.Id / 3 % 3 - 1) * 4f);
+            if (DotCrew) { DotBelonging(ci, b.Kind, c0, col, a, b.Open, !b.Usable); continue; } // 도트 (ShipSim.Art.DotItems)
             Glyph(ci, b.Kind, c0, col, a, b.Open);
             if (!b.Usable) ci.DrawLine(c0 + new Vector2(-5, -5), c0 + new Vector2(5, 5), new Color(1f, 0.4f, 0.3f, 0.7f), 1.2f, true);
         }
@@ -28,7 +30,11 @@ public partial class ShipView
             if (c == null || c.Dead) continue;
             var p = CrewPx(c);
             if (bs.Get(s.Item) is Belonging held && held.Holder == c.Id)
-                Glyph(ci, held.Kind, p + new Vector2(CrewRadius * 0.9f, CrewRadius * 0.4f), Palette.Crew(c.Id), 1f, true, 0.8f);
+            {
+                var hp = p + new Vector2(CrewRadius * 0.9f, CrewRadius * 0.4f);
+                if (DotCrew) DotBelonging(ci, held.Kind, hp, Palette.Crew(c.Id), 1f, true, false);
+                else Glyph(ci, held.Kind, hp, Palette.Crew(c.Id), 1f, true, 0.8f);
+            }
             // 연주·노래: 음표가 떠오른다 (조용히 해 달라고 했으면 멈춘다)
             if (s.Hobby is Hobby.Instrument or Hobby.Singing && !s.Hushed)
             {
@@ -46,6 +52,15 @@ public partial class ShipView
             if (a == null || b2 == null || a.Job?.Activity is not HobbyActivity || b2.Job?.Activity is not HobbyActivity) continue;
             ci.DrawDashedLine(CrewPx(a), CrewPx(b2), new Color(0.9f, 0.85f, 0.6f, 0.35f), 1f, 3f);
         }
+    }
+
+    /// <summary>도트 물건 한 장 (주인 색 · 펼침 · 망가짐 — 못 쓰는 것은 흐리게).</summary>
+    private void DotBelonging(CanvasItem ci, BelongingKind k, Vector2 c, Color owner, float alpha, bool open, bool broken)
+    {
+        int ramp = Ramps.Derive((byte)(owner.R * 255), (byte)(owner.G * 255), (byte)(owner.B * 255));
+        var e = Dots.Get(DotTex.Key(12, (int)k, ramp, open ? 1 : 0, broken ? 1 : 0), () => DotItems.Belonging(k, ramp, open, broken));
+        if (e is not { W: > 0 }) return;
+        ci.DrawTextureRect(Zoom >= 0.999f ? e.Crisp : e.Tex, new Rect2(new Vector2(Mathf.Round(c.X - e.W / 2f), Mathf.Round(c.Y - e.H / 2f)), e.W, e.H), false, new Color(1, 1, 1, alpha));
     }
 
     /// <summary>물건의 작은 그림 (종류마다).</summary>

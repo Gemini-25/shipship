@@ -189,6 +189,18 @@ public static class DotProps
         return d.ToImg(outline: false);
     }
 
+    /// <summary>바닥 점검 뚜껑 22 × 22: 테두리 홈 · 귀퉁이 나사 넷 · 손잡이 홈.</summary>
+    public static Img Hatch()
+    {
+        var d = new Dot(22, 22);
+        d.Part = 1; d.Rect(0, 0, 22, 22, Ramps.Steel, 2);
+        d.Part = 2; d.Rect(1, 1, 20, 20, Ramps.Steel, 3);
+        d.Bevel();
+        foreach (var (x, y) in new[] { (3, 3), (18, 3), (3, 18), (18, 18) }) { d.Mark(x, y, Ramps.Steel, 5); d.Mark(x + 1, y + 1, Ramps.Steel, 1); }
+        d.MarkRect(7, 10, 8, 2, Ramps.Panel, 0); d.MarkRect(7, 10, 8, 1, Ramps.Panel, 1);
+        return d.ToImg(outline: false);
+    }
+
     /// <summary>바닥 배수구 11 × 11.</summary>
     public static Img Drain()
     {

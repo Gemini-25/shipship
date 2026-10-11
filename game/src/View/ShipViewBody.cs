@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Godot;
+using ShipSim.Art;
 using ShipSim.Core;
 using Mat = ShipSim.Core.Material;
 
@@ -126,7 +127,8 @@ public partial class ShipView
                 }
             }
             // 점검 뚜껑 자리: 바닥에 사각 테두리 · 나사 넷 · 손잡이 홈
-            if ((body.Under[i] & UnderFlags.HatchSpot) != 0)
+            if ((body.Under[i] & UnderFlags.HatchSpot) != 0 && DotCrew) DotBlit(ci, DotTex.Key(9, 5), DotProps.Hatch, p + new Vector2(5, 5)); // 도트 뚜껑
+            else if ((body.Under[i] & UnderFlags.HatchSpot) != 0)
             {
                 float a = 5f, b2 = T - 5f;
                 hatch.Add(new Vector2(p.X + a, p.Y + a), new Vector2(p.X + b2, p.Y + a));

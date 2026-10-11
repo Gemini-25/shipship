@@ -51,6 +51,8 @@ public static class DotSheet
             "tiles" => Tiles(),
             "props" => Props(),
             "gear" => Gear(),
+            "food" => Food(),
+            "items" => Items(),
             "fixtures" => Fixtures(Arg(args, "--dotstate=") ?? "on"),
             _ => People(),
         };
@@ -155,6 +157,34 @@ public static class DotSheet
             img.Fill(x, y + DotMachines.RiseOf(t), w * 32, h * 32, Rgba.Hex("#3a404b"));
             img.Draw(body, x, y); img.Draw(life, x, y);
         }
+        return img;
+    }
+
+    // ───────────────────────────── 개인 물건 ─────────────────────────────
+
+    private static Img Items()
+    {
+        var kinds = (ShipSim.Core.BelongingKind[])Enum.GetValues(typeof(ShipSim.Core.BelongingKind));
+        var img = new Img(kinds.Length * 16 + 8, 3 * 16 + 8);
+        img.Fill(0, 0, img.W, img.H, Rgba.Hex("#7a4c28"));
+        for (int i = 0; i < kinds.Length; i++)
+            for (int r = 0; r < 3; r++)
+                img.Draw(DotItems.Belonging(kinds[i], Ramps.Accent[i % Ramps.Accent.Length], r == 1, r == 2), 4 + i * 16, 4 + r * 16);
+        return img;
+    }
+
+    // ───────────────────────────── 음식 그릇 ─────────────────────────────
+
+    private static Img Food()
+    {
+        var kinds = (DotDish[])Enum.GetValues(typeof(DotDish));
+        var states = (DishState[])Enum.GetValues(typeof(DishState));
+        var img = new Img(kinds.Length * 28 + 8, states.Length * 22 + 8);
+        img.Fill(0, 0, img.W, img.H, Rgba.Hex("#7a4c28"));
+        int soup = Ramps.Derive(0xd9, 0xa4, 0x41), kimchi = Ramps.Derive(0xc8, 0x41, 0x2f);
+        for (int i = 0; i < kinds.Length; i++)
+            for (int r = 0; r < states.Length; r++)
+                img.Draw(DotFood.Dish(kinds[i], i % 2 == 0 ? soup : kimchi, states[r], r, 4 - r % 5, i), 4 + i * 28, 4 + r * 22);
         return img;
     }
 
