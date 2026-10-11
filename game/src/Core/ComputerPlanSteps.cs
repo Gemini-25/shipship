@@ -351,6 +351,7 @@ internal sealed class DerateStep : FixAction
 {
     private readonly float _cap;
     public DerateStep(float cap) => _cap = cap;
+    public override string? Ready(World w, FixPlan p, FixStep s) => s.Issued ? null : w.Automation.Coord.DerateWait(_cap); // v19 계획 조율: 낮춘 출력으로 수술 · 생명유지를 버티나
     public override string Name => _cap <= 0.2f ? "원자로 출력 최저로" : $"출력 {_cap * 100:0}%로 낮추기";
     public override float CapSet => _cap;
     public override (float min, float max) Span(World w, FixCase c) => (2f, 3f);

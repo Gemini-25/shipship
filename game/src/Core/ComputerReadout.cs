@@ -97,7 +97,7 @@ public static class ComputerReadout
             float mins = a.ReviewOrNull?.BatteryMinutes(drain) ?? float.PositiveInfinity;
             r.Forecasts.Add(new ReadLine { Text = $"배터리 {pw.BatteryPercent * 100:0}% · {drain:0.#}kW씩 — 바닥까지 {mins:0}분" + (a.ReviewOrNull?.Values.BatterySamples > 0 ? $" (이 배에서 잰 용량 {a.ReviewOrNull!.Values.BatteryFactor * 100:0}%)" : " (이름표 용량)"), Kind = "예측" });
         }
-        r.Reserve = a.ReserveOrNull?.Line ?? "";
+        r.Reserve = string.Join(" · ", new[] { a.ReserveOrNull?.Line ?? "", a.CoordOrNull?.Line ?? "" }.Where(x => x != "")); // v19 계획 조율
         r.Zones = zones != null && zones.Reports.Count > 0 && now - zones.Reports[^1].tick < SimTime.Hours(2) ? zones.Reports[^1].text : "";
         var self = a.SelfOrNull;
         r.Self = self == null ? "" : self.Status != "정상" ? self.Status : self.Notes.Count > 0 && now - self.Notes[^1].tick < SimTime.Hours(1) ? self.Notes[^1].text : "";

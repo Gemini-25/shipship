@@ -149,6 +149,12 @@ public sealed class ChoresActivity : Activity
         if (o.Kind == WorkKind.ManualControl && (o.Assignee == c || w.Automation.LastOperator == c.Id && w.Tick - w.Automation.LastOperatorTick < SimTime.Minutes(10))) score += 0.3f;
         else if (o.Robot != null) score -= 0.15f; // v10.10: 로봇이 하고 있는 일에 합류 — 더 급한 일이 없을 때만
         if (c.Vitals.Health < 0.5f) score -= 0.3f;
+        // v19 계획 조율: 오래 끄는 비상에 기력이 바닥난 사람은 새 일을 잡지 않는다 (목숨이 걸린 일은 빼고) — 교대로 잔다
+        if (c.Needs.Rest < 0.1f && Crisis.Chronic(w) && !LifeOrDeath(o) && Relief(c, w)) score -= 0.5f;
+        // v19 계획 조율: 기력이 바닥나 (8% 아래 — 깨면 곧 쓰러진다) 잠든 사람은 일로 깨우지 않는다 — 또 하나의 치료 일이 된다
+        //   (40인 배 열흘: 기력 0에 잠을 깨워 치료하러 보낸 것 87번 → 쓰러짐 38 · 탈진 1700사람·시간). 급한 일(0.9 넘게)인데 깨어 있는 성한 손이 없을 때만 일어난다
+        if (c.Needs.Rest < 0.08f && (c.Pose == Pose.Sleeping || c.Job?.Activity is SleepActivity) && !(o.Urgency >= 0.9f && !Relief(c, w)))
+            score -= 1f;
         // 제 치료를 기다리는 사람은 남을 치료하러 돌아다니지 않는다 (다친 사람끼리 서로 쫓으면 치료하러 온 사람이 헛걸음한다 — 성한 사람이 간다)
         if (o.Kind == WorkKind.Treat && o.Urgency < 0.9f && w.Board.OpenUnsorted.Any(x => x.Kind == WorkKind.Treat && x.Target.Crew == c)) score -= 0.3f;
         if (c.Fx.Worst > 0.45f && o.Urgency < 0.9f) score -= 0.3f * c.Fx.Worst; // v14.1 앓는 사람은 급하지 않은 일을 미룬다
@@ -252,6 +258,17 @@ public sealed class ChoresActivity : Activity
     }
 
     /// <summary>통합: 지금 이 사람이 붙을 만한 가장 나은 일의 점수 (없으면 0) — 당직이 "할 일이 따로 없을 때"인지 본다.</summary>
+    /// <summary>v19 교대해 줄 손: 깨어 있고 기력이 남은 다른 사람 (작은 배에서 지친 사람마저 자러 가면 생명유지를 고칠 사람이 없다 — 미리내 스무 날 끝에 모두 잃었다).</summary>
+    internal static bool Relief(CrewMember c, World w)
+    {
+        foreach (var x in w.Crew)
+            if (x != c && x.CanAct && !x.Outside && !x.IsChild && x.Pose != Pose.Sleeping && x.Needs.Rest >= 0.3f) return true;
+        return false;
+    }
+
+    /// <summary>지금 목숨이 걸린 일: 불 · 구조 · 파공 봉합 — 지쳐도 손을 놓지 않는다.</summary>
+    internal static bool LifeOrDeath(WorkOrder? o) => o != null && o.Kind is WorkKind.Extinguish or WorkKind.Rescue or WorkKind.SealBreach;
+
     internal static float BestScore(CrewMember c, World w, DistanceField dist) { var (o, s, _) = Best(c, w, dist); return o == null ? 0f : s; }
 
     public override (float, string) Score(CrewMember c, World w, DistanceField dist)
@@ -691,7 +708,9 @@ public static partial class WorkPlanners
         ItemKind? part = materials.Length > 0 ? materials[0].kind : null;
 
         // 재료를 구할 수 있나 (갈 수 있는 보관함에 있나). 파손이면 핵심 부품 + 금속판
-        List<Toil>? fetch = materials.Length > 0 ? FetchAll(c, w, dist, materials) : Plans.DropOff(c, w, dist);
+        // v19 계획 조율: 남은 부품이 더 급한 수리 몫이면 꺼내지 않는다 (부분 수리로 버티거나 기다린다)
+        string? held = part is ItemKind pk && w.Ship.CountStored(pk) > 0 ? w.Automation.CoordOrNull?.PartHeldFor(o, pk) : null;
+        List<Toil>? fetch = held != null ? null : materials.Length > 0 ? FetchAll(c, w, dist, materials) : Plans.DropOff(c, w, dist);
         bool havePart = fetch != null;
 
         // 무엇을 할지: 급한 핵심 설비가 멈춰 있고 완전 수리가 오래 걸리면 먼저 긴급 우회로 살린다
@@ -702,7 +721,7 @@ public static partial class WorkPlanners
         else
         {
             var missing = materials.Where(x => w.Ship.CountStored(x.kind) < x.count).Select(x => ItemKinds.Name(x.kind));
-            blocked = $"{string.Join("·", missing.DefaultIfEmpty(ItemKinds.Name(part!.Value)))} 없음" + (fault.Stage > 0 ? $" ({fault.StageName} 운전 중)" : "");
+            blocked = held ?? $"{string.Join("·", missing.DefaultIfEmpty(ItemKinds.Name(part!.Value)))} 없음" + (fault.Stage > 0 ? $" ({fault.StageName} 운전 중)" : "");
             return null;
         }
 

@@ -447,6 +447,7 @@ public sealed partial class AutomationSystem
         Recovery.Update();
         Probe.Update();
         Reserve.Update();
+        Coord.Update(); // v19 계획 조율 (사람 · 부품 · 통로 · 전력 · 배터리)
         Review.Update();
         Manner.Update();
     }

@@ -406,7 +406,7 @@ public sealed partial class DroneSystem
             {
                 case DroneState.Docked:
                     if (d.Wrecked) break;
-                    if (DockWorking(d) && d.Battery < 1f)
+                    if (DockWorking(d) && d.Battery < 1f && _world.Automation.CoordOrNull?.HoldCharge(d) != true) // v19 계획 조율: 원자로가 멎은 동안 배터리를 재기동 몫으로
                     {
                         d.Battery = MathF.Min(1f, d.Battery + ChargePerHour * d.Dock.Machine!.Efficiency * dt);
                         docksCharging.Add(d.Dock);
@@ -838,6 +838,9 @@ public sealed partial class DroneSystem
     }
 
     /// <summary>하던 일을 두고 돌아온다.</summary>
+    /// <summary>v19 계획 조율이 덜 급한 드론을 불러들인다.</summary>
+    public void Recall(Drone d, string why) => Abort(d, why);
+
     private void Abort(Drone d, string? why)
     {
         var w = _world;

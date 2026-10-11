@@ -147,9 +147,11 @@ public static class Brain
                     if (!Leisure(e)) { best = e; break; }
             // v19 비상이 아닐 때 탈진 직전이면 하던 일을 놓고 눕는다 — 수리 · 당직은 다른 사람 · 로봇이 잇는다 (배고프면 먹고 나서)
             //   60인 배 하루: 배전반 수리를 네 시간 붙든 끝에 휴식 12% · 먹고 한 시간 걸어 침대에 닿을 때 3%
+            //   v19 계획 조율: 세 시간 넘게 끄는 비상에도 그렇다 — 불 · 구조 · 파공처럼 지금 목숨이 걸린 일이 아니고, 이어받을 성한 손이 있으면 넘기고 잔다
+            //   (40인 배: 냉각 펌프 열 대가 서고 서른여덟 시간 — 모두 버티다 기력 평균 2%, 원자로를 다시 켤 사람이 없어 사흘을 캄캄하게)
             bool spent = false;
             if (c.Needs.Rest < 0.1f && !c.Outside && c.Job.Activity is not (SleepActivity or EatActivity or SavedPlateActivity) && best.Activity is not EatActivity
-                && (!c.Job.Urgent || c.Job.Activity is ChoresActivity or DutyActivity) && !Crisis.Acting(w))
+                && (!c.Job.Urgent || c.Job.Activity is ChoresActivity or DutyActivity) && (!Crisis.Acting(w) || Crisis.Chronic(w) && !ChoresActivity.LifeOrDeath(c.Job.Order) && ChoresActivity.Relief(c, w)))
                 foreach (var e in evals)
                     if (e.Activity is SleepActivity) { if (e.Score > 0.5f) { best = e; spent = true; } break; }
             if (best.Activity == c.Job.Activity)

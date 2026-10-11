@@ -431,6 +431,14 @@ public sealed partial class CoopSystem
             if (who != null && who != c) { c.ChangeAffinity(who, -0.02f); _w.Brain2.Emotions.Feel(c, Feeling.Anger, 0.12f, "펼쳐 둔 부품을 누가 건드렸다", who); }
             MarkLog.Add(c.Memory.Marks, now, $"{ex.Label} 정비 자리 — 돌아오니 부품이 흩어져 있었다");
         }
+        else if (w.Automation.CoordOrNull?.TakeHandover(o!.Id) is string note) // v19 계획 조율: 불려 간 사람이 남긴 인계 메모 — 더듬지 않는다
+        {
+            s.SetupMin = 0.3f; s.Boost = 1f; s.BoostUntil = now + SimTime.Minutes(15);
+            Stats.Inherited++;
+            c.Say(w, Persona.Say(c, "메모 봤어 — 여기서부터 이으면 되겠네"));
+            w.Log.Add(now, LogKind.Work, $"인계 메모를 보고 {ex.Label} 자리를 바로 잇는다 ({pct}) — {note}", c.Id);
+            ex.Owner = c.Id;
+        }
         else
         {
             var prev = CrewById(ex.Owner);

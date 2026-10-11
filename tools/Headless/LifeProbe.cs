@@ -7,7 +7,8 @@ using ShipSim.Core;
 //   days 시드 --lifeprobe [--ship=Saeteo] [--crew=60] [--incidents=fixed|natural|none|storm] [--daily]
 //     fixed: 이틀마다 같은 시각에 같은 무작위 사고 (시드에서 나온 차례 그대로) · natural: 게임처럼 평균 3일에 한 번 · none: 사고 없음
 //     storm: 사흘째 새벽 같은 시각에 센 태양 폭풍 (세기 3.3 · 아홉 시간으로 고정)
-//     --daily: 하루마다 한 줄 · 환경 변수 LP_TRACE=1: 폭풍 · 굶주림 동안 30분마다 식량 · 잠 · 대피소 상태
+//     --daily: 하루마다 한 줄 · 환경 변수 LP_TRACE=1: 폭풍 · 굶주림 동안 30분마다 식량 · 잠 · 대피소 상태 (폭풍엔 쬐는 사람도)
+//     LP_COORD=1: 복구 계획이 도는 동안 두 시간마다 계획 단계 · 급한 일 · 조율 결정 (계획이 셋 넘게 몰리면 그 전 기록)
 public static partial class Program
 {
     private static int RunLifeProbe(int days, int seed, string[] args)
@@ -32,9 +33,30 @@ public static partial class Program
         float h0 = 0f, t0 = 0f; int mb0 = 0, sb0 = 0, ex0 = 0;
         Dictionary<string, float> sbw0 = new(), tw0 = new(), crisisWhy = new();
         int crisisMin = 0, acuteMin = 0;
+        bool coordTrace = Environment.GetEnvironmentVariable("LP_COORD") == "1"; // 원자로가 멎은 동안 두 시간마다: 계획 단계 · 급한 일 · 조율 결정
+        int seenDecisions = 0;
+        bool dumped = false;
         while (w.Tick < end)
         {
             w.Step();
+            if (coordTrace && !dumped && w.Automation.Recovery.Open.Count() >= 3) // 계획이 셋 넘게 한꺼번에 — 그 전 기록
+            {
+                dumped = true;
+                Console.WriteLine($"   [기록] 계획 {w.Automation.Recovery.Open.Count()}개가 동시에 — 앞선 기록:");
+                foreach (var e in w.Log.Entries.Where(e => w.Tick - e.Tick < SimTime.Hours(6) && e.Kind is LogKind.Ship or LogKind.Warning).TakeLast(40))
+                    Console.WriteLine($"     {SimTime.Clock(e.Tick)} {e.Text}");
+            }
+            if (coordTrace && w.Tick % SimTime.Hours(2) == 0 && (!w.Power.ReactorOnline || w.Automation.Recovery.Open.Any()))
+            {
+                var co = w.Automation.Coord;
+                Console.WriteLine($"   [조율] {(w.Tick - dayStart) / SimTime.TicksPerDay + 1}일 {SimTime.Clock(w.Tick)} 원자로 {(w.Power.ReactorOnline ? "돎" : "멎음")} {w.Power.ReactorTemperature:0}℃ · 배터리 {w.Power.BatteryCharge:0}/{w.Power.BatteryCapacity:0} · {co.Line}");
+                foreach (var pl in w.Automation.Recovery.Open)
+                    Console.WriteLine($"     계획 {pl.Problem} {pl.Name}: " + string.Join(" → ", pl.Steps.Select((st, i) => $"{(i == pl.Cur ? "▶" : "")}{st.Name}[{st.State}{(st.Waiting != "" ? " " + st.Waiting : "")}]")));
+                foreach (var o in w.Board.Open.Where(o => !o.Closed && o.Urgency >= 0.85f).OrderByDescending(o => o.Urgency).Take(6))
+                    Console.WriteLine($"     일 {o.Title} {o.Urgency:0.##} · {(o.Assignee?.Name ?? o.Robot?.Name ?? (o.Drone != null ? "드론" : "—"))} · {o.Progress * 100:0}% · {o.BlockedReason}");
+                foreach (var d in co.Decisions.Skip(Math.Min(seenDecisions, co.Decisions.Count))) Console.WriteLine($"     결정 {SimTime.Clock(d.tick)} {d.text}");
+                seenDecisions = co.Decisions.Count;
+            }
             if (daily && (w.Tick - dayStart) % SimTime.TicksPerDay == 0)
             {
                 var lw0 = w.LifeWatch;
@@ -83,6 +105,8 @@ public static partial class Program
                 var hot = string.Join(",", ship2.Rooms.Where(r => r.Radiation >= 0.05f && r.Type is RoomType.Mess or RoomType.Galley or RoomType.Storage or RoomType.Freezer or RoomType.Shelter).Select(r => $"{r.Name}{r.Radiation:0.00}"));
                 var jobs = w.Crew.Where(c => !c.Dead).GroupBy(c => c.Job?.Label ?? "-").OrderByDescending(g => g.Count()).Take(6).Select(g => $"{g.Key} {g.Count()}");
                 Console.WriteLine($"  [{w.Day}일 {SimTime.Clock(w.Tick)}] 폭풍 {w.Ambience.StormPower:0.00} · 냉장 {fr} · 배식 {dsp} · 비상 {rat} · 채소 {prod} · 굶주림 {w.Crew.Count(c => !c.Dead && c.Needs.Food < 0.15f)} · 기력 {w.Crew.Where(c => !c.Dead).Average(c => c.Needs.Rest):0.00} 지침 {w.Crew.Count(c => !c.Dead && c.Needs.Rest < 0.15f)} 잠 {w.Crew.Count(c => !c.Dead && c.Pose == Pose.Sleeping)} 대피소잠 {w.Crew.Count(c => !c.Dead && c.Pose == Pose.Sleeping && c.Room?.Kind == RoomType.Shelter)} 대피소 {string.Join(",", w.Ship.Rooms.Where(r => r.Kind == RoomType.Shelter).Select(r => $"{w.Crew.Count(c => !c.Dead && c.Room == r)}명 잠질{AmbienceSystem.SleepFactor(r):0.00} 소음{r.Noise:0.0} O2 {r.Air.O2:0.0} CO2 {r.Air.CO2:0.0} 기력{w.Crew.Where(c => !c.Dead && c.Room == r).Select(c => c.Needs.Rest).DefaultIfEmpty(0f).Average():0.00}"))} 숨참{w.Crew.Count(c => !c.Dead && c.Vitals.Oxygen < 0.85f)} · 조리일 [{string.Join(" ", cooks)}] · 쬐는 방 [{hot}] · 하는 일 {string.Join(" · ", jobs)}");
+                if (w.Ambience.StormPower > 0.05f)
+                    Console.WriteLine("     쬐는 사람 " + string.Join(" · ", w.Crew.Where(c => !c.Dead && (c.Outside || c.Room?.Radiation >= 0.2f)).GroupBy(c => $"{(c.Outside ? "밖" : c.Room!.Name)}:{c.Job?.Label ?? "-"}{(c.Pose == Pose.Sleeping ? "(잠)" : c.Down ? "(쓰러짐)" : "")}").OrderByDescending(g => g.Count()).Take(8).Select(g => $"{g.Key} {g.Count()}")));
             }
             foreach (var c in w.Crew)
             {
