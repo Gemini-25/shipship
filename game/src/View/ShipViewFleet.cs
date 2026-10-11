@@ -168,6 +168,7 @@ public partial class ShipView
 
     private void PaintDroneArt(CanvasItem ci, Drone d, Vector2 p, Color col, bool docked)
     {
+        if (PaintDotDrone(ci, d, p, col, docked)) return; // 도트 드론 (ShipViewDotBots.cs)
         float t = _time + d.Id * 0.91f;
         bool adrift = d.State == DroneState.Adrift;
         float ang = adrift ? Mathf.DegToRad(d.Hurt.Spin) + _time * (d.Hurt.Tumbling ? 3f : 0.6f) : Mathf.Atan2(d.Facing.Y, d.Facing.X);

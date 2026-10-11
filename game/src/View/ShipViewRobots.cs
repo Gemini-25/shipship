@@ -222,6 +222,17 @@ public partial class ShipView
             float fl = 0.5f + 0.5f * Mathf.Sin(t * 9f);
             ci.DrawLine(p, p.Lerp(hp, 0.75f), new Color("#9fd8ff").WithAlpha(0.25f + 0.25f * fl), 1f, true);
         }
+        bool dot = false;
+        if (DotCrew && !ZoomDetail.Shows(Zoom, Detail.CrewDot))
+        {
+            // 도트 로봇: 발밑 납작한 그림자 + 종류 · 상태 · 짐 · 방향 그림 (ShipViewDotBots.cs)
+            ci.DrawSetTransform(p + new Vector2(0f, 8.5f), 0f, new Vector2(1f, 0.32f));
+            ci.Circle(Vector2.Zero, 12f, new Color(0, 0, 0, 0.35f), true, -1f, true);
+            ci.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+            dot = PaintDotRobot(ci, r, p, working, moving);
+        }
+        if (!dot)
+        {
         // 그림자
         ci.Circle(p + new Vector2(2.5f, 3f), 9.5f, new Color(0, 0, 0, 0.3f), true, -1f, true);
 
@@ -240,12 +251,13 @@ public partial class ShipView
         var eye = dead ? new Color("#3a3f48") : new Color("#7de8ff").WithAlpha(0.85f);
         ci.DrawLine(new Vector2(8.5f, -4.5f), new Vector2(8.5f, 4.5f), eye, 1.8f, true);
         ci.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+        }
 
         // 상태 불빛 · 배터리
         bool self = faulty && RobotSystem.CanSelfRepair(r);
         Color led = self ? Palette.Warning : faulty ? Palette.Danger : dead ? Palette.TextMuted : r.Battery < 0.25f ? Palette.Warning : Palette.Good;
         float blink = faulty || dead ? 0.3f + 0.7f * Mathf.Abs(Mathf.Sin(t * 4f)) : 1f;
-        ci.Circle(p, 1.9f, led.WithAlpha(blink), true, -1f, true);
+        if (!dot) ci.Circle(p, 1.9f, led.WithAlpha(blink), true, -1f, true); // 도트 로봇은 몸에 불빛이 있다
         if (!r.AtDock || r.Battery < 0.99f)
         {
             var bar = new Rect2(p.X - 8f, p.Y + 11.5f, 16f, 2.5f);
@@ -256,7 +268,7 @@ public partial class ShipView
         // 가벼운 고장: 노란 렌치 (스스로 고친다) · 심한 고장: 연기 한 줄기 · 방전: 느낌표
         if (self)
         {
-            var wp = p + new Vector2(0, -14f);
+            var wp = p + new Vector2(0, dot ? -26f : -14f);
             ci.DrawLine(wp + new Vector2(-3f, 3f), wp + new Vector2(2f, -2f), Palette.Warning.WithAlpha(blink), 1.6f, true);
             ci.Arc(wp + new Vector2(2.6f, -2.6f), 2.2f, -2.4f, 1.6f, 8, Palette.Warning.WithAlpha(blink), 1.4f, true);
             if (r.AtDock)
@@ -269,7 +281,7 @@ public partial class ShipView
                 ci.Circle(p + new Vector2(2f + 3f * Mathf.Sin(ph * 6f + k), -6f - 14f * ph), 2f + 3f * ph, new Color(0.35f, 0.35f, 0.38f, 0.5f * (1f - ph)), true, -1f, true);
             }
         else if (r.State == RobotState.Stalled)
-            Gfx.TextCentered(ci, Fonts.Bold, p + new Vector2(0, -14f), "!", 11, Palette.Warning.WithAlpha(blink));
+            Gfx.TextCentered(ci, Fonts.Bold, p + new Vector2(0, dot ? -26f : -14f), "!", 11, Palette.Warning.WithAlpha(blink));
         // 진척 (일하는 중)
         if (working && r.Progress is float pr && pr > 0f && RobotsV15.Base(r.Kind) != RobotKind.Safety)
         {

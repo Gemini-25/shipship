@@ -30,6 +30,7 @@ public static class DotSheet
         {
             "scene" => Scene(),
             "parts" => Parts(),
+            "bots" => Bots(),
             _ => People(),
         };
         var big = img.OnColor(Rgba.Hex("#2b2f38")).Scale(scale);
@@ -103,6 +104,47 @@ public static class DotSheet
         var sprite = d.ToImg();
         img.DrawShadowOf(sprite, x, y);
         img.Draw(sprite, x, y);
+    }
+
+    // ───────────────────────────── 로봇 · 드론 장면표 ─────────────────────────────
+
+    private static Img Bots()
+    {
+        var img = new Img(8 * 34 + 4, 6 * 34 + 2 * 28 + 8);
+        var shapes = new[] { (DotBotKind.Maintainer, Ramps.Hazard, 6), (DotBotKind.Hauler, Ramps.ClothOrange, 1), (DotBotKind.Gardener, Ramps.ClothGreen, 7), (DotBotKind.Safety, Ramps.ClothRed, 10), (DotBotKind.Nurse, Ramps.ClothWhite, 0), (DotBotKind.Stretcher, Ramps.ClothWhite, 0) };
+        int y = 2;
+        foreach (var (shape, paint, badge) in shapes)
+        {
+            int x = 2;
+            var l = new BotLook { Shape = shape, Paint = paint, Badge = badge, Seed = 3, Cargo = shape == DotBotKind.Hauler ? Ramps.Wood : -1 };
+            foreach (var f in new[] { DotFacing.S, DotFacing.E, DotFacing.W, DotFacing.N })
+            {
+                var r = DotBots.Robot(l, f, 0);
+                img.Oval(x + 16, y + 30, 12, 3, new Rgba(0, 0, 0), 0.3f);
+                img.Draw(r, x, y); x += 34;
+            }
+            foreach (var st in new[] { DotBotState.Working, DotBotState.Broken, DotBotState.Off })
+            {
+                l.State = st;
+                var r = DotBots.Robot(l, DotFacing.S, 1);
+                img.Oval(x + 16, y + 30, 12, 3, new Rgba(0, 0, 0), 0.3f);
+                img.Draw(r, x, y); x += 34;
+            }
+            l.State = DotBotState.Ok; l.Cargo = -1;
+            if (shape == DotBotKind.Hauler) { img.Draw(DotBots.Robot(l, DotFacing.E, 2), x, y); }
+            y += 34;
+        }
+        int dx = 2;
+        foreach (var k in new[] { DotDroneKind.Inspect, DotDroneKind.Repair, DotDroneKind.Tow, DotDroneKind.Build })
+        {
+            img.Draw(DotBots.Drone(k, DotBotState.Ok, 0, -1, false, (int)k + 1), dx, y); dx += 30;
+            img.Draw(DotBots.Drone(k, DotBotState.Working, 1), dx, y); dx += 30;
+        }
+        y += 28; dx = 2;
+        img.Draw(DotBots.Drone(DotDroneKind.Repair, DotBotState.Ok, 0, Ramps.ClothOrange, brokenRotor: true), dx, y); dx += 30;
+        img.Draw(DotBots.Drone(DotDroneKind.Inspect, DotBotState.Off, 0), dx, y); dx += 30;
+        img.Draw(DotBots.Drone(DotDroneKind.Tow, DotBotState.Broken, 0), dx, y); dx += 30;
+        return img;
     }
 
     // ───────────────────────────── 설비 · 로봇 · 드론 · 폭발 장면표 ─────────────────────────────

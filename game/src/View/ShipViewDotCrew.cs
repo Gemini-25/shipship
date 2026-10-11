@@ -12,36 +12,14 @@ namespace ShipSim.View;
 // 읽기만 한다 — 결정론과 상관없다.
 public partial class ShipView
 {
-    /// <summary>도트 사람을 쓰나 (끄면 예전 인형).</summary>
+    /// <summary>도트 그림을 쓰나 (끄면 예전 도형 그림 — 사람 · 로봇 · 드론).</summary>
     public static bool DotCrew { get; set; } = true;
 
-    private sealed class DotSprite
-    {
-        public ImageTexture Tex = null!;
-        public CanvasTexture Crisp = null!;
-        public long Used;
-    }
-
-    private readonly Dictionary<(ulong sig, byte face, byte pose, byte frame, byte variant), DotSprite> _dotCache = new();
+    /// <summary>도트 그림 캐시 (사람 · 로봇 · 드론 · 설비가 함께 쓴다 — DotTex.cs).</summary>
+    internal readonly DotTex Dots = new();
     private readonly Dictionary<int, PersonLook> _dotLooks = new();
-    private int _dotBudget;
-    private long _dotFrame;
-    /// <summary>시험 · 성능 측정: 지금까지 새로 그린 장면 수 · 캐시 크기.</summary>
-    public int DotBuilt { get; private set; }
-    public int DotCached => _dotCache.Count;
 
-    private void DotFrameStart()
-    {
-        _dotFrame = (long)Engine.GetProcessFrames();
-        _dotBudget = 24;
-        if ((_dotFrame & 511) == 0 && _dotCache.Count > 600)
-        {
-            // 오래 안 쓴 장면은 버린다 (옷 · 상처 · 든 것이 바뀌어 다시는 안 쓰는 것)
-            var old = new List<(ulong, byte, byte, byte, byte)>();
-            foreach (var (k, v) in _dotCache) if (_dotFrame - v.Used > 900) old.Add(k);
-            foreach (var k in old) _dotCache.Remove(k);
-        }
-    }
+    private void DotFrameStart() => Dots.Tick(24);
 
     /// <summary>사람 하나의 도트 겉모습 (같은 사람은 같은 객체를 고쳐 쓴다).</summary>
     private PersonLook DotLookOf(CrewMember c, PuppetSpec spec)
@@ -155,30 +133,15 @@ public partial class ShipView
     }
 
     /// <summary>장면 하나의 텍스처 (없으면 예산 안에서 그린다 · 예산이 다 되면 null).</summary>
-    private DotSprite? DotGet(PersonLook l, ulong sig, DotFacing f, DotPose p, int frame, byte variant)
-    {
-        var key = (sig, (byte)f, (byte)p, (byte)frame, variant);
-        if (_dotCache.TryGetValue(key, out var s)) { s.Used = _dotFrame; return s; }
-        if (_dotBudget <= 0) return null;
-        _dotBudget--;
-        DotBuilt++;
-        Dot d;
-        switch (variant)
+    private DotTex.Entry? DotGet(PersonLook l, ulong sig, DotFacing f, DotPose p, int frame, byte variant, bool force = false) =>
+        Dots.Get(DotTex.Key(1, (long)sig, (long)f, (long)p, frame, variant), () => variant switch
         {
-            case 1: d = DotPeople.Draw(l, DotFacing.S, DotPose.Stand, 0).Rotate(cw: false); break;      // 옆으로 누움 (머리가 왼쪽)
-            case 2: d = DotPeople.Draw(l, DotFacing.N, DotPose.Stand, 0).Rotate(cw: false); break;      // 엎드려 김
-            default: d = DotPeople.Draw(l, f, p, frame); break;
-        }
-        var img = d.ToImg();
-        var gimg = Image.CreateFromData(img.W, img.H, false, Image.Format.Rgba8, img.Px);
-        gimg.GenerateMipmaps();
-        var tex = ImageTexture.CreateFromImage(gimg);
-        s = new DotSprite { Tex = tex, Crisp = new CanvasTexture { DiffuseTexture = tex, TextureFilter = TextureFilterEnum.Nearest }, Used = _dotFrame };
-        _dotCache[key] = s;
-        return s;
-    }
+            1 => DotPeople.Draw(l, DotFacing.S, DotPose.Stand, 0).Rotate(cw: false).ToImg(),   // 옆으로 누움 (머리가 왼쪽)
+            2 => DotPeople.Draw(l, DotFacing.N, DotPose.Stand, 0).Rotate(cw: false).ToImg(),   // 엎드려 김
+            _ => DotPeople.Draw(l, f, p, frame).ToImg(),
+        }, force);
 
-    private Texture2D DotTex(DotSprite s) => Zoom >= 0.999f ? s.Crisp : s.Tex;
+    private Texture2D DotTexOf(DotTex.Entry s) => Zoom >= 0.999f ? s.Crisp : s.Tex;
 
     /// <summary>건강 카드 그림: 서 있는 앞모습 (든 것 없이) — 가장 가까운 칸으로 또렷하게. 아직 못 그렸으면 null.</summary>
     public Texture2D? Portrait(CrewMember c, out PersonLook look)
@@ -187,8 +150,7 @@ public partial class ShipView
         look = DotLookOf(c, spec);
         look.Held = DotHeld.None;
         look.EyesClosed = c.Dead || c.Down;
-        if (_dotBudget <= 0) _dotBudget = 1; // HUD는 다른 때 그린다 — 한 장은 늘 허락
-        return DotGet(look, DotSig(look), DotFacing.S, DotPose.Stand, 0, 0)?.Crisp;
+        return DotGet(look, DotSig(look), DotFacing.S, DotPose.Stand, 0, 0, force: true)?.Crisp; // HUD는 다른 때 그린다 — 한 장은 늘 허락
     }
 
     /// <summary>사람 위치에서 머리 위까지 (말풍선 · 상태 딱지 자리). 도트 사람은 한 칸 키라 예전 인형보다 높다.</summary>
@@ -226,7 +188,7 @@ public partial class ShipView
         var s = DotGet(l, sig, f, pose, frame, 0) ?? (frame != 0 ? DotGet(l, sig, f, pose, 0, 0) : null);
         if (s == null) return false;
         var o = new Vector2(Mathf.Round(at.X) - DotPeople.Cx, Mathf.Round(at.Y) - DotPeople.Foot);
-        ci.DrawTextureRect(DotTex(s), new Rect2(o, DotPeople.FW, DotPeople.FH), false);
+        ci.DrawTextureRect(DotTexOf(s), new Rect2(o, DotPeople.FW, DotPeople.FH), false);
         return true;
     }
 
@@ -240,7 +202,7 @@ public partial class ShipView
         var s = DotGet(l, DotSig(l), DotFacing.S, DotPose.Stand, 0, crawl ? (byte)2 : (byte)1);
         if (s == null) return false;
         var o = new Vector2(Mathf.Round(at.X) - DotPeople.FH / 2f, Mathf.Round(at.Y) - DotPeople.FW / 2f);
-        ci.DrawTextureRect(DotTex(s), new Rect2(o, DotPeople.FH, DotPeople.FW), false);
+        ci.DrawTextureRect(DotTexOf(s), new Rect2(o, DotPeople.FH, DotPeople.FW), false);
         return true;
     }
 
@@ -254,7 +216,7 @@ public partial class ShipView
         if (s == null) return false;
         int headRows = 20;
         var o = new Vector2(Mathf.Round(at.X) - DotPeople.Cx, Mathf.Round(at.Y) - 14f);
-        ci.DrawTextureRectRegion(DotTex(s), new Rect2(o, DotPeople.FW, headRows), new Rect2(0, 0, DotPeople.FW, headRows));
+        ci.DrawTextureRectRegion(DotTexOf(s), new Rect2(o, DotPeople.FW, headRows), new Rect2(0, 0, DotPeople.FW, headRows));
         // 담요: 접힌 끝(밝게) · 몸 윤곽(가운데 어둡게) · 외곽선
         var pc = Palette.Crew(c.Id);
         var blanket = pc.Darkened(0.25f);
