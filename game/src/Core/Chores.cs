@@ -479,6 +479,8 @@ public static partial class WorkPlanners
             WorkKind.StockCache => StockCache(activity, o, c, w, dist, at, out blocked),
             WorkKind.ShelterFood => ShelterFood(activity, o, c, w, dist, at, out blocked),
             WorkKind.FlushMain => FlushMain(activity, o, c, w, dist, at, out blocked), // v19 물 순환
+            WorkKind.LookRoom => LookRoom(activity, o, c, w, dist, at, out blocked), // v19 정보 경계
+            WorkKind.SealSeep => SealSeep(activity, o, c, w, dist, at, out blocked),
             WorkKind.ClearMain => ClearMain(activity, o, c, w, dist, at, out blocked),
             WorkKind.SetBucket => SetBucket(activity, o, c, w, dist, at, out blocked),
             WorkKind.EmptyBucket => EmptyBucket(activity, o, c, w, dist, at, out blocked),

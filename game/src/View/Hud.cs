@@ -1322,6 +1322,20 @@ public partial class Hud : Control
             lines.Add(("열", $"드는 열 {room.HeatIn:0.0}kW{hv}" + (room.Insulated || _world.Cosmic.Insulated(room) ? " · 단열재 — 열이 덜 빠진다" : ""),
                 room.Air.Temperature > 32f ? Palette.Warning : Palette.TextDim));
         }
+        // v19 정보 경계: 주 컴퓨터가 이 방에 대해 아는 것 (값 · 출처 · 언제 · 믿음) · 의심 중이면 갈래와 확인 상태
+        if (_world.Automation.Present && room.Type != RoomType.Corridor)
+        {
+            var fx = _world.Automation.Facts;
+            bool unknown = fx.Unknown(room, FactKind.O2) || fx.Unknown(room, FactKind.People);
+            lines.Add(("컴퓨터가 아는 것", $"{fx.Line(room, FactKind.O2)} · {fx.Line(room, FactKind.People)}", unknown ? Palette.Warning : Palette.TextDim));
+            var wetF = fx.Get(room, FactKind.Wet);
+            if (wetF.Value >= 0.1f || fx.Get(room, FactKind.Flow).At >= 0 && fx.Get(room, FactKind.Flow).Value >= 0.5f)
+                lines.Add(("물 (컴퓨터)", $"{fx.Line(room, FactKind.Wet)}" + (fx.Get(room, FactKind.Flow).At >= 0 ? $" · {fx.Line(room, FactKind.Flow)}" : ""), Palette.TextDim));
+            foreach (var d in fx.Open)
+                if (d.RoomId == room.Id)
+                    lines.Add(("의심", d.Symptom + (d.H.Count > 0 ? " — " + string.Join(" · ", d.H.Take(3).Select(h => $"{h.Name} {h.P * 100:0}%")) : "")
+                        + (d.State == "확인 중" ? (d.Asked >= 0 && d.Asked < _world.Crew.Count ? $" · {Ko.IGa(_world.Crew[d.Asked].Name)} 보러 간다" : " · 로봇이 보러 간다") : " · 볼 사람을 찾는다"), Palette.Warning));
+        }
         if (_world.Automation.ComputerBody is Furniture comp && comp.Room == room)
         {
             var au = _world.Automation;

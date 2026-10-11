@@ -69,6 +69,8 @@ public enum WorkKind
     ShelterFood,
     // v19 물 순환: 회수관 역세척 · 뚫기 · 임시 회수통 놓기 · 비우기
     FlushMain, ClearMain, SetBucket, EmptyBucket,
+    // v19 정보 경계: 주 컴퓨터가 모르는 걸 가서 봐 준다 · 급수관 스밈 땜질
+    LookRoom, SealSeep,
 }
 
 public static class WorkKinds
@@ -153,6 +155,8 @@ public static class WorkKinds
         WorkKind.ClearMain => "회수관 뚫기",
         WorkKind.SetBucket => "임시 회수통",
         WorkKind.EmptyBucket => "회수통 비우기",
+        WorkKind.LookRoom => "살펴보기",
+        WorkKind.SealSeep => "급수관 땜질",
         WorkKind.RemoveJumper => "임시 배선 철거",
         WorkKind.StowCot => "간이침대 치우기",
         WorkKind.Recycle => "부품 재활용",
@@ -365,6 +369,8 @@ public sealed class WorkOrder
         WorkKind.ClearMain => "막힌 회수관 뚫기",
         WorkKind.SetBucket => $"{Target.Room?.Name} 배수구 밑에 임시 회수통 받치기",
         WorkKind.EmptyBucket => $"{Target.Room?.Name} 임시 회수통을 정수기에 붓기",
+        WorkKind.LookRoom => $"{Target.Room?.Name} 가서 보고 주 컴퓨터에 알려 주기",
+        WorkKind.SealSeep => $"{Target.Room?.Name} 바닥 밑 급수관 스밈 땜질",
         WorkKind.RemoveJumper => $"{PowerGrid.CircuitName(Circuit)} 회로 임시 배선 걷기",
         WorkKind.StowCot => $"{Target.Label} 접어 창고로",
         WorkKind.Recycle => $"{Target.Label}에서 {ItemKinds.Name(Product ?? ItemKind.Plate)} 되살리기 (재활용)",
@@ -1316,6 +1322,7 @@ public sealed partial class WorkBoard
         ScanPrevention(Post); // v11.0 예방과 안전
         psc = Prof.Lap("scan.Prevention", psc);
         ScanCalibration(Post); // v12.0 감지기 교정
+        ScanFacts(Post); // v19 정보 경계 (살펴보기 · 급수관 땜질)
         psc = Prof.Lap("scan.Calibration", psc);
         ScanHandover(Post); // v12.0 찾아가 인수인계
         psc = Prof.Lap("scan.Handover", psc);

@@ -392,7 +392,7 @@ public static partial class WorkPlanners
 {
     /// <summary>로봇이 맡는 물 일 (역세척 · 회수통 나르기): 맡을 로봇이 있으면 사람은 나서지 않는다 — 한 시간 넘게 아무도 안 맡았을 때만 (로봇이 고장 · 방전 · 길이 막힘).</summary>
     internal static bool RobotFirst(World w, WorkOrder o) =>
-        o.Kind is WorkKind.FlushMain or WorkKind.EmptyBucket && w.Tick - o.Posted < SimTime.Hours(1) && w.Robots.Robots.Any(r => r.Operational && RobotSystem.CanDo(r.Kind, o.Kind));
+        o.Kind is WorkKind.FlushMain or WorkKind.EmptyBucket or WorkKind.LookRoom or WorkKind.SealSeep && w.Tick - o.Posted < SimTime.Hours(1) && w.Robots.Robots.Any(r => r.Operational && RobotSystem.CanDo(r.Kind, o.Kind));
 
     private static Job? FlushMain(Activity a, WorkOrder o, CrewMember c, World w, DistanceField dist, Cell at, out string? blocked)
     {

@@ -255,6 +255,7 @@ public sealed partial class AutomationSystem
     private void V16(float dt)
     {
         Belief.Update(dt);
+        Facts.Update(dt); // v19 정보 경계 (값 · 출처 · 확인 시각 · 믿음)
         Resources(dt);
         if (_wasRebooting && !Rebooting) Speak.Announce(Voice.Style($"{Voice.Call} 다시 켜졌습니다 — 하던 일을 하나씩 되찾습니다"), null, 1); // v16.20 단계적 (ComputerLoad.Resources가 하나씩)
         _wasRebooting = Rebooting;

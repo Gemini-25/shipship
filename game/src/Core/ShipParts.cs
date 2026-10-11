@@ -174,6 +174,10 @@ public sealed class Room
     public bool Insulated { get; set; }
     public float HvacHeat { get; set; }
     public float HvacKw { get; set; }
+    /// <summary>v19 정보 경계: 바닥 밑 급수관이 스민다 (시간당 L · 0 = 없음) — 아무도 모른다, 교정된 유량계가 잡거나 사람이 봐야 안다.</summary>
+    public float SeepLph { get; set; }
+    public long SeepSince { get; set; } = -1;
+    public Cell SeepAt { get; set; }
 
     /// <summary>길찾기에서 이 방을 지나는 추가 비용 (공기·온도·어둠). 공기 시스템이 갱신.</summary>
     public int HazardCost { get; set; }

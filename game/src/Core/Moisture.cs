@@ -12,6 +12,7 @@ public sealed class MoistureStats
 {
     public int Floods, Shorts, Shocks, ElectricFires, AutoIsolations, CrewIsolations, Restores, Valves, Inrush;
     public float Condensed, Pumped, Recovered, Leaked;
+    public int Seeps; // v19 급수관 스밈 (생긴 수)
     public override string ToString() =>
         $"침수 {Floods} · 누전 {Shorts} · 감전 {Shocks} · 전기 화재 {ElectricFires} · 분전함 차단 {AutoIsolations}(컴퓨터)+{CrewIsolations}(사람) · 다시 올림 {Restores} · " +
         $"밸브 {Valves} · 기동 전류 트립 {Inrush} · 샌 물 {Leaked:0}L · 결로 {Condensed:0}L · 퍼냄 {Pumped:0}L(탱크로 {Recovered:0}L)";
@@ -74,6 +75,15 @@ public sealed class MoistureSystem
                     AddWater(room, l);
                 }
 
+            // 1-b) v19 급수관 스밈: 밸브가 열려 있으면 조금씩 바닥으로 (아무도 모르는 물)
+            if (room.SeepLph > 0f && room.WaterLinked && !room.ValveShut && w.Water.Level > 1f)
+            {
+                float l = MathF.Min(w.Water.Level, room.SeepLph * dt);
+                w.Water.Level -= l;
+                AddWater(room, l);
+                w.Body.RaiseMark(room.SeepAt, CellMark.Wet, MathF.Min(1f, 0.3f + 0.25f * room.SeepLph), "바닥 밑에서 스민 물"); // 스미는 자리는 마르지 않는다
+            }
+
             // 2) 습도: 방마다 평소 값으로, 환기가 돌면 빨리 마른다 · 고인 물은 증발해 습도를 올린다
             bool vented = Atmosphere.Vented(room);
             float depth = Depth(room);
@@ -96,6 +106,7 @@ public sealed class MoistureSystem
             }
 
             // 4) 오래 습하면 관이 삭고 감지기가 틀어진다
+            Seep(room, dt);
             if (room.Humidity > 0.8f)
             {
                 foreach (var s in w.Piping.Segments)
@@ -228,6 +239,26 @@ public sealed class MoistureSystem
             w.Log.Add(w.Tick, LogKind.Warning, $"기동 전류 — {room.Name} 설비가 한꺼번에 켜지며 {PowerGrid.CircuitName(room.Circuit)} 회로 차단기가 떨어졌다 ({draw:0}kW)");
             MarkLog.Add(room.Marks, w.Tick, $"기동 전류로 차단기 트립 ({draw:0}kW)");
         }
+    }
+
+    private Rng? _seepRng;
+    private Rng SeepRng => _seepRng ??= new Rng(unchecked(_w.Seed * 7919 + 613));
+
+    /// <summary>v19 급수관 스밈이 생긴다: 급수 설비가 있는 방에서 드물게 (습하면 삭아 더 잦다) — 시간당 0.6~2L (유량계 눈금 1L 아래도 있다).</summary>
+    private void Seep(Room room, float dt)
+    {
+        if (room.SeepLph > 0f || !room.WaterLinked || room.Type == RoomType.Corridor || room.Air.Pressure < 30f) return;
+        bool plumbed = false;
+        foreach (var f in room.Furniture) if (f.Machine != null && Procedures.Plumbed(f.Type)) { plumbed = true; break; }
+        if (!plumbed) return;
+        float rate = (room.Humidity > 0.8f ? 0.004f : 0.0004f) * dt; // 마른 방은 한 달에 한 번쯤
+        if (!SeepRng.Chance(rate)) return;
+        var cells = room.Cells.Where(c => _w.Ship.IsWalkable(c)).ToList();
+        if (cells.Count == 0) return;
+        room.SeepLph = SeepRng.Range(0.6f, 2f);
+        room.SeepSince = _w.Tick;
+        room.SeepAt = SeepRng.Pick(cells);
+        Stats.Seeps++;
     }
 
     /// <summary>방 분전함을 내린다 (그 방만 정전 — 누전·감전을 막는다).</summary>

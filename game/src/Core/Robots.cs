@@ -395,7 +395,7 @@ public sealed partial class RobotSystem
     public static bool CanDo(RobotKind k, WorkKind w) => k switch
     {
         RobotKind.Hauler => w is WorkKind.Restock or WorkKind.StockDock or WorkKind.CarryWater or WorkKind.StockCache or WorkKind.StowCot or WorkKind.RefillPropellant or WorkKind.ShelterFood or WorkKind.EmptyBucket,
-        RobotKind.Maintainer => w is WorkKind.Maintain or WorkKind.FixLights or WorkKind.FlushMain or WorkKind.ClearMain,
+        RobotKind.Maintainer => w is WorkKind.Maintain or WorkKind.FixLights or WorkKind.FlushMain or WorkKind.ClearMain or WorkKind.LookRoom or WorkKind.SealSeep,
         RobotKind.Gardener => w is WorkKind.Tend or WorkKind.Harvest,
         _ => RobotsV15.CanDo(k, w),
     };
@@ -901,6 +901,39 @@ public sealed partial class RobotSystem
                 {
                     if (o.Closed) return true;
                     if (clear) world.Water.Cleared(world, rb.Name); else world.Water.Flushed(world, rb.Name);
+                    world.Board.Close(o);
+                    Done(rb, null);
+                    return true;
+                }));
+                return steps;
+            }
+            case WorkKind.LookRoom: // v19 정보 경계: 주 컴퓨터가 모르는 방을 가서 본다 (카메라 · 습도 막대)
+            {
+                var d = w.Automation.Facts.Doubt(o.Circuit);
+                if (d == null) { w.Board.Close(o); return null; }
+                steps.Add(new RDo((rb, world) => { world.Automation.Facts.Asked(d, null, rb.Name); return true; }));
+                steps.Add(new RGoto(at));
+                steps.Add(new RWork(0.08f, o, at.Center));
+                steps.Add(new RDo((rb, world) =>
+                {
+                    if (o.Closed) return true;
+                    world.Automation.Facts.Answer(d, null, rb);
+                    world.Board.Close(o);
+                    Done(rb, null);
+                    return true;
+                }));
+                return steps;
+            }
+            case WorkKind.SealSeep: // v19 급수관 스밈 땜질
+            {
+                var room = o.Target.Room;
+                if (room == null || room.SeepLph <= 0f) { w.Board.Close(o); return null; }
+                steps.Add(new RGoto(at));
+                steps.Add(new RWork(0.6f, o, at.Center));
+                steps.Add(new RDo((rb, world) =>
+                {
+                    if (o.Closed) return true;
+                    WorkPlanners.Sealed(world, room, rb.Name, null);
                     world.Board.Close(o);
                     Done(rb, null);
                     return true;

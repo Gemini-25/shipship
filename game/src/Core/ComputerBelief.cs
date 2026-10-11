@@ -117,6 +117,25 @@ public sealed class BeliefModel
         Read(r, b);
     }
 
+    /// <summary>v19 사람 · 로봇이 그 자리에서 감지기를 다시 켰다 (정보 경계의 확인 — 로봇도 한다).</summary>
+    public void Reset(Room r, string who, int by, bool wrong)
+    {
+        var b = Of(r);
+        if (wrong)
+        {
+            b.Misreads++;
+            b.Trust = MathF.Max(0.2f, b.Trust - 0.25f);
+        }
+        if (b.Fault != SensorFault.None)
+        {
+            _w.Log.Add(_w.Tick, LogKind.Work, $"{who}: {r.Name} {FaultName(b.Fault)} 감지기를 다시 맞췄다 ({b.FaultWhy})", by);
+            b.Fault = SensorFault.None;
+            b.FaultWhy = "";
+            Repairs++;
+        }
+        Read(r, b);
+    }
+
     public static string FaultName(SensorFault f) => f switch { SensorFault.Blind => "문 감지기 틀어짐", SensorFault.Stuck => "값 멈춤", SensorFault.Ghost => "헛불", _ => "정상" };
 
     private void Read(Room r, RoomBelief b)
