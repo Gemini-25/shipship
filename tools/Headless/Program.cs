@@ -208,6 +208,7 @@ public static partial class Program
         if (args.Contains("--shipcomputertest")) return RunShipComputerTest(seed); // v16.20
         if (args.Contains("--failsafetest")) return RunFailsafeTest(seed); // v16.19
         if (args.Contains("--lookcheck")) return RunLookCheck(seed); // v16.5a 재질 그림
+        if (args.Any(a => a.StartsWith("--dotsheet"))) return DotSheet.Run(args); // 도트 그림 확인
         if (args.Contains("--techlookcheck")) return RunTechLookCheck(seed); // v16.5b 기술 · 설비가 티 나는 그림
         if (args.Contains("--annextest")) return RunAnnexTest(seed); // v16.10
         if (args.Contains("--techwebtest")) return RunTechWebTest(seed); // v16.14
