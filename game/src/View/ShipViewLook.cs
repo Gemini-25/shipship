@@ -78,7 +78,8 @@ public partial class ShipView
             var c = g.CellAt(i);
             if (g.Kind(c) != TileKind.Void) ci.Box(CellRect(c).Grow(3f), Palette.HullRim);
         }
-        if (LookOn) PaintLookCells(ci);
+        if (DotCrew) PaintDotCells(ci); // 도트 바닥 · 벽 (ShipViewDotTiles.cs)
+        else if (LookOn) PaintLookCells(ci);
         else PaintLegacyCells(ci);
     }
 

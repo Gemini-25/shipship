@@ -31,6 +31,7 @@ public static class DotSheet
             "scene" => Scene(),
             "parts" => Parts(),
             "bots" => Bots(),
+            "tiles" => Tiles(),
             _ => People(),
         };
         var big = img.OnColor(Rgba.Hex("#2b2f38")).Scale(scale);
@@ -104,6 +105,61 @@ public static class DotSheet
         var sprite = d.ToImg();
         img.DrawShadowOf(sprite, x, y);
         img.Draw(sprite, x, y);
+    }
+
+    // ───────────────────────────── 바닥 · 벽 타일 ─────────────────────────────
+
+    private static Img Tiles()
+    {
+        var fa = DotTiles.FloorAtlas();
+        var wa = DotTiles.WallAtlas();
+        // 작은 방 둘: 바닥 재질을 섞고 벽은 이웃을 따라 이어 붙인다
+        string[] map =
+        {
+            "HHHHHHHHHHHHHH",
+            "HmmmmmPtttttH.",
+            "HmggggPttttttH",
+            "HmggggDttttttH",
+            "HmeeeePtttcccH",
+            "HmeeeePrrrcccH",
+            "HHHHHHHHHHHHHH",
+        };
+        int W = map[0].Length, H = map.Length;
+        var room = new Img(W * 32, H * 32);
+        bool IsWall(int x, int y) => y >= 0 && y < H && x >= 0 && x < W && map[y][x] is 'H' or 'P' or 'D';
+        for (int y = 0; y < H; y++)
+            for (int x = 0; x < W; x++)
+            {
+                char ch = map[y][x];
+                if (ch == '.') continue;
+                if (ch is 'H' or 'P')
+                {
+                    int k = ch == 'H' ? 2 : 1;
+                    int mask = (IsWall(x, y - 1) ? 1 : 0) | (IsWall(x + 1, y) ? 2 : 0) | (IsWall(x, y + 1) ? 4 : 0) | (IsWall(x - 1, y) ? 8 : 0);
+                    Blit(room, wa, mask * 32, k * 32, 32, 32, x * 32, y * 32);
+                    continue;
+                }
+                int fk = ch switch { 'g' => 1, 't' => 2, 'r' => 3, 'c' => 4, 'e' => 5, _ => 0 };
+                int v = (int)(DotHash.U(x, y) % 4);
+                Blit(room, fa, v * 32, fk * 32, 32, 32, x * 32, y * 32);
+            }
+        // 남쪽 앞면
+        for (int y = 0; y < H - 1; y++)
+            for (int x = 0; x < W; x++)
+            {
+                if (!IsWall(x, y) || IsWall(x, y + 1) || map[y + 1][x] == '.') continue;
+                var kind = map[y][x] == 'H' ? DotWall.Hull : DotWall.Partition;
+                var (fx, fy) = DotTiles.FaceCell(kind, !IsWall(x - 1, y) || IsWall(x - 1, y + 1), !IsWall(x + 1, y) || IsWall(x + 1, y + 1), x % 4 == 2);
+                Blit(room, wa, fx, fy, 32, DotTiles.Face, x * 32, (y + 1) * 32);
+            }
+        var img = new Img(Math.Max(room.W, wa.W) + 8, fa.H + wa.H + room.H + 24);
+        img.Draw(fa, 4, 4); img.Draw(wa, 4, fa.H + 12); img.Draw(room, 4, fa.H + wa.H + 20);
+        return img;
+    }
+
+    private static void Blit(Img dst, Img src, int sx, int sy, int w, int h, int dx, int dy)
+    {
+        for (int y = 0; y < h; y++) for (int x = 0; x < w; x++) { var c = src.Get(sx + x, sy + y); if (c.A > 0) dst.Blend(dx + x, dy + y, c); }
     }
 
     // ───────────────────────────── 로봇 · 드론 장면표 ─────────────────────────────

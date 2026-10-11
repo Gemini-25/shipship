@@ -229,8 +229,8 @@ public partial class ShipView : Node2D
         // v16.5a 외판 · 테두리 · 바닥 · 벽 칸은 바탕 층(PaintLookBase)이 그린다 — 겹치기 · 흔적이 그 위, 가구 아래에 오도록
         if (_hullCells == null || _hullVersion != _world.Structure.Version) BuildHull(); // 그리는 순서가 바뀌어도 외판 칸은 먼저
 
-        // 벽 안쪽 모서리 하이라이트
-        for (int i = 0; i < g.CellCount; i++)
+        // 벽 안쪽 모서리 하이라이트 (도트 벽은 타일에 테가 있다)
+        for (int i = 0; i < g.CellCount && !DotCrew; i++)
         {
             var c = g.CellAt(i);
             if (g.Kind(c) != TileKind.Wall) continue;
@@ -1346,9 +1346,9 @@ public partial class ShipView : Node2D
                 ci.Box(new Rect2(r.GetCenter().X - th * 0.5f, r.Position.Y + from, th, len), c);
         }
 
-        Band(0f, 3f, Palette.WallEdge);
-        Band(T - 3f, 3f, Palette.WallEdge);
-        if (half > 0.5f)
+        bool dot = DotCrew && !ZoomDetail.Shows(Zoom, Detail.CrewDot) && PaintDotDoor(ci, d, open); // 도트 문 (ShipViewDotTiles.cs)
+        if (!dot) { Band(0f, 3f, Palette.WallEdge); Band(T - 3f, 3f, Palette.WallEdge); }
+        if (half > 0.5f && !dot)
         {
             Band(0f, half, panel);
             Band(T - half, half, panel);

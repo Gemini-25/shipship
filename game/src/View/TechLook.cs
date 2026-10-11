@@ -174,8 +174,11 @@ public partial class ShipView
     {
         if (_techGeoVersion != _world.Structure.Version) BuildTechGeometry();
         var s = TechLook.Now;
-        PaintLookFloor(ci, s);
-        foreach (var f in _faces) PaintLookFace(ci, f, s);
+        if (!DotCrew) // 도트 바닥 · 벽은 타일에 판 이음 · 앞면이 있다 (ShipViewDotTiles.cs)
+        {
+            PaintLookFloor(ci, s);
+            foreach (var f in _faces) PaintLookFace(ci, f, s);
+        }
         PaintRemodelFresh(ci); // TechMoments.cs — 개조 칸 새 패널
         PaintVisualsStatic(ci); // TechVisuals.cs — 익힌 기술의 배 모습
     }
