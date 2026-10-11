@@ -243,7 +243,7 @@ public static partial class FixtureArt
     }
 
     /// <summary>동적 층 맨 위: 상태 표시 (꺼짐 어둠 · 대기 불 · 고장 효과 · 파손 연기 · 달아오름 · 가스 · 분말).</summary>
-    public static void PaintState(CanvasItem ci, Furniture f, World w, float time, float zoom)
+    public static void PaintState(CanvasItem ci, Furniture f, World w, float time, float zoom, bool dot = false)
     {
         if (!Table.TryGetValue(f.Type, out var a) || f.Machine is not Machine m) return;
         var x = new Fix(ci, f, w, time, zoom, true);
@@ -251,10 +251,10 @@ public static partial class FixtureArt
         switch (x.St)
         {
             case State.Off:
-                Gfx.RoundRect(ci, x.R.Grow(-2f), new Color(0, 0, 0, 0.38f), 5);
+                if (!dot) Gfx.RoundRect(ci, x.R.Grow(-2f), new Color(0, 0, 0, 0.38f), 5); // 도트: 몸체 모양 어둠은 ShipView 가
                 break;
             case State.Parked:
-                Gfx.RoundRect(ci, x.R.Grow(-2f), new Color(0.02f, 0.04f, 0.08f, 0.26f), 5);
+                if (!dot) Gfx.RoundRect(ci, x.R.Grow(-2f), new Color(0.02f, 0.04f, 0.08f, 0.26f), 5);
                 Led(ci, new Vector2(x.B.Position.X + 3.5f, x.B.End.Y - 3.5f), ParkedBlue, 0.85f, 1.6f);
                 break;
             case State.Standby:
@@ -264,14 +264,14 @@ public static partial class FixtureArt
                 FaultFx(in x, a.Fault, e, 0.55f);
                 break;
             case State.Broken:
-                Gfx.RoundRect(ci, x.R.Grow(-2f), new Color(0, 0, 0, 0.22f), 5);
+                if (!dot) Gfx.RoundRect(ci, x.R.Grow(-2f), new Color(0, 0, 0, 0.22f), 5);
                 FaultFx(in x, a.Fault, e, 1f);
                 break;
             case State.Wrecked:
                 Smoke(ci, e, time, x.Id, 0.5f, x.Lod, 2);
                 break;
         }
-        TierGradeLife(in x, a, m); // v16.5b 단계 부품 빛 · Mk.3 테 · Mk.1 손질 움직임 (FixtureArtTier.cs)
+        if (!dot) TierGradeLife(in x, a, m); // v16.5b 단계 부품 빛 · Mk.3 테 · Mk.1 손질 움직임 (FixtureArtTier.cs)
         Moments(in x, a, m, e); // 고장 순간 · 고치는 중 (FixtureArtWear.cs)
         if (x.Lod == 0) return;
         // 열 · 압력 스트레스: 아지랑이
@@ -666,6 +666,7 @@ public partial class ShipView
 
     private void PaintFixtureFine(CanvasItem ci)
     {
+        if (DotCrew) return; // 도트 설비는 잔 디테일이 몸체에 들어 있다
         foreach (var f in _world.Ship.Furniture)
             if (!f.Stowed && !f.Room.Detached) FixtureArt.PaintFine(ci, f);
     }

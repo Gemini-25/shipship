@@ -40,6 +40,18 @@ public partial class ShipView
         AddChild(_lookLight);
     }
 
+    /// <summary>
+    /// 그 자리의 빛 (곱하기 층 위에 그리는 것 중 빛을 내지 않는 것 — 자는 사람의 담요 · 꺼진 설비의 그늘 — 을 바닥과 같은 밝기로 맞춘다).
+    /// </summary>
+    private Color LightAtPx(Vector2 px)
+    {
+        if (!LookLightOn || _lw == 0 || _lr.Length == 0) return Colors.White;
+        int k = LookSpec.LightPx;
+        int x = Math.Clamp((int)(px.X / T * k), 0, _lw - 1), y = Math.Clamp((int)(px.Y / T * k), 0, _lh - 1);
+        int p = y * _lw + x;
+        return new Color(Mathf.Clamp(_lr[p], 0f, 1f), Mathf.Clamp(_lg[p], 0f, 1f), Mathf.Clamp(_lb[p], 0f, 1f));
+    }
+
     private void PaintLightMap(CanvasItem ci)
     {
         if (_lightTex == null || !LookOn) return;

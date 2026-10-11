@@ -15,6 +15,23 @@ public static class DotSheet
         string path = Arg(args, "--dotsheet=") ?? "dotsheet.png";
         int scale = int.TryParse(Arg(args, "--dotscale="), out var s) ? s : 4;
         string what = Arg(args, "--dotwhat=") ?? "people";
+        if (what == "fsizes")
+        {
+            // 배마다 설비 종류 · 크기 (도트 설비 그림의 틀을 정하려고)
+            var sizes = new SortedDictionary<string, SortedSet<string>>();
+            foreach (var t in ShipSim.Core.ShipCatalog.All)
+            {
+                var w = ShipSim.Core.World.CreateDefault(7, 0, t.Key);
+                foreach (var f in w.Ship.Furniture)
+                {
+                    var k = f.Type.ToString();
+                    if (!sizes.TryGetValue(k, out var set)) sizes[k] = set = new SortedSet<string>();
+                    set.Add($"{f.Width}x{f.Height}");
+                }
+            }
+            foreach (var (k, set) in sizes) Console.WriteLine($"{k}: {string.Join(" ", set)}");
+            return 0;
+        }
         if (what == "speed")
         {
             var cast0 = Cast();
@@ -32,6 +49,7 @@ public static class DotSheet
             "parts" => Parts(),
             "bots" => Bots(),
             "tiles" => Tiles(),
+            "fixtures" => Fixtures(Arg(args, "--dotstate=") ?? "on"),
             _ => People(),
         };
         var big = img.OnColor(Rgba.Hex("#2b2f38")).Scale(scale);
@@ -105,6 +123,37 @@ public static class DotSheet
         var sprite = d.ToImg();
         img.DrawShadowOf(sprite, x, y);
         img.Draw(sprite, x, y);
+    }
+
+    // ───────────────────────────── 설비 · 가구 137종 ─────────────────────────────
+
+    private static readonly Dictionary<string, (int w, int h)> CommonSize = new()
+    {
+        ["AuxGenerator"] = (2, 1), ["Battery"] = (2, 2), ["Bed"] = (1, 2), ["Collector"] = (2, 1), ["CoolantPump"] = (2, 2), ["EngineCore"] = (3, 3),
+        ["Fridge"] = (2, 1), ["GrowBed"] = (3, 1), ["MainComputer"] = (2, 2), ["MedBed"] = (1, 2), ["OxygenGenerator"] = (2, 2), ["PowerPanel"] = (3, 1),
+        ["ReactorCore"] = (3, 3), ["Refinery"] = (2, 2), ["SensorArray"] = (2, 1), ["Shelf"] = (2, 1), ["Stove"] = (2, 1), ["SuitLocker"] = (1, 2),
+        ["Table"] = (2, 1), ["WaterRecycler"] = (2, 2), ["Workbench"] = (3, 1), ["OperatingTable"] = (1, 2),
+    };
+
+    private static Img Fixtures(string state)
+    {
+        var st = state switch { "off" => FixState.Off, "broken" => FixState.Broken, _ => FixState.On };
+        var types = (ShipSim.Core.FurnitureType[])Enum.GetValues(typeof(ShipSim.Core.FurnitureType));
+        int cols = 12, cell = 104;
+        int rows = (types.Length + cols - 1) / cols;
+        var img = new Img(cols * cell, rows * cell);
+        for (int i = 0; i < types.Length; i++)
+        {
+            var t = types[i];
+            var (w, h) = CommonSize.TryGetValue(t.ToString(), out var sz) ? sz : (1, 1);
+            var body = DotMachines.Body(t, w, h, -1, 1, 1, i);
+            var life = DotMachines.Life(t, w, h, st, 2, 0.8f);
+            int x = (i % cols) * cell + (cell - body.W) / 2, y = (i / cols) * cell + (cell - body.H) / 2;
+            // 바닥 칸 (자리)
+            img.Fill(x, y + DotMachines.RiseOf(t), w * 32, h * 32, Rgba.Hex("#3a404b"));
+            img.Draw(body, x, y); img.Draw(life, x, y);
+        }
+        return img;
     }
 
     // ───────────────────────────── 바닥 · 벽 타일 ─────────────────────────────

@@ -45,7 +45,15 @@ public sealed class DotTex
 
     public bool Has(ulong key) => _map.ContainsKey(key);
 
-    /// <summary>그림 하나 (없으면 예산 안에서 만든다 · 예산이 다 되면 null).</summary>
+    /// <summary>이미 있는 그림만 (만들지 않는다).</summary>
+    public Entry? Peek(ulong key)
+    {
+        if (!_map.TryGetValue(key, out var e)) return null;
+        e.Used = _frame;
+        return e;
+    }
+
+    /// <summary>그림 하나 (없으면 예산 안에서 만든다 · 예산이 다 되면 null · 빈 그림이면 W = 0).</summary>
     public Entry? Get(ulong key, Func<Img> make, bool force = false)
     {
         if (_map.TryGetValue(key, out var e)) { e.Used = _frame; return e; }
@@ -53,6 +61,7 @@ public sealed class DotTex
         Budget--;
         Built++;
         var img = make();
+        if (img.Blank) { e = new Entry { W = 0, H = 0, Used = _frame }; _map[key] = e; return e; } // 빈 그림: 텍스처 없이 (W = 0)
         var gimg = Image.CreateFromData(img.W, img.H, false, Image.Format.Rgba8, img.Px);
         gimg.GenerateMipmaps();
         var tex = ImageTexture.CreateFromImage(gimg);

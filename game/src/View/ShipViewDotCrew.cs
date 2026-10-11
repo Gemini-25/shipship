@@ -215,6 +215,22 @@ public partial class ShipView
         var s = DotGet(l, DotSig(l), DotFacing.S, DotPose.Stand, 0, 0);
         if (s == null) return false;
         int headRows = 20;
+        var cell = CellAtPx(at);
+        var bed = _world.Ship.FurnitureAt(cell);
+        if (bed != null && DotMachines.Spec(bed.Type).Arch == FixArch.Bed && bed.Type != FurnitureType.OperatingTable)
+        {
+            // 도트 침대: 베개 위 머리 + 그 침대 담요 색 그대로 몸 굴곡 (담요가 몸을 덮는다)
+            var top = DotFixtureAt(bed);
+            var head = new Vector2(bed.MinX * T + bed.Width * T / 2f - DotPeople.Cx, top.Y + 4f);
+            ci.DrawTextureRectRegion(DotTexOf(s), new Rect2(head, DotPeople.FW, headRows), new Rect2(0, 0, DotPeople.FW, headRows));
+            var (kx, ky, bw, bh) = DotMachines.BlanketRect(bed.Type, bed.Width, bed.Height);
+            int ramp = DotMachines.BlanketOf(bed.Type, DotBodyArgs(bed).Blanket);
+            int curl = (int)(DotHash.U(c.Id, (int)(_world.Tick / 20000), 9) % 2);
+            var e = Dots.Get(DotTex.Key(7, ramp, bw, bh - 4, curl), () => DotMachines.Sleeper(ramp, bw, bh - 4, curl));
+            var lit = LightAtPx(new Vector2(bed.MinX * T + kx + bw / 2f, top.Y + ky + bh / 2f)); // 빛 층 위라 바닥과 같은 밝기로 맞춘다
+            if (e is { W: > 0 }) ci.DrawTextureRect(Zoom >= 0.999f ? e.Crisp : e.Tex, new Rect2(bed.MinX * T + kx, top.Y + ky - 1, e.W, e.H), false, lit);
+            return true;
+        }
         var o = new Vector2(Mathf.Round(at.X) - DotPeople.Cx, Mathf.Round(at.Y) - 14f);
         ci.DrawTextureRectRegion(DotTexOf(s), new Rect2(o, DotPeople.FW, headRows), new Rect2(0, 0, DotPeople.FW, headRows));
         // 담요: 접힌 끝(밝게) · 몸 윤곽(가운데 어둡게) · 외곽선

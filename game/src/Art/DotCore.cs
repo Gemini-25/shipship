@@ -385,6 +385,16 @@ public sealed class Img
 
     public Img(int w, int h) { W = w; H = h; Px = new byte[w * h * 4]; }
 
+    /// <summary>다 투명한가 (그릴 것이 없는 그림은 텍스처를 만들지 않는다).</summary>
+    public bool Blank
+    {
+        get
+        {
+            for (int i = 3; i < Px.Length; i += 4) if (Px[i] != 0) return false;
+            return true;
+        }
+    }
+
     public bool In(int x, int y) => (uint)x < (uint)W && (uint)y < (uint)H;
 
     public Rgba Get(int x, int y)

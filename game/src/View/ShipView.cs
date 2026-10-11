@@ -256,9 +256,13 @@ public partial class ShipView : Node2D
         PaintWiring(ci); // v10.9 케이블 트레이·분전함·간선
         PaintWallProps(ci); // v10.9 벽에 붙은 계기·사물함·소화기·번호판
         // v10: 가구 그림자 (빛이 왼쪽 위에서)
+        if (!DotCrew) // 도트는 그림자가 몸체 그림에 들어 있다
         foreach (var f in ship.Furniture.Where(f => !f.Stowed && !f.Room.Detached && !FurnitureTypes.Walkable(f.Type)))
             Gfx.RoundRect(ci, new Rect2(FurnitureRect(f).Position + new Vector2(3f, 4f), FurnitureRect(f).Size).Grow(-3f), new Color(0, 0, 0, 0.28f), 6);
-        foreach (var f in ship.Furniture.Where(f => !f.Stowed && !f.Room.Detached)) PaintFurniture(ci, f);
+        if (DotCrew) // 도트: 위로 솟은 몸체가 뒤(북쪽) 설비를 덮도록 북쪽부터
+            foreach (var f in ship.Furniture.Where(f => !f.Stowed && !f.Room.Detached).OrderBy(f => f.MaxY).ThenBy(f => f.Id)) PaintFurniture(ci, f);
+        else
+            foreach (var f in ship.Furniture.Where(f => !f.Stowed && !f.Room.Detached)) PaintFurniture(ci, f);
     }
 
     /// <summary>v10: 벽 아래 그늘 — 벽과 맞닿은 바닥 칸의 가장자리가 어둡다 (앰비언트 오클루전 흉내).</summary>
@@ -386,8 +390,9 @@ public partial class ShipView : Node2D
         }
     }
 
-    private static void PaintFurniture(CanvasItem ci, Furniture f)
+    private void PaintFurniture(CanvasItem ci, Furniture f)
     {
+        if (DotCrew && PaintDotFixtureBody(ci, f)) return; // 도트 설비 (ShipViewDotFixtures)
         var r = FurnitureRect(f);
         var center = r.GetCenter();
         var accent = Palette.Room(f.Room.Kind);
@@ -899,6 +904,7 @@ public partial class ShipView : Node2D
         var m = f.Machine;
         float eff = m?.Efficiency ?? 1f;
         bool alive = eff > 0.01f;
+        if (DotCrew) { PaintDotFixtureLife(ci, f); return; } // 도트 설비 (ShipViewDotFixtures)
         if (PaintFixtureLife(ci, f)) return; // v16.5c 설비 그림 표 (움직임 · 상태)
         if (Modules.IsModule(f.Type)) { PaintModuleLife(ci, f, t); return; } // v10.8
         if (f.Type == FurnitureType.SupplyCache) { PaintSupplyCacheLife(ci, f); return; } // v10.10
