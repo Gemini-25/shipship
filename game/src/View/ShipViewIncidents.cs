@@ -274,7 +274,14 @@ public partial class ShipView
             ci.Circle(c, T * (0.6f + 0.6f * intensity) * flick, FireOuter.WithAlpha(0.13f), true, -1f, true);
             ci.Circle(c, T * (0.35f + 0.3f * intensity), FireMid.WithAlpha(0.18f), true, -1f, true);
 
-            int tongues = 3 + (int)(intensity * 3f);
+            if (DotCrew) // 도트 불꽃 (8장면 · 세기 4단계 · 칸마다 다른 결)
+            {
+                int fr = (int)(_time * 10f + seed * 3f) & 7, lv = Mathf.Clamp((int)(intensity * 4f), 0, 3), sd = (int)(seed * 7f) & 3;
+                float st = 0.45f + 0.18f * lv;
+                var fe = Dots.Get(DotTex.Key(15, fr, lv, sd), () => ShipSim.Art.DotFx.FireTile(fr, st, sd), force: true);
+                if (fe is { W: > 0 }) ci.DrawTextureRect(Zoom >= 0.999f ? fe.Crisp : fe.Tex, new Rect2(new Vector2(r.Position.X, r.End.Y - fe.H + 2f), fe.W, fe.H), false);
+            }
+            int tongues = DotCrew ? 0 : 3 + (int)(intensity * 3f);
             for (int k = 0; k < tongues; k++)
             {
                 float x = (k - (tongues - 1) * 0.5f) * 5f + Mathf.Sin(_time * 7f + k * 2.1f + seed) * 1.5f;

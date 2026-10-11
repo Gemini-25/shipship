@@ -19,7 +19,10 @@ public partial class Main
     private float _camZoomTarget;
 
     public bool Highlight => Settings.Highlight;
-    public bool SlowMotion => Settings.Highlight && Settings.AutoCamera && Time.GetTicksMsec() < _slowUntilMsec;
+    public bool SlowMotion => Settings.Highlight && Settings.AutoCamera && Time.GetTicksMsec() < _slowUntilMsec || Time.GetTicksMsec() < _impactUntilMsec;
+
+    /// <summary>도트 7단계: 폭발 순간은 하이라이트 모드가 아니어도 잠깐(0.9초) 느리게 — 불덩이가 피어오르는 걸 볼 수 있게.</summary>
+    private ulong _impactUntilMsec;
 
     public void ToggleHighlight()
     {
@@ -46,6 +49,7 @@ public partial class Main
             long hold = n.Kind is CauseKind.Death or CauseKind.Explosion or CauseKind.Scram or CauseKind.Detach ? SimTime.Minutes(40) : SimTime.Minutes(20);
             _hotUntilTick = System.Math.Max(_hotUntilTick, Sim.Tick + hold);
             if (n.Kind is CauseKind.Explosion or CauseKind.Death or CauseKind.Detach) _slowUntilMsec = Time.GetTicksMsec() + 2600;
+            if (n.Kind == CauseKind.Explosion && Replaying == null && Sim.Tick - n.Tick < SimTime.Minutes(1)) _impactUntilMsec = Time.GetTicksMsec() + 900;
             if (focus == null || n.Kind is CauseKind.Death or CauseKind.Explosion) focus = n;
         }
         if (!Settings.Highlight) return;

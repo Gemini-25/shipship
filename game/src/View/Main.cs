@@ -1043,6 +1043,18 @@ public partial class Main : Node2D
                 case "--tool":
                     if (Enum.TryParse<IncidentTool>(value, out var tool)) Tool = tool;
                     break;
+                case "--blast":
+                {
+                    // 도트 7단계 화면 확인용: --blast=Fuel:Storage:0.6 (폭발 종류 : 방 종류 : 세기) — 그 방 가운데에서 터뜨린다
+                    var bb = value.Split(':');
+                    if (!Enum.TryParse<BlastKind>(bb[0], out var bk)) break;
+                    var brt = bb.Length > 1 && Enum.TryParse<RoomType>(bb[1], out var brt0) ? brt0 : RoomType.Storage;
+                    float bpw = bb.Length > 2 ? float.Parse(bb[2], CultureInfo.InvariantCulture) : 0.6f;
+                    var broom = Sim.Ship.RoomsOf(brt).FirstOrDefault();
+                    var bcells = broom?.Cells.Where(Sim.Ship.IsOpenFloor).ToList();
+                    if (bcells is { Count: > 0 }) Sim.Blast.Detonate(bcells[bcells.Count / 2], bpw, bk, "화면 확인");
+                    break;
+                }
                 case "--hazard":
                 {
                     // v11.2 화면 확인용: --hazard=GasLeak:LifeSupport (방 종류) · --hazard=CropBlight:Hydroponics (그 방 첫 재배대)

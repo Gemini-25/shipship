@@ -74,6 +74,25 @@ public static class Settings
             else System.IO.File.WriteAllText(path, ShipSim.Core.Tuning.Write());
         }
         catch (System.Exception e) when (e is System.IO.IOException or System.UnauthorizedAccessException) { GD.PrintErr($"tuning: {e.Message}"); }
+        StoryOnce();
+    }
+
+    /// <summary>
+    /// 도트 7단계: 사고가 실제로 나게 — 이야기꾼도 무작위 사고도 꺼져 있으면 처음 한 번 꾸준형 이야기꾼을 켠다.
+    /// 그 뒤에 설정에서 끄면 그대로 둔다 (한 번만 · settings.cfg [play] story_on_once).
+    /// </summary>
+    private static void StoryOnce()
+    {
+        var cfg = new ConfigFile();
+        cfg.Load(Path);
+        if (cfg.GetValue("play", "story_on_once", false).AsBool()) return;
+        if (ShipSim.Core.Storyteller.Persona == ShipSim.Core.StoryPersona.Off && ShipSim.Core.HazardSystem.RandomDays <= 0f)
+        {
+            ShipSim.Core.Tuning.Apply("story.persona", (float)ShipSim.Core.StoryPersona.Steady);
+            SaveTuning();
+        }
+        cfg.SetValue("play", "story_on_once", true);
+        cfg.Save(Path);
     }
 
     public static void SaveTuning()
@@ -112,6 +131,7 @@ public static class Settings
         cfg.SetValue("sound", "effects", Effects);
         cfg.SetValue("sound", "ambience", Ambience);
         cfg.SetValue("play", "auto_pause_critical", AutoPauseCritical);
+        cfg.SetValue("play", "story_on_once", true); // 도트 7단계 한 번 켜기는 이미 지났다 (StoryOnce)
         cfg.SetValue("play", "event_toasts", EventToasts);
         cfg.SetValue("play", "start_speed", StartSpeed);
         cfg.SetValue("voyage", "crew", Crew);

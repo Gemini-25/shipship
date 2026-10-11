@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
+using ShipSim.Art;
 using ShipSim.Core;
 
 namespace ShipSim.View;
@@ -84,6 +85,36 @@ public partial class ShipView
             foreach (var old in _blastSeen.Keys.Where(id => b.Recent.All(r => r.Id != id)).ToList()) _blastSeen.Remove(old);
     }
 
+    /// <summary>
+    /// 도트 불덩이: 0~1 섬광 · 2~5 불덩이 · 6~11 연기로 흩어짐 (약 1.4초). 세기만큼 크다 (48~128 도트).
+    /// 증기 · 냉매 · 분말 · 분진은 그 구름 위에 터진 자리만, 발효 국물 · 기름 불기둥은 예전 그림 그대로. 그렸으면 true.
+    /// </summary>
+    private bool PaintDotFireball(CanvasItem ci, BlastRecord rec, Vector2 o, float age, float pw)
+    {
+        const float dur = 1.4f;
+        if (age >= dur) return true;
+        DotBlast? kind = rec.Kind switch
+        {
+            BlastKind.Hydrogen => DotBlast.Hydrogen,
+            BlastKind.Battery => DotBlast.Battery,
+            BlastKind.Arc => DotBlast.Arc,
+            BlastKind.Steam or BlastKind.Refrigerant or BlastKind.ColdGas or BlastKind.Powder => DotBlast.Steam,
+            BlastKind.Dust => DotBlast.Dust,
+            BlastKind.Ferment or BlastKind.Grease => null,
+            _ => DotBlast.Fuel,
+        };
+        if (kind is not DotBlast k) return false;
+        float scale = rec.Kind switch { BlastKind.Charge => 0.7f, BlastKind.Arc => 0.6f, BlastKind.Steam or BlastKind.Refrigerant or BlastKind.ColdGas or BlastKind.Powder or BlastKind.Dust => 0.6f, _ => 1f };
+        int size = Mathf.Clamp((int)MathF.Round((40f + 88f * Mathf.Clamp(pw, 0f, 1f)) * scale / 16f) * 16, 32, 128);
+        int frame = Mathf.Clamp((int)(age / dur * 12f), 0, 11);
+        int sd = rec.Id & 3;
+        var e = Dots.Get(DotTex.Key(14, (int)k, size, frame, sd), () => DotFx.Blast(k, frame, size, sd + 1), force: true);
+        if (e is not { W: > 0 }) return true;
+        var at = new Vector2(Mathf.Round(o.X - e.W / 2f), Mathf.Round(o.Y - e.H / 2f - size * 0.12f * frame / 11f)); // 연기는 조금 떠오른다
+        ci.DrawTextureRect(Zoom >= 0.999f ? e.Crisp : e.Tex, new Rect2(at, e.W, e.H), false);
+        return true;
+    }
+
     private void PaintBlast(CanvasItem ci, BlastRecord rec, float age)
     {
         var spec = rec.Spec;
@@ -143,16 +174,17 @@ public partial class ShipView
         }
 
         // ── 3) 종류마다 다른 몸통 ──
+        bool dotBody = DotCrew && PaintDotFireball(ci, rec, o, age, pw); // 도트 불덩이 (12장면) — 그렸으면 예전 불덩이는 건너뛴다
         switch (rec.Kind)
         {
             case BlastKind.Dust: PaintDustFront(ci, rec, age, look); break;
-            case BlastKind.Arc: PaintArcBolts(ci, o, age, pw, seed); PaintFireball(ci, o, age, pw * 0.5f, look, seed, 0.6f); break;
+            case BlastKind.Arc: PaintArcBolts(ci, o, age, pw, seed); if (!dotBody) PaintFireball(ci, o, age, pw * 0.5f, look, seed, 0.6f); break;
             case BlastKind.Steam or BlastKind.Refrigerant or BlastKind.ColdGas or BlastKind.Powder: PaintBurstCloud(ci, rec, o, age, pw, look, seed); break;
             case BlastKind.Ferment: PaintSplatter(ci, o, age, pw, look, seed); break;
             case BlastKind.Grease: PaintFlameColumn(ci, o, age, pw, look, seed); break;
-            case BlastKind.Hydrogen: PaintFireball(ci, o, age, pw, look, seed, 0.45f); break; // 거의 안 보이는 파란 불
-            case BlastKind.Charge: PaintFireball(ci, o, age, pw * 0.7f, look, seed, 0.35f); break; // 짧고 작다 — 압력이 전부
-            default: PaintFireball(ci, o, age, pw * Mathf.Max(0.4f, spec.Heat + 0.3f), look, seed, 1.1f); break;
+            case BlastKind.Hydrogen: if (!dotBody) PaintFireball(ci, o, age, pw, look, seed, 0.45f); break; // 거의 안 보이는 파란 불
+            case BlastKind.Charge: if (!dotBody) PaintFireball(ci, o, age, pw * 0.7f, look, seed, 0.35f); break; // 짧고 작다 — 압력이 전부
+            default: if (!dotBody) PaintFireball(ci, o, age, pw * Mathf.Max(0.4f, spec.Heat + 0.3f), look, seed, 1.1f); break;
         }
 
         // ── 4) 파편 궤적 ──
@@ -932,30 +964,77 @@ public partial class SoundSystem
     }
 
     /// <summary>폭발음 파형: 0 날카로운 쾅 · 1 깊은 쿵 · 2 불길 훅 · 3 쉭 터짐 · 4 지직 · 5 펑. 먹먹하면 높은 소리를 깎는다.</summary>
+    /// <summary>
+    /// 폭발음 합성 (도트 7단계): ① 날카로운 터짐(넓은 소음 수 ms) ② 낮은 쿵(내려가는 사인 · 살짝 찌그러뜨려 힘 있게)
+    /// ③ 우르릉(걸러진 소음 · 걸러지는 폭이 점점 닫힌다) ④ 쉭(증기) · 지직(전기) ⑤ 떨어지는 파편 딸깍 ⑥ 쇠 선체 울림(짧은 메아리 셋).
+    /// 종류마다 비율 · 길이가 다르다. 벽 너머면 높은 소리를 깎는다.
+    /// </summary>
     private static float[] BlastSound(int kind, bool muffled)
     {
-        float len = kind switch { 1 => 2.2f, 2 => 1.6f, 3 => 1.8f, 4 => 1.4f, 5 => 0.5f, _ => 1.2f };
+        float len = kind switch { 1 => 2.8f, 2 => 2.2f, 3 => 1.9f, 4 => 1.9f, 5 => 0.8f, _ => 1.8f };
         int n = (int)(Rate * len);
         var s = new float[n];
         var rng = new Random(91 + kind);
-        float low = 0f, lp = 0f, crackle = 0f;
+        // 터짐 · 쿵 세기 · 쿵 시작/끝 높이 · 쿵 줄어듦 · 우르릉 · 우르릉 줄어듦 · 파편 · 쉭 · 지직
+        var (crack, boom, f0, f1, boomDecay, rumble, rumbleDecay, debris, hiss, zap) = kind switch
+        {
+            0 => (1.0f, 0.9f, 95f, 38f, 5f, 0.5f, 2.4f, 0.6f, 0f, 0f),     // 날카로운 쾅
+            1 => (0.7f, 1.0f, 72f, 26f, 2.0f, 1.0f, 1.3f, 0.8f, 0f, 0f),   // 깊은 쿵 + 우르릉
+            2 => (0.4f, 0.75f, 62f, 30f, 2.8f, 1.0f, 1.5f, 0.4f, 0.35f, 0f), // 훅 (불길)
+            3 => (0.5f, 0.3f, 85f, 50f, 6f, 0.3f, 3f, 0.2f, 1.0f, 0f),     // 쉭 터짐
+            4 => (0.6f, 0.4f, 90f, 45f, 6f, 0.3f, 3f, 0.3f, 0.15f, 1.0f),  // 지직 · 탁탁
+            _ => (0.8f, 0.5f, 140f, 70f, 10f, 0.2f, 6f, 0.25f, 0f, 0f),    // 펑 (작은 것)
+        };
+        float phase = 0f, lp = 0f, lp2 = 0f, prev = 0f, crackle = 0f;
         for (int i = 0; i < n; i++)
         {
             float t = i / (float)Rate;
             float noise = (float)(rng.NextDouble() * 2 - 1);
-            low += 0.06f * (noise - low);
-            float x = kind switch
+            // ① 터짐
+            float x = crack * noise * MathF.Exp(-t * 60f);
+            // ② 쿵
+            float f = f1 + (f0 - f1) * MathF.Exp(-t * 6f);
+            phase += MathF.Tau * f / Rate;
+            x += boom * 0.8f * MathF.Tanh(2.2f * MathF.Sin(phase) * MathF.Exp(-t * boomDecay) * MathF.Min(1f, t * 200f));
+            // ③ 우르릉
+            float cut = 0.02f + 0.25f * MathF.Exp(-t * 3f);
+            lp += cut * (noise - lp); lp2 += cut * (lp - lp2);
+            x += rumble * 6f * lp2 * MathF.Exp(-t * rumbleDecay) * MathF.Min(1f, t * 30f);
+            // ④ 쉭 · 지직
+            float hpN = noise - prev; prev = noise;
+            x += hiss * 0.5f * hpN * MathF.Exp(-t * 1.8f) * MathF.Min(1f, t * 40f);
+            if (zap > 0f)
             {
-                0 => 0.9f * noise * MathF.Exp(-t * 18f) + 0.8f * MathF.Sin(t * MathF.Tau * (70f - 30f * t)) * MathF.Exp(-t * 4f) + 0.4f * low * 3f * MathF.Exp(-t * 3f),
-                1 => 0.9f * MathF.Sin(t * MathF.Tau * (48f - 18f * t)) * MathF.Exp(-t * 2.2f) + 0.6f * low * 4f * MathF.Exp(-t * 1.6f) + 0.3f * noise * MathF.Exp(-t * 12f),
-                2 => 0.7f * low * 5f * MathF.Min(1f, t * 12f) * MathF.Exp(-t * 2.4f) + 0.3f * MathF.Sin(t * MathF.Tau * 60f) * MathF.Exp(-t * 3f),
-                3 => 0.7f * noise * MathF.Min(1f, t * 40f) * MathF.Exp(-t * 2.5f) + 0.4f * MathF.Sin(t * MathF.Tau * 55f) * MathF.Exp(-t * 6f),
-                4 => (crackle = rng.NextDouble() < 0.012 * MathF.Exp(-t * 1.5f) ? 1f : crackle * 0.9f) * noise + 0.4f * noise * MathF.Exp(-t * 14f) + 0.3f * MathF.Sin(t * MathF.Tau * 90f) * MathF.Exp(-t * 5f),
-                _ => 0.8f * noise * MathF.Exp(-t * 22f) + 0.5f * MathF.Sin(t * MathF.Tau * 140f) * MathF.Exp(-t * 14f),
-            };
-            if (muffled) { lp += 0.05f * (x - lp); x = lp * 2.2f; }
-            s[i] = Math.Clamp(0.75f * x, -1f, 1f);
+                crackle = rng.NextDouble() < 0.025 * MathF.Exp(-t * 1.2f) ? 1f : crackle * 0.86f;
+                x += zap * (0.7f * crackle * noise + 0.15f * MathF.Sin(t * MathF.Tau * 120f) * MathF.Exp(-t * 2f));
+            }
+            s[i] = x;
         }
+        // ⑤ 떨어지는 파편: 흩어진 쇳조각 딸깍 (늦을수록 드물고 작다)
+        int clicks = (int)(36 * debris);
+        for (int k = 0; k < clicks; k++)
+        {
+            float t = 0.12f + MathF.Pow((float)rng.NextDouble(), 1.6f) * (len - 0.35f);
+            float amp = (0.12f + 0.3f * (float)rng.NextDouble()) * MathF.Exp(-t * 1.1f), fr = 1400f + 3600f * (float)rng.NextDouble();
+            int at = (int)(t * Rate), m = (int)(Rate * 0.025f);
+            for (int j = 0; j < m && at + j < n; j++) s[at + j] += amp * MathF.Sin(MathF.Tau * fr * j / Rate) * MathF.Exp(-j / (Rate * 0.004f));
+        }
+        // ⑥ 쇠 선체 울림: 짧은 메아리 셋 (복사본에서 더해 되먹임 없이)
+        var dry = (float[])s.Clone();
+        foreach (var (ms, g) in new[] { (23f, 0.28f), (31f, 0.2f), (47f, 0.14f) })
+        {
+            int d = (int)(Rate * ms / 1000f);
+            for (int i = d; i < n; i++) s[i] += g * dry[i - d];
+        }
+        // 벽 너머: 높은 소리를 깎는다
+        if (muffled) { float m = 0f; for (int i = 0; i < n; i++) { m += 0.05f * (s[i] - m); s[i] = m * 2.2f; } }
+        // 끝을 부드럽게 · 크기 맞춤
+        int fade = Math.Min(n, Rate / 10);
+        for (int i = 0; i < fade; i++) s[n - 1 - i] *= i / (float)fade;
+        float peak = 1e-4f;
+        foreach (var v in s) peak = MathF.Max(peak, MathF.Abs(v));
+        float norm = 0.9f / peak;
+        for (int i = 0; i < n; i++) s[i] = Math.Clamp(s[i] * norm, -1f, 1f);
         return s;
     }
 }
