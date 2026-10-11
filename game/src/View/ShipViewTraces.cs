@@ -21,7 +21,8 @@ public partial class ShipView
             if (a <= 0.02f) continue;
             var cr = CellRect(tr.At);
             if (!_fixView.Intersects(cr.Grow(T))) continue;
-            DrawTrace(ci, tr.Kind, cr.GetCenter(), Mathf.Clamp(a * 1.4f, 0f, 1f), tr.Id);
+            if (DotCrew) DotTrace(ci, tr.Kind, cr.GetCenter(), Mathf.Clamp(a * 1.4f, 0f, 1f), tr.Id); // 도트 흔적
+            else DrawTrace(ci, tr.Kind, cr.GetCenter(), Mathf.Clamp(a * 1.4f, 0f, 1f), tr.Id);
         }
         foreach (var s in signs.Signs)
         {
@@ -31,6 +32,15 @@ public partial class ShipView
             if (!_fixView.Intersects(new Rect2(c - new Vector2(T, T), new Vector2(T * 2f, T * 2f)))) continue;
             DrawOmen(ci, s.Kind, c + new Vector2(T * 0.6f, -T * 0.6f), s.Id);
         }
+    }
+
+    /// <summary>도트 흔적 (그림 하나 · 옅어지는 만큼 투명하게).</summary>
+    private void DotTrace(CanvasItem ci, HazardKind k, Vector2 c, float a, int id)
+    {
+        int seed = id & 7;
+        var e = Dots.Get(DotTex.Key(13, (int)k, seed), () => ShipSim.Art.DotTraces.Trace(k, seed));
+        if (e is not { W: > 0 }) return;
+        ci.DrawTextureRect(Zoom >= 0.999f ? e.Crisp : e.Tex, new Rect2(new Vector2(Mathf.Round(c.X - e.W / 2f), Mathf.Round(c.Y - e.H / 2f)), e.W, e.H), false, new Color(1, 1, 1, Mathf.Clamp(a, 0f, 1f) * 0.92f));
     }
 
     /// <summary>사고마다 다른 흔적 (a: 남은 진하기).</summary>

@@ -53,6 +53,7 @@ public static class DotSheet
             "gear" => Gear(),
             "food" => Food(),
             "items" => Items(),
+            "traces" => Traces(),
             "fixtures" => Fixtures(Arg(args, "--dotstate=") ?? "on"),
             _ => People(),
         };
@@ -157,6 +158,19 @@ public static class DotSheet
             img.Fill(x, y + DotMachines.RiseOf(t), w * 32, h * 32, Rgba.Hex("#3a404b"));
             img.Draw(body, x, y); img.Draw(life, x, y);
         }
+        return img;
+    }
+
+    // ───────────────────────────── 사고 흔적 ─────────────────────────────
+
+    private static Img Traces()
+    {
+        var kinds = (ShipSim.Core.HazardKind[])Enum.GetValues(typeof(ShipSim.Core.HazardKind));
+        int cols = 10;
+        var img = new Img(cols * 28 + 8, (kinds.Length + cols - 1) / cols * 28 + 8);
+        img.Fill(0, 0, img.W, img.H, Rgba.Hex("#4a525e"));
+        for (int i = 0; i < kinds.Length; i++)
+            img.Draw(DotTraces.Trace(kinds[i], i), 4 + i % cols * 28, 4 + i / cols * 28);
         return img;
     }
 
