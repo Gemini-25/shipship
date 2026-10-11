@@ -128,6 +128,8 @@ public static partial class Program
         if (args.Contains("--hazardtest")) return RunHazardTest(seed);
         if (args.Contains("--livingtest")) return RunLivingTest(seed);
         if (args.Contains("--watertest")) return RunWaterTest(seed); // v19 물 순환
+        if (args.Contains("--heattest")) return RunHeatTest(seed); // v19 열
+        if (args.Contains("--heatprobe")) return RunHeatProbe(seed, days, shipArg); // v19 열 (days 자리는 시간)
         if (args.Contains("--waterprobe")) return RunWaterProbe(seed, shipArg ?? "Mirinae", days * 24);
         if (args.Contains("--remodeltest")) return RunRemodelTest(seed);
         if (args.Contains("--commstest")) return RunOutsideCommsTest(seed);

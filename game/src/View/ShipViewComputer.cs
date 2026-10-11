@@ -749,7 +749,7 @@ public partial class ShipView
         float load = Mathf.Clamp(a.Load, 0f, 1.2f) / 1.2f;
         var lc = a.Load > 0.9f ? Palette.Danger : a.Load > 0.7f ? Palette.Warning : Palette.Good;
         ci.Arc(gc, 9f, Mathf.Pi * 0.8f, Mathf.Pi * (0.8f + 1.4f * load), 16, lc.WithAlpha(flick), 2.2f, true);
-        float temp = a.ComputerBody?.Room.Air.Temperature ?? 20f;
+        float temp = a.ComputerBody != null ? a.Core.CoreC : 20f;
         float th = Mathf.Clamp((temp - 15f) / 30f, 0f, 1f);
         var tb = new Rect2(p0.Position + new Vector2(32f, 4f), new Vector2(4f, 18f));
         ci.Box(tb, new Color(0.4f, 0.85f, 1f, 0.15f));

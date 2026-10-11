@@ -127,9 +127,15 @@ public sealed class FailsafeSystem
     /// </summary>
     public int Feed(Room r, bool[] fed)
     {
-        if (fed[r.Circuit] || r.AltCircuit < 0 || Durability.Legacy) return r.Circuit;
+        if (r.AltCircuit < 0 || Durability.Legacy) return r.Circuit;
+        // 제 힘으로 도는 회로가 먼저다 — 임시 · 예비 배선으로만 받는 회로는 배선 용량이 모자라면 내려진다
+        var live = _w.Power.CircuitLive;
+        if (fed[r.Circuit] && live[r.Circuit]) return r.Circuit;
         if (_altTick != _w.Tick) { _altPrev.Clear(); _altPrev.UnionWith(_alt); _alt.Clear(); _altTick = _w.Tick; }
-        int c = fed[r.AltCircuit] ? r.AltCircuit : -1;
+        int c = fed[r.AltCircuit] && live[r.AltCircuit] ? r.AltCircuit : -1;
+        for (int i = 0; c < 0 && i < fed.Length; i++) if (fed[i] && live[i]) c = i;
+        if (c < 0 && fed[r.Circuit]) return r.Circuit; // 살아 있는 회로가 없으면 배선으로라도 받는 주 회로
+        if (c < 0) c = fed[r.AltCircuit] ? r.AltCircuit : -1;
         for (int i = 0; c < 0 && i < fed.Length; i++) if (fed[i]) c = i;
         if (c < 0) return r.Circuit;
         _alt.Add(r.Id);

@@ -95,6 +95,8 @@ public sealed class ShipCore
     public float BackupHours;
     /// <summary>자기 절전 (비필수 모듈을 끄고 자기 전력 10%).</summary>
     public bool SelfSaving { get; private set; }
+    /// <summary>v19 컴퓨터 함 안 온도 (방 공기보다 덥다 — 환기가 끊기면 크게).</summary>
+    public float CoreC { get; private set; }
     public string SelfSavingWhy { get; private set; } = "";
     public int SelfSaves;
     public float SavedKwh;
@@ -166,7 +168,11 @@ public sealed class ShipCore
         var a = w.Automation;
         if (m == null || m.Body.Room.Detached || !(m.Powered || OnUps) || m.Has(FaultKind.Wrecked)) { if (SafeMode) ExitSafe("컴퓨터가 멎었다"); return; }
         var room = m.Body.Room;
-        float t = room.Air.Temperature;
+        // v19 함 안 온도: 방 공기 + 바람이 얼마나 지나가나 (환기 · 연산) — 방 열 장부(Thermal.cs)는 공기만, 과열은 함 안으로 본다
+        float target = room.Air.Temperature + a.HeatFor(room);
+        CoreC = CoreC <= 0f ? target : CoreC + (target - CoreC) * (1f - MathF.Exp(-12f * dt)); // 함은 작아 5분쯤에 따라간다
+        CoreC = MathF.Max(CoreC, room.Air.Temperature); // 방 공기보다 차가울 수는 없다
+        float t = CoreC;
         if (!SafeMode && t > AutomationSystem.OverheatC && !m.Has(FaultKind.Overheat))
         {
             SafeMode = true;

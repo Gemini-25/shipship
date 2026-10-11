@@ -89,6 +89,14 @@ public sealed partial class AutomationSystem
     }
 
     /// <summary>주 컴퓨터가 방을 데우는 정도 (℃, 대기 온도 목표에 더한다).</summary>
+    /// <summary>v19 주 컴퓨터가 내는 열 (kW): 평소 1.6 · 연산 부하가 60%를 넘으면 더 · 안전 모드 · 절전이면 덜 (Thermal.cs가 방 열 장부에 넣는다).</summary>
+    public float HeatKw()
+    {
+        var m = Computer;
+        if (m == null || !m.Powered && !Core.OnUps || m.Stopped && !Core.BackupCore) return 0f;
+        return (1.6f + 4f * MathF.Max(0f, Load - 0.6f)) * Core.HeatMul * (m.Stopped ? 0.3f : 1f);
+    }
+
     public float HeatFor(Room room)
     {
         var m = Computer;

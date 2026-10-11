@@ -54,7 +54,7 @@ public sealed class Pathfinder
 
     /// <summary>v16.26 이 사람이 지금 못 여는 출입 통제 문 (문 번호 · 통제되는 방) 목록을 채운다 — 배 본체가 건다.</summary>
     public Func<int, List<(int door, int inner)>, bool>? BarredDoors { get; set; }
-    private readonly List<(int door, int inner)> _barred = new();
+    [NotSaved] private readonly List<(int door, int inner)> _barred = new(); // 부를 때마다 비우고 채우는 작업 칸 (상태 저장에 넣지 않는다 — 배열 끝의 지난 값이 바이트를 흔든다)
     private int[] _barMark = Array.Empty<int>();
     private int _barRun;
 
@@ -340,8 +340,8 @@ public sealed class Pathfinder
     // v14.2 거리장 계산을 빠르게: 방·문·칸의 성질을 계산마다 한 번 배열로 펴 두고 (같은 식, 같은 값), 큐를 다시 쓴다.
     private readonly PriorityQueue<int, int> _open = new();
     private bool[] _pass = Array.Empty<bool>();
-    private int[] _roomAdd = Array.Empty<int>(), _doorAdd = Array.Empty<int>();
-    private bool[] _roomBlocked = Array.Empty<bool>(), _doorBlocked = Array.Empty<bool>();
+    [NotSaved] private int[] _roomAdd = Array.Empty<int>(), _doorAdd = Array.Empty<int>(); // 작업 칸: 펼 때마다 다시 채운다 (상태 저장에 넣지 않는다 — 거리장 캐시를 안 담아 되살린 쪽만 다시 펴면 남은 값이 달라진다)
+    [NotSaved] private bool[] _roomBlocked = Array.Empty<bool>(), _doorBlocked = Array.Empty<bool>();
 
     private readonly bool[]?[] _passBy = new bool[]?[8];
     private readonly int[] _passEpochBy = { -1, -1, -1, -1, -1, -1, -1, -1 };
@@ -462,8 +462,8 @@ public sealed class Pathfinder
     }
 
     // ── v16.26 원형 통 큐 (같은 식 · 같은 값) ──
-    private int[] _bHead = Array.Empty<int>();
-    private int[] _eNode = new int[4096], _eNext = new int[4096];
+    [NotSaved] private int[] _bHead = Array.Empty<int>(); // 작업 칸 (상태 저장에 넣지 않는다)
+    [NotSaved] private int[] _eNode = new int[4096], _eNext = new int[4096];
 
     /// <summary>한 걸음에 드는 비용의 위 끝 (0 = 통 큐를 못 쓴다: 0 이하 걸음이 있을 수 있다).</summary>
     private int MaxStep(int nr, int nd, float hazardMul)
@@ -482,7 +482,7 @@ public sealed class Pathfinder
         return m > int.MaxValue / 4 ? int.MaxValue : (int)m;
     }
 
-    private int[] _enter = Array.Empty<int>();
+    [NotSaved] private int[] _enter = Array.Empty<int>(); // 작업 칸 (상태 저장에 넣지 않는다)
 
     private void BucketFlood(int s, int[] cost, int maxStep, float cellScale, float hazardScale, bool spotsOn)
     {
@@ -493,7 +493,7 @@ public sealed class Pathfinder
         int count = 0, pending = 0;
         void Push(int node, int d)
         {
-            if (count == _eNode.Length) { Array.Resize(ref _eNode, count * 2); Array.Resize(ref _eNext, count * 2); }
+            if (count == _eNode.Length) { int grow = Math.Max(4096, count * 2); Array.Resize(ref _eNode, grow); Array.Resize(ref _eNext, grow); } // 되살린 직후엔 빈 배열
             int b = d % B;
             _eNode[count] = node; _eNext[count] = head[b]; head[b] = count; count++; pending++;
         }

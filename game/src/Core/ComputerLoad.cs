@@ -47,6 +47,9 @@ public sealed partial class AutomationSystem
     /// <summary>지금 부하 0~ (1 = 꽉 참): 켜진 모듈 + 진행 중인 대응 (불 · 공기 구역 · 제안 · 확인).</summary>
     public float Load { get; private set; }
 
+    /// <summary>시험: 연산 부하를 이만큼 더 (단위).</summary>
+    public static float TestLoad;
+
     /// <summary>모듈 부하 + 위기 처리 부하 (단위).</summary>
     public float Demand()
     {
@@ -54,6 +57,7 @@ public sealed partial class AutomationSystem
         foreach (var m in _modules) if (!Suspended.Contains(m)) d += ModuleLoad(m);
         d += 2f * FireCases.Count + (ZoneActive ? 2f : 0f) + Asks.Open.Count() + Checks.Count * 0.5f;
         if (_planner is { Busy: true }) d += 0.5f; // v16.16 협상 중인 계획 (안건 · 제안)
+        d += TestLoad; // 시험: 연산을 더 얹는다
         if (_foresee != null) d += _foresee.Load; // v16.20 미리 돌려 보기 · 겹친 사고
         if (_triage is { Busy: true }) d += 1f; // v16.20 전력 트리아지
         d += 0.15f * _wireless; // v16.20 무선으로 읽는 방 (대역이 좁아 연산을 더 쓴다)

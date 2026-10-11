@@ -1314,13 +1314,21 @@ public partial class Hud : Control
                          + (seg.Radiator.Count > 0 ? $" · 방열판 {seg.RadiatorCondition * 100:0}%" : "") + (seg.Breaks > 0 ? $" · 터짐 {seg.Breaks}" : "");
             lines.Add((seg.Name, txt, seg.Leaking || seg.Severed ? Palette.Danger : bad ? Palette.Warning : Palette.TextDim));
         }
+        // v19 열: 드는 열 · 공조가 빼거나 넣는 열 · 냉방 전기 · 단열 (Thermal.cs)
+        if (room.Type != RoomType.Corridor && (room.HeatIn > 0.05f || MathF.Abs(room.HvacHeat) > 0.05f || room.Insulated))
+        {
+            string hv = room.HvacHeat > 0.05f ? $" · 공조가 {room.HvacHeat:0.0}kW 뺀다" + (room.HvacKw > 0.01f ? $" (냉방 전기 {room.HvacKw:0.00}kW)" : "")
+                      : room.HvacHeat < -0.05f ? $" · 공조가 {-room.HvacHeat:0.0}kW 덥힌다" : !Atmosphere.Vented(room) && room.HeatIn > 0.5f ? " · 식히지 못한다 (환기 끊김)" : "";
+            lines.Add(("열", $"드는 열 {room.HeatIn:0.0}kW{hv}" + (room.Insulated || _world.Cosmic.Insulated(room) ? " · 단열재 — 열이 덜 빠진다" : ""),
+                room.Air.Temperature > 32f ? Palette.Warning : Palette.TextDim));
+        }
         if (_world.Automation.ComputerBody is Furniture comp && comp.Room == room)
         {
             var au = _world.Automation;
             bool vent = au.Ventilated(room);
             string st = au.MainOnline ? "가동 · 자동화 켜짐" : $"정지 ({comp.Machine?.Faults.FirstOrDefault()?.Name ?? "전기 없음"})" + (au.BackupActive ? " · 예비 제어기" : "");
-            lines.Add((comp.Machine?.Grade == MachineGrade.Mk1 ? "임시 제어 컴퓨터" : "주 컴퓨터", $"{st} · {room.Air.Temperature:0}℃ · 환기 {(vent ? "됨" : "끊김")}",
-                !au.MainOnline || room.Air.Temperature > AutomationSystem.OverheatC - 4f ? Palette.Danger : !vent ? Palette.Warning : Palette.TextDim));
+            lines.Add((comp.Machine?.Grade == MachineGrade.Mk1 ? "임시 제어 컴퓨터" : "주 컴퓨터", $"{st} · 함 안 {au.Core.CoreC:0}℃ (방 {room.Air.Temperature:0}℃) · 환기 {(vent ? "됨" : "끊김")}",
+                !au.MainOnline || au.Core.CoreC > AutomationSystem.OverheatC - 4f ? Palette.Danger : !vent ? Palette.Warning : Palette.TextDim));
             if (room.DamperStuck) lines.Add(("댐퍼", "구동기가 걸렸다 — 손으로 풀어야 한다", Palette.Warning));
         }
         if (room.Type == RoomType.Cooling && _world.Piping.Built)

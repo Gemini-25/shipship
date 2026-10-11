@@ -84,7 +84,7 @@ public sealed partial class AftermathSystem
         {
             if (lm.Owner != c.Id || lm.ClaimedBy >= 0 && lm.ClaimedBy != c.Id || lm.Returned >= 0) continue;
             if (lm.Moved < 0 && w.Tick - lm.Asked < SimTime.Hours(12))
-                Consider(new AfterTask(AfterTaskKind.Lamp, shift ? 0.25f : 0.46f, "작업등 불빛이 눈부시다 — 선실의 등을 가져온다", lm));
+                Consider(new AfterTask(AfterTaskKind.Lamp, (shift ? 0.25f : 0.46f) + 0.2f * MathF.Min(1f, (w.Tick - lm.Asked) / (float)SimTime.Hours(6)), "작업등 불빛이 눈부시다 — 선실의 등을 가져온다", lm)); // 가져오겠다고 말해 놓고 미룰수록 마음에 걸린다 (0.46으로는 취미 · 꾸미는 일에 밀려 열두 시간을 넘겼다)
             else if (lm.Active && lm.WantBack && lm.Carrying < 0)
                 Consider(new AfterTask(AfterTaskKind.LampBack, (shift ? 0.18f : 0.36f) + (bed ? 0.3f : 0f) + (lm.LitAgain >= 0 ? 0.2f * MathF.Min(1f, (w.Tick - lm.LitAgain) / (float)SimTime.Hours(8)) : 0f), "조명이 돌아왔다 — 등을 선실로 가져간다", lm)); // 통합8 머리맡 등이 없는 밤이 길어질수록 마음에 걸린다 (0.36으로는 하루 반을 미뤘다)
         }

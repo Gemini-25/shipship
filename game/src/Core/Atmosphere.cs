@@ -10,7 +10,7 @@ namespace ShipSim.Core;
 /// 감압된 방을 다시 채우는 공기(질소)는 공기 탱크에서만 온다 — 반복된 파공은 탱크를 비운다.
 /// 수치는 게임용으로 실제보다 빠르게 잡았다.
 /// </summary>
-public sealed class Atmosphere
+public sealed partial class Atmosphere
 {
     /// <summary>승무원 한 명이 한 시간에 쓰는 산소 (kPa·칸). 30칸 방이면 시간당 0.5kPa.</summary>
     public const float BreathO2 = 14f;
@@ -244,18 +244,8 @@ public sealed class Atmosphere
             }
         }
 
-        // 6) 온도: 전기가 있으면 21℃로 조절, 없으면 서서히 식는다. 원자로·엔진은 열이 난다.
-        float reactorRatio = _world.Power.CoolingCapacity > 0.1f ? _world.Power.ReactorOutput / _world.Power.CoolingCapacity : 1f;
-        foreach (var r in ship.Rooms)
-        {
-            float target = r.Powered ? 21f : 6f;
-            if (r.Type == RoomType.Reactor) target += 6f + 20f * MathF.Max(0f, reactorRatio - 0.7f);
-            if (r.Type == RoomType.Engine) target += 3f;
-            target += _world.Automation.HeatFor(r); // v9.2: 주 컴퓨터 열 (환기가 끊기면 크게)
-            if (r.Type == RoomType.Galley && _world.Ship.FurnitureOf(FurnitureType.Stove).Any(s => s.Machine!.Active)) target += 3f;
-            float rate = r.Powered ? 1.2f : 0.12f;
-            r.Air.Temperature += (target - r.Air.Temperature) * (1f - MathF.Exp(-rate * dtHours));
-        }
+        // 6) 온도: v19 방마다 열 장부 (Thermal.cs) — 드는 열 · 선체로 빠지는 열 · 공조가 빼고 넣는 열
+        UpdateHeat(dtHours);
 
         // 7) 길찾기용 위험 비용
         foreach (var r in ship.Rooms) UpdateHazard(r);

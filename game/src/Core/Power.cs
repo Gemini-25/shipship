@@ -470,7 +470,7 @@ public sealed class PowerGrid
             int rc = _world.Failsafe.Feed(r, CircuitFed); // v16.19 두 갈래 급전: 주 회로가 죽으면 다른 회로로 저절로 넘어간다
             // 떨어져 나갔거나 사출 준비로 전력을 끊은 방은 전기가 없다
             if (!CircuitFed[rc] || r.Detached || r.PowerCut || r.BreakerOff || !r.PowerLinked) { r.Powered = false; continue; }
-            consumers.Add((8, RoomSystemsKw * ComputerV15.RoomKwMul(_world, r), rc, on => r.Powered = on)); // v15.9 전력 분배: 빈 방은 낮춘다
+            consumers.Add((8, RoomSystemsKw * ComputerV15.RoomKwMul(_world, r) + r.HvacKw, rc, on => r.Powered = on)); // v15.9 전력 분배: 빈 방은 낮춘다 · v19 냉방 전기 (Thermal.cs)
         }
         float parkedKw = 0f;
         foreach (var m in ship.Machines)

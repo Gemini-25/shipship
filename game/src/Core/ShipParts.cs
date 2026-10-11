@@ -168,6 +168,13 @@ public sealed class Room
     /// <summary>조명·환기팬에 전기가 들어오는지.</summary>
     public bool Powered { get; set; } = true;
 
+    /// <summary>v19 열: 이 방에 드는 열(사람 · 돌아가는 설비 · 주 컴퓨터, kW) · 공조가 빼는 열(+) / 넣는 열(−) · 그 냉방 전기(kW, 방 계통 전력에 얹힌다).</summary>
+    public float HeatIn { get; set; }
+    /// <summary>v19 임시 단열재를 붙였다 (선체로 빠지는 열이 1/3 — 추위는 막지만 기계 열은 갇힌다).</summary>
+    public bool Insulated { get; set; }
+    public float HvacHeat { get; set; }
+    public float HvacKw { get; set; }
+
     /// <summary>길찾기에서 이 방을 지나는 추가 비용 (공기·온도·어둠). 공기 시스템이 갱신.</summary>
     public int HazardCost { get; set; }
 

@@ -907,12 +907,16 @@ public static class StateSave
             return o;
         }
 
-        /// <summary>NotSaved 필드: 값 형식은 기본값, 빈 생성자가 있는 참조 형식(목록 · 사전)은 새로 — 다시 계산할 캐시.</summary>
+        /// <summary>NotSaved 필드: 값 형식은 기본값, 빈 생성자가 있는 참조 형식(목록 · 사전)은 새로, 1차원 배열은 빈 배열 — 다시 계산할 캐시 · 작업 칸.</summary>
         private static void Fresh(object o, Plan p)
         {
             foreach (var f in p.Skipped)
-                if (!f.FieldType.IsValueType && !f.FieldType.IsAbstract && !f.FieldType.IsInterface && f.FieldType.GetConstructor(Type.EmptyTypes) != null)
-                    f.SetValue(o, Activator.CreateInstance(f.FieldType));
+            {
+                var ft = f.FieldType;
+                if (ft.IsArray && ft.GetArrayRank() == 1) f.SetValue(o, Array.CreateInstance(ft.GetElementType()!, 0));
+                else if (!ft.IsValueType && !ft.IsAbstract && !ft.IsInterface && ft.GetConstructor(Type.EmptyTypes) != null)
+                    f.SetValue(o, Activator.CreateInstance(ft));
+            }
         }
 
         private static MethodInfo? FindMethod(Type decl, string name, Type[] ps, Type[] ga)

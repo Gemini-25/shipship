@@ -83,7 +83,7 @@ public sealed class ComputerForesight
             "물 — 아끼기 (빨래 · 샤워 줄임 · 회의 안건)", ""),
         new("o2", "산소 (믿는 값)", "%", AvgO2, w => 18.5f, w => float.MaxValue, 0.6f,
             "산소 — 공기 구역 · 산소 발생기 점검", ""),
-        new("heat", "컴퓨터 온도", "℃", w => w.Automation.ComputerBody?.Room.Air.Temperature, w => float.MinValue, w => AutomationSystem.OverheatC - 2f, 1.5f,
+        new("heat", "컴퓨터 온도", "℃", w => w.Automation.ComputerBody != null ? w.Automation.Core.CoreC : null, w => float.MinValue, w => AutomationSystem.OverheatC - 2f, 1.5f,
             "", "컴퓨터 열 — 급하지 않은 일부터 쉰다"),
         new("rest", "평균 기력", "", AvgRest, w => 0.25f, w => float.MaxValue, 0.08f,
             "기력 — 당번을 줄이고 재운다 (피로 경보)", ""),

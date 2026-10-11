@@ -163,6 +163,26 @@ public static partial class Program
         return 0;
     }
 
+    /// <summary>v19 열: 배마다 몇 시간 돌려 방 온도 · 공조 열 · 냉방 전기 · 전력 수요를 본다.</summary>
+    private static int RunHeatProbe(int seed, int hours, string? only)
+    {
+        foreach (var t in ShipCatalog.All.Where(t => only == null || t.Key == only))
+        {
+            var w = World.CreateDefault(seed, 0, t.Key);
+            Run(w, SimTime.Hours(hours));
+            var live = w.Ship.LiveRooms.Where(r => r.Type != RoomType.Corridor).ToList();
+            var hot = live.OrderByDescending(r => r.Air.Temperature).First();
+            var cold = live.OrderBy(r => r.Air.Temperature).First();
+            var comp = w.Automation.ComputerBody?.Room;
+            if (Environment.GetEnvironmentVariable("HEAT_ROOMS") == "1")
+                foreach (var r in w.Ship.LiveRooms.OrderBy(r => r.Air.Temperature))
+                    Console.WriteLine($"    {r.Name,-10} {r.Type,-12} {r.Air.Temperature,5:0.0}℃ · 부피 {r.Volume,3} · 드는 열 {r.HeatIn:0.00} · 공조 {r.HvacHeat:0.00} · 환기 {Atmosphere.Vented(r)} · 전기 {r.Powered} · 외벽 {w.Air.HullConductance(r):0.000} · 사람 {w.Crew.Count(c => !c.Dead && c.Room == r)}");
+            Console.WriteLine($"{w.Ship.Name,-6} 방 {live.Count} · 평균 {live.Average(r => r.Air.Temperature):0.0}℃ · 가장 더운 {hot.Name} {hot.Air.Temperature:0.0} · 가장 찬 {cold.Name} {cold.Air.Temperature:0.0}"
+                + $" · 컴퓨터실 {comp?.Air.Temperature:0.0} · 냉방 {w.Air.CoolingKw:0.0}kW(전기 {w.Air.HvacElectricKw:0.0} · 버림 {w.Air.RejectKw:0.0}) · 난방 {w.Air.HeatingKw:0.0} · 전력 수요 {w.Power.Demand:0.0}/원자로 {w.Power.ReactorLimit:0.0} · 끈 것 {w.Power.ShedCount}");
+        }
+        return 0;
+    }
+
     private static (float used, float drained, float returned, float processed, float spilled) Snap(WaterLoopStats l) => (l.Used, l.Drained, l.Returned, l.Processed, l.Spilled);
 
     private static float Recyclers(World w) => w.Ship.FurnitureOf(FurnitureType.WaterRecycler).Select(f => f.Machine!.Efficiency).DefaultIfEmpty(0f).Average();
