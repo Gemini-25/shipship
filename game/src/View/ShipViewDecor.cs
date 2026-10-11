@@ -67,18 +67,18 @@ public partial class ShipView
                 // 문 옆: 번호판 (한 번) · 소화기
                 if (nearDoor)
                 {
-                    if (!signDone && room.Type != RoomType.Corridor) { DrawProp(ci, Prop.Sign, w, inward, room); signDone = true; }
-                    else if (H3(w.X, w.Y, 3) < 0.5f) DrawProp(ci, Prop.Extinguisher, w, inward, room);
+                    if (!signDone && room.Type != RoomType.Corridor) { PropAt(ci, Prop.Sign, w, inward, room); signDone = true; }
+                    else if (H3(w.X, w.Y, 3) < 0.5f) PropAt(ci, Prop.Extinguisher, w, inward, room);
                     continue;
                 }
                 float h = H3(w.X, w.Y, (int)room.Type);
                 if (room.Type == RoomType.Corridor)
                 {
-                    if ((w.X + w.Y) % 9 == 0 && d.Y != 0) DrawProp(ci, h < 0.5f ? Prop.Vent : Prop.Panel, w, inward, room);
+                    if ((w.X + w.Y) % 9 == 0 && d.Y != 0) PropAt(ci, h < 0.5f ? Prop.Vent : Prop.Panel, w, inward, room);
                     continue;
                 }
                 if (h > 0.3f) continue;
-                DrawProp(ci, props[(int)(H3(w.X, w.Y, 11) * props.Length) % props.Length], w, inward, room);
+                PropAt(ci, props[(int)(H3(w.X, w.Y, 11) * props.Length) % props.Length], w, inward, room);
             }
         }
     }
@@ -253,6 +253,7 @@ public partial class ShipView
     /// <summary>바닥 꾸밈: 원자로 경고 띠, 바닥 격자, 배수구, 깔개, 통로 구역 표시.</summary>
     private void PaintFloorDecor(CanvasItem ci)
     {
+        if (PaintDotFloorDecor(ci)) return; // 도트 (ShipViewDotProps)
         var ship = _world.Ship;
         var g = ship.Grid;
         foreach (var room in ship.Rooms)

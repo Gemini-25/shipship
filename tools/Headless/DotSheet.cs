@@ -49,6 +49,7 @@ public static class DotSheet
             "parts" => Parts(),
             "bots" => Bots(),
             "tiles" => Tiles(),
+            "props" => Props(),
             "fixtures" => Fixtures(Arg(args, "--dotstate=") ?? "on"),
             _ => People(),
         };
@@ -153,6 +154,33 @@ public static class DotSheet
             img.Fill(x, y + DotMachines.RiseOf(t), w * 32, h * 32, Rgba.Hex("#3a404b"));
             img.Draw(body, x, y); img.Draw(life, x, y);
         }
+        return img;
+    }
+
+    // ───────────────────────────── 벽 소품 · 바닥 꾸밈 ─────────────────────────────
+
+    private static Img Props()
+    {
+        var props = (DotProp[])Enum.GetValues(typeof(DotProp));
+        var img = new Img(props.Length * 40 + 8, 210);
+        img.Fill(0, 0, img.W, img.H, Rgba.Hex("#2a2f38"));
+        for (int i = 0; i < props.Length; i++)
+        {
+            int x = 4 + i * 40;
+            // 앞면: 벽 앞면 띠(10줄) 위에
+            img.Fill(x, 4, 32, 10, Rgba.Hex("#3a4250"));
+            img.Draw(DotProps.Wall(props[i], PropSide.Face, Ramps.ClothTeal, Ramps.Leaf, i, "MS-12"), x, 4);
+            // 옆 · 뒤
+            img.Fill(x, 34, 6, 32, Rgba.Hex("#151a22"));
+            img.Draw(DotProps.Wall(props[i], PropSide.Side, Ramps.ClothTeal, Ramps.Cyan, i), x + 6, 38);
+            img.Fill(x, 72, 32, 6, Rgba.Hex("#151a22"));
+            img.Draw(DotProps.Wall(props[i], PropSide.Back, Ramps.ClothTeal, Ramps.Cyan, i), x + 4, 68);
+        }
+        img.Draw(DotProps.Grate(), 4, 90);
+        img.Draw(DotProps.Drain(), 30, 94);
+        img.Draw(DotProps.Rug(120, 70, Ramps.ClothBrown, 3), 50, 90);
+        img.Draw(DotProps.Rug(36, 10, Ramps.ClothRed, 5), 180, 90);
+        img.Draw(DotProps.HazardFrame(110, 100, 5), 230, 90);
         return img;
     }
 
