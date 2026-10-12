@@ -888,6 +888,7 @@ public partial class ShipView : Node2D
         PaintAfterOver(ci); // v17.5 악몽에 뒤척임 · 놀라 깸 · 안고 가는 침구 · 들고 가는 등
         PaintSounds(ci); // v17.2 소리 표시 (발소리 · 베어링 · 팬 · 물방울 · 삐걱 · 무전 · 흥얼 …) · 문 너머로 넘는 소리
         PaintComputerTop(ci, mode); // v16.6 선내 방송 말풍선 · 컴퓨터가 보는 배
+        PaintComputerOverlay(ci); // v20 관제를 배 위에 (명령선 · 못 보는 방 · 잘못 아는 방) · 기다리는 제안 말풍선
         PaintDrones(ci);
         PaintIncoming(ci);
         PaintImpacts(ci);

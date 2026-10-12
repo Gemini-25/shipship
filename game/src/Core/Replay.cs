@@ -142,6 +142,37 @@ public static class Player
         return w.Cosmic.Force(kind, leadHours, source: "관찰자");
     }
 
+    /// <summary>v20 관제: 관찰자가 함장 대신 컴퓨터 제안을 받거나 거절한다 (기록되어 불러오기가 같은 틱에 같은 결정을). 기다리는 제안이 아니면 false.</summary>
+    public static bool Ask(World w, int id, bool accept)
+    {
+        var p = w.Automation.Asks.All.FirstOrDefault(q => q.Id == id && q.State == ProposalState.Pending);
+        if (p == null) return false;
+        Record(w, "ask", $"{id.ToString(Inv)} {(accept ? 1 : 0)}");
+        w.Automation.Asks.Decide(p, accept, "관찰자");
+        return true;
+    }
+
+    /// <summary>v20 관제: 컴퓨터 권한을 정한다 (갈래마다 조언만 · 제안 · 자동 실행 — 회의도 바꿀 수 있다).</summary>
+    public static void Authority(World w, Domain d, AuthLevel to)
+    {
+        Record(w, "auth", $"{d} {((int)to).ToString(Inv)}");
+        w.Automation.Authority.Set(d, to, "관찰자가 정했다");
+    }
+
+    /// <summary>v20 관제: 컴퓨터가 맡은 일을 켜거나 끈다 (끄면 그 일은 사람이 한다).</summary>
+    public static void Duty(World w, ComputerModule m, bool on)
+    {
+        var a = w.Automation;
+        if (a.Has(m) == on) return;
+        Record(w, "duty", $"{m} {(on ? 1 : 0)}");
+        if (on) a.Install(m, "관찰자가 다시 맡겼다");
+        else
+        {
+            a.Remove(m);
+            w.History.Add(w, HistoryKind.Decision, $"관찰자가 주 컴퓨터에게서 {Ko.EulReul(AutomationSystem.ModuleName(m))} 거뒀다 — 이제 사람이 한다", null, log: true);
+        }
+    }
+
     /// <summary>불러올 때: 기록된 일을 그대로 다시 한다 (다시 기록도 된다 → 불러온 뒤 또 저장할 수 있다).</summary>
     public static void Apply(World w, PlayerCommand cmd)
     {
@@ -194,6 +225,15 @@ public static class Player
                 break;
             case "policy":
                 Policy(w, a[0], int.Parse(a[1], Inv));
+                break;
+            case "ask":
+                Ask(w, int.Parse(a[0], Inv), a[1] == "1");
+                break;
+            case "auth":
+                Authority(w, Enum.Parse<Domain>(a[0]), (AuthLevel)int.Parse(a[1], Inv));
+                break;
+            case "duty":
+                Duty(w, Enum.Parse<ComputerModule>(a[0]), a[1] == "1");
                 break;
             default:
                 throw new FormatException($"모르는 기록: {cmd}");
@@ -538,6 +578,10 @@ public sealed class ReplayRunner
             "scarcity" or "death" => true,
             "hazard" => a.Length >= 3 && Enum.TryParse<HazardKind>(a[0], out _) && int.TryParse(a[1], NumberStyles.Integer, inv, out _)
                         && int.TryParse(a[2], NumberStyles.Integer, inv, out _) && (a.Length < 4 || int.TryParse(a[3], NumberStyles.Integer, inv, out _)),
+            "cosmic" => a.Length >= 2 && Enum.TryParse<CosmicKind>(a[0], out _) && float.TryParse(a[1], NumberStyles.Float, inv, out _), // v19 우주급 재난
+            "ask" => a.Length >= 2 && int.TryParse(a[0], NumberStyles.Integer, inv, out _) && a[1] is "0" or "1", // v20 관제: 제안 받기 · 거절
+            "auth" => a.Length >= 2 && Enum.TryParse<Domain>(a[0], out _) && int.TryParse(a[1], NumberStyles.Integer, inv, out var lv) && lv is >= 0 and <= 2, // v20 권한
+            "duty" => a.Length >= 2 && Enum.TryParse<ComputerModule>(a[0], out _) && a[1] is "0" or "1", // v20 맡은 일
             _ => false,
         };
         if (!ok) throw new FormatException($"다시 할 수 없는 기록이다: {c}");

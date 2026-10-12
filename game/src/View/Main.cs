@@ -1045,6 +1045,7 @@ public partial class Main : Node2D
                     if (tab == DockTab.None) break;
                     Hud.OpenDock(tab, ob.Length > 1 ? int.Parse(ob[1], CultureInfo.InvariantCulture) : 0);
                     if (tab == DockTab.Computer && ob.Length > 2) Hud.ControlTab = int.Parse(ob[2], CultureInfo.InvariantCulture);
+                    if (tab == DockTab.Computer && ob.Length > 3) Hud.ControlSub = int.Parse(ob[3], CultureInfo.InvariantCulture);
                     break;
                 }
                 case "--blast":
@@ -1154,6 +1155,14 @@ public partial class Main : Node2D
                     _screenshotPath = value;
                     if (_screenshotFrames < 0) _screenshotFrames = 30;
                     break;
+                case "--propose":
+                {
+                    // 화면 확인용 (v20 관제): --propose=방 종류 — 그 방에 급하지 않은 점검 제안을 하나 올린다 (기록되지 않는 화면 시험)
+                    var prt = Enum.TryParse<RoomType>(value, out var pr0) ? pr0 : RoomType.Storage;
+                    if (Sim.Ship.RoomsOf(prt).FirstOrDefault() is Room pr)
+                        Sim.Automation.Asks.Propose("shot:" + pr.Id, "check", pr, $"{pr.Name} 환기 댐퍼 점검", "공기 흐름이 어제보다 12% 약하다", "막힌 곳을 미리 찾는다", 90f, null);
+                    break;
+                }
                 case "--blastage":
                     ShipView.ShotBlastAge = float.Parse(value, CultureInfo.InvariantCulture);
                     break;
