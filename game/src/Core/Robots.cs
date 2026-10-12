@@ -218,23 +218,32 @@ internal sealed class RWork : RobotStep
     internal float Hours => _hours;
     /// <summary>v21 함께 채우는 일 (같이 하기).</summary>
     internal WorkOrder? Shared => _shared;
-    public override float? Progress => _shared != null ? _shared.Progress : _needed > 0 ? _done / _needed : 0f;
+    /// <summary>v22 함께 채우지 않는 일도 손일 단계가 하나뿐이면 진척을 그 일에 남긴다 (끊겨도 다음 로봇 · 사람이 잇는다).</summary>
+    private WorkOrder? _auto;
+    private WorkOrder? Track => _shared ?? _auto;
+    public override float? Progress => Track != null ? Track.Progress : _needed > 0 ? _done / _needed : 0f;
 
     public override void Begin(Robot r, World w)
     {
         _needed = SimTime.Hours(_hours) * RobotsV21.WorkMul(r, r.Order) * w.Fleet.Work * RobotBody.WorkMul(r); // v22 팔 · 도구 · 센서 · 제어기 // v16.20b 공구 등급 · v21 특기 · 개량 단계 · 숙련
         if (_face is Vector2 f && (f - r.Position).LengthSquared() > 0.0001f) r.Facing = Vector2.Normalize(f - r.Position);
+        _auto = null;
+        if (_shared == null && WorkToil.AutoResume && _hours >= 0.1f && r.Order is WorkOrder o && !o.Closed && r.Steps != null && r.Steps.Count(x => x is RWork) == 1)
+        {
+            _auto = o;
+            if (o.Progress >= 0.999f) o.Progress = 0f; // 지난번에 다 채운 채 남은 진척 (되풀이하는 일)
+        }
     }
 
     public override ToilStatus Tick(Robot r, World w)
     {
         if (CanContinue != null && !CanContinue(r, w)) return ToilStatus.Failed;
-        // 사람과 같은 일을 하면 진척을 함께 쓴다 (누가 먼저 끝내든 한 번만 끝난다)
-        if (_shared != null)
+        // 사람과 같은 일을 하면 진척을 함께 쓴다 (누가 먼저 끝내든 한 번만 끝난다) · v22 끊긴 일은 남은 데서부터
+        if (Track is WorkOrder tr)
         {
-            if (_shared.Closed) return ToilStatus.Failed;
-            _shared.Progress = MathF.Min(1f, _shared.Progress + 1f / MathF.Max(1f, _needed));
-            return _shared.Progress >= 1f ? ToilStatus.Succeeded : ToilStatus.Running;
+            if (tr.Closed) return ToilStatus.Failed;
+            tr.Progress = MathF.Min(1f, tr.Progress + 1f / MathF.Max(1f, _needed));
+            return tr.Progress >= 1f ? ToilStatus.Succeeded : ToilStatus.Running;
         }
         _done += 1f;
         return _done >= _needed ? ToilStatus.Succeeded : ToilStatus.Running;

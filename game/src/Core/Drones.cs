@@ -353,6 +353,7 @@ public sealed partial class DroneSystem
                     d.Battery = MathF.Max(0f, d.Battery - Drain(d.Kind) * 0.8f * Durability.DroneDrain * w.Fleet.DroneDrain * hour);
                     d.FlightHours += hour;
                     d.WorkDone += hour * d.Quirk.Work; // v12.5 버릇
+                    if (WorkToil.AutoResume && d.Errand == DroneErrand.None && d.Order is WorkOrder wo && d.WorkNeeded > 0f) wo.Progress = MathF.Min(0.999f, d.WorkDone / d.WorkNeeded); // v22 끊겨도 남는다
                     if (d.WorkDone >= d.WorkNeeded) FinishWork(d);
                     else if (d.Battery <= 0f) Strand(d, "일하다 배터리가 바닥났다");
                     break;
@@ -736,6 +737,11 @@ public sealed partial class DroneSystem
                 d.WorkDone = 0f;
                 d.WorkNeeded = d.Errand == DroneErrand.Guard ? GuardHours(d) : d.Errand != DroneErrand.None ? DronesV21.ErrandHours(d) : d.Order != null ? WorkHours(d.Order.Kind) * RobotsV15.Work(d.Kind) * w.Fleet.Work * (d.Order.Kind == WorkKind.SealBreach ? SealSlow(d.Kind) : 1f) * (RobotsV21.General && !Special(d.Kind, d.Order.Kind) ? 1.4f : 1f) : d.HullCare != null ? WorkHours(WorkKind.RepairHull) * RobotsV15.Work(d.Kind) * w.Fleet.Work : 0.1f; // v15.7 손이 빠른 드론 · v16.20b 공구 등급 · 외벽 순찰 용접
                 FleetCarry(d); // v16.20b 교대: 앞 드론이 한 만큼 이어서
+                if (WorkToil.AutoResume && d.Errand == DroneErrand.None && d.Order is WorkOrder ro) // v22 끊긴 일은 작업 목록에 남은 데서부터
+                {
+                    if (ro.Progress >= 0.999f) ro.Progress = 0f;
+                    d.WorkDone = MathF.Max(d.WorkDone, d.WorkNeeded * MathF.Min(ro.Progress, 0.95f));
+                }
                 return;
             case DroneState.Towing:
                 if (d.Towing is Fragment f)

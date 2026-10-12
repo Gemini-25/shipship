@@ -165,6 +165,14 @@ public sealed class WorkToil : Toil
         _face = face;
     }
 
+    /// <summary>
+    /// v22 Resume 없이 만든 단계도, 작업 목록의 일 하나에 손일 단계가 하나뿐이면 진척을 그 일에 남긴다
+    /// (끼니 · 잠 · 사고로 끊겨도 다음 사람 · 로봇이 그 자리부터 잇는다). 끝나면 0으로 돌려 되풀이하는 일이 공짜로 끝나지 않게 한다.
+    /// </summary>
+    public static bool AutoResume = true;
+    private WorkOrder? _auto;
+    private WorkOrder? Track => Resume ?? _auto;
+
     public override float? Progress => _needed > 0 ? _done / _needed : 0f;
 
     public override void Begin(CrewMember c, World w)
@@ -173,7 +181,15 @@ public sealed class WorkToil : Toil
         Locomotion.Face(c, _face);
         float skill = c.SkillLevel(_skill);
         _needed = SimTime.Hours(_baseHours) * (1.6f - 0.8f * skill);
-        if (Resume != null) _done = Resume.Progress * _needed;
+        _auto = null;
+        if (Resume == null && AutoResume && _baseHours >= 0.1f && c.Job is Job j && j.Order is WorkOrder o && !o.Closed && j.Toils.Count(t => t is WorkToil) == 1)
+        {
+            _auto = o;
+            if (o.Progress >= 0.999f) o.Progress = 0f; // 지난번에 다 채운 채 남은 진척 (되풀이하는 일)
+        }
+        if (Track is WorkOrder t0 && t0.Progress > 0.01f && t0.Progress < 0.999f)
+            w.Log.Add(w.Tick, LogKind.Work, $"{t0.Title} — {t0.Progress * 100:0}%까지 된 데서 잇는다", c.Id);
+        if (Track != null) _done = Track.Progress * _needed;
         OnBegin?.Invoke(c, w);
     }
 
@@ -201,19 +217,25 @@ public sealed class WorkToil : Toil
         // v10.10: 정비 로봇이 옆에서 거들면 (부품을 잡아 주고 공구를 건넨다) 빨라진다
         float co = w.Coop.WorkMul(c, Resume, _face); if (co < 0f) return ToilStatus.Failed; speed *= co; // v17.4 예약 · 옆 설비 · 펼치기 · 짝 기다림 · 이어 함 · 헷갈림 · 혼자
         if (c.Helper is Robot helper && helper.Helping == c && (helper.Position - c.Position).LengthSquared() < 2.7f * 2.7f) speed *= 1f + RobotsV15.AssistBonus(helper.Kind); // v15.7 조수 로봇은 더 거든다
-        if (Resume != null && _needed > 0)
+        if (Track is WorkOrder tr && _needed > 0)
         {
             // 로봇과 같은 일을 하면 진척을 함께 쓴다 (누가 먼저 채우든 한 번만 끝난다)
-            if (Resume.Closed) return ToilStatus.Succeeded;
-            Resume.Progress = MathF.Min(1f, Resume.Progress + speed / _needed);
-            _done = Resume.Progress * _needed;
-            return Resume.Progress >= 1f ? ToilStatus.Succeeded : ToilStatus.Running;
+            if (tr.Closed) return ToilStatus.Succeeded;
+            tr.Progress = MathF.Min(1f, tr.Progress + speed / _needed);
+            _done = tr.Progress * _needed;
+            return tr.Progress >= 1f ? ToilStatus.Succeeded : ToilStatus.Running;
         }
         _done += speed;
         return _done >= _needed ? ToilStatus.Succeeded : ToilStatus.Running;
     }
 
-    public override void End(CrewMember c, World w) { OnEnd?.Invoke(c, w); w.Coop.WorkEnded(c, Progress >= 0.999f); } // v17.4 다 했나 · 끊겼나 (작업장이 남는다)
+    public override void End(CrewMember c, World w)
+    {
+        OnEnd?.Invoke(c, w);
+        bool done = Progress >= 0.999f;
+        if (done && _auto != null) _auto.Progress = 0f; // v22 다 했으면 되돌린다 (되풀이하는 일은 다음 번에 처음부터)
+        w.Coop.WorkEnded(c, done); // v17.4 다 했나 · 끊겼나 (작업장이 남는다)
+    }
 }
 
 /// <summary>보관함에서 물건을 꺼내 손에 든다.</summary>
