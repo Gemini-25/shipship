@@ -84,6 +84,9 @@ public sealed class World
     /// <summary>v10.10 선내 로봇: 운반·정비·재배·방재. 멈추면 그 일은 사람에게 돌아간다.</summary>
     public RobotSystem Robots { get; }
 
+    /// <summary>v23 주컴퓨터 사고 지휘관: 사고마다 지휘 건 — 동원 · 증원 · 확인 · 닫기 (주 코어가 멎으면 사람에게 넘긴다).</summary>
+    public IncidentCommander Commander { get; }
+
     /// <summary>v11.2 엔진·추진제·항로: 회피 기동, 보통 항로 ↔ 잔해 지대.</summary>
     public PropulsionSystem Propulsion { get; }
 
@@ -287,6 +290,7 @@ public sealed class World
         Structure = new StructureSystem(this);
         Drones = new DroneSystem(this);
         Robots = new RobotSystem(this);
+        Commander = new IncidentCommander(this);
         Propulsion = new PropulsionSystem(this, 1f);
         Hazards = new HazardSystem(this, seed);
         Comms = new CommsSystem(this);
@@ -618,6 +622,7 @@ public sealed class World
         ps = Prof.Lap("step.Board", ps);
         Drones.Step();
         Robots.Step();
+        Commander.Tick(); // v23 사고 지휘관
         EvaRisk.Step(); // v16.11 표류하는 몸 · 떠다니는 공구와 잔해
         Prof.Lap("step.drones·robots", ps);
 

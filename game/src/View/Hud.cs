@@ -122,7 +122,10 @@ public partial class Hud : Control
         else if (_main.SelectedRobot is Robot robot) DrawRobotInspector(robot, y, room);
         else if (_main.SelectedFurniture is Furniture f) { if (!DrawFurnitureCodex(f, y, room, mouse)) DrawMachineInspector(f, y, room, mouse); }
         else if (_main.SelectedRoom is Room r) { if (!DrawRoomCodex(r, y, room, mouse)) DrawRoomInspector(r, y, mouse); }
+        else if (CommandOpen && DrawCommandCard(y, room, true, mouse) > 0f) { } // v23 지휘 카드 (긴급 작업 목록 대신)
         else if (UrgentWork) DrawWorkBoard(y, room, mouse);
+        if ((_main.SelectedCrew != null || _main.SelectedRobot != null || _main.SelectedFurniture != null || _main.SelectedRoom != null) && CommandOpen && !_plan.Side.Empty)
+            DrawCommandCard(_plan.Side.Y + _plan.Side.H + UiLayout.Gap, SideBottom - (_plan.Side.Y + _plan.Side.H + UiLayout.Gap), false, mouse); // 고른 카드 아래 짧게
         FrameProbe.Add("hud.crew", _hp); _hp = FrameProbe.Now;
 
         // ③ 사고 · 경보 카드

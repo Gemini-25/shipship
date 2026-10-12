@@ -414,7 +414,7 @@ public sealed partial class MotionSystem
         var w = _w;
         void Rule(string id, int to, MotionKind kind, SittingKind sitting, float s, string title, string why)
         {
-            if (w.Policies[id] == to || Pending(id)) return;
+            if (PolicySystem.IsFixed(id) || w.Policies[id] == to || Pending(id)) return; // v23 주컴퓨터 전권은 안건이 되지 않는다
             long set = w.Policies.SetAt(id);
             if (set >= 0 && w.Tick - set < SimTime.TicksPerDay * (kind == MotionKind.Crisis ? 1 : 3)) return; // 정한 지 사흘도 안 됐다 (급한 일은 하루)
             consider(s, () => Propose(c, kind, sitting, title, why, id, to));

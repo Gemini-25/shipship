@@ -430,10 +430,10 @@ public sealed partial class RobotSystem
     /// <summary>강화: 급한 일(0.9 이상)을 맡은 로봇 — 주 컴퓨터가 잠긴 격벽을 잠깐 열어 준다 (양쪽 방이 새지 않을 때).</summary>
     public static readonly PathProfile UrgentProfile = Profile with { Responder = true };
     private static bool Rushes(World w, WorkOrder? o) => o is { Urgency: >= 0.9f } && w.Automation.Present && w.Automation.MainOnline && !FleetSystem.Off;
-    private static PathProfile ProfileOf(Robot r, World w) => Rushes(w, r.Order) ? UrgentProfile : Profile;
+    private static PathProfile ProfileOf(Robot r, World w) => Rushes(w, r.Order) || Enlisted(w, r) ? UrgentProfile : Profile; // v23 지휘 건에 묶인 로봇도 급한 길로
     /// <summary>주 컴퓨터가 이 로봇에게 잠긴 격벽을 열어 주나 (용접 · 새는 방 · 버린 구획은 안 연다 — 봉쇄가 풀린 게 아니다).</summary>
     private static bool ComputerOpens(Robot r, Door d, World w) =>
-        Rushes(w, r.Order) && !d.Welded && d.RoomA is Room a && d.RoomB is Room b && !a.Leaking && !b.Leaking && !a.Abandoned && !b.Abandoned && !a.Detached && !b.Detached;
+        (Rushes(w, r.Order) || Enlisted(w, r)) && !d.Welded && d.RoomA is Room a && d.RoomB is Room b && !a.Leaking && !b.Leaking && !a.Abandoned && !b.Abandoned && !a.Detached && !b.Detached;
 
     internal World World => _world;
 
@@ -638,7 +638,7 @@ public sealed partial class RobotSystem
     {
         var path = r.Path;
         if (path == null) return true;
-        float budget = Speed(r.Kind) * r.Quirk.Speed * (r.Fault == null && r.Battery > 0.02f ? 1f : 0.5f) * w.Fleet.Speed(r) * RobotsV21.SpeedMul(r) * RobotBody.SpeedMul(r); // v22 상한 구동부는 절뚝인다 // v21 개량 단계 // v16.20b 단계 · 아껴 쓰기 · 같이 들기
+        float budget = Speed(r.Kind) * r.Quirk.Speed * (r.Fault == null && r.Battery > 0.02f ? 1f : 0.5f) * w.Fleet.Speed(r) * RobotsV21.SpeedMul(r) * RobotBody.SpeedMul(r) * Sprint(w, r); // v23 지휘 건이면 뛴다 // v22 상한 구동부는 절뚝인다 // v21 개량 단계 // v16.20b 단계 · 아껴 쓰기 · 같이 들기
         bool repathed = false;
         while (budget > 0f && r.PathIndex < path.Count)
         {
@@ -737,7 +737,7 @@ public sealed partial class RobotSystem
                     bool working = r.Steps != null && r.StepIndex < r.Steps.Count && r.Steps[r.StepIndex] is RWork or RAssist or RSpray;
                     bool moving = r.Path != null;
                     float drain = r.Steps != null && r.StepIndex < r.Steps.Count && r.Steps[r.StepIndex] is RSpray ? DrainSpray
-                        : moving ? DrainMove : working ? DrainWork : DrainIdle;
+                        : moving ? DrainMove * (Sprint(w, r) > 1f ? 2.2f : 1f) : working ? DrainWork : DrainIdle; // v23 뛰면 전지를 두 배 넘게
                     r.Battery = Math.Clamp(r.Battery - drain * RobotsV15.Drain(r.Kind) * Durability.RobotDrain * w.Fleet.Drain(r) * RobotBody.DrainMul(r) * dt + ReactorRate(r) * dt, 0f, MaxCharge(r)); // v21 원자로가 내장 전지를 채운다 // v15.7 배터리 크기 · v16.19 큰 셀 · v16.20b 셀 등급 · 아껴 쓰기
                     r.ActiveHours += dt;
                     r.Condition = MathF.Max(0f, r.Condition - (working || moving ? 0.008f : 0.002f) * Durability.RobotWear * dt);
@@ -1281,10 +1281,19 @@ public sealed partial class RobotSystem
     private void GoHome(Robot r, string? why)
     {
         var w = _world;
+        if (r.State == RobotState.Active && why == null && r.CaseId >= 0 && r.Battery > 0.2f) // v23 지휘 건 로봇은 그 자리에서 다음 지시를 기다린다
+        {
+            r.Steps = new List<RobotStep> { new RWait(SimTime.Minutes(1)) };
+            r.StepIndex = 0;
+            r.Doing = $"지휘 건 #{r.CaseId} — 다음 지시를 기다린다";
+            r.Steps[0].Begin(r, w);
+            return;
+        }
+        if (r.State == RobotState.Active && why == null && GoPost(r)) return; // v23 할 일이 없으면 거점에서 기다린다
         if (r.AtDock || r.State != RobotState.Active) return;
         var spots = r.Dock.UseSpots.Where(s => w.Ship.IsWalkable(s)).ToList();
         if (spots.Count == 0) spots = r.Dock.Cells.SelectMany(c => Cell.Dirs4.Select(d => c + d)).Where(w.Ship.IsWalkable).ToList();
-        var dist = w.Paths.Flood(r.Cell, Profile);
+        var dist = w.Paths.Flood(r.Cell, ProfileOf(r, w)); // v23 지휘 건 뒤에는 봉쇄된 방에서 나오는 길도
         var spot = spots.Where(s => dist.Reachable(s)).OrderBy(s => dist.Get(s)).Cast<Cell?>().FirstOrDefault();
         if (spot is not Cell at)
         {

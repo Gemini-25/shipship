@@ -236,9 +236,18 @@ public sealed class PolicySystem
         foreach (var p in All) _value[p.Id] = p.Default;
     }
 
+    /// <summary>
+    /// v23 주컴퓨터 전권 고정: 자동 실행은 "전부" · 묻지 않고 "바로 실행" — 회의 · 화면 · 시험 어디서도 바꿀 수 없다.
+    /// 주컴퓨터가 멎거나 부서지면 그때 사람이 지휘한다 (권한 쪽에서 판단 — ComputerAuthority.Level).
+    /// </summary>
+    public static readonly Dictionary<string, int> ComputerFixed = new() { ["autoscope"] = 2, ["computerask"] = 0 };
+    /// <summary>시험: 끄면 예전처럼 회의가 정한다.</summary>
+    public static bool FixedControl = true;
+    public static bool IsFixed(string id) => FixedControl && ComputerFixed.ContainsKey(id);
+
     public int this[string id]
     {
-        get => _value.TryGetValue(id, out var v) ? v : Spec(id).Default;
+        get => IsFixed(id) ? ComputerFixed[id] : _value.TryGetValue(id, out var v) ? v : Spec(id).Default;
     }
 
     public string Option(string id) => Spec(id).Options[Math.Clamp(this[id], 0, Spec(id).Options.Length - 1)];
@@ -246,6 +255,7 @@ public sealed class PolicySystem
     /// <summary>방침을 바꾼다 (회의·시험). 바뀐 이력이 남는다.</summary>
     public void Set(string id, int value, string why = "", int yes = 0, int no = 0)
     {
+        if (IsFixed(id)) return; // v23 주컴퓨터 전권은 고정
         var spec = Spec(id);
         value = Math.Clamp(value, 0, spec.Options.Length - 1);
         int from = this[id];

@@ -734,7 +734,7 @@ public sealed class MeetingSystem
     /// <summary>시험·사고 기록: 사후 검토를 손으로 올린다.</summary>
     public void QueueReview(string id, int to, string why)
     {
-        if (Reviews.Any(r => r.id == id)) return;
+        if (PolicySystem.IsFixed(id) || Reviews.Any(r => r.id == id)) return; // v23 주컴퓨터 전권은 회의에 올리지 않는다
         Reviews.Add((id, to, why));
     }
 

@@ -256,6 +256,7 @@ public sealed partial class RobotSystem
         {
             _v21Minute = w.Tick + SimTime.Minutes(1);
             BodyMinute(); // v22 폭발 · 파편 · 물 · 진공 · 열 · 추위 · 방사선이 부위를 깎는다
+            SprintWear(); // v23 지휘 건으로 뛴 구동부
             SalvageTick(); // v22 잔해 회수 · 해체 · 뜯어 살리기 · 새 몸 조립 (5분마다)
             DraftTick();
             CallSpecialists();
@@ -483,13 +484,14 @@ public sealed partial class RobotSystem
         var a = w.Automation;
         // 끝난 지정은 푼다
         foreach (var r in Robots)
-            if (r.Draft != DraftKind.None && (!r.Drafted(w) || !CrisisLasts(r.Draft, r.DraftRoom)))
+            if (r.Draft != DraftKind.None && r.CaseId < 0 && (!r.Drafted(w) || !CrisisLasts(r.Draft, r.DraftRoom))) // v23 지휘 건 로봇은 지휘관이 푼다
             {
                 r.Draft = DraftKind.None;
                 r.DraftRoom = -1;
                 if (r.Operational) r.Mind.Say("긴급 지정이 풀렸다 — 내 일로 돌아간다", w.Tick);
             }
         if (!RobotsV21.General || FleetSystem.Off || !a.Present || !a.MainOnline) return; // 컴퓨터가 멎으면 로봇은 처음 맡은 일을 한다
+        if (w.Commander.Active) return; // v23 불 · 다친 사람 · 파공은 사고 지휘관이 지휘 건으로 직접 동원한다
         var level = a.Authority.Level(Domain.Fleet);
         // 불: 방마다 거품을 든 로봇이 모자라면
         if (w.Fire.Count > 0)

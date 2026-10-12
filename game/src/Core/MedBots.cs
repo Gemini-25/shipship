@@ -466,6 +466,7 @@ internal sealed class RPress : RobotStep
     private readonly MedBotSystem _m;
     private int _ticks;
     public RPress(CrewMember pt, MedBotSystem m) { _pt = pt; _m = m; }
+    internal CrewMember Patient => _pt;
     public override float? Progress => MathF.Min(1f, _ticks / (float)SimTime.Minutes(2));
     public override ToilStatus Tick(Robot r, World w)
     {

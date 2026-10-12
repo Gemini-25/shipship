@@ -81,20 +81,26 @@ public sealed class ComputerAuthority
     public static string LevelName(AuthLevel l) => l switch { AuthLevel.Advise => "조언만", AuthLevel.Propose => "제안", _ => "자동 실행" };
 
     /// <summary>회의가 준 권한 (위기 = 방침 "컴퓨터 자동 실행").</summary>
-    public AuthLevel Granted0(Domain d) => d == Domain.Crisis ? (AuthLevel)Math.Clamp(_w.Policies["autoscope"], 0, 2) : _levels[d];
+    public AuthLevel Granted0(Domain d) => PolicySystem.FixedControl ? AuthLevel.Auto : d == Domain.Crisis ? (AuthLevel)Math.Clamp(_w.Policies["autoscope"], 0, 2) : _levels[d];
 
-    /// <summary>지금 쓸 수 있는 권한 (컴퓨터가 상해 추론을 못 하면 조언만 · 멎으면 조언도 못 한다).</summary>
+    /// <summary>
+    /// 지금 쓸 수 있는 권한. v23 주컴퓨터 전권 고정: 주 코어가 돌면 모든 갈래가 자동 실행 (상처가 있어도 지휘는 놓지 않는다) ·
+    /// 주 코어가 멎거나 부서지면 조언도 못 한다 — 그때 사람이 지휘한다.
+    /// </summary>
     public AuthLevel Level(Domain d)
     {
         var a = _w.Automation;
         var g = Granted0(d);
-        if (!a.Present || !a.MainOnline || a.Level < 4 && d is not (Domain.Crisis or Domain.Fleet)) return AuthLevel.Advise; // v21 로봇 지휘는 위기처럼 낮은 단계에서도
+        if (!a.Present || !a.MainOnline) return AuthLevel.Advise;
+        if (PolicySystem.FixedControl) return AuthLevel.Auto;
+        if (a.Level < 4 && d is not (Domain.Crisis or Domain.Fleet)) return AuthLevel.Advise; // v21 로봇 지휘는 위기처럼 낮은 단계에서도
         return g;
     }
 
-    /// <summary>권한을 바꾼다 (회의 · 시험).</summary>
+    /// <summary>권한을 바꾼다 (회의 · 시험) — v23 전권 고정이면 바꾸지 않는다.</summary>
     public void Set(Domain d, AuthLevel to, string why, int yes = 0, int no = 0)
     {
+        if (PolicySystem.FixedControl) return;
         var w = _w;
         var from = Granted0(d);
         if (from == to) return;
@@ -111,6 +117,7 @@ public sealed class ComputerAuthority
 
     public void QueueReview(Domain d, AuthLevel to, string why, bool bySelf = false)
     {
+        if (PolicySystem.FixedControl) return; // v23 전권 고정 — 회의도 스스로도 권한을 줄이지 않는다
         if (Granted0(d) == to || Reviews.Any(r => r.Domain == d)) return;
         Reviews.Add(new AuthorityReview { Domain = d, To = to, Why = why, Tick = _w.Tick, BySelf = bySelf });
     }
