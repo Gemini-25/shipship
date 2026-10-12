@@ -53,6 +53,15 @@ public sealed class CommandCase
     /// <summary>v23 파공: 바람이 세서 로봇을 문 앞에 세워 두는 중.</summary>
     public bool WindWait { get; set; }
     public List<int> Bots { get; } = new();
+    /// <summary>v23 결산: 열 때의 모습 (그 방 설비 고장 수 · 탄 물건 · 사람 체력 · 로봇 상처 단계 · 방 안 사람) · 처음 닿은 로봇.</summary>
+    public int FaultsAt0 { get; set; }
+    public int BurnedAt0 { get; set; }
+    public int BotStagesAt0 { get; set; }
+    public int PeopleIn0 { get; set; }
+    public SortedDictionary<int, float> HealthAt0 { get; } = new();
+    /// <summary>붙을 때 그 로봇이 지휘 건에서 다친 수 (결산: 이 건에서 다친 만큼).</summary>
+    public SortedDictionary<int, int> ScaresAt0 { get; } = new();
+    public int FirstBot { get; set; } = -1;
     /// <summary>v23 이 건에 한 번이라도 붙었던 로봇 (경험 · 동료 기억).</summary>
     public List<int> Served { get; } = new();
     public List<CaseNote> Notes { get; } = new();
@@ -314,6 +323,7 @@ public sealed partial class IncidentCommander
         var k = new CommandCase { Id = _nextId++, Kind = kind, RoomId = room.Id, CrewId = crewId, Opened = w.Tick, Source = src, BetterAt = w.Tick };
         Cases.Add(k);
         Stats.Opened++;
+        Snapshot(k, room); // v23 결산용
         Note(k, $"{what} — {Ko.EuRo(src)} 알았다 · 지휘 건을 연다");
     }
 
@@ -406,7 +416,7 @@ public sealed partial class IncidentCommander
             if (BotOf(id) is not Robot r) continue;
             if (r.Foam <= 0.15f) { rs.Release(r, "거품이 떨어졌다 — 채우러 간다"); k.Bots.Remove(id); Note(k, $"{r.Name} 거품이 떨어져 물러남"); continue; }
             if (RobotSystem.Idle(r)) rs.FightIn(r, room);
-            if (k.OnScene < 0 && r.FightingFire && r.Room == room) { k.OnScene = w.Tick; Note(k, $"{r.Name} 현장 도착 — {(w.Tick - k.Opened) / (float)SimTime.Minutes(1):0}분"); }
+            if (k.OnScene < 0 && r.FightingFire && r.Room == room) { k.OnScene = w.Tick; k.FirstBot = r.Id; Note(k, $"{r.Name} 현장 도착 — {(w.Tick - k.Opened) / (float)SimTime.Minutes(1):0}분"); }
         }
         if (k.Bots.Count < want) Dispatch(k, room, room.Cells.Where(c => w.Fire.At(c) > 0f).OrderBy(c => c.X).ThenBy(c => c.Y).FirstOrDefault(), want - k.Bots.Count);
     }
@@ -426,7 +436,7 @@ public sealed partial class IncidentCommander
             if (BotOf(id) is not Robot r) continue;
             if (r.Draft != DraftKind.Rescue || r.DraftUntil < w.Tick + SimTime.Minutes(5)) { r.Draft = DraftKind.Rescue; r.DraftUntil = w.Tick + SimTime.Minutes(30); } // 지휘 건이 열린 동안은 구조 지정을 놓지 않는다
             if (RobotSystem.Idle(r) || r.Steps != null && r.StepIndex < r.Steps.Count && r.Steps[r.StepIndex] is RWait) w.Robots.GoTo(r, pt, $"{Ko.EulReul(pt.Name)} 지키러 — 지휘 건 #{k.Id}");
-            if (k.OnScene < 0 && Vector2.Distance(r.Position, pt.Position) < 1.6f) { k.OnScene = w.Tick; Note(k, $"{r.Name} {pt.Name} 곁에 닿았다 — {(w.Tick - k.Opened) / (float)SimTime.Minutes(1):0}분"); }
+            if (k.OnScene < 0 && Vector2.Distance(r.Position, pt.Position) < 1.6f) { k.OnScene = w.Tick; k.FirstBot = r.Id; Note(k, $"{r.Name} {pt.Name} 곁에 닿았다 — {(w.Tick - k.Opened) / (float)SimTime.Minutes(1):0}분"); }
         }
         if (k.Bots.Count < want) Dispatch(k, pt.Room, pt.Cell, want - k.Bots.Count);
         // 치료 일: 의사 로봇이 있으면 직접 붙는다 (사람 몫이어도 함께 — 사람 의사가 자고 있는 밤)
@@ -493,7 +503,7 @@ public sealed partial class IncidentCommander
                     if (w.Robots.WorkOn(r, o)) { on = true; break; }
                 if (!on) w.Robots.Steer(r);
             }
-            if (k.OnScene < 0 && r.Order is { Kind: WorkKind.SealBreach } && r.Room == room) { k.OnScene = w.Tick; Note(k, $"{r.Name} 봉합 시작 — {(w.Tick - k.Opened) / (float)SimTime.Minutes(1):0}분"); }
+            if (k.OnScene < 0 && r.Order is { Kind: WorkKind.SealBreach } && r.Room == room) { k.OnScene = w.Tick; k.FirstBot = r.Id; Note(k, $"{r.Name} 봉합 시작 — {(w.Tick - k.Opened) / (float)SimTime.Minutes(1):0}분"); }
         }
         int want = Math.Max(1, Math.Min(3, 1 + orders.Count) + (k.Life ? 1 : 0) + Learned(CaseKind.Breach));
         if (k.Bots.Count < want) Dispatch(k, room, orders.FirstOrDefault()?.Target.Cell ?? Cell.FromPosition(room.Center), want - k.Bots.Count);
@@ -590,6 +600,7 @@ public sealed partial class IncidentCommander
         var w = _w;
         RobotBrain.AfterCase(w, k, outcome is "불을 껐다" or "파공을 막았다" or "고비를 넘겼다");
         Review(k, outcome); // v23 복기
+        Summarize(k, outcome); // v23 결산 카드
         foreach (var id in k.Bots) if (BotOf(id) is Robot r && r.CaseId == k.Id) w.Robots.Release(r, $"지휘 건 #{k.Id} 닫힘 — {outcome}");
         k.Bots.Clear();
         k.Phase = CasePhase.Closed;

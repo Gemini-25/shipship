@@ -142,6 +142,7 @@ public partial class Hud : Control
         FrameProbe.Add("hud.dock", _hp); _hp = FrameProbe.Now;
 
         DrawBanners();
+        DrawCaseSummaryCard(mouse); // v23 사고 결산 카드 (크게 → 접힘)
         DrawSummaryCard(mouse); // v12.8 요약 진행
         DrawCampaign(); // v12.9 임무
         DrawTutorial(mouse); // v12.9 첫 항해 안내

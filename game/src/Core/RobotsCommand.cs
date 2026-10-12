@@ -56,7 +56,7 @@ public sealed partial class RobotSystem
         r.DraftUntil = w.Tick + SimTime.Minutes(60);
         if (draft == DraftKind.Fire) r.Foam = MathF.Max(r.Foam, 0.6f); // 정비대 곁 소화기를 집어 든다
         if (r.State == RobotState.Docked) SetState(r, RobotState.Active);
-        if (!k.Served.Contains(r.Id)) k.Served.Add(r.Id);
+        if (!k.Served.Contains(r.Id)) { k.Served.Add(r.Id); k.ScaresAt0[r.Id] = r.Scares; }
         r.Mind.Say(RobotBrain.Terse(r, $"#{k.Id} {room?.Name ?? "?"}", why), w.Tick); // v23 위급하면 짧게
         MarkLog.Add(r.Marks, w.Tick, $"지휘 건 #{k.Id}: {why}");
         w.Fleet.Line(CmdTarget.Robot, r.Id, room, $"{r.Name}: 지휘 건 #{k.Id}", why, 1f, 30f);
