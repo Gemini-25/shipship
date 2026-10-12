@@ -269,12 +269,14 @@ public static partial class Program
         w.Disease.Infect(s, null);
         s.InfectedAt = w.Tick - SimTime.TicksPerDay * 4 / 5;
         var home = s.Room!;
+        s.EndJob(w, ToilStatus.Interrupted); s.NextThinkTick = w.Tick + SimTime.Minutes(30); // v21 권고 전에 스스로 격리실 침대로 가 버리면 컴퓨터가 권할 까닭이 없다 — 첫 25분은 제 방에서
         Run(w, SimTime.Minutes(25));
         bool advised = w.Infection.Advised(s);
         bool shut = w.Log.Entries.Any(e => e.Text.Contains("댐퍼를 닫았다"));
         Check("격리 권고 — 주컴퓨터가 열병을 읽고 격리를 권하고 · 앓는 사람의 방 댐퍼를 닫는다 (공기가 다른 방으로 가지 않게)",
             advised && w.Log.Entries.Any(e => e.Text.Contains("격리 권고") && e.Text.Contains(s.Name)) && w.Infection.Stats.Dampers > 0,
-            $"권고 {advised} · 댐퍼 {w.Infection.Stats.Dampers} ({(shut ? "닫음" : "-")}) · {home.Name} 환기 {home.VentOpen} · 음압기 {(neg != null ? ward.Name : "설치 실패")}");
+            $"권고 {advised} · 댐퍼 {w.Infection.Stats.Dampers} ({(shut ? "닫음" : "-")}) · {home.Name} 환기 {home.VentOpen} · 음압기 {(neg != null ? ward.Name : "설치 실패")}"
+            + (advised ? "" : $" · [{s.Name}@{s.Room?.Name} 데이터선 {s.Room?.DataLinked} · 컴퓨터 {w.Automation.MainOnline} · 병 {string.Join(",", s.Ailments.Select(x => $"{x.Id}:{w.Ailments.Severity(x):0.00}{(x.Diagnosed ? "진단" : "")}"))} · 옮김 {w.Infection.Contagious(s)?.name ?? "-"}]"));
         bool went = OgRunUntil(w, SimTime.Hours(6), () => s.Room == ward);
         Check("격리 — 앓는 사람이 음압 격리실로 간다 (따르는 사람)", went || w.Infection.Refuses(s), $"{s.Name} → {s.Room?.Name} · {s.Job?.Label} · 버팀 {w.Infection.Refuses(s)}");
         Run(w, SimTime.Hours(1));
