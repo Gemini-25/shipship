@@ -85,10 +85,16 @@ public static partial class Program
         Check("인공 폐 — 진단받은 사람이 기계 곁에 눕고 의무관이 연결한다", hooked && ecmo != null && w.Organs.PatientOn(ecmo) == a,
             $"{(ecmo != null ? ecmo.Name : "설치 실패")} · 연결 {hooked} · {a.Name} {a.Job?.Label} · {w.Organs.Stats.Line()}");
         float l0 = w.Organs.Dmg(a, Organ.Lungs);
-        Run(w, SimTime.Hours(6));
+        var lt = new List<string>();
+        for (int q = 0; q < 12; q++)
+        {
+            Run(w, SimTime.Minutes(30));
+            var ob = w.Organs.Peek(a);
+            lt.Add($"{(q + 1) * 30}분 폐 {w.Organs.Dmg(a, Organ.Lungs) * 100:0} {ob?.Cause[0]} 연결 {ob?.Hooked} 돎 {(ecmo != null && w.Organs.Running(ecmo))} 전기 {ecmo?.Machine?.Powered} {a.Room?.Name} {a.Job?.Label}");
+        }
         float l1 = w.Organs.Dmg(a, Organ.Lungs);
         Check("인공 폐 — 기계가 숨을 대신하는 동안 피에 산소가 차고 폐가 쉬며 낫는다", a.Vitals.Oxygen > 0.85f && l1 < l0,
-            $"산소 {a.Vitals.Oxygen:0.00} · 폐 {l0 * 100:0}% → {l1 * 100:0}% · 연결 {w.Organs.Peek(a)?.Hooked}");
+            $"산소 {a.Vitals.Oxygen:0.00} · 폐 {l0 * 100:0}% → {l1 * 100:0}% · 연결 {w.Organs.Peek(a)?.Hooked}" + (l1 < l0 ? "" : $" · [{string.Join(" / ", lt)}] 앓는 것 {string.Join(",", a.Ailments.Select(x => x.Id))} · 상처 {string.Join(",", a.Vitals.Wounds.Where(x => x.Part == BodyPart.Lungs).Select(x => $"{x.Kind}:{x.Weight:0.00}"))}"));
     }
 
     // 2) 신장 부전 → 투석 / 3) 정전 중 투석기 → 컴퓨터가 회로를 지킨다
@@ -270,13 +276,19 @@ public static partial class Program
         s.InfectedAt = w.Tick - SimTime.TicksPerDay * 4 / 5;
         var home = s.Room!;
         s.EndJob(w, ToilStatus.Interrupted); s.NextThinkTick = w.Tick + SimTime.Minutes(30); // v21 권고 전에 스스로 격리실 침대로 가 버리면 컴퓨터가 권할 까닭이 없다 — 첫 25분은 제 방에서
-        Run(w, SimTime.Minutes(25));
+        var trace = new List<string>();
+        for (int m = 0; m < 25; m++)
+        {
+            Run(w, SimTime.Minutes(1));
+            string at = $"{m + 1}분 {s.Room?.Name} {s.Job?.Label ?? "-"}{(s.CarriedBy != null ? " 업힘" : "")}";
+            if (trace.Count == 0 || !trace[^1].EndsWith(at[(at.IndexOf(' ') + 1)..])) trace.Add(at);
+        }
         bool advised = w.Infection.Advised(s);
         bool shut = w.Log.Entries.Any(e => e.Text.Contains("댐퍼를 닫았다"));
         Check("격리 권고 — 주컴퓨터가 열병을 읽고 격리를 권하고 · 앓는 사람의 방 댐퍼를 닫는다 (공기가 다른 방으로 가지 않게)",
             advised && w.Log.Entries.Any(e => e.Text.Contains("격리 권고") && e.Text.Contains(s.Name)) && w.Infection.Stats.Dampers > 0,
             $"권고 {advised} · 댐퍼 {w.Infection.Stats.Dampers} ({(shut ? "닫음" : "-")}) · {home.Name} 환기 {home.VentOpen} · 음압기 {(neg != null ? ward.Name : "설치 실패")}"
-            + (advised ? "" : $" · [{s.Name}@{s.Room?.Name} 데이터선 {s.Room?.DataLinked} · 컴퓨터 {w.Automation.MainOnline} · 병 {string.Join(",", s.Ailments.Select(x => $"{x.Id}:{w.Ailments.Severity(x):0.00}{(x.Diagnosed ? "진단" : "")}"))} · 옮김 {w.Infection.Contagious(s)?.name ?? "-"}]"));
+            + (advised ? "" : $" · 길 {string.Join(" → ", trace)} · [{s.Name}@{s.Room?.Name} 데이터선 {s.Room?.DataLinked} · 컴퓨터 {w.Automation.MainOnline} · 병 {string.Join(",", s.Ailments.Select(x => $"{x.Id}:{w.Ailments.Severity(x):0.00}{(x.Diagnosed ? "진단" : "")}"))} · 옮김 {w.Infection.Contagious(s)?.name ?? "-"}]"));
         bool went = OgRunUntil(w, SimTime.Hours(6), () => s.Room == ward);
         Check("격리 — 앓는 사람이 음압 격리실로 간다 (따르는 사람)", went || w.Infection.Refuses(s), $"{s.Name} → {s.Room?.Name} · {s.Job?.Label} · 버팀 {w.Infection.Refuses(s)}");
         Run(w, SimTime.Hours(1));
