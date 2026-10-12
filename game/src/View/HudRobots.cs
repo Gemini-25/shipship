@@ -24,7 +24,7 @@ public partial class Hud
         float x0 = ColX; // v20 고른 것 카드 자리 (창이 열리면 창 왼쪽)
         var marks = r.Marks.TakeLast(6).Reverse().ToList();
         bool wreck = r.Wrecked; // v22 잔해: 생각 · 거품 칸 없이 몸 · 이력만
-        float height = Mathf.Min(maxHeight, 300 + (wreck ? 0 : RobotMindHeight(r)) + (!wreck && RobotSystem.FightsNow(r, _world) ? 22 : 0) + (r.CoreHeat > 0.05f || r.Runaway ? 22 : 0) + (r.Drafted(_world) ? 20 : 0) + (marks.Count > 0 ? 34 + marks.Count * 18 : 0) + 18); // v16.20b 생각 · v21 원자로 · 긴급 지정 · v22 몸
+        float height = Mathf.Min(maxHeight, 300 + (wreck ? 0 : RobotMindHeight(r)) + (!wreck && RobotSystem.FightsNow(r, _world) ? 22 : 0) + (r.CoreHeat > 0.05f || r.Runaway ? 22 : 0) + (r.Drafted(_world) ? 20 : 0) + (marks.Count > 0 ? 34 + marks.Count * 18 : 0) + 18 + (wreck ? 0 : 18)); // v16.20b 생각 · v21 원자로 · 긴급 지정 · v22 몸 · v23 경험
         var card = new Rect2(x0, y, RightColumnWidth, height);
         Card(card);
         float x = x0 + 18, right = card.End.X - 18;
@@ -74,6 +74,12 @@ public partial class Hud
         Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 70), UiKit.Fit(body, right - x, Ui.TextSmall, Fonts.Body), Ui.TextSmall,
             RobotBody.Worst(r) < 0.25f ? Palette.Danger : RobotBody.Damaged(r) > 0 ? Palette.Warning : Palette.TextDim);
         ly += 82;
+        if (!wreck)
+        {
+            // v23 로봇 두뇌: 사건 경험 · 다친 적 · 손발 맞는 동료 · 챙기는 사람 · 말버릇
+            Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 6), UiKit.Fit($"경험: {RobotBrain.Line(_world, r)}", right - x, Ui.TextSmall, Fonts.Body), Ui.TextSmall, Palette.TextDim);
+            ly += 18;
+        }
         if (marks.Count > 0)
         {
             SectionTitle(x, ly + 10, "이력");

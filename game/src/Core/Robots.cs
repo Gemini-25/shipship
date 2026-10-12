@@ -297,7 +297,7 @@ internal sealed class RSpray : RobotStep
         }
         if (nearest is not Cell aim || r.Foam <= 0.01f) return ToilStatus.Succeeded;
         r.Facing = Vector2.Normalize(aim.Center - r.Position + new Vector2(0.0001f, 0f));
-        w.Fire.Suppress(aim, 1.4f, RobotSystem.FoamRateOf(r) / SimTime.TicksPerHour); // v15.7 소방 로봇은 더 세게·오래 · v21 긴급 지정 로봇은 작은 소화기
+        w.Fire.Suppress(aim, 1.4f, RobotSystem.FoamRateOf(r) * RobotBrain.FireMul(r, w) / SimTime.TicksPerHour); // v23 불 경험 · 손발 맞는 동료 // v15.7 소방 로봇은 더 세게·오래 · v21 긴급 지정 로봇은 작은 소화기
         r.Foam = MathF.Max(0f, r.Foam - 1f / (RobotSystem.FoamHoursOf(r) * SimTime.TicksPerHour));
         return ToilStatus.Running;
     }
@@ -433,7 +433,13 @@ public sealed partial class RobotSystem
     private static PathProfile ProfileOf(Robot r, World w) => Rushes(w, r.Order) || Enlisted(w, r) ? UrgentProfile : Profile; // v23 지휘 건에 묶인 로봇도 급한 길로
     /// <summary>주 컴퓨터가 이 로봇에게 잠긴 격벽을 열어 주나 (용접 · 새는 방 · 버린 구획은 안 연다 — 봉쇄가 풀린 게 아니다).</summary>
     private static bool ComputerOpens(Robot r, Door d, World w) =>
-        (Rushes(w, r.Order) || Enlisted(w, r)) && !d.Welded && d.RoomA is Room a && d.RoomB is Room b && !a.Leaking && !b.Leaking && !a.Abandoned && !b.Abandoned && !a.Detached && !b.Detached;
+        (Rushes(w, r.Order) || Enlisted(w, r)) && !d.Welded && d.RoomA is Room a && d.RoomB is Room b && !a.Abandoned && !b.Abandoned && !a.Detached && !b.Detached
+        && (!a.Leaking && !b.Leaking || BreachEntry(r, a, b, w));
+
+    /// <summary>v23 파공을 막으러 가는 지휘 건 로봇: 주 컴퓨터가 새는 방 문을 잠깐 열어 들여보낸다 (바깥 방이 새지 않을 때 · 공기가 조금 샌다) · 막고 나올 때도.</summary>
+    private static bool BreachEntry(Robot r, Room a, Room b, World w) =>
+        w.Commander.OpensDoors && r.CaseId >= 0 && r.Order is { Kind: WorkKind.SealBreach } o && o.Target.CurrentRoom is Room t
+        && (t == a && !b.Leaking || t == b && !a.Leaking || r.Room == t && (a == t || b == t));
 
     internal World World => _world;
 

@@ -51,7 +51,13 @@ public static partial class Program
                 Hull.Damage(ship, wall, 1.2f);
                 bool robotSeal = false;
                 CommandCase? k = null;
-                for (int m = 0; m < 20 && !robotSeal; m++) { Run(w, SimTime.Minutes(1)); k = w.Commander.Cases.FirstOrDefault(c => c.Kind == CaseKind.Breach); robotSeal = k != null && k.Notes.Any(n => n.Text.Contains("봉합 시작")); }
+                for (int m = 0; m < 20 && !robotSeal; m++)
+                {
+                    Run(w, SimTime.Minutes(1)); k = w.Commander.Cases.FirstOrDefault(c => c.Kind == CaseKind.Breach); robotSeal = k != null && k.Notes.Any(n => n.Text.Contains("봉합 시작"));
+                    if (Environment.GetEnvironmentVariable("CT_DEBUG") == "1" && k != null)
+                        Console.WriteLine($"    [{m}분] {room.Name} 새는 {room.Leaking} · 봉합 일 {string.Join(",", w.Board.OpenUnsorted.Where(o => o.Kind == WorkKind.SealBreach).Select(o => $"{o.Title}({o.Target.CurrentRoom?.Name}) 사람 {o.Assignee?.Name ?? "-"} 로봇 {o.Robot?.Name ?? "-"}"))} · "
+                            + string.Join(" / ", k.Bots.Select(id => w.Robots.Robots.First(r => r.Id == id)).Select(r => $"{r.Name}@{r.Room?.Name}:{r.Doing} [{r.Mind.Why}]")));
+                }
                 Check("파공 — 지휘 건 로봇이 봉합 일에 직접 붙는다 (사람 몫이어도 함께)", k != null && robotSeal, k == null ? "지휘 건 없음" : string.Join(" / ", k.Notes.Select(n => n.Text)));
             }
 

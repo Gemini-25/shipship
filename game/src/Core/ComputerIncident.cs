@@ -51,6 +51,8 @@ public sealed class CommandCase
     /// <summary>v23 천장 소화 설비 — 마지막으로 적은 상태 (바뀔 때만 적는다).</summary>
     public string NozzleSaid { get; set; } = "";
     public List<int> Bots { get; } = new();
+    /// <summary>v23 이 건에 한 번이라도 붙었던 로봇 (경험 · 동료 기억).</summary>
+    public List<int> Served { get; } = new();
     public List<CaseNote> Notes { get; } = new();
     public bool Open => Phase != CasePhase.Closed;
 }
@@ -505,6 +507,7 @@ public sealed class IncidentCommander
                 CaseKind.Casualty => med || r.Kind is RobotKind.Stretcher or RobotKind.Rescuer ? 0.4f : 1.5f,
                 _ => RobotSystem.Special(r.Kind, WorkKind.SealBreach) ? 0.5f : 1f,
             };
+            mul *= RobotBrain.PickMul(w, r, k, k.Bots); // v23 경험 · 손발 · 아는 사람 · 남은 힘
             picks.Add((r, d * mul + d * 0.0001f));
             near.Add((r, d));
         }
@@ -563,6 +566,7 @@ public sealed class IncidentCommander
     private void Close(CommandCase k, string outcome)
     {
         var w = _w;
+        RobotBrain.AfterCase(w, k, outcome is "불을 껐다" or "파공을 막았다" or "고비를 넘겼다");
         foreach (var id in k.Bots) if (BotOf(id) is Robot r && r.CaseId == k.Id) w.Robots.Release(r, $"지휘 건 #{k.Id} 닫힘 — {outcome}");
         k.Bots.Clear();
         k.Phase = CasePhase.Closed;

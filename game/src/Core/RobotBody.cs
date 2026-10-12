@@ -213,6 +213,7 @@ public sealed partial class RobotSystem
         var s1 = RobotBody.Stage(after);
         if (s1 == s0) return;
         Body.Stages++;
+        if (r.CaseId >= 0) r.Scares++; // v23 지휘 건에서 다쳤다 — 위험을 기억한다
         string part = RobotBody.Name(r.Kind, p);
         r.LastHurt = $"{part} {RobotBody.StageName(s1)} — {cause}";
         MarkLog.Add(r.Marks, w.Tick, $"{part} {RobotBody.StageName(s1)} ({cause})");

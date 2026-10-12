@@ -36,8 +36,8 @@ public sealed class RelayZone
 
 public sealed class RelayStats
 {
-    public int Cuts, Restored, Burned, Blasted, Drained, DroneRelays, Fixed, SelfActs, Unheard;
-    public string Line() => $"끊김 {Cuts} (불 {Burned} · 폭발 {Blasted} · 전지 {Drained}) · 되살아남 {Restored} · 드론 임시 중계 {DroneRelays} · 고침 {Fixed} · 끊긴 구역 로봇이 스스로 {SelfActs} · 못 들은 무전 {Unheard}";
+    public int Cuts, Restored, Burned, Blasted, Drained, DroneRelays, Fixed, SelfActs, Unheard, PeerCalls;
+    public string Line() => $"끊김 {Cuts} (불 {Burned} · 폭발 {Blasted} · 전지 {Drained}) · 되살아남 {Restored} · 드론 임시 중계 {DroneRelays} · 고침 {Fixed} · 끊긴 구역 로봇이 스스로 {SelfActs} (동료 무전 호출 {PeerCalls}) · 못 들은 무전 {Unheard}";
 }
 
 public sealed class RelaySystem
@@ -228,8 +228,10 @@ public sealed class RelaySystem
                 if (w.Robots.FightIn(r, room, $"무전이 끊겼다 — 스스로 {room.Name} 불로"))
                 {
                     Stats.SelfActs++;
-                    r.Mind.Say("무전이 안 닿는다 — 눈앞의 불부터", w.Tick);
+                    r.Mind.Say(RobotBrain.Terse(r, $"{room.Name} 불", "무전 끊김 · 스스로 진입"), w.Tick);
                     MarkLog.Add(r.Marks, w.Tick, $"무전이 끊긴 {room.Name}에서 스스로 불을 껐다");
+                    // v23 로봇 두뇌: 혼자 감당 못 할 불이면 가까운 동료를 직접 무전으로 부른다 (구역 중계 없이 닿는 짧은 거리)
+                    if (w.Fire.CountIn(room) >= 3) CallPeer(r, room);
                 }
                 continue;
             }
@@ -244,6 +246,23 @@ public sealed class RelaySystem
                 }
             }
         }
+    }
+
+    /// <summary>로봇끼리 짧은 무전 (15칸 안 · 같은 구역): 손이 빈 동료 하나를 같은 불로 부른다.</summary>
+    private void CallPeer(Robot r, Room room)
+    {
+        var w = _w;
+        var z = ZoneOf(room);
+        var peer = w.Robots.Robots.Where(p => p != r && p.CaseId < 0 && !p.FightingFire && RobotSystem.Callable(w, p) && p.Foam > 0.2f && p.Room != null && ZoneOf(p.Room) == z
+                && (p.Position - r.Position).LengthSquared() < 15f * 15f && !(p.Order is WorkOrder po && po.Urgency >= 0.9f))
+            .OrderBy(p => r.Mates.TryGetValue(p.Id, out var n) ? -n : 0).ThenBy(p => (p.Position - r.Position).LengthSquared()).ThenBy(p => p.Id).FirstOrDefault();
+        if (peer == null) return;
+        w.Robots.DropTaskFor(peer);
+        if (!w.Robots.FightIn(peer, room, $"{r.Name} 무전 — {room.Name} 불 도우러")) return;
+        Stats.PeerCalls++;
+        r.Mind.Say(RobotBrain.Terse(r, $"{room.Name} 불 {w.Fire.CountIn(room)}칸", $"{peer.Name} 호출"), w.Tick);
+        peer.Mind.Say(RobotBrain.Terse(peer, $"{room.Name} 불", $"{r.Name} 무전 · 간다"), w.Tick);
+        w.Log.Add(w.Tick, LogKind.Work, $"{r.Name}: 무전이 끊긴 {room.Name} — 혼자는 벅차다, {Ko.EulReul(peer.Name)} 직접 부른다");
     }
 
     /// <summary>무전을 못 들었다 (끊긴 구역에서 본 것 — 주 컴퓨터는 모른다).</summary>

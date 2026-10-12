@@ -55,7 +55,8 @@ public sealed partial class RobotSystem
         r.DraftUntil = w.Tick + SimTime.Minutes(60);
         if (draft == DraftKind.Fire) r.Foam = MathF.Max(r.Foam, 0.6f); // 정비대 곁 소화기를 집어 든다
         if (r.State == RobotState.Docked) SetState(r, RobotState.Active);
-        r.Mind.Say($"지휘 건 #{k.Id} — {why}", w.Tick);
+        if (!k.Served.Contains(r.Id)) k.Served.Add(r.Id);
+        r.Mind.Say(RobotBrain.Terse(r, $"#{k.Id} {room?.Name ?? "?"}", why), w.Tick); // v23 위급하면 짧게
         MarkLog.Add(r.Marks, w.Tick, $"지휘 건 #{k.Id}: {why}");
         w.Fleet.Line(CmdTarget.Robot, r.Id, room, $"{r.Name}: 지휘 건 #{k.Id}", why, 1f, 30f);
     }
@@ -70,7 +71,7 @@ public sealed partial class RobotSystem
         r.Draft = DraftKind.None;
         r.DraftRoom = -1;
         r.FightingFire = false;
-        if (r.Operational) r.Mind.Say(why, w.Tick);
+        if (r.Operational) r.Mind.Say(RobotBrain.Calm(r, why, w.Tick), w.Tick); // v23 평소 말투로 돌아온다
         r.NextDecide = w.Tick;
         if (r.State == RobotState.Active && r.Order == null && r.Steps != null && !r.Homing) { r.Steps = null; r.Path = null; }
     }
@@ -97,6 +98,7 @@ public sealed partial class RobotSystem
         if (best is not Cell at) return false;
         FiresFought++;
         r.FightingFire = true;
+        r.Mind.Say(RobotBrain.Terse(r, $"{room.Name} 불 {w.Fire.CountIn(room)}칸", "진입"), w.Tick);
         Begin(r, new List<RobotStep>
         {
             new RGoto(at),

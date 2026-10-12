@@ -156,6 +156,7 @@ public static class RobotsV21
         if (General && o != null && !RobotSystem.Special(r.Kind, o.Kind)) m *= GeneralSlow;
         m *= 1f - 0.12f * (Math.Clamp(r.Mk, 1, 3) - 1);
         m *= 1f - 0.2f * r.Skill;
+        if (o?.Kind == WorkKind.SealBreach) m *= RobotBrain.SealMul(r); // v23 파공 경험
         return m;
     }
 
