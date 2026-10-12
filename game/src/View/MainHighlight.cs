@@ -24,6 +24,9 @@ public partial class Main
     /// <summary>도트 7단계: 폭발 순간은 하이라이트 모드가 아니어도 잠깐(0.9초) 느리게 — 불덩이가 피어오르는 걸 볼 수 있게.</summary>
     private ulong _impactUntilMsec;
 
+    /// <summary>연출 장부: 잠깐(ms) 느리게 (사고 시작 · 폭발).</summary>
+    public void Impact(int ms) => _impactUntilMsec = System.Math.Max(_impactUntilMsec, Time.GetTicksMsec() + (ulong)ms);
+
     public void ToggleHighlight()
     {
         Settings.Highlight = !Settings.Highlight;

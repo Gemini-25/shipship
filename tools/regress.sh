@@ -12,6 +12,7 @@ run() { local name="$1"; shift; local t0=$(date +%s); $H "$@" > "$OUT/$name.txt"
 export -f run; export H OUT
 cat <<LIST | xargs -P "$JOBS" -L 1 bash -c 'run "$@"' _
 selftest 1 20260929 --selftest
+stagingtest 1 1 --stagingtest
 scenarios 1 20260929 --scenario=all
 exp1 1 20260929 --experiment=20
 exp3 1 20260929 --experiment=20 --waves=3

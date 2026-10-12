@@ -188,6 +188,7 @@ public static partial class Program
         if (args.Contains("--risktest")) return RunRiskTest(seed); // 통합5 위험 수준 (보통 재해 · 배 전체급 · 우주급)
         if (args.Contains("--riskprobe")) return RunRiskProbe(args, seed); // 통합6 위험 수준 살피기
         if (args.Contains("--tickspikes")) return RunTickSpikes(days, seed, args); // v19 60프레임: 튀는 틱
+        if (args.Contains("--stagingtest")) return RunStagingTest(); // 도트 8단계: 연출 장부 (빠진 것 0)
         if (args.Contains("--blastprobe")) return RunBlastProbe(days, seed, args); // 도트 7단계: 사고 · 폭발이 실제로 나는지
         if (args.Contains("--lifeprobe")) return RunLifeProbe(days, seed, args); // v19 굶주림 · 탈진 원인 · 고정 비교 지표
         if (args.Contains("--showerprobe")) return RunShowerProbe(seed); // 운석 피해 살피기 (사망 · 구멍 · 드론)

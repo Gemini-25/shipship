@@ -92,6 +92,7 @@ public partial class SoundSystem : Node
 
         ProcessSpatial(w, delta, quiet); // v11.3 문·발소리·로봇
         ProcessBlasts(w, quiet); // v16.13 폭발음 (종류 · 거리 · 벽 너머 먹먹)
+        ProcessStaging(w, quiet); // 도트 8단계: 연출 장부대로 사고 시작 소리 · 카메라
 
         // 배경음
         bool ambient = Settings.Ambience && !quiet && !_main.Paused;
