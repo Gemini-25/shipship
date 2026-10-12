@@ -157,6 +157,7 @@ public static partial class Program
             for (int att = 0; att < 3; att++)
             {
                 var w = BrainDay(seed + att * 101, "Mirinae");
+                NoRobots(w); // v21 사람이 알리러 가는 장면 — 소방 로봇이 불난 방에 드나들며 연기가 통로로 번지면 본 사람이 친구 방으로 대피해 소문으로 먼저 닿는다
                 w.Policies.Set("inertfire", 0, "시험");
                 w.Policies.Set("vacuumfire", 0, "시험");
                 w.Policies.Set("command", 0, "시험"); // 지휘 · 무전이 없는 배: 본 사람만 알릴 수 있다

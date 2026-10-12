@@ -86,6 +86,7 @@ public static partial class Program
     private static World FireScene(int seed, out CauseIncident? inc, out Room? room)
     {
         var w = DayOne(seed, "Hanbit");
+        NoRobots(w); // v21 사람이 겪은 사고 카드를 본다 — 로봇이 먼저 맡으면 장면이 흐려진다
         // 사람이 둘 이상 있는 방 (없으면 사람이 가장 많은 방)
         room = w.Ship.Rooms.Where(r => r.Kind != RoomType.Corridor && !r.Detached && r.Cells.Count >= 6)
             .OrderByDescending(r => w.Crew.Count(c => !c.Dead && c.Room == r)).ThenBy(r => r.Id).First();

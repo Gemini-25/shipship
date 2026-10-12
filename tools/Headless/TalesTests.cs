@@ -158,6 +158,7 @@ public static partial class Program
         if (Do("5"))
         {
             var w = DayOne(seed, "Hanbit");
+            NoRobots(w); // v21 사람 사이의 이야기를 본다 — 로봇이 먼저 맡으면 장면이 흐려진다
             var st = w.Tales; st.NoSeeds = true; st.Pace = 8f; st.Loves.Clear();
             var p = w.Crew.Where(c => !c.Dead && !c.IsChild && c.Partner == null && c.Id != w.Command.CaptainId).OrderByDescending(c => c.Traits.Sociability).ThenBy(c => c.Id).ToList();
             var a = p[0]; var b = p[1]; var third = p[2];

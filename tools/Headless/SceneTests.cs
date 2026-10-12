@@ -76,7 +76,7 @@ public static partial class Program
                 var cups = cs.Things.Where(t => t.Kind == ThingKind.Cup).ToList();
                 Check("커피 — 타서(재고가 줄고) 들고 가 판 곁에 놓아 준다 · 받은 사람의 마음과 관계가 바뀐다",
                     served && cs.Delivered >= 1 && stock1 < stock0 && cups.Count >= 1 && (a.AffinityTo(cof) > affA0 || b.AffinityTo(cof) > affB0) && mem1 > mem0,
-                    $"{cs.Title} · {cs.Stage} · 놓음 {cs.Delivered}/{cs.Targets.Count} · 재고 {stock0} → {stock1} · 잔 {cups.Count}개({string.Join(",", cups.Select(t => t.At == s.Table ? "탁자" : "곁"))}) · 관계 기억 {mem0} → {mem1}");
+                    $"{cs.Title} · {cs.Stage} · 놓음 {cs.Delivered}/{cs.Targets.Count} · 재고 {stock0} → {stock1} · 잔 {cups.Count}개({string.Join(",", cups.Select(t => t.At == s.Table ? "탁자" : "곁"))}) · 관계 기억 {mem0} → {mem1}" + (cs.Delivered >= 1 ? "" : $" · [{string.Join(" / ", cs.Trail.TakeLast(5))}] · {a.Name} {a.ActivityLabel}@{a.Room?.Name} · {b.Name} {b.ActivityLabel}@{b.Room?.Name} · 판 {s.Stage}"));
 
                 bool done = ScUntil(w, () => !s.Open, 4f);
                 Check("판이 끝난다 — 끊긴 판을 이어 둔 대국 (이긴 사람 · 끊김이 기록에)", done && s.Stage == SceneStage.Done && g!.Done && g.Winner >= 0 && s.Pauses >= 1,

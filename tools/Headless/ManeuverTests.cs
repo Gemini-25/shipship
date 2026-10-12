@@ -124,6 +124,7 @@ public static partial class Program
         World w2;
         {
             var w = w2 = DayOne(seed, "Hanbit");
+            NoRobots(w); // v21 사람이 걸쇠를 거는 관행를 본다 — 로봇이 먼저 맡으면 장면이 흐려진다
             var ms = w.Maneuver;
             var shelves = w.Ship.Furniture.Where(f => ManeuverSystem.Shelfish(f.Type) && !f.Room.Detached).OrderBy(f => f.Id).ToList();
             var tight = shelves[0];

@@ -97,6 +97,7 @@ public static partial class Program
         // ── 1b) 비워 둔 자리를 누가 건드리면 돌아온 사람이 헷갈린다 · 펼친 부품이 통로를 좁힌다 ──
         {
             var w = DayOne(seed, "Hanbit");
+            NoRobots(w); // v21 사람의 자리 · 헷갈림를 본다 — 로봇이 먼저 맡으면 장면이 흐려진다
             RunUntilHour(w, 10f);
             var f = w.Ship.Furniture.Where(x => x.Machine is Machine m && !x.Stowed && m.Faults.Count == 0 && m.Spec.ServiceHours >= 0.7f && x.Room.Type != RoomType.Corridor)
                 .OrderBy(x => x.Id).Skip(1).First();

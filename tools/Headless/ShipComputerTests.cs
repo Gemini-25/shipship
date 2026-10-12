@@ -90,6 +90,7 @@ public static partial class Program
             if (Sc("breaker"))
             {
                 var w = DayOne(seed, "Hanbit");
+                NoRobots(w); // v21 주 컴퓨터가 사람에게 원인을 빼 달라고 하는 일 (로봇이 먼저 콘센트를 뽑았다)를 본다 — 로봇이 먼저 맡으면 장면이 흐려진다
                 var a = w.Automation;
                 var room = w.Ship.LiveRooms.Where(r => r.Circuit == 3 && PortableSystem.OutletOk(r) && r.Type != RoomType.Corridor && r.Cells.Count(w.Ship.IsOpenFloor) >= 3).OrderBy(r => r.Id).FirstOrDefault()
                            ?? w.Ship.LiveRooms.Where(r => PortableSystem.OutletOk(r) && r.Type is RoomType.Quarters or RoomType.Lounge).OrderBy(r => r.Id).First();

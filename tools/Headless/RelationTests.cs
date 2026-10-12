@@ -156,6 +156,7 @@ public static partial class Program
             // 8) 기억이 판단에 걸린다: 구해 준 사람의 말은 무겁고, 경고를 무시한 사람은 덜 믿는다 · 안 돌려준 사람에겐 공구를 빌려주지 않는다
             {
                 var w = DayOne(seed, "Hanbit");
+                NoRobots(w); // v21 구해 준 사람 · 경고를 무시한 사람에 대한 판단를 본다 — 로봇이 먼저 맡으면 장면이 흐려진다
                 var a = w.Crew[0]; var b = w.Crew[1]; var d = w.Crew[2];
                 w.Relations.Remember(a, b, RelationReason.SavedMe, "시험: 구해 줬다");
                 w.Relations.Remember(a, d, RelationReason.IgnoredMyWarning, "시험: 경고를 무시했다");

@@ -314,6 +314,7 @@ public static partial class Program
         if (Do("8"))
         {
             var w = GDay(seed);
+            NoRobots(w); // v21 들은 소리를 확인하러 가는 사람를 본다 — 로봇이 먼저 맡으면 장면이 흐려진다
             Machine? m = null; Door? door = null; Room? next = null;
             foreach (var x in w.Ship.Machines.OrderBy(x => x.Body.Id))
             {

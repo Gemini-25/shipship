@@ -81,6 +81,7 @@ public static partial class Program
         // ── 3) 넓게 덴 몸: 곁의 사람이 식혀 감싸도 수액(의무관 · 의무실)이 있어야 멎는다 ──
         {
             var w = DayOne(seed, "Hanbit");
+            NoRobots(w); // v21 곁의 사람이 식혀 감싸는 화상 (치료 로봇이 먼저 손대면 늦어지는 정도가 가려진다)를 본다 — 로봇이 먼저 맡으면 장면이 흐려진다
             w.CrewCanDie = true;
             var v = w.Crew.Where(c => c.CanAct && !c.IsChild && c.Role != CrewRole.Medic && c.SkillLevel(Skill.Medicine) < 0.5f).OrderBy(c => c.Id).First();
             var lay = w.Crew.Where(c => c != v && c.CanAct && !c.IsChild && c.Role != CrewRole.Medic && c.SkillLevel(Skill.Medicine) < 0.5f).OrderBy(c => c.Id).First();
