@@ -180,6 +180,9 @@ public sealed class FleetSystem
         return (true, "");
     }
 
+    /// <summary>v23 새는 방의 바람을 로봇이 버티나 (15kPa 아래 · 단계 2 이상은 버틴다).</summary>
+    public bool WindOk(Room room) => Off || !room.Leaking || room.Air.Pressure <= 15f || Tier >= 2;
+
     public bool MayEnter(Robot r, Room room)
     {
         var (ok, what) = Judge(r, room);

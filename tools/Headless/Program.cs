@@ -254,6 +254,7 @@ public static partial class Program
         if (args.Contains("--relaytest")) return RunRelayTest(seed); // v23 구역 중계기
         if (args.Contains("--eyetest")) return RunEyeTest(seed); // v23 눈의 그물
         if (args.Contains("--robotbraintest")) return RunRobotBrainTest(seed); // v23 로봇 두뇌
+        if (args.Contains("--learntest")) return RunLearnTest(seed); // v23 평소 수리 배치 · 복기
         if (args.Contains("--story21test")) return RunStory21Test(seed); // v21 이야기꾼 · 난이도 세분화
         if (args.FirstOrDefault(a => a.StartsWith("--foodprobe=")) is string fp) return RunFoodProbe(seed, fp[12..]); // v21 먹을 것 탐침
         if (args.Contains("--campaign15test")) return RunCampaign15Test(seed); // v15.6

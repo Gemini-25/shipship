@@ -439,7 +439,8 @@ public sealed partial class RobotSystem
     /// <summary>v23 파공을 막으러 가는 지휘 건 로봇: 주 컴퓨터가 새는 방 문을 잠깐 열어 들여보낸다 (바깥 방이 새지 않을 때 · 공기가 조금 샌다) · 막고 나올 때도.</summary>
     private static bool BreachEntry(Robot r, Room a, Room b, World w) =>
         w.Commander.OpensDoors && r.CaseId >= 0 && r.Order is { Kind: WorkKind.SealBreach } o && o.Target.CurrentRoom is Room t
-        && (t == a && !b.Leaking || t == b && !a.Leaking || r.Room == t && (a == t || b == t));
+        && (t == a && !b.Leaking || t == b && !a.Leaking || r.Room == t && (a == t || b == t))
+        && (w.Fleet.WindOk(t) || r.Room == t); // 바람을 못 버티면 들여보내지 않는다 (문 앞에서 기다린다)
 
     internal World World => _world;
 

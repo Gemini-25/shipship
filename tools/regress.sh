@@ -48,6 +48,7 @@ nozzletest 1 7 --nozzletest
 relaytest 1 7 --relaytest
 eyetest 1 7 --eyetest
 robotbraintest 1 7 --robotbraintest
+learntest 1 7 --learntest
 story21test 1 7 --story21test
 hazardtest 1 20260929 --hazardtest
 livingtest 1 20260929 --livingtest

@@ -53,7 +53,7 @@ public static partial class Program
                             {
                                 var room = bc.Room!;
                                 Console.WriteLine($"  {m}분 {bc.Name} {room.Name}: 불 {w.Fire.CountIn(room)} · 연기 {room.Air.Smoke:0.00} · 산소 {room.Air.O2:0.0} · 기압 {room.Air.Pressure:0} · 믿음 불 {w.Automation.Belief.Of(room).Fire}");
-                                foreach (var r in w.Robots.Robots.Where(r => r.Room == room && !r.Wrecked)) Console.WriteLine($"     로봇 {r.Name} {r.State} {r.Doing} · 일 {r.Order?.Kind} · 지정 {r.Draft} · 소화 {r.FightingFire}");
+                                foreach (var r in w.Robots.Robots.Where(r => (r.Room == room || r.CaseId >= 0) && !r.Wrecked)) Console.WriteLine($"     로봇 {r.Name}@{r.Room?.Name} {r.State} {r.Doing} · 일 {r.Order?.Kind} · 건 {r.CaseId} · 전지 {r.Battery * 100:0}% · 짐 {r.Cargo} · 생각 {r.Mind.Why}");
                                 foreach (var c in w.Crew.Where(c => c.Room == room)) Console.WriteLine($"     사람 {c.Name} {c.Job?.Label} · 일 {c.Job?.Order?.Kind}");
                                 foreach (var o in w.Board.OpenUnsorted.Where(o => o.Target.Room == room)) Console.WriteLine($"     [일] {o.Title} {o.Kind} 맡음 {o.Assignee?.Name}{o.Robot?.Name}{o.Drone?.Name} 보류 {o.BlockedReason}");
                             }

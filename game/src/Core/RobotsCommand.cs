@@ -22,7 +22,8 @@ public sealed partial class Robot
 public sealed partial class RobotSystem
 {
     /// <summary>지휘 건 로봇이 손이 비었나 (할 일 없이 · 또는 다음 지시를 기다리는 중).</summary>
-    internal static bool Idle(Robot r) => r.State == RobotState.Active && (r.Steps == null || r.Order == null && r.Steps.Count == 1 && r.Steps[0] is RWait);
+    internal static bool Idle(Robot r) => (r.State == RobotState.Active || r.State == RobotState.Docked && r.Fault == null && r.Battery >= 0.5f) // v23 정비대에 붙어 쉬는 지휘 건 로봇도 다시 부른다
+        && (r.Steps == null || r.Order == null && r.Steps.Count == 1 && r.Steps[0] is RWait);
 
     /// <summary>지휘 건에 묶여 움직이는 중 — 주 컴퓨터 · 보조 두뇌가 지휘하면 잠긴 격벽도 열어 준다 (로봇 대장은 문 제어가 없다).</summary>
     internal static bool Enlisted(World w, Robot r) => (r.CaseId >= 0 || r.ExitUntil > w.Tick) && w.Commander.OpensDoors;
@@ -108,6 +109,30 @@ public sealed partial class RobotSystem
         return true;
     }
 
+    /// <summary>v23 새는 방 문 앞(새지 않는 쪽)에서 기압이 떨어지길 1분 기다린다 — 갈 곳이 없으면 false.</summary>
+    internal bool WaitAtDoor(Robot r, Room room)
+    {
+        var w = _world;
+        var field = w.Paths.Flood(r.Cell, Profile);
+        Cell? best = null; int bd = int.MaxValue;
+        foreach (var d in room.Doors)
+        {
+            if (d.Removed || d.IsExternal) continue;
+            var other = d.RoomA == room ? d.RoomB : d.RoomA;
+            if (other == null || other.Leaking || other.Detached) continue;
+            foreach (var dir in Cell.Dirs4)
+            {
+                var c = d.Cell + dir;
+                if (w.Ship.RoomAt(c) != other || !w.Ship.IsWalkable(c)) continue;
+                int dd = field.Get(c);
+                if (dd >= 0 && dd < bd) { bd = dd; best = c; }
+            }
+        }
+        if (best is not Cell at) return false;
+        Begin(r, new List<RobotStep> { new RGoto(at), new RWait(SimTime.Minutes(1)) }, $"{room.Name} 문 앞 — 기압이 떨어지길 기다린다 (지휘 건 #{r.CaseId})");
+        return true;
+    }
+
     /// <summary>하던 일을 내려놓는다 (끊긴 구역의 로봇이 눈앞의 일을 스스로 맡을 때).</summary>
     internal void DropTaskFor(Robot r) => DropTask(r);
 
@@ -183,7 +208,7 @@ public sealed partial class RobotSystem
     /// 지휘 건 로봇이 그 일에 직접 붙는다 — 사람 몫으로 묶인 일이어도 진척을 함께 채운다 (봉합 · 수리).
     /// 재료는 가까운 보관함에서 · 잠긴 격벽은 연다. 갈 칸이 없거나 재료가 없으면 false.
     /// </summary>
-    internal bool WorkOn(Robot r, WorkOrder o)
+    internal bool WorkOn(Robot r, WorkOrder o, string? label = null)
     {
         var w = _world;
         if (o.Closed || o.Robot != null && o.Robot != r) return false;
@@ -193,7 +218,7 @@ public sealed partial class RobotSystem
         if (steps == null) { if (blocked != null) r.Mind.Say($"{o.Title} — {blocked}", w.Tick); return false; }
         o.Robot = r;
         r.Order = o;
-        Begin(r, steps, $"{o.Title} — 지휘 건 #{r.CaseId}");
+        Begin(r, steps, label ?? $"{o.Title} — 지휘 건 #{r.CaseId}");
         return true;
     }
 

@@ -50,6 +50,8 @@ public sealed class CommandCase
     public string Outcome { get; set; } = "";
     /// <summary>v23 천장 소화 설비 — 마지막으로 적은 상태 (바뀔 때만 적는다).</summary>
     public string NozzleSaid { get; set; } = "";
+    /// <summary>v23 파공: 바람이 세서 로봇을 문 앞에 세워 두는 중.</summary>
+    public bool WindWait { get; set; }
     public List<int> Bots { get; } = new();
     /// <summary>v23 이 건에 한 번이라도 붙었던 로봇 (경험 · 동료 기억).</summary>
     public List<int> Served { get; } = new();
@@ -63,7 +65,7 @@ public sealed class CommanderStats
     public string Line() => $"지휘 건 {Opened} (닫음 {Closed}) · 출동 {Sent} · 증원 {Reinforced} · 다시 붙음 {Refires} · 길 막힘 {NoPath} · 사람 몫을 돌림 {Freed} · 보조 두뇌로 {ToBackup} · 로봇 대장으로 {ToLeader} (대장 {Leaders}) · 사람에게 넘김 {Handover}";
 }
 
-public sealed class IncidentCommander
+public sealed partial class IncidentCommander
 {
     /// <summary>시험: 끄면 예전처럼 (긴급 지정 · 작업 목록만).</summary>
     public static bool On = true;
@@ -127,6 +129,7 @@ public sealed class IncidentCommander
         Sense();
         foreach (var k in Cases.Where(c => c.Open).OrderByDescending(Priority).ThenBy(c => c.Id).ToList()) Run(k);
         if (w.Tick >= _postNext) { _postNext = w.Tick + SimTime.Minutes(10); Posts(); }
+        if (w.Tick >= _backlogNext) { _backlogNext = w.Tick + SimTime.Minutes(10); Backlog(); } // v23 평소 수리 배치
         int closed = Cases.Count(c => !c.Open);
         for (int i = 0; i < Cases.Count && closed > 40; i++)
             if (!Cases[i].Open) { Cases.RemoveAt(i); i--; closed--; }
@@ -168,7 +171,7 @@ public sealed class IncidentCommander
         int open = Cases.Count(c => c.Open);
         string text = now switch
         {
-            CommandTier.Main => $"주 컴퓨터가 돌아왔다 — 지휘를 돌려받는다 (그동안 {TierName(was)}가 지휘했다 · 열린 지휘 건 {open}개)",
+            CommandTier.Main => $"주 컴퓨터가 돌아왔다 — 지휘를 돌려받는다 (그동안 {TierName(was)}가 지휘했다 · 열린 지휘 건 {open}개 · 그동안의 복기 {Lessons.Reviews}건을 넘겨받는다)",
             CommandTier.Backup => $"주 컴퓨터가 멎었다 — 보조 두뇌가 지휘를 잇는다 (느리다 · 열린 지휘 건 {open}개)",
             CommandTier.RobotLeader => $"보조 두뇌도 멎었다 — {Voice}가 무전으로 로봇들을 지휘한다 (감지기 없이 · 잠긴 격벽은 못 연다)",
             _ => "지휘할 컴퓨터도 로봇도 없다 — 사람이 지휘한다",
@@ -191,6 +194,7 @@ public sealed class IncidentCommander
             _ => 0f,
         };
         s += room.Furniture.Count(f => f.Machine != null) * 0.25f + _w.Fleet.Hot(room) / (float)SimTime.Hours(2);
+        s += SlowBias(room); // v23 복기: 첫 손이 늦게 닿았던 방
         return s;
     }
 
@@ -385,7 +389,7 @@ public sealed class IncidentCommander
                 });
             }
         }
-        int want = Math.Clamp(2 + size / 3, 2, 6) + (k.Life ? 1 : 0);
+        int want = Math.Max(1, Math.Clamp(2 + size / 3, 2, 6) + (k.Life ? 1 : 0) + Learned(CaseKind.Fire)); // v23 복기에서 배운 만큼
         if (nz.Spraying(room)) want = Math.Max(1, want - 1); // 천장이 누르는 동안은 한 대 덜
         if (size < k.Best) { k.Best = size; k.BetterAt = w.Tick; }
         else if (k.OnScene >= 0 && w.Tick - Math.Max(k.BetterAt, k.OnScene) > SimTime.Minutes(3) && k.Bots.Count >= want + k.Reinforced && k.Reinforced < 3) // 손이 닿은 뒤에야 진척을 따진다
@@ -416,7 +420,7 @@ public sealed class IncidentCommander
         if (t == null) { Close(k, "고비를 넘겼다"); return; }
         k.RoomId = pt.Room?.Id ?? k.RoomId;
         k.Life = w.Casualty.Urgent(pt);
-        int want = k.Life ? 2 : 1;
+        int want = Math.Max(1, (k.Life ? 2 : 1) + Learned(CaseKind.Casualty));
         foreach (var id in k.Bots.ToList())
         {
             if (BotOf(id) is not Robot r) continue;
@@ -459,10 +463,28 @@ public sealed class IncidentCommander
                 Stats.Freed++;
                 Note(k, $"{c.Name} 몫이던 {o.Title} — 손대지 않아 로봇에게 돌린다");
             }
+        // 바람이 세서 로봇이 못 들어간다 — 외벽 구멍은 드론이 밖에서 막게 사람 몫을 거둔다 (방 안에서 이미 막고 있는 사람은 그대로)
+        if (!w.Fleet.WindOk(room) && w.Automation.DroneControl && DroneSystem.Hatch(w) != null && w.Drones.Drones.Any(d => d.Operational && d.State == DroneState.Docked))
+            foreach (var o in orders.Where(o => o.Drone == null && o.Target.Kind == TargetKind.Wall && o.Assignee is CrewMember c && c.Room != room))
+            {
+                var c = (CrewMember)o.Assignee!;
+                if (c.Job?.Order == o) c.EndJob(w, ToilStatus.Interrupted);
+                o.Assignee = null;
+                Stats.Freed++;
+                Note(k, $"바람이 세다 — {c.Name} 몫이던 {o.Title}, 드론이 밖에서 막게 돌린다");
+            }
         foreach (var id in k.Bots)
         {
             if (BotOf(id) is not Robot r) continue;
             bool idle = RobotSystem.Idle(r);
+            if (idle && !w.Fleet.WindOk(room) && r.Room != room)
+            {
+                // 바람이 세다 — 로봇이 휩쓸려 짐을 놓치고 되돌아오는 일을 되풀이하지 않게 문 앞에서 기압이 떨어지길 기다린다
+                if (!k.WindWait) { k.WindWait = true; Note(k, $"기압 {room.Air.Pressure:0}kPa — 로봇이 바람을 못 버틴다 · 문 앞에서 15kPa 아래로 떨어지길 기다린다"); }
+                w.Robots.WaitAtDoor(r, room);
+                continue;
+            }
+            if (idle && k.WindWait) { k.WindWait = false; Note(k, $"기압 {room.Air.Pressure:0}kPa — 들어간다"); }
             if (idle)
             {
                 // 봉합 일에 직접 붙는다 — 로봇이 아직 없는 일부터 (사람 몫이어도 함께)
@@ -473,7 +495,7 @@ public sealed class IncidentCommander
             }
             if (k.OnScene < 0 && r.Order is { Kind: WorkKind.SealBreach } && r.Room == room) { k.OnScene = w.Tick; Note(k, $"{r.Name} 봉합 시작 — {(w.Tick - k.Opened) / (float)SimTime.Minutes(1):0}분"); }
         }
-        int want = Math.Min(3, 1 + orders.Count) + (k.Life ? 1 : 0);
+        int want = Math.Max(1, Math.Min(3, 1 + orders.Count) + (k.Life ? 1 : 0) + Learned(CaseKind.Breach));
         if (k.Bots.Count < want) Dispatch(k, room, orders.FirstOrDefault()?.Target.Cell ?? Cell.FromPosition(room.Center), want - k.Bots.Count);
     }
 
@@ -567,6 +589,7 @@ public sealed class IncidentCommander
     {
         var w = _w;
         RobotBrain.AfterCase(w, k, outcome is "불을 껐다" or "파공을 막았다" or "고비를 넘겼다");
+        Review(k, outcome); // v23 복기
         foreach (var id in k.Bots) if (BotOf(id) is Robot r && r.CaseId == k.Id) w.Robots.Release(r, $"지휘 건 #{k.Id} 닫힘 — {outcome}");
         k.Bots.Clear();
         k.Phase = CasePhase.Closed;
