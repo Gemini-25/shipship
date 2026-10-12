@@ -116,7 +116,6 @@ public partial class Main
     /// <summary>사진 모드 키 (켜져 있을 때 먼저 받는다): F2 나가기 · Enter/PrintScreen 찍기 · Esc 나가기.</summary>
     private bool PhotoKey(InputEventKey key)
     {
-        if (key.Keycode == Key.F2) { TogglePhotoMode(); return true; }
         if (!PhotoMode) return false;
         switch (key.Keycode)
         {

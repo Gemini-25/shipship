@@ -19,7 +19,7 @@ public partial class Hud
 
     private void DrawCodex(string title, string sub, Color accent, CodexEntry entry, List<(string, string, Color)> links, List<string> past, float y, float maxHeight, Vector2 mouse, string? icon = null)
     {
-        float x0 = Screen.X - Margin - RightColumnWidth;
+        float x0 = ColX; // v20 고른 것 카드 자리 (창이 열리면 창 왼쪽)
         float width = RightColumnWidth - 36;
         var sections = new (string label, string text, Color col)[]
         {

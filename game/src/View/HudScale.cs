@@ -287,14 +287,14 @@ public partial class Hud
     private void DrawScaleCodex(Vector2 mouse)
     {
         var sc = _world.Scale;
-        float x0 = Margin, y0 = Margin + 52f + 8f + 40f + 8f;
-        float w = Mathf.Min(760f, Screen.X - RightColumnWidth - Margin * 3);
-        float height = Screen.Y - y0 - LogFullHeight - Margin - 40f;
+        float x0 = WinX, y0 = WinY; // v20 오른쪽 창
+        float w = WinW;
+        float height = WinBottom - y0;
         var card = new Rect2(x0, y0, w, height);
         Card(card);
         float x = x0 + 18, right = card.End.X - 18;
         Gfx.Text(this, Fonts.Bold, new Vector2(x, y0 + 30), "사고 도감 — 다섯 규모", Ui.TextLarge, Palette.Text);
-        Button(new Rect2(right - 76, y0 + 12, 76, 26), "⇧K 닫기", false, mouse, ToggleScaleCodex, Ui.TextSmall);
+        Button(new Rect2(right - 76, y0 + 12, 76, 26), "닫기", false, mouse, ToggleScaleCodex, Ui.TextSmall);
         int total = ScaleTable.All.Length, seenKinds = ScaleTable.All.Count(r => sc.SeenOf(r.Key) > 0);
         Gfx.Text(this, Fonts.Body, new Vector2(x, y0 + 50), UiKit.Fit($"표 {total}종 · 겪어 본 것 {seenKinds}종 · 규모가 오른 일 {sc.Escalations} · 컴퓨터 판정 {sc.Plans} · 교훈 {sc.Lessons.Count} · 이야기꾼이 쉬어 감 {sc.Rests}", right - (x), Ui.TextBody, Fonts.Body), Ui.TextBody, Palette.TextDim);
         Divider(x, right, y0 + 62);

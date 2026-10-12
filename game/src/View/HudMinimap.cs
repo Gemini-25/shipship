@@ -16,20 +16,20 @@ public partial class Hud
 
     private Rect2 _minimapRect;
 
-    private void DrawMinimap()
+    /// <summary>지도 (v20: 아래 탭 "배" 창 안 — area 안에 꽉 차게).</summary>
+    private void DrawMinimap(Rect2? at = null)
     {
-        if (!MinimapOpen || ChronicleOpen || TechOpen) return;
+        if (at == null && (!MinimapOpen || ChronicleOpen || TechOpen)) return;
         var bounds = _main.ShipView.Bounds;
         if (bounds.Size.X < 1f) return;
-        float maxW = 280f, maxH = LogFullHeight - 30f;
+        float maxW = at is Rect2 a0 ? a0.Size.X - 24f : 280f, maxH = at is Rect2 a1 ? a1.Size.Y - 36f : LogFullHeight - 30f;
         float scale = Mathf.Min(maxW / bounds.Size.X, maxH / bounds.Size.Y);
         var size = bounds.Size * scale;
-        var card = new Rect2(Margin + 470f + 10f, Screen.Y - Margin - LogFullHeight, size.X + 24f, size.Y + 36f);
+        var card = new Rect2(at?.Position ?? new Vector2(Margin + 470f + 10f, Screen.Y - Margin - LogFullHeight), new Vector2(size.X + 24f, size.Y + 36f));
         Card(card);
         _minimapRight = card.End.X;
         _minimapRect = card;
         Gfx.Text(this, Fonts.Bold, new Vector2(card.Position.X + 12, card.Position.Y + 18), "지도", Ui.TextSmall, Palette.TextDim);
-        Gfx.TextRight(this, Fonts.Body, new Vector2(card.End.X - 12, card.Position.Y + 18), "G", Ui.TextTiny, Palette.TextMuted);
         var origin = card.Position + new Vector2(12f, 26f);
         Vector2 M(Vector2 worldPx) => origin + (worldPx - bounds.Position) * scale;
         float t = ShipView.T;

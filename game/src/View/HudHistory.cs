@@ -81,9 +81,9 @@ public partial class Hud
     private void DrawChronicleEvents(Vector2 mouse)
     {
         var h = _world.History;
-        float x0 = Margin, y0 = Margin + 52f + 8f + 40f + 8f + 64f + 10f;
-        float w = Mathf.Min(620f, Screen.X - RightColumnWidth - Margin * 3);
-        float height = Screen.Y - y0 - LogFullHeight - Margin - 10f;
+        float x0 = WinX, y0 = WinY; // v20 오른쪽 창
+        float w = WinW;
+        float height = WinBottom - y0;
         var card = new Rect2(x0, y0, w, height);
         _chronicleRect = card;
         Card(card);
@@ -93,7 +93,7 @@ public partial class Hud
         Gfx.Text(this, Fonts.Body, new Vector2(x + Gfx.Width(Fonts.Bold, $"{_world.Ship.Name} 연대기", Ui.TextLarge) + 10, y0 + 30),
             $"{_world.Day}일째 · 사고 {h.Episodes.Count}건 · 개조 {h.Upgrades} · 결정 {h.DecisionsMade}(부결 {h.DecisionsRejected})"
             + (_world.Voyage.Past.Count > 0 ? $" · 마친 항해 {_world.Voyage.Past.Count}" : "") + (_world.Life.Memorial.Count > 0 ? $" · 추모 {string.Join("·", _world.Life.Memorial.Select(m => m.name))}" : ""), Ui.TextBody, Palette.TextMuted); // v12.8·v12.7
-        Button(new Rect2(right - 58, y0 + 12, 58, 26), "J 닫기", false, mouse, ToggleChronicle, Ui.TextSmall);
+        Button(new Rect2(right - 58, y0 + 12, 58, 26), "닫기", false, mouse, ToggleChronicle, Ui.TextSmall);
         ChronModeTabs(right - 58f - Ui.S2, y0 + 12f, mouse); // v16.24 날 · 주 · 기록
 
         // 교훈 (운영 방침)

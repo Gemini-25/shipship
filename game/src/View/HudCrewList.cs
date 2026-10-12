@@ -21,7 +21,7 @@ public partial class Hud
         int n = _world.Crew.Count;
         bool two = n > 12;
         float rowH = two ? 20f : n <= 8 ? 30f : 22f, headH = n <= 12 ? 18f : 20f, tRowH = 30f;
-        float maxH = Mathf.Max(220f, Screen.Y * 0.52f);
+        float maxH = _colMaxH > 0f ? _colMaxH : Mathf.Max(220f, Screen.Y * 0.52f);
         int tShow = Math.Min(trouble.Count, 6);
         float GroupH(List<CrewMember> l, bool folded) => headH + (folded ? 0f : (two ? (l.Count + 1) / 2 : l.Count) * rowH);
         // 저절로 접기: 넘치면 큰 묶음부터 (사람이 펼친 묶음은 그대로)
@@ -32,8 +32,8 @@ public partial class Hud
             if (Total() <= maxH) break;
             if (!_roleFold.ContainsKey(g.role)) fold[g.role] = true;
         }
-        float x0 = Screen.X - Margin - RightColumnWidth;
-        var card = new Rect2(x0, Margin, RightColumnWidth, Total());
+        float x0 = ColX; // v20 고른 것 카드 자리 (창이 열리면 창 왼쪽)
+        var card = new Rect2(x0, _colTop >= 0f ? _colTop : Margin, RightColumnWidth, Total());
         Card(card);
         SectionTitle(x0 + 18, card.Position.Y + 24, "승무원");
         int alive = _world.Crew.Count(c => !c.Dead && !c.LeftShip);

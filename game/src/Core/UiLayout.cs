@@ -4,7 +4,8 @@ using System.Collections.Generic;
 namespace ShipSim.Core;
 
 // v17.6 화면 배치 규칙 — 패널끼리 겹치지 않게: 세로로 쌓고, 자리가 모자라면 접는다.
-// 화면(Hud)과 헤드리스 시험(--hudtest)이 같은 규칙을 쓴다 (글꼴 없이 계산되는 것만). 배 그림은 패널이 비운 가장 넓은 자리에 맞춘다.
+// v20 UI 개편: 늘 보이는 것은 위 줄(시간 · 배속 · 자원) · 사고/경보 카드 · 고른 것 카드뿐. 나머지 창은 아래 탭(F1~F7)으로 열고 오른쪽 한 칸에 하나씩.
+// 화면(Hud)과 헤드리스 시험(--hudtest)이 같은 규칙을 쓴다 (글꼴 없이 계산되는 것만). 배 그림은 위 줄 · 아래 탭 · 오른쪽 창을 피한 가장 넓은 자리에 맞춘다.
 
 /// <summary>화면 사각형 (왼쪽 위 · 너비 · 높이).</summary>
 public readonly record struct UiRect(float X, float Y, float W, float H)
@@ -23,44 +24,42 @@ public sealed class HudNeeds
 {
     public float W = 1600f, H = 900f;
     public float TopBarW = 560f;
-    /// <summary>조용한 HUD에서 접어 둔 보기 · 사고 도구 칩 너비 (0 = 없음). 도구 막대가 펼쳐져 있으면 쓰지 않는다.</summary>
-    public float FoldedToolsW;
-    /// <summary>함선 지표 카드 (0 = 안 보임).</summary>
-    public float ProfileW, ProfileH;
     /// <summary>우주 대재난 카드 (0 = 없음).</summary>
     public float CosmicH;
     /// <summary>보기 범례 (0 = 일반 보기).</summary>
     public float LegendW, LegendH;
-    public bool Computer = true;
-    /// <summary>주 컴퓨터 카드를 다 펼쳤을 때 높이.</summary>
-    public float ComputerH = 260f;
-    public bool ComputerUserFolded;
-    public float LogH = 190f;
-    public float MinimapW, MinimapH;
-    public bool Voyage;
-    /// <summary>위쪽 줄(보기 · 사고 도구)이 보이나.</summary>
-    public bool Tools = true;
+    /// <summary>고른 것 카드 (사람 · 설비 · 방 · 로봇 — 0 = 고른 것 없음).</summary>
+    public float SideH;
+    /// <summary>오른쪽 창이 열려 있나 (아래 탭).</summary>
+    public bool Dock;
     public float ShipW = 1200f, ShipH = 520f;
 }
 
 /// <summary>배치 결과: 패널마다 사각형 · 접혔나 · 배를 그릴 자리.</summary>
 public sealed class HudPlan
 {
-    public UiRect TopBar, Status, Tools, Profile, Cosmic, Legend, Computer, Log, Minimap, Voyage, Right, ShipArea;
-    public bool ComputerFolded, ComputerHidden, CosmicFolded, CosmicHidden, LegendHidden;
-    public float StatusMaxW, ToolsMaxW;
+    public UiRect TopBar, Status, Cosmic, Legend, Side, Dock, TabBar, ShipArea;
+    public bool CosmicFolded, CosmicHidden, LegendHidden;
+    public float StatusMaxW;
     /// <summary>왼쪽 위 더미의 자리 (그 패널이 지난 그림에 없었어도 이번에 그릴 자리).</summary>
-    public float ProfileY, CosmicY, LegendY;
+    public float CosmicY, LegendY;
+    /// <summary>사고 카드 · 시간 띠가 쌓이는 아래쪽 띠 (아래 탭 바로 위 · 고른 것 카드와 오른쪽 창 앞까지).</summary>
+    public float AlertBottom, AlertRight;
 
     /// <summary>이름 붙은 패널 (빈 것은 뺀다).</summary>
     public IEnumerable<(string name, UiRect r)> Panels()
     {
         var all = new (string, UiRect)[]
         {
-            ("시계", TopBar), ("상태 줄", Status), ("보기 · 사고", Tools), ("함선 지표", Profile), ("대재난", Cosmic), ("범례", Legend),
-            ("주 컴퓨터", Computer), ("항해 기록", Log), ("지도", Minimap), ("항로", Voyage), ("오른쪽 칸", Right),
+            ("시계", TopBar), ("상태 줄", Status), ("대재난", Cosmic), ("범례", Legend), ("고른 것", Side), ("오른쪽 창", Dock), ("아래 탭", TabBar),
         };
         foreach (var p in all) if (!p.Item2.Empty) yield return p;
+    }
+
+    /// <summary>배가 피하는 패널 (위 줄 · 아래 탭 · 오른쪽 창 — 고른 것 카드와 경보는 배 위에 뜬다).</summary>
+    public IEnumerable<UiRect> Fixed()
+    {
+        foreach (var r in new[] { TopBar, Status, TabBar, Dock }) if (!r.Empty) yield return r;
     }
 
     /// <summary>겹치는 패널 쌍 (없으면 빈 목록).</summary>
@@ -77,11 +76,15 @@ public sealed class HudPlan
 
 public static class UiLayout
 {
-    public const float Margin = 16f, Gap = 8f, RightW = 324f, TopBarH = 52f, ToolsH = 40f;
-    public const float CosmicFoldH = 54f;
-    public const float ComputerW = 318f, ComputerFoldH = 44f, LogW = 470f, LogFullH = 190f, VoyageH = 40f, CosmicW = 344f;
+    public const float Margin = 16f, Gap = 8f, RightW = 324f, TopBarH = 52f;
+    public const float CosmicFoldH = 54f, CosmicW = 344f;
+    /// <summary>아래 탭 막대: 탭 7개.</summary>
+    public const int Tabs = 7;
+    public const float TabH = 46f, TabW = 104f;
+    public const float DockMinW = 520f, DockMaxW = 760f;
 
     // ── 주 컴퓨터 카드 속 줄 높이 (화면과 시험이 같은 값) ──
+    public const float ComputerW = 318f, ComputerFoldH = 44f;
     public const float CompHead = 44f, CompNow = 34f, CompLoad = 20f, CompIconRow = 19f, CompIconPad = 12f, CompBookLine = 18f, CompBrain = 74f, CompButtons = 34f, CompProposal = 118f;
     public const float CompIconStep = 18f;
 
@@ -96,72 +99,55 @@ public static class UiLayout
         folded ? ComputerFoldH
             : CompHead + CompNow + CompLoad + IconRows(modules, width) * CompIconRow + CompIconPad + CompBookLine + CompBrain + CompButtons + proposals * CompProposal + 6f;
 
-    /// <summary>규칙: ① 위 두 줄은 오른쪽 칸 앞에서 멈춘다(넘치면 접힘 칩) ② 왼쪽 위는 지표 → 대재난 → 범례 순으로 쌓는다
-    /// ③ 기록은 왼쪽 아래 · 지도와 항로는 그 옆에 쌓는다 ④ 주 컴퓨터는 기록 바로 위 — 왼쪽 위 더미와 겹치면 접고, 접어도 겹치면 숨긴다
-    /// ⑤ 배는 남은 자리 중 배 모양이 가장 크게 들어가는 사각형에.</summary>
+    /// <summary>오른쪽 창 너비 (화면의 4할 남짓 · 520~760).</summary>
+    public static float DockWidth(float screenW) => Math.Clamp(screenW * 0.42f, DockMinW, DockMaxW);
+
+    /// <summary>규칙: ① 위 줄은 시계 · 상태 ② 아래 가운데는 탭 막대 ③ 오른쪽 창은 위 줄과 탭 사이 오른쪽 끝
+    /// ④ 고른 것 카드는 오른쪽 (창이 열려 있으면 창 왼쪽) ⑤ 왼쪽 위는 대재난 → 범례 (고른 것 카드와 겹치면 접거나 숨긴다)
+    /// ⑥ 배는 위 줄 · 탭 · 창을 피한 사각형 중 배 모양이 가장 크게 들어가는 곳에 (고른 것 카드 · 경보는 배 위에 뜬다).</summary>
     public static HudPlan Plan(HudNeeds n)
     {
         var p = new HudPlan();
         float W = n.W, H = n.H;
-        p.Right = new UiRect(W - Margin - RightW, Margin, RightW, H - Margin * 2f);
-        float limit = p.Right.X - 12f;
-        p.TopBar = new UiRect(Margin, Margin, Math.Min(n.TopBarW, limit - Margin), TopBarH);
+        p.TopBar = new UiRect(Margin, Margin, Math.Min(n.TopBarW, W - Margin * 2f), TopBarH);
         float sx = p.TopBar.Right + 10f;
-        p.StatusMaxW = Math.Max(0f, limit - sx);
+        p.StatusMaxW = Math.Max(0f, W - Margin - sx);
         p.Status = p.StatusMaxW >= 60f ? new UiRect(sx, Margin, p.StatusMaxW, TopBarH) : default;
-        float ty = Margin + TopBarH + Gap;
-        p.ToolsMaxW = Math.Max(0f, limit - Margin);
-        p.Tools = n.Tools ? new UiRect(Margin, ty, p.ToolsMaxW, ToolsH)
-            : n.FoldedToolsW > 0f ? new UiRect(Margin, ty, Math.Min(n.FoldedToolsW, p.ToolsMaxW), ToolsH) : default; // 접힌 칩도 배가 덮지 않게
-        // ③ 아래 (먼저 — 위 더미가 여기까지만 내려온다)
-        p.Log = new UiRect(Margin, H - Margin - n.LogH, LogW, n.LogH);
-        if (n.MinimapW > 0f)
+        float top = Margin + TopBarH + Gap;
+        float tabW = Math.Min(Tabs * TabW + 16f, W - Margin * 2f);
+        p.TabBar = new UiRect((W - tabW) * 0.5f, H - Margin - TabH, tabW, TabH);
+        float bottom = p.TabBar.Y - Gap;
+        if (n.Dock)
         {
-            p.Minimap = new UiRect(Margin + LogW + 10f, H - Margin - LogFullH, n.MinimapW, n.MinimapH);
-            if (p.Minimap.Right > limit) p.Minimap = default; // 좁은 화면: 지도는 접는다 (G로 다시)
-            else if (n.Voyage) p.Voyage = new UiRect(p.Minimap.X, p.Minimap.Y - VoyageH - 6f, p.Minimap.W, VoyageH);
+            float dw = DockWidth(W);
+            p.Dock = new UiRect(W - Margin - dw, top, dw, Math.Max(80f, bottom - top));
         }
-        // ② 왼쪽 위 더미: 넘치면 대재난 카드는 접고, 범례는 옆으로 · 그래도 자리가 없으면 숨긴다
-        bool toolsRow = !p.Tools.Empty;
-        float y = toolsRow ? ty + ToolsH + Gap : ty;
-        float stackLimit = p.Log.Y - Gap;
-        float stackTop = y, stackW = 0f;
-        p.ProfileY = y;
-        if (n.ProfileH > 0f) { p.Profile = new UiRect(Margin, y, Math.Min(n.ProfileW, limit - Margin), n.ProfileH); y = p.Profile.Bottom + Gap; stackW = Math.Max(stackW, p.Profile.W); }
+        float sideX = (n.Dock ? p.Dock.X - Gap : W - Margin) - RightW;
+        if (n.SideH > 0f) p.Side = new UiRect(sideX, top, RightW, Math.Min(n.SideH, bottom - top));
+        p.AlertBottom = bottom;
+        p.AlertRight = (n.SideH > 0f ? p.Side.X : n.Dock ? p.Dock.X : W - Margin) - Gap;
+        // ⑤ 왼쪽 위 더미
+        float y = top;
+        float stackLimit = bottom;
+        bool Free(UiRect r) => r.Bottom <= stackLimit && !r.Intersects(p.Side) && !r.Intersects(p.Dock) && r.Right <= W - Margin;
         p.CosmicY = y;
         if (n.CosmicH > 0f)
         {
-            float h = n.CosmicH;
-            if (y + h > stackLimit && h > CosmicFoldH) { h = CosmicFoldH; p.CosmicFolded = true; }
-            if (y + h <= stackLimit) { p.Cosmic = new UiRect(Margin, y, CosmicW, h); y = p.Cosmic.Bottom + Gap; stackW = Math.Max(stackW, CosmicW); }
+            var full = new UiRect(Margin, y, CosmicW, n.CosmicH);
+            var fold = new UiRect(Margin, y, CosmicW, CosmicFoldH);
+            if (Free(full)) { p.Cosmic = full; y = full.Bottom + Gap; }
+            else if (Free(fold)) { p.Cosmic = fold; p.CosmicFolded = true; y = fold.Bottom + Gap; }
             else p.CosmicHidden = true;
         }
         p.LegendY = y;
         if (n.LegendH > 0f)
         {
             var below = new UiRect(Margin, y, n.LegendW, n.LegendH);
-            var beside = new UiRect(Margin + stackW + Gap, stackTop, n.LegendW, n.LegendH);
-            bool Free(UiRect r) => r.Bottom <= stackLimit && r.Right <= limit && !r.Intersects(p.Voyage) && !r.Intersects(p.Minimap);
-            if (Free(below)) { p.Legend = below; y = below.Bottom + Gap; }
-            else if (Free(beside)) p.Legend = beside;
+            if (Free(below)) p.Legend = below;
             else p.LegendHidden = true;
         }
-        float stackBottom = y - Gap;
-        // ④ 주 컴퓨터: 기록 바로 위
-        if (n.Computer)
-        {
-            float bottom = p.Log.Y - 10f;
-            float room = bottom - Math.Max(stackBottom + Gap, ty + (toolsRow ? ToolsH + Gap : 0f));
-            float full = n.ComputerUserFolded ? ComputerFoldH : n.ComputerH;
-            if (full <= room) p.Computer = new UiRect(Margin, bottom - full, ComputerW, full);
-            else if (ComputerFoldH <= room) { p.Computer = new UiRect(Margin, bottom - ComputerFoldH, ComputerW, ComputerFoldH); p.ComputerFolded = true; }
-            else p.ComputerHidden = true;
-            p.ComputerFolded |= n.ComputerUserFolded;
-        }
-        // ⑤ 배 자리
-        var taken = new List<UiRect>();
-        foreach (var (_, r) in p.Panels()) taken.Add(r);
-        p.ShipArea = FreeArea(W, H, taken, n.ShipW / Math.Max(1f, n.ShipH), Margin);
+        // ⑥ 배 자리
+        p.ShipArea = FreeArea(W, H, new List<UiRect>(p.Fixed()), n.ShipW / Math.Max(1f, n.ShipH), Margin);
         return p;
     }
 

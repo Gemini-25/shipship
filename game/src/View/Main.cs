@@ -346,11 +346,11 @@ public partial class Main : Node2D
             Paused = true;
             ShowNotice($"치명 경보 — 저절로 멈췄다: {last.Text}" + (last.Room != null ? " · N: 그곳으로" : ""), true);
         }
-        else if (Settings.EventToasts && last.Room != null) ShowNotice($"{last.Text} · N: 그곳으로", true);
+        else if (Settings.EventToasts && last.Room != null) ShowNotice($"{last.Text}", true);
     }
 
     /// <summary>N: 가장 최근 경보가 난 곳으로.</summary>
-    private void JumpToLatestAlert()
+    public void JumpToLatestAlert()
     {
         var a = Sim.Alerts.LastOrDefault(x => x.Room != null && !x.Room.Detached);
         if (a == null) { ShowNotice("아직 알릴 만한 사건이 없다"); return; }
@@ -359,7 +359,7 @@ public partial class Main : Node2D
     }
 
     /// <summary>[ ]: 지금까지의 사고(에피소드)를 하나씩 넘겨 본다.</summary>
-    private void CycleEpisode(int dir)
+    public void CycleEpisode(int dir)
     {
         var eps = Sim.History.Episodes;
         if (eps.Count == 0) { ShowNotice("아직 사고가 없었다"); return; }
@@ -371,7 +371,7 @@ public partial class Main : Node2D
     }
 
     /// <summary>R: 고른 사고(없으면 가장 최근 치명 경보)의 3분 전으로 되감는다 — 같은 시드·같은 관찰자 기록으로 다시 돌린다.</summary>
-    private void RewindToEvent()
+    public void RewindToEvent()
     {
         long tick = -1;
         var eps = Sim.History.Episodes;
@@ -422,7 +422,7 @@ public partial class Main : Node2D
     {
         path ??= SavePath;
         snapPath ??= System.IO.Path.ChangeExtension(path, ".snap");
-        if (!System.IO.File.Exists(path)) { ShowNotice("저장한 게임이 없다 (F5로 저장)"); return; }
+        if (!System.IO.File.Exists(path)) { ShowNotice("저장한 게임이 없다 (메뉴 › 저장 · 불러오기)"); return; }
         // v10.3: 읽기·해석에 실패하면 지금 게임을 그대로 두고 까닭을 알린다
         string text;
         try
@@ -514,40 +514,24 @@ public partial class Main : Node2D
                 case Key.Key2: SetSpeed(1); break;
                 case Key.Key3: SetSpeed(2); break;
                 case Key.Key4: SetSpeed(3); break;
-                case Key.V: CycleView(key.ShiftPressed ? -1 : 1); break;
-                case Key.Tab: CycleCrew(key.ShiftPressed ? -1 : 1); break;
+                case Key.V: CycleView(1); break;
                 case Key.F: ToggleFollow(); break;
                 case Key.Home:
                 case Key.H: FitCamera(); break;
                 case Key.Escape:
+                    // v20 Esc: 사고 도구 → 오른쪽 창 → 고른 것 차례로 내려놓는다
                     if (Tool != IncidentTool.None) Tool = IncidentTool.None;
                     else if (!Hud.CloseHazardMenu()) ClearSelection();
                     StopFollowItem(); // v17.7
                     break;
-                case Key.Q: CycleFollowItem(key.ShiftPressed ? -1 : 1); break; // v17.7 물건 따라가기
-                case Key.Z: ToggleTool(IncidentTool.SmallMeteor); break;
-                case Key.X: ToggleTool(IncidentTool.BigMeteor); break;
-                case Key.M: ToggleTool(IncidentTool.HugeMeteor); break;
-                case Key.C: ToggleTool(IncidentTool.Fire); break;
-                case Key.B: ToggleTool(IncidentTool.Break); break;
-                case Key.P: ToggleTool(IncidentTool.PipeBurst); break;
-                case Key.J: if (key.ShiftPressed) Hud.ToggleVoyage(); else Hud.ToggleChronicle(); break; // v17.7 ⇧J 항해 결산
-                case Key.K: if (key.ShiftPressed) Hud.ToggleScaleCodex(); else Hud.ToggleChain(); break; // v16.18 ⇧K 사고 도감 (규모별)
-                case Key.U: ToggleSummary(); break; // v12.8 요약 진행
-                case Key.L: ToggleHighlight(); break;
-                case Key.I: if (key.ShiftPressed) Hud.ToggleCollection(); else Hud.ToggleCodex(); break; // v17.9 ⇧I 수집 도감
-                case Key.Y: Hud.ToggleControl(); break;
-                case Key.E: if (key.ShiftPressed) Hud.ToggleCouncil(); else Hud.TogglePolicy(); break; // v13.2 방침·회의 · v18.18 ⇧E 회의록
-                case Key.G: Hud.ToggleMinimap(); break;
-                case Key.T: if (key.ShiftPressed) Hud.ToggleTechWeb(); else Hud.ToggleTech(); break; // v16.14 Shift+T 기술 지도
-                case Key.F5: SaveGame(); break;
-                case Key.F9: if (key.ShiftPressed) LoadAutoSave(); else LoadGame(); break; // v19 ⇧F9 자동 저장
-                case Key.O: Options.Toggle(); break;
-                case Key.N: JumpToLatestAlert(); break;
-                case Key.Bracketleft: CycleEpisode(-1); break;
-                case Key.Bracketright: CycleEpisode(1); break;
-                case Key.R: RewindToEvent(); break;
-                case Key.Slash or Key.Question or Key.F1: Hud.ToggleHelp(); break; // v16.2 ? 도움말
+                // v20 아래 탭: F1 배 · F2 사람 · F3 기록 · F4 사고 · F5 기술 · F6 컴퓨터 · F7 메뉴
+                case Key.F1: Hud.ToggleDock(DockTab.Ship); break;
+                case Key.F2: Hud.ToggleDock(DockTab.People); break;
+                case Key.F3: Hud.ToggleDock(DockTab.Records); break;
+                case Key.F4: Hud.ToggleDock(DockTab.Incidents); break;
+                case Key.F5: Hud.ToggleDock(DockTab.Tech); break;
+                case Key.F6: Hud.ToggleDock(DockTab.Computer); break;
+                case Key.F7: Hud.ToggleDock(DockTab.Menu); break;
                 default: return;
             }
             GetViewport().SetInputAsHandled();
@@ -562,7 +546,7 @@ public partial class Main : Node2D
     {
         SpeedIndex = Math.Clamp(index, 0, Speeds.Length - 1);
         Paused = false;
-        if (Settings.Highlight) { Settings.Highlight = false; Settings.Save(); ShowNotice("배속을 손으로 골라 자동 배속을 껐다 (L로 다시)"); }
+        if (Settings.Highlight) { Settings.Highlight = false; Settings.Save(); ShowNotice("배속을 손으로 골라 자동 배속을 껐다 (위 막대 '자동'으로 다시)"); }
     }
 
     public void CycleView(int dir)
@@ -763,7 +747,7 @@ public partial class Main : Node2D
         return false;
     }
 
-    private void CycleCrew(int dir)
+    public void CycleCrew(int dir)
     {
         if (Sim.Crew.Count == 0) return;
         int i = SelectedCrew == null ? (dir > 0 ? 0 : Sim.Crew.Count - 1)
@@ -775,6 +759,12 @@ public partial class Main : Node2D
 
     private int _hudFit;
     private Vector2 _fitZoom, _fitPos;
+
+    /// <summary>카메라가 아직 맞춘 그대로면 (사람이 옮기거나 확대하지 않았으면) 새 빈자리에 다시 맞춘다 — v20 오른쪽 창이 열리고 닫힐 때.</summary>
+    public void RefitIfFitted()
+    {
+        if (Camera.FollowTarget == null && Camera.Zoom == _fitZoom && Camera.Position == _fitPos) FitCamera();
+    }
 
     public void FitCamera()
     {
@@ -1045,25 +1035,16 @@ public partial class Main : Node2D
                     break;
                 case "--open":
                 {
-                    // 화면 확인용: --open=control:6 · chronicle · voyage · chain · scalecodex · collection · policy · council · tech · techweb · decisions · messenger · minimap · help
+                    // 화면 확인용 (v20 아래 탭): --open=탭:쪽[:관제 탭] — 탭 ship · people · records · incidents · tech · computer · menu (또는 F1~F7 번호 1~7)
                     var ob = value.Split(':');
-                    switch (ob[0])
+                    var tab = ob[0] switch
                     {
-                        case "control": Hud.ToggleControl(); if (ob.Length > 1) Hud.ControlTab = int.Parse(ob[1], CultureInfo.InvariantCulture); break;
-                        case "chronicle": Hud.ToggleChronicle(); break;
-                        case "voyage": Hud.ToggleVoyage(); break;
-                        case "chain": Hud.ToggleChain(); break;
-                        case "scalecodex": Hud.ToggleScaleCodex(); break;
-                        case "collection": Hud.ToggleCollection(); break;
-                        case "policy": Hud.TogglePolicy(); break;
-                        case "council": Hud.ToggleCouncil(); break;
-                        case "tech": Hud.ToggleTech(); break;
-                        case "techweb": Hud.ToggleTechWeb(); break;
-                        case "decisions": Hud.DecisionsOpen = true; break;
-                        case "messenger": Hud.MessengerOpen = true; break;
-                        case "minimap": Hud.ToggleMinimap(); break;
-                        case "help": Hud.ToggleHelp(); break;
-                    }
+                        "ship" or "1" => DockTab.Ship, "people" or "2" => DockTab.People, "records" or "3" => DockTab.Records, "incidents" or "4" => DockTab.Incidents,
+                        "tech" or "5" => DockTab.Tech, "computer" or "6" => DockTab.Computer, "menu" or "7" => DockTab.Menu, _ => DockTab.None,
+                    };
+                    if (tab == DockTab.None) break;
+                    Hud.OpenDock(tab, ob.Length > 1 ? int.Parse(ob[1], CultureInfo.InvariantCulture) : 0);
+                    if (tab == DockTab.Computer && ob.Length > 2) Hud.ControlTab = int.Parse(ob[2], CultureInfo.InvariantCulture);
                     break;
                 }
                 case "--blast":

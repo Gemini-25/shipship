@@ -105,81 +105,52 @@ public partial class Hud : Control
         _tip = null;
         var mouse = GetLocalMousePosition();
         long _hp = FrameProbe.Now; // v19 HUD 패널별 시간 (--perf)
-        MeasureLog(); // v16.2 접힌 기록 높이 → 컴퓨터 카드가 그 바로 위에
-        PlanLayout(); // v17.6 패널 배치 규칙 (쌓고 · 모자라면 접는다 — HudLayout.cs)
+        FollowFlags(); // v20 창 안 단추가 바꾼 창 깃발 → 아래 탭
+        PlanLayout(); // v17.6 · v20 패널 배치 규칙 (HudLayout.cs)
 
         FrameProbe.Add("hud.layout0", _hp); _hp = FrameProbe.Now;
+        // ① 늘 보이는 위 줄: 시간 · 배속 · 자원
         float topRight = DrawTopBar(mouse);
         DrawStatus(topRight + 10f, mouse);
-        // v16.2 조용한 HUD: 보기 · 사고 도구는 접어 두고 열 때만
-        if (!Quiet || _toolsOpen || _hazardMenu || _main.Tool != IncidentTool.None)
-        {
-            float viewRight = DrawViewPicker(mouse); // v17.6 보기 선택판 하나
-            DrawIncidentTools(viewRight + 10f, mouse);
-            if (Quiet) DrawToolsFoldButton(_toolsRight + 6f, mouse);
-        }
-        else DrawToolsFolded(mouse);
-        FrameProbe.Add("hud.layout", _hp); _hp = FrameProbe.Now;
-        DrawProfile();
-        DrawViewLegend(); // v17.6 보기마다 범례
-
-        // v16.2 조용한 HUD: 승무원은 살펴볼 사람만 (머리글을 누르면 모두)
-        // 승무원 카드가 주인공: 조용한 HUD에서 누군가를 고르면 위 칸은 줄여 카드에 자리를 준다
+        DrawViewLegend(); // 일반 보기가 아닐 때만
         FrameProbe.Add("hud.top", _hp); _hp = FrameProbe.Now;
-        float y = Quiet && !_rosterOpen ? DrawCrewSummary(mouse, _main.SelectedCrew != null ? 2 : 6) : DrawRoster(mouse);
-        if (Quiet && _rosterOpen) DrawRosterFold(y, mouse);
-        FrameProbe.Add("hud.profile", _hp); _hp = FrameProbe.Now;
-        float room = Screen.Y - y - 10f - Margin - 40f; // 오른쪽 아래 ? 단추 · 힌트 자리
-        if (_main.SelectedCrew is CrewMember crew) DrawCrewInspector(crew, y + 10f, mouse);
-        else if (_main.SelectedRobot is Robot robot) DrawRobotInspector(robot, y + 10f, room);
-        else if (_main.SelectedFurniture is Furniture f) { if (!DrawFurnitureCodex(f, y + 10f, room, mouse)) DrawMachineInspector(f, y + 10f, room, mouse); }
-        else if (_main.SelectedRoom is Room r) { if (!DrawRoomCodex(r, y + 10f, room, mouse)) DrawRoomInspector(r, y + 10f, mouse); }
-        else
-        {
-            // 아무도 고르지 않았으면: 지금 눈여겨볼 한 사람의 작은 승무원 카드 (목표 · 이유 사슬 · 믿음) — 조용한 HUD에서도 늘
-            float sy = DrawCrewSpotlight(y + 10f, mouse);
-            if (!Quiet || _workOpen || _world.Board.Open.Any(o => o.Urgency >= 0.9f)) DrawWorkBoard(sy + 10f, Screen.Y - sy - 20f - Margin - 40f, mouse); // 조용한 HUD: 긴급 작업만 떠오른다
-        }
 
+        // ② 고른 것 카드 (고른 것이 있을 때만 · 창이 열려 있으면 창 왼쪽) — 아무것도 고르지 않았으면 긴급 작업만 떠오른다
+        float y = _plan.Side.Empty ? Margin + UiLayout.TopBarH + UiLayout.Gap : _plan.Side.Y;
+        float room = SideBottom - y;
+        if (_main.SelectedCrew is CrewMember crew) DrawCrewInspector(crew, y, mouse);
+        else if (_main.SelectedRobot is Robot robot) DrawRobotInspector(robot, y, room);
+        else if (_main.SelectedFurniture is Furniture f) { if (!DrawFurnitureCodex(f, y, room, mouse)) DrawMachineInspector(f, y, room, mouse); }
+        else if (_main.SelectedRoom is Room r) { if (!DrawRoomCodex(r, y, room, mouse)) DrawRoomInspector(r, y, mouse); }
+        else if (UrgentWork) DrawWorkBoard(y, room, mouse);
         FrameProbe.Add("hud.crew", _hp); _hp = FrameProbe.Now;
-        DrawComputerCard(mouse); // v16.0 ④ 주컴퓨터 상시 카드 (HudComputer.cs)
-        FrameProbe.Add("hud.inspector", _hp); _hp = FrameProbe.Now;
+
+        // ③ 사고 · 경보 카드
         DrawCosmicPanel(mouse); // v18.13 우주 대재난 예보 (HudCosmic.cs)
-        FrameProbe.Add("hud.computer", _hp); _hp = FrameProbe.Now;
-        DrawLog(mouse);
-        FrameProbe.Add("hud.cosmic", _hp); _hp = FrameProbe.Now;
-        DrawMinimap(); // v11.3
-        if (MinimapOpen && !ChronicleOpen && !TechOpen && _minimapRect.Size.X > 0f) DrawVoyageBar(_minimapRect); // v12.8 항로
-        FrameProbe.Add("hud.log", _hp); _hp = FrameProbe.Now;
         DrawIncidentCards(mouse); // v12.2 사고 카드
         DrawTalkCard(mouse); // v18.17 대화 카드 (HudTalkCard.cs)
         DrawItemTrail(mouse); // v17.7 따라가는 물건이 거친 손 (HudWatch.cs)
-        if (_world.Causes.Notable().Any()) DrawTimeBar(mouse); // v12.2 시간 막대
-        FrameProbe.Add("hud.minimap", _hp); _hp = FrameProbe.Now;
-        if (CouncilOpen) DrawCouncil(mouse); // v18.18 회의록 · 안건 · 파벌 (HudCouncil.cs)
-        else if (PolicyOpen) DrawPolicy(mouse); // v13.2 방침·회의 화면
-        else if (ControlOpen) DrawControl(mouse); // v12.5 관제 화면
-        else if (ChainOpen) DrawChain(mouse); // v12.2 인과 사슬
-        else if (ChronicleOpen) DrawChronicle(mouse);
-        else if (TechOpen) DrawTech(mouse);
-        else if (ScaleCodexOpen) DrawScaleCodex(mouse); // v16.18 사고 도감 — 규모별 (HudScale.cs)
-        else if (CollectionOpen) DrawCollection(mouse); // v17.9 수집 도감 (HudCollection.cs)
-        else if (VoyageOpen) DrawVoyage(mouse); // v17.7 항해 결산 (HudWatch.cs)
+        if (_world.Causes.Notable().Any(i => i.Open)) DrawTimeBar(mouse); // v12.2 시간 막대 (사고가 진행 중일 때만)
         FrameProbe.Add("hud.cards", _hp); _hp = FrameProbe.Now;
-        DrawHelpCorner(mouse); // v16.2 단축키 한 줄 대신 ? 도움말 + 상황 힌트
+
+        // ④ 아래 탭 · 오른쪽 창 하나
+        DrawTabBar(mouse);
+        DrawDock(mouse);
+        FrameProbe.Add("hud.dock", _hp); _hp = FrameProbe.Now;
+
         DrawBanners();
         DrawSummaryCard(mouse); // v12.8 요약 진행
         DrawCampaign(); // v12.9 임무
         DrawTutorial(mouse); // v12.9 첫 항해 안내
-        if (_hazardMenu) DrawHazardMenu(_hazardMenuAt, mouse); // v11.2 떠 있는 메뉴는 맨 위에
-        DrawViewPickerPanel(mouse); // v17.6
-        if (HelpOpen) DrawHelp(mouse); // v16.2
         _tip?.Invoke(); // v16.2 툴팁은 맨 위에
         FrameProbe.Add("hud.screens", _hp); _hp = FrameProbe.Now;
         DrawScaleFrame(); // v16.18 지금 가장 큰 사고의 규모로 화면 테두리
         DrawPauseFrame(); // v16.2 일시정지 테두리
         FrameProbe.Add("hud.rest", _hp);
     }
+
+    /// <summary>고른 것이 없을 때 오른쪽에 떠오르는 긴급 작업.</summary>
+    private bool UrgentWork => _world.Board.Open.Any(o => o.Urgency >= 0.9f);
 
     // ─────────────────────────────── 공통 ───────────────────────────────
 
@@ -421,13 +392,12 @@ public partial class Hud : Control
     }
 
     /// <summary>함선 지표 (처음 출발할 때 = 100): 사고와 개조를 거치며 어떤 건 떨어지고 어떤 건 오른다.</summary>
-    private void DrawProfile()
+    /// <summary>함선 지표 (v20: 아래 탭 "배" 창 안 — at이 그 자리).</summary>
+    private void DrawProfile(Vector2 at)
     {
-        _profileSz = Vector2.Zero;
-        if (_world.InitialProfile is not ShipProfile basis) return;
+        if (_world.InitialProfile is not ShipProfile basis) { DrawNote("함선 지표", "처음 상태를 아직 재지 않았다"); return; }
         if (_world.Tick % 30 == 0 || _profile == null) _profile = ShipProfile.Measure(_world).RelativeTo(basis);
         var values = _profile.Values;
-        if (Quiet && !_toolsOpen && values.All(v => v >= 90f)) return; // v16.2 조용한 HUD: 떨어진 지표가 있을 때만 떠오른다
         var widths = ShipProfile.Names.Select((n, i) => Gfx.Width(Fonts.Body, n, Ui.TextTiny) + 4 + Gfx.Width(Fonts.Bold, $"{values[i]:0}", Ui.TextBody) + 14).ToList();
         // 재료: 기본 수리재·부품 재고와 채집 (평소엔 천천히 쌓이고, 큰 사고는 몇 주 치를 쓴다)
         var ship = _world.Ship;
@@ -441,8 +411,7 @@ public partial class Hud : Control
         // v12.4 이야기꾼: 성격·난이도·긴장·여력·다음 사고까지
         string story = StoryLine();
         titleW = Mathf.Max(titleW, Gfx.Width(Fonts.Body, story, Ui.TextTiny));
-        var card = new Rect2(Margin, _plan.ProfileY, 28 + Mathf.Max(widths.Sum() - 14, titleW), story.Length > 0 ? 80f : 64f);
-        _profileSz = card.Size; // v17.6 배치 규칙에 알린다
+        var card = new Rect2(at, new Vector2(28 + Mathf.Max(widths.Sum() - 14, titleW), story.Length > 0 ? 80f : 64f));
         Card(card);
         Gfx.Text(this, Fonts.Body, new Vector2(card.Position.X + 14, card.Position.Y + 16), "함선 지표 · 처음 = 100", Ui.TextTiny, Palette.TextMuted);
         Gfx.TextRight(this, Fonts.Bold, new Vector2(card.End.X - 14, card.Position.Y + 16), mats, Ui.TextTiny,
@@ -503,7 +472,7 @@ public partial class Hud : Control
         float titleW = Gfx.Width(Fonts.Bold, "사고", Ui.TextSmall) + 14f;
         const float moreW = 84f;
         // v17.6 오른쪽 칸 앞에서 멈춘다: 단추를 좁히고, 그래도 모자라면 뒤쪽 도구는 접는다 (단축키는 그대로)
-        float avail = Margin + _plan.ToolsMaxW - x0 - (14 + titleW + moreW + 14);
+        float avail = Screen.X - Margin - x0 - (14 + titleW + moreW + 14);
         float bw = Mathf.Clamp(avail / Math.Max(1, tools.Length) - gap, 56f, 74f);
         int fit = Math.Clamp((int)(avail / (bw + gap)), 0, tools.Length);
         if (fit < tools.Length) tools = tools.Take(fit).ToArray();
@@ -559,8 +528,10 @@ public partial class Hud : Control
     /// <summary>열려 있었으면 닫고 true.</summary>
     public bool CloseHazardMenu()
     {
-        bool was = _hazardMenu || HelpOpen;
+        bool was = _hazardMenu || HelpOpen || Dock != DockTab.None || _viewPickerOpen;
         _hazardMenu = false;
+        _viewPickerOpen = false;
+        if (Dock != DockTab.None) CloseDock(); // v20 Esc는 오른쪽 창도 닫는다
         HelpOpen = false; // v16.2 Esc는 도움말도 닫는다
         return was;
     }
@@ -579,14 +550,20 @@ public partial class Hud : Control
     }
 
     /// <summary>v11.2 사고 더 보기: 대상이 있는 사고는 고르고 클릭, 배 전체 사고는 누르면 바로. 맨 위는 무작위 사고 주기.</summary>
-    private void DrawHazardMenu(Vector2 at, Vector2 mouse)
+    private void DrawHazardMenu(Vector2 at, Vector2 mouse, float width = 0f)
     {
         var all = Hazards.All;
-        int cols = all.Length > 30 ? 5 : 3; // v15 사고 70: 다섯 칸
-        float bw = all.Length > 30 ? 128f : 150f, bh = all.Length > 30 ? 24f : 30f;
         const float gap = 6f, pad = 14f;
+        int cols = width > 0f ? Math.Max(2, (int)((width - pad * 2 + gap) / (128f + gap))) : all.Length > 30 ? 5 : 3; // v15 사고 70: 다섯 칸 · v20 창 너비대로
+        float bw = width > 0f ? (width - pad * 2 - (cols - 1) * gap) / cols : all.Length > 30 ? 128f : 150f, bh = all.Length > 30 ? 24f : 30f;
         int rows = (all.Length + cols - 1) / cols;
-        var card = new Rect2(at, new Vector2(pad * 2 + cols * bw + (cols - 1) * gap, pad + 26 + 34 + rows * (bh + gap) + 20));
+        // v20 창 안: 아래 탭 위까지 들어가는 줄만 — 넘치면 쪽으로 나눈다 (◀ ▶)
+        int fitRows = width > 0f ? Math.Max(3, (int)((SideBottom - at.Y - (pad + 26 + 34 + 20 + 28)) / (bh + gap))) : rows;
+        int pages = (rows + fitRows - 1) / fitRows;
+        _hazardPage = Math.Clamp(_hazardPage, 0, pages - 1);
+        int first = _hazardPage * fitRows * cols, shown = Math.Min(all.Length - first, fitRows * cols);
+        rows = Math.Min(rows, fitRows);
+        var card = new Rect2(at, new Vector2(pad * 2 + cols * bw + (cols - 1) * gap, pad + 26 + 34 + rows * (bh + gap) + 20 + (pages > 1 ? 28 : 0)));
         Card(card);
         float x = card.Position.X + pad, y = card.Position.Y + pad;
         Gfx.Text(this, Fonts.Bold, new Vector2(x, y + 12), "사고 더 보기", Ui.TextLabel, Palette.Danger.WithAlpha(0.85f));
@@ -610,10 +587,11 @@ public partial class Hud : Control
             mx += w + 4;
         }
         y += 34;
-        for (int i = 0; i < all.Length; i++)
+        for (int k = 0; k < shown; k++)
         {
+            int i = first + k;
             var spec = all[i];
-            var r = new Rect2(x + (i % cols) * (bw + gap), y + (i / cols) * (bh + gap), bw, bh);
+            var r = new Rect2(x + (k % cols) * (bw + gap), y + (k / cols) * (bh + gap), bw, bh);
             bool active = _main.Tool == IncidentTool.Hazard && _main.ToolHazard == spec.Kind;
             bool hover = r.HasPoint(mouse);
             Gfx.RoundRect(this, r, active ? Palette.Danger.WithAlpha(0.18f) : hover ? new Color(1, 1, 1, 0.07f) : new Color(1, 1, 1, 0.025f), 8,
@@ -633,12 +611,27 @@ public partial class Hud : Control
             }));
             if (hover) _hazardHover = spec.Hint;
         }
+        if (pages > 1)
+        {
+            float py = card.End.Y - 46f;
+            for (int d = -1; d <= 1; d += 2)
+            {
+                var pr = new Rect2(d < 0 ? x : card.End.X - pad - 60f, py, 60f, 24f);
+                bool ok = d < 0 ? _hazardPage > 0 : _hazardPage < pages - 1, hv = ok && pr.HasPoint(mouse);
+                Gfx.RoundRect(this, pr, hv ? Ui.Hover : new Color(1, 1, 1, 0.025f), 7, Ui.PanelEdge);
+                Gfx.TextCentered(this, Fonts.Bold, pr.GetCenter() + new Vector2(0, Gfx.CenterOffset(Fonts.Bold, Ui.TextSmall)), d < 0 ? "◀ 앞" : "뒤 ▶", Ui.TextSmall, ok ? Palette.TextDim : Palette.TextMuted.WithAlpha(0.4f));
+                int dd = d;
+                if (ok) _buttons.Add((pr, () => _hazardPage += dd));
+            }
+            Gfx.TextCentered(this, Fonts.Body, new Vector2(card.GetCenter().X, py + 12f + Gfx.CenterOffset(Fonts.Body, Ui.TextSmall)), $"{_hazardPage + 1} / {pages}쪽 · 사고 {all.Length}가지", Ui.TextSmall, Palette.TextMuted);
+        }
         string foot = _hazardHover ?? (_world.Hazards.RandomCount > 0 ? $"무작위 사고 {_world.Hazards.RandomCount}번 · 마지막: {_world.Hazards.LastRandomText}" : "무작위 사고는 되감기·불러오기에도 같은 때 같은 사고로 난다 (항해 번호 · 수치가 같으면)");
         Gfx.Text(this, Fonts.Body, new Vector2(x, card.End.Y - 12), Clip(foot, card.Size.X - pad * 2, Ui.TextTiny), Ui.TextTiny, Palette.TextMuted);
         _hazardHover = null;
     }
 
     private string? _hazardHover;
+    private int _hazardPage;
 
     private static string Clip(string s, float width, int size) => UiKit.Fit(s, width, size);
 
@@ -664,10 +657,10 @@ public partial class Hud : Control
     private void DrawCrewInspector(CrewMember c, float y, Vector2 mouse)
     {
         var col = Palette.Crew(c.Id);
-        float x0 = Screen.X - Margin - RightColumnWidth;
+        float x0 = ColX; // v20 고른 것 카드 자리 (창이 열리면 창 왼쪽)
         float w = RightColumnWidth;
         // 요약 카드는 담긴 만큼 (지난 그림에서 잰 높이) · 화면 아래 ? 단추 자리까지
-        float avail = Screen.Y - y - Margin - 40f;
+        float avail = SideBottom - y;
         float height = _crewTab == CardTab ? Mathf.Clamp(_crewCardH, 320f, Mathf.Max(320f, avail)) : _crewTab == 3 ? 560f : _crewTab >= 2 ? 600f : 500f;
         _crewCardBottom = y + height - 50f; // 따라가기 단추 위까지
         var card = new Rect2(x0, y, w, height);
@@ -896,7 +889,7 @@ public partial class Hud : Control
     {
         var m = f.Machine;
         var accent = Palette.Room(f.Room.Kind);
-        float x0 = Screen.X - Margin - RightColumnWidth;
+        float x0 = ColX; // v20 고른 것 카드 자리 (창이 열리면 창 왼쪽)
         var orders = _world.Board.Open.Where(o => o.Target.Furniture == f).ToList();
         var extra = MachineExtras(f);
         int invLines = f.Storage?.Contents.Count() ?? 0;
@@ -1121,7 +1114,7 @@ public partial class Hud : Control
     private void DrawRoomInspector(Room room, float y, Vector2 mouse)
     {
         var accent = Palette.Room(room.Kind);
-        float x0 = Screen.X - Margin - RightColumnWidth;
+        float x0 = ColX; // v20 고른 것 카드 자리 (창이 열리면 창 왼쪽)
         var inside = _world.Crew.Where(c => c.Room == room).ToList();
         var equipment = room.Furniture.Where(f => f.Machine != null || f.Storage != null).ToList();
         var status = RoomStatusLines(room);
@@ -1391,7 +1384,7 @@ public partial class Hud : Control
 
     private void DrawWorkBoard(float y, float maxHeight, Vector2 mouse)
     {
-        float x0 = Screen.X - Margin - RightColumnWidth;
+        float x0 = ColX; // v20 고른 것 카드 자리 (창이 열리면 창 왼쪽)
         var all = _world.Board.Open.ToList();
         var urgentOrders = all.Where(o => o.Urgency >= 0.9f).ToList();
         // 긴급한 일이 있으면 그것만 크게, 나머지는 한 줄로 접는다
@@ -1450,8 +1443,8 @@ public partial class Hud : Control
 
     private void DrawBanners()
     {
-        float cx = (Screen.X - RightColumnWidth - Margin) * 0.5f;
-        float y = Margin + 52f + 8f + 40f + 26f;
+        float cx = (_plan.Dock.Empty ? Screen.X : _plan.Dock.X) * 0.5f; // v20 배가 보이는 자리 가운데 · 위 줄 바로 아래
+        float y = Margin + 52f + 8f + 22f;
         if (_main.Replaying is ReplayRunner rr)
         {
             float pulse = 0.7f + 0.3f * Mathf.Sin(_time * 4f);

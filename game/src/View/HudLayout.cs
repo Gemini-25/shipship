@@ -13,31 +13,26 @@ public partial class Hud
     private HudPlan _plan = new();
     /// <summary>지난 그림의 배치 (카메라가 배를 맞출 자리 · 시험).</summary>
     public HudPlan Plan => _plan;
-    private Vector2 _profileSz, _legendSz;
+    private Vector2 _legendSz;
     private float _cosmicH;
     private bool _viewPickerOpen;
 
     private static Rect2 R(UiRect r) => new(r.X, r.Y, r.W, r.H);
 
-    /// <summary>이번 그림의 배치를 정한다 (패널 크기는 지난 그림에서 잰 값).</summary>
+    /// <summary>이번 그림의 배치를 정한다 (패널 크기는 지난 그림에서 잰 값). 오른쪽 창이 열리고 닫히면 배를 남은 자리에 다시 맞춘다.</summary>
     private void PlanLayout()
     {
-        var a = _world.Automation;
         var bounds = _main.ShipView.Bounds;
-        var mm = MinimapSize();
-        bool tools = !Quiet || _toolsOpen || _hazardMenu || _main.Tool != IncidentTool.None;
+        bool side = _main.SelectedCrew != null || _main.SelectedRobot != null || _main.SelectedFurniture != null || _main.SelectedRoom != null || UrgentWork;
         var n = new HudNeeds
         {
-            W = Screen.X, H = Screen.Y, TopBarW = TopBarWidth(), FoldedToolsW = tools ? 0f : _foldedToolsW,
-            ProfileW = _profileSz.X, ProfileH = _profileSz.Y, CosmicH = _cosmicH,
-            LegendW = _legendSz.X, LegendH = _legendSz.Y,
-            Computer = a.Present && !ControlOpen && !ChronicleOpen && !TechOpen && !PolicyOpen && !ChainOpen && !CollectionOpen && !VoyageOpen,
-            ComputerH = ComputerFullHeight(), ComputerUserFolded = ComputerFolded,
-            LogH = LogHeight, MinimapW = mm.X, MinimapH = mm.Y,
-            Voyage = mm.X > 0f && _world.Voyage.TotalDays > 0f, Tools = tools,
+            W = Screen.X, H = Screen.Y, TopBarW = TopBarWidth(), CosmicH = _cosmicH,
+            LegendW = _legendSz.X, LegendH = _legendSz.Y, SideH = side ? Screen.Y : 0f, Dock = Dock != DockTab.None,
             ShipW = Mathf.Max(1f, bounds.Size.X), ShipH = Mathf.Max(1f, bounds.Size.Y),
         };
+        bool wasDock = !_plan.Dock.Empty;
         _plan = UiLayout.Plan(n);
+        if (wasDock != !_plan.Dock.Empty) _main.RefitIfFitted();
     }
 
     /// <summary>주 컴퓨터 카드를 다 펼친 높이 (제안 카드 · 방금 정한 제안 하나 포함).</summary>
@@ -47,15 +42,6 @@ public partial class Hud
         if (!a.Present) return 0f;
         int open = a.Asks.Open.Count() + (a.Asks.All.LastOrDefault(p => p.State != ProposalState.Pending && p.DecidedAt >= 0 && _world.Tick - p.DecidedAt < SimTime.Minutes(20)) != null ? 1 : 0);
         return UiLayout.ComputerHeight(a.Modules.Count, open, false);
-    }
-
-    private Vector2 MinimapSize()
-    {
-        if (!MinimapOpen || ChronicleOpen || TechOpen) return Vector2.Zero;
-        var b = _main.ShipView.Bounds;
-        if (b.Size.X < 1f) return Vector2.Zero;
-        float scale = Mathf.Min(280f / b.Size.X, (LogFullHeight - 30f) / b.Size.Y);
-        return b.Size * scale + new Vector2(24f, 36f);
     }
 
     private float TopBarWidth()

@@ -23,12 +23,13 @@ public partial class Hud
         var w = _world;
         var chat = w.Info.Chat;
         var sel = _main.SelectedCrew;
-        const float width = 360f;
-        var msgs = chat.All.TakeLast(11).ToList();
+        bool docked = Dock == DockTab.People; // v20 아래 탭 "사람" 창 안: 위에 붙여 창 너비 · 높이만큼
+        float width = docked ? WinW : 360f;
+        var msgs = chat.All.TakeLast(docked ? 30 : 11).ToList();
         float H(ChatMsg m) => 34f + (m.Photo >= 0 ? 40f : 0f);
         float height = 46f + Math.Max(1, msgs.Count) * 0f + msgs.Sum(H) + (msgs.Count == 0 ? 30f : 0f);
-        height = Math.Min(height, 620f);
-        var card = new Rect2(bottomLeft.X, bottomLeft.Y - height, width, height);
+        height = Math.Min(height, docked ? WinBottom - WinY : 620f);
+        var card = docked ? new Rect2(WinX, WinY, width, height) : new Rect2(bottomLeft.X, bottomLeft.Y - height, width, height);
         Gfx.RoundRect(this, card, ChatGlass, 10, new Color(1, 1, 1, 0.07f));
         string head = sel != null ? $"선내 메신저 — {sel.Name}의 단말" : "선내 메신저";
         Gfx.Text(this, Fonts.Bold, card.Position + new Vector2(14, 22), head, 12, Palette.Text);

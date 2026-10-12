@@ -181,39 +181,41 @@ public static partial class Program
         int minX = w.Ship.Rooms.SelectMany(r => r.Cells).Min(c => c.X), maxX = w.Ship.Rooms.SelectMany(r => r.Cells).Max(c => c.X);
         int minY = w.Ship.Rooms.SelectMany(r => r.Cells).Min(c => c.Y), maxY = w.Ship.Rooms.SelectMany(r => r.Cells).Max(c => c.Y);
         float shipW = (maxX - minX + 1) * 32f, shipH = (maxY - minY + 1) * 32f;
-        float sc = Math.Min(280f / shipW, 160f / shipH);
         int modules = w.Automation.Modules.Count;
-        foreach (var (sw, sh) in new[] { (1600f, 900f), (1280f, 720f) })
+        foreach (var (sw, sh) in new[] { (1600f, 900f), (1280f, 720f), (1920f, 1080f) })
         {
-            int combos = 0, bad = 0, outside = 0, shipHit = 0, folded = 0, hidden = 0;
+            int combos = 0, bad = 0, outside = 0, shipHit = 0, hidden = 0;
             float minShip = float.MaxValue;
             string ex = "";
-            foreach (bool profile in new[] { false, true })
-                foreach (float cosmic in new[] { 0f, 30f, 54f, 236f })
-                    foreach (bool legend in new[] { false, true })
-                        foreach (int props in new[] { 0, 1, 3 })
-                            foreach (bool quiet in new[] { false, true })
-                                foreach (bool userFold in new[] { false, true })
-                                {
-                                    var n = new HudNeeds
-                                    {
-                                        W = sw, H = sh, TopBarW = 560f, ProfileW = profile ? 440f : 0f, ProfileH = profile ? 80f : 0f, CosmicH = cosmic,
-                                        LegendW = legend ? 170f : 0f, LegendH = legend ? 118f : 0f, ComputerH = UiLayout.ComputerHeight(modules, props, false), ComputerUserFolded = userFold,
-                                        LogH = quiet ? 36f : 190f, MinimapW = shipW * sc + 24f, MinimapH = shipH * sc + 36f, Voyage = true, ShipW = shipW, ShipH = shipH,
-                                    };
-                                    var p = UiLayout.Plan(n);
-                                    combos++;
-                                    var o = p.Overlaps();
-                                    if (o.Count > 0) { bad++; if (ex == "") ex = o[0]; }
-                                    if (p.Panels().Any(x => !x.r.Inside(sw, sh))) outside++;
-                                    if (p.Panels().Any(x => x.r.Intersects(p.ShipArea))) shipHit++;
-                                    if (p.ComputerFolded && !userFold) folded++;
-                                    if (p.ComputerHidden) hidden++;
-                                    minShip = Math.Min(minShip, Math.Min(p.ShipArea.W / (shipW / shipH), p.ShipArea.H));
-                                }
-            Check($"패널 배치 {sw:0}×{sh:0} — {combos}가지 조합에서 패널 사각형끼리 겹치지 않고 화면 안 · 배 자리는 패널과 안 겹친다",
+            foreach (float cosmic in new[] { 0f, 30f, 54f, 236f })
+                foreach (bool legend in new[] { false, true })
+                    foreach (float side in new[] { 0f, 300f, 2000f })
+                        foreach (bool dock in new[] { false, true })
+                        {
+                            var n = new HudNeeds
+                            {
+                                W = sw, H = sh, TopBarW = 560f, CosmicH = cosmic, LegendW = legend ? 170f : 0f, LegendH = legend ? 118f : 0f,
+                                SideH = side, Dock = dock, ShipW = shipW, ShipH = shipH,
+                            };
+                            var p = UiLayout.Plan(n);
+                            combos++;
+                            var o = p.Overlaps();
+                            if (o.Count > 0) { bad++; if (ex == "") ex = o[0]; }
+                            if (p.Panels().Any(x => !x.r.Inside(sw, sh))) outside++;
+                            if (p.Fixed().Any(r => r.Intersects(p.ShipArea))) shipHit++;
+                            if (p.CosmicHidden || p.LegendHidden) hidden++;
+                            minShip = Math.Min(minShip, Math.Min(p.ShipArea.W / (shipW / shipH), p.ShipArea.H));
+                        }
+            Check($"패널 배치 {sw:0}×{sh:0} — {combos}가지 조합에서 패널 사각형끼리 겹치지 않고 화면 안 · 배 자리는 위 줄 · 아래 탭 · 오른쪽 창과 안 겹친다",
                 bad == 0 && outside == 0 && shipHit == 0 && minShip >= 120f,
-                $"겹침 {bad}{(ex != "" ? $" ({ex})" : "")} · 화면 밖 {outside} · 배 자리 침범 {shipHit} · 자리 모자라 접음 {folded} · 숨김 {hidden} · 배가 들어가는 높이 최소 {minShip:0}px");
+                $"겹침 {bad}{(ex != "" ? $" ({ex})" : "")} · 화면 밖 {outside} · 배 자리 침범 {shipHit} · 숨김 {hidden} · 배가 들어가는 높이 최소 {minShip:0}px");
+        }
+        {
+            var p = UiLayout.Plan(new HudNeeds { W = 1600f, H = 900f, ShipW = shipW, ShipH = shipH });
+            var q = UiLayout.Plan(new HudNeeds { W = 1600f, H = 900f, ShipW = shipW, ShipH = shipH, Dock = true, SideH = 400f });
+            Check("아래 탭 7개는 가운데 · 오른쪽 창은 탭 위까지 · 창이 열리면 고른 것 카드는 창 왼쪽으로",
+                Math.Abs(p.TabBar.X + p.TabBar.W * 0.5f - 800f) < 1f && q.Dock.Bottom <= q.TabBar.Y && q.Side.Right <= q.Dock.X && q.ShipArea.Right <= q.Dock.X,
+                $"탭 {p.TabBar} · 창 {q.Dock} · 고른 것 {q.Side} · 배 {q.ShipArea}");
         }
         // 주 컴퓨터 카드 속: 아이콘 줄 아래에 글줄 (겹치지 않게) · 높이 = 줄 합
         {

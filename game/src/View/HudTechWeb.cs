@@ -32,16 +32,16 @@ public partial class Hud
         var w = _world;
         var tw = w.TechWeb;
         var e = w.Eras;
-        float x0 = Margin, y0 = Margin + 52f + 8f + 40f + 8f;
-        float width = Screen.X - RightColumnWidth - Margin * 3;
-        float height = Screen.Y - y0 - LogFullHeight - Margin - 10f;
+        float x0 = WinX, y0 = WinY; // v20 오른쪽 창
+        float width = WinW;
+        float height = WinBottom - y0;
         if (width < 520f || height < 300f) { DrawTechWebSmall(mouse, x0, y0, width, height); return; }
         var card = new Rect2(x0, y0, width, height);
         _chronicleRect = card;
         Card(card);
         float left = x0 + 16f, right = card.End.X - 16f;
         UiKit.CardTitle(this, left, right - 170f, y0 + 30, $"{w.Ship.Name} 기술 지도", $"{EraSystem.EraName(e.Era)} · 익힘 {e.Known.Count}/{TechWeb.Every.Length}" + (tw.Identity != "" ? $" · {tw.Identity}" : ""), "star"); // v16.24
-        Button(new Rect2(right - 58, y0 + 10, 58, 26), "T 닫기", false, mouse, ToggleTech, Ui.TextSmall);
+        Button(new Rect2(right - 58, y0 + 10, 58, 26), "닫기", false, mouse, ToggleTech, Ui.TextSmall);
         Button(new Rect2(right - 58 - 96, y0 + 10, 90, 26), "설비 단계", false, mouse, () => TechWebOpen = false, Ui.TextSmall);
         DrawWebLegend(left, y0 + 50f);
 
@@ -57,7 +57,7 @@ public partial class Hud
         _chronicleRect = card;
         Card(card);
         Gfx.Text(this, Fonts.Bold, new Vector2(x0 + 16, y0 + 28), "기술 지도 — 창이 좁다", Ui.TextTitle, Palette.Text);
-        Button(new Rect2(card.End.X - 74, y0 + 10, 58, 26), "T 닫기", false, mouse, ToggleTech, Ui.TextSmall);
+        Button(new Rect2(card.End.X - 74, y0 + 10, 58, 26), "닫기", false, mouse, ToggleTech, Ui.TextSmall);
         DrawWebPanel(new Rect2(x0 + 16, y0 + 44, card.Size.X - 32, card.Size.Y - 56));
     }
 

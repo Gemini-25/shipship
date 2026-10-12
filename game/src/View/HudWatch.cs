@@ -30,15 +30,15 @@ public partial class Hud
     {
         if (_voyage == null || _world.Tick - _voyageTick > SimTime.Minutes(10)) { _voyage = VoyageReview.Build(_world); _voyageTick = _world.Tick; } // 10분마다만 다시 모은다
         var v = _voyage;
-        float x0 = Margin, y0 = Margin + 52f + 8f + 40f + 8f + 64f + 10f;
-        float wdt = Mathf.Min(640f, Screen.X - RightColumnWidth - Margin * 3);
-        float maxH = Screen.Y - y0 - LogFullHeight - Margin - 10f;
+        float x0 = WinX, y0 = WinY; // v20 오른쪽 창
+        float wdt = WinW;
+        float maxH = WinBottom - y0;
         float height = Mathf.Min(maxH, _voyageH);
         var card = new Rect2(x0, y0, wdt, height);
         Card(card);
         float x = x0 + Ui.Pad, right = card.End.X - Ui.Pad, y = y0;
         UiKit.CardTitle(this, x, right - 70f, y + 32f, $"{v.Ship} 항해 결산", $"{v.Days}일째 · {v.Alive}/{v.Crew}명", "route");
-        Button(new Rect2(right - 64, y0 + 12, 64, 26), "⇧J 닫기", false, mouse, ToggleVoyage, Ui.TextSmall);
+        Button(new Rect2(right - 64, y0 + 12, 64, 26), "닫기", false, mouse, ToggleVoyage, Ui.TextSmall);
         y += 48f;
         UiKit.Stats(this, new Vector2(x, y + 14f), right, new (string, int, string, Tone)[]
         {
@@ -102,7 +102,7 @@ public partial class Hud
             yr += 6f + lines.Count * 16f;
         }
         yr += 8f;
-        UiKit.Header(this, xr, right, yr + 14f, "물건이 거친 손", "Q 따라가기", "bag");
+        UiKit.Header(this, xr, right, yr + 14f, "물건이 거친 손", "배 › 물건 따라가기", "bag");
         yr += 24f;
         foreach (var (id, name, hands, now, marks) in v.Items)
         {

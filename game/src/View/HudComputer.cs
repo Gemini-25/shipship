@@ -61,9 +61,9 @@ public partial class Hud
         var just = a.Asks.All.LastOrDefault(p => p.State != ProposalState.Pending && p.DecidedAt >= 0 && w.Tick - p.DecidedAt < SimTime.Minutes(20));
         if (just != null) open.Add(just);
         // v17.6 자리는 배치 규칙이 정한다 (기록 바로 위 · 왼쪽 위 더미와 겹치면 접고, 그래도 안 되면 숨긴다)
-        if (_plan.ComputerHidden || _plan.Computer.Empty) return;
-        bool folded = ComputerFolded || _plan.ComputerFolded;
-        var card = R(_plan.Computer);
+        bool folded = ComputerFolded;
+        float ch = folded ? UiLayout.ComputerFoldH : ComputerFullHeight();
+        var card = new Rect2(Margin, SideBottom - ch, UiLayout.ComputerW, ch);
         Card(card);
         // 카드 머리를 누르면 관제 화면
         var head = new Rect2(card.Position, new Vector2(width - 64f, 40f));
@@ -257,14 +257,16 @@ public partial class Hud
         foreach (var e in w.History.Events.Where(e => e.Tick >= day0 && e.Kind == HistoryKind.Upgrade))
             rows.Add((e.Tick, "개조", e.Text, new Color("#f2c66d"), "⚒"));
         rows.Sort((x, y) => y.tick.CompareTo(x.tick));
-        float width = 440f, height = 40f + Math.Max(1, Math.Min(rows.Count, 14)) * 18f;
-        var card = new Rect2(bottomLeft.X, bottomLeft.Y - height, width, height);
+        bool docked = Dock == DockTab.Computer; // v20 아래 탭 "컴퓨터" 창 안
+        int maxRows = docked ? Math.Max(4, (int)((WinBottom - WinY - 40f) / 18f)) : 14;
+        float width = docked ? WinW : 440f, height = 40f + Math.Max(1, Math.Min(rows.Count, maxRows)) * 18f;
+        var card = docked ? new Rect2(WinX, WinY, width, height) : new Rect2(bottomLeft.X, bottomLeft.Y - height, width, height);
         Card(card);
         Gfx.Text(this, Fonts.Bold, card.Position + new Vector2(14, 22), $"오늘의 결정 ({SimTime.Day(w.Tick)}일) — 컴퓨터 제안 · 회의 · 결정 · 개조", Ui.TextBody, Palette.Text);
         Button(new Rect2(card.End.X - 30, card.Position.Y + 8, 22, 20), "×", false, mouse, () => DecisionsOpen = false, Ui.TextSmall);
         float y = card.Position.Y + 34;
         if (rows.Count == 0) Gfx.Text(this, Fonts.Body, new Vector2(card.Position.X + 14, y + 12), "오늘은 아직 정한 일이 없다", Ui.TextSmall, Palette.TextMuted);
-        foreach (var (tick, src, text, col, glyph) in rows.Take(14))
+        foreach (var (tick, src, text, col, glyph) in rows.Take(maxRows))
         {
             Gfx.Text(this, Fonts.Body, new Vector2(card.Position.X + 12, y + 12), SimTime.Clock(tick), Ui.TextTiny, Palette.TextMuted);
             Gfx.Text(this, Fonts.Bold, new Vector2(card.Position.X + 52, y + 12), glyph, Ui.TextSmall, col);

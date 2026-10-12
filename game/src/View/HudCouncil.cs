@@ -37,9 +37,9 @@ public partial class Hud
         var mo = w.Motions;
         // 다른 창을 열면 비켜 준다
         if (PolicyOpen || ChronicleOpen || TechOpen || ControlOpen || ChainOpen || ScaleCodexOpen) { CouncilOpen = false; return; }
-        float x0 = Margin, y0 = Margin + 52f + 8f + 40f + 8f + 64f + 10f;
-        float wdt = Mathf.Min(1260f, Screen.X - RightColumnWidth - Margin * 3);
-        float height = Screen.Y - y0 - LogFullHeight - Margin - 10f;
+        float x0 = WinX, y0 = WinY; // v20 오른쪽 창
+        float wdt = WinW;
+        float height = WinBottom - y0;
         var card = new Rect2(x0, y0, wdt, height);
         _chronicleRect = card;
         UiKit.Panel(this, card);
@@ -111,7 +111,7 @@ public partial class Hud
         var list = mo.Past.ToList();
         if (mo.Now != null) list.Add(mo.Now);
         Gfx.Text(this, Fonts.Bold, new Vector2(x, y + 4), "회의 자리", Ui.TextSmall, Palette.TextDim);
-        if (list.Count == 0) { Gfx.Text(this, Fonts.Body, new Vector2(x, y + 30), "아직 따로 모인 적이 없다 — 안건은 정기 회의에서도 정해진다", Ui.TextBody, Palette.TextMuted); return; }
+        if (list.Count == 0) { Gfx.Text(this, Fonts.Body, new Vector2(x, y + 30), UiKit.Fit("아직 따로 모인 적이 없다", right - x, Ui.TextBody), Ui.TextBody, Palette.TextMuted); Gfx.Text(this, Fonts.Body, new Vector2(x, y + 50), UiKit.Fit("안건은 정기 회의에서도 정해진다", right - x, Ui.TextSmall), Ui.TextSmall, Palette.TextMuted); return; }
         int idx = _sittingIndex < 0 || _sittingIndex >= list.Count ? list.Count - 1 : _sittingIndex;
         Button(new Rect2(right - 52, y - 8, 22, 18), "‹", false, mouse, () => _sittingIndex = Math.Max(0, idx - 1), 11);
         Button(new Rect2(right - 26, y - 8, 22, 18), "›", false, mouse, () => _sittingIndex = idx + 1 >= list.Count - 1 ? -1 : idx + 1, 11);

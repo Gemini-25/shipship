@@ -34,9 +34,9 @@ public partial class Hud
         var w = _world;
         var types = Tech.Types.Where(t => w.Ship.FurnitureOf(t).Any()).ToList();
         var modules = Modules.All.Where(s => w.Ship.RoomsOf(s.Room).Any()).ToList();
-        float x0 = Margin, y0 = Margin + 52f + 8f + 40f + 8f + 64f + 10f;
-        float width = Mathf.Min(760f, Screen.X - RightColumnWidth - Margin * 3);
-        float avail = Screen.Y - y0 - LogFullHeight - Margin - 10f;
+        float x0 = WinX, y0 = WinY; // v20 오른쪽 창
+        float width = WinW;
+        float avail = WinBottom - y0;
         float rowH = Mathf.Clamp((avail - 150f) / (types.Count + modules.Count + 1), 17f, 30f);
         float height = Mathf.Min(avail, 110f + types.Count * rowH + 34f + modules.Count * rowH + 30f);
         var card = new Rect2(x0, y0, width, height);
@@ -48,7 +48,7 @@ public partial class Hud
         Gfx.Text(this, Fonts.Bold, new Vector2(x, y0 + 30), $"{w.Ship.Name} 기술", Ui.TextLarge, Palette.Text);
         Gfx.Text(this, Fonts.Body, new Vector2(x + Gfx.Width(Fonts.Bold, $"{w.Ship.Name} 기술", Ui.TextLarge) + 10, y0 + 30),
             $"연구 {w.Research:0}점 · 하루 +{perDay:0.0} (작업대·솜씨 좋은 사람·정밀 가공기)", Ui.TextBody, Palette.TextMuted);
-        Button(new Rect2(right - 58, y0 + 12, 58, 26), "T 닫기", false, mouse, ToggleTech, Ui.TextSmall);
+        Button(new Rect2(right - 58, y0 + 12, 58, 26), "닫기", false, mouse, ToggleTech, Ui.TextSmall);
         Button(new Rect2(right - 58 - 96, y0 + 12, 90, 26), "기술 지도", false, mouse, () => TechWebOpen = true, Ui.TextSmall); // v16.14 Shift+T
         Gfx.Text(this, Fonts.Body, new Vector2(x, y0 + 50),
             "연구가 문턱을 넘으면 설계가 풀리고, 올리는 건 개조 회의가 정한다 (재료 · 겪은 일 순서). 높은 단계는 출력이 크지만 전기·마모·고장 값을 치른다.", Ui.TextSmall, Palette.TextDim);

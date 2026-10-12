@@ -178,7 +178,7 @@ public partial class OptionsPanel : PanelContainer
         title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         title.ClipText = true;
         head.AddChild(title);
-        var x = new Button { Text = "✕", Flat = true, TooltipText = "닫기 (O)" };
+        var x = new Button { Text = "✕", Flat = true, TooltipText = "닫기" };
         x.Pressed += () => Toggle();
         head.AddChild(x);
         outer.AddChild(head);
@@ -202,7 +202,7 @@ public partial class OptionsPanel : PanelContainer
         box.AddChild(Check("배경음 (기계음·새는 소리·불)", Settings.Ambience, on => Settings.Ambience = on));
         box.AddChild(Caption("관찰"));
         box.AddChild(Check("치명 경보가 울리면 저절로 일시정지", Settings.AutoPauseCritical, on => Settings.AutoPauseCritical = on));
-        box.AddChild(Check("사건 알림 (N: 그곳으로 · [ ] 사건 넘기기 · R 사건 직전으로 되감기)", Settings.EventToasts, on => Settings.EventToasts = on));
+        box.AddChild(Check("사건 알림", Settings.EventToasts, on => Settings.EventToasts = on));
         // v11.2 무작위 사고: 관찰자가 던지지 않아도 배가 사고를 겪는다 (사고 도구의 "더 보기"에서도 바꾼다)
         _random = new OptionButton { CustomMinimumSize = new Vector2(360, 0) };
         foreach (var (_, name) in RandomChoices) _random.AddItem($"무작위 사고: {name}");
@@ -262,7 +262,7 @@ public partial class OptionsPanel : PanelContainer
         box.AddChild(crewLabel);
         box.AddChild(crew);
         box.AddChild(Check("승무원이 죽을 수 있다 (새 항해부터)", Settings.Death, on => Settings.Death = on)); // v12.0
-        box.AddChild(Check("자동 배속: 평온하면 빠르게, 사고가 나면 1배속 (L)", Settings.Highlight, on => Settings.Highlight = on)); // v12.2
+        box.AddChild(Check("자동 배속: 평온하면 빠르게, 사고가 나면 1배속", Settings.Highlight, on => Settings.Highlight = on)); // v12.2
         box.AddChild(Check("자동 배속일 때 화면이 사고 현장으로 · 고비에서는 느리게", Settings.AutoCamera, on => Settings.AutoCamera = on));
         box.AddChild(Check("화면 안내 전부 보기 (끄면 조용한 화면 — 이상이 생긴 것만 떠오른다)", Settings.ShowAllHud, on => Settings.ShowAllHud = on)); // v16.2
         var voyage = new HBoxContainer();
@@ -317,7 +317,7 @@ public partial class OptionsPanel : PanelContainer
         box.AddChild(tuneToggle);
         box.AddChild(tuneScroll);
 
-        var close = new Button { Text = "닫기 (O)" };
+        var close = new Button { Text = "닫기" };
         close.Pressed += () => Toggle();
         outer.AddChild(close);
         Wrap(box);

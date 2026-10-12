@@ -21,7 +21,7 @@ public partial class Hud
     private void DrawRobotInspector(Robot r, float y, float maxHeight)
     {
         var col = ShipView.RobotColor(r.Kind);
-        float x0 = Screen.X - Margin - RightColumnWidth;
+        float x0 = ColX; // v20 고른 것 카드 자리 (창이 열리면 창 왼쪽)
         var marks = r.Marks.TakeLast(6).Reverse().ToList();
         float height = Mathf.Min(maxHeight, 300 + RobotMindHeight(r) + (RobotsV15.Fights(r.Kind) ? 22 : 0) + (marks.Count > 0 ? 34 + marks.Count * 18 : 0)); // v16.20b 생각
         var card = new Rect2(x0, y, RightColumnWidth, height);

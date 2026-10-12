@@ -42,9 +42,9 @@ public partial class Hud
     {
         var w = _world;
         var mt = w.Meetings;
-        float x0 = Margin, y0 = Margin + 52f + 8f + 40f + 8f + 64f + 10f;
-        float wdt = Mathf.Min(1260f, Screen.X - RightColumnWidth - Margin * 3);
-        float height = Screen.Y - y0 - LogFullHeight - Margin - 10f;
+        float x0 = WinX, y0 = WinY; // v20 오른쪽 창
+        float wdt = WinW;
+        float height = WinBottom - y0;
         var card = new Rect2(x0, y0, wdt, height);
         _chronicleRect = card;
         Card(card);
@@ -68,7 +68,7 @@ public partial class Hud
             }
             Gfx.Text(this, Fonts.Body, new Vector2(gx, gy + 32), Fit($"{SocietySystem.MoraleName(soc.Morale)} — {soc.MoraleWhy}", gw + 70, Ui.TextMicro, Fonts.Body), Ui.TextMicro, Palette.TextMuted);
         }
-        Button(new Rect2(right - 58, y0 + 12, 58, 26), "E 닫기", false, mouse, TogglePolicy, Ui.TextSmall);
+        Button(new Rect2(right - 58, y0 + 12, 58, 26), "닫기", false, mouse, TogglePolicy, Ui.TextSmall);
 
         // ── 왼쪽 두 칸: 방침 (재난·지휘·자원 / 생활·사회·세대선·항해) ──
         float colW = Mathf.Min(370f, (right - x) * 0.31f);

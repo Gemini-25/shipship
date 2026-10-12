@@ -74,7 +74,7 @@ public partial class Main
             }
             catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException) { _saveError = e.Message; }
         });
-        if (!auto) ShowNotice($"저장했다 — {when} · 관찰자 기록 {Sim.Commands.Count}줄 · 항해 번호 {Sim.Seed} (F9로 그 자리에서 이어 간다)");
+        if (!auto) ShowNotice($"저장했다 — {when} · 관찰자 기록 {Sim.Commands.Count}줄 · 항해 번호 {Sim.Seed} (메뉴 › 저장 · 불러오기에서 그 자리로 돌아간다)");
         GD.Print($"{(auto ? "autosaved" : "saved")}: {path} ({saver.Objects} objects · {saver.Ms:0}ms)");
         return true;
     }

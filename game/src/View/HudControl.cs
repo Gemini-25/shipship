@@ -26,9 +26,9 @@ public partial class Hud
     {
         var w = _world;
         var a = w.Automation;
-        float x0 = Margin, y0 = Margin + 52f + 8f + 40f + 8f + 64f + 10f;
-        float wdt = Mathf.Min(_controlTab == 6 ? 980f : 640f, Screen.X - RightColumnWidth - Margin * 3); // v16.20 지휘 탭은 넓게
-        float height = Screen.Y - y0 - LogHeight - Margin - 40f;
+        float x0 = WinX, y0 = WinY; // v20 오른쪽 창
+        float wdt = WinW; // v16.20 지휘 탭은 넓게
+        float height = WinBottom - y0;
         var card = new Rect2(x0, y0, wdt, height);
         _controlRect = card;
         Card(card);
@@ -36,7 +36,7 @@ public partial class Hud
         int level = a.Level;
         string state = !a.Present ? "주 컴퓨터 없음" : a.MainOnline ? "온라인" : a.BackupActive ? "멎음 · 예비 제어기" : "멎음";
         UiKit.CardTitle(this, x, right - 70f, y0 + 32, "주 컴퓨터 관제", $"등급 {AutomationSystem.LevelName(level)}" + (level < 5 ? $" · 내려간 까닭: {a.LevelWhy}" : ""), "computer", level < 5 ? Palette.Warning : null); // v16.24
-        Button(new Rect2(right - 58, y0 + 12, 58, 26), "Y 닫기", false, mouse, ToggleControl, Ui.TextSmall);
+        Button(new Rect2(right - 58, y0 + 12, 58, 26), "닫기", false, mouse, ToggleControl, Ui.TextSmall);
         var col = a.MainOnline ? Palette.Good : Palette.Danger;
         Gfx.Text(this, Fonts.Body, new Vector2(x, y0 + 50), UiKit.Fit($"{state} · {(a.Computer is Machine m ? $"{m.Name} (단계 {m.Tier})" : "-")}" +
             (a.Operator is CrewMember op ? $" · 관제석: {op.Name} (수동 조종 — 좁게 끊고 빨리 되돌린다)" : " · 관제석 비어 있음 (컴퓨터가 보수적으로)"), right - (x), Ui.TextBody, Fonts.Body), Ui.TextBody, a.Operator != null ? Palette.Accent : col);
@@ -90,7 +90,7 @@ public partial class Hud
         int fitRows = Math.Max(0, (int)((card.End.Y - ly - 14f - below) / 15f));
         var shown = pool.OrderByDescending(p => w.Policies.Changes.LastOrDefault(c => c.Id == p.Id)?.Tick ?? -1).Take(fitRows * 2).ToArray();
         if (shown.Length < pool.Count) shown = pool.Where(shown.Contains).ToArray(); // 고른 것은 원래 차례대로
-        Gfx.TextRight(this, Fonts.Body, new Vector2(right, ly + 14), shown.Length == 0 ? $"{pool.Count}개 — 전부 보기: E" : shown.Length < pool.Count ? $"최근 바뀐 {shown.Length}개 · 전부 {pool.Count}개는 E" : "전부 보기: E", Ui.TextTiny, Palette.TextMuted);
+        Gfx.TextRight(this, Fonts.Body, new Vector2(right, ly + 14), shown.Length == 0 ? $"{pool.Count}개 — 전부: 사람 › 방침" : shown.Length < pool.Count ? $"최근 바뀐 {shown.Length}개 · 전부 {pool.Count}개는 사람 › 방침" : "전부: 사람 › 방침", Ui.TextTiny, Palette.TextMuted);
         for (int i = 0; i < shown.Length; i++)
         {
             var p = shown[i];

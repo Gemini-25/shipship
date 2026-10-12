@@ -56,7 +56,7 @@ public partial class Hud
         var all = _world.Board.Open.ToList();
         int urgent = all.Count(o => o.Urgency >= 0.9f);
         const float headH = 40f, rowH = 26f, footH = 34f;
-        float x0 = Screen.X - Margin - RightColumnWidth;
+        float x0 = ColX; // v20 고른 것 카드 자리 (창이 열리면 창 왼쪽)
         var card = new Rect2(x0, Margin, RightColumnWidth, headH + rows * rowH + (watch.Count > maxRows ? 18 : 0) + footH + 4);
         var worst = watch.Count == 0 ? Tone.Good : watch.Any(a => a.tone == Tone.Danger) ? Tone.Danger : Tone.Caution;
         Card(card, watch.Count > 0 ? worst : null);
@@ -166,29 +166,32 @@ public partial class Hud
 
     private static readonly (string title, (string key, string what)[] rows)[] HelpSections =
     {
-        ("카메라", new[] { ("휠", "확대 · 축소"), ("우클릭 끌기", "화면 옮기기"), ("H", "배 전체 보기"), ("F", "고른 사람 따라가기"), ("Tab", "다음 사람"), ("Q", "물건 따라가기"), ("F2", "사진 (Enter 찍기)") }),
-        ("시간", new[] { ("Space", "일시정지 · 재개"), ("1–4", "배속"), ("L", "자동 배속"), ("U", "빨리 감기"), ("R", "사건 직전으로 되감기") }),
-        ("보기", new[] { ("V", "보기 (Shift: 겹쳐 보기)"), ("G", "지도"), ("I", "설명서"), ("⇧I", "도감 — 모은 것"), ("N", "최근 사건으로"), ("[ ]", "사고 넘기기") }),
-        ("사고", new[] { ("Z X M", "운석 소 · 대 · 거대"), ("C", "화재"), ("B", "고장"), ("P", "배관 파열"), ("Esc", "취소 · 닫기") }),
-        ("창", new[] { ("K", "인과 사슬"), ("J", "연대기 (Shift: 항해 결산)"), ("T", "기술 (Shift: 기술 지도)"), ("Y", "관제"), ("E", "방침 · 회의 (Shift: 회의록)") }), // v16.14 Shift+T · v18.18 Shift+E
-        ("저장", new[] { ("F5", "저장"), ("F9", "불러오기"), ("⇧F9", "자동 저장 불러오기"), ("O", "설정 (전부 보기)"), ("?", "이 도움말") }),
+        ("카메라", new[] { ("휠", "확대 · 축소"), ("우클릭 끌기", "화면 옮기기"), ("H", "배 전체 보기"), ("F", "고른 사람 따라가기"), ("클릭", "사람 · 설비 · 방 고르기") }),
+        ("시간", new[] { ("Space", "일시정지 · 재개"), ("1–4", "배속"), ("자동", "위 막대 — 평온하면 빠르게") }),
+        ("보기", new[] { ("V", "다음 보기"), ("F1", "배 — 겹쳐 보기 · 지도 · 지표"), ("Esc", "도구 · 창 · 고른 것 내려놓기") }),
+        ("아래 탭 ①", new[] { ("F1", "배 — 보기 · 지도 · 지표"), ("F2", "사람 — 승무원 · 방침 · 회의"), ("F3", "기록 — 연대기 · 인과 사슬") }),
+        ("아래 탭 ②", new[] { ("F4", "사고 — 도구 · 도감 · 이야기꾼"), ("F5", "기술 — 기술 · 기술 지도"), ("F6", "컴퓨터 — 관제 · 결정") }),
+        ("아래 탭 ③", new[] { ("F7", "메뉴 — 설명서 · 설정 · 저장"), ("같은 키", "한 번 더 누르면 닫힌다") }),
     };
 
     private void DrawHelp(Vector2 mouse)
     {
-        const float colW = 250f, pad = 22f, rowH = 21f;
-        int cols = 3;
+        const float pad = 22f, rowH = 21f;
+        bool docked = Dock == DockTab.Menu; // v20 아래 탭 "메뉴" 창 안
+        int cols = docked ? 2 : 3;
+        float colW = docked ? (WinW - pad * 2 - 16f) / 2f : 250f;
         int rowsPer = HelpSections.Max(s => s.rows.Length);
         float secH = 26 + rowsPer * rowH + 14;
-        float w = pad * 2 + cols * colW + (cols - 1) * 16, h = 64 + 2 * secH + 20;
-        var card = new Rect2((Screen.X - w) * 0.5f, (Screen.Y - h) * 0.5f, w, h);
+        int secRows = (HelpSections.Length + cols - 1) / cols;
+        float w = pad * 2 + cols * colW + (cols - 1) * 16, h = 64 + secRows * secH + 20;
+        var card = docked ? new Rect2(WinX, WinY, WinW, Mathf.Min(h, WinBottom - WinY)) : new Rect2((Screen.X - w) * 0.5f, (Screen.Y - h) * 0.5f, w, h);
         Card(card);
         _buttons.Add((card, () => { })); // 창 안을 눌러도 뒤의 단추로 새지 않게 (닫기 단추는 이 뒤에 넣어 먼저 받는다)
         float x = card.Position.X + pad, y = card.Position.Y + pad;
         Icons.Draw(this, "help", new Vector2(x + 10, y + 8), Ui.IconL, Palette.Accent);
         Gfx.Text(this, Fonts.Bold, new Vector2(x + 30, y + 15), "도움말 · 단축키", Ui.TextTitle + 1, Palette.Text);
         Gfx.Text(this, Fonts.Body, new Vector2(x + 30 + Gfx.Width(Fonts.Bold, "도움말 · 단축키", Ui.TextTitle + 1) + 12, y + 15),
-            "평소엔 조용한 화면 — 이상이 생긴 것만 떠오른다 · 설정(O)에서 전부 보기", Ui.TextSmall, Palette.TextMuted);
+            "늘 보이는 것은 위 줄 · 경보 · 고른 것뿐 — 나머지는 아래 탭에", Ui.TextSmall, Palette.TextMuted);
         var close = new Rect2(card.End.X - pad - 24, y, 24, 24);
         Gfx.RoundRect(this, close, close.HasPoint(mouse) ? Ui.Hover : new Color(0, 0, 0, 0), 6);
         Icons.Draw(this, "close", close.GetCenter(), 16, Palette.TextDim);
@@ -203,7 +206,8 @@ public partial class Hud
             {
                 float ry = sy + 26 + k * rowH;
                 float kw = Keycap(rows[k].key, new Vector2(sx, ry + 7));
-                Gfx.Text(this, Fonts.Body, new Vector2(sx + Mathf.Max(kw, 64) + 10, ry + 11), rows[k].what, Ui.TextBody, Palette.TextDim);
+                float tx = sx + Mathf.Max(kw, 64) + 10;
+                Gfx.Text(this, Fonts.Body, new Vector2(tx, ry + 11), UiKit.Fit(rows[k].what, sx + colW - tx, Ui.TextBody), Ui.TextBody, Palette.TextDim);
             }
         }
     }

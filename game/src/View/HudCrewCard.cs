@@ -353,7 +353,7 @@ public partial class Hud
         if (SpotlightCrew() is not CrewMember c) return y - 10f;
         var w = _world;
         var col = Palette.Crew(c.Id);
-        float x0 = Screen.X - Margin - RightColumnWidth;
+        float x0 = ColX; // v20 고른 것 카드 자리 (창이 열리면 창 왼쪽)
         var chain = CrewWhy.Chain(c, w);
         var beliefs = CrewWhy.Beliefs(c, w, 1);
         var links = CrewWhy.Influences(c, w);

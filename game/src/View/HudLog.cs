@@ -59,18 +59,21 @@ public partial class Hud
         return true;
     }
 
-    private void DrawLog(Vector2 mouse)
+    /// <summary>항해 기록 (v20: 아래 탭 "기록" 창 안에 — area가 그 자리, 줄 수는 높이대로).</summary>
+    private void DrawLog(Vector2 mouse, Rect2? area = null)
     {
-        if (Quiet && !_logOpen) { DrawLogFolded(mouse); return; }
-        var card = new Rect2(Margin, Screen.Y - Margin - LogFullHeight, 470f, LogFullHeight);
+        bool docked = area != null;
+        if (!docked && Quiet && !_logOpen) { DrawLogFolded(mouse); return; }
+        var card = area ?? new Rect2(Margin, Screen.Y - Margin - LogFullHeight, 470f, LogFullHeight);
+        int rows = docked ? Math.Max(3, (int)((card.Size.Y - 50f) / 21f)) : LogRows;
         _logRect = card;
         Card(card);
         float x = card.Position.X + 18, right = card.End.X - 14;
         float hy = card.Position.Y + 22;
         var head = new Rect2(card.Position.X + 6, card.Position.Y + 6, 120, 30);
-        if (Quiet && head.HasPoint(mouse)) Gfx.RoundRect(this, head, Ui.HoverSoft, Ui.RadiusControl);
+        if (Quiet && !docked && head.HasPoint(mouse)) Gfx.RoundRect(this, head, Ui.HoverSoft, Ui.RadiusControl);
         UiKit.Header(this, x, x + 110, hy, "항해 기록", null, "log");
-        if (Quiet)
+        if (Quiet && !docked)
         {
             Icons.Draw(this, "chevron-up", new Vector2(x + 96, hy - 4), 12, Palette.TextMuted);
             _buttons.Add((head, () => { _logOpen = false; _logScroll = 0; }));
@@ -82,10 +85,10 @@ public partial class Hud
         fx = LogChip(fx, hy - 4, _main.SelectedCrew is CrewMember sc ? sc.Name : "사람", "crew", _logByCrew && _main.SelectedCrew != null, _main.SelectedCrew != null, mouse, () => { _logByCrew = !_logByCrew; _logScroll = 0; });
         fx = LogChip(fx, hy - 4, LogKinds[_logKind].name, "filter", _logKind != 0, true, mouse, () => { _logKind = (_logKind + 1) % LogKinds.Length; _logScroll = 0; });
 
-        var groups = Readout.Group(_world.Log.Entries, LogRows + _logScroll + 1, LogFilter());
-        _logScroll = Math.Min(_logScroll, Math.Max(0, groups.Count - LogRows));
+        var groups = Readout.Group(_world.Log.Entries, rows + _logScroll + 1, LogFilter());
+        _logScroll = Math.Min(_logScroll, Math.Max(0, groups.Count - rows));
         int end = groups.Count - _logScroll;
-        int count = Math.Min(LogRows, end);
+        int count = Math.Min(rows, end);
         float y = card.Position.Y + 38;
         if (count <= 0)
         {

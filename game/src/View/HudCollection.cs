@@ -22,15 +22,15 @@ public partial class Hud
     private void DrawCollection(Vector2 mouse)
     {
         var cu = _world.Curios;
-        float x0 = Margin, y0 = Margin + 52f + 8f + 40f + 8f;
-        float w = Mathf.Min(860f, Screen.X - RightColumnWidth - Margin * 3);
-        float height = Screen.Y - y0 - LogHeight - Margin - 20f;
+        float x0 = WinX, y0 = WinY; // v20 오른쪽 창
+        float w = WinW;
+        float height = WinBottom - y0;
         var card = new Rect2(x0, y0, w, height);
         Card(card);
         float x = x0 + 18, right = card.End.X - 18;
         int total = CurioTable.All.Length, seen = CurioTable.All.Count(s => cu.Seen.Contains(s.Key));
         UiKit.CardTitle(this, x, right - 90, y0 + 30, "도감 — 모은 것", $"{seen} / {total}", "star");
-        Button(new Rect2(right - 76, y0 + 12, 76, 26), "⇧I 닫기", false, mouse, ToggleCollection, Ui.TextSmall);
+        Button(new Rect2(right - 76, y0 + 12, 76, 26), "닫기", false, mouse, ToggleCollection, Ui.TextSmall);
         // 칸 고르기
         float tx = x, ty = y0 + 50;
         foreach (CodexShelf s in Enum.GetValues<CodexShelf>())

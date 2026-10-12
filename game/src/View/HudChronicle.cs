@@ -50,9 +50,9 @@ public partial class Hud
     {
         if (_chronMode == 2) { DrawChronicleEvents(mouse); return; }
         RefreshChronicle();
-        float x0 = Margin, y0 = Margin + 52f + 8f + 40f + 8f + 64f + 10f;
-        float w = Mathf.Min(720f, Screen.X - RightColumnWidth - Margin * 3);
-        float height = Screen.Y - y0 - LogFullHeight - Margin - 10f;
+        float x0 = WinX, y0 = WinY; // v20 오른쪽 창
+        float w = WinW;
+        float height = WinBottom - y0;
         var card = new Rect2(x0, y0, w, height);
         _chronicleRect = card;
         Card(card);
@@ -62,7 +62,7 @@ public partial class Hud
         string sub = $"{_world.Day}일째" + (_world.Life.Memorial.Count > 0 ? $" · 기리는 이름 {string.Join("·", _world.Life.Memorial.Select(m => m.name))}" : "");
         float tabsX = ChronModeTabs(right - 58f - Ui.S2, y0 + 12f, mouse);
         UiKit.CardTitle(this, x, tabsX - Ui.S3, y0 + 32f, $"{_world.Ship.Name} 연대기", sub, "log");
-        Button(new Rect2(right - 58, y0 + 12, 58, 26), "J 닫기", false, mouse, ToggleChronicle, Ui.TextSmall);
+        Button(new Rect2(right - 58, y0 + 12, 58, 26), "닫기", false, mouse, ToggleChronicle, Ui.TextSmall);
 
         // ── 타임라인 ──
         var strip = new Rect2(x, y0 + 46f, right - x, 46f);

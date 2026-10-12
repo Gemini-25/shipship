@@ -75,18 +75,21 @@ public partial class Hud
 
     // ─────────────────────────────── 사고 카드 ───────────────────────────────
 
+    /// <summary>경보 카드가 쌓이는 바닥 (시간 띠가 있으면 그 위).</summary>
+    private float AlertTop => _plan.AlertBottom - (_world.Causes.Notable().Any(i => i.Open) ? 28f : 0f);
+
     private void DrawIncidentCards(Vector2 mouse)
     {
-        if (ChronicleOpen || TechOpen || ControlOpen || PolicyOpen || ScaleCodexOpen || VoyageOpen) return; // v16.24 큰 화면이 열리면 겹치지 않게
         var log = _world.Causes;
         var list = log.Notable().Where(i => i.Open || _world.Tick - i.End < SimTime.Hours(3)).Take(3).ToList();
         if (list.Count == 0) return;
-        float x0 = (MinimapOpen ? _minimapRight : Margin + 470f) + 10f;
-        float right = Screen.X - RightColumnWidth - Margin * 2;
+        // v20 경보 띠: 왼쪽 아래 (아래 탭 위 · 시간 띠 위로 쌓는다 · 고른 것 카드와 오른쪽 창 앞까지)
+        float x0 = Margin;
+        float right = _plan.AlertRight;
         float w = Mathf.Min(420f, right - x0);
         if (w < 220f) return;
         const float h = 54f, gap = 6f;
-        float y = Screen.Y - Margin - LogFullHeight;
+        float y = AlertTop - list.Count * (h + gap) + gap;
         foreach (var inc in list)
         {
             var rect = new Rect2(x0, y, w, h);
@@ -130,8 +133,9 @@ public partial class Hud
     /// <summary>그 점이 사슬 패널 오른쪽 빈 곳 가운데에 오게 카메라를 옮긴다.</summary>
     private void FocusAt(System.Numerics.Vector2 at)
     {
-        float panelRight = ChainOpen ? Margin + Mathf.Min(640f, Screen.X - RightColumnWidth - Margin * 3) : 0f;
-        float regionCenter = (panelRight + Screen.X - RightColumnWidth - Margin) * 0.5f;
+        // v20 배가 보이는 자리 (오른쪽 창이 열려 있으면 그 왼쪽) 가운데로
+        float regionRight = Dock != DockTab.None ? Screen.X - Margin - UiLayout.DockWidth(Screen.X) - Margin : Screen.X;
+        float regionCenter = regionRight * 0.5f;
         float delta = regionCenter - Screen.X * 0.5f;
         _main.Camera.Position = ShipView.ToPx(at) - new Vector2(delta, 0f) / _main.Camera.Zoom.X;
     }
@@ -153,9 +157,9 @@ public partial class Hud
     {
         var inc = ChainIncident!;
         var log = _world.Causes;
-        float x0 = Margin, y0 = Margin + 52f + 8f + 40f + 8f + 64f + 10f;
-        float w = Mathf.Min(640f, Screen.X - RightColumnWidth - Margin * 3);
-        float height = Screen.Y - y0 - LogFullHeight - Margin - 10f - 30f; // 아래에 시간 막대
+        float x0 = WinX, y0 = WinY; // v20 오른쪽 창
+        float w = WinW;
+        float height = WinBottom - y0; // 아래에 시간 막대
         var card = new Rect2(x0, y0, w, height);
         _chainRect = card;
         Card(card);
@@ -163,7 +167,7 @@ public partial class Hud
         var root = log.Node(inc.Root);
 
         // 머리: 뿌리 · 상태 · 숫자
-        Button(new Rect2(right - 58, y0 + 12, 58, 26), "K 닫기", false, mouse, () => OpenChain(null), Ui.TextSmall);
+        Button(new Rect2(right - 58, y0 + 12, 58, 26), "닫기", false, mouse, () => OpenChain(null), Ui.TextSmall);
         Button(new Rect2(right - 58 - 92, y0 + 12, 86, 26), "↶ 직전으로", false, mouse, () => _main.RewindTo(inc.Start - SimTime.Minutes(3)), Ui.TextSmall);
         float tabsX = ChainTabs(right - 58 - 92 - 6, y0 + 12, mouse); // v16.24 이야기 · 사슬
         Gfx.Text(this, Fonts.Bold, new Vector2(x, y0 + 30), Fit(root.Text, tabsX - x - 10, Ui.TextLarge, Fonts.Bold), Ui.TextLarge, Palette.Text);
@@ -266,15 +270,11 @@ public partial class Hud
     /// <summary>화면 아래 가는 띠: 지난 사흘(짧으면 항해 전체)의 사고 구간·사망·지금. 누르면 그 사고 사슬.</summary>
     private void DrawTimeBar(Vector2 mouse)
     {
-        if (ChronicleOpen || TechOpen) return;
         var log = _world.Causes;
-        // v16.2 컴퓨터 카드(왼쪽 아래)는 가리지 않는다 — 그 오른쪽부터
-        bool computer = _world.Automation.Present && !(ControlOpen || PolicyOpen || ChainOpen);
-        float x0 = computer ? Margin + ComputerCardWidth + Ui.Gap : Margin, x1 = Screen.X - RightColumnWidth - Margin * 2;
+        // v20 아래 탭 바로 위 · 왼쪽 끝부터 경보 띠 오른쪽 끝까지
+        float x0 = Margin, x1 = _plan.AlertRight;
         if (x1 - x0 < 160f) return;
-        float y = Screen.Y - Margin - LogFullHeight - 28f;
-        // 지도 위 항로 띠가 떠 있으면 그 위로 비켜 선다
-        if (MinimapOpen && _minimapRect.Size.X > 0f) y = Mathf.Min(y, _minimapRect.Position.Y - 46f - 26f);
+        float y = _plan.AlertBottom - 20f;
         var strip = new Rect2(x0, y, x1 - x0, 20f);
         long now = _world.Tick;
         long span = System.Math.Min(SimTime.TicksPerDay * 3, System.Math.Max(SimTime.Hours(6), now - _world.History.FoundedTick));
