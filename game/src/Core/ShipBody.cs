@@ -725,7 +725,7 @@ public sealed partial class BodySystem
         {
             if (room.Detached) continue;
             float depth = MoistureSystem.Depth(room);
-            bool sprinkling = room.Suppression && room.Powered && w.Fire.Count > 0 && w.Fire.CountIn(room) > 0;
+            bool sprinkling = w.Nozzles.Knock(room) > 0f && (room.NozzleOn || w.Fire.Count > 0 && w.Fire.CountIn(room) > 0);
             if (depth > 0.004f || sprinkling)
                 foreach (var c in room.Cells)
                 {

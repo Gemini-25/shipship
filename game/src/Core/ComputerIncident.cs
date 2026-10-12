@@ -48,6 +48,8 @@ public sealed class CommandCase
     /// <summary>사람 목숨이 걸렸나.</summary>
     public bool Life { get; set; }
     public string Outcome { get; set; } = "";
+    /// <summary>v23 천장 소화 설비 — 마지막으로 적은 상태 (바뀔 때만 적는다).</summary>
+    public string NozzleSaid { get; set; } = "";
     public List<int> Bots { get; } = new();
     public List<CaseNote> Notes { get; } = new();
     public bool Open => Phase != CasePhase.Closed;
@@ -347,7 +349,26 @@ public sealed class IncidentCommander
         }
         if (k.Phase == CasePhase.Verify) { k.Phase = CasePhase.Working; Stats.Refires++; Note(k, "다시 붙었다 — 다시 동원한다"); }
         k.Life = w.Crew.Any(c => !c.Dead && c.Room == room);
+        // 천장 소화 설비: 지휘관이 알면 바로 연다 (감지기가 놓친 불도 로봇의 눈 · 무전으로 알았으면) — 망가졌거나 바닥나면 로봇이 들어간다
+        var nz = w.Nozzles;
+        if (nz.Has(room))
+        {
+            if (!room.NozzleOn && OpensDoors && w.Automation.DampersIn(room) && nz.Ready(room)) nz.Open(room, false);
+            string st = !room.NozzleOn && nz.Ready(room) ? "" : nz.State(room);
+            if (st != k.NozzleSaid && st != "")
+            {
+                k.NozzleSaid = st;
+                Note(k, st switch
+                {
+                    "뿌리는 중" => "천장 소화 설비가 뿌린다 — 로봇은 남은 불을",
+                    "고장" => "천장 소화 설비 고장 — 로봇이 끈다",
+                    "바닥남" => "천장 소화 약제가 바닥났다 — 로봇이 끈다",
+                    _ => $"천장 소화 설비 {st}",
+                });
+            }
+        }
         int want = Math.Clamp(2 + size / 3, 2, 6) + (k.Life ? 1 : 0);
+        if (nz.Spraying(room)) want = Math.Max(1, want - 1); // 천장이 누르는 동안은 한 대 덜
         if (size < k.Best) { k.Best = size; k.BetterAt = w.Tick; }
         else if (k.OnScene >= 0 && w.Tick - Math.Max(k.BetterAt, k.OnScene) > SimTime.Minutes(3) && k.Bots.Count >= want + k.Reinforced && k.Reinforced < 3) // 손이 닿은 뒤에야 진척을 따진다
         {

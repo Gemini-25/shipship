@@ -358,7 +358,7 @@ public sealed class CauseLog
                     string how = room == null || room.Detached ? "불이 진공에 꺼졌다"
                         : by != null ? "불을 껐다"
                         : room.Air.Pressure < 40f ? "공기가 빠져 불이 꺼졌다"
-                        : room.Suppression ? "자동 소화 장치가 껐다"
+                        : room.Suppression || w.Nozzles.SprayedWithin(room, SimTime.Minutes(10)) ? "자동 소화 장치가 껐다"
                         : "불이 사그라들었다";
                     Resolve(id, how, by: by ?? "");
                     break;

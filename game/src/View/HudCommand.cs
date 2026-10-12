@@ -45,7 +45,7 @@ public partial class Hud
             {
                 string size = k.Kind switch
                 {
-                    CaseKind.Fire => $"불 {k.Size:0}칸 (가장 컸을 때 {k.Peak:0})",
+                    CaseKind.Fire => $"불 {k.Size:0}칸 (가장 컸을 때 {k.Peak:0}){(room != null && _world.Nozzles.Has(room) ? $" · 천장 {_world.Nozzles.State(room)}" : "")}",
                     CaseKind.Breach => "공기가 샌다",
                     _ => k.Life ? "위중" : "다침",
                 };

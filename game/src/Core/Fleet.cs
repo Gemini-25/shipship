@@ -254,7 +254,7 @@ public sealed class FleetSystem
                 RTake t => $"{ItemKinds.Name(t.Kind)} 가져오기",
                 RWork => o?.Kind switch
                 {
-                    WorkKind.Maintain => "고치기", WorkKind.FixLights => "조명 갈기", WorkKind.Tend => "돌보기", WorkKind.Harvest => "거두기",
+                    WorkKind.Maintain => "고치기", WorkKind.FixLights => "조명 갈기", WorkKind.ServiceNozzle => "소화 설비", WorkKind.Tend => "돌보기", WorkKind.Harvest => "거두기",
                     WorkKind.StowCot => "접어 두기", WorkKind.RefillPropellant => "채우기", null => r.Fixing is Robot fb ? fb.Fault == null ? "손보기" : "고치기" : "살펴보기", _ => "일하기",
                 },
                 RTest => "시험 가동",

@@ -71,6 +71,8 @@ public enum WorkKind
     FlushMain, ClearMain, SetBucket, EmptyBucket,
     // v19 정보 경계: 주 컴퓨터가 모르는 걸 가서 봐 준다 · 급수관 스밈 땜질
     LookRoom, SealSeep,
+    // v23 천장 소화 설비: 탱크 채우기 · 망가진 분사구 갈기 · 낡은 밸브 다듬기
+    ServiceNozzle,
 }
 
 public static class WorkKinds
@@ -126,6 +128,7 @@ public static class WorkKinds
         WorkKind.UnstockDock => "거치대 자재 되가져오기",
         WorkKind.RepairDoor => "문 구동기 수리",
         WorkKind.FixLights => "조명 수리",
+        WorkKind.ServiceNozzle => "소화 설비 손보기",
         WorkKind.Jettison => "구획 사출",
         WorkKind.Salvage => "물품 회수",
         WorkKind.IsolatePower => "전력 차단",
@@ -340,6 +343,7 @@ public sealed class WorkOrder
         WorkKind.UnstockDock => $"{Target.Label}에서 {ItemKinds.Name(Product ?? ItemKind.Plate)} 도로 꺼내 오기",
         WorkKind.RepairDoor => $"{Target.Door!.RoomA?.Name ?? "?"}·{Target.Door!.RoomB?.Name ?? "?"} 사이 문 구동기 수리",
         WorkKind.FixLights => $"{Target.Room!.Name} 조명 수리",
+        WorkKind.ServiceNozzle => $"{Target.Room!.Name} 천장 소화 설비 손보기",
         WorkKind.Jettison => $"{Target.Room!.Name} 사출",
         WorkKind.Salvage => $"{Target.Room!.Name}에서 물품 회수",
         WorkKind.IsolatePower => $"{Target.Room!.Name} 전력 차단",
@@ -1161,6 +1165,15 @@ public sealed partial class WorkBoard
                         || room.Furniture.Any(f => f.Machine is Machine m && m.Spec.Critical);
             Post(WorkKind.FixLights, WorkTarget.OfRoom(room), busy ? 0.45f : 0.3f, Skill.Electrical, "케이블 1");
         }
+        // ── v23 천장 소화 설비: 망가졌거나 반 넘게 빈 탱크 · 많이 낡은 밸브 (불이 꺼진 뒤에) ──
+        foreach (var room in ship.LiveRooms)
+        {
+            if (room.Abandoned || !w.Nozzles.NeedsService(room) || w.Fire.Count > 0 && w.Fire.CountIn(room) > 0) continue;
+            bool urgent = room.NozzleBroken || room.NozzleAgent < 0.25f;
+            bool risky = room.Fires > 0 || room.Type is RoomType.Galley or RoomType.Reactor or RoomType.Power or RoomType.Workshop;
+            Post(WorkKind.ServiceNozzle, WorkTarget.OfRoom(room), (urgent ? 0.5f : 0.3f) + (risky ? 0.1f : 0f), Skill.Mechanics,
+                room.NozzleBroken ? "퓨즈 1 · 탱크 물" : "탱크 물");
+        }
 
         // ── 환기 댐퍼: 전기가 없어 자동으로 못 움직이면 손으로 ──
         //    (떨어져 나간 방의 댐퍼가 열려 있으면 환기관이 우주로 열린 것: 방 밖 댐퍼를 손으로 닫는다)
@@ -1221,7 +1234,7 @@ public sealed partial class WorkBoard
             if (room.ResponseHold) continue; // v13.0 컴퓨터가 질식·진공 소화로 끄는 중 — 사람은 들어가지 않는다
             bool critical = room.Type is RoomType.Reactor or RoomType.Power or RoomType.LifeSupport or RoomType.Cooling;
             // v13.2 방침(불 끄는 수단: 자동 소화 먼저): 장치가 있는 방은 45분 동안 장치에 맡긴다
-            if (w.Policies["firemethod"] == 1 && room.Suppression && room.Powered && w.Fire.BurningHours(room) < 0.75f) continue;
+            if (w.Policies["firemethod"] == 1 && w.Nozzles.Auto(room) && w.Fire.BurningHours(room) < 0.75f) continue;
             // 불이 크면 두 사람 몫
             int crews = count >= 4 ? 2 : 1;
             for (int slot = 0; slot < crews; slot++)

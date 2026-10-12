@@ -167,7 +167,7 @@ public sealed partial class WorkBoard
             else if (ttf < 12f && (structure < 1 || !repairHands))
                 reason = $"연결부가 {ttf:0}시간 안에 버티지 못한다 — " + (structure < 1 ? "이을 구조재가 없다" : "밖에 나갈 손(드론·우주복)이 없다");
             else if (w.Fire.IsKnown(room) && w.Fire.BurningHours(room) >= 1.5f && w.Fire.CountIn(room) >= Math.Max(4, room.Volume / 4)
-                     && Have(ItemKind.Extinguisher) == 0 && !(room.Suppression && room.Powered))
+                     && Have(ItemKind.Extinguisher) == 0 && !w.Nozzles.Auto(room))
                 reason = $"불이 {w.Fire.BurningHours(room):0.#}시간째 꺼지지 않는다 ({w.Fire.CountIn(room)}칸) — 소화기가 없다";
             // v13.2 방침(사출: 적극): 더 일찍 떼어 낸다
             if (reason == null && w.Policies["jettison"] == 2)

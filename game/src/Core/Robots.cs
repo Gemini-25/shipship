@@ -411,7 +411,7 @@ public sealed partial class RobotSystem
     public static bool Special(RobotKind k, WorkKind w) => k switch
     {
         RobotKind.Hauler => w is WorkKind.Restock or WorkKind.StockDock or WorkKind.CarryWater or WorkKind.StockCache or WorkKind.StowCot or WorkKind.RefillPropellant or WorkKind.ShelterFood or WorkKind.EmptyBucket,
-        RobotKind.Maintainer => w is WorkKind.Maintain or WorkKind.FixLights or WorkKind.FlushMain or WorkKind.ClearMain or WorkKind.LookRoom or WorkKind.SealSeep,
+        RobotKind.Maintainer => w is WorkKind.Maintain or WorkKind.FixLights or WorkKind.ServiceNozzle or WorkKind.FlushMain or WorkKind.ClearMain or WorkKind.LookRoom or WorkKind.SealSeep,
         RobotKind.Gardener => w is WorkKind.Tend or WorkKind.Harvest,
         _ => RobotsV15.CanDo(k, w),
     };
@@ -1023,6 +1023,31 @@ public sealed partial class RobotSystem
                 }));
                 steps.Add(new RGoto(b.At));
                 steps.Add(new RDo((rb, world) => { b.RobotBy = -1; world.Board.Close(o); Done(rb, null); return true; }));
+                return steps;
+            }
+            case WorkKind.ServiceNozzle:
+            {
+                var room = o.Target.Room!;
+                bool broken = room.NozzleBroken;
+                if (broken)
+                {
+                    var (box, spot) = Nearest(w, dist, b => b.Storage!.Count(ItemKind.Fuse) > 0);
+                    if (box == null) { blocked = "퓨즈 없음"; return null; }
+                    steps.Add(new RGoto(spot));
+                    steps.Add(new RTake(box, ItemKind.Fuse, 1));
+                }
+                steps.Add(new RGoto(at));
+                steps.Add(new RWork(broken ? 0.6f : 0.35f, null, room.Center));
+                steps.Add(new RDo((rb, world) =>
+                {
+                    bool fuse = rb.Cargo?.Kind == ItemKind.Fuse;
+                    if (room.NozzleBroken && !fuse) return false;
+                    if (fuse) rb.Cargo = null;
+                    string what = world.Nozzles.Service(room, fuse);
+                    world.Board.Close(o);
+                    Done(rb, $"{room.Name} 천장 소화 설비 — {what}");
+                    return true;
+                }));
                 return steps;
             }
             case WorkKind.FixLights:

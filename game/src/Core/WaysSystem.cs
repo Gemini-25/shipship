@@ -508,7 +508,7 @@ public sealed partial class WaysSystem
         switch (k.Snag)
         {
             case Snag.Fire:
-                if (room.Suppression && room.Powered) See("fire.system", -1);
+                if (w.Nozzles.Auto(room)) See("fire.system", -1);
                 if (room.Purging) See("fire.vacuum", -1);
                 if (room.Inerting) See("fire.inert", -1);
                 if (w.Fleet.BotOn(room)) See("fire.robot", -1);
@@ -604,7 +604,7 @@ public sealed partial class WaysSystem
         }
         switch (way.Id)
         {
-            case "fire.system": if (room == null || !room.Suppression || !room.Powered) return (false, "소화 장치 없음", 5); break;
+            case "fire.system": if (room == null || !w.Nozzles.Auto(room)) return (false, room != null && w.Nozzles.Has(room) ? $"소화 설비 {w.Nozzles.State(room)}" : "소화 장치 없음", 5); break;
             case "fire.robot": if (!w.Robots.Robots.Any(r => r.Operational && r.Foam > 0.1f)) return (false, "로봇 없음", 6); break;
             case "fire.vacuum": if (room == null || w.Policies["vacuumfire"] <= 0) return (false, "방침이 막았다", 6); break;
             case "fire.inert": if (room == null || w.Policies["inertfire"] <= 0) return (false, "방침이 막았다", 8); break;

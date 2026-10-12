@@ -250,8 +250,21 @@ public sealed class Room
     public int Collapses { get; set; }
     public int Deaths { get; set; }
 
-    /// <summary>자동 소화 장치 (v7: 불을 여러 번 겪은 방에 단다). 전기가 있으면 불이 자라지 못하게 뿌린다.</summary>
+    /// <summary>자동 소화 장치 보강 (v7: 불을 여러 번 겪은 방에 단다) — v23부터 방마다 기본 설비가 있고, 보강하면 탱크가 크고 · 세게 뿌리고 · 열 퓨즈가 일찍 녹는다.</summary>
     public bool Suppression { get; set; }
+
+    // ── v23 방마다 천장 자동 소화 설비 (물안개 · Nozzles.cs) ──
+    /// <summary>설비가 있다 · 탱크에 남은 약제(0~1) · 분사구 · 밸브가 망가졌다 · 지금 뿌리는 중 · 낡음(열 때마다 쌓인다).</summary>
+    public bool NozzleFitted { get; set; } = true;
+    public float NozzleAgent { get; set; } = 1f;
+    public bool NozzleBroken { get; set; }
+    public bool NozzleOn { get; set; }
+    public float NozzleWear { get; set; }
+    /// <summary>마지막으로 연 때 · 연 까닭 (컴퓨터 / 열 퓨즈) · 불이 없어진 때 (잠깐 더 뿌리고 닫는다).</summary>
+    public long NozzleSince { get; set; } = -1;
+    public bool NozzleByFuse { get; set; }
+    public long NozzleClearSince { get; set; } = -1;
+    public long NozzleLast { get; set; } = -1;
 
     /// <summary>예전에 쓰이던 용도 (임시 침실이었다가 되돌아간 방 등).</summary>
     public List<string> FormerPurposes { get; } = new();

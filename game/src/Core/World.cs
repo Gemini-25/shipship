@@ -87,6 +87,9 @@ public sealed class World
     /// <summary>v23 주컴퓨터 사고 지휘관: 사고마다 지휘 건 — 동원 · 증원 · 확인 · 닫기 (주 코어가 멎으면 사람에게 넘긴다).</summary>
     public IncidentCommander Commander { get; }
 
+    /// <summary>v23 방마다 천장 자동 소화 설비 (물안개 · 탱크 · 밸브 · 열 퓨즈).</summary>
+    public NozzleSystem Nozzles { get; }
+
     /// <summary>v11.2 엔진·추진제·항로: 회피 기동, 보통 항로 ↔ 잔해 지대.</summary>
     public PropulsionSystem Propulsion { get; }
 
@@ -291,6 +294,7 @@ public sealed class World
         Drones = new DroneSystem(this);
         Robots = new RobotSystem(this);
         Commander = new IncidentCommander(this);
+        Nozzles = new NozzleSystem(this);
         Propulsion = new PropulsionSystem(this, 1f);
         Hazards = new HazardSystem(this, seed);
         Comms = new CommsSystem(this);
@@ -432,6 +436,7 @@ public sealed class World
             pf = Prof.Lap("sys.Fixtures", pf);
             Air.Update(dt);
             pf = Prof.Lap("sys.Air", pf);
+            Nozzles.Update(dt);
             Fire.Update(dt);
             pf = Prof.Lap("sys.Fire", pf);
             Water.Update(this, dt);

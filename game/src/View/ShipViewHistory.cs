@@ -35,19 +35,20 @@ public partial class ShipView
                 ci.Circle(p, 1.4f, SteelColor.Lightened(0.3f).WithAlpha(0.9f), true, -1f, true);
         }
 
-        // 자동 소화 장치: 천장 배관과 노즐 (불이 나면 물안개)
+        // 자동 소화 장치: 천장 배관과 노즐 (불이 나면 물안개) — v23 방마다 설비: 보강한 방은 배관이 늘 보이고, 기본 설비는 뿌릴 때 · 망가졌을 때만
         foreach (var room in _world.Ship.LiveRooms)
         {
-            if (!room.Suppression) continue;
-            bool spraying = room.Powered && _world.Fire.CountIn(room) > 0;
+            bool spraying = _world.Nozzles.Spraying(room) || !Core.NozzleSystem.On && room.Suppression && room.Powered && _world.Fire.CountIn(room) > 0;
+            bool broken = _world.Nozzles.Has(room) && room.NozzleBroken;
+            if (!room.Suppression && !spraying && !broken) continue;
             float y = (room.MinY + 0.18f) * T;
             float x0 = (room.MinX + 0.3f) * T, x1 = (room.MaxX + 0.7f) * T;
-            ci.DrawLine(new Vector2(x0, y), new Vector2(x1, y), new Color("#c8d6e4").WithAlpha(0.35f), 2f);
+            if (room.Suppression) ci.DrawLine(new Vector2(x0, y), new Vector2(x1, y), new Color("#c8d6e4").WithAlpha(0.35f), 2f);
             for (int x = room.MinX + 1; x <= room.MaxX; x += 3)
             {
                 var n = new Vector2((x + 0.5f) * T, y);
                 ci.Circle(n, 2.6f, new Color("#d8e4f0").WithAlpha(0.8f), true, -1f, true);
-                ci.Circle(n, 1.2f, new Color("#3a8fd9"), true, -1f, true);
+                ci.Circle(n, 1.2f, broken ? new Color("#d9583a") : new Color("#3a8fd9"), true, -1f, true);
                 if (!spraying) continue;
                 for (int k = 0; k < 5; k++)
                 {

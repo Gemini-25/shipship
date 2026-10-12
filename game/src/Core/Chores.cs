@@ -472,6 +472,7 @@ public static partial class WorkPlanners
             WorkKind.UnstockDock => UnstockDock(activity, o, c, w, dist, at, out blocked),
             WorkKind.RepairDoor => RepairDoor(activity, o, c, w, dist, at, out blocked),
             WorkKind.FixLights => FixLights(activity, o, c, w, dist, at, out blocked),
+            WorkKind.ServiceNozzle => ServiceNozzle(activity, o, c, w, dist, at, out blocked),
             WorkKind.PilotDrones => PilotDrones(activity, o, c, w, dist, at, out blocked),
             WorkKind.RadarWatch => RadarWatch(activity, o, c, w, dist, at, out blocked),
             WorkKind.Salvage => Salvage(activity, o, c, w, dist, at, out blocked),
@@ -1792,6 +1793,32 @@ public static partial class WorkPlanners
             return true;
         }));
         return Wrap(a, o, c, w, "조명 수리", toils, $"{room.Name} 조명을 고치러 간다");
+    }
+
+    // ── v23 천장 소화 설비 손보기: 망가진 분사구는 퓨즈 1로 갈고 · 탱크는 배의 물로 채운다 ──
+    private static Job? ServiceNozzle(Activity a, WorkOrder o, CrewMember c, World w, DistanceField dist, Cell at, out string? blocked)
+    {
+        blocked = null;
+        var room = o.Target.Room!;
+        if (!w.Nozzles.NeedsService(room)) { w.Board.Close(o); return null; }
+        var cost = room.NozzleBroken ? new[] { (ItemKind.Fuse, 1) } : Array.Empty<(ItemKind, int)>();
+        var toils = FetchAll(c, w, dist, cost);
+        if (toils == null) { blocked = "퓨즈 없음"; return null; }
+        toils.Add(new GotoToil(at));
+        toils.Add(new WorkToil(room.NozzleBroken ? 0.5f : 0.3f, Skill.Mechanics, room.Center) { Resume = o });
+        toils.Add(new DoToil((cm, world) =>
+        {
+            if (!world.Nozzles.NeedsService(room)) { world.Board.Close(o); return true; }
+            bool broken = room.NozzleBroken;
+            if (broken && !UseAll(cm, cost)) return false;
+            string what = world.Nozzles.Service(room, broken);
+            cm.Stats.Repairs++;
+            world.Board.Close(o);
+            MarkLog.Add(room.Marks, world.Tick, $"{Ko.IGa(cm.Name)} 천장 소화 설비를 손봤다");
+            world.Log.Add(world.Tick, LogKind.Work, $"{room.Name} 천장 소화 설비 — {what}", cm.Id);
+            return true;
+        }));
+        return Wrap(a, o, c, w, "소화 설비 손보기", toils, $"{room.Name} 천장 소화 설비를 손보러 간다");
     }
 
     // ── v9.3 저출력 운영: 배전반에서 설비를 하나씩 내리고(펌프 하나·산소 발생기 하나·빈 치료 침대·엔진·콘솔) 먹을 것에 전기를 돌린다 ──

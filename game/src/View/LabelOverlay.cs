@@ -317,6 +317,7 @@ public partial class LabelOverlay : Node2D
                 int plates = _world.Ship.Walls.Count(kv => kv.Value.Reinforced && Hull.InsideRoom(_world.Ship, kv.Key) == room);
                 if (plates > 0) parts.Add(compact ? $"보강{plates}" : $"보강 {plates}칸");
                 if (room.Suppression) parts.Add(compact ? "소화" : "소화 장치");
+                if (_world.Nozzles.Has(room) && (room.NozzleBroken || room.NozzleAgent < 0.25f)) parts.Add(compact ? "소화×" : room.NozzleBroken ? "소화 고장" : "소화 바닥");
                 if (room.FormerPurposes.Count > 0 && !compact) parts.Add($"예전: {room.FormerPurposes[^1]}");
                 bool hurt = room.Deaths > 0 || room.Collapses > 0 || room.TimesAbandoned > 0;
                 return (string.Join(compact ? " " : " · ", parts), hurt ? Palette.Warning : parts.Count > 0 ? Palette.TextDim : Palette.TextMuted);

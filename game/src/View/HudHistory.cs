@@ -297,7 +297,7 @@ public partial class Hud
         if (swaps > 0) hull.Add($"교체 {swaps}");
         if (plates > 0) hull.Add($"보강 {plates}칸");
         if (hull.Count > 0) lines.Add(("외벽: " + string.Join(" · ", hull), plates > 0 ? ShipView.SteelColor : Palette.TextDim, false));
-        if (room.Suppression) lines.Add(("천장에 자동 소화 장치", new Color("#9ad0ff"), false));
+        if (_world.Nozzles.Has(room)) lines.Add(($"천장 소화 설비{(room.Suppression ? " (보강)" : "")} · {_world.Nozzles.State(room)}", room.NozzleBroken || room.NozzleAgent < 0.25f ? Palette.Warning : new Color("#9ad0ff"), false));
         foreach (var mark in room.Marks.AsEnumerable().Reverse().Take(3))
             lines.Add(($"{SimTime.Day(mark.Tick)}일 {SimTime.Clock(mark.Tick)}  {mark.Text}", Palette.TextDim, false));
         return lines;
