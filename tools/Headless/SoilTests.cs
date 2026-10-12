@@ -56,11 +56,13 @@ public static partial class Program
                 c.Soil.SuitDust = 0.8f;
                 var room = c.Room!;
                 float dust0 = w.Soil.RoomSoil(room)[(int)SoilKind.Dust];
-                Run(w, SimTime.Minutes(30));
+                var dtrace = new System.Collections.Generic.List<string>();
+                float peak = dust0; // v21 넓은 통로를 오가면 묽게 쌓였다가 환기로 옅어진다 — 30분 뒤 순간값이 아니라 그동안 가장 짙었던 때
+                for (int m = 0; m < 6; m++) { for (int k = 0; k < 5; k++) { Run(w, SimTime.Minutes(1)); peak = MathF.Max(peak, w.Ship.LiveRooms.Max(r => w.Soil.RoomSoil(r)[(int)SoilKind.Dust])); } dtrace.Add($"{(m + 1) * 5}분 {c.Room?.Name} {c.Job?.Label ?? "-"} 우주복 {c.Soil.SuitDust:0.00} 입음 {c.Suit != null} 방 {(c.Room != null ? w.Soil.RoomSoil(c.Room)[(int)SoilKind.Dust] : 0f):0.000} 최대 {w.Ship.LiveRooms.Max(r => w.Soil.RoomSoil(r)[(int)SoilKind.Dust]):0.000}"); }
                 float clothes = c.Soil.Clothes[(int)SoilKind.Dust];
-                float spread = w.Ship.LiveRooms.Max(r => w.Soil.RoomSoil(r)[(int)SoilKind.Dust]);
+                float spread = peak;
                 Check("우주복 분진 — 털지 않고 들어오면 옷과 방으로 번진다 (털면 멈춘다)", clothes > 0.01f && spread > dust0 && w.Soil.Stats.SkippedDecons > 0,
-                    $"옷의 분진 {clothes * 100:0}% · 가장 더러운 방의 분진 {spread * 100:0}% · {w.Soil.Stats.Summary()}");
+                    $"옷의 분진 {clothes * 100:0}% · 가장 더러운 방의 분진 {spread * 100:0.0}% (처음 {dust0 * 100:0.0}%) · {w.Soil.Stats.Summary()}" + (spread > dust0 ? "" : $" · [{string.Join(" / ", dtrace)}]"));
             }
 
             // 4) 물이 모자라면 손만 씻고 빨래를 미룬다
