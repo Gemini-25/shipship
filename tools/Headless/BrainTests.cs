@@ -202,7 +202,7 @@ public static partial class Program
                         var te = witness.LastEvaluations.FirstOrDefault(e => e.Activity is TellActivity);
                         var top = witness.LastEvaluations.FirstOrDefault();
                         var wb = w.Brain2.Beliefs.Get(witness, Topic.Fire, room.Id);
-                        Console.WriteLine($"    {m * 0.5f}분 {witness.Name}: {witness.Job?.Label} @{witness.Room?.Name} · 알리기 {te.Score:0.00} ({te.Reason}) · 1위 {top.Activity?.Label} {top.Score:0.00} ({top.Reason}) · 대피 {witness.LastEvaluations.FirstOrDefault(e => e.Activity is EvacuateActivity).Score:0.00} 여유 {witness.Job?.InterruptMargin:0.00} 생각 {SimTime.Clock(witness.LastThinkTick)} · 믿음 {(wb != null ? $"{BeliefSystem.SourceName(wb.Src)} 경보{wb.Alarmed}" : "-")} · {friend.Name} 앎 {(friend.Mind.Knows.TryGetValue($"fire:{room.Id}", out var fk) ? MindSystem.SourceName(fk.src) : "-")} · 데이터선 {room.DataLinked}");
+                        Console.WriteLine($"    {m * 0.5f}분 {witness.Name}: {witness.Job?.Label} @{witness.Room?.Name} · 알리기 {te.Score:0.00} ({te.Reason}) · 1위 {top.Activity?.Label} {top.Score:0.00} ({top.Reason}) · 대피 {witness.LastEvaluations.FirstOrDefault(e => e.Activity is EvacuateActivity).Score:0.00} 여유 {witness.Job?.InterruptMargin:0.00} 생각 {SimTime.Clock(witness.LastThinkTick)} · 믿음 {(wb != null ? $"{BeliefSystem.SourceName(wb.Src)} 경보{wb.Alarmed}" : "-")} · {friend.Name} 앎 {(friend.Mind.Knows.TryGetValue($"fire:{room.Id}", out var fk) ? MindSystem.SourceName(fk.src) : "-")} · 데이터선 {room.DataLinked} · 친구 {friend.Job?.Label ?? "-"}@{friend.Room?.Name} 믿음 {(w.Brain2.Beliefs.Get(friend, Topic.Fire, room.Id) is Belief fq ? BeliefSystem.SourceName(fq.Src) : "-")}");
                     }
                 }
                 var wp = w.Brain2.Plans.Past.Concat(w.Brain2.Plans.Active).Where(p => p.Owner == witness.Id && p.Kind == PlanKind.Tell).ToList();
@@ -303,6 +303,7 @@ public static partial class Program
                     $"{worker2.Name}: {(plan2 == null ? "계획 없음" : string.Join(" / ", plan2.Trail))} · 원정 의지 {init0:0.00} → {init1:0.00}");
                 // 솜씨가 모자라면 잘하는 사람에게 부탁 (일 나누기)
                 var w3 = BrainDay(seed, "Hanbit");
+                NoRobots(w3); // v21 사람의 계획 · 부탁을 본다 — 수리 로봇이 펌프를 맡으면 서툰 사람은 곁에서 거들다 부탁이 늦는다
                 var pump3 = w3.Ship.FurnitureOf(FurnitureType.CoolantPump).First();
                 foreach (var f in w3.Ship.Containers) { int n = f.Storage!.Count(part); if (n > 0) f.Storage.Take(part, n); }
                 var clumsy = w3.Crew.Where(c => c.CanAct && c.IsAwake && !c.IsChild).OrderBy(c => c.SkillLevel(Skill.Mechanics)).First();
