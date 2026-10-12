@@ -85,7 +85,7 @@ public sealed partial class Storyteller
         StoryPersona.Merciful => t > 0.05f || cap < (Level >= 4 ? 0.4f : 0.5f)
                                  || _w.Crew.Any(c => !c.Dead && (c.Down || c.CareBed != null)),  // 쓰러진 사람이 있으면 기다린다
         StoryPersona.Vengeful => t > (Level >= 4 ? 0.8f : 0.55f),                 // 웬만해선 기다리지 않는다
-        _ => false,
+        _ => HoldV21(p, t, cap),                                                  // v21 새 성격 6
     };
 
     /// <summary>다음 사고까지의 간격 배율 (원래 성격은 1).</summary>
@@ -95,7 +95,7 @@ public sealed partial class Storyteller
         StoryPersona.Seasonal => SeasonPhase < 0.2f ? 1.6f : 0.55f + 0.6f * MathF.Abs(SeasonPhase - 0.6f), // 철이 바뀔 무렵 조용, 한철 한가운데 잦게
         StoryPersona.Merciful => 1.2f + 0.8f * (1f - cap) + Wounded(),                         // 약할수록 · 다친 사람이 많을수록 오래 쉰다
         StoryPersona.Vengeful => 1.4f - 0.9f * cap,                                            // 잘 추스른 배일수록 빨리
-        _ => 1f,
+        _ => GapMulV21(p, cap),                                                                // v21 새 성격 6 (원래 넷은 1)
     };
 
     private float Wounded()
@@ -149,7 +149,7 @@ public sealed partial class Storyteller
     }
 
     /// <summary>노릴 방 (앙갚음형만).</summary>
-    private Room? Aim(StoryPersona p) => p == StoryPersona.Vengeful ? Grudge() : null;
+    private Room? Aim(StoryPersona p) => p == StoryPersona.Vengeful ? Grudge() : p == StoryPersona.Chain ? ChainAim() : null; // v21 연쇄: 사슬이 시작된 방
 
     /// <summary>앙갚음형이 노리는 방: 가장 최근에 개조한 방, 없으면 운석·불을 가장 많이 버텨 낸 방.</summary>
     public Room? Grudge()

@@ -203,24 +203,8 @@ public partial class OptionsPanel : PanelContainer
         box.AddChild(Caption("관찰"));
         box.AddChild(Check("치명 경보가 울리면 저절로 일시정지", Settings.AutoPauseCritical, on => Settings.AutoPauseCritical = on));
         box.AddChild(Check("사건 알림", Settings.EventToasts, on => Settings.EventToasts = on));
-        // v11.2 무작위 사고: 관찰자가 던지지 않아도 배가 사고를 겪는다 (사고 도구의 "더 보기"에서도 바꾼다)
-        _random = new OptionButton { CustomMinimumSize = new Vector2(360, 0) };
-        foreach (var (_, name) in RandomChoices) _random.AddItem($"무작위 사고: {name}");
-        _random.ItemSelected += i => _main.SetRandomIncidents(RandomChoices[i].days);
-        box.AddChild(_random);
-        // v12.4 이야기꾼 · 난이도 (켜면 무작위 사고 대신 이야기꾼이 사고를 낸다)
-        _persona = new OptionButton { CustomMinimumSize = new Vector2(360, 0) };
-        foreach (var name in new[] { "이야기꾼: 끔 (위의 무작위 사고)", "이야기꾼: 꾸준형 — 고르게, 거의 추스르면 다음", "이야기꾼: 몰아치기형 — 오래 조용하다 한꺼번에", "이야기꾼: 무작위형 — 예측 불가", "이야기꾼: 시험관형 — 배의 급소를 노린다",
-                                   "이야기꾼: 느린 불씨형 — 작게 시작해 점점 잦고 크게", "이야기꾼: 계절형 — 철마다 한 갈래를 몰아서", // v15.7
-                                   "이야기꾼: 자비형 — 다 추스르고 막을 물자가 있을 때만", "이야기꾼: 앙갚음형 — 잘 버틴 만큼 되갚는다" })
-            _persona.AddItem(name);
-        _persona.ItemSelected += i => _main.SetTuned("story.persona", i);
-        box.AddChild(_persona);
-        _level = new OptionButton { CustomMinimumSize = new Vector2(360, 0) };
-        foreach (var name in new[] { "난이도 1 느긋", "난이도 2 쉬움", "난이도 3 보통", "난이도 4 어려움", "난이도 5 가혹" })
-            _level.AddItem($"{name} (시작 물자는 새 항해부터)");
-        _level.ItemSelected += i => _main.SetTuned("story.level", i + 1);
-        box.AddChild(_level);
+        // v21 무작위 사고 · 이야기꾼 성격 · 난이도 · 리듬은 아래 탭 '사고 › 이야기꾼' 한 곳에서 고른다
+        box.AddChild(Caption("사고 · 이야기꾼 · 난이도 — 아래 탭 '사고 › 이야기꾼'에서 고른다"));
         // v12.9 항해 방식 (새 항해부터)
         _mode = new OptionButton { CustomMinimumSize = new Vector2(360, 0) };
         foreach (var name in new[] { "항해: 자유 항해 (샌드박스)", "항해: 캠페인 — 이어지는 임무와 갈림길, 끝은 세대선", "항해: 처음부터 세대선 — 아이가 태어나고 자란다" })
@@ -360,24 +344,13 @@ public partial class OptionsPanel : PanelContainer
         Position = new Vector2(System.MathF.Max(margin, (vp.X - size.X) * 0.5f), System.MathF.Max(margin, (vp.Y - size.Y) * 0.5f));
     }
 
-    private OptionButton _random = null!;
-    private OptionButton _persona = null!, _level = null!, _mode = null!;
-
-    private static readonly (float days, string name)[] RandomChoices =
-        { (0f, "끔 (관찰자가 던진 것만)"), (6f, "드물게 — 평균 6일에 한 번"), (3f, "보통 — 3일에 한 번"), (1.5f, "잦게 — 하루 반에 한 번"), (0.5f, "혼돈 — 반나절에 한 번") };
+    private OptionButton _mode = null!;
 
     public void Toggle()
     {
         Visible = !Visible;
         if (Visible)
         {
-            float d = ShipSim.Core.HazardSystem.RandomDays;
-            int best = 0;
-            for (int i = 1; i < RandomChoices.Length; i++)
-                if (d > 0f && (best == 0 || System.MathF.Abs(RandomChoices[i].days - d) < System.MathF.Abs(RandomChoices[best].days - d))) best = i;
-            _random.Selected = best;
-            _persona.Selected = (int)ShipSim.Core.Storyteller.Persona;
-            _level.Selected = ShipSim.Core.Storyteller.Level - 1;
             _mode.Selected = (int)ShipSim.Core.CampaignSystem.ModeValue;
             if (!_hooked) { GetViewport().SizeChanged += () => { if (Visible) Layout(); }; _hooked = true; }
             _scroll.ScrollVertical = 0;

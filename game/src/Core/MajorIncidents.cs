@@ -955,10 +955,10 @@ public sealed class MajorIncidentSystem
     /// 규모 비율로 고른다: 고르는 표의 무게를 규모별로 모아 목표 비율에 맞춘다 (개인 6% · 방 34% · 계통 38% · 배 전체 22%) —
     /// 자잘한 사고가 무게 합으로 판을 덮지 않게. 규모는 표(ScaleTable)의 기본 규모.
     /// </summary>
-    public static void ShapeByScale(List<(string key, float weight)> pool)
+    public static void ShapeByScale(List<(string key, float weight)> pool, float[]? shares = null)
     {
         if (Durability.Legacy || pool.Count == 0) return;
-        float[] target = { 0.06f, 0.34f, 0.38f, 0.22f, 0f };
+        float[] target = shares ?? new[] { 0.06f, 0.34f, 0.38f, 0.22f, 0f }; // v21 혹독 이상은 배 전체급 몫이 크다 (Storyteller.ScaleTarget)
         var sum = new float[5];
         var scale = new IncidentScale[pool.Count];
         for (int i = 0; i < pool.Count; i++) { scale[i] = ScaleTable.OfKey(pool[i].key); sum[(int)scale[i]] += pool[i].weight; }

@@ -59,8 +59,12 @@ public static class Tuning
         E("evolution.gap", "개조와 개조 사이 (시간)", 16f, 0f, 200f, () => Evolution.GapHours, v => Evolution.GapHours = v),
         E("omen.share", "닳아서 날 고장 중 전조부터 내는 몫 (0~1)", 0.65f, 0f, 1f, () => OmenShare, v => OmenShare = v),
         E("incident.days", "무작위 사고 평균 간격 (일, 0이면 끔)", 0f, 0f, 30f, () => HazardSystem.RandomDays, v => HazardSystem.RandomDays = v),
-        E("story.persona", "이야기꾼 (0 끔·예전 무작위 사고 · 1 꾸준형 · 2 몰아치기형 · 3 무작위형 · 4 시험관형 · 5 느린 불씨형 · 6 계절형 · 7 자비형 · 8 앙갚음형)", 0f, 0f, 8f, () => Storyteller.PersonaValue, v => Storyteller.PersonaValue = MathF.Round(v)), // v12.4
-        E("story.level", "난이도 (1 느긋 · 2 쉬움 · 3 보통 · 4 어려움 · 5 가혹 — 사고 빈도·크기·시작 물자·부상·작은 이상)", 3f, 1f, 5f, () => Storyteller.LevelValue, v => Storyteller.LevelValue = MathF.Round(v)),
+        E("story.persona", "이야기꾼 (0 끔·예전 무작위 사고 · 1 꾸준형 · 2 몰아치기형 · 3 무작위형 · 4 시험관형 · 5 느린 불씨형 · 6 계절형 · 7 자비형 · 8 앙갚음형 · 9 연쇄형 · 10 포위형 · 11 내부 붕괴형 · 12 마라톤형 · 13 절정형 · 14 파도형)", 0f, 0f, 14f, () => Storyteller.PersonaValue, v => Storyteller.PersonaValue = MathF.Round(v)), // v12.4 · v21 성격 6 더
+        E("story.level", "난이도 (1 느긋 · 2 쉬움 · 3 보통 · 4 어려움 · 5 가혹 · 6 혹독 · 7 지옥 · 8 절멸 — 사고 빈도·크기·겹침·시작 물자·부상·작은 이상)", 3f, 1f, 8f, () => Storyteller.LevelValue, v => Storyteller.LevelValue = MathF.Round(v)), // v21 8단계
+        E("story.freq", "이야기꾼 리듬 · 잦기 (−2 아주 드물게 ~ 0 성격대로 ~ +2 아주 잦게)", 0f, -2f, 2f, () => Storyteller.FreqValue, v => Storyteller.FreqValue = MathF.Round(v)), // v21
+        E("story.size", "이야기꾼 리듬 · 크기 (−2 아주 작게 ~ 0 성격대로 ~ +2 아주 크게)", 0f, -2f, 2f, () => Storyteller.SizeValue, v => Storyteller.SizeValue = MathF.Round(v)),
+        E("story.burst", "이야기꾼 리듬 · 몰아치기 (−2 없음 ~ 0 성격대로 ~ +2 몰아서)", 0f, -2f, 2f, () => Storyteller.BurstValue, v => Storyteller.BurstValue = MathF.Round(v)),
+        E("incident.size", "무작위 사고 크기 범위 (0 작은 것만 · 1 섞어 · 2 큰 것만)", 1f, 0f, 2f, () => HazardSystem.SizeRangeValue, v => HazardSystem.SizeRangeValue = MathF.Round(v)),
         E("mode.campaign", "캠페인 (0 자유 항해 · 1 이어지는 임무 · 2 처음부터 세대선)", 0f, 0f, 2f, () => CampaignSystem.ModeValue, v => CampaignSystem.ModeValue = MathF.Round(v)), // v12.9
         E("generation.yeardays", "세대선의 한 해 (일)", 3f, 0.5f, 60f, () => GenerationSystem.YearDaysValue, v => GenerationSystem.YearDaysValue = v),
         E("meeting.maiden", "첫 출항 회의 (1 가치관대로 방침을 정한다 · 0 처음 값 그대로)", 1f, 0f, 1f, () => MeetingSystem.MaidenOff ? 0f : 1f, v => MeetingSystem.MaidenOff = v < 0.5f), // v13.2

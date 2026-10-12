@@ -360,7 +360,7 @@ public sealed partial class CosmicSystem
             _voyage = vn;
             _plan.Clear();
             float u = R.Float();
-            int n = u < 0.35f ? 0 : u < 0.82f ? 1 : 2;
+            int n = (u < 0.35f ? 0 : u < 0.82f ? 1 : 2) + Storyteller.CosmicExtra; // v21 혹독 +1 · 지옥 +2 · 절멸 +3
             float total = MathF.Max(4f, w.Voyage.TotalDays);
             for (int i = 0; i < n; i++)
             {
@@ -377,7 +377,8 @@ public sealed partial class CosmicSystem
         var k = PickKind();
         // 틀어진 센서는 없는 것을 본다 (헛예보)
         bool ghost = w.Sensors.Array?.Machine is Machine sm && sm.SensorCal < 0.6f && R.Chance(0.3f);
-        Force(k, null, R.Chance(0.4f), "항로", ghost);
+        var ev = Force(k, null, R.Chance(Storyteller.CosmicExtra > 0 ? 0.4f + 0.15f * Storyteller.CosmicExtra : 0.4f), "항로", ghost);
+        ev.Power *= Storyteller.CosmicPower; // v21 혹독 이상은 더 세게 (가까이 · 크게)
     }
 
     // ───────────────────────────── 예보 (주 컴퓨터) ─────────────────────────────

@@ -371,32 +371,112 @@ public partial class Hud
         DrawHazardMenu(new Vector2(card.Position.X, card.End.Y + 8f), mouse, card.Size.X);
     }
 
-    // ── 사고: 이야기꾼 ──
+    // ── 사고: 이야기꾼 ── v21 성격 · 난이도 · 리듬 · 무작위 사고를 한 곳에서 (바꾼 값은 기록된다 — 불러오기 · 다시 보기가 같다)
+    private static readonly Color StoryInk = new("#e0a3ff");
+
     private void DrawStoryPage(Vector2 mouse)
     {
-        var card = PageCard(220f);
-        float x = card.Position.X + 18f, y = card.Position.Y + 32f, right = card.End.X - 18f;
+        var card = PageCard(500f);
+        float x = card.Position.X + 18f, y = card.Position.Y + 30f, right = card.End.X - 18f, w = right - x;
+        var p = Storyteller.Persona;
+        bool on = p != StoryPersona.Off;
         Gfx.Text(this, Fonts.Bold, new Vector2(x, y), "이야기꾼", Ui.TextTitle, Palette.Text);
-        y += 26f;
+        Gfx.TextRight(this, Fonts.Body, new Vector2(right, y), "바꾼 값은 기록된다 · 시작 물자는 새 항해부터", Ui.TextTiny, Palette.TextMuted);
+        y += 22f;
         string story = StoryLine();
-        Gfx.Text(this, Fonts.Body, new Vector2(x, y), UiKit.Fit(story.Length > 0 ? story : "이야기꾼이 쉬고 있다 — 사고는 저절로 일어나지 않는다", right - x, Ui.TextBody), Ui.TextBody, Palette.TextDim);
-        y += 30f;
-        Gfx.Text(this, Fonts.Bold, new Vector2(x, y), "무작위 사고", Ui.TextLabel, Palette.Text);
-        y += 12f;
-        int mode = RandomModeIndex();
-        float bx = x, bw = (right - x - 4f * (RandomModes.Length - 1)) / RandomModes.Length;
-        for (int i = 0; i < RandomModes.Length; i++)
+        Gfx.Text(this, Fonts.Body, new Vector2(x, y), UiKit.Fit(story.Length > 0 ? story : RandomLine(), w, Ui.TextSmall), Ui.TextSmall, on ? StoryInk : Palette.TextDim);
+        y += 22f;
+
+        // 성격 15 (끔 + 14)
+        y = StoryLabel(x, y, "성격", $"{Storyteller.PersonaNote(p)}" + (on ? $" · 리듬 {Storyteller.PersonaRhythm(p)}" : ""));
+        int n = (int)StoryPersona.Wave + 1, cols = 5;
+        float cw = (w - 4f * (cols - 1)) / cols;
+        for (int i = 0; i < n; i++)
         {
-            var r = new Rect2(bx, y, bw, 30f);
-            bool on = i == mode, hover = r.HasPoint(mouse);
-            Gfx.RoundRect(this, r, on ? Palette.Danger.WithAlpha(0.16f) : hover ? Ui.Hover : new Color(1, 1, 1, 0.02f), 8, on ? Palette.Danger.WithAlpha(0.5f) : Ui.PanelEdge);
-            Gfx.TextCentered(this, Fonts.Bold, r.GetCenter() + new Vector2(0, Gfx.CenterOffset(Fonts.Bold, Ui.TextSmall)), UiKit.Fit(RandomModes[i].name, bw - 8f, Ui.TextSmall), Ui.TextSmall, on ? Palette.Danger : Palette.TextDim);
-            float days = RandomModes[i].days;
-            _buttons.Add((r, () => _main.SetRandomIncidents(days)));
-            bx += bw + 4f;
+            var r = new Rect2(x + (i % cols) * (cw + 4f), y + (i / cols) * 30f, cw, 26f);
+            int v = i;
+            StoryChip(r, i == 0 ? "끔" : Storyteller.PersonaName((StoryPersona)i), (int)p == i, mouse, () => _main.SetTuned("story.persona", v), StoryInk);
         }
-        y += 46f;
-        PageButton(y, "settings", "이야기꾼 성격 · 난이도", "설정 창에서 고른다", false, mouse, () => _main.Options.Toggle());
+        y += (n + cols - 1) / cols * 30f + 8f;
+
+        // 난이도 8
+        int lv = Storyteller.Level;
+        y = StoryLabel(x, y, "난이도", $"{lv} {Storyteller.LevelName(lv)} — {Storyteller.LevelNote(lv)}");
+        cw = (w - 4f * (Storyteller.MaxLevel - 1)) / Storyteller.MaxLevel;
+        for (int i = 1; i <= Storyteller.MaxLevel; i++)
+        {
+            var r = new Rect2(x + (i - 1) * (cw + 4f), y, cw, 26f);
+            int v = i;
+            StoryChip(r, Storyteller.LevelName(i), lv == i, mouse, () => _main.SetTuned("story.level", v), i >= 6 ? Palette.Danger : Palette.Warning);
+        }
+        y += 34f;
+
+        // 리듬 (어느 성격이든)
+        y = StoryLabel(x, y, "리듬", on ? "성격대로에서 더하고 뺀다" : "이야기꾼이 켜져 있을 때만");
+        y = RhythmRow(x, y, w, "잦기", Storyteller.FreqNames, Storyteller.Freq, "story.freq", mouse, on);
+        y = RhythmRow(x, y, w, "크기", Storyteller.SizeNames, Storyteller.Size, "story.size", mouse, on);
+        y = RhythmRow(x, y, w, "몰아치기", Storyteller.BurstNames, Storyteller.Burstiness, "story.burst", mouse, on);
+        y += 6f;
+
+        // 무작위 사고 10단계 + 크기 범위 (이야기꾼이 꺼져 있을 때)
+        y = StoryLabel(x, y, "무작위 사고", on ? "이야기꾼이 켜져 있으면 쉰다 — 성격을 '끔'으로" : "평균 간격 · 같은 시드면 같은 때에 같은 사고");
+        var steps = HazardSystem.RandomSteps;
+        int step = HazardSystem.RandomStep();
+        cols = 5;
+        cw = (w - 4f * (cols - 1)) / cols;
+        for (int i = 0; i < steps.Length; i++)
+        {
+            var r = new Rect2(x + (i % cols) * (cw + 4f), y + (i / cols) * 30f, cw, 26f);
+            float days = steps[i].days;
+            StoryChip(r, steps[i].name, i == step, mouse, () => _main.SetRandomIncidents(days), Palette.Danger, !on);
+        }
+        y += (steps.Length + cols - 1) / cols * 30f + 2f;
+        Gfx.Text(this, Fonts.Body, new Vector2(x, y + 17f), "크기", Ui.TextSmall, Palette.TextDim);
+        float sx = x + 70f, sw = (w - 70f - 8f) / 3f;
+        for (int i = 0; i < 3; i++)
+        {
+            var r = new Rect2(sx + i * (sw + 4f), y, sw, 26f);
+            int v = i;
+            StoryChip(r, HazardSystem.SizeRangeNames[i], HazardSystem.SizeRange == i, mouse, () => _main.SetTuned("incident.size", v), Palette.Danger, !on);
+        }
+    }
+
+    private static string RandomLine()
+    {
+        var steps = HazardSystem.RandomSteps;
+        int i = HazardSystem.RandomStep();
+        return i == 0 ? "이야기꾼도 무작위 사고도 꺼져 있다 — 사고는 관찰자가 던진 것만" : $"이야기꾼 끔 — 무작위 사고 평균 {steps[i].name}에 한 번 · {HazardSystem.SizeRangeNames[HazardSystem.SizeRange]}";
+    }
+
+    private float StoryLabel(float x, float y, string title, string note)
+    {
+        Gfx.Text(this, Fonts.Bold, new Vector2(x, y + 12f), title, Ui.TextLabel, Palette.Text);
+        float tw = Gfx.Width(Fonts.Bold, title, Ui.TextLabel) + 10f;
+        Gfx.Text(this, Fonts.Body, new Vector2(x + tw, y + 12f), UiKit.Fit(note, _dockBody.End.X - 18f - x - tw, Ui.TextTiny), Ui.TextTiny, Palette.TextMuted);
+        return y + 22f;
+    }
+
+    private float RhythmRow(float x, float y, float w, string name, string[] names, int value, string key, Vector2 mouse, bool live)
+    {
+        Gfx.Text(this, Fonts.Body, new Vector2(x, y + 17f), name, Ui.TextSmall, live ? Palette.TextDim : Palette.TextMuted);
+        float bx = x + 70f, bw = (w - 70f - 4f * (names.Length - 1)) / names.Length;
+        for (int i = 0; i < names.Length; i++)
+        {
+            var r = new Rect2(bx + i * (bw + 4f), y, bw, 26f);
+            int v = i - 2;
+            StoryChip(r, names[i], value == v, mouse, () => _main.SetTuned(key, v), StoryInk, live);
+        }
+        return y + 30f;
+    }
+
+    private void StoryChip(Rect2 r, string label, bool on, Vector2 mouse, Action act, Color ink, bool live = true)
+    {
+        bool hover = r.HasPoint(mouse);
+        float a = live ? 1f : 0.45f;
+        Gfx.RoundRect(this, r, on ? ink.WithAlpha(0.18f * a) : hover ? Ui.Hover : new Color(1, 1, 1, 0.02f), 7, on ? ink.WithAlpha(0.6f * a) : Ui.PanelEdge);
+        Gfx.TextCentered(this, Fonts.Bold, r.GetCenter() + new Vector2(0, Gfx.CenterOffset(Fonts.Bold, Ui.TextSmall)), UiKit.Fit(label, r.Size.X - 6f, Ui.TextSmall), Ui.TextSmall,
+            (on ? ink : hover ? Palette.Text : Palette.TextDim).WithAlpha(on || hover ? 1f : a));
+        _buttons.Add((r, act));
     }
 
     // ── 메뉴 ──

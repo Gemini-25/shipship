@@ -10,31 +10,36 @@ namespace ShipSim.Core;
 // 수치(성격·난이도)는 밸런스 수치로 저장·재생에 남는다 → 같은 시드면 같은 이야기.
 // v15.7 성격 넷 더 (StorytellerV15.cs): 느린 불씨형 · 계절형 · 자비형 · 앙갚음형.
 
-public enum StoryPersona { Off, Steady, Burst, Random, Tester, SlowBurn, Seasonal, Merciful, Vengeful }
+public enum StoryPersona { Off, Steady, Burst, Random, Tester, SlowBurn, Seasonal, Merciful, Vengeful, Chain, Siege, Implosion, Marathon, Climax, Wave } // v21 새 성격 6
 
 public sealed partial class Storyteller
 {
-    /// <summary>0 끔(예전 무작위 사고) · 1 꾸준형 · 2 몰아치기형 · 3 무작위형 · 4 시험관형 · 5 느린 불씨형 · 6 계절형 · 7 자비형 · 8 앙갚음형.</summary>
+    /// <summary>0 끔(예전 무작위 사고) · 1 꾸준형 · 2 몰아치기형 · 3 무작위형 · 4 시험관형 · 5 느린 불씨형 · 6 계절형 · 7 자비형 · 8 앙갚음형
+    /// · v21 9 연쇄형 · 10 포위형 · 11 내부 붕괴형 · 12 마라톤형 · 13 절정형 · 14 파도형.</summary>
     public static float PersonaValue;
-    /// <summary>난이도 1(느긋) ~ 5(가혹), 기본 3.</summary>
+    /// <summary>난이도 1(느긋) ~ 8(절멸), 기본 3.</summary>
     public static float LevelValue = 3f;
 
-    public static StoryPersona Persona => (StoryPersona)Math.Clamp((int)MathF.Round(PersonaValue), 0, (int)StoryPersona.Vengeful);
-    public static int Level => Math.Clamp((int)MathF.Round(LevelValue), 1, 5);
+    public static StoryPersona Persona => (StoryPersona)Math.Clamp((int)MathF.Round(PersonaValue), 0, (int)StoryPersona.Wave);
+    public static int Level => Math.Clamp((int)MathF.Round(LevelValue), 1, MaxLevel);
 
     public static string PersonaName(StoryPersona p) => p switch
     {
         StoryPersona.Steady => "꾸준형", StoryPersona.Burst => "몰아치기형", StoryPersona.Random => "무작위형", StoryPersona.Tester => "시험관형",
-        StoryPersona.SlowBurn => "느린 불씨형", StoryPersona.Seasonal => "계절형", StoryPersona.Merciful => "자비형", StoryPersona.Vengeful => "앙갚음형", _ => "끔",
+        StoryPersona.SlowBurn => "느린 불씨형", StoryPersona.Seasonal => "계절형", StoryPersona.Merciful => "자비형", StoryPersona.Vengeful => "앙갚음형",
+        StoryPersona.Chain => "연쇄형", StoryPersona.Siege => "포위형", StoryPersona.Implosion => "내부 붕괴형", StoryPersona.Marathon => "마라톤형", StoryPersona.Climax => "절정형", StoryPersona.Wave => "파도형", _ => "끔",
     };
-    public static string LevelName(int l) => l switch { 1 => "느긋", 2 => "쉬움", 3 => "보통", 4 => "어려움", _ => "가혹" };
+    public static string LevelName(int l) => l switch { 1 => "느긋", 2 => "쉬움", 3 => "보통", 4 => "어려움", 5 => "가혹", 6 => "혹독", 7 => "지옥", _ => "절멸" };
 
-    // 난이도가 바꾸는 것
-    public static float GapDays => new[] { 3.0f, 2.0f, 1.4f, 1.0f, 0.7f }[Level - 1];
-    public static float BigScale => new[] { 0.5f, 0.75f, 1f, 1.4f, 1.8f }[Level - 1];
-    public static float StockScale => Persona == StoryPersona.Off ? 1f : new[] { 1.4f, 1.2f, 1f, 0.85f, 0.7f }[Level - 1];
-    public static float InjuryScale => Persona == StoryPersona.Off ? 1f : new[] { 0.7f, 0.85f, 1f, 1.15f, 1.3f }[Level - 1];
-    public static float AnomalyScale => Persona == StoryPersona.Off ? 1f : new[] { 0.6f, 0.8f, 1f, 1.3f, 1.6f }[Level - 1];
+    // 난이도가 바꾸는 것 (v21 혹독 · 지옥 · 절멸: 간격 · 크기만 더 — 물자 · 부상 · 작은 이상은 가혹 그대로)
+    private static readonly float[] Gaps = { 3.0f, 2.0f, 1.4f, 1.0f, 0.7f, 0.5f, 0.36f, 0.25f }, Bigs = { 0.5f, 0.75f, 1f, 1.4f, 1.8f, 2.3f, 2.9f, 3.5f };
+    private static readonly float[] Stocks = { 1.4f, 1.2f, 1f, 0.85f, 0.7f }, Injuries = { 0.7f, 0.85f, 1f, 1.15f, 1.3f }, Anomalies = { 0.6f, 0.8f, 1f, 1.3f, 1.6f };
+    private static int Capped => Math.Min(Level, 5);
+    public static float GapDays => Gaps[Level - 1];
+    public static float BigScale => Bigs[Level - 1];
+    public static float StockScale => Persona == StoryPersona.Off ? 1f : Stocks[Capped - 1];
+    public static float InjuryScale => Persona == StoryPersona.Off ? 1f : Injuries[Capped - 1];
+    public static float AnomalyScale => Persona == StoryPersona.Off ? 1f : Anomalies[Capped - 1];
 
     private readonly World _w;
     private readonly Rng _rng;
@@ -100,7 +105,8 @@ public sealed partial class Storyteller
         float gap = GapDays;
         if (Next < 0) { Next = Math.Max(w.Tick, w.StartTickOf + SimTime.TicksPerDay) + GapTicks(gap, persona); return; }
         if (w.Tick < Next) return;
-        float t = Tension(), cap = Capacity();
+        float t0 = Tension(), cap = Capacity();
+        float t = Overlap(t0); // v21 혹독 이상: 수습하는 중에도 덜 기다린다 (가혹 이하는 그대로)
         // 자비: 이미 배가 무너지는 중이면 (가혹이 아니면) 기다린다
         float mercy = Level >= 5 ? 1.4f : Level == 4 ? 1.0f : 0.8f;
         switch (persona)
@@ -124,11 +130,12 @@ public sealed partial class Storyteller
                 break;
         }
         if (w.Scale.Breather(persona, out var rest)) { Next = w.Tick + SimTime.Hours(1); LastWhy = rest; return; } // v16.18 큰 사고 뒤 숨 돌릴 틈
-        var (key, room, why) = Choose(persona, t, cap);
+        var (key, room, why) = Choose(persona, t0, cap);
         string? what = w.Hazards.FireStory(key, room);
         if (what == null) { Next = w.Tick + SimTime.Hours(2); return; }
         Fired++;
-        Note(key, t); // v15.7
+        if (t0 > 0.3f) Overlaps++; // v21 앞 사고를 수습하는 중에 왔다
+        Note(key, t0); // v15.7
         LastWhat = what;
         LastWhy = why;
         Journal.Add((w.Tick, what, why));
@@ -137,21 +144,26 @@ public sealed partial class Storyteller
         // 다음
         if (persona == StoryPersona.Burst)
         {
-            if (BurstLeft == 0) BurstLeft = 1 + _rng.Range(1, 3); // 이번 것 뒤로 한두 개 더
+            if (BurstLeft == 0)
+            {
+                BurstLeft = 1 + _rng.Range(1, 3); // 이번 것 뒤로 한두 개 더
+                if (BurstMul != 1f) BurstLeft = Math.Max(1, (int)MathF.Round(BurstLeft * BurstMul)); // v21 리듬 몰아치기
+            }
             BurstLeft--;
             Next = BurstLeft > 0 ? w.Tick + SimTime.Minutes(_rng.Range(20f, 90f)) : w.Tick + GapTicks(gap * 2.2f, persona);
         }
-        else Next = w.Tick + GapTicks(gap * GapMul(persona, cap), persona); // v15.7 새 성격은 간격 규칙이 다르다 (원래 넷은 1)
+        else if (!NextV21(persona, t0, gap, cap)) Next = w.Tick + GapTicks(gap * GapMul(persona, cap), persona); // v15.7 새 성격은 간격 규칙이 다르다 (원래 넷은 1) · v21 연쇄 · 파도 · 겹침
     }
 
     private long GapTicks(float days, StoryPersona p)
     {
+        days *= FreqMul; // v21 리듬 잦기 (가운데 ×1)
         float d = p switch
         {
             StoryPersona.Random => -MathF.Log(1f - MathF.Min(_rng.Float(), 0.995f)) * days,
             _ => days * (0.7f + 0.6f * _rng.Float()),
         };
-        return SimTime.Hours(MathF.Max(3f, d * 24f));
+        return SimTime.Hours(MathF.Max(p == StoryPersona.Marathon ? 1.5f : 3f, d * 24f));
     }
 
     // ─────────────────────────────── 무엇을 ───────────────────────────────
@@ -184,8 +196,10 @@ public sealed partial class Storyteller
         }
         MajorIncidentSystem.AddToPool(w, pool, gentle, big); // v16.19 계통 · 배 전체 사고 24
         if (p == StoryPersona.Random) for (int i = 0; i < pool.Count; i++) pool[i] = (pool[i].key, 4f);
-        else MajorIncidentSystem.ShapeByScale(pool); // v16.19 규모 비율로 (자잘한 것만 쏟아지지 않게)
+        else MajorIncidentSystem.ShapeByScale(pool, ScaleTarget); // v16.19 규모 비율로 (자잘한 것만 쏟아지지 않게) · v21 혹독 이상은 배 전체급이 잦다
         if (p >= StoryPersona.SlowBurn) Shape(p, pool, cap); // v15.7 성격마다 고르는 규칙
+        if (p >= StoryPersona.Chain) ShapeV21(p, pool); // v21 새 성격 6
+        SizeShape(pool); // v21 리듬 크기
         for (int i = 0; i < pool.Count; i++) pool[i] = (pool[i].key, pool[i].weight * w.Voyage.HazardMul(pool[i].key) * w.Eras.RiskMul(pool[i].key)); // v12.8 구간 · 새 기술의 위험
         for (int i = 0; i < pool.Count; i++) pool[i] = (pool[i].key, pool[i].weight * w.Scale.PaceMul(pool[i].key)); // v16.18 규모 완급 (큰 것 뒤엔 작은 것 · 조용하면 작은 것부터)
         float total = pool.Sum(x => x.weight), roll = _rng.Float() * total;
@@ -195,6 +209,7 @@ public sealed partial class Storyteller
 
     private string Why(StoryPersona p, float t, float cap) => p switch
     {
+        >= StoryPersona.Chain => WhyV21(p, t, cap),
         >= StoryPersona.SlowBurn => WhyV15(p, t, cap),
         StoryPersona.Steady => $"배가 거의 추슬렀다 (긴장 {t:0.00} · 여력 {cap * 100:0}%)",
         StoryPersona.Burst => $"몰아친다 (긴장 {t:0.00} · 여력 {cap * 100:0}%)",

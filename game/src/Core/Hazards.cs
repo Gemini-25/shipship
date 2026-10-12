@@ -774,14 +774,13 @@ public sealed partial class HazardSystem
     {
         float u = RandomRng.Float();
         float days = -MathF.Log(1f - MathF.Min(u, 0.995f)) * RandomDays;
-        return SimTime.Hours(MathF.Max(4f, days * 24f));
+        return SimTime.Hours(MathF.Max(MathF.Min(4f, RandomDays * 12f), days * 24f)); // v21 4시간 · 2시간 주기는 더 짧게도 (원래 주기는 4시간 그대로)
     }
 
-    /// <summary>무작위 사고 하나 (기록되지 않는다 — 같은 시드·같은 수치면 같은 때에 같은 일이 난다).</summary>
-    public string? FireRandom()
+    /// <summary>무작위 사고를 고르는 표 (무게 · v21 크기 범위까지).</summary>
+    internal List<(string key, float weight)> RandomPool()
     {
         var w = _w;
-        var rr = RandomRng;
         // 고전 사고(운석·화재·고장·배관)와 새 사고를 무게대로
         var pool = new List<(string key, float weight)>
         {
@@ -796,6 +795,25 @@ public sealed partial class HazardSystem
             pool.Add((s.Kind.ToString(), s.Weight));
         }
         MajorIncidentSystem.AddToPool(w, pool, false, 1f); MajorIncidentSystem.ShapeByScale(pool); // v16.19 계통 · 배 전체 사고 · 규모 비율
+        SizeFilter(pool); // v21 크기 범위 (작은 것만 · 섞어 · 큰 것만)
+        return pool;
+    }
+
+    /// <summary>시험용: 무작위 사고 표에서 열쇠 하나 (사고는 내지 않는다).</summary>
+    internal string SampleRandomKey()
+    {
+        var pool = RandomPool();
+        float total = pool.Sum(p => p.weight), roll = RandomRng.Float() * total;
+        foreach (var p in pool) { roll -= p.weight; if (roll <= 0f) return p.key; }
+        return pool[^1].key;
+    }
+
+    /// <summary>무작위 사고 하나 (기록되지 않는다 — 같은 시드·같은 수치면 같은 때에 같은 일이 난다).</summary>
+    public string? FireRandom()
+    {
+        var w = _w;
+        var rr = RandomRng;
+        var pool = RandomPool();
         for (int i = 0; i < pool.Count; i++) pool[i] = (pool[i].key, pool[i].weight * w.Voyage.HazardMul(pool[i].key) * w.Eras.RiskMul(pool[i].key)); // v12.8 구간 · 새 기술의 위험
         for (int tries = 0; tries < 6; tries++)
         {

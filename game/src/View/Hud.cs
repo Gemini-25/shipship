@@ -536,19 +536,6 @@ public partial class Hud : Control
         return was;
     }
 
-    private static readonly (float days, string name)[] RandomModes =
-        { (0f, "끔"), (6f, "드물게 · 6일"), (3f, "보통 · 3일"), (1.5f, "잦게 · 하루 반"), (0.5f, "혼돈 · 반나절") };
-
-    private static int RandomModeIndex()
-    {
-        float d = HazardSystem.RandomDays;
-        if (d <= 0f) return 0;
-        int best = 1;
-        for (int i = 1; i < RandomModes.Length; i++)
-            if (Mathf.Abs(RandomModes[i].days - d) < Mathf.Abs(RandomModes[best].days - d)) best = i;
-        return best;
-    }
-
     /// <summary>v11.2 사고 더 보기: 대상이 있는 사고는 고르고 클릭, 배 전체 사고는 누르면 바로. 맨 위는 무작위 사고 주기.</summary>
     private void DrawHazardMenu(Vector2 at, Vector2 mouse, float width = 0f)
     {
@@ -569,22 +556,17 @@ public partial class Hud : Control
         Gfx.Text(this, Fonts.Bold, new Vector2(x, y + 12), "사고 더 보기", Ui.TextLabel, Palette.Danger.WithAlpha(0.85f));
         Gfx.TextRight(this, Fonts.Body, new Vector2(card.End.X - pad, y + 12), "● 배 전체 — 누르면 바로  ○ 대상 — 고른 뒤 클릭", Ui.TextTiny, Palette.TextMuted);
         y += 24;
-        // 무작위 사고 (기록되는 수치: 되감기·불러오기가 같은 때에 같은 사고를 낸다)
-        int mode = RandomModeIndex();
-        Gfx.Text(this, Fonts.Body, new Vector2(x, y + 19), "무작위 사고", Ui.TextBody, Palette.TextDim);
-        float mx = x + 76;
-        for (int i = 0; i < RandomModes.Length; i++)
+        // v21 무작위 사고 · 이야기꾼은 '이야기꾼' 쪽에서 고른다 (여기선 지금 값만 — 누르면 그 쪽으로)
         {
-            var (days, name) = RandomModes[i];
-            string label = name.Split(" · ")[0];
-            float w = Gfx.Width(Fonts.Bold, label, Ui.TextSmall) + 18;
-            var r = new Rect2(mx, y + 6, w, 22);
-            bool on = i == mode, hover = r.HasPoint(mouse);
-            Gfx.RoundRect(this, r, on ? Palette.Danger.WithAlpha(0.2f) : hover ? new Color(1, 1, 1, 0.06f) : new Color(1, 1, 1, 0.02f), 7, on ? Palette.Danger.WithAlpha(0.6f) : null);
-            Gfx.TextCentered(this, Fonts.Bold, r.GetCenter() + new Vector2(0, Gfx.CenterOffset(Fonts.Bold, Ui.TextSmall)), label, Ui.TextSmall, on ? Palette.Danger : hover ? Palette.Text : Palette.TextDim);
-            float d = days;
-            _buttons.Add((r, () => _main.SetRandomIncidents(d)));
-            mx += w + 4;
+            var p = Storyteller.Persona;
+            int step = HazardSystem.RandomStep();
+            string now = p != StoryPersona.Off ? $"이야기꾼 {Storyteller.PersonaName(p)} · {Storyteller.LevelName(Storyteller.Level)}"
+                : step == 0 ? "이야기꾼 · 무작위 사고 꺼짐" : $"무작위 사고 {HazardSystem.RandomSteps[step].name}에 한 번 · {HazardSystem.SizeRangeNames[HazardSystem.SizeRange]}";
+            var r = new Rect2(x, y + 6, card.Size.X - pad * 2, 22);
+            bool hover = r.HasPoint(mouse);
+            Gfx.RoundRect(this, r, hover ? new Color(1, 1, 1, 0.06f) : new Color(1, 1, 1, 0.02f), 7, null);
+            Gfx.Text(this, Fonts.Body, new Vector2(r.Position.X + 8, r.GetCenter().Y + Gfx.CenterOffset(Fonts.Body, Ui.TextSmall)), $"{now} — 바꾸려면 '이야기꾼' 쪽으로 ▸", Ui.TextSmall, hover ? Palette.Text : Palette.TextDim);
+            _buttons.Add((r, () => OpenDock(DockTab.Incidents, 2)));
         }
         y += 34;
         for (int k = 0; k < shown; k++)

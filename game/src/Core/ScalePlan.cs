@@ -299,8 +299,13 @@ public sealed partial class ScaleSystem
     /// <summary>큰 것 뒤 숨 돌릴 틈 (시간): 느긋 36 · 쉬움 24 · 보통 16 · 어려움 10 · 가혹 6, 자비형은 더 · 앙갚음형은 덜.</summary>
     public static float RestHours(StoryPersona p, int level)
     {
-        float h = new[] { 36f, 24f, 16f, 10f, 6f }[Math.Clamp(level, 1, 5) - 1];
-        return p switch { StoryPersona.Merciful => h * 1.5f, StoryPersona.Vengeful => h * 0.4f, StoryPersona.Burst => h * 0.6f, _ => h };
+        float h = new[] { 36f, 24f, 16f, 10f, 6f, 3f, 1.5f, 0.5f }[Math.Clamp(level, 1, Storyteller.MaxLevel) - 1]; // v21 혹독 · 지옥 · 절멸은 숨 돌릴 틈이 거의 없다
+        return p switch
+        {
+            StoryPersona.Merciful => h * 1.5f, StoryPersona.Vengeful => h * 0.4f, StoryPersona.Burst => h * 0.6f,
+            StoryPersona.Marathon => h * 0.5f, StoryPersona.Wave => h * 1.3f, StoryPersona.Climax => h * 0.7f, // v21
+            _ => h,
+        };
     }
 
     private bool BigHot() => _open.Any(k => k.Hot && k.Now >= IncidentScale.Ship);
@@ -328,7 +333,7 @@ public sealed partial class ScaleSystem
         var s = ScaleTable.OfKey(key);
         long rest = SimTime.Hours(RestHours(Storyteller.Persona, Storyteller.Level) * 2f);
         float m = 1f;
-        if (RecentBig(rest)) m *= s >= IncidentScale.Ship ? 0.05f : s == IncidentScale.System ? 0.25f : 1.4f;
+        if (RecentBig(rest)) m *= s >= IncidentScale.Ship ? Storyteller.AfterBigMul : s == IncidentScale.System ? 0.25f : 1.4f; // v21 혹독 이상은 큰 것이 겹친다
         else if (RecentSystem(rest / 2)) m *= s >= IncidentScale.Ship ? 0.5f : 1f;
         if (Quiet()) m *= s <= IncidentScale.Room ? 1.6f : s >= IncidentScale.Ship ? 0.5f : 0.9f;
         return m;
@@ -339,7 +344,7 @@ public sealed partial class ScaleSystem
     {
         var w = _w;
         why = "";
-        if (BigHot()) { why = "큰 사고가 아직 진행 중 — 숨 돌릴 틈"; }
+        if (BigHot() && Storyteller.Level < 7) { why = "큰 사고가 아직 진행 중 — 숨 돌릴 틈"; } // v21 지옥 · 절멸은 큰 사고 중에도 온다
         else if (LastBigEnd >= 0)
         {
             float h = RestHours(p, Storyteller.Level);
