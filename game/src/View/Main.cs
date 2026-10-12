@@ -1062,6 +1062,14 @@ public partial class Main : Node2D
                     if (tab == DockTab.Computer && ob.Length > 3) Hud.ControlSub = int.Parse(ob[3], CultureInfo.InvariantCulture);
                     break;
                 }
+                case "--relaycut":
+                {
+                    // 화면 확인용 (v23 구역 중계기): --relaycut=구역 번호 — 그 구역 중계기를 부순다
+                    int zi = int.Parse(value, CultureInfo.InvariantCulture);
+                    Sim.Relays.ZoneOf(Sim.Ship.Rooms[0]);
+                    if (zi >= 0 && zi < Sim.Relays.Zones.Count) Sim.Relays.Break(Sim.Relays.Zones[zi], "화면 확인 — 부쉈다");
+                    break;
+                }
                 case "--blast":
                 {
                     // 도트 7단계 화면 확인용: --blast=Fuel:Storage:0.6 (폭발 종류 : 방 종류 : 세기) — 그 방 가운데에서 터뜨린다

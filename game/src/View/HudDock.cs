@@ -25,7 +25,7 @@ public partial class Hud
         ("배", "layers", new[] { "겹쳐 보기", "지도", "함선 지표" }),
         ("사람", "people", new[] { "승무원", "방침", "회의록", "메신저" }),
         ("기록", "log", new[] { "항해 기록", "연대기", "항해 결산", "인과 사슬" }),
-        ("사고", "incident", new[] { "사고 도구", "사고 도감", "이야기꾼" }),
+        ("사고", "incident", new[] { "사고 도구", "사고 도감", "이야기꾼", "지휘" }),
         ("기술", "wrench", new[] { "기술", "기술 지도" }),
         ("컴퓨터", "computer", new[] { "관제", "오늘의 결정" }),
         ("메뉴", "settings", new[] { "설명서", "수집 도감", "설정", "도움말", "저장 · 불러오기" }),
@@ -238,6 +238,7 @@ public partial class Hud
             case (DockTab.Incidents, 0): DrawToolsPage(mouse); break;
             case (DockTab.Incidents, 1): DrawScaleCodex(mouse); break;
             case (DockTab.Incidents, 2): DrawStoryPage(mouse); break;
+            case (DockTab.Incidents, 3): DrawCommandPage(mouse); break;
             case (DockTab.Tech, _): DrawTech(mouse); break;
             case (DockTab.Computer, 0): if (_world.Automation.Present) DrawControl(mouse); else DrawNote("주 컴퓨터가 없는 배", "이 배는 사람이 모든 일을 직접 한다."); break;
             case (DockTab.Computer, 1): DrawDecisions(new Vector2(WinX, WinBottom), mouse); break;

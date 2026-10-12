@@ -44,7 +44,9 @@ public partial class ShipView
                     Gfx.TextCentered(ci, Fonts.Bold, new Vector2(rr.End.X - 16f, rr.Position.Y + 18f), "≠", 20, col);
                 }
                 else if (a.Belief.Of(room).Fault != SensorFault.None) ci.Circle(new Vector2(rr.End.X - 12f, rr.Position.Y + 12f), 4f, Palette.Warning, true, -1f, true);
+                PaintKnowing(ci, w, a, room, rr);
             }
+            PaintRelays(ci, w);
             if (home != null) PaintCommandLines(ci, w, a, RoomRect(home).GetCenter());
         }
         // 기다리는 제안: 컴퓨터실 위 말풍선
@@ -93,6 +95,57 @@ public partial class ShipView
             }
             ci.Arc(to, 9f, 0f, Mathf.Tau, 20, col.WithAlpha(alpha), 2f, true);
             CommandIcons.Draw(ci, o.Target, to, 6f, col.WithAlpha(Mathf.Max(0.5f, alpha)), _time);
+        }
+    }
+
+    /// <summary>v23 컴퓨터가 아는 것: 무전이 끊긴 구역(붉게 어둡게 · 점선 테 · 안테나 ×) · 로봇이 방금 본 방(눈) · 오래 모르는 방(옅은 ?) · 천장 소화 설비 고장(물방울).</summary>
+    private void PaintKnowing(CanvasItem ci, World w, AutomationSystem a, Room room, Rect2 rr)
+    {
+        var facts = a.Facts;
+        float k = 1f / Mathf.Clamp(Zoom, 0.3f, 2f); // 화면에서 늘 같은 크기로
+        bool cut = !w.Relays.Reach(room);
+        if (cut)
+        {
+            ci.DrawRect(rr, new Color(0.25f, 0.02f, 0.02f, 0.35f));
+            OvDashedRect(ci, rr.Grow(-2f * k), Palette.Danger.WithAlpha(0.7f), 1.5f * k, 6f * k);
+            var p = new Vector2(rr.Position.X + 12f * k, rr.End.Y - 8f * k);
+            ci.DrawLine(p, p + new Vector2(0, -12f * k), Palette.Danger, 2f * k);
+            ci.Arc(p + new Vector2(0, -12f * k), 5f * k, -Mathf.Pi * 0.85f, -Mathf.Pi * 0.15f, 8, Palette.Danger, 1.5f * k, true);
+            ci.DrawLine(p + new Vector2(5f * k, -6f * k), p + new Vector2(12f * k, 1f * k), Palette.Danger, 2f * k);
+            ci.DrawLine(p + new Vector2(12f * k, -6f * k), p + new Vector2(5f * k, 1f * k), Palette.Danger, 2f * k);
+        }
+        var seen = facts.Get(room, FactKind.People);
+        if (seen.From == FactFrom.Robot && w.Tick - seen.At <= SimTime.Minutes(2))
+        {
+            // 로봇의 눈: 방금 로봇이 보고 알려 줬다
+            var e = new Vector2(rr.Position.X + 12f * k, rr.Position.Y + 12f * k);
+            ci.DrawArc(e, 6f * k, 0f, Mathf.Tau, 16, OvRobot.WithAlpha(0.9f), 1.5f * k, true);
+            ci.Circle(e, 2.6f * k, OvRobot, true, -1f, true);
+        }
+        else if (!cut && facts.Unknown(room, FactKind.Fire) && a.Core.Reach(room) != 0)
+            Gfx.TextCentered(ci, Fonts.Bold, new Vector2(rr.Position.X + 12f * k, rr.Position.Y + 16f * k), "?", Mathf.RoundToInt(14f * k), new Color(0.75f, 0.8f, 0.9f, 0.6f));
+        if (w.Nozzles.Has(room) && (room.NozzleBroken || room.NozzleAgent < 0.25f))
+        {
+            var d = new Vector2(rr.End.X - 12f * k, rr.End.Y - 12f * k);
+            var col = room.NozzleBroken ? Palette.Danger : Palette.Warning;
+            ci.DrawColoredPolygon(new[] { d + new Vector2(0, -8f * k), d + new Vector2(4.5f * k, 0f), d + new Vector2(-4.5f * k, 0f) }, col);
+            ci.Circle(d + new Vector2(0, 1f * k), 4.5f * k, col, true, -1f, true);
+        }
+    }
+
+    /// <summary>v23 구역 중계기: 중계기 자리 (살아 있으면 푸른 · 드론이 잇는 중이면 초록 · 끊기면 붉게 깜빡) · 구역 이름.</summary>
+    private void PaintRelays(CanvasItem ci, World w)
+    {
+        float k = 1f / Mathf.Clamp(Zoom, 0.3f, 2f);
+        foreach (var z in w.Relays.Zones)
+        {
+            var p = new Vector2((z.At.X + 0.5f) * T, (z.At.Y + 0.5f) * T);
+            if (!_fixView.HasPoint(p)) continue;
+            var col = z.Broken || !z.Up ? Palette.Danger.WithAlpha(0.55f + 0.45f * Mathf.Sin(_time * 5f)) : z.DroneId >= 0 ? OvRobot : OvRemote;
+            ci.Circle(p, 9f * k, new Color(0.04f, 0.06f, 0.1f, 0.8f), true, -1f, true);
+            ci.DrawLine(p + new Vector2(0, 6f * k), p + new Vector2(0, -5f * k), col, 2f * k);
+            for (int i = 1; i <= 2; i++) ci.Arc(p + new Vector2(0, -5f * k), 3f * k * i, -Mathf.Pi * 0.8f, -Mathf.Pi * 0.2f, 8, col, 1.5f * k, true);
+            Gfx.TextCentered(ci, Fonts.Bold, p + new Vector2(0, 20f * k), z.Up ? (z.DroneId >= 0 ? $"{z.Name} · 드론" : z.Name) : $"{z.Name} 끊김", Mathf.RoundToInt(12f * k), col);
         }
     }
 

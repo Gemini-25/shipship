@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using Godot;
 using ShipSim.Core;
@@ -65,5 +66,87 @@ public partial class Hud
             ly += rowH;
         }
         return h + UiLayout.Gap;
+    }
+
+    // ── v23 사고 탭 · 지휘: 지휘 순서 · 지휘 건 타임라인 (판단 기록 · 틀린 판단까지) · 구역 무전 · 천장 소화 · 눈의 그물 · 복기 ──
+    private void DrawCommandPage(Vector2 mouse)
+    {
+        var w = _world;
+        var cm = w.Commander;
+        var card = PageCard(_dockBody.Size.Y);
+        float x = card.Position.X + 18f, y = card.Position.Y + 30f, right = card.End.X - 18f, bottom = card.End.Y - 10f, wd = right - x;
+        Gfx.Text(this, Fonts.Bold, new Vector2(x, y), "지휘", Ui.TextTitle, Palette.Text);
+        Gfx.TextRight(this, Fonts.Body, new Vector2(right, y), "주 컴퓨터 전권 자동 · 바꿀 수 없다", Ui.TextTiny, Palette.TextMuted);
+        y += 24f;
+        // 지휘 순서
+        float cx = x;
+        foreach (var t in new[] { CommandTier.Main, CommandTier.Backup, CommandTier.RobotLeader, CommandTier.Human })
+        {
+            bool now = cm.Tier == t;
+            string label = IncidentCommander.TierName(t) + (now && t == CommandTier.RobotLeader ? $" ({cm.Voice})" : "");
+            float tw = Gfx.Width(Fonts.Bold, label, Ui.TextSmall) + 16f;
+            var r = new Rect2(cx, y - 14f, tw, 20f);
+            Gfx.RoundRect(this, r, now ? Palette.Accent.WithAlpha(0.25f) : new Color(1, 1, 1, 0.04f), 6f, now ? Palette.Accent : new Color(1, 1, 1, 0.12f));
+            Gfx.Text(this, Fonts.Bold, new Vector2(cx + 8f, y), label, Ui.TextSmall, now ? Palette.Text : Palette.TextDim);
+            cx += tw + 4f;
+            if (t != CommandTier.Human) { Gfx.Text(this, Fonts.Body, new Vector2(cx, y), "→", Ui.TextSmall, Palette.TextMuted); cx += 16f; }
+        }
+        y += 20f;
+        Gfx.Text(this, Fonts.Body, new Vector2(x, y), UiKit.Fit(cm.Stats.Line(), wd, Ui.TextTiny, Fonts.Body), Ui.TextTiny, Palette.TextDim);
+        y += 16f;
+        Gfx.Text(this, Fonts.Body, new Vector2(x, y), UiKit.Fit(cm.Lessons.Line(), wd, Ui.TextTiny, Fonts.Body), Ui.TextTiny, Palette.TextDim);
+        y += 12f;
+
+        // 지휘 건: 열린 것 먼저 · 최근 닫힌 것
+        var list = cm.Cases.Where(k => k.Open).OrderByDescending(k => k.Life).ThenBy(k => k.Id)
+            .Concat(cm.Cases.Where(k => !k.Open).OrderByDescending(k => k.ClosedAt).Take(4)).ToList();
+        SectionTitle(x, y + 12f, list.Count == 0 ? "지휘 건 — 아직 없다" : "지휘 건");
+        y += 26f;
+        foreach (var k in list)
+        {
+            if (y > bottom - 120f) break;
+            var room = k.RoomId >= 0 && k.RoomId < w.Ship.Rooms.Count ? w.Ship.Rooms[k.RoomId] : null;
+            var who = k.CrewId >= 0 ? w.Crew.FirstOrDefault(c => c.Id == k.CrewId) : null;
+            var col = !k.Open ? Palette.TextDim : k.Life ? Palette.Danger : k.Phase == CasePhase.Verify ? Palette.Good : Palette.Warning;
+            float mins = ((k.Open ? w.Tick : k.ClosedAt) - k.Opened) / (float)SimTime.Minutes(1);
+            string head = $"#{k.Id} {IncidentCommander.KindName(k.Kind)} — {(who != null ? who.Name + " · " : "")}{room?.Name ?? "?"}";
+            string state = k.Open ? (k.Phase == CasePhase.Verify ? "확인 중" : k.OnScene >= 0 ? "현장" : "가는 중") + $" · {mins:0}분" : $"{k.Outcome} · {mins:0}분";
+            Gfx.Text(this, Fonts.Bold, new Vector2(x, y), UiKit.Fit(head, wd * 0.55f, Ui.TextSmall, Fonts.Bold), Ui.TextSmall, col);
+            Gfx.TextRight(this, Fonts.Body, new Vector2(right, y), UiKit.Fit(state, wd * 0.43f, Ui.TextSmall, Fonts.Body), Ui.TextSmall, k.Open ? Palette.Text : Palette.TextMuted);
+            y += 16f;
+            string bots = string.Join(" · ", k.Served.Select(id => w.Robots.Robots.FirstOrDefault(r => r.Id == id)?.Name).Where(n => n != null).Take(5));
+            Gfx.Text(this, Fonts.Body, new Vector2(x + 10f, y), UiKit.Fit($"{Ko.EuRo(k.Source)} 알았다 · 출동 {k.Sent}대{(k.Reinforced > 0 ? $" · 증원 {k.Reinforced}" : "")}{(bots != "" ? $" ({bots})" : "")}", wd - 10f, Ui.TextTiny, Fonts.Body), Ui.TextTiny, Palette.TextDim);
+            y += 15f;
+            int take = k.Open ? 5 : 2;
+            foreach (var n in k.Notes.Skip(Math.Max(0, k.Notes.Count - take)))
+            {
+                if (y > bottom - 110f) break;
+                bool wrong = n.Text.Contains("다시 붙었다") || n.Text.Contains("다시 샌다") || n.Text.Contains("빠짐") || n.Text.Contains("고장") || n.Text.Contains("바닥");
+                Gfx.Text(this, Fonts.Body, new Vector2(x + 10f, y), UiKit.Fit($"{SimTime.Clock(n.Tick)}  {n.Text}", wd - 10f, Ui.TextTiny, Fonts.Body), Ui.TextTiny, wrong ? Palette.Warning : Palette.TextMuted);
+                y += 14f;
+            }
+            y += 6f;
+        }
+
+        // 구역 무전 · 천장 소화 · 눈의 그물 · 복기
+        y = Math.Max(y, bottom - 104f);
+        Divider(x, right, y);
+        y += 16f;
+        var zones = w.Relays.Zones;
+        string relay = zones.Count == 0 ? "구역 없음" : string.Join(" · ", zones.Select(z => z.Up ? (z.DroneId >= 0 ? $"{z.Name} 드론" : z.Name) : $"{z.Name} 끊김"));
+        Gfx.Text(this, Fonts.Bold, new Vector2(x, y), "무전", Ui.TextSmall, Palette.Text);
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 54f, y), UiKit.Fit(relay, wd - 54f, Ui.TextTiny, Fonts.Body), Ui.TextTiny, zones.Any(z => !z.Up) ? Palette.Danger : Palette.TextDim);
+        y += 18f;
+        var live = w.Ship.LiveRooms.Where(w.Nozzles.Has).ToList();
+        string noz = $"뿌리는 중 {live.Count(w.Nozzles.Spraying)} · 고장 {live.Count(r => r.NozzleBroken)} · 반 넘게 빔 {live.Count(r => !r.NozzleBroken && r.NozzleAgent < 0.5f)} · 방 {live.Count}";
+        Gfx.Text(this, Fonts.Bold, new Vector2(x, y), "소화", Ui.TextSmall, Palette.Text);
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 54f, y), UiKit.Fit(noz, wd - 54f, Ui.TextTiny, Fonts.Body), Ui.TextTiny, live.Any(r => r.NozzleBroken) ? Palette.Warning : Palette.TextDim);
+        y += 18f;
+        Gfx.Text(this, Fonts.Bold, new Vector2(x, y), "눈", Ui.TextSmall, Palette.Text);
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 54f, y), UiKit.Fit(w.Eyes.Stats.Line(), wd - 54f, Ui.TextTiny, Fonts.Body), Ui.TextTiny, Palette.TextDim);
+        y += 18f;
+        string last = cm.Lessons.Recent.Count > 0 ? cm.Lessons.Recent[^1] : "아직 복기한 건이 없다";
+        Gfx.Text(this, Fonts.Bold, new Vector2(x, y), "복기", Ui.TextSmall, Palette.Text);
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 54f, y), UiKit.Fit(last, wd - 54f, Ui.TextTiny, Fonts.Body), Ui.TextTiny, Palette.TextDim);
     }
 }
