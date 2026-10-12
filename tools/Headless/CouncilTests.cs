@@ -196,7 +196,8 @@ public static partial class Program
                     dbgAt = w.Tick + SimTime.Hours(1);
                     Console.WriteLine($"     [{SimTime.Clock(w.Tick)}] {pr.Name} {pr.Job?.Label} · {trial.Stage} 서명 {trial.Signers.Count}/{trial.Need} 부탁 {trial.Asked.Count} · " + string.Join(", ", pr.LastEvaluations.OrderByDescending(e => e.Score).Take(4).Select(e => $"{e.Activity.Id}:{e.Score:0.00}")));
                 }
-                return (trial ??= w.Motions.All.FirstOrDefault(m => m.Kind == MotionKind.Accusation && m.Target == thief.Id)) != null && trial.Decided >= 0 && w.Motions.Now == null;
+                // v21 주 컴퓨터가 셔틀 예열 같은 다른 일을 알려 같은 사람에게 다른 고발이 먼저 오르기도 한다 — 빼돌린 일의 고발만
+                return (trial ??= w.Motions.All.FirstOrDefault(m => m.Kind == MotionKind.Accusation && m.Target == thief.Id && m.Theft >= 0)) != null && trial.Decided >= 0 && w.Motions.Now == null;
             }, SimTime.TicksPerDay * 2, 30);
             var past = w.Motions.Past.LastOrDefault(p => p.Motion == trial);
             var witLines = past?.Script.Where(l => l.Role is LineRole.Witness or LineRole.Accuser).ToList() ?? new();

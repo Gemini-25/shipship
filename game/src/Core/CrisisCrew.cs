@@ -631,6 +631,12 @@ public sealed partial class CrisisCrewSystem
             Snaps++;
             if (hand) HandSnaps++;
             _buddy[c.Id] = (h.Id, w.Tick + SimTime.Minutes(20));
+            // v21 깨운 그 자리에서 함께 할 자리를 준다 — 다음 갱신까지 기다리면 깬 사람이 자리 없이 먼저 생각해 하던 잡일로 돌아간다
+            if (!_active.ContainsKey(c.Id) && !c.IsChild)
+            {
+                var br = _active.TryGetValue(h.Id, out var hr2) && hr2 != StationRole.Guide ? hr2 : DrawOrder.FirstOrDefault(x => _need.Contains(x) && x != StationRole.Guide);
+                if (br != StationRole.None) { _active[c.Id] = br; _involved.Add(c.Id); }
+            }
             SnapMarks.Add((w.Tick, h.Id, c.Id, hand));
             if (SnapMarks.Count > 12) SnapMarks.RemoveAt(0);
             h.Say(w, Persona.Say(h, hand ? $"{c.Name}, 나 봐. 숨 쉬어 — 같이 하자" : $"{c.Name}! 정신 차려, 할 일 있어"));

@@ -211,7 +211,7 @@ public static partial class Program
                 if (alarmFirst && att < 2) { Console.WriteLine($"    (경보 · 방송이 먼저 닿았다 — 다른 날에 다시 {att + 1}) {friend.Mind.Knows[$"fire:{room.Id}"].Item3} {SimTime.Clock(friend.Mind.Knows[$"fire:{room.Id}"].Item2)} · {friend.Name} @{friend.Room?.Name}"); continue; }
                 Check("알리기 — 불을 본 사람이 모르는 사람에게 알리러 간다 (경보가 안 닿는 방)",
                     w.Brain2.Social.Tells + w.Brain2.Social.AlreadyKnew > 0 && wp.Count > 0 && (told || friendKnows),
-                    $"{witness.Name} → 알림 {w.Brain2.Social.Tells} (이미 앎 {w.Brain2.Social.AlreadyKnew}) · {far.Name}까지 · 계획 {string.Join(" / ", wp.SelectMany(p => p.Trail).Take(4))} · {friend.Name}: 믿음 출처 {fsrc} · Mind 앎 {friendKnows} · 설득 {w.Brain2.Social.Persuasions}");
+                    $"{witness.Name} → 알림 {w.Brain2.Social.Tells} (이미 앎 {w.Brain2.Social.AlreadyKnew}) · {far.Name}까지 · 계획 {string.Join(" / ", wp.SelectMany(p => p.Trail).Take(4))} · {friend.Name}: 믿음 출처 {fsrc} · Mind 앎 {friendKnows} · 설득 {w.Brain2.Social.Persuasions}" + (w.Brain2.Beliefs.Get(friend, Topic.Fire, room.Id) is Belief fb9 && fb9.Src != BeliefSource.Told ? $" · 먼저 가진 믿음 {BeliefSystem.SourceName(fb9.Src)} {SimTime.Clock(fb9.Tick)} ({w.Brain2.Beliefs.CrewById(fb9.From)?.Name ?? fb9.From.ToString()}) @{friend.Room?.Name}" : ""));
                 var toldWho = wp.FirstOrDefault()?.For ?? friend;
                 var wbel = w.Brain2.Beliefs.Get(witness, Topic.Fire, room.Id);
                 var guess = wbel != null && w.Brain2.Social.ThinksKnows(witness, toldWho, wbel);
@@ -317,11 +317,12 @@ public static partial class Program
                 Run(w3, SimTime.Minutes(1));
                 var order3 = w3.Board.Open.FirstOrDefault(o => o.Kind == WorkKind.Repair && o.Target.Furniture == pump3);
                 var plan3 = order3 != null ? w3.Brain2.Plans.StartFix(clumsy, order3) : null;
-                for (int m = 0; m < 12 && w3.Brain2.Plans.HelpAsked == 0; m++) Run(w3, SimTime.Minutes(5));
+                var hlog = new List<string>();
+                for (int m = 0; m < 12 && w3.Brain2.Plans.HelpAsked == 0; m++) { Run(w3, SimTime.Minutes(5)); hlog.Add($"{(m + 1) * 5}분 {clumsy.Job?.Label ?? "-"}@{clumsy.Room?.Name} · {expert.Name} {expert.Job?.Label ?? "-"}@{expert.Room?.Name}"); }
                 var help = w3.Brain2.Plans.Active.Concat(w3.Brain2.Plans.Past).FirstOrDefault(p => p.Kind == PlanKind.Help);
                 Check("사회적 추론 — 솜씨가 모자라면 믿는 자리에 있는 잘하는 사람에게 부탁한다 (일 나누기)",
                     w3.Brain2.Plans.HelpAsked > 0 && help is { Kind: PlanKind.Help },
-                    $"{clumsy.Name}: {(plan3 == null ? "계획 없음" : string.Join(" / ", plan3.Trail))} · 맡은 사람 {(help != null ? w3.Brain2.Beliefs.CrewById(help.Owner)?.Name : "-")}: {help?.Goal ?? "없음"}");
+                    $"{clumsy.Name}: {(plan3 == null ? "계획 없음" : string.Join(" / ", plan3.Trail))} · 맡은 사람 {(help != null ? w3.Brain2.Beliefs.CrewById(help.Owner)?.Name : "-")}: {help?.Goal ?? "없음"}" + (w3.Brain2.Plans.HelpAsked > 0 ? "" : $" · [{string.Join(" / ", hlog)}]"));
             }
 
             // ── 5b) 사회적 추론 — 얼굴을 보고 위로 · 부끄러운 실수는 숨기거나(작은 거짓말) 털어놓고 · 나중에 들통 · 컴퓨터를 믿는 사람의 설득 ──

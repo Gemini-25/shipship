@@ -314,7 +314,8 @@ public static partial class Program
             Run(w, SimTime.Hours(9));
             var mate = w.Automation.Mate;
             CrewMember? c = null;
-            for (int i = 0; i < SimTime.Hours(4) && c == null; i++) { w.Step(); c = w.Crew.Where(x => !x.Dead && !x.IsChild && x.IsAwake && x.CanAct && x.Job?.Order != null && x.Room is { DataLinked: true } && x.Room.Type is not (RoomType.Quarters or RoomType.QuietQuarters)).OrderBy(x => x.Id).FirstOrDefault(); }
+            // v21 로봇이 작업 지시를 먼저 맡는다 — 작업 지시를 든 사람만 기다리면 네 시간 내내 없어 침실의 사람이 골라진다 · 감시되는 방에서 깨어 무언가 하는 사람
+            for (int i = 0; i < SimTime.Hours(4) && c == null; i++) { w.Step(); c = w.Crew.Where(x => !x.Dead && !x.IsChild && x.IsAwake && x.CanAct && x.Job != null && x.Job.Activity is not SleepActivity && x.Room is { DataLinked: true } && x.Room.Type is not (RoomType.Quarters or RoomType.QuietQuarters)).OrderBy(x => x.Id).FirstOrDefault(); }
             c ??= w.Crew.First(x => !x.Dead && !x.IsChild);
             c.Needs.Rest = 0.12f; // 일하다 꾸벅꾸벅 졸기 시작했다 (첫날 — 컴퓨터는 이 사람을 오래 본 적이 없다)
             int before = mate.EarlyRests;
