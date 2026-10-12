@@ -22,9 +22,10 @@ public sealed partial class WorkBoard
             foreach (var wd in Wounds.Missing(c.Vitals).Take(1))
             {
                 if (!wd.ProstheticMade && !w.Ship.FurnitureOf(FurnitureType.Workbench).Any(f => !f.Room.Detached && !f.Room.Abandoned)) continue;
-                if (!wd.ProstheticMade && (Have(ItemKind.Electronics) < 2 || Have(ItemKind.Plate) < 1)) continue;
+                bool limb = Have(ItemKind.RobotLimb) >= 1 && Have(ItemKind.Electronics) >= 1; // v22 잔해에서 떼어 둔 로봇 팔다리가 있으면 그걸로
+                if (!wd.ProstheticMade && !limb && (Have(ItemKind.Electronics) < 2 || Have(ItemKind.Plate) < 1)) continue;
                 post(WorkKind.FitProsthetic, WorkTarget.OfCrew(c), 0.4f, Skill.Mechanics,
-                    $"{c.Name}의 {Wounds.PartName(wd.Part)} — {(Wounds.IsArm(wd.Part) ? "의수를" : "의족을")} 만들어 단다 (전자 부품 2 + 금속판 1)", minSkill: 0.35f);
+                    $"{c.Name}의 {Wounds.PartName(wd.Part)} — {(Wounds.IsArm(wd.Part) ? "의수를" : "의족을")} 만들어 단다 " + (limb ? "(로봇 팔다리 1 + 전자 부품 1)" : "(전자 부품 2 + 금속판 1)"), minSkill: 0.35f);
             }
     }
 }
@@ -86,10 +87,19 @@ public static partial class WorkPlanners
         var toils = Plans.DropOff(c, w, dist);
         if (!wd.ProstheticMade && bench != null)
         {
-            if (w.Ship.CountStored(ItemKind.Electronics) < 2 || w.Ship.CountStored(ItemKind.Plate) < 1) { blocked = "재료가 없다"; return null; }
+            bool limb = w.Ship.CountStored(ItemKind.RobotLimb) >= 1 && w.Ship.CountStored(ItemKind.Electronics) >= 1; // v22 로봇 팔다리로 (두 시간이면 된다)
+            if (!limb && (w.Ship.CountStored(ItemKind.Electronics) < 2 || w.Ship.CountStored(ItemKind.Plate) < 1)) { blocked = "재료가 없다"; return null; }
             toils.Add(new GotoToil(bench.UseSpots[0]));
-            toils.Add(new WorkToil(3f, Skill.Mechanics, bench.Center));
-            toils.Add(new DoToil((cm, world) => wd.ProstheticMade = Life.Take(world, ItemKind.Electronics, 2) && Life.Take(world, ItemKind.Plate, 1)));
+            toils.Add(new WorkToil(limb ? 2f : 3f, Skill.Mechanics, bench.Center));
+            toils.Add(new DoToil((cm, world) =>
+            {
+                if (world.Ship.CountStored(ItemKind.RobotLimb) >= 1 && world.Ship.CountStored(ItemKind.Electronics) >= 1 && Life.Take(world, ItemKind.RobotLimb, 1) && Life.Take(world, ItemKind.Electronics, 1))
+                {
+                    wd.LimbFrom = world.Robots.TakeLimbSource();
+                    return wd.ProstheticMade = true;
+                }
+                return wd.ProstheticMade = Life.Take(world, ItemKind.Electronics, 2) && Life.Take(world, ItemKind.Plate, 1);
+            }));
         }
         toils.Add(new GotoToilLate(cm => Cell.Dirs8.Select(d => patient.Cell + d).Where(x => w.Ship.IsWalkable(x)).Cast<Cell?>().FirstOrDefault()));
         // v14.1 맞추는 동안 그 자리에 앉아 있어 달라고 한다 (돌아다니면 맞출 수 없다)
@@ -118,8 +128,19 @@ public static partial class WorkPlanners
             world.Life.Stats.Prosthetics++;
             string what = Wounds.IsArm(wd.Part) ? "의수" : "의족";
             patient.ChangeAffinity(cm, 0.15f);
-            Life.Diary(world, patient, $"{Ko.IGa(cm.Name)} {Ko.EulReul(what)} 만들어 줬다. 다시 {(Wounds.IsArm(wd.Part) ? "일할" : "걸을")} 수 있다.");
-            world.History.Add(world, HistoryKind.Bond, $"{Ko.IGa(cm.Name)} {patient.Name}에게 {Ko.EulReul(what)} 만들어 달았다 ({Wounds.PartName(wd.Part)})", patient.Room, new[] { cm, patient }, log: true);
+            if (wd.LimbFrom.Length > 0)
+            {
+                // v22 잔해에서 나온 로봇 팔다리 — 그 로봇을 기억한다
+                Life.Diary(world, patient, $"{Ko.IGa(cm.Name)} {Ko.EulReul(what)} 만들어 줬다. {wd.LimbFrom}의 {(Wounds.IsArm(wd.Part) ? "팔" : "다리")}였다고 한다. 이제 내 것이다.");
+                string limb = Wounds.IsArm(wd.Part) ? "팔" : "다리";
+                MarkLog.Add(patient.Memory.Marks, world.Tick, $"{wd.LimbFrom}의 {Ko.EulReul(limb)} 달았다");
+                world.History.Add(world, HistoryKind.Bond, $"{wd.LimbFrom}의 {Ko.IGa(limb)} {patient.Name}의 {Ko.IGa(what)} 됐다 — {Ko.IGa(cm.Name)} 맞춰 달았다 ({Wounds.PartName(wd.Part)})", patient.Room, new[] { cm, patient }, log: true);
+            }
+            else
+            {
+                Life.Diary(world, patient, $"{Ko.IGa(cm.Name)} {Ko.EulReul(what)} 만들어 줬다. 다시 {(Wounds.IsArm(wd.Part) ? "일할" : "걸을")} 수 있다.");
+                world.History.Add(world, HistoryKind.Bond, $"{Ko.IGa(cm.Name)} {patient.Name}에게 {Ko.EulReul(what)} 만들어 달았다 ({Wounds.PartName(wd.Part)})", patient.Room, new[] { cm, patient }, log: true);
+            }
             world.Board.Close(o);
             return true;
         }));

@@ -176,6 +176,22 @@ public static partial class Program
                     donor != null ? $"{donor.Name}(급함 {RobotSystem.Worth(donor):0.0}) → {medic.Name}(급함 {RobotSystem.Worth(medic):0.0}) · {donor.Marks.LastOrDefault().Text} · {w.Robots.Salvage.Line()}" : $"없음 · {w.Robots.Salvage.Line()}");
             }
 
+            // 16) 로봇 팔다리로 만든 사람의 의수: 잔해에서 떼어 둔 팔다리가 있으면 그걸로 · 누구의 팔이었는지 남는다
+            {
+                var w = DayOne(seed, "Hanbit");
+                var c = w.Crew.Where(x => !x.Dead && !x.IsChild && x.CanAct).OrderBy(x => x.Id).Last();
+                var wd = new Wound { Part = BodyPart.LeftArm, Kind = WoundKind.Crush, Weight = 0.3f, Cause = "시험 — 격벽에 끼어", Lost = true };
+                c.Vitals.Wounds.Add(wd);
+                var box = w.Ship.Containers.First(f => f.Storage!.Accepts(ItemKind.RobotLimb) && f.Storage.Free > 3);
+                box.Storage!.Add(ItemKind.RobotLimb, 1);
+                box.Storage.Add(ItemKind.Electronics, 2);
+                w.Robots.LimbSources.Add("정비 로봇 3");
+                for (int m = 0; m < 72 && !wd.Prosthetic; m++) Run(w, SimTime.Minutes(10));
+                Check("의수 — 잔해에서 떼어 둔 로봇 팔로 의수를 달고 · 누구의 팔이었는지 남는다 (보통 의수보다 잘 움직인다)",
+                    wd.Prosthetic && wd.LimbFrom == "정비 로봇 3" && Wounds.Severity(c.Vitals, wd) < 0.1f && c.Memory.Marks.Any(m => m.Text.Contains("정비 로봇 3")),
+                    $"{c.Name}: {Wounds.Summary(c.Vitals)} · 크기 {Wounds.Severity(c.Vitals, wd):0.00} · {c.Memory.Marks.LastOrDefault().Text}");
+            }
+
             // 10) 하루 지내기: 아무 일 없는 하루에도 닳음 고장이 부위로 남고 · 결정론
             {
                 uint H()

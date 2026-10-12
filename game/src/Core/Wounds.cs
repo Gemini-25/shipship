@@ -20,6 +20,8 @@ public sealed class Wound
     public bool Lost { get; set; }           // 팔·다리를 잃었다
     public bool Prosthetic { get; set; }     // 의수·의족을 달았다
     public bool ProstheticMade { get; set; } // v14.1 다 만들어 두었다 (맞추다 끊기면 맞추기만 다시)
+    /// <summary>v22 잔해에서 떼어 낸 로봇 팔다리로 만들었다 — 그 로봇의 이름 ("" 보통 의수 · 의족). 동력이 있어 더 잘 움직인다.</summary>
+    public string LimbFrom { get; set; } = "";
 }
 
 public static class Wounds
@@ -76,7 +78,7 @@ public static class Wounds
     /// <summary>지금 이 상처의 크기 0~1 (전체 부상을 몫대로 나눈다). 잃은 팔다리는 따로.</summary>
     public static float Severity(Vitals v, Wound w)
     {
-        if (w.Lost) return w.Prosthetic ? 0.15f : 0.7f;
+        if (w.Lost) return w.Prosthetic ? (w.LimbFrom.Length > 0 ? 0.08f : 0.15f) : 0.7f; // v22 로봇 팔다리 의수는 모터가 돕는다
         // v14.2 반복문 (LINQ의 float 합은 double로 더한다 — 같게)
         double acc = 0;
         int kept = 0;
@@ -129,7 +131,7 @@ public static class Wounds
     public static string Summary(Vitals v)
     {
         var parts = v.Wounds.Where(x => x.Lost || Severity(v, x) > 0.03f)
-            .Select(x => x.Lost ? $"{PartName(x.Part)} {(x.Prosthetic ? (IsArm(x.Part) ? "의수" : "의족") : "잃음")}" : $"{PartName(x.Part)} {KindName(x.Kind)} {Severity(v, x) * 100:0}%");
+            .Select(x => x.Lost ? $"{PartName(x.Part)} {(x.Prosthetic ? (IsArm(x.Part) ? "의수" : "의족") + (x.LimbFrom.Length > 0 ? $"({x.LimbFrom}의 팔다리)" : "") : "잃음")}" : $"{PartName(x.Part)} {KindName(x.Kind)} {Severity(v, x) * 100:0}%");
         return string.Join(" · ", parts);
     }
 }

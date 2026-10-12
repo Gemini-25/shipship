@@ -38,6 +38,18 @@ public sealed partial class RobotSystem
     public SalvageStats Salvage { get; } = new();
     private long _salvageNext;
     private int _fleetTarget = -1;
+    /// <summary>v22 떼어 둔 로봇 팔다리가 누구의 것이었나 (꺼내 쓴 순서대로 — 의수 · 의족에 이름이 남는다).</summary>
+    public List<string> LimbSources { get; } = new();
+
+    /// <summary>떼어 둔 로봇 팔다리 하나의 주인 이름 (모르면 "잔해").</summary>
+    public string TakeLimbSource()
+    {
+        if (LimbSources.Count == 0) return "잔해";
+        var s = LimbSources[0];
+        LimbSources.RemoveAt(0);
+        return s;
+    }
+
     /// <summary>짜 맞춘 새 몸 — 로봇 목록을 도는 중에 넣지 않고 다음 분 첫머리에 넣는다.</summary>
     private readonly List<Robot> _newBots = new();
 
@@ -194,6 +206,7 @@ public sealed partial class RobotSystem
             int put = Stash(k, n, wr.Position);
             if (put <= 0) continue;
             if (k == ItemKind.MetalOre) scrap += put; else { parts += put; got.Add($"{ItemKinds.Name(k)}{(put > 1 ? $" {put}" : "")}"); }
+            if (k == ItemKind.RobotLimb) for (int i = 0; i < put; i++) LimbSources.Add(wr.Name); // 이 팔다리는 누구의 것이었나
             wr.Parts[(int)p] = 0f;
         }
         wr.Salvaged = true;
@@ -276,7 +289,7 @@ public sealed partial class RobotSystem
         foreach (var (k, n) in need)
         {
             int left = n;
-            if (k == ItemKind.RobotLimb) while (left > 0 && w.Ship.CountStored(ItemKind.RobotLimb) > 0 && ItemsV15.Use(w, ItemKind.RobotLimb)) left--;
+            if (k == ItemKind.RobotLimb) while (left > 0 && w.Ship.CountStored(ItemKind.RobotLimb) > 0 && ItemsV15.Use(w, ItemKind.RobotLimb)) { left--; TakeLimbSource(); }
             if (k == ItemKind.RobotLimb && left > 0) { for (int i = 0; i < left + 1; i++) ItemsV15.Use(w, ItemKind.Motor); left = 0; } // 떼어 둔 팔다리가 없으면 모터로 새로
             for (; left > 0; left--) ItemsV15.Use(w, k);
         }
