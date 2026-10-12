@@ -13,6 +13,9 @@ public partial class Hud
     public bool ControlOpen { get; set; }
     private Rect2 _controlRect;
 
+    /// <summary>화면 확인용 (--open=control:탭번호).</summary>
+    public int ControlTab { get => _controlTab; set => _controlTab = value; }
+
     public void ToggleControl()
     {
         ControlOpen = !ControlOpen;

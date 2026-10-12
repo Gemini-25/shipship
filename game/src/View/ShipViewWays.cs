@@ -27,6 +27,13 @@ public partial class ShipView
         {
             if (f.Type is not (FurnitureType.Bed or FurnitureType.Cot or FurnitureType.MedBed) || !ways.IsBare(f.Id)) continue;
             var r = FurnitureRect(f).Grow(-4f);
+            if (DotCrew)
+            {
+                int bw = (int)r.Size.X, bh = (int)r.Size.Y;
+                var be = Dots.Get(DotTex.Key(27, bw, bh), () => ShipSim.Art.DotWays.BareBed(bw, bh));
+                if (be is { W: > 0 }) ci.DrawTextureRect(Zoom >= 0.999f ? be.Crisp : be.Tex, new Rect2(r.Position.Round(), be.W, be.H), false);
+                continue;
+            }
             ci.Box(r, new Color(0.16f, 0.13f, 0.1f, 0.85f));
             bool wide = r.Size.X > r.Size.Y;
             int n = (int)((wide ? r.Size.X : r.Size.Y) / 7f);
@@ -53,8 +60,25 @@ public partial class ShipView
         }
     }
 
+    /// <summary>도트 해법 물건: 막을 쪽을 따라 돌린 32×32 한 장 (깜빡이는 것은 두 장 번갈아).</summary>
+    private void PaintDotWay(CanvasItem ci, WayMark m, Vector2 o, Vector2 dir, float a)
+    {
+        int di = Mathf.Abs(dir.X) > Mathf.Abs(dir.Y) ? (dir.X > 0 ? 1 : 3) : (dir.Y < 0 ? 2 : 0);
+        bool weak = !m.Ok || m.Q < 0.45f;
+        int frame = ((int)(_time * 3f) + m.At.X) & 1;
+        if (m.Look == WayLook.Lamp)
+        {
+            ci.Circle(o, T * 1.4f, new Color(1f, 0.92f, 0.7f, 0.1f * a));
+            ci.Circle(o, T * 0.8f, new Color(1f, 0.92f, 0.7f, 0.1f * a));
+        }
+        var e = Dots.Get(DotTex.Key(26, (int)m.Look, weak ? 1 : 0, frame, di), () => ShipSim.Art.DotWays.Way(m.Look, weak, frame, di));
+        if (e is not { W: > 0 }) return;
+        ci.DrawTextureRect(Zoom >= 0.999f ? e.Crisp : e.Tex, new Rect2(new Vector2(Mathf.Round(o.X - e.W / 2f), Mathf.Round(o.Y - e.H / 2f)), e.W, e.H), false, new Color(1, 1, 1, Mathf.Clamp(a, 0f, 1f)));
+    }
+
     private void PaintWay(CanvasItem ci, WayMark m, Vector2 o, Vector2 dir, Vector2 side, float a, float pulse)
     {
+        if (DotCrew) { PaintDotWay(ci, m, o, dir, a); return; }
         float h = T * 0.5f;
         switch (m.Look)
         {

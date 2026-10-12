@@ -308,7 +308,8 @@ public partial class ShipView
             {
                 float ph = Mathf.PosMod(_time * 0.9f + k / 3f + seed, 1f);
                 var p = c + new Vector2(Mathf.Sin(ph * 9f + k) * 6f, -ph * T * (0.8f + intensity));
-                ci.Circle(p, 1.3f, FireCore.WithAlpha(1f - ph), true, -1f, true);
+                if (DotCrew) ci.DrawRect(new Rect2(Mathf.Floor(p.X), Mathf.Floor(p.Y), 2, 2), FireCore.WithAlpha(1f - ph));
+                else ci.Circle(p, 1.3f, FireCore.WithAlpha(1f - ph), true, -1f, true);
             }
         }
     }

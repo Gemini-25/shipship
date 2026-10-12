@@ -486,9 +486,18 @@ public static partial class FixtureArt
 
     internal static float Pulse(float t, float speed) => 0.5f + 0.5f * Mathf.Sin(t * speed);
 
-    internal static void Dot(CanvasItem ci, Vector2 p, float r, Color c) => ci.Circle(p, r, c, true, -1f, true);
-    internal static void Ring(CanvasItem ci, Vector2 p, float r, Color c, float w = 1f, int n = 24) => ci.Arc(p, r, 0f, Mathf.Tau, n, c, w, true);
-    internal static void Line(CanvasItem ci, Vector2 a, Vector2 b, Color c, float w = 1f) => ci.DrawLine(a, b, c, w, true);
+    // 도트 모드에서는 남은 덧그림(고장 불꽃 · 새는 물 · 김 …)도 칸에 맞춰 각지게 (부드러운 가장자리 없이)
+    internal static void Dot(CanvasItem ci, Vector2 p, float r, Color c)
+    {
+        if (ShipView.DotCrew) { if (r < 1.6f) ci.DrawRect(new Rect2(Mathf.Floor(p.X), Mathf.Floor(p.Y), 2, 2), c); else ci.Circle(p.Round(), Mathf.Round(r), c, true, -1f, false); return; }
+        ci.Circle(p, r, c, true, -1f, true);
+    }
+    internal static void Ring(CanvasItem ci, Vector2 p, float r, Color c, float w = 1f, int n = 24) => ci.Arc(ShipView.DotCrew ? p.Round() : p, r, 0f, Mathf.Tau, n, c, ShipView.DotCrew ? Mathf.Max(1f, Mathf.Round(w)) : w, !ShipView.DotCrew);
+    internal static void Line(CanvasItem ci, Vector2 a, Vector2 b, Color c, float w = 1f)
+    {
+        if (ShipView.DotCrew) { ShipView.PixStreak(ci, a, b, c, Mathf.Max(1, Mathf.RoundToInt(w))); return; }
+        ci.DrawLine(a, b, c, w, true);
+    }
     internal static void Box(CanvasItem ci, Rect2 r, Color fill, float rad, Color? edge = null, int bw = 1) => Gfx.RoundRect(ci, r, fill, rad, edge, bw);
 
     /// <summary>위 · 왼쪽은 밝게, 아래 · 오른쪽은 어둡게 (빛이 왼쪽 위에서).</summary>

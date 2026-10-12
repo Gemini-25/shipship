@@ -54,6 +54,8 @@ public static class DotSheet
             "food" => Food(),
             "items" => Items(),
             "traces" => Traces(),
+            "ways" => Ways(),
+            "info" => Info(),
             "fixtures" => Fixtures(Arg(args, "--dotstate=") ?? "on"),
             _ => People(),
         };
@@ -171,6 +173,38 @@ public static class DotSheet
         img.Fill(0, 0, img.W, img.H, Rgba.Hex("#4a525e"));
         for (int i = 0; i < kinds.Length; i++)
             img.Draw(DotTraces.Trace(kinds[i], i), 4 + i % cols * 28, 4 + i / cols * 28);
+        return img;
+    }
+
+    // ───────────────────────────── 해법 물건 · 정보 물건 ─────────────────────────────
+
+    private static Img Ways()
+    {
+        var kinds = (ShipSim.Core.WayLook[])Enum.GetValues(typeof(ShipSim.Core.WayLook));
+        int cols = 12;
+        var img = new Img(cols * 36 + 4, (kinds.Length + cols - 1) / cols * 3 * 36 + 4);
+        img.Fill(0, 0, img.W, img.H, Rgba.Hex("#4a525e"));
+        for (int i = 0; i < kinds.Length; i++)
+            for (int r = 0; r < 3; r++)
+                img.Draw(DotWays.Way(kinds[i], r == 1, r == 1 ? 1 : 0, r == 2 ? 1 : 0), 4 + i % cols * 36, 4 + (i / cols * 3 + r) * 36);
+        return img;
+    }
+
+    private static Img Info()
+    {
+        var img = new Img(16 * 18 + 8, 6 * 30 + 8);
+        img.Fill(0, 0, img.W, img.H, Rgba.Hex("#7a4c28"));
+        for (int i = 0; i < 16; i++) img.Draw(DotInfo.Cup(i % 4, i / 4, (i & 1) == 0, Ramps.Accent[i % Ramps.Accent.Length], i == 15, i), 4 + i * 18, 4);
+        for (int i = 0; i < 4; i++) img.Draw(DotInfo.Shards(i, Ramps.Accent[i], i), 4 + i * 28, 20);
+        var scenes = (DotPhotoScene[])Enum.GetValues(typeof(DotPhotoScene));
+        for (int i = 0; i < scenes.Length; i++)
+            img.Draw(DotInfo.Photo(17, 12, i % 3, scenes[i], Ramps.Accent[i], new[] { 0, 1, 2 }[..(1 + i % 3)], new[] { 0, 2, 4 }, i == 4, i), 120 + i * 22, 20);
+        img.Draw(DotInfo.Photo(11, 15, 1, DotPhotoScene.Plain, Ramps.Accent[2], new[] { 1 }, new[] { 3 }, false, 9), 234, 20);
+        for (int k = 0; k < 6; k++) for (int st = 0; st < 5; st++) img.Draw(DotInfo.Made(k, Ramps.Accent[k], st), 4 + st * 16 + (k % 3) * 90, 46 + (k / 3) * 16);
+        img.Draw(DotInfo.Lamp(false, false, 0), 4, 82); img.Draw(DotInfo.Lamp(true, true, 2), 18, 82); img.Draw(DotInfo.Lamp(true, false, 1), 32, 82);
+        for (int n = 1; n <= 6; n++) img.Draw(DotInfo.DishPile(n), 50 + (n - 1) * 22, 82);
+        img.Draw(DotInfo.Roster(new[] { Ramps.Accent[0], Ramps.Accent[1], Ramps.Accent[2], Ramps.Accent[3] }, 2), 4, 112);
+        for (int i = 0; i < 4; i++) img.Draw(DotInfo.Tablet(Ramps.Accent[i]), 80 + i * 10, 112);
         return img;
     }
 

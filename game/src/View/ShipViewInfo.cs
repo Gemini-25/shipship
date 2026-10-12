@@ -13,6 +13,27 @@ public partial class ShipView
 {
     private readonly Dictionary<int, (Cell at, Cell dir)?> _rosterSpot = new();
 
+    /// <summary>도트 생활 물건 한 장을 c 가운데에 (ShipSim.Art.DotInfo).</summary>
+    private void DotInfoAt(CanvasItem ci, ulong key, Func<ShipSim.Art.Img> make, Vector2 c, float alpha = 1f)
+    {
+        var e = Dots.Get(key, make);
+        if (e is not { W: > 0 }) return;
+        ci.DrawTextureRect(Zoom >= 0.999f ? e.Crisp : e.Tex, new Rect2(new Vector2(Mathf.Round(c.X - e.W / 2f), Mathf.Round(c.Y - e.H / 2f)), e.W, e.H), false, new Color(1, 1, 1, alpha));
+    }
+
+    private static int RampOf(int crewId)
+    {
+        var pc = Palette.Crew(crewId);
+        return ShipSim.Art.Ramps.Derive((byte)(pc.R * 255), (byte)(pc.G * 255), (byte)(pc.B * 255));
+    }
+
+    private void DotCup(CanvasItem ci, Vector2 pos, Belonging b, bool mended)
+    {
+        int ramp = RampOf(b.Owner >= 0 ? b.Owner : 0), shape = b.Id % 4, pattern = b.Id / 4 % 4, sd = b.Id & 7;
+        bool left = b.Id % 7 == 3;
+        DotInfoAt(ci, DotTex.Key(18, shape, pattern, left ? 1 : 0, ramp, mended ? 1 : 0, sd), () => ShipSim.Art.DotInfo.Cup(shape, pattern, left, ramp, mended, sd), pos);
+    }
+
     private void PaintInfo(CanvasItem ci)
     {
         var w = _world;
@@ -27,7 +48,10 @@ public partial class ShipView
                 var sink = r.Furniture.Where(f => f.Type is FurnitureType.DishWasher or FurnitureType.MealDispenser or FurnitureType.Stove).OrderBy(f => f.Type == FurnitureType.DishWasher ? 0 : 1).ThenBy(f => f.Id).FirstOrDefault();
                 if (sink == null) continue;
                 bool washing = w.Crew.Any(c => !c.Dead && c.Room == r && c.Job?.Activity is InfoActivity && c.Job.Label == "설거지" && c.Pose == Pose.Working);
-                InfoArt.DishPile(ci, ToPx(sink.Center) + new Vector2(T * 0.55f, -T * 0.2f), Math.Min(info.Dirty, 14), washing, _time);
+                var pileAt = ToPx(sink.Center) + new Vector2(T * 0.55f, -T * 0.2f);
+                int pileN = Math.Min(info.Dirty, 14);
+                if (DotCrew) { DotInfoAt(ci, DotTex.Key(19, pileN), () => ShipSim.Art.DotInfo.DishPile(pileN), pileAt + new Vector2(0f, -8f)); if (washing) InfoArt.DishPile(ci, pileAt, 0, true, _time); } // 도트 (거품은 그대로)
+                else InfoArt.DishPile(ci, pileAt, pileN, washing, _time);
                 break;
             }
 
@@ -35,7 +59,17 @@ public partial class ShipView
         if (info.Roster.Count > 0 && w.Ship.RoomsOf(RoomType.Mess).FirstOrDefault() is Room mess)
         {
             if (!_rosterSpot.TryGetValue(mess.Id, out var spot)) _rosterSpot[mess.Id] = spot = info.WallSpot(mess, mess.Center + new System.Numerics.Vector2(2f, -3f));
-            if (spot is var (at, dir)) InfoArt.Roster(ci, CellRect(at).GetCenter() + new Vector2(dir.X, dir.Y) * T * 0.38f, info.Roster, info.OnDuty()?.Id ?? -1, close);
+            if (spot is var (at, dir))
+            {
+                var rc0 = CellRect(at).GetCenter() + new Vector2(dir.X, dir.Y) * T * 0.38f;
+                if (DotCrew)
+                {
+                    var ramps = info.Roster.Take(7).Select(RampOf).ToArray();
+                    int today = info.Roster.IndexOf(info.OnDuty()?.Id ?? -1);
+                    DotInfoAt(ci, DotTex.Key(20, ramps.Length, today, ramps.Aggregate(17L, (h, r) => h * 31 + r)), () => ShipSim.Art.DotInfo.Roster(ramps, today), rc0);
+                }
+                else InfoArt.Roster(ci, rc0, info.Roster, info.OnDuty()?.Id ?? -1, close);
+            }
         }
 
         // 벽에 건 사진
@@ -46,7 +80,18 @@ public partial class ShipView
             var c = rc.GetCenter() + new Vector2(p.WallDir.X, p.WallDir.Y) * T * 0.36f;
             bool side = p.WallDir.X != 0;
             var size = side ? new Vector2(T * 0.34f, T * 0.46f) : new Vector2(T * 0.52f, T * 0.38f);
-            InfoArt.Photo(ci, new Rect2(c - size / 2f, size), p, w, _time, close);
+            if (DotCrew) // 도트 사진 (액자 · 장면 · 그날의 사람들 · 검은 리본)
+            {
+                int pw = side ? 11 : 17, ph = side ? 15 : 12, frame = p.Taker % 4;
+                var scene = p.Scene switch { PhotoScene.Window => ShipSim.Art.DotPhotoScene.Window, PhotoScene.Birthday => ShipSim.Art.DotPhotoScene.Birthday, PhotoScene.Work => ShipSim.Art.DotPhotoScene.Work, PhotoScene.Meal => ShipSim.Art.DotPhotoScene.Meal, _ => ShipSim.Art.DotPhotoScene.Plain };
+                var bgc = p.Place switch { RoomType.Mess => new Color(0.82f, 0.68f, 0.5f), RoomType.Lounge => new Color(0.36f, 0.6f, 0.62f), RoomType.Quarters => new Color(0.62f, 0.56f, 0.72f), RoomType.Bridge => new Color(0.2f, 0.28f, 0.45f), _ => new Color(0.5f, 0.55f, 0.6f) };
+                int bg = ShipSim.Art.Ramps.Derive((byte)(bgc.R * 255), (byte)(bgc.G * 255), (byte)(bgc.B * 255));
+                var ppl = p.People.Take(5).Select(RampOf).ToArray();
+                var hair = p.People.Take(5).Select(id => ShipSim.Art.Ramps.Hair[(id * 7) % ShipSim.Art.Ramps.Hair.Length]).ToArray();
+                bool mourn = p.People.Any(id => w.Crew.FirstOrDefault(cc => cc.Id == id) is { Dead: true });
+                DotInfoAt(ci, DotTex.Key(21, p.Id, pw, mourn ? 1 : 0), () => ShipSim.Art.DotInfo.Photo(pw, ph, frame, scene, bg, ppl, hair, mourn, p.Id), c);
+            }
+            else InfoArt.Photo(ci, new Rect2(c - size / 2f, size), p, w, _time, close);
         }
 
         // 컵 · 조각 · 완성한 모형 · 선물
@@ -59,7 +104,12 @@ public partial class ShipView
                 if (!b.Usable)
                 {
                     var k = info.Cases.LastOrDefault(x => x.Cup == b.Id && !x.Swept);
-                    if (k != null) InfoArt.Shards(ci, CellRect(cell).GetCenter(), b, k, col, (now - k.Tick) / (float)SimTime.TicksPerSecond);
+                    if (k != null && DotCrew)
+                    {
+                        int sr = RampOf(b.Owner >= 0 ? b.Owner : 0), sseed = (k.Id + b.Id) & 15, spill = b.Id % 3;
+                        DotInfoAt(ci, DotTex.Key(22, sseed, sr, spill), () => ShipSim.Art.DotInfo.Shards(sseed, sr, spill), CellRect(cell).GetCenter());
+                    }
+                    else if (k != null) InfoArt.Shards(ci, CellRect(cell).GetCenter(), b, k, col, (now - k.Tick) / (float)SimTime.TicksPerSecond);
                     continue;
                 }
                 var table = info.TableOf(b);
@@ -72,11 +122,16 @@ public partial class ShipView
                 }
                 else pos = CellRect(cell).GetCenter() + new Vector2((b.Id % 3 - 1) * 5f, (b.Id / 3 % 3 - 1) * 4f);
                 float steam = info.OnTable.TryGetValue(b.Id, out var tcup) && !tcup.Left && now - tcup.Since < SimTime.Minutes(25) ? 1f : 0f;
-                InfoArt.Cup(ci, pos, b, col, 1f, info.Mended(b), steam, _time);
+                if (DotCrew) { DotCup(ci, pos, b, info.Mended(b)); if (steam > 0f) InfoArt.Steam(ci, pos, b.Id, steam, _time); }
+                else InfoArt.Cup(ci, pos, b, col, 1f, info.Mended(b), steam, _time);
                 continue;
             }
             if (b.Kind == BelongingKind.Artwork && info.Made(b) is Todo t)
-                InfoArt.Made(ci, CellRect(cell).GetCenter() + new Vector2(0f, -T * 0.18f), t.What, b.Id, 1f, Palette.Crew(b.Maker >= 0 ? b.Maker : b.Owner), _time);
+            {
+                var mpos = CellRect(cell).GetCenter() + new Vector2(0f, -T * 0.18f);
+                if (DotCrew) { int mk = ShipSim.Art.DotInfo.MadeKind(t.What), mr = RampOf(b.Maker >= 0 ? b.Maker : b.Owner); DotInfoAt(ci, DotTex.Key(23, mk, mr, 4), () => ShipSim.Art.DotInfo.Made(mk, mr, 4), mpos); }
+                else InfoArt.Made(ci, mpos, t.What, b.Id, 1f, Palette.Crew(b.Maker >= 0 ? b.Maker : b.Owner), _time);
+            }
         }
 
         // 하던 모형 · 선물 · 컵 붙이기: 손에 든 채 조금씩 (진척만큼 형태가 생긴다)
@@ -86,11 +141,20 @@ public partial class ShipView
             var t = info.TodosOf(c).FirstOrDefault(x => c.Job.Label == InfoSystem.TodoText(x, w));
             if (t == null) continue;
             var hand = CrewPx(c) + new Vector2(c.Facing.X, c.Facing.Y) * CrewRadius * 1.25f;
-            if (t.Kind is TodoKind.Model or TodoKind.Gift) InfoArt.Made(ci, hand, t.What, t.Id * 7 + 3, t.Progress, Palette.Crew(c.Id), _time);
+            if (t.Kind is TodoKind.Model or TodoKind.Gift && DotCrew)
+            {
+                int mk = ShipSim.Art.DotInfo.MadeKind(t.What), mr = RampOf(c.Id), st = Math.Clamp((int)(t.Progress * 4f), 0, 4);
+                DotInfoAt(ci, DotTex.Key(23, mk, mr, st), () => ShipSim.Art.DotInfo.Made(mk, mr, st), hand);
+            }
+            else if (t.Kind is TodoKind.Model or TodoKind.Gift) InfoArt.Made(ci, hand, t.What, t.Id * 7 + 3, t.Progress, Palette.Crew(c.Id), _time);
             else if (t.Kind == TodoKind.MendCup && w.Belongings.Get(t.Item) is Belonging cup)
             {
+                if (DotCrew) DotCup(ci, hand, cup, t.Progress >= 0.5f);
+                else
+                {
                 InfoArt.Cup(ci, hand, cup, Palette.Crew(cup.Owner), 0.9f, false, 0f, _time);
                 InfoArt.Seams(ci, hand, cup.Id, t.Progress, 0.9f);
+                }
             }
         }
 
@@ -104,7 +168,15 @@ public partial class ShipView
             if (!fixedLamp && !broken) continue;
             var head = ToPx(bed.Center) + new Vector2(-T * 0.32f, -T * 0.32f);
             bool on = c.Room == bed.Room && c.IsAwake && (hour >= 20f || hour < 6f || c.Pose == Pose.Sitting);
-            InfoArt.Lamp(ci, head, fixedLamp, on, _time, c.Id, info.TodosOf(c).FirstOrDefault(x => x.Kind == TodoKind.Lamp)?.Progress ?? 1f);
+            float lprog = info.TodosOf(c).FirstOrDefault(x => x.Kind == TodoKind.Lamp)?.Progress ?? 1f;
+            if (DotCrew)
+            {
+                bool lit = on && (fixedLamp || Mathf.Sin(_time * 17f + c.Id) * Mathf.Sin(_time * 5.3f + c.Id * 1.7f) > 0.35f); // 고장 난 등은 불규칙하게 깜빡
+                int tapes = fixedLamp ? 0 : 1 + (int)(lprog * 3f);
+                DotInfoAt(ci, DotTex.Key(24, fixedLamp ? 1 : 0, lit ? 1 : 0, tapes), () => ShipSim.Art.DotInfo.Lamp(fixedLamp, lit, tapes), head + new Vector2(4f, -3f));
+                if (fixedLamp && on) ci.Poly(new[] { head + new Vector2(4f, -1f), head + new Vector2(9f, -1f), head + new Vector2(14f, 10f), head + new Vector2(-1f, 10f) }, new Color(1f, 0.85f, 0.55f, 0.12f)); // 따뜻한 원뿔 빛
+            }
+            else InfoArt.Lamp(ci, head, fixedLamp, on, _time, c.Id, lprog);
         }
 
         // 손목 단말 화면 빛 (메신저를 들여다보는 중)
@@ -114,7 +186,8 @@ public partial class ShipView
             var c = w.Crew[id];
             if (c.Dead || c.CarriedBy != null) continue;
             var p = CrewPx(c) + new Vector2(CrewRadius * 0.55f, CrewRadius * 0.15f);
-            InfoArt.Tablet(ci, p, Palette.Crew(c.Id), _time + id);
+            if (DotCrew) { int tr = RampOf(c.Id); ci.Circle(p, 6f, new Color(0.5f, 0.8f, 1f, 0.07f)); DotInfoAt(ci, DotTex.Key(25, tr), () => ShipSim.Art.DotInfo.Tablet(tr), p); }
+            else InfoArt.Tablet(ci, p, Palette.Crew(c.Id), _time + id);
         }
     }
 }
@@ -195,6 +268,17 @@ public static class InfoArt
                 var p0 = c + new Vector2(-1.5f + 3f * i + Mathf.Sin(t * 6f + i) * 1.5f, -s * 0.9f - t * 7f);
                 ci.Circle(p0, 1.2f + t, new Color(1f, 1f, 1f, 0.25f * (1f - t) * steam));
             }
+    }
+
+    /// <summary>컵에서 오르는 김 (도트 컵과 같이 쓴다).</summary>
+    public static void Steam(CanvasItem ci, Vector2 c, int id, float steam, float time)
+    {
+        for (int i = 0; i < 2; i++)
+        {
+            float t = (time * 0.6f + i * 0.5f + id * 0.13f) % 1f;
+            var p0 = c + new Vector2(-1.5f + 3f * i + Mathf.Sin(t * 6f + i) * 1.5f, -6f - t * 7f);
+            ci.Circle(p0, 1.2f + t, new Color(1f, 1f, 1f, 0.25f * (1f - t) * steam));
+        }
     }
 
     /// <summary>금빛 이음매 (이어 붙인 자국 — 컵마다 다른 갈래).</summary>

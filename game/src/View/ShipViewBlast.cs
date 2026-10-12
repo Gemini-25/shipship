@@ -64,6 +64,9 @@ public partial class ShipView
 
     // ═══════════════════════════════ 폭발 연출 (동적 레이어 맨 위) ═══════════════════════════════
 
+    /// <summary>화면 확인용 (--blastage=초): 폭발 연출을 그 순간에 멈춰 찍는다.</summary>
+    public static float ShotBlastAge = -1f;
+
     private void PaintBlasts(CanvasItem ci)
     {
         var b = _world.Blast;
@@ -76,7 +79,7 @@ public partial class ShipView
                 _blastSeen[rec.Id] = seen;
                 if (fresh && BlastShake && rec.Power >= 0.08f) _main.Camera.Shake(Mathf.Clamp(4f + 18f * rec.Power * rec.Spec.Shock, 3f, 22f));
             }
-            float age = _time - seen;
+            float age = ShotBlastAge >= 0f && seen > -999f ? ShotBlastAge : _time - seen;
             if (age < 0f || age > 14f) continue;
             PaintBlast(ci, rec, age);
         }
@@ -203,8 +206,16 @@ public partial class ShipView
             {
                 float tail = rocket ? Mathf.Min(len * u, T * 3f) : Mathf.Min(len * u, 20f);
                 var c0 = rec.Kind == BlastKind.Battery ? new Color(0.9f, 0.95f, 1f) : look.Spark;
-                ci.DrawLine(head - dir * tail, head, c0.WithAlpha(0.35f), rocket ? 7f : 3.5f, true);
-                ci.DrawLine(head - dir * tail * 0.5f, head, new Color(1f, 1f, 0.95f, 0.9f), rocket ? 3f : 1.4f, true);
+                if (DotCrew && !rocket)
+                {
+                    PixStreak(ci, head - dir * tail, head, c0.WithAlpha(0.35f), 3);
+                    PixStreak(ci, head - dir * tail * 0.5f, head, new Color(1f, 1f, 0.95f, 0.9f), 1);
+                }
+                else
+                {
+                    ci.DrawLine(head - dir * tail, head, c0.WithAlpha(0.35f), rocket ? 7f : 3.5f, true);
+                    ci.DrawLine(head - dir * tail * 0.5f, head, new Color(1f, 1f, 0.95f, 0.9f), rocket ? 3f : 1.4f, true);
+                }
                 if (rocket)
                 {
                     // 통째로 날아가는 실린더: 몸통 + 뒤로 뿜는 불
@@ -262,7 +273,8 @@ public partial class ShipView
                 if (rec.Kind is BlastKind.Flare or BlastKind.Furnace) p += new Vector2(0f, T * 0.6f * age * age); // 무거운 불똥은 떨어진다
                 float fade = 1f - age / life;
                 var c = rec.Kind == BlastKind.Battery && k % 3 == 0 ? new Color(0.6f, 0.85f, 1f) : look.Spark;
-                ci.DrawLine(p - dir * 4f, p, c.WithAlpha(0.95f * fade), rec.Kind == BlastKind.Flare ? 2.4f : 1.5f, true);
+                if (DotCrew) PixStreak(ci, p - dir * 4f, p, c.WithAlpha(0.95f * fade), rec.Kind == BlastKind.Flare ? 2 : 1);
+                else ci.DrawLine(p - dir * 4f, p, c.WithAlpha(0.95f * fade), rec.Kind == BlastKind.Flare ? 2.4f : 1.5f, true);
             }
         if (age < 1.4f && spec.Shock > 0.3f && !Cloudy(rec.Kind))
             for (int k = 0; k < 10 + (int)(10 * pw); k++)
@@ -343,8 +355,28 @@ public partial class ShipView
                 pts.Add(p);
             }
             var arr = pts.ToArray();
+            if (DotCrew)
+            {
+                // 도트 번개: 칸에 맞춘 계단 줄 (푸른 테두리 3 · 흰 심 1)
+                for (int i = 1; i < arr.Length; i++) PixStreak(ci, arr[i - 1], arr[i], new Color(0.55f, 0.65f, 1f, 0.5f * (1f - age / 0.7f)), 3);
+                for (int i = 1; i < arr.Length; i++) PixStreak(ci, arr[i - 1], arr[i], new Color(1f, 1f, 1f, 0.95f * (1f - age / 0.7f)), 1);
+                continue;
+            }
             ci.Polyline(arr, new Color(0.55f, 0.65f, 1f, 0.45f * (1f - age / 0.7f)), 5f, true);
             ci.Polyline(arr, new Color(1f, 1f, 1f, 0.95f * (1f - age / 0.7f)), 1.6f, true);
+        }
+    }
+
+    /// <summary>도트 줄: 정수 칸에 맞춘 작은 네모를 이어 찍는다 (불똥 · 번개 · 파편 꼬리).</summary>
+    internal static void PixStreak(CanvasItem ci, Vector2 a, Vector2 b, Color c, int w)
+    {
+        var d = b - a;
+        int n = Mathf.Max(1, (int)Mathf.Ceil(Mathf.Max(Mathf.Abs(d.X), Mathf.Abs(d.Y)) / Mathf.Max(1, w / 2))); // 반 칸씩 겹쳐 끊김 없이
+        float half = (w - 1) * 0.5f;
+        for (int i = 0; i <= n; i++)
+        {
+            var p = a + d * (i / (float)n);
+            ci.DrawRect(new Rect2(Mathf.Floor(p.X - half), Mathf.Floor(p.Y - half), w, w), c);
         }
     }
 

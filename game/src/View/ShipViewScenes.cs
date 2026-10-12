@@ -250,8 +250,14 @@ public partial class ShipView
         float left = Mathf.Clamp(1f - age / MathF.Max(0.2f, life) * 0.9f, 0.1f, 1f) * Mathf.Clamp(t.Amount, 0f, 1f);
         var tint = Palette.Crew(t.Owner);
         // 식어 가며 받친 자리에 남는 커피 고리 (잔 아래로 살짝 비켜)
-        if (!hot && close && !t.Tea) ci.Arc(c + new Vector2(1.5f, 1.8f), 4.4f, 0.4f, 4.6f, 14, new Color(0.45f, 0.28f, 0.12f, 0.35f), 0.7f, true);
-        if (t.Tea)
+        if (!hot && close && !t.Tea && !DotCrew) ci.Arc(c + new Vector2(1.5f, 1.8f), 4.4f, 0.4f, 4.6f, 14, new Color(0.45f, 0.28f, 0.12f, 0.35f), 0.7f, true);
+        if (DotCrew)
+        {
+            // 도트 잔: 차는 받침 찻잔, 커피는 머그 (무늬 = 주인)
+            int ramp = RampOf(t.Owner >= 0 ? t.Owner : 0), shape = t.Tea ? 1 : 0, pattern = Math.Abs(t.Owner) % 4;
+            DotInfoAt(ci, DotTex.Key(18, shape, pattern, 0, ramp, 0, 0), () => ShipSim.Art.DotInfo.Cup(shape, pattern, false, ramp, false, 0), c);
+        }
+        else if (t.Tea)
         {
             ci.Circle(c, 6.2f, new Color(0.92f, 0.92f, 0.95f));
             ci.Arc(c, 6.2f, 0f, Mathf.Tau, 20, new Color(0.6f, 0.62f, 0.7f), 0.8f, true);
@@ -293,7 +299,7 @@ public partial class ShipView
                 ci.Polyline(new[] { p0, p0 + new Vector2(1.4f * Mathf.Sin(_time * 3f + k), -1.6f), p0 + new Vector2(-0.6f * Mathf.Sin(_time * 2.4f + k), -3.2f) }, new Color(1f, 1f, 1f, a * (1f - ph)), 0.9f, true);
             }
         }
-        else if (close) ci.DrawLine(c + new Vector2(-2f, 0.5f), c + new Vector2(2f, 0.2f), new Color(0.75f, 0.65f, 0.5f, 0.5f), 0.6f); // 식은 막
+        else if (close && !DotCrew) ci.DrawLine(c + new Vector2(-2f, 0.5f), c + new Vector2(2f, 0.2f), new Color(0.75f, 0.65f, 0.5f, 0.5f), 0.6f); // 식은 막
     }
 
     private void PaintTray(CanvasItem ci, Vector2 p, int cups, bool tea)

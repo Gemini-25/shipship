@@ -1043,6 +1043,29 @@ public partial class Main : Node2D
                 case "--tool":
                     if (Enum.TryParse<IncidentTool>(value, out var tool)) Tool = tool;
                     break;
+                case "--open":
+                {
+                    // 화면 확인용: --open=control:6 · chronicle · voyage · chain · scalecodex · collection · policy · council · tech · techweb · decisions · messenger · minimap · help
+                    var ob = value.Split(':');
+                    switch (ob[0])
+                    {
+                        case "control": Hud.ToggleControl(); if (ob.Length > 1) Hud.ControlTab = int.Parse(ob[1], CultureInfo.InvariantCulture); break;
+                        case "chronicle": Hud.ToggleChronicle(); break;
+                        case "voyage": Hud.ToggleVoyage(); break;
+                        case "chain": Hud.ToggleChain(); break;
+                        case "scalecodex": Hud.ToggleScaleCodex(); break;
+                        case "collection": Hud.ToggleCollection(); break;
+                        case "policy": Hud.TogglePolicy(); break;
+                        case "council": Hud.ToggleCouncil(); break;
+                        case "tech": Hud.ToggleTech(); break;
+                        case "techweb": Hud.ToggleTechWeb(); break;
+                        case "decisions": Hud.DecisionsOpen = true; break;
+                        case "messenger": Hud.MessengerOpen = true; break;
+                        case "minimap": Hud.ToggleMinimap(); break;
+                        case "help": Hud.ToggleHelp(); break;
+                    }
+                    break;
+                }
                 case "--blast":
                 {
                     // 도트 7단계 화면 확인용: --blast=Fuel:Storage:0.6 (폭발 종류 : 방 종류 : 세기) — 그 방 가운데에서 터뜨린다
@@ -1149,6 +1172,9 @@ public partial class Main : Node2D
                 case "--shot":
                     _screenshotPath = value;
                     if (_screenshotFrames < 0) _screenshotFrames = 30;
+                    break;
+                case "--blastage":
+                    ShipView.ShotBlastAge = float.Parse(value, CultureInfo.InvariantCulture);
                     break;
                 case "--frames":
                     _screenshotFrames = int.Parse(value, CultureInfo.InvariantCulture);
