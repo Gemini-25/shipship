@@ -84,7 +84,7 @@ public static partial class Program
         Check("진단 — 주컴퓨터가 생체 신호로 폐를 읽거나 의무관이 진단한다", w.Organs.Known(a, Organ.Lungs), diag.Text ?? $"방송 없음 · {w.Ailments.Line(a)}");
         Check("인공 폐 — 진단받은 사람이 기계 곁에 눕고 의무관이 연결한다", hooked && ecmo != null && w.Organs.PatientOn(ecmo) == a,
             $"{(ecmo != null ? ecmo.Name : "설치 실패")} · 연결 {hooked} · {a.Name} {a.Job?.Label} · {w.Organs.Stats.Line()}");
-        float l0 = w.Organs.Dmg(a, Organ.Lungs);
+        float l0 = w.Organs.Dmg(a, Organ.Lungs) + (w.Organs.Peek(a)?.Pending[0] ?? 0f); // 연기를 마신 폐는 몇십 분에 걸쳐 붓는다 — 이미 입었지만 아직 드러나지 않은 몫까지
         var lt = new List<string>();
         for (int q = 0; q < 12; q++)
         {
@@ -275,7 +275,8 @@ public static partial class Program
         w.Disease.Infect(s, null);
         s.InfectedAt = w.Tick - SimTime.TicksPerDay * 4 / 5;
         var home = s.Room!;
-        s.EndJob(w, ToilStatus.Interrupted); s.NextThinkTick = w.Tick + SimTime.Minutes(30); // v21 권고 전에 스스로 격리실 침대로 가 버리면 컴퓨터가 권할 까닭이 없다 — 첫 25분은 제 방에서
+        // v21 열이 오르자마자(0.08) 스스로 격리실로 가 버리면 옮는 단계(0.12)에서 컴퓨터가 권할 까닭이 없다 — 첫 25분은 제 자리에서 (일이 없으면 곧바로 다시 생각하므로 앉아 있게 한다)
+        Force(w, s, new Job(null, "앉아 쉬기", new List<Toil> { new WaitToil(SimTime.Minutes(30), Pose.Sitting) }), SimTime.Minutes(30));
         var trace = new List<string>();
         for (int m = 0; m < 25; m++)
         {
