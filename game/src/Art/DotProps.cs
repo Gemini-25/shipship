@@ -201,6 +201,23 @@ public static class DotProps
         return d.ToImg(outline: false);
     }
 
+    /// <summary>장갑 벽 덧판 (32 × 32 · 벽 위에 겹친다): 두꺼운 테 · 사선 보강대(무거우면 X자) · 귀퉁이 리벳.</summary>
+    public static Img Armor(bool heavy)
+    {
+        var d = new Dot(32, 32);
+        d.Part = 1;
+        int t = heavy ? 3 : 2;
+        d.Rect(1, 1, 30, t, Ramps.SteelWarm, 3); d.Rect(1, 31 - t, 30, t, Ramps.SteelWarm, 2);
+        d.Rect(1, 1, t, 30, Ramps.SteelWarm, 3); d.Rect(31 - t, 1, t, 30, Ramps.SteelWarm, 2);
+        d.Part = 2;
+        for (int i = 4; i < 28; i++) { d.Set(i, 31 - i, Ramps.SteelWarm, 3); d.Set(i + 1, 31 - i, Ramps.SteelWarm, 2); }
+        if (heavy) { d.Part = 3; for (int i = 4; i < 28; i++) { d.Set(i, i, Ramps.SteelWarm, 4); d.Set(i + 1, i, Ramps.SteelWarm, 2); } }
+        d.Bevel();
+        foreach (var (x, y) in new[] { (3, 3), (28, 3), (3, 28), (28, 28) })
+            if (heavy || x == y) { d.Mark(x, y, Ramps.Steel, 5, true); d.Mark(x + 1, y + 1, Ramps.Steel, 1, true); }
+        return d.ToImg(outline: false);
+    }
+
     /// <summary>바닥 배수구 11 × 11.</summary>
     public static Img Drain()
     {

@@ -34,6 +34,12 @@ public partial class ShipView
             if (wall.Armor >= 0.999f) continue;
             var r = CellRect(cell);
             bool heavy = wall.Armor <= 0.55f;
+            if (DotCrew) // 도트 장갑 덧판 (테 · 보강대 · 리벳)
+            {
+                var ae = Dots.Get(DotTex.Key(9, 6, heavy ? 1 : 0), () => ShipSim.Art.DotProps.Armor(heavy), force: true);
+                if (ae is { W: > 0 }) ci.DrawTextureRect(zoom >= 0.999f ? ae.Crisp : ae.Tex, r, false, new Color(1, 1, 1, heavy ? 0.5f : 0.38f)); // 벽 위에 옅게 (상자처럼 튀지 않게)
+                continue;
+            }
             ci.Box(r.Grow(-2f), ArmorPlate.WithAlpha(heavy ? 0.55f : 0.35f), false, heavy ? 2.4f : 1.4f);
             if (!near) continue;
             ci.DrawLine(r.Position + new Vector2(4, T - 4), r.Position + new Vector2(T - 4, 4), ArmorEdge.WithAlpha(0.35f), 1.2f, true);
