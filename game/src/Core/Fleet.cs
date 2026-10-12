@@ -541,7 +541,9 @@ public sealed class FleetSystem
             // 통합8 함교 · 통신실 화면(그 방 카메라)으로 지켜본 사람도 본 것이다 — 사람을 문 앞에 붙잡아 두면 곁에서 본 사람이 없었다
             bool screen = c.Room is { Type: RoomType.Bridge or RoomType.Comms or RoomType.ServerRoom } && room.DataLinked && w.Automation.MainOnline;
             bool door = c.Id == fw.Guard && Math.Abs(c.Cell.X - fw.GuardSpot.X) + Math.Abs(c.Cell.Y - fw.GuardSpot.Y) <= 1; // 문 앞에 선 사람은 문틈으로 본다 (큰 방이면 로봇이 9칸 넘게 떨어져 있어도)
-            if (d > 9f && !screen && !door) continue;
+            // v21 벽 너머는 안 보인다 — 그 방이나 열린 문 바로 너머에 있어야 (전엔 9칸 안이면 벽 건너 엔진실에서도 '직접 봤다')
+            bool sight = c.Room == room || c.Room is Room cr && room.Doors.Any(dd => !dd.Removed && dd.Openness >= 0.3f && (dd.RoomA == cr || dd.RoomB == cr));
+            if ((d > 9f || !sight) && !screen && !door) continue;
             w.Automation.Trusts.Change(c, 0.04f, $"{Ko.IGa(rb.Name)} 사람보다 먼저 불 속에 들어갔다", quiet: true); // 통합8 사람 대신 불에 든 걸 본 일은 작지 않다 (0.02는 그 사이 다른 일로 깎인 몫에 묻혔다)
             w.Brain2.Beliefs.Learn(c, Topic.Fire, room.Id, 1, BeliefSource.Seen, 0.95f);
             first ??= c;
