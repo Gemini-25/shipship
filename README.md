@@ -342,6 +342,7 @@ Godot 실행 인자의 `--` 뒤에 붙입니다 (에디터: 프로젝트 설정 
 |---|---|
 | `--meteor=Storage:1` | 그 방 외벽에 운석 (크기 0.35 작음 ~ 1 큼 ~ 1.5 거대) |
 | `--fire=Galley` · `--break=CoolantPump` | 그 방에 불 · 그 종류 첫 설비 고장 (끝에 `*`면 전부) |
+| `--relaycut=3` | (v23) 그 번호 구역의 무전 중계기를 부순다 — 끊긴 구역 · 드론 임시 중계를 볼 때 |
 | `--hazard=GasLeak:LifeSupport` · `--hazard=SolarStorm` | 사고 목록의 사고를 건다 (대상 방 · 번호, 배 전체는 이름만) |
 | `--cosmic=PulsarBeam:0.5` | 우주 규모 대재난을 건다 (재난 이름 : 몇 시간 뒤 도착) |
 | `--scenario=nosealant` | 헤드리스와 같은 사고 시험 장면 |
