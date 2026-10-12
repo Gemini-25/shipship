@@ -107,6 +107,55 @@ public partial class ShipView
             if (r.Wrecked && RobotSystem.IsWreck(r) && r.Marks.Count > 0 && w.Tick - r.Marks[^1].Tick < SimTime.Hours(12)) PaintWreckSmoke(ci, r, p, t);
         }
         PaintCommandLines(ci);
+        PaintGuardMoments(ci); // v22 로봇이 막아 선 · 부서진 순간
+    }
+
+    /// <summary>v22 막아 선 순간: 로봇 앞의 방패 빛 · 튀는 불꽃 · 지켜 준 사람과 잇는 선 (부서졌으면 번쩍이는 고리와 흩어지는 조각).</summary>
+    private void PaintGuardMoments(CanvasItem ci)
+    {
+        var w = _world;
+        var ms = w.Robots.Moments;
+        var bots = w.Robots.Robots;
+        float life = SimTime.Minutes(4);
+        for (int i = ms.Count - 1; i >= 0; i--)
+        {
+            var m = ms[i];
+            long age = w.Tick - m.Tick;
+            if (age > life) break; // 시간 순서로 쌓인다
+            if (age < 0) continue;
+            float u = age / life, a = 1f - u;
+            var rb = m.Robot >= 0 && m.Robot < bots.Count && bots[m.Robot].Id == m.Robot ? bots[m.Robot] : null;
+            var p = rb != null ? RobotPx(rb) : ToPx(m.At);
+            if (!_fixView.Grow(T * 3f).HasPoint(p)) continue;
+            if (m.Crew >= 0)
+            {
+                var from = ToPx(m.From);
+                var dir = (from - p).LengthSquared() > 1f ? (from - p).Normalized() : Vector2.Up;
+                float ang = dir.Angle();
+                ci.Arc(p + dir * 6f, 13f, ang - 1.1f, ang + 1.1f, 16, new Color("#9fe6ff").WithAlpha(0.85f * a), 3f, true);
+                ci.Arc(p + dir * 6f, 16f + 6f * u, ang - 0.9f, ang + 0.9f, 14, new Color("#e8fbff").WithAlpha(0.5f * a), 1.5f, true);
+                for (int k = 0; k < 6; k++)
+                {
+                    float sa = ang + (k - 2.5f) * 0.32f + 0.15f * Mathf.Sin(m.Tick * 0.7f + k);
+                    var q = p + dir * 15f;
+                    var e = q + new Vector2(Mathf.Cos(sa), Mathf.Sin(sa)) * (4f + 12f * u);
+                    ci.DrawLine(q + (e - q) * 0.4f, e, new Color("#ffd27a").WithAlpha(0.9f * a), 1.2f, true);
+                }
+                if (w.Crew.FirstOrDefault(c => c.Id == m.Crew) is CrewMember cm && !cm.Dead)
+                    ci.DrawLine(p, CrewPx(cm), new Color("#9fe6ff").WithAlpha(0.35f * a), 1f, true);
+            }
+            if (m.Wrecked)
+            {
+                ci.Arc(p, 10f + 30f * u, 0f, Mathf.Tau, 32, new Color("#ffb15c").WithAlpha(0.7f * a), 2.5f, true);
+                ci.Circle(p, 14f * (1f - u), new Color(1f, 0.85f, 0.6f, 0.35f * a), true, -1f, true);
+                for (int k = 0; k < 8; k++)
+                {
+                    float sa = k * 0.785f + m.Robot * 0.37f;
+                    var e = p + new Vector2(Mathf.Cos(sa), Mathf.Sin(sa)) * (6f + 26f * u);
+                    ci.Box(new Rect2(e.X - 1.2f, e.Y - 1.2f, 2.4f, 2.4f), new Color("#4a4f58").WithAlpha(a));
+                }
+            }
+        }
     }
 
     /// <summary>탄 잔해 덩어리 (도트를 못 그릴 때 · 선 그림 모드).</summary>

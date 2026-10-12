@@ -428,6 +428,8 @@ public sealed class CasualtySystem
                 // 옷 · 머리카락에 옮겨붙는다 — 깨어 있으면 물러서고, 우주복은 막는다
                 float burn = R.Range(0.08f, 0.24f) * (spread ? 0.6f : 1f) * (asleep ? 1.6f : 1f) * (c.Suit != null ? 0.25f : 1f) * (c.Job?.Order?.Kind == WorkKind.Extinguish ? 0.4f : 1f) /* 소화기를 겨누고 있던 사람은 물러설 줄 안다 */ * (1.2f - 0.4f * d2 / (1.3f * 1.3f));
                 if (burn < 0.04f) continue;
+                burn *= w.Robots.Cover(c, cell.Center, burn, "불길", burn: true); // v22 곁의 로봇이 몸으로 막아 준다
+                if (burn < 0.02f) continue;
                 Flashes++;
                 c.Vitals.Health = MathF.Max(0.02f, c.Vitals.Health - burn);
                 NeedsSystem.AddInjury(c.Vitals, burn, asleep ? "자다가 불에 덴 화상" : "불이 옮겨붙은 화상");

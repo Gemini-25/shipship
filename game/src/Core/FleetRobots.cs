@@ -494,6 +494,7 @@ public sealed partial class RobotSystem
         r.Doing = why;
         MarkLog.Add(r.Marks, w.Tick, why);
         w.History.Add(w, HistoryKind.Damage, $"{Ko.IGa(r.Name)} {why}", r.Room, log: true);
+        Moment(r, null, r.Position, true, $"{Ko.IGa(r.Name)} {why}"); // v22 부서지는 순간 (화면이 잠깐 느리게 · 가까이)
         w.Fleet.Mourn(r, why);
     }
 }

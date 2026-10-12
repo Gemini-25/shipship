@@ -662,10 +662,10 @@ public sealed class FleetSystem
     }
 
     /// <summary>같이 일하는 사람 (거들어 준 시간).</summary>
-    internal void Bond(Robot r, CrewMember c)
+    internal void Bond(Robot r, CrewMember c, float hours = 1f / 60f)
     {
         if (!_bond.TryGetValue(r.Id, out var b)) _bond[r.Id] = b = new();
-        b[c.Id] = b.GetValueOrDefault(c.Id) + 1f / 60f;
+        b[c.Id] = b.GetValueOrDefault(c.Id) + hours;
     }
 
     /// <summary>로봇이 부서졌다: 같이 일하던 사람이 아쉬워한다.</summary>
@@ -683,7 +683,9 @@ public sealed class FleetSystem
         Mourned++;
         keeper.Needs.Stress = MathF.Min(1f, keeper.Needs.Stress + 0.05f);
         Memory.Shake(w, keeper, 0.015f, $"{Ko.EulReul(r.Name)} 잃었다");
-        Life.Diary(w, keeper, Persona.Say(keeper, best > 0.5f
+        Life.Diary(w, keeper, Persona.Say(keeper, r.Guarded.Contains(keeper.Name) // v22 몸으로 막아 준 로봇
+            ? $"{Ko.IGa(r.Name)} 부서졌다. 나를 몸으로 막아 줬던 녀석이다"
+            : best > 0.5f
             ? $"{Ko.IGa(r.Name)} 부서졌다. 내 옆에서 {best:0}시간을 거들던 녀석이었다"
             : $"{Ko.IGa(r.Name)} 부서졌다. {r.JobsDone}건을 해 준 녀석이었다"));
         w.History.Add(w, HistoryKind.Memory, $"{Ko.IGa(r.Name)} 부서졌다 — {why} · 한 일 {r.JobsDone}건 · {Ko.IGa(keeper.Name)} 아쉬워한다", r.Room, new[] { keeper });

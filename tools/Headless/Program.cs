@@ -246,6 +246,7 @@ public static partial class Program
         if (args.Contains("--robot21probe")) return RunRobot21Probe(seed, shipArg ?? "Hanbit", days, args.Contains("--legacy")); // v21 로봇 확장 (한 배 며칠)
         if (args.Contains("--robot21test")) return RunRobot21Test(seed); // v21 로봇 · 드론 확장
         if (args.Contains("--robotbodytest")) return RunRobotBodyTest(seed); // v22 기계의 상처 (1) 로봇 몸의 부위
+        if (args.Contains("--guardtest")) return RunGuardTest(seed); // v22 연출: 로봇이 몸으로 막아 주기
         if (args.Contains("--story21test")) return RunStory21Test(seed); // v21 이야기꾼 · 난이도 세분화
         if (args.FirstOrDefault(a => a.StartsWith("--foodprobe=")) is string fp) return RunFoodProbe(seed, fp[12..]); // v21 먹을 것 탐침
         if (args.Contains("--campaign15test")) return RunCampaign15Test(seed); // v15.6

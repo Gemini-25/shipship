@@ -644,6 +644,10 @@ public sealed partial class BlastSystem
             if (!reached) continue;
             float suit = c.Suit != null ? 0.55f : 1f;
             bool hit = false;
+            // v22 곁의 로봇이 몸으로 막아 준다 (압력 · 화구 · 증기를 함께 — 사람이 받는 몫)
+            float est = (p > 0.06f ? 0.08f + 0.55f * p : 0f) + (spec.Heat > 0f && dist < fireR && p > 0.03f ? 0.24f * spec.Heat * power : 0f);
+            float share = est * suit > 0.04f ? w.Robots.Cover(c, at.Center, est * suit, spec.Name, burn: spec.Heat > 0.5f) : 1f;
+            suit *= share;
             // 압력 (가까울수록 · 우주복이면 덜)
             if (p > 0.06f)
             {
@@ -672,7 +676,7 @@ public sealed partial class BlastSystem
             }
             if (hit && !rec.Hurt.Contains(c.Id)) rec.Hurt.Add(c.Id);
             // 밀쳐냄: 바깥쪽으로 한 칸 · 세면 넘어진다
-            float fallAt = 0.18f * (c.Suit != null ? 1.25f : 1f) * (c.IsChild ? 0.7f : 1f);
+            float fallAt = 0.18f * (c.Suit != null ? 1.25f : 1f) * (c.IsChild ? 0.7f : 1f) / MathF.Max(0.4f, share); // v22 로봇 뒤에 있으면 덜 넘어진다
             if (p > fallAt * 0.75f)
             {
                 var away = c.Position - at.Center;
@@ -1177,8 +1181,9 @@ public static class Shrapnel
     }
 
     /// <summary>파편이 사람을 맞혔다 (우주복이면 덜 · 경보를 듣고 숙였으면 덜).</summary>
-    public static float HitCrew(World w, Rng rng, CrewMember c, float baseDmg, float mul, string cause, string mark)
+    public static float HitCrew(World w, Rng rng, CrewMember c, float baseDmg, float mul, string cause, string mark, Vector2? from = null)
     {
+        mul *= w.Robots.Cover(c, from, baseDmg * mul * (c.Suit != null ? 0.5f : 1f), cause); // v22 곁의 로봇이 몸으로 막아 준다
         float dmg = baseDmg * rng.Range(0.6f, 1f) * (c.Suit != null ? 0.5f : 1f) * mul;
         c.Vitals.Health = MathF.Max(0.02f, c.Vitals.Health - dmg);
         NeedsSystem.AddInjury(c.Vitals, dmg * 0.9f, cause);
@@ -1236,7 +1241,7 @@ public static class Shrapnel
             {
                 if (c.Dead || c.Outside || (c.Position - p).LengthSquared() > 0.45f * 0.45f || hurt.Contains(c)) continue;
                 hurt.Add(c);
-                HitCrew(w, rng, c, 0.1f + 0.4f * s, 1f, $"폭발 파편 ({cause})", $"폭발 파편에 맞았다 ({c.Room?.Name ?? "?"})");
+                HitCrew(w, rng, c, 0.1f + 0.4f * s, 1f, $"폭발 파편 ({cause})", $"폭발 파편에 맞았다 ({c.Room?.Name ?? "?"})", from);
                 if (rng.Chance(0.6f)) return new Shard(from, p, strength, 3);
                 s *= 0.5f;
             }

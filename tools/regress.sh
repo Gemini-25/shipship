@@ -41,6 +41,7 @@ ships10 10 20260929 --ships
 robottest 1 20260929 --robottest
 robot21test 1 7 --robot21test
 robotbodytest 1 7 --robotbodytest
+guardtest 1 7 --guardtest
 story21test 1 7 --story21test
 hazardtest 1 20260929 --hazardtest
 livingtest 1 20260929 --livingtest

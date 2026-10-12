@@ -298,6 +298,7 @@ public partial class Main : Node2D
         }
 
         UpdateHighlight(delta); // v12.2 하이라이트 모드 · 자동 카메라
+        UpdateGuardCam(delta); // v22 로봇이 막아 선 · 부서진 순간 (MainGuard.cs)
         UpdateObservers(); // v17.7 평화로운 장면 · 물건 따라가기 (MainWatch.cs)
         UpdateHover();
         _stars.CameraPosition = Camera.Position;

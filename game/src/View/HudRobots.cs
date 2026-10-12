@@ -69,7 +69,8 @@ public partial class Hud
         };
         Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 52), can, Ui.TextSmall, Palette.TextMuted);
         // v22 몸: 부위마다 단계 · 덧댄 판 · 이어받은 잔해
-        string body = $"몸: {RobotBody.Line(r)}" + (r.FromWreck != "" ? $" · {Ko.EulReul(r.FromWreck)} 이어 짠 {r.Rebuilt + 1}번째 몸" : "");
+        string body = $"몸: {RobotBody.Line(r)}" + (r.FromWreck != "" ? $" · {Ko.EulReul(r.FromWreck)} 이어 짠 {r.Rebuilt + 1}번째 몸" : "")
+            + (r.Shielded > 0 ? $" · 몸으로 막아 줌 {r.Shielded}번 ({string.Join("·", r.Guarded.Take(3))})" : "");
         Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 70), UiKit.Fit(body, right - x, Ui.TextSmall, Fonts.Body), Ui.TextSmall,
             RobotBody.Worst(r) < 0.25f ? Palette.Danger : RobotBody.Damaged(r) > 0 ? Palette.Warning : Palette.TextDim);
         ly += 82;
