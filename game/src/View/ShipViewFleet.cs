@@ -104,12 +104,13 @@ public partial class ShipView
                 }
             }
             // 불에 탄 잔해 (반나절 동안 그 자리에)
-            if (r.Wrecked && r.Marks.Count > 0 && w.Tick - r.Marks[^1].Tick < SimTime.Hours(12)) PaintRobotWreck(ci, r, p, t);
+            if (r.Wrecked && RobotSystem.IsWreck(r) && r.Marks.Count > 0 && w.Tick - r.Marks[^1].Tick < SimTime.Hours(12)) PaintWreckSmoke(ci, r, p, t);
         }
         PaintCommandLines(ci);
     }
 
-    private void PaintRobotWreck(CanvasItem ci, Robot r, Vector2 p, float t)
+    /// <summary>탄 잔해 덩어리 (도트를 못 그릴 때 · 선 그림 모드).</summary>
+    private void PaintRobotWreck(CanvasItem ci, Robot r, Vector2 p)
     {
         float ang = Mathf.Atan2(r.Facing.Y, r.Facing.X) + 0.4f;
         ci.DrawSetTransform(p, ang, Vector2.One);
@@ -117,8 +118,14 @@ public partial class ShipView
         ci.Poly(new[] { new Vector2(-9, -6), new Vector2(-2, -8), new Vector2(8, -5), new Vector2(9, 4), new Vector2(1, 7), new Vector2(-8, 5) }, char0);
         ci.Polyline(new[] { new Vector2(-6, -4), new Vector2(-1, 1), new Vector2(5, -3) }, new Color("#4a403a"), 1f, true);
         ci.DrawLine(new Vector2(3, 3), new Vector2(11, 8), new Color("#3a3a3a"), 1.4f, true); // 떨어져 나간 팔
-        ci.Circle(new Vector2(-3, 2), 1.4f, new Color("#ff7a3a").WithAlpha(0.3f + 0.3f * Mathf.Sin(t * 5f)), true, -1f, true); // 아직 남은 불씨
         ci.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+    }
+
+    /// <summary>부서진 지 반나절: 아직 남은 불씨 · 가는 연기.</summary>
+    private void PaintWreckSmoke(CanvasItem ci, Robot r, Vector2 p, float t)
+    {
+        if (!_fixView.Grow(T * 2f).HasPoint(p)) return;
+        ci.Circle(p + new Vector2(-2f, 1f), 1.4f, new Color("#ff7a3a").WithAlpha(0.3f + 0.3f * Mathf.Sin(t * 5f)), true, -1f, true); // 아직 남은 불씨
         for (int k = 0; k < 2; k++)
         {
             float ph = (t * 0.35f + k * 0.5f) % 1f;

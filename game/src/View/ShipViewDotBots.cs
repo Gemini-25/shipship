@@ -44,14 +44,62 @@ public partial class ShipView
         l.State = r.Fault != null && !RobotSystem.CanSelfRepair(r) ? DotBotState.Broken : dead ? DotBotState.Off : working ? DotBotState.Working : DotBotState.Ok;
         l.Cargo = r.Cargo is ItemStack st ? RampOf(Palette.Item(st.Kind)) : r.Order?.Kind == WorkKind.CarryWater ? Ramps.Glass : -1;
         l.Seed = r.Id & 3;
+        BodyLook(l, r);
+        l.Wreck = false;
         var fv = r.Facing;
         var f = MathF.Abs(fv.X) > MathF.Abs(fv.Y) * 1.15f ? (fv.X > 0 ? DotFacing.E : DotFacing.W) : fv.Y < 0 ? DotFacing.N : DotFacing.S;
         int frame = moving ? (int)(_time * 8f + r.Id) & 3 : working ? (int)(_time * 10f + r.Id) & 3 : ((int)(_time * 2f + r.Id) & 1);
-        var key = DotTex.Key(2, (long)l.Shape, l.Paint, l.Badge, (long)l.State, l.Cargo, l.Seed, (long)f, frame);
+        var key = DotTex.Key(2, (long)l.Shape, l.Paint, l.Badge, (long)l.State, l.Cargo, l.Seed, (long)f, frame, l.Wear, l.Patch);
         var e = Dots.Peek(key) ?? MakeDotRobot(key, l, f, frame); // v21 로봇 80대: 있는 그림이면 만들 준비(클로저)도 하지 않는다
         if (e == null) return false;
         var o = new Vector2(Mathf.Round(p.X) - DotBots.Cx, Mathf.Round(p.Y) + 9f - DotBots.Foot);
         ci.DrawTextureRect(Zoom >= 0.999f ? e.Crisp : e.Tex, new Rect2(o, e.W, e.H), false);
+        return true;
+    }
+
+    /// <summary>v22 부위 단계 · 덧댄 판을 겉모습으로 옮긴다.</summary>
+    private static void BodyLook(BotLook l, Robot r)
+    {
+        int wear = 0, patch = 0;
+        for (int i = 0; i < RobotBody.Count; i++)
+        {
+            if (!RobotBody.Has(r.Kind, (BotPart)i)) continue;
+            wear |= (int)RobotBody.Stage(r.Parts[i]) << (i * 3);
+            if (r.Patches[i] > 0) patch |= 1 << i;
+        }
+        l.Wear = wear;
+        l.Patch = patch;
+    }
+
+    /// <summary>v22 잔해: 부서진 몸을 옆으로 눕혀 그린다 (회수 · 해체될 때까지 그 자리에). 그렸으면 true.</summary>
+    private bool PaintDotWreck(CanvasItem ci, Robot r, Vector2 p)
+    {
+        if (!DotCrew || ZoomDetail.Shows(Zoom, Detail.CrewDot)) return false;
+        var l = _botLook;
+        var kind = r.Kind;
+        l.Shape = kind switch
+        {
+            RobotKind.Nurse or RobotKind.Medic => DotBotKind.Nurse,
+            RobotKind.Stretcher or RobotKind.Rescuer => DotBotKind.Stretcher,
+            _ => RobotsV15.Base(kind) switch { RobotKind.Hauler => DotBotKind.Hauler, RobotKind.Gardener => DotBotKind.Gardener, RobotKind.Safety => DotBotKind.Safety, _ => DotBotKind.Maintainer },
+        };
+        l.Paint = kind is RobotKind.Nurse or RobotKind.Stretcher or RobotKind.Medic ? Ramps.ClothWhite : RampOf(RobotColor(kind));
+        l.Badge = BotBadge(kind);
+        l.State = DotBotState.Off;
+        l.Cargo = -1;
+        l.Seed = r.Id & 3;
+        BodyLook(l, r);
+        l.Wreck = true;
+        var f = (r.Id & 2) == 0 ? DotFacing.E : DotFacing.S;
+        var key = DotTex.Key(4, (long)l.Shape, l.Paint, l.Badge, l.Seed, (long)f, l.Wear, l.Patch);
+        var e = Dots.Peek(key) ?? MakeDotRobot(key, l, f, 0);
+        if (e == null || e.W == 0) return false;
+        // 바닥에 눕는다: 발밑 그림자 · 옆으로 쓰러진 몸 (로봇마다 다른 쪽으로)
+        ci.DrawSetTransform(p + new Vector2(0f, 6f), 0f, new Vector2(1f, 0.35f));
+        ci.Circle(Vector2.Zero, 14f, new Color(0, 0, 0, 0.35f), true, -1f, true);
+        ci.DrawSetTransform(p + new Vector2(0f, 2f), (r.Id & 1) == 0 ? 1.45f : -1.45f, Vector2.One);
+        ci.DrawTextureRect(Zoom >= 0.999f ? e.Crisp : e.Tex, new Rect2(-DotBots.Cx, -e.H * 0.5f, e.W, e.H), false);
+        ci.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
         return true;
     }
 

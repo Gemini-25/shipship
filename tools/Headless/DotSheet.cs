@@ -48,6 +48,7 @@ public static class DotSheet
             "scene" => Scene(),
             "parts" => Parts(),
             "bots" => Bots(),
+            "scars" => BotScars(),
             "tiles" => Tiles(),
             "props" => Props(),
             "gear" => Gear(),
@@ -374,6 +375,36 @@ public static class DotSheet
         img.Draw(DotBots.Drone(DotDroneKind.Repair, DotBotState.Ok, 0, Ramps.ClothOrange, brokenRotor: true), dx, y); dx += 30;
         img.Draw(DotBots.Drone(DotDroneKind.Inspect, DotBotState.Off, 0), dx, y); dx += 30;
         img.Draw(DotBots.Drone(DotDroneKind.Tow, DotBotState.Broken, 0), dx, y); dx += 30;
+        return img;
+    }
+
+    /// <summary>v22 로봇 몸의 상처: 단계(긁힘 · 찌그러짐 · 망가짐) · 떨어져 나간 부위 · 덧댄 판 · 잔해.</summary>
+    private static Img BotScars()
+    {
+        var shapes = new[] { (DotBotKind.Maintainer, Ramps.Hazard, 6), (DotBotKind.Hauler, Ramps.ClothOrange, 1), (DotBotKind.Gardener, Ramps.ClothGreen, 7), (DotBotKind.Safety, Ramps.ClothRed, 10), (DotBotKind.Nurse, Ramps.ClothWhite, 20), (DotBotKind.Stretcher, Ramps.ClothWhite, 17) };
+        int all(int st) { int w = 0; for (int p = 0; p < DotBots.PartCount; p++) w |= st << (p * 3); return w; }
+        int one(int p, int st) => st << (p * 3);
+        var cols = new (int wear, int patch, bool wreck, DotFacing f)[]
+        {
+            (all(1), 0, false, DotFacing.S), (all(2), 0, false, DotFacing.S), (all(3), 0, false, DotFacing.S), (all(3), 0, false, DotFacing.E),
+            (one(DotBots.PArmR, 4) | one(DotBots.PArmL, 4), 0, false, DotFacing.S), (one(DotBots.PArmR, 4), 0, false, DotFacing.E), (one(DotBots.PTool, 4), 0, false, DotFacing.S),
+            (one(DotBots.PDrive, 4), 0, false, DotFacing.S), (one(DotBots.PSensor, 4) | one(DotBots.PBrain, 4), 0, false, DotFacing.S), (one(DotBots.PPower, 4), 0, false, DotFacing.N),
+            (0, 0xFF, false, DotFacing.S), (all(1), 0xFF, false, DotFacing.E), (all(2), 0, true, DotFacing.S), (all(3) | one(DotBots.PArmR, 4), 0x0F, true, DotFacing.E),
+        };
+        var img = new Img(cols.Length * 34 + 4, shapes.Length * 34 + 4);
+        int y = 2;
+        foreach (var (shape, paint, badge) in shapes)
+        {
+            int x = 2;
+            foreach (var (wear, patch, wreck, f) in cols)
+            {
+                var l = new BotLook { Shape = shape, Paint = paint, Badge = badge, Seed = 3, Wear = wear, Patch = patch, Wreck = wreck, State = wreck ? DotBotState.Off : DotBotState.Ok };
+                var r = DotBots.Robot(l, f, 0);
+                img.Oval(x + 16, y + 30, 12, 3, new Rgba(0, 0, 0), 0.3f);
+                img.Draw(r, x, y); x += 34;
+            }
+            y += 34;
+        }
         return img;
     }
 

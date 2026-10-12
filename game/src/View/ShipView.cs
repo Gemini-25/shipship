@@ -1558,7 +1558,7 @@ public partial class ShipView : Node2D
 
     /// <summary>v10.10: 클릭한 곳의 로봇 (충전대에 있으면 충전대 칸 가운데).</summary>
     public Robot? PickRobot(Vector2 worldPx) =>
-        _world.Robots.Robots.Where(r => r.State != RobotState.Lost)
+        _world.Robots.Robots.Where(r => r.State != RobotState.Lost || RobotSystem.IsWreck(r)) // v22 잔해도 고를 수 있다
             .Select(r => (r, d: RobotPx(r).DistanceTo(worldPx)))
             .Where(x => x.d < 11f)
             .OrderBy(x => x.d)

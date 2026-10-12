@@ -62,7 +62,7 @@ public static class RobotBody
     public static string Name(RobotKind k, BotPart p) => p switch
     {
         BotPart.Frame => "몸통",
-        BotPart.Drive => RobotsV15.Base(k) is RobotKind.Maintainer or RobotKind.Safety ? "궤도" : "바퀴",
+        BotPart.Drive => Tracked(k) ? "궤도" : "바퀴",
         BotPart.ArmL => "왼팔",
         BotPart.ArmR => "오른팔",
         BotPart.Sensor => "센서",
@@ -70,6 +70,10 @@ public static class RobotBody
         BotPart.Power => RobotsV21.Reactor ? "소형 원자로" : "전지",
         _ => ToolName(k),
     };
+
+    /// <summary>궤도로 다니는 몸 (정비 · 방재 · 재배 계열 — 간호 · 들것은 바퀴).</summary>
+    public static bool Tracked(RobotKind k) => k is not (RobotKind.Nurse or RobotKind.Medic or RobotKind.Stretcher or RobotKind.Rescuer)
+        && RobotsV15.Base(k) is RobotKind.Maintainer or RobotKind.Safety or RobotKind.Gardener;
 
     public static string ToolName(RobotKind k) => k switch
     {

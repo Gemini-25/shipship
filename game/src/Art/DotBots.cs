@@ -24,6 +24,12 @@ public sealed class BotLook
     /// <summary>특기 표식 0 없음 · 1 편지 · 2 물방울 · 3 상자 · 4 번개 · 5 손 · 6 톱니 · 7 잎 · 8 물뿌리개 · 9 눈 · 10 불꽃 · 11 더하기 · v21 12 빗자루 · 13 냄비 · 14 관 · 15 지게 · 16 바람개비 · 17 팔 · 18 덮개판 · 19 공기 방울 · 20 붉은 십자.</summary>
     public int Badge;
     public int Seed;
+    /// <summary>v22 부위 단계 (부위마다 3비트 · 0 멀쩡 · 1 긁힘 · 2 찌그러짐 · 3 망가짐 · 4 떨어져 나감 · DotBots.PFrame 순서).</summary>
+    public int Wear;
+    /// <summary>v22 덧댄 판이 붙은 부위 (비트).</summary>
+    public int Patch;
+    /// <summary>v22 부서진 몸 (잔해).</summary>
+    public bool Wreck;
 }
 
 public static class DotBots
@@ -44,6 +50,7 @@ public static class DotBots
         }
         d.Bevel();
         Details(d, l, f, frame);
+        if (l.Wear != 0 || l.Patch != 0 || l.Wreck) Scars(d, l, f);
         var img = d.ToImg();
         Effects(img, l, f, frame);
         return img;
@@ -328,7 +335,7 @@ public static class DotBots
     {
         if (l.State == DotBotState.Off) return;
         bool side = f == DotFacing.E, back = f == DotFacing.N;
-        if (l.Shape is DotBotKind.Maintainer or DotBotKind.Gardener or DotBotKind.Safety && !back)
+        if (l.Shape is DotBotKind.Maintainer or DotBotKind.Gardener or DotBotKind.Safety && !back && StageOf(l, PSensor) < 4) // v22 깨진 눈은 빛나지 않는다
             img.Glow(side ? 20.5f : 16.5f, 8.5f, 4f, Ramps.Get(l.State == DotBotState.Broken ? Ramps.Alarm : Ramps.Cyan, 3), 0.35f);
         if (l.Shape == DotBotKind.Safety && l.State != DotBotState.Broken)
         {
@@ -365,6 +372,217 @@ public static class DotBots
             int sx = side ? 14 : 18;
             img.Set(sx, 14, spark); img.Set(sx + 2, 13, spark); img.Set(sx + 1, 12 - (frame & 1), Ramps.Get(Ramps.Fire, 5));
             if ((frame & 1) == 0) img.Glow(sx + 0.5f, 16.5f, 3.5f, spark, 0.5f);
+        }
+    }
+
+    // ───────────────────────────── v22 몸의 상처 ─────────────────────────────
+    //   부위마다 단계: 긁힘(밝은 금속 줄) · 찌그러짐(움푹 + 테두리 빛) · 망가짐(그을음 · 뚫린 구멍 · 드러난 전선) · 떨어져 나감(그 부위가 없고 끊긴 자리).
+    //   덧댄 판: 다른 색 철판 + 모서리 리벳. 잔해: 어둡게 · 그을음 · 눈이 꺼짐 (화면에서 눕혀 그린다).
+
+    /// <summary>부위 번호 (시뮬레이션의 BotPart 순서와 같다).</summary>
+    public const int PFrame = 0, PDrive = 1, PArmL = 2, PArmR = 3, PSensor = 4, PBrain = 5, PPower = 6, PTool = 7, PartCount = 8;
+
+    public static int StageOf(BotLook l, int part) => (l.Wear >> (part * 3)) & 7;
+
+    /// <summary>부위가 보이는 칸 (x, y, w, h) — 이 방향에서 안 보이면 w = 0.</summary>
+    private static (int x, int y, int w, int h) Zone(BotLook l, DotFacing f, int p)
+    {
+        bool side = f == DotFacing.E, back = f == DotFacing.N;
+        switch (l.Shape)
+        {
+            case DotBotKind.Hauler:
+            {
+                int tx = side ? 3 : back ? 21 : 4;
+                return p switch
+                {
+                    PFrame => side ? (2, 18, 28, 4) : (3, 17, 26, 5),
+                    PDrive => side ? (4, 24, 24, 7) : (3, 24, 26, 7),
+                    PSensor => (tx, 7, 7, 10),
+                    PBrain => (tx + 1, 5, 5, 2),
+                    PPower => side ? (2, 21, 28, 5) : (3, 21, 26, 6),
+                    _ => (0, 0, 0, 0),
+                };
+            }
+            case DotBotKind.Nurse:
+                return p switch
+                {
+                    PFrame => side ? (10, 11, 12, 12) : (9, 11, 14, 12),
+                    PDrive => (7, 24, 18, 7),
+                    PSensor => side ? (13, 3, 10, 8) : (10, 3, 12, 8),
+                    PBrain => side ? (14, 3, 8, 3) : (12, 3, 8, 3),
+                    PArmL => side ? (0, 0, 0, 0) : back ? (23, 14, 6, 8) : (4, 14, 5, 8),
+                    PArmR => side ? (18, 15, 8, 6) : back ? (4, 14, 5, 8) : (23, 14, 6, 8),
+                    PTool => side ? (24, 18, 2, 2) : back ? (4, 20, 2, 2) : (26, 20, 2, 2),
+                    PPower => (10, 19, 12, 6),
+                    _ => (0, 0, 0, 0),
+                };
+            case DotBotKind.Stretcher:
+                return p switch
+                {
+                    PFrame => side ? (2, 16, 28, 9) : (7, 8, 18, 18),
+                    PDrive => side ? (3, 25, 26, 6) : (5, 25, 22, 6),
+                    PSensor or PBrain or PPower => side ? (2, 16, 10, 6) : (7, 8, 18, 6),
+                    _ => (0, 0, 0, 0),
+                };
+        }
+        // 궤도 로봇 (정비 · 재배 · 방재): 팔은 하나만 보인다
+        if (side)
+            return p switch
+            {
+                PFrame => (6, 13, 18, 10),
+                PDrive => (3, 22, 24, 8),
+                PArmR => (24, 9, 6, 14),
+                PTool => (28, 9, 3, 14),
+                PSensor => (12, 6, 11, 7),
+                PBrain => (10, 0, 4, 7),
+                PPower => (1, 9, 5, 11),
+                _ => (0, 0, 0, 0),
+            };
+        return p switch
+        {
+            PFrame => (7, 11, 18, 12),
+            PDrive => (5, 20, 22, 10),
+            PArmR => back ? (0, 12, 6, 12) : (25, 1, 7, 23),
+            PTool => back ? (0, 20, 6, 3) : (26, 1, 6, 23),
+            PSensor => (10, 5, 12, 8),
+            PBrain => (19, 0, 4, 6),
+            PPower => back ? (26, 9, 5, 12) : (1, 9, 5, 12),
+            _ => (0, 0, 0, 0),
+        };
+    }
+
+    private static void Scars(Dot d, BotLook l, DotFacing f)
+    {
+        var torn = new System.Collections.Generic.List<(int x, int y)>();
+        for (int p = 0; p < PartCount; p++)
+            if (StageOf(l, p) >= 4) Lose(d, l, f, p, torn);
+        // 끊긴 자리: 남은 쪽 가장자리가 그을리고 한 점은 불꽃
+        int k = 0;
+        foreach (var (x, y) in torn)
+            foreach (var (nx, ny) in new[] { (x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1) })
+                if (d.Has(nx, ny)) d.Mark(nx, ny, (k++ % 5) == 0 ? Ramps.Hazard : Ramps.Char, (k % 5) == 1 ? 4 : 1);
+        for (int p = 0; p < PartCount; p++)
+        {
+            int st = StageOf(l, p);
+            var (zx, zy, zw, zh) = Zone(l, f, p);
+            if (st == 0 || zw == 0) continue;
+            int seed = l.Seed * 31 + p * 7 + 3;
+            (int, int) At(int i) => (zx + (int)(DotHash.F(seed, i) * zw), zy + (int)(DotHash.F(seed, i, 1) * zh));
+            // 긁힘: 맨 금속이 드러난 짧은 사선
+            for (int i = 0; i < Math.Min(st, 3); i++)
+            {
+                var (x, y) = At(i);
+                d.Mark(x, y, Ramps.Steel, 5); d.Mark(x + 1, y + 1, Ramps.Steel, 4);
+            }
+            if (st >= 2)
+            {
+                // 찌그러짐: 움푹 들어간 2×2 · 위쪽 테두리는 빛을 받는다
+                var (x, y) = At(10);
+                d.Tone(x, y, -2); d.Tone(x + 1, y, -2); d.Tone(x, y + 1, -1); d.Tone(x + 1, y + 1, -2);
+                d.Tone(x, y - 1, 1); d.Tone(x - 1, y, 1);
+            }
+            if (st >= 3)
+            {
+                // 망가짐: 그을음 · 뚫린 구멍 · 드러난 전선
+                for (int i = 0; i < 4; i++) { var (x, y) = At(20 + i); d.Mark(x, y, Ramps.Char, 1 + (i & 1)); }
+                var (hx, hy) = At(30);
+                d.Mark(hx, hy, Ramps.Panel, 0); d.Mark(hx + 1, hy, Ramps.Panel, 0); d.Mark(hx, hy + 1, Ramps.Panel, 0);
+                d.Mark(hx + 1, hy + 1, Ramps.Alarm, 3); d.Mark(hx + 2, hy, Ramps.Hazard, 2);
+            }
+        }
+        // 덧댄 판: 다른 색 철판 + 모서리 리벳
+        for (int p = 0; p < PartCount; p++)
+        {
+            if ((l.Patch & (1 << p)) == 0 || StageOf(l, p) >= 4) continue;
+            var (zx, zy, zw, zh) = Zone(l, f, p);
+            if (zw == 0) continue;
+            int pw = Math.Min(3, zw), ph = Math.Min(3, zh);
+            int x0 = zx + Math.Max(0, (zw - pw) / 2 + (int)((DotHash.F(l.Seed + p, 40) - 0.5f) * Math.Max(0, zw - pw))), y0 = zy + Math.Max(0, (zh - ph) / 2);
+            if (p == PSensor) { x0 = zx + 1; y0 = zy; } // 눈은 가리지 않고 머리 옆에 덧댄다
+            for (int j = 0; j < ph; j++) for (int i = 0; i < pw; i++) d.Mark(x0 + i, y0 + j, Ramps.SteelWarm, 3);
+            d.Mark(x0, y0, Ramps.SteelWarm, 5); d.Mark(x0 + pw - 1, y0 + ph - 1, Ramps.SteelWarm, 5);
+            if (pw == 3 && ph == 3) { d.Mark(x0 + 2, y0, Ramps.SteelWarm, 5); d.Mark(x0, y0 + 2, Ramps.SteelWarm, 5); }
+        }
+        if (!l.Wreck) return;
+        // 잔해: 한 단 어둡게 · 눈 · 불빛이 꺼지고 · 그을음이 번진다
+        for (int y = 0; y < RH; y++)
+            for (int x = 0; x < RW; x++)
+            {
+                if (!d.Has(x, y)) continue;
+                int r = d.RampAt(x, y);
+                if (r == Ramps.Cyan || r == Ramps.Led || r == Ramps.Alarm) d.Mark(x, y, Ramps.Ink, 0);
+                else d.Tone(x, y, -1);
+            }
+        for (int i = 0; i < 22; i++) d.Mark(4 + (int)(DotHash.F(l.Seed, 50 + i) * 24), 4 + (int)(DotHash.F(l.Seed, 50 + i, 1) * 25), Ramps.Char, (i % 3) == 0 ? 0 : 1);
+        int ox = 10 + (int)(DotHash.F(l.Seed, 90) * 10), oy = 14;
+        d.MarkRect(ox, oy, 3, 3, Ramps.Panel, 0);
+        d.Mark(ox + 1, oy + 1, Ramps.Alarm, 2); d.Mark(ox + 2, oy + 2, Ramps.Hazard, 2);
+    }
+
+    /// <summary>떨어져 나간 부위를 지운다 (지운 칸은 torn에 — 끊긴 자리를 그을린다).</summary>
+    private static void Lose(Dot d, BotLook l, DotFacing f, int p, System.Collections.Generic.List<(int x, int y)> torn)
+    {
+        bool side = f == DotFacing.E, back = f == DotFacing.N;
+        void Cut(int x, int y, int w, int h)
+        {
+            for (int j = y; j < y + h; j++)
+                for (int i = x; i < x + w; i++)
+                    if (d.Has(i, j)) { d.Clear(i, j); torn.Add((i, j)); }
+        }
+        switch (p)
+        {
+            case PArmL or PArmR:
+                var (zx, zy, zw, zh) = Zone(l, f, p);
+                if (zw == 0) return;
+                if (l.Shape == DotBotKind.Nurse) { if (side) Cut(21, 15, 6, 6); else if (zx < 16) Cut(3, 18, 5, 5); else Cut(25, 18, 5, 5); }
+                else if (side) Cut(26, 8, 6, 16);
+                else if (back) Cut(0, 17, 6, 7);
+                else { Cut(26, 0, 6, 13); Cut(25, 17, 7, 7); }
+                return;
+            case PTool:
+                if (l.Shape == DotBotKind.Nurse) { if (side) Cut(25, 19, 1, 1); else { Cut(4, 21, 2, 1); Cut(27, 21, 2, 1); } }
+                else if (l.Shape is DotBotKind.Hauler or DotBotKind.Stretcher) return;
+                else if (side) Cut(29, 8, 3, 16);
+                else if (back) Cut(0, 21, 6, 3);
+                else { Cut(26, 0, 6, 4); Cut(26, 21, 6, 3); }
+                return;
+            case PDrive:
+                switch (l.Shape)
+                {
+                    case DotBotKind.Hauler: if (side) Cut(20, 26, 9, 6); else Cut(3, 28, 8, 4); break;
+                    case DotBotKind.Nurse: Cut(7, 27, 6, 4); break;
+                    case DotBotKind.Stretcher: if (side) Cut(3, 25, 6, 6); else Cut(5, 25, 6, 6); break;
+                    default: if (side) Cut(3, 26, 10, 4); else Cut(5, 23, 6, 7); break;
+                }
+                return;
+            case PSensor:
+            {
+                // 눈이 깨진다: 눈빛이 꺼진 구멍 · 금
+                var (sx, sy, sw, sh) = Zone(l, f, p);
+                if (sw == 0) return;
+                for (int y = sy; y < sy + sh; y++)
+                    for (int x = sx; x < sx + sw; x++)
+                        if (d.Has(x, y) && d.RampAt(x, y) is var r && (r == Ramps.Cyan || r == Ramps.Alarm)) d.Mark(x, y, Ramps.Ink, 0);
+                int cx = sx + sw / 2, cy = sy + 1;
+                d.Mark(cx, cy, Ramps.Steel, 5); d.Mark(cx + 1, cy + 1, Ramps.Steel, 5); d.Mark(cx, cy + 2, Ramps.Steel, 4); d.Mark(cx - 1, cy + 3, Ramps.Steel, 4);
+                Cut(cx + 2, sy, 2, 1);
+                return;
+            }
+            case PBrain:
+                if (l.Shape is DotBotKind.Maintainer or DotBotKind.Gardener or DotBotKind.Safety) { var (bx, by, bw, _) = Zone(l, f, p); Cut(bx, by, bw, 3); }
+                else { var (bx, by, _, _) = Zone(l, f, p); d.MarkRect(bx + 1, by, 3, 2, Ramps.Panel, 0); d.Mark(bx + 2, by + 1, Ramps.Alarm, 3); }
+                return;
+            case PPower:
+                if (l.Shape is DotBotKind.Maintainer or DotBotKind.Gardener or DotBotKind.Safety) { var (px, py, pw, ph) = Zone(l, f, p); if (pw > 0) Cut(px, py, pw, ph); }
+                else
+                {
+                    var (px, py, pw, ph) = Zone(l, f, p);
+                    if (pw == 0) return;
+                    int hx = px + pw / 2 - 2, hy = py + ph / 2 - 1;
+                    d.MarkRect(hx, hy, 4, 3, Ramps.Panel, 0);
+                    d.Mark(hx + 1, hy + 1, Ramps.Alarm, 3); d.Mark(hx + 2, hy + 2, Ramps.Hazard, 4); d.Mark(hx + 3, hy, Ramps.Cyan, 2);
+                }
+                return;
         }
     }
 

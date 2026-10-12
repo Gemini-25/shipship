@@ -14,7 +14,7 @@ public partial class Hud
         RobotState.Active => r.Helping != null ? "거드는 중" : r.Order != null ? "일하는 중" : r.Doing.StartsWith("충전대로") ? "돌아가는 중" : "움직이는 중",
         RobotState.Stalled => r.Fault != null ? "고장 · 멈춤" : "방전 · 멈춤",
         RobotState.Towed => "끌려가는 중",
-        RobotState.Lost => "잃음",
+        RobotState.Lost => r.Wrecked ? (r.AtShop ? "잔해 · 작업장에서 해체 대기" : "잔해") : "잃음",
         _ => "",
     };
 
@@ -23,7 +23,8 @@ public partial class Hud
         var col = ShipView.RobotColor(r.Kind);
         float x0 = ColX; // v20 고른 것 카드 자리 (창이 열리면 창 왼쪽)
         var marks = r.Marks.TakeLast(6).Reverse().ToList();
-        float height = Mathf.Min(maxHeight, 300 + RobotMindHeight(r) + (RobotSystem.FightsNow(r, _world) ? 22 : 0) + (r.CoreHeat > 0.05f || r.Runaway ? 22 : 0) + (r.Drafted(_world) ? 20 : 0) + (marks.Count > 0 ? 34 + marks.Count * 18 : 0)); // v16.20b 생각 · v21 원자로 · 긴급 지정
+        bool wreck = r.Wrecked; // v22 잔해: 생각 · 거품 칸 없이 몸 · 이력만
+        float height = Mathf.Min(maxHeight, 300 + (wreck ? 0 : RobotMindHeight(r)) + (!wreck && RobotSystem.FightsNow(r, _world) ? 22 : 0) + (r.CoreHeat > 0.05f || r.Runaway ? 22 : 0) + (r.Drafted(_world) ? 20 : 0) + (marks.Count > 0 ? 34 + marks.Count * 18 : 0) + 18); // v16.20b 생각 · v21 원자로 · 긴급 지정 · v22 몸
         var card = new Rect2(x0, y, RightColumnWidth, height);
         Card(card);
         float x = x0 + 18, right = card.End.X - 18;
@@ -43,12 +44,13 @@ public partial class Hud
         ly += 58;
         Row(x, right, ly, RobotsV21.Reactor ? "전지 (원자로)" : "배터리", r.Battery, Palette.Good, Pct(r.Battery), r.Battery < 0.25f);
         Row(x, right, ly + 22, "상태", r.Condition, new Color("#9fb4cc"), Pct(r.Condition), r.Condition < 0.45f);
-        if (RobotSystem.FightsNow(r, _world)) { Row(x, right, ly + 44, "소화 거품", r.Foam, new Color("#f4f1ec"), Pct(r.Foam), r.Foam < 0.2f); ly += 22; }
+        if (!wreck && RobotSystem.FightsNow(r, _world)) { Row(x, right, ly + 44, "소화 거품", r.Foam, new Color("#f4f1ec"), Pct(r.Foam), r.Foam < 0.2f); ly += 22; }
         if (RobotsV21.Reactor && (r.CoreHeat > 0.05f || r.Runaway)) { Row(x, right, ly + 44, r.Runaway ? "원자로 폭주!" : "원자로 열", r.CoreHeat, Palette.Danger, Pct(r.CoreHeat), r.CoreHeat > 0.5f); ly += 22; }
         if (r.Drafted(_world)) { Gfx.Text(this, Fonts.Bold, new Vector2(x, ly + 58), $"긴급 지정 — {RobotsV21.DraftName(r.Draft)} (주 컴퓨터)", Ui.TextSmall, Palette.Warning); ly += 20; }
         ly += 50;
-        ly = DrawRobotMind(r, x, right, ly); // v16.20b 지금 · 다음 · 배터리 · 왜 · 단계
-        string fault = r.Fault is RobotFault f
+        if (!wreck) ly = DrawRobotMind(r, x, right, ly); // v16.20b 지금 · 다음 · 배터리 · 왜 · 단계
+        string fault = wreck ? (r.AtShop ? "잔해 — 작업장에서 해체를 기다린다 (쓸 부품은 다시 쓴다)" : r.State == RobotState.Towed ? "잔해 — 작업장으로 끌려가는 중" : "잔해 — 회수를 기다린다")
+            : r.Fault is RobotFault f
             ? RobotSystem.CanSelfRepair(r)
                 ? $"{RobotSystem.FaultName(f)} — 가벼움 · {(RobotsV21.Reactor ? "정비대" : "충전대")}에서 스스로 고친다 ({RobotSystem.SelfRepairHours(f) * 60:0}분)"
                 : $"{RobotSystem.FaultName(f)} — 사람이 고쳐야 한다: " + (RobotSystem.WhyNotSelf(r) ?? "") +
@@ -66,7 +68,11 @@ public partial class Hud
             _ => "맡는 일: 순찰(불·사고 전조 찾기) · 소화 거품",
         };
         Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 52), can, Ui.TextSmall, Palette.TextMuted);
-        ly += 64;
+        // v22 몸: 부위마다 단계 · 덧댄 판 · 이어받은 잔해
+        string body = $"몸: {RobotBody.Line(r)}" + (r.FromWreck != "" ? $" · {Ko.EulReul(r.FromWreck)} 이어 짠 {r.Rebuilt + 1}번째 몸" : "");
+        Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 70), UiKit.Fit(body, right - x, Ui.TextSmall, Fonts.Body), Ui.TextSmall,
+            RobotBody.Worst(r) < 0.25f ? Palette.Danger : RobotBody.Damaged(r) > 0 ? Palette.Warning : Palette.TextDim);
+        ly += 82;
         if (marks.Count > 0)
         {
             SectionTitle(x, ly + 10, "이력");

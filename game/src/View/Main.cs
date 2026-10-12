@@ -1026,6 +1026,19 @@ public partial class Main : Node2D
                     }
                     break;
                 }
+                case "--botscars":
+                {
+                    // 화면 확인용 (v22): 로봇 몇 대의 부위를 다치게 하고 · 덧댄 판을 붙이고 · 네 대째마다 부서뜨린다
+                    int n = int.Parse(value, CultureInfo.InvariantCulture), k = 0;
+                    var rng = new Random(7);
+                    foreach (var rb in Sim.Robots.Robots.Where(x => x.State != RobotState.Lost).Take(n).ToList())
+                    {
+                        foreach (var part in RobotBody.All) Sim.Robots.Hurt(rb, part, (float)rng.NextDouble() * (k % 2 == 0 ? 1.1f : 0.6f), "화면 시험");
+                        if (k % 3 == 1) rb.Patches[(int)BotPart.Frame] = 1;
+                        if (++k % 4 == 0) Sim.Robots.Hurt(rb, BotPart.Frame, 2f, "화면 시험");
+                    }
+                    break;
+                }
                 case "--focus":
                     if (Sim.Ship.Rooms.FirstOrDefault(r => r.Type.ToString() == value) is Room fr)
                         Camera.Position = ShipView.ToPx(fr.Center) + new Vector2(Hud.RightColumnWidth * 0.5f, 0f) / Camera.Zoom.X;

@@ -212,12 +212,29 @@ public partial class ShipView
         }
         foreach (var r in rs.Robots)
         {
+            // v22 잔해: 회수 · 해체될 때까지 쓰러진 자리(또는 끌려가는 중 · 작업장)에 남는다
+            if (r.Wrecked) { if (RobotSystem.IsWreck(r) || r.State == RobotState.Towed) PaintWreck(ci, r, far); continue; }
             if (r.State == RobotState.Lost) continue;
             var p = RobotPx(r);
             if (!_fixView.Grow(T * 2f).HasPoint(p)) continue;
             if (far && !r.Runaway) { PaintRobotDot(ci, r, p); continue; }
             PaintRobot(ci, r);
         }
+    }
+
+    /// <summary>v22 잔해 한 대: 멀리선 검게 탄 점 · 가까이선 쓰러진 도트 몸 (도트를 못 그리면 탄 덩어리).</summary>
+    private void PaintWreck(CanvasItem ci, Robot r, bool far)
+    {
+        var p = RobotPx(r);
+        if (!_fixView.Grow(T * 2f).HasPoint(p)) return;
+        if (far)
+        {
+            ci.Box(new Rect2(p.X - 3.5f, p.Y - 2.5f, 7f, 5f), new Color("#3a3330"));
+            ci.Box(new Rect2(p.X - 1.5f, p.Y - 1f, 3f, 2f), RobotColor(r.Kind).Darkened(0.6f));
+            return;
+        }
+        if (r.TowedBy is CrewMember tower) ci.DrawLine(p, CrewPx(tower), TetherColor.WithAlpha(0.75f), 1.5f, true);
+        if (!PaintDotWreck(ci, r, p)) PaintRobotWreck(ci, r, p);
     }
 
     /// <summary>v21 멀리서 본 로봇: 종류 색 네모 하나 (고장이면 붉은 테 · 일하면 밝게).</summary>
