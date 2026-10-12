@@ -93,6 +93,9 @@ public sealed class World
     /// <summary>v23 구역 중계기: 로봇 · 사람의 무전이 주 컴퓨터에 닿는 길 (꺼지면 그 구역이 끊긴다).</summary>
     public RelaySystem Relays { get; }
 
+    /// <summary>v23 눈의 그물: 로봇이 본 것을 주 컴퓨터 장부에 · 감지기 대조 · 모르는 곳 정찰.</summary>
+    public EyeNet Eyes { get; }
+
     /// <summary>v11.2 엔진·추진제·항로: 회피 기동, 보통 항로 ↔ 잔해 지대.</summary>
     public PropulsionSystem Propulsion { get; }
 
@@ -299,6 +302,7 @@ public sealed class World
         Commander = new IncidentCommander(this);
         Nozzles = new NozzleSystem(this);
         Relays = new RelaySystem(this);
+        Eyes = new EyeNet(this);
         Propulsion = new PropulsionSystem(this, 1f);
         Hazards = new HazardSystem(this, seed);
         Comms = new CommsSystem(this);
@@ -633,6 +637,7 @@ public sealed class World
         Drones.Step();
         Robots.Step();
         Commander.Tick(); // v23 사고 지휘관
+        Eyes.Tick(); // v23 눈의 그물
         EvaRisk.Step(); // v16.11 표류하는 몸 · 떠다니는 공구와 잔해
         Prof.Lap("step.drones·robots", ps);
 

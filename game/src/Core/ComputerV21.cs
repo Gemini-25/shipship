@@ -67,6 +67,7 @@ public sealed partial class RobotSystem
         foreach (var r in Robots)
         {
             if (!Free(r) || r.Runaway || r.Upgrading || RobotsV21.Medical(r.Kind)) continue;
+            if (r.CaseId >= 0 || !w.Relays.Reach(r.Room)) continue; // v23 지휘 건에 묶인 로봇 · 무전이 끊긴 구역의 로봇은 부르지 못한다
             float d = Far(r.Position, room.Center);
             if (d < bd) { bd = d; best = r; }
         }

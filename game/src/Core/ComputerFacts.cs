@@ -133,6 +133,19 @@ public sealed class ComputerFacts
         f.Value = value; f.From = from; f.At = at; f.Trust = trust; f.By = by;
     }
 
+    /// <summary>v23 눈의 그물: 로봇이 지나가며 본 그 방 (사람 · 불 · 산소 · 기압 · 온도) — 로봇이 봄으로 장부에 (믿음 0.9).</summary>
+    public void Saw(Room r, Robot rb)
+    {
+        var w = _w;
+        int people = 0;
+        foreach (var c in w.Crew) if (!c.Dead && c.Room == r && !c.Outside) people++;
+        Put(r, FactKind.People, people, FactFrom.Robot, w.Tick, 0.9f, rb.Id);
+        Put(r, FactKind.Fire, w.Fire.Count > 0 && w.Fire.CountIn(r) > 0 ? 1f : 0f, FactFrom.Robot, w.Tick, 0.9f, rb.Id);
+        Put(r, FactKind.O2, r.Air.O2, FactFrom.Robot, w.Tick, 0.9f, rb.Id);
+        Put(r, FactKind.Pressure, r.Air.Pressure, FactFrom.Robot, w.Tick, 0.9f, rb.Id);
+        Put(r, FactKind.Temp, r.Air.Temperature, FactFrom.Robot, w.Tick, 0.9f, rb.Id);
+    }
+
     // ───────────────────────────── 계기: 방 급수 유량계 ─────────────────────────────
 
     private static bool HasMeter(Room r)

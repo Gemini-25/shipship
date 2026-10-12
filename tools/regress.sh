@@ -46,6 +46,7 @@ resumetest 1 7 --resumetest
 commandertest 1 7 --commandertest
 nozzletest 1 7 --nozzletest
 relaytest 1 7 --relaytest
+eyetest 1 7 --eyetest
 story21test 1 7 --story21test
 hazardtest 1 20260929 --hazardtest
 livingtest 1 20260929 --livingtest
