@@ -10,7 +10,7 @@ namespace ShipSim.View;
 /// </summary>
 public partial class Hud
 {
-    public bool MinimapOpen { get; set; } = true;
+    public bool MinimapOpen { get; set; } // 도트 9단계: 배를 크게 — 지도는 G로 연다 (배 전체가 이미 화면에 보인다)
 
     public void ToggleMinimap() => MinimapOpen = !MinimapOpen;
 

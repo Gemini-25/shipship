@@ -216,11 +216,13 @@ public partial class LabelOverlay : Node2D
             if (room.Detached || room.Type == RoomType.Corridor) continue;
             var c = xf * new Vector2((room.MinX + room.MaxX + 1) * 0.5f * T, (room.MinY + room.MaxY + 1) * 0.5f * T);
             float w = (room.MaxX - room.MinX + 1) * T * zoom, h = (room.MaxY - room.MinY + 1) * T * zoom;
-            float size = Mathf.Clamp(Mathf.Min(w, h) * 0.45f, 10f, 30f);
+            bool dot = ShipView.DotCrew; // 도트 9단계: 도트 그림이 보이게 작고 옅게 (사고 난 방은 그대로 진하게)
+            float size = dot ? Mathf.Clamp(Mathf.Min(w, h) * 0.3f, 9f, 18f) : Mathf.Clamp(Mathf.Min(w, h) * 0.45f, 10f, 30f);
             var sev = Severity.Of(_world, room);
-            var col = sev == RoomSeverity.Critical ? Palette.Danger : Palette.Room(room.Kind).Lightened(0.15f);
-            this.Circle(c, size * 0.72f, new Color(0.02f, 0.03f, 0.05f, 0.55f), true, -1f, true);
-            Icons.Draw(this, Icons.Room(room.Kind), c, size, col.WithAlpha(0.9f));
+            bool hot = sev == RoomSeverity.Critical;
+            var col = hot ? Palette.Danger : Palette.Room(room.Kind).Lightened(0.15f);
+            this.Circle(c, size * 0.72f, new Color(0.02f, 0.03f, 0.05f, dot && !hot ? 0.35f : 0.55f), true, -1f, true);
+            Icons.Draw(this, Icons.Room(room.Kind), c, size, col.WithAlpha(dot && !hot ? 0.65f : 0.9f));
         }
     }
 

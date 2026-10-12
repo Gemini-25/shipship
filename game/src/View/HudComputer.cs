@@ -13,7 +13,7 @@ namespace ShipSim.View;
 /// </summary>
 public partial class Hud
 {
-    public bool ComputerFolded { get; set; }
+    public bool ComputerFolded { get; set; } = true; // 도트 9단계: 배를 크게 — 처음엔 접어 둔다 (▴로 펼침)
     public bool DecisionsOpen { get; set; }
     private int _controlTab;
 
