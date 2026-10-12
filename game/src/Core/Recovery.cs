@@ -78,7 +78,7 @@ public sealed class RecoverySystem
         if (c.Dead || c.Away || c.Outside) return false;
         if (c.Down || PostOps.TryGetValue(c.Id, out var t) && _w.Tick - t < SimTime.TicksPerDay) return true;
         var g = _w.Grades.Now(c);
-        return g == InjuryGrade.Critical || g == InjuryGrade.Serious && (c.Vitals.Health < 0.6f || c.Vitals.Injury >= 0.45f) || _w.Blood.Lost(c) >= 0.35f && c.Vitals.Health < 0.6f; // 피를 많이 흘린 사람도 눕는다
+        return g == InjuryGrade.Critical || g == InjuryGrade.Serious && (c.Vitals.Health < 0.6f || c.Vitals.Injury >= 0.45f) || _w.Blood.Lost(c) >= 0.35f && (c.Vitals.Health < 0.6f || _w.Blood.NeedsBlood(c)); // 피를 많이 흘린 사람도 눕는다 · v21 수혈을 기다리는 동안은 (로봇 치료로 체력이 올라도) 누워 있는다
     }
 
     private static bool BedOk(Furniture f) => !f.Room.Detached && !f.Stowed && f.Machine is Machine m && m.Efficiency > 0f;

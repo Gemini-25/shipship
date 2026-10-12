@@ -501,7 +501,7 @@ public sealed partial class RobotSystem
                 Cell? spot = null;
                 foreach (var room in ship.RoomsOf(type).OrderBy(r => RobotsV21.Expanded ? perRoom.GetValueOrDefault(r.Id) : 0).ThenBy(r => r.Id))
                 {
-                    if (RobotsV21.Expanded && (room.Abandoned || room.OffLimits || perRoom.GetValueOrDefault(room.Id) >= Math.Max(2, room.Cells.Count / 8))) continue; // 방을 정비대로 채우지 않는다
+                    if (RobotsV21.Expanded && (room.Abandoned || room.OffLimits || perRoom.GetValueOrDefault(room.Id) >= Math.Max(2, room.Cells.Count / 12))) continue; // 방을 정비대로 채우지 않는다
                     var cells = Adaptation.FreeCells(w, room)
                         .Where(c => Cell.Dirs4.Any(d => ship.Grid.Kind(c + d) == TileKind.Wall))           // 벽가에
                         .Where(c => Cell.Dirs4.Any(d => ship.IsOpenFloor(c + d) && ship.RoomAt(c + d) == room)) // 앞에 설 자리
@@ -521,32 +521,30 @@ public sealed partial class RobotSystem
         return result;
     }
 
-    /// <summary>v21 이 칸을 막아도 방의 문들이 서로 이어져 있나 (문마다 닿기만 하면 되는 게 아니라 한 덩어리로 — 정비대를 여럿 달면 통로가 둘로 갈렸다).</summary>
+    /// <summary>
+    /// v21 이 칸을 막아도 방의 걸을 수 있는 칸이 모두 한 덩어리인가 (문마다 닿기만 하면 되는 게 아니라 —
+    /// 정비대를 여럿 달면 통로가 둘로 갈리거나 의무실 안쪽에 사람이 갇혔다).
+    /// </summary>
     private static bool StillConnected(World w, Room room, Cell blocked)
     {
         var ship = w.Ship;
-        var starts = new List<Cell>();
-        foreach (var d in room.Doors)
-            foreach (var n in Cell.Dirs4)
-            {
-                var c = d.Cell + n;
-                if (c != blocked && ship.RoomAt(c) == room && ship.IsWalkable(c)) starts.Add(c);
-            }
-        if (starts.Count <= 1) return true;
-        var seen = new HashSet<Cell> { starts[0] };
+        var open = new HashSet<Cell>();
+        foreach (var c in room.Cells) if (c != blocked && ship.IsWalkable(c)) open.Add(c);
+        if (open.Count == 0) return false;
+        var start = open.First();
+        var seen = new HashSet<Cell> { start };
         var stack = new Stack<Cell>();
-        stack.Push(starts[0]);
+        stack.Push(start);
         while (stack.Count > 0)
         {
             var c = stack.Pop();
             foreach (var n in Cell.Dirs4)
             {
                 var x = c + n;
-                if (x == blocked || ship.RoomAt(x) != room || !ship.IsWalkable(x) || !seen.Add(x)) continue;
-                stack.Push(x);
+                if (open.Contains(x) && seen.Add(x)) stack.Push(x);
             }
         }
-        return starts.All(seen.Contains);
+        return seen.Count == open.Count;
     }
 
     public string Summary

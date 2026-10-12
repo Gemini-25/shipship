@@ -223,7 +223,7 @@ public static partial class Program
                 nb.Disabled = false;
                 Until(w8, () => w8.MedBots.Transfused > 0, 3f);
                 Check("로봇이 피 배달 — 혈액 냉장고의 피를 침대까지 날라 (주컴퓨터 투여 펌프로) 넣는다 (간호 · 운반 로봇이 나눠 맡는다)", w8.MedBots.Delivered > 0 && w8.MedBots.Transfused > 0 && w8.Blood.Transfusions + w8.Blood.Substitutes > tf0,
-                    $"{v8.Name} 흘린 피 {w8.Blood.Lost(v8) * 100:0}% · 날라 옴 {w8.MedBots.Delivered} · 넣음 {w8.MedBots.Transfused} · {w8.Log.Entries.Select(e => e.Text).LastOrDefault(t => t.Contains("가져온 피"))}");
+                    $"{v8.Name} 흘린 피 {w8.Blood.Lost(v8) * 100:0}% · 날라 옴 {w8.MedBots.Delivered} · 넣음 {w8.MedBots.Transfused} · {w8.Log.Entries.Select(e => e.Text).LastOrDefault(t => t.Contains("가져온 피"))}" + (w8.MedBots.Transfused > 0 ? "" : $" · [{v8.Room?.Name} 침대 {v8.CareBed?.Label ?? "-"} 펌프 {w8.Telemed.PumpAt(v8)} · 피 필요 {w8.Blood.NeedsBlood(v8)} · {string.Join(" / ", w8.Log.Entries.Where(e => e.CrewId == v8.Id).Select(e => e.Text).TakeLast(4))}]"));
                 Run(w8, SimTime.Hours(1));
                 Check("원격 의료 — 데이터선이 닿는 침대: 투여 펌프로 진통제를 조금씩", w8.Telemed.PumpDoses > 0,
                     $"펌프 {w8.Telemed.PumpDoses} · 줄임 {w8.Telemed.Tapered} · 의존 {w8.Pharmacy.Dependence.GetValueOrDefault(v8.Id) * 100:0}%");

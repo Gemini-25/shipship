@@ -137,6 +137,7 @@ public static partial class Program
         if (Sec(4))
         {
             var w = DayOne(seed, "Hanbit");
+            NoRobots(w); // v21 사람이 양수기를 가져와 퍼내는 장면 (배관 로봇이 먼저 퍼내면 양수기가 필요 없다)
             var room = w.Ship.RoomsOf(RoomType.Galley).First();
             w.Moisture.AddWater(room, room.Cells.Count * 20f * 0.5f);
             PortableDevice? pump = null;

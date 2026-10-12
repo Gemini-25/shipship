@@ -30,6 +30,15 @@ public static partial class Program
             Console.WriteLine($"  {f.Label} @{f.Room.Name} 닿음 {f.UseSpots.Any(dist.Reachable)} 칸 {string.Join(",", f.UseSpots.Take(2))}");
         Console.WriteLine("  정비대 방: " + string.Join(" · ", w.Ship.FurnitureOf(FurnitureType.RobotDock).GroupBy(d => d.Room.Name + "(" + d.Room.Type + ")").Select(g => $"{g.Key} {g.Count()}")));
         Console.WriteLine($"  {hungry.Name} 갈 수 있는 방: {w.Ship.LiveRooms.Count(r => r.Cells.Any(dist.Reachable))}/{w.Ship.LiveRooms.Count()}");
+        if (hungry.Room is Room hr)
+        {
+            Console.WriteLine($"  {hungry.Name} 칸 {hungry.Cell} 걷기 {w.Ship.IsWalkable(hungry.Cell)} · {hr.Name} 칸 {hr.Cells.Count} · 닿는 칸 {hr.Cells.Count(dist.Reachable)} · 이웃 {string.Join(",", Cell.Dirs4.Select(d => w.Ship.IsWalkable(hungry.Cell + d) ? "o" : "x"))}");
+            foreach (var dd in Cell.Dirs8) { var nc = hungry.Cell + dd; var fs = w.Ship.Furniture.Where(f => f.Cells.Contains(nc)).Select(f => $"{f.Label}({f.Type}{(f.Stowed ? ",접힘" : "")})"); Console.WriteLine($"    옆 {nc}: 타일 {w.Ship.Grid.Kind(nc)} 걷기 {w.Ship.IsWalkable(nc)} 가구 {string.Join(",", fs)} 사람 {string.Join(",", w.Crew.Where(c => c.Cell == nc).Select(c => c.Name))}"); }
+            foreach (var d in hr.Doors) Console.WriteLine($"    문 {d.Cell} 잠김 {d.Locked} 용접 {d.Welded} 전기 {d.Powered} 걷기 {w.Ship.IsWalkable(d.Cell)} · {d.RoomA?.Name}↔{d.RoomB?.Name}");
+            foreach (var f in hr.Furniture.Where(f => f.Type == FurnitureType.RobotDock)) Console.WriteLine($"    정비대 {string.Join(",", f.Cells)}");
+            var bots = w.Robots.Robots.Where(r => r.Room == hr).Select(r => $"{r.Name}@{r.Cell}{(r.AtDock ? "(대)" : "")}");
+            Console.WriteLine($"    로봇: {string.Join(" ", bots)}");
+        }
         return 0;
     }
 

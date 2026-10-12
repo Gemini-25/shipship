@@ -139,7 +139,10 @@ public static class Adaptation
         var before = Reach(false);
         var after = Reach(true);
         var needed = room.Furniture.SelectMany(f => f.UseSpots).Append(room.DamperSpot).Where(before.Contains);
-        return needed.All(c => !skips.Contains(c) && after.Contains(c));
+        if (!needed.All(c => !skips.Contains(c) && after.Contains(c))) return false;
+        // v21 문에서 닿던 칸은 막은 뒤에도 모두 닿아야 한다 — 구석에 주머니가 생겨 그 칸에 서 있던 사람이 갇혔다 (의무실 멸균기)
+        foreach (var c in before) if (!skips.Contains(c) && !after.Contains(c)) return false;
+        return true;
     }
 
     private static readonly RoomType[] ShopCandidates = { RoomType.Storage, RoomType.Mess, RoomType.Lounge, RoomType.Medbay, RoomType.Bridge };

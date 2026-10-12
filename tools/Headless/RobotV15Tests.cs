@@ -26,8 +26,8 @@ public static partial class Program
                 bool tuned = Tuning.Entries.Any(e => e.Key == "story.persona" && e.Max >= (int)StoryPersona.Vengeful)
                              && Enum.GetValues<StoryPersona>().All(p => p == StoryPersona.Off || Storyteller.PersonaName(p) != "끔");
                 // 의료 3차: 들것 로봇 · 간호 로봇 +2 (25 → 27 · 새 17 → 19) · v21 새 로봇 9 (· 새 드론) — 원래 여덟 말고는 모두 표에 있다
-                Check($"목록 — 로봇·드론 {robots + drones} (새 {robots + drones - 8}는 원형을 쓰고 특기가 모두 다르다) · 이야기꾼 8", robots + drones >= 36 && RobotsV15.KindCount == robots + drones
-                      && RobotsV15.Bots.Length + RobotsV15.Flyers.Length == robots + drones - 8 && named && covered && specs.Distinct().Count() == specs.Count && personas == 8 && tuned,
+                Check($"목록 — 로봇·드론 {robots + drones} (새 {robots + drones - 8}는 원형을 쓰고 특기가 모두 다르다) · 이야기꾼 8 이상", robots + drones >= 36 && RobotsV15.KindCount == robots + drones
+                      && RobotsV15.Bots.Length + RobotsV15.Flyers.Length == robots + drones - 8 && named && covered && specs.Distinct().Count() == specs.Count && personas >= 8 && tuned, // v21 성격 6 더 (14)
                     $"로봇 {robots} · 드론 {drones} · 새 {RobotsV15.Bots.Length}+{RobotsV15.Flyers.Length} · 특기 겹침 {specs.Count - specs.Distinct().Count()} · 이야기꾼 {personas}" +
                     (named ? "" : " · 이름·원형 빠짐") + (covered ? "" : " · 표에 없는 종류") + (tuned ? "" : " · 설정 범위 모자람"));
             }
