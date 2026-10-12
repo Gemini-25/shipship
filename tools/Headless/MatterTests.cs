@@ -217,6 +217,7 @@ public static partial class Program
         {
             var w = World.CreateDefault(seed, 0, "Hanbit");
             RunUntilHour(w, 10f);
+            NoRobots(w); // v21 냄새를 따라온 사람이 수건을 치우는지 본다 (로봇이 먼저 치우면 장면이 아니다)
             var m = w.Matter;
             var room = MRoom(w, r => r.DataLinked && r.Doors.Count(d => !d.IsExternal) >= 1 && r.Kind is RoomType.Quarters or RoomType.Laundry or RoomType.Lounge or RoomType.Mess or RoomType.PrivateCabins or RoomType.Gym);
             var hub = MHub(w, room)!.Value;

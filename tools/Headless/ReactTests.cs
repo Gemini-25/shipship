@@ -62,6 +62,7 @@ public static partial class Program
         // ── 1) 같은 정전에 다섯 사람이 다섯 가지로 ──
         {
             var w = ReactDay(seed);
+            foreach (var r in w.Robots.Robots) r.Disabled = true; // v21 사람의 반응을 본다 — 로봇 80대가 몇 분 만에 불을 되살리면 "등 하나 끌고 올게"가 할 일이 없다
             var mess = w.Ship.LiveRooms.First(r => r.Type == RoomType.Mess);
             var five = Awake(w, 5);
             Gather(w, five, mess);
@@ -79,7 +80,7 @@ public static partial class Program
                 plainMul = five.Where(c => rs.Peek(c)?.Way is null or "wait" or "feel").Select(c => rs.DarkMul(c)).DefaultIfEmpty(1f).Max();
             }
             var first = five.Select(c => rs.NotesOf(Stir.Dark).FirstOrDefault(n => n.Crew == c.Id)).ToList();
-            var ways = first.Where(n => n.Way.Length > 0).Select(n => n.Way).ToList();
+            var ways = first.Where(n => !string.IsNullOrEmpty(n.Way)).Select(n => n!.Way).ToList(); // 반응 기록이 없는 사람도 있다 (빨리 불이 돌아오면)
             int distinct = ways.Distinct().Count();
             bool allDark = ways.All(DarkWaysIds.Contains);
             var lines = rs.NotesOf(Stir.Dark).Where(n => n.Line.Length > 0).Select(n => n.Line).ToList();
@@ -90,7 +91,7 @@ public static partial class Program
             var detail = new List<string>();
             foreach (var (c, n) in five.Zip(first))
             {
-                if (n.Way.Length == 0) { detail.Add($"{c.Name}:—"); continue; }
+                if (string.IsNullOrEmpty(n.Way)) { detail.Add($"{c.Name}:—"); continue; }
                 bool ok = n.Way switch
                 {
                     "torch" => rs.Peek(c)?.TorchOn == true || n.Gesture == Gesture.Torch,

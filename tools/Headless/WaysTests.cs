@@ -101,6 +101,7 @@ public static partial class Program
     {
         var w = WyShip(seed, "Mirinae");
         WyNoFireGear(w);
+        NoRobots(w); // v21 사람이 문을 닫아 숨을 끊는 해법을 본다 (소방 로봇이 먼저 끄면 장면이 아니다)
         var room = w.Ship.LiveRooms.Where(r => r.Kind is RoomType.Storage or RoomType.Workshop && r.Doors.Count > 0 && !r.Doors.Any(d => d.IsExternal)).OrderBy(r => r.Volume).FirstOrDefault();
         if (room == null) { Check("소화기 없는 방의 불 — 장면", false, "창고 · 작업실 없음"); return null; }
         WyClearNear(w, room);

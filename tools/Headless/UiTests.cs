@@ -74,6 +74,7 @@ public static partial class Program
             {
                 var wa = DayOne(seed, "Hanbit");
                 var wb = DayOne(seed, "Hanbit");
+                NoRobots(wa); NoRobots(wb); // v21 사람의 작업 속도를 견준다 (다친 사람에게 의료 로봇이 오면 일이 끊긴다)
                 CrewMember? pa = null;
                 for (int t = 0; t < SimTime.Hours(12) && pa == null; t++)
                 {

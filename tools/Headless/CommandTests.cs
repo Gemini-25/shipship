@@ -18,6 +18,7 @@ public static partial class Program
         var lounge = w.Ship.RoomsOf(RoomType.Lounge).First();
         var wall = w.Ship.Walls.Where(kv => kv.Value.IsHull && Hull.InsideRoom(w.Ship, kv.Key) == lounge).Select(kv => kv.Key).First();
         Hull.Damage(w.Ship, wall, 0.5f);
+        foreach (var r in w.Robots.Robots) r.Disabled = true; // v21 사람의 지휘 · 조 편성을 본다 — 로봇 80대 · 긴급 지정이 몇 분 만에 불을 끄면 조가 서기 전에 장면이 끝난다
         return w;
     }
 

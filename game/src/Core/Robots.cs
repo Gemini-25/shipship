@@ -492,10 +492,10 @@ public sealed partial class RobotSystem
         foreach (var k in already) want.Remove(k);
         var perRoom = new Dictionary<int, int>(); // v21 방마다 정비대 수 (고르게 나눠 단다)
         foreach (var f in ship.FurnitureOf(FurnitureType.RobotDock)) perRoom[f.Room.Id] = perRoom.GetValueOrDefault(f.Room.Id) + 1;
-        var anyRoom = Enum.GetValues<RoomType>().Where(t => t is not (RoomType.Reactor or RoomType.Airlock or RoomType.EscapeBay or RoomType.Morgue)).ToArray();
+        var anyRoom = Enum.GetValues<RoomType>().Where(t => t is not (RoomType.Reactor or RoomType.Airlock or RoomType.EscapeBay or RoomType.Morgue or RoomType.Corridor)).ToArray(); // v21 통로에는 두지 않는다 (쌍동선 연결 통로가 막혀 반쪽이 식당에 못 갔다)
         foreach (var kind in want)
         {
-            var types = RobotsV21.Expanded ? RobotsV21.HomeRooms(kind).Concat(HomeRooms(kind)).Concat(RobotsV21.Fallback).Concat(anyRoom).Distinct().ToArray() : HomeRooms(kind); // v21 자리가 없으면 아무 방이나
+            var types = RobotsV21.Expanded ? RobotsV21.HomeRooms(kind).Concat(HomeRooms(kind)).Concat(RobotsV21.Fallback).Concat(anyRoom).Where(t => t != RoomType.Corridor).Distinct().ToArray() : HomeRooms(kind); // v21 자리가 없으면 아무 방이나 (통로는 빼고)
             foreach (var type in types)
             {
                 Cell? spot = null;
@@ -507,7 +507,7 @@ public sealed partial class RobotSystem
                         .Where(c => Cell.Dirs4.Any(d => ship.IsOpenFloor(c + d) && ship.RoomAt(c + d) == room)) // 앞에 설 자리
                         .OrderBy(c => c.Y).ThenBy(c => c.X);
                     foreach (var c in cells)
-                        if (Adaptation.SafeToBlock(w, room, c)) { spot = c; break; }
+                        if (Adaptation.SafeToBlock(w, room, c) && (!RobotsV21.Expanded || StillConnected(w, room, c))) { spot = c; break; }
                     if (spot != null) break;
                 }
                 if (spot is not Cell at) continue;
@@ -519,6 +519,34 @@ public sealed partial class RobotSystem
         }
         if (result.Count > 0) w.Paths.Invalidate();
         return result;
+    }
+
+    /// <summary>v21 이 칸을 막아도 방의 문들이 서로 이어져 있나 (문마다 닿기만 하면 되는 게 아니라 한 덩어리로 — 정비대를 여럿 달면 통로가 둘로 갈렸다).</summary>
+    private static bool StillConnected(World w, Room room, Cell blocked)
+    {
+        var ship = w.Ship;
+        var starts = new List<Cell>();
+        foreach (var d in room.Doors)
+            foreach (var n in Cell.Dirs4)
+            {
+                var c = d.Cell + n;
+                if (c != blocked && ship.RoomAt(c) == room && ship.IsWalkable(c)) starts.Add(c);
+            }
+        if (starts.Count <= 1) return true;
+        var seen = new HashSet<Cell> { starts[0] };
+        var stack = new Stack<Cell>();
+        stack.Push(starts[0]);
+        while (stack.Count > 0)
+        {
+            var c = stack.Pop();
+            foreach (var n in Cell.Dirs4)
+            {
+                var x = c + n;
+                if (x == blocked || ship.RoomAt(x) != room || !ship.IsWalkable(x) || !seen.Add(x)) continue;
+                stack.Push(x);
+            }
+        }
+        return starts.All(seen.Contains);
     }
 
     public string Summary

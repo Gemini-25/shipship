@@ -40,6 +40,8 @@ public sealed class HiddenFind
     public bool Found { get; set; }
     /// <summary>정비 로봇이 일하다 먼저 꺼내 두었다 (로봇 이름) — 그 방에 들르는 사람이 집어 든다.</summary>
     public string? SpottedBy { get; set; }
+    /// <summary>v21 꺼낸 로봇 (Id) — 하던 일을 마치면 깨어 있는 사람에게 가져다준다 (-1 이면 그 방에 둔 것).</summary>
+    public int Courier { get; set; } = -1;
     public long FoundAt { get; set; } = -1;
     public int FoundBy { get; set; } = -1;
     /// <summary>막힌 구역 안에 있다 (다시 열어야 찾는다).</summary>
@@ -424,21 +426,12 @@ public sealed partial class ShipOriginSystem
             if (f.Found || f.SpottedBy != null || f.Kind == FindKind.Graffiti || f.Machine != fu.Id || fu.Room.Abandoned) continue;
             f.SpottedBy = rb.Name;
             w.Log.Add(w.Tick, LogKind.Life, $"{Ko.IGa(rb.Name)} {fu.Room.Name} {fu.Label} 패널 뒤에서 오래된 {Ko.EulReul(f.KindName)} 찾아 꺼냈다 (읽지 않고 사람에게 건넨다)");
-            if (rb.Steps == null) continue;
-            // 일을 마치면 가장 가까운 깨어 있는 사람에게 건넨다 (못 만나면 그 방에 두고 간다 — 들른 사람이 본다)
-            CrewMember? Nearest(Robot r) => w.Crew.Where(c => Able(c) && !c.IsChild && c.IsAwake && c.Room != null && !c.Room.Abandoned)
-                .OrderBy(c => (c.Position - r.Position).LengthSquared()).FirstOrDefault();
-            rb.Steps.Add(new RGoto(r => Nearest(r)?.Cell));
-            rb.Steps.Add(new RDo((r, world) =>
-            {
-                if (f.Found) return true;
-                var c = Nearest(r);
-                if (c == null || (c.Position - r.Position).Length() > 3f) return true;
-                Found(f, c, $"{Ko.IGa(r.Name)} {fu.Room.Name} 패널 뒤에서 꺼내 온");
-                return true;
-            }));
+            f.Courier = rb.Id; // v21 하던 일을 마치면 깨어 있는 사람에게 가져다준다 (RobotsV21.DeliverFinds — 일 목록에 덧붙이면 일을 마칠 때 같이 지워졌다)
         }
     }
+
+    /// <summary>v21 로봇이 꺼내 온 것을 사람에게 건넨다.</summary>
+    internal void HandOver(HiddenFind f, CrewMember c, string handed) { if (!f.Found) Found(f, c, handed); f.Courier = -1; }
 
     private void Found(HiddenFind f, CrewMember c, string? handed = null)
     {

@@ -249,6 +249,7 @@ public static partial class Program
         // ── 4) 옆 설비를 잠시 멈춰야 접근 (전원 · 컴퓨터 승인) ──
         {
             var w = DayOne(seed, "Hanbit");
+            NoRobots(w); // v21 사람이 옆 설비를 멈추고 손을 넣는 장면 (정비 로봇이 먼저 고치면 장면이 아니다)
             Furniture? f = null, g = null;
             foreach (var x in w.Ship.Furniture.Where(x => x.Machine is { Faults.Count: 0 } && !x.Stowed && x.Machine.Spec.ServiceHours > 0f).OrderBy(x => x.Id))
             {

@@ -312,11 +312,12 @@ public sealed partial class CrisisCrewSystem
     /// <summary>제 자리의 일이 열려 있다 (서 있던 사람이 바로 일을 잡게).</summary>
     internal bool RoleWorkOpen(CrewMember c, StationRole r)
     {
+        // v21 맡을 수 있는 일만 — 공기가 빠진 방의 일은 우주복이 없으면 제 자리 일이 아니다 (불 + 파공에 모두 "제 자리 일이 있다"며 자리도 일도 없이 걸쇠만 보던 것)
         foreach (var o in _w.Board.All)
-            if (!o.Closed && o.Assignee == null && o.BlockedUntil <= _w.Tick && RoleFor(o) == r && o.Urgency >= 0.8f && _w.Minds.Aware(c, o)) return true;
+            if (!o.Closed && o.Assignee == null && o.BlockedUntil <= _w.Tick && RoleFor(o) == r && o.Urgency >= 0.8f && _w.Minds.Aware(c, o) && !HelpActivity.Airless(c, o.Target.CurrentRoom)) return true;
         // 누가 붙어 하는 제 자리의 일에 손이 모자라면 거들러 간다
         foreach (var (o, cap, have, _, _) in Cands())
-            if (have < cap && !o.Closed && o.Assignee is CrewMember a && a != c && RoleFor(o) == r && _w.Minds.Aware(c, o)) return true;
+            if (have < cap && !o.Closed && o.Assignee is CrewMember a && a != c && RoleFor(o) == r && _w.Minds.Aware(c, o) && !HelpActivity.Airless(c, o.Target.CurrentRoom)) return true;
         return false;
     }
 

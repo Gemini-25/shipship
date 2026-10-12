@@ -107,6 +107,7 @@ public static partial class Program
             // 5) 영웅심: 용감한 사람은 가까운 사람이 진공 속에 쓰러지면 우주복 없이도 뛰어든다
             {
                 var w = DayOne(seed, "Mirinae");
+                NoRobots(w); // v21 사람의 영웅심을 본다 (구조 로봇이 먼저 가면 뛰어들 까닭이 없다)
                 var hero = w.Crew.Where(c => c.CanAct).OrderByDescending(c => c.Traits.Bravery).First();
                 if (!hero.IsAwake) { hero.EndJob(w, ToilStatus.Interrupted); hero.Pose = Pose.Standing; } // 깨어 있어야 안다
                 hero.Needs.Rest = 1f; hero.NextThinkTick = w.Tick; // 푹 잤다 (다시 잠들지 않게)

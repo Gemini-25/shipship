@@ -103,7 +103,7 @@ public static partial class Program
     {
         // 1) 혼자 · 쓰러진 채 뜨거운 방에 남는다
         {
-            var w = DayOne(seed, "Mirinae"); w.CrewCanDie = true;
+            var w = DayOne(seed, "Mirinae"); w.CrewCanDie = true; NoRobots(w); // v21 혼자 남은 사람 — 구조 로봇이 끌어내면 장면이 아니다
             var room = IgQuiet(w);
             var v = w.Crew.First(c => c.CanAct);
             foreach (var o in w.Crew.Where(o => o != v)) { o.EndJob(w, ToilStatus.Interrupted); IgPut(o, w.Ship.LiveRooms.First(x => x != room && x.Type == RoomType.Corridor).Cells.First(w.Ship.IsOpenFloor)); }

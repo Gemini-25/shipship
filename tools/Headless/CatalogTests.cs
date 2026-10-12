@@ -51,6 +51,7 @@ public static partial class Program
             // 3) 키트도 붕대도 없으면 천으로, 붕대가 있으면 붕대로
             {
                 var w = DayOne(seed, "Mirinae");
+                NoRobots(w); // v21 사람의 응급 처치를 본다 (의료 로봇이 먼저 치료하면 장면이 아니다)
                 foreach (var f in w.Ship.Furniture.Where(f => f.Storage != null)) f.Storage!.Take(ItemKind.MedKit, 999);
                 foreach (var c in w.Crew) if (c.Carrying is ItemStack held && held.Kind == ItemKind.MedKit) c.Carrying = null; // 통합: 그 순간 손에 들고 옮기던 키트도 (나중에 선반에 넣으면 키트로 치료했다)
                 var p = w.Crew[2];

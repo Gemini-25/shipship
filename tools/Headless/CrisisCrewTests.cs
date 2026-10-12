@@ -256,7 +256,7 @@ public static partial class Program
                     else if (CrResponding(c, w) || c.Job?.Label == "알리러 감" || r == StationRole.Guide && !w.Crew.Any(x => x.Mind.Panicking(w.Tick))) did.Add(id); // 다른 급한 일 · 알리러 · 공황 난 사람이 없으면 대피 유도는 제자리
                     if (r == StationRole.Fire && (c.Job?.Order?.Kind == WorkKind.Extinguish || cc.HelpingOrder(c) is int ho && w.Board.All.Any(o => o.Id == ho && o.Kind == WorkKind.Extinguish))) fireRoleOnFire++;
                     if (c.Mind.Knows.Count == 0 && w.Scale.Felt(c) < IncidentScale.System) unaware++;
-                    if (Environment.GetEnvironmentVariable("CR_DBG") == "fire" && i % 4 == 0) Console.WriteLine($"    {SimTime.Clock(w.Tick)} {c.Name} {CrisisCrewSystem.RoleName(r)}: {Doing(c, w)} · {c.Room?.Name}");
+                    if (Environment.GetEnvironmentVariable("CR_DBG") == "fire" && i % 4 == 0) Console.WriteLine($"    {SimTime.Clock(w.Tick)} {c.Name} {CrisisCrewSystem.RoleName(r)}: {Doing(c, w)} · {c.Room?.Name} · " + string.Join(", ", c.LastEvaluations.Where(e => e.Activity.Id is "help" or "station").Concat(c.LastEvaluations.OrderByDescending(e => e.Score).Take(2)).Select(e => $"{e.Activity.Id}:{e.Score:0.00}({e.Reason})")));
                 }
                 if (Environment.GetEnvironmentVariable("CR_DBG") == "fire" && i % 4 == 0)
                 {
@@ -324,6 +324,7 @@ public static partial class Program
         {
             var w = DayOne(seed, "Hanbit");
             var cc = w.CrisisCrew;
+            foreach (var r in w.Robots.Robots) r.Disabled = true; // v21 사람의 공황을 본다 — 로봇 80대가 3분 안에 불을 꺼 버리면 장면이 아니다
             Incidents.Fire(w, CrFloor(w, RoomType.Galley));
             // 통합: 장면 동안 위기가 이어지게 — 불 한 칸은 부엌에 있던 사람이 3분 안에 꺼 버리기도 한다 (공황이 끝날 까닭이 사고가 끝나서가 되지 않게)
             foreach (var x in w.Ship.RoomsOf(RoomType.Galley).First().Cells.Where(w.Ship.IsOpenFloor).OrderBy(x => x.Y).ThenBy(x => x.X).Take(3)) w.Fire.Ignite(x, 0.8f);
@@ -488,6 +489,8 @@ public static partial class Program
         if (Environment.GetEnvironmentVariable("CR_LEVEL") is string lv) Storyteller.LevelValue = float.Parse(lv);
         Console.WriteLine($"\n  측정 · 시드 {string.Join(",", seeds)} · 난이도 {Storyteller.LevelName(Storyteller.Level)} · 장면마다 6시간");
         RobotSystem.HandsOff = true; // 사람의 위기 행동만 견준다 — 로봇 손일 · 원격 시동이 양쪽 다 발전기를 켜면 차이가 가려진다
+        bool g0 = RobotsV21.General, r0 = RobotsV21.Reactor, e0 = RobotsV21.Expanded;
+        RobotsV21.General = RobotsV21.Reactor = RobotsV21.Expanded = false; // v21 로봇 80대 · 긴급 지정이 사고를 몇 분 만에 끝내면 사람의 위기 행동 차이가 가려진다 — 예전 로봇으로 견준다
         CrisisCrewSystem.Off = true;
         var b0 = MeasureBundle(seeds, normal, 6f);
         var b1 = MeasureBundle(seeds, harsh, 6f);
@@ -495,6 +498,7 @@ public static partial class Program
         var a0 = MeasureBundle(seeds, normal, 6f);
         var a1 = MeasureBundle(seeds, harsh, 6f);
         RobotSystem.HandsOff = false;
+        RobotsV21.General = g0; RobotsV21.Reactor = r0; RobotsV21.Expanded = e0;
         PrintBundle("전 · 예전 승무원", b0.Concat(b1).ToList());
         PrintBundle("후", a0.Concat(a1).ToList());
         CrisisRun Sum(IEnumerable<(string scene, CrisisRun sum, int runs)> rows)

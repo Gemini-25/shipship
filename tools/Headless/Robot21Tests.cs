@@ -7,6 +7,32 @@ using ShipSim.Core;
 // v21 로봇 · 드론 확장 점검 (--robot21test).
 public static partial class Program
 {
+    /// <summary>v21 사람의 행동을 재는 장면: 로봇 80대 · 긴급 지정이 먼저 해결해 버리면 장면이 성립하지 않는다 — 그 장면에서만 로봇을 쉬게 한다.</summary>
+    internal static void NoRobots(World w) { foreach (var r in w.Robots.Robots) r.Disabled = true; }
+
+    /// <summary>먹을 것 탐침 (--foodprobe=배): 두 시간마다 먹을 것이 어디 있고 누가 먹었나.</summary>
+    private static int RunFoodProbe(int seed, string ship)
+    {
+        var w = World.CreateDefault(seed, 0, ship);
+        for (int h = 0; h <= 36; h += 2)
+        {
+            if (h > 0) Run(w, SimTime.Hours(2));
+            string Where(ItemKind k) => string.Join(",", w.Ship.Containers.Where(f => f.Storage!.Count(k) > 0).GroupBy(f => f.Type).Select(g => $"{g.Key}:{g.Sum(f => f.Storage!.Count(k))}"));
+            int botMeals = w.Robots.Robots.Sum(r => r.Cargo is ItemStack st && st.Kind is ItemKind.Meal or ItemKind.Ration or ItemKind.Produce ? st.Count : 0);
+            int crewHeld = w.Crew.Sum(c => c.Carrying is ItemStack st && st.Kind is ItemKind.Meal or ItemKind.Ration ? st.Count : 0);
+            Console.WriteLine($"{h,2}시간 끼니[{Where(ItemKind.Meal)}] 비상[{Where(ItemKind.Ration)}] 채소[{Where(ItemKind.Produce)}] 로봇 짐 {botMeals} 사람 손 {crewHeld} · 냄비 {w.Cooking.Batches.Sum(b => b.Portions)} · 먹은 끼니 {w.Crew.Sum(c => c.Stats.Meals)} · 최저 배부름 {w.Crew.Where(c => !c.Dead).Min(c => c.Needs.Food):0.00}");
+        }
+        var hungry = w.Crew.Where(c => !c.Dead).OrderBy(c => c.Needs.Food).First();
+        var dist = w.Paths.Flood(hungry.Cell, hungry.PathProfile);
+        Console.WriteLine($"가장 배고픈 {hungry.Name} @{hungry.Room?.Name} · 판단: {string.Join(" / ", hungry.LastEvaluations.OrderByDescending(e => e.Score).Take(5).Select(e => $"{e.Activity.Id}:{e.Score:0.00}({e.Reason})"))}");
+        Console.WriteLine($"  식사 점수 지금: {new EatActivity().Score(hungry, w, dist)}");
+        foreach (var f in w.Ship.Furniture.Where(f => f.Type is FurnitureType.MealDispenser or FurnitureType.Fridge || f.Storage?.Count(ItemKind.Ration) > 0))
+            Console.WriteLine($"  {f.Label} @{f.Room.Name} 닿음 {f.UseSpots.Any(dist.Reachable)} 칸 {string.Join(",", f.UseSpots.Take(2))}");
+        Console.WriteLine("  정비대 방: " + string.Join(" · ", w.Ship.FurnitureOf(FurnitureType.RobotDock).GroupBy(d => d.Room.Name + "(" + d.Room.Type + ")").Select(g => $"{g.Key} {g.Count()}")));
+        Console.WriteLine($"  {hungry.Name} 갈 수 있는 방: {w.Ship.LiveRooms.Count(r => r.Cells.Any(dist.Reachable))}/{w.Ship.LiveRooms.Count()}");
+        return 0;
+    }
+
     private static int RunRobot21Probe(int seed, string ship, int days, bool legacy)
     {
         if (legacy) { RobotsV21.General = false; RobotsV21.Reactor = false; RobotsV21.Expanded = false; }
@@ -217,7 +243,8 @@ public static partial class Program
                 var b = w.Robots.Robots.First(r => r.Kind == RobotKind.Courier && r.Mk == 1);
                 b.JobsDone = 60;
                 foreach (var k in new[] { ItemKind.Electronics, ItemKind.Motor, ItemKind.Sensor })
-                    w.Ship.Containers.First(c => c.Type == FurnitureType.Shelf && c.Storage!.Free > 4).Storage!.Add(k, 4);
+                    w.Ship.Containers.First(c => c.Type == FurnitureType.Shelf && c.Storage!.Free > 8).Storage!.Add(k, 8); // 수리 몫 여섯은 남기고 개량한다
+                w.Robots.LastUpgrade = -SimTime.TicksPerDay; // 첫날 다른 로봇을 이미 개량했어도 (하루 한 대)
                 Run(w, SimTime.Hours(8));
                 float skill = w.Robots.Robots.Max(r => r.Skill);
                 Check("개량 · 숙련 — 일 많이 한 로봇이 Mk.II 이상으로 · 숙련이 오른다", b.Mk >= 2 && w.Robots.V21.Upgrades >= 1 && skill > 0.05f,

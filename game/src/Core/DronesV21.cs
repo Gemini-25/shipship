@@ -101,7 +101,7 @@ public sealed partial class DroneSystem
                 d.ErrandSpot = at;
                 V21.Relays++;
                 Launch(d, at, $"무전 중계 — {far.Name} 쪽으로");
-                d.Mind.Say($"{far.Name}이(가) 선외에 있다 — 무전을 이어 준다", w.Tick);
+                d.Mind.Say($"{Ko.IGa(far.Name)} 선외에 있다 — 무전을 이어 준다", w.Tick);
                 return true;
             }
             case DroneKind.Polisher:

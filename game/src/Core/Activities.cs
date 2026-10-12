@@ -63,7 +63,7 @@ public sealed class EatActivity : Activity
             Try(Plans.NearestContainer(w, dist, c, f =>
                 f.Type == FurnitureType.Fridge && Left(f) > 0), Source.Fridge, 50);
         if (best == null || bestCost > 400 || storm) // 식사가 가까이 있으면 비상식량은 보지 않는다 (폭풍 속은 늘 본다)
-            Try(Plans.NearestContainer(w, dist, c, f => f.Storage!.Count(ItemKind.Ration) - (headed?.GetValueOrDefault(f.Id) ?? 0) > 0), Source.Ration, storm ? 0 : hunger > 0.7f ? 300 : 1200);
+            Try(Plans.NearestContainer(w, dist, c, f => f.Storage!.Count(ItemKind.Ration) - (headed?.GetValueOrDefault(f.Id) ?? 0) > 0), Source.Ration, storm ? 0 : hunger > 0.7f && !(w.Cooking.HomeCraving(c) is float home && home > 0f) ? 300 : 1200); // v21 고향 음식 냄비가 있으면 비상식량으로 때우지 않고 식당까지 간다
         // 마지막 수단: 조리할 수 없고 비상식량도 떨어졌으면 채소를 날로 (v7에서 고침: 전에는 채소가 쌓여 있는데 굶었다)
         if (best == null || hunger > 0.85f && bestCost > 600)
             Try(Plans.NearestContainer(w, dist, c, f => f.Type == FurnitureType.Fridge && f.Storage!.Count(ItemKind.Produce) > 0), Source.Produce, best == null ? 0 : 600);

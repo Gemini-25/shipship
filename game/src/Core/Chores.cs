@@ -68,7 +68,7 @@ public sealed class ChoresActivity : Activity
         if (spot is not Cell s) return -1f;
         distance = dist.Get(s);
         float ap = AppealAt(c, w, o, distance, eva);
-        if (ap > 0f && o.Urgency < 1f && o.Kind != WorkKind.StartAux && !(o.Kind == WorkKind.Cook && c.Role == CrewRole.Cook) && w.Robots.HandsFree(o) && !(w.CrisisCrew.ActiveRoles.TryGetValue(c.Id, out var role) && CrisisCrewSystem.RoleFor(o) == role))
+        if (ap > 0f && o.Urgency < 1f && o.Kind != WorkKind.StartAux && !(o.Kind == WorkKind.Cook && (c.Role == CrewRole.Cook || w.Cooking.HeadCook == c || w.Cooking.Apprentice == c)) && w.Robots.HandsFree(o) && !(w.CrisisCrew.ActiveRoles.TryGetValue(c.Id, out var role) && CrisisCrewSystem.RoleFor(o) == role))
             ap = RobotsV21.Yields(o.Kind) && w.Tick - o.Posted < SimTime.Minutes(10) ? -1f : ap * 0.5f; // v21 특기 로봇이 놀고 있으면 처음 10분은 맡기고 손대지 않는다 · 로봇이 먼저 — 맡을 로봇이 놀고 있으면 급한 일이 아니면 로봇에게 미룬다 (Unattended.cs) · 비상 배치표로 그 자리에 선 사람은 제 몫을 한다
         return ap;
     }

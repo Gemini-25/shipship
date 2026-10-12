@@ -145,7 +145,7 @@ public static class RobotsV21
     };
 
     /// <summary>집 방이 없을 때 (어느 배에나 있는 방).</summary>
-    public static readonly RoomType[] Fallback = { RoomType.RobotBay, RoomType.Storage, RoomType.Cargo, RoomType.Corridor, RoomType.Workshop, RoomType.Mess, RoomType.Lounge, RoomType.Galley };
+    public static readonly RoomType[] Fallback = { RoomType.RobotBay, RoomType.Storage, RoomType.Cargo, RoomType.Workshop, RoomType.Mess, RoomType.Lounge, RoomType.Galley };
 
     // ─────────────────────────────── 솜씨 ───────────────────────────────
 
@@ -186,12 +186,25 @@ public sealed partial class RobotSystem
     private bool Eligible(Robot r, WorkOrder o)
     {
         var w = _world;
+        if (o.Kind == WorkKind.Cook && PeopleCook(o)) return false; // 요리사 · 배우는 사람이 있으면 사람이 짓는다 (고향 음식 · 맛 · 대신 서기는 사람의 이야기)
         if (Special(r.Kind, o.Kind) && RobotsV15.Takes(r.Kind, o)) return true;
         if (r.Drafted(w) && RobotsV21.DraftJob(r.Draft, o.Kind)) return true;
         if (Stands(r, o)) return !RobotsV21.General || Fixer(r.Kind) || Carrier(r.Kind) || Waited(o) || o.Kind is WorkKind.ResetBreaker or WorkKind.StartAux or WorkKind.CloseValve or WorkKind.OpenValve;
         if (!RobotsV21.General || !RobotsV21.Basic(o.Kind)) return false;
         if (RobotsV21.OnCall(r.Kind) && o.Urgency < 0.7f) return false; // 의료 · 구조 로봇은 자리를 지킨다
         return Waited(o);
+    }
+
+    /// <summary>
+    /// 끼니는 사람이 먼저: 조리 책임자 · 배우는 사람이 있는 배면 45분 동안은 사람 몫 — 조리사가 다치면 배우던 사람이 대신 서고 맛이 달라진다.
+    /// 조리 로봇은 그 뒤 (다들 바쁘거나 자는 밤) · 요리할 사람이 없는 배 · 무인 운항에서 짓는다.
+    /// </summary>
+    private bool PeopleCook(WorkOrder o)
+    {
+        var w = _world;
+        if (w.Tick - o.Posted >= SimTime.Minutes(45) || w.Automation.Unattended) return false;
+        var ck = w.Cooking;
+        return ck.HeadCook is { Dead: false } && w.Crew.Any(c => c.CanAct && !c.IsChild && !c.Outside);
     }
 
     /// <summary>특기 로봇이 먼저 잡을 만큼 기다렸나 (급하거나 · 사람이 없으면 바로).</summary>
@@ -243,6 +256,7 @@ public sealed partial class RobotSystem
             _v21Minute = w.Tick + SimTime.Minutes(1);
             DraftTick();
             CallSpecialists();
+            DeliverFinds();
             JoinTick();
         }
         if (w.Tick >= _v21Upgrade)
@@ -480,6 +494,7 @@ public sealed partial class RobotSystem
             {
                 int cells = w.Fire.CountIn(room);
                 if (cells == 0 || room.Abandoned) continue;
+                if (!room.DataLinked && !a.FireCases.Any(fc => fc.RoomId == room.Id)) continue; // 컴퓨터가 아는 불만 (데이터선이 끊긴 방은 누가 알려 올 때까지 모른다)
                 int want = Math.Clamp(1 + cells / 4, 1, 4);
                 int have = Robots.Count(x => FightsNow(x, w) && x.Operational && x.Foam > 0.15f && (x.Room == room || x.FightingFire));
                 Need(DraftKind.Fire, room, want - have, $"{room.Name} 불 {cells}칸 · 거품 든 로봇 {have}대", level);
@@ -607,16 +622,51 @@ public sealed partial class RobotSystem
         _ => new[] { (ItemKind.Electronics, 1), (ItemKind.Sensor, 1), (ItemKind.Motor, 1) },
     };
 
-    /// <summary>몇 시간마다: 평시에 · 부품이 넉넉하면 · 일을 많이 한 로봇 하나를 정비 로봇이 개량한다.</summary>
+    /// <summary>패널 뒤에서 꺼낸 쪽지 · 술병: 하던 일을 마친 로봇이 가장 가까운 깨어 있는 사람에게 가져다준다 (로봇은 읽지 않는다).</summary>
+    private void DeliverFinds()
+    {
+        var w = _world;
+        foreach (var f in w.Origin.Finds)
+        {
+            if (f.Found || f.Courier < 0) continue;
+            var r = Robots.FirstOrDefault(x => x.Id == f.Courier);
+            if (r == null || !r.Operational || r.Runaway) { f.Courier = -1; continue; }
+            if (!Free(r)) continue; // 하던 일부터
+            CrewMember? Near(Robot rb) => w.Crew.Where(c => !c.Dead && c.CanAct && !c.IsChild && c.IsAwake && !c.Outside && c.Room is Room cr && !cr.Abandoned)
+                .OrderBy(c => (c.Position - rb.Position).LengthSquared()).ThenBy(c => c.Id).FirstOrDefault();
+            if (Near(r) == null) continue;
+            var find = f;
+            var room = w.Ship.Rooms[f.RoomId].Name;
+            if (r.State == RobotState.Docked) SetState(r, RobotState.Active);
+            Begin(r, new List<RobotStep>
+            {
+                new RGoto(rb => Near(rb)?.Cell),
+                new RDo((rb, world) =>
+                {
+                    var c = Near(rb);
+                    if (c == null || (c.Position - rb.Position).Length() > 3f) { find.Courier = rb.Id; Done(rb, null); return true; } // 그새 자리를 떴다 — 다음에 다시 따라간다
+                    world.Origin.HandOver(find, c, $"{Ko.IGa(rb.Name)} {room} 패널 뒤에서 꺼내 온");
+                    Done(rb, null);
+                    return true;
+                }),
+            }, $"찾은 {find.KindName} 건네기");
+            f.Courier = -1;
+        }
+    }
+
+    /// <summary>마지막으로 개량을 시작한 때 (하루에 한 대까지 — 부품은 고치는 데 먼저 쓴다).</summary>
+    public long LastUpgrade { get; internal set; } = -SimTime.TicksPerDay;
+
+    /// <summary>몇 시간마다: 평시에 · 부품이 넉넉하면 · 일을 많이 한 로봇 하나를 정비 로봇이 개량한다 (하루에 한 대).</summary>
     private void UpgradeTick()
     {
         var w = _world;
-        if (FleetSystem.Off || w.Fleet.Mode != "평시" || Robots.Any(x => x.Upgrading)) return;
+        if (FleetSystem.Off || w.Fleet.Mode != "평시" || Robots.Any(x => x.Upgrading) || w.Tick - LastUpgrade < SimTime.TicksPerDay) return;
         var b = Robots.Where(x => x.AtDock && x.Operational && !x.Runaway && x.Mk < 3 && x.Fault == null && x.JobsDone >= 30 * x.Mk && !x.Dock.Room.Detached)
             .OrderByDescending(x => x.JobsDone - 30 * x.Mk).ThenBy(x => x.Id).FirstOrDefault();
         if (b == null) return;
         var parts = MkParts(b.Mk + 1);
-        if (!parts.All(p => w.Ship.CountStored(p.kind) >= p.count + 2)) return; // 수리 몫은 남긴다
+        if (!parts.All(p => w.Ship.CountStored(p.kind) >= p.count + 6)) return; // 수리 몫은 넉넉히 남긴다
         Robot? fixer = null; float bd = float.MaxValue;
         foreach (var r in Robots)
         {
@@ -632,6 +682,7 @@ public sealed partial class RobotSystem
         if (box == null || near is not Cell at) return;
         int to = b.Mk + 1;
         b.Upgrading = true;
+        LastUpgrade = w.Tick;
         SetState(fixer, RobotState.Active);
         var steps = new List<RobotStep>
         {
@@ -993,12 +1044,15 @@ public sealed partial class RobotSystem
         return null;
     }
 
-    /// <summary>바닥 얼룩 (유리 조각 · 기름 · 그을음 · 미끄러운 물기) — 사람의 "배 손보기"와 같은 기준.</summary>
+    /// <summary>
+    /// 바닥 얼룩 (기름 · 그을음 · 미끄러운 물기 — 사고 흔적) — 사람의 "배 손보기"와 같은 기준.
+    /// 깨진 컵 조각은 사람이 빗자루로 쓴다 (밥 먹고 쓸어 담는 사람 · 누구 컵이었나) — 폭발 · 불 자리의 유리만 그을음과 함께 치운다.
+    /// </summary>
     private static bool Stained(World w, CellState s, int i) =>
-        s.V[(int)CellMark.Glass] > 0.2f || s.V[(int)CellMark.Oil] > 0.3f || s.V[(int)CellMark.Soot] > 0.4f && w.Fire.Count == 0
+        s.V[(int)CellMark.Oil] > 0.3f || s.V[(int)CellMark.Soot] > 0.4f && w.Fire.Count == 0
         || s.V[(int)CellMark.Wet] > 0.4f && w.Body.SlipAt(i) > 0.35f;
 
-    /// <summary>청소 로봇: 쉬는 동안 얼룩이 가장 많은 방에 가서 바닥을 닦는다 (유리 조각 · 기름 · 그을음 · 물기 — 네 칸까지).</summary>
+    /// <summary>청소 로봇: 쉬는 동안 얼룩이 가장 많은 방에 가서 바닥을 닦는다 (기름 · 그을음 · 물기 — 네 칸까지).</summary>
     private bool TryWipe(Robot r, DistanceField dist)
     {
         var w = _world;
@@ -1030,7 +1084,7 @@ public sealed partial class RobotSystem
                 if (st.V[(int)CellMark.Soot] > 0.4f && world.Fire.Scorch.TryGetValue(spot, out var sc)) world.Fire.Scorch[spot] = sc * 0.3f;
                 if (st.V[(int)CellMark.Wet] > 0.2f) { foreach (var dd in Cell.Dirs4) if (b.Mark(spot + dd, CellMark.Wet) > 0.2f) b.SetMark(spot + dd, CellMark.Wet, 0f, ""); b.Stats.Mopped++; }
                 b.SetMark(spot, CellMark.Wet, 0f, "");
-                b.SetMark(spot, CellMark.Glass, 0f, "");
+                if (st.V[(int)CellMark.Soot] > 0.2f) b.SetMark(spot, CellMark.Glass, 0f, ""); // 사고 자리 유리만
                 b.SetMark(spot, CellMark.Oil, 0f, "");
                 b.SetMark(spot, CellMark.Soot, 0f, "");
                 b.Stats.Cleaned++;

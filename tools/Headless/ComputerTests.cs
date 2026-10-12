@@ -178,11 +178,14 @@ public static partial class Program
                 Run(w, SimTime.Hours(2));
                 var quiet = w.Ship.LiveRooms.First(r => r.Type == RoomType.Lounge);
                 a.Belief.Break(quiet, SensorFault.Ghost, "시험: 업데이트 버그");
+                int robot0 = a.RobotChecks + a.RobotChecksInstant;
                 var k = a.RequestCheck(quiet, "시험 — 화재 감지기 경보", ghost: true);
-                for (int m = 0; m < 30 && k is { Seen: false }; m++) Run(w, SimTime.Minutes(1));
                 var b = a.Belief.Of(quiet);
-                Check("배우기 — 헛불을 사람이 확인하면 그 감지기를 덜 믿는다", k != null && k.Seen && b.FalseAlarms == 1 && b.Trust < 1f && b.Fault == SensorFault.None,
-                    $"확인 {(k?.Seen == true ? "했다" : "못 했다")} · 오경보 {b.FalseAlarms} · 감지기 믿음 {b.Trust * 100:0}% · 고장 {BeliefModel.FaultName(b.Fault)}");
+                // v21 확인은 로봇 눈이 먼저 — 로봇을 보냈으면 요청 없이 (null) 로봇이 가서 본다
+                for (int m = 0; m < 30 && (k is { Seen: false } || k == null && b.Fault != SensorFault.None); m++) Run(w, SimTime.Minutes(1));
+                bool robotSaw = k == null && a.RobotChecks + a.RobotChecksInstant > robot0;
+                Check("배우기 — 헛불을 사람 · 로봇이 확인하면 그 감지기를 덜 믿는다", (k != null && k.Seen || robotSaw) && b.FalseAlarms == 1 && b.Trust < 1f && b.Fault == SensorFault.None,
+                    $"확인 {(k?.Seen == true ? "했다 (사람)" : robotSaw ? "했다 (로봇)" : "못 했다")} · 오경보 {b.FalseAlarms} · 감지기 믿음 {b.Trust * 100:0}% · 고장 {BeliefModel.FaultName(b.Fault)}");
             }
 
             // 5) 문 본체 × 컴퓨터: 출입 관리 모듈이 다친 사람을 잠긴 약품고에 원격으로 들인다 (기다리지 않는다 · 신뢰 ↑)
@@ -225,14 +228,16 @@ public static partial class Program
                 guest.NextThinkTick = w.Tick + SimTime.Hours(1);
                 Run(w, World.SystemInterval * 2);
                 int believed = a.Belief.Of(room).People;
+                int robot0 = a.RobotChecks + a.RobotChecksInstant;
                 var k = a.RequestCheck(room, "시험 — 사람 수 확인");
-                for (int m = 0; m < 30 && k is { Seen: false }; m++) { Run(w, SimTime.Minutes(1)); if (guest.Room != room) Put(w, guest, room); }
+                for (int m = 0; m < 30 && (k is { Seen: false } || k == null && a.Belief.Of(room).Fault != SensorFault.None); m++) { Run(w, SimTime.Minutes(1)); if (guest.Room != room) Put(w, guest, room); }
+                bool robotSaw = k == null && a.RobotChecks + a.RobotChecksInstant > robot0 && a.Belief.Of(room).Fault == SensorFault.None; // v21 로봇 눈이 먼저
                 Run(w, SimTime.Minutes(6));
                 bool known = a.DoorsKnown > 0 && a.Apps.MaintPlan.Any(x => x.Machine == "문 감지기");
                 int brokenDoor = b.Doors.Where(x => x.SensorBroken).Select(x => x.Door).DefaultIfEmpty(-1).First();
-                Check("문 감지기 고장 → 컴퓨터는 사람이 있는 방을 비었다고 믿는다 → 사람 확인으로 드러나 정비 일정표 맨 앞에 올린다 (수리 우선)",
-                    blind && believed == 0 && k != null && k.Seen && known,
-                    $"{room.Name} 고장 {BeliefModel.FaultName(bel.Fault)} · 믿음 {believed}명 ↔ 실제 {BeliefModel.Actual(w, room)}명 · 확인 {(k?.Seen == true ? "했다" : "못 했다")} · 알게 된 문 {a.DoorsKnown} (수리 우선 {a.DoorKnownBroken(brokenDoor)}) · 정비 일정 {string.Join(" / ", a.Apps.MaintPlan.Take(2).Select(x => $"{x.Machine}({x.Room}) {x.Why}"))}");
+                Check("문 감지기 고장 → 컴퓨터는 사람이 있는 방을 비었다고 믿는다 → 사람 · 로봇 확인으로 드러나 정비 일정표 맨 앞에 올린다 (수리 우선)",
+                    blind && believed == 0 && (k != null && k.Seen || robotSaw) && known,
+                    $"{room.Name} 고장 {BeliefModel.FaultName(bel.Fault)} · 믿음 {believed}명 ↔ 실제 {BeliefModel.Actual(w, room)}명 · 확인 {(k?.Seen == true ? "했다 (사람)" : robotSaw ? "했다 (로봇)" : "못 했다")} · 알게 된 문 {a.DoorsKnown} (수리 우선 {a.DoorKnownBroken(brokenDoor)}) · 정비 일정 {string.Join(" / ", a.Apps.MaintPlan.Take(2).Select(x => $"{x.Machine}({x.Room}) {x.Why}"))}");
             }
 
             // 6) 식단 × 식량: 식단 계획 모듈은 배급을 하루 앞당긴다 (주방 당번이 배급표를 붙인다) → 배고픈 사람이 컴퓨터 식단을 탓한다 → 컴퓨터가 거둔다

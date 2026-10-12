@@ -318,6 +318,7 @@ public static partial class Program
                     bool fireOut = w.Fire.Count == 0;
                     float powered = w.Ship.Machines.Count(m => m.Powered) / (float)Math.Max(1, w.Ship.Machines.Count());
                     bool fed = w.Crew.All(c => c.Dead || c.Needs.Food > 0.1f);
+                    if (!fed) foreach (var c in w.Crew.Where(c => !c.Dead && c.Needs.Food <= 0.1f)) Console.WriteLine($"      배고픔: {c.Name} 먹을 것 {c.Needs.Food:0.00} · {c.Room?.Name} · {c.ActivityLabel} · 끼니 {c.Stats.Meals} · 역할 {c.Role} · {(c.Outside ? "선외" : "")}{(c.Down ? "쓰러짐" : "")}");
                     bool slept = w.Crew.All(c => c.Dead || c.Needs.Rest > 0.1f);
                     int reach = Unreached(w.Ship).Count;
                     int stuck = w.Ship.Doors.Count(d => d.MotorBroken && !d.Welded);
