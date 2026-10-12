@@ -405,6 +405,7 @@ public static partial class Program
             {
                 CrisisCrewSystem.Off = off;
                 var w = DayOne(seed, "Hanbit");
+                NoRobots(w); // v21 사람 손이 여럿 붙는지 본다 (정비 로봇이 수리를 맡으면 견줄 수 없다)
                 var f = w.Ship.FurnitureOf(FurnitureType.OxygenGenerator).First();
                 // 부품은 창고에 있다 (부품을 구하러 다니는 시간이 아니라 손을 잰다)
                 w.Ship.Containers.First(x => x.Room.Type == RoomType.Storage && x.Storage!.Free > 0).Storage!.Add(ItemKind.PowerController, 1);

@@ -1013,6 +1013,8 @@ public sealed partial class RobotSystem
             case WorkKind.Treat:
             {
                 if (o.Target.Crew is not CrewMember pt || pt.Dead) { w.Board.Close(o); return null; }
+                if (w.Blood.NeedsBlood(pt) && (w.Blood.CompatibleFor(pt) > 0 || w.Pharmacy.Stock(ItemKind.BloodSubstitute) > 0) && pt.Vitals.Health > 0.08f)
+                { blocked = "수혈이 먼저"; return null; } // 피를 많이 잃은 사람: 피부터 (치료로 체력만 올리면 일어나 투여 펌프 침대를 떠났다)
                 var (box, spot) = Nearest(w, dist, b => b.Type != FurnitureType.DroneDock && b.Storage!.Count(ItemKind.MedKit) > 0);
                 bool kit = box != null;
                 if (box != null) { steps.Add(new RGoto(spot)); steps.Add(new RTake(box, ItemKind.MedKit, 1)); }

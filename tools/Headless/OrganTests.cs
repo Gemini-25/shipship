@@ -67,6 +67,7 @@ public static partial class Program
     private static void OgLungs(int seed)
     {
         var w = DayOne(seed, "Hanbit");
+        NoRobots(w); // v21 사람 의무관 · 기계의 치료를 본다 (의사 로봇이 먼저 손대면 장면이 흐려진다)
         var bed = w.Ship.FurnitureOf(FurnitureType.MedBed).OrderBy(f => f.Id).FirstOrDefault();
         if (bed == null) { Check("인공 폐 — 치료 침대가 있다", false); return; }
         var ecmo = OgPut(w, FurnitureType.Ecmo, bed);
@@ -259,6 +260,7 @@ public static partial class Program
     private static void OgIsolate(int seed)
     {
         var w = DayOne(seed, "Hanbit");
+        NoRobots(w); // v21 주 컴퓨터의 격리 권고를 본다 (의사 로봇이 25분 안에 열병을 고치면 권할 까닭이 없다)
         var crew = OgCrew(w);
         var medbay = w.Ship.FurnitureOf(FurnitureType.MedBed).First().Room;
         var ward = w.Ship.Rooms.FirstOrDefault(r => r.Kind == RoomType.Quarantine && !r.Detached) ?? medbay;
