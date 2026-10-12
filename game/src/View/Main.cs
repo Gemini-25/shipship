@@ -125,9 +125,12 @@ public partial class Main : Node2D
     public long NoticeTick { get; private set; } = -1;
 
     private Starfield _stars = null!;
+    public SceneShooter Shooter { get; private set; } = null!;
     private double _accumulator;
     private string? _screenshotPath;
     private int _screenshotFrames = -1;
+    private float _shotAfterHour = -1f;
+    private long _shotFromTick;
     private Input.CursorShape _cursor = Input.CursorShape.Arrow;
 
     public override void _Ready()
@@ -223,6 +226,9 @@ public partial class Main : Node2D
         Hud = new Hud { Name = "Hud" };
         ui.AddChild(Hud);
         Hud.Init(this, Sim);
+        Shooter = new SceneShooter { Name = "SceneShooter" }; // v23 오늘의 장면 — 그 순간 그 자리를 따로 찍는다
+        AddChild(Shooter);
+        Shooter.Init(this);
 
         // v10: 소리와 옵션 창
         Sound = new SoundSystem { Name = "Sound" };
@@ -311,6 +317,7 @@ public partial class Main : Node2D
         AutoSaveTick(); // v19 자동 저장 (5분마다)
         PacedGc(); // v19 60프레임
         PerfFrame(); // v17.7
+        if (_shotAfterHour >= 0f && Sim.Tick > _shotFromTick && SimTime.HourOfDay(Sim.Tick) >= _shotAfterHour) { _shotAfterHour = -1f; _screenshotFrames = 20; } // v23 --shotafter
         if (_screenshotFrames > 0 && --_screenshotFrames == 0) TakeScreenshotAndQuit();
     }
 
@@ -1194,6 +1201,11 @@ public partial class Main : Node2D
                 }
                 case "--blastage":
                     ShipView.ShotBlastAge = float.Parse(value, CultureInfo.InvariantCulture);
+                    break;
+                case "--shotafter": // v23 화면 시험: 그 시각(시)이 지나면 20프레임 뒤에 찍는다 (--shotafter=22.05)
+                    _shotAfterHour = float.Parse(value, CultureInfo.InvariantCulture);
+                    _shotFromTick = Sim.Tick;
+                    _screenshotFrames = 1_000_000;
                     break;
                 case "--frames":
                     _screenshotFrames = int.Parse(value, CultureInfo.InvariantCulture);

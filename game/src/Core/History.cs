@@ -219,6 +219,7 @@ public sealed class ShipHistory
     {
         var ids = crew?.Where(c => c != null).Select(c => c.Id).Distinct().ToArray() ?? Array.Empty<int>();
         Events.Add(new HistoryEvent(w.Tick, kind, text, room?.Id ?? -1, ids, at, Current?.Id ?? -1));
+        w.Album?.Offer(Events[^1]); // v23 오늘의 장면 후보
         if (Events.Count > 4000) Events.RemoveRange(0, Events.Count - 4000);
         Version++;
         if (log) w.Log.Add(w.Tick, kind is HistoryKind.Memory or HistoryKind.Bond ? LogKind.Life : LogKind.Ship, text, crewLog);

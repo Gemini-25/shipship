@@ -96,6 +96,9 @@ public sealed class World
     /// <summary>v23 눈의 그물: 로봇이 본 것을 주 컴퓨터 장부에 · 감지기 대조 · 모르는 곳 정찰.</summary>
     public EyeNet Eyes { get; }
 
+    /// <summary>v23 오늘의 장면 · 사진첩.</summary>
+    public SceneBook Album { get; }
+
     /// <summary>v11.2 엔진·추진제·항로: 회피 기동, 보통 항로 ↔ 잔해 지대.</summary>
     public PropulsionSystem Propulsion { get; }
 
@@ -303,6 +306,7 @@ public sealed class World
         Nozzles = new NozzleSystem(this);
         Relays = new RelaySystem(this);
         Eyes = new EyeNet(this);
+        Album = new SceneBook(this);
         Propulsion = new PropulsionSystem(this, 1f);
         Hazards = new HazardSystem(this, seed);
         Comms = new CommsSystem(this);
@@ -638,6 +642,7 @@ public sealed class World
         Robots.Step();
         Commander.Tick(); // v23 사고 지휘관
         Eyes.Tick(); // v23 눈의 그물
+        if (Tick % 25 == 0) Album.Update(); // v23 저녁 22시 오늘의 장면
         EvaRisk.Step(); // v16.11 표류하는 몸 · 떠다니는 공구와 잔해
         Prof.Lap("step.drones·robots", ps);
 

@@ -24,7 +24,7 @@ public partial class Hud
     {
         ("배", "layers", new[] { "겹쳐 보기", "지도", "함선 지표" }),
         ("사람", "people", new[] { "승무원", "방침", "회의록", "메신저" }),
-        ("기록", "log", new[] { "항해 기록", "연대기", "항해 결산", "인과 사슬" }),
+        ("기록", "log", new[] { "항해 기록", "연대기", "항해 결산", "인과 사슬", "사진첩" }),
         ("사고", "incident", new[] { "사고 도구", "사고 도감", "이야기꾼", "지휘" }),
         ("기술", "wrench", new[] { "기술", "기술 지도" }),
         ("컴퓨터", "computer", new[] { "관제", "오늘의 결정" }),
@@ -235,6 +235,7 @@ public partial class Hud
             case (DockTab.Records, 1): DrawChronicle(mouse); break;
             case (DockTab.Records, 2): DrawVoyage(mouse); break;
             case (DockTab.Records, 3): if (ChainOpen) DrawChain(mouse); else DrawNote("아직 번진 사고가 없다", "사고가 나면 원인에서 결과까지의 사슬이 여기에 그려진다."); break;
+            case (DockTab.Records, 4): DrawAlbumPage(mouse); break; // v23 오늘의 장면 사진첩
             case (DockTab.Incidents, 0): DrawToolsPage(mouse); break;
             case (DockTab.Incidents, 1): DrawScaleCodex(mouse); break;
             case (DockTab.Incidents, 2): DrawStoryPage(mouse); break;
