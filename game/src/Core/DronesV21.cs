@@ -13,7 +13,7 @@ namespace ShipSim.Core;
 //  · 구조 드론: 견인 원형 — 떠내려간 사람 · 드론을 빨리 · 세게 끌어온다.
 //  모든 드론은 기본 바깥일(연결부 보강 · 죔쇠 · 연결 해제 · 방열판 수리)을 한다 — 특기 드론보다 느리다.
 
-public enum DroneErrand : byte { None, Guard, Mine, Polish, Relay }
+public enum DroneErrand : byte { None, Guard, Mine, Polish, Relay, /* v23 구역 중계기가 꺼진 구역 */ Zone }
 
 public sealed partial class Drone
 {
@@ -46,7 +46,7 @@ public static class DronesV21
 
     public static string ErrandName(DroneErrand e) => e switch
     {
-        DroneErrand.Guard => "운석 길목 지키기", DroneErrand.Mine => "얼음 · 금속 먼지 캐기", DroneErrand.Polish => "방열판 닦기", DroneErrand.Relay => "무전 중계", _ => "",
+        DroneErrand.Guard => "운석 길목 지키기", DroneErrand.Mine => "얼음 · 금속 먼지 캐기", DroneErrand.Polish => "방열판 닦기", DroneErrand.Relay => "무전 중계", DroneErrand.Zone => "구역 무전 임시 중계", _ => "",
     };
 
     public static float ErrandHours(Drone d) => d.Errand switch
@@ -54,6 +54,7 @@ public static class DronesV21
         DroneErrand.Mine => 1.5f,
         DroneErrand.Polish => 0.5f,
         DroneErrand.Relay => 1f,
+        DroneErrand.Zone => 0.5f,
         _ => 0.25f, // Guard: 아래에서 운석이 올 때까지로 다시 잡는다
     };
 }
@@ -184,6 +185,8 @@ public sealed partial class DroneSystem
                 w.Log.Add(w.Tick, LogKind.Work, $"{d.Name}: {seg.Name} 방열판의 먼지 · 서리를 닦았다 ({before * 100:0}% → {seg.RadiatorCondition * 100:0}%)");
                 break;
             }
+            case DroneErrand.Zone when ZoneStays(d):
+                return false;
             case DroneErrand.Relay when w.Crew.Any(c => !c.Dead && c.Outside) && d.Battery > ReturnCost(d) + 0.2f:
                 d.WorkDone = 0f; // 아직 밖에 사람이 있다 — 더 머문다
                 d.WorkNeeded = 0.5f;

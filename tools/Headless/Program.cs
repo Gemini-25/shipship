@@ -251,6 +251,7 @@ public static partial class Program
         if (args.Any(a => a.StartsWith("--cmdbench"))) return RunCommandBench(args); // v23 주컴퓨터 대응 측정
         if (args.Contains("--commandertest")) return RunCommanderTest(seed); // v23 사고 지휘관
         if (args.Contains("--nozzletest")) return RunNozzleTest(seed); // v23 방마다 천장 자동 소화 설비
+        if (args.Contains("--relaytest")) return RunRelayTest(seed); // v23 구역 중계기
         if (args.Contains("--story21test")) return RunStory21Test(seed); // v21 이야기꾼 · 난이도 세분화
         if (args.FirstOrDefault(a => a.StartsWith("--foodprobe=")) is string fp) return RunFoodProbe(seed, fp[12..]); // v21 먹을 것 탐침
         if (args.Contains("--campaign15test")) return RunCampaign15Test(seed); // v15.6

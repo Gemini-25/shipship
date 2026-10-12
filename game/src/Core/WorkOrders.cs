@@ -73,6 +73,8 @@ public enum WorkKind
     LookRoom, SealSeep,
     // v23 천장 소화 설비: 탱크 채우기 · 망가진 분사구 갈기 · 낡은 밸브 다듬기
     ServiceNozzle,
+    // v23 구역 중계기 고치기 (케이블 1)
+    RepairRelay,
 }
 
 public static class WorkKinds
@@ -129,6 +131,7 @@ public static class WorkKinds
         WorkKind.RepairDoor => "문 구동기 수리",
         WorkKind.FixLights => "조명 수리",
         WorkKind.ServiceNozzle => "소화 설비 손보기",
+        WorkKind.RepairRelay => "중계기 수리",
         WorkKind.Jettison => "구획 사출",
         WorkKind.Salvage => "물품 회수",
         WorkKind.IsolatePower => "전력 차단",
@@ -344,6 +347,7 @@ public sealed class WorkOrder
         WorkKind.RepairDoor => $"{Target.Door!.RoomA?.Name ?? "?"}·{Target.Door!.RoomB?.Name ?? "?"} 사이 문 구동기 수리",
         WorkKind.FixLights => $"{Target.Room!.Name} 조명 수리",
         WorkKind.ServiceNozzle => $"{Target.Room!.Name} 천장 소화 설비 손보기",
+        WorkKind.RepairRelay => $"{Target.Room!.Name} 구역 중계기 수리",
         WorkKind.Jettison => $"{Target.Room!.Name} 사출",
         WorkKind.Salvage => $"{Target.Room!.Name}에서 물품 회수",
         WorkKind.IsolatePower => $"{Target.Room!.Name} 전력 차단",
@@ -1164,6 +1168,12 @@ public sealed partial class WorkBoard
             bool busy = room.Type is RoomType.Medbay or RoomType.Workshop or RoomType.Galley or RoomType.Hydroponics or RoomType.Bridge
                         || room.Furniture.Any(f => f.Machine is Machine m && m.Spec.Critical);
             Post(WorkKind.FixLights, WorkTarget.OfRoom(room), busy ? 0.45f : 0.3f, Skill.Electrical, "케이블 1");
+        }
+        // ── v23 구역 중계기: 꺼지면 그 구역 무전이 끊긴다 (불이 꺼진 뒤에) ──
+        foreach (var z in w.Relays.Zones)
+        {
+            if (!z.Broken || z.RoomId < 0 || ship.Rooms[z.RoomId] is not Room hr || hr.Detached || w.Fire.Count > 0 && w.Fire.AnyWithin(z.At, 2.2f)) continue;
+            Post(WorkKind.RepairRelay, WorkTarget.OfRoom(hr), 0.75f, Skill.Electrical, $"{z.Name} 무전이 끊겼다 · 케이블 1");
         }
         // ── v23 천장 소화 설비: 망가졌거나 반 넘게 빈 탱크 · 많이 낡은 밸브 (불이 꺼진 뒤에) ──
         foreach (var room in ship.LiveRooms)

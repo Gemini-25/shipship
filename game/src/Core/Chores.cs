@@ -473,6 +473,7 @@ public static partial class WorkPlanners
             WorkKind.RepairDoor => RepairDoor(activity, o, c, w, dist, at, out blocked),
             WorkKind.FixLights => FixLights(activity, o, c, w, dist, at, out blocked),
             WorkKind.ServiceNozzle => ServiceNozzle(activity, o, c, w, dist, at, out blocked),
+            WorkKind.RepairRelay => RepairRelay(activity, o, c, w, dist, at, out blocked),
             WorkKind.PilotDrones => PilotDrones(activity, o, c, w, dist, at, out blocked),
             WorkKind.RadarWatch => RadarWatch(activity, o, c, w, dist, at, out blocked),
             WorkKind.Salvage => Salvage(activity, o, c, w, dist, at, out blocked),
@@ -1819,6 +1820,32 @@ public static partial class WorkPlanners
             return true;
         }));
         return Wrap(a, o, c, w, "소화 설비 손보기", toils, $"{room.Name} 천장 소화 설비를 손보러 간다");
+    }
+
+    // ── v23 구역 중계기 수리: 케이블 1 ──
+    private static Job? RepairRelay(Activity a, WorkOrder o, CrewMember c, World w, DistanceField dist, Cell at, out string? blocked)
+    {
+        blocked = null;
+        var room = o.Target.Room!;
+        var z = w.Relays.Zones.FirstOrDefault(x => x.RoomId == room.Id && x.Broken);
+        if (z == null) { w.Board.Close(o); return null; }
+        var cost = new[] { (ItemKind.Cable, 1) };
+        var toils = FetchAll(c, w, dist, cost);
+        if (toils == null) { blocked = "케이블 없음"; return null; }
+        toils.Add(new GotoToil(w.Ship.IsWalkable(z.At) ? z.At : at));
+        toils.Add(new WorkToil(0.4f, Skill.Electrical, z.At.Center) { Resume = o });
+        toils.Add(new DoToil((cm, world) =>
+        {
+            if (!z.Broken) { world.Board.Close(o); return true; }
+            if (!UseAll(cm, cost)) return false;
+            world.Relays.Fix(z);
+            cm.Stats.Repairs++;
+            world.Board.Close(o);
+            MarkLog.Add(room.Marks, world.Tick, $"{Ko.IGa(cm.Name)} {z.Name} 중계기를 고쳤다");
+            world.Log.Add(world.Tick, LogKind.Work, $"{z.Name} 중계기를 고쳤다 — 무전이 다시 닿는다", cm.Id);
+            return true;
+        }));
+        return Wrap(a, o, c, w, "중계기 수리", toils, $"{z.Name} 중계기를 고치러 간다");
     }
 
     // ── v9.3 저출력 운영: 배전반에서 설비를 하나씩 내리고(펌프 하나·산소 발생기 하나·빈 치료 침대·엔진·콘솔) 먹을 것에 전기를 돌린다 ──

@@ -218,7 +218,7 @@ public sealed class IncidentCommander
             Robot? pick = null; int bd = int.MaxValue;
             foreach (var r in bots)
             {
-                if (!RobotSystem.Callable(w, r) || r.CaseId >= 0 || r.Post != null || r.Steps != null && r.Order != null || RobotsV21.Medical(r.Kind) || RobotsV21.OnCall(r.Kind) || r.Battery < 0.7f) continue;
+                if (!RobotSystem.Callable(w, r) || r.CaseId >= 0 || r.Post != null || r.Steps != null && r.Order != null || RobotsV21.Medical(r.Kind) || RobotsV21.OnCall(r.Kind) || r.Battery < 0.7f || !w.Relays.Reach(r.Room)) continue;
                 int d = Reach(field, r);
                 if (d < 0) continue;
                 d = (int)(d * (RobotsV15.Fights(r.Kind) ? 0.6f : 1f));
@@ -250,13 +250,25 @@ public sealed class IncidentCommander
             if (b.Reading(room) && b.Of(room).Fire) return "감지기";
             if (a.FireCases.Any(fc => fc.RoomId == room.Id)) return "소화 수순";
         }
+        // v23 로봇의 눈 · 사람의 무전은 구역 중계기를 거쳐야 닿는다 (끊긴 구역에서 본 것은 주 컴퓨터가 모른다)
+        bool unheard = false;
         foreach (var r in w.Robots.Robots)
             if (!r.Wrecked && r.State != RobotState.Lost && r.Aboard == null && (r.Room == room || w.Fire.AnyWithin(r.Cell, 4f) && w.Ship.RoomAt(r.Cell) is Room rr && rr.Doors.Any(d => d.RoomA == room || d.RoomB == room)))
-                return $"{r.Name}의 눈";
+            {
+                if (w.Relays.Reach(r.Room)) return $"{r.Name}의 눈";
+                unheard = true;
+            }
         foreach (var c in w.Crew)
-            if (!c.Dead && c.IsAwake && !c.Outside && c.Room == room) return $"{c.Name}의 무전";
+            if (!c.Dead && c.IsAwake && !c.Outside && c.Room == room)
+            {
+                if (w.Relays.Reach(c.Room)) return $"{c.Name}의 무전";
+                unheard = true;
+            }
+        if (unheard && _unheardRoom != room.Id) { _unheardRoom = room.Id; w.Relays.Unheard(); }
         return null;
     }
+
+    private int _unheardRoom = -1;
 
     private void Sense()
     {
@@ -271,6 +283,7 @@ public sealed class IncidentCommander
         {
             if (o.Kind != WorkKind.SealBreach || o.Target.CurrentRoom is not Room room || room.Detached || Find(CaseKind.Breach, room.Id) != null) continue;
             string? bsrc = Tier <= CommandTier.Backup ? (w.Automation.Belief.Reading(room) ? "기압 감지기" : "봉합 일")
+                : !w.Relays.Reach(room) ? null
                 : w.Robots.Robots.FirstOrDefault(r => !r.Wrecked && r.State != RobotState.Lost && r.Room == room) is Robot eye0 ? $"{eye0.Name}의 눈"
                 : w.Crew.FirstOrDefault(c => !c.Dead && c.IsAwake && c.Room == room) is CrewMember by0 ? $"{by0.Name}의 무전" : null;
             if (bsrc != null) OpenCase(CaseKind.Breach, room, -1, bsrc, $"{room.Name} 파공 — 공기가 샌다");
@@ -280,8 +293,11 @@ public sealed class IncidentCommander
             if (t.Closed || w.Crew.FirstOrDefault(c => c.Id == t.CrewId) is not CrewMember pt || pt.Dead || pt.Outside || pt.Away || pt.Room == null) continue;
             if (Find(CaseKind.Casualty, -1, pt.Id) != null) continue;
             string? src = Tier > CommandTier.Backup ? null : t.Paged ? "호출" : w.Automation.Has(ComputerModule.BioMonitor) ? "생체 감시" : null;
-            src ??= w.Robots.Robots.FirstOrDefault(r => !r.Wrecked && r.State != RobotState.Lost && r.Room == pt.Room) is Robot eye ? $"{eye.Name}의 눈" : null;
-            src ??= w.Crew.FirstOrDefault(c => c != pt && !c.Dead && c.IsAwake && c.Room == pt.Room) is CrewMember by ? $"{by.Name}의 무전" : null;
+            if (w.Relays.Reach(pt.Room))
+            {
+                src ??= w.Robots.Robots.FirstOrDefault(r => !r.Wrecked && r.State != RobotState.Lost && r.Room == pt.Room) is Robot eye ? $"{eye.Name}의 눈" : null;
+                src ??= w.Crew.FirstOrDefault(c => c != pt && !c.Dead && c.IsAwake && c.Room == pt.Room) is CrewMember by ? $"{by.Name}의 무전" : null;
+            }
             if (src != null) OpenCase(CaseKind.Casualty, pt.Room, pt.Id, src, $"{pt.Name} 다쳤다 ({t.Cause})");
         }
     }
@@ -292,7 +308,7 @@ public sealed class IncidentCommander
         var k = new CommandCase { Id = _nextId++, Kind = kind, RoomId = room.Id, CrewId = crewId, Opened = w.Tick, Source = src, BetterAt = w.Tick };
         Cases.Add(k);
         Stats.Opened++;
-        Note(k, $"{what} — {src}로 알았다 · 지휘 건을 연다");
+        Note(k, $"{what} — {Ko.EuRo(src)} 알았다 · 지휘 건을 연다");
     }
 
     private void Note(CommandCase k, string text)
@@ -476,6 +492,7 @@ public sealed class IncidentCommander
         foreach (var r in rs.Robots)
         {
             if (!RobotSystem.Callable(w, r) || r.CaseId >= 0) continue;
+            if (!w.Relays.Reach(r.Room)) continue; // v23 끊긴 구역의 로봇은 부를 수 없다 (제 판단으로 움직인다)
             if (r.Order is WorkOrder o && o.Urgency >= 0.9f) continue; // 다른 급한 일을 하는 중
             bool med = RobotsV21.Medical(r.Kind);
             if (med && k.Kind != CaseKind.Casualty && hurtOpen) continue;

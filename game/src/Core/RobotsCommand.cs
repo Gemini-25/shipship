@@ -76,7 +76,7 @@ public sealed partial class RobotSystem
     }
 
     /// <summary>그 방의 불로 곧장 (잠긴 격벽은 주 컴퓨터가 연다) — 갈 칸이 없으면 false.</summary>
-    internal bool FightIn(Robot r, Room room)
+    internal bool FightIn(Robot r, Room room, string? label = null)
     {
         var w = _world;
         var dist = w.Paths.Flood(r.Cell, w.Commander.OpensDoors ? UrgentProfile : Profile);
@@ -102,9 +102,12 @@ public sealed partial class RobotSystem
             new RGoto(at),
             new RSpray(),
             new RDo((rb, world) => { Done(rb, $"{room.Name} 불에 거품을 뿌렸다 (거품 {rb.Foam * 100:0}%)"); return true; }),
-        }, $"{room.Name} 불 — 지휘 건 #{r.CaseId}");
+        }, label ?? $"{room.Name} 불 — 지휘 건 #{r.CaseId}");
         return true;
     }
+
+    /// <summary>하던 일을 내려놓는다 (끊긴 구역의 로봇이 눈앞의 일을 스스로 맡을 때).</summary>
+    internal void DropTaskFor(Robot r) => DropTask(r);
 
     /// <summary>
     /// 다친 사람 곁으로: 피가 나면 곧장 상처를 누른다 (주 컴퓨터의 지시 — 어느 로봇이든 손으로 누를 수는 있다) ·

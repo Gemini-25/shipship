@@ -411,7 +411,7 @@ public sealed partial class RobotSystem
     public static bool Special(RobotKind k, WorkKind w) => k switch
     {
         RobotKind.Hauler => w is WorkKind.Restock or WorkKind.StockDock or WorkKind.CarryWater or WorkKind.StockCache or WorkKind.StowCot or WorkKind.RefillPropellant or WorkKind.ShelterFood or WorkKind.EmptyBucket,
-        RobotKind.Maintainer => w is WorkKind.Maintain or WorkKind.FixLights or WorkKind.ServiceNozzle or WorkKind.FlushMain or WorkKind.ClearMain or WorkKind.LookRoom or WorkKind.SealSeep,
+        RobotKind.Maintainer => w is WorkKind.Maintain or WorkKind.FixLights or WorkKind.ServiceNozzle or WorkKind.RepairRelay or WorkKind.FlushMain or WorkKind.ClearMain or WorkKind.LookRoom or WorkKind.SealSeep,
         RobotKind.Gardener => w is WorkKind.Tend or WorkKind.Harvest,
         _ => RobotsV15.CanDo(k, w),
     };
@@ -1023,6 +1023,28 @@ public sealed partial class RobotSystem
                 }));
                 steps.Add(new RGoto(b.At));
                 steps.Add(new RDo((rb, world) => { b.RobotBy = -1; world.Board.Close(o); Done(rb, null); return true; }));
+                return steps;
+            }
+            case WorkKind.RepairRelay:
+            {
+                var room = o.Target.Room!;
+                var z = w.Relays.Zones.FirstOrDefault(x => x.RoomId == room.Id && x.Broken);
+                if (z == null) { w.Board.Close(o); blocked = "고칠 것 없음"; return null; }
+                var (box, spot) = Nearest(w, dist, b => b.Storage!.Count(ItemKind.Cable) > 0);
+                if (box == null) { blocked = "케이블 없음"; return null; }
+                steps.Add(new RGoto(spot));
+                steps.Add(new RTake(box, ItemKind.Cable, 1));
+                steps.Add(new RGoto(w.Ship.IsWalkable(z.At) ? z.At : at));
+                steps.Add(new RWork(0.5f, null, z.At.Center));
+                steps.Add(new RDo((rb, world) =>
+                {
+                    if (rb.Cargo?.Kind != ItemKind.Cable) return false;
+                    rb.Cargo = null;
+                    if (z.Broken) world.Relays.Fix(z);
+                    world.Board.Close(o);
+                    Done(rb, $"{z.Name} 중계기를 고쳤다 — 무전이 다시 닿는다");
+                    return true;
+                }));
                 return steps;
             }
             case WorkKind.ServiceNozzle:

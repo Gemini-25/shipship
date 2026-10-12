@@ -1033,6 +1033,7 @@ public sealed partial class BlastSystem
             int total = rr.Cells.Count(c => (w.Body.Ceiling[ship.Grid.Index(c)] & CeilingFlags.Light) != 0);
             if (lost > 0 && lost * 2 >= Math.Max(1, total)) w.Fixtures.LightsFail(rr, "폭발에 조명이 깨졌다");
             if (lost > 0) w.Nozzles.Blast(rr, lost / (float)Math.Max(1, total)); // v23 천장 소화 배관도 같이 흔들린다
+            if (lost > 0) w.Relays.Blast(rr, lost / (float)Math.Max(1, total)); // v23 구역 중계기도
         }
         if (rec.Room >= 0) MarkLog.Add(ship.Rooms[rec.Room].Marks, w.Tick, $"{spec.Name} 자국 ({cause})");
         Scars.Add(scar);

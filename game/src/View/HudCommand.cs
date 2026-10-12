@@ -10,16 +10,18 @@ public partial class Hud
 {
     private const float CmdHead = 34f, CmdRow = 50f, CmdRowShort = 22f;
 
-    private bool CommandOpen => _world.Commander.OpenCases.Any() || _world.Commander.Tier != CommandTier.Main && _world.Commander.Tier != CommandTier.Human;
+    private bool CommandOpen => _world.Commander.OpenCases.Any() || _world.Commander.Tier != CommandTier.Main && _world.Commander.Tier != CommandTier.Human || _world.Relays.Zones.Any(z => !z.Up);
 
     /// <summary>지휘 카드 (그렸으면 높이).</summary>
     private float DrawCommandCard(float y, float maxH, bool full, Vector2 mouse)
     {
         var cm = _world.Commander;
         var open = cm.OpenCases.OrderByDescending(c => c.Life).ThenBy(c => c.Id).Take(full ? 4 : 3).ToList();
-        if (open.Count == 0 && cm.Tier == CommandTier.Main) return 0f;
+        var cut = _world.Relays.Zones.Where(z => !z.Up || z.DroneId >= 0).ToList();
+        if (open.Count == 0 && cm.Tier == CommandTier.Main && cut.Count == 0) return 0f;
         float rowH = full ? CmdRow : CmdRowShort;
-        float h = CmdHead + open.Count * rowH + 10f;
+        float cutH = cut.Count > 0 ? 18f : 0f;
+        float h = CmdHead + cutH + open.Count * rowH + 10f;
         if (h > maxH) return 0f;
         float x0 = ColX, w = RightColumnWidth;
         var card = new Rect2(x0, y, w, h);
@@ -31,6 +33,13 @@ public partial class Hud
         Gfx.Text(this, Fonts.Bold, new Vector2(x, y + 22), "지휘", Ui.TextLabel, Palette.Text);
         Gfx.TextRight(this, Fonts.Bold, new Vector2(right, y + 22), Fit($"{cm.Voice} · 지휘 건 {open.Count}", w - 80, Ui.TextSmall, Fonts.Bold), Ui.TextSmall, tierCol);
         float ly = y + CmdHead;
+        if (cut.Count > 0)
+        {
+            // v23 구역 중계기: 끊긴 구역 (드론이 임시로 잇는 구역은 따로)
+            string line = "무전 " + string.Join(" · ", cut.Select(z => z.Up ? $"{z.Name} 드론 중계" : $"{z.Name} 끊김({z.Why})"));
+            Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 8), Fit(line, w - 28, Ui.TextTiny, Fonts.Body), Ui.TextTiny, cut.Any(z => !z.Up) ? Palette.Danger : Palette.Warning);
+            ly += cutH;
+        }
         foreach (var k in open)
         {
             var room = k.RoomId >= 0 && k.RoomId < _world.Ship.Rooms.Count ? _world.Ship.Rooms[k.RoomId] : null;

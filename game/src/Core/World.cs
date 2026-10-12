@@ -90,6 +90,9 @@ public sealed class World
     /// <summary>v23 방마다 천장 자동 소화 설비 (물안개 · 탱크 · 밸브 · 열 퓨즈).</summary>
     public NozzleSystem Nozzles { get; }
 
+    /// <summary>v23 구역 중계기: 로봇 · 사람의 무전이 주 컴퓨터에 닿는 길 (꺼지면 그 구역이 끊긴다).</summary>
+    public RelaySystem Relays { get; }
+
     /// <summary>v11.2 엔진·추진제·항로: 회피 기동, 보통 항로 ↔ 잔해 지대.</summary>
     public PropulsionSystem Propulsion { get; }
 
@@ -295,6 +298,7 @@ public sealed class World
         Robots = new RobotSystem(this);
         Commander = new IncidentCommander(this);
         Nozzles = new NozzleSystem(this);
+        Relays = new RelaySystem(this);
         Propulsion = new PropulsionSystem(this, 1f);
         Hazards = new HazardSystem(this, seed);
         Comms = new CommsSystem(this);
@@ -437,6 +441,7 @@ public sealed class World
             Air.Update(dt);
             pf = Prof.Lap("sys.Air", pf);
             Nozzles.Update(dt);
+            Relays.Update(dt);
             Fire.Update(dt);
             pf = Prof.Lap("sys.Fire", pf);
             Water.Update(this, dt);
