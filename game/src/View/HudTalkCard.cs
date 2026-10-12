@@ -32,7 +32,6 @@ public partial class Hud
         var w = _world;
         var st = w.Tales;
         if (StorySystem.Off || st.Cards.Count == 0) return;
-        if (CouncilOpen || PolicyOpen || ChronicleOpen || TechOpen || ControlOpen || ChainOpen || ScaleCodexOpen || HelpOpen || VoyageOpen) return; // v17.7 항해 결산과 겹치지 않게
         var last = st.Cards[^1];
         if (last.Id != _talkId) { _talkId = last.Id; _talkAt = _time; _talkShift = 0; _talkClosed = w.Tick - last.Tick > SimTime.Minutes(30); } // 화면을 처음 볼 때(건너뛰기 · 불러오기) 지난 대화는 띄우지 않는다
         bool hover = _talkRect.HasPoint(mouse);
@@ -46,12 +45,14 @@ public partial class Hud
 
         float W = 610f, rowH = 30f;
         float H = 44f + 104f + k.Options.Count * rowH + 70f;
-        float x0 = Mathf.Clamp((Screen.X - RightColumnWidth) * 0.5f - W * 0.5f + 150f, Margin + 290f, MathF.Max(Margin + 290f, Screen.X - RightColumnWidth - W - Margin * 2)); // v19 좁은 창
-        // 위쪽 알림 띠(두 줄까지) 아래에서 — 알림이 대화 카드 머리를 덮지 않게
-        float y0 = MathF.Min(Margin + 52f + 8f + 40f + 26f + 76f, Screen.Y - H - LogHeight - Margin - 12f);
+        // v20 배가 보이는 자리 가운데 (고른 것 카드 · 오른쪽 창 앞까지) · 위쪽 알림 띠 아래 · 아래 탭 위
+        float areaR = (!_plan.Side.Empty ? _plan.Side.X : !_plan.Dock.Empty ? _plan.Dock.X : Screen.X - Margin) - UiLayout.Gap;
+        float x0 = Mathf.Clamp((Margin + areaR) * 0.5f - W * 0.5f, Margin, MathF.Max(Margin, areaR - W));
+        float y0 = MathF.Max(Margin, MathF.Min(Margin + 52f + 8f + 76f, SideBottom - H));
         var rect = new Rect2(x0, y0, W, H);
         _talkRect = rect;
         UiKit.Panel(this, rect);
+        _cards.Add(rect); // 이 자리를 누르면 화면이 받는다 (× · ◀ ▶ 단추가 배로 새지 않게)
         this.Box(new Rect2(x0, y0 + 10, 3, H - 20), tone.WithAlpha(0.85f));
         float x = x0 + 18, right = rect.End.X - 18;
 
@@ -62,7 +63,7 @@ public partial class Hud
         var room = w.Ship.Rooms.FirstOrDefault(r => r.Id == k.RoomId);
         Gfx.Text(this, Fonts.Bold, new Vector2(tx, y0 + 27), UiKit.Fit(k.Title, 220, Ui.TextTitle, Fonts.Bold), Ui.TextTitle, Palette.Text);
         Gfx.Text(this, Fonts.Body, new Vector2(tx + 230, y0 + 27), $"{room?.Name ?? ""} · {SimTime.Clock(k.Tick)}", Ui.TextSmall, Palette.TextMuted);
-        Button(new Rect2(right - 22, y0 + 10, 22, 20), "×", false, mouse, () => _talkClosed = true, 11);
+        Button(new Rect2(right - 26, y0 + 8, 26, 24), "×", false, mouse, () => { _talkClosed = true; _talkShift = 0; }, 13);
         if (st.Cards.Count > 1)
         {
             Button(new Rect2(right - 72, y0 + 10, 22, 20), "◀", false, mouse, () => _talkShift = Math.Min(_talkShift + 1, _world.Tales.Cards.Count - 1), 10);

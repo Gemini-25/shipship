@@ -31,6 +31,7 @@ public partial class Hud
         height = Math.Min(height, docked ? WinBottom - WinY : 620f);
         var card = docked ? new Rect2(WinX, WinY, width, height) : new Rect2(bottomLeft.X, bottomLeft.Y - height, width, height);
         Gfx.RoundRect(this, card, ChatGlass, 10, new Color(1, 1, 1, 0.07f));
+        _cards.Add(card); // 누르면 화면이 받는다 (× 단추가 배로 새지 않게)
         string head = sel != null ? $"선내 메신저 — {sel.Name}의 단말" : "선내 메신저";
         Gfx.Text(this, Fonts.Bold, card.Position + new Vector2(14, 22), head, 12, Palette.Text);
         if (sel != null)
