@@ -208,6 +208,10 @@ public static partial class Program
                 var wp = w.Brain2.Plans.Past.Concat(w.Brain2.Plans.Active).Where(p => p.Owner == witness.Id && p.Kind == PlanKind.Tell).ToList();
                 bool friendKnows = friend.Mind.Knows.ContainsKey($"fire:{room.Id}");
                 bool alarmFirst = !told && friend.Mind.Knows.TryGetValue($"fire:{room.Id}", out var fk0) && fk0.src is KnowSource.Alarm or KnowSource.Radio; // 통합7 방송(누가 본 걸 컴퓨터가 알렸다)이 먼저 닿아도 장면 전제가 깨진다
+                // v21 본 사람이 불길을 피해 하필 친구가 있는 방으로 대피해 들어가 소문으로 먼저 닿기도 한다 (찾아가 알린 게 아니다) — 그것도 장면 전제가 깨진 날
+                var ob = w.Brain2.Beliefs.Get(friend, Topic.Fire, room.Id);
+                bool otherFirst = !told && w.Brain2.Social.Tells == 0 && ob != null && ob.Src != BeliefSource.Told;
+                if (otherFirst && !alarmFirst && att < 2) { Console.WriteLine($"    (다른 길로 먼저 알았다 — 다른 날에 다시 {att + 1}) {friend.Name} {BeliefSystem.SourceName(ob!.Src)} {SimTime.Clock(ob.Tick)}"); continue; }
                 if (alarmFirst && att < 2) { Console.WriteLine($"    (경보 · 방송이 먼저 닿았다 — 다른 날에 다시 {att + 1}) {friend.Mind.Knows[$"fire:{room.Id}"].Item3} {SimTime.Clock(friend.Mind.Knows[$"fire:{room.Id}"].Item2)} · {friend.Name} @{friend.Room?.Name}"); continue; }
                 Check("알리기 — 불을 본 사람이 모르는 사람에게 알리러 간다 (경보가 안 닿는 방)",
                     w.Brain2.Social.Tells + w.Brain2.Social.AlreadyKnew > 0 && wp.Count > 0 && (told || friendKnows),

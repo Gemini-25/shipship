@@ -78,6 +78,7 @@ public static partial class Program
     public static int Main(string[] args)
     {
         Console.OutputEncoding = System.Text.Encoding.UTF8;
+        if (Environment.GetEnvironmentVariable("SHIPSIM_V21") == "0") RobotsV21.General = RobotsV21.Reactor = RobotsV21.Expanded = false; // 개발용: 회귀가 로봇 확장 때문인지 가린다
         int days = args.Length > 0 && int.TryParse(args[0], out var d) ? d : 14;
         int seed = args.Length > 1 && int.TryParse(args[1], out var s) ? s : 20260929;
         bool quiet = args.Contains("--quiet");
