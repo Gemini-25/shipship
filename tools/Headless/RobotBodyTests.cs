@@ -120,6 +120,62 @@ public static partial class Program
                 Check("저장 — 되살린 세계에서도 부위 · 덧댄 판 · 마지막 상처가 같다", same, $"{RobotBody.Line(r)} ↔ {RobotBody.Line(r2)}");
             }
 
+            // 11~13) 잔해 → 회수 → 해체 → 새 몸 조립
+            {
+                var w = DayOne(seed, "Hanbit");
+                var shopTypes = new[] { RoomType.RobotBay, RoomType.Workshop, RoomType.Storage };
+                var r = w.Robots.Robots.First(x => x.Operational && x.Room != null && !shopTypes.Contains(x.Room.Type));
+                string name = r.Name;
+                var dock = r.Dock;
+                w.Robots.Hurt(r, BotPart.ArmL, 0.9f, "시험"); // 왼팔은 고철로
+                w.Robots.Hurt(r, BotPart.Frame, 1.2f, "시험 — 무너진 격벽");
+                bool hauled = false;
+                for (int m = 0; m < 24 && !hauled; m++) { Run(w, SimTime.Minutes(10)); hauled = r.AtShop; }
+                Check("회수 — 부서진 로봇은 잔해로 남고 · 쉬던 로봇이 정비실로 끌어 온다", r.Wrecked && hauled && w.Robots.Salvage.Hauled >= 1,
+                    $"{name} 잔해 · {r.Room?.Name} · 정비실 {r.AtShop} · {w.Robots.Salvage.Line()}");
+                int motors0 = w.Ship.CountStored(ItemKind.Motor), sensors0 = w.Ship.CountStored(ItemKind.Sensor);
+                bool done = false;
+                for (int m = 0; m < 36 && !done; m++) { Run(w, SimTime.Minutes(10)); done = r.Salvaged; }
+                Check("해체 — 살아남은 부위는 부품으로 (모터 · 센서 …) · 망가진 부위는 고철로", done && w.Robots.Salvage.PartsBack >= 2 && w.Robots.Salvage.Scrap >= 1
+                    && (w.Ship.CountStored(ItemKind.Motor) > motors0 || w.Ship.CountStored(ItemKind.Sensor) > sensors0),
+                    $"해체 {done} · {w.Robots.Salvage.Line()} · {r.Marks.LastOrDefault().Text}");
+                // 조립: 모자란 부품을 채워 둔다 (해체로 나온 것에 보탠다)
+                foreach (var (k, n) in new[] { (ItemKind.Plate, 4), (ItemKind.Motor, 3), (ItemKind.Sensor, 2), (ItemKind.Electronics, 3), (ItemKind.CellPack, 2), (ItemKind.Cable, 3), (ItemKind.RobotLimb, 2) })
+                    w.Ship.Containers.First(f => f.Storage!.Accepts(k) && f.Storage.Free > n).Storage!.Add(k, n);
+                Robot? fresh = null;
+                for (int m = 0; m < 96 && fresh == null; m++) { Run(w, SimTime.Minutes(10)); fresh = w.Robots.Robots.FirstOrDefault(x => x.FromWreck == name); }
+                Check("조립 — 함대가 줄고 부품이 모이면 정비 로봇이 빈 충전대에 새 몸을 짜 맞춘다 (잔해의 이름을 잇는다)", fresh != null && fresh.Dock == dock && fresh.Rebuilt == 1 && w.Robots.Salvage.Built == 1,
+                    fresh != null ? $"{fresh.Name} ← {fresh.FromWreck} · {fresh.Rebuilt}번째 몸 · {fresh.Marks.LastOrDefault().Text}" : $"없음 · {w.Robots.Salvage.Line()}");
+            }
+
+            // 14) 뜯어 살리기 — 잔해에서: 부품이 없어 멈춘 급한 로봇에게 잔해의 부위를
+            {
+                var w = DayOne(seed, "Hanbit");
+                var medic = w.Robots.Robots.First(x => x.Operational && RobotSystem.Worth(x) >= 2.5f && x.State == RobotState.Docked);
+                var wreck = w.Robots.Robots.First(x => x != medic && x.Operational && RobotSystem.Worth(x) < 2.5f);
+                w.Robots.Hurt(wreck, BotPart.Frame, 1.2f, "시험");
+                foreach (var f in w.Ship.Containers) foreach (var k in new[] { ItemKind.Motor, ItemKind.Bearing }) { int n = f.Storage!.Count(k); if (n > 0) f.Storage.Take(k, n); } // 새 모터도 · 임시로 되살릴 베어링도 없다
+                w.Robots.ForceFault(medic, RobotFault.Drive);
+                bool fixedIt = false;
+                for (int m = 0; m < 48 && !fixedIt; m++) { Run(w, SimTime.Minutes(10)); fixedIt = medic.Fault == null; }
+                Check("뜯어 살리기 — 모터가 배에 없으면 잔해의 바퀴로 급한 로봇을 살린다 (떼어 오든 해체해 나오든 · 멀쩡한 로봇은 건드리지 않는다)",
+                    fixedIt && w.Robots.Salvage.FromRobots == 0 && w.Robots.Salvage.FromWrecks + w.Robots.Salvage.Dismantled >= 1,
+                    $"{medic.Name}: 고장 {medic.Fault?.ToString() ?? "없음"} · {RobotBody.Line(medic)} · {w.Robots.Salvage.Line()}");
+            }
+
+            // 15) 뜯어 살리기 — 다른 로봇에서: 잔해도 없으면 덜 급한 로봇을 세워 떼어 낸다 (주 컴퓨터가 정하고 까닭을 남긴다)
+            {
+                var w = DayOne(seed, "Hanbit");
+                var medic = w.Robots.Robots.First(x => x.Operational && RobotSystem.Worth(x) >= 2.5f && x.State == RobotState.Docked);
+                foreach (var f in w.Ship.Containers) foreach (var k in new[] { ItemKind.Motor, ItemKind.Bearing }) { int n = f.Storage!.Count(k); if (n > 0) f.Storage.Take(k, n); } // 새 모터도 · 임시로 되살릴 베어링도 없다
+                w.Robots.ForceFault(medic, RobotFault.Drive);
+                Robot? donor = null;
+                for (int m = 0; m < 48 && donor == null; m++) { Run(w, SimTime.Minutes(10)); donor = w.Robots.Robots.FirstOrDefault(x => x.Marks.Any(k => k.Text.Contains("떼였다"))); }
+                Check("뜯어 살리기 — 잔해도 없으면 주 컴퓨터가 덜 급한 로봇의 부위를 떼어 살린다 (떼인 로봇은 멈추고 · 까닭이 남는다)", donor != null && donor.Fault != null && w.Robots.Salvage.FromRobots >= 1
+                    && w.Log.Entries.Any(e => e.Text.Contains("덜 급한")),
+                    donor != null ? $"{donor.Name}(급함 {RobotSystem.Worth(donor):0.0}) → {medic.Name}(급함 {RobotSystem.Worth(medic):0.0}) · {donor.Marks.LastOrDefault().Text} · {w.Robots.Salvage.Line()}" : $"없음 · {w.Robots.Salvage.Line()}");
+            }
+
             // 10) 하루 지내기: 아무 일 없는 하루에도 닳음 고장이 부위로 남고 · 결정론
             {
                 uint H()

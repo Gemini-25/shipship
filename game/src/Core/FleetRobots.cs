@@ -93,6 +93,7 @@ public sealed partial class RobotSystem
         {
             r.TowBot = null;
             if (tb.Hauling == r) tb.Hauling = null;
+            if (r.Wrecked) { SetState(r, RobotState.Lost); r.SalvageBy = -1; r.Doing = "끌던 로봇이 놓았다 — 잔해가 그 자리에"; r.Room = _world.Ship.RoomAt(r.Cell) ?? r.Room; return true; } // v22 잔해는 잔해로
             SetState(r, RobotState.Stalled);
             r.Doing = "끌던 로봇이 놓았다 — 멈춰 섰다";
             return true;

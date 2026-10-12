@@ -256,6 +256,7 @@ public sealed partial class RobotSystem
         {
             _v21Minute = w.Tick + SimTime.Minutes(1);
             BodyMinute(); // v22 폭발 · 파편 · 물 · 진공 · 열 · 추위 · 방사선이 부위를 깎는다
+            SalvageTick(); // v22 잔해 회수 · 해체 · 뜯어 살리기 · 새 몸 조립 (5분마다)
             DraftTick();
             CallSpecialists();
             DeliverFinds();

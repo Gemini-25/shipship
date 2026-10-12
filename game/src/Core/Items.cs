@@ -54,6 +54,8 @@ public enum ItemKind
     Painkiller, Antibiotic, Anesthetic, BloodSubstitute, MedHerb,
     // 의료 2차 — 면역억제제 · 투석액 · 세포 잉크
     Immunosuppressant, Dialysate, BioInk,
+    // v22 기계의 상처 — 잔해에서 떼어 낸 로봇 팔다리 (새 로봇 조립 · 사람 의수 · 의족)
+    RobotLimb,
 }
 
 /// <summary>재료 등급 (리뷰어 안: 원료 → 기본 수리재 → 일반 부품 → 고급 부품).</summary>
@@ -93,6 +95,7 @@ public static class ItemKinds
         ItemKind.Immunosuppressant => "면역억제제",
         ItemKind.Dialysate => "투석액",
         ItemKind.BioInk => "세포 잉크",
+        ItemKind.RobotLimb => "로봇 팔다리",
         _ => ItemsV15.Name(k) ?? k.ToString(), // v15
     };
 
@@ -100,7 +103,7 @@ public static class ItemKinds
     {
         ItemKind.MetalOre or ItemKind.Silicate or ItemKind.Carbon or ItemKind.Ice or ItemKind.Rare => ItemTier.Raw,
         ItemKind.Plate or ItemKind.Structure or ItemKind.Cable or ItemKind.Fuse or ItemKind.Electronics or ItemKind.Sealant => ItemTier.Basic,
-        ItemKind.Motor or ItemKind.Pump or ItemKind.Bearing or ItemKind.PowerController or ItemKind.Sensor => ItemTier.General,
+        ItemKind.Motor or ItemKind.Pump or ItemKind.Bearing or ItemKind.PowerController or ItemKind.Sensor or ItemKind.RobotLimb => ItemTier.General,
         ItemKind.ReactorControl => ItemTier.Advanced,
         _ => ItemsV15.Tier(k), // v15
     };
