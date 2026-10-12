@@ -103,12 +103,21 @@ public sealed partial class RobotSystem
     private bool Stands(Robot r, WorkOrder o)
     {
         var w = _world;
-        if (HandsOff || !HandWork(o.Kind) || r.Kind is RobotKind.Stretcher or RobotKind.Nurse) return false;
+        if (HandsOff || !HandWork(o.Kind) || RobotsV21.Medical(r.Kind) && o.Urgency < 0.9f) return false; // v21 의료 로봇은 아주 급할 때만
         if (o.Kind is WorkKind.ResetBreaker or WorkKind.StartAux or WorkKind.CloseValve or WorkKind.OpenValve) return true;
         if (o.Kind == WorkKind.StockDock) return w.Automation.Unattended || o.Urgency >= 0.9f; // 운반 로봇이 없는 작은 배: 드론이 외벽을 막을 금속판을 거치대에 (아무 로봇이나 나른다) · 강화: 구멍이 열려 드론이 자재를 기다리면 언제나
-        if (o.Kind is WorkKind.Refuel or WorkKind.RefillCoolant) return Carrier(r.Kind) || Fixer(r.Kind);
+        if (o.Kind is WorkKind.Refuel or WorkKind.RefillCoolant) return Carrier(r.Kind) || Fixer(r.Kind) || RobotsV21.General || r.Kind == RobotKind.Plumber;
         // 무인 운항: 정비 로봇이 모자라면 다른 로봇도 주 컴퓨터 안내로 가벼운 수리를 (무거운 부품 없이 · 느리고 자주 헛짚는다)
-        if (o.Kind == WorkKind.PreventiveCheck) return o.Target.Kind == TargetKind.Room && (Fixer(r.Kind) || RobotsV15.Patrols(r.Kind)); // 방 순찰: 수리 로봇이 쉴 때 센서로 둘러본다 (설비 전조 손보기는 사람 몫)
+        if (o.Kind == WorkKind.PreventiveCheck) return o.Target.Kind == TargetKind.Room && (Fixer(r.Kind) || RobotsV15.Patrols(r.Kind) || RobotsV21.General); // 방 순찰: 수리 로봇이 쉴 때 센서로 둘러본다 (설비 전조 손보기는 사람 몫)
+        // v21 모든 로봇의 기본 손일: 가벼운 관 이음 · 전선 · 땜질 · 간선 · 부품 한 가지 수리 (특기 로봇보다 느리고 · 특기 로봇이 먼저 잡게 기다린다)
+        if (!Fixer(r.Kind) && RobotsV21.General && !RobotsV21.Medical(r.Kind))
+            return o.Kind switch
+            {
+                WorkKind.Reline or WorkKind.Rewire or WorkKind.PatchPipe => true,
+                WorkKind.RepairNet => o.Urgency >= 0.75f || w.Automation.Unattended,
+                WorkKind.Repair => RepairOk(o) && o.Target.Furniture?.Machine?.Faults.FirstOrDefault(x => x.Kind == o.Fault && x.Circuit == o.Circuit) is Fault gf && !gf.Materials.Any(x => PartsSystem.Heavy(x.kind)),
+                _ => false,
+            };
         if (!Fixer(r.Kind)) return o.Kind == WorkKind.Repair && w.Automation.Unattended && RepairOk(o) && o.Target.Furniture?.Machine?.Faults.FirstOrDefault(x => x.Kind == o.Fault && x.Circuit == o.Circuit) is Fault lf && !lf.Materials.Any(x => PartsSystem.Heavy(x.kind));
         return o.Kind switch
         {
@@ -137,19 +146,26 @@ public sealed partial class RobotSystem
     public bool HandsFree(WorkOrder o)
     {
         var w = _world;
-        if (HandsOff || !HandWork(o.Kind)) return false;
+        if (HandsOff || !HandWork(o.Kind) && !RobotsV21.Yields(o.Kind)) return false;
         if (_freeTick != w.Tick)
         {
             _freeTick = w.Tick;
             _freeKinds.Clear();
             foreach (var r in Robots)
             {
-                if (!r.Operational || r.State is not (RobotState.Docked or RobotState.Active) || r.Order != null || r.Steps != null && r.State == RobotState.Active || r.Battery < 0.4f) continue;
-                if (r.Kind is RobotKind.Stretcher or RobotKind.Nurse) continue;
+                if (!r.Operational || r.State is not (RobotState.Docked or RobotState.Active) || r.Battery < 0.4f) continue;
+                if (r.Order != null || r.Steps != null && r.State == RobotState.Active)
+                {
+                    // v21 남의 가벼운 일을 하던 특기 로봇은 부르면 온다 (제 특기 일만)
+                    if (Callable(r) && RobotsV15.Bot(r.Kind) is { } cr) foreach (var j in cr.Jobs) if (RobotsV21.Yields(j)) _freeKinds.Add(j);
+                    continue;
+                }
+                if (RobotsV15.Bot(r.Kind) is { } mr && RobotsV21.Medical(r.Kind)) { foreach (var j in mr.Jobs) if (RobotsV21.Yields(j)) _freeKinds.Add(j); continue; } // 의료 로봇: 치료만
                 _freeKinds.Add(WorkKind.ResetBreaker); _freeKinds.Add(WorkKind.StartAux); _freeKinds.Add(WorkKind.CloseValve); _freeKinds.Add(WorkKind.OpenValve);
                 if (Carrier(r.Kind) || Fixer(r.Kind)) { _freeKinds.Add(WorkKind.Refuel); _freeKinds.Add(WorkKind.RefillCoolant); }
                 if (Fixer(r.Kind) || RobotsV15.Patrols(r.Kind)) _freeKinds.Add(WorkKind.PreventiveCheck);
                 if (Fixer(r.Kind)) { _freeKinds.Add(WorkKind.Repair); _freeKinds.Add(WorkKind.Reline); _freeKinds.Add(WorkKind.Rewire); _freeKinds.Add(WorkKind.PatchPipe); if (w.Automation.CoreOnline && w.Automation.Unattended) _freeKinds.Add(WorkKind.RestartReactor); }
+                if (RobotsV15.Bot(r.Kind) is { } row) foreach (var j in row.Jobs) if (RobotsV21.Yields(j)) _freeKinds.Add(j); // v21 새 특기 일 (청소 · 조리 · 물 퍼내기 · 봉합 …)
             }
         }
         return _freeKinds.Contains(o.Kind) && (o.Kind != WorkKind.Repair || RepairOk(o)) && (o.Kind != WorkKind.PreventiveCheck || o.Target.Kind == TargetKind.Room);

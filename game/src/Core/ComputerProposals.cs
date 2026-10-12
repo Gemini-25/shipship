@@ -204,6 +204,7 @@ public sealed partial class AutomationSystem
     {
         var w = _world;
         if (Checks.Any(k => k.RoomId == room.Id)) return null;
+        if (proposal < 0 && RobotEyes(room, why, ghost)) return null; // v21 확인은 로봇 눈이 먼저 (사람은 로봇이 없을 때)
         var c = room.Center;
         var who = w.Crew.Where(x => x.CanAct && x.IsAwake && !x.IsChild && !x.Outside && x.Room != null && x.Room != room && x.CarryingPerson == null)
             .OrderBy(x => MathF.Abs(x.Cell.X + 0.5f - c.X) + MathF.Abs(x.Cell.Y + 0.5f - c.Y)).ThenBy(x => x.Id).FirstOrDefault()

@@ -158,7 +158,9 @@ public static partial class Program
                 Run(w6, SimTime.Minutes(2));
                 bool down = v6.Down;
                 Until(w6, () => w6.MedBots.Carried > 0, 3f);
-                Check("들것 로봇 — 쓰러진 사람을 들것에 실어 치료 침대로 옮긴다", down && w6.MedBots.Carried > 0 && (v6.CareBed != null || v6.LaidSafe) && v6.Memory.Marks.Any(m => m.Text.Contains(st.Name)),
+                // v21 배에 들것 · 구조 로봇이 처음부터 실려 있다 — 어느 로봇이든 옮기면 된다
+                bool byBot = w6.Robots.Robots.Any(r => r.Kind is RobotKind.Stretcher or RobotKind.Rescuer && v6.Memory.Marks.Any(m => m.Text.Contains(r.Name)));
+                Check("들것 로봇 — 쓰러진 사람을 들것에 실어 치료 침대로 옮긴다", down && w6.MedBots.Carried > 0 && (v6.CareBed != null || v6.LaidSafe) && byBot,
                     $"{v6.Name} 쓰러짐 {down} · 옮김 {w6.MedBots.Carried} · 침대 {v6.CareBed?.Name ?? (v6.LaidSafe ? "바닥" : "-")} · {v6.Room?.Name} · 로봇 {st.State}/{st.Doing}");
 
                 var w6b = DayOne(seed, "Hanbit");
@@ -167,10 +169,13 @@ public static partial class Program
                 var back = Able(w6b).First(c => c != v6b && c.Role != CrewRole.Medic);
                 Alone(w6b, v6b);
                 v6b.Vitals.Health = 0.1f;
-                Until(w6b, () => w6b.MedBots.Carrying(st2) != null, 3f);
-                bool carrying = w6b.MedBots.Carrying(st2) != null;
+                Robot? Carrier() => w6b.Robots.Robots.FirstOrDefault(r => w6b.MedBots.Carrying(r) == v6b);
+                Until(w6b, () => Carrier() != null, 3f);
+                var carrier = Carrier() ?? st2;
+                bool carrying = w6b.MedBots.Carrying(carrier) != null;
                 Run(w6b, SimTime.Minutes(1));
-                w6b.Robots.ForceFault(st2, RobotFault.Drive);
+                foreach (var r in w6b.Robots.Robots.Where(r => r != carrier && r.Kind is RobotKind.Stretcher or RobotKind.Rescuer)) r.Disabled = true; // 다른 들것은 없는 셈 — 사람이 이어 옮긴다
+                w6b.Robots.ForceFault(carrier, RobotFault.Drive);
                 Run(w6b, SimTime.Minutes(1));
                 bool dropped = w6b.MedBots.Dropped > 0 && !w6b.MedBots.CarriedByBot(v6b) && v6b.Down;
                 back.Away = false;

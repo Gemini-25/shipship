@@ -345,7 +345,7 @@ public sealed partial class RobotSystem
         foreach (var r in Robots)
         {
             bool natural = RobotsV15.Assists(r.Kind) || RobotsV15.Base(r.Kind) == RobotKind.Maintainer;
-            if (r == b || !Spare(r, cmd) || !natural && !(w.Automation.Unattended && r.Kind is not (RobotKind.Stretcher or RobotKind.Nurse))) continue; // 무인 운항: 정비 로봇이 멈추면 다른 로봇이 주 컴퓨터 안내로
+            if (r == b || !Spare(r, cmd) || !natural && !(w.Automation.Unattended && !RobotsV21.Medical(r.Kind))) continue; // 무인 운항: 정비 로봇이 멈추면 다른 로봇이 주 컴퓨터 안내로
             float d = Far(r.Position, b.Position) + (Free(r) ? 0f : 20f) + (natural ? 0f : 40f);
             if (d < bd) { bd = d; best = r; }
         }

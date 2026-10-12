@@ -242,6 +242,8 @@ public static partial class Program
         if (args.Contains("--proptest")) return RunPropTest(seed); // v15.8 소품·장식 70
         if (args.Contains("--computer15test")) return RunComputerV15Test(seed); // v15.9
         if (args.Contains("--robot15test")) return RunRobotV15Test(seed); // v15.7 로봇·드론 27(의료 3차 +2) · 이야기꾼 8
+        if (args.Contains("--robot21probe")) return RunRobot21Probe(seed, shipArg ?? "Hanbit", days, args.Contains("--legacy")); // v21 로봇 확장 (한 배 며칠)
+        if (args.Contains("--robot21test")) return RunRobot21Test(seed); // v21 로봇 · 드론 확장
         if (args.Contains("--campaign15test")) return RunCampaign15Test(seed); // v15.6
         if (args.Contains("--replaycheck")) return RunReplayCheck(seed);
         if (args.Contains("--detcheck") || args.Contains("--dethash")) // 결정론: 같은 시드 → 같은 틱에 같은 상태

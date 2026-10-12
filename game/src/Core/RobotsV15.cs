@@ -116,6 +116,48 @@ public static class RobotsV15
             C((ItemKind.Motor, 1), (ItemKind.Electronics, 1), (ItemKind.Sensor, 1), (ItemKind.Pump, 1)),
             w => w.Blood.Transfusions + w.Organs.Stats.Cranked >= 3 ? (0.4f, $"수혈 · 손 펌프 {w.Blood.Transfusions + w.Organs.Stats.Cranked}번")
                 : w.Infection.Stats.Isolated >= 1 ? (0.3f, "격리실을 썼다") : No),
+        // ── v21 새 로봇 9 (RobotsV21.cs): 기본 행동은 모든 로봇이 하고, 이들은 특기가 있다 ──
+        // 생활
+        new(RobotKind.Cleaner, "청소 로봇", RobotKind.Hauler, J(WorkKind.CleanUp, WorkKind.ClearRubble, WorkKind.EmptyBucket), 0.08f, 0.9f, 0.9f, 1.1f,
+            "그을음 · 소화 분말 닦기 · 잔해 치우기 · 회수통 비우기 · 지나가며 바닥 닦기",
+            C((ItemKind.Motor, 1), (ItemKind.Nozzle, 1), (ItemKind.Plate, 1)),
+            w => w.History.Fires >= 1 ? (0.3f, $"불이 {ShipHistory.Times(w.History.Fires)} 났다") : No),
+        new(RobotKind.Chef, "조리 로봇", RobotKind.Hauler, J(WorkKind.Cook, WorkKind.Restock), 0.08f, 1f, 1f, 1.25f,
+            "주방에서 식사 짓기 · 배식기 채우기 · 맛은 무난하다 (솜씨 좋은 사람만 못하다)",
+            C((ItemKind.Motor, 1), (ItemKind.Electronics, 1), (ItemKind.Sensor, 1)),
+            w => Evolution.StarvedHours(w) > 1f ? (0.35f, $"굶주린 {Evolution.StarvedHours(w):0}사람·시간") : No),
+        // 설비
+        new(RobotKind.Plumber, "배관 로봇", RobotKind.Maintainer, J(WorkKind.PatchPipe, WorkKind.Reline, WorkKind.SealSeep, WorkKind.FlushMain, WorkKind.ClearMain, WorkKind.PumpOut,
+                WorkKind.CloseValve, WorkKind.OpenValve, WorkKind.ShutRoomValve, WorkKind.OpenRoomValve, WorkKind.RefillCoolant), 0.075f, 1f, 1f, 1.05f,
+            "관 속을 기어 새는 곳 땜질 · 밸브 · 바닥 물 퍼내기 · 냉각수 보충",
+            C((ItemKind.Motor, 1), (ItemKind.Hose, 1), (ItemKind.Sensor, 1)),
+            w => w.Piping.Segments.Any(x => !x.Sound) ? (0.35f, "배관이 샌다") : No),
+        new(RobotKind.Lifter, "지게 로봇", RobotKind.Hauler, J(WorkKind.ClearRubble, WorkKind.StockCache, WorkKind.StockDock), 0.07f, 1.3f, 0.7f, 1.1f,
+            "무거운 짐 · 잔해 · 무거운 부품을 혼자 든다 · 무거운 부품 수리를 사람 곁에서 받친다",
+            C((ItemKind.Motor, 2), (ItemKind.Plate, 2)),
+            w => w.Robots.Robots.Count(r => r.Partner != null) >= 1 ? (0.25f, "로봇 둘이 무거운 짐을 들었다") : No) { Assist = true, AssistBonus = 0.45f },
+        new(RobotKind.Ventman, "환기 로봇", RobotKind.Maintainer, J(WorkKind.OperateDamper, WorkKind.CoolDown, WorkKind.LookRoom), 0.085f, 0.9f, 0.9f, 1.1f,
+            "환기 댐퍼를 손으로 · 달아오른 설비 식히기 · 컴퓨터가 모르는 방의 공기 재기",
+            C((ItemKind.Motor, 1), (ItemKind.Sensor, 2)),
+            w => w.Ship.Rooms.Any(r => r.DamperJammed || r.DamperStuck) ? (0.3f, "댐퍼가 걸렸다") : No),
+        // 안전
+        new(RobotKind.Rescuer, "구조 로봇", RobotKind.Hauler, J(WorkKind.WakeCrew), 0.095f, 1.1f, 0.85f, 1.1f,
+            "쓰러진 사람을 위험한 방에서 끌어내기 · 상처 누르기 · 위기에 잠든 사람 깨우기 · 진공 · 연기에서도",
+            C((ItemKind.Motor, 2), (ItemKind.Plate, 1), (ItemKind.Sensor, 1)),
+            w => w.History.Collapses >= 1 ? (0.4f, $"쓰러진 일 {w.History.Collapses}번") : No),
+        new(RobotKind.Sealer, "봉쇄 로봇", RobotKind.Safety, J(WorkKind.SealBreach, WorkKind.CrankDoor), 0.085f, 1.1f, 0.8f, 1.05f,
+            "안쪽에서 파공 막기 (숨을 안 쉬어 진공도 간다) · 격벽 손으로 닫기 · 열에 강하다",
+            C((ItemKind.Motor, 1), (ItemKind.Plate, 2), (ItemKind.Nozzle, 1)),
+            w => w.History.BreachesByRoom.Values.Sum() >= 1 ? (0.4f, "선체가 뚫렸다") : No),
+        new(RobotKind.Airman, "공기 로봇", RobotKind.Safety, J(WorkKind.SealO2Line, WorkKind.BleedRoom), 0.085f, 1f, 0.9f, 1.05f,
+            "산소관 누출 막기 · 문틈 환기로 역화 막기 · 독한 공기를 빨아들여 거른다",
+            C((ItemKind.Motor, 1), (ItemKind.Pump, 1), (ItemKind.Sensor, 1)),
+            w => w.Ship.Rooms.Any(r => r.O2Leak > 0f || r.Backdraft > 0f) ? (0.35f, "공기가 위험했다") : No),
+        // 의료
+        new(RobotKind.Medic, "의사 로봇", RobotKind.Hauler, J(WorkKind.Treat), 0.085f, 0.9f, 0.85f, 1.15f,
+            "진단 · 응급 처치 · 상처 누르기 · 구급 키트 · 피 나르기 (의무관 곁을 지킨다)",
+            C((ItemKind.Electronics, 2), (ItemKind.Sensor, 1), (ItemKind.Pump, 1)),
+            w => w.History.Collapses >= 1 ? (0.45f, $"쓰러진 일 {w.History.Collapses}번") : No),
     };
 
     public static readonly DroneRow[] Flyers =
@@ -147,6 +189,27 @@ public static class RobotsV15
             "골조 다시 세우기 · 임시 트러스 · 연결부 · 튼튼하고 손이 빠르다",
             C((ItemKind.Motor, 1), (ItemKind.Electronics, 1), (ItemKind.Structure, 1)),
             w => w.Structure.FramesLost.Values.Sum() >= 1 ? (0.4f, $"골조를 {w.Structure.FramesLost.Values.Sum()}번 잃었다") : No),
+        // ── v21 새 드론 5 (DronesV21.cs) ──
+        new(DroneKind.Shield, "방패 드론", DroneKind.Inspect, J(), 0.32f, 0.22f, 1.1f, 1f,
+            "경보가 난 운석의 길목에 나가 몸으로 받는다 (작은 것은 부수고 큰 것은 줄인다) · 평소엔 외벽 검사",
+            C((ItemKind.Motor, 1), (ItemKind.Plate, 2), (ItemKind.Sensor, 1)),
+            w => w.History.ImpactCells.Count >= 1 ? (0.5f, $"운석이 {w.History.ImpactCells.Count}번 들어왔다") : No) { PatrolRooms = 3 },
+        new(DroneKind.Miner, "채굴 드론", DroneKind.Tow, J(WorkKind.Retrieve), 0.13f, 0.14f, 0.9f, 1f,
+            "한가할 때 배 곁 먼지 띠에서 얼음 · 금속 원료를 긁어 온다 · 떠내려간 것 건지기",
+            C((ItemKind.Motor, 1), (ItemKind.Electronics, 1), (ItemKind.Nozzle, 1)),
+            w => w.Water.Level < w.Water.Capacity * 0.4f ? (0.35f, "물이 모자라다") : No) { Tow = 1.2f },
+        new(DroneKind.Polisher, "외판 손질 드론", DroneKind.Repair, J(WorkKind.RepairRadiator, WorkKind.Clamp), 0.18f, 0.15f, 0.8f, 0.8f,
+            "방열판의 먼지 · 서리를 닦아 냉각을 되살린다 (고장 나기 전에) · 방열판 수리",
+            C((ItemKind.Motor, 1), (ItemKind.Nozzle, 1), (ItemKind.Sensor, 1)),
+            w => w.Piping.Segments.Any(s => s.Radiator.Count > 0 && s.RadiatorCondition < 0.85f) ? (0.3f, "방열판이 흐려졌다") : No),
+        new(DroneKind.Relay, "중계 드론", DroneKind.Inspect, J(), 0.24f, 0.12f, 0.8f, 1f,
+            "사람이 선외에 나가면 그쪽에 떠서 무전을 이어 준다 · 평소엔 외벽 검사",
+            C((ItemKind.Motor, 1), (ItemKind.Electronics, 2)),
+            w => w.EvaRisk.Stats.Adrifts >= 1 ? (0.45f, $"선외에서 {w.EvaRisk.Stats.Adrifts}번 떠내려갔다") : No) { PatrolRooms = 4 },
+        new(DroneKind.Lifeguard, "구조 드론", DroneKind.Tow, J(WorkKind.Retrieve), 0.22f, 0.15f, 0.85f, 1f,
+            "떠내려간 사람 · 드론을 빨리 · 세게 끌어온다",
+            C((ItemKind.Motor, 2), (ItemKind.Electronics, 1)),
+            w => w.EvaRisk.Stats.Adrifts >= 1 ? (0.5f, "사람이 떠내려간 적이 있다") : No) { Tow = 1.4f },
     };
 
     private static readonly BotRow?[] BotOf = Index(Bots, b => (int)b.Kind, Enum.GetValues<RobotKind>().Length);

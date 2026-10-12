@@ -91,6 +91,23 @@ public sealed class ComputerForesight
             "", "연산 — 덜 급한 일을 쉬게 한다"),
     };
 
+    /// <summary>v21 추세를 눌러 쓰는 비율 (사람 · 컴퓨터가 대비하면 꺾인다).</summary>
+    public const float Damp = 0.6f;
+    /// <summary>하루 주기가 뚜렷한 값.</summary>
+    private static bool Daily(string key) => key == "rest";
+
+    /// <summary>뒤에서 n개의 최소제곱 기울기 (한 시간마다).</summary>
+    private static float Trend(List<float> list, int n)
+    {
+        int s0 = list.Count - n;
+        float mx = (n - 1) / 2f, my = 0f;
+        for (int i = 0; i < n; i++) my += list[s0 + i];
+        my /= n;
+        float num = 0f, den = 0f;
+        for (int i = 0; i < n; i++) { float dx = i - mx; num += dx * (list[s0 + i] - my); den += dx * dx; }
+        return den > 0f ? num / den : 0f;
+    }
+
     /// <summary>갈래마다 맞힌 비율 (처음엔 반쯤 믿는다).</summary>
     public float Skill(string key) => _score.TryGetValue(key, out var s) ? (s.hits + 1f) / (s.total + 2f) : 0.5f;
 
@@ -126,15 +143,23 @@ public sealed class ComputerForesight
             if (pr.Measure(w) is not float now) continue;
             if (!_samples.TryGetValue(pr.Key, out var list)) _samples[pr.Key] = list = new List<float>();
             list.Add(now);
-            if (list.Count > 7) list.RemoveAt(0);
+            if (list.Count > 25) list.RemoveAt(0); // v21 하루치 (어제 같은 때를 본다)
             if (list.Count < 3) continue;
-            float slope = (list[^1] - list[0]) / (list.Count - 1); // 한 시간마다
-            float value = now + slope * Horizon;
+            // v21 열두 시간 최소제곱 추세 (한두 시간 흔들림에 덜 휘둘린다) · 사람이 대비하면 꺾이니 눌러서 쓴다
+            float slope = Trend(list, Math.Min(list.Count, 12));
+            float value = now + slope * Horizon * Damp;
+            string basis = $"지난 {Math.Min(list.Count, 12) - 1}시간 추세 {(slope >= 0 ? "+" : "")}{slope:0.##}{pr.Unit}/시간";
+            if (Daily(pr.Key) && list.Count >= 25)
+            {
+                // 하루 주기 (기력은 밤에 차고 낮에 준다): 어제 이맘때 + 6시간 뒤 값에 하루 동안 달라진 만큼
+                value = list[^19] + (list[^1] - list[0]);
+                basis = "어제 같은 때 + 하루 사이 달라진 만큼";
+            }
             float conf = Skill(pr.Key);
             var p = new Prediction
             {
                 Key = pr.Key, Name = pr.Name, Unit = pr.Unit, Tick = w.Tick, Due = w.Tick + SimTime.Hours(Horizon), Now = now, Value = value, Slope = slope, Confidence = conf,
-                Basis = $"지난 {list.Count - 1}시간 {(slope >= 0 ? "+" : "")}{slope:0.##}{pr.Unit}/시간",
+                Basis = basis,
             };
             Current.Add(p);
             Pending.Add(p);
@@ -142,7 +167,8 @@ public sealed class ComputerForesight
             Made++;
             // 3) 계획: 문턱을 넘을 것 같으면 할 일을 올린다 (지금 이미 넘었으면 다른 조치들이 이미 움직인다)
             float low = pr.Low(w), high = pr.High(w);
-            string? goal = value < low && now >= low && pr.LowGoal != "" ? pr.LowGoal : value > high && now <= high && pr.HighGoal != "" ? pr.HighGoal : null;
+            // v21 문턱을 허용 오차 넘게 지날 때만 계획을 세운다 (아슬아슬한 예측으로 사람을 흔들지 않는다)
+            string? goal = value < low - pr.Tolerance * 0.5f && now >= low && pr.LowGoal != "" ? pr.LowGoal : value > high + pr.Tolerance * 0.5f && now <= high && pr.HighGoal != "" ? pr.HighGoal : null;
             if (goal == null || Plan.Any(x => x.Key == pr.Key && w.Tick - x.Tick < SimTime.Hours(Horizon))) continue;
             var item = new PlanItem
             {
@@ -157,7 +183,11 @@ public sealed class ComputerForesight
             bool below = value < low;
             a.Book.Add(ActKind.Forecast, pr.Key == "heat" ? a.ComputerBody?.Room : null, $"{pr.Name} {now:0.#}{pr.Unit} · {p.Basis}", $"{Horizon:0}시간 뒤 {value:0.#}{pr.Unit} — 문턱 {thr:0.#} (믿음 {conf * 100:0}%)",
                 $"계획: {item.Action}", conf >= 0.6f ? "방송" : "", "plan:" + key, SimTime.Hours(Horizon), Horizon * 60f,
-                (world, act) => Predictors.First(x => x.Key == key).Measure(world) is float v ? ((below ? v < thr + pr.Tolerance : v > thr - pr.Tolerance) ? (1, $"맞았다 — {v:0.#}{pr.Unit}") : (-1, $"틀렸다 — {v:0.#}{pr.Unit} (문턱을 안 넘었다)")) : (2, "참고 — 잴 수 없다"));
+                (world, act) => Predictors.First(x => x.Key == key).Measure(world) is float v
+                    ? (below ? v < thr + pr.Tolerance : v > thr - pr.Tolerance) ? (1, $"맞았다 — {v:0.#}{pr.Unit}")
+                    : (below ? v < p.Now : v > p.Now) ? (2, $"참고 — 그쪽으로 갔지만 대비해서 문턱은 안 넘었다 ({v:0.#}{pr.Unit})") // v21 계획이 막았을 수 있다
+                    : (-1, $"틀렸다 — {v:0.#}{pr.Unit} (반대로 갔다)")
+                    : (2, "참고 — 잴 수 없다"));
             if (conf >= 0.6f && key is "food" or "water" or "o2") a.Speak.Announce(a.Voice.Style($"예측 — {Horizon:0}시간 뒤 {pr.Name} {value:0.#}{pr.Unit}. {item.Action}"), null, 1);
         }
         foreach (var it in Plan) if (it.State == "예정" && w.Tick - it.Tick > SimTime.Hours(Horizon)) it.State = "지남";

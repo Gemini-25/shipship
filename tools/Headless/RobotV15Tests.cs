@@ -25,13 +25,16 @@ public static partial class Program
                                && Enum.GetValues<DroneKind>().All(k => k <= DroneKind.Build || RobotsV15.Flyer(k) != null);
                 bool tuned = Tuning.Entries.Any(e => e.Key == "story.persona" && e.Max >= (int)StoryPersona.Vengeful)
                              && Enum.GetValues<StoryPersona>().All(p => p == StoryPersona.Off || Storyteller.PersonaName(p) != "끔");
-                // 의료 3차: 들것 로봇 · 간호 로봇 +2 (25 → 27 · 새 17 → 19)
-                Check("목록 — 로봇·드론 27 (새 19는 원형을 쓰고 특기가 모두 다르다) · 이야기꾼 8", robots + drones == 27 && RobotsV15.KindCount == 27
-                      && RobotsV15.Bots.Length + RobotsV15.Flyers.Length == 19 && named && covered && specs.Distinct().Count() == specs.Count && personas == 8 && tuned,
+                // 의료 3차: 들것 로봇 · 간호 로봇 +2 (25 → 27 · 새 17 → 19) · v21 새 로봇 9 (· 새 드론) — 원래 여덟 말고는 모두 표에 있다
+                Check($"목록 — 로봇·드론 {robots + drones} (새 {robots + drones - 8}는 원형을 쓰고 특기가 모두 다르다) · 이야기꾼 8", robots + drones >= 36 && RobotsV15.KindCount == robots + drones
+                      && RobotsV15.Bots.Length + RobotsV15.Flyers.Length == robots + drones - 8 && named && covered && specs.Distinct().Count() == specs.Count && personas == 8 && tuned,
                     $"로봇 {robots} · 드론 {drones} · 새 {RobotsV15.Bots.Length}+{RobotsV15.Flyers.Length} · 특기 겹침 {specs.Count - specs.Distinct().Count()} · 이야기꾼 {personas}" +
                     (named ? "" : " · 이름·원형 빠짐") + (covered ? "" : " · 표에 없는 종류") + (tuned ? "" : " · 설정 범위 모자람"));
             }
 
+            // v21 아래 1) ~ 3)은 v15.7 특기 원형을 따로 본다 — 예전 구성 · 특기만 (모든 로봇의 기본 행동은 --robot21test)
+            bool gen0 = RobotsV21.General, exp0 = RobotsV21.Expanded, rea0 = RobotsV21.Reactor;
+            RobotsV21.General = false; RobotsV21.Expanded = false; RobotsV21.Reactor = false;
             // 1) 개조로 들인다: 겪은 일이 후보를 부르고, 개조를 마치면 충전대·거치대와 함께 들어온다
             {
                 var w = DayOne(seed, "Hanbit");
@@ -137,6 +140,7 @@ public static partial class Program
                         (d.Kind == DroneKind.Tug ? $" · 건질 드론 {adrift?.State}" : "") + (own ? "" : " · 남의 일을 맡았다")));
                 }
             }
+            RobotsV21.General = gen0; RobotsV21.Expanded = exp0; RobotsV21.Reactor = rea0;
             int okCount = works.Count(x => x.ok);
             Check($"새 종류 {works.Count} 중 {works.Count - 2} 이상이 들이면 맡은 일을 한다", works.Count == 17 && okCount >= works.Count - 2,
                 $"{okCount}/{works.Count} — " + string.Join(" / ", works.Select(x => $"{(x.ok ? "" : "✘")}{x.name}: {x.detail}")));

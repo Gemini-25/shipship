@@ -303,7 +303,7 @@ public partial class Hud
         float x = body.Position.X, right = body.End.X, y = body.Position.Y;
         UiKit.Header(this, x, right, y + 12f, "권한", "누르면 바꾼다 — 승무원 회의도 주고 거둔다 · 등급 III 아래면 모두 조언만", "duty");
         y += 24f;
-        float nameW = 64f, segW = (right - x - nameW - 12f) / 3f;
+        float nameW = 78f, segW = (right - x - nameW - 12f) / 3f; // v21 "로봇 지휘"
         foreach (var d in ComputerAuthority.Domains)
         {
             var g = au.Granted0(d);

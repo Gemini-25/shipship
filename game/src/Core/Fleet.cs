@@ -195,7 +195,7 @@ public sealed class FleetSystem
         if (Plain) return true;
         float hours = 0f;
         foreach (var s in steps) if (s is RWork rw) hours += rw.Hours;
-        hours *= RobotSystem.WorkFactor(r.Kind) * Work;
+        hours *= RobotsV21.WorkMul(r, o) * Work; // v21 특기 · 개량 단계 · 숙련
         var c = spot.Center;
         float there = (MathF.Abs(c.X - r.Position.X) + MathF.Abs(c.Y - r.Position.Y)) * 1.4f + 4f;
         float back = (MathF.Abs(c.X - r.DockPosition.X) + MathF.Abs(c.Y - r.DockPosition.Y)) * 1.4f + 4f;
@@ -715,11 +715,11 @@ public sealed class FleetSystem
             if (r.State == RobotState.Active)
             {
                 float back = RobotSystem.FleetReturnCost(r);
-                m.Power = $"배터리 {r.Battery * 100:0}% · 돌아갈 몫 {back * 100:0}%" + (Thrift ? " · 아껴 쓰는 중" : "");
+                m.Power = RobotsV21.Reactor ? $"전지 {r.Battery * 100:0}% (원자로가 채운다)" : $"배터리 {r.Battery * 100:0}% · 돌아갈 몫 {back * 100:0}%" + (Thrift ? " · 아껴 쓰는 중" : "");
             }
-            else if (r.State == RobotState.Docked) m.Power = $"배터리 {r.Battery * 100:0}%" + (r.Battery < 0.99f && RobotSystem.DockWorking(r) ? " · 충전 중" : "");
+            else if (r.State == RobotState.Docked) m.Power = RobotsV21.Reactor ? $"전지 {r.Battery * 100:0}% (원자로)" : $"배터리 {r.Battery * 100:0}%" + (r.Battery < 0.99f && RobotSystem.DockWorking(r) ? " · 충전 중" : "");
             if (m.WhySince < 0 || w.Tick - m.WhySince > SimTime.Minutes(30))
-                m.Say(!cmd ? "관제가 없어 스스로 판단한다" : r.Helping != null ? $"{Ko.EulReul(r.Helping.Name)} 거들면 긴 일이 빨라진다" : r.State == RobotState.Docked ? "할 일이 없어 충전하며 기다린다" : m.Why, w.Tick);
+                m.Say(!cmd ? "관제가 없어 스스로 판단한다" : r.Helping != null ? $"{Ko.EulReul(r.Helping.Name)} 거들면 긴 일이 빨라진다" : r.State == RobotState.Docked ? (RobotsV21.Reactor ? "할 일이 없어 정비대에서 기다린다" : "할 일이 없어 충전하며 기다린다") : m.Why, w.Tick);
         }
         foreach (var d in w.Drones.Drones)
         {

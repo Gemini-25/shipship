@@ -423,6 +423,26 @@ public sealed class AilmentSystem
     /// <summary>v15.1 약 없이 진단만 (구급 키트가 없는 응급 처치).</summary>
     public void DiagnoseOnly(CrewMember doctor, CrewMember patient) => Diagnose(doctor, patient);
 
+    /// <summary>v21 의사 로봇: 생체 신호와 검사로 진단하고 (주 컴퓨터 의료 기록을 짚는다) 처방대로 약을 쓴다 — 세균성은 항생제 · 쉬어야 낫는 병은 침대.</summary>
+    public void TreatedByBot(CrewMember patient, string bot)
+    {
+        var w = _w;
+        foreach (var a in patient.Ailments.Where(a => !a.Diagnosed))
+        {
+            a.Diagnosed = true;
+            Stats.Diagnosed++;
+            w.Log.Add(w.Tick, LogKind.Life, $"진단 ({bot}): {patient.Name} — {Spec(a.Id).Name} ({CureName(Spec(a.Id).Cure)})", patient.Id);
+        }
+        foreach (var a in patient.Ailments.Where(a => a.Diagnosed && Spec(a.Id).Cure is Cure.Medic or Cure.Bed))
+        {
+            a.TreatedAt = w.Tick;
+            a.Treatments++;
+            if (PharmacySystem.Bacterial(a.Id) && w.Pharmacy.Take(ItemKind.Antibiotic)) a.Healed += 1.1f;
+            if (Spec(a.Id).Cure == Cure.Bed) a.Healed += 0.3f;
+            Stats.Treated++;
+        }
+    }
+
     public void Treated(CrewMember patient, CrewMember doctor)
     {
         var w = _w;

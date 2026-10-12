@@ -16,7 +16,7 @@ namespace ShipSim.Core;
 //    v16.6의 틀린 판단(제안 채점)도 사과한다. 실수가 잦으면 겸손해지고(말투) 권한 축소를 스스로 청한다.
 //  말투: 배 문화(ComputerVoice.Tone) + 기억(실수 → 겸손 · 맞힘 → 자신) + 확신도를 말에 싣는다.
 
-public enum Domain { Resources, Schedule, Maintenance, Crisis }
+public enum Domain { Resources, Schedule, Maintenance, Crisis, Fleet } // v21 로봇 지휘 (긴급 지정)
 public enum AuthLevel { Advise, Propose, Auto }
 
 public sealed record LearnedItem(long Tick, string Kind, string Text);
@@ -52,7 +52,7 @@ public sealed class ComputerAuthority
     private readonly World _w;
     private Rng? _rng;
     private Rng R => _rng ??= new Rng(unchecked(_w.Seed * 7333 + 601));
-    private readonly Dictionary<Domain, AuthLevel> _levels = new() { [Domain.Resources] = AuthLevel.Propose, [Domain.Schedule] = AuthLevel.Auto, [Domain.Maintenance] = AuthLevel.Auto };
+    private readonly Dictionary<Domain, AuthLevel> _levels = new() { [Domain.Resources] = AuthLevel.Propose, [Domain.Schedule] = AuthLevel.Auto, [Domain.Maintenance] = AuthLevel.Auto, [Domain.Fleet] = AuthLevel.Auto };
     private readonly HashSet<string> _admitted = new();
     private long _next;
     private int _mistakeNext = 1;
@@ -66,11 +66,11 @@ public sealed class ComputerAuthority
     /// <summary>겸손 0~1 (실수할수록 · 하루에 조금씩 옅어진다).</summary>
     public float Humility { get; private set; }
 
-    public static readonly Domain[] Domains = { Domain.Resources, Domain.Schedule, Domain.Maintenance, Domain.Crisis };
+    public static readonly Domain[] Domains = { Domain.Resources, Domain.Schedule, Domain.Maintenance, Domain.Crisis, Domain.Fleet };
 
     public ComputerAuthority(World w) => _w = w;
 
-    public static string DomainName(Domain d) => d switch { Domain.Resources => "자원", Domain.Schedule => "일정", Domain.Maintenance => "정비", _ => "위기" };
+    public static string DomainName(Domain d) => d switch { Domain.Resources => "자원", Domain.Schedule => "일정", Domain.Maintenance => "정비", Domain.Fleet => "로봇 지휘", _ => "위기" };
     /// <summary>틀린 판단의 조치 이름 (v16.6 기록의 종류 → 사람 말).</summary>
     public static string ActName(string kind) => kind switch
     {
@@ -88,7 +88,7 @@ public sealed class ComputerAuthority
     {
         var a = _w.Automation;
         var g = Granted0(d);
-        if (!a.Present || !a.MainOnline || a.Level < 4 && d != Domain.Crisis) return AuthLevel.Advise;
+        if (!a.Present || !a.MainOnline || a.Level < 4 && d is not (Domain.Crisis or Domain.Fleet)) return AuthLevel.Advise; // v21 로봇 지휘는 위기처럼 낮은 단계에서도
         return g;
     }
 

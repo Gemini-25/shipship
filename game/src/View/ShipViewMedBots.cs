@@ -18,10 +18,10 @@ public partial class ShipView
     /// <summary>의료 로봇이면 그리고 true (아니면 원형 몸을 그리게 false).</summary>
     private bool PaintMedBot(CanvasItem ci, Robot r, Color body, Color col, bool moving, bool working, float t, bool dead)
     {
-        if (r.Kind is not (RobotKind.Stretcher or RobotKind.Nurse)) return false;
+        if (r.Kind is not (RobotKind.Stretcher or RobotKind.Nurse or RobotKind.Rescuer or RobotKind.Medic)) return false; // v21 구조 로봇 = 들것 몸 · 의사 로봇 = 간호 몸
         var task = _world.MedBots.TaskOf(r);
         var dim = dead ? new Color(0.55f, 0.55f, 0.58f) : Colors.White;
-        if (r.Kind == RobotKind.Stretcher) PaintStretcher(ci, r, body, col, moving, working, t, task, dim);
+        if (r.Kind is RobotKind.Stretcher or RobotKind.Rescuer) PaintStretcher(ci, r, body, col, moving, working, t, task, dim);
         else PaintNurse(ci, r, body, col, working, t, task, dim);
         return true;
     }

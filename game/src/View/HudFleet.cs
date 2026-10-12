@@ -28,7 +28,7 @@ public partial class Hud
         }
         Line("지금", m.Now, Palette.Text);
         Line("다음", m.Next == "" ? "—" : m.Next, Palette.TextDim);
-        Line("배터리", m.Power == "" ? $"배터리 {Pct(r.Battery)}" : m.Power, r.Battery < 0.25f ? Palette.Warning : Palette.TextDim);
+        Line(RobotsV21.Reactor ? "전지" : "배터리", m.Power == "" ? (RobotsV21.Reactor ? $"전지 {Pct(r.Battery)} (원자로)" : $"배터리 {Pct(r.Battery)}") : m.Power, r.Battery < 0.25f ? Palette.Warning : Palette.TextDim);
         Line("왜", m.Why == "" ? "—" : m.Why, ShipView.RobotColor(r.Kind).Lightened(0.35f));
         if (m.Stages.Count > 1)
         {

@@ -13,12 +13,15 @@ public partial class ShipView
     private static int BotBadge(RobotKind k) => k switch
     {
         RobotKind.Courier => 1, RobotKind.Tanker => 2, RobotKind.Stocker => 3, RobotKind.Lineman => 4, RobotKind.Assistant => 5, RobotKind.Overhauler => 6,
-        RobotKind.Harvester => 7, RobotKind.Tender => 8, RobotKind.Sentry => 9, RobotKind.Firefighter => 10, RobotKind.Utility => 11, _ => 0,
+        RobotKind.Harvester => 7, RobotKind.Tender => 8, RobotKind.Sentry => 9, RobotKind.Firefighter => 10, RobotKind.Utility => 11,
+        RobotKind.Cleaner => 12, RobotKind.Chef => 13, RobotKind.Plumber => 14, RobotKind.Lifter => 15, RobotKind.Ventman => 16,
+        RobotKind.Rescuer => 17, RobotKind.Sealer => 18, RobotKind.Airman => 19, RobotKind.Medic => 20, _ => 0, // v21
     };
 
     private static int DroneBadge(DroneKind k) => k switch
     {
-        DroneKind.Scout => 9, DroneKind.Surveyor => 6, DroneKind.Welder => 10, DroneKind.Radiator => 2, DroneKind.Tug => 3, DroneKind.Rigger => 4, _ => 0,
+        DroneKind.Scout => 9, DroneKind.Surveyor => 6, DroneKind.Welder => 10, DroneKind.Radiator => 2, DroneKind.Tug => 3, DroneKind.Rigger => 4,
+        DroneKind.Shield => 18, DroneKind.Miner => 3, DroneKind.Polisher => 12, DroneKind.Relay => 4, DroneKind.Lifeguard => 17, _ => 0, // v21
     };
 
     private static int RampOf(Color c) => Ramps.Derive((byte)(c.R * 255), (byte)(c.G * 255), (byte)(c.B * 255));
@@ -31,11 +34,11 @@ public partial class ShipView
         var kind = r.Kind;
         l.Shape = kind switch
         {
-            RobotKind.Nurse => DotBotKind.Nurse,
-            RobotKind.Stretcher => DotBotKind.Stretcher,
+            RobotKind.Nurse or RobotKind.Medic => DotBotKind.Nurse,
+            RobotKind.Stretcher or RobotKind.Rescuer => DotBotKind.Stretcher,
             _ => RobotsV15.Base(kind) switch { RobotKind.Hauler => DotBotKind.Hauler, RobotKind.Gardener => DotBotKind.Gardener, RobotKind.Safety => DotBotKind.Safety, _ => DotBotKind.Maintainer },
         };
-        l.Paint = l.Shape is DotBotKind.Nurse or DotBotKind.Stretcher ? Ramps.ClothWhite : RampOf(RobotColor(kind));
+        l.Paint = kind is RobotKind.Nurse or RobotKind.Stretcher or RobotKind.Medic ? Ramps.ClothWhite : RampOf(RobotColor(kind));
         l.Badge = BotBadge(kind);
         bool dead = r.State is RobotState.Stalled or RobotState.Towed || r.Disabled;
         l.State = r.Fault != null && !RobotSystem.CanSelfRepair(r) ? DotBotState.Broken : dead ? DotBotState.Off : working ? DotBotState.Working : DotBotState.Ok;
@@ -45,13 +48,14 @@ public partial class ShipView
         var f = MathF.Abs(fv.X) > MathF.Abs(fv.Y) * 1.15f ? (fv.X > 0 ? DotFacing.E : DotFacing.W) : fv.Y < 0 ? DotFacing.N : DotFacing.S;
         int frame = moving ? (int)(_time * 8f + r.Id) & 3 : working ? (int)(_time * 10f + r.Id) & 3 : ((int)(_time * 2f + r.Id) & 1);
         var key = DotTex.Key(2, (long)l.Shape, l.Paint, l.Badge, (long)l.State, l.Cargo, l.Seed, (long)f, frame);
-        var look = l;
-        var e = Dots.Get(key, () => DotBots.Robot(look, f, frame));
+        var e = Dots.Peek(key) ?? MakeDotRobot(key, l, f, frame); // v21 로봇 80대: 있는 그림이면 만들 준비(클로저)도 하지 않는다
         if (e == null) return false;
         var o = new Vector2(Mathf.Round(p.X) - DotBots.Cx, Mathf.Round(p.Y) + 9f - DotBots.Foot);
         ci.DrawTextureRect(Zoom >= 0.999f ? e.Crisp : e.Tex, new Rect2(o, e.W, e.H), false);
         return true;
     }
+
+    private DotTex.Entry? MakeDotRobot(ulong key, BotLook look, DotFacing f, int frame) => Dots.Get(key, () => DotBots.Robot(look, f, frame));
 
     /// <summary>드론 몸 (가운데가 p). 그렸으면 true.</summary>
     private bool PaintDotDrone(CanvasItem ci, Drone d, Vector2 p, Color col, bool docked)

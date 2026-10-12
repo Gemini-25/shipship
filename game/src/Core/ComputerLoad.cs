@@ -180,9 +180,13 @@ public sealed partial class AutomationSystem
     {
         var w = _world;
         var b = Belief.Of(r);
-        bool doubt = b.Trust < 0.7f || Has(ComputerModule.Lessons) && b.FalseAlarms >= 1;
-        Book.Add(ActKind.Alarm, r, $"{r.Name} 화재 감지기", doubt ? $"이 감지기는 오경보 {b.FalseAlarms}번 — 덜 믿는다" : "화재로 본다", doubt ? "사람 확인을 먼저 부른다" : "화재 경보",
-            "확인", "ghost:" + r.Id, SimTime.Minutes(10), 15f, (world, a) => (-1, "틀렸다 — 헛불이었다 (오경보)"));
+        bool lone = !Corroborated(r); // v21 교차 확인: 온도 · 연기 계기가 조용하다
+        bool doubt = lone || b.Trust < 0.7f || Has(ComputerModule.Lessons) && b.FalseAlarms >= 1;
+        if (doubt) GhostsFiltered++;
+        Book.Add(ActKind.Alarm, r, $"{r.Name} 화재 감지기" + (lone ? " · 같은 방 온도 · 연기 계기는 조용하다" : ""),
+            lone ? "감지기 하나만 울린다 — 확인부터" : doubt ? $"이 감지기는 오경보 {b.FalseAlarms}번 — 덜 믿는다" : "화재로 본다", doubt ? "경보 보류 · 확인을 먼저 부른다" : "화재 경보",
+            "확인", "ghost:" + r.Id, SimTime.Minutes(10), 15f,
+            (world, a) => doubt ? (1, "맞았다 — 확인부터 해서 헛불에 사람을 뛰게 하지 않았다") : (-1, "틀렸다 — 헛불이었다 (오경보)"));
         if (!doubt) Speak.Announce(Voice.Style($"{r.Name} 화재 감지 — 가까운 사람은 확인하라"), r, 2);
         RequestCheck(r, doubt ? "오경보가 잦은 감지기 — 불이 있는지 직접 본다" : "화재 감지기 경보 — 불을 직접 본다", ghost: true);
     }

@@ -441,6 +441,15 @@ public sealed partial class WorkBoard
         _open.Values.Where(o => !o.Closed && o.Assignee == null && o.Drone == null && o.Robot == null && (o.BlockedUntil <= _world.Tick || SuitBlock(o)) && Council.Cleared(o))
             .OrderByDescending(o => o.Urgency).ThenBy(o => o.Id);
 
+    private long _robotTick = -1;
+    private readonly List<WorkOrder> _robotList = new();
+    /// <summary>v21 로봇이 고를 일 (틱마다 한 번 모은다 — 고르는 쪽에서 닫힘 · 맡은 사람을 다시 본다).</summary>
+    internal List<WorkOrder> RobotCandidates()
+    {
+        if (_robotTick != _world.Tick) { _robotTick = _world.Tick; _robotList.Clear(); _robotList.AddRange(OpenForRobot()); }
+        return _robotList;
+    }
+
     public IEnumerable<WorkOrder> All => _open.Values;
 
     /// <summary>강화: 사람에게 우주복이 없어 미룬 일 — 숨을 쉬지 않는 드론 · 로봇은 맡을 수 있다.</summary>

@@ -5,7 +5,7 @@ using System.Numerics;
 
 namespace ShipSim.Core;
 
-public enum DroneKind { Inspect, Repair, Tow, Build, /* v15.7 새 드론 6 (RobotsV15.cs) */ Scout, Surveyor, Welder, Radiator, Tug, Rigger }
+public enum DroneKind { Inspect, Repair, Tow, Build, /* v15.7 새 드론 6 (RobotsV15.cs) */ Scout, Surveyor, Welder, Radiator, Tug, Rigger, /* v21 새 드론 5 (DronesV21.cs) */ Shield, Miner, Polisher, Relay, Lifeguard }
 
 public enum DroneState
 {
@@ -85,7 +85,8 @@ public sealed partial class Drone
     public bool Operational => !Wrecked && !Faulty && State != DroneState.Lost && State != DroneState.Adrift && !Dock.Room.Detached;
     public float WorkProgress => WorkNeeded > 0 ? Math.Clamp(WorkDone / WorkNeeded, 0f, 1f) : 0f;
 
-    public Vector2 DockPosition => Dock.Center + new Vector2(0f, (Slot - 1) * 0.55f);
+    /// <summary>거치대 자리: 세 대씩 한 줄 · 넘치면 좌우로 줄을 더한다 (v21 드론이 많다).</summary>
+    public Vector2 DockPosition => Dock.Center + new Vector2(Slot / 3 == 0 ? 0f : ((Slot / 3 + 1) / 2) * 0.5f * ((Slot / 3) % 2 == 1 ? 1f : -1f), (Slot % 3 - 1) * 0.55f);
 
     public string KindName => DroneSystem.KindName(Kind);
 }
@@ -202,7 +203,10 @@ public sealed partial class DroneSystem
         _ => RobotsV15.Drain(k),
     };
 
-    public static bool CanDo(DroneKind d, WorkKind k) => d switch
+    /// <summary>v21 모든 드론이 하는 기본 바깥일 (특기 드론보다 느리다).</summary>
+    public static bool CanDo(DroneKind d, WorkKind k) => Special(d, k) || RobotsV21.General && k is WorkKind.RepairJoint or WorkKind.ReleaseJoint or WorkKind.Clamp or WorkKind.RepairRadiator;
+
+    public static bool Special(DroneKind d, WorkKind k) => d switch
     {
         DroneKind.Inspect => k is WorkKind.InspectHull,
         DroneKind.Repair => k is WorkKind.RepairJoint or WorkKind.ReleaseJoint or WorkKind.Clamp or WorkKind.RepairRadiator,
@@ -236,6 +240,13 @@ public sealed partial class DroneSystem
         if (docks.Count > 0) { plan.Add((0, DroneKind.Inspect)); plan.Add((0, DroneKind.Repair)); plan.Add((0, DroneKind.Tow)); }
         if (docks.Count > 1) { plan.Add((1, DroneKind.Repair)); plan.Add((1, DroneKind.Build)); }
         else if (docks.Count == 1) plan.Add((0, DroneKind.Build));
+        // v21 사람 세 명에 한 대씩 더 (상한 24): 방패 · 구조 · 채굴 · 외판 손질 · 중계부터
+        if (docks.Count > 0 && RobotsV21.Expanded)
+        {
+            int beds = world.Ship.Furniture.Count(f => f.Type == FurnitureType.Bed);
+            int want = DronesV21.Count(beds);
+            for (int i = 0; plan.Count < want; i++) plan.Add((plan.Count % docks.Count, DronesV21.Extra[i % DronesV21.Extra.Length]));
+        }
         var slots = new Dictionary<int, int>();
         foreach (var (di, kind) in plan)
         {
@@ -527,15 +538,18 @@ public sealed partial class DroneSystem
         if (SkyHold(d)) { d.Doing = "우주 날씨 예보 — 거치대에서 기다린다"; return; } // v16.27
         if (FleetDecide(d)) return; // v16.20b 주 컴퓨터가 맡긴 일 (파공 · 교대 · 건지기)
         if (d.Battery < 0.35f) return;
+        if (Errand(d)) return; // v21 방패 · 채굴 · 외판 손질 · 중계
         switch (RobotsV15.Base(d.Kind))
         {
             case DroneKind.Inspect:
                 PlanPatrol(d);
-                return;
+                if (d.State != DroneState.Docked || !RobotsV21.General) return;
+                break; // v21 순찰할 곳이 없으면 기본 바깥일
             case DroneKind.Tow:
                 if (PlanTow(d)) return;
                 PlanFetch(d);
-                return;
+                if (d.State != DroneState.Docked || !RobotsV21.General) return;
+                break;
         }
         foreach (var o in w.Board.OpenFor(d).Where(o => CanDo(d.Kind, o.Kind)).OrderByDescending(o => o.Urgency).ThenBy(o => o.Id))
         {
@@ -720,7 +734,7 @@ public sealed partial class DroneSystem
                 d.State = DroneState.Working;
                 d.StateSince = w.Tick;
                 d.WorkDone = 0f;
-                d.WorkNeeded = d.Order != null ? WorkHours(d.Order.Kind) * RobotsV15.Work(d.Kind) * w.Fleet.Work * (d.Order.Kind == WorkKind.SealBreach ? SealSlow(d.Kind) : 1f) : d.HullCare != null ? WorkHours(WorkKind.RepairHull) * RobotsV15.Work(d.Kind) * w.Fleet.Work : 0.1f; // v15.7 손이 빠른 드론 · v16.20b 공구 등급 · 외벽 순찰 용접
+                d.WorkNeeded = d.Errand == DroneErrand.Guard ? GuardHours(d) : d.Errand != DroneErrand.None ? DronesV21.ErrandHours(d) : d.Order != null ? WorkHours(d.Order.Kind) * RobotsV15.Work(d.Kind) * w.Fleet.Work * (d.Order.Kind == WorkKind.SealBreach ? SealSlow(d.Kind) : 1f) * (RobotsV21.General && !Special(d.Kind, d.Order.Kind) ? 1.4f : 1f) : d.HullCare != null ? WorkHours(WorkKind.RepairHull) * RobotsV15.Work(d.Kind) * w.Fleet.Work : 0.1f; // v15.7 손이 빠른 드론 · v16.20b 공구 등급 · 외벽 순찰 용접
                 FleetCarry(d); // v16.20b 교대: 앞 드론이 한 만큼 이어서
                 return;
             case DroneState.Towing:
@@ -775,6 +789,7 @@ public sealed partial class DroneSystem
     {
         var w = _world;
         var o = d.Order;
+        if (o == null && d.Errand != DroneErrand.None) { if (ErrandDone(d)) GoHome(d); return; } // v21 (중계는 사람이 밖에 있는 동안 더 머문다)
         if (o == null) { if (!FleetRoundWeld(d)) GoHome(d); return; } // v16.20b 외벽 순찰 용접
         if (o.Kind == WorkKind.SealBreach) { FleetSeal(d, o); return; } // v16.20b
         if (o.Kind == WorkKind.RepairHull) { FleetWeld(d, o); return; } // v16.20b 밖에서 외벽 용접
@@ -808,6 +823,7 @@ public sealed partial class DroneSystem
     private void GoHome(Drone d)
     {
         var w = _world;
+        if (d.Errand != DroneErrand.None) { d.Errand = DroneErrand.None; d.ErrandSpot = null; }
         d.State = DroneState.Returning;
         d.StateSince = w.Tick;
         d.Doing = "복귀";

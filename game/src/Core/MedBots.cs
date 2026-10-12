@@ -43,7 +43,8 @@ public sealed class MedBotSystem
 
     public static bool Can(RobotKind k, MedTask t) => k switch
     {
-        RobotKind.Stretcher => t is MedTask.Carry or MedTask.Press,
+        RobotKind.Stretcher or RobotKind.Rescuer => t is MedTask.Carry or MedTask.Press, // v21 구조 로봇
+        RobotKind.Medic => t is MedTask.Press or MedTask.Kit or MedTask.Blood, // v21 의사 로봇
         RobotKind.Nurse => t is MedTask.Press or MedTask.Blood or MedTask.Kit or MedTask.Crank or MedTask.Disinfect,
         RobotKind.Utility => t is MedTask.Blood or MedTask.Kit or MedTask.Crank,
         RobotKind.Courier or RobotKind.Hauler => t is MedTask.Blood or MedTask.Kit,
@@ -60,13 +61,20 @@ public sealed class MedBotSystem
     public bool CarriedByBot(CrewMember c) => _carry.ContainsValue(c.Id);
     public bool Holding(Robot r) => _holding.Contains(r.Id);
     public bool Cranking(Furniture f) => _crank.TryGetValue(f.Id, out var t) && _w.Tick - t < SimTime.Minutes(3);
-    public bool CanCarry() => _w.Robots.Robots.Any(r => r.Kind == RobotKind.Stretcher && r.Operational && r.Battery > 0.3f);
+    public bool CanCarry() => _w.Robots.Robots.Any(r => r.Kind is RobotKind.Stretcher or RobotKind.Rescuer && r.Operational && r.Battery > 0.3f);
     public bool Claimed(CrewMember pt) => _claim.TryGetValue(pt.Id, out var x) && _w.Tick - x.at < SimTime.Minutes(40) && Bot(x.bot) is Robot r && r.Operational && TaskOf(r) == MedTask.Blood;
     private bool Taken(MedTask t, int target) { foreach (var kv in _task) if (kv.Value.task == t && kv.Value.target == target && Bot(kv.Key) is Robot r && r.Steps != null && r.Operational) return true; return false; }
 
     /// <summary>이 로봇이 할 의료 일이 있나 (Robots.Decide가 묻는다 — 싸게).</summary>
+    /// <summary>v21 이 로봇이 이 의료 일을 하나 (종류 · 긴급 지정된 로봇은 옮기기 · 누르기).</summary>
+    public bool CanBot(Robot r, MedTask t) => Can(r.Kind, t) || r.Draft == DraftKind.Rescue && r.Drafted(_w) && t is MedTask.Carry or MedTask.Press;
+
+    /// <summary>v21 옮길 사람 · 누를 상처가 남았나 (긴급 지정을 풀 때 본다).</summary>
+    public bool Wants0() => _rescue.Count > 0 || _bleed.Count > 0;
+
     public bool Wants(Robot r)
     {
+        bool Can(RobotKind _, MedTask t) => CanBot(r, t);
         var k = r.Kind;
         if (!(Can(k, MedTask.Carry) || Can(k, MedTask.Press) || Can(k, MedTask.Blood) || Can(k, MedTask.Kit) || Can(k, MedTask.Crank) || Can(k, MedTask.Disinfect))) return false;
         return Can(k, MedTask.Carry) && (_rescue.Count > 0 || _toTable.Count > 0) || Can(k, MedTask.Press) && _bleed.Count > 0 || Can(k, MedTask.Blood) && _blood.Count > 0
@@ -80,6 +88,7 @@ public sealed class MedBotSystem
     {
         var w = _w;
         var k = r.Kind;
+        bool Can(RobotKind _, MedTask t) => CanBot(r, t);
         float best = float.MinValue;
         Func<List<RobotStep>?>? build = null;
         MedTask pick = MedTask.None; int target = -1; string what = ""; Room? where = null; string why = "";

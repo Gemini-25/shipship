@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using Godot;
 using ShipSim.Core;
@@ -36,6 +37,10 @@ public partial class ShipView
         RobotKind.Utility => new Color("#a8a29a"),
         // 의료 3차
         RobotKind.Stretcher => new Color("#e86a5a"), RobotKind.Nurse => new Color("#4fc8b8"),
+        // v21
+        RobotKind.Cleaner => new Color("#8fd0c8"), RobotKind.Chef => new Color("#f0a070"), RobotKind.Plumber => new Color("#5a8fb0"),
+        RobotKind.Lifter => new Color("#d8b030"), RobotKind.Ventman => new Color("#9ab8d8"), RobotKind.Rescuer => new Color("#ff7a3a"),
+        RobotKind.Sealer => new Color("#b04a3a"), RobotKind.Airman => new Color("#7ad0f0"), RobotKind.Medic => new Color("#f4f4f4"),
         _ => new Color("#cccccc"),
     };
 
@@ -47,6 +52,8 @@ public partial class ShipView
         DroneKind.Radiator => new Color("#ff7f9e"),
         DroneKind.Tug => new Color("#d9733f"),
         DroneKind.Rigger => new Color("#5fbf6a"),
+        DroneKind.Shield => new Color("#c0c8d8"), DroneKind.Miner => new Color("#b08850"), DroneKind.Polisher => new Color("#a0e0f0"),
+        DroneKind.Relay => new Color("#f0d060"), DroneKind.Lifeguard => new Color("#ff8a3c"), // v21
         _ => new Color("#9fe38a"),
     };
 
@@ -171,14 +178,22 @@ public partial class ShipView
         return ToPx(System.Numerics.Vector2.Lerp(a, b, _main.Alpha));
     }
 
+    private readonly Dictionary<int, Robot> _dockedAt = new();
+
     private void PaintRobots(CanvasItem ci)
     {
         var rs = _world.Robots;
+        bool far = ZoomDetail.Shows(Zoom, Detail.CrewDot);
+        // v21 로봇이 많다 (80대): 정비대마다 선 로봇을 한 번에 모은다 · 화면 밖은 건너뛴다 · 멀리선 점 하나
+        _dockedAt.Clear();
+        foreach (var x in rs.Robots) if (x.AtDock) _dockedAt[x.Dock.Id] = x;
         // 충전대 위의 충전 불꽃과 상태 띠 (로봇이 있든 없든)
         foreach (var dock in _world.Ship.FurnitureOf(FurnitureType.RobotDock))
         {
             var r = FurnitureRect(dock).Grow(-2.5f);
-            var here = rs.Robots.FirstOrDefault(x => x.Dock == dock && x.AtDock);
+            if (!_fixView.Intersects(r.Grow(T))) continue;
+            if (far) continue; // 멀리선 정비대 불빛을 생략한다
+            var here = _dockedAt.GetValueOrDefault(dock.Id);
             bool power = RobotSystem.DockWorking(dock);
             bool charging = here != null && power && (here.Battery < 0.995f || (RobotsV15.Fights(here.Kind) && here.Foam < 0.995f));
             Color led = !power ? Palette.Danger : charging ? new Color("#5fd0ff") : here != null ? Palette.Good : Palette.Warning;
@@ -198,8 +213,21 @@ public partial class ShipView
         foreach (var r in rs.Robots)
         {
             if (r.State == RobotState.Lost) continue;
+            var p = RobotPx(r);
+            if (!_fixView.Grow(T * 2f).HasPoint(p)) continue;
+            if (far && !r.Runaway) { PaintRobotDot(ci, r, p); continue; }
             PaintRobot(ci, r);
         }
+    }
+
+    /// <summary>v21 멀리서 본 로봇: 종류 색 네모 하나 (고장이면 붉은 테 · 일하면 밝게).</summary>
+    private void PaintRobotDot(CanvasItem ci, Robot r, Vector2 p)
+    {
+        var col = RobotColor(r.Kind);
+        bool bad = r.Fault != null || r.State is RobotState.Stalled or RobotState.Towed;
+        var c = r.State == RobotState.Active ? col : col.Darkened(0.35f);
+        ci.Box(new Rect2(p.X - 3.5f, p.Y - 3.5f, 7f, 7f), bad ? Palette.Danger : c);
+        if (r.Drafted(_world)) ci.Box(new Rect2(p.X - 1.5f, p.Y - 1.5f, 3f, 3f), new Color("#ff9a3c"));
     }
 
     private void PaintRobot(CanvasItem ci, Robot r)
@@ -225,10 +253,13 @@ public partial class ShipView
         bool dot = false;
         if (DotCrew && !ZoomDetail.Shows(Zoom, Detail.CrewDot))
         {
-            // 도트 로봇: 발밑 납작한 그림자 + 종류 · 상태 · 짐 · 방향 그림 (ShipViewDotBots.cs)
-            ci.DrawSetTransform(p + new Vector2(0f, 8.5f), 0f, new Vector2(1f, 0.32f));
-            ci.Circle(Vector2.Zero, 12f, new Color(0, 0, 0, 0.35f), true, -1f, true);
-            ci.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+            // 도트 로봇: 발밑 납작한 그림자 + 종류 · 상태 · 짐 · 방향 그림 (ShipViewDotBots.cs) — v21 정비대 위에선 그림자를 생략한다
+            if (!r.AtDock)
+            {
+                ci.DrawSetTransform(p + new Vector2(0f, 8.5f), 0f, new Vector2(1f, 0.32f));
+                ci.Circle(Vector2.Zero, 12f, new Color(0, 0, 0, 0.35f), true, -1f, true);
+                ci.DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
+            }
             dot = PaintDotRobot(ci, r, p, working, moving);
         }
         if (!dot)
@@ -258,7 +289,7 @@ public partial class ShipView
         Color led = self ? Palette.Warning : faulty ? Palette.Danger : dead ? Palette.TextMuted : r.Battery < 0.25f ? Palette.Warning : Palette.Good;
         float blink = faulty || dead ? 0.3f + 0.7f * Mathf.Abs(Mathf.Sin(t * 4f)) : 1f;
         if (!dot) ci.Circle(p, 1.9f, led.WithAlpha(blink), true, -1f, true); // 도트 로봇은 몸에 불빛이 있다
-        if (!r.AtDock || r.Battery < 0.99f)
+        if (RobotsV21.Reactor ? r.Battery < 0.9f : !r.AtDock || r.Battery < 0.99f) // v21 원자로가 전지를 채우니 모자랄 때만
         {
             var bar = new Rect2(p.X - 8f, p.Y + 11.5f, 16f, 2.5f);
             ci.Box(bar, new Color(0, 0, 0, 0.7f));
@@ -282,6 +313,17 @@ public partial class ShipView
             }
         else if (r.State == RobotState.Stalled)
             Gfx.TextCentered(ci, Fonts.Bold, p + new Vector2(0, dot ? -26f : -14f), "!", 11, Palette.Warning.WithAlpha(blink));
+        // v21 원자로 폭주: 붉게 맥박치는 고리 · 남은 시간이 줄수록 빨라진다 · 긴급 지정: 주황 띠
+        if (r.Runaway)
+        {
+            float left = Mathf.Clamp((r.CoreBlowAt - _world.Tick) / (float)SimTime.Minutes(7), 0f, 1f);
+            float pulse = 0.5f + 0.5f * Mathf.Sin(t * (6f + 14f * (1f - left)));
+            ci.Arc(p, 14f + 3f * pulse, 0f, Mathf.Tau, 28, Palette.Danger.WithAlpha(0.5f + 0.5f * pulse), 2f, true);
+            ci.Circle(p, 10f, new Color(1f, 0.25f, 0.1f, 0.12f + 0.18f * pulse), true, -1f, true);
+            Gfx.TextCentered(ci, Fonts.Bold, p + new Vector2(0, dot ? -28f : -16f), "!!", 12, Palette.Danger.WithAlpha(0.6f + 0.4f * pulse));
+        }
+        else if (r.Draft != DraftKind.None && r.Drafted(_world))
+            ci.Arc(p, 13f, Mathf.Pi * 0.15f, Mathf.Pi * 0.85f, 10, new Color("#ff9a3c").WithAlpha(0.85f), 2f, true);
         // 진척 (일하는 중)
         if (working && r.Progress is float pr && pr > 0f && RobotsV15.Base(r.Kind) != RobotKind.Safety)
         {

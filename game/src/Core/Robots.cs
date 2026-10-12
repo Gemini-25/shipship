@@ -16,6 +16,8 @@ public enum RobotKind
     Courier, Tanker, Stocker, Lineman, Assistant, Overhauler, Harvester, Tender, Sentry, Firefighter, Utility,
     // 의료 3차 (MedBots.cs): 들것 로봇 · 간호 로봇
     Stretcher, Nurse,
+    // v21 새 로봇 9 (RobotsV21.cs): 생활(청소 · 조리) · 설비(배관 · 지게 · 환기) · 안전(구조 · 봉쇄 · 공기) · 의료(의사)
+    Cleaner, Chef, Plumber, Lifter, Ventman, Rescuer, Sealer, Airman, Medic,
 }
 
 public enum RobotState
@@ -214,11 +216,13 @@ internal sealed class RWork : RobotStep
     public Func<Robot, World, bool>? CanContinue { get; init; }
     public RWork(float hours, WorkOrder? shared, Vector2? face) { _hours = hours; _shared = shared; _face = face; }
     internal float Hours => _hours;
+    /// <summary>v21 함께 채우는 일 (같이 하기).</summary>
+    internal WorkOrder? Shared => _shared;
     public override float? Progress => _shared != null ? _shared.Progress : _needed > 0 ? _done / _needed : 0f;
 
     public override void Begin(Robot r, World w)
     {
-        _needed = SimTime.Hours(_hours) * RobotSystem.WorkFactor(r.Kind) * w.Fleet.Work; // v16.20b 공구 등급
+        _needed = SimTime.Hours(_hours) * RobotsV21.WorkMul(r, r.Order) * w.Fleet.Work; // v16.20b 공구 등급 · v21 특기 · 개량 단계 · 숙련
         if (_face is Vector2 f && (f - r.Position).LengthSquared() > 0.0001f) r.Facing = Vector2.Normalize(f - r.Position);
     }
 
@@ -284,8 +288,8 @@ internal sealed class RSpray : RobotStep
         }
         if (nearest is not Cell aim || r.Foam <= 0.01f) return ToilStatus.Succeeded;
         r.Facing = Vector2.Normalize(aim.Center - r.Position + new Vector2(0.0001f, 0f));
-        w.Fire.Suppress(aim, 1.4f, RobotsV15.FoamRate(r.Kind) / SimTime.TicksPerHour); // v15.7 소방 로봇은 더 세게·오래
-        r.Foam = MathF.Max(0f, r.Foam - 1f / (RobotsV15.FoamHours(r.Kind) * SimTime.TicksPerHour));
+        w.Fire.Suppress(aim, 1.4f, RobotSystem.FoamRateOf(r) / SimTime.TicksPerHour); // v15.7 소방 로봇은 더 세게·오래 · v21 긴급 지정 로봇은 작은 소화기
+        r.Foam = MathF.Max(0f, r.Foam - 1f / (RobotSystem.FoamHoursOf(r) * SimTime.TicksPerHour));
         return ToilStatus.Running;
     }
 }
@@ -333,7 +337,7 @@ public sealed partial class RobotSystem
         RobotFault.Drive => "구동 모터 고장",
         RobotFault.Sensor => "주행 센서 오차",
         RobotFault.Controller => "제어기 오류",
-        RobotFault.Cell => "배터리 셀 열화",
+        RobotFault.Cell => RobotsV21.Reactor ? "소형 원자로 출력 저하" : "배터리 셀 열화",
         RobotFault.Scorched => "열에 그을림",
         RobotFault.Jam => "바퀴에 이물질 걸림",
         RobotFault.Overheat => "구동 모터 과열",
@@ -391,8 +395,11 @@ public sealed partial class RobotSystem
 
     public static Skill FaultSkill(RobotFault f) => f is RobotFault.Drive or RobotFault.Scorched or RobotFault.Jam or RobotFault.Overheat ? Skill.Mechanics : Skill.Electrical;
 
-    /// <summary>로봇이 맡는 작업 목록의 일.</summary>
-    public static bool CanDo(RobotKind k, WorkKind w) => k switch
+    /// <summary>로봇이 맡는 작업 목록의 일 — v21 모든 로봇은 기본 행동을 다 하고, 종류마다 특기가 있다.</summary>
+    public static bool CanDo(RobotKind k, WorkKind w) => Special(k, w) || RobotsV21.General && RobotsV21.Basic(w);
+
+    /// <summary>이 종류의 특기 (빠르고 먼저 맡는다).</summary>
+    public static bool Special(RobotKind k, WorkKind w) => k switch
     {
         RobotKind.Hauler => w is WorkKind.Restock or WorkKind.StockDock or WorkKind.CarryWater or WorkKind.StockCache or WorkKind.StowCot or WorkKind.RefillPropellant or WorkKind.ShelterFood or WorkKind.EmptyBucket,
         RobotKind.Maintainer => w is WorkKind.Maintain or WorkKind.FixLights or WorkKind.FlushMain or WorkKind.ClearMain or WorkKind.LookRoom or WorkKind.SealSeep,
@@ -424,18 +431,21 @@ public sealed partial class RobotSystem
     public RobotSystem(World world)
     {
         _world = world;
-        // 충전대는 설계도에 그리지 않고, 배를 띄울 때 방마다 길을 막지 않는 벽가에 단다 (한 칸에 한 대)
-        var kinds = world.Ship.FurnitureOf(FurnitureType.RobotDock).Any() ? null : InstallDocks(world);
-        var docks = world.Ship.FurnitureOf(FurnitureType.RobotDock).OrderBy(f => f.Id).ToList();
+        // 충전대(정비대)는 설계도에 그리지 않고, 배를 띄울 때 방마다 길을 막지 않는 벽가에 단다 (한 칸에 한 대)
+        // v21 설계도에 그린 정비대가 있어도 사람 한 명에 두 대가 될 때까지 더 단다
+        var designed = world.Ship.FurnitureOf(FurnitureType.RobotDock).OrderBy(f => f.Id).ToList();
         var plan = new List<(Furniture dock, int slot, RobotKind kind)>();
-        foreach (var dock in docks)
+        foreach (var dock in designed)
             for (int s = 0; s < dock.Cells.Count; s++)
-                plan.Add((dock, s, kinds != null && kinds.TryGetValue(dock, out var k) ? k : dock.Room.Type switch
+                plan.Add((dock, s, dock.Room.Type switch
                 {
                     RoomType.Workshop => s % 2 == 0 ? RobotKind.Maintainer : RobotKind.Safety,
                     RoomType.Hydroponics => RobotKind.Gardener,
                     _ => RobotKind.Hauler,
                 }));
+        var kinds = designed.Count > 0 && !RobotsV21.Expanded ? new Dictionary<Furniture, RobotKind>() : InstallDocks(world, plan.Select(p => p.kind).ToList());
+        foreach (var dock in world.Ship.FurnitureOf(FurnitureType.RobotDock).Where(kinds.ContainsKey).OrderBy(f => f.Id))
+            plan.Add((dock, 0, kinds[dock]));
         foreach (var (dock, slot, kind) in plan)
         {
             int same = plan.Count(p => p.kind == kind);
@@ -445,6 +455,7 @@ public sealed partial class RobotSystem
                 Id = Robots.Count, Kind = kind, Dock = dock, Slot = slot,
                 Name = same > 1 ? $"{KindName(kind)} {nth}" : KindName(kind),
                 Condition = world.Rng.Range(0.85f, 1f),
+                Mk = RobotsV21.Expanded && world.Rng.Chance(0.15f) ? 2 : 1, // v21 몇 대는 개량형으로 실었다
             };
             r.Position = r.DockPosition;
             r.PreviousPosition = r.Position;
@@ -472,18 +483,25 @@ public sealed partial class RobotSystem
         _ => new[] { RoomType.Storage, RoomType.Galley, RoomType.Mess, RoomType.Lounge, RoomType.Corridor },
     };
 
-    private static Dictionary<Furniture, RobotKind> InstallDocks(World w)
+    private static Dictionary<Furniture, RobotKind> InstallDocks(World w, List<RobotKind> already)
     {
         var ship = w.Ship;
         var result = new Dictionary<Furniture, RobotKind>();
         int beds = ship.Furniture.Count(f => f.Type == FurnitureType.Bed);
-        foreach (var kind in Complement(beds))
+        var want = (RobotsV21.Expanded ? RobotsV21.Complement(beds) : Complement(beds)).ToList();
+        foreach (var k in already) want.Remove(k);
+        var perRoom = new Dictionary<int, int>(); // v21 방마다 정비대 수 (고르게 나눠 단다)
+        foreach (var f in ship.FurnitureOf(FurnitureType.RobotDock)) perRoom[f.Room.Id] = perRoom.GetValueOrDefault(f.Room.Id) + 1;
+        var anyRoom = Enum.GetValues<RoomType>().Where(t => t is not (RoomType.Reactor or RoomType.Airlock or RoomType.EscapeBay or RoomType.Morgue)).ToArray();
+        foreach (var kind in want)
         {
-            foreach (var type in HomeRooms(kind))
+            var types = RobotsV21.Expanded ? RobotsV21.HomeRooms(kind).Concat(HomeRooms(kind)).Concat(RobotsV21.Fallback).Concat(anyRoom).Distinct().ToArray() : HomeRooms(kind); // v21 자리가 없으면 아무 방이나
+            foreach (var type in types)
             {
                 Cell? spot = null;
-                foreach (var room in ship.RoomsOf(type).OrderBy(r => r.Id))
+                foreach (var room in ship.RoomsOf(type).OrderBy(r => RobotsV21.Expanded ? perRoom.GetValueOrDefault(r.Id) : 0).ThenBy(r => r.Id))
                 {
+                    if (RobotsV21.Expanded && (room.Abandoned || room.OffLimits || perRoom.GetValueOrDefault(room.Id) >= Math.Max(2, room.Cells.Count / 8))) continue; // 방을 정비대로 채우지 않는다
                     var cells = Adaptation.FreeCells(w, room)
                         .Where(c => Cell.Dirs4.Any(d => ship.Grid.Kind(c + d) == TileKind.Wall))           // 벽가에
                         .Where(c => Cell.Dirs4.Any(d => ship.IsOpenFloor(c + d) && ship.RoomAt(c + d) == room)) // 앞에 설 자리
@@ -495,6 +513,7 @@ public sealed partial class RobotSystem
                 if (spot is not Cell at) continue;
                 var dock = ship.AddFurniture(FurnitureType.RobotDock, at);
                 result[dock] = kind;
+                perRoom[dock.Room.Id] = perRoom.GetValueOrDefault(dock.Room.Id) + 1;
                 break;
             }
         }
@@ -584,7 +603,7 @@ public sealed partial class RobotSystem
     {
         var path = r.Path;
         if (path == null) return true;
-        float budget = Speed(r.Kind) * r.Quirk.Speed * (r.Fault == null && r.Battery > 0.02f ? 1f : 0.5f) * w.Fleet.Speed(r); // v16.20b 단계 · 아껴 쓰기 · 같이 들기
+        float budget = Speed(r.Kind) * r.Quirk.Speed * (r.Fault == null && r.Battery > 0.02f ? 1f : 0.5f) * w.Fleet.Speed(r) * RobotsV21.SpeedMul(r); // v21 개량 단계 // v16.20b 단계 · 아껴 쓰기 · 같이 들기
         bool repathed = false;
         while (budget > 0f && r.PathIndex < path.Count)
         {
@@ -644,7 +663,14 @@ public sealed partial class RobotSystem
             {
                 case RobotState.Docked:
                 {
-                    if (DockWorking(r))
+                    if (RobotsV21.Reactor)
+                    {
+                        // v21 소형 원자로: 정비대 전기 없이 내장 전지를 채우고 · 거품을 다시 채우고 · 조금씩 스스로 손본다
+                        r.Battery = MathF.Min(MaxCharge(r), r.Battery + ReactorRate(r) * 1.6f * dt);
+                        if (r.Foam < 1f) r.Foam = MathF.Min(1f, r.Foam + FoamRefillPerHour * dt);
+                        if (r.Fault == null && r.Condition < 0.8f) r.Condition = MathF.Min(0.8f, r.Condition + 0.01f * dt);
+                    }
+                    else if (DockWorking(r))
                     {
                         float eff = r.Dock.Machine!.Efficiency;
                         if (r.Battery < 1f) { r.Battery = MathF.Min(MaxCharge(r), r.Battery + ChargePerHour * eff * dt); charging.Add(r.Dock); }
@@ -654,7 +680,7 @@ public sealed partial class RobotSystem
                     if (r.Fault is RobotFault df)
                     {
                         // 가벼운 고장: 충전대에서 스스로 진단·수리 (전기가 있어야)
-                        if (CanSelfRepair(r) && DockWorking(r))
+                        if (CanSelfRepair(r) && (RobotsV21.Reactor || DockWorking(r)))
                         {
                             r.SelfRepairDone += dt;
                             r.Doing = $"{FaultName(df)} — 스스로 고치는 중 {Math.Min(99, (int)(r.SelfRepairDone / SelfRepairHours(df) * 100))}%";
@@ -664,11 +690,11 @@ public sealed partial class RobotSystem
                         break;
                     }
                     // 충전대가 죽었으면 기다려도 차지 않는다 — 남은 배터리로 급한 일만 하러 나간다 (돌아올 만큼은 남긴다)
-                    bool deadDock = !DockWorking(r);
+                    bool deadDock = !RobotsV21.Reactor && !DockWorking(r); // v21 원자로: 정비대 전기가 없어도 된다
                     if (deadDock && r.Battery < DeadDockReserve) { r.Doing = r.Dock.Machine!.Powered ? "충전대 멈춤 — 충전 못 함" : "충전대에 전기가 없다 — 충전 못 함"; break; }
-                    if (!deadDock && r.Battery < 0.35f) { r.Doing = $"충전 {r.Battery * 100:0}%"; break; }
+                    if (!deadDock && r.Battery < 0.35f) { r.Doing = RobotsV21.Reactor ? $"원자로로 전지 채우는 중 {r.Battery * 100:0}%" : $"충전 {r.Battery * 100:0}%"; break; }
                     Decide(r);
-                    if (r.State == RobotState.Docked) r.Doing = r.Battery < 0.99f && !deadDock ? $"충전 {r.Battery * 100:0}% · 대기" : deadDock && r.Battery < 0.35f ? $"충전대에 전기가 없다 — 배터리 {r.Battery * 100:0}% · 급한 일만" : "대기";
+                    if (r.State == RobotState.Docked) r.Doing = r.Upgrading ? "개량 받는 중" : r.Battery < 0.99f && !deadDock ? (RobotsV21.Reactor ? $"전지 {r.Battery * 100:0}% · 대기" : $"충전 {r.Battery * 100:0}% · 대기") : deadDock && r.Battery < 0.35f ? $"충전대에 전기가 없다 — 배터리 {r.Battery * 100:0}% · 급한 일만" : "대기";
                     break;
                 }
                 case RobotState.Active:
@@ -677,7 +703,7 @@ public sealed partial class RobotSystem
                     bool moving = r.Path != null;
                     float drain = r.Steps != null && r.StepIndex < r.Steps.Count && r.Steps[r.StepIndex] is RSpray ? DrainSpray
                         : moving ? DrainMove : working ? DrainWork : DrainIdle;
-                    r.Battery = MathF.Max(0f, r.Battery - drain * RobotsV15.Drain(r.Kind) * Durability.RobotDrain * w.Fleet.Drain(r) * dt); // v15.7 배터리 크기 · v16.19 큰 셀 · v16.20b 셀 등급 · 아껴 쓰기
+                    r.Battery = Math.Clamp(r.Battery - drain * RobotsV15.Drain(r.Kind) * Durability.RobotDrain * w.Fleet.Drain(r) * dt + ReactorRate(r) * dt, 0f, MaxCharge(r)); // v21 원자로가 내장 전지를 채운다 // v15.7 배터리 크기 · v16.19 큰 셀 · v16.20b 셀 등급 · 아껴 쓰기
                     r.ActiveHours += dt;
                     r.Condition = MathF.Max(0f, r.Condition - (working || moving ? 0.008f : 0.002f) * Durability.RobotWear * dt);
                     // 가벼운 고장으로 충전대에 돌아가는 중 (느리게): 길이 막히면 그 자리에 멈춘다
@@ -691,7 +717,7 @@ public sealed partial class RobotSystem
                     // 불 곁에서 그을리거나, 닳아서 고장
                     if (w.Fire.AnyWithin(r.Cell, 1.2f) && !RobotsV15.Fireproof(r.Kind) && w.Rng.Chance(0.6f * Durability.RobotScorch * w.Fleet.Hurt * dt)) { Break(r, RobotFault.Scorched); break; } // v16.19 방열 외피
                     if (w.Fire.AnyWithin(r.Cell, 0.8f) && RobotsV15.Fireproof(r.Kind)) r.Condition = MathF.Max(0f, r.Condition - 0.05f * RobotsV15.HeatWear(r.Kind) * dt);
-                    float wearRisk = (0.0025f + 0.045f * (1f - r.Condition) * (1f - r.Condition)) * RobotsV15.Fault(r.Kind) * Durability.RobotFault * w.Fleet.FaultMul; // v16.20b 외피 등급 · v15.7 고장률 · v16.19 재조정
+                    float wearRisk = (0.0025f + 0.045f * (1f - r.Condition) * (1f - r.Condition)) * RobotsV15.Fault(r.Kind) * Durability.RobotFault * w.Fleet.FaultMul * RobotsV21.FaultMul(r); // v21 개량 단계 · 숙련 · v16.20b 외피 등급 · v15.7 고장률 · v16.19 재조정
                     if (w.Rng.Chance(wearRisk * dt)) { Break(r, PickFault(r)); break; }
                     if (r.Battery <= 0.001f) { Stall(r, "배터리가 바닥났다"); break; }
                     // 맡은 일이 사라졌으면 (누가 끝냈거나 조건이 없어졌다) 손을 놓는다
@@ -703,7 +729,7 @@ public sealed partial class RobotSystem
                     // 배터리가 모자라면 돌아간다 (돌아갈 만큼 남기고) — 맡은 일이든, 사람을 거들든, 순찰이든
                     if (!r.Homing && r.Steps != null && r.Battery < ReturnCost(r) + 0.05f) { Abort(r, "배터리가 모자라 충전대로 돌아간다"); break; }
                     // 방재 로봇: 순찰·귀환 중에도 불이 나면 그쪽으로 (거품이 있을 때)
-                    if (RobotsV15.Fights(r.Kind) && !r.FightingFire && w.Fire.Count > 0 && r.Foam > 0.15f && r.Battery > ReturnCost(r) + 0.15f)
+                    if (FightsNow(r, w) && !r.FightingFire && !r.Runaway && w.Fire.Count > 0 && r.Foam > 0.15f && r.Battery > ReturnCost(r) + 0.15f)
                     {
                         var fireDist = w.Paths.Flood(r.Cell, Profile);
                         var keep = (r.Steps, r.StepIndex, r.Doing, r.Homing);
@@ -722,6 +748,7 @@ public sealed partial class RobotSystem
         }
         foreach (var dock in w.Ship.FurnitureOf(FurnitureType.RobotDock))
             if (dock.Machine != null) dock.Machine.Active = charging.Contains(dock);
+        TickV21(dt); // v21 원자로 · 긴급 지정 · 개량
     }
 
     /// <summary>배터리 셀이 열화하면 끝까지 차지 않는다.</summary>
@@ -756,7 +783,7 @@ public sealed partial class RobotSystem
     private void Decide(Robot r)
     {
         var w = _world;
-        if (r.Disabled || r.Fault != null || r.Dock.Room.Detached) return;
+        if (r.Disabled || r.Fault != null || r.Dock.Room.Detached || r.Runaway || r.Upgrading) return; // v21 폭주 · 개량 중
         // 충전대가 떨어져 나갔거나 포기한 구획이면 나가지 않는다
         if (r.Dock.Room.Abandoned || r.Dock.Room.OffLimits) { if (!r.AtDock) GoHome(r, null); return; }
         bool frugal = r.AtDock && !DockWorking(r) && r.Battery < 0.35f; // 죽은 충전대: 급한 일만
@@ -765,26 +792,29 @@ public sealed partial class RobotSystem
         // 충전대에서 기다릴 때는 2분에 한 번만 생각한다 (거리장은 비싸다)
         if (r.AtDock && w.Tick < r.NextDecide) return;
         r.NextDecide = w.Tick + SimTime.Minutes(2);
-        bool fire = RobotsV15.Fights(r.Kind) && r.Foam > 0.15f && w.Fire.Count > 0;
-        bool work = w.Board.OpenForRobot().Any(o => CanDo(r.Kind, o.Kind) || Stands(r, o)); // 무인 운항: 사람 몫의 손일도
+        bool fire = FightsNow(r, w) && r.Foam > 0.15f && w.Fire.Count > 0; // v21 긴급 지정된 로봇도
+        var open = w.Board.RobotCandidates(); // v21 틱마다 한 번 모은 목록 (로봇 80대)
+        bool work = false;
+        foreach (var o in open) if (!o.Closed && o.Assignee == null && o.Robot == null && o.Drone == null && Eligible(r, o)) { work = true; break; } // 특기 · 기본 행동 · 사람 몫의 손일
         bool assist = RobotsV15.Assists(r.Kind) && w.Crew.Any(c => c.CanAct && c.Helper == null && c.Job?.Order is WorkOrder jo && Assistable(jo.Kind) && c.Job.Current is WorkToil);
         bool patrol = RobotsV15.Patrols(r.Kind) && w.Tick >= r.NextPatrol && r.Battery > 0.7f;
         bool med = w.MedBots.Wants(r); // 의료 3차 쓰러진 사람 · 피 · 손 펌프 · 소독
-        if (!fire && !work && !assist && !patrol && !med) { if (!r.AtDock) GoHome(r, null); return; }
+        bool wipe = r.Kind == RobotKind.Cleaner && w.Tick >= r.NextPatrol; // v21 청소 로봇: 바닥 닦기
+        if (!fire && !work && !assist && !patrol && !med && !wipe) { if (!r.AtDock) GoHome(r, null); return; }
 
         var dist = w.Paths.Flood(r.Cell, Profile);
 
         // 방재 로봇: 불이 먼저
-        if (RobotsV15.Fights(r.Kind) && r.Foam > 0.15f && PlanFire(r, dist)) return;
+        if (FightsNow(r, w) && r.Foam > 0.15f && PlanFire(r, dist)) return;
         if (med && w.MedBots.Plan(r, dist)) return; // 의료 3차 위중한 사람부터
 
         WorkOrder? best = null;
         Cell bestSpot = default;
         float bestScore = float.MinValue;
         DistanceField? udist = null, bestField = null;
-        foreach (var o in w.Board.OpenForRobot())
+        foreach (var o in open)
         {
-            if (!(CanDo(r.Kind, o.Kind) || Stands(r, o)) || !RobotsV15.Takes(r.Kind, o)) continue;
+            if (o.Closed || o.Assignee != null || o.Robot != null || o.Drone != null || !Eligible(r, o)) continue; // v21 특기 먼저 · 기본 행동은 기다렸다
             if (frugal && o.Urgency < 0.7f) continue;
             // 원자로 정비는 사람 몫 (제어봉·계측을 손보는 기관 일이다)
             if (o.Kind == WorkKind.Maintain && o.Target.Furniture?.Type == FurnitureType.ReactorCore) continue;
@@ -795,9 +825,10 @@ public sealed partial class RobotSystem
             var field = dist;
             if (Rushes(w, o)) field = udist ??= w.Paths.Flood(r.Cell, UrgentProfile); // 강화: 급한 일은 잠긴 격벽 너머도 (주 컴퓨터가 연다)
             if (Spot(r, o, field) is not Cell spot) continue;
-            float score = o.Urgency - field.Get(spot) / 9000f + w.Automation.Command.Bias(r, o); // v16.20 컴퓨터 명령 (ComputerCommand.Order)
+            float score = o.Urgency - field.Get(spot) / 9000f + w.Automation.Command.Bias(r, o) + (Special(r.Kind, o.Kind) ? 0.3f : 0f); // v16.20 컴퓨터 명령 (ComputerCommand.Order) · v21 특기
             if (score > bestScore) { bestScore = score; best = o; bestSpot = spot; bestField = field; }
         }
+        if (wipe && (best == null || !Special(r.Kind, best.Kind)) && TryWipe(r, dist)) return; // v21 청소 로봇: 남의 일보다 제 바닥 닦기
         if (best != null)
         {
             var steps = Plan(r, best, bestSpot, bestField!, out string? blocked);
@@ -827,8 +858,8 @@ public sealed partial class RobotSystem
         {
             int d = dist.Get(s);
             if (d < 0) continue;
-            if (_world.Crew.Any(c => !c.Dead && c.Cell == s)) d += 300;
-            if (Robots.Any(x => x != r && x.State == RobotState.Active && x.Cell == s)) d += 300;
+            if (Occupied(r, s, out bool byBot)) d += 300; // v21 틱마다 한 번 모은 칸
+            if (byBot) d += 300;
             if (d < bestCost) { best = s; bestCost = d; }
         }
         return best;
@@ -856,7 +887,7 @@ public sealed partial class RobotSystem
     {
         blocked = null;
         var w = _world;
-        if (!CanDo(r.Kind, o.Kind) && o.Kind != WorkKind.StockDock) return PlanHands(r, o, at, dist, out blocked); // 무인 운항 — 사람 몫의 손일 (Unattended.cs)
+        if (!CanDo(r.Kind, o.Kind) && o.Kind != WorkKind.StockDock && HandWork(o.Kind)) return PlanHands(r, o, at, dist, out blocked); // 무인 운항 — 사람 몫의 손일 (Unattended.cs)
         var steps = new List<RobotStep>();
         switch (o.Kind)
         {
@@ -1110,7 +1141,7 @@ public sealed partial class RobotSystem
             case WorkKind.ShelterFood:
                 return Logistics.RobotShelterFood(this, r, o, at, dist, out blocked);
         }
-        return null;
+        return HandWork(o.Kind) ? PlanHands(r, o, at, dist, out blocked) : PlanV21(r, o, at, dist, out blocked); // v21 특기로 맡는 사람 몫 손일 · 새 특기 일
     }
 
     internal static (Furniture? box, Cell spot) NearestFor(World w, DistanceField dist, Func<Furniture, bool> match) => Nearest(w, dist, match);
@@ -1118,6 +1149,7 @@ public sealed partial class RobotSystem
     /// <summary>한 일을 기록한다.</summary>
     internal void Done(Robot r, string? what)
     {
+        Learn(r); // v21 숙련
         r.JobsDone++;
         JobsDone++;
         if (what != null) _world.Log.Add(_world.Tick, LogKind.Work, $"{r.Name}: {what}");

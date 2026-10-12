@@ -251,6 +251,7 @@ public sealed class SensorSystem
             if (m.Warned == WarnLevel.Sensor) WarnedBySensor++;
         }
         float lead = m.WarnedAt >= 0 ? (m.Arrive - m.WarnedAt) / (float)SimTime.Minutes(1) : 0f;
+        if (_w.Drones.Intercept(m)) { foreach (var d in m.SealedDoors) d.Locked = false; return; } // v21 방패 드론이 받아 냈다 (큰 것은 줄여서 그대로 온다)
         _w.Causes.ObserverNext = m.ByObserver;
         using (_w.Causes.Because(m.CauseNode)) Incidents.Meteor(_w, m.Target, m.Size, m.Warned, lead);
         _w.Causes.ObserverNext = false;

@@ -21,7 +21,7 @@ public sealed class BotLook
     public DotBotState State;
     /// <summary>짐 색표 (-1: 빈 짐칸).</summary>
     public int Cargo = -1;
-    /// <summary>특기 표식 0 없음 · 1 편지 · 2 물방울 · 3 상자 · 4 번개 · 5 손 · 6 톱니 · 7 잎 · 8 물뿌리개 · 9 눈 · 10 불꽃 · 11 더하기.</summary>
+    /// <summary>특기 표식 0 없음 · 1 편지 · 2 물방울 · 3 상자 · 4 번개 · 5 손 · 6 톱니 · 7 잎 · 8 물뿌리개 · 9 눈 · 10 불꽃 · 11 더하기 · v21 12 빗자루 · 13 냄비 · 14 관 · 15 지게 · 16 바람개비 · 17 팔 · 18 덮개판 · 19 공기 방울 · 20 붉은 십자.</summary>
     public int Badge;
     public int Seed;
 }
@@ -310,6 +310,15 @@ public static class DotBots
             8 => (Ramps.Cyan, "##." + ".##" + "..#"),      // 물뿌리개
             9 => (Ramps.Alarm, "###" + "#.#" + "###"),     // 눈
             10 => (Ramps.Fire, ".#." + "###" + "###"),     // 불꽃
+            12 => (Ramps.Cyan, "#.." + ".#." + "###"),     // 빗자루
+            13 => (Ramps.Bandage, "###" + "#.#" + ".#."),  // 냄비
+            14 => (Ramps.Steel, "##." + ".#." + ".##"),    // 관
+            15 => (Ramps.Hazard, "#.." + "#.." + "###"),   // 지게
+            16 => (Ramps.Cyan, "#.#" + "###" + "#.#"),     // 바람개비
+            17 => (Ramps.Alarm, "#.#" + ".#." + "###"),    // 들어 올리는 팔
+            18 => (Ramps.Steel, "###" + "#.#" + "###"),    // 덮개판
+            19 => (Ramps.Glass, ".#." + "#.#" + ".#."),    // 공기 방울
+            20 => (Ramps.Alarm, ".#." + "###" + ".#."),    // 붉은 십자
             _ => (Ramps.Led, ".#." + "###" + ".#."),       // 더하기
         };
         for (int j = 0; j < 3; j++) for (int i = 0; i < 3; i++) if (pat[j * 3 + i] == '#') d.Mark(x + i, y + j, ramp, ramp == Ramps.Fire ? 5 : 3);

@@ -39,6 +39,7 @@ scar_44 60 44 --scarcity --quiet
 scar_55 60 55 --scarcity --quiet
 ships10 10 20260929 --ships
 robottest 1 20260929 --robottest
+robot21test 1 7 --robot21test
 hazardtest 1 20260929 --hazardtest
 livingtest 1 20260929 --livingtest
 remodeltest 1 20260929 --remodeltest

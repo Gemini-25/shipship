@@ -23,14 +23,14 @@ public partial class Hud
         var col = ShipView.RobotColor(r.Kind);
         float x0 = ColX; // v20 고른 것 카드 자리 (창이 열리면 창 왼쪽)
         var marks = r.Marks.TakeLast(6).Reverse().ToList();
-        float height = Mathf.Min(maxHeight, 300 + RobotMindHeight(r) + (RobotsV15.Fights(r.Kind) ? 22 : 0) + (marks.Count > 0 ? 34 + marks.Count * 18 : 0)); // v16.20b 생각
+        float height = Mathf.Min(maxHeight, 300 + RobotMindHeight(r) + (RobotSystem.FightsNow(r, _world) ? 22 : 0) + (r.CoreHeat > 0.05f || r.Runaway ? 22 : 0) + (r.Drafted(_world) ? 20 : 0) + (marks.Count > 0 ? 34 + marks.Count * 18 : 0)); // v16.20b 생각 · v21 원자로 · 긴급 지정
         var card = new Rect2(x0, y, RightColumnWidth, height);
         Card(card);
         float x = x0 + 18, right = card.End.X - 18;
 
         Gfx.RoundRect(this, new Rect2(x, y + 18, 16, 16), col.WithAlpha(0.3f), 5, col);
         Gfx.Text(this, Fonts.Bold, new Vector2(x + 26, y + 32), r.Name, Ui.TextLarge, Palette.Text);
-        Gfx.Text(this, Fonts.Body, new Vector2(x + 26, y + 50), UiKit.Fit($"{r.Room?.Name ?? "?"} · 충전대 {r.Dock.Room.Name} · 버릇: {r.Quirk.Name}", right - (x + 26), Ui.TextBody, Fonts.Body), Ui.TextBody, Palette.TextMuted);
+        Gfx.Text(this, Fonts.Body, new Vector2(x + 26, y + 50), UiKit.Fit($"{RobotsV21.MkName(r.Mk)} · 숙련 {r.Skill * 100:0}% · {r.Room?.Name ?? "?"} · {(RobotsV21.Reactor ? "정비대" : "충전대")} {r.Dock.Room.Name} · 버릇: {r.Quirk.Name}", right - (x + 26), Ui.TextBody, Fonts.Body), Ui.TextBody, Palette.TextMuted);
         var sc = r.Fault != null || r.State is RobotState.Stalled or RobotState.Towed ? Palette.Danger : r.Battery < 0.25f ? Palette.Warning : Palette.Good;
         Gfx.TextRight(this, Fonts.Bold, new Vector2(right, y + 32), RobotStateText(r), Ui.TextBody, sc);
         Divider(x, right, y + 64);
@@ -41,14 +41,16 @@ public partial class Hud
         else if (r.Helping != null) Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 32), UiKit.Fit($"{Ko.EulReul(r.Helping.Name)} 거든다 — 긴 손일이 {RobotsV15.AssistBonus(r.Kind) * 100:0}% 빨라진다", right - (x), Ui.TextSmall, Fonts.Body), Ui.TextSmall, Palette.TextMuted);
         if (r.Cargo is ItemStack cargo) Gfx.Text(this, Fonts.Body, new Vector2(x, ly + 48), $"싣고 있음: {cargo}", Ui.TextSmall, Palette.TextMuted);
         ly += 58;
-        Row(x, right, ly, "배터리", r.Battery, Palette.Good, Pct(r.Battery), r.Battery < 0.25f);
+        Row(x, right, ly, RobotsV21.Reactor ? "전지 (원자로)" : "배터리", r.Battery, Palette.Good, Pct(r.Battery), r.Battery < 0.25f);
         Row(x, right, ly + 22, "상태", r.Condition, new Color("#9fb4cc"), Pct(r.Condition), r.Condition < 0.45f);
-        if (RobotsV15.Fights(r.Kind)) { Row(x, right, ly + 44, "소화 거품", r.Foam, new Color("#f4f1ec"), Pct(r.Foam), r.Foam < 0.2f); ly += 22; }
+        if (RobotSystem.FightsNow(r, _world)) { Row(x, right, ly + 44, "소화 거품", r.Foam, new Color("#f4f1ec"), Pct(r.Foam), r.Foam < 0.2f); ly += 22; }
+        if (RobotsV21.Reactor && (r.CoreHeat > 0.05f || r.Runaway)) { Row(x, right, ly + 44, r.Runaway ? "원자로 폭주!" : "원자로 열", r.CoreHeat, Palette.Danger, Pct(r.CoreHeat), r.CoreHeat > 0.5f); ly += 22; }
+        if (r.Drafted(_world)) { Gfx.Text(this, Fonts.Bold, new Vector2(x, ly + 58), $"긴급 지정 — {RobotsV21.DraftName(r.Draft)} (주 컴퓨터)", Ui.TextSmall, Palette.Warning); ly += 20; }
         ly += 50;
         ly = DrawRobotMind(r, x, right, ly); // v16.20b 지금 · 다음 · 배터리 · 왜 · 단계
         string fault = r.Fault is RobotFault f
             ? RobotSystem.CanSelfRepair(r)
-                ? $"{RobotSystem.FaultName(f)} — 가벼움 · 충전대에서 스스로 고친다 ({RobotSystem.SelfRepairHours(f) * 60:0}분)"
+                ? $"{RobotSystem.FaultName(f)} — 가벼움 · {(RobotsV21.Reactor ? "정비대" : "충전대")}에서 스스로 고친다 ({RobotSystem.SelfRepairHours(f) * 60:0}분)"
                 : $"{RobotSystem.FaultName(f)} — 사람이 고쳐야 한다: " + (RobotSystem.WhyNotSelf(r) ?? "") +
                   (RobotSystem.FaultParts(f).Length == 0 ? "" : " · " + string.Join(" + ", RobotSystem.FaultParts(f).Select(p => $"{ItemKinds.Name(p.kind)} {p.count}")))
             : $"고장 없음 · 자가 수리 {r.SelfRepairs}/{RobotSystem.SelfRepairLimit} (사람 정비 뒤) · 임계점 상태 {RobotSystem.SelfRepairFloor * 100:0}%";
@@ -57,7 +59,7 @@ public partial class Hud
             $"한 일 {r.JobsDone}건 · 일한 {r.ActiveHours:0}시간 · 거든 {r.AssistHours:0.0}시간 · 고장 {r.Breakdowns}번(스스로 {r.SelfRepairsTotal}) · 끌려옴 {r.Fetched}번", Ui.TextSmall, Palette.TextMuted);
         string can = r.Kind switch
         {
-            _ when RobotsV15.Bot(r.Kind) is { } v => $"맡는 일: {v.Note}", // v15.7
+            _ when RobotsV15.Bot(r.Kind) is { } v => $"특기: {v.Note}" + (RobotsV21.General ? " · 기본 행동은 다 한다" : ""), // v15.7 · v21
             RobotKind.Hauler => "맡는 일: 배식기 채우기 · 드론 자재 보급 · 물통 급수 · 비상 물자함",
             RobotKind.Maintainer => "맡는 일: 정기 정비(원자로 빼고) · 조명 · 사람 옆에서 거들기",
             RobotKind.Gardener => "맡는 일: 작물 돌보기 · 수확해 냉장고로",

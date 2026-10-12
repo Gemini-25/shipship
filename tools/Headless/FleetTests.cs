@@ -188,8 +188,10 @@ public static partial class Program
                 Check("고장 난 로봇을 다른 로봇이 고친다: 부품 → 고치기 → 시험 가동", broken != null && broken.Fault == null && f.Fixes >= 1 && gi >= 0 && gi < fi && fi < ti && f.Tests + f.TestFails >= 1,
                     $"고침 {f.Fixes} · 단계 {string.Join(" → ", stagesSeen)} · 시험 {f.Tests}/{f.TestFails} · 고장 {broken?.Fault}");
 
-                // 방전돼 멈춘 로봇을 다른 로봇이 끌고 온다
+                // 방전돼 멈춘 로봇을 다른 로봇이 끌고 온다 (v21 소형 원자로면 방전으로 서지 않는다 — 예전 전지 방식으로 본다)
                 var flat = w.Robots.Robots.Where(r => r != broken && r.Operational && !RobotsV15.Fights(r.Kind)).OrderBy(r => r.Id).FirstOrDefault();
+                bool reactor0 = RobotsV21.Reactor;
+                RobotsV21.Reactor = false;
                 if (flat != null)
                 {
                     for (int t = 0; t < SimTime.Hours(10) && flat.State != RobotState.Active; t++) w.Step();
@@ -201,6 +203,7 @@ public static partial class Program
                             Console.WriteLine($"    t{t} {flat.Name} {flat.State} ← {tb.Name} {tb.State} {tb.Room?.Name} 길 {(tb.Path == null ? -1 : tb.Path.Count - tb.PathIndex)} 단계 {tb.StepIndex}/{tb.Steps?.Count} 비킴 {tb.YieldTicks} 배 {tb.Battery:0.00} · {tb.Doing} · {tb.Mind.Why}");
                     }
                 }
+                RobotsV21.Reactor = reactor0;
                 Check("방전돼 멈춘 로봇을 다른 로봇이 충전대까지 끌고 온다", flat != null && flat.State == RobotState.Docked && f.Tows >= 1,
                     $"상태 {flat?.State} · 끌고 옴 {f.Tows} · {flat?.Doing} · {string.Join(" / ", flat?.Marks.TakeLast(3).Select(m => m.Text) ?? Array.Empty<string>())}");
 
