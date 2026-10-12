@@ -18,6 +18,9 @@ public sealed class Broadcast
     public int Priority { get; init; }
     /// <summary>방송에 실린 지시 ("shelter" 대피소로 · "gather:방번호" 모여라 …) — 들은 사람만 따른다 (HeedBroadcastActivity).</summary>
     public string Order { get; init; } = "";
+    /// <summary>v21 방송한 그 순간 그 방에 불 · 구멍이 있었나 — 들은 사람은 방송이 말한 때의 일을 안다 (읽어 들이는 사이 새로 붙은 불을 방송이 알린 걸로 치지 않는다).</summary>
+    public bool Fire { get; init; }
+    public bool Leak { get; init; }
     public List<int> Rooms { get; } = new();
     public List<int> Silent { get; } = new();
     public List<int> HeardBy { get; } = new();
@@ -55,7 +58,7 @@ public sealed class PublicAddress
         var w = _w;
         var a = w.Automation;
         if (!a.Present || !a.CoreOnline) return null; // v16.20 예비 코어도 방송은 한다 (경보는 핵심 고리)
-        var b = new Broadcast { Id = _next++, Tick = w.Tick, Text = text, RoomId = about?.Id ?? -1, Priority = priority, Order = order };
+        var b = new Broadcast { Id = _next++, Tick = w.Tick, Text = text, RoomId = about?.Id ?? -1, Priority = priority, Order = order, Fire = about != null && w.Fire.CountIn(about) > 0, Leak = about?.Leaking == true };
         foreach (var r in w.Ship.Rooms)
         {
             if (r.Detached) continue;

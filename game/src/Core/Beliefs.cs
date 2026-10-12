@@ -648,8 +648,8 @@ public sealed class BeliefSystem
                 Of(c).Heard++;
                 if (bc.Order == "shelter") Learn(c, Topic.Shelter, bc.RoomId, 1, BeliefSource.Broadcast, conf, -2);
                 if (room == null) continue;
-                if (FireIn(room) > 0) Learn(c, Topic.Fire, room.Id, 1, BeliefSource.Broadcast, conf, -2);
-                if (room.Leaking) Learn(c, Topic.Breach, room.Id, 1, BeliefSource.Broadcast, conf, -2);
+                if (bc.Fire) Learn(c, Topic.Fire, room.Id, 1, BeliefSource.Broadcast, conf, -2); // v21 방송한 때의 불 (데이터선 끊김 방송을 늦게 읽는 사이 붙은 불을 방송이 알린 걸로 믿었다)
+                if (bc.Leak) Learn(c, Topic.Breach, room.Id, 1, BeliefSource.Broadcast, conf, -2);
                 if (bc.Priority >= 2 && bc.Order != "shelter") Learn(c, Topic.Warn, room.Id, 1, BeliefSource.Broadcast, conf, -2);
                 if (room.Dark && bc.Text.Contains("정전")) Learn(c, Topic.Dark, room.Id, 1, BeliefSource.Broadcast, conf, -2);
             }
