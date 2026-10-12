@@ -56,6 +56,7 @@ public partial class Starfield : Node2D
         _time += (float)delta;
         _cruise = Mathf.Lerp(_cruise, Cruise, 1f - Mathf.Exp(-3f * (float)delta)); // 배속이 바뀌면 부드럽게
         _travel += _cruise * (float)delta;
+        StepScenery((float)delta); // v23 구간 풍경 섞기
         QueueRedraw();
     }
 
@@ -75,6 +76,8 @@ public partial class Starfield : Node2D
             DrawNebula(new Vector2(size.X * 0.18f, size.Y * 0.85f), size.X * 0.42f, new Color("#1a2b52"));
             DrawNebula(new Vector2(size.X * 0.82f, size.Y * 0.12f), size.X * 0.32f, new Color("#2a1f4a"));
         }
+
+        DrawSceneryLayer(size, near: false); // v23 구간 풍경 (먼 것)
 
         // v11.2 태양 폭풍: 보라·초록 띠가 화면을 가로질러 일렁인다
         _storm = Mathf.MoveToward(_storm, Storm, 0.02f);
@@ -110,6 +113,7 @@ public partial class Starfield : Node2D
             if (s.Size < 1.1f) this.Box(new Rect2(x, y, 1f, 1f), color);
             else this.Circle(new Vector2(x, y), s.Size * 0.6f, color, true, -1f, true);
         }
+        DrawSceneryLayer(size, near: true); // v23 구간 풍경 (가까운 것)
         // v12.2 잔해 지대: 크고 작은 잔해가 앞에서 뒤로 지나간다 (돌면서)
         if (Debris)
         {

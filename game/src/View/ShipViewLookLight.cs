@@ -307,11 +307,14 @@ public partial class ShipView
             float ml = mv.Length();
             _srcs.Add(new LightSrc(who.Position.X, who.Position.Y, 3f, 0.62f, 0.6f, 0.5f, wr.Id, ml > 0.001f ? mv.X / ml : 0f, ml > 0.001f ? mv.Y / ml : 0f));
         }
-        // 관측창: 차가운 별빛 (덮개를 내리면 없다)
+        // 관측창: 창밖 풍경의 빛 (v23 구간마다 — 별바다는 차가운 별빛 · 가스 행성은 주황 · 근일점은 하얗게 · 펄서는 숨 쉬듯) · 덮개를 내리면 없다
+        var view = w.Voyage.View;
+        float vk = w.Voyage.Current.Kind switch { LegKind.Pulsar => 0.6f + 0.6f * Mathf.Pow(0.5f + 0.5f * Mathf.Sin(_time * 7f), 6f), LegKind.Perihelion => 1.4f, _ => 1f };
+        float vr = w.Voyage.Current.Kind == LegKind.Perihelion ? 3.4f : 2.4f;
         foreach (var wb in body.WallList)
         {
             if (!wb.Window || wb.Shutter || wb.Room < 0 || wb.Room >= ship.Rooms.Count || ship.Rooms[wb.Room].Detached) continue;
-            _srcs.Add(new LightSrc(wb.Cell.X + 0.5f, wb.Cell.Y + 0.5f, 2.2f, 0.12f, 0.16f, 0.26f, wb.Room));
+            _srcs.Add(new LightSrc(wb.Cell.X + 0.5f, wb.Cell.Y + 0.5f, vr, view.R * vk, view.G * vk, view.B * vk, wb.Room));
         }
         AddIncidentLights(); // v23 경보 회전등 · 로봇 헤드램프
     }

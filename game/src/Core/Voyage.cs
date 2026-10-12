@@ -26,7 +26,7 @@ public sealed class Leg
 
 public sealed record VoyageSummary(int Number, string From, string To, float Days, int Incidents, int Deaths, int Trades, int Recruits, int Salvage, int Techs, string Highlight);
 
-public sealed class VoyageSystem
+public sealed partial class VoyageSystem
 {
     private readonly World _w;
     public List<Leg> Legs { get; } = new();
@@ -148,6 +148,7 @@ public sealed class VoyageSystem
             return;
         }
         Enter(Current);
+        OnScenery(); // v23 창밖 풍경
     }
 
     private void Enter(Leg leg)

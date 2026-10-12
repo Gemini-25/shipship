@@ -306,6 +306,7 @@ public partial class Main : Node2D
         _stars.Cruise = Paused || Replaying != null ? 0f : 7f * Speeds[SpeedIndex] * (SlowMotion ? 0.3f : 1f) * (Sim.Propulsion.Burning ? 3f : 1f);
         _stars.Debris = Sim.Propulsion.Zone == ZoneKind.Debris;
         _stars.Storm = Sim.Hazards.StormActive ? 1f : 0f;
+        _stars.Leg = (int)Sim.Voyage.Current.Kind; // v23 구간 풍경
 
         AutoSaveTick(); // v19 자동 저장 (5분마다)
         PacedGc(); // v19 60프레임
@@ -1060,6 +1061,12 @@ public partial class Main : Node2D
                     Hud.OpenDock(tab, ob.Length > 1 ? int.Parse(ob[1], CultureInfo.InvariantCulture) : 0);
                     if (tab == DockTab.Computer && ob.Length > 2) Hud.ControlTab = int.Parse(ob[2], CultureInfo.InvariantCulture);
                     if (tab == DockTab.Computer && ob.Length > 3) Hud.ControlSub = int.Parse(ob[3], CultureInfo.InvariantCulture);
+                    break;
+                }
+                case "--leg":
+                {
+                    // 화면 확인용 (v23 창밖 풍경): --leg=GasGiant — 그 구간으로 바로 간다
+                    if (System.Enum.TryParse<LegKind>(value, out var lk)) Sim.Voyage.JumpTo(lk);
                     break;
                 }
                 case "--relaycut":
