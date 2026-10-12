@@ -223,14 +223,21 @@ public sealed class BeliefSystem
     public Belief? Learn(CrewMember c, Fact f, BeliefSource src, float conf, int from = -1) => Learn(c, f.Topic, f.Id, f.Value, src, conf, from);
 
     /// <summary>Mind.Knows의 사고 열쇠(fire:방 · breach:방 · down:사람)를 믿음으로 (v13.3 아는 것의 차이와 같은 출처).</summary>
-    public void FromMind(CrewMember c, string key, KnowSource src, string what)
+    public void FromMind(CrewMember c, string key, KnowSource src, string what, CrewMember? teller = null)
     {
         if (!BrainSystem.Enabled) return;
         if (!TryParse(key, out var t, out int id)) return;
         var bs = src switch { KnowSource.Seen => BeliefSource.Seen, KnowSource.Alarm => BeliefSource.Alarm, KnowSource.Radio => BeliefSource.Radio, _ => BeliefSource.Rumor };
         float conf = src switch { KnowSource.Seen => 1f, KnowSource.Alarm => 0.9f, KnowSource.Radio => 0.85f, _ => 0.65f };
-        var b = Learn(c, t, id, 1, bs, conf);
+        var b = Learn(c, t, id, 1, bs, conf, teller?.Id ?? -1);
         if (b != null && src == KnowSource.Alarm) b.Alarmed = true;
+        // v21 같은 방에서 옆 사람에게 들었다 — 누구에게서 들었는지 남고, 전한 사람도 저 사람이 안다고 짐작한다 (전엔 출처 없는 소문이라 전한 사람은 또 알리러 갔다)
+        if (teller != null)
+        {
+            long k = Key(t, id);
+            Of(teller).Shared.Add((k, c.Id));
+            Of(c).Shared.Add((k, teller.Id));
+        }
     }
 
     public static bool TryParse(string key, out Topic t, out int id)

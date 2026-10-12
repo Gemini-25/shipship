@@ -91,7 +91,7 @@ public static partial class Program
                 for (int k = 0; k < 2; k++)
                 {
                     var w = DayOne(seed, "Mirinae");
-                    NoRobots(w); // v21 쓰러진 사람이 있는 방에 대한 대피 방침를 본다 — 로봇이 먼저 맡으면 장면이 흐려진다
+                    NoRobots(w); // v21 쓰러진 사람이 있는 방에 대한 대피 방침을 본다 — 로봇이 먼저 맡으면 장면이 흐려진다
                     w.Policies.Set("inertfire", 0, "시험");
                     w.Policies.Set("vacuumfire", k == 0 ? 1 : 2, "시험");
                     var room = StoreRoom(w);

@@ -313,8 +313,9 @@ public static partial class Program
         // ── 8) 소리가 문 · 벽 층을 따라 퍼진다 — 닫힌 문 너머는 먹먹해 못 듣고, 열리면 듣고 확인하러 간다
         if (Do("8"))
         {
+            using var legacy = LegacyRobots(); // v21 칸 단위 장면 — 방마다 늘어난 정비대가 칸을 바꾸지 않게 예전 구성으로
             var w = GDay(seed);
-            NoRobots(w); // v21 들은 소리를 확인하러 가는 사람를 본다 — 로봇이 먼저 맡으면 장면이 흐려진다
+            NoRobots(w); // v21 들은 소리를 확인하러 가는 사람을 본다 — 로봇이 먼저 맡으면 장면이 흐려진다
             Machine? m = null; Door? door = null; Room? next = null;
             foreach (var x in w.Ship.Machines.OrderBy(x => x.Body.Id))
             {

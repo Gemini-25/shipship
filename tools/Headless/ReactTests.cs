@@ -61,6 +61,7 @@ public static partial class Program
 
         // ── 1) 같은 정전에 다섯 사람이 다섯 가지로 ──
         {
+            using var legacy = LegacyRobots(); // v21 칸 단위 장면 — 방마다 늘어난 정비대가 칸을 바꾸지 않게 예전 구성으로
             var w = ReactDay(seed);
             foreach (var r in w.Robots.Robots) r.Disabled = true; // v21 사람의 반응을 본다 — 로봇 80대가 몇 분 만에 불을 되살리면 "등 하나 끌고 올게"가 할 일이 없다
             var mess = w.Ship.LiveRooms.First(r => r.Type == RoomType.Mess);
@@ -167,8 +168,9 @@ public static partial class Program
 
         // ── 4) 젖은 바닥 → 조심 걸음 · 5) 깨진 유리 → 돌아간다 ──
         {
+            using var legacy = LegacyRobots(); // v21 칸 단위 장면 — 방마다 늘어난 정비대가 칸을 바꾸지 않게 예전 구성으로
             var w = ReactDay(seed);
-            NoRobots(w); // v21 유리 조각을 피해 가는 사람를 본다 — 로봇이 먼저 맡으면 장면이 흐려진다
+            NoRobots(w); // v21 유리 조각을 피해 가는 사람을 본다 — 로봇이 먼저 맡으면 장면이 흐려진다
             var rs = w.React;
             var walker = Awake(w, 1, c => -c.Traits.Calm)[0];
             // 미끄러운 바닥이 되는 방 (젖으면 미끄러운 바닥재)
@@ -267,7 +269,7 @@ public static partial class Program
         // ── 7b) 연기 · 흔들림 · 냄새 · 새 물건 · 우는 사람 — 사람마다 다른 행동 ──
         {
             var w = ReactDay(seed);
-            NoRobots(w); // v21 연기에 반응하는 사람를 본다 — 로봇이 먼저 맡으면 장면이 흐려진다
+            NoRobots(w); // v21 연기에 반응하는 사람을 본다 — 로봇이 먼저 맡으면 장면이 흐려진다
             var rs = w.React;
             var mess = w.Ship.LiveRooms.First(r => r.Type == RoomType.Mess);
             var nb = w.Ambience.Neighbors(mess).Where(x => x.Item2 && !x.Item1.OffLimits && x.Item1.Air.Pressure > 70f).Select(x => x.Item1).OrderBy(r => r.Id).FirstOrDefault();

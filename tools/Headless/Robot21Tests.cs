@@ -10,6 +10,17 @@ public static partial class Program
     /// <summary>v21 사람의 행동을 재는 장면: 로봇 80대 · 긴급 지정이 먼저 해결해 버리면 장면이 성립하지 않는다 — 그 장면에서만 로봇을 쉬게 한다.</summary>
     internal static void NoRobots(World w) { foreach (var r in w.Robots.Robots) r.Disabled = true; }
 
+    /// <summary>v21 예전 로봇 구성(정비대 2~9개 · 특기만)으로 — 이 블록이 끝나면 되돌린다.
+    /// 사람 한 명에 두 대가 되며 방마다 정비대가 늘어 칸이 바뀌면 한 칸 단위 몸짓 장면(유리 조각 돌아가기 · 소리 난 칸 찾아가기)이 흐려진다.</summary>
+    internal static IDisposable LegacyRobots() => new LegacyScope();
+
+    private sealed class LegacyScope : IDisposable
+    {
+        private readonly bool _g = RobotsV21.General, _r = RobotsV21.Reactor, _e = RobotsV21.Expanded;
+        public LegacyScope() { RobotsV21.General = RobotsV21.Reactor = RobotsV21.Expanded = false; }
+        public void Dispose() { RobotsV21.General = _g; RobotsV21.Reactor = _r; RobotsV21.Expanded = _e; }
+    }
+
     /// <summary>먹을 것 탐침 (--foodprobe=배): 두 시간마다 먹을 것이 어디 있고 누가 먹었나.</summary>
     private static int RunFoodProbe(int seed, string ship)
     {

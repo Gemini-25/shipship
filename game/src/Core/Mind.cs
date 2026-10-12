@@ -117,11 +117,11 @@ public sealed class MindSystem
     /// <summary>v16.15 다른 사람이 찾아와 알려 줬다 (두뇌 2.0 알리러 감) — 소문과 같은 출처로 안다.</summary>
     public void Hear(CrewMember c, string key, string what) { if (!c.Mind.Knows.ContainsKey(key)) Learn(c, key, KnowSource.Rumor, what); }
 
-    private void Learn(CrewMember c, string key, KnowSource src, string what)
+    private void Learn(CrewMember c, string key, KnowSource src, string what, CrewMember? teller = null)
     {
         var w = _w;
         c.Mind.Knows[key] = (src, w.Tick, what);
-        w.Brain2.Beliefs.FromMind(c, key, src, what); // v16.15 아는 것은 믿음 장부로 모인다
+        w.Brain2.Beliefs.FromMind(c, key, src, what, teller); // v16.15 아는 것은 믿음 장부로 모인다
         // 통합8 불이 난 그 방에 있던 사람은 (보았든 경보로 알았든) 그날을 기억한다 — 사고 카드 · 연대기의 "누가 기억하나"
         if (key.StartsWith("fire:") && c.Room is Room here && key == $"fire:{here.Id}") MarkLog.Add(c.Memory.Marks, w.Tick, $"{here.Name}에서 불길이 이는 걸 봤다");
         c.NextThinkTick = Math.Min(c.NextThinkTick, w.Tick + 1); // 알게 된 그 자리에서 다시 판단한다
@@ -155,14 +155,15 @@ public sealed class MindSystem
             {
                 if (c.Dead || c.Down || c.IsChild || c.Mind.Knows.ContainsKey(inc.key) || inc.person == c) continue;
                 KnowSource? src = null;
+                CrewMember? teller = null;
                 if (c.IsAwake && Sees(c, inc.room, inc.person)) src = KnowSource.Seen;
                 else if (inc.alarm && (c.IsAwake || !c.DeepAsleep)) src = KnowSource.Alarm;
                 else if (cmd.Active && (cmd.Commander == c || cmd.CaptainId == c.Id) && reported) src = KnowSource.Radio;
                 else if (cmd.Active && cmd.TeamOf(c) is Team t && TeamIncident(t) == inc.key) src = KnowSource.Radio;
                 else if (c.IsAwake && c.Room != null && _rng.Chance(0.6f)
-                         && w.Crew.Any(x => x != c && x.Room == c.Room && x.IsAwake && x.Mind.Knows.TryGetValue(inc.key, out var k) && w.Tick - k.tick >= SimTime.Minutes(0.3f)))
+                         && (teller = w.Crew.FirstOrDefault(x => x != c && x.Room == c.Room && x.IsAwake && x.Mind.Knows.TryGetValue(inc.key, out var k) && w.Tick - k.tick >= SimTime.Minutes(0.3f))) != null)
                     src = KnowSource.Rumor;
-                if (src is KnowSource s) Learn(c, inc.key, s, inc.what);
+                if (src is KnowSource s) Learn(c, inc.key, s, inc.what, s == KnowSource.Rumor ? teller : null);
             }
         }
         // 끝난 사고는 잊는다

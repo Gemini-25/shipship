@@ -178,6 +178,7 @@ public static partial class Program
 
         // ── 4) 체중이 늘어 우주복이 안 맞는다: 컴퓨터가 재고 알린다 → 치수 조정 · 선외에서는 긁히고 산소를 더 쓴다 ──
         {
+            using var legacy = LegacyRobots(); // v21 칸 단위 장면 — 방마다 늘어난 정비대가 칸을 바꾸지 않게 예전 구성으로
             var w = BrainDay(seed, "Hanbit");
             NoRobots(w); // v21 사람이 맞추는 우주복 치수를 본다 — 로봇이 먼저 맡으면 장면이 흐려진다
             var adults = Adults(w);

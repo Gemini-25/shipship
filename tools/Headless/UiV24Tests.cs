@@ -85,6 +85,7 @@ public static partial class Program
 
     private static World FireScene(int seed, out CauseIncident? inc, out Room? room)
     {
+        using var legacy = LegacyRobots(); // v21 칸 단위 장면 — 방마다 늘어난 정비대가 칸을 바꾸지 않게 예전 구성으로
         var w = DayOne(seed, "Hanbit");
         NoRobots(w); // v21 사람이 겪은 사고 카드를 본다 — 로봇이 먼저 맡으면 장면이 흐려진다
         // 사람이 둘 이상 있는 방 (없으면 사람이 가장 많은 방)

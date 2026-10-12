@@ -45,6 +45,7 @@ public static partial class Program
             // 3) 선외 작업 뒤 우주복을 털지 않으면 분진이 옷과 방으로 번진다
             {
                 var w = DayOne(seed, "Mirinae");
+                NoRobots(w); // v21 우주복 분진이 옷과 방으로 번지는지 본다 — 청소 로봇이 곧바로 닦으면 번진 자국이 남지 않는다
                 var c = w.Crew.First(x => !x.IsChild && x.CanAct);
                 // 털지 않고 식당까지 들어왔다 — 두뇌 2.0 뒤로 이 사람이 아침에 에어락 곁 통로(넓은 방 · 칸이 많아 쌓임이 옅다)에 있기도 해 곧장 털러 간다:
                 // 장면은 "생활 공간까지 들어온 분진"이므로 식당에서 시작한다

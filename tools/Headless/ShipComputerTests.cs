@@ -89,8 +89,9 @@ public static partial class Program
             // ③ D 차단기 반복 버그: 사람이 끊긴 히터를 다시 꽂으면 같은 원인 — 이번엔 올리지 않고 사람에게 원인을 빼게 한다
             if (Sc("breaker"))
             {
+                using var legacy = LegacyRobots(); // v21 칸 단위 장면 — 방마다 늘어난 정비대가 칸을 바꾸지 않게 예전 구성으로
                 var w = DayOne(seed, "Hanbit");
-                NoRobots(w); // v21 주 컴퓨터가 사람에게 원인을 빼 달라고 하는 일 (로봇이 먼저 콘센트를 뽑았다)를 본다 — 로봇이 먼저 맡으면 장면이 흐려진다
+                NoRobots(w); // v21 주 컴퓨터가 사람에게 원인을 빼 달라고 하는 일 (로봇이 먼저 콘센트를 뽑았다)
                 var a = w.Automation;
                 var room = w.Ship.LiveRooms.Where(r => r.Circuit == 3 && PortableSystem.OutletOk(r) && r.Type != RoomType.Corridor && r.Cells.Count(w.Ship.IsOpenFloor) >= 3).OrderBy(r => r.Id).FirstOrDefault()
                            ?? w.Ship.LiveRooms.Where(r => PortableSystem.OutletOk(r) && r.Type is RoomType.Quarters or RoomType.Lounge).OrderBy(r => r.Id).First();

@@ -69,6 +69,8 @@ public static partial class Program
                 float affA0 = a.AffinityTo(cof), affB0 = b.AffinityTo(cof);
                 int mem0 = w.Relations.All.Count(m => m.About == cof.Id && m.Reason == RelationReason.Comforted);
                 cof.Needs.Food = 1f; cof.Needs.Rest = 1f;
+                // v21 커피를 타서 닿기까지 한 시간쯤 — 그 전에 판이 끝나면 둘이 자리를 떠 '사람이 없어 식어 간다'가 된다 (판 곁에 놓아 주는 장면이다)
+                if (g != null && g.Target - g.Moves < 60f) g.Moves = MathF.Max(0f, g.Target - 60f);
                 var cs = w.Scenes.OpenCoffee(cof, new List<CrewMember> { a, b })!;
                 bool served = ScUntil(w, () => !cs.Open, 2f);
                 int stock1 = w.Ship.CountStored(ItemKind.Coffee) + w.Ship.CountStored(ItemKind.TeaLeaf);
@@ -218,6 +220,7 @@ public static partial class Program
 
             // 4-2) 간식 × 음식: 식탁에 이름표를 붙여 덜어 둔 남의 몫을 밤에 먹어 버린다 → 주인은 늦은 끼니를 못 찾고 · 쪽지를 붙인다
             {
+                using var legacy = LegacyRobots(); // v21 칸 단위 장면 — 방마다 늘어난 정비대가 칸을 바꾸지 않게 예전 구성으로
                 var w = DayOne(seed, "Mirinae");
                 var adults = w.Crew.Where(c => !c.Dead && !c.IsChild && c.CanAct).OrderBy(c => c.Id).ToList();
                 var owner = adults[0];
@@ -409,6 +412,7 @@ public static partial class Program
 
             // 7) 쪽지 · 게시판: 돌려 가며 서명하는 생일 카드 — 주인공은 받을 때까지 모른다 · 당번표 낙서는 이름 없이
             {
+                using var legacy = LegacyRobots(); // v21 칸 단위 장면 — 방마다 늘어난 정비대가 칸을 바꾸지 않게 예전 구성으로
                 var w = DayOne(seed, "Mirinae");
                 var adults = w.Crew.Where(c => !c.Dead && !c.IsChild).OrderBy(c => c.Id).ToList();
                 var who = adults[0];

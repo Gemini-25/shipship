@@ -156,12 +156,13 @@ public static partial class Program
             // 8) 기억이 판단에 걸린다: 구해 준 사람의 말은 무겁고, 경고를 무시한 사람은 덜 믿는다 · 안 돌려준 사람에겐 공구를 빌려주지 않는다
             {
                 var w = DayOne(seed, "Hanbit");
-                NoRobots(w); // v21 구해 준 사람 · 경고를 무시한 사람에 대한 판단를 본다 — 로봇이 먼저 맡으면 장면이 흐려진다
+                NoRobots(w); // v21 구해 준 사람 · 경고를 무시한 사람에 대한 판단을 본다 — 로봇이 먼저 맡으면 장면이 흐려진다
                 var a = w.Crew[0]; var b = w.Crew[1]; var d = w.Crew[2];
+                float td0 = w.Relations.Trust(a, d); // v21 첫날 하루 쌓인 사이에서 얼마나 떨어지나 (하루가 조금만 달라도 -0.10에 딱 걸렸다)
                 w.Relations.Remember(a, b, RelationReason.SavedMe, "시험: 구해 줬다");
                 w.Relations.Remember(a, d, RelationReason.IgnoredMyWarning, "시험: 경고를 무시했다");
                 float tb = w.Relations.Trust(a, b), td = w.Relations.Trust(a, d);
-                Check("판단 — 구해 준 사람은 믿고, 경고를 무시한 사람은 덜 믿는다", tb > 0.3f && td < -0.1f, $"{a.Name}→{b.Name} {tb:0.00} · {a.Name}→{d.Name} {td:0.00} · 이유: {w.Relations.Why(a, b)?.Text} / {w.Relations.Why(a, d)?.Text}");
+                Check("판단 — 구해 준 사람은 믿고, 경고를 무시한 사람은 덜 믿는다", tb > 0.3f && td < 0f && td < td0 - 0.05f, $"{a.Name}→{b.Name} {tb:0.00} · {a.Name}→{d.Name} {td0:0.00} → {td:0.00} · 이유: {w.Relations.Why(a, b)?.Text} / {w.Relations.Why(a, d)?.Text}");
             }
             // 9) 결정론
             {

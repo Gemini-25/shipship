@@ -97,7 +97,7 @@ public static partial class Program
         // ── 1b) 비워 둔 자리를 누가 건드리면 돌아온 사람이 헷갈린다 · 펼친 부품이 통로를 좁힌다 ──
         {
             var w = DayOne(seed, "Hanbit");
-            NoRobots(w); // v21 사람의 자리 · 헷갈림를 본다 — 로봇이 먼저 맡으면 장면이 흐려진다
+            NoRobots(w); // v21 사람의 자리 · 헷갈림을 본다 — 로봇이 먼저 맡으면 장면이 흐려진다
             RunUntilHour(w, 10f);
             var f = w.Ship.Furniture.Where(x => x.Machine is Machine m && !x.Stowed && m.Faults.Count == 0 && m.Spec.ServiceHours >= 0.7f && x.Room.Type != RoomType.Corridor)
                 .OrderBy(x => x.Id).Skip(1).First();
@@ -249,6 +249,7 @@ public static partial class Program
 
         // ── 4) 옆 설비를 잠시 멈춰야 접근 (전원 · 컴퓨터 승인) ──
         {
+            using var legacy = LegacyRobots(); // v21 칸 단위 장면 — 방마다 늘어난 정비대가 칸을 바꾸지 않게 예전 구성으로
             var w = DayOne(seed, "Hanbit");
             NoRobots(w); // v21 사람이 옆 설비를 멈추고 손을 넣는 장면 (정비 로봇이 먼저 고치면 장면이 아니다)
             Furniture? f = null, g = null;
