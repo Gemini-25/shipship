@@ -187,7 +187,8 @@ public sealed partial class RobotSystem
     {
         var w = _world;
         if (o.Kind == WorkKind.Cook && PeopleCook(o)) return false; // 요리사 · 배우는 사람이 있으면 사람이 짓는다 (고향 음식 · 맛 · 대신 서기는 사람의 이야기)
-        if (Special(r.Kind, o.Kind) && RobotsV15.Takes(r.Kind, o)) return true;
+        if (RobotBody.Gripless(r) && RobotBody.HandJob(o.Kind)) return false; // v22 두 팔을 다 잃었다 — 나르기 · 밸브 · 차단기만
+        if (Special(r.Kind, o.Kind) && RobotsV15.Takes(r.Kind, o)) return !RobotBody.ToolLost(r) || !RobotBody.HandJob(o.Kind); // v22 특기 도구를 잃으면 특기 일은 못 한다
         if (r.Drafted(w) && RobotsV21.DraftJob(r.Draft, o.Kind)) return true;
         if (Stands(r, o)) return !RobotsV21.General || Fixer(r.Kind) || Carrier(r.Kind) || Waited(o) || o.Kind is WorkKind.ResetBreaker or WorkKind.StartAux or WorkKind.CloseValve or WorkKind.OpenValve;
         if (!RobotsV21.General || !RobotsV21.Basic(o.Kind)) return false;
@@ -254,6 +255,7 @@ public sealed partial class RobotSystem
         if (w.Tick >= _v21Minute)
         {
             _v21Minute = w.Tick + SimTime.Minutes(1);
+            BodyMinute(); // v22 폭발 · 파편 · 물 · 진공 · 열 · 추위 · 방사선이 부위를 깎는다
             DraftTick();
             CallSpecialists();
             DeliverFinds();

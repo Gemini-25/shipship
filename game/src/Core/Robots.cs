@@ -222,7 +222,7 @@ internal sealed class RWork : RobotStep
 
     public override void Begin(Robot r, World w)
     {
-        _needed = SimTime.Hours(_hours) * RobotsV21.WorkMul(r, r.Order) * w.Fleet.Work; // v16.20b 공구 등급 · v21 특기 · 개량 단계 · 숙련
+        _needed = SimTime.Hours(_hours) * RobotsV21.WorkMul(r, r.Order) * w.Fleet.Work * RobotBody.WorkMul(r); // v22 팔 · 도구 · 센서 · 제어기 // v16.20b 공구 등급 · v21 특기 · 개량 단계 · 숙련
         if (_face is Vector2 f && (f - r.Position).LengthSquared() > 0.0001f) r.Facing = Vector2.Normalize(f - r.Position);
     }
 
@@ -629,7 +629,7 @@ public sealed partial class RobotSystem
     {
         var path = r.Path;
         if (path == null) return true;
-        float budget = Speed(r.Kind) * r.Quirk.Speed * (r.Fault == null && r.Battery > 0.02f ? 1f : 0.5f) * w.Fleet.Speed(r) * RobotsV21.SpeedMul(r); // v21 개량 단계 // v16.20b 단계 · 아껴 쓰기 · 같이 들기
+        float budget = Speed(r.Kind) * r.Quirk.Speed * (r.Fault == null && r.Battery > 0.02f ? 1f : 0.5f) * w.Fleet.Speed(r) * RobotsV21.SpeedMul(r) * RobotBody.SpeedMul(r); // v22 상한 구동부는 절뚝인다 // v21 개량 단계 // v16.20b 단계 · 아껴 쓰기 · 같이 들기
         bool repathed = false;
         while (budget > 0f && r.PathIndex < path.Count)
         {
@@ -729,7 +729,7 @@ public sealed partial class RobotSystem
                     bool moving = r.Path != null;
                     float drain = r.Steps != null && r.StepIndex < r.Steps.Count && r.Steps[r.StepIndex] is RSpray ? DrainSpray
                         : moving ? DrainMove : working ? DrainWork : DrainIdle;
-                    r.Battery = Math.Clamp(r.Battery - drain * RobotsV15.Drain(r.Kind) * Durability.RobotDrain * w.Fleet.Drain(r) * dt + ReactorRate(r) * dt, 0f, MaxCharge(r)); // v21 원자로가 내장 전지를 채운다 // v15.7 배터리 크기 · v16.19 큰 셀 · v16.20b 셀 등급 · 아껴 쓰기
+                    r.Battery = Math.Clamp(r.Battery - drain * RobotsV15.Drain(r.Kind) * Durability.RobotDrain * w.Fleet.Drain(r) * RobotBody.DrainMul(r) * dt + ReactorRate(r) * dt, 0f, MaxCharge(r)); // v21 원자로가 내장 전지를 채운다 // v15.7 배터리 크기 · v16.19 큰 셀 · v16.20b 셀 등급 · 아껴 쓰기
                     r.ActiveHours += dt;
                     r.Condition = MathF.Max(0f, r.Condition - (working || moving ? 0.008f : 0.002f) * Durability.RobotWear * dt);
                     // 가벼운 고장으로 충전대에 돌아가는 중 (느리게): 길이 막히면 그 자리에 멈춘다
@@ -1426,6 +1426,7 @@ public sealed partial class RobotSystem
     private void Break(Robot r, RobotFault f)
     {
         var w = _world;
+        BodyOnFault(r, f); // v22 그 부위가 망가진다
         r.Fault = f;
         r.SelfRepairDone = 0f;
         r.Breakdowns++;
@@ -1499,6 +1500,7 @@ public sealed partial class RobotSystem
     {
         var w = _world;
         r.Fault = null;
+        BodyOnRepair(r, self: true, makeshift: false); // v22 다시 맞추기만 (덧댄 판 없이)
         r.SelfRepairDone = 0f;
         r.SelfRepairs++;
         r.SelfRepairsTotal++;
@@ -1516,6 +1518,7 @@ public sealed partial class RobotSystem
         var w = _world;
         var f = r.Fault;
         r.Fault = null;
+        BodyOnRepair(r, self: false, makeshift); // v22 고친 자리에 판을 덧댄다
         r.SelfRepairDone = 0f;
         if (!makeshift) r.SelfRepairs = 0; // 사람이 제대로 봤다
         r.Condition = MathF.Max(r.Condition, makeshift ? 0.45f : 0.85f);
@@ -1548,6 +1551,7 @@ public sealed partial class RobotSystem
     internal void Serviced(Robot r)
     {
         r.Condition = 0.97f;
+        BodyOnService(r, 0.9f); // v22 긁히고 찌그러진 부위를 펴고 조인다
         r.SelfRepairs = 0;
         MarkLog.Add(r.Marks, _world.Tick, "정비 (윤활·조임·센서 청소)");
     }

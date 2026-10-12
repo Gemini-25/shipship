@@ -174,7 +174,13 @@ public sealed partial class RobotSystem
             // 불길 속: 방열 외피도 오래 버티지는 못한다
             if (r.State is RobotState.Active or RobotState.Stalled && w.Fire.Count > 0 && w.Fire.AnyWithin(r.Cell, 1.2f))
             {
-                r.Condition = MathF.Max(0f, r.Condition - (RobotsV15.Fireproof(r.Kind) ? 0.004f : 0.02f) * f.Hurt);
+                float burn = (RobotsV15.Fireproof(r.Kind) ? 0.004f : 0.02f) * f.Hurt;
+                r.Condition = MathF.Max(0f, r.Condition - burn);
+                // v22 부위가 탄다: 센서 렌즈가 먼저 그을고 · 도구 · 몸통 외피 (몸통이 다 타면 부서진다)
+                Hurt(r, BotPart.Sensor, burn * 1.3f, "불길");
+                Hurt(r, BotPart.Tool, burn * 0.7f, "불길");
+                if (!r.Wrecked) Hurt(r, BotPart.Frame, burn, $"{r.Room?.Name ?? "?"} 불길");
+                if (r.Wrecked) continue;
                 if (r.Condition <= 0.001f) { Wreck(r, $"{r.Room?.Name ?? "?"} 불길 속에서 타 버렸다"); continue; }
             }
             // 자기 보존
@@ -310,6 +316,7 @@ public sealed partial class RobotSystem
         if (used) r.Cargo = r.Cargo!.Value.Count > 1 ? new ItemStack(ItemKind.Lubricant, r.Cargo.Value.Count - 1) : null;
         if (!b.AtDock || b.Fault != null) { Done(r, null); return true; }
         b.Condition = MathF.Max(b.Condition, used ? 0.9f + 0.02f * w.Fleet.Tier : 0.8f);
+        BodyOnService(b, used ? 0.9f : 0.8f); // v22 긁힌 부위를 펴고 조인다
         MarkLog.Add(b.Marks, w.Tick, $"{Ko.IGa(r.Name)} 손봤다 ({(used ? "윤활 · 조임" : "조임 · 청소")})");
         w.Fleet.Tunes++;
         w.Fleet.CloseLine(CmdTarget.Robot, r.Id, "손봤다");
@@ -397,6 +404,7 @@ public sealed partial class RobotSystem
             r.Cargo = c.Count > parts[0].count ? new ItemStack(c.Kind, c.Count - parts[0].count) : null;
         }
         b.Fault = null;
+        BodyOnRepair(b, self: false, makeshift: false); // v22 동료가 판을 덧대 고쳤다
         b.SelfRepairDone = 0f;
         b.SelfRepairs = 0;
         b.Condition = MathF.Max(b.Condition, 0.7f + 0.05f * w.Fleet.Tier);
