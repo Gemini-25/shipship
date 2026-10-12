@@ -89,7 +89,8 @@ public partial class ShipView
         }
         if (_zone.Length != n) { _zone = new int[n]; _cellR = new float[n]; _cellG = new float[n]; _cellB = new float[n]; }
 
-        // 1) 방 바탕: 켜짐 × 색온도 · 정전은 푸르스름한 어둠
+        // 1) 방 바탕: 켜짐 × 색온도 · 정전은 푸르스름한 어둠 · v23 밤 · 경보
+        ScanRoomsForLight();
         int rooms = ship.Rooms.Count;
         Span<float> rr = rooms <= 512 ? stackalloc float[rooms] : new float[rooms];
         Span<float> rg = rooms <= 512 ? stackalloc float[rooms] : new float[rooms];
@@ -103,7 +104,9 @@ public partial class ShipView
             var (tr, tg, tb) = LookSpec.Temperature(room.Kind);
             float amb = room.Type == RoomType.Corridor ? LookSpec.AmbientCorridor : LookSpec.AmbientLit;
             if (room.PowerFlow < 0.75f) amb *= 0.55f + 0.45f * room.PowerFlow / 0.75f; // 전압 강하: 흐리다
-            rr[r] = amb * tr; rg[r] = amb * tg; rb[r] = amb * tb;
+            amb *= NightMul(room); // v23 하루 주기
+            var (ar, ag, ab) = AlarmTint(room); // v23 경보
+            rr[r] = amb * tr * ar; rg[r] = amb * tg * ag; rb[r] = amb * tb * ab;
         }
         for (int i = 0; i < n; i++)
         {
@@ -220,7 +223,7 @@ public partial class ShipView
             if (!unlit)
             {
                 float flow = room.PowerFlow < 0.75f ? 0.45f + 0.55f * room.PowerFlow / 0.75f : 1f;
-                float s = LookSpec.CeilingPool * flow * (room.Type == RoomType.Corridor ? 0.85f : 1f);
+                float s = LookSpec.CeilingPool * flow * (room.Type == RoomType.Corridor ? 0.85f : 1f) * NightMul(room); // v23 밤엔 낮춘다
                 foreach (var c in room.Cells)
                 {
                     int i = g.Index(c);
@@ -310,6 +313,7 @@ public partial class ShipView
             if (!wb.Window || wb.Shutter || wb.Room < 0 || wb.Room >= ship.Rooms.Count || ship.Rooms[wb.Room].Detached) continue;
             _srcs.Add(new LightSrc(wb.Cell.X + 0.5f, wb.Cell.Y + 0.5f, 2.2f, 0.12f, 0.16f, 0.26f, wb.Room));
         }
+        AddIncidentLights(); // v23 경보 회전등 · 로봇 헤드램프
     }
 
     // ───────────────────────── 더하기 층: 매 프레임 깜빡임 ─────────────────────────

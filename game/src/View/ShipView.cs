@@ -316,6 +316,7 @@ public partial class ShipView : Node2D
                 strength *= (0.45f + 0.55f * room.PowerFlow / 0.75f) * (room.PowerFlow < 0.55f ? 0.8f + 0.2f * Mathf.Sin(_world.Tick * 0.7f + room.Id) : 1f);
             if (emergency && Mathf.Sin(_time * 2.2f + room.Id) < -0.2f) strength *= 0.5f; // 비상등은 느리게 깜빡인다
             if (LookLightOn) strength *= 0.5f; // v16.5a 바탕 빛은 빛 버퍼가 맡고 여기선 번짐만
+            if (!emergency && _roomOcc.Length > room.Id) strength *= NightMul(room); // v23 하루 주기
             int minX = room.Cells.Min(c => c.X), minY = room.Cells.Min(c => c.Y);
             foreach (var c in room.Cells)
             {
