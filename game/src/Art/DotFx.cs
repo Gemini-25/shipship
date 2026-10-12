@@ -159,6 +159,39 @@ public static class DotFx
             }
     }
 
+    /// <summary>연기 덩이 한 장 (size × size · 덩이 셋이 겹친 뭉게구름 · 점묘 가장자리). 투명도는 그릴 때.</summary>
+    public static Img SmokeSprite(int size, int seed, int ramp = -1)
+    {
+        var img = new Img(size, size);
+        float c = size / 2f, r = size * 0.32f;
+        for (int k = 0; k < 3; k++)
+        {
+            float a = seed * 1.7f + k * 2.1f;
+            Puff(img, c + MathF.Cos(a) * r * 0.45f, c + MathF.Sin(a) * r * 0.35f, r * (0.75f + 0.12f * k), 3 + (k & 1), 1f, ramp);
+        }
+        Puff(img, c, c - r * 0.2f, r * 0.8f, 4, 1f, ramp);
+        return img;
+    }
+
+    /// <summary>고인 물 한 칸 (32 × 32 · frame 0~7): 반투명 물빛 + 흐르는 물결 줄 + 반짝임.</summary>
+    public static Img WaterTile(int frame, int seed)
+    {
+        var img = new Img(32, 32);
+        var deep = Ramps.Get(Ramps.Glass, 2);
+        var crest = Ramps.Get(Ramps.Glass, 4);
+        for (int y = 0; y < 32; y++)
+            for (int x = 0; x < 32; x++)
+            {
+                img.Blend(x, y, deep, 0.55f + 0.1f * Dither(x + seed, y));
+                // 물결: 비스듬한 줄이 아래로 천천히 흐른다
+                int band = (y * 2 + x / 3 + frame * 2 + seed * 5) % 16;
+                if (band == 0 && ((x + seed) % 7) < 5) img.Blend(x, y, crest, 0.55f);
+            }
+        int sx = (seed * 11 + frame * 3) % 28 + 2, sy = (seed * 7 + frame) % 24 + 4;
+        if ((frame + seed) % 4 == 0) { img.Set(sx, sy, Ramps.Get(Ramps.Glass, 4)); img.Blend(sx + 1, sy, Ramps.Get(Ramps.Glass, 4), 0.6f); }
+        return img;
+    }
+
     /// <summary>바닥 그을음 (방사형 줄기) — 며칠 남는 자국.</summary>
     public static void Scorch(Img img, float cx, float cy, float r, int seed)
     {

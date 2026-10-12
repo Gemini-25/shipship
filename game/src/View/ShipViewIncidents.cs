@@ -74,7 +74,13 @@ public partial class ShipView
                 if (((cell.X * 3 + cell.Y * 5) & 3) != 0) continue;
                 float ph = _time * 0.25f + Hash(cell.X, cell.Y) * 6f;
                 var p = CellRect(cell).GetCenter() + new Vector2(Mathf.Sin(ph) * 8f, Mathf.Cos(ph * 0.7f) * 6f);
-                ci.Circle(p, T * (0.55f + 0.2f * Mathf.Sin(ph * 1.3f)), new Color(0.42f, 0.42f, 0.45f, 0.18f * smoke), true, -1f, true);
+                if (DotCrew) // 도트 연기 덩이 (크기 셋 × 결 넷)
+                {
+                    int sz = 32 + 8 * ((cell.X + cell.Y) % 3), sd = (cell.X * 7 + cell.Y) & 3;
+                    var se = Dots.Get(DotTex.Key(16, sz, sd), () => ShipSim.Art.DotFx.SmokeSprite(sz, sd), force: true);
+                    if (se is { W: > 0 }) ci.DrawTextureRect(Zoom >= 0.999f ? se.Crisp : se.Tex, new Rect2(new Vector2(Mathf.Round(p.X - sz / 2f), Mathf.Round(p.Y - sz / 2f)), sz, sz), false, new Color(1, 1, 1, Mathf.Clamp(0.3f * smoke + 0.08f, 0f, 0.6f)));
+                }
+                else ci.Circle(p, T * (0.55f + 0.2f * Mathf.Sin(ph * 1.3f)), new Color(0.42f, 0.42f, 0.45f, 0.18f * smoke), true, -1f, true);
                 i++;
             }
         }
@@ -232,7 +238,8 @@ public partial class ShipView
             float spread = (Hash(cell.X, cell.Y, 90 + k) - 0.5f) * 0.9f;
             var dir = outDir.Rotated(spread);
             var p = hole + dir * T * (0.2f + 2.4f * ph);
-            ci.Circle(p, 1.2f + 2.5f * ph, new Color(0.85f, 0.92f, 1f, 0.55f * (1f - ph) * strength), true, -1f, true);
+            if (DotCrew) { float q = Mathf.Round(1f + 2f * ph); ci.DrawRect(new Rect2(p.Round(), q, q), new Color(0.85f, 0.92f, 1f, 0.6f * (1f - ph) * strength)); } // 도트: 네모 알갱이
+            else ci.Circle(p, 1.2f + 2.5f * ph, new Color(0.85f, 0.92f, 1f, 0.55f * (1f - ph) * strength), true, -1f, true);
         }
     }
 
@@ -256,7 +263,8 @@ public partial class ShipView
                 float eased = ph * ph;
                 var p = start.Lerp(hole, eased);
                 var dir = (hole - start).Normalized();
-                ci.DrawLine(p - dir * (3f + 10f * eased), p, new Color(0.8f, 0.9f, 1f, 0.35f * strength * Mathf.Sin(ph * Mathf.Pi)), 1.2f, true);
+                if (DotCrew) ci.DrawLine((p - dir * (3f + 10f * eased)).Round(), p.Round(), new Color(0.8f, 0.9f, 1f, 0.4f * strength * Mathf.Sin(ph * Mathf.Pi)), 1f, false); // 도트: 계단진 줄
+                else ci.DrawLine(p - dir * (3f + 10f * eased), p, new Color(0.8f, 0.9f, 1f, 0.35f * strength * Mathf.Sin(ph * Mathf.Pi)), 1.2f, true);
             }
         }
     }

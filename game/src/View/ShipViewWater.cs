@@ -19,6 +19,13 @@ public partial class ShipView
                 foreach (var c in room.Cells)
                 {
                     var r = CellRect(c);
+                    if (DotCrew) // 도트 물 (8장면 · 칸마다 다른 결)
+                    {
+                        int fr = (int)(_time * 5f + c.X * 0.37f) & 7, sd = (c.X * 3 + c.Y * 5) & 3;
+                        var we = Dots.Get(DotTex.Key(17, fr, sd), () => ShipSim.Art.DotFx.WaterTile(fr, sd), force: true);
+                        if (we is { W: > 0 }) ci.DrawTextureRect(Zoom >= 0.999f ? we.Crisp : we.Tex, r, false, new Color(1, 1, 1, Mathf.Clamp(0.35f + 0.9f * depth, 0f, 1f)));
+                        continue;
+                    }
                     ci.Box(r, deep);
                     // 물결: 칸마다 어긋난 가는 선이 천천히 흐른다
                     float ph = Mathf.PosMod(_time * 0.6f + (c.X * 0.37f + c.Y * 0.21f), 1f);
