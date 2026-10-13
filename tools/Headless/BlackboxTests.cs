@@ -161,8 +161,8 @@ public static partial class Program
             var w = sc.W;
             var g = w.Blackbox.Wipes.FirstOrDefault();
             Console.WriteLine($"   [지움] {sc.C.Name} ({w.Blackbox.AccessOf(sc.C)}) · {sc.Script}");
-            Check("단말에 가서 그 구간 기록을 지운다 (권한 · 솜씨)", g != null && g.Wiper == sc.C.Id && g.Removed > 0 && !w.Blackbox.Log.Any(e => e.Kind == BoxKind.Work && e.Who == sc.C.Id && e.Tick >= g.From && e.Tick <= g.To),
-                g != null ? $"{w.Blackbox.GapLine(g)} · {g.Removed}줄" : "지우지 않음");
+            Check("단말에 가서 그 구간 기록을 지운다 (권한 · 솜씨)", g != null && g.Wiper == sc.C.Id && g.Removed > 0 && !w.Blackbox.Log.Any(e => e.Kind == BoxKind.Work && e.Who == sc.C.Id && e.Tick >= g.From && e.Tick <= g.To && (g.Room < 0 || e.Room == g.Room)), // 지우는 건 그 방의 그 구간 (같은 때 다른 방에서 한 일은 남는다)
+                g != null ? $"{w.Blackbox.GapLine(g)} · {g.Removed}줄" + string.Concat(w.Blackbox.Log.Where(e => e.Kind == BoxKind.Work && e.Who == sc.C.Id && e.Tick >= g.From && e.Tick <= g.To && (g.Room < 0 || e.Room == g.Room)).Take(3).Select(e => $" · 남은 줄 {SimTime.Clock(e.Tick)} 방{e.Room} 참조{e.Ref} 값{e.Val}")) : "지우지 않음");
             Check("주 컴퓨터가 빈 구간을 찾아낸다 (지운 시각 · 권한 · 단말)", w.Inquiry.Stats.GapsSeen > 0 && g?.Noticed >= 0, w.Automation.Book.Acts.LastOrDefault(a => a.Key.StartsWith("box:gap"))?.Observe ?? "");
             Check("빈 구간이 단서가 된다 — 지운 시각 단말 방 위치 기록이 지운 사람을 가리킨다", sc.Sit?.Script.Any(l => l.Text.Contains("비어 있다") && l.Text.Contains(sc.C.Name)) == true && sc.F?.Blamed == sc.C.Id && sc.F.GapSeen,
                 sc.F?.Text ?? "");

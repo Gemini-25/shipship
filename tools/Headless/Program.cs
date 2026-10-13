@@ -79,16 +79,17 @@ public static partial class Program
     private const string Robots23 = "commander,relay,eyes,brain"; // 사고 지휘관 · 구역 중계기 · 눈의 그물 · 로봇 두뇌가 먼저 맡아 사람 장면이 흐려진다
     private const string Nozzle = "nozzle"; // 천장 자동 소화가 불을 먼저 끈다 — 사람이 불에 대응하는 장면
     private const string Legacy23 = "nozzle,commander,relay,eyes,brain"; // 둘 다
+    private const string All23 = Legacy23 + "," + Fixed; // 셋 다 — 컴퓨터가 묻지 않고 환기 · 댐퍼부터 닫으면 냄새 · 가스 장면이 사라진다
     /// <summary>v23 대개편 장치를 끄고 보는 시험 (회귀 v23에서 가렸다 — 그 장치만 끄면 예전처럼 통과).</summary>
-    private static readonly Dictionary<string, string> V23Legacy = new()
+    private static readonly Dictionary<string, string> V23Legacy = new() // 회의 · 로봇21: 새 선장 방침 · 긴급 지정이 권한 단계(자동 · 제안 · 조언)를 본다
     {
         ["computerbraintest"] = Fixed, ["computertest"] = Fixed, ["ctltest"] = Fixed, ["meetingtest"] = Fixed,
-        ["aftertest"] = Robots23, ["counciltest"] = Robots23, ["crisistest"] = Robots23, ["gesturetest"] = Robots23, ["gradetest"] = Robots23,
-        ["maneuvertest"] = Robots23, ["medbottest"] = Robots23, ["mindtest"] = Robots23, ["shipcomputertest"] = Robots23, ["coordtest"] = Robots23,
+        ["aftertest"] = Robots23, ["counciltest"] = Robots23 + "," + Fixed, ["crisistest"] = Robots23, ["gesturetest"] = Robots23, ["gradetest"] = Robots23,
+        ["maneuvertest"] = Robots23, ["medbottest"] = Robots23, ["mindtest"] = Legacy23, ["shipcomputertest"] = Robots23, ["coordtest"] = Robots23,
         ["knowtest"] = Robots23,
         ["commandtest"] = Nozzle, ["techwebtest"] = Nozzle, ["bodytest"] = Nozzle,
-        ["docktest"] = Legacy23, ["foodtest"] = Legacy23, ["hazardtest"] = Legacy23, ["mattertest"] = Legacy23, ["organtest"] = Legacy23,
-        ["responsetest"] = Legacy23, ["robot21test"] = Legacy23, ["roomtest"] = Legacy23, ["soiltest"] = Legacy23, ["waystest"] = Legacy23,
+        ["docktest"] = All23, ["foodtest"] = All23, ["hazardtest"] = All23, ["mattertest"] = Legacy23, ["organtest"] = Legacy23,
+        ["responsetest"] = Legacy23, ["robot21test"] = Legacy23 + "," + Fixed, ["roomtest"] = Legacy23, ["soiltest"] = Legacy23, ["waystest"] = Legacy23,
     };
 
     public static int Main(string[] args)
