@@ -47,6 +47,8 @@ public partial class Hud
         var e = _world.Eras;
         string era = $"{EraSystem.EraName(e.Era)} · " + (EraSystem.Find(e.Project) is EraTech pt ? $"연구 {pt.Name} {e.Progress / _world.TechWeb.CostOf(pt) * 100:0}%" : "연구할 것 없음"); // v16 통합: 그물 새 기술(Extra)도 찾는다 (All 만 보면 예외)
         Gfx.TextRight(this, Fonts.Body, new Vector2(bar.End.X - 10f, bar.Position.Y + 36f), era, Ui.TextTiny, Palette.TextMuted);
+        if (_world.Big.Line() is string big) // v23 큰 사고 (전자기 펄스 · 노심 카운트다운 …)
+            Gfx.Text(this, Fonts.Bold, new Vector2(bar.Position.X + 10f, bar.Position.Y - 6f), big, Ui.TextSmall, Palette.Danger);
         if (_world.Env.Line() is string env) // v23 극한 환경: 어디 · 몇 도 · 날씨 · 위험 · 센 기제 · 낌새
             Gfx.Text(this, Fonts.Body, new Vector2(bar.Position.X + 10f, bar.Position.Y + 36f), UiKit.Fit(env, bar.Size.X * 0.58f, Ui.TextTiny, Fonts.Body), Ui.TextTiny, _world.Env.Pending.Count > 0 ? Palette.Warning : new Color("#9ad0ff"));
     }

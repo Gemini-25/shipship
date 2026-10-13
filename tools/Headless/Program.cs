@@ -122,6 +122,7 @@ public static partial class Program
                 case "home": HomelandSystem.Off = true; break;
                 case "mind": MindCareSystem.Off = true; break;
                 case "env": EnvHazardSystem.Off = true; break;
+                case "big": BigIncidentSystem.Off = true; break;
             }
         int days = args.Length > 0 && int.TryParse(args[0], out var d) ? d : 14;
         int seed = args.Length > 1 && int.TryParse(args[1], out var s) ? s : 20260929;
@@ -310,6 +311,7 @@ public static partial class Program
         if (args.Contains("--mentortest")) return RunKnowledgeTest(seed); // v23 지식 전수 · 외부 세계 기억
         if (args.Contains("--mindcaretest")) return RunMindCareTest(seed); // v23 마음 돌봄 (말벗 로봇 · 상담 · 오락실)
         if (args.Contains("--envtest")) return RunEnvTest(seed); // v23 극한 환경 사고
+        if (args.Contains("--bigtest")) return RunBigTest(seed); // v23 큰 사고 여섯
         if (args.Contains("--story21test")) return RunStory21Test(seed); // v21 이야기꾼 · 난이도 세분화
         if (args.FirstOrDefault(a => a.StartsWith("--foodprobe=")) is string fp) return RunFoodProbe(seed, fp[12..]); // v21 먹을 것 탐침
         if (args.Contains("--campaign15test")) return RunCampaign15Test(seed); // v15.6
