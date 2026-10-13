@@ -191,7 +191,7 @@ public sealed partial class DroneSystem
     internal void PlanSalvage(Drone d)
     {
         var w = _world;
-        if (d.Hurt.Arm < 0.5f || d.Battery < 0.9f || w.Sensors.Alarm != null || w.Hazards.StormActive) return;
+        if (d.Hurt.Arm < 0.5f || d.Battery < 0.9f || w.Sensors.Alarm != null || w.Hazards.StormActive || w.Planet.Sheltering) return;
         var f = w.EvaRisk.Floaters.Where(x => x.CarriedBy < 0 && !x.Lost && x.Kind != FloatKind.Shard && x.Heat < 0.3f && (x.Pos - w.Structure.ShipCenter).Length() < StructureSystem.LostRange)
             .Where(x => !Drones.Any(o => o.Hurt.FetchFloater == x.Id))
             .OrderBy(x => (x.Pos - d.Position).LengthSquared()).FirstOrDefault();

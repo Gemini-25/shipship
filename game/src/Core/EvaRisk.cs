@@ -345,6 +345,7 @@ public sealed partial class EvaRiskSystem
         float s = Math.Clamp(1f - FromHull(at) / MathF.Max(1f, range), 0f, 1f);
         s = MathF.Max(s, _w.Drones.RelaySignal(at, range)); // v21 중계 드론
         if (_w.Hazards.StormActive) s *= 0.55f;
+        if (_w.Planet.Sheltering) s *= 0.3f; // v23 행성의 사나운 날씨
         return s;
     }
 

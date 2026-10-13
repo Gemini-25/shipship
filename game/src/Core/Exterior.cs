@@ -79,7 +79,7 @@ public sealed class ExteriorSystem
     public float AntennaFactor => All.FirstOrDefault(f => f.Kind == ExtKind.Antenna) is ExtFixture a ? 0.45f + 0.55f * a.Condition : 1f;
 
     /// <summary>태양 날개가 지금 내는 전기 (kW).</summary>
-    public float SolarNow => All.Where(f => f.Kind == ExtKind.SolarWing).Sum(f => SolarKw * f.Condition) * (_w.Hazards.StormActive ? 0.6f : 1f);
+    public float SolarNow => All.Where(f => f.Kind == ExtKind.SolarWing).Sum(f => SolarKw * f.Condition) * (_w.Hazards.StormActive ? 0.6f : 1f) * (_w.Planet?.SolarMul ?? 1f); // v23 행성: 밤 · 모래 폭풍
 
     /// <summary>충격이 선체 밖 설비 가까이를 지나갔다.</summary>
     public void Hit(Cell at, float size, string why)
@@ -133,7 +133,7 @@ public sealed class ExteriorSystem
                 f.RepairBy = null;
                 continue;
             }
-            if (f.Condition >= 0.7f || f.DamagedAt < 0 || w.Hazards.StormActive) continue;
+            if (f.Condition >= 0.7f || f.DamagedAt < 0 || w.Hazards.StormActive || w.Planet.Sheltering) continue; // v23 행성 폭풍 속엔 나가지 않는다
             if (w.Ship.CountStored(ItemKind.Plate) < 1) continue;
             // 드론 먼저: 수리 드론이 거치대에 있으면 바로 나간다. 없으면 반나절 뒤 사람이 나간다
             var drone = w.Drones.Drones.FirstOrDefault(d => RobotsV15.Base(d.Kind) == DroneKind.Repair && d.Operational && d.State == DroneState.Docked && d.Battery > 0.5f);

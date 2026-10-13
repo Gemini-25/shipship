@@ -113,7 +113,7 @@ public sealed partial class VoyageSystem
     };
 
     /// <summary>이 구간에서 사고 하나의 무게 배율.</summary>
-    public float HazardMul(string key) => _w.Planet.HazardMul(key) * _w.Outside.RiskMul(key) * Current.Kind switch // v15.4 바깥 소식(예보 · 옛 등대)이 무게를 바꾼다
+    public float HazardMul(string key) => (_w.Planet?.HazardMul(key) ?? 1f) * _w.Outside.RiskMul(key) * Current.Kind switch // v15.4 바깥 소식(예보 · 옛 등대)이 무게를 바꾼다
     {
         LegKind.AsteroidBelt => key is "meteor" or "bigmeteor" or nameof(HazardKind.MicroShower) or nameof(HazardKind.MeteorShower) or nameof(HazardKind.DebrisCloud) or nameof(HazardKind.HullCrack) ? 2.5f : 1f,
         LegKind.Nebula => key is nameof(HazardKind.PowerSurge) or nameof(HazardKind.ComputerFault) or nameof(HazardKind.ComputerMisjudge) or nameof(HazardKind.LightsOut) ? 2.5f : 1f,
@@ -137,7 +137,7 @@ public sealed partial class VoyageSystem
         speed *= VoyageV15.SpeedMul(Current.Kind); // v15.4 태양풍 물길
         if (Current.Kind == LegKind.Port) speed = 1f; // 정박 중
         if (w.Expedition.Halted) speed = 0f; // v16.12 재료가 바닥나 엔진을 껐다 — 일정이 밀린다
-        if (w.Planet.Holding) speed = 0f; // v23 행성에 가는 · 머무는 동안
+        if (w.Planet?.Holding == true) speed = 0f; // v23 행성에 가는 · 머무는 동안
         Progress += dt / 24f * speed;
         if (Progress < Current.Days) return;
         Progress = 0f;

@@ -150,7 +150,7 @@ public sealed partial class DroneSystem
     {
         var w = _world;
         var f = w.Fleet;
-        if (!CanSeal(d.Kind) || d.Battery < 0.9f || f.Mode == "비상" || w.Sensors.Alarm != null || w.Hazards.Shower.Count > 0 || w.Hazards.StormActive) return false;
+        if (!CanSeal(d.Kind) || d.Battery < 0.9f || f.Mode == "비상" || w.Sensors.Alarm != null || w.Hazards.Shower.Count > 0 || w.Hazards.StormActive || w.Planet.Sheltering) return false;
         if (w.Tick < f.NextHullCare) return false;
         f.NextHullCare = w.Tick + SimTime.Minutes(2); // 작업 목록은 2분에 한 번만 훑는다
         if (!(w.Automation.Present && (w.Automation.MainOnline || w.Automation.Core.BackupCore)) || !w.Automation.DroneControl) return false;

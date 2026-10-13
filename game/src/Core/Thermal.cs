@@ -164,6 +164,7 @@ public sealed partial class Atmosphere
             _wallFlow[ia] -= q;
             _wallFlow[ib] += q;
         }
+        float shellC = w.Planet?.ShellC ?? ShellC, hullMul = w.Planet?.HullHeatMul ?? 1f; // (배를 만드는 동안엔 행성이 아직 없다)
         foreach (var r in ship.Rooms)
         {
             if (r.Detached) { r.HvacHeat = 0f; r.HvacKw = 0f; continue; }
@@ -173,7 +174,7 @@ public sealed partial class Atmosphere
             if (r.Type == RoomType.Engine && w.Propulsion.Burning) r.HeatIn += HullLossPerCell * vol * 6f;
             if (r.Type == RoomType.Galley && cooking) r.HeatIn += 0.5f;
             float t = r.Air.Temperature;
-            float loss = _hullG[r.Id] * Wrap(w, r) * (t - ShellC);
+            float loss = _hullG[r.Id] * Wrap(w, r) * hullMul * (t - shellC); // v23 행성: 바깥 기온 · 바람
             float net = r.HeatIn - loss + _wallFlow[r.Id];
             // 공조: 덥히기는 전기가 든 방(벽 패널 · 냉각수 남는 열) · 식히기는 환기되는 방(덕트)
             float want = net + HvacRate * cap * (t - Setpoint(r));

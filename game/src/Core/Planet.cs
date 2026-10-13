@@ -298,6 +298,9 @@ public static class PlanetGen
             new[] { (ItemKind.Ice, 0.8f), (ItemKind.Carbon, 0.3f), (ItemKind.MetalOre, 0.3f) }, "#3a7a95", "#5a6a7a"),
     };
 
+    /// <summary>이름 붙은 특별 행성을 열쇠로 (시험 · 화면 확인).</summary>
+    public static Planet Special(Rng r, int id, string key) => MakeSpecial(r, id, Specials.First(s => s.Key == key));
+
     private static Planet MakeSpecial(Rng r, int id, SpecialSpec s)
     {
         var p = new Planet
