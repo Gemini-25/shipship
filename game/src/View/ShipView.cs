@@ -699,7 +699,6 @@ public partial class ShipView : Node2D
         PaintRadiators(ci); // v9 선체 밖 방열판
         PaintExterior(ci); // v12.6 안테나·태양 날개
         PaintMeetShip(ci); // v23 나란히 선 다른 배
-        PaintFestival(ci); // v23 축제 줄 전구
         PaintHullKind(ci); // v18.8 뼈대 · 용도마다 다른 선체 바깥 (바퀴 · 컨테이너 · 덧댄 판 · 집게 · 탱크 · 온실)
         PaintScorch(ci);
         PaintBlastScars(ci); // v16.13 폭발 흔적 (방사형 그을음 · 깨진 조명 · 날아간 문짝 · 추모)
@@ -808,6 +807,7 @@ public partial class ShipView : Node2D
             else PaintFaultMarker(ci, f, m);
         }
         PaintManeuver(ci); // v17.0 걸쇠 · 끈 · 냄비 집게 · 떨어진 물건 · 쏟은 자국 · 빗자루
+        PaintFestival(ci); // v23 축제 줄 전구 (방 위)
         PaintEco(ci); // v18.2 · v18.3 · v18.4 화분 · 고양이 방석 · 밥그릇 · 바구미 포대 · 배수구 · 쓰레기통 · 합선 그을음
         PaintSchemesFloor(ci); // v18.14 꾸미는 일 (밀주 통 · 비밀 정원 · 방송 장비 · 덮개 · 압수 상자 · 팻말 · 깃발 줄)
         PaintHairClips(ci); // v17.1 바닥에 떨어진 머리카락

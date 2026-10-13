@@ -51,9 +51,16 @@ public static partial class Program
             float minFood = 1f, minO2 = 99f, minBattery = 1f, minWater = 1e9f, maxDemand = 0f;
             string minO2Room = "";
             long starving = 0;
+            bool daily = Environment.GetEnvironmentVariable("SHIPDAILY") == "1";
+            long starvedDay = 0;
             while (w.Tick < end)
             {
                 w.Step();
+                if (daily && w.Tick % SimTime.TicksPerDay == 0) // v23 날마다: 굶주림 · 물 · 식량 · 전력
+                {
+                    Console.WriteLine($"    {w.Tick / SimTime.TicksPerDay}일: 굶주림 {starving - starvedDay} · 물 {w.Water.Level:0}L · 저장 식량 {w.Ship.CountStored(ItemKind.Ration)} · 식사 {w.Ship.CountStored(ItemKind.Meal)} · 채소 {w.Ship.CountStored(ItemKind.Produce)} · 하루 생장 {w.FoodSources.GrowPerDay:0} · 수요 {w.Power.Demand:0}/{w.Power.ReactorRated:0}kW · 배터리 {w.Power.BatteryPercent * 100:0}% · 고장 {w.Ship.Machines.Count(m => m.Faults.Count > 0)} · 평균 포만 {w.Crew.Where(c => !c.Dead).Average(c => c.Needs.Food) * 100:0}%");
+                    starvedDay = starving;
+                }
                 if (w.Tick % World.SystemInterval != 0) continue;
                 foreach (var c in w.Crew.Where(c => !c.Dead)) { minFood = MathF.Min(minFood, c.Needs.Food); if (c.Needs.Food <= 0.02f) starving++; }
                 foreach (var r in w.Ship.Rooms.Where(r => !r.Detached)) if (r.Air.O2 < minO2) { minO2 = r.Air.O2; minO2Room = $"{r.Name}#{r.Id}@{SimTime.Clock(w.Tick)}"; }
@@ -130,6 +137,7 @@ public static partial class Program
                 case "parasite": ParasiteSystem.Off = true; break;
                 case "pets": PetSystem.Off = true; break;
                 case "meet": EncounterSystem.Off = true; break;
+                case "tiers+": ShipTiers.On = true; break; // v23 크기별 기술 등급 도안 (켜기)
             }
         int days = args.Length > 0 && int.TryParse(args[0], out var d) ? d : 14;
         int seed = args.Length > 1 && int.TryParse(args[1], out var s) ? s : 20260929;
@@ -322,6 +330,7 @@ public static partial class Program
         if (args.Contains("--arcstest")) return RunArcsTest(seed); // v23 주컴퓨터의 자아 · 외계 기생체 · 도전 시나리오
         if (args.Contains("--funtest")) return RunFunTest(seed); // v23 볼거리 (반려동물 · 살아 있는 행성 · 다른 배 · 상륙 · 축제)
         if (args.Contains("--allontest")) return RunAllOnTest(seed); // v23 통합 시험 묶음 — 모든 기능 켬 · 핵심 장면 20
+        if (args.Contains("--hungerprobe")) return RunHungerProbe(Math.Max(1, days), seed, shipArg ?? "Cheonma"); // v23 진단: 식량이 있는데 굶는 사람
         if (args.Contains("--story21test")) return RunStory21Test(seed); // v21 이야기꾼 · 난이도 세분화
         if (args.FirstOrDefault(a => a.StartsWith("--foodprobe=")) is string fp) return RunFoodProbe(seed, fp[12..]); // v21 먹을 것 탐침
         if (args.Contains("--campaign15test")) return RunCampaign15Test(seed); // v15.6

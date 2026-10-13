@@ -1181,6 +1181,16 @@ public partial class Main : Node2D
                         Player.Cosmic(Sim, ck, bits.Length > 1 ? float.Parse(bits[1], CultureInfo.InvariantCulture) : 1f);
                     break;
                 }
+                case "--meet": // v23 화면 확인: 다른 배가 나란히 선다 (--meet=Trader|Distress|Generation|Raider) — 50분 흘려 통로까지 잇는다 · 기록되지 않는다
+                    if (Enum.TryParse<MeetKind>(value, out var mk))
+                    {
+                        Sim.Encounters.Meet(mk);
+                        for (long t = 0; t < SimTime.Minutes(50); t++) Sim.Step();
+                    }
+                    break;
+                case "--festival": // v23 화면 확인: 수확 축제 — 식당에 줄 전구 (기록되지 않는다)
+                    if (Sim.Encounters.Celebrate("수확 축제") && Sim.Ship.Rooms.FirstOrDefault(r => r.Id == Sim.Encounters.DecorRoom) is Room fest) FocusRoom(fest);
+                    break;
                 case "--airlow":
                     // v11.2 화면 확인용: 공기 탱크를 그 비율로 (조난 신호 장면) — 기록되지 않는다
                     Sim.Air.Reserve = Sim.Air.ReserveCapacity * float.Parse(value, CultureInfo.InvariantCulture);

@@ -1048,6 +1048,7 @@ public sealed class World
         StockShip(ship, rng, scale * Storyteller.StockScale); // v12.4 난이도: 시작 물자
         if (ShipClasses.Base(template.Key) || template.Key.StartsWith("gen:") && !template.Legacy) { ShipClasses.Stock(ship, ShipClasses.Of(template)); if (ShipClasses.Base(template.Key)) ShipClasses.FitOut(world, ShipClasses.Of(template)); } // v16.22 크기 등급: 시작 물자 · 특수 방 대표 설비
         if (Storyteller.StockScale < 0.99f) TrimStock(ship, Storyteller.StockScale);
+        ShipTiers.Apply(world, template.Crew); // v23 크기별 기술 등급 (승인 전에는 꺼짐)
 
         var beds = ship.FurnitureOf(FurnitureType.Bed).OrderBy(b => b.MinX).ToList();
         float hour = SimTime.HourOfDay(world.Tick);
