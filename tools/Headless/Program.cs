@@ -71,6 +71,9 @@ public static partial class Program
             Console.WriteLine($"  {(ok ? "✔" : "✘")} {t.Name}({t.Key}) {w.Crew.Count}명 · 방 {ship.Rooms.Count} · 설비 {ship.Machines.Count()} · 격자 {ship.Grid.Width}×{ship.Grid.Height} · " +
                               $"원자로 {w.Power.ReactorRated:0}kW(최대 수요 {maxDemand:0}) · 냉각 {w.Piping.CoolingKw:0}kW · 최저 배터리 {minBattery * 100:0}% · 최저 산소 {minO2:0.0}kPa({minO2Room}) · 최저 포만 {minFood * 100:0}% · " +
                               $"굶주림 {starving}회 · 물 {minWater:0}/{w.Water.Capacity:0}L · 사망 {dead} · 연구 {w.Research:0} · {days * SimTime.TicksPerDay / Math.Max(0.001, watch.Elapsed.TotalSeconds):N0}틱/초");
+            // v23 설계도 손보기: 굶주림 · 전력의 뿌리 (식량원 · 남은 날 · 저장 · 정전 · 부하 차단)
+            Console.WriteLine($"      식량 {w.FoodSources.Summary()} · 하루 생장 {w.FoodSources.GrowPerDay:0.0} · 남은 날 {w.FoodSources.DaysLeft:0.0} · 저장 식량 {ship.CountStored(ItemKind.Ration)} · 식사 {ship.CountStored(ItemKind.Meal)} · 채소 {ship.CountStored(ItemKind.Produce)}"
+                + $" · 재배대 {ship.FurnitureOf(FurnitureType.GrowBed).Count()} · 조리대 {ship.FurnitureOf(FurnitureType.Stove).Count()} · 정전 {w.Power.Brownouts}번 · 부하 차단 {w.Power.ShedCount}번");
         }
         return bad == 0 ? 0 : 1;
     }
@@ -318,6 +321,7 @@ public static partial class Program
         if (args.Contains("--bigtest")) return RunBigTest(seed); // v23 큰 사고 여섯
         if (args.Contains("--arcstest")) return RunArcsTest(seed); // v23 주컴퓨터의 자아 · 외계 기생체 · 도전 시나리오
         if (args.Contains("--funtest")) return RunFunTest(seed); // v23 볼거리 (반려동물 · 살아 있는 행성 · 다른 배 · 상륙 · 축제)
+        if (args.Contains("--allontest")) return RunAllOnTest(seed); // v23 통합 시험 묶음 — 모든 기능 켬 · 핵심 장면 20
         if (args.Contains("--story21test")) return RunStory21Test(seed); // v21 이야기꾼 · 난이도 세분화
         if (args.FirstOrDefault(a => a.StartsWith("--foodprobe=")) is string fp) return RunFoodProbe(seed, fp[12..]); // v21 먹을 것 탐침
         if (args.Contains("--campaign15test")) return RunCampaign15Test(seed); // v15.6
