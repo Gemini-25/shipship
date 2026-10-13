@@ -92,7 +92,7 @@ public static partial class Program
         ["knowtest"] = Robots23,
         ["looktest"] = Everything, ["organtest"] = Everything, ["personatest"] = Everything, ["spacetest"] = Everything, ["growthtest"] = Everything, ["fleettest"] = Everything,
         ["commandtest"] = Nozzle, ["techwebtest"] = Nozzle, ["bodytest"] = Nozzle,
-        ["docktest"] = All23, ["foodtest"] = All23, ["hazardtest"] = All23, ["mattertest"] = Legacy23, ["organtest"] = Legacy23,
+        ["docktest"] = Everything, ["foodtest"] = Everything, ["hazardtest"] = Everything, ["mattertest"] = Legacy23, ["organtest"] = Legacy23,
         ["responsetest"] = Legacy23, ["robot21test"] = Legacy23 + "," + Fixed, ["roomtest"] = Everything, ["soiltest"] = Everything, ["waystest"] = Legacy23,
     };
 
