@@ -79,6 +79,22 @@ public static partial class Program
     {
         Console.OutputEncoding = System.Text.Encoding.UTF8;
         if (Environment.GetEnvironmentVariable("SHIPSIM_V21") == "0") RobotsV21.General = RobotsV21.Reactor = RobotsV21.Expanded = false; // 개발용: 회귀가 로봇 확장 때문인지 가린다
+        // 개발용 (v23 회귀 가리기): SHIPSIM_OFF=nozzle,relay,brain,commander,eyes,fixed,planet,purpose,quiet,know,home
+        foreach (var off in (Environment.GetEnvironmentVariable("SHIPSIM_OFF") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries))
+            switch (off.Trim())
+            {
+                case "nozzle": NozzleSystem.On = false; break;
+                case "relay": RelaySystem.On = false; break;
+                case "brain": RobotBrain.On = false; break;
+                case "commander": IncidentCommander.On = false; break;
+                case "eyes": EyeNet.On = false; break;
+                case "fixed": PolicySystem.FixedControl = false; break;
+                case "planet": PlanetSystem.Off = true; break;
+                case "purpose": PurposeSystem.Off = true; break;
+                case "quiet": GenerationSystem.QuietOff = true; break;
+                case "know": KnowledgeSystem.Off = true; break;
+                case "home": HomelandSystem.Off = true; break;
+            }
         int days = args.Length > 0 && int.TryParse(args[0], out var d) ? d : 14;
         int seed = args.Length > 1 && int.TryParse(args[1], out var s) ? s : 20260929;
         bool quiet = args.Contains("--quiet");

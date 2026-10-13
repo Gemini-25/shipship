@@ -210,6 +210,7 @@ public static class Icons
         FurnitureType.PartTestBench => "part-test-bench",
         FurnitureType.CalibrationRig => "calibration-rig",
         FurnitureType.Hoist => "hoist",
+        FurnitureType.SurgicalArm => "surgical-arm", // 의료 3차 수술 로봇 팔
         FurnitureType.MaintCart => "maint-cart",
         FurnitureType.VibrationMonitor => "vibration",
         FurnitureType.ThermalCamera => "thermal-camera",

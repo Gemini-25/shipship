@@ -701,7 +701,7 @@ public static class WaysWork
         }
         c.Practice(m.Spec.Skill, 0.03f);
         MarkLog.Add(m.Marks, w.Tick, $"{c.Name}: {how} {(part is ItemKind pp ? ItemKinds.Name(pp) : "")}{(proper ? "" : " (임시)")}로 수리");
-        ways.Finish(t, true, $"{how}{(how.EndsWith("온") || how.EndsWith("든") || how.EndsWith("진") ? " " : "(으)로 ")}{(proper && part is ItemKind p2 ? ItemKinds.Name(p2) + "로 " : "")}{Ko.EulReul(m.Name)} 살렸다", c);
+        ways.Finish(t, true, $"{(how.EndsWith("온") || how.EndsWith("든") || how.EndsWith("진") ? how : Ko.EuRo(how))} {(proper && part is ItemKind p2 ? Ko.EuRo(ItemKinds.Name(p2)) + " " : "")}{Ko.EulReul(m.Name)} 살렸다", c);
         return true;
     }
 

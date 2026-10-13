@@ -241,7 +241,7 @@ public sealed partial class IncidentCommander
             }
             if (pick == null) continue;
             w.Robots.SetPost(pick, room, at);
-            w.Log.Add(w.Tick, LogKind.Ship, $"{Voice}: 거점 — {pick.Name}을(를) {room.Name} 곁에 세운다 (불이 잘 나는 방 · 가까이 로봇이 없다)");
+            w.Log.Add(w.Tick, LogKind.Ship, $"{Voice}: 거점 — {Ko.EulReul(pick.Name)} {room.Name} 곁에 세운다 (불이 잘 나는 방 · 가까이 로봇이 없다)");
         }
     }
 

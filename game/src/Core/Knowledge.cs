@@ -52,6 +52,8 @@ public sealed class KnowledgeSystem
     public Dictionary<Skill, float> Best { get; } = new();
     private long _nextHour;
     private int _corrupt0 = -1;
+    /// <summary>시험: 끄면 짝 · 일지 · 잃는 솜씨가 없다.</summary>
+    public static bool Off;
 
     public KnowledgeSystem(World w)
     {
@@ -68,7 +70,7 @@ public sealed class KnowledgeSystem
     public void Update(float dt)
     {
         var w = _w;
-        if (w.Tick < _nextHour) return;
+        if (Off || w.Tick < _nextHour) return;
         _nextHour = w.Tick + SimTime.Hours(1);
         if (w.Tick < SimTime.Hours(6)) return; // 출항 첫 반나절은 자리를 잡는다
         bool newDay = w.Tick % SimTime.TicksPerDay < SimTime.Hours(1);

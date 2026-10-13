@@ -47,7 +47,7 @@ public static partial class Program
         float rate0 = CollectionSystem.RatePerHour;
         try
         {
-            Check("목록 — 목적지 8종 · 일지 사건 40+ · 재료 갈래 6", ExpeditionSites.All.Length == 8 && ExpeditionSites.EventCount >= 40 && ExpeditionSystem.Cats.Length == 6,
+            Check("목록 — 목적지 9종(v23 행성 지표) · 일지 사건 40+ · 재료 갈래 6", ExpeditionSites.All.Length == 9 && ExpeditionSites.EventCount >= 40 && ExpeditionSystem.Cats.Length == 6,
                 $"목적지 {ExpeditionSites.All.Length} · 사건 {ExpeditionSites.EventCount}");
 
             // ── 1) 재료 바닥 → 컴퓨터 예측 → 정지 → 제안(자원 · 반대) → 결정 → 셋이 출발 → 원정 중 → 귀환 → 나르기 → 식탁 ──

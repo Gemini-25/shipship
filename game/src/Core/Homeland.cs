@@ -21,6 +21,8 @@ public sealed class HomelandSystem
     public int Birthdays, Memorials, ShipBirthdays, SkippedBirthdays;
     private long _nextHour;
     private float _lastDay = -1f;
+    /// <summary>시험: 끄면 향수병 · 기념일이 없다.</summary>
+    public static bool Off;
 
     public HomelandSystem(World w)
     {
@@ -47,7 +49,7 @@ public sealed class HomelandSystem
     public void Update(float dt)
     {
         var w = _w;
-        if (w.Tick < _nextHour) return;
+        if (Off || w.Tick < _nextHour) return;
         _nextHour = w.Tick + SimTime.Hours(1);
         float day = w.Generation.CalendarDays;
         foreach (var c in Aboard)
