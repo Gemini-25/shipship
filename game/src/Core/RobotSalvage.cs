@@ -78,7 +78,7 @@ public sealed partial class RobotSystem
         {
             if (!IsWreck(wreck) || wreck.SalvageBy >= 0) continue;
             if (!wreck.AtShop) { if (shop != null) TryHaulWreck(wreck, shop); }
-            else TryDismantle(wreck);
+            else if (!WantedPart(wreck)) TryDismantle(wreck); // 급한 로봇이 이 잔해의 부위를 기다리면 해체는 미룬다 (뜯어 살리기가 먼저)
         }
         TryCannibalize();
         TryBuild();
@@ -319,6 +319,21 @@ public sealed partial class RobotSystem
 
     // ─────────────────────────────── ④ 뜯어 살리기 ───────────────────────────────
 
+    /// <summary>멈춘 급한 로봇이 이 잔해의 부위를 기다린다 (부품이 배에 없고 · 멈춘 지 세 시간 안).</summary>
+    private bool WantedPart(Robot wreck)
+    {
+        var w = _world;
+        foreach (var t in Robots)
+        {
+            if (t == wreck || t.Wrecked || t.Fault is not RobotFault f || t.FaultPart < 0 || Worth(t) < 2.5f || w.Tick - t.StateSince > SimTime.Hours(3)) continue;
+            var need = FaultParts(f);
+            if (need.Length == 0 || need.All(x => w.Ship.CountStored(x.kind) >= x.count)) continue;
+            var p = (BotPart)t.FaultPart;
+            if (RobotBody.Has(wreck.Kind, p) && wreck.Parts[(int)p] >= 0.25f) return true;
+        }
+        return false;
+    }
+
     /// <summary>얼마나 급한 로봇인가 (의료 · 구조 · 방재가 가장 · 그다음 정비).</summary>
     internal static float Worth(Robot r) =>
         RobotsV21.Medical(r.Kind) || r.Kind == RobotKind.Rescuer ? 3f
@@ -340,7 +355,8 @@ public sealed partial class RobotSystem
             var wreck = Robots.Where(x => IsWreck(x) && x.SalvageBy < 0 && x.Parts[(int)p] >= 0.25f && RobotBody.Has(x.Kind, p)).OrderBy(x => Far(x.Position, t.Position)).FirstOrDefault();
             Robot? donor = wreck;
             // 쓸 만한 부위가 남은 잔해가 있으면 (끌어 가는 중 · 해체하는 중이어도) 거기서 나올 부품을 기다린다 — 멀쩡한 로봇은 잔해가 하나도 없을 때만
-            if (donor == null && Robots.Any(x => IsWreck(x) && RobotBody.Has(x.Kind, p) && x.Parts[(int)p] >= 0.25f)) continue;
+            // (끌려가는 동안 방이 비어 '잔해'로 안 잡히는 것 · 해체 중인 것도 곧 부품이 나올 곳이다)
+            if (donor == null && Robots.Any(x => x.Wrecked && !x.Salvaged && x.Aboard == null && x.Room is not { Detached: true } && RobotBody.Has(x.Kind, p) && x.Parts[(int)p] >= 0.25f)) continue;
             // 임시로 되살릴 재료라도 있으면 그게 먼저 (멀쩡한 로봇을 세우는 건 마지막)
             var mk = MakeshiftParts(f);
             if (donor == null && mk.Length > 0 && mk.All(x => w.Ship.CountStored(x.kind) >= x.count)) continue;
@@ -364,12 +380,33 @@ public sealed partial class RobotSystem
             if (near is not Cell at) continue;
             var dn = donor; var tg = t; var part = p;
             bool fromWreck = donor.Wrecked;
+            bool carry = need.Length == 1;
             var steps = new List<RobotStep>
             {
                 new RGoto(at),
                 new RWork(0.4f, null, dn.Position),
-                new RDo((rb, world) => { TakePart(rb, dn, tg, part, need); return true; }),
+                new RDo((rb, world) => { TakePart(rb, dn, tg, part, need, carry); return true; }),
             };
+            if (carry)
+            {
+                Cell? tn = null; int tc = int.MaxValue;
+                foreach (var d in Cell.Dirs8)
+                {
+                    var s = tg.Cell + d;
+                    if (!w.Ship.IsWalkable(s)) continue;
+                    int dd = dist.Get(s);
+                    if (dd < 0 || dd >= tc) continue;
+                    tc = dd; tn = s;
+                }
+                if (tn is Cell tat)
+                {
+                    steps.Add(new RGoto(tat));
+                    steps.Add(new RWork(FaultHours(f) * 0.9f, null, tg.Position));
+                    steps.Add(new RDo((rb, world) => world.Robots.FixedBy(rb, tg, need)));
+                    steps.Add(new RTest(tg));
+                }
+                else carry = false;
+            }
             if (best.State == RobotState.Active) Release(best);
             if (fromWreck) donor.SalvageBy = best.Id;
             Begin(best, steps, $"{dn.Name}의 {RobotBody.Name(dn.Kind, p)} 떼어 오기 — {tg.Name}를 살리려고");
@@ -383,14 +420,15 @@ public sealed partial class RobotSystem
         }
     }
 
-    private void TakePart(Robot by, Robot donor, Robot target, BotPart p, (ItemKind kind, int count)[] need)
+    private void TakePart(Robot by, Robot donor, Robot target, BotPart p, (ItemKind kind, int count)[] need, bool carry = false)
     {
         var w = _world;
         bool fromWreck = donor.Wrecked;
         if (fromWreck) donor.SalvageBy = -1;
         if (donor.Parts[(int)p] < 0.25f) return;
         donor.Parts[(int)p] = 0f;
-        foreach (var (k, n) in need) Stash(k, n, by.Position);
+        if (carry && need.Length == 1 && by.Cargo == null) { by.Cargo = new ItemStack(need[0].kind, need[0].count); by.Fixing = target; } // 들고 가서 바로 갈아 끼운다
+        else foreach (var (k, n) in need) Stash(k, n, by.Position);
         string part = RobotBody.Name(donor.Kind, p);
         if (fromWreck)
         {

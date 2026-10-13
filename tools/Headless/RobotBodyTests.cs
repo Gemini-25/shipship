@@ -161,6 +161,12 @@ public static partial class Program
                 Check("뜯어 살리기 — 모터가 배에 없으면 잔해의 바퀴로 급한 로봇을 살린다 (떼어 오든 해체해 나오든 · 멀쩡한 로봇은 건드리지 않는다)",
                     fixedIt && w.Robots.Salvage.FromRobots == 0 && w.Robots.Salvage.FromWrecks + w.Robots.Salvage.Dismantled >= 1,
                     $"{medic.Name}: 고장 {medic.Fault?.ToString() ?? "없음"} · {RobotBody.Line(medic)} · {w.Robots.Salvage.Line()}");
+                if (w.Robots.Salvage.FromRobots > 0) // 실패 때: 무슨 일이 어떤 순서로
+                {
+                    Console.WriteLine($"      잔해 {wreck.Name}: {RobotBody.Line(wreck)} · 부위 {string.Join(" ", wreck.Parts.Select(x => x.ToString("0.00")))} · 고장 부위 {medic.FaultPart}");
+                    foreach (var e in w.Log.Entries.Where(e => !e.Text.Contains("세워") && (e.Text.Contains("떼") || e.Text.Contains("해체") || e.Text.Contains("끌어") || e.Text.Contains("모터") || e.Text.Contains(wreck.Name))).Take(16))
+                        Console.WriteLine($"      {SimTime.Clock(e.Tick)} {e.Text}");
+                }
             }
 
             // 15) 뜯어 살리기 — 다른 로봇에서: 잔해도 없으면 덜 급한 로봇을 세워 떼어 낸다 (주 컴퓨터가 정하고 까닭을 남긴다)
