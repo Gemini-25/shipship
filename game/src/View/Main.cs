@@ -137,6 +137,7 @@ public partial class Main : Node2D
     public override void _Ready()
     {
         RenderingServer.SetDefaultClearColor(Palette.Space);
+        Engine.MaxFps = 60; // v23 화면은 늘 60프레임 (주사율이 높은 모니터에서도 — 남는 시간은 시뮬레이션 배속에 쓴다)
         Settings.Load();
         Fonts.Load();
         Textures.Load();
