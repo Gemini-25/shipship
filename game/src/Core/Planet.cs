@@ -11,26 +11,28 @@ namespace ShipSim.Core;
 public enum PlanetClimate : byte { Frozen, Cold, Mild, Hot, Scorched, Airless }
 public enum PlanetSurface : byte { Rock, Dunes, IceSheet, Shallows, Lava, Crystal, Mud, Ash }
 public enum PlanetWeather : byte { Calm, Wind, DustStorm, Rain, AcidRain, Thunder, Typhoon, Blizzard, HeatWave }
+/// <summary>v23 극한 환경: 천체 종류 (보통 바위 행성 · 새 천체 8).</summary>
+public enum PlanetBody : byte { Rocky, GasGiant, IceMoon, Venus, Titan, Io, Comet, Asteroid, Rogue }
 public enum PlanetFeature : byte { Quakes, Geysers, Vents, MeteorRain, Aurora, Tides, Sinkholes, Static, NoMagnet, StrongMagnet, Rings, Moons, TidalLock, CrystalField, ToxicDust }
 
 public sealed class Planet
 {
     public int Id { get; init; }
-    public string Name { get; init; } = "";
+    public string Name { get; set; } = "";
     /// <summary>항성 목록 이름 (예: 케플러-418 c).</summary>
     public string Code { get; init; } = "";
     /// <summary>이름 붙은 특별 행성의 열쇠 (보통 행성은 "").</summary>
     public string Key { get; init; } = "";
     public int Seed { get; init; }
-    public PlanetClimate Climate { get; init; }
-    public PlanetSurface Surface { get; init; }
-    public float Gravity { get; init; } = 1f;
+    public PlanetClimate Climate { get; set; }
+    public PlanetSurface Surface { get; set; }
+    public float Gravity { get; set; } = 1f;
     /// <summary>한낮 평균 기온 (°C).</summary>
-    public float TempC { get; init; }
+    public float TempC { get; set; }
     /// <summary>낮밤 기온 차 (°C).</summary>
-    public float Swing { get; init; }
+    public float Swing { get; set; }
     /// <summary>대기압 (kPa — 0이면 대기 없음).</summary>
-    public float Pressure { get; init; }
+    public float Pressure { get; set; }
     /// <summary>날씨 (같은 것이 여러 번 들어가면 그만큼 잦다).</summary>
     public List<PlanetWeather> Weathers { get; } = new();
     public List<PlanetFeature> Features { get; } = new();
@@ -45,12 +47,14 @@ public sealed class Planet
     public float Certainty { get; set; }
     /// <summary>임무 기간 (일).</summary>
     public float StayDays { get; init; }
-    public string Hex { get; init; } = "#888888";
-    public string Hex2 { get; init; } = "#444444";
+    public string Hex { get; set; } = "#888888";
+    public string Hex2 { get; set; } = "#444444";
     public string Line { get; set; } = "";
     public float CompScore { get; set; }
     public string CompNote { get; set; } = "";
 
+    /// <summary>v23 천체 종류 (가스 거인 · 얼음 위성 · 금성형 · 메탄 위성 · 화산 위성 · 혜성 · 소행성 · 떠돌이).</summary>
+    public PlanetBody Body { get; set; }
     public bool Has(PlanetFeature f) => Features.Contains(f);
     public bool Special => Key.Length > 0;
     public string Title => Special ? Name : $"{Name} ({Code})";
@@ -213,8 +217,80 @@ public static class PlanetGen
         Add(ItemKind.Rare, surface switch { PlanetSurface.Crystal => 0.4f, PlanetSurface.Lava => 0.2f, _ => 0.04f } + (p.Has(PlanetFeature.CrystalField) ? 0.4f : 0f) + (p.Has(PlanetFeature.Vents) ? 0.1f : 0f));
         Add(ItemKind.Fuel, (surface is PlanetSurface.IceSheet || climate == PlanetClimate.Frozen ? 0.4f : 0f) + (surface == PlanetSurface.Mud ? 0.3f : 0f) + (p.Has(PlanetFeature.Vents) ? 0.2f : 0f));
         foreach (var k in p.Rich.Keys.ToList()) p.Rich[k] = Math.Clamp(p.Rich[k] * r.Range(0.6f, 1.4f), 0f, 1f);
+        ApplyBody(p, level, null);
         Finish(p);
         return p;
+    }
+
+    // ─────────────── v23 새 천체 (난수 흐름을 건드리지 않게 — 다 뽑은 뒤 행성 씨앗으로 덧입힌다) ───────────────
+
+    public static string BodyName(PlanetBody b) => b switch
+    {
+        PlanetBody.GasGiant => "가스 거인", PlanetBody.IceMoon => "얼음 위성", PlanetBody.Venus => "금성형 행성", PlanetBody.Titan => "메탄 위성",
+        PlanetBody.Io => "화산 위성", PlanetBody.Comet => "혜성", PlanetBody.Asteroid => "소행성", PlanetBody.Rogue => "떠돌이 행성", _ => "바위 행성",
+    };
+
+    /// <summary>천체마다 날씨 이름 (타이탄형의 비 = 메탄 비 · 화산 위성의 눈보라 = 황 눈 …).</summary>
+    public static string WeatherName(Planet p, PlanetWeather w) => (p.Body, w) switch
+    {
+        (PlanetBody.Titan, PlanetWeather.Rain) => "메탄 비", (PlanetBody.Io, PlanetWeather.Blizzard) => "황 눈", (PlanetBody.Io, PlanetWeather.DustStorm) => "화산재 낙진",
+        (PlanetBody.GasGiant, PlanetWeather.Thunder) => "초거대 번개", (PlanetBody.GasGiant, PlanetWeather.Typhoon) => "거대 소용돌이", (PlanetBody.Venus, PlanetWeather.AcidRain) => "황산 비",
+        (PlanetBody.Comet, PlanetWeather.DustStorm) => "가스 분출", (PlanetBody.Rogue, PlanetWeather.Blizzard) => "질소 눈",
+        _ => WeatherName(w),
+    };
+
+    private static uint Mix(uint x) { x ^= x >> 16; x *= 0x7feb352dU; x ^= x >> 15; x *= 0x846ca68bU; x ^= x >> 16; return x; }
+
+    /// <summary>행성 씨앗으로 천체 종류를 정해 덧입힌다 (force가 있으면 그 종류로 — 시험 · 이야기).</summary>
+    public static void ApplyBody(Planet p, int level, PlanetBody? force)
+    {
+        uint h = Mix((uint)p.Seed * 2654435761U + (uint)level);
+        float u = (h & 0xffff) / 65535f, v = ((h >> 16) & 0xffff) / 65535f;
+        PlanetBody b = force ?? (p.Special || u > 0.2f + 0.025f * level ? PlanetBody.Rocky : (PlanetBody)(1 + (int)(v * 8f) % 8));
+        if (b == PlanetBody.Rocky) return;
+        float t(float a, float bb) => a + (bb - a) * v;
+        p.Body = b;
+        p.Weathers.Clear(); p.Features.Clear(); p.Hidden.Clear(); p.Rich.Clear();
+        void W(params PlanetWeather[] ws) => p.Weathers.AddRange(ws);
+        void F(params PlanetFeature[] fs) => p.Features.AddRange(fs);
+        void R(ItemKind k, float x) => p.Rich[k] = x;
+        string adj = new[] { "거대한", "고요한", "성난", "창백한", "검은", "빛나는" }[(int)(h % 6)];
+        switch (b)
+        {
+            case PlanetBody.GasGiant:
+                p.Climate = PlanetClimate.Cold; p.Surface = PlanetSurface.Shallows; p.TempC = t(-130f, -60f); p.Pressure = t(1200f, 3000f); p.Gravity = t(1.9f, 2.6f); p.Swing = 8f;
+                W(PlanetWeather.Calm, PlanetWeather.Wind, PlanetWeather.Wind, PlanetWeather.Thunder, PlanetWeather.Typhoon); F(PlanetFeature.StrongMagnet, PlanetFeature.Aurora, PlanetFeature.Moons);
+                R(ItemKind.Fuel, 0.95f); R(ItemKind.Ice, 0.3f); p.Hex = "#d8b27a"; p.Hex2 = "#e8c89a"; break;
+            case PlanetBody.IceMoon:
+                p.Climate = PlanetClimate.Frozen; p.Surface = PlanetSurface.IceSheet; p.TempC = t(-190f, -140f); p.Pressure = 0f; p.Gravity = t(0.1f, 0.2f); p.Swing = 30f;
+                W(PlanetWeather.Calm); F(PlanetFeature.Geysers, PlanetFeature.Tides, PlanetFeature.NoMagnet, PlanetFeature.Quakes);
+                R(ItemKind.Ice, 1f); R(ItemKind.Rare, 0.25f); R(ItemKind.Silicate, 0.2f); p.Hex = "#dff0fa"; p.Hex2 = "#05060a"; break;
+            case PlanetBody.Venus:
+                p.Climate = PlanetClimate.Scorched; p.Surface = PlanetSurface.Rock; p.TempC = t(440f, 475f); p.Pressure = t(8000f, 9500f); p.Gravity = t(0.85f, 0.95f); p.Swing = 4f;
+                W(PlanetWeather.Calm, PlanetWeather.AcidRain, PlanetWeather.AcidRain, PlanetWeather.Thunder, PlanetWeather.HeatWave); F(PlanetFeature.Vents, PlanetFeature.ToxicDust);
+                R(ItemKind.Carbon, 0.6f); R(ItemKind.Rare, 0.35f); R(ItemKind.MetalOre, 0.3f); p.Hex = "#c8a060"; p.Hex2 = "#e0b070"; break;
+            case PlanetBody.Titan:
+                p.Climate = PlanetClimate.Frozen; p.Surface = PlanetSurface.Mud; p.TempC = t(-185f, -175f); p.Pressure = t(140f, 160f); p.Gravity = t(0.12f, 0.16f); p.Swing = 3f;
+                W(PlanetWeather.Calm, PlanetWeather.Rain, PlanetWeather.Rain, PlanetWeather.Wind); F(PlanetFeature.Tides, PlanetFeature.Geysers);
+                R(ItemKind.Fuel, 1f); R(ItemKind.Carbon, 0.8f); R(ItemKind.Ice, 0.6f); p.Hex = "#a07a3a"; p.Hex2 = "#c89a5a"; break;
+            case PlanetBody.Io:
+                p.Climate = PlanetClimate.Airless; p.Surface = PlanetSurface.Lava; p.TempC = t(-150f, -120f); p.Pressure = 0.2f; p.Gravity = t(0.16f, 0.2f); p.Swing = 160f;
+                W(PlanetWeather.Calm, PlanetWeather.DustStorm, PlanetWeather.Blizzard); F(PlanetFeature.Vents, PlanetFeature.Quakes, PlanetFeature.NoMagnet);
+                R(ItemKind.MetalOre, 0.4f); R(ItemKind.Rare, 0.35f); R(ItemKind.Silicate, 0.4f); p.Hex = "#e8d060"; p.Hex2 = "#05060a"; break;
+            case PlanetBody.Comet:
+                p.Climate = PlanetClimate.Frozen; p.Surface = PlanetSurface.IceSheet; p.TempC = t(-210f, -150f); p.Pressure = 0f; p.Gravity = 0.01f; p.Swing = 60f;
+                W(PlanetWeather.Calm, PlanetWeather.Calm, PlanetWeather.DustStorm); F(PlanetFeature.Geysers, PlanetFeature.Static, PlanetFeature.MeteorRain);
+                R(ItemKind.Ice, 1f); R(ItemKind.Carbon, 0.45f); R(ItemKind.Fuel, 0.3f); p.Hex = "#9aa0a8"; p.Hex2 = "#05060a"; break;
+            case PlanetBody.Asteroid:
+                p.Climate = PlanetClimate.Airless; p.Surface = PlanetSurface.Rock; p.TempC = t(-110f, -40f); p.Pressure = 0f; p.Gravity = t(0.01f, 0.04f); p.Swing = 200f;
+                W(PlanetWeather.Calm); F(PlanetFeature.MeteorRain, PlanetFeature.Static, PlanetFeature.NoMagnet);
+                R(ItemKind.MetalOre, 1f); R(ItemKind.Rare, 0.45f); R(ItemKind.Silicate, 0.4f); p.Hex = "#6a6460"; p.Hex2 = "#05060a"; break;
+            case PlanetBody.Rogue:
+                p.Climate = PlanetClimate.Frozen; p.Surface = PlanetSurface.IceSheet; p.TempC = t(-235f, -210f); p.Pressure = t(0f, 20f); p.Gravity = t(0.6f, 1.1f); p.Swing = 2f;
+                W(PlanetWeather.Calm, PlanetWeather.Calm, PlanetWeather.Blizzard); F(PlanetFeature.Geysers, PlanetFeature.Quakes);
+                R(ItemKind.Ice, 0.8f); R(ItemKind.Fuel, 0.3f); R(ItemKind.Rare, 0.2f); p.Hex = "#3a4458"; p.Hex2 = "#020205"; break;
+        }
+        p.Name = $"{adj} {BodyName(b)}";
     }
 
     private static void Finish(Planet p)
@@ -223,8 +299,8 @@ public static class PlanetGen
         p.Reward = RewardOf(p);
         if (p.Line.Length == 0)
         {
-            var bits = new List<string> { $"{ClimateName(p.Climate)} {SurfaceName(p.Surface)}", $"{p.TempC:0}°C", p.Pressure <= 0.5f ? "대기 없음" : p.Pressure > 1000f ? $"짓누르는 대기 {p.Pressure / 101f:0}기압" : $"대기 {p.Pressure:0}kPa", $"중력 {p.Gravity:0.0}G" };
-            var rough = p.Weathers.Where(x => x != PlanetWeather.Calm).Distinct().Select(WeatherName).ToList();
+            var bits = new List<string> { p.Body != PlanetBody.Rocky ? BodyName(p.Body) : $"{ClimateName(p.Climate)} {SurfaceName(p.Surface)}", $"{p.TempC:0}°C", p.Pressure <= 0.5f ? "대기 없음" : p.Pressure > 1000f ? $"짓누르는 대기 {p.Pressure / 101f:0}기압" : $"대기 {p.Pressure:0}kPa", $"중력 {p.Gravity:0.0}G" };
+            var rough = p.Weathers.Where(x => x != PlanetWeather.Calm).Distinct().Select(x => WeatherName(p, x)).ToList();
             if (rough.Count > 0) bits.Add(string.Join("·", rough));
             p.Line = string.Join(" · ", bits);
         }

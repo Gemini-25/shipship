@@ -43,7 +43,7 @@ public sealed class HomelandSystem
 
     private IEnumerable<CrewMember> Aboard => _w.Crew.Where(c => !c.Dead && !c.LeftShip && !c.Away);
 
-    private void Bump(CrewMember c, float d)
+    internal void Bump(CrewMember c, float d)
     {
         if (c.BornAboard) { Homesick[c.Id] = 0f; return; }
         Homesick[c.Id] = Math.Clamp(Of(c) + d, 0f, 1f);
