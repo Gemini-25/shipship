@@ -55,6 +55,7 @@ public sealed partial class GenerationSystem
     {
         var w = _w;
         float years = months / 12f;
+        float fromDay = CalendarDays;
         var span = new QuietSpan { Tick = w.Tick, Months = months, Leg = where };
         var people = w.Crew.Where(c => !c.Dead && !c.LeftShip && !c.Away).ToList();
         int edu = w.Policies["education"];
@@ -132,6 +133,8 @@ public sealed partial class GenerationSystem
         foreach (var c in people.Where(c => !c.Dead))
             MarkLog.Add(c.Memory.Marks, w.Tick, $"조용한 {MonthsName(months)} — {marks[_rng.Range(0, marks.Length)]}");
         Months += months;
+        w.Knowledge.QuietMonths(months, span); // v23 사수 곁에서 익히고 · 일지를 적는다
+        w.Homeland.QuietMonths(months, span, fromDay); // v23 향수병 · 건너뛴 생일 · 추모일
         LastSkip = w.Tick;
         Spans.Add(span);
         if (Spans.Count > 40) Spans.RemoveAt(0);
@@ -140,6 +143,9 @@ public sealed partial class GenerationSystem
         w.History.Add(w, span.Born + span.Passed + span.Paired > 0 ? HistoryKind.Milestone : HistoryKind.Memory, sum, null, log: false);
         return span;
     }
+
+    /// <summary>배의 달력 (날 — 실제로 지난 날 + 넘긴 달).</summary>
+    public float CalendarDays => Months * 30f + _w.Tick / (float)SimTime.TicksPerDay;
 
     /// <summary>배가 살아온 이야기 시간 (해 · 달).</summary>
     public string Calendar

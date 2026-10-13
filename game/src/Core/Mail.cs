@@ -217,6 +217,7 @@ public sealed class MailSystem
     private void Read(CrewMember c, Contact k, Letter l)
     {
         var w = _w;
+        w.Homeland.Letter(c, l.Kind); // v23 향수병
         var emo = w.Brain2.Emotions;
         _reading[c.Id] = (l.Kind, w.Tick + SimTime.Minutes(l.Batch ? 40 : 15));
         string home = Home(c);

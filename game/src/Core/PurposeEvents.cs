@@ -188,6 +188,7 @@ public sealed partial class PurposeSystem
         w.History.Add(w, HistoryKind.Milestone, $"{v.Destination} 도착 — {m.Title}: {m.Result}", null, log: true);
         WriteBook(m);
         Handover(m);
+        w.Homeland.Port(); // v23 도착 — 사람 · 소식 · 고향 재료
         Past.Add(m);
         if (Past.Count > 30) Past.RemoveAt(0);
         LastArrival = w.Tick;
@@ -245,11 +246,12 @@ public sealed partial class PurposeSystem
         var w = _w;
         var crew = w.Crew.Where(c => !c.Dead && !c.LeftShip && !c.Away && !c.IsChild && !c.Passenger).ToList();
         int leave = 0;
-        foreach (var c in crew.OrderByDescending(c => c.Needs.Stress).ThenBy(c => c.Id))
+        foreach (var c in crew.OrderByDescending(c => w.Homeland.WantsHome(c) ? 2f : c.Needs.Stress).ThenBy(c => c.Id))
         {
             if (leave >= 2 || crew.Count - leave <= 4 || c.Id == w.Command.CaptainId) break;
-            if (c.Needs.Stress < 0.65f || !_rng.Chance(0.5f)) continue;
-            w.Values.Depart(c, $"{w.Voyage.Destination}에서 이번 항해를 끝으로 내렸다 — 지쳤다");
+            bool home = w.Homeland.WantsHome(c);
+            if (!home && c.Needs.Stress < 0.65f || !_rng.Chance(home ? 0.7f : 0.5f)) continue;
+            w.Values.Depart(c, home ? $"{w.Voyage.Destination}에서 내렸다 — {Ko.EuRo(w.Homeland.HomeOf(c))} 돌아간다 (향수병)" : $"{w.Voyage.Destination}에서 이번 항해를 끝으로 내렸다 — 지쳤다");
             leave++;
         }
         int people = w.Crew.Count(c => !c.Dead && !c.LeftShip && !c.Passenger);

@@ -105,6 +105,12 @@ public sealed class World
     /// <summary>v23 항해의 목적과 끝: 임무 · 갈림길 · 늦은 통신 · 도착 · 항해의 책.</summary>
     public PurposeSystem Purpose { get; }
 
+    /// <summary>v23 지식 전수 (사수 · 부사수 · 일지 · 잃는 솜씨).</summary>
+    public KnowledgeSystem Knowledge { get; }
+
+    /// <summary>v23 외부 세계 기억 (향수병 · 생일 · 추모일 · 배의 생일).</summary>
+    public HomelandSystem Homeland { get; }
+
     /// <summary>v11.2 엔진·추진제·항로: 회피 기동, 보통 항로 ↔ 잔해 지대.</summary>
     public PropulsionSystem Propulsion { get; }
 
@@ -315,6 +321,8 @@ public sealed class World
         Album = new SceneBook(this);
         Planet = new PlanetSystem(this);
         Purpose = new PurposeSystem(this);
+        Knowledge = new KnowledgeSystem(this);
+        Homeland = new HomelandSystem(this);
         Propulsion = new PropulsionSystem(this, 1f);
         Hazards = new HazardSystem(this, seed);
         Comms = new CommsSystem(this);
@@ -596,6 +604,8 @@ public sealed class World
             Voyage.Update(dt); // v12.8 항로 구간 · 기항지 · 난파선
             Planet.Update(dt); // v23 행성
             Purpose.Update(dt); // v23 항해의 목적 (임무 · 갈림길 · 늦은 통신)
+            Knowledge.Update(dt); // v23 지식 전수
+            Homeland.Update(dt); // v23 향수병 · 기념일
             pf = Prof.Lap("sys.Voyage", pf);
             Generation.Update(dt); // v12.9 나이 · 짝 · 출생 · 성장
             pf = Prof.Lap("sys.Generation", pf);

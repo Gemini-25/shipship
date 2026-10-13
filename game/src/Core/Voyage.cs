@@ -164,6 +164,7 @@ public sealed partial class VoyageSystem
                 w.History.Add(w, HistoryKind.Decision, $"{leg.Name}에 닿았다", null, log: true);
                 Trade(leg);
                 w.Dock.OnPort(leg); // v18.5 거룻배 도킹 · 손님
+                w.Homeland?.Port(); // v23 사람 · 소식 · 고향 재료 — 향수병이 누그러진다
                 break;
             case LegKind.Derelict:
                 w.RaiseAlert($"{leg.Name} — 건질 것이 있는지 본다", null, AlertLevel.Notice, shipWide: true);

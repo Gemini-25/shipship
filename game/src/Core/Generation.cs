@@ -106,6 +106,7 @@ public sealed partial class GenerationSystem
         Comings++;
         w.History.Add(w, HistoryKind.Bond, $"{Ko.IGa(c.Name)} 열네 살 — 이제 {CrewRoles.Name(c.Role)} 일을 배운다", c.Room, new[] { c }, log: true);
         Life.Diary(w, c, "오늘부터 일을 한다.");
+        w.Knowledge.NewAdult(c); // v23 부사수 자리부터
     }
 
     /// <summary>새해: 지난 일 하나를 기린다 (가장 큰 사고, 아니면 첫 항해).</summary>
