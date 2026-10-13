@@ -31,6 +31,7 @@ public partial class Hud
         const float width = 344f;
         float x = Margin, y = _plan.CosmicY; // v17.6 왼쪽 위 더미에 쌓는다
         if (e == null && DrawPlanetPanel(x, y, width, mouse)) return; // v23 행성 카드 (대재난이 없을 때 그 자리에)
+        if (e == null && cs.Sky.Count == 0 && cs.Customs.Count == 0 && DrawMissionPanel(x, y, width, mouse)) return; // v23 임무 띠 (그것도 없을 때)
         if (e == null)
         {
             if (cs.Sky.Count == 0 && cs.Customs.Count == 0) return;

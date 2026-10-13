@@ -234,6 +234,7 @@ public sealed partial class PlanetSystem
                 }
                 else { w.Research += 8f; m.Found = "땅의 기록 (연구)"; }
                 w.Log.Add(w.Tick, LogKind.Work, $"{d.Name}: {m.Name}을 살폈다 — {m.Found}");
+                w.Purpose?.Data(1, $"{m.Name}을 살폈다");
                 if (Surveys == 1) w.History.Add(w, HistoryKind.Milestone, $"{Here?.Name}의 {m.Name}을 처음 살폈다 — {m.Found}", null, log: true);
                 break;
             }

@@ -261,6 +261,7 @@ public static partial class Program
         if (args.Contains("--planettest")) return RunPlanetTest(seed); // v23 행성
         if (args.Contains("--planetweathertest")) return RunPlanetWeatherTest(seed); // v23 행성 날씨
         if (args.Contains("--planetworktest")) return RunPlanetWorkTest(seed); // v23 행성 기지
+        if (args.Contains("--missiontest")) return RunMissionTest(seed); // v23 항해의 목적
         if (args.Contains("--story21test")) return RunStory21Test(seed); // v21 이야기꾼 · 난이도 세분화
         if (args.FirstOrDefault(a => a.StartsWith("--foodprobe=")) is string fp) return RunFoodProbe(seed, fp[12..]); // v21 먹을 것 탐침
         if (args.Contains("--campaign15test")) return RunCampaign15Test(seed); // v15.6

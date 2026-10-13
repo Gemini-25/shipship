@@ -68,6 +68,7 @@ public sealed partial class VoyageSystem
         {
             KindsSeen.Add((int)Current.Kind);
             w.History.Add(w, HistoryKind.Milestone, $"처음 본 창밖 — {v.Name} ({v.Line})", null);
+            w.Purpose?.Data(1, $"처음 본 {v.Name}");
         }
     }
 

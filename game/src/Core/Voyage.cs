@@ -342,9 +342,15 @@ public sealed partial class VoyageSystem
     }
 
     /// <summary>목적지: 항해를 정리하고 (연대기 요약) 다음 항해를 잡는다.</summary>
+    /// <summary>v23 목적지에 닿아 항해를 정리하는 중.</summary>
+    public bool Finishing { get; private set; }
+
     private void Finish()
     {
         var w = _w;
+        Finishing = true;
+        w.Purpose?.Arrive(); // v23 임무 매듭 · 항해의 책 · 이어받기
+        Finishing = false;
         float days = (w.Tick - StartTick) / (float)SimTime.TicksPerDay;
         int inc = w.Causes.Incidents.Count - _incidents0, deaths = w.History.Deaths - _deaths0, techs = w.Eras.Known.Count - _techs0;
         var top = w.Causes.Incidents.Skip(_incidents0).OrderByDescending(i => i.Weight(w.Causes)).FirstOrDefault();

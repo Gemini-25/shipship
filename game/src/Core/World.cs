@@ -102,6 +102,9 @@ public sealed class World
     /// <summary>v23 행성: 착륙 창 · 고르기 · 착륙 · 머무름 · 이륙 · 불시착.</summary>
     public PlanetSystem Planet { get; }
 
+    /// <summary>v23 항해의 목적과 끝: 임무 · 갈림길 · 늦은 통신 · 도착 · 항해의 책.</summary>
+    public PurposeSystem Purpose { get; }
+
     /// <summary>v11.2 엔진·추진제·항로: 회피 기동, 보통 항로 ↔ 잔해 지대.</summary>
     public PropulsionSystem Propulsion { get; }
 
@@ -311,6 +314,7 @@ public sealed class World
         Eyes = new EyeNet(this);
         Album = new SceneBook(this);
         Planet = new PlanetSystem(this);
+        Purpose = new PurposeSystem(this);
         Propulsion = new PropulsionSystem(this, 1f);
         Hazards = new HazardSystem(this, seed);
         Comms = new CommsSystem(this);
@@ -591,6 +595,7 @@ public sealed class World
             pf = Prof.Lap("sys.Eras", pf);
             Voyage.Update(dt); // v12.8 항로 구간 · 기항지 · 난파선
             Planet.Update(dt); // v23 행성
+            Purpose.Update(dt); // v23 항해의 목적 (임무 · 갈림길 · 늦은 통신)
             pf = Prof.Lap("sys.Voyage", pf);
             Generation.Update(dt); // v12.9 나이 · 짝 · 출생 · 성장
             pf = Prof.Lap("sys.Generation", pf);

@@ -33,6 +33,8 @@ public sealed partial class PlanetSystem
     private readonly Rng _rng;
     /// <summary>시험용: 착륙 창을 열지 않는다.</summary>
     public static bool Off;
+    /// <summary>시험용: 불시착을 굴리지 않는다.</summary>
+    public static bool NoCrash;
 
     public PlanetPhase Phase { get; private set; }
     public long PhaseSince { get; private set; }
@@ -116,9 +118,9 @@ public sealed partial class PlanetSystem
         Stats.Windows++;
         Go(PlanetPhase.Window);
         // 가끔 불시착: 엔진이 시원찮으면 더 잦다
-        float eng = w.Propulsion.Engines.Select(m => m.Efficiency).DefaultIfEmpty(0f).Max();
+        float eng = w.Propulsion.Engines.Select(m => m.FaultFactor * (0.6f + 0.4f * m.Condition)).DefaultIfEmpty(0f).Max(); // 꺼 둔 엔진은 고장이 아니다 — 고장 · 상태로 본다
         float crash = 0.015f * Storyteller.Level + (eng < 0.4f ? 0.25f : 0f) + (w.Propulsion.Propellant < w.Propulsion.Capacity * 0.05f ? 0.15f : 0f);
-        if (forceCrash || _rng.Chance(crash)) { Crash(Candidates.OrderByDescending(c => c.Danger).First()); return; }
+        if (forceCrash || _rng.Chance(crash) && !NoCrash) { Crash(Candidates.OrderByDescending(c => c.Danger).First()); return; }
         string list = string.Join(" · ", Candidates.Select(c => $"{c.Title} (위험 {c.KnownDanger * 100:0}% · 보상 {c.KnownReward * 100:0}% · 확실 {c.Certainty * 100:0}%)"));
         Note($"착륙 창 — 후보 {Candidates.Count}: {list}");
         w.Log.Add(w.Tick, LogKind.Ship, $"주 컴퓨터: 내릴 만한 행성 {Candidates.Count}곳을 멀리서 본다 — {string.Join(" · ", Candidates.Select(c => c.Title))}");
@@ -128,7 +130,7 @@ public sealed partial class PlanetSystem
     public float ShipStrain()
     {
         var w = _w;
-        float eng = w.Propulsion.Engines.Select(m => m.Efficiency).DefaultIfEmpty(1f).Average();
+        float eng = w.Propulsion.Engines.Select(m => m.FaultFactor * (0.6f + 0.4f * m.Condition)).DefaultIfEmpty(1f).Average();
         int leaking = w.Ship.LiveRooms.Count(r => r.Leaking);
         int hurt = w.Crew.Count(c => !c.Dead && c.Vitals.Health < 0.6f);
         return Math.Clamp((1f - eng) * 0.6f + leaking * 0.15f + hurt * 0.08f, 0f, 1f);
@@ -168,11 +170,14 @@ public sealed partial class PlanetSystem
             p.CompNote = string.Join(" · ", why);
         }
         var best = Candidates.OrderByDescending(c => c.CompScore).First();
-        bool go = best.CompScore > 0.05f && strain < 0.55f;
+        bool hurry = w.Purpose?.Behind == true && Need(best) < 0.6f; // v23 임무 기한이 빠듯하다
+        bool go = best.CompScore > 0.05f && strain < 0.55f && !hurry;
         if (!go)
         {
             Stats.Skipped++;
-            Decision = strain >= 0.55f ? $"지나친다 — 배가 상해 내릴 때가 아니다 (상한 정도 {strain * 100:0}%)" : $"지나친다 — 내릴 만한 곳이 없다 (가장 나은 {best.Title}: {best.CompNote})";
+            Decision = strain >= 0.55f ? $"지나친다 — 배가 상해 내릴 때가 아니다 (상한 정도 {strain * 100:0}%)"
+                : hurry ? $"지나친다 — 임무 기한이 빠듯하다 (남은 길 {w.Purpose!.RouteLeft:0.0}일 · 기한 {w.Purpose.DaysLeft:0.0}일)"
+                : $"지나친다 — 내릴 만한 곳이 없다 (가장 나은 {best.Title}: {best.CompNote})";
             Note(Decision);
             w.Log.Add(w.Tick, LogKind.Ship, $"주 컴퓨터: 행성에 {Decision}");
             Candidates.Clear();
@@ -224,6 +229,7 @@ public sealed partial class PlanetSystem
         w.RaiseAlert(crash ? $"불시착 — {p.Title} · 고치기 전엔 뜰 수 없다" : $"착륙 — {p.Title} · {p.StayDays:0.0}일 머문다", null, crash ? AlertLevel.Critical : AlertLevel.Notice, shipWide: true);
         w.History.Add(w, HistoryKind.Milestone, (crash ? "불시착 — " : "행성에 내렸다 — ") + $"{p.Title} · {p.Line}{feats}{hidden}", null, log: true);
         OnLanded(p, crash);
+        w.Purpose?.Data(2, $"{p.Name}에 내렸다");
     }
 
     /// <summary>불시착: 예고 없이 내려앉는다 — 충격 · 선체 균열 · 엔진 고장.</summary>
