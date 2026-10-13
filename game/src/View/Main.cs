@@ -126,6 +126,7 @@ public partial class Main : Node2D
 
     private Starfield _stars = null!;
     public SceneShooter Shooter { get; private set; } = null!;
+    public PlanetGround? Ground { get; private set; }
     private double _accumulator;
     private string? _screenshotPath;
     private int _screenshotFrames = -1;
@@ -207,6 +208,9 @@ public partial class Main : Node2D
         background.AddChild(_stars);
         background.AddChild(new CosmicSky { Name = "CosmicSky", Main = this }); // v18.13 우주 대재난 하늘 · 섬광 · 소리 · 바깥 시점
 
+        Ground = new PlanetGround { Name = "PlanetGround" }; // v23 행성 땅 (배 그림 아래)
+        AddChild(Ground);
+        Ground.Init(this);
         ShipView = new ShipView { Name = "Ship" };
         AddChild(ShipView);
         ShipView.Init(this, Sim);
@@ -215,6 +219,11 @@ public partial class Main : Node2D
         AddChild(Camera);
         Camera.MakeCurrent();
 
+        var weather = new CanvasLayer { Name = "PlanetWeather", Layer = 4 }; // v23 행성 날씨 연출 (이름표 · 화면 글 아래)
+        AddChild(weather);
+        var wfx = new PlanetWeatherFx { Name = "WeatherFx" };
+        weather.AddChild(wfx);
+        wfx.Init(this);
         var labels = new CanvasLayer { Name = "Labels", Layer = 5 };
         AddChild(labels);
         var overlay = new LabelOverlay { Name = "LabelOverlay" };
@@ -313,6 +322,7 @@ public partial class Main : Node2D
         _stars.Debris = Sim.Propulsion.Zone == ZoneKind.Debris;
         _stars.Storm = Sim.Hazards.StormActive ? 1f : 0f;
         _stars.Leg = (int)Sim.Voyage.Current.Kind; // v23 구간 풍경
+        _stars.Visible = (Ground?.Alpha ?? 0f) < 0.99f; // v23 행성 땅이 하늘을 덮었다
 
         AutoSaveTick(); // v19 자동 저장 (5분마다)
         PacedGc(); // v19 60프레임
@@ -1070,6 +1080,25 @@ public partial class Main : Node2D
                     if (tab == DockTab.Computer && ob.Length > 3) Hud.ControlSub = int.Parse(ob[3], CultureInfo.InvariantCulture);
                     break;
                 }
+                case "--planet":
+                {
+                    // 화면 확인용 (v23 행성): --planet=thunder (특별 행성 열쇠) | random | random:crash — 바로 내려앉는다
+                    var pb = value.Split(':');
+                    var pr = new Rng(Sim.Seed * 31 + 5);
+                    var planet = pb[0] == "random" || pb[0].Length == 0 ? Sim.Planet.NewPlanet(Storyteller.Level) : PlanetGen.Special(pr, 950, pb[0]);
+                    Sim.Planet.LandNow(planet, crash: pb.Length > 1 && pb[1] == "crash");
+                    break;
+                }
+                case "--wx":
+                {
+                    // 화면 확인용 (v23 행성 날씨): --wx=Thunder:0.9
+                    var wb = value.Split(':');
+                    if (Enum.TryParse<PlanetWeather>(wb[0], out var pw)) Sim.Planet.SetWeather(pw, wb.Length > 1 ? float.Parse(wb[1], CultureInfo.InvariantCulture) : 0.8f, 6f);
+                    break;
+                }
+                case "--planetwindow": // 화면 확인용 (v23): 착륙 창을 바로 연다 (후보 카드)
+                    Sim.Planet.OpenWindow();
+                    break;
                 case "--leg":
                 {
                     // 화면 확인용 (v23 창밖 풍경): --leg=GasGiant — 그 구간으로 바로 간다

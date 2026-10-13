@@ -46,13 +46,13 @@ public sealed partial class PlanetSystem
         get
         {
             if (!Landed || Here == null) return Atmosphere.ShellC;
-            float k = Here.Pressure < 1f ? 0.12f : 0.25f + MathF.Min(0.15f, Here.Pressure / 2000f);
+            float k = Here.Pressure < 1f ? 0.12f : 0.2f + MathF.Min(0.1f, Here.Pressure / 3000f); // 선체 단열이 바깥 기온을 많이 걸러 낸다
             return Math.Clamp(Atmosphere.ShellC + (OutsideC - Atmosphere.ShellC) * k, -60f, 75f);
         }
     }
 
     /// <summary>외벽으로 드나드는 열 배율 (대기가 있으면 바람이 열을 실어 나른다).</summary>
-    public float HullHeatMul => !Landed || Here == null || Here.Pressure < 1f ? 1f : 1f + MathF.Min(0.6f, Here.Pressure / 200f) + 0.8f * Wind;
+    public float HullHeatMul => !Landed || Here == null || Here.Pressure < 1f ? 1f : 1f + MathF.Min(0.3f, Here.Pressure / 400f) + 0.5f * Wind;
 
     /// <summary>태양 날개에 드는 빛 배율 (밤 · 모래 폭풍 · 눈보라 · 두꺼운 대기).</summary>
     public float SolarMul
@@ -142,7 +142,9 @@ public sealed partial class PlanetSystem
             w.RaiseAlert($"{p.Name} {fc}", null, AlertLevel.Notice, shipWide: true);
         }
         bool wasShelter = Sheltering;
-        Sheltering = Severe(Weather) && WxPower >= 0.35f || Forecasted >= 0 && Severe(NextWx) && toNext <= ForecastLead;
+        // 바람 폭풍은 35%부터 · 뇌우 · 산성비 · 폭염은 60%부터 밖 일을 멈춘다 (드론이 날아갈 수는 있다)
+        static float Gate(PlanetWeather x) => Windy(x) ? 0.35f : 0.6f;
+        Sheltering = Severe(Weather) && WxPower >= Gate(Weather) || Forecasted >= 0 && Severe(NextWx) && NextWxPower >= Gate(NextWx) && toNext <= ForecastLead;
         if (Sheltering) Shelter();
         else if (wasShelter) { Hunkered = false; w.Log.Add(w.Tick, LogKind.Ship, $"주 컴퓨터: {p.Name} 날씨가 누그러졌다 — 밖 일을 다시 연다"); }
 
@@ -169,7 +171,7 @@ public sealed partial class PlanetSystem
         {
             case PlanetWeather.Thunder:
             {
-                float rate = 1.4f * pw * (p.Has(PlanetFeature.Static) ? 1.3f : 1f) * (p.Has(PlanetFeature.StrongMagnet) ? 1.2f : 1f);
+                float rate = 1.0f * pw * (p.Has(PlanetFeature.Static) ? 1.3f : 1f) * (p.Has(PlanetFeature.StrongMagnet) ? 1.2f : 1f);
                 if (_wx.Chance(MathF.Min(0.9f, rate * dt))) Strike(outsideDrones, outsideCrew);
                 break;
             }
@@ -241,7 +243,7 @@ public sealed partial class PlanetSystem
             return;
         }
         var ext = w.Exterior.All.Where(f => f.Condition > 0.05f).ToList();
-        if (ext.Count > 0 && x < 0.65f)
+        if (ext.Count > 0 && x < 0.75f)
         {
             var f = ext.OrderBy(f => f.Kind == ExtKind.Antenna ? 0 : 1).ThenBy(_ => _wx.Float()).First(); // 안테나가 가장 높다
             w.Exterior.Damage(f, 0.3f + _wx.Range(0f, 0.35f), "번개");
