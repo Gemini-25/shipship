@@ -78,8 +78,21 @@ public sealed class Ship
         else foreach (var d in Cell.Dirs4) if (IsOpenFloor(cell + d) && RoomAt(cell + d) == room) f.UseSpots.Add(cell + d);
         f.Label = $"{f.Name} #{Furniture.Count(x => x.Type == type)}";
         if (MachineSpecs.For(type) is MachineSpec spec) f.Machine = new Machine(f, spec);
+        f.Storage ??= StorageFor(type); // v23 운항 중에 단 배식기 · 냉장고에도 보관함 (설비 보충한 배식기가 비어 있어 일감 훑기가 멈췄다)
         return f;
     }
+
+    /// <summary>설비 종류마다 붙는 보관함 (배를 지을 때 · 운항 중에 달 때 같다).</summary>
+    public static Inventory? StorageFor(FurnitureType type) => type switch
+    {
+        FurnitureType.Shelf => new Inventory(60, ItemKinds.Shelved),
+        FurnitureType.Collector => new Inventory(CollectionSystem.BinSize * 4 + 5, ItemKinds.RawKinds), // 채집 호퍼 (종류별 칸)
+        FurnitureType.SuitLocker => new Inventory(2, ItemKind.Suit),
+        FurnitureType.Fridge => new Inventory(150, ItemKind.Produce, ItemKind.Meal),
+        FurnitureType.DroneDock => new Inventory(12, ItemKind.Structure, ItemKind.Plate, ItemKind.Sealant), // 드론이 싣고 나갈 자재
+        FurnitureType.MealDispenser => new Inventory(20, ItemKind.Meal),
+        _ => null,
+    };
 
     /// <summary>v10.1: 여러 칸짜리 가구 (항해 중에 짜 넣는 재배대).</summary>
     public Furniture AddFurniture(FurnitureType type, IReadOnlyList<Cell> cells)
@@ -393,16 +406,7 @@ public static class ShipBuilder
             seq[f.Type] = seq.TryGetValue(f.Type, out int n) ? n + 1 : 1;
             f.Label = counts[f.Type] > 1 ? $"{f.Name} #{seq[f.Type]}" : f.Name;
             if (MachineSpecs.For(f.Type) is MachineSpec spec) f.Machine = new Machine(f, spec);
-            f.Storage = f.Type switch
-            {
-                FurnitureType.Shelf => new Inventory(60, ItemKinds.Shelved),
-                FurnitureType.Collector => new Inventory(CollectionSystem.BinSize * 4 + 5, ItemKinds.RawKinds), // 채집 호퍼 (종류별 칸)
-                FurnitureType.SuitLocker => new Inventory(2, ItemKind.Suit),
-                FurnitureType.Fridge => new Inventory(150, ItemKind.Produce, ItemKind.Meal),
-                FurnitureType.DroneDock => new Inventory(12, ItemKind.Structure, ItemKind.Plate, ItemKind.Sealant), // 드론이 싣고 나갈 자재
-                FurnitureType.MealDispenser => new Inventory(20, ItemKind.Meal),
-                _ => null,
-            };
+            f.Storage = Ship.StorageFor(f.Type);
         }
 
         // 6) 문 (한쪽이 우주면 외부 해치)

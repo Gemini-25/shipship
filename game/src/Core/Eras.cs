@@ -44,7 +44,7 @@ public sealed class EraSystem
     public float[] Insight { get; } = new float[8];
     public EraStats Stats { get; } = new();
     /// <summary>기술 하나의 값 배율 (설정 파일 · 시험). 보통 배에서 작은 기술은 엿새 남짓, 시대 하나는 한두 달.</summary>
-    public static float CostScale = 2.0f;
+    public static float CostScale = 2.3f;
     /// <summary>배 크기 배율: 사람이 많으면 연구도 빠르니 값도 조금 크다 ((사람/8)^0.35 — 첫 날 정한다).</summary>
     public float SizeMul { get; private set; } = 1f;
     /// <summary>기술을 지키는 솜씨: 살아 있는 사람 가운데 이만큼 하는 사람이 없으면 날이 센다.</summary>
