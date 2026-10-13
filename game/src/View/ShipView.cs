@@ -698,6 +698,8 @@ public partial class ShipView : Node2D
         PaintNavLights(ci); // v10.9 항해등
         PaintRadiators(ci); // v9 선체 밖 방열판
         PaintExterior(ci); // v12.6 안테나·태양 날개
+        PaintMeetShip(ci); // v23 나란히 선 다른 배
+        PaintFestival(ci); // v23 축제 줄 전구
         PaintHullKind(ci); // v18.8 뼈대 · 용도마다 다른 선체 바깥 (바퀴 · 컨테이너 · 덧댄 판 · 집게 · 탱크 · 온실)
         PaintScorch(ci);
         PaintBlastScars(ci); // v16.13 폭발 흔적 (방사형 그을음 · 깨진 조명 · 날아간 문짝 · 추모)

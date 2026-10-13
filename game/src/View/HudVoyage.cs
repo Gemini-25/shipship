@@ -49,6 +49,10 @@ public partial class Hud
         Gfx.TextRight(this, Fonts.Body, new Vector2(bar.End.X - 10f, bar.Position.Y + 36f), era, Ui.TextTiny, Palette.TextMuted);
         if (_world.Big.Line() is string big) // v23 큰 사고 (전자기 펄스 · 노심 카운트다운 …)
             Gfx.Text(this, Fonts.Bold, new Vector2(bar.Position.X + 10f, bar.Position.Y - 6f), big, Ui.TextSmall, Palette.Danger);
+        else if (_world.Parasite.Line() is string para) // v23 외계 기생체
+            Gfx.Text(this, Fonts.Bold, new Vector2(bar.Position.X + 10f, bar.Position.Y - 6f), para, Ui.TextSmall, Palette.Warning);
+        else if (_world.Encounters.Line() is string meet) // v23 나란히 선 다른 배
+            Gfx.Text(this, Fonts.Body, new Vector2(bar.Position.X + 10f, bar.Position.Y - 6f), UiKit.Fit(meet, bar.Size.X - 20f, Ui.TextSmall, Fonts.Body), Ui.TextSmall, new Color("#ffe8a3"));
         if (_world.Env.Line() is string env) // v23 극한 환경: 어디 · 몇 도 · 날씨 · 위험 · 센 기제 · 낌새
             Gfx.Text(this, Fonts.Body, new Vector2(bar.Position.X + 10f, bar.Position.Y + 36f), UiKit.Fit(env, bar.Size.X * 0.58f, Ui.TextTiny, Fonts.Body), Ui.TextTiny, _world.Env.Pending.Count > 0 ? Palette.Warning : new Color("#9ad0ff"));
     }

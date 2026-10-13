@@ -211,6 +211,22 @@ public sealed partial class MotionSystem
     public Faction? FactionOf(CrewMember c) => Factions.FirstOrDefault(f => !f.Gone && f.Members.Contains(c.Id));
     public bool Summoned(CrewMember c) => Now is { } s && s.Invited.Contains(c.Id) && (s.End <= 0 || _w.Tick < s.End);
     public bool Feasting => _feastAt >= 0 && _w.Tick >= _feastAt && _w.Tick < _feastEnd;
+
+    /// <summary>v23 축제 · 명절 · 다른 배와의 잔치: 저녁 7시(이미 지났으면 한 시간 뒤)에 잔치를 연다.</summary>
+    public bool ScheduleFeast(Room? venue, string why, float hours = 1.5f)
+    {
+        var w = _w;
+        if (Off || Feasting || _feastAt >= 0 && w.Tick < _feastEnd) return false;
+        float hour = SimTime.HourOfDay(w.Tick);
+        long day0 = w.Tick - w.Tick % SimTime.TicksPerDay;
+        _feastAt = hour < 18f ? day0 + SimTime.Hours(19f) : w.Tick + SimTime.Hours(1);
+        _feastEnd = _feastAt + SimTime.Hours(hours);
+        _feastDone = false;
+        FeastRoom = venue ?? w.Ship.Rooms.FirstOrDefault(r => r.Kind == RoomType.Mess && !r.Detached) ?? w.Ship.Rooms.FirstOrDefault(r => r.Type == RoomType.Lounge);
+        w.Log.Add(w.Tick, LogKind.Ship, $"{why} — {SimTime.Clock(_feastAt)} {FeastRoom?.Name ?? "식당"}에서 잔치");
+        return true;
+    }
+    public long FeastAt => _feastAt;
     /// <summary>승무원이 선장 불신임 서명을 돌리고 있다 (정기 회의의 자동 불신임 대신).</summary>
     public bool ConfidencePending => !Off && All.Any(m => m.Kind == MotionKind.Confidence
         && (m.Stage is MotionStage.Ready or MotionStage.Sitting || m.Stage == MotionStage.Signing && _w.Tick - m.Born < SimTime.TicksPerDay));

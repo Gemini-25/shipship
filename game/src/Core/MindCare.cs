@@ -336,6 +336,7 @@ public sealed class MindCareSystem
         if (cs.LastRobot >= 0 && now - cs.LastRobot < win && cs.RobotSessions > 0) g += 0.8f * cs.RobotEff;
         if (cs.LastPlay >= 0 && now - cs.LastPlay < win) g += 0.4f;
         if (a.Id == "insomnia" && Aided(c)) g += 0.8f;
+        g += _w.Pets.ComfortGain(c); // 반려동물 곁
         return g;
     }
 

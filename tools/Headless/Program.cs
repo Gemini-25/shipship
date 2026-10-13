@@ -78,7 +78,7 @@ public static partial class Program
     private const string Fixed = "fixed"; // 회의 · 관찰자가 컴퓨터 권한을 바꾸는 장면 (v23 전권 고정이면 바뀌지 않는다)
     private const string Robots23 = "commander,relay,eyes,brain"; // 사고 지휘관 · 구역 중계기 · 눈의 그물 · 로봇 두뇌가 먼저 맡아 사람 장면이 흐려진다
     private const string Nozzle = "nozzle"; // 천장 자동 소화가 불을 먼저 끈다 — 사람이 불에 대응하는 장면
-    private const string Legacy23 = "nozzle,commander,relay,eyes,brain,mind"; // v23 말벗 로봇도 (로봇 한 대가 더 실린다) // 둘 다
+    private const string Legacy23 = "nozzle,commander,relay,eyes,brain,mind,pets,meet"; // v23 말벗 로봇도 (로봇 한 대가 더 실린다) // 둘 다
     private const string All23 = Legacy23 + "," + Fixed; // 셋 다 — 컴퓨터가 묻지 않고 환기 · 댐퍼부터 닫으면 냄새 · 가스 장면이 사라진다
     // 감정 · 공황 · 일 순서를 보는 확률 장면: 오늘 넣은 것(대개편 · 향수병의 슬픔 · 지식 전수 · 행성 · 임무)이 끼면 기대한 때에 장면이 안 나온다
     //   → 예전 조건에서 본다 (기준 코드에서 통과 · 장치를 다 끄면 통과 — 회귀 v23)
@@ -125,6 +125,8 @@ public static partial class Program
                 case "big": BigIncidentSystem.Off = true; break;
                 case "self": ComputerSelfSystem.Off = true; break;
                 case "parasite": ParasiteSystem.Off = true; break;
+                case "pets": PetSystem.Off = true; break;
+                case "meet": EncounterSystem.Off = true; break;
             }
         int days = args.Length > 0 && int.TryParse(args[0], out var d) ? d : 14;
         int seed = args.Length > 1 && int.TryParse(args[1], out var s) ? s : 20260929;
@@ -315,6 +317,7 @@ public static partial class Program
         if (args.Contains("--envtest")) return RunEnvTest(seed); // v23 극한 환경 사고
         if (args.Contains("--bigtest")) return RunBigTest(seed); // v23 큰 사고 여섯
         if (args.Contains("--arcstest")) return RunArcsTest(seed); // v23 주컴퓨터의 자아 · 외계 기생체 · 도전 시나리오
+        if (args.Contains("--funtest")) return RunFunTest(seed); // v23 볼거리 (반려동물 · 살아 있는 행성 · 다른 배 · 상륙 · 축제)
         if (args.Contains("--story21test")) return RunStory21Test(seed); // v21 이야기꾼 · 난이도 세분화
         if (args.FirstOrDefault(a => a.StartsWith("--foodprobe=")) is string fp) return RunFoodProbe(seed, fp[12..]); // v21 먹을 것 탐침
         if (args.Contains("--campaign15test")) return RunCampaign15Test(seed); // v15.6

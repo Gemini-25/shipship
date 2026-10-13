@@ -13,6 +13,51 @@ public partial class Hud
     private float _sceneAt = -1000f;
     private int _albumPage;
     private const float SceneOpenSec = 10f;
+    // v23 하이라이트 다시보기: 점수 높은 장면을 날짜 순으로 한 장씩 (장면마다 그 방으로 화면이 간다)
+    private List<int> _reel = new();
+    private int _reelAt = -1;
+    private float _reelT;
+    private const float ReelSec = 4.5f;
+
+    private void StartReel()
+    {
+        var book = _world.Album;
+        _reel = book.Shots.OrderByDescending(s => s.Score).ThenBy(s => s.Id).Take(10).OrderBy(s => s.Tick).Select(s => s.Id).ToList();
+        _reelAt = _reel.Count > 0 ? 0 : -1;
+        _reelT = _time;
+        ReelFocus();
+    }
+
+    private void ReelFocus()
+    {
+        if (_reelAt < 0 || _reelAt >= _reel.Count) return;
+        if (_world.Album.Get(_reel[_reelAt]) is SceneShot s && s.RoomId >= 0 && _world.Ship.Rooms.FirstOrDefault(r => r.Id == s.RoomId) is Room room && !room.Detached)
+            _main.FocusRoom(room);
+    }
+
+    private void DrawReel()
+    {
+        if (_reelAt < 0) return;
+        if (_time - _reelT > ReelSec) { _reelAt++; _reelT = _time; if (_reelAt >= _reel.Count) { _reelAt = -1; return; } ReelFocus(); }
+        if (_world.Album.Get(_reel[_reelAt]) is not SceneShot s) { _reelAt = -1; return; }
+        float t = _time - _reelT, a = Mathf.Clamp(t / 0.3f, 0f, 1f) * Mathf.Clamp((ReelSec - t) / 0.3f, 0f, 1f);
+        float right = _plan.Side.Empty ? ColX + RightColumnWidth : ColX - UiLayout.Gap;
+        float pw = MathF.Min(420f, right - Margin * 2f - 36f), ph = pw * SceneShooter.H / SceneShooter.W;
+        float w = pw + 36f, h = 50f + ph + 62f;
+        float cx = (Margin + right) * 0.5f, y0 = Margin + UiLayout.TopBarH + 50f;
+        var card = new Rect2(cx - w * 0.5f, y0, w, h);
+        Card(card);
+        float x = card.Position.X + 18f, y = y0 + 26f;
+        Gfx.Text(this, Fonts.Bold, new Vector2(x, y), "다시보기", Ui.TextTitle, Palette.Text);
+        Gfx.TextRight(this, Fonts.Body, new Vector2(card.End.X - 18f, y), $"{_reelAt + 1}/{_reel.Count} · 누르면 그만", Ui.TextTiny, Palette.TextMuted);
+        y += 14f;
+        DrawSceneFrame(new Rect2(x, y, pw, ph), s, a, 1.2f);
+        Gfx.Text(this, Fonts.Bold, new Vector2(x, y + ph + 20f), UiKit.Fit($"{s.Day}일 {SimTime.Clock(s.Tick)} · {s.Title}", pw, Ui.TextSmall, Fonts.Bold), Ui.TextSmall, Palette.Text.WithAlpha(a));
+        Gfx.Text(this, Fonts.Body, new Vector2(x, y + ph + 40f), UiKit.Fit(s.Text, pw, Ui.TextTiny, Fonts.Body), Ui.TextTiny, Palette.TextDim.WithAlpha(a));
+        // 진행 막대
+        this.Box(new Rect2(x, card.End.Y - 8f, pw * Mathf.Clamp(t / ReelSec, 0f, 1f), 2f), SceneTint(s.Kind));
+        _buttons.Add((card, () => _reelAt = -1));
+    }
 
     private static Color SceneTint(HistoryKind k) => k switch
     {
@@ -93,6 +138,13 @@ public partial class Hud
         float x = card.Position.X + 18f, y = card.Position.Y + 30f, right = card.End.X - 18f, bottom = card.End.Y - 12f, wd = right - x;
         Gfx.Text(this, Fonts.Bold, new Vector2(x, y), "사진첩", Ui.TextTitle, Palette.Text);
         Gfx.TextRight(this, Fonts.Body, new Vector2(right, y), $"장면 {book.Shots.Count}장 · 오늘 후보 {book.Today.Count}", Ui.TextTiny, Palette.TextMuted);
+        if (book.Shots.Count > 0)
+        {
+            var reel = new Rect2(x + 90f, y - 16f, 96f, 22f);
+            Gfx.RoundRect(this, reel, reel.HasPoint(mouse) ? Palette.Accent.WithAlpha(0.25f) : new Color(1, 1, 1, 0.06f), 4f, Palette.Accent.WithAlpha(0.6f));
+            Gfx.TextCentered(this, Fonts.Bold, reel.GetCenter() + new Vector2(0, 5f), _reelAt >= 0 ? "■ 그만" : "▶ 다시보기", Ui.TextTiny, Palette.Accent);
+            _buttons.Add((reel, () => { if (_reelAt >= 0) _reelAt = -1; else StartReel(); }));
+        }
         y += 14f;
         if (book.Shots.Count == 0)
         {

@@ -302,6 +302,7 @@ public static class PlanetGen
             var bits = new List<string> { p.Body != PlanetBody.Rocky ? BodyName(p.Body) : $"{ClimateName(p.Climate)} {SurfaceName(p.Surface)}", $"{p.TempC:0}°C", p.Pressure <= 0.5f ? "대기 없음" : p.Pressure > 1000f ? $"짓누르는 대기 {p.Pressure / 101f:0}기압" : $"대기 {p.Pressure:0}kPa", $"중력 {p.Gravity:0.0}G" };
             var rough = p.Weathers.Where(x => x != PlanetWeather.Calm).Distinct().Select(x => WeatherName(p, x)).ToList();
             if (rough.Count > 0) bits.Add(string.Join("·", rough));
+            if (PetSystem.LifeOf(p) > 0.05f) bits.Add($"생명: {PetSystem.LifeLine(p)}"); // v23 살아 있는 행성
             p.Line = string.Join(" · ", bits);
         }
     }

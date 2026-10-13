@@ -58,6 +58,7 @@ public partial class ShipView
                 if (q > 0.45f && close) EcoArt.Queasy(ci, at + new Vector2(0, -16f), q, _time);
             }
         }
+        foreach (var pet in w.Pets.Pets) if (!pet.Gone) PetArt.Draw(ci, pet, ToPx(pet.Pos), _time, close); // v23 반려동물 · 외계 생물
         if (w.Eco.Cat is ShipCat cat)
         {
             int stripe = cat.Name.Length * 7 + cat.Name[0];
