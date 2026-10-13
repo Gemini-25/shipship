@@ -13,7 +13,7 @@ namespace ShipSim.Core;
 //  · 구조 드론: 견인 원형 — 떠내려간 사람 · 드론을 빨리 · 세게 끌어온다.
 //  모든 드론은 기본 바깥일(연결부 보강 · 죔쇠 · 연결 해제 · 방열판 수리)을 한다 — 특기 드론보다 느리다.
 
-public enum DroneErrand : byte { None, Guard, Mine, Polish, Relay, /* v23 구역 중계기가 꺼진 구역 */ Zone }
+public enum DroneErrand : byte { None, Guard, Mine, Polish, Relay, /* v23 구역 중계기가 꺼진 구역 */ Zone, /* v23 행성 땅: 캐기 · 짓기 · 살피기 */ Dig, Raise, Survey }
 
 public sealed partial class Drone
 {
@@ -46,7 +46,8 @@ public static class DronesV21
 
     public static string ErrandName(DroneErrand e) => e switch
     {
-        DroneErrand.Guard => "운석 길목 지키기", DroneErrand.Mine => "얼음 · 금속 먼지 캐기", DroneErrand.Polish => "방열판 닦기", DroneErrand.Relay => "무전 중계", DroneErrand.Zone => "구역 무전 임시 중계", _ => "",
+        DroneErrand.Guard => "운석 길목 지키기", DroneErrand.Mine => "얼음 · 금속 먼지 캐기", DroneErrand.Polish => "방열판 닦기", DroneErrand.Relay => "무전 중계", DroneErrand.Zone => "구역 무전 임시 중계",
+        DroneErrand.Dig => "행성 땅 캐기", DroneErrand.Raise => "행성 기지 짓기", DroneErrand.Survey => "행성 땅 살피기", _ => "",
     };
 
     public static float ErrandHours(Drone d) => d.Errand switch
@@ -55,6 +56,7 @@ public static class DronesV21
         DroneErrand.Polish => 0.5f,
         DroneErrand.Relay => 1f,
         DroneErrand.Zone => 0.5f,
+        DroneErrand.Dig => 2f, DroneErrand.Raise => 1.5f, DroneErrand.Survey => 1f,
         _ => 0.25f, // Guard: 아래에서 운석이 올 때까지로 다시 잡는다
     };
 }
@@ -69,7 +71,17 @@ public sealed partial class DroneSystem
     private bool Errand(Drone d)
     {
         var w = _world;
-        if (!RobotsV21.General || FleetSystem.Off) return false;
+        if (FleetSystem.Off) return false;
+        // v23 행성 땅: 짓기 · 살피기 · 캐기 (날씨가 사나우면 나가지 않는다)
+        if (w.Planet.DroneJob(d) is (DroneErrand pe, Vector2 pat, int ptarget, string plabel) && TripCost(d, pat, DronesV21.ErrandHours(d)) <= d.Battery)
+        {
+            d.Errand = pe;
+            d.ErrandSpot = pat;
+            d.GuardFor = ptarget;
+            Launch(d, pat, plabel);
+            return true;
+        }
+        if (!RobotsV21.General) return false;
         switch (d.Kind)
         {
             case DroneKind.Shield:
@@ -187,6 +199,9 @@ public sealed partial class DroneSystem
             }
             case DroneErrand.Zone when ZoneStays(d):
                 return false;
+            case DroneErrand.Dig or DroneErrand.Raise or DroneErrand.Survey:
+                w.Planet.DroneDone(d, d.Errand, d.GuardFor);
+                break;
             case DroneErrand.Relay when w.Crew.Any(c => !c.Dead && c.Outside) && d.Battery > ReturnCost(d) + 0.2f:
                 d.WorkDone = 0f; // 아직 밖에 사람이 있다 — 더 머문다
                 d.WorkNeeded = 0.5f;

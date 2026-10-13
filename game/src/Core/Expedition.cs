@@ -443,7 +443,7 @@ public sealed class ExpeditionSystem
         {
             var leg = w.Voyage.Current.Kind;
             float total = 0f;
-            var weights = ExpeditionSites.All.Select(s => s.Likes.Contains(leg) ? 3f : s.Kind == SiteKind.Signal ? 0.5f : 1f).ToArray();
+            var weights = ExpeditionSites.All.Select(s => s.Kind == SiteKind.Surface ? 0f : s.Likes.Contains(leg) ? 3f : s.Kind == SiteKind.Signal ? 0.5f : 1f).ToArray(); // v23 행성 지표는 내려앉았을 때만
             total = weights.Sum();
             float x = R.Float() * total;
             int pick = 0;
@@ -452,6 +452,26 @@ public sealed class ExpeditionSystem
         }
         Evaluate();
     }
+
+    /// <summary>v23 착륙한 행성의 먼 곳 (걸어서 가는 원정 목적지).</summary>
+    public Site AddPlanetSite(string name, float dist, float risk, float yield, float cert)
+    {
+        var w = _w;
+        var s = new Site
+        {
+            Id = _nextSite++, Kind = SiteKind.Surface, Name = name, Dist = MathF.Round(dist * 10f) / 10f, Risk = risk, Yield = MathF.Round(yield), Certainty = cert,
+            Truth = Math.Clamp(1f + R.Range(-0.4f, 0.4f) * (1.1f - cert), 0.3f, 2f), TrueRisk = Math.Clamp(risk * R.Range(0.8f, 1.3f), 0.02f, 0.95f),
+            Found = w.Tick, Expires = w.Tick + SimTime.Hours(24 * 8), By = "착륙 관측", Seed = R.Range(0, 100000),
+        };
+        Sites.Add(s);
+        return s;
+    }
+
+    /// <summary>v23 떠날 때: 행성의 먼 곳은 지운다 (가는 중이 아니면).</summary>
+    public void DropPlanetSites() => Sites.RemoveAll(s => s.Kind == SiteKind.Surface && !s.Taken);
+
+    /// <summary>v23 행성의 먼 곳에 나간 원정대가 아직 밖에 있다.</summary>
+    public bool PlanetTripOut => Current is Trip t && t.Site.Kind == SiteKind.Surface && t.Phase is TripPhase.Gathering or TripPhase.Away or TripPhase.Back;
 
     private Site Add(SiteKind kind, float q, string by, float certBonus)
     {
@@ -496,7 +516,10 @@ public sealed class ExpeditionSystem
         }
     }
 
-    public Site? ComputerPick => _w.Automation.Present && _w.Automation.MainOnline ? Sites.Where(s => !s.Taken).OrderByDescending(s => s.CompScore).ThenBy(s => s.Id).FirstOrDefault() : null;
+    /// <summary>v23 지금 갈 수 있는 곳: 행성에 내려앉았으면 그 땅만 · 우주에 있으면 우주의 목적지만.</summary>
+    public bool Reach(Site s) => _w.Planet.Landed ? s.Kind == SiteKind.Surface : s.Kind != SiteKind.Surface;
+
+    public Site? ComputerPick => _w.Automation.Present && _w.Automation.MainOnline ? Sites.Where(s => !s.Taken && Reach(s)).OrderByDescending(s => s.CompScore).ThenBy(s => s.Id).FirstOrDefault() : null;
 
     // ═══════════════════════════════ 주 컴퓨터: 예측 · 경고 ═══════════════════════════════
 
@@ -571,21 +594,21 @@ public sealed class ExpeditionSystem
         if (adults.Count < 2) return;
         MatCat? need = Halted ? HaltCat : _asked ?? Cats.Where(Low).Cast<MatCat?>().FirstOrDefault(); // v16.16 컴퓨터 계획자가 청한 재료
         if (need is not MatCat cat) return;
-        if (Sites.All(s => s.Taken)) { if (w.Tick >= _nextScan - SimTime.Hours(2)) Scan(); if (Sites.All(s => s.Taken)) return; }
+        if (Sites.All(s => s.Taken || !Reach(s))) { if (w.Tick >= _nextScan - SimTime.Hours(2) && !w.Planet.Landed) Scan(); if (Sites.All(s => s.Taken || !Reach(s))) return; }
         Evaluate();
         // 누가 알아챘나: 그 재료를 손에 쥐는 사람 (멈췄으면 모두)
         var noticers = adults.Where(c => Halted || Notices(c, cat)).ToList();
         var comp = ComputerPick;
         bool compSays = comp != null && (Halted || _asked == cat || Forecasts.Any(f => f.cat == cat && w.Tick - f.tick < SimTime.TicksPerDay * 2));
         // 좋은 목표가 보이면 멈추지 않아도 꺼낸다 (가깝고 · 확실하고 · 덜 위험하고 · 모자란 것을 채운다)
-        Site? Good(CrewMember? judge) => Sites.Where(s => !s.Taken && (Halted || s.Certainty >= 0.55f && s.Risk <= 0.38f && s.Dist <= 1.1f && ExpeditionSites.Fills(s.Kind, cat) >= 0.25f))
+        Site? Good(CrewMember? judge) => Sites.Where(s => !s.Taken && Reach(s) && (Halted || s.Certainty >= 0.55f && s.Risk <= 0.38f && s.Dist <= 1.1f && ExpeditionSites.Fills(s.Kind, cat) >= 0.25f))
             .OrderByDescending(s => s.Yield * (0.3f + 0.7f * s.Certainty) * (0.5f + ExpeditionSites.Fills(s.Kind, cat)) - s.Risk * (judge == null ? 12f : 22f - 18f * judge.Traits.Bravery) - s.Dist * 2f)
             .ThenBy(s => s.Id).FirstOrDefault();
         CrewMember? proposer = noticers.OrderByDescending(c => Initiative(c, cat)).ThenBy(c => c.Id).FirstOrDefault(c => Initiative(c, cat) > 0.5f);
         Site? site = proposer != null ? Good(proposer) : compSays ? (Halted || _asked == cat ? comp : Good(null)) : null;
         // 관찰자가 고른 후보 (방침 "원정 목적지")
         int pickNo = w.Policies["expsite"];
-        var open = Sites.Where(s => !s.Taken).ToList();
+        var open = Sites.Where(s => !s.Taken && Reach(s)).ToList();
         if (pickNo > 0 && pickNo <= open.Count) site = open[pickNo - 1];
         if (site == null) return;
         _nextPropose = w.Tick + SimTime.Hours(Halted ? 8f : 60f);
@@ -747,7 +770,7 @@ public sealed class ExpeditionSystem
         if (order == 1) { Close(p, true, "관찰자", "당장 보낸다 (방침)"); return; }
         // 관찰자가 원정 창에서 다른 후보를 골랐다 (방침 "원정 목적지")
         int pickNo = w.Policies["expsite"];
-        var open = Sites.Where(s => !s.Taken).ToList();
+        var open = Sites.Where(s => !s.Taken && Reach(s)).ToList();
         if (pickNo > 0 && pickNo <= open.Count && open[pickNo - 1] != p.Site)
         {
             var ns = open[pickNo - 1];

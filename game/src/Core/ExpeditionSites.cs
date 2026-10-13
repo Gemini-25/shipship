@@ -8,7 +8,7 @@ namespace ShipSim.Core;
 // 센서가 찾은 목적지는 "알려진 값"(거리 · 위험 · 예상 수확 · 확실성)과 "실제 값"(Truth · TrueRisk)이 다르다 — 세계 ≠ 사람이 아는 것.
 // 사건은 한 줄짜리 이벤트가 아니라 원정대의 구성(솜씨 · 성격 · 관계 · 부상) · 장비 · 날씨 · 해적 · 목적지 종류가 무게를 바꾼다.
 
-public enum SiteKind { Asteroid, IceComet, Wreck, Station, Moon, Debris, Container, Signal }
+public enum SiteKind { Asteroid, IceComet, Wreck, Station, Moon, Debris, Container, Signal, /* v23 착륙한 행성의 먼 곳 (걸어서) */ Surface }
 
 /// <summary>재료 갈래 여섯 (바닥나면 배가 멈춘다).</summary>
 public enum MatCat { Repair, Structure, Parts, Fuel, Water, Food }
@@ -87,6 +87,10 @@ public static class ExpeditionSites
             L((ItemKind.Electronics, 0.18f), (ItemKind.Rare, 0.1f), (ItemKind.Sensor, 0.1f), (ItemKind.Plate, 0.14f), (ItemKind.Ration, 0.12f), (ItemKind.MedKit, 0.1f), (ItemKind.Ice, 0.12f), (ItemKind.Structure, 0.14f)),
             0.2f, 0.45f, 0.6f, false, "맥박치는 고리 · 무늬가 도는 전파",
             new[] { "되풀이되는 신호 원", "숫자를 읽는 목소리", "침묵 사이의 박동" }, K(LegKind.DeepVoid, LegKind.Pulsar, LegKind.Nebula)),
+        new(SiteKind.Surface, "행성 지표", "#c9a46a", 0.15f, 0.5f, 0.3f, 12f, 0.75f,
+            L((ItemKind.MetalOre, 0.3f), (ItemKind.Ice, 0.25f), (ItemKind.Silicate, 0.15f), (ItemKind.Carbon, 0.15f), (ItemKind.Rare, 0.15f)),
+            0f, 0f, 0.35f, false, "낯선 땅 · 바람 자국 · 먼 능선",
+            new[] { "먼 능선", "마른 강바닥", "검은 분화구", "얼음 동굴 입구" }, K()),
     };
 
     public static SiteSpec Spec(SiteKind k) => All[(int)k];
@@ -318,8 +322,8 @@ public static class ExpeditionSites
 
         // ── 소행성 ──
         new("spin", "빙글 도는 바위", S(SiteKind.Asteroid), 1f, null, x => { x.Delay(0.2f); return x.Line($"바위가 빙글 돈다 — 그늘과 햇빛이 번갈아 오가 닻을 다시 박았다 · {x.Haul(2)}", 0); }),
-        new("dust", "먼지 구름", S(SiteKind.Asteroid, SiteKind.Moon), 0.8f, null, x => { x.T.Dusty += 0.3f; return x.Line($"먼지가 피어올라 헬멧이 뿌옇다 — 손으로 더듬어 캤다 · {x.Haul(2)}", 0); }),
-        new("vein", "희귀 광맥", S(SiteKind.Asteroid, SiteKind.Moon, SiteKind.Debris), 0.5f, x => x.Site.Truth, x =>
+        new("dust", "먼지 구름", S(SiteKind.Asteroid, SiteKind.Moon, SiteKind.Surface), 0.8f, null, x => { x.T.Dusty += 0.3f; return x.Line($"먼지가 피어올라 헬멧이 뿌옇다 — 손으로 더듬어 캤다 · {x.Haul(2)}", 0); }),
+        new("vein", "희귀 광맥", S(SiteKind.Asteroid, SiteKind.Moon, SiteKind.Debris, SiteKind.Surface), 0.5f, x => x.Site.Truth, x =>
         {
             int n = x.R.Range(1, 3);
             x.Add(ItemKind.Rare, n);
@@ -338,7 +342,7 @@ public static class ExpeditionSites
             x.Hurt(m, 0.1f, "원정 중 가스 분출에 튕김");
             return x.Line($"분출구가 발밑에서 터졌다 — {Ko.IGa(m.Name)} 튕겨 나갔다 ({x.SuitStage(m)})", -1);
         }),
-        new("clearice", "맑은 얼음", S(SiteKind.IceComet, SiteKind.Moon), 0.9f, null, x => { x.Add(ItemKind.Ice, 4); return x.Line("투명한 얼음층 — 녹이면 바로 마실 물 (얼음 4)", 1); }),
+        new("clearice", "맑은 얼음", S(SiteKind.IceComet, SiteKind.Moon, SiteKind.Surface), 0.9f, null, x => { x.Add(ItemKind.Ice, 4); return x.Line("투명한 얼음층 — 녹이면 바로 마실 물 (얼음 4)", 1); }),
         // ── 난파선 ──
         new("logbook", "항해 일지", S(SiteKind.Wreck, SiteKind.Station), 0.8f, null, x =>
         {
@@ -403,6 +407,34 @@ public static class ExpeditionSites
             return x.Line("낮은 중력에서 껑충껑충 — 누가 먼저 넘어지나 내기를 했다", 1);
         }),
         new("regolith", "표토", S(SiteKind.Moon), 0.8f, null, x => { x.T.Dusty += 0.4f; return x.Line($"고운 표토가 우주복 이음매마다 끼었다 · {x.Haul(3)}", 0); }),
+        // ── v23 행성 지표 (걸어서) ──
+        new("pstorm", "날씨가 덮쳤다", S(SiteKind.Surface), 1f, x => PlanetSystem.Severe(x.W.Planet.Weather) ? 2f : 0.3f, x =>
+        {
+            var m = x.Any();
+            x.Delay(0.3f);
+            if (x.R.Chance(0.4f + 0.3f * x.Calm)) return x.Line($"{PlanetGen.WeatherName(PlanetSystem.Severe(x.W.Planet.Weather) ? x.W.Planet.Weather : PlanetWeather.Wind)} — 바위 그늘에 웅크려 지나가길 기다렸다", -1);
+            x.Suit(m, 0.2f);
+            x.Hurt(m, 0.08f, "원정 중 행성 날씨에 휩쓸림");
+            return x.Line($"날씨가 덮쳤다 — {Ko.IGa(m.Name)} 쓸려 넘어졌다 ({x.SuitStage(m)})", -1);
+        }),
+        new("vista", "능선 위의 풍경", S(SiteKind.Surface), 0.8f, null, x =>
+        {
+            x.StressAll(-0.06f);
+            return x.Line($"능선에 올라섰다 — {x.W.Planet.Here?.Name ?? "이 행성"}의 지평선이 끝없이 이어졌다. 한참 아무 말도 하지 않았다", 2);
+        }),
+        new("sinkfall", "꺼지는 땅", S(SiteKind.Surface), 0.6f, x => x.W.Planet.Here?.Has(PlanetFeature.Sinkholes) == true ? 2f : 0.4f, x =>
+        {
+            var m = x.Any();
+            x.Hurt(m, 0.1f, "원정 중 꺼진 땅에 빠짐");
+            x.Delay(0.2f);
+            return x.Line($"발밑이 꺼졌다 — {Ko.IGa(m.Name)} 구덩이에 빠졌다가 밧줄로 끌어 올렸다", -1);
+        }),
+        new("crystals", "수정 밭", S(SiteKind.Surface), 0.6f, x => x.W.Planet.Here?.Rich.GetValueOrDefault(ItemKind.Rare) > 0.3f ? 2f : 0.3f, x =>
+        {
+            int n = x.R.Range(2, 4);
+            x.Add(ItemKind.Rare, n);
+            return x.Line($"빛나는 수정 밭 — 깨지지 않게 조심조심 {n}개를 떼어 냈다 (희귀 소재 {n})", 2);
+        }),
         // ── 잔해 구름 ──
         new("fastdebris", "빠른 파편", S(SiteKind.Debris), 1f, x => 0.5f + x.Risk, x =>
         {

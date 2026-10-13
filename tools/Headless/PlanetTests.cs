@@ -79,7 +79,7 @@ public static partial class Program
             c.Planet.OpenWindow(forceCrash: true);
             Run(c, 30);
             string? why = c.Planet.CannotLift();
-            bool enginesDown = !c.Propulsion.Engines.Any(m => m.Efficiency > 0.3f);
+            bool enginesDown = !c.Propulsion.Engines.Any(m => m.FaultFactor * (0.6f + 0.4f * m.Condition) > 0.3f);
             Check("불시착 — 예고 없는 충격 · 엔진 고장 · 선체 균열 · 고치기 전엔 못 뜬다",
                 c.Planet.Phase == PlanetPhase.Landed && c.Planet.Crashed && why != null && enginesDown && c.Maneuver.Recent.Any(m => m.Kind == ManeuverKind.Impact) && c.History.Events.Any(e => e.Text.StartsWith("불시착")),
                 $"{c.Planet.Decision} · 못 뜨는 까닭: {why ?? "없음"} · 새는 방 {leak0} → {c.Ship.LiveRooms.Count(r => r.Leaking)}");

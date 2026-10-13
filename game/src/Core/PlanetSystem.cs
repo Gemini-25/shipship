@@ -248,7 +248,7 @@ public sealed partial class PlanetSystem
     public string? CannotLift()
     {
         var w = _w;
-        if (!w.Propulsion.Engines.Any(m => m.Efficiency > 0.3f)) return "엔진이 멎었다";
+        if (!w.Propulsion.Engines.Any(m => m.FaultFactor * (0.6f + 0.4f * m.Condition) > 0.3f)) return "엔진이 멎었다"; // 땅에선 엔진을 꺼 둔다 — 고장 · 상태로 본다
         if (w.Propulsion.Capacity > 0f && w.Propulsion.Propellant < w.Propulsion.Capacity * 0.04f) return "추진제가 모자란다";
         if (w.Ship.LiveRooms.Any(r => r.Leaking)) return "선체가 새고 있다";
         return null;
@@ -294,6 +294,7 @@ public sealed partial class PlanetSystem
         var p = Here!;
         if (early.Length > 0) Stats.Early++;
         float g = Math.Clamp(0.25f + 0.18f * p.Gravity, 0.2f, 0.65f);
+        foreach (var e in w.Propulsion.Engines) e.Parked = false; // 꺼 둔 엔진을 다시 켠다
         var m = w.Maneuver.Begin(ManeuverKind.Landing, 6f, g, $"{p.Name} 이륙", 10f);
         LiftAt = m.End;
         Go(PlanetPhase.Liftoff);

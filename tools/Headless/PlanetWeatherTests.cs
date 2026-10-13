@@ -71,7 +71,7 @@ public static partial class Program
                 w.Planet.SetWeather(PlanetWeather.DustStorm, 1f, 10f);
                 float solar = w.Planet.SolarMul;
                 Run(w, SimTime.Hours(8));
-                int clogged = w.Ship.Machines.Count(m => m.Has(FaultKind.FilterClogged));
+                int clogged = w.Planet.Harm.GetValueOrDefault("막힌 필터"); // 막힌 횟수 (로봇이 그새 갈아 끼우기도 한다)
                 Check("모래 폭풍 · 유독 먼지 — 필터가 막히고 태양 빛이 끊긴다", clogged >= 1 && solar < 0.35f, $"막힌 필터 {clogged} · 태양 빛 {solar:0.00} · {string.Join(" · ", w.Planet.Harm.Select(kv => $"{kv.Key} {kv.Value}"))}");
             }
             // 5) 타는 행성 · 얼어붙은 행성: 선체 온도 → 공조

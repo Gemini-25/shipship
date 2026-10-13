@@ -54,6 +54,7 @@ scenerytest 1 7 --scenerytest
 albumtest 1 7 --albumtest
 planettest 1 7 --planettest
 planetweathertest 1 7 --planetweathertest
+planetworktest 1 7 --planetworktest
 story21test 1 7 --story21test
 hazardtest 1 20260929 --hazardtest
 livingtest 1 20260929 --livingtest
