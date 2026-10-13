@@ -236,7 +236,9 @@ public sealed class PowerTriage
             a.Book.Add(ActKind.Shed, p.Reactor?.Body.Room, $"노심 {p.ReactorTemperature:0}℃ (경고 {PowerGrid.OverheatWarnC:0}℃)", "냉각이 출력을 못 따라간다 — 긴급 정지면 몇 시간 못 켠다", $"원자로 출력 상한 {ReactorCap * 100:0}%", "냉각 계통을 본다", "rtrim", SimTime.Minutes(15), 30f,
                 (world, act) => (world.Power.ReactorOnline ? 1 : -1, world.Power.ReactorOnline ? "맞았다 — 긴급 정지 없이 버텼다" : "틀렸다 — 그래도 정지했다"));
         }
-        else if (ReactorCap < 1f && (!p.ReactorOnline || p.ReactorTemperature < PowerGrid.OverheatWarnC - 60f))
+        // 되돌리는 선: 평소 노심(300~315℃)보다 높아야 한다 — 290℃였을 때는 한 번 낮추면 평소 온도로는 영영 풀리지 않아
+        // 출력이 70%에 묶이고, 모자란 전기에 부하 차단이 엔진을 세워 배가 표류했다 (회귀 v23 항해 시험)
+        else if (ReactorCap < 1f && (!p.ReactorOnline || p.ReactorTemperature < PowerGrid.OverheatWarnC - 40f))
             ReactorCap = MathF.Min(1f, ReactorCap + 0.1f);
 
         // 원자로 재기동: 냉각이 돌아왔으면 기관사에게 (제어봉은 손으로)
