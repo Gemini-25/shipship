@@ -197,6 +197,7 @@ public sealed class AmbienceSystem
     {
         RoomType.Observatory or RoomType.Garden => 1.35f,
         RoomType.Theater or RoomType.Chapel or RoomType.Meditation => 1.25f,
+        RoomType.Arcade => 1.3f, // v23 마음 돌봄 오락실
         RoomType.Gym or RoomType.Centrifuge => 1.1f,
         _ => 1f,
     } * (room == null ? 1f : 1f - 0.3f * room.Noise - 0.3f * room.Smell) * ModulesV15.RelaxMul(room) // v15 커피 머신 · 영사기 · 수조 …

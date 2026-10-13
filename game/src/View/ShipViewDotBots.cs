@@ -15,7 +15,7 @@ public partial class ShipView
         RobotKind.Courier => 1, RobotKind.Tanker => 2, RobotKind.Stocker => 3, RobotKind.Lineman => 4, RobotKind.Assistant => 5, RobotKind.Overhauler => 6,
         RobotKind.Harvester => 7, RobotKind.Tender => 8, RobotKind.Sentry => 9, RobotKind.Firefighter => 10, RobotKind.Utility => 11,
         RobotKind.Cleaner => 12, RobotKind.Chef => 13, RobotKind.Plumber => 14, RobotKind.Lifter => 15, RobotKind.Ventman => 16,
-        RobotKind.Rescuer => 17, RobotKind.Sealer => 18, RobotKind.Airman => 19, RobotKind.Medic => 20, _ => 0, // v21
+        RobotKind.Rescuer => 17, RobotKind.Sealer => 18, RobotKind.Airman => 19, RobotKind.Medic => 20, RobotKind.Companion => 21, _ => 0, // v21 · v23 말벗
     };
 
     private static int DroneBadge(DroneKind k) => k switch
@@ -34,7 +34,7 @@ public partial class ShipView
         var kind = r.Kind;
         l.Shape = kind switch
         {
-            RobotKind.Nurse or RobotKind.Medic => DotBotKind.Nurse,
+            RobotKind.Nurse or RobotKind.Medic or RobotKind.Companion => DotBotKind.Nurse, // v23 말벗 로봇은 간호 로봇의 둥근 몸
             RobotKind.Stretcher or RobotKind.Rescuer => DotBotKind.Stretcher,
             _ => RobotsV15.Base(kind) switch { RobotKind.Hauler => DotBotKind.Hauler, RobotKind.Gardener => DotBotKind.Gardener, RobotKind.Safety => DotBotKind.Safety, _ => DotBotKind.Maintainer },
         };
@@ -79,7 +79,7 @@ public partial class ShipView
         var kind = r.Kind;
         l.Shape = kind switch
         {
-            RobotKind.Nurse or RobotKind.Medic => DotBotKind.Nurse,
+            RobotKind.Nurse or RobotKind.Medic or RobotKind.Companion => DotBotKind.Nurse, // v23 말벗 로봇은 간호 로봇의 둥근 몸
             RobotKind.Stretcher or RobotKind.Rescuer => DotBotKind.Stretcher,
             _ => RobotsV15.Base(kind) switch { RobotKind.Hauler => DotBotKind.Hauler, RobotKind.Gardener => DotBotKind.Gardener, RobotKind.Safety => DotBotKind.Safety, _ => DotBotKind.Maintainer },
         };

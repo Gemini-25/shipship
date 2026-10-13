@@ -110,6 +110,7 @@ public sealed class World
 
     /// <summary>v23 외부 세계 기억 (향수병 · 생일 · 추모일 · 배의 생일).</summary>
     public HomelandSystem Homeland { get; }
+    public MindCareSystem MindCare { get; } // v23 마음 돌봄 (말벗 로봇 · 사람 상담 · 오락실)
 
     /// <summary>v11.2 엔진·추진제·항로: 회피 기동, 보통 항로 ↔ 잔해 지대.</summary>
     public PropulsionSystem Propulsion { get; }
@@ -323,6 +324,7 @@ public sealed class World
         Purpose = new PurposeSystem(this);
         Knowledge = new KnowledgeSystem(this);
         Homeland = new HomelandSystem(this);
+        MindCare = new MindCareSystem(this);
         Propulsion = new PropulsionSystem(this, 1f);
         Hazards = new HazardSystem(this, seed);
         Comms = new CommsSystem(this);
@@ -606,6 +608,7 @@ public sealed class World
             Purpose.Update(dt); // v23 항해의 목적 (임무 · 갈림길 · 늦은 통신)
             Knowledge.Update(dt); // v23 지식 전수
             Homeland.Update(dt); // v23 향수병 · 기념일
+            MindCare.Update(dt); // v23 마음 돌봄
             pf = Prof.Lap("sys.Voyage", pf);
             Generation.Update(dt); // v12.9 나이 · 짝 · 출생 · 성장
             pf = Prof.Lap("sys.Generation", pf);

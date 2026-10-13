@@ -71,6 +71,7 @@ public static class Brain
         new ReactActivity(), // v17.8 반응에서 이어지는 짧은 행동 (장비 · 담요 · 창가 · 소리 확인 · 말 걸기 · 위로 · 구경)
         new StoryActivity(), // v18.16 · v18.17 밤 모임 · 할 말 있는 사람 찾아가기 · 이야기의 장소 · 연인 곁
         new OmenCheckActivity(), new FixtureUseActivity(), // 압축-마 낌새 살피기 · 흔적 치우기 · 새 설비 쓰기
+        new CareActivity(), // v23 마음 돌봄 (주컴퓨터가 부탁한 사람 곁에서 오래 이야기)
         new ChatActivity(),
         new RelaxActivity(),
         new WanderActivity(),
@@ -120,6 +121,7 @@ public static class Brain
             var (score, reason) = a.Score(c, w, dist);
             pt = Prof.Lap(a.ScoreKey, pt);
             // 위기 판단: 비상·생존 위기에는 잠·휴식을 미룬다 (탈진 직전이면 쪽잠)
+            if (a is RelaxActivity or HobbyActivity && score > 0f && w.MindCare.Resting(c)) { score += 0.3f; reason += " · 주컴퓨터가 쉬라고 했다"; } // v23 마음 돌봄
             if (a is RelaxActivity or ChatActivity or WanderActivity or HobbyActivity or MendActivity or ReachOutActivity) score *= w.Society.LeisureFactor; // v13.4 휴식·여가 방침
             w.Brain2.Tilt(c, a, ref score, ref reason); // v16.15 장 · 중기 목표와 감정이 점수를 기울인다
             float damp = Crisis.Damp(c, w, a, out var note);

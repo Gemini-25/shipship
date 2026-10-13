@@ -326,6 +326,7 @@ public static class DotBots
             18 => (Ramps.Steel, "###" + "#.#" + "###"),    // 덮개판
             19 => (Ramps.Glass, ".#." + "#.#" + ".#."),    // 공기 방울
             20 => (Ramps.Alarm, ".#." + "###" + ".#."),    // 붉은 십자
+            21 => (Ramps.Led, "###" + "###" + "#.."),      // v23 말풍선 (말벗)
             _ => (Ramps.Led, ".#." + "###" + ".#."),       // 더하기
         };
         for (int j = 0; j < 3; j++) for (int i = 0; i < 3; i++) if (pat[j * 3 + i] == '#') d.Mark(x + i, y + j, ramp, ramp == Ramps.Fire ? 5 : 3);

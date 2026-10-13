@@ -59,6 +59,7 @@ public static class Modules
         foreach (var room in w.Ship.RoomsOf(spec.Room))
         {
             if (room.Abandoned || room.Leaking || room.OffLimits) continue;
+            if (spec.Type is FurnitureType.ArcadeCabinet or FurnitureType.VrChair && room.Kind != RoomType.Arcade) continue; // v23 오락실에만
             int have = room.Furniture.Count(f => f.Type == spec.Type);
             if (have >= spec.Max) continue;
             var (need, why) = Need(w, spec.Type);

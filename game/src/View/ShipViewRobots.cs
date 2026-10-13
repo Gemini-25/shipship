@@ -41,6 +41,7 @@ public partial class ShipView
         RobotKind.Cleaner => new Color("#8fd0c8"), RobotKind.Chef => new Color("#f0a070"), RobotKind.Plumber => new Color("#5a8fb0"),
         RobotKind.Lifter => new Color("#d8b030"), RobotKind.Ventman => new Color("#9ab8d8"), RobotKind.Rescuer => new Color("#ff7a3a"),
         RobotKind.Sealer => new Color("#b04a3a"), RobotKind.Airman => new Color("#7ad0f0"), RobotKind.Medic => new Color("#f4f4f4"),
+        RobotKind.Companion => new Color("#c8a8f0"), // v23 말벗 로봇 (연보라)
         _ => new Color("#cccccc"),
     };
 

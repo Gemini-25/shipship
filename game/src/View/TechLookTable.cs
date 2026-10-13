@@ -441,6 +441,9 @@ public static class TechLookTable
         K(FurnitureType.NegPressure, Improv.BoltedFan, Trim.Chevron, 0x5fb0ffff, "filter@.78,.4", "rotor@.36,.5 hood@.78,.05", "field@.36,.5 plating@.9,.9"),
         // 의료 3차
         K(FurnitureType.SurgicalArm, Improv.ZipTies, Trim.HaloRing, 0x5dff9aff, "arm@.5,.5", "screen@.2,.86 cables@.5,.95", "holo@.5,.3 chip@.84,.2"),
+        // v23 마음 돌봄 — 오락실
+        K(FurnitureType.ArcadeCabinet, Improv.TapedScreen, Trim.EdgeGlow, 0xff7ad0ff, "screen@.5,.3", "lamp@.5,.02 strip@.5,.98", "holo@.5,.4 chip@.85,.8"),
+        K(FurnitureType.VrChair, Improv.DuctTape, Trim.HaloRing, 0x9ad0ffff, "cushion@.5,.6", "hood@.5,.15 cables@.9,.9", "holo@.5,.2 field@.5,.5"),
     };
 
     private static Dictionary<FurnitureType, TierKit>? _kits;

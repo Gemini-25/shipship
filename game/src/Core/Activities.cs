@@ -482,6 +482,7 @@ public sealed class RelaxActivity : Activity
             value *= AmbienceSystem.RelaxFactor(seat.Room); // v12.6 관측실·정원은 더 끌린다, 시끄러운 곳은 덜
             value += 0.5f * (0.6f - c.Fitness) * Facilities.Factor(seat.Room, "exercise"); // 몸이 굳었으면 운동하러
             value += 0.8f * c.Memory.Trauma * Facilities.Factor(seat.Room, "grief"); // 마음이 무거우면 기도실로
+            if (seat.Room.Kind == RoomType.Arcade) value += 0.25f + 0.6f * c.Needs.Stress + 0.4f * w.Homeland.Of(c); // v23 지치거나 고향이 그리우면 오락실로
             foreach (var o in w.Crew)
             {
                 if (o == c || (o.Position - seat.Center).Length() > 3f) continue;

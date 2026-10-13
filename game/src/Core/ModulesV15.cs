@@ -82,6 +82,11 @@ public static class ModulesV15
             0.5f, Skill.Mechanics, F(FaultKind.BeltSlip, FaultKind.BrushWear), w => w.Crew.Any(c => c.Ailments.Any(a => a.Id is "boneloss" or "atrophy")) ? (0.4f, "뼈와 근육이 약해진 사람") : Research(w, 20f)),
         new(FurnitureType.PlantWall, "식물 벽", RoomType.Mess, ModuleRole.Relax, 0.1f, C((ItemKind.Seed, 1), (ItemKind.Nutrient, 1), (ItemKind.Mesh, 1)), "식당에서 10% 더 풀린다",
             0.1f, Skill.Botany, F(FaultKind.NutrientImbalance), w => w.Daily.Stats.Seen.Contains("bloom") ? (0.25f, "꽃 핀 걸 다들 보러 갔다") : Research(w, 15f)),
+        // v23 마음 돌봄 — 오락실 (MindCare.cs): 오락실이 생기면 들인다
+        new(FurnitureType.ArcadeCabinet, "오락기", RoomType.Lounge, ModuleRole.Relax, 0.15f, C((ItemKind.Electronics, 1), (ItemKind.Lamp, 1), (ItemKind.Plate, 1)), "오락실에서 15% 더 풀린다 · 둘이 붙어 겨루면 웃음이 난다",
+            0.25f, Skill.Electrical, F(FaultKind.DisplayFault, FaultKind.FanFail), w => w.MindCare.ArcadeNeed(FurnitureType.ArcadeCabinet)),
+        new(FurnitureType.VrChair, "가상 고향 의자", RoomType.Lounge, ModuleRole.Relax, 0.1f, C((ItemKind.Electronics, 2), (ItemKind.Sensor, 1)), "고향 풍경 · 소리를 보여 준다 — 향수병이 풀리고 깊은 상처가 조금씩 아문다",
+            0.2f, Skill.Electrical, F(FaultKind.DisplayFault), w => w.MindCare.ArcadeNeed(FurnitureType.VrChair)),
         // 안전
         new(FurnitureType.EmergencyLight, "비상등", RoomType.Corridor, ModuleRole.Light, 1f, C((ItemKind.Lamp, 1), (ItemKind.CellPack, 1)), "정전·조명 고장에도 그 방이 어둡지 않다",
             0.05f, Skill.Electrical, F(FaultKind.LampBurnout, FaultKind.DiodeFail), w => w.Fixtures.LightFailures >= 1 || w.History.DarkHours > 0.5f ? (0.4f, "캄캄한 통로를 겪었다") : No),

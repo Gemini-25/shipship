@@ -122,6 +122,7 @@ public static class RobotsV21
         var list = new List<RobotKind>(n);
         for (int i = 0; i < First.Length && list.Count < n; i++) list.Add(First[i]);
         for (int i = 0; list.Count < n; i++) list.Add(Bulk[i % Bulk.Length]);
+        if (beds >= 3 && !MindCareSystem.Off && list.Count < RobotCap) list.Add(RobotKind.Companion); // v23 마음 돌봄: 세 사람 넘는 배는 말벗 로봇 한 대를 더 싣는다
         return list.ToArray();
     }
 
@@ -141,6 +142,7 @@ public static class RobotsV21
         RobotKind.Lineman => new[] { RoomType.Power, RoomType.Substation, RoomType.Workshop, RoomType.RobotBay, RoomType.Storage },
         RobotKind.Harvester or RobotKind.Tender => new[] { RoomType.Hydroponics, RoomType.Garden, RoomType.AlgaeLab, RoomType.MushroomFarm, RoomType.RobotBay, RoomType.Storage },
         RobotKind.Courier or RobotKind.Tanker => new[] { RoomType.Mess, RoomType.Galley, RoomType.Storage, RoomType.RobotBay, RoomType.Corridor },
+        RobotKind.Companion => new[] { RoomType.Lounge, RoomType.Mess, RoomType.Medbay, RoomType.Quarters, RoomType.RobotBay, RoomType.Storage },
         _ => Array.Empty<RoomType>(),
     };
 

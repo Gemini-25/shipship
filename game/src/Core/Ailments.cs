@@ -316,7 +316,7 @@ public sealed class AilmentSystem
             worst = MathF.Max(worst, sev);
             work *= 1f - s.Work * sev;
             walk *= 1f - s.Walk * sev;
-            sleep = MathF.Max(sleep, s.Sleep * sev / MathF.Max(0.01f, s.Peak));
+            sleep = MathF.Max(sleep, s.Sleep * sev / MathF.Max(0.01f, s.Peak) * (a.Id == "insomnia" && w.MindCare.Aided(c) ? 0.5f : 1f)); // v23 잠 처방을 받은 밤은 덜 설친다
             panic += s.Panic * sev / MathF.Max(0.01f, s.Peak);
             // 누워야 하는 병: 침대로 낫는 병 · 약으로 낫는 위험한 병은 심할 때만 (약이 없다고 영영 눕지는 않는다)
             if (s.Cure == Cure.Bed || s.Cure == Cure.Medic && s.Health > 0f && sev > 0.55f) bed = MathF.Max(bed, sev);
@@ -356,7 +356,8 @@ public sealed class AilmentSystem
                 case Cure.Exercise: gain = c.Fitness > 0.5f ? (c.Fitness - 0.4f) * 3f : 0f; break;
                 case Cure.Company:
                     bool friend = w.Crew.Any(o => o != c && !o.Dead && o.IsAwake && (o.Position - c.Position).LengthSquared() < 9f && (o.Quals.Contains(Qual.Counseling) || c.AffinityTo(o) > 0.3f));
-                    gain = (friend ? 1.5f : 0f) + (w.Society.Morale > 0.6f ? 0.3f : 0f) + (c.Needs.Stress < 0.3f ? 0.3f : 0f);
+                    gain = (friend ? 1.5f : 0f) + (w.Society.Morale > 0.6f ? 0.3f : 0f) + (c.Needs.Stress < 0.3f ? 0.3f : 0f)
+                           + w.MindCare.CureGain(c, a); // v23 마음 돌봄: 상담 · 말벗 로봇 · 오락실 · 잠 처방
                     break;
             }
             if (s.Chronic) a.Healed += gain * day;

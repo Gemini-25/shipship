@@ -31,6 +31,9 @@ public sealed class HomelandSystem
     }
 
     /// <summary>하루에 자라는 향수병 (향수병 기질 · 승객은 더 · 아이는 덜 · 배에서 태어나면 없음).</summary>
+    /// <summary>향수병이 저절로 다가가는 한도 (버릇 · 승객은 더 깊다) — 한도에 가까울수록 느려진다.</summary>
+    public static float Cap(CrewMember c) => c.BornAboard ? 0f : Life.Has(c, Habit.Homesick) ? 0.95f : c.Passenger ? 0.9f : 0.75f;
+
     public static float GrowPerDay(CrewMember c) => c.BornAboard ? 0f : 0.022f * (Life.Has(c, Habit.Homesick) ? 1.6f : 1f) * (c.Passenger ? 1.3f : 1f) * (c.IsChild ? 0.3f : 1f);
 
     public float Of(CrewMember c) => Homesick.TryGetValue(c.Id, out var h) ? h : 0f;
@@ -55,9 +58,15 @@ public sealed class HomelandSystem
         foreach (var c in Aboard)
         {
             if (!BirthDay.ContainsKey(c.Id)) { BirthDay[c.Id] = c.BornAboard ? (int)(day % 360f) : _rng.Range(0, 360); Bump(c, _rng.Range(0f, 0.2f)); }
-            Bump(c, GrowPerDay(c) / 24f);
+            float h0 = Of(c), cap = Cap(c);
+            if (h0 < cap) // v23 균형: 한도로 천천히 다가간다 · 가까운 사람이 둘 넘으면 덜 깊어진다
+            {
+                int close = 0;
+                foreach (var o in Aboard) if (o != c && c.AffinityTo(o) > 0.4f && ++close >= 2) break;
+                Bump(c, GrowPerDay(c) / 24f * (1f - h0 / cap) * (close >= 2 ? 0.6f : 1f));
+            }
             float h = Of(c);
-            if (h > 0.6f) c.Needs.Stress = MathF.Min(1f, c.Needs.Stress + 0.004f * (h - 0.6f) / 0.4f);
+            if (h > 0.65f) c.Needs.Stress = MathF.Min(1f, c.Needs.Stress + 0.0015f * MathF.Min(1f, (h - 0.65f) / 0.35f)); // v23 균형: 깊을 때만 · 조금씩
             if (h > 0.6f && w.Tick % SimTime.TicksPerDay < SimTime.Hours(1) && _rng.Chance(0.5f))
             {
                 string home = HomeOf(c);
@@ -143,6 +152,9 @@ public sealed class HomelandSystem
     public void Letter(CrewMember c, News kind) => Bump(c, kind switch { News.Hello => -0.025f, News.Parcel => -0.05f, News.Wedding or News.Birth => -0.01f, News.Death => 0.15f, News.Ill => 0.05f, _ => 0f });
 
     /// <summary>기항지: 사람 · 소식 · 고향 재료 — 모두 조금 누그러진다.</summary>
+    /// <summary>v23 마음 돌봄: 말벗 · 상담 · 가상 고향 의자가 향수병을 누그러뜨린다.</summary>
+    public void Ease(CrewMember c, float d) { if (!Off && d > 0f) Bump(c, -d); }
+
     public void Port() { foreach (var c in Aboard) Bump(c, -0.15f); }
 
     /// <summary>조용한 달: 향수병이 깊어지고 · 그동안의 생일은 건너뛴 채 지나간다.</summary>

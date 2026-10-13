@@ -78,11 +78,11 @@ public static partial class Program
     private const string Fixed = "fixed"; // 회의 · 관찰자가 컴퓨터 권한을 바꾸는 장면 (v23 전권 고정이면 바뀌지 않는다)
     private const string Robots23 = "commander,relay,eyes,brain"; // 사고 지휘관 · 구역 중계기 · 눈의 그물 · 로봇 두뇌가 먼저 맡아 사람 장면이 흐려진다
     private const string Nozzle = "nozzle"; // 천장 자동 소화가 불을 먼저 끈다 — 사람이 불에 대응하는 장면
-    private const string Legacy23 = "nozzle,commander,relay,eyes,brain"; // 둘 다
+    private const string Legacy23 = "nozzle,commander,relay,eyes,brain,mind"; // v23 말벗 로봇도 (로봇 한 대가 더 실린다) // 둘 다
     private const string All23 = Legacy23 + "," + Fixed; // 셋 다 — 컴퓨터가 묻지 않고 환기 · 댐퍼부터 닫으면 냄새 · 가스 장면이 사라진다
     // 감정 · 공황 · 일 순서를 보는 확률 장면: 오늘 넣은 것(대개편 · 향수병의 슬픔 · 지식 전수 · 행성 · 임무)이 끼면 기대한 때에 장면이 안 나온다
     //   → 예전 조건에서 본다 (기준 코드에서 통과 · 장치를 다 끄면 통과 — 회귀 v23)
-    private const string Everything = All23 + ",planet,purpose,quiet,know,home";
+    private const string Everything = All23 + ",planet,purpose,quiet,know,home"; // (mind는 Legacy23에 들었다)
     /// <summary>v23 대개편 장치를 끄고 보는 시험 (회귀 v23에서 가렸다 — 그 장치만 끄면 예전처럼 통과).</summary>
     private static readonly Dictionary<string, string> V23Legacy = new() // 회의 · 로봇21: 새 선장 방침 · 긴급 지정이 권한 단계(자동 · 제안 · 조언)를 본다
     {
@@ -105,7 +105,7 @@ public static partial class Program
         //    nozzletest · commandertest · relaytest · eyetest · robotbraintest · learntest)
         string v23Off = string.Join(",", V23Legacy.Where(kv => args.Contains("--" + kv.Key)).Select(kv => kv.Value));
         if (v23Off.Length > 0) Environment.SetEnvironmentVariable("SHIPSIM_OFF", string.Join(",", new[] { Environment.GetEnvironmentVariable("SHIPSIM_OFF"), v23Off }.Where(x => !string.IsNullOrEmpty(x))));
-        // 개발용 (v23 회귀 가리기): SHIPSIM_OFF=nozzle,relay,brain,commander,eyes,fixed,planet,purpose,quiet,know,home
+        // 개발용 (v23 회귀 가리기): SHIPSIM_OFF=nozzle,relay,brain,commander,eyes,fixed,planet,purpose,quiet,know,home,mind
         foreach (var off in (Environment.GetEnvironmentVariable("SHIPSIM_OFF") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries))
             switch (off.Trim())
             {
@@ -120,6 +120,7 @@ public static partial class Program
                 case "quiet": GenerationSystem.QuietOff = true; break;
                 case "know": KnowledgeSystem.Off = true; break;
                 case "home": HomelandSystem.Off = true; break;
+                case "mind": MindCareSystem.Off = true; break;
             }
         int days = args.Length > 0 && int.TryParse(args[0], out var d) ? d : 14;
         int seed = args.Length > 1 && int.TryParse(args[1], out var s) ? s : 20260929;
@@ -306,6 +307,7 @@ public static partial class Program
         if (args.Contains("--missiontest")) return RunMissionTest(seed); // v23 항해의 목적
         if (args.Contains("--generationtest")) return RunGenerationTest(seed); // v23 세대
         if (args.Contains("--mentortest")) return RunKnowledgeTest(seed); // v23 지식 전수 · 외부 세계 기억
+        if (args.Contains("--mindcaretest")) return RunMindCareTest(seed); // v23 마음 돌봄 (말벗 로봇 · 상담 · 오락실)
         if (args.Contains("--story21test")) return RunStory21Test(seed); // v21 이야기꾼 · 난이도 세분화
         if (args.FirstOrDefault(a => a.StartsWith("--foodprobe=")) is string fp) return RunFoodProbe(seed, fp[12..]); // v21 먹을 것 탐침
         if (args.Contains("--campaign15test")) return RunCampaign15Test(seed); // v15.6

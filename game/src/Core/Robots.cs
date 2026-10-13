@@ -18,6 +18,8 @@ public enum RobotKind
     Stretcher, Nurse,
     // v21 새 로봇 9 (RobotsV21.cs): 생활(청소 · 조리) · 설비(배관 · 지게 · 환기) · 안전(구조 · 봉쇄 · 공기) · 의료(의사)
     Cleaner, Chef, Plumber, Lifter, Ventman, Rescuer, Sealer, Airman, Medic,
+    // v23 마음 돌봄 (MindCare.cs): 지친 사람 곁에 앉아 이야기를 듣는 말벗 로봇
+    Companion,
 }
 
 public enum RobotState

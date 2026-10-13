@@ -19,6 +19,7 @@ public enum RoomType
     ElectronicsLab, WeldingShop, Crusher, Hyperbaric, QuarantineLock, Triage, PrivateCabins, Garden, Theater,
     MeetingRoom, Archive, Meditation, ShuttleBay, CraneControl, Navigation, HeatStorage, Security, Centrifuge, School, BackupBridge,
     ComputerRoom, MushroomFarm, // v16.22 주컴퓨터실(배 한가운데) · 버섯 재배실
+    Arcade, // v23 마음 돌봄 오락실 (설계도에는 없다 — 마음이 지친 사람이 늘면 휴게실 · 창고를 고친다)
 }
 
 public static class RoomTypes
@@ -403,6 +404,8 @@ public enum FurnitureType
     Dialyzer, Ecmo, HeartPump, OrganCooler, BioPrinter, NegPressure,
     // 의료 3차 — 수술 로봇 팔 (SurgicalArm.cs)
     SurgicalArm,
+    // v23 마음 돌봄 — 오락실 (MindCare.cs)
+    ArcadeCabinet, VrChair,
 }
 
 public static class FurnitureTypes

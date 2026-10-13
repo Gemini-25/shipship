@@ -158,6 +158,11 @@ public static class RobotsV15
             "진단 · 응급 처치 · 상처 누르기 · 구급 키트 · 피 나르기 (의무관 곁을 지킨다)",
             C((ItemKind.Electronics, 2), (ItemKind.Sensor, 1), (ItemKind.Pump, 1)),
             w => w.History.Collapses >= 1 ? (0.45f, $"쓰러진 일 {w.History.Collapses}번") : No),
+        // v23 마음 돌봄 (MindCare.cs) — 일은 작업 목록이 아니라 주컴퓨터가 마음이 지친 사람부터 맡긴다
+        new(RobotKind.Companion, "말벗 로봇", RobotKind.Hauler, J(), 0.07f, 0.8f, 0.8f, 1.2f,
+            "지친 사람 곁에 앉아 이야기를 듣는다 · 고향 소리 · 잠들기 전 숨 고르기 · 오락실로 데려간다 · 깊으면 상담 자격자 · 의무관을 부른다",
+            C((ItemKind.Electronics, 2), (ItemKind.Sensor, 1), (ItemKind.Motor, 1)),
+            w => w.MindCare.Need()),
     };
 
     public static readonly DroneRow[] Flyers =

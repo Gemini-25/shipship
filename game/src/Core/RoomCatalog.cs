@@ -155,6 +155,10 @@ public static class RoomCatalog
             E("기록 보관소. 배의 역사와 배운 것.", "기록 선반과 서버.", "전기.", "교훈이 흐려진다.", "없음.", "없음.")),
         new(RoomType.Meditation, RoomType.Lounge, "명상실", 3, "#b8b0e8", "MD", RoomTag.Rest | RoomTag.Quiet, 0f, 0f, 0f, 0f, "S1x1x2",
             E("명상실. 긴장을 내려놓는다.", "조용한 방.", "없음.", "긴장이 오래 남는다.", "없음.", "없음.")),
+        // v23 마음 돌봄: 설계도에는 없고, 마음이 지친 사람이 늘면 휴게실을 고친다 (MindCare.cs)
+        new(RoomType.Arcade, RoomType.Lounge, "오락실", 2, "#e07ad0", "AC", RoomTag.Rest, 0.4f, 0.05f, 0f, 0f, "S2x1x2",
+            E("오락실. 오락기 · 게임 탁자 · 고향 풍경을 보여 주는 가상 의자 — 머리를 비우고 웃는 곳.", "휴게실 한쪽을 고쳐 오락기와 의자를 들였다. 말벗 로봇이 자주 사람을 데려온다.",
+              "전기.", "휴게실 카드놀이로 버틴다 — 긴장이 덜 풀리고 향수병이 오래 간다.", "오락기 화면 · 조이스틱 손질.", "시끄럽다 — 옆 침실이 잠을 설친다.")),
         new(RoomType.ShuttleBay, RoomType.Storage, "셔틀 격납고", 3, "#9fb0c8", "SB", RoomTag.Explosive, 0.35f, 0.15f, 0f, 0f, "K2x2x1",
             E("셔틀 격납고. 기항지·잔해로 오가는 작은 배.", "셔틀과 발사 문.", "전기, 추진제.", "배째로 다가가야 한다.", "셔틀 점검.", "추진제 누출.")),
         new(RoomType.CraneControl, RoomType.Comms, "크레인 조종실", 3, "#86d9b0", "CC", RoomTag.None, 0.05f, 0f, 0f, 0f, "C1x1x1",
@@ -234,6 +238,7 @@ public static class RoomCatalog
         new("stars", "별 보기", new[] { RoomType.Observatory }, new[] { (RoomType.Lounge, 0.5f), (RoomType.Bridge, 0.4f) }, "관측실이 없다 — 화면으로 본다"),
         new("calibration", "교정", new[] { RoomType.Calibration }, new[] { (RoomType.Workshop, 0.7f) }, "교정실이 없다 — 현장에서 (덜 정확하다)"),
         new("rest", "깊은 잠", new[] { RoomType.QuietQuarters, RoomType.PrivateCabins, RoomType.WaterWallCabin }, new[] { (RoomType.Quarters, 0.85f) }, "조용한 침실이 없다 — 여럿이 한방에서"),
+        new("play", "놀이", new[] { RoomType.Arcade }, new[] { (RoomType.Lounge, 0.45f), (RoomType.Theater, 0.7f) }, "오락실이 없다 — 휴게실 카드놀이로 (긴장 · 향수병이 덜 풀린다)"), // v23 마음 돌봄
         new("morgue", "안치", new[] { RoomType.Morgue }, new[] { (RoomType.Freezer, 0.8f), (RoomType.Storage, 0.4f) }, "안치실이 없다 — 창고에 모신다 (산 사람이 힘들어한다)"),
     };
 

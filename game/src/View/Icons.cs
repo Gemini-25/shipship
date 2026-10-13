@@ -211,6 +211,7 @@ public static class Icons
         FurnitureType.CalibrationRig => "calibration-rig",
         FurnitureType.Hoist => "hoist",
         FurnitureType.SurgicalArm => "surgical-arm", // 의료 3차 수술 로봇 팔
+        FurnitureType.ArcadeCabinet => "arcade", FurnitureType.VrChair => "vr-chair", // v23 마음 돌봄
         FurnitureType.MaintCart => "maint-cart",
         FurnitureType.VibrationMonitor => "vibration",
         FurnitureType.ThermalCamera => "thermal-camera",

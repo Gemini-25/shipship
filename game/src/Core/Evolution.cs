@@ -242,6 +242,9 @@ public static class Evolution
         float trauma = alive.Average(c => c.Memory.Trauma);
         bool loss = w.Crew.Any(c => c.Dead);
         if ((loss || trauma > 0.3f) && Plan("grief", RoomType.Lounge, RoomType.Chapel, 0.35f + trauma + (loss ? 0.3f : 0f), loss ? "동료를 잃었다" : $"마음의 상처가 깊다 ({trauma * 100:0}%)") is UpgradePlan d) yield return d;
+        // v23 마음 돌봄: 마음이 지친 사람이 늘었다 → 휴게실 하나를 오락실로
+        var (play, playWhy) = w.MindCare.ArcadeWant();
+        if (play > 0f && Plan("play", RoomType.Lounge, RoomType.Arcade, play, playWhy, r => -r.Cells.Count) is UpgradePlan ar) yield return ar;
         // 시끄러운 침실 → 방음
         foreach (var q in ship.RoomsOf(RoomType.Quarters).Where(r => r.Special == null && r.Noise + r.Vibration > 0.35f).Take(1))
             if (Plan("rest", RoomType.Quarters, RoomType.QuietQuarters, 0.3f + q.Noise + q.Vibration, $"{Ko.IGa(q.Name)} 시끄러워 잠을 설친다 (소음 {q.Noise * 100:0}%)", r => -(r.Noise + r.Vibration)) is UpgradePlan e) yield return e;
@@ -367,6 +370,7 @@ public static class Evolution
         // ── v12.6 방 용도 변경: 겪은 일이 가르쳐 준 방 (전용 방이 없어 본래 방이 겸하던 일) ──
         foreach (var plan in RepurposeCandidates(w)) yield return plan;
         foreach (var plan in RobotsV15.Candidates(w)) yield return plan; // v15.7 로봇·드론 들이기
+        foreach (var plan in w.MindCare.Candidates()) yield return plan; // v23 말벗 로봇 더
         foreach (var plan in PortableSystem.Candidates(w)) yield return plan; // v16.7 오래 둔 이동식 장비 → 정식 시설
 
         // ── v12.3 보조 간선: 간선이 끊겨 방 여럿이 한꺼번에 정전된 배 ──

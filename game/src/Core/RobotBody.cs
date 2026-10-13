@@ -43,7 +43,7 @@ public static class RobotBody
 
     /// <summary>팔 달린 종류 (정비 · 재배 바탕 · 간호 · 의사 · 조리 · 구조 · 지게 · 배관 · 봉합).</summary>
     public static bool HasArms(RobotKind k) => RobotsV15.Base(k) is RobotKind.Maintainer or RobotKind.Gardener
-        || k is RobotKind.Nurse or RobotKind.Medic or RobotKind.Chef or RobotKind.Rescuer or RobotKind.Lifter or RobotKind.Plumber or RobotKind.Sealer;
+        || k is RobotKind.Nurse or RobotKind.Medic or RobotKind.Chef or RobotKind.Rescuer or RobotKind.Lifter or RobotKind.Plumber or RobotKind.Sealer or RobotKind.Companion;
 
     public static bool Has(RobotKind k, BotPart p) => p is not (BotPart.ArmL or BotPart.ArmR) || HasArms(k);
 
@@ -81,6 +81,7 @@ public static class RobotBody
         RobotKind.Nurse or RobotKind.Medic => "의료 도구",
         RobotKind.Cleaner => "솔",
         RobotKind.Chef => "조리 도구",
+        RobotKind.Companion => "얼굴 화면", // v23 말벗 로봇: 표정을 띄우는 둥근 화면
         RobotKind.Plumber => "배관 공구",
         RobotKind.Sealer => "봉합 노즐",
         RobotKind.Airman or RobotKind.Ventman => "송풍기",

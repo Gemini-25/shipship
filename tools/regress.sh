@@ -58,6 +58,7 @@ planetworktest 1 7 --planetworktest
 missiontest 1 7 --missiontest
 generationtest 1 7 --generationtest
 mentortest 1 7 --mentortest
+mindcaretest 1 7 --mindcaretest
 story21test 1 7 --story21test
 hazardtest 1 20260929 --hazardtest
 livingtest 1 20260929 --livingtest
