@@ -9,7 +9,7 @@ namespace ShipSim.Core;
 // 열네 살이 되면 부모를 닮은 역할로 일을 시작한다. 일흔이 넘으면 몸이 약해지고, 언젠가 조용히 떠난다.
 // 해마다 배는 지난 일을 기린다 (기념일) — 세대가 바뀌어도 이야기는 남는다.
 
-public sealed class GenerationSystem
+public sealed partial class GenerationSystem
 {
     private readonly World _w;
     public bool Enabled { get; private set; }
@@ -60,6 +60,7 @@ public sealed class GenerationSystem
                 if (Enabled && w.CrewCanDie && _rng.Chance(years * 0.04f * (c.Age - 68f))) { c.Vitals.InjuryCause = "노환"; c.Vitals.Health = 0f; Elders++; }
             }
         }
+        QuietCheck(); // v23 조용한 달 넘기기 (세대선 모드가 아닐 때)
         if (!Enabled) return;
         _yearClock += years;
         if (_yearClock >= 1f) { _yearClock -= 1f; NewYear(); }
@@ -88,7 +89,7 @@ public sealed class GenerationSystem
         }
     }
 
-    private void Birth(CrewMember a, CrewMember b)
+    internal void Birth(CrewMember a, CrewMember b)
     {
         var w = _w;
         var c = w.AddChild(a, b, _rng);
@@ -99,7 +100,7 @@ public sealed class GenerationSystem
         foreach (var o in w.Crew.Where(o => !o.Dead)) o.Needs.Stress = MathF.Max(0f, o.Needs.Stress - 0.1f);
     }
 
-    private void ComeOfAge(CrewMember c)
+    internal void ComeOfAge(CrewMember c)
     {
         var w = _w;
         Comings++;

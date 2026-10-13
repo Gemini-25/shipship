@@ -145,6 +145,7 @@ public partial class Hud : Control
         DrawCaseSummaryCard(mouse); // v23 사고 결산 카드 (크게 → 접힘)
         DrawSceneDayCard(mouse); // v23 저녁 22시 오늘의 장면
         DrawArrivalCard(mouse); // v23 목적지 도착 — 임무 결과 · 항해의 책
+        DrawQuietCard(mouse); // v23 조용한 달을 넘겼다
         DrawSummaryCard(mouse); // v12.8 요약 진행
         DrawCampaign(); // v12.9 임무
         DrawTutorial(mouse); // v12.9 첫 항해 안내

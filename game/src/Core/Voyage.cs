@@ -287,11 +287,11 @@ public sealed partial class VoyageSystem
     public void Replan() => Plan(first: false);
 
     /// <summary>시험용: 지금 구간을 이 종류로 바꾼다 (enter면 들어선 것처럼 이점 · 교역까지).</summary>
-    public void Force(LegKind k, bool enter = false, string? name = null)
+    public void Force(LegKind k, bool enter = false, string? name = null, float days = 1f)
     {
         Leave(Current);
         var pool = VoyageV15.Pool(k);
-        Legs[Math.Clamp(Index, 0, Legs.Count - 1)] = new Leg { Kind = k, Name = name ?? pool[_mix.Range(0, pool.Length)], Days = 1f };
+        Legs[Math.Clamp(Index, 0, Legs.Count - 1)] = new Leg { Kind = k, Name = name ?? pool[_mix.Range(0, pool.Length)], Days = days };
         Progress = 0f;
         if (enter) Enter(Current);
     }

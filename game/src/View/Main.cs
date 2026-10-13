@@ -1096,6 +1096,9 @@ public partial class Main : Node2D
                     if (Enum.TryParse<PlanetWeather>(wb[0], out var pw)) Sim.Planet.SetWeather(pw, wb.Length > 1 ? float.Parse(wb[1], CultureInfo.InvariantCulture) : 0.8f, 6f);
                     break;
                 }
+                case "--quiet": // 화면 확인용 (v23 세대): 조용한 달을 바로 넘긴다 (--quiet=3)
+                    Sim.Generation.SkipMonths(int.Parse(value.Length > 0 ? value : "3", CultureInfo.InvariantCulture), "순항");
+                    break;
                 case "--arrive": // 화면 확인용 (v23 항해의 목적): 목적지 바로 앞으로 — 곧 도착 카드 · 항해의 책
                     Sim.Voyage.ArriveSoon();
                     break;
