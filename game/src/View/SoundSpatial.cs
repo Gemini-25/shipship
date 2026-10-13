@@ -31,7 +31,7 @@ public partial class SoundSystem
         for (int i = 0; i < 10; i++)
         {
             // 거리 감쇠는 직접 한다 (화면 기준) — 여기서는 좌우만 맡긴다
-            var p = new AudioStreamPlayer2D { MaxDistance = 1e7f, Attenuation = 0f, PanningStrength = 1f };
+            var p = new AudioStreamPlayer2D { MaxDistance = 1e7f, Attenuation = 0f, PanningStrength = 1f, Bus = Buses.Sfx };
             AddChild(p);
             _pool2D.Add(p);
         }

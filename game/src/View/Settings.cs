@@ -21,6 +21,11 @@ public static class Settings
     /// <summary>v17.6 색약 팔레트 (색과 함께 모양 · 무늬로 가른다).</summary>
     public static bool ColorSafeOn { get => ColorSafe.On; set => ColorSafe.On = value; }
 
+    /// <summary>v23 효과음 크기 0~1 (경보 · 문 · 발소리 · 일하는 소리 · 폭발).</summary>
+    public static float EffectsVolume { get; set; } = 0.8f;
+    /// <summary>v23 환경음 크기 0~1 (기계음 · 새는 소리 · 불 · 행성 바람 · 비 · 용암 · 천둥).</summary>
+    public static float AmbienceVolume { get; set; } = 0.7f;
+
     /// <summary>경보·운석·문 같은 효과음.</summary>
     public static bool Effects { get; set; } = true;
 
@@ -120,6 +125,8 @@ public static class Settings
         ShowAllHud = cfg.GetValue("ui", "show_all", ShowAllHud).AsBool(); // v16.2
         MusicVolume = (float)cfg.GetValue("sound", "music", MusicVolume).AsDouble(); // v17.6
         CabinVolume = (float)cfg.GetValue("sound", "cabin_music", CabinVolume).AsDouble();
+        EffectsVolume = (float)cfg.GetValue("sound", "effects_volume", EffectsVolume).AsDouble(); // v23
+        AmbienceVolume = (float)cfg.GetValue("sound", "ambience_volume", AmbienceVolume).AsDouble();
         TextScale = (float)cfg.GetValue("ui", "text_scale", TextScale).AsDouble();
         ColorSafeOn = cfg.GetValue("ui", "color_safe", ColorSafeOn).AsBool();
     }
@@ -143,6 +150,8 @@ public static class Settings
         cfg.SetValue("ui", "show_all", ShowAllHud); // v16.2
         cfg.SetValue("sound", "music", MusicVolume); // v17.6
         cfg.SetValue("sound", "cabin_music", CabinVolume);
+        cfg.SetValue("sound", "effects_volume", EffectsVolume); // v23
+        cfg.SetValue("sound", "ambience_volume", AmbienceVolume);
         cfg.SetValue("ui", "text_scale", TextScale);
         cfg.SetValue("ui", "color_safe", ColorSafeOn);
         cfg.Save(Path);
@@ -193,13 +202,16 @@ public partial class OptionsPanel : PanelContainer
         vol.ValueChanged += v => { Settings.Volume = (float)v / 100f; volLabel.Text = $"전체 소리 {v:0}%"; Changed(); };
         box.AddChild(volLabel);
         box.AddChild(vol);
-        box.AddChild(Check("효과음 (경보·운석·감압·문·발소리·로봇)", Settings.Effects, on => Settings.Effects = on));
+        box.AddChild(Check("효과음 (경보·운석·감압·문·발소리·로봇·일하는 소리)", Settings.Effects, on => Settings.Effects = on));
+        box.AddChild(Slider("효과음 크기", Settings.EffectsVolume, v => Settings.EffectsVolume = v)); // v23
+        box.AddChild(Check("환경음 (기계음·새는 소리·불·행성 바람·비·용암·천둥)", Settings.Ambience, on => Settings.Ambience = on));
+        box.AddChild(Slider("환경음 크기", Settings.AmbienceVolume, v => Settings.AmbienceVolume = v));
+        box.AddChild(Caption("확대율: 멀리선 바깥 날씨가 크게 · 가까이선 선체 너머로 먹먹하게 (일하는 소리는 또렷하게)"));
         box.AddChild(Slider("배경 음악", Settings.MusicVolume, v => Settings.MusicVolume = v)); // v17.6
         box.AddChild(Slider("배 안에서 트는 음악", Settings.CabinVolume, v => Settings.CabinVolume = v));
         box.AddChild(Caption("보기"));
         box.AddChild(Slider("글자 크기", (Settings.TextScale - 0.85f) / 0.45f, v => Settings.TextScale = 0.85f + v * 0.45f, () => $"{Settings.TextScale * 100:0}%"));
         box.AddChild(Check("색약 팔레트 (사람은 표식 모양, 방은 바닥 무늬로도 가른다)", Settings.ColorSafeOn, on => Settings.ColorSafeOn = on));
-        box.AddChild(Check("배경음 (기계음·새는 소리·불)", Settings.Ambience, on => Settings.Ambience = on));
         box.AddChild(Caption("관찰"));
         box.AddChild(Check("치명 경보가 울리면 저절로 일시정지", Settings.AutoPauseCritical, on => Settings.AutoPauseCritical = on));
         box.AddChild(Check("사건 알림", Settings.EventToasts, on => Settings.EventToasts = on));

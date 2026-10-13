@@ -148,6 +148,7 @@ public partial class Main : Node2D
         {
             if (arg.StartsWith("--seed=") && int.TryParse(arg[7..], out var sd)) seed = sd;
             if (arg.StartsWith("--crew=") && int.TryParse(arg[7..], out var cr)) crew = cr;
+            if (arg.StartsWith("--sounddump=")) Dsp.DumpDir = arg[12..]; // v23 소리 확인: 만든 소리를 wav로 꺼낸다
             if (arg.StartsWith("--ship=")) shipArg = ShipCatalog.Find(arg[7..])?.Key;
             if (!_commandLineDone && arg.StartsWith("--load=") && System.IO.File.Exists(arg[7..]))
             {
@@ -1086,6 +1087,9 @@ public partial class Main : Node2D
                     var pb = value.Split(':');
                     var pr = new Rng(Sim.Seed * 31 + 5);
                     var planet = pb[0] == "random" || pb[0].Length == 0 ? Sim.Planet.NewPlanet(Storyteller.Level) : PlanetGen.Special(pr, 950, pb[0]);
+                    // --planet=random:Lava — 그 땅이 나올 때까지 (v23 소리 확인)
+                    if (pb.Length > 1 && Enum.TryParse<PlanetSurface>(pb[1], out var want))
+                        for (int k = 0; k < 300 && planet.Surface != want; k++) planet = Sim.Planet.NewPlanet(Storyteller.Level);
                     Sim.Planet.LandNow(planet, crash: pb.Length > 1 && pb[1] == "crash");
                     break;
                 }
@@ -1241,6 +1245,9 @@ public partial class Main : Node2D
                     _shotAfterHour = float.Parse(value, CultureInfo.InvariantCulture);
                     _shotFromTick = Sim.Tick;
                     _screenshotFrames = 1_000_000;
+                    break;
+                case "--soundcheck": // v23 소리 확인: 1초마다 지금 들리는 것을 글로 찍는다
+                    SoundSystem.Probe = true;
                     break;
                 case "--frames":
                     _screenshotFrames = int.Parse(value, CultureInfo.InvariantCulture);

@@ -944,7 +944,7 @@ public partial class CosmicSound : Node
         _whoosh = Make(Gen(1.8f, (i, x) => (rng.Randf() * 2f - 1f) * 0.3f * Mathf.Sin(x * Mathf.Pi) * (0.5f + 0.5f * Mathf.Sin(i * Mathf.Tau * (200f + 1600f * x) / Rate))));
         _drone = Make(Gen(3f, (i, x) => (Mathf.Sin(i * Mathf.Tau * 55f / Rate) + Mathf.Sin(i * Mathf.Tau * 58f / Rate)) * 0.22f * Mathf.Sin(x * Mathf.Pi)));
         _boom = Make(Gen(2f, (i, x) => { lp += (rng.Randf() * 2f - 1f - lp) * 0.05f; return (lp * 3f + Mathf.Sin(i * Mathf.Tau * 42f / Rate) * 0.6f) * Mathf.Exp(-x * 3f); }));
-        for (int i = 0; i < 3; i++) { var p = new AudioStreamPlayer(); AddChild(p); _pool.Add(p); }
+        for (int i = 0; i < 3; i++) { var p = new AudioStreamPlayer { Bus = Buses.Sfx }; AddChild(p); _pool.Add(p); }
     }
 
     private static float[] Gen(float seconds, Func<int, float, float> f)

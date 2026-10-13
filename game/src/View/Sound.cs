@@ -30,6 +30,7 @@ public partial class SoundSystem : Node
     public void Init(Main main)
     {
         _main = main;
+        Buses.Ensure(); // v23 효과음 · 환경음 · 바깥 길
         _siren = Make(Siren());
         _beep = Make(Beep());
         _impact = Make(ImpactSound());
@@ -38,9 +39,11 @@ public partial class SoundSystem : Node
         _hiss = Loop2D(Noise(2f, 0.22f, high: true, seed: 3));
         _fire = Loop2D(FireSound());
         InitSpatial();
+        InitWork(); // v23 일하는 소리
+        if (Dsp.DumpDir != null) InitPlanetSound(); // 확인용: 행성 소리도 바로 꺼내 둔다
         for (int i = 0; i < 6; i++)
         {
-            var p = new AudioStreamPlayer();
+            var p = new AudioStreamPlayer { Bus = Buses.Sfx };
             AddChild(p);
             _pool.Add(p);
         }
@@ -50,8 +53,13 @@ public partial class SoundSystem : Node
         ApplyVolume();
     }
 
-    public static void ApplyVolume() =>
+    public static void ApplyVolume()
+    {
         AudioServer.SetBusVolumeDb(0, Mathf.LinearToDb(Mathf.Max(0.0001f, Settings.Volume)));
+        Buses.Ensure();
+        Buses.Volume(Buses.Sfx, Settings.EffectsVolume); // v23 효과음 크기
+        Buses.Volume(Buses.Amb, Settings.AmbienceVolume); // v23 환경음 크기 (기계음 · 행성 날씨)
+    }
 
     public override void _Process(double delta)
     {
@@ -99,6 +107,7 @@ public partial class SoundSystem : Node
         PlaceLoops(w);
         var p = w.Power;
         float hum = !ambient ? 0f : p.ReactorOnline ? 0.25f + 0.45f * Math.Clamp(p.Delivered / 45f, 0f, 1f) : p.AuxRunning ? 0.15f : 0.03f;
+        hum *= 0.55f + 0.45f * Dsp.Closeness(_main.Camera.Zoom.X); // v23 멀리서 배 전체를 보면 안쪽 기계음은 작게
         float hiss = !ambient ? 0f : w.Ship.LiveRooms.Any(r => r.Leaking) ? 0.6f * _hissGain : 0f;
         float fire = !ambient ? 0f : Math.Min(1f, w.Fire.Count / 6f) * 0.8f * _fireGain;
         Fade(_hum, hum, delta);
@@ -107,6 +116,9 @@ public partial class SoundSystem : Node
         ProcessComputerSound(w, delta, quiet); // v16.6 서버 랙 팬 · 방송 차임 (SoundComputer.cs)
         ProcessScaleSound(w, quiet); // v16.18 규모별 경보음 (SoundScale.cs)
         ProcessMusic(w, delta, quiet); // v17.6 상황 음악 · 배 안에서 트는 음악 (SoundMusic.cs)
+        ProcessPlanetSound(w, delta, quiet); // v23 행성 환경음 · 확대율마다 바깥 소리 (SoundPlanet.cs)
+        ProcessWork(w, delta, quiet); // v23 일하는 소리 (SoundWork.cs)
+        if (Probe) ProbeLine(w, delta);
     }
 
     private void Play(AudioStreamWav stream, float db)
@@ -141,7 +153,7 @@ public partial class SoundSystem : Node
         s.LoopMode = AudioStreamWav.LoopModeEnum.Forward;
         s.LoopBegin = 0;
         s.LoopEnd = samples.Length;
-        var p = new AudioStreamPlayer2D { Stream = s, VolumeDb = -80f, MaxDistance = 1e7f, Attenuation = 0f, PanningStrength = 0.6f };
+        var p = new AudioStreamPlayer2D { Stream = s, VolumeDb = -80f, MaxDistance = 1e7f, Attenuation = 0f, PanningStrength = 0.6f, Bus = Buses.Amb };
         AddChild(p);
         return p;
     }
@@ -152,7 +164,7 @@ public partial class SoundSystem : Node
         s.LoopMode = AudioStreamWav.LoopModeEnum.Forward;
         s.LoopBegin = 0;
         s.LoopEnd = samples.Length;
-        var p = new AudioStreamPlayer { Stream = s, VolumeDb = -80f };
+        var p = new AudioStreamPlayer { Stream = s, VolumeDb = -80f, Bus = Buses.Amb };
         AddChild(p);
         return p;
     }
