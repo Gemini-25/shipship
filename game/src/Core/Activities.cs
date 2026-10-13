@@ -70,6 +70,20 @@ public sealed class EatActivity : Activity
         return (best, bestSpot, bestSrc);
     }
 
+    /// <summary>v23 먼 비상식량 · 날채소를 가지러 가는 길에 가까운 배식기 · 냉장고에 식사가 다시 찼으면 그리로 바꾼다
+    /// (천마호: 아침 배식기가 잠깐 비었을 때 114칸 떨어진 비상 선반으로 떠나 — 곁의 배식기 여덟 대가 다시 찼는데도 끝까지 걸어가 굶주렸다).</summary>
+    public static bool BetterFoodNearby(CrewMember c, World w, DistanceField dist)
+    {
+        if (c.Job is not { Activity: EatActivity } j || j.Label is not ("비상식량" or "날채소") || j.TargetRoom == null) return false;
+        bool notYet = false;
+        foreach (var f in j.TargetRoom.Furniture) if (f.Storage != null && j.PendingTake(f)) { notYet = true; break; }
+        if (!notYet) return false; // 이미 받아 들었다
+        int left = c.Path != null ? c.Path.Count - c.PathIndex : 0;
+        if (left < 25) return false; // 거의 닿았다
+        var (box, spot, src) = FindFood(c, w, dist);
+        return box != null && src is Source.Dispenser or Source.Fridge && box.Room != j.TargetRoom && dist.Get(spot) < left * 0.6f;
+    }
+
     /// <summary>v19 태양 폭풍 속에 더 쬐는 방의 식사를 받으러 잠깐 다녀오나: 배가 꽤 고프고 · 그 방이 잠깐 들를 만하다 (15분이면 0.1Sv 남짓).</summary>
     private static bool Dash(CrewMember c, Furniture? box, float hunger) =>
         box != null && box.Room.Radiation >= 0.2f && box.Room.Radiation < 0.8f && hunger >= 0.7f;

@@ -192,6 +192,10 @@ public sealed class Pathfinder
         return d >= 0 && _ship.Doors[d].IsExternal && !_ship.Doors[d].Removed;
     }
 
+    /// <summary>v23 정비 통로(벽 속 기어가는 칸) 안에서 짐을 들거나 다치면 '못 기어감'이 켜져 그 칸에서 한 걸음도 못 나가 굶었다 (고래호: 종자 보관소 벽 속에서 서른두 시간) —
+    /// 이미 통로 안이면 짐을 끌고라도 기어 나온다.</summary>
+    private PathProfile OutOfDuct(int si, PathProfile p) => p.NoCrawl && Crawl[si] && !_walk[si] ? p with { NoCrawl = false } : p;
+
     private bool Passable(int i, PathProfile p) => Walk(i) || (p.Eva && (_space[i] || Hatch(i))) || Crawl[i] && !p.Robot && !p.NoCrawl;
 
     private bool Walk(int i)
@@ -218,6 +222,7 @@ public sealed class Pathfinder
         var grid = _ship.Grid;
         if (start == goal) return new List<Cell>();
         if (!grid.InBounds(goal) || !grid.InBounds(start)) return null;
+        profile = OutOfDuct(grid.Index(start), profile);
         int goalIndex = grid.Index(goal);
         if (!Passable(goalIndex, profile)) return null;
 
@@ -318,6 +323,7 @@ public sealed class Pathfinder
         var grid = _ship.Grid;
         int version = StateVersion();
         int si = grid.InBounds(start) ? grid.Index(start) : -1;
+        if (si >= 0) profile = OutOfDuct(si, profile);
         int bar = MarkBarred(profile, si >= 0 ? _room[si] : -1);
         var key = (si, profile.HazardScale, (profile.Suit ? 1 : 0) | (profile.Responder ? 2 : 0) | (profile.Eva ? 4 : 0) | (profile.Robot ? 8 : 0) | (profile.NoCrawl ? 16 : 0) | (profile.Fleeing ? 32 : 0), bar);
         if (_floods.TryGetValue(key, out var e) && e.Version == version && SameFear(e.Fear, profile.Fear) && SameSpots(e.Spots, profile.Spots))

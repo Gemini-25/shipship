@@ -25,7 +25,7 @@ public partial class SoundSystem
             if (quiet) continue;
             if (Settings.Effects && cue.Sound != StageSound.None)
             {
-                if (!_stageWav.TryGetValue(cue.Sound, out var wav)) _stageWav[cue.Sound] = wav = Make(StageSounds.Make(cue.Sound));
+                if (!_stageWav.TryGetValue(cue.Sound, out var wav)) _stageWav[cue.Sound] = wav = Make(StageSounds.Make(cue.Sound), "stage_" + cue.Sound);
                 Play(wav, cue.Sound is StageSound.Siren ? -9f : -7f);
             }
             if (ShipView.BlastShake)

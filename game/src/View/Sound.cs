@@ -147,9 +147,9 @@ public partial class SoundSystem : Node
         p.VolumeDb = Mathf.LinearToDb(next);
     }
 
-    private AudioStreamPlayer2D Loop2D(float[] samples)
+    private AudioStreamPlayer2D Loop2D(float[] samples, [System.Runtime.CompilerServices.CallerArgumentExpression("samples")] string? what = null)
     {
-        var s = Make(samples);
+        var s = Make(samples, what);
         s.LoopMode = AudioStreamWav.LoopModeEnum.Forward;
         s.LoopBegin = 0;
         s.LoopEnd = samples.Length;
@@ -158,9 +158,9 @@ public partial class SoundSystem : Node
         return p;
     }
 
-    private AudioStreamPlayer Loop(float[] samples)
+    private AudioStreamPlayer Loop(float[] samples, [System.Runtime.CompilerServices.CallerArgumentExpression("samples")] string? what = null)
     {
-        var s = Make(samples);
+        var s = Make(samples, what);
         s.LoopMode = AudioStreamWav.LoopModeEnum.Forward;
         s.LoopBegin = 0;
         s.LoopEnd = samples.Length;
@@ -169,7 +169,7 @@ public partial class SoundSystem : Node
         return p;
     }
 
-    private static AudioStreamWav Make(float[] samples)
+    private static AudioStreamWav Make(float[] samples, [System.Runtime.CompilerServices.CallerArgumentExpression("samples")] string? what = null)
     {
         var bytes = new byte[samples.Length * 2];
         for (int i = 0; i < samples.Length; i++)
@@ -178,7 +178,19 @@ public partial class SoundSystem : Node
             bytes[2 * i] = (byte)(v & 0xff);
             bytes[2 * i + 1] = (byte)((v >> 8) & 0xff);
         }
+        if (Dsp.DumpDir != null) Dsp.Dump(DumpName(what), bytes); // v23 확인용 페이지: 기본 효과음 · 음악도 wav로
         return new AudioStreamWav { Format = AudioStreamWav.FormatEnum.Format16Bits, MixRate = Rate, Stereo = false, Data = bytes };
+    }
+
+    private static readonly Dictionary<string, int> _dumped = new();
+    /// <summary>"MoodLoop(MusicMood.Calm)" → "MoodLoop_Calm" (같은 이름이면 _2 · _3).</summary>
+    private static string DumpName(string? what)
+    {
+        string n = new string((what ?? "sound").Select(ch => char.IsLetterOrDigit(ch) ? ch : '_').ToArray()).Replace("MusicMood_", "").Replace("__", "_").Trim('_');
+        if (n.Length > 48) n = n[..48];
+        int k = _dumped.TryGetValue(n, out var c) ? c + 1 : 1;
+        _dumped[n] = k;
+        return k == 1 ? n : $"{n}_{k}";
     }
 
     // ── 파형 ──

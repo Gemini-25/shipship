@@ -156,6 +156,17 @@ public static class Brain
                 && (!c.Job.Urgent || c.Job.Activity is ChoresActivity or DutyActivity) && (!Crisis.Acting(w) || Crisis.Chronic(w) && !ChoresActivity.LifeOrDeath(c.Job.Order) && ChoresActivity.Relief(c, w)))
                 foreach (var e in evals)
                     if (e.Activity is SleepActivity) { if (e.Score > 0.5f) { best = e; spent = true; } break; }
+            // v23 먼 비상식량을 가지러 가는 길에 곁의 식사가 다시 찼으면 그리로
+            if (c.Job.Activity is EatActivity eatNow && EatActivity.BetterFoodNearby(c, w, dist))
+            {
+                var nearer = PlanTimed(eatNow, c, w, dist);
+                if (nearer != null)
+                {
+                    var why = evals[0];
+                    foreach (var e in evals) if (e.Activity == eatNow) { why = e; break; }
+                    c.EndJob(w, ToilStatus.Interrupted); c.StartJob(nearer, w, why); return;
+                }
+            }
             if (best.Activity == c.Job.Activity)
             {
                 // 같은 "작업"이라도 훨씬 급한 일이 올라오면 하던 정비를 내려놓고 간다
@@ -196,6 +207,9 @@ public static class Brain
             c.StartJob(job, w, e);
             return;
         }
+        // v23 할 수 있는 일이 하나도 없는데 큰 짐을 들었다 — 짐 때문에 정비 통로를 못 기어가 방에 갇힌 것일 수 있다 (고래호: 케이블 다섯 묶음을 든 채
+        //   종자 보관소 안쪽에서 서른두 시간 굶었다). 그 자리에 내려놓는다 — 다음 생각부터 기어 나간다 (내려놓은 짐은 나중에 챙긴다).
+        if (c.Carrying is { Count: > 4 } && !c.Outside && c.Room != null && w.Movement.SetDown(c, "짐을 들고는 빠져나갈 길이 없다", any: true)) { c.NextThinkTick = w.Tick + 1; return; }
         c.StartJob(IdleJob.Create(), w, null);
     }
 }

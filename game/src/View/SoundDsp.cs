@@ -167,7 +167,7 @@ internal static class Dsp
         return w;
     }
 
-    private static void Dump(string name, byte[] pcm)
+    internal static void Dump(string name, byte[] pcm)
     {
         try
         {

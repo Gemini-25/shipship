@@ -28,6 +28,9 @@ public static class ShipTiers
             int t = Math.Min(tier, Tech.Tiers(f.Type).Count);
             if (t > m.Tier) { m.Tier = t; raised++; }
         }
+        // 배터리 용량이 커졌으니 처음 채워 둔 양도 그만큼 (늘 80%로 떠난다 — 그대로 두면 32%로 시작한 셈이었다)
+        float cap = w.Ship.FurnitureOf(FurnitureType.Battery).Sum(PowerGrid.BatteryKwh);
+        if (cap > 0f) w.Power.BatteryCharge = cap * 0.8f;
         return raised;
     }
 }
