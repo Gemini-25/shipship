@@ -72,6 +72,11 @@ public static class Scenarios
         // ── 증축 (v16.10) ──
         ("crowded", "빈 침대는 예전에 화물칸으로 · 구조한 두 사람이 탄다 → 간이침대 → 승무원이 증축을 낸다"),
         ("annex", "관찰자 지시: 아래 외벽에 방을 새로 붙이자는 안건 (다음 생각 때 · 회의)"),
+        // ── v23 도전 시나리오 (사용자가 고른 76~79) ──
+        ("o2return", "산소 탱크 폭발 뒤 귀환 — 산소 발생기 둘 고장 · 생명유지실 파공 · 배터리 30% · 공기 예비 바닥 → 작은 구역에 모여 버틴다"),
+        ("iceexpedition", "얼음 행성에 갇힌 탐험대 — 영하 120도 · 냉각 폭주 결빙 · 식량 · 물 빠듯 → 구조를 기다리며 버틴다"),
+        ("lonesurvivor", "혼자 남은 승무원 — 다른 사람은 모두 앞선 사고로 떠났다 · 로봇과 재배실로 살아남기"),
+        ("lastten", "반쯤 부서진 배에 마지막 열 명 — 설비 절반 고장 · 파공 셋 · 물자 부족"),
     };
 
     public static readonly string[] Extreme = { "nosuits", "nosealant", "keycrew", "nofuel", "overload", "secondhit" };
@@ -81,6 +86,7 @@ public static class Scenarios
     public static readonly string[] Piping = { "hotleg", "hotleak", "branch", "radiator", "noplates", "coolantleak", "watermain", "feedline" };
     public static readonly string[] Automation = { "cpuheat", "cpubreach", "cpuparts", "cpufire", "cpupower" };
     public static readonly string[] Fixtures = { "doormotor", "doorbreach", "darkfire", "nomotors" };
+    public static readonly string[] Challenge = { "o2return", "iceexpedition", "lonesurvivor", "lastten" }; // v23
 
     /// <summary>
     /// 물자 부족 모드: 부품·수리재·원료·연료통을 바닥내고 소모품(필터·윤활유)도 조금만 남긴다.
@@ -344,6 +350,49 @@ public static class Scenarios
                 Meteor(RoomType.Engine, 0.9f);
                 focus = R(RoomType.Engine);
                 break;
+            // ── v23 도전 시나리오 ──
+            case "o2return":
+            {
+                foreach (var g in ship.FurnitureOf(FurnitureType.OxygenGenerator)) w.Machines.Break(g.Machine!, FaultKind.ElectrolyzerFault);
+                w.Hazards.FireStory("GasTankRupture", R(RoomType.LifeSupport));
+                Meteor(RoomType.LifeSupport, 0.7f);
+                w.Air.Reserve = w.Air.ReserveCapacity * 0.15f;
+                foreach (var b in ship.FurnitureOf(FurnitureType.Battery)) if (b.Machine != null) b.Machine.Condition = MathF.Min(b.Machine.Condition, 0.6f);
+                w.RaiseAlert("산소 탱크 폭발 — 공기 예비 15% · 산소 발생기 둘 고장", R(RoomType.LifeSupport), AlertLevel.Critical, shipWide: true);
+                w.History.Add(w, HistoryKind.Incident, "도전: 산소 탱크 폭발 뒤 귀환 — 작은 구역에 모여 버틴다");
+                focus = R(RoomType.LifeSupport);
+                break;
+            }
+            case "iceexpedition":
+            {
+                w.Env.Force = EnvHazardSystem.Sample(EnvKind.Frozen);
+                w.Big.Start(BigKind.FreezeRunaway);
+                LimitStock(w, ItemKind.Meal, 6);
+                w.Water.Level = MathF.Min(w.Water.Level, 90f);
+                w.History.Add(w, HistoryKind.Incident, "도전: 얼음 행성에 갇힌 탐험대 — 영하 120도, 구조를 기다린다");
+                focus = ship.Rooms.FirstOrDefault(r => w.Big.Open.Any(b => b.Rooms.Contains(r.Id)));
+                break;
+            }
+            case "lonesurvivor":
+            {
+                var keep = w.Crew.Where(c => !c.Dead && !c.IsChild).OrderByDescending(c => c.Traits.Bravery + c.RawSkill(Skill.Botany)).ThenBy(c => c.Id).FirstOrDefault();
+                foreach (var c in w.Crew.Where(c => c != keep && !c.Dead)) { c.LeftShip = true; c.Room = null; }
+                if (keep != null) { keep.Needs.Stress = 0.6f; keep.Memory.Trauma = 0.35f; Life.Diary(w, keep, "이제 나 혼자다. 로봇들이 아직 움직인다."); }
+                w.History.Add(w, HistoryKind.Incident, $"도전: 혼자 남은 승무원 — {keep?.Name}");
+                focus = keep?.Room;
+                break;
+            }
+            case "lastten":
+            {
+                foreach (var c in w.Crew.Where(c => !c.Dead).OrderBy(c => c.Id).Skip(10)) { c.LeftShip = true; c.Room = null; }
+                var ms = ship.Machines.Where(m => !m.Body.Stowed && m.Body.Type is not (FurnitureType.Cot or FurnitureType.SupplyCache)).OrderBy(m => m.Body.Id).ToList();
+                for (int i = 0; i < ms.Count; i += 2) w.Machines.Break(ms[i]);
+                Meteor(RoomType.Storage, 0.7f); Meteor(RoomType.Hydroponics, 0.5f); Meteor(RoomType.Quarters, 0.5f);
+                LimitStock(w, ItemKind.Plate, 2); LimitStock(w, ItemKind.Sealant, 2);
+                w.History.Add(w, HistoryKind.Incident, "도전: 반쯤 부서진 배에 마지막 열 명");
+                focus = R(RoomType.Storage);
+                break;
+            }
             case "jettisonfire":
             {
                 LimitStock(w, ItemKind.Extinguisher, 0);

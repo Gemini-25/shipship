@@ -683,6 +683,7 @@ public sealed class EnvHazardSystem
         c.Vitals.InjuryCause = Cause(m);
         c.Vitals.Health = MathF.Max(0.15f, c.Vitals.Health - 0.15f * sev);
         if (ail != null) w.Ailments.Catch(c, ail, null, MechName(m));
+        if (m == EnvMech.Bio && _rng.Chance(0.3f)) w.Parasite.Infect(c, "포자"); // v23 낯선 포자에 묻어 온 기생체
         c.Needs.Stress = MathF.Min(1f, c.Needs.Stress + 0.1f);
         c.Interrupt(w);
         Stats.Injured++;

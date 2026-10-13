@@ -61,6 +61,7 @@ mentortest 1 7 --mentortest
 mindcaretest 1 7 --mindcaretest
 envtest 1 7 --envtest
 bigtest 1 7 --bigtest
+arcstest 1 7 --arcstest
 story21test 1 7 --story21test
 hazardtest 1 20260929 --hazardtest
 livingtest 1 20260929 --livingtest

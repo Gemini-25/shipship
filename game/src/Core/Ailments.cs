@@ -83,6 +83,7 @@ public sealed class AilmentSystem
         // 마음
         new("insomnia", "불면증", AilmentGroup.Mind, "하루 넘게 높은 스트레스", "잠들지 못한다 — 자도 덜 쉰다", 4f, 0.5f, Chronic: true, Stress: 0.01f, Sleep: 0.4f, Cure: Cure.Company),
         new("depression", "우울증", AilmentGroup.Mind, "낮은 사기 · 슬픔 · 깊은 상처", "아무것도 하기 싫다 — 손이 느리다", 8f, 0.5f, Chronic: true, Stress: 0.02f, Work: 0.25f, Sleep: 0.15f, Cure: Cure.Company),
+        new("parasite", "외계 기생체", AilmentGroup.Body, "낯선 땅 · 포자 구름에서 묻어 왔다", "늘 춥고 배고프다 — 밤에 무언가 꿈틀거린다", 12f, 0.7f, Chronic: true, Rest: 0.02f, Stress: 0.03f, Work: 0.2f, Sleep: 0.2f, Health: 0.01f, Cure: Cure.Medic), // v23 (Parasite.cs)
         new("ptsd", "외상 후 스트레스", AilmentGroup.Mind, "아주 무서운 일을 겪음 (긴장 60% 넘음)", "악몽 · 작은 일에도 놀란다 — 공황이 잦다", 10f, 0.5f, Chronic: true, Stress: 0.02f, Sleep: 0.2f, Panic: 1.2f, Cure: Cure.Company),
         // 의료 2차 — 장기가 상해 생기는 것 (OrganSystem 이 세기를 맞춘다 · 약으로는 낫지 않는다 — 기계 · 이식 · 시간)
         new("lungfail", "폐 부전", AilmentGroup.Body, "연기 · 유독 가스 · 감압 · 폐렴 · 큰 피폭으로 상한 폐", "숨이 차다 — 조금만 걸어도 헐떡인다", 999f, 0.6f, Chronic: true, Rest: 0.07f, Stress: 0.02f, Work: 0.3f, Walk: 0.35f, Health: 0.03f, Cure: Cure.None),
