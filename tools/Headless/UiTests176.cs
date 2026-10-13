@@ -106,7 +106,7 @@ public static partial class Program
             CurioPlaced? p = null;
             for (int k = 0; k < 72 && !cu.Seen.Contains("music_box"); k++)
             {
-                var c = w.Crew.Where(x => x.IsAwake && x.Room != null && x.Room.Type != RoomType.Corridor).OrderBy(x => (x.Id + k) % 7).FirstOrDefault();
+                var c = w.Crew.Where(x => x.IsAwake && x.Room != null && x.Room.Type != RoomType.Corridor && x.Pose != Pose.Walking).OrderBy(x => (x.Id + k) % 7).FirstOrDefault(); // 걷는 중인 사람 곁에 두면 곧 멀어진다 (찾을 틈이 없다)
                 if (c != null)
                 {
                     if (p != null && !p.Found) cu.Placed.Remove(p);

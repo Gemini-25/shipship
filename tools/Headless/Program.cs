@@ -75,10 +75,31 @@ public static partial class Program
         return bad == 0 ? 0 : 1;
     }
 
+    private const string Fixed = "fixed"; // 회의 · 관찰자가 컴퓨터 권한을 바꾸는 장면 (v23 전권 고정이면 바뀌지 않는다)
+    private const string Robots23 = "commander,relay,eyes,brain"; // 사고 지휘관 · 구역 중계기 · 눈의 그물 · 로봇 두뇌가 먼저 맡아 사람 장면이 흐려진다
+    private const string Nozzle = "nozzle"; // 천장 자동 소화가 불을 먼저 끈다 — 사람이 불에 대응하는 장면
+    private const string Legacy23 = "nozzle,commander,relay,eyes,brain"; // 둘 다
+    /// <summary>v23 대개편 장치를 끄고 보는 시험 (회귀 v23에서 가렸다 — 그 장치만 끄면 예전처럼 통과).</summary>
+    private static readonly Dictionary<string, string> V23Legacy = new()
+    {
+        ["computerbraintest"] = Fixed, ["computertest"] = Fixed, ["ctltest"] = Fixed, ["meetingtest"] = Fixed,
+        ["aftertest"] = Robots23, ["counciltest"] = Robots23, ["crisistest"] = Robots23, ["gesturetest"] = Robots23, ["gradetest"] = Robots23,
+        ["maneuvertest"] = Robots23, ["medbottest"] = Robots23, ["mindtest"] = Robots23, ["shipcomputertest"] = Robots23, ["coordtest"] = Robots23,
+        ["knowtest"] = Robots23,
+        ["commandtest"] = Nozzle, ["techwebtest"] = Nozzle, ["bodytest"] = Nozzle,
+        ["docktest"] = Legacy23, ["foodtest"] = Legacy23, ["hazardtest"] = Legacy23, ["mattertest"] = Legacy23, ["organtest"] = Legacy23,
+        ["responsetest"] = Legacy23, ["robot21test"] = Legacy23, ["roomtest"] = Legacy23, ["soiltest"] = Legacy23, ["waystest"] = Legacy23,
+    };
+
     public static int Main(string[] args)
     {
         Console.OutputEncoding = System.Text.Encoding.UTF8;
         if (Environment.GetEnvironmentVariable("SHIPSIM_V21") == "0") RobotsV21.General = RobotsV21.Reactor = RobotsV21.Expanded = false; // 개발용: 회귀가 로봇 확장 때문인지 가린다
+        // v23 주컴퓨터 대개편 뒤: 사람이 하는 대응 · 회의가 정하는 권한을 보는 시험은 그 장치를 끄고 본다
+        //   (기본은 로봇 · 주컴퓨터가 먼저 — 그게 실패했을 때 사람이 나서는 장면을 본다 · 장치마다 제 시험이 따로 있다:
+        //    nozzletest · commandertest · relaytest · eyetest · robotbraintest · learntest)
+        string v23Off = string.Join(",", V23Legacy.Where(kv => args.Contains("--" + kv.Key)).Select(kv => kv.Value));
+        if (v23Off.Length > 0) Environment.SetEnvironmentVariable("SHIPSIM_OFF", string.Join(",", new[] { Environment.GetEnvironmentVariable("SHIPSIM_OFF"), v23Off }.Where(x => !string.IsNullOrEmpty(x))));
         // 개발용 (v23 회귀 가리기): SHIPSIM_OFF=nozzle,relay,brain,commander,eyes,fixed,planet,purpose,quiet,know,home
         foreach (var off in (Environment.GetEnvironmentVariable("SHIPSIM_OFF") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries))
             switch (off.Trim())
