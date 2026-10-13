@@ -594,6 +594,7 @@ public sealed class EraSystem
     public void Update()
     {
         var w = _w;
+        if (_nextDay < 0 && Stats.Starts == 0 && _lastResearch == 0f) _lastResearch = w.Research; // 첫 틱: 실어 온 연구 점수는 새 기술 진척이 아니다
         float gained = MathF.Max(0f, w.Research - _lastResearch);
         _lastResearch = w.Research;
         if (w.Tick >= _nextHour) { _nextHour = w.Tick + SimTime.TicksPerHour; Lessons(); }

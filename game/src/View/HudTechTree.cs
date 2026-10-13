@@ -352,7 +352,13 @@ public partial class Hud
     private void DrawUnlockCard(Vector2 mouse)
     {
         var e = _world.Eras;
-        if (_unlockSeen < 0 || _unlockSeen > e.Unlocks.Count) { _unlockSeen = e.Unlocks.Count; return; } // 처음(불러온 게임)엔 지난 카드를 다시 띄우지 않는다
+        if (_unlockSeen < 0)
+        {
+            // 처음(불러온 게임)엔 지난 카드를 다시 띄우지 않는다 — 방금(한 시간 안) 익힌 것만
+            _unlockSeen = e.Unlocks.Count;
+            while (_unlockSeen > 0 && e.Unlocks[_unlockSeen - 1].Tick >= _world.Tick - SimTime.Hours(1)) _unlockSeen--;
+        }
+        if (_unlockSeen > e.Unlocks.Count) _unlockSeen = e.Unlocks.Count;
         if (_unlockSeen >= e.Unlocks.Count) return;
         var u = e.Unlocks[_unlockSeen];
         if (_unlockAt < 0f) _unlockAt = _time;

@@ -992,6 +992,10 @@ public partial class Main : Node2D
                     break;
                 case "--tech":
                     Hud.TechOpen = true;
+                    if (value == "tiers") Hud.TechWebOpen = true; // v23 둘째 쪽 (설비 단계)
+                    break;
+                case "--learn": // v23 화면 확인: --learn=p2,l2 (지금 바로 익힌다 · 카드가 뜬다 · 기록되지 않는다)
+                    foreach (var tid in value.Split(',', StringSplitOptions.RemoveEmptyEntries)) Sim.Eras.LearnNow(tid.Trim());
                     break;
                 case "--tune":
                 {
