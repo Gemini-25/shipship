@@ -3,29 +3,31 @@ using System.Linq;
 
 namespace ShipSim.Core;
 
-// v23 크기별 기술 등급 (도안 — 함장 승인 전에는 꺼 둔다):
-//   소형 · 기본형 (8명 이하) I · 중형 (9~14명) II · 대형 (15~24명) III · 초대형 · 세대선 (25명 넘음) IV.
-//   큰 배일수록 더 좋은 기술을 싣고 떠난다 — 원자로 · 재배대 · 정수기 · 산소 발생기 · 배터리 · 냉각 펌프 · 작업대 · 정련기 · 수집기 …
-//   각 설비는 그 설비가 가진 단계까지만 (재배대는 III이 끝). 높은 단계의 값(전기 더 먹음 · 더 닳음 · 더 자주 고장)도 그대로 따라온다.
+// v23 크기별 시작 시대 (함장 승인):
+//   소형 · 기본형 (8명 이하) Ⅰ 핵분열 출항 · 중형 (9~14명) Ⅱ 폐쇄 순환 · 대형 (15~24명) Ⅲ 핵융합 · 초대형 · 세대선 (25명 넘음) Ⅳ 나노 조립.
+//   큰 배일수록 앞선 시대에서 떠난다 — 그 앞 시대의 기술을 이미 알고, 설비도 그 단계로 지어져 있다 (EraSystem.StartAt).
+//   높은 단계의 대가(전기 · 닳음 · 고장)는 약하게 따라온다 (Tech.Mild).
 public static class ShipTiers
 {
-    /// <summary>켜면 배를 만들 때 크기 등급만큼 설비 단계를 올린다 (기본 꺼짐 — 승인 뒤 켠다).</summary>
-    public static bool On;
+    /// <summary>끄면 모든 배가 Ⅰ 시대 · I 단계 설비로 떠난다 (시험 · SHIPSIM_OFF=tiers).</summary>
+    public static bool On = true;
 
-    public static int TierOf(int crew) => crew <= 8 ? 1 : crew <= 14 ? 2 : crew <= 24 ? 3 : 4;
+    public static int EraOf(int crew) => crew <= 8 ? 1 : crew <= 14 ? 2 : crew <= 24 ? 3 : 4;
+    public static int TierOf(int crew) => EraOf(crew);
 
-    public static string Name(int tier) => tier switch { 1 => "I 기본 기술", 2 => "II 개량 기술", 3 => "III 고급 기술", _ => "IV 최신 기술" };
+    public static string Name(int era) => $"{TechTree.Roman(era)} {TechTree.EraName(era)}";
 
-    /// <summary>배를 띄울 때 한 번: 기술 단계가 있는 설비를 크기 등급까지 올린다.</summary>
+    /// <summary>배를 띄울 때 한 번: 크기만큼 앞선 시대에서 시작하고, 설비를 아는 단계까지 지어 둔다. 올린 설비 수.</summary>
     public static int Apply(World w, int crew)
     {
         if (!On) return 0;
-        int tier = TierOf(crew), raised = 0;
-        if (tier <= 1) return 0;
+        int era = EraOf(crew), raised = 0;
+        if (era <= 1) return 0;
+        w.Eras.StartAt(era);
         foreach (var f in w.Ship.Furniture)
         {
             if (f.Machine is not Machine m || !Tech.HasTree(f.Type)) continue;
-            int t = Math.Min(tier, Tech.Tiers(f.Type).Count);
+            int t = Tech.Unlocked(w, f.Type);
             if (t > m.Tier) { m.Tier = t; raised++; }
         }
         // 배터리 용량이 커졌으니 처음 채워 둔 양도 그만큼 (늘 80%로 떠난다 — 그대로 두면 32%로 시작한 셈이었다)

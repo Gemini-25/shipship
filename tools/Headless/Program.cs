@@ -137,7 +137,7 @@ public static partial class Program
                 case "parasite": ParasiteSystem.Off = true; break;
                 case "pets": PetSystem.Off = true; break;
                 case "meet": EncounterSystem.Off = true; break;
-                case "tiers+": ShipTiers.On = true; break; // v23 크기별 기술 등급 도안 (켜기)
+                case "tiers": ShipTiers.On = false; break; // v23 크기별 시작 시대 끄기 (모두 Ⅰ 시대)
             }
         int days = args.Length > 0 && int.TryParse(args[0], out var d) ? d : 14;
         int seed = args.Length > 1 && int.TryParse(args[1], out var s) ? s : 20260929;
@@ -276,6 +276,8 @@ public static partial class Program
         if (args.Contains("--techlookcheck")) return RunTechLookCheck(seed); // v16.5b 기술 · 설비가 티 나는 그림
         if (args.Contains("--annextest")) return RunAnnexTest(seed); // v16.10
         if (args.Contains("--techwebtest")) return RunTechWebTest(seed); // v16.14
+        if (args.Contains("--techtreetest")) return RunTechTreeTest(seed); // v23 기술 체계 개편
+        if (args.Contains("--techpace")) return RunTechPace(seed, args); // v23 진도 재기
         if (args.Contains("--scaletest")) return RunScaleTest(seed); // v16.18 사고 규모
         if (args.Contains("--fixartcheck")) return RunFixArtCheck(seed); // v16.5c 설비 그림 표
         if (args.Contains("--roomtest")) return RunRoomTest(seed); // v16.17 방은 승무원이 정한다
@@ -331,6 +333,8 @@ public static partial class Program
         if (args.Contains("--funtest")) return RunFunTest(seed); // v23 볼거리 (반려동물 · 살아 있는 행성 · 다른 배 · 상륙 · 축제)
         if (args.Contains("--allontest")) return RunAllOnTest(seed); // v23 통합 시험 묶음 — 모든 기능 켬 · 핵심 장면 20
         if (args.Contains("--hungerprobe")) return RunHungerProbe(Math.Max(1, days), seed, shipArg ?? "Cheonma"); // v23 진단: 식량이 있는데 굶는 사람
+        if (args.Contains("--shipcensus")) return RunShipCensus(seed); // v23 설계도 손보기 근거
+        if (args.Contains("--techdump")) return RunTechDump(); // v23 기술 개편 준비
         if (args.Contains("--story21test")) return RunStory21Test(seed); // v21 이야기꾼 · 난이도 세분화
         if (args.FirstOrDefault(a => a.StartsWith("--foodprobe=")) is string fp) return RunFoodProbe(seed, fp[12..]); // v21 먹을 것 탐침
         if (args.Contains("--campaign15test")) return RunCampaign15Test(seed); // v15.6

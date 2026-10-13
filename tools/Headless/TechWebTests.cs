@@ -44,81 +44,67 @@ public static partial class Program
                     $"갈림길 {TechWeb.Forks.Length} · 조합 {combos} · 조건 종류 {gates} · 줄기 본체/음식/이동식/선외/원정/폭발/대재난/방 {string.Join("/", lines)} · 컴퓨터 {computer}");
             }
 
-            // 1) 핵융합로: 세 분야를 거쳐야
+            // 1) 핵융합로 (v23 새 기술표): Ⅲ 시대 전엔 연구할 수 없고, 소형 핵융합로를 익혀야 원자로 III 설계가 생긴다
             {
+                bool tiersWas = ShipTiers.On;
+                ShipTiers.On = false;
                 var w = World.CreateDefault(seed, 0, "Hanbit");
-                w.Research = 140f; // 핵융합 시대
-                var fc = T("fusioncore");
-                var pre = TechWeb.Node("fusioncore").Pre.Select(T).ToList();
-                bool AvailFc() => w.Eras.Available.Any(t => t.Id == "fusioncore");
-                foreach (var id in new[] { "rcd", "weldcode", "vibelisten", "checklist" }) Learn(w, id);
-                bool tier0 = TechWeb.TierOk(w, FurnitureType.ReactorCore, 3);
+                ShipTiers.On = tiersWas;
+                bool AvailP3() => w.Eras.Available.Any(t => t.Id == "p3");
                 int unlocked0 = Tech.Unlocked(w, FurnitureType.ReactorCore);
-                var steps = new List<string>();
-                foreach (var p in pre) { steps.Add($"{p.Name}({EraSystem.Fields(p.Field)}) 전 {(AvailFc() ? "열림" : "닫힘")}"); Learn(w, p.Id); }
-                bool openAfter = AvailFc();
-                bool driveLocked = !w.Eras.Available.Any(t => t.Id == "fusiondrive");
-                Learn(w, "fusioncore");
-                Learn(w, "rcsthruster");
+                bool closed0 = !AvailP3() && w.Eras.Era == 1;
+                foreach (var t in TechTree.Main.Where(t => t.Era == 1)) w.Eras.LearnNow(t.Id);
+                int era2 = w.Eras.Era;
+                w.Eras.LearnNow("p2");
                 int unlocked1 = Tech.Unlocked(w, FurnitureType.ReactorCore);
-                bool driveOpen = w.Eras.Available.Any(t => t.Id == "fusiondrive");
-                Check("핵융합로 — 초전도 자석(동력) · 플라스마 진단(센서) · 방사선 차폐(선체)를 다 익혀야 열리고, 원자로 III 설계 · 핵융합 추진도 그 뒤에",
-                    pre.Select(p => p.Field).Distinct().Count() == 3 && steps.All(s => s.EndsWith("닫힘")) && openAfter && driveLocked && !tier0 && unlocked0 == 2 && unlocked1 >= 3 && driveOpen,
-                    string.Join(" → ", steps) + $" → 다 익힌 뒤 {(openAfter ? "열림" : "닫힘")} · 원자로 단계 {unlocked0} → {unlocked1} · {fc.Effect}");
+                bool closed1 = !AvailP3();
+                foreach (var t in TechTree.Main.Where(t => t.Era == 2 && !w.Eras.Known.Contains(t.Id))) w.Eras.LearnNow(t.Id);
+                bool openAfter = AvailP3() && w.Eras.Era == 3;
+                bool tier0 = TechWeb.TierOk(w, FurnitureType.ReactorCore, 3);
+                w.Eras.LearnNow("p3");
+                int unlocked2 = Tech.Unlocked(w, FurnitureType.ReactorCore);
+                var card = w.Eras.Unlocks.LastOrDefault(u => u.Id == "p3");
+                Check("핵융합로 — Ⅲ 시대가 열리기 전엔 연구할 수 없고, 개량 핵분열로 → 소형 핵융합로를 익혀야 원자로 단계가 1 → 2 → 3 (공사 기다림이 카드에)",
+                    closed0 && era2 == 2 && closed1 && openAfter && !tier0 && unlocked0 == 1 && unlocked1 == 2 && unlocked2 == 3 && w.Eras.Known.Contains("fusioncore") && card != null && card.Installs.Length >= 1,
+                    $"시대 1 → {era2} → {w.Eras.Era} · 원자로 단계 {unlocked0} → {unlocked1} → {unlocked2} · 카드: {string.Join(" / ", card?.Lines ?? Array.Empty<string>())} · 설치: {string.Join(" / ", card?.Installs ?? Array.Empty<string>())}");
             }
 
-            // 2) 갈림길: 실제 회의가 고른다 · 조류를 고른 배는 화학 산소가 잠기고 비싸진다 · 약점이 거듭되면 다시 꺼낸다
+            // 2) 갈림길 (v23): 그 기술을 연구할 때 배의 형편으로 기울고(이유가 보인다), 함장이 뒤집을 수 있고, 익히면 배의 이름이 붙는다 · 화학 산소 배는 산소 III이 막힌다
             {
+                bool tiersWas = ShipTiers.On;
+                ShipTiers.On = false;
                 var w = World.CreateDefault(seed, 0, "Mirinae");
-                Run(w, SimTime.Hours(2));
-                w.Research = 60f;
-                foreach (var id in new[] { "amine", "seedbank" }) Learn(w, id);
-                Run(w, SimTime.Hours(1) + 1); // 한 시간 훑기: 갈림길이 안건에 오른다
+                ShipTiers.On = tiersWas;
+                foreach (var t in TechTree.Main.Where(t => t.Era == 1)) w.Eras.LearnNow(t.Id);
+                w.Eras.Begin("l2", "시험");
+                bool leaned = w.Eras.Picks.TryGetValue("oxygen", out var side0) && w.Eras.PickWhy["oxygen"].Length > 0;
+                string why0 = w.Eras.PickWhy.GetValueOrDefault("oxygen") ?? "";
+                bool flipped = w.Eras.FlipFork("oxygen") && w.Eras.Picks["oxygen"] == 1 - side0 && w.Eras.PickWhy["oxygen"] == "함장이 골랐다";
+                if (w.Eras.Picks["oxygen"] != 0) w.Eras.FlipFork("oxygen"); // 화학 산소 쪽으로
+                w.Eras.LearnNow("l2");
                 var st = w.TechWeb.ForkStates["oxygen"];
-                bool pending = st.PendingSince >= 0 && st.Side < 0;
-                bool hidden = !w.Eras.Available.Where(t => !w.TechWeb.Undecided(t)).Any(t => t.Id is "chemox" or "algaeox"); // 정하기 전엔 회의가 연구로 고르지 않는다
-                var attendees = w.Crew.Where(c => !c.Dead && c.CanAct && !c.IsChild).ToList();
-                var rec = w.Meetings.Hold(MeetingKind.Regular, attendees, "식당");
-                var item = rec.Items.FirstOrDefault(i => i.Topic == "techfork:oxygen");
-                bool decided = st.Side >= 0 && item != null && item.Votes.Count >= 2 && item.Speeches.Count > 0;
-                Check("갈림길 회의 — 산소: 화학 산소냐 조류 광합성이냐를 회의가 토론 · 표결로 정하고 배의 이름이 붙는다",
-                    pending && hidden && decided && w.TechWeb.Epithets.Count == 1,
-                    $"안건 {(pending ? "올라옴" : "없음")} · {item?.Title} · 찬성 {item?.Yes} 반대 {item?.No} · 발언: {string.Join(" / ", item?.Speeches.Take(3).Select(s => $"{w.Crew[s.Who].Name}: {s.Text}") ?? Array.Empty<string>())}"
-                    + $" · 컴퓨터: {(item?.Computer ?? "없음")} → {w.TechWeb.Identity} ({st.Why})");
-
-                var w2 = World.CreateDefault(seed, 0, "Hanbit");
-                w2.Research = 60f;
-                foreach (var id in new[] { "amine", "seedbank" }) Learn(w2, id);
-                w2.TechWeb.Scan();
-                w2.TechWeb.Decide(TechWeb.Forks.First(f => f.Id == "oxygen"), 1, "시험 — 조류를 골랐다", "시험", 3, 1);
-                var chem = T("chemox");
-                bool locked = !w2.Eras.Available.Any(t => t.Id == "chemox") && w2.TechWeb.Locked(chem) && w2.Eras.Available.Any(t => t.Id == "algaeox" || !w2.TechWeb.GateMet(T("algaeox")));
-                float cost = w2.TechWeb.CostOf(chem);
-                bool tierOk = TechWeb.TierOk(w2, FurnitureType.OxygenGenerator, 3);
-                w2.Hazards.Count[(int)HazardKind.WaterContamination] += 1;
-                w2.Hazards.Count[(int)HazardKind.MoldOutbreak] += 1;
-                Run(w2, SimTime.Hours(1) + 1);
-                var st2 = w2.TechWeb.ForkStates["oxygen"];
-                bool reopened = st2.Reopened && w2.Eras.Available.Any(t => t.Id == "chemox") && Math.Abs(w2.TechWeb.CostOf(chem) - 2f * chem.Cost) < 0.01f;
-                var w3 = World.CreateDefault(seed, 0, "Hanbit");
-                w3.TechWeb.Decide(TechWeb.Forks.First(f => f.Id == "oxygen"), 0, "시험", "시험", 1, 0);
-                bool chemShip = !TechWeb.TierOk(w3, FurnitureType.OxygenGenerator, 3) && w3.TechWeb.Locked(T("algaeox")) && w3.TechWeb.Locked(T("algaeox")) && !w3.Eras.Available.Any(t => t.Id == "algaebio");
-                Check("갈림길 — 조류 광합성을 고른 배는 화학 산소가 잠기고(값 두 배), 조류의 약점(물 오염 · 곰팡이)이 거듭되자 다시 꺼낸다 · 화학 산소를 고른 배는 조류 광합성조(산소 III)가 막힌다",
-                    locked && Math.Abs(cost - 2f * chem.Cost) < 0.01f && tierOk && reopened && chemShip && w2.TechWeb.Epithets.Contains("초록 숨의 배"),
-                    $"화학 산소 잠김 {locked} · 값 {chem.Cost:0} → {cost:0} · 다시 꺼냄 {st2.Reopened} · 배 이름 '{w2.TechWeb.Identity}' · 화학 산소 배의 산소 III {(TechWeb.TierOk(w3, FurnitureType.OxygenGenerator, 3) ? "열림" : "막힘")}");
+                bool chem = w.Eras.Known.Contains("chemox") && !w.Eras.Known.Contains("algaeox") && st.Side == 0;
+                bool noFlip = !w.Eras.FlipFork("oxygen");
+                bool tierBlocked = !TechWeb.TierOk(w, FurnitureType.OxygenGenerator, 3);
+                foreach (var t in TechTree.Main.Where(t => t.Era == 2 && !w.Eras.Known.Contains(t.Id))) w.Eras.LearnNow(t.Id);
+                w.Eras.LearnNow("l3");
+                int o2 = Tech.Unlocked(w, FurnitureType.OxygenGenerator);
+                Check("갈림길 — 산소: 연구를 시작할 때 이 배의 형편으로 기울고(이유), 함장이 뒤집고, 익히면 배의 이름 · 화학 산소 배는 생물 여과를 익혀도 산소 발생기가 II에 머문다",
+                    leaned && flipped && chem && noFlip && tierBlocked && o2 == 2 && w.TechWeb.Epithets.Contains("약품 산소의 배"),
+                    $"처음 기운 쪽 {(side0 == 0 ? "화학 산소" : "조류 광합성")} ({why0}) · 뒤집음 {flipped} · 익힌 뒤 뒤집기 막힘 {noFlip} · 배 이름 '{w.TechWeb.Identity}' · 산소 발생기 단계 {o2}");
             }
 
             // 3) 원정 유물 역설계 · ④ 연구자가 실제로 실험한다
             {
                 var w = DayOne(seed, "Hanbit");
                 var wa = T("wreckalloy");
-                bool hidden0 = !w.TechWeb.Visible(wa) && !w.Eras.Available.Contains(wa);
+                bool hidden0 = !w.TechWeb.Visible(wa) && !w.Eras.Available.Any(t => t.Absorbs.Contains("wreckalloy"));
                 var spec = Props.Get("derelictplaque");
                 var room = w.Ship.LiveRooms.Where(r => !r.Abandoned && Props.Fits(spec.Place, r)).OrderBy(r => r.Id).First();
                 w.Props.Place(spec, room, null, "원정 옛 화물선에서 가져왔다", "옛 화물선 명판");
                 w.TechWeb.Scan();
                 string why = w.TechWeb.Why.GetValueOrDefault("wreckalloy") ?? "";
-                bool shown = w.TechWeb.Visible(wa) && w.Eras.Available.Contains(wa) && why.Contains("명판");
+                bool shown = w.TechWeb.Visible(wa) && w.Eras.Available.Any(t => t.Absorbs.Contains("wreckalloy")) && why.Contains("명판");
                 w.Eras.Begin("wreckalloy", "시험 — 유물이 궁금하다");
                 var leads = new HashSet<string>();
                 bool sawRelic = false;
@@ -141,7 +127,10 @@ public static partial class Program
 
             // 4) 실험이 잘못되어 작은 사고 (분야마다 다르다 — 동력은 방전 폭발) · 컴퓨터가 읽는다 · 놀란 연구자는 신중해진다
             {
+                bool tiersWas = ShipTiers.On;
+                ShipTiers.On = false; // v23 Ⅰ 시대에서 — 안전 배전반(동력) 실험
                 var w = DayOne(seed, "Hanbit");
+                ShipTiers.On = tiersWas;
                 w.Eras.Begin("rcd", "시험");
                 int det0 = w.Blast.Stats.Detonations, acc0 = w.TechWeb.Stats.Accidents;
                 int adv0 = w.Automation.Book.Acts.Count(a => a.Observe.StartsWith("실험 사고"));
@@ -149,7 +138,7 @@ public static partial class Program
                 for (int i = 0; i < 48 && w.TechWeb.Stats.Accidents == acc0; i++)
                 {
                     Run(w, SimTime.Minutes(30));
-                    if (w.TechWeb.Trial is ExperimentState x && x.Tech == "rcd" && x.Force == null) { x.Force = "accident"; x.Style = ResearchStyle.Bold; trial = x; }
+                    if (w.TechWeb.Trial is ExperimentState x && x.Tech == w.Eras.Project && x.Force == null) { x.Force = "accident"; x.Style = ResearchStyle.Bold; trial = x; }
                 }
                 var s = w.TechWeb.Stats;
                 var lead = trial != null ? w.Crew[trial.Lead] : null;
@@ -172,11 +161,15 @@ public static partial class Program
                 var w = DayOne(seed, "Mirinae");
                 w.Eras.Begin("checklist", "시험");
                 ExperimentState? x = null;
+                var dbg = new List<string>();
                 for (int i = 0; i < 96 && x == null; i++)
                 {
                     Run(w, SimTime.Minutes(10));
                     if (w.TechWeb.Trial is ExperimentState y && y.Progress > 0.15f && w.Crew[y.Lead].Job?.Activity is ResearchActivity) x = y;
+                    if (i % 6 == 0 && Environment.GetEnvironmentVariable("TW_DEBUG") != null)
+                        dbg.Add(w.TechWeb.Trial is ExperimentState z ? $"{i / 6}h {z.Tech} {z.Progress:0.00} {w.Crew[z.Lead].Name}:{w.Crew[z.Lead].Job?.Activity?.GetType().Name}" : $"{i / 6}h 없음 {w.Eras.Project}");
                 }
+                if (dbg.Count > 0) Console.WriteLine("    " + string.Join(" | ", dbg));
                 bool paused = false;
                 if (x != null)
                 {
@@ -189,7 +182,7 @@ public static partial class Program
                 var s = w.TechWeb.Stats;
                 Check("중단과 재개 — 불 경보에 실험이 끊겨 작업대에 노트가 남고, 다시 와서 노트를 펴고 이어 한다",
                     x != null && paused && s.Interrupts >= 1 && s.Resumed >= 1 && s.Notes >= 1,
-                    $"끊김 {s.Interrupts} · 재개 {s.Resumed} · 노트 {s.Notes}(남의 노트 읽음 {s.NotesRead}) · {string.Join(" / ", w.TechWeb.Recent.Where(r => r.text.Contains("끊겼") || r.text.Contains("재개")).Take(2).Select(r => r.text))}");
+                    $"[실험 {(x != null ? "잡힘" : "없음")} · 연구 {w.Eras.ProjectTech?.Name} · 점검표 익힘 {w.Eras.Known.Contains("c1")}] 끊김 {s.Interrupts} · 재개 {s.Resumed} · 노트 {s.Notes}(남의 노트 읽음 {s.NotesRead}) · {string.Join(" / ", w.TechWeb.Recent.Where(r => r.text.Contains("끊겼") || r.text.Contains("재개")).Take(2).Select(r => r.text))}");
             }
 
             // 6) 조합 숨은 기술: A + B를 익히면 C가 보인다
@@ -212,23 +205,23 @@ public static partial class Program
                     $"{bl.Name}: {w.TechWeb.Why.GetValueOrDefault("biolamp")} · 조합 {all}개 드러남");
             }
 
-            // 7) 주 컴퓨터 추천: 이 배의 기록을 근거로 · 회의가 믿음만큼 따른다
+            // 7) 다음 연구 고르기 (v23): 겪은 일이 많은 줄기를 먼저 — 이유가 연대기에 남는다 · 함장 우선 지시가 그보다 앞선다
             {
                 var w = World.CreateDefault(seed, 0, "Hanbit");
                 Run(w, SimTime.Hours(1));
-                w.History.Fires += 3;
-                w.Hazards.Count[(int)HazardKind.GroundFault] += 2;
-                var options = w.Eras.Available.Where(t => !w.TechWeb.Undecided(t)).ToList();
-                string? rec = w.TechWeb.Advise(options, _ => 0f);
-                var act = w.Automation.Book.Acts.LastOrDefault(a => a.Observe.StartsWith("연구 후보"));
-                bool why = rec != null && w.TechWeb.RecWhy.Length > 0 && (w.TechWeb.RecWhy.Contains("불") || w.TechWeb.RecWhy.Contains("누전"));
-                foreach (var c in w.Crew) w.Automation.Trusts.Change(c, 0.4f, "시험", quiet: true);
-                w.Eras.Begin(null!, ""); // 다음 틱에 회의가 고른다
+                w.History.Fires += 4;
+                w.Eras.Begin("m1", "시험"); // 아무거나 하나 하던 중
+                w.Eras.LearnNow("m1");
                 Run(w, SimTime.Minutes(10));
-                var pickLine = w.History.Events.LastOrDefault(e => e.Text.Contains("다음 연구는"))?.Text ?? "";
-                Check("컴퓨터 추천 — 불 3번 · 누전 2번을 겪은 배에 근거를 들어 다음 연구를 권하고, 컴퓨터를 믿는 회의는 그대로 고른다",
-                    why && act != null && pickLine.Contains("컴퓨터 추천대로") && w.TechWeb.Stats.Followed >= 1,
-                    $"추천 {TechWeb.Find(rec)?.Name}: {w.TechWeb.RecWhy} · 연대기: {pickLine}");
+                var pick = w.Eras.ProjectTech;
+                var line = w.History.Events.LastOrDefault(e => e.Text.StartsWith("다음 연구 —"))?.Text ?? "";
+                bool fire = pick != null && pick.Branch == Branch.Life && line.Contains("불이");
+                var other = w.Eras.Available.First(t => t.Id != pick?.Id && !t.Side);
+                bool ordered = w.Eras.SetPriority(other.Id) && w.Eras.Project == other.Id && w.Eras.Priority == other.Id;
+                bool kept = pick != null && w.Eras.Partial.ContainsKey(pick.Id) || w.Eras.Partial.Count == 0;
+                Check("다음 연구 — 불을 네 번 겪은 배는 생명유지 줄기를 먼저 고르고 이유가 연대기에 남는다 · 함장이 누르면 그것부터 (하던 것은 남겨 둔다)",
+                    fire && ordered && kept && w.Eras.Stats.Orders == 1,
+                    $"고른 것 {pick?.Name} · {line} · 함장 지시 → {other.Name} ({w.Eras.ProjectWhy})");
             }
 
             // 8) 부작용 연쇄: 서툰 이틀 · 늘어난 설비의 새 위험 · 새 관행 (주 컴퓨터가 예보한다)
@@ -252,9 +245,12 @@ public static partial class Program
                     $"케이블 화재 무게 ×{fresh:0.00}(익힌 날) → ×{later:0.00}(17시간) → ×{settled:0.00}(사흘) · 관행 '{(custom ? CultureSystem.Name(CustomKind.FireCheck) : "없음")}' · {w.TechWeb.Recent.LastOrDefault(r => r.text.StartsWith("부작용")).text}");
             }
 
-            // 9) 새 시스템 줄기: 그 시스템이 읽는 배율이 실제로 바뀐다
+            // 9) 새 시스템 줄기: 그 시스템이 읽는 배율이 실제로 바뀐다 (v23 크기별 시작 시대는 끄고 — 아무것도 모르는 배에서)
             {
+                bool tiersWas = ShipTiers.On;
+                ShipTiers.On = false;
                 var w = World.CreateDefault(seed, 0, "Hanbit");
+                ShipTiers.On = tiersWas;
                 var keys = TechWeb.Keys.Where(k => !k.StartsWith("lab.")).ToList();
                 bool ones = keys.All(k => TechWeb.Mul(w, k) == 1f);
                 var cell = w.Ship.Rooms.SelectMany(r => r.Cells).First(c => w.Body.FloorAt(c) != Material.None);
@@ -281,9 +277,9 @@ public static partial class Program
                 Run(w, SimTime.TicksPerDay * 2);
                 var s = w.TechWeb.Stats;
                 var tops = w.TechWeb.Experiments.OrderByDescending(kv => kv.Value).Take(3).Select(kv => $"{w.Crew[kv.Key].Name} {kv.Value}").ToList();
-                Check("이틀 — 회의가 연구를 고르고(컴퓨터 추천) 사람들이 실제로 실험한다",
-                    s.Advices >= 1 && s.Experiments >= 2 && w.Eras.Known.Count >= 1,
-                    $"익힌 기술 {w.Eras.Known.Count}: {string.Join(", ", w.Eras.Order.Select(id => TechWeb.Find(id)!.Name))} · 실험한 사람 {string.Join(", ", tops)} · {s}");
+                Check("이틀 — 회의(주 컴퓨터 권고)가 이유를 들어 연구를 고르고 사람들이 실제로 실험한다 (v23)",
+                    w.Eras.Stats.Starts >= 1 && w.Eras.ProjectWhy.Length > 0 && s.Experiments >= 2 && (w.Eras.Order.Count >= 1 || w.Eras.Progress > 0f),
+                    $"익힌 기술 {w.Eras.Order.Count}: {string.Join(", ", w.Eras.Order.Select(id => TechWeb.Find(id)!.Name))} · 지금 {w.Eras.ProjectTech?.Name} {w.Eras.Fraction * 100:0}% ({w.Eras.ProjectWhy}) · 실험한 사람 {string.Join(", ", tops)} · {s}");
             }
 
             // 11) 결정론

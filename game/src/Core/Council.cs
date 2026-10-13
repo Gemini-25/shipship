@@ -30,8 +30,11 @@ public static partial class Council
             or WorkKind.Ration // v10.11
             or WorkKind.Distress or WorkKind.AnswerSignal; // v11.2
 
+    /// <summary>v23 이 일에 결정이 필요한가 — 기술 설치 공사는 연구를 고를 때 이미 정했으니 회의를 다시 열지 않는다.</summary>
+    public static bool Needs(WorkOrder o) => Needs(o.Kind) && !Evolution.TechInstall(o);
+
     /// <summary>손대도 되는 일인지 (결정이 필요 없거나, 승인됐다).</summary>
-    public static bool Cleared(WorkOrder o) => !Needs(o.Kind) || o.Decision == DecisionState.Approved;
+    public static bool Cleared(WorkOrder o) => !Needs(o) || o.Decision == DecisionState.Approved;
 
     /// <summary>지휘 순서대로 결정할 사람. 급하면 자는 사람도 깨운다.</summary>
     public static CrewMember? Decider(World w, bool urgent)
@@ -470,7 +473,7 @@ public static partial class Council
         var h = w.History;
         foreach (var o in orders)
         {
-            if (!Needs(o.Kind) || o.Closed || o.Assignee != null || o.Drone != null) continue;
+            if (!Needs(o) || o.Closed || o.Assignee != null || o.Drone != null) continue;
             if (o.Decision == DecisionState.Approved) continue;
             if (o.Decision == DecisionState.Rejected)
             {

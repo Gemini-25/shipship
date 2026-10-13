@@ -97,6 +97,17 @@ public static class Tech
         },
     };
 
+    /// <summary>v23 높은 단계의 대가는 약하게 (함장 결정): 전기 · 닳음 · 고장이 1보다 큰 몫을 절반으로.</summary>
+    private static float Mild(float x) => x > 1f ? 1f + (x - 1f) * 0.5f : x;
+    private static string MildNote(string n) => System.Text.RegularExpressions.Regex.Replace(n, @"전기 \+(\d+)%", m => $"전기 +{int.Parse(m.Groups[1].Value) / 2}%");
+    private static readonly bool _mild = MakeMild();
+    private static bool MakeMild()
+    {
+        foreach (var k in Table.Keys.ToList())
+            Table[k] = Table[k].Select(t => t with { Power = Mild(t.Power), Wear = Mild(t.Wear), Faults = Mild(t.Faults), Note = MildNote(t.Note) }).ToArray();
+        return true;
+    }
+
     private static readonly TechTier[] Basic = { new(1, "", 1f, 1f, 1f, 1f, 0, Array.Empty<(ItemKind, int)>(), "") };
 
     public static IReadOnlyList<TechTier> Tiers(FurnitureType t) => Table.TryGetValue(t, out var l) ? l : Basic;
@@ -111,9 +122,8 @@ public static class Tech
 
     public static string TierName(Machine m) => Of(m).Name.Length > 0 ? Of(m).Name : m.Name;
 
-    /// <summary>연구로 풀린 가장 높은 단계.</summary>
-    public static int Unlocked(World w, FurnitureType t) =>
-        Tiers(t).Where(x => x.Research <= w.Research && TechWeb.TierOk(w, t, x.Tier)).Select(x => x.Tier).DefaultIfEmpty(1).Max(); // v16.14 핵융합로 설계 · 갈림길
+    /// <summary>익힌 기술로 지을 줄 아는 가장 높은 단계 (v23 새 기술표 — 연구 점수 문턱이 아니라 그 기술을 익혀야 한다).</summary>
+    public static int Unlocked(World w, FurnitureType t) => Math.Min(Tiers(t).Count, w.Eras.TierFor(t));
 
     /// <summary>다음 단계 (없으면 null).</summary>
     public static TechTier? Next(Machine m)
@@ -127,6 +137,8 @@ public static class Tech
     /// <summary>연구가 문턱을 넘어 새 단계가 풀리면 알린다 (연대기에 남는다).</summary>
     public static void NoteUnlocks(World w, float before)
     {
+        return; // v23 설계는 기술을 익힐 때 풀린다 (EraSystem.Learn의 카드가 알린다)
+#pragma warning disable CS0162
         foreach (var (type, tiers) in Table)
             foreach (var t in tiers)
                 if (t.Research > before && t.Research <= w.Research)
@@ -134,6 +146,7 @@ public static class Tech
                     w.Log.Add(w.Tick, LogKind.Ship, $"연구 {w.Research:0}점 — {t.Name} 설계가 풀렸다 ({FurnitureTypes.Name(type)} {Roman(t.Tier)}단계 · {t.Note})");
                     w.History.Add(w, HistoryKind.Milestone, $"연구 노트가 쌓여 {t.Name} 설계가 풀렸다");
                 }
+#pragma warning restore CS0162
     }
 
     /// <summary>하루치 연구: 작업대(등급·효율만큼) + 솜씨 좋은(0.6 넘는) 사람. 설정 파일로 바꿀 수 있다.

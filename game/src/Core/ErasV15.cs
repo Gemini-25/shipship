@@ -123,7 +123,7 @@ public static class ErasV15
                 if (e.Known.Contains(r.Tech.Id))
                     foreach (var (s, m) in r.Fx) memo.Mul[s] = (memo.Mul.TryGetValue(s, out var v) ? v : 1f) * m;
         }
-        return memo.Mul.TryGetValue(stat, out var x) ? x : 1f;
+        return (memo.Mul.TryGetValue(stat, out var x) ? x : 1f) * e.TreeMul(stat); // v23 새 기술표의 시대 6~7 효과
     }
 
     /// <summary>일의 종류 → 그 일 속도를 바꾸는 수치 (WorkToil).</summary>

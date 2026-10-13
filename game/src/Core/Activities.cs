@@ -78,10 +78,11 @@ public sealed class EatActivity : Activity
         bool notYet = false;
         foreach (var f in j.TargetRoom.Furniture) if (f.Storage != null && j.PendingTake(f)) { notYet = true; break; }
         if (!notYet) return false; // 이미 받아 들었다
-        int left = c.Path != null ? c.Path.Count - c.PathIndex : 0;
-        if (left < 25) return false; // 거의 닿았다
+        if (c.Path == null || c.Path.Count - c.PathIndex < 25) return false; // 거의 닿았다
+        int there = dist.Get(c.Path[^1]); // 지금 가는 곳까지의 걸음 비용 (칸 수가 아니라 거리 지도와 같은 단위로)
+        if (there <= 0) return false;
         var (box, spot, src) = FindFood(c, w, dist);
-        return box != null && src is Source.Dispenser or Source.Fridge && box.Room != j.TargetRoom && dist.Get(spot) < left * 0.6f;
+        return box != null && src is Source.Dispenser or Source.Fridge && box.Room != j.TargetRoom && dist.Get(spot) < there * 0.6f;
     }
 
     /// <summary>v19 태양 폭풍 속에 더 쬐는 방의 식사를 받으러 잠깐 다녀오나: 배가 꽤 고프고 · 그 방이 잠깐 들를 만하다 (15분이면 0.1Sv 남짓).</summary>

@@ -672,7 +672,7 @@ public sealed class EnvHazardSystem
             hits.Add($"{c.Name} 마음이 흔들렸다");
             return;
         }
-        float inj = 0.12f + 0.3f * sev;
+        float inj = (0.12f + 0.3f * sev) * w.Eras.TreeMul("env"); // v23 착륙 다리 · 거주 돔 · 행성 개조
         string? ail = m switch
         {
             EnvMech.Freeze => "hypothermia", EnvMech.Heat => sev > 0.5f ? "heatstroke" : "dehydration", EnvMech.Corrode or EnvMech.Toxic or EnvMech.Volcanic => "chemburn",

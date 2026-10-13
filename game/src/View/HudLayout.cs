@@ -51,7 +51,7 @@ public partial class Hud
         float dayW = Gfx.Width(Fonts.Body, $"{_world.Day}일차", Ui.TextBody);
         const float btnW = 40f, btnGap = 4f;
         float speedW = 5 * btnW + 4 * btnGap;
-        return 18 + 16 + nameW + 20 + 20 + clockW + 8 + dayW + 20 + 14 + speedW + 8 + 52 + 12;
+        return 18 + 16 + nameW + 20 + 20 + clockW + 8 + dayW + 20 + 14 + speedW + 8 + 52 + 12 + EraBlockW + 24; // v23 시대 칸
     }
 
     // ─────────────────────────────── 보기 선택판 ───────────────────────────────

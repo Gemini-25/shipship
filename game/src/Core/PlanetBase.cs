@@ -201,6 +201,7 @@ public sealed partial class PlanetSystem
             case DroneErrand.Dig when Sites.FirstOrDefault(s => s.Id == target) is GroundSite s && s.Left > 0:
             {
                 int n = Math.Min(s.Left, (d.Kind == DroneKind.Miner ? 3 : 1 + _wx.Range(0, 2)) + (Built(BuildKind.Depot) != null ? 1 : 0));
+                n = Math.Min(s.Left, (int)MathF.Round(n * w.Eras.TreeMul("mining"))); // v23 궤도 채굴 드론망
                 int put = VoyageV15.Put(w, s.Item, n);
                 s.Left -= n; s.Mined += put;
                 Gathered[s.Item] = Gathered.GetValueOrDefault(s.Item) + put;

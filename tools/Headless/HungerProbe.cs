@@ -49,3 +49,36 @@ public static partial class Program
         return 0;
     }
 }
+
+// v23 설계도 손보기 근거 (--shipcensus): 배마다 인원 대비 설비 수 · 원자로 · 정수 용량 (시뮬레이션 없이)
+public static partial class Program
+{
+    private static int RunShipCensus(int seed)
+    {
+        Console.WriteLine("배 | 인원 | 원자로kW | 정수기 | 정수 L/h | 산소 | 재배대 | 조리대 | 배식기 | 배터리 | 보조발전");
+        foreach (var t in ShipCatalog.All)
+        {
+            var w = World.CreateDefault(seed, 0, t.Key);
+            var s = w.Ship;
+            int N(FurnitureType ft) => s.FurnitureOf(ft).Count();
+            float waterCap = s.FurnitureOf(FurnitureType.WaterRecycler).Sum(f => f.Machine!.Rating) * WaterSystem.RecyclerLitersPerHour;
+            Console.WriteLine($"{t.Name}({t.Key}) | {w.Crew.Count} | {w.Power.ReactorRated:0} | {N(FurnitureType.WaterRecycler)} | {waterCap:0.0} | {N(FurnitureType.OxygenGenerator)} | {N(FurnitureType.GrowBed)} | {N(FurnitureType.Stove)} | {N(FurnitureType.MealDispenser)} | {N(FurnitureType.Battery)} | {N(FurnitureType.AuxGenerator)}");
+        }
+        return 0;
+    }
+}
+
+// v23 기술 개편 준비 (--techdump): 지금 기술 전부 (시대 · 분야 · 이름 · 효과 · 그물 마디)
+public static partial class Program
+{
+    private static int RunTechDump()
+    {
+        foreach (var t in TechWeb.Every.OrderBy(t => t.Field).ThenBy(t => t.Era))
+        {
+            var n = TechWeb.Node(t.Id);
+            Console.WriteLine($"{t.Field}\t{t.Era}\t{t.Id}\t{t.Name}\t{t.Cost:0}\t{t.Effect}\t{(n.Hidden ? "숨김" : "")}{(n.Gate != null ? " 조건:" + n.Gate.Text : "")}{(n.Combo != null ? " 조합:" + string.Join("+", n.Combo) : "")}{(n.Trial ? " 역설계" : "")}");
+        }
+        Console.WriteLine($"모두 {TechWeb.Every.Length}");
+        return 0;
+    }
+}

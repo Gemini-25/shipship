@@ -145,6 +145,7 @@ public partial class Hud : Control
         DrawCaseSummaryCard(mouse); // v23 사고 결산 카드 (크게 → 접힘)
         DrawSceneDayCard(mouse); // v23 저녁 22시 오늘의 장면
         DrawReel(); // v23 하이라이트 다시보기
+        DrawUnlockCard(mouse); // v23 새 기술 · 새 시대 카드 (전후 숫자)
         DrawArrivalCard(mouse); // v23 목적지 도착 — 임무 결과 · 항해의 책
         DrawQuietCard(mouse); // v23 조용한 달을 넘겼다
         DrawSummaryCard(mouse); // v12.8 요약 진행
@@ -219,7 +220,7 @@ public partial class Hud : Control
         float dayW = Gfx.Width(Fonts.Body, day, Ui.TextBody);
         const float btnW = 40f, btnGap = 4f;
         float speedW = labels.Length * btnW + (labels.Length - 1) * btnGap;
-        float w = 18 + 16 + nameW + 20 + 20 + clockW + 8 + dayW + 20 + 14 + speedW + 8 + 52 + 12;
+        float w = 18 + 16 + nameW + 20 + 20 + clockW + 8 + dayW + 20 + 14 + speedW + 8 + 52 + 12 + EraBlockW + 24; // v23 시대 칸
 
         var card = new Rect2(Margin, Margin, w, 52f);
         Card(card);
@@ -261,6 +262,10 @@ public partial class Hud : Control
         // v12.2 하이라이트 모드: 배속을 저절로
         var auto = new Rect2(x + labels.Length * (btnW + btnGap) + 4, cy - 14f, 52f, 28f);
         Button(auto, _main.SlowMotion ? "느리게" : "자동", _main.Highlight, mouse, _main.ToggleHighlight, Ui.TextBody);
+        // v23 시대 이름 + 다음 기술 진행 막대 (누르면 기술표)
+        float ex = auto.End.X + 12f;
+        DrawLine(new Vector2(ex, card.Position.Y + 13), new Vector2(ex, card.End.Y - 13), Palette.PanelBorder, 1f);
+        DrawTopEra(new Rect2(ex + 8f, card.Position.Y + 7f, EraBlockW, card.Size.Y - 14f), mouse);
         return card.End.X;
     }
 

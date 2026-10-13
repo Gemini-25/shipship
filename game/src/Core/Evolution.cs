@@ -153,6 +153,12 @@ public static class Evolution
     /// <summary>v13.2 방침(비축)에 맞춘 비상용 몫.</summary>
     public static int Reserve(ItemKind k, World w) => w.History.Doctrine.StockScale == 1f ? Reserve(k) : (int)MathF.Round(Reserve(k) * w.History.Doctrine.StockScale);
 
+    /// <summary>v23 기술 설치 공사의 표식 (회로 칸): 익힌 기술의 설비 단계로 고쳐 다는 일 — 회의 없이 바로 공사.</summary>
+    public const int InstallCircuit = -7;
+    /// <summary>옛 길 (개조 회의로 설비 단계 올리기) — v23부터 꺼 둔다.</summary>
+    public static bool TierUpViaMeeting = false;
+    public static bool TechInstall(WorkOrder o) => o.Kind == WorkKind.Upgrade && o.Upgrade == UpgradeKind.TierUp && o.Circuit == InstallCircuit;
+
     public static bool Affordable(WorkBoard b, (ItemKind kind, int count)[] cost) =>
         cost.All(x => b.Have(x.kind) - x.count >= Reserve(x.kind, b.World) + b.Held(x.kind));
 
@@ -457,9 +463,11 @@ public static class Evolution
         }
 
         // ── 설비 단계 올리기 (v10.5): 연구로 풀린 단계 — 겪은 일이 무엇부터 올릴지 정한다 (종류마다 한 대씩, 가장 닳은 것부터) ──
+        // v23 기술 설치는 따로 (WorkBoard.ScanInstalls — 회의 없이 바로 공사). 여기서는 내지 않는다.
         var seenTypes = new HashSet<FurnitureType>();
         foreach (var m in ship.Machines.OrderByDescending(x => x.Wear))
         {
+            if (!TierUpViaMeeting) break;
             var type = m.Body.Type;
             if (!Tech.HasTree(type) || seenTypes.Contains(type) || m.Body.Room.Abandoned || m.Faults.Count > 0 || m.Grade == MachineGrade.Mk1) continue;
             if (Tech.Next(m) is not TechTier next || next.Tier > Tech.Unlocked(w, type)) continue;

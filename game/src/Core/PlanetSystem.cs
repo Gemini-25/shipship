@@ -120,6 +120,7 @@ public sealed partial class PlanetSystem
         // 가끔 불시착: 엔진이 시원찮으면 더 잦다
         float eng = w.Propulsion.Engines.Select(m => m.FaultFactor * (0.6f + 0.4f * m.Condition)).DefaultIfEmpty(0f).Max(); // 꺼 둔 엔진은 고장이 아니다 — 고장 · 상태로 본다
         float crash = 0.015f * Storyteller.Level + (eng < 0.4f ? 0.25f : 0f) + (w.Propulsion.Propellant < w.Propulsion.Capacity * 0.05f ? 0.15f : 0f);
+        crash *= w.Eras.TreeMul("landing"); // v23 착륙 다리 완충
         if (forceCrash || _rng.Chance(crash) && !NoCrash) { Crash(Candidates.OrderByDescending(c => c.Danger).First()); return; }
         string list = string.Join(" · ", Candidates.Select(c => $"{c.Title} (위험 {c.KnownDanger * 100:0}% · 보상 {c.KnownReward * 100:0}% · 확실 {c.Certainty * 100:0}%)"));
         Note($"착륙 창 — 후보 {Candidates.Count}: {list}");

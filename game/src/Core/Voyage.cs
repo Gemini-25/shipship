@@ -134,6 +134,7 @@ public sealed partial class VoyageSystem
         var w = _w;
         float speed = Drifting ? (w.Eras.Has("fusiondrive") ? 0.5f : 0.33f) : 1f;
         if (w.Eras.Has("warpbubble")) speed *= 2f; // v12.8 공간 왜곡
+        speed *= w.Eras.TreeMul("speed"); // v23 초공간 항법
         speed *= VoyageV15.SpeedMul(Current.Kind); // v15.4 태양풍 물길
         if (Current.Kind == LegKind.Port) speed = 1f; // 정박 중
         if (w.Expedition.Halted) speed = 0f; // v16.12 재료가 바닥나 엔진을 껐다 — 일정이 밀린다

@@ -12,6 +12,8 @@ namespace ShipSim.View;
 public partial class Hud
 {
     public bool TechOpen { get; set; }
+    /// <summary>기술 탭 둘째 쪽 (설비 단계). 첫 쪽은 v23 기술표.</summary>
+    public bool TechWebOpen { get; set; }
 
     public void ToggleTech()
     {
@@ -30,7 +32,7 @@ public partial class Hud
 
     private void DrawTech(Vector2 mouse)
     {
-        if (TechWebOpen) { DrawTechWeb(mouse); return; } // v16.14 기술 지도
+        if (!TechWebOpen) { DrawTechTree(mouse); return; } // v23 기술표가 첫 쪽 · 이 쪽(설비 단계)은 둘째
         var w = _world;
         var types = Tech.Types.Where(t => w.Ship.FurnitureOf(t).Any()).ToList();
         var modules = Modules.All.Where(s => w.Ship.RoomsOf(s.Room).Any()).ToList();
@@ -49,22 +51,15 @@ public partial class Hud
         Gfx.Text(this, Fonts.Body, new Vector2(x + Gfx.Width(Fonts.Bold, $"{w.Ship.Name} 기술", Ui.TextLarge) + 10, y0 + 30),
             $"연구 {w.Research:0}점 · 하루 +{perDay:0.0} (작업대·솜씨 좋은 사람·정밀 가공기)", Ui.TextBody, Palette.TextMuted);
         Button(new Rect2(right - 58, y0 + 12, 58, 26), "닫기", false, mouse, ToggleTech, Ui.TextSmall);
-        Button(new Rect2(right - 58 - 96, y0 + 12, 90, 26), "기술 지도", false, mouse, () => TechWebOpen = true, Ui.TextSmall); // v16.14 Shift+T
+        Button(new Rect2(right - 58 - 96, y0 + 12, 90, 26), "기술표", false, mouse, () => TechWebOpen = false, Ui.TextSmall); // v23
         Gfx.Text(this, Fonts.Body, new Vector2(x, y0 + 50),
-            "연구가 문턱을 넘으면 설계가 풀리고, 올리는 건 개조 회의가 정한다 (재료 · 겪은 일 순서). 높은 단계는 출력이 크지만 전기·마모·고장 값을 치른다.", Ui.TextSmall, Palette.TextDim);
+            "기술을 익히면 설계가 생기고, 로봇 · 승무원이 재료로 한 대씩 고쳐 단다. 높은 단계는 출력이 크고 전기 · 닳음 · 고장 값을 조금 더 치른다.", Ui.TextSmall, Palette.TextDim);
 
-        // 다음 문턱까지 막대
-        int next = Tech.Types.SelectMany(t => Tech.Tiers(t)).Select(t => t.Research).Where(r => r > w.Research).DefaultIfEmpty(0).Min();
-        int prev = Tech.Types.SelectMany(t => Tech.Tiers(t)).Select(t => t.Research).Where(r => r <= w.Research).DefaultIfEmpty(0).Max();
-        var bar = new Rect2(x, y0 + 60, right - x, 8);
-        Gfx.RoundRect(this, bar, new Color(1, 1, 1, 0.06f), 4);
-        if (next > 0)
-        {
-            float f = Mathf.Clamp((w.Research - prev) / Mathf.Max(1f, next - prev), 0f, 1f);
-            Gfx.RoundRect(this, new Rect2(bar.Position, new Vector2(bar.Size.X * f, bar.Size.Y)), Palette.Accent, 4);
-            Gfx.TextRight(this, Fonts.Body, new Vector2(right, y0 + 84), $"다음 설계까지 {next - w.Research:0}점" + (perDay > 0.01f ? $" (약 {(next - w.Research) / perDay:0.#}일)" : ""), Ui.TextSmall, Palette.TextMuted);
-        }
-        else Gfx.TextRight(this, Fonts.Body, new Vector2(right, y0 + 84), "모든 설계가 풀렸다", Ui.TextSmall, new Color("#8fd65a"));
+        // v23 설치 공사: 지을 줄 아는 단계보다 낮은 설비 · 지금 하는 공사
+        int behind = 0;
+        foreach (var type in Tech.Types) { int u = Tech.Unlocked(w, type); foreach (var f in w.Ship.FurnitureOf(type)) if (f.Machine is Machine m && m.Tier < u) behind++; }
+        int installing = w.Board.Open.Count(o => Evolution.TechInstall(o));
+        Gfx.TextRight(this, Fonts.Body, new Vector2(right, y0 + 84), behind == 0 ? "모든 설비가 아는 단계까지 지어져 있다" : $"설치 기다림 {behind}대 · 공사 중 {installing}", Ui.TextSmall, behind == 0 ? new Color("#8fd65a") : Palette.Accent);
 
         float y = y0 + 96;
         float nameW = 128f;
@@ -87,7 +82,7 @@ public partial class Hud
                     here > 0 ? col.WithAlpha(0.85f) : open ? col.WithAlpha(0.35f) : new Color(1, 1, 1, 0.08f));
                 string label = $"{Tech.Roman(t.Tier)} {t.Name}";
                 int fs = rowH < 22f ? 10 : 11;
-                string tail = here > 0 ? $" ×{here}" : open ? "" : $" · {t.Research}점";
+                string tail = here > 0 ? $" ×{here}" : open ? " · 설치 가능" : "";
                 while (label.Length > 3 && Gfx.Width(Fonts.Body, label + tail, fs) > chip.Size.X - 10) label = label[..^1];
                 Gfx.Text(this, here > 0 ? Fonts.Bold : Fonts.Body, new Vector2(chip.Position.X + 6, chip.GetCenter().Y + Gfx.CenterOffset(Fonts.Body, fs)),
                     label + tail, fs, here > 0 ? Palette.Text : open ? col.Lightened(0.1f) : Palette.TextMuted);
@@ -125,7 +120,6 @@ public partial class Hud
             Gfx.Text(this, Fonts.Body, new Vector2(x, card.End.Y - 12), _techHover, Ui.TextSmall, Palette.Accent);
             _techHover = null;
         }
-        DrawEraCard(card); // v12.8 시대 기술
     }
 
     private string? _techHover;

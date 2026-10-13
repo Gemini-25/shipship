@@ -126,7 +126,7 @@ public static class TechWeb
     public static readonly EraTech[] Every = EraSystem.All.Concat(Extra).ToArray();
     private static readonly Dictionary<string, EraTech> ById = Every.ToDictionary(t => t.Id);
     private static readonly Dictionary<string, Row> RowById = Rows.ToDictionary(r => r.Tech.Id);
-    public static EraTech? Find(string? id) => id != null && ById.TryGetValue(id, out var t) ? t : null;
+    public static EraTech? Find(string? id) => id != null && ById.TryGetValue(id, out var t) ? t : TechTree.AsEra(id); // v23 새 기술표 아이디도 (실험 · 연대기)
     public static Row? RowOf(string id) => RowById.TryGetValue(id, out var r) ? r : null;
     public static bool IsExtra(string id) => RowById.ContainsKey(id);
 
@@ -260,7 +260,7 @@ public static class TechWeb
 
     public static readonly Dictionary<string, WebNode> Nodes = NodeList.Concat(TechWebV18.Nodes).ToDictionary(n => n.Id); // 압축-마
     private static readonly WebNode Plain = new("", Array.Empty<string>(), "dot", "");
-    public static WebNode Node(string id) => Nodes.TryGetValue(id, out var n) ? n : Plain;
+    public static WebNode Node(string id) => Nodes.TryGetValue(id, out var n) ? n : id.StartsWith("side.", StringComparison.Ordinal) && Nodes.TryGetValue(id[5..], out var sn) ? sn : Plain; // v23 곁가지는 옛 마디 그대로 (유물 · 아이콘)
     public static string Visual(EraTech t) => Node(t.Id).Visual is { Length: > 0 } v ? v : $"{t.Field.ToString().ToLowerInvariant()}.{t.Id}";
 
     // ─────────────────────────────── ② 갈림길 ───────────────────────────────
@@ -325,7 +325,7 @@ public static class TechWeb
     }
 
     /// <summary>새 시스템이 읽는 배율 (익힌 새 기술의 곱 · 없으면 1). 세계가 아직 다 안 만들어졌으면 1.</summary>
-    public static float Mul(World w, string key) => w.TechWeb is TechWebSystem t ? t.Mul(key) : 1f;
+    public static float Mul(World w, string key) => w.TechWeb is TechWebSystem t ? t.Mul(key) * (w.Eras?.TreeMul(key) ?? 1f) : 1f; // v23 새 기술표 효과도
 
     /// <summary>설비 단계도 그물을 따른다: 원자로 III · IV는 핵융합로 설계가 있어야, 갈림길에서 버린 쪽 설비는 막힌다.</summary>
     public static bool TierOk(World w, FurnitureType type, int tier)
@@ -593,7 +593,7 @@ public sealed partial class TechWebSystem
         if (w.Tick < _nextScan) return;
         _nextScan = w.Tick + SimTime.TicksPerHour;
         Scan();
-        ForkTick();
+        // v23 갈림길은 새 기술표가 그 기술을 연구할 때 정한다 (EraSystem.PickFork) — 회의 안건으로 따로 올리지 않는다
         ChainTick();
         ResearchHour(); // TechResearch.cs: 실험 차례 · 연구자 · 컴퓨터 경고
     }
@@ -606,7 +606,7 @@ public sealed partial class TechWebSystem
         if (Learned.Count > 40) Learned.RemoveAt(0);
         if (t.RiskKey != null) Stats.Fresh++;
         // 갈림길: 정하기 전에 한쪽을 익혔으면 (옛 기록 · 임무 보상) 그쪽으로 정해진다
-        if (TechWeb.ForkFor(t.Id) is var (f, side) && ForkStates[f.Id].Side < 0) Decide(f, side, "먼저 익혔다", "", 0, 0, learned: true);
+        if (TechTree.OwnerOf(t.Id) == null && TechWeb.ForkFor(t.Id) is var (f, side) && ForkStates[f.Id].Side < 0) Decide(f, side, "먼저 익혔다", "", 0, 0, learned: true); // v23 새 기술표 안의 갈림길은 EraSystem이 정한다
         foreach (var c in TechWeb.Chains)
         {
             if (c.Tech != t.Id) continue;
@@ -838,6 +838,18 @@ public sealed partial class TechWebSystem
     }
 
     /// <summary>갈림길을 정한다: 버린 쪽은 잠기고 · 배의 이름이 붙는다.</summary>
+    /// <summary>v23 배가 생길 때 (앞선 시대에서 시작): 갈림길을 조용히 정한다 — 연대기에 남기지 않는다.</summary>
+    public void DecideQuiet(TechFork f, int side, string why)
+    {
+        var st = ForkStates[f.Id];
+        if (st.Side >= 0) return;
+        st.Side = side;
+        st.Decided = _w.Tick;
+        st.Why = why;
+        st.Base = (side == 0 ? f.WeakA : f.WeakB).Select(k => TechWeb.Incidents(_w, k)).ToArray();
+        Epithets.Add(side == 0 ? f.TitleA : f.TitleB);
+    }
+
     public void Decide(TechFork f, int side, string why, string by, int yes, int no, bool learned = false, List<CrewMember>? voters = null)
     {
         var w = _w;

@@ -181,7 +181,7 @@ public sealed class PowerGrid
     internal void Heat(float celsius) => ReactorTemperature += celsius;
 
     /// <summary>v10.4: 이 배 원자로의 정격 (크기 × 테크 단계).</summary>
-    public float ReactorRated => ReactorMaxKw * (Reactor?.Rating ?? 1f);
+    public float ReactorRated => ReactorMaxKw * (Reactor?.Rating ?? 1f) * (_world.Eras?.TreeMul("reactor") ?? 1f); // v23 영점 배전 · 진공 에너지 탭
 
     /// <summary>v10.4: 보조 발전기 정격.</summary>
     public float AuxRated => AuxKw * (Aux?.Rating ?? 1f);
@@ -430,7 +430,7 @@ public sealed class PowerGrid
         }
         if (ReactorOnline) ReactorRamp = MathF.Min(1f, ReactorRamp + dtHours / RampHours);
         ReactorPoison = MathF.Max(0f, ReactorPoison - dtHours / 6f);
-        float reactorMax = reactor == null || !ReactorOnline ? 0f : ReactorMaxKw * reactor.Rating * reactor.Efficiency * (1f - 0.55f * ReactorPoison) * (MaintenanceCap ? 0.5f : 1f) * _world.Automation.ReactorCap; // v16.20 컴퓨터가 달아오른 노심 출력을 낮춘다
+        float reactorMax = reactor == null || !ReactorOnline ? 0f : ReactorMaxKw * reactor.Rating * (_world.Eras?.TreeMul("reactor") ?? 1f) * reactor.Efficiency * (1f - 0.55f * ReactorPoison) * (MaintenanceCap ? 0.5f : 1f) * _world.Automation.ReactorCap; // v16.20 컴퓨터가 달아오른 노심 출력을 낮춘다
         float cooling = LowPowerMode ? NaturalCoolingKw + CoolingCapacity : CoolingCapacity * 0.95f;
         float target = MathF.Min(reactorMax, cooling) * ReactorRamp;
         // v9: 자동 제어봉은 한 시간에 60kW만큼만 출력을 내린다 — 냉각이 갑자기 줄면 그동안 넘치는 열이 노심을 데운다

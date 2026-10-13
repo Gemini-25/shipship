@@ -658,6 +658,39 @@ public sealed partial class WorkBoard
     private delegate void Poster(WorkKind kind, WorkTarget target, float urgency, Skill skill, string detail, FaultKind? fault = null,
         int circuit = -1, ItemKind? product = null, float minSkill = 0f, UpgradeKind? upgrade = null);
 
+    /// <summary>v23 기술 설치 공사: 익힌 기술이 지을 줄 아는 단계보다 낮은 설비를 한 대씩 고쳐 단다 (종류마다 하나 · 배 전체 셋까지 · 재료가 있을 때).
+    /// 사고 중엔 미룬다. 회의는 다시 열지 않는다 (연구를 고를 때 정했다).</summary>
+    private void ScanInstalls(Poster post)
+    {
+        var w = _world;
+        if (w.History.Current != null) return;
+        int open = 0;
+        var busy = new HashSet<FurnitureType>();
+        foreach (var o in _open.Values)
+            if (Evolution.TechInstall(o) && o.Target.Furniture is Furniture bf) { open++; busy.Add(bf.Type); }
+        foreach (var o in _open.Values.ToList())
+            if (Evolution.TechInstall(o)) post(o.Kind, o.Target, o.Urgency, o.Skill, o.Detail, circuit: o.Circuit, minSkill: o.MinSkill, upgrade: o.Upgrade); // 하던 공사는 이어 간다
+        foreach (var type in Tech.Types)
+        {
+            if (open >= 3) return;
+            if (busy.Contains(type)) continue;
+            int want = Tech.Unlocked(w, type);
+            if (want <= 1) continue;
+            Machine? pick = null;
+            foreach (var f in w.Ship.FurnitureOf(type))
+            {
+                if (f.Machine is not Machine m || m.Tier >= want || f.Room.Abandoned || f.Room.Detached || f.Stowed || m.Faults.Count > 0) continue;
+                if (pick == null || m.Tier < pick.Tier || m.Tier == pick.Tier && m.Wear > pick.Wear) pick = m;
+            }
+            if (pick == null || Tech.Next(pick) is not TechTier next || !Evolution.Affordable(this, next.Cost)) continue;
+            var tech = w.Eras.Installer(type, next.Tier);
+            post(WorkKind.Upgrade, WorkTarget.Of(pick.Body), 0.42f + 0.04f * next.Tier, pick.Spec.Skill,
+                $"기술 설치 — {tech}: {Ko.EulReul(pick.Name)} {next.Name}로 ({next.Note} · {string.Join(" + ", next.Cost.Select(c => $"{ItemKinds.Name(c.kind)} {c.count}"))})",
+                circuit: Evolution.InstallCircuit, minSkill: 0.25f, upgrade: UpgradeKind.TierUp);
+            open++;
+        }
+    }
+
     /// <summary>
     /// v5 적응: 완벽하게 못 고칠 때 버티는 일들.
     /// 암흑 우주선 탈출(연료통 급유·원자로 수동 기동), 임시 배선, 절전, 부품 뜯어 쓰기, 방 용도 변경.
@@ -1340,6 +1373,8 @@ public sealed partial class WorkBoard
             Post(busy.Kind, busy.Target, busy.Urgency, busy.Skill, busy.Detail, circuit: busy.Circuit, minSkill: busy.MinSkill, upgrade: busy.Upgrade);
         if (!_open.Values.Any(o => o.Kind == WorkKind.Upgrade && o.Assignee != null) && Evolution.Plan(w) is UpgradePlan plan)
             Post(WorkKind.Upgrade, plan.Target, plan.Score, plan.Skill, plan.Why, circuit: plan.Circuit, minSkill: plan.MinSkill, upgrade: plan.Kind);
+
+        ScanInstalls(Post); // v23 익힌 기술의 설비 설치 공사
 
         // ── 구조와 외부 작업 (v8): 연결부·골조·드론·사출·되찾기·재연결 ──
         ScanStructure(Post);

@@ -148,6 +148,7 @@ public sealed partial class TechWebSystem
     private float Fit(CrewMember c, EraTech t, Room? lab)
     {
         if (c.Dead || c.Away || c.IsChild || !c.CanAct) return -9f;
+        if (c.Down || c.Vitals.Injury > 0.4f || c.Job?.Activity is WardRestActivity) return -9f; // v23 병실에 누운 사람에게 실험을 묶어 두지 않는다 (반나절 넘게 아무도 실험하지 못했다)
         float fear = c.Memory.FearOf(lab);
         if (fear > 0.4f) return -5f; // 그 방이 무섭다 — 피한다
         return 0.6f * c.RawSkill(SkillOf(t.Field)) + Interest(c, t.Field) + 0.15f * c.Traits.Diligence - 0.5f * fear - 0.2f * c.Needs.Stress;

@@ -381,7 +381,7 @@ public sealed class MeetingSystem
         // 2) 선장 불신임
         if (w.Command.Trust < 0.35f && attendees.Count >= 3 && cap != null && !w.Motions.ConfidencePending) rec.Items.Add(w.Command.VoteNoConfidence(attendees, this)); // v18.18 서명을 돌리는 중이면 그쪽에서
         // 3) 미뤄 둔 결정: 모인 김에 정한다
-        foreach (var o in w.Board.Open.Where(o => Council.Needs(o.Kind) && o.Decision == DecisionState.Pending && !o.Alone && !o.Closed).ToList())
+        foreach (var o in w.Board.Open.Where(o => Council.Needs(o) && o.Decision == DecisionState.Pending && !o.Alone && !o.Closed).ToList())
             Council.DecideNow(w, o, attendees, rec);
         w.Cosmic.Agenda(rec, attendees); // v18.13 대재난 대비 계획 · 그날을 기리는 관행
         w.Expedition.Agenda(rec, attendees, chair); // v16.12 원정 안건
