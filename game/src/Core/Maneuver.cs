@@ -17,7 +17,7 @@ namespace ShipSim.Core;
 //  여러 번 잃고 나면 배에 관행이 생긴다 (쓰고 난 건 걸쇠 · 끈 · 자기 전 침대 끈) → 다음 충격에 덜 떨어진다.
 //  화물 무게중심이 한쪽으로 쏠리면 기동할 때 배가 돌아 추력이 준다 — 컴퓨터가 계산해 옮기자고 하고, 사람들이 상자를 옮긴다.
 
-public enum ManeuverKind : byte { Evasion, Course, Impact, Quake }
+public enum ManeuverKind : byte { Evasion, Course, Impact, Quake, Landing } // v23 행성 착륙 · 이륙
 public enum PrepKind : byte { ClampPot, HeaterOff, SetDown, HoldCup, LatchShelf, StrapCart, TieDown, Brace }
 public enum FallenKind : byte { Can, Bowl, Book, Bottle, Box, Tool, PillJar, Plate }
 public enum SplashKind : byte { Soup, Water, Pills }
@@ -43,7 +43,7 @@ public sealed class Maneuver
     public List<int> Knew { get; } = new();
     public int Fell, Hurt, Dropped, Broken, Rolled, Tipped, Spilled, Held, Braced, Safe, Thrown, Slid, CupsFell, Torn, Fast;
     public List<int> Rooms { get; } = new();
-    public string Talk => Kind switch { ManeuverKind.Evasion => "회피 기동", ManeuverKind.Course => "항로 연소", ManeuverKind.Impact => "충격", _ => "흔들림" };
+    public string Talk => Kind switch { ManeuverKind.Evasion => "회피 기동", ManeuverKind.Course => "항로 연소", ManeuverKind.Impact => "충격", ManeuverKind.Landing => Why.EndsWith("이륙") ? "이륙" : "착륙 하강", _ => "흔들림" };
 }
 
 /// <summary>준비 한 가지 (누가 무엇을).</summary>
