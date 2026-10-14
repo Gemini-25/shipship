@@ -108,22 +108,33 @@ public partial class SoundSystem
         return s;
     }
 
-    /// <summary>우주급: 45Hz 깊은 웅웅(맥놀이) 위로 반짝이는 배음이 2kHz → 400Hz로 천천히 내려앉는다.</summary>
+    /// <summary>우주급 (v23 다시): 살짝 어긋난 낮은 톱니 셋이 맥놀이하며 웅웅대고, 잡음에 울리는 선체 공명(90·135·210·330Hz)이 깔리며, 높은 쉬익이 천천히 내려앉는다 · 넓은 잔향.</summary>
     private static float[] CosmicDrone()
     {
-        float len = 3.2f;
-        int n = (int)(Rate * len);
-        var s = new float[n];
-        float phase = 0f;
-        for (int i = 0; i < n; i++)
+        float len = 3.4f;
+        var s = Dsp.Buf(len);
+        var n = new Dsp.Noise(131);
+        var sawLp1 = new Dsp.Low();
+        var sawLp2 = new Dsp.Low();
+        var modes = new Dsp.Band[4];
+        float[] modeHz = { 90f, 135f, 210f, 330f }, modeAmp = { 1f, 0.8f, 0.55f, 0.35f };
+        var whoosh = new Dsp.Band();
+        var breathe = new Dsp.Wander(132, 0.8f);
+        double p1 = 0, p2 = 0, p3 = 0;
+        for (int i = 0; i < s.Length; i++)
         {
-            float t = i / (float)Rate;
-            float drone = MathF.Sin(t * MathF.Tau * 45f) * (0.75f + 0.25f * MathF.Sin(t * MathF.Tau * 1.5f)) + 0.4f * MathF.Sin(t * MathF.Tau * 47.5f);
-            float f = 2000f * MathF.Pow(0.2f, t / len);
-            phase += f / Rate;
-            float shimmer = MathF.Sin(phase * MathF.Tau) * (0.5f + 0.5f * MathF.Sin(t * MathF.Tau * 7f));
-            s[i] = (0.3f * drone + 0.12f * shimmer) * Env(t, len, 0.4f);
+            float t = i / (float)Dsp.Rate;
+            p1 += 45f / Dsp.Rate; p2 += 45.6f / Dsp.Rate; p3 += 67.5f / Dsp.Rate;
+            float saw = (float)(2 * (p1 - Math.Floor(p1)) - 1) + (float)(2 * (p2 - Math.Floor(p2)) - 1) + 0.6f * (float)(2 * (p3 - Math.Floor(p3)) - 1);
+            float drone = sawLp2.Run(sawLp1.Run(saw, 300f), 260f);
+            float x = n.Pink();
+            float hull = 0f;
+            for (int k = 0; k < 4; k++) hull += modeAmp[k] * modes[k].Run(x, modeHz[k], 0.08f);
+            float wf = 2000f * MathF.Pow(0.2f, t / len);
+            float hiss = whoosh.Run(n.White(), wf, 0.35f) * MathF.Min(1f, t / 0.25f);
+            float env = MathF.Min(1f, t / 0.45f) * MathF.Min(1f, MathF.Max(0f, (len - t) / 1.1f));
+            s[i] = env * ((0.8f + 0.2f * breathe.Next()) * (0.55f * drone + 0.12f * hull) + 0.09f * hiss);
         }
-        return s;
+        return Dsp.Normalize(Dsp.Reverb(s, 1.3f, 0.3f, 0.5f), 0.32f);
     }
 }

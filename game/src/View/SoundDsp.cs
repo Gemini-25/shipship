@@ -89,6 +89,63 @@ internal static class Dsp
         }
     }
 
+    /// <summary>v23 부드럽게 떠도는 값 (-1~1): 바람 세기 · 천둥 구름 · 땅울림처럼 사인보다 덜 규칙적인 흔들림.</summary>
+    public sealed class Wander
+    {
+        private readonly Random _r;
+        private readonly float _step;
+        private float _a, _b, _k = 1f;
+        public Wander(int seed, float hz) { _r = new Random(seed); _step = hz / Rate; _a = Pick(); _b = Pick(); }
+        private float Pick() => (float)(_r.NextDouble() * 2.0 - 1.0);
+        public float Next()
+        {
+            _k += _step;
+            if (_k >= 1f) { _k -= 1f; _a = _b; _b = Pick(); }
+            float e = 0.5f - 0.5f * MathF.Cos(MathF.PI * _k);
+            return _a + (_b - _a) * e;
+        }
+    }
+
+    /// <summary>v23 짧은 잔향 (빗방울 · 천둥 · 도마가 방이나 하늘에 퍼진다) — 되먹임 빗 넷 + 올패스 둘 (슈뢰더). size 0.3(작은 방) ~ 1.5(하늘).</summary>
+    public static float[] Reverb(float[] s, float size, float mix, float damp = 0.35f)
+    {
+        int[] combs = { 1116, 1188, 1277, 1356 };
+        int[] alls = { 556, 225 };
+        var wet = new float[s.Length];
+        foreach (int c0 in combs)
+        {
+            int d = Math.Max(8, (int)(c0 * size * Rate / 44100f));
+            var buf = new float[d];
+            float lp = 0f, fb = 0.78f;
+            int idx = 0;
+            for (int i = 0; i < s.Length; i++)
+            {
+                float y = buf[idx];
+                lp = y * (1f - damp) + lp * damp;
+                buf[idx] = s[i] + lp * fb;
+                wet[i] += y * 0.25f;
+                if (++idx >= d) idx = 0;
+            }
+        }
+        foreach (int a0 in alls)
+        {
+            int d = Math.Max(4, (int)(a0 * size * Rate / 44100f));
+            var buf = new float[d];
+            int idx = 0;
+            for (int i = 0; i < s.Length; i++)
+            {
+                float b = buf[idx];
+                float y = -wet[i] + b;
+                buf[idx] = wet[i] + b * 0.5f;
+                wet[i] = y;
+                if (++idx >= d) idx = 0;
+            }
+        }
+        var o = new float[s.Length];
+        for (int i = 0; i < s.Length; i++) o[i] = s[i] * (1f - mix) + wet[i] * mix;
+        return o;
+    }
+
     /// <summary>한 극 거름 (낮은 쪽만).</summary>
     public struct Low
     {

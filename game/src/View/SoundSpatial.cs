@@ -192,21 +192,30 @@ public partial class SoundSystem
         return s;
     }
 
-    /// <summary>로봇 구동음: 짧게 올라가는 모터 소리.</summary>
+    /// <summary>로봇 구동음 (v23 다시): 작은 전기 모터가 위잉 하고 돌아가며(톱니파 · 배음) 톱니바퀴가 사각사각 맞물리고, 처음과 끝에 짧은 딸깍.</summary>
     private static float[] ServoSound()
     {
-        int n = (int)(Rate * 0.16f);
-        var s = new float[n];
+        float len = 0.28f;
+        var s = Dsp.Buf(len);
+        var n = new Dsp.Noise(141);
+        var whineLp = new Dsp.Low();
+        var gear = new Dsp.Band();
+        var clickHp = new Dsp.High();
         double phase = 0;
-        for (int i = 0; i < n; i++)
+        for (int i = 0; i < s.Length; i++)
         {
-            float t = i / (float)Rate;
-            float f = 380f + 900f * t;
-            phase += f / Rate;
-            float env = MathF.Min(1f, t / 0.02f) * MathF.Min(1f, (0.16f - t) / 0.04f);
-            float x = MathF.Sin((float)(phase * MathF.Tau));
-            s[i] = 0.3f * env * (x + 0.3f * MathF.Sign(x));
+            float t = i / (float)Dsp.Rate;
+            float f = 330f + 170f * MathF.Min(1f, t / 0.12f) - 60f * MathF.Max(0f, (t - 0.2f) / 0.08f);
+            phase += f / Dsp.Rate;
+            float ph = (float)(phase - Math.Floor(phase));
+            float saw = 2f * ph - 1f;
+            float whine = whineLp.Run(saw + 0.35f * MathF.Sin(ph * Dsp.Tau * 3f) + 0.2f * MathF.Sin(ph * Dsp.Tau * 7f), 2400f);
+            float teeth = 0.5f + 0.5f * MathF.Sin((float)(phase * Dsp.Tau / 4)); // 감속 톱니가 맞물리는 박자
+            float mesh = gear.Run(n.White(), 3000f, 0.5f) * teeth * teeth;
+            float env = MathF.Min(1f, t / 0.025f) * MathF.Min(1f, MathF.Max(0f, (len - t) / 0.05f));
+            float click = (t < 0.004f || MathF.Abs(t - (len - 0.02f)) < 0.003f) ? clickHp.Run(n.White(), 1800f) : clickHp.Run(0f, 1800f);
+            s[i] = env * (0.6f * whine + 0.25f * mesh) + 0.4f * click;
         }
-        return s;
+        return Dsp.Normalize(s, 0.3f);
     }
 }

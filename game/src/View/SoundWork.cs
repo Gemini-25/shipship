@@ -246,14 +246,33 @@ public partial class SoundSystem
         return Dsp.Normalize(s, 0.6f);
     }
 
-    /// <summary>도마: 칼이 탁탁탁.</summary>
+    /// <summary>도마 (v23 다시): 칼날이 채소를 '사각' 자르고(잡음) 나무 도마에 '톡' 닿는다(울리는 나무 공명 · 사인 '삑'이 아니다) — 세 번, 간격이 조금씩 다르다.</summary>
     private static float[] Chop()
     {
-        var s = Dsp.Buf(0.8f);
+        var s = Dsp.Buf(0.85f);
         var n = new Dsp.Noise(261);
+        float at = 0.02f;
         for (int k = 0; k < 3; k++)
-            Dsp.Add(s, 0.02f + k * 0.22f, 0.08f, t => MathF.Exp(-t * 45f) * MathF.Sin(Dsp.Tau * 230f * t) + 0.6f * MathF.Exp(-t * 70f) * MathF.Sin(Dsp.Tau * 610f * t) + (t < 0.005f ? n.White() * 0.8f : 0f));
-        return Dsp.Normalize(s, 0.75f);
+        {
+            float amp = n.Range(0.8f, 1f);
+            var crunch = new Dsp.Band();
+            var nn = new Dsp.Noise(k * 13 + 5);
+            Dsp.Add(s, at, 0.05f, t => amp * MathF.Min(1f, t / 0.004f) * MathF.Exp(-t * 70f) * crunch.Run(nn.White(), 2200f, 0.7f) * 0.55f);
+            float hit = at + 0.028f;
+            var b1 = new Dsp.Band();
+            var b2 = new Dsp.Band();
+            var b3 = new Dsp.Band();
+            var hp = new Dsp.High();
+            Dsp.Add(s, hit, 0.12f, t =>
+            {
+                float imp = t < 0.0015f ? nn.White() : 0f;
+                float wood = 1.0f * b1.Run(imp, 520f, 0.09f) + 0.35f * b2.Run(imp, 1250f, 0.12f) + 4f * b3.Run(imp, 185f, 0.1f);
+                float blade = t < 0.003f ? hp.Run(nn.White(), 2500f) * 0.4f : 0f;
+                return amp * (wood * MathF.Exp(-t * 35f) * 4f + blade);
+            });
+            at += n.Range(0.2f, 0.25f);
+        }
+        return Dsp.Normalize(Dsp.Reverb(s, 0.35f, 0.12f), 0.75f);
     }
 
     /// <summary>가위: 싹둑 · 싹둑.</summary>

@@ -211,26 +211,37 @@ public partial class SoundSystem
         return Dsp.Loop(Dsp.Normalize(s, 0.75f));
     }
 
-    /// <summary>비: 높은 쉬 소리 + 수많은 빗방울 톡 + 낮은 두드림.</summary>
+    /// <summary>비 (v23 다시): 넓은 빗소리(분홍 잡음 · 높은 쪽은 걷어 냄) + 촘촘한 잔빗방울(잡음 알갱이) + 굵은 빗방울(짧은 잡음 톡 — 사인 '삑'이 아니다) + 낮은 두드림.</summary>
     private static float[] RainWave()
     {
-        var s = Dsp.Buf(4.2f);
+        var s = Dsp.Buf(4.6f);
         var n = new Dsp.Noise(57);
-        var low = new Dsp.Low();
-        var pat = new Dsp.Low();
+        var hp = new Dsp.High();
+        var lp1 = new Dsp.Low();
+        var lp2 = new Dsp.Low();
+        var fine = new Dsp.Band();
+        var drum = new Dsp.Low();
+        var drumHp = new Dsp.High();
+        var swell = new Dsp.Wander(58, 0.6f);
         for (int i = 0; i < s.Length; i++)
         {
-            float x = n.White();
-            float hiss = x - low.Run(x, 1800f);
-            s[i] = 0.22f * hiss + 0.5f * pat.Run(n.White(), 420f);
+            float x = n.Pink();
+            float rush = lp2.Run(lp1.Run(hp.Run(x, 350f), 6500f), 7500f);
+            float grain = n.U() < 0.09f ? n.White() * (0.4f + 0.6f * n.U()) : 0f; // 하나하나는 들리지 않는 잔빗방울
+            float patter = fine.Run(grain, 3600f, 0.9f);
+            float low = drumHp.Run(drum.Run(n.Brown(), 220f), 70f); // 지붕을 두드리는 낮은 쪽 (DC는 걷어 낸다)
+            s[i] = (0.9f + 0.12f * swell.Next()) * (0.55f * rush + 0.75f * patter) + 0.12f * low;
         }
-        int drops = (int)(s.Length / (float)Dsp.Rate * 380f);
+        float len = s.Length / (float)Dsp.Rate;
+        int drops = (int)(len * 55f);
         for (int d = 0; d < drops; d++)
         {
-            float at = n.U() * s.Length / Dsp.Rate, amp = 0.15f + 0.6f * n.U() * n.U(), f = n.Range(1400f, 4200f), dec = n.Range(250f, 600f);
-            Dsp.Add(s, at, 0.012f, t => amp * MathF.Exp(-t * dec) * MathF.Sin(Dsp.Tau * f * t));
+            float at = n.U() * len, amp = 0.06f + 0.22f * n.U() * n.U(), f = n.Range(900f, 3200f), dec = n.Range(140f, 320f), q = n.Range(0.25f, 0.6f);
+            var b = new Dsp.Band();
+            var nn = new Dsp.Noise(d * 7 + 3);
+            Dsp.Add(s, at, 0.03f, t => amp * MathF.Exp(-t * dec) * b.Run(nn.White(), f, q) * 2.2f);
         }
-        return Dsp.Loop(Dsp.Normalize(s, 0.7f));
+        return Dsp.Loop(Dsp.Normalize(Dsp.Reverb(s, 0.45f, 0.18f), 0.7f), 0.3f);
     }
 
     /// <summary>모래 폭풍: 알갱이가 부딪는 거친 쉬 소리.</summary>
@@ -251,22 +262,33 @@ public partial class SoundSystem
         return Dsp.Loop(Dsp.Normalize(s, 0.65f));
     }
 
-    /// <summary>눈보라 · 태풍 휘파람: 좁은 띠가 천천히 오르내린다.</summary>
+    /// <summary>눈보라 · 태풍 울부짖음 (v23 다시): 세기가 불규칙하게 몰아치고(사인 대신 떠도는 값), 넓은 바람 소리 위로 틈새를 지나는 울음이 오르내린다.</summary>
     private static float[] HowlWave()
     {
-        var s = Dsp.Buf(6.4f);
+        var s = Dsp.Buf(7.2f);
         var n = new Dsp.Noise(71);
         var b1 = new Dsp.Band();
         var b2 = new Dsp.Band();
-        float len = s.Length / (float)Dsp.Rate;
+        var b3 = new Dsp.Band();
+        var rushLp = new Dsp.Low();
+        var rushHp = new Dsp.High();
+        var gustW = new Dsp.Wander(72, 0.35f);
+        var gustF = new Dsp.Wander(73, 1.6f);
+        var f1 = new Dsp.Wander(74, 0.45f);
+        var f2 = new Dsp.Wander(75, 0.3f);
+        var whistleW = new Dsp.Wander(76, 0.25f);
         for (int i = 0; i < s.Length; i++)
         {
-            float t = i / (float)Dsp.Rate;
-            float sweep = 0.5f + 0.5f * MathF.Sin(Dsp.Tau * 2f * t / len) * MathF.Cos(Dsp.Tau * t / len + 0.6f);
-            float x = n.White();
-            s[i] = b1.Run(x, 380f + 420f * sweep, 0.05f) + 0.6f * b2.Run(x, 610f + 300f * (1f - sweep), 0.07f);
+            float gust = Math.Clamp(0.6f + 0.32f * gustW.Next() + 0.08f * gustF.Next(), 0.15f, 1f);
+            float x = n.Pink();
+            float rush = rushLp.Run(rushHp.Run(x, 120f), 900f + 900f * gust);
+            float moan = b1.Run(x, 300f + 160f * f1.Next() + 120f * gust, 0.22f);
+            float moan2 = b2.Run(x, 520f + 200f * f2.Next(), 0.28f);
+            float w = Math.Clamp(whistleW.Next() * 0.5f + gust - 0.55f, 0f, 1f);
+            float whistle = b3.Run(n.White(), 820f + 260f * f2.Next() + 300f * gust, 0.06f) * w;
+            s[i] = gust * (0.9f * rush + 1.4f * moan + 0.8f * moan2) + 0.9f * whistle;
         }
-        return Dsp.Loop(Dsp.Normalize(s, 0.6f));
+        return Dsp.Loop(Dsp.Normalize(s, 0.6f), 0.5f);
     }
 
     /// <summary>용암: 깊은 웅웅 + 끓어오르는 거품 + 튀는 소리 · 김.</summary>
@@ -314,63 +336,108 @@ public partial class SoundSystem
         return Dsp.Loop(Dsp.Normalize(s, 0.7f));
     }
 
-    /// <summary>가까운 번개: 찢어지는 소리 → 길게 구르는 천둥.</summary>
+    /// <summary>가까운 번개 (v23 다시): 날카로운 '쩍' + 짧게 이어지는 찢어짐 → 큰 쾅 → 여러 번 굴러가는 천둥 (사이사이 커졌다 잦아든다) · 하늘에 퍼지는 잔향.</summary>
     private static float[] ThunderNear()
     {
-        var s = Dsp.Buf(3.4f);
+        float len = 5.2f;
+        var s = Dsp.Buf(len);
         var n = new Dsp.Noise(101);
-        var l1 = new Dsp.Low();
-        var l2 = new Dsp.Low();
-        var hp = new Dsp.Low();
+        var crackHp = new Dsp.High();
+        var boomLp1 = new Dsp.Low();
+        var boomLp2 = new Dsp.Low();
         var sub = new Dsp.High();
+        var midLp = new Dsp.Low();
+        var midLp2 = new Dsp.Low();
+        var midHp = new Dsp.High();
+        var tear = new Dsp.Band();
+        var grumble = new Dsp.Wander(102, 7f);
+        // 굴러가는 덩어리: (시작 · 오름 · 내림 · 세기)
+        var rolls = new List<(float at, float up, float down, float amp)> { (0.03f, 0.02f, 0.9f, 1f) };
+        float tr = 0.35f;
+        for (int k = 0; k < 7 && tr < len - 1f; k++) { rolls.Add((tr, n.Range(0.12f, 0.3f), n.Range(0.5f, 1.1f), n.Range(0.35f, 0.75f) * MathF.Exp(-tr * 0.35f))); tr += n.Range(0.25f, 0.6f); }
         for (int i = 0; i < s.Length; i++)
         {
             float t = i / (float)Dsp.Rate;
-            float x = n.White();
-            float tear = t < 0.4f ? (x - hp.Run(x, 900f)) * (t < 0.015f ? 1f : n.U() < 0.3f ? 0.9f : 0.15f) * MathF.Exp(-t * 8f) : 0f;
-            float rumble = 2.5f * sub.Run(l2.Run(l1.Run(n.Brown(), 160f), 110f), 30f) * MathF.Min(1f, t / 0.05f) * MathF.Exp(-t * 1.1f) * (1f + 0.4f * MathF.Sin(Dsp.Tau * 1.7f * t));
-            s[i] = 0.8f * tear + 9f * rumble;
+            float w = n.White();
+            // 쩍: 처음 15ms는 통째로, 그 뒤 0.35초는 듬성듬성 찢어진다
+            float crackEnv = t < 0.012f ? 1f : t < 0.6f && n.U() < 0.22f * MathF.Exp(-t * 5f) + 0.03f ? 0.75f * MathF.Exp(-t * 5f) : 0f;
+            float crack = crackHp.Run(w, 1400f) * crackEnv + 0.5f * tear.Run(w * crackEnv, 900f, 0.6f);
+            float env = 0f;
+            foreach (var r in rolls) if (t >= r.at) { float u = t - r.at; env += r.amp * MathF.Min(1f, u / r.up) * MathF.Exp(-MathF.Max(0f, u - r.up) / r.down); }
+            float body = sub.Run(boomLp2.Run(boomLp1.Run(n.Brown() + 0.15f * w, 220f), 140f), 32f);
+            float mid = midHp.Run(midLp2.Run(midLp.Run(n.Pink(), 480f), 420f), 110f); // 작은 스피커에서도 들리는 우르릉
+            s[i] = 0.9f * crack + env * (0.8f + 0.2f * grumble.Next()) * (5f * body + 1.6f * mid);
         }
-        return Dsp.Normalize(s, 0.95f);
+        return Dsp.Normalize(Dsp.Reverb(s, 1.4f, 0.28f, 0.55f), 0.95f);
     }
 
-    /// <summary>먼 천둥: 찢어짐 없이 느리게 부풀어 구른다.</summary>
+    /// <summary>먼 천둥 (v23 다시): 찢어짐 없이 낮게 깔려 여러 번 우르릉 굴러간다 — 높은 쪽은 거리에 먹혀 둥글다.</summary>
     private static float[] ThunderFar()
     {
-        var s = Dsp.Buf(4.6f);
+        float len = 6.2f;
+        var s = Dsp.Buf(len);
         var n = new Dsp.Noise(111);
         var l1 = new Dsp.Low();
         var l2 = new Dsp.Low();
         var sub = new Dsp.High();
+        var midLp = new Dsp.Low();
+        var midLp2 = new Dsp.Low();
+        var midHp = new Dsp.High();
+        var grumble = new Dsp.Wander(112, 5f);
+        var rolls = new List<(float at, float up, float down, float amp)>();
+        float tr = 0.15f;
+        for (int k = 0; k < 6 && tr < len - 1.2f; k++) { rolls.Add((tr, n.Range(0.35f, 0.7f), n.Range(0.7f, 1.3f), n.Range(0.5f, 1f) * (k == 1 ? 1.3f : 1f))); tr += n.Range(0.45f, 1f); }
         for (int i = 0; i < s.Length; i++)
         {
             float t = i / (float)Dsp.Rate;
-            float env = MathF.Min(1f, t / 0.45f) * MathF.Exp(-t * 0.8f) * (1f + 0.5f * MathF.Sin(Dsp.Tau * 0.9f * t + 0.4f));
-            s[i] = sub.Run(l2.Run(l1.Run(n.Brown(), 110f), 80f), 28f) * env;
+            float env = 0f;
+            foreach (var r in rolls) if (t >= r.at) { float u = t - r.at; env += r.amp * MathF.Min(1f, u / r.up) * MathF.Exp(-MathF.Max(0f, u - r.up) / r.down); }
+            float body = sub.Run(l2.Run(l1.Run(n.Brown(), 140f), 95f), 30f);
+            float mid = midHp.Run(midLp2.Run(midLp.Run(n.Pink(), 260f), 220f), 90f);
+            s[i] = env * (0.7f + 0.3f * grumble.Next()) * (body + 0.4f * mid);
         }
-        return Dsp.Normalize(s, 0.7f);
+        return Dsp.Normalize(Dsp.Reverb(s, 1.5f, 0.3f, 0.65f), 0.7f);
     }
 
-    /// <summary>지진: 땅 밑 울림 + 선반 · 걸쇠가 덜그럭.</summary>
+    /// <summary>지진 (v23 다시): 땅 밑 깊은 울림이 불규칙하게 밀려오고, 갈리는 소리 · 선반과 걸쇠가 덜그럭(짧은 잡음 덩어리 — 사인 '삑'이 아니다) · 무거운 것이 쿵.</summary>
     private static float[] QuakeWave()
     {
-        var s = Dsp.Buf(3.6f);
+        float len = 4.4f;
+        var s = Dsp.Buf(len);
         var n = new Dsp.Noise(121);
-        var low = new Dsp.Low();
+        var l1 = new Dsp.Low();
+        var l2 = new Dsp.Low();
         var sub = new Dsp.High();
-        float len = s.Length / (float)Dsp.Rate;
+        var growl = new Dsp.Band();
+        var grind = new Dsp.Band();
+        var surge = new Dsp.Wander(122, 1.3f);
+        var shake = new Dsp.Wander(123, 9f);
+        float Shape(float t) => MathF.Min(1f, t / 0.5f) * MathF.Min(1f, MathF.Max(0f, (len - t) / 1.6f));
         for (int i = 0; i < s.Length; i++)
         {
             float t = i / (float)Dsp.Rate;
-            float env = MathF.Pow(MathF.Sin(MathF.PI * t / len), 0.7f);
-            s[i] = env * (0.5f * MathF.Sin(Dsp.Tau * 28f * t) + 0.35f * MathF.Sin(Dsp.Tau * 41f * t + 1f) + 6f * sub.Run(low.Run(n.Brown(), 70f), 20f));
+            float e = Shape(t) * (0.75f + 0.25f * surge.Next());
+            float x = n.Pink();
+            float rumble = 5f * sub.Run(l2.Run(l1.Run(n.Brown(), 75f), 55f), 18f);
+            float g = growl.Run(x, 140f, 0.6f) * (0.6f + 0.4f * shake.Next());
+            float gr = grind.Run(n.White(), 380f, 0.7f) * 0.25f * (0.5f + 0.5f * surge.Next());
+            s[i] = e * (rumble + 2.2f * g + gr);
         }
-        for (int k = 0; k < 90; k++)
+        for (int k = 0; k < 140; k++)
         {
-            float at = n.U() * len, amp = 0.25f * MathF.Pow(MathF.Sin(MathF.PI * at / len), 1.5f), f = n.Range(1800f, 3200f);
-            Dsp.Add(s, at, 0.02f, t => amp * MathF.Exp(-t * 260f) * MathF.Sin(Dsp.Tau * f * t));
+            float at = n.U() * len, amp = 0.1f * Shape(at) * n.Range(0.3f, 1f), f = n.Range(500f, 2600f), q = n.Range(0.15f, 0.4f), dur = n.Range(0.006f, 0.03f);
+            var b = new Dsp.Band();
+            var nn = new Dsp.Noise(k * 17 + 9);
+            Dsp.Add(s, at, dur + 0.03f, t => amp * MathF.Min(1f, t / 0.001f) * MathF.Exp(-t / dur) * b.Run(nn.White(), f, q) * 2f);
         }
-        return Dsp.Normalize(s, 0.9f);
+        for (int k = 0; k < 5; k++)
+        {
+            float at = n.Range(0.6f, len - 1f), amp = n.Range(0.4f, 0.8f);
+            var lp = new Dsp.Low();
+            var nn = new Dsp.Noise(k * 31 + 2);
+            Dsp.Add(s, at, 0.12f, t => amp * MathF.Exp(-t * 28f) * lp.Run(nn.White(), 260f) * 4f);
+        }
+        return Dsp.Normalize(Dsp.Reverb(s, 0.7f, 0.15f), 0.9f);
     }
 
     /// <summary>간헐천: 보글거리다 솟구치는 김 소리.</summary>
