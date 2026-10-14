@@ -595,7 +595,7 @@ public sealed partial class DockingSystem
         var w = _w;
         var hatch = w.Ship.Doors[v.HatchDoor];
         if (Inner(hatch) is not Cell at) return;
-        int n = w.Crew.Count(c => !c.Dead) >= World.MaxCrew - 1 ? 0 : R.Range(1, 3);
+        int n = w.Crew.Count(c => !c.Dead) >= World.MaxCrew - 1 ? 0 : Math.Min(R.Range(1, 3), w.Berths()); // v23 잘 자리 · 끼니까지
         for (int i = 0; i < n; i++)
         {
             var p = w.Passengers.Board(at, v.Name, rescued: false);

@@ -132,7 +132,7 @@ public sealed class EncounterSystem
     {
         var w = _w;
         int alive = w.Crew.Count(c => !c.Dead && !c.LeftShip);
-        int take = Math.Min(_rng.Range(1, 4), Math.Max(0, World.MaxCrew - alive));
+        int take = Math.Min(_rng.Range(1, 4), Math.Min(Math.Max(0, World.MaxCrew - alive), w.Berths(rescue: true))); // v23 자리가 없으면 물자만 건넨다
         var dock = w.Ship.RoomsOf(RoomType.Airlock).FirstOrDefault()?.Cells.FirstOrDefault(w.Ship.IsOpenFloor);
         var names = new List<string>();
         for (int i = 0; i < take && dock is Cell d; i++)

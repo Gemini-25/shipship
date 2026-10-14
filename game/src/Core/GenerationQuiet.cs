@@ -111,7 +111,7 @@ public sealed partial class GenerationSystem
         // 아이
         int beds = w.Ship.FurnitureOf(FurnitureType.Bed).Count() + w.Ship.FurnitureOf(FurnitureType.Cot).Count();
         int alive = w.Crew.Count(c => !c.Dead && !c.LeftShip);
-        bool room = alive < Math.Min(World.MaxCrew, beds + 2) && (w.Policies["birth"] == 0 || alive < beds);
+        bool room = alive < Math.Min(World.MaxCrew, beds + 2) && (w.Policies["birth"] == 0 || alive < beds) && w.Berths() > 0; // v23 재배대가 한 사람 더 먹일 수 있어야
         foreach (var a in adults.Where(a => a.Partner is int p && a.Id < p && a.Age <= 45f).ToList())
         {
             var b = w.Crew.FirstOrDefault(x => x.Id == a.Partner);
@@ -120,7 +120,7 @@ public sealed partial class GenerationSystem
             span.Born++;
             span.Lines.Add($"{Ko.WaGwa(a.Name)} {b.Name} 사이에 아이가 태어났다");
             alive++;
-            room = alive < Math.Min(World.MaxCrew, beds + 2);
+            room = alive < Math.Min(World.MaxCrew, beds + 2) && w.Berths() > 0;
         }
         // 가까워지는 사이
         foreach (var a in people.Where(c => !c.Dead))

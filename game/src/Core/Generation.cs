@@ -68,7 +68,7 @@ public sealed partial class GenerationSystem
         var adults = w.Crew.Where(c => !c.Dead && !c.IsChild && c.Age is >= 20f and <= 45f).ToList();
         int beds = w.Ship.FurnitureOf(FurnitureType.Bed).Count() + w.Ship.FurnitureOf(FurnitureType.Cot).Count();
         int alive = w.Crew.Count(c => !c.Dead);
-        bool room = alive < Math.Min(World.MaxCrew, beds + 2) && w.Ship.CountStored(ItemKind.Meal) + w.Ship.CountStored(ItemKind.Produce) > alive * 3;
+        bool room = alive < Math.Min(World.MaxCrew, beds + 2) && w.Ship.CountStored(ItemKind.Meal) + w.Ship.CountStored(ItemKind.Produce) > alive * 3 && w.Berths() > 0; // v23 재배대가 한 사람 더 먹일 수 있어야
         // v13.4 방침(짝·출산: 수용력에 맞춘 허가) — 빈 침대가 있고 먹을 것이 두 배로 넉넉할 때만
         if (w.Policies["birth"] == 1) room &= alive < beds && w.Ship.CountStored(ItemKind.Meal) + w.Ship.CountStored(ItemKind.Produce) > alive * 6;
         foreach (var a in adults)

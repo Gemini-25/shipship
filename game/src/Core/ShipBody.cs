@@ -505,7 +505,8 @@ public sealed partial class BodySystem
         if (_fallUntil[id] >= 0 && _fallUntil[id] <= now) { _fallUntil[id] = -1; if (c.Pose == Pose.Sitting) c.Pose = Pose.Walking; }
         if (_holdUntil[id] > now) return 0f;
         var grid = w.Ship.Grid;
-        bool urgent = c.Job?.Urgent == true;
+        bool urgent = c.Job?.Urgent == true
+            || c.Job?.Activity is EatActivity && c.Needs.Hunger > 0.75f; // v23 배고픈 사람은 비상 해제 손잡이를 당기고 지나간다 (제비호: 냉장고 가는 길이 남의 구역을 지나 문 앞에서 돌아서기를 하루 수백 번 · 끊긴 끼니 1만 번)
 
         // 칸에 들어섰다
         int ci = grid.Index(c.Cell);

@@ -208,7 +208,7 @@ public sealed partial class ValueSystem
                 return (-1, worn?.Body.Room.Id ?? -1, worn != null ? $"{Ko.IGa(worn.Name)} 아침까지 버틸지 모른다" : "삐걱대는 설비가 아침까지 버틸지 모른다", 0);
             }
             case "refugees":
-                if (leg != LegKind.Port || w.Crew.Count(c => !c.Dead) >= World.MaxCrew - 1 || !R.Chance(0.25f)) return null;
+                if (leg != LegKind.Port || w.Crew.Count(c => !c.Dead) >= World.MaxCrew - 1 || w.Berths() < 2 || !R.Chance(0.25f)) return null; // v23 잘 자리 · 끼니가 둘 몫 있어야
                 return (-1, -1, $"{w.Voyage.Current.Name} 부두에서 만난 가족이다", 0);
             case "smuggler_report":
                 if (leg is not (LegKind.Port or LegKind.TradeLane) || !R.Chance(0.06f)) return null;
@@ -250,7 +250,7 @@ public sealed partial class ValueSystem
         if (_portsSeen < 0) _portsSeen = w.Voyage.PortsVisited;
         if (w.Voyage.PortsVisited != _portsSeen) { _portsSeen = w.Voyage.PortsVisited; OnPort(); }
         var leg = w.Voyage.Current.Kind;
-        if (_legSeen == LegKind.Port && leg != LegKind.Port && Open == null && w.Crew.Count(c => !c.Dead) < World.MaxCrew && w.Tick >= SimTime.TicksPerDay * 3 && Cool("stowaway", 10f) && R.Chance(0.3f))
+        if (_legSeen == LegKind.Port && leg != LegKind.Port && Open == null && w.Crew.Count(c => !c.Dead) < World.MaxCrew && w.Berths() > 0 && w.Tick >= SimTime.TicksPerDay * 3 && Cool("stowaway", 10f) && R.Chance(0.3f))
             Stowaway();
         _legSeen = leg;
         foreach (var d in Dilemmas)
@@ -584,7 +584,7 @@ public sealed partial class ValueSystem
                 if (A)
                 {
                     var dock = w.Comms.Airlock?.Cells.FirstOrDefault(w.Ship.IsOpenFloor);
-                    for (int i = 0; i < 2 && dock is Cell dc && w.Crew.Count(c => !c.Dead) < World.MaxCrew; i++)
+                    for (int i = 0; i < 2 && dock is Cell dc && w.Crew.Count(c => !c.Dead) < World.MaxCrew && w.Berths() > 0; i++)
                     {
                         var nc = w.AddSurvivor(dc);
                         nc.Vitals.Injury = 0f; nc.Vitals.Wounds.Clear(); nc.Vitals.Health = 1f; nc.Vitals.InjuryCause = null;

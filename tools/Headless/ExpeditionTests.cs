@@ -150,8 +150,9 @@ public static partial class Program
 
                 // (f) 귀환
                 bool back = RunUntil(w, () => x.Current == null, SimTime.TicksPerDay * 6);
+                if (back) RunUntil(w, () => team.All(c => c.Dead || !c.Away && c.Room != null), SimTime.Hours(1)); // 에어락 문 칸을 지나 안으로 들어올 때까지 (끝난 그 틱에는 문 칸 위일 수 있다)
                 Check("귀환 — 재료를 들고 에어락으로 돌아온다 · 전리품이 쌓인다", back && team.All(c => !c.Away && c.Room != null) && t.LootTotal > 0 && (x.Spoils.Count > 0 || x.Stats.Hauled > 0),
-                    $"{t.Site.Name} · {x.LootText(t)} · 쌓인 것 {x.SpoilsCount} · 우주복 {string.Join("/", t.Members.Select(m => TripMember.Stage(m.SuitDamage)))}");
+                    $"{t.Site.Name} · {x.LootText(t)} · 쌓인 것 {x.SpoilsCount} · 우주복 {string.Join("/", t.Members.Select(m => TripMember.Stage(m.SuitDamage)))} · 돌아옴 {back} · {string.Join("/", team.Select(c => $"{c.Name}:{(c.Dead ? "숨짐" : c.Away ? "떠남" : c.Room?.Name ?? "방밖")}"))}");
                 var leaver = w.Crew.First(c => !c.Dead && !c.Away && !team.Contains(c));
                 int drinkBack = WaterSystem.Drinkers(w);
                 leaver.LeftShip = true; int drinkLeft = WaterSystem.Drinkers(w); leaver.LeftShip = false;

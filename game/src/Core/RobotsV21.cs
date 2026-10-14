@@ -67,7 +67,8 @@ public static class RobotsV21
     /// <summary>모든 로봇이 하는 기본 행동 (작업 목록의 일).</summary>
     public static bool Basic(WorkKind w) => w is WorkKind.Restock or WorkKind.StockDock or WorkKind.CarryWater or WorkKind.StockCache or WorkKind.StowCot
         or WorkKind.RefillPropellant or WorkKind.ShelterFood or WorkKind.EmptyBucket or WorkKind.Maintain or WorkKind.FixLights or WorkKind.FlushMain
-        or WorkKind.ClearMain or WorkKind.LookRoom or WorkKind.SealSeep or WorkKind.Tend or WorkKind.Harvest or WorkKind.CleanUp or WorkKind.ServiceNozzle or WorkKind.RepairRelay;
+        or WorkKind.ClearMain or WorkKind.LookRoom or WorkKind.SealSeep or WorkKind.Tend or WorkKind.Harvest or WorkKind.CleanUp or WorkKind.ServiceNozzle or WorkKind.RepairRelay
+        or WorkKind.Cook; // v23 조리 로봇이 없는 배: 사람이 45분 넘게 못 잡은 조리는 아무 로봇이나 (고래호 90일 — 채소 590개를 쌓아 두고 굶었다)
 
     /// <summary>놀고 있는 특기 로봇이 있으면 사람이 미루는 v21 특기 일 (급한 일 · 다친 사람 치료는 사람도 바로 한다).</summary>
     public static bool Yields(WorkKind w) => w is WorkKind.CleanUp or WorkKind.ClearRubble or WorkKind.Cook or WorkKind.PumpOut or WorkKind.ShutRoomValve or WorkKind.OpenRoomValve

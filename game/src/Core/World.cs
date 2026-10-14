@@ -1013,6 +1013,18 @@ public sealed class World
     /// <summary>v10.1: 늘릴 수 있는 최대 승무원 수 (간이침대를 놓을 자리와 공기·식량이 버티는 선).</summary>
     public const int MaxCrew = 60; // v16.9 40~60인 배
 
+    /// <summary>v23 몇 명 더 태울 수 있나: 잘 자리(침대 · 간이침대 + 하나)와 재배대가 대는 끼니(그 85%까지 먹는 사람 수)로 센다.
+    /// 60명 한도만 보던 탑승 길(기항지 손님 · 이주민 · 피란 가족 · 밀항 · 구조 · 원정)이 겹쳐 4인 배 제비호가 40일 만에 12명이 되었고,
+    /// 재배대 넷(하루 24끼 · 12명은 31끼)과 조리대 하나로 버티다 넷이 굶어 숨졌다. 목숨이 걸린 구조는 두 자리 · 재배대 끼니 전부까지 비집는다.</summary>
+    public int Berths(bool rescue = false)
+    {
+        int alive = Crew.Count(c => !c.Dead && !c.LeftShip);
+        int sleep = Ship.Furniture.Count(f => FurnitureTypes.Sleepable(f.Type) && f.Type != FurnitureType.MedBed && !f.Stowed && !f.Room.Abandoned && !f.Room.Detached) + (rescue ? 3 : 1);
+        float grow = MathF.Max(FoodPolicy.GrowingPerDay(this), Evolution.GrowCapacity(this));
+        int food = Math.Max(StartCrew, (int)(grow * (rescue ? 1f : 0.85f) / FoodPolicy.MealsPerPersonDay));
+        return Math.Max(0, Math.Min(MaxCrew, Math.Min(sleep, food)) - alive);
+    }
+
     /// <summary>v10.4: 이 배의 템플릿 (저장·재생이 같은 배를 다시 만들 수 있게).</summary>
     public string ShipKey { get; private set; } = "Mirinae";
 

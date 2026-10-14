@@ -73,7 +73,7 @@ public sealed class PassengerSystem
     public CrewMember? Board(Cell at, string from, bool rescued, bool? volunteer = null)
     {
         var w = _w;
-        if (Off || w.Crew.Count >= World.MaxCrew) return null;
+        if (Off || w.Crew.Count >= World.MaxCrew || w.Berths(rescued) <= 0) return null; // v23 잘 자리 · 끼니까지 본다
         var c = w.AddSurvivor(at);
         c.Passenger = true;
         bool vol = volunteer ?? (c.Traits.Bravery > 0.5f && c.Traits.Calm > 0.4f || R.Chance(0.15f)); // 겁이 덜하고 차분한 사람이 나선다

@@ -582,7 +582,7 @@ public sealed class QueueToil : Toil
     private readonly Furniture? _f;
     private readonly Cell _spot;
     private ServiceQueue? _q;
-    private bool _serving, _arrivedOnce, _ok = true;
+    private bool _serving, _arrivedOnce, _ok = true, _done;
     private Cell _slot = new(-9999, -9999);
     internal ServiceQueue? Queue => _q;
     /// <summary>v19 줄에서 왜 빠졌나 (끊긴 끼니 기록).</summary>
@@ -596,6 +596,9 @@ public sealed class QueueToil : Toil
     }
 
     private Cell Target => _q?.Kind is QueueKind.Shower or QueueKind.Toilet ? _q.Spot : _spot;
+
+    /// <summary>받는 칸 바로 곁 (한 칸 반 안).</summary>
+    private bool NearSpot(CrewMember c) => _q?.Kind is not (QueueKind.Shower or QueueKind.Toilet) && (Target.Center - c.Position).LengthSquared() <= 1.5f * 1.5f;
 
     public override void Begin(CrewMember c, World w)
     {
@@ -618,8 +621,9 @@ public sealed class QueueToil : Toil
         var qs = w.Coop.Queues;
         if (_serving)
         {
-            if (!_ok) { FailWhy = "받는 칸에 갈 길이 없다"; return ToilStatus.Failed; }
-            if (c.Path == null || Locomotion.Step(c, w)) { c.Pose = Pose.Standing; Locomotion.Face(c, q.Toward); return ToilStatus.Succeeded; }
+            if (!_ok && !NearSpot(c)) { FailWhy = "받는 칸에 갈 길이 없다"; return ToilStatus.Failed; }
+            if (!_ok || c.Path == null || Locomotion.Step(c, w)) { c.Path = null; c.Pose = Pose.Standing; Locomotion.Face(c, q.Toward); _done = true; return ToilStatus.Succeeded; }
+            if (c.PathBlocked && NearSpot(c)) { c.PathBlocked = false; c.Path = null; c.Pose = Pose.Standing; Locomotion.Face(c, q.Toward); _done = true; return ToilStatus.Succeeded; } // v23 받는 칸 바로 곁까지 왔으면 손을 뻗어 받는다
             if (c.PathBlocked) FailWhy = "받는 칸 길이 막혔다";
             return c.PathBlocked ? ToilStatus.Failed : ToilStatus.Running;
         }
@@ -654,7 +658,7 @@ public sealed class QueueToil : Toil
 
     public override void End(CrewMember c, World w)
     {
-        if (_q != null) w.Coop.Queues.Leave(c, _q, _serving);
+        if (_q != null) w.Coop.Queues.Leave(c, _q, _serving && _done); // v23 받으러 가다 실패하면 받는 자리를 놓는다 (붙든 채 1분 쉬고 또 막히기를 되풀이해 뒷사람이 아무도 못 받았다)
         c.Path = null;
         c.Destination = null;
         if (c.Pose == Pose.Walking) c.Pose = Pose.Standing;

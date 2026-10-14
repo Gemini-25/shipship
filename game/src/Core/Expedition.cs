@@ -1391,7 +1391,9 @@ public sealed class ExpeditionSystem
         if (t.Shuttle) ShuttleWear = MathF.Min(1f, ShuttleWear + 0.05f + t.ShuttleDamage);
         if (t.ShuttleFound) ShuttleOwned = true;
         // 발견: 생존자 · 유물 · 정보
-        for (int i = 0; i < t.Survivors && w.Crew.Count < World.MaxCrew; i++)
+        int berths = w.Berths(rescue: true); // v23 잘 자리 · 끼니가 모자라면 남은 사람은 물과 식량을 받고 다음 배를 기다린다
+        if (t.Survivors > berths) w.Log.Add(w.Tick, LogKind.Ship, $"{t.Site.Name}의 생존자 {t.Survivors - berths}명은 배에 자리가 없어 물과 식량을 남겨 두고 왔다 — 구조 신호를 대신 띄웠다");
+        for (int i = 0; i < t.Survivors && i < berths && w.Crew.Count < World.MaxCrew; i++)
         {
             var nc = w.AddSurvivor(at0);
             nc.Joined = $"{t.Site.Name}({t.Site.Spec.Name})에서 원정대가 데려왔다";
