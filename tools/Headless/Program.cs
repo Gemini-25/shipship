@@ -157,6 +157,13 @@ public static partial class Program
         ["responsetest"] = Legacy23, ["robot21test"] = Legacy23 + "," + Fixed, ["roomtest"] = Everything, ["soiltest"] = Everything, ["waystest"] = Legacy23,
     };
 
+    /// <summary>v23 실제 출발 조건(크기별 시작 시대 · 설비 보충 · 식량 비상 공사)에서 보는 시험 — 마지막 회귀에서 이 조건으로 통과했다. 나머지 기능 시험은 예전 출발 조건(모두 Ⅰ 시대)으로 본다.</summary>
+    private static readonly HashSet<string> RealStart = new()
+    {
+        "--techtreetest", "--voyagetest", "--medtest", "--aftertest", "--bodytest", "--counciltest", "--docktest", "--heattest",
+        "--mentortest", "--robotbodytest", "--roomtest", "--schemetest", "--shiptest",
+    };
+
     public static int Main(string[] args)
     {
         Console.OutputEncoding = System.Text.Encoding.UTF8;
@@ -167,7 +174,7 @@ public static partial class Program
         string v23Off = string.Join(",", V23Legacy.Where(kv => args.Contains("--" + kv.Key)).Select(kv => kv.Value));
         // v23 기술 개편 뒤: 기능 시험은 그 시험을 짠 출발 조건(Ⅰ 시대 · 설비 보충 없음)에서 본다 — 크기별 시작 시대 · 설비 보충은
         //   --techtreetest · --voyagetest(항해 하나를 끝까지 — 실제 출발 조건) · --medtest(헌혈 장면 — 실제 출발 조건에서 맞춘 장면)와 긴 항해(--ships · peace · 균형)가 본다. SHIPSIM_TIERS=1이면 기능 시험도 새 출발 조건으로.
-        if (args.Any(a => a.StartsWith("--", StringComparison.Ordinal) && a.EndsWith("test", StringComparison.Ordinal) && a is not ("--techtreetest" or "--voyagetest" or "--medtest")) && Environment.GetEnvironmentVariable("SHIPSIM_TIERS") != "1")
+        if (args.Any(a => a.StartsWith("--", StringComparison.Ordinal) && a.EndsWith("test", StringComparison.Ordinal) && !RealStart.Contains(a)) && Environment.GetEnvironmentVariable("SHIPSIM_TIERS") != "1")
             v23Off = string.Join(",", new[] { v23Off, "tiers", "refit", "foodbeds" }.Where(x => x.Length > 0));
         if (v23Off.Length > 0) Environment.SetEnvironmentVariable("SHIPSIM_OFF", string.Join(",", new[] { Environment.GetEnvironmentVariable("SHIPSIM_OFF"), v23Off }.Where(x => !string.IsNullOrEmpty(x))));
         // 개발용 (v23 회귀 가리기): SHIPSIM_OFF=nozzle,relay,brain,commander,eyes,fixed,planet,purpose,quiet,know,home,mind
