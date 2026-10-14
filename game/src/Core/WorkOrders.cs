@@ -524,10 +524,16 @@ public sealed partial class WorkBoard
     /// <summary>
     /// 지금 쓸 수 있는 작업대/정제기: 전기가 들어오고 멈추지 않은 것. 포기한 구획의 것은 다른 게 없을 때만 (우주복을 입고 들어가서).
     /// </summary>
-    internal Furniture? StationFor(Station station) =>
-        _world.Ship.FurnitureOf(Recipes.StationType(station))
-            .Where(f => f.Machine!.Efficiency > 0f && !f.Machine.Has(FaultKind.Stripped) && _world.Fire.CountIn(f.Room) == 0)
-            .OrderBy(f => f.Room.Abandoned ? 1 : 0).ThenByDescending(f => f.Machine!.Efficiency).FirstOrDefault();
+    internal Furniture? StationFor(Station station) => StationsFor(station).FirstOrDefault();
+
+    /// <summary>쓸 수 있는 작업대/정제기 전부, 나은 것부터 (포기한 구획의 것은 맨 뒤 · 다른 게 없을 때만 쓴다).</summary>
+    internal IEnumerable<Furniture> StationsFor(Station station)
+    {
+        var all = _world.Ship.FurnitureOf(Recipes.StationType(station))
+            .Where(f => f.Machine!.Efficiency > 0f && !f.Machine.Has(FaultKind.Stripped) && _world.Fire.CountIn(f.Room) == 0 && !f.Room.OffLimits && !f.Room.Detached)
+            .OrderBy(f => f.Room.Abandoned ? 1 : 0).ThenByDescending(f => f.Machine!.Efficiency).ThenBy(f => f.Id).ToList();
+        return all.Any(f => !f.Room.Abandoned) ? all.Where(f => !f.Room.Abandoned) : all.Take(1);
+    }
 
     /// <summary>
     /// 이 물건을 곧 구할 수 있는지: 재고가 있거나, 만들 곳과 재료가 있거나 (한 단계 아래 재료까지 만들 수 있으면 된다).
@@ -585,21 +591,28 @@ public sealed partial class WorkBoard
     private void ScanFabrication(Poster post, int crewCount, int produce, int meals)
     {
         var w = _world;
-        var ship = w.Ship;
         var demand = PartDemand();
         int spareFood = produce + meals * 2 / 3 - crewCount * 6;
         foreach (Station station in Enum.GetValues(typeof(Station)))
         {
-            var at = StationFor(station);
-            if (at == null) continue;
-            // 한 곳에서는 한 번에 한 가지만 (누가 하고 있으면 새로 올리지 않는다)
-            var busy = _open.Values.Where(o => o.Assignee != null && o.Target.Furniture == at && o.Kind is WorkKind.Fabricate or WorkKind.MeltIce).ToList();
-            if (busy.Count > 0)
+            // v23 부품 고갈: 작업대 · 정제기가 여러 대면 한 대에 한 가지씩 함께 돌린다 (큰 배의 작업대 6대 중 1대만 쓰던 것)
+            var stations = StationsFor(station).ToList();
+            if (stations.Count == 0) continue;
+            var making = new HashSet<ItemKind>();
+            var free = new List<Furniture>();
+            foreach (var at in stations)
             {
-                foreach (var o in busy) post(o.Kind, o.Target, o.Urgency, o.Skill, o.Detail, product: o.Product, minSkill: o.MinSkill);
-                continue;
+                // 한 곳에서는 한 번에 한 가지만 (누가 · 어느 로봇이 하고 있으면 새로 올리지 않는다)
+                var busy = _open.Values.Where(o => (o.Assignee != null || o.Robot != null) && o.Target.Furniture == at && o.Kind is WorkKind.Fabricate or WorkKind.MeltIce).ToList();
+                if (busy.Count > 0)
+                {
+                    foreach (var o in busy) { post(o.Kind, o.Target, o.Urgency, o.Skill, o.Detail, product: o.Product, minSkill: o.MinSkill); if (o.Product is ItemKind mp) making.Add(mp); }
+                    continue;
+                }
+                free.Add(at);
             }
-            (Recipe? recipe, float u, string detail) best = (null, 0f, "");
+            if (free.Count == 0) continue;
+            var picks = new List<(Recipe recipe, float u, string detail)>();
             foreach (var r in Recipes.All)
             {
                 if (r.Station != station || !w.History.Doctrine.Knows(r)) continue;
@@ -632,26 +645,36 @@ public sealed partial class WorkBoard
                     u = wanted;
                     why = $"수리에 쓸 {ItemKinds.Name(r.Product)} 없음 · " + string.Join(" + ", r.Inputs.Select(x => $"{ItemKinds.Name(x.kind)} {x.count}"));
                 }
-                if (u > best.u) best = (r, u, why);
+                picks.Add((r, u, why));
             }
+            picks.Sort((x, y) => y.u.CompareTo(x.u));
 
-            // 정제기: 얼음을 녹여 공기 탱크(와 물)에 보탠다
-            if (station == Station.Refinery)
+            // 정제기: 얼음을 녹여 공기 탱크(와 물)에 보탠다 (한 대만)
+            bool melting = _open.Values.Any(o => o.Kind == WorkKind.MeltIce && (o.Assignee != null || o.Robot != null));
+            foreach (var at in free)
             {
-                int ice = Have(ItemKind.Ice);
-                float tank = w.Air.Reserve / w.Air.ReserveCapacity;
-                if (ice >= 2 && (tank < 0.97f || w.Water.Level < w.Water.Capacity * (w.History.Doctrine.PipeReserve ? 0.95f : 0.8f)))
+                if (station == Station.Refinery && !melting)
                 {
-                    float u = 0.2f + 0.6f * (1f - tank);
-                    if (u > best.u)
+                    int ice = Have(ItemKind.Ice);
+                    float tank = w.Air.Reserve / w.Air.ReserveCapacity;
+                    if (ice >= 2 && (tank < 0.97f || w.Water.Level < w.Water.Capacity * (w.History.Doctrine.PipeReserve ? 0.95f : 0.8f)))
                     {
-                        post(WorkKind.MeltIce, WorkTarget.Of(at), u, Skill.Mechanics, $"공기 탱크 {tank * 100:0}% · 얼음 {ice}개");
-                        continue;
+                        float u = 0.2f + 0.6f * (1f - tank);
+                        int first = picks.FindIndex(p => !making.Contains(p.recipe.Product));
+                        if (first < 0 || u > picks[first].u)
+                        {
+                            post(WorkKind.MeltIce, WorkTarget.Of(at), u, Skill.Mechanics, $"공기 탱크 {tank * 100:0}% · 얼음 {ice}개");
+                            melting = true;
+                            continue;
+                        }
                     }
                 }
+                int i = picks.FindIndex(p => !making.Contains(p.recipe.Product));
+                if (i < 0) break;
+                var (pick, pu, pd) = picks[i];
+                making.Add(pick.Product);
+                post(WorkKind.Fabricate, WorkTarget.Of(at), pu, pick.Skill, pd, product: pick.Product, minSkill: pick.MinSkill);
             }
-            if (best.recipe is Recipe pick)
-                post(WorkKind.Fabricate, WorkTarget.Of(at), best.u, pick.Skill, best.detail, product: pick.Product, minSkill: pick.MinSkill);
         }
     }
 

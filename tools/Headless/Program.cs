@@ -121,6 +121,15 @@ public static partial class Program
         var open = w.Board.All.Where(o => !o.Closed).ToList();
         Console.WriteLine($"      [일 {open.Count}] " + string.Join(" · ", open.GroupBy(o => o.Kind).OrderByDescending(g => g.Count()).Take(10)
             .Select(g => $"{WorkKinds.Name(g.Key)}×{g.Count()}(맡음 {g.Count(o => o.Assignee != null || o.Robot != null || o.Drone != null)} · 보류 {g.Count(o => o.BlockedUntil > w.Tick)}{(g.FirstOrDefault(o => o.BlockedReason != null && o.BlockedUntil > w.Tick)?.BlockedReason is string br ? " " + br : "")})")));
+        // 부품 고갈 진단: 작업대 · 정제기 상태와 올라온 제작 일
+        foreach (Station st in Enum.GetValues(typeof(Station)))
+        {
+            var all = w.Ship.FurnitureOf(Recipes.StationType(st)).ToList();
+            var use = w.Board.StationFor(st);
+            var fab = open.Where(o => o.Kind is WorkKind.Fabricate or WorkKind.MeltIce && all.Contains(o.Target.Furniture!)).ToList();
+            Console.WriteLine($"      [제작 {st}] {all.Count}대(" + string.Join(" · ", all.Select(f => $"{f.Room.Name} 효율{f.Machine!.Efficiency:0.00}{(f.Machine.Faults.Count > 0 ? " 고장" + string.Join("/", f.Machine.Faults.Select(x => x.Kind)) : "")}")) + $") 쓰는 곳 {use?.Room.Name ?? "없음"} · 일 " +
+                string.Join(" · ", fab.Select(o => $"{o.Product}{o.Urgency:0.00}(맡음 {o.Assignee?.Name ?? (o.Robot != null ? "로봇" : "-")} · 진척 {o.Progress:0.00}{(o.BlockedUntil > w.Tick ? " 보류 " + o.BlockedReason : "")})")));
+        }
         string Where(ItemKind k) => string.Join(" · ", w.Ship.Furniture.Where(f => f.Storage != null && f.Storage.Count(k) > 0).GroupBy(f => f.Type)
             .Select(g => $"{g.Key}{g.Sum(f => f.Storage!.Count(k))}({g.Count(f => f.Machine is Machine m && m.Efficiency <= 0f)}멈춤 · {g.Count(f => f.Room.OffLimits || f.Room.Abandoned || f.Room.Detached)}막힌방)"));
         bool shortF = Evolution.FoodShort(w, out float gF, out float nF);

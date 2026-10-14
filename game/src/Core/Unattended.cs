@@ -125,7 +125,9 @@ public sealed partial class RobotSystem
             WorkKind.RepairNet => o.Urgency >= 0.75f || w.Automation.Unattended, // 강화: 끊겨 방들이 정전 · 환기 끊김이면 정비 로봇이 잇는다 (공기가 빠진 방에서도)
             WorkKind.RestartReactor => w.Automation.CoreOnline && w.Automation.Unattended, // 노심을 다루는 일 — 사람 기관사가 있으면 사람이 (로봇은 느리고 자주 헛짚는다) · 아무도 없을 때 주 컴퓨터가 절차를 짚어 주면
             WorkKind.Repair => RepairOk(o),
-            WorkKind.Fabricate => w.Automation.Unattended && FabOk(o) is not null, // 무인 운항: 작업대에서 간단한 부품을 (주 컴퓨터가 도면을 짚어 준다)
+            // 무인 운항: 작업대에서 간단한 부품을 (주 컴퓨터가 도면을 짚어 준다)
+            // v23 부품 고갈: 사람이 있어도 수리가 기다리는 부품 · 바닥난 부품(0.4 이상)은 로봇이 먼저 만든다 — 재고 채우기는 한 시간 아무도 안 잡으면
+            WorkKind.Fabricate => (w.Automation.Unattended || o.Urgency >= 0.4f || w.Tick - o.Posted >= SimTime.Hours(1)) && FabOk(o) is not null,
             _ => false,
         };
     }
