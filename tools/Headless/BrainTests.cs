@@ -24,12 +24,12 @@ public static partial class Program
         c.NextThinkTick = w.Tick + 1;
     }
 
-    private static World BrainDay(int seed, string ship, float hour = 10f)
+    private static World BrainDay(int seed, string ship, float hour = 10f) => WarmCache.Get($"day1+{hour}h", seed, ship, () =>
     {
         var w = DayOne(seed, ship);
         Run(w, SimTime.Hours(hour));
         return w;
-    }
+    });
 
     private static int RunBrainTest(int seed)
     {

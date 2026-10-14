@@ -20,12 +20,12 @@ public static partial class Program
 
     private static void RunE(World w, long ticks, Action every) { for (long t = 0; t < ticks; t++) { every(); w.Step(); } }
 
-    private static World GDay(int seed)
+    private static World GDay(int seed) => WarmCache.Get("day1@10", seed, "Hanbit", () =>
     {
         var w = DayOne(seed, "Hanbit");
         RunUntilHour(w, 10f);
         return w;
-    }
+    });
 
     private static void GWalk(World w, CrewMember c, Cell to, string label = "짐 나르기")
     {

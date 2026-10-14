@@ -6,7 +6,9 @@ using ShipSim.Core;
 // v10.10 선내 로봇 · 자원 회복, v11.0 예방: 하나씩 재현해 본다
 public static partial class Program
 {
-    private static World DayOne(int seed, string ship)
+    private static World DayOne(int seed, string ship) => WarmCache.Get("day1", seed, ship, () => DayOneRaw(seed, ship)); // 같은 첫날은 한 번만 돌리고 되살린다
+
+    private static World DayOneRaw(int seed, string ship)
     {
         // v13.2 점검용 첫날 배는 처음 방침 그대로 하루를 보낸다 (첫 출항 회의의 문화가 첫날을 흔들지 않게 — 문화는 회의·밸런스·긴 시험이 본다)
         bool off = MeetingSystem.MaidenOff;

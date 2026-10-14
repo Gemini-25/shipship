@@ -25,9 +25,13 @@ public static partial class Program
     private static World ReactDay(int seed)
     {
         TallyReact();
-        var w = DayOne(seed, "Hanbit");
+        var w = WarmCache.Get("day1@10", seed, "Hanbit", () =>
+        {
+            var x = DayOne(seed, "Hanbit");
+            RunUntilHour(x, 10f);
+            return x;
+        });
         _lastReact = w;
-        RunUntilHour(w, 10f);
         return w;
     }
 

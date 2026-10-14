@@ -219,6 +219,7 @@ public static partial class Program
     public static int Main(string[] args)
     {
         Console.OutputEncoding = System.Text.Encoding.UTF8;
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => WarmCache.Report();
         if (Environment.GetEnvironmentVariable("SHIPSIM_V21") == "0") RobotsV21.General = RobotsV21.Reactor = RobotsV21.Expanded = false; // 개발용: 회귀가 로봇 확장 때문인지 가린다
         // v23 주컴퓨터 대개편 뒤: 사람이 하는 대응 · 회의가 정하는 권한을 보는 시험은 그 장치를 끄고 본다
         //   (기본은 로봇 · 주컴퓨터가 먼저 — 그게 실패했을 때 사람이 나서는 장면을 본다 · 장치마다 제 시험이 따로 있다:
@@ -265,6 +266,9 @@ public static partial class Program
         if (args.FirstOrDefault(a => a.StartsWith("--tuning=")) is string tf && System.IO.File.Exists(tf.Split('=', 2)[1]))
             Console.WriteLine($"수치 파일: {Tuning.Load(System.IO.File.ReadAllText(tf.Split('=', 2)[1]))}개 적용");
         if (args.Contains("--bench")) return RunBench(days, seed);
+        if (args.Contains("--warmbench")) return RunWarmBench(seed, args); // 시험 시간 재기
+        if (args.Contains("--patrolprobe")) return RunPatrolProbe(days, seed, args); // 로봇 · 드론 순찰 진단
+        if (args.Contains("--matprobe")) return RunMatProbe(days, seed, args); // 재료 흐름 진단
         if (args.Contains("--profile")) return RunProfile(seed, args); // v14.2
         if (args.Contains("--syscheck")) return RunSysCheck(seed, args); // 모든 배 — 주컴퓨터 · 로봇 · 드론 실제 점검
         if (args.Contains("--unmanned")) return RunUnmanned(seed, args); // 사람이 모두 떠난 배 — 주컴퓨터 · 로봇 · 드론만으로
