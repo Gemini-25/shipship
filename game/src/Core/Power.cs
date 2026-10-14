@@ -149,7 +149,9 @@ public sealed class PowerGrid
     /// <summary>내린 설비까지 다 켰을 때의 수요.</summary>
     public float FullDemand { get; private set; }
     public int ParkedCount { get; private set; }
-    private int _parkedPump = -1, _parkedO2 = -1;
+    private int _parkedPump = -1;
+    /// <summary>v23 전력이 모자랄 때 쉬게 한 산소 발생기 (숨 쉴 만큼만 남긴다 — 예전엔 한 대만 쉬었다).</summary>
+    private readonly HashSet<int> _parkedO2 = new();
 
     /// <summary>임시 배선. 한번 깔면 흔적으로 남는다.</summary>
     public List<Jumper> Jumpers { get; } = new();
@@ -273,7 +275,7 @@ public sealed class PowerGrid
         w.Coop.Park(); // v17.4 옆에서 손을 넣느라 잠시 멈춘 설비
         w.Automation.Park(); // v16.20 전력 트리아지: 필수 우선순위표로 비필수를 끄고 몰아준다
         w.Failsafe.Park(); // v16.19 부하 차단 계전기: 배터리만으로 버틸 때 비필수부터 (컴퓨터가 없어도 하드웨어로)
-        if (!Brownout) { _parkedPump = _parkedO2 = -1; return; }
+        if (!Brownout) { _parkedPump = -1; _parkedO2.Clear(); return; }
 
         // 냉각 펌프: 분기 하나로 원자로 출력을 식힐 수 있으면 약한 쪽 분기의 펌프를 내린다
         var branches = w.Piping.Branches.Where(b => b.Pump?.Machine is Machine pm && !b.Pump.Room.Detached && pm.FaultFactor > 0.3f).ToList();
@@ -295,22 +297,40 @@ public sealed class PowerGrid
         float vol = living.Sum(r => r.Volume);
         float avgO2 = vol > 0 ? living.Sum(r => r.Air.O2 * r.Volume) / vol : 0f;
         int breathers = w.OnBoard; // 원정대 · 떠난 사람은 배의 공기를 마시지 않는다
-        if (gens.Count >= 2)
+        if (gens.Count >= 2 && !ReactorOnline)
         {
+            // 원자로가 멈춰 배터리로 버틸 때: 생명유지는 건드리지 않는다 — 한 대로 넉넉할 때만 예비 한 대를 쉰다
             var spare = gens.OrderBy(f => f.Machine!.FaultFactor * (0.6f + 0.4f * f.Machine.Condition)).ThenByDescending(f => f.Id).First();
             var main = gens.Where(f => f != spare).OrderByDescending(f => f.Machine!.FaultFactor).First();
             bool enough = breathers * Atmosphere.BreathO2 <= 0.8f * Atmosphere.GeneratorCapacity * main.Machine!.FaultFactor * main.Machine.Rating;
-            bool wasParked = _parkedO2 == spare.Id;
-            bool keep = enough && (wasParked ? avgO2 >= 18.5f : avgO2 >= 19.5f) && !living.Any(r => r.Leaking);
-            _parkedO2 = keep ? spare.Id : -1;
+            bool keep = enough && (_parkedO2.Contains(spare.Id) ? avgO2 >= 18.5f : avgO2 >= 19.5f) && !living.Any(r => r.Leaking);
+            _parkedO2.Clear();
+            if (keep) _parkedO2.Add(spare.Id);
         }
-        else _parkedO2 = -1;
+        else if (gens.Count >= 2)
+        {
+            // v23 원자로는 도는데 전력이 모자랄 때(보듬호: 산소 발생기 7대 27kW · 원자로 한도와 평소 수요가 같다):
+            //   좋은 것부터 숨 쉴 만큼(80% 여유) 돌리고 나머지는 쉰다 — 셋 이상이면 두 대는 남긴다 (한 대가 서도 버티게)
+            var order = gens.OrderByDescending(f => f.Machine!.FaultFactor * (0.6f + 0.4f * f.Machine.Condition)).ThenBy(f => f.Id).ToList();
+            float need = breathers * Atmosphere.BreathO2, cap = 0f;
+            int run = 0;
+            foreach (var g in order)
+            {
+                if (run >= (gens.Count >= 3 ? 2 : 1) && need <= 0.8f * cap) break;
+                cap += Atmosphere.GeneratorCapacity * g.Machine!.FaultFactor * g.Machine.Rating;
+                run++;
+            }
+            bool keep = need <= 0.8f * cap && (_parkedO2.Count > 0 ? avgO2 >= 18.5f : avgO2 >= 19.5f) && !living.Any(r => r.Leaking);
+            _parkedO2.Clear();
+            if (keep) foreach (var g in order.Skip(run)) _parkedO2.Add(g.Id);
+        }
+        else _parkedO2.Clear();
 
         bool hurt = w.Crew.Any(c => !c.Dead && (c.Down || c.Vitals.Injury > 0.25f));
         foreach (var m in ship.Machines)
         {
             if (m.Body.Room.Detached) continue;
-            bool park = m.Body.Id == _parkedPump || m.Body.Id == _parkedO2
+            bool park = m.Body.Id == _parkedPump || _parkedO2.Contains(m.Body.Id)
                         || (m.Body.Type == FurnitureType.MedBed && !hurt)
                         || m.Body.Type == FurnitureType.EngineCore
                         || (m.Body.Type == FurnitureType.Console && m.Body.Room.Type != RoomType.Bridge)
