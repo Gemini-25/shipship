@@ -23,7 +23,7 @@ public static partial class Program
 
             // 0) 목록
             {
-                var perEra = EraSystem.Eras.Select(e => fresh.Count(t => t.Era == e.era)).ToList();
+                var perEra = Enumerable.Range(1, 6).Select(era => fresh.Count(t => t.Era == era)).ToList(); // v15 옛 표는 여섯 시대 (v23 기술표가 흡수)
                 var perField = Enum.GetValues<TechField>().Select(f => fresh.Count(t => t.Field == f)).ToList();
                 bool unique = all.Select(t => t.Id).Distinct().Count() == all.Length && all.Select(t => t.Name).Distinct().Count() == all.Length;
                 Check("목록 — 기술 70 · 새 기술은 시대마다 8~9개 · 열세 분야에 넷씩 · id·이름이 겹치지 않는다",
@@ -130,15 +130,17 @@ public static partial class Program
                 var w = World.CreateDefault(seed, 0, "Hanbit");
                 Run(w, SimTime.Hours(1));
                 for (int i = 0; i < 36; i++) { w.Research += 300f; Run(w, SimTime.Minutes(10)); }
-                var got = w.Eras.Order.Where(id => ErasV15.Rows.Any(r => r.Tech.Id == id)).ToList();
-                var chosen = w.History.Events.Count(e => e.Text.Contains("다음 연구는") && fresh.Any(t => e.Text.Contains(t.Name)));
+                // v23 새 기술표: 회의가 고르는 것은 새 기술이고, 옛 v15 기술은 그 안에 담겨 함께 익는다
+                var got = ErasV15.Rows.Where(r => w.Eras.Known.Contains(r.Tech.Id)).Select(r => r.Tech.Id).ToList();
+                var carriers = TechTree.All.Where(t => t.Absorbs.Any(a => ErasV15.Rows.Any(r => r.Tech.Id == a))).Select(t => t.Name).ToList();
+                var chosen = w.History.Events.Count(e => e.Text.StartsWith("다음 연구 —") && carriers.Any(n => e.Text.Contains(n)));
                 var mismatch = ErasV15.Stats.Where(s =>
                 {
                     float expect = 1f;
                     foreach (var r in ErasV15.Rows) if (w.Eras.Known.Contains(r.Tech.Id)) foreach (var f in r.Fx) if (f.stat == s) expect *= f.mul;
                     return !Near(ErasV15.Mul(w, s), expect, 1e-4f);
                 }).ToList();
-                Check("연구 흐름 — 회의가 새 기술을 골라 익히고, 수치는 익힌 것만큼", got.Count >= 10 && chosen >= 10 && mismatch.Count == 0,
+                Check("연구 흐름 — 회의가 새 기술표에서 골라 익히면 안에 담긴 v15 기술도 익고, 수치는 익힌 것만큼", got.Count >= 10 && chosen >= 3 && mismatch.Count == 0,
                     $"익힌 기술 {w.Eras.Known.Count} (새 {got.Count}) · 회의가 고른 새 기술 {chosen} · 처음 다섯: {string.Join(", ", got.Take(5).Select(id => (EraSystem.Find(id)?.Name ?? id)))}"
                     + $" · 연구 ×{ErasV15.Mul(w, "research"):0.00} · 수리 ×{ErasV15.Mul(w, "repair"):0.00}" + (mismatch.Count > 0 ? $" · 어긋남: {string.Join(",", mismatch)}" : ""));
             }

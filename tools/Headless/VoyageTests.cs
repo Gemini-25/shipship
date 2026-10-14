@@ -49,7 +49,7 @@ public static partial class Program
                 Run(w, SimTime.TicksPerDay * 10);
                 var e = w.Eras;
                 var known = e.Order.Select(id => (EraSystem.Find(id)?.Name ?? id)).ToList();
-                Check("시대 기술 — 회의가 고르고, 익힌다", known.Count >= 1 && w.History.Events.Any(x => x.Text.Contains("다음 연구는")),
+                Check("시대 기술 — 회의가 고르고, 익힌다", known.Count >= 1 && w.History.Events.Any(x => x.Text.StartsWith("다음 연구 —")), // v23 새 기술표의 연대기 글
                     $"{EraSystem.EraName(e.Era)} · 연구 {w.Research:0} · 익힘 {string.Join(", ", known)} · 지금 {(e.Project ?? "-")} {e.Progress:0}");
             }
             // 5) 결정론

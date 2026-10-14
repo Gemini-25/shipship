@@ -660,6 +660,20 @@ public sealed partial class WorkBoard
 
     /// <summary>v23 기술 설치 공사: 익힌 기술이 지을 줄 아는 단계보다 낮은 설비를 한 대씩 고쳐 단다 (종류마다 하나 · 배 전체 셋까지 · 재료가 있을 때).
     /// 사고 중엔 미룬다. 회의는 다시 열지 않는다 (연구를 고를 때 정했다).</summary>
+    /// <summary>v23 식량 비상: 재배대가 먹는 만큼 못 대고 먹을 것이 바닥을 보이면 회의 없이 재배대 공사를 올린다 (한 번에 하나 · 물이 넉넉할 때).</summary>
+    private void ScanFoodBeds(Poster post)
+    {
+        var w = _world;
+        foreach (var o in _open.Values)
+            if (Evolution.FoodBed(o)) { post(o.Kind, o.Target, o.Urgency, o.Skill, o.Detail, circuit: o.Circuit, minSkill: o.MinSkill, upgrade: o.Upgrade); return; } // 하던 공사는 이어 간다
+        if (w.History.GrowBedsAdded >= Evolution.MaxGrowBeds || w.Water.Level < 0.3f * w.Water.Capacity || !Evolution.FoodShort(w, out float grow, out float need)) return;
+        var cost = Evolution.Cost(UpgradeKind.AddGrowBed, null);
+        if (!cost.All(x => Have(x.kind) >= x.count) || Evolution.GrowSpot(w) is not { } gs) return; // 비상이다 — 비상용으로 남겨 둔 몫까지 쓴다
+        post(WorkKind.Upgrade, WorkTarget.AtCell(gs.cells[0], gs.room), 0.8f, Skill.Botany,
+            $"식량 비상 — 재배대가 하루 {grow:0}끼를 대는데 {need:0}끼를 먹는다 → {gs.room.Name}에 재배대 ({string.Join(" + ", cost.Select(c => $"{ItemKinds.Name(c.kind)} {c.count}"))})",
+            circuit: Evolution.FoodCircuit, upgrade: UpgradeKind.AddGrowBed);
+    }
+
     private void ScanInstalls(Poster post)
     {
         var w = _world;
@@ -1375,6 +1389,7 @@ public sealed partial class WorkBoard
             Post(WorkKind.Upgrade, plan.Target, plan.Score, plan.Skill, plan.Why, circuit: plan.Circuit, minSkill: plan.MinSkill, upgrade: plan.Kind);
 
         ScanInstalls(Post); // v23 익힌 기술의 설비 설치 공사
+        ScanFoodBeds(Post); // v23 식량 비상 재배대 공사
 
         // ── 구조와 외부 작업 (v8): 연결부·골조·드론·사출·되찾기·재연결 ──
         ScanStructure(Post);

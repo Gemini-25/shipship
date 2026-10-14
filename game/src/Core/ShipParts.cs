@@ -175,6 +175,8 @@ public sealed class Room
     public bool Insulated { get; set; }
     public float HvacHeat { get; set; }
     public float HvacKw { get; set; }
+    /// <summary>v23 전압 강하 때 설계 몫을 넘는 냉방 전기를 끊었다 (먹을 것 설비가 먼저) — 열은 설계 몫까지만 뺀다.</summary>
+    public bool HvacShed { get; set; }
     /// <summary>v19 정보 경계: 바닥 밑 급수관이 스민다 (시간당 L · 0 = 없음) — 아무도 모른다, 교정된 유량계가 잡거나 사람이 봐야 안다.</summary>
     public float SeepLph { get; set; }
     public long SeepSince { get; set; } = -1;

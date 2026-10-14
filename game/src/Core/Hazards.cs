@@ -267,6 +267,7 @@ public sealed partial class HazardSystem
     public int Poisoned { get; private set; }
     public int FoodDiscarded { get; internal set; }
     public int BlightCured { get; internal set; }
+    public int BlightCaughtEarly { get; internal set; } // 반점이 보이기 전에 돌보다가 잎 뒷면에서 찾아 잡음
     public int BlightKilled { get; private set; }
     public int GasSealed { get; internal set; }
 

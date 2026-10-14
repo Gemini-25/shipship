@@ -470,7 +470,12 @@ public sealed class PowerGrid
             int rc = _world.Failsafe.Feed(r, CircuitFed); // v16.19 두 갈래 급전: 주 회로가 죽으면 다른 회로로 저절로 넘어간다
             // 떨어져 나갔거나 사출 준비로 전력을 끊은 방은 전기가 없다
             if (!CircuitFed[rc] || r.Detached || r.PowerCut || r.BreakerOff || !r.PowerLinked) { r.Powered = false; continue; }
-            consumers.Add((8, RoomSystemsKw * ComputerV15.RoomKwMul(_world, r) + r.HvacKw, rc, on => r.Powered = on)); // v15.9 전력 분배: 빈 방은 낮춘다 · v19 냉방 전기 (Thermal.cs)
+            // v23 전압 강하 중에는 설계 몫을 넘는 냉방 전기를 재배대 · 냉장고 · 조리대 · 배식기 다음으로 미룬다 (주 컴퓨터실 냉방은 그대로)
+            //   (90일 항해 보듬호: 원자로가 빠듯한 배에서 냉방이 44kW로 뛰자 방이 먼저 전기를 받아 식량 설비가 모두 꺼졌고 · 비상식량이 바닥나 굶주렸다)
+            bool hvacApart = Brownout && r.HvacKw > 0f && r != _world.Automation.ComputerBody?.Room;
+            consumers.Add((8, RoomSystemsKw * ComputerV15.RoomKwMul(_world, r) + (hvacApart ? 0f : r.HvacKw), rc, on => r.Powered = on)); // v15.9 전력 분배: 빈 방은 낮춘다 · v19 냉방 전기 (Thermal.cs)
+            if (hvacApart) consumers.Add((7, r.HvacKw, rc, on => r.HvacShed = !on));
+            else r.HvacShed = false;
         }
         float parkedKw = 0f;
         foreach (var m in ship.Machines)

@@ -5,6 +5,7 @@ using ShipSim.Core;
 // v14.7 오염 · 씻기 · 빨래 · 우주복 털기 · 손으로 옮는 것
 public static partial class Program
 {
+    private static readonly System.Collections.Generic.HashSet<string> _cookSeen = new();
     private static int RunSoilTest(int seed)
     {
         _fails = 0;
@@ -30,13 +31,19 @@ public static partial class Program
                 for (int k = 0; k < 2; k++)
                 {
                     var w = DayOne(seed, "Mirinae");
+                    NoRobots(w); // 사람이 짓는 끼니의 손 위생 (조리 로봇이 지으면 손이 없다)
                     for (int h = 0; h < 48; h++)
                     {
                         foreach (var c in w.Crew) { c.Soil.Hands[(int)SoilKind.Bio] = 0.8f; if (k == 1) c.Soil.WashedAt = w.Tick; }
                         if (k == 1) foreach (var c in w.Crew) w.Soil.WashHands(c, "시험");
+                        if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "1")
+                            for (long t = 0; t < SimTime.Hours(1); t++) { w.Step(); if (t % 30 == 0) foreach (var o in w.Board.All.Where(o => o.Kind == WorkKind.Cook && (o.Assignee != null || o.Robot != null))) _cookSeen.Add($"{k}:{o.Id}:{o.Assignee?.Name}{o.Robot?.Name}"); }
+                        else
                         Run(w, SimTime.Hours(1));
                     }
                     tainted[k] = w.Soil.Stats.TaintedMeals;
+                    if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "1")
+                        Console.WriteLine($"   [{(k == 0 ? "안 씻음" : "씻음")}] 조리장 {w.Cooking.HeadCook?.Name}({w.Cooking.HeadCook?.CanAct}) · 맡은 이 {string.Join(",", _cookSeen.Where(x => x.StartsWith(k + ":")).Select(x => x.Split(':')[2]).GroupBy(x => x).Select(g => g.Key + "×" + g.Count()))} · 사람이 지은 끼 {w.Crew.Sum(c => c.Stats.MealsCooked)} · 로봇 {w.Robots.V21.Meals} · {w.Soil.Stats.Summary()}");
                 }
                 Check("손 위생 — 균이 묻은 손으로 조리하면 식사에 균이 들고, 씻으면 덜하다", tainted[0] > tainted[1],
                     $"안 씻음 {tainted[0]}끼 ↔ 씻음 {tainted[1]}끼");

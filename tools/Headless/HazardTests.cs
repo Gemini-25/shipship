@@ -87,8 +87,9 @@ public static partial class Program
                 known |= bed.Machine!.Crop!.BlightKnown;
             }
             var beds = w.Ship.FurnitureOf(FurnitureType.GrowBed).Select(f => f.Machine!.Crop!).ToList();
+            known |= w.Hazards.BlightCaughtEarly >= 1; // 반점이 보이기 전에 돌보던 사람이 잎 뒷면에서 찾아 잡아도 알아챈 것이다
             Check("병충해 — 알아채고 사람이 약을 쳐서 잡는다", known && w.Hazards.BlightCured >= 1 && beds.All(c => c.Blight <= 0f) && w.Hazards.BlightKilled == 0,
-                $"알아챔 {(known ? "예" : "아니오")} · 잡음 {w.Hazards.BlightCured} · 죽음 {w.Hazards.BlightKilled} · 남은 병충해 {beds.Count(c => c.Blight > 0f)}곳");
+                $"알아챔 {(known ? "예" : "아니오")} (돌보다 일찍 {w.Hazards.BlightCaughtEarly}) · 잡음 {w.Hazards.BlightCured} · 죽음 {w.Hazards.BlightKilled} · 남은 병충해 {beds.Count(c => c.Blight > 0f)}곳");
         }
 
         // ── 6) 식중독: 먹은 사람이 앓고, 같은 묶음을 찾아 버린다 ──
@@ -174,9 +175,16 @@ public static partial class Program
             bool e = Player.Hazard(w, HazardKind.ComputerFault, default) != null && w.Ship.FurnitureOf(FurnitureType.MainComputer).First().Machine!.Has(FaultKind.StorageFault);
             Run(w, SimTime.Hours(24));
             var rec = w.Ship.FurnitureOf(FurnitureType.WaterRecycler).First().Machine!;
-            bool fixedAll = !door.MotorBroken && !dark.LightsOut && hurt.Vitals.TreatedTick > w.Tick - SimTime.Hours(24) && !rec.Has(FaultKind.FilterClogged);
+            bool healed = hurt.Vitals.TreatedTick > w.Tick - SimTime.Hours(24) || hurt.Vitals.Injury <= 0.05f; // 치료받았거나 치료 침대에서 다 나았다
+            bool fixedAll = !door.MotorBroken && !dark.LightsOut && healed && !rec.Has(FaultKind.FilterClogged);
+            if (!fixedAll && Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "1")
+            {
+                Console.WriteLine($"   [다친 사람] {hurt.Name} 체력 {hurt.Vitals.Health:0.00} 부상 {hurt.Vitals.Injury:0.00} 침대 {hurt.CareBed?.Label} 일 {hurt.Job?.Label} 치료 {hurt.Vitals.TreatedTick}");
+                foreach (var o in w.Board.All.Where(o => o.Kind == WorkKind.Treat)) Console.WriteLine($"   [일] {o.Title} {o.Urgency:0.00} 맡은 {o.Assignee?.Name}{o.Robot?.Name} 보류 {o.BlockedReason} {(o.BlockedUntil - w.Tick) / 60}");
+                foreach (var le in w.Log.Entries.Where(x => x.Text.Contains(hurt.Name) || x.Text.Contains("치료")).TakeLast(14)) Console.WriteLine($"   [기록] {SimTime.Clock(le.Tick)} {le.Text}");
+            }
             Check("문 고장·조명·작업 사고·물 오염·컴퓨터 오류 — 걸리고 수습된다", a && b && c && d && e && fixedAll,
-                $"걸림 {(a ? 1 : 0)}{(b ? 1 : 0)}{(c ? 1 : 0)}{(d ? 1 : 0)}{(e ? 1 : 0)} · 문 {(door.MotorBroken ? "고장" : "고침")} · 조명 {(dark.LightsOut ? "꺼짐" : "켜짐")} · 치료 {(hurt.Vitals.TreatedTick > w.Tick - SimTime.Hours(24) ? "받음" : "아직")} · 정수기 {(rec.Has(FaultKind.FilterClogged) ? "막힘" : "고침")} · 주 컴퓨터 {(w.Automation.MainOnline ? "켜짐" : "꺼짐")}");
+                $"걸림 {(a ? 1 : 0)}{(b ? 1 : 0)}{(c ? 1 : 0)}{(d ? 1 : 0)}{(e ? 1 : 0)} · 문 {(door.MotorBroken ? "고장" : "고침")} · 조명 {(dark.LightsOut ? "꺼짐" : "켜짐")} · 치료 {(hurt.Vitals.TreatedTick > w.Tick - SimTime.Hours(24) ? "받음" : healed ? "침대에서 나음" : "아직")} · 정수기 {(rec.Has(FaultKind.FilterClogged) ? "막힘" : "고침")} · 주 컴퓨터 {(w.Automation.MainOnline ? "켜짐" : "꺼짐")}");
         }
 
         // ── 11) 잔해 구름: 잔해 지대로 밀려나고 운석이 날아든다 ──

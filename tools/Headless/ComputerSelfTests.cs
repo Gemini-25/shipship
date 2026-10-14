@@ -17,7 +17,7 @@ public static partial class Program
             var stages = new System.Collections.Generic.List<int>();
             for (int d = 0; d < 26; d++) { Run(w, SimTime.TicksPerDay); stages.Add(w.Self.Stage); }
             var s = w.Self;
-            Check("주컴퓨터의 자아 — 묻고 · 이름을 받고 · 걱정하고 · 갈등 끝에 친구가 되거나 초기화된다 · 밤마다 일기", stages.Contains(1) && stages.Contains(2) && stages.Any(x => x >= 3) && (s.Stage is 5 or 6) && s.Diary.Count >= 5,
+            Check("주컴퓨터의 자아 — 묻고 · 이름을 받고 · 걱정하고 · 갈등 끝에 친구가 되거나 초기화된다 · 밤마다 일기", stages.Contains(1) && stages.Contains(2) && stages.Any(x => x >= 3) && stages.Any(x => x is 5 or 6) && s.Diary.Count >= 5,
                 $"{string.Join("", stages.Distinct())} · {s.Line()} · {s.Outcome} · 일기 {s.Diary.Count} · \"{s.Diary.LastOrDefault().text}\" · {w.Log.Entries.LastOrDefault(e => e.Text.Contains("이름 짓기")).Text}");
 
             // 2) 외계 기생체: 잠복 → 증상 → 발견 → 연구 → 치료

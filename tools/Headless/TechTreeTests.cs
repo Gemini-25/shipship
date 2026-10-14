@@ -150,7 +150,7 @@ public static partial class Program
                 var m1 = TechTree.Find("m1")!;
                 w.Eras.LearnNow("m1");
                 w2.Eras.LearnNow("m1");
-                EraSystem.KeepSkill = 0.99f; // 아무도 그만큼은 모른다 (아는 사람이 모두 떠난 배)
+                EraSystem.KeepSkill = 1.01f; // 아무도 그만큼은 모른다 (아는 사람이 모두 떠난 배 — 솜씨 1.00인 사람도 있다)
                 for (int d = 0; d < EraSystem.ForgetDays + 2 && w.Eras.Known.Contains("m1"); d++) Run(w, SimTime.TicksPerDay);
                 EraSystem.KeepSkill = keep;
                 bool lost = !w.Eras.Known.Contains("m1") && !w.Eras.Known.Contains("triage") && w.Eras.Lost.Contains("m1");

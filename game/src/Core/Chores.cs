@@ -928,11 +928,13 @@ public static partial class WorkPlanners
             {
                 float skill = cm.SkillLevel(Skill.Botany);
                 crop.Blight = MathF.Max(0f, crop.Blight - (0.55f + 0.5f * skill));
+                bool early = !crop.BlightKnown;
                 if (crop.Blight <= 0f)
                 {
                     crop.BlightKnown = false;
                     world.Hazards.BlightCured++;
-                    MarkLog.Add(bed.Machine!.Marks, world.Tick, $"{cm.Name}: 병충해를 잡았다");
+                    if (early) world.Hazards.BlightCaughtEarly++;
+                    MarkLog.Add(bed.Machine!.Marks, world.Tick, early ? $"{cm.Name}: 돌보다가 잎 뒷면의 벌레를 찾아 잡았다" : $"{cm.Name}: 병충해를 잡았다");
                     world.History.Add(world, HistoryKind.Response, $"{Ko.IGa(cm.Name)} {bed.Label}의 병충해를 잡았다", bed.Room, new[] { cm }, log: true, crewLog: cm.Id);
                 }
                 else world.Log.Add(world.Tick, LogKind.Work, $"{bed.Label}에 약을 쳤다 — 벌레가 아직 남았다 ({crop.Blight * 100:0}%)", cm.Id);

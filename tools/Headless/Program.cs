@@ -52,17 +52,20 @@ public static partial class Program
             string minO2Room = "";
             long starving = 0;
             bool daily = Environment.GetEnvironmentVariable("SHIPDAILY") == "1";
+            bool diag = Environment.GetEnvironmentVariable("SHIPDIAG") == "1";
+            _starve.Clear();
             long starvedDay = 0;
             while (w.Tick < end)
             {
                 w.Step();
                 if (daily && w.Tick % SimTime.TicksPerDay == 0) // v23 날마다: 굶주림 · 물 · 식량 · 전력
                 {
-                    Console.WriteLine($"    {w.Tick / SimTime.TicksPerDay}일: 굶주림 {starving - starvedDay} · 물 {w.Water.Level:0}L · 저장 식량 {w.Ship.CountStored(ItemKind.Ration)} · 식사 {w.Ship.CountStored(ItemKind.Meal)} · 채소 {w.Ship.CountStored(ItemKind.Produce)} · 하루 생장 {w.FoodSources.GrowPerDay:0} · 수요 {w.Power.Demand:0}/{w.Power.ReactorRated:0}kW · 배터리 {w.Power.BatteryPercent * 100:0}% · 고장 {w.Ship.Machines.Count(m => m.Faults.Count > 0)} · 평균 포만 {w.Crew.Where(c => !c.Dead).Average(c => c.Needs.Food) * 100:0}%");
+                    Console.WriteLine($"    {w.Tick / SimTime.TicksPerDay}일: 굶주림 {starving - starvedDay} · 물 {w.Water.Level:0}L · 저장 식량 {w.Ship.CountStored(ItemKind.Ration)} · 식사 {w.Ship.CountStored(ItemKind.Meal)} · 채소 {w.Ship.CountStored(ItemKind.Produce)} · 하루 생장 {w.FoodSources.GrowPerDay:0} · 수요 {w.Power.Demand:0}/{w.Power.ReactorRated:0}kW · 배터리 {w.Power.BatteryPercent * 100:0}% · 고장 {w.Ship.Machines.Count(m => m.Faults.Count > 0)} · 평균 포만 {w.Crew.Where(c => !c.Dead).Select(c => c.Needs.Food).DefaultIfEmpty(0f).Average() * 100:0}%");
                     starvedDay = starving;
+                    if (Environment.GetEnvironmentVariable("SHIPDIAG") == "1" && w.Tick / SimTime.TicksPerDay % 5 == 0) ShipDiag(w);
                 }
                 if (w.Tick % World.SystemInterval != 0) continue;
-                foreach (var c in w.Crew.Where(c => !c.Dead)) { minFood = MathF.Min(minFood, c.Needs.Food); if (c.Needs.Food <= 0.02f) starving++; }
+                foreach (var c in w.Crew.Where(c => !c.Dead)) { minFood = MathF.Min(minFood, c.Needs.Food); if (c.Needs.Food <= 0.02f) { starving++; if (diag) StarveWhy(w, c); } }
                 foreach (var r in w.Ship.Rooms.Where(r => !r.Detached)) if (r.Air.O2 < minO2) { minO2 = r.Air.O2; minO2Room = $"{r.Name}#{r.Id}@{SimTime.Clock(w.Tick)}"; }
                 minBattery = MathF.Min(minBattery, w.Power.BatteryPercent);
                 minWater = MathF.Min(minWater, w.Water.Level);
@@ -83,6 +86,54 @@ public static partial class Program
                 + $" · 재배대 {ship.FurnitureOf(FurnitureType.GrowBed).Count()} · 조리대 {ship.FurnitureOf(FurnitureType.Stove).Count()} · 정전 {w.Power.Brownouts}번 · 부하 차단 {w.Power.ShedCount}번");
         }
         return bad == 0 ? 0 : 1;
+    }
+
+    private static readonly Dictionary<string, int> _starve = new();
+    private static readonly Dictionary<int, (Job job, long since)> _jobSeen = new();
+    /// <summary>굶주린 사람이 그 순간 무엇을 하고 있나 (하는 일 · 상태 · 가장 큰 이유).</summary>
+    private static void StarveWhy(World w, CrewMember c)
+    {
+        string state = c.Down ? "쓰러짐" : c.CareBed != null ? "침대" : c.Pose == Pose.Sleeping ? "잠" : !c.CanAct ? "못 움직임" : c.Away ? "떠남" : c.Outside ? "밖" : "깨어";
+        if (c.Job != null && (!_jobSeen.TryGetValue(c.Id, out var js) || js.job != c.Job)) _jobSeen[c.Id] = (c.Job, w.Tick);
+        string job = c.Job == null ? "(없음)" : c.Job.Label.Split(' ')[0];
+        if (c.Job?.Activity is EatActivity)
+        {
+            float mins = (w.Tick - _jobSeen[c.Id].since) / (float)SimTime.TicksPerHour * 60f;
+            string age = mins < 10f ? "<10분" : mins < 30f ? "10~30분" : mins < 60f ? "30~60분" : "1시간+";
+            int left = c.Path == null ? 0 : c.Path.Count - c.PathIndex;
+            job = $"먹으러:{c.Job.Label}:{c.Job.Current?.GetType().Name.Replace("Toil", "")}:{age}:{(left > 60 ? "먼길" : left > 0 ? "걷는중" : "섬")}";
+        }
+        string k = $"{state}·{job}";
+        _starve[k] = _starve.GetValueOrDefault(k) + 1;
+    }
+
+    /// <summary>v23 긴 항해 진단 (SHIPDIAG=1, 닷새마다): 안 고쳐지는 고장 · 막힌 일 · 부품 · 사람 · 끼니.</summary>
+    private static void ShipDiag(World w)
+    {
+        var broken = w.Ship.Machines.Where(m => m.Faults.Count > 0).ToList();
+        Console.WriteLine($"      [고장 {broken.Count}] " + string.Join(" · ", broken.SelectMany(m => m.Faults.Select(f => (m, f))).GroupBy(x => x.f.Spec.Name).OrderByDescending(g => g.Count()).Take(8)
+            .Select(g => $"{g.Key}×{g.Count()}(부품 {g.First().f.Part?.ToString() ?? "-"} 남은 {(g.First().f.Part is ItemKind pk ? w.Ship.CountStored(pk) : -1)} · 가장 오래 {(w.Tick - g.Min(x => x.f.Since)) / (float)SimTime.TicksPerDay:0.0}일)")));
+        var open = w.Board.All.Where(o => !o.Closed).ToList();
+        Console.WriteLine($"      [일 {open.Count}] " + string.Join(" · ", open.GroupBy(o => o.Kind).OrderByDescending(g => g.Count()).Take(10)
+            .Select(g => $"{WorkKinds.Name(g.Key)}×{g.Count()}(맡음 {g.Count(o => o.Assignee != null || o.Robot != null || o.Drone != null)} · 보류 {g.Count(o => o.BlockedUntil > w.Tick)}{(g.FirstOrDefault(o => o.BlockedReason != null && o.BlockedUntil > w.Tick)?.BlockedReason is string br ? " " + br : "")})")));
+        string Where(ItemKind k) => string.Join(" · ", w.Ship.Furniture.Where(f => f.Storage != null && f.Storage.Count(k) > 0).GroupBy(f => f.Type)
+            .Select(g => $"{g.Key}{g.Sum(f => f.Storage!.Count(k))}({g.Count(f => f.Machine is Machine m && m.Efficiency <= 0f)}멈춤 · {g.Count(f => f.Room.OffLimits || f.Room.Abandoned || f.Room.Detached)}막힌방)"));
+        bool shortF = Evolution.FoodShort(w, out float gF, out float nF);
+        var costF = Evolution.Cost(UpgradeKind.AddGrowBed, null);
+        Console.WriteLine($"      [식량 비상] 모자람 {shortF} (재배 {gF:0} · 먹음 {nF:0} · {FoodPolicy.FoodDays(w):0.0}일치 · 굶은 {Evolution.StarvedHours(w):0}h) · 재료 {Evolution.Affordable(w.Board, costF)} ({string.Join(",", costF.Select(c => $"{c.kind}{w.Ship.CountStored(c.kind)}"))}) · 자리 {(Evolution.GrowSpot(w) is { } gsF ? gsF.room.Name : "없음")} · 증설 {w.History.GrowBedsAdded} · 공사 {string.Join(",", w.Board.All.Where(Evolution.FoodBed).Select(o => $"{o.Assignee?.Name ?? "-"}/{o.BlockedReason}"))}");
+        var pw = w.Power;
+        Console.WriteLine($"      [전력] 원자로 {(pw.ReactorOnline ? "켜짐" : "꺼짐")} · 한도 {pw.ReactorLimit:0}kW · 냉각 {pw.CoolingCapacity:0}kW · 램프 {pw.ReactorRamp:0.00} · 독 {pw.ReactorPoison:0.00} · 정비 제한 {pw.MaintenanceCap} · 컴퓨터 제한 {w.Automation.ReactorCap:0.00} · 저출력 {pw.LowPowerMode} · 강하 {pw.Brownout} · 공급 {pw.Delivered:0}/{pw.Demand:0}kW · 차단 {pw.ShedCount} · 배터리 {pw.BatteryPercent * 100:0}% · 원자로 상태 {pw.Reactor?.Efficiency:0.00}/{pw.Reactor?.Condition:0.00} 고장 {string.Join(",", pw.Reactor?.Faults.Select(f => f.Spec.Name) ?? Array.Empty<string>())}");
+        Console.WriteLine($"      [전력 큰 것] " + string.Join(" · ", w.Ship.Machines.Where(m => m.Spec.PowerDraw > 0f && !m.Parked).GroupBy(m => m.Body.Type).Select(g => (g.Key, kw: g.Sum(m => m.Demand), n: g.Count(), tier: g.Max(m => m.Tier))).OrderByDescending(x => x.kw).Take(10).Select(x => $"{x.Key}{x.n}대 {x.kw:0}kW(단계{x.tier})"))
+            + $" · 방 {w.Ship.Rooms.Where(r => !r.Detached).Sum(r => r.HvacKw):0}kW 냉난방");
+        var beds = w.Ship.FurnitureOf(FurnitureType.GrowBed).Select(f => f.Machine!).ToList();
+        Console.WriteLine($"      [재배대 {beds.Count}] 돌봄 평균 {beds.Select(m => m.Crop?.Care ?? 0f).DefaultIfEmpty(0f).Average():0.00} · 익음 {beds.Count(m => m.Crop?.Ripe == true)} · 멈춤 {beds.Count(m => m.Efficiency <= 0f)} · 마름 {beds.Count(m => m.Crop?.DryHours > 6f)} · 병 {beds.Count(m => m.Crop?.Blight > 0f)} · 거둔 채소 누계 {w.FoodSources.Summary()} · 조리대 멈춤 {w.Ship.FurnitureOf(FurnitureType.Stove).Count(f => f.Machine!.Stopped || f.Machine.Efficiency <= 0f)}/{w.Ship.FurnitureOf(FurnitureType.Stove).Count()} · 배식기 멈춤 {w.Ship.FurnitureOf(FurnitureType.MealDispenser).Count(f => f.Machine!.Efficiency <= 0f)}/{w.Ship.FurnitureOf(FurnitureType.MealDispenser).Count()}");
+        Console.WriteLine($"      [식사 어디] {Where(ItemKind.Meal)} · [채소 어디] {Where(ItemKind.Produce)} · [비상식량] {Where(ItemKind.Ration)}");
+        if (_starve.Count > 0) { Console.WriteLine($"      [굶주릴 때] " + string.Join(" · ", _starve.OrderByDescending(x => x.Value).Take(12).Select(x => $"{x.Key}×{x.Value}"))); _starve.Clear(); }
+        var alive = w.Crew.Where(c => !c.Dead).ToList();
+        Console.WriteLine($"      [사람 {alive.Count}/{w.Crew.Count}] 깨어 일함 {alive.Count(c => c.CanAct && c.IsAwake)} · 쓰러짐 {alive.Count(c => c.Down)} · 다침 {alive.Count(c => c.Vitals.Injury > 0.3f)} · 떠남 {alive.Count(c => c.Away || c.LeftShip)} · 밖 {alive.Count(c => c.Outside)} · 하는 일: "
+            + string.Join(" · ", alive.Where(c => c.Job != null).GroupBy(c => c.Job!.Label.Split(' ')[0]).OrderByDescending(g => g.Count()).Take(8).Select(g => $"{g.Key}×{g.Count()}")));
+        Console.WriteLine($"      [로봇] 움직임 {w.Robots.Robots.Count(r => r.Operational)}/{w.Robots.Robots.Count} · 고장 {w.Robots.Robots.Count(r => r.Fault != null)} · 꺼짐 {w.Robots.Robots.Count(r => r.Disabled)} · 조리 {w.Robots.V21.Meals} · [부품] " +
+            string.Join(" · ", Enum.GetValues<ItemKind>().Where(k => k is not (ItemKind.Produce or ItemKind.Meal or ItemKind.Ration)).Select(k => (k, n: w.Ship.CountStored(k))).Where(x => x.n > 0).OrderByDescending(x => x.n).Take(10).Select(x => $"{x.k}{x.n}")));
     }
 
     private const string Fixed = "fixed"; // 회의 · 관찰자가 컴퓨터 권한을 바꾸는 장면 (v23 전권 고정이면 바뀌지 않는다)
@@ -114,6 +165,10 @@ public static partial class Program
         //   (기본은 로봇 · 주컴퓨터가 먼저 — 그게 실패했을 때 사람이 나서는 장면을 본다 · 장치마다 제 시험이 따로 있다:
         //    nozzletest · commandertest · relaytest · eyetest · robotbraintest · learntest)
         string v23Off = string.Join(",", V23Legacy.Where(kv => args.Contains("--" + kv.Key)).Select(kv => kv.Value));
+        // v23 기술 개편 뒤: 기능 시험은 그 시험을 짠 출발 조건(Ⅰ 시대 · 설비 보충 없음)에서 본다 — 크기별 시작 시대 · 설비 보충은
+        //   --techtreetest · --voyagetest(항해 하나를 끝까지 — 실제 출발 조건) · --medtest(헌혈 장면 — 실제 출발 조건에서 맞춘 장면)와 긴 항해(--ships · peace · 균형)가 본다. SHIPSIM_TIERS=1이면 기능 시험도 새 출발 조건으로.
+        if (args.Any(a => a.StartsWith("--", StringComparison.Ordinal) && a.EndsWith("test", StringComparison.Ordinal) && a is not ("--techtreetest" or "--voyagetest" or "--medtest")) && Environment.GetEnvironmentVariable("SHIPSIM_TIERS") != "1")
+            v23Off = string.Join(",", new[] { v23Off, "tiers", "refit", "foodbeds" }.Where(x => x.Length > 0));
         if (v23Off.Length > 0) Environment.SetEnvironmentVariable("SHIPSIM_OFF", string.Join(",", new[] { Environment.GetEnvironmentVariable("SHIPSIM_OFF"), v23Off }.Where(x => !string.IsNullOrEmpty(x))));
         // 개발용 (v23 회귀 가리기): SHIPSIM_OFF=nozzle,relay,brain,commander,eyes,fixed,planet,purpose,quiet,know,home,mind
         foreach (var off in (Environment.GetEnvironmentVariable("SHIPSIM_OFF") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries))
@@ -138,6 +193,8 @@ public static partial class Program
                 case "pets": PetSystem.Off = true; break;
                 case "meet": EncounterSystem.Off = true; break;
                 case "tiers": ShipTiers.On = false; break; // v23 크기별 시작 시대 끄기 (모두 Ⅰ 시대)
+                case "refit": ShipRefit.On = false; break; // v23 설비 보충 끄기
+                case "foodbeds": Evolution.FoodBeds = false; break; // v23 식량 비상 재배대 공사 끄기
             }
         int days = args.Length > 0 && int.TryParse(args[0], out var d) ? d : 14;
         int seed = args.Length > 1 && int.TryParse(args[1], out var s) ? s : 20260929;

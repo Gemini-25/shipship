@@ -180,7 +180,7 @@ public sealed partial class Atmosphere
             float want = net + HvacRate * cap * (t - Setpoint(r));
             float hv = 0f;
             float lim = MathF.Max(HvacPerCell * vol * (r == comp ? 3f : 1f), Design(r, comp) * 1.25f); // 컴퓨터실은 전용 냉각기 · 기계 방은 설비 열에 맞춰 (25% 여유)
-            if (want > 0f && Vented(r) && !r.Leaking) hv = MathF.Min(want, lim);
+            if (want > 0f && Vented(r) && !r.Leaking) hv = MathF.Min(want, r.HvacShed ? MathF.Min(lim, Design(r, comp)) : lim); // v23 끊긴 냉방 전기 — 설계 몫까지만
             else if (want < 0f && r.Powered) hv = MathF.Max(want, -lim);
             r.HvacHeat = hv;
             if (hv > 0f) { if (r != comp) cool += hv; } else heat -= hv;

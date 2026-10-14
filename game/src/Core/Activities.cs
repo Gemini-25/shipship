@@ -221,6 +221,7 @@ public sealed class EatActivity : Activity
         Cell? back = hot && box.Room.Radiation >= 0.2f && box.Room != c.Room && (c.Room?.Radiation ?? 0f) + 0.05f < box.Room.Radiation ? c.Cell : null;
         if (back != null) { seat = null; away = null; }
         bool grab = hot && kind is ItemKind.Ration or ItemKind.Produce; // 폭풍 속 대피소 선반의 비상식량은 줄 없이 집어 간다 (60인 배 폭풍: 대피소 선반 앞 줄에서 굶주린 것 140사람·시간)
+        // (v23 90일 항해에서 평소에도 줄 없이 집게 해 봤다 — 한울호: 비상식량이 열흘 만에 바닥나 모두 먼 배식기까지 걸었고 사망 4 → 13. 선반 앞 줄이 비상식량을 아껴 쓰게 한다)
 
         var toils = Plans.DropOff(c, w, dist);
         if (!grab) toils.Add(new QueueToil(QueueKind.Meal, box, spot)); // v17.4 배식 줄
@@ -241,7 +242,7 @@ public sealed class EatActivity : Activity
         if (back is Cell b) toils.Add(new GotoToil(b));
         else toils.AddRange(w.Cooking.ReheatToils()); // v16.8 식었으면 데운다 (전기가 모자라면 그냥)
         toils.AddRange(w.After.PauseToils(c, seat, dist)); // v17.5 떠난 사람의 빈자리 앞에서 잠깐
-        if (seat != null) toils.Add(new GotoToilLate(cm => w.Coop.Queues.SeatFor(cm, seat))); // v17.4 받고 나서 다시 본다 (방금 다툰 사람 곁이면 떨어진 자리로)
+        if (seat != null) toils.Add(new GotoToilLate(cm => cm.Needs.Hunger > 0.9f && (seat.Center - cm.Position).Length() > 10f ? null : w.Coop.Queues.SeatFor(cm, seat))); // v17.4 받고 나서 다시 본다 (방금 다툰 사람 곁이면 떨어진 자리로) · v23 줄에서 기다리다 굶주림 지경이 됐으면 먼 자리까지 들고 가지 않고 받은 자리에서 먹는다 (한울호: 식판을 들고 30~60분)
         if (away != null) toils.AddRange(w.After.AwayToils(away)); // v17.5
 
         var table = seat == null ? null : seat.Room.Furniture.Where(f => f.Type == FurnitureType.Table)

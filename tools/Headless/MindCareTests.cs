@@ -106,10 +106,12 @@ public static partial class Program
             w.Homeland.Homesick[home.Id] = 0.8f;
             float h0 = w.Homeland.Of(home);
             int plays0 = m.Stats.HomeViews;
-            for (int i = 0; i < 36 && w.Homeland.Of(home) >= h0 - 0.001f; i++)
+            for (int i = 0; i < 36 && m.Stats.HomeViews <= plays0; i++) // 잠 · 대화로도 조금씩 준다 — 의자를 쓸 때까지 본다
             {
                 home.Needs.Stress = MathF.Max(home.Needs.Stress, 0.6f);
                 Run(w, SimTime.Hours(1));
+                if (Environment.GetEnvironmentVariable("MC_DEBUG") != null)
+                    Console.WriteLine($"    {SimTime.Clock(w.Tick)} {home.Name} {home.Job?.Label} @{home.Room?.Name} · 스트레스 {home.Needs.Stress:0.00} · {string.Join(" / ", (home.LastEvaluations ?? System.Array.Empty<Evaluation>()).Take(3).Select(e => $"{e.Activity.Label} {e.Score:0.00}"))}");
             }
             Check("지치고 고향이 그리운 사람은 오락실로 가고 · 가상 고향 의자에서 향수병이 풀린다", m.Stats.Plays >= 1 && m.Stats.HomeViews > plays0 && w.Homeland.Of(home) < h0,
                 $"{home.Name} 향수병 {h0 * 100:0} → {w.Homeland.Of(home) * 100:0} · 오락실 {m.Stats.Plays}시간 · 고향 풍경 {m.Stats.HomeViews}");

@@ -159,6 +159,36 @@ public static class Evolution
     public static bool TierUpViaMeeting = false;
     public static bool TechInstall(WorkOrder o) => o.Kind == WorkKind.Upgrade && o.Upgrade == UpgradeKind.TierUp && o.Circuit == InstallCircuit;
 
+    /// <summary>
+    /// v23 식량 비상 공사의 표식 (회로 칸): 재배대가 대는 끼니가 먹는 끼니에 넉넉히 못 미치고 먹을 것이 바닥을 보이면 회의 없이 바로 재배대를 짠다.
+    /// (90일 항해: 굶주린 뒤에야 안건에 오르고 · 평화로울 때 · 열여섯 시간 간격 · 다른 개조안과 겨루느라 굶주린 배일수록 재배대가 늦었다 — 보듬호 16명이 재배대 8대로 버티다 쓰러졌다)
+    /// </summary>
+    public const int FoodCircuit = -8;
+    public static bool FoodBed(WorkOrder o) => o.Kind == WorkKind.Upgrade && o.Upgrade == UpgradeKind.AddGrowBed && o.Circuit == FoodCircuit;
+    /// <summary>회의를 거치지 않는 공사 (기술 설치 · 식량 비상 재배대).</summary>
+    public static bool NoMeeting(WorkOrder o) => TechInstall(o) || FoodBed(o);
+
+    /// <summary>시험 · 개발용: 식량 비상 재배대 공사를 끈다 (예전 조건에서 맞춘 기능 시험).</summary>
+    public static bool FoodBeds = true;
+
+    /// <summary>재배대가 하루에 대는 끼니(지금 돌봄만큼)가 먹는 끼니에 못 미치고(5% 여유), 이미 굶주렸거나 먹을 것이 사흘치 아래다.</summary>
+    public static bool FoodShort(World w, out float grow, out float need)
+    {
+        grow = need = 0f;
+        int crew = w.Aboard;
+        if (!FoodBeds || crew == 0) return false;
+        need = crew * FoodPolicy.MealsPerPersonDay;
+        grow = GrowCapacity(w);
+        return grow < need * 1.05f && (StarvedHours(w) >= 6f || FoodPolicy.FoodDays(w) < 3f);
+    }
+
+    /// <summary>재배대가 하루에 대는 끼니 — 전기와 상관없이 (정전으로 멈춘 재배대를 모자람으로 세면 금속판 · 케이블을 다 써 가며 증설이 이어졌다) · 고장 난 재배대는 반 · 지금 돌봄만큼 (돌봄이 낮으면 덜 자란다).</summary>
+    public static float GrowCapacity(World w) =>
+        w.Ship.FurnitureOf(FurnitureType.GrowBed).Where(f => !f.Room.Abandoned && f.Machine?.Crop != null)
+            .Sum(f => FoodChain.HarvestYield * FoodChain.BedSize(f) * (f.Machine!.Faults.Count > 0 ? 0.5f : 1f) * f.Machine.Rating * 24f / FoodChain.GrowHours * FoodSourceSystem.YieldMul(f) * FoodSourceSystem.GrowMul(f.Machine)
+                      * (0.45f + 0.55f * f.Machine.Crop!.Care))
+        * (FoodChain.MealsPerBatch / (float)FoodChain.ProducePerBatch);
+
     public static bool Affordable(WorkBoard b, (ItemKind kind, int count)[] cost) =>
         cost.All(x => b.Have(x.kind) - x.count >= Reserve(x.kind, b.World) + b.Held(x.kind));
 
@@ -451,7 +481,7 @@ public static class Evolution
         // ── 재배대 증설 (v10.1): 사람이 굶주렸던 배 — 먹을 것은 늘지만 물을 더 먹는다 ──
         float starved = StarvedHours(w);
         // 물통이 바닥을 보이면 재배대는 안건에도 오르지 않는다 (먹을 것보다 마실 것이 먼저)
-        if (h.GrowBedsAdded < MaxGrowBeds && starved >= 6f + 10f * h.GrowBedsAdded && w.Water.Level > 0.35f * w.Water.Capacity && GrowSpot(w) is { } gs)
+        if (h.GrowBedsAdded < MaxGrowBeds && starved >= 6f + 10f * h.GrowBedsAdded && w.Water.Level > 0.35f * w.Water.Capacity && !w.Board.Open.Any(FoodBed) && GrowSpot(w) is { } gs) // v23 식량 비상 공사가 이미 짜고 있으면 안건으로 또 올리지 않는다
         {
             // 물이 빠듯한 배는 재배대가 반갑지만은 않다 (재배대 하나가 사람 둘 몫의 물을 먹는다)
             float dry = WaterShort(w) ? 0.4f : 0f;

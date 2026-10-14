@@ -90,11 +90,23 @@ public static partial class Program
             var spots = room.Cells.Where(w.Ship.IsOpenFloor).OrderBy(c => c.X).ThenBy(c => c.Y).ToList();
             Stay(w, v, spots[0], Pose.Sitting);
             Stay(w, lay, spots[1], Pose.Working);
+            // 의무관 · 의료를 아는 사람은 멀리 (곁의 사람만 있는 장면 — 근무 교대 · 치료 침대로 걸어감도 막는다)
+            Away(w, new[] { v, lay }, spots[0], 999f);
             NeedsSystem.AddInjury(v.Vitals, 0.4f, "불길에 덴 화상");
             w.Casualty.Inflict(v, TraumaKind.BurnShock, 0.2f, "불길에 덴 화상");
-            Run(w, SimTime.Minutes(8));
+            for (int m = 0; m < 8; m++)
+            {
+                if (v.Job?.Label != "시험 작업") Stay(w, v, spots[0], Pose.Sitting);
+                if (lay.Job?.Label != "시험 작업") Stay(w, lay, spots[1], Pose.Working);
+                Run(w, SimTime.Minutes(1));
+            }
             var t = w.Casualty.Of(v);
             bool slowed = t != null && t.Rate < 0.15f && w.Log.Entries.Any(e => e.Text.Contains("식혀 감쌌다 — 넓게 데어"));
+            if (!slowed && Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "1")
+            {
+                foreach (var c in w.Crew.Where(c => c.CanAct).Take(12)) Console.WriteLine($"   {c.Name} {c.Room?.Name} {c.Job?.Label} · {c.LastEvaluations?.FirstOrDefault().Reason}");
+                foreach (var e in w.Log.Entries.TakeLast(15)) Console.WriteLine($"   [기록] {SimTime.Clock(e.Tick)} {e.Text}");
+            }
             Check("보통 재해 — 넓게 덴 사람은 곁의 사람이 식혀 감싸도 멎지 않는다 (늦출 뿐)", slowed, t == null ? "벌써 멎었다: " + string.Join(" / ", w.Casualty.Done.Select(d => d.Outcome)) : $"남은 속도 {t.Rate:0.000}/시");
             for (int i = 0; i < 24 && w.Casualty.Of(v) != null && !v.Dead; i++) Run(w, SimTime.Minutes(10));
             var done = w.Casualty.Done.LastOrDefault(d => d.CrewId == v.Id);

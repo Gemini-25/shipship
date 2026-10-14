@@ -182,7 +182,7 @@ public static partial class Program
                 leak.O2Leak = 0.5f;
                 // 의사: 다친 사람 · 봉쇄: 운석 파공
                 var hurt = w.Crew.Where(c => !c.Dead && !c.Down && !c.IsChild).OrderBy(c => c.Id).First();
-                NeedsSystem.AddInjury(hurt.Vitals, 0.35f, "시험 — 넘어짐");
+                NeedsSystem.AddInjury(hurt.Vitals, 0.35f, "시험 — 연기 흡입"); // 피 흘리지 않는 상처 (넘어져 부러지면 피를 흘려 수혈이 먼저다 — 의사 로봇은 그때 치료를 미룬다)
                 hurt.Vitals.Health = 0.55f;
                 var hullRoom = rooms.Where(r => r.Type is RoomType.Storage or RoomType.Cargo or RoomType.Workshop).OrderBy(r => r.Id).First();
                 var hullCell = w.Ship.Walls.Where(kv => kv.Value.IsHull && w.Ship.RoomAt(kv.Key) == null && Cell.Dirs4.Any(d => w.Ship.RoomAt(kv.Key + d) == hullRoom)).Select(kv => kv.Key).FirstOrDefault();
@@ -195,13 +195,20 @@ public static partial class Program
                 {
                     w.Step();
                     if (t % 20 != 0) continue;
+                    if (Environment.GetEnvironmentVariable("R21V") != null && t < SimTime.Hours(1))
+                        foreach (var o in w.Board.All.Where(o => o.Kind is WorkKind.Treat or WorkKind.SealBreach))
+                            Console.WriteLine($"    [{SimTime.Clock(w.Tick)}] {o.Title} 긴급 {o.Urgency:0.00} 올린 지 {(w.Tick - o.Posted) / (float)SimTime.TicksPerHour * 60f:0}분 · 맡은 {o.Assignee?.Name}{o.Robot?.Name} · 막힘 {o.BlockedReason} · 손빔 {w.Robots.HandsFree(o)} · 막힌 때 {o.BlockedUntil - w.Tick} · 수혈 필요 {w.Blood.NeedsBlood(hurt)} 체력 {hurt.Vitals.Health:0.00}");
                     foreach (var r in w.Robots.Robots)
                         if (r.Order is WorkOrder o && RobotSystem.Special(r.Kind, o.Kind)) (did.TryGetValue(r.Kind, out var s) ? s : did[r.Kind] = new()).Add(o.Kind);
                     foreach (var o in w.Board.All)
                         if (o.Kind is WorkKind.CoolDown or WorkKind.Treat or WorkKind.SealBreach && (o.Assignee != null || o.Robot != null || o.Drone != null))
                             who.Add($"{WorkKinds.Name(o.Kind)}:{o.Assignee?.Name ?? o.Robot?.Name ?? o.Drone?.Name}");
                 }
-                if (Environment.GetEnvironmentVariable("R21V") != null) Console.WriteLine($"    맡은 이: {string.Join(", ", who)} · 파공 칸 {hullCell} · 뜨거운 설비 {hot?.Name} 열 {hot?.Heat:0.00}");
+                if (Environment.GetEnvironmentVariable("R21V") != null)
+                {
+                    Console.WriteLine($"    맡은 이: {string.Join(", ", who)} · 파공 칸 {hullCell} · 뜨거운 설비 {hot?.Name} 열 {hot?.Heat:0.00}");
+                    foreach (var r in w.Robots.Robots.Where(r => r.Kind is RobotKind.Medic or RobotKind.Sealer)) Console.WriteLine($"    {r.Name} {r.Kind} 작동 {r.Operational} 상태 {r.State} 고장 {r.Fault} 배터리 {r.Battery:0.00} 일 {r.Order?.Title} · {r.Doing}");
+                }
                 bool D(RobotKind k, params WorkKind[] ks) => did.TryGetValue(k, out var s) && ks.Any(s.Contains);
                 var res = new List<(string, bool)>
                 {
