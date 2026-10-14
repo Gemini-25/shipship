@@ -120,6 +120,8 @@ public static partial class Program
                 if (blackout) door.Openness = 0f; // 통합8 앞서 누가 손으로 돌려 열어 둔 문이면 그냥 지나간다 — 닫힌 문 앞에서 잰다
                 Force(w, p, new Job(null, "지나가기", new List<Toil> { new GotoToil(to), new WaitToil(30, Pose.Standing) }));
                 long t0 = w.Tick;
+                bool react0 = ReactSystem.Off;
+                ReactSystem.Off = true; // 어둠 반응(작업등 · 배전반 보러 감)이 문을 돌리던 손을 끊지 않게 — 이 장면은 문을 지나는 시간만 잰다
                 var past = door.Cell + dir; // 문을 넘어선 첫 칸 (정전이면 넘자마자 배전반을 보러 가는 사람도 있다 — 지나간 때를 잰다)
                 bool crossed = false;
                 for (int t = 0; t < SimTime.Minutes(10); t++)
@@ -127,6 +129,7 @@ public static partial class Program
                     w.Step();
                     if (p.Cell == to || p.Cell == past) { crossed = true; break; }
                 }
+                ReactSystem.Off = react0;
                 cranks = w.Body.Stats.Cranks;
                 bool powered = door.Powered;
                 Console.WriteLine($"    {(blackout ? "정전" : "평시")}: {door.RoomA!.Name}·{door.RoomB!.Name} 문 전기 {powered} · {w.Tick - t0}틱");
