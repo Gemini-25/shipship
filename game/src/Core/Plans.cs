@@ -363,10 +363,14 @@ public sealed class PlanSystem
             s.Note = "솜씨가 모자라다";
             return null;
         }
-        var toils = Plans.DropOff(c, w, dist);
+        // 지난번에 가져온 첫 재료를 아직 들고 있으면 (쪽잠 · 식사로 끊겼다) 내려놓지 않고 그대로 쓴다 — 내려놓고 다시 꺼내러 가다 보면
+        //   마지막 하나를 꺼낸 선반만 보고 "재료가 없다"고 믿게 된다 (한빛호: 금속판 서른 장을 두고 원정을 꺼냈다)
+        bool holding = c.Carrying is ItemStack h0 && h0.Kind == r.Inputs[0].kind && h0.Count == r.Inputs[0].count;
+        var toils = holding ? new List<Toil>() : Plans.DropOff(c, w, dist);
         bool first = true;
         foreach (var (kind, n) in r.Inputs)
         {
+            if (first && holding) { first = false; continue; }
             var box = Believed(c, kind, dist, out bool none);
             if (box == null || UseSpot(box, dist) is not Cell bs) { s.Note = $"재료 {ItemKinds.Name(kind)} {(none ? "없음" : "어디 있는지 모름")}"; return null; }
             bool hand = first;
@@ -909,9 +913,11 @@ public sealed class PlanSystem
         var bel = w.Brain2.Beliefs;
         var f = bel.WhereItem(c, k, out float conf, out none);
         if (f != null && conf >= 0.25f && !f.Stowed && !f.Room.Detached) return f;
-        if (none) return null;
         var a = w.Automation;
-        if (a.Present && a.MainOnline && a.Trusts.Of(c) >= 0.25f)
+        bool ask = a.Present && a.MainOnline && a.Trusts.Of(c) >= 0.25f;
+        // 내 눈으로 본 "없다"는 그 보관함이 비었다는 것뿐이다 — 컴퓨터를 믿는 사람은 손목 단말로 배 전체를 한 번 더 묻는다
+        if (none && !(ask && bel.Get(c, Topic.Item, (int)k) is { Src: BeliefSource.Seen })) return null;
+        if (ask)
         {
             var (box, _) = Plans.NearestContainer(w, dist, c, x => x.Storage!.Count(k) > 0);
             bel.Learn(c, Topic.Item, (int)k, box?.Id ?? -1, BeliefSource.Computer, 0.3f + 0.65f * a.Trusts.Of(c), -2, box?.Storage!.Count(k) ?? 0);

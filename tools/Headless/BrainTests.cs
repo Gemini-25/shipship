@@ -253,6 +253,7 @@ public static partial class Program
                 BrainPut(w, s2, far, 0);
                 Run(w, 2);
                 w.Brain2.Beliefs.Learn(s2, Topic.Fire, room.Id, 1, BeliefSource.Rumor, 0.85f, teller.Id);
+                if (s2.Job != null) s2.EndJob(w, ToilStatus.Interrupted); // v23 잡고 있던 일(개조)의 이어 하기 덤이 소문 확인을 눌렀다 — 들은 그 자리에서 처음부터 다시 고른다
                 s2.NextThinkTick = w.Tick + 1; // 통합8 소문을 들은 그 자리에서 다시 판단한다 (첫 사람처럼 — 들은 사람은 Mind.Hear 로 그렇게 된다) · 잡은 개조 일을 몇 시간 이어 가 장면이 안 됐다
                 int heeded0 = w.Brain2.Beliefs.NudgesHeeded;
                 bool s2reached = false;
@@ -269,12 +270,15 @@ public static partial class Program
             // ── 5) 계획이 막히면 다른 길: 부품 없음(믿었던 선반이 비었다) → 작업대 · 재료도 없으면 원정 제안 · 솜씨가 모자라면 부탁 ──
             {
                 var w = BrainDay(seed, "Hanbit");
+                // v23 정비 로봇은 수리가 기다리는 부품을 먼저 만든다 — 그러면 사람이 작업대로 갈 일이 없다 (이 장면은 로봇이 없을 때 사람의 계획을 본다)
+                foreach (var r in w.Robots.Robots) r.Disabled = true;
                 var pump = w.Ship.FurnitureOf(FurnitureType.CoolantPump).First();
                 var part = ItemKind.Bearing;
                 foreach (var f in w.Ship.Containers) { int n = f.Storage!.Count(part); if (n > 0) f.Storage.Take(part, n); }
                 var shelf = w.Ship.Containers.Where(f => f.Type == FurnitureType.Shelf && f.Storage!.Accepts(part)).OrderBy(f => f.Id).First();
                 var worker = w.Crew.Where(c => c.CanAct && c.IsAwake && !c.IsChild && c.SkillLevel(Skill.Mechanics) >= 0.3f).OrderByDescending(c => c.SkillLevel(Skill.Mechanics)).First();
                 BrainTrait(worker, "Diligence", 0.95f);
+                worker.Needs.Rest = 0.95f; worker.Needs.Food = 0.95f; // 계획의 갈래만 본다 — 지치고 배고픈 사람이면 (기력 24%) 쪽잠 · 비상식량에 끊겨 여덟 시간에 못 만든다
                 w.Brain2.Beliefs.Learn(worker, Topic.Item, (int)part, shelf.Id, BeliefSource.Seen, 1f, -1, 2); // 어제 본 대로: 저 선반에 베어링 둘
                 w.Machines.Break(pump.Machine!, FaultKind.BearingWear);
                 Run(w, SimTime.Minutes(1));

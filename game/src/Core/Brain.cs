@@ -199,6 +199,9 @@ public static class Brain
             // v10.5: 긴 개조·정비 중에도 굶주리면 손을 놓고 먹으러 간다 (급한 일은 예외 — 불 끄던 사람은 버틴다)
             float hungerAt = EatActivity.ArriveFor == c.Id ? System.MathF.Max(c.Needs.Hunger, EatActivity.Arrive) : c.Needs.Hunger; // v19 먹을 데까지 걷는 동안 더 배고파진다
             if ((!c.Job.Urgent || !Crisis.Acting(w)) && hungerAt > 0.85f && best.Activity is EatActivity) margin = 0f; // 통합7 급한 수리라도 지금 불 · 경보가 없으면 굶어 가며 버티지 않는다 (부싯돌호: 원자로 수리 세 시간에 0까지) · v10.10: 0.9 → 0.85
+            // 지쳐 쓰러지기 직전에 누운 사람을 수리 계획이 다시 일으키지 않는다 — 일으키면 위의 "지쳤다" 규칙이 곧 다시 눕혀
+            //   몇 분마다 눕고 일어나기만 되풀이한다 (한빛호: 냉각 펌프 계획과 쪽잠 사이를 두 시간 동안 열 번)
+            if (c.Job.Activity is SleepActivity && c.Needs.Rest < 0.1f && best.Activity is PlanActivity && w.Brain2.Plans.Current(c) is { Kind: PlanKind.Fix }) return;
             if (!spent && best.Score < current + margin) return;
 
             var next = PlanTimed(best.Activity, c, w, dist);
