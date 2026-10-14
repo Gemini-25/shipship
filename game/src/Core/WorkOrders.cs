@@ -1343,6 +1343,9 @@ public sealed partial class WorkBoard
             bool needs = c.Vitals.Health < 0.6f || (resting && c.Vitals.Health < 0.8f) || c.Vitals.Injury >= 0.3f;
             // v13.2 방침(의약품: 아낀다): 크게 다친 사람에게만 구급 키트를 쓴다
             if (w.Policies["medicine"] == 0) needs = c.Vitals.Health < 0.45f || c.Vitals.Injury >= 0.45f;
+            // v23 상처 감염은 부상 25%를 넘고 열두 시간 못 돌보면 생긴다 — 치료 일은 30%(아끼면 45%)부터라 그 틈의 사람이 곪았다 (제비호 · 보듬호: 감염 → 패혈증 → 간 · 신장 부전)
+            //   곪기 전에(아홉 시간이 지나기 전) 한 번은 돌본다 — 방침과 상관없이
+            if (c.Vitals.Injury > 0.25f && w.Tick - c.Vitals.TreatedTick > SimTime.Hours(9)) needs = true;
             // v14.1 약을 써야 낫는 병 · 진단 안 된 병 (의무관이 봐 줘야 한다) — 다친 사람 치료와 같은 일 (한 번에 함께)
             var ill = c.Ailments.Count > 0 ? w.Ailments.NeedsMedic(c) : null;
             bool exam = c.Ailments.Count > 0 && ill == null && w.Ailments.Undiagnosed(c) && c.Fx.Worst > (w.Policies["medicine"] == 0 ? 0.45f : 0.3f) && w.Tick - c.Vitals.TreatedTick > SimTime.Hours(8);

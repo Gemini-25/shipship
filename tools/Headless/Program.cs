@@ -130,6 +130,16 @@ public static partial class Program
             Console.WriteLine($"      [제작 {st}] {all.Count}대(" + string.Join(" · ", all.Select(f => $"{f.Room.Name} 효율{f.Machine!.Efficiency:0.00}{(f.Machine.Faults.Count > 0 ? " 고장" + string.Join("/", f.Machine.Faults.Select(x => x.Kind)) : "")}")) + $") 쓰는 곳 {use?.Room.Name ?? "없음"} · 일 " +
                 string.Join(" · ", fab.Select(o => $"{o.Product}{o.Urgency:0.00}(맡음 {o.Assignee?.Name ?? (o.Robot != null ? "로봇" : "-")} · 진척 {o.Progress:0.00}{(o.BlockedUntil > w.Tick ? " 보류 " + o.BlockedReason : "")})")));
         }
+        // 의료: 다친 사람 · 못 돌본 시간 · 곪은 상처 · 패혈증 · 키트 · 의무관 · 의료 로봇 · 치료 일
+        {
+            var medAlive = w.Crew.Where(c => !c.Dead && !c.Away).ToList();
+            var hurt = medAlive.Where(c => c.Vitals.Injury > 0.25f).ToList();
+            float worst = hurt.Count > 0 ? hurt.Max(c => (w.Tick - c.Vitals.TreatedTick) / (float)SimTime.TicksPerHour) : 0f;
+            var treat = open.Where(o => o.Kind == WorkKind.Treat).ToList();
+            Console.WriteLine($"      [의료] 다침(25%↑) {hurt.Count} · 가장 오래 못 돌봄 {Math.Min(worst, 999):0}h · 곪은 상처 {medAlive.Count(c => c.Ailments.Any(a => a.Id == "woundinf"))} · 패혈증 {medAlive.Count(c => c.Ailments.Any(a => a.Id == "sepsis"))} · 장기 반쯤 상함 {medAlive.Count(c => w.Organs.Peek(c) is { } ob && ob.Dmg.Any(d => d > 0.5f))}"
+                + $" · 키트 {w.Ship.CountStored(ItemKind.MedKit)} · 붕대 {w.Ship.CountStored(ItemKind.Bandage)} · 항생제 {w.Ship.CountStored(ItemKind.Antibiotic)} · 의무관 {medAlive.Count(c => c.Role == CrewRole.Medic)} · 의료 로봇 {w.Robots.Robots.Count(r => r.Operational && RobotsV21.Medical(r.Kind))}"
+                + $" · 치료 일 {treat.Count}(맡음 {treat.Count(o => o.Assignee != null || o.Robot != null)}) · 방침 의약품 {w.Policies["medicine"]}");
+        }
         // 누가 무엇으로 숨졌나 (굶주림이 없는데 하나둘 죽는 배)
         var deadNow = w.Crew.Where(c => c.Dead).ToList();
         if (deadNow.Count > 0)
