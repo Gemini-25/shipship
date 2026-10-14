@@ -443,7 +443,7 @@ public sealed partial class StorySystem
             case CardKind.Calm:
                 if (ok)
                 {
-                    l.Mind.PanicUntil = w.Tick;
+                    w.CrisisCrew.Woke(l, s, true); // 깨운 사람의 비상 자리에 함께 (위기가 아니면 자리는 없다)
                     em.Feel(l, Feeling.Fear, -0.25f, "곁에서 붙잡아 줬다", s);
                     w.Relations.Remember(l, s, RelationReason.Comforted, "공황이 왔을 때 곁에서 붙잡아 줬다");
                     l.ChangeAffinity(s, 0.08f);

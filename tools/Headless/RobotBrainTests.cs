@@ -91,6 +91,16 @@ public static partial class Program
                 {
                     var bot = pair.bots.First(b => b.Room!.Cells.Count(w.Ship.IsOpenFloor) >= 8 && w.Crew.All(c => c.Room != b.Room));
                     var room = bot.Room!;
+                    // 짧은 무전이 닿는 곳(15칸 안)에 손이 빈 동료를 하나 세운다 — 이 장면은 "혼자 벅차면 부른다"는 판단을 본다
+                    //   (같은 구역 동료가 그때 어디서 무엇을 하고 있었는지에 따라 무전이 닿기도 안 닿기도 해 장면이 뒤집혔다)
+                    var peer = pair.bots.FirstOrDefault(p => p != bot);
+                    var near = pair.z.Rooms.Select(id => w.Ship.Rooms[id]).Where(r2 => r2 != room && !r2.Detached).SelectMany(r2 => r2.Cells.Where(w.Ship.IsOpenFloor))
+                        .Where(c => (c.Center - bot.Position).LengthSquared() is > 9f and < 100f).OrderBy(c => (c.Center - bot.Position).LengthSquared()).ThenBy(c => c.X).ThenBy(c => c.Y).Cast<Cell?>().FirstOrDefault();
+                    if (peer != null && near is Cell nc)
+                    {
+                        w.Robots.DropTaskFor(peer);
+                        peer.Position = nc.Center; peer.PreviousPosition = peer.Position;
+                    }
                     w.Relays.Break(pair.z, "시험");
                     Run(w, 10);
                     foreach (var c in room.Cells.Where(w.Ship.IsOpenFloor).OrderBy(c => (c.Center - bot.Position).LengthSquared()).ThenBy(c => c.X).Skip(1).Take(5)) w.Fire.Ignite(c, 0.9f);

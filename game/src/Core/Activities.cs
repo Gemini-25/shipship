@@ -461,6 +461,9 @@ public sealed class DutyActivity : Activity
         foreach (var f in room.Furniture)
         {
             if (!(FurnitureTypes.IsDutyStation(f.Type) || f.Machine != null) || !f.IsFreeFor(c)) continue;
+            // 사람이 눕는 자리(수술대 · 치료 침대 · 침대)는 당직 자리가 아니다 — 수술대 위에 서서 한두 시간씩 당직을 서며 붙들어
+            //   의무관 없는 배에서 수술 팔이 열 시간 동안 수술을 열지 못했다
+            if (FurnitureTypes.Walkable(f.Type)) continue;
             var spots = f.UseSpots.Where(sp => dist.Reachable(sp) && !w.IsSpotTaken(sp, c)).ToList();
             if (spots.Count > 0) candidates.Add((f, w.Rng.Pick(spots)));
         }

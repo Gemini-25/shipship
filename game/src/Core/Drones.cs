@@ -934,7 +934,12 @@ public sealed partial class DroneSystem
         d.Patrol.Clear();
         d.PatrolIndex = 0;
         foreach (var r in rooms.Take(RobotsV15.PatrolRooms(d.Kind)))
-            d.Patrol.AddRange(r.Joints.Where(j => w.Ship.Grid.Kind(j.Spot) == TileKind.Void || w.Paths.IsSpace(j.Spot)).OrderBy(j => j.Index));
+        {
+            var outside = r.Joints.Where(j => w.Ship.Grid.Kind(j.Spot) == TileKind.Void || w.Paths.IsSpace(j.Spot)).OrderBy(j => j.Index).ToList();
+            // 운석 뒤 검사가 배터리로 중간에 끊겼으면 그 뒤에 본 칸은 건너뛰고 남은 칸부터 (처음 칸부터 다시 돌다 그 방을 끝내지 못했다)
+            if (urgent && st.Unseen.TryGetValue(r.Id, out long hitAt)) { var left = outside.Where(j => j.SeenAt < hitAt).ToList(); if (left.Count > 0) outside = left; }
+            d.Patrol.AddRange(outside);
+        }
         if (d.Patrol.Count == 0) return;
         Launch(d, d.Patrol[0].Spot.Center, urgent ? $"{rooms[0].Name} 외벽 검사 (운석 뒤)" : $"정기 외벽 검사 ({string.Join("·", rooms.Select(r => r.Name))})");
     }

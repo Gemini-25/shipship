@@ -122,10 +122,16 @@ public sealed class BloodSystem
     private readonly SortedDictionary<int, float> _lost = new(), _prevHealth = new();
     /// <summary>흘린 피 (피가 나는 동안 빠진 체력의 합 — 응급 처치로 기운이 돌아도 피는 그대로다).</summary>
     public float Lost(CrewMember c) => _lost.TryGetValue(c.Id, out var x) ? x : 0f;
-    /// <summary>수혈하러 가는 사람 (한 사람에게 한 명만 — 여럿이 냉장고로 몰리지 않게).</summary>
+    /// <summary>
+    /// 수혈하러 가는 사람 (한 사람에게 한 명만 — 여럿이 냉장고로 몰리지 않게).
+    /// 맡은 사람이 아직 그 환자에게 가는 중이면 몇 분이 걸려도 맡은 채다 — 예전엔 40분이 지나면 다른 사람이 가져가,
+    /// 피 팩을 들고 가던 사람은 할 일이 사라진 줄 알고 게시판을 보러 갔다 (한빛호: 두 시간 동안 셋이 번갈아 나서고 한 번도 못 넣었다).
+    /// </summary>
     private readonly SortedDictionary<int, (int by, long at)> _claims = new();
-    public bool Claimed(CrewMember pt, CrewMember by) => _claims.TryGetValue(pt.Id, out var x) && x.by != by.Id && _w.Tick - x.at < SimTime.Minutes(40) && _w.Crew.Any(c => c.Id == x.by && c.CanAct && c.Job?.Activity is TransfuseActivity);
-    public void Claim(CrewMember pt, CrewMember by) => _claims[pt.Id] = (by.Id, _w.Tick);
+    private readonly SortedDictionary<int, int> _claimFor = new(); // 맡은 사람 → 그 사람이 피를 가져가는 환자
+    public bool Claimed(CrewMember pt, CrewMember by) => _claims.TryGetValue(pt.Id, out var x) && x.by != by.Id
+        && _w.Crew.Any(c => c.Id == x.by && c.CanAct && c.Job?.Activity is TransfuseActivity && (_claimFor.TryGetValue(c.Id, out var p) ? p == pt.Id : _w.Tick - x.at < SimTime.Minutes(40)));
+    public void Claim(CrewMember pt, CrewMember by) { _claims[pt.Id] = (by.Id, _w.Tick); _claimFor[by.Id] = pt.Id; }
     /// <summary>냉장고에서 팩을 꺼내 들고 다니는 사람 (환자가 자리를 옮겨도 다시 냉장고로 가지 않는다 — 한 시간 넘으면 미지근해져 돌려놓는다).</summary>
     private readonly SortedDictionary<int, long> _holding = new();
     public bool Holding(CrewMember c) => _holding.TryGetValue(c.Id, out var t) && _w.Tick - t < SimTime.Hours(1);

@@ -36,7 +36,18 @@ public static partial class Program
             // 3) 팔다리를 잃으면 정비실에서 의수·의족을 만들어 단다
             {
                 var w = DayOne(seed, "Mirinae");
-                var c = w.Crew.First(x => x.Role != CrewRole.Technician);
+                var aboard = w.Crew.Where(x => !x.Away && !x.Dead && !x.IsChild).ToList();
+                var c = aboard.First(x => x.Role != CrewRole.Technician);
+                // 배에 의수를 만들 줄 아는 사람이 남아 있는 장면 — 첫날 새벽 원정대가 정비 손 둘을 데리고 떠나, 배에 남은 마지막 정비 손이
+                //   하필 이 장면에서 팔을 잃는 사람이었던 날이 있었다 (원정대가 돌아올 때까지 아무도 못 만든다) — 그날은 남은 사람 중 손이 가장 익은 이가 배워 둔 셈 친다
+                string taught = "";
+                if (!aboard.Any(y => y != c && y.CanAct && y.SkillLevel(Skill.Mechanics) >= 0.45f)) // 다친 몸은 솜씨가 준다 — 지금 손으로 본다
+                {
+                    var learner = aboard.Where(y => y != c && y.CanAct).OrderByDescending(y => y.SkillLevel(Skill.Mechanics)).ThenBy(y => y.Id).First();
+                    learner.SkillLevels[(int)Skill.Mechanics] = MathF.Max(learner.RawSkill(Skill.Mechanics), 0.75f);
+                    taught = $" · 배워 둔 셈 {learner.Name}";
+                }
+                long t3 = w.Tick;
                 NeedsSystem.AddInjury(c.Vitals, 0.5f, "구조물에 짓눌림");
                 var lost = c.Vitals.Wounds.FirstOrDefault(x => x.Lost);
                 float hand0 = Wounds.HandFactor(c.Vitals), leg0 = Wounds.LegFactor(c.Vitals);
@@ -45,7 +56,12 @@ public static partial class Program
                 Run(w, SimTime.Hours(30));
                 for (int h = 0; h < 18 && lost != null && !lost.Prosthetic; h++) Run(w, SimTime.Hours(1)); // 통합8 정비실 일이 밀리는 날은 서른 시간을 조금 넘긴다 — 달 때까지 (이틀 안)
                 Check("팔다리를 잃으면 의수·의족을 만들어 단다", lost != null && lost.Prosthetic,
-                    $"{(lost == null ? "잃지 않음" : Wounds.PartName(lost.Part))} · {Wounds.Summary(c.Vitals)} · 손 {hand0 * 100:0}→{Wounds.HandFactor(c.Vitals) * 100:0}% · 걸음 {leg0 * 100:0}→{Wounds.LegFactor(c.Vitals) * 100:0}% · {w.Life.Stats}");
+                    $"{(lost == null ? "잃지 않음" : Wounds.PartName(lost.Part))} · {Wounds.Summary(c.Vitals)} · 손 {hand0 * 100:0}→{Wounds.HandFactor(c.Vitals) * 100:0}% · 걸음 {leg0 * 100:0}→{Wounds.LegFactor(c.Vitals) * 100:0}% · {w.Life.Stats}"
+                    + $" · 일감 {string.Join(" / ", w.Board.All.Where(o => o.Kind == WorkKind.FitProsthetic).Select(o => $"{(o.Closed ? "닫힘" : "열림")} 맡은 {o.Assignee?.Name ?? "-"} 막힘 {o.BlockedReason ?? "-"}"))} · 전자 {w.Ship.CountStored(ItemKind.Electronics)} 판 {w.Ship.CountStored(ItemKind.Plate)} · {c.Name} {(c.Dead ? "숨짐" : c.Away ? "배 밖(원정 · 상륙)" : c.Outside ? "선외" : c.Job?.Label)} @{c.Room?.Name}"
+                    + (w.Board.All.FirstOrDefault(o => o.Kind == WorkKind.FitProsthetic && !o.Closed) is WorkOrder po
+                        ? " · 하고 싶음 " + string.Join(", ", w.Crew.Where(x => !x.Dead && x != c).Select(x => $"{x.Name}(정비 {x.SkillLevel(Skill.Mechanics):0.00}) {ChoresActivity.Appeal(x, w, po, w.Paths.Flood(x.Cell, x.PathProfile), out _):0.00}/{(x.Away ? "배 밖" : x.Outside ? "선외" : x.Job?.Label)}"))
+                        : "")
+                    + " · 나선 때 " + string.Join(", ", w.Log.Entries.Where(e => e.Text.Contains("에어락을 나섰다") || e.Text.Contains("셔틀에 올랐다") || e.Text.Contains("손이 없어 남는다")).Select(e => $"{SimTime.Day(e.Tick)}일 {SimTime.Clock(e.Tick)} {w.Crew.FirstOrDefault(x => x.Id == e.CrewId)?.Name} {e.Text}")) + $" · 다친 때 {SimTime.Day(t3)}일 {SimTime.Clock(t3)}{taught}");
             }
             // 4) 실수: 피곤하면 틀린다 — 확률이 오르고, 왜 틀렸는지가 기록과 인과 사슬에 남는다
             {

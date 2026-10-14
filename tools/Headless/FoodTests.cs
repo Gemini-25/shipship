@@ -109,6 +109,8 @@ public static partial class Program
                 {
                     var w = DayOne(sd, "Hanbit");
                     Run(w, SimTime.Hours(3)); // 10시쯤 — 아침과 점심 사이
+                    // 사람이 굽는 빵 냄새를 본다 — 조리 로봇이 끼니를 다 채우면 사람이 화구 앞에 설 일이 없다 (로봇이 고장에서 스스로 돌아오자 그랬다)
+                    foreach (var rb in w.Robots.Robots) rb.Disabled = true;
                     int crew = w.Crew.Count(c => !c.Dead);
                     foreach (var c in w.Crew) c.Needs.Food = MathF.Min(c.Needs.Food, 0.45f); // 통합8 끼니 사이 출출한 정도(0.55)로는 꾸밈 · 일에 밀려 한 사람만 왔다 — 배고픈 사람들
                     int keep = crew * 2;
@@ -147,6 +149,17 @@ public static partial class Program
                 var stove = w.Ship.FurnitureOf(FurnitureType.Stove).First();
                 long alerts0 = w.AlertSerial;
                 w.Cooking.LeaveOnBurner(stove, null);
+                // 냄새를 맡을 사람을 주방 옆방에 하나 둔다 — 이 장면은 "맡은 사람이 경보보다 먼저 확인한다"를 본다
+                //   (그 시각 모두가 주방에서 먼 정비실 · 의무실에 있으면 탄내가 닿지 않아 장면이 뒤집혔다)
+                var nose = w.Crew.Where(c => !c.Dead && c.CanAct && c.IsAwake && !c.IsChild && !c.Outside && c.Room != stove.Room).OrderBy(c => c.Id).FirstOrDefault();
+                var nextDoor = w.Ambience.Neighbors(stove.Room).Where(n => n.door && !n.room.Detached).Select(n => n.room).SelectMany(r => r.Cells.Where(w.Ship.IsOpenFloor))
+                    .OrderBy(c => (c.Center - stove.Center).LengthSquared()).ThenBy(c => c.X).ThenBy(c => c.Y).Cast<Cell?>().FirstOrDefault();
+                if (nose != null && nextDoor is Cell nd)
+                {
+                    if (nose.Job != null) nose.EndJob(w, ToilStatus.Interrupted);
+                    Teleport(w, nose, nd);
+                    nose.NextThinkTick = w.Tick + 1;
+                }
                 long left = w.Tick, checkAt = -1, alarmAt = -1;
                 string? checker = null;
                 float hereMax = 0f, nbMax = 0f;

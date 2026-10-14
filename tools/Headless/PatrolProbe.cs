@@ -115,6 +115,8 @@ public static partial class Program
                 if (t.Pace >= 30) Console.WriteLine($"      좁은 곳 왕복 {t.Pace}분 (한 시간에 {t.PaceTravel:0}칸 · 폭 {t.PaceSpan:0.0}칸) — {t.PaceAt}");
                 if (t.Flips >= 3) Console.WriteLine($"      두 일 번갈아 {t.Flips}번 — {t.FlipAt}");
             }
+            int faultMin = tr.Values.Sum(t => t.Kinds.GetValueOrDefault("고장"));
+            Console.WriteLine($"  고장 {w.Robots.Robots.Sum(r => r.Breakdowns)}번 · 스스로 고침 {w.Robots.Robots.Sum(r => r.SelfRepairsTotal)}번 · 지금 고장 {w.Robots.Robots.Count(r => r.Fault != null)}대 · 고장으로 쉰 시간 {faultMin / 60f:0}시간(로봇 합)");
             Console.WriteLine($"  → 멈춤(20분↑) {frozenBots}대 · 좁은 곳 왕복(30분↑) {pacingBots}대 · 두 일 번갈아(3번↑) {flipBots}대 · 순찰 비중 {tr.Values.Sum(t => t.Patrol) * 100 / Math.Max(1, tr.Values.Sum(t => t.Minutes))}%");
         }
         return 0;

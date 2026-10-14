@@ -321,11 +321,13 @@ public sealed partial class RobotSystem
             if (r.State != RobotState.Active || r.Order is not WorkOrder o || r.Steps == null || r.StepIndex >= r.Steps.Count) continue;
             if (r.Steps[r.StepIndex] is not RWork rw || rw.Shared != o || o.Progress > 0.5f || rw.Hours < 0.4f) continue;
             if (o.Kind is not (WorkKind.ClearRubble or WorkKind.PumpOut or WorkKind.CleanUp or WorkKind.Maintain or WorkKind.SealSeep or WorkKind.FlushMain or WorkKind.ClearMain or WorkKind.Cook or WorkKind.Tend or WorkKind.Harvest)) continue;
-            if (Robots.Any(x => x != r && x.Steps != null && x.StepIndex < x.Steps.Count && x.Steps[x.StepIndex] is RWork xw && xw.Shared == o)) continue;
+            // 짝이 이미 붙었거나 가는 중이면 둘째는 부르지 않는다 (가는 중인 짝을 세지 않아 1분마다 또 불렀다)
+            if (Robots.Any(x => x != r && SharesIn(x) == o)) continue;
             Robot? mate = null; float bd = 14f;
             foreach (var x in Robots)
             {
-                if (x == r || !Free(x) || x.Runaway || x.Upgrading || RobotsV21.OnCall(x.Kind) || !CanDo(x.Kind, o.Kind)) continue;
+                // 다른 일에 같이 하러 가는 로봇은 빼 오지 않는다 — 두 일이 한 로봇을 1분마다 서로 빼앗아 두 곳 사이를 오갔다 (천마호 수확 로봇)
+                if (x == r || !Free(x) || x.Runaway || x.Upgrading || RobotsV21.OnCall(x.Kind) || !CanDo(x.Kind, o.Kind) || SharesIn(x) != null) continue;
                 float d = Far(x.Position, r.Position);
                 if (d < bd) { bd = d; mate = x; }
             }
@@ -343,6 +345,15 @@ public sealed partial class RobotSystem
             mate.Mind.Say($"{main.Name} 혼자 하기엔 오래 걸린다 — 같이 한다 ({o.Title})", w.Tick);
             V21.Joins++;
         }
+    }
+
+    /// <summary>이 로봇이 같이 하러 가거나 같이 하는 남의 일 (남은 단계에 함께 채우는 일이 있으면).</summary>
+    private static WorkOrder? SharesIn(Robot x)
+    {
+        if (x.Steps == null) return null;
+        for (int i = x.StepIndex; i < x.Steps.Count; i++)
+            if (x.Steps[i] is RWork { Shared: WorkOrder so }) return so;
+        return null;
     }
 
     /// <summary>남의 가벼운 일을 하는 특기 로봇은 제 특기 일에는 "놀고 있다"고 본다 (부르면 바꾼다).</summary>
@@ -1072,6 +1083,9 @@ public sealed partial class RobotSystem
         s.V[(int)CellMark.Oil] > 0.3f || s.V[(int)CellMark.Soot] > 0.4f && w.Fire.Count == 0
         || s.V[(int)CellMark.Wet] > 0.4f && w.Body.SlipAt(i) > 0.35f;
 
+    /// <summary>칸마다 마지막으로 닦은 때 (닦아도 곧 다시 더러워지는 칸을 건너뛴다).</summary>
+    private readonly SortedDictionary<int, long> _wipedAt = new();
+
     /// <summary>청소 로봇: 쉬는 동안 얼룩이 가장 많은 방에 가서 바닥을 닦는다 (기름 · 그을음 · 물기 — 네 칸까지).</summary>
     private bool TryWipe(Robot r, DistanceField dist)
     {
@@ -1082,6 +1096,7 @@ public sealed partial class RobotSystem
         foreach (var (i, st) in w.Body.Marks)
         {
             if (!Stained(w, st, i)) continue;
+            if (_wipedAt.TryGetValue(i, out long wiped) && w.Tick - wiped < SimTime.Hours(3)) continue; // 닦아도 곧 다시 젖는 칸 — 40분마다 같은 칸 하나를 닦으러 오갔다
             var cell = w.Ship.Grid.CellAt(i);
             if (w.Ship.RoomAt(cell) is not Room room || room.Abandoned || room.OffLimits || w.Fire.CountIn(room) > 0 || !dist.Reachable(cell) && !Cell.Dirs4.Any(d => dist.Reachable(cell + d))) continue;
             if (!byRoom.TryGetValue(room.Id, out var list)) byRoom[room.Id] = list = new List<Cell>();
@@ -1107,6 +1122,7 @@ public sealed partial class RobotSystem
                 if (st.V[(int)CellMark.Soot] > 0.2f) b.SetMark(spot, CellMark.Glass, 0f, ""); // 사고 자리 유리만
                 b.SetMark(spot, CellMark.Oil, 0f, "");
                 b.SetMark(spot, CellMark.Soot, 0f, "");
+                _wipedAt[world.Ship.Grid.Index(spot)] = world.Tick;
                 b.Stats.Cleaned++;
                 V21.Wipes++;
                 return true;

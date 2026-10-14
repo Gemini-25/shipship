@@ -203,6 +203,8 @@ public sealed class WorkToil : Toil
     private WorkOrder? Track => Resume ?? _auto;
 
     public override float? Progress => _needed > 0 ? _done / _needed : 0f;
+    /// <summary>남은 일 (틱) — 로봇이 거들러 가 볼 만한지 (가는 길보다 짧으면 헛걸음).</summary>
+    public float TicksLeft => MathF.Max(0f, _needed - _done);
 
     public override void Begin(CrewMember c, World w)
     {

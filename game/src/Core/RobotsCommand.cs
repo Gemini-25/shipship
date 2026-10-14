@@ -162,6 +162,7 @@ public sealed partial class RobotSystem
         {
             new RGoto(rb => Cell.Dirs8.Select(d => pt.Cell + d).Where(c => world0().Ship.IsWalkable(c)).OrderBy(c => (c.Center - rb.Position).LengthSquared()).ThenBy(c => c.X).ThenBy(c => c.Y).Cast<Cell?>().FirstOrDefault()),
             new RDo((rb, world) => { rb.Facing = pt.Position - rb.Position == Vector2.Zero ? rb.Facing : Vector2.Normalize(pt.Position - rb.Position); Done(rb, $"{Ko.EulReul(pt.Name)} 곁에 닿았다 — 지킨다"); return true; }),
+            new RGuard(pt), // 닿자마자 끝내면 "다음 지시를 기다린다" ↔ "지키러"를 1~3분마다 되풀이했다 (한빛호 급수 로봇)
         }, what);
         return true;
         World world0() => _world;
@@ -231,6 +232,24 @@ public sealed partial class RobotSystem
 }
 
 /// <summary>v23 그 자리에서 잠깐 기다린다 (거점).</summary>
+/// <summary>지휘 건: 다친 사람 곁을 지킨다 — 건이 닫히거나 · 사람이 옮겨 가면(다시 따라가게) 끝.</summary>
+internal sealed class RGuard : RobotStep
+{
+    private readonly CrewMember _pt;
+    public RGuard(CrewMember pt) => _pt = pt;
+
+    public override void Begin(Robot r, World w) => r.Doing = $"{Ko.EulReul(_pt.Name)} 곁을 지킨다 — 지휘 건 #{r.CaseId}";
+
+    public override ToilStatus Tick(Robot r, World w)
+    {
+        if (r.CaseId < 0 || _pt.Dead || w.Casualty.Of(_pt) == null) return ToilStatus.Succeeded;
+        var d = _pt.Position - r.Position;
+        if (d.LengthSquared() > 2.2f * 2.2f) return ToilStatus.Succeeded;
+        if (d.LengthSquared() > 0.0001f) r.Facing = Vector2.Normalize(d);
+        return ToilStatus.Running;
+    }
+}
+
 internal sealed class RWait : RobotStep
 {
     private readonly int _ticks;

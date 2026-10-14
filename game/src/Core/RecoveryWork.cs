@@ -29,7 +29,7 @@ public sealed partial class WorkBoard
                 string need = parts.Length == 0 ? "다시 맞추기만" : have ? string.Join(" + ", parts.Select(x => $"{ItemKinds.Name(x.kind)} {x.count}"))
                     : "임시로 " + string.Join(" + ", alt.Select(x => $"{ItemKinds.Name(x.kind)} {x.count}"));
                 post(WorkKind.RepairRobot, WorkTarget.OfRobot(r), 0.3f + 0.08f * down + (RobotsV15.Base(r.Kind) == RobotKind.Safety ? 0.05f : 0f), RobotSystem.FaultSkill(f),
-                    $"{RobotSystem.FaultName(f)} · {need}" + (RobotSystem.WhyNotSelf(r) is string why && RobotSystem.Minor(f) ? $" · {why}" : "") + (r.AtDock ? "" : $" · {r.Room?.Name ?? "?"}에 멈춤"));
+                    $"{RobotSystem.FaultName(f)} · {need}" + (RobotSystem.WhyNotSelf(r) is string why ? $" · {why}" : "") + (r.AtDock ? "" : $" · {r.Room?.Name ?? "?"}에 멈춤"));
                 continue;
             }
             if (r.State == RobotState.Stalled)

@@ -728,11 +728,24 @@ public sealed class ExpeditionSystem
         return (s, best.why ?? "");
     }
 
-    /// <summary>나갈 수 있는 몸 (원정대 후보).</summary>
+    /// <summary>나갈 수 있는 몸 (원정대 후보) — 팔다리를 잃고 아직 의수 · 의족을 달지 못한 사람은 남는다 (팔을 잃은 사람이 달기도 전에 배를 떠나 이틀 넘게 못 달았다).</summary>
     public bool Fit(CrewMember c) => !c.Dead && !c.Away && c.CanAct && !c.IsChild && c.Vitals.Injury < 0.35f && c.Fx.Worst < 0.3f && c.Needs.Rest > 0.2f
-                                     && c.InfectedAt < 0 && !_w.Society.OnProbation(c) && c.Vitals.Health > 0.55f;
+                                     && c.InfectedAt < 0 && !_w.Society.OnProbation(c) && c.Vitals.Health > 0.55f && !Wounds.Missing(c.Vitals).Any();
 
     private int SuitsAboard() => _w.Ship.FurnitureOf(FurnitureType.SuitLocker).Sum(f => f.Storage!.Count(ItemKind.Suit)) + _w.Crew.Count(c => !c.Dead && !c.Away && c.Suit != null);
+
+    /// <summary>
+    /// 정비 · 의료를 할 줄 아는 마지막 성한 손은 배에 남긴다 — 정비 솜씨 순으로 뽑다 보니 둘 다 원정을 떠나,
+    /// 팔을 잃은 사람이 이틀 넘게 의수를 못 달았다 (배에 남은 넷 모두 정비 0.35 아래).
+    /// </summary>
+    private Skill? LastHandSkill(CrewMember c, List<CrewMember> leaving)
+    {
+        foreach (var s in new[] { Skill.Mechanics, Skill.Medicine })
+            if (c.SkillLevel(s) >= 0.35f && !Adults().Any(x => x != c && !leaving.Contains(x) && !x.Down && x.CareBed == null && x.Vitals.Injury < 0.35f && !Wounds.Missing(x.Vitals).Any() && x.SkillLevel(s) >= 0.35f)) return s; // 팔다리를 잃고 아직 못 단 사람은 남은 손으로 세지 않는다
+        return null;
+    }
+
+    private bool LastHand(CrewMember c, List<CrewMember> leaving) => LastHandSkill(c, leaving) != null;
 
     /// <summary>원정대 1~4명: 자원한 사람부터, 솜씨 · 체력 · 성격으로, 사이가 나쁜 둘은 되도록 떼어 놓고, 배에 일손을 남긴다.</summary>
     private List<int> PickTeam(Site site, List<int> volunteers)
@@ -753,6 +766,7 @@ public sealed class ExpeditionSystem
         {
             if (team.Count >= size) break;
             if (team.Any(t => c.AffinityTo(t) < -0.35f || t.AffinityTo(c) < -0.35f) && pool.Count - pool.IndexOf(c) > size - team.Count) continue;
+            if (LastHand(c, team)) continue;
             team.Add(c);
         }
         return team.Select(c => c.Id).ToList();
@@ -875,6 +889,8 @@ public sealed class ExpeditionSystem
         var w = _w;
         var site = p.Site;
         var team = p.Team.Select(id => w.Crew[id]).Where(Fit).ToList();
+        // 정할 때와 나설 때 사이에 남기로 한 손이 다쳤을 수 있다 — 떠나는 순간에도 마지막 정비 · 의료 손은 남긴다
+        foreach (var c in team.ToList()) if (LastHand(c, team)) team.Remove(c);
         if (team.Count == 0) { w.Log.Add(w.Tick, LogKind.Warning, $"원정 {site.Name} — 정했지만 나설 사람이 없다"); return; }
         site.Taken = true;
         var t = new Trip { Id = _nextTrip++, Site = site, Called = w.Tick, Source = p.Source, Why = p.Why, Phase = TripPhase.Gathering, Deadline = w.Tick + SimTime.Hours(4) };
@@ -999,6 +1015,14 @@ public sealed class ExpeditionSystem
     {
         var w = _w;
         if (Current is not Trip t || t.Phase != TripPhase.Gathering || t.Members.FirstOrDefault(m => m.Id == c.Id) is not TripMember m || m.Boarded) return false;
+        // 모이는 사이 남기로 한 정비 · 의료 손이 다쳤으면, 나서기 직전에 남는다 (원정대는 남은 사람으로 간다)
+        if (t.Members.Count > 1 && LastHandSkill(c, t.Members.Select(x => w.Crew[x.Id]).ToList()) is Skill need)
+        {
+            t.Members.Remove(m);
+            w.Log.Add(w.Tick, LogKind.Ship, $"원정 {t.Site.Name} — 배에 {(need == Skill.Medicine ? "의료" : "정비")}를 할 손이 없어 남는다", c.Id);
+            if (t.Members.All(x => x.Boarded)) Depart(t);
+            return false;
+        }
         m.Boarded = true;
         if (c.Carrying is ItemStack held) { VoyageV15.Put(w, held.Kind, held.Count); c.Carrying = null; }
         if (c.Suit == null)

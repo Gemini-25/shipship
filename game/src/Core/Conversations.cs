@@ -230,7 +230,8 @@ public sealed partial class RelationSystem
         var w = _w;
         _tried[(c.Id, o.Id, t)] = w.Tick;
         // 누가 말을 걸어오면 (급한 일이 아니면) 잠깐 멈춰 서서 듣는다
-        if (o.Job?.Urgent != true && (o.Job?.Order == null || o.Job.Order.Urgency < 0.7f) && o.Job?.Activity is not RecoverActivity)
+        //   기계에 몸을 맡긴 사람(심장 전지 충전 · 투석 · 인공 폐)은 그 자리에 앉은 채 듣는다 — 일어나면 충전이 88%에서 끊겨 다시 앉지 않았다
+        if (o.Job?.Urgent != true && (o.Job?.Order == null || o.Job.Order.Urgency < 0.7f) && o.Job?.Activity is not (RecoverActivity or PumpChargeActivity or OrganSupportActivity))
         {
             o.HoldUntil = w.Tick + SimTime.Minutes(20);
             o.HoldWhy = $"{Ko.IGa(c.Name)} 말을 걸어왔다";

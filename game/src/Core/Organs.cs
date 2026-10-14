@@ -757,8 +757,10 @@ public sealed class PumpChargeActivity : Activity
 
     public override (float, string) Score(CrewMember c, World w, DistanceField dist)
     {
-        if (!c.CanAct || c.Outside || w.Organs.Peek(c) is not { Pump: true } b || b.PumpCharge > (c.Job?.Activity is PumpChargeActivity ? 0.97f : 0.35f)) return (0f, "—");
+        // 채우다 말고 (말 걸기 · 회의 · 훈련으로) 일어난 사람은 35% 아래로 떨어질 때까지 다시 앉지 않았다 — 60% 아래면 틈날 때 마저 채운다
+        if (!c.CanAct || c.Outside || w.Organs.Peek(c) is not { Pump: true } b || b.PumpCharge > (c.Job?.Activity is PumpChargeActivity ? 0.97f : 0.6f)) return (0f, "—");
         if (Dock(w, dist) == null) return (0f, "충전대가 멎었다");
+        if (b.PumpCharge > 0.35f && c.Job?.Activity is not PumpChargeActivity) return (0.5f, $"심장 전지 {b.PumpCharge * 100:0}% — 틈날 때 마저 채운다");
         return (b.PumpCharge < 0.15f ? 1.1f : 0.8f, $"심장 전지 {b.PumpCharge * 100:0}% — 충전대로");
     }
 

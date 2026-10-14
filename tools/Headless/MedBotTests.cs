@@ -13,7 +13,8 @@ public static partial class Program
         try
         {
             static List<CrewMember> Able(World w) => w.Crew.Where(c => !c.Dead && !c.Down && !c.IsChild && !c.Away && !c.Outside).OrderBy(c => c.Id).ToList();
-            static CrewMember Patient(World w, int skip = 0) => Able(w).Where(c => c.Role != CrewRole.Medic).Skip(skip).First();
+            // 다친 데 없는 사람부터 (먼저 다친 데가 있으면 같은 부상도 무겁게 잡혀 골절 고정 대신 팔다리 살리기 수술로 간다 — 배의 흐름이 조금만 바뀌어도 장면이 뒤집혔다)
+            static CrewMember Patient(World w, int skip = 0) => Able(w).Where(c => c.Role != CrewRole.Medic).OrderBy(c => c.Vitals.Injury > 0.01f || c.Vitals.Wounds.Count > 0 ? 1 : 0).ThenBy(c => c.Id).Skip(skip).First();
             static void Hurt(World w, CrewMember c, float amt, string cause)
             {
                 NeedsSystem.AddInjury(c.Vitals, amt, cause);

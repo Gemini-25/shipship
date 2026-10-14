@@ -107,6 +107,7 @@ public static partial class Program
             var c = w.Crew.Where(x => x.CanAct && !x.IsChild && SimTime.InWindow(h0, x.Schedule.WorkStart, x.Schedule.WorkLength) && SimTime.InWindow(h0 + 3f, x.Schedule.WorkStart, x.Schedule.WorkLength))
                         .OrderByDescending(x => x.SkillLevel(f.Machine!.Spec.Skill)).ThenBy(x => x.Id).FirstOrDefault() ?? SpWorker(w, f.Machine!.Spec.Skill);
             var other = w.Crew.First(x => x != c && x.CanAct && !x.IsChild);
+            c.Needs.Food = 0.95f; c.Needs.Rest = 0.95f; // 자리를 비웠다 돌아오는 것만 본다 — 늦은 끼니로 떠난 사이 다른 사람이 그 정비를 이어 끝낸 날이 있었다
             foreach (var x in w.Crew) if (x.Job?.Order == o) x.EndJob(w, ToilStatus.Interrupted);
             Force(w, c, SpChore(w, c, o)!, SimTime.Hours(4));
             for (int k = 0; k < 40 && o.Progress < 0.15f; k++) Run(w, SimTime.Minutes(3));
@@ -140,13 +141,14 @@ public static partial class Program
             for (int k = 0; k < 30 && w.Coop.Stats.Confused == confused0; k++) Run(w, SimTime.Minutes(2));
             var conf = w.Log.Entries.LastOrDefault(e => e.CrewId == c.Id && e.Text.Contains("헷갈려")).Text;
             Check("누가 건드린 자리로 돌아오면 헷갈린다 (느려짐 · 건드린 사람에게 서운함)", w.Coop.Stats.Confused > confused0 && conf != null && c.AffinityTo(other) < aff,
-                $"헷갈림 {w.Coop.Stats.Confused} · \"{conf}\" · {c.Name}→{other.Name} {aff:0.00} → {c.AffinityTo(other):0.00}");
+                $"헷갈림 {w.Coop.Stats.Confused} · \"{conf}\" · {c.Name}→{other.Name} {aff:0.00} → {c.AffinityTo(other):0.00} · 자리 {site.State} 주인 {w.Crew.FirstOrDefault(x => x.Id == site.Owner)?.Name ?? "-"} 건드림 {site.Touched} · {c.Name} {c.Job?.Label ?? "-"} @{c.Room?.Name} · 맡은 사람 {o.Assignee?.Name ?? "-"} · 끝남 {o.Closed}");
             Skip1b:;
         }
 
         // ── 2) 둘이 하는 일: 한 명은 잡고 한 명은 체결 — 짝이 오면 함께, 안 오면 시간 상한 뒤 혼자 · 보류 (교착 없음) ──
         {
             var w = DayOne(seed, "Hanbit");
+            NoRobots(w); // 사람이 짝을 부르는 장면 — 정비 로봇이 냉장고를 먼저 고치면 부를 일이 없다
             RunUntilHour(w, 10f);
             SpNoHoist(w);
             var fridge = w.Ship.FurnitureOf(FurnitureType.Fridge).OrderBy(x => x.Id).First();
@@ -439,6 +441,8 @@ public static partial class Program
             {
                 w.Step();
                 if (k % 5 != 0) continue;
+                if (Environment.GetEnvironmentVariable("SP_DBG") == "1" && k % 60 == 0 && k < SimTime.Minutes(25))
+                    Console.WriteLine($"    [{k / 60}분] 불 {w.Fire.Count} · 현장 {cs.Scenes.Count(s => !s.Ended)} · " + string.Join(" | ", curious.Select(c => $"{c.Name} {c.Job?.Label ?? "-"} @{c.Room?.Name} 구경 {c.LastEvaluations.FirstOrDefault(e => e.Activity is SpectateActivity).Score:0.00}({c.LastEvaluations.FirstOrDefault(e => e.Activity is SpectateActivity).Reason}) 1위 {c.LastEvaluations.FirstOrDefault().Activity?.Id}:{c.LastEvaluations.FirstOrDefault().Score:0.00}")));
                 int now = cs.Scenes.Where(s => !s.Ended).Sum(s => s.Watchers.Count);
                 maxWatch = Math.Max(maxWatch, now);
                 squeezed |= cs.Stats.Squeezes > 0;

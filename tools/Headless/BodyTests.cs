@@ -186,6 +186,7 @@ public static partial class Program
                 Check("엿듣기 — 옆 선실 대화가 얇은 칸막이로 새어 엿듣고, 기억에 남는다", thin && mem != null, detail);
 
                 // 선실 노크: 자는 사람은 대답이 없다 · 깨어 있으면 "들어와"
+                NoRobots(w); // 사람이 문 앞에서 두드리는 장면 — 청소 · 정비 로봇이 드나들며 문을 열어 두면 두드릴 일 없이 들른다
                 b.SetZone(q2, AccessZone.Cabin, LockKind.Key);
                 var owner = w.Crew.FirstOrDefault(c => q2.Furniture.Any(f => f.Type == FurnitureType.Bed && f.Owner == c) && c != A && c != B && c != L && c.CanAct);
                 if (owner != null)
@@ -193,18 +194,28 @@ public static partial class Program
                     var bedSpot = q2.Cells.Where(w.Ship.IsWalkable).OrderBy(c => (c.Center - q2.Center).LengthSquared()).First();
                     Teleport(w, owner, bedSpot);
                     Force(w, owner, new Job(null, "낮잠", new List<Toil> { new WaitToil(SimTime.Hours(2), Pose.Sleeping) }));
-                    foreach (var c in new[] { A, B, L }) if (c.Job != null) c.EndJob(w, ToilStatus.Interrupted);
                     var door = plan.Door;
-                    var visitor = A;
+                    // 그 선실에 침대가 있거나 지나다니는 사람은 두드리지 않고 들어간다 — 손님은 그 선실 사람이 아닌 이로
+                    var visitor = new[] { A, B, L }.FirstOrDefault(v => !b.Allowed(v, b.DoorOf(w.Ship.DoorAt(door)!)!)) ?? A;
+                    // 손님만 하던 일을 놓는다 — 안쪽 칸에서 책을 읽던 L까지 놓으면 L이 그 문으로 나가며 문을 열어, 손님이 두드릴 새 없이 열린 문으로 들렀다
+                    if (visitor.Job != null) visitor.EndJob(w, ToilStatus.Interrupted);
                     var outside = q.Cells.Where(w.Ship.IsWalkable).OrderBy(c => (c.Center - door.Center).LengthSquared()).First();
                     Teleport(w, visitor, outside);
                     var target = q2.Cells.Where(c => w.Ship.IsWalkable(c) && c != bedSpot).OrderBy(c => (c.Center - door.Center).LengthSquared()).Skip(1).First();
                     w.Step();
                     Force(w, visitor, new Job(null, "들르기", new List<Toil> { new GotoToil(target) }));
+                    w.Ship.DoorAt(door)!.Openness = 0f; // 닫힌 문 앞에서 시작한다 — 손님을 세우는 한 틱 사이 다른 길로 가려다 문을 열어 둔 채(96%) 들른 날이 있었다
                     int k0 = b.Stats.Knocks, n0 = b.Stats.NoAnswer;
-                    for (int t = 0; t < SimTime.Minutes(5) && visitor.Job?.Label == "들르기"; t++) w.Step();
+                    bool kdbg = Environment.GetEnvironmentVariable("BODY_DBG") == "1";
+                    for (int t = 0; t < SimTime.Minutes(5) && visitor.Job?.Label == "들르기"; t++)
+                    {
+                        if (kdbg && t < 40) Console.WriteLine($"    [{t}] {visitor.Name} {visitor.Cell} ({visitor.Position.X:0.00},{visitor.Position.Y:0.00}) 길 {(visitor.Path == null ? "-" : string.Join(">", visitor.Path.Skip(visitor.PathIndex).Take(3)))} · 문 열림 {w.Ship.DoorAt(door)!.Openness:0.00} 잠김 {w.Ship.DoorAt(door)!.Locked} · 노크 {b.Stats.Knocks} 들름 {b.Stats.DropIns} · 안 {string.Join(",", w.Crew.Where(c => c.Room == q2).Select(c => c.Name))}");
+                        w.Step();
+                    }
                     bool noAnswer = b.Stats.Knocks > k0 && b.Stats.NoAnswer > n0 && visitor.Room != q2;
-                    string phase1 = $"1차: 노크 {b.Stats.Knocks - k0} · 대답 없음 {b.Stats.NoAnswer - n0} · 있는 곳 {visitor.Room?.Name ?? "?"}{visitor.Cell} 문 {door} 바깥 {outside} 목표 {target} · 주인 {owner.Pose}";
+                    var kdb = b.DoorOf(w.Ship.DoorAt(door)!)!;
+                    string phase1 = $"1차: 노크 {b.Stats.Knocks - k0} · 대답 없음 {b.Stats.NoAnswer - n0} · 있는 곳 {visitor.Room?.Name ?? "?"}{visitor.Cell} 문 {door} 바깥 {outside} 목표 {target} · 주인 {owner.Pose}"
+                        + $" · 문 열림 {w.Ship.DoorAt(door)!.Openness:0.00} 열어 둠 {kdb.HeldOpen} · 손님 권한 {b.Allowed(visitor, kdb)} · 안의 주인 {string.Join(",", w.Crew.Where(c => c.Room == q2 && q2.Furniture.Any(f => f.Type == FurnitureType.Bed && f.Owner == c)).Select(c => $"{c.Name}({c.Pose})"))}";
                     // 깨어 있으면
                     Force(w, owner, new Job(null, "책 읽기", new List<Toil> { new WaitToil(SimTime.Hours(2), Pose.Sitting) }));
                     b.DoorOf(w.Ship.DoorAt(door)!)!.Knocker = -1;
@@ -217,6 +228,7 @@ public static partial class Program
                     Teleport(w, visitor, outside);
                     w.Step();
                     Force(w, visitor, new Job(null, "들르기", new List<Toil> { new GotoToil(target), new WaitToil(20, Pose.Standing) }));
+                    w.Ship.DoorAt(door)!.Openness = 0f;
                     int a0 = b.Stats.Answered, d0 = b.Stats.DropIns;
                     bool entered = false;
                     for (int t = 0; t < SimTime.Minutes(5) && !entered; t++) { w.Step(); entered = visitor.Room == q2; }

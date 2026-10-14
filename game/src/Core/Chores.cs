@@ -141,6 +141,8 @@ public sealed class ChoresActivity : Activity
         // 통합8 다친 몸은 미룰수록 굳는다 — 의무관이 정한 재활은 제 몸 일이라 솜씨와 상관없이 앞에 둔다 (0.6 × 솜씨로는 순찰 · 잡일 · 밥에 밀려 엿새에 한 번도 못 했다)
         if (o.Kind == WorkKind.Rehab && o.Target.Crew is CrewMember rc) score += 0.12f + 0.4f * MathF.Min(0.5f, rc.Vitals.Injury) + 0.2f * MathF.Min(1f, (w.Tick - o.Posted) / (float)SimTime.TicksPerDay);
         if (o.Kind == WorkKind.Train) score += 0.08f + 0.05f * c.Traits.Diligence + 0.2f * MathF.Min(1f, (w.Tick - o.Posted) / (float)(SimTime.TicksPerDay * 2));
+        // 팔다리를 잃은 동료의 의수 · 의족도 미룰수록 마음에 걸린다 — 셋이 원정을 떠난 배에서 남은 정비 손 하나가 수리에 밀려 이틀을 미뤘다
+        if (o.Kind == WorkKind.FitProsthetic) score += 0.25f * MathF.Min(1f, (w.Tick - o.Posted) / (float)SimTime.TicksPerDay);
         if (BedtimeStatic(c, w)) score -= emergency || allHands ? 0.1f : o.Kind == WorkKind.Handover ? 0.15f : 0.5f;
 
         score -= distance / 6000f;

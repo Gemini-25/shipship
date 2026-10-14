@@ -346,7 +346,13 @@ public static partial class Program
         if (hb.Pump)
         {
             hb.PumpCharge = 0.3f;
-            bool charged = OgRunUntil(w, SimTime.Hours(4), () => hb.PumpCharge >= 0.95f);
+            bool dbg = Environment.GetEnvironmentVariable("OG_DBG") == "1";
+            int ticks = 0;
+            bool charged = OgRunUntil(w, SimTime.Hours(4), () =>
+            {
+                if (dbg && ticks++ % 4 == 0) Console.WriteLine($"    {SimTime.Clock(w.Tick)} 전지 {hb.PumpCharge * 100:0}% · {h.Job?.Label} @{h.Room?.Name} · 배 {h.Needs.Food:0.00} 기력 {h.Needs.Rest:0.00} · " + string.Join(", ", h.LastEvaluations.OrderByDescending(e => e.Score).Take(4).Select(e => $"{e.Activity.Id}:{e.Score:0.00}({e.Reason})")));
+                return hb.PumpCharge >= 0.95f;
+            });
             Check("인공 심장 — 전지가 줄면 스스로 충전대에 앉아 채운다", charged, $"전지 {hb.PumpCharge * 100:0}% · {h.Name} {h.Job?.Label} · 충전대 {dock?.Name}");
         }
         // 손 펌프: 인공 폐에 매달린 사람 · 기계 전선이 끊겼다
@@ -357,10 +363,12 @@ public static partial class Program
         NeedsSystem.AddInjury(p.Vitals, 0.9f, "유독 가스");
         OgRunUntil(w2, SimTime.Hours(14), () => w2.Organs.Peek(p)?.Hooked == true);
         ecmo.Machine!.Feed = 0f;
-        bool crank = OgRunUntil(w2, SimTime.Hours(3), () => w2.Organs.Stats.Cranked > 0);
+        int rewired0 = w2.Procs.Rewired + w2.Procs.Spliced;
+        // 장면 동안 전선은 끊긴 채 둔다 — 정비 로봇 · 사람이 내장 전지가 다 닳기 전에 다시 이으면 손 펌프를 돌릴 일이 없다 (그건 잘한 일이다)
+        bool crank = OgRunUntil(w2, SimTime.Hours(3), () => { ecmo.Machine!.Feed = 0f; return w2.Organs.Stats.Cranked > 0; });
         Check("손 펌프 — 인공 폐 전선이 끊기면 내장 전지로 돌고 · 바닥나면 곁의 사람이 손으로 돌린다 · 주컴퓨터가 알린다",
             w2.Organs.Peek(p)?.Hooked == true && w2.Organs.Stats.PowerLost > 0 && crank && w2.Log.Entries.Any(e => e.Text.Contains("인공 폐") && e.Text.Contains("전원이 끊겼다")),
-            $"연결 {w2.Organs.Peek(p)?.Hooked} · 끊김 {w2.Organs.Stats.PowerLost} · 손 펌프 {w2.Organs.Stats.Cranked} · 산소 {p.Vitals.Oxygen:0.00}");
+            $"연결 {w2.Organs.Peek(p)?.Hooked} · 끊김 {w2.Organs.Stats.PowerLost} · 손 펌프 {w2.Organs.Stats.Cranked} · 산소 {p.Vitals.Oxygen:0.00} · 다시 이음 {w2.Procs.Rewired + w2.Procs.Spliced - rewired0} · 전지 {w2.Organs.Cell(ecmo) * 100:0}%");
         // 배양 장기: 기술 · 세포 잉크 · 양액 → 받을 사람의 세포로
         var w3 = DayOne(seed, "Hanbit");
         w3.Eras.Known.Add("regenmed");

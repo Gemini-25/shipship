@@ -620,29 +620,39 @@ public sealed partial class CrisisCrewSystem
             bool hand = d2 <= 2.6f;
             float rate = (hand ? 0.55f : 0.18f) * (0.4f + h.Traits.Calm) * (1f + 0.5f * MathF.Max(0f, c.AffinityTo(h))) * (_active.TryGetValue(h.Id, out var hr) && hr == StationRole.Guide ? 1.5f : 1f);
             if (!R.Chance(1f - MathF.Exp(-rate * minutes))) continue;
-            c.Mind.PanicUntil = w.Tick;
-            c.Mind.Frozen = false;
-            c.NextThinkTick = w.Tick + 1;
             c.Needs.Stress = MathF.Max(0f, c.Needs.Stress - 0.06f);
             w.Brain2.Emotions.Feel(c, Feeling.Fear, -0.15f, "");
             c.ChangeAffinity(h, 0.04f);
             h.ChangeAffinity(c, 0.02f);
             w.Relations.Remember(c, h, RelationReason.Comforted, hand ? "공황에 빠졌을 때 어깨를 붙잡아 줬다" : "공황에 빠졌을 때 정신 차리라고 불러 줬다");
-            Snaps++;
-            if (hand) HandSnaps++;
-            _buddy[c.Id] = (h.Id, w.Tick + SimTime.Minutes(20));
-            // v21 깨운 그 자리에서 함께 할 자리를 준다 — 다음 갱신까지 기다리면 깬 사람이 자리 없이 먼저 생각해 하던 잡일로 돌아간다
-            if (!_active.ContainsKey(c.Id) && !c.IsChild)
-            {
-                var br = _active.TryGetValue(h.Id, out var hr2) && hr2 != StationRole.Guide ? hr2 : DrawOrder.FirstOrDefault(x => _need.Contains(x) && x != StationRole.Guide);
-                if (br != StationRole.None) { _active[c.Id] = br; _involved.Add(c.Id); }
-            }
-            SnapMarks.Add((w.Tick, h.Id, c.Id, hand));
-            if (SnapMarks.Count > 12) SnapMarks.RemoveAt(0);
+            Woke(c, h, hand);
             h.Say(w, Persona.Say(h, hand ? $"{c.Name}, 나 봐. 숨 쉬어 — 같이 하자" : $"{c.Name}! 정신 차려, 할 일 있어"));
             c.Say(w, Persona.Say(c, "…응. 알았어"));
             w.Log.Add(w.Tick, LogKind.Life, hand ? $"{Ko.IGa(h.Name)} 어깨를 붙잡아 정신이 들었다" : $"{Ko.IGa(h.Name)} 부르는 소리에 정신이 들었다", c.Id);
         }
+    }
+
+    /// <summary>
+    /// 동료가 공황에서 깨웠다 (곁에서 부르기 · 붙잡기 · 마주 앉아 달래기 — 어느 쪽이든): 깨운 사람의 자리에 함께 ("같이 하자").
+    /// 대화 카드로 달래 깨운 사람은 자리를 받지 못해, 불이 아직 타는데 당직을 서러 갔다.
+    /// </summary>
+    public void Woke(CrewMember c, CrewMember h, bool hand)
+    {
+        var w = _w;
+        c.Mind.PanicUntil = w.Tick;
+        c.Mind.Frozen = false;
+        c.NextThinkTick = w.Tick + 1;
+        Snaps++;
+        if (hand) HandSnaps++;
+        _buddy[c.Id] = (h.Id, w.Tick + SimTime.Minutes(20));
+        // v21 깨운 그 자리에서 함께 할 자리를 준다 — 다음 갱신까지 기다리면 깬 사람이 자리 없이 먼저 생각해 하던 잡일로 돌아간다
+        if (!_active.ContainsKey(c.Id) && !c.IsChild)
+        {
+            var br = _active.TryGetValue(h.Id, out var hr2) && hr2 != StationRole.Guide ? hr2 : DrawOrder.FirstOrDefault(x => _need.Contains(x) && x != StationRole.Guide);
+            if (br != StationRole.None) { _active[c.Id] = br; _involved.Add(c.Id); }
+        }
+        SnapMarks.Add((w.Tick, h.Id, c.Id, hand));
+        if (SnapMarks.Count > 12) SnapMarks.RemoveAt(0);
     }
 
     /// <summary>몸이 먼저 하는 것: 산소 마스크 · 불난 방 문 닫기.</summary>

@@ -124,6 +124,7 @@ public static partial class Program
                 foreach (var o in w.Crew) if (o != a) a.Affinity[o.Id] = Math.Min(a.AffinityTo(o), 0.1f);
                 Method Outage(int round)
                 {
+                    a.Needs.Rest = 0.95f; a.Needs.Food = 0.95f; // 고른 길만 본다 — 늦은 끼니(1.15)가 정전 대응(1.13)을 앞질러 스무 분을 밥 먹으러 간 날이 있었다
                     BrainPut(w, a, room, round);
                     a.HoldUntil = w.Tick + SimTime.Minutes(2); a.HoldWhy = "그 방에서 일하던 중"; // 통합8 놓자마자 다른 방 정비로 떠나 불이 나간 걸 못 봤다 — 불이 나갈 때 그 방에 있게
                     Run(w, 2);
@@ -192,7 +193,8 @@ public static partial class Program
                 bool told = false;
                 string fsrc = "";
                 var cutLinks = w.Net.Links.Where(l => l.Kind == NetKind.Data && (l.Door?.RoomA == room || l.Door?.RoomB == room || l.Room == far || l.Door?.RoomA == far || l.Door?.RoomB == far)).ToList();
-                for (int m = 0; m < 120 && !told && w.Brain2.Social.AlreadyKnew == 0; m++) // 통합7 불이 통로로 번지면 본 사람이 먼저 피했다가 알리러 간다 — 스무 분으론 모자랐다
+                // 가까운 사람에게 먼저 들렀는데 이미 알고 있었으면, 그다음에 친구에게 간다 — 이미 안 사람을 만났다고 장면을 끝내지 않는다
+                for (int m = 0; m < 120 && !told; m++) // 통합7 불이 통로로 번지면 본 사람이 먼저 피했다가 알리러 간다 — 스무 분으론 모자랐다
                 {
                     foreach (var l in cutLinks) if (!l.Cut) w.Net.Hurt(l, 1f, "시험"); // 통합8 장면 내내 그 방 데이터선은 끊겨 있다 (망 잇기가 몇 분 만에 이어 경보가 닿았다)
                     Run(w, SimTime.Minutes(0.5f));
@@ -230,10 +232,14 @@ public static partial class Program
             {
                 var w = BrainDay(seed, "Mirinae");
                 var room = StoreRoom(w);
-                var crew = w.Crew.Where(c => c.CanAct && c.IsAwake && !c.IsChild && c.Room != room).ToList();
+                // 다친 데 없고 마음이 가라앉은 사람이 소문을 듣는다 — 울던 사람(달래 주러 온 동료와 앉아 있었다) · 다친 사람은 한 시간 안에 창고까지 안 간다
+                var crew = w.Crew.Where(c => c.CanAct && c.IsAwake && !c.IsChild && c.Room != room)
+                    .OrderBy(c => c.Vitals.Injury > 0.01f || c.Vitals.Wounds.Count > 0 || c.Needs.Stress > 0.5f ? 1 : 0).ThenBy(c => c.Id).ToList();
                 var s1 = crew[0];
                 var teller = crew[1];
                 BrainTrait(s1, "Bravery", 0.85f); BrainTrait(s1, "Diligence", 0.8f); s1.Fears.Clear();
+                s1.Needs.Rest = 0.95f; s1.Needs.Food = 0.95f;
+                if (s1.Job != null) s1.EndJob(w, ToilStatus.Interrupted);
                 w.Automation.Trusts.Change(s1, 0.08f - w.Automation.Trusts.Of(s1), "시험");
                 w.Brain2.Beliefs.Learn(s1, Topic.Fire, room.Id, 1, BeliefSource.Rumor, 0.85f, teller.Id);
                 s1.NextThinkTick = w.Tick + 1;

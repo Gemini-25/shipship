@@ -102,20 +102,31 @@ public static partial class Program
                 wb.Casualty.Inflict(d, TraumaKind.Bleed, 0.3f, "시험 파편");
                 d.Vitals.Health = 0.32f;
                 int t0 = wb.Blood.Transfusions;
-                Until(wb, () => wb.Blood.Transfusions > t0, 4f);
+                int mt = 0;
+                Until(wb, () =>
+                {
+                    if (Environment.GetEnvironmentVariable("MED_DBG") == "1" && mt++ % 10 == 0)
+                        Console.WriteLine($"    {SimTime.Clock(wb.Tick)} {d.Name} 체력 {d.Vitals.Health * 100:0}% · 흘린 피 {wb.Blood.Lost(d):0.00} 수혈 필요 {wb.Blood.NeedsBlood(d)} · 상처 {wb.Casualty.Of(d)?.Kind.ToString() ?? "-"} · {d.Job?.Label} @{d.Room?.Name} · 의무관 "
+                            + string.Join(" / ", wb.Crew.Where(x => x.Role == CrewRole.Medic || x.SkillLevel(Skill.Medicine) >= 0.25f).Select(x => $"{x.Name} {x.Job?.Label} {x.LastEvaluations.FirstOrDefault(e => e.Activity is TransfuseActivity).Score:0.00}"
+                                + (x.Job?.Activity is TransfuseActivity ? $" [{x.Job.Current?.GetType().Name} @{x.Room?.Name}{x.Cell} 거리 {(x.Position - d.Position).Length():0.0} 길 {(x.Path == null ? "없음" : x.Path.Count.ToString())} 듦 {wb.Blood.Holding(x)}]" : "")
+                                + " {" + string.Join(" | ", wb.Log.Entries.Where(e => e.CrewId == x.Id && e.Tick > wb.Tick - SimTime.Minutes(10)).TakeLast(3).Select(e => e.Text)) + "}")) + $" · 환자 {d.Cell} {d.Pose}");
+                    return wb.Blood.Transfusions > t0;
+                }, 4f);
                 Check("출혈 위중 → 수혈 — 냉장고의 맞는 피 (O형 Rh-는 누구에게나)", wb.Blood.Transfusions > t0 && wb.Log.Entries.Any(e => e.Text.Contains($"{d.Name}에게") && e.Text.Contains("피를 넣었다")),
-                    $"{d.Name}({wb.Blood.TypeOf(d).Name}) 수혈 {wb.Blood.Transfusions - t0} · 체력 {d.Vitals.Health * 100:0}% · 남은 팩 {wb.Blood.Count()}");
+                    $"{d.Name}({wb.Blood.TypeOf(d).Name}) 수혈 {wb.Blood.Transfusions - t0} · 체력 {d.Vitals.Health * 100:0}% · 남은 팩 {wb.Blood.Count()} · 흘린 피 {wb.Blood.Lost(d):0.00} · 상처 {wb.Casualty.Of(d)?.Kind.ToString() ?? "-"} · {d.Job?.Label ?? "-"} @{d.Room?.Name}");
                 wb.Blood.Packs.Clear();
                 Strip(wb, ItemKind.BloodSubstitute);
                 var e = Patient(wb, 1);
                 wb.Casualty.Inflict(e, TraumaKind.Bleed, 0.3f, "시험 파편");
                 e.Vitals.Health = 0.3f;
+                var aff0 = wb.Crew.ToDictionary(x => x.Id, x => e.AffinityTo(x)); // 사이는 처음보다 가까워졌는지로 본다 (원래 서먹한 사이였으면 한 번에 0.05를 넘지 못한다)
                 CrewMember? Giver() => wb.Crew.FirstOrDefault(x => x.Memory.Marks.Any(m => m.Text.Contains($"{e.Name}에게 내 피")));
                 Until(wb, () => Giver() != null, 4f);
                 var giver = Giver();
                 Check("맞는 피가 없으면 — 피가 맞는 사람이 나서 바로 준다 (관계 · 기억)",
-                    wb.Blood.Fresh > 0 && giver != null && wb.Blood.Compatible(giver, e) && e.Memory.Marks.Any(m => m.Text.Contains("피로 살았다")) && e.AffinityTo(giver) > 0.05f,
-                    $"{e.Name}({wb.Blood.TypeOf(e).Name}) ← {giver?.Name}({(giver != null ? wb.Blood.TypeOf(giver).Name : "-")}) · 바로 {wb.Blood.Fresh} · 부름 {wb.Blood.Calls}");
+                    wb.Blood.Fresh > 0 && giver != null && wb.Blood.Compatible(giver, e) && e.Memory.Marks.Any(m => m.Text.Contains("피로 살았다")) && e.AffinityTo(giver) > aff0[giver.Id] + 0.05f,
+                    $"{e.Name}({wb.Blood.TypeOf(e).Name}) ← {giver?.Name}({(giver != null ? wb.Blood.TypeOf(giver).Name : "-")}) · 바로 {wb.Blood.Fresh} · 부름 {wb.Blood.Calls}"
+                    + (giver != null ? $" · 사이 {aff0[giver.Id]:0.00} → {e.AffinityTo(giver):0.00} · 기억 {e.Memory.Marks.Any(m => m.Text.Contains("피로 살았다"))}" : ""));
                 // 맞지 않는 피를 무릅쓰면 위험하다
                 var odd = Able(wb).FirstOrDefault(x => wb.Blood.TypeOf(x) is { Group: not BloodGroup.AB } || wb.Blood.TypeOf(x).Neg);
                 wb.Blood.Packs.Clear();

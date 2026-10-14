@@ -76,6 +76,8 @@ public sealed partial class Robot
 
     /// <summary>고장 (null이면 멀쩡하다).</summary>
     public RobotFault? Fault { get; internal set; }
+    /// <summary>이 고장은 몸이 부서져 났다 (맞음 · 물 · 진공 · 열 · 방사선 · 사고 충격) — 스스로는 못 고친다.</summary>
+    public bool FaultHard { get; internal set; }
 
     /// <summary>시험용: 꺼 둔 로봇 (로봇 없는 배와 견줄 때).</summary>
     public bool Disabled { get; set; }
@@ -265,6 +267,7 @@ internal sealed class RAssist : RobotStep
     private readonly CrewMember _who;
     private readonly Job _job;
     public RAssist(CrewMember who, Job job) { _who = who; _job = job; }
+    internal CrewMember Who => _who;
 
     public override void Begin(Robot r, World w)
     {
@@ -355,26 +358,38 @@ public sealed partial class RobotSystem
         _ => f.ToString(),
     };
 
-    /// <summary>스스로 고칠 수 있는 가벼운 고장.</summary>
+    /// <summary>가벼운 고장 (몸이 덜 상하고 빨리 고친다).</summary>
     public static bool Minor(RobotFault f) => f is RobotFault.Sensor or RobotFault.Jam or RobotFault.Overheat;
 
-    /// <summary>이 아래로 닳은 로봇은 가벼운 고장도 스스로 못 고친다 (임계점).</summary>
-    public const float SelfRepairFloor = 0.35f;
+    /// <summary>
+    /// 닳아서 난 고장이면 스스로 고친다 — 구동 · 제어기 · 전지도 (가벼운 것보다 오래 · 부품 없이 다시 맞추고 우회 배선).
+    /// 사람 · 동료 로봇 몫: 몸이 부서져 난 고장(맞음 · 물 · 진공 · 열 · 방사선 · 사고 충격)과 불에 그을림.
+    /// 예전엔 가벼운 셋만 스스로 고쳐서, 흔한 구동 불량마다 사람이 부품을 들고 가야 했다.
+    /// </summary>
+    public static bool SelfFixable(RobotFault f) => f is not RobotFault.Scorched;
+
+    /// <summary>이 아래로 닳은 로봇은 스스로 못 고친다 (임계점).</summary>
+    public const float SelfRepairFloor = 0.3f;
 
     /// <summary>사람 정비 없이 스스로 고칠 수 있는 횟수.</summary>
-    public const int SelfRepairLimit = 3;
+    public const int SelfRepairLimit = 5;
 
     /// <summary>스스로 고치는 데 걸리는 시간 (충전대에서, 전기가 있어야).</summary>
-    public static float SelfRepairHours(RobotFault f) => f switch { RobotFault.Sensor => 0.5f, RobotFault.Jam => 0.3f, RobotFault.Overheat => 0.8f, _ => 1f };
+    public static float SelfRepairHours(RobotFault f) => f switch
+    {
+        RobotFault.Sensor => 0.5f, RobotFault.Jam => 0.3f, RobotFault.Overheat => 0.8f,
+        RobotFault.Drive => 2.5f, RobotFault.Controller => 2f, RobotFault.Cell => 3f, _ => 1f,
+    };
 
-    /// <summary>지금 이 로봇이 이 고장을 스스로 고칠 수 있나 (가벼운 고장 · 임계점 위 · 횟수 안).</summary>
+    /// <summary>지금 이 로봇이 이 고장을 스스로 고칠 수 있나 (닳아서 난 고장 · 임계점 위 · 횟수 안).</summary>
     public static bool CanSelfRepair(Robot r) =>
-        r.Fault is RobotFault f && Minor(f) && r.Condition >= SelfRepairFloor && r.SelfRepairs < SelfRepairLimit && !r.Dock.Room.Detached;
+        r.Fault is RobotFault f && SelfFixable(f) && !r.FaultHard && r.Condition >= SelfRepairFloor && r.SelfRepairs < SelfRepairLimit && !r.Dock.Room.Detached;
 
     /// <summary>스스로 못 고치는 까닭 (고칠 수 있으면 null).</summary>
     public static string? WhyNotSelf(Robot r) =>
         r.Fault is not RobotFault f ? null
-        : !Minor(f) ? "심한 고장"
+        : f == RobotFault.Scorched ? "불에 그을렸다"
+        : r.FaultHard ? "몸이 부서져 난 고장"
         : r.Condition < SelfRepairFloor ? $"상태 {r.Condition * 100:0}% — 임계점({SelfRepairFloor * 100:0}%)을 넘었다"
         : r.SelfRepairs >= SelfRepairLimit ? $"사람 정비 없이 {r.SelfRepairs}번 스스로 고쳤다 — 더는 못 믿는다"
         : null;
@@ -1389,6 +1404,8 @@ public sealed partial class RobotSystem
             if (!c.CanAct || c.Helper != null || c.Outside || c.Job?.Order is not WorkOrder o || !Assistable(o.Kind)) continue;
             if (c.Job.Current is not WorkToil wt || (wt.Progress ?? 0f) > 0.85f) continue;
             if (c.Room == null || c.Room.Abandoned || w.Fire.CountIn(c.Room) > 0) continue;
+            // 다른 로봇이 이미 거들러 가는 사람 — 셋이 한꺼번에 25분을 걸어가 하나만 거들고 둘은 돌아섰다 (보듬호)
+            if (Robots.Any(x => x != r && x.Steps != null && x.Steps.Skip(x.StepIndex).Any(s => s is RAssist ra && ra.Who == c))) continue;
             foreach (var d in Cell.Dirs8)
             {
                 var s = c.Cell + d;
@@ -1396,6 +1413,9 @@ public sealed partial class RobotSystem
                 if (w.Crew.Any(x => !x.Dead && x.Cell == s) || Robots.Any(x => x != r && x.Cell == s && x.State == RobotState.Active)) continue;
                 int dd = dist.Get(s);
                 if (dd < 0 || dd >= bestCost) continue;
+                // 가는 동안 일이 끝나면 헛걸음 — 닿은 뒤에도 십 분 넘게 거들 만큼 남았을 때만
+                float travel = dd / 10f / MathF.Max(0.01f, Speed(r.Kind));
+                if (wt.TicksLeft < travel * 1.5f + SimTime.Minutes(10)) continue;
                 bestCost = dd; who = c; spot = s;
             }
         }
@@ -1481,7 +1501,13 @@ public sealed partial class RobotSystem
     // ─────────────────────────────── 시험용 ───────────────────────────────
 
     /// <summary>시험·화면 확인용: 로봇을 고장 낸다.</summary>
-    public void ForceFault(Robot r, RobotFault f) => Break(r, f);
+    /// <summary>시험 · 사고(태양 폭풍 · 전자기 충격)가 낸 큰 고장은 몸이 상한 것으로 본다 — 스스로 못 고친다.</summary>
+    public void ForceFault(Robot r, RobotFault f)
+    {
+        _forcedHard = true;
+        try { Break(r, f); } finally { _forcedHard = false; }
+    }
+    private bool _forcedHard;
 
     /// <summary>시험·화면 확인용: 로봇을 그 칸에서 방전된 채 멈춰 세운다.</summary>
     public void ForceStall(Robot r, Cell at)
@@ -1502,6 +1528,7 @@ public sealed partial class RobotSystem
         var w = _world;
         BodyOnFault(r, f); // v22 그 부위가 망가진다
         r.Fault = f;
+        r.FaultHard = _bodyBreaking || _forcedHard && !Minor(f);
         r.SelfRepairDone = 0f;
         r.Breakdowns++;
         Breakdowns++;
@@ -1509,13 +1536,13 @@ public sealed partial class RobotSystem
         w.Fleet.Learn(r.Room, FaultName(f)); // v16.20b 자주 고장 나는 곳
         if (CanSelfRepair(r))
         {
-            // 가벼운 고장: 하던 일은 작업 목록에 두고, 느리게 충전대로 돌아가 스스로 고친다
+            // 닳아서 난 고장: 하던 일은 작업 목록에 두고, 느리게 충전대로 돌아가 스스로 고친다
             w.Log.Add(w.Tick, LogKind.Warning, $"{r.Name} {FaultName(f)} — 스스로 고치러 충전대로 (느리게)" + (r.Order != null ? $" · {Ko.EunNeun(r.Order.Title)} 작업 목록으로" : ""));
             DropTask(r);
             if (r.State == RobotState.Active) GoHome(r, "자가 수리하러");
             return;
         }
-        if (Minor(f)) w.Log.Add(w.Tick, LogKind.Warning, $"{r.Name}: {WhyNotSelf(r)} — 사람이 고쳐야 한다");
+        if (WhyNotSelf(r) is string whyNot) w.Log.Add(w.Tick, LogKind.Warning, $"{r.Name}: {whyNot} — 사람이 고쳐야 한다");
         w.Log.Add(w.Tick, LogKind.Warning, $"{r.Name} {FaultName(f)} — {r.Room?.Name ?? "?"}에 멈춰 섰다" + (r.Order != null ? $" (하던 일 {Ko.EunNeun(r.Order.Title)} 작업 목록으로)" : ""));
         DropTask(r);
         SetState(r, RobotState.Stalled);
@@ -1574,14 +1601,16 @@ public sealed partial class RobotSystem
     {
         var w = _world;
         r.Fault = null;
+        r.FaultHard = false;
         BodyOnRepair(r, self: true, makeshift: false); // v22 다시 맞추기만 (덧댄 판 없이)
         r.SelfRepairDone = 0f;
         r.SelfRepairs++;
         r.SelfRepairsTotal++;
         SelfRepairs++;
-        r.Condition = MathF.Max(0f, r.Condition - 0.02f);
-        MarkLog.Add(r.Marks, w.Tick, $"스스로 고쳤다 ({FaultName(f)} · 사람 정비 뒤 {r.SelfRepairs}번째)");
-        w.Log.Add(w.Tick, LogKind.Work, $"{r.Name}: {Ko.EulReul(FaultName(f))} 자가 진단으로 고쳤다 ({r.SelfRepairs}/{SelfRepairLimit})");
+        bool rough = !Minor(f); // 구동 · 제어기 · 전지: 부품 없이 다시 맞추고 우회 배선 — 조금 더 닳는다 (정비 때 제대로)
+        r.Condition = MathF.Max(0f, r.Condition - (rough ? 0.05f : 0.02f));
+        MarkLog.Add(r.Marks, w.Tick, $"스스로 고쳤다 ({FaultName(f)}{(rough ? " · 부품 없이 임시로" : "")} · 사람 정비 뒤 {r.SelfRepairs}번째)");
+        w.Log.Add(w.Tick, LogKind.Work, $"{r.Name}: {Ko.EulReul(FaultName(f))} 자가 진단으로 고쳤다{(rough ? " (부품 없이 임시로 — 다음 정비 때 제대로)" : "")} ({r.SelfRepairs}/{SelfRepairLimit})");
     }
 
     public int SelfRepairs { get; private set; }
@@ -1592,6 +1621,7 @@ public sealed partial class RobotSystem
         var w = _world;
         var f = r.Fault;
         r.Fault = null;
+        r.FaultHard = false;
         BodyOnRepair(r, self: false, makeshift); // v22 고친 자리에 판을 덧댄다
         r.SelfRepairDone = 0f;
         if (!makeshift) r.SelfRepairs = 0; // 사람이 제대로 봤다

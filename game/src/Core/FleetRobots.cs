@@ -405,6 +405,7 @@ public sealed partial class RobotSystem
             r.Cargo = c.Count > parts[0].count ? new ItemStack(c.Kind, c.Count - parts[0].count) : null;
         }
         b.Fault = null;
+        b.FaultHard = false;
         BodyOnRepair(b, self: false, makeshift: false); // v22 동료가 판을 덧대 고쳤다
         b.SelfRepairDone = 0f;
         b.SelfRepairs = 0;
@@ -490,6 +491,7 @@ public sealed partial class RobotSystem
         r.FightingFire = false;
         r.Wrecked = true;
         r.Fault = null;
+        r.FaultHard = false;
         SetState(r, RobotState.Lost);
         r.Doing = why;
         MarkLog.Add(r.Marks, w.Tick, why);
