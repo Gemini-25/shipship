@@ -85,8 +85,10 @@ public static partial class Council
                 break;
             case WorkKind.ChangeCourse:
                 // v11.2: 잔해 지대에서 나가자는 안은 맞을수록 쉽게, 들어가자는 안은 원료가 모자랄수록
+                // v23 부품 고갈: 얼음 · 규산이 쌓여 원료 합계가 넉넉해 보이면 금속 원료 · 탄소가 0이어도 들어가자는 안이 늘 부결됐다 — 모자란 종류로 잰다
                 p = (ZoneKind)o.Circuit == ZoneKind.Normal ? 0.6f + 0.15f * w.Propulsion.HitsThisZone
-                    : 0.45f + MathF.Min(0.3f, (12 - ItemKinds.RawKinds.Sum(k => w.Board.Have(k))) * 0.03f);
+                    : 0.45f + MathF.Min(0.3f, MathF.Max(Math.Max(6 - w.Board.Have(ItemKind.MetalOre), 4 - w.Board.Have(ItemKind.Carbon)) * 0.06f,
+                        (12 - ItemKinds.RawKinds.Sum(k => w.Board.Have(k))) * 0.03f));
                 break;
             case WorkKind.Ration:
                 p = RationPressure(w); // v10.11
@@ -270,7 +272,7 @@ public static partial class Council
                 else
                 {
                     terms.Add((0.1f + 0.1f * w.Propulsion.HitsThisZone, $"잔해 지대에서 {w.Propulsion.HitsThisZone}번 맞았다"));
-                    if (c.Role == CrewRole.Technician && ItemKinds.RawKinds.Sum(k => w.Board.Have(k)) < 20) terms.Add((-0.15f, "원료를 조금만 더"));
+                    if (c.Role == CrewRole.Technician && (ItemKinds.RawKinds.Sum(k => w.Board.Have(k)) < 20 || w.Board.Have(ItemKind.MetalOre) < 20 || w.Board.Have(ItemKind.Carbon) < 10)) terms.Add((-0.15f, "원료를 조금만 더"));
                 }
                 if (c.Role == CrewRole.Pilot) terms.Add((0.1f, "조종은 내 몫이다"));
                 terms.Add((MathF.Max(0f, pressure - 0.6f), "상황이 그렇다"));
