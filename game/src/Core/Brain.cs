@@ -131,6 +131,15 @@ public static class Brain
             if (score > 0f) score += w.Rng.Range(-Noise, Noise);
             evals.Add(new Evaluation(a, score < 0f ? 0f : score, reason));
         }
+        // v23 굶주린 사람(93% 넘게 배고픔)은 여가보다 먼저 먹는다 — 보듬호: 동료를 잃은 뒤 마음 돌봄 · 취미 · 차(1.9)가 굶주림의 끼니(1.7)를 이겨,
+        //   먹을 것이 냉장고에 수백 개 있는데 열 명이 굶어 죽었다
+        if (c.Needs.Hunger > 0.93f && evals.FindIndex(e => e.Activity is EatActivity && e.Score > 0f) is int ei and >= 0)
+        {
+            float eat = evals[ei].Score;
+            for (int i = 0; i < evals.Count; i++)
+                if (i != ei && evals[i].Score >= eat && Leisure(evals[i]))
+                    evals[i] = evals[i] with { Score = eat > 0.05f ? eat - 0.05f : 0f, Reason = evals[i].Reason + " · 굶주림이 먼저" };
+        }
         evals.Sort((x, y) => y.Score.CompareTo(x.Score));
         c.LastEvaluations = evals;
         c.LastThinkTick = w.Tick;
