@@ -130,6 +130,11 @@ public static partial class Program
             Console.WriteLine($"      [제작 {st}] {all.Count}대(" + string.Join(" · ", all.Select(f => $"{f.Room.Name} 효율{f.Machine!.Efficiency:0.00}{(f.Machine.Faults.Count > 0 ? " 고장" + string.Join("/", f.Machine.Faults.Select(x => x.Kind)) : "")}")) + $") 쓰는 곳 {use?.Room.Name ?? "없음"} · 일 " +
                 string.Join(" · ", fab.Select(o => $"{o.Product}{o.Urgency:0.00}(맡음 {o.Assignee?.Name ?? (o.Robot != null ? "로봇" : "-")} · 진척 {o.Progress:0.00}{(o.BlockedUntil > w.Tick ? " 보류 " + o.BlockedReason : "")})")));
         }
+        // 누가 무엇으로 숨졌나 (굶주림이 없는데 하나둘 죽는 배)
+        var deadNow = w.Crew.Where(c => c.Dead).ToList();
+        if (deadNow.Count > 0)
+            Console.WriteLine($"      [사망 {deadNow.Count}] " + string.Join(" · ", deadNow.GroupBy(c => c.Vitals.InjuryCause ?? "?").OrderByDescending(g => g.Count())
+                .Select(g => $"{g.Key}×{g.Count()}({string.Join("/", g.Select(c => $"{SimTime.Day(c.DiedAt)}일 {c.Room?.Name ?? "?"}").Take(4))})")));
         // 증축한 방의 공기 (증축 침실 산소가 0까지 내려간 일)
         var annexRooms = w.Annex.Plans.Where(p => p.RoomId >= 0 && p.RoomId < w.Ship.Rooms.Count).ToList();
         if (annexRooms.Count > 0)
