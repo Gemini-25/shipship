@@ -157,6 +157,7 @@ public static class Icons
         RoomType.Navigation => "route",
         RoomType.ComputerRoom => "room-computer-core", // v16.24
         RoomType.MushroomFarm => "room-mushroom-farm",
+        RoomType.Arcade => "room-arcade", // v23 마음 돌봄 오락실
         _ => "room",
     };
 

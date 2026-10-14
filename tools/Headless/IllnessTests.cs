@@ -16,9 +16,9 @@ public static partial class Program
             {
                 var all = AilmentSystem.Catalog.ToList();
                 var groups = all.GroupBy(a => a.Group).Select(g => $"{AilmentSystem.GroupName(g.Key)} {g.Count()}");
-                bool ok = all.Count == 30 && all.Select(a => a.Id).Distinct().Count() == 30 && all.Select(a => a.Name).Distinct().Count() == 30
+                bool ok = all.Count >= 30 && all.Select(a => a.Id).Distinct().Count() == all.Count && all.Select(a => a.Name).Distinct().Count() == all.Count // 처음 30 — 그 뒤 마음 돌봄 · 긴 항해로 늘었다
                           && all.All(a => a.Cause.Length > 0 && a.Symptom.Length > 0 && a.Days > 0f && a.Peak > 0f) && all.GroupBy(a => a.Group).All(g => g.Count() >= 3);
-                Check("목록 — 질병·몸 상태 30 (다섯 갈래)", ok, $"{all.Count}가지 · " + string.Join(" · ", groups) + "\n      " + string.Join(" · ", all.Select(a => a.Name)));
+                Check("목록 — 질병·몸 상태 30 이상 (다섯 갈래 · 이름 겹침 없음)", ok, $"{all.Count}가지 · " + string.Join(" · ", groups) + "\n      " + string.Join(" · ", all.Select(a => a.Name)));
             }
             // 2) 원인: 그 조건일 때만 잘 걸린다
             {

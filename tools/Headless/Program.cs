@@ -132,6 +132,7 @@ public static partial class Program
         var alive = w.Crew.Where(c => !c.Dead).ToList();
         Console.WriteLine($"      [사람 {alive.Count}/{w.Crew.Count}] 깨어 일함 {alive.Count(c => c.CanAct && c.IsAwake)} · 쓰러짐 {alive.Count(c => c.Down)} · 다침 {alive.Count(c => c.Vitals.Injury > 0.3f)} · 떠남 {alive.Count(c => c.Away || c.LeftShip)} · 밖 {alive.Count(c => c.Outside)} · 하는 일: "
             + string.Join(" · ", alive.Where(c => c.Job != null).GroupBy(c => c.Job!.Label.Split(' ')[0]).OrderByDescending(g => g.Count()).Take(8).Select(g => $"{g.Key}×{g.Count()}")));
+        Console.WriteLine($"      [탄 사람] " + string.Join(" · ", w.Crew.Where(c => !string.IsNullOrEmpty(c.Joined)).GroupBy(c => c.Joined!.Split(' ')[0]).Select(g => $"{g.Key}×{g.Count()}(살아 {g.Count(c => !c.Dead)})")) + $" · 침대 {w.Ship.FurnitureOf(FurnitureType.Bed).Count()}");
         Console.WriteLine($"      [로봇] 움직임 {w.Robots.Robots.Count(r => r.Operational)}/{w.Robots.Robots.Count} · 고장 {w.Robots.Robots.Count(r => r.Fault != null)} · 꺼짐 {w.Robots.Robots.Count(r => r.Disabled)} · 조리 {w.Robots.V21.Meals} · [부품] " +
             string.Join(" · ", Enum.GetValues<ItemKind>().Where(k => k is not (ItemKind.Produce or ItemKind.Meal or ItemKind.Ration)).Select(k => (k, n: w.Ship.CountStored(k))).Where(x => x.n > 0).OrderByDescending(x => x.n).Take(10).Select(x => $"{x.k}{x.n}")));
     }

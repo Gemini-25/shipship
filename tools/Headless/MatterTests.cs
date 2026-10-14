@@ -276,7 +276,9 @@ public static partial class Program
             RunUntilHour(w, 9f);
             var m = w.Matter;
             m.QuietUntil = long.MaxValue;
-            var (room, hub) = MWide(w, r => r.Kind is RoomType.Lounge or RoomType.Mess or RoomType.Storage or RoomType.Cargo or RoomType.Gym or RoomType.Quarters or RoomType.Galley or RoomType.Workshop or RoomType.Hydroponics)!.Value;
+            // 둘레 두 칸이 빈 바닥 — 사람이 지내는 방에서 먼저, 없으면 아무 방에서 (설비가 늘어 한빛호 생활 방에 5×5 빈 바닥이 없어졌다)
+            var (room, hub) = (MWide(w, r => r.Kind is RoomType.Lounge or RoomType.Mess or RoomType.Storage or RoomType.Cargo or RoomType.Gym or RoomType.Quarters or RoomType.Galley or RoomType.Workshop or RoomType.Hydroponics)
+                               ?? MWide(w, _ => true))!.Value;
             var jar = m.Add(ArticleKind.GlassJar, hub + new Cell(1, 0), "시험");
             var mug = m.Add(ArticleKind.Mug, hub + new Cell(0, 1), "시험");
             var box = m.Add(ArticleKind.CardboardBox, hub + new Cell(-1, 0), "시험");
