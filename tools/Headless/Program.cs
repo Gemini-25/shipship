@@ -67,7 +67,8 @@ public static partial class Program
                 }
                 if (w.Tick % World.SystemInterval != 0) continue;
                 foreach (var c in w.Crew.Where(c => !c.Dead)) { minFood = MathF.Min(minFood, c.Needs.Food); if (c.Needs.Food <= 0.02f) { starving++; if (diag) StarveWhy(w, c); } }
-                foreach (var r in w.Ship.Rooms.Where(r => !r.Detached)) if (r.Air.O2 < minO2) { minO2 = r.Air.O2; minO2Room = $"{r.Name}#{r.Id}@{SimTime.Clock(w.Tick)}"; }
+                // 사람이 숨 쉬던 방만 (공사 중인 증축 방 · 버린 방의 빈 공기는 세지 않는다 — 우주복 입은 사람도)
+                foreach (var cm in w.Crew) if (!cm.Dead && !cm.Away && cm.Suit == null && cm.Room is Room r && !r.Detached && r.Air.O2 < minO2) { minO2 = r.Air.O2; minO2Room = $"{r.Name}#{r.Id}@{SimTime.Day(w.Tick)}일 {SimTime.Clock(w.Tick)}"; }
                 minBattery = MathF.Min(minBattery, w.Power.BatteryPercent);
                 minWater = MathF.Min(minWater, w.Water.Level);
                 maxDemand = MathF.Max(maxDemand, w.Power.Demand);
