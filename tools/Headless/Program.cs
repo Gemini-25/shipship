@@ -130,6 +130,10 @@ public static partial class Program
             Console.WriteLine($"      [제작 {st}] {all.Count}대(" + string.Join(" · ", all.Select(f => $"{f.Room.Name} 효율{f.Machine!.Efficiency:0.00}{(f.Machine.Faults.Count > 0 ? " 고장" + string.Join("/", f.Machine.Faults.Select(x => x.Kind)) : "")}")) + $") 쓰는 곳 {use?.Room.Name ?? "없음"} · 일 " +
                 string.Join(" · ", fab.Select(o => $"{o.Product}{o.Urgency:0.00}(맡음 {o.Assignee?.Name ?? (o.Robot != null ? "로봇" : "-")} · 진척 {o.Progress:0.00}{(o.BlockedUntil > w.Tick ? " 보류 " + o.BlockedReason : "")})")));
         }
+        // 증축한 방의 공기 (증축 침실 산소가 0까지 내려간 일)
+        var annexRooms = w.Annex.Plans.Where(p => p.RoomId >= 0 && p.RoomId < w.Ship.Rooms.Count).ToList();
+        if (annexRooms.Count > 0)
+            Console.WriteLine("      [증축] " + string.Join(" · ", annexRooms.Select(p => { var r = w.Ship.Rooms[p.RoomId]; return $"{r.Name}({p.UseName} {p.State}) O2 {r.Air.O2:0.0} 압력 {r.Air.Pressure:0} 전기 {(r.Powered ? "O" : "X")} 환기 {(r.VentOpen ? "O" : "X")} 덕트 {(r.DuctLinked ? "O" : "X")} 샘 {(r.Leaking ? "O" : "X")} 사람 {w.Crew.Count(c => !c.Dead && c.Room == r)} 숨진 {w.Crew.Count(c => c.Dead && c.Room == r)}"; })));
         string Where(ItemKind k) => string.Join(" · ", w.Ship.Furniture.Where(f => f.Storage != null && f.Storage.Count(k) > 0).GroupBy(f => f.Type)
             .Select(g => $"{g.Key}{g.Sum(f => f.Storage!.Count(k))}({g.Count(f => f.Machine is Machine m && m.Efficiency <= 0f)}멈춤 · {g.Count(f => f.Room.OffLimits || f.Room.Abandoned || f.Room.Detached)}막힌방)"));
         bool shortF = Evolution.FoodShort(w, out float gF, out float nF);
