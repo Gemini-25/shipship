@@ -153,16 +153,22 @@ public sealed partial class BodySystem
     /// 선실 주인이 자는 사이 문 앞에서 돌아서 식당에 못 가 하루 1,155번 줄에서 빠지고 굶었다.</summary>
     private bool PassesThrough(CrewMember c, DoorBody db)
     {
-        if (db.Inner < 0 || c.Bed?.Room is not Room home || home.Id == db.Inner || home.Detached) return false;
+        if (db.Inner < 0) return false;
         // 그 선실을 지나야만 나올 수 있는 방 (안쪽 문이 모두 그 선실로 난 막다른 방 — 증축 방) — 제 문이 따로 있는 옆 선실 사람은 아니다
-        bool any = false;
-        foreach (var o in home.Doors)
+        bool DeadEnd(Room? r)
         {
-            if (o.IsExternal || o.Removed) continue;
-            if (o.RoomA?.Id != db.Inner && o.RoomB?.Id != db.Inner) return false;
-            any = true;
+            if (r == null || r.Id == db.Inner || r.Detached) return false;
+            bool any = false;
+            foreach (var o in r.Doors)
+            {
+                if (o.IsExternal || o.Removed) continue;
+                if (o.RoomA?.Id != db.Inner && o.RoomB?.Id != db.Inner) return false;
+                any = true;
+            }
+            return any;
         }
-        return any;
+        // 거기서 자는 사람 · 지금 그 안에 있는 사람 (일하러 · 들르러 들어갔다가 나오지 못해 갇혔다 — 고래호 아리아 아리프네 별채 896번)
+        return DeadEnd(c.Bed?.Room) || DeadEnd(c.Room);
     }
 
     /// <summary>지금 잠겨 있나 (화재 해제 방침 · 정전이면 전자 잠금이 풀린다 · 선실은 주인이 잠갔을 때만).</summary>
