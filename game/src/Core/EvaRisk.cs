@@ -684,6 +684,26 @@ public sealed partial class EvaRiskSystem
     // ─────────────────────────────── 운석 경보: 에어락 · 그늘 · 마저 끝내기 ───────────────────────────────
 
     /// <summary>에어락(해치)까지 걸리는 분 (선체 밖 길 · 표류 중이면 곧장).</summary>
+    private readonly Dictionary<int, (long at, float eta)> _etaCache = new();
+
+    /// <summary>에어락까지 걸리는 시간 (1분에 한 번만 길을 잰다).</summary>
+    public float CachedEta(CrewMember c)
+    {
+        if (_etaCache.TryGetValue(c.Id, out var e) && _w.Tick - e.at < SimTime.Minutes(1)) return e.eta;
+        float eta = EtaMinutes(c);
+        _etaCache[c.Id] = (_w.Tick, eta);
+        return eta;
+    }
+
+    /// <summary>v23 우주복 산소(새는 만큼 줄여)가 에어락까지 걸음 × 1.25 + 10분 아래면 하던 일을 두고 돌아선다.
+    /// 보름달호 29일: 증축 골조를 용접하던 둘이 산소 36분에야 돌아섰는데, 큰 배 선체를 손잡이로 옮겨 가는 길이 52~106분이라 밖에서 숨졌다.</summary>
+    public bool ShouldTurnBack(CrewMember c, SuitState s)
+    {
+        float o2 = s.Oxygen / MathF.Max(0.01f, s.Leak) * 60f;
+        if (o2 > 240f) return false; // 넉넉하면 길을 재지 않는다
+        return o2 < CachedEta(c) * 1.25f + 10f;
+    }
+
     public float EtaMinutes(CrewMember c)
     {
         var w = _w;

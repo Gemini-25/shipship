@@ -649,13 +649,14 @@ public sealed class EvacuateActivity : Activity
         // v8: 선체 밖 — EVA 일을 하는 중이 아니면 에어락으로 돌아온다 (튕겨 나갔거나, 일이 끊겼거나)
         if (c.Outside)
         {
-            bool working = c.Job?.Order is WorkOrder o && (o.External || o.Kind == WorkKind.Rescue) && c.Suit is { Oxygen: > 0.6f };
+            bool far = c.Suit is SuitState su && w.EvaRisk.ShouldTurnBack(c, su); // v23 에어락이 멀면 산소가 넉넉해 보여도 일찍
+            bool working = c.Job?.Order is WorkOrder o && (o.External || o.Kind == WorkKind.Rescue) && c.Suit is { Oxygen: > 0.6f } && !far;
             // v10.1: 운석 경보 — 궤적을 읽은 경보면 선체 밖 일을 두고 돌아온다
             if (w.Sensors.Alarm is IncomingMeteor inc && inc.Warned >= WarnLevel.Manual && inc.MinutesLeft(w.Tick) > 0f && c.CarryingPerson == null && !w.EvaRisk.Staying(c)) // v16.11 그늘 · 마저 끝내기
                 return (1.3f, $"운석 경보 — {inc.MinutesLeft(w.Tick):0.#}분 뒤 · 에어락으로");
             if (working) return (0f, "선체 밖 작업 중");
-            float s = c.Suit == null ? 1.5f : c.Suit.Oxygen < 0.6f ? 1.35f : 0.95f;
-            return (s, c.Suit == null ? "선체 밖 — 우주복 없음" : c.Suit.Oxygen < 0.6f ? "선체 밖 — 우주복 산소가 바닥난다" : "선체 밖 — 에어락으로 돌아간다");
+            float s = c.Suit == null ? 1.5f : c.Suit.Oxygen < 0.6f || far ? 1.35f : 0.95f;
+            return (s, c.Suit == null ? "선체 밖 — 우주복 없음" : c.Suit.Oxygen < 0.6f ? "선체 밖 — 우주복 산소가 바닥난다" : far ? $"선체 밖 — 에어락까지 {w.EvaRisk.CachedEta(c):0}분 · 산소가 그만큼 남지 않는다" : "선체 밖 — 에어락으로 돌아간다");
         }
         if (c.Room == null) return (0f, "—");
         // v12.9.1 맨몸으로 숨이 찰 만큼 산소가 묽다 — 무슨 일이든 두고 당장 나간다 (사람을 업고 있거나 각오하고 뛰어든 사람은 빼고)

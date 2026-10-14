@@ -717,12 +717,15 @@ public sealed class World
             SenseHazard(c);
 
             // v8: 선체 밖에서 우주복 산소가 바닥나 가면 하던 일을 두고 돌아온다 (긴 일의 진척은 작업 목록에 남는다)
-            if (c.Outside && c.Suit is { Oxygen: < 0.6f } && c.Job?.Activity is not EvacuateActivity and not EvaSurviveActivity && c.CarryingPerson == null)
+            //   v23 산소가 넉넉해 보여도 에어락까지 먼 길이면 그만큼 일찍 (EvaRisk.ShouldTurnBack)
+            if (c.Outside && c.Suit is SuitState su && (su.Oxygen < 0.6f || (Tick + c.Id) % 5 == 0 && c.Job?.Order is { External: true } && EvaRisk.ShouldTurnBack(c, su))
+                && c.Job?.Activity is not EvacuateActivity and not EvaSurviveActivity && c.CarryingPerson == null)
             {
                 if (c.Job != null && Tick - c.SuitWarnedAt > SimTime.Minutes(20))
                 {
                     c.SuitWarnedAt = Tick;
-                    Log.Add(Tick, LogKind.Warning, $"우주복 산소 {c.Suit.Oxygen * 60:0}분 — 하던 일을 두고 에어락으로 돌아간다", c.Id);
+                    Log.Add(Tick, LogKind.Warning, su.Oxygen < 0.6f ? $"우주복 산소 {su.Oxygen * 60:0}분 — 하던 일을 두고 에어락으로 돌아간다"
+                        : $"우주복 산소 {su.Oxygen / MathF.Max(0.01f, su.Leak) * 60f:0}분 · 에어락까지 {EvaRisk.CachedEta(c):0}분 — 하던 일을 두고 돌아간다", c.Id);
                 }
                 c.EndJob(this, ToilStatus.Interrupted);
                 c.NextThinkTick = Tick;

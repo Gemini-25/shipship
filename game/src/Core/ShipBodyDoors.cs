@@ -142,11 +142,27 @@ public sealed partial class BodySystem
             AccessZone.Open => true,
             AccessZone.Medicine => c.Role == CrewRole.Medic || captain,
             AccessZone.Reactor => c.Role is CrewRole.Engineer or CrewRole.Technician or CrewRole.Electrician || captain,
-            AccessZone.Captain => captain || Owners(db).Contains(c),
+            AccessZone.Captain => captain || Owners(db).Contains(c) || PassesThrough(c, db),
             AccessZone.Security => captain,
-            AccessZone.Cabin => Owners(db).Contains(c),
+            AccessZone.Cabin => Owners(db).Contains(c) || PassesThrough(c, db),
             _ => true,
         };
+    }
+
+    /// <summary>v23 선실에 붙여 지은 증축 침실에서 자는 사람은 그 선실을 지나다닌다 — 고래호 60일: 별채 · 새 침실 사람들이
+    /// 선실 주인이 자는 사이 문 앞에서 돌아서 식당에 못 가 하루 1,155번 줄에서 빠지고 굶었다.</summary>
+    private bool PassesThrough(CrewMember c, DoorBody db)
+    {
+        if (db.Inner < 0 || c.Bed?.Room is not Room home || home.Id == db.Inner || home.Detached) return false;
+        // 그 선실을 지나야만 나올 수 있는 방 (안쪽 문이 모두 그 선실로 난 막다른 방 — 증축 방) — 제 문이 따로 있는 옆 선실 사람은 아니다
+        bool any = false;
+        foreach (var o in home.Doors)
+        {
+            if (o.IsExternal || o.Removed) continue;
+            if (o.RoomA?.Id != db.Inner && o.RoomB?.Id != db.Inner) return false;
+            any = true;
+        }
+        return any;
     }
 
     /// <summary>지금 잠겨 있나 (화재 해제 방침 · 정전이면 전자 잠금이 풀린다 · 선실은 주인이 잠갔을 때만).</summary>

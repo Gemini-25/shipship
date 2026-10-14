@@ -198,6 +198,10 @@ public sealed partial class AnnexSystem
 
     // ─────────────────────────────── 자리 찾기 ───────────────────────────────
 
+    /// <summary>v23 한두 사람의 선실 (문에 열쇠가 있다) — 여기에 붙이면 새 방 사람들이 남의 선실을 지나다닌다 (고래호 · 보름달호: 별채 밑에 또 별채).</summary>
+    private static bool Private(Room r) => r.Kind is RoomType.Quarters or RoomType.PrivateCabins or RoomType.QuietQuarters or RoomType.WaterWallCabin
+        && r.Furniture.Count(f => f.Type == FurnitureType.Bed) is >= 1 and <= 2;
+
     private static bool Hullish(RoomType t) => t is RoomType.Engine or RoomType.Reactor or RoomType.Cooling or RoomType.Airlock or RoomType.Power;
 
     /// <summary>증축할 수 있는 자리들 (붙는 방의 아래 외벽). 쓰임에 맞는 방부터.</summary>
@@ -229,7 +233,7 @@ public sealed partial class AnnexSystem
         int Pref(Room r) => use == RoomType.Storage
             ? (r.Kind == RoomType.Storage ? 3 : r.Kind == RoomType.Corridor ? 2 : r.Kind == RoomType.Workshop ? 1 : 0)
             : use == RoomType.Hydroponics ? (r.Kind == RoomType.Hydroponics ? 3 : r.Kind is RoomType.Mess or RoomType.Galley or RoomType.Storage ? 2 : r.Kind == RoomType.Corridor ? 1 : 0)
-            : (RoomUseSystem.Actual(r) == RoomType.Quarters || r.Kind == RoomType.Quarters ? 3 : r.Kind == RoomType.Corridor ? 2 : r.Kind is RoomType.Lounge or RoomType.Mess ? 1 : 0);
+            : (Private(r) ? 1 : RoomUseSystem.Actual(r) == RoomType.Quarters || r.Kind == RoomType.Quarters ? 3 : r.Kind == RoomType.Corridor ? 2 : r.Kind is RoomType.Lounge or RoomType.Mess ? 1 : 0);
         return list.OrderByDescending(s => Pref(ship.Rooms[s.AttachRoom])).ThenByDescending(s => s.Width).ThenBy(s => s.AttachRoom).ToList();
     }
 
@@ -282,7 +286,7 @@ public sealed partial class AnnexSystem
             bool fits = use == RoomType.Storage ? r.Kind is RoomType.Storage or RoomType.Corridor or RoomType.Workshop
                 : use == RoomType.Hydroponics ? r.Kind is RoomType.Hydroponics or RoomType.Mess or RoomType.Galley or RoomType.Storage or RoomType.Corridor
                 : RoomUseSystem.Actual(r) == RoomType.Quarters || r.Kind is RoomType.Quarters or RoomType.Corridor or RoomType.Lounge or RoomType.Mess;
-            float score = ShiftOf(s, fixtures) * 10f + (fits ? 0f : 1.5f) - 0.05f * s.Width;
+            float score = ShiftOf(s, fixtures) * 10f + (fits ? 0f : 1.5f) + (Private(r) ? 0.8f : 0f) - 0.05f * s.Width;
             if (score < bs - 1e-4f) { bs = score; best = s; }
         }
         return best;

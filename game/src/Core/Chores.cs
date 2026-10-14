@@ -77,6 +77,7 @@ public sealed class ChoresActivity : Activity
     private static bool Rejects(CrewMember c, World w, WorkOrder o, bool eva)
     {
         if (c.IsChild) return true; // v12.9 아이는 일하지 않는다
+        if (eva && c.Outside && c.Suit is SuitState su && w.EvaRisk.ShouldTurnBack(c, su)) return true; // v23 에어락까지 갈 산소밖에 안 남았으면 밖의 일을 더 잡지 않는다
         if (c.Passenger && !PassengerSystem.MayWork(c, w, o)) return true; // v18.6 승객은 자원봉사로 가벼운 일만
         if (o.Target.Crew == c && o.Kind != WorkKind.Rehab) return true; // 자기 자신은 치료 못 함 (v11.3 재활은 제 몸을 푼다)
         if (o.Kind == WorkKind.Drill && o.Circuit != c.Id) return true; // v11.0: 훈련은 제 몫만
