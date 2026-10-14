@@ -76,6 +76,16 @@ public static partial class Program
                     {
                         var w = CrisisShip(seed + k, 0);
                         foreach (var c in w.Crew) c.Needs.Stress = 0.6f;
+                        // v23 불길 곁에 맨손으로 있던 두 사람 (창고에서 일하다) — 소화조는 소화기를 들어 덜 무섭고, 나머지는 곧 의무실로 물러나
+                        //   위험한 자리에 선 사람이 없어 느긋 · 가혹 모두 공황 0이었다 (난이도를 견줄 수 없다)
+                        var fireRoom = w.Ship.RoomsOf(RoomType.Storage).First();
+                        var near = fireRoom.Cells.Where(x => w.Ship.IsWalkable(x) && w.Fire.At(x) <= 0f).OrderBy(x => x.X).ThenBy(x => x.Y).Take(2).ToList();
+                        foreach (var (c, at) in w.Crew.Where(c => c.CanAct && !c.IsChild && c.Carrying?.Kind != ItemKind.Extinguisher).OrderBy(c => c.Traits.Bravery).ThenBy(c => c.Id).Take(2).Zip(near))
+                        {
+                            c.Position = at.Center;
+                            c.Path = null;
+                            if (c.Job != null) c.EndJob(w, ToilStatus.Interrupted);
+                        }
                         Run(w, SimTime.Minutes(40));
                         p += w.Minds.Panics;
                         f += w.Minds.Freezes;
@@ -86,7 +96,7 @@ public static partial class Program
                 var hard = Count(5);
                 Storyteller.LevelValue = level0;
                 Check("공황 — 난이도가 높을수록 잦고, 느긋에서는 얼어붙지 않는다", hard.panics > easy.panics && easy.freezes == 0,
-                    $"느긋: 공황 {easy.panics} · 얼어붙음 {easy.freezes} / 가혹: 공황 {hard.panics} · 얼어붙음 {hard.freezes} (배 넷씩, 40분)");
+                    $"느긋: 공황 {easy.panics} · 얼어붙음 {easy.freezes} / 가혹: 공황 {hard.panics} · 얼어붙음 {hard.freezes} (배 넷씩, 40분 · 불길 곁에 둘)");
             }
             // 4) 명령 반응: 화가 난 사람은 지휘를 덜 따른다
             {
