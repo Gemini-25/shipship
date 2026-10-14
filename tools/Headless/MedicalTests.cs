@@ -251,14 +251,17 @@ public static partial class Program
                     $"팩 {packs0} → 상함 {wo.Blood.Spoiled - sp0}");
                 // 약 기한이 지나면 버리고 → 컴퓨터가 예측해 → 재배실 채소로 약초 · 약초로 진통제를 만든다
                 Run(wo, SimTime.Hours(2));
+                int aged = wo.Pharmacy.Stock(ItemKind.Painkiller);
                 wo.Pharmacy.Age(ItemKind.Painkiller, SimTime.TicksPerDay * 61);
                 Until(wo, () => wo.Pharmacy.ExpiredCount > 0, 3f);
                 int left = wo.Pharmacy.Stock(ItemKind.Painkiller);
+                // 그사이 새로 만든 약은 남아도 된다 (작업대 · 정제기가 함께 돈다) — 기한 지난 묶음이 하나도 안 남았는지를 본다
+                bool noneStale = wo.Pharmacy.NextExpiry(ItemKind.Painkiller) is long nx && (nx < 0 || nx > wo.Tick);
                 for (int i = 0; i < 3; i++) wo.Pharmacy.Used(ItemKind.Painkiller);
                 Until(wo, () => wo.Pharmacy.Stock(ItemKind.Painkiller) > 0, 36f);
                 Check("약 — 기한이 지나면 버린다 · 컴퓨터가 남은 날을 예측해 더 만들게 한다 · 재배실 채소 → 약초 → 진통제",
-                    wo.Pharmacy.ExpiredCount > 0 && left == 0 && wo.Pharmacy.Forecasts > 0 && wo.Pharmacy.Stock(ItemKind.Painkiller) > 0,
-                    $"버림 {wo.Pharmacy.ExpiredCount} · 남음 {left} → {wo.Pharmacy.Stock(ItemKind.Painkiller)} · 예측 {wo.Pharmacy.Forecasts} · 목표 {wo.Pharmacy.Want(ItemKind.Painkiller)} · 약초 {wo.Pharmacy.Stock(ItemKind.MedHerb)}");
+                    wo.Pharmacy.ExpiredCount > 0 && noneStale && wo.Pharmacy.Forecasts > 0 && wo.Pharmacy.Stock(ItemKind.Painkiller) > 0,
+                    $"묵힌 {aged} · 버림 {wo.Pharmacy.ExpiredCount} · 남음 {left}(기한 지난 것 {(noneStale ? 0 : 1)}+) → {wo.Pharmacy.Stock(ItemKind.Painkiller)} · 예측 {wo.Pharmacy.Forecasts} · 목표 {wo.Pharmacy.Want(ItemKind.Painkiller)} · 약초 {wo.Pharmacy.Stock(ItemKind.MedHerb)}");
             }
 
             // ── 11) 결정론 ──

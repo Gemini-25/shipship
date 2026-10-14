@@ -46,6 +46,7 @@ public static partial class Program
         {
             var w = World.CreateDefault(seed, 0, t.Key);
             w.CrewCanDie = true;
+            if (Environment.GetEnvironmentVariable("SHIPLOG") != null) w.Log.Capacity = 400_000; // 긴 항해의 기록을 처음부터 (붕괴 전날을 보려고)
             long end = w.Tick + (long)days * SimTime.TicksPerDay;
             var watch = System.Diagnostics.Stopwatch.StartNew();
             float minFood = 1f, minO2 = 99f, minBattery = 1f, minWater = 1e9f, maxDemand = 0f;
@@ -139,6 +140,12 @@ public static partial class Program
             Console.WriteLine($"      [의료] 다침(25%↑) {hurt.Count} · 가장 오래 못 돌봄 {Math.Min(worst, 999):0}h · 곪은 상처 {medAlive.Count(c => c.Ailments.Any(a => a.Id == "woundinf"))} · 패혈증 {medAlive.Count(c => c.Ailments.Any(a => a.Id == "sepsis"))} · 장기 반쯤 상함 {medAlive.Count(c => w.Organs.Peek(c) is { } ob && ob.Dmg.Any(d => d > 0.5f))}"
                 + $" · 키트 {w.Ship.CountStored(ItemKind.MedKit)} · 붕대 {w.Ship.CountStored(ItemKind.Bandage)} · 항생제 {w.Ship.CountStored(ItemKind.Antibiotic)} · 의무관 {medAlive.Count(c => c.Role == CrewRole.Medic)} · 의료 로봇 {w.Robots.Robots.Count(r => r.Operational && RobotsV21.Medical(r.Kind))}"
                 + $" · 치료 일 {treat.Count}(맡음 {treat.Count(o => o.Assignee != null || o.Robot != null)}) · 방침 의약품 {w.Policies["medicine"]}");
+        }
+        // 항로: 잔해 지대로 못 가는 까닭 (원료가 모자란데 한 번도 안 갔다)
+        {
+            var pr = w.Propulsion;
+            int ore = w.Board.Have(ItemKind.MetalOre), carbon = w.Board.Have(ItemKind.Carbon), raw = ItemKinds.RawKinds.Sum(k => w.Board.Have(k));
+            Console.WriteLine($"      [항로] {PropulsionSystem.ZoneName(pr.Zone)} {(w.Tick - pr.ZoneSince) / (float)SimTime.TicksPerDay:0.0}일 · 추진제 {pr.Propellant:0}/{pr.Capacity:0}(이동 {pr.TransferCost:0}) · 추력 {pr.Thrust * 100:0}% · 원료 {raw}(금속 {ore} · 탄소 {carbon}) · 평온 {Evolution.Peaceful(w)} · 공기 탱크 {w.Air.Reserve / Math.Max(1f, w.Air.ReserveCapacity) * 100:0}% · 실런트 {w.Board.Have(ItemKind.Sealant)} · 물 {w.Water.Level:0}/{w.Water.Capacity:0}L · 항로 일 {open.Count(o => o.Kind == WorkKind.ChangeCourse)}");
         }
         // 누가 무엇으로 숨졌나 (굶주림이 없는데 하나둘 죽는 배)
         var deadNow = w.Crew.Where(c => c.Dead).ToList();

@@ -887,7 +887,8 @@ public sealed class ExpeditionSystem
             m.Job = c == lead ? "대장" : c.Role == CrewRole.Medic ? "의무" : c.SkillLevel(Skill.Mechanics) > 0.5f ? "절단" : c.Role == CrewRole.Pilot ? "조종" : "운반";
         }
         // 셔틀 · 드론 · 장비를 재고에서
-        t.Shuttle = HasShuttle && ShuttleWear < 0.8f && w.Propulsion.Propellant >= ShuttleCost + 12f;
+        t.Shuttle = HasShuttle && ShuttleWear < 0.8f && w.Propulsion.Propellant >= ShuttleCost + 12f
+            + (w.Propulsion.Zone == ZoneKind.Debris ? w.Propulsion.TransferCost : 0f); // v23 잔해 지대에서는 빠져나올 추진제를 남긴다
         float days = site.Dist * 2f * (t.Shuttle ? 0.6f : 1f) + 0.6f + 0.15f * site.Yield / Math.Max(1, team.Count);
         int nd = (int)MathF.Ceiling(days);
         TakeGear(t, "산소통", team.Count * nd + 1, n => { float air = n * 60f; if (w.Air.Reserve < air + 2000f) return 0; w.Air.Reserve -= air; return n; });

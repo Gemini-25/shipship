@@ -296,7 +296,9 @@ public sealed partial class WorkBoard
         var engine = w.Ship.FurnitureOf(FurnitureType.EngineCore).FirstOrDefault(f => !f.Room.Abandoned && !f.Room.OffLimits);
         if (engine == null) return;
         // ── 추진제 보충: 물이 넉넉할 때 정수기 꼭지에서 엔진실로 ──
-        if (p.Propellant < p.Capacity * 0.6f && w.Water.Level > w.Water.Capacity * 0.45f && Logistics.WaterTap(w) != null)
+        // v23 잔해 지대에서 추진제가 빠져나올 만큼도 안 남았으면(제비호: 6/120kg으로 2주를 갇혀 맞았다) 물이 적어도 25%까지는 덜어 쓴다
+        bool stuck = p.Zone == ZoneKind.Debris && p.Propellant < p.TransferCost;
+        if (p.Propellant < p.Capacity * 0.6f && w.Water.Level > w.Water.Capacity * (stuck ? 0.25f : 0.45f) && Logistics.WaterTap(w) != null)
             post(WorkKind.RefillPropellant, WorkTarget.Of(engine), 0.18f + 0.4f * (1f - p.Propellant / p.Capacity), Skill.Engineering,
                 $"추진제 {p.Propellant:0}/{p.Capacity:0}kg · 물 {w.Water.Level:0}L에서 덜어 온다");
         // ── 항로 변경: 원료가 모자라면 잔해 지대로, 거기서 맞거나 채울 만큼 채웠으면 빠져나온다 ──
@@ -314,7 +316,9 @@ public sealed partial class WorkBoard
                    ?? engine;
         // 회의를 통과한 항로 변경은 미루지 않는다 (당직보다 앞)
         bool approved = _open.Values.Any(o => o.Kind == WorkKind.ChangeCourse && o.Decision == DecisionState.Approved);
-        if (p.Zone == ZoneKind.Normal && lean && calm && can && w.Tick - p.ZoneSince > SimTime.Hours(72))
+        // v23 들어갈 때는 빠져나올 몫까지 (오가는 두 번 + 기동 여유) 있어야 간다
+        bool roundTrip = p.Propellant >= p.TransferCost * 2f + 10f;
+        if (p.Zone == ZoneKind.Normal && lean && calm && can && roundTrip && w.Tick - p.ZoneSince > SimTime.Hours(72))
             post(WorkKind.ChangeCourse, WorkTarget.Of(helm), approved ? 0.7f : 0.4f, Skill.Piloting,
                 (raw < 12 ? $"원료 {raw}개" : $"금속 원료 {ore}개 · 탄소 {carbon}개") + $" · 금속판 {Have(ItemKind.Plate)}개 → 잔해 지대로 (채집 1.7배 · 작은 운석이 날아든다 · 추진제 {p.TransferCost:0}kg)",
                 circuit: (int)ZoneKind.Debris);

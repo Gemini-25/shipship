@@ -1350,6 +1350,8 @@ public sealed partial class WorkBoard
             var ill = c.Ailments.Count > 0 ? w.Ailments.NeedsMedic(c) : null;
             bool exam = c.Ailments.Count > 0 && ill == null && w.Ailments.Undiagnosed(c) && c.Fx.Worst > (w.Policies["medicine"] == 0 ? 0.45f : 0.3f) && w.Tick - c.Vitals.TreatedTick > SimTime.Hours(8);
             bool sick = ill != null && (w.Policies["medicine"] != 0 || w.Ailments.Severity(ill) > 0.4f) || exam;
+            // v23 키트 없이 처치만 하면 병의 "치료함"이 안 남아 곧바로 또 불렀다 (하루 열 번) — 처치 뒤 네 시간은 기다린다
+            if (sick && !exam && w.Tick - c.Vitals.TreatedTick < SimTime.Hours(4)) sick = false;
             if (sick && !(needs && w.Tick - c.Vitals.TreatedTick > SimTime.Hours(c.Vitals.Injury >= 0.3f ? 6 : 3)))
                 Post(WorkKind.Treat, WorkTarget.OfCrew(c), 0.5f + 0.4f * c.Fx.Worst, Skill.Medicine,
                     ill != null ? $"{AilmentSystem.Spec(ill.Id).Name} {w.Ailments.Severity(ill) * 100:0}% — 약" : $"어딘가 아프다 {c.Fx.Worst * 100:0}% — 진찰");

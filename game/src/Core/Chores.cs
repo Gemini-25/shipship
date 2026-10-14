@@ -1491,7 +1491,9 @@ public static partial class WorkPlanners
     {
         blocked = null;
         var patient = o.Target.Crew!;
-        var toils = Fetch(c, w, dist, ItemKind.MedKit, 1);
+        // v23 하루에 약을 네 번 쓴 사람에게는 더 쓰지 않는다 (다섯 번째부터 간 · 신장이 상한다) — 붕대로 처치만
+        bool capped = w.Organs.RecentDoses(patient) >= 4;
+        var toils = capped ? null : Fetch(c, w, dist, ItemKind.MedKit, 1);
         bool kit = toils != null;
         if (!kit && w.Growth.NoFirstAid) { blocked = "구급 키트 없음"; return null; } // (시험: 재활만 견준다)
         // v15 키트가 바닥나면 손에 있는 천·소독약으로 응급 처치 (효과는 절반 — 키트는 배에서 못 만든다)
@@ -1514,8 +1516,9 @@ public static partial class WorkPlanners
             float skill = cm.SkillLevel(Skill.Medicine), eff = kit ? 1f : bandage ? 0.75f : 0.5f;
             patient.Vitals.Health = MathF.Min(patient.Vitals.MaxHealth, patient.Vitals.Health + (0.15f + 0.25f * skill) * eff * MathF.Max(0.25f, world.Perils.MarrowMul(patient))); // 통합6 응급 처치로는 무너진 골수를 못 채운다
             patient.Vitals.Injury = MathF.Max(0f, patient.Vitals.Injury - (0.06f + 0.14f * skill) * eff);
-            if (!kit) world.Log.Add(world.Tick, LogKind.Warning, $"구급 키트가 없어 {patient.Name}에게 응급 처치만 했다 ({(bandage ? "붕대" : "천과 소독약")})", cm.Id);
+            if (!kit) world.Log.Add(world.Tick, capped ? LogKind.Work : LogKind.Warning, capped ? $"{patient.Name}은 오늘 약을 네 번 썼다 — 약 없이 {(bandage ? "붕대" : "천과 소독약")}로 처치만 했다" : $"구급 키트가 없어 {patient.Name}에게 응급 처치만 했다 ({(bandage ? "붕대" : "천과 소독약")})", cm.Id);
             patient.Vitals.TreatedTick = world.Tick;
+            if (kit) world.Organs.Dosed(patient);
             if (FoodPolicy.Drip(patient)) world.Log.Add(world.Tick, LogKind.Life, $"굶주린 {patient.Name}에게 영양 수액을 놓았다", cm.Id); // v23
             if (kit) world.Ailments.Treated(patient, cm); // v14.1 진단하고 약을 쓴다
             else world.Ailments.DiagnoseOnly(cm, patient); // v15.1 키트가 없으면 진단만 — 응급 처치는 약이 아니다

@@ -290,23 +290,29 @@ public sealed class OrganSystem
             Toward(c, Organ.Liver, 0.6f * over, 0.05f * h, "큰 피폭");
             Toward(c, Organ.Lungs, 0.5f * over, 0.04f * h, "큰 피폭");
         }
-        // 약 과용: 하루에 다섯 번 넘게 치료(구급 키트 · 진통제)를 받으면 간 · 신장이 상한다
-        if (v.TreatedTick > 0 && (Peek(c)?.LastTreated ?? -1_000_000) != v.TreatedTick)
+    }
+
+    /// <summary>약을 실제로 쓴 때 (구급 키트의 약) — 하루 다섯 번째부터 간 · 신장이 상한다.
+    /// v23: 전에는 붕대 · 천으로 한 응급 처치 · 꿰맴까지 "약"으로 셌다 — 키트가 바닥난 배에서 하루 열 번 붕대를 갈다 신부전으로 죽었다.</summary>
+    public void Dosed(CrewMember c)
+    {
+        var w = _w;
+        var b = Of(c);
+        b.LastTreated = w.Tick;
+        Array.Copy(b.Meds, 0, b.Meds, 1, b.Meds.Length - 1);
+        b.Meds[0] = w.Tick;
+        int recent = RecentDoses(c);
+        if (recent >= 5)
         {
-            var b = Of(c);
-            b.LastTreated = v.TreatedTick;
-            Array.Copy(b.Meds, 0, b.Meds, 1, b.Meds.Length - 1);
-            b.Meds[0] = v.TreatedTick;
-            int recent = b.Meds.Count(m => m > 0 && w.Tick - m < SimTime.TicksPerDay);
-            if (recent >= 5)
-            {
-                Stats.OverMed++;
-                Hurt(c, Organ.Liver, 0.06f * (recent - 4), "약을 너무 많이 썼다");
-                Hurt(c, Organ.Kidney, 0.03f * (recent - 4), "약을 너무 많이 썼다");
-                if (recent == 5) w.Log.Add(w.Tick, LogKind.Warning, $"{c.Name} — 하루에 약을 {recent}번 썼다 · 간에 무리가 간다", c.Id);
-            }
+            Stats.OverMed++;
+            Hurt(c, Organ.Liver, 0.06f * (recent - 4), "약을 너무 많이 썼다");
+            Hurt(c, Organ.Kidney, 0.03f * (recent - 4), "약을 너무 많이 썼다");
+            if (recent == 5) w.Log.Add(w.Tick, LogKind.Warning, $"{c.Name} — 하루에 약을 {recent}번 썼다 · 간에 무리가 간다", c.Id);
         }
     }
+
+    /// <summary>지난 하루 동안 약을 쓴 횟수 (의무관 · 의사 로봇은 넷째 뒤로는 약 없이 처치만 한다).</summary>
+    public int RecentDoses(CrewMember c) => Peek(c) is { } b ? b.Meds.Count(m => m > 0 && _w.Tick - m < SimTime.TicksPerDay) : 0;
 
     /// <summary>저절로: 덜 상한 장기는 천천히 낫고 · 반 넘게 상하면 서서히 나빠진다 (기계가 대신하면 멈춘다).</summary>
     private void Course(CrewMember c, OrganBody b, float h)

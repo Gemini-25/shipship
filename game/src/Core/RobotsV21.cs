@@ -1029,7 +1029,8 @@ public sealed partial class RobotSystem
                 if (o.Target.Crew is not CrewMember pt || pt.Dead) { w.Board.Close(o); return null; }
                 if (w.Blood.NeedsBlood(pt) && (w.Blood.CompatibleFor(pt) > 0 || w.Pharmacy.Stock(ItemKind.BloodSubstitute) > 0) && pt.Vitals.Health > 0.08f)
                 { blocked = "수혈이 먼저"; return null; } // 피를 많이 잃은 사람: 피부터 (치료로 체력만 올리면 일어나 투여 펌프 침대를 떠났다)
-                var (box, spot) = Nearest(w, dist, b => b.Type != FurnitureType.DroneDock && b.Storage!.Count(ItemKind.MedKit) > 0);
+                var (box, spot) = w.Organs.RecentDoses(pt) >= 4 ? (null, default) // v23 하루 약 네 번이 한도 — 붕대로 처치만
+                    : Nearest(w, dist, b => b.Type != FurnitureType.DroneDock && b.Storage!.Count(ItemKind.MedKit) > 0);
                 bool kit = box != null;
                 if (box != null) { steps.Add(new RGoto(spot)); steps.Add(new RTake(box, ItemKind.MedKit, 1)); }
                 Cell? Beside(Robot rb) => (pt.Position - rb.Position).Length() < 2f || pt.Dead ? null
@@ -1048,6 +1049,7 @@ public sealed partial class RobotSystem
                     pt.Vitals.Health = MathF.Min(pt.Vitals.MaxHealth, pt.Vitals.Health + (0.15f + 0.25f * skill) * eff * MathF.Max(0.25f, world.Perils.MarrowMul(pt)));
                     pt.Vitals.Injury = MathF.Max(0f, pt.Vitals.Injury - (0.06f + 0.14f * skill) * eff);
                     pt.Vitals.TreatedTick = world.Tick;
+                    if (used) world.Organs.Dosed(pt);
                     bool drip = FoodPolicy.Drip(pt); // v23 굶주린 환자에게 영양 수액
                     if (used && rb.Kind == RobotKind.Medic) world.Ailments.TreatedByBot(pt, rb.Name); // 의사 로봇: 진단하고 약을 쓴다
                     V21.Treats++;

@@ -183,12 +183,16 @@ public sealed partial class DroneSystem
         {
             case DroneErrand.Mine:
             {
-                int ice = 1 + (R21.Chance(0.6f) ? 1 : 0), ore = R21.Chance(0.5f) ? 1 : 0;
-                VoyageV15.Put(w, ItemKind.Ice, ice); // 배 창고로 (거치대에서 로봇이 옮긴 셈)
+                // v23 얼음이 창고에 넉넉하면(30개↑) 얼음 대신 금속 · 탄소 먼지를 고른다 — 얼음만 90개 넘게 쌓이고 금속 원료 · 탄소가 바닥났다 (보듬호)
+                bool iceFull = w.Ship.CountStored(ItemKind.Ice) >= 30;
+                int ice = iceFull ? 0 : 1 + (R21.Chance(0.6f) ? 1 : 0), ore = iceFull ? 1 + (R21.Chance(0.5f) ? 1 : 0) : R21.Chance(0.5f) ? 1 : 0, carbon = iceFull && R21.Chance(0.6f) ? 1 : 0;
+                if (ice > 0) VoyageV15.Put(w, ItemKind.Ice, ice); // 배 창고로 (거치대에서 로봇이 옮긴 셈)
                 if (ore > 0) VoyageV15.Put(w, ItemKind.MetalOre, ore);
+                if (carbon > 0) VoyageV15.Put(w, ItemKind.Carbon, carbon);
                 V21.Mines++; V21.Ice += ice; V21.Ore += ore;
-                MarkLog.Add(d.Marks, w.Tick, $"얼음 {ice}{(ore > 0 ? $" · 금속 원료 {ore}" : "")} 캐 옴");
-                w.Log.Add(w.Tick, LogKind.Work, $"{d.Name}: 배 곁을 지나는 먼지 띠에서 얼음 {ice}{(ore > 0 ? $" · 금속 원료 {ore}" : "")}을 긁어 왔다 (거치대 자재칸)");
+                string got = string.Join(" · ", new[] { ice > 0 ? $"얼음 {ice}" : null, ore > 0 ? $"금속 원료 {ore}" : null, carbon > 0 ? $"탄소 {carbon}" : null }.Where(x => x != null));
+                MarkLog.Add(d.Marks, w.Tick, $"{got} 캐 옴");
+                w.Log.Add(w.Tick, LogKind.Work, $"{d.Name}: 배 곁을 지나는 먼지 띠에서 {got}을 긁어 왔다 (거치대 자재칸{(iceFull ? " · 얼음은 넉넉해 금속 · 탄소 먼지만" : "")})");
                 break;
             }
             case DroneErrand.Polish when d.GuardFor >= 0 && d.GuardFor < w.Piping.Segments.Count:
