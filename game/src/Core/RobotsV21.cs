@@ -68,7 +68,7 @@ public static class RobotsV21
     public static bool Basic(WorkKind w) => w is WorkKind.Restock or WorkKind.StockDock or WorkKind.CarryWater or WorkKind.StockCache or WorkKind.StowCot
         or WorkKind.RefillPropellant or WorkKind.ShelterFood or WorkKind.EmptyBucket or WorkKind.Maintain or WorkKind.FixLights or WorkKind.FlushMain
         or WorkKind.ClearMain or WorkKind.LookRoom or WorkKind.SealSeep or WorkKind.Tend or WorkKind.Harvest or WorkKind.CleanUp or WorkKind.ServiceNozzle or WorkKind.RepairRelay
-        or WorkKind.Cook; // v23 조리 로봇이 없는 배: 사람이 45분 넘게 못 잡은 조리는 아무 로봇이나 (고래호 90일 — 채소 590개를 쌓아 두고 굶었다)
+        or WorkKind.Cook; // v23 조리 로봇이 없는 배: 부엌을 볼 사람이 아무도 움직일 수 없을 때 아무 로봇이나 (Eligible)
 
     /// <summary>놀고 있는 특기 로봇이 있으면 사람이 미루는 v21 특기 일 (급한 일 · 다친 사람 치료는 사람도 바로 한다).</summary>
     public static bool Yields(WorkKind w) => w is WorkKind.CleanUp or WorkKind.ClearRubble or WorkKind.Cook or WorkKind.PumpOut or WorkKind.ShutRoomValve or WorkKind.OpenRoomValve
@@ -191,6 +191,7 @@ public sealed partial class RobotSystem
     {
         var w = _world;
         if (o.Kind == WorkKind.Cook && PeopleCook(o)) return false; // 요리사 · 배우는 사람이 있으면 사람이 짓는다 (고향 음식 · 맛 · 대신 서기는 사람의 이야기)
+        if (o.Kind == WorkKind.Cook && !Special(r.Kind, o.Kind) && KitchenHands(w)) return false; // v23 조리 로봇이 아니면 부엌을 볼 사람이 아무도 없을 때만
         if (RobotBody.Gripless(r) && RobotBody.HandJob(o.Kind)) return false; // v22 두 팔을 다 잃었다 — 나르기 · 밸브 · 차단기만
         if (Special(r.Kind, o.Kind) && RobotsV15.Takes(r.Kind, o)) return !RobotBody.ToolLost(r) || !RobotBody.HandJob(o.Kind); // v22 특기 도구를 잃으면 특기 일은 못 한다
         if (r.Drafted(w) && RobotsV21.DraftJob(r.Draft, o.Kind)) return true;
@@ -211,6 +212,10 @@ public sealed partial class RobotSystem
         var ck = w.Cooking;
         return ck.HeadCook is { Dead: false } && w.Crew.Any(c => c.CanAct && !c.IsChild && !c.Outside);
     }
+
+    /// <summary>v23 부엌을 볼 사람(조리사 · 재배 담당 · 주방장 · 배우는 사람)이 움직일 수 있나 — 없으면 일반 로봇도 조리한다.</summary>
+    private static bool KitchenHands(World w) =>
+        w.Crew.Any(c => !c.Dead && !c.Away && !c.IsChild && c.CanAct && !c.Down && (c.Role is CrewRole.Cook or CrewRole.Botanist || w.Cooking.HeadCook == c || w.Cooking.Apprentice == c));
 
     /// <summary>특기 로봇이 먼저 잡을 만큼 기다렸나 (급하거나 · 사람이 없으면 바로).</summary>
     private bool Waited(WorkOrder o) => o.Urgency >= 0.7f || _world.Tick - o.Posted >= SimTime.Minutes(RobotsV21.GeneralWaitMin) || _world.Automation.Unattended;
