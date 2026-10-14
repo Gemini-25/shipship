@@ -104,6 +104,11 @@ public static partial class Program
             job = $"먹으러:{c.Job.Label}:{c.Job.Current?.GetType().Name.Replace("Toil", "")}:{age}:{(left > 60 ? "먼길" : left > 0 ? "걷는중" : "섬")}";
         }
         string k = $"{state}·{job}";
+        if (c.Job?.Activity is not EatActivity && c.LastEvaluations is { Count: > 0 } ev)
+        {
+            var eat = ev.FirstOrDefault(e => e.Activity is EatActivity);
+            k += $"[식사 {(eat.Activity == null ? -1f : eat.Score):0.0} {eat.Reason?.Split(' ')[0]} · 1등 {ev[0].Activity.Label} {ev[0].Score:0.0}]";
+        }
         _starve[k] = _starve.GetValueOrDefault(k) + 1;
     }
 

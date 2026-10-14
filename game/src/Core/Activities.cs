@@ -828,6 +828,7 @@ public sealed class RecoverActivity : Activity
             EveryTick = (cm, world) =>
             {
                 if (bed.Machine!.Efficiency > 0f) cm.Vitals.Health += 0.12f * world.Perils.MarrowMul(cm) / SimTime.TicksPerHour; // 통합6 골수가 무너진 몸은 침대도 기운을 못 채운다
+                if (bed.Machine.Efficiency > 0f && cm.Needs.Food < 0.4f) cm.Needs.Food += 0.15f / SimTime.TicksPerHour; // v23 굶주린 채 누웠으면 영양 수액이 천천히 (침대에서 굶어 숨지지 않게)
             },
             DoneWhen = (cm, world) => cm.Vitals.Health >= MathF.Min(0.92f, cm.Vitals.MaxHealth - 0.02f) && cm.Vitals.Injury < 0.25f && cm.Fx.Bed < 0.25f && !RadBed(cm, world),
         });

@@ -42,6 +42,15 @@ public sealed class FoodPolicy
     /// <summary>한 사람이 하루에 먹는 몫 (끼니 기준, 식사 1 · 비상식량 1 · 채소는 조리하면 1.5배).</summary>
     public const float MealsPerPersonDay = 2.6f;
 
+    /// <summary>v23 굶주린 환자에게 영양 수액 (치료할 때 한 번) — 쓰러진 사람은 스스로 먹으러 갈 수 없다
+    /// (한울호 90일: 쓰러진 채 굶은 것 3,613번 · 신장이 먼저 상해 숨졌다). 수액이 놓였으면 true.</summary>
+    public static bool Drip(CrewMember pt)
+    {
+        if (pt.Dead || pt.Needs.Food >= 0.3f) return false;
+        pt.Needs.Food = MathF.Min(1f, pt.Needs.Food + 0.35f);
+        return true;
+    }
+
     /// <summary>먹을 것 (끼니로 친다): 식사 + 비상식량 + 채소(조리하면 늘어난다).</summary>
     public static float FoodStock(World w) =>
         w.Ship.CountStored(ItemKind.Meal) + w.Ship.CountStored(ItemKind.Ration)

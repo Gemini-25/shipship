@@ -582,7 +582,9 @@ public sealed class QueueToil : Toil
     private readonly Furniture? _f;
     private readonly Cell _spot;
     private ServiceQueue? _q;
-    private bool _serving, _arrivedOnce, _ok = true, _done;
+    private bool _serving, _arrivedOnce, _ok = true, _done, _approach;
+    /// <summary>v23 이만큼(칸) 가까이 와서야 줄에 선다 — 배 반대편에서 줄 자리를 잡고 30분 넘게 걸어오는 동안 곁의 사람들이 기다렸다 (한울호 90일: 굶주린 사람 대부분이 "줄에 선 채 걷는 중").</summary>
+    public const float JoinWithin = 8f;
     private Cell _slot = new(-9999, -9999);
     internal ServiceQueue? Queue => _q;
     /// <summary>v19 줄에서 왜 빠졌나 (끊긴 끼니 기록).</summary>
@@ -604,6 +606,12 @@ public sealed class QueueToil : Toil
     {
         var qs = w.Coop.Queues;
         _q = qs.For(_kind, _f, _spot);
+        if ((_q.Spot.Center - c.Position).LengthSquared() > JoinWithin * JoinWithin && _q.Serving != c.Id && !_q.Line.Contains(c.Id))
+        {
+            // 멀면 먼저 줄 근처까지 걸어간다 (줄 자리는 닿아서 잡는다)
+            _approach = Locomotion.SetDestination(c, w, Target);
+            if (_approach) { if (c.Path is { Count: > 0 }) c.Pose = Pose.Walking; return; }
+        }
         if (qs.Join(c, _q)) GoServe(c, w);
     }
 
@@ -619,6 +627,17 @@ public sealed class QueueToil : Toil
     {
         var q = _q!;
         var qs = w.Coop.Queues;
+        if (_approach)
+        {
+            bool there = c.Path == null || Locomotion.Step(c, w);
+            if (c.PathBlocked && !there) { FailWhy = "줄로 가는 길이 막혔다"; return ToilStatus.Failed; }
+            if (!there && (q.Spot.Center - c.Position).LengthSquared() > JoinWithin * JoinWithin) return ToilStatus.Running;
+            _approach = false;
+            c.Path = null;
+            if (qs.Join(c, q)) { GoServe(c, w); return ToilStatus.Running; }
+            _slot = new(-9999, -9999);
+            return ToilStatus.Running;
+        }
         if (_serving)
         {
             if (!_ok && !NearSpot(c)) { FailWhy = "받는 칸에 갈 길이 없다"; return ToilStatus.Failed; }

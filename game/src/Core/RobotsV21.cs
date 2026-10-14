@@ -1043,10 +1043,11 @@ public sealed partial class RobotSystem
                     pt.Vitals.Health = MathF.Min(pt.Vitals.MaxHealth, pt.Vitals.Health + (0.15f + 0.25f * skill) * eff * MathF.Max(0.25f, world.Perils.MarrowMul(pt)));
                     pt.Vitals.Injury = MathF.Max(0f, pt.Vitals.Injury - (0.06f + 0.14f * skill) * eff);
                     pt.Vitals.TreatedTick = world.Tick;
+                    bool drip = FoodPolicy.Drip(pt); // v23 굶주린 환자에게 영양 수액
                     if (used && rb.Kind == RobotKind.Medic) world.Ailments.TreatedByBot(pt, rb.Name); // 의사 로봇: 진단하고 약을 쓴다
                     V21.Treats++;
                     world.Board.Close(o);
-                    Done(rb, $"{Ko.EulReul(pt.Name)} 치료했다 ({(used ? "구급 키트" : bandage ? "붕대" : "천과 소독약")} · 체력 {pt.Vitals.Health * 100:0}%)");
+                    Done(rb, $"{Ko.EulReul(pt.Name)} 치료했다 ({(used ? "구급 키트" : bandage ? "붕대" : "천과 소독약")}{(drip ? " · 영양 수액" : "")} · 체력 {pt.Vitals.Health * 100:0}%)");
                     return true;
                 }));
                 return steps;
