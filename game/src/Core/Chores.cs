@@ -1521,7 +1521,8 @@ public static partial class WorkPlanners
             if (kit) world.Organs.Dosed(patient);
             if (FoodPolicy.Drip(patient)) world.Log.Add(world.Tick, LogKind.Life, $"굶주린 {patient.Name}에게 영양 수액을 놓았다", cm.Id); // v23
             if (kit) world.Ailments.Treated(patient, cm); // v14.1 진단하고 약을 쓴다
-            else world.Ailments.DiagnoseOnly(cm, patient); // v15.1 키트가 없으면 진단만 — 응급 처치는 약이 아니다
+            else if (capped) world.Ailments.DiagnoseOnly(cm, patient); // v15.1 약 없이 진단만 — 응급 처치는 약이 아니다
+            else if (world.Ailments.TreatedWithoutKit(patient, cm)) world.Organs.Dosed(patient); // v23 키트가 없어도 선반의 항생제는 쓴다 (없으면 진단만)
             world.Soil.OnTreated(cm, patient); // v14.7 더러운 손이면 상처가 곪기도
             if (patient != cm) world.Relations.Remember(patient, cm, RelationReason.NursedMe, "다쳤을 때 치료해 줬다"); // v14.4
             patient.ChangeAffinity(cm, 0.08f);

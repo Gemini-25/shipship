@@ -577,6 +577,9 @@ public sealed partial class WorkBoard
                 foreach (var (kind, count) in f.Materials) Want(kind, count, u, 2);
             }
         }
+        // v23 곪은 상처 · 폐렴 · 패혈증을 앓는 사람이 있는데 항생제가 바닥났다 — 약초 · 탄소를 다른 재고보다 먼저 항생제에 (제비호: 탄소를 비누 · 테이프에 쓰는 사이 패혈증)
+        if (Have(ItemKind.Antibiotic) == 0 && _world.Crew.Any(c => !c.Dead && c.Ailments.Any(a => PharmacySystem.Bacterial(a.Id) && _world.Ailments.Severity(a) > 0.15f)))
+            Want(ItemKind.Antibiotic, 1, 0.85f, 2);
         // v9: 끊어졌거나 우회로 버티는 관을 새 관으로 갈 금속판 (냉각 본관이 가장 급하다)
         foreach (var seg in _world.Piping.Segments)
         {

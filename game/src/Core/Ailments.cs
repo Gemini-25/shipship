@@ -445,6 +445,51 @@ public sealed class AilmentSystem
         }
     }
 
+    /// <summary>v23 구급 키트가 없어도 따로 둔 항생제는 쓴다 (쓴 약이 있으면 true).
+    /// 전에는 키트가 바닥나면 항생제가 선반에 있어도 진단만 하고 돌아서 곪은 상처가 패혈증이 됐다 (제비호 상처 감염 사망).</summary>
+    public bool TreatedWithoutKit(CrewMember patient, CrewMember doctor)
+    {
+        var w = _w;
+        Diagnose(doctor, patient);
+        bool used = false;
+        // 세균성 병의 항생제만 (진통제는 아픈 걸 덜 뿐 낫게 하지 않는다 — 치통은 키트의 처치가 있어야 낫는다)
+        foreach (var a in patient.Ailments.Where(a => a.Diagnosed && Spec(a.Id).Cure == Cure.Medic && PharmacySystem.Bacterial(a.Id)).ToList())
+        {
+            int before = w.Pharmacy.Doses;
+            float heal = w.Pharmacy.Treat(patient, doctor, a.Id);
+            if (w.Pharmacy.Doses == before) continue; // 그 약이 없었다
+            used = true;
+            a.TreatedAt = w.Tick;
+            a.Treatments++;
+            a.Healed += heal * w.Telemed.Diagnose(patient, doctor, a.Id);
+            Stats.Treated++;
+        }
+        return used;
+    }
+
+    /// <summary>v23 의사 로봇: 키트가 없어도 세균성 병에는 선반의 항생제를 쓴다 (쓴 약이 있으면 true).</summary>
+    public bool AntibioticByBot(CrewMember patient, string bot)
+    {
+        var w = _w;
+        bool used = false;
+        foreach (var a in patient.Ailments.Where(a => !a.Diagnosed))
+        {
+            a.Diagnosed = true;
+            Stats.Diagnosed++;
+            w.Log.Add(w.Tick, LogKind.Life, $"진단 ({bot}): {patient.Name} — {Spec(a.Id).Name} ({CureName(Spec(a.Id).Cure)})", patient.Id);
+        }
+        foreach (var a in patient.Ailments.Where(a => a.Diagnosed && PharmacySystem.Bacterial(a.Id)).ToList())
+        {
+            if (!w.Pharmacy.Take(ItemKind.Antibiotic)) break;
+            used = true;
+            a.TreatedAt = w.Tick;
+            a.Treatments++;
+            a.Healed += 1.1f;
+            Stats.Treated++;
+        }
+        return used;
+    }
+
     public void Treated(CrewMember patient, CrewMember doctor)
     {
         var w = _w;

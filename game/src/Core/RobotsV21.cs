@@ -1050,6 +1050,7 @@ public sealed partial class RobotSystem
                     pt.Vitals.Injury = MathF.Max(0f, pt.Vitals.Injury - (0.06f + 0.14f * skill) * eff);
                     pt.Vitals.TreatedTick = world.Tick;
                     if (used) world.Organs.Dosed(pt);
+                    else if (rb.Kind == RobotKind.Medic && !world.Growth.NoFirstAid && world.Organs.RecentDoses(pt) < 4 && world.Ailments.AntibioticByBot(pt, rb.Name)) world.Organs.Dosed(pt); // v23 키트가 없어도 항생제는 (시험: 치료를 막았으면 안 쓴다)
                     bool drip = FoodPolicy.Drip(pt); // v23 굶주린 환자에게 영양 수액
                     if (used && rb.Kind == RobotKind.Medic) world.Ailments.TreatedByBot(pt, rb.Name); // 의사 로봇: 진단하고 약을 쓴다
                     V21.Treats++;
