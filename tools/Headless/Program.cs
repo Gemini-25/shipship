@@ -144,7 +144,8 @@ public static partial class Program
         var deadNow = w.Crew.Where(c => c.Dead).ToList();
         if (deadNow.Count > 0)
             Console.WriteLine($"      [사망 {deadNow.Count}] " + string.Join(" · ", deadNow.GroupBy(c => c.Vitals.InjuryCause ?? "?").OrderByDescending(g => g.Count())
-                .Select(g => $"{g.Key}×{g.Count()}({string.Join("/", g.Select(c => $"{SimTime.Day(c.DiedAt)}일 {c.Room?.Name ?? "?"}").Take(4))})")));
+                .Select(g => $"{g.Key}×{g.Count()}({string.Join("/", g.Select(c => $"{SimTime.Day(c.DiedAt)}일 {c.Room?.Name ?? "?"}{OrganWhy(c)}").Take(4))})")));
+        string OrganWhy(CrewMember c) => w.Organs.Peek(c) is { } ob && ob.Dmg.Select((d, i) => (d, i)).Where(x => x.d > 0.5f).Select(x => $"{OrganSystem.Name((Organ)x.i)}:{ob.Cause[x.i]}").ToList() is { Count: > 0 } l ? " ← " + string.Join(",", l) : "";
         // 증축한 방의 공기 (증축 침실 산소가 0까지 내려간 일)
         var annexRooms = w.Annex.Plans.Where(p => p.RoomId >= 0 && p.RoomId < w.Ship.Rooms.Count).ToList();
         if (annexRooms.Count > 0)
