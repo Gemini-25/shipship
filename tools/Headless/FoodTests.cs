@@ -103,35 +103,41 @@ public static partial class Program
             }
 
             // 3) 빵 굽는 냄새: 주방에서 빵을 구우면 냄새가 문과 덕트로 퍼지고, 배고픈 사람들이 주방으로 모인다
+            //   v23 시드 셋으로 잰다 — 그날 아침 끼니를 언제 먹었는지에 따라 한 장면에서는 모두 이미 식당에서 먹고 있어 냄새를 따라올 사람이 없었다
             {
-                var w = DayOne(seed, "Hanbit");
-                Run(w, SimTime.Hours(3)); // 10시쯤 — 아침과 점심 사이
-                int crew = w.Crew.Count(c => !c.Dead);
-                foreach (var c in w.Crew) c.Needs.Food = MathF.Min(c.Needs.Food, 0.45f); // 통합8 끼니 사이 출출한 정도(0.55)로는 꾸밈 · 일에 밀려 한 사람만 왔다 — 배고픈 사람들
-                int keep = crew * 2;
-                int have = w.Ship.CountStored(ItemKind.Meal);
-                if (have > keep) Life.Take(w, ItemKind.Meal, have - keep); // 식사가 모자라 조리 일감이 선다
-                w.Cooking.ForceNext = "bread";
-                long bakeAt = -1;
-                for (int m = 0; m < 240 && bakeAt < 0; m++)
+                (long bakeAt, int came, float spread, string line) Bake(int sd)
                 {
-                    Run(w, SimTime.Minutes(1));
-                    if (w.Ship.FurnitureOf(FurnitureType.Stove).Any(s => w.Cooking.CookingAt(s)?.Kind == DishKind.Bread)) bakeAt = w.Tick;
+                    var w = DayOne(sd, "Hanbit");
+                    Run(w, SimTime.Hours(3)); // 10시쯤 — 아침과 점심 사이
+                    int crew = w.Crew.Count(c => !c.Dead);
+                    foreach (var c in w.Crew) c.Needs.Food = MathF.Min(c.Needs.Food, 0.45f); // 통합8 끼니 사이 출출한 정도(0.55)로는 꾸밈 · 일에 밀려 한 사람만 왔다 — 배고픈 사람들
+                    int keep = crew * 2;
+                    int have = w.Ship.CountStored(ItemKind.Meal);
+                    if (have > keep) Life.Take(w, ItemKind.Meal, have - keep); // 식사가 모자라 조리 일감이 선다
+                    w.Cooking.ForceNext = "bread";
+                    long bakeAt = -1;
+                    for (int m = 0; m < 240 && bakeAt < 0; m++)
+                    {
+                        Run(w, SimTime.Minutes(1));
+                        if (w.Ship.FurnitureOf(FurnitureType.Stove).Any(s => w.Cooking.CookingAt(s)?.Kind == DishKind.Bread)) bakeAt = w.Tick;
+                    }
+                    var galley = w.Ship.FurnitureOf(FurnitureType.Stove).FirstOrDefault(s => w.Cooking.CookingAt(s) != null)?.Room;
+                    if (Environment.GetEnvironmentVariable("FOODDBG") != null && galley != null) Console.WriteLine($"    [빵 이웃] {galley.Name}: " + string.Join(", ", w.Ambience.Neighbors(galley).Select(n => $"{n.room.Name}{(n.door ? "(문)" : "(벽)")}")));
+                    var came = new HashSet<int>();
+                    float spread = 0f;
+                    for (int m = 0; m < 70 && bakeAt >= 0; m++)
+                    {
+                        Run(w, SimTime.Minutes(1));
+                        foreach (var c in w.Crew) if (c.Job?.Activity is FollowSmellActivity) came.Add(c.Id);
+                        if (Environment.GetEnvironmentVariable("FOODDBG") != null && m % 5 == 0) Console.WriteLine($"    [빵 {m}] " + string.Join(" / ", w.Crew.Where(c => !c.Dead).Select(c => $"{c.Name}@{c.Room?.Name} {(c.Room != null ? w.Smells.Level(c.Room, SmellKind.Bread) : 0f):0.000} {(w.Smells.Smelled(c, SmellKind.Bread, SimTime.Minutes(20)) != null ? "맡음" : "")} 배고픔{c.Needs.Hunger:0.00} {c.ActivityLabel}")));
+                        if (galley != null)
+                            foreach (var (o, _) in w.Ambience.Neighbors(galley)) spread = MathF.Max(spread, w.Smells.Level(o, SmellKind.Bread));
+                    }
+                    return (bakeAt, came.Count, spread, $"시드 {sd}: 굽기 {(bakeAt >= 0 ? SimTime.Clock(bakeAt) : "없음")} · 옆방 냄새 {spread * 100:0}% · 따라온 {came.Count}명 ({string.Join(", ", came.Select(i => w.Crew[i].Name))})");
                 }
-                var galley = w.Ship.FurnitureOf(FurnitureType.Stove).FirstOrDefault(s => w.Cooking.CookingAt(s) != null)?.Room;
-                if (Environment.GetEnvironmentVariable("FOODDBG") != null && galley != null) Console.WriteLine($"    [빵 이웃] {galley.Name}: " + string.Join(", ", w.Ambience.Neighbors(galley).Select(n => $"{n.room.Name}{(n.door ? "(문)" : "(벽)")}")));
-                var came = new HashSet<int>();
-                float spread = 0f;
-                for (int m = 0; m < 70 && bakeAt >= 0; m++)
-                {
-                    Run(w, SimTime.Minutes(1));
-                    foreach (var c in w.Crew) if (c.Job?.Activity is FollowSmellActivity) came.Add(c.Id);
-                    if (Environment.GetEnvironmentVariable("FOODDBG") != null && m % 5 == 0) Console.WriteLine($"    [빵 {m}] " + string.Join(" / ", w.Crew.Where(c => !c.Dead).Select(c => $"{c.Name}@{c.Room?.Name} {(c.Room != null ? w.Smells.Level(c.Room, SmellKind.Bread) : 0f):0.000} {(w.Smells.Smelled(c, SmellKind.Bread, SimTime.Minutes(20)) != null ? "맡음" : "")} 배고픔{c.Needs.Hunger:0.00} {c.ActivityLabel}")));
-                    if (galley != null)
-                        foreach (var (o, _) in w.Ambience.Neighbors(galley)) spread = MathF.Max(spread, w.Smells.Level(o, SmellKind.Bread));
-                }
-                Check("빵 굽는 냄새 — 냄새가 옆방으로 번지고 사람들이 주방으로 모인다", bakeAt >= 0 && came.Count >= 2 && spread > SmellSystem.Threshold(SmellKind.Bread),
-                    $"굽기 시작 {(bakeAt >= 0 ? SimTime.Clock(bakeAt) : "없음")} · 옆방 빵 냄새 최고 {spread * 100:0}% · 냄새 따라온 사람 {came.Count}명 ({string.Join(", ", came.Select(i => w.Crew[i].Name))}) · {w.Smells.Stats.Summary()}");
+                var bakes = new[] { Bake(seed), Bake(seed + 1), Bake(seed + 2) };
+                Check("빵 굽는 냄새 — 냄새가 옆방으로 번지고 사람들이 주방으로 모인다 (시드 셋 중 둘 이상)", bakes.Count(b => b.bakeAt >= 0 && b.came >= 2 && b.spread > SmellSystem.Threshold(SmellKind.Bread)) >= 2,
+                    string.Join(" / ", bakes.Select(b => b.line)));
             }
 
             // 4) 탄 냄새: 불려 나간 조리사가 냄비를 불 위에 두고 갔다 → 냄새를 맡은 사람이 경보(불꽃 감지)보다 먼저 확인하러 가서 내린다
@@ -168,7 +174,9 @@ public static partial class Program
                 Run(w, SimTime.Hours(2));
                 foreach (var rb in w.Robots.Robots.Where(r => RobotsV15.Base(r.Kind) == RobotKind.Safety)) w.Robots.ForceFault(rb, RobotFault.Drive); // 순찰 로봇은 멈춰 있다
                 // 문으로 이어진 옆방에 깨어 있는 사람이 있는 빈 방 — 두뇌 2.0 뒤로는 2시간째에 통로가 빌 때가 있어(모두 방 안에서 일함) 그런 순간이 올 때까지 1분씩 기다린다
-                Room? PickRoom() => w.Ship.LiveRooms.Where(r => r.Type is not (RoomType.Corridor or RoomType.Galley or RoomType.Mess) && !r.Abandoned && w.Crew.All(c => c.Room != r)
+                // 먹을 것을 두는 방(냉장고 · 냉동고)과 누가 지금 가려는 방은 빼다 — 끼니 사이 누가 걸어 들어가 냄새보다 먼저 불을 봤다 (냉동 창고)
+                Room? PickRoom() => w.Ship.LiveRooms.Where(r => r.Type is not (RoomType.Corridor or RoomType.Galley or RoomType.Mess or RoomType.Freezer) && !r.Abandoned && w.Crew.All(c => c.Room != r && c.Job?.TargetRoom != r)
+                        && !r.Furniture.Any(f => f.Type == FurnitureType.Fridge || f.Storage != null && ItemKinds.All.Any(k => ItemKinds.IsFood(k) && f.Storage.Count(k) > 0))
                         && w.Ambience.Neighbors(r).Any(n => n.door && w.Crew.Any(c => c.IsAwake && c.Room == n.room)) && r.Cells.Any(c => w.Ship.IsWalkable(c)))
                     .OrderBy(r => r.Id).FirstOrDefault();
                 Room? picked = PickRoom();

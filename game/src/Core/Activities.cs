@@ -138,6 +138,8 @@ public sealed class EatActivity : Activity
     {
         ArriveFor = -1;
         if (c.Job?.Activity is SavedPlateActivity) return (0f, "남겨 둔 접시로 가는 중"); // 이미 먹으러 가는 길 — 굶주림 문턱을 넘었다고 배식기로 돌아서지 않는다
+        // v23 누가 이름표를 붙여 덜어 둔 제 몫이 있으면 그 식탁으로 (늦은 끼니) — 배식기에서 따로 받아 먹어 접시가 식탁에서 상했다
+        if (w.Cooking.PlateFor(c) is Plate mine && c.Needs.Hunger >= 0.3f && SetAsidePlateActivity.Spot(mine.Table, w, dist) is Cell ms && dist.Reachable(ms)) return (0f, "남겨 둔 제 몫이 식탁에 있다");
         var (box, spot, src) = FindFood(c, w, dist);
         if (src == Source.None) return (0f, "먹을 것이 없음");
         float hunger = c.Needs.Hunger;
