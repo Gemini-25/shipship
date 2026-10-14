@@ -94,8 +94,10 @@ public sealed class AnnexPlan
     public Dictionary<int, float> Hands { get; } = new();
     public List<int> Celebrated { get; } = new();
     public List<int> MovedIn { get; } = new();
-    public string UseName => Use == RoomType.Storage ? "창고" : "침실";
-    public string FixtureName => Use == RoomType.Storage ? "선반" : "침대";
+    public string UseName => Use == RoomType.Storage ? "창고" : Use == RoomType.Hydroponics ? "재배실" : "침실";
+    public string FixtureName => Use == RoomType.Storage ? "선반" : Use == RoomType.Hydroponics ? "재배대" : "침대";
+    /// <summary>v23 정원을 넘겨 태운 만큼 회의 없이 바로 짓는다 (함장 · 주 컴퓨터).</summary>
+    public bool Auto;
 }
 
 public sealed class AnnexStats
@@ -203,7 +205,7 @@ public sealed partial class AnnexSystem
     {
         var ship = _w.Ship;
         var list = new List<AnnexSite>();
-        int wantW = use == RoomType.Storage ? Math.Clamp(fixtures * 2 + 1, 4, 6) : Math.Clamp(fixtures * 2 + 1, 4, 8);
+        int wantW = use == RoomType.Storage ? Math.Clamp(fixtures * 2 + 1, 4, 6) : use == RoomType.Hydroponics ? Math.Clamp(fixtures * 3 + 1, 4, 8) : Math.Clamp(fixtures * 2 + 1, 4, 8);
         foreach (var r in ship.Rooms)
         {
             if (r.Detached || r.OffLimits || r.Abandoned || r.Cells.Count == 0 || Hullish(r.Kind)) continue;
@@ -226,6 +228,7 @@ public sealed partial class AnnexSystem
         }
         int Pref(Room r) => use == RoomType.Storage
             ? (r.Kind == RoomType.Storage ? 3 : r.Kind == RoomType.Corridor ? 2 : r.Kind == RoomType.Workshop ? 1 : 0)
+            : use == RoomType.Hydroponics ? (r.Kind == RoomType.Hydroponics ? 3 : r.Kind is RoomType.Mess or RoomType.Galley or RoomType.Storage ? 2 : r.Kind == RoomType.Corridor ? 1 : 0)
             : (RoomUseSystem.Actual(r) == RoomType.Quarters || r.Kind == RoomType.Quarters ? 3 : r.Kind == RoomType.Corridor ? 2 : r.Kind is RoomType.Lounge or RoomType.Mess ? 1 : 0);
         return list.OrderByDescending(s => Pref(ship.Rooms[s.AttachRoom])).ThenByDescending(s => s.Width).ThenBy(s => s.AttachRoom).ToList();
     }
@@ -277,6 +280,7 @@ public sealed partial class AnnexSystem
         {
             var r = _w.Ship.Rooms[s.AttachRoom];
             bool fits = use == RoomType.Storage ? r.Kind is RoomType.Storage or RoomType.Corridor or RoomType.Workshop
+                : use == RoomType.Hydroponics ? r.Kind is RoomType.Hydroponics or RoomType.Mess or RoomType.Galley or RoomType.Storage or RoomType.Corridor
                 : RoomUseSystem.Actual(r) == RoomType.Quarters || r.Kind is RoomType.Quarters or RoomType.Corridor or RoomType.Lounge or RoomType.Mess;
             float score = ShiftOf(s, fixtures) * 10f + (fits ? 0f : 1.5f) - 0.05f * s.Width;
             if (score < bs - 1e-4f) { bs = score; best = s; }
@@ -405,14 +409,53 @@ public sealed partial class AnnexSystem
         if (homeless.Count > 0) { if (_homelessSince < 0) _homelessSince = w.Tick; }
         else _homelessSince = -1;
         AnnexPlan? draft = null;
-        if (homeless.Count > 0 && (w.Tick - _homelessSince >= SimTime.Hours(6) || Directive)) draft = QuartersDraft(homeless, adults);
-        else if (StorageFill() > 0.9f) draft = StorageDraft(adults);
-        else if (Directive) draft = QuartersDraft(homeless, adults);
+        // v23 정원을 넘겨 태웠다(손님 · 구조 · 피란 · 아이): 침대 · 재배대가 모자라면 회의 없이 바로 넓힌다
+        bool crowded = Crowded(w);
+        if (crowded && FoodBehind(w) && (Evolution.GrowSpot(w) == null || w.History.GrowBedsAdded >= Evolution.MaxGrowBeds)) draft = FarmDraft(adults);
+        if (draft == null && homeless.Count > 0 && (w.Tick - _homelessSince >= SimTime.Hours(crowded ? 2 : 6) || Directive)) draft = QuartersDraft(homeless, adults);
+        else if (draft == null && StorageFill() > 0.9f) draft = StorageDraft(adults);
+        else if (draft == null && Directive) draft = QuartersDraft(homeless, adults);
         if (draft == null) return;
         string key = $"{draft.Use}";
-        if (!Directive && _cool.TryGetValue(key, out var until) && w.Tick < until) return;
+        bool auto = crowded && draft.Use != RoomType.Storage && !Directive;
+        if (!Directive && !auto && _cool.TryGetValue(key, out var until) && w.Tick < until) return;
+        if (auto && _cool.TryGetValue("auto:" + key, out var au) && w.Tick < au) return;
         Directive = false;
-        Propose(draft);
+        var p = Propose(draft);
+        if (!auto) return;
+        // 지금 선외 공사가 위험하면(잔해 지대 · 위험 큼) 회의에 맡긴다
+        if (p.Sign < 0) { _cool["auto:" + key] = w.Tick + SimTime.TicksPerDay; return; }
+        p.Auto = true;
+        p.Decided = w.Tick;
+        Stats.Passed++;
+        var room = w.Ship.Rooms[p.Site.AttachRoom];
+        string who = w.Automation.Present && w.Automation.MainOnline ? "주 컴퓨터" : w.Command.Captain is CrewMember cap ? $"함장 {cap.Name}" : "승무원";
+        w.History.Add(w, HistoryKind.Decision, $"{who}: 정원을 넘겨 태운 만큼 회의 없이 바로 증축 — {p.Title} ({p.Why})", room, adults, log: true);
+        Start(p);
+    }
+
+    /// <summary>처음보다 사람이 늘었다 (태운 사람 · 태어난 아이).</summary>
+    public static bool Crowded(World w) => w.Crew.Count(c => !c.Dead && !c.LeftShip) > w.StartCrew;
+
+    /// <summary>재배대가 대는 끼니가 먹는 끼니에 못 미친다 (5% 여유).</summary>
+    public static bool FoodBehind(World w) => Evolution.GrowCapacity(w) < w.Aboard * FoodPolicy.MealsPerPersonDay * 1.05f;
+
+    /// <summary>배 안에 재배대를 더 놓을 데가 없으면 밖에 재배실을 붙인다 (재배대 2~3).</summary>
+    private AnnexPlan? FarmDraft(List<CrewMember> adults)
+    {
+        var w = _w;
+        float grow = Evolution.GrowCapacity(w), need = w.Aboard * FoodPolicy.MealsPerPersonDay;
+        int n = 2;
+        var by = adults.OrderByDescending(c => c.Role == CrewRole.Botanist ? 1 : 0).ThenByDescending(c => c.SkillLevel(Skill.Botany)).ThenBy(c => c.Id).First();
+        var sites = Sites(RoomType.Hydroponics, n);
+        if (sites.Count == 0) { NoSite("재배실"); return null; }
+        var site = BestSite(sites, n, RoomType.Hydroponics) ?? sites[0];
+        return new AnnexPlan
+        {
+            Proposer = by.Id, Use = RoomType.Hydroponics, Fixtures = n, Site = site, Proposed = w.Tick, Source = "인원 변화",
+            Why = $"재배대가 하루 {grow:0}끼를 대는데 {w.Aboard}명이 {need:0}끼를 먹는다 · 배 안에 재배대 놓을 데가 없다",
+            Title = $"{w.Ship.Rooms[site.AttachRoom].Name} 아래 증축 — 재배실 (재배대 {n})",
+        };
     }
 
     private AnnexPlan? QuartersDraft(List<CrewMember> homeless, List<CrewMember> adults)
@@ -482,7 +525,8 @@ public sealed partial class AnnexSystem
         return p;
     }
 
-    private string Pitch(AnnexPlan p) => p.Use == RoomType.Storage ? "선반이 꽉 찼다 — 밖에 창고를 하나 붙이자" : "간이침대는 이제 그만 — 밖에 침실을 하나 붙이자";
+    private string Pitch(AnnexPlan p) => p.Use == RoomType.Storage ? "선반이 꽉 찼다 — 밖에 창고를 하나 붙이자"
+        : p.Use == RoomType.Hydroponics ? "먹을 입이 늘었다 — 밖에 재배실을 하나 붙이자" : "간이침대는 이제 그만 — 밖에 침실을 하나 붙이자";
 
     // ─────────────────────────────── 주 컴퓨터의 조언 ───────────────────────────────
 
@@ -491,9 +535,9 @@ public sealed partial class AnnexSystem
     public static int NeedOf(AnnexPlan p, ItemKind k) => k switch
     {
         ItemKind.Structure => (p.Site.Shell.Count + 3) / 4 + (p.Use == RoomType.Quarters ? p.Fixtures : 0),
-        ItemKind.Plate => (p.Site.Shell.Count + 1) / 2 + (p.Use == RoomType.Storage ? p.Fixtures : 0),
-        ItemKind.Sealant => 1,
-        ItemKind.Cable => 2,
+        ItemKind.Plate => (p.Site.Shell.Count + 1) / 2 + (p.Use == RoomType.Storage ? p.Fixtures : p.Use == RoomType.Hydroponics ? 2 * p.Fixtures : 0),
+        ItemKind.Sealant => 1 + (p.Use == RoomType.Hydroponics ? p.Fixtures : 0),
+        ItemKind.Cable => 2 + (p.Use == RoomType.Hydroponics ? 2 * p.Fixtures : 0),
         ItemKind.Hose => 1,
         _ => 0,
     };
@@ -512,7 +556,7 @@ public sealed partial class AnnexSystem
         {
             p.Wanted = p.Site;
             p.Site = best;
-            p.Title = $"{w.Ship.Rooms[best.AttachRoom].Name} 아래 증축 — {p.UseName}" + (p.Use == RoomType.Quarters ? $" (침대 {p.Fixtures})" : "");
+            p.Title = $"{w.Ship.Rooms[best.AttachRoom].Name} 아래 증축 — {p.UseName}" + (p.Use != RoomType.Storage ? $" ({p.FixtureName} {p.Fixtures})" : "");
             where = $" · 자리: {w.Ship.Rooms[p.Wanted.AttachRoom].Name} 아래보다 {w.Ship.Rooms[best.AttachRoom].Name} 아래가 무게 중심이 덜 흔들린다 ({p.WantedShift:0.00} → {ShiftOf(best, p.Fixtures):0.00}칸)";
         }
         var s = p.Site;
@@ -522,7 +566,7 @@ public sealed partial class AnnexSystem
         float M = _mass0 + AddedMassT;
         p.ThrustLoss = 1f - M / (M + p.MassT);
         p.FuelMul = (M + p.MassT) / M;
-        p.PowerKw = PowerGrid.RoomSystemsKw + (p.Use == RoomType.Quarters ? 0.04f * p.Fixtures : 0.02f);
+        p.PowerKw = PowerGrid.RoomSystemsKw + (p.Use == RoomType.Quarters ? 0.04f * p.Fixtures : p.Use == RoomType.Hydroponics ? 1.2f * p.Fixtures : 0.02f);
         int vol = w.Ship.Rooms.Where(r => !r.Detached).Sum(r => r.Volume);
         p.AirPct = vol > 0 ? s.Inside.Count * 100f / vol : 0f;
         p.Need.Clear();
@@ -653,12 +697,18 @@ public sealed partial class AnnexSystem
         // 설비 자리: 먼 줄을 따라 한 칸 걸러 (문 아래 줄은 비운다 — 드나드는 길)
         p.FixtureSpots.Clear();
         int fy = s.Y0 + s.Depth;
-        for (int x = s.X0; x <= s.X1 && p.FixtureSpots.Count < p.Fixtures; x += 2)
+        if (p.Use == RoomType.Hydroponics)
+            for (int x = s.X0; x + 1 <= s.X1 && p.FixtureSpots.Count < p.Fixtures; x++)
+            {
+                if (x == s.Door.X || x + 1 == s.Door.X || p.FixtureSpots.Any(f => Math.Abs(f.X - x) <= 2)) continue;
+                p.FixtureSpots.Add(new Cell(x, fy));
+            }
+        for (int x = s.X0; x <= s.X1 && p.FixtureSpots.Count < p.Fixtures && p.Use != RoomType.Hydroponics; x += 2)
         {
             if (x == s.Door.X) { x--; continue; }
             p.FixtureSpots.Add(new Cell(x, fy));
         }
-        if (p.FixtureSpots.Count < p.Fixtures)
+        if (p.FixtureSpots.Count < p.Fixtures && p.Use != RoomType.Hydroponics)
             for (int x = s.X1; x >= s.X0 && p.FixtureSpots.Count < p.Fixtures; x--)
             {
                 var c = new Cell(x, fy);
@@ -921,10 +971,11 @@ public sealed partial class AnnexSystem
         var cell = p.FixtureSpots[i];
         if (w.Ship.FurnitureAt(cell) != null) return true;
         if (!w.Ship.IsOpenFloor(cell) || w.Ship.RoomAt(cell) != room) { p.Fit[i] = 0.95f; return false; }
+        var right2 = p.Use == RoomType.Hydroponics ? cell + new Cell(1, 0) : cell; // 재배대는 두 칸
         foreach (var o in w.Crew)
-            if (!o.Dead && o.Cell == cell && !o.Outside)
+            if (!o.Dead && (o.Cell == cell || o.Cell == right2) && !o.Outside)
             {
-                var free = room.Cells.Where(x => x != cell && w.Ship.IsWalkable(x)).OrderBy(x => (x.Center - o.Position).LengthSquared()).ThenBy(x => x.Y).ThenBy(x => x.X).FirstOrDefault();
+                var free = room.Cells.Where(x => x != cell && x != right2 && w.Ship.IsWalkable(x)).OrderBy(x => (x.Center - o.Position).LengthSquared()).ThenBy(x => x.Y).ThenBy(x => x.X).FirstOrDefault();
                 if (free != default) { o.Position = free.Center; o.PreviousPosition = o.Position; }
             }
         Furniture f;
@@ -933,6 +984,20 @@ public sealed partial class AnnexSystem
             if (!ItemsV15.Use(w, ItemKind.Plate)) ItemsV15.Use(w, ItemKind.Structure);
             f = w.Ship.AddFurniture(FurnitureType.Shelf, cell);
             f.Storage = new Inventory(60, ItemKinds.Shelved);
+        }
+        else if (p.Use == RoomType.Hydroponics)
+        {
+            var right = cell + new Cell(1, 0);
+            if (w.Ship.FurnitureAt(right) != null || !w.Ship.IsOpenFloor(right) || w.Ship.RoomAt(right) != room) { p.Fit[i] = 0.95f; return false; }
+            for (int k = 0; k < 2; k++) if (!ItemsV15.Use(w, ItemKind.Plate)) ItemsV15.Use(w, ItemKind.Structure);
+            for (int k = 0; k < 2; k++) ItemsV15.Use(w, ItemKind.Cable);
+            ItemsV15.Use(w, ItemKind.Sealant);
+            f = w.Ship.AddFurniture(FurnitureType.GrowBed, new[] { cell, right });
+            f.Improved = true;
+            f.Machine!.Condition = 1f;
+            f.Machine.Wear = 0f;
+            if (f.Machine.Crop != null) f.Machine.Crop.Care = 0.8f;
+            MarkLog.Add(f.Machine.Marks, w.Tick, $"{c.Name}: 증축 재배실에 들인 재배대");
         }
         else
         {
@@ -958,7 +1023,7 @@ public sealed partial class AnnexSystem
         var top = builders.FirstOrDefault(c => !c.Dead);
         if (p.MeteorHits > 0 && (by == null || by.Traits.Bravery >= 0.45f)) { p.Name = $"운석 맞은 별채"; p.NameSource = "사건"; }
         else if (top != null && (by == null || by.Traits.Sociability >= 0.4f || by.Habits.Contains(Habit.Joker))) { p.Name = $"{top.Name}네 별채"; p.NameSource = "사람"; }
-        else { p.Name = p.Use == RoomType.Storage ? "새 창고" : "새 침실"; p.NameSource = "쓰임"; }
+        else { p.Name = p.Use == RoomType.Storage ? "새 창고" : p.Use == RoomType.Hydroponics ? "새 재배실" : "새 침실"; p.NameSource = "쓰임"; }
         if (w.Ship.Rooms.Any(r => r != room && r.CustomName == p.Name)) p.Name += $" {p.Id}";
         room.CustomName = p.Name;
         room.Purpose = null;
@@ -1151,7 +1216,7 @@ public sealed partial class AnnexSystem
         var p = Propose(new AnnexPlan
         {
             Proposer = by.Id, Use = use, Fixtures = fixtures, Site = sites[0], Proposed = w.Tick, Source = "지시", Why = "관찰자 지시",
-            Title = $"{w.Ship.Rooms[sites[0].AttachRoom].Name} 아래 증축 — {(use == RoomType.Storage ? "창고" : "침실")}",
+            Title = $"{w.Ship.Rooms[sites[0].AttachRoom].Name} 아래 증축 — {(use == RoomType.Storage ? "창고" : use == RoomType.Hydroponics ? "재배실" : "침실")}",
         });
         Start(p);
         return p.State == "공사" ? p : null;

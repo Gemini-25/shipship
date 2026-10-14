@@ -127,7 +127,9 @@ public sealed partial class RobotSystem
             WorkKind.Repair => RepairOk(o),
             // 무인 운항: 작업대에서 간단한 부품을 (주 컴퓨터가 도면을 짚어 준다)
             // v23 부품 고갈: 사람이 있어도 수리가 기다리는 부품 · 바닥난 부품(0.4 이상)은 로봇이 먼저 만든다 — 재고 채우기는 한 시간 아무도 안 잡으면
-            WorkKind.Fabricate => (w.Automation.Unattended || o.Urgency >= 0.4f || w.Tick - o.Posted >= SimTime.Hours(1)) && FabOk(o) is not null,
+            //   채소로 만드는 것(필터 · 윤활유 · 연료)은 먹을 것을 헤아리는 사람 몫 — 아무도 없거나 아주 급할 때만
+            WorkKind.Fabricate => (w.Automation.Unattended || o.Urgency >= 0.4f || w.Tick - o.Posted >= SimTime.Hours(1)) && FabOk(o) is Recipe fr
+                && (!fr.FromProduce || w.Automation.Unattended || o.Urgency >= 0.9f),
             _ => false,
         };
     }

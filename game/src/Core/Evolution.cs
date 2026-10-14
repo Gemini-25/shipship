@@ -179,7 +179,8 @@ public static class Evolution
         if (!FoodBeds || crew == 0) return false;
         need = crew * FoodPolicy.MealsPerPersonDay;
         grow = GrowCapacity(w);
-        return grow < need * 1.05f && (StarvedHours(w) >= 6f || FoodPolicy.FoodDays(w) < 3f);
+        // v23 정원을 넘겨 태웠으면 바닥나기 전에 미리 늘린다
+        return grow < need * 1.05f && (StarvedHours(w) >= 6f || FoodPolicy.FoodDays(w) < 3f || AnnexSystem.Crowded(w) && FoodPolicy.FoodDays(w) < 10f);
     }
 
     /// <summary>재배대가 하루에 대는 끼니 — 전기와 상관없이 (정전으로 멈춘 재배대를 모자람으로 세면 금속판 · 케이블을 다 써 가며 증설이 이어졌다) · 고장 난 재배대는 반 · 지금 돌봄만큼 (돌봄이 낮으면 덜 자란다).</summary>

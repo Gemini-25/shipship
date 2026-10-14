@@ -18,6 +18,7 @@ public static partial class Program
             int h0 = w.Ship.Grid.Height, rooms0 = w.Ship.Rooms.Count;
             float evade0 = w.Propulsion.EvadeCost, thrust0 = w.Propulsion.Thrust;
             Player.Scenario(w, "crowded", out _);
+            DroneSystem.ShieldOff = true; // 골조가 운석을 맞는 장면 — 방패 드론의 요격은 robot21test가 잰다 (착공 때가 바뀌면 드론이 다 막아 버린다)
             var homeless0 = w.Annex.Homeless().Select(c => c.Id).ToList();
             var stages = new List<AnnexStage>();
             int meteors = 0;
@@ -25,7 +26,7 @@ public static partial class Program
             IncomingMeteor? mt = null;
             AnnexPlan? p = null;
             bool slept = false;
-            float maxNoise = 0f;
+            float maxNoise = 0f, annexO2 = 99f;
             int maxOutside = 0;
             long t0 = w.Tick;
             while (w.Tick - t0 < SimTime.TicksPerDay * 7)
@@ -51,6 +52,7 @@ public static partial class Program
                 if (p.State == "개통")
                 {
                     var room = w.Ship.Rooms[p.RoomId];
+                    if (w.Tick - p.Opened > SimTime.Hours(1)) annexO2 = MathF.Min(annexO2, room.Air.O2);
                     if (!slept) foreach (var id in p.MovedIn) if (w.Crew[id].Pose == Pose.Sleeping && w.Crew[id].Room == room) slept = true;
                     if (slept && w.Tick - p.Opened > SimTime.Hours(2) || w.Tick - p.Opened > SimTime.TicksPerDay * 1.5f) break;
                 }
@@ -73,8 +75,10 @@ public static partial class Program
                     $"{by.Name} · {p.Why} ({p.Source}) · 간이침대 {homeless0.Count}명");
                 Check("주 컴퓨터 — 자리 · 무게 → 가속 · 연료 · 전력 · 자재 · 기간 · 위험 · 공정 순서", p.Advice.Contains("가속") && p.Advice.Contains("자재") && p.Advice.Contains("위험") && p.Advice.Contains("순서"),
                     p.Advice.Length > 160 ? p.Advice[..160] + "…" : p.Advice);
-                Check("회의가 정했다 (찬성 · 반대 · 기록)", p.Decided > 0 && p.For.Count > p.Against.Count && w.History.Events.Any(e => e.Text.Contains("회의: ") && e.Text.Contains("증축")),
-                    $"찬성 {p.For.Count} · 반대 {p.Against.Count}");
+                // v23 정원을 넘겨 태운 배는 회의 없이 바로 짓는다 (함장 · 주 컴퓨터) — 위험해서 미룬 것만 회의로
+                Check("정했다 — 정원을 넘긴 배는 회의 없이 바로 · 아니면 회의 (찬성 · 반대 · 기록)", p.Decided > 0
+                    && (p.Auto ? w.History.Events.Any(e => e.Text.Contains("회의 없이 바로 증축")) : p.For.Count > p.Against.Count && w.History.Events.Any(e => e.Text.Contains("회의: ") && e.Text.Contains("증축"))),
+                    p.Auto ? $"바로 착공 · 제안 뒤 {(p.Decided - p.Proposed) / (float)SimTime.TicksPerHour:0.#}시간" : $"찬성 {p.For.Count} · 반대 {p.Against.Count}");
                 Check("아래 여백에 지었다 — 격자 · 칸 배열이 맞다 (저장 기록의 칸이 처음부터 격자 안)", p.Site.Grow == 0 && p.Site.Y0 + p.Site.Depth + 1 < h0 && w.Body.Floor.Length == w.Ship.Grid.CellCount && w.Paths.CellBody.Length == w.Ship.Grid.CellCount,
                     $"높이 {h0} → {w.Ship.Grid.Height} · 바깥 벽 줄 {p.Site.Y0 + p.Site.Depth + 1} · 방 {rooms0} → {w.Ship.Rooms.Count}");
                 var want = new[] { AnnexStage.Frame, AnnexStage.Plating, AnnexStage.Pressure, AnnexStage.Utilities, AnnexStage.FitOut, AnnexStage.Opening };
@@ -90,6 +94,8 @@ public static partial class Program
                 int beds = room?.Furniture.Count(f => f.Type == FurnitureType.Bed) ?? 0;
                 Check("새 방 — 외벽에 문 · 첫 점등(전력) · 침대", room != null && door && room.Powered && !room.PowerCut && beds == p.Fixtures && p.FirstLight > 0,
                     $"{room?.Name} · 문 {(door ? "있음" : "없음")} · 전력 {(room?.Powered == true ? "들어옴" : "없음")} · 침대 {beds}/{p.Fixtures}");
+                Check("새 방에도 공기가 돈다 (환기 덕트가 이어져 산소가 들어온다 — 자는 동안에도)", annexO2 >= 18f,
+                    $"개통 뒤 최저 산소 {annexO2:0.0}kPa · 자는 사람 {p.MovedIn.Count}");
                 Check("새 침실이 열리면 사람들이 옮겨 가 잔다", p.MovedIn.Count >= 2 && slept && w.Annex.Homeless().Count < homeless0.Count,
                     $"옮긴 사람 {string.Join("·", p.MovedIn.Select(id => w.Crew[id].Name))} · 그 방에서 잠 {(slept ? "✔" : "✘")} · 간이침대 {homeless0.Count} → {w.Annex.Homeless().Count}");
                 bool chron = w.History.Events.Any(e => e.Text.Contains("증축 개통") && p.Name != null && e.Text.Contains(p.Name) && e.CrewIds.Length >= 2);
@@ -117,6 +123,7 @@ public static partial class Program
                 Check("되감기 — 증축 전으로 되감아 다시 흘려도 같은 역사", rw.Rewind && hBack == h0 && SaveGame.StateHash(rw.World) == SaveGame.StateHash(w),
                     $"{SimTime.Day(back)}일 {SimTime.Clock(back)} (높이 {hBack}) → {SaveGame.StateHash(rw.World):x8} / {SaveGame.StateHash(w):x8}");
             }
+            DroneSystem.ShieldOff = false; // 저장 · 되감기 재생도 같은 조건으로 흘린 뒤에 되돌린다
         }
 
         // ── 2) 기밀 시험을 건너뛰면 약한 이음이 나중에 터진다 (공사 구역 감압) ──
@@ -186,6 +193,38 @@ public static partial class Program
             uint G() { var w = DayOne(seed, "Hanbit"); Player.Scenario(w, "crowded", out _); Run(w, SimTime.TicksPerDay * 2); return SaveGame.StateHash(w) ^ (uint)w.Ship.Grid.Height * 2654435761u ^ (uint)w.Annex.Stats.Members; }
             uint c1 = G(), c2 = G();
             Check("결정론 — 증축 공사 중에도 같은 지문", c1 == c2, $"{c1:x8} / {c2:x8}");
+        }
+
+        // ── 4b) v23 정원을 넘겨 태운다 → 배가 알아서 넓힌다 (침실 · 재배실) ──
+        {
+            var w = DayOne(seed, "Hanbit");
+            int beds = w.Ship.Furniture.Count(f => FurnitureTypes.Sleepable(f.Type) && f.Type != FurnitureType.MedBed && !f.Stowed);
+            var at = w.Ship.LiveRooms.First(r => r.Type == RoomType.Corridor).Cells.First(w.Ship.IsWalkable);
+            while (w.Crew.Count(c => !c.Dead) < beds + 1) w.AddSurvivor(at);
+            int room = w.Berths();
+            Check("정원을 넘겨 태울 수 있다 (밖에 붙일 자리가 있으면 · 넘친 만큼 넓힌다)", room > 0,
+                $"침대 {beds} · 사람 {w.Crew.Count(c => !c.Dead)} · 더 태울 수 있는 사람 {room}");
+            // 재배대가 대는 끼니보다 입이 많고 배 안에 재배대 놓을 데가 없다 → 재배실 증축 (회의 없이)
+            while (!AnnexSystem.FoodBehind(w) && w.Crew.Count < World.MaxCrew) w.AddSurvivor(at);
+            w.History.GrowBedsAdded = Evolution.MaxGrowBeds;
+            w.Paths.Invalidate();
+            float grow0 = Evolution.GrowCapacity(w);
+            long t1 = w.Tick;
+            AnnexPlan? farm = null;
+            while (w.Tick - t1 < SimTime.TicksPerDay && farm == null) { w.Step(); farm = w.Annex.Plans.FirstOrDefault(x => x.Use == RoomType.Hydroponics && x.State == "공사"); }
+            Check("입이 늘고 재배대 놓을 데가 없으면 밖에 재배실을 붙인다 (회의 없이 바로)", farm != null && farm.Auto && farm.Fixtures >= 2,
+                farm != null ? $"{farm.Title} · {farm.Why}" : $"안건 {string.Join(" / ", w.Annex.Plans.Select(x => $"{x.Title}:{x.State}"))} · 사람 {w.Aboard} · 재배 {grow0:0}끼");
+            if (farm != null)
+            {
+                float g0 = Evolution.GrowCapacity(w);
+                var r = w.Annex.BuildNow(farm);
+                float g1 = Evolution.GrowCapacity(w);
+                var newBeds = r?.Furniture.Where(f => f.Type == FurnitureType.GrowBed && f.Machine?.Crop != null).ToList() ?? new List<Furniture>();
+                Run(w, SimTime.Hours(6));
+                float grown = newBeds.Count > 0 ? newBeds.Average(f => f.Machine!.Crop!.Growth) : 0f;
+                Check("재배실이 열리면 재배대가 자란다 (먹을 것이 는다)", r != null && r.Type == RoomType.Hydroponics && newBeds.Count == farm.Fixtures && g1 > g0 && grown > 0f,
+                    $"{r?.Name} · 재배대 {newBeds.Count}/{farm.Fixtures} · 하루 {g0:0} → {g1:0}끼 · 여섯 시간 뒤 자람 {grown * 100:0}% · 전기 {(r?.Powered == true ? "들어옴" : "없음")}");
+            }
         }
 
         // ── 5) 모든 기존 배에서 증축 한 번 (예외 없이) ──

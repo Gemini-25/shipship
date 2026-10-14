@@ -301,6 +301,9 @@ public sealed partial class WorkBoard
                 $"추진제 {p.Propellant:0}/{p.Capacity:0}kg · 물 {w.Water.Level:0}L에서 덜어 온다");
         // ── 항로 변경: 원료가 모자라면 잔해 지대로, 거기서 맞거나 채울 만큼 채웠으면 빠져나온다 ──
         int raw = ItemKinds.RawKinds.Sum(k => Have(k));
+        // v23 부품 고갈: 얼음 · 규산만 쌓이고 금속 원료 · 탄소가 바닥나도 합계로는 넉넉해 보였다 — 종류별로 본다
+        int ore = Have(ItemKind.MetalOre), carbon = Have(ItemKind.Carbon);
+        bool lean = ore < 6 || carbon < 4 || raw < 12 && Have(ItemKind.Plate) < 10;
         bool calm = Evolution.Peaceful(w) && w.Air.Reserve > w.Air.ReserveCapacity * 0.75f && Have(ItemKind.Sealant) >= 6;
         bool can = p.Thrust >= 0.5f && p.Propellant >= p.TransferCost;
         var bridge = w.Ship.RoomsOf(RoomType.Bridge).FirstOrDefault(r => !r.Abandoned && !r.Leaking);
@@ -311,16 +314,16 @@ public sealed partial class WorkBoard
                    ?? engine;
         // 회의를 통과한 항로 변경은 미루지 않는다 (당직보다 앞)
         bool approved = _open.Values.Any(o => o.Kind == WorkKind.ChangeCourse && o.Decision == DecisionState.Approved);
-        if (p.Zone == ZoneKind.Normal && raw < 12 && Have(ItemKind.Plate) < 10 && calm && can && w.Tick - p.ZoneSince > SimTime.Hours(72))
+        if (p.Zone == ZoneKind.Normal && lean && calm && can && w.Tick - p.ZoneSince > SimTime.Hours(72))
             post(WorkKind.ChangeCourse, WorkTarget.Of(helm), approved ? 0.7f : 0.4f, Skill.Piloting,
-                $"원료 {raw}개 · 금속판 {Have(ItemKind.Plate)}개 → 잔해 지대로 (채집 1.7배 · 작은 운석이 날아든다 · 추진제 {p.TransferCost:0}kg)",
+                (raw < 12 ? $"원료 {raw}개" : $"금속 원료 {ore}개 · 탄소 {carbon}개") + $" · 금속판 {Have(ItemKind.Plate)}개 → 잔해 지대로 (채집 1.7배 · 작은 운석이 날아든다 · 추진제 {p.TransferCost:0}kg)",
                 circuit: (int)ZoneKind.Debris);
         else if (p.Zone == ZoneKind.Debris)
         {
             float days = (w.Tick - p.ZoneSince) / (float)SimTime.TicksPerDay;
             string? why = p.HitsThisZone >= 2 ? $"잔해 지대에서 {p.HitsThisZone}번 맞았다"
                 : w.Air.Reserve < w.Air.ReserveCapacity * 0.6f ? "공기 탱크가 줄었다"
-                : raw > 40 ? $"원료를 채웠다 ({raw}개)"
+                : raw > 40 && ore >= 20 && carbon >= 10 ? $"원료를 채웠다 ({raw}개 · 금속 원료 {ore} · 탄소 {carbon})"
                 : days > 6f ? $"잔해 지대에서 {days:0}일"
                 : null;
             if (why != null)

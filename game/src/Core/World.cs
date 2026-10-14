@@ -1022,7 +1022,9 @@ public sealed class World
         int sleep = Ship.Furniture.Count(f => FurnitureTypes.Sleepable(f.Type) && f.Type != FurnitureType.MedBed && !f.Stowed && !f.Room.Abandoned && !f.Room.Detached) + (rescue ? 3 : 1);
         float grow = MathF.Max(FoodPolicy.GrowingPerDay(this), Evolution.GrowCapacity(this));
         int food = Math.Max(StartCrew, (int)(grow * (rescue ? 1f : 0.85f) / FoodPolicy.MealsPerPersonDay));
-        return Math.Max(0, Math.Min(MaxCrew, Math.Min(sleep, food)) - alive);
+        // v23 정원을 넘겨 태워도 된다 — 넘친 만큼 배가 알아서 증축한다 (침실 · 재배실 · 재배대). 밖에 붙일 자리가 없으면 넘기지 않는다
+        int over = !AnnexSystem.ThinkOff && Annex.Sites(RoomType.Quarters, 2).Count > 0 ? Math.Clamp(StartCrew / 2, 2, 6) : 0;
+        return Math.Max(0, Math.Min(MaxCrew, Math.Min(sleep, food) + over) - alive);
     }
 
     /// <summary>v10.4: 이 배의 템플릿 (저장·재생이 같은 배를 다시 만들 수 있게).</summary>

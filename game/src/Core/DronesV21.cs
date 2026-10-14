@@ -64,6 +64,8 @@ public static class DronesV21
 public sealed partial class DroneSystem
 {
     public DroneV21Stats V21 { get; } = new();
+    /// <summary>시험용: 방패 드론이 운석 길목에 나가지 않는다 (다른 장면을 재는 시험).</summary>
+    public static bool ShieldOff;
     private Rng? _v21Rng;
     private Rng R21 => _v21Rng ??= new Rng(unchecked(_world.Seed * 7741 + 307));
 
@@ -86,6 +88,7 @@ public sealed partial class DroneSystem
         {
             case DroneKind.Shield:
             {
+                if (ShieldOff) return false;
                 foreach (var m in w.Sensors.Incoming)
                 {
                     if (m.Warned == WarnLevel.None || m.Arrive - w.Tick > SimTime.Minutes(40) || m.Arrive <= w.Tick + SimTime.Minutes(1)) continue;
