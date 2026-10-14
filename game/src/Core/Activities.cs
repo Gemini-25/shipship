@@ -200,6 +200,26 @@ public sealed class EatActivity : Activity
         return (score, reason);
     }
 
+    /// <summary>v23 받은 칸 곁에서 줄 자리 · 받는 칸이 아닌 빈 칸 (같은 방 먼저).</summary>
+    private static Cell? StepAside(CrewMember cm, World w, Furniture box, Cell spot)
+    {
+        ServiceQueue? q = null;
+        foreach (var x in w.Coop.Queues.All) if (x.Kind == QueueKind.Meal && x.FurnitureId == box.Id) { q = x; break; }
+        Cell? best = null; float bd = float.MaxValue;
+        for (int r = 1; r <= 3 && best == null; r++)
+            for (int dx = -r; dx <= r; dx++)
+                for (int dy = -r; dy <= r; dy++)
+                {
+                    if (Math.Max(Math.Abs(dx), Math.Abs(dy)) != r) continue;
+                    var x = new Cell(spot.X + dx, spot.Y + dy);
+                    if (!w.Ship.IsWalkable(x) || w.IsSpotTaken(x, cm) || box.UseSpots.Contains(x)) continue;
+                    if (q != null && (x == q.Spot || q.Slots.Take(4).Contains(x))) continue;
+                    float d = (x.Center - cm.Position).LengthSquared() + (w.Ship.RoomAt(x) == box.Room ? 0f : 50f);
+                    if (d < bd) { bd = d; best = x; }
+                }
+        return best;
+    }
+
     public override Job? Plan(CrewMember c, World w, DistanceField dist)
     {
         var (box, spot, src) = FindFood(c, w, dist);
@@ -239,10 +259,13 @@ public sealed class EatActivity : Activity
             if (kind == ItemKind.Ration) world.FoodSources.Note(FoodSrc.Stored, 1); // v16.22 저장 식량을 뜯었다
             return true;
         }));
+        // v23 받은 칸에 선 채 먹으면(앉을 자리가 없거나 · 굶주려 먼 자리까지 안 가거나) 뒤 사람이 받는 칸에 못 간다 —
+        //   굶주린 사람이 차례로 그 자리를 막아 "받는 칸 길이 막혔다"로 하루 551번 줄에서 빠졌다 (제비호 62~72일) · 받으면 한 걸음 비켜선다
+        if (back == null && seat == null && away == null && !grab) toils.Add(new StepAsideToil(cm => StepAside(cm, w, box, spot)));
         if (back is Cell b) toils.Add(new GotoToil(b));
         else toils.AddRange(w.Cooking.ReheatToils()); // v16.8 식었으면 데운다 (전기가 모자라면 그냥)
         toils.AddRange(w.After.PauseToils(c, seat, dist)); // v17.5 떠난 사람의 빈자리 앞에서 잠깐
-        if (seat != null) toils.Add(new GotoToilLate(cm => cm.Needs.Hunger > 0.9f && (seat.Center - cm.Position).Length() > 10f ? null : w.Coop.Queues.SeatFor(cm, seat))); // v17.4 받고 나서 다시 본다 (방금 다툰 사람 곁이면 떨어진 자리로) · v23 줄에서 기다리다 굶주림 지경이 됐으면 먼 자리까지 들고 가지 않고 받은 자리에서 먹는다 (한울호: 식판을 들고 30~60분)
+        if (seat != null) toils.Add(new GotoToilLate(cm => cm.Needs.Hunger > 0.9f && (seat.Center - cm.Position).Length() > 10f ? StepAside(cm, w, box, spot) : w.Coop.Queues.SeatFor(cm, seat))); // v17.4 받고 나서 다시 본다 (방금 다툰 사람 곁이면 떨어진 자리로) · v23 줄에서 기다리다 굶주림 지경이 됐으면 먼 자리까지 들고 가지 않고 받은 자리에서 먹는다 (한울호: 식판을 들고 30~60분)
         if (away != null) toils.AddRange(w.After.AwayToils(away)); // v17.5
 
         var table = seat == null ? null : seat.Room.Furniture.Where(f => f.Type == FurnitureType.Table)

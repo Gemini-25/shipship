@@ -100,6 +100,35 @@ public sealed class GotoToilLate : Toil
     }
 }
 
+/// <summary>v23 한 걸음 비켜선다 — 못 비키면 그 자리에서 (실패하지 않는다: 받아 든 끼니를 잃지 않게).</summary>
+public sealed class StepAsideToil : Toil
+{
+    private readonly Func<CrewMember, Cell?> _pick;
+    private bool _ok;
+
+    public StepAsideToil(Func<CrewMember, Cell?> pick) => _pick = pick;
+
+    public override void Begin(CrewMember c, World w)
+    {
+        _ok = _pick(c) is Cell t && t != c.Cell && Locomotion.SetDestination(c, w, t);
+        if (_ok && c.Path is { Count: > 0 }) c.Pose = Pose.Walking;
+        else c.Path = null;
+    }
+
+    public override ToilStatus Tick(CrewMember c, World w)
+    {
+        if (!_ok || c.Path == null || Locomotion.Step(c, w) || c.PathBlocked) { c.PathBlocked = false; return ToilStatus.Succeeded; }
+        return ToilStatus.Running;
+    }
+
+    public override void End(CrewMember c, World w)
+    {
+        c.Path = null;
+        c.Destination = null;
+        if (c.Pose == Pose.Walking) c.Pose = Pose.Standing;
+    }
+}
+
 /// <summary>자리에서 시간을 보낸다 (식사, 수면, 휴식).</summary>
 public sealed class WaitToil : Toil
 {

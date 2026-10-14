@@ -146,6 +146,8 @@ public static partial class Program
             var pr = w.Propulsion;
             int ore = w.Board.Have(ItemKind.MetalOre), carbon = w.Board.Have(ItemKind.Carbon), raw = ItemKinds.RawKinds.Sum(k => w.Board.Have(k));
             Console.WriteLine($"      [항로] {PropulsionSystem.ZoneName(pr.Zone)} {(w.Tick - pr.ZoneSince) / (float)SimTime.TicksPerDay:0.0}일 · 추진제 {pr.Propellant:0}/{pr.Capacity:0}(이동 {pr.TransferCost:0}) · 추력 {pr.Thrust * 100:0}% · 원료 {raw}(금속 {ore} · 탄소 {carbon}) · 평온 {Evolution.Peaceful(w)} · 공기 탱크 {w.Air.Reserve / Math.Max(1f, w.Air.ReserveCapacity) * 100:0}% · 실런트 {w.Board.Have(ItemKind.Sealant)} · 물 {w.Water.Level:0}/{w.Water.Capacity:0}L · 항로 일 {open.Count(o => o.Kind == WorkKind.ChangeCourse)}");
+            // 원료가 들어온 길: 채집 장치 누계 · 채굴 드론 · 고철 되살림
+            Console.WriteLine($"      [원료 들어옴] 채집 장치 {w.Ship.FurnitureOf(FurnitureType.Collector).Count()}대 누계 {w.Collection.Collected} · 밀도 {w.Space.Density:0.00} · 드론 채굴 {w.Drones.V21.Mines}번(얼음 {w.Drones.V21.Ice} · 금속 {w.Drones.V21.Ore}) · 고철 되살림 {w.Scrap.Recovered}");
         }
         // 누가 무엇으로 숨졌나 (굶주림이 없는데 하나둘 죽는 배)
         var deadNow = w.Crew.Where(c => c.Dead).ToList();

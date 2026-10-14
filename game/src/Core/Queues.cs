@@ -624,7 +624,7 @@ public sealed class QueueToil : Toil
             if (!_ok && !NearSpot(c)) { FailWhy = "받는 칸에 갈 길이 없다"; return ToilStatus.Failed; }
             if (!_ok || c.Path == null || Locomotion.Step(c, w)) { c.Path = null; c.Pose = Pose.Standing; Locomotion.Face(c, q.Toward); _done = true; return ToilStatus.Succeeded; }
             if (c.PathBlocked && NearSpot(c)) { c.PathBlocked = false; c.Path = null; c.Pose = Pose.Standing; Locomotion.Face(c, q.Toward); _done = true; return ToilStatus.Succeeded; } // v23 받는 칸 바로 곁까지 왔으면 손을 뻗어 받는다
-            if (c.PathBlocked) FailWhy = "받는 칸 길이 막혔다";
+            if (c.PathBlocked) FailWhy = BlockWhy(c, w);
             return c.PathBlocked ? ToilStatus.Failed : ToilStatus.Running;
         }
         int idx = q.Line.IndexOf(c.Id);
@@ -654,6 +654,15 @@ public sealed class QueueToil : Toil
         if (!_arrivedOnce) { _arrivedOnce = true; qs.OnArrive(c, q); }
         else if (w.Tick % 25 == c.Id % 25 && qs.Waiting(c, q, Math.Max(0, q.Line.IndexOf(c.Id)))) { FailWhy = "줄이 길어 포기"; return ToilStatus.Failed; }
         return ToilStatus.Running;
+    }
+
+    /// <summary>v23 받는 칸 길이 왜 막혔나 (끊긴 끼니 기록 — "받는 칸 길이 막혔다" 하나로는 고칠 곳을 못 찾았다).</summary>
+    private string BlockWhy(CrewMember c, World w)
+    {
+        var t = Target;
+        if (Locomotion.Blocked(w.Ship, t)) return "받는 칸 길이 막혔다 (받는 칸에 물건)";
+        if (w.Ship.RoomAt(t) is Room r && r != c.Room && (r.Unbreathable || r.Air.Pressure < 50f)) return "받는 칸 길이 막혔다 (그 방 공기가 없다)";
+        return w.Ship.RoomAt(t) is Room r2 && r2 != c.Room ? $"받는 칸 길이 막혔다 ({c.Room?.Name ?? "?"} → {r2.Name})" : "받는 칸 길이 막혔다 (같은 방 안)";
     }
 
     public override void End(CrewMember c, World w)
