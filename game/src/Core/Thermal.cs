@@ -33,6 +33,7 @@ public sealed partial class Atmosphere
     [NotSaved] private float[] _wallFlow = Array.Empty<float>();
     private readonly System.Collections.Generic.List<(int a, int b, float g)> _links = new();
     private long _wallsAt = -1;
+    [NotSaved] private float[] _boostKw = Array.Empty<float>();
     private int _wallsKey = -1;
 
     /// <summary>임시 단열재로 감싼 방: 벽으로 드나드는 열이 1/3.</summary>
@@ -118,7 +119,7 @@ public sealed partial class Atmosphere
     public float HvacElectricKw { get; private set; }
 
     /// <summary>공조가 맞추는 온도: 원자로실 · 기관실은 덥게 둔다 (식히는 전기를 아낀다).</summary>
-    public static float Setpoint(Room r) => r.Type == RoomType.Reactor ? 27f : r.Type == RoomType.Engine ? 24f : 21f;
+    public static float Setpoint(Room r) => (r.Type == RoomType.Reactor ? 27f : r.Type == RoomType.Engine ? 24f : 21f) + r.HomeoOffset; // 항상성: 미리 덥히기 · 식히기 · 닫은 방
 
     /// <summary>돌아가는 설비가 쓰는 전기 가운데 방에 열로 남는 몫.</summary>
     private static float HeatShare(FurnitureType t) => t switch
@@ -165,6 +166,9 @@ public sealed partial class Atmosphere
             _wallFlow[ib] += q;
         }
         float shellC = w.Planet?.ShellC ?? ShellC, hullMul = w.Planet?.HullHeatMul ?? 1f; // (배를 만드는 동안엔 행성이 아직 없다)
+        bool space = w.Planet?.Landed != true && !Homeostasis.Off && w.Homeo != null; // 항상성 마) 우주 공간: 방마다 햇빛 쪽 · 그늘 쪽 선체 온도
+        float boost = w.Homeo?.HeatBoost ?? 1f;
+        if (_boostKw.Length != ship.Rooms.Count) _boostKw = new float[ship.Rooms.Count];
         foreach (var r in ship.Rooms)
         {
             if (r.Detached) { r.HvacHeat = 0f; r.HvacKw = 0f; continue; }
@@ -174,14 +178,22 @@ public sealed partial class Atmosphere
             if (r.Type == RoomType.Engine && w.Propulsion.Burning) r.HeatIn += HullLossPerCell * vol * 6f;
             if (r.Type == RoomType.Galley && cooking) r.HeatIn += 0.5f;
             float t = r.Air.Temperature;
-            float loss = _hullG[r.Id] * Wrap(w, r) * hullMul * (t - shellC); // v23 행성: 바깥 기온 · 바람
+            float rs = space ? w.Homeo!.Shell(r) : shellC;
+            float loss = _hullG[r.Id] * Wrap(w, r) * hullMul * (t - rs); // v23 행성: 바깥 기온 · 바람 · 항상성 마) 우주: 햇빛 쪽 · 그늘 쪽
             float net = r.HeatIn - loss + _wallFlow[r.Id];
             // 공조: 덥히기는 전기가 든 방(벽 패널 · 냉각수 남는 열) · 식히기는 환기되는 방(덕트)
             float want = net + HvacRate * cap * (t - Setpoint(r));
             float hv = 0f;
             float lim = MathF.Max(HvacPerCell * vol * (r == comp ? 3f : 1f), Design(r, comp) * 1.25f); // 컴퓨터실은 전용 냉각기 · 기계 방은 설비 열에 맞춰 (25% 여유)
-            if (want > 0f && Vented(r) && !r.Leaking) hv = MathF.Min(want, r.HvacShed ? MathF.Min(lim, Design(r, comp)) : lim); // v23 끊긴 냉방 전기 — 설계 몫까지만
-            else if (want < 0f && r.Powered) hv = MathF.Max(want, -lim);
+            _boostKw[r.Id] = 0f;
+            if (want > 0f && Vented(r) && !r.Leaking) hv = MathF.Min(want, r.HvacShed ? MathF.Min(lim, Design(r, comp)) : lim * boost); // v23 끊긴 냉방 전기 — 설계 몫까지만 · 항상성: 더위 대비 땐 냉방에 전기를 더
+            else if (want < 0f && r.Powered)
+            {
+                // 덥히는 몫: 우주에서는 선체 0℃까지 바깥벽으로 빠지는 열을 댈 만큼 (원자로 냉각수의 남는 열 · 벽 패널) · 항상성 추위 대비 땐 원자로 출력을 보탠다 (보탠 만큼 전기)
+                float heatLim = space ? MathF.Max(lim, _hullG[r.Id] * Wrap(w, r) * MathF.Max(0f, Setpoint(r) - (ShellC - 6f)) * 1.1f) : lim;
+                hv = MathF.Max(want, -heatLim * boost);
+                _boostKw[r.Id] = MathF.Max(0f, -hv - heatLim);
+            }
             r.HvacHeat = hv;
             if (hv > 0f) { if (r != comp) cool += hv; } else heat -= hv;
             r.Air.Temperature = t + (net - hv) / cap * dtHours;
@@ -193,6 +205,7 @@ public sealed partial class Atmosphere
             float hv = r.HvacHeat;
             float over = hv <= 0f || r.Detached ? 0f : MathF.Max(0f, hv - Design(r, comp)); // 설계 몫을 넘는 열
             r.HvacKw = over <= 0f ? 0f : r == comp ? over / CoolCop : over / MoveCop + (cool > 0f ? reject * hv / cool / CoolCop : 0f);
+            r.HvacKw += _boostKw.Length > r.Id ? _boostKw[r.Id] : 0f; // 원자로 출력을 보탠 난방 (전기 그대로 열로)
             elec += r.HvacKw;
         }
         CoolingKw = cool + (comp?.HvacHeat > 0f ? comp.HvacHeat : 0f);

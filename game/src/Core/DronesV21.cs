@@ -52,7 +52,7 @@ public static class DronesV21
 
     public static float ErrandHours(Drone d) => d.Errand switch
     {
-        DroneErrand.Mine => 1.5f,
+        DroneErrand.Mine => d.GuardFor == 1 ? 2.5f : 1.5f, // 끌어오기는 멀리 나가 바위를 묶어 온다
         DroneErrand.Polish => 0.5f,
         DroneErrand.Relay => 1f,
         DroneErrand.Zone => 0.5f,
@@ -149,11 +149,18 @@ public sealed partial class DroneSystem
                     if (dir.LengthSquared() < 0.01f) continue;
                     var at = hc.Center + Vector2.Normalize(dir) * 4f;
                     at = new Vector2(Math.Clamp(at.X, 0.5f, grid.Width - 0.5f), Math.Clamp(at.Y, 0.5f, grid.Height - 0.5f));
-                    if (grid.Kind(Cell.FromPosition(at)) != TileKind.Void || TripCost(d, at, 1.5f) > d.Battery) continue;
+                    // 재료 관리: 돌이 많은 구간이고 급한 원료가 그 돌에 들어 있으면 작은 바위 · 혜성 조각을 끌어온다 (하루 한 번 · 더 멀리 · 오래)
+                    var far = hc.Center + Vector2.Normalize(dir) * 6f;
+                    far = new Vector2(Math.Clamp(far.X, 0.5f, grid.Width - 0.5f), Math.Clamp(far.Y, 0.5f, grid.Height - 0.5f));
+                    bool tow = w.Mats.TowSource() != null && grid.Kind(Cell.FromPosition(far)) == TileKind.Void && TripCost(d, far, 2.5f) <= d.Battery && w.Mats.WantTow();
+                    if (tow) at = far;
+                    if (grid.Kind(Cell.FromPosition(at)) != TileKind.Void || TripCost(d, at, tow ? 2.5f : 1.5f) > d.Battery) continue;
                     d.Errand = DroneErrand.Mine;
                     d.ErrandSpot = at;
+                    d.GuardFor = tow ? 1 : -1;
                     d.NextErrand = w.Tick + SimTime.Hours(8);
-                    Launch(d, at, "얼음 · 금속 먼지 캐기");
+                    var aim = tow ? null : w.Mats.MineFor();
+                    Launch(d, at, tow ? $"{w.Mats.TowSource()!.Value.what} 끌어오기" : aim is ItemKind ak ? $"{ItemKinds.Name(ak)} 먼지를 노려 캐기" : "얼음 · 금속 먼지 캐기");
                     return true;
                 }
                 return false;
@@ -183,14 +190,26 @@ public sealed partial class DroneSystem
         {
             case DroneErrand.Mine:
             {
+                if (d.GuardFor == 1) { V21.Mines++; MarkLog.Add(d.Marks, w.Tick, $"{w.Mats.Towed(d)} 끌어 옴"); break; } // 끌어온 바위 · 혜성 조각
                 // v23 얼음이 창고에 넉넉하면(30개↑) 얼음 대신 금속 · 탄소 먼지를 고른다 — 얼음만 90개 넘게 쌓이고 금속 원료 · 탄소가 바닥났다 (보듬호)
                 bool iceFull = w.Ship.CountStored(ItemKind.Ice) >= 30;
                 int ice = iceFull ? 0 : 1 + (R21.Chance(0.6f) ? 1 : 0), ore = iceFull ? 1 + (R21.Chance(0.5f) ? 1 : 0) : R21.Chance(0.5f) ? 1 : 0, carbon = iceFull && R21.Chance(0.6f) ? 1 : 0;
+                // 재료 관리: 가장 급한 원료를 노려 캔다 (그 먼지를 골라 긁는다 — 둘에 하나 더)
+                int sil = 0;
+                if (w.Mats.MineFor() is ItemKind aim)
+                {
+                    w.Mats.Aimed();
+                    ice = aim == ItemKind.Ice ? 2 + (R21.Chance(0.5f) ? 1 : 0) : 0;
+                    ore = aim == ItemKind.MetalOre ? 2 + (R21.Chance(0.5f) ? 1 : 0) : R21.Chance(0.3f) ? 1 : 0;
+                    carbon = aim == ItemKind.Carbon ? 2 + (R21.Chance(0.4f) ? 1 : 0) : 0;
+                    sil = aim == ItemKind.Silicate ? 1 + (R21.Chance(0.5f) ? 1 : 0) : 0;
+                }
+                if (sil > 0) VoyageV15.Put(w, ItemKind.Silicate, sil);
                 if (ice > 0) VoyageV15.Put(w, ItemKind.Ice, ice); // 배 창고로 (거치대에서 로봇이 옮긴 셈)
                 if (ore > 0) VoyageV15.Put(w, ItemKind.MetalOre, ore);
                 if (carbon > 0) VoyageV15.Put(w, ItemKind.Carbon, carbon);
                 V21.Mines++; V21.Ice += ice; V21.Ore += ore;
-                string got = string.Join(" · ", new[] { ice > 0 ? $"얼음 {ice}" : null, ore > 0 ? $"금속 원료 {ore}" : null, carbon > 0 ? $"탄소 {carbon}" : null }.Where(x => x != null));
+                string got = string.Join(" · ", new[] { ice > 0 ? $"얼음 {ice}" : null, ore > 0 ? $"금속 원료 {ore}" : null, carbon > 0 ? $"탄소 {carbon}" : null, sil > 0 ? $"규산 {sil}" : null }.Where(x => x != null));
                 MarkLog.Add(d.Marks, w.Tick, $"{got} 캐 옴");
                 w.Log.Add(w.Tick, LogKind.Work, $"{d.Name}: 배 곁을 지나는 먼지 띠에서 {got}을 긁어 왔다 (거치대 자재칸{(iceFull ? " · 얼음은 넉넉해 금속 · 탄소 먼지만" : "")})");
                 break;

@@ -45,9 +45,12 @@ public sealed partial class PurposeSystem
         float margin = DaysLeft - RouteLeft;
         int route = w.Policies["route"];
         float shortScore = (margin < 1f ? 1.2f : margin < 3f ? 0.4f : -0.2f) - strain * 1.5f + (route == 2 ? 0.6f : route == 3 ? 0.3f : route == 1 ? -0.8f : 0f) + (m.Kind == MissionKind.Cargo ? 0.2f : 0f);
+        // 재료 관리: 금속 · 규산이 바닥이면 돌 많은 지름길(소행성대 · 난파선 무덤)을 더 쳐준다 — 지나며 캐고 거둔다
+        bool rocks = risky is (LegKind.AsteroidBelt or LegKind.Graveyard) && w.Mats.Urgent(0.6f) is (ItemKind.MetalOre or ItemKind.Silicate);
+        if (rocks) shortScore += 0.5f;
         bool takeShort = shortScore > 0f;
         string why = takeShort
-            ? (margin < 1f ? $"기한이 빠듯하다 (여유 {margin:0.0}일)" : route == 2 ? "방침이 빠르게" : "배가 버틸 만하다") + $" — {riskyName}을 지나 {save:0.0}일 줄인다"
+            ? (rocks ? $"{ItemKinds.Name(w.Mats.Urgent(0.6f)!.Value)}가 바닥이다 — 돌 많은 길에서 거둔다" : margin < 1f ? $"기한이 빠듯하다 (여유 {margin:0.0}일)" : route == 2 ? "방침이 빠르게" : "배가 버틸 만하다") + $" — {riskyName}을 지나 {save:0.0}일 줄인다"
             : (strain >= 0.3f ? $"배가 상했다 ({strain * 100:0}%)" : route == 1 ? "방침이 안전하게" : $"여유가 있다 ({margin:0.0}일)") + $" — {safeName}으로 돌아 {extra:0.0}일 더 간다";
         v.ForkTo(takeShort ? risky : safe, takeShort ? -save : extra, _rng);
         Note(m, $"갈림길 — {(takeShort ? "지름길" : "돌아가는 길")}: {why}");

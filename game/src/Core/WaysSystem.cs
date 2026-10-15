@@ -501,6 +501,10 @@ public sealed partial class WaysSystem
                 if (!here) continue;
                 if (way.Id == "breach.weld" && w.Ship.CountStored(ItemKind.Sealant) >= 1) continue; // 실링폼이 있으면 실링폼 갈래
                 if (way.Id == "breach.sealant" && w.Ship.CountStored(ItemKind.Sealant) < 1) continue;
+                // 추운 방에서 하는 수리가 모두 "난방을 고친다"는 아니다 — 전기가 끊긴 방이거나 열을 대는 설비(배전반 · 원자로 · 냉각 · 보조 발전기)를 고칠 때만
+                //   (추운 행성 · 깊은 공허에서는 바깥이 추운 것이지 난방이 고장 난 게 아니다 — 아무 수리나 난방 수리로 적던 것)
+                if (way.Id == "cold.heater" && room != null && room.Powered && room.PowerLinked
+                    && o.Target.Furniture?.Type is not (FurnitureType.PowerPanel or FurnitureType.ReactorCore or FurnitureType.CoolantPump or FurnitureType.HeatExchanger or FurnitureType.AuxGenerator)) continue;
                 See(way.Id, c.Id);
             }
         }

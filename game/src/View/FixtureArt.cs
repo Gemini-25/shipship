@@ -49,6 +49,7 @@ public static partial class FixtureArt
         MedArt2(t);     // FixtureArtMed2.cs — 의료 2차 (투석기 · 인공 폐 · 인공 심장 충전대 · 장기 보관함 · 바이오 프린터 · 음압기)
         MedArt3(t);     // FixtureArtMed3.cs — 의료 3차 수술 로봇 팔
         MindArt(t);     // FixtureArtMind.cs — v23 마음 돌봄 오락실
+        MatArt(t);      // FixtureArtMats.cs — 재료 되살리기 (탄소 회수기)
         return t;
     }
 

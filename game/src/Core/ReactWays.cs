@@ -254,7 +254,8 @@ public sealed partial class ReactSystem
         float seek = 0.1f + 0.4f * t.Bravery + 0.25f * t.Diligence + (fireman ? 0.4f : 0f) - (Life.Has(c, Habit.Worrier) ? 0.25f : 0f);
         float leave = 0.15f + 0.45f * (1f - t.Bravery) + (Life.Has(c, Habit.Worrier) ? 0.25f : 0f) + (c.Vitals.Health < 0.7f ? 0.2f : 0f);
         long until = w.Tick + SimTime.Minutes(20);
-        if (seek >= leave && Smokier(room) is Room src && FreeNear(src, src.Center) is Cell sc && R.Chance(Math.Clamp(seek, 0.1f, 0.9f)))
+        // 연기 나는 방이 이미 불타고 있으면 "살피러" 그 안으로 걸어 들어가지 않는다 — 불은 비상 자리가 맡고, 구경은 바깥에서 (불타는 창고 한가운데 서 있던 것)
+        if (seek >= leave && Smokier(room) is Room src && w.Fire.CountIn(src) == 0 && FreeNear(src, src.Center) is Cell sc && R.Chance(Math.Clamp(seek, 0.1f, 0.9f)))
         {
             Plan(c, s, new ReactAct { Kind = ReactKind.Move, For = Stir.Smoke, To = sc, Face = src.Center, Target = src.Id, Label = $"연기 나는 {src.Name} 쪽을 살핀다", Way = "smoke_seek", Score = 0.52f, Until = until });
             return "smoke_seek";

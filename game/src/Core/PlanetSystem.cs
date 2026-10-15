@@ -168,6 +168,13 @@ public sealed partial class PlanetSystem
             if (Need(p) > 0.3f) why.Add("모자란 것이 있다");
             if (blur > 0.5f) why.Add("잘 안 보인다");
             if (p.Special) why.Add("이름난 곳");
+            // 항상성: 그 땅의 추위 · 더위를 이 배가 버틸 수 있나 (단열 덮개 · 난방 보탬까지 쳐서) — 못 버티면 내리지 않는다
+            if (!Homeostasis.Off)
+            {
+                var (hold, hnote) = w.Homeo.CanHold(p);
+                if (!hold) { p.CompScore -= 1f; why.Add(hnote); }
+                else if (p.TempC < -60f || p.TempC > 60f) why.Add(hnote);
+            }
             p.CompNote = string.Join(" · ", why);
         }
         var best = Candidates.OrderByDescending(c => c.CompScore).First();

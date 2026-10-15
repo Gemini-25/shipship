@@ -136,6 +136,13 @@ public sealed partial class RobotSystem
     /// <summary>하던 일을 내려놓는다 (끊긴 구역의 로봇이 눈앞의 일을 스스로 맡을 때).</summary>
     internal void DropTaskFor(Robot r) => DropTask(r);
 
+    /// <summary>새 일을 맡기 전에 쥐고 있던 일을 놓는다 — 덮어쓰면 옛 일에 로봇 이름이 남아 아무도 못 맡았다
+    /// (지휘 건으로 불려 간 정밀 정비 로봇이 비누 정제를 쥔 채 해체돼, 정제기 한 대가 하루 넘게 묶였다 — 한빛호).</summary>
+    internal static void LetGo(Robot r, WorkOrder next)
+    {
+        if (r.Order is WorkOrder old && old != next && old.Robot == r) old.Robot = null;
+    }
+
     /// <summary>
     /// 다친 사람 곁으로: 피가 나면 곧장 상처를 누른다 (주 컴퓨터의 지시 — 어느 로봇이든 손으로 누를 수는 있다) ·
     /// 의료 로봇은 제 판단표(구급 키트 · 피 나르기 · 들것)로 · 아니면 곁에 서서 지킨다.
@@ -217,6 +224,7 @@ public sealed partial class RobotSystem
         if (Spot(r, o, field) is not Cell spot) return false;
         var steps = Plan(r, o, spot, field, out string? blocked);
         if (steps == null) { if (blocked != null) r.Mind.Say($"{o.Title} — {blocked}", w.Tick); return false; }
+        LetGo(r, o);
         o.Robot = r;
         r.Order = o;
         Begin(r, steps, label ?? $"{o.Title} — 지휘 건 #{r.CaseId}");

@@ -61,6 +61,8 @@ public static class Recipes
         // 채소가 모자랄 때의 길: 탄소 원료로 활성탄 필터와 합성 윤활유 (필터 ← 채소 ← 물 ← 정수기 ← 필터의 고리를 끊는다)
         new(ItemKind.Filter, In((ItemKind.Carbon, 1)), 0.8f, Skill.Mechanics, Station.Refinery, 6),
         new(ItemKind.Lubricant, In((ItemKind.Carbon, 1), (ItemKind.Ice, 1)), 0.8f, Skill.Mechanics, Station.Refinery, 6),
+        // 남는 채소를 말려 탄소 원료로 (먹을 것이 넉넉할 때만 — 탄소가 모자라 실링폼 · 필터를 못 만들던 배)
+        new(ItemKind.Carbon, In((ItemKind.Produce, 3)), 1f, Skill.Mechanics, Station.Refinery, 6),
     };
 
     public static Recipe? For(ItemKind k) => All.FirstOrDefault(r => r.Product == k);
@@ -147,7 +149,7 @@ public sealed class CollectionSystem
             while (acc >= 1f)
             {
                 acc -= 1f;
-                var kind = Pick(w.Rng);
+                var kind = w.Mats.Sieve(Pick(w.Rng)); // 주 컴퓨터가 급한 원료 쪽으로 체를 바꿔 낀다
                 if (f.Storage!.Count(kind) >= (kind == ItemKind.Rare ? 5 : BinSize)) continue; // 그 칸이 가득: 흘려보낸다
                 if (f.Storage.Add(kind, 1) > 0)
                 {

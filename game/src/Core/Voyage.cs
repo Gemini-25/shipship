@@ -136,6 +136,7 @@ public sealed partial class VoyageSystem
         if (w.Eras.Has("warpbubble")) speed *= 2f; // v12.8 공간 왜곡
         speed *= w.Eras.TreeMul("speed"); // v23 초공간 항법
         speed *= VoyageV15.SpeedMul(Current.Kind); // v15.4 태양풍 물길
+        speed *= w.Mats.SpeedMul; // 짧은 들름: 돌이 많은 구간을 반나절 천천히 지나며 더 거둔다
         if (Current.Kind == LegKind.Port) speed = 1f; // 정박 중
         if (w.Expedition.Halted) speed = 0f; // v16.12 재료가 바닥나 엔진을 껐다 — 일정이 밀린다
         if (w.Planet?.Holding == true) speed = 0f; // v23 행성에 가는 · 머무는 동안

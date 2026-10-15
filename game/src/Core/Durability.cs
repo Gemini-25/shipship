@@ -85,6 +85,7 @@ public static class Essentials
             or FurnitureType.SuitLocker or FurnitureType.SuitDryer or FurnitureType.Lathe or FurnitureType.SolderStation or FurnitureType.ReactorSimulator => Essential.Support,
         FurnitureType.Dialyzer or FurnitureType.Ecmo or FurnitureType.HeartPump or FurnitureType.OrganCooler or FurnitureType.NegPressure => Essential.Support, // 의료 2차
         FurnitureType.SurgicalArm => Essential.Support, // 의료 3차
+        FurnitureType.CarbonReclaimer => Essential.Support, // 재료 되살리기
         _ => Essential.Comfort,
     };
 

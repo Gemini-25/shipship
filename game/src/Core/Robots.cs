@@ -895,6 +895,7 @@ public sealed partial class RobotSystem
             if (steps != null)
             {
                 w.Fleet.Chose(r, best, steps); // v16.20b 판단 이유 · 단계
+                LetGo(r, best);
                 best.Robot = r;
                 r.Order = best;
                 Begin(r, steps, best.Title);

@@ -22,7 +22,7 @@ public partial class Hud
 
     private static readonly (string name, string icon, string[] pages)[] DockTabs =
     {
-        ("배", "layers", new[] { "겹쳐 보기", "지도", "함선 지표" }),
+        ("배", "layers", new[] { "겹쳐 보기", "지도", "함선 지표", "항상성 · 재료" }),
         ("사람", "people", new[] { "승무원", "방침", "회의록", "메신저" }),
         ("기록", "log", new[] { "항해 기록", "연대기", "항해 결산", "인과 사슬", "사진첩", "항해의 책" }),
         ("사고", "incident", new[] { "사고 도구", "사고 도감", "이야기꾼", "지휘" }),
@@ -227,6 +227,7 @@ public partial class Hud
             case (DockTab.Ship, 0): DrawViewPage(mouse); break;
             case (DockTab.Ship, 1): DrawMinimap(_dockBody); break;
             case (DockTab.Ship, 2): DrawProfile(_dockBody.Position); break;
+            case (DockTab.Ship, 3): DrawHomeoPage(mouse); break; // 항상성 (온도 · 습도 · 이산화탄소 · 기압 · 방사선) · 재료 (며칠 치)
             case (DockTab.People, 0): DrawCrewPage(mouse); break;
             case (DockTab.People, 1): DrawPolicy(mouse); break;
             case (DockTab.People, 2): DrawCouncil(mouse); break;

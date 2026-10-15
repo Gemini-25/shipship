@@ -621,9 +621,14 @@ public sealed partial class WorkBoard
                 if (r.Station != station || !w.History.Doctrine.Knows(r)) continue;
                 int have = Have(r.Product);
                 int held = w.Board.Held(r.Product), target = Math.Max(Math.Max(w.History.Doctrine.Target(r), held), w.Pharmacy.Want(r.Product)); // v15.6 비축 임무: 모을 만큼 더 만든다 · 의료 1차 약은 컴퓨터 예측만큼
+                if (r.Station == Station.Refinery) target = Math.Max(target, (int)MathF.Ceiling(w.History.Doctrine.Target(r) * MaterialSystem.StockScale(w, r.Product))); // 재료 관리: 큰 배는 수리재를 더 쌓는다
                 float wanted = demand.GetValueOrDefault(r.Product);
                 if (have >= target && wanted <= 0f) continue;
-                if (!r.Inputs.All(x => Have(x.kind) >= x.count)) continue;
+                if (!r.Inputs.All(x => Have(x.kind) >= x.count))
+                {
+                    foreach (var x in r.Inputs) if (Have(x.kind) < x.count) w.Mats.Lacked(x.kind); // 재료 관리: 이 원료가 없어 못 만든다
+                    continue;
+                }
                 // 수리가 기다리는 재료는 재고 채우기용 제작에 쓰지 않는다 (뜯어 온 부품이 엉뚱한 데 쓰이지 않게)
                 if (wanted <= 0f && r.Inputs.Any(x => demand.GetValueOrDefault(x.kind) > 0f)) continue;
                 if (r.MinSkill > 0f && !w.Crew.Any(c => !c.Dead && !c.Down && !c.Away && c.SkillLevel(r.Skill) >= r.MinSkill)) continue;
@@ -687,6 +692,36 @@ public sealed partial class WorkBoard
     /// <summary>v23 기술 설치 공사: 익힌 기술이 지을 줄 아는 단계보다 낮은 설비를 한 대씩 고쳐 단다 (종류마다 하나 · 배 전체 셋까지 · 재료가 있을 때).
     /// 사고 중엔 미룬다. 회의는 다시 열지 않는다 (연구를 고를 때 정했다).</summary>
     /// <summary>v23 식량 비상: 재배대가 먹는 만큼 못 대고 먹을 것이 바닥을 보이면 회의 없이 재배대 공사를 올린다 (한 번에 하나 · 물이 넉넉할 때).</summary>
+    /// <summary>재료 설비 공사 (MatWorks.cs): 배 크기에 견줘 채집 장치가 모자라거나 · 탄소가 급하면 주 컴퓨터가 회의 없이 올린다 (한 번에 하나 · 재료가 있을 때 · 사고 중엔 미룬다).</summary>
+    private void ScanMatWorks(Poster post)
+    {
+        var w = _world;
+        foreach (var o in _open.Values)
+            if (o.Kind == WorkKind.Upgrade && o.Upgrade == UpgradeKind.Works) { post(o.Kind, o.Target, o.Urgency, o.Skill, o.Detail, circuit: o.Circuit, minSkill: o.MinSkill, upgrade: o.Upgrade); return; } // 하던 공사는 이어 간다
+        if (MaterialSystem.Off || !w.Automation.Present || !w.Automation.MainOnline || w.History.Current != null) return;
+        int have = w.Ship.FurnitureOf(FurnitureType.Collector).Count();
+        int want = w.Mats.CollectorsWanted();
+        if (have < want && MaterialSystem.CollectorSpot(w) is { } cs)
+        {
+            var cost = MaterialSystem.Cost(FurnitureType.Collector);
+            if (cost.All(x => Have(x.kind) >= x.count + Evolution.Reserve(x.kind, w)))
+            {
+                post(WorkKind.Upgrade, WorkTarget.AtCell(cs.cells[0], cs.room), 0.45f, Skill.Mechanics,
+                    $"설비 {w.Ship.Machines.Count()}대에 채집 장치 {have}대 — {want}대는 있어야 한다 ({w.Mats.Brief()}) → {cs.room.Name}에 채집 장치 ({string.Join(" + ", cost.Select(c => $"{ItemKinds.Name(c.kind)} {c.count}"))})",
+                    circuit: (int)FurnitureType.Collector, upgrade: UpgradeKind.Works);
+                return;
+            }
+        }
+        if (w.Mats.ReclaimerWanted() && w.Ship.RoomsOf(RoomType.LifeSupport).FirstOrDefault(r => !r.Abandoned && !r.Leaking && !r.OffLimits && Modules.Spot(w, r) != null) is Room ls && Modules.Spot(w, ls) is Cell at)
+        {
+            var cost = MaterialSystem.Cost(FurnitureType.CarbonReclaimer);
+            if (cost.All(x => Have(x.kind) >= x.count + Evolution.Reserve(x.kind, w)))
+                post(WorkKind.Upgrade, WorkTarget.AtCell(at, ls), 0.45f, Skill.Electrical,
+                    $"탄소 {Have(ItemKind.Carbon)}개 · {w.Mats.DaysLeft(ItemKind.Carbon):0}일 치 → {ls.Name}에 탄소 회수기 (내쉰 숨에서 탄소 · {string.Join(" + ", cost.Select(c => $"{ItemKinds.Name(c.kind)} {c.count}"))})",
+                    circuit: (int)FurnitureType.CarbonReclaimer, upgrade: UpgradeKind.Works);
+        }
+    }
+
     private void ScanFoodBeds(Poster post)
     {
         var w = _world;
@@ -1036,6 +1071,11 @@ public sealed partial class WorkBoard
         var ship = w.Ship;
         var seen = new HashSet<string>();
         long psc = Prof.Now; // v14.2
+        // 부서지거나 해체된 로봇 · 다른 일로 넘어간 로봇이 이름만 걸어 둔 일은 놓아 준다 (아무도 못 맡고 정제기 · 작업대 자리를 묶었다)
+        foreach (var o in _open.Values)
+            if (o.Robot is Robot rb && (rb.Wrecked || rb.State == RobotState.Lost
+                || rb.Order != o && rb.Fixing == null && rb.Hauling == null && o.Kind is not (WorkKind.RepairRobot or WorkKind.FetchRobot)))
+                o.Robot = null;
 
         void Post(WorkKind kind, WorkTarget target, float urgency, Skill skill, string detail, FaultKind? fault = null, int circuit = -1,
             ItemKind? product = null, float minSkill = 0f, UpgradeKind? upgrade = null)
@@ -1421,6 +1461,7 @@ public sealed partial class WorkBoard
 
         ScanInstalls(Post); // v23 익힌 기술의 설비 설치 공사
         ScanFoodBeds(Post); // v23 식량 비상 재배대 공사
+        ScanMatWorks(Post); // 재료 설비: 채집 장치 · 탄소 회수기 (주 컴퓨터가 회의 없이)
 
         // ── 구조와 외부 작업 (v8): 연결부·골조·드론·사출·되찾기·재연결 ──
         ScanStructure(Post);

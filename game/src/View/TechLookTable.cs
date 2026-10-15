@@ -444,6 +444,7 @@ public static class TechLookTable
         // v23 마음 돌봄 — 오락실
         K(FurnitureType.ArcadeCabinet, Improv.TapedScreen, Trim.EdgeGlow, 0xff7ad0ff, "screen@.5,.3", "lamp@.5,.02 strip@.5,.98", "holo@.5,.4 chip@.85,.8"),
         K(FurnitureType.VrChair, Improv.DuctTape, Trim.HaloRing, 0x9ad0ffff, "cushion@.5,.6", "hood@.5,.15 cables@.9,.9", "holo@.5,.2 field@.5,.5"),
+        K(FurnitureType.CarbonReclaimer, Improv.HoseClamp, Trim.Anodized, 0xffb070ff, "valve@.9,.5", "coil@.2,.5 tank@.8,.3", "core@.5,.5 cells@.2,.9"),
     };
 
     private static Dictionary<FurnitureType, TierKit>? _kits;

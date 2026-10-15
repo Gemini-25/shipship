@@ -173,6 +173,8 @@ public sealed class Room
     public float HeatIn { get; set; }
     /// <summary>v19 임시 단열재를 붙였다 (선체로 빠지는 열이 1/3 — 추위는 막지만 기계 열은 갇힌다).</summary>
     public bool Insulated { get; set; }
+    /// <summary>항상성: 주 컴퓨터가 맞춘 온도 더하기 (미리 덥히기 +2 · 미리 식히기 −2 · 닫은 바깥 방 −9).</summary>
+    public float HomeoOffset { get; set; }
     public float HvacHeat { get; set; }
     public float HvacKw { get; set; }
     /// <summary>v23 전압 강하 때 설계 몫을 넘는 냉방 전기를 끊었다 (먹을 것 설비가 먼저) — 열은 설계 몫까지만 뺀다.</summary>
@@ -408,6 +410,8 @@ public enum FurnitureType
     SurgicalArm,
     // v23 마음 돌봄 — 오락실 (MindCare.cs)
     ArcadeCabinet, VrChair,
+    // 재료 — 배 안에서 되살린다 (MatWorks.cs): 주 컴퓨터가 탄소가 모자랄 때 단다
+    CarbonReclaimer,
 }
 
 public static class FurnitureTypes

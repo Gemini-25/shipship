@@ -297,6 +297,7 @@ public sealed class PartsSystem
             Stats.Replaced++;
             Stats.ByOrigin[(int)lot.Origin]++;
             MarkLog.Add(p.Marks, now, $"{c.Name}: 갈았다 — {lot.Label}");
+            w.Mats.Stripped(kind, c, m); // 헌 부품은 뜯어 고철 · 쓸 만한 속으로
         }
         else MarkLog.Add(p.Marks, now, $"{c.Name}: 손봤다 ({Faults.Spec(fault).Name})");
     }

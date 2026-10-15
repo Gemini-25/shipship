@@ -269,6 +269,7 @@ public static partial class Program
         if (args.Contains("--warmbench")) return RunWarmBench(seed, args); // 시험 시간 재기
         if (args.Contains("--patrolprobe")) return RunPatrolProbe(days, seed, args); // 로봇 · 드론 순찰 진단
         if (args.Contains("--matprobe")) return RunMatProbe(days, seed, args); // 재료 흐름 진단
+        if (args.Contains("--matbtest")) return RunMatHomeoTest(seed); // 재료 수집 (가 · 나 · 다) · 항상성 (나 · 라 · 마)
         if (args.Contains("--profile")) return RunProfile(seed, args); // v14.2
         if (args.Contains("--syscheck")) return RunSysCheck(seed, args); // 모든 배 — 주컴퓨터 · 로봇 · 드론 실제 점검
         if (args.Contains("--unmanned")) return RunUnmanned(seed, args); // 사람이 모두 떠난 배 — 주컴퓨터 · 로봇 · 드론만으로

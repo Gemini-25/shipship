@@ -170,7 +170,7 @@ public sealed class MedBotSystem
             else if (w.Ship.RoomsOf(RoomType.Medbay).Where(m => !m.Detached && !m.Leaking).SelectMany(m => m.Cells).Where(c => w.Ship.IsOpenFloor(c) && dist.Reachable(c)).OrderBy(c => dist.Get(c)).ThenBy(c => c.X).ThenBy(c => c.Y).Cast<Cell?>().FirstOrDefault() is Cell safe) dest = safe;
             else return null;
         }
-        if (o != null) { o.Robot = r; r.Order = o; }
+        if (o != null) { RobotSystem.LetGo(r, o); o.Robot = r; r.Order = o; }
         var steps = new List<RobotStep>
         {
             new RGoto(at),

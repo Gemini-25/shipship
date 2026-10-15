@@ -264,6 +264,7 @@ public sealed class DrainSystem
         var w = _w;
         bool sort = w.Culture.Follows(c, CustomKind.SortWaste);
         float amount = b.Fill;
+        w.Scrap.AddOrganic(2f * b.Food); // 음식 찌꺼기는 나누든 안 나누든 따로 말린다 (정제기에서 탄소로)
         b.Fill = 0f; b.Food = 0f; b.ClaimedBy = -1; b.Emptied = w.Tick;
         Stats.Emptied++;
         if (sort) { Stats.Sorted++; float back = 0.4f * amount; w.Scrap.AddScrap(back); if (back > 0.1f) Stats.Recycled++; }

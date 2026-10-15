@@ -8,7 +8,7 @@ namespace ShipSim.Core;
 // 겪은 일이 있어야 단다(그 일이 없으면 연구가 쌓였을 때) — 효과는 몇 군데 공통 지점으로 모인다:
 //   전조 감지(진동·열·압력·오차) · 일 속도(기술별) · 방 오염 감소 · 잠 · 쉼 · 어두움 · 서지 · 불 · 에어락 · 우주복 · 습기 · 빨래.
 
-public enum ModuleRole { Omen, Speed, Clean, Sleep, Relax, Light, Surge, FireDamp, Airlock, SuitDry, Dry, Laundry }
+public enum ModuleRole { Omen, Speed, Clean, Sleep, Relax, Light, Surge, FireDamp, Airlock, SuitDry, Dry, Laundry, /* 재료 되살리기 (MatWorks.cs) */ Reclaim }
 
 public static class ModulesV15
 {
@@ -100,6 +100,9 @@ public static class ModulesV15
             0.8f, Skill.Mechanics, F(FaultKind.ValveStuck, FaultKind.SealWorn), w => w.AirlockCycles >= 8 ? (0.3f, $"에어락을 {w.AirlockCycles}번 돌렸다") : No),
         new(FurnitureType.SuitDryer, "우주복 건조기", RoomType.Airlock, ModuleRole.SuitDry, 1f, C((ItemKind.Fan, 1), (ItemKind.Thermostat, 1)), "에어락에 들어서면 우주복 분진이 털린다",
             0.3f, Skill.Mechanics, F(FaultKind.FanFail), w => w.Soil.Stats.SkippedDecons >= 1 ? (0.3f, "분진을 묻혀 들어왔다") : No),
+        // 재료 — 배 안에서 되살린다 (MatWorks.cs): 회의 안건에는 오르지 않는다 (탄소가 모자라면 주 컴퓨터가 바로 단다)
+        new(FurnitureType.CarbonReclaimer, "탄소 회수기", RoomType.LifeSupport, ModuleRole.Reclaim, 1f, C((ItemKind.Pump, 1), (ItemKind.Electronics, 2), (ItemKind.Plate, 2)), "사람이 내쉰 이산화탄소에서 탄소를 뽑는다 (하루 사람 하나에 0.12개 · 전기를 많이 먹는다)",
+            2.5f, Skill.Electrical, F(FaultKind.HeatingElement, FaultKind.FilterClogged), w => No),
         new(FurnitureType.SignalBooster, "신호 증폭기", RoomType.Comms, ModuleRole.Relax, 0.15f, C((ItemKind.Electronics, 1), (ItemKind.Fiber, 1)), "통신실에서 15% 더 풀린다 (집에서 온 소식이 또렷하다)",
             0.2f, Skill.Electrical, F(FaultKind.FiberBreak), w => w.Daily.Stats.Seen.Contains("letter") ? (0.2f, "집에서 온 소식이 끊겼다") : Research(w, 25f)),
     };

@@ -122,7 +122,7 @@ public sealed partial class Atmosphere
         {
             if (!Vented(r) || r.Leaking) continue;
             needO2 += MathF.Max(0f, TargetO2 - r.Air.O2) * r.Volume;
-            needCO2 += MathF.Max(0f, r.Air.CO2 - TargetCO2) * r.Volume;
+            needCO2 += MathF.Max(0f, r.Air.CO2 - TargetCO2) * r.Volume * (_world.Homeo?.ScrubWeight(r) ?? 1f); // 항상성 라) 짙은 방에 세정을 몰아 준다
         }
         float giveO2 = MathF.Min(budget, needO2);
         float takeCO2 = MathF.Min(budget, needCO2);
@@ -130,7 +130,7 @@ public sealed partial class Atmosphere
         {
             if (!Vented(r) || r.Leaking) continue;
             if (needO2 > 0f) r.Air.O2 += giveO2 * (MathF.Max(0f, TargetO2 - r.Air.O2) * r.Volume / needO2) / r.Volume;
-            if (needCO2 > 0f) r.Air.CO2 -= takeCO2 * (MathF.Max(0f, r.Air.CO2 - TargetCO2) * r.Volume / needCO2) / r.Volume;
+            if (needCO2 > 0f) r.Air.CO2 = MathF.Max(TargetCO2 * 0.5f, r.Air.CO2 - takeCO2 * (MathF.Max(0f, r.Air.CO2 - TargetCO2) * r.Volume * (_world.Homeo?.ScrubWeight(r) ?? 1f) / needCO2) / r.Volume);
         }
         O2Produced = dtHours > 0 ? giveO2 / dtHours : 0f;
         CO2Scrubbed = dtHours > 0 ? takeCO2 / dtHours : 0f;
@@ -246,6 +246,7 @@ public sealed partial class Atmosphere
 
         // 6) 온도: v19 방마다 열 장부 (Thermal.cs) — 드는 열 · 선체로 빠지는 열 · 공조가 빼고 넣는 열
         UpdateHeat(dtHours);
+        _world.Homeo?.Moist(dtHours); // 항상성 라) 제습 · 가습 운전 (공조 전기에 얹힌다)
 
         // 7) 길찾기용 위험 비용
         foreach (var r in ship.Rooms) UpdateHazard(r);

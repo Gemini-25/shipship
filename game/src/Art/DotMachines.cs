@@ -157,6 +157,7 @@ public static class DotMachines
             [FurnitureType.SurgicalArm] = S(FixArch.Box, Wh, Cy, ar | le, 18, 8),
             [FurnitureType.ArcadeCabinet] = S(FixArch.Box, Pu, Ld, sc | ke | le | gl, 14, 16), // v23 오락기
             [FurnitureType.VrChair] = S(FixArch.Seat, Nv, Cy, sc | ca | gl, 12, 6), // v23 가상 고향 의자
+            [FurnitureType.CarbonReclaimer] = S(FixArch.Tank, St, Ld, pi | co | ga | le, 14, 18), // 탄소 회수기 (반응 기둥 · 전열 코일)
             // 지휘 · 통신 · 안전
             [FurnitureType.Console] = S(FixArch.Box, Pa, Cy, sc | ke | le, 8, 10),
             [FurnitureType.NavComputer] = S(FixArch.Box, Pa, Bl, sc | ke | le, 8, 12),

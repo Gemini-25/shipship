@@ -148,12 +148,18 @@ public sealed class ScrapSystem
     /// <summary>모아 둔 고철 (판 개수로).</summary>
     public float Scrap { get; private set; }
     public void AddScrap(float v) => Scrap += MathF.Max(0f, v); // v18.3 나눠 버린 금속 · 플라스틱
-    public int Recovered, Runs;
+    /// <summary>모아 둔 음식 찌꺼기 · 시든 채소 (정제기에서 말려 탄소로).</summary>
+    public float Organic { get; private set; }
+    public void AddOrganic(float v) => Organic += MathF.Max(0f, v);
+    public int Recovered, Runs, CarbonBack;
     private int _plates = -1;
     private long _next;
 
+    /// <summary>고철을 녹일 정제기: 재활용실 · 파쇄실의 것이 먼저 (고철 2 → 금속 원료 1), 없으면 어느 정제기든 (고철 3 → 1 — 가려내는 손이 더 든다).</summary>
     public Furniture? Smelter => _w.Ship.FurnitureOf(FurnitureType.Refinery)
-        .Where(f => !f.Room.Detached && f.Room.Kind is RoomType.Recycling or RoomType.Crusher && f.Machine!.Efficiency > 0f).OrderBy(f => f.Id).FirstOrDefault();
+        .Where(f => !f.Room.Detached && !f.Room.Abandoned && f.Machine!.Efficiency > 0f && (MaterialSystem.Off ? f.Room.Kind is RoomType.Recycling or RoomType.Crusher : true))
+        .OrderBy(f => f.Room.Kind is RoomType.Recycling or RoomType.Crusher ? 0 : 1).ThenBy(f => f.Id).FirstOrDefault();
+    private static float PerOre(Furniture sm) => sm.Room.Kind is RoomType.Recycling or RoomType.Crusher ? 2f : 3f;
 
     public void Update(float dt)
     {
@@ -163,14 +169,17 @@ public sealed class ScrapSystem
         int plates = w.Ship.CountStored(ItemKind.Plate) + w.Ship.CountStored(ItemKind.Structure);
         if (_plates >= 0 && plates < _plates) Scrap += (_plates - plates) * 0.6f; // 떼어 낸 헌 판 · 깎아 낸 자투리
         _plates = plates;
-        if (w.Tick % SimTime.Hours(4) >= SimTime.Hours(1) || Scrap < 2f || Smelter is not Furniture sm) return;
-        int ore = (int)(Scrap / 2f);
+        if (w.Tick % SimTime.Hours(4) >= SimTime.Hours(1) || Smelter is not Furniture sm) return;
+        Char(sm);
+        float per = PerOre(sm);
+        if (Scrap < per) return;
+        int ore = (int)(Scrap / per);
         var shelf = sm.Room.Furniture.Where(f => f.Type == FurnitureType.Shelf && f.Storage != null && f.Storage.Accepts(ItemKind.MetalOre)).OrderBy(f => f.Id).FirstOrDefault()
                     ?? w.Ship.Containers.Where(f => f.Type == FurnitureType.Shelf && f.Storage!.Accepts(ItemKind.MetalOre)).OrderBy(f => f.Id).FirstOrDefault();
-        if (shelf == null) return;
-        int put = shelf.Storage!.Add(ItemKind.MetalOre, ore);
+        int put = shelf?.Storage!.Add(ItemKind.MetalOre, ore) ?? 0;
+        if (put < ore && !MaterialSystem.Off) put += VoyageV15.Put(w, ItemKind.MetalOre, ore - put); // 정제기 옆 선반이 차면 다른 창고로
         if (put <= 0) return;
-        Scrap -= put * 2f;
+        Scrap -= put * per;
         Recovered += put;
         Runs++;
         sm.Machine!.Wear = MathF.Min(1f, sm.Machine.Wear + 0.01f * put);
@@ -178,5 +187,20 @@ public sealed class ScrapSystem
         w.Log.Add(w.Tick, LogKind.Work, $"{sm.Room.Name}: 수리 · 공사에서 나온 고철을 녹여 금속 원료 {put}개를 되살렸다");
     }
 
-    public void Hash(Action<long> I, Action<float> F) { F(Scrap); I(Recovered); I(Runs); I(_plates); }
+    /// <summary>음식 찌꺼기를 말려 숯(탄소 원료)으로 — 찌꺼기 4 → 탄소 1.</summary>
+    private void Char(Furniture sm)
+    {
+        var w = _w;
+        if (MaterialSystem.Off || Organic < 4f) return;
+        int n = Math.Min(3, (int)(Organic / 4f));
+        int put = VoyageV15.Put(w, ItemKind.Carbon, n);
+        if (put <= 0) return;
+        Organic -= put * 4f;
+        CarbonBack += put;
+        w.Mats.Stats.CarbonFromWaste += put;
+        MarkLog.Add(sm.Room.Marks, w.Tick, $"찌꺼기를 말려 탄소 {put}");
+        w.Log.Add(w.Tick, LogKind.Work, $"{sm.Room.Name}: 모아 둔 음식 찌꺼기 · 시든 채소를 말려 탄소 원료 {put}개를 얻었다");
+    }
+
+    public void Hash(Action<long> I, Action<float> F) { F(Scrap); I(Recovered); I(Runs); I(_plates); F(Organic); I(CarbonBack); }
 }
