@@ -131,9 +131,12 @@ public sealed partial class Mind
 
         if (person && asleep)
         {
-            // 몸이 깨운다: 숨참(산소 분압 · 이산화탄소 — 일산화탄소는 아니다) · 추위 · 더위 · 귀 먹먹
+            // 몸이 깨운다: 숨참(산소 분압 · 이산화탄소 — 일산화탄소는 아니다) · 추위 · 더위 · 귀 먹먹 · 코와 목을 찌르는 기체(암모니아 50ppm · 오존 1ppm) · 아픔
+            // 연기 냄새로는 잘 깨지 않는다 (그래서 경보가 있다)
             double p = F.Pressure(cell);
-            if (F.Partial(T.gO2, cell) < 15 || F.Ppm(T.gCO2, cell) > 30000 || F.Temp(cell) < 283 || F.Temp(cell) > 315 || Math.Abs(p - c.LastKPa) > 3)
+            ref var sb = ref _life![c.Body];
+            if (F.Partial(T.gO2, cell) < 15 || F.Ppm(T.gCO2, cell) > 30000 || F.Temp(cell) < 283 || F.Temp(cell) > 315 || Math.Abs(p - c.LastKPa) > 3
+                || F.Ppm(T.gNH3, cell) > 50 || F.Ppm(T.gO3, cell) > 1 || sb.Pain > 0.5f)
                 Wake(sim, a, "몸이 깨웠다");
             c.LastKPa = (float)p;
             Decay(a, t, dt);

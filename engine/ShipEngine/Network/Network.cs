@@ -81,6 +81,7 @@ public sealed class Network : IEngine
     public float[] Supply;        // 받은 비율 0~1
     public float[] Wear;          // [장치 × 4 + 부품] 시간
     public byte[] Broken;         // [장치 × 4 + 부품]
+    public int[] SealLeakCause;   // [장치] 봉함이 망가져 냉매가 새기 시작한 원인 마디 (고치면 0)
     public float[] Charge;        // 배터리 kWh · 보조 발전기 연료 kWh
     // ── 상태 (급전선마다) ──
     public byte[] Breaker;        // 1: 붙어 있음
@@ -90,6 +91,9 @@ public sealed class Network : IEngine
     public float[] Amps;
     // ── 상태 (방마다) ──
     public byte[] Damper;         // 1: 열림
+    /// <summary>1: 정화 배기 — 그 방 덕트를 배 덕트에서 떼어 정화기(활성탄 · 촉매)로만 돌린다 (독한 기체가 다른 방으로 가지 않고 그 방에서 걸러진다).</summary>
+    public byte[] Exhaust;
+    public double TraceScrubbed;  // 정화기가 걸러 낸 독한 기체 (몰 — 암모니아 · 일산화탄소 · 오존)
     // ── 배 전체 ──
     public bool ReactorScram;
     public int ScramCause;
@@ -119,7 +123,7 @@ public sealed class Network : IEngine
         }
         int nd = Devices.Count;
         On = Devices.Select(d => (byte)(d.Def.On ? 1 : 0)).ToArray();
-        Supply = new float[nd]; Wear = new float[nd * 4]; Broken = new byte[nd * 4];
+        Supply = new float[nd]; Wear = new float[nd * 4]; Broken = new byte[nd * 4]; SealLeakCause = new int[nd];
         Charge = Devices.Select(d => (float)d.Def.Kwh).ToArray();
         _limit = new float[nd * 4];
         for (int d = 0; d < nd; d++)
@@ -138,6 +142,7 @@ public sealed class Network : IEngine
         Breaker = Enumerable.Repeat((byte)1, nf).ToArray();
         OverSec = new float[nf]; FaultCell = Enumerable.Repeat(-1, nf).ToArray(); BreakerStuck = new byte[nf]; Amps = new float[nf];
         Damper = Enumerable.Repeat((byte)1, L.Rooms.Count).ToArray();
+        Exhaust = new byte[L.Rooms.Count];
         WaterTank = 800 * 55.5;      // 물 800L
         int inside = L.Rooms.Sum(r => r.Cells.Length);
         AirReserve = inside * Field.CellVolume * 101_325 / (Field.R * 293.15) * 0.5;
@@ -222,6 +227,13 @@ public sealed class Network : IEngine
     }
     public bool IsStuckFault(int f) => f >= 0 && f < Feeders.Count && FaultCell[f] >= 0 && Breaker[f] != 0 && BreakerStuck[f] != 0;
     public void SetDamper(int room, bool open) => Damper[room] = (byte)(open ? 1 : 0);
+    public void SetExhaust(int room, bool on) => Exhaust[room] = (byte)(on ? 1 : 0);
+    /// <summary>독한 기체를 거르는 정화기(이산화탄소 정화기 · 공기 재생기의 활성탄 거르개)가 돌고 있나.</summary>
+    public bool ScrubberWorking()
+    {
+        for (int d = 0; d < Devices.Count; d++) if (Devices[d].Def.Role is "scrubber" or "o2gen" && Working(d) && Broken[d * 4 + (int)Part.Filter] == 0) return true;
+        return false;
+    }
     public bool IsBroken(int device, Part p) => Broken[device * 4 + (int)p] != 0;
     public float WearFraction(int device, Part p) => _limit[device * 4 + (int)p] == float.MaxValue ? 0 : Wear[device * 4 + (int)p] / _limit[device * 4 + (int)p];
     public bool Working(int d) => On[d] != 0 && Broken[d * 4 + (int)Part.Electric] == 0 && Broken[d * 4 + (int)Part.Mechanical] == 0 && Supply[d] > 0.05f;
@@ -246,7 +258,7 @@ public sealed class Network : IEngine
     private readonly Dictionary<int, int> _wearCause = new(); // 낡게 한 원인 (부품 → 원인 마디) — 고장이 그 뿌리에 이어진다
 
     /// <summary>부품을 고친다 (사람 · 로봇의 수리).</summary>
-    public void Repair(int device, Part p) { Broken[device * 4 + (int)p] = 0; Wear[device * 4 + (int)p] = 0; _wearCause.Remove(device * 4 + (int)p); }
+    public void Repair(int device, Part p) { Broken[device * 4 + (int)p] = 0; Wear[device * 4 + (int)p] = 0; _wearCause.Remove(device * 4 + (int)p); if (p == Part.Seal) SealLeakCause[device] = 0; }
 
     // ───────────────────────── 한 틱 ─────────────────────────
 
@@ -483,11 +495,15 @@ public sealed class Network : IEngine
                     }
                     // 이산화탄소 거르기 (공기 재생기 — 옛 배의 '산소 발생기'는 한 대로 둘 다 했다 · 거르개가 닳으면 1/5)
                     if (dev.Def.Mol > 0 && p > 0) ScrubRoom(dev, T.gCO2, dev.Def.Mol * (filterBad ? 0.2 : 1) * dt);
+                    // 독한 기체 거름 (활성탄 거르개)
+                    if (p > 0 && !filterBad) TraceScrubbed += ScrubTrace(dev.Room >= 0 && dev.Room < L.Rooms.Count ? L.Rooms[dev.Room].Cells : new[] { dev.Cell }, Math.Min(0.5, 0.01 * dt));
                     break;
                 }
                 case "scrubber":
                 {
                     ScrubRoom(dev, T.gCO2, dev.Def.Mol * (p > 0 && mechOk ? 1 : 0) * (filterBad ? 0.2 : 1) * dt);
+                    // 독한 기체 거름 (활성탄 · 촉매 산화): 정화기 방 공기의 독한 기체를 초마다 1%씩 — 덕트가 배 공기를 이리로 돌린다
+                    if (p > 0 && mechOk && !filterBad) TraceScrubbed += ScrubTrace(dev.Room >= 0 && dev.Room < L.Rooms.Count ? L.Rooms[dev.Room].Cells : new[] { dev.Cell }, Math.Min(0.5, 0.01 * dt));
                     F.AddHeat(c, kw * 1000 * dt);
                     break;
                 }
@@ -619,11 +635,21 @@ public sealed class Network : IEngine
     private void Ducts(Sim sim)
     {
         if (HvacKw <= 0) return; // 팬이 돌지 않는다 (냉각 고리 · 열교환기가 모두 섰다)
+        // 정화 배기: 방 곳곳의 흡입구로 칸 공기의 1.5%씩(1분이면 방 공기의 3할)을 정화기로 보내 독한 기체의 90%를 걸러 그 방으로 돌려준다 (정화기가 서 있으면 못 한다)
+        bool scrub = false, checkedScrub = false;
+        for (int r = 0; r < L.Rooms.Count; r++)
+        {
+            int v = Vent[r];
+            if (Exhaust[r] == 0 || v < 0 || !RoomPowered(r) || F.RegionOf[v] < 0) continue;
+            if (!checkedScrub) { scrub = ScrubberWorking(); checkedScrub = true; }
+            if (!scrub) break;
+            TraceScrubbed += ScrubTrace(L.Rooms[r].Cells, VentFraction / 4 * 0.9);
+        }
         var vents = new List<int>();
         for (int r = 0; r < L.Rooms.Count; r++)
         {
             int v = Vent[r];
-            if (v >= 0 && Damper[r] != 0 && RoomPowered(r) && F.RegionOf[v] >= 0 && F.Moles(v) > 1) vents.Add(v);
+            if (v >= 0 && Damper[r] != 0 && Exhaust[r] == 0 && RoomPowered(r) && F.RegionOf[v] >= 0 && F.Moles(v) > 1) vents.Add(v);
         }
         if (vents.Count < 2) return;
         // 압력 차단판: 기압이 다른 방들보다 15% 넘게 낮은 방의 통풍구는 저절로 닫힌다 (뚫린 방으로 배 전체 공기가 덕트를 타고 빠지지 않게)
@@ -680,6 +706,19 @@ public sealed class Network : IEngine
     }
 
     /// <summary>송풍기로 방 공기를 돌려 기체 하나를 걷는다 — 방 칸마다 가진 만큼 나눠서 (장치 칸만 비우지 않게).</summary>
+    /// <summary>칸들의 독한 기체(암모니아 · 일산화탄소 · 오존)를 frac만큼 걸러 낸다. 걸러 낸 몰.</summary>
+    private double ScrubTrace(int[] cells, double frac)
+    {
+        double took = 0;
+        foreach (int c in cells)
+            foreach (int g in new[] { T.gNH3, T.gCO, T.gO3 })
+            {
+                double n = F.Gas(g, c);
+                if (n > 1e-9) took += F.RemoveGas(c, g, n * frac);
+            }
+        return took;
+    }
+
     private void ScrubRoom(Device dev, int gas, double mol)
     {
         if (mol <= 0) return;
@@ -706,12 +745,19 @@ public sealed class Network : IEngine
             Shorts++;
         }
         if (p == Part.Mechanical) sim.Find<Sound>()?.Emit(sim, dev.Cell, 85, SoundKind.Machine, cause);
+        // 냉매 고리의 봉함: 암모니아가 새기 시작한다 (쉬익 — 독한 기체)
+        if (p == Part.Seal && dev.Def.Role is "pump" or "hvac" && Coolant > 0)
+        {
+            SealLeakCause[d] = sim.Causes.Add(CauseKind.Leak, $"{Ko.I(dev.Name)} 터진 틈으로 암모니아가 새어 나온다", sim.Tick, dev.Cell, cause);
+            sim.Facts.Emit(sim.Tick, FactKind.Toxic, dev.Cell, 0, SealLeakCause[d], other: d);
+            sim.Find<Sound>()?.Emit(sim, dev.Cell, 70, SoundKind.Hiss, SealLeakCause[d]);
+        }
     }
 
     public void Save(StateWriter w)
     {
         w.Arr(On); w.Arr(Supply); w.Arr(Wear); w.Arr(Broken); w.Arr(Charge);
-        w.Arr(Breaker); w.Arr(OverSec); w.Arr(FaultCell); w.Arr(BreakerStuck); w.Arr(Amps); w.Arr(Damper);
+        w.Arr(Breaker); w.Arr(OverSec); w.Arr(FaultCell); w.Arr(BreakerStuck); w.Arr(Amps); w.Arr(Damper); w.Arr(Exhaust); w.F64(TraceScrubbed); w.Arr(SealLeakCause);
         w.Bool(ReactorScram); w.I32(ScramCause); w.F64(WaterTank); w.F64(Coolant); w.F64(VentedH2); w.F64(AirReserve); w.F64(AirRelease); w.F64(AirReleased);
         w.F64(Supplied); w.F64(Demanded); w.F64(CoolingKw); w.F64(ReactorKw); w.F64(HvacKw);
         w.I64(Trips); w.I64(Shorts); w.I64(Failures);
@@ -726,7 +772,7 @@ public sealed class Network : IEngine
     public void Load(StateReader r)
     {
         r.ArrInto(On); r.ArrInto(Supply); r.ArrInto(Wear); r.ArrInto(Broken); r.ArrInto(Charge);
-        r.ArrInto(Breaker); r.ArrInto(OverSec); r.ArrInto(FaultCell); r.ArrInto(BreakerStuck); r.ArrInto(Amps); r.ArrInto(Damper);
+        r.ArrInto(Breaker); r.ArrInto(OverSec); r.ArrInto(FaultCell); r.ArrInto(BreakerStuck); r.ArrInto(Amps); r.ArrInto(Damper); r.ArrInto(Exhaust); TraceScrubbed = r.F64(); r.ArrInto(SealLeakCause);
         ReactorScram = r.Bool(); ScramCause = r.I32(); WaterTank = r.F64(); Coolant = r.F64(); VentedH2 = r.F64(); AirReserve = r.F64(); AirRelease = r.F64(); AirReleased = r.F64();
         Supplied = r.F64(); Demanded = r.F64(); CoolingKw = r.F64(); ReactorKw = r.F64(); HvacKw = r.F64();
         Trips = r.I64(); Shorts = r.I64(); Failures = r.I64();

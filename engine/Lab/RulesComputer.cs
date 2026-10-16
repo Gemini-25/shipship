@@ -61,6 +61,24 @@ public static partial class Program
                 $"깸 {s.Facts.CountOf(FactKind.Woke)} · 있는 곳 {(room >= 0 ? lay.Rooms[room].Name : "-")} · 가장 높던 일산화탄소 헤모글로빈 {cohb:0.00} · 경보 {s.Facts.CountOf(FactKind.ComputerAlarm)}");
         }
 
+        // ── 코를 찌르는 냄새: 주컴퓨터가 멈춰 경보가 없어도 암모니아가 짙어지면 자던 사람이 깬다 (연기 냄새로는 잘 깨지 않는다) ──
+        {
+            var s = World();
+            var m = s.Get<Mind>(); var f = s.Get<Field>(); var life = s.Get<Life>(); var net = s.Get<Network>();
+            net.Age(net.Devices.First(d => d.Type == "MainComputer").Id, Part.Electric, 1.0);
+            int sleeper = m.AddPerson(s, At(3, 5), -1, At(3, 5));
+            ref var sb = ref life[m[sleeper].C.Body];
+            sb.Asleep = 1; m[sleeper].C.Sleepy = 1;
+            m[sleeper].Plan.Add(new PlanStep { Kind = StepKind.Use, Arg = (byte)UseKind.Sleep, Value = Time.Hours(8) });
+            m[sleeper].C.Goal = GoalKind.Sleep;
+            s.Run(5);
+            foreach (int c in lay.Rooms[lay.Room[At(3, 5)]].Cells) f.AddGas(c, f.T.gNH3, f.Moles(c) * 120e-6, 293);
+            long wokeAt = -1;
+            for (int k = 0; k < Time.Minutes(3) && wokeAt < 0; k++) { s.Step(); if (life[m[sleeper].C.Body].Asleep == 0) wokeAt = k; }
+            Check("암모니아 냄새(120ppm)에 자던 사람이 깬다 — 주컴퓨터 경보가 없어도", wokeAt >= 0,
+                wokeAt >= 0 ? $"{Time.ToSeconds(wokeAt):0}초 만에 깸" : $"3분 동안 안 깸 · 칸 암모니아 {f.Ppm(f.T.gNH3, m[sleeper].C.Cell):0}ppm");
+        }
+
         // ── 구멍 난 빈 방: 주컴퓨터가 기압이 떨어지는 것을 보고 봉쇄한다 → 옆 방은 버틴다 (주컴퓨터가 멈춰 있으면 같이 빠진다) ──
         (double right, long seals) BreachRun(bool computerOk)
         {
@@ -287,6 +305,41 @@ public static partial class Program
             if (Debug) Console.WriteLine($"    로봇 {m.Thought(r)} 맡음 {m[r].C.AssignedGoal}:{m[r].C.AssignedTarget} 기한 {(m[r].C.AssignedUntil - s.Tick) / 25}분 피함 {string.Join(",", m[r].Avoid.Select(v => v.Goal + ":" + v.Target))}");
             Check("빠진 방의 외판 구멍: 로봇이 에어락으로 나가 바깥에서 막는다 → 주컴퓨터가 예비 공기로 배를 다시 채운다", patchedAt > 0 && outside && avg > 85 && net.AirReleased > 0 && s.Facts.CountOf(FactKind.WentOutside) > 0,
                 patchedAt > 0 ? $"{(patchedAt - Time.Minutes(15)) / 25.0:0}분 만에 {(outside ? "바깥에서" : "안에서")} 막음 · 가장 낮던 배 기압 {lowest:0} → 8시간 뒤 {avg:0}kPa · 휴게실 {f.Pressure(L2.Rooms[lounge].Cells[0]):0}kPa" : $"못 막음 · 배 기압 {avg:0}kPa");
+        }
+
+        // ── 냉매 샘: 냉각 펌프 봉함이 터져 암모니아가 샌다 → 주컴퓨터가 알아채 경보 · 통풍구를 닫고 그 방 덕트를 정화기로만 돌려 거른다 · 봉쇄 →
+        //    배로 번지지 않아 자던 사람도 무사하다 · 다 걸러지면 통풍구를 다시 연다 ──
+        {
+            var s = ShipWorld.Create("Pabal", 6);
+            var m = s.Get<Mind>(); var f = s.Get<Field>(); var cm = s.Get<ShipMind>(); var net = s.Get<Network>(); var life = s.Get<Life>();
+            int dock = s.Layout.Furniture.First(fu => fu.Type == "RobotDock").Cells[0];
+            m.AddRobot(s, dock, AgentKind.Robot, dock);
+            var bed = s.Layout.Furniture.First(fu => fu.Type == "Bed").Cells[0];
+            int sleeper = m.AddPerson(s, bed, -1, bed);
+            life[m[sleeper].C.Body].Asleep = 1; m[sleeper].C.Sleepy = 1;
+            m[sleeper].Plan.Add(new PlanStep { Kind = StepKind.Use, Arg = (byte)UseKind.Sleep, Value = Time.Hours(8) });
+            m[sleeper].C.Goal = GoalKind.Sleep;
+            s.Run(Time.Minutes(10));
+            var pump = net.Devices.First(d => d.Def.Role == "pump");
+            int room = pump.Room;
+            net.Age(pump.Id, Part.Seal, 1.0);
+            long alarmAt = -1; double worstAtPerson = 0, peak = 0; bool exhausted = false;
+            for (int k = 0; k < Time.Minutes(90); k++)
+            {
+                s.Step();
+                if (alarmAt < 0 && cm.Incidents.Any(x => x.Active != 0 && x.Kind == IncidentKind.Toxic && x.Room == room)) alarmAt = k;
+                exhausted |= net.Exhaust[room] != 0;
+                var b = life[m[sleeper].C.Body];
+                if (b.Alive != 0) worstAtPerson = Math.Max(worstAtPerson, f.Ppm(f.T.gNH3, b.Cell));
+                if (k % 25 == 0) peak = Math.Max(peak, s.Layout.Rooms[room].Cells.Max(c => f.Ppm(f.T.gNH3, c)));
+            }
+            double left = s.Layout.Rooms[room].Cells.Max(c => f.Ppm(f.T.gNH3, c));
+            var leak = s.Facts.Since(0).FirstOrDefault(x => x.Kind == FactKind.Toxic);
+            if (Debug) foreach (var (tk, tx) in cm.Log.TakeLast(16)) Console.WriteLine($"    주컴 {Time.Clock(tk)} {tx}");
+            Check("냉매 샘: 주컴퓨터가 1분 안에 알아채 경보 · 통풍구를 닫고 정화 배기 → 자던 사람 곁은 50ppm 아래 · 90분 뒤 다 걸러 통풍구를 다시 연다",
+                alarmAt >= 0 && alarmAt < Time.Minutes(1) && exhausted && worstAtPerson < 50 && life[m[sleeper].C.Body].Alive != 0 && left < 35 && net.Damper[room] != 0 && net.Exhaust[room] == 0
+                && leak.Kind == FactKind.Toxic && s.Causes.Story(leak.Cause).Contains("봉함"),
+                $"알아챔 {(alarmAt >= 0 ? $"{Time.ToSeconds(alarmAt):0}초" : "못 함")} · 정화 배기 {exhausted} · {cm.RoomName(room)} 가장 짙을 때 {peak:0}ppm → {left:0}ppm · 사람 곁 최고 {worstAtPerson:0}ppm · 통풍구 {(net.Damper[room] != 0 ? "열림" : "닫힘")} · 걸러 낸 것 {net.TraceScrubbed:0.0}몰");
         }
 
         // ── 공조: 설비 열이 큰 방(정비실 15kW)도 시원하다 · 냉각 펌프가 모두 서면 배가 더워진다 ──

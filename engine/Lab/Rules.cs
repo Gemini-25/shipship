@@ -470,6 +470,31 @@ public static partial class Program
             s11.Get<Structure>().Impact(s11, hull, 60_000, 1, 0, 0);
             s11.Run(10);
             Check("파편이 뚫고 들어온 칸의 사람은 다치고 피를 흘린다", l11[b11].Blunt > 0 && l11[b11].BloodL < 5, $"충격 {l11[b11].Blunt:0.00} · 피 {l11[b11].BloodL:0.00}L");
+
+            // 암모니아: 짙기만큼 — 500ppm 10분은 아프지만 버티고 · 1만ppm은 몇 분 안에 쓰러진다
+            (bool down, float lung, float sat) Ammonia(double ppm, long ticks)
+            {
+                var sa = new Sim(new SimSetup(Worlds.Ascii(Worlds.Symmetric), 1, sim => { var ff = new Field(sim.Layout, sim.Tables); sim.Add(ff); sim.Add(new Life(ff)); }));
+                var fa = sa.Get<Field>(); var la = sa.Get<Life>(); fa.FillAir();
+                int ba = la.AddBody(Worlds.At(fa.L, 5, 3));
+                bool down = false;
+                for (long k = 0; k < ticks; k++)
+                {
+                    for (int i = 0; i < fa.Cells; i++)
+                    {
+                        if (fa.L.Kind[i] != CellKind.Floor) continue;
+                        double want = ppm * 1e-6 * fa.Moles(i), have = fa.Gas(fa.T.gNH3, i);
+                        if (want > have) fa.AddGas(i, fa.T.gNH3, want - have, fa.Temp(i));
+                    }
+                    sa.Step();
+                    down |= la[ba].Conscious == 0 || la[ba].Alive == 0;
+                }
+                return (down, la[ba].LungDamage, la[ba].SpO2);
+            }
+            var a500 = Ammonia(500, Time.Minutes(10));
+            var a10k = Ammonia(10000, Time.Minutes(10));
+            Check("암모니아: 500ppm 10분은 목이 아파도 버틴다 · 1만ppm 10분이면 쓰러진다 (짙기만큼 폐가 상한다)", !a500.down && a500.sat > 0.85f && a10k.down,
+                $"500ppm 폐 {a500.lung:0.00} · 산소 포화 {a500.sat:0.00} · 쓰러짐 {a500.down} / 1만ppm 폐 {a10k.lung:0.00} · 쓰러짐 {a10k.down}");
         }
 
         if (Do("빛"))

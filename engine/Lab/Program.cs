@@ -31,6 +31,10 @@ public static partial class Program
             else if (args.Contains("--probe-story")) ProbeStory(args);
             else if (args.Contains("--probe-robot")) ProbeRobot(args);
             else if (args.Contains("--probe-heat")) ProbeHeat(args);
+            else if (args.Contains("--probe-danger")) ProbeDanger(args);
+            else if (args.Contains("--probe-person")) ProbePerson(args);
+            else if (args.Contains("--probe-log")) ProbeLog(args);
+            else if (args.Contains("--probe-holes")) ProbeHoles(args);
             else if (args.Contains("--shot")) Shot(args);
             else if (args.Contains("--film")) Film(args);
             else { Console.WriteLine("Lab --law | --rule | --bench | --scene 이름 [폴더] | --ships | --fun [배,…] [날] [시드 수] [성격] [가혹함]"); return 2; }

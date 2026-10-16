@@ -179,11 +179,12 @@ public sealed class Life : IEngine
         if (pCO2 > 7) { b.Hypoxia += (float)((pCO2 - 7) / 5 * dt / 60); harm ??= "이산화탄소가 너무 짙었다"; env = env == 0 ? EnvCause(sim, c, st, chem) : env; }
         if (pCO2 > 3) b.Pain = (float)Math.Min(1, b.Pain + (pCO2 - 3) / 40 * dt / 60);
         double lung = 0;
-        if (nh3 > 300) lung += nh3 / 5000;
+        // 암모니아: 300ppm은 한 시간 넘게 버티고 · 3000ppm은 30분이면 위태롭고 · 1만ppm은 몇 분 (분마다 폐 손상 0.0167 × (ppm/3000)^1.3)
+        if (nh3 > 100) lung += 0.0167 * Math.Pow(nh3 / 3000, 1.3);
         if (o3 > 5) lung += o3 / 200;
         if (soot > 2000) lung += soot / 200_000;
         if (Mold[c] > 0.3f) lung += 0.002;
-        if (lung > 0) { b.LungDamage += (float)(lung * dt / 60); b.Pain = (float)Math.Min(1, b.Pain + lung * dt / 120); harm ??= nh3 > 300 ? "암모니아를 마셨다" : o3 > 5 ? "오존을 마셨다" : "연기를 마셨다"; env = env == 0 ? EnvCause(sim, c, st, chem) : env; }
+        if (lung > 0) { b.LungDamage += (float)(lung * dt / 60); b.Pain = (float)Math.Min(1, b.Pain + lung * dt / 120); harm ??= nh3 > 100 ? "암모니아를 마셨다" : o3 > 5 ? "오존을 마셨다" : "연기를 마셨다"; env = env == 0 ? EnvCause(sim, c, st, chem) : env; }
         else b.LungDamage = (float)Math.Max(0, b.LungDamage - dt / (14 * 86400));
 
         // ── 체온 ──

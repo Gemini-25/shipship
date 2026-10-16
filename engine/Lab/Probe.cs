@@ -212,3 +212,161 @@ public static partial class Program
         }
     }
 }
+
+public static partial class Program
+{
+    /// <summary>
+    /// 사람이 위험에 얼마나 가까이 가는지 (--probe-danger [배,배…] [날] [시드 수]).
+    /// 사람마다 가장 낮은 산소 포화 · 가장 높은 산소 부족 · 일산화탄소 · 쓰러짐을, 위험한 일(벽이 뚫림 · 불 · 연기 · 독 · 공기가 빠짐)마다 그 방에 있던 사람 수와 30분 안 최저 포화를 센다.
+    /// </summary>
+    internal static void ProbeDanger(string[] args)
+    {
+        var rest = args.SkipWhile(a => a != "--probe-danger").Skip(1).ToArray();
+        var ships = (rest.Length > 0 ? rest[0] : "Kestrel,Pabal,Jebi,Gorae").Split(',');
+        double days = rest.Length > 1 ? double.Parse(rest[1]) : 2;
+        int seeds = rest.Length > 2 ? int.Parse(rest[2]) : 2;
+        var kinds = new[] { FactKind.WallBreach, FactKind.Ignition, FactKind.FireSpread, FactKind.SmokeThick, FactKind.Toxic, FactKind.RegionVented, FactKind.PressureDrop, FactKind.DoorBlown, FactKind.Flood };
+        foreach (var ship in ships)
+            for (int k = 0; k < seeds; k++)
+            {
+                ulong seed = (ulong)(18 + k * 7);
+                var lay = Layout.Ship(ship, Tables.Default);
+                int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
+                var s = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0);
+                var st = s.Get<Storyteller>(); st.Enabled = true;
+                var m = s.Get<Mind>(); var life = s.Get<Life>();
+                var people = m.Agents.Where(a => a.IsPerson).ToList();
+                var minSat = people.ToDictionary(a => a.Id, a => 1f);
+                var maxHyp = people.ToDictionary(a => a.Id, a => 0f);
+                var maxCo = people.ToDictionary(a => a.Id, a => 0f);
+                var watch = new List<(long tick, FactKind kind, int room, int inRoom, HashSet<int> who, float min, string text)>();
+                long cursor = 0, end = (long)(days * Time.Hours(24));
+                for (long t = 0; t < end; t++)
+                {
+                    s.Step();
+                    foreach (var f in s.Facts.Since(cursor))
+                    {
+                        if (!kinds.Contains(f.Kind) || f.Cell < 0) continue;
+                        int room = m.RoomOf(f.Cell);
+                        if (room < 0) { Span<int> nb = stackalloc int[4]; s.Layout.Neighbors(f.Cell, nb); foreach (int j in nb) if (j >= 0 && m.RoomOf(j) >= 0) room = m.RoomOf(j); }
+                        if (room < 0 || watch.Any(w => w.room == room && w.kind == f.Kind && f.Tick - w.tick < Time.Minutes(30))) continue;
+                        var who = people.Where(a => life.Bodies[a.C.Body].Alive != 0 && m.RoomOf(life.Bodies[a.C.Body].Cell) == room).Select(a => a.Id).ToHashSet();
+                        watch.Add((f.Tick, f.Kind, room, who.Count, who, 1f, s.Causes.Story(f.Cause)));
+                    }
+                    cursor = s.Facts.Total;
+                    foreach (var a in people)
+                    {
+                        var b = life.Bodies[a.C.Body];
+                        if (b.Alive == 0) continue;
+                        minSat[a.Id] = Math.Min(minSat[a.Id], b.SpO2); maxHyp[a.Id] = Math.Max(maxHyp[a.Id], b.Hypoxia); maxCo[a.Id] = Math.Max(maxCo[a.Id], b.COHb);
+                    }
+                    for (int i = 0; i < watch.Count; i++)
+                    {
+                        var w = watch[i];
+                        if (t - w.tick > Time.Minutes(30) || w.who.Count == 0) continue;
+                        foreach (int id in w.who) { var b = life.Bodies[m.Agents[id].C.Body]; if (b.Alive != 0) w.min = Math.Min(w.min, b.SpO2); }
+                        watch[i] = w;
+                    }
+                }
+                var d = s.Get<Life>();
+                Console.WriteLine($"■ {ship} 시드 {seed} · 사람 {people.Count} · 씨앗 {string.Join(",", st.Seeds.Select(x => Storyteller.SeedName(x.Kind)))} · 죽음 {d.Deaths}");
+                Console.WriteLine($"  사람 최저 포화 {string.Join(" ", people.Select(a => $"{m.NameOf(a.Id)}:{minSat[a.Id]:0.00}"))}");
+                Console.WriteLine($"  최고 산소 부족 {people.Max(a => maxHyp[a.Id]):0.00} · 최고 일산화탄소 {people.Max(a => maxCo[a.Id]):0.00} · 포화 0.9 아래로 간 사람 {people.Count(a => minSat[a.Id] < 0.9f)}");
+                foreach (var w in watch)
+                    Console.WriteLine($"    {Time.Clock(w.tick)} [{FactNames.Of(w.kind)}] {s.Layout.Rooms[w.room].Name} · 있던 사람 {w.inRoom}{(w.inRoom > 0 ? $" · 30분 최저 포화 {w.min:0.00}" : "")} · {w.text}");
+            }
+    }
+}
+
+public static partial class Program
+{
+    /// <summary>사람을 틱마다 따라간다 — 칸의 독 · 폐 · 포화 · 생각 · 믿음 (--probe-person [배] [시드] [몇 시간 뒤부터] [틱 수] [몇 틱마다]).</summary>
+    internal static void ProbePerson(string[] args)
+    {
+        var rest = args.SkipWhile(a => a != "--probe-person").Skip(1).ToArray();
+        string ship = rest.Length > 0 ? rest[0] : "Pabal";
+        ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 25;
+        double hours = rest.Length > 2 ? double.Parse(rest[2]) : 10;
+        int ticks = rest.Length > 3 ? int.Parse(rest[3]) : 600;
+        int every = rest.Length > 4 ? int.Parse(rest[4]) : 5;
+        var lay = Layout.Ship(ship, Tables.Default);
+        int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
+        var s = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0);
+        s.Get<Storyteller>().Enabled = true;
+        var m = s.Get<Mind>(); var f = s.Get<Field>(); var life = s.Get<Life>(); var sm = s.Get<ShipMind>();
+        s.Run((long)Time.Hours(hours));
+        string Where(int c) => c < 0 ? "-" : $"({s.Layout.X(c)},{s.Layout.Y(c)}){(m.RoomOf(c) >= 0 ? s.Layout.Rooms[m.RoomOf(c)].Name : "")}";
+        long cursor = s.Facts.Total;
+        for (int k = 0; k < ticks; k++)
+        {
+            s.Step();
+            foreach (var x in s.Facts.Since(cursor))
+                if (Director.Weight(x.Kind) >= 3 || x.Kind is FactKind.ComputerAlarm or FactKind.Toxic or FactKind.Fled or FactKind.Warned)
+                    Console.WriteLine($"    {Time.Clock(x.Tick)} [{FactNames.Of(x.Kind)}] {Where(x.Cell)} · {s.Causes.Story(x.Cause)}");
+            cursor = s.Facts.Total;
+            if (k % every != 0) continue;
+            var rooms = s.Layout.Rooms.Select((r, i) => (r.Name, ppm: r.Cells.Length > 0 ? r.Cells.Max(c => f.Ppm(s.Tables.gNH3, c)) : 0)).Where(r => r.ppm > 25).Select(r => $"{r.Name} {r.ppm:0}");
+            Console.WriteLine($"  {Time.Clock(s.Tick)} 암모니아 최고: {string.Join(" · ", rooms)} · 사건 {string.Join(",", sm.Incidents.Where(x => x.Active != 0).Select(x => $"{x.Kind}@{(x.Room >= 0 ? s.Layout.Rooms[x.Room].Name : "-")}{(x.Sealed != 0 ? "(봉쇄)" : "")}"))}");
+            foreach (var a in m.Agents.Where(a => a.IsPerson))
+            {
+                var b = life.Bodies[a.C.Body];
+                if (b.Alive == 0) continue;
+                Console.WriteLine($"    {m.NameOf(a.Id),-5} {Where(b.Cell),-16} {m.Thought(a.Id),-22} 암모니아 {f.Ppm(s.Tables.gNH3, b.Cell):0} · 폐 {b.LungDamage:0.00} · 포화 {b.SpO2:0.00} · 의식 {b.Conscious} 잠 {b.Asleep} · 믿음 {string.Join(",", a.Beliefs.Where(x => x.Kind is BeliefKind.BadAir).Select(x => $"{x.Kind}@{Where(x.Cell)}:{x.Conf:0.0}"))}");
+            }
+        }
+    }
+}
+
+public static partial class Program
+{
+    /// <summary>주컴퓨터 일지 · 정화 장부 (--probe-log [배] [시드] [시간]).</summary>
+    internal static void ProbeLog(string[] args)
+    {
+        var rest = args.SkipWhile(a => a != "--probe-log").Skip(1).ToArray();
+        string ship = rest.Length > 0 ? rest[0] : "Pabal";
+        ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 25;
+        double hours = rest.Length > 2 ? double.Parse(rest[2]) : 12;
+        var lay = Layout.Ship(ship, Tables.Default);
+        int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
+        var s = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0);
+        s.Get<Storyteller>().Enabled = true;
+        var sm = s.Get<ShipMind>(); var net = s.Get<Network>();
+        for (long t = 0; t < Time.Hours(hours); t++)
+        {
+            s.Step();
+            if (t % Time.Minutes(10) == 0) Console.WriteLine($"  {Time.Clock(s.Tick)} 정화 {net.TraceScrubbed:0.0}몰 · 정화기 {(net.ScrubberWorking() ? "돈다" : "섰다")} · 팬 {net.HvacKw:0}kW · 배기 {string.Join(",", Enumerable.Range(0, s.Layout.Rooms.Count).Where(r => net.Exhaust[r] != 0).Select(r => s.Layout.Rooms[r].Name))}");
+        }
+        foreach (var (tick, text) in sm.Log.TakeLast(40)) Console.WriteLine($"    주컴 {Time.Clock(tick)} {text}");
+    }
+}
+
+public static partial class Program
+{
+    /// <summary>구멍 · 끼인 문 · 로봇 일을 10분마다 (--probe-holes [배] [시드] [시작 시간] [몇 시간]).</summary>
+    internal static void ProbeHoles(string[] args)
+    {
+        var rest = args.SkipWhile(a => a != "--probe-holes").Skip(1).ToArray();
+        string ship = rest.Length > 0 ? rest[0] : "Gorae";
+        ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 18;
+        double from = rest.Length > 2 ? double.Parse(rest[2]) : 7;
+        double hours = rest.Length > 3 ? double.Parse(rest[3]) : 3;
+        var lay = Layout.Ship(ship, Tables.Default);
+        int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
+        var s = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0);
+        s.Get<Storyteller>().Enabled = true;
+        var m = s.Get<Mind>(); var f = s.Get<Field>(); var st = s.Get<Structure>(); var life = s.Get<Life>(); var sm = s.Get<ShipMind>();
+        s.Run((long)Time.Hours(from));
+        for (long t = 0; t < Time.Hours(hours); t++)
+        {
+            s.Step();
+            if (t % Time.Minutes(10) != 0) continue;
+            int holes = 0; double area = 0;
+            for (int c = 0; c < f.Cells; c++) if (f.Hole[c] > 0) { holes++; area += f.Hole[c]; }
+            var jams = Enumerable.Range(0, s.Layout.Doors.Count).Where(d => st.DoorJam[d] != 0).Select(d => $"{m.RoomOf(s.Layout.Doors[d].Cell)}:{f.DoorOpen[d]:0.0}");
+            var goals = m.Agents.Where(a => !a.IsPerson).GroupBy(a => a.C.Goal).OrderByDescending(g => g.Count()).Select(g => $"{g.Key} {g.Count()}");
+            var people = m.Agents.Where(a => a.IsPerson && life[a.C.Body].Alive != 0).GroupBy(a => a.C.Goal).OrderByDescending(g => g.Count()).Select(g => $"{g.Key} {g.Count()}");
+            double kpa = s.Layout.Rooms.Where(r => r.Cells.Length > 0).Average(r => f.Pressure(r.Cells[0]));
+            Console.WriteLine($"  {Time.Clock(s.Tick)} 구멍 {holes}칸 {area * 1e4:0}cm² · 끼인 문 {string.Join(",", jams)} · 배 기압 {kpa:0} · 막음 {s.Facts.CountOf(FactKind.Patched)} · 로봇 [{string.Join(" ", goals)}] · 사람 [{string.Join(" ", people)}] · 사건 {sm.Incidents.Count(x => x.Active != 0)}");
+        }
+    }
+}
