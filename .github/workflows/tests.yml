@@ -1,0 +1,114 @@
+# 전체 시험 — 푸시마다 자동 (docs/DEV_PROCESS.md)
+#   빌드 한 번 → 12조각으로 나눠 동시에 (조각마다 3개씩) → 기준(tools/tests/baseline.txt)과 견줌
+#   → 기준에선 통과하던 장면이 실패하면 다른 시드 둘(11 · 23)로 다시 → 한 장 요약 (작업 요약 · summary 아티팩트)
+#   빨강(규칙 · 핵심 실패 · 멈춤)이 있을 때만 실패로 끝난다. 장면 시험은 막지 않는다.
+name: tests
+
+on:
+  push:
+    paths-ignore: ['**.md', 'docs/**', '**.jpg', '**.png', '**.wav', '**.ogg']
+  workflow_dispatch:
+
+env:
+  DOTNET_NOLOGO: '1'
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+  HEADLESS: ${{ github.workspace }}/build/headless/Headless.dll
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '8.0.x' }
+      - name: 빌드 (시험 도구)
+        run: dotnet build tools/Headless -c Release -o build/headless
+      - uses: actions/upload-artifact@v4
+        with: { name: headless, path: build/headless, retention-days: 3 }
+
+  shard:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '8.0.x' }
+      - uses: actions/download-artifact@v4
+        with: { name: headless, path: build/headless }
+      - name: 시험 (조각 ${{ matrix.shard }})
+        run: |
+          python3 tools/ci/shard.py tools/tests/tests.txt ${{ matrix.shard }} 12 > list.txt
+          cat list.txt | tr '\n' ' '; echo
+          tools/ci/run-tests.sh list.txt results 3 7
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: 'results-${{ matrix.shard }}', path: results, retention-days: 14 }
+
+  plan:
+    needs: shard
+    if: always()
+    runs-on: ubuntu-latest
+    outputs:
+      recheck: ${{ steps.plan.outputs.recheck }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { pattern: 'results-*', path: results }
+      - id: plan
+        name: 기준과 견줘 새 실패 고르기
+        run: |
+          python3 tools/ci/summarize.py --results results --plan recheck.json > /dev/null || true
+          echo "recheck=$(cat recheck.json)" >> "$GITHUB_OUTPUT"
+          echo "다시 볼 장면: $(cat recheck.json)"
+
+  recheck:
+    needs: [build, plan]
+    if: always() && needs.plan.outputs.recheck != '' && needs.plan.outputs.recheck != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        test: ${{ fromJSON(needs.plan.outputs.recheck) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '8.0.x' }
+      - uses: actions/download-artifact@v4
+        with: { name: headless, path: build/headless }
+      - name: 다른 시드로 다시 (${{ matrix.test }})
+        run: |
+          echo "${{ matrix.test }}" > one.txt
+          tools/ci/run-tests.sh one.txt recheck 1 11 .s11 &
+          tools/ci/run-tests.sh one.txt recheck 1 23 .s23
+          wait
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: 'recheck-${{ matrix.test }}', path: recheck, retention-days: 14 }
+
+  report:
+    needs: [plan, recheck]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { pattern: 'results-*', path: results }
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { pattern: 'recheck-*', path: recheck }
+      - name: 한 장 요약
+        run: |
+          mkdir -p recheck
+          python3 tools/ci/summarize.py --results results --recheck recheck --md summary.md; rc=$?
+          cat summary.md >> "$GITHUB_STEP_SUMMARY"
+          exit $rc
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: summary, path: summary.md, retention-days: 30 }

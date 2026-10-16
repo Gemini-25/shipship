@@ -270,6 +270,7 @@ public static partial class Program
         if (args.Contains("--bench")) return RunBench(days, seed);
         if (args.Contains("--warmbench")) return RunWarmBench(seed, args); // 시험 시간 재기
         if (args.Contains("--warmdiff")) return RunWarmDiff(seed, args); // 되살린 첫날 배가 어디서 갈라지나
+        if (args.Contains("--ruletest")) return RunRuleTest(seed); // 규칙 시험: 작은 배에서 규칙 하나씩 — 반드시 통과 (docs/DEV_PROCESS.md)
         if (args.Any(a => a.StartsWith("--warmsplit="))) return RunWarmSplit(seed, args); // 프로세스를 나눠 견준다
         if (args.Contains("--patrolprobe")) return RunPatrolProbe(days, seed, args); // 로봇 · 드론 순찰 진단
         if (args.Contains("--matprobe")) return RunMatProbe(days, seed, args); // 재료 흐름 진단

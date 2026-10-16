@@ -163,7 +163,7 @@ public sealed class SneakFoodActivity : Activity
     private static World? _boxesW;
     private static int _boxesCount = -1, _boxesVer = -1;
 
-    private static List<Furniture> Boxes(World w)
+    internal static List<Furniture> Boxes(World w)
     {
         if (_boxes == null || _boxesW != w || _boxesCount != w.Ship.Furniture.Count || _boxesVer != Furniture.StorageVersion)
         {
@@ -175,7 +175,7 @@ public sealed class SneakFoodActivity : Activity
         return _boxes;
     }
 
-    private static Furniture? Pick(CrewMember c, World w, DistanceField dist)
+    internal static Furniture? Pick(CrewMember c, World w, DistanceField dist)
     {
         Furniture? best = null;
         int bd = int.MaxValue;

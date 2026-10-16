@@ -31,7 +31,7 @@ public static class WarmCache
     public static World Get(string label, int seed, string ship, Func<World> make)
     {
         if (!On) return make();
-        string key = Hash($"{label}|{seed}|{ship}|{Switches()}|{typeof(World).Assembly.ManifestModule.ModuleVersionId}");
+        string key = KeyOf(label, seed, ship);
         var sw = Stopwatch.StartNew();
         if (Mem.TryGetValue(key, out var bytes) || TryDisk(key, out bytes))
         {
@@ -53,6 +53,10 @@ public static class WarmCache
         Misses++;
         return copy;
     }
+
+    /// <summary>첫날 배의 열쇠: 이름 · 시드 · 배 · 전역 스위치 · 코드 판 (규칙 시험이 직접 본다).</summary>
+    internal static string KeyOf(string label, int seed, string ship) =>
+        Hash($"{label}|{seed}|{ship}|{Switches()}|{typeof(World).Assembly.ManifestModule.ModuleVersionId}");
 
     /// <summary>세계 밖에 있는 전역 스위치 · 수치 (시험이 켜고 끄는 것) — 하나라도 다르면 다른 첫날이다.</summary>
     /// <summary>진단: 하루를 돌리는 동안 바뀐 전역 칸 (열쇠에서 빼야 할 것).</summary>

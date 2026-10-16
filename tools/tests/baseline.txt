@@ -1,0 +1,26 @@
+# 기준 실패 목록: 이 장면 시험들은 기준 커밋에서도 실패했다 (성능 줄 빼고). 묶음 끝에 갱신한다.
+# 기준 커밋: 085fd1b (전체 회귀 r28 · 통과 113/137)
+catalogtest
+commandtest
+fixartcheck
+gesturetest
+growthtest
+guardtest
+hazardtest
+infotest
+livingtest
+looktest
+maneuvertest
+planettest
+risktest
+robotbraintest
+roomtest
+scenetest
+schemetest
+shipdesigntest
+shiptest
+soiltest
+spacetest
+syscheck
+talestest
+techlookcheck

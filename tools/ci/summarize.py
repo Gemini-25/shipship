@@ -1,0 +1,141 @@
+#!/usr/bin/env python3
+"""시험 결과를 한 장으로 줄인다 (사람 · 에이전트가 긴 출력 대신 이것만 읽는다).
+
+   python3 tools/ci/summarize.py --results 결과폴더 [--recheck 재확인폴더] [--plan 새실패.json] [--md 요약.md] [--only rule,core]
+
+판정 (docs/DEV_PROCESS.md):
+  · 줄 맨 앞의 ✘ 가 실패한 확인 — '성능' 줄은 따로 센다 (동시에 돌리면 흔들린다)
+  · rule(규칙) · core(핵심) 실패나 멈춤/예외 → 빨강 (막음 · 바로 조사)
+  · scene(장면) 실패는 기준(baseline.txt)과 견준다 — 기준에서도 실패면 '원래 실패', 아니면 '새 실패'
+    새 실패는 다른 시드 둘(11 · 23)로 다시 돌려 거기서도 실패하면 '조사 필요', 둘 다 통과면 '운'
+종료 코드: 빨강이 하나라도 있으면 1."""
+import argparse, json, os, re, sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+CRASH = {'124': '시간 초과', '134': '중단', '137': '죽음', '139': '세그폴트'}
+
+
+def read_tests(path):
+    rows = []
+    for line in open(path, encoding='utf-8'):
+        line = line.strip()
+        if line and not line.startswith('#'):
+            name, tier, sec = (line.split() + ['scene', '60'])[:3]
+            rows.append((name, tier, int(sec)))
+    return rows
+
+
+def find_files(folder):
+    found = {}
+    for d, _, files in os.walk(folder):
+        for f in files:
+            if f.endswith('.txt'):
+                found[f[:-4]] = os.path.join(d, f)
+    return found
+
+
+def judge(path):
+    """(상태, 첫 실패 줄, 초) — 상태: 통과 · 실패 · 성능만 · 멈춤 · 없음"""
+    if not path:
+        return '없음', '', 0
+    text = open(path, encoding='utf-8', errors='replace').read()
+    m = re.search(r'exit=(\d+)(?: sec=(\d+))?', text)
+    sec = int(m.group(2)) if m and m.group(2) else 0
+    if not m:
+        return '멈춤', '끝 줄 없음', sec
+    if m.group(1) in CRASH:
+        return '멈춤', CRASH[m.group(1)], sec
+    fails = [l.strip() for l in text.splitlines() if re.match(r'^\s*✘', l)]
+    real = [l for l in fails if '성능' not in l]
+    if real:
+        return '실패', real[0], sec
+    if fails:
+        return '성능만', fails[0], sec
+    if m.group(1) != '0' and 'Unhandled exception' in text:
+        return '멈춤', '예외', sec
+    return '통과', '', sec
+
+
+def short(s, n=110):
+    s = s.lstrip('✘ ').replace('|', '/')
+    return s if len(s) <= n else s[:n] + '…'
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--results', required=True)
+    ap.add_argument('--tests', default=os.path.join(ROOT, 'tools/tests/tests.txt'))
+    ap.add_argument('--baseline', default=os.path.join(ROOT, 'tools/tests/baseline.txt'))
+    ap.add_argument('--recheck')
+    ap.add_argument('--plan')
+    ap.add_argument('--md')
+    ap.add_argument('--only')
+    ap.add_argument('--max-recheck', type=int, default=20)
+    a = ap.parse_args()
+
+    tiers = set(a.only.split(',')) if a.only else None
+    tests = [r for r in read_tests(a.tests) if not tiers or r[1] in tiers]
+    base = {l.strip() for l in open(a.baseline, encoding='utf-8') if l.strip() and not l.startswith('#')}
+    files = find_files(a.results)
+    rfiles = find_files(a.recheck) if a.recheck else {}
+
+    red, new, known, fixed, perf, lucky, investigate = [], [], [], [], [], [], []
+    passed = total_sec = 0
+    slow = []
+    for name, tier, _ in tests:
+        st, line, sec = judge(files.get(name))
+        total_sec += sec
+        slow.append((sec, name))
+        if st == '통과':
+            passed += 1
+            if tier == 'scene' and name in base:
+                fixed.append(name)
+        elif st == '성능만':
+            passed += 1
+            perf.append((name, line))
+        elif st in ('멈춤', '없음') or tier in ('rule', 'core'):
+            red.append((name, tier, st, line))
+        elif name in base:
+            known.append((name, line))
+        else:
+            new.append((name, line))
+            seeds = [judge(rfiles.get(f'{name}.s{s}'))[0] for s in (11, 23)]
+            if any(s == '없음' for s in seeds):
+                continue
+            (investigate if any(s in ('실패', '멈춤') for s in seeds) else lucky).append((name, seeds))
+
+    if a.plan:
+        json.dump([n for n, _ in new][:a.max_recheck], open(a.plan, 'w'))
+
+    out = []
+    head = '🔴' if red else ('🟡' if investigate else '🟢')
+    out.append(f'## {head} 시험 {passed}/{len(tests)} 통과 · 빨강 {len(red)} · 새 실패 {len(new)} (조사 필요 {len(investigate)} · 운 {len(lucky)}) · 원래 실패 {len(known)} · 기준보다 나아짐 {len(fixed)}')
+    out.append(f'시험 시간 합 {total_sec // 60}분 · 오래 걸린 것: ' + ', '.join(f'{n} {s}초' for s, n in sorted(slow, reverse=True)[:5]))
+    if red:
+        out.append('\n### 🔴 막음 — 규칙 · 핵심 실패 또는 멈춤 (진짜 버그)')
+        out += [f'- **{n}** ({t} · {st}) — {short(l)}' for n, t, st, l in red]
+    if investigate:
+        out.append('\n### 🟡 조사 필요 — 기준에선 통과 · 지금 실패 · 다른 시드에서도 실패')
+        out += [f'- **{n}** — 시드 11: {s[0]} · 23: {s[1]}' for n, s in investigate]
+    if new:
+        out.append('\n### 새 실패 (기준 대비)')
+        out += [f'- {n} — {short(l)}' for n, l in new]
+    if lucky:
+        out.append('\n운으로 본다 (다른 시드 둘 다 통과): ' + ', '.join(n for n, _ in lucky))
+    if fixed:
+        out.append('\n기준에선 실패 · 지금 통과: ' + ', '.join(fixed))
+    if perf:
+        out.append('\n성능 줄만 실패 (동시에 돌려 흔들림 — 따로 재 봄): ' + ', '.join(n for n, _ in perf))
+    if known:
+        out.append(f'\n<details><summary>원래 실패 {len(known)}개 (기준에서도 실패)</summary>\n')
+        out += [f'- {n} — {short(l, 90)}' for n, l in known]
+        out.append('</details>')
+    md = '\n'.join(out) + '\n'
+    if a.md:
+        open(a.md, 'w', encoding='utf-8').write(md)
+    print(md)
+    return 1 if red else 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
