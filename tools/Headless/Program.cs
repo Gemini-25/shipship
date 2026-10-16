@@ -255,6 +255,8 @@ public static partial class Program
                 case "tiers": ShipTiers.On = false; break; // v23 크기별 시작 시대 끄기 (모두 Ⅰ 시대)
                 case "refit": ShipRefit.On = false; break; // v23 설비 보충 끄기
                 case "foodbeds": Evolution.FoodBeds = false; break; // v23 식량 비상 재배대 공사 끄기
+                case "mats": MaterialSystem.Off = true; break; // 재료 수집 (가 · 나 · 다) 끄기
+                case "homeo": Homeostasis.Off = true; break; // 항상성 (나 · 라 · 마) 끄기
             }
         int days = args.Length > 0 && int.TryParse(args[0], out var d) ? d : 14;
         int seed = args.Length > 1 && int.TryParse(args[1], out var s) ? s : 20260929;

@@ -93,6 +93,8 @@ public static partial class Program
                     bool before = plate.Found;
                     Run(w, SimTime.Minutes(1));
                     if (!before && plate.Found) tempAtFind = plate.Temp;
+                    if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "plate" && m % 20 == 0)
+                        Console.WriteLine($"      [접시] {SimTime.Clock(w.Tick)} {mech.Name} @{mech.Room?.Name} {mech.ActivityLabel} · 배고픔 {mech.Needs.Hunger:0.00} · 접시 찾음 {plate.Found} 먹음 {plate.Eaten} {plate.Temp:0}℃ · 일 {mech.Job?.Order?.Title}");
                 }
                 var by = plate != null ? w.Crew[plate.By] : null;
                 var mem = by != null ? w.Relations.Of(mech, by).FirstOrDefault(x => x.Text.Contains("남겨")) : null;

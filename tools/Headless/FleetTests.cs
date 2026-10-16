@@ -214,7 +214,12 @@ public static partial class Program
                 for (int t = 0; t < SimTime.Hours(12) && f.Reroutes == re0; t++)
                 {
                     w.Step();
-                    if (f.Reroutes != re0) break;
+                    if (f.Reroutes != re0)
+                    {
+                        // 고른 로봇이 그 문을 피해 돌아간 때만 (다른 로봇이 다른 곳에 막혀 돌아간 것 · 고른 로봇이 다른 일로 넘어가 문을 풀어 준 사이의 것은 이 장면이 아니다)
+                        if (locked != null && (mover!.Path == null || mover.Path.Skip(mover.PathIndex).All(c => w.Ship.DoorAt(c) != locked))) break;
+                        re0 = f.Reroutes;
+                    }
                     if (locked != null && (mover!.Path == null || !mover.Path.Skip(mover.PathIndex).Any(c => w.Ship.DoorAt(c) == locked))) { locked.Locked = false; locked = null; }
                     if (locked != null || t % 10 != 0) continue;
                     foreach (var r in w.Robots.Robots)

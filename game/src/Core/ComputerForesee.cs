@@ -296,7 +296,7 @@ public sealed class ComputerForesee
         var w = _w;
         var a = w.Automation;
         if (!a.MainOnline || a.Level < 4 || AutomationSystem.Ship20Off) return fallback();
-        if (Timeline.LastOrDefault(d => d.Kind == "불" && d.RoomId == room.Id) is ForeseeDecision last && last.Pick.Key == "crew" && w.Tick - last.Tick < SimTime.Minutes(a.Core.Horizon / 2f))
+        if (crewOnIt && Timeline.LastOrDefault(d => d.Kind == "불" && d.RoomId == room.Id) is ForeseeDecision last && last.Pick.Key == "crew" && w.Tick - last.Tick < SimTime.Minutes(a.Core.Horizon / 2f))
             return "crew"; // 방금 "더 맡긴다"로 정했다 — 예측 거리의 반만큼 기다렸다 다시 본다
         var (pw, sw) = Weights();
         float shipV = ShipVolume();

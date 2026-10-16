@@ -112,10 +112,13 @@ public static partial class Program
             for (int t = 0; t < SimTime.Hours(2) && !v.Dead; t++)
             {
                 room.Air.Temperature = 66f; room.Humidity = 0.85f;
+                foreach (var d in room.Doors) { d.Locked = true; d.Openness = 0f; } // 혼자 남는다 — 문이 잠긴 방 (부름을 듣고 달려온 동료가 몇 분 차이로 업어 내면 이 장면이 아니다: 바로 다음 장면이 그것)
                 if (!v.Down) { v.EndJob(w, ToilStatus.Interrupted); v.Pose = Pose.Working; IgPut(v, spot); v.NextThinkTick = w.Tick + 50; }
                 w.Step();
                 if (v.Down && collapseMin < 0) collapseMin = t / SimTime.Minutes(1);
                 if (v.Dead) deathMin = t / SimTime.Minutes(1);
+                if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "heat" && t % SimTime.Minutes(5) == 0)
+                    Console.WriteLine($"      [열] {t / SimTime.Minutes(1)}분 {v.Name} 방 {v.Room?.Name} {room.Air.Temperature:0.0}℃ 습도 {room.Humidity:0.00} · 쓰러짐 {v.Down} · 체력 {v.Vitals.Health:0.00} · 열 {w.Perils.HeatOf(v):0.00} · 업힘 {v.CarriedBy?.Name} · 침상 {v.CareBed != null} · 우주복 {v.Suit != null} · 공조 {room.HvacHeat:0.0}kW · 항상성 {w.Homeo.HeatBoost:0.0}");
             }
             var hist = w.History.Events.LastOrDefault(e => e.Kind == HistoryKind.Death);
             Check("열사병 — 김이 찬 66℃ 방에서 힘쓰면 한 시간 안에 쓰러진다", collapseMin is > 0 and < 60, $"쓰러짐 {collapseMin}분 · 열 {w.Perils.HeatOf(v):0.00}");
@@ -356,6 +359,7 @@ public static partial class Program
         // ① 센 태양 폭풍: 대피소 밖 바깥 방에 붙들린 사람은 방사선 병 · 대피소의 사람은 조금
         {
             var w = DayOne(seed, "Hanbit"); w.CrewCanDie = true;
+            w.Personal.Wear.RadVests = 0; // 납 조끼가 없는 배 — 남은 조끼가 있으면 방사선 방에 들어서며 걸쳐 0.55배로 준다 (그건 대비한 배의 장면)
             var outer = w.Ship.LiveRooms.Where(r => r.Type != RoomType.Corridor && r.Cells.Count(w.Ship.IsOpenFloor) >= 2).OrderByDescending(r => w.Ambience.Exposure(r)).ThenBy(r => r.Id).First();
             var shelter = Facilities.Best(w.Ship, "shelter", r => !r.Detached).room;
             var v = w.Crew.First(c => c.CanAct);
@@ -369,6 +373,8 @@ public static partial class Program
                 if (v.Room != outer) { Put(w, v, outer); v.Room = outer; } // 자리를 지켜야 하는 사람 (수동 조종 · 손을 놓지 못하는 수리)
                 if (shelter != null && s0.Room != shelter) { Put(w, s0, shelter); s0.Room = shelter; }
                 Run(w, 5);
+                if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "storm" && t % SimTime.Minutes(15) == 0)
+                    Console.WriteLine($"      [폭풍] {t / SimTime.Minutes(1)}분 {v.Name} 방 {v.Room?.Name} 방사선 {outer.Radiation:0.00} · 쬔 양 {v.Dose:0.00} · 우주복 {v.Suit != null} · 조끼 {w.Personal.Wear.RadMul(v):0.00} · 창 {w.Body.OpenWindows(outer)} · 폭풍 {w.Ambience.StormPower:0.00}");
             }
             Check("센 태양 폭풍 — 바깥 방에 붙들린 사람은 세 시간이면 방사선 병 (4Sv 넘게) · 대피소는 막는다",
                 v.Dose >= 4f && (shelter == null || s0.Dose < v.Dose * 0.3f) && w.Ailments.Has(v, "radiation"),

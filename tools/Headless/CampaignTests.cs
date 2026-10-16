@@ -21,7 +21,22 @@ public static partial class Program
                 var cp = w.Campaign;
                 bool started = cp.Active && cp.Current?.Chapter == 1;
                 int days = 0;
-                while (days < 40 && cp.Current?.Chapter == 1) { Run(w, SimTime.TicksPerDay); days++; }
+                bool dbg = Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "camp";
+                while (days < 40 && cp.Current?.Chapter == 1)
+                {
+                    if (!dbg) { Run(w, SimTime.TicksPerDay); days++; continue; }
+                    int drift = 0, halt = 0, hold = 0, slow = 0;
+                    for (int h = 0; h < 24; h++)
+                    {
+                        Run(w, SimTime.TicksPerHour);
+                        if (w.Voyage.Drifting) drift++;
+                        if (w.Expedition.Halted) halt++;
+                        if (w.Planet?.Holding == true) hold++;
+                        if (w.Mats.SpeedMul < 1f) slow++;
+                    }
+                    days++;
+                    Console.WriteLine($"      [{days}일] 구간 {w.Voyage.Index} {w.Voyage.Current.Kind} {w.Voyage.Progress:0.0}/{w.Voyage.Current.Days:0.0} · 표류 {drift}h · 멈춤 {halt}h · 행성 {hold}h({w.Planet?.Phase}) · 천천히 {slow}h · 추진제 {w.Propulsion.Propellant:0} · 엔진 {string.Join(",", w.Propulsion.Engines.Select(m => m.Efficiency.ToString("0.0")))} · 항상성 {w.Homeo.Stats.Line()}");
+                }
                 var done = cp.Done.FirstOrDefault();
                 Check("캠페인 — 1장 「첫 항해」를 마치면 2장으로", started && cp.Current?.Chapter == 2,
                     $"{days}일 · {(done.m != null ? $"{done.m.Title} {(done.ok ? "해냄" : "실패")} ({done.note})" : "아직")} · 지금 {cp.Current?.Chapter}장 「{cp.Current?.Title}」 · {cp.Status().text}");

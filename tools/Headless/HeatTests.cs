@@ -85,8 +85,9 @@ public static partial class Program
                 Run(a, SimTime.Minutes(10)); Run(b, SimTime.Minutes(10));
                 foreach (var w in new[] { a, b }) foreach (var c in w.Crew.Where(c => c.Room?.Id == qa.Id || c.Room?.Id == ma.Id)) c.Position = w.Ship.LiveRooms.First(r => r.Type == RoomType.Corridor).Center;
             }
-            Check("단열 — 전기가 끊긴 빈 방은 단열하면 덜 식는다", qa.Air.Temperature > qb.Air.Temperature + 3f,
-                $"{qa.Name}: 단열 {qa.Air.Temperature:0.0}℃ ↔ 그대로 {qb.Air.Temperature:0.0}℃ (여섯 시간)");
+            // 식는 폭은 선체 바깥 온도(햇빛 쪽 · 그늘 쪽)에 따라 다르다 — 단열하면 식는 폭이 2/3 아래로 준다
+            Check("단열 — 전기가 끊긴 빈 방은 단열하면 덜 식는다", q0 - qb.Air.Temperature > 2f && q0 - qa.Air.Temperature < (q0 - qb.Air.Temperature) * 0.65f,
+                $"{qa.Name}: 단열 {q0:0.0} → {qa.Air.Temperature:0.0}℃ ↔ 그대로 {q0:0.0} → {qb.Air.Temperature:0.0}℃ (여섯 시간)");
             Check("단열 — 냉각이 끊긴 기계 방은 단열하면 열이 갇혀 더 달아오른다", ma.Air.Temperature > mb.Air.Temperature + 2f,
                 $"{ma.Name} (설비 열 {mb.HeatIn:0.0}kW): 단열 {ma.Air.Temperature:0.0}℃ ↔ 그대로 {mb.Air.Temperature:0.0}℃");
             // 4) 정전: 외벽이 닿은 방은 선체로 빨리 식고 · 안쪽 방은 이웃 방 덕에 덜 식는다

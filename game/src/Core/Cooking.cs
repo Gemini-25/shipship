@@ -1119,7 +1119,8 @@ public sealed class SavedPlateActivity : Activity
         toils.Add(new DoToil((_, world) => { world.Cooking.FinishPlateReheat(p); return true; }));
         toils.Add(new WaitToil(eat + SimTime.Minutes(5), Pose.Sitting, p.Table.Center, minTicks: SimTime.Minutes(12))
         {
-            EveryTick = (cm, _) => cm.Needs.Food += 0.95f / eat,
+            // 거의 다 먹었으면 접시는 비운 것 — 마지막 숟가락 전에 불려 가도 (서명 받기 · 호출) 이름표 접시가 식탁에 그대로 남지 않게
+            EveryTick = (cm, world) => { cm.Needs.Food += 0.95f / eat; if (cm.Needs.Food >= 0.9f && !p.Eaten) world.Cooking.EatPlate(cm, p); },
             DoneWhen = (cm, _) => cm.Needs.Food >= 0.99f,
         });
         toils.Add(new DoToil((cm, world) => { world.Cooking.EatPlate(cm, p); return true; }));

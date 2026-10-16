@@ -161,7 +161,7 @@ public static partial class Program
             {
                 Run(w, SimTime.Minutes(10));
                 foreach (var c in Able(w).OrderBy(c => c.Id))
-                    if (c.IsAwake && c.CanAct && !c.Outside && c.Suit == null && c.Job?.Order is WorkOrder o && o.Urgency < 0.6f && o.Progress > 0.05f && c.Job.Urgent != true) { m = c; low = o; break; }
+                    if (c.IsAwake && c.CanAct && !c.Outside && c.Suit == null && c.Job?.Order is WorkOrder o && o.Urgency < 0.6f && o.Progress > 0.05f && o.Progress < 0.5f && o.Kind is not (WorkKind.Maintain or WorkKind.PreventiveCheck) && c.Job.Urgent != true) { m = c; low = o; break; } // 절반 넘게 남은 긴 일 (몇 분짜리 점검은 급한 고장이 뜨기 전에 끝나 버려 인계할 것이 없다)
             }
             if (m != null)
             {

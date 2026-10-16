@@ -133,6 +133,7 @@ public static partial class Program
                     Run(w, SimTime.Minutes(1));
                     if (c.Room != room) left = true;
                     if (room.Purging) purged = true;
+                    if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "2") Console.WriteLine($"      [5] {SimTime.Clock(w.Tick)} {c.Name} 방 {c.Room?.Name} · 불 {w.Fire.CountIn(room)}칸 · 빼는 중 {room.Purging} · 안 {w.Crew.Count(x => x.Room == room)} · 로봇 {w.Robots.Robots.Count(r => r.Room == room)} · {w.Automation.FireCases.FirstOrDefault()?.Status} · 로봇들 {string.Join(" / ", w.Robots.Robots.Where(r => r.FightingFire || r.Room == room).Select(r => $"{r.Name}({r.Kind}) {r.State} 방 {r.Room?.Name} 거품 {r.Foam:0.00} 불끔 {r.FightingFire} 일 {r.Doing}"))} · 소화조 {string.Join(" / ", w.Crew.Where(x => x.Job?.Order is { Kind: WorkKind.Extinguish }).Select(x => $"{x.Name} 방 {x.Room?.Name} {x.Job?.Label}"))}");
                 }
                 Check("대피 — 소화 경보를 들은 사람이 나간 뒤에 뺀다", left && purged && !c.Dead && c.Room != room, $"{c.Name}: {(left ? "나갔다" : "남았다")} · 진공 {(purged ? "했다" : "안 했다")}");
             }

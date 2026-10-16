@@ -85,10 +85,19 @@ public static partial class Program
                 float t1 = hot.Ship.LiveRooms.Average(r => r.Air.Temperature);
                 Check("타는 행성 — 선체가 달궈져 방이 더워지고 냉방이 힘겹다", hot.Planet.ShellC > 40f && (t1 > t0 + 1f || hot.Air.CoolingKw > baseKw * 1.5f),
                     $"바깥 {hot.Planet.OutsideC:0}°C · 선체 {hot.Planet.ShellC:0}°C · 방 평균 {t0:0.0} → {t1:0.0}°C · 냉방 {baseKw:0.0} → {hot.Air.CoolingKw:0.0}kW");
+                // 맨몸 (주 컴퓨터가 덮개를 내리지 않는다): 선체가 얼면 난방이 는다
+                Homeostasis.Off = true;
+                var bare = OnClimate(PlanetClimate.Frozen);
+                Run(bare, SimTime.Hours(6));
+                Homeostasis.Off = false;
+                Check("얼어붙은 행성 — 선체가 얼어 난방이 늘어난다 (덮개 없이)", bare.Planet.ShellC < -15f && bare.Air.HeatingKw > cool.Air.HeatingKw + 2f,
+                    $"바깥 {bare.Planet.OutsideC:0}°C · 선체 {bare.Planet.ShellC:0}°C · 난방 {cool.Air.HeatingKw:0.0} → {bare.Air.HeatingKw:0.0}kW · 방 평균 {bare.Ship.LiveRooms.Average(r => r.Air.Temperature):0.0}°C");
+                // 항상성: 주 컴퓨터가 바깥 방 덮개를 내려 — 난방이 덜 들고 방은 따뜻하다
                 var cold = OnClimate(PlanetClimate.Frozen);
                 Run(cold, SimTime.Hours(6));
-                Check("얼어붙은 행성 — 선체가 얼어 난방이 늘어난다", cold.Planet.ShellC < -15f && cold.Air.HeatingKw > cool.Air.HeatingKw + 2f,
-                    $"바깥 {cold.Planet.OutsideC:0}°C · 선체 {cold.Planet.ShellC:0}°C · 난방 {cool.Air.HeatingKw:0.0} → {cold.Air.HeatingKw:0.0}kW · 방 평균 {cold.Ship.LiveRooms.Average(r => r.Air.Temperature):0.0}°C");
+                float warm = cold.Ship.LiveRooms.Where(r => r.Type != RoomType.Corridor && cold.Crew.Any(c => c.Room == r)).Select(r => r.Air.Temperature).DefaultIfEmpty(21f).Min();
+                Check("얼어붙은 행성 — 주 컴퓨터가 덮개를 내려 난방을 덜 쓰고, 사람 있는 방은 따뜻하다", cold.Homeo.Stats.Shutters > 0 && cold.Air.HeatingKw < bare.Air.HeatingKw * 0.8f && warm > 17f,
+                    $"덮개 {cold.Homeo.Stats.Shutters} · 난방 {bare.Air.HeatingKw:0.0} → {cold.Air.HeatingKw:0.0}kW · 사람 있는 방 최저 {warm:0.0}°C");
             }
             // 6) 지진 · 7) 방사선
             {

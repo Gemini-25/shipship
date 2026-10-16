@@ -184,8 +184,20 @@ public static partial class Program
             var w = sc.W; var s = sc.S;
             s.Guilt = 1.2f;
             MotionSystem.Off = true; // 조사 회의 없이 — 스스로
+            w.Policies.Set("expedition", 2, "시험"); // 원정 없이 — 털어놓을 사람이 원정대에 뽑혀 배를 떠나면 이 장면이 아니다 (근무가 엇갈린 사이 얼음 원정에 나갔다)
             bool went = false;
-            BbUntil(w, () => { went |= w.Inquiry.TaskOf(sc.C)?.Kind == CoverTaskKind.Confess && sc.C.Job?.Activity is CoverActivity; return s.Confessed; }, SimTime.TicksPerDay * 3);
+            bool dbg = Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "bb7"; long nextDbg = 0;
+            BbUntil(w, () =>
+            {
+                went |= w.Inquiry.TaskOf(sc.C)?.Kind == CoverTaskKind.Confess && sc.C.Job?.Activity is CoverActivity;
+                if (dbg && w.Tick >= nextDbg)
+                {
+                    nextDbg = w.Tick + SimTime.Minutes(20);
+                    var tk = w.Inquiry.TaskOf(sc.C); var to = tk is CoverTask ct ? w.Crew.FirstOrDefault(o => o.Id == ct.Other) : null;
+                    Console.WriteLine($"      [{SimTime.Clock(w.Tick)}] {sc.C.Name} @{sc.C.Room?.Name} 일 {sc.C.Job?.Label ?? "-"} ({sc.C.Job?.Activity?.Id}) · 할 일 {tk?.Kind} → {to?.Name} @{to?.Room?.Name} 일 {to?.Job?.Label ?? "-"} 깨어 {to?.IsAwake} · 재료 {w.Mats.Brief()} · 바닥 {w.Mats.Starved()} · 원정 {w.Expedition.Current?.Site?.Name} 제안 {w.Expedition.Pending?.Source}");
+                }
+                return s.Confessed;
+            }, SimTime.TicksPerDay * 3);
             Check("죄책감이 꿈 · 일기 · 말수로 드러난다", w.Inquiry.Stats.Dreams > 0 && w.After.Minds.TryGetValue(sc.C.Id, out var am) && am.Seen.Any(x => x.Key == $"slip:{s.Id}"),
                 $"꿈거리 {w.Inquiry.Stats.Dreams} · {sc.C.Diary.LastOrDefault(d => d.text.Contains(s.MachineName)).text}");
             MotionSystem.Off = false;

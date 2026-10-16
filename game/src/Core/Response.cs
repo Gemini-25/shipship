@@ -43,6 +43,9 @@ public sealed class FireCase
     public long RejectedUntil { get; set; } = -1;
     /// <summary>v16.6 대피 경보를 듣고 빠져나간 사람 (수순이 사람을 잃지 않고 끝나면 컴퓨터를 더 믿는다).</summary>
     public List<int> Evacuees { get; } = new();
+    /// <summary>"소화조에 더 맡긴다"로 정한 때 · 그때 불 칸 수 (맡겨 봤는데 줄지 않으면 실제로 불 앞에 선 손만 센다).</summary>
+    public long CrewSince { get; set; } = -1;
+    public int CrewCells { get; set; }
 }
 
 public sealed partial class AutomationSystem
@@ -160,8 +163,19 @@ public sealed partial class AutomationSystem
                     float need = 17f * room.Volume;
                     bool inertOk = Policy("inert") > 0 && InertGas >= need * 0.6f && !fc.TriedInert, vacOk = Policy("vacuum") > 0 && CanVent(room);
                     int fighters = w.Crew.Count(c => !c.Dead && c.Job?.Order is { Kind: WorkKind.Extinguish } eo && eo.Target.CurrentRoom == room) + (w.Fleet.BotOn(room) ? 1 : 0); // v16.20b
-                    var method = Foresee.Fire(room, fc, cells, minutes, inertOk, vacOk, crewOnIt, fighters, () => PickMethod(room, fc));
-                    if (method == "crew") { fc.Status = $"미리 돌려 봄 — 소화조 {fighters}명이 잡는다 ({cells}칸)"; break; }
+                    // 맡겨 본 지 6분이 지나도 불이 줄지 않았다 — 소화 일을 받아 들고 문 밖 · 에어락을 서성이는 사람은 세지 않는다 (불 앞에 선 손만)
+                    //   (창고에 세워 둔 운반 로봇이 거품만 다 쓰고 · 두 사람은 밖에서 기다리는데 "소화조 2명이 잡는다"를 30분 되풀이했다)
+                    bool stalled = fc.CrewSince >= 0 && w.Tick - fc.CrewSince >= SimTime.Minutes(6) && cells >= fc.CrewCells;
+                    if (stalled)
+                        fighters = w.Crew.Count(c => !c.Dead && c.Room == room && c.Job?.Order is { Kind: WorkKind.Extinguish } eo2 && eo2.Target.CurrentRoom == room)
+                                   + (w.Fleet.BotOn(room) && w.Robots.Robots.Any(r => r.FightingFire && r.Room == room && r.Foam > 0.2f) ? 1 : 0);
+                    var method = Foresee.Fire(room, fc, cells, minutes, inertOk, vacOk, crewOnIt && (!stalled || fighters > 0), fighters, () => PickMethod(room, fc));
+                    if (method == "crew")
+                    {
+                        if (fc.CrewSince < 0 || cells < fc.CrewCells) { fc.CrewSince = w.Tick; fc.CrewCells = cells; } // 줄고 있으면 다시 잰다
+                        fc.Status = $"미리 돌려 봄 — 소화조 {fighters}명이 잡는다 ({cells}칸)";
+                        break;
+                    }
                     if (method == null) { fc.Status = $"쓸 수단이 없다 — 소화조에 맡긴다 ({cells}칸)"; break; }
                     Plan(fc, room, method, cells, minutes);
                     break;
