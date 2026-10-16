@@ -110,9 +110,11 @@ public sealed partial class Field
                 }
         });
         (Ts, _t2) = (_t2, Ts);
-        // ③ 외판
+        // ③ 외판: 다층 단열재 겉면(흡수 0.3 · 방사 0.8)이 햇빛 · 우주와 평형 → 단열재(0.1 W/m²K)를 지나는 열만 벽으로.
+        //    구멍 난 외판은 단열재가 찢겨 재질 그대로 복사 · 흡수한다. 행성 대기 속에서는 바깥 공기와 대류도.
         if (Adiabatic) return;
         double bg = Outside.Vacuum ? 2.7 : Outside.Temp;
+        double bg4 = bg * bg * bg * bg;
         Par.Rows(L.H, (y0, y1) =>
         {
             for (int y = y0; y < y1; y++)
@@ -122,10 +124,20 @@ public sealed partial class Field
                     if (_exposed[i] == 0 || Cs[i] <= 0) continue;
                     var m = T.Materials[L.Material[i]].Def;
                     bool damaged = Hole[i] > 0;
-                    double eps = damaged ? m.Emiss : HullEmissivity, alpha = damaged ? m.Absorb : 0.1;
-                    double t = Ts[i];
-                    double q = -eps * Sigma * WallFace * _exposed[i] * (t * t * t * t - bg * bg * bg * bg);
-                    q += alpha * Outside.Sun * WallFace * SunFacing(x, y);
+                    double t = Ts[i], q = 0;
+                    foreach (var (dx, dy) in Dirs)
+                    {
+                        int nx = x + dx, ny = y + dy;
+                        if (L.In(nx, ny) && L.Kind[L.Index(nx, ny)] != CellKind.Outside) continue;
+                        double cos = Math.Max(0, dx * Outside.SunX + dy * Outside.SunY);
+                        if (damaged)
+                            q += m.Absorb * Outside.Sun * WallFace * cos - m.Emiss * Sigma * WallFace * (t * t * t * t - bg4);
+                        else
+                        {
+                            double to = Math.Pow((0.3 * Outside.Sun * cos + 0.8 * Sigma * bg4) / (0.8 * Sigma), 0.25); // 단열재 겉면 온도
+                            q += 0.1 * WallFace * (to - t);
+                        }
+                    }
                     if (!Outside.Vacuum) q += 10 * WallFace * _exposed[i] * (Outside.Temp - t) * Math.Min(1, Outside.KPa / 100);
                     Ts[i] = Math.Max(2.7, t + q * dt / Cs[i]);
                 }
@@ -134,7 +146,7 @@ public sealed partial class Field
 
     /// <summary>
     /// 겉면 ↔ 기체(대류 10 W/m²K · 1m²) · 겉면 ↔ 바닥(전도 20 W/K + 복사 εσ(T⁴−Ts⁴) 선형화) — 두 물체 정확한 식을 차례로.
-    /// 화학 엔진이 불 곁 뜨거운 겉면에 매 틱 부른다.
+    /// 장은 바닥과 2K 넘게 다른 겉면을 매 틱, 나머지는 5틱마다 부른다.
     /// </summary>
     public void SurfaceExchange(int i, double dt)
     {

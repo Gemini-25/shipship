@@ -43,6 +43,8 @@ public sealed class Structure : IEngine
     public byte[] DoorJam;       // 1: 끼임
     public byte[] DoorPowered;   // 1: 전동 (망이 끊으면 0 — 손으로만)
     public long Cracks, Breaches, Impacts, DoorsBlown;
+    /// <summary>칸마다 들어온 충격 에너지 (J) — ⑦ 생명이 읽고 비운다 (그 칸 몸의 상처).</summary>
+    public float[] ImpactJ;
 
     private double[] _p = Array.Empty<double>();
 
@@ -52,6 +54,7 @@ public sealed class Structure : IEngine
         Fatigue = new float[L.N]; Corrode = new float[L.N]; Stress = new float[L.N]; DamageCause = new int[L.N];
         DoorTarget = new float[L.Doors.Count]; DoorJam = new byte[L.Doors.Count];
         DoorPowered = Enumerable.Repeat((byte)1, L.Doors.Count).ToArray();
+        ImpactJ = new float[L.N];
     }
 
     // ───────────────────────── 요청 ─────────────────────────
@@ -100,6 +103,7 @@ public sealed class Structure : IEngine
             else if (L.IsSpace(c))
             {
                 // 공기 칸: 절반은 열 (불덩이 · 파편이 데운다), 절반은 계속
+                ImpactJ[c] += (float)e;
                 double heat = e * 0.5;
                 F.AddSurfaceHeat(c, heat * 0.5);
                 F.AddHeat(c, heat * 0.5);
@@ -296,12 +300,12 @@ public sealed class Structure : IEngine
     public void Save(StateWriter w)
     {
         w.Arr(Fatigue); w.Arr(Corrode); w.Arr(Stress); w.Arr(DamageCause); w.Arr(DoorTarget); w.Arr(DoorJam); w.Arr(DoorPowered);
-        w.I64(Cracks); w.I64(Breaches); w.I64(Impacts); w.I64(DoorsBlown); w.F64(RustedO2);
+        w.I64(Cracks); w.I64(Breaches); w.I64(Impacts); w.I64(DoorsBlown); w.F64(RustedO2); w.Arr(ImpactJ);
     }
 
     public void Load(StateReader r)
     {
         r.ArrInto(Fatigue); r.ArrInto(Corrode); r.ArrInto(Stress); r.ArrInto(DamageCause); r.ArrInto(DoorTarget); r.ArrInto(DoorJam); r.ArrInto(DoorPowered);
-        Cracks = r.I64(); Breaches = r.I64(); Impacts = r.I64(); DoorsBlown = r.I64(); RustedO2 = r.F64();
+        Cracks = r.I64(); Breaches = r.I64(); Impacts = r.I64(); DoorsBlown = r.I64(); RustedO2 = r.F64(); r.ArrInto(ImpactJ);
     }
 }

@@ -21,7 +21,6 @@ public sealed partial class Field : IEngine
     public const double DoorArea = 2.0;         // m² (문 1m × 2m)
     public const double LeakNormalDoor = 0.0005; // m² (닫힌 보통 문의 틈 5cm² — 이웃 방이 진공이면 반 시간쯤에 걸쳐 샌다)
     public const double Sigma = 5.670374e-8;
-    public const double HullEmissivity = 0.03;  // 외판 단열재(다층 단열) 덕분에 낮다 — 구멍 난 곳은 재질 그대로
     public const int SlowEvery = 5;
 
     public string Name => "장";

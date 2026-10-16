@@ -302,6 +302,125 @@ public static partial class Program
                 $"산소 {o2a:0} → {f9.Total(f9.T.gO2):0}몰 · 물 {w0 / 55.5:0}L → {n9.WaterTank / 55.5:0}L");
         }
 
+        if (Do("생명"))
+        {
+            var lay = Worlds.Ascii(Worlds.Sealed);
+            Sim World(Action<Sim>? setup = null) { var w = Worlds.Full(lay, 1); setup?.Invoke(w); return w; }
+            int a = Worlds.At(lay, 4, 3), hull = Worlds.At(lay, 0, 3);
+
+            // 진공: 15초면 쓰러지고 1분 반쯤에 죽는다 · 죽음의 원인 사슬이 파편까지
+            var s = World();
+            var life = s.Get<Life>(); int b = life.AddBody(Worlds.At(lay, 4, 1));
+            int seed = s.Causes.Add(CauseKind.Story, "파편 하나가 날아왔다", s.Tick);
+            s.Get<Structure>().Impact(s, hull, 4e5, 1, 0, seed);
+            long downAt = -1, deadAt = -1;
+            for (int i = 0; i < Time.Minutes(6) && deadAt < 0; i++)
+            {
+                s.Step();
+                if (downAt < 0 && life[b].Conscious == 0) downAt = s.Tick;
+                if (life[b].Alive == 0) deadAt = s.Tick;
+            }
+            Check("감압된 방의 사람: 곧 쓰러지고 몇 분 안에 죽는다 · 죽음의 원인이 파편까지 이어진다",
+                downAt > 0 && deadAt > downAt && Time.ToSeconds(deadAt) < 300 && s.Causes.Story(life[b].DeathCause).StartsWith("파편 하나가 날아왔다"),
+                $"쓰러짐 {Time.ToSeconds(downAt):0}초 · 죽음 {Time.ToSeconds(deadAt):0}초 · {s.Causes.Story(life[b].DeathCause)}");
+            var sb = World(); var lb = sb.Get<Life>(); int bb = lb.AddBody(Worlds.At(lay, 4, 1));
+            sb.Run(5);
+            sb.Get<Field>().SetHole(hull, 2.5f);
+            sb.Run(10);
+            Check("외판이 통째로 뚫려 몇 초 만에 빠지면 폐를 다친다 (급감압)", lb[bb].Barotrauma > 0, $"{lb[bb].Barotrauma:0.00}");
+
+            // 저산소: 산소 분압 8kPa 방은 몇 분 안에 쓰러진다 · 15kPa는 버틴다
+            Sim LowO2(double kPa)
+            {
+                return World(w =>
+                {
+                    var f = w.Get<Field>();
+                    foreach (int c in lay.Rooms.First(r => r.Cells.Contains(a)).Cells)
+                    {
+                        double n = f.Moles(c), o2 = f.Gas(f.T.gO2, c), want = n * kPa / f.Pressure(c);
+                        f.RemoveGas(c, f.T.gO2, Math.Max(0, o2 - want));
+                        f.AddGas(c, f.T.gN2, Math.Max(0, o2 - want), f.Temp(c));
+                    }
+                    var net = w.Get<Network>(); for (int d = 0; d < net.Devices.Count; d++) if (net.Devices[d].Def.Role == "o2gen") net.SetOn(d, false);
+                });
+            }
+            var s2 = LowO2(8); var l2 = s2.Get<Life>(); int b2 = l2.AddBody(a);
+            s2.Run(Time.Minutes(8));
+            var s3 = LowO2(15); var l3 = s3.Get<Life>(); int b3 = l3.AddBody(a);
+            s3.Run(Time.Hours(1));
+            Check("산소 분압 8kPa(해발 7천m 꼴)에서는 몇 분 안에 쓰러진다 · 15kPa는 버틴다", l2[b2].Conscious == 0 && l3[b3].Conscious == 1,
+                $"8kPa: 포화도 {l2[b2].SpO2:0.00} · 15kPa: 포화도 {l3[b3].SpO2:0.00}");
+
+            // 일산화탄소 3000ppm: 일하는 사람은 한두 시간 안에 쓰러진다
+            var s4 = World(w => { var f = w.Get<Field>(); foreach (int c in lay.Rooms.First(r => r.Cells.Contains(a)).Cells) f.AddGas(c, f.T.gCO, f.Moles(c) * 0.003, f.Temp(c)); });
+            var l4 = s4.Get<Life>(); int b4 = l4.AddBody(a); l4[b4].ActivityW = 250;
+            long co = -1;
+            for (int i = 0; i < Time.Hours(3) && co < 0; i++) { s4.Step(); if (l4[b4].Conscious == 0) co = s4.Tick; }
+            Check("일산화탄소 3000ppm 속에서 일하면 한두 시간 안에 쓰러진다 (헤모글로빈이 막힌다)", co > 0 && co < Time.Hours(2.5), $"{(co > 0 ? Time.Clock(co) : "버팀")} · COHb {l4[b4].COHb:0.00}");
+
+            // 불 곁: 화상 · 원인이 불
+            var lounge = Worlds.Ascii(Worlds.Lounge, Worlds.Seats);
+            var s5 = Worlds.Full(lounge, 1);
+            var l5 = s5.Get<Life>(); int b5 = l5.AddBody(Worlds.At(lounge, 3, 2));
+            s5.Get<Chemistry>().Ignite(Worlds.At(lounge, 3, 3), 3e6, s5.Causes.Add(CauseKind.Person, "누가 담배를 떨어뜨렸다", 0));
+            s5.Run(Time.Minutes(5));
+            Check("불 붙은 의자 곁에 있으면 데고, 그 원인이 불까지 이어진다", l5[b5].Burn > 0.2 && s5.Causes.Story(l5[b5].HurtCause).Contains("담배"),
+                $"화상 {l5[b5].Burn:0.00} · {s5.Causes.Story(l5[b5].HurtCause)}");
+
+            // 굶주림 · 물: 하루에 양분 약 3몰 · 물 1L 넘게
+            var s6 = World(); var l6 = s6.Get<Life>(); int b6 = l6.AddBody(a);
+            double r0 = l6[b6].Reserve, w0 = l6[b6].Water;
+            s6.Run(Time.Days(1));
+            Check("하루 동안 몸의 양분(약 3몰)과 물(1L 넘게)이 준다", r0 - l6[b6].Reserve > 2 && r0 - l6[b6].Reserve < 6 && (w0 - l6[b6].Water) / 55.5 > 0.9,
+                $"양분 −{r0 - l6[b6].Reserve:0.0}몰 · 물 −{(w0 - l6[b6].Water) / 55.5:0.0}L · 체온 {l6[b6].CoreK - 273.15:0.0}℃");
+
+            // 방사선: 폭발 때 바깥쪽 칸이 안쪽보다 많이 맞는다
+            var s7 = ShipWorld.Create("Hanbit", 2);
+            var o7 = s7.Get<Outside>(); var f7 = s7.Get<Field>(); var l7 = s7.Get<Life>();
+            o7.Star = "blue"; o7.ScheduleFlare(1, 0);
+            var floor = Enumerable.Range(0, f7.Cells).Where(i => f7.L.Kind[i] == CellKind.Floor && f7.L.FurnitureAt[i] < 0).ToList();
+            s7.Run(Time.Minutes(50));
+            int outer = floor.OrderByDescending(i => o7.Dose[i]).First(), inner = floor.OrderBy(i => o7.Dose[i]).First();
+            int bo = l7.AddBody(outer), bi = l7.AddBody(inner);
+            s7.Run(Time.Hours(3));
+            Check("별 폭발 동안 바깥쪽 칸의 사람이 안쪽(가려진 곳)보다 훨씬 많이 맞는다", l7[bo].RadGy > l7[bi].RadGy * 2 && l7[bo].RadGy > 0.05,
+                $"바깥쪽 {l7[bo].RadGy * 1000:0}mGy · 안쪽 {l7[bi].RadGy * 1000:0}mGy");
+
+            // 작물: 재배등이 켜진 재배대는 자라고 산소를 낸다 · 꺼진 것은 안 자란다
+            var s8 = ShipWorld.Create("Bodeum", 2);
+            var n8 = s8.Get<Network>(); var l8 = s8.Get<Life>();
+            int off = l8.Crops[0].Device;
+            n8.SetOn(off, false);
+            s8.Run(Time.Hours(12));
+            var lit = l8.Crops.Skip(1).Average(c => c.Biomass);
+            Check("재배등이 켜진 재배대는 반나절에 자라고 · 꺼진 것은 거의 안 자란다 (사람이 없으면 이산화탄소가 모자라 느리다)", lit > 0.15 && l8.Crops[0].Biomass < lit * 0.3,
+                $"켜진 것 평균 {lit:0.00}몰 · 꺼진 것 {l8.Crops[0].Biomass:0.00}몰 · 재배대 {l8.Crops.Count}");
+
+            // 곰팡이: 습하고 따뜻한 방에서 자란다
+            var s9 = World(w => { var f = w.Get<Field>(); f.Adiabatic = true; /* 난방 장치가 없는 글자 도면 — 얼지 않게 */ foreach (int c in lay.Rooms.First(r => r.Cells.Contains(a)).Cells) { f.AddStore(c, f.T.sWater, 80); f.AddGas(c, f.T.gH2O, 1.5, f.Temp(c)); } var net = w.Get<Network>(); for (int d = 0; d < net.Devices.Count; d++) if (net.Devices[d].Def.Role == "dehumid") net.SetOn(d, false); });
+            var l9 = s9.Get<Life>(); var f9 = s9.Get<Field>();
+            s9.Run(Time.Days(3));
+            if (Environment.GetEnvironmentVariable("RULE_DEBUG") == "1")
+                Console.WriteLine($"    곰팡이 칸: 습도 {f9.Partial(f9.T.gH2O, a) / Water.SatKPa(f9.Temp(a)):0.00} · 물 {f9.Stored(f9.T.sWater, a):0} · {f9.Temp(a):0}K · 구역 {f9.RegionOf[a]}");
+            Check("물이 고이고 습한 방에는 곰팡이가 핀다 · 마른 방에는 없다", l9.Mold[a] > 0.02 && l9.Mold[Worlds.At(lay, 15, 3)] == 0,
+                $"젖은 방 {l9.Mold[a]:0.000} · 마른 방 {l9.Mold[Worlds.At(lay, 15, 3)]:0.000}");
+
+            // 음식 상함: 산소 없는 곳에서는 메탄이 생긴다
+            var s10 = new Sim(new SimSetup(Worlds.Ascii(Worlds.Symmetric), 1, sim => { var ff = new Field(sim.Layout, sim.Tables); sim.Add(ff); sim.Add(new Life(ff)); }));
+            var f10 = s10.Get<Field>(); f10.FillAir();
+            int mid = Worlds.At(f10.L, 5, 3);
+            for (int i = 0; i < f10.Cells; i++) if (f10.L.Kind[i] == CellKind.Floor) { double o = f10.Gas(f10.T.gO2, i); f10.RemoveGas(i, f10.T.gO2, o); f10.AddGas(i, f10.T.gN2, o, 293); f10.AddGas(i, f10.T.gH2O, 1.5, 293); }
+            f10.AddStore(mid, f10.T.sFood, 100);
+            s10.Run(Time.Days(4));
+            Check("산소 없는 창고의 음식은 썩으며 메탄을 낸다 (불이 붙을 수 있는 기체)", f10.Total(f10.T.gCH4) > 0.5, $"메탄 {f10.Total(f10.T.gCH4):0.0}몰 · 남은 음식 {f10.Stored(f10.T.sFood, mid):0.0}몰");
+
+            // 충격: 파편이 지나간 칸의 사람은 다친다
+            var s11 = World(); var l11 = s11.Get<Life>(); int b11 = l11.AddBody(Worlds.At(lay, 1, 3));
+            s11.Get<Structure>().Impact(s11, hull, 60_000, 1, 0, 0);
+            s11.Run(10);
+            Check("파편이 뚫고 들어온 칸의 사람은 다치고 피를 흘린다", l11[b11].Blunt > 0 && l11[b11].BloodL < 5, $"충격 {l11[b11].Blunt:0.00} · 피 {l11[b11].BloodL:0.00}L");
+        }
+
         if (Do("빛"))
         {
             var lay = Worlds.Ascii(Worlds.Lounge, Worlds.Seats);

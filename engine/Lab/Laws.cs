@@ -288,6 +288,31 @@ public static partial class Program
             Check("모든 엔진: 되살린 세계의 지문이 같다", b.Hash() == one, $"{snap1.Length / 1024}KB");
         }
 
+        if (Do("생명"))
+        {
+            Console.WriteLine("\n[⑦ 숨 · 체온 보존 — 단열 닫힌 방에 사람 넷]");
+            var lay = Worlds.Ascii(Worlds.Symmetric);
+            var s = new Sim(new SimSetup(lay, 1, sim => { var ff = new Field(sim.Layout, sim.Tables); sim.Add(ff); sim.Add(new Life(ff)); }));
+            var f = s.Get<Field>(); var life = s.Get<Life>();
+            f.FillAir(); f.Adiabatic = true;
+            foreach (var x in new[] { 2, 4, 6, 8 }) { int b = life.AddBody(Worlds.At(lay, x, 3)); life[b].ActivityW = 120; }
+            double[] Elements()
+            {
+                var e = f.ElementTotals();
+                var (g, w) = life.BodyMatter();
+                var m = new double[f.T.Substances.Count];
+                m[f.T.S("Glucose").Index] = g; m[f.T.S("H2O_l").Index] = w;
+                var be = f.T.ElementsOf(m);
+                return e.Zip(be, (a, b) => a + b).ToArray();
+            }
+            var e0 = Elements(); double en0 = f.EnergyLedger() + life.EnergyLedger();
+            s.Run(Time.Hours(2));
+            var e1 = Elements(); double en1 = f.EnergyLedger() + life.EnergyLedger();
+            double worst = e0.Zip(e1).Max(p => Rel(p.First, p.Second));
+            Check("숨 · 땀 · 체온: 원소 총량이 같다 (몸의 양분 · 물 + 장)", worst < 1e-9, $"{worst:0.0e0} · 이산화탄소 {f.Ppm(f.T.gCO2, Worlds.At(lay, 5, 3)):0}ppm");
+            Check("숨 · 땀 · 체온: 에너지 장부가 같다 (몸의 열 · 양분 + 장)", Rel(en0, en1) < 1e-9, $"{Rel(en0, en1):0.0e0} · 체온 {life[0].CoreK - 273.15:0.0}℃");
+        }
+
         if (Do("물"))
         {
             Console.WriteLine("\n[③ 물 · 응결]");
