@@ -288,5 +288,20 @@ public static partial class Program
             Check("빠진 방의 외판 구멍: 로봇이 에어락으로 나가 바깥에서 막는다 → 주컴퓨터가 예비 공기로 배를 다시 채운다", patchedAt > 0 && outside && avg > 85 && net.AirReleased > 0,
                 patchedAt > 0 ? $"{(patchedAt - Time.Minutes(15)) / 25.0:0}분 만에 {(outside ? "바깥에서" : "안에서")} 막음 · 가장 낮던 배 기압 {lowest:0} → 8시간 뒤 {avg:0}kPa · 휴게실 {f.Pressure(L2.Rooms[lounge].Cells[0]):0}kPa" : $"못 막음 · 배 기압 {avg:0}kPa");
         }
+
+        // ── 공조: 설비 열이 큰 방(정비실 15kW)도 시원하다 · 냉각 펌프가 모두 서면 배가 더워진다 ──
+        {
+            double Hottest(bool pumpsDown)
+            {
+                var s = ShipWorld.Create("Pabal", 5);
+                var net = s.Get<Network>(); var f = s.Get<Field>();
+                if (pumpsDown) foreach (var d in net.Devices.Where(d => d.Def.Role == "pump")) net.Age(d.Id, Part.Mechanical, 1.0);
+                s.Run(Time.Hours(4));
+                return s.Layout.Rooms.Where(r => r.Cells.Length > 0).Max(r => r.Cells.Average(c => f.Temp(c))) - 273.15;
+            }
+            double cool = Hottest(false), hot = Hottest(true);
+            Check("공조: 설비 열이 큰 방도 시원하다 (4시간 뒤 가장 더운 방 25℃ 아래) · 냉각 펌프가 모두 서면 더워진다", cool < 25 && hot > cool + 5,
+                $"가장 더운 방 {cool:0.0}℃ · 펌프가 서면 {hot:0.0}℃");
+        }
     }
 }

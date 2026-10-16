@@ -94,6 +94,8 @@ public sealed class Network : IEngine
     public bool ReactorScram;
     public int ScramCause;
     public double WaterTank;      // 물 (몰)
+    /// <summary>냉각 펌프 하나에 딸린 방 열교환 · 팬 (kW) — 전기가 모두 방 공기의 열이 되니 배 전력만큼은 걷어 내야 한다.</summary>
+    public const double HvacPerPumpKw = 30;
     /// <summary>예비 공기 (몰 · 질소 79% 산소 21%) — 큰 감압 뒤 배를 다시 채울 압축 공기. 배 전체를 반 번 채울 만큼 싣고 떠난다.</summary>
     public double AirReserve;
     /// <summary>예비 공기를 지금 푸는 빠르기 (몰/초) — 주컴퓨터가 정한다 (생명유지 설비 자리로 나온다).</summary>
@@ -547,11 +549,11 @@ public sealed class Network : IEngine
         double cap = 0;
         for (int d = 0; d < Devices.Count; d++)
             if (Devices[d].Def.Role == "pump" && Working(d) && Coolant > 1000) cap += Devices[d].Def.HeatKw * Supply[d];
-        // 공조: 냉각 고리에 딸린 방 열교환 · 팬 (펌프마다 6kW) + 따로 단 열교환기
+        // 공조: 냉각 고리에 딸린 방 열교환 · 팬 (펌프마다 30kW) + 따로 단 열교환기
         double hvacCap = 0;
         for (int d = 0; d < Devices.Count; d++)
         {
-            if (Devices[d].Def.Role == "pump" && Working(d) && Coolant > 1000) hvacCap += 6 * Supply[d];
+            if (Devices[d].Def.Role == "pump" && Working(d) && Coolant > 1000) hvacCap += HvacPerPumpKw * Supply[d];
             if (Devices[d].Def.Role == "hvac" && Working(d)) hvacCap += Devices[d].Def.HeatKw * Supply[d];
         }
         HvacKw = hvacCap;
@@ -592,8 +594,11 @@ public sealed class Network : IEngine
         {
             int v = Vent[r];
             if (v < 0 || !RoomPowered(r) || Damper[r] == 0 || F.RegionOf[v] < 0 || F.Moles(v) < 1) continue;
-            double t = F.Temp(v);
-            need[r] = Math.Clamp(0.3 * L.Rooms[r].Cells.Length * (t - SetpointK) / 10, -3, 15);
+            // 방 공기 평균 온도로 (통풍구 한 칸만 보면 그 칸만 식어 방은 계속 덥다)
+            double sumT = 0; int nT = 0;
+            foreach (int c in L.Rooms[r].Cells) if (F.Moles(c) > 1) { sumT += F.Temp(c); nT++; }
+            double t = nT > 0 ? sumT / nT : F.Temp(v);
+            need[r] = Math.Clamp(0.1 * L.Rooms[r].Cells.Length * (t - SetpointK), -3, 40); // 칸마다 1K에 0.1kW
             if (need[r] > 0) coolSum += need[r];
         }
         double scale = coolSum > left ? left / coolSum : 1;
@@ -601,7 +606,12 @@ public sealed class Network : IEngine
         {
             if (need[r] == 0) continue;
             double kw = need[r] > 0 ? need[r] * scale : need[r];
-            F.AddHeat(Vent[r], -kw * 1000 * dt);
+            // 방 칸마다 나눠서 (팬이 방 공기를 돌린다)
+            var cells = L.Rooms[r].Cells;
+            int live = 0;
+            foreach (int c in cells) if (F.Moles(c) > 1) live++;
+            if (live == 0) { F.AddHeat(Vent[r], -kw * 1000 * dt); continue; }
+            foreach (int c in cells) if (F.Moles(c) > 1) F.AddHeat(c, -kw * 1000 * dt / live);
         }
     }
 

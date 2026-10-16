@@ -191,4 +191,24 @@ public static partial class Program
             Console.WriteLine($"  {Time.Clock(s.Tick)} {m.NameOf(r.Id)}#{r.Id} {Where(c.Cell)} {m.Thought(r.Id)} · 맡음 {c.AssignedGoal}:{Where(c.AssignedTarget)} · 길 {r.PathIdx}/{r.Path.Count}{door} · 계획 {plan} · 피함 {string.Join(",", r.Avoid.Select(v => v.Goal + ":" + v.Target))}");
         }
     }
+
+    /// <summary>방 온도 · 냉각 장부를 시간마다 (--probe-heat [배] [시간] [사람 수]).</summary>
+    internal static void ProbeHeat(string[] args)
+    {
+        var rest = args.SkipWhile(a => a != "--probe-heat").Skip(1).ToArray();
+        string ship = rest.Length > 0 ? rest[0] : "Pabal";
+        double hours = rest.Length > 1 ? double.Parse(rest[1]) : 12;
+        int crew = rest.Length > 2 ? int.Parse(rest[2]) : 0;
+        var lay = Layout.Ship(ship, Tables.Default);
+        int docks = lay.Furniture.Count(f => f.Type == "RobotDock");
+        var s = crew > 0 ? ShipWorld.Crewed(ship, 3, crew, docks, 0) : ShipWorld.Create(ship, 3);
+        var f = s.Get<Field>(); var net = s.Get<Network>();
+        Console.WriteLine($"  장치: " + string.Join(" · ", net.Devices.GroupBy(d => d.Type).Select(g => $"{g.Key}×{g.Count()}")));
+        for (int h = 0; h <= hours; h++)
+        {
+            if (h > 0) s.Run(Time.Hours(1));
+            var rooms = s.Layout.Rooms.Where(r => r.Cells.Length > 0).Select(r => (r.Name, t: r.Cells.Average(c => f.Temp(c)) - 273.15, kw: net.Devices.Where(d => d.Room == r.Id && net.Working(d.Id)).Sum(d => d.Def.Kw)));
+            Console.WriteLine($"  {h}시간 · 냉각 {net.CoolingKw:0.0}kW 공조 {net.HvacKw:0.0}kW · 전력 {net.Supplied:0}/{net.Demanded:0}kW · " + string.Join(" · ", rooms.OrderByDescending(x => x.t).Take(6).Select(x => $"{x.Name} {x.t:0}℃({x.kw:0.0}kW)")));
+        }
+    }
 }
