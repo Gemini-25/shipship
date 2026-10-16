@@ -56,7 +56,7 @@ for a in ann:
     t, m = a.get('title') or '', a.get('message') or ''
     if mode == 'times':
         if t == '시간' and m.startswith('시간 '): print(m)
-    elif t == '요약' or (t == '시간' and not m.startswith('시간 ')):
+    elif t in ('요약', '재확인') or (t == '시간' and not m.startswith('시간 ')):
         print(m)
     elif t == '조사':
         print(f'- {m}')
