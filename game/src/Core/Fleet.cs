@@ -86,6 +86,8 @@ public sealed class FleetSystem
     internal SortedDictionary<int, float> Carry { get; } = new();
     private readonly SortedDictionary<int, FireWatch> _fire = new();
     private readonly SortedDictionary<string, long> _decided = new(StringComparer.Ordinal);
+    /// <summary>쉬는 드론이 없어 사람 몫으로 정한 파공 — 2분마다 다시 보되, 같은 결론을 기록 · 타임라인에 또 남기지 않는다 (드론이 생기면 다시 견준다).</summary>
+    private readonly SortedDictionary<string, long> _sealNoDrone = new(StringComparer.Ordinal);
     private readonly SortedDictionary<int, SortedDictionary<int, float>> _bond = new();
     private readonly SortedSet<int> _fetchSaid = new();
     private long _next;
@@ -579,6 +581,8 @@ public sealed class FleetSystem
             _decided[key] = w.Tick;
             var room = o.Target.Room!;
             var (d, eta, why) = w.Drones.FleetSealer(o, at);
+            // 제비호 82일: 쉬는 드론이 없는 40분 동안 "누가 막나 — 사람이 우주복을 입고 막는다"를 2분마다 열여섯 번 기록했다
+            if (d == null && _sealNoDrone.ContainsKey(key)) { _decided[key] = w.Tick - SimTime.Minutes(10); continue; }
             bool suit = room.Unbreathable || room.Air.Pressure < 60f || wall.Breach >= 0.25f;
             bool rocks = w.Hazards.Shower.Count > 0 || w.Sensors.Alarm != null;
             float crewRisk = (suit ? 0.35f : 0.1f) + (rocks && suit ? 0.45f : rocks ? 0.1f : 0f) + (wall.Breach >= 0.25f ? 0.15f : 0f);
@@ -591,7 +595,8 @@ public sealed class FleetSystem
             };
             var dec = w.Automation.Foresee.Fleet("파공", room, $"{room.Name} 외벽 파공 {wall.Breach * 100:0}% — 누가 막나", opts);
             dec.Grader = (world, dd) => wall.Breach <= 0f || wall.Patched ? (1, "맞았다 — 막혔다") : null;
-            if (d == null) { _decided[key] = w.Tick - SimTime.Minutes(10); continue; } // 강화: 쉬는 드론이 없으면 2분 뒤 다시 본다 (12분이 아니라)
+            if (d == null) { _decided[key] = w.Tick - SimTime.Minutes(10); _sealNoDrone[key] = w.Tick; continue; } // 강화: 쉬는 드론이 없으면 2분 뒤 다시 본다 (12분이 아니라)
+            _sealNoDrone.Remove(key);
             if (dec.Pick.Key != "drone") continue;
             DroneTask[d.Id] = o.Id;
             o.Drone = d;
@@ -637,7 +642,7 @@ public sealed class FleetSystem
     }
 
     /// <summary>이 파공은 다시 견줘 본다 (맡았던 드론을 교대로 돌렸을 때).</summary>
-    internal void Forget(WorkOrder o) => _decided.Remove($"seal:{o.Target.Cell.X},{o.Target.Cell.Y}");
+    internal void Forget(WorkOrder o) { var k = $"seal:{o.Target.Cell.X},{o.Target.Cell.Y}"; _decided.Remove(k); _sealNoDrone.Remove(k); }
 
     // ───────────── 명령선 · 생각 ─────────────
 

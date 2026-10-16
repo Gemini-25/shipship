@@ -85,6 +85,38 @@ public static partial class Program
                 $"옆 방 {R0?.Name} {before:0} → {after:0}kPa · 새 방 {room?.Air.Pressure:0}kPa · 탱크 {tank0:0} → {w.Air.Reserve:0}");
         }
 
+        // ── 주 컴퓨터는 같은 결론을 되풀이해 적지 않는다: 쉬는 드론이 없는 파공 — "누가 막나"는 한 번 (제비호 82일: 40분에 열여섯 번) ──
+        if (Do("sealquiet"))
+        {
+            var w = World.CreateDefault(seed, 0, "Mirinae");
+            Run(w, SimTime.Minutes(5));
+            var (wallCell, room) = w.Ship.Walls.Where(kv => kv.Value.IsHull).Select(kv => (cell: kv.Key, room: Hull.InsideRoom(w.Ship, kv.Key)))
+                .Where(x => x.room is Room r && !r.Detached && w.Crew.Any(c => !c.Dead && c.Room == r)).OrderBy(x => x.cell.X * 1000 + x.cell.Y).First();
+            void Busy() // 드론 거치대에 봉합 재료가 없다 (밖에서 막을 드론이 없다)
+            {
+                foreach (var f in w.Ship.FurnitureOf(FurnitureType.DroneDock))
+                    if (f.Storage != null) foreach (var k in Enum.GetValues<ItemKind>()) f.Storage.Take(k, 999);
+            }
+            // 막을 손이 한동안 없다 (제비호 82일: 불시착 뒤 40분) — 사람은 모두 배 밖 (원정), 로봇도 일을 받지 않게 멈춘다
+            foreach (var c in w.Crew) c.Away = true;
+            foreach (var rb in w.Robots.Robots) rb.Disabled = true;
+            Busy();
+            int Said() => w.Log.Entries.Count(e => e.Text.Contains("누가 막나"));
+            int said0 = Said();
+            string? hit = Hazards.Apply(w, HazardKind.HullCrack, wallCell, -1);
+            long t0 = w.Tick;
+            int seals = 0;
+            while (w.Tick - t0 < SimTime.Minutes(15))
+            {
+                Busy(); w.Step(); seals = Math.Max(seals, w.Board.Open.Count(o => o.Kind == WorkKind.SealBreach));
+                if (Environment.GetEnvironmentVariable("RULE_DEBUG") == "1" && (w.Tick - t0) % SimTime.Minutes(1) == 0)
+                    Console.WriteLine($"    {(w.Tick - t0) / SimTime.Minutes(1)}분: " + string.Join(" | ", w.Board.All.Where(o => o.Kind == WorkKind.SealBreach).Select(o => $"#{o.Id} 닫힘 {o.Closed} 맡은 {o.Assignee?.Name ?? "-"} 드론 {o.Drone?.Name ?? "-"} 대상 {o.Target.Kind} 방 {o.Target.Room?.Name} 버림 {o.Target.Room?.Abandoned}"))
+                        + $" · 드론 조종 {w.Automation.DroneControl} · 해치 {DroneSystem.Hatch(w) != null}");
+            }
+            int said = Said() - said0;
+            Check("주 컴퓨터 — 드론 없는 파공의 '누가 막나'는 한 번만 적는다 (15분)", said == 1, $"{said}번 · {room!.Name} · {hit ?? "균열 없음"} · 봉합 일 {seals}");
+        }
+
         // ── 결정론: 같은 시드 두 배는 같은 역사 ──
         if (Do("det"))
         {
