@@ -278,7 +278,7 @@ public sealed class Outside : IEngine
             if (!L.In(ix, iy)) continue;
             int c = L.Index(ix, iy);
             if (L.Kind[c] == CellKind.Outside) continue;
-            int cause = sim.Causes.Add(CauseKind.Impact, $"{what}이(가) 부딪혔다 ({energy / 1000:0.#}kJ)", sim.Tick, c, parentCause);
+            int cause = sim.Causes.Add(CauseKind.Impact, $"{Ko.I(what)} 부딪혔다 ({energy / 1000:0.#}kJ)", sim.Tick, c, parentCause);
             int dx = Math.Abs(ux) >= Math.Abs(uy) ? Math.Sign(ux) : 0, dy = dx == 0 ? Math.Sign(uy) : 0;
             sim.Find<Structure>()?.Impact(sim, c, energy, dx, dy, cause);
             return true;

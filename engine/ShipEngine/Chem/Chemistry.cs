@@ -276,7 +276,7 @@ public sealed class Chemistry : IEngine
             Hrr[i] += (float)(heat / dt / 1000);
             GasBursts++;
             int cause = _spark[i] != 0 ? _sparkCause[i] : FireCause[i];
-            if (cause == 0) cause = sim.Causes.Add(CauseKind.Reaction, $"{T.Substances[T.Gases[gf.gas].Index].Name}이(가) 한꺼번에 탔다", sim.Tick, i);
+            if (cause == 0) cause = sim.Causes.Add(CauseKind.Reaction, $"{Ko.I(T.Substances[T.Gases[gf.gas].Index].Name)} 한꺼번에 탔다", sim.Tick, i);
             sim.Facts.Emit(sim.Tick, FactKind.Ignition, i, (float)(heat / 1000), cause, other: gf.gas);
             // 불꽃 앞면: 이웃이 다음 틱의 불씨
             F.L.Neighbors(i, nb);

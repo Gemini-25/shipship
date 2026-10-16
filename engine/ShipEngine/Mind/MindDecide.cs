@@ -139,7 +139,10 @@ public sealed partial class Mind
             }
             // 이 방의 위험을 다루러 들어온 사람(불 끄기 · 구하기 · 막기)은 나가지 않는다 — 정말 위험하면 본능이 끊는다
             bool committed = c.Goal is GoalKind.FightFire or GoalKind.Rescue or GoalKind.Patch && a.Plan.Count > 0 && c.StepIndex < a.Plan.Count && InRoom(c.GoalCell, myRoom);
-            if (worst > 0 && !committed) Add(GoalKind.Evacuate, myRoom, cell, worst);
+            // 지나가는 중: 지금 걸음이 위험하지 않다고 믿는 다른 방으로 가고 있으면 새로 대피하지 않는다 (통로를 지날 때마다 문을 여닫지 않게)
+            bool passing = a.Plan.Count > 0 && c.StepIndex < a.Plan.Count && a.Plan[c.StepIndex].Kind == StepKind.GoTo && a.Plan[c.StepIndex].Cell >= 0
+                && RoomOf(a.Plan[c.StepIndex].Cell) != myRoom && RoomBadness(a, RoomOf(a.Plan[c.StepIndex].Cell)) < 0.3f;
+            if (worst > 0 && !committed && !passing) Add(GoalKind.Evacuate, myRoom, cell, worst);
         }
         foreach (var b in a.Beliefs)
         {
@@ -176,6 +179,7 @@ public sealed partial class Mind
                 case BeliefKind.Bang or BeliefKind.Strain or BeliefKind.Leak or BeliefKind.SmokeSmell or BeliefKind.Help or BeliefKind.Spark:
                 {
                     if (b.Src == BeliefSource.Saw && b.Kind != BeliefKind.Spark) break; // 이미 본 자리
+                    if (person && b.Src == BeliefSource.Screen) break;                 // 주컴퓨터가 알린 것은 로봇이 살핀다
                     if (Dist(here, b.Cell) <= 1) break;
                     float s = person ? b.Conf * ((c.Curious + c.Diligent) * 1.2f + (b.Kind == BeliefKind.Help ? c.Kindness * 2 : 0)) * caution : b.Conf * 3;
                     int key = b.Cell;
@@ -361,6 +365,8 @@ public sealed partial class Mind
                 int refuge = FindRefuge(a, here, o.Target, o.Cell);
                 if (refuge < 0) return false;
                 plan.Add(Go(refuge));
+                a.Avoid.Add(new AvoidEntry { Goal = GoalKind.Flee, Target = o.Target, Until = sim.Tick + Time.Minutes(10) });
+                if (a.Avoid.Count > 16) a.Avoid.RemoveAt(0);
                 return true;
             }
             case GoalKind.Investigate:
@@ -381,27 +387,25 @@ public sealed partial class Mind
         return false;
     }
 
-    /// <summary>피할 곳: 위험한 방(room) 밖 · 위험한 칸에서 4칸 넘게 · 몸이 느끼기에 안전한 가장 가까운 칸 · 위험하다고 믿지 않는 방 (없으면 그나마 나은 방).</summary>
+    /// <summary>피할 곳: 위험한 방(room) 밖 · 위험한 칸에서 4칸 넘게 · 몸이 느끼기에 안전한 칸 중
+    /// 위험하다고 믿는 정도가 가장 낮은 방의 가장 가까운 칸 — 그런 방이 없으면 지금 방보다 확실히 나은 곳만 (없으면 -1: 옮기지 않는다).</summary>
     private int FindRefuge(Agent a, int from, int room, int danger)
-    {
-        int c = FindRefuge(a, from, room, danger, true);
-        return c >= 0 ? c : FindRefuge(a, from, room, danger, false);
-    }
-
-    private int FindRefuge(Agent a, int from, int room, int danger, bool trustBeliefs)
     {
         var q = new Queue<int>();
         var seen = new HashSet<int> { from };
         q.Enqueue(from);
         Span<int> nb = stackalloc int[4];
+        float here = RoomBadness(a, room);
+        int best = -1; float bestBad = float.MaxValue;
         while (q.Count > 0 && seen.Count < 3000)
         {
             int c = q.Dequeue();
-            if (L.Kind[c] == CellKind.Floor && L.Room[c] != room && L.Room[c] >= 0 && (danger < 0 || Dist(c, danger) > 4) && SafeAt(c)
-                && Believes(a, BeliefKind.Vacuum, c, 3) < 0.3f && Believes(a, BeliefKind.Fire, c, 4) < 0.3f && (!trustBeliefs || !BelievedRoomBad(a, L.Room[c])))
+            if (L.Kind[c] == CellKind.Floor && L.Room[c] != room && L.Room[c] >= 0 && (danger < 0 || Dist(c, danger) > 4) && SafeAt(c) && !FledFrom(a, L.Room[c])
+                && Believes(a, BeliefKind.Vacuum, c, 3) < 0.3f && Believes(a, BeliefKind.Fire, c, 4) < 0.3f)
             {
-                // 문에서 한 칸 더 들어간다 (문간에 서지 않게)
-                return c;
+                float bad = RoomBadness(a, L.Room[c]);
+                if (bad <= 0) return c;                       // 위험하다고 믿지 않는 가장 가까운 방
+                if (bad < bestBad) { bestBad = bad; best = c; }
             }
             L.Neighbors(c, nb);
             foreach (int j in nb)
@@ -411,7 +415,28 @@ public sealed partial class Mind
                 seen.Add(j); q.Enqueue(j);
             }
         }
-        return -1;
+        return best >= 0 && bestBad < here - 0.15f ? best : -1;
+    }
+
+    /// <summary>그 방이 위험하다고 믿는 정도 (0 = 믿지 않음 · 가장 확신하는 위험 믿음).</summary>
+    private float RoomBadness(Agent a, int room)
+    {
+        float worst = 0;
+        foreach (var b in a.Beliefs)
+        {
+            if (b.Conf < 0.3f || !InRoom(b.Cell, room)) continue;
+            bool bad = b.Kind is BeliefKind.Smoke or BeliefKind.Breach or BeliefKind.Vacuum or BeliefKind.Fire or BeliefKind.BadAir
+                       || b.Kind == BeliefKind.Leak && L.Kind[b.Cell] != CellKind.Door;
+            if (bad && b.Conf > worst) worst = b.Conf;
+        }
+        return worst;
+    }
+
+    /// <summary>최근(10분) 빠져나온 방인가 — 그리로 다시 피하지 않는다 (두 방을 오가며 문을 여닫지 않게).</summary>
+    private bool FledFrom(Agent a, int room)
+    {
+        foreach (var v in a.Avoid) if (v.Goal == GoalKind.Flee && v.Target == room && v.Until > _nowTick) return true; // '빠져나온 방' 기억은 Flee로 적는다 (점수 고르기에는 Flee가 없다)
+        return false;
     }
 
     /// <summary>그 방이 위험하다고 믿나: 구멍 · 공기 빠짐 · 새는 곳(문틈 말고) · 이상한 공기 · 연기 · 불.</summary>

@@ -249,7 +249,11 @@ public sealed partial class Mind
         Patched++;
         int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} 구멍을 막았다", t, wall, _st.DamageCause[wall], 0, a.Id);
         sim.Facts.Emit(t, FactKind.Patched, wall, (float)Math.Min(area, max), cause, a.Id);
-        if (F.Hole[wall] <= 0) Forget(a, b => b.Kind == BeliefKind.Breach && b.Cell == wall);
+        if (F.Hole[wall] <= 0)
+        {
+            Forget(a, b => b.Kind == BeliefKind.Breach && b.Cell == wall || b.Kind is BeliefKind.Leak or BeliefKind.Vacuum && Dist(b.Cell, wall) <= 6);
+            a.Doubts.Add(new Doubt { Kind = BeliefKind.Leak, Cell = wall, Until = t + Time.Minutes(10) }); // 내가 막았다 — 한동안 '샌다'는 말을 반신반의
+        }
         Next(a, t);
     }
 

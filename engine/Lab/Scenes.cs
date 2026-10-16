@@ -49,28 +49,45 @@ public static partial class Program
             }
             case "meteor":
             {
-                s = ShipWorld.Create("Kestrel", 4);
-                var life = s.Get<Life>(); var ff = s.Get<Field>();
-                var floor = Enumerable.Range(0, ff.Cells).Where(i => ff.L.Kind[i] == CellKind.Floor && ff.L.FurnitureAt[i] < 0).ToList();
-                var rng = Rng.Stream(4, "장면 사람");
-                for (int k = 0; k < 6; k++) life.AddBody(floor[rng.Range(0, floor.Count)]);
-                s.Run(Time.Minutes(2));
+                s = ShipWorld.Crewed("Kestrel", 4, 6, 3);
+                s.Run(Time.Hours(2));
                 int seed = s.Causes.Add(CauseKind.Story, "운석 하나가 배를 향해 온다", s.Tick);
                 s.Get<Outside>().AddRock(1.5, 6000, -1, 0.15, 2, 25_000, seed);
-                every = 4; count = 40;
+                every = 6; count = 60;
                 break;
             }
             default: Console.WriteLine($"모르는 장면: {name}"); return;
         }
+        var trace = Environment.GetEnvironmentVariable("TRACE");
+        var tm = s.Find<Mind>();
         for (int k = 0; k < count; k++)
         {
             Map.Save(s, Path.Combine(dir, $"{k:000}.png"));
-            s.Run(every);
+            for (int i = 0; i < every; i++)
+            {
+                s.Step();
+                if (trace != null && tm != null && int.TryParse(trace, out int ti) && ti < tm.Agents.Count)
+                {
+                    var a = tm.Agents[ti];
+                    int r = tm.RoomOf(a.C.Cell);
+                    Console.WriteLine($"    [{tm.NameOf(ti)}] {Time.Clock(s.Tick)} {(r >= 0 ? s.Layout.Rooms[r].Name : "문")} {tm.Thought(ti)} · {s.Get<Field>().Pressure(a.C.Cell):0}kPa · 믿음 {string.Join(",", a.Beliefs.Where(b => b.Conf >= 0.3f).Select(b => $"{Mind.BeliefName(b.Kind)}@{(tm.RoomOf(b.Cell) >= 0 ? s.Layout.Rooms[tm.RoomOf(b.Cell)].Name : "?")}:{b.Conf:0.0}{b.Src.ToString()[0]}"))}");
+                }
+            }
         }
         Console.WriteLine($"  {name}: {count}장 → {dir}");
         if (Environment.GetEnvironmentVariable("FACTS") == "1")
+        {
+            var mind = s.Find<Mind>();
             foreach (var f in s.Facts.Since(0))
-                Console.WriteLine($"    틱 {f.Tick} {f.Kind} 칸 {f.Cell} 크기 {f.Size:0.##} · {s.Causes.Story(f.Cause)}");
+            {
+                if (f.Kind is FactKind.LoudSound or FactKind.Woke) continue;
+                string who = f.Actor >= 0 && mind != null && f.Actor < mind.Agents.Count ? mind.NameOf(f.Actor) + " " : "";
+                Console.WriteLine($"    {Time.Clock(f.Tick)} {f.Kind} {who}칸 {f.Cell} 크기 {f.Size:0.##} · {s.Causes.Story(f.Cause)}");
+            }
+            var sm = s.Find<ShipMind>();
+            if (sm != null) foreach (var (t, txt) in sm.Log) Console.WriteLine($"    [주컴퓨터] {Time.Clock(t)} {txt}");
+            if (mind != null) foreach (var a in mind.Agents) Console.WriteLine($"    {mind.NameOf(a.Id)}: {mind.Thought(a.Id)} · {(a.IsPerson ? (s.Get<Life>()[a.C.Body].Alive != 0 ? "삶" : "죽음") : "")}");
+        }
     }
 }
 
@@ -135,6 +152,15 @@ public static class Map
             }
         }
         var lifeE = s.Find<Life>();
+        var mindE = s.Find<Mind>();
+        if (mindE != null)
+            foreach (var a in mindE.Agents)
+            {
+                if (a.IsPerson) continue;
+                int bx = l.X(a.C.Cell) * Px, by = l.Y(a.C.Cell) * Px;
+                uint col = Png.Rgba(0.4, 0.7, 1.0);
+                for (int yy = 2; yy < Px - 2; yy++) for (int xx = 2; xx < Px - 2; xx++) if ((xx + yy) % 2 == 0) img[(by + yy) * w + bx + xx] = col;
+            }
         if (lifeE != null)
             foreach (var b in lifeE.Bodies)
             {

@@ -51,7 +51,7 @@ public static partial class Program
             for (int k = 0; k < Time.Minutes(20); k++)
             {
                 s.Step(); cohb = Math.Max(cohb, life[m[sleeper].C.Body].COHb);
-                if (Debug && k < 90 && k % 3 == 0) Console.WriteLine($"    {k} 잠든 이 칸 {m[sleeper].C.Cell} {m.Thought(sleeper)} 자는 중 {life[m[sleeper].C.Body].Asleep} · 믿음 {string.Join(",", m[sleeper].Beliefs.Select(b => $"{b.Kind}@{b.Cell}:{b.Conf:0.0}/{b.Src}"))} · 회피 {string.Join(",", m[sleeper].Avoid.Select(v => v.Goal + ":" + v.Target))}");
+                if (Debug && k % 20 == 0) Console.WriteLine($"    {k} 잠든 이 칸 {m[sleeper].C.Cell} {m.Thought(sleeper)} 자는 중 {life[m[sleeper].C.Body].Asleep} · 믿음 {string.Join(",", m[sleeper].Beliefs.Select(b => $"{b.Kind}@{b.Cell}:{b.Conf:0.0}/{b.Src}"))} · 회피 {string.Join(",", m[sleeper].Avoid.Select(v => v.Goal + ":" + v.Target))}");
             }
             var cm = s.Get<ShipMind>();
             if (Debug) for (int rr = 0; rr < lay.Rooms.Count; rr++) Console.WriteLine($"    방 {lay.Rooms[rr].Name}: {cm.RoomKPa[rr]:0.0}kPa 산소 {cm.RoomO2[rr]:0.0} 이산화탄소 {cm.RoomCO2[rr]:0} 일산화탄소 {cm.RoomCO[rr]:0} 그을음 {cm.RoomSoot[rr]:0} 온도 {cm.RoomTemp[rr]:0} 읽힘 {cm.RoomSeen[rr]}");
@@ -116,9 +116,10 @@ public static partial class Program
             }
             var seal = s2.Facts.Since(0).Where(x => x.Kind == FactKind.ComputerSeal && x.Other == lay.Room[At(6, 2)]).ToList();
             int r2 = m2.RoomOf(m2[c2].C.Cell);
-            Check("상상 (나): 천천히 새는 방에 깨어 있는 사람 — 사람이 나가기 전에는 봉쇄하지 않는다 (갇히지 않는다) · 산다",
-                life2[m2[c2].C.Body].Alive != 0 && seal.Count > 0 && seal[0].Size == 0,
-                $"사람 {(r2 >= 0 ? lay.Rooms[r2].Name : "-")} {f2.Pressure(m2[c2].C.Cell):0}kPa {m2.Thought(c2)} · 봉쇄 {seal.Count} (안에 사람 {(seal.Count > 0 ? seal[0].Size : -1)}) · 상상 {cm2.Imaginations.Count}");
+            bool patched2 = f2.Hole[At(0, 4)] <= 0;
+            Check("상상 (나): 천천히 새는 방에 깨어 있는 사람 — 나가거나 직접 막는다 · 봉쇄는 사람이 나간 뒤거나 막는 사람이 남아 있을 때만 · 산다",
+                life2[m2[c2].C.Body].Alive != 0 && seal.Count > 0 && (seal[0].Size == 0 || patched2),
+                $"사람 {(r2 >= 0 ? lay.Rooms[r2].Name : "-")} {f2.Pressure(m2[c2].C.Cell):0}kPa {m2.Thought(c2)} · 직접 막음 {patched2} · 봉쇄 {seal.Count} (안에 사람 {(seal.Count > 0 ? seal[0].Size : -1)}) · 상상 {cm2.Imaginations.Count}");
         }
 
         // ── 차단기: 합선 없이 떨어진 차단기는 주컴퓨터가 다시 올린다 ──

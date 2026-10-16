@@ -539,6 +539,11 @@ public sealed class Network : IEngine
             if (v >= 0 && Damper[r] != 0 && RoomPowered(r) && F.RegionOf[v] >= 0 && F.Moles(v) > 1) vents.Add(v);
         }
         if (vents.Count < 2) return;
+        // 압력 차단판: 기압이 다른 방들보다 15% 넘게 낮은 방의 통풍구는 저절로 닫힌다 (뚫린 방으로 배 전체 공기가 덕트를 타고 빠지지 않게)
+        var ps = vents.Select(v => F.Pressure(v)).OrderBy(x => x).ToList();
+        double median = ps[ps.Count / 2];
+        vents.RemoveAll(v => F.Pressure(v) < 0.85 * median);
+        if (vents.Count < 2) return;
         int G = F.G;
         var pool = new double[G];
         double poolU = 0;
@@ -593,7 +598,7 @@ public sealed class Network : IEngine
         Broken[d * 4 + (int)p] = 1;
         Failures++;
         string what = p switch { Part.Electric => "회로", Part.Mechanical => "모터", Part.Seal => "봉함", _ => "거르개" };
-        int cause = sim.Causes.Add(CauseKind.Wear, $"{dev.Name}의 {what}이(가) 낡아 망가졌다", sim.Tick, dev.Cell);
+        int cause = sim.Causes.Add(CauseKind.Wear, $"{dev.Name}의 {Ko.I(what)} 낡아 망가졌다", sim.Tick, dev.Cell);
         sim.Facts.Emit(sim.Tick, FactKind.MachineFail, dev.Cell, (int)p, cause, other: d);
         if (p == Part.Electric && dev.Feeder >= 0 && Rng.Unit(_seed, Rng.Key("회로 고장 합선"), sim.Tick, d) < 0.25)
         {
