@@ -77,6 +77,7 @@ public sealed class ShipMind : IEngine
     public bool Online;
     public float[] RoomKPa, RoomKPaPrev, RoomO2, RoomSoot, RoomSootPrev, RoomCO, RoomCO2, RoomTemp;
     public int[] RoomHot;                       // 방에서 가장 뜨거운 칸
+    public float[] DoorMoles = new float[6];    // 문 칸들에 든 기체 (읽기 6번) — 문이 열리면 그 칸이 공기를 채운다 (잃은 것이 아니다)
     public float[] RoomMoles;                   // [방 × 6]: 지난 1분(읽기 6번)의 기체량 — 새는지는 기체량이 줄어드는 것으로 (온도 · 문 여닫이로 기압이 흔들리는 것과 가른다)
     private int _reads;
     /// <summary>배 전체 기체량 — 1분마다 10개 (느린 샘: 10분에 0.5% 넘게 줄면).</summary>
@@ -157,8 +158,12 @@ public sealed class ShipMind : IEngine
             Array.Copy(ShipMolesHist, 1, ShipMolesHist, 0, ShipMolesHist.Length - 1);
             float total = 0;
             for (int r = 0; r < L.Rooms.Count; r++) total += RoomMoles[r * 6 + (_reads - 1) % 6];
+            total += DoorMoles[(_reads - 1) % 6];
             ShipMolesHist[^1] = total;
         }
+        double doors = 0;
+        foreach (var d in L.Doors) doors += F.Moles(d.Cell);
+        DoorMoles[_reads % 6] = (float)doors;
         for (int r = 0; r < L.Rooms.Count; r++)
         {
             RoomKPaPrev[r] = RoomKPa[r]; RoomSootPrev[r] = RoomSoot[r];
@@ -240,7 +245,7 @@ public sealed class ShipMind : IEngine
             float dp = RoomKPa[r] - RoomKPaPrev[r];
             if (RoomKPa[r] < 40) { Raise(sim, IncidentKind.Vacuum, r, _roomVent[r], RoomKPa[r], -1, BreachCause(r)); Mark(IncidentKind.Vacuum, r); }
             // 샘: 12초에 기체가 2% 넘게 줄거나 · 1분 내내 줄어 4% 넘게 · 80kPa 아래에서 아직 줄고 있으면 — 온도 · 문 여닫이로 흔들리는 기압 · 막고 난 뒤 낮은 기압은 아니다
-            else if (Losing(r) || RoomKPa[r] < 80 && RoomKPaPrev[r] - RoomKPa[r] > 0.2f) { Raise(sim, IncidentKind.Leak, r, LeakSpot(r), -dp, -1, BreachCause(r)); Mark(IncidentKind.Leak, r); }
+            else if (Losing(r) || RoomKPa[r] < 80 && RoomKPaPrev[r] - RoomKPa[r] > 0.2f && !Moved(r, 1)) { Raise(sim, IncidentKind.Leak, r, LeakSpot(r), -dp, -1, BreachCause(r)); Mark(IncidentKind.Leak, r); }
             if (RoomCO[r] > 150) { Raise(sim, IncidentKind.CO, r, _roomVent[r], RoomCO[r]); Mark(IncidentKind.CO, r); }
             if (RoomCO2[r] > 8000 || RoomO2[r] < 15 && RoomKPa[r] > 40) { Raise(sim, IncidentKind.BadAir, r, _roomVent[r], RoomO2[r]); Mark(IncidentKind.BadAir, r); }
         }
@@ -347,9 +352,25 @@ public sealed class ShipMind : IEngine
         if (_reads < 7) return false;
         float now = RoomMoles[r * 6 + _reads % 6], prev = RoomMoles[r * 6 + (_reads + 5) % 6], old = RoomMoles[r * 6 + (_reads + 1) % 6];
         if (prev <= 0 || old <= 0) return false;
-        bool fast = (prev - now) / prev > 0.02f;
-        bool slow = (old - now) / old > 0.04f && now < prev;
+        bool fast = (prev - now) / prev > 0.02f && !Moved(r, 1);
+        bool slow = (old - now) / old > 0.04f && now < prev && !Moved(r, 5);
         return fast || slow;
+    }
+
+    /// <summary>
+    /// 옮겨 갔을 뿐인가: 그 방이 back번 읽는 사이 잃은 기체를 배 전체(읽히는 방들)는 30%도 잃지 않았다 — 열린 문으로 옆 방에 간 것이지 새는 것이 아니다.
+    /// (큰 사고 뒤 배 전체가 80kPa 아래로 낮아진 채 문을 여닫으면, 이것을 샘으로 보고 방마다 봉쇄 · 해제를 몇 분마다 되풀이했다.)
+    /// </summary>
+    private bool Moved(int r, int back)
+    {
+        if (_reads < back + 1) return false;
+        int now = _reads % 6, then = (_reads + 6 - back) % 6;
+        float lost = RoomMoles[r * 6 + then] - RoomMoles[r * 6 + now];
+        if (lost <= 0) return false;
+        float shipThen = DoorMoles[then], shipNow = DoorMoles[now];
+        for (int k = 0; k < L.Rooms.Count; k++)
+            if (RoomSeen[k] != 0) { shipThen += RoomMoles[k * 6 + then]; shipNow += RoomMoles[k * 6 + now]; }
+        return shipThen - shipNow < 0.3f * lost;
     }
 
     /// <summary>그 방 둘레 구멍의 원인 (원인 사슬용 — 주컴퓨터가 구멍 자리를 아는 것은 아니다).</summary>
@@ -620,7 +641,7 @@ public sealed class ShipMind : IEngine
         w.List(Incidents);
         w.I32(Log.Count); foreach (var (t, s) in Log) { w.I64(t); w.Str(s); }
         w.Bool(Online);
-        w.Arr(RoomKPa); w.Arr(RoomKPaPrev); w.Arr(RoomO2); w.Arr(RoomSoot); w.Arr(RoomSootPrev); w.Arr(RoomCO); w.Arr(RoomCO2); w.Arr(RoomTemp); w.Arr(RoomHot); w.Arr(RoomSeen); w.Arr(RoomMoles); w.I32(_reads); w.Arr(ShipMolesHist);
+        w.Arr(RoomKPa); w.Arr(RoomKPaPrev); w.Arr(RoomO2); w.Arr(RoomSoot); w.Arr(RoomSootPrev); w.Arr(RoomCO); w.Arr(RoomCO2); w.Arr(RoomTemp); w.Arr(RoomHot); w.Arr(RoomSeen); w.Arr(RoomMoles); w.I32(_reads); w.Arr(ShipMolesHist); w.Arr(DoorMoles);
         w.Arr(Shed); w.Arr(BreakerResetAt); w.List(Imaginations);
         w.I64(Alarms); w.I64(Assignments); w.I64(Seals); w.I64(Sheds); w.I64(Resets);
     }
@@ -631,7 +652,7 @@ public sealed class ShipMind : IEngine
         Incidents = r.List<Incident>();
         Log.Clear(); int n = r.I32(); for (int i = 0; i < n; i++) { long t = r.I64(); Log.Add((t, r.Str() ?? "")); }
         Online = r.Bool();
-        r.ArrInto(RoomKPa); r.ArrInto(RoomKPaPrev); r.ArrInto(RoomO2); r.ArrInto(RoomSoot); r.ArrInto(RoomSootPrev); r.ArrInto(RoomCO); r.ArrInto(RoomCO2); r.ArrInto(RoomTemp); r.ArrInto(RoomHot); r.ArrInto(RoomSeen); r.ArrInto(RoomMoles); _reads = r.I32(); r.ArrInto(ShipMolesHist);
+        r.ArrInto(RoomKPa); r.ArrInto(RoomKPaPrev); r.ArrInto(RoomO2); r.ArrInto(RoomSoot); r.ArrInto(RoomSootPrev); r.ArrInto(RoomCO); r.ArrInto(RoomCO2); r.ArrInto(RoomTemp); r.ArrInto(RoomHot); r.ArrInto(RoomSeen); r.ArrInto(RoomMoles); _reads = r.I32(); r.ArrInto(ShipMolesHist); r.ArrInto(DoorMoles);
         Shed = r.Arr<byte>(); BreakerResetAt = r.Arr<long>(); Imaginations.Clear(); Imaginations.AddRange(r.List<Imagined>());
         Alarms = r.I64(); Assignments = r.I64(); Seals = r.I64(); Sheds = r.I64(); Resets = r.I64();
     }

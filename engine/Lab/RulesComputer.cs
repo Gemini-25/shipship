@@ -234,5 +234,28 @@ public static partial class Program
             Check("빈 방 외판의 작은 금: 들을 사람이 없어도 주컴퓨터가 배 전체의 느린 샘을 보고 로봇을 보내 막는다 (한 시간 안)", patchedAt > 0,
                 patchedAt > 0 ? $"{(patchedAt - Time.Minutes(15)) / 25.0:0}분 만에 막음" : $"못 막음 · 평균 기압 {s.Get<ShipMind>().RoomKPa.Where(x => x > 0).Average():0}kPa");
         }
+
+        // ── 큰 사고 뒤 낮아진 배 (80kPa 아래)에서 방 사이 문을 열면 공기가 옮겨 갈 뿐 — 주컴퓨터는 이것을 샘으로 보고 봉쇄하지 않는다 ──
+        {
+            var s = World(7);
+            var f = s.Get<Field>(); var cm = s.Get<ShipMind>(); var st = s.Get<Structure>();
+            // 사고는 이미 지나갔다: 처음부터 방마다 기압이 다르다 (주컴퓨터가 처음 읽을 때 이미 낮다)
+            void Thin(int room, double keep) { foreach (int c in lay.Rooms[room].Cells) for (int g = 0; g < f.G; g++) f.RemoveGas(c, g, f.N[c * f.G + g] * (1 - keep)); }
+            int left = lay.Room[At(3, 2)], right = lay.Room[At(17, 2)], hall = lay.Room[At(10, 8)];
+            Thin(left, 0.55); Thin(right, 0.77); Thin(hall, 0.7);
+            long seals0 = s.Facts.CountOf(FactKind.ComputerSeal);
+            bool leak = false;
+            for (int k = 0; k < Time.Minutes(3); k++) { s.Step(); leak |= cm.Incidents.Any(x => x.Active != 0 && x.Kind == IncidentKind.Leak); }
+            int door = lay.DoorAt[At(10, 3)];
+            st.RequestDoor(door, 1);
+            for (int k = 0; k < Time.Minutes(10); k++)
+            {
+                s.Step(); leak |= cm.Incidents.Any(x => x.Active != 0 && x.Kind == IncidentKind.Leak);
+                if (Debug && k < 20 && s.Tick % 5 == 0) Console.WriteLine($"    {s.Tick} " + string.Join(" · ", Enumerable.Range(0, lay.Rooms.Count).Select(r => $"{lay.Rooms[r].Name} {cm.RoomKPa[r]:0.0}kPa {Enumerable.Range(0, 6).Select(q => cm.RoomMoles[r * 6 + q]).Max():0}")) + $" 문칸 {f.Moles(At(10, 3)):0}");
+            }
+            if (Debug) foreach (var (tk, tx) in cm.Log) Console.WriteLine($"    주컴 {tk} {tx}");
+            Check("낮아진 배에서 방 사이 문을 열어 공기가 옮겨 가도 주컴퓨터는 샘으로 보지 않는다 (봉쇄 없음)", !leak && s.Facts.CountOf(FactKind.ComputerSeal) == seals0 && f.DoorOpen[door] > 0.9f,
+                $"샘 사건 {leak} · 봉쇄 {s.Facts.CountOf(FactKind.ComputerSeal) - seals0} · 문 {f.DoorOpen[door]:0.0} · 왼쪽 {cm.RoomKPa[left]:0} 오른쪽 {cm.RoomKPa[right]:0}kPa");
+        }
     }
 }
