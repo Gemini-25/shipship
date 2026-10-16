@@ -3,16 +3,27 @@
 #   tools/ci/last.sh            상태 · 걸린 시간 · 한 줄 요약 · 조사할 것
 #   tools/ci/last.sh --times    시험별 걸린 초 한 줄 (→ python3 tools/ci/retime.py 로 tests.txt에)
 #   tools/ci/last.sh --run ID   그 실행
+#   tools/ci/last.sh --wait     지금 커밋(HEAD)의 실행이 끝날 때까지 1분마다 보고 기다린다 (많아야 1시간 · 백그라운드로 띄워 두면 끝날 때 알 수 있다)
 # gh api 를 쓴다 (GitHub CLI 또는 같은 꼴의 gh).
 set -u
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 REPO=$(git -C "$ROOT" remote get-url origin | sed -E 's#^.*github\.com[:/]##; s#\.git$##')
 BRANCH=$(git -C "$ROOT" rev-parse --abbrev-ref HEAD)
-MODE=summary RUN=""
+MODE=summary RUN="" WAIT=0
 while [ $# -gt 0 ]; do
-  case "$1" in --times) MODE=times ;; --run) RUN="$2"; shift ;; esac
+  case "$1" in --times) MODE=times ;; --run) RUN="$2"; shift ;; --wait) WAIT=1 ;; esac
   shift
 done
+if [ "$WAIT" = 1 ] && [ -z "$RUN" ]; then
+  SHA=$(git -C "$ROOT" rev-parse HEAD)
+  for i in $(seq 1 60); do
+    st=$(gh api "repos/$REPO/actions/workflows/tests.yml/runs?per_page=5&branch=$BRANCH" \
+         --jq "[.workflow_runs[] | select(.head_sha == \"$SHA\")][0] | \"\(.id) \(.status)\"" 2>/dev/null)
+    case "$st" in *" completed") RUN=${st%% *}; break ;; esac
+    sleep 60
+  done
+  [ -n "$RUN" ] || { echo "(한 시간 안에 끝나지 않았다: ${SHA:0:7} · $st)"; exit 1; }
+fi
 if [ -z "$RUN" ]; then
   RUN=$(gh api "repos/$REPO/actions/workflows/tests.yml/runs?per_page=1&branch=$BRANCH" --jq '.workflow_runs[0].id')
 fi
