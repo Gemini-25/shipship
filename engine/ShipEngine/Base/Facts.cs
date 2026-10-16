@@ -20,6 +20,7 @@ public enum FactKind : ushort
     WallBreach,        // 터졌다
     Impact,            // 충돌
     DoorJammed,        // 문이 끼었다
+    DoorBlown,         // 문이 압력에 날아갔다
     ObjectFlung,       // 물건이 날아갔다
     // ⑤ 바깥
     DebrisNear,        // 파편이 다가온다

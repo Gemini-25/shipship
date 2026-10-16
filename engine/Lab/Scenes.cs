@@ -47,6 +47,19 @@ public static partial class Program
                 every = 25; count = 30;
                 break;
             }
+            case "meteor":
+            {
+                s = ShipWorld.Create("Kestrel", 4);
+                var life = s.Get<Life>(); var ff = s.Get<Field>();
+                var floor = Enumerable.Range(0, ff.Cells).Where(i => ff.L.Kind[i] == CellKind.Floor && ff.L.FurnitureAt[i] < 0).ToList();
+                var rng = Rng.Stream(4, "장면 사람");
+                for (int k = 0; k < 6; k++) life.AddBody(floor[rng.Range(0, floor.Count)]);
+                s.Run(Time.Minutes(2));
+                int seed = s.Causes.Add(CauseKind.Story, "운석 하나가 배를 향해 온다", s.Tick);
+                s.Get<Outside>().AddRock(1.5, 6000, -1, 0.15, 2, 25_000, seed);
+                every = 4; count = 40;
+                break;
+            }
             default: Console.WriteLine($"모르는 장면: {name}"); return;
         }
         for (int k = 0; k < count; k++)
@@ -55,6 +68,9 @@ public static partial class Program
             s.Run(every);
         }
         Console.WriteLine($"  {name}: {count}장 → {dir}");
+        if (Environment.GetEnvironmentVariable("FACTS") == "1")
+            foreach (var f in s.Facts.Since(0))
+                Console.WriteLine($"    틱 {f.Tick} {f.Kind} 칸 {f.Cell} 크기 {f.Size:0.##} · {s.Causes.Story(f.Cause)}");
     }
 }
 
@@ -118,6 +134,15 @@ public static class Map
                 }
             }
         }
+        var lifeE = s.Find<Life>();
+        if (lifeE != null)
+            foreach (var b in lifeE.Bodies)
+            {
+                if (b.Cell < 0) continue;
+                int bx = l.X(b.Cell) * Px, by = l.Y(b.Cell) * Px;
+                uint col = b.Alive == 0 ? Png.Rgba(0.4, 0.1, 0.1) : b.Conscious == 0 ? Png.Rgba(0.9, 0.7, 0.2) : Png.Rgba(0.3, 0.9, 0.5);
+                for (int yy = 2; yy < Px - 2; yy++) for (int xx = 2; xx < Px - 2; xx++) img[(by + yy) * w + bx + xx] = col;
+            }
         Png.Write(path, w, h, img);
     }
 }

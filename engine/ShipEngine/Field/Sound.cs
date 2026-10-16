@@ -13,6 +13,7 @@ public enum SoundKind : byte
     Machine,    // 기계 소리 (덜컹 · 끼익)
     Step,       // 발소리
     Thud,       // 쿵 (넘어짐 · 떨어짐)
+    Creak,      // 끼익 (압력을 버티는 문 · 벽)
 }
 
 /// <summary>들린 소리 하나.</summary>

@@ -25,6 +25,8 @@ public sealed class Structure : IEngine
     public int Offset => 0;
 
     public const double HullRatingKPa = 400, WallRatingKPa = 160;
+    /// <summary>보통 문: 한 기압은 겨우 버틴다 — 피로가 쌓이면 수십 분 뒤 날아간다 (끼익 소리가 먼저).</summary>
+    public const double NormalDoorKPa = 120;
     public const double FatigueK = 1.8e-4;   // 피로 쌓임 (초당 · 넘친 부하의 세제곱에 곱한다)
     public const double CrackArea = 0.0005;  // 금 (m²)
 
@@ -121,13 +123,16 @@ public sealed class Structure : IEngine
         if (F.HasSurface(c)) F.AddSurfaceHeat(c, j); else F.AddSolidHeat(c, j);
     }
 
+    /// <summary>소리가 나는 공기 칸: 바닥 · 열린 문은 그 칸, 벽 · 닫힌 문은 옆 칸 중 기압이 가장 높은 쪽 (진공 쪽에선 아무도 못 듣는다).</summary>
     private int NearestAir(int c)
     {
-        if (L.IsSpace(c)) return c;
+        if (L.Kind[c] == CellKind.Floor || (L.Kind[c] == CellKind.Door && F.DoorPassable(L.DoorAt[c]))) return c;
         Span<int> nb = stackalloc int[4];
         L.Neighbors(c, nb);
-        foreach (int j in nb) if (j >= 0 && L.IsSpace(j)) return j;
-        return c;
+        int best = c; double bp = -1;
+        foreach (int j in nb)
+            if (j >= 0 && L.IsSpace(j) && F.Pressure(j) > bp) { bp = F.Pressure(j); best = j; }
+        return best;
     }
 
     // ───────────────────────── 한 틱 ─────────────────────────
@@ -139,6 +144,25 @@ public sealed class Structure : IEngine
         Doors(sim, dt);
         Walls(sim, dt);
         if (sim.Tick % 25 == 0) Rust(sim, 25 * dt);
+    }
+
+    /// <summary>압력이 빠진 쪽의 원인: 낮은 쪽 구역에 뚫린 틈(벽 구멍 · 날아간 문)이 있으면 그 원인.</summary>
+    private int LowSideCause(int c)
+    {
+        int x = L.X(c), y = L.Y(c), low = -1; double pl = double.MaxValue;
+        foreach (var (xx, yy) in new[] { (x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1) })
+        {
+            if (!L.In(xx, yy)) continue;
+            int j = L.Index(xx, yy);
+            if (_p[j] >= 0 && _p[j] < pl) { pl = _p[j]; low = j; }
+        }
+        if (low < 0) return 0;
+        int r = F.RegionOf[low];
+        if (r < 0) return DamageCause[low];
+        foreach (var k in F.Links)
+            if ((k.RA == r || k.RB == r) && k.Via >= 0 && DamageCause[k.Via] != 0 && k.Kind is LinkKind.Breach or LinkKind.Crack or LinkKind.Open or LinkKind.DoorAjar)
+                return DamageCause[k.Via];
+        return 0;
     }
 
     /// <summary>양쪽 압력: 좌우 · 위아래 가운데 차이가 큰 쪽 (바깥은 바깥 압력 · 벽 속은 -1이면 건너뜀).</summary>
@@ -177,7 +201,7 @@ public sealed class Structure : IEngine
         if (L.Kind[c] == CellKind.Door)
         {
             var d = L.Doors[L.DoorAt[c]];
-            baseKPa = d.Kind switch { "pressure" => 300, "airlock" => 400, _ => 40 };
+            baseKPa = d.Kind switch { "pressure" => 300, "airlock" => 400, _ => NormalDoorKPa };
         }
         else baseKPa = L.Hull[c] ? HullRatingKPa : WallRatingKPa;
         double strength = Math.Sqrt(Math.Max(0.01, m.Strength / 250.0));
@@ -203,7 +227,10 @@ public sealed class Structure : IEngine
             {
                 double x = (nominal - m.Fatigue) / (1 - m.Fatigue);
                 Fatigue[c] = (float)Math.Min(1, Fatigue[c] + FatigueK * x * x * x * dt);
-                if (DamageCause[c] == 0) DamageCause[c] = sim.Causes.Add(CauseKind.Pressure, "압력 차가 벽을 밀었다", sim.Tick, c);
+                if (DamageCause[c] == 0) DamageCause[c] = sim.Causes.Add(CauseKind.Pressure, "압력 차가 벽을 밀었다", sim.Tick, c, LowSideCause(c));
+                // 끼익: 버티는 문 · 벽이 소리를 낸다 (사람 · 컴퓨터가 듣고 알아챈다)
+                if (load >= 0.6 && (sim.Tick + c) % 10 == 0)
+                    sim.Find<Sound>()?.Emit(sim, NearestAir(c), (float)(50 + 30 * Math.Min(1, load)), SoundKind.Creak, DamageCause[c]);
             }
             if (kind == CellKind.Door)
             {
@@ -243,8 +270,9 @@ public sealed class Structure : IEngine
         DoorsBlown++;
         int cause = sim.Causes.Add(CauseKind.Pressure, "문이 압력을 못 이겨 날아갔다", sim.Tick, c, DamageCause[c]);
         DoorJam[d] = 1;
+        DamageCause[c] = cause;
         F.SetDoor(d, load > 1.5 ? 1f : 0.35f);
-        sim.Facts.Emit(sim.Tick, FactKind.DoorJammed, c, (float)load, cause);
+        sim.Facts.Emit(sim.Tick, FactKind.DoorBlown, c, (float)load, cause);
         sim.Find<Sound>()?.Emit(sim, NearestAir(c), 125, SoundKind.Bang, cause);
     }
 

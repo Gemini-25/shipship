@@ -139,6 +139,35 @@ public static partial class Program
             var st5 = s5.Get<Structure>();
             Check("수소 폭연이 보통 문을 날린다 (압력이 정격을 넘는다)", st5.DoorsBlown > 0 && s5.Get<Field>().DoorOpen[0] > 0,
                 $"날아간 문 {st5.DoorsBlown} · 문 열림 {s5.Get<Field>().DoorOpen[0]:0.0} · 큰 소리 {s5.Facts.CountOf(FactKind.LoudSound)}번");
+            // 보통 문은 한 기압 차를 버틴다 — 끼익 소리 · 문틈으로 쉬익 새어 옆 방도 천천히 빠진다 · 그 원인은 외판을 친 파편까지 이어진다
+            var l6 = Worlds.Ascii(Worlds.TwoRooms);
+            var s6 = Worlds.Full(l6, 1);
+            var st6 = s6.Get<Structure>(); var f6 = s6.Get<Field>(); var snd6 = s6.Get<Sound>();
+            int hull6 = Worlds.At(l6, 0, 2), doorCell6 = Worlds.At(l6, 10, 3), door6 = f6.L.DoorAt[doorCell6], right6 = Worlds.At(l6, 15, 3);
+            int rock6 = s6.Causes.Add(CauseKind.Impact, "파편이 외판을 쳤다", s6.Tick, hull6);
+            st6.Impact(s6, hull6, 3e5, 1, 0, rock6);
+            int creaks = 0;
+            for (int k = 0; k < Time.Minutes(15); k++)
+            {
+                s6.Step();
+                if (snd6.At(right6).Any(h => h.Kind == SoundKind.Creak)) creaks++;
+                if (Environment.GetEnvironmentVariable("RULE_DEBUG") == "1" && k % 250 == 0)
+                    Console.WriteLine($"    {k / 25}분 · 왼쪽 {f6.Pressure(Worlds.At(l6, 3, 2)):0.0} · 오른쪽 {f6.Pressure(right6):0.0} · 부하 {st6.Stress[doorCell6]:0.00} · 피로 {st6.Fatigue[doorCell6]:0.000}");
+            }
+            Check("보통 문은 한 기압 차를 버티며 끼익거린다 · 문틈으로 새어 옆 방이 천천히 빠진다 · 문을 민 압력의 원인은 외판을 친 파편",
+                f6.DoorOpen[door6] == 0 && creaks > 0 && f6.Pressure(right6) is > 60 and < 98 && s6.Causes.Story(st6.DamageCause[doorCell6]).Contains("파편"),
+                $"문 {f6.DoorOpen[door6]:0.0} · 끼익 {creaks}번 · 오른쪽 {f6.Pressure(right6):0}kPa · 원인 {s6.Causes.Story(st6.DamageCause[doorCell6])}");
+            // 피로가 쌓인 문은 날아간다 — 원인 사슬이 이어진다
+            var s7 = Worlds.Full(l6, 1);
+            var st7 = s7.Get<Structure>();
+            st7.Fatigue[doorCell6] = 0.3f;
+            int rock7 = s7.Causes.Add(CauseKind.Impact, "파편이 외판을 쳤다", s7.Tick, hull6);
+            st7.Impact(s7, hull6, 3e5, 1, 0, rock7);
+            s7.Run(Time.Minutes(10));
+            var blown = s7.Facts.Since(0).Where(x => x.Kind == FactKind.DoorBlown).ToList();
+            Check("피로가 쌓인 문(30%)은 한쪽이 빠지면 날아간다 · '문이 날아갔다'의 원인은 파편까지 이어진다",
+                blown.Count > 0 && s7.Causes.Story(blown[0].Cause).Contains("파편"),
+                blown.Count > 0 ? $"{blown[0].Tick / 25.0:0.0}분 · {s7.Causes.Story(blown[0].Cause)}" : "안 날아갔다");
         }
 
         if (Do("바깥"))
@@ -186,16 +215,15 @@ public static partial class Program
             bool burst = s4.Facts.Since(0).Any(x => x.Kind == FactKind.Flare && x.Other == 1);
             Check("별 폭발: X선 조짐이 먼저 · 폭발 뒤 바깥 방사선이 뛴다 · 안쪽 칸이 덜 맞는다 (벽 · 설비가 가린다)", warned && burst && o4.DoseOut > 20 && lo < hi * 0.6,
                 $"바깥 {o4.DoseOut:0}mGy/시 · 배 안 {lo:0.0}~{hi:0.0}mGy/시");
-            // 행성: 붉은 사막에 내리면 구멍으로 0.6kPa까지만 빠지고 바깥은 춥다
-            var s5 = ShipWorld.Create("Kestrel", 3);
+            // 행성: 붉은 사막에 내리면 구멍으로 0.6kPa까지만 빠지고 바깥은 춥다 (방 하나 — 옆 방이 문틈으로 공기를 대 주지 않게)
+            var l5 = Worlds.Ascii(Worlds.Sealed);
+            var s5 = Worlds.Full(l5, 3);
             var o5 = s5.Get<Outside>(); var f5 = s5.Get<Field>();
             o5.Land("marslike", s5.Tick);
             s5.Run(5);
-            int hull = Enumerable.Range(0, f5.Cells).First(i => f5.L.Hull[i] && f5.L.Y(i) == f5.L.H / 2);
-            f5.SetHole(hull, 0.3f);
+            f5.SetHole(Worlds.At(l5, 0, 3), 0.3f);
             s5.Run(Time.Minutes(20));
-            var ext = f5.Links.First(k => k.RB < 0);
-            int room = ext.A;
+            int room = Worlds.At(l5, 4, 3);
             if (Environment.GetEnvironmentVariable("RULE_DEBUG") == "1")
                 foreach (var k in f5.Links.Where(k => k.RB < 0)) Console.WriteLine($"    바깥 틈 {k.Kind} 칸 {k.A} 넓이 {k.Area} · 이산화탄소 {f5.Ppm(f5.T.gCO2, k.A):0}ppm · {f5.Pressure(k.A):0.00}kPa · 흐름 {k.Flow:0.000}");
             Check("붉은 사막에 내린 배: 구멍 난 방은 바깥 기압(0.6kPa) 근처까지만 빠지고 이산화탄소가 들어온다", f5.Pressure(room) < 3 && f5.Ppm(f5.T.gCO2, room) > 10000,
