@@ -1,0 +1,18 @@
+// 재질 표 — 벽 · 바닥 · 설비 · 물건이 무엇으로 되어 있나
+//   made: 이루는 물질과 질량 비율 (타면 이 물질이 탄다 · 녹슬면 이 물질이 녹슨다)
+//   density kg/m³ · c J/kg·K · k 열전도 W/m·K · strength 강도 MPa · fatigue 피로 한계(강도에 대한 비율)
+//   meltK 녹는점 · ignK 불이 붙는 온도(타는 것만) · emiss 방사율 · absorb 햇빛 흡수율
+//   penetrate: 1mm 두께를 뚫는 데 드는 충돌 에너지 (kJ — 파편 · 운석)
+[
+  { "id": "steel",     "name": "강철",     "made": { "Fe": 1.0 },               "density": 7850, "c": 490,  "k": 45,   "strength": 250, "fatigue": 0.45, "meltK": 1700, "emiss": 0.35, "absorb": 0.5, "penetrate": 0.9 },
+  { "id": "aluminum",  "name": "알루미늄", "made": { "Al": 1.0 },               "density": 2700, "c": 900,  "k": 205,  "strength": 270, "fatigue": 0.35, "meltK": 933,  "emiss": 0.1,  "absorb": 0.2, "penetrate": 0.35 },
+  { "id": "titanium",  "name": "티타늄",   "made": { "Ti": 1.0 },               "density": 4500, "c": 520,  "k": 22,   "strength": 880, "fatigue": 0.5,  "meltK": 1941, "emiss": 0.3,  "absorb": 0.6, "penetrate": 1.4 },
+  { "id": "glass",     "name": "유리",     "made": { "SiO2": 1.0 },             "density": 2500, "c": 840,  "k": 1.0,  "strength": 50,  "fatigue": 0.3,  "meltK": 1900, "emiss": 0.9,  "absorb": 0.1, "penetrate": 0.2 },
+  { "id": "polymer",   "name": "고분자",   "made": { "CH2": 1.0 },              "density": 950,  "c": 2300, "k": 0.4,  "strength": 25,  "fatigue": 0.3,  "meltK": 400,  "ignK": 620, "emiss": 0.9, "absorb": 0.8, "penetrate": 0.05 },
+  { "id": "composite", "name": "복합재",   "made": { "C": 0.7, "CH2": 0.3 },    "density": 1600, "c": 1000, "k": 5,    "strength": 600, "fatigue": 0.6,  "meltK": 3000, "ignK": 700, "emiss": 0.85, "absorb": 0.9, "penetrate": 0.6 },
+  { "id": "copper",    "name": "구리",     "made": { "Cu": 1.0 },               "density": 8960, "c": 385,  "k": 400,  "strength": 70,  "fatigue": 0.35, "meltK": 1358, "emiss": 0.05, "absorb": 0.3, "penetrate": 0.5 },
+  { "id": "ceramic",   "name": "세라믹",   "made": { "Al2O3": 1.0 },            "density": 3900, "c": 880,  "k": 30,   "strength": 300, "fatigue": 0.4,  "meltK": 2300, "emiss": 0.8,  "absorb": 0.4, "penetrate": 1.0 },
+  { "id": "foam",      "name": "단열재",   "made": { "CH2": 1.0 },              "density": 30,   "c": 1500, "k": 0.03, "strength": 0.2, "fatigue": 0.3,  "meltK": 400,  "ignK": 600, "emiss": 0.9, "absorb": 0.8, "penetrate": 0.005 },
+  { "id": "fabric",    "name": "천",       "made": { "Cellulose": 1.0 },        "density": 600,  "c": 1300, "k": 0.1,  "strength": 10,  "fatigue": 0.3,  "meltK": 9999, "ignK": 570, "emiss": 0.9, "absorb": 0.7, "penetrate": 0.02 },
+  { "id": "food",      "name": "음식",     "made": { "Glucose": 0.6, "H2O_l": 0.4 }, "density": 900, "c": 3000, "k": 0.5, "strength": 0.1, "fatigue": 0.1, "meltK": 9999, "ignK": 600, "emiss": 0.9, "absorb": 0.7, "penetrate": 0.01 }
+]

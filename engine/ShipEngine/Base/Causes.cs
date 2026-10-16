@@ -1,0 +1,93 @@
+namespace ShipEngine;
+
+/// <summary>원인의 종류.</summary>
+public enum CauseKind : byte
+{
+    None,
+    Story,      // 이야기꾼이 심은 것
+    Wear,       // 마모 · 피로 · 낡음
+    Corrosion,  // 부식
+    Impact,     // 바깥 물체의 충돌
+    Pressure,   // 압력 차 (하중)
+    Heat,       // 열 (과열 · 열 약화)
+    Fire,       // 불
+    Breach,     // 구멍
+    Leak,       // 샘 (배관 · 탱크)
+    Electric,   // 전기 (과부하 · 합선 · 불꽃)
+    Reaction,   // 화학 반응
+    Person,     // 사람의 행동
+    Robot,      // 로봇 · 드론
+    Computer,   // 주컴퓨터의 결정
+    Machine,    // 장치 고장
+    Weather,    // 행성 날씨
+    Flare,      // 별 폭발 · 방사선
+    Biology,    // 미생물 · 곰팡이 · 작물
+    Setup,      // 처음부터 그랬다 (시험 장면)
+}
+
+/// <summary>원인 마디: 무엇 · 어디 · 언제 · 부모 원인 (둘까지).</summary>
+public struct CauseNode
+{
+    public CauseKind Kind;
+    public int Cell;      // 칸 번호 (-1: 배 전체 · 바깥)
+    public long Tick;
+    public int Parent;    // 0: 없음
+    public int Parent2;
+    public int Text;      // 글 번호
+    public int Actor;     // 누가 (-1: 없음)
+}
+
+/// <summary>
+/// 원인 그래프. 상태를 크게 바꾸는 모든 것에 원인 마디를 붙인다 — 연출의 원인 사슬 · 사고 조사 · 믿음이 읽는다.
+/// 번호 0은 '원인 없음'. 마디는 병렬 구역 밖에서만 더한다 (번호가 늘 같은 순서로 붙게).
+/// </summary>
+public sealed class Causes : IState
+{
+    private readonly List<CauseNode> _nodes = new() { default };
+    private readonly List<string> _texts = new() { "" };
+    private readonly Dictionary<string, int> _textIds = new() { [""] = 0 };
+
+    public int Count => _nodes.Count;
+    public CauseNode this[int id] => (uint)id < (uint)_nodes.Count ? _nodes[id] : default;
+    public string Text(int id) => _texts[this[id].Text];
+
+    public int Add(CauseKind kind, string text, long tick, int cell = -1, int parent = 0, int parent2 = 0, int actor = -1)
+    {
+        if (!_textIds.TryGetValue(text, out int t)) { t = _texts.Count; _texts.Add(text); _textIds[text] = t; }
+        _nodes.Add(new CauseNode { Kind = kind, Cell = cell, Tick = tick, Parent = parent, Parent2 = parent2, Text = t, Actor = actor });
+        return _nodes.Count - 1;
+    }
+
+    /// <summary>뿌리부터 이 마디까지 (첫 부모를 따라).</summary>
+    public List<int> Chain(int id, int max = 64)
+    {
+        var list = new List<int>();
+        var seen = new HashSet<int>();
+        while (id > 0 && list.Count < max && seen.Add(id)) { list.Add(id); id = this[id].Parent; }
+        list.Reverse();
+        return list;
+    }
+
+    public int Root(int id) { var c = Chain(id); return c.Count > 0 ? c[0] : 0; }
+    public int Depth(int id) => Chain(id).Count;
+
+    /// <summary>"합선 → 피복이 탄다 → 연기" 처럼.</summary>
+    public string Story(int id) => string.Join(" → ", Chain(id).Select(Text));
+
+    public void Save(StateWriter w)
+    {
+        w.Tag("causes");
+        w.List(_nodes);
+        w.I32(_texts.Count);
+        foreach (var s in _texts) w.Str(s);
+    }
+
+    public void Load(StateReader r)
+    {
+        r.Tag("causes");
+        _nodes.Clear(); _nodes.AddRange(r.List<CauseNode>());
+        _texts.Clear(); _textIds.Clear();
+        int n = r.I32();
+        for (int i = 0; i < n; i++) { string s = r.Str() ?? ""; _texts.Add(s); _textIds.TryAdd(s, i); }
+    }
+}

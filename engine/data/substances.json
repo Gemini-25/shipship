@@ -1,0 +1,45 @@
+// 물질 표 — docs/ENGINE.md ② 물질
+//   formula: 화학식 (원소 수) · phase: gas(기체) · aerosol(공기에 떠 있는 가루) · liquid · solid
+//   hf: 표준 생성 엔탈피 (kJ/몰, 그 상태에서) — 반응열은 이것에서 계산한다 (헤스의 법칙)
+//   c: 몰 열용량 (J/몰·K) — 기체는 정적(cv), 응축상은 cp
+//   cell: 칸 바닥에 쌓이거나 고일 수 있는 응축상 (연료 · 그을음 · 물 웅덩이)
+//   condense: 이 기체가 응결하면 무엇이 되나 · boilK: 1기압 끓는점 (포화 증기압은 클라우지우스-클라페이롱)
+//   harm/deadly: 몸에 해로운 · 위험한 농도 (ppm) — ⑦ 생명이 읽는다 · smell: 냄새 (맡는 문턱 ppm)
+[
+  { "id": "N2",  "name": "질소",     "formula": "N2",  "phase": "gas", "hf": 0,      "c": 20.8 },
+  { "id": "O2",  "name": "산소",     "formula": "O2",  "phase": "gas", "hf": 0,      "c": 21.0 },
+  { "id": "Ar",  "name": "아르곤",   "formula": "Ar",  "phase": "gas", "hf": 0,      "c": 12.5 },
+  { "id": "CO2", "name": "이산화탄소", "formula": "CO2", "phase": "gas", "hf": -393.5, "c": 28.8, "harm": 5000, "deadly": 70000 },
+  { "id": "H2O", "name": "수증기",   "formula": "H2O", "phase": "gas", "hf": -241.8, "c": 25.3, "condense": "H2O_l", "boilK": 373.15 },
+  { "id": "CO",  "name": "일산화탄소", "formula": "CO",  "phase": "gas", "hf": -110.5, "c": 20.8, "harm": 50, "deadly": 1600 },
+  { "id": "H2",  "name": "수소",     "formula": "H2",  "phase": "gas", "hf": 0,      "c": 20.5 },
+  { "id": "CH4", "name": "메탄",     "formula": "CH4", "phase": "gas", "hf": -74.8,  "c": 27.4 },
+  { "id": "NH3", "name": "암모니아", "formula": "NH3", "phase": "gas", "hf": -45.9,  "c": 26.8, "condense": "NH3_l", "boilK": 239.8,
+    "harm": 25, "deadly": 5000, "smell": { "name": "코를 찌르는 암모니아 냄새", "ppm": 5 } },
+  { "id": "O3",  "name": "오존",     "formula": "O3",  "phase": "gas", "hf": 142.7,  "c": 30.9, "harm": 0.1, "deadly": 50,
+    "smell": { "name": "비 온 뒤 같은 날카로운 냄새", "ppm": 0.02 } },
+  { "id": "Soot", "name": "그을음",  "formula": "C",   "phase": "aerosol", "hf": 0, "c": 8.5, "harm": 50, "deadly": 2000,
+    "smell": { "name": "탄 냄새", "ppm": 2 }, "color": "#1a1614" },
+  { "id": "Aroma", "name": "음식 향", "formula": "C6H12O2", "phase": "gas", "hf": -500, "c": 190,
+    "smell": { "name": "음식 냄새", "ppm": 0.5 } },
+
+  { "id": "H2O_l", "name": "물",      "formula": "H2O", "phase": "liquid", "hf": -285.8, "c": 75.3, "cell": true },
+  { "id": "NH3_l", "name": "액체 암모니아", "formula": "NH3", "phase": "liquid", "hf": -69.2, "c": 80.8, "cell": true },
+  { "id": "H2O_s", "name": "얼음",    "formula": "H2O", "phase": "solid", "hf": -291.8, "c": 38.0 },
+
+  { "id": "C",       "name": "탄소 찌꺼기", "formula": "C",       "phase": "solid", "hf": 0,      "c": 8.5,  "cell": true },
+  { "id": "CH2",     "name": "고분자",    "formula": "CH2",     "phase": "solid", "hf": -28,    "c": 30,   "cell": true },
+  { "id": "Cellulose", "name": "섬유질",  "formula": "C6H10O5", "phase": "solid", "hf": -963,   "c": 220,  "cell": true },
+  { "id": "Glucose", "name": "양분",      "formula": "C6H12O6", "phase": "solid", "hf": -1273,  "c": 218,  "cell": true },
+  { "id": "Fe",      "name": "철",        "formula": "Fe",      "phase": "solid", "hf": 0,      "c": 25.1 },
+  { "id": "Fe2O3",   "name": "녹",        "formula": "Fe2O3",   "phase": "solid", "hf": -824.2, "c": 103.9 },
+  { "id": "Al",      "name": "알루미늄",  "formula": "Al",      "phase": "solid", "hf": 0,      "c": 24.2 },
+  { "id": "Al2O3",   "name": "산화알루미늄", "formula": "Al2O3", "phase": "solid", "hf": -1675.7, "c": 79 },
+  { "id": "Cu",      "name": "구리",      "formula": "Cu",      "phase": "solid", "hf": 0,      "c": 24.4 },
+  { "id": "CuO",     "name": "산화구리",  "formula": "CuO",     "phase": "solid", "hf": -157.3, "c": 42.3 },
+  { "id": "Ti",      "name": "티타늄",    "formula": "Ti",      "phase": "solid", "hf": 0,      "c": 25.1 },
+  { "id": "TiO2",    "name": "산화티타늄", "formula": "TiO2",   "phase": "solid", "hf": -944,   "c": 55 },
+  { "id": "SiO2",    "name": "유리질",    "formula": "SiO2",    "phase": "solid", "hf": -910.7, "c": 44.4 },
+  { "id": "LiOH",    "name": "수산화리튬", "formula": "LiOH",   "phase": "solid", "hf": -484.9, "c": 49.6 },
+  { "id": "Li2CO3",  "name": "탄산리튬",  "formula": "Li2CO3",  "phase": "solid", "hf": -1216,  "c": 97.4 }
+]

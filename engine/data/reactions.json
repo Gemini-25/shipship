@@ -1,0 +1,38 @@
+// 반응식 표 — docs/ENGINE.md ② 물질
+//   kind: fire(칸에서 타는 것 · 불이 붙어 있어야) · gasfire(기체끼리 — 섞여 있다 불씨가 닿으면 한꺼번에) · slow(저절로 천천히) ·
+//         electric(전기가 드는 장치 · 불꽃) · device(장치 안 · 촉매) · life(몸 · 작물) · bio(미생물)
+//   반응열은 적지 않는다 — 물질 표의 생성 엔탈피로 계산한다. 원소가 안 맞으면 표를 읽을 때 멈춘다.
+//   minK: 일어나는 최저 온도 · rate: 빠르기 (종류마다 뜻이 다르다 — fire: 1이 보통 · slow: 초당 비율)
+//   need: 조건 (wet: 습기 · light: 빛 · lowO2: 산소가 모자랄 때 · noO2: 산소가 거의 없을 때)
+[
+  { "id": "breathe",      "name": "숨",               "kind": "life", "in": { "Glucose": 1, "O2": 6 }, "out": { "CO2": 6, "H2O": 6 } },
+  { "id": "photosynth",   "name": "광합성",           "kind": "life", "in": { "CO2": 6, "H2O_l": 6 }, "out": { "Glucose": 1, "O2": 6 }, "need": ["light"] },
+  { "id": "rot",          "name": "썩음",             "kind": "bio",  "in": { "Glucose": 1, "O2": 6 }, "out": { "CO2": 6, "H2O": 6 }, "minK": 275, "rate": 2e-7, "need": ["wet"] },
+  { "id": "ferment",      "name": "메탄 발효",        "kind": "bio",  "in": { "Glucose": 1 }, "out": { "CO2": 3, "CH4": 3 }, "minK": 280, "rate": 1e-7, "need": ["wet", "noO2"] },
+
+  { "id": "burn_poly",    "name": "고분자가 탄다",    "kind": "fire", "in": { "CH2": 2, "O2": 3 }, "out": { "CO2": 2, "H2O": 2 }, "minK": 620, "rate": 1.0 },
+  { "id": "burn_poly_co", "name": "고분자가 그을며 탄다", "kind": "fire", "in": { "CH2": 1, "O2": 1 }, "out": { "CO": 1, "H2O": 1 }, "minK": 620, "rate": 1.0, "need": ["lowO2"] },
+  { "id": "burn_poly_soot", "name": "고분자가 검댕을 내며 탄다", "kind": "fire", "in": { "CH2": 2, "O2": 1 }, "out": { "Soot": 2, "H2O": 2 }, "minK": 620, "rate": 1.0, "need": ["lowO2"] },
+  { "id": "burn_cell",    "name": "섬유가 탄다",      "kind": "fire", "in": { "Cellulose": 1, "O2": 6 }, "out": { "CO2": 6, "H2O": 5 }, "minK": 570, "rate": 1.0 },
+  { "id": "burn_cell_co", "name": "섬유가 그을며 탄다", "kind": "fire", "in": { "Cellulose": 1, "O2": 3 }, "out": { "CO": 6, "H2O": 5 }, "minK": 570, "rate": 1.0, "need": ["lowO2"] },
+  { "id": "char_cell",    "name": "섬유가 숯이 된다", "kind": "fire", "in": { "Cellulose": 1 }, "out": { "Soot": 6, "H2O": 5 }, "minK": 570, "rate": 0.3, "need": ["noO2"] },
+  { "id": "burn_food",    "name": "음식이 탄다",      "kind": "fire", "in": { "Glucose": 1, "O2": 6 }, "out": { "CO2": 6, "H2O": 6 }, "minK": 600, "rate": 0.6 },
+  { "id": "burn_soot",    "name": "그을음이 탄다",    "kind": "fire", "in": { "C": 1, "O2": 1 }, "out": { "CO2": 1 }, "minK": 800, "rate": 0.3 },
+
+  { "id": "burn_co",      "name": "일산화탄소가 탄다", "kind": "gasfire", "in": { "CO": 2, "O2": 1 }, "out": { "CO2": 2 }, "minK": 880, "rate": 1.0 },
+  { "id": "burn_h2",      "name": "수소가 탄다",      "kind": "gasfire", "in": { "H2": 2, "O2": 1 }, "out": { "H2O": 2 }, "minK": 840, "rate": 1.0 },
+  { "id": "burn_ch4",     "name": "메탄이 탄다",      "kind": "gasfire", "in": { "CH4": 1, "O2": 2 }, "out": { "CO2": 1, "H2O": 2 }, "minK": 850, "rate": 1.0 },
+  { "id": "burn_nh3",     "name": "암모니아가 탄다",  "kind": "gasfire", "in": { "NH3": 4, "O2": 3 }, "out": { "N2": 2, "H2O": 6 }, "minK": 924, "rate": 0.4 },
+  { "id": "crack_nh3",    "name": "암모니아가 갈라진다", "kind": "gasfire", "in": { "NH3": 2 }, "out": { "N2": 1, "H2": 3 }, "minK": 750, "rate": 0.2 },
+
+  { "id": "electrolysis", "name": "물 전기분해",      "kind": "electric", "in": { "H2O_l": 2 }, "out": { "H2": 2, "O2": 1 } },
+  { "id": "ozone_make",   "name": "전기 불꽃이 오존을 만든다", "kind": "electric", "in": { "O2": 3 }, "out": { "O3": 2 } },
+  { "id": "sabatier",     "name": "사바티에 반응",    "kind": "device", "in": { "CO2": 1, "H2": 4 }, "out": { "CH4": 1, "H2O": 2 }, "minK": 570 },
+  { "id": "lioh_scrub",   "name": "수산화리튬이 이산화탄소를 잡는다", "kind": "device", "in": { "LiOH": 2, "CO2": 1 }, "out": { "Li2CO3": 1, "H2O": 1 } },
+
+  { "id": "ozone_decay",  "name": "오존이 산소로 돌아간다", "kind": "slow", "in": { "O3": 2 }, "out": { "O2": 3 }, "minK": 0, "rate": 5e-5 },
+  { "id": "rust",         "name": "철이 녹슨다",      "kind": "slow", "in": { "Fe": 4, "O2": 3 }, "out": { "Fe2O3": 2 }, "minK": 260, "rate": 1e-9, "need": ["wet"] },
+  { "id": "burn_al",      "name": "알루미늄이 탄다",  "kind": "fire", "in": { "Al": 4, "O2": 3 }, "out": { "Al2O3": 2 }, "minK": 1900, "rate": 0.5 },
+  { "id": "burn_ti",      "name": "티타늄이 탄다",    "kind": "fire", "in": { "Ti": 1, "O2": 1 }, "out": { "TiO2": 1 }, "minK": 1900, "rate": 0.5 },
+  { "id": "oxid_cu",      "name": "뜨거운 구리가 산화된다", "kind": "slow", "in": { "Cu": 2, "O2": 1 }, "out": { "CuO": 2 }, "minK": 500, "rate": 1e-6 }
+]

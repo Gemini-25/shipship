@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 새 엔진 코어 — 순수 C# (Godot 없음). docs/ENGINE.md -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>12</LangVersion>
+    <RootNamespace>ShipEngine</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <NoWarn>CS1591</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- 데이터 표: engine/data/**.json 을 내장 자원으로 (이름: ShipEngine.Data.<하위 폴더/>파일) -->
+    <EmbeddedResource Include="../data/**/*.json" LogicalName="ShipEngine.Data.%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>
