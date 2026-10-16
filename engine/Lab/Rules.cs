@@ -85,6 +85,74 @@ public static partial class Program
                 $"폭연 {ch4.GasBursts}칸 · 압력 {p0:0} → {pk:0}kPa · {tk:0}K · 남은 수소 {f4.Total(f4.T.gH2):0.0}몰");
         }
 
+        if (Do("구조"))
+        {
+            // 작은 파편(50kJ)이 외판에 → 구멍 → 그 방이 빠진다 · 원인 사슬
+            var l = Worlds.Ascii(Worlds.Sealed);
+            var s = Worlds.Full(l, 1);
+            var st = s.Get<Structure>(); var f = s.Get<Field>();
+            int hull = Worlds.At(l, 0, 3);
+            int cause = s.Causes.Add(CauseKind.Impact, "파편이 외판을 쳤다", s.Tick, hull);
+            st.Impact(s, hull, 50_000, 1, 0, cause);
+            s.Run(Time.Minutes(5));
+            int left = Worlds.At(l, 4, 3), right = Worlds.At(l, 15, 3);
+            Check("파편(50kJ)이 외판을 뚫으면 그 방이 빠진다 · 차압 문 너머는 그대로", f.Hole[hull] > 0 && f.Pressure(left) < 60 && f.Pressure(right) > 99,
+                $"구멍 {f.Hole[hull] * 1e4:0}cm² · 왼쪽 {f.Pressure(left):0.0} · 오른쪽 {f.Pressure(right):0.0} kPa · 원인 {s.Causes.Story(st.DamageCause[hull])}");
+            // 큰 충돌(50MJ)은 여러 벽을 뚫고 불덩이를 남긴다
+            var s2 = Worlds.Full(l, 1);
+            var st2 = s2.Get<Structure>(); var f2 = s2.Get<Field>();
+            st2.Impact(s2, hull, 5e7, 1, 0, 0);
+            s2.Run(Time.Minutes(3));
+            int holes = Enumerable.Range(0, f2.Cells).Count(i => f2.Hole[i] > 0);
+            Check("큰 충돌(50MJ)은 여러 벽을 뚫고 지나간다 — 두 방이 다 빠진다", holes >= 2 && f2.Pressure(left) < 5 && f2.Pressure(right) < 60,
+                $"구멍 {holes}칸 · 왼쪽 {f2.Pressure(left):0.0} · 오른쪽 {f2.Pressure(right):0.0} kPa");
+            // 피로가 쌓인 칸막이는 한쪽이 진공이 되면 찢어진다
+            var l3 = Worlds.Ascii(Worlds.TwoRooms);
+            var s3 = Worlds.Full(l3, 1);
+            var st3 = s3.Get<Structure>(); var f3 = s3.Get<Field>();
+            int wall = Worlds.At(l3, 10, 1); // 두 방 사이 칸막이 (문 아님)
+            st3.Fatigue[wall] = 0.45f;
+            f3.SetHole(Worlds.At(l3, 0, 2), 2.5f); // 왼쪽 방 외판이 뚫렸다
+            s3.Run(Time.Minutes(10));
+            Check("피로가 쌓인 칸막이는 한쪽이 진공이 되면 찢어진다 (오른쪽 방도 빠진다)", f3.Hole[wall] > 0 && f3.Pressure(Worlds.At(l3, 15, 2)) < 90,
+                $"칸막이 구멍 {f3.Hole[wall]:0.000}m² · 부하 {st3.Stress[wall]:0.00} · 오른쪽 방 {f3.Pressure(Worlds.At(l3, 15, 2)):0.0}kPa");
+            Check("새 칸막이는 버틴다 (피로 0)", Enumerable.Range(0, f3.Cells).Where(i => i != wall && f3.L.Kind[i] == CellKind.Wall && !f3.L.Hull[i]).All(i => f3.Hole[i] == 0 || i == wall));
+            // 기압 차가 있으면 문이 안 열린다 (손으로)
+            var s4 = Worlds.Full(l, 1);
+            var st4 = s4.Get<Structure>(); var f4 = s4.Get<Field>();
+            f4.SetHole(hull, 2.5f);
+            s4.Run(Time.Minutes(1));
+            st4.DoorPowered[0] = 0;
+            st4.RequestDoor(0, 1f);
+            s4.Run(20);
+            Check("기압 차가 크면 손으로 문을 못 연다 (진공 쪽 문)", f4.DoorOpen[0] == 0, $"차이 {f4.Pressure(right) - f4.Pressure(left):0}kPa · 문 {f4.DoorOpen[0]:0.0}");
+            // 폭발이 보통 문을 날린다
+            var l5 = Worlds.Ascii(Worlds.TwoRooms);
+            var s5 = Worlds.Full(l5, 1, sim =>
+            {
+                var ff = sim.Get<Field>();
+                foreach (int c in ff.L.Rooms.First(r => r.Cells.Contains(Worlds.At(ff.L, 3, 2))).Cells) ff.AddGas(c, ff.T.gH2, 14, 293);
+            });
+            s5.Run(3);
+            s5.Get<Chemistry>().Ignite(Worlds.At(l5, 3, 2), 5e4, 0);
+            s5.Run(30);
+            var st5 = s5.Get<Structure>();
+            Check("수소 폭연이 보통 문을 날린다 (압력이 정격을 넘는다)", st5.DoorsBlown > 0 && s5.Get<Field>().DoorOpen[0] > 0,
+                $"날아간 문 {st5.DoorsBlown} · 문 열림 {s5.Get<Field>().DoorOpen[0]:0.0} · 큰 소리 {s5.Facts.CountOf(FactKind.LoudSound)}번");
+        }
+
+        if (Do("빛"))
+        {
+            var lay = Worlds.Ascii(Worlds.Lounge, Worlds.Seats);
+            var s = Worlds.Full(lay, 1, sim => sim.Get<Chemistry>().Ignite(Worlds.At(lay, 3, 3), 3e6, 0));
+            var li = s.Get<Light>();
+            for (int r = 0; r < li.Lamp.Length; r++) li.SetLamp(r, 0); // 정전
+            s.Run(Time.Minutes(3));
+            int near = Worlds.At(lay, 3, 2), far = Worlds.At(lay, 14, 1);
+            Check("정전된 방에서도 불꽃은 곁을 밝힌다 · 먼 구석은 어둡다", li.Lux[near] > 500 && li.Lux[far] < 50, $"곁 {li.Lux[near]:0}lx · 구석 {li.Lux[far]:0}lx");
+            Check("연기 속에서는 보이는 거리가 짧다", li.Visibility(near) < li.Visibility(far) && li.Visibility(near) < 15, $"곁 {li.Visibility(near):0.0}m · 구석 {li.Visibility(far):0.0}m");
+        }
+
         if (Do("차압문"))
         {
             var l = Worlds.Ascii(Worlds.TwoRooms);

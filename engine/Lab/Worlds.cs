@@ -56,6 +56,14 @@ public static class Worlds
         return s;
     }
 
+    /// <summary>모든 엔진을 붙인 세계 (ShipWorld) — 공기 · 설비 + 준비.</summary>
+    public static Sim Full(Layout layout, ulong seed = 1, Action<Sim>? setup = null)
+    {
+        var s = ShipWorld.Create(layout, seed);
+        setup?.Invoke(s);
+        return s;
+    }
+
     /// <summary>장 + 화학(불) + 설비를 앉힌 세계.</summary>
     public static Sim WithChem(Layout layout, ulong seed = 1, Action<Field, Chemistry>? setup = null)
     {

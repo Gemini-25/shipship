@@ -45,6 +45,7 @@ public enum FactKind : ushort
     StorySeed,         // 이야기꾼이 원인을 심었다
 }
 
+[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, Pack = 1)] // 찍기는 바이트를 그대로 쓴다 — 정렬용 빈 바이트(쓰레기 값)가 없게
 public struct Fact
 {
     public long Tick;

@@ -26,6 +26,7 @@ public enum CauseKind : byte
 }
 
 /// <summary>원인 마디: 무엇 · 어디 · 언제 · 부모 원인 (둘까지).</summary>
+[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, Pack = 1)] // 찍기는 바이트를 그대로 쓴다 — 정렬용 빈 바이트(쓰레기 값)가 없게
 public struct CauseNode
 {
     public CauseKind Kind;

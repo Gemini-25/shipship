@@ -58,6 +58,18 @@ public static partial class Program
             Check("같은 시드 · 같은 입력이면 같은 지문", one == again);
         }
 
+        if (Do("빈바이트"))
+        {
+            Console.WriteLine("\n[① 찍기 구조체에 빈 바이트가 없다 (쓰레기 값이 지문을 흔들지 않게)]");
+            int Fields(Type ty) => ty.GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)
+                .Sum(f => f.FieldType.IsEnum ? System.Runtime.InteropServices.Marshal.SizeOf(Enum.GetUnderlyingType(f.FieldType)) : System.Runtime.InteropServices.Marshal.SizeOf(f.FieldType));
+            foreach (var ty in new[] { typeof(CauseNode), typeof(Fact), typeof(Heard) })
+            {
+                int size = (int)typeof(System.Runtime.CompilerServices.Unsafe).GetMethod("SizeOf")!.MakeGenericMethod(ty).Invoke(null, null)!;
+                Check($"{ty.Name}: 크기 {size} = 필드 합 {Fields(ty)}", size == Fields(ty));
+            }
+        }
+
         if (Do("찍기"))
         {
             Console.WriteLine("\n[① 찍기 · 되살리기 · 복제]");
@@ -233,6 +245,47 @@ public static partial class Program
             Check("불이 타도 원소 총량이 같다 (연료 · 산소 → 이산화탄소 · 물 · 일산화탄소 · 그을음)", worst < 1e-9, $"{worst:0.0e0} · 이산화탄소 {co20:0} → {f.Total(f.T.gCO2):0}몰");
             Check("불이 타도 에너지 장부가 같다 (반응열 → 기체 · 바닥 · 이웃)", Rel(e0, e1) < 1e-9, $"{Rel(e0, e1):0.0e0} · 가장 센 불 {peak:0}kW");
             Check("음수가 없다", !f.N.Any(v => v < 0) && !f.Store.Any(v => v < 0) && !f.U.Any(v => v < 0));
+        }
+
+        if (Do("소리"))
+        {
+            Console.WriteLine("\n[③ 소리]");
+            var l = Worlds.Ascii(Worlds.Sealed);
+            var s = Worlds.Full(l, 1);
+            var f = s.Get<Field>(); var snd = s.Get<Sound>();
+            int a = Worlds.At(l, 4, 2), near = Worlds.At(l, 8, 2), other = Worlds.At(l, 15, 2);
+            snd.Emit(s, a, 100, SoundKind.Bang);
+            float dNear = snd.Loudest(near), dOther = snd.Loudest(other);
+            Check("소리는 멀수록 작고, 닫힌 차압 문 너머는 더 작다", dNear > dOther + 15 && dOther > 0, $"같은 방 {dNear:0}dB · 문 너머 {dOther:0}dB");
+            // 왼쪽 방을 진공으로
+            foreach (int c in l.Rooms.First(r => r.Cells.Contains(a)).Cells) { for (int g = 0; g < f.G; g++) f.N[c * f.G + g] = 0; f.U[c] = 0; }
+            s.Step(); s.Step(); s.Step();
+            snd.Emit(s, a, 120, SoundKind.Bang);
+            Check("진공에서는 소리가 전해지지 않는다", snd.Loudest(near) == 0 && snd.Loudest(other) == 0, $"{snd.Loudest(near):0} / {snd.Loudest(other):0}dB");
+        }
+
+        if (Do("모든엔진"))
+        {
+            Console.WriteLine("\n[① 결정론 · 찍기 — 모든 엔진 · 옛 배 제비호]");
+            ulong Run(int threads, out byte[] snap)
+            {
+                int keep = Par.Threads; Par.Threads = threads;
+                var s = ShipWorld.Create("Kestrel", 9);
+                var f = s.Get<Field>();
+                var floor = Enumerable.Range(0, f.Cells).Where(i => f.L.Kind[i] == CellKind.Floor && f.L.FurnitureAt[i] >= 0).ToArray();
+                s.Get<Chemistry>().Ignite(floor[floor.Length / 2], 3e6, 0);
+                int hull = Enumerable.Range(0, f.Cells).First(i => f.L.Hull[i] && f.L.Y(i) == f.L.H / 2);
+                s.Get<Structure>().Impact(s, hull, 2e5, 1, 0, 0);
+                s.Run(400);
+                snap = s.Save();
+                Par.Threads = keep;
+                return s.Hash();
+            }
+            ulong one = Run(1, out var snap1), many = Run(Math.Max(4, Environment.ProcessorCount), out _);
+            Check("모든 엔진: 1코어 = 여러 코어 (불 · 충돌 · 감압 · 소리 · 빛 · 구조)", one == many, $"{one:x16} / {many:x16}");
+            var b = new Sim(ShipWorld.Setup(Layout.Ship("Kestrel", Tables.Default), 9));
+            b.Load(snap1);
+            Check("모든 엔진: 되살린 세계의 지문이 같다", b.Hash() == one, $"{snap1.Length / 1024}KB");
         }
 
         if (Do("물"))
