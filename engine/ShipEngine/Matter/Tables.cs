@@ -36,6 +36,13 @@ public sealed class ReactionDef
     public string[] Need = Array.Empty<string>();
 }
 
+public sealed class EquipmentDef
+{
+    public string Name = "";
+    public Dictionary<string, double> Parts = new();
+    public double Heat;
+}
+
 public sealed class MaterialDef
 {
     public string Id = "", Name = "";
@@ -132,6 +139,10 @@ public sealed class Tables
     /// <summary>칸 바닥 저장 순서대로의 물질.</summary>
     public Substance[] Stores = Array.Empty<Substance>();
 
+    /// <summary>설비 · 가구 표 (옛 설비 이름 → 재질 kg · 열).</summary>
+    public Dictionary<string, EquipmentDef> Equipment = new();
+    public EquipmentDef Equip(string type) => Equipment.TryGetValue(type, out var e) ? e : Equipment["_default"];
+
     public Substance S(string id) => _subById.TryGetValue(id, out var s) ? s : throw new KeyNotFoundException($"물질 표에 없다: {id}");
     public Reaction R(string id) => _rxById.TryGetValue(id, out var r) ? r : throw new KeyNotFoundException($"반응식 표에 없다: {id}");
     public Material M(string id) => _matById.TryGetValue(id, out var m) ? m : throw new KeyNotFoundException($"재질 표에 없다: {id}");
@@ -208,6 +219,12 @@ public sealed class Tables
             t.Materials.Add(m);
             t._matById[d.Id] = m;
         }
+
+        t.Equipment = DataFiles.Load<Dictionary<string, EquipmentDef>>("equipment.json");
+        foreach (var (k, e) in t.Equipment)
+            foreach (var m in e.Parts.Keys)
+                if (!t._matById.ContainsKey(m)) throw new InvalidDataException($"설비 표: '{k}'의 재질 '{m}'이 재질 표에 없다");
+        if (!t.Equipment.ContainsKey("_default")) throw new InvalidDataException("설비 표에 _default가 없다");
 
         t.gN2 = t.S("N2").Gas; t.gO2 = t.S("O2").Gas; t.gAr = t.S("Ar").Gas; t.gCO2 = t.S("CO2").Gas; t.gH2O = t.S("H2O").Gas;
         t.gCO = t.S("CO").Gas; t.gH2 = t.S("H2").Gas; t.gCH4 = t.S("CH4").Gas; t.gNH3 = t.S("NH3").Gas; t.gO3 = t.S("O3").Gas;

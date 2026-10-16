@@ -86,6 +86,12 @@ public sealed partial class Field
                     Ts[i] = teq + (ts - teq) * e;
                 }
         });
+        // ①' 겉면 ↔ 기체 · 겉면 ↔ 바닥 (바닥 · 문 칸)
+        Par.Rows(L.H, (y0, y1) =>
+        {
+            for (int i = y0 * L.W; i < y1 * L.W; i++)
+                if (_surfTick.Length != Cells || _surfTick[i] <= _tickNow - SlowEvery) SurfaceExchange(i, dt); // 매 틱 다룬 겉면은 빼고
+        });
         // ② 고체 전도 (두 버퍼)
         if (_t2.Length != Cells) _t2 = new double[Cells];
         Par.Rows(L.H, (y0, y1) =>
@@ -124,6 +130,37 @@ public sealed partial class Field
                     Ts[i] = Math.Max(2.7, t + q * dt / Cs[i]);
                 }
         });
+    }
+
+    /// <summary>
+    /// 겉면 ↔ 기체(대류 10 W/m²K · 1m²) · 겉면 ↔ 바닥(전도 20 W/K + 복사 εσ(T⁴−Ts⁴) 선형화) — 두 물체 정확한 식을 차례로.
+    /// 화학 엔진이 불 곁 뜨거운 겉면에 매 틱 부른다.
+    /// </summary>
+    public void SurfaceExchange(int i, double dt)
+    {
+        if (!HasSurface(i)) return;
+        double cf = SurfaceC;
+        if (RegionOf.Length > i && RegionOf[i] >= 0)
+        {
+            double cg = GasC(i);
+            if (cg > 1e-6)
+            {
+                double tg = U[i] / cg, tf = Tf[i];
+                double gk = 10 * 1.0 * dt * (1 / cg + 1 / cf);
+                double teq = (cg * tg + cf * tf) / (cg + cf), e = Math.Exp(-gk);
+                U[i] = cg * (teq + (tg - teq) * e);
+                Tf[i] = teq + (tf - teq) * e;
+            }
+        }
+        if (Cs[i] > 0)
+        {
+            double tf = Tf[i], ts = Ts[i], tm = 0.5 * (tf + ts);
+            double gsf = 20 + 4 * 0.9 * Sigma * tm * tm * tm;
+            double gk = gsf * dt * (1 / cf + 1 / Cs[i]);
+            double teq = (cf * tf + Cs[i] * ts) / (cf + Cs[i]), e = Math.Exp(-gk);
+            Tf[i] = teq + (tf - teq) * e;
+            Ts[i] = teq + (ts - teq) * e;
+        }
     }
 
     /// <summary>바닥 ↔ 벽 대류는 공기가 있을 때만 (진공이면 복사만 — 10%).</summary>
@@ -265,13 +302,13 @@ public sealed partial class Field
     // ── 에너지 장부 (법칙 시험) ──
 
     /// <summary>
-    /// 배 전체의 에너지 장부 (J): 기체 현열 + 기체 성분의 (hf − cv·298.15) + 바닥 저장의 hf + 고체 열.
+    /// 배 전체의 에너지 장부 (J): 기체 현열 + 기체 성분의 (hf − cv·298.15) + 바닥 저장의 hf + 고체 열 + 겉면 열.
     /// 단열된 닫힌 배에서는 흐름 · 확산 · 열 · 상 변화 · 반응으로 바뀌지 않는다.
     /// </summary>
     public double EnergyLedger()
     {
         double e = 0;
-        for (int i = 0; i < Cells; i++) e += U[i] + Cs[i] * Ts[i];
+        for (int i = 0; i < Cells; i++) e += U[i] + Cs[i] * Ts[i] + (HasSurface(i) ? SurfaceC * Tf[i] : 0);
         for (int g = 0; g < G; g++)
         {
             double k = T.Gases[g].Hf * 1000 - _cv[g] * 298.15;

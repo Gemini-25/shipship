@@ -216,6 +216,25 @@ public static partial class Program
             Check("해가 없는 우주에서 배는 천천히 식는다 (단열재 덕분에 느리게)", f2.Temp(c) < t0 && f2.Temp(c) > t0 - 30, $"12시간 {t0:0.0} → {f2.Temp(c):0.0}K");
         }
 
+        if (Do("불"))
+        {
+            Console.WriteLine("\n[② 칸의 화학 — 불 보존 (단열 · 닫힌 방)]");
+            var s = Worlds.WithChem(Worlds.Ascii(Worlds.Lounge, Worlds.Seats), 1, (f, c) =>
+            {
+                f.Adiabatic = true;
+                c.Ignite(Worlds.At(f.L, 3, 3), 3e6, 0);
+            });
+            var f = s.Get<Field>(); var ch = s.Get<Chemistry>();
+            var el0 = f.ElementTotals(); double e0 = f.EnergyLedger(); double co20 = f.Total(f.T.gCO2);
+            double peak = 0;
+            for (int i = 0; i < Time.Minutes(30); i++) { s.Step(); peak = Math.Max(peak, ch.Hrr.Max()); }
+            var el1 = f.ElementTotals(); double e1 = f.EnergyLedger();
+            double worst = el0.Zip(el1).Max(p => Rel(p.First, p.Second));
+            Check("불이 타도 원소 총량이 같다 (연료 · 산소 → 이산화탄소 · 물 · 일산화탄소 · 그을음)", worst < 1e-9, $"{worst:0.0e0} · 이산화탄소 {co20:0} → {f.Total(f.T.gCO2):0}몰");
+            Check("불이 타도 에너지 장부가 같다 (반응열 → 기체 · 바닥 · 이웃)", Rel(e0, e1) < 1e-9, $"{Rel(e0, e1):0.0e0} · 가장 센 불 {peak:0}kW");
+            Check("음수가 없다", !f.N.Any(v => v < 0) && !f.Store.Any(v => v < 0) && !f.U.Any(v => v < 0));
+        }
+
         if (Do("물"))
         {
             Console.WriteLine("\n[③ 물 · 응결]");

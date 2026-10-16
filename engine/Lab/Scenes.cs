@@ -32,6 +32,21 @@ public static partial class Program
                 every = 1; count = 1;
                 break;
             }
+            case "fire":
+            {
+                var l = Worlds.Ascii(Worlds.Lounge, Worlds.Seats);
+                int a = Worlds.At(l, 3, 3);
+                s = Worlds.WithChem(l, 1, (f, c) => c.Ignite(a, 3e6, 0));
+                var ff = s.Get<Field>(); var cc = s.Get<Chemistry>();
+                for (int k = 0; k < 600; k++)
+                {
+                    if (k < 6 || k % 50 == 0)
+                        Console.WriteLine($"  틱 {s.Tick}: 겉면 {ff.Tf[a]:0}K · 기체 {ff.Temp(a):0}K · 바닥 {ff.Ts[a]:0}K · 불 {cc.Burning[a]} · {cc.Hrr[a]:0}kW · 산소 {ff.Partial(ff.T.gO2, a):0.0}kPa · 고분자 {ff.Stored(ff.T.sPoly, a):0}몰 · 옆 겉면 {ff.Tf[a + 1]:0}K");
+                    s.Step();
+                }
+                every = 25; count = 30;
+                break;
+            }
             default: Console.WriteLine($"모르는 장면: {name}"); return;
         }
         for (int k = 0; k < count; k++)
@@ -51,6 +66,7 @@ public static class Map
     public static void Save(Sim s, string path, bool overlay = true)
     {
         var f = s.Get<Field>();
+        var chem = s.Find<Chemistry>();
         var l = f.L;
         int w = l.W * Px, h = l.H * Px;
         var img = new uint[w * h];
@@ -82,6 +98,9 @@ public static class Map
                     r = r * (1 - smoke) + 0.05 * smoke; g = g * (1 - smoke) + 0.04 * smoke; b = b * (1 - smoke) + 0.04 * smoke;
                     b += 0.5 * water; g += 0.15 * water;
                     if (l.FurnitureAt[i] >= 0) { r += 0.08; g += 0.08; b += 0.06; }
+                    if (chem != null && chem.Hrr[i] > 1) { double fl = Math.Min(1, chem.Hrr[i] / 200); r = 0.6 + 0.4 * fl; g = 0.25 + 0.45 * fl; b = 0.05; }
+                    double sc = Math.Clamp((f.Tf[i] - 400) / 500, 0, 1);
+                    if (sc > 0 && (chem == null || chem.Hrr[i] <= 1)) { r += 0.5 * sc; g += 0.15 * sc; }
                     c = Png.Rgba(r, g, b);
                     break;
                 }

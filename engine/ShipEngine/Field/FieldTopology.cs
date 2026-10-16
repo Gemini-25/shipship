@@ -44,7 +44,6 @@ public sealed partial class Field
                 CellKind.Wall => m.Density * m.C * 0.075,     // 벽: 두 겹 판 + 골조 (유효 두께 7.5cm)
                 _ => 0,
             };
-            if (L.FurnitureAt[i] >= 0) Cs[i] += 60_000; // 설비 · 가구 (약 120kg 강철)
         }
         Span<int> nb = stackalloc int[4];
         for (int i = 0; i < Cells; i++)

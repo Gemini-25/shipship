@@ -40,6 +40,15 @@ public sealed partial class Field : IEngine
     public double[] U;
     /// <summary>고체(바닥 · 벽) 온도 K.</summary>
     public double[] Ts;
+    /// <summary>
+    /// 겉면 온도 K (바닥 · 문 칸): 물건 · 연료의 얇은 겉면 — 열용량이 작아 불꽃 · 복사에 금방 달궈진다 (불이 붙고 번지는 곳).
+    /// 기체 · 고체와 열을 주고받는다.
+    /// </summary>
+    public double[] Tf;
+    public const double SurfaceC = 4000; // J/K (겉면 약 2kg)
+    /// <summary>겉면을 매 틱 다룬 마지막 틱 (5틱마다의 열 단계에서 겹쳐 세지 않게).</summary>
+    private long[] _surfTick = Array.Empty<long>();
+    private long _tickNow;
     /// <summary>바닥에 고이거나 쌓인 응축상: Store[s * Cells + i] (몰).</summary>
     public double[] Store;
     /// <summary>문마다 열린 정도 0~1.</summary>
@@ -65,7 +74,7 @@ public sealed partial class Field : IEngine
     public Field(Layout layout, Tables t)
     {
         L = layout; T = t; Cells = layout.N; G = t.GasCount; S = t.StoreCount;
-        N = new double[G * Cells]; U = new double[Cells]; Ts = new double[Cells]; Store = new double[S * Cells];
+        N = new double[G * Cells]; U = new double[Cells]; Ts = new double[Cells]; Tf = new double[Cells]; Store = new double[S * Cells];
         DoorOpen = new float[layout.Doors.Count]; Hole = new float[Cells];
         WindX = new float[Cells]; WindY = new float[Cells];
         _cv = t.Gases.Select(s => s.C).ToArray();
@@ -73,6 +82,7 @@ public sealed partial class Field : IEngine
         Cs = new double[Cells]; _kRight = new double[Cells]; _kDown = new double[Cells]; _exposed = new byte[Cells];
         BuildSolids();
         Array.Fill(Ts, 293.15);
+        Array.Fill(Tf, 293.15);
         _dirty = true;
     }
 
@@ -166,6 +176,15 @@ public sealed partial class Field : IEngine
         else AddSolidHeat(i, joules);
     }
 
+    /// <summary>겉면에 열 (J) — 바닥 · 문 칸만 (아니면 고체로).</summary>
+    public void AddSurfaceHeat(int i, double joules)
+    {
+        if (HasSurface(i)) Tf[i] = Math.Max(2.7, Tf[i] + joules / SurfaceC);
+        else AddSolidHeat(i, joules);
+    }
+
+    public bool HasSurface(int i) => L.Kind[i] is CellKind.Floor or CellKind.Door;
+
     public void AddSolidHeat(int i, double joules)
     {
         if (Cs[i] > 0) Ts[i] = Math.Max(2.7, Ts[i] + joules / Cs[i]);
@@ -179,6 +198,27 @@ public sealed partial class Field : IEngine
         double take = Math.Clamp(moles, 0, Store[k]);
         Store[k] -= take;
         return take;
+    }
+
+    /// <summary>
+    /// 두 칸이 같은 몰 수 m = frac × min(nᵢ, nⱼ)을 주고받는다 (성분 · 열이 섞이고 압력은 그대로 — 보존).
+    /// 불꽃의 상승 기류가 둘레 공기를 빨아들이는 것 · 선풍기 · 사람의 움직임.
+    /// </summary>
+    public void Exchange(int i, int j, double frac)
+    {
+        double ni = Moles(i), nj = Moles(j);
+        if (ni <= 1e-12 || nj <= 1e-12 || frac <= 0) return;
+        double m = Math.Min(0.45, frac) * Math.Min(ni, nj);
+        double a = m / nj, b = m / ni;
+        int bi = i * G, bj = j * G;
+        for (int g = 0; g < G; g++)
+        {
+            double d = a * N[bj + g] - b * N[bi + g];
+            N[bi + g] += d; N[bj + g] -= d;
+        }
+        double du = a * U[j] - b * U[i];
+        U[i] += du; U[j] -= du;
+        if (RegionOf.Length > i) MarkDirty(RegionOf[i], m / ni * 0.01);
     }
 
     public void SetDoor(int door, float open)
@@ -224,10 +264,11 @@ public sealed partial class Field : IEngine
             if (!Passable(i)) continue;
             for (int g = 0; g < G; g++) N[i * G + g] = n * frac[g];
             U[i] = GasC(i) * temp;
-            Ts[i] = temp;
+            Ts[i] = temp; Tf[i] = temp;
         }
         for (int i = 0; i < Cells; i++) if (L.Kind[i] == CellKind.Wall || L.Kind[i] == CellKind.Door) Ts[i] = temp;
         _dirty = true;
+        RebuildNow();
     }
 
     // ───────────────────────── 한 틱 ─────────────────────────
@@ -245,6 +286,8 @@ public sealed partial class Field : IEngine
 
     public void Step(Sim sim, double dt)
     {
+        _tickNow = sim.Tick;
+        if (_surfTick.Length != Cells) { _surfTick = new long[Cells]; Array.Fill(_surfTick, long.MinValue / 2); }
         long t = Prof != null ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
         if (_dirty) Rebuild();
         t = Lap("구역", t);
@@ -253,6 +296,9 @@ public sealed partial class Field : IEngine
         t = Lap("틈 흐름", t);
         Equalize();
         t = Lap("압력 고르기", t);
+        // 달궈지거나 식은 겉면(바닥과 2K 넘게 다름)은 매 틱 열을 주고받는다 — 불이 붙고 번지는 빠르기
+        for (int i = 0; i < Cells; i++)
+            if (Math.Abs(Tf[i] - Ts[i]) > 2 && HasSurface(i)) { SurfaceExchange(i, dt); _surfTick[i] = sim.Tick; }
         if (sim.Tick % SlowEvery == 0)
         {
             double slow = dt * SlowEvery;
@@ -270,14 +316,14 @@ public sealed partial class Field : IEngine
 
     public void Save(StateWriter w)
     {
-        w.Arr(N); w.Arr(U); w.Arr(Ts); w.Arr(Store); w.Arr(DoorOpen); w.Arr(Hole); w.Arr(WindX); w.Arr(WindY);
+        w.Arr(N); w.Arr(U); w.Arr(Ts); w.Arr(Tf); w.Arr(Store); w.Arr(DoorOpen); w.Arr(Hole); w.Arr(WindX); w.Arr(WindY);
         w.F64(VentedTotal);
         Outside.Save(w);
     }
 
     public void Load(StateReader r)
     {
-        r.ArrInto(N); r.ArrInto(U); r.ArrInto(Ts); r.ArrInto(Store); r.ArrInto(DoorOpen); r.ArrInto(Hole); r.ArrInto(WindX); r.ArrInto(WindY);
+        r.ArrInto(N); r.ArrInto(U); r.ArrInto(Ts); r.ArrInto(Tf); r.ArrInto(Store); r.ArrInto(DoorOpen); r.ArrInto(Hole); r.ArrInto(WindX); r.ArrInto(WindY);
         VentedTotal = r.F64();
         Outside.Load(r);
         _dirty = true;
