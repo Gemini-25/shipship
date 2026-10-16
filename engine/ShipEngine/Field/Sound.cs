@@ -51,12 +51,15 @@ public sealed class Sound : IEngine
     private readonly List<(long tick, int cell)> _order = new();
     private int _nextEvent;
     public long Emitted;
+    /// <summary>지금까지 낸 소리 사건의 마지막 번호 (마음이 어디까지 들었는지 적는다).</summary>
+    public int LastEvent => _nextEvent;
 
     public Sound(Field f) { F = f; L = f.L; }
 
-    /// <summary>칸 cell에서 크기 db(1m에서의 dB)의 소리가 난다.</summary>
-    public int Emit(Sim sim, int cell, float db, SoundKind kind, int cause = 0, int actor = -1)
+    /// <summary>칸 cell에서 크기 db(1m에서의 dB)의 소리가 난다 (source: 들은 이가 아는 소리의 자리 — 없으면 cell).</summary>
+    public int Emit(Sim sim, int cell, float db, SoundKind kind, int cause = 0, int actor = -1, int source = -1)
     {
+        int src = source >= 0 ? source : cell;
         int ev = ++_nextEvent;
         Emitted++;
         if (Thin(cell) <= 0) return ev; // 진공: 아무도 못 듣는다
@@ -68,7 +71,7 @@ public sealed class Sound : IEngine
         {
             float lv = -negLevel;
             if (best.TryGetValue(c, out float b) && b > lv + 1e-4f) continue;
-            Add(sim, c, new Heard { Event = ev, Kind = kind, Source = cell, Db = lv, Cause = cause, Tick = sim.Tick, Actor = actor });
+            Add(sim, c, new Heard { Event = ev, Kind = kind, Source = src, Db = lv, Cause = cause, Tick = sim.Tick, Actor = actor });
             L.Neighbors(c, nb);
             foreach (int j in nb)
             {
@@ -145,6 +148,23 @@ public sealed class Sound : IEngine
             k++;
         }
         if (k > 0) _order.RemoveRange(0, k);
+        if (sim.Tick % HissEvery == 0) Hiss(sim);
+    }
+
+    public const int HissEvery = 5;
+
+    /// <summary>쉬익: 기압 차가 5kPa 넘는 틈마다 높은 쪽 칸에서 (흐름이 클수록 크게 — 문틈 약 65dB · 큰 구멍 약 95dB).</summary>
+    private void Hiss(Sim sim)
+    {
+        foreach (var k in F.Links)
+        {
+            double pa = F.Pressure(k.A), pb = k.B >= 0 ? F.Pressure(k.B) : F.Outside.KPa;
+            if (Math.Abs(pa - pb) < 5) continue;
+            int at = pa >= pb ? k.A : k.B;
+            if (at < 0) continue;
+            float db = (float)Math.Min(99, 60 + 10 * Math.Log10(Math.Abs(k.Flow) + 0.01));
+            Emit(sim, at, db, SoundKind.Hiss, 0, -1, k.Via >= 0 ? k.Via : at); // 들린 자리 = 틈 (문 · 벽 칸)
+        }
     }
 
     public void Save(StateWriter w)

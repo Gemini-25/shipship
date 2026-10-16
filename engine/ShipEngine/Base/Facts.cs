@@ -42,6 +42,14 @@ public enum FactKind : ushort
     Decision,          // 결정
     Mistake,           // 실수
     Relationship,      // 관계가 바뀌었다
+    Warned,            // 외쳐 알렸다
+    Panicked,          // 공황에 빠졌다
+    Fled,              // 몸을 피했다 (본능)
+    Extinguished,      // 불을 껐다
+    Patched,           // 구멍을 막았다
+    Repaired,          // 장치를 고쳤다
+    DoorSealed,        // 도망치며 문을 닫았다
+    Woke,              // 잠에서 깼다
     // ⑫
     StorySeed,         // 이야기꾼이 원인을 심었다
 }

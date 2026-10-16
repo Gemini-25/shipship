@@ -30,6 +30,34 @@ public static class Worlds
 #.........#.............#
 #########################";
 
+    /// <summary>마음 시험 배: 왼쪽 방(우주복 보관함 · 배전반 · 배터리 · 침대) | 오른쪽 방(의자 넷 · 충전독 · 보관함) · 아래 통로(작업대 · 배식기 · 충전독).
+    /// 통로로 가는 문이 둘 (왼쪽 방 · 오른쪽 방).</summary>
+    public const string MindShip = @"
+#########################
+#..s......#....a....a.s.#
+#.........#.............#
+#..p.b....D.............#
+#.........#....a....a.r.#
+#..e....q.#.............#
+#####D########D##########
+#m.r..........w.....m...#
+#.......................#
+#########################";
+
+    public static Dictionary<char, string> MindLegend => new()
+    {
+        ['s'] = "SuitLocker", ['p'] = "PowerPanel", ['b'] = "Battery", ['a'] = "Seat", ['e'] = "Bed",
+        ['r'] = "RobotDock", ['w'] = "Workbench", ['m'] = "MealDispenser", ['q'] = "RobotDock",
+    };
+
+    /// <summary>문 위의 벽: 위는 통로 · 아래는 닫힌 문 (문 양옆은 다른 방).</summary>
+    public const string WallOverDoor = @"
+#########
+#.......#
+#########
+#...D...#
+#########";
+
     /// <summary>좌우 대칭 방 (가운데 칸이 정확히 가운데).</summary>
     public const string Symmetric = @"
 ###########

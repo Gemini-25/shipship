@@ -140,7 +140,9 @@ public sealed class Structure : IEngine
     public void Step(Sim sim, double dt)
     {
         if (_p.Length != L.N) _p = new double[L.N];
-        for (int i = 0; i < L.N; i++) _p[i] = L.IsSpace(i) || F.Hole[i] >= 2 ? F.Pressure(i) : -1;
+        // 닫힌 문 칸은 벽처럼 (장이 기체를 비워 둔 칸 — 기압 0으로 읽으면 옆 벽이 한쪽이 진공이라고 착각한다)
+        for (int i = 0; i < L.N; i++)
+            _p[i] = (L.Kind[i] == CellKind.Floor || L.Kind[i] == CellKind.Door && F.DoorPassable(L.DoorAt[i]) || F.Hole[i] >= 2) ? F.Pressure(i) : -1;
         Doors(sim, dt);
         Walls(sim, dt);
         if (sim.Tick % 25 == 0) Rust(sim, 25 * dt);

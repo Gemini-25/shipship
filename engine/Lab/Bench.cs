@@ -80,6 +80,21 @@ public static partial class Program
             Field.Prof = null;
             Console.WriteLine($"  평시 100명 숨 · {f.Cells}칸 · 코어 {threads}: 틱마다 {ms:0.000}ms (게임 1시간 = {ms * Time.TicksPerHour / 1000:0.00}초)");
         }
+        // 100명 · 로봇 30이 탄 큰 배(새터호): 마음 엔진 · 전체
+        {
+            Par.Threads = Math.Max(2, Environment.ProcessorCount);
+            var s = ShipWorld.Crewed("saeteo", 1, 100, 30);
+            s.Run(50);
+            s.Measure = true;
+            s.LastMs.Clear();
+            var sw = Stopwatch.StartNew();
+            const int Ticks = 1500;
+            s.Run(Ticks);
+            double ms = sw.Elapsed.TotalMilliseconds / Ticks;
+            var m = s.Get<Mind>();
+            Console.WriteLine("    " + string.Join(" · ", s.LastMs.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key} {kv.Value / Ticks:0.000}")));
+            Console.WriteLine($"  새터호 사람 {m.Agents.Count(a => a.IsPerson)} · 로봇 {m.Agents.Count(a => !a.IsPerson)} · 코어 {Par.Threads}: 틱마다 {ms:0.000}ms (마음 {s.LastMs.GetValueOrDefault("마음") / Ticks:0.000}ms) · 게임 1시간 = {ms * Time.TicksPerHour / 1000:0.00}초");
+        }
         Par.Threads = Math.Max(1, Environment.ProcessorCount);
     }
 

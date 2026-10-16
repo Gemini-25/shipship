@@ -139,6 +139,13 @@ public static partial class Program
             var st5 = s5.Get<Structure>();
             Check("수소 폭연이 보통 문을 날린다 (압력이 정격을 넘는다)", st5.DoorsBlown > 0 && s5.Get<Field>().DoorOpen[0] > 0,
                 $"날아간 문 {st5.DoorsBlown} · 문 열림 {s5.Get<Field>().DoorOpen[0]:0.0} · 큰 소리 {s5.Facts.CountOf(FactKind.LoudSound)}번");
+            // 닫힌 문 칸은 기체가 없다 — 그 문과 맞닿은 벽이 한쪽이 진공이라고 착각하면 안 된다 (케스트럴 9시간에 금이 갔던 버그)
+            var l8 = Worlds.Ascii(Worlds.WallOverDoor);
+            var s8 = Worlds.Full(l8, 1);
+            s8.Run(5);
+            int over = Worlds.At(l8, 4, 2);
+            Check("닫힌 문 위의 벽은 압력을 받지 않는다 (문 칸의 빈 기체를 진공으로 보지 않는다)", s8.Get<Structure>().Stress[over] < 0.05f,
+                $"부하 {s8.Get<Structure>().Stress[over]:0.00} · 위 {s8.Get<Field>().Pressure(Worlds.At(l8, 4, 1)):0}kPa");
             // 보통 문은 한 기압 차를 버틴다 — 끼익 소리 · 문틈으로 쉬익 새어 옆 방도 천천히 빠진다 · 그 원인은 외판을 친 파편까지 이어진다
             var l6 = Worlds.Ascii(Worlds.TwoRooms);
             var s6 = Worlds.Full(l6, 1);
@@ -472,5 +479,7 @@ public static partial class Program
                 f.Pressure(Worlds.At(l, 10, 7)) < 1 && right > 75 && left > right,
                 $"왼쪽 방 {f.Pressure(Worlds.At(l, 3, 2)):0.0} · 오른쪽 방 {f.Pressure(Worlds.At(l, 15, 2)):0.0} · 통로 {f.Pressure(Worlds.At(l, 10, 7)):0.00} kPa");
         }
+
+        MindRules();
     }
 }

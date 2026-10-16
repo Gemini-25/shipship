@@ -77,6 +77,7 @@ public sealed class Life : IEngine
     public List<Crop> Crops = new();
     public float[] Mold;
     public long Deaths;
+    public double FoodRotted;   // 썩은 양분 (몰 — 장부)
 
     public Life(Field f)
     {
@@ -367,6 +368,7 @@ public sealed class Life : IEngine
             if (xi <= 1e-9) continue;
             double q = r.Heat(T, t) * xi;
             F.TakeStore(c, T.sFood, xi);
+            FoodRotted += xi;
             foreach (var x in r.In) { var s = T.Substances[x.S]; if (s.Gas >= 0) F.RemoveGas(c, s.Gas, x.Nu * xi); }
             foreach (var x in r.Out) { var s = T.Substances[x.S]; if (s.Gas >= 0) F.AddGas(c, s.Gas, x.Nu * xi, t); }
             F.AddHeat(c, q);
@@ -389,6 +391,6 @@ public sealed class Life : IEngine
         return (g, w);
     }
 
-    public void Save(StateWriter w) { w.List(Bodies); w.List(Crops); w.Arr(Mold); w.I64(Deaths); }
-    public void Load(StateReader r) { Bodies = r.List<Body>(); Crops = r.List<Crop>(); r.ArrInto(Mold); Deaths = r.I64(); }
+    public void Save(StateWriter w) { w.List(Bodies); w.List(Crops); w.Arr(Mold); w.I64(Deaths); w.F64(FoodRotted); }
+    public void Load(StateReader r) { Bodies = r.List<Body>(); Crops = r.List<Crop>(); r.ArrInto(Mold); Deaths = r.I64(); FoodRotted = r.F64(); }
 }

@@ -11,6 +11,8 @@ public static class Time
     public static long Hours(double h) => (long)Math.Round(h * TicksPerHour);
     public static long Days(double d) => (long)Math.Round(d * TicksPerDay);
     public static double ToSeconds(long ticks) => ticks * SecondsPerTick;
+    /// <summary>하루 중 몇 시 (0~24).</summary>
+    public static double HourOfDay(long tick) => (tick % TicksPerDay) / (double)TicksPerHour;
 
     /// <summary>"3일 07:42" — 게임 안 시각.</summary>
     public static string Clock(long tick)

@@ -78,8 +78,26 @@ public static class LayoutBuilder
             cells.Sort();
             L.Rooms.Add(new RoomDef { Id = L.Rooms.Count, Type = "Room", Name = $"방{L.Rooms.Count + 1}", Cells = cells.ToArray() });
         }
+        // 같은 글자라도 떨어져 있으면 따로 (붙어 있는 칸끼리 설비 하나)
         foreach (var (ch, cells) in furnCells)
-            L.Furniture.Add(new FurnitureDef { Id = L.Furniture.Count, Type = legend![ch], Cells = cells.ToArray() });
+        {
+            var left = new SortedSet<int>(cells);
+            while (left.Count > 0)
+            {
+                int start = left.Min;
+                var group = new List<int>();
+                var st = new Stack<int>();
+                st.Push(start); left.Remove(start);
+                while (st.Count > 0)
+                {
+                    int c = st.Pop(); group.Add(c);
+                    L.Neighbors(c, nb);
+                    foreach (int j in nb) if (j >= 0 && left.Remove(j)) st.Push(j);
+                }
+                group.Sort();
+                L.Furniture.Add(new FurnitureDef { Id = L.Furniture.Count, Type = legend![ch], Cells = group.ToArray() });
+            }
+        }
         L.Finish();
         foreach (var f in L.Furniture) f.Room = L.Room[f.Cells[0]];
         return L;

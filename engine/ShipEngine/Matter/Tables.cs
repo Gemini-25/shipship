@@ -60,6 +60,27 @@ public sealed class DeviceDef
     public Dictionary<string, double> Parts = new();
 }
 
+/// <summary>사람 표 (⑧ 마음): 이름 · 맡은 일 · 물건 · 빠르기 · 대사량 · 욕구 · 믿음 반감기.</summary>
+public sealed class PeopleTable
+{
+    public List<string> Names = new();
+    public Dictionary<string, RoleDef> Roles = new();
+    public Dictionary<string, Dictionary<string, int>> Stock = new();
+    public Dictionary<string, ItemDef> Items = new();
+    public Dictionary<string, double> Speed = new(), Watts = new(), Needs = new(), HalfLife = new();
+}
+
+public sealed class RoleDef
+{
+    public List<string> Rooms = new(), Devices = new();
+    public Dictionary<string, double> Skills = new();
+}
+
+public sealed class ItemDef
+{
+    public double Water, O2, Minutes, MaxArea;
+}
+
 public sealed class EquipmentDef
 {
     public string Name = "";
@@ -167,6 +188,7 @@ public sealed class Tables
     public Dictionary<string, EquipmentDef> Equipment = new();
     /// <summary>장치 표 (옛 설비 이름 → 역할 · 숫자). 없는 설비는 장치가 아니다 (의자 · 침대 …).</summary>
     public Dictionary<string, DeviceDef> Devices = new();
+    public PeopleTable People = new();
     public DeviceDef? Dev(string type) => Devices.TryGetValue(type, out var d) ? d : null;
 
     /// <summary>별 · 행성 · 파편 표 (⑤ 바깥 세계).</summary>
@@ -266,6 +288,12 @@ public sealed class Tables
             if (!roles.Contains(d.Role)) throw new InvalidDataException($"장치 표: '{k}'의 역할 '{d.Role}'을 모른다");
             foreach (var p in d.Parts.Keys) if (!parts.Contains(p)) throw new InvalidDataException($"장치 표: '{k}'의 부품 '{p}'를 모른다");
         }
+        t.People = DataFiles.Load<PeopleTable>("people.json");
+        foreach (var (k, st) in t.People.Stock)
+            foreach (var it in st.Keys)
+                if (!t.People.Items.ContainsKey(it)) throw new InvalidDataException($"사람 표: '{k}'에 든 '{it}'이 물건 표에 없다");
+        foreach (var key in new[] { "walk", "run", "crawl", "carry", "robot", "drone" })
+            if (!t.People.Speed.ContainsKey(key)) throw new InvalidDataException($"사람 표: 빠르기 '{key}'가 없다");
         foreach (var (k, p) in t.Space.Planets)
         {
             foreach (var g in p.Air.Keys)
