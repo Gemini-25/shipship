@@ -11,7 +11,8 @@ dotnet build "$ROOT/tools/Headless" -c Release -o "$ROOT/build/headless" --nolog
 mkdir -p "$OUT"
 rm -f "${OUT:?}"/*.txt
 LIST="$OUT/list"
-awk '!/^#/ && ($2=="rule" || $2=="core") {print $1}' "$ROOT/tools/tests/tests.txt" > "$LIST"
+# 오래 걸리는 것부터 (가장 긴 시험이 맨 끝에 혼자 돌지 않게)
+awk '!/^#/ && ($2=="rule" || $2=="core") {print $3, $1}' "$ROOT/tools/tests/tests.txt" | sort -rn | awk '{print $2}' > "$LIST"
 for t in "$@"; do echo "$t" >> "$LIST"; done
 "$ROOT/tools/ci/run-tests.sh" "$LIST" "$OUT" 4 7
 ONLY="rule,core"; [ $# -gt 0 ] && ONLY=""

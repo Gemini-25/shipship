@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """시험 결과를 한 장으로 줄인다 (사람 · 에이전트가 긴 출력 대신 이것만 읽는다).
 
-   python3 tools/ci/summarize.py --results 결과폴더 [--recheck 재확인폴더] [--plan 새실패.json] [--md 요약.md] [--only rule,core]
+   python3 tools/ci/summarize.py --results 결과폴더 [--recheck 재확인폴더] [--plan 새실패.json] [--md 요약.md] [--only rule,core] [--times]
+   --plan: 다시 볼 장면을 오래 걸리는 것부터 조각(--recheck-shards, 기본 5)에 고르게 — 조각마다 '이름 이름 …' 한 줄인 JSON 목록
+   --times: 시험별 걸린 초를 한 줄로 ('시간 이름=초 …' — tools/ci/retime.py가 tests.txt에 옮긴다)
 
 판정 (docs/DEV_PROCESS.md):
   · 줄 맨 앞의 ✘ 가 실패한 확인 — '성능' 줄은 따로 센다 (동시에 돌리면 흔들린다)
@@ -74,6 +76,8 @@ def main():
     ap.add_argument('--md')
     ap.add_argument('--only')
     ap.add_argument('--max-recheck', type=int, default=20)
+    ap.add_argument('--recheck-shards', type=int, default=5)
+    ap.add_argument('--times', action='store_true')
     a = ap.parse_args()
 
     tiers = set(a.only.split(',')) if a.only else None
@@ -85,8 +89,10 @@ def main():
     red, new, known, fixed, perf, lucky, investigate, seedish = [], [], [], [], [], [], [], []
     passed = total_sec = 0
     slow = []
-    for name, tier, _ in tests:
+    secs = {}
+    for name, tier, est in tests:
         st, line, sec = judge(files.get(name))
+        secs[name] = sec if sec else est
         total_sec += sec
         slow.append((sec, name))
         if st == '통과':
@@ -115,7 +121,18 @@ def main():
                 seedish.append((name, cur, base))  # 지금 실패한 시드에서 기준도 실패 — 시드 7에 맞춘 장면
 
     if a.plan:
-        json.dump([n for n, _ in new][:a.max_recheck], open(a.plan, 'w'))
+        # 조각마다 지금 코드 · 기준 커밋 × 시드 둘 = 4개를 동시에 돌린다 — 오래 걸리는 것부터 가장 가벼운 조각에
+        pick = sorted([n for n, _ in new][:a.max_recheck], key=lambda n: -secs.get(n, 60))
+        k = min(a.recheck_shards, len(pick))
+        groups, load = [[] for _ in range(k)], [0] * k
+        for n in pick:
+            i = min(range(k), key=lambda j: load[j])
+            groups[i].append(n)
+            load[i] += secs.get(n, 60)
+        json.dump([' '.join(g) for g in groups], open(a.plan, 'w'))
+    if a.times:
+        print('시간 ' + ' '.join(f'{n}={secs[n]}' for n, _, _ in tests))
+        return 0
 
     out = []
     def seeds(c, b):
