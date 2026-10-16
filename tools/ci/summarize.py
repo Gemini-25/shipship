@@ -132,6 +132,15 @@ def main():
         json.dump([' '.join(g) for g in groups], open(a.plan, 'w'))
     if a.times:
         print('시간 ' + ' '.join(f'{n}={secs[n]}' for n, _, _ in tests))
+        # 첫날 배 (SHIPSIM_WARM_REPORT=1): 조각마다 새로 돌린 시간 — 조각끼리 나눠 쓸 값어치가 있는지
+        warm = re.compile(r'\[첫날 배\] 되살림 (\d+)\(파일 (\d+)\) · 새로 돌림 (\d+) · 돌린 시간 ([\d.]+)초')
+        hit = disk = miss = 0; build = 0.0
+        for n, _, _ in tests:
+            if files.get(n):
+                for m in warm.finditer(open(files[n], encoding='utf-8', errors='replace').read()):
+                    hit += int(m.group(1)); disk += int(m.group(2)); miss += int(m.group(3)); build += float(m.group(4))
+        if hit or miss:
+            print(f'첫날 배: 되살림 {hit} (파일 {disk}) · 새로 돌림 {miss} · 새로 돌린 시간 합 {build:.0f}초')
         return 0
 
     out = []

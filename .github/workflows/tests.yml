@@ -1,8 +1,9 @@
 # 전체 시험 — 푸시마다 자동 (docs/DEV_PROCESS.md)
-#   빌드 한 번 → 8조각으로 나눠 동시에 (조각마다 4개씩 — 러너 CPU 4개 · growthtest는 안에서 자식 프로세스로 더 나눈다 ·
-#   공개 저장소는 작업을 동시에 20개까지 — 이 가지는 한 번에 한 실행만 돌아 8조각 + 재확인 5조각이 줄 서지 않는다) → 기준(tools/tests/baseline.txt)과 견줌
+#   빌드 한 번 → 10조각으로 나눠 동시에 (조각마다 4개씩 — 러너 CPU 4개 · growthtest는 안에서 자식 프로세스로 더 나눈다 ·
+#   공개 저장소는 작업을 동시에 20개까지 — 이 가지는 한 번에 한 실행만 돌아 10조각도 줄 서지 않는다) → 기준(tools/tests/baseline.txt)과 견줌
 #   → 기준에선 통과하던 장면이 실패하면 다른 시드 둘(11 · 23)로 지금 코드 · 기준 커밋을 함께 다시 → 한 장 요약 (작업 요약 · summary 아티팩트)
 #   빨강(규칙 · 핵심 실패 · 멈춤)이 있을 때만 실패로 끝난다. 장면 시험은 막지 않는다.
+#   러너는 ubuntu-24.04로 고정 (ubuntu-latest가 26으로 바뀌어도 걸리는 시간 · 결과가 흔들리지 않게).
 #   같은 가지에 잇달아 푸시하면 도는 것은 끝까지 돌고, 기다리던 것은 가장 새 커밋 하나만 남는다 (줄이 쌓이지 않게).
 name: tests
 
@@ -19,10 +20,11 @@ env:
   DOTNET_NOLOGO: '1'
   DOTNET_CLI_TELEMETRY_OPTOUT: '1'
   HEADLESS: ${{ github.workspace }}/build/headless/Headless.dll
+  SHIPSIM_WARM_REPORT: '1'
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -35,12 +37,12 @@ jobs:
 
   shard:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3, 4, 5, 6, 7]
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -59,7 +61,7 @@ jobs:
   plan:
     needs: shard
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       recheck: ${{ steps.plan.outputs.recheck }}
     steps:
@@ -77,7 +79,7 @@ jobs:
     # 새 실패가 있을 때만: 기준 커밋(tools/tests/baseline.txt 머리말)을 빌드해 같은 시드로 견준다 — 한 번 빌드하면 캐시에서
     needs: plan
     if: always() && needs.plan.outputs.recheck != '' && needs.plan.outputs.recheck != '[]'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -103,7 +105,7 @@ jobs:
     # 다시 볼 장면을 조각(많아야 5)에 나눠 — 조각마다 지금 코드 · 기준 커밋 × 시드 11 · 23 = 4개를 동시에
     needs: [build, plan, base-build]
     if: always() && needs.plan.outputs.recheck != '' && needs.plan.outputs.recheck != '[]'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -135,7 +137,7 @@ jobs:
   report:
     needs: [plan, base-build, recheck]
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -152,11 +154,12 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: summary, path: summary.md, retention-days: 30 }
-      - name: 시험별 걸린 초 (tools/ci/retime.py로 tests.txt에 옮긴다)
-        if: always()
-        run: python3 tools/ci/summarize.py --results results --times
-      - name: 한 줄 요약 (로그 끝 30줄만 읽으면 되게)
+      - name: 한 줄 요약 · 시험별 걸린 초 (주석으로 — tools/ci/last.sh가 긴 로그 없이 읽는다)
         if: always()
         run: |
+          esc() { sed 's/%/%25/g'; }
+          echo "::notice title=요약::$(head -1 summary.md | sed 's/^## //' | esc)"
+          grep -E '^- \*\*' summary.md | head -9 | esc | while IFS= read -r l; do echo "::warning title=조사::$l"; done
+          python3 tools/ci/summarize.py --results results --times | esc | while IFS= read -r l; do echo "::notice title=시간::$l"; done
           head -1 summary.md
           grep -E '^- \*\*' summary.md || true
