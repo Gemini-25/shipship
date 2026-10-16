@@ -5,7 +5,14 @@
 - 새 배 설계는 초안으로 먼저 보이고 승인을 받는다. 로봇 · 주 컴퓨터가 먼저, 사람은 그게 안 될 때 나선다. 60프레임 유지.
 - README 맨 위는 늘 최신 진행 상황(진행률 %) · 화면 사진.
 
-## 시험 · 개발 과정 — docs/DEV_PROCESS.md
+## 새 엔진 가지 (claude/engine-rewrite) — docs/ENGINE.md
+- 층마다: 설계(ENGINE.md에 적기) → 법칙 시험 먼저 → 구현 → 관찰 장면 → 재미 측정 → 커밋 · 푸시.
+- 확인: `dotnet build engine/Lab -c Release -o build/lab` + `dotnet build/lab/Lab.dll --law` + `--rule` (빨강이면 엔진 버그 — 고친다 · 끄지 않는다).
+- 새 법칙 · 고친 버그마다 법칙 시험 또는 규칙 시험을 하나 더한다. CI는 `engine` (옛 `tests`는 이 가지에서 돌지 않는다).
+- 엔진 사이 약속: 아래는 위를 모른다 · 위는 읽고 요청만 · 결정론(두 버퍼 · 고정 덩어리 · 난수 갈래) · 원인 마디 · 사실 흐름.
+- 옛 게임 버그는 고치지 않는다 (엔진을 다 만든 뒤 옛 장면 시험을 다시 돌린다).
+
+## 시험 · 개발 과정 (옛 게임 가지) — docs/DEV_PROCESS.md
 1. 기능 하나 넣을 때마다: 빌드(게임 `dotnet build game/ShipSim.csproj` · 도구 `dotnet build tools/Headless -c Release`) + 그 기능 시험 + `tools/quick.sh`.
    quick이 빨강이면(규칙 · 핵심 실패) 진짜 버그로 보고 고친다.
 2. 새 기능 · 고친 버그마다 `tools/Headless/RuleTests.cs`에 규칙 시험을 하나 더한다 (작은 배 · 몇 초 · 고치기 전 코드에서 실패하는지 확인).

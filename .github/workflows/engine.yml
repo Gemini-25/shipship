@@ -1,0 +1,34 @@
+# 새 엔진 — 빌드 + 법칙 시험 + 규칙 시험 (docs/ENGINE.md §7 · §8)
+#   빨강이면 엔진 버그다. 시험을 끄지 않는다.
+name: engine
+
+on:
+  push:
+    paths-ignore: ['**.md', 'docs/**', '**.jpg', '**.png', '**.wav', '**.ogg']
+  workflow_dispatch:
+
+concurrency:
+  group: engine-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: '1'
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+
+jobs:
+  engine:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: 빌드
+        run: dotnet build engine/Lab -c Release -o build/lab --nologo -v q
+      - name: 법칙 시험
+        run: dotnet build/lab/Lab.dll --law
+      - name: 규칙 시험
+        run: dotnet build/lab/Lab.dll --rule
+      - name: 성능
+        run: dotnet build/lab/Lab.dll --bench || true
