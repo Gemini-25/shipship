@@ -69,6 +69,7 @@ public static partial class Program
                 foreach (var c in w.Crew.Where(c => !c.Dead)) { minFood = MathF.Min(minFood, c.Needs.Food); if (c.Needs.Food <= 0.02f) { starving++; if (diag) StarveWhy(w, c); } }
                 // 사람이 숨 쉬던 방만 (공사 중인 증축 방 · 버린 방의 빈 공기는 세지 않는다 — 우주복 입은 사람도)
                 foreach (var cm in w.Crew) if (!cm.Dead && !cm.Away && cm.Suit == null && cm.Room is Room r && !r.Detached && r.Air.O2 < minO2) { minO2 = r.Air.O2; minO2Room = $"{r.Name}#{r.Id}@{SimTime.Day(w.Tick)}일 {SimTime.Clock(w.Tick)}"; }
+                if (diag) LowAirWhy(w); // 사람이 숨 쉬는 방의 산소가 12kPa 아래 — 그 순간 방 상태 (한 방에 한 시간에 한 번)
                 minBattery = MathF.Min(minBattery, w.Power.BatteryPercent);
                 minWater = MathF.Min(minWater, w.Water.Level);
                 maxDemand = MathF.Max(maxDemand, w.Power.Demand);
@@ -112,6 +113,24 @@ public static partial class Program
             k += $"[식사 {(eat.Activity == null ? -1f : eat.Score):0.0} {eat.Reason?.Split(' ')[0]} · 1등 {ev[0].Activity.Label} {ev[0].Score:0.0}]";
         }
         _starve[k] = _starve.GetValueOrDefault(k) + 1;
+    }
+
+    private static readonly Dictionary<int, long> _lowAirSaid = new();
+
+    /// <summary>긴 항해 진단 (SHIPDIAG=1): 사람이 우주복 없이 있는 방의 산소가 12kPa 아래면 그 순간 방 상태 — 환기 · 덕트 · 전기 · 문 · 누가 무엇을 하나.</summary>
+    private static void LowAirWhy(World w)
+    {
+        foreach (var r in w.Ship.Rooms)
+        {
+            if (r.Detached || r.Air.O2 >= 12f) continue;
+            var inside = w.Crew.Where(c => !c.Dead && !c.Away && c.Suit == null && c.Room == r).ToList();
+            if (inside.Count == 0) continue;
+            if (_lowAirSaid.TryGetValue(r.Id, out long t) && w.Tick - t < SimTime.Hours(1)) continue;
+            _lowAirSaid[r.Id] = w.Tick;
+            Console.WriteLine($"      [산소 낮음] {SimTime.Day(w.Tick)}일 {SimTime.Clock(w.Tick)} {r.Name}#{r.Id} O2 {r.Air.O2:0.0} 압력 {r.Air.Pressure:0} 부피 {r.Volume:0} · 전기 {(r.Powered ? "O" : "X")}{(r.PowerCut ? "(끊김)" : "")} 환기 {(r.VentOpen ? "O" : "X")}{(r.VentSealed ? "(봉함)" : "")} 덕트 {(r.DuctLinked ? "O" : "X")} 샘 {(r.Leaking ? "O" : "X")} 버림 {(r.Abandoned ? "O" : "X")} · 전력 {w.Power.Delivered:0}/{w.Power.Demand:0}kW 차단 {w.Power.ShedCount} 배터리 {w.Power.BatteryPercent * 100:0}% · 탱크 {w.Air.Reserve:0}"
+                + " · 문 " + string.Join(",", r.Doors.Where(d => !d.Removed).Select(d => $"{(d.RoomA == r ? d.RoomB : d.RoomA)?.Name ?? "밖"}{(d.Openness > 0.5f ? "열림" : "닫힘")}{(d.Locked ? "잠김" : "")}"))
+                + " · 안에 " + string.Join(", ", inside.Select(c => $"{c.Name}({c.Pose} {c.Job?.Label ?? "-"} 몸 산소 {c.Vitals.Oxygen:0.00})")));
+        }
     }
 
     /// <summary>v23 긴 항해 진단 (SHIPDIAG=1, 닷새마다): 안 고쳐지는 고장 · 막힌 일 · 부품 · 사람 · 끼니.</summary>

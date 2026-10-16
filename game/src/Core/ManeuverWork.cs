@@ -109,6 +109,8 @@ public sealed partial class ManeuverSystem
     {
         var w = _w;
         if (Active || c.IsChild || c.Room is not Room here) return (AfterKind.None, 0f, "", -1);
+        // 기동 뒤 뒷정리는 급하지 않은 일 — 공기가 새거나 숨 쉬기 어려운 방에서는 하지 않는다 (먼저 피한다 · 제비호: 새는 별채에서 넘어진 히터를 세웠다)
+        if (WorkPlanners.Hostile(here)) return (AfterKind.None, 0f, "", -1);
         // 데우는 냄비 지키기 (조리사)
         foreach (var x in Warming)
             if (x.Cook == c.Id && !x.Stopped && x.Plate < 0 && !Clamped.Contains(x.Stove))
@@ -125,6 +127,7 @@ public sealed partial class ManeuverSystem
             {
                 if (s.ClaimedBy >= 0 || w.Body.Mark(s.At, CellMark.Glass) < 0.2f) continue;
                 var r = w.Ship.RoomAt(s.At);
+                if (r != null && WorkPlanners.Hostile(r)) continue;
                 bool near = r == here || r != null && here.Doors.Any(d => d.RoomA == r || d.RoomB == r);
                 if (!near && !ate) continue;
                 float sc = ate && near ? 0.95f : Life.Has(c, Habit.NeatFreak) ? 0.5f : w.Tick - s.Tick > SimTime.Hours(2) ? 0.35f : 0f;
@@ -149,7 +152,7 @@ public sealed partial class ManeuverSystem
         // 걸쇠 · 끈 점검 (손재주 있는 사람)
         if (CheckRooms.Count > 0 && c.SkillLevel(Skill.Mechanics) >= 0.35f)
             foreach (var rid in CheckRooms)
-                if (!Claimed(9, rid, c) && rid < w.Ship.Rooms.Count && !w.Ship.Rooms[rid].Detached && dist.Reachable(w.Ship.Rooms[rid].Cells[0]))
+                if (!Claimed(9, rid, c) && rid < w.Ship.Rooms.Count && !w.Ship.Rooms[rid].Detached && !WorkPlanners.Hostile(w.Ship.Rooms[rid]) && dist.Reachable(w.Ship.Rooms[rid].Cells[0]))
                     return (AfterKind.Check, 0.5f + 0.1f * c.Traits.Diligence, $"{w.Ship.Rooms[rid].Name} 걸쇠 · 끈 점검", rid);
         // 관행: 쓰고 난 선반은 걸쇠를 건다
         if (w.Culture.Follows(c, CustomKind.StowAway) && !Life.Has(c, Habit.Messy))
@@ -194,9 +197,11 @@ public sealed class ManeuverActivity : Activity
         var ms = w.Maneuver;
         if (ms.Down(c) is Tumble t)
         {
+            // 공기가 새거나 숨 쉬기 어려운 방이면 주저앉아 있지 않고 곧바로 일어나 피한다 (제비호: 불시착으로 갈라진 별채에서 2분 반을 앉아 있었다)
+            bool flee = c.Room is Room fr && WorkPlanners.Hostile(fr);
             var up = new List<Toil>
             {
-                new WaitToil(SimTime.Minutes(t.Hurt ? 2.5f : 1.2f), Pose.Sitting, c.Position - t.Dir),
+                new WaitToil(flee ? SimTime.Minutes(0.15f) : SimTime.Minutes(t.Hurt ? 2.5f : 1.2f), Pose.Sitting, c.Position - t.Dir),
                 new DoToil((cm, world) => { t.Up = true; return true; }),
             };
             return new Job(this, t.FromBed ? "바닥에서 일어난다" : "주저앉았다 일어난다", up) { InterruptMargin = 0.9f, OnFinished = (cm, world, _) => t.Up = true };

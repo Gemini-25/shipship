@@ -231,7 +231,8 @@ public sealed class CommandSystem
         needs = needs.OrderBy(n => n.kind).ThenByDescending(n => n.urgency).ToList();
 
         // 2) 쓸 수 있는 사람
-        var free = w.Crew.Where(c => c.CanAct && !c.IsChild && !c.Outside && !Resting(c) && c.Vitals.Injury < 0.5f && !w.Society.Suspended(c)).ToList();
+        var free = w.Crew.Where(c => c.CanAct && !c.IsChild && !c.Outside && !Resting(c) && c.Vitals.Injury < 0.5f && !w.Society.Suspended(c)
+                                     && w.Casualty.Of(c) == null).ToList(); // 막 다쳐 피를 흘리거나 덴 사람은 조에 넣지 않는다 (제비호: 불시착으로 다친 사람을 봉합조로)
         if (!ComputerCommands && Commander != null) free.Remove(Commander); // 사람 지휘자는 지휘에 매인다 (작은 배면 같이 뛴다)
         if (free.Count <= 2 && Commander != null && !ComputerCommands) free.Add(Commander);
         int risk = w.Policies["risktaking"]; // 0 신중(위험한 방은 2인 1조) · 1 보통(숨 쉴 수 없는 방만) · 2 과감(혼자)
@@ -247,7 +248,8 @@ public sealed class CommandSystem
                 float s = c.SkillLevel(sk) + (CrewRoles.Owns(c.Role, new WorkOrder { Kind = n.kind == TeamKind.Fire ? WorkKind.Extinguish : n.kind == TeamKind.Power ? WorkKind.ResetBreaker : WorkKind.Rescue, Skill = sk }) ? 0.15f : 0f)
                           - d / 80f - 0.4f * MathF.Max(0f, 0.35f - c.Needs.Rest) + 0.1f * c.Traits.Bravery * (n.hazard ? 1f : 0f)
                           - (c.IsAwake ? 0f : 0.6f) // v13.2 깨어 있는 사람부터 (자는 사람은 깨워야 온다)
-                          + w.CrisisCrew.TeamFit(c, n.kind); // v16.21 비상 배치표에 그 자리로 적힌 사람
+                          + w.CrisisCrew.TeamFit(c, n.kind) // v16.21 비상 배치표에 그 자리로 적힌 사람
+                          - (n.hazard && c.Room == n.room && c.Suit == null ? 1f : 0f); // 그 위험한 방 안에 맨몸으로 있는 사람은 먼저 피해야 한다 (가깝다고 뽑지 않는다)
                 // 솜씨 없는 지휘자는 가끔 엉뚱한 사람을 보낸다
                 return s + _rng.Range(-0.3f, 0.3f) * (1f - skill);
             }

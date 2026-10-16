@@ -54,7 +54,9 @@ public static class Wounds
         if (Has("유독", "연기", "가스", "질식")) return (BodyPart.Lungs, WoundKind.Toxic);
         if (Has("방사선")) return (BodyPart.Chest, WoundKind.Radiation);
         if (Has("감전", "누전")) return (h % 2 == 0 ? BodyPart.RightArm : BodyPart.LeftArm, WoundKind.Burn);
-        if (Has("화상", "불", "화재", "증기", "열")) return (h % 3 == 0 ? BodyPart.Chest : h % 3 == 1 ? BodyPart.RightArm : BodyPart.LeftArm, WoundKind.Burn);
+        // 충격 · 추락 · 넘어짐 · 빠짐은 불보다 먼저 본다 — '불시착 충격'의 '불', '열린 점검 뚜껑'의 '열'이 화상으로 잡혀 "넓게 데었다"가 되었다
+        if (Has("불시착", "추락", "충격", "빠졌")) return (h % 2 == 0 ? Limb() : BodyPart.RightArm, amount > 0.2f ? WoundKind.Fracture : WoundKind.Cut);
+        if (Has("화상", "화재", "증기", "열기", "불길", "불꽃", "불이", "불에")) return (h % 3 == 0 ? BodyPart.Chest : h % 3 == 1 ? BodyPart.RightArm : BodyPart.LeftArm, WoundKind.Burn);
         if (Has("폭발", "파편", "운석", "충돌")) return h % 7 == 0 ? (BodyPart.Head, WoundKind.Cut) : (Limb(), amount > 0.3f ? WoundKind.Fracture : WoundKind.Cut);
         if (Has("끼임", "짓눌", "무너", "구조물")) return (Limb(), WoundKind.Crush);
         if (Has("작업", "넘어", "떨어")) return (h % 2 == 0 ? Limb() : BodyPart.RightArm, amount > 0.2f ? WoundKind.Fracture : WoundKind.Cut);

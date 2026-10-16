@@ -35,6 +35,42 @@ public static partial class Program
                 $"바이트 {(at < 0 ? "같음" : $"@{at} 다름")} · {(split < 0 ? "30분 내내 같음" : $"틱 {split}에 갈라짐")} ({raw0.Length / 1024}KB)");
         }
 
+        // ── 상처 분류: 원인 글의 낱말로 고른다 — '불시착'의 '불' · '열린 뚜껑'의 '열'은 화상이 아니다 (제비호: 불시착으로 다친 사람이 "넓게 데었다") ──
+        if (Do("wound"))
+        {
+            WoundKind? K(string cause) => Wounds.Classify(cause, 0.3f, 0)?.kind;
+            var wrong = new[] { "불시착 충격", "열린 점검 뚜껑에 발이 빠졌다" }.Where(x => K(x) == WoundKind.Burn).ToList();
+            var missed = new[] { "불길에 덴 화상", "배기 불꽃 열기", "불이 옮겨붙은 화상", "자다가 불에 덴 화상", "화학 화상" }.Where(x => K(x) != WoundKind.Burn).ToList();
+            Check("상처 분류 — 불시착 · 열린 뚜껑은 화상이 아니고, 불길 · 불꽃 · 열기는 화상", wrong.Count == 0 && missed.Count == 0,
+                $"화상으로 잘못 {wrong.Count} ({string.Join(", ", wrong)}) · 화상 놓침 {missed.Count} ({string.Join(", ", missed)})");
+        }
+
+        // ── 위험한 방: 넘어진 사람은 주저앉아 있지 않고 곧바로 일어나며, 기동 뒤 뒷정리는 그 방에서 하지 않는다 (제비호: 갈라진 별채에서 2분 반 앉았다가 히터를 세웠다) ──
+        if (Do("hostile"))
+        {
+            var w = World.CreateDefault(seed, 0, "Kestrel");
+            Run(w, SimTime.Minutes(10));
+            var c = w.Crew.First(x => !x.Dead && x.IsAwake && x.Room is Room rr && rr.Cells.Count(w.Ship.IsOpenFloor) > 4);
+            var r = c.Room!;
+            void Thin() { r.Air.O2 = 2f; r.Air.N2 = 9f; r.Air.CO2 = 0f; } // 11kPa — 숨 쉴 수 없다
+            var spot = r.Cells.Where(x => w.Ship.IsOpenFloor(x) && x != c.Cell).OrderBy(x => (x.Center - c.Position).LengthSquared()).First();
+            w.Maneuver.Fallen.Add(new FallenThing { Id = 990001, Kind = default, At = spot, RoomId = r.Id, Tick = w.Tick });
+            var dist = w.Paths.Flood(c.Cell, c.PathProfile);
+            var calm = w.Maneuver.PickAfter(c, dist).kind;
+            Thin();
+            var bad = w.Maneuver.PickAfter(c, dist).kind;
+            w.Maneuver.Fallen.Clear();
+            // 넘어진 채로: 숨 쉴 수 없는 방이면 곧바로 일어난다
+            var t = new Tumble { Crew = c.Id, Tick = w.Tick, At = c.Position, Dir = new System.Numerics.Vector2(1f, 0f), Hurt = true };
+            w.Maneuver.Tumbles.Add(t);
+            c.NextThinkTick = w.Tick;
+            long t0 = w.Tick;
+            while (!t.Up && w.Tick - t0 < SimTime.Minutes(2)) { Thin(); w.Step(); }
+            float upMin = (w.Tick - t0) / (float)SimTime.Minutes(1);
+            Check("위험한 방 — 넘어진 사람은 곧바로 일어나고 (1분 안), 뒷정리는 그 방에서 하지 않는다", calm == AfterKind.Pickup && bad == AfterKind.None && t.Up && upMin < 1f,
+                $"공기 멀쩡: {calm} · 11kPa: {bad} · 일어나기까지 {upMin:0.0}분{(t.Up ? "" : " (2분이 지나도 앉아 있다)")}");
+        }
+
         // ── 결정론: 같은 시드 두 배는 같은 역사 ──
         if (Do("det"))
         {
