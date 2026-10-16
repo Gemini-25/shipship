@@ -111,16 +111,17 @@ def main():
         else:
             new.append((name, line))
             cur = [judge(rfiles.get(f'{name}.s{s}'))[0] for s in (11, 23)]
-            base = [judge(rfiles.get(f'{name}.b{s}'))[0] for s in (11, 23)]
+            # 기준 커밋 결과 — 이름을 'base'로 쓰면 기준 실패 목록을 덮어써, 첫 새 실패 뒤의 원래 실패가 모두 새 실패로 잡혔다 (실행 #14)
+            was = [judge(rfiles.get(f'{name}.b{s}'))[0] for s in (11, 23)]
             if any(s == '없음' for s in cur):
                 continue
             bad = lambda s: s in ('실패', '멈춤')
             if not any(bad(c) for c in cur):
-                lucky.append((name, cur, base))
-            elif all(b == '없음' for b in base) or any(bad(c) and not bad(b) for c, b in zip(cur, base)):
-                investigate.append((name, cur, base))  # 기준은 그 시드에서 통과 · 지금은 실패 (또는 기준을 못 돌렸다)
+                lucky.append((name, cur, was))
+            elif all(b == '없음' for b in was) or any(bad(c) and not bad(b) for c, b in zip(cur, was)):
+                investigate.append((name, cur, was))  # 기준은 그 시드에서 통과 · 지금은 실패 (또는 기준을 못 돌렸다)
             else:
-                seedish.append((name, cur, base))  # 지금 실패한 시드에서 기준도 실패 — 시드 7에 맞춘 장면
+                seedish.append((name, cur, was))  # 지금 실패한 시드에서 기준도 실패 — 시드 7에 맞춘 장면
 
     if a.plan:
         # 조각마다 지금 코드 · 기준 커밋 × 시드 둘 = 4개를 동시에 돌린다 — 오래 걸리는 것부터 가장 가벼운 조각에
