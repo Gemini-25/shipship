@@ -66,7 +66,8 @@ public sealed class Director
         FactKind.Repaired => 10, FactKind.ComputerSeal => 18, FactKind.ComputerAlarm => 10, FactKind.DebrisNear => 15, FactKind.Impact => 12,
         FactKind.StorySeed => 6, FactKind.Hurt => 12, FactKind.Fled => 10, FactKind.DoorSealed => 6, FactKind.Warned => 5, FactKind.Noticed => 4,
         FactKind.MachineFail => 12, FactKind.Short => 15, FactKind.BreakerTrip => 5, FactKind.Flare => 20, FactKind.WallCrack => 15,
-        FactKind.Woke => 2, FactKind.ComputerAssign => 4, FactKind.Sick => 8, _ => 1,
+        FactKind.Woke => 2, FactKind.ComputerAssign => 4, FactKind.Sick => 8,
+        FactKind.Relationship => 12, FactKind.Grieved => 30, FactKind.TrustLost => 25, _ => 1,
     };
 
     private static bool Critical(FactKind k) => k is FactKind.Died or FactKind.Collapsed or FactKind.WallBreach or FactKind.DoorBlown or FactKind.Panicked;
@@ -228,7 +229,8 @@ public sealed class Director
     private static string TitleOf(Sim sim, in Fact f)
     {
         var mind = sim.Find<Mind>();
-        string who = f.Actor >= 0 && mind != null && f.Actor < mind.Agents.Count ? Ko.I(mind.NameOf(f.Actor)) + " " : "";
+        int actor = f.Kind is FactKind.Died or FactKind.Collapsed or FactKind.Hurt && mind != null ? mind.AgentOfBody(f.Actor) : f.Actor; // 생명의 사실은 몸 번호
+        string who = actor >= 0 && mind != null && actor < mind.Agents.Count ? Ko.I(mind.NameOf(actor)) + " " : "";
         string story = f.Cause != 0 ? sim.Causes.Story(f.Cause) : "";
         return story.Length > 0 ? story : who + FactText(f.Kind);
     }

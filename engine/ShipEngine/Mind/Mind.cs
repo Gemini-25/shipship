@@ -23,6 +23,7 @@ public sealed partial class Mind : IEngine
     private Life? _life;
     private Network? _net;
     private Structure? _st;
+    private Society? _soc;
     private Chemistry? _chem;
     private Sound? _snd;
     private Light? _light;
@@ -282,7 +283,7 @@ public sealed partial class Mind : IEngine
     private void Bind(Sim sim)
     {
         _life ??= sim.Find<Life>(); _net ??= sim.Find<Network>(); _st ??= sim.Find<Structure>();
-        _chem ??= sim.Find<Chemistry>(); _snd ??= sim.Find<Sound>(); _light ??= sim.Find<Light>();
+        _chem ??= sim.Find<Chemistry>(); _snd ??= sim.Find<Sound>(); _light ??= sim.Find<Light>(); _soc ??= sim.Find<Society>();
     }
 
     public void Step(Sim sim, double dt)
@@ -442,7 +443,7 @@ public sealed partial class Mind : IEngine
         foreach (var a in Agents) if (a.IsPerson) _bodyAgent[a.C.Body] = a.Id;
     }
 
-    private int AgentOfBody(int body) => body >= 0 && body < _bodyAgent.Length ? _bodyAgent[body] : -1;
+    public int AgentOfBody(int body) => body >= 0 && body < _bodyAgent.Length ? _bodyAgent[body] : -1;
 
     // ───────────────────────── 일감 표시 ─────────────────────────
 

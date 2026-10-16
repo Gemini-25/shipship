@@ -28,6 +28,7 @@ public sealed partial class Mind
         if (src is BeliefSource.Told or BeliefSource.Screen)
             foreach (var d in a.Doubts)
                 if (d.Kind == kind && d.Until > tick && Dist(d.Cell, cell) <= 4) { conf *= 0.2f; break; } // 가 봤는데 없었다
+        if (src == BeliefSource.Screen && _soc != null && a.IsPerson) conf *= 0.3f + 0.7f * _soc.Trust(a.Id); // 주컴퓨터를 믿는 만큼만 (⑨)
         if (conf <= 0.02f) return false;
         var list = a.Beliefs;
         for (int i = 0; i < list.Count; i++)

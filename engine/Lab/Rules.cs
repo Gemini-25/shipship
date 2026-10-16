@@ -499,5 +499,6 @@ public static partial class Program
         MindRules();
         ComputerRules();
         StoryRules();
+        SocietyRules();
     }
 }

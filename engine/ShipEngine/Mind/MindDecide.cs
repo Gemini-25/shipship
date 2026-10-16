@@ -106,9 +106,10 @@ public sealed partial class Mind
             // 욕구는 어느 만큼 차야 움직인다 (배가 조금 고프다고 바로 먹으러 가지 않는다)
             if (c.Hunger > 0.55f) Add(GoalKind.Eat, -1, -1, c.Hunger * c.Hunger * 5 + (F.Ppm(T.gAroma, here) > 5 ? 0.5f : 0));
             if (c.Thirst > 0.3f) Add(GoalKind.Drink, -1, -1, c.Thirst * c.Thirst * 6);
-            if (InWindow(hour, c.ShiftHour, 8) && c.Station >= 0) Add(GoalKind.Work, c.Station, L.Furniture[c.Station].Cells[0], 1.2f + c.Diligent);
+            float grief = _soc?.GriefOf(a.Id) ?? 0; // ⑨ 슬픔: 일손을 놓고 사람을 찾는다
+            if (InWindow(hour, c.ShiftHour, 8) && c.Station >= 0) Add(GoalKind.Work, c.Station, L.Furniture[c.Station].Cells[0], (1.2f + c.Diligent) * (1 - 0.7f * grief));
             if (c.Bored > 0.3f) Add(GoalKind.Relax, -1, -1, c.Bored * 1.5f);
-            if (c.Lonely > 0.3f) Add(GoalKind.Socialize, -1, -1, c.Lonely * (0.5f + c.Sociable) * 1.5f);
+            if (c.Lonely > 0.3f || grief > 0.3f) Add(GoalKind.Socialize, -1, -1, Math.Max(c.Lonely, grief) * (0.5f + c.Sociable) * 1.5f + grief);
             Add(GoalKind.Idle, -1, here, 0.3f);
         }
         else
@@ -160,7 +161,8 @@ public sealed partial class Mind
                 }
                 case BeliefKind.Injured when !drone && (b.Src is BeliefSource.Told or BeliefSource.Heard || !SafeAt(b.Cell)):
                 {
-                    float s = person ? b.Conf * (1 + c.Kindness + c.SkMedic) * 2.2f * caution : b.Conf * 5.5f;
+                    float bond = person && _soc != null ? Math.Max(0, _soc.BondOf(a.Id, AgentOfBody(b.Subject))) : 0; // ⑨ 친구는 더 무릅쓰고 구한다
+                    float s = person ? b.Conf * (1 + c.Kindness + c.SkMedic + 2 * bond) * 2.2f * (caution + bond * (1 - caution)) : b.Conf * 5.5f;
                     Add(GoalKind.Rescue, b.Subject, b.Cell, s * df * ClaimFactor(a, GoalKind.Rescue, b.Subject, 1), b.Cause);
                     break;
                 }
@@ -501,6 +503,15 @@ public sealed partial class Mind
         return best;
     }
 
+    /// <summary>그 방에 있는 이들에 대한 정의 합 (⑨ — 친구가 있는 곳으로 간다).</summary>
+    private float FriendsIn(Agent a, int room)
+    {
+        if (_soc == null) return 0;
+        float s = 0;
+        foreach (var o in Agents) if (o != a && o.IsPerson && o.C.Up != 0 && RoomOf(o.C.Cell) == room) s += Math.Max(0, _soc.BondOf(a.Id, o.Id));
+        return s;
+    }
+
     /// <summary>사람이 가장 많이 모인 사교 방의 빈자리.</summary>
     private int BusiestSeat(Agent a)
     {
@@ -514,7 +525,7 @@ public sealed partial class Mind
             bool used = false;
             foreach (var o in Agents) if (o != a && o.C.Cell == cell) { used = true; break; }
             if (used) continue;
-            double s = count.GetValueOrDefault(L.Furniture[fu].Room) * 10 - Manhattan(a.C.Cell, cell) * 0.1;
+            double s = count.GetValueOrDefault(L.Furniture[fu].Room) * 10 + FriendsIn(a, L.Furniture[fu].Room) * 15 - Manhattan(a.C.Cell, cell) * 0.1;
             if (s > bs) { bs = s; best = cell; }
         }
         return best;

@@ -58,6 +58,9 @@ public enum FactKind : ushort
     ComputerDown,      // 주컴퓨터가 멈췄다
     // ⑫
     StorySeed,         // 이야기꾼이 원인을 심었다
+    // ⑨
+    Grieved,           // 가까운 이를 잃었다 (Actor: 남은 사람 · Other: 죽은 사람)
+    TrustLost,         // 주컴퓨터를 덜 믿게 됐다
 }
 
 public static class FactNames
@@ -76,7 +79,8 @@ public static class FactNames
         FactKind.Warned => "외쳐 알렸다", FactKind.Panicked => "공황에 빠졌다", FactKind.Fled => "몸을 피했다", FactKind.Extinguished => "불을 껐다",
         FactKind.Patched => "구멍을 막았다", FactKind.Repaired => "고쳤다", FactKind.DoorSealed => "문을 닫았다", FactKind.Woke => "잠에서 깼다",
         FactKind.ComputerAlarm => "경보", FactKind.ComputerSeal => "봉쇄", FactKind.ComputerAssign => "로봇을 보냈다", FactKind.LoadShed => "장치를 껐다",
-        FactKind.BreakerReset => "차단기를 올렸다", FactKind.ComputerDown => "주컴퓨터가 멈췄다", FactKind.StorySeed => "조짐", _ => "",
+        FactKind.BreakerReset => "차단기를 올렸다", FactKind.ComputerDown => "주컴퓨터가 멈췄다", FactKind.StorySeed => "조짐",
+        FactKind.Grieved => "슬픔", FactKind.TrustLost => "믿음이 깨졌다", _ => "",
     };
 }
 
