@@ -11,6 +11,11 @@ on:
   push:
     paths-ignore: ['**.md', 'docs/**', '**.jpg', '**.png', '**.wav', '**.ogg']
   workflow_dispatch:
+    inputs:
+      recheck:
+        description: '새 실패가 없어도 다시 볼 장면 (공백으로 나눔) — 재확인 길(기준 커밋 빌드 · 재확인 조각)을 시험할 때'
+        required: false
+        default: ''
 
 concurrency:
   group: tests-${{ github.ref }}
@@ -70,8 +75,10 @@ jobs:
         with: { pattern: 'results-*', path: results }
       - id: plan
         name: 기준과 견줘 새 실패 고르기
+        env:
+          ALSO: ${{ inputs.recheck }}
         run: |
-          python3 tools/ci/summarize.py --results results --plan recheck.json > /dev/null || true
+          python3 tools/ci/summarize.py --results results --plan recheck.json --also "$ALSO" > /dev/null || true
           echo "recheck=$(cat recheck.json)" >> "$GITHUB_OUTPUT"
           echo "다시 볼 장면: $(cat recheck.json)"
 
@@ -88,7 +95,7 @@ jobs:
           echo "sha=$(grep -oE '기준 커밋: [0-9a-f]+' tools/tests/baseline.txt | awk '{print $3}')" >> "$GITHUB_OUTPUT"
       - id: cache
         uses: actions/cache@v4
-        with: { path: build/base, key: 'headless-base-${{ steps.sha.outputs.sha }}' }
+        with: { path: build/base, key: 'headless-base-v2-${{ steps.sha.outputs.sha }}' }
       - uses: actions/setup-dotnet@v4
         if: steps.cache.outputs.cache-hit != 'true'
         with: { dotnet-version: '8.0.x' }
@@ -98,6 +105,8 @@ jobs:
           git fetch -q --depth 1 origin ${{ steps.sha.outputs.sha }}
           git checkout -q FETCH_HEAD
           dotnet build tools/Headless -c Release -o build/base
+          # 기준 커밋에 있던 시험 이름 (그 뒤에 생긴 시험은 기준과 견줄 수 없다 — 모르는 이름이면 기본 항해를 돌려 엉뚱한 결과가 난다)
+          grep -oE 'Contains\("--[a-z0-9]+"\)' tools/Headless/Program.cs | sed -E 's/.*--([a-z0-9]+).*/\1/' | sort -u > build/base/known.txt
       - uses: actions/upload-artifact@v4
         with: { name: headless-base, path: build/base, retention-days: 3 }
 
@@ -126,8 +135,9 @@ jobs:
           tools/ci/run-tests.sh some.txt recheck 1 11 .s11 &
           tools/ci/run-tests.sh some.txt recheck 1 23 .s23 &
           if [ -f build/base/Headless.dll ]; then
-            HEADLESS=$PWD/build/base/Headless.dll tools/ci/run-tests.sh some.txt recheck 1 11 .b11 &
-            HEADLESS=$PWD/build/base/Headless.dll tools/ci/run-tests.sh some.txt recheck 1 23 .b23 &
+            grep -xFf build/base/known.txt some.txt > base.txt || true   # 기준 커밋에 없던 시험은 빼고 (→ 요약에서 '조사 필요')
+            HEADLESS=$PWD/build/base/Headless.dll tools/ci/run-tests.sh base.txt recheck 1 11 .b11 &
+            HEADLESS=$PWD/build/base/Headless.dll tools/ci/run-tests.sh base.txt recheck 1 23 .b23 &
           fi
           wait
       - uses: actions/upload-artifact@v4
@@ -146,9 +156,11 @@ jobs:
         continue-on-error: true
         with: { pattern: 'recheck-*', path: recheck }
       - name: 한 장 요약
+        env:
+          ALSO: ${{ inputs.recheck }}
         run: |
           mkdir -p recheck
-          python3 tools/ci/summarize.py --results results --recheck recheck --md summary.md; rc=$?
+          python3 tools/ci/summarize.py --results results --recheck recheck --also "$ALSO" --md summary.md; rc=$?
           cat summary.md >> "$GITHUB_STEP_SUMMARY"
           exit $rc
       - uses: actions/upload-artifact@v4

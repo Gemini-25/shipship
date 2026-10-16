@@ -78,6 +78,7 @@ def main():
     ap.add_argument('--max-recheck', type=int, default=20)
     ap.add_argument('--recheck-shards', type=int, default=5)
     ap.add_argument('--times', action='store_true')
+    ap.add_argument('--also', default='', help='새 실패가 없어도 다시 볼 장면 (재확인 길 시험 · workflow_dispatch)')
     a = ap.parse_args()
 
     tiers = set(a.only.split(',')) if a.only else None
@@ -86,6 +87,7 @@ def main():
     files = find_files(a.results)
     rfiles = find_files(a.recheck) if a.recheck else {}
 
+    also = [n for n in re.split(r'[\s,]+', a.also) if n]
     red, new, known, fixed, perf, lucky, investigate, seedish = [], [], [], [], [], [], [], []
     passed = total_sec = 0
     slow = []
@@ -122,7 +124,9 @@ def main():
 
     if a.plan:
         # 조각마다 지금 코드 · 기준 커밋 × 시드 둘 = 4개를 동시에 돌린다 — 오래 걸리는 것부터 가장 가벼운 조각에
-        pick = sorted([n for n, _ in new][:a.max_recheck], key=lambda n: -secs.get(n, 60))
+        names = [n for n, _ in new][:a.max_recheck]
+        names += [n for n in also if n in secs and n not in names]
+        pick = sorted(names, key=lambda n: -secs.get(n, 60))
         k = min(a.recheck_shards, len(pick))
         groups, load = [[] for _ in range(k)], [0] * k
         for n in pick:
@@ -163,6 +167,10 @@ def main():
         out.append('\n운으로 본다 (다른 시드 둘 다 통과): ' + ', '.join(n for n, _, _ in lucky))
     if seedish:
         out.append('\n시드 탓으로 본다 (지금 실패한 시드에서 기준 커밋도 실패): ' + ', '.join(f'{n} ({seeds(c, b)})' for n, c, b in seedish))
+    asked = [n for n in also if n not in {x for x, _ in new} and any(f'{n}.{k}' in rfiles for k in ('s11', 's23', 'b11', 'b23'))]
+    if asked:
+        out.append('\n요청한 재확인 (재확인 길 시험): ' + ', '.join(
+            f"{n} ({seeds([judge(rfiles.get(f'{n}.s{s}'))[0] for s in (11, 23)], [judge(rfiles.get(f'{n}.b{s}'))[0] for s in (11, 23)])})" for n in asked))
     if fixed:
         out.append('\n기준에선 실패 · 지금 통과: ' + ', '.join(fixed))
     if perf:
