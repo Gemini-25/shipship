@@ -83,7 +83,8 @@ public sealed partial class Mind
             foreach (var v in _deciding.Avoid) if (v.Goal == g && v.Target == target) return;
             ref var c = ref _deciding.C;
             if (c.AssignedGoal == g && c.AssignedUntil > _nowTick && (c.AssignedTarget < 0 || c.AssignedTarget == target
-                || g is GoalKind.FightFire or GoalKind.Patch or GoalKind.Brace or GoalKind.Investigate && cell >= 0 && Dist(c.AssignedTarget, cell) <= 3)) score += 3; // 주컴퓨터가 맡긴 일
+                || g is GoalKind.FightFire or GoalKind.Patch or GoalKind.Brace or GoalKind.Investigate && cell >= 0 && Dist(c.AssignedTarget, cell) <= 3))
+                score += g is GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean && _deciding.IsPerson ? 1 : 3; // 주컴퓨터가 맡긴 일 (사람의 일상 일은 끼니 · 잠보다 앞서지 않게)
         }
         _opts.Add(new Option { Goal = g, Target = target, Cell = cell, Score = score, Cause = cause });
     }
@@ -111,11 +112,13 @@ public sealed partial class Mind
             if (c.Bored > 0.3f) Add(GoalKind.Relax, -1, -1, c.Bored * 1.5f);
             if (c.Lonely > 0.3f || grief > 0.3f) Add(GoalKind.Socialize, -1, -1, Math.Max(c.Lonely, grief) * (0.5f + c.Sociable) * 1.5f + grief);
             Add(GoalKind.Idle, -1, here, 0.3f);
+            JobOption(a);
         }
         else
         {
             float low = c.Battery < 0.1f ? 8 : c.Battery < 0.3f ? 4 : c.Battery < 0.95f && c.Goal == GoalKind.Charge ? 1.5f : 0.4f;
             Add(GoalKind.Charge, c.Dock, c.Dock, low);
+            if (!drone) JobOption(a);
         }
 
         float caution = person ? 1 - c.Fear * (1 - c.Brave) : 1;
@@ -388,6 +391,35 @@ public sealed partial class Mind
                 plan.Add(new PlanStep { Kind = StepKind.Brace, Cell = wall });
                 return true;
             }
+            case GoalKind.Craft:
+            {
+                int bench = o.Target;
+                plan.Add(Go(L.Furniture[bench].Cells[0], 1));
+                plan.Add(new PlanStep { Kind = StepKind.Craft, Target = bench, Arg = (byte)c.AssignedArg });
+                return true;
+            }
+            case GoalKind.Maintain:
+            {
+                if (_net == null) return false;
+                int dev = o.Target / 4, part = o.Target % 4;
+                if (a.IsPerson && c.Holding != iRepair)
+                {
+                    if (c.Holding != 255) return false;
+                    int src = NearestStock(here, iRepair);
+                    if (src < 0) return false;
+                    plan.Add(Go(L.Furniture[src].Cells[0], 1));
+                    plan.Add(new PlanStep { Kind = StepKind.Take, Target = src, Arg = iRepair });
+                }
+                plan.Add(Go(_net.Devices[dev].Cell, 1));
+                plan.Add(new PlanStep { Kind = StepKind.Maintain, Target = dev, Arg = (byte)part });
+                return true;
+            }
+            case GoalKind.Clean:
+            {
+                plan.Add(Go(o.Target, 1));
+                plan.Add(new PlanStep { Kind = StepKind.Clean, Cell = o.Target });
+                return true;
+            }
             case GoalKind.Evacuate:
             {
                 int refuge = FindRefuge(a, here, o.Target, o.Cell);
@@ -502,6 +534,20 @@ public sealed partial class Mind
             if (d < bd) { bd = d; best = cell; }
         }
         return best;
+    }
+
+    /// <summary>⑪ 일감판이 맡긴 일 (만들기 · 정비 · 청소) — 맡긴 보너스(+3)가 붙는다.</summary>
+    private void JobOption(Agent a)
+    {
+        ref var c = ref a.C;
+        if (c.AssignedUntil <= _nowTick || c.AssignedGoal is not (GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean)) return;
+        int cell = c.AssignedGoal switch
+        {
+            GoalKind.Craft => L.Furniture[c.AssignedTarget].Cells[0],
+            GoalKind.Maintain => _net != null ? _net.Devices[c.AssignedTarget / 4].Cell : -1,
+            _ => c.AssignedTarget,
+        };
+        if (cell >= 0) Add(c.AssignedGoal, c.AssignedTarget, cell, 1.2f);
     }
 
     /// <summary>그 방에 있는 이들에 대한 정의 합 (⑨ — 친구가 있는 곳으로 간다).</summary>

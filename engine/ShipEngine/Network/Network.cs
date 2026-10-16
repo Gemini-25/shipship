@@ -203,6 +203,14 @@ public sealed class Network : IEngine
         return -1;
     }
     public int FaultCause(int feeder) => _faultCause.GetValueOrDefault(feeder);
+    /// <summary>지금 낼 수 있는 전력 (kW): 돌고 있는 원자로 · 보조 발전기.</summary>
+    public double Capacity()
+    {
+        double cap = 0;
+        foreach (var d in Devices)
+            if (d.Def.Role is "reactor" or "aux" && On[d.Id] != 0 && Broken[d.Id * 4] == 0 && !(d.Def.Role == "reactor" && ReactorScram)) cap += d.Def.Gen;
+        return cap;
+    }
     public bool IsStuckFault(int f) => f >= 0 && f < Feeders.Count && FaultCell[f] >= 0 && Breaker[f] != 0 && BreakerStuck[f] != 0;
     public void SetDamper(int room, bool open) => Damper[room] = (byte)(open ? 1 : 0);
     public bool IsBroken(int device, Part p) => Broken[device * 4 + (int)p] != 0;
@@ -415,8 +423,11 @@ public sealed class Network : IEngine
     }
 
     /// <summary>장치의 일: 열 · 산소 · 이산화탄소 · 물 · 조리대 · 배터리 열폭주 · 샘.</summary>
+    private readonly List<(int cell, double kw)> _jacket = new(); // 이번 틱 냉각수 재킷으로 간 열 (틱 안에서만 — 찍지 않는다)
+
     private void Effects(Sim sim, double dt)
     {
+        _jacket.Clear();
         for (int d = 0; d < Devices.Count; d++)
         {
             var dev = Devices[d];
@@ -494,6 +505,10 @@ public sealed class Network : IEngine
                         }
                     }
                     break;
+                case "industry":
+                    // 냉각수 재킷: 열의 80%는 냉각 고리로 (모자라면 냉각에서 방으로 돌려준다)
+                    if (kw > 0) { F.AddHeat(c, kw * 0.2 * 1000 * dt); _jacket.Add((c, kw * 0.8)); }
+                    break;
                 default:
                     if (kw > 0) F.AddHeat(c, kw * 1000 * dt);
                     break;
@@ -518,6 +533,15 @@ public sealed class Network : IEngine
         CoolingKw = cap;
         // 원자로 칸: 정상 온도(330K) 위의 열을 냉각 용량까지 뺀다
         double used = 0;
+        // 공장 설비 재킷 열 (원자로 다음) — 냉각이 모자라면 남은 만큼 그 방으로
+        double jacketKw = _jacket.Sum(j => j.kw);
+        if (jacketKw > 0)
+        {
+            double take = Math.Min(jacketKw, Math.Max(0, cap - used));
+            used += take;
+            double rest = 1 - take / jacketKw;
+            if (rest > 1e-6) foreach (var (jc, jk) in _jacket) F.AddHeat(jc, jk * rest * 1000 * dt);
+        }
         foreach (var dev in Devices)
         {
             if (dev.Def.Role != "reactor") continue;

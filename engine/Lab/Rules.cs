@@ -500,5 +500,6 @@ public static partial class Program
         ComputerRules();
         StoryRules();
         SocietyRules();
+        WorkRules();
     }
 }

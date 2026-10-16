@@ -6,6 +6,8 @@
 //   speed: m/s (칸 1m) · watts: 하는 일의 대사량 (W)
 //   needs: 욕구가 0 → 1 되는 시간 (시간)
 //   halfLife: 믿음 종류마다 확신이 반으로 주는 시간 (분)
+//   recipes: ⑪ 작업대에서 만드는 것 — 설비 · 분 · 드는 것 · 배에 두려는 개수
+//   makers: ⑪ 전기를 먹고 저절로 만드는 설비 — 무엇 · 몇 시간에 하나 · 많아야
 {
   "names": [ "김하늘", "이도윤", "박서연", "최민준", "정지우", "강서준", "조하은", "윤지호", "장수아", "임건우",
              "한유진", "오시우", "서다인", "신우진", "권나연", "황도현", "안채원", "송민재", "류하린", "전태윤",
@@ -24,7 +26,8 @@
     "Workbench":     { "수리 꾸러미": 2, "봉합 꾸러미": 2 },
     "Shelf":         { "소화기": 1, "봉합 꾸러미": 1 },
     "OxygenMaskBox": { "산소 마스크": 6 },
-    "MedBed":        { "구급 상자": 1 }
+    "MedBed":        { "구급 상자": 1 },
+    "Refinery":      { "원료": 4 }
   },
   "items": {
     "소화기":      { "water": 500, "minutes": 0 },
@@ -32,7 +35,17 @@
     "봉합 꾸러미": { "minutes": 3, "maxArea": 0.05 },
     "우주복":      { "o2": 60, "minutes": 2 },
     "산소 마스크": { "o2": 20, "minutes": 0.3 },
-    "구급 상자":   { "minutes": 5 }
+    "구급 상자":   { "minutes": 5 },
+    "원료":        { "minutes": 0 }
+  },
+  "recipes": {
+    "봉합 꾸러미": { "at": "Workbench", "minutes": 20, "needs": { "원료": 1 }, "keep": 4 },
+    "수리 꾸러미": { "at": "Workbench", "minutes": 40, "needs": { "원료": 2 }, "keep": 3 },
+    "소화기":      { "at": "Workbench", "minutes": 30, "needs": { "원료": 2 }, "keep": 3 }
+  },
+  "makers": {
+    "Refinery":  { "item": "원료", "hours": 2, "max": 8 },
+    "Collector": { "item": "원료", "hours": 6, "max": 4 }
   },
   "speed":  { "walk": 1.3, "run": 3.0, "crawl": 0.6, "carry": 0.6, "robot": 1.0, "drone": 2.0 },
   "watts":  { "sleep": 70, "rest": 90, "walk": 250, "run": 700, "work": 180, "hard": 450 },

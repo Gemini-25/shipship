@@ -20,6 +20,7 @@ public static class ShipWorld
         sim.Add(new Mind(f));
         sim.Add(new Society(f.L));
         sim.Add(new ShipMind(f));
+        sim.Add(new Work(f.L, f.T));
         sim.Add(new Storyteller(f, sim.Seed));
     });
 

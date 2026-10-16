@@ -67,6 +67,8 @@ public sealed class PeopleTable
     public Dictionary<string, RoleDef> Roles = new();
     public Dictionary<string, Dictionary<string, int>> Stock = new();
     public Dictionary<string, ItemDef> Items = new();
+    public Dictionary<string, RecipeDef> Recipes = new();
+    public Dictionary<string, MakerDef> Makers = new();
     public Dictionary<string, double> Speed = new(), Watts = new(), Needs = new(), HalfLife = new();
 }
 
@@ -79,6 +81,23 @@ public sealed class RoleDef
 public sealed class ItemDef
 {
     public double Water, O2, Minutes, MaxArea;
+}
+
+/// <summary>⑪ 만들기: 어느 설비에서 · 몇 분 · 무엇이 드나 · 배에 몇 개를 두려 하나.</summary>
+public sealed class RecipeDef
+{
+    public string At = "";
+    public double Minutes;
+    public Dictionary<string, int> Needs = new();
+    public int Keep;
+}
+
+/// <summary>⑪ 저절로 만드는 설비 (전기를 먹고): 무엇을 · 몇 시간에 하나 · 많아야 몇 개.</summary>
+public sealed class MakerDef
+{
+    public string Item = "";
+    public double Hours;
+    public int Max;
 }
 
 public sealed class EquipmentDef

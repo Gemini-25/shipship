@@ -52,6 +52,9 @@ public sealed partial class Mind
             case StepKind.Spray: SprayStep(sim, a, st); return;
             case StepKind.Seal: SealStep(sim, a, st); return;
             case StepKind.Brace: BraceStep(sim, a, st); return;
+            case StepKind.Craft: CraftStep(sim, a, st); return;
+            case StepKind.Maintain: MaintainStep(sim, a, st); return;
+            case StepKind.Clean: CleanStep(sim, a, st); return;
             case StepKind.Fix: FixStep(sim, a, st); return;
             case StepKind.PickUp:
             {
@@ -281,6 +284,67 @@ public sealed partial class Mind
         sim.Facts.Emit(t, FactKind.Repaired, wall, _st.Stress[wall], cause, a.Id, -1);
         Forget(a, b => b.Kind == BeliefKind.Strain && Dist(b.Cell, wall) <= 1);
         Next(a, t);
+    }
+
+    // ───────────────────────── ⑪ 일 ─────────────────────────
+
+    private void JobDone(Agent a, long t) { a.C.AssignedUntil = t; Next(a, t); }
+
+    private void CraftStep(Sim sim, Agent a, PlanStep st)
+    {
+        ref var c = ref a.C;
+        long t = sim.Tick;
+        int bench = st.Target, item = st.Arg;
+        if (Dist(c.Cell, L.Furniture[bench].Cells[0]) > 2) { Fail(sim, a, "멀다"); return; }
+        if (!P.Recipes.TryGetValue(ItemNames[item], out var r)) { JobDone(a, t); return; }
+        Activity(a, "work");
+        double minutes = a.IsPerson ? r.Minutes * (1.5 - c.SkRepair) : r.Minutes;
+        if (t - c.StepStart < Time.Minutes(minutes)) return;
+        foreach (var (need, n) in r.Needs)
+            for (int k = 0; k < n; k++)
+                if (!TakeOne(c.Cell, ItemIndex(need))) { Fail(sim, a, "재료가 없다"); return; }
+        Stock[bench * ItemCount + item]++;
+        if (_work != null) _work.Crafted++;
+        if (a.IsPerson) c.SkRepair = Math.Min(1, c.SkRepair + 0.005f);
+        JobDone(a, t);
+    }
+
+    private void MaintainStep(Sim sim, Agent a, PlanStep st)
+    {
+        ref var c = ref a.C;
+        long t = sim.Tick;
+        int dev = st.Target, part = st.Arg;
+        if (_net == null || _net.Broken[dev * 4 + part] != 0) { JobDone(a, t); return; }
+        if (Dist(c.Cell, _net.Devices[dev].Cell) > 2) { Fail(sim, a, "멀다"); return; }
+        if (a.IsPerson && c.Holding != iRepair) { Fail(sim, a, "수리 꾸러미가 없다"); return; }
+        Activity(a, "work");
+        double minutes = a.IsPerson ? 20 * (1.6 - c.SkRepair) : 15;
+        if (t - c.StepStart < Time.Minutes(minutes)) return;
+        if (a.IsPerson) { c.Holding = 255; c.HoldCharge = 0; }
+        else if (!TakeOne(c.Cell, iRepair)) { Fail(sim, a, "갈아 끼울 부품이 없다"); return; }
+        _net.Repair(dev, (Part)part);
+        if (_work != null) _work.Maintained++;
+        int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} {_net.Devices[dev].Name}의 {Device.PartName((Part)part)} 부품을 미리 갈았다", t, _net.Devices[dev].Cell, 0, 0, a.Id);
+        sim.Facts.Emit(t, FactKind.Repaired, _net.Devices[dev].Cell, part, cause, a.Id, dev);
+        JobDone(a, t);
+    }
+
+    private void CleanStep(Sim sim, Agent a, PlanStep st)
+    {
+        ref var c = ref a.C;
+        long t = sim.Tick;
+        int cell = st.Cell;
+        if (Dist(c.Cell, cell) > 2) { Fail(sim, a, "멀다"); return; }
+        Activity(a, "work");
+        if (t - c.StepStart < Time.Minutes(10)) return;
+        if (_life != null)
+        {
+            int x0 = L.X(cell), y0 = L.Y(cell);
+            for (int y = Math.Max(0, y0 - 1); y <= Math.Min(L.H - 1, y0 + 1); y++)
+                for (int x = Math.Max(0, x0 - 1); x <= Math.Min(L.W - 1, x0 + 1); x++) _life.Mold[L.Index(x, y)] = 0;
+        }
+        if (_work != null) _work.Cleaned++;
+        JobDone(a, t);
     }
 
     private void FixStep(Sim sim, Agent a, PlanStep st)

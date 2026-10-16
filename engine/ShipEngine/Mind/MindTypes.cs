@@ -52,6 +52,9 @@ public enum GoalKind : byte
     FightFire, Rescue, Patch, Repair, Investigate, GetSuit, Charge,
     Evacuate,   // 위험한 방을 나와 문을 닫는다 (구멍 · 새는 소리 · 연기 · 불 · 이상한 공기)
     Brace,      // 끼익거리는 문 · 벽을 덧대 받친다
+    Craft,      // ⑪ 작업대에서 물건을 만든다
+    Maintain,   // ⑪ 닳은 부품을 미리 간다
+    Clean,      // ⑪ 곰팡이를 닦아 낸다
 }
 
 /// <summary>계획의 한 단계.</summary>
@@ -69,6 +72,9 @@ public enum StepKind : byte
     Wear,      // 우주복 · 마스크를 입는다 (Arg: 물건)
     Look,      // 살펴본다 (그 칸 믿음을 확인)
     Brace,     // 문 · 벽을 덧대 받친다 (Cell: 문 · 벽)
+    Craft,     // 만든다 (Target: 작업대 설비 · Arg: 물건)
+    Maintain,  // 부품을 미리 간다 (Target: 장치 · Arg: 부품)
+    Clean,     // 닦는다 (Cell)
 }
 
 /// <summary>쓰기 단계가 하는 일.</summary>
@@ -135,6 +141,7 @@ public struct AgentCore
 
     // 주컴퓨터가 맡긴 일 (그 목표 점수에 +3)
     public GoalKind AssignedGoal;
+    public int AssignedArg;     // 맡긴 일의 덧붙임 (만들 물건)
     public int AssignedTarget;
     public long AssignedUntil;
 

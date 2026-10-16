@@ -24,6 +24,7 @@ public sealed partial class Mind : IEngine
     private Network? _net;
     private Structure? _st;
     private Society? _soc;
+    private Work? _work;
     private Chemistry? _chem;
     private Sound? _snd;
     private Light? _light;
@@ -233,6 +234,34 @@ public sealed partial class Mind : IEngine
     }
 
     /// <summary>로봇 · 사람에게 일을 맡긴다: 믿음을 넣고 그 목표에 점수를 더한다 (until 틱까지).</summary>
+    /// <summary>⑪ 일감판이 일을 맡긴다 (믿음 없이).</summary>
+    public void AssignJob(int agent, GoalKind goal, int target, int arg, long until)
+    {
+        var a = Agents[agent];
+        a.C.AssignedGoal = goal; a.C.AssignedTarget = target; a.C.AssignedArg = arg; a.C.AssignedUntil = until;
+    }
+
+    public int ItemIndex(string name) => Array.IndexOf(ItemNames, name);
+
+    /// <summary>배에 있는 그 물건 수 (설비 안 + 손에 든 것).</summary>
+    public int TotalOf(int item)
+    {
+        if (item < 0) return 0;
+        int n = 0;
+        for (int fu = 0; fu < L.Furniture.Count; fu++) n += Stock[fu * ItemCount + item];
+        foreach (var a in Agents) if (a.C.Holding == item) n++;
+        return n;
+    }
+
+    /// <summary>가장 가까운 설비에서 하나 꺼내 쓴다 (없으면 거짓).</summary>
+    public bool TakeOne(int from, int item)
+    {
+        int fu = NearestStock(from, (byte)item);
+        if (fu < 0) return false;
+        Stock[fu * ItemCount + item]--;
+        return true;
+    }
+
     public void Assign(Sim sim, int agent, GoalKind goal, int target, Belief b, long until)
     {
         var a = Agents[agent];
@@ -251,7 +280,8 @@ public sealed partial class Mind : IEngine
         GoalKind.Idle => "쉬는 중", GoalKind.Flee => "몸을 피한다", GoalKind.Panic => "어쩔 줄 모른다", GoalKind.Down => "쓰러져 있다",
         GoalKind.Sleep => "잔다", GoalKind.Eat => "먹는다", GoalKind.Drink => "물을 마신다", GoalKind.Work => "일한다", GoalKind.Relax => "쉰다",
         GoalKind.Socialize => "어울린다", GoalKind.FightFire => "불을 끈다", GoalKind.Rescue => "사람을 구한다", GoalKind.Patch => "구멍을 막는다",
-        GoalKind.Repair => "고친다", GoalKind.Investigate => "살피러 간다", GoalKind.GetSuit => "우주복을 입는다", GoalKind.Charge => "충전한다", GoalKind.Evacuate => "방을 빠져나간다", GoalKind.Brace => "버티는 문을 받친다", _ => "",
+        GoalKind.Repair => "고친다", GoalKind.Investigate => "살피러 간다", GoalKind.GetSuit => "우주복을 입는다", GoalKind.Charge => "충전한다", GoalKind.Evacuate => "방을 빠져나간다", GoalKind.Brace => "버티는 문을 받친다",
+        GoalKind.Craft => "물건을 만든다", GoalKind.Maintain => "부품을 미리 간다", GoalKind.Clean => "곰팡이를 닦는다", _ => "",
     };
 
     public static string BeliefName(BeliefKind k) => k switch
@@ -272,7 +302,7 @@ public sealed partial class Mind : IEngine
             var st = a.Plan[a.C.StepIndex];
             string step = st.Kind switch
             {
-                StepKind.GoTo => "가는 중", StepKind.Take => $"{ItemNames[st.Arg]} 꺼내는 중", StepKind.Spray => "물을 뿌리는 중", StepKind.Seal => "막는 중", StepKind.Brace => "덧대는 중",
+                StepKind.GoTo => "가는 중", StepKind.Take => $"{ItemNames[st.Arg]} 꺼내는 중", StepKind.Spray => "물을 뿌리는 중", StepKind.Seal => "막는 중", StepKind.Brace => "덧대는 중", StepKind.Craft => "만드는 중", StepKind.Maintain => "가는 중(정비)", StepKind.Clean => "닦는 중",
                 StepKind.Fix => "고치는 중", StepKind.PickUp => "업는 중", StepKind.Drop => "내려놓는 중", StepKind.Wear => "입는 중", StepKind.Look => "살펴보는 중", _ => "",
             };
             if (step.Length > 0) s += " — " + step;
@@ -285,7 +315,7 @@ public sealed partial class Mind : IEngine
     private void Bind(Sim sim)
     {
         _life ??= sim.Find<Life>(); _net ??= sim.Find<Network>(); _st ??= sim.Find<Structure>();
-        _chem ??= sim.Find<Chemistry>(); _snd ??= sim.Find<Sound>(); _light ??= sim.Find<Light>(); _soc ??= sim.Find<Society>();
+        _chem ??= sim.Find<Chemistry>(); _snd ??= sim.Find<Sound>(); _light ??= sim.Find<Light>(); _soc ??= sim.Find<Society>(); _work ??= sim.Find<Work>();
     }
 
     public void Step(Sim sim, double dt)
