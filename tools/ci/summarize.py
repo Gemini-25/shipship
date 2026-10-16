@@ -7,7 +7,8 @@
   · 줄 맨 앞의 ✘ 가 실패한 확인 — '성능' 줄은 따로 센다 (동시에 돌리면 흔들린다)
   · rule(규칙) · core(핵심) 실패나 멈춤/예외 → 빨강 (막음 · 바로 조사)
   · scene(장면) 실패는 기준(baseline.txt)과 견준다 — 기준에서도 실패면 '원래 실패', 아니면 '새 실패'
-    새 실패는 다른 시드 둘(11 · 23)로 다시 돌려 거기서도 실패하면 '조사 필요', 둘 다 통과면 '운'
+    새 실패는 다른 시드 둘(11 · 23)로 지금 코드와 기준 커밋을 함께 다시 돌린다:
+      그 시드에서 기준은 통과 · 지금은 실패 → '조사 필요' · 지금 둘 다 통과 → '운' · 기준도 같은 시드에서 실패 → '시드 탓'
 종료 코드: 빨강이 하나라도 있으면 1."""
 import argparse, json, os, re, sys
 
@@ -81,7 +82,7 @@ def main():
     files = find_files(a.results)
     rfiles = find_files(a.recheck) if a.recheck else {}
 
-    red, new, known, fixed, perf, lucky, investigate = [], [], [], [], [], [], []
+    red, new, known, fixed, perf, lucky, investigate, seedish = [], [], [], [], [], [], [], []
     passed = total_sec = 0
     slow = []
     for name, tier, _ in tests:
@@ -101,29 +102,41 @@ def main():
             known.append((name, line))
         else:
             new.append((name, line))
-            seeds = [judge(rfiles.get(f'{name}.s{s}'))[0] for s in (11, 23)]
-            if any(s == '없음' for s in seeds):
+            cur = [judge(rfiles.get(f'{name}.s{s}'))[0] for s in (11, 23)]
+            base = [judge(rfiles.get(f'{name}.b{s}'))[0] for s in (11, 23)]
+            if any(s == '없음' for s in cur):
                 continue
-            (investigate if any(s in ('실패', '멈춤') for s in seeds) else lucky).append((name, seeds))
+            bad = lambda s: s in ('실패', '멈춤')
+            if not any(bad(c) for c in cur):
+                lucky.append((name, cur, base))
+            elif all(b == '없음' for b in base) or any(bad(c) and not bad(b) for c, b in zip(cur, base)):
+                investigate.append((name, cur, base))  # 기준은 그 시드에서 통과 · 지금은 실패 (또는 기준을 못 돌렸다)
+            else:
+                seedish.append((name, cur, base))  # 지금 실패한 시드에서 기준도 실패 — 시드 7에 맞춘 장면
 
     if a.plan:
         json.dump([n for n, _ in new][:a.max_recheck], open(a.plan, 'w'))
 
     out = []
+    def seeds(c, b):
+        return ' · '.join(f'시드 {sd}: 지금 {x}' + (f' / 기준 {y}' if y != '없음' else '') for sd, x, y in zip((11, 23), c, b))
+
     head = '🔴' if red else ('🟡' if investigate else '🟢')
-    out.append(f'## {head} 시험 {passed}/{len(tests)} 통과 · 빨강 {len(red)} · 새 실패 {len(new)} (조사 필요 {len(investigate)} · 운 {len(lucky)}) · 원래 실패 {len(known)} · 기준보다 나아짐 {len(fixed)}')
+    out.append(f'## {head} 시험 {passed}/{len(tests)} 통과 · 빨강 {len(red)} · 새 실패 {len(new)} (조사 필요 {len(investigate)} · 운 {len(lucky)} · 시드 탓 {len(seedish)}) · 원래 실패 {len(known)} · 기준보다 나아짐 {len(fixed)}')
     out.append(f'시험 시간 합 {total_sec // 60}분 · 오래 걸린 것: ' + ', '.join(f'{n} {s}초' for s, n in sorted(slow, reverse=True)[:5]))
     if red:
         out.append('\n### 🔴 막음 — 규칙 · 핵심 실패 또는 멈춤 (진짜 버그)')
         out += [f'- **{n}** ({t} · {st}) — {short(l)}' for n, t, st, l in red]
     if investigate:
-        out.append('\n### 🟡 조사 필요 — 기준에선 통과 · 지금 실패 · 다른 시드에서도 실패')
-        out += [f'- **{n}** — 시드 11: {s[0]} · 23: {s[1]}' for n, s in investigate]
+        out.append('\n### 🟡 조사 필요 — 기준에선 통과 · 지금 실패 · 다른 시드에서도 (기준은 통과하는데) 실패')
+        out += [f'- **{n}** — {seeds(c, b)}' for n, c, b in investigate]
     if new:
         out.append('\n### 새 실패 (기준 대비)')
         out += [f'- {n} — {short(l)}' for n, l in new]
     if lucky:
-        out.append('\n운으로 본다 (다른 시드 둘 다 통과): ' + ', '.join(n for n, _ in lucky))
+        out.append('\n운으로 본다 (다른 시드 둘 다 통과): ' + ', '.join(n for n, _, _ in lucky))
+    if seedish:
+        out.append('\n시드 탓으로 본다 (지금 실패한 시드에서 기준 커밋도 실패): ' + ', '.join(f'{n} ({seeds(c, b)})' for n, c, b in seedish))
     if fixed:
         out.append('\n기준에선 실패 · 지금 통과: ' + ', '.join(fixed))
     if perf:
