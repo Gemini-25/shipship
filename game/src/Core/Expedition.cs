@@ -239,7 +239,9 @@ public sealed class ExpeditionSystem
         float s = Stock(cat);
         return cat switch
         {
-            MatCat.Repair => s < 4f || _w.Mats.Starved() != null && _w.Mats.AskExpedition(), // 원료가 이틀 넘게 바닥이면 (드론 · 채집으로 못 메우면) 원정을 꺼낸다
+            // 원료가 이틀 넘게 바닥이고 (드론 · 채집으로 못 메우고) 수리재도 넉넉하지 않으면 원정을 꺼낸다
+            //   (수리재가 114개나 있는데 탄소 하나가 바닥이라고 깊은 공허 한가운데서 원정을 보내 배가 이틀을 멈춰 섰다)
+            MatCat.Repair => s < 4f || s < 10f + 3f * Alive && _w.Mats.Starved() != null && _w.Mats.AskExpedition(),
             MatCat.Structure => s < 1f,
             MatCat.Parts => s < 2f,
             MatCat.Fuel => s < 30f,

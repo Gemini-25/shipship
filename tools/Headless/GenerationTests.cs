@@ -62,9 +62,17 @@ public static partial class Program
             PlanetSystem.Off = true;
             GenerationSystem.QuietOff = false;
             Run(q, SimTime.TicksPerDay * 12 + SimTime.Hours(1));
+            q.Policies.Set("expedition", 2, "시험"); // 조용한 구간 — 증축 자재가 모자라 원정이 나가면 배가 이틀을 멈춰 서서 '한가운데'가 오지 않는다 (그건 원정 장면)
             q.Voyage.Force(LegKind.DeepVoid, enter: false, days: 4f);
             int spans0 = q.Generation.Spans.Count;
-            for (int h = 0; h < 72 && q.Generation.Spans.Count == spans0; h++) Run(q, SimTime.Hours(1));
+            for (int h = 0; h < 72 && q.Generation.Spans.Count == spans0; h++)
+            {
+                Run(q, SimTime.Hours(1));
+                if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "quiet" && h % 3 == 0)
+                    Console.WriteLine($"      [조용] {h}h 구간 {q.Voyage.Current.Kind} {q.Voyage.Progress:0.00}/{q.Voyage.Current.Days:0.0} · 지휘 건 {q.Commander.Cases.Count(k => k.Open)} · 우주 {q.Cosmic.Main != null} · 원정 {q.Expedition.Current?.Site?.Name} · 새는 방 {q.Ship.LiveRooms.Count(r => r.Leaking)} · 불 {q.Ship.LiveRooms.Count(r => q.Fire.CountIn(r) > 0)} · 체력 최저 {q.Crew.Where(c => !c.Dead && !c.LeftShip).Select(c => c.Vitals.Health).DefaultIfEmpty(1f).Min():0.00} · 건 {string.Join(",", q.Commander.Cases.Where(k => k.Open).Select(k => k.Kind))} · 모자람 {string.Join(",", ExpeditionSystem.Cats.Where(c => q.Expedition.Low(c)))} · 추진제 {q.Propulsion.Propellant:0}/{q.Propulsion.Capacity:0} · 물 {q.Water.Level:0} · 얼음 {q.Ship.CountStored(ItemKind.Ice)} · 전력 {q.Power.Demand:0}/{q.Power.ReactorRated:0}kW 보조 {q.Power.AuxRunning} · 공조 {q.Air.HvacElectricKw:0.0}kW 난방 {q.Air.HeatingKw:0}kW · 제안 {string.Join(" / ", q.Expedition.Proposals.TakeLast(2).Select(pp => $"{pp.Source} · {pp.Why} · {pp.For} · {pp.State} · {pp.DecidedBy}"))}");
+            }
+            if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "quiet")
+                foreach (var e in q.Log.Entries.Where(e => e.Text.Contains("원정") || e.Text.Contains("안건")).TakeLast(12)) Console.WriteLine($"      [원정 기록] {SimTime.Clock(e.Tick)} {e.Text}");
             var auto = q.Generation.Spans.LastOrDefault();
             Check("조용한 긴 구간 한가운데에서 저절로 몇 달을 넘긴다", q.Generation.Spans.Count > spans0 && auto != null && auto.Months >= 2 && q.Log.Entries.Any(e => e.Text.StartsWith("조용한")),
                 auto == null ? "넘기지 않음" : $"{auto.Leg} · {auto.Months}달 · 배의 달력 {q.Generation.Calendar} · {q.Log.Entries.Last(e => e.Text.StartsWith("조용한")).Text}");
