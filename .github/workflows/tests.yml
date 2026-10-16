@@ -1,0 +1,177 @@
+# 전체 시험 — 푸시마다 자동 (docs/DEV_PROCESS.md)
+#   빌드 한 번 → 10조각으로 나눠 동시에 (조각마다 4개씩 — 러너 CPU 4개 · growthtest는 안에서 자식 프로세스로 더 나눈다 ·
+#   공개 저장소는 작업을 동시에 20개까지 — 이 가지는 한 번에 한 실행만 돌아 10조각도 줄 서지 않는다) → 기준(tools/tests/baseline.txt)과 견줌
+#   → 기준에선 통과하던 장면이 실패하면 다른 시드 둘(11 · 23)로 지금 코드 · 기준 커밋을 함께 다시 → 한 장 요약 (작업 요약 · summary 아티팩트)
+#   빨강(규칙 · 핵심 실패 · 멈춤)이 있을 때만 실패로 끝난다. 장면 시험은 막지 않는다.
+#   러너는 ubuntu-24.04로 고정 (ubuntu-latest가 26으로 바뀌어도 걸리는 시간 · 결과가 흔들리지 않게).
+#   같은 가지에 잇달아 푸시하면 도는 것은 끝까지 돌고, 기다리던 것은 가장 새 커밋 하나만 남는다 (줄이 쌓이지 않게).
+name: tests
+
+on:
+  push:
+    paths-ignore: ['**.md', 'docs/**', '**.jpg', '**.png', '**.wav', '**.ogg']
+  workflow_dispatch:
+    inputs:
+      recheck:
+        description: '새 실패가 없어도 다시 볼 장면 (공백으로 나눔) — 재확인 길(기준 커밋 빌드 · 재확인 조각)을 시험할 때'
+        required: false
+        default: ''
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_NOLOGO: '1'
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+  HEADLESS: ${{ github.workspace }}/build/headless/Headless.dll
+  SHIPSIM_WARM_REPORT: '1'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '8.0.x' }
+      - name: 빌드 (시험 도구)
+        run: dotnet build tools/Headless -c Release -o build/headless
+      - uses: actions/upload-artifact@v4
+        with: { name: headless, path: build/headless, retention-days: 3 }
+
+  shard:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '8.0.x' }
+      - uses: actions/download-artifact@v4
+        with: { name: headless, path: build/headless }
+      - name: 시험 (조각 ${{ matrix.shard }})
+        run: |
+          python3 tools/ci/shard.py tools/tests/tests.txt ${{ matrix.shard }} ${{ strategy.job-total }} > list.txt
+          cat list.txt | tr '\n' ' '; echo
+          tools/ci/run-tests.sh list.txt results 4 7
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: 'results-${{ matrix.shard }}', path: results, retention-days: 14 }
+
+  plan:
+    needs: shard
+    if: always()
+    runs-on: ubuntu-24.04
+    outputs:
+      recheck: ${{ steps.plan.outputs.recheck }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { pattern: 'results-*', path: results }
+      - id: plan
+        name: 기준과 견줘 새 실패 고르기
+        env:
+          ALSO: ${{ inputs.recheck }}
+        run: |
+          python3 tools/ci/summarize.py --results results --plan recheck.json --also "$ALSO" > /dev/null || true
+          echo "recheck=$(cat recheck.json)" >> "$GITHUB_OUTPUT"
+          echo "다시 볼 장면: $(cat recheck.json)"
+
+  base-build:
+    # 기준 커밋(tools/tests/baseline.txt 머리말)을 빌드해 재확인에서 같은 시드로 견준다 — 조각들과 나란히 미리 (캐시가 있으면 20초 · 없으면 1분)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - id: sha
+        run: |
+          echo "sha=$(grep -oE '기준 커밋: [0-9a-f]+' tools/tests/baseline.txt | awk '{print $3}')" >> "$GITHUB_OUTPUT"
+      - id: cache
+        uses: actions/cache@v4
+        with: { path: build/base, key: 'headless-base-v2-${{ steps.sha.outputs.sha }}' }
+      - uses: actions/setup-dotnet@v4
+        if: steps.cache.outputs.cache-hit != 'true'
+        with: { dotnet-version: '8.0.x' }
+      - name: 기준 커밋 빌드 (${{ steps.sha.outputs.sha }})
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          # 커밋 하나만 받아오려면 전체 이름(40자)이어야 한다 — 짧은 이름이면 'couldn't find remote ref'
+          git fetch -q --depth 1 origin ${{ steps.sha.outputs.sha }}
+          git checkout -q FETCH_HEAD
+          dotnet build tools/Headless -c Release -o build/base
+          # 기준 커밋에 있던 시험 이름 (그 뒤에 생긴 시험은 기준과 견줄 수 없다 — 모르는 이름이면 기본 항해를 돌려 엉뚱한 결과가 난다)
+          grep -oE 'Contains\("--[a-z0-9]+"\)' tools/Headless/Program.cs | sed -E 's/.*--([a-z0-9]+).*/\1/' | sort -u > build/base/known.txt
+      - uses: actions/upload-artifact@v4
+        with: { name: headless-base, path: build/base, retention-days: 3 }
+
+  recheck:
+    # 다시 볼 장면을 조각(많아야 5)에 나눠 — 조각마다 지금 코드 · 기준 커밋 × 시드 11 · 23 = 4개를 동시에
+    needs: [build, plan, base-build]
+    if: always() && needs.plan.outputs.recheck != '' && needs.plan.outputs.recheck != '[]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        tests: ${{ fromJSON(needs.plan.outputs.recheck) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '8.0.x' }
+      - uses: actions/download-artifact@v4
+        with: { name: headless, path: build/headless }
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { name: headless-base, path: build/base }
+      - name: 다른 시드로 다시 — 지금 코드 · 기준 커밋 (${{ matrix.tests }})
+        run: |
+          echo "${{ matrix.tests }}" | tr ' ' '\n' > some.txt
+          tools/ci/run-tests.sh some.txt recheck 1 11 .s11 &
+          tools/ci/run-tests.sh some.txt recheck 1 23 .s23 &
+          if [ -f build/base/Headless.dll ]; then
+            grep -xFf build/base/known.txt some.txt > base.txt || true   # 기준 커밋에 없던 시험은 빼고 (→ 요약에서 '조사 필요')
+            HEADLESS=$PWD/build/base/Headless.dll tools/ci/run-tests.sh base.txt recheck 1 11 .b11 &
+            HEADLESS=$PWD/build/base/Headless.dll tools/ci/run-tests.sh base.txt recheck 1 23 .b23 &
+          fi
+          wait
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: 'recheck-${{ strategy.job-index }}', path: recheck, retention-days: 14 }
+
+  report:
+    needs: [plan, base-build, recheck]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { pattern: 'results-*', path: results }
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { pattern: 'recheck-*', path: recheck }
+      - name: 한 장 요약
+        env:
+          ALSO: ${{ inputs.recheck }}
+        run: |
+          mkdir -p recheck
+          python3 tools/ci/summarize.py --results results --recheck recheck --also "$ALSO" --md summary.md; rc=$?
+          cat summary.md >> "$GITHUB_STEP_SUMMARY"
+          exit $rc
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: summary, path: summary.md, retention-days: 30 }
+      - name: 한 줄 요약 · 시험별 걸린 초 (주석으로 — tools/ci/last.sh가 긴 로그 없이 읽는다)
+        if: always()
+        run: |
+          esc() { sed 's/%/%25/g'; }
+          echo "::notice title=요약::$(head -1 summary.md | sed 's/^## //' | esc)"
+          grep -E '^- \*\*' summary.md | head -9 | esc | while IFS= read -r l; do echo "::warning title=조사::$l"; done
+          grep -E '^(운으로|시드 탓으로|요청한 재확인)' summary.md | esc | while IFS= read -r l; do echo "::notice title=재확인::$l"; done
+          python3 tools/ci/summarize.py --results results --times | esc | while IFS= read -r l; do echo "::notice title=시간::$l"; done
+          head -1 summary.md
+          grep -E '^- \*\*' summary.md || true

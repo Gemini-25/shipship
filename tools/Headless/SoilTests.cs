@@ -1,0 +1,106 @@
+using System;
+using System.Linq;
+using ShipSim.Core;
+
+// v14.7 오염 · 씻기 · 빨래 · 우주복 털기 · 손으로 옮는 것
+public static partial class Program
+{
+    private static readonly System.Collections.Generic.HashSet<string> _cookSeen = new();
+    private static int RunSoilTest(int seed)
+    {
+        _fails = 0;
+        Console.WriteLine($"오염·위생 점검 (v14.7) · 시드 {seed}\n");
+        try
+        {
+            // 1) 정비하면 손에 기름이 묻고, 씻으면 준다
+            {
+                var w = DayOne(seed, "Mirinae");
+                var tech = w.Crew.OrderByDescending(c => c.RawSkill(Skill.Mechanics)).First();
+                var pump = w.Ship.Machines.First(m => m.Body.Type == FurnitureType.CoolantPump);
+                w.Machines.Break(pump, FaultKind.BearingWear);
+                float before = tech.Soil.Hands[(int)SoilKind.Oil], peak = 0f;
+                for (int m = 0; m < 240; m++) { Run(w, SimTime.Minutes(1)); peak = MathF.Max(peak, w.Crew.Max(c => c.Soil.Hands[(int)SoilKind.Oil])); }
+                var st = w.Soil.Stats;
+                Check("기름 — 정비하면 손과 옷에 묻고, 일이 끝나면 씻고 갈아입는다", peak > 0.3f && st.HandWashes > 0,
+                    $"손의 기름 최고 {peak * 100:0}% · {st.Summary()}");
+            }
+
+            // 2) 씻지 않은 손으로 조리하면 식사에 균이 든다 (씻으면 덜) — 누가 만들었는지 남는다
+            {
+                int[] tainted = new int[2];
+                for (int k = 0; k < 2; k++)
+                {
+                    var w = DayOne(seed, "Mirinae");
+                    NoRobots(w); // 사람이 짓는 끼니의 손 위생 (조리 로봇이 지으면 손이 없다)
+                    for (int h = 0; h < 48; h++)
+                    {
+                        foreach (var c in w.Crew) { c.Soil.Hands[(int)SoilKind.Bio] = 0.8f; if (k == 1) c.Soil.WashedAt = w.Tick; }
+                        if (k == 1) foreach (var c in w.Crew) w.Soil.WashHands(c, "시험");
+                        if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "1")
+                            for (long t = 0; t < SimTime.Hours(1); t++) { w.Step(); if (t % 30 == 0) foreach (var o in w.Board.All.Where(o => o.Kind == WorkKind.Cook && (o.Assignee != null || o.Robot != null))) _cookSeen.Add($"{k}:{o.Id}:{o.Assignee?.Name}{o.Robot?.Name}"); }
+                        else
+                        Run(w, SimTime.Hours(1));
+                    }
+                    tainted[k] = w.Soil.Stats.TaintedMeals;
+                    if (Environment.GetEnvironmentVariable("SHIPSIM_DEBUG") == "1")
+                        Console.WriteLine($"   [{(k == 0 ? "안 씻음" : "씻음")}] 조리장 {w.Cooking.HeadCook?.Name}({w.Cooking.HeadCook?.CanAct}) · 맡은 이 {string.Join(",", _cookSeen.Where(x => x.StartsWith(k + ":")).Select(x => x.Split(':')[2]).GroupBy(x => x).Select(g => g.Key + "×" + g.Count()))} · 사람이 지은 끼 {w.Crew.Sum(c => c.Stats.MealsCooked)} · 로봇 {w.Robots.V21.Meals} · {w.Soil.Stats.Summary()}");
+                }
+                Check("손 위생 — 균이 묻은 손으로 조리하면 식사에 균이 들고, 씻으면 덜하다", tainted[0] > tainted[1],
+                    $"안 씻음 {tainted[0]}끼 ↔ 씻음 {tainted[1]}끼");
+            }
+
+            // 3) 선외 작업 뒤 우주복을 털지 않으면 분진이 옷과 방으로 번진다
+            {
+                var w = DayOne(seed, "Mirinae");
+                NoRobots(w); // v21 우주복 분진이 옷과 방으로 번지는지 본다 — 청소 로봇이 곧바로 닦으면 번진 자국이 남지 않는다
+                var c = w.Crew.First(x => !x.IsChild && x.CanAct);
+                // 털지 않고 식당까지 들어왔다 — 두뇌 2.0 뒤로 이 사람이 아침에 에어락 곁 통로(넓은 방 · 칸이 많아 쌓임이 옅다)에 있기도 해 곧장 털러 간다:
+                // 장면은 "생활 공간까지 들어온 분진"이므로 식당에서 시작한다
+                var mess = w.Ship.RoomsOf(RoomType.Mess).First();
+                c.EndJob(w, ToilStatus.Interrupted);
+                Place(c, mess.Cells.First(x => w.Ship.IsWalkable(x) && w.Ship.FurnitureAt(x) == null));
+                w.Step();
+                c.Soil.SuitDust = 0.8f;
+                var room = c.Room!;
+                float dust0 = w.Soil.RoomSoil(room)[(int)SoilKind.Dust];
+                var dtrace = new System.Collections.Generic.List<string>();
+                float peak = dust0; // v21 넓은 통로를 오가면 묽게 쌓였다가 환기로 옅어진다 — 30분 뒤 순간값이 아니라 그동안 가장 짙었던 때
+                for (int m = 0; m < 6; m++) { for (int k = 0; k < 5; k++) { Run(w, SimTime.Minutes(1)); peak = MathF.Max(peak, w.Ship.LiveRooms.Max(r => w.Soil.RoomSoil(r)[(int)SoilKind.Dust])); } dtrace.Add($"{(m + 1) * 5}분 {c.Room?.Name} {c.Job?.Label ?? "-"} 우주복 {c.Soil.SuitDust:0.00} 입음 {c.Suit != null} 방 {(c.Room != null ? w.Soil.RoomSoil(c.Room)[(int)SoilKind.Dust] : 0f):0.000} 최대 {w.Ship.LiveRooms.Max(r => w.Soil.RoomSoil(r)[(int)SoilKind.Dust]):0.000}"); }
+                float clothes = c.Soil.Clothes[(int)SoilKind.Dust];
+                float spread = peak;
+                Check("우주복 분진 — 털지 않고 들어오면 옷과 방으로 번진다 (털면 멈춘다)", clothes > 0.01f && spread > dust0 && w.Soil.Stats.SkippedDecons > 0,
+                    $"옷의 분진 {clothes * 100:0}% · 가장 더러운 방의 분진 {spread * 100:0.0}% (처음 {dust0 * 100:0.0}%) · {w.Soil.Stats.Summary()}" + (spread > dust0 ? "" : $" · [{string.Join(" / ", dtrace)}]"));
+            }
+
+            // 4) 물이 모자라면 손만 씻고 빨래를 미룬다
+            {
+                var w = DayOne(seed, "Mirinae");
+                w.Policies.Set("water", 2, "시험");
+                foreach (var c in w.Crew) { c.Soil.Clothes[(int)SoilKind.Oil] = 0.8f; c.Soil.Hands[(int)SoilKind.Oil] = 0.8f; }
+                Run(w, SimTime.Hours(24));
+                var st = w.Soil.Stats;
+                Check("물 부족 — 손만 씻고 빨래를 미룬다", st.PartialWashes > 0 && st.LaundryRuns == 0 || st.LaundryDeferred > 0,
+                    st.Summary());
+            }
+
+            // 4b) 물이 넉넉하면 갈아입은 옷이 모여 빨래를 돌린다
+            {
+                var w = DayOne(seed, "Mirinae");
+                foreach (var c in w.Crew) c.Soil.Clothes[(int)SoilKind.Oil] = 0.8f;
+                Run(w, SimTime.Hours(36));
+                var st = w.Soil.Stats;
+                Check("빨래 — 갈아입은 옷이 바구니에 모이고 세탁실에서 돌린다", st.Changes >= 4 && st.LaundryRuns > 0, st.Summary());
+            }
+
+            // 5) 결정론
+            {
+                uint H() { var w = World.CreateDefault(seed, 0, "Hanbit"); Run(w, SimTime.TicksPerDay + SimTime.Hours(6)); return SaveGame.StateHash(w); }
+                uint x = H(), y = H();
+                Check("결정론 — 오염이 든 배도 같은 시드 같은 지문", x == y, $"{x:x8} / {y:x8}");
+            }
+        }
+        catch (Exception e) { Console.WriteLine(e); _fails++; }
+        Console.WriteLine(_fails == 0 ? "\n✔ 오염·위생 점검 모두 통과" : $"\n✘ {_fails}개 실패");
+        return _fails == 0 ? 0 : 1;
+    }
+}

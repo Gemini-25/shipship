@@ -1,0 +1,79 @@
+using System;
+using System.Linq;
+using Godot;
+using ShipSim.Core;
+
+namespace ShipSim.View;
+
+// v12.8 항로 막대(지도 위): 구간을 색으로, 배의 자리, 다음 구간까지 · 목적지 · 시대와 지금 연구.
+// 요약 진행 카드: 빨리 감는 동안 무엇이 있었는지 한 장으로.
+public partial class Hud
+{
+    public static Color LegColor(LegKind k) => k switch
+    {
+        LegKind.AsteroidBelt => new Color("#c9a66b"), LegKind.Nebula => new Color("#b58cff"), LegKind.RadiationBelt => new Color("#f5d547"),
+        LegKind.Derelict => new Color("#8d93a6"), LegKind.Port => new Color("#6ee7b7"),
+        _ when VoyageV15.Spec(k) is LegSpec s => new Color(s.Hex), // v15.4 새 구간
+        _ => new Color("#3d4b63"),
+    };
+
+    private void DrawVoyageBar(Rect2 minimap)
+    {
+        var v = _world.Voyage;
+        float total = v.TotalDays;
+        if (total <= 0f) return;
+        var bar = new Rect2(minimap.Position.X, minimap.Position.Y - 46f, minimap.Size.X, 40f);
+        Gfx.RoundRect(this, bar, new Color(0.04f, 0.05f, 0.08f, 0.88f), 8f, new Color(1, 1, 1, 0.08f));
+        float x = bar.Position.X + 10f, w = bar.Size.X - 20f, y = bar.Position.Y + 22f;
+        float acc = 0f;
+        for (int i = 0; i < v.Legs.Count; i++)
+        {
+            var leg = v.Legs[i];
+            float x0 = x + w * acc / total, x1 = x + w * (acc + leg.Days) / total;
+            var col = LegColor(leg.Kind).WithAlpha(i < v.Index ? 0.35f : 0.9f);
+            this.Box(new Rect2(x0 + 0.5f, y - 3f, MathF.Max(1f, x1 - x0 - 1f), 6f), col);
+            if (leg.Kind is LegKind.Port or LegKind.Derelict) this.Circle(new Vector2((x0 + x1) / 2f, y), 4f, col);
+            acc += leg.Days;
+        }
+        float px = x + w * v.DoneDays / total;
+        this.Circle(new Vector2(px, y), 5f, v.Drifting ? Palette.Danger : Colors.White);
+        DrawLine(new Vector2(px, y - 9f), new Vector2(px, y + 9f), Colors.White.WithAlpha(0.6f), 1f);
+        var cur = v.Current;
+        float left = cur.Days - v.Progress;
+        var next = v.Index + 1 < v.Legs.Count ? v.Legs[v.Index + 1] : null;
+        string head = $"{v.Number}번째 항해 · {v.Origin} → {v.Destination} · 지금 {VoyageSystem.KindName(cur.Kind)}" + (cur.Kind != LegKind.Cruise ? $"({cur.Name})" : "")
+                      + (next != null ? $" · {left:0.0}일 뒤 {VoyageSystem.KindName(next.Kind)}" : "") + (v.Drifting ? " · 표류 중" : "");
+        Gfx.Text(this, Fonts.Body, new Vector2(bar.Position.X + 10f, bar.Position.Y + 13f), UiKit.Fit(head, bar.Size.X - 20f, Ui.TextSmall, Fonts.Body), Ui.TextSmall, v.Drifting ? Palette.Danger : Palette.TextDim);
+        var e = _world.Eras;
+        string era = $"{TechTree.Roman(e.Era)} {TechTree.EraName(e.Era)} · " + (e.ProjectTech is TreeTech pt ? $"연구 {pt.Name} {e.Fraction * 100:0}%" : "연구할 것 없음"); // v23 새 기술표
+        Gfx.TextRight(this, Fonts.Body, new Vector2(bar.End.X - 10f, bar.Position.Y + 36f), era, Ui.TextTiny, Palette.TextMuted);
+        if (_world.Big.Line() is string big) // v23 큰 사고 (전자기 펄스 · 노심 카운트다운 …)
+            Gfx.Text(this, Fonts.Bold, new Vector2(bar.Position.X + 10f, bar.Position.Y - 6f), big, Ui.TextSmall, Palette.Danger);
+        else if (_world.Parasite.Line() is string para) // v23 외계 기생체
+            Gfx.Text(this, Fonts.Bold, new Vector2(bar.Position.X + 10f, bar.Position.Y - 6f), para, Ui.TextSmall, Palette.Warning);
+        else if (_world.Encounters.Line() is string meet) // v23 나란히 선 다른 배
+            Gfx.Text(this, Fonts.Body, new Vector2(bar.Position.X + 10f, bar.Position.Y - 6f), UiKit.Fit(meet, bar.Size.X - 20f, Ui.TextSmall, Fonts.Body), Ui.TextSmall, new Color("#ffe8a3"));
+        if (_world.Env.Line() is string env) // v23 극한 환경: 어디 · 몇 도 · 날씨 · 위험 · 센 기제 · 낌새
+            Gfx.Text(this, Fonts.Body, new Vector2(bar.Position.X + 10f, bar.Position.Y + 36f), UiKit.Fit(env, bar.Size.X * 0.58f, Ui.TextTiny, Fonts.Body), Ui.TextTiny, _world.Env.Pending.Count > 0 ? Palette.Warning : new Color("#9ad0ff"));
+    }
+
+    // ── 요약 진행 ──
+    public string[]? SummaryLines { get; set; }
+    public long SummaryShownAt { get; set; } = -1;
+
+    private void DrawSummaryCard(Vector2 mouse)
+    {
+        if (SummaryLines == null) return;
+        float w = 460f, h = 60f + SummaryLines.Length * 22f;
+        var card = new Rect2((Screen.X - w) / 2f, Screen.Y * 0.22f, w, h);
+        Card(card);
+        Gfx.Text(this, Fonts.Bold, card.Position + new Vector2(20, 32), "빨리 감기", Ui.TextLarge, Palette.Text);
+        Button(new Rect2(card.End.X - 74, card.Position.Y + 12, 58, 26), "닫기", false, mouse, () => SummaryLines = null, Ui.TextSmall);
+        float y = card.Position.Y + 58;
+        foreach (var line in SummaryLines)
+        {
+            Gfx.Text(this, Fonts.Body, new Vector2(card.Position.X + 20, y + 10), line, Ui.TextLabel, line.StartsWith("멈춤") ? Palette.Warning : Palette.TextDim);
+            y += 22f;
+        }
+    }
+}
