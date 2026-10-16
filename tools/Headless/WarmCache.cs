@@ -62,7 +62,7 @@ public static class WarmCache
         var before = _switches!.Select(f => f.GetValue(null)?.ToString()).ToArray();
         run();
         for (int i = 0; i < _switches!.Length; i++)
-            if (_switches[i].GetValue(null)?.ToString() != before[i]) yield return $"{_switches[i].DeclaringType!.Name}.{_switches[i].Name}: {before[i]} → {_switches[i].GetValue(null)}";
+            if (_switches[i].GetValue(null)?.ToString() != before[i]) yield return $"{_switches[i].DeclaringType!.Name}.{Name(_switches[i])}: {before[i]} → {_switches[i].GetValue(null)}";
     }
 
     private static string Switches()
@@ -70,16 +70,20 @@ public static class WarmCache
         _switches ??= typeof(World).Assembly.GetTypes()
             .Where(t => t != typeof(Program) && t != typeof(WarmCache))
             .SelectMany(t => t.GetFields(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
-            .Where(f => !f.IsInitOnly && !f.IsLiteral && !f.Name.StartsWith('_') && !f.Name.Contains('<')
+            .Where(f => !f.IsInitOnly && !f.IsLiteral && !Name(f).StartsWith('_') && !Name(f).Contains('<')
                         && (f.FieldType.IsPrimitive || f.FieldType.IsEnum || f.FieldType == typeof(string))
-                        && !f.Name.EndsWith("Ticks") && !f.Name.EndsWith("Count") && !f.Name.EndsWith("Version") && !f.Name.StartsWith("Last"))
-            .Where(f => !Scratch.Contains($"{f.DeclaringType!.Name}.{f.Name}"))
+                        && !Name(f).EndsWith("Ticks") && !Name(f).Contains("Stopwatch") && !Name(f).EndsWith("Count") && !Name(f).EndsWith("Version") && !Name(f).StartsWith("Last"))
+            .Where(f => !Scratch.Contains($"{f.DeclaringType!.Name}.{Name(f)}"))
             .OrderBy(f => f.DeclaringType!.FullName).ThenBy(f => f.Name).ToArray();
         var sb = new StringBuilder();
-        foreach (var f in _switches) sb.Append(f.DeclaringType!.Name).Append('.').Append(f.Name).Append('=').Append(f.GetValue(null)).Append(';');
+        foreach (var f in _switches) sb.Append(f.DeclaringType!.Name).Append('.').Append(Name(f)).Append('=').Append(f.GetValue(null)).Append(';');
         sb.Append(Tuning.Write());
         return sb.ToString();
     }
+
+    /// <summary>필드 이름 — 전역 자동 속성(RoomPlanSystem.ThinkOff { get; set; } 같은 스위치)은 속성 이름으로.
+    /// 예전엔 속성 뒤 필드(&lt;ThinkOff&gt;k__BackingField)를 빼서, 스위치를 켠 채 부른 첫날 배가 보통 첫날 배 열쇠로 저장되었다.</summary>
+    private static string Name(FieldInfo f) => f.Name.StartsWith('<') && f.Name.EndsWith(">k__BackingField") ? f.Name[1..f.Name.IndexOf('>')] : f.Name;
 
     private static string Hash(string s) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(s)))[..24];
 

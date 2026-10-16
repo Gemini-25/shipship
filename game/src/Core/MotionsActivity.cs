@@ -157,17 +157,20 @@ public sealed class SneakFoodActivity : Activity
     public override string Id => "sneakfood";
     public override string Label => "잠깐 창고에";
 
+    // 보관함 목록은 가구가 늘거나 보관함이 붙고 떨어질 때만 다시 모은다 (먹을 것 · 버린 방은 고를 때 지금 값으로 본다).
+    // 예전엔 "먹을 것이 든 보관함"을 한 시간씩 붙들어 두었다 — 언제 모았는지가 저장되지 않아, 되살린 배와 이어 간 배가 다른 창고로 갔다.
     private static List<Furniture>? _boxes;
-    private static long _boxesAt = -1;
     private static World? _boxesW;
+    private static int _boxesCount = -1, _boxesVer = -1;
 
     private static List<Furniture> Boxes(World w)
     {
-        if (_boxes == null || _boxesW != w || w.Tick - _boxesAt > SimTime.Hours(1) || w.Tick < _boxesAt)
+        if (_boxes == null || _boxesW != w || _boxesCount != w.Ship.Furniture.Count || _boxesVer != Furniture.StorageVersion)
         {
-            _boxes = w.Ship.Containers.Where(f => !f.Room.Abandoned && f.UseSpots.Count > 0 && f.Storage != null && (f.Storage.Count(ItemKind.Ration) > 0 || f.Storage.Count(ItemKind.Meal) > 0)).OrderBy(f => f.Id).ToList();
-            _boxesAt = w.Tick;
+            _boxes = w.Ship.Furniture.Where(f => f.Storage != null && f.Type != FurnitureType.DroneDock && f.UseSpots.Count > 0).OrderBy(f => f.Id).ToList();
             _boxesW = w;
+            _boxesCount = w.Ship.Furniture.Count;
+            _boxesVer = Furniture.StorageVersion;
         }
         return _boxes;
     }
@@ -178,6 +181,7 @@ public sealed class SneakFoodActivity : Activity
         int bd = int.MaxValue;
         foreach (var f in Boxes(w))
         {
+            if (f.Room.Detached || f.Stowed || f.Room.Abandoned) continue;
             if (f.Storage == null || f.Storage.Count(ItemKind.Ration) + f.Storage.Count(ItemKind.Meal) == 0 || !dist.Reachable(f.UseSpots[0])) continue;
             bool eyes = false;
             foreach (var o in w.Crew) if (o != c && !o.Dead && o.IsAwake && o.Room == f.Room) { eyes = true; break; }

@@ -21,7 +21,15 @@ public static partial class Program
         return w;
     }
 
-    private static void Run(World w, long ticks) { for (long t = 0; t < ticks; t++) w.Step(); }
+    private static readonly bool HashTrace = Environment.GetEnvironmentVariable("SHIPSIM_HASHTRACE") == "1"; // 점검: 틱마다 지문을 오류 출력으로 (켬/끔 비교)
+    private static void Run(World w, long ticks)
+    {
+        for (long t = 0; t < ticks; t++)
+        {
+            w.Step();
+            if (HashTrace) Console.Error.WriteLine($"{w.Tick} {SaveGame.StateHash(w):x8}");
+        }
+    }
 
     private static int RunSelfTest(int seed)
     {

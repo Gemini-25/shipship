@@ -269,6 +269,8 @@ public static partial class Program
             Console.WriteLine($"수치 파일: {Tuning.Load(System.IO.File.ReadAllText(tf.Split('=', 2)[1]))}개 적용");
         if (args.Contains("--bench")) return RunBench(days, seed);
         if (args.Contains("--warmbench")) return RunWarmBench(seed, args); // 시험 시간 재기
+        if (args.Contains("--warmdiff")) return RunWarmDiff(seed, args); // 되살린 첫날 배가 어디서 갈라지나
+        if (args.Any(a => a.StartsWith("--warmsplit="))) return RunWarmSplit(seed, args); // 프로세스를 나눠 견준다
         if (args.Contains("--patrolprobe")) return RunPatrolProbe(days, seed, args); // 로봇 · 드론 순찰 진단
         if (args.Contains("--matprobe")) return RunMatProbe(days, seed, args); // 재료 흐름 진단
         if (args.Contains("--matbtest")) return RunMatHomeoTest(seed); // 재료 수집 (가 · 나 · 다) · 항상성 (나 · 라 · 마)

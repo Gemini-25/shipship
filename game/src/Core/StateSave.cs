@@ -691,7 +691,7 @@ public static class StateSave
             if (Trace != null) _at = $"#{_ids[o]} {Pretty(t)}";
             if (o is Array a)
             {
-                if (p.BulkWrite != null) { p.BulkWrite(_w, a); return; }
+                if (p.BulkWrite != null) { Mark($"[{a.Length}] 통째"); p.BulkWrite(_w, a); return; }
                 if (a.Rank == 1) { _arr = a; _arrElem = p.Elem; _arrAt = 0; return; } // Step이 이어서 (나눠 찍기)
                 foreach (var e in a) WriteVal(e, p.Elem!);
                 return;

@@ -18,6 +18,9 @@ public sealed class DistanceField
 
     public int Get(Cell c) { if (!_grid.InBounds(c)) return -1; int i = _grid.Index(c); return i < _cost.Length ? _cost[i] : -1; } // v16.10 증축 전에 만든 거리장은 새 칸을 모른다
     public bool Reachable(Cell c) => Get(c) >= 0;
+    /// <summary>점검용: 처음 다른 칸 (같으면 -1).</summary>
+    internal int FirstDiff(DistanceField o) { int n = Math.Min(_cost.Length, o._cost.Length); for (int i = 0; i < n; i++) if (_cost[i] != o._cost[i]) return i; return _cost.Length == o._cost.Length ? -1 : n; }
+    internal int CostAt(int i) => i < _cost.Length ? _cost[i] : -2;
 }
 
 /// <summary>
@@ -266,6 +269,10 @@ public sealed class Pathfinder
     [NotSaved] private readonly Dictionary<(int start, float scale, int flags, int bar), FloodEntry> _floods = new(); // 상태 저장: 캐시
     [field: NotSaved] public int FloodHits { get; private set; } // 캐시 통계 (상태 저장에 넣지 않는다)
     [field: NotSaved] public int FloodMisses { get; private set; }
+    /// <summary>점검용 (SHIPSIM_DEBUG=floodcache): 캐시에서 꺼낼 때마다 다시 펴서 견준다 — 다르면 캐시가 낡은 값을 돌려준 것.</summary>
+    public static bool CheckCache;
+    public static int StaleHits;
+    public static string? FirstStale;
 
     private int[] _hazardSeen = Array.Empty<int>();
 
@@ -329,6 +336,12 @@ public sealed class Pathfinder
         if (_floods.TryGetValue(key, out var e) && e.Version == version && SameFear(e.Fear, profile.Fear) && SameSpots(e.Spots, profile.Spots))
         {
             FloodHits++;
+            if (CheckCache)
+            {
+                var again = FloodCore(start, profile, version);
+                int at = again.FirstDiff(e.Field);
+                if (at >= 0) { StaleHits++; FirstStale ??= $"칸 {at} ({at % _w},{at / _w}) 캐시 {e.Field.CostAt(at)} · 다시 {again.CostAt(at)} · 출발 {si} · 성향 {key.Item3} · 막힘 {bar}"; }
+            }
             Prof.Lap("path.Flood(캐시)", pf);
             return e.Field;
         }
@@ -344,8 +357,8 @@ public sealed class Pathfinder
         a == null ? b == null || b.All(x => x <= 0.05f) : b == null ? a.All(x => x <= 0.05f) : a.AsSpan().SequenceEqual(b);
 
     // v14.2 거리장 계산을 빠르게: 방·문·칸의 성질을 계산마다 한 번 배열로 펴 두고 (같은 식, 같은 값), 큐를 다시 쓴다.
-    private readonly PriorityQueue<int, int> _open = new();
-    private bool[] _pass = Array.Empty<bool>();
+    [NotSaved] private readonly PriorityQueue<int, int> _open = new(); // 작업 칸 (상태 저장에 넣지 않는다 — 거리장 캐시를 안 담아 되살린 쪽만 다시 펴면 배열 끝의 지난 값이 달라진다)
+    [NotSaved] private bool[] _pass = Array.Empty<bool>(); // 지금 펴는 통행 표 (_passBy 가운데 하나를 가리키는 작업 칸 — 펼 때마다 다시 가리킨다)
     [NotSaved] private int[] _roomAdd = Array.Empty<int>(), _doorAdd = Array.Empty<int>(); // 작업 칸: 펼 때마다 다시 채운다 (상태 저장에 넣지 않는다 — 거리장 캐시를 안 담아 되살린 쪽만 다시 펴면 남은 값이 달라진다)
     [NotSaved] private bool[] _roomBlocked = Array.Empty<bool>(), _doorBlocked = Array.Empty<bool>();
 
