@@ -112,3 +112,8 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: summary, path: summary.md, retention-days: 30 }
+      - name: 한 줄 요약 (로그 끝 30줄만 읽으면 되게)
+        if: always()
+        run: |
+          head -1 summary.md
+          grep -E '^- \*\*' summary.md || true
