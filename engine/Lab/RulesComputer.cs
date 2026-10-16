@@ -257,5 +257,36 @@ public static partial class Program
             Check("낮아진 배에서 방 사이 문을 열어 공기가 옮겨 가도 주컴퓨터는 샘으로 보지 않는다 (봉쇄 없음)", !leak && s.Facts.CountOf(FactKind.ComputerSeal) == seals0 && f.DoorOpen[door] > 0.9f,
                 $"샘 사건 {leak} · 봉쇄 {s.Facts.CountOf(FactKind.ComputerSeal) - seals0} · 문 {f.DoorOpen[door]:0.0} · 왼쪽 {cm.RoomKPa[left]:0} 오른쪽 {cm.RoomKPa[right]:0}kPa");
         }
+
+        // ── 빠진 방(우주로 트인 구멍)은 문으로 못 들어간다 — 로봇이 에어락으로 나가 외판 바깥에서 막고, 주컴퓨터가 예비 공기로 배를 다시 채운다 ──
+        {
+            var s = ShipWorld.Create("Pabal", 4);
+            var m = s.Get<Mind>(); var f = s.Get<Field>(); var cm = s.Get<ShipMind>(); var net = s.Get<Network>();
+            int dock = s.Layout.Furniture.First(fu => fu.Type == "RobotDock").Cells[0];
+            int r = m.AddRobot(s, dock, AgentKind.Robot, dock);
+            s.Run(Time.Minutes(15));
+            var L2 = s.Layout;
+            int lounge = L2.Rooms.First(rm => rm.Name == "휴게실").Id;
+            int hull = Enumerable.Range(0, L2.N).First(c => L2.Hull[c] && L2.Kind[c] == CellKind.Wall && Enumerable.Range(0, 4).Any(k =>
+            {
+                int x = L2.X(c) + (k == 0 ? 1 : k == 1 ? -1 : 0), y = L2.Y(c) + (k == 2 ? 1 : k == 3 ? -1 : 0);
+                return L2.In(x, y) && L2.Room[L2.Index(x, y)] == lounge;
+            }));
+            s.Get<Structure>().DamageCause[hull] = s.Causes.Add(CauseKind.Story, "작은 운석이 휴게실 외판을 뚫었다", s.Tick, hull);
+            f.SetHole(hull, 0.009f);
+            long patchedAt = -1; bool outside = false; double lowest = 200;
+            for (int k = 0; k < Time.Hours(8); k++)
+            {
+                s.Step();
+                if (patchedAt < 0 && f.Hole[hull] <= 0) { patchedAt = s.Tick; outside = L2.Kind[m[r].C.Cell] == CellKind.Outside; }
+                if (k % 25 == 0) lowest = Math.Min(lowest, L2.Rooms.Where(rm => rm.Id != lounge && rm.Cells.Length > 0).Average(rm => f.Pressure(rm.Cells[0])));
+            }
+            double avg = L2.Rooms.Where(rm => rm.Cells.Length > 0 && rm.Name != "에어락").Average(rm => f.Pressure(rm.Cells[0]));
+            if (Debug) foreach (var (tk, tx) in cm.Log.TakeLast(20)) Console.WriteLine($"    주컴 {Time.Clock(tk)} {tx}");
+            if (Debug) foreach (var x in cm.Incidents.Where(x => x.Active != 0)) Console.WriteLine($"    사건 {x.Kind} {cm.RoomName(x.Room)} 보냄 {x.Tries} 로봇 {x.RobotA} 봉쇄 {x.Sealed} 읽힘 {(x.Room >= 0 ? cm.RoomSeen[x.Room] : 9)}");
+            if (Debug) Console.WriteLine($"    로봇 {m.Thought(r)} 맡음 {m[r].C.AssignedGoal}:{m[r].C.AssignedTarget} 기한 {(m[r].C.AssignedUntil - s.Tick) / 25}분 피함 {string.Join(",", m[r].Avoid.Select(v => v.Goal + ":" + v.Target))}");
+            Check("빠진 방의 외판 구멍: 로봇이 에어락으로 나가 바깥에서 막는다 → 주컴퓨터가 예비 공기로 배를 다시 채운다", patchedAt > 0 && outside && avg > 85 && net.AirReleased > 0,
+                patchedAt > 0 ? $"{(patchedAt - Time.Minutes(15)) / 25.0:0}분 만에 {(outside ? "바깥에서" : "안에서")} 막음 · 가장 낮던 배 기압 {lowest:0} → 8시간 뒤 {avg:0}kPa · 휴게실 {f.Pressure(L2.Rooms[lounge].Cells[0]):0}kPa" : $"못 막음 · 배 기압 {avg:0}kPa");
+        }
     }
 }

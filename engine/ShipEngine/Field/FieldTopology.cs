@@ -86,15 +86,16 @@ public sealed partial class Field
     /// <summary>되살릴 때: 마지막으로 구역을 지은 때의 문 · 구멍으로 같은 구역 · 틈을 다시 세운다 (기체는 건드리지 않는다 — 원래 세계와 바이트까지 같게).</summary>
     private void RestoreTopology()
     {
-        if (_topoDoor.Length != DoorOpen.Length || _topoHole.Length != Hole.Length || _topoTaped.Length != DoorTaped.Length) { _dirty = true; Rebuild(); return; }
-        var door = DoorOpen; var hole = Hole; var taped = DoorTaped;
-        DoorOpen = (float[])_topoDoor.Clone(); Hole = (float[])_topoHole.Clone(); DoorTaped = (byte[])_topoTaped.Clone();
+        if (_topoDoor.Length != DoorOpen.Length || _topoHole.Length != Hole.Length || _topoTaped.Length != DoorTaped.Length || _topoBleed.Length != DoorBleed.Length) { _dirty = true; Rebuild(); return; }
+        var door = DoorOpen; var hole = Hole; var taped = DoorTaped; var bleed = DoorBleed;
+        DoorOpen = (float[])_topoDoor.Clone(); Hole = (float[])_topoHole.Clone(); DoorTaped = (byte[])_topoTaped.Clone(); DoorBleed = (byte[])_topoBleed.Clone();
         BuildTopology();
-        DoorOpen = door; Hole = hole; DoorTaped = taped;
+        DoorOpen = door; Hole = hole; DoorTaped = taped; DoorBleed = bleed;
     }
 
     private float[] _topoDoor = Array.Empty<float>(), _topoHole = Array.Empty<float>(); // 마지막으로 구역을 지은 때의 문 · 구멍 · 막은 문틈 (찍는다)
     private byte[] _topoTaped = Array.Empty<byte>();
+    private byte[] _topoBleed = Array.Empty<byte>();
 
     /// <summary>1. 기체가 못 드는 칸(닫힌 문 등)에 남은 기체는 이웃으로 밀어낸다.</summary>
     private void PushOutTrapped()
@@ -129,7 +130,8 @@ public sealed partial class Field
         if (_topoDoor.Length != DoorOpen.Length) _topoDoor = new float[DoorOpen.Length];
         if (_topoHole.Length != Hole.Length) _topoHole = new float[Hole.Length];
         if (_topoTaped.Length != DoorTaped.Length) _topoTaped = new byte[DoorTaped.Length];
-        Array.Copy(DoorOpen, _topoDoor, DoorOpen.Length); Array.Copy(Hole, _topoHole, Hole.Length); Array.Copy(DoorTaped, _topoTaped, DoorTaped.Length);
+        if (_topoBleed.Length != DoorBleed.Length) _topoBleed = new byte[DoorBleed.Length];
+        Array.Copy(DoorOpen, _topoDoor, DoorOpen.Length); Array.Copy(Hole, _topoHole, Hole.Length); Array.Copy(DoorTaped, _topoTaped, DoorTaped.Length); Array.Copy(DoorBleed, _topoBleed, DoorBleed.Length);
         if (RegionOf.Length != Cells) RegionOf = new int[Cells];
         Array.Fill(RegionOf, -1);
         Regions.Clear();
@@ -158,7 +160,7 @@ public sealed partial class Field
         {
             if (DoorPassable(d)) continue;
             var door = L.Doors[d];
-            double area = DoorOpen[d] > 0 ? DoorOpen[d] * DoorArea : door.Kind == "normal" && DoorTaped[d] == 0 ? LeakNormalDoor : 0;
+            double area = DoorOpen[d] > 0 ? DoorOpen[d] * DoorArea : DoorBleed[d] != 0 ? BleedArea : door.Kind == "normal" && DoorTaped[d] == 0 ? LeakNormalDoor : 0;
             if (area <= 0) continue;
             int c = door.Cell, x = L.X(c), y = L.Y(c);
             var (a, b) = door.Vertical ? (Cell(x, y - 1), Cell(x, y + 1)) : (Cell(x - 1, y), Cell(x + 1, y));

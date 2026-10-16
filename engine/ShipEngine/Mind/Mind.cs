@@ -47,6 +47,10 @@ public sealed partial class Mind : IEngine
 
     // 도면에서 미리 뽑은 것
     private readonly int[][] _roomWalls;      // 방 둘레의 벽 칸 (구멍 보기)
+    private readonly bool[] _hullOut;         // 외판 바깥을 걸을 수 있는 칸
+    /// <summary>외판 바깥을 걸을 수 있나 (선외 작업): 로봇 — 진공 · 추위를 견딘다.</summary>
+    public static bool Eva(Agent a) => a.C.Kind == AgentKind.Robot;
+    public bool HullOut(int cell) => cell >= 0 && cell < _hullOut.Length && _hullOut[cell];
     private readonly int[][] _roomDoors;      // 방 둘레의 문 칸
     private readonly int[] _food, _water, _beds, _social, _relax, _docks, _droneDocks, _lockers, _medBeds;
     private readonly double[] _halfLife;      // 믿음 종류 → 반감기 (초)
@@ -85,6 +89,20 @@ public sealed partial class Mind : IEngine
                 }
             }
             _roomWalls[r.Id] = walls.ToArray(); _roomDoors[r.Id] = doors.ToArray();
+        }
+        // 외판 바깥: 외판 벽 · 바깥 문과 맞닿은(대각선 포함) 바깥 칸 — 로봇이 자석 발로 걸을 수 있다
+        _hullOut = new bool[L.N];
+        for (int i = 0; i < L.N; i++)
+        {
+            if (L.Kind[i] != CellKind.Outside) continue;
+            int x = L.X(i), y = L.Y(i);
+            for (int dy = -1; dy <= 1 && !_hullOut[i]; dy++)
+                for (int dx = -1; dx <= 1; dx++)
+                {
+                    if (!L.In(x + dx, y + dy)) continue;
+                    int j = L.Index(x + dx, y + dy);
+                    if (L.Kind[j] == CellKind.Wall && L.Hull[j] || L.Kind[j] == CellKind.Door && L.DoorAt[j] >= 0 && L.Doors[L.DoorAt[j]].External) { _hullOut[i] = true; break; }
+                }
         }
 
         int[] Furn(Func<FurnitureDef, bool> pick) => L.Furniture.Where(fu => fu.Cells.Length > 0 && pick(fu)).Select(fu => fu.Id).ToArray();

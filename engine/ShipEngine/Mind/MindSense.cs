@@ -7,6 +7,25 @@ public sealed partial class Mind
     private readonly HashSet<int> _sparks = new();
     private int[] _devAt = Array.Empty<int>();
 
+    /// <summary>문 너머(기압이 낮은 쪽)가 바깥 문이 닫힌 에어락인가 — 비운 에어락으로 새는 문틈은 배를 빼지 않는다 (바깥 문이 열려 있으면 다르다).</summary>
+    private bool ClosedAirlockBeyond(int door)
+    {
+        Span<int> nb = stackalloc int[4];
+        L.Neighbors(door, nb);
+        int low = -1; double lp = double.MaxValue;
+        foreach (int j in nb) if (j >= 0 && L.Kind[j] == CellKind.Floor && F.Pressure(j) < lp) { lp = F.Pressure(j); low = j; }
+        if (low < 0 || L.Room[low] < 0) return false;
+        bool external = false;
+        foreach (int dc in _roomDoors[L.Room[low]])
+        {
+            int d = L.DoorAt[dc];
+            if (d < 0 || !L.Doors[d].External) continue;
+            if (F.DoorOpen[d] > 0 || F.DoorBleed[d] != 0 || (_st != null && _st.DoorJam[d] != 0)) return false;
+            external = true;
+        }
+        return external;
+    }
+
     /// <summary>문 양쪽의 기압 차 (kPa).</summary>
     private double DoorDeltaKPa(int door)
     {
@@ -147,7 +166,7 @@ public sealed partial class Mind
                 int d = L.DoorAt[x];
                 if (d < 0 || !F.DoorGapOpen(d) || Dist(x, cell) > 3) continue;
                 double dp = DoorDeltaKPa(x);
-                if (dp > 20) Learn(a, t, BeliefKind.Breach, x, -1, (float)Math.Min(1, dp / 60), BeliefSource.Saw, _st?.LowSideCause(x) ?? 0, (float)Field.LeakNormalDoor);
+                if (dp > 20 && !ClosedAirlockBeyond(x)) Learn(a, t, BeliefKind.Breach, x, -1, (float)Math.Min(1, dp / 60), BeliefSource.Saw, _st?.LowSideCause(x) ?? 0, (float)Field.LeakNormalDoor);
             }
             if (L.Kind[cell] == CellKind.Door)
             {
@@ -157,6 +176,19 @@ public sealed partial class Mind
                     if (j >= 0 && L.Room[j] >= 0 && L.Room[j] != room)
                         foreach (int x in L.Rooms[L.Room[j]].Cells) SeeCell(sim, a, x, radius);
             }
+        }
+        else if (L.Kind[cell] == CellKind.Outside)
+        {
+            // 외판 바깥: 둘레 3칸 안의 외판 구멍이 보인다
+            int x0 = L.X(cell), y0 = L.Y(cell);
+            for (int dy = -3; dy <= 3; dy++)
+                for (int dx = -3; dx <= 3; dx++)
+                {
+                    if (!L.In(x0 + dx, y0 + dy)) continue;
+                    int w = L.Index(x0 + dx, y0 + dy);
+                    if (L.Kind[w] == CellKind.Wall && L.Hull[w] && F.Hole[w] > 0)
+                        Learn(a, t, BeliefKind.Breach, w, -1, 1, BeliefSource.Saw, _st?.DamageCause[w] ?? 0, F.Hole[w]);
+                }
         }
         // 공기가 빠졌다 (사람은 몸으로 · 로봇은 센서로)
         double kpa = F.Pressure(cell);

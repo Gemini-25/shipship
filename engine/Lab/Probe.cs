@@ -159,4 +159,36 @@ public static partial class Program
         }
         foreach (var (tick, text) in sm.Log.TakeLast(30)) Console.WriteLine($"    주컴 {Time.Clock(tick)} {text}");
     }
+
+    /// <summary>이야기꾼을 켠 배에서 로봇 하나를 틱마다 따라간다 (--probe-robot [배] [시드] [몇 시간 뒤부터] [로봇 번호] [틱 수]).</summary>
+    internal static void ProbeRobot(string[] args)
+    {
+        var rest = args.SkipWhile(a => a != "--probe-robot").Skip(1).ToArray();
+        string ship = rest.Length > 0 ? rest[0] : "Pabal";
+        ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 18;
+        double hours = rest.Length > 2 ? double.Parse(rest[2]) : 8;
+        int which = rest.Length > 3 ? int.Parse(rest[3]) : 0;
+        int ticks = rest.Length > 4 ? int.Parse(rest[4]) : 200;
+        var lay = Layout.Ship(ship, Tables.Default);
+        int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
+        var s = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0);
+        s.Get<Storyteller>().Enabled = true;
+        var m = s.Get<Mind>(); var f = s.Get<Field>();
+        s.Run((long)Time.Hours(hours));
+        var robots = m.Agents.Where(a => !a.IsPerson).ToList();
+        var r = robots[Math.Min(which, robots.Count - 1)];
+        var sm = s.Get<ShipMind>();
+        foreach (var x in sm.Incidents.Where(x => x.Active != 0))
+            Console.WriteLine($"  사건 {x.Kind} {(x.Room >= 0 ? s.Layout.Rooms[x.Room].Name : "-")} 수준 {x.Level:0.0} 로봇 {x.RobotA}/{x.RobotB} 보냄 {x.Tries} 봉쇄 {x.Sealed}");
+        foreach (var a in robots) Console.WriteLine($"  {m.NameOf(a.Id)}#{a.Id} 맡음 {a.C.AssignedGoal}:{a.C.AssignedTarget} 기한 {(a.C.AssignedUntil - s.Tick) / 25.0:0}분 · 전지 {a.C.Battery:0.00} · {m.Thought(a.Id)}");
+        string Where(int c) => c < 0 ? "-" : $"({s.Layout.X(c)},{s.Layout.Y(c)}){(s.Layout.Kind[c] == CellKind.Outside ? "바깥" : m.RoomOf(c) >= 0 ? s.Layout.Rooms[m.RoomOf(c)].Name : "")}";
+        for (int k = 0; k < ticks; k++)
+        {
+            s.Step();
+            var c = r.C;
+            string plan = string.Join(">", r.Plan.Select((p, i) => (i == c.StepIndex ? "*" : "") + p.Kind + (p.Cell >= 0 ? Where(p.Cell) : "")));
+            string door = c.WaitDoor >= 0 ? $" 문{c.WaitDoor}({s.Layout.Doors[c.WaitDoor].Kind}{(s.Layout.Doors[c.WaitDoor].External ? " 바깥" : "")}) 기다림 {c.WaitTicks} 밸브 {f.DoorBleed[c.WaitDoor]} 열림 {f.DoorOpen[c.WaitDoor]:0.0} 여기 {f.Pressure(c.Cell):0}kPa" : "";
+            Console.WriteLine($"  {Time.Clock(s.Tick)} {m.NameOf(r.Id)}#{r.Id} {Where(c.Cell)} {m.Thought(r.Id)} · 맡음 {c.AssignedGoal}:{Where(c.AssignedTarget)} · 길 {r.PathIdx}/{r.Path.Count}{door} · 계획 {plan} · 피함 {string.Join(",", r.Avoid.Select(v => v.Goal + ":" + v.Target))}");
+        }
+    }
 }

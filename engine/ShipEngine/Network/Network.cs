@@ -94,6 +94,11 @@ public sealed class Network : IEngine
     public bool ReactorScram;
     public int ScramCause;
     public double WaterTank;      // 물 (몰)
+    /// <summary>예비 공기 (몰 · 질소 79% 산소 21%) — 큰 감압 뒤 배를 다시 채울 압축 공기. 배 전체를 반 번 채울 만큼 싣고 떠난다.</summary>
+    public double AirReserve;
+    /// <summary>예비 공기를 지금 푸는 빠르기 (몰/초) — 주컴퓨터가 정한다 (생명유지 설비 자리로 나온다).</summary>
+    public double AirRelease;
+    public double AirReleased;
     public double Coolant;        // 냉각 고리의 암모니아 (몰)
     public double VentedH2;       // 배 밖으로 버린 수소 (몰 · 원소 장부)
     public double Supplied, Demanded, CoolingKw, ReactorKw, HvacKw;
@@ -132,6 +137,8 @@ public sealed class Network : IEngine
         OverSec = new float[nf]; FaultCell = Enumerable.Repeat(-1, nf).ToArray(); BreakerStuck = new byte[nf]; Amps = new float[nf];
         Damper = Enumerable.Repeat((byte)1, L.Rooms.Count).ToArray();
         WaterTank = 800 * 55.5;      // 물 800L
+        int inside = L.Rooms.Sum(r => r.Cells.Length);
+        AirReserve = inside * Field.CellVolume * 101_325 / (Field.R * 293.15) * 0.5;
         Coolant = 200_000 / 17.03;   // 암모니아 200kg
     }
 
@@ -248,7 +255,25 @@ public sealed class Network : IEngine
         Effects(sim, dt);
         Cooling(sim, dt);
         Ducts(sim);
+        ReleaseAir(dt);
         if (sim.Tick % 25 == 0) WearStep(sim, 25 * dt);
+    }
+
+    /// <summary>예비 공기를 생명유지 설비(산소 발생기) 자리로 푼다 — 없으면 첫 방 통풍구로.</summary>
+    private void ReleaseAir(double dt)
+    {
+        if (AirRelease <= 0 || AirReserve <= 0) return;
+        double n = Math.Min(AirRelease * dt, AirReserve);
+        var at = new List<int>();
+        foreach (var dev in Devices) if (dev.Def.Role == "o2gen" && F.Passable(dev.Cell)) at.Add(dev.Cell);
+        if (at.Count == 0) for (int r = 0; r < Vent.Length && at.Count == 0; r++) if (Vent[r] >= 0 && F.Passable(Vent[r])) at.Add(Vent[r]);
+        if (at.Count == 0) return;
+        foreach (int c in at)
+        {
+            F.AddGas(c, T.gN2, n * 0.79 / at.Count, 293.15);
+            F.AddGas(c, T.gO2, n * 0.21 / at.Count, 293.15);
+        }
+        AirReserve -= n; AirReleased += n;
     }
 
     /// <summary>합선 찾기: 급전선이 지나는 칸이 젖었거나 겉면이 470K를 넘으면.</summary>
@@ -677,7 +702,7 @@ public sealed class Network : IEngine
     {
         w.Arr(On); w.Arr(Supply); w.Arr(Wear); w.Arr(Broken); w.Arr(Charge);
         w.Arr(Breaker); w.Arr(OverSec); w.Arr(FaultCell); w.Arr(BreakerStuck); w.Arr(Amps); w.Arr(Damper);
-        w.Bool(ReactorScram); w.I32(ScramCause); w.F64(WaterTank); w.F64(Coolant); w.F64(VentedH2);
+        w.Bool(ReactorScram); w.I32(ScramCause); w.F64(WaterTank); w.F64(Coolant); w.F64(VentedH2); w.F64(AirReserve); w.F64(AirRelease); w.F64(AirReleased);
         w.F64(Supplied); w.F64(Demanded); w.F64(CoolingKw); w.F64(ReactorKw); w.F64(HvacKw);
         w.I64(Trips); w.I64(Shorts); w.I64(Failures);
         var keys = _faultCause.Keys.OrderBy(k => k).ToList();
@@ -692,7 +717,7 @@ public sealed class Network : IEngine
     {
         r.ArrInto(On); r.ArrInto(Supply); r.ArrInto(Wear); r.ArrInto(Broken); r.ArrInto(Charge);
         r.ArrInto(Breaker); r.ArrInto(OverSec); r.ArrInto(FaultCell); r.ArrInto(BreakerStuck); r.ArrInto(Amps); r.ArrInto(Damper);
-        ReactorScram = r.Bool(); ScramCause = r.I32(); WaterTank = r.F64(); Coolant = r.F64(); VentedH2 = r.F64();
+        ReactorScram = r.Bool(); ScramCause = r.I32(); WaterTank = r.F64(); Coolant = r.F64(); VentedH2 = r.F64(); AirReserve = r.F64(); AirRelease = r.F64(); AirReleased = r.F64();
         Supplied = r.F64(); Demanded = r.F64(); CoolingKw = r.F64(); ReactorKw = r.F64(); HvacKw = r.F64();
         Trips = r.I64(); Shorts = r.I64(); Failures = r.I64();
         _faultCause.Clear();

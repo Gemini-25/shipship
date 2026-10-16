@@ -11,6 +11,8 @@ public sealed partial class Mind
     }
 
     private readonly List<Option> _opts = new();
+    /// <summary>조사용: 이 에이전트의 고르기를 찍는다 (MIND_DEBUG_AGENT).</summary>
+    public static readonly int DebugAgent = int.TryParse(Environment.GetEnvironmentVariable("MIND_DEBUG_AGENT"), out var v) ? v : -1;
 
     private void Decide(Sim sim, Agent a)
     {
@@ -24,6 +26,7 @@ public sealed partial class Mind
         if (_opts.Count == 0) return;
         _opts.Sort((x, y) => y.Score.CompareTo(x.Score) is var k && k != 0 ? k : x.Goal.CompareTo(y.Goal));
 
+        if (DebugAgent == a.Id) Console.WriteLine($"    [고르기 {a.Id}] " + string.Join(" · ", _opts.Take(5).Select(o => $"{o.Goal}:{o.Target}={o.Score:0.00}")));
         bool busy = a.Plan.Count > 0 && c.StepIndex < a.Plan.Count;
         if (busy && c.Carrying >= 0) return; // 업은 사람을 내려놓기 전에는 다른 일을 하지 않는다
         if (busy && a.Plan[c.StepIndex].Kind is StepKind.Spray or StepKind.Seal or StepKind.Fix or StepKind.PickUp or StepKind.Drop or StepKind.Wear or StepKind.Take)
@@ -329,6 +332,13 @@ public sealed partial class Mind
             case GoalKind.Patch:
             {
                 int wall = o.Target;
+                if (Eva(a) && L.Hull[wall])
+                {
+                    // 로봇: 구멍 곁 아무 칸이나 — 안쪽에 못 들어가면(진공 방 문이 안 열린다) 에어락으로 나가 외판 바깥에서 막는다
+                    plan.Add(Go(wall, 1));
+                    plan.Add(new PlanStep { Kind = StepKind.Seal, Cell = wall });
+                    return true;
+                }
                 int stand = StandBeside(wall);
                 if (stand < 0) return false;
                 if (a.IsPerson)
@@ -430,11 +440,61 @@ public sealed partial class Mind
                 return true;
             }
             case GoalKind.Investigate:
+                if (L.Kind[o.Cell] == CellKind.Outside)
+                {
+                    // 바깥에서 살핀다: 그 방 외판을 따라 걸으며 구멍을 찾는다 (주컴퓨터가 맡긴 둘러보기)
+                    if (!Eva(a)) return false;
+                    foreach (int wp in SurveyRoute(o.Cell)) plan.Add(Go(wp, 1));
+                    plan.Add(new PlanStep { Kind = StepKind.Look, Cell = o.Cell });
+                    return true;
+                }
                 plan.Add(Go(o.Cell, 2));
                 plan.Add(new PlanStep { Kind = StepKind.Look, Cell = o.Cell });
                 return true;
         }
         return false;
+    }
+
+    /// <summary>외판 둘러보기 길: 시작 칸(외판 바깥)에 맞닿은 방의 외판 바깥 칸들을 가까운 차례로 잇고 3칸마다 들른다.</summary>
+    private List<int> SurveyRoute(int start)
+    {
+        var route = new List<int>();
+        int room = OutsideRoom(start);
+        if (room < 0) { route.Add(start); return route; }
+        var cells = new List<int>();
+        Span<int> nb = stackalloc int[4];
+        foreach (int w in _roomWalls[room])
+        {
+            if (!L.Hull[w]) continue;
+            L.Neighbors(w, nb);
+            foreach (int j in nb) if (j >= 0 && _hullOut[j] && !cells.Contains(j)) cells.Add(j);
+        }
+        cells.Sort();
+        int cur = start, n = 0;
+        route.Add(start);
+        cells.Remove(start);
+        while (cells.Count > 0)
+        {
+            int best = cells[0];
+            foreach (int c in cells) if (Manhattan(cur, c) < Manhattan(cur, best)) best = c;
+            cells.Remove(best); cur = best;
+            if (++n % 3 == 0 || cells.Count == 0) route.Add(best);
+        }
+        return route;
+    }
+
+    /// <summary>외판 바깥 칸에 맞닿은 방 (외판 벽 너머).</summary>
+    public int OutsideRoom(int cell)
+    {
+        Span<int> nb = stackalloc int[4], nb2 = stackalloc int[4];
+        L.Neighbors(cell, nb);
+        foreach (int w in nb)
+        {
+            if (w < 0 || L.Kind[w] != CellKind.Wall) continue;
+            L.Neighbors(w, nb2);
+            foreach (int j in nb2) if (j >= 0 && L.Room[j] >= 0) return L.Room[j];
+        }
+        return -1;
     }
 
     /// <summary>칸이 그 방 안이거나 그 방 둘레의 벽 · 문인가.</summary>
@@ -536,10 +596,11 @@ public sealed partial class Mind
         return best;
     }
 
-    /// <summary>⑪ 일감판이 맡긴 일 (만들기 · 정비 · 청소) — 맡긴 보너스(+3)가 붙는다.</summary>
+    /// <summary>⑪ 일감판이 맡긴 일 (만들기 · 정비 · 청소) — 맡긴 보너스(+3)가 붙는다. 주컴퓨터가 로봇에게 맡긴 살피기(빠진 방 · 외판 둘러보기)도.</summary>
     private void JobOption(Agent a)
     {
         ref var c = ref a.C;
+        if (!a.IsPerson && c.AssignedGoal == GoalKind.Investigate && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0) Add(GoalKind.Investigate, c.AssignedTarget, c.AssignedTarget, 1.2f);
         if (c.AssignedUntil <= _nowTick || c.AssignedGoal is not (GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean)) return;
         int cell = c.AssignedGoal switch
         {

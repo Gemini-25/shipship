@@ -449,10 +449,12 @@ public sealed partial class Mind
                 {
                     _st?.RequestDoor(d, 1);
                     if (c.WaitDoor != d) { c.WaitDoor = d; c.WaitTicks = 0; }
-                    c.WaitTicks++;
+                    if (F.DoorBleed[d] == 0 || t % 10 == 0) c.WaitTicks++; // 압력 맞춤 밸브가 쉬익거리면 (기압을 맞추는 중) 더 기다린다
+                    if (c.OpenedDoor >= 0 && c.OpenedDoor != d) CloseBehind(sim, a, 1); // 에어락: 뒷문을 닫아야 앞문 밸브가 열린다
                     if (c.WaitTicks > 12 || (_st != null && _st.DoorJam[d] != 0 && F.DoorOpen[d] < 0.5f))
                     {
                         Learn(a, t, BeliefKind.StuckDoor, n, d, 1, BeliefSource.Felt);
+                        _st?.RequestDoor(d, 0); // 안 열리는 문 — 열어 달라던 것을 거둔다 (밸브도 닫힌다)
                         c.WaitTicks = 0; c.WaitDoor = -1;
                         a.Path.Clear(); a.PathIdx = 0;
                     }
@@ -485,7 +487,7 @@ public sealed partial class Mind
     }
 
     /// <summary>내가 연 문을 지나면 다시 닫는다 (배의 규칙). 공기 때문에 도망치는 중이면 지나자마자 — 뒤에 오는 사람이 있어도 (착한 사람은 기다린다).</summary>
-    private void CloseBehind(Sim sim, Agent a)
+    private void CloseBehind(Sim sim, Agent a, int minDist = 2)
     {
         ref var c = ref a.C;
         int d = c.OpenedDoor;
@@ -500,7 +502,7 @@ public sealed partial class Mind
                 foreach (var o in Agents)
                     if (o != a && o.IsPerson && o.C.Up != 0 && o.C.Mode == 1 && Dist(o.C.Cell, dc) <= 3 && Dist(o.C.Cell, c.Cell) > dist) return; // 뒤따르는 사람을 기다린다
         }
-        else if (dist < 2) return;
+        else if (dist < minDist) return;
         _st.RequestDoor(d, 0);
         c.OpenedDoor = -1;
         if (c.CloseHard != 0)
@@ -527,6 +529,7 @@ public sealed partial class Mind
         if (to < 0) return false;
         _dangerFire.Clear(); _dangerVac.Clear();
         bool suit = a.IsPerson && _life![a.C.Body].Suit != 0;
+        bool eva = Eva(a);
         foreach (var b in a.Beliefs)
         {
             if (b.Conf < 0.3f) continue;
@@ -548,8 +551,10 @@ public sealed partial class Mind
             L.Neighbors(cur, nb);
             foreach (int j in nb)
             {
-                if (j < 0 || !L.IsSpace(j)) continue;
-                float cost = 1;
+                if (j < 0) continue;
+                bool outside = !L.IsSpace(j);
+                if (outside && !(eva && _hullOut[j])) continue;
+                float cost = outside ? 2 : 1; // 외판 바깥은 자석 발로 천천히
                 if (L.FurnitureAt[j] >= 0) cost += 0.5f;
                 if (L.Kind[j] == CellKind.Door)
                 {

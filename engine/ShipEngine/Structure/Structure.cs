@@ -46,7 +46,7 @@ public sealed class Structure : IEngine
     public byte[] DoorJam;       // 1: 끼임
     public byte[] Braced;        // 1: 버티는 문 · 벽에 덧대 받쳤다 (정격 ×1.6)
     public byte[] DoorPowered;   // 1: 전동 (망이 끊으면 0 — 손으로만)
-    public long Cracks, Breaches, Impacts, DoorsBlown;
+    public long Cracks, Breaches, Impacts, DoorsBlown, Bleeds;
     /// <summary>칸마다 들어온 충격 에너지 (J) — ⑦ 생명이 읽고 비운다 (그 칸 몸의 상처).</summary>
     public float[] ImpactJ;
 
@@ -287,20 +287,83 @@ public sealed class Structure : IEngine
 
     private void Doors(Sim sim, double dt)
     {
+        _life ??= sim.Find<Life>();
         for (int d = 0; d < L.Doors.Count; d++)
         {
             float now = F.DoorOpen[d], target = DoorTarget[d];
+            bool opening = now <= 0.001f && target > now && DoorJam[d] == 0;
+            if (F.DoorBleed[d] != 0 && !opening) F.SetBleed(d, false);
             if (DoorJam[d] != 0 || Math.Abs(now - target) < 1e-4) continue;
             int c = L.Doors[d].Cell;
             // 닫힌 문을 열 때: 양쪽 압력 차를 이겨야 한다
             if (now <= 0.001f && target > now)
             {
                 double limit = DoorPowered[d] != 0 ? 30 : 2;
-                if (DeltaP(c) > limit) continue;
+                if (DeltaP(c) > limit)
+                {
+                    // 전동 문은 먼저 압력 맞춤 밸브로 양쪽 기압을 맞춘다 — 안전할 때만
+                    bool ok = DoorPowered[d] != 0 && SafeToBleed(d);
+                    if (ok && F.DoorBleed[d] == 0) Bleeds++;
+                    F.SetBleed(d, ok);
+                    continue;
+                }
             }
             float step = (float)(0.5 * dt);
             F.SetDoor(d, target > now ? Math.Min(target, now + step) : Math.Max(target, now - step));
         }
+    }
+
+    /// <summary>
+    /// 압력 맞춤 밸브를 열어도 되나:
+    /// 바깥으로 빼는 문(에어락 바깥문)은 그 방의 다른 문이 모두 닫혀 있고(맞물림) 우주복 없이 살아 있는 사람이 없을 때만 —
+    /// 안쪽 문은 낮은 쪽 구역이 우주로 트여 있지 않을 때만 (트였으면 높은 쪽 공기까지 우주로 빠진다 — 구멍을 먼저 막아야 한다).
+    /// </summary>
+    public bool SafeToBleed(int d)
+    {
+        var door = L.Doors[d];
+        int c = door.Cell, x = L.X(c), y = L.Y(c);
+        int a = door.Vertical ? Idx(x, y - 1) : Idx(x - 1, y), b = door.Vertical ? Idx(x, y + 1) : Idx(x + 1, y);
+        double pa = SideKPa(a), pb = SideKPa(b);
+        int lo = pa < pb ? a : b, hi = pa < pb ? b : a;
+        bool Out(int j) => j < 0 || L.Kind[j] == CellKind.Outside;
+        if (Out(hi)) return false;
+        if (Out(lo))
+        {
+            int room = L.Room[hi];
+            if (room < 0) return false;
+            foreach (int e in RoomDoors(room)) if (e != d && (F.DoorOpen[e] > 0 || DoorTarget[e] > 0)) return false;
+            if (_life != null)
+                foreach (var body in _life.Bodies)
+                    if (body.Alive != 0 && body.Suit == 0 && body.Cell >= 0 && L.Room[body.Cell] == room) return false;
+            return true;
+        }
+        int region = lo < F.RegionOf.Length ? F.RegionOf[lo] : -1;
+        if (region < 0) return false;
+        foreach (var k in F.Links) if (k.RB < 0 && k.RA == region && k.Area > 0) return false;
+        return true;
+    }
+
+    private int Idx(int x, int y) => L.In(x, y) ? L.Index(x, y) : -1;
+    private double SideKPa(int j) => j < 0 || L.Kind[j] == CellKind.Outside ? F.Outside.KPa : F.Pressure(j);
+    private Life? _life;
+    private List<int>[]? _roomDoorList;
+
+    /// <summary>방 둘레의 문.</summary>
+    public List<int> RoomDoors(int room)
+    {
+        if (_roomDoorList == null)
+        {
+            _roomDoorList = new List<int>[L.Rooms.Count];
+            for (int r = 0; r < L.Rooms.Count; r++) _roomDoorList[r] = new List<int>();
+            Span<int> nb = stackalloc int[4];
+            for (int d = 0; d < L.Doors.Count; d++)
+            {
+                L.Neighbors(L.Doors[d].Cell, nb);
+                foreach (int j in nb)
+                    if (j >= 0 && L.Room[j] >= 0 && !_roomDoorList[L.Room[j]].Contains(d)) _roomDoorList[L.Room[j]].Add(d);
+            }
+        }
+        return _roomDoorList[room];
     }
 
     /// <summary>
@@ -337,12 +400,12 @@ public sealed class Structure : IEngine
     public void Save(StateWriter w)
     {
         w.Arr(Fatigue); w.Arr(Corrode); w.Arr(Stress); w.Arr(DamageCause); w.Arr(DoorTarget); w.Arr(DoorJam); w.Arr(DoorPowered); w.Arr(Braced);
-        w.I64(Cracks); w.I64(Breaches); w.I64(Impacts); w.I64(DoorsBlown); w.F64(RustedO2); w.Arr(ImpactJ);
+        w.I64(Cracks); w.I64(Breaches); w.I64(Impacts); w.I64(DoorsBlown); w.F64(RustedO2); w.Arr(ImpactJ); w.I64(Bleeds);
     }
 
     public void Load(StateReader r)
     {
         r.ArrInto(Fatigue); r.ArrInto(Corrode); r.ArrInto(Stress); r.ArrInto(DamageCause); r.ArrInto(DoorTarget); r.ArrInto(DoorJam); r.ArrInto(DoorPowered); r.ArrInto(Braced);
-        Cracks = r.I64(); Breaches = r.I64(); Impacts = r.I64(); DoorsBlown = r.I64(); RustedO2 = r.F64(); r.ArrInto(ImpactJ);
+        Cracks = r.I64(); Breaches = r.I64(); Impacts = r.I64(); DoorsBlown = r.I64(); RustedO2 = r.F64(); r.ArrInto(ImpactJ); Bleeds = r.I64();
     }
 }
