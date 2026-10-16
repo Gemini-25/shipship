@@ -29,6 +29,22 @@ public static partial class Program
             if (n == 0) Check("배 도면이 하나 이상 있다", false);
         }
 
+        if (Do("배전기"))
+        {
+            // 옛 배 19척: 평시 10분 — 과부하로 떨어지는 차단기 없음 · 원자로 멀쩡 (새터호 냉각실 급전선이 펌프 여럿을 못 버티던 버그)
+            var bad = new List<string>();
+            int n = 0;
+            foreach (var key in Layout.ShipKeys())
+            {
+                var s = ShipWorld.Create(key, 1);
+                var net = s.Get<Network>();
+                s.Run(Time.Minutes(10));
+                if (net.Trips > 0 || net.ReactorScram) bad.Add($"{s.Layout.Name}(차단기 {net.Trips} · 원자로 {(net.ReactorScram ? "멈춤" : "멀쩡")})");
+                n++;
+            }
+            Check($"옛 배 {n}척 평시 10분: 과부하 차단기 없음 · 원자로 멀쩡 (급전선 굵기는 방의 장치에 맞춘다)", bad.Count == 0, bad.Count == 0 ? "모두 멀쩡" : string.Join(" · ", bad));
+        }
+
         if (Do("불"))
         {
             var lay = Worlds.Ascii(Worlds.Lounge, Worlds.Seats);
@@ -481,5 +497,6 @@ public static partial class Program
         }
 
         MindRules();
+        ComputerRules();
     }
 }

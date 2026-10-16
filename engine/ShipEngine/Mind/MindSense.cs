@@ -14,6 +14,9 @@ public sealed partial class Mind
     /// <summary>믿음을 더하거나 고친다 — 같은 종류가 가까우면(3칸 · 대상이 있으면 같은 대상) 합친다. 새 믿음이면 참.</summary>
     public bool Learn(Agent a, long tick, BeliefKind kind, int cell, int subject, float conf, BeliefSource src, int cause = 0, float size = 0)
     {
+        if (src is BeliefSource.Told or BeliefSource.Screen)
+            foreach (var d in a.Doubts)
+                if (d.Kind == kind && d.Until > tick && Dist(d.Cell, cell) <= 4) { conf *= 0.2f; break; } // 가 봤는데 없었다
         if (conf <= 0.02f) return false;
         var list = a.Beliefs;
         for (int i = 0; i < list.Count; i++)
@@ -242,6 +245,8 @@ public sealed partial class Mind
             if (!Visible(a, b.Cell, room, radius)) continue;
             b.Conf = 0;
             a.Beliefs[i] = b;
+            a.Doubts.RemoveAll(d => d.Until <= t);
+            if (a.Doubts.Count < 8) a.Doubts.Add(new Doubt { Kind = b.Kind, Cell = b.Cell, Until = t + Time.Minutes(3) });
         }
     }
 
@@ -280,12 +285,13 @@ public sealed partial class Mind
                 Learn(a, t, BeliefKind.Fire, h.Source, -1, 0.5f, BeliefSource.Heard, h.Cause); break;
             case SoundKind.Scream when h.Actor != a.Id:
                 Learn(a, t, BeliefKind.Help, h.Source, h.Actor, 0.8f, BeliefSource.Heard, h.Cause); break;
+            case SoundKind.Alarm:
             case SoundKind.Voice when h.Actor != a.Id:
                 foreach (var (ev, _, sp, b) in _said)
                     if (ev == h.Event && sp != a.Id)
                     {
                         float clarity = (float)Math.Clamp((h.Db - 25) / 30, 0.2, 1);
-                        Learn(a, t, b.Kind, b.Cell, b.Subject, b.Conf * 0.8f * clarity, BeliefSource.Told, b.Cause, b.Size);
+                        Learn(a, t, b.Kind, b.Cell, b.Subject, b.Conf * 0.8f * clarity, sp == Computer ? BeliefSource.Screen : BeliefSource.Told, b.Cause, b.Size);
                         if (a.IsPerson && Urgent(b.Kind)) a.C.Fear = Math.Max(a.C.Fear, 0.3f * (1 - a.C.Brave));
                     }
                 break;
@@ -328,7 +334,8 @@ public sealed partial class Mind
     private bool AirBad(Agent a, int cell)
     {
         if (a.IsPerson && _life![a.C.Body].Suit != 0) return false;
-        return F.Pressure(cell) < 40 || F.Partial(T.gO2, cell) < 14 || F.Ppm(T.gCO2, cell) > 50000;
+        // 몸은 산소가 모자란 것을 직접 느끼지 못한다 (숨이 찬 것은 이산화탄소 때문) — 낮은 기압 · 이산화탄소만 본능을 깨운다
+        return F.Pressure(cell) < 40 || F.Ppm(T.gCO2, cell) > 50000;
     }
 
     private bool HeatBad(int cell) => F.Temp(cell) > 330 || BurningNear(cell, 1);
@@ -364,7 +371,7 @@ public sealed partial class Mind
                 // 헤맨다: 근처 아무 칸으로
                 int x = L.X(cell) + (int)(Rng.Unit(sim.Seed, Rng.Key("헤맴x"), t, a.Id) * 13) - 6;
                 int y = L.Y(cell) + (int)(Rng.Unit(sim.Seed, Rng.Key("헤맴y"), t, a.Id) * 13) - 6;
-                if (L.In(x, y) && L.IsSpace(L.Index(x, y)))
+                if (L.In(x, y) && L.IsSpace(L.Index(x, y)) && !BelievedRoomBad(a, RoomOf(L.Index(x, y))))
                 {
                     a.Plan.Clear(); a.Plan.Add(new PlanStep { Kind = StepKind.GoTo, Cell = L.Index(x, y) }); c.StepIndex = 0; a.Path.Clear();
                 }

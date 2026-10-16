@@ -214,6 +214,29 @@ public sealed partial class Mind : IEngine
         }
     }
 
+    // ───────────────────────── 주컴퓨터가 쓰는 요청 ─────────────────────────
+
+    /// <summary>말한 이 번호: 주컴퓨터.</summary>
+    public const int Computer = -2;
+
+    /// <summary>방송 · 경보: 칸 cell의 스피커에서 소리가 나고, 들은 사람은 믿음을 '화면(방송)' 출처로 얻는다.</summary>
+    public int Announce(Sim sim, int cell, float db, Belief b)
+    {
+        Bind(sim);
+        if (_snd == null) return -1;
+        int ev = _snd.Emit(sim, cell, db, SoundKind.Alarm, b.Cause, Computer);
+        _said.Add((ev, sim.Tick, Computer, b));
+        return ev;
+    }
+
+    /// <summary>로봇 · 사람에게 일을 맡긴다: 믿음을 넣고 그 목표에 점수를 더한다 (until 틱까지).</summary>
+    public void Assign(Sim sim, int agent, GoalKind goal, int target, Belief b, long until)
+    {
+        var a = Agents[agent];
+        Learn(a, sim.Tick, b.Kind, b.Cell, b.Subject, b.Conf, BeliefSource.Screen, b.Cause, b.Size);
+        a.C.AssignedGoal = goal; a.C.AssignedTarget = target; a.C.AssignedUntil = until;
+    }
+
     // ───────────────────────── 읽기 (화면 · 연출 · 시험) ─────────────────────────
 
     public Agent this[int i] => Agents[i];
@@ -451,7 +474,7 @@ public sealed partial class Mind : IEngine
         foreach (var a in Agents)
         {
             w.List(new List<AgentCore> { a.C });
-            w.List(a.Beliefs); w.List(a.Plan); w.List(a.Path); w.I32(a.PathIdx); w.List(a.Avoid);
+            w.List(a.Beliefs); w.List(a.Plan); w.List(a.Path); w.I32(a.PathIdx); w.List(a.Avoid); w.List(a.Doubts);
         }
         w.Arr(Stock); w.List(Loose);
         w.I32(_said.Count);
@@ -466,7 +489,7 @@ public sealed partial class Mind : IEngine
         for (int i = 0; i < n; i++)
         {
             var a = new Agent { Id = i, C = r.List<AgentCore>()[0] };
-            a.Beliefs = r.List<Belief>(); a.Plan = r.List<PlanStep>(); a.Path = r.List<int>(); a.PathIdx = r.I32(); a.Avoid = r.List<AvoidEntry>();
+            a.Beliefs = r.List<Belief>(); a.Plan = r.List<PlanStep>(); a.Path = r.List<int>(); a.PathIdx = r.I32(); a.Avoid = r.List<AvoidEntry>(); a.Doubts = r.List<Doubt>();
             Agents.Add(a);
         }
         r.ArrInto(Stock); Loose = r.List<LooseItem>();

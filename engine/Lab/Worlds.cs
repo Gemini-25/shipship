@@ -44,8 +44,12 @@ public static class Worlds
 #.......................#
 #########################";
 
+    /// <summary>마음 시험 배 + 주컴퓨터(왼쪽 방 위).</summary>
+    public static string MindShipComputer => MindShip.Replace("#..s......#....a....a.s.#", "#..s...c..#....a....a.s.#");
+
     public static Dictionary<char, string> MindLegend => new()
     {
+        ['c'] = "MainComputer",
         ['s'] = "SuitLocker", ['p'] = "PowerPanel", ['b'] = "Battery", ['a'] = "Seat", ['e'] = "Bed",
         ['r'] = "RobotDock", ['w'] = "Workbench", ['m'] = "MealDispenser", ['q'] = "RobotDock",
     };

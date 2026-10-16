@@ -181,6 +181,12 @@ public sealed class Network : IEngine
             RoomFeeder[r] = fd.Id;
         }
         foreach (var d in Devices) d.Feeder = d.Room >= 0 ? RoomFeeder[d.Room] : -1;
+        // 전선 굵기는 그 방에 달린 장치를 다 켰을 때의 1.5배로 (배 설계자가 하듯) — 많아야 60A보다 작지는 않다
+        foreach (var fd in Feeders)
+        {
+            double kw = Devices.Where(d => d.Feeder == fd.Id).Sum(d => d.Def.Kw);
+            fd.RatingA = Math.Max(60, Math.Ceiling(kw * 1.5 * 1000 / Volts / 10) * 10);
+        }
     }
 
     // ───────────────────────── 요청 ─────────────────────────

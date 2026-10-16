@@ -131,6 +131,11 @@ public struct AgentCore
     public byte CloseHard;     // 1: 공기 때문에 도망 중 — 지나자마자 닫는다
     public float Speed;        // 지난 틱 빠르기 (m/s — 화면용)
 
+    // 주컴퓨터가 맡긴 일 (그 목표 점수에 +3)
+    public GoalKind AssignedGoal;
+    public int AssignedTarget;
+    public long AssignedUntil;
+
     // 감각
     public int HeardUpTo;      // 처리한 소리 사건 번호
     public float LastKPa, LastCOHb;
@@ -156,6 +161,15 @@ public struct AvoidEntry
     public long Until;
 }
 
+/// <summary>직접 가서 없다고 확인한 것 — 한동안 말 · 방송으로 들어도 반신반의한다.</summary>
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
+public struct Doubt
+{
+    public BeliefKind Kind;
+    public int Cell;
+    public long Until;
+}
+
 /// <summary>사람 · 로봇 하나 — 바탕 값 + 믿음 · 계획 · 길.</summary>
 public sealed class Agent
 {
@@ -165,6 +179,7 @@ public sealed class Agent
     public List<PlanStep> Plan = new();
     public List<int> Path = new();
     public List<AvoidEntry> Avoid = new();
+    public List<Doubt> Doubts = new();
     public int PathIdx;
     public bool IsPerson => C.Kind == AgentKind.Person;
 }

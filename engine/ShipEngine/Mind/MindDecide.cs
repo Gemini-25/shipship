@@ -18,7 +18,7 @@ public sealed partial class Mind
         ref var c = ref a.C;
         _opts.Clear();
         a.Avoid.RemoveAll(v => v.Until <= t);
-        _deciding = a;
+        _deciding = a; _nowTick = t;
         Options(sim, a);
         _deciding = null;
         if (_opts.Count == 0) return;
@@ -26,6 +26,8 @@ public sealed partial class Mind
 
         bool busy = a.Plan.Count > 0 && c.StepIndex < a.Plan.Count;
         if (busy && c.Carrying >= 0) return; // 업은 사람을 내려놓기 전에는 다른 일을 하지 않는다
+        if (busy && a.Plan[c.StepIndex].Kind is StepKind.Spray or StepKind.Seal or StepKind.Fix or StepKind.PickUp or StepKind.Drop or StepKind.Wear or StepKind.Take)
+            return; // 손을 쓰는 단계는 마친다 (단계가 스스로 끝을 확인한다)
         float current = -1;
         if (busy)
             foreach (var o in _opts)
@@ -71,12 +73,18 @@ public sealed partial class Mind
     }
 
     private Agent? _deciding;
+    private long _nowTick;
 
     private void Add(GoalKind g, int target, int cell, float score, int cause = 0)
     {
         if (score <= 0.01f) return;
         if (_deciding != null)
+        {
             foreach (var v in _deciding.Avoid) if (v.Goal == g && v.Target == target) return;
+            ref var c = ref _deciding.C;
+            if (c.AssignedGoal == g && c.AssignedUntil > _nowTick && (c.AssignedTarget < 0 || c.AssignedTarget == target
+                || g is GoalKind.FightFire or GoalKind.Patch or GoalKind.Investigate && cell >= 0 && Dist(c.AssignedTarget, cell) <= 3)) score += 3; // 주컴퓨터가 맡긴 일
+        }
         _opts.Add(new Option { Goal = g, Target = target, Cell = cell, Score = score, Cause = cause });
     }
 
@@ -92,7 +100,9 @@ public sealed partial class Mind
         {
             // 졸림이 0.6을 넘거나, 잠잘 시간대에 0.4를 넘으면 잔다 (덜 졸린데 누우면 짧게 깬다)
             bool night = InWindow(hour, c.ShiftHour + 16, 8);
-            if (c.Sleepy > 0.6f || night && c.Sleepy > 0.4f) Add(GoalKind.Sleep, c.Bed, c.Bed >= 0 ? c.Bed : here, c.Sleepy * c.Sleepy * 5 + (night ? 1.5f : 0));
+            int bedRoom = RoomOf(c.Bed >= 0 ? c.Bed : here);
+            if ((c.Sleepy > 0.6f || night && c.Sleepy > 0.4f) && !BelievedRoomBad(a, bedRoom)) // 위험하다고 믿는 방에서는 자지 않는다
+                Add(GoalKind.Sleep, c.Bed, c.Bed >= 0 ? c.Bed : here, c.Sleepy * c.Sleepy * 5 + (night ? 1.5f : 0));
             // 욕구는 어느 만큼 차야 움직인다 (배가 조금 고프다고 바로 먹으러 가지 않는다)
             if (c.Hunger > 0.55f) Add(GoalKind.Eat, -1, -1, c.Hunger * c.Hunger * 5 + (F.Ppm(T.gAroma, here) > 5 ? 0.5f : 0));
             if (c.Thirst > 0.3f) Add(GoalKind.Drink, -1, -1, c.Thirst * c.Thirst * 6);
@@ -122,7 +132,7 @@ public sealed partial class Mind
                     BeliefKind.Leak when b.Conf >= 0.5f && L.Kind[b.Cell] != CellKind.Door => 6 * b.Conf, // 쉬익대는 닫힌 문은 그 너머가 빠진 것
                     BeliefKind.Smoke when b.Conf >= 0.5f => 4 * b.Conf,
                     BeliefKind.Fire => 3 * b.Conf * (1.3f - c.Brave),
-                    BeliefKind.BadAir => 3 * b.Conf,
+                    BeliefKind.BadAir => (b.Src == BeliefSource.Screen ? 7 : 3) * b.Conf, // 주컴퓨터 경보는 믿는다
                     _ => 0,
                 };
                 if (s > worst) { worst = s; cell = b.Cell; }
@@ -371,8 +381,14 @@ public sealed partial class Mind
         return false;
     }
 
-    /// <summary>피할 곳: 위험한 방(room) 밖 · 위험한 칸에서 4칸 넘게 · 몸이 느끼기에 안전한 가장 가까운 칸.</summary>
+    /// <summary>피할 곳: 위험한 방(room) 밖 · 위험한 칸에서 4칸 넘게 · 몸이 느끼기에 안전한 가장 가까운 칸 · 위험하다고 믿지 않는 방 (없으면 그나마 나은 방).</summary>
     private int FindRefuge(Agent a, int from, int room, int danger)
+    {
+        int c = FindRefuge(a, from, room, danger, true);
+        return c >= 0 ? c : FindRefuge(a, from, room, danger, false);
+    }
+
+    private int FindRefuge(Agent a, int from, int room, int danger, bool trustBeliefs)
     {
         var q = new Queue<int>();
         var seen = new HashSet<int> { from };
@@ -382,7 +398,7 @@ public sealed partial class Mind
         {
             int c = q.Dequeue();
             if (L.Kind[c] == CellKind.Floor && L.Room[c] != room && L.Room[c] >= 0 && (danger < 0 || Dist(c, danger) > 4) && SafeAt(c)
-                && Believes(a, BeliefKind.Vacuum, c, 3) < 0.3f && Believes(a, BeliefKind.Fire, c, 4) < 0.3f && !BelievedRoomBad(a, L.Room[c]))
+                && Believes(a, BeliefKind.Vacuum, c, 3) < 0.3f && Believes(a, BeliefKind.Fire, c, 4) < 0.3f && (!trustBeliefs || !BelievedRoomBad(a, L.Room[c])))
             {
                 // 문에서 한 칸 더 들어간다 (문간에 서지 않게)
                 return c;
@@ -404,7 +420,8 @@ public sealed partial class Mind
         foreach (var b in a.Beliefs)
         {
             if (b.Conf < 0.3f || !InRoom(b.Cell, room)) continue;
-            if (b.Kind is BeliefKind.BadAir or BeliefKind.Smoke or BeliefKind.Breach or BeliefKind.Vacuum or BeliefKind.Fire) return true;
+            if (b.Kind is BeliefKind.Smoke or BeliefKind.Breach or BeliefKind.Vacuum or BeliefKind.Fire) return true;
+            if (b.Kind == BeliefKind.BadAir && b.Conf >= 0.5f) return true;
             if (b.Kind == BeliefKind.Leak && b.Conf >= 0.5f && L.Kind[b.Cell] != CellKind.Door) return true;
         }
         return false;

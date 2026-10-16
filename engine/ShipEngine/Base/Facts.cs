@@ -50,6 +50,12 @@ public enum FactKind : ushort
     Repaired,          // 장치를 고쳤다
     DoorSealed,        // 도망치며 문을 닫았다
     Woke,              // 잠에서 깼다
+    ComputerAlarm,     // 주컴퓨터가 경보를 울렸다 (Other: 사건 종류)
+    ComputerSeal,      // 주컴퓨터가 방을 봉쇄했다 (문을 닫았다)
+    ComputerAssign,    // 주컴퓨터가 로봇에게 일을 맡겼다
+    LoadShed,          // 전력이 모자라 장치를 껐다
+    BreakerReset,      // 떨어진 차단기를 다시 올렸다
+    ComputerDown,      // 주컴퓨터가 멈췄다
     // ⑫
     StorySeed,         // 이야기꾼이 원인을 심었다
 }
