@@ -79,6 +79,8 @@ public sealed class ShipMind : IEngine
     public int[] RoomHot;                       // 방에서 가장 뜨거운 칸
     public float[] RoomMoles;                   // [방 × 6]: 지난 1분(읽기 6번)의 기체량 — 새는지는 기체량이 줄어드는 것으로 (온도 · 문 여닫이로 기압이 흔들리는 것과 가른다)
     private int _reads;
+    /// <summary>배 전체 기체량 — 1분마다 10개 (느린 샘: 10분에 0.5% 넘게 줄면).</summary>
+    public float[] ShipMolesHist = new float[10];
     public byte[] RoomSeen;                     // 1: 이번에 센서가 읽혔다 (전원)
     public byte[] Shed;                         // 장치마다 1: 전력 때문에 꺼 둠
     public long[] BreakerResetAt;               // 급전선마다 마지막으로 다시 올린 틱
@@ -150,6 +152,13 @@ public sealed class ShipMind : IEngine
     private void ReadSensors()
     {
         _reads++;
+        if (_reads % 5 == 0)
+        {
+            Array.Copy(ShipMolesHist, 1, ShipMolesHist, 0, ShipMolesHist.Length - 1);
+            float total = 0;
+            for (int r = 0; r < L.Rooms.Count; r++) total += RoomMoles[r * 6 + (_reads - 1) % 6];
+            ShipMolesHist[^1] = total;
+        }
         for (int r = 0; r < L.Rooms.Count; r++)
         {
             RoomKPaPrev[r] = RoomKPa[r]; RoomSootPrev[r] = RoomSoot[r];
@@ -234,6 +243,15 @@ public sealed class ShipMind : IEngine
             else if (Losing(r) || RoomKPa[r] < 80 && RoomKPaPrev[r] - RoomKPa[r] > 0.2f) { Raise(sim, IncidentKind.Leak, r, LeakSpot(r), -dp, -1, BreachCause(r)); Mark(IncidentKind.Leak, r); }
             if (RoomCO[r] > 150) { Raise(sim, IncidentKind.CO, r, _roomVent[r], RoomCO[r]); Mark(IncidentKind.CO, r); }
             if (RoomCO2[r] > 8000 || RoomO2[r] < 15 && RoomKPa[r] > 40) { Raise(sim, IncidentKind.BadAir, r, _roomVent[r], RoomO2[r]); Mark(IncidentKind.BadAir, r); }
+        }
+        // 느린 샘: 배 전체 기체가 10분에 0.5% 넘게 줄고 있다 — 어디서인지 모르면 기압이 가장 낮은 방(새는 곳에 가깝다)부터 살핀다
+        if (ShipMolesHist[0] > 0 && (ShipMolesHist[0] - ShipMolesHist[^1]) / ShipMolesHist[0] > 0.005f && ShipMolesHist[^2] > ShipMolesHist[^1])
+        {
+            int low = -1; float lp = float.MaxValue;
+            for (int r = 0; r < L.Rooms.Count; r++)
+                if (RoomSeen[r] != 0 && L.Rooms[r].Cells.Length > 0 && RoomKPa[r] > 5 && RoomKPa[r] < lp) { lp = RoomKPa[r]; low = r; }
+            if (low >= 0 && Find(IncidentKind.Leak, low) < 0) Raise(sim, IncidentKind.Leak, low, LeakSpot(low), lp, -1, BreachCause(low));
+            if (low >= 0) Mark(IncidentKind.Leak, low);
         }
         // 사람 표: 의식을 잃은 사람 (방에 전원이 있어야 표가 읽힌다)
         if (_mind != null && _life != null)
@@ -602,7 +620,7 @@ public sealed class ShipMind : IEngine
         w.List(Incidents);
         w.I32(Log.Count); foreach (var (t, s) in Log) { w.I64(t); w.Str(s); }
         w.Bool(Online);
-        w.Arr(RoomKPa); w.Arr(RoomKPaPrev); w.Arr(RoomO2); w.Arr(RoomSoot); w.Arr(RoomSootPrev); w.Arr(RoomCO); w.Arr(RoomCO2); w.Arr(RoomTemp); w.Arr(RoomHot); w.Arr(RoomSeen); w.Arr(RoomMoles); w.I32(_reads);
+        w.Arr(RoomKPa); w.Arr(RoomKPaPrev); w.Arr(RoomO2); w.Arr(RoomSoot); w.Arr(RoomSootPrev); w.Arr(RoomCO); w.Arr(RoomCO2); w.Arr(RoomTemp); w.Arr(RoomHot); w.Arr(RoomSeen); w.Arr(RoomMoles); w.I32(_reads); w.Arr(ShipMolesHist);
         w.Arr(Shed); w.Arr(BreakerResetAt); w.List(Imaginations);
         w.I64(Alarms); w.I64(Assignments); w.I64(Seals); w.I64(Sheds); w.I64(Resets);
     }
@@ -613,7 +631,7 @@ public sealed class ShipMind : IEngine
         Incidents = r.List<Incident>();
         Log.Clear(); int n = r.I32(); for (int i = 0; i < n; i++) { long t = r.I64(); Log.Add((t, r.Str() ?? "")); }
         Online = r.Bool();
-        r.ArrInto(RoomKPa); r.ArrInto(RoomKPaPrev); r.ArrInto(RoomO2); r.ArrInto(RoomSoot); r.ArrInto(RoomSootPrev); r.ArrInto(RoomCO); r.ArrInto(RoomCO2); r.ArrInto(RoomTemp); r.ArrInto(RoomHot); r.ArrInto(RoomSeen); r.ArrInto(RoomMoles); _reads = r.I32();
+        r.ArrInto(RoomKPa); r.ArrInto(RoomKPaPrev); r.ArrInto(RoomO2); r.ArrInto(RoomSoot); r.ArrInto(RoomSootPrev); r.ArrInto(RoomCO); r.ArrInto(RoomCO2); r.ArrInto(RoomTemp); r.ArrInto(RoomHot); r.ArrInto(RoomSeen); r.ArrInto(RoomMoles); _reads = r.I32(); r.ArrInto(ShipMolesHist);
         Shed = r.Arr<byte>(); BreakerResetAt = r.Arr<long>(); Imaginations.Clear(); Imaginations.AddRange(r.List<Imagined>());
         Alarms = r.I64(); Assignments = r.I64(); Seals = r.I64(); Sheds = r.I64(); Resets = r.I64();
     }

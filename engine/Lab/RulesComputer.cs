@@ -213,5 +213,26 @@ public static partial class Program
             Check("눌어붙은 차단기의 합선: 로봇이 하던 일을 놓고 배전반에서 그 급전선을 손으로 끊는다", pulledAt > 0 && fact.Contains("손으로 끊었다"),
                 pulledAt > 0 ? $"{(pulledAt - 10) / 25.0:0.0}분 만에 · {fact}" : "끊지 못했다");
         }
+
+        // ── 빈 방 외판의 작은 금(5cm²): 쉬익 소리를 들을 사람이 없어도 주컴퓨터가 배 전체의 느린 샘을 보고 로봇을 보내 막는다 ──
+        {
+            var s = ShipWorld.Create("Mirinae", 3);
+            var m = s.Get<Mind>(); var f = s.Get<Field>();
+            int dock = s.Layout.Furniture.First(fu => fu.Type == "RobotDock").Cells[0];
+            m.AddRobot(s, dock, AgentKind.Robot, dock);
+            s.Run(Time.Minutes(15));
+            var lay2 = s.Layout;
+            int engineRoom = lay2.Rooms.First(r => r.Type == "Engine").Id;
+            int hull = Enumerable.Range(0, lay2.N).First(c => lay2.Hull[c] && lay2.Kind[c] == CellKind.Wall && Enumerable.Range(0, 4).Any(k =>
+            {
+                int x = lay2.X(c) + (k == 0 ? 1 : k == 1 ? -1 : 0), y = lay2.Y(c) + (k == 2 ? 1 : k == 3 ? -1 : 0);
+                return lay2.In(x, y) && lay2.Room[lay2.Index(x, y)] == engineRoom;
+            }));
+            f.SetHole(hull, 0.0005f);
+            long patchedAt = -1;
+            for (int k = 0; k < Time.Hours(1) && patchedAt < 0; k++) { s.Step(); if (f.Hole[hull] <= 0) patchedAt = s.Tick; }
+            Check("빈 방 외판의 작은 금: 들을 사람이 없어도 주컴퓨터가 배 전체의 느린 샘을 보고 로봇을 보내 막는다 (한 시간 안)", patchedAt > 0,
+                patchedAt > 0 ? $"{(patchedAt - Time.Minutes(15)) / 25.0:0}분 만에 막음" : $"못 막음 · 평균 기압 {s.Get<ShipMind>().RoomKPa.Where(x => x > 0).Average():0}kPa");
+        }
     }
 }
