@@ -501,5 +501,6 @@ public static partial class Program
         StoryRules();
         SocietyRules();
         WorkRules();
+        ViewRules();
     }
 }

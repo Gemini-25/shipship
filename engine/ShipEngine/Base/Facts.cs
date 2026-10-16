@@ -61,6 +61,7 @@ public enum FactKind : ushort
     // ⑨
     Grieved,           // 가까운 이를 잃었다 (Actor: 남은 사람 · Other: 죽은 사람)
     TrustLost,         // 주컴퓨터를 덜 믿게 됐다
+    WentOutside,       // 에어락으로 나가 외판 바깥을 걷는다 (선외 작업)
 }
 
 public static class FactNames
@@ -80,7 +81,7 @@ public static class FactNames
         FactKind.Patched => "구멍을 막았다", FactKind.Repaired => "고쳤다", FactKind.DoorSealed => "문을 닫았다", FactKind.Woke => "잠에서 깼다",
         FactKind.ComputerAlarm => "경보", FactKind.ComputerSeal => "봉쇄", FactKind.ComputerAssign => "로봇을 보냈다", FactKind.LoadShed => "장치를 껐다",
         FactKind.BreakerReset => "차단기를 올렸다", FactKind.ComputerDown => "주컴퓨터가 멈췄다", FactKind.StorySeed => "조짐",
-        FactKind.Grieved => "슬픔", FactKind.TrustLost => "믿음이 깨졌다", _ => "",
+        FactKind.Grieved => "슬픔", FactKind.TrustLost => "믿음이 깨졌다", FactKind.WentOutside => "선외로 나갔다", _ => "",
     };
 }
 

@@ -465,8 +465,14 @@ public sealed partial class Mind
                 else if (_st != null && _st.DoorTarget[d] < 0.5f) { _st.RequestDoor(d, 1); c.OpenedDoor = d; } // 누가 닫으려던 문 — 지나가며 내가 닫는다
                 c.WaitDoor = -1; c.WaitTicks = 0;
             }
+            bool wasOut = L.Kind[c.Cell] == CellKind.Outside;
             Move(a, n);
             a.PathIdx++;
+            if (!wasOut && L.Kind[n] == CellKind.Outside)
+            {
+                int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} 에어락으로 나가 외판을 걷는다", t, n, c.GoalCause, 0, a.Id);
+                sim.Facts.Emit(t, FactKind.WentOutside, n, 0, cause, a.Id);
+            }
             c.MoveBudget -= L.FurnitureAt[n] >= 0 ? 1.5f : 1f;
             CloseBehind(sim, a);
         }

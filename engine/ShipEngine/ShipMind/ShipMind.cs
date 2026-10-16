@@ -252,9 +252,9 @@ public sealed class ShipMind : IEngine
             else if (RoomTemp[r] > 318) { Raise(sim, IncidentKind.Hot, r, RoomHot[r], RoomTemp[r]); Mark(IncidentKind.Hot, r); }
             float dp = RoomKPa[r] - RoomKPaPrev[r];
             if (IsolatedAirlock(r)) { }   // 안쪽 문이 모두 닫힌 에어락은 비어 있어도 된다 (순환 중)
-            else if (RoomKPa[r] < 40) { Raise(sim, IncidentKind.Vacuum, r, _roomVent[r], RoomKPa[r], -1, BreachCause(r)); Mark(IncidentKind.Vacuum, r); }
+            else if (RoomKPa[r] < 40) { Raise(sim, IncidentKind.Vacuum, r, _roomVent[r], RoomKPa[r], -1, LeakCause(r)); Mark(IncidentKind.Vacuum, r); }
             // 샘: 12초에 기체가 2% 넘게 줄거나 · 1분 내내 줄어 4% 넘게 · 80kPa 아래에서 아직 줄고 있으면 — 온도 · 문 여닫이로 흔들리는 기압 · 막고 난 뒤 낮은 기압은 아니다
-            else if (Losing(r) || RoomKPa[r] < 80 && RoomKPaPrev[r] - RoomKPa[r] > 0.2f && !Moved(r, 1)) { Raise(sim, IncidentKind.Leak, r, LeakSpot(r), -dp, -1, BreachCause(r)); Mark(IncidentKind.Leak, r); }
+            else if (Losing(r) || RoomKPa[r] < 80 && RoomKPaPrev[r] - RoomKPa[r] > 0.2f && !Moved(r, 1)) { Raise(sim, IncidentKind.Leak, r, LeakSpot(r), -dp, -1, LeakCause(r)); Mark(IncidentKind.Leak, r); }
             if (RoomCO[r] > 150) { Raise(sim, IncidentKind.CO, r, _roomVent[r], RoomCO[r]); Mark(IncidentKind.CO, r); }
             if (RoomCO2[r] > 8000 || RoomO2[r] < 15 && RoomKPa[r] > 40 && RoomO2[r] < shipO2 - 1.5f) { Raise(sim, IncidentKind.BadAir, r, _roomVent[r], RoomO2[r]); Mark(IncidentKind.BadAir, r); }
         }
@@ -264,7 +264,7 @@ public sealed class ShipMind : IEngine
             int low = -1; float lp = float.MaxValue;
             for (int r = 0; r < L.Rooms.Count; r++)
                 if (RoomSeen[r] != 0 && L.Rooms[r].Cells.Length > 0 && RoomKPa[r] > 5 && RoomKPa[r] < lp) { lp = RoomKPa[r]; low = r; }
-            if (low >= 0 && Find(IncidentKind.Leak, low) < 0) Raise(sim, IncidentKind.Leak, low, LeakSpot(low), lp, -1, BreachCause(low));
+            if (low >= 0 && Find(IncidentKind.Leak, low) < 0) Raise(sim, IncidentKind.Leak, low, LeakSpot(low), lp, -1, LeakCause(low));
             if (low >= 0) Mark(IncidentKind.Leak, low);
         }
         // 사람 표: 의식을 잃은 사람 (방에 전원이 있어야 표가 읽힌다)
@@ -462,6 +462,15 @@ public sealed class ShipMind : IEngine
             foreach (int j in nb) if (j >= 0 && L.Kind[j] == CellKind.Wall && F.Hole[j] > 0 && _st.DamageCause[j] != 0) return _st.DamageCause[j];
         }
         return 0;
+    }
+
+    /// <summary>샘의 원인: 그 방 둘레 구멍 — 없으면 새는 문(틈) 너머의 원인 (옆 방을 뚫은 것).</summary>
+    private int LeakCause(int room)
+    {
+        int c = BreachCause(room);
+        if (c != 0 || _st == null) return c;
+        int spot = LeakSpot(room);
+        return spot >= 0 && L.Kind[spot] == CellKind.Door ? _st.LowSideCause(spot) : 0;
     }
 
     private int FireCause(int cell)

@@ -12,5 +12,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../ShipEngine/ShipEngine.csproj" />
+    <ProjectReference Include="../ShipView/ShipView.csproj" />
   </ItemGroup>
 </Project>

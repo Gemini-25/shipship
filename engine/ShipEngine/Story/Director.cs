@@ -5,6 +5,7 @@ public sealed class Highlight
 {
     public long Tick;          // 정점
     public long StartTick;     // 다시보기 시작 — 원인 사슬의 뿌리(첫 조짐)
+    public long Last;          // 이 장면에 마지막으로 이어진 일
     public int Cell;
     public float Score;
     public FactKind Kind;
@@ -67,7 +68,7 @@ public sealed class Director
         FactKind.StorySeed => 6, FactKind.Hurt => 12, FactKind.Fled => 10, FactKind.DoorSealed => 6, FactKind.Warned => 5, FactKind.Noticed => 4,
         FactKind.MachineFail => 12, FactKind.Short => 15, FactKind.BreakerTrip => 5, FactKind.Flare => 20, FactKind.WallCrack => 15,
         FactKind.Woke => 2, FactKind.ComputerAssign => 4, FactKind.Sick => 8,
-        FactKind.Relationship => 12, FactKind.Grieved => 30, FactKind.TrustLost => 25, _ => 1,
+        FactKind.Relationship => 12, FactKind.Grieved => 30, FactKind.TrustLost => 25, FactKind.WentOutside => 20, _ => 1,
     };
 
     private static bool Critical(FactKind k) => k is FactKind.Died or FactKind.Collapsed or FactKind.WallBreach or FactKind.DoorBlown or FactKind.Panicked;
@@ -201,18 +202,21 @@ public sealed class Director
         if (spot < HighlightAt) return;
         int root = 0;
         if (f.Cause != 0) { var ch = sim.Causes.Chain(f.Cause); root = ch.Count > 0 ? ch[0] : 0; }
-        // 하나로 묶는다: 같은 뿌리에서 나온 일(30분 안) · 같은 곳 2분 안 — 더 크면 고친다 (정점 · 제목 · 시작은 더 이른 쪽)
+        // 하나로 묶는다: 같은 뿌리에서 나온 일(30분 안) · 같은 곳 2분 안 · 한 소동(마지막 일에서 15분 안에 그 소동 동안 새로 시작된 일 — 잔해 폭풍 뒤 봉쇄 · 경보) — 더 크면 고친다 (정점 · 제목 · 시작은 더 이른 쪽)
+        long rootTick = root != 0 ? sim.Causes[root].Tick : t;
         foreach (var h in Highlights)
             if (root != 0 && h.Root == root && t - h.Tick < Time.Minutes(30)
-                || t - h.Tick < Time.Minutes(2) && Math.Max(Math.Abs(L.X(h.Cell) - L.X(f.Cell)), Math.Abs(L.Y(h.Cell) - L.Y(f.Cell))) <= SpotRadius * 2)
+                || t - h.Tick < Time.Minutes(2) && Math.Max(Math.Abs(L.X(h.Cell) - L.X(f.Cell)), Math.Abs(L.Y(h.Cell) - L.Y(f.Cell))) <= SpotRadius * 2
+                || t - h.Last < Time.Minutes(15) && rootTick >= h.StartTick - Time.Minutes(1))
             {
                 if (spot > h.Score) { h.Score = spot; h.Tick = t; h.Cell = f.Cell; }
                 if (Weight(f.Kind) > Weight(h.Kind)) { h.Kind = f.Kind; h.Cause = f.Cause; h.Actor = f.Actor; h.Title = TitleOf(sim, f); }
                 h.StartTick = Math.Min(h.StartTick, RootTick(sim, f, t));
                 if (h.Root == 0) h.Root = root;
+                h.Last = Math.Max(h.Last, t);
                 return;
             }
-        Highlights.Add(new Highlight { Tick = t, Cell = f.Cell, Score = spot, Kind = f.Kind, Cause = f.Cause, Actor = f.Actor, Root = root, Title = TitleOf(sim, f), StartTick = RootTick(sim, f, t) });
+        Highlights.Add(new Highlight { Tick = t, Cell = f.Cell, Score = spot, Kind = f.Kind, Cause = f.Cause, Actor = f.Actor, Root = root, Title = TitleOf(sim, f), StartTick = RootTick(sim, f, t), Last = t });
         Caption = Highlights[^1].Title;
     }
 

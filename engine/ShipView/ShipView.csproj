@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 새 화면의 그리기 — 순수 C# (Godot 없음): 세계 + 연출 → 도트 그림. 화가는 옛 게임의 것을 그대로 쓴다 (game/src/Art). docs/ENGINE.md §새 화면 -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>12</LangVersion>
+    <RootNamespace>ShipView</RootNamespace>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <NoWarn>CS1591;CS8618;CS8600;CS8602;CS8604</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../ShipEngine/ShipEngine.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- 옛 도트 화가 (Godot · 옛 코어 없이 도는 것만) -->
+    <Compile Include="../../game/src/Art/DotCore.cs" Link="Art/DotCore.cs" />
+    <Compile Include="../../game/src/Art/DotTiles.cs" Link="Art/DotTiles.cs" />
+    <Compile Include="../../game/src/Art/DotMachines.cs" Link="Art/DotMachines.cs" />
+    <Compile Include="../../game/src/Art/DotPeople.cs" Link="Art/DotPeople.cs" />
+    <Compile Include="../../game/src/Art/DotBots.cs" Link="Art/DotBots.cs" />
+    <Compile Include="../../game/src/Art/DotFx.cs" Link="Art/DotFx.cs" />
+    <Compile Include="../../game/src/Art/DotFixtures.cs" Link="Art/DotFixtures.cs" />
+    <Compile Include="../../game/src/Art/DotGear.cs" Link="Art/DotGear.cs" />
+    <Compile Include="../../game/src/Art/DotProps.cs" Link="Art/DotProps.cs" />
+  </ItemGroup>
+</Project>

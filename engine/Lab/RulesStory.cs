@@ -137,6 +137,20 @@ public static partial class Program
                 Check("비슷한 두 사건 사이를 이리저리 오가지 않는다 (한 장면에 머문다)", d.Switches <= 2, $"장면 바꿈 {d.Switches}번 · 화면 {d.ScreenSeconds:0}초");
             }
 
+            // ── 한 소동은 한 장면: 잔해 폭풍이 외판 여러 곳을 뚫고 주컴퓨터가 방마다 봉쇄해도 하이라이트는 한둘 ──
+            {
+                var s = ShipWorld.Crewed("Pabal", 18, 2, 4, 0);
+                var d = new Director(s.Layout) { KeepRing = false };
+                s.Run(Time.Minutes(10));
+                int c0 = s.Causes.Add(CauseKind.Story, "잔해 지대가 항로로 들어온다", s.Tick);
+                var dd = s.Tables.Space.Debris["rubble"];
+                s.Get<Outside>().AddCloud("rubble", dd.Speed * 120 + 300_000, 300_000, 1.2e-6, 0, 1, c0);
+                for (int i = 0; i < Time.Minutes(40); i++) { s.Step(); d.Observe(s); }
+                long seals = s.Facts.CountOf(FactKind.ComputerSeal), breaches = s.Facts.CountOf(FactKind.WallBreach);
+                Check("한 소동은 한 장면: 잔해 폭풍에 구멍 · 봉쇄가 여럿이어도 하이라이트는 한둘", breaches + seals >= 4 && d.Highlights.Count is >= 1 and <= 2,
+                    $"벽이 뚫림 {breaches} · 봉쇄 {seals} → 하이라이트 {d.Highlights.Count}: {string.Join(" / ", d.Highlights.Select(h => h.Title))}");
+            }
+
             // ── 하이라이트는 첫 조짐부터 · 다시보기는 같은 일을 그대로 되풀이한다 ──
             {
                 var s = ShipWorld.Create("Kestrel", 3);

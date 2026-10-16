@@ -285,7 +285,7 @@ public static partial class Program
             if (Debug) foreach (var (tk, tx) in cm.Log.TakeLast(20)) Console.WriteLine($"    주컴 {Time.Clock(tk)} {tx}");
             if (Debug) foreach (var x in cm.Incidents.Where(x => x.Active != 0)) Console.WriteLine($"    사건 {x.Kind} {cm.RoomName(x.Room)} 보냄 {x.Tries} 로봇 {x.RobotA} 봉쇄 {x.Sealed} 읽힘 {(x.Room >= 0 ? cm.RoomSeen[x.Room] : 9)}");
             if (Debug) Console.WriteLine($"    로봇 {m.Thought(r)} 맡음 {m[r].C.AssignedGoal}:{m[r].C.AssignedTarget} 기한 {(m[r].C.AssignedUntil - s.Tick) / 25}분 피함 {string.Join(",", m[r].Avoid.Select(v => v.Goal + ":" + v.Target))}");
-            Check("빠진 방의 외판 구멍: 로봇이 에어락으로 나가 바깥에서 막는다 → 주컴퓨터가 예비 공기로 배를 다시 채운다", patchedAt > 0 && outside && avg > 85 && net.AirReleased > 0,
+            Check("빠진 방의 외판 구멍: 로봇이 에어락으로 나가 바깥에서 막는다 → 주컴퓨터가 예비 공기로 배를 다시 채운다", patchedAt > 0 && outside && avg > 85 && net.AirReleased > 0 && s.Facts.CountOf(FactKind.WentOutside) > 0,
                 patchedAt > 0 ? $"{(patchedAt - Time.Minutes(15)) / 25.0:0}분 만에 {(outside ? "바깥에서" : "안에서")} 막음 · 가장 낮던 배 기압 {lowest:0} → 8시간 뒤 {avg:0}kPa · 휴게실 {f.Pressure(L2.Rooms[lounge].Cells[0]):0}kPa" : $"못 막음 · 배 기압 {avg:0}kPa");
         }
 

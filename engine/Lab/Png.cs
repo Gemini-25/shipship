@@ -5,6 +5,14 @@ namespace Lab;
 /// <summary>아주 작은 PNG 쓰개 (관찰 장면 그림용 — 외부 라이브러리 없이).</summary>
 public static class Png
 {
+    /// <summary>RGBA 바이트 (도트 화가의 그림 Img.Px).</summary>
+    public static void WriteRgba(string path, int w, int h, byte[] px)
+    {
+        var u = new uint[w * h];
+        for (int i = 0; i < u.Length; i++) u[i] = (uint)px[i * 4] << 24 | (uint)px[i * 4 + 1] << 16 | (uint)px[i * 4 + 2] << 8 | px[i * 4 + 3];
+        Write(path, w, h, u);
+    }
+
     public static void Write(string path, int w, int h, uint[] rgba)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
