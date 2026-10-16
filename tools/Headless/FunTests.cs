@@ -83,10 +83,11 @@ public static partial class Program
             // 6) 기항지 상륙
             float stress0 = w.Crew.Where(c => !c.Dead).Average(c => c.Needs.Stress);
             foreach (var c in w.Crew.Where(c => !c.Dead)) c.Needs.Stress = MathF.Max(c.Needs.Stress, 0.5f);
+            float stressPre = w.Crew.Where(c => !c.Dead).Average(c => c.Needs.Stress); // 상륙 직전 (이미 0.5보다 지친 사람은 그대로 — 절대값 0.5로 재면 앞 장면에 따라 뒤집혔다)
             meet.ShoreLeave("새벽 항구");
             float stress1 = w.Crew.Where(c => !c.Dead).Average(c => c.Needs.Stress);
-            Check("기항지 상륙 — 장보기 · 기념품 · 술집 다툼, 쉬고 온다", meet.ShoreLeaves == 1 && stress1 < 0.5f,
-                $"스트레스 0.50→{stress1:0.00} · 기념품 {meet.Souvenirs} · 다툼 {meet.Brawls} · {w.Log.Entries.Where(e => e.Text.Contains("새벽 항구")).Select(e => e.Text).LastOrDefault()}");
+            Check("기항지 상륙 — 장보기 · 기념품 · 술집 다툼, 쉬고 온다", meet.ShoreLeaves == 1 && stress1 < stressPre - 0.03f,
+                $"스트레스 {stressPre:0.00}→{stress1:0.00} · 기념품 {meet.Souvenirs} · 다툼 {meet.Brawls} · {w.Log.Entries.Where(e => e.Text.Contains("새벽 항구")).Select(e => e.Text).LastOrDefault()}");
 
             // 7) 축제 — 식당에 장식 불빛 · 잔치
             int fest0 = meet.Festivals;
