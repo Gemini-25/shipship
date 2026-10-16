@@ -117,6 +117,38 @@ public static partial class Program
             Check("주 컴퓨터 — 드론 없는 파공의 '누가 막나'는 한 번만 적는다 (15분)", said == 1, $"{said}번 · {room!.Name} · {hit ?? "균열 없음"} · 봉합 일 {seals}");
         }
 
+        // ── 하나뿐인 주방은 '일찍 포기'하지 않는다 (보듬호 34일: 구멍 난 주방을 1.5시간 만에 포기하고 이레 동안 되찾지 않아, 그 방 냉장고의 채소를 두고 모두 굶었다) ──
+        if (Do("galleykeep"))
+        {
+            var w = World.CreateDefault(seed, 0, "Bodeum");
+            Run(w, SimTime.Minutes(5));
+            var kitchens = w.Ship.FurnitureOf(FurnitureType.Stove).Where(f => !f.Stowed).Select(f => f.Room).Distinct().ToList();
+            var room = kitchens.Count == 1 ? kitchens[0] : null;
+            var hull = w.Ship.Walls.Where(kv => kv.Value.IsHull && room != null && Hull.InsideRoom(w.Ship, kv.Key) == room)
+                .Select(kv => kv.Key).OrderBy(c => c.X * 1000 + c.Y).ToList();
+            foreach (var c in w.Crew) c.Away = true; // 막을 손이 없다 — 구멍이 그대로 남아 '포기' 판단까지 간다
+            foreach (var rb in w.Robots.Robots) rb.Disabled = true;
+            void Busy()
+            {
+                foreach (var f in w.Ship.FurnitureOf(FurnitureType.DroneDock))
+                    if (f.Storage != null) foreach (var k in Enum.GetValues<ItemKind>()) f.Storage.Take(k, 999);
+            }
+            w.Policies.Set("zoneabandon", 0); // 방침: 일찍 포기 (1.5시간)
+            string? hit = hull.Count > 0 ? Hazards.Apply(w, HazardKind.HullCrack, hull[hull.Count / 2], -1) : null;
+            Busy();
+            Run(w, SimTime.Minutes(3));
+            if (room != null && room.Leaking) room.LeakingSince = w.Tick - SimTime.Hours(2); // 두 시간째 아무도 못 막았다
+            bool offered = false;
+            for (long t0 = w.Tick; w.Tick - t0 < SimTime.Minutes(10);)
+            {
+                Busy(); w.Board.RequestScan(); w.Step();
+                offered |= w.Board.All.Any(o => o.Kind == WorkKind.SealOffRoom && o.Target.Room == room);
+            }
+            Check("하나뿐인 주방 — 구멍이 두 시간째 안 막혀도 '일찍 포기' 방침으로 버리지 않는다 (대신할 조리대 · 냉장고가 없다)",
+                room != null && room.Leaking && !offered && Council.Essential(w, room) != null,
+                $"{room?.Name ?? "주방이 하나가 아님"} · {hit ?? "균열 없음"} · 새는 중 {room?.Leaking} · 포기 일 {(offered ? "올라옴!" : "없음")} · 대신할 것 없음 {(room == null ? "?" : Council.Essential(w, room) ?? "없음")}");
+        }
+
         // ── 결정론: 같은 시드 두 배는 같은 역사 ──
         if (Do("det"))
         {

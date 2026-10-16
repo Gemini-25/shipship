@@ -196,6 +196,15 @@ public static partial class Council
                                                    && o.Machine is Machine om && !om.Has(FaultKind.Wrecked));
             if (!spare) return f.Label;
         }
+        // 보듬호 34일: 하나뿐인 주방을 '일찍 포기'하고 이레 동안 되찾지 않아, 그 방 냉장고의 채소 31개를 두고 모두 굶었다 —
+        // 대신할 게 없는 조리대 · 냉장고도 없이는 버틸 수 없다 (포기하지 않고, 포기했으면 서둘러 되찾는다)
+        foreach (var f in r.Furniture)
+        {
+            if (f.Type is not (FurnitureType.Stove or FurnitureType.Fridge) || f.Stowed) continue;
+            bool spare = w.Ship.FurnitureOf(f.Type).Any(o => o.Room != r && !o.Stowed && !o.Room.Detached && !o.Room.Abandoned
+                                                             && !(o.Machine?.Has(FaultKind.Wrecked) ?? false));
+            if (!spare) return f.Label;
+        }
         if (w.Ship.Doors.Any(d => d.IsExternal && !d.Removed && (d.RoomA == r || d.RoomB == r))
             && !w.Ship.Doors.Any(d => d.IsExternal && !d.Removed && d.RoomA != r && d.RoomB != r && !(d.RoomA?.Detached ?? false) && !(d.RoomB?.Detached ?? false)))
             return "외부 해치";
