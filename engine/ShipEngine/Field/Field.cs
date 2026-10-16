@@ -318,6 +318,8 @@ public sealed partial class Field : IEngine
         w.Arr(N); w.Arr(U); w.Arr(Ts); w.Arr(Tf); w.Arr(Store); w.Arr(DoorOpen); w.Arr(Hole); w.Arr(WindX); w.Arr(WindY);
         w.F64(VentedTotal);
         Outside.Save(w);
+        // 칸 고체 열용량(설비를 앉히며 늘었다) · 구역별 '아직 고를 차이' · 겉면을 매 틱 다룬 때 · 구역을 지은 때의 문 · 구멍 — 다음 틱의 계산을 바꾸므로 찍는다
+        w.Arr(Cs); w.Arr(_imb); w.Arr(_surfTick); w.Bool(_dirty); w.Arr(_topoDoor); w.Arr(_topoHole);
     }
 
     public void Load(StateReader r)
@@ -325,8 +327,10 @@ public sealed partial class Field : IEngine
         r.ArrInto(N); r.ArrInto(U); r.ArrInto(Ts); r.ArrInto(Tf); r.ArrInto(Store); r.ArrInto(DoorOpen); r.ArrInto(Hole); r.ArrInto(WindX); r.ArrInto(WindY);
         VentedTotal = r.F64();
         Outside.Load(r);
-        _dirty = true;
-        _imb = Array.Empty<double>();
+        r.ArrInto(Cs); var imb = r.Arr<double>(); _surfTick = r.Arr<long>(); bool dirty = r.Bool(); _topoDoor = r.Arr<float>(); _topoHole = r.Arr<float>();
+        // 구역 · 틈은 찍지 않고 다시 세운다 — 장보다 먼저 도는 엔진(망 · 마음 · 주컴퓨터)이 첫 틱에 구역을 읽는다
+        RestoreTopology();
+        _dirty = dirty; _imb = imb;
     }
 }
 

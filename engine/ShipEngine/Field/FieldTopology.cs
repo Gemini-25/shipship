@@ -78,6 +78,26 @@ public sealed partial class Field
     {
         _dirty = false;
         TopologyVersion++;
+        PushOutTrapped();
+        BuildTopology();
+        MarkAllDirty();
+    }
+
+    /// <summary>되살릴 때: 마지막으로 구역을 지은 때의 문 · 구멍으로 같은 구역 · 틈을 다시 세운다 (기체는 건드리지 않는다 — 원래 세계와 바이트까지 같게).</summary>
+    private void RestoreTopology()
+    {
+        if (_topoDoor.Length != DoorOpen.Length || _topoHole.Length != Hole.Length) { _dirty = true; Rebuild(); return; }
+        var door = DoorOpen; var hole = Hole;
+        DoorOpen = (float[])_topoDoor.Clone(); Hole = (float[])_topoHole.Clone();
+        BuildTopology();
+        DoorOpen = door; Hole = hole;
+    }
+
+    private float[] _topoDoor = Array.Empty<float>(), _topoHole = Array.Empty<float>(); // 마지막으로 구역을 지은 때의 문 · 구멍 (찍는다)
+
+    /// <summary>1. 기체가 못 드는 칸(닫힌 문 등)에 남은 기체는 이웃으로 밀어낸다.</summary>
+    private void PushOutTrapped()
+    {
         Span<int> nb = stackalloc int[4];
 
         // 1. 기체가 못 드는 칸(닫힌 문 등)에 남은 기체는 이웃으로 밀어낸다
@@ -99,7 +119,15 @@ public sealed partial class Field
             U[i] = 0;
         }
 
-        // 2. 구역 (칸 번호 순서로 — 결정론)
+    }
+
+    /// <summary>2 · 3. 구역 (칸 번호 순서로 — 결정론) · 틈.</summary>
+    private void BuildTopology()
+    {
+        Span<int> nb = stackalloc int[4];
+        if (_topoDoor.Length != DoorOpen.Length) _topoDoor = new float[DoorOpen.Length];
+        if (_topoHole.Length != Hole.Length) _topoHole = new float[Hole.Length];
+        Array.Copy(DoorOpen, _topoDoor, DoorOpen.Length); Array.Copy(Hole, _topoHole, Hole.Length);
         if (RegionOf.Length != Cells) RegionOf = new int[Cells];
         Array.Fill(RegionOf, -1);
         Regions.Clear();
@@ -156,7 +184,6 @@ public sealed partial class Field
             (k.NearA, k.WA) = Near(k.A, k.RA);
             if (k.B >= 0) (k.NearB, k.WB) = Near(k.B, k.RB);
         }
-        MarkAllDirty();
     }
 
     private int Cell(int x, int y) => L.In(x, y) ? L.Index(x, y) : -1;

@@ -1,0 +1,137 @@
+using ShipEngine;
+
+namespace Lab;
+
+/// <summary>⑫ 이야기꾼 · ⑬ 연출 규칙 시험.</summary>
+public static partial class Program
+{
+    private static void StoryRules()
+    {
+        if (Do("이야기꾼"))
+        {
+            Console.WriteLine("\n[이야기꾼]");
+            // ── 조용한 배에는 원인을 심는다 · 같은 시드면 같은 때 같은 원인 · 긴장이 높으면 심지 않는다 ──
+            List<Seed> Run(ulong seed, double tension)
+            {
+                var s = ShipWorld.Create("Kestrel", seed);
+                var st = s.Get<Storyteller>(); st.Enabled = true; st.Tension = tension;
+                s.Run(Time.Hours(7));
+                return st.Seeds;
+            }
+            var a = Run(5, 0); var b = Run(5, 0); var hi = Run(5, 1000);
+            bool same = a.Count == b.Count && a.Zip(b).All(p => p.First.Tick == p.Second.Tick && p.First.Kind == p.Second.Kind && p.First.Size == p.Second.Size);
+            Check("조용한 배에는 이야기꾼이 원인을 심는다 · 같은 시드면 같은 때 같은 원인", a.Count >= 1 && same,
+                $"심은 것 {a.Count} ({string.Join(", ", a.Select(x => $"{x.Tick / 1500.0:0.0}시 {Storyteller.SeedName(x.Kind)}"))}) · 같음 {same}");
+            Check("긴장이 이미 높으면 심지 않는다 (쉬게 둔다)", hi.Count == 0, $"심은 것 {hi.Count}");
+
+            // ── 가혹함: 높을수록 큰 운석 ──
+            double Mass(byte level)
+            {
+                var s = ShipWorld.Create("Kestrel", 9);
+                var st = s.Get<Storyteller>(); st.Level = level;
+                for (int i = 0; i < 30; i++) st.Plant(s, SeedKind.Rock);
+                return st.Seeds.Average(x => x.Size);
+            }
+            double m2 = Mass(2), m8 = Mass(8);
+            Check("가혹함이 높을수록 큰 운석을 보낸다", m8 > m2 * 2, $"가혹함 2: 평균 {m2:0.00}kg · 가혹함 8: {m8:0.00}kg");
+
+            // ── 심은 원인이 실제 일로: 낡은 부품 → 몇 시간 안에 고장 · 원인 사슬의 뿌리가 이야기꾼 ──
+            {
+                var s = ShipWorld.Create("Kestrel", 4);
+                var st = s.Get<Storyteller>(); st.Level = 8;
+                st.Plant(s, SeedKind.WornPart);
+                var seed = st.Seeds[0];
+                long failAt = -1; int failCause = 0;
+                for (int k = 0; k < Time.Hours(8) && failAt < 0; k += 25)
+                {
+                    s.Run(25);
+                    foreach (var f in s.Facts.Since(0))
+                        if (f.Kind == FactKind.MachineFail && f.Cell == seed.Cell) { failAt = f.Tick; failCause = f.Cause; break; }
+                }
+                var chain = failCause != 0 ? s.Causes.Chain(failCause) : new List<int>();
+                Check("'낡은 부품'을 심으면 몇 시간 안에 그 장치가 스스로 고장 난다 · 고장의 뿌리가 이야기꾼의 원인", failAt > 0 && chain.Count >= 2 && chain[0] == seed.Cause,
+                    $"{(failAt > 0 ? $"{(failAt - seed.Tick) / 1500.0:0.0}시간 뒤 고장" : "고장 없음")} · {(failCause != 0 ? s.Causes.Story(failCause) : "")}");
+            }
+
+            // ── 먼 운석도 끝까지 온다 (예전: 1,000km 밖에서 심은 운석이 바로 지워졌다) ──
+            {
+                var s = ShipWorld.Create("Kestrel", 3);
+                int c0 = s.Causes.Add(CauseKind.Story, "먼 운석", s.Tick);
+                s.Get<Outside>().AddRock(1, 8000, 1, 0, 0, 8000 * 60 * 20, c0); // 20분 거리 · 9,600km
+                s.Run(Time.Minutes(22));
+                var o = s.Get<Outside>();
+                Check("20분 거리(9,600km)에서 심은 운석도 사라지지 않고 와서 부딪힌다", o.RockHits == 1, $"충돌 {o.RockHits} · 조짐 {s.Facts.CountOf(FactKind.DebrisNear)}");
+            }
+        }
+
+        if (Do("연출"))
+        {
+            Console.WriteLine("\n[연출]");
+            var lay = Worlds.Ascii(Worlds.MindShipComputer, Worlds.MindLegend);
+            int At(int x, int y) => Worlds.At(lay, x, y);
+
+            // ── 조용하면 빨리 · 불이 나면 카메라가 불로 가고 느려진다 ──
+            {
+                var s = Worlds.Full(lay, 2);
+                var d = new Director(s.Layout) { KeepRing = false };
+                for (int i = 0; i < 40; i++) { s.Step(); d.Observe(s); }
+                double calmSpeed = d.Speed; string calmMood = d.Mood;
+                int fire = At(15, 1); // 오른쪽 방 의자
+                s.Get<Chemistry>().Ignite(fire, 3e6, s.Causes.Add(CauseKind.Story, "의자 밑 불씨", s.Tick));
+                int near = -1; double slow = 1e9;
+                for (int i = 0; i < 60; i++)
+                {
+                    s.Step(); d.Observe(s);
+                    slow = Math.Min(slow, d.Speed);
+                    if (near < 0 && d.FocusCell >= 0 && Math.Max(Math.Abs(lay.X(d.FocusCell) - lay.X(fire)), Math.Abs(lay.Y(d.FocusCell) - lay.Y(fire))) <= 3) near = i;
+                }
+                Check("조용할 땐 빨리 감는다 · 불이 붙으면 카메라가 불로 가고 시간이 느려진다", calmSpeed == Director.CalmSpeed && near >= 0 && near < 10 && slow <= Director.DangerSpeed,
+                    $"처음 {calmMood} {calmSpeed}틱/초 · 불 쪽으로 {near}틱 · 가장 느리게 {slow}틱/초 · 지금 '{d.Mood}'");
+            }
+
+            // ── 비슷한 두 불 사이를 오가지 않는다 (머물기) ──
+            {
+                var s = Worlds.Full(lay, 2);
+                var d = new Director(s.Layout) { KeepRing = false };
+                s.Run(5);
+                var ch = s.Get<Chemistry>();
+                ch.Ignite(At(3, 5), 3e6, s.Causes.Add(CauseKind.Story, "왼쪽 방 침대 불씨", s.Tick));
+                ch.Ignite(At(15, 1), 3e6, s.Causes.Add(CauseKind.Story, "오른쪽 방 의자 불씨", s.Tick));
+                for (int i = 0; i < Time.Minutes(3); i++) { s.Step(); d.Observe(s); }
+                Check("비슷한 두 사건 사이를 이리저리 오가지 않는다 (한 장면에 머문다)", d.Switches <= 2, $"장면 바꿈 {d.Switches}번 · 화면 {d.ScreenSeconds:0}초");
+            }
+
+            // ── 하이라이트는 첫 조짐부터 · 다시보기는 같은 일을 그대로 되풀이한다 ──
+            {
+                var s = ShipWorld.Create("Kestrel", 3);
+                var d = new Director(s.Layout);
+                int c0 = s.Causes.Add(CauseKind.Story, "운석 하나가 배를 향해 온다", s.Tick);
+                s.Get<Outside>().AddRock(1.5, 6000, -1, 0.15, 2, 6000 * 60 * 4, c0); // 4분 거리
+                d.Observe(s);
+                long hitAt = -1; string moodAtHit = "";
+                for (int i = 0; i < Time.Minutes(9); i++)
+                {
+                    s.Step(); d.Observe(s);
+                    if (hitAt < 0 && s.Get<Outside>().RockHits > 0) { hitAt = s.Tick; moodAtHit = d.Mood; }
+                }
+                var h = d.Highlights.OrderByDescending(x => x.Score).FirstOrDefault();
+                long warnAt = s.Facts.Since(0).Where(f => f.Kind == FactKind.DebrisNear).Select(f => f.Tick).DefaultIfEmpty(-1).First();
+                Check("큰 사건은 하이라이트가 되고, 그 시작은 첫 조짐(운석이 다가온다)보다 앞이다", h != null && hitAt > 0 && h.StartTick <= warnAt && h.StartTick <= hitAt && moodAtHit == "결정적 순간",
+                    h == null ? "하이라이트 없음" : $"'{h.Title}' · 점수 {h.Score:0} · 시작 {h.StartTick} ≤ 조짐 {warnAt} ≤ 충돌 {hitAt} · 충돌 때 '{moodAtHit}'");
+                if (h != null)
+                {
+                    var r = d.Replay(s, h);
+                    bool sameEnd = false; long replayHit = -1, start = -1;
+                    if (r != null)
+                    {
+                        start = r.Tick;
+                        while (r.Tick < s.Tick) { r.Step(); if (replayHit < 0 && r.Get<Outside>().RockHits > 0) replayHit = r.Tick; }
+                        sameEnd = r.Save().AsSpan().SequenceEqual(s.Save());
+                    }
+                    Check("다시보기: 고리에서 되살린 세계를 이어 돌리면 같은 틱에 같은 충돌 · 끝 상태가 바이트까지 같다", r != null && replayHit == hitAt && sameEnd,
+                        $"되살린 틱 {start} · 충돌 {replayHit} (원래 {hitAt}) · 끝 같음 {sameEnd} · 고리 {d.Ring.Count}장");
+                }
+            }
+        }
+    }
+}

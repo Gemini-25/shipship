@@ -200,15 +200,25 @@ public sealed class Network : IEngine
     public bool RoomPowered(int room) => room >= 0 && RoomFeeder[room] >= 0 && Breaker[RoomFeeder[room]] != 0 && Supplied > 0;
 
     /// <summary>부품을 낡게 한다 (이야기꾼이 '낡은 부품'이라는 원인을 심는다 · 시험) — 숨은 한계의 fraction까지.</summary>
-    public void Age(int device, Part p, double fraction)
+    public void Age(int device, Part p, double fraction, int cause = 0)
     {
         int k = device * 4 + (int)p;
         if (_limit[k] == float.MaxValue) return;
         Wear[k] = (float)Math.Max(Wear[k], _limit[k] * fraction);
+        if (cause != 0) _wearCause[k] = cause;
     }
+    /// <summary>부품을 숨은 한계까지 hoursLeft시간(보통 쓰임 기준)만 남게 낡게 한다 — 이야기꾼의 '낡은 부품'.</summary>
+    public void AgeLeft(int device, Part p, double hoursLeft, int cause = 0)
+    {
+        int k = device * 4 + (int)p;
+        if (_limit[k] == float.MaxValue) return;
+        Wear[k] = (float)Math.Max(Wear[k], _limit[k] - Math.Max(0.01, hoursLeft));
+        if (cause != 0) _wearCause[k] = cause;
+    }
+    private readonly Dictionary<int, int> _wearCause = new(); // 낡게 한 원인 (부품 → 원인 마디) — 고장이 그 뿌리에 이어진다
 
     /// <summary>부품을 고친다 (사람 · 로봇의 수리).</summary>
-    public void Repair(int device, Part p) { Broken[device * 4 + (int)p] = 0; Wear[device * 4 + (int)p] = 0; }
+    public void Repair(int device, Part p) { Broken[device * 4 + (int)p] = 0; Wear[device * 4 + (int)p] = 0; _wearCause.Remove(device * 4 + (int)p); }
 
     // ───────────────────────── 한 틱 ─────────────────────────
 
@@ -598,7 +608,7 @@ public sealed class Network : IEngine
         Broken[d * 4 + (int)p] = 1;
         Failures++;
         string what = p switch { Part.Electric => "회로", Part.Mechanical => "모터", Part.Seal => "봉함", _ => "거르개" };
-        int cause = sim.Causes.Add(CauseKind.Wear, $"{dev.Name}의 {Ko.I(what)} 낡아 망가졌다", sim.Tick, dev.Cell);
+        int cause = sim.Causes.Add(CauseKind.Wear, $"{dev.Name}의 {Ko.I(what)} 낡아 망가졌다", sim.Tick, dev.Cell, _wearCause.GetValueOrDefault(d * 4 + (int)p));
         sim.Facts.Emit(sim.Tick, FactKind.MachineFail, dev.Cell, (int)p, cause, other: d);
         if (p == Part.Electric && dev.Feeder >= 0 && Rng.Unit(_seed, Rng.Key("회로 고장 합선"), sim.Tick, d) < 0.25)
         {
@@ -619,6 +629,9 @@ public sealed class Network : IEngine
         var keys = _faultCause.Keys.OrderBy(k => k).ToList();
         w.I32(keys.Count);
         foreach (var k in keys) { w.I32(k); w.I32(_faultCause[k]); }
+        var wk = _wearCause.Keys.OrderBy(k => k).ToList();
+        w.I32(wk.Count);
+        foreach (var k in wk) { w.I32(k); w.I32(_wearCause[k]); }
     }
 
     public void Load(StateReader r)
@@ -631,5 +644,8 @@ public sealed class Network : IEngine
         _faultCause.Clear();
         int n = r.I32();
         for (int i = 0; i < n; i++) { int k = r.I32(); _faultCause[k] = r.I32(); }
+        _wearCause.Clear();
+        n = r.I32();
+        for (int i = 0; i < n; i++) { int k = r.I32(); _wearCause[k] = r.I32(); }
     }
 }

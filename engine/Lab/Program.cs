@@ -25,7 +25,7 @@ public static partial class Program
             else if (args.Contains("--bench")) Bench();
             else if (args.Contains("--scene")) Scene(args[Array.IndexOf(args, "--scene") + 1], args.Length > Array.IndexOf(args, "--scene") + 2 ? args[Array.IndexOf(args, "--scene") + 2] : "build/scenes");
             else if (args.Contains("--ships")) Ships();
-            else if (args.Contains("--probe-det")) ProbeDeterminism();
+            else if (args.Contains("--probe-det")) ProbeDeterminism(args.Contains("load"));
             else if (args.Contains("--probe-crew")) ProbeCrew(args);
             else { Console.WriteLine("Lab --law | --rule | --bench | --scene 이름 [폴더] | --ships"); return 2; }
         }

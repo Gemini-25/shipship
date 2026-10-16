@@ -8,6 +8,7 @@ public struct Cloud
     public int Kind;     // 파편 표 순서
     public int Cause;
     public long Hits;
+    public byte Warned;  // 10분 앞 '다가온다'를 알렸다
 }
 
 /// <summary>떠다니는 물체 하나 (운석 · 큰 파편 · 떨어져 나간 조각).</summary>
@@ -200,6 +201,12 @@ public sealed class Outside : IEngine
             var c = Clouds[k];
             c.X += c.Vx * dt; c.Y += c.Vy * dt;
             double dist = Math.Sqrt(c.X * c.X + c.Y * c.Y);
+            double csp = Math.Sqrt(c.Vx * c.Vx + c.Vy * c.Vy);
+            if (c.Warned == 0 && c.X * c.Vx + c.Y * c.Vy < 0 && (dist - c.Radius - Math.Max(halfW, halfH)) < csp * Time.SecondsPerTick * 250)
+            {
+                c.Warned = 1;
+                sim.Facts.Emit(sim.Tick, FactKind.DebrisNear, -1, (float)c.Density, c.Cause, other: 2);
+            }
             if (dist < c.Radius + Math.Max(halfW, halfH))
             {
                 // 배가 구름 속: 칸이 쓸고 지나는 부피 = 단면(구름이 오는 쪽에서 본 배 폭 × 높이 2.5m) × 속도 × dt
@@ -220,7 +227,7 @@ public sealed class Outside : IEngine
             }
             Clouds[k] = c;
         }
-        Clouds.RemoveAll(c => Math.Sqrt(c.X * c.X + c.Y * c.Y) > c.Radius * 3 + 1e5);
+        Clouds.RemoveAll(c => c.X * c.Vx + c.Y * c.Vy > 0 && Math.Sqrt(c.X * c.X + c.Y * c.Y) > c.Radius * 3 + 1e5); // 지나가 멀어진 것만
     }
 
     private void RocksStep(Sim sim, double dt)
@@ -258,7 +265,7 @@ public sealed class Outside : IEngine
             }
             Rocks[k] = r;
         }
-        Rocks.RemoveAll(r => r.Mass <= 0 || r.X * r.X + r.Y * r.Y > 1e12);
+        Rocks.RemoveAll(r => r.Mass <= 0 || r.X * r.Vx + r.Y * r.Vy > 0 && r.X * r.X + r.Y * r.Y > 1e12); // 지나가 멀어진 것만 (멀리서 다가오는 것은 남긴다)
     }
 
     /// <summary>

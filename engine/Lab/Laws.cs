@@ -286,6 +286,19 @@ public static partial class Program
             var b = new Sim(ShipWorld.Setup(Layout.Ship("Kestrel", Tables.Default), 9));
             b.Load(snap1);
             Check("모든 엔진: 되살린 세계의 지문이 같다", b.Hash() == one, $"{snap1.Length / 1024}KB");
+            // 원래 세계 ↔ 도중에 찍어 되살린 세계: 이어 돌려도 바이트까지 같다 (다시보기 · 주컴퓨터의 상상이 이것에 기댄다)
+            {
+                var o = ShipWorld.Crewed("Kestrel", 9, 6, 3);
+                var of = o.Get<Field>();
+                var fl = Enumerable.Range(0, of.Cells).Where(i => of.L.Kind[i] == CellKind.Floor && of.L.FurnitureAt[i] >= 0).ToArray();
+                o.Get<Chemistry>().Ignite(fl[fl.Length / 2], 3e6, 0);
+                o.Get<Structure>().Impact(o, Enumerable.Range(0, of.Cells).First(i => of.L.Hull[i] && of.L.Y(i) == of.L.H / 2), 2e5, 1, 0, 0);
+                o.Run(10);
+                var r = new Sim(o.Setup); r.Load(o.Save());
+                long firstDiff = -1;
+                for (int k = 0; k < 400 && firstDiff < 0; k++) { o.Step(); r.Step(); if (k % 20 == 19 && o.Hash() != r.Hash()) firstDiff = o.Tick; }
+                Check("모든 엔진: 원래 세계와 도중에 되살린 세계가 이어 돌려도 같다 (사람 6 · 로봇 3 · 불 · 충돌 · 400틱)", firstDiff < 0, firstDiff < 0 ? "" : $"틱 {firstDiff}에 갈라짐");
+            }
         }
 
         if (Do("마음"))
