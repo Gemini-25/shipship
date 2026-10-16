@@ -210,6 +210,98 @@ public static partial class Program
                 $"터진 벽 {st6.Breaches} · 배 안 가장 뜨거운 곳 {hot:0}K");
         }
 
+        if (Do("망"))
+        {
+            // 평시 6시간: 정전 없음 · 방 온도가 293K 근처 · 원자로 멀쩡
+            var s = ShipWorld.Create("Kestrel", 5);
+            var net = s.Get<Network>(); var f = s.Get<Field>();
+            s.Run(Time.Hours(6));
+            var temps = f.L.Rooms.Where(r => net.Vent[r.Id] >= 0).Select(r => f.Temp(net.Vent[r.Id])).ToList();
+            var hottest = f.L.Rooms.Where(r => net.Vent[r.Id] >= 0).OrderByDescending(r => f.Temp(net.Vent[r.Id])).First();
+            Check("평시 6시간: 공급이 수요를 채우고 · 방 온도가 288~300K · 원자로 멀쩡", net.Supplied >= net.Demanded - 1e-6 && temps.All(t => t > 288 && t < 300) && !net.ReactorScram,
+                $"수요 {net.Demanded:0.0}kW · 원자로 {net.ReactorKw:0.0}kW · 냉각 {net.CoolingKw:0}kW · 방 온도 {temps.Min():0.0}~{temps.Max():0.0}K (가장 더운 곳 {hottest.Name}) · 장치 {net.Devices.Count} · 급전선 {net.Feeders.Count}");
+
+            // 냉각 펌프를 끄면 원자로가 뜨거워져 스스로 멈춘다 → 배터리 → 결국 어둠
+            var s2 = ShipWorld.Create("Kestrel", 5);
+            var n2 = s2.Get<Network>();
+            for (int d = 0; d < n2.Devices.Count; d++) if (n2.Devices[d].Def.Role == "pump") n2.SetOn(d, false);
+            long scramAt = -1;
+            for (int i = 0; i < Time.Hours(12) && scramAt < 0; i++) { s2.Step(); if (n2.ReactorScram) scramAt = s2.Tick; }
+            double battAfter = n2.Devices.Where(d => d.Def.Role == "battery").Sum(d => n2.Charge[d.Id]);
+            Check("냉각 펌프가 모두 서면 원자로가 뜨거워져 스스로 멈춘다 (스크램) — 그 뒤는 배터리", scramAt > 0 && n2.Supplied > 0,
+                $"스크램 {(scramAt > 0 ? Time.Clock(scramAt) : "없음")} · 배터리 {battAfter:0.0}kWh · 원인 {s2.Causes.Story(n2.ScramCause)}");
+
+            // 합선: 전선이 지나는 칸이 젖으면 → 차단기 → 그 방이 어둡다
+            var s3 = ShipWorld.Create("Kestrel", 5);
+            var n3 = s3.Get<Network>(); var f3 = s3.Get<Field>(); var li3 = s3.Get<Light>();
+            var fd = n3.Feeders.First(x => x.Path.Length > 4);
+            f3.AddStore(fd.Path[fd.Path.Length / 2], f3.T.sWater, 400);
+            s3.Run(10);
+            var trip = s3.Facts.Since(0).FirstOrDefault(x => x.Kind == FactKind.BreakerTrip);
+            Check("전선이 지나는 바닥이 젖으면 합선 → 차단기가 떨어지고 그 방이 어두워진다", n3.Breaker[fd.Id] == 0 && li3.Lamp[fd.Room] < 50,
+                $"원인 {s3.Causes.Story(trip.Cause)} · 조명 {li3.Lamp[fd.Room]:0}lx");
+
+            // 낡아 붙은 차단기 + 합선 → 아크가 계속 → 불
+            var s4 = ShipWorld.Create("Kestrel", 5);
+            var n4 = s4.Get<Network>(); var f4 = s4.Get<Field>(); var ch4 = s4.Get<Chemistry>();
+            var fd4 = n4.Feeders.First(x => x.Path.Length > 4);
+            int wet = fd4.Path[fd4.Path.Length / 2];
+            n4.BreakerStuck[fd4.Id] = 1;
+            f4.AddStore(wet, f4.T.sPoly, 300); // 전선 피복 · 짐
+            f4.AddStore(wet, f4.T.sWater, 30);
+            s4.Run(Time.Minutes(3));
+            Check("차단기가 낡아 붙어 있으면 합선 아크가 계속되어 불이 난다", ch4.Ignitions > 0, $"발화 {ch4.Ignitions} · 원인 {s4.Causes.Story(ch4.FireCause[wet])}");
+
+            // 덕트로 연기가 번진다 — 댐퍼를 닫은 방은 빠진다
+            var s5 = ShipWorld.Create("Kestrel", 5);
+            var n5 = s5.Get<Network>(); var f5 = s5.Get<Field>();
+            s5.Step();
+            var rooms = Enumerable.Range(0, f5.L.Rooms.Count).Where(r => n5.Vent[r] >= 0 && n5.RoomPowered(r)).ToList();
+            int src = rooms[0], open = rooms[^1], shut = rooms[^2];
+            n5.SetDamper(shut, false);
+            f5.AddGas(n5.Vent[src], f5.T.gSoot, 40, 320);
+            s5.Run(Time.Minutes(10));
+            double ppmOpen = f5.Ppm(f5.T.gSoot, n5.Vent[open]), ppmShut = f5.Ppm(f5.T.gSoot, n5.Vent[shut]);
+            Check("연기가 덕트를 타고 먼 방까지 번진다 · 댐퍼를 닫은 방은 빠진다", ppmOpen > 5 && ppmShut < ppmOpen * 0.1,
+                $"열린 방 {ppmOpen:0}ppm · 닫은 방 {ppmShut:0.0}ppm");
+
+            // 낡은 냉각 펌프 봉함 → 고장 → 암모니아가 샌다 (원인: 낡음)
+            var s6 = ShipWorld.Create("Kestrel", 5);
+            var n6 = s6.Get<Network>(); var f6 = s6.Get<Field>();
+            int pump = n6.Devices.First(d => d.Def.Role == "pump").Id;
+            n6.Age(pump, Part.Seal, 0.99995);
+            s6.Run(Time.Hours(3));
+            int pc = n6.Devices[pump].Cell;
+            var fail = s6.Facts.Since(0).FirstOrDefault(x => x.Kind == FactKind.MachineFail && x.Other == pump);
+            Check("낡은 냉각 펌프 봉함이 망가지면 암모니아가 그 방으로 샌다 (확률이 아니라 마모에서)", n6.IsBroken(pump, Part.Seal) && f6.Ppm(f6.T.gNH3, pc) > 25,
+                $"암모니아 {f6.Ppm(f6.T.gNH3, pc):0}ppm · 원인 {s6.Causes.Story(fail.Cause)}");
+
+            // 곧 망가질 모터는 끽끽거린다
+            var s7 = ShipWorld.Create("Kestrel", 5);
+            var n7 = s7.Get<Network>(); var snd7 = s7.Get<Sound>();
+            int pump7 = n7.Devices.First(d => d.Def.Role == "pump").Id;
+            n7.Age(pump7, Part.Mechanical, 0.9);
+            bool squeal = false;
+            for (int i = 0; i < Time.Minutes(30) && !squeal; i++) { s7.Step(); squeal = snd7.At(n7.Devices[pump7].Cell).Any(h => h.Kind == SoundKind.Machine); }
+            Check("곧 망가질 모터는 끽끽 소리를 낸다 (알아챌 수 있는 조짐)", squeal);
+
+            // 뜨거워진 배터리는 열폭주로 불이 난다
+            var s8 = ShipWorld.Create("Kestrel", 5);
+            var n8 = s8.Get<Network>(); var f8 = s8.Get<Field>(); var ch8 = s8.Get<Chemistry>();
+            var bat = n8.Devices.First(d => d.Def.Role == "battery");
+            f8.AddSurfaceHeat(bat.Cell, (460 - f8.Tf[bat.Cell]) * Field.SurfaceC);
+            s8.Run(Time.Minutes(2));
+            Check("뜨거워진 배터리는 열폭주로 불이 난다", ch8.Ignitions > 0 && n8.IsBroken(bat.Id, Part.Electric), $"발화 {ch8.Ignitions}");
+
+            // 산소 발생기: 사람이 없으면 산소가 는다 · 물탱크가 준다
+            var s9 = ShipWorld.Create("Kestrel", 5);
+            var n9 = s9.Get<Network>(); var f9 = s9.Get<Field>();
+            double o2a = f9.Total(f9.T.gO2), w0 = n9.WaterTank;
+            s9.Run(Time.Hours(2));
+            Check("산소 발생기는 물을 갈라 산소를 낸다 (물탱크가 준다 · 수소는 배 밖으로)", f9.Total(f9.T.gO2) > o2a && n9.WaterTank < w0 && n9.VentedH2 > 0,
+                $"산소 {o2a:0} → {f9.Total(f9.T.gO2):0}몰 · 물 {w0 / 55.5:0}L → {n9.WaterTank / 55.5:0}L");
+        }
+
         if (Do("빛"))
         {
             var lay = Worlds.Ascii(Worlds.Lounge, Worlds.Seats);

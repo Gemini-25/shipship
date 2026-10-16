@@ -51,6 +51,15 @@ public sealed class SpaceTable
     public Dictionary<string, DebrisDef> Debris = new();
 }
 
+/// <summary>장치 표 (⑥ 망 · 장치): 역할과 숫자.</summary>
+public sealed class DeviceDef
+{
+    public string Role = "";
+    public double Kw, Gen, Kwh, HeatKw, Mol;
+    public bool On;
+    public Dictionary<string, double> Parts = new();
+}
+
 public sealed class EquipmentDef
 {
     public string Name = "";
@@ -156,6 +165,10 @@ public sealed class Tables
 
     /// <summary>설비 · 가구 표 (옛 설비 이름 → 재질 kg · 열).</summary>
     public Dictionary<string, EquipmentDef> Equipment = new();
+    /// <summary>장치 표 (옛 설비 이름 → 역할 · 숫자). 없는 설비는 장치가 아니다 (의자 · 침대 …).</summary>
+    public Dictionary<string, DeviceDef> Devices = new();
+    public DeviceDef? Dev(string type) => Devices.TryGetValue(type, out var d) ? d : null;
+
     /// <summary>별 · 행성 · 파편 표 (⑤ 바깥 세계).</summary>
     public SpaceTable Space = new();
 
@@ -244,6 +257,15 @@ public sealed class Tables
                 if (!t._matById.ContainsKey(m)) throw new InvalidDataException($"설비 표: '{k}'의 재질 '{m}'이 재질 표에 없다");
         if (!t.Equipment.ContainsKey("_default")) throw new InvalidDataException("설비 표에 _default가 없다");
         t.Space = DataFiles.Load<SpaceTable>("space.json");
+        t.Devices = DataFiles.Load<Dictionary<string, DeviceDef>>("devices.json");
+        var roles = new HashSet<string> { "panel", "reactor", "aux", "battery", "pump", "hvac", "o2gen", "scrubber", "dehumid", "recycler",
+                                          "computer", "console", "sensor", "stove", "fridge", "grow", "charger", "industry", "appliance", "lamp", "engine" };
+        var parts = new HashSet<string> { "전기", "기계", "봉함", "거르개" };
+        foreach (var (k, d) in t.Devices)
+        {
+            if (!roles.Contains(d.Role)) throw new InvalidDataException($"장치 표: '{k}'의 역할 '{d.Role}'을 모른다");
+            foreach (var p in d.Parts.Keys) if (!parts.Contains(p)) throw new InvalidDataException($"장치 표: '{k}'의 부품 '{p}'를 모른다");
+        }
         foreach (var (k, p) in t.Space.Planets)
         {
             foreach (var g in p.Air.Keys)

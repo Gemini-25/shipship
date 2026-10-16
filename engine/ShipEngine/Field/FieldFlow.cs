@@ -243,6 +243,9 @@ public sealed partial class Field
         _imb[region] += Math.Abs(rel);
     }
 
+    /// <summary>위층이 칸 기체를 직접 옮겼을 때 (덕트 등) — 모든 구역 압력을 다시 고른다.</summary>
+    public void MarkDirtyAll() => MarkAllDirty();
+
     private void MarkAllDirty() { if (_imb.Length < Regions.Count) _imb = new double[Regions.Count]; Array.Fill(_imb, 1.0); }
 
     private double CellMoles(int i)

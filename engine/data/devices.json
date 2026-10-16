@@ -1,0 +1,54 @@
+// ⑥ 망 · 장치 표 — 설비가 하는 일 (재질은 equipment.json). 옛 설비 이름 → 역할 · 숫자.
+//   role: panel(배전반) reactor(원자로) aux(보조 발전기) battery pump(냉각 펌프) hvac(공조 열교환기)
+//         o2gen(산소 발생기 — 물 전기분해) scrubber(이산화탄소 제거) dehumid(제습 — 물을 걷는다) recycler(물 재생)
+//         computer console sensor stove fridge grow charger industry appliance lamp engine
+//   kw: 켜져 있을 때 쓰는 전력 · gen: 내는 전력 · kwh: 저장 · heatKw: 옮기는 열 (펌프 · 공조)
+//   on: 처음에 켜져 있나 (조리대 · 공장 기계는 꺼져 있다가 사람이 켠다)
+//   parts: 부품 → 평균 수명(시간). 부품마다 숨은 한계(와이블)가 있고, 마모(가동 · 열 · 습기 · 부하)가 그 한계를 넘으면 고장 — 확률이 아니라 상태에서.
+//     전기: 멈춤 · 가끔 합선(불꽃) · 기계: 멈추기 전에 끽끽 소리 · 봉함: 샌다 (냉매 · 물 · 수소) · 거르개: 효율이 떨어진다
+{
+  "PowerPanel":      { "role": "panel",    "kw": 0.05, "on": true, "parts": { "전기": 60000 } },
+  "SurgeProtector":  { "role": "panel",    "kw": 0.01, "on": true, "parts": { "전기": 80000 } },
+  "ReactorCore":     { "role": "reactor",  "gen": 120,  "on": true, "parts": { "전기": 40000, "기계": 30000 } },
+  "AuxGenerator":    { "role": "aux",      "gen": 25,   "kwh": 400, "on": false, "parts": { "기계": 6000, "전기": 20000 } },
+  "Battery":         { "role": "battery",  "kwh": 40,   "kw": 25, "on": true, "parts": { "전기": 30000 } },
+  "CapacitorBank":   { "role": "battery",  "kwh": 2,    "kw": 50, "on": true, "parts": { "전기": 40000 } },
+  "CoolantPump":     { "role": "pump",     "kw": 3,     "heatKw": 90, "on": true, "parts": { "기계": 9000, "봉함": 12000, "전기": 30000 } },
+  "HeatExchanger":   { "role": "hvac",     "kw": 0.5,   "heatKw": 30, "on": true, "parts": { "기계": 15000, "봉함": 20000 } },
+  "OxygenGenerator": { "role": "o2gen",    "kw": 1.5,   "on": true, "parts": { "전기": 15000, "봉함": 10000 } },
+  "Scrubber":        { "role": "scrubber", "kw": 0.3,   "mol": 0.0015, "on": true, "parts": { "기계": 12000, "거르개": 3000 } },
+  "Dehumidifier":    { "role": "dehumid",  "kw": 0.2,   "mol": 0.004, "on": true, "parts": { "기계": 15000 } },
+  "WaterRecycler":   { "role": "recycler", "kw": 0.9,   "on": true, "parts": { "기계": 12000, "봉함": 15000, "거르개": 4000 } },
+  "GreywaterFilter": { "role": "recycler", "kw": 0.1,   "on": true, "parts": { "거르개": 3000 } },
+  "MainComputer":    { "role": "computer", "kw": 2.5,   "on": true, "parts": { "전기": 50000 } },
+  "NavComputer":     { "role": "computer", "kw": 0.3,   "on": true, "parts": { "전기": 50000 } },
+  "Console":         { "role": "console",  "kw": 0.12,  "on": true, "parts": { "전기": 40000 } },
+  "SensorArray":     { "role": "sensor",   "kw": 0.08,  "on": true, "parts": { "전기": 40000 } },
+  "LeakDetector":    { "role": "sensor",   "kw": 0.01,  "on": true, "parts": { "전기": 60000 } },
+  "VibrationMonitor":{ "role": "sensor",   "kw": 0.01,  "on": true, "parts": { "전기": 60000 } },
+  "ThermalCamera":   { "role": "sensor",   "kw": 0.02,  "on": true, "parts": { "전기": 60000 } },
+  "Stove":           { "role": "stove",    "kw": 3,     "on": false, "parts": { "전기": 20000 } },
+  "Oven":            { "role": "stove",    "kw": 2,     "on": false, "parts": { "전기": 20000 } },
+  "CoffeeMachine":   { "role": "appliance","kw": 1,     "on": false, "parts": { "전기": 15000 } },
+  "Fridge":          { "role": "fridge",   "kw": 0.25,  "on": true, "parts": { "기계": 30000, "봉함": 40000 } },
+  "MealDispenser":   { "role": "appliance","kw": 0.1,   "on": true, "parts": { "기계": 20000 } },
+  "GrowBed":         { "role": "grow",     "kw": 0.4,   "on": true, "parts": { "전기": 30000 } },
+  "PlantWall":       { "role": "grow",     "kw": 0.1,   "on": true, "parts": { "전기": 30000 } },
+  "MedBed":          { "role": "appliance","kw": 0.15,  "on": true, "parts": { "전기": 40000 } },
+  "DiagnosticScanner":{ "role": "appliance","kw": 0.6,  "on": false, "parts": { "전기": 30000 } },
+  "Autoclave":       { "role": "appliance","kw": 1.5,   "on": false, "parts": { "전기": 20000 } },
+  "RobotDock":       { "role": "charger",  "kw": 0.5,   "on": true, "parts": { "전기": 30000 } },
+  "DroneDock":       { "role": "charger",  "kw": 0.6,   "on": true, "parts": { "전기": 30000 } },
+  "Refinery":        { "role": "industry", "kw": 12,    "on": false, "parts": { "기계": 8000, "전기": 20000 } },
+  "Workbench":       { "role": "industry", "kw": 1,     "on": false, "parts": { "전기": 30000 } },
+  "Lathe":           { "role": "industry", "kw": 5,     "on": false, "parts": { "기계": 10000, "전기": 20000 } },
+  "SolderStation":   { "role": "industry", "kw": 0.1,   "on": false, "parts": { "전기": 20000 } },
+  "Collector":       { "role": "industry", "kw": 2,     "on": true, "parts": { "기계": 10000 } },
+  "LedPanel":        { "role": "lamp",     "kw": 0.06,  "on": true, "parts": { "전기": 50000 } },
+  "EmergencyLight":  { "role": "lamp",     "kw": 0.01,  "on": true, "parts": { "전기": 50000 } },
+  "Projector":       { "role": "appliance","kw": 0.25,  "on": false, "parts": { "전기": 20000 } },
+  "WashingMachine":  { "role": "appliance","kw": 0.5,   "on": false, "parts": { "기계": 10000, "봉함": 15000 } },
+  "SuitDryer":       { "role": "appliance","kw": 0.3,   "on": false, "parts": { "전기": 20000 } },
+  "Treadmill":       { "role": "appliance","kw": 0.1,   "on": false, "parts": { "기계": 15000 } },
+  "EngineCore":      { "role": "engine",   "kw": 2,     "on": true, "parts": { "기계": 20000, "전기": 30000 } }
+}
