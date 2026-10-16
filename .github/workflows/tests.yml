@@ -83,9 +83,7 @@ jobs:
           echo "다시 볼 장면: $(cat recheck.json)"
 
   base-build:
-    # 새 실패가 있을 때만: 기준 커밋(tools/tests/baseline.txt 머리말)을 빌드해 같은 시드로 견준다 — 한 번 빌드하면 캐시에서
-    needs: plan
-    if: always() && needs.plan.outputs.recheck != '' && needs.plan.outputs.recheck != '[]'
+    # 기준 커밋(tools/tests/baseline.txt 머리말)을 빌드해 재확인에서 같은 시드로 견준다 — 조각들과 나란히 미리 (캐시가 있으면 20초 · 없으면 1분)
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
