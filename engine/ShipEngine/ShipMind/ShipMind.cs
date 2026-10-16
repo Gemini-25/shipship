@@ -321,6 +321,9 @@ public sealed class ShipMind : IEngine
         return best;
     }
 
+    /// <summary>다른 사건의 뿌리라 무엇보다 먼저인 일: 차단기가 눌어붙어 계속 타는 합선.</summary>
+    private bool Root(in Incident x) => x.Kind == IncidentKind.ElectricFault && _net != null && _net.IsStuckFault(x.Subject);
+
     private bool Losing(int r)
     {
         if (_reads < 7) return false;
@@ -433,6 +436,9 @@ public sealed class ShipMind : IEngine
             case IncidentKind.Leak: case IncidentKind.Vacuum: g = GoalKind.Investigate; target = x.Cell; drone = true; break;
             case IncidentKind.PersonDown: g = GoalKind.Rescue; target = x.Subject; drone = false; break;
             case IncidentKind.DeviceBroken: g = GoalKind.Repair; target = x.Subject; drone = false; break;
+            case IncidentKind.ElectricFault when _net != null && _net.IsStuckFault(x.Subject):
+                // 차단기가 눌어붙었다 — 멀리서는 끊을 수 없다: 로봇이 배전반에서 손으로 끊는다
+                g = GoalKind.Repair; target = _net.Feeders[x.Subject].Panel; drone = false; break;
             case IncidentKind.ElectricFault: g = GoalKind.Investigate; target = x.Cell; drone = true; break;
             case IncidentKind.Strain: g = GoalKind.Brace; target = x.Cell; drone = false; break;
             default: return;
@@ -446,13 +452,16 @@ public sealed class ShipMind : IEngine
             foreach (var a in _mind.Agents)
             {
                 if (a.IsPerson || a.C.Up == 0 || a.C.Battery < 0.2f || (!drone && a.C.Kind == AgentKind.Drone)) continue;
-                if (a.C.AssignedUntil > sim.Tick) continue; // 이미 맡은 일이 있다
+                if (a.C.AssignedUntil > sim.Tick && !Root(x)) continue; // 이미 맡은 일이 있다 (불의 뿌리 — 눌어붙은 합선 — 는 하던 일을 놓고 간다)
                 if (a.Id == x.RobotA || a.Id == x.RobotB) continue;
                 int d = _mind.Dist(a.C.Cell, x.Cell >= 0 ? x.Cell : a.C.Cell);
                 if (d < bd) { bd = d; best = a.Id; }
             }
             if (best < 0) break;
-            _mind.Assign(sim, best, g, target, BeliefOf(x), sim.Tick + Time.Minutes(30));
+            var belief = g == GoalKind.Repair && x.Kind == IncidentKind.ElectricFault && _net != null
+                ? new Belief { Kind = BeliefKind.Broken, Cell = _net.Devices[target].Cell, Subject = target, Conf = 1f, Cause = x.Cause }
+                : BeliefOf(x);
+            _mind.Assign(sim, best, g, target, belief, sim.Tick + Time.Minutes(30));
             if (!Busy(x.RobotA)) x.RobotA = best; else x.RobotB = best;
             have++;
             Assignments++;

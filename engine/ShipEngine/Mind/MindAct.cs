@@ -288,6 +288,22 @@ public sealed partial class Mind
         ref var c = ref a.C;
         long t = sim.Tick;
         int dev = st.Target;
+        if (st.Arg == PullFeederArg && _net != null)
+        {
+            // 배전반: 합선 난 급전선을 손으로 끊는다 (1분)
+            int fd = _net.StuckFault(dev);
+            if (fd < 0) { Forget(a, b => b.Kind == BeliefKind.Broken && b.Subject == dev); Next(a, t); return; }
+            if (Dist(c.Cell, _net.Devices[dev].Cell) > 2) { Fail(sim, a, "멀다"); return; }
+            Activity(a, "work");
+            if (t - c.StepStart < Time.Minutes(1)) return;
+            _net.PullFeeder(fd);
+            string room = _net.Feeders[fd].Room >= 0 ? L.Rooms[_net.Feeders[fd].Room].Name : "";
+            int pc = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} 배전반에서 {room} 급전선을 손으로 끊었다 (차단기가 눌어붙어 있었다)", t, _net.Devices[dev].Cell, _net.FaultCause(fd), 0, a.Id);
+            sim.Facts.Emit(t, FactKind.Repaired, _net.Devices[dev].Cell, st.Arg, pc, a.Id, dev);
+            if (_net.StuckFault(dev) < 0) Forget(a, b => b.Kind == BeliefKind.Broken && b.Subject == dev);
+            Next(a, t);
+            return;
+        }
         if (_net == null || _net.Broken[dev * 4 + st.Arg] == 0) { Forget(a, b => b.Kind == BeliefKind.Broken && b.Subject == dev); Next(a, t); return; }
         if (Dist(c.Cell, _net.Devices[dev].Cell) > 2) { Fail(sim, a, "멀다"); return; }
         if (a.IsPerson && c.Holding != iRepair) { Fail(sim, a, "수리 꾸러미가 없다"); return; }

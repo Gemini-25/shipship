@@ -193,6 +193,17 @@ public sealed class Network : IEngine
 
     public void SetOn(int device, bool on) => On[device] = (byte)(on ? 1 : 0);
     public void ResetBreaker(int feeder) { Breaker[feeder] = 1; OverSec[feeder] = 0; }
+    /// <summary>배전반에서 급전선을 손으로 끊는다 (눌어붙은 차단기도) — 합선을 잇는 전기가 멎는다.</summary>
+    public void PullFeeder(int feeder) { Breaker[feeder] = 0; BreakerStuck[feeder] = 0; OverSec[feeder] = 0; }
+    /// <summary>합선이 났는데 차단기가 눌어붙어 전기가 계속 흐르는 급전선 (없으면 -1).</summary>
+    public int StuckFault(int panel = -1)
+    {
+        for (int f = 0; f < Feeders.Count; f++)
+            if (FaultCell[f] >= 0 && Breaker[f] != 0 && BreakerStuck[f] != 0 && (panel < 0 || Feeders[f].Panel == panel)) return f;
+        return -1;
+    }
+    public int FaultCause(int feeder) => _faultCause.GetValueOrDefault(feeder);
+    public bool IsStuckFault(int f) => f >= 0 && f < Feeders.Count && FaultCell[f] >= 0 && Breaker[f] != 0 && BreakerStuck[f] != 0;
     public void SetDamper(int room, bool open) => Damper[room] = (byte)(open ? 1 : 0);
     public bool IsBroken(int device, Part p) => Broken[device * 4 + (int)p] != 0;
     public float WearFraction(int device, Part p) => _limit[device * 4 + (int)p] == float.MaxValue ? 0 : Wear[device * 4 + (int)p] / _limit[device * 4 + (int)p];

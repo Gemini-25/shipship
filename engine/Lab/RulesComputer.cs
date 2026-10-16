@@ -196,5 +196,22 @@ public static partial class Program
             Check("정전: 주컴퓨터는 급전선이 끊겨도 자체 축전지로 버틴다 (30분 내내 켜짐 · 전지가 다하면 꺼진다)", on30 && !sm.Online,
                 $"30분 켜짐 {on30} · 90분 뒤 {(sm.Online ? "켜짐" : "꺼짐")} · 남은 전지 {net.Charge[comp.Id]:0.00}kWh");
         }
+
+        // ── 눌어붙은 차단기의 합선: 주컴퓨터가 로봇을 배전반으로 보내 손으로 끊는다 (하던 일도 놓고) ──
+        {
+            var s = World(6);
+            var m = s.Get<Mind>(); var net = s.Get<Network>();
+            int r = m.AddRobot(s, At(3, 7), AgentKind.Robot, At(3, 7));
+            s.Run(10);
+            m.Assign(s, r, GoalKind.Investigate, At(20, 7), new Belief { Kind = BeliefKind.Bang, Cell = At(20, 7), Subject = -1, Conf = 0.5f }, s.Tick + Time.Minutes(30)); // 다른 일을 맡고 있었다
+            var dev = net.Devices.First(d => d.Feeder >= 0 && d.Room == s.Layout.Room[At(17, 2)]);
+            int fd = dev.Feeder;
+            net.BreakerStuck[fd] = 1; net.FaultCell[fd] = dev.Cell;
+            long pulledAt = -1;
+            for (int k = 0; k < Time.Minutes(15) && pulledAt < 0; k++) { s.Step(); if (net.Breaker[fd] == 0) pulledAt = s.Tick; }
+            var fact = s.Facts.Since(0).Where(f => f.Kind == FactKind.Repaired).Select(f => s.Causes.Text(f.Cause)).FirstOrDefault() ?? "";
+            Check("눌어붙은 차단기의 합선: 로봇이 하던 일을 놓고 배전반에서 그 급전선을 손으로 끊는다", pulledAt > 0 && fact.Contains("손으로 끊었다"),
+                pulledAt > 0 ? $"{(pulledAt - 10) / 25.0:0.0}분 만에 · {fact}" : "끊지 못했다");
+        }
     }
 }

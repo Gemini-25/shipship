@@ -36,6 +36,8 @@ public sealed partial class Mind : IEngine
     public readonly string[] RoleNames;
     public readonly int ItemCount;
     public readonly byte iExt, iRepair, iPatch, iSuit, iMask, iMedkit;
+    /// <summary>고치기 단계의 '부품' 자리에 넣는 특별 값: 배전반에서 급전선을 손으로 끊기.</summary>
+    public const byte PullFeederArg = 254;
 
     // 말: 소리 사건 번호 → 그 말에 실린 믿음 (몇 틱만)
     private readonly List<(int ev, long tick, int speaker, Belief b)> _said = new();

@@ -42,6 +42,8 @@ public sealed class Storyteller : IEngine
     public byte Level = 4;
     public StoryStyle Style = StoryStyle.Balanced;
     public double Tension;
+    /// <summary>심었지만 아직 터지지 않은 원인의 예상 긴장 (반감기 8시간) — 잠복 원인을 겹겹이 쌓아 한꺼번에 터지지 않게.</summary>
+    public double Pending;
     public long LastSeedTick = long.MinValue / 2;
     public SeedKind LastKind;
     public List<Seed> Seeds = new();
@@ -93,14 +95,21 @@ public sealed class Storyteller : IEngine
         foreach (var f in sim.Facts.Since(_factCursor)) Tension += Weight(f.Kind);
         _factCursor = sim.Facts.Total;
         Tension *= Math.Exp(-dt * 0.6931 / (2 * 3600));
+        Pending *= Math.Exp(-dt * 0.6931 / (8 * 3600));
         if (!Enabled || sim.Tick % ThinkEvery != ThinkEvery - 1) return;
         if (sim.Tick < Time.Hours(2)) return; // 첫 두 시간은 배를 보여 준다
         if (sim.Tick - LastSeedTick < Time.Hours(RestHours)) return;
-        if (Tension >= Target(sim.Tick)) return;
-        Plant(sim, Choose());
+        if (Tension + Pending >= Target(sim.Tick)) return;
+        Plant(sim, Choose(sim));
     }
 
-    private SeedKind Choose()
+    /// <summary>원인 하나가 터지면 올 긴장 (가혹함 배율 전).</summary>
+    public static double Potential(SeedKind k) => k switch
+    {
+        SeedKind.Rock => 1.5, SeedKind.Cloud => 2, SeedKind.Flare => 2, SeedKind.WornPart => 1, SeedKind.HullFatigue => 1.5, SeedKind.Mold => 0.5, SeedKind.ArcRisk => 2.5, _ => 1,
+    };
+
+    private SeedKind Choose(Sim sim)
     {
         // 성격마다 무게 (없음 · 운석 · 구름 · 폭발 · 낡은 부품 · 외판 피로 · 곰팡이 · 합선 불씨)
         double[] w = Style switch
@@ -113,6 +122,8 @@ public sealed class Storyteller : IEngine
             _ => new double[] { 0, 1.5, 1.5, 1, 2, 1.5, 1, 1.5 },
         };
         if (LastKind != SeedKind.None) w[(int)LastKind] *= 0.15; // 같은 종류를 연달아 피한다
+        var net = sim.Find<Network>();
+        if (net != null && net.BreakerStuck.Any(b => b != 0)) w[(int)SeedKind.ArcRisk] = 0; // 눌어붙은 차단기가 이미 있다
         double sum = w.Sum(), r = _rng.Unit() * sum;
         for (int i = 1; i < w.Length; i++) { r -= w[i]; if (r <= 0) return (SeedKind)i; }
         return SeedKind.WornPart;
@@ -231,6 +242,7 @@ public sealed class Storyteller : IEngine
     {
         Seeds.Add(new Seed { Tick = sim.Tick, Kind = kind, Cause = cause, Cell = cell, Size = size });
         LastSeedTick = sim.Tick; LastKind = kind;
+        Pending += Potential(kind) * Level / 4.0;
         sim.Facts.Emit(sim.Tick, FactKind.StorySeed, cell, size, cause, -1, (int)kind);
         return true;
     }
@@ -247,13 +259,13 @@ public sealed class Storyteller : IEngine
     {
         _rng.Save(w);
         w.Bool(Enabled); w.Byte(Level); w.Byte((byte)Style);
-        w.F64(Tension); w.I64(LastSeedTick); w.Byte((byte)LastKind); w.List(Seeds); w.I64(_factCursor);
+        w.F64(Tension); w.F64(Pending); w.I64(LastSeedTick); w.Byte((byte)LastKind); w.List(Seeds); w.I64(_factCursor);
     }
 
     public void Load(StateReader r)
     {
         _rng.Load(r);
         Enabled = r.Bool(); Level = r.Byte(); Style = (StoryStyle)r.Byte();
-        Tension = r.F64(); LastSeedTick = r.I64(); LastKind = (SeedKind)r.Byte(); Seeds = r.List<Seed>(); _factCursor = r.I64();
+        Tension = r.F64(); Pending = r.F64(); LastSeedTick = r.I64(); LastKind = (SeedKind)r.Byte(); Seeds = r.List<Seed>(); _factCursor = r.I64();
     }
 }

@@ -357,6 +357,7 @@ public sealed partial class Mind
                 if (_net == null || dev < 0) return false;
                 int part = -1;
                 for (int p = 0; p < 4; p++) if (_net.Broken[dev * 4 + p] != 0) { part = p; break; }
+                if (part < 0 && _net.Devices[dev].Def.Role == "panel" && _net.StuckFault(dev) >= 0) part = PullFeederArg; // 눌어붙은 차단기: 손으로 끊는다
                 if (part < 0) return false;
                 if (a.IsPerson && c.Holding != iRepair)
                 {

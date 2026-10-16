@@ -24,6 +24,21 @@ public static partial class Program
                 $"심은 것 {a.Count} ({string.Join(", ", a.Select(x => $"{x.Tick / 1500.0:0.0}시 {Storyteller.SeedName(x.Kind)}"))}) · 같음 {same}");
             Check("긴장이 이미 높으면 심지 않는다 (쉬게 둔다)", hi.Count == 0, $"심은 것 {hi.Count}");
 
+            // ── 잠복 원인을 겹겹이 쌓지 않는다: 아직 안 터진 원인(대기 긴장)도 셈한다 · 눌어붙은 차단기가 있으면 합선 불씨를 또 심지 않는다 ──
+            {
+                var s = ShipWorld.Create("Kestrel", 5);
+                var st = s.Get<Storyteller>(); st.Enabled = true; st.Pending = 50;
+                s.Run(Time.Hours(7));
+                int pendingSeeds = st.Seeds.Count;
+                var s2 = ShipWorld.Create("Kestrel", 5);
+                var st2 = s2.Get<Storyteller>(); st2.Enabled = true; st2.Style = StoryStyle.SlowBurn; st2.Level = 8;
+                s2.Get<Network>().BreakerStuck[0] = 1;
+                s2.Run(Time.Hours(16));
+                int arcs = st2.Seeds.Count(x => x.Kind == SeedKind.ArcRisk);
+                Check("잠복 원인을 쌓지 않는다: 안 터진 원인의 긴장도 셈하고 · 눌어붙은 차단기가 있으면 합선 불씨를 또 심지 않는다", pendingSeeds == 0 && arcs == 0 && st2.Seeds.Count > 0,
+                    $"대기 긴장 높을 때 심은 것 {pendingSeeds} · 차단기가 눌어붙은 16시간 동안 합선 불씨 {arcs} (심은 것 {st2.Seeds.Count}: {string.Join(",", st2.Seeds.Select(x => Storyteller.SeedName(x.Kind)))})");
+            }
+
             // ── 가혹함: 높을수록 큰 운석 ──
             double Mass(byte level)
             {
