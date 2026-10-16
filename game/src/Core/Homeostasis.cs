@@ -236,8 +236,8 @@ public sealed class Homeostasis
     }
 
     /// <summary>추위에 닫아 둘 만한 방: 덜 쓰는 창고 · 화물칸 · 전망실 · 체력단련실 · 오락실 같은 곳 (일하러 오는 방 · 침실 · 식당은 닫지 않는다).</summary>
-    private static bool Closable(Room r) => r.Kind is RoomType.Storage or RoomType.Cargo or RoomType.Observatory or RoomType.Chapel or RoomType.Theater or RoomType.Gym
-        or RoomType.Arcade or RoomType.SeedVault or RoomType.DockingBay or RoomType.Meditation; // 재활용실 · 파쇄실 · 연구실은 정제 · 실험하러 사람이 온다
+    private static bool Closable(Room r) => r.Kind is RoomType.Storage or RoomType.Cargo or RoomType.Observatory or RoomType.SeedVault or RoomType.DockingBay;
+    // 재활용실 · 파쇄실 · 연구실은 정제 · 실험하러 사람이 온다 · 오락실 · 명상실 · 예배실 · 극장 · 체육관은 지친 사람이 쉬러 간다 (추운 구간일수록 — 닫아 차게 두면 발길이 끊긴다)
 
     /// <summary>배의 자세: 햇빛이 오는 쪽을 고른다 (따뜻하게 = 사람 많은 쪽으로 · 시원하게 = 사람 없는 쪽으로).</summary>
     private void Turn(List<Room> occupied, bool warm, List<string> plan)

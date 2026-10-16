@@ -348,6 +348,13 @@ public static partial class Program
             var heater = w.Portable.Devices.First(d => d.Kind == PortableKind.Heater);
             float dust = heater.Dust;
             w.Portable.PlaceNow(heater, room.Cells.First(c => w.Ship.IsOpenFloor(c) && w.Ship.FurnitureAt(c) == null), null, "hold", outlet: room);
+            // 그 방에 쉬는 사람 하나 (먼지는 30분이면 다 탄다 — 마침 아무도 없으면 맡을 사람이 없다: 오가는 사람의 운에 기대지 않게)
+            if (w.Crew.Where(c => c.CanAct && c.IsAwake && !c.IsChild && c.Job?.Urgent != true && c.Suit == null).OrderBy(c => c.Id).FirstOrDefault() is CrewMember sitter)
+            {
+                sitter.EndJob(w, ToilStatus.Interrupted);
+                sitter.Position = room.Cells.Where(c => w.Ship.IsOpenFloor(c) && w.Ship.FurnitureAt(c) == null).OrderByDescending(c => (c.Center - heater.At.Center).LengthSquared()).First().Center;
+                sitter.PreviousPosition = sitter.Position;
+            }
             float burnt = 0f;
             for (int i = 0; i < 30 && w.Portable.Stats.DustSniffs == 0; i++) { Run(w, SimTime.Minutes(1)); burnt = MathF.Max(burnt, w.Smells.Level(room, SmellKind.Burnt)); }
             Check("냄새 × 승무원 — 오래 둔 히터를 켜면 열선 먼지가 타는 냄새가 나고, 냄새를 따라온 사람이 까닭을 알아챈다",

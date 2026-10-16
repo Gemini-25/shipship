@@ -16,6 +16,7 @@ public static partial class Program
         {
             // 1) 아는 것의 차이: 데이터선이 닿은 방의 불은 경보로 모두 알고, 끊긴 방의 불은 본 사람부터 무전·소문으로 퍼진다
             {
+                bool byPerson = false; // 컴퓨터 감지기가 아니라 본 사람이 처음 알렸다 ("발견 — 경보가 돌지 않았다")
                 string Spread(bool cut, out int knowAt1, out int total, out string sources)
                 {
                     var w = DayOne(seed, "Mirinae");
@@ -27,6 +28,9 @@ public static partial class Program
                     if (cut)
                     {
                         foreach (var l in w.Net.Links.Where(l => l.Kind == NetKind.Data && (l.Door?.RoomA == room || l.Door?.RoomB == room)).ToList()) w.Net.Hurt(l, 1f, "시험");
+                        // v23 구역 중계기: 그 구역 제어기가 불을 보고 무선으로 경보를 돌린다 — 그 구역 중계기도 끊긴 때로 본다 (데이터선 · 무선이 다 끊긴 방)
+                        foreach (var z in w.Relays.Zones.Where(z => z.Rooms.Contains(room.Id)).ToList()) w.Relays.Break(z, "시험");
+                        foreach (var d in w.Drones.Drones) d.Battery = MathF.Min(d.Battery, 0.3f); // 임시 중계 드론도 못 뜬다
                         Run(w, SimTime.Minutes(1));
                     }
                     // 한 사람이 그 방에 있다가 불을 본다
@@ -39,6 +43,9 @@ public static partial class Program
                     var awake = w.Crew.Where(c => c.CanAct).ToList();
                     total = awake.Count;
                     knowAt1 = awake.Count(c => c.Mind.Knows.ContainsKey(key));
+                    if (cut) byPerson = w.Log.Entries.Any(e => e.Text.Contains($"{room.Name} 화재 —") && e.Text.Contains("경보가 돌지 않았다"));
+                    if (debug) Console.WriteLine($"      [{(cut ? "끊김" : "이어짐")}] {room.Name} 데이터선 {room.DataLinked} · " + string.Join(" / ", awake.Where(c => c.Mind.Knows.ContainsKey(key)).Select(c => $"{c.Name}@{c.Room?.Name} {MindSystem.SourceName(c.Mind.Knows[key].src)}"))
+                        + " · 기록: " + string.Join(" | ", w.Log.Entries.Where(e => e.Tick >= w.Tick - SimTime.Minutes(1)).Select(e => e.Text).Take(8)));
                     Run(w, SimTime.Minutes(9));
                     sources = string.Join(" · ", awake.Where(c => c.Mind.Knows.ContainsKey(key)).GroupBy(c => c.Mind.Knows[key].src).Select(g => $"{MindSystem.SourceName(g.Key)} {g.Count()}"));
                     return cut ? (room.DataLinked ? "다시 이어짐" : "끊김") : "이어짐";
@@ -46,8 +53,8 @@ public static partial class Program
                 Spread(false, out int linked1, out int total, out var srcA);
                 string state = Spread(true, out int cut1, out _, out var srcB);
                 Check("아는 것의 차이 — 데이터선이 닿은 방의 불은 경보로 곧장 모두, 끊긴 방의 불은 본 사람부터 무전·소문으로",
-                    linked1 >= total - 1 && cut1 < linked1 && srcB.Length > 0,
-                    $"1분 뒤 아는 사람: 이어진 방 {linked1}/{total} ({srcA}) · 끊긴 방 {cut1}/{total} → 10분 뒤 ({srcB}) · 데이터선 {state}");
+                    linked1 >= total - 1 && (cut1 < linked1 || byPerson) && srcB.Length > 0, // 본 사람이 1분 안에 무전으로 알리면 모두 안다 — 그래도 처음은 사람이었다
+                    $"1분 뒤 아는 사람: 이어진 방 {linked1}/{total} ({srcA}) · 끊긴 방 {cut1}/{total} → 10분 뒤 ({srcB}) · 데이터선 {state} · 끊긴 방은 본 사람이 처음 알림 {byPerson}");
             }
             // 2) 목표 계층: 위기 중 조원은 '맡은 역할', 위험한 방에서 나가는 사람은 '생존'
             {

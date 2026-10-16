@@ -36,7 +36,7 @@ public static partial class Program
                     if (dbg && i % 36 == 0) Console.WriteLine($"     [{(prepared ? "대비" : "못 함")} {SimTime.Clock(w.Tick)}] " + string.Join(" | ", w.Crew.Select(c => $"{c.Name} {c.Dose:0.0}Sv {(c.Dead ? "숨짐" : $"{c.Vitals.Health * 100:0}% {c.Room?.Name}")}")));
                 }
                 return (w.Crew.Count(c => c.Dead), w.Crew.Count(c => c.Dose >= 1f), w.Crew.Max(c => c.Dose),
-                    string.Join(", ", w.Crew.Select(c => $"{c.Name} {c.Dose:0.0}Sv{(c.Dead ? "†" : "")}")));
+                    string.Join(", ", w.Crew.Select(c => $"{c.Name} {c.Dose:0.0}Sv{(c.Dead ? $"†({c.Vitals.InjuryCause})" : "")}")));
             }
             var ready = Nova(true);
             var bare = Nova(false);
