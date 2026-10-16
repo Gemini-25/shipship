@@ -14,12 +14,12 @@ using ShipSim.Core;
 /// · 열쇠: 이름 · 시드 · 배 · 세계 밖 전역 스위치(켜고 끄는 Off/On · 수치) · 코드 판(어셈블리 지문)
 /// · 처음 돌린 배도 찍은 것을 되살려 돌려준다 — 언제나 되살린 배로 시험하니 켜고 끈 결과를 견줄 수 있다
 /// · 프로세스 사이에서도 나눈다 (임시 폴더 · SHIPSIM_WARMDIR) — 코드가 바뀌면 지문이 바뀌어 다시 돌린다
-/// · 지금은 SHIPSIM_WARM=1 일 때만 켠다 — 시험 130개를 켜고 끈 출력이 모두 같은 걸 확인하면 기본으로 켠다
-///   (시험 세 개는 시간 줄만 빼고 글자까지 같았다: braintest 165 → 137초 · computerplantest 180 → 102초)
+/// · 기본으로 켠다 (끄려면 SHIPSIM_WARM=0) — 시험 137개를 켜고 끈 출력을 견줘 시간 줄만 빼고 글자까지 같은 것을 확인했다
+///   (처음 견줄 땐 두 개가 달랐다: 전역 속성 스위치가 열쇠에서 빠져, 스위치를 켠 채 만든 첫날 배가 보통 첫날 배 자리에 저장되었다)
 /// </summary>
 public static class WarmCache
 {
-    public static readonly bool On = Environment.GetEnvironmentVariable("SHIPSIM_WARM") == "1";
+    public static readonly bool On = Environment.GetEnvironmentVariable("SHIPSIM_WARM") != "0";
     private static readonly Dictionary<string, byte[]> Mem = new();
     private static readonly string? Dir = On ? Environment.GetEnvironmentVariable("SHIPSIM_WARMDIR") ?? Path.Combine(Path.GetTempPath(), "shipsim-warm") : null;
     private static FieldInfo[]? _switches;
@@ -102,12 +102,21 @@ public static class WarmCache
         catch (IOException) { return false; }
     }
 
+    private static bool _pruned;
+
     private static void SaveDisk(string key, byte[] bytes)
     {
         if (Dir == null) return;
         try
         {
             Directory.CreateDirectory(Dir);
+            if (!_pruned)
+            {
+                // 기본으로 켜니 임시 폴더에 지난 코드 판의 첫날 배가 쌓인다 — 이틀 넘게 안 쓴 것은 지운다 (지금 판은 열쇠가 달라 어차피 안 쓴다)
+                _pruned = true;
+                foreach (var f in Directory.EnumerateFiles(Dir, "*.snap"))
+                    if (DateTime.UtcNow - File.GetLastWriteTimeUtc(f) > TimeSpan.FromDays(2)) File.Delete(f);
+            }
             var tmp = Path.Combine(Dir, $"{key}.{Environment.ProcessId}.tmp");
             File.WriteAllBytes(tmp, bytes);
             File.Move(tmp, Path.Combine(Dir, key + ".snap"), overwrite: true);
