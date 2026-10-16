@@ -12,6 +12,7 @@
 import argparse, json, os, re, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+TOTAL = re.compile(r'^\s*✘\s*(\d+\s*개\s*실패|실패\s*\d+)\s*$')
 CRASH = {'124': '시간 초과', '134': '중단', '137': '죽음', '139': '세그폴트'}
 
 
@@ -45,7 +46,8 @@ def judge(path):
         return '멈춤', '끝 줄 없음', sec
     if m.group(1) in CRASH:
         return '멈춤', CRASH[m.group(1)], sec
-    fails = [l.strip() for l in text.splitlines() if re.match(r'^\s*✘', l)]
+    # 줄 맨 앞 ✘ = 실패한 확인 · 합계 줄('✘ 1개 실패' · '✘ 실패 2')은 세지 않는다 (성능 줄만 실패해도 합계가 찍힌다)
+    fails = [l.strip() for l in text.splitlines() if re.match(r'^\s*✘', l) and not TOTAL.match(l)]
     real = [l for l in fails if '성능' not in l]
     if real:
         return '실패', real[0], sec

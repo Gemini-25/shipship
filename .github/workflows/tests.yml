@@ -1,5 +1,5 @@
 # 전체 시험 — 푸시마다 자동 (docs/DEV_PROCESS.md)
-#   빌드 한 번 → 12조각으로 나눠 동시에 (조각마다 3개씩) → 기준(tools/tests/baseline.txt)과 견줌
+#   빌드 한 번 → 5조각으로 나눠 동시에 (조각마다 3개씩 · 이 계정은 작업을 동시에 5개까지 돌린다 — 다 한 번에 시작하게) → 기준(tools/tests/baseline.txt)과 견줌
 #   → 기준에선 통과하던 장면이 실패하면 다른 시드 둘(11 · 23)로 다시 → 한 장 요약 (작업 요약 · summary 아티팩트)
 #   빨강(규칙 · 핵심 실패 · 멈춤)이 있을 때만 실패로 끝난다. 장면 시험은 막지 않는다.
 name: tests
@@ -34,7 +34,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+        shard: [0, 1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -43,7 +43,7 @@ jobs:
         with: { name: headless, path: build/headless }
       - name: 시험 (조각 ${{ matrix.shard }})
         run: |
-          python3 tools/ci/shard.py tools/tests/tests.txt ${{ matrix.shard }} 12 > list.txt
+          python3 tools/ci/shard.py tools/tests/tests.txt ${{ matrix.shard }} 5 > list.txt
           cat list.txt | tr '\n' ' '; echo
           tools/ci/run-tests.sh list.txt results 3 7
       - uses: actions/upload-artifact@v4
