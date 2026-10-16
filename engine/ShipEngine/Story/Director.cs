@@ -10,6 +10,7 @@ public sealed class Highlight
     public FactKind Kind;
     public int Cause;
     public int Actor;
+    public int Root;           // 원인 사슬의 뿌리 (같은 뿌리의 일은 한 하이라이트로)
     public string Title = "";
 }
 
@@ -197,14 +198,20 @@ public sealed class Director
     {
         float spot = SpotScore(f.Cell);
         if (spot < HighlightAt) return;
-        // 같은 곳 · 2분 안의 하이라이트는 하나로 (더 크면 고친다)
+        int root = 0;
+        if (f.Cause != 0) { var ch = sim.Causes.Chain(f.Cause); root = ch.Count > 0 ? ch[0] : 0; }
+        // 하나로 묶는다: 같은 뿌리에서 나온 일(30분 안) · 같은 곳 2분 안 — 더 크면 고친다 (정점 · 제목 · 시작은 더 이른 쪽)
         foreach (var h in Highlights)
-            if (t - h.Tick < Time.Minutes(2) && Math.Max(Math.Abs(L.X(h.Cell) - L.X(f.Cell)), Math.Abs(L.Y(h.Cell) - L.Y(f.Cell))) <= SpotRadius * 2)
+            if (root != 0 && h.Root == root && t - h.Tick < Time.Minutes(30)
+                || t - h.Tick < Time.Minutes(2) && Math.Max(Math.Abs(L.X(h.Cell) - L.X(f.Cell)), Math.Abs(L.Y(h.Cell) - L.Y(f.Cell))) <= SpotRadius * 2)
             {
-                if (spot > h.Score) { h.Score = spot; if (Weight(f.Kind) > Weight(h.Kind)) { h.Kind = f.Kind; h.Cause = f.Cause; h.Actor = f.Actor; h.Title = TitleOf(sim, f); h.StartTick = RootTick(sim, f, t); } }
+                if (spot > h.Score) { h.Score = spot; h.Tick = t; h.Cell = f.Cell; }
+                if (Weight(f.Kind) > Weight(h.Kind)) { h.Kind = f.Kind; h.Cause = f.Cause; h.Actor = f.Actor; h.Title = TitleOf(sim, f); }
+                h.StartTick = Math.Min(h.StartTick, RootTick(sim, f, t));
+                if (h.Root == 0) h.Root = root;
                 return;
             }
-        Highlights.Add(new Highlight { Tick = t, Cell = f.Cell, Score = spot, Kind = f.Kind, Cause = f.Cause, Actor = f.Actor, Title = TitleOf(sim, f), StartTick = RootTick(sim, f, t) });
+        Highlights.Add(new Highlight { Tick = t, Cell = f.Cell, Score = spot, Kind = f.Kind, Cause = f.Cause, Actor = f.Actor, Root = root, Title = TitleOf(sim, f), StartTick = RootTick(sim, f, t) });
         Caption = Highlights[^1].Title;
     }
 
@@ -216,14 +223,7 @@ public sealed class Director
         return Math.Max(0, Math.Min(root, t) - Time.Minutes(0.5)); // 조짐 조금 앞부터
     }
 
-    public static string FactText(FactKind k) => k switch
-    {
-        FactKind.Died => "죽었다", FactKind.Collapsed => "쓰러졌다", FactKind.Rescue => "구했다", FactKind.Panicked => "공황에 빠졌다",
-        FactKind.WallBreach => "벽이 뚫렸다", FactKind.DoorBlown => "문이 날아갔다", FactKind.Ignition => "불이 붙었다", FactKind.Extinguished => "불을 껐다",
-        FactKind.Patched => "구멍을 막았다", FactKind.Repaired => "고쳤다", FactKind.ComputerSeal => "봉쇄", FactKind.ComputerAlarm => "경보",
-        FactKind.DebrisNear => "무언가 다가온다", FactKind.Impact => "충돌", FactKind.Hurt => "다쳤다", FactKind.Fled => "몸을 피했다",
-        FactKind.MachineFail => "고장", FactKind.Short => "합선", FactKind.Flare => "별 폭발", FactKind.WallCrack => "금이 갔다", _ => k.ToString(),
-    };
+    public static string FactText(FactKind k) => FactNames.Of(k);
 
     private static string TitleOf(Sim sim, in Fact f)
     {

@@ -55,6 +55,11 @@ public sealed class Causes : IState
     public int Add(CauseKind kind, string text, long tick, int cell = -1, int parent = 0, int parent2 = 0, int actor = -1)
     {
         if (!_textIds.TryGetValue(text, out int t)) { t = _texts.Count; _texts.Add(text); _textIds[text] = t; }
+        // 같은 자리에서 같은 일이 또 일어나면 (금이 더 자람 · 불이 또 번짐) 새 마디를 달지 않고 그 마디를 잇는다 — 이야기가 '금이 갔다 → 금이 갔다 → …'로 되풀이되지 않게
+        // (몇 마디 위까지: '뜨거워 약해졌다 → 찢어졌다 → 뜨거워 약해졌다 → …'처럼 번갈아 되풀이되는 것도)
+        if (parent2 == 0)
+            for (int p = parent, k = 0; p > 0 && p < _nodes.Count && k < 6; p = _nodes[p].Parent, k++)
+                if (_nodes[p].Text == t && _nodes[p].Cell == cell) return p;
         _nodes.Add(new CauseNode { Kind = kind, Cell = cell, Tick = tick, Parent = parent, Parent2 = parent2, Text = t, Actor = actor });
         return _nodes.Count - 1;
     }
@@ -73,7 +78,21 @@ public sealed class Causes : IState
     public int Depth(int id) => Chain(id).Count;
 
     /// <summary>"합선 → 피복이 탄다 → 연기" 처럼.</summary>
-    public string Story(int id) => string.Join(" → ", Chain(id).Select(Text));
+    public string Story(int id)
+    {
+        // 같은 말이 잇따르면 한 번만 (불이 칸마다 번진 것: '옆 칸으로 번졌다 ×3')
+        var parts = new List<string>();
+        string? last = null; int n = 0;
+        foreach (int c in Chain(id))
+        {
+            string t = Text(c);
+            if (t == last) { n++; continue; }
+            if (last != null) parts.Add(n > 1 ? $"{last} ×{n}" : last);
+            last = t; n = 1;
+        }
+        if (last != null) parts.Add(n > 1 ? $"{last} ×{n}" : last);
+        return string.Join(" → ", parts);
+    }
 
     public void Save(StateWriter w)
     {

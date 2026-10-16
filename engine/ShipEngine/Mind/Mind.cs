@@ -248,7 +248,7 @@ public sealed partial class Mind : IEngine
         GoalKind.Idle => "쉬는 중", GoalKind.Flee => "몸을 피한다", GoalKind.Panic => "어쩔 줄 모른다", GoalKind.Down => "쓰러져 있다",
         GoalKind.Sleep => "잔다", GoalKind.Eat => "먹는다", GoalKind.Drink => "물을 마신다", GoalKind.Work => "일한다", GoalKind.Relax => "쉰다",
         GoalKind.Socialize => "어울린다", GoalKind.FightFire => "불을 끈다", GoalKind.Rescue => "사람을 구한다", GoalKind.Patch => "구멍을 막는다",
-        GoalKind.Repair => "고친다", GoalKind.Investigate => "살피러 간다", GoalKind.GetSuit => "우주복을 입는다", GoalKind.Charge => "충전한다", GoalKind.Evacuate => "방을 빠져나간다", _ => "",
+        GoalKind.Repair => "고친다", GoalKind.Investigate => "살피러 간다", GoalKind.GetSuit => "우주복을 입는다", GoalKind.Charge => "충전한다", GoalKind.Evacuate => "방을 빠져나간다", GoalKind.Brace => "버티는 문을 받친다", _ => "",
     };
 
     public static string BeliefName(BeliefKind k) => k switch
@@ -269,7 +269,7 @@ public sealed partial class Mind : IEngine
             var st = a.Plan[a.C.StepIndex];
             string step = st.Kind switch
             {
-                StepKind.GoTo => "가는 중", StepKind.Take => $"{ItemNames[st.Arg]} 꺼내는 중", StepKind.Spray => "물을 뿌리는 중", StepKind.Seal => "막는 중",
+                StepKind.GoTo => "가는 중", StepKind.Take => $"{ItemNames[st.Arg]} 꺼내는 중", StepKind.Spray => "물을 뿌리는 중", StepKind.Seal => "막는 중", StepKind.Brace => "덧대는 중",
                 StepKind.Fix => "고치는 중", StepKind.PickUp => "업는 중", StepKind.Drop => "내려놓는 중", StepKind.Wear => "입는 중", StepKind.Look => "살펴보는 중", _ => "",
             };
             if (step.Length > 0) s += " — " + step;

@@ -27,7 +27,9 @@ public static partial class Program
             else if (args.Contains("--ships")) Ships();
             else if (args.Contains("--probe-det")) ProbeDeterminism(args.Contains("load"));
             else if (args.Contains("--probe-crew")) ProbeCrew(args);
-            else { Console.WriteLine("Lab --law | --rule | --bench | --scene 이름 [폴더] | --ships"); return 2; }
+            else if (args.Contains("--fun")) Fun(args);
+            else if (args.Contains("--probe-story")) ProbeStory(args);
+            else { Console.WriteLine("Lab --law | --rule | --bench | --scene 이름 [폴더] | --ships | --fun [배,…] [날] [시드 수] [성격] [가혹함]"); return 2; }
         }
         catch (Exception e)
         {

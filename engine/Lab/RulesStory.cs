@@ -53,6 +53,27 @@ public static partial class Program
                     $"{(failAt > 0 ? $"{(failAt - seed.Tick) / 1500.0:0.0}시간 뒤 고장" : "고장 없음")} · {(failCause != 0 ? s.Causes.Story(failCause) : "")}");
             }
 
+            // ── 같은 자리에서 같은 일이 또 일어나면 원인 이야기는 한 번만 (금이 갔다 → 금이 갔다 → … 가 아니게) ──
+            {
+                var s = ShipWorld.Create("Kestrel", 4);
+                var st = s.Get<Storyteller>(); st.Level = 8;
+                st.Plant(s, SeedKind.HullFatigue);
+                var seed = st.Seeds[0];
+                int cracks = 0; int lastCause = 0;
+                var stc = s.Get<Structure>(); var fld = s.Get<Field>();
+                for (int k = 0; k < Time.Hours(12) && cracks < 3; k += 25)
+                {
+                    s.Run(25);
+                    var cr = s.Facts.Since(0).Where(f => f.Kind is FactKind.WallCrack or FactKind.WallBreach && f.Cell == seed.Cell).ToList();
+                    cracks = cr.Count; if (cr.Count > 0) lastCause = cr[^1].Cause;
+                    if (fld.Hole[seed.Cell] > 0) stc.Patch(seed.Cell, 0); // 누가 막았다 — 피로는 그대로라 또 금이 간다
+                }
+                var texts = lastCause != 0 ? s.Causes.Chain(lastCause).Select(s.Causes.Text).ToList() : new List<string>();
+                bool repeats = texts.Zip(texts.Skip(1)).Any(p => p.First == p.Second);
+                Check("외판 피로: 금이 몇 번 더 자라도 원인 이야기에 같은 말이 되풀이되지 않는다 · 뿌리는 이야기꾼", cracks >= 2 && !repeats && texts.Count >= 2 && texts[0] == s.Causes.Text(seed.Cause),
+                    $"금 {cracks}번 · {(lastCause != 0 ? s.Causes.Story(lastCause) : "금 없음")}");
+            }
+
             // ── 먼 운석도 끝까지 온다 (예전: 1,000km 밖에서 심은 운석이 바로 지워졌다) ──
             {
                 var s = ShipWorld.Create("Kestrel", 3);

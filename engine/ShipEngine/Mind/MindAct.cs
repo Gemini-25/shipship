@@ -51,6 +51,7 @@ public sealed partial class Mind
             case StepKind.Use: UseStep(sim, a, st); return;
             case StepKind.Spray: SprayStep(sim, a, st); return;
             case StepKind.Seal: SealStep(sim, a, st); return;
+            case StepKind.Brace: BraceStep(sim, a, st); return;
             case StepKind.Fix: FixStep(sim, a, st); return;
             case StepKind.PickUp:
             {
@@ -236,7 +237,8 @@ public sealed partial class Mind
         ref var c = ref a.C;
         long t = sim.Tick;
         int wall = st.Cell;
-        if (F.Hole[wall] <= 0) { Forget(a, b => b.Kind == BeliefKind.Breach && b.Cell == wall); Next(a, t); return; }
+        bool doorGap = F.Hole[wall] <= 0 && DoorGapLeaks(wall);
+        if (F.Hole[wall] <= 0 && !doorGap) { Forget(a, b => b.Kind == BeliefKind.Breach && b.Cell == wall); Next(a, t); return; }
         if (Dist(c.Cell, wall) > 1) { Fail(sim, a, "멀다"); return; }
         if (a.IsPerson && c.Holding != iPatch) { Fail(sim, a, "봉합 꾸러미가 없다"); return; }
         Activity(a, "hard");
@@ -247,13 +249,37 @@ public sealed partial class Mind
         _st!.Patch(wall, (float)Math.Max(0, area - max));
         if (a.IsPerson) { c.Holding = 255; c.HoldCharge = 0; }
         Patched++;
-        int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} 구멍을 막았다", t, wall, _st.DamageCause[wall], 0, a.Id);
-        sim.Facts.Emit(t, FactKind.Patched, wall, (float)Math.Min(area, max), cause, a.Id);
-        if (F.Hole[wall] <= 0)
+        int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} {(doorGap ? "문틈" : "구멍")}을 막았다", t, wall,
+            doorGap ? _st.LowSideCause(wall) : _st.DamageCause[wall], 0, a.Id);
+        sim.Facts.Emit(t, FactKind.Patched, wall, (float)Math.Min(doorGap ? Field.LeakNormalDoor : area, max), cause, a.Id);
+        if (F.Hole[wall] <= 0 && !DoorGapLeaks(wall))
         {
             Forget(a, b => b.Kind == BeliefKind.Breach && b.Cell == wall || b.Kind is BeliefKind.Leak or BeliefKind.Vacuum && Dist(b.Cell, wall) <= 6);
             a.Doubts.Add(new Doubt { Kind = BeliefKind.Leak, Cell = wall, Until = t + Time.Minutes(10) }); // 내가 막았다 — 한동안 '샌다'는 말을 반신반의
         }
+        // 로봇: 막은 자리가 아직 휘어 있으면(또 금이 갈 것) 그 자리에서 바로 덧대 받친다
+        if (!a.IsPerson && _st.Stress[wall] >= 0.6f && _st.Braced[wall] == 0 && L.Kind[wall] is CellKind.Wall or CellKind.Door)
+            a.Plan.Insert(Math.Min(a.Plan.Count, c.StepIndex + 1), new PlanStep { Kind = StepKind.Brace, Cell = wall });
+        Next(a, t);
+    }
+
+    private void BraceStep(Sim sim, Agent a, PlanStep st)
+    {
+        ref var c = ref a.C;
+        long t = sim.Tick;
+        int wall = st.Cell;
+        if (_st == null || _st.Braced[wall] != 0) { Forget(a, b => b.Kind == BeliefKind.Strain && Dist(b.Cell, wall) <= 1); Next(a, t); return; }
+        if (Dist(c.Cell, wall) > 1) { Fail(sim, a, "멀다"); return; }
+        if (a.IsPerson && c.Holding != iRepair) { Fail(sim, a, "수리 꾸러미가 없다"); return; }
+        Activity(a, "hard");
+        double minutes = a.IsPerson ? 4 * (1.5 - c.SkRepair) : 3;
+        if (t - c.StepStart < Time.Minutes(minutes)) return;
+        _st.Brace(wall);
+        if (a.IsPerson) { c.Holding = 255; c.HoldCharge = 0; }
+        string what = L.Kind[wall] == CellKind.Door ? "문" : "벽";
+        int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} 끼익거리는 {Ko.Eul(what)} 덧대 받쳤다", t, wall, _st.DamageCause[wall], 0, a.Id);
+        sim.Facts.Emit(t, FactKind.Repaired, wall, _st.Stress[wall], cause, a.Id, -1);
+        Forget(a, b => b.Kind == BeliefKind.Strain && Dist(b.Cell, wall) <= 1);
         Next(a, t);
     }
 

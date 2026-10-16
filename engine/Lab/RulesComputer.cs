@@ -151,5 +151,50 @@ public static partial class Program
             Check("쓰러진 사람: 주컴퓨터가 사람 표로 알고 다른 방 로봇을 보낸다 → 업어 낸다", s.Facts.CountOf(FactKind.Rescue) > 0 && s.Facts.CountOf(FactKind.ComputerAssign) > 0 && body.Alive != 0,
                 $"구함 {s.Facts.CountOf(FactKind.Rescue)} · 맡김 {s.Facts.CountOf(FactKind.ComputerAssign)} · 내려놓은 곳 산소 {f.Partial(f.T.gO2, body.Cell):0.0}kPa");
         }
+
+        // ── 옆 방이 진공: 사이 문틈으로 새고 · 문이 끼익거린다 → 로봇이 문틈을 막고 덧대 받친다 · 사람은 진공 쪽으로 나가지 않는다 ──
+        {
+            var s = World(3);
+            var m = s.Get<Mind>(); var f = s.Get<Field>(); var st = s.Get<Structure>(); var life = s.Get<Life>();
+            int r1 = m.AddRobot(s, At(3, 7), AgentKind.Robot, At(3, 7));
+            int r2 = m.AddRobot(s, At(8, 7), AgentKind.Robot, At(8, 7));
+            int p = m.AddPerson(s, At(5, 2), -1, -1);
+            s.Run(5);
+            int hull = At(17, 0);
+            f.SetHole(hull, 2.5f); // 오른쪽 방 천장 외판이 통째로 떨어져 나갔다
+            st.DamageCause[hull] = s.Causes.Add(CauseKind.Story, "오른쪽 방 외판이 떨어져 나갔다", s.Tick, hull);
+            var left = s.Layout.Rooms[s.Layout.Room[At(5, 2)]].Cells;
+            int door = At(10, 3), doorC = At(14, 6);
+            double minLeft = 999, minSpO2 = 1;
+            for (int k = 0; k < Time.Minutes(30); k++)
+            {
+                s.Step();
+                minLeft = Math.Min(minLeft, left.Average(c => f.Pressure(c)));
+                minSpO2 = Math.Min(minSpO2, life[m[p].C.Body].SpO2);
+            }
+            var taped = s.Facts.Since(0).Where(x => x.Kind == FactKind.Patched && (x.Cell == door || x.Cell == doorC)).ToList();
+            Check("옆 방이 진공: 로봇이 쉬익대는 문틈을 막아 이쪽 방 기압이 버틴다", taped.Count > 0 && minLeft > 60,
+                $"문틈 막음 {taped.Count} ({string.Join(", ", taped.Select(x => s.Causes.Text(x.Cause)))}) · 왼쪽 방 최저 {minLeft:0}kPa");
+            Check("옆 방이 진공: 사람은 새는 문틈 쪽 진공으로 뛰쳐나가지 않는다", minSpO2 > 0.85 && life[m[p].C.Body].Alive != 0,
+                $"가장 낮은 산소 포화 {minSpO2:0.00} · 지금 {m.RoomOf(m[p].C.Cell)}방 · {m.Thought(p)}");
+            for (int k = 0; k < Time.Hours(6); k++) s.Step();
+            Check("옆 방이 진공: 끼익거리는 문을 덧대 받쳐 6시간을 버틴다", s.Facts.CountOf(FactKind.DoorBlown) == 0 && st.Braced[door] != 0,
+                $"문 날아감 {s.Facts.CountOf(FactKind.DoorBlown)} · 받침 {st.Braced[door]}/{st.Braced[doorC]} · 피로 {st.Fatigue[door]:0.00} · 부하 {st.Stress[door]:0.00}");
+        }
+
+        // ── 정전: 주컴퓨터 방의 급전선이 합선으로 떨어져도 자체 축전지로 버틴다 (3kWh · 약 70분) ──
+        {
+            var s = World(4);
+            var net = s.Get<Network>(); var sm = s.Get<ShipMind>();
+            s.Run(10);
+            var comp = net.Devices.First(d => d.Type == "MainComputer");
+            int fd = comp.Feeder;
+            net.Breaker[fd] = 0; net.FaultCell[fd] = comp.Cell; // 합선이 남아 있어 다시 올리지 못한다
+            bool on30 = true;
+            for (int k = 0; k < Time.Minutes(30); k++) { s.Step(); if (!sm.Online) on30 = false; }
+            for (int k = 0; k < Time.Minutes(60); k++) s.Step();
+            Check("정전: 주컴퓨터는 급전선이 끊겨도 자체 축전지로 버틴다 (30분 내내 켜짐 · 전지가 다하면 꺼진다)", on30 && !sm.Online,
+                $"30분 켜짐 {on30} · 90분 뒤 {(sm.Online ? "켜짐" : "꺼짐")} · 남은 전지 {net.Charge[comp.Id]:0.00}kWh");
+        }
     }
 }

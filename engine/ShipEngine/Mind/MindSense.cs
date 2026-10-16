@@ -7,6 +7,17 @@ public sealed partial class Mind
     private readonly HashSet<int> _sparks = new();
     private int[] _devAt = Array.Empty<int>();
 
+    /// <summary>문 양쪽의 기압 차 (kPa).</summary>
+    private double DoorDeltaKPa(int door)
+    {
+        Span<int> nb = stackalloc int[4];
+        L.Neighbors(door, nb);
+        double hi = 0, lo = double.MaxValue;
+        foreach (int j in nb)
+            if (j >= 0 && (L.Kind[j] == CellKind.Floor || L.Kind[j] == CellKind.Outside)) { double p = L.Kind[j] == CellKind.Outside ? 0 : F.Pressure(j); hi = Math.Max(hi, p); lo = Math.Min(lo, p); }
+        return lo == double.MaxValue ? 0 : hi - lo;
+    }
+
     private static bool Urgent(BeliefKind k) => k is BeliefKind.Fire or BeliefKind.Breach or BeliefKind.Vacuum or BeliefKind.Injured or BeliefKind.Dead or BeliefKind.Smoke or BeliefKind.Spark;
 
     // ───────────────────────── 믿음 ─────────────────────────
@@ -119,6 +130,24 @@ public sealed partial class Mind
             foreach (int w in _roomWalls[room])
                 if (F.Hole[w] > 0 && Dist(w, cell) <= radius + 1)
                     Learn(a, t, BeliefKind.Breach, w, -1, 1, BeliefSource.Saw, _st?.DamageCause[w] ?? 0, F.Hole[w]);
+            // 휘어 끼익거리는 문 · 벽 (부하가 정격의 60% 넘음) — 가서 보면 안다
+            if (_st != null)
+            {
+                foreach (int w in _roomWalls[room])
+                    if (_st.Stress[w] >= 0.6f && _st.Braced[w] == 0 && F.Hole[w] <= 0 && Dist(w, cell) <= 3)
+                        Learn(a, t, BeliefKind.Strain, w, -1, Math.Min(1f, _st.Stress[w]), BeliefSource.Saw, _st.DamageCause[w], _st.Stress[w]);
+                foreach (int x in _roomDoors[room])
+                    if (_st.Stress[x] >= 0.6f && _st.Braced[x] == 0 && Dist(x, cell) <= 3)
+                        Learn(a, t, BeliefKind.Strain, x, -1, Math.Min(1f, _st.Stress[x]), BeliefSource.Saw, _st.DamageCause[x], _st.Stress[x]);
+            }
+            // 닫힌 문이 바람을 빨아들인다 (서리 · 틈새 바람 · 쉬익) — 그 너머가 빠졌다: 문틈도 막을 구멍이다
+            foreach (int x in _roomDoors[room])
+            {
+                int d = L.DoorAt[x];
+                if (d < 0 || !F.DoorGapOpen(d) || Dist(x, cell) > 3) continue;
+                double dp = DoorDeltaKPa(x);
+                if (dp > 20) Learn(a, t, BeliefKind.Breach, x, -1, (float)Math.Min(1, dp / 60), BeliefSource.Saw, _st?.LowSideCause(x) ?? 0, (float)Field.LeakNormalDoor);
+            }
             if (L.Kind[cell] == CellKind.Door)
             {
                 Span<int> nb = stackalloc int[4];

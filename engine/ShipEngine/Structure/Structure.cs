@@ -27,7 +27,8 @@ public sealed class Structure : IEngine
     public const double HullRatingKPa = 400, WallRatingKPa = 160;
     /// <summary>보통 문: 한 기압은 겨우 버틴다 — 피로가 쌓이면 수십 분 뒤 날아간다 (끼익 소리가 먼저).</summary>
     public const double NormalDoorKPa = 120;
-    public const double FatigueK = 1.8e-4;   // 피로 쌓임 (초당 · 넘친 부하의 세제곱에 곱한다)
+    public const double FatigueK = 1.8e-4;
+    public const double BraceFactor = 1.6;   // 덧대 받친 문 · 벽의 정격 배율   // 피로 쌓임 (초당 · 넘친 부하의 세제곱에 곱한다)
     public const double CrackArea = 0.0005;  // 금 (m²)
 
     private readonly Field F;
@@ -43,6 +44,7 @@ public sealed class Structure : IEngine
     public int[] DamageCause;    // 그 벽을 상하게 한 원인
     public float[] DoorTarget;   // 문 목표 0~1
     public byte[] DoorJam;       // 1: 끼임
+    public byte[] Braced;        // 1: 버티는 문 · 벽에 덧대 받쳤다 (정격 ×1.6)
     public byte[] DoorPowered;   // 1: 전동 (망이 끊으면 0 — 손으로만)
     public long Cracks, Breaches, Impacts, DoorsBlown;
     /// <summary>칸마다 들어온 충격 에너지 (J) — ⑦ 생명이 읽고 비운다 (그 칸 몸의 상처).</summary>
@@ -54,7 +56,7 @@ public sealed class Structure : IEngine
     {
         F = f; L = f.L; T = f.T;
         Fatigue = new float[L.N]; Corrode = new float[L.N]; Stress = new float[L.N]; DamageCause = new int[L.N];
-        DoorTarget = new float[L.Doors.Count]; DoorJam = new byte[L.Doors.Count];
+        DoorTarget = new float[L.Doors.Count]; DoorJam = new byte[L.Doors.Count]; Braced = new byte[L.N];
         DoorPowered = Enumerable.Repeat((byte)1, L.Doors.Count).ToArray();
         ImpactJ = new float[L.N];
     }
@@ -67,8 +69,12 @@ public sealed class Structure : IEngine
     /// <summary>구멍을 막는다 (임시 봉합 · 용접) — 남는 넓이로.</summary>
     public void Patch(int cell, float remainingArea)
     {
+        if (L.Kind[cell] == CellKind.Door && L.DoorAt[cell] >= 0 && remainingArea <= 0) F.TapeDoor(L.DoorAt[cell]); // 문틈도 막는다
         F.SetHole(cell, Math.Min(F.Hole[cell], Math.Max(0, remainingArea)));
     }
+
+    /// <summary>버티는 문 · 벽에 덧대 받친다 (수리 꾸러미) — 정격 ×1.6 · 피로가 더 쌓이는 것을 늦춘다.</summary>
+    public void Brace(int cell) { if (L.Kind[cell] is CellKind.Wall or CellKind.Door) Braced[cell] = 1; }
 
     /// <summary>충돌: 칸 cell에 에너지 joules가 (dx, dy) 방향으로 들어온다.</summary>
     public void Impact(Sim sim, int cell, double joules, int dx, int dy, int cause)
@@ -149,14 +155,15 @@ public sealed class Structure : IEngine
     }
 
     /// <summary>압력이 빠진 쪽의 원인: 낮은 쪽 구역에 뚫린 틈(벽 구멍 · 날아간 문)이 있으면 그 원인.</summary>
-    private int LowSideCause(int c)
+    public int LowSideCause(int c)
     {
         int x = L.X(c), y = L.Y(c), low = -1; double pl = double.MaxValue;
         foreach (var (xx, yy) in new[] { (x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1) })
         {
             if (!L.In(xx, yy)) continue;
             int j = L.Index(xx, yy);
-            if (_p[j] >= 0 && _p[j] < pl) { pl = _p[j]; low = j; }
+            double pj = F.Passable(j) ? F.Pressure(j) : -1; // 마음 · 주컴퓨터도 부른다 — 구조의 틱 안 캐시(_p)에 기대지 않는다
+            if (pj >= 0 && pj < pl) { pl = pj; low = j; }
         }
         if (low < 0) return 0;
         int r = F.RegionOf[low];
@@ -207,7 +214,7 @@ public sealed class Structure : IEngine
         }
         else baseKPa = L.Hull[c] ? HullRatingKPa : WallRatingKPa;
         double strength = Math.Sqrt(Math.Max(0.01, m.Strength / 250.0));
-        return baseKPa * strength * HeatFactor(c, m) * (1 - Fatigue[c]) * (1 - Corrode[c]);
+        return baseKPa * strength * HeatFactor(c, m) * (1 - Fatigue[c]) * (1 - Corrode[c]) * (Braced[c] != 0 ? BraceFactor : 1);
     }
 
     private void Walls(Sim sim, double dt)
@@ -329,13 +336,13 @@ public sealed class Structure : IEngine
 
     public void Save(StateWriter w)
     {
-        w.Arr(Fatigue); w.Arr(Corrode); w.Arr(Stress); w.Arr(DamageCause); w.Arr(DoorTarget); w.Arr(DoorJam); w.Arr(DoorPowered);
+        w.Arr(Fatigue); w.Arr(Corrode); w.Arr(Stress); w.Arr(DamageCause); w.Arr(DoorTarget); w.Arr(DoorJam); w.Arr(DoorPowered); w.Arr(Braced);
         w.I64(Cracks); w.I64(Breaches); w.I64(Impacts); w.I64(DoorsBlown); w.F64(RustedO2); w.Arr(ImpactJ);
     }
 
     public void Load(StateReader r)
     {
-        r.ArrInto(Fatigue); r.ArrInto(Corrode); r.ArrInto(Stress); r.ArrInto(DamageCause); r.ArrInto(DoorTarget); r.ArrInto(DoorJam); r.ArrInto(DoorPowered);
+        r.ArrInto(Fatigue); r.ArrInto(Corrode); r.ArrInto(Stress); r.ArrInto(DamageCause); r.ArrInto(DoorTarget); r.ArrInto(DoorJam); r.ArrInto(DoorPowered); r.ArrInto(Braced);
         Cracks = r.I64(); Breaches = r.I64(); Impacts = r.I64(); DoorsBlown = r.I64(); RustedO2 = r.F64(); r.ArrInto(ImpactJ);
     }
 }

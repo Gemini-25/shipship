@@ -52,6 +52,7 @@ public sealed partial class Field : IEngine
     public double[] Store;
     /// <summary>문마다 열린 정도 0~1.</summary>
     public float[] DoorOpen;
+    public byte[] DoorTaped;    // 1: 닫힌 문의 틈을 봉합 꾸러미로 막았다 (문을 열면 떨어진다)
     /// <summary>벽 칸의 구멍 넓이 (m²). 2 이상이면 벽이 뚫려 칸이 트인다.</summary>
     public float[] Hole;
     /// <summary>바람 (m/s) — 틈으로 빠지는 흐름에서 계산한다.</summary>
@@ -74,7 +75,7 @@ public sealed partial class Field : IEngine
     {
         L = layout; T = t; Cells = layout.N; G = t.GasCount; S = t.StoreCount;
         N = new double[G * Cells]; U = new double[Cells]; Ts = new double[Cells]; Tf = new double[Cells]; Store = new double[S * Cells];
-        DoorOpen = new float[layout.Doors.Count]; Hole = new float[Cells];
+        DoorOpen = new float[layout.Doors.Count]; DoorTaped = new byte[layout.Doors.Count]; Hole = new float[Cells];
         WindX = new float[Cells]; WindY = new float[Cells];
         _cv = t.Gases.Select(s => s.C).ToArray();
         _molar = t.Gases.Select(s => s.MolarMass).ToArray();
@@ -226,6 +227,7 @@ public sealed partial class Field : IEngine
         if (DoorOpen[door] == open) return;
         bool before = DoorPassable(door), linkBefore = DoorOpen[door] > 0f;
         DoorOpen[door] = open;
+        if (open > 0f) DoorTaped[door] = 0; // 열면 막은 것이 떨어진다
         // 지나다닐 수 있는지가 바뀌거나 틈 넓이가 바뀌면 구역을 다시 짠다
         if (before != DoorPassable(door) || linkBefore != (open > 0f) || !before) _dirty = true;
     }
@@ -239,6 +241,16 @@ public sealed partial class Field : IEngine
     }
 
     public bool DoorPassable(int door) => DoorOpen[door] >= 0.5f;
+
+    /// <summary>닫힌 보통 문의 틈으로 새고 있나 (막지 않았다).</summary>
+    public bool DoorGapOpen(int door) => DoorOpen[door] <= 0f && DoorTaped[door] == 0 && L.Doors[door].Kind == "normal";
+
+    /// <summary>닫힌 문의 틈을 막는다 (봉합 꾸러미).</summary>
+    public void TapeDoor(int door)
+    {
+        if (DoorOpen[door] > 0f || DoorTaped[door] != 0) return;
+        DoorTaped[door] = 1; _dirty = true;
+    }
 
     /// <summary>기체가 지나다닐 수 있는 칸: 바닥 · 반 넘게 열린 문 · 뚫린 벽.</summary>
     public bool Passable(int i) => L.Kind[i] switch
@@ -319,7 +331,7 @@ public sealed partial class Field : IEngine
         w.F64(VentedTotal);
         Outside.Save(w);
         // 칸 고체 열용량(설비를 앉히며 늘었다) · 구역별 '아직 고를 차이' · 겉면을 매 틱 다룬 때 · 구역을 지은 때의 문 · 구멍 — 다음 틱의 계산을 바꾸므로 찍는다
-        w.Arr(Cs); w.Arr(_imb); w.Arr(_surfTick); w.Bool(_dirty); w.Arr(_topoDoor); w.Arr(_topoHole);
+        w.Arr(Cs); w.Arr(_imb); w.Arr(_surfTick); w.Bool(_dirty); w.Arr(_topoDoor); w.Arr(_topoHole); w.Arr(DoorTaped); w.Arr(_topoTaped);
     }
 
     public void Load(StateReader r)
@@ -327,7 +339,7 @@ public sealed partial class Field : IEngine
         r.ArrInto(N); r.ArrInto(U); r.ArrInto(Ts); r.ArrInto(Tf); r.ArrInto(Store); r.ArrInto(DoorOpen); r.ArrInto(Hole); r.ArrInto(WindX); r.ArrInto(WindY);
         VentedTotal = r.F64();
         Outside.Load(r);
-        r.ArrInto(Cs); var imb = r.Arr<double>(); _surfTick = r.Arr<long>(); bool dirty = r.Bool(); _topoDoor = r.Arr<float>(); _topoHole = r.Arr<float>();
+        r.ArrInto(Cs); var imb = r.Arr<double>(); _surfTick = r.Arr<long>(); bool dirty = r.Bool(); _topoDoor = r.Arr<float>(); _topoHole = r.Arr<float>(); r.ArrInto(DoorTaped); _topoTaped = r.Arr<byte>();
         // 구역 · 틈은 찍지 않고 다시 세운다 — 장보다 먼저 도는 엔진(망 · 마음 · 주컴퓨터)이 첫 틱에 구역을 읽는다
         RestoreTopology();
         _dirty = dirty; _imb = imb;

@@ -151,7 +151,7 @@ public sealed class Storyteller : IEngine
                 double radius = _rng.Range(300_000, 800_000);
                 double density = (k == "dust" ? 3e-6 : k == "rubble" ? 3e-7 : 6e-8) * g;
                 double ang = _rng.Range(0, 2 * Math.PI);
-                text = $"{d.Name}가 항로로 들어온다";
+                text = $"{Ko.I(d.Name)} 항로로 들어온다";
                 int c0 = sim.Causes.Add(CauseKind.Story, text, sim.Tick);
                 outside.AddCloud(k, d.Speed * minutes * 60 + radius, radius, density, Math.Cos(ang), Math.Sin(ang), c0);
                 size = (float)density;

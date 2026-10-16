@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace ShipEngine;
 
 /// <summary>주컴퓨터가 알아챈 일의 종류.</summary>
-public enum IncidentKind : byte { None, Fire, Leak, Vacuum, CO, BadAir, PersonDown, DeviceBroken, ElectricFault, PowerShort, ReactorScram, Hot }
+public enum IncidentKind : byte { None, Fire, Leak, Vacuum, CO, BadAir, PersonDown, DeviceBroken, ElectricFault, PowerShort, ReactorScram, Hot, Strain }
 
 /// <summary>주컴퓨터가 붙잡고 있는 사건 하나.</summary>
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -215,7 +215,7 @@ public sealed class ShipMind : IEngine
     {
         IncidentKind.Fire => "불", IncidentKind.Leak => "공기가 샌다", IncidentKind.Vacuum => "공기가 빠졌다", IncidentKind.CO => "일산화탄소",
         IncidentKind.BadAir => "공기가 나쁘다", IncidentKind.PersonDown => "사람이 쓰러졌다", IncidentKind.DeviceBroken => "장치 고장",
-        IncidentKind.ElectricFault => "전기 합선", IncidentKind.PowerShort => "전력이 모자란다", IncidentKind.ReactorScram => "원자로가 멈췄다", IncidentKind.Hot => "너무 덥다", _ => "",
+        IncidentKind.ElectricFault => "전기 합선", IncidentKind.PowerShort => "전력이 모자란다", IncidentKind.ReactorScram => "원자로가 멈췄다", IncidentKind.Hot => "너무 덥다", IncidentKind.Strain => "문이 압력에 휜다", _ => "",
     };
 
     private void Detect(Sim sim)
@@ -231,7 +231,7 @@ public sealed class ShipMind : IEngine
             float dp = RoomKPa[r] - RoomKPaPrev[r];
             if (RoomKPa[r] < 40) { Raise(sim, IncidentKind.Vacuum, r, _roomVent[r], RoomKPa[r], -1, BreachCause(r)); Mark(IncidentKind.Vacuum, r); }
             // 샘: 12초에 기체가 2% 넘게 줄거나 · 1분 내내 줄어 4% 넘게 · 80kPa 아래에서 아직 줄고 있으면 — 온도 · 문 여닫이로 흔들리는 기압 · 막고 난 뒤 낮은 기압은 아니다
-            else if (Losing(r) || RoomKPa[r] < 80 && RoomKPaPrev[r] - RoomKPa[r] > 0.2f) { Raise(sim, IncidentKind.Leak, r, _roomVent[r], -dp, -1, BreachCause(r)); Mark(IncidentKind.Leak, r); }
+            else if (Losing(r) || RoomKPa[r] < 80 && RoomKPaPrev[r] - RoomKPa[r] > 0.2f) { Raise(sim, IncidentKind.Leak, r, LeakSpot(r), -dp, -1, BreachCause(r)); Mark(IncidentKind.Leak, r); }
             if (RoomCO[r] > 150) { Raise(sim, IncidentKind.CO, r, _roomVent[r], RoomCO[r]); Mark(IncidentKind.CO, r); }
             if (RoomCO2[r] > 8000 || RoomO2[r] < 15 && RoomKPa[r] > 40) { Raise(sim, IncidentKind.BadAir, r, _roomVent[r], RoomO2[r]); Mark(IncidentKind.BadAir, r); }
         }
@@ -261,13 +261,24 @@ public sealed class ShipMind : IEngine
                 if (_net.FaultCell[fd] >= 0) { Raise(sim, IncidentKind.ElectricFault, _net.Feeders[fd].Room, _net.FaultCell[fd], 1, fd); Mark(IncidentKind.ElectricFault, _net.Feeders[fd].Room, fd); }
             if (_net.ReactorScram) { Raise(sim, IncidentKind.ReactorScram, -1, -1, 1, -1, _net.ScramCause); Mark(IncidentKind.ReactorScram, -1); }
         }
+        // 휘는 문 · 외판 (하중 센서 — 그 곁 방에 전원이 있어야 읽힌다): 정격의 60%를 넘으면 로봇을 보내 덧대 받친다
+        if (_st != null)
+            foreach (var door in L.Doors)
+            {
+                int dc = door.Cell;
+                if (_st.Stress[dc] < 0.6f || _st.Braced[dc] != 0) continue;
+                int r = HighSideRoom(dc);
+                if (r < 0 || RoomSeen[r] == 0) continue;
+                Raise(sim, IncidentKind.Strain, r, dc, _st.Stress[dc], dc, _st.DamageCause[dc]);
+                Mark(IncidentKind.Strain, r, dc);
+            }
         // 다시 멀쩡하게 두 번 읽히면 끝
         for (int i = 0; i < Incidents.Count; i++)
         {
             var x = Incidents[i];
             if (x.Active == 0) continue;
             if (x.Room >= 0 && x.Room < RoomSeen.Length && RoomSeen[x.Room] == 0 && x.Kind is not (IncidentKind.DeviceBroken or IncidentKind.ElectricFault)) continue; // 못 보는 방은 그대로 둔다
-            long key = ((long)x.Kind << 48) | ((long)(x.Room + 1) << 24) | (uint)((x.Kind is IncidentKind.PersonDown or IncidentKind.DeviceBroken or IncidentKind.ElectricFault ? x.Subject : -1) + 1);
+            long key = ((long)x.Kind << 48) | ((long)(x.Room + 1) << 24) | (uint)((x.Kind is IncidentKind.PersonDown or IncidentKind.DeviceBroken or IncidentKind.ElectricFault or IncidentKind.Strain ? x.Subject : -1) + 1);
             if (seen.Contains(key)) continue;
             // 끝: 5번(1분) 연속 멀쩡 · 위험한 사건은 적어도 2분은 붙잡는다
             int need = Dangerous(x.Kind) ? 5 : 2;
@@ -275,6 +286,39 @@ public sealed class ShipMind : IEngine
             Incidents[i] = x;
         }
         if (Incidents.Count > 200) Incidents.RemoveAll(x => x.Active == 0 && x.Ended < sim.Tick - Time.Hours(6));
+    }
+
+    /// <summary>샌다면 어디로: 닫힌 문 너머 방(또는 바깥)과 기압 차가 20kPa 넘는 문 — 그 문틈. 모르면 방 가운데.</summary>
+    private int LeakSpot(int r)
+    {
+        int best = _roomVent[r]; float bdp = 20;
+        Span<int> nb = stackalloc int[4];
+        foreach (int d in _roomDoors[r])
+        {
+            if (!F.DoorGapOpen(d)) continue;
+            int dc = L.Doors[d].Cell;
+            L.Neighbors(dc, nb);
+            foreach (int j in nb)
+            {
+                if (j < 0) continue;
+                float po;
+                if (L.Kind[j] == CellKind.Outside) po = 0;
+                else if (L.Room[j] >= 0 && L.Room[j] != r && RoomSeen[L.Room[j]] != 0) po = RoomKPa[L.Room[j]];
+                else continue;
+                if (RoomKPa[r] - po > bdp) { bdp = RoomKPa[r] - po; best = dc; }
+            }
+        }
+        return best;
+    }
+
+    /// <summary>칸 곁의 방 중 기압이 높은 쪽 (센서 값).</summary>
+    private int HighSideRoom(int cell)
+    {
+        Span<int> nb = stackalloc int[4];
+        L.Neighbors(cell, nb);
+        int best = -1; float bp = -1;
+        foreach (int j in nb) if (j >= 0 && L.Room[j] >= 0 && RoomKPa[L.Room[j]] > bp) { bp = RoomKPa[L.Room[j]]; best = L.Room[j]; }
+        return best;
     }
 
     private bool Losing(int r)
@@ -356,6 +400,7 @@ public sealed class ShipMind : IEngine
         IncidentKind.PersonDown => new Belief { Kind = BeliefKind.Injured, Cell = x.Cell, Subject = x.Subject, Conf = 1f, Cause = x.Cause },
         IncidentKind.DeviceBroken => new Belief { Kind = BeliefKind.Broken, Cell = x.Cell, Subject = x.Subject, Conf = 1f, Cause = x.Cause },
         IncidentKind.ElectricFault => new Belief { Kind = BeliefKind.Spark, Cell = x.Cell, Subject = -1, Conf = 1f, Cause = x.Cause },
+        IncidentKind.Strain => new Belief { Kind = BeliefKind.Strain, Cell = x.Cell, Subject = -1, Conf = Math.Clamp(x.Level, 0.6f, 1f), Cause = x.Cause },
         _ => default,
     };
 
@@ -389,6 +434,7 @@ public sealed class ShipMind : IEngine
             case IncidentKind.PersonDown: g = GoalKind.Rescue; target = x.Subject; drone = false; break;
             case IncidentKind.DeviceBroken: g = GoalKind.Repair; target = x.Subject; drone = false; break;
             case IncidentKind.ElectricFault: g = GoalKind.Investigate; target = x.Cell; drone = true; break;
+            case IncidentKind.Strain: g = GoalKind.Brace; target = x.Cell; drone = false; break;
             default: return;
         }
         int need = x.Kind == IncidentKind.Fire ? 2 : 1;

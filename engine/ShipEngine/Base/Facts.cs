@@ -60,6 +60,26 @@ public enum FactKind : ushort
     StorySeed,         // 이야기꾼이 원인을 심었다
 }
 
+public static class FactNames
+{
+    /// <summary>화면 · 기록에 쓰는 이름.</summary>
+    public static string Of(FactKind k) => k switch
+    {
+        FactKind.RegionVented => "공기가 다 빠졌다", FactKind.PressureDrop => "기압이 떨어진다", FactKind.Ignition => "불이 붙었다", FactKind.FireOut => "불이 꺼졌다",
+        FactKind.FireSpread => "불이 번졌다", FactKind.SmokeThick => "연기가 짙다", FactKind.Toxic => "독한 기체", FactKind.Condensation => "이슬이 맺혔다",
+        FactKind.Flood => "물이 찼다", FactKind.LoudSound => "큰 소리", FactKind.WallCrack => "금이 갔다", FactKind.WallBreach => "벽이 뚫렸다",
+        FactKind.Impact => "충돌", FactKind.DoorJammed => "문이 끼었다", FactKind.DoorBlown => "문이 날아갔다", FactKind.ObjectFlung => "물건이 날아갔다",
+        FactKind.DebrisNear => "무언가 다가온다", FactKind.Flare => "별 폭발", FactKind.BreakerTrip => "차단기가 떨어졌다", FactKind.Short => "합선",
+        FactKind.Overheat => "과열", FactKind.PipeLeak => "관이 샌다", FactKind.MachineFail => "고장", FactKind.Hurt => "다쳤다",
+        FactKind.Collapsed => "쓰러졌다", FactKind.Died => "죽었다", FactKind.Sick => "병", FactKind.Noticed => "알아챘다",
+        FactKind.Rescue => "구했다", FactKind.Decision => "결정", FactKind.Mistake => "실수", FactKind.Relationship => "사이가 달라졌다",
+        FactKind.Warned => "외쳐 알렸다", FactKind.Panicked => "공황에 빠졌다", FactKind.Fled => "몸을 피했다", FactKind.Extinguished => "불을 껐다",
+        FactKind.Patched => "구멍을 막았다", FactKind.Repaired => "고쳤다", FactKind.DoorSealed => "문을 닫았다", FactKind.Woke => "잠에서 깼다",
+        FactKind.ComputerAlarm => "경보", FactKind.ComputerSeal => "봉쇄", FactKind.ComputerAssign => "로봇을 보냈다", FactKind.LoadShed => "장치를 껐다",
+        FactKind.BreakerReset => "차단기를 올렸다", FactKind.ComputerDown => "주컴퓨터가 멈췄다", FactKind.StorySeed => "조짐", _ => "",
+    };
+}
+
 [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, Pack = 1)] // 찍기는 바이트를 그대로 쓴다 — 정렬용 빈 바이트(쓰레기 값)가 없게
 public struct Fact
 {

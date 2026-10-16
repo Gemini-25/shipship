@@ -366,6 +366,12 @@ public sealed class Network : IEngine
             bool fed = dev.Feeder >= 0 && Breaker[dev.Feeder] != 0;
             Supply[d] = (float)(On[d] != 0 && Broken[d * 4] == 0 && fed ? frac : 0);
             if (dev.Def.Role is "reactor" or "aux" or "battery") Supply[d] = On[d] != 0 ? 1 : 0;
+            else if (dev.Def.Kwh > 0 && On[d] != 0 && Broken[d * 4] == 0)
+            {
+                // 자체 축전지(무정전): 전기가 끊기면 제 전지로 버티고, 들어오면 다시 채운다
+                if (Supply[d] < 0.5f && Charge[d] > 0) { Supply[d] = 1; Charge[d] = (float)Math.Max(0, Charge[d] - dev.Def.Kw * dt / 3600); }
+                else if (Supply[d] >= 0.5f && Charge[d] < dev.Def.Kwh) Charge[d] = (float)Math.Min(dev.Def.Kwh, Charge[d] + dev.Def.Kw * 0.2 * dt / 3600);
+            }
         }
         // 조명 · 문 동력
         var light = sim.Find<Light>();
@@ -426,12 +432,13 @@ public sealed class Network : IEngine
                         if (sealLeak) F.AddGas(c, T.gH2, 2 * o2, F.Temp(c)); else VentedH2 += 2 * o2;
                         F.AddHeat(c, kw * 1000 * 0.3 * dt);
                     }
+                    // 이산화탄소 거르기 (공기 재생기 — 옛 배의 '산소 발생기'는 한 대로 둘 다 했다 · 거르개가 닳으면 1/5)
+                    if (dev.Def.Mol > 0 && p > 0) ScrubRoom(dev, T.gCO2, dev.Def.Mol * (filterBad ? 0.2 : 1) * dt);
                     break;
                 }
                 case "scrubber":
                 {
-                    double take = dev.Def.Mol * (p > 0 && mechOk ? 1 : 0) * (filterBad ? 0.2 : 1) * dt;
-                    F.RemoveGas(c, T.gCO2, Math.Min(take, F.Gas(T.gCO2, c) * 0.5));
+                    ScrubRoom(dev, T.gCO2, dev.Def.Mol * (p > 0 && mechOk ? 1 : 0) * (filterBad ? 0.2 : 1) * dt);
                     F.AddHeat(c, kw * 1000 * dt);
                     break;
                 }
@@ -600,6 +607,18 @@ public sealed class Network : IEngine
                 if (frac >= 1) Fail(sim, d, (Part)p);
             }
         }
+    }
+
+    /// <summary>송풍기로 방 공기를 돌려 기체 하나를 걷는다 — 방 칸마다 가진 만큼 나눠서 (장치 칸만 비우지 않게).</summary>
+    private void ScrubRoom(Device dev, int gas, double mol)
+    {
+        if (mol <= 0) return;
+        var cells = dev.Room >= 0 && dev.Room < L.Rooms.Count && L.Rooms[dev.Room].Cells.Length > 0 ? L.Rooms[dev.Room].Cells : new[] { dev.Cell };
+        double total = 0;
+        foreach (int c in cells) total += F.Gas(gas, c);
+        if (total <= 1e-12) return;
+        double frac = Math.Min(0.5, mol / total);
+        foreach (int c in cells) { double g = F.Gas(gas, c); if (g > 0) F.RemoveGas(c, gas, g * frac); }
     }
 
     private void Fail(Sim sim, int d, Part p)

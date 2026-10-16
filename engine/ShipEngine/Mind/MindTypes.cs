@@ -51,6 +51,7 @@ public enum GoalKind : byte
     Sleep, Eat, Drink, Work, Relax, Socialize,
     FightFire, Rescue, Patch, Repair, Investigate, GetSuit, Charge,
     Evacuate,   // 위험한 방을 나와 문을 닫는다 (구멍 · 새는 소리 · 연기 · 불 · 이상한 공기)
+    Brace,      // 끼익거리는 문 · 벽을 덧대 받친다
 }
 
 /// <summary>계획의 한 단계.</summary>
@@ -67,6 +68,7 @@ public enum StepKind : byte
     Drop,      // 내려놓는다
     Wear,      // 우주복 · 마스크를 입는다 (Arg: 물건)
     Look,      // 살펴본다 (그 칸 믿음을 확인)
+    Brace,     // 문 · 벽을 덧대 받친다 (Cell: 문 · 벽)
 }
 
 /// <summary>쓰기 단계가 하는 일.</summary>

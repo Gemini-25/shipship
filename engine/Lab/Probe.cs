@@ -110,3 +110,53 @@ public static partial class Program
                     Console.WriteLine($"    {Time.Clock(f.Tick)} {f.Kind} 칸 {f.Cell} 크기 {f.Size:0.####} 누가 {f.Actor} 무엇 {f.Other} · {s.Causes.Story(f.Cause)}");
     }
 }
+
+public static partial class Program
+{
+    /// <summary>이야기꾼을 켠 배 하루: 30분마다 씨앗 · 방 산소 최저 · 고장 · 주컴퓨터 사건 · 큰 사실 (--probe-story [배] [시드] [시간]).</summary>
+    internal static void ProbeStory(string[] args)
+    {
+        var rest = args.SkipWhile(a => a != "--probe-story").Skip(1).ToArray();
+        string ship = rest.Length > 0 ? rest[0] : "Kestrel";
+        ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 18;
+        double hours = rest.Length > 2 ? double.Parse(rest[2]) : 24;
+        var lay = Layout.Ship(ship, Tables.Default);
+        int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
+        var s = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0);
+        var st = s.Get<Storyteller>(); st.Enabled = true;
+        var m = s.Get<Mind>(); var life = s.Get<Life>(); var net = s.Get<Network>(); var f = s.Get<Field>(); var sm = s.Get<ShipMind>();
+        long cursor = 0;
+        for (long t = 0; t <= Time.Hours(hours); t++)
+        {
+            if (t % Time.Minutes(30) == 0)
+            {
+                var rooms = s.Layout.Rooms.Where(r => r.Cells.Length > 0).Select(r => (r.Name, o2: r.Cells.Average(c => f.Partial(s.Tables.gO2, c)), co2: r.Cells.Average(c => f.Ppm(s.Tables.gCO2, c)), p: r.Cells.Average(c => f.Pressure(c)))).ToList();
+                var low = rooms.OrderBy(r => r.o2).First();
+                var broken = net.Devices.Where(d => Enum.GetValues<Part>().Any(p => net.IsBroken(d.Id, p))).Select(d => d.Name).ToList();
+                Console.WriteLine($"  {Time.Clock(s.Tick)} · 씨앗 {string.Join(",", st.Seeds.Select(x => Storyteller.SeedName(x.Kind)))} · 산소 최저 {low.Name} {low.o2:0.0}kPa · 평균 산소 {rooms.Average(r => r.o2):0.0} CO2 {rooms.Average(r => r.co2):0}ppm 기압 {rooms.Average(r => r.p):0} · 고장 [{string.Join(",", broken)}] · 전력 {net.Supplied:0}/{net.Demanded:0}kW · 주컴 {(sm.Online ? "켜짐" : "꺼짐")} 사건 {sm.Incidents.Count(x => x.Active != 0)}");
+                if (Environment.GetEnvironmentVariable("HOLES") == "1")
+                {
+                    for (int c = 0; c < f.Cells; c++)
+                        if (f.Hole[c] > 0) { int rr = -1; Span<int> nb = stackalloc int[4]; s.Layout.Neighbors(c, nb); foreach (int j in nb) if (j >= 0 && s.Layout.Room[j] >= 0) rr = s.Layout.Room[j]; Console.WriteLine($"      구멍 칸 {c} ({s.Layout.X(c)},{s.Layout.Y(c)}) {f.Hole[c] * 1e4:0}cm² 곁방 {(rr >= 0 ? s.Layout.Rooms[rr].Name : "-")} 바깥면 {s.Layout.Hull[c]}"); }
+                    string RoomAt(int c) => c < 0 ? "바깥" : s.Layout.Room[c] >= 0 ? s.Layout.Rooms[s.Layout.Room[c]].Name : $"칸{c}";
+                    foreach (var k in f.Links.Where(k => Math.Abs(k.Flow) > 0.05).OrderByDescending(k => Math.Abs(k.Flow)).Take(8))
+                        Console.WriteLine($"      틈 {k.Kind} 칸 {k.Via} ({s.Layout.X(k.Via)},{s.Layout.Y(k.Via)}) {RoomAt(k.A)} → {RoomAt(k.B)} {k.Area * 1e4:0}cm² 흐름 {k.Flow:0.00}몰/초");
+                    foreach (var a in m.Agents.Where(a => !a.IsPerson))
+                        Console.WriteLine($"      {m.NameOf(a.Id),-6} {(m.RoomOf(a.C.Cell) >= 0 ? s.Layout.Rooms[m.RoomOf(a.C.Cell)].Name : "-"),-8} {m.Thought(a.Id),-24} 전지 {a.C.Battery:0.00} 맡음 {a.C.AssignedGoal}:{a.C.AssignedTarget} · 믿음 {string.Join(",", a.Beliefs.Where(x => x.Kind is BeliefKind.Leak or BeliefKind.Breach or BeliefKind.Vacuum).Select(x => $"{x.Kind}@{x.Cell}:{x.Conf:0.0}"))} · 실패 {a.C.Failed}");
+                }
+                foreach (var a in m.Agents.Where(a => a.IsPerson))
+                {
+                    var b = life.Bodies[a.C.Body];
+                    if (b.Alive == 0) continue;
+                    Console.WriteLine($"      {m.NameOf(a.Id),-6} {(m.RoomOf(a.C.Cell) >= 0 ? s.Layout.Rooms[m.RoomOf(a.C.Cell)].Name : "-"),-8} {m.Thought(a.Id),-20} 산소포화 {b.SpO2:0.00} 의식 {b.Conscious}");
+                }
+            }
+            s.Step();
+            foreach (var x in s.Facts.Since(cursor))
+                if (Director.Weight(x.Kind) >= 10 || x.Kind is FactKind.StorySeed or FactKind.MachineFail or FactKind.LoadShed or FactKind.BreakerTrip)
+                    Console.WriteLine($"    {Time.Clock(x.Tick)} [{FactNames.Of(x.Kind)}] 칸 {x.Cell} · {s.Causes.Story(x.Cause)}");
+            cursor = s.Facts.Total;
+        }
+        foreach (var (tick, text) in sm.Log.TakeLast(30)) Console.WriteLine($"    주컴 {Time.Clock(tick)} {text}");
+    }
+}

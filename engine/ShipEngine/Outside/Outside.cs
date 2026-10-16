@@ -222,7 +222,7 @@ public sealed class Outside : IEngine
                     double m = PowerLaw(d.MinKg, d.MaxKg, d.Alpha);
                     double e = 0.5 * m * sp * sp;
                     double off = (_rng.Unit() - 0.5) * width;
-                    if (HitShip(sim, ux, uy, off, e, c.Cause, $"{d.Name}의 파편 ({m * 1000:0.##}g)")) { c.Hits++; DebrisHits++; }
+                    if (HitShip(sim, ux, uy, off, e, c.Cause, $"{d.Name}의 {m * 1000:0.##}g 파편")) { c.Hits++; DebrisHits++; }
                 }
             }
             Clouds[k] = c;

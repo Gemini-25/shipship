@@ -83,7 +83,7 @@ public sealed partial class Mind
             foreach (var v in _deciding.Avoid) if (v.Goal == g && v.Target == target) return;
             ref var c = ref _deciding.C;
             if (c.AssignedGoal == g && c.AssignedUntil > _nowTick && (c.AssignedTarget < 0 || c.AssignedTarget == target
-                || g is GoalKind.FightFire or GoalKind.Patch or GoalKind.Investigate && cell >= 0 && Dist(c.AssignedTarget, cell) <= 3)) score += 3; // 주컴퓨터가 맡긴 일
+                || g is GoalKind.FightFire or GoalKind.Patch or GoalKind.Brace or GoalKind.Investigate && cell >= 0 && Dist(c.AssignedTarget, cell) <= 3)) score += 3; // 주컴퓨터가 맡긴 일
         }
         _opts.Add(new Option { Goal = g, Target = target, Cell = cell, Score = score, Cause = cause });
     }
@@ -128,6 +128,7 @@ public sealed partial class Mind
                 if (b.Conf < 0.35f || myRoom < 0 || !InRoom(b.Cell, myRoom)) continue;
                 float s = b.Kind switch
                 {
+                    BeliefKind.Breach when L.Kind[b.Cell] == CellKind.Door => 0, // 새는 문틈: 위험은 문 너머다 (나가면 진공으로 간다)
                     BeliefKind.Breach or BeliefKind.Vacuum => 8 * b.Conf,
                     BeliefKind.Leak when b.Conf >= 0.5f && L.Kind[b.Cell] != CellKind.Door => 6 * b.Conf, // 쉬익대는 닫힌 문은 그 너머가 빠진 것
                     BeliefKind.Smoke when b.Conf >= 0.5f => 4 * b.Conf,
@@ -163,7 +164,7 @@ public sealed partial class Mind
                     Add(GoalKind.Rescue, b.Subject, b.Cell, s * df * ClaimFactor(a, GoalKind.Rescue, b.Subject, 1), b.Cause);
                     break;
                 }
-                case BeliefKind.Breach when !drone && F.Hole[b.Cell] > 0 || b.Kind == BeliefKind.Breach && !drone && b.Conf > 0.6f:
+                case BeliefKind.Breach when !drone && (F.Hole[b.Cell] > 0 || DoorGapLeaks(b.Cell)) || b.Kind == BeliefKind.Breach && !drone && b.Conf > 0.6f:
                 {
                     float s = person ? b.Conf * (0.3f + c.SkSeal) * 3 * caution : b.Conf * 5;
                     Add(GoalKind.Patch, b.Cell, b.Cell, s * df * ClaimFactor(a, GoalKind.Patch, b.Cell, 1), b.Cause);
@@ -174,6 +175,13 @@ public sealed partial class Mind
                     float imp = Importance(b.Subject);
                     float s = person ? b.Conf * c.SkRepair * 2.5f * imp : b.Conf * 3.5f * imp;
                     Add(GoalKind.Repair, b.Subject, b.Cell, s * df * ClaimFactor(a, GoalKind.Repair, b.Subject, 1), b.Cause);
+                    break;
+                }
+                case BeliefKind.Strain when !drone && L.Kind[b.Cell] is CellKind.Wall or CellKind.Door && _st != null && _st.Braced[b.Cell] == 0:
+                {
+                    // 본 · 들은 끼익거리는 문 · 벽: 덧대 받친다 (사람은 수리 꾸러미)
+                    float s = person ? b.Conf * (0.3f + c.SkRepair) * 3 * caution : b.Conf * 5;
+                    Add(GoalKind.Brace, b.Cell, b.Cell, s * df * ClaimFactor(a, GoalKind.Brace, b.Cell, 1), b.Cause);
                     break;
                 }
                 case BeliefKind.Bang or BeliefKind.Strain or BeliefKind.Leak or BeliefKind.SmokeSmell or BeliefKind.Help or BeliefKind.Spark:
@@ -360,6 +368,23 @@ public sealed partial class Mind
                 plan.Add(new PlanStep { Kind = StepKind.Fix, Target = dev, Arg = (byte)part });
                 return true;
             }
+            case GoalKind.Brace:
+            {
+                int wall = o.Target;
+                int stand = StandBeside(wall);
+                if (stand < 0 || _st == null || _st.Braced[wall] != 0) return false;
+                if (a.IsPerson && c.Holding != iRepair)
+                {
+                    if (c.Holding != 255) return false;
+                    int src = NearestStock(here, iRepair);
+                    if (src < 0) return false;
+                    plan.Add(Go(L.Furniture[src].Cells[0], 1));
+                    plan.Add(new PlanStep { Kind = StepKind.Take, Target = src, Arg = iRepair });
+                }
+                plan.Add(Go(stand));
+                plan.Add(new PlanStep { Kind = StepKind.Brace, Cell = wall });
+                return true;
+            }
             case GoalKind.Evacuate:
             {
                 int refuge = FindRefuge(a, here, o.Target, o.Cell);
@@ -425,8 +450,8 @@ public sealed partial class Mind
         foreach (var b in a.Beliefs)
         {
             if (b.Conf < 0.3f || !InRoom(b.Cell, room)) continue;
-            bool bad = b.Kind is BeliefKind.Smoke or BeliefKind.Breach or BeliefKind.Vacuum or BeliefKind.Fire or BeliefKind.BadAir
-                       || b.Kind == BeliefKind.Leak && L.Kind[b.Cell] != CellKind.Door;
+            bool bad = b.Kind is BeliefKind.Smoke or BeliefKind.Vacuum or BeliefKind.Fire or BeliefKind.BadAir
+                       || b.Kind is BeliefKind.Leak or BeliefKind.Breach && L.Kind[b.Cell] != CellKind.Door; // 새는 문틈은 문 너머가 나쁜 것
             if (bad && b.Conf > worst) worst = b.Conf;
         }
         return worst;
@@ -445,7 +470,8 @@ public sealed partial class Mind
         foreach (var b in a.Beliefs)
         {
             if (b.Conf < 0.3f || !InRoom(b.Cell, room)) continue;
-            if (b.Kind is BeliefKind.Smoke or BeliefKind.Breach or BeliefKind.Vacuum or BeliefKind.Fire) return true;
+            if (b.Kind is BeliefKind.Smoke or BeliefKind.Vacuum or BeliefKind.Fire) return true;
+            if (b.Kind == BeliefKind.Breach && L.Kind[b.Cell] != CellKind.Door) return true;
             if (b.Kind == BeliefKind.BadAir && b.Conf >= 0.5f) return true;
             if (b.Kind == BeliefKind.Leak && b.Conf >= 0.5f && L.Kind[b.Cell] != CellKind.Door) return true;
         }
@@ -526,11 +552,17 @@ public sealed partial class Mind
     }
 
     /// <summary>벽 칸 옆에 설 수 있는 바닥 칸 (안쪽).</summary>
+    /// <summary>닫힌 문의 틈으로 공기가 새고 있나 (막을 수 있는 문틈).</summary>
+    private bool DoorGapLeaks(int cell) => L.Kind[cell] == CellKind.Door && L.DoorAt[cell] >= 0 && F.DoorGapOpen(L.DoorAt[cell]) && DoorDeltaKPa(cell) > 5;
+
+    /// <summary>구멍 · 문틈 곁 설 자리 — 공기가 있는 쪽(기압이 높은 바닥)을 고른다.</summary>
     private int StandBeside(int wall)
     {
         Span<int> nb = stackalloc int[4];
         L.Neighbors(wall, nb);
-        foreach (int j in nb) if (j >= 0 && L.Kind[j] == CellKind.Floor) return j;
+        int best = -1; double bp = -1;
+        foreach (int j in nb) if (j >= 0 && L.Kind[j] == CellKind.Floor && F.Pressure(j) > bp) { bp = F.Pressure(j); best = j; }
+        if (best >= 0) return best;
         foreach (int j in nb) if (j >= 0 && L.IsSpace(j)) return j;
         return -1;
     }
