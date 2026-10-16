@@ -219,6 +219,7 @@ public static partial class Program
     public static int Main(string[] args)
     {
         Console.OutputEncoding = System.Text.Encoding.UTF8;
+        MainArgs = args; // 자식 프로세스를 같은 인자로 띄운다 (ChildRuns.cs)
         AppDomain.CurrentDomain.ProcessExit += (_, _) => WarmCache.Report();
         if (Environment.GetEnvironmentVariable("SHIPSIM_V21") == "0") RobotsV21.General = RobotsV21.Reactor = RobotsV21.Expanded = false; // 개발용: 회귀가 로봇 확장 때문인지 가린다
         // v23 주컴퓨터 대개편 뒤: 사람이 하는 대응 · 회의가 정하는 권한을 보는 시험은 그 장치를 끄고 본다

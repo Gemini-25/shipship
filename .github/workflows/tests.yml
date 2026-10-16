@@ -1,5 +1,5 @@
 # 전체 시험 — 푸시마다 자동 (docs/DEV_PROCESS.md)
-#   빌드 한 번 → 5조각으로 나눠 동시에 (조각마다 3개씩 · 이 계정은 작업을 동시에 5개까지 돌린다 — 다 한 번에 시작하게) → 기준(tools/tests/baseline.txt)과 견줌
+#   빌드 한 번 → 5조각으로 나눠 동시에 (조각마다 4개씩 — 러너 CPU 4개 · growthtest는 안에서 자식 프로세스로 더 나눈다 · 이 계정은 작업을 동시에 5개까지 돌린다 — 다 한 번에 시작하게) → 기준(tools/tests/baseline.txt)과 견줌
 #   → 기준에선 통과하던 장면이 실패하면 다른 시드 둘(11 · 23)로 다시 → 한 장 요약 (작업 요약 · summary 아티팩트)
 #   빨강(규칙 · 핵심 실패 · 멈춤)이 있을 때만 실패로 끝난다. 장면 시험은 막지 않는다.
 name: tests
@@ -45,7 +45,7 @@ jobs:
         run: |
           python3 tools/ci/shard.py tools/tests/tests.txt ${{ matrix.shard }} 5 > list.txt
           cat list.txt | tr '\n' ' '; echo
-          tools/ci/run-tests.sh list.txt results 3 7
+          tools/ci/run-tests.sh list.txt results 4 7
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: 'results-${{ matrix.shard }}', path: results, retention-days: 14 }
