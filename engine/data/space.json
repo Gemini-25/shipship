@@ -1,0 +1,24 @@
+// ⑤ 바깥 세계 표 — 별 · 행성 · 파편
+//   star.flaresPerDay: 하루 평균 폭발 수 · flareDose: 폭발 때 바깥 방사선 (mGy/시) · warnMin: 폭발 전 X선 조짐이 먼저 오는 시간 (분)
+//   star.lightAt1: 1 단위 거리(배가 도는 궤도)에서 햇빛 세기 W/m²
+//   planet: 대기(kPa · 성분 비율) · 낮 온도 · 밤 온도 · 하루 길이(시간) · 중력(g) · 바람(m/s) · 모래 폭풍(하루 확률)
+//   debris: 입자 질량 범위(kg) · 거듭제곱 분포 지수 · 상대 속도(m/s)
+{
+  "stars": {
+    "yellow": { "name": "노란 별",   "lightAt1": 1361, "flaresPerDay": 0.05, "flareDose": 50,  "flareHours": 6,  "warnMin": 30, "baseDose": 0.02 },
+    "redDwarf": { "name": "붉은 왜성", "lightAt1": 900,  "flaresPerDay": 0.6,  "flareDose": 120, "flareHours": 2,  "warnMin": 8,  "baseDose": 0.05 },
+    "blue":   { "name": "푸른 별",   "lightAt1": 2400, "flaresPerDay": 0.15, "flareDose": 300, "flareHours": 10, "warnMin": 45, "baseDose": 0.2 }
+  },
+  "planets": {
+    "earthlike": { "name": "푸른 행성",   "kPa": 101, "air": { "N2": 0.78, "O2": 0.21, "Ar": 0.01 }, "dayK": 295, "nightK": 280, "dayHours": 24, "g": 1.0, "wind": 6, "stormsPerDay": 0.05 },
+    "marslike":  { "name": "붉은 사막",   "kPa": 0.6, "air": { "CO2": 0.95, "N2": 0.03, "Ar": 0.02 }, "dayK": 250, "nightK": 180, "dayHours": 24.6, "g": 0.38, "wind": 10, "stormsPerDay": 0.2 },
+    "venuslike": { "name": "끓는 행성",   "kPa": 9200, "air": { "CO2": 0.965, "N2": 0.035 }, "dayK": 735, "nightK": 735, "dayHours": 2800, "g": 0.9, "wind": 1, "stormsPerDay": 0 },
+    "titanlike": { "name": "얼음 달",     "kPa": 147, "air": { "N2": 0.95, "CH4": 0.05 }, "dayK": 94, "nightK": 92, "dayHours": 383, "g": 0.14, "wind": 1, "stormsPerDay": 0.02 },
+    "airless":   { "name": "바위 위성",   "kPa": 0, "air": {}, "dayK": 390, "nightK": 100, "dayHours": 708, "g": 0.17, "wind": 0, "stormsPerDay": 0 }
+  },
+  "debris": {
+    "dust":    { "name": "먼지 구름",   "minKg": 1e-6, "maxKg": 1e-3, "alpha": 1.8, "speed": 8000 },
+    "rubble":  { "name": "잔해 지대",   "minKg": 1e-4, "maxKg": 1.0,  "alpha": 1.6, "speed": 3000 },
+    "kessler": { "name": "파편 폭풍",   "minKg": 1e-3, "maxKg": 5.0,  "alpha": 1.5, "speed": 10000 }
+  }
+}

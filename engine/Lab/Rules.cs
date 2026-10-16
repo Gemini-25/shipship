@@ -141,6 +141,75 @@ public static partial class Program
                 $"날아간 문 {st5.DoorsBlown} · 문 열림 {s5.Get<Field>().DoorOpen[0]:0.0} · 큰 소리 {s5.Facts.CountOf(FactKind.LoudSound)}번");
         }
 
+        if (Do("바깥"))
+        {
+            // 잔해 지대를 지난다 → 파편이 외판을 친다 (대부분 작아 움푹 · 가끔 구멍)
+            var s = ShipWorld.Create("Kestrel", 3);
+            var o = s.Get<Outside>(); var st = s.Get<Structure>();
+            int seed = s.Causes.Add(CauseKind.Story, "잔해 지대가 항로에 있다", s.Tick);
+            o.AddCloud("rubble", 400_000, 300_000, 3e-7, 1, 0, seed);
+            s.Run(Time.Minutes(8));
+            var hit = s.Facts.Since(0).Where(f => f.Kind == FactKind.Impact).ToList();
+            string story = hit.Count > 0 ? s.Causes.Story(hit[0].Cause) : "";
+            Check("잔해 지대를 지나면 파편이 외판을 친다 · 원인 사슬이 이야기꾼의 원인까지 이어진다", o.DebrisHits > 0 && story.StartsWith("잔해 지대가 항로에 있다"),
+                $"맞음 {o.DebrisHits}번 · 구멍 {st.Breaches} · 예: {story}");
+            // 운석 정면: 큰 것은 여러 벽을 뚫는다 · 오기 전에 '다가온다'가 먼저
+            var s2 = ShipWorld.Create("Kestrel", 3);
+            var o2 = s2.Get<Outside>(); var f2 = s2.Get<Field>();
+            o2.AddRock(2, 5000, 1, 0.1, 0, 30_000, 0);
+            long warnAt = -1, hitAt = -1;
+            for (int i = 0; i < 60 && hitAt < 0; i++)
+            {
+                s2.Step();
+                if (warnAt < 0 && s2.Facts.CountOf(FactKind.DebrisNear) > 0) warnAt = s2.Tick;
+                if (o2.RockHits > 0) hitAt = s2.Tick;
+            }
+            s2.Run(Time.Minutes(2));
+            int holes = Enumerable.Range(0, f2.Cells).Count(i => f2.Hole[i] > 0);
+            Check("2kg 운석(25MJ)이 정면으로 → 먼저 '다가온다' · 부딪혀 여러 벽을 뚫는다", warnAt >= 0 && warnAt < hitAt && holes >= 2 && f2.VentedTotal > 100,
+                $"조짐 틱 {warnAt} · 충돌 틱 {hitAt} · 구멍 {holes}칸 · 샌 공기 {f2.VentedTotal:0}몰");
+            // 비껴간다
+            var s3 = ShipWorld.Create("Kestrel", 3);
+            var o3 = s3.Get<Outside>();
+            o3.AddRock(2, 5000, 1, 0, 300, 30_000, 0);
+            s3.Run(60);
+            Check("300m 비껴가는 운석은 맞지 않는다 (아슬아슬함은 사실로 남는다)", o3.RockHits == 0 && o3.NearMisses == 1, $"맞음 {o3.RockHits} · 비껴감 {o3.NearMisses}");
+            // 별 폭발: 조짐 → 폭발 → 안쪽 방이 덜 맞는다
+            var s4 = ShipWorld.Create("Hanbit", 3);
+            var o4 = s4.Get<Outside>(); var f4 = s4.Get<Field>();
+            o4.Star = "redDwarf";
+            o4.ScheduleFlare(5, 0);
+            s4.Run(Time.Minutes(25));
+            var floor = Enumerable.Range(0, f4.Cells).Where(i => f4.L.Kind[i] == CellKind.Floor).ToList();
+            double hi = floor.Max(i => o4.Dose[i]), lo = floor.Min(i => o4.Dose[i]);
+            bool warned = s4.Facts.Since(0).Any(x => x.Kind == FactKind.Flare && x.Other == 0);
+            bool burst = s4.Facts.Since(0).Any(x => x.Kind == FactKind.Flare && x.Other == 1);
+            Check("별 폭발: X선 조짐이 먼저 · 폭발 뒤 바깥 방사선이 뛴다 · 안쪽 칸이 덜 맞는다 (벽 · 설비가 가린다)", warned && burst && o4.DoseOut > 20 && lo < hi * 0.6,
+                $"바깥 {o4.DoseOut:0}mGy/시 · 배 안 {lo:0.0}~{hi:0.0}mGy/시");
+            // 행성: 붉은 사막에 내리면 구멍으로 0.6kPa까지만 빠지고 바깥은 춥다
+            var s5 = ShipWorld.Create("Kestrel", 3);
+            var o5 = s5.Get<Outside>(); var f5 = s5.Get<Field>();
+            o5.Land("marslike", s5.Tick);
+            s5.Run(5);
+            int hull = Enumerable.Range(0, f5.Cells).First(i => f5.L.Hull[i] && f5.L.Y(i) == f5.L.H / 2);
+            f5.SetHole(hull, 0.3f);
+            s5.Run(Time.Minutes(20));
+            var ext = f5.Links.First(k => k.RB < 0);
+            int room = ext.A;
+            if (Environment.GetEnvironmentVariable("RULE_DEBUG") == "1")
+                foreach (var k in f5.Links.Where(k => k.RB < 0)) Console.WriteLine($"    바깥 틈 {k.Kind} 칸 {k.A} 넓이 {k.Area} · 이산화탄소 {f5.Ppm(f5.T.gCO2, k.A):0}ppm · {f5.Pressure(k.A):0.00}kPa · 흐름 {k.Flow:0.000}");
+            Check("붉은 사막에 내린 배: 구멍 난 방은 바깥 기압(0.6kPa) 근처까지만 빠지고 이산화탄소가 들어온다", f5.Pressure(room) < 3 && f5.Ppm(f5.T.gCO2, room) > 10000,
+                $"{f5.Pressure(room):0.00}kPa · 이산화탄소 {f5.Ppm(f5.T.gCO2, room) / 1e4:0}% · 바깥 {f5.Outside.Temp:0}K");
+            // 끓는 행성: 외판이 바깥 압력에 짓눌린다
+            var s6 = ShipWorld.Create("Kestrel", 3);
+            var o6 = s6.Get<Outside>(); var st6 = s6.Get<Structure>(); var f6 = s6.Get<Field>();
+            o6.Land("venuslike", s6.Tick);
+            s6.Run(Time.Minutes(2));
+            double hot = Enumerable.Range(0, f6.Cells).Where(i => f6.RegionOf[i] >= 0).Max(i => f6.Temp(i));
+            Check("끓는 행성(92기압 · 735K)에 내리면 외판이 짓눌려 터지고 뜨거운 이산화탄소가 밀려든다", st6.Breaches > 0 && hot > 450,
+                $"터진 벽 {st6.Breaches} · 배 안 가장 뜨거운 곳 {hot:0}K");
+        }
+
         if (Do("빛"))
         {
             var lay = Worlds.Ascii(Worlds.Lounge, Worlds.Seats);

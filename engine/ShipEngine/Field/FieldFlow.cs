@@ -119,9 +119,10 @@ public sealed partial class Field
         return aHigh ? dn : -dn;
     }
 
-    /// <summary>바깥과의 틈: 진공이면 정확한 지수 감소, 행성 대기면 무한히 큰 통과 고르기.</summary>
+    /// <summary>바깥과의 틈: 진공이면 정확한 지수 감소, 행성 대기면 무한히 큰 통과 고르기 + 섞임(확산).</summary>
     private double FlowExterior(Link k, double h)
     {
+        if (!Outside.Vacuum && Outside.Frac.Length == G) ExteriorMix(k, h);
         int r = k.RA;
         double p = RegionP(r), pe = Outside.KPa * 1000;
         double t = RegionT(r);
@@ -162,6 +163,29 @@ public sealed partial class Field
             return -dn;
         }
         return 0;
+    }
+
+    /// <summary>
+    /// 행성 대기와 구멍으로 섞인다 (압력이 같아도): 틈 곁 칸의 기체 m몰이 나가고 같은 몰의 바깥 공기가 들어온다.
+    /// m = 0.02/s/m² × 넓이 × 칸 몰 수 × h (구멍이 클수록 · 오래될수록).
+    /// </summary>
+    private void ExteriorMix(Link k, double h)
+    {
+        int c = k.A;
+        double n = CellMoles(c);
+        if (n <= 1e-9) return;
+        double m = Math.Min(0.5, 0.02 * k.Area * h) * n;
+        if (m <= 1e-12) return;
+        double cg = GasC(c), t = cg > 1e-9 ? U[c] / cg : Outside.Temp;
+        double f = m / n, cvOut = 0;
+        for (int g = 0; g < G; g++)
+        {
+            int idx = c * G + g;
+            N[idx] = N[idx] * (1 - f) + m * Outside.Frac[g];
+            cvOut += Outside.Frac[g] * _cv[g];
+        }
+        U[c] = U[c] * (1 - f) + m * cvOut * Outside.Temp;
+        MarkDirty(k.RA, f);
     }
 
     /// <summary>

@@ -100,7 +100,7 @@ public sealed class Sound : IEngine
             if (th <= 0) return 999;
             loss += (float)(-20 * Math.Log10(th) * 0.5);
         }
-        return loss;
+        return Math.Max(0.3f, loss); // 짙은 대기에서도 소리는 칸을 건널수록 준다
     }
 
     /// <summary>공기가 엷은 정도 (1: 1기압 · 0: 진공).</summary>

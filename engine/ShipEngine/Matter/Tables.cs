@@ -36,6 +36,21 @@ public sealed class ReactionDef
     public string[] Need = Array.Empty<string>();
 }
 
+public sealed class StarDef { public string Name = ""; public double LightAt1, FlaresPerDay, FlareDose, FlareHours, WarnMin, BaseDose; }
+public sealed class PlanetDef
+{
+    public string Name = "";
+    public double KPa, DayK, NightK, DayHours, G, Wind, StormsPerDay;
+    public Dictionary<string, double> Air = new();
+}
+public sealed class DebrisDef { public string Name = ""; public double MinKg, MaxKg, Alpha, Speed; }
+public sealed class SpaceTable
+{
+    public Dictionary<string, StarDef> Stars = new();
+    public Dictionary<string, PlanetDef> Planets = new();
+    public Dictionary<string, DebrisDef> Debris = new();
+}
+
 public sealed class EquipmentDef
 {
     public string Name = "";
@@ -141,6 +156,9 @@ public sealed class Tables
 
     /// <summary>설비 · 가구 표 (옛 설비 이름 → 재질 kg · 열).</summary>
     public Dictionary<string, EquipmentDef> Equipment = new();
+    /// <summary>별 · 행성 · 파편 표 (⑤ 바깥 세계).</summary>
+    public SpaceTable Space = new();
+
     public EquipmentDef Equip(string type) => Equipment.TryGetValue(type, out var e) ? e : Equipment["_default"];
 
     public Substance S(string id) => _subById.TryGetValue(id, out var s) ? s : throw new KeyNotFoundException($"물질 표에 없다: {id}");
@@ -225,6 +243,14 @@ public sealed class Tables
             foreach (var m in e.Parts.Keys)
                 if (!t._matById.ContainsKey(m)) throw new InvalidDataException($"설비 표: '{k}'의 재질 '{m}'이 재질 표에 없다");
         if (!t.Equipment.ContainsKey("_default")) throw new InvalidDataException("설비 표에 _default가 없다");
+        t.Space = DataFiles.Load<SpaceTable>("space.json");
+        foreach (var (k, p) in t.Space.Planets)
+        {
+            foreach (var g in p.Air.Keys)
+                if (!t._subById.TryGetValue(g, out var sub) || !sub.Airborne) throw new InvalidDataException($"행성 표: '{k}' 대기의 '{g}'가 기체가 아니다");
+            double sum = p.Air.Values.Sum();
+            if (p.KPa > 0 && Math.Abs(sum - 1) > 1e-6) throw new InvalidDataException($"행성 표: '{k}' 대기 비율 합이 1이 아니다 ({sum})");
+        }
 
         t.gN2 = t.S("N2").Gas; t.gO2 = t.S("O2").Gas; t.gAr = t.S("Ar").Gas; t.gCO2 = t.S("CO2").Gas; t.gH2O = t.S("H2O").Gas;
         t.gCO = t.S("CO").Gas; t.gH2 = t.S("H2").Gas; t.gCH4 = t.S("CH4").Gas; t.gNH3 = t.S("NH3").Gas; t.gO3 = t.S("O3").Gas;
