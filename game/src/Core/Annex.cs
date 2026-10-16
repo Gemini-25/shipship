@@ -889,7 +889,13 @@ public sealed partial class AnnexSystem
             g.SetRoomId(cell, room.Id);
             room.Include(cell);
         }
-        float vr = R0.Volume, vn = room.Volume, k = vr / (vr + vn);
+        // 공기 탱크로 먼저 채운다 — 옆 방 공기를 반씩 나눠 받으면 사람이 있던 옆 방이 한순간 감압된다
+        // (제비호 33일: 새 창고 산소 10.4kPa → 감압으로 보고 대피 · 격벽 · 방송). 탱크는 비상 재가압 몫(15%)을 남기고, 모자란 만큼만 옆 방과 나눈다.
+        float vr = R0.Volume, vn = room.Volume;
+        float need = R0.Air.Pressure * vn, spare = MathF.Max(0f, w.Air.Reserve - w.Air.ReserveCapacity * 0.15f);
+        float fromTank = MathF.Min(need, spare), f = need > 0f ? fromTank / need : 1f;
+        w.Air.Reserve -= fromTank;
+        float k = (vr + f * vn) / (vr + vn);
         room.Air.O2 = R0.Air.O2 * k; room.Air.N2 = R0.Air.N2 * k; room.Air.CO2 = R0.Air.CO2 * k;
         R0.Air.O2 *= k; R0.Air.N2 *= k; R0.Air.CO2 *= k;
         room.Air.Temperature = R0.Air.Temperature - 6f; // 새 외판은 차다
@@ -937,7 +943,7 @@ public sealed partial class AnnexSystem
         w.Structure.Touch();
         w.Board.RequestScan();
         Version++;
-        MarkLog.Add(room.Marks, w.Tick, $"가압 · 문을 땄다 ({by?.Name ?? "?"})");
+        MarkLog.Add(room.Marks, w.Tick, $"가압 · 문을 땄다 ({by?.Name ?? "?"})" + (f >= 0.999f ? " · 공기 탱크로" : $" · 탱크가 모자라 {R0.Name} 공기를 나눠 받았다 ({R0.Air.Pressure:0}kPa)"));
         w.History.Add(w, HistoryKind.Adaptation, $"증축 — {R0.Name} 아래에 새 방이 생겼다: 가압하고 외벽에 문을 땄다 ({s.Width}×{s.Depth}칸)", room, by != null ? new[] { by } : null, log: true);
         Next(p, AnnexStage.Utilities, "가압 · 문 따기 끝 — 배선 · 배관을 잇는다 (아직 어둡다)");
         return room;

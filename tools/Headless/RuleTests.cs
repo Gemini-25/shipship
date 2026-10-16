@@ -71,6 +71,20 @@ public static partial class Program
                 $"공기 멀쩡: {calm} · 11kPa: {bad} · 일어나기까지 {upMin:0.0}분{(t.Up ? "" : " (2분이 지나도 앉아 있다)")}");
         }
 
+        // ── 증축 가압은 공기 탱크로: 옆 방(사람이 있을 수 있다) 공기를 반씩 나눠 받지 않는다 (제비호 33일: 새 창고 산소 10.4kPa) ──
+        if (Do("annexair"))
+        {
+            var w = World.CreateDefault(seed, 0, "Mirinae");
+            Run(w, SimTime.Minutes(5));
+            var p = w.Annex.Order(RoomType.Storage, 0);
+            var R0 = p != null ? w.Ship.Rooms[p.Site.AttachRoom] : null;
+            float before = R0?.Air.Pressure ?? 0f, tank0 = w.Air.Reserve;
+            var room = p != null ? w.Annex.BuildNow(p) : null;
+            float after = R0?.Air.Pressure ?? 0f;
+            Check("증축 가압은 공기 탱크로 — 옆 방 기압이 그대로 (3kPa 안), 새 방도 찬다", room != null && after >= before - 3f && room.Air.Pressure >= before * 0.9f && w.Air.Reserve < tank0,
+                $"옆 방 {R0?.Name} {before:0} → {after:0}kPa · 새 방 {room?.Air.Pressure:0}kPa · 탱크 {tank0:0} → {w.Air.Reserve:0}");
+        }
+
         // ── 결정론: 같은 시드 두 배는 같은 역사 ──
         if (Do("det"))
         {
