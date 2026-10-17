@@ -28,6 +28,8 @@ public readonly record struct Acoustic(float F1, float Eta, float Hard, float Ab
 public abstract class Voice
 {
     public float Gain = 1, Cutoff = 10000, Pan, Send = 0.25f;
+    /// <summary>늦게 닿는 소리: 섞개가 이만큼(표본) 기다렸다 울린다 (공기 343m/s · 뼈대 5,000m/s — 화면 시간으로).</summary>
+    public int Delay;
     public bool Done;
     public abstract float Next();
 }
@@ -181,15 +183,22 @@ public sealed class Fire : Voice
     }
 }
 
-/// <summary>기계: 돌아가는 장치의 웅웅 (전원 주파수 배음) + 팬 바람 · 날개 박자. 이어 돈다.</summary>
+/// <summary>
+/// 기계: 돌아가는 장치의 웅웅 (전원 주파수 배음) + 팬 바람 · 날개 박자. 이어 돈다.
+/// 낡은 베어링 (wear dB — 엔진의 낡은 몫): 굴림 요소가 결함을 지날 때마다(바깥 궤도 결함 박자 BPFO ≈ 3.6 × 축 회전 — 29.5Hz 축이면 약 105Hz)
+/// 하우징의 고유 진동(2.5kHz 언저리)을 두드리는 딱딱 소리 + 거친 우르릉 — 낡을수록 세고 박자가 흔들린다 (베어링 고장 3 · 4단계).
+/// </summary>
 public sealed class Machine : Voice
 {
     private Noise _n;
-    private OnePole _air;
+    private OnePole _air, _rumble;
+    private Biquad _housing = Biquad.Band(2500, 6);
     private double _ph;
     private readonly float _f0, _fan, _whine;
-    private float _level, _cur;
+    private float _level, _cur, _wear;
     private int _i;
+    private float _nextKnock;
+    private const float Bpfo = 105;
     public Machine(string role, uint seed)
     {
         _n = new Noise(seed);
@@ -206,18 +215,30 @@ public sealed class Machine : Voice
         };
     }
     public void Set(float level) => _level = level;
+    /// <summary>크기 · 낡은 몫 (dB — 0 새것 · 12 곧 망가진다).</summary>
+    public void Set(float level, float wear) { _level = level; _wear = Math.Clamp(wear, 0, 12); }
     public override float Next()
     {
         _cur += (_level - _cur) * 0.0005f;
         if (_level <= 0 && _cur < 1e-4f) { Done = true; return 0; }
-        float t = _i++ / (float)Dsp.Rate;
+        float t = _i / (float)Dsp.Rate;
         _ph += _f0 / Dsp.Rate;
         float p = (float)(_ph * Dsp.Tau);
         float hum = MathF.Sin(p) + 0.5f * MathF.Sin(2 * p) + 0.25f * MathF.Sin(3 * p);
         float blade = 0.6f + 0.4f * MathF.Sin(t * Dsp.Tau * _f0 * 0.4f);
         float air = _air.Low(_n.White(), 700) * _fan * blade * 2f;
         float whine = _whine * 0.3f * MathF.Sin(p * 24f);
-        return _cur * (0.5f * hum + air + whine);
+        float worn = 0;
+        if (_wear > 0.5f)
+        {
+            float k = _wear / 12f;                                   // 0 ~ 1
+            float knock = 0;
+            if (_i >= _nextKnock) { knock = 1; _nextKnock = _i + Dsp.Rate / Bpfo * (1 + 0.25f * k * _n.White()); }
+            worn = _housing.Run(knock * (0.5f + 0.5f * _n.White())) * 20f * k       // 딱딱 (하우징이 운다)
+                 + _rumble.Low(_n.White(), 180) * 1.2f * k * k;                     // 거친 우르릉 (4단계 — 띠가 넓어진다)
+        }
+        _i++;
+        return _cur * (0.5f * hum + air + whine + worn);
     }
 }
 

@@ -250,6 +250,15 @@ public sealed partial class Mind
                     Add(GoalKind.Repair, b.Subject, b.Cell, s * df * ClaimFactor(a, GoalKind.Repair, b.Subject, 1), b.Cause);
                     break;
                 }
+                case BeliefKind.Grind when !drone && b.Subject >= 0 && _net != null && b.Subject < _net.Devices.Count && (!person || c.SkRepair >= GrindSkill):
+                {
+                    // 기계 소리가 이상하다: 로봇이 먼저 · 고치는 솜씨 있는 이가 기계 부품을 미리 간다 (수리 꾸러미 — 멈췄으면 가서 보고 고친다)
+                    float imp = Importance(b.Subject);
+                    float s = person ? b.Conf * (0.3f + c.SkRepair) * 2 * imp * caution : b.Conf * 3.5f * imp;
+                    int key = b.Subject * 4 + (int)Part.Mechanical;
+                    Add(GoalKind.Maintain, key, _net.Devices[b.Subject].Cell, s * df * ClaimFactor(a, GoalKind.Maintain, key, 1), b.Cause);
+                    break;
+                }
                 case BeliefKind.Strain when !drone && L.Kind[b.Cell] is CellKind.Wall or CellKind.Door && _st != null && (_st.Braced[b.Cell] == 0 || _st.JammedAt(b.Cell)):
                 {
                     // 본 · 들은 끼익거리는 문 · 벽: 덧대 받친다 (사람은 수리 꾸러미)

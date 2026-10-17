@@ -42,6 +42,14 @@ public sealed class Chemistry : IEngine
     private int[] _sparkCause, _sparkCauseNext;
     public long Ignitions, GasBursts;
 
+    // ── 소리 (바퀴 2 소리 — ③ 소리 장에 요청만) ──
+    /// <summary>방마다 아직 소리를 내지 않은 기체 불의 열 (J) · 가장 센 칸 · 원인 — 기체 불이 그친 틱에 쾅 하나 (찍는다).</summary>
+    private readonly double[] _boomJ;
+    private readonly int[] _boomCell, _boomCause;
+    private readonly double[] _tickBurst; // 이번 틱 방마다 기체 불의 열 (틱 안에서만)
+    private readonly double[] _roarKw;    // 우르릉: 방마다 불의 열 (틱 안에서만)
+    private readonly int[] _roarCell, _roarCause;
+
     private readonly (Reaction full, Reaction? co, Reaction? soot, int store)[] _fuels;
     private readonly (Reaction r, int gas, double lfl, double ufl)[] _gasFires;
     private readonly Reaction _ozone;
@@ -67,7 +75,12 @@ public sealed class Chemistry : IEngine
             (T.R("burn_nh3"), T.gNH3, 0.15, 0.28),
         };
         _ozone = T.R("ozone_decay");
+        int nr = f.L.Rooms.Count + 1; // 마지막 칸: 방 밖 (문 칸 · 통로가 아닌 곳)
+        _boomJ = new double[nr]; _boomCell = new int[nr]; _boomCause = new int[nr]; _tickBurst = new double[nr];
+        _roarKw = new double[nr]; _roarCell = new int[nr]; _roarCause = new int[nr];
     }
+
+    private int RoomSlot(int cell) => F.L.Room[cell] >= 0 ? F.L.Room[cell] : _boomJ.Length - 1;
 
     /// <summary>불씨 (전기 불꽃 · 성냥 · 과열): 그 칸 겉면에 열을 넣고, 다음 틱에 연소 범위의 기체를 태운다.</summary>
     public void Ignite(int cell, double joules, int cause)
@@ -116,6 +129,7 @@ public sealed class Chemistry : IEngine
             if (Burning[i] != 0) burning++;
         }
         BurningCount = burning;
+        Sounds(sim);
         (_spark, _sparkNext) = (_sparkNext, _spark);
         (_sparkCause, _sparkCauseNext) = (_sparkCauseNext, _sparkCause);
         if (sim.Tick % 25 == 0) Slow(25 * dt);
@@ -290,10 +304,43 @@ public sealed class Chemistry : IEngine
             int cause = _spark[i] != 0 ? _sparkCause[i] : FireCause[i];
             if (cause == 0) cause = sim.Causes.Add(CauseKind.Reaction, $"{Ko.I(T.Substances[T.Gases[gf.gas].Index].Name)} 한꺼번에 탔다", sim.Tick, i);
             sim.Facts.Emit(sim.Tick, FactKind.Ignition, i, (float)(heat / 1000), cause, other: gf.gas);
+            int slot = RoomSlot(i);
+            if (_boomJ[slot] <= 0 && _tickBurst[slot] <= 0) { _boomCell[slot] = i; _boomCause[slot] = cause; } // 쾅의 자리 · 원인: 그 불이 처음 터진 칸
+            _tickBurst[slot] += heat;
             // 불꽃 앞면: 이웃이 다음 틱의 불씨
             F.L.Neighbors(i, nb);
             foreach (int j in nb) if (j >= 0) { _sparkNext[j] = 1; _sparkCauseNext[j] = cause; }
         }
+    }
+
+    /// <summary>
+    /// 불과 폭발의 소리 (③ 소리 장에 요청): 타는 방마다 5틱에 한 번 우르릉 — 60 + 10·log(그 방 불의 kW) (의자 하나 250kW 84dB · 어림) ·
+    /// 기체 불은 그 방에서 그친 틱에 쾅 하나 — 85 + 10·log(탄 열 kJ · 많아야 140dB — 충돌과 같은 잣대 · 어림).
+    /// </summary>
+    private void Sounds(Sim sim)
+    {
+        var snd = sim.Find<Sound>();
+        int nr = _boomJ.Length;
+        if (snd != null)
+            for (int r = 0; r < nr; r++)
+                if (_tickBurst[r] <= 0 && _boomJ[r] > 0)
+                {
+                    float db = (float)Math.Min(140, 85 + 10 * Math.Log10(Math.Max(1, _boomJ[r] / 1000)));
+                    snd.Emit(sim, _boomCell[r], db, SoundKind.Bang, _boomCause[r]);
+                    _boomJ[r] = 0;
+                }
+        for (int r = 0; r < nr; r++) { _boomJ[r] += _tickBurst[r]; _tickBurst[r] = 0; }
+        if (snd == null || BurningCount == 0 || sim.Tick % 5 != 0) return;
+        Array.Clear(_roarKw);
+        for (int i = 0; i < Cells; i++)
+        {
+            if (Burning[i] == 0 || Hrr[i] <= 0) continue;
+            int r = RoomSlot(i);
+            if (_roarKw[r] <= 0 || Hrr[i] > Hrr[_roarCell[r]]) { _roarCell[r] = i; _roarCause[r] = FireCause[i]; }
+            _roarKw[r] += Hrr[i];
+        }
+        for (int r = 0; r < nr; r++)
+            if (_roarKw[r] > 0) snd.Emit(sim, _roarCell[r], (float)(60 + 10 * Math.Log10(Math.Max(1, _roarKw[r]))), SoundKind.Roar, _roarCause[r]);
     }
 
     /// <summary>느린 반응 (25틱마다): 오존이 산소로 돌아간다.</summary>
@@ -320,11 +367,13 @@ public sealed class Chemistry : IEngine
     {
         w.Arr(Burning); w.Arr(FireCause); w.Arr(HeatCause); w.Arr(Hrr); w.Arr(_spark); w.Arr(_sparkCause);
         w.I64(Ignitions); w.I64(GasBursts);
+        w.Tag("폭발 소리"); w.Arr(_boomJ); w.Arr(_boomCell); w.Arr(_boomCause);
     }
 
     public void Load(StateReader r)
     {
         r.ArrInto(Burning); r.ArrInto(FireCause); r.ArrInto(HeatCause); r.ArrInto(Hrr); r.ArrInto(_spark); r.ArrInto(_sparkCause);
         Ignitions = r.I64(); GasBursts = r.I64();
+        r.Tag("폭발 소리"); r.ArrInto(_boomJ); r.ArrInto(_boomCell); r.ArrInto(_boomCause);
     }
 }

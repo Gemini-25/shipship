@@ -150,20 +150,22 @@ public static partial class Program
         }
 
         // ── 잠의 질: 잠자리 곁에서 50dB 기계 소리가 되풀이되면 잠이 얕아(깨지는 않는다) 여섯 시간 뒤 졸림이 덜 풀린다 ──
+        //    (조용한 잠자리 — 주컴퓨터(서버 · 1m 58dB)가 없는 같은 배: 주컴퓨터 곁 침대는 이어지는 바탕 소음 58dB만으로 잠이 얕다 · 소리 바퀴 2)
         {
+            var quietLay = Worlds.Ascii(Worlds.MindShip, Worlds.MindLegend);
             (float sleepy, float loss) Run(bool noisy)
             {
-                var s = Worlds.Full(lay, 8);
+                var s = Worlds.Full(quietLay, 8);
                 var m = s.Get<Mind>(); var snd = s.Get<Sound>();
-                int bed = lay.Furniture.First(f => f.Type == "Bed").Id;
-                int p = m.AddPerson(s, lay.Furniture[bed].Cells[0]);
-                m[p].C.Bed = lay.Furniture[bed].Cells[0];
+                int bed = quietLay.Furniture.First(f => f.Type == "Bed").Id;
+                int p = m.AddPerson(s, quietLay.Furniture[bed].Cells[0]);
+                m[p].C.Bed = quietLay.Furniture[bed].Cells[0];
                 s.Run(5);
                 m[p].C.Sleepy = 1; m[p].C.Hunger = 0; m[p].C.Thirst = 0;
                 float loss = 0; int n = 0;
                 for (int k = 0; k < Time.Hours(6); k++)
                 {
-                    if (noisy && k % 25 == 0) snd.Emit(s, lay.Furniture[bed].Cells[0], 50, SoundKind.Machine);
+                    if (noisy && k % 25 == 0) snd.Emit(s, quietLay.Furniture[bed].Cells[0], 50, SoundKind.Machine);
                     s.Step(); m[p].C.Hunger = 0; m[p].C.Thirst = 0;
                     if (k > Time.Hours(1)) { loss += m[p].C.SleepLoss; n++; }
                 }

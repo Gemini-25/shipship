@@ -259,6 +259,21 @@ public sealed class Network : IEngine
         for (int d = 0; d < Devices.Count; d++) if (Devices[d].Def.Role is "scrubber" or "o2gen" && Working(d) && Broken[d * 4 + (int)Part.Filter] == 0) return true;
         return false;
     }
+    /// <summary>
+    /// 낡은 기계의 소리 (dB — 바퀴 2 소리): 기계 부품의 마모가 숨은 한계의 60%를 넘으면 커진다 — 12 × ((마모 − 0.6)/0.4)² (0.9에서 +6.8 · 끝에서 +12).
+    /// 베어링 고장 3단계부터 귀에 들리고 · ISO 10816 영역 A → D 진동 속도가 네 배 (소리 힘 +12dB). 기계 부품이 없거나 멈췄으면 0.
+    /// </summary>
+    public float WornDb(int d)
+    {
+        int k = d * 4 + (int)Part.Mechanical;
+        if (_limit[k] == float.MaxValue || Broken[k] != 0) return 0;
+        double f = Math.Min(1, Wear[k] / _limit[k]);
+        return f <= 0.6 ? 0 : (float)(12 * Math.Pow((f - 0.6) / 0.4, 2));
+    }
+    /// <summary>돌아가는 장치가 1m에서 내는 소리 (dB — 표의 크기 + 낡은 몫 · 멈췄으면 0).</summary>
+    public float NoiseDb(int d) => Devices[d].Def.Db > 0 && Working(d) ? (float)Devices[d].Def.Db + WornDb(d) : 0;
+    /// <summary>끽끽 · 덜컹을 내기 시작하는 낡은 몫 (dB — 마모 0.8 남짓).</summary>
+    public const float GrindFromDb = 3;
     public bool IsBroken(int device, Part p) => Broken[device * 4 + (int)p] != 0;
     public float WearFraction(int device, Part p) => _limit[device * 4 + (int)p] == float.MaxValue ? 0 : Wear[device * 4 + (int)p] / _limit[device * 4 + (int)p];
     public bool Working(int d) => On[d] != 0 && Broken[d * 4 + (int)Part.Electric] == 0 && Broken[d * 4 + (int)Part.Mechanical] == 0 && Supply[d] > 0.05f;
@@ -689,6 +704,10 @@ public sealed class Network : IEngine
                             int cause = sim.Causes.Add(CauseKind.Heat, "배터리가 뜨거워져 열폭주", sim.Tick, c);
                             sim.Find<Chemistry>()?.Ignite(c, Math.Min(e, 8e6), cause);
                             sim.Facts.Emit(sim.Tick, FactKind.MachineFail, c, (float)(e / 1e6), cause, other: d);
+                            // 셀이 터지는 펑 · 안전 밸브로 뿜는 기체의 쉬익 (어림 — 셀 파열 120~130dB 언저리 · 1m)
+                            var snd = sim.Find<Sound>();
+                            snd?.Emit(sim, c, 110, SoundKind.Bang, cause);
+                            snd?.Emit(sim, c, 85, SoundKind.Hiss, cause);
                         }
                     }
                     break;
@@ -860,10 +879,32 @@ public sealed class Network : IEngine
                 };
                 Wear[k] += (float)(hours * stress);
                 double frac = Wear[k] / _limit[k];
-                if ((Part)p == Part.Mechanical && frac > 0.85 && running && sim.Tick % 125 == 0)
-                    sim.Find<Sound>()?.Emit(sim, c, 68, SoundKind.Machine, 0); // 끽끽 — 곧 망가진다
                 if (frac >= 1) Fail(sim, d, (Part)p);
             }
+        }
+        Noise(sim);
+    }
+
+    /// <summary>
+    /// 장치의 소리 (1분마다 — ③ 소리 장에 요청만): 돌아가는 장치마다 이어지는 소리(표의 크기 + 낡은 몫) ·
+    /// 낡은 몫이 3dB를 넘으면 5분마다 끽끽 · 덜컹 (장치 크기 + 낡은 몫 + 6dB — 결함 박자의 충격이 웅웅 위로 솟는다 · 어림).
+    /// 끽끽의 원인 마디 '○○의 모터가 낡아 끽끽거린다'는 그 부품을 낡게 한 원인에 잇고, 망가지면 그 마디에 잇는다.
+    /// </summary>
+    private void Noise(Sim sim)
+    {
+        var snd = sim.Find<Sound>();
+        if (snd == null) return;
+        for (int d = 0; d < Devices.Count; d++)
+        {
+            var dev = Devices[d];
+            float db = NoiseDb(d);
+            if (db > 0 || snd.DroneDb(d) > 0) snd.SetDrone(d, dev.Cell, db);
+            float worn = WornDb(d);
+            if (db <= 0 || worn < GrindFromDb || sim.Tick % 125 != 0) continue;
+            int k = d * 4 + (int)Part.Mechanical;
+            int cause = sim.Causes.Add(CauseKind.Wear, $"{dev.Name}의 모터가 낡아 끽끽거린다", sim.Tick, dev.Cell, _wearCause.GetValueOrDefault(k));
+            _wearCause[k] = cause;
+            snd.Emit(sim, dev.Cell, db + 6, SoundKind.Machine, cause);
         }
     }
 

@@ -58,6 +58,12 @@ public sealed partial class Mind : IEngine
     private readonly double[] _halfLife;      // 믿음 종류 → 반감기 (초)
 
     public long Shouts, Panics, Extinguished, Rescued, Patched, Repaired, FledCount, Meals, Drinks, Exercised;
+    /// <summary>소리 (바퀴 2): 바탕 소음에 가려 못 들은 소리 · '기계 소리가 이상하다'를 알아챈 수 · 그 소리를 듣고 부품을 미리 간 수.</summary>
+    public long Masked, GrindHeard, EarMaintained;
+    /// <summary>이상한 기계 소리 알림 (최근 16개 · 찍는다) — 일감판이 읽는다.</summary>
+    public readonly List<GrindReport> GrindReports = new();
+    /// <summary>스스로 갈 솜씨 (이보다 덜하면 듣고도 알리기만 한다).</summary>
+    public const float GrindSkill = 0.3f;
     public double FoodEaten, WaterDrunk;   // 몰 (장부)
 
     public Mind(Field f)
@@ -128,6 +134,7 @@ public sealed partial class Mind : IEngine
         HL(BeliefKind.Injured, "다친 사람"); HL(BeliefKind.Dead, "죽은 사람"); HL(BeliefKind.Broken, "고장"); HL(BeliefKind.Bang, "쾅");
         HL(BeliefKind.Strain, "끼익"); HL(BeliefKind.Leak, "쉬익"); HL(BeliefKind.SmokeSmell, "타는 냄새"); HL(BeliefKind.BadAir, "나쁜 공기");
         HL(BeliefKind.Water, "물"); HL(BeliefKind.Spark, "합선"); HL(BeliefKind.StuckDoor, "안 열리는 문"); HL(BeliefKind.Help, "도와 달라");
+        HL(BeliefKind.Grind, "기계 소리");
 
         _g = new float[L.N]; _from = new int[L.N]; _stamp = new int[L.N];
     }
@@ -274,9 +281,20 @@ public sealed partial class Mind : IEngine
     {
         Bind(sim);
         if (_snd == null) return -1;
+        db = Math.Max(db, Math.Min(105, _snd.Ambient(cell) + 15));   // 스피커는 바탕 소음보다 15dB 크게 (NFPA 72 · ISO 7731)
         int ev = _snd.Emit(sim, cell, db, SoundKind.Alarm, b.Cause, Computer);
         _said.Add((ev, sim.Tick, Computer, b));
         return ev;
+    }
+
+    /// <summary>
+    /// 외치는 크기 (1m · dB) — 롬바르 효과: 사람은 바탕 소음이 48dB를 넘는 몫의 반만큼 더 크게 (75 → 많아야 90 — 외침 76~84dB @1m · 기울기 0.5dB/dB) ·
+    /// 로봇의 안내는 바탕 소음 + 15dB (80 ~ 95).
+    /// </summary>
+    public float VoiceDb(int cell, bool person)
+    {
+        float n = _snd?.Ambient(cell) ?? 0;
+        return person ? Math.Min(90, 75 + 0.5f * Math.Max(0, n - 48)) : Math.Clamp(n + 15, 80, 95);
     }
 
     /// <summary>로봇 · 사람에게 일을 맡긴다: 믿음을 넣고 그 목표에 점수를 더한다 (until 틱까지).</summary>
@@ -348,7 +366,7 @@ public sealed partial class Mind : IEngine
         BeliefKind.Fire => "불", BeliefKind.Smoke => "연기", BeliefKind.Breach => "구멍", BeliefKind.Vacuum => "공기가 빠짐", BeliefKind.Injured => "쓰러진 사람",
         BeliefKind.Dead => "죽은 사람", BeliefKind.Broken => "멈춘 장치", BeliefKind.Bang => "쾅 소리", BeliefKind.Strain => "끼익 소리", BeliefKind.Leak => "새는 소리",
         BeliefKind.SmokeSmell => "타는 냄새", BeliefKind.BadAir => "이상한 공기", BeliefKind.Water => "고인 물", BeliefKind.Spark => "불꽃", BeliefKind.StuckDoor => "안 열리는 문",
-        BeliefKind.Help => "비명", BeliefKind.Cold => "추위", BeliefKind.Hot => "더위", _ => "",
+        BeliefKind.Help => "비명", BeliefKind.Cold => "추위", BeliefKind.Hot => "더위", BeliefKind.Grind => "이상한 기계 소리", _ => "",
     };
 
     /// <summary>머릿속 한 줄 (화면의 생각 칸).</summary>
@@ -605,6 +623,7 @@ public sealed partial class Mind : IEngine
         w.I64(Shouts); w.I64(Panics); w.I64(Extinguished); w.I64(Rescued); w.I64(Patched); w.I64(Repaired); w.I64(FledCount); w.I64(Meals); w.I64(Drinks); w.I64(Exercised); w.F64(FoodEaten); w.F64(WaterDrunk); w.F64(WaterSprayed);
         w.I64(Cooked); w.I64(Forgot); w.I64(_learnCursor); w.I64(AteTogether); w.I64(Followed);
         w.Arr(HobbyCount); SavePlaces(w); SaveRation(w);
+        w.I64(Masked); w.I64(GrindHeard); w.I64(EarMaintained); w.List(GrindReports);
     }
 
     public void Load(StateReader r)
@@ -624,5 +643,6 @@ public sealed partial class Mind : IEngine
         Shouts = r.I64(); Panics = r.I64(); Extinguished = r.I64(); Rescued = r.I64(); Patched = r.I64(); Repaired = r.I64(); FledCount = r.I64(); Meals = r.I64(); Drinks = r.I64(); Exercised = r.I64(); FoodEaten = r.F64(); WaterDrunk = r.F64(); WaterSprayed = r.F64();
         Cooked = r.I64(); Forgot = r.I64(); _learnCursor = r.I64(); AteTogether = r.I64(); Followed = r.I64();
         HobbyCount = r.Arr<long>(); LoadPlaces(r); LoadRation(r);
+        Masked = r.I64(); GrindHeard = r.I64(); EarMaintained = r.I64(); GrindReports.Clear(); GrindReports.AddRange(r.List<GrindReport>());
     }
 }

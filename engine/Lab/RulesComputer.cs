@@ -89,12 +89,15 @@ public static partial class Program
             int door = lay.DoorAt[At(10, 3)];
             st.RequestDoor(door, 1); s.Run(3); // 옆 방으로 가는 문이 열려 있다
             f.SetHole(At(0, 2), 0.02f);
+            // 구멍이 열려 있는 동안의 옆 방 기압 (로봇이 큰 쉬익을 듣고 들어가 구멍을 막으면 그 뒤 밸브로 빈 방을 다시 채워 배 전체가 고르게 낮아진다 — 그것은 봉쇄의 몫이 아니다)
+            double right = f.Pressure(At(15, 3));
             for (int k = 0; k < Time.Minutes(8); k++)
             {
                 s.Step();
+                if (f.Hole[At(0, 2)] > 0) right = f.Pressure(At(15, 3));
                 if (Debug && k < 40 && k % 4 == 0) Console.WriteLine($"    {k} 왼 {f.Pressure(At(6, 2)):0.0} 오른 {f.Pressure(At(15, 3)):0.0} 통로 {f.Pressure(At(10, 8)):0.0} · 문 {string.Join(",", f.DoorOpen.Select(x => x.ToString("0.0")))}");
             }
-            return (f.Pressure(At(15, 3)), s.Facts.CountOf(FactKind.ComputerSeal));
+            return (right, s.Facts.CountOf(FactKind.ComputerSeal));
         }
         var on = BreachRun(true); var down = BreachRun(false);
         Check("구멍 난 빈 방: 주컴퓨터가 기압이 떨어지는 것을 보고 봉쇄한다 → 열려 있던 옆 방이 버틴다 (주컴퓨터가 멈추면 같이 빠진다)",

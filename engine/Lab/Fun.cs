@@ -66,7 +66,8 @@ public static partial class Program
         string daily = "쉼 " + string.Join(" · ", Enumerable.Range(0, mind.HobbyCount.Length).Where(h => mind.HobbyCount[h] > 0).Select(h => $"{Mind.HobbyName((Hobby)h)} {mind.HobbyCount[h]}"))
             + $" / 밥 짓기 {mind.Cooked} · 깜빡 {mind.Forgot} / 몸의 시계 {chrono.Min():+0.0;-0.0}~{chrono.Max():+0.0;-0.0}시간"
             + $" / 같이 먹음 {mind.AteTogether} · 따라 나감 {mind.Followed} · 방을 꺼리게 됨 {mind.Dreads}"
-            + $" / 돌봄 {mind.Treats}(맨손 {mind.TreatsBare}) · 곪음 {life.Infections} · 패혈증 {life.Sepses} · 감기 {life.Colds}";
+            + $" / 돌봄 {mind.Treats}(맨손 {mind.TreatsBare}) · 곪음 {life.Infections} · 패혈증 {life.Sepses} · 감기 {life.Colds}"
+            + $" / 소리: 가려 못 들음 {mind.Masked} · 이상한 기계 소리 알아챔 {mind.GrindHeard} · 듣고 미리 갈기 {mind.EarMaintained} · 낸 소리 {s.Get<Sound>().Emitted} · 큰 소리(100dB 넘게) {s.Facts.CountOf(FactKind.LoudSound)}";
         return new FunResult(ship, seed, crew, days, hl, kinds, depth, d.NearMisses, life.Deaths, calm, d.Firsts, st.Seeds.Count, fruit.Count,
             d.ScreenSeconds / 60 / days, score, titles, daily);
     }
