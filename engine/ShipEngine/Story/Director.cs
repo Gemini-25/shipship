@@ -13,6 +13,9 @@ public sealed class Highlight
     public int Actor;
     public int Root;           // 원인 사슬의 뿌리 (같은 뿌리의 일은 한 하이라이트로)
     public string Title = "";
+    /// <summary>사람 이야기 (다툼 · 사과 · 위로 · 소문 · 몸싸움 · 몰래 한 짓) — 하이라이트 목록에서 사건과 나눠 보인다.</summary>
+    public bool People;
+    public string Line = "";   // 그 장면의 한 마디 (있으면)
 }
 
 /// <summary>
@@ -43,6 +46,7 @@ public sealed class Director
     public double ScreenSeconds;                // 지금까지 흐른 화면 시간
     public double CalmScreenSec, OmenScreenSec, DangerScreenSec, CriticalScreenSec;
     public readonly HashSet<FactKind> SeenKinds = new();
+    private readonly HashSet<int> _seenTalk = new();
     public int Firsts;
     public int NearMisses;                      // 위험했다 산 사람 (산소 포화 0.75 아래 · 쓰러짐 뒤 깨어남)
 
@@ -69,11 +73,28 @@ public sealed class Director
         FactKind.StorySeed => 6, FactKind.Hurt => 12, FactKind.Fled => 10, FactKind.DoorSealed => 6, FactKind.Warned => 5, FactKind.Noticed => 4,
         FactKind.MachineFail => 12, FactKind.Short => 15, FactKind.BreakerTrip => 5, FactKind.Flare => 20, FactKind.WallCrack => 15,
         FactKind.Woke => 2, FactKind.ComputerAssign => 4, FactKind.Sick => 8,
-        FactKind.Relationship => 12, FactKind.Grieved => 30, FactKind.TrustLost => 25, FactKind.WentOutside => 20, _ => 1,
+        FactKind.Relationship => 12, FactKind.Grieved => 30, FactKind.TrustLost => 25, FactKind.WentOutside => 20,
+        FactKind.Talk => 2, FactKind.Blamed => 15, FactKind.Fight => 60, FactKind.Sabotage => 40, _ => 1,
     };
 
-    private static bool Critical(FactKind k) => k is FactKind.Died or FactKind.Collapsed or FactKind.WallBreach or FactKind.DoorBlown or FactKind.Panicked;
-    private static bool Omen(FactKind k) => k is FactKind.DebrisNear or FactKind.ComputerAlarm or FactKind.StorySeed or FactKind.WallCrack or FactKind.Flare or FactKind.Noticed or FactKind.Warned;
+    /// <summary>사실 하나의 무게 — 대화는 끝에 따라 (다툼 · 사과 · 위로 · 소문은 볼 만하고 잡담은 거의 0) · 끝장 몸싸움은 더.</summary>
+    public static float WeightOf(in Fact f) => f.Kind switch
+    {
+        FactKind.Talk => (TalkEnd)(int)f.Size switch
+        {
+            TalkEnd.Argue => 40, TalkEnd.Apology => 30, TalkEnd.Comfort => 22, TalkEnd.Spread => 22, TalkEnd.Praise => 16, TalkEnd.Defend => 16,
+            TalkEnd.Friction => 6, TalkEnd.Worry => 6, _ => 1,
+        },
+        FactKind.Fight => f.Size >= 2 ? 90 : 60,
+        _ => Weight(f.Kind),
+    };
+
+    /// <summary>사람 이야기 사실인가 (관계 · 대화 · 싸움 · 몰래 한 짓 · 슬픔).</summary>
+    public static bool PeopleFact(FactKind k) => k is FactKind.Talk or FactKind.Blamed or FactKind.Fight or FactKind.Sabotage or FactKind.Relationship or FactKind.Grieved or FactKind.TrustLost;
+
+    private static bool Critical(FactKind k) => k is FactKind.Died or FactKind.Collapsed or FactKind.WallBreach or FactKind.DoorBlown or FactKind.Panicked or FactKind.Fight;
+    private static bool Omen(FactKind k) => k is FactKind.DebrisNear or FactKind.ComputerAlarm or FactKind.StorySeed or FactKind.WallCrack or FactKind.Flare or FactKind.Noticed or FactKind.Warned or FactKind.Blamed;
+    private static bool Omen(in Fact f) => Omen(f.Kind) || f.Kind == FactKind.Talk && (TalkEnd)(int)f.Size is TalkEnd.Argue or TalkEnd.Spread;
 
     // ───────────────────────── 한 틱 ─────────────────────────
 
@@ -93,12 +114,13 @@ public sealed class Director
         {
             int cell = f.Cell;
             if (cell < 0 && f.Actor >= 0 && mind != null && f.Actor < mind.Agents.Count) cell = mind.Agents[f.Actor].C.Cell;
-            float w = Weight(f.Kind);
+            float w = WeightOf(f);
             int depth = f.Cause != 0 ? sim.Causes.Depth(f.Cause) : 0;
             float score = w * (1 + 0.15f * depth);
-            if (SeenKinds.Add(f.Kind) && w >= 5) { score *= 2; Firsts++; }
+            // 처음 보는 일은 두 배 (대화는 끝마다 따로 — 첫 다툼 · 첫 사과)
+            if (w >= 5 && (f.Kind == FactKind.Talk ? _seenTalk.Add((int)f.Size) : SeenKinds.Add(f.Kind))) { score *= 2; Firsts++; }
             if (cell >= 0 && cell < Heat.Length) Heat[cell] += score;
-            if (Omen(f.Kind)) _lastOmen = t;
+            if (Omen(f)) _lastOmen = t;
             if (Critical(f.Kind)) { _criticalLeft = 3; _lastDanger = t; }
             if (score > bestScore && cell >= 0) { bestScore = score; best = f; best.Cell = cell; }
         }
@@ -211,13 +233,14 @@ public sealed class Director
                 || t - h.Last < Time.Minutes(15) && rootTick >= h.StartTick - Time.Minutes(1))
             {
                 if (spot > h.Score) { h.Score = spot; h.Tick = t; h.Cell = f.Cell; }
-                if (Weight(f.Kind) > Weight(h.Kind)) { h.Kind = f.Kind; h.Cause = f.Cause; h.Actor = f.Actor; h.Title = TitleOf(sim, f); }
+                if (WeightOf(f) > Weight(h.Kind)) { h.Kind = f.Kind; h.Cause = f.Cause; h.Actor = f.Actor; h.Title = TitleOf(sim, f); h.People = PeopleFact(f.Kind); h.Line = LineOf(sim, f); }
                 h.StartTick = Math.Min(h.StartTick, RootTick(sim, f, t));
                 if (h.Root == 0) h.Root = root;
                 h.Last = Math.Max(h.Last, t);
                 return;
             }
-        Highlights.Add(new Highlight { Tick = t, Cell = f.Cell, Score = spot, Kind = f.Kind, Cause = f.Cause, Actor = f.Actor, Root = root, Title = TitleOf(sim, f), StartTick = RootTick(sim, f, t), Last = t });
+        Highlights.Add(new Highlight { Tick = t, Cell = f.Cell, Score = spot, Kind = f.Kind, Cause = f.Cause, Actor = f.Actor, Root = root, Title = TitleOf(sim, f), StartTick = RootTick(sim, f, t), Last = t,
+            People = PeopleFact(f.Kind), Line = LineOf(sim, f) });
         Caption = Highlights[^1].Title;
     }
 
@@ -230,6 +253,24 @@ public sealed class Director
     }
 
     public static string FactText(FactKind k) => FactNames.Of(k);
+
+    /// <summary>그 사실에 이어진 한 마디 (대화 · 싸움 — 사회의 말 기록에서).</summary>
+    private static string LineOf(Sim sim, in Fact f)
+    {
+        if (f.Kind is not (FactKind.Talk or FactKind.Fight)) return "";
+        var so = sim.Find<Society>();
+        if (so == null) return "";
+        for (int i = so.Sayings.Count - 1; i >= 0; i--)
+        {
+            var s = so.Sayings[i];
+            if (s.Tick < f.Tick - 25) break;
+            if (s.Speaker == f.Actor) return sim.Causes.Text(s.Line);
+        }
+        return "";
+    }
+
+    /// <summary>사람 이야기 · 사건 하이라이트 목록 (최근 것 먼저 · 화면 · 기록).</summary>
+    public IEnumerable<Highlight> List(bool? people = null) => Highlights.AsEnumerable().Reverse().Where(h => people == null || h.People == people);
 
     private static string TitleOf(Sim sim, in Fact f)
     {

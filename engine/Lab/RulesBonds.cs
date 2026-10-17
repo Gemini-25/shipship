@@ -119,6 +119,33 @@ public static partial class Program
                 $"홀로: 타박 {alone.blunt:0.00} · {(alone.alive ? "살았다" : "죽었다")} / 로봇 곁: 타박 {watched.blunt:0.00} · 말림 {watched.stopped} · \"{watched.said}\"");
         }
 
+        // ── 연출: 사람 이야기도 하이라이트가 된다 — 다툼은 '사람 이야기'로 잡히고 · 잡담만 하는 둘은 하이라이트가 없다 ──
+        {
+            (List<Highlight> hl, long talks) Watch(bool grudge)
+            {
+                var s = Worlds.Full(lay, 4);
+                var m = s.Get<Mind>(); var so = s.Get<Society>();
+                var dir = new Director(s.Layout) { KeepRing = false };
+                int x = m.AddPerson(s, At(14, 2)), y = m.AddPerson(s, At(15, 3));
+                m.SetPersonality(x, 0.5f, 0.5f, 0.6f, 0.05f, 0.8f);
+                m.SetPersonality(y, 0.5f, 0.5f, 0.6f, 0.4f, 0.6f);
+                s.Run(2);
+                if (grudge)
+                {
+                    so.Grudge[y * so.N + x] = 0.6f;
+                    int c0 = s.Causes.Add(CauseKind.Person, $"{Ko.I(m.NameOf(x))} 거르개를 거꾸로 끼웠다", s.Tick, At(14, 2), 0, 0, x);
+                    so.Remember(s, y, Topic.Blame, x, c0, 0.8f, At(14, 2));
+                }
+                for (int k = 0; k < Time.Hours(4); k++) { s.Step(); dir.Observe(s); foreach (int p in new[] { x, y }) { m[p].C.Hunger = 0; m[p].C.Sleepy = 0; m[p].C.Lonely = 0.5f; } }
+                return (dir.Highlights.ToList(), so.Talks);
+            }
+            var feud = Watch(true); var calmPair = Watch(false);
+            var ppl = feud.hl.FirstOrDefault(h => h.People);
+            Check("연출: 사람 이야기도 하이라이트가 된다 — 따지다 다툰 일은 '사람 이야기'로 · 제목에 그 일 · 한 마디 · 잡담뿐인 둘은 하이라이트 없음",
+                ppl != null && ppl.Title.Contains("탓") && ppl.Line.Length > 0 && !calmPair.hl.Any(h => h.People) && calmPair.talks > 0,
+                $"다툰 둘: {(ppl != null ? $"\"{ppl.Title}\" · \"{ppl.Line}\"" : "없음")} / 잡담한 둘: 하이라이트 {calmPair.hl.Count} · 대화 {calmPair.talks}");
+        }
+
         // ── 평소의 하루: 케스트럴 6명 — 말은 자주 나누고 · 몸싸움은 없다 (갈등은 드물게만 끝까지 간다) ──
         {
             var s = calm.Result;
