@@ -413,6 +413,7 @@ public sealed partial class Society
                 float r1 = Rnd(sim, "주먹", a, br.Blows), r2 = Rnd(sim, "피", a, br.Blows);
                 float blunt = br.Lethal != 0 ? 0.25f + 0.3f * r1 : 0.06f + 0.1f * r1, bleed = br.Lethal != 0 ? 1.0f + 2.0f * r2 : 0.15f * r2;
                 _life!.Strike(sim, C(b).Body, blunt, bleed, br.Cause);
+                if (_life[C(b).Body].Conscious != 0) sim.Find<Sound>()?.Emit(sim, C(b).Cell, 85, SoundKind.Scream, br.Cause, b); // 맞는 이의 비명 — 옆 방에서도 들린다 (로봇 · 사람이 온다)
                 // 맞는 이가 거칠면 맞받아친다
                 if (C(b).Agree < 0.4f && C(b).Anger > 0.4f && C(b).Brave > 0.4f) _life.Strike(sim, C(a).Body, blunt * 0.5f, bleed * 0.3f, br.Cause);
                 br.Blows++; Brawls[k] = br;

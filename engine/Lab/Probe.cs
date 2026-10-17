@@ -305,7 +305,7 @@ public static partial class Program
             foreach (var a in m.Agents.Where(a => a.IsPerson))
             {
                 var now = (a.C.Goal, a.C.StepIndex, a.Plan.Count, a.C.GoalSince, a.C.Cell);
-                if (prev.TryGetValue(a.Id, out var p) && p.g == GoalKind.Relax && (now.Goal != GoalKind.Relax || now.GoalSince != p.since) && shown++ < 25)
+                if (prev.TryGetValue(a.Id, out var p) && p.g == GoalKind.Relax && (now.Goal != GoalKind.Relax || now.GoalSince != p.since) && Environment.GetEnvironmentVariable("PROBE_RELAX") == "1" && shown++ < 25)
                     Console.WriteLine($"    {Time.Clock(s.Tick)} {m.NameOf(a.Id)} 쉼({Mind.HobbyName((Hobby)a.C.Hobby)}) {Time.ToSeconds(s.Tick - p.since) / 60:0}분 · 걸음 {p.step}/{p.plan} → {m.Thought(a.Id)}");
                 prev[a.Id] = now;
             }
@@ -321,6 +321,8 @@ public static partial class Program
         Console.WriteLine("  시간을 쓴 곳: " + string.Join(" · ", share.OrderByDescending(kv => kv.Value).Select(kv => $"{Mind.GoalName(kv.Key)} {kv.Value * 100.0 / total:0}%")));
         Console.WriteLine("  쉬는 시간: " + string.Join(" · ", Enumerable.Range(0, m.HobbyCount.Length).Select(h => $"{Mind.HobbyName((Hobby)h)} {m.HobbyCount[h]}")));
         Console.WriteLine($"  지루함 평균 {bored / Math.Max(1, n):0.00} · 졸림 평균 {sleepy / Math.Max(1, n):0.00} · 밥 짓기 {m.Cooked}");
+        var so = s.Get<Society>();
+        Console.WriteLine($"  함께: 같이 먹음 {m.AteTogether} · 따라 나감 {m.Followed} · 무리 {so.Bands.Count} ({string.Join(" ", so.Bands.Select(b => $"{so.BandName(b.Id)} {b.Size}명"))}) · 짝 {so.Couples} · 몸싸움 {so.Fights}");
     }
 
     internal static void ProbePerson(string[] args)

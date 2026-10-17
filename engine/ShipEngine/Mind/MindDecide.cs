@@ -18,7 +18,7 @@ public sealed partial class Mind
     {
         long t = sim.Tick;
         ref var c = ref a.C;
-        _opts.Clear();
+        _opts.Clear(); _followScore = 0;
         a.Avoid.RemoveAll(v => v.Until <= t);
         _deciding = a; _nowTick = t;
         if (a.IsPerson) TakeOffSuit(sim, a);
@@ -89,6 +89,7 @@ public sealed partial class Mind
         c.Failed = 0;
         a.Plan = plan; c.StepIndex = 0; c.StepStart = sim.Tick; a.Path.Clear(); a.PathIdx = 0; c.WaitTicks = 0;
         c.CloseHard = (byte)(o.Goal == GoalKind.Evacuate ? 1 : 0);
+        if (o.Goal == GoalKind.Evacuate && _followScore > 0 && o.Score == _followScore) Followed++; // ⑨ 아는 이를 따라 나갔다
         if (IsTask(o.Goal)) Claim(a, o.Goal, o.Target, +1);
         return true;
     }
@@ -140,9 +141,10 @@ public sealed partial class Mind
             if ((c.Sleepy > 0.6f || night && c.Sleepy > 0.4f) && !BelievedRoomBad(a, bedRoom)) // 위험하다고 믿는 방에서는 자지 않는다
                 Add(GoalKind.Sleep, c.Bed, c.Bed >= 0 ? c.Bed : here, c.Sleepy * c.Sleepy * 5 + (night ? 1.5f : 0)); // 몸의 시계는 '언제 눕나'만 옮긴다 (얼마나 간절한지는 쌓인 졸림)
             // 욕구는 어느 만큼 차야 움직인다 (배가 조금 고프다고 바로 먹으러 가지 않는다)
-            if (c.Hunger > 0.55f)
+            int kinMeal = c.Hunger > 0.35f && c.Hunger <= 0.55f ? KinMeal(a) : -1; // ⑨ 가까운 이가 먹으러 가면 조금 배고파도 따라간다
+            if (c.Hunger > 0.55f || kinMeal >= 0)
             {
-                float eat = c.Hunger * c.Hunger * 5 + (F.Ppm(T.gAroma, here) > 5 ? 0.5f : 0);
+                float eat = c.Hunger * c.Hunger * 5 + (F.Ppm(T.gAroma, here) > 5 ? 0.5f : 0) + (kinMeal >= 0 ? 0.6f : 0);
                 Add(GoalKind.Eat, -1, -1, eat);
                 // ⑧ 밥을 짓는다: 요리를 좋아하는 이 · 꺼진 조리대가 있고 같은 방에 먹을 것이 있으면 (먹기보다 조금 앞서게)
                 if (WantsToCook(sim, a) && CookStove(a) is int sv && sv >= 0) Add(GoalKind.Cook, sv, _net!.Devices[sv].Cell, eat + 0.3f);
@@ -201,6 +203,13 @@ public sealed partial class Mind
             bool passing = a.Plan.Count > 0 && c.StepIndex < a.Plan.Count && a.Plan[c.StepIndex].Kind == StepKind.GoTo && a.Plan[c.StepIndex].Cell >= 0
                 && RoomOf(a.Plan[c.StepIndex].Cell) != myRoom && RoomBadness(a, RoomOf(a.Plan[c.StepIndex].Cell)) < 0.3f;
             if (worst > 0 && !committed && !passing) Add(GoalKind.Evacuate, myRoom, cell, worst);
+            // ⑨ 따라 나간다: 짝 · 이끄는 이 · 같은 무리가 이 방에서 빠져나가면 위험을 몰라도 함께 나간다
+            if (!committed && !passing && c.Goal != GoalKind.Evacuate && FollowOut(a, myRoom, out int danger) is float follow && follow > worst)
+            {
+                Add(GoalKind.Evacuate, myRoom, danger >= 0 ? danger : here, follow);
+                _followScore = follow;
+                if (DebugAgent == a.Id) Console.WriteLine($"    [따라 나간다 {a.Id}] {follow:0.0}");
+            }
         }
         foreach (var b in a.Beliefs)
         {
@@ -218,8 +227,10 @@ public sealed partial class Mind
                 case BeliefKind.Injured when !drone && (b.Src is BeliefSource.Told or BeliefSource.Heard || !SafeAt(b.Cell)):
                 {
                     float bond = person && _soc != null ? Math.Max(0, _soc.BondOf(a.Id, AgentOfBody(b.Subject))) : 0; // ⑨ 친구는 더 무릅쓰고 구한다
+                    bool mate = person && _soc != null && _soc.PartnerOf(a.Id) == AgentOfBody(b.Subject);
+                    if (mate) bond = 1;                                                                               // 짝은 누구보다 먼저 달려간다
                     float s = person ? b.Conf * (1 + c.Kindness + c.SkMedic + 2 * bond) * 2.2f * (caution + bond * (1 - caution)) : b.Conf * 5.5f;
-                    Add(GoalKind.Rescue, b.Subject, b.Cell, s * df * ClaimFactor(a, GoalKind.Rescue, b.Subject, 1), b.Cause);
+                    Add(GoalKind.Rescue, b.Subject, b.Cell, s * df * (mate ? 1 : ClaimFactor(a, GoalKind.Rescue, b.Subject, 1)), b.Cause); // 남이 맡았어도 짝은 간다
                     break;
                 }
                 case BeliefKind.Breach when !drone && (F.Hole[b.Cell] > 0 || DoorGapLeaks(b.Cell)) || b.Kind == BeliefKind.Breach && !drone && b.Conf > 0.6f:
@@ -240,6 +251,15 @@ public sealed partial class Mind
                     // 본 · 들은 끼익거리는 문 · 벽: 덧대 받친다 (사람은 수리 꾸러미)
                     float s = person ? b.Conf * (0.3f + c.SkRepair) * 3 * caution : b.Conf * 5;
                     Add(GoalKind.Brace, b.Cell, b.Cell, s * df * ClaimFactor(a, GoalKind.Brace, b.Cell, 1), b.Cause);
+                    break;
+                }
+                // ⑨ 몸싸움: 맞는 이의 비명을 들었거나 맞는 것을 봤다 — 로봇은 말리러 간다 · 다정하고 용감한 이 · 이끄는 이 · 짝 · 같은 무리도 (같은 방에 들어서면 사회가 말림을 셈한다)
+                case BeliefKind.Help when !drone && b.Subject >= 0 && b.Subject != a.Id && _soc != null && _soc.InBrawl(b.Subject, out int hitter, out bool att) && !att && hitter != a.Id:
+                {
+                    float k = person ? Kin(a.Id, b.Subject) : 0;
+                    float s = person ? (c.Agree > 0.45f && c.Brave > 0.3f || k > 0 ? (c.Agree + c.Brave + 2 * Math.Max(0, k)) * 1.5f * caution : 0) : 6;
+                    if (s > 0 && (RoomOf(here) != RoomOf(b.Cell) || Dist(here, b.Cell) > 3))
+                        Add(GoalKind.Investigate, b.Cell, b.Cell, s * df * ClaimFactor(a, GoalKind.Investigate, b.Cell, 1), b.Cause);
                     break;
                 }
                 case BeliefKind.Bang or BeliefKind.Strain or BeliefKind.Leak or BeliefKind.SmokeSmell or BeliefKind.Help or BeliefKind.Spark:
@@ -306,7 +326,7 @@ public sealed partial class Mind
             }
             case GoalKind.Eat:
             {
-                int src = Nearest(here, _food, fu => FoodAt(fu) >= 1);
+                int src = MealSource(a, here);   // ⑨ 가까운 이와 같은 자리 · 벌어진 무리 사람이 먹는 자리는 피한다
                 if (src < 0) return false;
                 int cell = L.Furniture[src].Cells[0];
                 plan.Add(Go(cell, 1));
@@ -730,7 +750,8 @@ public sealed partial class Mind
     {
         if (_soc == null) return 0;
         float s = 0;
-        foreach (var o in Agents) if (o != a && o.IsPerson && o.C.Up != 0 && RoomOf(o.C.Cell) == room) s += _soc.Liking(a.Id, o.Id) >= 0 ? _soc.BondOf(a.Id, o.Id) : 2 * _soc.Liking(a.Id, o.Id); // 미운 이가 있는 방은 피한다
+        foreach (var o in Agents) if (o != a && o.IsPerson && o.C.Up != 0 && RoomOf(o.C.Cell) == room)
+            s += (_soc.Liking(a.Id, o.Id) >= 0 ? _soc.BondOf(a.Id, o.Id) : 2 * _soc.Liking(a.Id, o.Id)) - (_soc.Rival(a.Id, o.Id) ? 0.5f : 0); // 미운 이 · 벌어진 무리 사람이 있는 방은 피한다
         return s;
     }
 

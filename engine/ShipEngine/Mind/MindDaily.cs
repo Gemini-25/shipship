@@ -70,6 +70,7 @@ public sealed partial class Mind
         void Opt(Hobby h, int cell, int near, float w)
         {
             if (cell < 0 || w <= 0) return;
+            if (RivalNear(a, cell)) w *= 0.3f;                       // ⑨ 벌어진 무리 사람 곁에서는 쉬지 않는다
             opts.Add((h, cell, near, w / (1f + Manhattan(me, cell) / 30f)));
         }
         int seat = NearestFree(a, _relax);

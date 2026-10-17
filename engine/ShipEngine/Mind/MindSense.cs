@@ -297,6 +297,8 @@ public sealed partial class Mind
             var body = _life!.Bodies[bi];
             if (body.Alive == 0) { Learn(a, t, BeliefKind.Dead, x, bi, 1, BeliefSource.Saw, body.DeathCause); Forget(a, b => b.Kind == BeliefKind.Injured && b.Subject == bi); }
             else if (body.Conscious == 0) Learn(a, t, BeliefKind.Injured, x, bi, 1, BeliefSource.Saw, body.HurtCause);
+            else if (_soc != null && AgentOfBody(bi) is int who && who >= 0 && who != a.Id && _soc.InBrawl(who, out _, out bool att) && !att)
+                Learn(a, t, BeliefKind.Help, x, who, 1, BeliefSource.Saw); // ⑨ 맞고 있다 — 깨어 있어도 '도와 달라'
             else Forget(a, b => b.Kind is BeliefKind.Injured or BeliefKind.Help && b.Subject == bi);
         }
     }
