@@ -46,7 +46,9 @@ public sealed class Structure : IEngine
     public byte[] DoorJam;       // 1: 끼임
     public byte[] Braced;        // 1: 버티는 문 · 벽에 덧대 받쳤다 (정격 ×1.6)
     public byte[] DoorPowered;   // 1: 전동 (망이 끊으면 0 — 손으로만)
-    public long Cracks, Breaches, Impacts, DoorsBlown, Bleeds;
+    public long Cracks, Breaches, Impacts, DoorsBlown, Bleeds, BleedAborts;
+    /// <summary>바깥문 비우기 감시: 밸브를 연 때 · 그때 방 기압 · 다시 비우지 않을 때까지 (에어락이 비워지지 않으면 멈춘다).</summary>
+    public long[] BleedSince; public float[] BleedFrom; public long[] BleedLock; public byte[] BleedFails; public long[] BleedLast;
     /// <summary>칸마다 들어온 충격 에너지 (J) — ⑦ 생명이 읽고 비운다 (그 칸 몸의 상처).</summary>
     public float[] ImpactJ;
 
@@ -59,6 +61,7 @@ public sealed class Structure : IEngine
         DoorTarget = new float[L.Doors.Count]; DoorJam = new byte[L.Doors.Count]; Braced = new byte[L.N];
         DoorPowered = Enumerable.Repeat((byte)1, L.Doors.Count).ToArray();
         ImpactJ = new float[L.N];
+        BleedSince = new long[L.Doors.Count]; BleedFrom = new float[L.Doors.Count]; BleedLock = Enumerable.Repeat(long.MinValue / 2, L.Doors.Count).ToArray(); BleedFails = new byte[L.Doors.Count]; BleedLast = Enumerable.Repeat(long.MinValue / 2, L.Doors.Count).ToArray();
     }
 
     // ───────────────────────── 요청 ─────────────────────────
@@ -172,6 +175,7 @@ public sealed class Structure : IEngine
     public void Step(Sim sim, double dt)
     {
         if (_p.Length != L.N) _p = new double[L.N];
+        _now = sim.Tick;
         // 닫힌 문 칸은 벽처럼 (장이 기체를 비워 둔 칸 — 기압 0으로 읽으면 옆 벽이 한쪽이 진공이라고 착각한다)
         for (int i = 0; i < L.N; i++)
             _p[i] = (L.Kind[i] == CellKind.Floor || L.Kind[i] == CellKind.Door && F.DoorPassable(L.DoorAt[i]) || F.Hole[i] >= 2) ? F.Pressure(i) : -1;
@@ -324,12 +328,30 @@ public sealed class Structure : IEngine
             // 닫힌 문을 열 때: 양쪽 압력 차를 이겨야 한다
             if (now <= 0.001f && target > now)
             {
-                double limit = DoorPowered[d] != 0 ? 30 : 2;
+                double limit = DoorPowered[d] != 0 ? (OutsideBleedRoomCell(d) >= 0 ? 5 : 30) : 2;   // 바깥문은 에어락이 거의 비어야 연다 (맞물림 — 배와 이어진 채 반쯤 빈 에어락의 바깥문을 열면 배 공기가 빠진다)
                 if (DeltaP(c) > limit)
                 {
                     // 전동 문은 먼저 압력 맞춤 밸브로 양쪽 기압을 맞춘다 — 안전할 때만
                     bool ok = DoorPowered[d] != 0 && SafeToBleed(d);
-                    if (ok && F.DoorBleed[d] == 0) Bleeds++;
+                    int hi = OutsideBleedRoomCell(d);
+                    if (ok && F.DoorBleed[d] == 0)
+                    {
+                        Bleeds++;
+                        if (sim.Tick - BleedLast[d] > Time.Minutes(1)) { BleedSince[d] = sim.Tick; BleedFrom[d] = hi >= 0 ? (float)F.Pressure(hi) : 0; }   // 1분 안에 다시 켠 밸브는 그 감시를 이어 간다
+                    }
+                    if (ok) BleedLast[d] = sim.Tick;
+                    // 비우기 감시: 바깥으로 빼는 동안 3분마다 잰다 — 그 3분에 방 기압이 10%도 빠지지 않았다 (배와 공기가 이어져 들어오는 만큼 빠진다 — 비워지지 않는다 · 막힌 큰 방은 계속 빠지니 그대로)
+                    if (ok && hi >= 0 && F.DoorBleed[d] != 0 && sim.Tick - BleedSince[d] > Time.Minutes(3) && F.Pressure(hi) <= BleedFrom[d] * 0.9f) { BleedSince[d] = sim.Tick; BleedFrom[d] = (float)F.Pressure(hi); }
+                    else if (ok && hi >= 0 && F.DoorBleed[d] != 0 && (sim.Tick - BleedSince[d] > Time.Minutes(3) || sim.Tick - BleedSince[d] > Time.Minutes(1) && Unsealed(hi)))
+                    {
+                        ok = false; BleedAborts++;
+                        BleedLock[d] = sim.Tick + Time.Hours(1 << Math.Min(4, (int)BleedFails[d]));   // 거듭 안 되면 더 오래 (1 · 2 · 4 · 8 · 16시간)
+                        if (BleedFails[d] < 255) BleedFails[d]++;
+                        DoorTarget[d] = 0;
+                        int room = L.Room[hi];
+                        int cause = sim.Causes.Add(CauseKind.Machine, $"{Ko.I(room >= 0 ? L.Rooms[room].Name : "에어락")} 비워지지 않아 바깥문 밸브를 잠갔다 — 배 공기가 계속 들어온다", sim.Tick, c);
+                        sim.Facts.Emit(sim.Tick, FactKind.Decision, c, (float)F.Pressure(hi), cause, -1, d);
+                    }
                     F.SetBleed(d, ok);
                     continue;
                 }
@@ -356,7 +378,10 @@ public sealed class Structure : IEngine
         if (Out(lo))
         {
             int room = L.Room[hi];
-            if (room < 0) return false;
+            if (room < 0 || BleedLock[d] > _now) return false;
+            // 방이 배와 막혀 있어야 비울 수 있다 — 그 방 기체 구역에 다른 방 칸이 있으면 (문 없이 트였다) 비워지지 않는다
+            int reg = hi < F.RegionOf.Length ? F.RegionOf[hi] : -1;
+            if (reg >= 0 && reg < F.Regions.Count) foreach (int e in F.Regions[reg]) if (L.Room[e] >= 0 && L.Room[e] != room) return false;
             foreach (int e in RoomDoors(room)) if (e != d && (F.DoorOpen[e] > 0 || DoorTarget[e] > 0)) return false;
             if (_life != null)
                 foreach (var body in _life.Bodies)
@@ -369,6 +394,34 @@ public sealed class Structure : IEngine
         return true;
     }
 
+    /// <summary>비우는 방이 막혀 있지 않다: 그 기체 구역으로 다른 구역에서 들어오는 흐름이 바깥으로 빼는 흐름의 5분의 1을 넘는다 (안쪽 벽 구멍 · 틈 — 빼는 만큼 배에서 들어온다).</summary>
+    private bool Unsealed(int cell)
+    {
+        int reg = cell < F.RegionOf.Length ? F.RegionOf[cell] : -1;
+        if (reg < 0) return false;
+        double inflow = 0, outflow = 0;
+        foreach (var k in F.Links)
+        {
+            if (k.RA == reg && k.RB < 0) { if (k.Flow > 0) outflow += k.Flow; }
+            else if (k.RA == reg && k.RB >= 0) { if (k.Flow < 0) inflow -= k.Flow; }
+            else if (k.RB == reg && k.RA >= 0) { if (k.Flow > 0) inflow += k.Flow; }
+        }
+        return outflow > 0 && inflow > outflow * 0.2;
+    }
+
+    /// <summary>바깥으로 빼는 문이면 방 쪽 칸 (아니면 −1).</summary>
+    public int OutsideBleedRoomCell(int d)
+    {
+        var door = L.Doors[d];
+        int c = door.Cell, x = L.X(c), y = L.Y(c);
+        int a = door.Vertical ? Idx(x, y - 1) : Idx(x - 1, y), b = door.Vertical ? Idx(x, y + 1) : Idx(x + 1, y);
+        bool Out(int j) => j < 0 || L.Kind[j] == CellKind.Outside;
+        if (Out(a) && !Out(b)) return b;
+        if (Out(b) && !Out(a)) return a;
+        return -1;
+    }
+
+    private long _now;
     private int Idx(int x, int y) => L.In(x, y) ? L.Index(x, y) : -1;
     private double SideKPa(int j) => j < 0 || L.Kind[j] == CellKind.Outside ? F.Outside.KPa : F.Pressure(j);
     private Life? _life;
@@ -427,11 +480,13 @@ public sealed class Structure : IEngine
     {
         w.Arr(Fatigue); w.Arr(Corrode); w.Arr(Stress); w.Arr(DamageCause); w.Arr(DoorTarget); w.Arr(DoorJam); w.Arr(DoorPowered); w.Arr(Braced);
         w.I64(Cracks); w.I64(Breaches); w.I64(Impacts); w.I64(DoorsBlown); w.F64(RustedO2); w.Arr(ImpactJ); w.I64(Bleeds);
+        w.Arr(BleedSince); w.Arr(BleedFrom); w.Arr(BleedLock); w.Arr(BleedFails); w.Arr(BleedLast); w.I64(BleedAborts);
     }
 
     public void Load(StateReader r)
     {
         r.ArrInto(Fatigue); r.ArrInto(Corrode); r.ArrInto(Stress); r.ArrInto(DamageCause); r.ArrInto(DoorTarget); r.ArrInto(DoorJam); r.ArrInto(DoorPowered); r.ArrInto(Braced);
         Cracks = r.I64(); Breaches = r.I64(); Impacts = r.I64(); DoorsBlown = r.I64(); RustedO2 = r.F64(); r.ArrInto(ImpactJ); Bleeds = r.I64();
+        r.ArrInto(BleedSince); r.ArrInto(BleedFrom); r.ArrInto(BleedLock); r.ArrInto(BleedFails); r.ArrInto(BleedLast); BleedAborts = r.I64();
     }
 }

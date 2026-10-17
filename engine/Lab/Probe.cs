@@ -656,3 +656,41 @@ public static partial class Program
         }
     }
 }
+
+public static partial class Program
+{
+    /// <summary>배가 어디로 새나: 그 시각까지 돌린 뒤 한 번 — 방 기압 · 바깥 · 진공 쪽으로 흐르는 틈 · 주컴퓨터 사건 · 예비 공기 · 로봇 (--probe-leak [배] [시드] [시간]).</summary>
+    internal static void ProbeLeak(string[] args)
+    {
+        var rest = args.SkipWhile(a => a != "--probe-leak").Skip(1).ToArray();
+        string ship = rest.Length > 0 ? rest[0] : "Saetteul";
+        ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 18;
+        double hours = rest.Length > 2 ? double.Parse(rest[2]) : 45;
+        var lay = Layout.Ship(ship, Tables.Default);
+        int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
+        var s = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0);
+        s.Get<Storyteller>().Enabled = true;
+        var m = s.Get<Mind>(); var f = s.Get<Field>(); var sm = s.Get<ShipMind>(); var net = s.Get<Network>();
+        s.Run((long)Time.Hours(hours));
+        string RoomOfCell(int c) => c < 0 ? "바깥" : s.Layout.Room[c] >= 0 ? s.Layout.Rooms[s.Layout.Room[c]].Name : $"칸{c}";
+        Console.WriteLine($"■ {Time.Clock(s.Tick)} · 죽음 {s.Get<Life>().Deaths} · 비우기 멈춤 {s.Get<Structure>().BleedAborts} · 예비 참음 {sm.RefillHeld} · 예비 공기 {net.AirReserve:0}몰 · 푸는 빠르기 {net.AirRelease:0.00}몰/초 · 마지막 바깥문 {(s.Tick - sm.LastCycle) / 25.0:0}분 전 · 배 기체 10분 {sm.ShipMolesHist[0]:0} → {sm.ShipMolesHist[^1]:0} ({(sm.ShipMolesHist[0] - sm.ShipMolesHist[^1]) / Math.Max(1, sm.ShipMolesHist[0]) * 100:0.00}%)");
+        foreach (var d in s.Layout.Doors.Where(d => d.External)) Console.WriteLine($"  바깥문 {d.Id} {RoomOfCell(d.Cell)} 칸 {d.Cell} 열림 {f.DoorOpen[d.Id]:0.00} 밸브 {f.DoorBleed[d.Id]} 막음 {f.DoorTaped[d.Id]} 종류 {d.Kind}");
+        foreach (var r in s.Layout.Rooms.Where(r => r.Cells.Length > 0 && f.Pressure(r.Cells[0]) < 60))
+            Console.WriteLine($"  낮은 방 {r.Name} {f.Pressure(r.Cells[0]):0.0}kPa");
+        double lost = 0;
+        foreach (var k in f.Links)
+        {
+            double pa = f.Pressure(k.A), pb = k.B >= 0 ? f.Pressure(k.B) : 0;
+            bool toVac = k.B < 0 || pb < 5 || pa < 5;
+            if (!toVac || Math.Abs(k.Flow) < 0.002) continue;
+            lost += Math.Abs(k.Flow);
+            Console.WriteLine($"  틈 {k.Kind} 칸 {k.Via} ({s.Layout.X(k.Via)},{s.Layout.Y(k.Via)}) {RoomOfCell(k.A)} {pa:0}kPa → {RoomOfCell(k.B)} {pb:0}kPa · {k.Area * 1e4:0.0}cm² · {k.Flow:0.000}몰/초");
+        }
+        Console.WriteLine($"  진공 · 바깥으로 흐르는 합 {lost:0.00}몰/초");
+        foreach (var x in sm.Incidents.Where(x => x.Active != 0))
+            Console.WriteLine($"  사건 {ShipMind.KindName(x.Kind)} · {(x.Room >= 0 ? s.Layout.Rooms[x.Room].Name : "-")} · {Time.Clock(x.Since)}부터 · 로봇 {x.RobotA}/{x.RobotB} · 시도 {x.Tries} · 봉쇄 {x.Sealed}");
+        foreach (var a in m.Agents.Where(a => !a.IsPerson))
+            Console.WriteLine($"  {m.NameOf(a.Id),-6} {(m.RoomOf(a.C.Cell) >= 0 ? s.Layout.Rooms[m.RoomOf(a.C.Cell)].Name : "-"),-10} {m.Thought(a.Id),-24} 맡음 {a.C.AssignedGoal}:{a.C.AssignedTarget} 실패 {a.C.Failed}");
+        foreach (var (tick, text) in sm.Log.TakeLast(25)) Console.WriteLine($"    주컴 {Time.Clock(tick)} {text}");
+    }
+}

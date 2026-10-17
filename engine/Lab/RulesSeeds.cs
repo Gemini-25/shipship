@@ -27,21 +27,26 @@ public static partial class Program
                 $"운석 {lo.rock:0.00} → {hi.rock:0.00}kg · 긴장 목표 {lo.target:0.0} → {hi.target:0.0} · 터질 긴장 {lo.pending:0.0} → {hi.pending:0.0}");
         }
 
-        // ── 가혹함: 함장이 고른 만큼 — 같은 배 · 같은 성격, 가혹함 2와 7의 18시간 (작은 배 화살호 — 이틀을 기다리지 않아도 갈린다) ──
+        // ── 가혹함: 함장이 고른 만큼 — 같은 배 · 같은 성격, 가혹함 2와 7의 12시간 × 두 시드 (작은 배 화살호 — 이틀을 기다리지 않아도 갈린다 · 한 시드면 절정 하나가 무엇이냐에 너무 달렸다) ──
         {
-            (int seeds, double tension, int events) Run(byte level)
+            (int seeds, double tension, int events) Run(byte level, ulong seed)
             {
-                var s = ShipWorld.Crewed("Hwasal", 8, 3, 1);
+                var s = ShipWorld.Crewed("Hwasal", seed, 3, 1);
                 var st = s.Get<Storyteller>(); st.Enabled = true; st.Style = StoryStyle.Balanced; st.Level = level;
                 double sum = 0; int n = 0;
-                for (long t = 0; t < Time.Hours(18); t++) { s.Step(); if (t % 250 == 0) { sum += st.Tension; n++; } }
-                // 벌어진 일: 불 · 고장 · 금 · 구멍 · 충돌 · 다침 · 사람 사이 (몸싸움 · 몰래 방해) — 이야기꾼은 사람 사이 씨앗도 심는다
+                for (long t = 0; t < Time.Hours(12); t++) { s.Step(); if (t % 250 == 0) { sum += st.Tension; n++; } }
+                // 벌어진 일: 불 · 고장 · 금 · 구멍 · 충돌 · 다침 · 사람 사이 (몸싸움 · 몰래 방해) · 별 폭발 · 병 — 이야기꾼은 사람 사이 · 몸의 씨앗도 심는다
                 int events = (int)(s.Facts.CountOf(FactKind.Ignition) + s.Facts.CountOf(FactKind.MachineFail) + s.Facts.CountOf(FactKind.WallCrack) + s.Facts.CountOf(FactKind.WallBreach) + s.Facts.CountOf(FactKind.Hurt) + s.Facts.CountOf(FactKind.Impact)
-                    + s.Facts.CountOf(FactKind.Fight) + s.Facts.CountOf(FactKind.Sabotage));
+                    + s.Facts.CountOf(FactKind.Fight) + s.Facts.CountOf(FactKind.Sabotage) + s.Facts.CountOf(FactKind.Flare) + s.Facts.CountOf(FactKind.Sick));
                 if (Debug) Console.WriteLine($"    가혹함 {level}: 씨앗 {string.Join(", ", st.Seeds.Select(x => $"{x.Kind}@{x.Tick / Time.Hours(1)}시 {x.Size:0.00}"))} · 불 {s.Facts.CountOf(FactKind.Ignition)} 고장 {s.Facts.CountOf(FactKind.MachineFail)} 구멍 {s.Facts.CountOf(FactKind.WallBreach)} 다침 {s.Facts.CountOf(FactKind.Hurt)} 충격 {s.Facts.CountOf(FactKind.Impact)} 금 {s.Facts.CountOf(FactKind.WallCrack)} 싸움 {s.Facts.CountOf(FactKind.Fight)} 방해 {s.Facts.CountOf(FactKind.Sabotage)} 탓 {s.Facts.CountOf(FactKind.Blamed)} 실수 {s.Facts.CountOf(FactKind.Mistake)}");
                 return (st.Seeds.Count, sum / n, events);
             }
-            var loT = Task.Run(() => Run(2)); var hi = Run(7); var lo = loT.Result;
+            (int seeds, double tension, int events) Two(byte level)
+            {
+                var aT = Task.Run(() => Run(level, 8)); var b = Run(level, 9); var a = aT.Result;
+                return (a.seeds + b.seeds, (a.tension + b.tension) / 2, a.events + b.events);
+            }
+            var loT = Task.Run(() => Two(2)); var hi = Two(7); var lo = loT.Result;
             Check("위험도: 함장이 고른 가혹함만큼 — 가혹함 7은 2보다 원인을 더 자주 심고 · 긴장이 높고 · 일이 더 벌어진다",
                 // 가혹하면 일찍 큰 일이 터져 긴장이 높은 동안 이야기꾼이 쉰다 (긴장이 목표를 넘으면) — 그래도 더 적게 심지는 않는다
                 hi.seeds > lo.seeds && hi.tension > lo.tension * 2 && hi.events > lo.events,

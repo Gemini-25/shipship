@@ -474,7 +474,7 @@ public sealed class LiveShow
                 string bar = new string('■', st.Level) + new string('□', 8 - st.Level);
                 string last = st.LastKind == SeedKind.None ? "아직 없음" : $"{Storyteller.SeedName(st.LastKind)} ({HourMin(st.LastSeedTick)})";
                 rows.Add(new PanelRow($"가혹함  ◀ {bar} ▶  {st.Level} {Storyteller.LevelName(st.Level)}",
-                    $"심은 조짐 {st.Seeds.Count}개 · 마지막 {last} · 한 번 심으면 {st.RestHours:0.#}시간 쉰다\n지금 긴장 {st.Tension + st.Pending:0.0} / 바라는 긴장 {st.Target(Sim.Tick):0.0}", false));
+                    $"심은 조짐 {st.Seeds.Count}개 · 마지막 {last} · 지금 막 {Storyteller.ActName(st.Act)}{(st.Act == Storyteller.ActAfter ? $" ({Math.Max(0, st.ActUntil - Sim.Tick) / (double)Time.Hours(1):0.#}시간 남음)" : st.Act == Storyteller.ActBuild ? $" (조짐 {st.BuildLeft}개 남음)" : "")} · 지난 막 {st.Arc}\n지금 긴장 {st.Tension + st.Pending:0.0} / 바라는 긴장 {st.Target(Sim.Tick):0.0}", false));
                 break;
             }
             case PanelKind.Journal:

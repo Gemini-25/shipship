@@ -56,7 +56,8 @@ public static partial class Program
         double sDepth = 15 * Math.Min(1, depth / 3.0);
         double sNear = 10 * Math.Min(1, (d.NearMisses + life.Deaths) / 2.0);
         double sCalm = calm >= 0.4 && calm <= 0.85 ? 15 : 15 * Math.Max(0, 1 - Math.Abs(calm - 0.625) / 0.5);
-        double sFruit = st.Seeds.Count > 0 ? 15 * fruit.Count / (double)st.Seeds.Count : 0;
+        int seedN = st.Seeds.Count(x => x.Kind != SeedKind.GoodNews);   // 반가운 소식은 일을 만들려는 씨앗이 아니다
+        double sFruit = seedN > 0 ? 15 * fruit.Count / (double)seedN : 0;
         double penalty = life.Deaths / days > Math.Max(1, crew * 0.15) ? 20 : 0;
         double score = Math.Max(0, sHl + sKinds + sDepth + sNear + sCalm + sFruit - penalty);
         var titles = d.Highlights.OrderByDescending(h => h.Score).Take(6)
@@ -66,8 +67,10 @@ public static partial class Program
         string daily = "쉼 " + string.Join(" · ", Enumerable.Range(0, mind.HobbyCount.Length).Where(h => mind.HobbyCount[h] > 0).Select(h => $"{Mind.HobbyName((Hobby)h)} {mind.HobbyCount[h]}"))
             + $" / 밥 짓기 {mind.Cooked} · 깜빡 {mind.Forgot} / 몸의 시계 {chrono.Min():+0.0;-0.0}~{chrono.Max():+0.0;-0.0}시간"
             + $" / 같이 먹음 {mind.AteTogether} · 따라 나감 {mind.Followed} · 방을 꺼리게 됨 {mind.Dreads}"
-            + $" / 돌봄 {mind.Treats}(맨손 {mind.TreatsBare}) · 곪음 {life.Infections} · 패혈증 {life.Sepses} · 감기 {life.Colds}";
-        return new FunResult(ship, seed, crew, days, hl, kinds, depth, d.NearMisses, life.Deaths, calm, d.Firsts, st.Seeds.Count, fruit.Count,
+            + $" / 돌봄 {mind.Treats}(맨손 {mind.TreatsBare}) · 곪음 {life.Infections} · 패혈증 {life.Sepses} · 감기 {life.Colds}"
+            + $" / 막 {st.Arc} · 큰 일로 여파 {st.Aftermaths} · 형편 보고 쉼 {st.Mercies} · 열매 {st.Fruited} · 헛돎 {st.Fizzled} · 털어놓음 {s.Get<Society>().Confessions} · 숨김 {s.Get<Society>().SecretsKept}"
+            + $" / 씨앗 {string.Join(" ", st.Seeds.GroupBy(x => x.Kind).Select(g => $"{Storyteller.SeedName(g.Key)} {g.Count()}"))}";
+        return new FunResult(ship, seed, crew, days, hl, kinds, depth, d.NearMisses, life.Deaths, calm, d.Firsts, seedN, fruit.Count,
             d.ScreenSeconds / 60 / days, score, titles, daily);
     }
 

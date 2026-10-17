@@ -67,7 +67,7 @@ public sealed partial class Society
         // 마음을 고백한다: 짝이 없는 둘 · 끌림이 깊고 정도 쌓였다 (끌림이 클수록 · 외향일수록 먼저 꺼낸다)
         foreach (var (a, b) in new[] { (i, j), (j, i) })
             if (Partner[a] < 0 && Partner[b] < 0 && AttractOf(a, b) >= ConfessAt && BondOf(a, b) >= 0.45f)
-                opts.Add(new(Topic.Heart, 6 * (AttractOf(a, b) - 0.5f) * (0.5f + C(a).Extra), b, 0, C(a).Cell, a));
+                opts.Add(new(Topic.Heart, 6 * (AttractOf(a, b) - 0.5f) * (0.5f + C(a).Extra), b, MemoryCause(a, Topic.Heart, b), C(a).Cell, a));   // 남몰래 품은 마음(⑫ 짝사랑)이 있으면 그 원인에 잇는다
         // 함께 겪은 일 (같은 원인을 둘 다 기억한다 — 가장 큰 것) · 무서웠던 일일수록 (그 자리를 꺼릴수록) 더 꺼낸다 (감정 나눔 연구 — 강한 일은 함께 겪은 이와 되새긴다)
         int best = -1; float bw = 0.15f;
         for (int k = 0; k < Memories.Count; k++)

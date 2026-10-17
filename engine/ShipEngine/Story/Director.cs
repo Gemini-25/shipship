@@ -74,7 +74,7 @@ public sealed class Director
         FactKind.MachineFail => 12, FactKind.Short => 15, FactKind.BreakerTrip => 5, FactKind.Flare => 20, FactKind.WallCrack => 15,
         FactKind.Woke => 2, FactKind.ComputerAssign => 4, FactKind.Sick => 8,
         FactKind.Relationship => 12, FactKind.Grieved => 30, FactKind.TrustLost => 25, FactKind.WentOutside => 20,
-        FactKind.Talk => 2, FactKind.Blamed => 15, FactKind.Fight => 60, FactKind.Sabotage => 40, _ => 1,
+        FactKind.Talk => 2, FactKind.Blamed => 15, FactKind.Fight => 60, FactKind.Sabotage => 40, FactKind.Confessed => 30, _ => 1,
     };
 
     /// <summary>사실 하나의 무게 — 대화는 끝에 따라 (다툼 · 사과 · 위로 · 소문은 볼 만하고 잡담은 거의 0) · 끝장 몸싸움은 더.</summary>
@@ -83,14 +83,15 @@ public sealed class Director
         FactKind.Talk => (TalkEnd)(int)f.Size switch
         {
             TalkEnd.Argue => 40, TalkEnd.Apology => 30, TalkEnd.Comfort => 22, TalkEnd.Spread => 22, TalkEnd.Praise => 16, TalkEnd.Defend => 16,
-            TalkEnd.Friction => 6, TalkEnd.Worry => 6, _ => 1,
+            TalkEnd.Friction => 6, TalkEnd.Worry => 6, TalkEnd.Accept => 35, TalkEnd.Reject => 30, _ => 1,   // 고백 — 받아 줌 · 거절
         },
         FactKind.Fight => f.Size >= 2 ? 90 : 60,
+        FactKind.Mistake => f.Size >= 2 ? 25 : 1,   // 숨긴 실수 · 숨겼다 (사람들은 모르지만 관객은 본다)
         _ => Weight(f.Kind),
     };
 
     /// <summary>사람 이야기 사실인가 (관계 · 대화 · 싸움 · 몰래 한 짓 · 슬픔).</summary>
-    public static bool PeopleFact(FactKind k) => k is FactKind.Talk or FactKind.Blamed or FactKind.Fight or FactKind.Sabotage or FactKind.Relationship or FactKind.Grieved or FactKind.TrustLost;
+    public static bool PeopleFact(FactKind k) => k is FactKind.Talk or FactKind.Blamed or FactKind.Fight or FactKind.Sabotage or FactKind.Relationship or FactKind.Grieved or FactKind.TrustLost or FactKind.Confessed;
 
     private static bool Critical(FactKind k) => k is FactKind.Died or FactKind.Collapsed or FactKind.WallBreach or FactKind.DoorBlown or FactKind.Panicked or FactKind.Fight;
     private static bool Omen(FactKind k) => k is FactKind.DebrisNear or FactKind.ComputerAlarm or FactKind.StorySeed or FactKind.WallCrack or FactKind.Flare or FactKind.Noticed or FactKind.Warned or FactKind.Blamed;

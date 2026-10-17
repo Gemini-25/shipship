@@ -90,7 +90,11 @@ public sealed partial class ShipMind : IEngine
     public float[] RoomNH3, RoomO3;             // 방에서 가장 짙은 암모니아 · 오존 (ppm)
     public int[] RoomToxCell;                   // 독한 기체가 가장 짙은 칸
     private long _tick;
-    public long LastCycle = long.MinValue / 2;  // 에어락 바깥 문이 마지막으로 열렸거나 밸브로 비운 때 (그 공기는 일부러 내보낸 것)
+    public long LastCycle = long.MinValue / 2;
+    /// <summary>예비 공기를 풀지 않을 때까지 (배가 새는 줄 알았다) · 그렇게 참은 번수.</summary>
+    private long _refillHold = long.MinValue / 2, _refillSince;
+    private long[] _extOpenSince = Array.Empty<long>();   // 바깥문이 열린 (밸브가 열린) 때 — 0: 닫힘
+    public long RefillHeld;  // 에어락 바깥 문이 마지막으로 열렸거나 밸브로 비운 때 (그 공기는 일부러 내보낸 것)
     public float[] DoorMoles = new float[6];    // 문 칸들에 든 기체 (읽기 6번) — 문이 열리면 그 칸이 공기를 채운다 (잃은 것이 아니다)
     public byte[] DoorWasOpen;                  // 문마다: 지난 읽기 뒤로 한 번이라도 열렸거나 밸브가 열렸다 (읽기 사이에 열렸다 닫힌 문도 놓치지 않게)
     public int[] GaveAirAt;                     // 방마다: 열린 문 · 밸브로 더 낮은 기압의 방에 공기를 주던 마지막 읽기 번호 (그동안 줄어든 것은 샘이 아니다)
@@ -195,7 +199,18 @@ public sealed partial class ShipMind : IEngine
         }
         double doors = 0;
         foreach (var d in L.Doors) doors += F.Moles(d.Cell);
-        foreach (var d in L.Doors) if (d.External && (F.DoorOpen[d.Id] > 0 || F.DoorBleed[d.Id] != 0)) { LastCycle = _tick; break; }
+        // 에어락 순환 (일부러 내보낸 공기): 바깥문이 열렸거나 밸브가 열렸다 — 15분 넘게 그대로면 순환이 아니다 (끼여 열린 바깥문 · 비워지지 않는 방 — 느린 샘을 가리지 않게)
+        if (_extOpenSince.Length != L.Doors.Count) _extOpenSince = new long[L.Doors.Count];
+        foreach (var d in L.Doors)
+        {
+            if (!d.External) continue;
+            if (F.DoorOpen[d.Id] > 0 || F.DoorBleed[d.Id] != 0)
+            {
+                if (_extOpenSince[d.Id] == 0) _extOpenSince[d.Id] = _tick;
+                if (_tick - _extOpenSince[d.Id] < Time.Minutes(15)) LastCycle = _tick;
+            }
+            else _extOpenSince[d.Id] = 0;
+        }
         DoorMoles[_reads % 6] = (float)doors;
         for (int r = 0; r < L.Rooms.Count; r++)
         {
@@ -475,11 +490,25 @@ public sealed partial class ShipMind : IEngine
         for (int r = 0; r < L.Rooms.Count; r++)
             if (RoomSeen[r] != 0 && RoomKPa[r] > 40 && !IsolatedAirlock(r)) { sum += RoomKPa[r]; n++; }
         bool leaking = Incidents.Any(x => x.Active != 0 && x.Kind == IncidentKind.Leak);
-        bool want = n > 0 && sum / n < (_net.AirRelease > 0 ? 96 : 90) && !leaking && _net.AirReserve > 0;
+        // 배 전체 기체의 흐름: 10분 넘게 풀었는데 푼 만큼의 30%도 늘지 않았다 — 어딘가 샌다 (모르는 샘에 예비를 버리지 않는다 · 한 시간 잠근다) /
+        // 풀기 전: 지난 2분에 0.1% 넘게 줄고 있으면 이번에는 풀지 않는다 (사고 직후 · 아직 새는 중)
+        float h0 = ShipMolesHist[0], h1 = ShipMolesHist[^1], h2 = ShipMolesHist[^3];
+        if (_net.AirRelease > 0 && h0 > 0 && _tick - _refillSince >= Time.Minutes(10) && _tick - LastCycle > Time.Minutes(11))
+        {
+            double released = _net.AirRelease * Time.SecondsPerTick * 25 * (ShipMolesHist.Length - 1);
+            if (h1 - h0 < released * 0.3)
+            {
+                _refillHold = _tick + Time.Hours(1); RefillHeld++;
+                Say(sim, "예비 공기를 풀어도 배 기압이 오르지 않는다 — 어딘가 샌다 · 예비를 잠근다");
+            }
+        }
+        bool falling = _net.AirRelease <= 0 && h2 > 0 && h1 - h2 < -h2 * 0.001;
+        bool want = n > 0 && sum / n < (_net.AirRelease > 0 ? 96 : 90) && !leaking && _net.AirReserve > 0 && _tick >= _refillHold && !falling;
         int inside = L.Rooms.Sum(rm => rm.Cells.Length);
         double rate = want ? inside * 0.002 : 0;
         if ((rate > 0) != (_net.AirRelease > 0))
             Say(sim, rate > 0 ? $"예비 공기를 푼다 — 배 기압 {sum / n:0}kPa · 남은 예비 {_net.AirReserve / Math.Max(1, inside * Field.CellVolume * 101_325 / (Field.R * 293.15)) * 100:0}%" : "예비 공기를 잠갔다");
+        if (rate > 0 && _net.AirRelease <= 0) _refillSince = _tick;
         _net.AirRelease = rate;
     }
 
@@ -1080,7 +1109,7 @@ public sealed partial class ShipMind : IEngine
         w.List(Incidents);
         w.I32(Log.Count); foreach (var (t, s) in Log) { w.I64(t); w.Str(s); }
         w.Bool(Online);
-        w.Arr(RoomKPa); w.Arr(RoomKPaPrev); w.Arr(RoomO2); w.Arr(RoomSoot); w.Arr(RoomSootPrev); w.Arr(RoomCO); w.Arr(RoomCO2); w.Arr(RoomTemp); w.Arr(RoomHot); w.Arr(RoomNH3); w.Arr(RoomO3); w.Arr(RoomToxCell); w.Arr(RoomSeen); w.Arr(RoomMoles); w.I32(_reads); w.Arr(ShipMolesHist); w.Arr(DoorMoles); w.I64(LastCycle);
+        w.Arr(RoomKPa); w.Arr(RoomKPaPrev); w.Arr(RoomO2); w.Arr(RoomSoot); w.Arr(RoomSootPrev); w.Arr(RoomCO); w.Arr(RoomCO2); w.Arr(RoomTemp); w.Arr(RoomHot); w.Arr(RoomNH3); w.Arr(RoomO3); w.Arr(RoomToxCell); w.Arr(RoomSeen); w.Arr(RoomMoles); w.I32(_reads); w.Arr(ShipMolesHist); w.Arr(DoorMoles); w.I64(LastCycle); w.I64(_refillHold); w.I64(RefillHeld); w.I64(_refillSince); w.Arr(_extOpenSince);
         w.Arr(Shed); w.Arr(BreakerResetAt); w.List(Imaginations);
         w.I64(Alarms); w.I64(Assignments); w.I64(Seals); w.I64(Sheds); w.I64(Resets); w.I64(Exhausts); w.I64(OuterClosed); w.I64(StovesCut); SaveCrew(w); SaveSupply(w);
         w.I32(Journal.Count); foreach (var (t, s) in Journal) { w.I64(t); w.Str(s); }
@@ -1093,7 +1122,7 @@ public sealed partial class ShipMind : IEngine
         Incidents = r.List<Incident>();
         Log.Clear(); int n = r.I32(); for (int i = 0; i < n; i++) { long t = r.I64(); Log.Add((t, r.Str() ?? "")); }
         Online = r.Bool();
-        r.ArrInto(RoomKPa); r.ArrInto(RoomKPaPrev); r.ArrInto(RoomO2); r.ArrInto(RoomSoot); r.ArrInto(RoomSootPrev); r.ArrInto(RoomCO); r.ArrInto(RoomCO2); r.ArrInto(RoomTemp); r.ArrInto(RoomHot); r.ArrInto(RoomNH3); r.ArrInto(RoomO3); r.ArrInto(RoomToxCell); r.ArrInto(RoomSeen); r.ArrInto(RoomMoles); _reads = r.I32(); r.ArrInto(ShipMolesHist); r.ArrInto(DoorMoles); LastCycle = r.I64();
+        r.ArrInto(RoomKPa); r.ArrInto(RoomKPaPrev); r.ArrInto(RoomO2); r.ArrInto(RoomSoot); r.ArrInto(RoomSootPrev); r.ArrInto(RoomCO); r.ArrInto(RoomCO2); r.ArrInto(RoomTemp); r.ArrInto(RoomHot); r.ArrInto(RoomNH3); r.ArrInto(RoomO3); r.ArrInto(RoomToxCell); r.ArrInto(RoomSeen); r.ArrInto(RoomMoles); _reads = r.I32(); r.ArrInto(ShipMolesHist); r.ArrInto(DoorMoles); LastCycle = r.I64(); _refillHold = r.I64(); RefillHeld = r.I64(); _refillSince = r.I64(); _extOpenSince = r.Arr<long>();
         Shed = r.Arr<byte>(); BreakerResetAt = r.Arr<long>(); Imaginations.Clear(); Imaginations.AddRange(r.List<Imagined>());
         Alarms = r.I64(); Assignments = r.I64(); Seals = r.I64(); Sheds = r.I64(); Resets = r.I64(); Exhausts = r.I64(); OuterClosed = r.I64(); StovesCut = r.I64(); LoadCrew(r); LoadSupply(r);
         Journal.Clear(); int nj = r.I32(); for (int i = 0; i < nj; i++) { long t = r.I64(); Journal.Add((t, r.Str() ?? "")); }

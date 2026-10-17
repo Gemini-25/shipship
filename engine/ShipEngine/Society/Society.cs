@@ -430,6 +430,12 @@ public sealed partial class Society : IEngine
                     }
                     break;
                 }
+                case FactKind.Mistake when f.Size >= 2 && f.Size < 2.5f && f.Actor >= 0 && f.Actor < N:
+                    Hidden.Add(new HiddenMistake { Cause = f.Cause, Who = f.Actor, Device = f.Other, Tick = f.Tick });
+                    break;
+                case FactKind.MachineFail when Hidden.Count > 0:
+                    Reveal(sim, f);
+                    break;
                 case FactKind.ComputerSeal when f.Size > 0:
                     _sealedIn.Add((f.Tick, f.Other, f.Cause));
                     if (_sealedIn.Count > 32) _sealedIn.RemoveAt(0);
@@ -505,6 +511,7 @@ public sealed partial class Society : IEngine
         w.I32(_sealedIn.Count); foreach (var (t, r, c) in _sealedIn) { w.I64(t); w.I32(r); w.I32(c); }
         var keys = _sharedSeen.Keys.OrderBy(k => k).ToList();
         w.I32(keys.Count); foreach (var k in keys) { w.I32(k); w.Arr(_sharedSeen[k]); }
+        SaveSecrets(w);
     }
 
     public void Load(StateReader r)
@@ -517,5 +524,6 @@ public sealed partial class Society : IEngine
         LoadBands(r);
         _sealedIn.Clear(); int n = r.I32(); for (int i = 0; i < n; i++) { long t = r.I64(); int room = r.I32(); int c = r.I32(); _sealedIn.Add((t, room, c)); }
         _sharedSeen.Clear(); n = r.I32(); for (int i = 0; i < n; i++) { int k = r.I32(); _sharedSeen[k] = r.Arr<int>(); }
+        LoadSecrets(r);
     }
 }

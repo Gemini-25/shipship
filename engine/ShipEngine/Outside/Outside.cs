@@ -126,7 +126,9 @@ public sealed class Outside : IEngine
     }
 
     /// <summary>별 폭발을 앞당긴다 (지금부터 minutes 뒤 조짐).</summary>
-    public void ScheduleFlare(double minutes, int cause) { FlareWarnAt = -1; FlareStart = -1; ScheduleAt(Time.Minutes(minutes + StarDef.WarnMin), cause); }
+    /// <summary>이야기꾼의 별 폭발: minutes 뒤 조짐 · scale은 세기 배율 (가혹함 — 이 폭발이 끝나면 1로).</summary>
+    public void ScheduleFlare(double minutes, int cause, double scale = 1) { FlareWarnAt = -1; FlareStart = -1; FlareScale = scale; ScheduleAt(Time.Minutes(minutes + StarDef.WarnMin), cause); }
+    public double FlareScale = 1;
 
     private long _nowTick;
     private void ScheduleAt(long ticksFromNow, int cause) { NextFlare = _nowTick + ticksFromNow; FlareCause = cause; }
@@ -206,7 +208,7 @@ public sealed class Outside : IEngine
             FlareStart = sim.Tick;
             FlareEnd = sim.Tick + Time.Hours(star.FlareHours * (0.5 + _rng.Unit()));
             int c = sim.Causes.Add(CauseKind.Flare, $"{star.Name} 폭발 — 양성자 폭풍", sim.Tick, -1, FlareCause);
-            sim.Facts.Emit(sim.Tick, FactKind.Flare, -1, (float)star.FlareDose, c, other: 1);
+            sim.Facts.Emit(sim.Tick, FactKind.Flare, -1, (float)(star.FlareDose * FlareScale), c, other: 1);
         }
         // 별 입자는 거리의 제곱에 반비례 (1AU 값) · 은하 우주선은 거리와 상관없다
         double near = 1 / Math.Max(0.05, Distance * Distance);
@@ -216,9 +218,9 @@ public sealed class Outside : IEngine
             if (sim.Tick < FlareEnd)
             {
                 double x = (sim.Tick - FlareStart) / (double)Math.Max(1, FlareEnd - FlareStart);
-                dose += star.FlareDose * near * Math.Min(1, x * 6) * Math.Exp(-2 * x);
+                dose += star.FlareDose * FlareScale * near * Math.Min(1, x * 6) * Math.Exp(-2 * x);
             }
-            else { FlareStart = -1; FlareWarnAt = -1; NextFlare = -1; FlareCause = 0; }
+            else { FlareStart = -1; FlareWarnAt = -1; NextFlare = -1; FlareCause = 0; FlareScale = 1; }
         }
         if (Planet != null)
         {
@@ -389,7 +391,7 @@ public sealed class Outside : IEngine
     public void Save(StateWriter w)
     {
         w.Str(Star); w.F64(Distance); w.F64(VoyageFrom); w.F64(VoyageTo); w.I64(VoyageStart); w.I64(VoyageTicks); w.F64(SunAngle); w.F64(SunDrift); w.Str(Planet); w.I64(PlanetSince); w.Bool(Storm); w.I64(StormUntil);
-        w.I64(NextFlare); w.I64(FlareWarnAt); w.I64(FlareStart); w.I64(FlareEnd); w.I32(FlareCause); w.F64(DoseOut);
+        w.I64(NextFlare); w.I64(FlareWarnAt); w.I64(FlareStart); w.I64(FlareEnd); w.I32(FlareCause); w.F64(DoseOut); w.F64(FlareScale);
         w.List(Clouds); w.List(Rocks);
         w.I64(DebrisHits); w.I64(RockHits); w.I64(NearMisses); w.I64(Flares);
         _rng.Save(w);
@@ -399,7 +401,7 @@ public sealed class Outside : IEngine
     public void Load(StateReader r)
     {
         Star = r.Str()!; Distance = r.F64(); VoyageFrom = r.F64(); VoyageTo = r.F64(); VoyageStart = r.I64(); VoyageTicks = r.I64(); SunAngle = r.F64(); SunDrift = r.F64(); Planet = r.Str(); PlanetSince = r.I64(); Storm = r.Bool(); StormUntil = r.I64();
-        NextFlare = r.I64(); FlareWarnAt = r.I64(); FlareStart = r.I64(); FlareEnd = r.I64(); FlareCause = r.I32(); DoseOut = r.F64();
+        NextFlare = r.I64(); FlareWarnAt = r.I64(); FlareStart = r.I64(); FlareEnd = r.I64(); FlareCause = r.I32(); DoseOut = r.F64(); FlareScale = r.F64();
         Clouds = r.List<Cloud>(); Rocks = r.List<Rock>();
         DebrisHits = r.I64(); RockHits = r.I64(); NearMisses = r.I64(); Flares = r.I64();
         _rng.Load(r);

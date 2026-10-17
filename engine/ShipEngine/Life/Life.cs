@@ -156,6 +156,17 @@ public sealed partial class Life : IEngine
         sim.Facts.Emit(sim.Tick, FactKind.Hurt, b.Cell, blunt, cause, actor: body);
     }
 
+    /// <summary>⑫ 데었다 (이야기꾼의 씨앗 — 일하다 뜨거운 관에): 화상 · 아픔 — 원인 마디.</summary>
+    public void Scald(Sim sim, int body, float burn, int cause)
+    {
+        if (body < 0 || body >= Bodies.Count) return;
+        ref var b = ref this[body];
+        if (b.Alive == 0) return;
+        b.Burn += burn; b.Pain = Math.Min(1, b.Pain + burn);
+        b.HurtCause = cause;
+        sim.Facts.Emit(sim.Tick, FactKind.Hurt, b.Cell, burn, cause, actor: body);
+    }
+
     /// <summary>재배대마다 작물을 심는다 (망의 장치에서).</summary>
     public void Plant(Network net)
     {
