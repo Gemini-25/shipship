@@ -458,8 +458,10 @@ public sealed class LiveShow
             case PanelKind.Highlights:
                 foreach (var h in HighlightsNewest())
                 {
-                    string sub = h.Line.Length > 0 ? h.Line : h.Cause != 0 ? Sim.Causes.Story(h.Cause) : "";
-                    rows.Add(new PanelRow($"{HourMin(h.Tick)}  {(h.People ? "사람 이야기 · " : "")}{h.Title}", sub, CanReplay(h)));
+                    string story = h.Cause != 0 ? Sim.Causes.Story(h.Cause) : "";
+                    string said = h.Line.Length > 0 ? h.Line : story.Length > 0 && story != h.Title ? story : "";
+                    string when = CanReplay(h) ? "Enter로 다시보기" : "한 시간 넘게 지나 다시 볼 수 없다";
+                    rows.Add(new PanelRow($"{HourMin(h.Tick)}  {(h.People ? "사람 이야기 · " : "")}{h.Title}", said.Length > 0 ? said + "\n" + when : when, CanReplay(h)));
                 }
                 if (rows.Count == 0) rows.Add(new PanelRow("아직 볼 만한 장면이 없다", "조용한 항해 — 일이 나면 여기에 쌓인다", false));
                 break;
