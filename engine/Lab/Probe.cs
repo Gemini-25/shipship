@@ -456,3 +456,37 @@ public static partial class Program
         for (int b = 0; b < life.Bodies.Count; b++) if (m.Dist(life[b].Cell, dc) <= 1) Console.WriteLine($"    몸 {b} 칸 {life[b].Cell} 살아 {life[b].Alive}");
     }
 }
+
+public static partial class Program
+{
+    /// <summary>큰 불 하나를 붙여 몇 분마다 타는 칸 · 다시 붙음 · 끔 · 사람을 센다 (--probe-fire [배] [시드] [장치 종류] [MJ] [분]).</summary>
+    internal static void ProbeFire(string[] args)
+    {
+        var rest = args.SkipWhile(a => a != "--probe-fire").Skip(1).ToArray();
+        string ship = rest.Length > 0 ? rest[0] : "Pabal";
+        ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 3;
+        string type = rest.Length > 2 ? rest[2] : "Battery";
+        double mj = rest.Length > 3 ? double.Parse(rest[3]) : 8;
+        double minutes = rest.Length > 4 ? double.Parse(rest[4]) : 120;
+        var lay = Layout.Ship(ship, Tables.Default);
+        int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
+        var s = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0);
+        var ch = s.Get<Chemistry>(); var f = s.Get<Field>(); var life = s.Get<Life>(); var m = s.Get<Mind>(); var sm = s.Get<ShipMind>();
+        s.Run(Time.Minutes(30));
+        int cell = s.Layout.Furniture.First(fu => fu.Type == type).Cells[0];
+        int room = m.RoomOf(cell);
+        ch.Ignite(cell, mj * 1e6, s.Causes.Add(CauseKind.Story, "시험 불", s.Tick, cell));
+        long cursor = s.Facts.Total;
+        Console.WriteLine($"  불: {(room >= 0 ? s.Layout.Rooms[room].Name : "-")} 칸 {cell}");
+        for (long t = 0; t < Time.Minutes(minutes); t++)
+        {
+            s.Step();
+            if (t % Time.Minutes(5) != 0) continue;
+            int ign = 0, ext = 0;
+            foreach (var x in s.Facts.Since(cursor)) { if (x.Kind is FactKind.Ignition or FactKind.FireSpread) ign++; if (x.Kind == FactKind.Extinguished) ext++; }
+            cursor = s.Facts.Total;
+            var cells = room >= 0 ? s.Layout.Rooms[room].Cells : new[] { cell };
+            Console.WriteLine($"  +{t / 25}분 타는 칸 {ch.BurningCount} · 붙음/번짐 {ign} · 끔 {ext} · 방 최고 {cells.Max(c => f.Temp(c)) - 273:0}℃ 겉면 {cells.Max(c => f.Tf[c]) - 273:0}℃ · 산소 {cells.Average(c => f.Partial(s.Tables.gO2, c)):0.0}kPa · 연기 {cells.Max(c => f.Ppm(s.Tables.gSoot, c)):0}ppm · 사건 {string.Join(",", sm.Incidents.Where(x => x.Active != 0 && x.Room == room).Select(x => x.Kind + (x.Sealed != 0 ? "(봉쇄)" : "")))} · 로봇 {string.Join(",", m.Agents.Where(a => !a.IsPerson && a.C.Goal == GoalKind.FightFire).Select(a => m.NameOf(a.Id)))} · 다침 {life.Bodies.Count(b => b.Burn > 0.1f)} 죽음 {life.Deaths}");
+        }
+    }
+}

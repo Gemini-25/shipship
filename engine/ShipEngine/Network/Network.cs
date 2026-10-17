@@ -406,9 +406,17 @@ public sealed class Network : IEngine
                 chem?.Ignite(fc, arcKw * 1000 * dt, cause);
                 sim.Find<Sound>()?.Emit(sim, fc, 95, SoundKind.Machine, cause);
                 amps = Volts / (CableOhmPerM * fd.Path.Length + ArcOhm);
+                // 윗단 보호 장치 (배전반 주 차단기 · 시간 지연 과전류): 아래 차단기가 눌어붙어도 20초 뒤 끊는다 — 그사이 아크가 그 자리에 불씨를 남긴다
+                OverSec[k] += (float)dt;
+                if (OverSec[k] > 20)
+                {
+                    Trip(sim, k, cause, "윗단 보호 장치가 회로를 끊었다 — 아래 차단기는 눌어붙어 있었다");
+                    continue;
+                }
             }
             Amps[k] = (float)amps;
-            if (amps > fd.RatingA * 1.25)
+            if (fc >= 0 && supplied > 0) { } // 합선은 위에서 셌다
+            else if (amps > fd.RatingA * 1.25)
             {
                 OverSec[k] += (float)dt;
                 if (OverSec[k] > 5 && BreakerStuck[k] == 0)

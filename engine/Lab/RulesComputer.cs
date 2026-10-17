@@ -446,6 +446,27 @@ public static partial class Program
                 $"그 회로 합선 {shorts}번 · 남은 물 {f.Stored(f.T.sWater, wet):0}몰 · 차단기 {(net.Breaker[fd] != 0 ? "올라감" : "내려감")} · 다시 올림 {s.Get<ShipMind>().Resets}");
         }
 
+        // ── 눌어붙은 차단기 + 합선: 아크가 이어지면 회로 전체에 수백 A — 윗단 보호 장치가 20초 뒤 끊는다 (전선 길 전체가 타지 않는다) ──
+        {
+            var s = ShipWorld.Create("Pabal", 13);
+            var f = s.Get<Field>(); var net = s.Get<Network>(); var ch = s.Get<Chemistry>();
+            s.Run(Time.Minutes(2));
+            int fd = Enumerable.Range(0, net.Feeders.Count).OrderByDescending(k => net.Feeders[k].Path.Length).First();
+            var path = net.Feeders[fd].Path;
+            int wet = path[path.Length / 2];
+            net.BreakerStuck[fd] = 1;
+            f.AddStore(wet, f.T.sWater, 60);
+            int maxBurn = 0; long cutAt = -1;
+            for (int k = 0; k < Time.Minutes(3); k++)
+            {
+                s.Step();
+                maxBurn = Math.Max(maxBurn, path.Count(c => ch.Burning[c] != 0));
+                if (cutAt < 0 && net.Breaker[fd] == 0) cutAt = k;
+            }
+            Check("눌어붙은 차단기 + 합선: 윗단 보호 장치가 1분 안에 회로를 끊는다 · 전선 길이 통째로 타지 않는다", cutAt >= 0 && cutAt < Time.Minutes(1) && maxBurn <= 3,
+                $"끊김 {(cutAt >= 0 ? $"{Time.ToSeconds(cutAt):0}초" : "없음")} · 길 {path.Length}칸 중 동시에 탄 칸 최대 {maxBurn}");
+        }
+
         // ── 공조: 설비 열이 큰 방(정비실 15kW)도 시원하다 · 냉각 펌프가 모두 서면 배가 더워진다 ──
         {
             double Hottest(bool pumpsDown)
