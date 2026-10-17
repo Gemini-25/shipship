@@ -17,6 +17,7 @@ public static class Ko
     public static string Eul(string w) => w + (HasFinal(w) ? "을" : "를");
     public static string Eun(string w) => w + (HasFinal(w) ? "은" : "는");
     public static string Gwa(string w) => w + (HasFinal(w) ? "과" : "와");
+    public static string A(string w) => w + (HasFinal(w) ? "아" : "야"); // 부를 때 (하늘아 · 지우야)
     public static string Euro(string w)
     {
         if (string.IsNullOrEmpty(w)) return w;

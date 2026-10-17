@@ -57,6 +57,7 @@ public enum GoalKind : byte
     Clean,      // ⑪ 곰팡이를 닦아 낸다
     Harvest,    // ⑪ 다 자란 작물을 거둬 식량 창고(냉장고 · 배식기)에 넣는다
     Exercise,   // ⑧ 운동 (달리기틀 — 없으면 침대 곁 맨몸 운동)
+    Brawl,      // ⑨ 몸싸움 (그 자리에서 — 사회가 주먹을 셈한다)
 }
 
 /// <summary>계획의 한 단계.</summary>

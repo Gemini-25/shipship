@@ -81,6 +81,7 @@ public sealed class Life : IEngine
     public const double Fat0 = 39;                // 처음 지방 (몰 — 약 10kg · 체지방 14%)
     public const double Urine0 = 83.3 / 86400;    // 오줌 (몰/초 — 하루 1.5L, 물이 넉넉하면 많이 · 모자라면 적게)
     public const double UrineRefWater = Mind.BodyWater0 * 0.995; // 이 물에서 하루 1.5L (목마름은 몸의 물이 0.5% 줄 때쯤 마시게 한다 — 그 언저리가 보통)
+    public const double BluntHealDays = 7, BurnHealDays = 14;
     public const double NightUrine = 0.5;          // 자는 동안 오줌 빠르기 (낮의 절반)
     public const double Insensible = 83.3 / 86400; // 숨 · 피부로 늘 잃는 물 (몰/초 — 하루 1.5L · 대사로 생긴 물 0.35L와 합쳐 BVAD 1.85kg)
     /// <summary>산소 1몰에서 나오는 에너지 (J · 물이 액체인 열량 — 식품 열량과 같은 기준): 포도당 467kJ · 지방 434kJ.</summary>
@@ -122,6 +123,17 @@ public sealed class Life : IEngine
     public void Move(int body, int cell) => this[body].Cell = cell;
     public void Eat(int body, double glucoseMol) => this[body].Reserve += glucoseMol;
     public void Drink(int body, double waterMol) => this[body].Water += waterMol;
+
+    /// <summary>⑨ 맞았다 (몸싸움): 타박 · 출혈 · 아픔 — 원인 마디에 때린 사람 (죽으면 그 사슬이 죽음의 원인).</summary>
+    public void Strike(Sim sim, int body, float blunt, float bleed, int cause)
+    {
+        if (body < 0 || body >= Bodies.Count) return;
+        ref var b = ref this[body];
+        if (b.Alive == 0) return;
+        b.Blunt += blunt; b.Bleed += bleed; b.Pain = Math.Min(1, b.Pain + blunt);
+        b.HurtCause = cause;
+        sim.Facts.Emit(sim.Tick, FactKind.Hurt, b.Cell, blunt, cause, actor: body);
+    }
 
     /// <summary>재배대마다 작물을 심는다 (망의 장치에서).</summary>
     public void Plant(Network net)
@@ -325,6 +337,9 @@ public sealed class Life : IEngine
         // ── 피 · 물 · 양분 ──
         b.BloodL -= (float)(b.Bleed * dt / 3600);
         b.Bleed = (float)(b.Bleed * Math.Exp(-dt / 1800)); // 굳는다
+        // 상처가 낫는다: 타박 · 화상은 살아 있으면 천천히 (가벼운 타박 1~2주 · 화상 2~3주 — e로 줄어드는 날 7일 · 14일) — 아주 큰 상처는 저절로 낫지 않는다
+        if (b.Blunt > 0 && b.Blunt < 1.0f) b.Blunt = (float)(b.Blunt * Math.Exp(-dt / (BluntHealDays * 86400)));
+        if (b.Burn > 0 && b.Burn < 0.8f) b.Burn = (float)(b.Burn * Math.Exp(-dt / (BurnHealDays * 86400)));
         if (b.Burn > 0.2) b.Water -= (b.Burn * 55.5 * dt / 3600); // 넓은 화상은 물을 잃는다
 
         // ── 의식 · 죽음 ──

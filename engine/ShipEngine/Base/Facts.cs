@@ -62,6 +62,10 @@ public enum FactKind : ushort
     Grieved,           // 가까운 이를 잃었다 (Actor: 남은 사람 · Other: 죽은 사람)
     TrustLost,         // 주컴퓨터를 덜 믿게 됐다
     WentOutside,       // 에어락으로 나가 외판 바깥을 걷는다 (선외 작업)
+    Talk,              // 말을 나눴다 (Actor: 말한 이 · Other: 들은 이 · Size: 대화의 끝 TalkEnd)
+    Blamed,            // 누군가를 탓하게 됐다 (Actor: 탓하는 이 · Other: 탓 듣는 이)
+    Fight,             // 몸싸움이 났다 (Actor: 덤빈 이 · Other: 맞은 이 · Size: 1 주먹 · 2 끝장)
+    Sabotage,          // 몰래 장치에 손을 댔다 (Actor: 한 이 · Other: 장치) — 사람들은 모른다
 }
 
 public static class FactNames
@@ -81,7 +85,8 @@ public static class FactNames
         FactKind.Patched => "구멍을 막았다", FactKind.Repaired => "고쳤다", FactKind.DoorSealed => "문을 닫았다", FactKind.Woke => "잠에서 깼다",
         FactKind.ComputerAlarm => "경보", FactKind.ComputerSeal => "봉쇄", FactKind.ComputerAssign => "로봇을 보냈다", FactKind.LoadShed => "장치를 껐다",
         FactKind.BreakerReset => "차단기를 올렸다", FactKind.ComputerDown => "주컴퓨터가 멈췄다", FactKind.StorySeed => "조짐",
-        FactKind.Grieved => "슬픔", FactKind.TrustLost => "믿음이 깨졌다", FactKind.WentOutside => "선외로 나갔다", _ => "",
+        FactKind.Grieved => "슬픔", FactKind.TrustLost => "믿음이 깨졌다", FactKind.WentOutside => "선외로 나갔다",
+        FactKind.Talk => "이야기", FactKind.Blamed => "탓", FactKind.Fight => "몸싸움", FactKind.Sabotage => "몰래 한 짓", _ => "",
     };
 }
 

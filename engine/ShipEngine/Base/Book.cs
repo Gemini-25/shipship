@@ -116,6 +116,22 @@ public sealed class Book
         return ((o - Ring[at + 2]) / days, (i - Ring[at + 1]) / days);
     }
 
+    /// <summary>마지막 한 시간 칸의 재고 (고리가 비었으면 −1).</summary>
+    public double LastStock(int k)
+    {
+        if (RingN == 0) return -1;
+        int K = Kinds, at = (((RingAt - 1 + RingHours) % RingHours) * K + k) * 3;
+        return Ring[at];
+    }
+
+    /// <summary>며칠 버티나 (마지막 재고 ÷ 하루에 줄어드는 양) — 모르거나 줄지 않으면 무한. 사람 · 주컴퓨터가 읽는 '창고를 보면 아는' 값.</summary>
+    public double DaysLeft(int k, long now)
+    {
+        double st = LastStock(k);
+        var (use, make) = PerDay(k, now);
+        return st < 0 || use - make <= 1e-9 ? double.PositiveInfinity : st / (use - make);
+    }
+
     public void Save(StateWriter w)
     {
         w.Arr(BulkFlow); w.Arr(ItemFlow); w.Arr(Start); w.Arr(ItemStart); w.Bool(Started); w.I64(StartTick);

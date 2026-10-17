@@ -146,6 +146,12 @@ public sealed partial class Mind
             if (c.Lonely > 0.3f || grief > 0.3f) Add(GoalKind.Socialize, -1, -1, Math.Max(c.Lonely, grief) * (0.5f + c.Sociable) * 1.5f + grief);
             Add(GoalKind.Idle, -1, here, 0.3f);
             JobOption(a);
+            // ⑨ 몸싸움: 덤빈 이는 그 자리에서 · 맞는 이는 겁이 많으면 방을 빠져나가 문을 닫는다
+            if (_soc != null && _soc.InBrawl(a.Id, out int foe, out bool attacker))
+            {
+                if (attacker || c.Brave >= 0.4f) Add(GoalKind.Brawl, foe, here, 8);
+                else Add(GoalKind.Evacuate, RoomOf(here), Agents[foe].C.Cell, 8 + (1 - c.Brave));
+            }
         }
         else
         {
@@ -328,6 +334,9 @@ public sealed partial class Mind
                 plan.Add(Use(UseKind.Exercise, Time.Minutes(45)));
                 return true;
             }
+            case GoalKind.Brawl:
+                plan.Add(Use(UseKind.None, Time.Minutes(1)));
+                return true;
             case GoalKind.Socialize:
             {
                 int seat = BusiestSeat(a);
@@ -677,7 +686,7 @@ public sealed partial class Mind
     {
         if (_soc == null) return 0;
         float s = 0;
-        foreach (var o in Agents) if (o != a && o.IsPerson && o.C.Up != 0 && RoomOf(o.C.Cell) == room) s += Math.Max(0, _soc.BondOf(a.Id, o.Id));
+        foreach (var o in Agents) if (o != a && o.IsPerson && o.C.Up != 0 && RoomOf(o.C.Cell) == room) s += _soc.Liking(a.Id, o.Id) >= 0 ? _soc.BondOf(a.Id, o.Id) : 2 * _soc.Liking(a.Id, o.Id); // 미운 이가 있는 방은 피한다
         return s;
     }
 

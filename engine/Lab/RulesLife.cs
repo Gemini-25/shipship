@@ -82,6 +82,16 @@ public static partial class Program
                 $"네 시간 오줌 — 낮 {day * 0.018:0.00}L · 잘 때 {night * 0.018:0.00}L ({night / day:0.00}배)");
         }
 
+        // ── 상처가 낫는다: 가벼운 타박은 며칠에 걸쳐 (e로 줄어드는 날 7일) · 아주 큰 상처는 저절로 낫지 않는다 ──
+        {
+            var s = Room(out var life);
+            int a = life.AddBody(Worlds.At(lay, 5, 3)), b = life.AddBody(Worlds.At(lay, 6, 3));
+            life[a].Blunt = 0.6f; life[b].Blunt = 1.2f;
+            for (long t = 0; t < Time.Days(3); t++) { life[a].ActivityW = life[b].ActivityW = 105; foreach (int x in new[] { a, b }) { if (life[x].Reserve < 1) life.Eat(x, 1.15); if (life[x].Water < Mind.BodyWater0) life.Drink(x, 5); } Hvac(s); s.Step(); }
+            Check("상처: 가벼운 타박(0.6)은 사흘에 0.4 아래로 낫고 · 큰 타박(1.2)은 저절로 낫지 않는다",
+                life[a].Blunt is > 0.25f and < 0.4f && life[b].Blunt >= 1.2f - 1e-4f && life[a].Alive != 0, $"가벼운 {life[a].Blunt:0.00} · 큰 {life[b].Blunt:0.00}");
+        }
+
         // ── 남는 양분은 지방으로 · 굶으면 지방을 태운다 ──
         {
             var s = Room(out var life);
