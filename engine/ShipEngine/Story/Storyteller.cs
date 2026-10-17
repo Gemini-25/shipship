@@ -67,6 +67,18 @@ public sealed class Storyteller : IEngine
         StoryStyle.SlowBurn => "느린 불씨", StoryStyle.Cosmic => "우주의 변덕", StoryStyle.Human => "사람의 이야기", _ => "",
     };
 
+    /// <summary>성격 한 줄 (함장이 고르는 판) — 무엇을 심고 얼마나 쉬나.</summary>
+    public static string StyleLine(StoryStyle s) => s switch
+    {
+        StoryStyle.Balanced => "조용한 때와 사고를 고르게 — 운석 · 낡은 부품 · 외판 피로 · 사람 사이의 일",
+        StoryStyle.Gentle => "드물고 작게 — 오래 쉬고 · 낡은 부품 · 먼지구름이 주로",
+        StoryStyle.Relentless => "쉴 틈 없이 — 운석 · 먼지구름 · 합선 불씨가 잇달아",
+        StoryStyle.SlowBurn => "작은 조짐이 쌓인다 — 낡은 부품 · 외판 피로 · 곰팡이 · 합선 불씨",
+        StoryStyle.Cosmic => "배 밖의 일 — 운석 · 먼지구름 · 별 폭발",
+        StoryStyle.Human => "사람 사이의 일 — 사람의 실수 · 묵은 앙금",
+        _ => "",
+    };
+
     // ───────────────────────── 긴장 ─────────────────────────
 
     public static double Weight(FactKind k) => k switch
@@ -93,7 +105,8 @@ public sealed class Storyteller : IEngine
         return baseT * Level / 4.0;
     }
 
-    private double RestHours => Style switch { StoryStyle.Gentle => 8, StoryStyle.Relentless => 2, StoryStyle.SlowBurn => 5, _ => 4 } * 4.0 / Math.Max(1, (int)Level);
+    /// <summary>원인 하나를 심은 뒤 쉬는 시간 (시간) — 성격 · 가혹함에 따라.</summary>
+    public double RestHours => Style switch { StoryStyle.Gentle => 8, StoryStyle.Relentless => 2, StoryStyle.SlowBurn => 5, _ => 4 } * 4.0 / Math.Max(1, (int)Level);
 
     public void Step(Sim sim, double dt)
     {

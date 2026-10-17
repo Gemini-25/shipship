@@ -130,6 +130,35 @@ public static partial class Program
             started && replayHits == liveHits && liveHits > 0 && replayFrames > 60 && liveStill && !rs.Replaying && rs.World == rs.Sim,
             hl == null ? "하이라이트 없음" : $"'{hl.Title}' · 다시보기 {replayFrames}장 · 충돌 산 세계 {liveHits} / 다시보기 {replayHits} · 산 세계 멈춤 {liveStill} · 돌아옴 {!rs.Replaying}");
 
+        // 판 (화면 바퀴 1): 하이라이트 목록(L) — 가장 새것이 위 · 골라 Enter면 그 장면 다시보기 / 이야기꾼(T) — 고른 성격 · 가혹함 / 일지(J) · 아침 방송 자막
+        rs.TogglePanel(PanelKind.Highlights);
+        var hlRows = rs.Render(); rs.Recycle(hlRows.Img);
+        bool listOk = hlRows.PanelTitle.StartsWith("볼 만했던 장면") && hlRows.PanelRows.Length == rs.Dir.Highlights.Count && hl != null && hlRows.PanelRows[0].Main.Contains(rs.Dir.Highlights[^1].Title) && hlRows.PanelPick == 0;
+        bool pickReplay = rs.PanelEnter() && rs.Replaying && rs.ReplayOf == rs.Dir.Highlights[^1] && rs.Panel == PanelKind.None;
+        rs.StopReplay();
+        rs.TogglePanel(PanelKind.Storyteller);
+        var st = rs.Sim.Get<Storyteller>();
+        byte lv0 = st.Level;
+        rs.PanelMove(+5); rs.PanelMove(-3);                 // 고른 이야기꾼(0)에서 → 사람의 이야기(5) → 몰아치는(2)
+        rs.PanelEnter(); rs.PanelSide(+1);
+        var stFrame = rs.Render(); rs.Recycle(stFrame.Img);
+        bool tellerOk = st.Style == StoryStyle.Relentless && st.Level == lv0 + 1 && stFrame.PanelRows.Length == 7 && stFrame.PanelRows[2].On && stFrame.PanelRows[2].Sub.Length > 0
+            && stFrame.PanelRows[6].Main.Contains($"{st.Level} {Storyteller.LevelName(st.Level)}") && stFrame.Notice.Contains("몰아치는");
+        rs.TogglePanel(PanelKind.Storyteller);
+        var js = new LiveShow(Worlds.Full(lay, 3), "시험호");
+        var jsm = js.Sim.Get<ShipMind>(); jsm.JournalHour = 1; jsm.MorningHour = 1; // 시험: 01시에 일지 · 방송
+        js.Advance(dt);
+        js.Sim.Run((int)(Time.Hours(1) - js.Sim.Tick + 1));
+        for (int i = 0; i < 30; i++) js.Advance(dt);
+        var jf = js.Render(); js.Recycle(jf.Img);
+        js.TogglePanel(PanelKind.Journal);
+        var jp = js.Render(); js.Recycle(jp.Img);
+        bool journalOk = jf.Broadcast.StartsWith("주컴퓨터 방송 — 좋은 아침입니다.") && jf.BroadcastAlpha > 0 && jp.PanelTitle == "주컴퓨터 일지" && jp.PanelRows.Length >= 2
+            && jp.PanelRows[0].Main.Contains("큰 일 없이 지나갔다") && jp.PanelRows[0].Sub.Contains("배: 산소") && jp.PanelRows[^1].Main == "아침 방송";
+        Check("관전 화면 판: 하이라이트 목록(가장 새것 위 · 골라 Enter면 그 장면 다시보기) · 이야기꾼 판(성격 여섯 · 한 줄 설명 · 가혹함 막대) · 일지 판 · 아침 방송 자막",
+            listOk && pickReplay && tellerOk && journalOk,
+            $"목록 {hlRows.PanelRows.Length}줄 '{(hlRows.PanelRows.Length > 0 ? hlRows.PanelRows[0].Main : "")}' · 골라 다시보기 {pickReplay} · 이야기꾼 {Storyteller.StyleName(st.Style)} 가혹함 {st.Level} · 일지 '{(jp.PanelRows.Length > 0 ? jp.PanelRows[0].Main : "")}' · 자막 '{jf.Broadcast[..Math.Min(40, jf.Broadcast.Length)]}'");
+
         // 사람 눌러 보기: 그려진 자리를 누르면 그 사람을 고르고 카드(이름 · 생각 · 몸)를 띄우고 카메라가 따라간다 · 빈 곳을 누르면 놓는다
         var pick = new LiveShow(Worlds.Full(lay, 3), "시험호");
         var pm = pick.Sim.Get<Mind>();

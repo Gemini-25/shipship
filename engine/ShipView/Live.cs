@@ -16,7 +16,19 @@ public sealed class LiveFrame
     public double CamLeft, CamTop, CamW, CamH;   // 화면이 보는 곳 (칸 · 소수) — 누른 자리를 칸으로 바꿀 때
     public string[] Card = Array.Empty<string>(); // 고른 사람 · 로봇 카드 (첫 줄: 이름)
     public double SelX = double.NaN, SelY;        // 고른 이가 그려진 자리 (칸 · 가운데)
+    public string Broadcast = "";                 // 주컴퓨터 방송 자막 (아침 방송 · 몇 초)
+    public float BroadcastAlpha;
+    /// <summary>열린 판 (하이라이트 목록 · 이야기꾼 · 일지) — 제목이 비면 닫혔다.</summary>
+    public string PanelTitle = "", PanelFoot = "";
+    public PanelRow[] PanelRows = Array.Empty<PanelRow>();
+    public int PanelPick = -1;
 }
+
+/// <summary>판 한 줄: 굵은 첫 줄 · 옅은 둘째 줄(여러 줄일 수 있다) · 켜짐(지금 고른 성격 · 다시보기 됨 등).</summary>
+public readonly record struct PanelRow(string Main, string Sub, bool On);
+
+/// <summary>관전 화면의 판.</summary>
+public enum PanelKind { None, Highlights, Storyteller, Journal }
 
 /// <summary>
 /// 관전 화면의 속 (docs/ENGINE.md §새 화면 2단계) — 세계를 돌리고, 연출이 정한 빠르기 · 볼 곳을 따르고, 그린다.
@@ -105,6 +117,13 @@ public sealed class LiveShow
     public const double ReplayFast = 3;
     public (int x0, int y0, int x1, int y1) Bounds => _bbox;
 
+    /// <summary>화면 없이 앞으로 감기 (연출은 함께 본다 — 하이라이트 · 다시보기 고리가 쌓인다). 확인 · 화면 사진용.</summary>
+    public void FastForward(long ticks)
+    {
+        for (long i = 0; i < ticks; i++) { Sim.Step(); Dir.Observe(Sim); }
+        WatchComputer(0);
+    }
+
     /// <summary>화면 시간 realSec만큼 나아간다 — 돌린 틱 수.</summary>
     public int Advance(double realSec)
     {
@@ -133,6 +152,7 @@ public sealed class LiveShow
         }
         BannerLeft = Math.Max(0, BannerLeft - realSec);
         TickNotice(realSec);
+        WatchComputer(realSec);
         // 카메라: 연출이 고른 곳으로 부드럽게 (전체 보기면 배 가운데)
         var L = Sim.Layout;
         var vd = View;
@@ -334,11 +354,145 @@ public sealed class LiveShow
             CamLeft = left, CamTop = top, CamW = w, CamH = h,
             Card = Card(), SelX = sel.x, SelY = sel.y,
             Notice = Notice, Storyteller = StoryLine(),
+            Broadcast = _castLeft > 0 ? _cast : "", BroadcastAlpha = (float)Math.Clamp(Math.Min(_castLeft, CastSec - _castLeft) / 0.5, 0, 1),
+            PanelTitle = Panel == PanelKind.None ? "" : PanelTitleOf(Panel), PanelRows = Panel == PanelKind.None ? Array.Empty<PanelRow>() : PanelRows(), PanelPick = Panel == PanelKind.None ? -1 : PanelPick,
+            PanelFoot = Panel == PanelKind.None ? "" : PanelFootOf(),
         };
     }
 
     /// <summary>다 쓴 그림을 돌려준다 (화면이 텍스처로 옮긴 뒤 — 다음 장에 다시 쓴다).</summary>
     public void Recycle(Img img) { if (_spare.Count < 3) _spare.Add(img); }
+
+    // ── 주컴퓨터 방송 · 일지 (⑩) — 산 세계에서만 ──
+    private string _cast = ""; private double _castLeft; private int _journals = -1; private string _morning = "";
+    public const double CastSec = 12;
+
+    /// <summary>아침 방송이 나오면 자막으로 몇 초 · 일지를 쓰면 알림 (J로 보기).</summary>
+    private void WatchComputer(double realSec)
+    {
+        _castLeft = Math.Max(0, _castLeft - realSec);
+        var sm = Sim.Find<ShipMind>();
+        if (sm == null) return;
+        if (_journals < 0) { _journals = sm.Journal.Count; _morning = sm.Morning; }
+        if (!ReferenceEquals(sm.Morning, _morning) && sm.Morning != _morning) { _morning = sm.Morning; _cast = "주컴퓨터 방송 — " + sm.Morning; _castLeft = CastSec; }
+        if (sm.Journal.Count != _journals) { _journals = sm.Journal.Count; if (_journals > 0) Notify("주컴퓨터가 일지를 썼다 — J로 보기", 5); }
+    }
+
+    // ── 판: 하이라이트 목록(L) · 이야기꾼(T) · 일지(J) ──
+    public PanelKind Panel;
+    public int PanelPick;
+
+    /// <summary>판을 열거나 (같은 판이면) 닫는다. 열 때 맨 위(가장 새것 · 지금 성격)를 고른다.</summary>
+    public void TogglePanel(PanelKind k)
+    {
+        if (Panel == k) { Panel = PanelKind.None; return; }
+        Panel = k;
+        var st = Sim.Find<Storyteller>();
+        PanelPick = k == PanelKind.Storyteller && st != null ? (int)st.Style : 0;
+    }
+
+    /// <summary>↑ ↓: 판에서 고르기.</summary>
+    public void PanelMove(int d)
+    {
+        int n = Panel switch { PanelKind.Highlights => Dir.Highlights.Count, PanelKind.Storyteller => Enum.GetValues<StoryStyle>().Length, PanelKind.Journal => Sim.Find<ShipMind>()?.Journal.Count ?? 0, _ => 0 };
+        if (n == 0) { PanelPick = 0; return; }
+        PanelPick = Math.Clamp(PanelPick + d, 0, n - 1);
+    }
+
+    /// <summary>← →: 이야기꾼 판에서 가혹함.</summary>
+    public void PanelSide(int d) { if (Panel == PanelKind.Storyteller) Harsher(d); }
+
+    /// <summary>Enter: 하이라이트는 다시보기 · 이야기꾼은 고른 성격으로. 한 일이 있으면 true.</summary>
+    public bool PanelEnter()
+    {
+        switch (Panel)
+        {
+            case PanelKind.Highlights:
+            {
+                var list = HighlightsNewest();
+                if (PanelPick < 0 || PanelPick >= list.Count) return false;
+                if (!StartReplay(list[PanelPick])) { Notify("그 장면은 너무 오래돼 다시 볼 수 없다 (한 시간 안의 것만)"); return false; }
+                Panel = PanelKind.None;
+                return true;
+            }
+            case PanelKind.Storyteller:
+            {
+                var st = Sim.Find<Storyteller>(); if (st == null) return false;
+                st.Style = (StoryStyle)Math.Clamp(PanelPick, 0, Enum.GetValues<StoryStyle>().Length - 1);
+                Notify("이야기꾼: " + StoryLine());
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private List<Highlight> HighlightsNewest() { var l = Dir.Highlights.ToList(); l.Reverse(); return l; }
+
+    /// <summary>그 하이라이트를 다시 볼 수 있나 (다시보기 고리에 그 앞 찍기가 있다).</summary>
+    public bool CanReplay(Highlight h) => Dir.Ring.Count > 0 && Dir.Ring[0].tick <= h.Tick;
+
+    private static string HourMin(long t) { long m = t % Time.TicksPerDay * 60 / Time.TicksPerHour; return $"{t / Time.TicksPerDay + 1}일 {m / 60:00}:{m % 60:00}"; }
+
+    private string PanelTitleOf(PanelKind k) => k switch
+    {
+        PanelKind.Highlights => $"볼 만했던 장면 ({Dir.Highlights.Count})",
+        PanelKind.Storyteller => "이야기꾼",
+        PanelKind.Journal => "주컴퓨터 일지",
+        _ => "",
+    };
+
+    private string PanelFootOf() => Panel switch
+    {
+        PanelKind.Highlights => "↑ ↓ 고르기 · Enter 다시보기 · L 닫기",
+        PanelKind.Storyteller => "↑ ↓ 성격 · Enter 고르기 · ← → 가혹함 · T 닫기",
+        PanelKind.Journal => "↑ ↓ 고르기 · J 닫기",
+        _ => "",
+    };
+
+    /// <summary>열린 판의 줄들.</summary>
+    public PanelRow[] PanelRows()
+    {
+        var rows = new List<PanelRow>();
+        switch (Panel)
+        {
+            case PanelKind.Highlights:
+                foreach (var h in HighlightsNewest())
+                {
+                    string sub = h.Line.Length > 0 ? h.Line : h.Cause != 0 ? Sim.Causes.Story(h.Cause) : "";
+                    rows.Add(new PanelRow($"{HourMin(h.Tick)}  {(h.People ? "사람 이야기 · " : "")}{h.Title}", sub, CanReplay(h)));
+                }
+                if (rows.Count == 0) rows.Add(new PanelRow("아직 볼 만한 장면이 없다", "조용한 항해 — 일이 나면 여기에 쌓인다", false));
+                break;
+            case PanelKind.Storyteller:
+            {
+                var st = Sim.Find<Storyteller>();
+                if (st == null) break;
+                foreach (var style in Enum.GetValues<StoryStyle>())
+                    rows.Add(new PanelRow(Storyteller.StyleName(style), Storyteller.StyleLine(style), style == st.Style));
+                string bar = new string('■', st.Level) + new string('□', 8 - st.Level);
+                string last = st.LastKind == SeedKind.None ? "아직 없음" : $"{Storyteller.SeedName(st.LastKind)} ({HourMin(st.LastSeedTick)})";
+                rows.Add(new PanelRow($"가혹함  ◀ {bar} ▶  {st.Level} {Storyteller.LevelName(st.Level)}",
+                    $"심은 조짐 {st.Seeds.Count}개 · 마지막 {last} · 한 번 심으면 {st.RestHours:0.#}시간 쉰다\n지금 긴장 {st.Tension + st.Pending:0.0} / 바라는 긴장 {st.Target(Sim.Tick):0.0}", false));
+                break;
+            }
+            case PanelKind.Journal:
+            {
+                var sm = Sim.Find<ShipMind>();
+                if (sm == null) break;
+                for (int i = sm.Journal.Count - 1; i >= 0; i--)
+                {
+                    var (t, text) = sm.Journal[i];
+                    var lines = text.Split('\n');
+                    int row = sm.Journal.Count - 1 - i;
+                    rows.Add(new PanelRow($"{HourMin(t)}  {lines[0]}", row == PanelPick ? string.Join("\n", lines.Skip(1)) : "", false));
+                }
+                if (rows.Count == 0) rows.Add(new PanelRow("아직 일지가 없다", $"주컴퓨터는 {sm.JournalHour}시에 하루를 적는다", false));
+                if (sm.Morning.Length > 0) rows.Add(new PanelRow("아침 방송", sm.Morning, false));
+                break;
+            }
+        }
+        return rows.ToArray();
+    }
 
     // ── 함장이 고르는 이야기꾼 (⑫) ──
     private string _notice = ""; private double _noticeLeft;

@@ -77,6 +77,8 @@ public sealed partial class Mind
     {
         var plan = new List<PlanStep>();
         if (!BuildPlan(sim, a, o, plan)) return false;
+        // 일상의 걸음이 방금 빠져나온 위험한 방으로 들어가면 하지 않는다 (침대 · 밥 · 일터를 그 안에서 고른 계획)
+        if (Everyday(o.Goal)) foreach (var st in plan) if (st.Kind == StepKind.GoTo && Shunned(a, st.Cell)) return false;
         ref var c = ref a.C;
         if (IsSleeping(a)) _life![c.Body].Asleep = 0;
         if (c.Carrying >= 0) DropCarried(sim, a, false);
@@ -111,6 +113,7 @@ public sealed partial class Mind
         if (_deciding != null)
         {
             foreach (var v in _deciding.Avoid) if (v.Goal == g && v.Target == target) return;
+            if (Everyday(g) && Shunned(_deciding, cell)) return;
             ref var c = ref _deciding.C;
             if (c.AssignedGoal == g && c.AssignedUntil > _nowTick && (c.AssignedTarget < 0 || c.AssignedTarget == target
                 || g is GoalKind.FightFire or GoalKind.Patch or GoalKind.Brace or GoalKind.Investigate && cell >= 0 && Dist(c.AssignedTarget, cell) <= 3))
@@ -634,6 +637,21 @@ public sealed partial class Mind
             if (bad && b.Conf > worst) worst = b.Conf;
         }
         return worst;
+    }
+
+    /// <summary>일상 목표 (위기를 다루는 일이 아닌 것) — 빠져나온 위험한 방으로는 이것 때문에 돌아가지 않는다.</summary>
+    private static bool Everyday(GoalKind g) => g is GoalKind.Sleep or GoalKind.Eat or GoalKind.Drink or GoalKind.Work or GoalKind.Relax or GoalKind.Socialize
+        or GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Exercise or GoalKind.Restock;
+
+    /// <summary>
+    /// 피하는 칸: 사람이 방금(10분) 빠져나온 방이고 아직 위험하다고 믿는다 (지금 그 방 안이면 아니다).
+    /// 디딤호에서: 일터가 금 간 방 안이라 빠져나오고 · 일하러 들어가고 · 또 빠져나오며 5분 동안 문을 여닫았다.
+    /// </summary>
+    private bool Shunned(Agent a, int cell)
+    {
+        if (!a.IsPerson || cell < 0) return false;
+        int r = RoomOf(cell);
+        return r >= 0 && r != RoomOf(a.C.Cell) && FledFrom(a, r) && RoomBadness(a, r) >= 0.3f;
     }
 
     /// <summary>최근(10분) 빠져나온 방인가 — 그리로 다시 피하지 않는다 (두 방을 오가며 문을 여닫지 않게).</summary>

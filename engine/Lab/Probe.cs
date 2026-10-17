@@ -337,9 +337,47 @@ public static partial class Program
         for (long t = 0; t < Time.Hours(hours); t++)
         {
             s.Step();
-            if (t % Time.Minutes(10) == 0) Console.WriteLine($"  {Time.Clock(s.Tick)} 정화 {net.TraceScrubbed:0.0}몰 · 정화기 {(net.ScrubberWorking() ? "돈다" : "섰다")} · 팬 {net.HvacKw:0}kW · 배기 {string.Join(",", Enumerable.Range(0, s.Layout.Rooms.Count).Where(r => net.Exhaust[r] != 0).Select(r => s.Layout.Rooms[r].Name))}");
+            if (rest.Contains("doors") && s.Tick >= Time.Hours(2.55) && s.Tick <= Time.Hours(2.62) && s.Tick % 5 == 0)
+            {
+                var fld = s.Get<Field>(); var L2 = s.Layout;
+                foreach (var nm in new[] { "에어락", "탐사 장비고" })
+                {
+                    var room = L2.Rooms.First(r => r.Name == nm);
+                    var ds = new List<string>();
+                    Span<int> nb2 = stackalloc int[4];
+                    foreach (var d in L2.Doors)
+                    {
+                        L2.Neighbors(d.Cell, nb2);
+                        var rs = new List<string>(); bool mine = false;
+                        foreach (int j in nb2) if (j >= 0 && L2.Room[j] >= 0) { if (L2.Room[j] == room.Id) mine = true; else rs.Add(L2.Rooms[L2.Room[j]].Name); }
+                        if (mine) ds.Add($"문{d.Id}→{string.Join("/", rs.Distinct())} 열림 {fld.DoorOpen[d.Id]:0.0} 틈 {fld.DoorGapOpen(d.Id)} {d.Kind}");
+                    }
+                    Console.WriteLine($"    {Time.Clock(s.Tick)} {nm} {sm.RoomKPa[room.Id]:0.00}kPa 몰 {room.Cells.Sum(c => fld.Moles(c)):0.0} 온도 {sm.RoomAirT[room.Id]:0.0} · {string.Join(" · ", ds)}");
+                }
+            }
+            if (rest.Contains("facts") && s.Tick >= Time.Hours(13.48) && s.Tick <= Time.Hours(13.7))
+            {
+                foreach (var f in s.Facts.Recent(64).Where(x => x.Tick == s.Tick - 1 && x.Kind is not (FactKind.Talk or FactKind.Noticed or FactKind.Woke)))
+                    Console.WriteLine($"    사실 {Time.Clock(f.Tick)} {f.Kind} 칸 {f.Cell}({(f.Cell >= 0 ? s.Layout.X(f.Cell) + "," + s.Layout.Y(f.Cell) : "-")}) 크기 {f.Size:0.###} · {s.Causes.Story(f.Cause)}");
+                {
+                    var mm = s.Get<Mind>();
+                    var who = mm.Agents.First(x => mm.NameOf(x.Id) == "정지우");
+                    Console.WriteLine($"    정지우 {Time.Clock(s.Tick)} 칸 {s.Layout.X(who.C.Cell)},{s.Layout.Y(who.C.Cell)} 목표 {who.C.Goal} 방식 {who.C.Mode} 세게닫기 {who.C.CloseHard} 연문 {who.C.OpenedDoor} · {mm.Thought(who.Id)} · 길 {who.Path.Count - who.PathIdx}");
+                }
+                if (s.Tick % 5 == 0)
+                {
+                    var fld = s.Get<Field>();
+                    var holes = Enumerable.Range(0, s.Layout.N).Where(c => fld.Hole[c] > 0).Select(c => $"{s.Layout.X(c)},{s.Layout.Y(c)}:{fld.Hole[c]:0.####}");
+                    var rooms = new[] { "원자로실", "둘레 통로", "재배실" }.Select(n => s.Layout.Rooms.First(r => r.Name == n)).Select(r => $"{r.Name} {sm.RoomKPa[r.Id]:0.00}kPa 몰 {r.Cells.Sum(c => fld.Moles(c)):0.0}");
+                    Console.WriteLine($"    {Time.Clock(s.Tick)} 구멍 [{string.Join(" ", holes)}] · {string.Join(" · ", rooms)} · 열린 문 {Enumerable.Range(0, s.Layout.Doors.Count).Count(d => fld.DoorGapOpen(d))}");
+                }
+            }
+            if (rest.Contains("air") && t % Time.Minutes(10) == 0) Console.WriteLine($"  {Time.Clock(s.Tick)} 정화 {net.TraceScrubbed:0.0}몰 · 정화기 {(net.ScrubberWorking() ? "돈다" : "섰다")} · 팬 {net.HvacKw:0}kW · 배기 {string.Join(",", Enumerable.Range(0, s.Layout.Rooms.Count).Where(r => net.Exhaust[r] != 0).Select(r => s.Layout.Rooms[r].Name))}");
         }
-        foreach (var (tick, text) in sm.Log.TakeLast(40)) Console.WriteLine($"    주컴 {Time.Clock(tick)} {text}");
+        foreach (var sd in s.Get<Storyteller>().Seeds) Console.WriteLine($"    씨앗 {Time.Clock(sd.Tick)} {Storyteller.SeedName(sd.Kind)} · {s.Causes.Story(sd.Cause)}");
+        foreach (var (tick, text) in sm.Log.TakeLast(rest.Contains("all") ? 300 : 40)) Console.WriteLine($"    주컴 {Time.Clock(tick)} {text}");
+        if (rest.Contains("inc")) foreach (var x in sm.Incidents) Console.WriteLine($"    사건 {Time.Clock(x.Since)} {sm.RoomName(x.Room)} {ShipMind.KindName(x.Kind)} 칸 {(x.Cell >= 0 ? s.Layout.X(x.Cell) + "," + s.Layout.Y(x.Cell) : "-")} 원인 {x.Cause}/{s.Causes.Root(x.Cause)} \"{s.Causes.Story(x.Cause)}\"");
+        foreach (var (tick, text) in sm.Journal) Console.WriteLine($"    일지 {Time.Clock(tick)}\n      {text.Replace("\n", "\n      ")}");
     }
 }
 

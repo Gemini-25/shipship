@@ -60,6 +60,8 @@ public partial class Main : Node2D
     private string? _shotDir;
     private double _shotEvery = 10, _runFor, _runT, _nextShot = 3;
     private int _shotN, _picsTotal, _pick = -1;
+    private PanelKind _openPanel;
+    private double _skipHours;                                 // --skip=시간: 띄우기 전에 그만큼 앞으로 감는다 (화면 사진용)                              // --panel=L|T|J: 3초 뒤 그 판을 연다 (화면 사진용)
     private readonly System.Collections.Generic.List<double> _frameMs = new();
 
     public override void _Ready()
@@ -80,6 +82,8 @@ public partial class Main : Node2D
             else if (a.StartsWith("--every=")) _shotEvery = double.Parse(a[8..], System.Globalization.CultureInfo.InvariantCulture);
             else if (a.StartsWith("--for=")) _runFor = double.Parse(a[6..], System.Globalization.CultureInfo.InvariantCulture);
             else if (a.StartsWith("--pick=") && int.TryParse(a[7..], out var pk)) _pick = pk;
+            else if (a.StartsWith("--skip=")) _skipHours = double.Parse(a[7..], System.Globalization.CultureInfo.InvariantCulture);
+            else if (a.StartsWith("--panel=")) _openPanel = a[8..] switch { "L" => PanelKind.Highlights, "T" => PanelKind.Storyteller, "J" => PanelKind.Journal, _ => PanelKind.None };
         }
         if (_shotDir != null) { System.IO.Directory.CreateDirectory(_shotDir); _help = true; _helpLeft = 4; }
         _shipAt = Math.Max(0, Array.IndexOf(_ships, ship));
@@ -119,6 +123,7 @@ public partial class Main : Node2D
                 gen = _gen;
                 while (_cmds.TryDequeue(out _)) { }               // 옛 배에 내린 손은 버린다
                 _show = LiveShow.Crewed(want, _launchSeed);
+                if (_skipHours > 0) { _show.FastForward(Time.Hours(_skipHours)); _skipHours = 0; }
                 last = clock.Elapsed.TotalSeconds;
             }
             var show = _show;
@@ -144,10 +149,11 @@ public partial class Main : Node2D
         if (size != _lastSize && size.X > 0) { _lastSize = size; _aspect = size.Y / size.X; }
         // 손으로 카메라 옮기기 (누르고 있는 동안)
         var pan = Vector2.Zero;
-        if (Input.IsKeyPressed(Key.A) || Input.IsKeyPressed(Key.Left)) pan.X -= 1;
-        if (Input.IsKeyPressed(Key.D) || Input.IsKeyPressed(Key.Right)) pan.X += 1;
-        if (Input.IsKeyPressed(Key.W) || Input.IsKeyPressed(Key.Up)) pan.Y -= 1;
-        if (Input.IsKeyPressed(Key.S) || Input.IsKeyPressed(Key.Down)) pan.Y += 1;
+        bool arrows = !PanelOpen;                                // 판이 열려 있으면 화살표는 판에서 고르기
+        if (Input.IsKeyPressed(Key.A) || arrows && Input.IsKeyPressed(Key.Left)) pan.X -= 1;
+        if (Input.IsKeyPressed(Key.D) || arrows && Input.IsKeyPressed(Key.Right)) pan.X += 1;
+        if (Input.IsKeyPressed(Key.W) || arrows && Input.IsKeyPressed(Key.Up)) pan.Y -= 1;
+        if (Input.IsKeyPressed(Key.S) || arrows && Input.IsKeyPressed(Key.Down)) pan.Y += 1;
         if (pan != Vector2.Zero && _shown != null)
         {
             double cells = _shown.SrcW / Painter.T * 0.8 * delta;
@@ -206,6 +212,7 @@ public partial class Main : Node2D
     {
         _runT += delta;
         if (_pick >= 0 && _runT > 3) { int who = _pick; _pick = -1; _cmds.Enqueue(s => { s.Selected = who; s.FollowSelected = true; }); }
+        if (_openPanel != PanelKind.None && _runT > 3) { var k = _openPanel; _openPanel = PanelKind.None; _cmds.Enqueue(s => s.TogglePanel(k)); }
         if (_shown != null && _runT > 1) _frameMs.Add(delta * 1000);
         if (_shotDir != null && _shown != null && _runT >= _nextShot)
         {
@@ -278,7 +285,19 @@ public partial class Main : Node2D
             DrawMultilineString(_font, new Vector2(20, vp.Y - 38), f.Story, HorizontalAlignment.Left, vp.X - 40, 17, 2, new Color(0.88f, 0.9f, 0.95f));
         }
 
+        // 주컴퓨터 방송 자막 (아침 방송)
+        if (f.Broadcast.Length > 0 && f.BroadcastAlpha > 0)
+        {
+            float bw = Math.Min(vp.X - 80, 980);
+            var tsz = _font.GetMultilineStringSize(f.Broadcast, HorizontalAlignment.Left, bw - 40, 17, 3);
+            var r = new Rect2(vp.X / 2 - bw / 2, vp.Y - 64 - tsz.Y - 34, bw, tsz.Y + 22);
+            DrawRect(r, new Color(0.02f, 0.06f, 0.08f, 0.88f * f.BroadcastAlpha));
+            DrawRect(r, new Color(0.45f, 0.85f, 0.9f, 0.85f * f.BroadcastAlpha), false, 1.5f);
+            DrawMultilineString(_font, new Vector2(r.Position.X + 20, r.Position.Y + 28), f.Broadcast, HorizontalAlignment.Left, bw - 40, 17, 3, new Color(0.8f, 0.96f, 1f, f.BroadcastAlpha));
+        }
+
         if (f.Card.Length > 0) DrawCard(f, vp);
+        if (f.PanelTitle.Length > 0) DrawPanel(f, vp);
         if (_meter) DrawString(_font, new Vector2(vp.X - 340, 60), $"초당 화면 {_screenPerSec}장 · 그림 {_picPerSec}장 · 소리 {_mix.Voices}개", HorizontalAlignment.Right, 324, 14, new Color(0.6f, 0.9f, 0.6f));
         if (_help) DrawHelp(vp);
     }
@@ -304,6 +323,39 @@ public partial class Main : Node2D
         }
     }
 
+    /// <summary>판 (하이라이트 목록 · 이야기꾼 · 일지): 오른쪽에 · 고른 줄이 늘 보이게 내려 보인다.</summary>
+    private void DrawPanel(LiveFrame f, Vector2 vp)
+    {
+        float w = Math.Min(640, Math.Max(380, vp.X * 0.42f)), top = 52, bottom = vp.Y - 76;
+        float inner = w - 36;
+        var heights = f.PanelRows.Select(r => 26f + (r.Sub.Length > 0 ? _font.GetMultilineStringSize(r.Sub, HorizontalAlignment.Left, inner, 14, 8).Y + 4 : 0)).ToArray();
+        float room = bottom - top - 50 - 34;
+        int first = 0;
+        float Span(int a, int b) { float t = 0; for (int i = a; i <= b && i < heights.Length; i++) t += heights[i]; return t; }
+        if (f.PanelPick >= 0) while (first < f.PanelPick && Span(first, f.PanelPick) > room) first++;
+        float used = 0; int last = first;
+        while (last < heights.Length && used + heights[last] <= room) { used += heights[last]; last++; }
+        float h = 50 + used + 34;
+        var box = new Rect2(vp.X - w - 16, top, w, Math.Min(h, bottom - top));
+        DrawRect(box, new Color(0.03f, 0.04f, 0.07f, 0.92f));
+        DrawRect(box, new Color(0.55f, 0.7f, 0.95f, 0.8f), false, 1.5f);
+        DrawString(_bold, new Vector2(box.Position.X + 18, box.Position.Y + 32), f.PanelTitle, HorizontalAlignment.Left, inner, 20, new Color(0.9f, 0.94f, 1f));
+        float y = box.Position.Y + 50;
+        for (int i = first; i < last; i++)
+        {
+            var r = f.PanelRows[i];
+            if (i == f.PanelPick) DrawRect(new Rect2(box.Position.X + 6, y - 2, w - 12, heights[i]), new Color(0.3f, 0.45f, 0.75f, 0.35f));
+            var head = r.On ? new Color(1f, 0.88f, 0.55f) : new Color(0.9f, 0.92f, 0.97f);
+            DrawString(_bold, new Vector2(box.Position.X + 18, y + 17), (r.On ? "● " : "") + r.Main, HorizontalAlignment.Left, inner, 16, head);
+            if (r.Sub.Length > 0)
+                DrawMultilineString(_font, new Vector2(box.Position.X + 18, y + 38), r.Sub, HorizontalAlignment.Left, inner, 14, 8, new Color(0.68f, 0.73f, 0.83f));
+            y += heights[i];
+        }
+        if (first > 0 || last < heights.Length)
+            DrawString(_font, new Vector2(box.Position.X + w - 120, box.Position.Y + 32), $"{f.PanelPick + 1}/{heights.Length}", HorizontalAlignment.Right, 100, 14, new Color(0.6f, 0.65f, 0.75f));
+        DrawString(_font, new Vector2(box.Position.X + 18, box.End.Y - 12), f.PanelFoot, HorizontalAlignment.Left, inner, 14, new Color(0.6f, 0.68f, 0.8f));
+    }
+
     private void DrawHelp(Vector2 vp)
     {
         string[] lines =
@@ -316,7 +368,9 @@ public partial class Main : Node2D
             "B  방금 그 장면 다시보기 (한 번 더 누르면 돌아오기)",
             "사람 · 로봇 누르기  생각 · 몸 보기 (그를 따라간다)",
             "N  다음 배      R  같은 배 새로",
-            "T  이야기꾼 성격 바꾸기      [ ]  가혹함 낮추기 · 높이기",
+            "L  볼 만했던 장면 (골라서 다시보기)",
+            "T  이야기꾼 (성격 · 가혹함)      [ ]  가혹함",
+            "J  주컴퓨터 일지 · 아침 방송",
             "M  소리 끄기 · 켜기",
             "H  도움말      Esc  나가기",
             $"지금 이야기꾼: {_shown?.Storyteller}",
@@ -329,8 +383,23 @@ public partial class Main : Node2D
             DrawString(_font, new Vector2(r.Position.X + 18, r.Position.Y + 30 + i * 26), lines[i], HorizontalAlignment.Left, w - 30, 16, new Color(0.85f, 0.88f, 0.95f));
     }
 
+    private bool PanelOpen => _shown != null && _shown.PanelTitle.Length > 0;
+
     public override void _UnhandledInput(InputEvent e)
     {
+        if (e is InputEventKey { Pressed: true } pk && PanelOpen)
+        {
+            // 판이 열려 있다: 화살표 · Enter · Esc는 판에 (누르고 있으면 되풀이)
+            switch (pk.Keycode)
+            {
+                case Key.Up: _cmds.Enqueue(s => s.PanelMove(-1)); return;
+                case Key.Down: _cmds.Enqueue(s => s.PanelMove(+1)); return;
+                case Key.Left when !pk.Echo: _cmds.Enqueue(s => s.PanelSide(-1)); return;
+                case Key.Right when !pk.Echo: _cmds.Enqueue(s => s.PanelSide(+1)); return;
+                case Key.Enter or Key.KpEnter when !pk.Echo: _cmds.Enqueue(s => s.PanelEnter()); return;
+                case Key.Escape when !pk.Echo: _cmds.Enqueue(s => s.Panel = PanelKind.None); return;
+            }
+        }
         if (e is InputEventKey { Pressed: true, Echo: false } k)
         {
             switch (k.Keycode)
@@ -351,7 +420,9 @@ public partial class Main : Node2D
                 case Key.N: _shipAt = (_shipAt + 1) % Math.Max(1, _ships.Length); _speedAt = 0; Launch(_ships[_shipAt], _seed); break;
                 case Key.R: _seed++; _speedAt = 0; Launch(_ships[_shipAt], _seed); break;
                 case Key.H: _help = !_help; _helpLeft = 0; break;
-                case Key.T: _cmds.Enqueue(s => s.CycleStyle()); break;
+                case Key.T: _cmds.Enqueue(s => s.TogglePanel(PanelKind.Storyteller)); break;
+                case Key.L: _cmds.Enqueue(s => s.TogglePanel(PanelKind.Highlights)); break;
+                case Key.J: _cmds.Enqueue(s => s.TogglePanel(PanelKind.Journal)); break;
                 case Key.Bracketleft: _cmds.Enqueue(s => s.Harsher(-1)); break;
                 case Key.Bracketright: _cmds.Enqueue(s => s.Harsher(+1)); break;
                 case Key.F3: _meter = !_meter; break;
