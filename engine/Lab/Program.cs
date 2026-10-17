@@ -17,6 +17,7 @@ public static partial class Program
         Console.OutputEncoding = System.Text.Encoding.UTF8;
         _only = Environment.GetEnvironmentVariable("ONLY");
         if (args.Contains("--threads")) Par.Threads = int.Parse(args[Array.IndexOf(args, "--threads") + 1]);
+        if (args.Contains("--shard")) { var p = args[Array.IndexOf(args, "--shard") + 1].Split('/'); _shard = int.Parse(p[0]); _shards = int.Parse(p[1]); }
         var sw = Stopwatch.StartNew();
         try
         {
@@ -51,12 +52,51 @@ public static partial class Program
             Console.WriteLine($"✘ 멈춤: {e.GetType().Name}: {e.Message}\n{e.StackTrace}");
             return 1;
         }
+        EndGroup();
+        if (Environment.GetEnvironmentVariable("RULE_TIMES") == "1") foreach (var (k, t) in _times) Console.WriteLine($"⏱\t{k}\t{t:0.0}");
         if (_pass + _fail > 0)
             Console.WriteLine($"\n{(_fail == 0 ? "✔" : "✘")} 통과 {_pass} · 실패 {_fail} · {sw.Elapsed.TotalSeconds:0.0}초");
         return _fail == 0 ? 0 : 1;
     }
 
-    internal static bool Do(string key) => _only == null || _only.Split(',').Any(k => key.Contains(k.Trim()));
+    internal static bool Do(string key)
+    {
+        if (_only != null && !_only.Split(',').Any(k => key.Contains(k.Trim()))) { EndGroup(); return false; }
+        if (_shards > 1 && ShardOf(key) != _shard) { EndGroup(); return false; }
+        EndGroup();
+        _group = key; _groupStart = Stopwatch.GetTimestamp();
+        return true;
+    }
+
+    // ── 묶음 시간 · 나눠 돌리기 (--shard i/n: 묶음을 지난 시간표대로 n 갈래에 고르게 — tools/rules.sh가 함께 띄운다) ──
+    private static int _shard, _shards = 1;
+    private static string? _group;
+    private static long _groupStart;
+    private static readonly List<(string key, double sec)> _times = new();
+    private static Dictionary<string, int>? _assign;
+
+    private static void EndGroup()
+    {
+        if (_group == null) return;
+        _times.Add((_group, (Stopwatch.GetTimestamp() - _groupStart) / (double)Stopwatch.Frequency));
+        _group = null;
+    }
+
+    /// <summary>묶음 → 갈래: 시간표(tools/rule-times.txt — "묶음 초")의 긴 것부터 가장 덜 찬 갈래에 · 표에 없으면 이름의 해시.</summary>
+    private static int ShardOf(string key)
+    {
+        if (_assign == null)
+        {
+            _assign = new();
+            var load = new double[_shards];
+            string path = Environment.GetEnvironmentVariable("RULE_TIMES_FILE") ?? "tools/rule-times.txt";
+            var rows = File.Exists(path)
+                ? File.ReadAllLines(path).Select(l => l.Split('\t')).Where(p => p.Length == 2 && double.TryParse(p[1], out _)).Select(p => (k: p[0], t: double.Parse(p[1]))).OrderByDescending(r => r.t).ToList()
+                : new();
+            foreach (var (k, t) in rows) { int best = Array.IndexOf(load, load.Min()); _assign[k] = best; load[best] += t; }
+        }
+        return _assign.TryGetValue(key, out int sh) ? sh : (int)(Rng.Key(key) % (ulong)_shards);
+    }
 
     internal static void Check(string name, bool ok, string detail = "")
     {

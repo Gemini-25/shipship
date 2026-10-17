@@ -28,8 +28,8 @@ jobs:
         run: dotnet build engine/Lab -c Release -o build/lab --nologo -v q
       - name: 법칙 시험
         run: dotnet build/lab/Lab.dll --law
-      - name: 규칙 시험
-        run: dotnet build/lab/Lab.dll --rule
+      - name: 규칙 시험 (4갈래 함께 — 묶음 시간표 tools/rule-times.txt)
+        run: tools/rules.sh build/lab/Lab.dll 4
       - name: 성능
         run: dotnet build/lab/Lab.dll --bench || true
       # 관전 화면 (engine/Godot): 빌드하고, Godot을 받아 화면 없이 10초 띄운다 — 장면이 뜨고 세계가 돌고 그림이 오는지
