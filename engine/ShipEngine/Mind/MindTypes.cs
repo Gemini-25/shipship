@@ -61,6 +61,7 @@ public enum GoalKind : byte
     Restock,    // ⑪ 식량 창고(포장 식량)에서 주방(냉장고 · 배식기)으로 식량 상자를 나른다
     Cook,       // ⑧ 조리대에서 밥을 짓고(켜고 · 끄고) 먹는다
     Pilfer,     // ⑪ 배급 중 몫을 다 먹고 — 재지 않는 식량 보관함에서 몰래 한 끼
+    Treat,      // ⑦ 다친 이를 돌본다 (구급 상자 — 없으면 맨손)
 }
 
 /// <summary>계획의 한 단계.</summary>
@@ -87,7 +88,7 @@ public enum StepKind : byte
 }
 
 /// <summary>쓰기 단계가 하는 일.</summary>
-public enum UseKind : byte { None, Eat, Drink, Sleep, Work, Relax, Talk, Charge, Exercise, Cook, Pilfer }
+public enum UseKind : byte { None, Eat, Drink, Sleep, Work, Relax, Talk, Charge, Exercise, Cook, Pilfer, Treat }
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct PlanStep
@@ -171,6 +172,8 @@ public struct AgentCore
     public byte Hobby;         // 쉬는 시간에 하는 일 (Hobby)
     // ⑨ 함께
     public long FollowedAt;    // 아는 이를 따라 방을 나선 때 (0: 없음) — 10분 동안은 다시 따라 나서지 않는다
+    public float SleepNoise;   // ⑦ 자는 동안 들은 가장 큰 소리 (dB — 10분에 걸쳐 흐려진다)
+    public float SleepLoss;    // ⑦ 잠이 얕은 정도 (0 깊다 · 1 거의 못 잔다 — 1 − 잠의 질)
 }
 
 /// <summary>바닥에 떨어진 · 놓인 물건.</summary>

@@ -28,6 +28,14 @@ public struct Body
     public int HurtCause;
     public double Fat;         // 몸의 지방 (팔미트산 몰 — 1몰 256g · 10MJ) — 쉴 때 주로 태운다
     public double Bladder;     // 방광의 물 (몰) — 0.4L 넘으면 비운다 (오수로)
+    // ⑦ 돌봄 · 감염 · 옮는 병 (깊이 바퀴 2)
+    public float Dressed;      // 상처를 덮어 둔 남은 시간 (시간 — 붕대 · 화상 덮개)
+    public float Infect;       // 상처 감염 (0 없음 · 1 넘으면 패혈증 — 쓰러진다 · 2면 죽는다)
+    public float Abx;          // 항생제가 남은 시간 (시간)
+    public byte Ill;           // 옮는 병: 0 안 걸림 · 1 잠복 · 2 앓음 · 3 나음(면역)
+    public float IllH;         // 그 단계에 든 지 (시간)
+    public int IllCause;       // 병의 원인 마디 (옮긴 이 쪽으로 이어진다)
+    public int InfectCause;    // 곪음의 원인 마디
 }
 
 /// <summary>재배대의 작물.</summary>
@@ -58,7 +66,7 @@ public struct Crop
 /// </para>
 /// 에너지 장부: 몸의 양분(생성 엔탈피) + 몸의 열(245kJ/K × 체온) + 몸의 물. 숨 · 땀 · 열 주고받기로 장의 장부와 합쳐 보존된다.
 /// </summary>
-public sealed class Life : IEngine
+public sealed partial class Life : IEngine
 {
     public string Name => "생명";
     public Phase Phase => Phase.Life;
@@ -178,6 +186,7 @@ public sealed class Life : IEngine
         var net = sim.Find<Network>();
         if (net != null) Grow(sim, net, dt);
         if (sim.Tick % 125 == 3) { MoldStep(dt * 25); RotStep(sim, dt * 25); }
+        if (sim.Tick % 25 == 3) Spread(sim, dt * 5);   // 옮는 병 (1분마다)
     }
 
     private readonly List<int> _flames = new(); // 이번 틱 불 붙은 칸 (틱 안에서만 — 찍지 않는다)
@@ -245,7 +254,8 @@ public sealed class Life : IEngine
         if (b.Conscious == 0) b.ActivityW = 80; // 의식 없는 몸은 기초 대사로 (쓰러지기 전 달리던 대사량이 남아 스스로 익지 않게)
 
         // ── 숨 ── (추우면 떨어서 대사가 는다)
-        double shiver = b.Conscious != 0 ? Math.Clamp((309.75 - b.CoreK) * 300, 0, 400) : 0; // 36.6℃ 아래로 내려간 만큼 떤다 (0.1℃에 30W · 많아야 400W)
+        double fever = FeverK(b);   // 열: 감염 · 앓음이 뇌의 설정점을 올린다 — 떨어서 체온을 올리고 · 땀은 늦게 (깊이 바퀴 2)
+        double shiver = b.Conscious != 0 ? Math.Clamp((309.75 + fever - b.CoreK) * 300, 0, 400) : 0; // 36.6℃ 아래로 내려간 만큼 떤다 (0.1℃에 30W · 많아야 400W)
         double watts = b.ActivityW + shiver; // 잠의 대사량은 ⑧ 마음이 잠 77W로 준다 (여기서 또 줄이지 않는다)
         double fc = b.Reserve <= 0.01 ? 0 : b.Fat <= 0.01 ? 1 : CarbShare(watts); // 탄수화물 몫 (글리코겐이 바닥나면 지방만)
         double vo2 = watts / (fc * GlucoseJPerO2 + (1 - fc) * FatJPerO2) * dt; // 필요한 산소 (몰)
@@ -313,7 +323,7 @@ public sealed class Life : IEngine
         double thin = Math.Sqrt(Math.Clamp(p / 101.3, 0, 2));
         // 체온 조절 (ISO 7730 · Gagge 두 마디를 가볍게): 피부 온도는 혈관이 조였다 풀었다 (추우면 낮게 · 더우면 높게) ·
         // 마른 열은 '옷의 저항 + 겉 공기층의 저항'을 지나 공기(대류)와 둘레 겉면(복사)으로 — 옷 1clo · 침대 이불 2.5clo (1clo = 0.155 m²K/W)
-        double coreC = b.CoreK - 273.15;
+        double coreC = b.CoreK - 273.15 - fever;
         double skin = 273.15 + Math.Clamp(33.7 - 4 * Math.Max(0, 36.8 - coreC) + 2 * Math.Max(0, coreC - 37.0), 28, 36);
         double hc = (3 + 4 * Math.Pow(wind, 0.6)) * thin;
         double hr = 4 * 0.95 * Field.Sigma * 0.7 * Math.Pow((skin + tsurf) / 2, 3);   // 복사를 곧게 편 것 (W/m²K)
@@ -324,10 +334,10 @@ public sealed class Life : IEngine
         double dry = (skin - top) * SkinArea / (icl + 1 / Math.Max(0.5, h));                // W (+ 몸이 잃음)
         double conv = h > 0 ? dry * hc / h : 0, rad = h > 0 ? dry * hr / h : 0;
         double sweat = 0;
-        if (b.CoreK > 310.4 && !suit && p > 6.3)
+        if (b.CoreK > 310.4 + fever && !suit && p > 6.3)
         {
             // 땀: 몸이 내려는 만큼(심부 37.25℃ 넘은 만큼) — 마를 수 있는 한도까지 (ISO 7933: 피부 포화 수증기압 − 공기 수증기압 ÷ 증발 저항(옷 + 공기층 · 루이스 16.5))
-            double demand = Math.Min(600, (b.CoreK - 310.4) * 400);
+            double demand = Math.Min(600, (b.CoreK - 310.4 - fever) * 400);
             double re = icl / (16.5 * 0.38) + 1 / (16.5 * Math.Max(0.5, hc));
             double emax = Math.Max(0, Water.SatKPa(skin) - F.Partial(T.gH2O, c)) * SkinArea / re;
             sweat = Math.Min(demand, emax);
@@ -401,19 +411,25 @@ public sealed class Life : IEngine
         // ── 피 · 물 · 양분 ──
         b.BloodL -= (float)(b.Bleed * dt / 3600);
         b.Bleed = (float)(b.Bleed * Math.Exp(-dt / 1800)); // 굳는다
-        // 상처가 낫는다: 타박 · 화상은 살아 있으면 천천히 (가벼운 타박 1~2주 · 화상 2~3주 — e로 줄어드는 날 7일 · 14일) — 아주 큰 상처는 저절로 낫지 않는다
-        if (b.Blunt > 0 && b.Blunt < 1.0f) b.Blunt = (float)(b.Blunt * Math.Exp(-dt / (BluntHealDays * 86400)));
-        if (b.Burn > 0 && b.Burn < 0.8f) b.Burn = (float)(b.Burn * Math.Exp(-dt / (BurnHealDays * 86400)));
+        // 상처가 낫는다: 타박 · 화상은 살아 있으면 천천히 (가벼운 타박 1~2주 · 화상 2~3주 — e로 줄어드는 날 7일 · 14일) — 아주 큰 상처는 돌봄을 받아야 낫는다
+        //   덮어 둔 상처는 두 배 · 의료 침대에서는 세 배 빨리 · 곪은 상처는 항생제가 없으면 반만 (깊이 바퀴 2)
+        double careX = OnTherapy(sim, c) ? 3 : b.Dressed > 0 ? 2 : 1;
+        if (b.Infect > 0.1f && b.Abx <= 0) careX *= 0.5;
+        bool cared = b.Dressed > 0 || OnTherapy(sim, c);
+        if (b.Blunt > 0 && (b.Blunt < 1.0f || cared)) b.Blunt = (float)(b.Blunt * Math.Exp(-dt * careX / (BluntHealDays * 86400)));
+        if (b.Burn > 0 && (b.Burn < 0.8f || cared)) b.Burn = (float)(b.Burn * Math.Exp(-dt * careX / (BurnHealDays * 86400)));
+        Care(sim, id, ref b, dt);
         if (b.Burn > 0.2) b.Water -= (b.Burn * 55.5 * dt / 3600); // 넓은 화상은 물을 잃는다
 
         // ── 의식 · 죽음 ──
         double pain = Math.Min(1, b.Pain + b.Burn * 0.6 + b.Blunt * 0.5 + b.Barotrauma * 0.4);
         b.Pain = (float)Math.Max(0, b.Pain - dt / 1800);
-        bool down = b.Hypoxia > 0.5 || b.COHb > 0.5 || pCO2 > 7 || b.CoreK < 305 || b.CoreK > 313 || b.BloodL < 3.5 || pain > 0.95 || b.RadRecent > 6;
+        bool down = b.Hypoxia > 0.5 || b.COHb > 0.5 || pCO2 > 7 || b.CoreK < 305 || b.CoreK > 313 || b.BloodL < 3.5 || pain > 0.95 || b.RadRecent > 6 || b.Infect > 1;
         if (down && b.Conscious != 0)
         {
             b.Conscious = 0;
-            int cause = sim.Causes.Add(CauseKind.Biology, harm ?? "쓰러졌다", sim.Tick, c, env);
+            int cause = b.Infect > 1 && harm == null ? sim.Causes.Add(CauseKind.Biology, "패혈증으로 쓰러졌다 — 곪은 상처를 치료하지 못했다", sim.Tick, c, b.InfectCause)
+                      : sim.Causes.Add(CauseKind.Biology, harm ?? "쓰러졌다", sim.Tick, c, env);
             b.HurtCause = cause;
             sim.Facts.Emit(sim.Tick, FactKind.Collapsed, c, (float)b.Hypoxia, cause, actor: id);
         }
@@ -421,11 +437,11 @@ public sealed class Life : IEngine
         string? death = b.Hypoxia > 3 ? harm ?? "숨을 못 쉬었다"
             : b.CoreK < 301 ? "얼어 죽었다" : b.CoreK > 316 ? "열사병" : b.BloodL < 2.5 ? "피를 너무 흘렸다"
             : b.Burn > 1.2 ? "화상" : b.Blunt > 1.5 ? "크게 다쳤다" : b.LungDamage > 1.2 ? "폐가 상했다"
-            : b.Water < 42 * 55.5 * 0.82 ? "목이 말라" : b.Reserve <= 0.01 && b.Fat <= 0.01 && b.CoreK < 306 ? "굶어서" : b.RadRecent > 9 ? "방사선" : null;
+            : b.Infect > 2 ? "패혈증" : b.Water < 42 * 55.5 * 0.82 ? "목이 말라" : b.Reserve <= 0.01 && b.Fat <= 0.01 && b.CoreK < 306 ? "굶어서" : b.RadRecent > 9 ? "방사선" : null;
         if (death != null)
         {
             b.Alive = 0; b.Conscious = 0; b.DiedAt = sim.Tick;
-            int cause = sim.Causes.Add(CauseKind.Biology, $"죽었다 — {death}", sim.Tick, c, env != 0 ? env : b.HurtCause);
+            int cause = sim.Causes.Add(CauseKind.Biology, $"죽었다 — {death}", sim.Tick, c, death == "패혈증" ? b.InfectCause : env != 0 ? env : b.HurtCause);
             b.DeathCause = cause;
             Deaths++;
             sim.Facts.Emit(sim.Tick, FactKind.Died, c, 0, cause, actor: id);
@@ -539,6 +555,6 @@ public sealed class Life : IEngine
         return (g, w, f);
     }
 
-    public void Save(StateWriter w) { w.List(Bodies); w.List(Crops); w.Arr(Mold); w.I64(Deaths); w.F64(FoodRotted); w.F64(O2Used); w.F64(CO2Made); w.F64(MetabolicJ); w.F64(UrineMade); }
-    public void Load(StateReader r) { Bodies = r.List<Body>(); Crops = r.List<Crop>(); r.ArrInto(Mold); Deaths = r.I64(); FoodRotted = r.F64(); O2Used = r.F64(); CO2Made = r.F64(); MetabolicJ = r.F64(); UrineMade = r.F64(); }
+    public void Save(StateWriter w) { SaveCare(w); w.List(Bodies); w.List(Crops); w.Arr(Mold); w.I64(Deaths); w.F64(FoodRotted); w.F64(O2Used); w.F64(CO2Made); w.F64(MetabolicJ); w.F64(UrineMade); }
+    public void Load(StateReader r) { LoadCare(r); Bodies = r.List<Body>(); Crops = r.List<Crop>(); r.ArrInto(Mold); Deaths = r.I64(); FoodRotted = r.F64(); O2Used = r.F64(); CO2Made = r.F64(); MetabolicJ = r.F64(); UrineMade = r.F64(); }
 }

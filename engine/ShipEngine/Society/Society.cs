@@ -409,6 +409,15 @@ public sealed partial class Society : IEngine
                     }
                     break;
                 }
+                case FactKind.Treated when f.Actor >= 0 && f.Other >= 0 && f.Other < N:
+                {
+                    // ⑦ 돌봄을 받았다: 돌본 이에게 빚 · 정 · 믿음 (로봇에게도) · 함께 기억한다
+                    int v = f.Other, r = f.Actor;
+                    Warm(sim, v, r, 0.2f); Add(Debt, v, r, 0.25f); Add(TrustOf, v, r, 0.1f);
+                    if (mind.Agents[r].IsPerson) Warm(sim, r, v, 0.08f);
+                    Remember(sim, v, Topic.Rescue, r, f.Cause, 0.6f, f.Cell);
+                    break;
+                }
                 case FactKind.Pilfer when f.Actor >= 0 && f.Actor < N:
                 {
                     // ⑪ 배급 중 몰래 먹는 것을 봤다: 원망한다 (성실할수록 크게 — 몫을 지킨 사람일수록) · 덜 믿는다 · 기억한다 (따지기 · 험담으로 번진다)

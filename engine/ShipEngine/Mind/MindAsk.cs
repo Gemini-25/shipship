@@ -13,7 +13,7 @@ public sealed partial class Mind
     public static string JobName(GoalKind g) => g switch
     {
         GoalKind.FightFire => "불을 꺼", GoalKind.Rescue => "쓰러진 사람을 구해", GoalKind.Patch => "구멍을 막아", GoalKind.Investigate => "살펴봐",
-        GoalKind.Repair => "고쳐", GoalKind.Brace => "받쳐", _ => "가 봐",
+        GoalKind.Repair => "고쳐", GoalKind.Brace => "받쳐", GoalKind.Treat => "다친 이를 돌봐", _ => "가 봐",
     };
 
     /// <summary>주컴퓨터가 그 사람에게 일을 부탁한다 — 받으면 true (그 일이 맡은 일이 된다) · reply는 그 사람의 대답.</summary>
@@ -30,7 +30,7 @@ public sealed partial class Mind
         float trust = _soc?.Trust(agent) ?? 0.5f;
         float skill = goal switch
         {
-            GoalKind.FightFire => c.SkFire, GoalKind.Rescue => c.SkMedic, GoalKind.Patch => c.SkSeal,
+            GoalKind.FightFire => c.SkFire, GoalKind.Rescue or GoalKind.Treat => c.SkMedic, GoalKind.Patch => c.SkSeal,
             GoalKind.Repair or GoalKind.Brace => c.SkRepair, _ => 0.3f,
         };
         float fear = c.Fear * (1 - c.Brave), tired = Math.Max(0, c.Sleepy - 0.6f);

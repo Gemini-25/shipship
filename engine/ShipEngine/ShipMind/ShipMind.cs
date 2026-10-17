@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace ShipEngine;
 
 /// <summary>주컴퓨터가 알아챈 일의 종류.</summary>
-public enum IncidentKind : byte { None, Fire, Leak, Vacuum, CO, BadAir, PersonDown, DeviceBroken, ElectricFault, PowerShort, ReactorScram, Hot, Strain, Toxic, DoorJam, SensorLost }
+public enum IncidentKind : byte { None, Fire, Leak, Vacuum, CO, BadAir, PersonDown, DeviceBroken, ElectricFault, PowerShort, ReactorScram, Hot, Strain, Toxic, DoorJam, SensorLost, Injured }
 
 /// <summary>주컴퓨터가 붙잡고 있는 사건 하나.</summary>
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -285,7 +285,7 @@ public sealed partial class ShipMind : IEngine
     {
         IncidentKind.Fire => "불", IncidentKind.Leak => "공기가 샌다", IncidentKind.Vacuum => "공기가 빠졌다", IncidentKind.CO => "일산화탄소",
         IncidentKind.BadAir => "공기가 나쁘다", IncidentKind.PersonDown => "사람이 쓰러졌다", IncidentKind.DeviceBroken => "장치 고장",
-        IncidentKind.ElectricFault => "전기 합선", IncidentKind.PowerShort => "전력이 모자란다", IncidentKind.ReactorScram => "원자로가 멈췄다", IncidentKind.Hot => "너무 덥다", IncidentKind.Strain => "문이 압력에 휜다", IncidentKind.Toxic => "독한 기체", IncidentKind.DoorJam => "문이 끼었다", IncidentKind.SensorLost => "센서가 끊겼다", _ => "",
+        IncidentKind.ElectricFault => "전기 합선", IncidentKind.PowerShort => "전력이 모자란다", IncidentKind.ReactorScram => "원자로가 멈췄다", IncidentKind.Hot => "너무 덥다", IncidentKind.Strain => "문이 압력에 휜다", IncidentKind.Toxic => "독한 기체", IncidentKind.DoorJam => "문이 끼었다", IncidentKind.SensorLost => "센서가 끊겼다", IncidentKind.Injured => "다친 사람", _ => "",
     };
 
     private void Detect(Sim sim)
@@ -353,6 +353,17 @@ public sealed partial class ShipMind : IEngine
                 if (r < 0 || RoomSeen[r] == 0 || b.Alive == 0 || b.Conscious != 0) continue;
                 Raise(sim, IncidentKind.PersonDown, r, b.Cell, b.Hypoxia, a.C.Body, b.HurtCause);
                 Mark(IncidentKind.PersonDown, r, a.C.Body);
+            }
+        // 사람 표: 돌봄이 필요한 몸 — 덮지 않은 큰 상처 · 흐르는 피 · 곪은 상처 (안전한 방에서도 · ⑦ 깊이 바퀴 2) · 열이 나는 이는 쉬라고 한 번 알린다
+        if (_mind != null && _life != null)
+            foreach (var a in _mind.Agents)
+            {
+                if (!a.IsPerson) continue;
+                var b = _life.Bodies[a.C.Body];
+                int r = _mind.RoomOf(b.Cell);
+                if (r < 0 || RoomSeen[r] == 0 || b.Alive == 0) continue;
+                if (Life.NeedsCare(b)) { Raise(sim, IncidentKind.Injured, r, b.Cell, Math.Max(b.Burn, Math.Max(b.Blunt, b.Infect)), a.C.Body, b.InfectCause != 0 && b.Infect > 0 ? b.InfectCause : b.HurtCause); Mark(IncidentKind.Injured, r, a.C.Body); }
+                FeverWatch(sim, a.Id, b);
             }
         // 장치 · 전기
         if (_net != null)
@@ -742,6 +753,7 @@ public sealed partial class ShipMind : IEngine
                 g = GoalKind.Investigate; target = o2; drone = false; break;
             case IncidentKind.Leak: case IncidentKind.Vacuum: g = GoalKind.Investigate; target = x.Cell; drone = true; break;
             case IncidentKind.PersonDown: g = GoalKind.Rescue; target = x.Subject; drone = false; break;
+            case IncidentKind.Injured: g = GoalKind.Treat; target = x.Subject; drone = false; break;
             case IncidentKind.DeviceBroken: g = GoalKind.Repair; target = x.Subject; drone = false; break;
             case IncidentKind.ElectricFault when _net != null && _net.IsStuckFault(x.Subject):
                 // 차단기가 눌어붙었다 — 멀리서는 끊을 수 없다: 로봇이 배전반에서 손으로 끊는다

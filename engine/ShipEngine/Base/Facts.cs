@@ -74,6 +74,8 @@ public enum FactKind : ushort
     // ⑪
     Pilfer,            // 배급 중 몫 밖의 한 끼를 몰래 꺼내 먹었다 (Actor: 먹은 이 · Other: 보관함 · Size: 몰)
     Rationed,          // 주컴퓨터가 배급을 열었다 (Size: 몫 비율 · 0이면 풀었다)
+    // ⑦
+    Treated,           // 다친 이를 돌봤다 (Actor: 돌본 이 · Other: 돌봄을 받은 이 · Size: 1 구급 상자 · 0 맨손)
 }
 
 public static class FactNames
@@ -94,7 +96,7 @@ public static class FactNames
         FactKind.ComputerAlarm => "경보", FactKind.ComputerSeal => "봉쇄", FactKind.ComputerAssign => "로봇을 보냈다", FactKind.LoadShed => "장치를 껐다",
         FactKind.BreakerReset => "차단기를 올렸다", FactKind.ComputerDown => "주컴퓨터가 멈췄다", FactKind.StorySeed => "조짐",
         FactKind.Grieved => "슬픔", FactKind.TrustLost => "믿음이 깨졌다", FactKind.WentOutside => "선외로 나갔다",
-        FactKind.Talk => "이야기", FactKind.Blamed => "탓", FactKind.Fight => "몸싸움", FactKind.Sabotage => "몰래 한 짓", FactKind.Pilfer => "몰래 먹었다", FactKind.Rationed => "배급",
+        FactKind.Talk => "이야기", FactKind.Blamed => "탓", FactKind.Fight => "몸싸움", FactKind.Sabotage => "몰래 한 짓", FactKind.Pilfer => "몰래 먹었다", FactKind.Rationed => "배급", FactKind.Treated => "돌봤다",
         FactKind.ComputerJournal => "일지", FactKind.ComputerBroadcast => "아침 방송", FactKind.Switched => "껐다", _ => "",
     };
 }

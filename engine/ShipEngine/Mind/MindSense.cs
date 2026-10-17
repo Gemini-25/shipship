@@ -126,6 +126,7 @@ public sealed partial class Mind
                 if (h.Actor != a.Id) loudest = Math.Max(loudest, h.Db);
             }
             c.HeardUpTo = _snd.LastEvent;
+            if (asleep) c.SleepNoise = Math.Max(c.SleepNoise, loudest);   // ⑦ 잠의 질
             if (asleep && loudest >= 60) Wake(sim, a, "소리에 깼다");
         }
 

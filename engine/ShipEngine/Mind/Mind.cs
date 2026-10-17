@@ -492,8 +492,8 @@ public sealed partial class Mind : IEngine
         bool asleep = b.Asleep != 0;
         c.Hunger = (float)Math.Min(1, c.Hunger + h / Need("hunger", 8) * (asleep ? 0.5 : 1)); // 자는 동안은 천천히
         c.Thirst = (float)Math.Clamp((BodyWater0 - b.Water) / (0.02 * BodyWater0), 0, 1);
-        if (asleep) c.Sleepy = (float)Math.Max(0, c.Sleepy - h / 8.0 * 1.6); // 16시간 깨어 있던 졸림을 5시간 남짓 · 꽉 찬 졸림은 8시간 가까이
-        else c.Sleepy = (float)Math.Min(1, c.Sleepy + h / Need("sleep", 16));
+        if (asleep) { SleepQuality(a, h); c.Sleepy = (float)Math.Max(0, c.Sleepy - h / 8.0 * 1.6 * (1 - 0.6 * c.SleepLoss)); } // 16시간 깨어 있던 졸림을 5시간 남짓 · 꽉 찬 졸림은 8시간 가까이 — 얕은 잠은 덜 풀린다 (⑦)
+        else c.Sleepy = (float)Math.Min(1, c.Sleepy + h / Need("sleep", 16) * TireFactor(a)); // 앓거나 몸무게를 잃으면 빨리 지친다 (⑦)
         int others = CountNear(a, 6);
         if (others > 0 && !asleep) c.Lonely = (float)Math.Max(0, c.Lonely - h * Math.Min(2, others) / 1.5);
         else c.Lonely = (float)Math.Min(1, c.Lonely + h / (Need("social", 10) * (1.5 - c.Extra))); // 외향일수록 사람이 빨리 그립다 (6~14시간)

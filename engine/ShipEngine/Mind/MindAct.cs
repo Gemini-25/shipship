@@ -184,6 +184,7 @@ public sealed partial class Mind
         var use = (UseKind)st.Arg;
         if (t <= c.StepStart && use == UseKind.Sleep && a.IsPerson) { _life![c.Body].Asleep = 1; c.SleptAt = t; }
         Activity(a, use switch { UseKind.Sleep => "sleep", UseKind.Work or UseKind.Cook => "work", UseKind.Exercise => "hard", UseKind.None or UseKind.Relax or UseKind.Talk => "rest", _ => "rest" });
+        if (use == UseKind.Treat && !TreatNear(a, st)) { Fail(sim, a, "다친 이가 멀어졌다"); return; }
         bool done = t - c.StepStart >= st.Value;
         switch (use)
         {
@@ -205,6 +206,7 @@ public sealed partial class Mind
                 break;
             }
             case UseKind.Pilfer when a.IsPerson: PilferDone(sim, a, st); break;
+            case UseKind.Treat: TreatDone(sim, a, st); break;
             case UseKind.Drink when a.IsPerson:
             {
                 double want = Math.Min(Math.Max(15, c.Thirst * 0.02 * BodyWater0 + 10), WaterLeft(a.Id));   // ⑪ 배급: 오늘 몫 안에서만
@@ -558,7 +560,7 @@ public sealed partial class Mind
         if (SmokeBad(a, c.Cell)) v = Math.Min(v, P.Speed["crawl"]);
         if (b.Suit != 0) v *= 0.7;
         if (b.CoreK > 312.15) v = Math.Min(v, P.Speed["walk"]); // 더위에 지쳐 뛰지 못한다
-        return v * Math.Max(0.3, 1 - b.Pain * 0.5);
+        return v * Math.Max(0.3, 1 - b.Pain * 0.5) * BodyPace(a);   // ⑦ 앓음 · 잃은 몸무게
     }
 
     private void Walk(Sim sim, Agent a, double dt)

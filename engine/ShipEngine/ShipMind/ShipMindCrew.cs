@@ -16,7 +16,7 @@ public sealed partial class ShipMind
     private int _effectiveRead = ReadEvery;
 
     /// <summary>사람이 할 수 있는 일인가 (드론 · 로봇만의 일 — 차단기 손으로 끊기 · 바깥 둘러보기 — 은 아니다).</summary>
-    private static bool PeopleCan(IncidentKind k, GoalKind g) => g is GoalKind.FightFire or GoalKind.Rescue or GoalKind.Repair or GoalKind.Brace
+    private static bool PeopleCan(IncidentKind k, GoalKind g) => g is GoalKind.FightFire or GoalKind.Rescue or GoalKind.Repair or GoalKind.Brace or GoalKind.Treat
         || g == GoalKind.Investigate && k is IncidentKind.Leak or IncidentKind.Vacuum or IncidentKind.SensorLost;
 
     private void AskPerson(Sim sim, ref Incident x, GoalKind g, int target)
@@ -35,7 +35,8 @@ public sealed partial class ShipMind
             ref var b = ref life[a.C.Body];
             if (b.Alive == 0 || b.Conscious == 0 || x.Kind == IncidentKind.PersonDown && a.C.Body == x.Subject) continue;
             if (a.C.AssignedUntil > t && a.C.AssignedGoal != GoalKind.Idle) continue;   // 이미 다른 일을 맡았다
-            float skill = g switch { GoalKind.FightFire => a.C.SkFire, GoalKind.Rescue => a.C.SkMedic, GoalKind.Repair or GoalKind.Brace => a.C.SkRepair, _ => a.C.SkSeal };
+            if (g == GoalKind.Treat && a.C.Body == x.Subject) continue;   // 다친 이에게 저를 돌보라 하지 않는다
+            float skill = g switch { GoalKind.FightFire => a.C.SkFire, GoalKind.Rescue or GoalKind.Treat => a.C.SkMedic, GoalKind.Repair or GoalKind.Brace => a.C.SkRepair, _ => a.C.SkSeal };
             double cost = _mind.Dist(a.C.Cell, x.Cell >= 0 ? x.Cell : a.C.Cell) * (1.5 - skill) + (b.Asleep != 0 ? 30 : 0);
             if (cost < bc) { bc = cost; best = a.Id; }
         }
@@ -77,12 +78,12 @@ public sealed partial class ShipMind
         _effectiveRead = Throttled != 0 ? ReadEvery * 3 : ReadEvery;
     }
 
-    /// <summary>급한 차례 (작을수록 급하다): 쓰러진 사람 · 불 · 공기 빠짐 · 샘 · 전기 사고 · 버팀 · 고장 · 센서 · 그 밖.</summary>
+    /// <summary>급한 차례 (작을수록 급하다): 쓰러진 사람 · 불 · 공기 빠짐 · 샘 · 다친 사람 · 전기 사고 · 버팀 · 고장 · 센서 · 그 밖.</summary>
     internal static int Rank(IncidentKind k) => k switch
     {
-        IncidentKind.PersonDown => 0, IncidentKind.Fire => 1, IncidentKind.Vacuum => 2, IncidentKind.Leak => 3,
-        IncidentKind.ElectricFault => 4, IncidentKind.Strain or IncidentKind.DoorJam => 5, IncidentKind.CO or IncidentKind.Toxic => 6,
-        IncidentKind.DeviceBroken or IncidentKind.SensorLost => 7, _ => 8,
+        IncidentKind.PersonDown => 0, IncidentKind.Fire => 1, IncidentKind.Vacuum => 2, IncidentKind.Leak => 3, IncidentKind.Injured => 4,
+        IncidentKind.ElectricFault => 5, IncidentKind.Strain or IncidentKind.DoorJam => 6, IncidentKind.CO or IncidentKind.Toxic => 7,
+        IncidentKind.DeviceBroken or IncidentKind.SensorLost => 8, _ => 9,
     };
 
     private int[] _order = new int[16];
@@ -103,6 +104,18 @@ public sealed partial class ShipMind
         byte over = (byte)(n > 5 ? 1 : 0);
         if (over != Overloaded) { Overloaded = over; if (over != 0) { Overloads++; Say(sim, $"사건이 몰렸다 ({n}건) — 앞일을 그려 보지 않고 급한 것부터 맡긴다"); } }
         return n;
+    }
+
+    private readonly HashSet<int> _feverSaid = new();   // 열을 알린 몸 (열이 내리면 지운다)
+
+    /// <summary>사람 표의 체온: 37.6℃를 넘으면 한 번 "열이 있습니다 — 쉬세요" (37.2℃ 아래로 내리면 다시 알릴 수 있다).</summary>
+    private void FeverWatch(Sim sim, int agent, in Body b)
+    {
+        int body = _mind!.Agents[agent].C.Body;
+        double c = b.CoreK - 273.15;
+        if (c > 37.6 && b.Conscious != 0 && _feverSaid.Add(body))
+            Say(sim, $"{_mind.NameOf(agent)}님 열이 있습니다 ({c:0.0}℃) — 쉬세요{(b.Ill == 2 ? " · 옮을 수 있으니 다른 분은 가까이 가지 마세요" : b.Infect > 0 ? " · 상처를 보이세요" : "")}");
+        else if (c < 37.2) _feverSaid.Remove(body);
     }
 
     /// <summary>그 로봇이 지금 가 있는 사건 (없으면 -1).</summary>
@@ -132,13 +145,13 @@ public sealed partial class ShipMind
     {
         w.I64(Asked); w.I64(AskAccepted); w.I64(AskDeclined); w.I64(Throttles); w.I64(HeatStops); w.I64(Overloads); w.I64(Preempts);
         w.Arr(new[] { Throttled, HeatStopped, Overloaded }); w.I32(_effectiveRead); w.F32(IntakeK);
-        w.Arr(new[] { _jT, _jH, _jO, _jA, _jY, _jN, _jP });
+        w.Arr(new[] { _jT, _jH, _jO, _jA, _jY, _jN, _jP }); w.Arr(_feverSaid.OrderBy(x => x).ToArray());
     }
     private void LoadCrew(StateReader r)
     {
         Asked = r.I64(); AskAccepted = r.I64(); AskDeclined = r.I64(); Throttles = r.I64(); HeatStops = r.I64(); Overloads = r.I64(); Preempts = r.I64();
         var s = r.Arr<byte>(); Throttled = s[0]; HeatStopped = s[1]; Overloaded = s[2]; _effectiveRead = r.I32(); IntakeK = r.F32();
-        var j = r.Arr<long>(); _jT = j[0]; _jH = j[1]; _jO = j[2]; _jA = j[3]; _jY = j[4]; _jN = j[5]; _jP = j[6];
+        var j = r.Arr<long>(); _jT = j[0]; _jH = j[1]; _jO = j[2]; _jA = j[3]; _jY = j[4]; _jN = j[5]; _jP = j[6]; _feverSaid.Clear(); foreach (int x in r.Arr<int>()) _feverSaid.Add(x);
     }
     private long _jT, _jH, _jO, _jA, _jY, _jN, _jP;   // 지난 일지 때의 셈 (그 뒤만 적는다)
 }

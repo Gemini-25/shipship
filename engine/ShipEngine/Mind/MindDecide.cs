@@ -149,10 +149,12 @@ public sealed partial class Mind
                 // ⑧ 밥을 짓는다: 요리를 좋아하는 이 · 꺼진 조리대가 있고 같은 방에 먹을 것이 있으면 (먹기보다 조금 앞서게)
                 if (WantsToCook(sim, a) && CookStove(a) is int sv && sv >= 0) Add(GoalKind.Cook, sv, _net!.Devices[sv].Cell, eat + 0.3f);
             }
+            SickOptions(a, here);    // ⑦ 앓는 이는 눕는다 (덜 성실할수록)
+            AwaitCare(a, here);      // ⑦ 돌보러 오는 이가 있으면 기다린다
             PilferOption(a, here);   // ⑪ 몫을 다 먹고 몹시 배고프면 — 덜 성실하고 덜 다정한 이는 몰래 한 끼
             if (c.Thirst > 0.3f && WaterLeft(a.Id) >= 5) Add(GoalKind.Drink, -1, -1, c.Thirst * c.Thirst * 6 + (c.Thirst > 0.85f ? 2 : 0)); // 몹시 마른 목(몸의 물 1.7% 모자람)은 한밤의 잠보다 급하다
             float grief = _soc?.GriefOf(a.Id) ?? 0; // ⑨ 슬픔: 일손을 놓고 사람을 찾는다
-            if (InWindow(hour, c.ShiftHour, 8) && c.Station >= 0) Add(GoalKind.Work, c.Station, L.Furniture[c.Station].Cells[0], (1.2f + c.Diligent) * (1 - 0.7f * grief));
+            if (InWindow(hour, c.ShiftHour, 8) && c.Station >= 0) Add(GoalKind.Work, c.Station, L.Furniture[c.Station].Cells[0], (1.2f + c.Diligent) * (1 - 0.7f * grief) * WorkFactor(a));
             if (c.Bored > 0.3f) Add(GoalKind.Relax, -1, -1, c.Bored * 1.5f);
             else if (c.Bored > 0.1f && !InWindow(hour, c.ShiftHour, 8)) Add(GoalKind.Relax, -1, -1, 0.35f); // 일 밖의 빈 시간: 우두커니 서 있기보다 좋아하는 것을 한다
             // ⑧ 운동: 하루 한 번쯤 — 성실 · 외향일수록 챙기고 신경성은 덜 (운동 습관 연구) · 일하는 시간 밖에서 · 졸리지 않을 때 (ISS 승무원은 하루 2시간 남짓)
@@ -336,6 +338,7 @@ public sealed partial class Mind
                 return true;
             }
             case GoalKind.Cook: return BuildCook(a, o, plan);
+            case GoalKind.Treat: return BuildTreat(a, o, plan, here);
             case GoalKind.Pilfer:
             {
                 if (o.Target < 0) return false;
@@ -740,6 +743,9 @@ public sealed partial class Mind
         if (!a.IsPerson && c.AssignedGoal == GoalKind.Investigate && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0) Add(GoalKind.Investigate, c.AssignedTarget, c.AssignedTarget, 1.2f);
         // 맡긴 끼인 문: 믿음이 바래도 간다
         if (!a.IsPerson && c.AssignedGoal == GoalKind.Brace && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0 && _st != null && _st.JammedAt(c.AssignedTarget)) Add(GoalKind.Brace, c.AssignedTarget, c.AssignedTarget, 1.2f);
+        // ⑦ 맡긴 돌보기: 다친 이 곁으로 (맡김 가산 +3 — 사람이면 끼니보다 앞선다)
+        if (c.AssignedGoal == GoalKind.Treat && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0 && c.AssignedTarget < _life!.Bodies.Count && _life.Bodies[c.AssignedTarget].Alive != 0)
+            Add(GoalKind.Treat, c.AssignedTarget, _life.Bodies[c.AssignedTarget].Cell, 1.2f);
         // 거둔 것을 들고 있으면 (하던 일이 끊겼어도) 식량 창고에 넣는다
         if (c.Holding == iHarvest && _life != null && _life.Crops.Count > 0) Add(GoalKind.Harvest, 0, c.Cell, 1.0f);
         if (c.Holding == iRation) Add(GoalKind.Restock, c.AssignedGoal == GoalKind.Restock && c.AssignedUntil > _nowTick ? c.AssignedTarget : -1, c.Cell, 1.0f);
