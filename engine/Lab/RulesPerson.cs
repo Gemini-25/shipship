@@ -50,16 +50,20 @@ public static partial class Program
             return (social / (double)Time.TicksPerHour, ex, work / (double)Time.TicksPerHour, s, p);
         }
 
+        // 넷은 서로 다른 세계라 함께 돌린다 (결정론 그대로 — 세계끼리 나누는 것이 없다)
+        var eHi = Task.Run(() => Day(0.5f, 0.5f, 0.95f, 0.5f, 0.5f, 18)); var eLo = Task.Run(() => Day(0.5f, 0.5f, 0.05f, 0.5f, 0.5f, 18));
+        var cHi = Task.Run(() => Day(0.5f, 0.95f, 0.5f, 0.5f, 0.5f, 34)); var cLo = Task.Run(() => Day(0.5f, 0.05f, 0.5f, 0.5f, 0.5f, 34));
+
         // ── 외향: 같은 하루 — 외향적인 사람은 사람을 찾아 어울리고 · 내향적인 사람은 덜 ──
         {
-            var hi = Day(0.5f, 0.5f, 0.95f, 0.5f, 0.5f, 18); var lo = Day(0.5f, 0.5f, 0.05f, 0.5f, 0.5f, 18);
+            var hi = eHi.Result; var lo = eLo.Result;
             Check("성격 · 외향: 같은 18시간, 외향적인 사람(0.95)은 내향적인 사람(0.05)보다 두 배 넘게 어울린다",
                 hi.social > lo.social * 2 && hi.social > 0.5, $"어울린 시간 외향 {hi.social:0.0}시간 · 내향 {lo.social:0.0}시간");
         }
 
         // ── 성실: 이틀 — 성실한 사람은 운동을 챙긴다 (게으른 사람보다 많이) ──
         {
-            var hi = Day(0.5f, 0.95f, 0.5f, 0.5f, 0.5f, 34); var lo = Day(0.5f, 0.05f, 0.5f, 0.5f, 0.5f, 34);
+            var hi = cHi.Result; var lo = cLo.Result;
             Check("성격 · 성실: 34시간 동안 성실한 사람(0.95)은 운동을 거르지 않고 · 게으른 사람(0.05)은 덜 한다 (운동 습관)",
                 hi.exercise >= 2 && hi.exercise > lo.exercise, $"운동 성실 {hi.exercise}번 · 게으름 {lo.exercise}번 · 일한 시간 {hi.work:0.0} / {lo.work:0.0}시간");
         }

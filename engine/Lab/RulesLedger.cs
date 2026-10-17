@@ -66,7 +66,7 @@ public static partial class Program
                 }
                 return (sum / Math.Max(1, n), net.PpO2, -s.Book.Of(Res.Water, Flow.Split));
             }
-            var one = Run(1); var six = Run(6);
+            var oneT = Task.Run(() => Run(1)); var six = Run(6); var one = oneT.Result;
             Check("산소 조절: 산소 발생기는 배 산소 분압에 맞춰 돈다 — 1명이면 6명보다 덜 돌아 물을 덜 가르고 · 분압은 20.4~21.6kPa",
                 one.duty < six.duty * 0.7 && one.split < six.split * 0.6 && one.pp is > 20.4 and < 21.6 && six.pp is > 20.4 and < 21.6,
                 $"1명: 일 몫 {one.duty:0.00} · {one.pp:0.00}kPa · 가른 물 {one.split * 0.018:0.0}L / 6명: {six.duty:0.00} · {six.pp:0.00}kPa · {six.split * 0.018:0.0}L");
