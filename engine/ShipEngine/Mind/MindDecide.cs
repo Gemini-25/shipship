@@ -138,7 +138,13 @@ public sealed partial class Mind
             if ((c.Sleepy > 0.6f || night && c.Sleepy > 0.4f) && !BelievedRoomBad(a, bedRoom)) // 위험하다고 믿는 방에서는 자지 않는다
                 Add(GoalKind.Sleep, c.Bed, c.Bed >= 0 ? c.Bed : here, c.Sleepy * c.Sleepy * 5 + (night ? 1.5f : 0));
             // 욕구는 어느 만큼 차야 움직인다 (배가 조금 고프다고 바로 먹으러 가지 않는다)
-            if (c.Hunger > 0.55f) Add(GoalKind.Eat, -1, -1, c.Hunger * c.Hunger * 5 + (F.Ppm(T.gAroma, here) > 5 ? 0.5f : 0));
+            if (c.Hunger > 0.55f)
+            {
+                float eat = c.Hunger * c.Hunger * 5 + (F.Ppm(T.gAroma, here) > 5 ? 0.5f : 0);
+                Add(GoalKind.Eat, -1, -1, eat);
+                // ⑧ 밥을 짓는다: 요리를 좋아하는 이 · 꺼진 조리대가 있고 같은 방에 먹을 것이 있으면 (먹기보다 조금 앞서게)
+                if (WantsToCook(sim, a) && CookStove(a) is int sv && sv >= 0) Add(GoalKind.Cook, sv, _net!.Devices[sv].Cell, eat + 0.3f);
+            }
             if (c.Thirst > 0.3f) Add(GoalKind.Drink, -1, -1, c.Thirst * c.Thirst * 6);
             float grief = _soc?.GriefOf(a.Id) ?? 0; // ⑨ 슬픔: 일손을 놓고 사람을 찾는다
             if (InWindow(hour, c.ShiftHour, 8) && c.Station >= 0) Add(GoalKind.Work, c.Station, L.Furniture[c.Station].Cells[0], (1.2f + c.Diligent) * (1 - 0.7f * grief));
@@ -304,6 +310,7 @@ public sealed partial class Mind
                 plan.Add(Use(UseKind.Eat, Time.Minutes(10), cell, src));
                 return true;
             }
+            case GoalKind.Cook: return BuildCook(a, o, plan);
             case GoalKind.Drink:
             {
                 if (_net != null && _net.WaterTank < 30) return false;
@@ -641,7 +648,7 @@ public sealed partial class Mind
 
     /// <summary>일상 목표 (위기를 다루는 일이 아닌 것) — 빠져나온 위험한 방으로는 이것 때문에 돌아가지 않는다.</summary>
     private static bool Everyday(GoalKind g) => g is GoalKind.Sleep or GoalKind.Eat or GoalKind.Drink or GoalKind.Work or GoalKind.Relax or GoalKind.Socialize
-        or GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Exercise or GoalKind.Restock;
+        or GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Exercise or GoalKind.Restock or GoalKind.Cook;
 
     /// <summary>
     /// 피하는 칸: 사람이 방금(10분) 빠져나온 방이고 아직 위험하다고 믿는다 (지금 그 방 안이면 아니다).
@@ -651,7 +658,9 @@ public sealed partial class Mind
     {
         if (!a.IsPerson || cell < 0) return false;
         int r = RoomOf(cell);
-        return r >= 0 && r != RoomOf(a.C.Cell) && FledFrom(a, r) && RoomBadness(a, r) >= 0.3f;
+        if (r < 0) return false;
+        if (r == RoomOf(a.C.Cell)) return a.C.Goal == GoalKind.Evacuate && RoomBadness(a, r) >= 0.5f; // 빠져나가는 중에 그 방의 일상 일(밥 짓기 · 끼니)로 돌아서지 않는다
+        return FledFrom(a, r) && RoomBadness(a, r) >= 0.3f;
     }
 
     /// <summary>최근(10분) 빠져나온 방인가 — 그리로 다시 피하지 않는다 (두 방을 오가며 문을 여닫지 않게).</summary>

@@ -647,7 +647,12 @@ public sealed class ShipMind : IEngine
             // 불이 난 방의 조리대 전원을 내린다 (켜 둔 조리대가 불씨면 끄지 않는 한 다시 붙는다)
             if (x.Kind == IncidentKind.Fire && x.Room >= 0 && _net != null)
                 foreach (var dv in _net.Devices)
-                    if (dv.Def.Role == "stove" && _net.On[dv.Id] != 0 && L.Room[dv.Cell] == x.Room) { _net.SetOn(dv.Id, false); StovesCut++; Say(sim, $"{RoomName(x.Room)} {dv.Name} 전원을 내렸다 — 불이 났다"); }
+                    if (dv.Def.Role == "stove" && _net.On[dv.Id] != 0 && L.Room[dv.Cell] == x.Room)
+                    {
+                        int cut = sim.Causes.Add(CauseKind.Computer, $"주컴퓨터가 {RoomName(x.Room)} {dv.Name} 전원을 내렸다", sim.Tick, dv.Cell, _net.OnCause[dv.Id] != 0 ? _net.OnCause[dv.Id] : x.Cause);
+                        sim.Facts.Emit(sim.Tick, FactKind.Switched, dv.Cell, 0, cut, -1, dv.Id);
+                        _net.SetOn(dv.Id, false); StovesCut++; Say(sim, $"{RoomName(x.Room)} {dv.Name} 전원을 내렸다 — 불이 났다");
+                    }
             // 연기 · 독한 공기가 덕트로 번지지 않게 그 방 통풍구를 닫는다
             if (x.Kind is IncidentKind.Fire or IncidentKind.CO or IncidentKind.Toxic && x.Room >= 0 && _net != null && _net.Damper[x.Room] != 0) { _net.SetDamper(x.Room, false); Say(sim, $"{RoomName(x.Room)} 통풍구를 닫았다"); }
             // 독한 기체는 그 방 덕트를 정화기로만 돌려 그 자리에서 거른다 (불이 난 방은 아니다 — 공기를 더 대 주지 않게)

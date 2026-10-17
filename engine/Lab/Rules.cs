@@ -555,6 +555,6 @@ public static partial class Program
         WorkRules();
         ViewRules();
         SoundRules();
-        LifeRules(); LedgerRules(); PersonRules(); BondRules(); SeedRules(); ShipRules(); DayRules(); SootRules(); RadiantRules(); FlingRules(); VoyageRules(); SensorRules(); JournalRules(); LeakJudgeRules(); HeartRules(); BandRules(); DoorRequestRules();
+        LifeRules(); LedgerRules(); PersonRules(); BondRules(); SeedRules(); ShipRules(); DayRules(); SootRules(); RadiantRules(); FlingRules(); VoyageRules(); SensorRules(); JournalRules(); LeakJudgeRules(); HeartRules(); BandRules(); DoorRequestRules(); CookRules();
     }
 }

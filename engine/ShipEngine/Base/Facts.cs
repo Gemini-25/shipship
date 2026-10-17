@@ -70,6 +70,7 @@ public enum FactKind : ushort
     // ⑩
     ComputerJournal,   // 주컴퓨터가 일지를 썼다 (Size: 사건 수)
     ComputerBroadcast, // 주컴퓨터의 아침 방송
+    Switched,          // 켜진 장치를 껐다 (Actor: 끈 이 · −1 주컴퓨터 · Other: 장치) — 켜 둔 원인이 있으면 그 원인에 잇는다
 }
 
 public static class FactNames
@@ -91,7 +92,7 @@ public static class FactNames
         FactKind.BreakerReset => "차단기를 올렸다", FactKind.ComputerDown => "주컴퓨터가 멈췄다", FactKind.StorySeed => "조짐",
         FactKind.Grieved => "슬픔", FactKind.TrustLost => "믿음이 깨졌다", FactKind.WentOutside => "선외로 나갔다",
         FactKind.Talk => "이야기", FactKind.Blamed => "탓", FactKind.Fight => "몸싸움", FactKind.Sabotage => "몰래 한 짓",
-        FactKind.ComputerJournal => "일지", FactKind.ComputerBroadcast => "아침 방송", _ => "",
+        FactKind.ComputerJournal => "일지", FactKind.ComputerBroadcast => "아침 방송", FactKind.Switched => "껐다", _ => "",
     };
 }
 

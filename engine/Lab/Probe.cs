@@ -398,6 +398,12 @@ public static partial class Program
         foreach (var (tick, text) in sm.Log.TakeLast(rest.Contains("all") ? 300 : 40)) Console.WriteLine($"    주컴 {Time.Clock(tick)} {text}");
         if (rest.Contains("inc")) foreach (var x in sm.Incidents) Console.WriteLine($"    사건 {Time.Clock(x.Since)} {sm.RoomName(x.Room)} {ShipMind.KindName(x.Kind)} 칸 {(x.Cell >= 0 ? s.Layout.X(x.Cell) + "," + s.Layout.Y(x.Cell) : "-")} 원인 {x.Cause}/{s.Causes.Root(x.Cause)} \"{s.Causes.Story(x.Cause)}\"");
         foreach (var (tick, text) in sm.Journal) Console.WriteLine($"    일지 {Time.Clock(tick)}\n      {text.Replace("\n", "\n      ")}");
+        if (rest.Contains("cook"))
+        {
+            var mm = s.Get<Mind>();
+            Console.WriteLine($"    밥 짓기 {mm.Cooked} · 깜빡 {mm.Forgot} · 끼니 {mm.Meals} · 주컴퓨터가 조리대를 끔 {sm.StovesCut} · 조심 {string.Join(" ", mm.Agents.Where(a => a.IsPerson).Select(a => a.C.Careful.ToString("0.00")))}");
+            foreach (var f in s.Facts.Since(0).Where(x => x.Kind is FactKind.Mistake or FactKind.Switched or FactKind.Ignition)) Console.WriteLine($"    {Time.Clock(f.Tick)} {f.Kind} · {s.Causes.Story(f.Cause)}");
+        }
         if (rest.Contains("soc"))
         {
             // 사회: 관계 사실 · 무리 · 존경 · 정 분포

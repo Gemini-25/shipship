@@ -265,8 +265,8 @@ public sealed class Storyteller : IEngine
                 var people = mind.Agents.Where(a => a.IsPerson && a.C.Up != 0).ToList();
                 if (stoves.Count == 0 || people.Count == 0) return false;
                 var stove = stoves[_rng.Range(0, stoves.Count)];
-                // 덜 성실한 사람일수록 (조리사라면 더)
-                var who = people.OrderBy(a => a.C.Consc + 0.3 * _rng.Unit() - (a.C.SkCook > 0.5f ? 0.2 : 0)).First();
+                // 덜 성실한 사람일수록 (조리사라면 더) · 지난 실수에서 배운 이는 덜 (⑧ 조심)
+                var who = people.OrderBy(a => a.C.Consc + a.C.Careful + 0.3 * _rng.Unit() - (a.C.SkCook > 0.5f ? 0.2 : 0)).First();
                 text = $"{Ko.I(mind.NameOf(who.Id))} {Ko.Eul(stove.Name)} 켜 둔 채 자리를 떴다";
                 int c0 = sim.Causes.Add(CauseKind.Person, text, sim.Tick, stove.Cell, 0, 0, who.Id);
                 net.SetOn(stove.Id, true); net.OnCause[stove.Id] = c0; net.PanWater[stove.Id] = 0.4f * 55.5f; // 국 냄비 하나 (물 0.4L)

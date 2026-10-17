@@ -339,7 +339,7 @@ public sealed partial class Mind : IEngine
         GoalKind.Sleep => "잔다", GoalKind.Eat => "먹는다", GoalKind.Drink => "물을 마신다", GoalKind.Work => "일한다", GoalKind.Relax => "쉰다",
         GoalKind.Socialize => "어울린다", GoalKind.FightFire => "불을 끈다", GoalKind.Rescue => "사람을 구한다", GoalKind.Patch => "구멍을 막는다",
         GoalKind.Repair => "고친다", GoalKind.Investigate => "살피러 간다", GoalKind.GetSuit => "우주복을 입는다", GoalKind.Charge => "충전한다", GoalKind.Evacuate => "방을 빠져나간다", GoalKind.Brace => "버티는 문을 받친다",
-        GoalKind.Craft => "물건을 만든다", GoalKind.Maintain => "부품을 미리 간다", GoalKind.Clean => "곰팡이를 닦는다", GoalKind.Harvest => "작물을 거둔다", GoalKind.Exercise => "운동한다", GoalKind.Brawl => "몸싸움 중", GoalKind.Restock => "식량을 주방으로 나른다", _ => "",
+        GoalKind.Craft => "물건을 만든다", GoalKind.Maintain => "부품을 미리 간다", GoalKind.Clean => "곰팡이를 닦는다", GoalKind.Harvest => "작물을 거둔다", GoalKind.Exercise => "운동한다", GoalKind.Brawl => "몸싸움 중", GoalKind.Restock => "식량을 주방으로 나른다", GoalKind.Cook => "밥을 짓는다", _ => "",
     };
 
     public static string BeliefName(BeliefKind k) => k switch
@@ -387,12 +387,14 @@ public sealed partial class Mind : IEngine
         foreach (var a in Agents) Sense(sim, a, dt);
         _said.RemoveAll(x => x.tick < sim.Tick - Sound.KeepTicks - 1);
         BuildClaims();
+        if (sim.Tick % 25 == 0) Learn(sim);
         foreach (var a in Agents)
         {
             if (a.C.Up != 0 && a.IsPerson) Instinct(sim, a);
             bool think = a.C.Up != 0 && a.C.Mode == 0 && ((sim.Tick + a.Id) % 2 == 0 || a.Plan.Count == 0 || a.C.StepIndex >= a.Plan.Count);
             if (think) Decide(sim, a);
             WithdrawDoor(a);
+            WithdrawCook(sim, a);
             if (a.C.Up != 0 || IsSleeping(a)) Advance(sim, a, dt);
             Needs(sim, a, dt);
         }
@@ -484,6 +486,7 @@ public sealed partial class Mind : IEngine
         }
         ref var b = ref _life![c.Body];
         if (b.Alive == 0) return;
+        if (c.Careful > 0) c.Careful *= (float)Math.Exp(-dt * 0.6931 / (7 * 86400)); // 배운 조심은 이레에 반쯤 흐려진다
         bool asleep = b.Asleep != 0;
         c.Hunger = (float)Math.Min(1, c.Hunger + h / Need("hunger", 8) * (asleep ? 0.5 : 1)); // 자는 동안은 천천히
         c.Thirst = (float)Math.Clamp((BodyWater0 - b.Water) / (0.02 * BodyWater0), 0, 1);
@@ -596,6 +599,7 @@ public sealed partial class Mind : IEngine
         w.I32(_said.Count);
         foreach (var (ev, tick, sp, b) in _said) { w.I32(ev); w.I64(tick); w.I32(sp); w.List(new List<Belief> { b }); }
         w.I64(Shouts); w.I64(Panics); w.I64(Extinguished); w.I64(Rescued); w.I64(Patched); w.I64(Repaired); w.I64(FledCount); w.I64(Meals); w.I64(Drinks); w.I64(Exercised); w.F64(FoodEaten); w.F64(WaterDrunk); w.F64(WaterSprayed);
+        w.I64(Cooked); w.I64(Forgot); w.I64(_learnCursor);
     }
 
     public void Load(StateReader r)
@@ -613,5 +617,6 @@ public sealed partial class Mind : IEngine
         int m = r.I32();
         for (int i = 0; i < m; i++) { int ev = r.I32(); long t = r.I64(); int sp = r.I32(); var b = r.List<Belief>()[0]; _said.Add((ev, t, sp, b)); }
         Shouts = r.I64(); Panics = r.I64(); Extinguished = r.I64(); Rescued = r.I64(); Patched = r.I64(); Repaired = r.I64(); FledCount = r.I64(); Meals = r.I64(); Drinks = r.I64(); Exercised = r.I64(); FoodEaten = r.F64(); WaterDrunk = r.F64(); WaterSprayed = r.F64();
+        Cooked = r.I64(); Forgot = r.I64(); _learnCursor = r.I64();
     }
 }

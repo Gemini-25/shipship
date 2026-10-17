@@ -59,6 +59,7 @@ public enum GoalKind : byte
     Exercise,   // ⑧ 운동 (달리기틀 — 없으면 침대 곁 맨몸 운동)
     Brawl,      // ⑨ 몸싸움 (그 자리에서 — 사회가 주먹을 셈한다)
     Restock,    // ⑪ 식량 창고(포장 식량)에서 주방(냉장고 · 배식기)으로 식량 상자를 나른다
+    Cook,       // ⑧ 조리대에서 밥을 짓고(켜고 · 끄고) 먹는다
 }
 
 /// <summary>계획의 한 단계.</summary>
@@ -85,7 +86,7 @@ public enum StepKind : byte
 }
 
 /// <summary>쓰기 단계가 하는 일.</summary>
-public enum UseKind : byte { None, Eat, Drink, Sleep, Work, Relax, Talk, Charge, Exercise }
+public enum UseKind : byte { None, Eat, Drink, Sleep, Work, Relax, Talk, Charge, Exercise, Cook }
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct PlanStep
@@ -161,6 +162,9 @@ public struct AgentCore
     public float LastKPa, LastCOHb;
     public long LastShout;
     public long WokeAt, AteAt, DrankAt, SleptAt;
+    // ⑧ 요리 · 배우기
+    public int CookOn;         // 지금 쓰는 조리대 (장치 번호 + 1 · 0: 없음)
+    public float Careful;      // 실수에서 배운 조심 (0~1 · 이레에 반쯤 흐려진다)
 }
 
 /// <summary>바닥에 떨어진 · 놓인 물건.</summary>

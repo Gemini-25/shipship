@@ -183,7 +183,7 @@ public sealed partial class Mind
         long t = sim.Tick;
         var use = (UseKind)st.Arg;
         if (t <= c.StepStart && use == UseKind.Sleep && a.IsPerson) { _life![c.Body].Asleep = 1; c.SleptAt = t; }
-        Activity(a, use switch { UseKind.Sleep => "sleep", UseKind.Work => "work", UseKind.Exercise => "hard", UseKind.None or UseKind.Relax or UseKind.Talk => "rest", _ => "rest" });
+        Activity(a, use switch { UseKind.Sleep => "sleep", UseKind.Work or UseKind.Cook => "work", UseKind.Exercise => "hard", UseKind.None or UseKind.Relax or UseKind.Talk => "rest", _ => "rest" });
         bool done = t - c.StepStart >= st.Value;
         switch (use)
         {
@@ -192,6 +192,7 @@ public sealed partial class Mind
             case UseKind.Charge: done |= c.Battery >= 0.98f && t - c.StepStart >= Time.Minutes(10); break; // 다 차면 독에서 10분씩 기다린다
             case UseKind.Work: done |= !InWindow(Time.HourOfDay(t), c.ShiftHour, 8); break;
         }
+        if (use == UseKind.Cook) CookStep(sim, a, st, done);
         if (!done) return;
         switch (use)
         {
@@ -249,7 +250,11 @@ public sealed partial class Mind
                     bool stove = false;
                     if (_net != null)
                         foreach (var dv in _net.Devices)
-                            if (dv.Def.Role == "stove" && _net.On[dv.Id] != 0 && Dist(dv.Cell, center) <= 3) { _net.SetOn(dv.Id, false); stove = true; }
+                            if (dv.Def.Role == "stove" && _net.On[dv.Id] != 0 && Dist(dv.Cell, center) <= 3)
+                            {
+                                if (_net.OnCause[dv.Id] != 0) sim.Facts.Emit(t, FactKind.Switched, dv.Cell, 0, _net.OnCause[dv.Id], a.Id, dv.Id);
+                                _net.SetOn(dv.Id, false); stove = true;
+                            }
                     int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} 불을 껐다{(stove ? " · 조리대 전원도 내렸다" : "")}", t, center, c.GoalCause, 0, a.Id);
                     sim.Facts.Emit(t, FactKind.Extinguished, center, 0, cause, a.Id);
                 }
