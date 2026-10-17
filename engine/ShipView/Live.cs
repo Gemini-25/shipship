@@ -9,7 +9,7 @@ public sealed class LiveFrame
 {
     public Img Img = null!;
     public float SrcX, SrcY, SrcW, SrcH;
-    public string Ship = "", Status = "", Story = "", Banner = "", Mood = "";
+    public string Ship = "", Status = "", Story = "", Banner = "", Mood = "", Notice = "", Storyteller = "";
     public float BannerAlpha;
     public long Tick;
     public string Replay = "";            // 다시보기 중이면 그 하이라이트 제목
@@ -132,6 +132,7 @@ public sealed class LiveShow
             Banner = Dir.Highlights[^1].Title; BannerLeft = BannerSec;
         }
         BannerLeft = Math.Max(0, BannerLeft - realSec);
+        TickNotice(realSec);
         // 카메라: 연출이 고른 곳으로 부드럽게 (전체 보기면 배 가운데)
         var L = Sim.Layout;
         var vd = View;
@@ -332,11 +333,42 @@ public sealed class LiveShow
             Tick = World.Tick, Replay = _replayOf?.Title ?? "",
             CamLeft = left, CamTop = top, CamW = w, CamH = h,
             Card = Card(), SelX = sel.x, SelY = sel.y,
+            Notice = Notice, Storyteller = StoryLine(),
         };
     }
 
     /// <summary>다 쓴 그림을 돌려준다 (화면이 텍스처로 옮긴 뒤 — 다음 장에 다시 쓴다).</summary>
     public void Recycle(Img img) { if (_spare.Count < 3) _spare.Add(img); }
+
+    // ── 함장이 고르는 이야기꾼 (⑫) ──
+    private string _notice = ""; private double _noticeLeft;
+    /// <summary>잠깐 띄우는 알림 (이야기꾼을 바꿨다 등) — 남은 초가 0이면 빈 글.</summary>
+    public string Notice => _noticeLeft > 0 ? _notice : "";
+    public void Notify(string text, double seconds = 3) { _notice = text; _noticeLeft = seconds; }
+    public void TickNotice(double realSec) => _noticeLeft = Math.Max(0, _noticeLeft - realSec);
+
+    /// <summary>이야기꾼 한 줄: 성격 · 가혹함.</summary>
+    public string StoryLine()
+    {
+        var st = Sim.Find<Storyteller>();
+        return st == null ? "" : $"{Storyteller.StyleName(st.Style)} · 가혹함 {st.Level} {Storyteller.LevelName(st.Level)}";
+    }
+
+    /// <summary>이야기꾼 성격을 다음 것으로 (고른 → 잔잔한 → 몰아치는 → 느린 불씨 → 우주의 변덕 → 사람의 이야기).</summary>
+    public void CycleStyle()
+    {
+        var st = Sim.Find<Storyteller>(); if (st == null) return;
+        st.Style = (StoryStyle)(((int)st.Style + 1) % Enum.GetValues<StoryStyle>().Length);
+        Notify("이야기꾼: " + StoryLine());
+    }
+
+    /// <summary>가혹함을 한 칸 올리거나 내린다 (1 ~ 8).</summary>
+    public void Harsher(int d)
+    {
+        var st = Sim.Find<Storyteller>(); if (st == null) return;
+        st.Level = (byte)Math.Clamp(st.Level + d, 1, 8);
+        Notify("이야기꾼: " + StoryLine());
+    }
 
     /// <summary>위 줄: 배 · 시각 · 분위기 · 빠르기 · 사람.</summary>
     public string Status()

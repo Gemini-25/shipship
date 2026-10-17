@@ -562,6 +562,6 @@ public static partial class Program
         WorkRules();
         ViewRules();
         SoundRules();
-        LifeRules(); LedgerRules(); PersonRules(); BondRules();
+        LifeRules(); LedgerRules(); PersonRules(); BondRules(); SeedRules();
     }
 }

@@ -82,6 +82,8 @@ public sealed class Network : IEngine
     public float[] Wear;          // [장치 × 4 + 부품] 시간
     public byte[] Broken;         // [장치 × 4 + 부품]
     public int[] SealLeakCause;   // [장치] 봉함이 망가져 냉매가 새기 시작한 원인 마디 (고치면 0)
+    public float[] PanK, PanWater; // [장치] 조리대 위 냄비 온도 (K) · 냄비 속 물 (몰) — 켜 두면 졸고 · 눌고 · 불이 붙는다
+    public int[] OnCause;         // [장치] 켠 원인 (켜 둔 조리대의 사람 — 그 열로 불이 나면 불의 뿌리가 된다 · 끄면 0)
     public float[] Charge;        // 배터리 kWh · 보조 발전기 연료 kWh
     // ── 상태 (급전선마다) ──
     public byte[] Breaker;        // 1: 붙어 있음
@@ -136,7 +138,7 @@ public sealed class Network : IEngine
         }
         int nd = Devices.Count;
         On = Devices.Select(d => (byte)(d.Def.On ? 1 : 0)).ToArray();
-        Supply = new float[nd]; Duty = Enumerable.Repeat(1f, nd).ToArray(); Wear = new float[nd * 4]; Broken = new byte[nd * 4]; SealLeakCause = new int[nd];
+        Supply = new float[nd]; Duty = Enumerable.Repeat(1f, nd).ToArray(); Wear = new float[nd * 4]; Broken = new byte[nd * 4]; SealLeakCause = new int[nd]; OnCause = new int[nd]; PanK = Enumerable.Repeat(293.15f, nd).ToArray(); PanWater = new float[nd];
         Charge = Devices.Select(d => (float)d.Def.Kwh).ToArray();
         _limit = new float[nd * 4];
         for (int d = 0; d < nd; d++)
@@ -218,7 +220,7 @@ public sealed class Network : IEngine
 
     // ───────────────────────── 요청 ─────────────────────────
 
-    public void SetOn(int device, bool on) => On[device] = (byte)(on ? 1 : 0);
+    public void SetOn(int device, bool on) { On[device] = (byte)(on ? 1 : 0); if (!on) OnCause[device] = 0; }
     public void ResetBreaker(int feeder) { Breaker[feeder] = 1; OverSec[feeder] = 0; }
     /// <summary>배전반에서 급전선을 손으로 끊는다 (눌어붙은 차단기도) — 합선을 잇는 전기가 멎는다.</summary>
     public void PullFeeder(int feeder) { Breaker[feeder] = 0; BreakerStuck[feeder] = 0; OverSec[feeder] = 0; }
@@ -593,7 +595,27 @@ public sealed class Network : IEngine
                     F.AddHeat(c, kw * 1000 * 0.3 * dt);
                     break;
                 case "stove":
-                    if (kw > 0) F.AddSurfaceHeat(c, kw * 1000 * 0.6 * dt); // 겉면을 달군다 (그 위 음식 · 기름)
+                {
+                    // 냄비: 화구 열의 60%가 냄비 · 음식으로 — 물이 다 졸 때까지 100℃에 머물고 · 그 뒤 눌어 오르다 600K를 넘으면 그 위 음식에 불이 붙는다
+                    // (식는 것: 대류 3W/K + 복사 εσA(T⁴ − T공기⁴), A 0.1m² — 3kW 화구에 혼자 두면 30분 남짓 · 켜 둔 조리는 집안 불의 첫째 원인)
+                    double food = F.Stored(T.sFood, c), tAir = F.Temp(c);
+                    double cPan = 500 + food * 0.18 * 3000 + PanWater[d] * 0.018 * 4186; // 냄비 1kg + 음식 + 물 (J/K)
+                    double pk = PanK[d];
+                    double loss = 3 * (pk - tAir) + 0.9 * 5.67e-8 * 0.1 * (Math.Pow(pk, 4) - Math.Pow(tAir, 4));
+                    double q = (kw > 0 ? kw * 1000 * 0.6 : 0) - loss;
+                    if (q > 0 && pk >= 373.15 && PanWater[d] > 0)
+                    {
+                        double boil = Math.Min(PanWater[d], q * dt / 40_650);              // 끓어 날아간다 (몰 — 증발열 40.65kJ/몰)
+                        PanWater[d] -= (float)boil; F.AddGas(c, T.gH2O, boil, 373.15);
+                    }
+                    else pk += q * dt / cPan;
+                    PanK[d] = (float)Math.Max(tAir, pk);
+                    F.AddSurfaceHeat(c, loss * dt * 0.5);                                  // 냄비가 내는 열의 반은 조리대 겉면으로
+                    F.AddHeat(c, (kw * 1000 * 0.4 + loss * 0.5) * dt);
+                    if (PanK[d] > 600 && food > 0.05) F.Tf[c] = Math.Max(F.Tf[c], PanK[d]); // 눌은 음식이 불붙을 만큼 뜨겁다
+                    if (kw > 0 && OnCause[d] != 0) { var chem = sim.Find<Chemistry>(); if (chem != null) chem.HeatCause[c] = OnCause[d]; }
+                    break;
+                }
                     F.AddHeat(c, kw * 1000 * 0.4 * dt);
                     break;
                 case "battery":
@@ -836,7 +858,7 @@ public sealed class Network : IEngine
     public void Save(StateWriter w)
     {
         w.Arr(On); w.Arr(Supply); w.Arr(Wear); w.Arr(Broken); w.Arr(Charge);
-        w.Arr(Breaker); w.Arr(OverSec); w.Arr(FaultCell); w.Arr(BreakerStuck); w.Arr(Amps); w.Arr(Damper); w.Arr(Exhaust); w.F64(TraceScrubbed); w.Arr(SealLeakCause);
+        w.Arr(Breaker); w.Arr(OverSec); w.Arr(FaultCell); w.Arr(BreakerStuck); w.Arr(Amps); w.Arr(Damper); w.Arr(Exhaust); w.F64(TraceScrubbed); w.Arr(SealLeakCause); w.Arr(OnCause); w.Arr(PanK); w.Arr(PanWater);
         w.Bool(ReactorScram); w.I32(ScramCause); w.F64(WaterTank); w.F64(WasteWater); w.F64(Brine); w.F64(Coolant); w.F64(VentedH2); w.F64(AirReserve); w.F64(AirRelease); w.F64(AirReleased);
         w.F64(VentedCH4); w.F64(VentedCO2); w.F64(CO2Store); w.Arr(Duty); w.F64(PpO2);
         w.F64(Supplied); w.F64(Demanded); w.F64(CoolingKw); w.F64(ReactorKw); w.F64(HvacKw);
@@ -852,7 +874,7 @@ public sealed class Network : IEngine
     public void Load(StateReader r)
     {
         r.ArrInto(On); r.ArrInto(Supply); r.ArrInto(Wear); r.ArrInto(Broken); r.ArrInto(Charge);
-        r.ArrInto(Breaker); r.ArrInto(OverSec); r.ArrInto(FaultCell); r.ArrInto(BreakerStuck); r.ArrInto(Amps); r.ArrInto(Damper); r.ArrInto(Exhaust); TraceScrubbed = r.F64(); r.ArrInto(SealLeakCause);
+        r.ArrInto(Breaker); r.ArrInto(OverSec); r.ArrInto(FaultCell); r.ArrInto(BreakerStuck); r.ArrInto(Amps); r.ArrInto(Damper); r.ArrInto(Exhaust); TraceScrubbed = r.F64(); r.ArrInto(SealLeakCause); r.ArrInto(OnCause); r.ArrInto(PanK); r.ArrInto(PanWater);
         ReactorScram = r.Bool(); ScramCause = r.I32(); WaterTank = r.F64(); WasteWater = r.F64(); Brine = r.F64(); Coolant = r.F64(); VentedH2 = r.F64(); AirReserve = r.F64(); AirRelease = r.F64(); AirReleased = r.F64();
         VentedCH4 = r.F64(); VentedCO2 = r.F64(); CO2Store = r.F64(); r.ArrInto(Duty); PpO2 = r.F64();
         Supplied = r.F64(); Demanded = r.F64(); CoolingKw = r.F64(); ReactorKw = r.F64(); HvacKw = r.F64();

@@ -6,7 +6,7 @@ namespace ShipEngine;
 public enum StoryStyle : byte { Balanced, Gentle, Relentless, SlowBurn, Cosmic, Human }
 
 /// <summary>이야기꾼이 심는 원인의 종류.</summary>
-public enum SeedKind : byte { None, Rock, Cloud, Flare, WornPart, HullFatigue, Mold, ArcRisk }
+public enum SeedKind : byte { None, Rock, Cloud, Flare, WornPart, HullFatigue, Mold, ArcRisk, Mistake, OldGrudge }
 
 /// <summary>심은 원인 하나 (기록).</summary>
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -54,6 +54,12 @@ public sealed class Storyteller : IEngine
         F = f; L = f.L; T = f.T;
         _rng = Rng.Stream(seed, "이야기꾼");
     }
+
+    /// <summary>가혹함 이름 (함장이 고르는 판).</summary>
+    public static string LevelName(int level) => level switch
+    {
+        1 => "평온한 항해", 2 => "잔잔함", 3 => "이따금", 4 => "아슬아슬", 5 => "거칠게", 6 => "가혹하게", 7 => "잔혹하게", _ => level >= 8 ? "끝까지" : "평온한 항해",
+    };
 
     public static string StyleName(StoryStyle s) => s switch
     {
@@ -106,21 +112,26 @@ public sealed class Storyteller : IEngine
     /// <summary>원인 하나가 터지면 올 긴장 (가혹함 배율 전).</summary>
     public static double Potential(SeedKind k) => k switch
     {
-        SeedKind.Rock => 1.5, SeedKind.Cloud => 2, SeedKind.Flare => 2, SeedKind.WornPart => 1, SeedKind.HullFatigue => 1.5, SeedKind.Mold => 0.5, SeedKind.ArcRisk => 2.5, _ => 1,
+        SeedKind.Rock => 1.5, SeedKind.Cloud => 2, SeedKind.Flare => 2, SeedKind.WornPart => 1, SeedKind.HullFatigue => 1.5, SeedKind.Mold => 0.5, SeedKind.ArcRisk => 2.5,
+        SeedKind.Mistake => 1.5, SeedKind.OldGrudge => 1, _ => 1,
     };
 
     private SeedKind Choose(Sim sim)
     {
-        // 성격마다 무게 (없음 · 운석 · 구름 · 폭발 · 낡은 부품 · 외판 피로 · 곰팡이 · 합선 불씨)
+        // 성격마다 무게 (없음 · 운석 · 구름 · 폭발 · 낡은 부품 · 외판 피로 · 곰팡이 · 합선 불씨 · 사람의 실수 · 묵은 앙금)
         double[] w = Style switch
         {
-            StoryStyle.Cosmic => new double[] { 0, 3, 3, 2, 0.3, 0.3, 0, 0 },
-            StoryStyle.SlowBurn => new double[] { 0, 0.3, 0.3, 0.3, 3, 2, 2, 2 },
-            StoryStyle.Gentle => new double[] { 0, 0.5, 1, 1, 2, 1, 1, 0.3 },
-            StoryStyle.Human => new double[] { 0, 0.3, 0.5, 0.5, 2, 1, 1.5, 1 },
-            StoryStyle.Relentless => new double[] { 0, 2, 2, 1.5, 1.5, 1.5, 1, 2 },
-            _ => new double[] { 0, 1.5, 1.5, 1, 2, 1.5, 1, 1.5 },
+            StoryStyle.Cosmic => new double[] { 0, 3, 3, 2, 0.3, 0.3, 0, 0, 0, 0 },
+            StoryStyle.SlowBurn => new double[] { 0, 0.3, 0.3, 0.3, 3, 2, 2, 2, 1, 1 },
+            StoryStyle.Gentle => new double[] { 0, 0.5, 1, 1, 2, 1, 1, 0.3, 0.5, 0.5 },
+            StoryStyle.Human => new double[] { 0, 0.3, 0.5, 0.5, 1, 0.5, 1, 0.5, 3, 3 },
+            StoryStyle.Relentless => new double[] { 0, 2, 2, 1.5, 1.5, 1.5, 1, 2, 1, 1 },
+            _ => new double[] { 0, 1.5, 1.5, 1, 2, 1.5, 1, 1.5, 1, 1 },
         };
+        var mindForSeed = sim.Find<Mind>();
+        int people = mindForSeed?.Agents.Count(a => a.IsPerson) ?? 0;
+        if (people < 1) w[(int)SeedKind.Mistake] = 0;
+        if (people < 2 || sim.Find<Society>() == null) w[(int)SeedKind.OldGrudge] = 0;
         if (LastKind != SeedKind.None) w[(int)LastKind] *= 0.15; // 같은 종류를 연달아 피한다
         var net = sim.Find<Network>();
         if (net != null && net.BreakerStuck.Any(b => b != 0)) w[(int)SeedKind.ArcRisk] = 0; // 눌어붙은 차단기가 이미 있다
@@ -221,6 +232,41 @@ public sealed class Storyteller : IEngine
                 foreach (int x in room.Cells) if (Math.Abs(L.X(x) - L.X(c)) <= 1 && Math.Abs(L.Y(x) - L.Y(c)) <= 1) life.Mold[x] = Math.Max(life.Mold[x], (float)(0.2 * g));
                 return Record(sim, kind, c0, c, (float)(0.2 * g));
             }
+            case SeedKind.Mistake:
+            {
+                // 사람의 실수: 조리대를 켜 둔 채 자리를 떴다 — 그 위 음식이 눌어 불이 날 수 있다 (켠 원인이 불의 뿌리 → 다친 이 · 본 이가 그를 탓한다)
+                var mind = sim.Find<Mind>();
+                if (net == null || mind == null) return false;
+                var stoves = net.Devices.Where(d => d.Def.Role == "stove" && net.On[d.Id] == 0 && !net.IsBroken(d.Id, Part.Electric)).ToList();
+                var people = mind.Agents.Where(a => a.IsPerson && a.C.Up != 0).ToList();
+                if (stoves.Count == 0 || people.Count == 0) return false;
+                var stove = stoves[_rng.Range(0, stoves.Count)];
+                // 덜 성실한 사람일수록 (조리사라면 더)
+                var who = people.OrderBy(a => a.C.Consc + 0.3 * _rng.Unit() - (a.C.SkCook > 0.5f ? 0.2 : 0)).First();
+                text = $"{Ko.I(mind.NameOf(who.Id))} {Ko.Eul(stove.Name)} 켜 둔 채 자리를 떴다";
+                int c0 = sim.Causes.Add(CauseKind.Person, text, sim.Tick, stove.Cell, 0, 0, who.Id);
+                net.SetOn(stove.Id, true); net.OnCause[stove.Id] = c0; net.PanWater[stove.Id] = 0.4f * 55.5f; // 국 냄비 하나 (물 0.4L)
+                return Record(sim, kind, c0, stove.Cell, 1);
+            }
+            case SeedKind.OldGrudge:
+            {
+                // 묵은 앙금: 거친 두 사람 사이의 지난 일 — 원한의 씨앗만 (따질지 · 풀지 · 터질지는 그들이 정한다)
+                var mind = sim.Find<Mind>(); var so = sim.Find<Society>();
+                if (mind == null || so == null) return false;
+                var people = mind.Agents.Where(a => a.IsPerson && a.C.Up != 0).ToList();
+                if (people.Count < 2) return false;
+                var a1 = people.OrderBy(a => a.C.Agree + 0.4 * _rng.Unit()).First();
+                var a2 = people.Where(a => a.Id != a1.Id).OrderBy(a => a.C.Agree + 0.4 * _rng.Unit() - so.KnownOf(a1.Id, a.Id) * 0.3).First();
+                string why = new[] { "지난 항구에서 크게 다툰 적이 있다", "예전 배에서 서로의 실수를 덮어 주지 않았다", "같은 자리를 두고 겨룬 적이 있다" }[_rng.Range(0, 3)];
+                text = $"{Ko.Gwa(mind.NameOf(a1.Id))} {Ko.Eun(mind.NameOf(a2.Id))} {why}";
+                int c0 = sim.Causes.Add(CauseKind.Person, text, sim.Tick, a1.C.Cell, 0, 0, a2.Id);
+                float g0 = (float)(0.3 + 0.15 * g);
+                so.Grudge[a1.Id * so.N + a2.Id] = Math.Max(so.Grudge[a1.Id * so.N + a2.Id], g0);
+                so.Grudge[a2.Id * so.N + a1.Id] = Math.Max(so.Grudge[a2.Id * so.N + a1.Id], g0 * 0.6f);
+                so.Remember(sim, a1.Id, Topic.Blame, a2.Id, c0, 0.7f, a1.C.Cell);
+                so.Remember(sim, a2.Id, Topic.Blame, a1.Id, c0, 0.5f, a2.C.Cell);
+                return Record(sim, kind, c0, a1.C.Cell, g0);
+            }
             case SeedKind.ArcRisk:
             {
                 if (net == null || net.Feeders.Count == 0) return false;
@@ -250,7 +296,7 @@ public sealed class Storyteller : IEngine
     public static string SeedName(SeedKind k) => k switch
     {
         SeedKind.Rock => "운석", SeedKind.Cloud => "파편 구름", SeedKind.Flare => "별 폭발", SeedKind.WornPart => "낡은 부품",
-        SeedKind.HullFatigue => "외판 피로", SeedKind.Mold => "곰팡이", SeedKind.ArcRisk => "합선 불씨", _ => "",
+        SeedKind.HullFatigue => "외판 피로", SeedKind.Mold => "곰팡이", SeedKind.ArcRisk => "합선 불씨", SeedKind.Mistake => "사람의 실수", SeedKind.OldGrudge => "묵은 앙금", _ => "",
     };
 
     // ───────────────────────── 찍기 ─────────────────────────

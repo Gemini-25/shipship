@@ -251,6 +251,16 @@ public partial class Main : Node2D
         string hint = _speedAt == 0 ? "빠르기: 연출" : $"빠르기: ×{GameSecPerSec[_speedAt]:0} (손)";
         DrawString(_font, new Vector2(vp.X - 230, 27), hint + " · H 도움말", HorizontalAlignment.Right, 214, 15, new Color(0.65f, 0.7f, 0.8f));
 
+        // 함장이 이야기꾼을 바꿨다 (몇 초)
+        if (f.Notice.Length > 0)
+        {
+            var sz = _font.GetStringSize(f.Notice, HorizontalAlignment.Left, -1, 17);
+            var r = new Rect2(vp.X - sz.X - 40, 48, sz.X + 24, 32);
+            DrawRect(r, new Color(0.04f, 0.06f, 0.1f, 0.9f));
+            DrawRect(r, new Color(0.5f, 0.65f, 0.9f, 0.9f), false, 1);
+            DrawString(_font, new Vector2(r.Position.X + 12, r.Position.Y + 22), f.Notice, HorizontalAlignment.Left, -1, 17, new Color(0.85f, 0.9f, 1f));
+        }
+
         // 새 하이라이트
         if (f.Banner.Length > 0 && f.BannerAlpha > 0)
         {
@@ -306,8 +316,10 @@ public partial class Main : Node2D
             "B  방금 그 장면 다시보기 (한 번 더 누르면 돌아오기)",
             "사람 · 로봇 누르기  생각 · 몸 보기 (그를 따라간다)",
             "N  다음 배      R  같은 배 새로",
+            "T  이야기꾼 성격 바꾸기      [ ]  가혹함 낮추기 · 높이기",
             "M  소리 끄기 · 켜기",
             "H  도움말      Esc  나가기",
+            $"지금 이야기꾼: {_shown?.Storyteller}",
         };
         float w = 470, h = 26 + lines.Length * 26;
         var r = new Rect2(vp.X - w - 20, vp.Y - h - 84, w, h);
@@ -339,6 +351,9 @@ public partial class Main : Node2D
                 case Key.N: _shipAt = (_shipAt + 1) % Math.Max(1, _ships.Length); _speedAt = 0; Launch(_ships[_shipAt], _seed); break;
                 case Key.R: _seed++; _speedAt = 0; Launch(_ships[_shipAt], _seed); break;
                 case Key.H: _help = !_help; _helpLeft = 0; break;
+                case Key.T: _cmds.Enqueue(s => s.CycleStyle()); break;
+                case Key.Bracketleft: _cmds.Enqueue(s => s.Harsher(-1)); break;
+                case Key.Bracketright: _cmds.Enqueue(s => s.Harsher(+1)); break;
                 case Key.F3: _meter = !_meter; break;
                 case Key.M: _mute = !_mute; break;
                 case Key.Escape: GetTree().Quit(); break;

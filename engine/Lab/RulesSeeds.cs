@@ -1,0 +1,86 @@
+using ShipEngine;
+
+namespace Lab;
+
+/// <summary>⑫ 이야기꾼 — 함장이 고르는 위험도 · 사람 사이 씨앗(실수 · 묵은 앙금). docs/DEPTH.md</summary>
+public static partial class Program
+{
+    private static void SeedRules()
+    {
+        if (!Do("위험도")) return;
+        Console.WriteLine("\n[⑫ 위험도 · 사람 사이 씨앗]");
+        bool Debug = Environment.GetEnvironmentVariable("RULE_DEBUG") == "1";
+
+        // ── 가혹함: 함장이 고른 만큼 — 같은 배 · 같은 성격, 가혹함 2와 7의 이틀 ──
+        {
+            (int seeds, double tension, int events) Run(byte level)
+            {
+                var s = ShipWorld.Crewed("Kestrel", 8, 6, 2);
+                var st = s.Get<Storyteller>(); st.Enabled = true; st.Style = StoryStyle.Balanced; st.Level = level;
+                double sum = 0; int n = 0;
+                for (long t = 0; t < Time.Days(2); t++) { s.Step(); if (t % 250 == 0) { sum += st.Tension; n++; } }
+                int events = (int)(s.Facts.CountOf(FactKind.Ignition) + s.Facts.CountOf(FactKind.MachineFail) + s.Facts.CountOf(FactKind.WallBreach) + s.Facts.CountOf(FactKind.Hurt) + s.Facts.CountOf(FactKind.Impact));
+                return (st.Seeds.Count, sum / n, events);
+            }
+            var loT = Task.Run(() => Run(2)); var hi = Run(7); var lo = loT.Result;
+            Check("위험도: 함장이 고른 가혹함만큼 — 가혹함 7은 2보다 원인을 더 자주 심고 · 긴장이 높고 · 일이 더 벌어진다",
+                hi.seeds > lo.seeds * 1.5 && hi.tension > lo.tension && hi.events > lo.events,
+                $"가혹함 2: 씨앗 {lo.seeds} · 긴장 {lo.tension:0.0} · 일 {lo.events} / 가혹함 7: 씨앗 {hi.seeds} · 긴장 {hi.tension:0.0} · 일 {hi.events} · {Storyteller.LevelName(2)} / {Storyteller.LevelName(7)}");
+        }
+
+        // ── 함장의 판: 관전 화면에서 이야기꾼 성격 · 가혹함을 바꾼다 (1~8 안) · 바꾼 것이 잠깐 뜬다 ──
+        {
+            var show = ShipView.LiveShow.Crewed("Kestrel", 3);
+            var st = show.Sim.Get<Storyteller>();
+            var style0 = st.Style;
+            show.CycleStyle();
+            bool changed = st.Style != style0;
+            for (int k = 0; k < 10; k++) show.Harsher(+1);
+            byte top = st.Level;
+            for (int k = 0; k < 10; k++) show.Harsher(-1);
+            var fr = show.Render();
+            Check("함장의 판: 관전 화면에서 이야기꾼 성격을 돌리고 · 가혹함을 1~8 안에서 올리고 내린다 · 바꾼 것이 화면에 잠깐 뜬다",
+                changed && top == 8 && st.Level == 1 && fr.Notice.Contains("가혹함 1") && fr.Storyteller.Contains(Storyteller.StyleName(st.Style)),
+                $"{fr.Notice} · 가장 높이 {top}");
+        }
+
+        // ── 사람의 실수: 조리대를 켜 둔 채 자리를 떴다 → 그 위 음식이 눌어 불 — 불의 원인 사슬 뿌리가 그 사람 ──
+        {
+            var s = ShipWorld.Crewed("Kestrel", 9, 6, 2);
+            var st = s.Get<Storyteller>(); var net = s.Get<Network>(); var ch = s.Get<Chemistry>(); var m = s.Get<Mind>(); var so = s.Get<Society>();
+            s.Run(Time.Minutes(10));
+            bool planted = st.Plant(s, SeedKind.Mistake);
+            var seed = st.Seeds[^1];
+            int culprit = s.Causes[seed.Cause].Actor;
+            long lit = -1;
+            var stoveDev = net.Devices.First(d => d.Cell == s.Causes[seed.Cause].Cell || d.Def.Role == "stove" && net.On[d.Id] != 0);
+            var f = s.Get<Field>();
+            for (long t = 0; t < Time.Hours(8) && lit < 0; t++)
+            {
+                s.Step(); if (ch.Ignitions > 0) lit = t;
+                if (Debug && t % 1500 == 0) Console.WriteLine($"    {t / 1500}시간 · 조리대 켬 {net.On[stoveDev.Id]} 공급 {net.Supply[stoveDev.Id]:0.00} · 겉면 {f.Tf[stoveDev.Cell]:0}K · 공기 {f.Temp(stoveDev.Cell):0}K · 음식 {f.Stored(f.T.sFood, stoveDev.Cell):0.0}몰");
+            }
+            int fire = 0;
+            for (int c = 0; c < ch.FireCause.Length && fire == 0; c++) if (ch.FireCause[c] != 0) fire = ch.FireCause[c];
+            int root = so.Culprit(s, fire, -1);
+            if (Debug) Console.WriteLine($"    불 {(lit >= 0 ? Time.Clock(lit) : "없음")} · {s.Causes.Story(fire)}");
+            Check("사람의 실수: 켜 둔 조리대가 그 위 음식을 눌려 불을 낸다 — 불의 원인 사슬 뿌리가 켜 둔 사람",
+                planted && lit > 0 && root == culprit && culprit >= 0,
+                $"{s.Causes.Text(seed.Cause)} → 불 {(lit > 0 ? $"{lit / 1500.0:0.0}시간 뒤" : "안 남")} · 뿌리 {(root >= 0 ? m.NameOf(root) : "-")}");
+        }
+
+        // ── 묵은 앙금: 거친 두 사람 사이에 원한의 씨앗만 심는다 — 기억 · 원한이 남고 그 뒤는 그들이 정한다 ──
+        {
+            var s = ShipWorld.Crewed("Kestrel", 10, 6, 2);
+            var st = s.Get<Storyteller>(); var so = s.Get<Society>(); var m = s.Get<Mind>();
+            s.Run(Time.Minutes(10));
+            bool planted = st.Plant(s, SeedKind.OldGrudge);
+            var seed = st.Seeds[^1];
+            int a2 = s.Causes[seed.Cause].Actor;
+            int a1 = so.Memories.FirstOrDefault(x => x.Cause == seed.Cause && x.About == a2).Owner;
+            Check("묵은 앙금: 두 사람 사이에 원한의 씨앗 — 원한 · 기억이 남는다 (따질지 · 풀지는 그들이)",
+                planted && so.GrudgeOf(a1, a2) >= 0.3f && so.Memories.Any(x => x.Owner == a1 && x.Topic == Topic.Blame && x.About == a2),
+                $"{s.Causes.Text(seed.Cause)} · 원한 {so.GrudgeOf(a1, a2):0.00} / {so.GrudgeOf(a2, a1):0.00}");
+        }
+    }
+}

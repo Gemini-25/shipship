@@ -33,6 +33,8 @@ public sealed class Chemistry : IEngine
     public byte[] Burning;
     /// <summary>불 붙은 칸의 원인 마디.</summary>
     public int[] FireCause;
+    /// <summary>칸을 달군 것의 원인 (켜 둔 조리대 · 과열 장치 — 위 층이 적는다) — 뜨거워 불이 붙으면 그 불의 부모가 된다.</summary>
+    public int[] HeatCause;
     /// <summary>지난 틱에 낸 열 (kW) — 화면 · 연출.</summary>
     public float[] Hrr;
     /// <summary>이번 틱의 불씨 (전기 불꽃 · 불 붙은 이웃의 기체 불) — 다음 틱에 쓴다.</summary>
@@ -47,7 +49,7 @@ public sealed class Chemistry : IEngine
     public Chemistry(Field f)
     {
         F = f; T = f.T; Cells = f.Cells;
-        Burning = new byte[Cells]; FireCause = new int[Cells]; Hrr = new float[Cells];
+        Burning = new byte[Cells]; FireCause = new int[Cells]; HeatCause = new int[Cells]; Hrr = new float[Cells];
         _spark = new byte[Cells]; _sparkNext = new byte[Cells]; _sparkCause = new int[Cells]; _sparkCauseNext = new int[Cells];
         _fuels = new[]
         {
@@ -135,7 +137,7 @@ public sealed class Chemistry : IEngine
             foreach (int j in nb)
                 if (j >= 0 && Burning[j] != 0) { cause = sim.Causes.Add(CauseKind.Fire, "옆 칸으로 번졌다", sim.Tick, i, FireCause[j]); spread = true; break; }
         }
-        if (cause == 0) cause = sim.Causes.Add(CauseKind.Heat, "뜨거워져 불이 붙었다", sim.Tick, i);
+        if (cause == 0) cause = sim.Causes.Add(CauseKind.Heat, "뜨거워져 불이 붙었다", sim.Tick, i, HeatCause[i]);
         FireCause[i] = cause;
         sim.Facts.Emit(sim.Tick, spread ? FactKind.FireSpread : FactKind.Ignition, i, (float)F.Temp(i), cause);
     }
@@ -306,13 +308,13 @@ public sealed class Chemistry : IEngine
 
     public void Save(StateWriter w)
     {
-        w.Arr(Burning); w.Arr(FireCause); w.Arr(Hrr); w.Arr(_spark); w.Arr(_sparkCause);
+        w.Arr(Burning); w.Arr(FireCause); w.Arr(HeatCause); w.Arr(Hrr); w.Arr(_spark); w.Arr(_sparkCause);
         w.I64(Ignitions); w.I64(GasBursts);
     }
 
     public void Load(StateReader r)
     {
-        r.ArrInto(Burning); r.ArrInto(FireCause); r.ArrInto(Hrr); r.ArrInto(_spark); r.ArrInto(_sparkCause);
+        r.ArrInto(Burning); r.ArrInto(FireCause); r.ArrInto(HeatCause); r.ArrInto(Hrr); r.ArrInto(_spark); r.ArrInto(_sparkCause);
         Ignitions = r.I64(); GasBursts = r.I64();
     }
 }
