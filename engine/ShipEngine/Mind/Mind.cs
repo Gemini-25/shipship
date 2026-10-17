@@ -392,10 +392,32 @@ public sealed partial class Mind : IEngine
             if (a.C.Up != 0 && a.IsPerson) Instinct(sim, a);
             bool think = a.C.Up != 0 && a.C.Mode == 0 && ((sim.Tick + a.Id) % 2 == 0 || a.Plan.Count == 0 || a.C.StepIndex >= a.Plan.Count);
             if (think) Decide(sim, a);
+            WithdrawDoor(a);
             if (a.C.Up != 0 || IsSleeping(a)) Advance(sim, a, dt);
             Needs(sim, a, dt);
         }
         BlockDoors();
+    }
+
+    /// <summary>열어 달라던 문을 지나가지 않게 됐으면 (계획이 바뀌었다 · 쓰러졌다) 요청을 거둔다 — 남이 그 문을 기다리지 않으면.
+    /// 안 거두면 아무도 지나가지 않는 문이 열린 채 남는다 (바깥문이면 배 공기가 에어락 안쪽 문틈으로 밤새 빠진다).</summary>
+    private void WithdrawDoor(Agent a)
+    {
+        ref var c = ref a.C;
+        int d = c.WaitDoor;
+        if (d < 0 || _st == null) return;
+        int dc = L.Doors[d].Cell;
+        if (c.Up != 0 && a.PathIdx < a.Path.Count && a.Path.IndexOf(dc, a.PathIdx) >= 0) return; // 아직 그 문으로 간다
+        c.WaitDoor = -1; c.WaitTicks = 0;
+        ReleaseDoor(a, d);
+    }
+
+    /// <summary>a가 열어 달라던 문 d의 요청을 거둔다 — 남이 그 문을 기다리지 않고 · 문 칸에 아무도 없으면.</summary>
+    private void ReleaseDoor(Agent a, int d)
+    {
+        if (d < 0 || _st == null) return;
+        foreach (var o in Agents) if (o != a && (o.C.WaitDoor == d || o.C.Cell == L.Doors[d].Cell)) return;
+        _st.RequestDoor(d, 0);
     }
 
     /// <summary>문 칸에 몸(사람 · 쓰러진 몸 · 로봇)이 있으면 문이 닫히지 않는다 — 몸에 걸린다.</summary>

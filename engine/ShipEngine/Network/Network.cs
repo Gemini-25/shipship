@@ -660,6 +660,12 @@ public sealed class Network : IEngine
                     PanK[d] = (float)Math.Max(tAir, pk);
                     F.AddSurfaceHeat(c, loss * dt * 0.5);                                  // 냄비가 내는 열의 반은 조리대 겉면으로
                     F.AddHeat(c, (kw * 1000 * 0.4 + loss * 0.5) * dt);
+                    // 물이 다 졸고 200℃를 넘으면 음식이 눌어 연기가 난다 (당 · 기름의 열분해 — C₆H₁₂O₆ → 6C + 6H₂O) — 불꽃보다 먼저 냄새 · 연기 (감지기가 안다)
+                    if (PanK[d] > 470 && food > 0.05 && PanWater[d] <= 0)
+                    {
+                        double x = F.TakeStore(c, T.sFood, Math.Min(food, 0.0005 * (PanK[d] - 470) / 100 * dt));
+                        F.AddGas(c, T.gSoot, 6 * x, PanK[d]); F.AddGas(c, T.gH2O, 6 * x, PanK[d]);
+                    }
                     if (PanK[d] > 600 && food > 0.05) F.Tf[c] = Math.Max(F.Tf[c], PanK[d]); // 눌은 음식이 불붙을 만큼 뜨겁다
                     if (kw > 0 && OnCause[d] != 0) { var chem = sim.Find<Chemistry>(); if (chem != null) chem.HeatCause[c] = OnCause[d]; }
                     break;

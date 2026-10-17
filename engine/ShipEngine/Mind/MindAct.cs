@@ -245,7 +245,12 @@ public sealed partial class Mind
                 if (t > c.StepStart)
                 {
                     Extinguished++;
-                    int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} 불을 껐다", t, center, c.GoalCause, 0, a.Id);
+                    // 불씨가 된 조리대가 곁에 켜져 있으면 전원도 내린다 (안 끄면 다시 눌어 붙는다)
+                    bool stove = false;
+                    if (_net != null)
+                        foreach (var dv in _net.Devices)
+                            if (dv.Def.Role == "stove" && _net.On[dv.Id] != 0 && Dist(dv.Cell, center) <= 3) { _net.SetOn(dv.Id, false); stove = true; }
+                    int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} 불을 껐다{(stove ? " · 조리대 전원도 내렸다" : "")}", t, center, c.GoalCause, 0, a.Id);
                     sim.Facts.Emit(t, FactKind.Extinguished, center, 0, cause, a.Id);
                 }
                 Forget(a, b => b.Kind == BeliefKind.Fire && Dist(b.Cell, center) <= 3);
@@ -561,7 +566,7 @@ public sealed partial class Mind
                 if (!F.DoorPassable(d))
                 {
                     _st?.RequestDoor(d, 1);
-                    if (c.WaitDoor != d) { c.WaitDoor = d; c.WaitTicks = 0; }
+                    if (c.WaitDoor != d) { ReleaseDoor(a, c.WaitDoor); c.WaitDoor = d; c.WaitTicks = 0; } // 앞서 열어 달라던 다른 문은 거둔다
                     if (F.DoorBleed[d] == 0 || t % 25 == 0) c.WaitTicks++; // 압력 맞춤 밸브가 쉬익거리면 (기압을 맞추는 중) 더 기다린다 — 큰 에어락은 몇 분 걸린다 (12분까지)
                     if (c.OpenedDoor >= 0 && c.OpenedDoor != d) CloseBehind(sim, a, 1); // 에어락: 뒷문을 닫아야 앞문 밸브가 열린다
                     // 바깥문 앞: 이 방의 다른 문이 열려 있으면 (남이 열어 둔 것이라도) 닫는다 — 문 칸에 아무도 없을 때

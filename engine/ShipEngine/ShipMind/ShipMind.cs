@@ -93,7 +93,7 @@ public sealed class ShipMind : IEngine
     public byte[] RoomSeen;                     // 1: 이번에 센서가 읽혔다 (전원)
     public byte[] Shed;                         // 장치마다 1: 전력 때문에 꺼 둠
     public long[] BreakerResetAt;               // 급전선마다 마지막으로 다시 올린 틱
-    public long Alarms, Assignments, Seals, Sheds, Resets, Exhausts;
+    public long Alarms, Assignments, Seals, Sheds, Resets, Exhausts, OuterClosed, StovesCut;
     private int _computer = -2;
 
     /// <summary>일지 — 하루 한 번(JournalHour시) 지난 일지 뒤로 주컴퓨터가 안 것만 적는다. 줄마다 하나 · 첫 줄은 한 줄 요약.</summary>
@@ -632,6 +632,7 @@ public sealed class ShipMind : IEngine
     private void Act(Sim sim)
     {
         long t = sim.Tick;
+        if (t % ReadEvery == 0) WatchOuterDoors(sim);
         for (int i = 0; i < Incidents.Count; i++)
         {
             var x = Incidents[i];
@@ -643,6 +644,10 @@ public sealed class ShipMind : IEngine
                 Alarm(sim, x);
                 x.LastAlarm = t;
             }
+            // 불이 난 방의 조리대 전원을 내린다 (켜 둔 조리대가 불씨면 끄지 않는 한 다시 붙는다)
+            if (x.Kind == IncidentKind.Fire && x.Room >= 0 && _net != null)
+                foreach (var dv in _net.Devices)
+                    if (dv.Def.Role == "stove" && _net.On[dv.Id] != 0 && L.Room[dv.Cell] == x.Room) { _net.SetOn(dv.Id, false); StovesCut++; Say(sim, $"{RoomName(x.Room)} {dv.Name} 전원을 내렸다 — 불이 났다"); }
             // 연기 · 독한 공기가 덕트로 번지지 않게 그 방 통풍구를 닫는다
             if (x.Kind is IncidentKind.Fire or IncidentKind.CO or IncidentKind.Toxic && x.Room >= 0 && _net != null && _net.Damper[x.Room] != 0) { _net.SetDamper(x.Room, false); Say(sim, $"{RoomName(x.Room)} 통풍구를 닫았다"); }
             // 독한 기체는 그 방 덕트를 정화기로만 돌려 그 자리에서 거른다 (불이 난 방은 아니다 — 공기를 더 대 주지 않게)
@@ -789,6 +794,28 @@ public sealed class ShipMind : IEngine
             bool near = false;
             foreach (var a in _mind.Agents) if (a.C.Up != 0 && _mind.Dist(a.C.Cell, dc) <= 2) { near = true; break; }
             if (!near) _st.RequestDoor(d, 0);
+        }
+    }
+
+    /// <summary>바깥문 지키기: 열려 있는데(열라는 요청이 남았는데) 곁 3칸에 아무도 없고 · 열어 달라고 기다리는 이도 · 선외에 나간 이도 없으면 닫는다 —
+    /// 열린 바깥문은 에어락 안쪽 문틈으로 배 공기를 조금씩 내보낸다 (밤새면 배 하나가 빈다).</summary>
+    private void WatchOuterDoors(Sim sim)
+    {
+        if (_st == null || _mind == null) return;
+        foreach (var d in L.Doors)
+        {
+            if (!d.External || F.DoorOpen[d.Id] <= 0 && _st.DoorTarget[d.Id] <= 0 || _st.DoorJam[d.Id] != 0) continue;
+            bool someone = false;
+            foreach (var a in _mind.Agents)
+                if (a.C.WaitDoor == d.Id || _mind.Dist(a.C.Cell, d.Cell) <= 3 || L.Kind[a.C.Cell] == CellKind.Outside) { someone = true; break; }
+            if (someone) continue;
+            _st.RequestDoor(d.Id, 0);
+            int room = -1;
+            Span<int> nb = stackalloc int[4];
+            L.Neighbors(d.Cell, nb);
+            foreach (int j in nb) if (j >= 0 && L.Room[j] >= 0) room = L.Room[j];
+            Say(sim, $"{RoomName(room)} 바깥문이 열린 채 아무도 없어 닫았다");
+            OuterClosed++;
         }
     }
 
@@ -996,7 +1023,7 @@ public sealed class ShipMind : IEngine
         w.Bool(Online);
         w.Arr(RoomKPa); w.Arr(RoomKPaPrev); w.Arr(RoomO2); w.Arr(RoomSoot); w.Arr(RoomSootPrev); w.Arr(RoomCO); w.Arr(RoomCO2); w.Arr(RoomTemp); w.Arr(RoomHot); w.Arr(RoomNH3); w.Arr(RoomO3); w.Arr(RoomToxCell); w.Arr(RoomSeen); w.Arr(RoomMoles); w.I32(_reads); w.Arr(ShipMolesHist); w.Arr(DoorMoles); w.I64(LastCycle);
         w.Arr(Shed); w.Arr(BreakerResetAt); w.List(Imaginations);
-        w.I64(Alarms); w.I64(Assignments); w.I64(Seals); w.I64(Sheds); w.I64(Resets); w.I64(Exhausts);
+        w.I64(Alarms); w.I64(Assignments); w.I64(Seals); w.I64(Sheds); w.I64(Resets); w.I64(Exhausts); w.I64(OuterClosed); w.I64(StovesCut);
         w.I32(Journal.Count); foreach (var (t, s) in Journal) { w.I64(t); w.Str(s); }
         w.I32(JournalHour); w.I32(MorningHour); w.I64(LastJournal); w.I64(_journalAssign); w.Arr(ReportedDead.ToArray()); w.Str(Morning); w.Arr(RoomAirT); w.Arr(GaveAirAt); w.Arr(DoorWasOpen);
     }
@@ -1009,7 +1036,7 @@ public sealed class ShipMind : IEngine
         Online = r.Bool();
         r.ArrInto(RoomKPa); r.ArrInto(RoomKPaPrev); r.ArrInto(RoomO2); r.ArrInto(RoomSoot); r.ArrInto(RoomSootPrev); r.ArrInto(RoomCO); r.ArrInto(RoomCO2); r.ArrInto(RoomTemp); r.ArrInto(RoomHot); r.ArrInto(RoomNH3); r.ArrInto(RoomO3); r.ArrInto(RoomToxCell); r.ArrInto(RoomSeen); r.ArrInto(RoomMoles); _reads = r.I32(); r.ArrInto(ShipMolesHist); r.ArrInto(DoorMoles); LastCycle = r.I64();
         Shed = r.Arr<byte>(); BreakerResetAt = r.Arr<long>(); Imaginations.Clear(); Imaginations.AddRange(r.List<Imagined>());
-        Alarms = r.I64(); Assignments = r.I64(); Seals = r.I64(); Sheds = r.I64(); Resets = r.I64(); Exhausts = r.I64();
+        Alarms = r.I64(); Assignments = r.I64(); Seals = r.I64(); Sheds = r.I64(); Resets = r.I64(); Exhausts = r.I64(); OuterClosed = r.I64(); StovesCut = r.I64();
         Journal.Clear(); int nj = r.I32(); for (int i = 0; i < nj; i++) { long t = r.I64(); Journal.Add((t, r.Str() ?? "")); }
         JournalHour = r.I32(); MorningHour = r.I32(); LastJournal = r.I64(); _journalAssign = r.I64(); ReportedDead.Clear(); ReportedDead.AddRange(r.Arr<int>()); Morning = r.Str() ?? ""; r.ArrInto(RoomAirT); r.ArrInto(GaveAirAt); r.ArrInto(DoorWasOpen);
     }

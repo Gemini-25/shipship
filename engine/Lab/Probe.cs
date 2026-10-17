@@ -323,6 +323,7 @@ public static partial class Program
 public static partial class Program
 {
     /// <summary>주컴퓨터 일지 · 정화 장부 (--probe-log [배] [시드] [시간]).</summary>
+    private static float _probeDoor = -1, _probeTarget = -1;
     internal static void ProbeLog(string[] args)
     {
         var rest = args.SkipWhile(a => a != "--probe-log").Skip(1).ToArray();
@@ -355,22 +356,41 @@ public static partial class Program
                     Console.WriteLine($"    {Time.Clock(s.Tick)} {nm} {sm.RoomKPa[room.Id]:0.00}kPa 몰 {room.Cells.Sum(c => fld.Moles(c)):0.0} 온도 {sm.RoomAirT[room.Id]:0.0} · {string.Join(" · ", ds)}");
                 }
             }
-            if (rest.Contains("facts") && s.Tick >= Time.Hours(13.48) && s.Tick <= Time.Hours(13.7))
+            double fFrom = double.Parse(Environment.GetEnvironmentVariable("FROM") ?? "13.48"), fTo = double.Parse(Environment.GetEnvironmentVariable("TO") ?? "13.7");
+            if (rest.Contains("facts") && s.Tick >= Time.Hours(fFrom) && s.Tick <= Time.Hours(fTo))
             {
                 foreach (var f in s.Facts.Recent(64).Where(x => x.Tick == s.Tick - 1 && x.Kind is not (FactKind.Talk or FactKind.Noticed or FactKind.Woke)))
                     Console.WriteLine($"    사실 {Time.Clock(f.Tick)} {f.Kind} 칸 {f.Cell}({(f.Cell >= 0 ? s.Layout.X(f.Cell) + "," + s.Layout.Y(f.Cell) : "-")}) 크기 {f.Size:0.###} · {s.Causes.Story(f.Cause)}");
                 {
                     var mm = s.Get<Mind>();
-                    var who = mm.Agents.First(x => mm.NameOf(x.Id) == "정지우");
-                    Console.WriteLine($"    정지우 {Time.Clock(s.Tick)} 칸 {s.Layout.X(who.C.Cell)},{s.Layout.Y(who.C.Cell)} 목표 {who.C.Goal} 방식 {who.C.Mode} 세게닫기 {who.C.CloseHard} 연문 {who.C.OpenedDoor} · {mm.Thought(who.Id)} · 길 {who.Path.Count - who.PathIdx}");
+                    var who = mm.Agents.FirstOrDefault(x => mm.NameOf(x.Id) == "정지우");
+                    if (who != null) Console.WriteLine($"    정지우 {Time.Clock(s.Tick)} 칸 {s.Layout.X(who.C.Cell)},{s.Layout.Y(who.C.Cell)} 목표 {who.C.Goal} 방식 {who.C.Mode} 세게닫기 {who.C.CloseHard} 연문 {who.C.OpenedDoor} · {mm.Thought(who.Id)} · 길 {who.Path.Count - who.PathIdx}");
                 }
                 if (s.Tick % 5 == 0)
                 {
                     var fld = s.Get<Field>();
                     var holes = Enumerable.Range(0, s.Layout.N).Where(c => fld.Hole[c] > 0).Select(c => $"{s.Layout.X(c)},{s.Layout.Y(c)}:{fld.Hole[c]:0.####}");
-                    var rooms = new[] { "원자로실", "둘레 통로", "재배실" }.Select(n => s.Layout.Rooms.First(r => r.Name == n)).Select(r => $"{r.Name} {sm.RoomKPa[r.Id]:0.00}kPa 몰 {r.Cells.Sum(c => fld.Moles(c)):0.0}");
+                    var rooms = new[] { "원자로실", "둘레 통로", "재배실" }.Select(n => s.Layout.Rooms.FirstOrDefault(r => r.Name == n)).Where(r => r != null).Select(r => r!).Select(r => $"{r.Name} {sm.RoomKPa[r.Id]:0.00}kPa 몰 {r.Cells.Sum(c => fld.Moles(c)):0.0}");
                     Console.WriteLine($"    {Time.Clock(s.Tick)} 구멍 [{string.Join(" ", holes)}] · {string.Join(" · ", rooms)} · 열린 문 {Enumerable.Range(0, s.Layout.Doors.Count).Count(d => fld.DoorGapOpen(d))}");
                 }
+            }
+            if (rest.Contains("door11"))
+            {
+                var fld = s.Get<Field>(); int dId = int.Parse(Environment.GetEnvironmentVariable("DOOR") ?? "11");
+                var stt = s.Get<Structure>();
+                if (stt.DoorTarget[dId] != _probeTarget) { var mm = s.Get<Mind>(); Console.WriteLine($"  {Time.Clock(s.Tick)} 문{dId} 목표 {_probeTarget:0.0} → {stt.DoorTarget[dId]:0.0} · 기다리는 이 {string.Join(", ", mm.Agents.Where(a => a.C.WaitDoor == dId || a.C.OpenedDoor == dId).Select(a => $"{mm.NameOf(a.Id)}({mm.Thought(a.Id)} · {a.C.Goal} · 칸 {s.Layout.X(a.C.Cell)},{s.Layout.Y(a.C.Cell)})"))}"); _probeTarget = stt.DoorTarget[dId]; }
+                float now = fld.DoorOpen[dId];
+                if (now != _probeDoor) { var mm = s.Get<Mind>(); int dc = s.Layout.Doors[dId].Cell; var near = mm.Agents.Where(a => mm.Dist(a.C.Cell, dc) <= 3).Select(a => $"{mm.NameOf(a.Id)}({mm.Thought(a.Id)} · {a.C.Goal})"); Console.WriteLine($"  {Time.Clock(s.Tick)} 문{dId} {_probeDoor:0.0} → {now:0.0} · 곁 {string.Join(", ", near)}"); _probeDoor = now; }
+            }
+            if (rest.Contains("hull") && t % Time.Minutes(30) == 0)
+            {
+                // 배 공기: 전체 몰 · 구멍 · 틈이 새는 문 · 열린 바깥문 · 예비 공기
+                var fld = s.Get<Field>(); var L2 = s.Layout;
+                double mol = 0; foreach (var r in L2.Rooms) foreach (int c in r.Cells) mol += fld.Moles(c);
+                var holes = Enumerable.Range(0, L2.N).Where(c => fld.Hole[c] > 0).Select(c => $"{L2.X(c)},{L2.Y(c)}:{fld.Hole[c]:0.####}");
+                var gaps = L2.Doors.Where(d => fld.DoorGapOpen(d.Id) || fld.DoorBleed[d.Id] != 0 || d.External && fld.DoorOpen[d.Id] > 0).Select(d => $"문{d.Id}{(d.External ? "(바깥)" : "")} 열림 {fld.DoorOpen[d.Id]:0.0} 틈 {fld.DoorGapOpen(d.Id)} 밸브 {fld.DoorBleed[d.Id]}");
+                Console.WriteLine($"  {Time.Clock(s.Tick)} 몰 {mol:0} · 예비 {net.AirReserve:0} · 구멍 [{string.Join(" ", holes)}] · 문 [{string.Join(" ", gaps)}]");
+                if (rest.Contains("who")) { var mm = s.Get<Mind>(); foreach (var a in mm.Agents) Console.WriteLine($"      {mm.NameOf(a.Id)} {L2.X(a.C.Cell)},{L2.Y(a.C.Cell)} {mm.RoomOf(a.C.Cell)} · {mm.Thought(a.Id)} · 목표 {a.C.Goal} 단계 {a.C.StepIndex}/{a.Plan.Count}"); }
             }
             if (rest.Contains("air") && t % Time.Minutes(10) == 0) Console.WriteLine($"  {Time.Clock(s.Tick)} 정화 {net.TraceScrubbed:0.0}몰 · 정화기 {(net.ScrubberWorking() ? "돈다" : "섰다")} · 팬 {net.HvacKw:0}kW · 배기 {string.Join(",", Enumerable.Range(0, s.Layout.Rooms.Count).Where(r => net.Exhaust[r] != 0).Select(r => s.Layout.Rooms[r].Name))}");
         }
