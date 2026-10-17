@@ -1,0 +1,27 @@
+; 새 엔진 관전 화면 (docs/ENGINE.md §새 화면 2단계) — 세계 · 연출 · 그리기는 ShipView(순수 C#)가 하고, 이 장면은 그림을 띄우고 글만 쓴다.
+
+config_version=5
+
+[application]
+
+config/name="우주선 관전"
+config/description="스스로 살아가고, 망가지고, 수리하는 우주선을 지켜본다 — 새 엔진"
+run/main_scene="res://Main.tscn"
+config/features=PackedStringArray("4.7", "C#", "GL Compatibility")
+
+[display]
+
+window/size/viewport_width=1600
+window/size/viewport_height=900
+window/stretch/mode="disabled"
+
+[dotnet]
+
+project/assembly_name="ShipLive"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+environment/defaults/default_clear_color=Color(0.0196, 0.0275, 0.047, 1)
+textures/canvas_textures/default_texture_filter=0

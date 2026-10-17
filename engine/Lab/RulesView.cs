@@ -46,5 +46,48 @@ public static partial class Program
         }
         Check("새 화면: 그리기는 세계를 바꾸지 않는다 (그리기 전후 바이트까지 같다) · 불 칸에 불꽃 · 빠진 방은 서리 빛", same && burning >= 0 && fire > 15 && vac > ok + 15,
             $"같음 {same} · 불꽃 도트 {fire} · 파란 값 빠진 방 {vac:0} / 통로 {ok:0} · {img.W}×{img.H}");
+
+        LiveRules(lay);
+    }
+
+    /// <summary>관전 화면 (Godot 장면의 속): 연출의 빠르기를 따르고 · 멈춤 · 밀린 것은 버림 · 카메라가 일 난 곳으로 · 세계는 그대로.</summary>
+    private static void LiveRules(Layout lay)
+    {
+        int At(int x, int y) => Worlds.At(lay, x, y);
+        Sim Make()
+        {
+            var w = Worlds.Full(lay, 3);
+            var mw = w.Get<Mind>();
+            mw.AddPerson(w, At(15, 2)); mw.AddRobot(w, At(20, 7), AgentKind.Robot, At(20, 7));
+            return w;
+        }
+        var show = new LiveShow(Make(), "시험호");
+        var twin = Make();                          // 화면 없이 같은 틱을 돌린 세계
+        const double dt = 1.0 / 60;
+        int calm = 0;
+        for (int i = 0; i < 60; i++) calm += show.Advance(dt);       // 조용함: 화면 1초 = 60틱
+        show.Paused = true; int paused = show.Advance(1); string pausedText = show.Status(); show.Paused = false;
+        int lag = show.Advance(5);                                    // 5초 밀림 → 한 번에 50틱까지만
+        twin.Run(show.Sim.Tick);
+        int fire = At(3, 5);
+        show.Sim.Get<Chemistry>().Ignite(fire, 3e6, show.Sim.Causes.Add(CauseKind.Story, "침대 불씨", show.Sim.Tick));
+        twin.Get<Chemistry>().Ignite(fire, 3e6, twin.Causes.Add(CauseKind.Story, "침대 불씨", twin.Tick));
+        double slow = 1e9; bool inView = false, srcOk = true; int frames = 0;
+        for (int i = 0; i < 60 * 8; i++)
+        {
+            show.Advance(dt);
+            slow = Math.Min(slow, show.Speed);
+            if (i % 20 != 0) continue;
+            var lf = show.Render(); frames++;
+            srcOk &= lf.SrcX >= 0 && lf.SrcY >= 0 && lf.SrcX + lf.SrcW <= lf.Img.W + 0.01 && lf.SrcY + lf.SrcH <= lf.Img.H + 0.01;
+            show.Recycle(lf.Img);
+            var (l, t, w, h) = show.Camera();
+            inView = lay.X(fire) + 0.5 >= l && lay.X(fire) + 0.5 <= l + w && lay.Y(fire) + 0.5 >= t && lay.Y(fire) + 0.5 <= t + h;
+        }
+        twin.Run(show.Sim.Tick - twin.Tick);
+        bool same = show.Sim.Save().AsSpan().SequenceEqual(twin.Save());
+        Check("관전 화면: 조용하면 화면 1초에 60틱 · 멈추면 0 · 밀린 5초는 50틱까지만 · 불이 나면 느려지고 카메라가 불을 담는다 · 화면 없이 돌린 세계와 바이트까지 같다",
+            calm is >= 59 and <= 61 && paused == 0 && pausedText.Contains("멈춤") && lag == LiveShow.MaxTicksPerCall && slow <= Director.OmenSpeed && inView && srcOk && same,
+            $"조용함 {calm}틱 · 멈춤 {paused}틱 · 밀림 {lag}틱 · 가장 느리게 {slow}틱/초 · 불이 화면 안 {inView} · 그림 {frames}장 (보일 곳 맞음 {srcOk}) · 같음 {same}");
     }
 }

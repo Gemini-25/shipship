@@ -691,9 +691,8 @@ public sealed class ShipMind : IEngine
     /// <summary>세계를 복제해 두 안(기다림 · 지금 봉쇄)을 각각 2분 돌려 본다. 복제 안의 주컴퓨터는 상상하지 않고 규칙대로만 한다.</summary>
     private (Imagined wait, Imagined now) Imagine(Sim sim, int room)
     {
-        Imagined Run(byte option)
+        Imagined Run(byte option, Sim w)
         {
-            var w = sim.Clone();
             var cm = w.Get<ShipMind>();
             cm.Imagining = true;
             if (option == 1)
@@ -721,7 +720,12 @@ public sealed class ShipMind : IEngine
                 if (r != room && L.Rooms[r].Cells.Length > 0) lost += Math.Max(0, before[r] - f0.Pressure(L.Rooms[r].Cells[0]));
             return new Imagined { Tick = sim.Tick, Room = room, Option = option, Dead = dead, Down = down, LostKPa = (float)lost, Score = (float)(dead * 100 + down * 30 + lost * 0.5) };
         }
-        return (Run(0), Run(1));
+        // 두 복제 세계는 서로 닿지 않는다 — 함께 돌린다 (복제는 차례로: 원래 세계를 동시에 읽지 않게). 결과는 순서와 상관없이 같다.
+        var w0 = sim.Clone(); var w1 = sim.Clone();
+        Imagined a = default, b = default;
+        if (Par.Threads <= 1) { a = Run(0, w0); b = Run(1, w1); }
+        else Parallel.Invoke(() => a = Run(0, w0), () => b = Run(1, w1));
+        return (a, b);
     }
 
     // ───────────────────────── 전력 ─────────────────────────

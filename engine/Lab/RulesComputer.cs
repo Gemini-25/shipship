@@ -121,6 +121,28 @@ public static partial class Program
                 string.Join(" / ", im.Select(v => $"{(v.Option == 1 ? "지금 닫음" : "기다림")}: 죽음 {v.Dead} 쓰러짐 {v.Down} 잃은 기압 {v.LostKPa:0}{(v.Chosen == 1 ? " ← 고름" : "")}"))
                 + $" · 옆 방 사람 곁 {f.Pressure(life[m[b].C.Body].Cell):0}kPa · 3분 계산 {ms:0}ms");
 
+            // (가′) 두 미래는 함께 돌린다 — 코어 하나로 돌린 것과 바이트까지 같다 (관전 화면이 위기 순간에 덜 멈추게: 0.21초 → 0.12초)
+            (byte[] save, int imagined) ImagineRun(int threads)
+            {
+                int keep = Par.Threads; Par.Threads = threads;
+                try
+                {
+                    var w = World();
+                    var mw = w.Get<Mind>(); var lw = w.Get<Life>();
+                    int pa = mw.AddPerson(w, At(6, 2)), pb = mw.AddPerson(w, At(13, 2));
+                    foreach (int p in new[] { pa, pb }) { ref var body = ref lw[mw[p].C.Body]; body.Conscious = 0; body.Hypoxia = 0.6f; }
+                    w.Get<Structure>().RequestDoor(lay.DoorAt[At(10, 3)], 1); w.Run(3);
+                    w.Get<Field>().SetHole(At(0, 2), 0.05f);
+                    w.Run(Time.Minutes(1));
+                    return (w.Save(), w.Get<ShipMind>().Imaginations.Count);
+                }
+                finally { Par.Threads = keep; }
+            }
+            var one = ImagineRun(1); var many = ImagineRun(Math.Max(2, Environment.ProcessorCount));
+            bool sameIm = one.save.AsSpan().SequenceEqual(many.save);
+            Check("상상: 두 미래를 함께 돌려도 코어 하나로 돌린 것과 세계가 바이트까지 같다", one.imagined >= 2 && sameIm,
+                $"상상 {one.imagined / 2}번 · {one.save.Length}B · 같음 {sameIm}");
+
             // (나) 천천히 새는 방 · 깨어 있는 사람 → 먼저 내보내고 봉쇄한다 (사람이 갇히지 않는다)
             var s2 = World();
             var m2 = s2.Get<Mind>(); var f2 = s2.Get<Field>(); var life2 = s2.Get<Life>(); var cm2 = s2.Get<ShipMind>();

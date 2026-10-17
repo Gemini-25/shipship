@@ -1,0 +1,14 @@
+<Project Sdk="Godot.NET.Sdk/4.7.2">
+  <!-- 새 엔진 관전 화면: Godot은 그림을 띄우기만 한다. 세계 · 연출 · 그리기는 ShipView (실험실의 live 명령이 같은 것을 PNG로 확인한다) -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <Nullable>enable</Nullable>
+    <LangVersion>12</LangVersion>
+    <RootNamespace>ShipLive</RootNamespace>
+    <NoWarn>CS1591;CS8618;CS8600;CS8602;CS8604</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../ShipView/ShipView.csproj" />
+  </ItemGroup>
+</Project>

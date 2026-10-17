@@ -72,10 +72,11 @@ public sealed class Painter
         return rooms >= 2 ? DotWall.Partition : DotWall.Panel;
     }
 
-    /// <summary>화면 한 장: 칸 (x0, y0)부터 w × h 칸. frame은 불꽃 · 걷기 같은 움직임의 장 번호.</summary>
-    public Img Frame(Sim s, int x0, int y0, int w, int h, int frame)
+    /// <summary>화면 한 장: 칸 (x0, y0)부터 w × h 칸. frame은 불꽃 · 걷기 같은 움직임의 장 번호.
+    /// into: 다시 쓸 그림 (크기가 맞으면 — 관전 화면이 매 장 5MB를 새로 만들지 않게. 처음에 통째로 칠한다).</summary>
+    public Img Frame(Sim s, int x0, int y0, int w, int h, int frame, Img? into = null)
     {
-        var img = new Img(w * T, h * T);
+        var img = into != null && into.W == w * T && into.H == h * T ? into : new Img(w * T, h * T);
         var f = s.Get<Field>();
         var net = s.Find<Network>();
         var st = s.Find<Structure>();
