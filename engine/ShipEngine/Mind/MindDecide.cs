@@ -160,7 +160,7 @@ public sealed partial class Mind
                 Add(GoalKind.Exercise, -1, -1, c.Unfit * (0.2f + 1.4f * c.Consc + 0.4f * c.Extra - 0.4f * c.Neuro));
             // 어울리기: 어울릴 사람이 깨어 있고 일하지 않을 때만 (모두 자거나 일하는데 혼자 휴게실에 앉아 몇 시간씩 기다리지 않는다)
             if ((c.Lonely > 0.3f || grief > 0.3f) && SomeoneFree(a)) Add(GoalKind.Socialize, -1, -1, Math.Max(c.Lonely, grief) * (0.5f + c.Sociable) * 1.5f + grief);
-            Add(GoalKind.Idle, -1, here, 0.3f);
+            Add(GoalKind.Idle, -1, here, 0.3f * (1 - DreadAt(a, here)));   // 꺼리는 방에서는 우두커니 머물지 않는다
             JobOption(a);
             // ⑨ 몸싸움: 덤빈 이는 그 자리에서 · 맞는 이는 겁이 많으면 방을 빠져나가 문을 닫는다
             if (_soc != null && _soc.InBrawl(a.Id, out int foe, out bool attacker))
@@ -717,7 +717,7 @@ public sealed partial class Mind
             bool used = false;
             foreach (var o in Agents) if (o != a && o.C.Cell == cell && o.C.Goal is GoalKind.Relax or GoalKind.Socialize or GoalKind.Sleep) { used = true; break; }
             if (used) continue;
-            int d = Manhattan(a.C.Cell, cell);
+            int d = Manhattan(a.C.Cell, cell) + (int)(60 * DreadAt(a, cell)); // 꺼리는 방은 그만큼 멀게 친다 (장소의 기억)
             if (d < bd) { bd = d; best = cell; }
         }
         return best;
@@ -776,7 +776,8 @@ public sealed partial class Mind
             bool used = false;
             foreach (var o in Agents) if (o != a && o.C.Cell == cell) { used = true; break; }
             if (used) continue;
-            double s = count.GetValueOrDefault(L.Furniture[fu].Room) * 10 + FriendsIn(a, L.Furniture[fu].Room) * 15 - Manhattan(a.C.Cell, cell) * 0.1;
+            double s = count.GetValueOrDefault(L.Furniture[fu].Room) * 10 + FriendsIn(a, L.Furniture[fu].Room) * 15 - Manhattan(a.C.Cell, cell) * 0.1
+                       - Dread(a.Id, L.Furniture[fu].Room) * 30; // 꺼리는 방은 사람이 모여 있어도 덜 간다
             if (s > bs) { bs = s; best = cell; }
         }
         return best;

@@ -64,7 +64,8 @@ public static partial class Program
         // 일상: 쉬는 시간에 한 일 · 밥 짓기 · 몸의 시계 (아침형 ~ 저녁형)
         var chrono = mind.Agents.Where(a => a.IsPerson).Select(a => a.C.Chrono).DefaultIfEmpty(0).ToList();
         string daily = "쉼 " + string.Join(" · ", Enumerable.Range(0, mind.HobbyCount.Length).Where(h => mind.HobbyCount[h] > 0).Select(h => $"{Mind.HobbyName((Hobby)h)} {mind.HobbyCount[h]}"))
-            + $" / 밥 짓기 {mind.Cooked} · 깜빡 {mind.Forgot} / 몸의 시계 {chrono.Min():+0.0;-0.0}~{chrono.Max():+0.0;-0.0}시간";
+            + $" / 밥 짓기 {mind.Cooked} · 깜빡 {mind.Forgot} / 몸의 시계 {chrono.Min():+0.0;-0.0}~{chrono.Max():+0.0;-0.0}시간"
+            + $" / 같이 먹음 {mind.AteTogether} · 따라 나감 {mind.Followed} · 방을 꺼리게 됨 {mind.Dreads}";
         return new FunResult(ship, seed, crew, days, hl, kinds, depth, d.NearMisses, life.Deaths, calm, d.Firsts, st.Seeds.Count, fruit.Count,
             d.ScreenSeconds / 60 / days, score, titles, daily);
     }

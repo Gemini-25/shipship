@@ -53,7 +53,7 @@ public sealed partial class Mind
             int cell = L.Furniture[fu].Cells[0], n = 0;
             foreach (var o in Agents) if (o != a && o.IsPerson && o.C.Goal == GoalKind.Relax && o.C.Hobby == (byte)h && Manhattan(o.C.GoalCell >= 0 ? o.C.GoalCell : o.C.Cell, cell) <= 2) n++;
             if (n >= cap) continue;
-            int d = Manhattan(a.C.Cell, cell);
+            int d = Manhattan(a.C.Cell, cell) + (int)(60 * DreadAt(a, cell)); // 꺼리는 방은 그만큼 멀게 친다
             if (d < bd) { bd = d; best = cell; }
         }
         return best;
@@ -71,6 +71,7 @@ public sealed partial class Mind
         {
             if (cell < 0 || w <= 0) return;
             if (RivalNear(a, cell)) w *= 0.3f;                       // ⑨ 벌어진 무리 사람 곁에서는 쉬지 않는다
+            w *= 1 - 0.85f * DreadAt(a, cell);                       // 무서운 일을 겪은 방에서는 쉬지 않는다
             opts.Add((h, cell, near, w / (1f + Manhattan(me, cell) / 30f)));
         }
         int seat = NearestFree(a, _relax);

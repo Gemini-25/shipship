@@ -68,13 +68,14 @@ public sealed partial class Society
         foreach (var (a, b) in new[] { (i, j), (j, i) })
             if (Partner[a] < 0 && Partner[b] < 0 && AttractOf(a, b) >= ConfessAt && BondOf(a, b) >= 0.45f)
                 opts.Add(new(Topic.Heart, 6 * (AttractOf(a, b) - 0.5f) * (0.5f + C(a).Extra), b, 0, C(a).Cell, a));
-        // 함께 겪은 일 (같은 원인을 둘 다 기억한다 — 가장 큰 것)
+        // 함께 겪은 일 (같은 원인을 둘 다 기억한다 — 가장 큰 것) · 무서웠던 일일수록 (그 자리를 꺼릴수록) 더 꺼낸다 (감정 나눔 연구 — 강한 일은 함께 겪은 이와 되새긴다)
         int best = -1; float bw = 0.15f;
         for (int k = 0; k < Memories.Count; k++)
         {
             var m = Memories[k];
             if (m.Owner != i || m.Topic is Topic.Blame or Topic.Gossip or Topic.Small) continue;
-            float w = Weight(m, sim.Tick);
+            int mr = _mind!.RoomOf(m.Cell);
+            float w = Weight(m, sim.Tick) * (1 + _mind.Dread(i, mr) + _mind.Dread(j, mr));
             if (w <= bw) continue;
             for (int q = 0; q < Memories.Count; q++) if (Memories[q].Owner == j && Memories[q].Cause == m.Cause && Memories[q].Topic == m.Topic) { best = k; bw = w; break; }
         }

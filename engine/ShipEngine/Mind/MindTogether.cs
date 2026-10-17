@@ -50,12 +50,12 @@ public sealed partial class Mind
         return best;
     }
 
-    /// <summary>먹을 자리: 가까운 이가 먹는 곳 → 아니면 벌어진 무리 사람이 없는 가장 가까운 곳 → 아니면 가장 가까운 곳.</summary>
+    /// <summary>먹을 자리: 가까운 이가 먹는 곳 → 아니면 벌어진 무리 사람이 없고 꺼리는 방이 아닌 가장 가까운 곳 → 아니면 가장 가까운 곳.</summary>
     private int MealSource(Agent a, int here)
     {
         int kin = KinMeal(a);
         if (kin >= 0) { AteTogether++; return kin; }
-        int calm = Nearest(here, _food, fu => FoodAt(fu) >= 1 && !RivalNear(a, L.Furniture[fu].Cells[0]));
+        int calm = Nearest(here, _food, fu => FoodAt(fu) >= 1 && !RivalNear(a, L.Furniture[fu].Cells[0]) && DreadAt(a, L.Furniture[fu].Cells[0]) < 0.3f); // 꺼리는 방도 피한다
         return calm >= 0 ? calm : Nearest(here, _food, fu => FoodAt(fu) >= 1);
     }
 
