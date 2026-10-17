@@ -155,6 +155,7 @@ public sealed class Network : IEngine
         RoomFeeder = Enumerable.Repeat(-1, L.Rooms.Count).ToArray();
         Vent = new int[L.Rooms.Count];
         BuildFeeders();
+        BuildData();
         int nf = Feeders.Count;
         Breaker = Enumerable.Repeat((byte)1, nf).ToArray();
         OverSec = new float[nf]; FaultCell = Enumerable.Repeat(-1, nf).ToArray(); BreakerStuck = new byte[nf]; Amps = new float[nf];
@@ -311,6 +312,7 @@ public sealed class Network : IEngine
         t = Lap("덕트", t);
         ReleaseAir(dt);
         if (sim.Tick % 25 == 0) WearStep(sim, 25 * dt);
+        if (sim.Tick % 5 == 0) DataStep(sim);
         Lap("마모", t);
     }
 
@@ -910,8 +912,132 @@ public sealed class Network : IEngine
         }
     }
 
+    // ───────────────────────── 센서 선 (⑥ 바퀴 1) ─────────────────────────
+    // 방마다 센서(통풍구 칸)에서 주컴퓨터까지 바닥 · 문 칸을 따라 선을 깐다 (줄기선은 여러 방이 함께 쓴다).
+    // 선이 지나는 칸이 불에 250℃를 넘거나 곁 외판이 뚫리면 그 칸의 선이 상한다 — 그 너머 방들의 센서가 주컴퓨터에 닿지 않는다.
+    // 주컴퓨터는 가장 가까운 끊긴 자리를 안다 (선 반사 측정) · 로봇 · 사람이 가서 이으면 다시 닿는다.
+
+    public const double CableBurnK = 523; // 전선 피복이 녹고 타는 온도 (250℃)
+    public int[][] DataPath = Array.Empty<int[]>(); // [방] 주컴퓨터 쪽부터 센서까지
+    public byte[] DataBroken = Array.Empty<byte>(); // [칸] 1: 그 칸의 선이 상했다
+    public int[] DataBrokenCause = Array.Empty<int>();
+    public int[] DataCutCell = Array.Empty<int>();   // [방] 주컴퓨터에서 가장 가까운 끊긴 칸 (-1: 닿는다)
+    private bool[] _onData = Array.Empty<bool>();
+    public long DataCuts, DataSplices;
+
+    private void BuildData()
+    {
+        DataPath = new int[L.Rooms.Count][];
+        DataCutCell = Enumerable.Repeat(-1, L.Rooms.Count).ToArray();
+        DataBroken = new byte[L.N]; DataBrokenCause = new int[L.N]; _onData = new bool[L.N];
+        var computer = Devices.FirstOrDefault(d => d.Type == "MainComputer");
+        for (int r = 0; r < L.Rooms.Count; r++) DataPath[r] = Array.Empty<int>();
+        if (computer == null) return;
+        // 주컴퓨터 칸에서 바닥 · 문을 따라 거리장
+        var prev = Enumerable.Repeat(-2, L.N).ToArray();
+        var q = new Queue<int>(); prev[computer.Cell] = -1; q.Enqueue(computer.Cell);
+        Span<int> nb = stackalloc int[4];
+        while (q.Count > 0)
+        {
+            int c = q.Dequeue();
+            L.Neighbors(c, nb);
+            foreach (int j in nb) if (j >= 0 && prev[j] == -2 && L.IsSpace(j)) { prev[j] = c; q.Enqueue(j); }
+        }
+        for (int r = 0; r < L.Rooms.Count; r++)
+        {
+            int v = Vent[r];
+            if (v < 0 || prev[v] == -2) continue;
+            var path = new List<int>();
+            for (int c = v; c >= 0; c = prev[c]) path.Add(c);
+            path.Reverse();
+            DataPath[r] = path.ToArray();
+            foreach (int c in path) _onData[c] = true;
+        }
+    }
+
+    /// <summary>그 방의 센서가 주컴퓨터에 닿나 (센서 선이 없는 배는 늘 닿는다).</summary>
+    public bool RoomLinked(int room) => room < 0 || room >= DataCutCell.Length || DataCutCell[room] < 0;
+
+    /// <summary>그 칸의 센서 선이 상했나.</summary>
+    public bool DataCutAt(int cell) => cell >= 0 && cell < DataBroken.Length && DataBroken[cell] != 0;
+
+    /// <summary>선이 상한다 (불 · 외판 구멍 — 시험 · 다른 피해도 이것으로).</summary>
+    public void CutData(Sim sim, int cell, int cause)
+    {
+        if (cell < 0 || cell >= DataBroken.Length || !_onData[cell] || DataBroken[cell] != 0) return;
+        DataBroken[cell] = 1; DataBrokenCause[cell] = cause; DataCuts++;
+        sim.Facts.Emit(sim.Tick, FactKind.SensorCut, cell, 0, cause);
+        Relink();
+    }
+
+    /// <summary>상한 선을 잇는다 (로봇 · 사람이 그 자리에서).</summary>
+    public bool SpliceData(int cell)
+    {
+        if (!DataCutAt(cell)) return false;
+        DataBroken[cell] = 0; DataBrokenCause[cell] = 0; DataSplices++;
+        Relink();
+        return true;
+    }
+
+    private void Relink()
+    {
+        for (int r = 0; r < DataPath.Length; r++)
+        {
+            DataCutCell[r] = -1;
+            foreach (int c in DataPath[r]) if (DataBroken[c] != 0) { DataCutCell[r] = c; break; }
+        }
+    }
+
+    /// <summary>5틱마다: 선이 지나는 칸이 불에 250℃를 넘거나 곁 외판이 뚫렸으면 그 칸의 선이 상한다.</summary>
+    private void DataStep(Sim sim)
+    {
+        if (DataPath.Length == 0) return;
+        Chemistry? chem = null; Structure? st = null;
+        Span<int> nb = stackalloc int[4];
+        for (int c = 0; c < L.N; c++)
+        {
+            if (!_onData[c] || DataBroken[c] != 0) continue;
+            int cause = 0;
+            if (F.Tf[c] > CableBurnK || F.Ts[c] > CableBurnK)
+            {
+                chem ??= sim.Find<Chemistry>();
+                cause = HeatSource(chem, c);
+                if (cause == 0) cause = sim.Causes.Add(CauseKind.Heat, "선이 지나는 바닥이 달아올랐다", sim.Tick, c);
+            }
+            else
+            {
+                L.Neighbors(c, nb);
+                foreach (int j in nb)
+                    if (j >= 0 && L.Kind[j] == CellKind.Wall && F.Hole[j] >= 0.05f)
+                    {
+                        st ??= sim.Find<Structure>();
+                        cause = st != null && st.DamageCause[j] != 0 ? st.DamageCause[j] : sim.Causes.Add(CauseKind.Pressure, "곁 외판이 뚫리며 선이 찢겼다", sim.Tick, c);
+                        break;
+                    }
+                if (cause == 0) continue;
+            }
+            CutData(sim, c, sim.Causes.Add(CauseKind.Electric, "센서 선이 끊겼다", sim.Tick, c, cause));
+        }
+    }
+
+    /// <summary>그 칸을 달군 불: 그 칸 또는 두 칸 안의 불 · 불씨 · 달군 원인 (가까운 것부터 · 없으면 0).</summary>
+    private int HeatSource(Chemistry? chem, int c)
+    {
+        if (chem == null) return 0;
+        int x0 = L.X(c), y0 = L.Y(c), best = 0, bd = int.MaxValue;
+        for (int y = y0 - 2; y <= y0 + 2; y++)
+            for (int x = x0 - 2; x <= x0 + 2; x++)
+            {
+                if (!L.In(x, y)) continue;
+                int j = L.Index(x, y), d = Math.Abs(x - x0) + Math.Abs(y - y0), why = chem.HeatCauseAt(j);
+                if (why != 0 && d < bd) { bd = d; best = why; }
+            }
+        return best;
+    }
+
     public void Save(StateWriter w)
     {
+        w.Arr(DataBroken); w.Arr(DataBrokenCause); w.Arr(DataCutCell); w.I64(DataCuts); w.I64(DataSplices);
         w.Arr(On); w.Arr(Supply); w.Arr(Wear); w.Arr(Broken); w.Arr(Charge);
         w.Arr(Breaker); w.Arr(OverSec); w.Arr(FaultCell); w.Arr(BreakerStuck); w.Arr(Amps); w.Arr(Damper); w.Arr(Exhaust); w.F64(TraceScrubbed); w.Arr(SealLeakCause); w.Arr(OnCause); w.Arr(PanK); w.Arr(PanWater);
         w.Bool(ReactorScram); w.I32(ScramCause); w.F64(WaterTank); w.F64(WasteWater); w.F64(Brine); w.F64(Coolant); w.F64(VentedH2); w.F64(AirReserve); w.F64(AirRelease); w.F64(AirReleased);
@@ -928,6 +1054,7 @@ public sealed class Network : IEngine
 
     public void Load(StateReader r)
     {
+        r.ArrInto(DataBroken); r.ArrInto(DataBrokenCause); r.ArrInto(DataCutCell); DataCuts = r.I64(); DataSplices = r.I64();
         r.ArrInto(On); r.ArrInto(Supply); r.ArrInto(Wear); r.ArrInto(Broken); r.ArrInto(Charge);
         r.ArrInto(Breaker); r.ArrInto(OverSec); r.ArrInto(FaultCell); r.ArrInto(BreakerStuck); r.ArrInto(Amps); r.ArrInto(Damper); r.ArrInto(Exhaust); TraceScrubbed = r.F64(); r.ArrInto(SealLeakCause); r.ArrInto(OnCause); r.ArrInto(PanK); r.ArrInto(PanWater);
         ReactorScram = r.Bool(); ScramCause = r.I32(); WaterTank = r.F64(); WasteWater = r.F64(); Brine = r.F64(); Coolant = r.F64(); VentedH2 = r.F64(); AirReserve = r.F64(); AirRelease = r.F64(); AirReleased = r.F64();

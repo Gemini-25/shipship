@@ -31,6 +31,7 @@ public enum FactKind : ushort
     Overheat,          // 과열
     PipeLeak,          // 관이 샌다
     MachineFail,       // 장치 고장
+    SensorCut,         // 센서 선이 끊겼다 (주컴퓨터가 그 너머 방을 못 본다)
     // ⑦ 생명
     Hurt,              // 다쳤다
     Collapsed,         // 쓰러졌다
@@ -76,7 +77,7 @@ public static class FactNames
         FactKind.RegionVented => "공기가 다 빠졌다", FactKind.PressureDrop => "기압이 떨어진다", FactKind.Ignition => "불이 붙었다", FactKind.FireOut => "불이 꺼졌다",
         FactKind.FireSpread => "불이 번졌다", FactKind.SmokeThick => "연기가 짙다", FactKind.Toxic => "독한 기체", FactKind.Condensation => "이슬이 맺혔다",
         FactKind.Flood => "물이 찼다", FactKind.LoudSound => "큰 소리", FactKind.WallCrack => "금이 갔다", FactKind.WallBreach => "벽이 뚫렸다",
-        FactKind.Impact => "충돌", FactKind.DoorJammed => "문이 끼었다", FactKind.DoorBlown => "문이 날아갔다", FactKind.ObjectFlung => "물건이 날아갔다",
+        FactKind.Impact => "충돌", FactKind.DoorJammed => "문이 끼었다", FactKind.DoorBlown => "문이 날아갔다", FactKind.ObjectFlung => "물건이 날아갔다", FactKind.SensorCut => "센서 선이 끊겼다",
         FactKind.DebrisNear => "무언가 다가온다", FactKind.Flare => "별 폭발", FactKind.BreakerTrip => "차단기가 떨어졌다", FactKind.Short => "합선",
         FactKind.Overheat => "과열", FactKind.PipeLeak => "관이 샌다", FactKind.MachineFail => "고장", FactKind.Hurt => "다쳤다",
         FactKind.Collapsed => "쓰러졌다", FactKind.Died => "죽었다", FactKind.Sick => "병", FactKind.Noticed => "알아챘다",
@@ -126,7 +127,7 @@ public sealed class Facts : IState
     /// <summary>번호 from(누계 기준) 이후의 사실들 (고리에 남은 것만).</summary>
     public IEnumerable<Fact> Since(long from)
     {
-        long start = Math.Max(from, _total - Capacity);
+        long start = Math.Max(Math.Max(0, from), _total - Capacity); // 음수 · 아직 없는 앞쪽을 물어도 있는 데부터
         for (long i = start; i < _total; i++) yield return _ring[i % Capacity];
     }
 

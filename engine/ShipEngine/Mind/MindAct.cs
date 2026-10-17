@@ -106,6 +106,15 @@ public sealed partial class Mind
                 return;
             }
             case StepKind.Look:
+                // 끊긴 센서 선: 식었으면 잇는다 (주컴퓨터가 맡긴 자리 — 아직 타면 불부터)
+                if (_net != null && _net.DataCutAt(st.Cell) && F.Tf[st.Cell] < 330 && (_chem == null || _chem.Burning[st.Cell] == 0))
+                {
+                    if (t - c.StepStart < Time.Minutes(a.IsPerson ? 4 : 2)) return;
+                    _net.SpliceData(st.Cell);
+                    int sc = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} 끊긴 센서 선을 이었다", t, st.Cell, c.GoalCause, 0, a.Id);
+                    sim.Facts.Emit(t, FactKind.Repaired, st.Cell, 0, sc, a.Id, -1);
+                    if (c.AssignedGoal == GoalKind.Investigate && c.AssignedTarget == st.Cell) c.AssignedUntil = t;
+                }
                 // 감각이 이번 틱에 다시 확인하지 못한 소리 · 냄새 믿음은 지운다 ("아무것도 없었다")
                 Forget(a, b => b.Kind is BeliefKind.Bang or BeliefKind.Strain or BeliefKind.Leak or BeliefKind.SmokeSmell or BeliefKind.Help or BeliefKind.Spark
                                && Dist(b.Cell, st.Cell) <= 3 && t - b.Seen > 5);

@@ -83,6 +83,15 @@ public static partial class Program
             for (int i = 0; i < 300 && split < 0; i++) { a.Step(); b.Step(); if (a.Hash() != b.Hash()) split = a.Tick; }
             Check("복제를 300틱 이어 가도 틱마다 같다", split < 0, split < 0 ? "" : $"틱 {split}에 갈라짐");
 
+            // 사실 흐름: 아직 적은 것보다 많이 물어도(최근 n · 음수 번호) 멈추지 않고 있는 것만 준다 (예전: 배열 밖을 읽어 멈췄다)
+            {
+                var fx = new Facts();
+                fx.Emit(1, FactKind.Ignition, 3);
+                int got = -1; string err = "";
+                try { got = fx.Recent(20).Count() + fx.Since(-5).Count(); } catch (Exception e) { err = e.GetType().Name; }
+                Check("사실 흐름: 적은 것보다 많이 물어도(최근 20개 · 음수 번호) 멈추지 않고 있는 것만 준다", got == 2, err.Length > 0 ? $"멈춤: {err}" : $"{got}개");
+            }
+
             // 저장 판: 맨 앞에 판 번호 — 다른 판 · 판 없는 저장은 엉뚱하게 읽지 않고 분명한 말로 거절한다
             string Refused(byte[] data)
             {
