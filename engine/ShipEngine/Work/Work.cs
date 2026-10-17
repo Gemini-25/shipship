@@ -205,6 +205,15 @@ public sealed partial class Work : IEngine
                     if (mind.TotalOf(mind.iRepair) <= 0) continue; // 갈아 끼울 부품(수리 꾸러미)이 없다
                     Post(sim, new Job { Kind = GoalKind.Maintain, Target = k }, dev.Cell, person => person.C.SkRepair >= 0.5f);
                 }
+        // 사람이 알린 이상한 기계 소리 (⑧이 남긴 알림을 읽는다 — 배 안 통신): 아직 끽끽거리면 그 장치의 기계 부품을 미리 간다 (로봇 먼저)
+        if (_net != null)
+            foreach (var rp in mind.GrindReports)
+            {
+                if (now - rp.Tick > Time.Hours(2) || rp.Device < 0 || rp.Device >= _net.Devices.Count || _net.WornDb(rp.Device) < Network.GrindFromDb) continue;
+                int k = rp.Device * 4 + (int)Part.Mechanical;
+                if (_net.Broken[k] != 0 || Jobs.Any(j => j.Kind == GoalKind.Maintain && j.Target == k) || mind.TotalOf(mind.iRepair) <= 0) continue;
+                Post(sim, new Job { Kind = GoalKind.Maintain, Target = k }, _net.Devices[rp.Device].Cell, person => person.C.SkRepair >= 0.5f);
+            }
         // 거두기: 다 자란 작물 (로봇 먼저 · 사람은 기르는 솜씨가 조금이라도 있으면)
         if (_life != null)
             for (int k = 0; k < _life.Crops.Count; k++)

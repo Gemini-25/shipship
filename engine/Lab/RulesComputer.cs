@@ -89,12 +89,15 @@ public static partial class Program
             int door = lay.DoorAt[At(10, 3)];
             st.RequestDoor(door, 1); s.Run(3); // 옆 방으로 가는 문이 열려 있다
             f.SetHole(At(0, 2), 0.02f);
+            // 구멍이 열려 있는 동안의 옆 방 기압 (로봇이 큰 쉬익을 듣고 들어가 구멍을 막으면 그 뒤 밸브로 빈 방을 다시 채워 배 전체가 고르게 낮아진다 — 그것은 봉쇄의 몫이 아니다)
+            double right = f.Pressure(At(15, 3));
             for (int k = 0; k < Time.Minutes(8); k++)
             {
                 s.Step();
+                if (f.Hole[At(0, 2)] > 0) right = f.Pressure(At(15, 3));
                 if (Debug && k < 40 && k % 4 == 0) Console.WriteLine($"    {k} 왼 {f.Pressure(At(6, 2)):0.0} 오른 {f.Pressure(At(15, 3)):0.0} 통로 {f.Pressure(At(10, 8)):0.0} · 문 {string.Join(",", f.DoorOpen.Select(x => x.ToString("0.0")))}");
             }
-            return (f.Pressure(At(15, 3)), s.Facts.CountOf(FactKind.ComputerSeal));
+            return (right, s.Facts.CountOf(FactKind.ComputerSeal));
         }
         var on = BreachRun(true); var down = BreachRun(false);
         Check("구멍 난 빈 방: 주컴퓨터가 기압이 떨어지는 것을 보고 봉쇄한다 → 열려 있던 옆 방이 버틴다 (주컴퓨터가 멈추면 같이 빠진다)",
@@ -384,13 +387,19 @@ public static partial class Program
             st.DamageCause[hull] = cause; st.DamageCause[L2.Doors[door].Cell] = cause;
             f.SetHole(hull, 0.004f);
             st.DoorJam[door] = 1; f.SetDoor(door, 0.3f);
-            long freedAt = -1;
-            for (int k = 0; k < Time.Minutes(45); k++) { s.Step(); if (freedAt < 0 && st.DoorJam[door] == 0) freedAt = k; }
-            double avg = L2.Rooms.Where(rm => rm.Cells.Length > 0 && rm.Id != lounge && rm.Name != "에어락").Average(rm => f.Pressure(rm.Cells[0]));
+            long freedAt = -1; double atClose = -1;
+            double Others() => L2.Rooms.Where(rm => rm.Cells.Length > 0 && rm.Id != lounge && rm.Name != "에어락").Average(rm => f.Pressure(rm.Cells[0]));
+            for (int k = 0; k < Time.Minutes(45); k++)
+            {
+                s.Step();
+                if (freedAt < 0 && st.DoorJam[door] == 0) freedAt = k;
+                if (freedAt >= 0 && atClose < 0 && f.DoorOpen[door] <= 0.01f) atClose = Others();   // 새는 길이 닫힌 때 (그 뒤 로봇이 외판까지 막고 빈 방을 다시 채우면 배 전체가 고르게 낮아진다)
+            }
+            double avg = Others();
             if (Debug) foreach (var (tk, tx) in cm.Log.TakeLast(16)) Console.WriteLine($"    주컴 {Time.Clock(tk)} {tx}");
-            Check("끼인 문: 주컴퓨터가 문 센서로 알아채 로봇이 비틀어 바로잡고 닫는다 → 배는 버틴다 (휴게실만 빠진다)",
-                freedAt >= 0 && f.DoorOpen[door] <= 0.01f && avg > 80,
-                freedAt >= 0 ? $"{Time.ToSeconds(freedAt) / 60:0}분 만에 바로잡음 · 문 {f.DoorOpen[door]:0.0} · 다른 방 평균 {avg:0}kPa · 휴게실 {f.Pressure(L2.Rooms[lounge].Cells[0]):0}kPa" : $"그대로 끼임 · 다른 방 평균 {avg:0}kPa");
+            Check("끼인 문: 주컴퓨터가 문 센서로 알아채 로봇이 비틀어 바로잡고 닫는다 → 배는 버틴다 (닫힌 때 다른 방 80kPa 넘게)",
+                freedAt >= 0 && f.DoorOpen[door] <= 0.01f && atClose > 80 && avg > 70,
+                freedAt >= 0 ? $"{Time.ToSeconds(freedAt) / 60:0}분 만에 바로잡음 · 문 {f.DoorOpen[door]:0.0} · 닫힌 때 다른 방 평균 {atClose:0}kPa · 끝 {avg:0}kPa · 휴게실 {f.Pressure(L2.Rooms[lounge].Cells[0]):0}kPa" : $"그대로 끼임 · 다른 방 평균 {avg:0}kPa");
         }
 
         // ── 우주복: 숨쉴 만한 방에 오면 벗어 보관함에 건다 (입은 채 지내다 익거나 · 우주복 산소가 떨어져 질식하지 않게) ──

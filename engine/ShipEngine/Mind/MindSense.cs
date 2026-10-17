@@ -115,19 +115,27 @@ public sealed partial class Mind
         bool asleep = IsSleeping(a);
         int cell = c.Cell;
 
-        // 귀 — 잠들어도 듣는다
+        // 귀 — 잠들어도 듣는다 · 바탕 소음이 가린 만큼 작게 (시끄러운 기계실에서는 문 너머 비명을 못 듣는다)
         if (_snd != null)
         {
-            float loudest = 0;
+            float loudest = 0, mask = 0, ambient = 0;
+            bool any = false;
             foreach (var h in _snd.At(cell))
             {
                 if (h.Event <= c.HeardUpTo) continue;
-                Hear(sim, a, h);
-                if (h.Actor != a.Id) loudest = Math.Max(loudest, h.Db);
+                if (!any) { ambient = _snd.Ambient(cell); mask = Math.Max(0, ambient - Sound.MaskFrom); any = true; }
+                if (h.Actor == a.Id) { Hear(sim, a, h); continue; }
+                var heard = h;
+                heard.Db = h.Db - mask;
+                if (heard.Db < HearFloor) { Masked++; continue; }
+                Hear(sim, a, heard);
+                loudest = Math.Max(loudest, h.Db);
             }
+            if (_shoutAfter is Belief say) { _shoutAfter = null; Shout(sim, a, say); }
             c.HeardUpTo = _snd.LastEvent;
-            if (asleep) c.SleepNoise = Math.Max(c.SleepNoise, loudest);   // ⑦ 잠의 질
-            if (asleep && loudest >= 60) Wake(sim, a, "소리에 깼다");
+            if (asleep) c.SleepNoise = Math.Max(c.SleepNoise, Math.Max(loudest, _snd.Ambient(cell)));   // ⑦ 잠의 질 — 이어지는 바탕 소음도 잠자리 소리다
+            // 깨우는 소리: 귀에 60dB 넘게 · 이어지는 바탕 소음보다 10dB 넘게 솟아야 (시끄러운 잠자리에서는 익숙해진 소음 위로 — NFPA 72 잠자리 경보는 바탕 소음 + 15dB)
+            if (asleep && loudest >= 60 && loudest >= ambient + 10) Wake(sim, a, "소리에 깼다");
         }
 
         if (person && asleep)
@@ -342,11 +350,37 @@ public sealed partial class Mind
         }
     }
 
+    /// <summary>들은 소리를 훑은 뒤에 할 외침 (알림 — 훑는 동안 외치면 그 칸의 들린 소리 목록이 바뀐다).</summary>
+    private Belief? _shoutAfter;
+
+    /// <summary>가린 몫을 뺀 크기가 이보다 작으면 못 듣는다 (dB — 귀의 문턱 근처).</summary>
+    public const float HearFloor = 23;
+
     private void Hear(Sim sim, Agent a, in Heard h)
     {
         long t = sim.Tick;
         switch (h.Kind)
         {
+            case SoundKind.Machine when _devAt.Length == L.N && (uint)h.Source < (uint)L.N && _devAt[h.Source] >= 0 && _net != null && _net.Devices[_devAt[h.Source]].Has(Part.Mechanical):
+            {
+                // 끽끽 · 덜컹: 그 장치의 소리가 이상하다 (멈춘 덜컹이면 가서 보면 '멈춘 장치')
+                int dev = _devAt[h.Source];
+                if (Learn(a, t, BeliefKind.Grind, h.Source, dev, (float)Math.Min(1, (h.Db - 25) / 30), BeliefSource.Heard, h.Cause, h.Db) && a.IsPerson)
+                {
+                    GrindHeard++;
+                    sim.Facts.Emit(t, FactKind.Noticed, h.Source, (float)h.Db, h.Cause, a.Id, (int)BeliefKind.Grind);
+                    // 갈 솜씨가 없으면 알린다: 소리 내어 (곁의 사람 · 로봇이 듣는다) · 배 안 통신으로 (일감판이 로봇을 보낸다) — 한 장치는 두 시간에 한 번
+                    if (a.C.SkRepair < GrindSkill && !IsSleeping(a) && a.C.Up != 0 && !GrindReports.Any(r => r.Device == dev && t - r.Tick < Time.Hours(2)))
+                    {
+                        int rc = sim.Causes.Add(CauseKind.Person, $"{Ko.I(NameOf(a.Id))} {_net.Devices[dev].Name} 소리가 이상하다고 알렸다", t, h.Source, h.Cause, 0, a.Id);
+                        if (GrindReports.Count >= 16) GrindReports.RemoveAt(0);
+                        GrindReports.Add(new GrindReport { Tick = t, Device = dev, Cause = rc, Who = a.Id });
+                        int bi = a.Beliefs.FindIndex(b => b.Kind == BeliefKind.Grind && b.Subject == dev);
+                        if (bi >= 0 && t - a.C.LastShout >= 10) { var said = a.Beliefs[bi]; said.Cause = rc; _shoutAfter = said; } // 들은 소리를 다 훑은 뒤에 (외침이 이 칸의 들린 소리 목록을 바꾼다)
+                    }
+                }
+                break;
+            }
             case SoundKind.Bang when h.Db >= 45:
                 Learn(a, t, BeliefKind.Bang, h.Source, -1, (float)Math.Min(1, (h.Db - 40) / 50), BeliefSource.Heard, h.Cause, h.Db); break;
             case SoundKind.Crack or SoundKind.Creak:
@@ -354,7 +388,7 @@ public sealed partial class Mind
             case SoundKind.Hiss:
                 Learn(a, t, BeliefKind.Leak, h.Source, -1, (float)Math.Min(1, (h.Db - 30) / 40), BeliefSource.Heard, h.Cause, h.Db); break;
             case SoundKind.Roar:
-                Learn(a, t, BeliefKind.Fire, h.Source, -1, 0.5f, BeliefSource.Heard, h.Cause); break;
+                Learn(a, t, BeliefKind.Fire, h.Source, -1, (float)Math.Clamp((h.Db - 30) / 50, 0.15, 0.6), BeliefSource.Heard, h.Cause); break; // 우르릉 — 어디서 타는지는 안다 · 얼마나 큰지는 모른다
             case SoundKind.Scream when h.Actor != a.Id:
                 Learn(a, t, BeliefKind.Help, h.Source, h.Actor, 0.8f, BeliefSource.Heard, h.Cause); break;
             case SoundKind.Alarm:
@@ -375,7 +409,7 @@ public sealed partial class Mind
     private void Shout(Sim sim, Agent a, Belief b)
     {
         if (_snd == null) return;
-        int ev = _snd.Emit(sim, a.C.Cell, a.IsPerson ? 75 : 80, SoundKind.Voice, b.Cause, a.Id);
+        int ev = _snd.Emit(sim, a.C.Cell, VoiceDb(a.C.Cell, a.IsPerson), SoundKind.Voice, b.Cause, a.Id);   // 시끄러울수록 크게 (롬바르)
         _said.Add((ev, sim.Tick, a.Id, b));
         a.C.LastShout = sim.Tick;
         Shouts++;

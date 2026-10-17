@@ -391,9 +391,20 @@ public sealed partial class Mind
         if (t - c.StepStart < Time.Minutes(minutes)) return;
         if (a.IsPerson) UseHeld(sim, a);
         else if (!TakeOne(c.Cell, iRepair, sim)) { Fail(sim, a, "갈아 끼울 부품이 없다"); return; }
+        // 소리로 안 것인가: 제가 들었다 (맡긴 일이 아니다) · 아니면 누가 '소리가 이상하다'고 알린 장치 (세 시간 안)
+        bool mech = (Part)part == Part.Mechanical;
+        bool heard = mech && a.Beliefs.Any(b => b.Kind == BeliefKind.Grind && b.Subject == dev && b.Conf > 0.05f) && !(c.AssignedGoal == GoalKind.Maintain && c.AssignedUntil > t);
+        int report = -1;
+        if (mech) for (int i = GrindReports.Count - 1; i >= 0; i--) if (GrindReports[i].Device == dev && t - GrindReports[i].Tick < Time.Hours(3)) { report = i; break; }
+        bool byEar = heard || report >= 0;
+        int parent = heard ? c.GoalCause : report >= 0 ? GrindReports[report].Cause : 0;
         _net.Repair(dev, (Part)part);
         if (_work != null) _work.Maintained++;
-        int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} {_net.Devices[dev].Name}의 {Device.PartName((Part)part)} 부품을 미리 갈았다", t, _net.Devices[dev].Cell, 0, 0, a.Id);
+        if (byEar) EarMaintained++;
+        Forget(a, b => b.Kind == BeliefKind.Grind && b.Subject == dev);
+        int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot,
+            byEar ? $"{Ko.I(NameOf(a.Id))} 소리가 이상한 {_net.Devices[dev].Name}의 {Device.PartName((Part)part)} 부품을 미리 갈았다" : $"{Ko.I(NameOf(a.Id))} {_net.Devices[dev].Name}의 {Device.PartName((Part)part)} 부품을 미리 갈았다",
+            t, _net.Devices[dev].Cell, parent, 0, a.Id);
         sim.Facts.Emit(t, FactKind.Repaired, _net.Devices[dev].Cell, part, cause, a.Id, dev);
         JobDone(a, t);
     }

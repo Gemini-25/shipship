@@ -70,6 +70,26 @@ public static partial class Program
                 $"카메라 {(tView < 0 ? "못 감" : Time.Clock(tView))} · 몸 {(tBody < 0 ? "아직" : Time.Clock(tBody))} · 공기 조짐 {d.AirWarnings} · 기압 {s.Get<Field>().Pressure(Worlds.At(sealedLay, 4, 3)):0}kPa");
         }
 
+        // ── 익숙해짐: 닫힌 방의 산소가 처음부터 옅다 (14kPa · 새지 않는다) — 처음엔 조짐이지만 한 시간이 지나면 더는 아니다 (며칠을 그렇게 사는 배가 늘 '조짐'이면 화면이 늘 느리다) ──
+        {
+            var sealedLay = Worlds.Ascii(LongShip.Replace("#........D......", "#........#......"));
+            var s = Worlds.Full(sealedLay, 5);
+            var m = s.Get<Mind>(); var f = s.Get<Field>();
+            m.AddPerson(s, Worlds.At(sealedLay, 4, 3));
+            foreach (int c in s.Layout.Rooms[s.Layout.Room[Worlds.At(sealedLay, 4, 3)]].Cells) f.RemoveGas(c, f.T.gO2, f.N[c * f.G + f.T.gO2] * 0.32);
+            var d = new Director(s.Layout) { KeepRing = false };
+            int early = 0, late = 0;
+            for (int i = 0; i < Time.Hours(2); i++)
+            {
+                int before = d.AirWarnings;
+                s.Step(); d.Observe(s);
+                if (d.AirWarnings > before) { if (i < Time.Minutes(10)) early++; else if (i >= Time.Hours(1)) late++; }
+            }
+            double o2 = f.Partial(f.T.gO2, Worlds.At(sealedLay, 4, 3));
+            Check("익숙해짐: 처음부터 옅은 산소(새지 않는다) 속의 사람 — 처음 10분은 조짐 · 한 시간이 지나면 더는 조짐이 아니다",
+                early > 0 && late == 0, $"처음 10분 조짐 {early} · 한 시간 뒤 {late} · 산소 {o2:0.0}kPa");
+        }
+
         // ── 주인공 따라가기: 쓰러진 이를 업고 긴 통로를 달리는 사람을 따라간다 (구한 일이 난 자리에 남지 않는다) ──
         {
             var s = Worlds.Full(lay, 2);

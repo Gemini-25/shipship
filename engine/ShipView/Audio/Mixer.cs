@@ -58,7 +58,7 @@ public sealed class Mixer
             {
                 case Jet j: j.Set(u.A, u.B); break;
                 case Fire fi: fi.Set(u.A); break;
-                case Machine m: m.Set(u.A); break;
+                case Machine m: m.Set(u.A, u.B); break;
                 case RoomTone r: r.Set(u.A); break;
                 case Breath b: b.Set(u.A, u.B); break;
             }
@@ -123,6 +123,7 @@ public sealed class Mixer
 
     private static float Run(Slot s, float follow)
     {
+        if (s.V.Delay > 0) { s.V.Delay--; return 0; }      // 늦게 닿는 소리: 아직 길 위에 있다
         s.Gain += (s.TGain - s.Gain) * follow;
         s.Cutoff += (s.TCutoff - s.Cutoff) * follow;
         s.Pan += (s.TPan - s.Pan) * follow;

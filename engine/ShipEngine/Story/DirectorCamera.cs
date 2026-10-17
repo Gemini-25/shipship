@@ -26,6 +26,7 @@ public sealed partial class Director
     private long _subjectQuiet;
     private readonly Dictionary<int, (int cell, double kpa, long tick, double rate)> _airKPa = new();
     private const double NormalKPa = 101.3;
+    private readonly Dictionary<int, float> _airBase = new();
     public readonly Dictionary<string, int> AirWhy = new();
     public string LastAir = "";
 
@@ -130,6 +131,10 @@ public sealed partial class Director
             float threat = Math.Max(Math.Max(Math.Max(tO2, tP), Math.Max(tCO, tK)), Math.Max(tFall, tFire));
             string why = threat == tO2 ? "산소" : threat == tP ? "기압" : threat == tCO ? "일산화탄소" : threat == tK ? "열" : threat == tFall ? "기압 떨어짐" : "불";
             if (b.Suit != 0) threat *= 0.3f;                                // 우주복 — 그래도 볼 만하다
+            // 익숙해짐: 30분에 걸쳐 그 사람의 기준이 따라 오른다 — 며칠째 옅은 산소 속에 사는 것은 조짐이 아니고 · 더 나빠지는 만큼만 (꾸준히 새는 방은 계속 나빠진다)
+            float base0 = _airBase.GetValueOrDefault(a.Id);
+            _airBase[a.Id] = base0 + (threat - base0) * SenseEvery / (float)Time.Minutes(30);
+            threat -= base0;
             if (threat < 0.15f) continue;
             if (b.Asleep != 0) threat = Math.Min(1, threat * 1.5f);        // 자는 사이에 공기가 나빠진다
             float add = 25 * threat;

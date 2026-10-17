@@ -45,7 +45,9 @@ public sealed class Acoustics
     private Sim? _world;
     private Layout L = null!;
     private Field F = null!;
-    private float[] _extra = Array.Empty<float>(), _occl = Array.Empty<float>(), _thin = Array.Empty<float>();
+    private float[] _extra = Array.Empty<float>(), _occl = Array.Empty<float>(), _thin = Array.Empty<float>(), _path = Array.Empty<float>();
+    /// <summary>소리 빠르기 (m/s): 공기 · 뼈대(강철 · 알루미늄 판의 세로파 약 5,000).</summary>
+    public const float AirMs = 343, StructMs = 5000;
     private int[] _seen = Array.Empty<int>();
     private float[] _sExtra = Array.Empty<float>();             // 구조 길: 벽 · 바닥 판을 타고 온 소리가 귀까지 준 크기
     private int[] _sSeen = Array.Empty<int>();
@@ -85,7 +87,7 @@ public sealed class Acoustics
         {
             _world = w; L = w.Layout; F = w.Get<Field>();
             int n = L.N;
-            _extra = new float[n]; _occl = new float[n]; _thin = new float[n]; _seen = new int[n];
+            _extra = new float[n]; _occl = new float[n]; _thin = new float[n]; _seen = new int[n]; _path = new float[n];
             _sExtra = new float[n]; _sSeen = new int[n];
             _doorWas = (float[])F.DoorOpen.Clone();
             _cursor = w.Find<Sound>()?.Logged ?? 0;
@@ -110,7 +112,10 @@ public sealed class Acoustics
         }
         float halfW = person >= 0 ? 10f : (float)Math.Max(6, show.Camera().w / 2);
         float speed = (float)show.Speed;
+        _screenPerGame = 1f / (Math.Max(0.05f, speed) * (float)Time.SecondsPerTick); // 게임 1초가 화면 몇 초인가 (늦게 닿는 소리)
 
+        var sndAmb = w.Find<Sound>();
+        float ambient = ear >= 0 && sndAmb != null ? sndAmb.Ambient(ear) : 0;
         // ── 방 울림: 듣는 방의 크기 · 벽 재질 ──
         int room = ear >= 0 ? L.Room[ear] : -1;
         if (room >= 0)
@@ -140,7 +145,7 @@ public sealed class Acoustics
                 }
                 var v = MakeShot(e, w);
                 if (v == null) continue;
-                v.Gain = gain; v.Cutoff = cut; v.Pan = pan;
+                v.Gain = gain; v.Cutoff = cut; v.Pan = pan; v.Delay = DelayOf(e.Cell, structAt);
                 shots.Add((lp, v));
                 Log?.Invoke($"{Time.Clock(e.Tick)} {e.Kind} {e.Db:0}dB → 귀 {lp:0}dB · 거름 {cut:0}Hz · 좌우 {pan:0.0}");
             }
@@ -187,8 +192,8 @@ public sealed class Acoustics
         Jets(frame, ear, halfW, suit, w.Tick);
         Fires(frame, w, ear, halfW, suit);
         Machines(frame, w, ear, halfW, suit);
-        if (ear >= 0 && EarThin > 0.02f)
-            frame.Loops.Add(new LoopUpdate { Key = 1, Kind = LoopKind.Room, A = 0.05f * Math.Min(1.2f, EarThin) * (suit ? 0.3f : 1f), Gain = 1, Cutoff = suit ? 900 : 10000 });
+        if (ear >= 0 && EarThin > 0.02f) // 방 공기: 엔진의 바탕 소음을 따라 (조용한 방 30dB · 기계실 70dB — 0.3배로 눌러 기계 소리와 겹치지 않게)
+            frame.Loops.Add(new LoopUpdate { Key = 1, Kind = LoopKind.Room, A = 0.05f * Math.Min(1.2f, EarThin) * (suit ? 0.3f : 1f) * Dsp.Db(Math.Clamp(ambient - 35, -10, 30) * 0.3f), Gain = 1, Cutoff = suit ? 900 : 10000 });
         if (suit) frame.Loops.Add(new LoopUpdate { Key = 2, Kind = LoopKind.Breath, A = breath, B = 0.35f, Gain = 1, Cutoff = 10000 });
         Out.Enqueue(frame);
         while (Out.Count > 30 && Out.TryDequeue(out _)) { } // 아무도 안 들으면 쌓지 않는다
@@ -229,7 +234,7 @@ public sealed class Acoustics
         foreach (var k in F.Links)
         {
             if (k.Area <= 0) continue;
-            double pa = F.Pressure(k.A), pb = k.B >= 0 ? F.Pressure(k.B) : F.Outside.KPa;
+            double pa = F.ZoneKPa(k.RA), pb = k.RB >= 0 ? F.ZoneKPa(k.RB) : F.Outside.KPa; // 구역 기압 (엔진의 쉬익과 같게)
             double hi = Math.Max(pa, pb), lo = Math.Min(pa, pb);
             if (hi - lo < 0.5 || hi < 2) continue;
             int at = pa >= pb ? k.A : k.B;
@@ -238,7 +243,7 @@ public sealed class Acoustics
             double v = lo / hi < 0.528 ? 310 : Math.Sqrt(2 * (hi - lo) * 1000 / rho); // 막힘 흐름이면 소리 빠르기
             double d = Math.Sqrt(k.Area);
             float hz = (float)(0.2 * v / d);
-            float db = (float)Math.Clamp(55 + 10 * Math.Log10(k.Area * 1e4) + 50 * Math.Log10(v / 100) + 10 * Math.Log10(rho / 1.2), 30, 130); // 넓이에 비례 · 속도에 가파르게 (분출 소음)
+            float db = Math.Max(30, Sound.JetDb(k.Area, hi, lo));  // 엔진의 쉬익과 같은 식 (라이트힐 — 속도의 8제곱 · 넓이)
             if (!Hear(at, db, ear, halfW, suit, out float lp, out float gain, out float cut, out float pan)) continue;
             long key = 1000 + (long)(k.Via >= 0 ? k.Via : at) * 4 + (k.B < 0 ? 1 : 0);
             list.Add((lp, new LoopUpdate { Key = key, Kind = LoopKind.Jet, A = hz, B = 1, Gain = gain, Cutoff = cut, Pan = pan, Send = 0.2f }));
@@ -277,12 +282,7 @@ public sealed class Acoustics
         foreach (var j in list.OrderByDescending(x => x.lp).Take(MaxFires)) frame.Loops.Add(j.u);
     }
 
-    // ── 돌아가는 장치 ──
-    private static float MachineDb(string role) => role switch
-    {
-        "reactor" => 68, "engine" => 74, "pump" => 64, "hvac" => 60, "scrubber" => 56, "dehumid" => 52, "recycler" => 60,
-        "industry" => 66, "fridge" => 44, "computer" => 50, _ => 0,
-    };
+    // ── 돌아가는 장치: 엔진의 장치 표 크기 + 낡은 몫 (바탕 소음과 같은 값) ──
 
     private void Machines(SoundFrame frame, Sim w, int ear, float halfW, bool suit)
     {
@@ -291,10 +291,10 @@ public sealed class Acoustics
         var list = new List<(float lp, LoopUpdate u)>();
         foreach (var dev in net.Devices)
         {
-            float db = MachineDb(dev.Def.Role);
-            if (db <= 0 || !net.Working(dev.Id)) continue;
+            float db = net.NoiseDb(dev.Id);
+            if (db <= 30) continue;
             if (!Hear(dev.Cell, db, ear, halfW, suit, out float lp, out float gain, out float cut, out float pan, dev.Cell)) continue;
-            list.Add((lp, new LoopUpdate { Key = 3_000_000 + dev.Id, Kind = LoopKind.Machine, Role = dev.Def.Role, A = 1, Gain = gain, Cutoff = cut, Pan = pan, Send = 0.15f }));
+            list.Add((lp, new LoopUpdate { Key = 3_000_000 + dev.Id, Kind = LoopKind.Machine, Role = dev.Def.Role, A = 1, B = net.WornDb(dev.Id), Gain = gain, Cutoff = cut, Pan = pan, Send = 0.15f }));
         }
         foreach (var j in list.OrderByDescending(x => x.lp).Take(MaxMachines)) frame.Loops.Add(j.u);
         if (Log != null && _logMachines++ % 600 == 0) Log("  기계: " + string.Join(" · ", list.OrderByDescending(x => x.lp).Take(MaxMachines).Select(x => $"{x.u.Role} {x.lp:0}dB")));
@@ -331,6 +331,22 @@ public sealed class Acoustics
         return true;
     }
 
+    private float _screenPerGame = 1;
+
+    /// <summary>
+    /// 늦게 닿는 소리 (표본): 더 크게 온 길이 공기면 길 따라 343m/s · 뼈대면 곧은 거리 / 5,000m/s — 게임 시간을 화면 시간으로 (빠르게 흐를 때는 그만큼 짧다 · 많아야 1.5초).
+    /// </summary>
+    public int DelayOf(int src, int structAt = -1)
+    {
+        if (_ear < 0 || (uint)src >= (uint)_seen.Length) return 0;
+        float dx = L.X(src) - L.X(_ear), dy = L.Y(src) - L.Y(_ear), straight = MathF.Max(1, MathF.Sqrt(dx * dx + dy * dy) * CellM);
+        int s = _seen[src] == _stamp ? src : NearestHeard(src);
+        float airLoss = s >= 0 ? _extra[s] + 20 * MathF.Log10(straight) : 999;                                   // 공기 길: 길에서 준 것 + 구면 확산
+        float structLoss = structAt >= 0 && _sSeen[structAt] == _stamp ? _sExtra[structAt] + 10 * MathF.Log10(straight) : 999; // 뼈대: 판의 원통 확산
+        float sec = structLoss < airLoss ? straight / StructMs : (s >= 0 ? Math.Max(_path[s], straight) : straight) / AirMs;
+        return (int)(Math.Min(1.5f, sec * _screenPerGame) * Dsp.Rate);
+    }
+
     /// <summary>벽 칸 · 구멍 칸처럼 길이 안 닿은 칸은 곁의 닿은 칸으로.</summary>
     private int NearestHeard(int c)
     {
@@ -357,7 +373,7 @@ public sealed class Acoustics
         if (ear < 0) return;
         var pq = new PriorityQueue<int, float>();                 // 상태 = 칸 × 2 + 겹 (0 공기 · 1 구조)
         bool earAir = Thin(ear) > 0;
-        if (earAir) { _extra[ear] = 0; _occl[ear] = 0; _thin[ear] = Thin(ear); _seen[ear] = _stamp; pq.Enqueue(ear * 2, 0); }
+        if (earAir) { _extra[ear] = 0; _occl[ear] = 0; _thin[ear] = Thin(ear); _seen[ear] = _stamp; _path[ear] = 0; pq.Enqueue(ear * 2, 0); }
         _sExtra[ear] = earAir ? Couple + 3 : Contact; _sSeen[ear] = _stamp; pq.Enqueue(ear * 2 + 1, _sExtra[ear]);
         Span<int> nb = stackalloc int[4];
         while (pq.TryDequeue(out int st, out float cost))
@@ -389,7 +405,7 @@ public sealed class Acoustics
                     float next = _extra[c] + loss + occl;
                     if (next > 80) continue;
                     if (_seen[j] == _stamp && _extra[j] <= next) continue;
-                    _seen[j] = _stamp; _extra[j] = next; _occl[j] = _occl[c] + occl; _thin[j] = Math.Min(_thin[c], th);
+                    _seen[j] = _stamp; _extra[j] = next; _occl[j] = _occl[c] + occl; _thin[j] = Math.Min(_thin[c], th); _path[j] = _path[c] + CellM;
                     pq.Enqueue(j * 2, next);
                 }
                 TryStruct(pq, c, _extra[c] + Couple + 3);                // 바닥 판
@@ -406,7 +422,7 @@ public sealed class Acoustics
                         float next = _sExtra[c] + Couple;
                         if (next <= 80 && !(_seen[j] == _stamp && _extra[j] <= next))
                         {
-                            _seen[j] = _stamp; _extra[j] = next; _occl[j] = 45; _thin[j] = Thin(j); // 구조로 온 소리는 먹먹하다
+                            _seen[j] = _stamp; _extra[j] = next; _occl[j] = 45; _thin[j] = Thin(j); _path[j] = 0; // 구조로 온 소리는 먹먹하다 (뼈대는 빨라 길이를 0으로)
                             pq.Enqueue(j * 2, next);
                         }
                     }

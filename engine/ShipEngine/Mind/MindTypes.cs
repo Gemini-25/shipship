@@ -26,6 +26,7 @@ public enum BeliefKind : byte
     Help,        // 비명 · 도와 달라
     Cold,
     Hot,
+    Grind,       // 기계 소리가 이상하다 — 끽끽 · 덜컹 (대상 = 장치 · 들어서 안다)
 }
 
 public enum BeliefSource : byte { Saw, Heard, Smelled, Felt, Told, Screen }
@@ -192,6 +193,16 @@ public struct AvoidEntry
     public GoalKind Goal;
     public int Target;
     public long Until;
+}
+
+/// <summary>이상한 기계 소리를 알렸다 (사람이 배 안 통신으로 — 일감판(⑪)이 읽어 예방 정비 일감을 올린다).</summary>
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
+public struct GrindReport
+{
+    public long Tick;
+    public int Device;
+    public int Cause;    // '○○이 ○○ 소리가 이상하다고 알렸다' (부모: 끽끽거린다)
+    public int Who;
 }
 
 /// <summary>직접 가서 없다고 확인한 것 — 한동안 말 · 방송으로 들어도 반신반의한다.</summary>

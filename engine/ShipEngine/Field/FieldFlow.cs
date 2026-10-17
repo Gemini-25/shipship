@@ -25,6 +25,12 @@ public sealed partial class Field
 
     private double RegionT(int r) => _rC[r] > 1e-12 ? _rU[r] / _rC[r] : 0;
 
+    /// <summary>
+    /// 구역의 기압 (kPa) — 이번 틱 틈 흐름을 셀 때의 구역 전체 값. 틈으로 나가는 기체는 틈 곁 칸에서 먼저 덜어 내므로 그 칸 하나의 기압은 잠깐 2 ~ 3kPa 튄다 —
+    /// 틈의 소리(③ 소리 · 쉬익)는 칸이 아니라 이 값으로 잰다.
+    /// </summary>
+    public double ZoneKPa(int region) => region >= 0 && region < Regions.Count && region < _rn.Length ? RegionP(region) / 1000 : 0;
+
     private void RegionTotals()
     {
         int n = Regions.Count;
