@@ -473,8 +473,23 @@ public sealed partial class Mind
                 {
                     _st?.RequestDoor(d, 1);
                     if (c.WaitDoor != d) { c.WaitDoor = d; c.WaitTicks = 0; }
-                    if (F.DoorBleed[d] == 0 || t % 10 == 0) c.WaitTicks++; // 압력 맞춤 밸브가 쉬익거리면 (기압을 맞추는 중) 더 기다린다
+                    if (F.DoorBleed[d] == 0 || t % 25 == 0) c.WaitTicks++; // 압력 맞춤 밸브가 쉬익거리면 (기압을 맞추는 중) 더 기다린다 — 큰 에어락은 몇 분 걸린다 (12분까지)
                     if (c.OpenedDoor >= 0 && c.OpenedDoor != d) CloseBehind(sim, a, 1); // 에어락: 뒷문을 닫아야 앞문 밸브가 열린다
+                    // 바깥문 앞: 이 방의 다른 문이 열려 있으면 (남이 열어 둔 것이라도) 닫는다 — 문 칸에 아무도 없을 때
+                    if (L.Doors[d].External && _st != null && F.DoorBleed[d] == 0 && t % 5 == 0)
+                    {
+                        int room = RoomOf(c.Cell);
+                        if (room >= 0)
+                            foreach (int e in _st.RoomDoors(room))
+                            {
+                                if (e == d || F.DoorOpen[e] <= 0 && _st.DoorTarget[e] <= 0 || _st.DoorJam[e] != 0) continue;
+                                int ec = L.Doors[e].Cell;
+                                bool busy = false;
+                                foreach (var o in Agents) if (o != a && o.C.Up != 0 && Dist(o.C.Cell, ec) <= 1) { busy = true; break; }
+                                if (!busy && _life != null) foreach (var b in _life.Bodies) if (b.Cell == ec) { busy = true; break; }
+                                if (!busy) _st.RequestDoor(e, 0);
+                            }
+                    }
                     if (c.WaitTicks > 12 || (_st != null && _st.DoorJam[d] != 0 && F.DoorOpen[d] < 0.5f))
                     {
                         Learn(a, t, BeliefKind.StuckDoor, n, d, 1, BeliefSource.Felt);

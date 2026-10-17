@@ -37,6 +37,7 @@ public static partial class Program
             else if (args.Contains("--probe-holes")) ProbeHoles(args);
             else if (args.Contains("--probe-cell")) ProbeCell(args);
             else if (args.Contains("--probe-flap")) ProbeFlap(args);
+            else if (args.Contains("--probe-door")) ProbeDoor(args);
             else if (args.Contains("--shot")) Shot(args);
             else if (args.Contains("--film")) Film(args);
             else { Console.WriteLine("Lab --law | --rule | --bench | --scene 이름 [폴더] | --ships | --fun [배,…] [날] [시드 수] [성격] [가혹함]"); return 2; }

@@ -173,7 +173,7 @@ public static partial class Program
         int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
         var s = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0);
         s.Get<Storyteller>().Enabled = true;
-        var m = s.Get<Mind>(); var f = s.Get<Field>();
+        var m = s.Get<Mind>(); var f = s.Get<Field>(); var stx = s.Get<Structure>();
         s.Run((long)Time.Hours(hours));
         var robots = m.Agents.Where(a => !a.IsPerson).ToList();
         var r = robots[Math.Min(which, robots.Count - 1)];
@@ -187,7 +187,7 @@ public static partial class Program
             s.Step();
             var c = r.C;
             string plan = string.Join(">", r.Plan.Select((p, i) => (i == c.StepIndex ? "*" : "") + p.Kind + (p.Cell >= 0 ? Where(p.Cell) : "")));
-            string door = c.WaitDoor >= 0 ? $" 문{c.WaitDoor}({s.Layout.Doors[c.WaitDoor].Kind}{(s.Layout.Doors[c.WaitDoor].External ? " 바깥" : "")}) 기다림 {c.WaitTicks} 밸브 {f.DoorBleed[c.WaitDoor]} 열림 {f.DoorOpen[c.WaitDoor]:0.0} 여기 {f.Pressure(c.Cell):0}kPa" : "";
+            string door = c.WaitDoor >= 0 ? $" 문{c.WaitDoor}({s.Layout.Doors[c.WaitDoor].Kind}{(s.Layout.Doors[c.WaitDoor].External ? " 바깥" : "")}) 기다림 {c.WaitTicks} 밸브 {f.DoorBleed[c.WaitDoor]} 열림 {f.DoorOpen[c.WaitDoor]:0.0} 목표 {stx.DoorTarget[c.WaitDoor]:0.0} 끼임 {stx.DoorJam[c.WaitDoor]} 전원 {stx.DoorPowered[c.WaitDoor]} 안전밸브 {stx.SafeToBleed(c.WaitDoor)} 여기 {f.Pressure(c.Cell):0}kPa · 방 문 [{string.Join(",", (m.RoomOf(c.Cell) >= 0 ? stx.RoomDoors(m.RoomOf(c.Cell)) : new List<int>()).Select(d => $"{d}:{f.DoorOpen[d]:0.0}/{stx.DoorTarget[d]:0.0}"))}]" : "";
             Console.WriteLine($"  {Time.Clock(s.Tick)} {m.NameOf(r.Id)}#{r.Id} {Where(c.Cell)} {m.Thought(r.Id)} · 맡음 {c.AssignedGoal}:{Where(c.AssignedTarget)} · 길 {r.PathIdx}/{r.Path.Count}{door} · 계획 {plan} · 피함 {string.Join(",", r.Avoid.Select(v => v.Goal + ":" + v.Target))}");
         }
     }
@@ -430,5 +430,29 @@ public static partial class Program
         }
         foreach (var (id, n) in flips.OrderByDescending(kv => kv.Value).Take(6))
             Console.WriteLine($"  {m.NameOf(id)} {n}번 · 처음 {Time.Clock(first[id])} · 마지막 위험: {last.GetValueOrDefault(id)}");
+    }
+}
+
+public static partial class Program
+{
+    /// <summary>문 하나: 열림 · 목표 · 그 칸과 곁에 있는 몸 · 로봇 (--probe-door [배] [시드] [시간] [문 번호]).</summary>
+    internal static void ProbeDoor(string[] args)
+    {
+        var rest = args.SkipWhile(a => a != "--probe-door").Skip(1).ToArray();
+        string ship = rest.Length > 0 ? rest[0] : "Gorae";
+        ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 18;
+        double hours = rest.Length > 2 ? double.Parse(rest[2]) : 9.36;
+        int d = rest.Length > 3 ? int.Parse(rest[3]) : 24;
+        var lay = Layout.Ship(ship, Tables.Default);
+        int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
+        var s = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0);
+        s.Get<Storyteller>().Enabled = true;
+        var m = s.Get<Mind>(); var f = s.Get<Field>(); var st = s.Get<Structure>(); var life = s.Get<Life>();
+        s.Run((long)Time.Hours(hours));
+        int dc = s.Layout.Doors[d].Cell;
+        Console.WriteLine($"  문 {d} 칸 {dc} ({s.Layout.X(dc)},{s.Layout.Y(dc)}) {s.Layout.Doors[d].Kind} 바깥 {s.Layout.Doors[d].External} · 열림 {f.DoorOpen[d]:0.0} 목표 {st.DoorTarget[d]:0.0} 끼임 {st.DoorJam[d]}");
+        foreach (var a in m.Agents.Where(a => m.Dist(a.C.Cell, dc) <= 2))
+            Console.WriteLine($"    {m.NameOf(a.Id)} 칸 {a.C.Cell} 거리 {m.Dist(a.C.Cell, dc)} · {m.Thought(a.Id)} · 연 문 {a.C.OpenedDoor}{(a.IsPerson ? $" · 살아 {life[a.C.Body].Alive} 의식 {life[a.C.Body].Conscious}" : "")}");
+        for (int b = 0; b < life.Bodies.Count; b++) if (m.Dist(life[b].Cell, dc) <= 1) Console.WriteLine($"    몸 {b} 칸 {life[b].Cell} 살아 {life[b].Alive}");
     }
 }

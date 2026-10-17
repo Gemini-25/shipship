@@ -403,6 +403,31 @@ public static partial class Program
             Check("업어 내기: 안전한 곳이 없으면 '구했다'를 되풀이하지 않는다", rescues <= 1, $"구했다 {rescues}번 · 배 기압 {f.Pressure(lounge):0}kPa");
         }
 
+        // ── 에어락: 안쪽 문을 남이 열어 두었어도, 바깥문 앞의 로봇이 그 문을 닫아 밸브가 열린다 (안 닫으면 맞물림이 밸브를 막아 영영 못 나간다) ──
+        {
+            var s = ShipWorld.Create("Pabal", 11);
+            var m = s.Get<Mind>(); var f = s.Get<Field>(); var st = s.Get<Structure>();
+            var L2 = s.Layout;
+            var ext = L2.Doors.First(dd => dd.External);
+            int ex = L2.X(ext.Cell), ey = L2.Y(ext.Cell);
+            var around = new[] { (ex + 1, ey), (ex - 1, ey), (ex, ey + 1), (ex, ey - 1) }.Where(p => L2.In(p.Item1, p.Item2)).Select(p => L2.Index(p.Item1, p.Item2)).ToList();
+            int outCell = around.First(c => L2.Kind[c] == CellKind.Outside), inCell = around.First(c => L2.Room[c] >= 0);
+            int lockRoom = L2.Room[inCell];
+            int r = m.AddRobot(s, inCell, AgentKind.Robot, inCell);
+            s.Run(5);
+            var inner = st.RoomDoors(lockRoom).Where(e => !L2.Doors[e].External).ToList();
+            foreach (int e in inner) { st.RequestDoor(e, 1); f.SetDoor(e, 1); }
+            m.Assign(s, r, GoalKind.Investigate, outCell, new Belief { Kind = BeliefKind.Breach, Cell = outCell, Subject = -1, Conf = 1 }, s.Tick + Time.Minutes(30));
+            long bledAt = -1; string innerAt = "";
+            for (int k = 0; k < Time.Minutes(4) && bledAt < 0; k++)
+            {
+                s.Step();
+                if (f.DoorBleed[ext.Id] != 0 || f.DoorOpen[ext.Id] > 0) { bledAt = k; innerAt = string.Join(",", inner.Select(e => $"{f.DoorOpen[e]:0.0}")); }
+            }
+            Check("에어락: 남이 열어 둔 안쪽 문도 바깥문 앞의 로봇이 닫는다 → 밸브가 열린다", bledAt >= 0,
+                bledAt >= 0 ? $"{Time.ToSeconds(bledAt):0}초 만에 밸브 · 그때 안쪽 문 {innerAt}" : $"4분 동안 밸브가 안 열림 · 안쪽 문 {string.Join(",", inner.Select(e => $"{f.DoorOpen[e]:0.0}/{st.DoorTarget[e]:0.0}"))} · 로봇 {m.Thought(r)}");
+        }
+
         // ── 공조: 설비 열이 큰 방(정비실 15kW)도 시원하다 · 냉각 펌프가 모두 서면 배가 더워진다 ──
         {
             double Hottest(bool pumpsDown)
