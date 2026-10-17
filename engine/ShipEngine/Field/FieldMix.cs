@@ -293,11 +293,18 @@ public sealed partial class Field
     /// <summary>액체가 흘러갈 수 있는 칸: 바닥 · 열린 문.</summary>
     private bool Wet(int i) => L.Kind[i] == CellKind.Floor || L.Kind[i] == CellKind.Door && DoorPassable(L.DoorAt[i]);
 
-    /// <summary>그을음이 바닥 · 벽에 가라앉는다 (두 시간에 1/e).</summary>
+    /// <summary>칸 하나의 바닥 + 천장 넓이 · 벽면 하나의 넓이 (m² — 칸 1m × 1m · 높이 2.5m).</summary>
+    public const double FloorCeilM2 = 2, WallFaceM2 = 2.5;
+
+    /// <summary>
+    /// 그을음이 겉면에 내려앉는다 (두 시간에 1/e). 작은 입자는 무게보다 확산 · 난류로 모든 겉면에 붙는다 —
+    /// 바닥 · 천장(2m²)과 곁의 벽면(면마다 2.5m²)에 넓이만큼 나눠 (불 곁의 벽이 검게 그을린다 · 벽 칸의 저장 = 그 벽에 묻은 그을음).
+    /// </summary>
     private void SettleSoot(double dt)
     {
         int g = T.gSoot, s = T.sSoot;
         double f = 1 - Math.Exp(-dt / 7200);
+        Span<int> nb = stackalloc int[4];
         for (int i = 0; i < Cells; i++)
         {
             int k = i * G + g;
@@ -306,10 +313,23 @@ public sealed partial class Field
             double n = v * f, cg = GasC(i);
             double tg = cg > 1e-9 ? U[i] / cg : Ts[i];
             N[k] -= n; U[i] = Math.Max(0, U[i] - n * _cv[g] * tg);
-            Store[s * Cells + i] += n;
-            if (Cs[i] > 0) Ts[i] += n * _cv[g] * (tg - 298.15) / Cs[i];
+            L.Neighbors(i, nb);
+            int walls = 0;
+            foreach (int j in nb) if (j >= 0 && L.Kind[j] == CellKind.Wall) walls++;
+            double onWall = walls * WallFaceM2 / (FloorCeilM2 + walls * WallFaceM2);
+            Deposit(i, n * (1 - onWall), tg);
+            if (walls > 0) foreach (int j in nb) if (j >= 0 && L.Kind[j] == CellKind.Wall) Deposit(j, n * onWall / walls, tg);
+        }
+
+        void Deposit(int c, double m, double tg)
+        {
+            Store[s * Cells + c] += m;
+            if (Cs[c] > 0) Ts[c] += m * _cv[g] * (tg - 298.15) / Cs[c];
         }
     }
+
+    /// <summary>겉면에 묻은 그을음 (g/m²): 바닥 칸은 바닥 · 천장에 반씩 · 벽 칸은 벽면 하나 넓이로 (그림 · 냄새 · 닦기).</summary>
+    public double SootGPerM2(int i) => Store[T.sSoot * Cells + i] * 12.0 / (L.Kind[i] == CellKind.Wall ? WallFaceM2 : FloorCeilM2);
 
     // ── 에너지 장부 (법칙 시험) ──
 

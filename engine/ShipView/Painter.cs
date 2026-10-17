@@ -150,6 +150,17 @@ public sealed class Painter
                 bool lamp = DotHash.U(x, y, 5) % 7 == 0;
                 img.Draw(Cached(Key(3, (int)wk, openW ? 1 : 0, openE ? 1 : 0, lamp ? 1 : 0), () => DotTiles.WallFace(wk, openW, openE, lamp)), Px(x), Py(y + 1));
             }
+        // 벽에 묻은 그을음 (② — 불 곁의 벽이 검게): 윗면 · 남쪽 앞면
+        for (int y = y0 - 1; y < y0 + h; y++)
+            for (int x = x0; x < x0 + w; x++)
+            {
+                if (KindAt(x, y) != CellKind.Wall) continue;
+                int c = L.Index(x, y);
+                double sg = f.SootGPerM2(c);
+                if (sg <= 0.05 || F(f, c).hole >= 2f) continue;
+                if (y >= y0) SootStain(img, Px(x), Py(y), T, T, sg, c);
+                if (KindAt(x, y + 1) == CellKind.Floor) SootStain(img, Px(x), Py(y + 1), T, DotTiles.Face, sg, c + 7);
+            }
         foreach (var d in L.Doors)
         {
             int x = L.X(d.Cell), y = L.Y(d.Cell);
@@ -228,6 +239,8 @@ public sealed class Painter
                 if (!L.In(x, y)) continue;
                 int c = L.Index(x, y);
                 if (L.Kind[c] is not (CellKind.Floor or CellKind.Door)) continue;
+                double sootG = f.SootGPerM2(c);
+                if (sootG > 0.05) SootStain(img, Px(x), Py(y), T, T, sootG, c); // 바닥에 앉은 그을음
                 double water = f.Stored(f.T.sWater, c);
                 if (water > 2) img.Draw(Cached(Key(6, frame & 3, c & 7), () => DotFx.WaterTile(frame & 3, c & 7)), Px(x), Py(y), false, (float)Math.Min(0.85, water / 60));
                 double kpa = f.Pressure(c);
@@ -277,6 +290,19 @@ public sealed class Painter
     }
 
     private static (float hole, int _) F(Field f, int c) => (f.Hole[c], 0);
+
+    /// <summary>그을음 얼룩: 묻은 양(g/m²)만큼 검게 — 2×2 점마다 조금씩 달리 (고르게 칠한 판이 아니라 얼룩으로 · 0.5g/m²에 3할 · 2g/m²에 6할).</summary>
+    private static void SootStain(Img img, int px, int py, int w, int h, double gPerM2, int seed)
+    {
+        float a = (float)(0.8 * (1 - Math.Exp(-gPerM2 / 1.1)));
+        var ink = Rgba.Hex("#15110d");
+        for (int y = 0; y < h; y += 2)
+            for (int x = 0; x < w; x += 2)
+            {
+                float k = a * (0.55f + 0.9f * DotHash.F(seed, x * 31 + y, 3));
+                if (k >= 0.02f) img.Fill(px + x, py + y, 2, Math.Min(2, h - y), ink, Math.Min(0.9f, k));
+            }
+    }
 
     private static Img Shadowed(Img body, int rise)
     {
