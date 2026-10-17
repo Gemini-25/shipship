@@ -44,8 +44,14 @@ public sealed class PlanetDef
     public Dictionary<string, double> Air = new();
 }
 public sealed class DebrisDef { public string Name = ""; public double MinKg, MaxKg, Alpha, Speed; }
+/// <summary>⑤ 별계의 천체 하나: 이름 · 궤도 반지름(AU) · 내려앉을 수 있는 행성 종류.</summary>
+public sealed class BodyDef { public string Name = "", Planet = ""; public double Au; }
+/// <summary>⑤ 지어낸 별계 (실제 물리): 별 · 천체 궤도 · 은하 우주선(거리와 상관없는 바깥 방사선 mGy/시).</summary>
+public sealed class SystemDef { public string Name = "", Star = "yellow"; public double Gcr; public List<BodyDef> Bodies = new(); }
+
 public sealed class SpaceTable
 {
+    public SystemDef System = new();
     public Dictionary<string, StarDef> Stars = new();
     public Dictionary<string, PlanetDef> Planets = new();
     public Dictionary<string, DebrisDef> Debris = new();

@@ -3,7 +3,19 @@
 //   star.lightAt1: 1 단위 거리(배가 도는 궤도)에서 햇빛 세기 W/m²
 //   planet: 대기(kPa · 성분 비율) · 낮 온도 · 밤 온도 · 하루 길이(시간) · 중력(g) · 바람(m/s) · 모래 폭풍(하루 확률)
 //   debris: 입자 질량 범위(kg) · 거듭제곱 분포 지수 · 상대 속도(m/s)
+//   system: 지어낸 별계 '한빛계' — 별 · 천체 궤도 반지름(AU · 1AU = 노란 별에서 햇빛 1361W/m²) · gcr: 은하 우주선 (mGy/시 — 거리와 상관없다 · 깊은 우주 약 0.02)
+//     별 입자 방사선(star.baseDose · flareDose)은 1AU 값 — 거리의 제곱에 반비례 · 항해는 호만 전이 궤도 (케플러 제3법칙: 주기 = a^1.5년)
 {
+  "system": {
+    "name": "한빛계", "star": "yellow", "gcr": 0.02,
+    "bodies": [
+      { "name": "끓는 행성", "au": 0.72, "planet": "venuslike" },
+      { "name": "푸른 행성", "au": 1.0,  "planet": "earthlike" },
+      { "name": "붉은 사막", "au": 1.52, "planet": "marslike" },
+      { "name": "바위 위성", "au": 5.2,  "planet": "airless" },
+      { "name": "얼음 달",   "au": 9.6,  "planet": "titanlike" }
+    ]
+  },
   "stars": {
     "yellow": { "name": "노란 별",   "lightAt1": 1361, "flaresPerDay": 0.05, "flareDose": 50,  "flareHours": 6,  "warnMin": 30, "baseDose": 0.02 },
     "redDwarf": { "name": "붉은 왜성", "lightAt1": 900,  "flaresPerDay": 0.6,  "flareDose": 120, "flareHours": 2,  "warnMin": 8,  "baseDose": 0.05 },

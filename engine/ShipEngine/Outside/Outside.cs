@@ -47,7 +47,10 @@ public sealed class Outside : IEngine
 
     // ── 상태 ──
     public string Star = "yellow";
-    public double Distance = 1;          // 별까지 (궤도 단위)
+    public double Distance = 1;          // 별까지 (AU — 1이면 노란 별에서 햇빛 1361W/m²)
+    // 항해: 호만 전이 궤도 (지금 거리 → 목표 거리 · 반 바퀴) — 출발 틱 · 걸리는 틱 (VoyageTicks 0이면 머문다)
+    public double VoyageFrom, VoyageTo;
+    public long VoyageStart, VoyageTicks;
     public double SunAngle;              // 햇빛이 오는 방향 (라디안 · 도면 좌표)
     public double SunDrift = 2 * Math.PI / Time.TicksPerDay; // 틱마다 (하루에 한 바퀴 — 배가 천천히 돈다)
     public string? Planet;               // 내려앉은 행성 (null: 우주)
@@ -97,6 +100,31 @@ public sealed class Outside : IEngine
         Rocks.Add(new Rock { X = -dirX * distance + px * offset, Y = -dirY * distance + py * offset, Vx = dirX * speed, Vy = dirY * speed, Mass = mass, Cause = cause });
     }
 
+    // ───────────────────────── ⑤ 항로 (케플러 — 별 질량 1, 거리 AU, 시간 년) ─────────────────────────
+
+    public const double DaysPerYear = 365.25;
+
+    /// <summary>호만 전이로 걸리는 날: 전이 타원 긴반지름 a = (r₁+r₂)/2 · 반 바퀴 = a^1.5 / 2 년.</summary>
+    public static double VoyageDays(double from, double to) => 0.5 * Math.Pow((from + to) / 2, 1.5) * DaysPerYear;
+
+    /// <summary>항해를 시작한다: 지금 거리에서 목표 거리(AU)로 호만 전이 (도착하면 그 거리에 머문다).</summary>
+    public void StartVoyage(Sim sim, double to)
+    {
+        VoyageFrom = Distance; VoyageTo = to; VoyageStart = sim.Tick;
+        VoyageTicks = Math.Max(1, (long)(VoyageDays(Distance, to) * Time.TicksPerDay));
+    }
+
+    /// <summary>전이 궤도 위 거리: 평균 근점 이각 M = π·(지난 몫) → 케플러 방정식 E − e·sinE = M (뉴턴법) → r = a(1 − e·cosE). 바깥으로 가면 근일점에서, 안으로 가면 원일점에서 출발.</summary>
+    public static double TransferDistance(double from, double to, double fraction)
+    {
+        fraction = Math.Clamp(fraction, 0, 1);
+        double a = (from + to) / 2, e = Math.Abs(to - from) / (to + from);
+        double m = Math.PI * fraction + (to < from ? Math.PI : 0); // 안으로 가면 원일점(M = π)에서
+        double ecc = m;
+        for (int k = 0; k < 20; k++) ecc -= (ecc - e * Math.Sin(ecc) - m) / (1 - e * Math.Cos(ecc));
+        return a * (1 - e * Math.Cos(ecc));
+    }
+
     /// <summary>별 폭발을 앞당긴다 (지금부터 minutes 뒤 조짐).</summary>
     public void ScheduleFlare(double minutes, int cause) { FlareWarnAt = -1; FlareStart = -1; ScheduleAt(Time.Minutes(minutes + StarDef.WarnMin), cause); }
 
@@ -112,6 +140,12 @@ public sealed class Outside : IEngine
     {
         _nowTick = sim.Tick;
         SunAngle += SunDrift;
+        if (VoyageTicks > 0 && Planet == null)
+        {
+            double frac = (sim.Tick - VoyageStart) / (double)VoyageTicks;
+            Distance = TransferDistance(VoyageFrom, VoyageTo, frac);
+            if (frac >= 1) { Distance = VoyageTo; VoyageTicks = 0; }
+        }
         Boundary(sim);
         FlareStep(sim, dt);
         CloudsStep(sim, dt);
@@ -174,13 +208,15 @@ public sealed class Outside : IEngine
             int c = sim.Causes.Add(CauseKind.Flare, $"{star.Name} 폭발 — 양성자 폭풍", sim.Tick, -1, FlareCause);
             sim.Facts.Emit(sim.Tick, FactKind.Flare, -1, (float)star.FlareDose, c, other: 1);
         }
-        double dose = star.BaseDose;
+        // 별 입자는 거리의 제곱에 반비례 (1AU 값) · 은하 우주선은 거리와 상관없다
+        double near = 1 / Math.Max(0.05, Distance * Distance);
+        double dose = star.BaseDose * near + T.Space.System.Gcr;
         if (FlareStart >= 0)
         {
             if (sim.Tick < FlareEnd)
             {
                 double x = (sim.Tick - FlareStart) / (double)Math.Max(1, FlareEnd - FlareStart);
-                dose += star.FlareDose * Math.Min(1, x * 6) * Math.Exp(-2 * x);
+                dose += star.FlareDose * near * Math.Min(1, x * 6) * Math.Exp(-2 * x);
             }
             else { FlareStart = -1; FlareWarnAt = -1; NextFlare = -1; FlareCause = 0; }
         }
@@ -352,7 +388,7 @@ public sealed class Outside : IEngine
 
     public void Save(StateWriter w)
     {
-        w.Str(Star); w.F64(Distance); w.F64(SunAngle); w.F64(SunDrift); w.Str(Planet); w.I64(PlanetSince); w.Bool(Storm); w.I64(StormUntil);
+        w.Str(Star); w.F64(Distance); w.F64(VoyageFrom); w.F64(VoyageTo); w.I64(VoyageStart); w.I64(VoyageTicks); w.F64(SunAngle); w.F64(SunDrift); w.Str(Planet); w.I64(PlanetSince); w.Bool(Storm); w.I64(StormUntil);
         w.I64(NextFlare); w.I64(FlareWarnAt); w.I64(FlareStart); w.I64(FlareEnd); w.I32(FlareCause); w.F64(DoseOut);
         w.List(Clouds); w.List(Rocks);
         w.I64(DebrisHits); w.I64(RockHits); w.I64(NearMisses); w.I64(Flares);
@@ -362,7 +398,7 @@ public sealed class Outside : IEngine
 
     public void Load(StateReader r)
     {
-        Star = r.Str()!; Distance = r.F64(); SunAngle = r.F64(); SunDrift = r.F64(); Planet = r.Str(); PlanetSince = r.I64(); Storm = r.Bool(); StormUntil = r.I64();
+        Star = r.Str()!; Distance = r.F64(); VoyageFrom = r.F64(); VoyageTo = r.F64(); VoyageStart = r.I64(); VoyageTicks = r.I64(); SunAngle = r.F64(); SunDrift = r.F64(); Planet = r.Str(); PlanetSince = r.I64(); Storm = r.Bool(); StormUntil = r.I64();
         NextFlare = r.I64(); FlareWarnAt = r.I64(); FlareStart = r.I64(); FlareEnd = r.I64(); FlareCause = r.I32(); DoseOut = r.F64();
         Clouds = r.List<Cloud>(); Rocks = r.List<Rock>();
         DebrisHits = r.I64(); RockHits = r.I64(); NearMisses = r.I64(); Flares = r.I64();

@@ -145,6 +145,25 @@ public sealed partial class Field
     }
 
     /// <summary>
+    /// 외판 겉 온도 (K): 우주에 닿은 면마다 다층 단열재 겉면이 햇빛 · 우주와 이루는 복사 평형 αS·cosθ + εσT배경⁴ = εσT⁴ (흡수 0.3 · 방사 0.8) 중 가장 뜨거운 것.
+    /// 별에 가까워지면 거리의 제곱근에 반비례해 뜨거워진다 · 구멍 난 외판은 재질 그대로 (벽 온도) · 우주에 닿지 않은 칸은 벽 온도.
+    /// </summary>
+    public double SkinTemp(int i)
+    {
+        if (_exposed.Length <= i || _exposed[i] == 0 || Hole[i] > 0) return Ts[i];
+        double bg = Outside.Vacuum ? 2.7 : Outside.Temp, bg4 = bg * bg * bg * bg, best = 0;
+        int x = L.X(i), y = L.Y(i);
+        foreach (var (dx, dy) in Dirs)
+        {
+            int nx = x + dx, ny = y + dy;
+            if (L.In(nx, ny) && L.Kind[L.Index(nx, ny)] != CellKind.Outside) continue;
+            double cos = Math.Max(0, dx * Outside.SunX + dy * Outside.SunY);
+            best = Math.Max(best, Math.Pow((0.3 * Outside.Sun * cos + 0.8 * Sigma * bg4) / (0.8 * Sigma), 0.25));
+        }
+        return best;
+    }
+
+    /// <summary>
     /// 겉면 ↔ 기체(대류 10 W/m²K · 1m²) · 겉면 ↔ 바닥(전도 20 W/K + 복사 εσ(T⁴−Ts⁴) 선형화) — 두 물체 정확한 식을 차례로.
     /// 장은 바닥과 2K 넘게 다른 겉면을 매 틱, 나머지는 5틱마다 부른다.
     /// </summary>
