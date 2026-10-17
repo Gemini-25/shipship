@@ -140,6 +140,9 @@ public sealed partial class Mind
             float grief = _soc?.GriefOf(a.Id) ?? 0; // ⑨ 슬픔: 일손을 놓고 사람을 찾는다
             if (InWindow(hour, c.ShiftHour, 8) && c.Station >= 0) Add(GoalKind.Work, c.Station, L.Furniture[c.Station].Cells[0], (1.2f + c.Diligent) * (1 - 0.7f * grief));
             if (c.Bored > 0.3f) Add(GoalKind.Relax, -1, -1, c.Bored * 1.5f);
+            // ⑧ 운동: 하루 한 번쯤 — 성실 · 외향일수록 챙기고 신경성은 덜 (운동 습관 연구) · 일하는 시간 · 잘 시간 밖에서 (ISS 승무원은 하루 2시간 남짓)
+            if (c.Unfit > 0.5f && !InWindow(hour, c.ShiftHour, 8) && !night)
+                Add(GoalKind.Exercise, -1, -1, c.Unfit * (0.2f + 1.4f * c.Consc + 0.4f * c.Extra - 0.4f * c.Neuro));
             if (c.Lonely > 0.3f || grief > 0.3f) Add(GoalKind.Socialize, -1, -1, Math.Max(c.Lonely, grief) * (0.5f + c.Sociable) * 1.5f + grief);
             Add(GoalKind.Idle, -1, here, 0.3f);
             JobOption(a);
@@ -314,6 +317,15 @@ public sealed partial class Mind
                 if (seat < 0) return false;
                 plan.Add(Go(seat));
                 plan.Add(Use(UseKind.Relax, Time.Minutes(45)));
+                return true;
+            }
+            case GoalKind.Exercise:
+            {
+                // 달리기틀이 비어 있으면 거기서 · 없으면 침대 곁 맨몸 운동
+                int gym = NearestFree(a, _gym);
+                int at = gym >= 0 ? gym : c.Bed >= 0 ? c.Bed : here;
+                plan.Add(Go(at, gym >= 0 ? 0 : 1));
+                plan.Add(Use(UseKind.Exercise, Time.Minutes(45)));
                 return true;
             }
             case GoalKind.Socialize:

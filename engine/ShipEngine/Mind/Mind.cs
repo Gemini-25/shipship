@@ -54,10 +54,10 @@ public sealed partial class Mind : IEngine
     public static bool Eva(Agent a) => a.C.Kind == AgentKind.Robot;
     public bool HullOut(int cell) => cell >= 0 && cell < _hullOut.Length && _hullOut[cell];
     private readonly int[][] _roomDoors;      // 방 둘레의 문 칸
-    private readonly int[] _food, _water, _beds, _social, _relax, _docks, _droneDocks, _lockers, _medBeds;
+    private readonly int[] _food, _water, _beds, _social, _relax, _gym, _docks, _droneDocks, _lockers, _medBeds;
     private readonly double[] _halfLife;      // 믿음 종류 → 반감기 (초)
 
-    public long Shouts, Panics, Extinguished, Rescued, Patched, Repaired, FledCount, Meals, Drinks;
+    public long Shouts, Panics, Extinguished, Rescued, Patched, Repaired, FledCount, Meals, Drinks, Exercised;
     public double FoodEaten, WaterDrunk;   // 몰 (장부)
 
     public Mind(Field f)
@@ -113,6 +113,7 @@ public sealed partial class Mind : IEngine
         _water = Furn(fu => fu.Type is "MealDispenser" or "WaterRecycler" or "CoffeeMachine" or "IceMaker" or "GreywaterFilter");
         _beds = Furn(fu => fu.Type is "Bed");
         _social = Furn(fu => fu.Type is "Seat" or "Table" && RoomType(fu) is "Mess" or "Lounge" or "Galley" or "MeetingRoom");
+        _gym = Furn(fu => fu.Type is "Treadmill");
         _relax = Furn(fu => fu.Type is "Seat" or "GameTable" or "Treadmill" or "Projector" or "Bookshelf" or "Aquarium" && RoomType(fu) is "Lounge" or "Gym" or "Theater" or "Observatory" or "Garden" or "Chapel");
         if (_relax.Length == 0) _relax = _social;
         _docks = Furn(fu => fu.Type is "RobotDock");
@@ -163,10 +164,34 @@ public sealed partial class Mind : IEngine
         };
         if (c.Role < RoleNames.Length)
             foreach (var (sk, v) in P.Roles[RoleNames[c.Role]].Skills) SetSkill(ref c, sk, (float)Math.Max(GetSkill(c, sk), v));
+        // ⑧ 성격 다섯 축 — 따로 갈래 낸 난수에서 (다른 난수 흐름은 그대로)
+        var pr = Rng.Stream(sim.Seed, "성격", people);
+        float Trait() { double u1 = Math.Max(1e-12, pr.Unit()), u2 = pr.Unit(); return (float)Math.Clamp(0.5 + TraitSd * Math.Sqrt(-2 * Math.Log(u1)) * Math.Cos(2 * Math.PI * u2), 0.02, 0.98); }
+        c.Open = Trait(); c.Consc = Trait(); c.Extra = Trait(); c.Agree = Trait(); c.Neuro = Trait();
+        float braveNoise = Trait() - 0.5f;
+        c.Unfit = pr.UnitF() * 0.8f;
+        Derive(ref c, braveNoise);
         var a = new Agent { Id = id, C = c };
         Agents.Add(a);
         a.C.Station = PickStation(a);
         return id;
+    }
+
+    public const double TraitSd = 0.17;
+
+    /// <summary>⑧ 다섯 축 → 여섯 버릇: 호기심 = 열림 · 성실 = 성실 · 사교 = 외향 · 친절 = 친화 · 침착 = 1 − 신경성 · 용기 = 외향(+) · 신경성(−)에 조금의 제 몫 (감각 추구 연구).</summary>
+    private static void Derive(ref AgentCore c, float braveNoise)
+    {
+        c.Curious = c.Open; c.Diligent = c.Consc; c.Sociable = c.Extra; c.Kindness = c.Agree; c.Calm = 1 - c.Neuro;
+        c.Brave = Math.Clamp(0.5f + 0.45f * (c.Extra - 0.5f) - 0.6f * (c.Neuro - 0.5f) + 0.5f * braveNoise, 0.02f, 0.98f);
+    }
+
+    /// <summary>성격을 정해 준다 (시험 · 승무원 명단) — 여섯 버릇도 다시 낸다 (용기의 제 몫은 0).</summary>
+    public void SetPersonality(int agent, float open, float consc, float extra, float agree, float neuro)
+    {
+        ref var c = ref Agents[agent].C;
+        c.Open = open; c.Consc = consc; c.Extra = extra; c.Agree = agree; c.Neuro = neuro;
+        Derive(ref c, 0);
     }
 
     public int AddRobot(Sim sim, int cell, AgentKind kind = AgentKind.Robot, int dock = -1)
@@ -311,7 +336,7 @@ public sealed partial class Mind : IEngine
         GoalKind.Sleep => "잔다", GoalKind.Eat => "먹는다", GoalKind.Drink => "물을 마신다", GoalKind.Work => "일한다", GoalKind.Relax => "쉰다",
         GoalKind.Socialize => "어울린다", GoalKind.FightFire => "불을 끈다", GoalKind.Rescue => "사람을 구한다", GoalKind.Patch => "구멍을 막는다",
         GoalKind.Repair => "고친다", GoalKind.Investigate => "살피러 간다", GoalKind.GetSuit => "우주복을 입는다", GoalKind.Charge => "충전한다", GoalKind.Evacuate => "방을 빠져나간다", GoalKind.Brace => "버티는 문을 받친다",
-        GoalKind.Craft => "물건을 만든다", GoalKind.Maintain => "부품을 미리 간다", GoalKind.Clean => "곰팡이를 닦는다", GoalKind.Harvest => "작물을 거둔다", _ => "",
+        GoalKind.Craft => "물건을 만든다", GoalKind.Maintain => "부품을 미리 간다", GoalKind.Clean => "곰팡이를 닦는다", GoalKind.Harvest => "작물을 거둔다", GoalKind.Exercise => "운동한다", _ => "",
     };
 
     public static string BeliefName(BeliefKind k) => k switch
@@ -439,15 +464,16 @@ public sealed partial class Mind : IEngine
         else c.Sleepy = (float)Math.Min(1, c.Sleepy + h / Need("sleep", 16));
         int others = CountNear(a, 6);
         if (others > 0 && !asleep) c.Lonely = (float)Math.Max(0, c.Lonely - h * Math.Min(2, others) / 1.5);
-        else c.Lonely = (float)Math.Min(1, c.Lonely + h / Need("social", 10));
+        else c.Lonely = (float)Math.Min(1, c.Lonely + h / (Need("social", 10) * (1.5 - c.Extra))); // 외향일수록 사람이 빨리 그립다 (6~14시간)
         if (c.Goal == GoalKind.Relax || c.Goal == GoalKind.Socialize) c.Bored = (float)Math.Max(0, c.Bored - h);
-        else if (!asleep) c.Bored = (float)Math.Min(1, c.Bored + h / Need("fun", 8) * (c.Goal == GoalKind.Work ? 1.5 - c.Diligent : 1));
+        else if (!asleep) c.Bored = (float)Math.Min(1, c.Bored + h / Need("fun", 8) * (c.Goal == GoalKind.Work ? 1.5 - c.Diligent : 1) * (0.6 + 0.8 * c.Open)); // 열린 사람은 새것이 빨리 고프다
+        if (!asleep && c.Goal != GoalKind.Exercise) c.Unfit = (float)Math.Min(1, c.Unfit + h / 16); // 깨어 있는 하루면 1
         // 감정: 두려움은 몇 분이면 가라앉는다 (침착할수록 빨리) · 긴장은 굶주림 · 졸림 · 두려움에 쌓이고 잠 · 쉼에 풀린다
         c.Fear = (float)Math.Max(0, c.Fear - dt / 600 * (0.5 + c.Calm));
         c.Joy = (float)Math.Max(0, c.Joy - h / 4);
         c.Sad = (float)Math.Max(0, c.Sad - h / 48);
         c.Anger = (float)Math.Max(0, c.Anger - h / 6);
-        double load = Math.Max(0, c.Hunger - 0.7) + Math.Max(0, c.Thirst - 0.7) + Math.Max(0, c.Sleepy - 0.7) + c.Fear * 0.5 + b.Pain * 0.5;
+        double load = (Math.Max(0, c.Hunger - 0.7) + Math.Max(0, c.Thirst - 0.7) + Math.Max(0, c.Sleepy - 0.7) + c.Fear * 0.5 + b.Pain * 0.5) * (0.6 + 0.8 * c.Neuro); // 신경성이 높으면 같은 일에도 더 긴장한다
         double ease = asleep || c.Goal is GoalKind.Relax or GoalKind.Socialize ? 0.3 : 0.05;
         c.Stress = (float)Math.Clamp(c.Stress + h * (load - ease), 0, 1);
     }
@@ -542,7 +568,7 @@ public sealed partial class Mind : IEngine
         w.Arr(Stock); w.List(Loose);
         w.I32(_said.Count);
         foreach (var (ev, tick, sp, b) in _said) { w.I32(ev); w.I64(tick); w.I32(sp); w.List(new List<Belief> { b }); }
-        w.I64(Shouts); w.I64(Panics); w.I64(Extinguished); w.I64(Rescued); w.I64(Patched); w.I64(Repaired); w.I64(FledCount); w.I64(Meals); w.I64(Drinks); w.F64(FoodEaten); w.F64(WaterDrunk); w.F64(WaterSprayed);
+        w.I64(Shouts); w.I64(Panics); w.I64(Extinguished); w.I64(Rescued); w.I64(Patched); w.I64(Repaired); w.I64(FledCount); w.I64(Meals); w.I64(Drinks); w.I64(Exercised); w.F64(FoodEaten); w.F64(WaterDrunk); w.F64(WaterSprayed);
     }
 
     public void Load(StateReader r)
@@ -559,6 +585,6 @@ public sealed partial class Mind : IEngine
         _said.Clear();
         int m = r.I32();
         for (int i = 0; i < m; i++) { int ev = r.I32(); long t = r.I64(); int sp = r.I32(); var b = r.List<Belief>()[0]; _said.Add((ev, t, sp, b)); }
-        Shouts = r.I64(); Panics = r.I64(); Extinguished = r.I64(); Rescued = r.I64(); Patched = r.I64(); Repaired = r.I64(); FledCount = r.I64(); Meals = r.I64(); Drinks = r.I64(); FoodEaten = r.F64(); WaterDrunk = r.F64(); WaterSprayed = r.F64();
+        Shouts = r.I64(); Panics = r.I64(); Extinguished = r.I64(); Rescued = r.I64(); Patched = r.I64(); Repaired = r.I64(); FledCount = r.I64(); Meals = r.I64(); Drinks = r.I64(); Exercised = r.I64(); FoodEaten = r.F64(); WaterDrunk = r.F64(); WaterSprayed = r.F64();
     }
 }

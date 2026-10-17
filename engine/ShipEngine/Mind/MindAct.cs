@@ -173,7 +173,7 @@ public sealed partial class Mind
         long t = sim.Tick;
         var use = (UseKind)st.Arg;
         if (t <= c.StepStart && use == UseKind.Sleep && a.IsPerson) { _life![c.Body].Asleep = 1; c.SleptAt = t; }
-        Activity(a, use switch { UseKind.Sleep => "sleep", UseKind.Work => "work", UseKind.None or UseKind.Relax or UseKind.Talk => "rest", _ => "rest" });
+        Activity(a, use switch { UseKind.Sleep => "sleep", UseKind.Work => "work", UseKind.Exercise => "hard", UseKind.None or UseKind.Relax or UseKind.Talk => "rest", _ => "rest" });
         bool done = t - c.StepStart >= st.Value;
         switch (use)
         {
@@ -204,6 +204,11 @@ public sealed partial class Mind
             }
             case UseKind.Sleep when a.IsPerson:
                 _life![c.Body].Asleep = 0; c.WokeAt = t;
+                break;
+            case UseKind.Exercise when a.IsPerson:
+                // 땀 흘리고 나면 개운하다: 지루함 · 긴장이 풀린다 (운동과 기분 연구)
+                c.Unfit = 0; c.ExercisedAt = t; Exercised++;
+                c.Bored = Math.Max(0, c.Bored - 0.3f); c.Stress = Math.Max(0, c.Stress - 0.2f); c.Joy = Math.Min(1, c.Joy + 0.15f);
                 break;
         }
         Next(a, t);

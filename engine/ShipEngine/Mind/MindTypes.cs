@@ -56,6 +56,7 @@ public enum GoalKind : byte
     Maintain,   // ⑪ 닳은 부품을 미리 간다
     Clean,      // ⑪ 곰팡이를 닦아 낸다
     Harvest,    // ⑪ 다 자란 작물을 거둬 식량 창고(냉장고 · 배식기)에 넣는다
+    Exercise,   // ⑧ 운동 (달리기틀 — 없으면 침대 곁 맨몸 운동)
 }
 
 /// <summary>계획의 한 단계.</summary>
@@ -81,7 +82,7 @@ public enum StepKind : byte
 }
 
 /// <summary>쓰기 단계가 하는 일.</summary>
-public enum UseKind : byte { None, Eat, Drink, Sleep, Work, Relax, Talk, Charge }
+public enum UseKind : byte { None, Eat, Drink, Sleep, Work, Relax, Talk, Charge, Exercise }
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct PlanStep
@@ -115,6 +116,10 @@ public struct AgentCore
     public float Fear, Sad, Anger, Joy, Stress;
     // 성격 0~1
     public float Brave, Calm, Kindness, Diligent, Sociable, Curious;
+    /// <summary>⑧ 성격 다섯 축 (Big Five · 0~1 — 사람 무리에서 평균 0.5 · 표준 편차 0.17의 정규 분포): 열림 · 성실 · 외향 · 친화 · 신경성. 위 여섯 버릇은 여기서 나온다.</summary>
+    public float Open, Consc, Extra, Agree, Neuro;
+    public float Unfit;        // ⑧ 운동하고 싶은 몸 (깨어 있는 하루면 1)
+    public long ExercisedAt;
     // 솜씨 0~1
     public float SkRepair, SkMedic, SkFire, SkSeal, SkCook, SkPilot, SkFarm, SkScience;
     // 로봇
