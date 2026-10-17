@@ -49,7 +49,9 @@ public struct ShipPolicy
     public byte ShedLoads;         // 1: 전력이 모자라면 덜 중요한 장치를 끈다
     public byte ResetBreakers;     // 1: 합선 없이 떨어진 차단기를 다시 올린다
     public byte AskPeople;         // 사람에게 일을 부탁한다 — 0: 하지 않는다 · 1: 로봇이 없을 때만 (1분 기다린 뒤) · 2: 로봇과 함께 곧바로
-    public static ShipPolicy Default => new() { AutoSeal = 1, SealWaitMin = 1.5f, ShedLoads = 1, ResetBreakers = 1, AskPeople = 1 };
+    public float RationBelow;      // 보통으로 먹으면 이 날 수를 못 버티면 배급 (0이면 하지 않는다) — 1.5배를 넘게 버티면 푼다
+    public float RationShare;      // 배급 때 식량 하루 몫 (보통의 몇 몫)
+    public static ShipPolicy Default => new() { AutoSeal = 1, SealWaitMin = 1.5f, ShedLoads = 1, ResetBreakers = 1, AskPeople = 1, RationBelow = 30, RationShare = 0.75f };
 }
 
 /// <summary>
@@ -166,6 +168,7 @@ public sealed partial class ShipMind : IEngine
         if (sim.Tick % _effectiveRead == 0) { _tick = sim.Tick; ReadSensors(); Detect(sim); Refill(sim); }
         Act(sim);
         Power(sim);
+        Supply(sim);   // ⑪ 배급 · 보관함 무게
         long tod = sim.Tick % Time.TicksPerDay; // 멈춰 있던 때에는 일지도 방송도 없다 (다음 일지가 그 사이를 함께 적는다)
         if (tod == Time.Hours(JournalHour) % Time.TicksPerDay) WriteJournal(sim);
         if (tod == Time.Hours(MorningHour) % Time.TicksPerDay) MorningBroadcast(sim);
@@ -928,13 +931,14 @@ public sealed partial class ShipMind : IEngine
         if (gap > 0.05 * Math.Max(1, _net.Demanded))
         {
             var order = _net.Devices.Where(d => _net.On[d.Id] != 0 && ShedRank(d.Def.Role) >= 0).OrderBy(d => ShedRank(d.Def.Role)).ThenBy(d => d.Id);
+            int shed = 0;
             foreach (var d in order)
             {
                 if (gap <= 0) break;
-                _net.SetOn(d.Id, false); Shed[d.Id] = 1; gap -= d.Def.Kw; Sheds++;
+                _net.SetOn(d.Id, false); Shed[d.Id] = 1; gap -= d.Def.Kw; Sheds++; shed++;
                 sim.Facts.Emit(t, FactKind.LoadShed, d.Cell, (float)d.Def.Kw, 0, -1, d.Id);
             }
-            Say(sim, "전력이 모자라 덜 중요한 장치를 껐다");
+            if (shed > 0) Say(sim, "전력이 모자라 덜 중요한 장치를 껐다");   // 끌 것이 없으면 말하지 않는다 (전지가 바닥난 배에서 틱마다 되풀이했다)
         }
         else if (_net.Supplied - _net.Demanded > 5)
         {
@@ -1003,7 +1007,7 @@ public sealed partial class ShipMind : IEngine
             if (root != 0) byRoot[root] = ng;
         }
         int count = groups.Count + (downs.Count > 0 ? 1 : 0);
-        if (count == 0 && carried.Count == 0 && dead.Count == 0) lines.Add("큰 일 없이 지나갔다");
+        if (count == 0 && carried.Count == 0 && dead.Count == 0) lines.Add(RationFoodOn != 0 || RationWaterOn != 0 ? "큰 사고 없이 지나갔다 — 배급 중" : "큰 일 없이 지나갔다");
         else
         {
             var heads = groups.Select(g => $"{RoomName(g[0].Room)} {KindName(g[0].Kind)}").Distinct().Take(3).ToList();
@@ -1028,6 +1032,7 @@ public sealed partial class ShipMind : IEngine
             lines.Add($"쓰러진 사람 {downs.Count}명: " + string.Join(" · ", downs.Select(body => _mind.Agents.FirstOrDefault(a => a.IsPerson && a.C.Body == body) is { } a ? _mind.NameOf(a.Id) : "?")));
         if (dead.Count > 0) lines.Add("숨을 거둔 사람: " + string.Join(" · ", dead));
         lines.Add("배: " + ShipLine(sim, true));
+        lines.AddRange(SupplyLines());
         string self = SelfLine(_jT, _jH, _jO, _jA, _jY, _jN);
         if (self.Length > 0) lines.Add(self);
         _jT = Throttles; _jH = HeatStops; _jO = Overloads; _jA = Asked; _jY = AskAccepted; _jN = AskDeclined; _jP = Preempts;
@@ -1065,7 +1070,7 @@ public sealed partial class ShipMind : IEngine
         w.Bool(Online);
         w.Arr(RoomKPa); w.Arr(RoomKPaPrev); w.Arr(RoomO2); w.Arr(RoomSoot); w.Arr(RoomSootPrev); w.Arr(RoomCO); w.Arr(RoomCO2); w.Arr(RoomTemp); w.Arr(RoomHot); w.Arr(RoomNH3); w.Arr(RoomO3); w.Arr(RoomToxCell); w.Arr(RoomSeen); w.Arr(RoomMoles); w.I32(_reads); w.Arr(ShipMolesHist); w.Arr(DoorMoles); w.I64(LastCycle);
         w.Arr(Shed); w.Arr(BreakerResetAt); w.List(Imaginations);
-        w.I64(Alarms); w.I64(Assignments); w.I64(Seals); w.I64(Sheds); w.I64(Resets); w.I64(Exhausts); w.I64(OuterClosed); w.I64(StovesCut); SaveCrew(w);
+        w.I64(Alarms); w.I64(Assignments); w.I64(Seals); w.I64(Sheds); w.I64(Resets); w.I64(Exhausts); w.I64(OuterClosed); w.I64(StovesCut); SaveCrew(w); SaveSupply(w);
         w.I32(Journal.Count); foreach (var (t, s) in Journal) { w.I64(t); w.Str(s); }
         w.I32(JournalHour); w.I32(MorningHour); w.I64(LastJournal); w.I64(_journalAssign); w.Arr(ReportedDead.ToArray()); w.Str(Morning); w.Arr(RoomAirT); w.Arr(GaveAirAt); w.Arr(DoorWasOpen); w.Arr(RoomCO2Hold);
     }
@@ -1078,7 +1083,7 @@ public sealed partial class ShipMind : IEngine
         Online = r.Bool();
         r.ArrInto(RoomKPa); r.ArrInto(RoomKPaPrev); r.ArrInto(RoomO2); r.ArrInto(RoomSoot); r.ArrInto(RoomSootPrev); r.ArrInto(RoomCO); r.ArrInto(RoomCO2); r.ArrInto(RoomTemp); r.ArrInto(RoomHot); r.ArrInto(RoomNH3); r.ArrInto(RoomO3); r.ArrInto(RoomToxCell); r.ArrInto(RoomSeen); r.ArrInto(RoomMoles); _reads = r.I32(); r.ArrInto(ShipMolesHist); r.ArrInto(DoorMoles); LastCycle = r.I64();
         Shed = r.Arr<byte>(); BreakerResetAt = r.Arr<long>(); Imaginations.Clear(); Imaginations.AddRange(r.List<Imagined>());
-        Alarms = r.I64(); Assignments = r.I64(); Seals = r.I64(); Sheds = r.I64(); Resets = r.I64(); Exhausts = r.I64(); OuterClosed = r.I64(); StovesCut = r.I64(); LoadCrew(r);
+        Alarms = r.I64(); Assignments = r.I64(); Seals = r.I64(); Sheds = r.I64(); Resets = r.I64(); Exhausts = r.I64(); OuterClosed = r.I64(); StovesCut = r.I64(); LoadCrew(r); LoadSupply(r);
         Journal.Clear(); int nj = r.I32(); for (int i = 0; i < nj; i++) { long t = r.I64(); Journal.Add((t, r.Str() ?? "")); }
         JournalHour = r.I32(); MorningHour = r.I32(); LastJournal = r.I64(); _journalAssign = r.I64(); ReportedDead.Clear(); ReportedDead.AddRange(r.Arr<int>()); Morning = r.Str() ?? ""; r.ArrInto(RoomAirT); r.ArrInto(GaveAirAt); r.ArrInto(DoorWasOpen); r.ArrInto(RoomCO2Hold);
     }

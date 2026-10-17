@@ -285,6 +285,46 @@ public static partial class Program
 {
     /// <summary>사람을 틱마다 따라간다 — 칸의 독 · 폐 · 포화 · 생각 · 믿음 (--probe-person [배] [시드] [몇 시간 뒤부터] [틱 수] [몇 틱마다]).</summary>
     /// <summary>하루 살피기: 사람들이 시간을 어디에 쓰나 (목표별 몫) · 쉬는 시간에 한 일 · 지루함 · 졸림 (⑧ 일상).</summary>
+    /// <summary>⑪ 모자람 살피기: 식량을 n일 치만 남기고 며칠 — 배급 · 몰래 먹기 · 본 이 · 탓 · 몸싸움 · 주컴퓨터 말 (--probe-supply [배] [시드] [날 수] [남길 날 수]).</summary>
+    internal static void ProbeSupply(string[] args)
+    {
+        var rest = args.SkipWhile(a => a != "--probe-supply").Skip(1).ToArray();
+        string ship = rest.Length > 0 ? rest[0] : "Didim";
+        ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 11;
+        double days = rest.Length > 2 ? double.Parse(rest[2]) : 3;
+        double keep = rest.Length > 3 ? double.Parse(rest[3]) : 12;
+        var lay = Layout.Ship(ship, Tables.Default);
+        int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
+        var s = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0);
+        var m = s.Get<Mind>(); var f = s.Get<Field>(); var sm = s.Get<ShipMind>(); var so = s.Get<Society>(); var life = s.Get<Life>();
+        int crew = m.Agents.Count(a => a.IsPerson);
+        // 식량을 keep일 치로: 모든 곳의 식량을 같은 비율로 줄인다 (작물은 그대로)
+        double total = 0;
+        foreach (var fu in lay.Furniture) foreach (int c in fu.Cells) total += f.Stored(f.T.sFood, c);
+        double want = keep * crew * ShipMind.FoodPerDay, k = total > 0 ? Math.Min(1, want / total) : 1;
+        foreach (var fu in lay.Furniture) foreach (int c in fu.Cells) { double have = f.Stored(f.T.sFood, c); f.TakeStore(c, f.T.sFood, have * (1 - k)); }
+        Console.WriteLine($"{ship} 시드 {seed} · 사람 {crew} · 식량 {total:0} → {want:0}몰 ({keep}일 치)");
+        int logAt = 0;
+        long brawls0 = so.Fights, blames0 = so.Blames;
+        for (long t = 0; t < Time.Days(days); t++)
+        {
+            s.Step();
+            for (; logAt < sm.Log.Count; logAt++)
+            {
+                var (tick, text) = sm.Log[logAt];
+                if (text.Contains("배급") || text.Contains("몫 밖") || text.Contains("막힌 곳")) Console.WriteLine($"    {Time.Clock(tick)} 주컴퓨터: {text}");
+            }
+            if (t % Time.Hours(12) == 0 && t > 0)
+            {
+                var ppl = m.Agents.Where(a => a.IsPerson && life[a.C.Body].Alive != 0).ToList();
+                Console.WriteLine($"    {Time.Clock(s.Tick)} 배고픔 평균 {ppl.Average(a => a.C.Hunger):0.00} · 짜증 {ppl.Average(a => a.C.Anger):0.00} · 긴장 {ppl.Average(a => a.C.Stress):0.00} · 몰래 먹음 {m.Pilfered} · 본 일 {so.PilferSeen} · 탓 {so.Blames - blames0} · 몸싸움 {so.Fights - brawls0} · 못 받음 {m.Refused}");
+            }
+        }
+        foreach (var x in s.Facts.Since(0).Where(x => x.Kind is FactKind.Pilfer or FactKind.Blamed or FactKind.Fight).Take(30))
+            Console.WriteLine($"    {Time.Clock(x.Tick)} {FactNames.Of(x.Kind)}: {s.Causes.Story(x.Cause)}");
+        if (sm.Journal.Count > 0) Console.WriteLine($"  마지막 일지:\n      {sm.Journal[^1].text.Replace("\n", "\n      ")}");
+    }
+
     internal static void ProbeDaily(string[] args)
     {
         var rest = args.SkipWhile(a => a != "--probe-daily").Skip(1).ToArray();

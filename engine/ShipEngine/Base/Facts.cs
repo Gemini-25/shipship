@@ -71,6 +71,9 @@ public enum FactKind : ushort
     ComputerJournal,   // 주컴퓨터가 일지를 썼다 (Size: 사건 수)
     ComputerBroadcast, // 주컴퓨터의 아침 방송
     Switched,          // 켜진 장치를 껐다 (Actor: 끈 이 · −1 주컴퓨터 · Other: 장치) — 켜 둔 원인이 있으면 그 원인에 잇는다
+    // ⑪
+    Pilfer,            // 배급 중 몫 밖의 한 끼를 몰래 꺼내 먹었다 (Actor: 먹은 이 · Other: 보관함 · Size: 몰)
+    Rationed,          // 주컴퓨터가 배급을 열었다 (Size: 몫 비율 · 0이면 풀었다)
 }
 
 public static class FactNames
@@ -91,7 +94,7 @@ public static class FactNames
         FactKind.ComputerAlarm => "경보", FactKind.ComputerSeal => "봉쇄", FactKind.ComputerAssign => "로봇을 보냈다", FactKind.LoadShed => "장치를 껐다",
         FactKind.BreakerReset => "차단기를 올렸다", FactKind.ComputerDown => "주컴퓨터가 멈췄다", FactKind.StorySeed => "조짐",
         FactKind.Grieved => "슬픔", FactKind.TrustLost => "믿음이 깨졌다", FactKind.WentOutside => "선외로 나갔다",
-        FactKind.Talk => "이야기", FactKind.Blamed => "탓", FactKind.Fight => "몸싸움", FactKind.Sabotage => "몰래 한 짓",
+        FactKind.Talk => "이야기", FactKind.Blamed => "탓", FactKind.Fight => "몸싸움", FactKind.Sabotage => "몰래 한 짓", FactKind.Pilfer => "몰래 먹었다", FactKind.Rationed => "배급",
         FactKind.ComputerJournal => "일지", FactKind.ComputerBroadcast => "아침 방송", FactKind.Switched => "껐다", _ => "",
     };
 }

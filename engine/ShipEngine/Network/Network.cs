@@ -102,7 +102,8 @@ public sealed class Network : IEngine
     public double WaterTank;      // 물 (몰)
     public double WasteWater;     // 오수 (몰 — 오줌 · 씻은 물) — 재활용 장치가 마실 물로 되돌린다
     public double Brine;          // 버린 소금물의 물 (몰 — 장부)
-    public const double WaterRecovery = 0.94, RecyclerMolPerSec = 0.025; // 장치 하나 1.6L/시
+    public const double WaterRecovery = 0.94, RecyclerMolPerSec = 0.025; // 장치 하나 1.6L/시 · 새 거르개의 회수율 (낡을수록 0.85까지)
+    public double WaterProcessed, WaterRecovered;   // 거른 오수 · 되찾은 물 (몰 — 회수율을 잰다)
     /// <summary>냉각 펌프 하나에 딸린 방 열교환 · 팬 (kW) — 전기가 모두 방 공기의 열이 되니 배 전력만큼은 걷어 내야 한다.</summary>
     public const double HvacShare = 1.0 / 3; // 펌프 냉각 용량의 1/3은 그 고리에 딸린 방 열교환 · 팬 몫 (90kW 펌프 → 30kW)
     /// <summary>예비 공기 (몰 · 질소 79% 산소 21%) — 큰 감압 뒤 배를 다시 채울 압축 공기. 배 전체를 반 번 채울 만큼 싣고 떠난다.</summary>
@@ -622,8 +623,12 @@ public sealed class Network : IEngine
                     // 오수(오줌 · 씻은 물) → 증류 · 걸러 마실 물로 (ISS 물 회수 장치: 오줌 처리 약 85% + 소금물 처리 → 전체 94~98% — 여기는 94%) · 남은 진한 소금물은 버린다
                     if (p > 0 && mechOk && WasteWater > 0)
                     {
-                        double n = Math.Min(WasteWater, RecyclerMolPerSec * (filterBad ? 0.3 : 1) * dt);
-                        WasteWater -= n; WaterTank += n * WaterRecovery; Brine += n * (1 - WaterRecovery); sim.Book.Add(Res.Water, Flow.Recycled, n * WaterRecovery);
+                        // 거르개가 낡을수록 막혀 덜 흐르고 · 소금물을 덜 짜내 회수율이 94% → 85% (오줌 처리만 — ISS 첫 물 회수 장치) · 망가지면 30%만 흐른다
+                        double wear = Math.Clamp(WearFraction(dev.Id, Part.Filter), 0, 1);
+                        double rec = filterBad ? 0.85 : WaterRecovery - 0.09 * wear;
+                        double n = Math.Min(WasteWater, RecyclerMolPerSec * (filterBad ? 0.3 : 1 - 0.5 * wear * wear) * dt);
+                        WasteWater -= n; WaterTank += n * rec; Brine += n * (1 - rec); sim.Book.Add(Res.Water, Flow.Recycled, n * rec);
+                        WaterProcessed += n; WaterRecovered += n * rec;
                     }
                     HeatInto(dev, kw * 1000 * dt);
                     break;
@@ -1046,7 +1051,7 @@ public sealed class Network : IEngine
         w.Arr(DataBroken); w.Arr(DataBrokenCause); w.Arr(DataCutCell); w.I64(DataCuts); w.I64(DataSplices);
         w.Arr(On); w.Arr(Supply); w.Arr(Wear); w.Arr(Broken); w.Arr(Charge);
         w.Arr(Breaker); w.Arr(OverSec); w.Arr(FaultCell); w.Arr(BreakerStuck); w.Arr(Amps); w.Arr(Damper); w.Arr(Exhaust); w.F64(TraceScrubbed); w.Arr(SealLeakCause); w.Arr(OnCause); w.Arr(PanK); w.Arr(PanWater);
-        w.Bool(ReactorScram); w.I32(ScramCause); w.F64(WaterTank); w.F64(WasteWater); w.F64(Brine); w.F64(Coolant); w.F64(VentedH2); w.F64(AirReserve); w.F64(AirRelease); w.F64(AirReleased);
+        w.Bool(ReactorScram); w.I32(ScramCause); w.F64(WaterTank); w.F64(WasteWater); w.F64(Brine); w.F64(WaterProcessed); w.F64(WaterRecovered); w.F64(Coolant); w.F64(VentedH2); w.F64(AirReserve); w.F64(AirRelease); w.F64(AirReleased);
         w.F64(VentedCH4); w.F64(VentedCO2); w.F64(CO2Store); w.Arr(Duty); w.F64(PpO2);
         w.F64(Supplied); w.F64(Demanded); w.F64(CoolingKw); w.F64(ReactorKw); w.F64(HvacKw);
         w.I64(Trips); w.I64(Shorts); w.I64(Failures);
@@ -1063,7 +1068,7 @@ public sealed class Network : IEngine
         r.ArrInto(DataBroken); r.ArrInto(DataBrokenCause); r.ArrInto(DataCutCell); DataCuts = r.I64(); DataSplices = r.I64();
         r.ArrInto(On); r.ArrInto(Supply); r.ArrInto(Wear); r.ArrInto(Broken); r.ArrInto(Charge);
         r.ArrInto(Breaker); r.ArrInto(OverSec); r.ArrInto(FaultCell); r.ArrInto(BreakerStuck); r.ArrInto(Amps); r.ArrInto(Damper); r.ArrInto(Exhaust); TraceScrubbed = r.F64(); r.ArrInto(SealLeakCause); r.ArrInto(OnCause); r.ArrInto(PanK); r.ArrInto(PanWater);
-        ReactorScram = r.Bool(); ScramCause = r.I32(); WaterTank = r.F64(); WasteWater = r.F64(); Brine = r.F64(); Coolant = r.F64(); VentedH2 = r.F64(); AirReserve = r.F64(); AirRelease = r.F64(); AirReleased = r.F64();
+        ReactorScram = r.Bool(); ScramCause = r.I32(); WaterTank = r.F64(); WasteWater = r.F64(); Brine = r.F64(); WaterProcessed = r.F64(); WaterRecovered = r.F64(); Coolant = r.F64(); VentedH2 = r.F64(); AirReserve = r.F64(); AirRelease = r.F64(); AirReleased = r.F64();
         VentedCH4 = r.F64(); VentedCO2 = r.F64(); CO2Store = r.F64(); r.ArrInto(Duty); PpO2 = r.F64();
         Supplied = r.F64(); Demanded = r.F64(); CoolingKw = r.F64(); ReactorKw = r.F64(); HvacKw = r.F64();
         Trips = r.I64(); Shorts = r.I64(); Failures = r.I64();

@@ -60,6 +60,7 @@ public enum GoalKind : byte
     Brawl,      // ⑨ 몸싸움 (그 자리에서 — 사회가 주먹을 셈한다)
     Restock,    // ⑪ 식량 창고(포장 식량)에서 주방(냉장고 · 배식기)으로 식량 상자를 나른다
     Cook,       // ⑧ 조리대에서 밥을 짓고(켜고 · 끄고) 먹는다
+    Pilfer,     // ⑪ 배급 중 몫을 다 먹고 — 재지 않는 식량 보관함에서 몰래 한 끼
 }
 
 /// <summary>계획의 한 단계.</summary>
@@ -86,7 +87,7 @@ public enum StepKind : byte
 }
 
 /// <summary>쓰기 단계가 하는 일.</summary>
-public enum UseKind : byte { None, Eat, Drink, Sleep, Work, Relax, Talk, Charge, Exercise, Cook }
+public enum UseKind : byte { None, Eat, Drink, Sleep, Work, Relax, Talk, Charge, Exercise, Cook, Pilfer }
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct PlanStep

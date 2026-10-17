@@ -142,14 +142,15 @@ public sealed partial class Mind
                 Add(GoalKind.Sleep, c.Bed, c.Bed >= 0 ? c.Bed : here, c.Sleepy * c.Sleepy * 5 + (night ? 1.5f : 0)); // 몸의 시계는 '언제 눕나'만 옮긴다 (얼마나 간절한지는 쌓인 졸림)
             // 욕구는 어느 만큼 차야 움직인다 (배가 조금 고프다고 바로 먹으러 가지 않는다)
             int kinMeal = c.Hunger > 0.35f && c.Hunger <= 0.55f ? KinMeal(a) : -1; // ⑨ 가까운 이가 먹으러 가면 조금 배고파도 따라간다
-            if (c.Hunger > 0.55f || kinMeal >= 0)
+            if ((c.Hunger > 0.55f || kinMeal >= 0) && FoodLeft(a.Id) >= 0.2) // ⑪ 배급: 오늘 몫을 다 받았으면 배식기가 주지 않는다 (참는다)
             {
                 float eat = c.Hunger * c.Hunger * 5 + (F.Ppm(T.gAroma, here) > 5 ? 0.5f : 0) + (kinMeal >= 0 ? 0.6f : 0);
                 Add(GoalKind.Eat, -1, -1, eat);
                 // ⑧ 밥을 짓는다: 요리를 좋아하는 이 · 꺼진 조리대가 있고 같은 방에 먹을 것이 있으면 (먹기보다 조금 앞서게)
                 if (WantsToCook(sim, a) && CookStove(a) is int sv && sv >= 0) Add(GoalKind.Cook, sv, _net!.Devices[sv].Cell, eat + 0.3f);
             }
-            if (c.Thirst > 0.3f) Add(GoalKind.Drink, -1, -1, c.Thirst * c.Thirst * 6 + (c.Thirst > 0.85f ? 2 : 0)); // 몹시 마른 목(몸의 물 1.7% 모자람)은 한밤의 잠보다 급하다
+            PilferOption(a, here);   // ⑪ 몫을 다 먹고 몹시 배고프면 — 덜 성실하고 덜 다정한 이는 몰래 한 끼
+            if (c.Thirst > 0.3f && WaterLeft(a.Id) >= 5) Add(GoalKind.Drink, -1, -1, c.Thirst * c.Thirst * 6 + (c.Thirst > 0.85f ? 2 : 0)); // 몹시 마른 목(몸의 물 1.7% 모자람)은 한밤의 잠보다 급하다
             float grief = _soc?.GriefOf(a.Id) ?? 0; // ⑨ 슬픔: 일손을 놓고 사람을 찾는다
             if (InWindow(hour, c.ShiftHour, 8) && c.Station >= 0) Add(GoalKind.Work, c.Station, L.Furniture[c.Station].Cells[0], (1.2f + c.Diligent) * (1 - 0.7f * grief));
             if (c.Bored > 0.3f) Add(GoalKind.Relax, -1, -1, c.Bored * 1.5f);
@@ -335,6 +336,14 @@ public sealed partial class Mind
                 return true;
             }
             case GoalKind.Cook: return BuildCook(a, o, plan);
+            case GoalKind.Pilfer:
+            {
+                if (o.Target < 0) return false;
+                int cell = L.Furniture[o.Target].Cells[0];
+                plan.Add(Go(cell, 1));
+                plan.Add(Use(UseKind.Pilfer, Time.Minutes(3), cell, o.Target));
+                return true;
+            }
             case GoalKind.Drink:
             {
                 if (_net != null && _net.WaterTank < 30) return false;

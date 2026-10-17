@@ -82,7 +82,8 @@ public sealed partial class Society
         if (best >= 0) { var m = Memories[best]; opts.Add(new(m.Topic, 2.2f * bw, m.About, m.Cause, m.Cell, C(i).Extra >= C(j).Extra ? i : j)); }
         // 식량 · 물이 열흘을 못 버틴다
         double food = sim.Book.DaysLeft((int)Res.Food, sim.Tick), water = sim.Book.DaysLeft((int)Res.Water, sim.Tick);
-        if (food < 10 || water < 10) opts.Add(new(Topic.Shortage, 1.2f, -1, 0, C(i).Cell, C(i).Neuro >= C(j).Neuro ? i : j));
+        bool rationed = _mind!.RationFood > 0 || _mind.RationWater > 0;   // ⑪ 배급 중이면 먹을 것 이야기가 잦다 (미네소타 굶주림 실험: 먹을 것 생각)
+        if (food < 10 || water < 10 || rationed) opts.Add(new(Topic.Shortage, rationed ? 2f + C(i).Hunger + C(j).Hunger : 1.2f, -1, 0, C(i).Cell, C(i).Neuro >= C(j).Neuro ? i : j));
         int talker = C(i).Extra >= C(j).Extra ? i : j;
         opts.Add(new(Topic.Small, 1, -1, 0, C(i).Cell, talker));
         if (C(i).Goal == GoalKind.Idle || C(j).Goal == GoalKind.Idle) opts.Add(new(Topic.Work, 0.5f, -1, 0, C(i).Cell, talker));

@@ -198,17 +198,20 @@ public sealed partial class Mind
         {
             case UseKind.Eat when a.IsPerson:
             {
-                double got = 0;
-                foreach (int x in L.Furniture[st.Target].Cells) { got += F.TakeStore(x, T.sFood, Math.Max(0, MealMol - got)); if (got >= MealMol) break; }
-                if (got > 0) { _life!.Eat(c.Body, got); FoodEaten += got; sim.Book.Add(Res.Food, Flow.Eaten, -got); c.Hunger = (float)Math.Max(0, c.Hunger - got); c.Joy = Math.Min(1, c.Joy + 0.1f); c.AteAt = t; Meals++; }
+                double got = 0, meal = Math.Min(MealMol, FoodLeft(a.Id));   // ⑪ 배급: 오늘 몫 안에서만
+                foreach (int x in L.Furniture[st.Target].Cells) { got += F.TakeStore(x, T.sFood, Math.Max(0, meal - got)); if (got >= meal) break; }
+                if (got <= 0 && RationFood > 0 && meal < 0.05) Refused++;
+                if (got > 0) { CountAte(a, got); _life!.Eat(c.Body, got); FoodEaten += got; sim.Book.Add(Res.Food, Flow.Eaten, -got); c.Hunger = (float)Math.Max(0, c.Hunger - got); c.Joy = Math.Min(1, c.Joy + 0.1f); c.AteAt = t; Meals++; }
                 break;
             }
+            case UseKind.Pilfer when a.IsPerson: PilferDone(sim, a, st); break;
             case UseKind.Drink when a.IsPerson:
             {
-                double want = Math.Max(15, c.Thirst * 0.02 * BodyWater0 + 10);
+                double want = Math.Min(Math.Max(15, c.Thirst * 0.02 * BodyWater0 + 10), WaterLeft(a.Id));   // ⑪ 배급: 오늘 몫 안에서만
                 double got = _net != null ? Math.Min(_net.WaterTank, want) : want;
                 if (_net != null) { _net.WaterTank -= got; sim.Book.Add(Res.Water, Flow.Drunk, -got); }
                 _life!.Drink(c.Body, got);
+                CountDrank(a, got);
                 WaterDrunk += got;
                 c.DrankAt = t; Drinks++;
                 break;
@@ -467,6 +470,7 @@ public sealed partial class Mind
         double got = 0;
         foreach (int x in fu.Cells) { got += F.TakeStore(x, T.sFood, RationMol - got); if (got >= RationMol) break; }
         if (got <= 1e-6) { JobDone(a, t); return; }
+        if (st.Target < LockerLogged.Length) LockerLogged[st.Target] += got;   // 나르기는 기록이 남는다 (주컴퓨터의 무게 센서가 견준다)
         if (c.Holding != 255) DropHeld(a);
         c.Holding = iRation; c.HoldCharge = (float)got;
         Next(a, t);

@@ -16,7 +16,7 @@ public struct Job
 /// 로봇 먼저, 그다음 솜씨가 맞는 사람에게 맡긴다. 정제기 같은 설비는 전기를 먹고 원료를 조금씩 만든다.
 /// 정비는 숨은 한계가 아니라 '쓴 시간'으로 정한다 — 어떤 고장은 미리 막고, 어떤 것은 그래도 터진다.
 /// </summary>
-public sealed class Work : IEngine
+public sealed partial class Work : IEngine
 {
     public string Name => "일과 물자";
     public Phase Phase => Phase.Requests;
@@ -57,7 +57,7 @@ public sealed class Work : IEngine
         if (_mind == null) return;
         if (MakerProgress.Length != L.Furniture.Count) MakerProgress = new float[L.Furniture.Count];
         Makers(sim, dt);
-        if (sim.Tick % PlanEvery == Offset) Plan(sim);
+        if (sim.Tick % PlanEvery == Offset) { Plan(sim); FindBlocks(sim); }
         Ledger(sim);
     }
 
@@ -165,7 +165,7 @@ public sealed class Work : IEngine
             int have = _mind.Stock[fu * _mind.ItemCount + item];
             // 켜고 끄기: 다 차면 끄고 · 모자라고 전력에 여유(80% 안)가 있으면 켠다
             if (have >= mk.Max) { if (_net.On[dev.Id] != 0 && dev.Def.Kw > 3) _net.SetOn(dev.Id, false); continue; }
-            if (_net.On[dev.Id] == 0 && _net.Demanded + dev.Def.Kw < 0.8 * _net.Capacity()) _net.SetOn(dev.Id, true);
+            if (_net.On[dev.Id] == 0 && _net.Demanded + dev.Def.Kw < (_powerFirst.Contains(dev.Id) ? 0.95 : 0.8) * _net.Capacity()) _net.SetOn(dev.Id, true); // 막힌 곳이면 95%까지
             if (!_net.Working(dev.Id)) continue;
             MakerProgress[fu] += (float)(dt / 3600);
             if (MakerProgress[fu] >= mk.Hours) { MakerProgress[fu] = 0; _mind.Stock[fu * _mind.ItemCount + item]++; Made++; sim.Book.AddItem(item, Flow.Made, 1); }
@@ -279,11 +279,13 @@ public sealed class Work : IEngine
     {
         w.List(Jobs); w.Arr(MakerProgress);
         w.I64(Crafted); w.I64(Maintained); w.I64(Cleaned); w.I64(Made); w.I64(Harvested);
+        w.I32(Blocks.Count); foreach (var b in Blocks) w.Str(b); w.Arr(_powerFirst.OrderBy(x => x).ToArray());
     }
 
     public void Load(StateReader r)
     {
         Jobs = r.List<Job>(); MakerProgress = r.Arr<float>();
         Crafted = r.I64(); Maintained = r.I64(); Cleaned = r.I64(); Made = r.I64(); Harvested = r.I64();
+        Blocks.Clear(); int nb = r.I32(); for (int i = 0; i < nb; i++) Blocks.Add(r.Str() ?? ""); _powerFirst.Clear(); foreach (int x in r.Arr<int>()) _powerFirst.Add(x);
     }
 }

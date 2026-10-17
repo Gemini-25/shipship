@@ -380,6 +380,7 @@ public sealed partial class Mind : IEngine
     public void Step(Sim sim, double dt)
     {
         Bind(sim);
+        RationDay(sim.Tick);
         Fling(sim, dt); // 감압 바람에 밀리는 물건 (사람 · 로봇이 없어도)
         if (Agents.Count == 0) { HoldDoorsByItems(); return; }
         F.RebuildNow();
@@ -508,6 +509,7 @@ public sealed partial class Mind : IEngine
         double load = (Math.Max(0, c.Hunger - 0.7) + Math.Max(0, c.Thirst - 0.7) + Math.Max(0, c.Sleepy - 0.7) + c.Fear * 0.5 + b.Pain * 0.5) * (0.6 + 0.8 * c.Neuro); // 신경성이 높으면 같은 일에도 더 긴장한다
         double ease = asleep || c.Goal is GoalKind.Relax or GoalKind.Socialize ? 0.3 : 0.05;
         c.Stress = (float)Math.Clamp(c.Stress + h * (load - ease), 0, 1);
+        RationHunger(a, h, asleep);   // ⑪ 배급: 몫을 다 먹고도 배고프다 — 참는다
     }
 
     private double Need(string k, double dflt) => P.Needs.TryGetValue(k, out var v) ? v : dflt;
@@ -602,7 +604,7 @@ public sealed partial class Mind : IEngine
         foreach (var (ev, tick, sp, b) in _said) { w.I32(ev); w.I64(tick); w.I32(sp); w.List(new List<Belief> { b }); }
         w.I64(Shouts); w.I64(Panics); w.I64(Extinguished); w.I64(Rescued); w.I64(Patched); w.I64(Repaired); w.I64(FledCount); w.I64(Meals); w.I64(Drinks); w.I64(Exercised); w.F64(FoodEaten); w.F64(WaterDrunk); w.F64(WaterSprayed);
         w.I64(Cooked); w.I64(Forgot); w.I64(_learnCursor); w.I64(AteTogether); w.I64(Followed);
-        w.Arr(HobbyCount); SavePlaces(w);
+        w.Arr(HobbyCount); SavePlaces(w); SaveRation(w);
     }
 
     public void Load(StateReader r)
@@ -621,6 +623,6 @@ public sealed partial class Mind : IEngine
         for (int i = 0; i < m; i++) { int ev = r.I32(); long t = r.I64(); int sp = r.I32(); var b = r.List<Belief>()[0]; _said.Add((ev, t, sp, b)); }
         Shouts = r.I64(); Panics = r.I64(); Extinguished = r.I64(); Rescued = r.I64(); Patched = r.I64(); Repaired = r.I64(); FledCount = r.I64(); Meals = r.I64(); Drinks = r.I64(); Exercised = r.I64(); FoodEaten = r.F64(); WaterDrunk = r.F64(); WaterSprayed = r.F64();
         Cooked = r.I64(); Forgot = r.I64(); _learnCursor = r.I64(); AteTogether = r.I64(); Followed = r.I64();
-        HobbyCount = r.Arr<long>(); LoadPlaces(r);
+        HobbyCount = r.Arr<long>(); LoadPlaces(r); LoadRation(r);
     }
 }
