@@ -379,7 +379,8 @@ public sealed partial class Mind : IEngine
     public void Step(Sim sim, double dt)
     {
         Bind(sim);
-        if (Agents.Count == 0) return;
+        Fling(sim, dt); // 감압 바람에 밀리는 물건 (사람 · 로봇이 없어도)
+        if (Agents.Count == 0) { HoldDoorsByItems(); return; }
         F.RebuildNow();
         IndexBodies();
         foreach (var a in Agents) UpdateUp(sim, a);
@@ -409,6 +410,7 @@ public sealed partial class Mind : IEngine
         }
         if (_life != null) foreach (var b in _life.Bodies) Hold(b.Cell);
         foreach (var a in Agents) if (!a.IsPerson) Hold(a.C.Cell);
+        HoldDoorsByItems();
     }
 
     /// <summary>움직일 수 있나: 사람은 살아 있고 의식이 있고 깨어 있어야 · 로봇은 멀쩡하고 전지가 있어야.</summary>

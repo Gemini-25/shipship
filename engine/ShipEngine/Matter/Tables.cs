@@ -83,6 +83,8 @@ public sealed class RoleDef
 public sealed class ItemDef
 {
     public double Water, O2, Minutes, MaxArea;
+    /// <summary>무게 (kg) — 감압 바람에 밀리나 · 문틀에 걸리나 · 맞으면 얼마나 아프나.</summary>
+    public double Kg = 2;
 }
 
 /// <summary>⑪ 만들기: 어느 설비에서 · 몇 분 · 무엇이 드나 · 배에 몇 개를 두려 하나.</summary>

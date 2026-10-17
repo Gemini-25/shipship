@@ -30,15 +30,15 @@
     "Refinery":      { "원료": 4 }
   },
   "items": {
-    "소화기":      { "water": 500, "minutes": 0 },
-    "수리 꾸러미": { "minutes": 20 },
-    "봉합 꾸러미": { "minutes": 3, "maxArea": 0.05 },
-    "우주복":      { "o2": 60, "minutes": 2 },
-    "산소 마스크": { "o2": 20, "minutes": 0.3 },
-    "구급 상자":   { "minutes": 5 },
-    "원료":        { "minutes": 0 },
-    "수확물":      { "minutes": 0 },
-    "식량 상자":   { "minutes": 0 }
+    "소화기":      { "water": 500, "minutes": 0, "kg": 9 },
+    "수리 꾸러미": { "minutes": 20, "kg": 4 },
+    "봉합 꾸러미": { "minutes": 3, "maxArea": 0.05, "kg": 1 },
+    "우주복":      { "o2": 60, "minutes": 2, "kg": 30 },
+    "산소 마스크": { "o2": 20, "minutes": 0.3, "kg": 2 },
+    "구급 상자":   { "minutes": 5, "kg": 2 },
+    "원료":        { "minutes": 0, "kg": 12 },
+    "수확물":      { "minutes": 0, "kg": 3 },
+    "식량 상자":   { "minutes": 0, "kg": 13 }
   },
   "recipes": {
     "봉합 꾸러미": { "at": "Workbench", "minutes": 20, "needs": { "원료": 1 }, "keep": 4 },

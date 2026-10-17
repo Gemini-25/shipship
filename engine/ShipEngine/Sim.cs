@@ -69,8 +69,8 @@ public sealed class Sim
     /// 저장 판 — 엔진의 저장 모양(무엇을 어떤 순서 · 꼴로 쓰나)이 바뀌면 올린다. 다른 판의 저장은 읽지 않고 분명한 말로 거절한다.
     /// <see cref="SaveShape"/>는 그 판의 모양 지문 (법칙 시험 '저장 판'이 지금 모양과 견준다 — 다르면 판을 올리고 지문을 고친다).
     /// </summary>
-    public const int SaveVersion = 1;
-    public const ulong SaveShape = 0xc376e77d141ddba1;
+    public const int SaveVersion = 2; // 2: 장부 흐름 '우주로' · 종류 수를 지문에
+    public const ulong SaveShape = 0x26fe1815ea709689;
 
     public byte[] Save()
     {
@@ -84,6 +84,8 @@ public sealed class Sim
     {
         var w = new StateWriter(1 << 16) { Shape = new() };
         SaveTo(w);
+        // 배열 길이를 정하는 종류 수도 (장부 흐름 · 물자 · 사실 · 원인 — 늘면 옛 저장의 배열이 어긋난다)
+        w.Shape.Add($"흐름{Book.Flows} 물자{Book.Bulk} 사실{Enum.GetValues<FactKind>().Length} 원인{Enum.GetValues<CauseKind>().Length}");
         return Fingerprint.Of(System.Text.Encoding.UTF8.GetBytes(string.Join("|", w.Shape)));
     }
 

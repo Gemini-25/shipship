@@ -26,6 +26,7 @@ public enum Flow : byte
     Used,            // 썼다 (물건 — 고치기 · 막기 · 만들기 재료)
     Burned,          // 불에 탔다 (식량 · 산소)
     Rusted,          // 젖은 강철 벽이 녹슬며 먹었다 (산소)
+    Spaced,          // 감압 바람에 구멍 밖 우주로 날아갔다 (물건)
     Count
 }
 

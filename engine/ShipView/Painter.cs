@@ -232,6 +232,22 @@ public sealed class Painter
             else img.Fill(px, py, bw * T, bh * T + rise, Rgba.Hex("#000308"), 0.3f);
         }
 
+        // ── 바닥에 놓인 · 날아온 물건 (④ — 문틀에 걸린 것은 문 위에) ──
+        if (mind != null)
+        {
+            var count = new Dictionary<int, int>();
+            foreach (var it in mind.Loose)
+            {
+                int c = it.Cell;
+                if (c < 0) continue;
+                int x = L.X(c), y = L.Y(c);
+                if (x < x0 || y < y0 || x >= x0 + w || y >= y0 + h) continue;
+                int n = count.GetValueOrDefault(c); count[c] = n + 1;
+                var icon = Cached(Key(9, it.Item), () => LooseIcon(mind.ItemNames[it.Item]));
+                img.Draw(icon, Px(x) + T / 2 - icon.W / 2 + (n % 3 - 1) * 7, Py(y) + T / 2 - icon.H / 2 + n / 3 * 6);
+            }
+        }
+
         // ── 칸 덮개: 물 · 진공 · 열 · 어둠 ──
         for (int y = y0; y < y0 + h; y++)
             for (int x = x0; x < x0 + w; x++)
@@ -290,6 +306,32 @@ public sealed class Painter
     }
 
     private static (float hole, int _) F(Field f, int c) => (f.Hole[c], 0);
+
+    /// <summary>바닥 물건 그림 (작은 도트 — 무게만큼 크게): 상자 · 꾸러미 · 소화기 · 우주복 · 원료 덩이.</summary>
+    private static Img LooseIcon(string name)
+    {
+        var (w, h, body, edge) = name switch
+        {
+            "식량 상자" => (16, 11, "#9a7346", "#5d4428"),
+            "원료" => (13, 10, "#7d838c", "#4a4f57"),
+            "우주복" => (14, 14, "#e6e8ec", "#8f96a3"),
+            "소화기" => (7, 13, "#d13b2f", "#7a1d16"),
+            "수리 꾸러미" => (11, 8, "#5b6f8f", "#2f3b4f"),
+            "봉합 꾸러미" => (9, 6, "#e0b33a", "#8a6a17"),
+            "구급 상자" => (10, 8, "#f2f2f2", "#9aa0a8"),
+            "산소 마스크" => (9, 7, "#9ad0e8", "#4f7d91"),
+            "수확물" => (9, 7, "#6fae4b", "#3d6b26"),
+            _ => (9, 7, "#a0a6ae", "#5a6068"),
+        };
+        var o = new Img(w + 2, h + 2);
+        o.Fill(1, 2, w, h, Rgba.Hex("#000000"), 0.35f);                  // 그림자
+        o.Fill(0, 0, w, h, Rgba.Hex(edge));
+        o.Fill(1, 1, w - 2, h - 2, Rgba.Hex(body));
+        o.Fill(1, 1, w - 2, 1, Rgba.Hex("#ffffff"), 0.25f);              // 윗면 빛
+        if (name == "구급 상자") { o.Fill(w / 2 - 1, 2, 2, h - 4, Rgba.Hex("#d13b2f")); o.Fill(2, h / 2 - 1, w - 4, 2, Rgba.Hex("#d13b2f")); }
+        if (name == "식량 상자") o.Fill(1, h / 2, w - 2, 1, Rgba.Hex(edge));
+        return o;
+    }
 
     /// <summary>그을음 얼룩: 묻은 양(g/m²)만큼 검게 — 2×2 점마다 조금씩 달리 (고르게 칠한 판이 아니라 얼룩으로 · 0.5g/m²에 3할 · 2g/m²에 6할).</summary>
     private static void SootStain(Img img, int px, int py, int w, int h, double gPerM2, int seed)

@@ -59,6 +59,11 @@ public sealed partial class Field : IEngine
     public float[] Hole;
     /// <summary>바람 (m/s) — 틈으로 빠지는 흐름에서 계산한다.</summary>
     public float[] WindX, WindY;
+    /// <summary>
+    /// 이 틱 처음 돌풍의 동압 ½ρv² (Pa — 이 틱 동안만 · 찍지 않는다): 감압은 한 틱 안에 방을 비우니 틱 평균 바람으로는 물건을 미는 힘을 잴 수 없다.
+    /// 구역 몰 수가 지수로 줄었다고 보고(틈 흐름이 그 식이다) 처음 흐름 = n₀·ln(n₀/n₁)/Δt · 처음 밀도 = 끝 밀도 × n₀/n₁.
+    /// </summary>
+    public float[] WindPa;
     /// <summary>틱마다 바깥으로 빠진 몰 수 누계 (시험 · 연출).</summary>
     public double VentedTotal;
     public Exterior Outside = Exterior.Space();
@@ -78,7 +83,7 @@ public sealed partial class Field : IEngine
         L = layout; T = t; Cells = layout.N; G = t.GasCount; S = t.StoreCount;
         N = new double[G * Cells]; U = new double[Cells]; Ts = new double[Cells]; Tf = new double[Cells]; Store = new double[S * Cells];
         DoorOpen = new float[layout.Doors.Count]; DoorTaped = new byte[layout.Doors.Count]; DoorBleed = new byte[layout.Doors.Count]; Hole = new float[Cells];
-        WindX = new float[Cells]; WindY = new float[Cells];
+        WindX = new float[Cells]; WindY = new float[Cells]; WindPa = new float[Cells];
         _cv = t.Gases.Select(s => s.C).ToArray();
         _molar = t.Gases.Select(s => s.MolarMass).ToArray();
         Cs = new double[Cells]; _kRight = new double[Cells]; _kDown = new double[Cells]; _exposed = new byte[Cells];
@@ -327,7 +332,7 @@ public sealed partial class Field : IEngine
         long t = Prof != null ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
         if (_dirty) Rebuild();
         t = Lap("구역", t);
-        Array.Clear(WindX); Array.Clear(WindY);
+        Array.Clear(WindX); Array.Clear(WindY); Array.Clear(WindPa);
         FlowLinks(dt);
         t = Lap("틈 흐름", t);
         Equalize();

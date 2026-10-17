@@ -85,7 +85,7 @@ public sealed partial class Field
             }
         long t = Prof != null ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
         foreach (var k in Links)
-            if (Math.Abs(k.Flow) > WindMinFlow) Wind(k);
+            if (Math.Abs(k.Flow) > WindMinFlow) Wind(k, dt);
         Lap("바람", t);
     }
 
@@ -306,13 +306,18 @@ public sealed partial class Field
     /// <summary>
     /// 바람: 틈으로 빠지는(들어오는) 흐름 q가 구역에 고르게 퍼져 있다고 보고, 틈까지 거리 고리마다 지나가는 양을 그 고리의 칸 수로 나눈다.
     /// 속도 = q × (그 고리 밖 칸의 비율) / (고리 칸 수 × 칸의 몰 수) [m/s] — 방향은 틈 쪽 이웃.
+    /// 칸의 몰 수는 틱 가운데 값으로 (감압은 한 틱 안에 구역을 비운다 — 틱 끝 값으로 나누면 속도가 부푼다) · 불기 시작할 때 밀도를 WindRho에.
     /// </summary>
-    private void Wind(Link k)
+    private void Wind(Link k, double dt)
     {
         void One(int start, int region, ref int[]? cache, double q)
         {
             if (start < 0 || region < 0) return;
             var cells = Regions[region];
+            double nEnd = Math.Max(1e-6, _rn[region]);
+            double gMid = Math.Max(0.05, 1 + 0.5 * q * dt / nEnd), gStart = Math.Max(0.05, 1 + q * dt / nEnd); // 이 틱에 잃은(+) · 얻은(−) 몫
+            // 돌풍: 잃는 쪽은 처음 흐름이 평균의 ln(r)·r/(r−1)배 (r = n₀/n₁ — 지수로 줄었다) · 얻는 쪽은 평균 그대로
+            double peak = gStart > 1.0001 ? Math.Log(gStart) * gStart / (gStart - 1) : 1;
             if (cache == null)
             {
                 if (_distBuf.Length != Cells) _distBuf = new int[Cells];
@@ -335,8 +340,10 @@ public sealed partial class Field
                 if (d < 0) continue;
                 double nCell = CellMoles(c);
                 if (nCell < 1e-6) continue;
-                double v = q * beyond[d] / (double)total / (ring[d] * nCell);
+                double v = q * beyond[d] / (double)total / (ring[d] * nCell * gMid);
                 v = Math.Clamp(v, -340, 340);
+                double rho0 = nCell * gStart * 0.029 / CellVolume, v0 = Math.Min(340, Math.Abs(v) * gMid / gStart * peak); // 처음 밀도 · 처음 빠르기
+                WindPa[c] = (float)Math.Max(WindPa[c], 0.5 * rho0 * v0 * v0);
                 double dx = 0, dy = 0;
                 if (d == 0) { dx = L.X(k.Via) - L.X(c); dy = L.Y(k.Via) - L.Y(c); if (dx == 0 && dy == 0) ExteriorDir(c, out dx, out dy); }
                 else

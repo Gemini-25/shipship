@@ -309,6 +309,7 @@ public sealed partial class Mind
         if (jam)
         {
             _st.FreeDoor(door);
+            ClearDoorItems(wall); // 문틀에 걸린 물건을 치운다
             if (_st.DoorDeltaP(door) > 3) _st.RequestDoor(door, 0); // 바람이 빨려 든다 — 바로잡은 김에 닫는다
             if (a.IsPerson) UseHeld(sim, a);
             int jc = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} 끼인 문을 비틀어 바로잡았다", t, wall, _st.DamageCause[wall], 0, a.Id);

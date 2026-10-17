@@ -77,6 +77,18 @@ public sealed class Structure : IEngine
     public void Brace(int cell) { if (L.Kind[cell] is CellKind.Wall or CellKind.Door) Braced[cell] = 1; }
     /// <summary>끼인 문을 바로잡는다 (다시 여닫힌다).</summary>
     public void FreeDoor(int door) { DoorJam[door] = 0; DoorTarget[door] = F.DoorOpen[door]; }
+
+    /// <summary>문틀에 무엇이 끼었다 (위층의 요청 — 바람에 날린 상자 등): 그 자리에서 멈춰 닫히지 않는다 · 끼인 문으로 바로잡아야 한다.</summary>
+    public void JamDoor(Sim sim, int door, int cause)
+    {
+        if (DoorJam[door] != 0) return;
+        int c = L.Doors[door].Cell;
+        DoorJam[door] = 1;
+        DamageCause[c] = cause;
+        F.SetDoor(door, Math.Max(F.DoorOpen[door], 0.5f));
+        sim.Facts.Emit(sim.Tick, FactKind.DoorJammed, c, F.DoorOpen[door], cause);
+        sim.Find<Sound>()?.Emit(sim, NearestAir(c), 95, SoundKind.Bang, cause);
+    }
     /// <summary>문 양쪽 기압 차 (kPa).</summary>
     public double DoorDeltaP(int door)
     {
