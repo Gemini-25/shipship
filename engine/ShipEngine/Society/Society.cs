@@ -3,10 +3,10 @@ using System.Runtime.InteropServices;
 namespace ShipEngine;
 
 /// <summary>⑨ 이야깃거리 — 사람이 기억하는 일 · 대화의 주제.</summary>
-public enum Topic : byte { Small, Work, Fire, Breach, Rescue, Hurt, Death, Blame, Gossip, Shortage, Fight }
+public enum Topic : byte { Small, Work, Fire, Breach, Rescue, Hurt, Death, Blame, Gossip, Shortage, Fight, Heart }
 
 /// <summary>⑨ 대화의 끝 — 어떻게 흘러갔나.</summary>
-public enum TalkEnd : byte { Agree, Laugh, Awkward, Friction, Praise, Comfort, Apology, Argue, Spread, Defend, Worry }
+public enum TalkEnd : byte { Agree, Laugh, Awkward, Friction, Praise, Comfort, Apology, Argue, Spread, Defend, Worry, Accept, Reject }
 
 /// <summary>사람 하나가 기억하는 일 (사람마다 많아야 12 · 닷새에 걸쳐 흐려진다).</summary>
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -85,13 +85,18 @@ public sealed partial class Society : IEngine
     public const int TalkReach = 6;
     /// <summary>사람마다 주컴퓨터를 믿는 정도 (0 ~ 1, 처음 0.8).</summary>
     public float[] TrustComputer = Array.Empty<float>();
+    /// <summary>끌림 [나 × 너] (0 ~ 1) — 함께 쉬는 시간에 자란다 (둘 사이의 맞음 · 성격) · 떨어져 지내면 열흘에 반쯤 흐려진다. 한쪽만일 수 있다.</summary>
+    public float[] Attract = Array.Empty<float>();
+    /// <summary>짝 (−1: 없음) — 고백을 받아 주면 맺고 · 원한이 쌓이거나 정이 식으면 헤어진다.</summary>
+    public int[] Partner = Array.Empty<int>();
+    public const float ConfessAt = 0.6f, AcceptAt = 0.4f;
     /// <summary>사람마다 슬픔 (0 ~ 1) — 하루 반감.</summary>
     public float[] Grief = Array.Empty<float>();
     public List<Memory> Memories = new();
     public List<Saying> Sayings = new();         // 최근 128마디
     public List<Brawl> Brawls = new();           // 지금 벌어지는 몸싸움
     public int N;                                  // 배열이 다루는 에이전트 수
-    public long Friendships, Griefs, TrustLosses, Talks, Arguments, Apologies, Rumors, Blames, Fights, Sabotages, Killings;
+    public long Friendships, Griefs, TrustLosses, Talks, Arguments, Apologies, Rumors, Blames, Fights, Sabotages, Killings, Couples, Rejections, Breakups;
     private long _cursor;
     private readonly List<(long tick, int room, int cause)> _sealedIn = new(); // 사람이 안에 있는데 봉쇄된 방 (그 뒤 죽음을 컴퓨터 탓으로)
 
@@ -104,6 +109,10 @@ public sealed partial class Society : IEngine
     public float KnownOf(int a, int b) => a >= 0 && b >= 0 && a < N && b < N ? Known[a * N + b] : 0;
     public float Trust(int a) => a >= 0 && a < N ? TrustComputer[a] : 1;
     public float GriefOf(int a) => a >= 0 && a < N ? Grief[a] : 0;
+    public float AttractOf(int a, int b) => a >= 0 && b >= 0 && a < N && b < N ? Attract[a * N + b] : 0;
+    public int PartnerOf(int a) => a >= 0 && a < N ? Partner[a] : -1;
+    /// <summary>둘 사이의 맞음 (0 ~ 1 · 짝마다 정해진 값 — 같은 시드면 같다): 왜 그 사람인지는 설명되지 않는 몫.</summary>
+    public float Spark(Sim sim, int a, int b) => (float)Rng.Unit(sim.Seed, Rng.Key("끌림"), Math.Min(a, b), Math.Max(a, b));
     /// <summary>마음이 고를 때 쓰는 끌림: 정 − 원한 (미운 이가 있는 방은 피한다).</summary>
     public float Liking(int a, int b) => BondOf(a, b) - GrudgeOf(a, b);
 
@@ -141,14 +150,16 @@ public sealed partial class Society : IEngine
             for (int i = 0; i < Math.Min(n, N); i++) for (int j = 0; j < Math.Min(n, N); j++) a[i * n + j] = old[i * N + j];
             return a;
         }
-        var b = Grow(Bond, 0); var tr = Grow(TrustOf, 0.5f); var gr = Grow(Grudge, 0); var de = Grow(Debt, 0); var kn = Grow(Known, 0);
+        var b = Grow(Bond, 0); var tr = Grow(TrustOf, 0.5f); var gr = Grow(Grudge, 0); var de = Grow(Debt, 0); var kn = Grow(Known, 0); var at = Grow(Attract, 0);
+        var pa = Enumerable.Repeat(-1, n).ToArray();
+        for (int i = 0; i < Math.Min(n, N); i++) pa[i] = Partner[i];
         var t = new float[n]; var g = new float[n];
         for (int i = 0; i < n; i++) t[i] = 0.8f;
         for (int i = 0; i < Math.Min(n, N); i++) { t[i] = TrustComputer[i]; g[i] = Grief[i]; }
         var lt = new long[n * n];
         Array.Fill(lt, -TalkRest);
         for (int i = 0; i < Math.Min(n, N); i++) for (int j = 0; j < Math.Min(n, N); j++) lt[i * n + j] = LastTalk[i * N + j];
-        Bond = b; TrustOf = tr; Grudge = gr; Debt = de; Known = kn; LastTalk = lt; TrustComputer = t; Grief = g; N = n;
+        Bond = b; TrustOf = tr; Grudge = gr; Debt = de; Known = kn; LastTalk = lt; TrustComputer = t; Grief = g; Attract = at; Partner = pa; _near = new byte[n * n]; N = n;
     }
 
     public void Step(Sim sim, double dt)
@@ -161,6 +172,7 @@ public sealed partial class Society : IEngine
         if (sim.Tick % TogetherEvery == 0)
         {
             Together(sim, TogetherEvery * dt);
+            Hearts(sim, TogetherEvery * dt);
             BrawlStep(sim);
             if (sim.Tick % (TogetherEvery * 30) == 0) Mischief(sim);
         }
@@ -193,6 +205,13 @@ public sealed partial class Society : IEngine
                 if (!Leisure(b.C.Goal)) continue;
                 if (_mind.RoomOf(a.C.Cell) != _mind.RoomOf(b.C.Cell) || _mind.Dist(a.C.Cell, b.C.Cell) > TalkReach) continue;
                 Add(Known, i, j, (float)(0.02 * dt / 3600));
+                // 끌림: 함께 쉬는 시간에 · 짝이 없거나 그 사람이 짝일 때 — 맞음 × (열림이 비슷할수록 · 상대가 다정할수록) · 시간당 많아야 0.04
+                if ((Partner[i] < 0 || Partner[i] == j) && GrudgeOf(i, j) < GrudgeAt)
+                {
+                    float chem = Spark(sim, i, j) * (0.6f + 0.4f * (1 - Math.Abs(a.C.Open - b.C.Open))) * (0.7f + 0.3f * b.C.Agree);
+                    Add(Attract, i, j, (float)(0.04 * chem * chem * dt / 3600));
+                    _near[i * N + j] = 1;
+                }
                 // 어울림: 시간당 약 0.05 × 맞음 (성격이 비슷하고 둘 다 다정하면 빨리) — 미운 사이는 같이 있어도 정이 쌓이지 않는다
                 if (GrudgeOf(i, j) < GrudgeAt)
                 {
@@ -210,6 +229,34 @@ public sealed partial class Society : IEngine
                 if (GrudgeOf(i, j) > 0.5f && C(i).Anger > 0.5f) Escalate(sim, i, j, 0.2f, 0);
             }
         }
+    }
+
+    private byte[] _near = Array.Empty<byte>();
+
+    /// <summary>끌림이 흐려지고 (함께 쉬지 않은 쌍 — 열흘 반감) · 짝이 헤어진다 (원한 0.45 넘거나 정 0.15 아래) — 1분마다 (함께 보낸 시간 뒤).</summary>
+    private void Hearts(Sim sim, double dt)
+    {
+        float fade = (float)Math.Exp(-dt * 0.6931 / (10 * 86400));
+        for (int k = 0; k < N * N; k++) { if (_near[k] == 0) Attract[k] *= fade; _near[k] = 0; }
+        for (int i = 0; i < N; i++)
+        {
+            int j = Partner[i];
+            if (j < 0 || j < i) continue;
+            if (!Person(i) || !Person(j)) { if (!Person(i) && !Person(j) || !Alive(i) || !Alive(j)) { Partner[i] = Partner[j] = -1; } continue; }
+            if (Math.Max(GrudgeOf(i, j), GrudgeOf(j, i)) > 0.45f || Math.Min(BondOf(i, j), BondOf(j, i)) < 0.15f) BreakUp(sim, i, j);
+        }
+    }
+
+    private bool Alive(int i) => i >= 0 && i < N && _mind!.Agents[i].IsPerson && _life![_mind.Agents[i].C.Body].Alive != 0;
+
+    private void BreakUp(Sim sim, int i, int j)
+    {
+        Partner[i] = Partner[j] = -1; Breakups++;
+        Attract[i * N + j] *= 0.3f; Attract[j * N + i] *= 0.3f;
+        foreach (int x in new[] { i, j }) { ref var c = ref C(x); c.Sad = Math.Min(1, c.Sad + 0.35f); c.Stress = Math.Min(1, c.Stress + 0.15f); }
+        int cause = sim.Causes.Add(CauseKind.Person, $"{Ko.Gwa(_mind!.NameOf(i))} {Ko.I(_mind.NameOf(j))} 헤어졌다 — {(Math.Max(GrudgeOf(i, j), GrudgeOf(j, i)) > 0.45f ? "쌓인 원망을 넘지 못했다" : "마음이 식었다")}", sim.Tick, C(i).Cell, 0, 0, i);
+        sim.Facts.Emit(sim.Tick, FactKind.Relationship, C(i).Cell, -1, cause, i, j);
+        Remember(sim, i, Topic.Heart, j, cause, 0.8f, C(i).Cell); Remember(sim, j, Topic.Heart, i, cause, 0.8f, C(j).Cell);
     }
 
     /// <summary>함께 쉬는 때 (어울림 · 쉼 · 밥 · 빈둥거림) — 일하거나 자거나 위급할 때는 정이 쌓이지 않는다.</summary>
@@ -431,6 +478,7 @@ public sealed partial class Society : IEngine
         w.List(Memories); w.List(Sayings); w.List(Brawls);
         w.I64(Friendships); w.I64(Griefs); w.I64(TrustLosses); w.I64(Talks); w.I64(Arguments); w.I64(Apologies); w.I64(Rumors); w.I64(Blames);
         w.I64(Fights); w.I64(Sabotages); w.I64(Killings); w.I64(_cursor);
+        w.Arr(Attract); w.Arr(Partner); w.Arr(_near); w.I64(Couples); w.I64(Rejections); w.I64(Breakups);
         w.I32(_sealedIn.Count); foreach (var (t, r, c) in _sealedIn) { w.I64(t); w.I32(r); w.I32(c); }
         var keys = _sharedSeen.Keys.OrderBy(k => k).ToList();
         w.I32(keys.Count); foreach (var k in keys) { w.I32(k); w.Arr(_sharedSeen[k]); }
@@ -442,6 +490,7 @@ public sealed partial class Society : IEngine
         Memories = r.List<Memory>(); Sayings = r.List<Saying>(); Brawls = r.List<Brawl>();
         Friendships = r.I64(); Griefs = r.I64(); TrustLosses = r.I64(); Talks = r.I64(); Arguments = r.I64(); Apologies = r.I64(); Rumors = r.I64(); Blames = r.I64();
         Fights = r.I64(); Sabotages = r.I64(); Killings = r.I64(); _cursor = r.I64();
+        Attract = r.Arr<float>(); Partner = r.Arr<int>(); _near = r.Arr<byte>(); Couples = r.I64(); Rejections = r.I64(); Breakups = r.I64();
         _sealedIn.Clear(); int n = r.I32(); for (int i = 0; i < n; i++) { long t = r.I64(); int room = r.I32(); int c = r.I32(); _sealedIn.Add((t, room, c)); }
         _sharedSeen.Clear(); n = r.I32(); for (int i = 0; i < n; i++) { int k = r.I32(); _sharedSeen[k] = r.Arr<int>(); }
     }

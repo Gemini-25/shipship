@@ -10,13 +10,14 @@ public sealed class TalkTable
     public static string TopicName(Topic t) => t switch
     {
         Topic.Small => "잡담", Topic.Work => "일", Topic.Fire => "불", Topic.Breach => "구멍", Topic.Rescue => "구조", Topic.Hurt => "다침",
-        Topic.Death => "죽음", Topic.Blame => "탓", Topic.Gossip => "험담", Topic.Shortage => "걱정", Topic.Fight => "싸움", _ => "잡담",
+        Topic.Death => "죽음", Topic.Blame => "탓", Topic.Gossip => "험담", Topic.Shortage => "걱정", Topic.Fight => "싸움", Topic.Heart => "마음", _ => "잡담",
     };
 
     public static string EndName(TalkEnd e) => e switch
     {
         TalkEnd.Agree => "맞장구", TalkEnd.Laugh => "웃음", TalkEnd.Awkward => "어색", TalkEnd.Friction => "다툼", TalkEnd.Praise => "칭찬",
-        TalkEnd.Comfort => "위로", TalkEnd.Apology => "사과", TalkEnd.Argue => "다툼", TalkEnd.Spread => "퍼짐", TalkEnd.Defend => "감쌈", TalkEnd.Worry => "걱정", _ => "맞장구",
+        TalkEnd.Comfort => "위로", TalkEnd.Apology => "사과", TalkEnd.Argue => "다툼", TalkEnd.Spread => "퍼짐", TalkEnd.Defend => "감쌈", TalkEnd.Worry => "걱정",
+        TalkEnd.Accept => "받아줌", TalkEnd.Reject => "거절", _ => "맞장구",
     };
 
     /// <summary>주제 · 결과의 이야기 한 줄 (기록 · 연출) — "둘이 불 이야기를 했다 → 서로 탓함".</summary>
@@ -26,7 +27,8 @@ public sealed class TalkTable
         TalkEnd.Friction => "말끝마다 부딪쳤다 · 사이가 조금 틀어졌다", TalkEnd.Praise => $"{TopicName(t)} 이야기를 하다 고맙다고 했다 · 가까워졌다",
         TalkEnd.Comfort => "슬픔을 나누며 위로했다 · 가까워졌다", TalkEnd.Apology => "그날 일을 사과했다 · 앙금이 풀렸다",
         TalkEnd.Argue => "그날 일을 두고 서로 탓했다 · 사이가 나빠졌다", TalkEnd.Spread => "누군가의 험담을 했다 · 소문이 퍼졌다",
-        TalkEnd.Defend => "험담을 막아섰다", TalkEnd.Worry => "식량 · 물 걱정을 했다", _ => "이야기를 했다",
+        TalkEnd.Defend => "험담을 막아섰다", TalkEnd.Worry => "식량 · 물 걱정을 했다",
+        TalkEnd.Accept => "마음을 고백했고 받아들여졌다 · 짝이 되었다", TalkEnd.Reject => "마음을 고백했지만 거절당했다", _ => "이야기를 했다",
     };
 }
 
@@ -55,6 +57,10 @@ public sealed partial class Society
             for (int x = 0; x < N; x++) if (x != a && x != b && GrudgeOf(a, x) > g3 && _mind!.RoomOf(C(x).Cell) != _mind.RoomOf(C(a).Cell)) { g3 = GrudgeOf(a, x); c3 = x; }
             if (c3 >= 0) opts.Add(new(Topic.Gossip, 1.5f * g3 * (1.2f - C(a).Agree), c3, MemoryCause(a, Topic.Blame, c3), MemoryCell(a, Topic.Blame, c3), a));
         }
+        // 마음을 고백한다: 짝이 없는 둘 · 끌림이 깊고 정도 쌓였다 (끌림이 클수록 · 외향일수록 먼저 꺼낸다)
+        foreach (var (a, b) in new[] { (i, j), (j, i) })
+            if (Partner[a] < 0 && Partner[b] < 0 && AttractOf(a, b) >= ConfessAt && BondOf(a, b) >= 0.45f)
+                opts.Add(new(Topic.Heart, 6 * (AttractOf(a, b) - 0.5f) * (0.5f + C(a).Extra), b, 0, C(a).Cell, a));
         // 함께 겪은 일 (같은 원인을 둘 다 기억한다 — 가장 큰 것)
         int best = -1; float bw = 0.15f;
         for (int k = 0; k < Memories.Count; k++)
@@ -157,6 +163,29 @@ public sealed partial class Society
                     Warm(sim, a, b, 0.02f);
                     Remember(sim, b, Topic.Blame, x, o.Cause, w * 0.6f, o.Cell);
                     Say(sim, a, b, o, end, Pick(sim, "험담/퍼짐", a));
+                }
+                break;
+            }
+            case Topic.Heart:
+            {
+                // 받아 주나: 듣는 이도 끌리고 · 정이 있고 · 앙금이 없다 (짝이 이미 있으면 아니다)
+                if (Partner[b] < 0 && AttractOf(b, a) >= AcceptAt && BondOf(b, a) >= 0.35f && GrudgeOf(b, a) < 0.2f)
+                {
+                    end = TalkEnd.Accept; Couples++;
+                    Partner[a] = b; Partner[b] = a;
+                    Warm(sim, a, b, 0.15f); Warm(sim, b, a, 0.15f); Add(TrustOf, a, b, 0.1f); Add(TrustOf, b, a, 0.1f);
+                    ca.Joy = Math.Min(1, ca.Joy + 0.5f); cb.Joy = Math.Min(1, cb.Joy + 0.4f);
+                    int line = Say(sim, a, b, o, end, Pick(sim, "마음/받아줌", a));
+                    int c = sim.Causes.Add(CauseKind.Person, $"{Ko.Gwa(_mind!.NameOf(a))} {Ko.I(_mind.NameOf(b))} 짝이 되었다", sim.Tick, ca.Cell, line, 0, a);
+                    sim.Facts.Emit(sim.Tick, FactKind.Relationship, ca.Cell, 1, c, a, b);
+                    Remember(sim, a, Topic.Heart, b, c, 0.9f, ca.Cell); Remember(sim, b, Topic.Heart, a, c, 0.9f, cb.Cell);
+                }
+                else
+                {
+                    end = TalkEnd.Reject; Rejections++;
+                    Attract[a * N + b] *= 0.5f;
+                    ca.Sad = Math.Min(1, ca.Sad + 0.3f); ca.Stress = Math.Min(1, ca.Stress + 0.1f);
+                    Say(sim, b, a, o, end, Pick(sim, "마음/거절", b));
                 }
                 break;
             }
