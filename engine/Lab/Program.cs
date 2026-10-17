@@ -4,7 +4,7 @@ using ShipEngine;
 namespace Lab;
 
 /// <summary>
-/// 실험실: --law 법칙 시험 · --rule 규칙 시험 · --scene 이름 [폴더] 관찰 장면 · --bench 성능 · --ships 배 도면 목록.
+/// 실험실: --law 법칙 시험 · --rule 규칙 시험 · --budget 시간 예산 · --scene 이름 [폴더] 관찰 장면 · --bench 성능 · --ships 배 도면 목록.
 /// 실패가 하나라도 있으면 1로 끝난다 (CI가 빨강).
 /// </summary>
 public static partial class Program
@@ -53,6 +53,7 @@ public static partial class Program
             else if (args.Contains("--shipgen")) ShipGen(args);
             else if (args.Contains("--profile")) ProfileShip(args);
             else if (args.Contains("--fingerprint")) Fingerprints();
+            else if (args.Contains("--budget")) Budget();
             else { Console.WriteLine("Lab --law | --rule | --bench | --scene 이름 [폴더] | --ships | --fun [배,…] [날] [시드 수] [성격] [가혹함] | --live 배 시드 초 | --listen 배 시드 초 [건너뛸 시간]"); return 2; }
         }
         catch (Exception e)
@@ -120,7 +121,7 @@ public static partial class Program
         _lap = now;
         if (ok) _pass++; else { _fail++; if (_group != null && !_failedGroups.Contains(_group)) _failedGroups.Add(_group); }
         Console.WriteLine($"  {(ok ? "✔" : "✘")} {name}{(detail.Length > 0 ? " — " + detail : "")}");
-        if (lap > SlowTestSec && _group != "평시 하루") Console.WriteLine($"  ⚠ 느린 시험 {lap:0}초 ({_group}) — 상황을 차려 놓고 짧게 · 작은 배로 (docs/ENGINE.md 시험 시간)");
+        if (_group != null && lap > SlowTestSec && _group != "평시 하루") Console.WriteLine($"  ⚠ 느린 시험 {lap:0}초 ({_group}) — 상황을 차려 놓고 짧게 · 작은 배로 (docs/ENGINE.md 시험 시간)");
     }
 
     internal static double Rel(double a, double b) => Math.Abs(a - b) / Math.Max(1e-30, Math.Max(Math.Abs(a), Math.Abs(b)));

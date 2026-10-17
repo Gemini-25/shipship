@@ -27,7 +27,6 @@ public static partial class Program
         return sb.ToString();
     }
 
-    /// <summary>배 하나 · 엔진마다 한 틱 시간 (--profile 배 사람 로봇 [틱]) — 시험이 많이 쓰는 배가 어디에 시간을 쓰나.</summary>
     /// <summary>--fingerprint: 배 몇 척을 몇 분 돌린 세계 지문 — 속도만 고친 뒤 결과가 한 비트도 안 바뀌었는지 (고치기 전과 견준다).</summary>
     private static void Fingerprints()
     {
@@ -39,6 +38,44 @@ public static partial class Program
         }
     }
 
+    /// <summary>
+    /// --budget: 엔진별 시간 예산 (docs/DEPTH.md ① — CI가 따로 잰다). 새터호 40명 · 로봇 10은 한 틱 4ms 안 · 엔진마다 제 몫 안 · 한누리호 100명 · 로봇 30은 9ms 안.
+    /// 세 번 재어 가장 빠른 것을 쓴다 (같은 기계의 다른 일에 흔들리지 않게). 넘으면 1로 끝난다 (CI 빨강).
+    /// </summary>
+    private static void Budget()
+    {
+        var share = new Dictionary<string, double>
+        {
+            ["장"] = 1.8, ["마음"] = 1.0, ["망"] = 0.6, ["구조"] = 0.4, ["화학"] = 0.4, ["주컴퓨터"] = 0.4,
+        };
+        const double Other = 0.15; // 나머지 엔진은 저마다
+        (double total, Dictionary<string, double> per) Measure(string ship, int people, int robots, int ticks)
+        {
+            var s = ShipWorld.Crewed(ship, 7, people, robots);
+            s.Run(300); // 데우기 (처음 길찾기 · 계획)
+            (double total, Dictionary<string, double> per) best = (double.MaxValue, new());
+            for (int k = 0; k < 3; k++)
+            {
+                s.Measure = true; s.LastMs.Clear();
+                var sw = Stopwatch.StartNew();
+                s.Run(ticks);
+                double ms = sw.Elapsed.TotalMilliseconds / ticks;
+                if (ms < best.total) best = (ms, s.LastMs.ToDictionary(kv => kv.Key, kv => kv.Value / ticks));
+            }
+            s.Measure = false;
+            return best;
+        }
+        Console.WriteLine($"\n[① 시간 예산 — 코어 {Par.Threads}]");
+        var (t, per) = Measure("Saetteul", 40, 10, 300);
+        Console.WriteLine("  " + string.Join(" · ", per.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key} {kv.Value:0.000}/{share.GetValueOrDefault(kv.Key, Other):0.00}")));
+        var over = per.Where(kv => kv.Value > share.GetValueOrDefault(kv.Key, Other)).Select(kv => $"{kv.Key} {kv.Value:0.00}ms > {share.GetValueOrDefault(kv.Key, Other):0.00}").ToList();
+        Check("시간 예산: 새터호 40명 · 로봇 10 — 한 틱 4ms 안 (60프레임에 넉넉히)", t <= 4.0, $"{t:0.00}ms/틱 (하루 = {t * Time.TicksPerDay / 1000:0}초)");
+        Check("시간 예산: 엔진마다 제 몫 안 (장 1.8 · 마음 1.0 · 망 0.6 · 구조 · 화학 · 주컴퓨터 0.4 · 나머지 0.15ms)", over.Count == 0, over.Count == 0 ? "모두 안" : string.Join(" · ", over));
+        var (th, _) = Measure("Hannuri", 100, 30, 150);
+        Check("시간 예산: 한누리호 100명 · 로봇 30 — 한 틱 9ms 안", th <= 9.0, $"{th:0.00}ms/틱");
+    }
+
+    /// <summary>배 하나 · 엔진마다 한 틱 시간 (--profile 배 사람 로봇 [틱]) — 시험이 많이 쓰는 배가 어디에 시간을 쓰나.</summary>
     private static void ProfileShip(string[] args)
     {
         var rest = args.SkipWhile(a => a != "--profile").Skip(1).ToArray();

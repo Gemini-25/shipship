@@ -22,24 +22,29 @@ public sealed class StateWriter
         _w = new BinaryWriter(_ms, Encoding.UTF8, leaveOpen: true);
     }
 
-    public void Tag(string name) { _w.Write(Rng.Key(name)); } // 엇갈려 읽으면 바로 알 수 있게
-    public void I32(int v) => _w.Write(v);
-    public void I64(long v) => _w.Write(v);
-    public void U64(ulong v) => _w.Write(v);
-    public void F32(float v) => _w.Write(v);
-    public void F64(double v) => _w.Write(v);
-    public void Bool(bool v) => _w.Write(v);
-    public void Byte(byte v) => _w.Write(v);
-    public void Str(string? s) { _w.Write(s != null); if (s != null) _w.Write(s); }
+    /// <summary>저장 모양 (무엇을 어떤 꼴로 쓰나 — 값은 빼고) · 켜 두면 적는다 (Sim.ShapeOf — 판 번호를 올릴 때를 잡는다).</summary>
+    public List<string>? Shape;
+
+    public void Tag(string name) { Shape?.Add("#" + name); _w.Write(Rng.Key(name)); } // 엇갈려 읽으면 바로 알 수 있게
+    public void I32(int v) { Shape?.Add("i"); _w.Write(v); }
+    public void I64(long v) { Shape?.Add("l"); _w.Write(v); }
+    public void U64(ulong v) { Shape?.Add("u"); _w.Write(v); }
+    public void F32(float v) { Shape?.Add("f"); _w.Write(v); }
+    public void F64(double v) { Shape?.Add("d"); _w.Write(v); }
+    public void Bool(bool v) { Shape?.Add("b"); _w.Write(v); }
+    public void Byte(byte v) { Shape?.Add("y"); _w.Write(v); }
+    public void Str(string? s) { Shape?.Add("s"); _w.Write(s != null); if (s != null) _w.Write(s); }
 
     public void Arr<T>(T[] a) where T : unmanaged
     {
+        Shape?.Add($"[{typeof(T).Name}:{System.Runtime.CompilerServices.Unsafe.SizeOf<T>()}]");
         _w.Write(a.Length);
         _w.Write(MemoryMarshal.AsBytes(a.AsSpan()));
     }
 
     public void List<T>(List<T> a) where T : unmanaged
     {
+        Shape?.Add($"<{typeof(T).Name}:{System.Runtime.CompilerServices.Unsafe.SizeOf<T>()}>");
         _w.Write(a.Count);
         _w.Write(MemoryMarshal.AsBytes(CollectionsMarshal.AsSpan(a)));
     }
@@ -59,6 +64,8 @@ public sealed class StateReader
         ulong got = _r.ReadUInt64();
         if (got != Rng.Key(name)) throw new InvalidDataException($"찍기 순서가 어긋났다: '{name}' 자리");
     }
+    /// <summary>그 자리가 이 이름표인가 (아니어도 읽은 자리는 지나간다).</summary>
+    public bool IsTag(string name) => _r.BaseStream.Length - _r.BaseStream.Position >= 8 && _r.ReadUInt64() == Rng.Key(name);
     public int I32() => _r.ReadInt32();
     public long I64() => _r.ReadInt64();
     public ulong U64() => _r.ReadUInt64();

@@ -30,6 +30,8 @@ jobs:
         run: dotnet build/lab/Lab.dll --law
       - name: 규칙 시험 (4갈래 함께 — 묶음 시간표 tools/rule-times.txt)
         run: tools/rules.sh build/lab/Lab.dll 4
+      - name: 시간 예산 (새터호 40명 한 틱 4ms · 엔진마다 몫 — 넘으면 빨강)
+        run: dotnet build/lab/Lab.dll --budget
       - name: 성능
         run: dotnet build/lab/Lab.dll --bench || true
       # 관전 화면 (engine/Godot): 빌드하고, Godot을 받아 화면 없이 10초 띄운다 — 장면이 뜨고 세계가 돌고 그림이 오는지

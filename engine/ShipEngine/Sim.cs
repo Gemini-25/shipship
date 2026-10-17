@@ -65,9 +65,32 @@ public sealed class Sim
 
     // ── 찍기 · 되살리기 · 복제 ──
 
+    /// <summary>
+    /// 저장 판 — 엔진의 저장 모양(무엇을 어떤 순서 · 꼴로 쓰나)이 바뀌면 올린다. 다른 판의 저장은 읽지 않고 분명한 말로 거절한다.
+    /// <see cref="SaveShape"/>는 그 판의 모양 지문 (법칙 시험 '저장 판'이 지금 모양과 견준다 — 다르면 판을 올리고 지문을 고친다).
+    /// </summary>
+    public const int SaveVersion = 1;
+    public const ulong SaveShape = 0xc376e77d141ddba1;
+
     public byte[] Save()
     {
         var w = new StateWriter();
+        SaveTo(w);
+        return w.ToArray();
+    }
+
+    /// <summary>저장 모양 지문: 값을 빼고 무엇을 어떤 꼴로 쓰는지만 (표준 세계 하나로 잰다 — 배 도면이 바뀌어도 바뀐다: 그 저장은 새 배에 맞지 않으니 판을 올리는 게 맞다).</summary>
+    public ulong ShapeOf()
+    {
+        var w = new StateWriter(1 << 16) { Shape = new() };
+        SaveTo(w);
+        return Fingerprint.Of(System.Text.Encoding.UTF8.GetBytes(string.Join("|", w.Shape)));
+    }
+
+    private void SaveTo(StateWriter w)
+    {
+        w.Tag("판");
+        w.I32(SaveVersion);
         w.Tag("sim");
         w.I64(Tick);
         Causes.Save(w);
@@ -75,12 +98,14 @@ public sealed class Sim
         Book.Save(w);
         foreach (var e in _engines) { w.Tag(e.Name); e.Save(w); }
         w.Tag("end");
-        return w.ToArray();
     }
 
     public void Load(byte[] data)
     {
         var r = new StateReader(data);
+        if (!r.IsTag("판")) throw new InvalidDataException($"판 번호가 없는 저장이다 (판을 붙이기 전에 쓴 것) — 이 엔진은 저장 판 {SaveVersion}만 읽는다");
+        int version = r.I32();
+        if (version != SaveVersion) throw new InvalidDataException($"저장 판 {version} — 이 엔진은 저장 판 {SaveVersion}만 읽는다");
         r.Tag("sim");
         Tick = r.I64();
         Causes.Load(r);

@@ -82,6 +82,23 @@ public static partial class Program
             long split = -1;
             for (int i = 0; i < 300 && split < 0; i++) { a.Step(); b.Step(); if (a.Hash() != b.Hash()) split = a.Tick; }
             Check("복제를 300틱 이어 가도 틱마다 같다", split < 0, split < 0 ? "" : $"틱 {split}에 갈라짐");
+
+            // 저장 판: 맨 앞에 판 번호 — 다른 판 · 판 없는 저장은 엉뚱하게 읽지 않고 분명한 말로 거절한다
+            string Refused(byte[] data)
+            {
+                try { var c = new Sim(a.Setup); c.Load(data); return ""; }
+                catch (InvalidDataException e) { return e.Message; }
+            }
+            var other = (byte[])s0.Clone();
+            BitConverter.GetBytes(Sim.SaveVersion + 1).CopyTo(other, 8); // 이름표(8바이트) 다음이 판 번호
+            string newer = Refused(other), bare = Refused(s0[12..]), same = Refused(s0);
+            Check("저장 판: 다른 판 · 판 번호 없는 저장은 분명한 말로 거절하고 · 같은 판은 읽는다",
+                newer.Contains($"저장 판 {Sim.SaveVersion + 1}") && bare.Contains("판 번호가 없는") && same == "", $"다른 판: \"{newer}\" · 판 없음: \"{bare}\"");
+
+            // 저장 모양 지문: 엔진이 저장하는 것(무엇을 어떤 순서 · 꼴로)이 바뀌었는데 판 번호를 그대로 두면 빨강 — 옛 저장을 엉뚱하게 읽는 일을 막는다
+            ulong shape = ShipWorld.Crewed("Didim", 1, 6, 2).ShapeOf();
+            Check($"저장 모양이 판 {Sim.SaveVersion}의 지문과 같다 (모양이 바뀌면 Sim.SaveVersion을 올리고 SaveShape를 고친다)", shape == Sim.SaveShape,
+                $"지금 모양 0x{shape:x16} · 판 {Sim.SaveVersion}의 지문 0x{Sim.SaveShape:x16}");
         }
 
         if (Do("보존"))
