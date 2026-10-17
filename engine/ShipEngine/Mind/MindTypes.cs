@@ -58,6 +58,7 @@ public enum GoalKind : byte
     Harvest,    // ⑪ 다 자란 작물을 거둬 식량 창고(냉장고 · 배식기)에 넣는다
     Exercise,   // ⑧ 운동 (달리기틀 — 없으면 침대 곁 맨몸 운동)
     Brawl,      // ⑨ 몸싸움 (그 자리에서 — 사회가 주먹을 셈한다)
+    Restock,    // ⑪ 식량 창고(포장 식량)에서 주방(냉장고 · 배식기)으로 식량 상자를 나른다
 }
 
 /// <summary>계획의 한 단계.</summary>
@@ -79,7 +80,8 @@ public enum StepKind : byte
     Maintain,  // 부품을 미리 간다 (Target: 장치 · Arg: 부품)
     Clean,     // 닦는다 (Cell)
     Harvest,   // 작물을 거둔다 (Target: 작물 번호) — 손에 수확물을 든다
-    Stow,      // 든 수확물을 식량 창고에 넣는다 (Target: 설비)
+    Stow,      // 든 수확물 · 식량 상자를 식량 창고에 넣는다 (Target: 설비)
+    TakeFood,  // 식량 보관함에서 식량 상자를 꺼낸다 (Target: 설비)
 }
 
 /// <summary>쓰기 단계가 하는 일.</summary>

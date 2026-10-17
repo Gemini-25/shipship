@@ -15,6 +15,12 @@ public sealed class Painter
 
     private readonly Layout L;
     private readonly DotFloor[] _roomFloor;
+    /// <summary>새 설비 → 닮은 옛 도트 그림 (제 그림이 생기기 전까지).</summary>
+    private static readonly Dictionary<string, string> Look = new()
+    {
+        ["FoodLocker"] = "SupplyCache", ["GrowRack"] = "PlantRack", ["LargeReactorCore"] = "ReactorCore", ["LargeCoolantPump"] = "CoolantPump",
+        ["Shuttle"] = "DockClampPanel", ["Rover"] = "MaintCart", ["CargoCrate"] = "SupplyCache", ["OreBin"] = "Compactor",
+    };
     private readonly FurnitureType?[] _fixType;
     private readonly (int x, int y, int w, int h)[] _fixBox;
     private readonly Dictionary<long, Img> _cache = new();
@@ -32,7 +38,7 @@ public sealed class Painter
         for (int i = 0; i < L.Furniture.Count; i++)
         {
             var fu = L.Furniture[i];
-            _fixType[i] = Enum.TryParse<FurnitureType>(fu.Type, out var t) ? t : null;
+            _fixType[i] = Enum.TryParse<FurnitureType>(Look.GetValueOrDefault(fu.Type, fu.Type), out var t) ? t : null;
             if (fu.Cells.Length == 0) continue;
             int x0 = fu.Cells.Min(L.X), y0 = fu.Cells.Min(L.Y), x1 = fu.Cells.Max(L.X), y1 = fu.Cells.Max(L.Y);
             _fixBox[i] = (x0, y0, x1 - x0 + 1, y1 - y0 + 1);
@@ -375,6 +381,7 @@ public sealed class Painter
             "봉합 꾸러미" => DotHeld.Box,
             "구급 상자" => DotHeld.MedKit,
             "수확물" => DotHeld.Plate,
+            "식량 상자" => DotHeld.Box,
             _ => DotHeld.None,
         };
         if (lying)

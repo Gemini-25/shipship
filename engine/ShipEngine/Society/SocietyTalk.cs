@@ -115,9 +115,9 @@ public sealed partial class Society
         {
             case Topic.Blame:
             {
-                // b가 사과하나: 다정하고 · 덜 불안하고 · a를 아끼고 · 실제로 b의 탓일수록
+                // b가 사과하나: 다정하고 · 덜 불안하고 · a를 아끼고 · 실제로 b의 탓일수록 (아주 다정하고 차분한 이가 제 잘못을 들으면 넷에 셋은 사과한다 · 거친 이는 백에 두셋)
                 bool guilty = o.Cause != 0 && Culprit(sim, o.Cause, -1) == b;
-                float p = cb.Agree * (1 - cb.Neuro * 0.5f) * (0.5f + Math.Max(0, BondOf(b, a)) + DebtOf(b, a)) * (guilty ? 1.2f : 0.5f);
+                float p = cb.Agree * (1 - cb.Neuro * 0.5f) * (0.7f + Math.Max(0, BondOf(b, a)) + DebtOf(b, a)) * (guilty ? 1.2f : 0.5f);
                 if (r < p)
                 {
                     end = TalkEnd.Apology; Apologies++;

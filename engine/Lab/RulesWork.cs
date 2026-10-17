@@ -60,7 +60,7 @@ public static partial class Program
 
         // ── 정제기: 전기를 먹고 원료를 조금씩 만든다 ──
         {
-            var s = ShipWorld.Create("Kestrel", 7);
+            var s = ShipWorld.Create("Didim", 7);
             var m = s.Get<Mind>(); var w = s.Get<Work>();
             int ore = m.ItemIndex("원료");
             int before = m.TotalOf(ore);

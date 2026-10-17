@@ -81,6 +81,8 @@ public sealed partial class Society : IEngine
     /// <summary>마지막으로 말을 나눈 때 [나 × 너] — 한 번 이야기한 둘은 한동안 (45분) 다시 말을 걸지 않는다.</summary>
     public long[] LastTalk = Array.Empty<long>();
     public const int TalkRest = 25 * 45;
+    /// <summary>한 방에서 말이 닿는 거리 (칸 — 조용한 방에서 6m 남짓이면 말을 건다).</summary>
+    public const int TalkReach = 6;
     /// <summary>사람마다 주컴퓨터를 믿는 정도 (0 ~ 1, 처음 0.8).</summary>
     public float[] TrustComputer = Array.Empty<float>();
     /// <summary>사람마다 슬픔 (0 ~ 1) — 하루 반감.</summary>
@@ -189,7 +191,7 @@ public sealed partial class Society : IEngine
                 var b = ag[j];
                 if (!b.IsPerson || b.C.Up == 0) continue;
                 if (!Leisure(b.C.Goal)) continue;
-                if (_mind.RoomOf(a.C.Cell) != _mind.RoomOf(b.C.Cell) || _mind.Dist(a.C.Cell, b.C.Cell) > 4) continue;
+                if (_mind.RoomOf(a.C.Cell) != _mind.RoomOf(b.C.Cell) || _mind.Dist(a.C.Cell, b.C.Cell) > TalkReach) continue;
                 Add(Known, i, j, (float)(0.02 * dt / 3600));
                 // 어울림: 시간당 약 0.05 × 맞음 (성격이 비슷하고 둘 다 다정하면 빨리) — 미운 사이는 같이 있어도 정이 쌓이지 않는다
                 if (GrudgeOf(i, j) < GrudgeAt)

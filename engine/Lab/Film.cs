@@ -10,7 +10,7 @@ public static partial class Program
     private static void Shot(string[] args)
     {
         var rest = args.SkipWhile(a => a != "--shot").Skip(1).ToArray();
-        string ship = rest.Length > 0 ? rest[0] : "Kestrel";
+        string ship = rest.Length > 0 ? rest[0] : "Didim";
         ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 3;
         double hours = rest.Length > 2 ? double.Parse(rest[2]) : 1;
         var lay = Layout.Ship(ship, Tables.Default);
@@ -43,7 +43,7 @@ public static partial class Program
     private static void Film(string[] args)
     {
         var rest = args.SkipWhile(a => a != "--film").Skip(1).ToArray();
-        string list = rest.Length > 0 ? rest[0] : "Kestrel:18";
+        string list = rest.Length > 0 ? rest[0] : "Didim:18";
         int argAt = 1;
         if (!list.Contains(':') && !list.Contains(',') && rest.Length > 1 && ulong.TryParse(rest[1], out var single)) { list = $"{list}:{single}"; argAt = 2; }
         double days = rest.Length > argAt ? double.Parse(rest[argAt]) : 2;

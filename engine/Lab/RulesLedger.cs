@@ -17,8 +17,8 @@ public static partial class Program
             return n > 0 ? sum / n : 0;
         }
 
-        // ── 장부: 케스트럴 하루 (6명 · 로봇 2) — 처음 재고 + 적은 흐름 = 지금 재고 · 며칠 버티나 ──
-        var day = ShipWorld.Crewed("Kestrel", 3, 6, 2);
+        // ── 장부: 디딤호 하루 (6명 · 로봇 2) — 처음 재고 + 적은 흐름 = 지금 재고 · 며칠 버티나 ──
+        var day = ShipWorld.Crewed("Didim", 3, 6, 2);
         day.Run(Time.Days(1));
         {
             var w = day.Get<Work>(); var b = day.Book;
@@ -32,8 +32,8 @@ public static partial class Program
             double o2Other = w.Other(day, (int)Res.O2), breathed = -b.Of(Res.O2, Flow.Breathed);
             var (foodDays, _) = w.DaysLeft(day, (int)Res.Food);
             var (waterDays, waterNoMake) = w.DaysLeft(day, (int)Res.Water);
-            Check("물자 장부: 케스트럴 하루 — 처음 재고 + 적은 흐름 = 지금 재고 (식량 · 물 · 물건 정확히 · 산소는 숨의 1% 안) · 며칠 버티나를 센다",
-                worst < 1e-9 && Math.Abs(o2Other) < breathed * 0.01 && foodDays is > 3 and < 100 && waterDays > waterNoMake,
+            Check("물자 장부: 디딤호 하루 — 처음 재고 + 적은 흐름 = 지금 재고 (식량 · 물 · 물건 정확히 · 산소는 숨의 1% 안) · 며칠 버티나를 센다",
+                worst < 1e-9 && Math.Abs(o2Other) < breathed * 0.01 && foodDays is > 150 and < 400 && waterDays > waterNoMake, // 탐사선: 180일 치 포장 식량
                 $"가장 큰 어긋남 {worst:0e0} ({worstName}) · 산소 {o2Other:0.0}몰 / 숨 {breathed:0}몰 · 식량 {foodDays:0.0}일 · 물 {waterDays:0}일 (되찾지 못하면 {waterNoMake:0.0}일)");
         }
 
@@ -48,7 +48,7 @@ public static partial class Program
         // ── 공조 응결: 제습기가 없는 배도 공조 열교환기가 숨 · 땀의 습기를 물로 모은다 → 습도 60% 아래 ──
         {
             double rh = Rh(day), cond = day.Book.Of(Res.Water, Flow.Condensed);
-            Check("공조 응결: 제습기 없는 케스트럴 — 열교환기가 하루 몇 L의 습기를 물탱크로 되찾고 · 방 습도는 60% 아래",
+            Check("공조 응결: 제습기 없는 디딤호 — 열교환기가 하루 몇 L의 습기를 물탱크로 되찾고 · 방 습도는 60% 아래",
                 cond * 0.018 > 3 && rh < 0.6, $"모은 물 {cond * 0.018:0.0}L/일 · 평균 습도 {rh * 100:0}%");
         }
 
@@ -56,7 +56,7 @@ public static partial class Program
         {
             (double duty, double pp, double split) Run(int people)
             {
-                var s = ShipWorld.Crewed("Kestrel", 5, people, 0);
+                var s = ShipWorld.Crewed("Didim", 5, people, 0);
                 var net = s.Get<Network>();
                 double sum = 0; int n = 0;
                 for (long t = 0; t < Time.Hours(12); t++)
@@ -74,10 +74,10 @@ public static partial class Program
 
         // ── 거두기: 다 자란 작물을 로봇이 거둬 냉장고에 넣는다 — 식량 장부에 '거둠'으로 ──
         {
-            var s = ShipWorld.Crewed("Kestrel", 3, 2, 2);
+            var s = ShipWorld.Crewed("Didim", 3, 2, 2);
             var life = s.Get<Life>(); var m = s.Get<Mind>(); var work = s.Get<Work>();
             var span = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(life.Crops);
-            for (int k = 0; k < span.Length; k++) span[k].Biomass = 0.5f;
+            for (int k = 0; k < span.Length; k++) span[k].Biomass = (float)(Work.HarvestAt * life.CropArea(s.Get<Network>(), k) * 1.5);
             int crops = span.Length;
             var fridge = s.Layout.Furniture.Where(fu => fu.Type == "Fridge").SelectMany(fu => fu.Cells).ToList();
             double fridge0 = fridge.Sum(c => s.Get<Field>().Stored(s.Tables.sFood, c));

@@ -12,7 +12,7 @@ public static partial class Program
     {
         var rest = args.SkipWhile(a => a != "--listen").Skip(1).ToArray();
         if (rest.Length > 0 && rest[0] == "demo") { ListenDemo(); return; }
-        string ship = rest.Length > 0 ? rest[0] : "Kestrel";
+        string ship = rest.Length > 0 ? rest[0] : "Didim";
         ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 18;
         double screenSec = rest.Length > 2 ? double.Parse(rest[2]) : 60;
         double skipHours = rest.Length > 3 ? double.Parse(rest[3]) : 0;

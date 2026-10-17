@@ -256,13 +256,13 @@ public static partial class Program
 
         // ── 빈 방 외판의 작은 금(5cm²): 쉬익 소리를 들을 사람이 없어도 주컴퓨터가 배 전체의 느린 샘을 보고 로봇을 보내 막는다 ──
         {
-            var s = ShipWorld.Create("Mirinae", 3);
+            var s = ShipWorld.Create("Didim", 3);
             var m = s.Get<Mind>(); var f = s.Get<Field>();
             int dock = s.Layout.Furniture.First(fu => fu.Type == "RobotDock").Cells[0];
             m.AddRobot(s, dock, AgentKind.Robot, dock);
             s.Run(Time.Minutes(15));
             var lay2 = s.Layout;
-            int engineRoom = lay2.Rooms.First(r => r.Type == "Engine").Id;
+            int engineRoom = HullRoom(lay2, "Engine", "Storage", "Hydroponics").Id; // 빈 방 (외판에 닿은)
             int hull = Enumerable.Range(0, lay2.N).First(c => lay2.Hull[c] && lay2.Kind[c] == CellKind.Wall && Enumerable.Range(0, 4).Any(k =>
             {
                 int x = lay2.X(c) + (k == 0 ? 1 : k == 1 ? -1 : 0), y = lay2.Y(c) + (k == 2 ? 1 : k == 3 ? -1 : 0);
@@ -300,13 +300,13 @@ public static partial class Program
 
         // ── 빠진 방(우주로 트인 구멍)은 문으로 못 들어간다 — 로봇이 에어락으로 나가 외판 바깥에서 막고, 주컴퓨터가 예비 공기로 배를 다시 채운다 ──
         {
-            var s = ShipWorld.Create("Pabal", 4);
+            var s = ShipWorld.Create("Hwasal", 4);
             var m = s.Get<Mind>(); var f = s.Get<Field>(); var cm = s.Get<ShipMind>(); var net = s.Get<Network>();
             int dock = s.Layout.Furniture.First(fu => fu.Type == "RobotDock").Cells[0];
             int r = m.AddRobot(s, dock, AgentKind.Robot, dock);
             s.Run(Time.Minutes(15));
             var L2 = s.Layout;
-            int lounge = L2.Rooms.First(rm => rm.Name == "휴게실").Id;
+            int lounge = CommonRoom(L2).Id;
             int hull = Enumerable.Range(0, L2.N).First(c => L2.Hull[c] && L2.Kind[c] == CellKind.Wall && Enumerable.Range(0, 4).Any(k =>
             {
                 int x = L2.X(c) + (k == 0 ? 1 : k == 1 ? -1 : 0), y = L2.Y(c) + (k == 2 ? 1 : k == 3 ? -1 : 0);
@@ -332,7 +332,7 @@ public static partial class Program
         // ── 냉매 샘: 냉각 펌프 봉함이 터져 암모니아가 샌다 → 주컴퓨터가 알아채 경보 · 통풍구를 닫고 그 방 덕트를 정화기로만 돌려 거른다 · 봉쇄 →
         //    배로 번지지 않아 자던 사람도 무사하다 · 다 걸러지면 통풍구를 다시 연다 ──
         {
-            var s = ShipWorld.Create("Pabal", 6);
+            var s = ShipWorld.Create("Hwasal", 6);
             var m = s.Get<Mind>(); var f = s.Get<Field>(); var cm = s.Get<ShipMind>(); var net = s.Get<Network>(); var life = s.Get<Life>();
             int dock = s.Layout.Furniture.First(fu => fu.Type == "RobotDock").Cells[0];
             m.AddRobot(s, dock, AgentKind.Robot, dock);
@@ -367,13 +367,13 @@ public static partial class Program
         // ── 끼인 문: 파편이 통로 쪽 문을 틀어 반쯤 열린 채 끼웠고, 그 방 외판에 구멍 — 배 전체 공기가 그 문으로 빠진다 →
         //    주컴퓨터가 문 센서로 알아채 로봇을 보내 비틀어 바로잡고 닫는다 ──
         {
-            var s = ShipWorld.Create("Pabal", 7);
+            var s = ShipWorld.Create("Hwasal", 7);
             var m = s.Get<Mind>(); var f = s.Get<Field>(); var st = s.Get<Structure>(); var cm = s.Get<ShipMind>();
             int dock = s.Layout.Furniture.First(fu => fu.Type == "RobotDock").Cells[0];
             m.AddRobot(s, dock, AgentKind.Robot, dock);
             s.Run(Time.Minutes(15));
             var L2 = s.Layout;
-            int lounge = L2.Rooms.First(rm => rm.Name == "휴게실").Id;
+            int lounge = CommonRoom(L2).Id;
             int door = st.RoomDoors(lounge).First(d => !L2.Doors[d].External);
             int hull = Enumerable.Range(0, L2.N).First(c => L2.Hull[c] && L2.Kind[c] == CellKind.Wall && Enumerable.Range(0, 4).Any(k =>
             {
@@ -395,9 +395,9 @@ public static partial class Program
 
         // ── 우주복: 숨쉴 만한 방에 오면 벗어 보관함에 건다 (입은 채 지내다 익거나 · 우주복 산소가 떨어져 질식하지 않게) ──
         {
-            var s = ShipWorld.Create("Pabal", 9);
+            var s = ShipWorld.Create("Hwasal", 9);
             var m = s.Get<Mind>(); var life = s.Get<Life>();
-            int lounge = s.Layout.Rooms.First(rm => rm.Name == "휴게실").Cells[0];
+            int lounge = CommonRoom(s.Layout).Cells[0];
             int p = m.AddPerson(s, lounge, -1, lounge);
             ref var pb = ref life[m[p].C.Body];
             pb.Suit = 1; pb.SuitO2 = 50;
@@ -410,11 +410,11 @@ public static partial class Program
 
         // ── 업어 내기: 배 어디도 안전하지 않으면(기압 45kPa) 업었다 내렸다를 되풀이하며 '구했다'를 쌓지 않는다 ──
         {
-            var s = ShipWorld.Create("Pabal", 10);
+            var s = ShipWorld.Create("Hwasal", 10);
             var m = s.Get<Mind>(); var f = s.Get<Field>(); var life = s.Get<Life>();
             int dock = s.Layout.Furniture.First(fu => fu.Type == "RobotDock").Cells[0];
             m.AddRobot(s, dock, AgentKind.Robot, dock);
-            int lounge = s.Layout.Rooms.First(rm => rm.Name == "휴게실").Cells[0];
+            int lounge = CommonRoom(s.Layout).Cells[0];
             int p = m.AddPerson(s, lounge, -1, lounge);
             s.Run(5);
             for (int c = 0; c < f.Cells; c++)
@@ -427,7 +427,7 @@ public static partial class Program
 
         // ── 에어락: 안쪽 문을 남이 열어 두었어도, 바깥문 앞의 로봇이 그 문을 닫아 밸브가 열린다 (안 닫으면 맞물림이 밸브를 막아 영영 못 나간다) ──
         {
-            var s = ShipWorld.Create("Pabal", 11);
+            var s = ShipWorld.Create("Hwasal", 11);
             var m = s.Get<Mind>(); var f = s.Get<Field>(); var st = s.Get<Structure>();
             var L2 = s.Layout;
             var ext = L2.Doors.First(dd => dd.External);
@@ -452,7 +452,7 @@ public static partial class Program
 
         // ── 젖은 바닥 밑 전선: 합선으로 차단기가 떨어지면 주컴퓨터는 길이 마를 때까지 다시 올리지 않고, 로봇이 물을 닦은 뒤 올린다 ──
         {
-            var s = ShipWorld.Create("Pabal", 12);
+            var s = ShipWorld.Create("Hwasal", 12);
             var m = s.Get<Mind>(); var f = s.Get<Field>(); var net = s.Get<Network>();
             int dock = s.Layout.Furniture.First(fu => fu.Type == "RobotDock").Cells[0];
             m.AddRobot(s, dock, AgentKind.Robot, dock);
@@ -470,7 +470,7 @@ public static partial class Program
 
         // ── 눌어붙은 차단기 + 합선: 아크가 이어지면 회로 전체에 수백 A — 윗단 보호 장치가 20초 뒤 끊는다 (전선 길 전체가 타지 않는다) ──
         {
-            var s = ShipWorld.Create("Pabal", 13);
+            var s = ShipWorld.Create("Hwasal", 13);
             var f = s.Get<Field>(); var net = s.Get<Network>(); var ch = s.Get<Chemistry>();
             s.Run(Time.Minutes(2));
             int fd = Enumerable.Range(0, net.Feeders.Count).OrderByDescending(k => net.Feeders[k].Path.Length).First();
@@ -493,7 +493,7 @@ public static partial class Program
         {
             double Hottest(bool pumpsDown)
             {
-                var s = ShipWorld.Create("Pabal", 5);
+                var s = ShipWorld.Create("Hwasal", 5);
                 var net = s.Get<Network>(); var f = s.Get<Field>();
                 if (pumpsDown) foreach (var d in net.Devices.Where(d => d.Def.Role == "pump")) net.Age(d.Id, Part.Mechanical, 1.0);
                 s.Run(Time.Hours(4));

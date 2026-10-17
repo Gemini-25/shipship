@@ -71,7 +71,7 @@ public partial class Main : Node2D
         player.Play();
         _playback = player.GetStreamPlayback() as AudioStreamGeneratorPlayback;
         _ships = Layout.ShipKeys().ToArray();
-        string ship = _ships.Contains("Kestrel") ? "Kestrel" : _ships.FirstOrDefault() ?? "Kestrel";
+        string ship = _ships.Contains("Didim") ? "Didim" : _ships.FirstOrDefault() ?? "Didim";
         foreach (var a in OS.GetCmdlineUserArgs())
         {
             if (a.StartsWith("--ship=")) ship = a[7..];

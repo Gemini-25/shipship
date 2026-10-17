@@ -10,7 +10,7 @@ public static partial class Program
     private static void Live(string[] args)
     {
         var rest = args.SkipWhile(a => a != "--live").Skip(1).ToArray();
-        string ship = rest.Length > 0 ? rest[0] : "Kestrel";
+        string ship = rest.Length > 0 ? rest[0] : "Didim";
         ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 18;
         double screenSec = rest.Length > 2 ? double.Parse(rest[2]) : 600;
         const double dt = 1.0 / 60;

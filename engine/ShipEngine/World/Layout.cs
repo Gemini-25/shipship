@@ -39,8 +39,10 @@ public sealed class FurnitureDef
 /// </summary>
 public sealed class Layout
 {
-    public string Key = "", Name = "";
+    public string Key = "", Name = "", About = "";
     public int W, H;
+    /// <summary>처음 물탱크 (L) · 냉각재 (kg) — 0이면 엔진 기본값.</summary>
+    public double WaterL, CoolantKg;
     public CellKind[] Kind = Array.Empty<CellKind>();
     /// <summary>칸 → 방 번호 (-1: 방 아님).</summary>
     public int[] Room = Array.Empty<int>();
@@ -95,12 +97,13 @@ public sealed class Layout
         if (Material.Length != N) Material = new byte[N];
     }
 
-    // ── 배 도면 파일 (engine/data/ships/*.json — 옛 배를 그대로 가져온 것) ──
+    // ── 배 도면 파일 (engine/data/ships/*.json — Lab --shipgen 이 만든다) ──
 
     private sealed class ShipFile
     {
-        public string Key = "", Name = "";
+        public string Key = "", Name = "", About = "";
         public int W, H;
+        public double WaterL, CoolantKg;
         public string[] Rows = Array.Empty<string>();
         public string WallMaterial = "steel", HullMaterial = "steel", FloorMaterial = "steel";
         public List<RoomDef> Rooms = new();
@@ -114,10 +117,13 @@ public sealed class Layout
         DataFiles.Names("ships/").Select(n => Path.GetFileNameWithoutExtension(n));
 
     /// <summary>engine/data/ships/{key}.json 을 읽는다.</summary>
-    public static Layout Ship(string key, Tables t)
+    public static Layout Ship(string key, Tables t) => FromJson(DataFiles.Text($"ships/{key.ToLowerInvariant()}.json"), t);
+
+    /// <summary>도면 글(JSON)을 읽는다 — 생성기가 만든 도면을 내장하기 전에 바로 검사할 때도.</summary>
+    public static Layout FromJson(string json, Tables t)
     {
-        var f = DataFiles.Load<ShipFile>($"ships/{key.ToLowerInvariant()}.json");
-        var L = new Layout { Key = f.Key, Name = f.Name, W = f.W, H = f.H };
+        var f = JsonSerializer.Deserialize<ShipFile>(json, DataFiles.Json) ?? throw new InvalidDataException("배 도면을 읽지 못했다");
+        var L = new Layout { Key = f.Key, Name = f.Name, About = f.About, W = f.W, H = f.H, WaterL = f.WaterL, CoolantKg = f.CoolantKg };
         L.Kind = new CellKind[L.N];
         L.Material = new byte[L.N];
         byte wallM = (byte)t.M(f.WallMaterial).Index, hullM = (byte)t.M(f.HullMaterial).Index, floorM = (byte)t.M(f.FloorMaterial).Index;

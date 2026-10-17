@@ -1,5 +1,6 @@
 // 설비 · 가구 표 — 무엇으로 되어 있나 (재질별 kg). 타는 재질(고분자 · 단열재 · 천 · 음식 · 복합재)은 그 칸의 연료가 된다.
 //   heat: 켜져 있을 때 내는 열 (W) — ⑥ 망 · 장치가 전기를 다루기 전까지는 늘 켜진 것으로 본다
+//   sealed: 포장되어 상하지 않는다 (식량 보관함)
 //   옛 게임의 설비 이름을 그대로 쓴다 (배 도면이 그 이름으로 들어온다). 표에 없는 것은 "_default".
 {
   "_default":        { "name": "설비",         "parts": { "steel": 40, "polymer": 5 } },
@@ -74,5 +75,13 @@
   "MemorialWall":    { "name": "추모 벽",      "parts": { "steel": 20, "fabric": 5 } },
   "Treadmill":       { "name": "달리기 기계",  "parts": { "steel": 50, "polymer": 15 }, "heat": 100 },
   "Aquarium":        { "name": "수조",         "parts": { "glass": 30, "polymer": 5 } },
-  "PestTrap":        { "name": "해충 덫",      "parts": { "polymer": 2 } }
+  "PestTrap":        { "name": "해충 덫",      "parts": { "polymer": 2 } },
+  "FoodLocker":      { "name": "식량 보관함",  "parts": { "steel": 30, "polymer": 8, "food": 250 }, "sealed": true },
+  "GrowRack":        { "name": "재배 선반",    "parts": { "steel": 60, "polymer": 40, "fabric": 10 }, "heat": 2400 },
+  "LargeReactorCore":{ "name": "대형 원자로",  "parts": { "steel": 6000, "ceramic": 900, "titanium": 300 }, "heat": 60000 },
+  "LargeCoolantPump":{ "name": "대형 냉각 펌프", "parts": { "steel": 400, "copper": 60, "polymer": 10 }, "heat": 3000 },
+  "Shuttle":         { "name": "셔틀",         "parts": { "aluminum": 1500, "titanium": 300, "composite": 200, "polymer": 150, "copper": 80, "glass": 20 } },
+  "Rover":           { "name": "탐사차",       "parts": { "aluminum": 300, "titanium": 50, "polymer": 40, "copper": 20, "glass": 5 } },
+  "CargoCrate":      { "name": "화물 상자",    "parts": { "steel": 40, "polymer": 30, "fabric": 20 } },
+  "OreBin":          { "name": "광석 통",      "parts": { "steel": 60, "ceramic": 500 } }
 }

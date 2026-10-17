@@ -266,11 +266,11 @@ public static partial class Program
 
         if (Do("모든엔진"))
         {
-            Console.WriteLine("\n[① 결정론 · 찍기 — 모든 엔진 · 옛 배 제비호]");
+            Console.WriteLine("\n[① 결정론 · 찍기 — 모든 엔진 · 배 디딤호]");
             ulong Run(int threads, out byte[] snap)
             {
                 int keep = Par.Threads; Par.Threads = threads;
-                var s = ShipWorld.Create("Kestrel", 9);
+                var s = ShipWorld.Create("Didim", 9);
                 var f = s.Get<Field>();
                 var floor = Enumerable.Range(0, f.Cells).Where(i => f.L.Kind[i] == CellKind.Floor && f.L.FurnitureAt[i] >= 0).ToArray();
                 s.Get<Chemistry>().Ignite(floor[floor.Length / 2], 3e6, 0);
@@ -283,12 +283,12 @@ public static partial class Program
             }
             ulong one = Run(1, out var snap1), many = Run(Math.Max(4, Environment.ProcessorCount), out _);
             Check("모든 엔진: 1코어 = 여러 코어 (불 · 충돌 · 감압 · 소리 · 빛 · 구조)", one == many, $"{one:x16} / {many:x16}");
-            var b = new Sim(ShipWorld.Setup(Layout.Ship("Kestrel", Tables.Default), 9));
+            var b = new Sim(ShipWorld.Setup(Layout.Ship("Didim", Tables.Default), 9));
             b.Load(snap1);
             Check("모든 엔진: 되살린 세계의 지문이 같다", b.Hash() == one, $"{snap1.Length / 1024}KB");
             // 원래 세계 ↔ 도중에 찍어 되살린 세계: 이어 돌려도 바이트까지 같다 (다시보기 · 주컴퓨터의 상상이 이것에 기댄다)
             {
-                var o = ShipWorld.Crewed("Kestrel", 9, 6, 3);
+                var o = ShipWorld.Crewed("Didim", 9, 6, 3);
                 var of = o.Get<Field>();
                 var fl = Enumerable.Range(0, of.Cells).Where(i => of.L.Kind[i] == CellKind.Floor && of.L.FurnitureAt[i] >= 0).ToArray();
                 o.Get<Chemistry>().Ignite(fl[fl.Length / 2], 3e6, 0);
@@ -307,7 +307,7 @@ public static partial class Program
             ulong RunCrew(int threads, int ticks, out byte[] snap)
             {
                 int keep = Par.Threads; Par.Threads = threads;
-                var s = ShipWorld.Crewed("Kestrel", 5, 6, 2);
+                var s = ShipWorld.Crewed("Didim", 5, 6, 2);
                 var f = s.Get<Field>();
                 var floor = Enumerable.Range(0, f.Cells).Where(i => f.L.Kind[i] == CellKind.Floor && f.L.FurnitureAt[i] >= 0).ToArray();
                 s.Run(200);
@@ -320,14 +320,14 @@ public static partial class Program
             ulong one = RunCrew(1, 600, out var snap), many = RunCrew(Math.Max(4, Environment.ProcessorCount), 600, out _);
             Check("마음: 1코어 = 여러 코어 (사람 6 · 로봇 2 · 불)", one == many, $"{one:x16} / {many:x16}");
             // 찍기 → 되살려 이어 돌린 것 = 그냥 이어 돌린 것
-            var a = new Sim(ShipWorld.Setup(Layout.Ship("Kestrel", Tables.Default), 5));
+            var a = new Sim(ShipWorld.Setup(Layout.Ship("Didim", Tables.Default), 5));
             a.Load(snap);
             var b = a.Clone();
             a.Run(300); b.Run(300);
             Check("마음: 되살린 세계도 같은 길을 간다 (믿음 · 계획 · 길 · 물건까지)", a.Hash() == b.Hash() && a.Get<Mind>().Agents.Count == 8,
                 $"{a.Hash():x16} / {b.Hash():x16} · {snap.Length / 1024}KB");
             // 먹으면 음식(포도당)이 냉장고에서 몸으로 옮겨 간다 — 사라지거나 생기지 않는다
-            var e = ShipWorld.Crewed("Kestrel", 5, 4, 0);
+            var e = ShipWorld.Crewed("Didim", 5, 4, 0);
             var ef = e.Get<Field>(); var el = e.Get<Life>(); var em = e.Get<Mind>();
             foreach (var ag in em.Agents) ag.C.Hunger = 1;
             double food0 = Enumerable.Range(0, ef.Cells).Sum(i => ef.Stored(ef.T.sFood, i)), rot0 = el.FoodRotted, eaten0 = em.FoodEaten;

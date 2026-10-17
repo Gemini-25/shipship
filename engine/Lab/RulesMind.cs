@@ -164,9 +164,9 @@ public static partial class Program
                 $"먹은 때 {(ate > 0 ? ate / 25.0 : -1):0.0}분 · 문 믿음 {stuck} · {m.Thought(p)}");
         }
 
-        // ── 평시 하루: 케스트럴 6명 + 로봇 2 — 굶거나 목마른 사람 없이 먹고 자고 일한다 · 벽에 금 없음 ──
+        // ── 평시 하루: 디딤호 6명 + 로봇 2 — 굶거나 목마른 사람 없이 먹고 자고 일한다 · 벽에 금 없음 ──
         {
-            var s = ShipWorld.Crewed("Kestrel", 3, 6, 2);
+            var s = ShipWorld.Crewed("Didim", 3, 6, 2);
             var m = s.Get<Mind>(); var life = s.Get<Life>();
             var people = m.Agents.Where(a => a.IsPerson).ToList();
             var meals = new int[m.Agents.Count]; var sleep = new int[m.Agents.Count]; var work = new int[m.Agents.Count]; var starving = new int[m.Agents.Count];
@@ -187,7 +187,7 @@ public static partial class Program
             double sleepH(int id) => sleep[id] / (double)Time.TicksPerHour;
             // 첫날은 졸림이 사람마다 달라 잠이 하루 경계에 걸린다 — 4~12시간
             bool ok = people.All(a => life[a.C.Body].Alive != 0 && starving[a.Id] < Time.Hours(1) && meals[a.Id] is >= 2 and <= 6 && sleepH(a.Id) is >= 4 and <= 12);
-            Check("평시 하루 (케스트럴 6명 · 로봇 2): 모두 살아 있고 하루 2~6끼 · 한 시간 넘게 굶주리거나 목마른 사람 없음 · 잠 4~12시간 · 일하고 · 벽에 금이 가지 않는다",
+            Check("평시 하루 (디딤호 6명 · 로봇 2): 모두 살아 있고 하루 2~6끼 · 한 시간 넘게 굶주리거나 목마른 사람 없음 · 잠 4~12시간 · 일하고 · 벽에 금이 가지 않는다",
                 ok && s.Facts.CountOf(FactKind.WallCrack) == 0 && people.Count(a => work[a.Id] > Time.Hours(2)) >= 4,
                 string.Join(" · ", people.Select(a => $"{m.NameOf(a.Id)} 끼니 {meals[a.Id]} 잠 {sleepH(a.Id):0.0}시간 일 {work[a.Id] / (double)Time.TicksPerHour:0.0}시간 굶주린 {starving[a.Id] / (double)Time.TicksPerHour:0.0}시간"))
                 + $" · 금 {s.Facts.CountOf(FactKind.WallCrack)}");

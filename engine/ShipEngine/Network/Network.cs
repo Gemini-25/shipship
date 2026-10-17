@@ -104,7 +104,7 @@ public sealed class Network : IEngine
     public double Brine;          // 버린 소금물의 물 (몰 — 장부)
     public const double WaterRecovery = 0.94, RecyclerMolPerSec = 0.025; // 장치 하나 1.6L/시
     /// <summary>냉각 펌프 하나에 딸린 방 열교환 · 팬 (kW) — 전기가 모두 방 공기의 열이 되니 배 전력만큼은 걷어 내야 한다.</summary>
-    public const double HvacPerPumpKw = 30;
+    public const double HvacShare = 1.0 / 3; // 펌프 냉각 용량의 1/3은 그 고리에 딸린 방 열교환 · 팬 몫 (90kW 펌프 → 30kW)
     /// <summary>예비 공기 (몰 · 질소 79% 산소 21%) — 큰 감압 뒤 배를 다시 채울 압축 공기. 배 전체를 반 번 채울 만큼 싣고 떠난다.</summary>
     public double AirReserve;
     /// <summary>예비 공기를 지금 푸는 빠르기 (몰/초) — 주컴퓨터가 정한다 (생명유지 설비 자리로 나온다).</summary>
@@ -123,6 +123,8 @@ public sealed class Network : IEngine
     public const double CoilK = 283.15;              // 공조 열교환판 온도 (이슬점 — ISS 공조는 4~16℃)
     public const double O2Target = 21.0, O2Band = 0.5; // 이 분압 아래에서 돌기 시작 · 0.5kPa 아래면 다 돈다 (떠날 때 공기 21.0kPa · ISS 19.5~23.1kPa)
     public double Supplied, Demanded, CoolingKw, ReactorKw, HvacKw;
+    /// <summary>지금 돌 수 있는 원자로들의 낼 수 있는 전력 합 (원자로 열을 나눌 때 — 틱마다 다시 센다).</summary>
+    public double ReactorMaxKw;
     public long Trips, Shorts, Failures;
 
     private readonly float[] _limit; // 부품마다 숨은 한계 (시드에서 — 찍지 않는다)
@@ -158,10 +160,10 @@ public sealed class Network : IEngine
         OverSec = new float[nf]; FaultCell = Enumerable.Repeat(-1, nf).ToArray(); BreakerStuck = new byte[nf]; Amps = new float[nf];
         Damper = Enumerable.Repeat((byte)1, L.Rooms.Count).ToArray();
         Exhaust = new byte[L.Rooms.Count];
-        WaterTank = 800 * 55.5;      // 물 800L
+        WaterTank = (L.WaterL > 0 ? L.WaterL : 800) * 55.5;      // 물 (도면에 적힌 L — 없으면 800L)
         int inside = L.Rooms.Sum(r => r.Cells.Length);
         AirReserve = inside * Field.CellVolume * 101_325 / (Field.R * 293.15) * 0.5;
-        Coolant = 200_000 / 17.03;   // 암모니아 200kg
+        Coolant = (L.CoolantKg > 0 ? L.CoolantKg : 200) * 1000 / 17.03;   // 암모니아 (도면에 적힌 kg — 없으면 200kg)
     }
 
     /// <summary>방마다 가까운 배전반 → 급전선 (전선이 지나는 칸).</summary>
@@ -373,6 +375,7 @@ public sealed class Network : IEngine
             if (dev.Def.Role == "aux" && ok && Charge[d] > 0) auxMax += dev.Def.Gen;
             if (dev.Def.Role == "battery" && ok && Charge[d] > 0) battMax += dev.Def.Kw;
         }
+        ReactorMaxKw = reactorMax;
         double avail = reactorMax + auxMax;
         double battCap = 0, battRate = 0;
         for (int d = 0; d < Devices.Count; d++)
@@ -506,6 +509,13 @@ public sealed class Network : IEngine
     /// <summary>장치의 일: 열 · 산소 · 이산화탄소 · 물 · 조리대 · 배터리 열폭주 · 샘.</summary>
     private readonly List<(int cell, double kw)> _jacket = new(); // 이번 틱 냉각수 재킷으로 간 열 (틱 안에서만 — 찍지 않는다)
 
+    /// <summary>장치 열을 그 장치가 차지한 칸에 고루 (긴 선반 · 큰 펌프의 열이 한 칸에 몰리지 않게).</summary>
+    private void HeatInto(Device dev, double joules)
+    {
+        var fc = L.Furniture[dev.Furniture].Cells;
+        foreach (int x in fc) F.AddHeat(x, joules / fc.Length);
+    }
+
     private void Effects(Sim sim, double dt)
     {
         _jacket.Clear();
@@ -521,7 +531,9 @@ public sealed class Network : IEngine
             switch (dev.Def.Role)
             {
                 case "reactor":
-                    if (ReactorKw > 0) F.AddSolidHeat(c, ReactorKw * 2 * 1000 * dt); // 열효율 1/3
+                    // 열효율 1/3 — 낸 전력의 두 배가 노심 열. 원자로가 여럿이면 저마다 맡은 몫만큼 (다 합쳐 한 번)
+                    if (ReactorKw > 0 && ReactorMaxKw > 0 && On[d] != 0 && Broken[d * 4] == 0 && !ReactorScram)
+                        F.AddSolidHeat(c, ReactorKw * dev.Def.Gen / ReactorMaxKw * 2 * 1000 * dt);
                     break;
                 case "o2gen":
                 {
@@ -536,7 +548,7 @@ public sealed class Network : IEngine
                         F.AddGas(c, T.gO2, o2, F.Temp(c)); sim.Book.Add(Res.O2, Flow.Electrolysis, o2);
                         if (sealLeak) F.AddGas(c, T.gH2, 2 * o2, F.Temp(c)); else h2 = 2 * o2;
                     }
-                    F.AddHeat(c, kw * 1000 * (0.3 * duty + Math.Max(0, 0.1 - duty)) * dt);
+                    HeatInto(dev, kw * 1000 * (0.3 * duty + Math.Max(0, 0.1 - duty)) * dt);
                     // 사바티에 (ISS 2010~): CO₂ + 4H₂ → CH₄ + 2H₂O — 걸러 모은 이산화탄소와 갈라 낸 수소(90%)로 물을 되찾는다 · 메탄은 배 밖으로 · 반응열 165kJ/몰
                     if (h2 > 0 && mechOk)
                     {
@@ -546,7 +558,7 @@ public sealed class Network : IEngine
                             CO2Store -= xi; h2 -= 4 * xi;
                             WaterTank += 2 * xi; sim.Book.Add(Res.Water, Flow.Sabatier, 2 * xi);
                             VentedCH4 += xi;
-                            F.AddHeat(c, 165e3 * xi);
+                            HeatInto(dev, 165e3 * xi);
                         }
                     }
                     VentedH2 += h2;
@@ -561,7 +573,7 @@ public sealed class Network : IEngine
                     ScrubRoom(dev, T.gCO2, dev.Def.Mol * (p > 0 && mechOk ? 1 : 0) * (filterBad ? 0.2 : 1) * dt);
                     // 독한 기체 거름 (활성탄 · 촉매 산화): 정화기 방 공기의 독한 기체를 초마다 1%씩 — 덕트가 배 공기를 이리로 돌린다
                     if (p > 0 && mechOk && !filterBad) TraceScrubbed += ScrubTrace(dev.Room >= 0 && dev.Room < L.Rooms.Count ? L.Rooms[dev.Room].Cells : new[] { dev.Cell }, Math.Min(0.5, 0.01 * dt));
-                    F.AddHeat(c, kw * 1000 * dt);
+                    HeatInto(dev, kw * 1000 * dt);
                     break;
                 }
                 case "dehumid":
@@ -569,7 +581,7 @@ public sealed class Network : IEngine
                     double take = dev.Def.Mol * (p > 0 && mechOk ? 1 : 0) * dt;
                     double rh = F.Partial(T.gH2O, c) / Math.Max(1e-6, Water.SatKPa(F.Temp(c)));
                     if (rh > 0.4) { double got = F.RemoveGas(c, T.gH2O, Math.Min(take, F.Gas(T.gH2O, c) * 0.3)); WaterTank += got; sim.Book.Add(Res.Water, Flow.Condensed, got); }
-                    F.AddHeat(c, kw * 1000 * dt);
+                    HeatInto(dev, kw * 1000 * dt);
                     break;
                 }
                 case "recycler":
@@ -581,7 +593,7 @@ public sealed class Network : IEngine
                         double n = Math.Min(WasteWater, RecyclerMolPerSec * (filterBad ? 0.3 : 1) * dt);
                         WasteWater -= n; WaterTank += n * WaterRecovery; Brine += n * (1 - WaterRecovery); sim.Book.Add(Res.Water, Flow.Recycled, n * WaterRecovery);
                     }
-                    F.AddHeat(c, kw * 1000 * dt);
+                    HeatInto(dev, kw * 1000 * dt);
                     break;
                 }
                 case "pump":
@@ -592,7 +604,11 @@ public sealed class Network : IEngine
                         Coolant -= leak;
                         F.AddGas(c, T.gNH3, leak, F.Temp(c));
                     }
-                    F.AddHeat(c, kw * 1000 * 0.3 * dt);
+                    HeatInto(dev, kw * 1000 * 0.1 * dt); // 모터 겉면 열 10%만 방으로 — 나머지는 펌프가 미는 냉각수가 가져간다
+                    break;
+                case "computer":
+                    // 주컴퓨터 · 항법 컴퓨터: 열의 80%는 냉각판으로 냉각 고리에 (우주선 전자 장비 — 방 공기만으로 식히면 그 칸이 45℃를 넘는다)
+                    if (kw > 0) { HeatInto(dev, kw * 0.2 * 1000 * dt); _jacket.Add((c, kw * 0.8)); }
                     break;
                 case "stove":
                 {
@@ -616,7 +632,7 @@ public sealed class Network : IEngine
                     if (kw > 0 && OnCause[d] != 0) { var chem = sim.Find<Chemistry>(); if (chem != null) chem.HeatCause[c] = OnCause[d]; }
                     break;
                 }
-                    F.AddHeat(c, kw * 1000 * 0.4 * dt);
+                    HeatInto(dev, kw * 1000 * 0.4 * dt);
                     break;
                 case "battery":
                     if (F.Tf[c] > 430 || F.Ts[c] > 430)
@@ -635,10 +651,11 @@ public sealed class Network : IEngine
                     break;
                 case "industry":
                     // 냉각수 재킷: 열의 80%는 냉각 고리로 (모자라면 냉각에서 방으로 돌려준다)
-                    if (kw > 0) { F.AddHeat(c, kw * 0.2 * 1000 * dt); _jacket.Add((c, kw * 0.8)); }
+                    if (kw > 0) { HeatInto(dev, kw * 0.2 * 1000 * dt); _jacket.Add((c, kw * 0.8)); }
                     break;
                 default:
-                    if (kw > 0) F.AddHeat(c, kw * 1000 * dt);
+                    // 전기는 결국 열 — 장치가 차지한 칸에 고루 (긴 재배 선반의 전등 열이 한 칸에 몰리지 않게)
+                    if (kw > 0) HeatInto(dev, kw * 1000 * dt);
                     break;
             }
         }
@@ -654,7 +671,7 @@ public sealed class Network : IEngine
         double hvacCap = 0;
         for (int d = 0; d < Devices.Count; d++)
         {
-            if (Devices[d].Def.Role == "pump" && Working(d) && Coolant > 1000) hvacCap += HvacPerPumpKw * Supply[d];
+            if (Devices[d].Def.Role == "pump" && Working(d) && Coolant > 1000) hvacCap += Devices[d].Def.HeatKw * HvacShare * Supply[d];
             if (Devices[d].Def.Role == "hvac" && Working(d)) hvacCap += Devices[d].Def.HeatKw * Supply[d];
         }
         HvacKw = hvacCap;

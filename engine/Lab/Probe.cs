@@ -10,7 +10,7 @@ public static partial class Program
         bool quiet = Environment.GetEnvironmentVariable("QUIET") == "1";
         Sim Make()
         {
-            var s = Environment.GetEnvironmentVariable("CREW") == "1" ? ShipWorld.Crewed("Kestrel", 9, 6, 3) : ShipWorld.Create("Kestrel", 9);
+            var s = Environment.GetEnvironmentVariable("CREW") == "1" ? ShipWorld.Crewed("Didim", 9, 6, 3) : ShipWorld.Create("Didim", 9);
             if (Environment.GetEnvironmentVariable("STORY") == "1") { var st = s.Get<Storyteller>(); st.Enabled = true; }
             if (quiet) return s;
             var f = s.Get<Field>();
@@ -71,7 +71,7 @@ public static partial class Program
     internal static void ProbeCrew(string[] args)
     {
         var rest = args.SkipWhile(a => a != "--probe-crew").Skip(1).ToArray();
-        string ship = rest.Length > 0 ? rest[0] : "Kestrel";
+        string ship = rest.Length > 0 ? rest[0] : "Didim";
         double hours = rest.Length > 1 ? double.Parse(rest[1]) : 24;
         int people = rest.Length > 2 ? int.Parse(rest[2]) : 6, robots = rest.Length > 3 ? int.Parse(rest[3]) : 2;
         var s = ShipWorld.Crewed(ship, 3, people, robots, 0);
@@ -117,7 +117,7 @@ public static partial class Program
     internal static void ProbeStory(string[] args)
     {
         var rest = args.SkipWhile(a => a != "--probe-story").Skip(1).ToArray();
-        string ship = rest.Length > 0 ? rest[0] : "Kestrel";
+        string ship = rest.Length > 0 ? rest[0] : "Didim";
         ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 18;
         double hours = rest.Length > 2 ? double.Parse(rest[2]) : 24;
         var lay = Layout.Ship(ship, Tables.Default);
@@ -164,7 +164,7 @@ public static partial class Program
     internal static void ProbeRobot(string[] args)
     {
         var rest = args.SkipWhile(a => a != "--probe-robot").Skip(1).ToArray();
-        string ship = rest.Length > 0 ? rest[0] : "Pabal";
+        string ship = rest.Length > 0 ? rest[0] : "Hwasal";
         ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 18;
         double hours = rest.Length > 2 ? double.Parse(rest[2]) : 8;
         int which = rest.Length > 3 ? int.Parse(rest[3]) : 0;
@@ -196,7 +196,7 @@ public static partial class Program
     internal static void ProbeHeat(string[] args)
     {
         var rest = args.SkipWhile(a => a != "--probe-heat").Skip(1).ToArray();
-        string ship = rest.Length > 0 ? rest[0] : "Pabal";
+        string ship = rest.Length > 0 ? rest[0] : "Hwasal";
         double hours = rest.Length > 1 ? double.Parse(rest[1]) : 12;
         int crew = rest.Length > 2 ? int.Parse(rest[2]) : 0;
         var lay = Layout.Ship(ship, Tables.Default);
@@ -209,6 +209,9 @@ public static partial class Program
             if (h > 0) s.Run(Time.Hours(1));
             var rooms = s.Layout.Rooms.Where(r => r.Cells.Length > 0).Select(r => (r.Name, t: r.Cells.Average(c => f.Temp(c)) - 273.15, kw: net.Devices.Where(d => d.Room == r.Id && net.Working(d.Id)).Sum(d => d.Def.Kw)));
             Console.WriteLine($"  {h}시간 · 냉각 {net.CoolingKw:0.0}kW 공조 {net.HvacKw:0.0}kW · 전력 {net.Supplied:0}/{net.Demanded:0}kW · " + string.Join(" · ", rooms.OrderByDescending(x => x.t).Take(6).Select(x => $"{x.Name} {x.t:0}℃({x.kw:0.0}kW)")));
+            // 가장 더운 칸 (방마다 · 위 다섯) — 그 칸의 설비
+            var hot = s.Layout.Rooms.Where(r => r.Cells.Length > 0).Select(r => (r.Name, c: r.Cells.MaxBy(c => f.Temp(c)))).OrderByDescending(x => f.Temp(x.c)).Take(5);
+            Console.WriteLine("    더운 칸: " + string.Join(" · ", hot.Select(x => $"{x.Name} {f.Temp(x.c) - 273.15:0}℃ ({(s.Layout.FurnitureAt[x.c] >= 0 ? s.Layout.Furniture[s.Layout.FurnitureAt[x.c]].Type : "바닥")})")));
         }
     }
 }
@@ -222,7 +225,7 @@ public static partial class Program
     internal static void ProbeDanger(string[] args)
     {
         var rest = args.SkipWhile(a => a != "--probe-danger").Skip(1).ToArray();
-        var ships = (rest.Length > 0 ? rest[0] : "Kestrel,Pabal,Jebi,Gorae").Split(',');
+        var ships = (rest.Length > 0 ? rest[0] : "Didim,Hwasal,Jebi,Gorae").Split(',');
         double days = rest.Length > 1 ? double.Parse(rest[1]) : 2;
         int seeds = rest.Length > 2 ? int.Parse(rest[2]) : 2;
         var kinds = new[] { FactKind.WallBreach, FactKind.Ignition, FactKind.FireSpread, FactKind.SmokeThick, FactKind.Toxic, FactKind.RegionVented, FactKind.PressureDrop, FactKind.DoorBlown, FactKind.Flood };
@@ -284,7 +287,7 @@ public static partial class Program
     internal static void ProbePerson(string[] args)
     {
         var rest = args.SkipWhile(a => a != "--probe-person").Skip(1).ToArray();
-        string ship = rest.Length > 0 ? rest[0] : "Pabal";
+        string ship = rest.Length > 0 ? rest[0] : "Hwasal";
         ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 25;
         double hours = rest.Length > 2 ? double.Parse(rest[2]) : 10;
         int ticks = rest.Length > 3 ? int.Parse(rest[3]) : 600;
@@ -323,7 +326,7 @@ public static partial class Program
     internal static void ProbeLog(string[] args)
     {
         var rest = args.SkipWhile(a => a != "--probe-log").Skip(1).ToArray();
-        string ship = rest.Length > 0 ? rest[0] : "Pabal";
+        string ship = rest.Length > 0 ? rest[0] : "Hwasal";
         ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 25;
         double hours = rest.Length > 2 ? double.Parse(rest[2]) : 12;
         var lay = Layout.Ship(ship, Tables.Default);
@@ -346,7 +349,7 @@ public static partial class Program
     internal static void ProbeHoles(string[] args)
     {
         var rest = args.SkipWhile(a => a != "--probe-holes").Skip(1).ToArray();
-        string ship = rest.Length > 0 ? rest[0] : "Gorae";
+        string ship = rest.Length > 0 ? rest[0] : "Saetteul";
         ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 18;
         double from = rest.Length > 2 ? double.Parse(rest[2]) : 7;
         double hours = rest.Length > 3 ? double.Parse(rest[3]) : 3;
@@ -377,7 +380,7 @@ public static partial class Program
     internal static void ProbeCell(string[] args)
     {
         var rest = args.SkipWhile(a => a != "--probe-cell").Skip(1).ToArray();
-        string ship = rest.Length > 0 ? rest[0] : "Gorae";
+        string ship = rest.Length > 0 ? rest[0] : "Saetteul";
         ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 18;
         int cell = rest.Length > 2 ? int.Parse(rest[2]) : 2919;
         double hours = rest.Length > 3 ? double.Parse(rest[3]) : 14;
@@ -405,7 +408,7 @@ public static partial class Program
     internal static void ProbeFlap(string[] args)
     {
         var rest = args.SkipWhile(a => a != "--probe-flap").Skip(1).ToArray();
-        string ship = rest.Length > 0 ? rest[0] : "Gorae";
+        string ship = rest.Length > 0 ? rest[0] : "Saetteul";
         ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 18;
         double days = rest.Length > 2 ? double.Parse(rest[2]) : 2;
         var lay = Layout.Ship(ship, Tables.Default);
@@ -439,7 +442,7 @@ public static partial class Program
     internal static void ProbeDoor(string[] args)
     {
         var rest = args.SkipWhile(a => a != "--probe-door").Skip(1).ToArray();
-        string ship = rest.Length > 0 ? rest[0] : "Gorae";
+        string ship = rest.Length > 0 ? rest[0] : "Saetteul";
         ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 18;
         double hours = rest.Length > 2 ? double.Parse(rest[2]) : 9.36;
         int d = rest.Length > 3 ? int.Parse(rest[3]) : 24;
@@ -463,7 +466,7 @@ public static partial class Program
     internal static void ProbeFire(string[] args)
     {
         var rest = args.SkipWhile(a => a != "--probe-fire").Skip(1).ToArray();
-        string ship = rest.Length > 0 ? rest[0] : "Pabal";
+        string ship = rest.Length > 0 ? rest[0] : "Hwasal";
         ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 3;
         string type = rest.Length > 2 ? rest[2] : "Battery";
         double mj = rest.Length > 3 ? double.Parse(rest[3]) : 8;

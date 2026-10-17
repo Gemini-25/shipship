@@ -31,7 +31,7 @@ public static partial class Program
 
         if (Do("배전기"))
         {
-            // 옛 배 19척: 평시 10분 — 과부하로 떨어지는 차단기 없음 · 원자로 멀쩡 (새터호 냉각실 급전선이 펌프 여럿을 못 버티던 버그)
+            // 모든 배: 평시 10분 — 과부하로 떨어지는 차단기 없음 · 원자로 멀쩡 (한누리호 냉각실 급전선이 펌프 여럿을 못 버티던 버그)
             var bad = new List<string>();
             int n = 0;
             foreach (var key in Layout.ShipKeys())
@@ -42,7 +42,7 @@ public static partial class Program
                 if (net.Trips > 0 || net.ReactorScram) bad.Add($"{s.Layout.Name}(차단기 {net.Trips} · 원자로 {(net.ReactorScram ? "멈춤" : "멀쩡")})");
                 n++;
             }
-            Check($"옛 배 {n}척 평시 10분: 과부하 차단기 없음 · 원자로 멀쩡 (급전선 굵기는 방의 장치에 맞춘다)", bad.Count == 0, bad.Count == 0 ? "모두 멀쩡" : string.Join(" · ", bad));
+            Check($"배 {n}척 평시 10분: 과부하 차단기 없음 · 원자로 멀쩡 (급전선 굵기는 방의 장치에 맞춘다)", bad.Count == 0, bad.Count == 0 ? "모두 멀쩡" : string.Join(" · ", bad));
         }
 
         if (Do("불"))
@@ -155,7 +155,7 @@ public static partial class Program
             var st5 = s5.Get<Structure>();
             Check("수소 폭연이 보통 문을 날린다 (압력이 정격을 넘는다)", st5.DoorsBlown > 0 && s5.Get<Field>().DoorOpen[0] > 0,
                 $"날아간 문 {st5.DoorsBlown} · 문 열림 {s5.Get<Field>().DoorOpen[0]:0.0} · 큰 소리 {s5.Facts.CountOf(FactKind.LoudSound)}번");
-            // 닫힌 문 칸은 기체가 없다 — 그 문과 맞닿은 벽이 한쪽이 진공이라고 착각하면 안 된다 (케스트럴 9시간에 금이 갔던 버그)
+            // 닫힌 문 칸은 기체가 없다 — 그 문과 맞닿은 벽이 한쪽이 진공이라고 착각하면 안 된다 (디딤호 9시간에 금이 갔던 버그)
             var l8 = Worlds.Ascii(Worlds.WallOverDoor);
             var s8 = Worlds.Full(l8, 1);
             s8.Run(5);
@@ -196,7 +196,7 @@ public static partial class Program
         if (Do("바깥"))
         {
             // 잔해 지대를 지난다 → 파편이 외판을 친다 (대부분 작아 움푹 · 가끔 구멍)
-            var s = ShipWorld.Create("Kestrel", 3);
+            var s = ShipWorld.Create("Didim", 3);
             var o = s.Get<Outside>(); var st = s.Get<Structure>();
             int seed = s.Causes.Add(CauseKind.Story, "잔해 지대가 항로에 있다", s.Tick);
             o.AddCloud("rubble", 400_000, 300_000, 3e-7, 1, 0, seed);
@@ -206,7 +206,7 @@ public static partial class Program
             Check("잔해 지대를 지나면 파편이 외판을 친다 · 원인 사슬이 이야기꾼의 원인까지 이어진다", o.DebrisHits > 0 && story.StartsWith("잔해 지대가 항로에 있다"),
                 $"맞음 {o.DebrisHits}번 · 구멍 {st.Breaches} · 예: {story}");
             // 운석 정면: 큰 것은 여러 벽을 뚫는다 · 오기 전에 '다가온다'가 먼저
-            var s2 = ShipWorld.Create("Kestrel", 3);
+            var s2 = ShipWorld.Create("Didim", 3);
             var o2 = s2.Get<Outside>(); var f2 = s2.Get<Field>();
             o2.AddRock(2, 5000, 1, 0.1, 0, 30_000, 0);
             long warnAt = -1, hitAt = -1;
@@ -221,13 +221,13 @@ public static partial class Program
             Check("2kg 운석(25MJ)이 정면으로 → 먼저 '다가온다' · 부딪혀 여러 벽을 뚫는다", warnAt >= 0 && warnAt < hitAt && holes >= 2 && f2.VentedTotal > 100,
                 $"조짐 틱 {warnAt} · 충돌 틱 {hitAt} · 구멍 {holes}칸 · 샌 공기 {f2.VentedTotal:0}몰");
             // 비껴간다
-            var s3 = ShipWorld.Create("Kestrel", 3);
+            var s3 = ShipWorld.Create("Didim", 3);
             var o3 = s3.Get<Outside>();
             o3.AddRock(2, 5000, 1, 0, 300, 30_000, 0);
             s3.Run(60);
             Check("300m 비껴가는 운석은 맞지 않는다 (아슬아슬함은 사실로 남는다)", o3.RockHits == 0 && o3.NearMisses == 1, $"맞음 {o3.RockHits} · 비껴감 {o3.NearMisses}");
             // 별 폭발: 조짐 → 폭발 → 안쪽 방이 덜 맞는다
-            var s4 = ShipWorld.Create("Hanbit", 3);
+            var s4 = ShipWorld.Create("Salpim", 3);
             var o4 = s4.Get<Outside>(); var f4 = s4.Get<Field>();
             o4.Star = "redDwarf";
             o4.ScheduleFlare(5, 0);
@@ -252,7 +252,7 @@ public static partial class Program
             Check("붉은 사막에 내린 배: 구멍 난 방은 바깥 기압(0.6kPa) 근처까지만 빠지고 이산화탄소가 들어온다", f5.Pressure(room) < 3 && f5.Ppm(f5.T.gCO2, room) > 10000,
                 $"{f5.Pressure(room):0.00}kPa · 이산화탄소 {f5.Ppm(f5.T.gCO2, room) / 1e4:0}% · 바깥 {f5.Outside.Temp:0}K");
             // 끓는 행성: 외판이 바깥 압력에 짓눌린다
-            var s6 = ShipWorld.Create("Kestrel", 3);
+            var s6 = ShipWorld.Create("Didim", 3);
             var o6 = s6.Get<Outside>(); var st6 = s6.Get<Structure>(); var f6 = s6.Get<Field>();
             o6.Land("venuslike", s6.Tick);
             s6.Run(Time.Minutes(2));
@@ -264,7 +264,7 @@ public static partial class Program
         if (Do("망"))
         {
             // 평시 6시간: 정전 없음 · 방 온도가 293K 근처 · 원자로 멀쩡
-            var s = ShipWorld.Create("Kestrel", 5);
+            var s = ShipWorld.Create("Didim", 5);
             var net = s.Get<Network>(); var f = s.Get<Field>();
             s.Run(Time.Hours(6));
             var temps = f.L.Rooms.Where(r => net.Vent[r.Id] >= 0).Select(r => f.Temp(net.Vent[r.Id])).ToList();
@@ -273,7 +273,7 @@ public static partial class Program
                 $"수요 {net.Demanded:0.0}kW · 원자로 {net.ReactorKw:0.0}kW · 냉각 {net.CoolingKw:0}kW · 방 온도 {temps.Min():0.0}~{temps.Max():0.0}K (가장 더운 곳 {hottest.Name}) · 장치 {net.Devices.Count} · 급전선 {net.Feeders.Count}");
 
             // 냉각 펌프를 끄면 원자로가 뜨거워져 스스로 멈춘다 → 배터리 → 결국 어둠
-            var s2 = ShipWorld.Create("Kestrel", 5);
+            var s2 = ShipWorld.Create("Didim", 5);
             var n2 = s2.Get<Network>();
             for (int d = 0; d < n2.Devices.Count; d++) if (n2.Devices[d].Def.Role == "pump") n2.SetOn(d, false);
             long scramAt = -1;
@@ -283,7 +283,7 @@ public static partial class Program
                 $"스크램 {(scramAt > 0 ? Time.Clock(scramAt) : "없음")} · 배터리 {battAfter:0.0}kWh · 원인 {s2.Causes.Story(n2.ScramCause)}");
 
             // 합선: 전선이 지나는 칸이 젖으면 → 차단기 → 그 방이 어둡다
-            var s3 = ShipWorld.Create("Kestrel", 5);
+            var s3 = ShipWorld.Create("Didim", 5);
             var n3 = s3.Get<Network>(); var f3 = s3.Get<Field>(); var li3 = s3.Get<Light>();
             var fd = n3.Feeders.First(x => x.Path.Length > 4);
             f3.AddStore(fd.Path[fd.Path.Length / 2], f3.T.sWater, 400);
@@ -293,7 +293,7 @@ public static partial class Program
                 $"원인 {s3.Causes.Story(trip.Cause)} · 조명 {li3.Lamp[fd.Room]:0}lx");
 
             // 낡아 붙은 차단기 + 합선 → 아크가 계속 → 불
-            var s4 = ShipWorld.Create("Kestrel", 5);
+            var s4 = ShipWorld.Create("Didim", 5);
             var n4 = s4.Get<Network>(); var f4 = s4.Get<Field>(); var ch4 = s4.Get<Chemistry>();
             var fd4 = n4.Feeders.First(x => x.Path.Length > 4);
             int wet = fd4.Path[fd4.Path.Length / 2];
@@ -304,7 +304,7 @@ public static partial class Program
             Check("차단기가 낡아 붙어 있으면 합선 아크가 계속되어 불이 난다", ch4.Ignitions > 0, $"발화 {ch4.Ignitions} · 원인 {s4.Causes.Story(ch4.FireCause[wet])}");
 
             // 덕트로 연기가 번진다 — 댐퍼를 닫은 방은 빠진다
-            var s5 = ShipWorld.Create("Kestrel", 5);
+            var s5 = ShipWorld.Create("Didim", 5);
             var n5 = s5.Get<Network>(); var f5 = s5.Get<Field>();
             s5.Step();
             var rooms = Enumerable.Range(0, f5.L.Rooms.Count).Where(r => n5.Vent[r] >= 0 && n5.RoomPowered(r)).ToList();
@@ -317,7 +317,7 @@ public static partial class Program
                 $"열린 방 {ppmOpen:0}ppm · 닫은 방 {ppmShut:0.0}ppm");
 
             // 낡은 냉각 펌프 봉함 → 고장 → 암모니아가 샌다 (원인: 낡음)
-            var s6 = ShipWorld.Create("Kestrel", 5);
+            var s6 = ShipWorld.Create("Didim", 5);
             var n6 = s6.Get<Network>(); var f6 = s6.Get<Field>();
             int pump = n6.Devices.First(d => d.Def.Role == "pump").Id;
             n6.Age(pump, Part.Seal, 0.99995);
@@ -328,7 +328,7 @@ public static partial class Program
                 $"암모니아 {f6.Ppm(f6.T.gNH3, pc):0}ppm · 원인 {s6.Causes.Story(fail.Cause)}");
 
             // 곧 망가질 모터는 끽끽거린다
-            var s7 = ShipWorld.Create("Kestrel", 5);
+            var s7 = ShipWorld.Create("Didim", 5);
             var n7 = s7.Get<Network>(); var snd7 = s7.Get<Sound>();
             int pump7 = n7.Devices.First(d => d.Def.Role == "pump").Id;
             n7.Age(pump7, Part.Mechanical, 0.9);
@@ -337,7 +337,7 @@ public static partial class Program
             Check("곧 망가질 모터는 끽끽 소리를 낸다 (알아챌 수 있는 조짐)", squeal);
 
             // 뜨거워진 배터리는 열폭주로 불이 난다
-            var s8 = ShipWorld.Create("Kestrel", 5);
+            var s8 = ShipWorld.Create("Didim", 5);
             var n8 = s8.Get<Network>(); var f8 = s8.Get<Field>(); var ch8 = s8.Get<Chemistry>();
             var bat = n8.Devices.First(d => d.Def.Role == "battery");
             f8.AddSurfaceHeat(bat.Cell, (460 - f8.Tf[bat.Cell]) * Field.SurfaceC);
@@ -345,7 +345,7 @@ public static partial class Program
             Check("뜨거워진 배터리는 열폭주로 불이 난다", ch8.Ignitions > 0 && n8.IsBroken(bat.Id, Part.Electric), $"발화 {ch8.Ignitions}");
 
             // 산소 발생기: 배 공기의 산소가 모자라면(5% 뺌 → 19.9kPa) 물을 갈라 산소를 낸다 · 물탱크가 준다 (넉넉하면 쉰다 — ⑪ 물자의 산소 조절 시험)
-            var s9 = ShipWorld.Create("Kestrel", 5);
+            var s9 = ShipWorld.Create("Didim", 5);
             var n9 = s9.Get<Network>(); var f9 = s9.Get<Field>();
             for (int c = 0; c < f9.Cells; c++) f9.RemoveGas(c, f9.T.gO2, f9.Gas(f9.T.gO2, c) * 0.05);
             double o2a = f9.Total(f9.T.gO2), w0 = n9.WaterTank;
@@ -429,7 +429,7 @@ public static partial class Program
                 $"에너지 −{used:0.0}MJ (포도당 −{r0 - l6[b6].Reserve:0.0}몰 · 지방 −{(f0 - l6[b6].Fat) * 0.256:0.00}kg) · 물 −{(w0 - l6[b6].Water) / 55.5:0.0}L · 체온 {l6[b6].CoreK - 273.15:0.0}℃");
 
             // 방사선: 폭발 때 바깥쪽 칸이 안쪽보다 많이 맞는다
-            var s7 = ShipWorld.Create("Hanbit", 2);
+            var s7 = ShipWorld.Create("Salpim", 2);
             var o7 = s7.Get<Outside>(); var f7 = s7.Get<Field>(); var l7 = s7.Get<Life>();
             o7.Star = "blue"; o7.ScheduleFlare(1, 0);
             var floor = Enumerable.Range(0, f7.Cells).Where(i => f7.L.Kind[i] == CellKind.Floor && f7.L.FurnitureAt[i] < 0).ToList();
@@ -441,13 +441,13 @@ public static partial class Program
                 $"바깥쪽 {l7[bo].RadGy * 1000:0}mGy · 안쪽 {l7[bi].RadGy * 1000:0}mGy");
 
             // 작물: 재배등이 켜진 재배대는 자라고 산소를 낸다 · 꺼진 것은 안 자란다
-            var s8 = ShipWorld.Create("Bodeum", 2);
+            var s8 = ShipWorld.Create("Didim", 2);
             var n8 = s8.Get<Network>(); var l8 = s8.Get<Life>();
             int off = l8.Crops[0].Device;
             n8.SetOn(off, false);
             s8.Run(Time.Hours(12));
             var lit = l8.Crops.Skip(1).Average(c => c.Biomass);
-            double ideal = l8.Crops.Skip(1).Average(c => s8.Layout.Furniture[n8.Devices[c.Device].Furniture].Cells.Length * Field.CellFloor) * Life.CropMolPerM2Day / 2;
+            double ideal = Enumerable.Range(1, l8.Crops.Count - 1).Average(k => l8.CropArea(n8, k)) * Life.CropMolPerM2Day / 2;
             // 실제 수확량: 1m²에 하루 0.1몰 (먹는 부분 18g — NASA BPC) → 반나절에 재배대 넓이 × 0.05몰이 다 자란 몫
             Check("재배등이 켜진 재배대는 반나절에 자라고(1m²에 하루 0.1몰 — 실제 수확량 · 사람이 없어 이산화탄소가 모자라 그 몇 할) · 꺼진 것은 거의 안 자란다", lit > ideal * 0.25 && lit <= ideal * 1.0001 && l8.Crops[0].Biomass < lit * 0.3,
                 $"켜진 것 평균 {lit:0.000}몰 (다 자라면 {ideal:0.000}) · 꺼진 것 {l8.Crops[0].Biomass:0.000}몰 · 재배대 {l8.Crops.Count}");
@@ -517,10 +517,10 @@ public static partial class Program
             // 산소 요법: 연기에 폐가 상한 사람(손상 0.45)은 맑은 공기에서도 숨이 모자라 쓰러진다 — 치료 침대의 산소 마스크면 버틴다
             (bool alive, float sat) Lungs(bool onBed)
             {
-                var so = ShipWorld.Create("Pabal", 8);
+                var so = ShipWorld.Create("Hwasal", 8);
                 var lo = so.Get<Life>();
                 var bedCell = so.Layout.Furniture.First(fu => fu.Type == "MedBed").Cells[0];
-                int floor = so.Layout.Rooms.First(r => r.Name == "휴게실").Cells[0];
+                int floor = CommonRoom(so.Layout).Cells[0];
                 int bo = lo.AddBody(onBed ? bedCell : floor);
                 lo[bo].LungDamage = 0.45f;
                 for (long k = 0; k < Time.Minutes(20); k++) { lo[bo].LungDamage = Math.Max(lo[bo].LungDamage, 0.45f); so.Step(); }
@@ -562,6 +562,6 @@ public static partial class Program
         WorkRules();
         ViewRules();
         SoundRules();
-        LifeRules(); LedgerRules(); PersonRules(); BondRules(); SeedRules();
+        LifeRules(); LedgerRules(); PersonRules(); BondRules(); SeedRules(); ShipRules();
     }
 }

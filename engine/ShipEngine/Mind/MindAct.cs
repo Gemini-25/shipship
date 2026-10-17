@@ -58,6 +58,7 @@ public sealed partial class Mind
             case StepKind.Clean: CleanStep(sim, a, st); return;
             case StepKind.Harvest: HarvestStep(sim, a, st); return;
             case StepKind.Stow: StowStep(sim, a, st); return;
+            case StepKind.TakeFood: TakeFoodStep(sim, a, st); return;
             case StepKind.Fix: FixStep(sim, a, st); return;
             case StepKind.PickUp:
             {
@@ -420,13 +421,32 @@ public sealed partial class Mind
         ref var c = ref a.C;
         long t = sim.Tick;
         var fu = L.Furniture[st.Target];
-        if (c.Holding != iHarvest) { JobDone(a, t); return; }
+        if (!IsFood(c.Holding)) { JobDone(a, t); return; }
         if (Dist(c.Cell, fu.Cells[0]) > 2) { Fail(sim, a, "멀다"); return; }
         Activity(a, "work");
         if (t - c.StepStart < Time.Minutes(1)) return;
         F.AddStore(fu.Cells[0], T.sFood, c.HoldCharge);
         c.Holding = 255; c.HoldCharge = 0;
         JobDone(a, t);
+    }
+
+    public const double RationMol = 40; // 식량 상자 하나 (포도당 40몰 ≈ 포장 식량 12kg)
+
+    /// <summary>식량 보관함에서 식량 상자를 꺼낸다 (2분) — 장부는 그대로 (배 안에서 옮길 뿐).</summary>
+    private void TakeFoodStep(Sim sim, Agent a, PlanStep st)
+    {
+        ref var c = ref a.C;
+        long t = sim.Tick;
+        var fu = L.Furniture[st.Target];
+        if (Dist(c.Cell, fu.Cells[0]) > 2) { Fail(sim, a, "멀다"); return; }
+        Activity(a, "work");
+        if (t - c.StepStart < Time.Minutes(2)) return;
+        double got = 0;
+        foreach (int x in fu.Cells) { got += F.TakeStore(x, T.sFood, RationMol - got); if (got >= RationMol) break; }
+        if (got <= 1e-6) { JobDone(a, t); return; }
+        if (c.Holding != 255) DropHeld(a);
+        c.Holding = iRation; c.HoldCharge = (float)got;
+        Next(a, t);
     }
 
     private void FixStep(Sim sim, Agent a, PlanStep st)

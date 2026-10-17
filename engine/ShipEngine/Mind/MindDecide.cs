@@ -114,7 +114,7 @@ public sealed partial class Mind
             ref var c = ref _deciding.C;
             if (c.AssignedGoal == g && c.AssignedUntil > _nowTick && (c.AssignedTarget < 0 || c.AssignedTarget == target
                 || g is GoalKind.FightFire or GoalKind.Patch or GoalKind.Brace or GoalKind.Investigate && cell >= 0 && Dist(c.AssignedTarget, cell) <= 3))
-                score += g is GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest && _deciding.IsPerson ? 1 : 3; // 주컴퓨터가 맡긴 일 (사람의 일상 일은 끼니 · 잠보다 앞서지 않게)
+                score += g is GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock && _deciding.IsPerson ? 1 : 3; // 주컴퓨터가 맡긴 일 (사람의 일상 일은 끼니 · 잠보다 앞서지 않게)
         }
         _opts.Add(new Option { Goal = g, Target = target, Cell = cell, Score = score, Cause = cause });
     }
@@ -140,10 +140,12 @@ public sealed partial class Mind
             float grief = _soc?.GriefOf(a.Id) ?? 0; // ⑨ 슬픔: 일손을 놓고 사람을 찾는다
             if (InWindow(hour, c.ShiftHour, 8) && c.Station >= 0) Add(GoalKind.Work, c.Station, L.Furniture[c.Station].Cells[0], (1.2f + c.Diligent) * (1 - 0.7f * grief));
             if (c.Bored > 0.3f) Add(GoalKind.Relax, -1, -1, c.Bored * 1.5f);
-            // ⑧ 운동: 하루 한 번쯤 — 성실 · 외향일수록 챙기고 신경성은 덜 (운동 습관 연구) · 일하는 시간 · 잘 시간 밖에서 (ISS 승무원은 하루 2시간 남짓)
-            if (c.Unfit > 0.5f && !InWindow(hour, c.ShiftHour, 8) && !night)
+            // ⑧ 운동: 하루 한 번쯤 — 성실 · 외향일수록 챙기고 신경성은 덜 (운동 습관 연구) · 일하는 시간 밖에서 · 졸리지 않을 때 (ISS 승무원은 하루 2시간 남짓)
+            //   (교대에 맞춘 '밤' 시간이 아니라 졸림으로 — 잠이 밀려 깨어 있는 저녁에도 운동할 수 있게)
+            if (c.Unfit > 0.5f && !InWindow(hour, c.ShiftHour, 8) && c.Sleepy < 0.6f)
                 Add(GoalKind.Exercise, -1, -1, c.Unfit * (0.2f + 1.4f * c.Consc + 0.4f * c.Extra - 0.4f * c.Neuro));
-            if (c.Lonely > 0.3f || grief > 0.3f) Add(GoalKind.Socialize, -1, -1, Math.Max(c.Lonely, grief) * (0.5f + c.Sociable) * 1.5f + grief);
+            // 어울리기: 어울릴 사람이 깨어 있고 일하지 않을 때만 (모두 자거나 일하는데 혼자 휴게실에 앉아 몇 시간씩 기다리지 않는다)
+            if ((c.Lonely > 0.3f || grief > 0.3f) && SomeoneFree(a)) Add(GoalKind.Socialize, -1, -1, Math.Max(c.Lonely, grief) * (0.5f + c.Sociable) * 1.5f + grief);
             Add(GoalKind.Idle, -1, here, 0.3f);
             JobOption(a);
             // ⑨ 몸싸움: 덤빈 이는 그 자리에서 · 맞는 이는 겁이 많으면 방을 빠져나가 문을 닫는다
@@ -495,6 +497,23 @@ public sealed partial class Mind
                 plan.Add(new PlanStep { Kind = StepKind.Stow, Target = store });
                 return true;
             }
+            case GoalKind.Restock:
+            {
+                // 식량 보관함 → 식량 상자 → 주방 (맡긴 일: Target 냉장고 · 배식기, 맡긴 Arg 보관함 · 들고만 있으면 가까운 주방)
+                if (c.Holding != 255 && c.Holding != iRation) return false;
+                int point = o.Target >= 0 ? o.Target : Nearest(c.Cell, _food, _ => true);
+                if (point < 0) return false;
+                if (c.Holding != iRation)
+                {
+                    int locker = c.AssignedGoal == GoalKind.Restock ? c.AssignedArg : -1;
+                    if (locker < 0 || locker >= L.Furniture.Count) return false;
+                    plan.Add(Go(L.Furniture[locker].Cells[0], 1));
+                    plan.Add(new PlanStep { Kind = StepKind.TakeFood, Target = locker });
+                }
+                plan.Add(Go(L.Furniture[point].Cells[0], 1));
+                plan.Add(new PlanStep { Kind = StepKind.Stow, Target = point });
+                return true;
+            }
             case GoalKind.Evacuate:
             {
                 int refuge = FindRefuge(a, here, o.Target, o.Cell);
@@ -670,12 +689,14 @@ public sealed partial class Mind
         if (!a.IsPerson && c.AssignedGoal == GoalKind.Brace && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0 && _st != null && _st.JammedAt(c.AssignedTarget)) Add(GoalKind.Brace, c.AssignedTarget, c.AssignedTarget, 1.2f);
         // 거둔 것을 들고 있으면 (하던 일이 끊겼어도) 식량 창고에 넣는다
         if (c.Holding == iHarvest && _life != null && _life.Crops.Count > 0) Add(GoalKind.Harvest, 0, c.Cell, 1.0f);
-        if (c.AssignedUntil <= _nowTick || c.AssignedGoal is not (GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest)) return;
+        if (c.Holding == iRation) Add(GoalKind.Restock, c.AssignedGoal == GoalKind.Restock && c.AssignedUntil > _nowTick ? c.AssignedTarget : -1, c.Cell, 1.0f);
+        if (c.AssignedUntil <= _nowTick || c.AssignedGoal is not (GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock)) return;
         int cell = c.AssignedGoal switch
         {
             GoalKind.Craft => L.Furniture[c.AssignedTarget].Cells[0],
             GoalKind.Maintain => _net != null ? _net.Devices[c.AssignedTarget / 4].Cell : -1,
             GoalKind.Harvest => _life != null && c.AssignedTarget < _life.Crops.Count ? _life.Crops[c.AssignedTarget].Cell : -1,
+            GoalKind.Restock => c.AssignedArg >= 0 && c.AssignedArg < L.Furniture.Count ? L.Furniture[c.AssignedArg].Cells[0] : -1,
             _ => c.AssignedTarget,
         };
         if (cell >= 0) Add(c.AssignedGoal, c.AssignedTarget, cell, 1.2f);
@@ -691,6 +712,14 @@ public sealed partial class Mind
     }
 
     /// <summary>사람이 가장 많이 모인 사교 방의 빈자리.</summary>
+    /// <summary>나 말고 깨어 있고 일하지 않는 사람이 있나 (어울릴 상대).</summary>
+    private bool SomeoneFree(Agent a)
+    {
+        foreach (var o in Agents)
+            if (o != a && o.IsPerson && o.C.Up != 0 && o.C.Goal is not (GoalKind.Work or GoalKind.Sleep) && (_life == null || _life[o.C.Body].Asleep == 0)) return true;
+        return false;
+    }
+
     private int BusiestSeat(Agent a)
     {
         if (_social.Length == 0) return -1;

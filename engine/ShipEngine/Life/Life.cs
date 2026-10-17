@@ -104,6 +104,19 @@ public sealed class Life : IEngine
         _breathe = T.R("breathe"); _photo = T.R("photosynth"); _rot = T.R("rot"); _ferment = T.R("ferment");
         _glucose = T.S("Glucose"); _waterL = T.S("H2O_l"); _fat = T.S("Fat");
         Mold = new float[L.N];
+        _sealed = new bool[L.N];
+        foreach (var fu in L.Furniture) if (T.Equip(fu.Type).Sealed) foreach (int c in fu.Cells) _sealed[c] = true;
+    }
+
+    /// <summary>포장된 식량 칸 (식량 보관함 — 상하지 않는다 · 불에는 탄다).</summary>
+    private readonly bool[] _sealed;
+
+    /// <summary>작물이 자라는 넓이 (m² — 칸 × 단).</summary>
+    public double CropArea(Network? net, int k)
+    {
+        if (net == null || k >= Crops.Count || Crops[k].Device >= net.Devices.Count) return Field.CellFloor;
+        var d = net.Devices[Crops[k].Device];
+        return L.Furniture[d.Furniture].Cells.Length * Field.CellFloor * Math.Max(1, d.Def.Tiers);
     }
 
     // ───────────────────────── 요청 (⑧ 마음 · 시험) ─────────────────────────
@@ -406,8 +419,8 @@ public sealed class Life : IEngine
             if (lamp < 0.1) cr.DarkHours += (float)(dt / 3600); else cr.DarkHours = 0;
             if (t < 275 || t > 318 || cr.DarkHours > 48 || water == 0) cr.Health = (float)Math.Max(0, cr.Health - dt / 86400);
             else cr.Health = (float)Math.Min(1, cr.Health + dt / (5 * 86400));
-            // 양분 몰/초: 재배대 1m²에 하루 0.1몰 (먹는 부분 마른 무게 하루 18g/m² — NASA 생물 재생 실험(BPC)의 밀 · 감자 20g/m² 안팎 · 상추 7g/m²)
-            double rate = CropMolPerM2Day / 86400 * L.Furniture[net.Devices[cr.Device].Furniture].Cells.Length * Field.CellFloor * lamp * tf * cf * water * cr.Health;
+            // 양분 몰/초: 재배대 1m²에 하루 0.1몰 (먹는 부분 마른 무게 하루 18g/m² — NASA 생물 재생 실험(BPC)의 밀 · 감자 20g/m² 안팎 · 상추 7g/m²) · 다단 선반은 단마다
+            double rate = CropMolPerM2Day / 86400 * CropArea(net, k) * lamp * tf * cf * water * cr.Health;
             double xi = rate * dt;
             xi = Math.Min(xi, F.Gas(T.gCO2, c) * 0.5 / 6);
             if (xi <= 0) continue;
@@ -439,7 +452,7 @@ public sealed class Life : IEngine
         for (int c = 0; c < L.N; c++)
         {
             double food = F.Stored(T.sFood, c);
-            if (food < 1e-3 || F.RegionOf.Length <= c || F.RegionOf[c] < 0) continue;
+            if (food < 1e-3 || _sealed[c] || F.RegionOf.Length <= c || F.RegionOf[c] < 0) continue;
             double t = F.Temp(c);
             if (t < 277) continue; // 냉장고
             double rh = F.Partial(T.gH2O, c) / Math.Max(1e-6, Water.SatKPa(Math.Max(250, t)));

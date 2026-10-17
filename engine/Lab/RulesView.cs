@@ -110,7 +110,7 @@ public static partial class Program
             }
         }
         // 다시보기: 운석 하나가 하이라이트가 된 뒤 B — 산 세계는 멈추고, 되살린 세계에서 같은 운석이 같은 곳에 부딪힌다 → 끝나면 산 세계로
-        var rs = new LiveShow(ShipWorld.Create("Kestrel", 3), "제비호");
+        var rs = new LiveShow(ShipWorld.Create("Didim", 3), "디딤호");
         int rc = rs.Sim.Causes.Add(CauseKind.Story, "운석 하나가 배를 향해 온다", rs.Sim.Tick);
         rs.Sim.Get<Outside>().AddRock(1.5, 6000, -1, 0.15, 2, 6000 * 60 * 4, rc); // 4분 거리
         for (int i = 0; i < 60 * 600 && (rs.Dir.Highlights.Count == 0 || rs.Sim.Tick < rs.Dir.Highlights[0].Last + Time.Minutes(3)); i++) rs.Advance(dt);

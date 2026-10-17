@@ -49,7 +49,7 @@ public static partial class Program
             }
             case "meteor":
             {
-                s = ShipWorld.Crewed("Kestrel", 4, 6, 3);
+                s = ShipWorld.Crewed("Didim", 4, 6, 3);
                 s.Run(Time.Hours(2));
                 int seed = s.Causes.Add(CauseKind.Story, "운석 하나가 배를 향해 온다", s.Tick);
                 s.Get<Outside>().AddRock(1.5, 6000, -1, 0.15, 2, 25_000, seed);

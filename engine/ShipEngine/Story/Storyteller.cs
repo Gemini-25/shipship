@@ -143,6 +143,15 @@ public sealed class Storyteller : IEngine
     // ───────────────────────── 심기 ─────────────────────────
 
     /// <summary>원인 하나를 심는다 (시험 · 함장의 '이야기꾼 부르기'도 이것을 쓴다).</summary>
+    /// <summary>네 이웃에 방 바닥이 있는 칸 (외판의 안쪽 면).</summary>
+    private bool NextToRoom(int i)
+    {
+        int x = L.X(i), y = L.Y(i);
+        foreach (var (dx, dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
+            if (L.In(x + dx, y + dy) && L.Room[L.Index(x + dx, y + dy)] >= 0) return true;
+        return false;
+    }
+
     public bool Plant(Sim sim, SeedKind kind)
     {
         double g = Level / 4.0; // 가혹함 배율
@@ -206,7 +215,8 @@ public sealed class Storyteller : IEngine
             case SeedKind.HullFatigue:
             {
                 if (st == null) return false;
-                var hull = Enumerable.Range(0, L.N).Where(i => L.Hull[i] && L.Kind[i] == CellKind.Wall && F.Hole[i] <= 0).ToList();
+                // 기압을 받치는 외판만 (안쪽이 방인 칸 — 착륙 다리 · 날개 같은 뼈대는 압력을 받지 않는다)
+                var hull = Enumerable.Range(0, L.N).Where(i => L.Hull[i] && L.Kind[i] == CellKind.Wall && F.Hole[i] <= 0 && NextToRoom(i)).ToList();
                 if (hull.Count == 0) return false;
                 int c = hull[_rng.Range(0, hull.Count)];
                 // 숨은 피로: 1기압 부하가 정격의 0.8~0.95가 되게 — 끼익 소리가 먼저 · 가혹하면 금이 간다

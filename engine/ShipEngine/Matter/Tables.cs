@@ -56,6 +56,8 @@ public sealed class DeviceDef
 {
     public string Role = "";
     public double Kw, Gen, Kwh, HeatKw, Mol;
+    /// <summary>재배 선반의 단 수 (재배 넓이 = 칸 × 단).</summary>
+    public int Tiers = 1;
     public bool On;
     public Dictionary<string, double> Parts = new();
 }
@@ -105,6 +107,8 @@ public sealed class EquipmentDef
     public string Name = "";
     public Dictionary<string, double> Parts = new();
     public double Heat;
+    /// <summary>포장되어 상하지 않는다 (식량 보관함).</summary>
+    public bool Sealed;
 }
 
 public sealed class MaterialDef

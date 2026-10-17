@@ -25,12 +25,24 @@ public sealed class Work : IEngine
 
     public const int PlanEvery = 125;          // 5분마다 일감판을 본다
     public const double MaintainAt = 0.8;      // 부품을 표준 수명의 80% 썼으면 미리 간다
-    public const float HarvestAt = 0.3f;       // 작물에 양분이 이만큼(몰 — 1m² 재배대 사흘 치) 쌓이면 거둔다
+    public const float HarvestAt = 0.3f;       // 작물 1m²(단마다)에 양분이 이만큼(몰 — 사흘 치) 쌓이면 거둔다
+    public const double RestockBelow = 30;     // 냉장고 · 배식기의 식량이 이 몰 아래면 식량 보관함에서 채운다 (한 상자 40몰)
 
     private readonly Layout L;
     private readonly Tables T;
     private Mind? _mind;
     private Network? _net;
+    private int[]? _pointsA, _lockersA;
+    /// <summary>먹을 것을 꺼내는 곳 (냉장고 · 배식기) · 식량 보관함 (포장 식량).</summary>
+    private int[] _points => _pointsA ??= L.Furniture.Where(f => f.Cells.Length > 0 && f.Type is "Fridge" or "MealDispenser").Select(f => f.Id).ToArray();
+    private int[] _lockers => _lockersA ??= L.Furniture.Where(f => f.Cells.Length > 0 && T.Equip(f.Type).Sealed).Select(f => f.Id).ToArray();
+
+    private double FoodAt(int fu)
+    {
+        double s = 0;
+        if (_f != null && fu >= 0 && fu < L.Furniture.Count) foreach (int c in L.Furniture[fu].Cells) s += _f.Stored(T.sFood, c);
+        return s;
+    }
     private Life? _life;
     private Field? _f;
     public List<Job> Jobs = new();
@@ -80,14 +92,14 @@ public sealed class Work : IEngine
                 if (_f != null) for (int c = 0; c < L.N; c++) food += _f.Stored(T.sFood, c);
                 if (_mind != null)
                 {
-                    foreach (var a in _mind.Agents) if (a.C.Holding == _mind.iHarvest) food += a.C.HoldCharge;
-                    foreach (var x in _mind.Loose) if (x.Item == _mind.iHarvest) food += x.Charge;
+                    foreach (var a in _mind.Agents) if (_mind.IsFood(a.C.Holding)) food += a.C.HoldCharge;
+                    foreach (var x in _mind.Loose) if (_mind.IsFood(x.Item)) food += x.Charge;
                 }
                 return food;
             }
             case (int)Res.Water: return _net?.WaterTank ?? 0;
             case (int)Res.O2: return (_f?.Total(T.gO2) ?? 0) + (_net?.AirReserve ?? 0) * 0.21;
-            default: return _mind?.CountAll(k - Book.Bulk) ?? 0;
+            default: return _mind == null || _mind.IsFood(k - Book.Bulk) ? 0 : _mind.CountAll(k - Book.Bulk); // 손에 든 식량은 식량으로 (위)
         }
     }
 
@@ -195,9 +207,22 @@ public sealed class Work : IEngine
             for (int k = 0; k < _life.Crops.Count; k++)
             {
                 var cr = _life.Crops[k];
-                if (cr.Biomass < HarvestAt || Jobs.Any(j => j.Kind == GoalKind.Harvest && j.Target == k)) continue;
+                if (cr.Biomass < HarvestAt * _life.CropArea(_net, k) || Jobs.Any(j => j.Kind == GoalKind.Harvest && j.Target == k)) continue;
                 Post(sim, new Job { Kind = GoalKind.Harvest, Target = k }, cr.Cell, person => person.C.SkFarm >= 0.3f);
             }
+        // 식량 나르기: 냉장고 · 배식기가 비어 가면 가까운 식량 보관함에서 (로봇 먼저 · 사람은 누구나)
+        foreach (int point in _points)
+        {
+            if (FoodAt(point) >= RestockBelow || Jobs.Any(j => j.Kind == GoalKind.Restock && j.Target == point)) continue;
+            int cell = L.Furniture[point].Cells[0], best = -1, bd = int.MaxValue;
+            foreach (int lk in _lockers)
+            {
+                if (FoodAt(lk) < 1) continue;
+                int d = mind.Dist(cell, L.Furniture[lk].Cells[0]);
+                if (d < bd) { bd = d; best = lk; }
+            }
+            if (best >= 0) Post(sim, new Job { Kind = GoalKind.Restock, Target = point, Arg = best }, L.Furniture[best].Cells[0], person => true);
+        }
         // 청소: 방마다 가장 지저분한 곳 하나 — 곰팡이 · 고인 물 (물 고인 바닥 밑 전선은 합선된다)
         foreach (var room in L.Rooms)
         {
@@ -217,7 +242,8 @@ public sealed class Work : IEngine
         GoalKind.Craft => _mind!.TotalOf(j.Arg) >= (T.People.Recipes.TryGetValue(_mind.ItemNames[j.Arg], out var r) ? r.Keep : 0),
         GoalKind.Maintain => _net == null || _net.Wear[j.Target] < MaintainAt * _net.Devices[j.Target / 4].Life((Part)(j.Target % 4)) * 0.5,
         GoalKind.Clean => (_life == null || _life.Mold[j.Target] < 0.05f) && (_f == null || _f.Stored(T.sWater, j.Target) < 2),
-        GoalKind.Harvest => _life == null || j.Target >= _life.Crops.Count || _life.Crops[j.Target].Biomass < HarvestAt * 0.5f,
+        GoalKind.Harvest => _life == null || j.Target >= _life.Crops.Count || _life.Crops[j.Target].Biomass < HarvestAt * 0.5f * _life.CropArea(_net, j.Target),
+        GoalKind.Restock => FoodAt(j.Target) >= RestockBelow * 2 || FoodAt(j.Arg) < 1,
         _ => true,
     };
 
@@ -242,7 +268,7 @@ public sealed class Work : IEngine
     }
 
     private static bool Busy(GoalKind g) => g is GoalKind.FightFire or GoalKind.Rescue or GoalKind.Patch or GoalKind.Brace or GoalKind.Repair
-        or GoalKind.Evacuate or GoalKind.Flee or GoalKind.Panic or GoalKind.Down or GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest;
+        or GoalKind.Evacuate or GoalKind.Flee or GoalKind.Panic or GoalKind.Down or GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock;
 
     // ───────────────────────── 찍기 ─────────────────────────
 

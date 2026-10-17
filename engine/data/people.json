@@ -37,7 +37,8 @@
     "산소 마스크": { "o2": 20, "minutes": 0.3 },
     "구급 상자":   { "minutes": 5 },
     "원료":        { "minutes": 0 },
-    "수확물":      { "minutes": 0 }
+    "수확물":      { "minutes": 0 },
+    "식량 상자":   { "minutes": 0 }
   },
   "recipes": {
     "봉합 꾸러미": { "at": "Workbench", "minutes": 20, "needs": { "원료": 1 }, "keep": 4 },

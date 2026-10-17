@@ -9,7 +9,7 @@ public static partial class Program
     private static void LedgerRun(string[] args)
     {
         var rest = args.SkipWhile(a => a != "--ledger").Skip(1).ToArray();
-        string ship = rest.Length > 0 ? rest[0] : "Kestrel";
+        string ship = rest.Length > 0 ? rest[0] : "Didim";
         double days = rest.Length > 1 ? double.Parse(rest[1]) : 2;
         ulong seed = rest.Length > 2 ? ulong.Parse(rest[2]) : 3;
         int people = rest.Length > 3 ? int.Parse(rest[3]) : 6, robots = rest.Length > 4 ? int.Parse(rest[4]) : 2;

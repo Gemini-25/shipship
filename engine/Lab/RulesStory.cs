@@ -13,7 +13,7 @@ public static partial class Program
             // ── 조용한 배에는 원인을 심는다 · 같은 시드면 같은 때 같은 원인 · 긴장이 높으면 심지 않는다 ──
             List<Seed> Run(ulong seed, double tension)
             {
-                var s = ShipWorld.Create("Kestrel", seed);
+                var s = ShipWorld.Create("Didim", seed);
                 var st = s.Get<Storyteller>(); st.Enabled = true; st.Tension = tension;
                 s.Run(Time.Hours(7));
                 return st.Seeds;
@@ -26,11 +26,11 @@ public static partial class Program
 
             // ── 잠복 원인을 겹겹이 쌓지 않는다: 아직 안 터진 원인(대기 긴장)도 셈한다 · 눌어붙은 차단기가 있으면 합선 불씨를 또 심지 않는다 ──
             {
-                var s = ShipWorld.Create("Kestrel", 5);
+                var s = ShipWorld.Create("Didim", 5);
                 var st = s.Get<Storyteller>(); st.Enabled = true; st.Pending = 50;
                 s.Run(Time.Hours(7));
                 int pendingSeeds = st.Seeds.Count;
-                var s2 = ShipWorld.Create("Kestrel", 5);
+                var s2 = ShipWorld.Create("Didim", 5);
                 var st2 = s2.Get<Storyteller>(); st2.Enabled = true; st2.Style = StoryStyle.SlowBurn; st2.Level = 8;
                 s2.Get<Network>().BreakerStuck[0] = 1;
                 s2.Run(Time.Hours(16));
@@ -42,7 +42,7 @@ public static partial class Program
             // ── 가혹함: 높을수록 큰 운석 ──
             double Mass(byte level)
             {
-                var s = ShipWorld.Create("Kestrel", 9);
+                var s = ShipWorld.Create("Didim", 9);
                 var st = s.Get<Storyteller>(); st.Level = level;
                 for (int i = 0; i < 30; i++) st.Plant(s, SeedKind.Rock);
                 return st.Seeds.Average(x => x.Size);
@@ -52,7 +52,7 @@ public static partial class Program
 
             // ── 심은 원인이 실제 일로: 낡은 부품 → 몇 시간 안에 고장 · 원인 사슬의 뿌리가 이야기꾼 ──
             {
-                var s = ShipWorld.Create("Kestrel", 4);
+                var s = ShipWorld.Create("Didim", 4);
                 var st = s.Get<Storyteller>(); st.Level = 8;
                 st.Plant(s, SeedKind.WornPart);
                 var seed = st.Seeds[0];
@@ -70,7 +70,7 @@ public static partial class Program
 
             // ── 같은 자리에서 같은 일이 또 일어나면 원인 이야기는 한 번만 (금이 갔다 → 금이 갔다 → … 가 아니게) ──
             {
-                var s = ShipWorld.Create("Kestrel", 4);
+                var s = ShipWorld.Create("Didim", 4);
                 var st = s.Get<Storyteller>(); st.Level = 8;
                 st.Plant(s, SeedKind.HullFatigue);
                 var seed = st.Seeds[0];
@@ -89,9 +89,24 @@ public static partial class Program
                     $"금 {cracks}번 · {(lastCause != 0 ? s.Causes.Story(lastCause) : "금 없음")}");
             }
 
+            // ── 외판 피로 씨앗은 기압을 받치는 외판(안쪽이 방)에만 — 착륙 다리 · 날개 같은 뼈대에 심으면 금이 자랄 수 없다 ──
+            {
+                var s = ShipWorld.Create("Didim", 11);
+                var st = s.Get<Storyteller>(); st.Level = 8;
+                var L = s.Layout;
+                int planted = 0, onRoom = 0;
+                for (int k = 0; k < 40; k++)
+                {
+                    if (!st.Plant(s, SeedKind.HullFatigue)) continue;
+                    int c = st.Seeds[^1].Cell; planted++;
+                    if (new[] { (1, 0), (-1, 0), (0, 1), (0, -1) }.Any(d => L.In(L.X(c) + d.Item1, L.Y(c) + d.Item2) && L.Room[L.Index(L.X(c) + d.Item1, L.Y(c) + d.Item2)] >= 0)) onRoom++;
+                }
+                Check("외판 피로 씨앗은 늘 방에 닿은 외판에 (뼈대 칸에는 심지 않는다)", planted >= 30 && onRoom == planted, $"심음 {planted} · 방에 닿음 {onRoom}");
+            }
+
             // ── 먼 운석도 끝까지 온다 (예전: 1,000km 밖에서 심은 운석이 바로 지워졌다) ──
             {
-                var s = ShipWorld.Create("Kestrel", 3);
+                var s = ShipWorld.Create("Didim", 3);
                 int c0 = s.Causes.Add(CauseKind.Story, "먼 운석", s.Tick);
                 s.Get<Outside>().AddRock(1, 8000, 1, 0, 0, 8000 * 60 * 20, c0); // 20분 거리 · 9,600km
                 s.Run(Time.Minutes(22));
@@ -139,7 +154,7 @@ public static partial class Program
 
             // ── 한 소동은 한 장면: 잔해 폭풍이 외판 여러 곳을 뚫고 주컴퓨터가 방마다 봉쇄해도 하이라이트는 한둘 ──
             {
-                var s = ShipWorld.Crewed("Pabal", 18, 2, 4, 0);
+                var s = ShipWorld.Crewed("Hwasal", 18, 2, 4, 0);
                 var d = new Director(s.Layout) { KeepRing = false };
                 s.Run(Time.Minutes(10));
                 int c0 = s.Causes.Add(CauseKind.Story, "잔해 지대가 항로로 들어온다", s.Tick);
@@ -153,7 +168,7 @@ public static partial class Program
 
             // ── 하이라이트는 첫 조짐부터 · 다시보기는 같은 일을 그대로 되풀이한다 ──
             {
-                var s = ShipWorld.Create("Kestrel", 3);
+                var s = ShipWorld.Create("Didim", 3);
                 var d = new Director(s.Layout);
                 int c0 = s.Causes.Add(CauseKind.Story, "운석 하나가 배를 향해 온다", s.Tick);
                 s.Get<Outside>().AddRock(1.5, 6000, -1, 0.15, 2, 6000 * 60 * 4, c0); // 4분 거리

@@ -15,8 +15,14 @@ public static partial class Program
         // 평소의 하루는 오래 걸리니 먼저 띄워 둔다 (다른 세계 — 결정론 그대로)
         var calm = Task.Run(() =>
         {
-            var s = ShipWorld.Crewed("Kestrel", 6, 6, 2);
-            s.Run(Time.Days(1));
+            var s = ShipWorld.Crewed("Didim", 6, 6, 2);
+            if (!Debug) { s.Run(Time.Days(1)); return s; }
+            var dm = s.Get<Mind>();
+            for (int h = 0; h < 24; h++)
+            {
+                s.Run(Time.Hours(1));
+                Console.WriteLine($"    {Time.Clock(s.Tick)} " + string.Join(" · ", dm.Agents.Where(a => a.IsPerson).Select(a => $"{dm.NameOf(a.Id)}:{a.C.Goal}@{(dm.RoomOf(a.C.Cell) >= 0 ? s.Layout.Rooms[dm.RoomOf(a.C.Cell)].Name : "-")}")));
+            }
             return s;
         });
 
@@ -71,9 +77,9 @@ public static partial class Program
 
         // ── 따지면: 다정한 사람은 사과해 앙금이 풀리고 · 거친 사람은 맞서 사이가 나빠진다 ──
         {
-            (long argue, long sorry, float bond, float grudge) Confront(float agreeX, float neuroX)
+            (long argue, long sorry, float bond, float grudge) Confront1(float agreeX, float neuroX, ulong seed)
             {
-                var s = Worlds.Full(lay, 4);
+                var s = Worlds.Full(lay, seed);
                 var m = s.Get<Mind>(); var so = s.Get<Society>();
                 int x = m.AddPerson(s, At(14, 2)), y = m.AddPerson(s, At(15, 3));
                 m.SetPersonality(x, 0.5f, 0.5f, 0.6f, agreeX, neuroX);
@@ -83,11 +89,19 @@ public static partial class Program
                 int c0 = s.Causes.Add(CauseKind.Person, $"{Ko.I(m.NameOf(x))} 거르개를 거꾸로 끼웠다", s.Tick, At(14, 2), 0, 0, x);
                 so.Remember(s, y, Topic.Blame, x, c0, 0.8f, At(14, 2));
                 for (int k = 0; k < Time.Hours(4); k++) { s.Step(); foreach (int p in new[] { x, y }) { m[p].C.Hunger = 0; m[p].C.Sleepy = 0; m[p].C.Lonely = 0.5f; } }
+                if (Debug) foreach (var w in so.Sayings) Console.WriteLine($"    친화 {agreeX} 시드 {seed}: {Time.Clock(w.Tick)} {(w.Speaker == x ? "x" : "y")}→{(w.Listener == x ? "x" : "y")} {w.Topic}/{w.End}");
                 return (so.Arguments, so.Apologies, so.BondOf(y, x), so.GrudgeOf(y, x));
+            }
+            // 사과는 한 번의 말에 달린 일 (다정한 이도 넷에 하나는 맞선다) — 시드 여섯을 더해 본다 (서로 다른 세계라 함께 돌린다)
+            (long argue, long sorry, float bond, float grudge) Confront(float agreeX, float neuroX)
+            {
+                var runs = new ulong[] { 4, 5, 6, 7, 8, 9 }.Select(sd => Task.Run(() => Confront1(agreeX, neuroX, sd))).ToArray();
+                var r = runs.Select(t => t.Result).ToList();
+                return (r.Sum(x => x.argue), r.Sum(x => x.sorry), r.Average(x => x.bond), r.Average(x => x.grudge));
             }
             var rough = Confront(0.05f, 0.8f); var kind = Confront(0.95f, 0.1f);
             Check("사과와 다툼: 따지면 다정한 이(친화 0.95)는 사과해 앙금이 줄고 · 거친 이(0.05)는 맞서 사이가 나빠진다",
-                rough.argue > 0 && rough.sorry == 0 && rough.bond < 0 && kind.sorry > 0 && kind.grudge < 0.6f && kind.grudge < rough.grudge,
+                rough.argue >= 3 * Math.Max(1, rough.sorry) && rough.bond < 0 && kind.sorry >= 3 * Math.Max(1, rough.sorry) && kind.grudge < 0.6f && kind.grudge < rough.grudge, // 여섯 세계를 더한 비율
                 $"거친 이: 다툼 {rough.argue} · 사과 {rough.sorry} · 정 {rough.bond:0.00} · 원한 {rough.grudge:0.00} / 다정한 이: 다툼 {kind.argue} · 사과 {kind.sorry} · 원한 {kind.grudge:0.00}");
         }
 
@@ -146,11 +160,16 @@ public static partial class Program
                 $"다툰 둘: {(ppl != null ? $"\"{ppl.Title}\" · \"{ppl.Line}\"" : "없음")} / 잡담한 둘: 하이라이트 {calmPair.hl.Count} · 대화 {calmPair.talks}");
         }
 
-        // ── 평소의 하루: 케스트럴 6명 — 말은 자주 나누고 · 몸싸움은 없다 (갈등은 드물게만 끝까지 간다) ──
+        // ── 평소의 하루: 디딤호 6명 — 말은 자주 나누고 · 몸싸움은 없다 (갈등은 드물게만 끝까지 간다) ──
         {
             var s = calm.Result;
             var so = s.Get<Society>();
-            Check("평소의 하루 (케스트럴 6명): 대화는 많고 · 다툼은 드물고 · 몸싸움 · 몰래 방해는 없다",
+            if (Debug)
+            {
+                var cm = s.Get<Mind>();
+                foreach (var x in so.Sayings) Console.WriteLine($"    {Time.Clock(x.Tick)} {cm.NameOf(x.Speaker)} → {cm.NameOf(x.Listener)} {x.Topic}/{x.End} @ {(cm.RoomOf(x.Cell) >= 0 ? s.Layout.Rooms[cm.RoomOf(x.Cell)].Name : "-")}");
+            }
+            Check("평소의 하루 (디딤호 6명): 대화는 많고 · 다툼은 드물고 · 몸싸움 · 몰래 방해는 없다",
                 so.Talks > 10 && so.Arguments <= 3 && so.Fights == 0 && so.Sabotages == 0,
                 $"대화 {so.Talks} · 다툼 {so.Arguments} · 사과 {so.Apologies} · 소문 {so.Rumors} · 몸싸움 {so.Fights} · 방해 {so.Sabotages} · 가까워짐 {so.Friendships}");
         }

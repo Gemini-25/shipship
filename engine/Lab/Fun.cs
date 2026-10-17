@@ -68,7 +68,7 @@ public static partial class Program
     internal static void Fun(string[] args)
     {
         var rest = args.SkipWhile(a => a != "--fun").Skip(1).ToArray();
-        var ships = (rest.Length > 0 ? rest[0] : "Kestrel").Split(',');
+        var ships = (rest.Length > 0 ? rest[0] : "Didim").Split(',');
         double days = rest.Length > 1 ? double.Parse(rest[1]) : 1;
         int seeds = rest.Length > 2 ? int.Parse(rest[2]) : 2;
         var style = rest.Length > 3 ? Enum.Parse<StoryStyle>(rest[3]) : StoryStyle.Balanced;
