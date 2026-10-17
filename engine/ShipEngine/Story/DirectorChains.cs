@@ -180,7 +180,7 @@ public sealed partial class Director
         return $"먼저 와 있음 {pct(SeenBefore, Watched):0}% · 3초 안 {pct(SeenAfter, Watched):0}% · 놓침 {pct(Missed, Watched):0}% (그 이야기도 못 봄 {pct(MissedStory, Watched):0}%) (큰 일 {Watched})"
             + $" · 연쇄의 일 본 것 {pct(ChainSeen, ChainWatched):0}% ({ChainWatched}) · 자르기 {Switches / Math.Max(1e-9, ScreenSeconds / 60):0.0}/분"
             + $" · 엉뚱한 곳 {100 * IdleScreenSec / Math.Max(1e-9, ScreenSeconds):0}%"
-            + $" · 끌림 {Pulls} · 엇갈림 {CrossCuts} · 따라감 {FollowTicks}틱 · 미리 보기 {Foresights}번 ({ForeseeMs / Math.Max(1, Foresights):0}ms · 본 일 {Predicted} · 미리 자름 {ForeCuts}) · 공기 조짐 {AirWarnings}"
+            + $" · 끌림 {Pulls} · 엇갈림 {CrossCuts} · 따라감 {FollowTicks}틱 · 미리 보기 (복제 {Foresights} · 앞선 틱 {AheadSteps} · 다시 맞춤 {Resyncs} · {ForeseeMs / 1000:0.0}초 · 본 일 {Predicted} · 미리 자름 {ForeCuts} · 까닭 {string.Join(" ", BrewWhy.Select(kv => $"{kv.Key} {kv.Value}"))}) · 공기 조짐 {AirWarnings}"
             + (AirWhy.Count > 0 ? " (" + string.Join(" ", AirWhy.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key} {kv.Value}")) + ")" : "")
             + (MissedKinds.Count > 0 ? " · 못 본 이야기 " + string.Join(" ", MissedKinds.OrderByDescending(kv => kv.Value).Take(5).Select(kv => $"{FactNames.Of(kv.Key)} {kv.Value}")) : "");
     }

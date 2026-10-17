@@ -135,6 +135,7 @@ public sealed class LiveShow
             _carry -= n;
             if (_carry >= 1) _carry -= Math.Floor(_carry);   // 밀린 것은 버린다 (다음 장에 몰아 돌리지 않는다)
             var w = World; var d = View;
+            d.Foresee = Speed <= Director.CalmSpeed;   // 함장이 빨리 감는 동안은 미리 보지 않는다 (복제가 1초에 수십 번 — 볼 틈도 없다)
             for (int i = 0; i < n; i++)
             {
                 if (i == n - 1) Remember();
