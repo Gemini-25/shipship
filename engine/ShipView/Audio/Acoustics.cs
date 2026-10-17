@@ -237,7 +237,7 @@ public sealed class Acoustics
             double v = lo / hi < 0.528 ? 310 : Math.Sqrt(2 * (hi - lo) * 1000 / rho); // 막힘 흐름이면 소리 빠르기
             double d = Math.Sqrt(k.Area);
             float hz = (float)(0.2 * v / d);
-            float db = (float)Math.Clamp(60 + 10 * Math.Log10(k.Area * 1e4) + 60 * Math.Log10(v / 100) + 10 * Math.Log10(rho / 1.2), 30, 135);
+            float db = (float)Math.Clamp(55 + 10 * Math.Log10(k.Area * 1e4) + 50 * Math.Log10(v / 100) + 10 * Math.Log10(rho / 1.2), 30, 130); // 넓이에 비례 · 속도에 가파르게 (분출 소음)
             if (!Hear(at, db, ear, halfW, suit, out float lp, out float gain, out float cut, out float pan)) continue;
             long key = 1000 + (long)(k.Via >= 0 ? k.Via : at) * 4 + (k.B < 0 ? 1 : 0);
             list.Add((lp, new LoopUpdate { Key = key, Kind = LoopKind.Jet, A = hz, B = 1, Gain = gain, Cutoff = cut, Pan = pan, Send = 0.2f }));
@@ -320,6 +320,7 @@ public sealed class Acoustics
             if (ls > lp) { lp = ls; occl = 30 + _sExtra[structAt] * 0.3f; thin = 1; }
         }
         if (suit) lp -= 12;                                       // 우주복 투구 너머
+        else if (EarThin < 1) lp += 20 * MathF.Log10(Math.Max(EarThin, 0.01f)); // 엷은 공기에선 고막도 덜 울린다
         if (lp < Audible) return false;
         gain = Dsp.Db((lp - 88) * 0.6f);
         cutoff = 9000 * MathF.Pow(2, -occl / 9f) * Math.Clamp(MathF.Pow(thin, 1.2f), 0.08f, 1f);

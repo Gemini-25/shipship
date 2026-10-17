@@ -255,7 +255,7 @@ public sealed class Shout : Voice
         float glottal = ph < 0.4f ? MathF.Sin(ph / 0.4f * MathF.PI) : 0;
         float src = glottal + (_scream ? 0.35f : 0.06f) * _n.White();
         float env = MathF.Pow(MathF.Sin(MathF.PI * ts), 0.6f);
-        return env * (_a.Run(src) * 1.0f + _b.Run(src) * 0.7f + _c.Run(src) * 0.35f) * 1.6f;
+        return env * (_a.Run(src) * 1.0f + _b.Run(src) * 0.7f + _c.Run(src) * 0.35f) * (_scream ? 1.6f : 6f); // 다른 소리와 같은 크기로 (좁은 모음 띠가 많이 먹는다)
     }
 }
 
