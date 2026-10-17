@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace ShipEngine;
 
 /// <summary>주컴퓨터가 알아챈 일의 종류.</summary>
-public enum IncidentKind : byte { None, Fire, Leak, Vacuum, CO, BadAir, PersonDown, DeviceBroken, ElectricFault, PowerShort, ReactorScram, Hot, Strain, Toxic }
+public enum IncidentKind : byte { None, Fire, Leak, Vacuum, CO, BadAir, PersonDown, DeviceBroken, ElectricFault, PowerShort, ReactorScram, Hot, Strain, Toxic, DoorJam }
 
 /// <summary>주컴퓨터가 붙잡고 있는 사건 하나.</summary>
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -238,7 +238,7 @@ public sealed class ShipMind : IEngine
     {
         IncidentKind.Fire => "불", IncidentKind.Leak => "공기가 샌다", IncidentKind.Vacuum => "공기가 빠졌다", IncidentKind.CO => "일산화탄소",
         IncidentKind.BadAir => "공기가 나쁘다", IncidentKind.PersonDown => "사람이 쓰러졌다", IncidentKind.DeviceBroken => "장치 고장",
-        IncidentKind.ElectricFault => "전기 합선", IncidentKind.PowerShort => "전력이 모자란다", IncidentKind.ReactorScram => "원자로가 멈췄다", IncidentKind.Hot => "너무 덥다", IncidentKind.Strain => "문이 압력에 휜다", IncidentKind.Toxic => "독한 기체", _ => "",
+        IncidentKind.ElectricFault => "전기 합선", IncidentKind.PowerShort => "전력이 모자란다", IncidentKind.ReactorScram => "원자로가 멈췄다", IncidentKind.Hot => "너무 덥다", IncidentKind.Strain => "문이 압력에 휜다", IncidentKind.Toxic => "독한 기체", IncidentKind.DoorJam => "문이 끼었다", _ => "",
     };
 
     private void Detect(Sim sim)
@@ -311,13 +311,24 @@ public sealed class ShipMind : IEngine
                 Raise(sim, IncidentKind.Strain, r, dc, _st.Stress[dc], dc, _st.DamageCause[dc]);
                 Mark(IncidentKind.Strain, r, dc);
             }
+        // 끼인 문 (문 센서 — 곁 방에 전원이 있어야 읽힌다): 파편 · 압력에 틀어져 여닫히지 않는다 — 로봇을 보내 비틀어 바로잡는다
+        if (_st != null)
+            for (int d = 0; d < L.Doors.Count; d++)
+            {
+                if (_st.DoorJam[d] == 0) continue;
+                int dc = L.Doors[d].Cell;
+                int r = HighSideRoom(dc);
+                if (r < 0 || RoomSeen[r] == 0) continue;
+                Raise(sim, IncidentKind.DoorJam, r, dc, (float)_st.DoorDeltaP(d), d, _st.DamageCause[dc]);
+                Mark(IncidentKind.DoorJam, r, d);
+            }
         // 다시 멀쩡하게 두 번 읽히면 끝
         for (int i = 0; i < Incidents.Count; i++)
         {
             var x = Incidents[i];
             if (x.Active == 0) continue;
-            if (x.Room >= 0 && x.Room < RoomSeen.Length && RoomSeen[x.Room] == 0 && x.Kind is not (IncidentKind.DeviceBroken or IncidentKind.ElectricFault)) continue; // 못 보는 방은 그대로 둔다
-            long key = ((long)x.Kind << 48) | ((long)(x.Room + 1) << 24) | (uint)((x.Kind is IncidentKind.PersonDown or IncidentKind.DeviceBroken or IncidentKind.ElectricFault or IncidentKind.Strain ? x.Subject : -1) + 1);
+            if (x.Room >= 0 && x.Room < RoomSeen.Length && RoomSeen[x.Room] == 0 && x.Kind is not (IncidentKind.DeviceBroken or IncidentKind.ElectricFault or IncidentKind.DoorJam)) continue; // 못 보는 방은 그대로 둔다
+            long key = ((long)x.Kind << 48) | ((long)(x.Room + 1) << 24) | (uint)((x.Kind is IncidentKind.PersonDown or IncidentKind.DeviceBroken or IncidentKind.ElectricFault or IncidentKind.Strain or IncidentKind.DoorJam ? x.Subject : -1) + 1);
             if (seen.Contains(key)) continue;
             // 끝: 5번(1분) 연속 멀쩡 · 위험한 사건은 적어도 2분은 붙잡는다
             int need = Dangerous(x.Kind) ? 5 : 2;
@@ -557,6 +568,7 @@ public sealed class ShipMind : IEngine
         IncidentKind.DeviceBroken => new Belief { Kind = BeliefKind.Broken, Cell = x.Cell, Subject = x.Subject, Conf = 1f, Cause = x.Cause },
         IncidentKind.ElectricFault => new Belief { Kind = BeliefKind.Spark, Cell = x.Cell, Subject = -1, Conf = 1f, Cause = x.Cause },
         IncidentKind.Strain => new Belief { Kind = BeliefKind.Strain, Cell = x.Cell, Subject = -1, Conf = Math.Clamp(x.Level, 0.6f, 1f), Cause = x.Cause },
+        IncidentKind.DoorJam => new Belief { Kind = BeliefKind.Strain, Cell = x.Cell, Subject = -1, Conf = 1f, Cause = x.Cause },
         _ => default,
     };
 
@@ -589,6 +601,9 @@ public sealed class ShipMind : IEngine
             case IncidentKind.Vacuum when x.Tries % 2 == 0 && OutsideOf(x.Room) is int o && o >= 0:
                 // 빠진 방 — 문은 기압 차로 안 열린다 (열면 배 공기까지 빠진다): 로봇이 에어락으로 나가 그 방 외판을 바깥에서 살핀다
                 g = GoalKind.Investigate; target = o; drone = false; break;
+            case IncidentKind.Leak when x.Tries % 2 == 1 && OutsideOf(x.Room) is int o2 && o2 >= 0:
+                // 안에서 살펴도 못 찾았다 (끼인 문 · 기압 차로 못 들어갔거나 구멍이 안 보였다): 번갈아 그 방 외판을 바깥에서 둘러본다
+                g = GoalKind.Investigate; target = o2; drone = false; break;
             case IncidentKind.Leak: case IncidentKind.Vacuum: g = GoalKind.Investigate; target = x.Cell; drone = true; break;
             case IncidentKind.PersonDown: g = GoalKind.Rescue; target = x.Subject; drone = false; break;
             case IncidentKind.DeviceBroken: g = GoalKind.Repair; target = x.Subject; drone = false; break;
@@ -597,6 +612,7 @@ public sealed class ShipMind : IEngine
                 g = GoalKind.Repair; target = _net.Feeders[x.Subject].Panel; drone = false; break;
             case IncidentKind.ElectricFault: g = GoalKind.Investigate; target = x.Cell; drone = true; break;
             case IncidentKind.Strain: g = GoalKind.Brace; target = x.Cell; drone = false; break;
+            case IncidentKind.DoorJam: g = GoalKind.Brace; target = x.Cell; drone = false; break;
             default: return;
         }
         int need = x.Kind == IncidentKind.Fire ? 2 : 1;

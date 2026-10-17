@@ -52,6 +52,7 @@ public sealed class Director
     private double _criticalLeft;               // 아주 느리게 남은 화면 초
     private long _lastOmen = long.MinValue / 2, _lastDanger = long.MinValue / 2;
     private readonly Dictionary<int, byte> _wasInDanger = new();
+    private readonly Dictionary<int, long> _lastNear = new(); // 한 사람의 간발의 차는 30분에 한 번만 (쓰러졌다 깨기를 되풀이해도 한 번)
 
     public Director(Layout layout)
     {
@@ -116,7 +117,7 @@ public sealed class Director
                 // 간발의 차: 위험했다가 살아난 사람
                 bool now = b.SpO2 < 0.75f || b.Conscious == 0;
                 if (now) _wasInDanger[a.Id] = 1;
-                else if (_wasInDanger.Remove(a.Id) && b.SpO2 > 0.9f) NearMisses++;
+                else if (_wasInDanger.Remove(a.Id) && b.SpO2 > 0.9f && t - _lastNear.GetValueOrDefault(a.Id, long.MinValue / 2) > Time.Minutes(30)) { NearMisses++; _lastNear[a.Id] = t; }
             }
         var chem = sim.Find<Chemistry>();
         if (chem != null && chem.BurningCount > 0) danger = true;

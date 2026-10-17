@@ -21,6 +21,7 @@ public sealed partial class Mind
         _opts.Clear();
         a.Avoid.RemoveAll(v => v.Until <= t);
         _deciding = a; _nowTick = t;
+        if (a.IsPerson) TakeOffSuit(sim, a);
         Options(sim, a);
         _deciding = null;
         if (_opts.Count == 0) return;
@@ -44,6 +45,32 @@ public sealed partial class Mind
             if (busy && o.Score <= current) return;
             if (TryPlan(sim, a, o)) return;
         }
+    }
+
+    /// <summary>
+    /// 우주복을 벗는다: 숨쉴 만한 방(80kPa · 산소 18kPa · 독 없음)에 왔고 우주복이 필요한 일(막기 · 구하기 · 불 끄기 · 대피) 중이 아니면 —
+    /// 우주복 산소가 바닥나면 그런 일 중이어도 벗는다 (헬멧 속에서 숨이 막힌다). 가장 가까운 우주복 보관함에 걸어 둔다.
+    /// </summary>
+    private void TakeOffSuit(Sim sim, Agent a)
+    {
+        ref var c = ref a.C;
+        ref var b = ref _life![c.Body];
+        if (b.Suit == 0 || b.Alive == 0 || b.Conscious == 0) return;
+        int here = c.Cell;
+        bool air = F.Pressure(here) > 80 && F.Partial(T.gO2, here) > 18 && F.Ppm(T.gCO, here) < 50 && F.Ppm(T.gNH3, here) < 25 && F.Ppm(T.gSoot, here) < 30;
+        if (!air) return;
+        bool empty = b.SuitO2 < 0.1 * ItemCharge(iSuit);
+        bool task = c.Goal is GoalKind.Patch or GoalKind.Rescue or GoalKind.FightFire or GoalKind.Evacuate or GoalKind.GetSuit && a.Plan.Count > 0 && c.StepIndex < a.Plan.Count;
+        if (!empty && (task || BelievedRoomBad(a, RoomOf(here)))) return;
+        b.Suit = 0; b.SuitO2 = 0;
+        int locker = -1, bd = int.MaxValue;
+        for (int fu = 0; fu < L.Furniture.Count; fu++)
+        {
+            if (L.Furniture[fu].Type != "SuitLocker" || L.Furniture[fu].Cells.Length == 0) continue;
+            int d = Manhattan(here, L.Furniture[fu].Cells[0]);
+            if (d < bd) { bd = d; locker = fu; }
+        }
+        if (locker >= 0) Stock[locker * ItemCount + iSuit]++;
     }
 
     private bool TryPlan(Sim sim, Agent a, Option o)
@@ -185,7 +212,7 @@ public sealed partial class Mind
                     Add(GoalKind.Repair, b.Subject, b.Cell, s * df * ClaimFactor(a, GoalKind.Repair, b.Subject, 1), b.Cause);
                     break;
                 }
-                case BeliefKind.Strain when !drone && L.Kind[b.Cell] is CellKind.Wall or CellKind.Door && _st != null && _st.Braced[b.Cell] == 0:
+                case BeliefKind.Strain when !drone && L.Kind[b.Cell] is CellKind.Wall or CellKind.Door && _st != null && (_st.Braced[b.Cell] == 0 || _st.JammedAt(b.Cell)):
                 {
                     // 본 · 들은 끼익거리는 문 · 벽: 덧대 받친다 (사람은 수리 꾸러미)
                     float s = person ? b.Conf * (0.3f + c.SkRepair) * 3 * caution : b.Conf * 5;
@@ -388,7 +415,7 @@ public sealed partial class Mind
             {
                 int wall = o.Target;
                 int stand = StandBeside(wall);
-                if (stand < 0 || _st == null || _st.Braced[wall] != 0) return false;
+                if (stand < 0 || _st == null || _st.Braced[wall] != 0 && !_st.JammedAt(wall)) return false;
                 if (a.IsPerson && c.Holding != iRepair)
                 {
                     if (c.Holding != 255) return false;
@@ -601,6 +628,8 @@ public sealed partial class Mind
     {
         ref var c = ref a.C;
         if (!a.IsPerson && c.AssignedGoal == GoalKind.Investigate && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0) Add(GoalKind.Investigate, c.AssignedTarget, c.AssignedTarget, 1.2f);
+        // 맡긴 끼인 문: 믿음이 바래도 간다
+        if (!a.IsPerson && c.AssignedGoal == GoalKind.Brace && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0 && _st != null && _st.JammedAt(c.AssignedTarget)) Add(GoalKind.Brace, c.AssignedTarget, c.AssignedTarget, 1.2f);
         if (c.AssignedUntil <= _nowTick || c.AssignedGoal is not (GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean)) return;
         int cell = c.AssignedGoal switch
         {

@@ -75,6 +75,20 @@ public sealed class Structure : IEngine
 
     /// <summary>버티는 문 · 벽에 덧대 받친다 (수리 꾸러미) — 정격 ×1.6 · 피로가 더 쌓이는 것을 늦춘다.</summary>
     public void Brace(int cell) { if (L.Kind[cell] is CellKind.Wall or CellKind.Door) Braced[cell] = 1; }
+    /// <summary>끼인 문을 바로잡는다 (다시 여닫힌다).</summary>
+    public void FreeDoor(int door) { DoorJam[door] = 0; DoorTarget[door] = F.DoorOpen[door]; }
+    /// <summary>문 양쪽 기압 차 (kPa).</summary>
+    public double DoorDeltaP(int door)
+    {
+        // 마음 · 주컴퓨터가 부른다 — 틱 안 캐시(_p)에 기대지 않고 지금 기압으로
+        var dr = L.Doors[door];
+        int x = L.X(dr.Cell), y = L.Y(dr.Cell);
+        int Side(int xx, int yy) => L.In(xx, yy) ? L.Index(xx, yy) : -1;
+        int a = dr.Vertical ? Side(x, y - 1) : Side(x - 1, y), b = dr.Vertical ? Side(x, y + 1) : Side(x + 1, y);
+        return Math.Abs(SideKPa(a) - SideKPa(b));
+    }
+    /// <summary>그 칸이 끼인 문인가.</summary>
+    public bool JammedAt(int cell) => L.DoorAt[cell] >= 0 && DoorJam[L.DoorAt[cell]] != 0;
 
     /// <summary>충돌: 칸 cell에 에너지 joules가 (dx, dy) 방향으로 들어온다.</summary>
     public void Impact(Sim sim, int cell, double joules, int dx, int dy, int cause)

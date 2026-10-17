@@ -160,8 +160,12 @@ public sealed partial class Mind
                     if (_st.Stress[w] >= 0.6f && _st.Braced[w] == 0 && F.Hole[w] <= 0 && Dist(w, cell) <= 3)
                         Learn(a, t, BeliefKind.Strain, w, -1, Math.Min(1f, _st.Stress[w]), BeliefSource.Saw, _st.DamageCause[w], _st.Stress[w]);
                 foreach (int x in _roomDoors[room])
+                {
                     if (_st.Stress[x] >= 0.6f && _st.Braced[x] == 0 && Dist(x, cell) <= 3)
                         Learn(a, t, BeliefKind.Strain, x, -1, Math.Min(1f, _st.Stress[x]), BeliefSource.Saw, _st.DamageCause[x], _st.Stress[x]);
+                    else if (_st.JammedAt(x) && Dist(x, cell) <= 4) // 틀어져 반쯤 열린 채 끼인 문
+                        Learn(a, t, BeliefKind.Strain, x, -1, 1f, BeliefSource.Saw, _st.DamageCause[x], 1f);
+                }
             }
             // 닫힌 문이 바람을 빨아들인다 (서리 · 틈새 바람 · 쉬익) — 그 너머가 빠졌다: 문틈도 막을 구멍이다
             foreach (int x in _roomDoors[room])

@@ -133,6 +133,15 @@ public sealed class Life : IEngine
         if (sim.Tick % 125 == 3) { MoldStep(dt * 25); RotStep(sim, dt * 25); }
     }
 
+    private HashSet<int>? _medBedCells; // 치료 침대 칸 (산소통 · 마스크 — 전원이 끊겨도 산소는 나온다)
+
+    /// <summary>그 칸이 치료 침대인가.</summary>
+    private bool OnTherapy(Sim sim, int cell)
+    {
+        _medBedCells ??= L.Furniture.Where(fu => fu.Type == "MedBed").SelectMany(fu => fu.Cells).ToHashSet();
+        return _medBedCells.Contains(cell);
+    }
+
     private void StepBody(Sim sim, int id, ref Body b, double dt, Structure? st, Outside? outside, Chemistry? chem)
     {
         int c = b.Cell;
@@ -144,12 +153,16 @@ public sealed class Life : IEngine
         double co = suit ? 0 : F.Ppm(T.gCO, c), nh3 = suit ? 0 : F.Ppm(T.gNH3, c), o3 = suit ? 0 : F.Ppm(T.gO3, c), soot = suit ? 0 : F.Ppm(T.gSoot, c);
         int env = 0; // 이번에 몸을 해친 것의 원인
         string? harm = null;
+        if (b.Conscious == 0) b.ActivityW = 80; // 의식 없는 몸은 기초 대사로 (쓰러지기 전 달리던 대사량이 남아 스스로 익지 않게)
 
         // ── 숨 ── (추우면 떨어서 대사가 는다)
         double shiver = b.CoreK < 309.6 && b.Conscious != 0 ? 150 : 0;
         double vo2 = (b.ActivityW * (b.Asleep != 0 ? 0.8 : 1) + shiver) / 467_000 * dt; // 필요한 산소 (몰)
         double hill(double x) => Math.Pow(x, 2.7) / (Math.Pow(x, 2.7) + Math.Pow(7, 2.7));
-        double sat = hill(pO2) * (1 - b.COHb) * (1 - Math.Min(0.9, b.LungDamage));
+        // 산소 요법: 치료 침대에 누우면 마스크로 거의 순수한 산소를 마신다 — 상한 폐로도 피에 산소가 들어간다
+        bool therapy = !suit && p > 30 && OnTherapy(sim, c);
+        double pO2e = therapy ? Math.Max(pO2, 0.9 * Math.Min(p, 101.3)) : pO2;
+        double sat = hill(pO2e) * (1 - b.COHb) * (1 - Math.Min(0.9, b.LungDamage * (therapy ? 0.5 : 1)));
         b.SpO2 = (float)sat;
         double o2Got;
         if (suit) { o2Got = Math.Min(vo2, b.SuitO2); b.SuitO2 -= (float)o2Got; if (b.SuitO2 <= 0) b.SpO2 = 0; }
@@ -173,7 +186,7 @@ public sealed class Life : IEngine
         else b.Hypoxia = (float)Math.Max(0, b.Hypoxia - dt / 600);
         // 일산화탄소 헤모글로빈 → 평형 1−e^(−ppm/1000), 시간 상수 4시간 × (80W/대사량)
         double eq = 1 - Math.Exp(-co / 1000);
-        double tau = 4 * 3600 * 80 / Math.Max(60, b.ActivityW);
+        double tau = 4 * 3600 * 80 / Math.Max(60, b.ActivityW) / (therapy ? 4 : 1); // 순수한 산소는 일산화탄소를 네 배 빨리 밀어낸다
         b.COHb += (float)((eq - b.COHb) * (1 - Math.Exp(-dt / tau)));
         // 이산화탄소 · 독
         if (pCO2 > 7) { b.Hypoxia += (float)((pCO2 - 7) / 5 * dt / 60); harm ??= "이산화탄소가 너무 짙었다"; env = env == 0 ? EnvCause(sim, c, st, chem) : env; }
@@ -202,9 +215,11 @@ public sealed class Life : IEngine
             double rh = F.Partial(T.gH2O, c) / Math.Max(1e-6, Water.SatKPa(Math.Max(250, tair)));
             sweat = Math.Min(500, (b.CoreK - 310.4) * 400) * Math.Clamp(1 - rh, 0, 1) * (p > 6.3 ? 1 : 0);
         }
-        double outW = conv + rad + sweat;
+        // 우주복 냉각 속옷: 우주복이 돌면(산소가 남아 있으면) 몸의 남는 열을 물 순환으로 빼 겉으로 버린다 — 땀이 마르지 않는 우주복 속에서 익지 않게
+        double suitCool = suit && b.SuitO2 > 0 && b.CoreK > 310.2 ? Math.Min(400, (b.CoreK - 310.2) * 400) : 0;
+        double outW = conv + rad + sweat + suitCool;
         b.CoreK -= outW * dt / BodyC;
-        F.AddHeat(c, conv * dt);          // 공기가 거의 없으면 장이 바닥으로 돌린다
+        F.AddHeat(c, (conv + suitCool) * dt);          // 공기가 거의 없으면 장이 바닥으로 돌린다
         F.AddSurfaceHeat(c, rad * dt);
         if (!suit && p > 1)
         {
@@ -271,7 +286,7 @@ public sealed class Life : IEngine
             b.HurtCause = cause;
             sim.Facts.Emit(sim.Tick, FactKind.Collapsed, c, (float)b.Hypoxia, cause, actor: id);
         }
-        else if (!down && b.Conscious == 0 && b.Hypoxia < 0.3) b.Conscious = 1;
+        else if (!down && b.Conscious == 0 && b.Hypoxia < 0.3 && b.CoreK < 312.15) b.Conscious = 1; // 열로 쓰러지면 39℃ 아래로 식어야 깬다
         string? death = b.Hypoxia > 3 ? harm ?? "숨을 못 쉬었다"
             : b.CoreK < 301 ? "얼어 죽었다" : b.CoreK > 316 ? "열사병" : b.BloodL < 2.5 ? "피를 너무 흘렸다"
             : b.Burn > 1.2 ? "화상" : b.Blunt > 1.5 ? "크게 다쳤다" : b.LungDamage > 1.2 ? "폐가 상했다"

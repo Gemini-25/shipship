@@ -342,6 +342,67 @@ public static partial class Program
                 $"알아챔 {(alarmAt >= 0 ? $"{Time.ToSeconds(alarmAt):0}초" : "못 함")} · 정화 배기 {exhausted} · {cm.RoomName(room)} 가장 짙을 때 {peak:0}ppm → {left:0}ppm · 사람 곁 최고 {worstAtPerson:0}ppm · 통풍구 {(net.Damper[room] != 0 ? "열림" : "닫힘")} · 걸러 낸 것 {net.TraceScrubbed:0.0}몰");
         }
 
+        // ── 끼인 문: 파편이 통로 쪽 문을 틀어 반쯤 열린 채 끼웠고, 그 방 외판에 구멍 — 배 전체 공기가 그 문으로 빠진다 →
+        //    주컴퓨터가 문 센서로 알아채 로봇을 보내 비틀어 바로잡고 닫는다 ──
+        {
+            var s = ShipWorld.Create("Pabal", 7);
+            var m = s.Get<Mind>(); var f = s.Get<Field>(); var st = s.Get<Structure>(); var cm = s.Get<ShipMind>();
+            int dock = s.Layout.Furniture.First(fu => fu.Type == "RobotDock").Cells[0];
+            m.AddRobot(s, dock, AgentKind.Robot, dock);
+            s.Run(Time.Minutes(15));
+            var L2 = s.Layout;
+            int lounge = L2.Rooms.First(rm => rm.Name == "휴게실").Id;
+            int door = st.RoomDoors(lounge).First(d => !L2.Doors[d].External);
+            int hull = Enumerable.Range(0, L2.N).First(c => L2.Hull[c] && L2.Kind[c] == CellKind.Wall && Enumerable.Range(0, 4).Any(k =>
+            {
+                int x = L2.X(c) + (k == 0 ? 1 : k == 1 ? -1 : 0), y = L2.Y(c) + (k == 2 ? 1 : k == 3 ? -1 : 0);
+                return L2.In(x, y) && L2.Room[L2.Index(x, y)] == lounge;
+            }));
+            int cause = s.Causes.Add(CauseKind.Story, "파편이 휴게실 외판과 문틀을 때렸다", s.Tick, hull);
+            st.DamageCause[hull] = cause; st.DamageCause[L2.Doors[door].Cell] = cause;
+            f.SetHole(hull, 0.004f);
+            st.DoorJam[door] = 1; f.SetDoor(door, 0.3f);
+            long freedAt = -1;
+            for (int k = 0; k < Time.Minutes(45); k++) { s.Step(); if (freedAt < 0 && st.DoorJam[door] == 0) freedAt = k; }
+            double avg = L2.Rooms.Where(rm => rm.Cells.Length > 0 && rm.Id != lounge && rm.Name != "에어락").Average(rm => f.Pressure(rm.Cells[0]));
+            if (Debug) foreach (var (tk, tx) in cm.Log.TakeLast(16)) Console.WriteLine($"    주컴 {Time.Clock(tk)} {tx}");
+            Check("끼인 문: 주컴퓨터가 문 센서로 알아채 로봇이 비틀어 바로잡고 닫는다 → 배는 버틴다 (휴게실만 빠진다)",
+                freedAt >= 0 && f.DoorOpen[door] <= 0.01f && avg > 80,
+                freedAt >= 0 ? $"{Time.ToSeconds(freedAt) / 60:0}분 만에 바로잡음 · 문 {f.DoorOpen[door]:0.0} · 다른 방 평균 {avg:0}kPa · 휴게실 {f.Pressure(L2.Rooms[lounge].Cells[0]):0}kPa" : $"그대로 끼임 · 다른 방 평균 {avg:0}kPa");
+        }
+
+        // ── 우주복: 숨쉴 만한 방에 오면 벗어 보관함에 건다 (입은 채 지내다 익거나 · 우주복 산소가 떨어져 질식하지 않게) ──
+        {
+            var s = ShipWorld.Create("Pabal", 9);
+            var m = s.Get<Mind>(); var life = s.Get<Life>();
+            int lounge = s.Layout.Rooms.First(rm => rm.Name == "휴게실").Cells[0];
+            int p = m.AddPerson(s, lounge, -1, lounge);
+            ref var pb = ref life[m[p].C.Body];
+            pb.Suit = 1; pb.SuitO2 = 50;
+            int lockers0 = Enumerable.Range(0, s.Layout.Furniture.Count).Where(fu => s.Layout.Furniture[fu].Type == "SuitLocker").Sum(fu => m.Stock[fu * m.ItemCount + m.iSuit]);
+            s.Run(Time.Minutes(2));
+            int lockers1 = Enumerable.Range(0, s.Layout.Furniture.Count).Where(fu => s.Layout.Furniture[fu].Type == "SuitLocker").Sum(fu => m.Stock[fu * m.ItemCount + m.iSuit]);
+            Check("우주복: 숨쉴 만한 방에서는 벗어 보관함에 건다", life[m[p].C.Body].Suit == 0 && lockers1 == lockers0 + 1,
+                $"입음 {life[m[p].C.Body].Suit} · 보관함 우주복 {lockers0} → {lockers1}");
+        }
+
+        // ── 업어 내기: 배 어디도 안전하지 않으면(기압 45kPa) 업었다 내렸다를 되풀이하며 '구했다'를 쌓지 않는다 ──
+        {
+            var s = ShipWorld.Create("Pabal", 10);
+            var m = s.Get<Mind>(); var f = s.Get<Field>(); var life = s.Get<Life>();
+            int dock = s.Layout.Furniture.First(fu => fu.Type == "RobotDock").Cells[0];
+            m.AddRobot(s, dock, AgentKind.Robot, dock);
+            int lounge = s.Layout.Rooms.First(rm => rm.Name == "휴게실").Cells[0];
+            int p = m.AddPerson(s, lounge, -1, lounge);
+            s.Run(5);
+            for (int c = 0; c < f.Cells; c++)
+                for (int g = 0; g < f.G; g++) { double n = f.Gas(g, c); if (n > 0) f.RemoveGas(c, g, n * 0.55); }
+            life[m[p].C.Body].Hypoxia = 0.7f;
+            s.Run(Time.Minutes(12));
+            long rescues = s.Facts.CountOf(FactKind.Rescue);
+            Check("업어 내기: 안전한 곳이 없으면 '구했다'를 되풀이하지 않는다", rescues <= 1, $"구했다 {rescues}번 · 배 기압 {f.Pressure(lounge):0}kPa");
+        }
+
         // ── 공조: 설비 열이 큰 방(정비실 15kW)도 시원하다 · 냉각 펌프가 모두 서면 배가 더워진다 ──
         {
             double Hottest(bool pumpsDown)

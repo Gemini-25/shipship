@@ -495,6 +495,35 @@ public static partial class Program
             var a10k = Ammonia(10000, Time.Minutes(10));
             Check("암모니아: 500ppm 10분은 목이 아파도 버틴다 · 1만ppm 10분이면 쓰러진다 (짙기만큼 폐가 상한다)", !a500.down && a500.sat > 0.85f && a10k.down,
                 $"500ppm 폐 {a500.lung:0.00} · 산소 포화 {a500.sat:0.00} · 쓰러짐 {a500.down} / 1만ppm 폐 {a10k.lung:0.00} · 쓰러짐 {a10k.down}");
+
+            // 몸의 열: 쓰러진 몸은 기초 대사로 (달리던 대사량이 남아 스스로 익지 않는다) · 우주복은 냉각 속옷으로 열을 뺀다 (산소가 남는 동안)
+            Sim BodyWorld() { var sw = new Sim(new SimSetup(Worlds.Ascii(Worlds.Symmetric), 1, sim => { var ff = new Field(sim.Layout, sim.Tables); sim.Add(ff); sim.Add(new Life(ff)); })); sw.Get<Field>().FillAir(); return sw; }
+            var sh = BodyWorld(); var lh = sh.Get<Life>(); int bh = lh.AddBody(Worlds.At(sh.Layout, 5, 3));
+            lh[bh].ActivityW = 700; lh[bh].Hypoxia = 0.6f;
+            sh.Run(10);
+            float downW = lh[bh].ActivityW; bool wasDown = lh[bh].Conscious == 0;
+            var ss = BodyWorld(); var ls = ss.Get<Life>(); int bs = ls.AddBody(Worlds.At(ss.Layout, 5, 3));
+            ls[bs].Suit = 1; ls[bs].SuitO2 = 500;
+            for (long k = 0; k < Time.Hours(2); k++) { ls[bs].ActivityW = 250; ss.Step(); }
+            double suitCore = ls[bs].CoreK - 273.15;
+            Check("쓰러진 몸은 기초 대사(80W)로 떨어진다 · 우주복을 입고 2시간 일해도 냉각 속옷이 체온을 지킨다 (38.5℃ 아래)", wasDown && downW <= 90 && suitCore < 38.5,
+                $"쓰러짐 {wasDown} · 대사 700 → {downW:0}W · 우주복 속 체온 {suitCore:0.0}℃");
+
+            // 산소 요법: 연기에 폐가 상한 사람(손상 0.45)은 맑은 공기에서도 숨이 모자라 쓰러진다 — 치료 침대의 산소 마스크면 버틴다
+            (bool alive, float sat) Lungs(bool onBed)
+            {
+                var so = ShipWorld.Create("Pabal", 8);
+                var lo = so.Get<Life>();
+                var bedCell = so.Layout.Furniture.First(fu => fu.Type == "MedBed").Cells[0];
+                int floor = so.Layout.Rooms.First(r => r.Name == "휴게실").Cells[0];
+                int bo = lo.AddBody(onBed ? bedCell : floor);
+                lo[bo].LungDamage = 0.45f;
+                for (long k = 0; k < Time.Minutes(20); k++) { lo[bo].LungDamage = Math.Max(lo[bo].LungDamage, 0.45f); so.Step(); }
+                return (lo[bo].Alive != 0 && lo[bo].Conscious != 0, lo[bo].SpO2);
+            }
+            var lungFloor = Lungs(false); var lungBed = Lungs(true);
+            Check("연기에 상한 폐(손상 0.45): 맑은 공기에서도 쓰러진다 · 치료 침대 산소 마스크면 버틴다", !lungFloor.alive && lungBed.alive,
+                $"바닥 — 깨어 있음 {lungFloor.alive} · 포화 {lungFloor.sat:0.00} / 치료 침대 — 깨어 있음 {lungBed.alive} · 포화 {lungBed.sat:0.00}");
         }
 
         if (Do("빛"))

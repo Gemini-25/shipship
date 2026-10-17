@@ -370,3 +370,65 @@ public static partial class Program
         }
     }
 }
+
+public static partial class Program
+{
+    /// <summary>한 칸의 방 · 온도 · 기압 · 산소를 30분마다 (--probe-cell [배] [시드] [칸] [시간]).</summary>
+    internal static void ProbeCell(string[] args)
+    {
+        var rest = args.SkipWhile(a => a != "--probe-cell").Skip(1).ToArray();
+        string ship = rest.Length > 0 ? rest[0] : "Gorae";
+        ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 18;
+        int cell = rest.Length > 2 ? int.Parse(rest[2]) : 2919;
+        double hours = rest.Length > 3 ? double.Parse(rest[3]) : 14;
+        var lay = Layout.Ship(ship, Tables.Default);
+        int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
+        var s = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0);
+        s.Get<Storyteller>().Enabled = true;
+        var m = s.Get<Mind>(); var f = s.Get<Field>(); var net = s.Get<Network>(); var sm = s.Get<ShipMind>(); var life = s.Get<Life>();
+        int room = m.RoomOf(cell);
+        Console.WriteLine($"  칸 {cell} ({s.Layout.X(cell)},{s.Layout.Y(cell)}) 방 {(room >= 0 ? s.Layout.Rooms[room].Name : "-")} · 설비 {string.Join(",", net.Devices.Where(d => d.Room == room).Select(d => d.Name))}");
+        for (long t = 0; t < Time.Hours(hours); t++)
+        {
+            s.Step();
+            if (t % Time.Minutes(30) != 0) continue;
+            var cells = room >= 0 ? s.Layout.Rooms[room].Cells : new[] { cell };
+            var who = m.Agents.Where(a => a.IsPerson && m.RoomOf(a.C.Cell) == room).Select(a => $"{m.NameOf(a.Id)}({m.Thought(a.Id)} 체온 {life[a.C.Body].CoreK - 273.15:0.0} 의식 {life[a.C.Body].Conscious} 살아 {life[a.C.Body].Alive} 대사 {life[a.C.Body].ActivityW:0}W 우주복 {life[a.C.Body].Suit} 산소 {life[a.C.Body].SuitO2:0.0} 물 {life[a.C.Body].Water:0} 화상 {life[a.C.Body].Burn:0.00})");
+            Console.WriteLine($"  {Time.Clock(s.Tick)} 칸 {f.Temp(cell) - 273.15:0.0}℃ · 방 평균 {cells.Average(c => f.Temp(c)) - 273.15:0.0}℃ 최고 {cells.Max(c => f.Temp(c)) - 273.15:0.0}℃ · {f.Pressure(cell):0}kPa · 통풍구 {(room >= 0 ? net.Damper[room] : 9)} 전원 {(room >= 0 && net.RoomPowered(room) ? "있음" : "없음")} · 냉각 {net.CoolingKw:0}kW 공조 {net.HvacKw:0}kW · 사건 {string.Join(",", sm.Incidents.Where(x => x.Active != 0 && x.Room == room).Select(x => x.Kind))} · {string.Join(" ", who)}");
+        }
+    }
+}
+
+public static partial class Program
+{
+    /// <summary>위험했다 살아나기를 되풀이하는 사람 (--probe-flap [배] [시드] [날]).</summary>
+    internal static void ProbeFlap(string[] args)
+    {
+        var rest = args.SkipWhile(a => a != "--probe-flap").Skip(1).ToArray();
+        string ship = rest.Length > 0 ? rest[0] : "Gorae";
+        ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 18;
+        double days = rest.Length > 2 ? double.Parse(rest[2]) : 2;
+        var lay = Layout.Ship(ship, Tables.Default);
+        int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
+        var s = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0);
+        s.Get<Storyteller>().Enabled = true;
+        var m = s.Get<Mind>(); var f = s.Get<Field>(); var life = s.Get<Life>();
+        var was = new Dictionary<int, bool>(); var flips = new Dictionary<int, int>(); var first = new Dictionary<int, long>();
+        var last = new Dictionary<int, string>();
+        for (long t = 0; t < (long)(days * Time.Hours(24)); t++)
+        {
+            s.Step();
+            foreach (var a in m.Agents.Where(a => a.IsPerson))
+            {
+                var b = life[a.C.Body];
+                if (b.Alive == 0) continue;
+                bool now = b.SpO2 < 0.75f || b.Conscious == 0;
+                if (now && !first.ContainsKey(a.Id) && !last.ContainsKey(a.Id)) Console.WriteLine($"  처음 위험 {m.NameOf(a.Id)} {Time.Clock(t)} 칸 {b.Cell} {(m.RoomOf(b.Cell) >= 0 ? s.Layout.Rooms[m.RoomOf(b.Cell)].Name : "-")} 체온 {b.CoreK - 273.15:0.0} 공기 {f.Temp(b.Cell) - 273.15:0.0}℃ 대사 {b.ActivityW:0}W 포화 {b.SpO2:0.00} · {m.Thought(a.Id)}");
+                if (now) { was[a.Id] = true; last[a.Id] = $"{Time.Clock(t)} {(m.RoomOf(b.Cell) >= 0 ? s.Layout.Rooms[m.RoomOf(b.Cell)].Name : "-")} 포화 {b.SpO2:0.00} 의식 {b.Conscious} 산소부족 {b.Hypoxia:0.00} 폐 {b.LungDamage:0.00} CO {b.COHb:0.00} 체온 {b.CoreK - 273.15:0.0} 피 {b.BloodL:0.0} 아픔 {b.Pain:0.00} 우주복 {b.Suit}/{b.SuitO2:0} 기압 {f.Pressure(b.Cell):0} 산소 {f.Partial(s.Tables.gO2, b.Cell):0.0} 칸 {b.Cell} 공기 {f.Temp(b.Cell) - 273.15:0.0}℃ 대사 {b.ActivityW:0}W · {m.Thought(a.Id)}"; }
+                else if (was.GetValueOrDefault(a.Id) && b.SpO2 > 0.9f) { was[a.Id] = false; flips[a.Id] = flips.GetValueOrDefault(a.Id) + 1; if (!first.ContainsKey(a.Id)) first[a.Id] = t; }
+            }
+        }
+        foreach (var (id, n) in flips.OrderByDescending(kv => kv.Value).Take(6))
+            Console.WriteLine($"  {m.NameOf(id)} {n}번 · 처음 {Time.Clock(first[id])} · 마지막 위험: {last.GetValueOrDefault(id)}");
+    }
+}

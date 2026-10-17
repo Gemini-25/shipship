@@ -78,9 +78,15 @@ public sealed partial class Mind
                 return;
             }
             case StepKind.Drop:
-                DropCarried(sim, a, true);
+            {
+                // 내려놓은 곳이 안전할 때만 '업어 냈다' — 배 어디도 안전하지 않으면(기압이 다 빠졌다) 내려놓고 한동안 다시 업지 않는다 (업고 내리기를 되풀이하지 않게)
+                int carried = c.Carrying;
+                bool safe = SafeAt(c.Cell);
+                DropCarried(sim, a, safe);
+                if (!safe && carried >= 0) a.Avoid.Add(new AvoidEntry { Goal = GoalKind.Rescue, Target = carried, Until = t + Time.Minutes(5) });
                 Next(a, t);
                 return;
+            }
             case StepKind.Wear:
             {
                 if (t == c.StepStart)
@@ -145,7 +151,9 @@ public sealed partial class Mind
     private void Activity(Agent a, string kind)
     {
         if (!a.IsPerson) return;
-        _life![a.C.Body].ActivityW = (float)(P.Watts.TryGetValue(kind, out var w) ? w : 90);
+        ref var b = ref _life![a.C.Body];
+        b.ActivityW = (float)(P.Watts.TryGetValue(kind, out var w) ? w : 90);
+        if (b.CoreK > 312.15 && b.ActivityW > 300) b.ActivityW = 300; // 체온 39℃가 넘으면 지쳐서 더 몰아붙이지 못한다
     }
 
     private void UseStep(Sim sim, Agent a, PlanStep st)
@@ -271,12 +279,27 @@ public sealed partial class Mind
         ref var c = ref a.C;
         long t = sim.Tick;
         int wall = st.Cell;
-        if (_st == null || _st.Braced[wall] != 0) { Forget(a, b => b.Kind == BeliefKind.Strain && Dist(b.Cell, wall) <= 1); Next(a, t); return; }
+        int door = L.Kind[wall] == CellKind.Door ? L.DoorAt[wall] : -1;
+        bool jam = door >= 0 && _st != null && _st.DoorJam[door] != 0;
+        if (_st == null || _st.Braced[wall] != 0 && !jam) { Forget(a, b => b.Kind == BeliefKind.Strain && Dist(b.Cell, wall) <= 1); Next(a, t); return; }
         if (Dist(c.Cell, wall) > 1) { Fail(sim, a, "멀다"); return; }
         if (a.IsPerson && c.Holding != iRepair) { Fail(sim, a, "수리 꾸러미가 없다"); return; }
         Activity(a, "hard");
-        double minutes = a.IsPerson ? 4 * (1.5 - c.SkRepair) : 3;
+        // 끼인 문: 틀을 비틀어 바로잡는다 (떨어져 나간 문을 다시 끼우는 것은 오래 걸린다)
+        double minutes = (a.IsPerson ? 4 * (1.5 - c.SkRepair) : 3) * (jam && F.DoorOpen[door] > 0.5f ? 2.5 : 1);
         if (t - c.StepStart < Time.Minutes(minutes)) return;
+        if (jam)
+        {
+            _st.FreeDoor(door);
+            if (_st.DoorDeltaP(door) > 3) _st.RequestDoor(door, 0); // 바람이 빨려 든다 — 바로잡은 김에 닫는다
+            if (a.IsPerson) { c.Holding = 255; c.HoldCharge = 0; }
+            int jc = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} 끼인 문을 비틀어 바로잡았다", t, wall, _st.DamageCause[wall], 0, a.Id);
+            sim.Facts.Emit(t, FactKind.Repaired, wall, (float)_st.DoorDeltaP(door), jc, a.Id, -1);
+            Forget(a, b => b.Kind == BeliefKind.Strain && Dist(b.Cell, wall) <= 1);
+            if (c.AssignedGoal == GoalKind.Brace && c.AssignedTarget == wall) c.AssignedUntil = t;
+            Next(a, t);
+            return;
+        }
         _st.Brace(wall);
         if (a.IsPerson) { c.Holding = 255; c.HoldCharge = 0; }
         string what = L.Kind[wall] == CellKind.Door ? "문" : "벽";
@@ -428,6 +451,7 @@ public sealed partial class Mind
         double v = c.Mode == 1 || c.Goal == GoalKind.Evacuate ? P.Speed["run"] : c.Carrying >= 0 ? P.Speed["carry"] : P.Speed["walk"];
         if (SmokeBad(a, c.Cell)) v = Math.Min(v, P.Speed["crawl"]);
         if (b.Suit != 0) v *= 0.7;
+        if (b.CoreK > 312.15) v = Math.Min(v, P.Speed["walk"]); // 더위에 지쳐 뛰지 못한다
         return v * Math.Max(0.3, 1 - b.Pain * 0.5);
     }
 

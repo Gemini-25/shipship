@@ -285,6 +285,7 @@ public sealed partial class Mind : IEngine
         var a = Agents[agent];
         Learn(a, sim.Tick, b.Kind, b.Cell, b.Subject, b.Conf, BeliefSource.Screen, b.Cause, b.Size);
         a.C.AssignedGoal = goal; a.C.AssignedTarget = target; a.C.AssignedUntil = until;
+        a.Avoid.RemoveAll(v => v.Goal == goal && v.Target == target); // 새로 맡긴 일: '거기는 봤다'를 접고 다시 간다
     }
 
     // ───────────────────────── 읽기 (화면 · 연출 · 시험) ─────────────────────────
