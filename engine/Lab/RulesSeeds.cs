@@ -35,7 +35,10 @@ public static partial class Program
                 var st = s.Get<Storyteller>(); st.Enabled = true; st.Style = StoryStyle.Balanced; st.Level = level;
                 double sum = 0; int n = 0;
                 for (long t = 0; t < Time.Hours(18); t++) { s.Step(); if (t % 250 == 0) { sum += st.Tension; n++; } }
-                int events = (int)(s.Facts.CountOf(FactKind.Ignition) + s.Facts.CountOf(FactKind.MachineFail) + s.Facts.CountOf(FactKind.WallBreach) + s.Facts.CountOf(FactKind.Hurt) + s.Facts.CountOf(FactKind.Impact));
+                // 벌어진 일: 불 · 고장 · 금 · 구멍 · 충돌 · 다침 · 사람 사이 (몸싸움 · 몰래 방해) — 이야기꾼은 사람 사이 씨앗도 심는다
+                int events = (int)(s.Facts.CountOf(FactKind.Ignition) + s.Facts.CountOf(FactKind.MachineFail) + s.Facts.CountOf(FactKind.WallCrack) + s.Facts.CountOf(FactKind.WallBreach) + s.Facts.CountOf(FactKind.Hurt) + s.Facts.CountOf(FactKind.Impact)
+                    + s.Facts.CountOf(FactKind.Fight) + s.Facts.CountOf(FactKind.Sabotage));
+                if (Debug) Console.WriteLine($"    가혹함 {level}: 씨앗 {string.Join(", ", st.Seeds.Select(x => $"{x.Kind}@{x.Tick / Time.Hours(1)}시 {x.Size:0.00}"))} · 불 {s.Facts.CountOf(FactKind.Ignition)} 고장 {s.Facts.CountOf(FactKind.MachineFail)} 구멍 {s.Facts.CountOf(FactKind.WallBreach)} 다침 {s.Facts.CountOf(FactKind.Hurt)} 충격 {s.Facts.CountOf(FactKind.Impact)} 금 {s.Facts.CountOf(FactKind.WallCrack)} 싸움 {s.Facts.CountOf(FactKind.Fight)} 방해 {s.Facts.CountOf(FactKind.Sabotage)} 탓 {s.Facts.CountOf(FactKind.Blamed)} 실수 {s.Facts.CountOf(FactKind.Mistake)}");
                 return (st.Seeds.Count, sum / n, events);
             }
             var loT = Task.Run(() => Run(2)); var hi = Run(7); var lo = loT.Result;

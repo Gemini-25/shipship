@@ -216,6 +216,9 @@ public sealed partial class Mind
             case UseKind.Sleep when a.IsPerson:
                 _life![c.Body].Asleep = 0; c.WokeAt = t;
                 break;
+            case UseKind.Relax when a.IsPerson:
+                FinishRelax(a);
+                break;
             case UseKind.Exercise when a.IsPerson:
                 // 땀 흘리고 나면 개운하다: 지루함 · 긴장이 풀린다 (운동과 기분 연구)
                 c.Unfit = 0; c.ExercisedAt = t; Exercised++;

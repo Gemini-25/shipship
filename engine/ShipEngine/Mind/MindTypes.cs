@@ -165,6 +165,9 @@ public struct AgentCore
     // ⑧ 요리 · 배우기
     public int CookOn;         // 지금 쓰는 조리대 (장치 번호 + 1 · 0: 없음)
     public float Careful;      // 실수에서 배운 조심 (0~1 · 이레에 반쯤 흐려진다)
+    // ⑧ 하루의 리듬 · 쉼
+    public float Chrono;       // 몸의 시계 (시간 — 음수 아침형 · 양수 저녁형)
+    public byte Hobby;         // 쉬는 시간에 하는 일 (Hobby)
 }
 
 /// <summary>바닥에 떨어진 · 놓인 물건.</summary>

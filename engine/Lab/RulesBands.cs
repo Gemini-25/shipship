@@ -72,7 +72,8 @@ public static partial class Program
             {
                 var s = Worlds.Full(lay, 5);
                 var m = s.Get<Mind>(); var so = s.Get<Society>(); var life = s.Get<Life>();
-                int x = m.AddPerson(s, At(4, 2)), y = m.AddPerson(s, At(6, 2)), l = m.AddPerson(s, At(7, 4)), t = m.AddPerson(s, At(20, 4));
+                // 통로의 작업대 곁 (화난 이는 작업대에서 손으로 무언가 만들며 삭이러 간다 — 맞는 이 · 지도자도 같은 통로)
+                int x = m.AddPerson(s, At(12, 8)), y = m.AddPerson(s, At(15, 8)), l = m.AddPerson(s, At(17, 8)), t = m.AddPerson(s, At(20, 4));
                 m.SetPersonality(x, 0.5f, 0.3f, 0.6f, 0.05f, 0.95f);
                 m.SetPersonality(y, 0.5f, 0.5f, 0.6f, 0.5f, 0.3f);
                 m.SetPersonality(l, 0.5f, 0.5f, 0.5f, 0.3f, 0.5f);

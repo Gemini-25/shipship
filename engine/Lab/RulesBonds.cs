@@ -20,7 +20,7 @@ public static partial class Program
             int p1 = m.AddPerson(s, At(13, 2)), p2 = m.AddPerson(s, At(14, 4));
             int p3 = m.AddPerson(s, At(3, 2)), p4 = m.AddPerson(s, At(5, 2));
             m.AddRobot(s, At(22, 4), AgentKind.Robot, At(22, 4));
-            foreach (int p in new[] { p1, p2, p3, p4 }) { m[p].C.Hunger = 0; m[p].C.Sleepy = 0; }
+            foreach (int p in new[] { p1, p2, p3, p4 }) { m[p].C.Hunger = 0; m[p].C.Sleepy = 0; m[p].C.Bored = 0; } // 다른 볼일 없이 제자리에 (쉬러 가지 않게)
             s.Run(3);
             ch.Ignite(At(15, 1), 3e6, s.Causes.Add(CauseKind.Story, "의자 밑에서 불씨가 튀었다", s.Tick));
             for (int k = 0; k < Time.Minutes(20) && s.Facts.CountOf(FactKind.Extinguished) == 0; k++) s.Step();
@@ -98,8 +98,9 @@ public static partial class Program
             {
                 var s = Worlds.Full(lay, 5);
                 var m = s.Get<Mind>(); var so = s.Get<Society>(); var life = s.Get<Life>();
-                int x = m.AddPerson(s, At(4, 2)), y = m.AddPerson(s, At(6, 2));
-                if (robot) m.AddRobot(s, At(8, 5), AgentKind.Robot, At(8, 5));
+                // 통로의 작업대 곁 (화난 이는 손으로 무언가 만들며 삭이러 작업대에 간다 — 맞는 이도 같은 통로) · 로봇도 통로에 있다
+                int x = m.AddPerson(s, At(12, 8)), y = m.AddPerson(s, At(15, 8));
+                if (robot) m.AddRobot(s, At(17, 8), AgentKind.Robot, At(17, 8));
                 m.SetPersonality(x, 0.5f, 0.3f, 0.6f, 0.05f, 0.95f);
                 m.SetPersonality(y, 0.5f, 0.5f, 0.6f, 0.5f, 0.3f);
                 s.Run(2);

@@ -37,6 +37,8 @@ public sealed partial class Mind
             foreach (var o in _opts)
                 if (o.Goal == c.Goal && o.Target == c.GoalTarget) { current = o.Score + 1.0f; break; }
         if (busy && current < 0 && c.Goal is GoalKind.Sleep or GoalKind.Eat or GoalKind.Drink && c.StepIndex > 0) current = 1.5f; // 하던 식사 · 잠은 웬만하면 마친다
+        // 시작한 쉼 · 어울림도 마친다 (하는 동안 지루함 · 외로움이 풀려 선택지가 사라져도 — 일 · 끼니처럼 더 급한 것은 끼어든다)
+        if (busy && current < 0 && c.Goal is GoalKind.Relax or GoalKind.Socialize && c.StepIndex > 0) current = 1.0f;
 
         for (int k = 0; k < Math.Min(4, _opts.Count); k++)
         {
@@ -132,11 +134,11 @@ public sealed partial class Mind
 
         if (person)
         {
-            // 졸림이 0.6을 넘거나, 잠잘 시간대에 0.4를 넘으면 잔다 (덜 졸린데 누우면 짧게 깬다)
-            bool night = InWindow(hour, c.ShiftHour + 16, 8);
+            // 졸림이 0.6을 넘거나, 잠잘 시간대에 0.4를 넘으면 잔다 (덜 졸린데 누우면 짧게 깬다) — 잘 시간대는 몸의 시계만큼 옮겨 간다 (아침형 · 저녁형)
+            bool night = InWindow(hour - c.Chrono, c.ShiftHour + 16, 8);
             int bedRoom = RoomOf(c.Bed >= 0 ? c.Bed : here);
             if ((c.Sleepy > 0.6f || night && c.Sleepy > 0.4f) && !BelievedRoomBad(a, bedRoom)) // 위험하다고 믿는 방에서는 자지 않는다
-                Add(GoalKind.Sleep, c.Bed, c.Bed >= 0 ? c.Bed : here, c.Sleepy * c.Sleepy * 5 + (night ? 1.5f : 0));
+                Add(GoalKind.Sleep, c.Bed, c.Bed >= 0 ? c.Bed : here, c.Sleepy * c.Sleepy * 5 + (night ? 1.5f : 0)); // 몸의 시계는 '언제 눕나'만 옮긴다 (얼마나 간절한지는 쌓인 졸림)
             // 욕구는 어느 만큼 차야 움직인다 (배가 조금 고프다고 바로 먹으러 가지 않는다)
             if (c.Hunger > 0.55f)
             {
@@ -145,10 +147,11 @@ public sealed partial class Mind
                 // ⑧ 밥을 짓는다: 요리를 좋아하는 이 · 꺼진 조리대가 있고 같은 방에 먹을 것이 있으면 (먹기보다 조금 앞서게)
                 if (WantsToCook(sim, a) && CookStove(a) is int sv && sv >= 0) Add(GoalKind.Cook, sv, _net!.Devices[sv].Cell, eat + 0.3f);
             }
-            if (c.Thirst > 0.3f) Add(GoalKind.Drink, -1, -1, c.Thirst * c.Thirst * 6);
+            if (c.Thirst > 0.3f) Add(GoalKind.Drink, -1, -1, c.Thirst * c.Thirst * 6 + (c.Thirst > 0.85f ? 2 : 0)); // 몹시 마른 목(몸의 물 1.7% 모자람)은 한밤의 잠보다 급하다
             float grief = _soc?.GriefOf(a.Id) ?? 0; // ⑨ 슬픔: 일손을 놓고 사람을 찾는다
             if (InWindow(hour, c.ShiftHour, 8) && c.Station >= 0) Add(GoalKind.Work, c.Station, L.Furniture[c.Station].Cells[0], (1.2f + c.Diligent) * (1 - 0.7f * grief));
             if (c.Bored > 0.3f) Add(GoalKind.Relax, -1, -1, c.Bored * 1.5f);
+            else if (c.Bored > 0.1f && !InWindow(hour, c.ShiftHour, 8)) Add(GoalKind.Relax, -1, -1, 0.35f); // 일 밖의 빈 시간: 우두커니 서 있기보다 좋아하는 것을 한다
             // ⑧ 운동: 하루 한 번쯤 — 성실 · 외향일수록 챙기고 신경성은 덜 (운동 습관 연구) · 일하는 시간 밖에서 · 졸리지 않을 때 (ISS 승무원은 하루 2시간 남짓)
             //   (교대에 맞춘 '밤' 시간이 아니라 졸림으로 — 잠이 밀려 깨어 있는 저녁에도 운동할 수 있게)
             if (c.Unfit > 0.5f && !InWindow(hour, c.ShiftHour, 8) && c.Sleepy < 0.6f)
@@ -329,14 +332,7 @@ public sealed partial class Mind
                 plan.Add(Use(UseKind.Work, Time.Hours(8), cell, o.Target));
                 return true;
             }
-            case GoalKind.Relax:
-            {
-                int seat = NearestFree(a, _relax);
-                if (seat < 0) return false;
-                plan.Add(Go(seat));
-                plan.Add(Use(UseKind.Relax, Time.Minutes(45)));
-                return true;
-            }
+            case GoalKind.Relax: return BuildRelax(sim, a, plan);
             case GoalKind.Exercise:
             {
                 // 달리기틀이 비어 있으면 거기서 · 없으면 침대 곁 맨몸 운동

@@ -88,25 +88,33 @@ public static partial class Program
         }
 
         // ── 목마름: 자다가 목이 몹시 마르면 깨어 물을 마시고 · 다시 눕는다 (⑦ 오줌 · 숨으로 밤새 물을 잃는다) ──
+        //    잘 시간대 한가운데(저녁형 · 아침형 둘 다)라도 — 몹시 마른 목은 잠보다 급하다
         {
-            var s = World();
-            var m = s.Get<Mind>(); var life = s.Get<Life>();
-            int p = m.AddPerson(s, At(3, 5), -1, At(3, 5));
-            ref var pb = ref life[m[p].C.Body];
-            pb.Asleep = 1; pb.Water = Mind.BodyWater0 * (1 - 0.02 * 0.9);   // 몸의 물 1.8% 모자람 (0.76L)
-            m[p].C.Sleepy = 1; m[p].C.Hunger = 0;
-            m[p].Plan.Add(new PlanStep { Kind = StepKind.Use, Arg = (byte)UseKind.Sleep, Value = Time.Hours(8) });
-            m[p].C.Goal = GoalKind.Sleep;
-            long drank = -1, back = -1, drank0 = m[p].C.DrankAt;
-            for (int k = 0; k < Time.Hours(2) && back < 0; k++)
+            string Run(float chrono, out bool ok)
             {
-                s.Step();
-                if (drank < 0 && m[p].C.DrankAt != drank0) drank = k;
-                if (drank >= 0 && life[m[p].C.Body].Asleep != 0) back = k;
+                var s = World();
+                var m = s.Get<Mind>(); var life = s.Get<Life>();
+                int p = m.AddPerson(s, At(3, 5), -1, At(3, 5));
+                m[p].C.Chrono = chrono;
+                ref var pb = ref life[m[p].C.Body];
+                pb.Asleep = 1; pb.Water = Mind.BodyWater0 * (1 - 0.02 * 0.9);   // 몸의 물 1.8% 모자람 (0.76L)
+                m[p].C.Sleepy = 1; m[p].C.Hunger = 0;
+                m[p].Plan.Add(new PlanStep { Kind = StepKind.Use, Arg = (byte)UseKind.Sleep, Value = Time.Hours(8) });
+                m[p].C.Goal = GoalKind.Sleep;
+                long drank = -1, back = -1, drank0 = m[p].C.DrankAt;
+                for (int k = 0; k < Time.Hours(2) && back < 0; k++)
+                {
+                    s.Step();
+                    if (drank < 0 && m[p].C.DrankAt != drank0) drank = k;
+                    if (drank >= 0 && life[m[p].C.Body].Asleep != 0) back = k;
+                    if (Debug && k % 50 == 0) Console.WriteLine($"    몸의 시계 {chrono} · {k / 25}분 {m.Thought(p)} · 목마름 {m[p].C.Thirst:0.00} · 졸림 {m[p].C.Sleepy:0.00} · 잠 {life[m[p].C.Body].Asleep}");
+                }
+                ok = drank > 0 && drank < Time.Hours(1) && back > drank;
+                return $"마신 때 {(drank > 0 ? drank / 25.0 : -1):0}분 · 다시 잔 때 {(back > 0 ? back / 25.0 : -1):0}분 · 목마름 {m[p].C.Thirst:0.00} · {m.Thought(p)}";
             }
-            Check("목마름: 자다가 목이 몹시 마르면 깨어 물을 마시고 다시 잔다",
-                drank > 0 && drank < Time.Hours(1) && back > drank,
-                $"마신 때 {(drank > 0 ? drank / 25.0 : -1):0}분 · 다시 잔 때 {(back > 0 ? back / 25.0 : -1):0}분 · 목마름 {m[p].C.Thirst:0.00} · {m.Thought(p)}");
+            string early = Run(-2.5f, out bool okEarly), late = Run(2.5f, out bool okLate);
+            Check("목마름: 자다가 목이 몹시 마르면 깨어 물을 마시고 다시 잔다 (잘 시간대 한가운데라도 — 아침형 · 저녁형)",
+                okEarly && okLate, $"아침형: {early} / 저녁형: {late}");
         }
 
         // ── 구조: 산소 없는 방에 쓰러진 사람 — 로봇이 보고 업어 공기 좋은 곳에 내려놓는다 ──

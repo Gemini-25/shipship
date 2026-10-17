@@ -39,6 +39,7 @@ public static partial class Program
             else if (args.Contains("--probe-heat")) ProbeHeat(args);
             else if (args.Contains("--probe-danger")) ProbeDanger(args);
             else if (args.Contains("--probe-person")) ProbePerson(args);
+            else if (args.Contains("--probe-daily")) ProbeDaily(args);
             else if (args.Contains("--probe-log")) ProbeLog(args);
             else if (args.Contains("--probe-holes")) ProbeHoles(args);
             else if (args.Contains("--probe-cell")) ProbeCell(args);

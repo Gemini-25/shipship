@@ -171,6 +171,7 @@ public sealed partial class Mind : IEngine
         float braveNoise = Trait() - 0.5f;
         c.Unfit = pr.UnitF() * 0.8f;
         Derive(ref c, braveNoise);
+        c.Chrono = ChronoOf(sim.Seed, people, c.Consc, c.Open);
         var a = new Agent { Id = id, C = c };
         Agents.Add(a);
         a.C.Station = PickStation(a);
@@ -354,7 +355,7 @@ public sealed partial class Mind : IEngine
     public string Thought(int agent)
     {
         var a = Agents[agent];
-        string s = GoalName(a.C.Goal);
+        string s = a.C.Goal == GoalKind.Relax && a.IsPerson ? HobbyName((Hobby)a.C.Hobby) : GoalName(a.C.Goal);
         if (a.Plan.Count > 0 && a.C.StepIndex < a.Plan.Count)
         {
             var st = a.Plan[a.C.StepIndex];
@@ -495,7 +496,8 @@ public sealed partial class Mind : IEngine
         int others = CountNear(a, 6);
         if (others > 0 && !asleep) c.Lonely = (float)Math.Max(0, c.Lonely - h * Math.Min(2, others) / 1.5);
         else c.Lonely = (float)Math.Min(1, c.Lonely + h / (Need("social", 10) * (1.5 - c.Extra))); // 외향일수록 사람이 빨리 그립다 (6~14시간)
-        if (c.Goal == GoalKind.Relax || c.Goal == GoalKind.Socialize) c.Bored = (float)Math.Max(0, c.Bored - h);
+        bool resting = c.Goal is GoalKind.Relax or GoalKind.Socialize && c.StepIndex < a.Plan.Count && a.Plan[c.StepIndex].Kind == StepKind.Use; // 가는 중이 아니라 쉬는 · 어울리는 중
+        if (resting) c.Bored = (float)Math.Max(0, c.Bored - h);
         else if (!asleep) c.Bored = (float)Math.Min(1, c.Bored + h / Need("fun", 8) * (c.Goal == GoalKind.Work ? 1.5 - c.Diligent : 1) * (0.6 + 0.8 * c.Open)); // 열린 사람은 새것이 빨리 고프다
         if (!asleep && c.Goal != GoalKind.Exercise) c.Unfit = (float)Math.Min(1, c.Unfit + h / 16); // 깨어 있는 하루면 1
         // 감정: 두려움은 몇 분이면 가라앉는다 (침착할수록 빨리) · 긴장은 굶주림 · 졸림 · 두려움에 쌓이고 잠 · 쉼에 풀린다
@@ -600,6 +602,7 @@ public sealed partial class Mind : IEngine
         foreach (var (ev, tick, sp, b) in _said) { w.I32(ev); w.I64(tick); w.I32(sp); w.List(new List<Belief> { b }); }
         w.I64(Shouts); w.I64(Panics); w.I64(Extinguished); w.I64(Rescued); w.I64(Patched); w.I64(Repaired); w.I64(FledCount); w.I64(Meals); w.I64(Drinks); w.I64(Exercised); w.F64(FoodEaten); w.F64(WaterDrunk); w.F64(WaterSprayed);
         w.I64(Cooked); w.I64(Forgot); w.I64(_learnCursor);
+        w.Arr(HobbyCount);
     }
 
     public void Load(StateReader r)
@@ -618,5 +621,6 @@ public sealed partial class Mind : IEngine
         for (int i = 0; i < m; i++) { int ev = r.I32(); long t = r.I64(); int sp = r.I32(); var b = r.List<Belief>()[0]; _said.Add((ev, t, sp, b)); }
         Shouts = r.I64(); Panics = r.I64(); Extinguished = r.I64(); Rescued = r.I64(); Patched = r.I64(); Repaired = r.I64(); FledCount = r.I64(); Meals = r.I64(); Drinks = r.I64(); Exercised = r.I64(); FoodEaten = r.F64(); WaterDrunk = r.F64(); WaterSprayed = r.F64();
         Cooked = r.I64(); Forgot = r.I64(); _learnCursor = r.I64();
+        HobbyCount = r.Arr<long>();
     }
 }

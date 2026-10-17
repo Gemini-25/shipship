@@ -10,7 +10,7 @@ namespace Lab;
 public static partial class Program
 {
     internal sealed record FunResult(string Ship, ulong Seed, int Crew, double Days, double HlPerDay, int Kinds, double Depth, int Near, long Deaths,
-        double Calm, int Firsts, int Seeds, int Fruit, double ScreenMinPerDay, double Score, List<string> Titles);
+        double Calm, int Firsts, int Seeds, int Fruit, double ScreenMinPerDay, double Score, List<string> Titles, string Daily);
 
     internal static FunResult FunRun(string ship, ulong seed, double days, StoryStyle style = StoryStyle.Balanced, byte level = 4)
     {
@@ -61,8 +61,12 @@ public static partial class Program
         double score = Math.Max(0, sHl + sKinds + sDepth + sNear + sCalm + sFruit - penalty);
         var titles = d.Highlights.OrderByDescending(h => h.Score).Take(6)
             .Select(h => $"{Time.Clock(h.Tick)} [{Director.FactText(h.Kind)}] {h.Title}").ToList();
+        // 일상: 쉬는 시간에 한 일 · 밥 짓기 · 몸의 시계 (아침형 ~ 저녁형)
+        var chrono = mind.Agents.Where(a => a.IsPerson).Select(a => a.C.Chrono).DefaultIfEmpty(0).ToList();
+        string daily = "쉼 " + string.Join(" · ", Enumerable.Range(0, mind.HobbyCount.Length).Where(h => mind.HobbyCount[h] > 0).Select(h => $"{Mind.HobbyName((Hobby)h)} {mind.HobbyCount[h]}"))
+            + $" / 밥 짓기 {mind.Cooked} · 깜빡 {mind.Forgot} / 몸의 시계 {chrono.Min():+0.0;-0.0}~{chrono.Max():+0.0;-0.0}시간";
         return new FunResult(ship, seed, crew, days, hl, kinds, depth, d.NearMisses, life.Deaths, calm, d.Firsts, st.Seeds.Count, fruit.Count,
-            d.ScreenSeconds / 60 / days, score, titles);
+            d.ScreenSeconds / 60 / days, score, titles, daily);
     }
 
     internal static void Fun(string[] args)
@@ -84,6 +88,7 @@ public static partial class Program
                 Console.WriteLine($"\n  {ship} 시드 {r.Seed} · 사람 {r.Crew} · {sw.Elapsed.TotalSeconds:0}초 → 점수 {r.Score:0}");
                 Console.WriteLine($"    하이라이트 하루 {r.HlPerDay:0.0} · 갈래 {r.Kinds} · 사슬 깊이 {r.Depth:0.0} · 간발의 차 {r.Near} · 죽음 {r.Deaths} · 처음 보는 일 {r.Firsts}");
                 Console.WriteLine($"    조용한 화면 {r.Calm:P0} · 화면 하루 {r.ScreenMinPerDay:0}분 · 씨앗 {r.Seeds} → 일이 된 것 {r.Fruit}");
+                Console.WriteLine($"    일상: {r.Daily}");
                 foreach (var t in r.Titles) Console.WriteLine($"      {t}");
             }
         Console.WriteLine($"\n  평균 점수 {all.Average(r => r.Score):0} · 하이라이트 하루 {all.Average(r => r.HlPerDay):0.0} · 죽음 {all.Sum(r => r.Deaths)} · 씨앗 {all.Sum(r => r.Seeds)} → 일 {all.Sum(r => r.Fruit)}");

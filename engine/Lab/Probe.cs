@@ -284,6 +284,45 @@ public static partial class Program
 public static partial class Program
 {
     /// <summary>사람을 틱마다 따라간다 — 칸의 독 · 폐 · 포화 · 생각 · 믿음 (--probe-person [배] [시드] [몇 시간 뒤부터] [틱 수] [몇 틱마다]).</summary>
+    /// <summary>하루 살피기: 사람들이 시간을 어디에 쓰나 (목표별 몫) · 쉬는 시간에 한 일 · 지루함 · 졸림 (⑧ 일상).</summary>
+    internal static void ProbeDaily(string[] args)
+    {
+        var rest = args.SkipWhile(a => a != "--probe-daily").Skip(1).ToArray();
+        string ship = rest.Length > 0 ? rest[0] : "Didim";
+        ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 11;
+        double hours = rest.Length > 2 ? double.Parse(rest[2]) : 24;
+        var lay = Layout.Ship(ship, Tables.Default);
+        int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
+        var s = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0);
+        var m = s.Get<Mind>();
+        var share = new Dictionary<GoalKind, long>();
+        double bored = 0, sleepy = 0; long n = 0;
+        var prev = new Dictionary<int, (GoalKind g, int step, int plan, long since, int cell)>();
+        int shown = 0;
+        for (long k = 0; k < Time.Hours(hours); k++)
+        {
+            s.Step();
+            foreach (var a in m.Agents.Where(a => a.IsPerson))
+            {
+                var now = (a.C.Goal, a.C.StepIndex, a.Plan.Count, a.C.GoalSince, a.C.Cell);
+                if (prev.TryGetValue(a.Id, out var p) && p.g == GoalKind.Relax && (now.Goal != GoalKind.Relax || now.GoalSince != p.since) && shown++ < 25)
+                    Console.WriteLine($"    {Time.Clock(s.Tick)} {m.NameOf(a.Id)} 쉼({Mind.HobbyName((Hobby)a.C.Hobby)}) {Time.ToSeconds(s.Tick - p.since) / 60:0}분 · 걸음 {p.step}/{p.plan} → {m.Thought(a.Id)}");
+                prev[a.Id] = now;
+            }
+            if (k % 25 != 0) continue;
+            foreach (var a in m.Agents.Where(a => a.IsPerson && s.Get<Life>()[a.C.Body].Alive != 0)) // 자는 이(누워 있다)도 센다
+            {
+                share[a.C.Goal] = share.GetValueOrDefault(a.C.Goal) + 1;
+                bored += a.C.Bored; sleepy += a.C.Sleepy; n++;
+            }
+        }
+        long total = share.Values.Sum();
+        Console.WriteLine($"{ship} 시드 {seed} · {hours}시간 · 사람 {m.Agents.Count(a => a.IsPerson)}");
+        Console.WriteLine("  시간을 쓴 곳: " + string.Join(" · ", share.OrderByDescending(kv => kv.Value).Select(kv => $"{Mind.GoalName(kv.Key)} {kv.Value * 100.0 / total:0}%")));
+        Console.WriteLine("  쉬는 시간: " + string.Join(" · ", Enumerable.Range(0, m.HobbyCount.Length).Select(h => $"{Mind.HobbyName((Hobby)h)} {m.HobbyCount[h]}")));
+        Console.WriteLine($"  지루함 평균 {bored / Math.Max(1, n):0.00} · 졸림 평균 {sleepy / Math.Max(1, n):0.00} · 밥 짓기 {m.Cooked}");
+    }
+
     internal static void ProbePerson(string[] args)
     {
         var rest = args.SkipWhile(a => a != "--probe-person").Skip(1).ToArray();
