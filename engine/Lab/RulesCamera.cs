@@ -70,6 +70,31 @@ public static partial class Program
                 $"카메라 {(tView < 0 ? "못 감" : Time.Clock(tView))} · 몸 {(tBody < 0 ? "아직" : Time.Clock(tBody))} · 공기 조짐 {d.AirWarnings} · 기압 {s.Get<Field>().Pressure(Worlds.At(sealedLay, 4, 3)):0}kPa");
         }
 
+        // ── 카메라만 쓰는 관심은 하이라이트가 아니다: 넷이 있는 닫힌 방에 4cm² 구멍 — 기압이 빨리 떨어져 카메라는 그 사람에게 가지만, 몸이 알기 전에는 (곁에 작은 일이 있어도) 하이라이트가 없다 ──
+        {
+            var sealedLay = Worlds.Ascii(LongShip.Replace("#........D......", "#........#......"));
+            var s = Worlds.Full(sealedLay, 6);
+            var m = s.Get<Mind>(); var life = s.Get<Life>();
+            int p = m.AddPerson(s, Worlds.At(sealedLay, 4, 3));
+            for (int k = 0; k < 3; k++) m.AddPerson(s, Worlds.At(sealedLay, 2 + 2 * k, 2));   // 방에 넷
+            var d = new Director(s.Layout) { KeepRing = false };
+            for (int i = 0; i < 5; i++) { s.Step(); d.Observe(s); }
+            s.Get<Field>().SetHole(Worlds.At(sealedLay, 0, 3), 0.0004f);
+            bool seen = false; long tBody = -1;
+            for (int i = 0; i < Time.Minutes(15) && tBody < 0; i++)
+            {
+                var b = life.Bodies[m.Agents[p].C.Body];
+                if (i % 25 == 0) s.Facts.Emit(s.Tick, FactKind.Noticed, b.Cell, 1, 0, p);   // 곁의 작은 일 (무언가를 알아챘다 — 이것만으로는 볼 만한 장면이 아니다)
+                s.Step(); d.Observe(s);
+                b = life.Bodies[m.Agents[p].C.Body];
+                seen |= d.InView(b.Cell);
+                if (b.SpO2 < 0.9f) tBody = s.Tick;
+            }
+            Check("카메라만 쓰는 관심은 하이라이트가 아니다: 기압이 빨리 떨어지는 방의 사람에게 카메라는 가지만 · 몸이 알기 전에는 하이라이트가 없다",
+                seen && d.AirWarnings > 0 && d.Highlights.Count == 0 && tBody > 0,
+                $"카메라 감 {seen} · 공기 조짐 {d.AirWarnings} · 하이라이트 {d.Highlights.Count} ({string.Join(" / ", d.Highlights.Select(h => h.Title))}) · 몸 {(tBody < 0 ? "아직" : Time.Clock(tBody))}");
+        }
+
         // ── 익숙해짐: 닫힌 방의 산소가 처음부터 옅다 (14kPa · 새지 않는다) — 처음엔 조짐이지만 한 시간이 지나면 더는 아니다 (며칠을 그렇게 사는 배가 늘 '조짐'이면 화면이 늘 느리다) ──
         {
             var sealedLay = Worlds.Ascii(LongShip.Replace("#........D......", "#........#......"));

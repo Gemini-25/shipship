@@ -34,6 +34,8 @@ public sealed partial class Director
 
     private readonly Layout L;
     public readonly float[] Heat;
+    /// <summary>카메라만 쓰는 관심 (몸으로 읽는 조짐 · 주인공이 지나간 칸) — 하이라이트 문턱에는 넣지 않는다 (일어난 일로만 하이라이트).</summary>
+    public readonly float[] Aux;
     public int FocusCell = -1;
     public int Zoom = 40;                       // 화면에 보이는 칸 수 (가로)
     public double Speed = CalmSpeed;            // 화면 1초에 틱
@@ -62,7 +64,7 @@ public sealed partial class Director
     public Director(Layout layout)
     {
         L = layout;
-        Heat = new float[L.N];
+        Heat = new float[L.N]; Aux = new float[L.N];
     }
 
     /// <summary>사실 종류의 무게 (볼 만한 정도).</summary>
@@ -107,7 +109,7 @@ public sealed partial class Director
         ScreenSeconds += screen; _sinceSwitch += screen;
         // 관심이 준다
         float decay = (float)Math.Exp(-Time.SecondsPerTick * 0.6931 / HalfLifeSec);
-        for (int i = 0; i < Heat.Length; i++) if (Heat[i] > 0.01f) Heat[i] *= decay; else Heat[i] = 0;
+        for (int i = 0; i < Heat.Length; i++) { if (Heat[i] > 0.01f) Heat[i] *= decay; else Heat[i] = 0; if (Aux[i] > 0.01f) Aux[i] *= decay; else Aux[i] = 0; }
 
         var mind = sim.Find<Mind>(); var life = sim.Find<Life>();
         // 사실
@@ -172,7 +174,18 @@ public sealed partial class Director
 
     // ───────────────────────── 카메라 ─────────────────────────
 
-    /// <summary>칸 c 둘레(반경 SpotRadius) 관심 합.</summary>
+    /// <summary>칸 c 둘레(반경 SpotRadius) 카메라가 보는 관심 합 (일어난 일 + 카메라만 쓰는 관심).</summary>
+    private float ViewScore(int c)
+    {
+        if (c < 0) return 0;
+        int x0 = L.X(c), y0 = L.Y(c); float s = 0;
+        for (int y = Math.Max(0, y0 - SpotRadius); y <= Math.Min(L.H - 1, y0 + SpotRadius); y++)
+            for (int x = Math.Max(0, x0 - SpotRadius); x <= Math.Min(L.W - 1, x0 + SpotRadius); x++)
+            { int i = L.Index(x, y); s += Heat[i] + Aux[i]; }
+        return s;
+    }
+
+    /// <summary>칸 c 둘레(반경 SpotRadius) 일어난 일의 관심 합 (하이라이트 문턱).</summary>
     public float SpotScore(int c)
     {
         if (c < 0) return 0;
@@ -190,19 +203,19 @@ public sealed partial class Director
         bool watching = FocusCell >= 0 && !_resting;
         for (int i = 0; i < Heat.Length; i++)
         {
-            float h = Heat[i];
+            float h = Heat[i] + Aux[i];
             if (h <= outMax) continue;
             if (h > max) { max = h; top = i; }
             if (watching && !InView(i)) { outMax = h; outTop = i; }
         }
         _top = top; _max = max;
         if (top < 0 || max < 1) { if (FocusCell < 0) { FocusCell = L.Index(L.W / 2, L.H / 2); _resting = true; } Subject = -1; SceneRoot = 0; return; }
-        float cur = _resting ? 0 : SpotScore(FocusCell);
+        float cur = _resting ? 0 : ViewScore(FocusCell);
         // 1. 사슬의 앞머리: 사슬이 새 엔진으로 번진 곳이 화면 밖이면 (결정적 순간이 아니고 · 지금 장면을 2초는 봤으면) 그리로 간다
         if (_pullCell >= 0)
         {
             if (ScreenSeconds - _pullAt > CaughtSec || InView(_pullCell)) _pullCell = -1;
-            else if (_criticalLeft <= 0 && (_resting || _sinceSwitch >= PullHoldSec) && SpotScore(_pullCell) >= cur * 0.25f)
+            else if (_criticalLeft <= 0 && (_resting || _sinceSwitch >= PullHoldSec) && ViewScore(_pullCell) >= cur * 0.25f)
             {
                 CutTo(sim, _pullCell, t, _pullRoot, _pullActor); Pulls++; _pullCell = -1;
                 Frame(max); return;
@@ -211,12 +224,12 @@ public sealed partial class Director
         // 주인공이 이야기 속에서 움직이면 따라간다 — 그가 떠나온 자리(같은 장면의 식은 자리)로는 되돌아 자르지 않는다
         int sc = _resting || FocusCell < 0 ? -1 : SubjectCell(sim, t);
         bool following = sc >= 0 && Math.Max(Math.Abs(L.X(sc) - L.X(FocusCell)), Math.Abs(L.Y(sc) - L.Y(FocusCell))) <= FollowReach;
-        float cand = SpotScore(top);
+        float cand = ViewScore(top);
         bool urgent = cand > cur * 3 && cand > 50;
         if ((FocusCell < 0 || _resting || urgent || cand > cur * 1.5f && _sinceSwitch >= HoldScreenSec) && !(following && SameScene(top, t)))
             CutTo(sim, top, t);
         // 2. 두 곳 오가기: 화면 밖에 지금 장면의 반쯤 되는 일이 오래 안 보였으면 잠깐 그리로 (영화의 엇갈려 보여 주기)
-        else if (outTop >= 0 && _sinceSwitch >= CrossHoldSec && _criticalLeft <= 0 && SpotScore(outTop) is float c2 && c2 > 30 && c2 >= cur * 0.5f && !SameScene(outTop, t))
+        else if (outTop >= 0 && _sinceSwitch >= CrossHoldSec && _criticalLeft <= 0 && ViewScore(outTop) is float c2 && c2 > 30 && c2 >= cur * 0.5f && !SameScene(outTop, t))
         {
             CutTo(sim, outTop, t); CrossCuts++;
         }
@@ -225,17 +238,17 @@ public sealed partial class Director
             // 지금 장면 안: 주인공(업고 뛰는 사람 · 도망치는 사람 · 쓰러진 사람)을 따라가고, 아니면 가장 뜨거운 곳으로 '훑기' (장면 바꿈이 아니다)
             if (following)
             {
-                Heat[sc] += SubjectHeat; FocusCell = sc; FollowTicks++;
+                Aux[sc] += SubjectHeat; FocusCell = sc; FollowTicks++;
             }
             else
             {
-                int best = FocusCell; float bm = Heat[FocusCell];
+                int best = FocusCell; float bm = Heat[FocusCell] + Aux[FocusCell];
                 int fx0 = L.X(FocusCell), fy0 = L.Y(FocusCell);
                 for (int y = Math.Max(0, fy0 - SpotRadius); y <= Math.Min(L.H - 1, fy0 + SpotRadius); y++)
                     for (int x = Math.Max(0, fx0 - SpotRadius); x <= Math.Min(L.W - 1, fx0 + SpotRadius); x++)
                     {
                         int i = L.Index(x, y);
-                        if (Heat[i] > bm * 1.2f) { bm = Heat[i]; best = i; }
+                        if (Heat[i] + Aux[i] > bm * 1.2f) { bm = Heat[i] + Aux[i]; best = i; }
                     }
                 FocusCell = best;
             }
@@ -251,7 +264,7 @@ public sealed partial class Director
         int fx = L.X(FocusCell), fy = L.Y(FocusCell);
         for (int y = Math.Max(0, fy - 20); y <= Math.Min(L.H - 1, fy + 20); y++)
             for (int x = Math.Max(0, fx - 30); x <= Math.Min(L.W - 1, fx + 30); x++)
-                if (Heat[L.Index(x, y)] > cut) { minX = Math.Min(minX, x); maxX = Math.Max(maxX, x); minY = Math.Min(minY, y); maxY = Math.Max(maxY, y); }
+                if (Heat[L.Index(x, y)] + Aux[L.Index(x, y)] > cut) { minX = Math.Min(minX, x); maxX = Math.Max(maxX, x); minY = Math.Min(minY, y); maxY = Math.Max(maxY, y); }
         Zoom = Math.Clamp(Math.Max(maxX - minX, (maxY - minY) * 2) + 10, 14, 64);
     }
 
