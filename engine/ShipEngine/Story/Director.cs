@@ -159,6 +159,8 @@ public sealed partial class Director
         if (chem != null && chem.BurningCount > 0) danger = true;
         if (danger) _lastDanger = t;
         if (mind != null && life != null && t % SenseEvery == 0) Sense(sim, mind, life, chem, t);
+        Foresight(sim, t);
+        Anticipate(sim, t);
 
         Camera(sim, t);
         Grade(sim, screen, _top, _max);
@@ -226,10 +228,11 @@ public sealed partial class Director
         bool following = sc >= 0 && Math.Max(Math.Abs(L.X(sc) - L.X(FocusCell)), Math.Abs(L.Y(sc) - L.Y(FocusCell))) <= FollowReach;
         float cand = ViewScore(top);
         bool urgent = cand > cur * 3 && cand > 50;
-        if ((FocusCell < 0 || _resting || urgent || cand > cur * 1.5f && _sinceSwitch >= HoldScreenSec) && !(following && SameScene(top, t)))
+        bool held = t < _foreHold;   // 미리 본 큰 일을 기다리는 중 — 다른 곳으로 자르지 않는다
+        if (!held && (FocusCell < 0 || _resting || urgent || cand > cur * 1.5f && _sinceSwitch >= HoldScreenSec) && !(following && SameScene(top, t)))
             CutTo(sim, top, t);
         // 2. 두 곳 오가기: 화면 밖에 지금 장면의 반쯤 되는 일이 오래 안 보였으면 잠깐 그리로 (영화의 엇갈려 보여 주기)
-        else if (outTop >= 0 && _sinceSwitch >= CrossHoldSec && _criticalLeft <= 0 && ViewScore(outTop) is float c2 && c2 > 30 && c2 >= cur * 0.5f && !SameScene(outTop, t))
+        else if (!held && outTop >= 0 && _sinceSwitch >= CrossHoldSec && _criticalLeft <= 0 && ViewScore(outTop) is float c2 && c2 > 30 && c2 >= cur * 0.5f && !SameScene(outTop, t))
         {
             CutTo(sim, outTop, t); CrossCuts++;
         }

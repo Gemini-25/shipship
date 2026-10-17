@@ -46,6 +46,28 @@ public static partial class Program
                 $"처음 터진 곳 {atA} · 딴 일에 머묾 {stayed} · 번진 곳까지 {reached:0.0}초 · 끌림 {d.Pulls} · 사슬 '{rec?.Path}' ({rec?.Count}개 엔진)");
         }
 
+        // ── 미리 보기: 오른쪽 끝으로 운석이 온다 (2분 거리) · 카메라는 왼쪽 끝 작은 일을 보고 있다 — 복제 세계로 앞을 돌려 보고, 부딪히는 그 순간에는 이미 그 자리를 보고 있다 ──
+        {
+            var s = Worlds.Full(lay, 7);
+            var d = new Director(s.Layout) { KeepRing = false };
+            int keep = s.Causes.Add(CauseKind.Fire, "왼쪽 방 상자가 그을린다", s.Tick, A);
+            int c0 = s.Causes.Add(CauseKind.Story, "운석 하나가 배를 향해 온다", s.Tick);
+            s.Get<Outside>().AddRock(0.3, 6000, -1, 0, 0, 6000 * 60 * 2, c0);   // 오른쪽에서 왼쪽으로 · 2분 거리
+            long cursor = s.Facts.Total; bool hit = false, seenAtHit = false; int hitCell = -1;
+            for (int i = 0; i < Time.Minutes(4) && !hit; i++)
+            {
+                if (i % 6 == 0) s.Facts.Emit(s.Tick, FactKind.FireSpread, A, 1, keep);
+                s.Step();
+                foreach (var f in s.Facts.Since(cursor))
+                    if (!hit && f.Kind is FactKind.Impact or FactKind.WallBreach && f.Cell >= 0) { hit = true; hitCell = f.Cell; seenAtHit = d.InView(f.Cell); }   // 연출이 그 일을 읽기 전 화면
+                cursor = s.Facts.Total;
+                d.Observe(s);
+            }
+            Check("미리 보기: 오른쪽 끝으로 오는 운석 — 복제 세계로 앞을 돌려 보고 · 부딪히는 그 순간에는 이미 그 자리를 보고 있다 (왼쪽 끝 작은 일을 두고)",
+                hit && seenAtHit && d.Foresights > 0 && d.ForeCuts > 0,
+                $"부딪힘 {hit} (칸 x {(hitCell >= 0 ? lay.X(hitCell) : -1)}) · 그때 화면 안 {seenAtHit} · 미리 보기 {d.Foresights}번 · 본 일 {d.Predicted} · 미리 자름 {d.ForeCuts} · {d.ForeseeMs / Math.Max(1, d.Foresights):0.0}ms");
+        }
+
         // ── 몸으로 읽는 조짐: 닫힌 방에 작은 구멍 — 기압이 천천히 떨어진다 (사실은 없다) · 배 반대편에 작은 볼거리가 줄곧 있어도 몸이 알기(산소 포화 0.9 아래) 전에 카메라가 그 사람에게 간다 ──
         {
             var sealedLay = Worlds.Ascii(LongShip.Replace("#........D......", "#........#......"));
