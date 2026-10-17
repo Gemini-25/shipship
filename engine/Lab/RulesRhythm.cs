@@ -62,6 +62,49 @@ public static partial class Program
                 $"마친 쉼 {finished} · 중간에 그만둔 번 {flips} · 지루함 {m[p].C.Bored:0.00} · {m.Thought(p)}");
         }
 
+        // ── 습관 — 단골 자리: 오른쪽 방 책장에서 여러 번 읽은 이는, 왼쪽 끝 배식기에서 먹고 나서 가까운 왼쪽 방 책장을 두고 먼 단골 책장으로 돌아간다
+        //    대조: 단골이 없는 같은 사람(곧바로 배고프다)은 가까운 왼쪽 방 책장으로 간다 ──
+        {
+            var legend = Worlds.MindLegend; legend['k'] = "Bookshelf";
+            var lay = Worlds.Ascii(Worlds.MindShip.Replace("#..p.b....D.............#", "#..p.bk...D.............#")
+                                                  .Replace("#.........#.............#", "#.........#..........k..#")
+                                                  .Replace("#m.r..........w.....m...#", "#m.r..........w.........#"), legend);
+            int At(int x, int y) => Worlds.At(lay, x, y);
+            int right = lay.Room[At(21, 3)];
+            (int room, int sessions, int n) Run(bool primed)
+            {
+                var s = Worlds.Full(lay, 9);
+                var m = s.Get<Mind>();
+                int p = m.AddPerson(s, At(21, 3));
+                m.SetPersonality(p, 0.9f, 0.1f, 0.1f, 0.5f, 0.3f);
+                s.Run(1);
+                m[p].C.SkRepair = 0;
+                long start = m.HobbyCount.Sum();
+                for (long k = 0; primed && k < Time.Hours(7); k++)
+                {
+                    s.Step(); ref var c = ref m[p].C;
+                    c.Sleepy = 0; c.Hunger = 0; c.Thirst = 0; c.Lonely = 0; c.Bored = Math.Max(c.Bored, 0.8f);
+                }
+                int sessions = (int)(m.HobbyCount.Sum() - start);
+                int fav = m.Habit(p, Hobby.Read, out int n);
+                m[p].C.Hunger = 0.95f;                                          // 배고프다 — 왼쪽 끝 배식기로
+                long meals = m.Meals; int room = -1;
+                for (long k = 0; k < Time.Hours(3) && room < 0; k++)
+                {
+                    s.Step(); ref var c = ref m[p].C;
+                    c.Sleepy = 0; c.Thirst = 0; c.Lonely = 0;
+                    if (m.Meals == meals) c.Bored = 0; else c.Bored = Math.Max(c.Bored, 0.8f);
+                    if (m.Meals > meals && c.Goal == GoalKind.Relax && c.Hobby == (byte)Hobby.Read && c.StepIndex < m[p].Plan.Count && m[p].Plan[c.StepIndex].Kind == StepKind.Use) room = m.RoomOf(c.Cell);
+                }
+                if (Debug) Console.WriteLine($"    {(primed ? "단골 있음" : "단골 없음")}: 앞서 쉰 번 {sessions} · 단골 {fav} 굳기 {n} · 먹은 뒤 읽은 방 {room} (오른쪽 {right})");
+                return (room, sessions, n);
+            }
+            var primed = Run(true); var fresh = Run(false);
+            Check("습관 — 단골 자리: 오른쪽 방 책장에서 여러 번 읽은 이는 먹고 난 뒤 가까운 책장을 두고 먼 단골 책장으로 돌아간다 · 단골이 없는 같은 사람은 가까운 쪽으로",
+                primed.n >= 5 && primed.room == right && fresh.room >= 0 && fresh.room != right,
+                $"단골 굳기 {primed.n} (쉰 번 {primed.sessions}) → 먹은 뒤 {(primed.room == right ? "단골 책장" : "가까운 책장")} / 단골 없음 → {(fresh.room == right ? "먼 책장" : fresh.room >= 0 ? "가까운 책장" : "읽지 않음")}");
+        }
+
         // ── 쉬는 시간: 책장 · 놀이 탁자 · 작업대가 있는 배 — 내향적이고 열린 이는 책을 · 외향적인 이는 놀이판을 · 성실하고 손재주 있는 이는 작업대에서 만든다 (만들수록 손재주가 는다) ──
         {
             var legend = Worlds.MindLegend; legend['k'] = "Bookshelf"; legend['g'] = "GameTable";

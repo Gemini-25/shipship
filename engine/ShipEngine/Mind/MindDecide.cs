@@ -708,7 +708,7 @@ public sealed partial class Mind
         return false;
     }
 
-    private int NearestFree(Agent a, int[] furn)
+    private int NearestFree(Agent a, int[] furn, int habit = -1)
     {
         int best = -1, bd = int.MaxValue;
         foreach (int fu in furn)
@@ -718,7 +718,7 @@ public sealed partial class Mind
             bool used = false;
             foreach (var o in Agents) if (o != a && o.C.Cell == cell && o.C.Goal is GoalKind.Relax or GoalKind.Socialize or GoalKind.Sleep) { used = true; break; }
             if (used) continue;
-            int d = Manhattan(a.C.Cell, cell) + (int)(60 * DreadAt(a, cell)); // 꺼리는 방은 그만큼 멀게 친다 (장소의 기억)
+            int d = Manhattan(a.C.Cell, cell) + (int)(60 * DreadAt(a, cell)) - (habit >= 0 ? HabitPull(a, (Hobby)habit, cell) : 0); // 꺼리는 방은 멀게 · 단골 자리는 가깝게
             if (d < bd) { bd = d; best = cell; }
         }
         return best;

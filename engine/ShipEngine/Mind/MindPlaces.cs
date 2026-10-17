@@ -50,6 +50,6 @@ public sealed partial class Mind
         }
     }
 
-    private void SavePlaces(StateWriter w) { w.Arr(_dread); w.I64(Dreads); }
-    private void LoadPlaces(StateReader r) { _dread = r.Arr<float>(); Dreads = r.I64(); }
+    private void SavePlaces(StateWriter w) { w.Arr(_dread); w.I64(Dreads); w.Arr(_habitCell); w.Arr(_habitN); }
+    private void LoadPlaces(StateReader r) { _dread = r.Arr<float>(); Dreads = r.I64(); _habitCell = r.Arr<int>(); _habitN = r.Arr<byte>(); }
 }

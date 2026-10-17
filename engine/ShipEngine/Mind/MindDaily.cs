@@ -9,12 +9,38 @@ public enum Hobby : byte { Rest, Read, Game, Film, Music, Study, Tinker }
 /// 잘 시간대(교대에 맞춘 여덟 시간)가 몸의 시계만큼 앞뒤로 옮겨 간다 — 아침형은 일찍 눕고 일찍 일어나고 · 저녁형은 늦게까지 깨어 있다 (교대 시작은 그대로라 저녁형은 졸린 채 일하러 간다).</para>
 /// <para><b>쉬는 시간</b>: 책 (열림 · 내향) · 놀이판 (외향 · 같이 할 사람) · 영상 · 음악 (신경성 — 마음이 가라앉는다) · 자료 공부 (과학 솜씨 · 열림) · 손으로 만들기 (수리 솜씨 · 성실).
 /// 가까운 빈 설비 쪽으로 · 한 시간마다 다시 고른다 · 같은 시드면 같다. 공부 · 만들기는 하는 만큼 솜씨가 조금씩 는다 (45분에 남은 몫의 0.8%).</para>
+/// <para><b>습관</b>: 쉬는 일마다 단골 자리가 있다 — 같은 자리에서 마칠수록 굳고 (많아야 10) · 굳은 만큼 가깝게 친다 (× 4칸 — 열이면 40칸) ·
+/// 다른 자리에서 하면 풀리다가 바뀐다. 같은 맥락에서 되풀이할수록 습관이 된다 (습관 형성 연구 — 맥락이 행동을 불러낸다).</para>
 /// </summary>
 public sealed partial class Mind
 {
     private int[] _books = Array.Empty<int>(), _games = Array.Empty<int>(), _films = Array.Empty<int>(), _study = Array.Empty<int>(), _tinker = Array.Empty<int>();
     private bool _hobbyBound;
     public long[] HobbyCount = new long[7];
+    private int[] _habitCell = Array.Empty<int>();   // [사람 × 쉬는 일] 단골 자리 (설비 칸 · −1 없음)
+    private byte[] _habitN = Array.Empty<byte>();    // 그 자리에서 거듭한 만큼 (0~10)
+
+    /// <summary>그 사람의 그 쉬는 일 단골 자리와 굳은 정도 (0~10).</summary>
+    public int Habit(int agent, Hobby h, out int n)
+    {
+        int k = agent * 7 + (int)h;
+        if (k < 0 || k >= _habitN.Length || _habitN[k] == 0) { n = 0; return -1; }
+        n = _habitN[k]; return _habitCell[k];
+    }
+
+    /// <summary>쉼을 마친 자리를 단골에 새긴다: 같은 자리면 굳고 (많아야 10) · 다른 자리면 풀리다가 바뀐다.</summary>
+    private void Groove(Agent a, Hobby h, int cell)
+    {
+        if (cell < 0) return;
+        if (_habitN.Length < Agents.Count * 7) { Array.Resize(ref _habitN, Agents.Count * 7); int old = _habitCell.Length; Array.Resize(ref _habitCell, Agents.Count * 7); for (int i = old; i < _habitCell.Length; i++) _habitCell[i] = -1; }
+        int k = a.Id * 7 + (int)h;
+        if (_habitN[k] == 0) { _habitCell[k] = cell; _habitN[k] = 1; }
+        else if (_habitCell[k] == cell) _habitN[k] = (byte)Math.Min(10, _habitN[k] + 1);
+        else if (--_habitN[k] == 0) { _habitCell[k] = cell; _habitN[k] = 1; }
+    }
+
+    /// <summary>단골 자리면 그만큼 가깝게 친다 (굳은 정도 × 4칸).</summary>
+    private int HabitPull(Agent a, Hobby h, int cell) => Habit(a.Id, h, out int n) == cell ? 4 * n : 0;
 
     public static string HobbyName(Hobby h) => h switch
     {
@@ -53,7 +79,7 @@ public sealed partial class Mind
             int cell = L.Furniture[fu].Cells[0], n = 0;
             foreach (var o in Agents) if (o != a && o.IsPerson && o.C.Goal == GoalKind.Relax && o.C.Hobby == (byte)h && Manhattan(o.C.GoalCell >= 0 ? o.C.GoalCell : o.C.Cell, cell) <= 2) n++;
             if (n >= cap) continue;
-            int d = Manhattan(a.C.Cell, cell) + (int)(60 * DreadAt(a, cell)); // 꺼리는 방은 그만큼 멀게 친다
+            int d = Manhattan(a.C.Cell, cell) + (int)(60 * DreadAt(a, cell)) - HabitPull(a, h, cell); // 꺼리는 방은 멀게 · 단골 자리는 가깝게 친다
             if (d < bd) { bd = d; best = cell; }
         }
         return best;
@@ -71,10 +97,11 @@ public sealed partial class Mind
         {
             if (cell < 0 || w <= 0) return;
             if (RivalNear(a, cell)) w *= 0.3f;                       // ⑨ 벌어진 무리 사람 곁에서는 쉬지 않는다
+            if (Habit(a.Id, h, out int hn) == cell) w *= 1 + 0.05f * hn; // 단골 자리의 그 일은 조금 더 끌린다
             w *= 1 - 0.85f * DreadAt(a, cell);                       // 무서운 일을 겪은 방에서는 쉬지 않는다
             opts.Add((h, cell, near, w / (1f + Manhattan(me, cell) / 30f)));
         }
-        int seat = NearestFree(a, _relax);
+        int seat = NearestFree(a, _relax, (int)Hobby.Rest);
         Opt(Hobby.Rest, seat, 0, 0.5f);
         int book = NearestShared(a, _books, 3, Hobby.Read);
         Opt(Hobby.Read, book >= 0 ? book : seat, book >= 0 ? 1 : 0, 0.3f + c.Open + 0.5f * (1 - c.Extra));
@@ -87,8 +114,8 @@ public sealed partial class Mind
         }
         Opt(Hobby.Film, NearestShared(a, _films, 6, Hobby.Film), 2, 0.5f + 0.3f * c.Extra);
         Opt(Hobby.Music, seat >= 0 ? seat : c.Bed >= 0 && !Taken(a, c.Bed) ? c.Bed : -1, 0, 0.3f + 0.6f * c.Neuro);
-        Opt(Hobby.Study, NearestFree(a, _study), 0, 0.2f + c.SkScience + 0.6f * c.Open);
-        Opt(Hobby.Tinker, NearestFree(a, _tinker), 0, 0.2f + c.SkRepair + 0.6f * c.Consc);
+        Opt(Hobby.Study, NearestFree(a, _study, (int)Hobby.Study), 0, 0.2f + c.SkScience + 0.6f * c.Open);
+        Opt(Hobby.Tinker, NearestFree(a, _tinker, (int)Hobby.Tinker), 0, 0.2f + c.SkRepair + 0.6f * c.Consc);
         if (opts.Count == 0) return false;
         float sum = 0; foreach (var o in opts) sum += o.w;
         float r = (float)Rng.Unit(sim.Seed, Rng.Key("쉼"), a.Id, sim.Tick / Time.Hours(1)) * sum;
@@ -101,11 +128,12 @@ public sealed partial class Mind
     }
 
     /// <summary>쉼을 마쳤다: 하는 일마다 다르게 풀린다 · 공부 · 만들기는 솜씨가 는다.</summary>
-    private void FinishRelax(Agent a)
+    private void FinishRelax(Agent a, int spot)
     {
         ref var c = ref a.C;
         var h = (Hobby)c.Hobby;
         HobbyCount[(int)h]++;
+        Groove(a, h, spot);
         switch (h)
         {
             case Hobby.Game:
