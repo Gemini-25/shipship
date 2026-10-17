@@ -13,6 +13,9 @@ public sealed class LiveFrame
     public float BannerAlpha;
     public long Tick;
     public string Replay = "";            // 다시보기 중이면 그 하이라이트 제목
+    public double CamLeft, CamTop, CamW, CamH;   // 화면이 보는 곳 (칸 · 소수) — 누른 자리를 칸으로 바꿀 때
+    public string[] Card = Array.Empty<string>(); // 고른 사람 · 로봇 카드 (첫 줄: 이름)
+    public double SelX = double.NaN, SelY;        // 고른 이가 그려진 자리 (칸 · 가운데)
 }
 
 /// <summary>
@@ -132,6 +135,7 @@ public sealed class LiveShow
         var vd = View;
         double tx = CamX, ty = CamY, tw = ViewW;
         if (Overview) { tx = (_bbox.x0 + _bbox.x1 + 1) / 2.0; ty = (_bbox.y0 + _bbox.y1 + 1) / 2.0; tw = Math.Max(_bbox.x1 - _bbox.x0 + 1, (_bbox.y1 - _bbox.y0 + 1) / Aspect); }
+        else if (Selected >= 0 && FollowSelected) { var (sx, sy) = DrawnAt(Selected); if (!double.IsNaN(sx)) { tx = sx; ty = sy; tw = Math.Clamp(ViewW, FollowMin, FollowMax); } }
         else if (Follow && vd.FocusCell >= 0) { tx = L.X(vd.FocusCell) + 0.5; ty = L.Y(vd.FocusCell) + 0.5; tw = Math.Clamp(vd.Zoom, FollowMin, FollowMax); }
         double k = 1 - Math.Exp(-realSec * 2.5);
         CamX += (tx - CamX) * k; CamY += (ty - CamY) * k; ViewW += (tw - ViewW) * k;
@@ -209,9 +213,88 @@ public sealed class LiveShow
         return ((int)Math.Round((px - L.X(cell)) * Painter.T), (int)Math.Round((py - L.Y(cell)) * Painter.T));
     }
 
+    // ───────────────────────── 사람 눌러 보기 ─────────────────────────
+
+    /// <summary>고른 사람 · 로봇 (-1: 없음). 고르면 카메라가 그를 따라간다 (손으로 옮기거나 F를 누르면 놓는다).</summary>
+    public int Selected = -1;
+    public bool FollowSelected;
+
+    /// <summary>그 사람 · 로봇이 그려진 자리 (칸 · 가운데 — 걸음 사이 메우기 포함).</summary>
+    public (double x, double y) DrawnAt(int agent)
+    {
+        var mind = World.Find<Mind>();
+        if (mind == null || (uint)agent >= (uint)mind.Agents.Count) return (double.NaN, 0);
+        var a = mind.Agents[agent];
+        var L = Sim.Layout;
+        var (nx, ny) = Nudge(a);
+        return (L.X(a.C.Cell) + 0.5 + nx / (double)Painter.T, L.Y(a.C.Cell) + 0.5 + ny / (double)Painter.T);
+    }
+
+    /// <summary>화면에서 누른 자리(칸 · 소수)에 가장 가까운 사람 · 로봇을 고른다 (한 칸 안) — 없으면 고른 것을 놓는다.</summary>
+    public bool SelectAt(double x, double y)
+    {
+        var mind = World.Find<Mind>();
+        int best = -1; double bd = 0.9 * 0.9;
+        if (mind != null)
+            foreach (var a in mind.Agents)
+            {
+                var (ax, ay) = DrawnAt(a.Id);
+                double d = (ax - x) * (ax - x) + (ay - y - 0.15) * (ay - y - 0.15); // 그림은 칸 위쪽으로 조금 솟는다
+                if (d < bd) { bd = d; best = a.Id; }
+            }
+        Selected = best; FollowSelected = best >= 0;
+        return best >= 0;
+    }
+
+    /// <summary>고른 이의 카드: 이름 · 맡은 일 / 지금 생각 / 몸 / 마음 · 바람 (로봇: 전지 · 손상) / 죽었으면 그 까닭.</summary>
+    public string[] Card()
+    {
+        if (Selected < 0) return Array.Empty<string>();
+        var w = World;
+        var mind = w.Find<Mind>(); var life = w.Find<Life>();
+        if (mind == null || Selected >= mind.Agents.Count) return Array.Empty<string>();
+        var a = mind.Agents[Selected];
+        var lines = new List<string>();
+        string role = a.IsPerson && a.C.Role < mind.RoleNames.Length ? " · " + mind.RoleNames[a.C.Role] : "";
+        lines.Add(mind.NameOf(a.Id) + role);
+        if (a.IsPerson && life != null && a.C.Body >= 0)
+        {
+            var b = life.Bodies[a.C.Body];
+            if (b.Alive == 0)
+            {
+                lines.Add("죽었다 — " + Time.Clock(b.DiedAt));
+                if (b.DeathCause != 0) lines.Add(w.Causes.Story(b.DeathCause));
+                return lines.ToArray();
+            }
+            lines.Add("생각: " + (b.Conscious == 0 ? "(의식이 없다)" : b.Asleep != 0 ? "(자는 중)" : mind.Thought(a.Id)));
+            string state = b.Conscious == 0 ? "쓰러짐" : b.Asleep != 0 ? "잠" : "깨어 있음";
+            lines.Add($"몸: {state} · 핏속 산소 {b.SpO2 * 100:0}% · 체온 {b.CoreK - 273.15:0.0}℃{(b.Suit != 0 ? " · 우주복" : "")}");
+            var hurt = new List<string>();
+            if (b.Burn > 0.05f) hurt.Add($"화상 {b.Burn * 100:0}");
+            if (b.Bleed > 0.01f) hurt.Add("피가 난다");
+            if (b.Blunt > 0.05f) hurt.Add($"타박 {b.Blunt * 100:0}");
+            if (b.LungDamage > 0.05f) hurt.Add($"폐 {b.LungDamage * 100:0}");
+            if (b.COHb > 0.05f) hurt.Add($"일산화탄소 {b.COHb * 100:0}%");
+            if (b.Hypoxia > 0.1f) hurt.Add("숨이 모자랐다");
+            if (hurt.Count > 0) lines.Add("다침: " + string.Join(" · ", hurt));
+            var c = a.C;
+            var feel = new List<(string, float)> { ("두려움", c.Fear), ("슬픔", c.Sad), ("화", c.Anger), ("기쁨", c.Joy), ("긴장", c.Stress) }
+                .Where(x => x.Item2 > 0.3f).OrderByDescending(x => x.Item2).Select(x => x.Item1).Take(2).ToList();
+            var want = new List<(string, float)> { ("배고픔", c.Hunger), ("목마름", c.Thirst), ("졸림", c.Sleepy), ("외로움", c.Lonely), ("심심함", c.Bored) }
+                .Where(x => x.Item2 > 0.6f).OrderByDescending(x => x.Item2).Select(x => x.Item1).Take(2).ToList();
+            if (feel.Count + want.Count > 0) lines.Add("마음: " + string.Join(" · ", feel.Concat(want)));
+        }
+        else
+        {
+            lines.Add("하는 일: " + mind.Thought(a.Id));
+            lines.Add($"전지 {a.C.Battery * 100:0}% · 손상 {a.C.Damage * 100:0}%");
+        }
+        return lines.ToArray();
+    }
+
     /// <summary>손으로 카메라 옮기기 (따라가기를 끈다).</summary>
-    public void Pan(double dx, double dy) { Follow = false; Overview = false; var c = Camera(); CamX = c.left + c.w / 2 + dx; CamY = c.top + c.h / 2 + dy; }
-    public void ZoomBy(double f) { Follow = false; Overview = false; ViewW = Math.Clamp(ViewW * f, MinView, MaxView); }
+    public void Pan(double dx, double dy) { Follow = false; Overview = false; FollowSelected = false; var c = Camera(); CamX = c.left + c.w / 2 + dx; CamY = c.top + c.h / 2 + dy; }
+    public void ZoomBy(double f) { if (!FollowSelected) Follow = false; Overview = false; ViewW = Math.Clamp(ViewW * f, MinView, MaxView); }
 
     /// <summary>지금 화면이 보는 곳 (칸 · 소수): 배 둘레 안으로 맞춘다 (배보다 넓으면 가운데).</summary>
     public (double left, double top, double w, double h) Camera()
@@ -235,6 +318,7 @@ public sealed class LiveShow
         while (_spare.TryTake(out var sp)) { if (reuse == null && sp.W == wc * Painter.T && sp.H == hc * Painter.T) reuse = sp; else keep.Add(sp); }
         foreach (var k in keep.Take(2)) _spare.Add(k);
         var img = Painter.Frame(World, x0, y0, wc, hc, (int)(_anim * AnimFps), reuse);
+        (double x, double y) sel = Selected >= 0 ? DrawnAt(Selected) : (double.NaN, 0.0);
         return new LiveFrame
         {
             Img = img,
@@ -243,6 +327,8 @@ public sealed class LiveShow
             Ship = ShipName, Status = Status(), Story = Story(), Mood = View.Mood,
             Banner = BannerLeft > 0 ? Banner : "", BannerAlpha = (float)Math.Clamp(Math.Min(BannerLeft, BannerSec - BannerLeft) / 0.5, 0, 1),
             Tick = World.Tick, Replay = _replayOf?.Title ?? "",
+            CamLeft = left, CamTop = top, CamW = w, CamH = h,
+            Card = Card(), SelX = sel.x, SelY = sel.y,
         };
     }
 

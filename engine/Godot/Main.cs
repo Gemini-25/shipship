@@ -46,11 +46,12 @@ public partial class Main : Node2D
     private int _gotFrames, _fpsFrames; private double _meterT; private int _picPerSec, _screenPerSec;
     private Vector2 _lastSize;
     private bool _dragging;
+    private Vector2 _pressAt; private float _dragDist;
 
     // ── 확인용 (명령 줄: --shots=폴더 --every=초 --for=초) — 몇 초마다 화면을 찍고, 끝나면 프레임 시간을 적고 나간다 ──
     private string? _shotDir;
     private double _shotEvery = 10, _runFor, _runT, _nextShot = 3;
-    private int _shotN, _picsTotal;
+    private int _shotN, _picsTotal, _pick = -1;
     private readonly System.Collections.Generic.List<double> _frameMs = new();
 
     public override void _Ready()
@@ -66,6 +67,7 @@ public partial class Main : Node2D
             else if (a.StartsWith("--shots=")) _shotDir = a[8..];
             else if (a.StartsWith("--every=")) _shotEvery = double.Parse(a[8..], System.Globalization.CultureInfo.InvariantCulture);
             else if (a.StartsWith("--for=")) _runFor = double.Parse(a[6..], System.Globalization.CultureInfo.InvariantCulture);
+            else if (a.StartsWith("--pick=") && int.TryParse(a[7..], out var pk)) _pick = pk;
         }
         if (_shotDir != null) { System.IO.Directory.CreateDirectory(_shotDir); _help = true; _helpLeft = 4; }
         _shipAt = Math.Max(0, Array.IndexOf(_ships, ship));
@@ -174,6 +176,7 @@ public partial class Main : Node2D
     private void Check(double delta)
     {
         _runT += delta;
+        if (_pick >= 0 && _runT > 3) { int who = _pick; _pick = -1; _cmds.Enqueue(s => { s.Selected = who; s.FollowSelected = true; }); }
         if (_shown != null && _runT > 1) _frameMs.Add(delta * 1000);
         if (_shotDir != null && _shown != null && _runT >= _nextShot)
         {
@@ -236,8 +239,30 @@ public partial class Main : Node2D
             DrawMultilineString(_font, new Vector2(20, vp.Y - 38), f.Story, HorizontalAlignment.Left, vp.X - 40, 17, 2, new Color(0.88f, 0.9f, 0.95f));
         }
 
+        if (f.Card.Length > 0) DrawCard(f, vp);
         if (_meter) DrawString(_font, new Vector2(vp.X - 300, 60), $"초당 화면 {_screenPerSec}장 · 그림 {_picPerSec}장", HorizontalAlignment.Right, 284, 14, new Color(0.6f, 0.9f, 0.6f));
         if (_help) DrawHelp(vp);
+    }
+
+    /// <summary>고른 사람 · 로봇: 그려진 자리에 고리 · 왼쪽에 카드.</summary>
+    private void DrawCard(LiveFrame f, Vector2 vp)
+    {
+        if (!double.IsNaN(f.SelX))
+        {
+            float px = (float)((f.SelX - f.CamLeft) / f.CamW * vp.X), py = (float)((f.SelY - f.CamTop) / f.CamH * vp.Y);
+            float r = (float)(vp.X / f.CamW * 0.62);
+            DrawArc(new Vector2(px, py), r, 0, Mathf.Tau, 40, new Color(1f, 0.9f, 0.45f, 0.9f), 2.5f);
+        }
+        float w = 430, lh = 25, h = 20 + f.Card.Length * lh + 6;
+        var box = new Rect2(16, 56, w, h);
+        DrawRect(box, new Color(0.03f, 0.04f, 0.07f, 0.88f));
+        DrawRect(box, new Color(1f, 0.9f, 0.45f, 0.7f), false, 1.5f);
+        for (int i = 0; i < f.Card.Length; i++)
+        {
+            bool head = i == 0;
+            DrawString(head ? _bold : _font, new Vector2(box.Position.X + 16, box.Position.Y + 28 + i * lh), f.Card[i], HorizontalAlignment.Left, w - 28, head ? 19 : 15,
+                head ? new Color(1f, 0.92f, 0.65f) : new Color(0.86f, 0.89f, 0.95f));
+        }
     }
 
     private void DrawHelp(Vector2 vp)
@@ -250,6 +275,7 @@ public partial class Main : Node2D
             "휠 · + −  확대 / 축소",
             "F  연출을 따라가기      Tab  배 전체",
             "B  방금 그 장면 다시보기 (한 번 더 누르면 돌아오기)",
+            "사람 · 로봇 누르기  생각 · 몸 보기 (그를 따라간다)",
             "N  다음 배      R  같은 배 새로",
             "H  도움말      Esc  나가기",
         };
@@ -275,7 +301,7 @@ public partial class Main : Node2D
                     _cmds.Enqueue(s => s.SpeedOverride = tps);
                     break;
                 }
-                case Key.F: _cmds.Enqueue(s => { s.Follow = true; s.Overview = false; }); break;
+                case Key.F: _cmds.Enqueue(s => { s.Follow = true; s.Overview = false; s.Selected = -1; s.FollowSelected = false; }); break;
                 case Key.B: _cmds.Enqueue(s => { if (s.Replaying) s.StopReplay(); else s.StartReplay(); }); break;
                 case Key.Tab: _cmds.Enqueue(s => s.Overview = !s.Overview); break;
                 case Key.Equal or Key.KpAdd: _cmds.Enqueue(s => s.ZoomBy(0.85)); break;
@@ -291,10 +317,26 @@ public partial class Main : Node2D
         {
             if (mb.Pressed && mb.ButtonIndex == MouseButton.WheelUp) _cmds.Enqueue(s => s.ZoomBy(0.9));
             else if (mb.Pressed && mb.ButtonIndex == MouseButton.WheelDown) _cmds.Enqueue(s => s.ZoomBy(1 / 0.9));
-            else if (mb.ButtonIndex == MouseButton.Left) _dragging = mb.Pressed;
+            else if (mb.ButtonIndex == MouseButton.Left)
+            {
+                if (mb.Pressed) { _dragging = true; _pressAt = mb.Position; _dragDist = 0; }
+                else
+                {
+                    _dragging = false;
+                    if (_dragDist < 6 && _shown != null)
+                    {
+                        // 누름: 그 자리의 사람 · 로봇을 고른다 (없으면 놓는다)
+                        var vp = GetViewportRect().Size; var f = _shown;
+                        double cx = f.CamLeft + mb.Position.X / vp.X * f.CamW, cy = f.CamTop + mb.Position.Y / vp.Y * f.CamH;
+                        _cmds.Enqueue(s => s.SelectAt(cx, cy));
+                    }
+                }
+            }
         }
         else if (e is InputEventMouseMotion mm && _dragging && _shown != null)
         {
+            _dragDist += mm.Relative.Length();
+            if (_dragDist < 6) return;
             double cellPx = GetViewportRect().Size.X / (_shown.SrcW / Painter.T);
             double dx = -mm.Relative.X / cellPx, dy = -mm.Relative.Y / cellPx;
             _cmds.Enqueue(s => s.Pan(dx, dy));

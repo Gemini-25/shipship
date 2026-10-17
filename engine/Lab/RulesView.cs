@@ -130,6 +130,22 @@ public static partial class Program
             started && replayHits == liveHits && liveHits > 0 && replayFrames > 60 && liveStill && !rs.Replaying && rs.World == rs.Sim,
             hl == null ? "하이라이트 없음" : $"'{hl.Title}' · 다시보기 {replayFrames}장 · 충돌 산 세계 {liveHits} / 다시보기 {replayHits} · 산 세계 멈춤 {liveStill} · 돌아옴 {!rs.Replaying}");
 
+        // 사람 눌러 보기: 그려진 자리를 누르면 그 사람을 고르고 카드(이름 · 생각 · 몸)를 띄우고 카메라가 따라간다 · 빈 곳을 누르면 놓는다
+        var pick = new LiveShow(Worlds.Full(lay, 3), "시험호");
+        var pm = pick.Sim.Get<Mind>();
+        int who = pm.AddPerson(pick.Sim, At(15, 2)); pm.AddRobot(pick.Sim, At(20, 7), AgentKind.Robot, At(20, 7));
+        pick.Advance(dt);
+        var (wx, wy) = pick.DrawnAt(who);
+        bool picked = pick.SelectAt(wx + 0.2, wy - 0.3) && pick.Selected == who;
+        var card = pick.Card();
+        for (int i = 0; i < 60 * 4; i++) pick.Advance(dt);
+        var (cl, ct, cw, ch) = pick.Camera(); var (px2, py2) = pick.DrawnAt(who);
+        bool followed = px2 >= cl && px2 <= cl + cw && py2 >= ct && py2 <= ct + ch;
+        bool released = !pick.SelectAt(lay.X(At(3, 8)) + 0.5, lay.Y(At(3, 8)) + 0.5) && pick.Selected == -1 && pick.Card().Length == 0;
+        Check("관전 화면 사람 눌러 보기: 누른 자리의 사람을 고르고 카드(이름 · 맡은 일 · 생각 · 몸)를 띄우고 따라간다 · 빈 곳을 누르면 놓는다",
+            picked && card.Length >= 3 && card[0].StartsWith(pm.NameOf(who)) && card.Any(l => l.StartsWith("생각:")) && card.Any(l => l.StartsWith("몸:")) && followed && released,
+            $"고름 {picked} · 카드 [{string.Join(" / ", card)}] · 따라감 {followed} · 놓음 {released}");
+
         Check("관전 화면: 틱이 드물면 걸음 사이를 메운다 — 한 틱에 지나간 칸들을 따라 사람 · 로봇이 칸 사이 자리에 그려진다",
             partial >= 20 && jumps == 0, $"걸은 틱 {moved} · 칸 사이에 그린 횟수 {partial} · 지나간 길보다 멀리 {jumps}");
     }
