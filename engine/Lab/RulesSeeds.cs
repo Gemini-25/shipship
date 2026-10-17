@@ -11,21 +11,37 @@ public static partial class Program
         Console.WriteLine("\n[⑫ 위험도 · 사람 사이 씨앗]");
         bool Debug = Environment.GetEnvironmentVariable("RULE_DEBUG") == "1";
 
-        // ── 가혹함: 함장이 고른 만큼 — 같은 배 · 같은 성격, 가혹함 2와 7의 이틀 ──
+        // ── 가혹함은 같은 원인을 키운다: 같은 배 · 같은 순간 · 같은 난수에서 가혹함만 2와 7 — 운석이 더 무겁고 · 긴장 목표가 높고 · 쉬는 틈이 짧다 ──
+        {
+            (float rock, double target, double pending) At(byte level)
+            {
+                var s = ShipWorld.Crewed("Hwasal", 8, 3, 1);
+                var st = s.Get<Storyteller>(); st.Level = level;
+                s.Run(5);
+                st.Plant(s, SeedKind.Rock);
+                return (st.Seeds[^1].Size, st.Target(s.Tick), st.Pending);
+            }
+            var lo = At(2); var hi = At(7);
+            Check("가혹함은 같은 원인을 키운다: 같은 순간 · 같은 난수에서 가혹함 7의 운석은 2보다 훨씬 무겁고 · 이야기꾼이 바라는 긴장도 높다",
+                hi.rock > lo.rock * 3 && hi.target > lo.target * 3 && hi.pending > lo.pending * 3,
+                $"운석 {lo.rock:0.00} → {hi.rock:0.00}kg · 긴장 목표 {lo.target:0.0} → {hi.target:0.0} · 터질 긴장 {lo.pending:0.0} → {hi.pending:0.0}");
+        }
+
+        // ── 가혹함: 함장이 고른 만큼 — 같은 배 · 같은 성격, 가혹함 2와 7의 18시간 (작은 배 화살호 — 이틀을 기다리지 않아도 갈린다) ──
         {
             (int seeds, double tension, int events) Run(byte level)
             {
-                var s = ShipWorld.Crewed("Didim", 8, 6, 2);
+                var s = ShipWorld.Crewed("Hwasal", 8, 3, 1);
                 var st = s.Get<Storyteller>(); st.Enabled = true; st.Style = StoryStyle.Balanced; st.Level = level;
                 double sum = 0; int n = 0;
-                for (long t = 0; t < Time.Days(2); t++) { s.Step(); if (t % 250 == 0) { sum += st.Tension; n++; } }
+                for (long t = 0; t < Time.Hours(18); t++) { s.Step(); if (t % 250 == 0) { sum += st.Tension; n++; } }
                 int events = (int)(s.Facts.CountOf(FactKind.Ignition) + s.Facts.CountOf(FactKind.MachineFail) + s.Facts.CountOf(FactKind.WallBreach) + s.Facts.CountOf(FactKind.Hurt) + s.Facts.CountOf(FactKind.Impact));
                 return (st.Seeds.Count, sum / n, events);
             }
             var loT = Task.Run(() => Run(2)); var hi = Run(7); var lo = loT.Result;
             Check("위험도: 함장이 고른 가혹함만큼 — 가혹함 7은 2보다 원인을 더 자주 심고 · 긴장이 높고 · 일이 더 벌어진다",
-                // 씨앗 수만으로 재지 않는다: 가혹하면 일찍 큰 일이 터져 긴장이 높은 동안 이야기꾼이 더 심지 않는다 (긴장이 목표를 넘으면 쉰다) — 그래도 적게 심지는 않는다
-                hi.seeds >= lo.seeds && hi.tension > lo.tension * 2 && hi.events > lo.events,
+                // 가혹하면 일찍 큰 일이 터져 긴장이 높은 동안 이야기꾼이 쉰다 (긴장이 목표를 넘으면) — 그래도 더 적게 심지는 않는다
+                hi.seeds > lo.seeds && hi.tension > lo.tension * 2 && hi.events > lo.events,
                 $"가혹함 2: 씨앗 {lo.seeds} · 긴장 {lo.tension:0.0} · 일 {lo.events} / 가혹함 7: 씨앗 {hi.seeds} · 긴장 {hi.tension:0.0} · 일 {hi.events} · {Storyteller.LevelName(2)} / {Storyteller.LevelName(7)}");
         }
 

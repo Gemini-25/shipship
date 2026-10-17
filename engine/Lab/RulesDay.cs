@@ -1,0 +1,108 @@
+using ShipEngine;
+
+namespace Lab;
+
+/// <summary>
+/// 평시 하루 — 디딤호(6명 · 로봇 2) 하루를 한 번만 돌려 마음(먹고 자고 일함) · 관계(대화 · 다툼) · 물자(장부 · 사바티에 · 공조 응결)를 함께 본다.
+/// 예전엔 세 묶음이 같은 하루를 저마다 돌렸다 (하루 셋 → 하나).
+/// </summary>
+public static partial class Program
+{
+    private static void DayRules()
+    {
+        if (!Do("평시 하루")) return;
+        Console.WriteLine("\n[평시 하루 — 디딤호 6명 · 로봇 2]");
+        bool Debug = Environment.GetEnvironmentVariable("RULE_DEBUG") == "1";
+        double Rh(Sim s)
+        {
+            var f = s.Get<Field>(); double sum = 0; int n = 0;
+            foreach (var room in s.Layout.Rooms) foreach (int c in room.Cells)
+                if (f.Pressure(c) > 50) { sum += f.Partial(f.T.gH2O, c) / Water.SatKPa(f.Temp(c)); n++; }
+            return n > 0 ? sum / n : 0;
+        }
+
+        var day = ShipWorld.Crewed("Didim", 3, 6, 2);
+        var m = day.Get<Mind>(); var life = day.Get<Life>();
+        var people = m.Agents.Where(a => a.IsPerson).ToList();
+        var meals = new int[m.Agents.Count]; var sleep = new int[m.Agents.Count]; var work = new int[m.Agents.Count]; var starving = new int[m.Agents.Count];
+        var lastAte = people.ToDictionary(a => a.Id, a => a.C.AteAt);
+        for (int k = 0; k < Time.Hours(24); k++)
+        {
+            day.Step();
+            foreach (var a in people)
+            {
+                if (a.C.AteAt != lastAte[a.Id]) { meals[a.Id]++; lastAte[a.Id] = a.C.AteAt; }
+                if (life[a.C.Body].Asleep != 0) sleep[a.Id]++;
+                if (a.C.Goal == GoalKind.Work) work[a.Id]++;
+                if (a.C.Hunger >= 0.99f || a.C.Thirst >= 0.9f) starving[a.Id]++;
+                if (Debug && k % 375 == 0 && (a.C.Hunger > 0.8f || a.C.Thirst > 0.8f))
+                    Console.WriteLine($"    {Time.Clock(day.Tick)} {m.NameOf(a.Id)} 배고픔 {a.C.Hunger:0.00} 목마름 {a.C.Thirst:0.00} 목표 {a.C.Goal} · {m.Thought(a.Id)} · 양분 {life[a.C.Body].Reserve:0.0}");
+            }
+            if (Debug && k % Time.Hours(1) == 0)
+                Console.WriteLine($"    {Time.Clock(day.Tick)} " + string.Join(" · ", people.Select(a => $"{m.NameOf(a.Id)}:{a.C.Goal}@{(m.RoomOf(a.C.Cell) >= 0 ? day.Layout.Rooms[m.RoomOf(a.C.Cell)].Name : "-")}")));
+        }
+
+        // ── 마음: 굶거나 목마른 사람 없이 먹고 자고 일한다 · 벽에 금 없음 ──
+        {
+            double sleepH(int id) => sleep[id] / (double)Time.TicksPerHour;
+            // 첫날은 졸림이 사람마다 달라 잠이 하루 경계에 걸린다 — 4~12시간
+            bool ok = people.All(a => life[a.C.Body].Alive != 0 && starving[a.Id] < Time.Hours(1) && meals[a.Id] is >= 2 and <= 6 && sleepH(a.Id) is >= 4 and <= 12);
+            Check("평시 하루 (디딤호 6명 · 로봇 2): 모두 살아 있고 하루 2~6끼 · 한 시간 넘게 굶주리거나 목마른 사람 없음 · 잠 4~12시간 · 일하고 · 벽에 금이 가지 않는다",
+                ok && day.Facts.CountOf(FactKind.WallCrack) == 0 && people.Count(a => work[a.Id] > Time.Hours(2)) >= 4,
+                string.Join(" · ", people.Select(a => $"{m.NameOf(a.Id)} 끼니 {meals[a.Id]} 잠 {sleepH(a.Id):0.0}시간 일 {work[a.Id] / (double)Time.TicksPerHour:0.0}시간 굶주린 {starving[a.Id] / (double)Time.TicksPerHour:0.0}시간"))
+                + $" · 금 {day.Facts.CountOf(FactKind.WallCrack)}");
+        }
+
+        // ── 망: 사람이 탄 하루 끝 — 공급이 수요를 채우고 · 방 온도가 288~300K · 원자로 멀쩡 ──
+        {
+            var net = day.Get<Network>(); var f = day.Get<Field>();
+            var vented = f.L.Rooms.Where(r => net.Vent[r.Id] >= 0).ToList();
+            var temps = vented.Select(r => f.Temp(net.Vent[r.Id])).ToList();
+            var hottest = vented.OrderByDescending(r => f.Temp(net.Vent[r.Id])).First();
+            Check("평시 하루 끝: 공급이 수요를 채우고 · 방 온도가 288~300K · 원자로 멀쩡", net.Supplied >= net.Demanded - 1e-6 && temps.All(t => t > 288 && t < 300) && !net.ReactorScram,
+                $"수요 {net.Demanded:0.0}kW · 원자로 {net.ReactorKw:0.0}kW · 냉각 {net.CoolingKw:0}kW · 방 온도 {temps.Min():0.0}~{temps.Max():0.0}K (가장 더운 곳 {hottest.Name}) · 장치 {net.Devices.Count} · 급전선 {net.Feeders.Count}");
+        }
+
+        // ── 관계: 말은 자주 나누고 · 몸싸움은 없다 (갈등은 드물게만 끝까지 간다) ──
+        {
+            var so = day.Get<Society>();
+            if (Debug) foreach (var x in so.Sayings) Console.WriteLine($"    {Time.Clock(x.Tick)} {m.NameOf(x.Speaker)} → {m.NameOf(x.Listener)} {x.Topic}/{x.End} @ {(m.RoomOf(x.Cell) >= 0 ? day.Layout.Rooms[m.RoomOf(x.Cell)].Name : "-")}");
+            Check("평소의 하루 (디딤호 6명): 대화는 많고 · 다툼은 드물고 · 몸싸움 · 몰래 방해는 없다",
+                so.Talks > 10 && so.Arguments <= 3 && so.Fights == 0 && so.Sabotages == 0,
+                $"대화 {so.Talks} · 다툼 {so.Arguments} · 사과 {so.Apologies} · 소문 {so.Rumors} · 몸싸움 {so.Fights} · 방해 {so.Sabotages} · 가까워짐 {so.Friendships}");
+        }
+
+        // ── 물자 장부: 처음 재고 + 적은 흐름 = 지금 재고 · 며칠 버티나 ──
+        {
+            var w = day.Get<Work>(); var b = day.Book;
+            double worst = 0; string worstName = "";
+            for (int k = 0; k < b.Kinds; k++)
+            {
+                if (k == (int)Res.O2) continue; // 산소는 아래에서 (공기는 새어 나갈 수 있다)
+                double o = Math.Abs(w.Other(day, k)) / Math.Max(1, Math.Abs(w.Stock(k)));
+                if (o > worst) { worst = o; worstName = k < Book.Bulk ? ((Res)k).ToString() : m.ItemNames[k - Book.Bulk]; }
+            }
+            double o2Other = w.Other(day, (int)Res.O2), breathed = -b.Of(Res.O2, Flow.Breathed);
+            var (foodDays, _) = w.DaysLeft(day, (int)Res.Food);
+            var (waterDays, waterNoMake) = w.DaysLeft(day, (int)Res.Water);
+            Check("물자 장부: 디딤호 하루 — 처음 재고 + 적은 흐름 = 지금 재고 (식량 · 물 · 물건 정확히 · 산소는 숨의 1% 안) · 며칠 버티나를 센다",
+                worst < 1e-9 && Math.Abs(o2Other) < breathed * 0.01 && foodDays is > 150 and < 400 && waterDays > waterNoMake, // 탐사선: 180일 치 포장 식량
+                $"가장 큰 어긋남 {worst:0e0} ({worstName}) · 산소 {o2Other:0.0}몰 / 숨 {breathed:0}몰 · 식량 {foodDays:0.0}일 · 물 {waterDays:0}일 (되찾지 못하면 {waterNoMake:0.0}일)");
+        }
+
+        // ── 사바티에: 갈라 낸 수소와 걸러 모은 이산화탄소로 가른 물의 절반 가까이를 되찾는다 (ISS — 수소가 모자라 절반을 넘지 못한다) ──
+        {
+            var b = day.Book;
+            double split = -b.Of(Res.Water, Flow.Split), back = b.Of(Res.Water, Flow.Sabatier);
+            Check("사바티에: 산소를 만들려고 가른 물의 40~50%를 이산화탄소 + 수소에서 되찾는다",
+                split > 0 && back / split is > 0.4 and <= 0.5, $"가른 물 {split * 0.018:0.0}L · 되찾음 {back * 0.018:0.0}L ({back / Math.Max(1e-9, split):0.00}) · 버린 메탄 {day.Get<Network>().VentedCH4 * 0.016:0.00}kg");
+        }
+
+        // ── 공조 응결: 제습기가 없는 배도 공조 열교환기가 숨 · 땀의 습기를 물로 모은다 → 습도 60% 아래 ──
+        {
+            double rh = Rh(day), cond = day.Book.Of(Res.Water, Flow.Condensed);
+            Check("공조 응결: 제습기 없는 디딤호 — 열교환기가 하루 몇 L의 습기를 물탱크로 되찾고 · 방 습도는 60% 아래",
+                cond * 0.018 > 3 && rh < 0.6, $"모은 물 {cond * 0.018:0.0}L/일 · 평균 습도 {rh * 100:0}%");
+        }
+    }
+}

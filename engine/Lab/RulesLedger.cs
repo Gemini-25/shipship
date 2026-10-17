@@ -9,48 +9,6 @@ public static partial class Program
     {
         if (!Do("물자")) return;
         Console.WriteLine("\n[⑪ 물자 — 장부]");
-        double Rh(Sim s)
-        {
-            var f = s.Get<Field>(); double sum = 0; int n = 0;
-            foreach (var room in s.Layout.Rooms) foreach (int c in room.Cells)
-                if (f.Pressure(c) > 50) { sum += f.Partial(f.T.gH2O, c) / Water.SatKPa(f.Temp(c)); n++; }
-            return n > 0 ? sum / n : 0;
-        }
-
-        // ── 장부: 디딤호 하루 (6명 · 로봇 2) — 처음 재고 + 적은 흐름 = 지금 재고 · 며칠 버티나 ──
-        var day = ShipWorld.Crewed("Didim", 3, 6, 2);
-        day.Run(Time.Days(1));
-        {
-            var w = day.Get<Work>(); var b = day.Book;
-            double worst = 0; string worstName = "";
-            for (int k = 0; k < b.Kinds; k++)
-            {
-                if (k == (int)Res.O2) continue; // 산소는 아래에서 (공기는 새어 나갈 수 있다)
-                double o = Math.Abs(w.Other(day, k)) / Math.Max(1, Math.Abs(w.Stock(k)));
-                if (o > worst) { worst = o; worstName = k < Book.Bulk ? ((Res)k).ToString() : day.Get<Mind>().ItemNames[k - Book.Bulk]; }
-            }
-            double o2Other = w.Other(day, (int)Res.O2), breathed = -b.Of(Res.O2, Flow.Breathed);
-            var (foodDays, _) = w.DaysLeft(day, (int)Res.Food);
-            var (waterDays, waterNoMake) = w.DaysLeft(day, (int)Res.Water);
-            Check("물자 장부: 디딤호 하루 — 처음 재고 + 적은 흐름 = 지금 재고 (식량 · 물 · 물건 정확히 · 산소는 숨의 1% 안) · 며칠 버티나를 센다",
-                worst < 1e-9 && Math.Abs(o2Other) < breathed * 0.01 && foodDays is > 150 and < 400 && waterDays > waterNoMake, // 탐사선: 180일 치 포장 식량
-                $"가장 큰 어긋남 {worst:0e0} ({worstName}) · 산소 {o2Other:0.0}몰 / 숨 {breathed:0}몰 · 식량 {foodDays:0.0}일 · 물 {waterDays:0}일 (되찾지 못하면 {waterNoMake:0.0}일)");
-        }
-
-        // ── 사바티에: 갈라 낸 수소와 걸러 모은 이산화탄소로 가른 물의 절반 가까이를 되찾는다 (ISS — 수소가 모자라 절반을 넘지 못한다) ──
-        {
-            var b = day.Book;
-            double split = -b.Of(Res.Water, Flow.Split), back = b.Of(Res.Water, Flow.Sabatier);
-            Check("사바티에: 산소를 만들려고 가른 물의 40~50%를 이산화탄소 + 수소에서 되찾는다",
-                split > 0 && back / split is > 0.4 and <= 0.5, $"가른 물 {split * 0.018:0.0}L · 되찾음 {back * 0.018:0.0}L ({back / Math.Max(1e-9, split):0.00}) · 버린 메탄 {day.Get<Network>().VentedCH4 * 0.016:0.00}kg");
-        }
-
-        // ── 공조 응결: 제습기가 없는 배도 공조 열교환기가 숨 · 땀의 습기를 물로 모은다 → 습도 60% 아래 ──
-        {
-            double rh = Rh(day), cond = day.Book.Of(Res.Water, Flow.Condensed);
-            Check("공조 응결: 제습기 없는 디딤호 — 열교환기가 하루 몇 L의 습기를 물탱크로 되찾고 · 방 습도는 60% 아래",
-                cond * 0.018 > 3 && rh < 0.6, $"모은 물 {cond * 0.018:0.0}L/일 · 평균 습도 {rh * 100:0}%");
-        }
 
         // ── 산소 조절: 산소 발생기는 배 산소 분압에 맞춰 돈다 — 사람이 적으면 덜 돌아 물을 아낀다 · 분압은 20.4~21.6kPa ──
         {
@@ -59,7 +17,7 @@ public static partial class Program
                 var s = ShipWorld.Crewed("Didim", 5, people, 0);
                 var net = s.Get<Network>();
                 double sum = 0; int n = 0;
-                for (long t = 0; t < Time.Hours(12); t++)
+                for (long t = 0; t < Time.Hours(6); t++)
                 {
                     s.Step();
                     if (t > Time.Hours(2) && t % 250 == 0) for (int d = 0; d < net.Devices.Count; d++) if (net.Devices[d].Def.Role == "o2gen") { sum += net.Duty[d]; n++; }

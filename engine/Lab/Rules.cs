@@ -263,14 +263,7 @@ public static partial class Program
 
         if (Do("망"))
         {
-            // 평시 6시간: 정전 없음 · 방 온도가 293K 근처 · 원자로 멀쩡
-            var s = ShipWorld.Create("Didim", 5);
-            var net = s.Get<Network>(); var f = s.Get<Field>();
-            s.Run(Time.Hours(6));
-            var temps = f.L.Rooms.Where(r => net.Vent[r.Id] >= 0).Select(r => f.Temp(net.Vent[r.Id])).ToList();
-            var hottest = f.L.Rooms.Where(r => net.Vent[r.Id] >= 0).OrderByDescending(r => f.Temp(net.Vent[r.Id])).First();
-            Check("평시 6시간: 공급이 수요를 채우고 · 방 온도가 288~300K · 원자로 멀쩡", net.Supplied >= net.Demanded - 1e-6 && temps.All(t => t > 288 && t < 300) && !net.ReactorScram,
-                $"수요 {net.Demanded:0.0}kW · 원자로 {net.ReactorKw:0.0}kW · 냉각 {net.CoolingKw:0}kW · 방 온도 {temps.Min():0.0}~{temps.Max():0.0}K (가장 더운 곳 {hottest.Name}) · 장치 {net.Devices.Count} · 급전선 {net.Feeders.Count}");
+            // 평시 정전 없음 · 방 온도 · 원자로는 '평시 하루' 묶음에서 (사람이 탄 하루 끝에 — RulesDay.cs)
 
             // 냉각 펌프를 끄면 원자로가 뜨거워져 스스로 멈춘다 → 배터리 → 결국 어둠
             var s2 = ShipWorld.Create("Didim", 5);
@@ -436,8 +429,8 @@ public static partial class Program
             s7.Run(Time.Minutes(50));
             int outer = floor.OrderByDescending(i => o7.Dose[i]).First(), inner = floor.OrderBy(i => o7.Dose[i]).First();
             int bo = l7.AddBody(outer), bi = l7.AddBody(inner);
-            s7.Run(Time.Hours(3));
-            Check("별 폭발 동안 바깥쪽 칸의 사람이 안쪽(가려진 곳)보다 훨씬 많이 맞는다", l7[bo].RadGy > l7[bi].RadGy * 2 && l7[bo].RadGy > 0.05,
+            s7.Run(Time.Hours(1));
+            Check("별 폭발 동안 바깥쪽 칸의 사람이 안쪽(가려진 곳)보다 훨씬 많이 맞는다", l7[bo].RadGy > l7[bi].RadGy * 2 && l7[bo].RadGy > 0.02, // 한 시간 — 폭발이 실제로 났는지만 (20mGy)
                 $"바깥쪽 {l7[bo].RadGy * 1000:0}mGy · 안쪽 {l7[bi].RadGy * 1000:0}mGy");
 
             // 작물: 재배등이 켜진 재배대는 자라고 산소를 낸다 · 꺼진 것은 안 자란다
@@ -445,11 +438,11 @@ public static partial class Program
             var n8 = s8.Get<Network>(); var l8 = s8.Get<Life>();
             int off = l8.Crops[0].Device;
             n8.SetOn(off, false);
-            s8.Run(Time.Hours(12));
+            s8.Run(Time.Hours(2)); // 자라는 빠르기는 늘 같은 틀 — 반나절을 기다리지 않는다
             var lit = l8.Crops.Skip(1).Average(c => c.Biomass);
-            double ideal = Enumerable.Range(1, l8.Crops.Count - 1).Average(k => l8.CropArea(n8, k)) * Life.CropMolPerM2Day / 2;
-            // 실제 수확량: 1m²에 하루 0.1몰 (먹는 부분 18g — NASA BPC) → 반나절에 재배대 넓이 × 0.05몰이 다 자란 몫
-            Check("재배등이 켜진 재배대는 반나절에 자라고(1m²에 하루 0.1몰 — 실제 수확량 · 사람이 없어 이산화탄소가 모자라 그 몇 할) · 꺼진 것은 거의 안 자란다", lit > ideal * 0.25 && lit <= ideal * 1.0001 && l8.Crops[0].Biomass < lit * 0.3,
+            double ideal = Enumerable.Range(1, l8.Crops.Count - 1).Average(k => l8.CropArea(n8, k)) * Life.CropMolPerM2Day / 12;
+            // 실제 수확량: 1m²에 하루 0.1몰 (먹는 부분 18g — NASA BPC) → 두 시간에 재배대 넓이 × 0.0083몰이 다 자란 몫
+            Check("재배등이 켜진 재배대는 자라고(1m²에 하루 0.1몰 — 실제 수확량 · 사람이 없어 이산화탄소가 모자라 그 몇 할) · 꺼진 것은 거의 안 자란다 (두 시간)", lit > ideal * 0.25 && lit <= ideal * 1.0001 && l8.Crops[0].Biomass < lit * 0.3,
                 $"켜진 것 평균 {lit:0.000}몰 (다 자라면 {ideal:0.000}) · 꺼진 것 {l8.Crops[0].Biomass:0.000}몰 · 재배대 {l8.Crops.Count}");
 
             // 곰팡이: 습하고 따뜻한 방에서 자란다
@@ -562,6 +555,6 @@ public static partial class Program
         WorkRules();
         ViewRules();
         SoundRules();
-        LifeRules(); LedgerRules(); PersonRules(); BondRules(); SeedRules(); ShipRules();
+        LifeRules(); LedgerRules(); PersonRules(); BondRules(); SeedRules(); ShipRules(); DayRules();
     }
 }

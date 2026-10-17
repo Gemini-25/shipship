@@ -116,7 +116,8 @@ public sealed class Storyteller : IEngine
         SeedKind.Mistake => 1.5, SeedKind.OldGrudge => 1, _ => 1,
     };
 
-    private SeedKind Choose(Sim sim)
+    /// <summary>다음에 심을 원인을 고른다 (심지는 않는다 — 시험이 고르는 버릇만 볼 때도 쓴다).</summary>
+    public SeedKind Choose(Sim sim)
     {
         // 성격마다 무게 (없음 · 운석 · 구름 · 폭발 · 낡은 부품 · 외판 피로 · 곰팡이 · 합선 불씨 · 사람의 실수 · 묵은 앙금)
         double[] w = Style switch

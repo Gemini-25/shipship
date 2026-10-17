@@ -62,6 +62,7 @@ public static partial class Program
         }
         EndGroup();
         if (Environment.GetEnvironmentVariable("RULE_TIMES") == "1") foreach (var (k, t) in _times) Console.WriteLine($"⏱\t{k}\t{t:0.0}");
+        if (_failedGroups.Count > 0) Console.WriteLine($"\n✘ 실패한 묶음: {string.Join(",", _failedGroups)}");
         if (_pass + _fail > 0)
             Console.WriteLine($"\n{(_fail == 0 ? "✔" : "✘")} 통과 {_pass} · 실패 {_fail} · {sw.Elapsed.TotalSeconds:0.0}초");
         return _fail == 0 ? 0 : 1;
@@ -107,14 +108,19 @@ public static partial class Program
     }
 
     private static long _lap;
+    private static readonly List<string> _failedGroups = new();
+    /// <summary>시험 하나가 이보다 오래 걸리면 알린다 — 하루를 기다리지 말고 상황을 차려 놓고 짧게 (평시 하루 묶음은 빼고).</summary>
+    public const double SlowTestSec = 10;
+
     internal static void Check(string name, bool ok, string detail = "")
     {
         long now = Stopwatch.GetTimestamp();
-        if (Environment.GetEnvironmentVariable("RULE_TIMES") == "1")
-            Console.WriteLine($"⏲\t{_group}\t{(now - Math.Max(_lap, _groupStart)) / (double)Stopwatch.Frequency:0.0}\t{name}");
+        double lap = (now - Math.Max(_lap, _groupStart)) / (double)Stopwatch.Frequency;
+        if (Environment.GetEnvironmentVariable("RULE_TIMES") == "1") Console.WriteLine($"⏲\t{_group}\t{lap:0.0}\t{name}");
         _lap = now;
-        if (ok) _pass++; else _fail++;
+        if (ok) _pass++; else { _fail++; if (_group != null && !_failedGroups.Contains(_group)) _failedGroups.Add(_group); }
         Console.WriteLine($"  {(ok ? "✔" : "✘")} {name}{(detail.Length > 0 ? " — " + detail : "")}");
+        if (lap > SlowTestSec && _group != "평시 하루") Console.WriteLine($"  ⚠ 느린 시험 {lap:0}초 ({_group}) — 상황을 차려 놓고 짧게 · 작은 배로 (docs/ENGINE.md 시험 시간)");
     }
 
     internal static double Rel(double a, double b) => Math.Abs(a - b) / Math.Max(1e-30, Math.Max(Math.Abs(a), Math.Abs(b)));

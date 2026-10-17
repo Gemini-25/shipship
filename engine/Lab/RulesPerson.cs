@@ -33,12 +33,16 @@ public static partial class Program
         }
 
         // 같은 배(디딤호 6명 · 로봇 2) · 같은 시드에서 한 사람의 성격만 바꿔 본다
+        //   하루를 기다리지 않고 차려 놓는다: 그 사람은 지금 일과가 빈 시간(교대를 맞춘다) · 졸리지도 배고프지도 않고 · 몸은 운동이 고프고 · 조금 외롭다 — 그다음 몇 시간 무엇을 고르나
         (double social, int exercise, double work, Sim s, int p) Day(float open, float consc, float extra, float agree, float neuro, double hours)
         {
             var s = ShipWorld.Crewed("Didim", 4, 6, 2);
             var m = s.Get<Mind>();
             int p = m.Agents.First(a => a.IsPerson).Id;
             m.SetPersonality(p, open, consc, extra, agree, neuro);
+            ref var c0 = ref m[p].C;
+            c0.ShiftHour = ((int)Time.HourOfDay(s.Tick) + 24 - 10) % 24; // 지금이 교대 시작 10시간 뒤 — 일도 잠도 아닌 6시간
+            c0.Sleepy = 0.1f; c0.Hunger = 0.1f; c0.Thirst = 0; c0.Bored = 0.3f; c0.Lonely = 0.6f; c0.Unfit = 0.9f;
             long social = 0, work = 0, lastEx = m[p].C.ExercisedAt; int ex = 0;
             for (long t = 0; t < Time.Hours(hours); t++)
             {
@@ -46,45 +50,46 @@ public static partial class Program
                 if (m[p].C.Goal == GoalKind.Socialize) social++;
                 if (m[p].C.Goal == GoalKind.Work) work++;
                 if (m[p].C.ExercisedAt != lastEx) { ex++; lastEx = m[p].C.ExercisedAt; }
-                if (Debug && consc > 0.9f && t % Time.Hours(1) == 0) Console.WriteLine($"    {Time.Clock(s.Tick)} 성실 {m.Thought(p)} · 운동 부족 {m[p].C.Unfit:0.00} · 교대 {m[p].C.ShiftHour}시");
+                if (Debug && t % Time.Minutes(30) == 0) Console.WriteLine($"    성실 {consc} 외향 {extra} {Time.Clock(s.Tick)} {m.Thought(p)} · 운동 부족 {m[p].C.Unfit:0.00} · 외로움 {m[p].C.Lonely:0.00}");
             }
             return (social / (double)Time.TicksPerHour, ex, work / (double)Time.TicksPerHour, s, p);
         }
 
         // 넷은 서로 다른 세계라 함께 돌린다 (결정론 그대로 — 세계끼리 나누는 것이 없다)
-        var eHi = Task.Run(() => Day(0.5f, 0.5f, 0.95f, 0.5f, 0.5f, 18)); var eLo = Task.Run(() => Day(0.5f, 0.5f, 0.05f, 0.5f, 0.5f, 18));
-        var cHi = Task.Run(() => Day(0.5f, 0.95f, 0.5f, 0.5f, 0.5f, 48)); var cLo = Task.Run(() => Day(0.5f, 0.05f, 0.5f, 0.5f, 0.5f, 48)); // 이틀 — 교대에 따라 하루 한 번 빈 시간
+        var eHi = Task.Run(() => Day(0.5f, 0.5f, 0.95f, 0.5f, 0.5f, 4)); var eLo = Task.Run(() => Day(0.5f, 0.5f, 0.05f, 0.5f, 0.5f, 4));
+        var cHi = Task.Run(() => Day(0.5f, 0.95f, 0.5f, 0.5f, 0.5f, 3)); var cLo = Task.Run(() => Day(0.5f, 0.05f, 0.5f, 0.5f, 0.5f, 3));
 
-        // ── 외향: 같은 하루 — 외향적인 사람은 사람을 찾아 어울리고 · 내향적인 사람은 덜 ──
+        // ── 외향: 같은 빈 시간 — 외향적인 사람은 사람을 찾아 어울리고 · 내향적인 사람은 덜 ──
         {
             var hi = eHi.Result; var lo = eLo.Result;
-            Check("성격 · 외향: 같은 18시간, 외향적인 사람(0.95)은 내향적인 사람(0.05)보다 두 배 넘게 어울린다",
+            Check("성격 · 외향: 같은 빈 4시간, 외향적인 사람(0.95)은 내향적인 사람(0.05)보다 두 배 넘게 어울린다",
                 hi.social > lo.social * 2 && hi.social > 0.5, $"어울린 시간 외향 {hi.social:0.0}시간 · 내향 {lo.social:0.0}시간");
         }
 
-        // ── 성실: 이틀 — 성실한 사람은 운동을 챙긴다 (게으른 사람보다 많이) ──
+        // ── 성실: 몸이 똑같이 운동을 바랄 때 — 성실한 사람은 운동을 챙긴다 (게으른 사람보다 많이) ──
         {
             var hi = cHi.Result; var lo = cLo.Result;
-            Check("성격 · 성실: 이틀(48시간) 동안 성실한 사람(0.95)은 운동을 거르지 않고 · 게으른 사람(0.05)은 덜 한다 (운동 습관)",
-                hi.exercise >= 2 && hi.exercise > lo.exercise, $"운동 성실 {hi.exercise}번 · 게으름 {lo.exercise}번 · 일한 시간 {hi.work:0.0} / {lo.work:0.0}시간");
+            Check("성격 · 성실: 똑같이 운동이 고픈 빈 3시간, 성실한 사람(0.95)은 운동하고 · 게으른 사람(0.05)은 덜 한다 (운동 습관)",
+                hi.exercise >= 1 && hi.exercise > lo.exercise, $"운동 성실 {hi.exercise}번 · 게으름 {lo.exercise}번 · 일한 시간 {hi.work:0.0} / {lo.work:0.0}시간");
         }
 
-        // ── 잠이 밀려 저녁에 깨어 있는 사람(교대 0시: 16~24시가 '밤')도 졸리지 않으면 운동한다 (예전: 교대에 맞춘 밤 시간에 막혔다) ──
+        // ── 잠이 밀려 교대의 '밤' 시간에 깨어 있는 사람(교대 8시: 0~8시가 '밤')도 졸리지 않으면 운동한다 (예전: 교대에 맞춘 밤 시간에 막혔다) ──
         {
             var s = ShipWorld.Crewed("Didim", 6, 1, 0);
             var m = s.Get<Mind>();
             int p = m.Agents.First(a => a.IsPerson).Id;
-            m[p].C.ShiftHour = 0;
-            s.Run(Time.Hours(17));
-            bool exercised = false;
+            m[p].C.ShiftHour = 8;
+            s.Run(5);
+            bool exercised = false, night = false;
             for (long t = 0; t < Time.Hours(2); t++)
             {
                 ref var c = ref m[p].C;
                 c.Sleepy = 0.1f; c.Hunger = 0; c.Bored = 0; c.Lonely = 0; c.Unfit = 1;
                 s.Step();
                 exercised |= m[p].C.Goal == GoalKind.Exercise;
+                night |= Time.HourOfDay(s.Tick) < 8;
             }
-            Check("잠이 밀려 저녁에 깨어 있으면(졸리지 않으면) 교대의 '밤' 시간이어도 운동한다", exercised, $"17~19시 운동 {exercised} · {m.Thought(p)}");
+            Check("잠이 밀려 교대의 '밤' 시간에 깨어 있으면(졸리지 않으면) 운동한다", exercised && night, $"교대 8시 · {Time.Clock(s.Tick)} · 운동 {exercised} · {m.Thought(p)}");
         }
 
         // ── 어울릴 사람이 없으면 (모두 자거나 일한다) 외로워도 혼자 휴게실에 앉아 몇 시간씩 기다리지 않는다 ──
@@ -93,8 +98,8 @@ public static partial class Program
             var m = s.Get<Mind>();
             int p = m.Agents.First(a => a.IsPerson).Id;
             long alone = 0;
-            for (long t = 0; t < Time.Hours(6); t++) { m[p].C.Lonely = 1; s.Step(); if (m[p].C.Goal == GoalKind.Socialize) alone++; }
-            Check("어울릴 사람이 아무도 없으면 외로워도 혼자 '어울린다'로 시간을 보내지 않는다 (6시간 중 거의 0)", alone < Time.Minutes(10),
+            for (long t = 0; t < Time.Hours(2); t++) { m[p].C.Lonely = 1; s.Step(); if (m[p].C.Goal == GoalKind.Socialize) alone++; }
+            Check("어울릴 사람이 아무도 없으면 외로워도 혼자 '어울린다'로 시간을 보내지 않는다 (두 시간 중 거의 0 — 예전엔 내내)", alone < Time.Minutes(10),
                 $"혼자 어울린 시간 {alone / (double)Time.TicksPerHour:0.0}시간");
         }
 

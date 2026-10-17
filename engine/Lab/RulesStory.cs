@@ -10,15 +10,15 @@ public static partial class Program
         if (Do("이야기꾼"))
         {
             Console.WriteLine("\n[이야기꾼]");
-            // ── 조용한 배에는 원인을 심는다 · 같은 시드면 같은 때 같은 원인 · 긴장이 높으면 심지 않는다 ──
+            // ── 조용한 배에는 원인을 심는다 · 같은 시드면 같은 때 같은 원인 · 긴장이 높으면 심지 않는다 (작은 배 · 첫 두 시간이 지나 처음 심는 때까지) ──
             List<Seed> Run(ulong seed, double tension)
             {
-                var s = ShipWorld.Create("Didim", seed);
+                var s = ShipWorld.Create("Hwasal", seed);
                 var st = s.Get<Storyteller>(); st.Enabled = true; st.Tension = tension;
-                s.Run(Time.Hours(7));
+                s.Run(Time.Hours(2.5));
                 return st.Seeds;
             }
-            var a = Run(5, 0); var b = Run(5, 0); var hi = Run(5, 1000);
+            var aT = Task.Run(() => Run(5, 0)); var bT = Task.Run(() => Run(5, 0)); var hi = Run(5, 1000); var a = aT.Result; var b = bT.Result;
             bool same = a.Count == b.Count && a.Zip(b).All(p => p.First.Tick == p.Second.Tick && p.First.Kind == p.Second.Kind && p.First.Size == p.Second.Size);
             Check("조용한 배에는 이야기꾼이 원인을 심는다 · 같은 시드면 같은 때 같은 원인", a.Count >= 1 && same,
                 $"심은 것 {a.Count} ({string.Join(", ", a.Select(x => $"{x.Tick / 1500.0:0.0}시 {Storyteller.SeedName(x.Kind)}"))}) · 같음 {same}");
@@ -26,17 +26,19 @@ public static partial class Program
 
             // ── 잠복 원인을 겹겹이 쌓지 않는다: 아직 안 터진 원인(대기 긴장)도 셈한다 · 눌어붙은 차단기가 있으면 합선 불씨를 또 심지 않는다 ──
             {
-                var s = ShipWorld.Create("Didim", 5);
+                var s = ShipWorld.Create("Hwasal", 5);
                 var st = s.Get<Storyteller>(); st.Enabled = true; st.Pending = 50;
-                s.Run(Time.Hours(7));
+                s.Run(Time.Hours(3));
                 int pendingSeeds = st.Seeds.Count;
-                var s2 = ShipWorld.Create("Didim", 5);
-                var st2 = s2.Get<Storyteller>(); st2.Enabled = true; st2.Style = StoryStyle.SlowBurn; st2.Level = 8;
+                // 차단기가 눌어붙은 배에서 이백 번 골라 본다 (16시간을 기다리지 않는다) — 멀쩡한 배에서는 합선 불씨도 고른다 (견줌)
+                var s2 = ShipWorld.Create("Hwasal", 5);
+                var st2 = s2.Get<Storyteller>(); st2.Style = StoryStyle.SlowBurn; st2.Level = 8;
+                int Arcs() { int n = 0; for (int k = 0; k < 200; k++) if (st2.Choose(s2) == SeedKind.ArcRisk) n++; return n; }
+                int healthy = Arcs();
                 s2.Get<Network>().BreakerStuck[0] = 1;
-                s2.Run(Time.Hours(16));
-                int arcs = st2.Seeds.Count(x => x.Kind == SeedKind.ArcRisk);
-                Check("잠복 원인을 쌓지 않는다: 안 터진 원인의 긴장도 셈하고 · 눌어붙은 차단기가 있으면 합선 불씨를 또 심지 않는다", pendingSeeds == 0 && arcs == 0 && st2.Seeds.Count > 0,
-                    $"대기 긴장 높을 때 심은 것 {pendingSeeds} · 차단기가 눌어붙은 16시간 동안 합선 불씨 {arcs} (심은 것 {st2.Seeds.Count}: {string.Join(",", st2.Seeds.Select(x => Storyteller.SeedName(x.Kind)))})");
+                int arcs = Arcs();
+                Check("잠복 원인을 쌓지 않는다: 안 터진 원인의 긴장도 셈하고 · 눌어붙은 차단기가 있으면 합선 불씨를 또 심지 않는다", pendingSeeds == 0 && arcs == 0 && healthy > 0,
+                    $"대기 긴장 높을 때 심은 것 {pendingSeeds} · 이백 번 골라 합선 불씨: 멀쩡한 배 {healthy} · 차단기가 눌어붙은 배 {arcs}");
             }
 
             // ── 가혹함: 높을수록 큰 운석 ──

@@ -12,19 +12,6 @@ public static partial class Program
         var lay = Worlds.Ascii(Worlds.MindShip, Worlds.MindLegend);
         int At(int x, int y) => Worlds.At(lay, x, y);
         bool Debug = Environment.GetEnvironmentVariable("RULE_DEBUG") == "1";
-        // 평소의 하루는 오래 걸리니 먼저 띄워 둔다 (다른 세계 — 결정론 그대로)
-        var calm = Task.Run(() =>
-        {
-            var s = ShipWorld.Crewed("Didim", 6, 6, 2);
-            if (!Debug) { s.Run(Time.Days(1)); return s; }
-            var dm = s.Get<Mind>();
-            for (int h = 0; h < 24; h++)
-            {
-                s.Run(Time.Hours(1));
-                Console.WriteLine($"    {Time.Clock(s.Tick)} " + string.Join(" · ", dm.Agents.Where(a => a.IsPerson).Select(a => $"{dm.NameOf(a.Id)}:{a.C.Goal}@{(dm.RoomOf(a.C.Cell) >= 0 ? s.Layout.Rooms[dm.RoomOf(a.C.Cell)].Name : "-")}")));
-            }
-            return s;
-        });
 
         // ── 함께 위기를 넘긴 둘은 가까워진다 · 그 일을 함께 기억하고 이야기한다 ──
         {
@@ -158,20 +145,6 @@ public static partial class Program
             Check("연출: 사람 이야기도 하이라이트가 된다 — 따지다 다툰 일은 '사람 이야기'로 · 제목에 그 일 · 한 마디 · 잡담뿐인 둘은 하이라이트 없음",
                 ppl != null && ppl.Title.Contains("탓") && ppl.Line.Length > 0 && !calmPair.hl.Any(h => h.People) && calmPair.talks > 0,
                 $"다툰 둘: {(ppl != null ? $"\"{ppl.Title}\" · \"{ppl.Line}\"" : "없음")} / 잡담한 둘: 하이라이트 {calmPair.hl.Count} · 대화 {calmPair.talks}");
-        }
-
-        // ── 평소의 하루: 디딤호 6명 — 말은 자주 나누고 · 몸싸움은 없다 (갈등은 드물게만 끝까지 간다) ──
-        {
-            var s = calm.Result;
-            var so = s.Get<Society>();
-            if (Debug)
-            {
-                var cm = s.Get<Mind>();
-                foreach (var x in so.Sayings) Console.WriteLine($"    {Time.Clock(x.Tick)} {cm.NameOf(x.Speaker)} → {cm.NameOf(x.Listener)} {x.Topic}/{x.End} @ {(cm.RoomOf(x.Cell) >= 0 ? s.Layout.Rooms[cm.RoomOf(x.Cell)].Name : "-")}");
-            }
-            Check("평소의 하루 (디딤호 6명): 대화는 많고 · 다툼은 드물고 · 몸싸움 · 몰래 방해는 없다",
-                so.Talks > 10 && so.Arguments <= 3 && so.Fights == 0 && so.Sabotages == 0,
-                $"대화 {so.Talks} · 다툼 {so.Arguments} · 사과 {so.Apologies} · 소문 {so.Rumors} · 몸싸움 {so.Fights} · 방해 {so.Sabotages} · 가까워짐 {so.Friendships}");
         }
     }
 }

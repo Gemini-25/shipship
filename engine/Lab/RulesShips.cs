@@ -68,10 +68,10 @@ public static partial class Program
             f.AddStore(open, s.Tables.sFood, 50);
             foreach (int c in L.Rooms[locker.Room].Cells) f.AddGas(c, s.Tables.gH2O, 1.2, f.Temp(c)); // 습한 방
             double l0 = f.Stored(s.Tables.sFood, lc), o0 = f.Stored(s.Tables.sFood, open);
-            s.Run(Time.Days(2));
+            s.Run(Time.Hours(2)); // 썩는 빠르기는 늘 같다 — 이틀을 기다리지 않아도 두 시간이면 바닥 음식이 준다
             double l1 = f.Stored(s.Tables.sFood, lc), o1 = f.Stored(s.Tables.sFood, open);
-            Check("포장 식량(식량 보관함)은 따뜻하고 습한 방에서도 상하지 않는다 · 같은 방 바닥에 둔 음식은 썩는다", Math.Abs(l1 - l0) < 1e-9 && o1 < o0 * 0.995,
-                $"보관함 {l0:0.0} → {l1:0.0}몰 · 바닥 음식 {o0:0.0} → {o1:0.00}몰");
+            Check("포장 식량(식량 보관함)은 따뜻하고 습한 방에서도 상하지 않는다 · 같은 방 바닥에 둔 음식은 썩는다", Math.Abs(l1 - l0) < 1e-9 && o1 < o0 * 0.9998,
+                $"보관함 {l0:0.0} → {l1:0.0}몰 · 바닥 음식 {o0:0.000} → {o1:0.000}몰 (두 시간)");
         }
 
         // ── 식량 나르기: 냉장고 · 배식기가 비면 로봇이 식량 보관함에서 상자를 날라 채운다 (장부는 그대로 — 배 안에서 옮길 뿐) ──

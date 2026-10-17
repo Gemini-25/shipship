@@ -64,7 +64,7 @@ public static partial class Program
             var m = s.Get<Mind>(); var w = s.Get<Work>();
             int ore = m.ItemIndex("원료");
             int before = m.TotalOf(ore);
-            s.Run(Time.Hours(5));
+            for (long t = 0; t < Time.Hours(5) && w.Made == 0; t++) s.Step(); // 처음 하나를 만들 때까지
             Check("정제기는 전기를 먹고 원료를 조금씩 만든다 (많아야 8)", w.Made > 0 && m.TotalOf(ore) > before, $"원료 {before} → {m.TotalOf(ore)} · 만든 것 {w.Made}");
         }
     }
