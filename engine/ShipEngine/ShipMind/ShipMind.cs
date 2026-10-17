@@ -735,7 +735,7 @@ public sealed class ShipMind : IEngine
         // 차단기: 합선 없이 떨어졌으면 30초 뒤 다시 (10분에 한 번까지)
         if (Policy.ResetBreakers != 0)
             for (int fd = 0; fd < _net.Feeders.Count; fd++)
-                if (_net.Breaker[fd] == 0 && _net.FaultCell[fd] < 0 && t - BreakerResetAt[fd] > Time.Minutes(10))
+                if (_net.Breaker[fd] == 0 && _net.FaultCell[fd] < 0 && t - BreakerResetAt[fd] > Time.Minutes(10) && !_net.PathFaulty(fd)) // 길이 아직 젖었거나 탔으면 올려도 또 합선 — 닦은 뒤에
                 {
                     BreakerResetAt[fd] = t;
                     _net.ResetBreaker(fd);

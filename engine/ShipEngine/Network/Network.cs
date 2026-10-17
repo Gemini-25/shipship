@@ -228,6 +228,12 @@ public sealed class Network : IEngine
     public bool IsStuckFault(int f) => f >= 0 && f < Feeders.Count && FaultCell[f] >= 0 && Breaker[f] != 0 && BreakerStuck[f] != 0;
     public void SetDamper(int room, bool open) => Damper[room] = (byte)(open ? 1 : 0);
     public void SetExhaust(int room, bool on) => Exhaust[room] = (byte)(on ? 1 : 0);
+    /// <summary>급전선 길에 젖은(물 5몰 — 합선 문턱 20몰보다 넉넉히: 번지는 물이 문턱을 오르내린다) · 뜨거운(430K) 칸이 있나 — 다시 올려도 또 합선된다.</summary>
+    public bool PathFaulty(int feeder)
+    {
+        foreach (int c in Feeders[feeder].Path) if (F.Stored(T.sWater, c) > 5 || F.Tf[c] > 430) return true;
+        return false;
+    }
     /// <summary>독한 기체를 거르는 정화기(이산화탄소 정화기 · 공기 재생기의 활성탄 거르개)가 돌고 있나.</summary>
     public bool ScrubberWorking()
     {
@@ -295,7 +301,7 @@ public sealed class Network : IEngine
     {
         foreach (var fd in Feeders)
         {
-            if (FaultCell[fd.Id] >= 0) continue;
+            if (FaultCell[fd.Id] >= 0 || Breaker[fd.Id] == 0) continue; // 차단기가 내려간 회로에는 전류가 없다 — 다시 올렸을 때 찾는다
             foreach (int c in fd.Path)
             {
                 bool wet = F.Stored(T.sWater, c) > 20;

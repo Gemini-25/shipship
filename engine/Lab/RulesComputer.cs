@@ -428,6 +428,24 @@ public static partial class Program
                 bledAt >= 0 ? $"{Time.ToSeconds(bledAt):0}초 만에 밸브 · 그때 안쪽 문 {innerAt}" : $"4분 동안 밸브가 안 열림 · 안쪽 문 {string.Join(",", inner.Select(e => $"{f.DoorOpen[e]:0.0}/{st.DoorTarget[e]:0.0}"))} · 로봇 {m.Thought(r)}");
         }
 
+        // ── 젖은 바닥 밑 전선: 합선으로 차단기가 떨어지면 주컴퓨터는 길이 마를 때까지 다시 올리지 않고, 로봇이 물을 닦은 뒤 올린다 ──
+        {
+            var s = ShipWorld.Create("Pabal", 12);
+            var m = s.Get<Mind>(); var f = s.Get<Field>(); var net = s.Get<Network>();
+            int dock = s.Layout.Furniture.First(fu => fu.Type == "RobotDock").Cells[0];
+            m.AddRobot(s, dock, AgentKind.Robot, dock);
+            s.Run(Time.Minutes(5));
+            int fd = Enumerable.Range(0, net.Feeders.Count).First(k => net.Feeders[k].Path.Any(c => s.Layout.Room[c] >= 0 && s.Layout.Kind[c] == CellKind.Floor));
+            int wet = net.Feeders[fd].Path.First(c => s.Layout.Room[c] >= 0 && s.Layout.Kind[c] == CellKind.Floor);
+            f.AddStore(wet, f.T.sWater, 60);
+            s.Run(Time.Minutes(90));
+            long shorts = s.Facts.Since(0).Count(x => x.Kind == FactKind.Short && x.Other == fd);
+            if (Debug) foreach (var x in s.Facts.Since(0).Where(x => x.Kind is FactKind.Short or FactKind.BreakerTrip or FactKind.BreakerReset).Where(x => x.Other == fd).Take(20))
+                Console.WriteLine($"    {Time.Clock(x.Tick)} {x.Kind} 칸 {x.Cell} 급전선 {x.Other} (시험 급전선 {fd} · 젖힌 칸 {wet}) · {s.Causes.Story(x.Cause)}");
+            Check("젖은 바닥 밑 전선: 합선 뒤 길이 젖은 동안은 차단기를 다시 올리지 않는다 → 로봇이 닦고 → 다시 올린다", shorts <= 2 && f.Stored(f.T.sWater, wet) < 5 && net.Breaker[fd] != 0,
+                $"그 회로 합선 {shorts}번 · 남은 물 {f.Stored(f.T.sWater, wet):0}몰 · 차단기 {(net.Breaker[fd] != 0 ? "올라감" : "내려감")} · 다시 올림 {s.Get<ShipMind>().Resets}");
+        }
+
         // ── 공조: 설비 열이 큰 방(정비실 15kW)도 시원하다 · 냉각 펌프가 모두 서면 배가 더워진다 ──
         {
             double Hottest(bool pumpsDown)

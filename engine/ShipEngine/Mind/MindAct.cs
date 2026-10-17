@@ -360,11 +360,17 @@ public sealed partial class Mind
         if (Dist(c.Cell, cell) > 2) { Fail(sim, a, "멀다"); return; }
         Activity(a, "work");
         if (t - c.StepStart < Time.Minutes(10)) return;
-        if (_life != null)
         {
             int x0 = L.X(cell), y0 = L.Y(cell);
             for (int y = Math.Max(0, y0 - 1); y <= Math.Min(L.H - 1, y0 + 1); y++)
-                for (int x = Math.Max(0, x0 - 1); x <= Math.Min(L.W - 1, x0 + 1); x++) _life.Mold[L.Index(x, y)] = 0;
+                for (int x = Math.Max(0, x0 - 1); x <= Math.Min(L.W - 1, x0 + 1); x++)
+                {
+                    int k = L.Index(x, y);
+                    if (_life != null) _life.Mold[k] = 0;
+                    // 고인 물을 닦아 물탱크로 (재생기가 다시 쓴다)
+                    double w = F.Stored(T.sWater, k);
+                    if (w > 0 && _net != null) _net.WaterTank += F.TakeStore(k, T.sWater, w);
+                }
         }
         if (_work != null) _work.Cleaned++;
         JobDone(a, t);

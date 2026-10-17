@@ -31,6 +31,7 @@ public sealed class Work : IEngine
     private Mind? _mind;
     private Network? _net;
     private Life? _life;
+    private Field? _f;
     public List<Job> Jobs = new();
     public float[] MakerProgress = Array.Empty<float>();   // 설비마다 만드는 중 (시간)
     public long Crafted, Maintained, Cleaned, Made;
@@ -39,7 +40,7 @@ public sealed class Work : IEngine
 
     public void Step(Sim sim, double dt)
     {
-        _mind ??= sim.Find<Mind>(); _net ??= sim.Find<Network>(); _life ??= sim.Find<Life>();
+        _mind ??= sim.Find<Mind>(); _net ??= sim.Find<Network>(); _life ??= sim.Find<Life>(); _f ??= sim.Find<Field>();
         if (_mind == null) return;
         if (MakerProgress.Length != L.Furniture.Count) MakerProgress = new float[L.Furniture.Count];
         Makers(sim, dt);
@@ -97,22 +98,25 @@ public sealed class Work : IEngine
                     if (mind.TotalOf(mind.iRepair) <= 0) continue; // 갈아 끼울 부품(수리 꾸러미)이 없다
                     Post(sim, new Job { Kind = GoalKind.Maintain, Target = k }, dev.Cell, person => person.C.SkRepair >= 0.5f);
                 }
-        // 곰팡이 청소: 방마다 가장 짙은 곳 하나
-        if (_life != null)
-            foreach (var room in L.Rooms)
+        // 청소: 방마다 가장 지저분한 곳 하나 — 곰팡이 · 고인 물 (물 고인 바닥 밑 전선은 합선된다)
+        foreach (var room in L.Rooms)
+        {
+            int worst = -1; double wm = 0;
+            foreach (int c in room.Cells)
             {
-                int worst = -1; float wm = 0.3f;
-                foreach (int c in room.Cells) if (_life.Mold[c] > wm) { wm = _life.Mold[c]; worst = c; }
-                if (worst < 0 || Jobs.Any(j => j.Kind == GoalKind.Clean && L.Room[j.Target] == room.Id)) continue;
-                Post(sim, new Job { Kind = GoalKind.Clean, Target = worst }, worst, person => true);
+                double dirt = (_life != null && _life.Mold[c] > 0.3f ? _life.Mold[c] : 0) + (_f != null && _f.Stored(T.sWater, c) > 5 ? _f.Stored(T.sWater, c) / 100 + 0.3 : 0);
+                if (dirt > wm) { wm = dirt; worst = c; }
             }
+            if (worst < 0 || Jobs.Any(j => j.Kind == GoalKind.Clean && L.Room[j.Target] == room.Id)) continue;
+            Post(sim, new Job { Kind = GoalKind.Clean, Target = worst }, worst, person => true);
+        }
     }
 
     private bool Done(in Job j) => j.Kind switch
     {
         GoalKind.Craft => _mind!.TotalOf(j.Arg) >= (T.People.Recipes.TryGetValue(_mind.ItemNames[j.Arg], out var r) ? r.Keep : 0),
         GoalKind.Maintain => _net == null || _net.Wear[j.Target] < MaintainAt * _net.Devices[j.Target / 4].Life((Part)(j.Target % 4)) * 0.5,
-        GoalKind.Clean => _life == null || _life.Mold[j.Target] < 0.05f,
+        GoalKind.Clean => (_life == null || _life.Mold[j.Target] < 0.05f) && (_f == null || _f.Stored(T.sWater, j.Target) < 2),
         _ => true,
     };
 
