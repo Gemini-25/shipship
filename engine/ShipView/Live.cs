@@ -545,7 +545,11 @@ public sealed class LiveShow
         if (d.Highlights.Count > 0)
         {
             var h = d.Highlights[^1];
-            if (w.Tick - h.Last < Time.Minutes(10) && h.Cause != 0) return w.Causes.Story(h.Cause);
+            if (w.Tick - h.Last < Time.Minutes(10) && h.Cause != 0)
+            {
+                string spread = d.SpreadText(h.Root);   // 사슬이 건넌 갈래 (우주 → 선체 → 사람 …)
+                return spread.Length > 0 ? $"[{spread}] {w.Causes.Story(h.Cause)}" : w.Causes.Story(h.Cause);
+            }
         }
         return d.Caption;
     }

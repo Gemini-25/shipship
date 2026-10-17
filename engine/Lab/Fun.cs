@@ -10,7 +10,8 @@ namespace Lab;
 public static partial class Program
 {
     internal sealed record FunResult(string Ship, ulong Seed, int Crew, double Days, double HlPerDay, int Kinds, double Depth, int Near, long Deaths,
-        double Calm, int Firsts, int Seeds, int Fruit, double ScreenMinPerDay, double Score, List<string> Titles, string Daily);
+        double Calm, int Firsts, int Seeds, int Fruit, double ScreenMinPerDay, double Score, List<string> Titles, string Daily,
+        string Camera = "", string ChainLine = "", int MaxEngines = 0, int MaxLine = 0, double Before = 0, double Missed = 0, double ChainSeen = 0, List<string>? Wide = null);
 
     internal static FunResult FunRun(string ship, ulong seed, double days, StoryStyle style = StoryStyle.Balanced, byte level = 4)
     {
@@ -70,9 +71,21 @@ public static partial class Program
             + $" / 돌봄 {mind.Treats}(맨손 {mind.TreatsBare}) · 곪음 {life.Infections} · 패혈증 {life.Sepses} · 감기 {life.Colds}"
             + $" / 막 {st.Arc} · 큰 일로 여파 {st.Aftermaths} · 형편 보고 쉼 {st.Mercies} · 열매 {st.Fruited} · 헛돎 {st.Fizzled} · 털어놓음 {s.Get<Society>().Confessions} · 숨김 {s.Get<Society>().SecretsKept}"
             + $" / 씨앗 {string.Join(" ", st.Seeds.GroupBy(x => x.Kind).Select(g => $"{Storyteller.SeedName(g.Key)} {g.Count()}"))}";
+        // 사슬: 건넌 엔진 수 · 가장 넓은 사슬 · 원인 없는 큰 일
+        var wide = d.AllChains().OrderByDescending(c => c.Count).ThenByDescending(c => c.Facts).Take(2).ToList();
+        var deep = d.AllChains().OrderByDescending(c => c.Line).ThenByDescending(c => c.Depth).FirstOrDefault();
+        int maxE = wide.Count > 0 ? wide[0].Count : 0, maxLine = deep?.Line ?? 0;
+        string chainLine = $"엔진 3개 넘게 {d.ChainsWith(3)} · 4개 {d.ChainsWith(4)} · 5개 {d.ChainsWith(5)} · 6개 {d.ChainsWith(6)} · 가장 넓은 것 {maxE}개 · 새 엔진으로 번짐 {d.Spreads}"
+            + $" · 원인 없는 큰 일 {d.Orphans.Values.Sum()}" + (d.Orphans.Count > 0 ? " (" + string.Join(" ", d.Orphans.OrderByDescending(kv => kv.Value).Take(5).Select(kv => $"{Director.FactText(kv.Key)} {kv.Value}")) + ")" : "");
+        var wideLines = wide.Select(c => $"넓게 [{c.Count}] {c.Path} · 일 {c.Facts} · 깊이 {c.Depth} · 가지 {c.Leaves.Count} — {Trim(s.Causes.Story(c.Cause), 160)}").ToList();
+        if (deep != null) wideLines.Add($"한 줄로 [{deep.Line}] {deep.LinePath} · 깊이 {s.Causes.Depth(deep.LineCause)} — {Trim(s.Causes.Story(deep.LineCause), 200)}");
+        chainLine += $" · 한 줄로 가장 많이 건넌 것 {maxLine}개";
+        double pct(int a, int b) => b > 0 ? (double)a / b : 0;
         return new FunResult(ship, seed, crew, days, hl, kinds, depth, d.NearMisses, life.Deaths, calm, d.Firsts, seedN, fruit.Count,
-            d.ScreenSeconds / 60 / days, score, titles, daily);
+            d.ScreenSeconds / 60 / days, score, titles, daily, d.CameraLine(), chainLine, maxE, maxLine, pct(d.SeenBefore, d.Watched), pct(d.MissedStory, d.Watched), pct(d.ChainSeen, d.ChainWatched), wideLines);
     }
+
+    private static string Trim(string t, int n) => t.Length <= n ? t : "…" + t[^n..];
 
     internal static void Fun(string[] args)
     {
@@ -94,8 +107,12 @@ public static partial class Program
                 Console.WriteLine($"    하이라이트 하루 {r.HlPerDay:0.0} · 갈래 {r.Kinds} · 사슬 깊이 {r.Depth:0.0} · 간발의 차 {r.Near} · 죽음 {r.Deaths} · 처음 보는 일 {r.Firsts}");
                 Console.WriteLine($"    조용한 화면 {r.Calm:P0} · 화면 하루 {r.ScreenMinPerDay:0}분 · 씨앗 {r.Seeds} → 일이 된 것 {r.Fruit}");
                 Console.WriteLine($"    일상: {r.Daily}");
+                Console.WriteLine($"    카메라: {r.Camera}");
+                Console.WriteLine($"    사슬: {r.ChainLine}");
+                foreach (var w in r.Wide ?? new()) Console.WriteLine($"      {w}");
                 foreach (var t in r.Titles) Console.WriteLine($"      {t}");
             }
-        Console.WriteLine($"\n  평균 점수 {all.Average(r => r.Score):0} · 하이라이트 하루 {all.Average(r => r.HlPerDay):0.0} · 죽음 {all.Sum(r => r.Deaths)} · 씨앗 {all.Sum(r => r.Seeds)} → 일 {all.Sum(r => r.Fruit)}");
+        Console.WriteLine($"\n  카메라: 먼저 와 있음 {all.Average(r => r.Before):P0} · 못 본 이야기 {all.Average(r => r.Missed):P0} · 연쇄의 일 본 것 {all.Average(r => r.ChainSeen):P0} · 가장 넓은 사슬 {all.Max(r => r.MaxEngines)}개 엔진 · 한 줄로 {all.Max(r => r.MaxLine)}개");
+        Console.WriteLine($"  평균 점수 {all.Average(r => r.Score):0} · 하이라이트 하루 {all.Average(r => r.HlPerDay):0.0} · 죽음 {all.Sum(r => r.Deaths)} · 씨앗 {all.Sum(r => r.Seeds)} → 일 {all.Sum(r => r.Fruit)}");
     }
 }

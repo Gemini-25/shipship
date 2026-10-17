@@ -694,3 +694,34 @@ public static partial class Program
         foreach (var (tick, text) in sm.Log.TakeLast(25)) Console.WriteLine($"    주컴 {Time.Clock(tick)} {text}");
     }
 }
+
+public static partial class Program
+{
+    /// <summary>카메라 탐침: 이야기꾼을 켜고 연출이 보는 대로 돌리며 공기 조짐 · 끌림 · 엇갈림 · 주인공을 때와 곳으로 적는다. --probe-cam 배 시드 시간</summary>
+    internal static void ProbeCam(string[] args)
+    {
+        var rest = args.SkipWhile(a => a != "--probe-cam").Skip(1).ToArray();
+        string ship = rest.Length > 0 ? rest[0] : "Didim";
+        ulong seed = rest.Length > 1 ? ulong.Parse(rest[1]) : 11;
+        double hours = rest.Length > 2 ? double.Parse(rest[2]) : 24;
+        var lay = Layout.Ship(ship, Tables.Default);
+        int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
+        var s = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0);
+        s.Get<Storyteller>().Enabled = true;
+        var d = new Director(s.Layout) { KeepRing = false };
+        var m = s.Get<Mind>();
+        string RoomOf(int c) => c < 0 ? "바깥" : s.Layout.Room[c] >= 0 ? s.Layout.Rooms[s.Layout.Room[c]].Name : $"칸{c}";
+        int air = 0, pulls = 0, cross = 0, subject = -1, shown = 0;
+        for (long t = 0; t < Time.Hours(hours); t++)
+        {
+            s.Step(); d.Observe(s);
+            string? line = null;
+            if (d.AirWarnings != air) { air = d.AirWarnings; line = $"공기 {d.LastAir}"; }
+            if (d.Pulls != pulls) { pulls = d.Pulls; line = $"끌림 → {RoomOf(d.FocusCell)}"; }
+            if (d.CrossCuts != cross) { cross = d.CrossCuts; line = $"엇갈림 → {RoomOf(d.FocusCell)}"; }
+            if (d.Subject != subject) { subject = d.Subject; line = subject >= 0 ? $"주인공 {m.NameOf(subject)} ({m.Agents[subject].C.Goal} · {m.Agents[subject].C.Mode})" : "주인공 없음"; }
+            if (line != null && shown++ < 80) Console.WriteLine($"{Time.Clock(s.Tick)} [{d.Mood}] {line}");
+        }
+        Console.WriteLine(d.CameraLine());
+    }
+}

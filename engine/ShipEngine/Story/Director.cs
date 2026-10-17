@@ -23,7 +23,7 @@ public sealed class Highlight
 /// <para>관심(사실의 무게 × 원인 사슬 깊이 × 처음 보는 일 · 위험한 칸의 사람) → 카메라(머물기 · 확대) · 시간(조용하면 빨리 · 조짐에 느리게 · 결정적 순간 아주 느리게) ·
 /// 하이라이트(제목 · 첫 조짐부터) · 다시보기 고리(2분마다 찍기 1시간치).</para>
 /// </summary>
-public sealed class Director
+public sealed partial class Director
 {
     public const double HalfLifeSec = 40;       // 관심이 반으로 주는 시간 (게임 초)
     public const int SpotRadius = 8;
@@ -51,6 +51,7 @@ public sealed class Director
     public int NearMisses;                      // 위험했다 산 사람 (산소 포화 0.75 아래 · 쓰러짐 뒤 깨어남)
 
     private long _cursor;
+    private int _top = -1; private float _max;
     private bool _resting;                      // 볼 것이 없어 배 가운데를 보고 있다 (첫 일에 바로 간다)
     private double _sinceSwitch;
     private double _criticalLeft;               // 아주 느리게 남은 화면 초
@@ -120,6 +121,16 @@ public sealed class Director
             float score = w * (1 + 0.15f * depth);
             // 처음 보는 일은 두 배 (대화는 끝마다 따로 — 첫 다툼 · 첫 사과)
             if (w >= 5 && (f.Kind == FactKind.Talk ? _seenTalk.Add((int)f.Size) : SeenKinds.Add(f.Kind))) { score *= 2; Firsts++; }
+            bool spread = Track(sim, f, w, out var rec);
+            int root = rec?.Root ?? 0;
+            if (root != 0 && root == SceneRoot) score *= ContinueBoost;     // 지금 보는 사슬이 이어진다
+            if (spread && cell >= 0)                                           // 사슬이 새 엔진으로 번졌다 — 그 앞머리로
+            {
+                score *= SpreadBoost; _lastOmen = t;
+                if (score > _pullScore || ScreenSeconds - _pullAt > CaughtSec) { _pullCell = cell; _pullAt = ScreenSeconds; _pullScore = score; _pullRoot = root; _pullActor = AgentOf(mind, f); }
+            }
+            Watch(cell, w, rec != null && rec.Count >= 2, f.Kind, root);
+            if (w >= ChainFactAt && cell >= 0) Recent(cell, root, AgentOf(mind, f), score, t);
             if (cell >= 0 && cell < Heat.Length) Heat[cell] += score;
             if (Omen(f)) _lastOmen = t;
             if (Critical(f.Kind)) { _criticalLeft = 3; _lastDanger = t; }
@@ -145,8 +156,10 @@ public sealed class Director
         var chem = sim.Find<Chemistry>();
         if (chem != null && chem.BurningCount > 0) danger = true;
         if (danger) _lastDanger = t;
+        if (mind != null && life != null && t % SenseEvery == 0) Sense(sim, mind, life, chem, t);
 
         Camera(sim, t);
+        Grade(sim, screen, _top, _max);
         Pace(t, screen);
         if (bestScore > 0) MaybeHighlight(sim, best, t);
         // 다시보기 고리
@@ -172,31 +185,67 @@ public sealed class Director
 
     private void Camera(Sim sim, long t)
     {
-        int top = -1; float max = 0;
-        for (int i = 0; i < Heat.Length; i++) if (Heat[i] > max) { max = Heat[i]; top = i; }
-        if (top < 0 || max < 1) { if (FocusCell < 0) { FocusCell = L.Index(L.W / 2, L.H / 2); _resting = true; } return; }
-        float cand = SpotScore(top), cur = _resting ? 0 : SpotScore(FocusCell);
-        bool urgent = cand > cur * 3 && cand > 50;
-        if (FocusCell < 0 || _resting || urgent || cand > cur * 1.5f && _sinceSwitch >= HoldScreenSec)
+        // 가장 뜨거운 칸 · 화면 밖에서 가장 뜨거운 칸 (두 곳 오가기)
+        int top = -1, outTop = -1; float max = 0, outMax = 0;
+        bool watching = FocusCell >= 0 && !_resting;
+        for (int i = 0; i < Heat.Length; i++)
         {
-            // 다른 곳으로 '자르기' (지금 장면 밖이면 장면 바꿈으로 센다)
-            if (FocusCell >= 0 && !_resting && Far(top, FocusCell)) { Switches++; _sinceSwitch = 0; }
-            FocusCell = top; _resting = false;
+            float h = Heat[i];
+            if (h <= outMax) continue;
+            if (h > max) { max = h; top = i; }
+            if (watching && !InView(i)) { outMax = h; outTop = i; }
+        }
+        _top = top; _max = max;
+        if (top < 0 || max < 1) { if (FocusCell < 0) { FocusCell = L.Index(L.W / 2, L.H / 2); _resting = true; } Subject = -1; SceneRoot = 0; return; }
+        float cur = _resting ? 0 : SpotScore(FocusCell);
+        // 1. 사슬의 앞머리: 사슬이 새 엔진으로 번진 곳이 화면 밖이면 (결정적 순간이 아니고 · 지금 장면을 2초는 봤으면) 그리로 간다
+        if (_pullCell >= 0)
+        {
+            if (ScreenSeconds - _pullAt > CaughtSec || InView(_pullCell)) _pullCell = -1;
+            else if (_criticalLeft <= 0 && (_resting || _sinceSwitch >= PullHoldSec) && SpotScore(_pullCell) >= cur * 0.25f)
+            {
+                CutTo(sim, _pullCell, t, _pullRoot, _pullActor); Pulls++; _pullCell = -1;
+                Frame(max); return;
+            }
+        }
+        // 주인공이 이야기 속에서 움직이면 따라간다 — 그가 떠나온 자리(같은 장면의 식은 자리)로는 되돌아 자르지 않는다
+        int sc = _resting || FocusCell < 0 ? -1 : SubjectCell(sim, t);
+        bool following = sc >= 0 && Math.Max(Math.Abs(L.X(sc) - L.X(FocusCell)), Math.Abs(L.Y(sc) - L.Y(FocusCell))) <= FollowReach;
+        float cand = SpotScore(top);
+        bool urgent = cand > cur * 3 && cand > 50;
+        if ((FocusCell < 0 || _resting || urgent || cand > cur * 1.5f && _sinceSwitch >= HoldScreenSec) && !(following && SameScene(top, t)))
+            CutTo(sim, top, t);
+        // 2. 두 곳 오가기: 화면 밖에 지금 장면의 반쯤 되는 일이 오래 안 보였으면 잠깐 그리로 (영화의 엇갈려 보여 주기)
+        else if (outTop >= 0 && _sinceSwitch >= CrossHoldSec && _criticalLeft <= 0 && SpotScore(outTop) is float c2 && c2 > 30 && c2 >= cur * 0.5f && !SameScene(outTop, t))
+        {
+            CutTo(sim, outTop, t); CrossCuts++;
         }
         else
         {
-            // 지금 장면 안에서는 가장 뜨거운 곳으로 '훑기' (장면 바꿈이 아니다)
-            int best = FocusCell; float bm = Heat[FocusCell];
-            int fx0 = L.X(FocusCell), fy0 = L.Y(FocusCell);
-            for (int y = Math.Max(0, fy0 - SpotRadius); y <= Math.Min(L.H - 1, fy0 + SpotRadius); y++)
-                for (int x = Math.Max(0, fx0 - SpotRadius); x <= Math.Min(L.W - 1, fx0 + SpotRadius); x++)
-                {
-                    int i = L.Index(x, y);
-                    if (Heat[i] > bm * 1.2f) { bm = Heat[i]; best = i; }
-                }
-            FocusCell = best;
+            // 지금 장면 안: 주인공(업고 뛰는 사람 · 도망치는 사람 · 쓰러진 사람)을 따라가고, 아니면 가장 뜨거운 곳으로 '훑기' (장면 바꿈이 아니다)
+            if (following)
+            {
+                Heat[sc] += SubjectHeat; FocusCell = sc; FollowTicks++;
+            }
+            else
+            {
+                int best = FocusCell; float bm = Heat[FocusCell];
+                int fx0 = L.X(FocusCell), fy0 = L.Y(FocusCell);
+                for (int y = Math.Max(0, fy0 - SpotRadius); y <= Math.Min(L.H - 1, fy0 + SpotRadius); y++)
+                    for (int x = Math.Max(0, fx0 - SpotRadius); x <= Math.Min(L.W - 1, fx0 + SpotRadius); x++)
+                    {
+                        int i = L.Index(x, y);
+                        if (Heat[i] > bm * 1.2f) { bm = Heat[i]; best = i; }
+                    }
+                FocusCell = best;
+            }
         }
-        // 확대: 관심이 큰 칸들의 넓이에 맞춘다
+        Frame(max);
+    }
+
+    /// <summary>확대: 관심이 큰 칸들의 넓이에 맞춘다.</summary>
+    private void Frame(float max)
+    {
         int minX = L.X(FocusCell), maxX = minX, minY = L.Y(FocusCell), maxY = minY;
         float cut = max * 0.1f;
         int fx = L.X(FocusCell), fy = L.Y(FocusCell);
