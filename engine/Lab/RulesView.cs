@@ -68,6 +68,7 @@ public static partial class Program
         for (int i = 0; i < 60; i++) calm += show.Advance(dt);       // 조용함: 화면 1초 = 60틱
         show.Paused = true; int paused = show.Advance(1); string pausedText = show.Status(); show.Paused = false;
         int lag = show.Advance(5);                                    // 5초 밀림 → 한 번에 50틱까지만
+        int afterLag = show.Advance(dt);                              // 밀린 것은 버린다 — 다음 장에 몰아 돌리지 않는다
         twin.Run(show.Sim.Tick);
         int fire = At(3, 5);
         show.Sim.Get<Chemistry>().Ignite(fire, 3e6, show.Sim.Causes.Add(CauseKind.Story, "침대 불씨", show.Sim.Tick));
@@ -86,8 +87,29 @@ public static partial class Program
         }
         twin.Run(show.Sim.Tick - twin.Tick);
         bool same = show.Sim.Save().AsSpan().SequenceEqual(twin.Save());
-        Check("관전 화면: 조용하면 화면 1초에 60틱 · 멈추면 0 · 밀린 5초는 50틱까지만 · 불이 나면 느려지고 카메라가 불을 담는다 · 화면 없이 돌린 세계와 바이트까지 같다",
-            calm is >= 59 and <= 61 && paused == 0 && pausedText.Contains("멈춤") && lag == LiveShow.MaxTicksPerCall && slow <= Director.OmenSpeed && inView && srcOk && same,
-            $"조용함 {calm}틱 · 멈춤 {paused}틱 · 밀림 {lag}틱 · 가장 느리게 {slow}틱/초 · 불이 화면 안 {inView} · 그림 {frames}장 (보일 곳 맞음 {srcOk}) · 같음 {same}");
+        Check("관전 화면: 조용하면 화면 1초에 60틱 · 멈추면 0 · 밀린 5초는 50틱까지만 (나머지는 버린다) · 불이 나면 느려지고 카메라가 불을 담는다 · 화면 없이 돌린 세계와 바이트까지 같다",
+            calm is >= 59 and <= 61 && paused == 0 && pausedText.Contains("멈춤") && lag == LiveShow.MaxTicksPerCall && afterLag <= 1 && slow <= Director.OmenSpeed && inView && srcOk && same,
+            $"조용함 {calm}틱 · 멈춤 {paused}틱 · 밀림 {lag}틱 → 다음 장 {afterLag}틱 · 가장 느리게 {slow}틱/초 · 불이 화면 안 {inView} · 그림 {frames}장 (보일 곳 맞음 {srcOk}) · 같음 {same}");
+        // 걸음 사이 메우기: 불 난 방에 있던 사람이 달아난다 — 화면 1초에 2틱(한 틱 2.4초에 두세 칸)으로 보면 지나간 길을 따라 칸 사이에 그려진다
+        var walk = new LiveShow(Worlds.Full(lay, 3), "시험호");
+        var wm = walk.Sim.Get<Mind>();
+        wm.AddPerson(walk.Sim, At(5, 4)); wm.AddRobot(walk.Sim, At(20, 7), AgentKind.Robot, At(20, 7));
+        walk.Sim.Run(3);
+        walk.Sim.Get<Chemistry>().Ignite(At(3, 5), 3e6, walk.Sim.Causes.Add(CauseKind.Story, "침대 불씨", walk.Sim.Tick));
+        walk.SpeedOverride = 2;
+        int partial = 0, jumps = 0, moved = 0;
+        for (int i = 0; i < 60 * 15; i++)
+        {
+            if (walk.Advance(dt) > 0) moved += wm.Agents.Count(a => walk.Nudge(a) != (0, 0));
+            foreach (var a in wm.Agents)
+            {
+                var (nx, ny) = walk.Nudge(a);
+                int m = Math.Max(Math.Abs(nx), Math.Abs(ny));
+                if (m % Painter.T > 4 && m % Painter.T < Painter.T - 4) partial++;
+                if (m > (LiveShow.TrailMax - 1) * Painter.T) jumps++;
+            }
+        }
+        Check("관전 화면: 틱이 드물면 걸음 사이를 메운다 — 한 틱에 지나간 칸들을 따라 사람 · 로봇이 칸 사이 자리에 그려진다",
+            partial >= 20 && jumps == 0, $"걸은 틱 {moved} · 칸 사이에 그린 횟수 {partial} · 지나간 길보다 멀리 {jumps}");
     }
 }

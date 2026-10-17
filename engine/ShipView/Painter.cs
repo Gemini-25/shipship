@@ -20,6 +20,9 @@ public sealed class Painter
     private readonly Dictionary<long, Img> _cache = new();
     private readonly Dictionary<int, PersonLook> _looks = new();
 
+    /// <summary>사람 · 로봇을 칸 자리에서 몇 픽셀 옮겨 그린다 (관전 화면이 틱 사이 걸음을 메운다 — 없으면 칸 그대로).</summary>
+    public Func<Agent, (int dx, int dy)>? Nudge;
+
     public Painter(Layout layout)
     {
         L = layout;
@@ -238,8 +241,9 @@ public sealed class Painter
                 int cell = a.C.Cell;
                 int x = L.X(cell), y = L.Y(cell);
                 if (x < x0 - 1 || y < y0 - 1 || x > x0 + w || y > y0 + h + 1) continue;
-                if (a.IsPerson) DrawPerson(img, mind, life, a, Px(x), Py(y), frame);
-                else DrawBot(img, a, Px(x), Py(y), frame);
+                var (nx, ny) = Nudge?.Invoke(a) ?? (0, 0);
+                if (a.IsPerson) DrawPerson(img, mind, life, a, Px(x) + nx, Py(y) + ny, frame);
+                else DrawBot(img, a, Px(x) + nx, Py(y) + ny, frame);
             }
         }
 

@@ -45,12 +45,16 @@ public sealed class LiveShow
     public double BannerLeft;
     public const double BannerSec = 6;
     private readonly ConcurrentBag<Img> _spare = new();
+    // 걸음 사이 메우기: 마지막 틱에 사람 · 로봇이 지나간 칸들 (한 틱 2.4초에 두세 칸을 걷는다)
+    public const int TrailMax = 10;
+    private int[][] _trail = Array.Empty<int[]>();
+    private int[] _trailLen = Array.Empty<int>();
 
     public LiveShow(Sim sim, string shipName)
     {
         Sim = sim; ShipName = shipName;
         Dir = new Director(sim.Layout) { KeepRing = false };
-        Painter = new Painter(sim.Layout);
+        Painter = new Painter(sim.Layout) { Nudge = Nudge };
         var L = sim.Layout;
         int x0 = L.W, y0 = L.H, x1 = 0, y1 = 0;
         for (int i = 0; i < L.N; i++)
@@ -80,8 +84,14 @@ public sealed class LiveShow
         {
             _carry += Speed * realSec;
             n = (int)Math.Min(_carry, MaxTicksPerCall);
-            _carry = Math.Min(_carry - n, MaxTicksPerCall);
-            for (int i = 0; i < n; i++) { Sim.Step(); Dir.Observe(Sim); }
+            _carry -= n;
+            if (_carry >= 1) _carry -= Math.Floor(_carry);   // 밀린 것은 버린다 (다음 장에 몰아 돌리지 않는다)
+            for (int i = 0; i < n; i++)
+            {
+                if (i == n - 1) Remember();
+                Sim.Step(); Dir.Observe(Sim);
+            }
+            if (n > 0) Trace();
         }
         _anim += realSec;
         if (Dir.Highlights.Count > _lastHighlights)
@@ -98,6 +108,77 @@ public sealed class LiveShow
         double k = 1 - Math.Exp(-realSec * 2.5);
         CamX += (tx - CamX) * k; CamY += (ty - CamY) * k; ViewW += (tw - ViewW) * k;
         return n;
+    }
+
+    /// <summary>마지막 틱 앞: 지금 칸과 앞으로 걸을 길(몇 칸)을 적어 둔다.</summary>
+    private void Remember()
+    {
+        var mind = Sim.Find<Mind>();
+        if (mind == null) return;
+        if (_trail.Length < mind.Agents.Count)
+        {
+            int old = _trail.Length;
+            Array.Resize(ref _trail, mind.Agents.Count); Array.Resize(ref _trailLen, mind.Agents.Count);
+            for (int i = old; i < _trail.Length; i++) _trail[i] = new int[TrailMax];
+        }
+        foreach (var a in mind.Agents)
+        {
+            var t = _trail[a.Id];
+            t[0] = a.C.Cell;
+            int k = 1;
+            for (int i = a.PathIdx; i < a.Path.Count && k < TrailMax; i++) t[k++] = a.Path[i];
+            _trailLen[a.Id] = -k;   // 음수: 아직 걸을 길 (틱 뒤에 지나간 만큼으로 줄인다)
+        }
+    }
+
+    /// <summary>마지막 틱 뒤: 적어 둔 길에서 지금 칸까지를 지나간 길로 남긴다 (길 밖으로 옮겨졌으면 옆 칸만 잇고 · 멀면 그대로).</summary>
+    private void Trace()
+    {
+        var mind = Sim.Find<Mind>();
+        if (mind == null) return;
+        var L = Sim.Layout;
+        foreach (var a in mind.Agents)
+        {
+            if ((uint)a.Id >= (uint)_trail.Length) continue;
+            var t = _trail[a.Id];
+            int planned = -_trailLen[a.Id], cell = a.C.Cell, len = 1;
+            if (planned <= 0) { _trailLen[a.Id] = 0; continue; }
+            if (cell != t[0])
+            {
+                len = 0;
+                for (int i = 1; i < planned; i++) if (t[i] == cell) { len = i + 1; break; }
+                if (len == 0)
+                {
+                    bool near = Math.Abs(L.X(cell) - L.X(t[0])) <= 1 && Math.Abs(L.Y(cell) - L.Y(t[0])) <= 1;
+                    if (near) { t[1] = cell; len = 2; } else len = 1;
+                }
+            }
+            _trailLen[a.Id] = len;
+        }
+        // 업힌 사람은 업은 이의 길을 따른다
+        foreach (var a in mind.Agents)
+            if (a.C.CarriedBy >= 0 && a.C.CarriedBy < _trail.Length && a.Id < _trail.Length)
+            {
+                int b = a.C.CarriedBy;
+                Array.Copy(_trail[b], _trail[a.Id], TrailMax); _trailLen[a.Id] = _trailLen[b];
+            }
+    }
+
+    /// <summary>걸음 사이 메우기: 마지막 틱에 지나간 길을 다음 틱까지 남은 시간에 맞춰 따라가며 그린다 (틱이 드문 순간에도 미끄러지듯 걷는다 — 한 틱 늦게 보인다).</summary>
+    public (int dx, int dy) Nudge(Agent a)
+    {
+        if ((uint)a.Id >= (uint)_trailLen.Length) return (0, 0);
+        int len = _trailLen[a.Id];
+        if (len <= 1) return (0, 0);
+        var t = _trail[a.Id];
+        int cell = a.C.Cell;
+        if (t[len - 1] != cell) return (0, 0);                       // 그 뒤에 또 옮겨졌다
+        var L = Sim.Layout;
+        double s = Math.Clamp(_carry, 0, 1) * (len - 1);
+        int i = Math.Min((int)s, len - 2);
+        double f = s - i;
+        double px = L.X(t[i]) + (L.X(t[i + 1]) - L.X(t[i])) * f, py = L.Y(t[i]) + (L.Y(t[i + 1]) - L.Y(t[i])) * f;
+        return ((int)Math.Round((px - L.X(cell)) * Painter.T), (int)Math.Round((py - L.Y(cell)) * Painter.T));
     }
 
     /// <summary>손으로 카메라 옮기기 (따라가기를 끈다).</summary>
