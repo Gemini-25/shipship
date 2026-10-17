@@ -9,7 +9,7 @@ public struct Body
     public int Cell;
     public byte Alive, Conscious, Asleep, Suit;   // 우주복: 바깥 공기 · 열 · 독을 막는다 (산소는 우주복 탱크)
     public float ActivityW;    // 대사량 W (쉬기 80 · 일 250 · 힘든 일 500)
-    public double Reserve;     // 몸의 에너지 (양분 몰 — 1몰 2.8MJ) — 장부 값이라 double
+    public double Reserve;     // 몸의 탄수화물 (글리코겐 · 핏속 포도당 — 양분 몰 · 1몰 180g · 2.8MJ) — 힘든 일에 주로 태운다
     public double Water;       // 몸의 물 (몰)
     public float SpO2;         // 산소 포화도 0~1 (일산화탄소 · 폐 손상 반영)
     public float Hypoxia;      // 산소 부족이 쌓인 것 (0.5 넘으면 쓰러짐 · 3이면 죽음)
@@ -26,6 +26,8 @@ public struct Body
     public int DeathCause;
     public long DiedAt;
     public int HurtCause;
+    public double Fat;         // 몸의 지방 (팔미트산 몰 — 1몰 256g · 10MJ) — 쉴 때 주로 태운다
+    public double Bladder;     // 방광의 물 (몰) — 0.4L 넘으면 비운다 (오수로)
 }
 
 /// <summary>재배대의 작물.</summary>
@@ -71,7 +73,22 @@ public sealed class Life : IEngine
     private readonly Layout L;
     private readonly Tables T;
     private readonly Reaction _breathe, _photo, _rot, _ferment;
-    private readonly Substance _glucose, _waterL;
+    private readonly Substance _glucose, _waterL, _fat;
+    private Network? _net;
+
+    // ── 대사 (NASA BVAD 2018 · Compendium of Physical Activities 2011) ──
+    public const double GlycogenMax = 3.5;        // 글리코겐 한도 (몰 — 약 630g: 근육 500 · 간 100 + 핏속) — 넘치면 지방으로
+    public const double Fat0 = 39;                // 처음 지방 (몰 — 약 10kg · 체지방 14%)
+    public const double Urine0 = 83.3 / 86400;    // 오줌 (몰/초 — 하루 1.5L, 물이 넉넉하면 많이 · 모자라면 적게)
+    public const double UrineRefWater = Mind.BodyWater0 * 0.995; // 이 물에서 하루 1.5L (목마름은 몸의 물이 0.5% 줄 때쯤 마시게 한다 — 그 언저리가 보통)
+    public const double NightUrine = 0.5;          // 자는 동안 오줌 빠르기 (낮의 절반)
+    public const double Insensible = 83.3 / 86400; // 숨 · 피부로 늘 잃는 물 (몰/초 — 하루 1.5L · 대사로 생긴 물 0.35L와 합쳐 BVAD 1.85kg)
+    /// <summary>산소 1몰에서 나오는 에너지 (J · 물이 액체인 열량 — 식품 열량과 같은 기준): 포도당 467kJ · 지방 434kJ.</summary>
+    public const double GlucoseJPerO2 = 2803e3 / 6, FatJPerO2 = 9978e3 / 23;
+    /// <summary>탄수화물로 태우는 몫 (산소 기준): 쉴 때 0.3(호흡 몫 0.79) → 힘들수록 → 813W에서 1(호흡 몫 1.0).</summary>
+    public static double CarbShare(double w) => Math.Clamp(0.3 + 0.7 * (w - 80) / 730, 0.3, 1.0);
+    // 장부 (재미 측정 · 시험): 지금까지 숨으로 쓴 산소 · 낸 이산화탄소 (몰) · 대사 에너지 (J) · 오줌 (몰)
+    public double O2Used, CO2Made, MetabolicJ, UrineMade;
 
     public List<Body> Bodies = new();
     public List<Crop> Crops = new();
@@ -83,7 +100,7 @@ public sealed class Life : IEngine
     {
         F = f; L = f.L; T = f.T;
         _breathe = T.R("breathe"); _photo = T.R("photosynth"); _rot = T.R("rot"); _ferment = T.R("ferment");
-        _glucose = T.S("Glucose"); _waterL = T.S("H2O_l");
+        _glucose = T.S("Glucose"); _waterL = T.S("H2O_l"); _fat = T.S("Fat");
         Mold = new float[L.N];
     }
 
@@ -93,7 +110,7 @@ public sealed class Life : IEngine
     {
         Bodies.Add(new Body
         {
-            Cell = cell, Alive = 1, Conscious = 1, ActivityW = 90, Reserve = 160, Water = 42 * 55.5, SpO2 = 0.97f,
+            Cell = cell, Alive = 1, Conscious = 1, ActivityW = 90, Reserve = GlycogenMax * 0.8, Fat = Fat0, Water = 42 * 55.5, SpO2 = 0.97f,
             CoreK = BodyTemp, BloodL = 5, LastKPa = (float)F.Pressure(cell),
         });
         return Bodies.Count - 1;
@@ -120,6 +137,7 @@ public sealed class Life : IEngine
         var st = sim.Find<Structure>();
         var outside = sim.Find<Outside>();
         var chem = sim.Find<Chemistry>();
+        _net ??= sim.Find<Network>();
         var span = CollectionsMarshal.AsSpan(Bodies);
         for (int b = 0; b < span.Length; b++)
         {
@@ -156,8 +174,10 @@ public sealed class Life : IEngine
         if (b.Conscious == 0) b.ActivityW = 80; // 의식 없는 몸은 기초 대사로 (쓰러지기 전 달리던 대사량이 남아 스스로 익지 않게)
 
         // ── 숨 ── (추우면 떨어서 대사가 는다)
-        double shiver = b.CoreK < 309.6 && b.Conscious != 0 ? 150 : 0;
-        double vo2 = (b.ActivityW * (b.Asleep != 0 ? 0.8 : 1) + shiver) / 467_000 * dt; // 필요한 산소 (몰)
+        double shiver = b.Conscious != 0 ? Math.Clamp((309.75 - b.CoreK) * 300, 0, 400) : 0; // 36.6℃ 아래로 내려간 만큼 떤다 (0.1℃에 30W · 많아야 400W)
+        double watts = b.ActivityW + shiver; // 잠의 대사량은 ⑧ 마음이 잠 77W로 준다 (여기서 또 줄이지 않는다)
+        double fc = b.Reserve <= 0.01 ? 0 : b.Fat <= 0.01 ? 1 : CarbShare(watts); // 탄수화물 몫 (글리코겐이 바닥나면 지방만)
+        double vo2 = watts / (fc * GlucoseJPerO2 + (1 - fc) * FatJPerO2) * dt; // 필요한 산소 (몰)
         double hill(double x) => Math.Pow(x, 2.7) / (Math.Pow(x, 2.7) + Math.Pow(7, 2.7));
         // 산소 요법: 치료 침대에 누우면 마스크로 거의 순수한 산소를 마신다 — 상한 폐로도 피에 산소가 들어간다
         bool therapy = !suit && p > 30 && OnTherapy(sim, c);
@@ -167,17 +187,33 @@ public sealed class Life : IEngine
         double o2Got;
         if (suit) { o2Got = Math.Min(vo2, b.SuitO2); b.SuitO2 -= (float)o2Got; if (b.SuitO2 <= 0) b.SpO2 = 0; }
         else o2Got = p > 1 ? Math.Min(vo2 * Math.Min(1, sat / 0.95), F.Gas(T.gO2, c) * 0.5) : 0;
-        double xi = Math.Min(o2Got / 6, b.Reserve);
-        if (xi > 0)
+        // 숨: 포도당 + 6O₂ → 6CO₂ + 6H₂O · 지방(팔미트산) + 23O₂ → 16CO₂ + 16H₂O — 섞어 태운다 (호흡 몫 0.79 ~ 1.0)
+        double xg = Math.Min(o2Got * fc / 6, b.Reserve), xf = Math.Min(o2Got * (1 - fc) / 23, b.Fat);
+        if (xg + xf > 0)
         {
-            // 숨: 양분 + 산소(칸) → 이산화탄소 + 수증기(칸 · 체온) — 반응열은 몸으로 (장부: E(기체, T) = hf + cv(T−298))
-            double q = xi * _glucose.Hf * 1000;
-            if (!suit) { q += 6 * xi * T.Gases[T.gO2].Energy(tair); F.RemoveGas(c, T.gO2, 6 * xi); }
-            else q += 6 * xi * T.Gases[T.gO2].Energy(BodyTemp);
-            q -= 6 * xi * T.Gases[T.gCO2].Energy(BodyTemp) + 6 * xi * T.Gases[T.gH2O].Energy(BodyTemp);
-            b.Reserve -= xi;
-            if (!suit && p > 1) { F.AddGas(c, T.gCO2, 6 * xi, BodyTemp); F.AddGas(c, T.gH2O, 6 * xi, BodyTemp); }
+            double o2 = 6 * xg + 23 * xf, co2 = 6 * xg + 16 * xf, h2o = 6 * xg + 16 * xf;
+            // 반응열은 몸으로 (장부: E(기체, T) = hf + cv(T−298))
+            double q = xg * _glucose.Hf * 1000 + xf * _fat.Hf * 1000;
+            if (!suit) { q += o2 * T.Gases[T.gO2].Energy(tair); F.RemoveGas(c, T.gO2, o2); }
+            else q += o2 * T.Gases[T.gO2].Energy(BodyTemp);
+            q -= co2 * T.Gases[T.gCO2].Energy(BodyTemp) + h2o * T.Gases[T.gH2O].Energy(BodyTemp);
+            b.Reserve -= xg; b.Fat -= xf;
+            if (!suit && p > 1) { F.AddGas(c, T.gCO2, co2, BodyTemp); F.AddGas(c, T.gH2O, h2o, BodyTemp); }
             b.CoreK += q / BodyC;
+            O2Used += o2; CO2Made += co2; MetabolicJ += xg * GlucoseJPerO2 * 6 + xf * FatJPerO2 * 23;
+        }
+        // 남는 탄수화물은 지방으로 (4 포도당 + O₂ → 팔미트산 + 8CO₂ + 8H₂O · 3시간에 걸쳐 — 열이 조금 난다)
+        if (b.Reserve > GlycogenMax && !suit && p > 1)
+        {
+            double k = Math.Min((b.Reserve - GlycogenMax) / 4 * dt / (3 * 3600), F.Gas(T.gO2, c) * 0.1);
+            if (k > 0)
+            {
+                double q = 4 * k * _glucose.Hf * 1000 + k * T.Gases[T.gO2].Energy(tair) - k * _fat.Hf * 1000 - 8 * k * T.Gases[T.gCO2].Energy(BodyTemp) - 8 * k * T.Gases[T.gH2O].Energy(BodyTemp);
+                F.RemoveGas(c, T.gO2, k); F.AddGas(c, T.gCO2, 8 * k, BodyTemp); F.AddGas(c, T.gH2O, 8 * k, BodyTemp);
+                b.Reserve -= 4 * k; b.Fat += k;
+                b.CoreK += q / BodyC;
+                O2Used += k; CO2Made += 8 * k;
+            }
         }
         // 산소 부족
         bool vacuum = !suit && p < 6.3;
@@ -204,16 +240,26 @@ public sealed class Life : IEngine
         double tsurf = F.HasSurface(c) ? F.Tf[c] : F.Ts[c];
         double wind = Math.Sqrt(F.WindX[c] * F.WindX[c] + F.WindY[c] * F.WindY[c]);
         double thin = Math.Sqrt(Math.Clamp(p / 101.3, 0, 2));
-        double clothes = suit ? 0.05 : 0.5;
-        double skin = b.CoreK - 3;
+        // 체온 조절 (ISO 7730 · Gagge 두 마디를 가볍게): 피부 온도는 혈관이 조였다 풀었다 (추우면 낮게 · 더우면 높게) ·
+        // 마른 열은 '옷의 저항 + 겉 공기층의 저항'을 지나 공기(대류)와 둘레 겉면(복사)으로 — 옷 1clo · 침대 이불 2.5clo (1clo = 0.155 m²K/W)
+        double coreC = b.CoreK - 273.15;
+        double skin = 273.15 + Math.Clamp(33.7 - 4 * Math.Max(0, 36.8 - coreC) + 2 * Math.Max(0, coreC - 37.0), 28, 36);
         double hc = (3 + 4 * Math.Pow(wind, 0.6)) * thin;
-        double conv = hc * SkinArea * (skin - tair) * clothes;                                  // W (+ 몸이 잃음)
-        double rad = 0.95 * Field.Sigma * SkinArea * 0.7 * (Math.Pow(skin, 4) - Math.Pow(tsurf, 4)) * clothes;
+        double hr = 4 * 0.95 * Field.Sigma * 0.7 * Math.Pow((skin + tsurf) / 2, 3);   // 복사를 곧게 편 것 (W/m²K)
+        bool inBed = b.Asleep != 0 && L.FurnitureAt[c] >= 0 && L.Furniture[L.FurnitureAt[c]].Type == "Bed";
+        double icl = suit ? 1.2 : inBed ? 2.5 * 0.155 : 0.155;                            // 우주복은 열을 거의 막는다 (냉각 속옷이 뺀다)
+        double h = hc + hr;
+        double top = h > 0 ? (hc * tair + hr * tsurf) / h : tair;                           // 느끼는 온도 (공기 · 겉면 평균)
+        double dry = (skin - top) * SkinArea / (icl + 1 / Math.Max(0.5, h));                // W (+ 몸이 잃음)
+        double conv = h > 0 ? dry * hc / h : 0, rad = h > 0 ? dry * hr / h : 0;
         double sweat = 0;
-        if (b.CoreK > 310.4 && !suit)
+        if (b.CoreK > 310.4 && !suit && p > 6.3)
         {
-            double rh = F.Partial(T.gH2O, c) / Math.Max(1e-6, Water.SatKPa(Math.Max(250, tair)));
-            sweat = Math.Min(500, (b.CoreK - 310.4) * 400) * Math.Clamp(1 - rh, 0, 1) * (p > 6.3 ? 1 : 0);
+            // 땀: 몸이 내려는 만큼(심부 37.25℃ 넘은 만큼) — 마를 수 있는 한도까지 (ISO 7933: 피부 포화 수증기압 − 공기 수증기압 ÷ 증발 저항(옷 + 공기층 · 루이스 16.5))
+            double demand = Math.Min(600, (b.CoreK - 310.4) * 400);
+            double re = icl / (16.5 * 0.38) + 1 / (16.5 * Math.Max(0.5, hc));
+            double emax = Math.Max(0, Water.SatKPa(skin) - F.Partial(T.gH2O, c)) * SkinArea / re;
+            sweat = Math.Min(demand, emax);
         }
         // 우주복 냉각 속옷: 우주복이 돌면(산소가 남아 있으면) 몸의 남는 열을 물 순환으로 빼 겉으로 버린다 — 땀이 마르지 않는 우주복 속에서 익지 않게
         double suitCool = suit && b.SuitO2 > 0 && b.CoreK > 310.2 ? Math.Min(400, (b.CoreK - 310.2) * 400) : 0;
@@ -235,8 +281,13 @@ public sealed class Life : IEngine
                 b.CoreK -= (need - sweat * dt) / BodyC;
             }
         }
-        // 늘 조금씩 물을 잃는다 (숨 · 피부 — 하루 1L)
-        double insens = 55.5 / 86400 * dt;
+        // 콩팥: 물이 넉넉하면 오줌을 많이 · 모자라면 적게 (하루 0.5 ~ 4.5L) — 방광이 차면 비운다 (오수로 — 망이 있으면)
+        // 자는 동안은 절반 (밤의 항이뇨 호르몬 — 건강한 어른의 밤 오줌은 하루의 20% 아래: ICS 2002)
+        double urine = Math.Min(b.Water * 0.001, Urine0 * Math.Clamp(1 + (b.Water - UrineRefWater) / (0.01 * Mind.BodyWater0), 0.33, 3) * (b.Asleep != 0 ? NightUrine : 1) * dt);
+        b.Water -= urine; b.Bladder += urine; UrineMade += urine;
+        if (b.Bladder > 22 && _net != null && b.Conscious != 0) { _net.WasteWater += b.Bladder; b.Bladder = 0; }
+        // 늘 조금씩 물을 잃는다 (숨 · 피부 — 하루 1.5L)
+        double insens = Insensible * dt;
         b.Water -= insens;
         if (!suit && p > 1) { F.AddGas(c, T.gH2O, insens, BodyTemp); b.CoreK -= insens * ((T.Gases[T.gH2O].Hf - _waterL.Hf) * 1000 + T.Gases[T.gH2O].C * (BodyTemp - 298.15)) / BodyC; }
 
@@ -290,7 +341,7 @@ public sealed class Life : IEngine
         string? death = b.Hypoxia > 3 ? harm ?? "숨을 못 쉬었다"
             : b.CoreK < 301 ? "얼어 죽었다" : b.CoreK > 316 ? "열사병" : b.BloodL < 2.5 ? "피를 너무 흘렸다"
             : b.Burn > 1.2 ? "화상" : b.Blunt > 1.5 ? "크게 다쳤다" : b.LungDamage > 1.2 ? "폐가 상했다"
-            : b.Water < 42 * 55.5 * 0.82 ? "목이 말라" : b.Reserve <= 0 && b.CoreK < 306 ? "굶어서" : b.RadRecent > 9 ? "방사선" : null;
+            : b.Water < 42 * 55.5 * 0.82 ? "목이 말라" : b.Reserve <= 0.01 && b.Fat <= 0.01 && b.CoreK < 306 ? "굶어서" : b.RadRecent > 9 ? "방사선" : null;
         if (death != null)
         {
             b.Alive = 0; b.Conscious = 0; b.DiedAt = sim.Tick;
@@ -395,18 +446,18 @@ public sealed class Life : IEngine
     public double EnergyLedger()
     {
         double e = 0;
-        foreach (var b in Bodies) e += b.Reserve * _glucose.Hf * 1000 + b.Water * _waterL.Hf * 1000 + BodyC * b.CoreK;
+        foreach (var b in Bodies) e += b.Reserve * _glucose.Hf * 1000 + b.Fat * _fat.Hf * 1000 + (b.Water + b.Bladder) * _waterL.Hf * 1000 + BodyC * b.CoreK;
         return e;
     }
 
-    /// <summary>원소 장부용: 몸의 양분 · 물 (몰).</summary>
-    public (double glucose, double water) BodyMatter()
+    /// <summary>원소 장부용: 몸의 양분 · 물(방광 포함) · 지방 (몰).</summary>
+    public (double glucose, double water, double fat) BodyMatter()
     {
-        double g = 0, w = 0;
-        foreach (var b in Bodies) { g += b.Reserve; w += b.Water; }
-        return (g, w);
+        double g = 0, w = 0, f = 0;
+        foreach (var b in Bodies) { g += b.Reserve; w += b.Water + b.Bladder; f += b.Fat; }
+        return (g, w, f);
     }
 
-    public void Save(StateWriter w) { w.List(Bodies); w.List(Crops); w.Arr(Mold); w.I64(Deaths); w.F64(FoodRotted); }
-    public void Load(StateReader r) { Bodies = r.List<Body>(); Crops = r.List<Crop>(); r.ArrInto(Mold); Deaths = r.I64(); FoodRotted = r.F64(); }
+    public void Save(StateWriter w) { w.List(Bodies); w.List(Crops); w.Arr(Mold); w.I64(Deaths); w.F64(FoodRotted); w.F64(O2Used); w.F64(CO2Made); w.F64(MetabolicJ); w.F64(UrineMade); }
+    public void Load(StateReader r) { Bodies = r.List<Body>(); Crops = r.List<Crop>(); r.ArrInto(Mold); Deaths = r.I64(); FoodRotted = r.F64(); O2Used = r.F64(); CO2Made = r.F64(); MetabolicJ = r.F64(); UrineMade = r.F64(); }
 }

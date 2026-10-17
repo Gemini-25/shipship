@@ -418,12 +418,14 @@ public static partial class Program
             Check("불 붙은 의자 곁에 있으면 데고, 그 원인이 불까지 이어진다", l5[b5].Burn > 0.2 && s5.Causes.Story(l5[b5].HurtCause).Contains("담배"),
                 $"화상 {l5[b5].Burn:0.00} · {s5.Causes.Story(l5[b5].HurtCause)}");
 
-            // 굶주림 · 물: 하루에 양분 약 3몰 · 물 1L 넘게
+            // 굶주림 · 물: 하루에 몸에 쌓인 에너지(포도당 + 지방) 약 8MJ · 물 1L 넘게 — 쉴 때는 지방이 연료의 절반 넘게 (⑦)
             var s6 = World(); var l6 = s6.Get<Life>(); int b6 = l6.AddBody(a);
-            double r0 = l6[b6].Reserve, w0 = l6[b6].Water;
+            double Store(int b) => (l6[b].Reserve * Life.GlucoseJPerO2 * 6 + l6[b].Fat * Life.FatJPerO2 * 23) / 1e6;
+            double e0 = Store(b6), r0 = l6[b6].Reserve, f0 = l6[b6].Fat, w0 = l6[b6].Water;
             s6.Run(Time.Days(1));
-            Check("하루 동안 몸의 양분(약 3몰)과 물(1L 넘게)이 준다", r0 - l6[b6].Reserve > 2 && r0 - l6[b6].Reserve < 6 && (w0 - l6[b6].Water) / 55.5 > 0.9,
-                $"양분 −{r0 - l6[b6].Reserve:0.0}몰 · 물 −{(w0 - l6[b6].Water) / 55.5:0.0}L · 체온 {l6[b6].CoreK - 273.15:0.0}℃");
+            double used = e0 - Store(b6);
+            Check("하루 동안 몸에 쌓인 에너지(포도당 + 지방, 약 8MJ)와 물(1L 넘게)이 준다", used > 5.6 && used < 16.8 && f0 > l6[b6].Fat && (w0 - l6[b6].Water) / 55.5 > 0.9,
+                $"에너지 −{used:0.0}MJ (포도당 −{r0 - l6[b6].Reserve:0.0}몰 · 지방 −{(f0 - l6[b6].Fat) * 0.256:0.00}kg) · 물 −{(w0 - l6[b6].Water) / 55.5:0.0}L · 체온 {l6[b6].CoreK - 273.15:0.0}℃");
 
             // 방사선: 폭발 때 바깥쪽 칸이 안쪽보다 많이 맞는다
             var s7 = ShipWorld.Create("Hanbit", 2);
@@ -557,5 +559,6 @@ public static partial class Program
         WorkRules();
         ViewRules();
         SoundRules();
+        LifeRules();
     }
 }

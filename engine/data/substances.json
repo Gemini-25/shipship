@@ -31,6 +31,7 @@
   { "id": "CH2",     "name": "고분자",    "formula": "CH2",     "phase": "solid", "hf": -28,    "c": 30,   "cell": true },
   { "id": "Cellulose", "name": "섬유질",  "formula": "C6H10O5", "phase": "solid", "hf": -963,   "c": 220,  "cell": true },
   { "id": "Glucose", "name": "양분",      "formula": "C6H12O6", "phase": "solid", "hf": -1273,  "c": 218,  "cell": true },
+  { "id": "Fat",     "name": "지방",      "formula": "C16H32O2", "phase": "solid", "hf": -891,   "c": 460 },
   { "id": "Fe",      "name": "철",        "formula": "Fe",      "phase": "solid", "hf": 0,      "c": 25.1 },
   { "id": "Fe2O3",   "name": "녹",        "formula": "Fe2O3",   "phase": "solid", "hf": -824.2, "c": 103.9 },
   { "id": "Al",      "name": "알루미늄",  "formula": "Al",      "phase": "solid", "hf": 0,      "c": 24.2 },

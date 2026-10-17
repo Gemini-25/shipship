@@ -15,6 +15,8 @@ public sealed partial class Mind : IEngine
 
     public const int MaxBeliefs = 24;
     public const double BodyWater0 = 42 * 55.5;   // 몸의 물 (몰) — ⑦ 생명이 처음 주는 값
+    public const float WakeThirst = 0.8f;         // 이만큼 목마르면 자다가 깬다 (몸의 물 1.6% 모자람 — 0.7L)
+    public const double MealMol = 1.15;           // 한 끼 (양분 몰 — 3.2MJ · 약 770kcal: 하루 3.6끼로 BVAD 11.8MJ)
 
     private readonly Field F;
     private readonly Layout L;

@@ -350,9 +350,9 @@ public static partial class Program
             double[] Elements()
             {
                 var e = f.ElementTotals();
-                var (g, w) = life.BodyMatter();
+                var (g, w, fat) = life.BodyMatter();
                 var m = new double[f.T.Substances.Count];
-                m[f.T.S("Glucose").Index] = g; m[f.T.S("H2O_l").Index] = w;
+                m[f.T.S("Glucose").Index] = g; m[f.T.S("H2O_l").Index] = w; m[f.T.S("Fat").Index] = fat;
                 var be = f.T.ElementsOf(m);
                 return e.Zip(be, (a, b) => a + b).ToArray();
             }

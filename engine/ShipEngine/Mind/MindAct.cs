@@ -166,7 +166,8 @@ public sealed partial class Mind
         bool done = t - c.StepStart >= st.Value;
         switch (use)
         {
-            case UseKind.Sleep: done |= c.Sleepy < 0.03f && t - c.StepStart >= Time.Hours(5); break; // 한번 누우면 다섯 시간은 잔다
+            // 한번 누우면 다섯 시간은 잔다 · 목이 몹시 마르면 깬다 (마실 것이 없어도 30분은 눈을 붙인다)
+            case UseKind.Sleep: done |= c.Sleepy < 0.03f && t - c.StepStart >= Time.Hours(5) || a.IsPerson && c.Thirst > WakeThirst && t - c.StepStart >= Time.Minutes(30); break;
             case UseKind.Charge: done |= c.Battery >= 0.98f && t - c.StepStart >= Time.Minutes(10); break; // 다 차면 독에서 10분씩 기다린다
             case UseKind.Work: done |= !InWindow(Time.HourOfDay(t), c.ShiftHour, 8); break;
         }
@@ -176,7 +177,7 @@ public sealed partial class Mind
             case UseKind.Eat when a.IsPerson:
             {
                 double got = 0;
-                foreach (int x in L.Furniture[st.Target].Cells) { got += F.TakeStore(x, T.sFood, Math.Max(0, 1 - got)); if (got >= 1) break; }
+                foreach (int x in L.Furniture[st.Target].Cells) { got += F.TakeStore(x, T.sFood, Math.Max(0, MealMol - got)); if (got >= MealMol) break; }
                 if (got > 0) { _life!.Eat(c.Body, got); FoodEaten += got; c.Hunger = (float)Math.Max(0, c.Hunger - got); c.Joy = Math.Min(1, c.Joy + 0.1f); c.AteAt = t; Meals++; }
                 break;
             }
