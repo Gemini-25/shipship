@@ -54,7 +54,7 @@ public partial class Main : Node2D
     private AudioStreamGeneratorPlayback? _playback;
     private float[] _audio = new float[4096];
     private Vector2[] _push = Array.Empty<Vector2>();
-    private bool _mute;
+    private int _mute;                                         // M: 0 다 켬 · 1 음악만 끔 · 2 다 끔
 
     // ── 확인용 (명령 줄: --shots=폴더 --every=초 --for=초) — 몇 초마다 화면을 찍고, 끝나면 프레임 시간을 적고 나간다 ──
     private string? _shotDir;
@@ -201,7 +201,8 @@ public partial class Main : Node2D
         if (frames <= 0) return;
         if (_audio.Length < frames * 2) _audio = new float[frames * 2];
         if (_push.Length != frames) _push = new Vector2[frames];
-        _mix.Master = _mute ? 0 : 0.9f;
+        _mix.Master = _mute == 2 ? 0 : 0.9f;
+        _mix.MusicGain = _mute == 0 ? 0.8f : 0;
         _mix.Render(_audio, frames);
         for (int i = 0; i < frames; i++) _push[i] = new Vector2(_audio[2 * i], _audio[2 * i + 1]);
         _playback.PushBuffer(_push);
@@ -371,7 +372,7 @@ public partial class Main : Node2D
             "L  볼 만했던 장면 (골라서 다시보기)",
             "T  이야기꾼 (성격 · 가혹함)      [ ]  가혹함",
             "J  주컴퓨터 일지 · 아침 방송",
-            "M  소리 끄기 · 켜기",
+            "M  다 켬 → 음악 끔 → 소리 끔",
             "H  도움말      Esc  나가기",
             $"지금 이야기꾼: {_shown?.Storyteller}",
         };
@@ -426,7 +427,7 @@ public partial class Main : Node2D
                 case Key.Bracketleft: _cmds.Enqueue(s => s.Harsher(-1)); break;
                 case Key.Bracketright: _cmds.Enqueue(s => s.Harsher(+1)); break;
                 case Key.F3: _meter = !_meter; break;
-                case Key.M: _mute = !_mute; break;
+                case Key.M: _mute = (_mute + 1) % 3; { string t = _mute switch { 0 => "소리 · 음악 켬", 1 => "음악 끔 (배 안 소리만)", _ => "소리 끔" }; _cmds.Enqueue(s => s.Notify(t)); } break;
                 case Key.Escape: GetTree().Quit(); break;
             }
         }

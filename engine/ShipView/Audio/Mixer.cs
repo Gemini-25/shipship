@@ -4,6 +4,7 @@ namespace ShipView.Audio;
 /// 섞개: 귀가 보낸 소리 목록을 받아 22,050Hz 스테레오로 그린다 (Godot 메인 스레드 · 실험실은 파일로).
 /// 소리마다: 합성 → 가림 거름(한 극 둘 — 벽 너머는 가파르게 먹먹) → 크기(튀지 않게 따라감) → 좌우 → 마른 소리 + 방 울림으로 보내기.
 /// 마지막에 부드러운 누름(tanh)으로 터지지 않게. 이어 도는 소리는 열쇠로 하나씩 — 이번 목록에 없으면 천천히 줄여 끈다.
+/// 바탕 음악(<see cref="Score"/>)은 방 울림 · 좌우 · 가림 없이 위에 얹는다 (배 안의 소리가 아니다).
 /// </summary>
 public sealed class Mixer
 {
@@ -22,6 +23,10 @@ public sealed class Mixer
     private float _wet = 0.25f, _tWet = 0.25f;
     private uint _seed = 7;
     public float Master = 0.9f;
+    /// <summary>바탕 음악 (연출의 분위기를 따른다) · 크기 (0이면 끈다). 효과음이 크면 음악은 잠깐 작아진다.</summary>
+    public readonly Score Music = new();
+    public float MusicGain = 0.8f;
+    private float _sfxEnv;
     public int Voices => _shots.Count + _loops.Count;
 
     /// <summary>귀가 보낸 것을 모두 받는다 (그리기 전에).</summary>
@@ -34,6 +39,7 @@ public sealed class Mixer
     {
         if (f.Reset) { foreach (var s in _loops.Values) s.TGain = 0; }
         _rev.SetRt60(f.Rt60); _tWet = f.Wet;
+        if (f.Mood.Length > 0) Music.SetMood(f.Mood);
         foreach (var v in f.Shots)
         {
             if (_shots.Count > 24) break;
@@ -102,8 +108,13 @@ public sealed class Mixer
                 l += x * gl; r += x * gr; send += x * s.V.Send;
             }
             float wet = _rev.Run(send) * _wet * 2.2f;
-            stereo[2 * i] = Soft((l + wet) * Master);
-            stereo[2 * i + 1] = Soft((r + wet * 0.92f) * Master);
+            // 음악: 효과음 크기를 따라가며 (빨리 올라 · 천천히 내려) 그만큼 줄인다
+            float sfx = MathF.Max(MathF.Abs(l), MathF.Abs(r));
+            _sfxEnv += (sfx - _sfxEnv) * (sfx > _sfxEnv ? 0.01f : 0.00005f);
+            float ml = 0, mr = 0;
+            if (MusicGain > 0) { (ml, mr) = Music.Next(); float g = MusicGain / (1 + 6 * _sfxEnv); ml *= g; mr *= g; }
+            stereo[2 * i] = Soft((l + wet + ml) * Master);
+            stereo[2 * i + 1] = Soft((r + wet * 0.92f + mr) * Master);
         }
         // 다 그친 이어 도는 소리를 치운다
         if (_loops.Count > 0)

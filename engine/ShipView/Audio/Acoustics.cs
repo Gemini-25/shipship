@@ -23,6 +23,7 @@ public sealed class SoundFrame
     public readonly List<LoopUpdate> Loops = new();
     public float Rt60 = 0.5f, Wet = 0.25f;
     public bool Reset;       // 세계가 바뀌었다 (다시보기 · 다른 배) — 이어 도는 소리를 모두 끈다
+    public string Mood = ""; // 연출의 분위기 (바탕 음악이 따른다)
 }
 
 /// <summary>
@@ -79,7 +80,7 @@ public sealed class Acoustics
     {
         if (!Enabled) return;
         var w = show.World;
-        var frame = new SoundFrame();
+        var frame = new SoundFrame { Mood = show.View.Mood };
         if (!ReferenceEquals(w, _world))
         {
             _world = w; L = w.Layout; F = w.Get<Field>();
