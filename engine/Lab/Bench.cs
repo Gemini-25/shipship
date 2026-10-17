@@ -27,6 +27,40 @@ public static partial class Program
         return sb.ToString();
     }
 
+    /// <summary>배 하나 · 엔진마다 한 틱 시간 (--profile 배 사람 로봇 [틱]) — 시험이 많이 쓰는 배가 어디에 시간을 쓰나.</summary>
+    /// <summary>--fingerprint: 배 몇 척을 몇 분 돌린 세계 지문 — 속도만 고친 뒤 결과가 한 비트도 안 바뀌었는지 (고치기 전과 견준다).</summary>
+    private static void Fingerprints()
+    {
+        foreach (var (ship, people, robots, ticks) in new[] { ("Didim", 6, 2, 3000), ("Salpim", 12, 4, 1500), ("Saetteul", 40, 10, 600), ("Hannuri", 100, 30, 300) })
+        {
+            var s = ShipWorld.Crewed(ship, 7, people, robots);
+            s.Run(ticks);
+            Console.WriteLine($"{ship} {people}/{robots} {ticks}틱 {s.Hash():x16}");
+        }
+    }
+
+    private static void ProfileShip(string[] args)
+    {
+        var rest = args.SkipWhile(a => a != "--profile").Skip(1).ToArray();
+        string ship = rest.Length > 0 ? rest[0] : "Didim";
+        int people = rest.Length > 1 ? int.Parse(rest[1]) : 6, robots = rest.Length > 2 ? int.Parse(rest[2]) : 2, ticks = rest.Length > 3 ? int.Parse(rest[3]) : 3000;
+        if (args.Contains("--one")) Par.Threads = 1;
+        var make = Stopwatch.StartNew();
+        var s = ShipWorld.Crewed(ship, 3, people, robots);
+        Console.WriteLine($"  만들기 {make.Elapsed.TotalMilliseconds:0}ms");
+        s.Run(100);
+        s.Measure = true; s.LastMs.Clear();
+        Field.Prof = new(); Network.Prof = new();
+        var sw = Stopwatch.StartNew();
+        s.Run(ticks);
+        double ms = sw.Elapsed.TotalMilliseconds / ticks;
+        Console.WriteLine("  장 안: " + string.Join(" · ", Field.Prof.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key} {kv.Value / ticks:0.000}")));
+        Console.WriteLine("  망 안: " + string.Join(" · ", Network.Prof.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key} {kv.Value / ticks:0.000}")));
+        Field.Prof = null; Network.Prof = null;
+        Console.WriteLine($"{ship} 사람 {people} · 로봇 {robots} · 코어 {Par.Threads}: 틱마다 {ms:0.000}ms (하루 = {ms * Time.TicksPerDay / 1000:0.0}초)");
+        Console.WriteLine("  " + string.Join(" · ", s.LastMs.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key} {kv.Value / ticks:0.000}")));
+    }
+
     private static void Bench()
     {
         Console.WriteLine("성능\n");

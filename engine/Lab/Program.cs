@@ -17,7 +17,12 @@ public static partial class Program
         Console.OutputEncoding = System.Text.Encoding.UTF8;
         _only = Environment.GetEnvironmentVariable("ONLY");
         if (args.Contains("--threads")) Par.Threads = int.Parse(args[Array.IndexOf(args, "--threads") + 1]);
-        if (args.Contains("--shard")) { var p = args[Array.IndexOf(args, "--shard") + 1].Split('/'); _shard = int.Parse(p[0]); _shards = int.Parse(p[1]); }
+        if (args.Contains("--shard"))
+        {
+            var p = args[Array.IndexOf(args, "--shard") + 1].Split('/'); _shard = int.Parse(p[0]); _shards = int.Parse(p[1]);
+            // 갈래끼리 이미 코어를 나눠 쓴다 — 갈래 안 장 계산까지 코어를 다 쓰면 서로 빼앗는다 (결정론이라 결과는 같다)
+            if (!args.Contains("--threads")) Par.Threads = Math.Max(1, Environment.ProcessorCount / _shards);
+        }
         var sw = Stopwatch.StartNew();
         try
         {
@@ -46,6 +51,8 @@ public static partial class Program
             else if (args.Contains("--listen")) Listen(args);
             else if (args.Contains("--ledger")) LedgerRun(args);
             else if (args.Contains("--shipgen")) ShipGen(args);
+            else if (args.Contains("--profile")) ProfileShip(args);
+            else if (args.Contains("--fingerprint")) Fingerprints();
             else { Console.WriteLine("Lab --law | --rule | --bench | --scene 이름 [폴더] | --ships | --fun [배,…] [날] [시드 수] [성격] [가혹함] | --live 배 시드 초 | --listen 배 시드 초 [건너뛸 시간]"); return 2; }
         }
         catch (Exception e)
@@ -99,8 +106,13 @@ public static partial class Program
         return _assign.TryGetValue(key, out int sh) ? sh : (int)(Rng.Key(key) % (ulong)_shards);
     }
 
+    private static long _lap;
     internal static void Check(string name, bool ok, string detail = "")
     {
+        long now = Stopwatch.GetTimestamp();
+        if (Environment.GetEnvironmentVariable("RULE_TIMES") == "1")
+            Console.WriteLine($"⏲\t{_group}\t{(now - Math.Max(_lap, _groupStart)) / (double)Stopwatch.Frequency:0.0}\t{name}");
+        _lap = now;
         if (ok) _pass++; else _fail++;
         Console.WriteLine($"  {(ok ? "✔" : "✘")} {name}{(detail.Length > 0 ? " — " + detail : "")}");
     }

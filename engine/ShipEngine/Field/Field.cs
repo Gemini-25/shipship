@@ -105,6 +105,18 @@ public sealed partial class Field : IEngine
         return c;
     }
 
+    /// <summary>몰 · 기체 열용량을 한 번에 (Moles · GasC와 같은 값).</summary>
+    public double Moles(int i, out double gasC)
+    {
+        double n = 0, c = 0;
+        for (int g = 0; g < G; g++) { double v = N[i * G + g]; n += v; c += v * _cv[g]; }
+        gasC = c;
+        return n;
+    }
+
+    /// <summary>기체 열용량을 이미 셌을 때의 온도 (Temp와 같은 값).</summary>
+    public double Temp(int i, double gasC) => gasC > 1e-6 ? U[i] / gasC : Ts[i];
+
     /// <summary>기체 온도 (K). 기체가 거의 없으면 바닥 온도.</summary>
     public double Temp(int i)
     {
@@ -172,9 +184,12 @@ public sealed partial class Field : IEngine
     }
 
     /// <summary>칸에 열 (J). 기체가 거의 없으면 바닥으로.</summary>
-    public void AddHeat(int i, double joules)
+    public void AddHeat(int i, double joules) => AddHeat(i, joules, GasC(i));
+
+    /// <summary>AddHeat과 같다 — 칸 기체 열용량(GasC)을 이미 셌을 때 (그 사이 기체가 바뀌지 않았어야 한다).</summary>
+    public void AddHeat(int i, double joules, double gasC)
     {
-        if (GasC(i) > 50) { U[i] = Math.Max(0, U[i] + joules); if (RegionOf.Length > i) MarkDirty(RegionOf[i], joules / Math.Max(1, U[i])); }
+        if (gasC > 50) { U[i] = Math.Max(0, U[i] + joules); if (RegionOf.Length > i) MarkDirty(RegionOf[i], joules / Math.Max(1, U[i])); }
         else AddSolidHeat(i, joules);
     }
 

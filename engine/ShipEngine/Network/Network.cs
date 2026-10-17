@@ -285,16 +285,33 @@ public sealed class Network : IEngine
 
     // ───────────────────────── 한 틱 ─────────────────────────
 
+    /// <summary>망 안 단계별 시간 (실험실 --profile — 켜 두면 잰다).</summary>
+    public static Dictionary<string, double>? Prof;
+    private static long Lap(string name, long t0)
+    {
+        if (Prof == null) return 0;
+        long t1 = System.Diagnostics.Stopwatch.GetTimestamp();
+        Prof[name] = Prof.GetValueOrDefault(name) + (t1 - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+        return t1;
+    }
+
     public void Step(Sim sim, double dt)
     {
+        long t = Prof != null ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
         if (sim.Tick % 25 == 0) MeasureO2();
         Faults(sim);
+        t = Lap("고장", t);
         Power(sim, dt);
+        t = Lap("전력", t);
         Effects(sim, dt);
+        t = Lap("장치 일", t);
         Cooling(sim, dt);
+        t = Lap("냉각 · 공조", t);
         Ducts(sim);
+        t = Lap("덕트", t);
         ReleaseAir(dt);
         if (sim.Tick % 25 == 0) WearStep(sim, 25 * dt);
+        Lap("마모", t);
     }
 
     /// <summary>배의 평균 산소 분압 → 산소 발생기 일 몫 (비례 조절).</summary>
@@ -350,10 +367,12 @@ public sealed class Network : IEngine
 
     private readonly Dictionary<int, int> _faultCause = new();
 
+    private double[] _load = Array.Empty<double>(); // 틱 안에서만 (찍지 않는다)
     private void Power(Sim sim, double dt)
     {
         // 수요 (급전선마다)
-        var load = new double[Feeders.Count];
+        if (_load.Length != Feeders.Count) _load = new double[Feeders.Count];
+        var load = _load; Array.Clear(load);
         for (int d = 0; d < Devices.Count; d++)
         {
             var dev = Devices[d];
@@ -482,7 +501,7 @@ public sealed class Network : IEngine
             for (int r = 0; r < L.Rooms.Count; r++)
             {
                 bool lit = RoomFeeder[r] >= 0 && Breaker[RoomFeeder[r]] != 0 && frac > 0.05;
-                float emergency = Devices.Any(x => x.Room == r && x.Type == "EmergencyLight") ? 30 : 0;
+                float emergency = EmergencyLit(r) ? 30 : 0;
                 light.SetLamp(r, lit ? (float)(300 * Math.Min(1, frac)) : emergency);
             }
         var st = sim.Find<Structure>();
@@ -496,6 +515,17 @@ public sealed class Network : IEngine
                 foreach (int j in nb) if (j >= 0 && L.Room[j] >= 0 && RoomPowered(L.Room[j])) powered = true;
                 st.DoorPowered[dr] = (byte)(powered ? 1 : 0);
             }
+    }
+
+    private bool[]? _emergency; // 방마다 비상등이 있나 (장치는 만들 때 정해진다)
+    private bool EmergencyLit(int room)
+    {
+        if (_emergency == null)
+        {
+            _emergency = new bool[L.Rooms.Count];
+            foreach (var x in Devices) if (x.Type == "EmergencyLight" && x.Room >= 0 && x.Room < _emergency.Length) _emergency[x.Room] = true;
+        }
+        return _emergency[room];
     }
 
     private void Trip(Sim sim, int feeder, int cause, string text)
@@ -661,6 +691,11 @@ public sealed class Network : IEngine
         }
     }
 
+    private double[] _need = Array.Empty<double>(); // 틱 안에서만 (찍지 않는다)
+    private int[] _live = Array.Empty<int>();
+    private bool[] _air = Array.Empty<bool>();
+    private double[] _gc = Array.Empty<double>(); // 칸 기체 열용량 (이 틱 — 방 공조가 열을 넣고 빼도 기체는 그대로)
+
     /// <summary>냉각: 펌프 용량만큼 원자로 칸 · 공조의 열을 우주로. 모자라면 원자로가 뜨거워진다 → 스크램.</summary>
     private void Cooling(Sim sim, double dt)
     {
@@ -706,7 +741,8 @@ public sealed class Network : IEngine
         // 방 온도를 293K로: 방마다 필요한 만큼 (식힘 +, 덥힘 − · 덥힘은 전기 히터라 냉각 용량과 상관없다) — 식힘이 남은 용량을 넘으면 나눈다
         if (hvacCap <= 0) return;
         double left = Math.Min(Math.Max(0, cap - used), hvacCap);
-        var need = new double[L.Rooms.Count];
+        if (_need.Length != L.Rooms.Count) { _need = new double[L.Rooms.Count]; _live = new int[L.Rooms.Count]; _air = new bool[L.N]; _gc = new double[L.N]; }
+        var need = _need; Array.Clear(need);
         double coolSum = 0;
         for (int r = 0; r < L.Rooms.Count; r++)
         {
@@ -714,7 +750,8 @@ public sealed class Network : IEngine
             if (v < 0 || !RoomPowered(r) || Damper[r] == 0 || F.RegionOf[v] < 0 || F.Moles(v) < 1) continue;
             // 방 공기 평균 온도로 (통풍구 한 칸만 보면 그 칸만 식어 방은 계속 덥다)
             double sumT = 0; int nT = 0;
-            foreach (int c in L.Rooms[r].Cells) if (F.Moles(c) > 1) { sumT += F.Temp(c); nT++; }
+            foreach (int c in L.Rooms[r].Cells) if (_air[c] = F.Moles(c, out _gc[c]) > 1) { sumT += F.Temp(c, _gc[c]); nT++; }
+            _live[r] = nT; // 열을 넣고 빼도 몰은 그대로 — 아래에서 다시 세지 않는다
             double t = nT > 0 ? sumT / nT : F.Temp(v);
             need[r] = Math.Clamp(0.1 * L.Rooms[r].Cells.Length * (t - SetpointK), -3, 40); // 칸마다 1K에 0.1kW
             if (need[r] > 0) coolSum += need[r];
@@ -726,10 +763,9 @@ public sealed class Network : IEngine
             double kw = need[r] > 0 ? need[r] * scale : need[r];
             // 방 칸마다 나눠서 (팬이 방 공기를 돌린다)
             var cells = L.Rooms[r].Cells;
-            int live = 0;
-            foreach (int c in cells) if (F.Moles(c) > 1) live++;
+            int live = _live[r];
             if (live == 0) { F.AddHeat(Vent[r], -kw * 1000 * dt); continue; }
-            foreach (int c in cells) if (F.Moles(c) > 1) F.AddHeat(c, -kw * 1000 * dt / live);
+            foreach (int c in cells) if (_air[c]) F.AddHeat(c, -kw * 1000 * dt / live, _gc[c]);
         }
     }
 
@@ -820,11 +856,13 @@ public sealed class Network : IEngine
 
     /// <summary>송풍기로 방 공기를 돌려 기체 하나를 걷는다 — 방 칸마다 가진 만큼 나눠서 (장치 칸만 비우지 않게).</summary>
     /// <summary>칸들의 독한 기체(암모니아 · 일산화탄소 · 오존)를 frac만큼 걸러 낸다. 걸러 낸 몰.</summary>
+    private int[]? _trace; // 거르는 독한 기체 (암모니아 · 일산화탄소 · 오존)
     private double ScrubTrace(int[] cells, double frac)
     {
         double took = 0;
+        _trace ??= new[] { T.gNH3, T.gCO, T.gO3 };
         foreach (int c in cells)
-            foreach (int g in new[] { T.gNH3, T.gCO, T.gO3 })
+            foreach (int g in _trace)
             {
                 double n = F.Gas(g, c);
                 if (n > 1e-9) took += F.RemoveGas(c, g, n * frac);
