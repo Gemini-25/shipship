@@ -59,6 +59,24 @@ public static partial class Program
             for (int y = 0; y < h; y++) Buffer.BlockCopy(lf.Img.Px, ((sy + y) * lf.Img.W + sx) * 4, o.Px, y * w * 4, w * 4);
             return o;
         }
+        // 다시보기: 첫 하이라이트를 첫 조짐 직전부터 — 화면처럼 돌려 몇 장 남긴다
+        if (show.Dir.Highlights.Count > 0 && show.StartReplay(show.Dir.Highlights[0]))
+        {
+            Console.WriteLine($"  다시보기: '{show.ReplayOf!.Title}' — {Time.Clock(show.World.Tick)}부터");
+            double rt = 0, next = 0; int rshots = 0;
+            while (show.Replaying && rt < 900)
+            {
+                show.Advance(dt); rt += dt;
+                if (rt >= next && show.Replaying && rshots < 12)
+                {
+                    var lf = show.Render(); var crop = Crop(lf);
+                    Png.WriteRgba($"build/live/r{rshots:00}-{rt:0000}s.png", crop.W, crop.H, crop.Px);
+                    Console.WriteLine($"    → build/live/r{rshots:00}-{rt:0000}s.png · {lf.Status} · {lf.Story}");
+                    show.Recycle(lf.Img); rshots++; next = rt + 15;
+                }
+            }
+            Console.WriteLine($"  다시보기 끝 · 화면 {rt:0}초 · 산 세계로 {(show.Replaying ? "못 돌아옴" : "돌아옴")}");
+        }
         double P(List<double> l, double q) { var o = l.OrderBy(x => x).ToList(); return o.Count == 0 ? 0 : o[(int)Math.Min(o.Count - 1, q * o.Count)]; }
         Console.WriteLine($"{show.ShipName} 화면 {screenSec:0}초 → 게임 {Time.Clock(show.Sim.Tick)} ({ticks}틱) · 하이라이트 {show.Dir.Highlights.Count} · 그림 {shots}장");
         Console.WriteLine($"  나아가기 1/60초마다: 보통 {P(adv, 0.5):0.00}ms · 99% {P(adv, 0.99):0.0}ms · 가장 김 {adv.Max():0.0}ms (화면 {adv.IndexOf(adv.Max()) * dt:0.0}초)");

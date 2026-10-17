@@ -12,6 +12,7 @@ public sealed class LiveFrame
     public string Ship = "", Status = "", Story = "", Banner = "", Mood = "";
     public float BannerAlpha;
     public long Tick;
+    public string Replay = "";            // 다시보기 중이면 그 하이라이트 제목
 }
 
 /// <summary>
@@ -21,10 +22,22 @@ public sealed class LiveFrame
 /// </summary>
 public sealed class LiveShow
 {
-    public readonly Sim Sim;
-    public readonly Director Dir;
+    public readonly Sim Sim;              // 산 세계
+    public readonly Director Dir;         // 산 세계의 연출 (다시보기 고리: 2분마다 찍기 1시간치)
     public readonly Painter Painter;
     public readonly string ShipName;
+
+    // ── 다시보기: 하이라이트의 첫 조짐 직전 찍기에서 되살린 세계를 따로 돌려 보여 준다 (그동안 산 세계는 멈춘다) ──
+    private Sim? _replay;
+    private Director? _replayDir;
+    private Highlight? _replayOf;
+    private long _replayEnd;
+    public bool Replaying => _replay != null;
+    public Highlight? ReplayOf => _replayOf;
+    /// <summary>지금 화면에 보이는 세계 · 연출 (다시보기 중이면 되살린 세계).</summary>
+    public Sim World => _replay ?? Sim;
+    public Director View => _replayDir ?? Dir;
+    public const double ReplayAfterMin = 2;   // 하이라이트의 마지막 일 뒤 2분까지 보여 준다
 
     // ── 함장의 손 (화면 쪽에서 바꾼다 — Godot은 명령 줄로 작업 스레드에 넘긴다) ──
     public bool Paused;
@@ -53,7 +66,7 @@ public sealed class LiveShow
     public LiveShow(Sim sim, string shipName)
     {
         Sim = sim; ShipName = shipName;
-        Dir = new Director(sim.Layout) { KeepRing = false };
+        Dir = new Director(sim.Layout);
         Painter = new Painter(sim.Layout) { Nudge = Nudge };
         var L = sim.Layout;
         int x0 = L.W, y0 = L.H, x1 = 0, y1 = 0;
@@ -73,7 +86,18 @@ public sealed class LiveShow
         return new LiveShow(s, lay.Name);
     }
 
-    public double Speed => SpeedOverride > 0 ? SpeedOverride : Dir.Speed;
+    /// <summary>화면 1초에 틱: 함장이 고른 빠르기 · 아니면 연출의 빠르기 (다시보기에선 정점 1분 전까지 조용함 · 조짐을 세 배로 — 이미 본 장면이다).</summary>
+    public double Speed
+    {
+        get
+        {
+            if (SpeedOverride > 0) return SpeedOverride;
+            double v = View.Speed;
+            if (_replayOf != null && _replay != null && v >= Director.OmenSpeed && _replay.Tick < _replayOf.Tick - Time.Minutes(1)) v *= ReplayFast;
+            return v;
+        }
+    }
+    public const double ReplayFast = 3;
     public (int x0, int y0, int x1, int y1) Bounds => _bbox;
 
     /// <summary>화면 시간 realSec만큼 나아간다 — 돌린 틱 수.</summary>
@@ -86,12 +110,15 @@ public sealed class LiveShow
             n = (int)Math.Min(_carry, MaxTicksPerCall);
             _carry -= n;
             if (_carry >= 1) _carry -= Math.Floor(_carry);   // 밀린 것은 버린다 (다음 장에 몰아 돌리지 않는다)
+            var w = World; var d = View;
             for (int i = 0; i < n; i++)
             {
                 if (i == n - 1) Remember();
-                Sim.Step(); Dir.Observe(Sim);
+                w.Step(); d.Observe(w);
+                if (_replay != null && w.Tick >= _replayEnd) break;
             }
             if (n > 0) Trace();
+            if (_replay != null && _replay.Tick >= _replayEnd) StopReplay();
         }
         _anim += realSec;
         if (Dir.Highlights.Count > _lastHighlights)
@@ -102,9 +129,10 @@ public sealed class LiveShow
         BannerLeft = Math.Max(0, BannerLeft - realSec);
         // 카메라: 연출이 고른 곳으로 부드럽게 (전체 보기면 배 가운데)
         var L = Sim.Layout;
+        var vd = View;
         double tx = CamX, ty = CamY, tw = ViewW;
         if (Overview) { tx = (_bbox.x0 + _bbox.x1 + 1) / 2.0; ty = (_bbox.y0 + _bbox.y1 + 1) / 2.0; tw = Math.Max(_bbox.x1 - _bbox.x0 + 1, (_bbox.y1 - _bbox.y0 + 1) / Aspect); }
-        else if (Follow && Dir.FocusCell >= 0) { tx = L.X(Dir.FocusCell) + 0.5; ty = L.Y(Dir.FocusCell) + 0.5; tw = Math.Clamp(Dir.Zoom, FollowMin, FollowMax); }
+        else if (Follow && vd.FocusCell >= 0) { tx = L.X(vd.FocusCell) + 0.5; ty = L.Y(vd.FocusCell) + 0.5; tw = Math.Clamp(vd.Zoom, FollowMin, FollowMax); }
         double k = 1 - Math.Exp(-realSec * 2.5);
         CamX += (tx - CamX) * k; CamY += (ty - CamY) * k; ViewW += (tw - ViewW) * k;
         return n;
@@ -113,7 +141,7 @@ public sealed class LiveShow
     /// <summary>마지막 틱 앞: 지금 칸과 앞으로 걸을 길(몇 칸)을 적어 둔다.</summary>
     private void Remember()
     {
-        var mind = Sim.Find<Mind>();
+        var mind = World.Find<Mind>();
         if (mind == null) return;
         if (_trail.Length < mind.Agents.Count)
         {
@@ -134,7 +162,7 @@ public sealed class LiveShow
     /// <summary>마지막 틱 뒤: 적어 둔 길에서 지금 칸까지를 지나간 길로 남긴다 (길 밖으로 옮겨졌으면 옆 칸만 잇고 · 멀면 그대로).</summary>
     private void Trace()
     {
-        var mind = Sim.Find<Mind>();
+        var mind = World.Find<Mind>();
         if (mind == null) return;
         var L = Sim.Layout;
         foreach (var a in mind.Agents)
@@ -206,15 +234,15 @@ public sealed class LiveShow
         var keep = new List<Img>();
         while (_spare.TryTake(out var sp)) { if (reuse == null && sp.W == wc * Painter.T && sp.H == hc * Painter.T) reuse = sp; else keep.Add(sp); }
         foreach (var k in keep.Take(2)) _spare.Add(k);
-        var img = Painter.Frame(Sim, x0, y0, wc, hc, (int)(_anim * AnimFps), reuse);
+        var img = Painter.Frame(World, x0, y0, wc, hc, (int)(_anim * AnimFps), reuse);
         return new LiveFrame
         {
             Img = img,
             SrcX = (float)((left - x0) * Painter.T), SrcY = (float)((top - y0) * Painter.T),
             SrcW = (float)(w * Painter.T), SrcH = (float)(h * Painter.T),
-            Ship = ShipName, Status = Status(), Story = Story(), Mood = Dir.Mood,
+            Ship = ShipName, Status = Status(), Story = Story(), Mood = View.Mood,
             Banner = BannerLeft > 0 ? Banner : "", BannerAlpha = (float)Math.Clamp(Math.Min(BannerLeft, BannerSec - BannerLeft) / 0.5, 0, 1),
-            Tick = Sim.Tick,
+            Tick = World.Tick, Replay = _replayOf?.Title ?? "",
         };
     }
 
@@ -224,22 +252,49 @@ public sealed class LiveShow
     /// <summary>위 줄: 배 · 시각 · 분위기 · 빠르기 · 사람.</summary>
     public string Status()
     {
-        var life = Sim.Find<Life>(); var mind = Sim.Find<Mind>();
+        var w = World;
+        var life = w.Find<Life>(); var mind = w.Find<Mind>();
         int alive = 0, all = 0;
         if (mind != null && life != null)
             foreach (var a in mind.Agents) if (a.IsPerson) { all++; if (life.Bodies[a.C.Body].Alive != 0) alive++; }
         string speed = Paused ? "멈춤" : $"×{Speed * Time.SecondsPerTick:0}";
-        return $"{ShipName} · {Time.Clock(Sim.Tick)} · {Dir.Mood} · {speed} · 사람 {alive}/{all}";
+        return $"{(_replay != null ? "다시보기 · " : "")}{ShipName} · {Time.Clock(w.Tick)} · {View.Mood} · {speed} · 사람 {alive}/{all}";
     }
 
     /// <summary>아래 줄: 지금 장면의 원인 사슬 (가장 최근 하이라이트가 아직 이어지면) — 아니면 연출 자막.</summary>
     public string Story()
     {
-        if (Dir.Highlights.Count > 0)
+        var w = World; var d = View;
+        if (d.Highlights.Count > 0)
         {
-            var h = Dir.Highlights[^1];
-            if (Sim.Tick - h.Last < Time.Minutes(10) && h.Cause != 0) return Sim.Causes.Story(h.Cause);
+            var h = d.Highlights[^1];
+            if (w.Tick - h.Last < Time.Minutes(10) && h.Cause != 0) return w.Causes.Story(h.Cause);
         }
-        return Dir.Caption;
+        return d.Caption;
     }
+
+    /// <summary>다시보기: 하이라이트(없으면 가장 최근 것)를 첫 조짐 직전 찍기부터 다시 보여 준다 — 산 세계는 그동안 멈춘다. 고리에 없으면 false.</summary>
+    public bool StartReplay(Highlight? h = null)
+    {
+        h ??= Dir.Highlights.Count > 0 ? Dir.Highlights[^1] : null;
+        if (h == null) return false;
+        var w = Dir.Replay(Sim, h);
+        if (w == null) return false;
+        _replay = w; _replayOf = h;
+        _replayDir = new Director(w.Layout) { KeepRing = false };
+        _replayEnd = Math.Min(Sim.Tick, h.Last + Time.Minutes(ReplayAfterMin));
+        _carry = 0; ClearTrails();
+        Banner = "다시보기 — " + h.Title; BannerLeft = BannerSec;
+        return true;
+    }
+
+    /// <summary>다시보기를 끝내고 산 세계로 돌아간다.</summary>
+    public void StopReplay()
+    {
+        if (_replay == null) return;
+        _replay = null; _replayDir = null; _replayOf = null;
+        _carry = 0; ClearTrails();
+    }
+
+    private void ClearTrails() { Array.Clear(_trailLen); }
 }

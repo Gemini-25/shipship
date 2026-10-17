@@ -109,6 +109,27 @@ public static partial class Program
                 if (m > (LiveShow.TrailMax - 1) * Painter.T) jumps++;
             }
         }
+        // 다시보기: 운석 하나가 하이라이트가 된 뒤 B — 산 세계는 멈추고, 되살린 세계에서 같은 운석이 같은 곳에 부딪힌다 → 끝나면 산 세계로
+        var rs = new LiveShow(ShipWorld.Create("Kestrel", 3), "제비호");
+        int rc = rs.Sim.Causes.Add(CauseKind.Story, "운석 하나가 배를 향해 온다", rs.Sim.Tick);
+        rs.Sim.Get<Outside>().AddRock(1.5, 6000, -1, 0.15, 2, 6000 * 60 * 4, rc); // 4분 거리
+        for (int i = 0; i < 60 * 600 && (rs.Dir.Highlights.Count == 0 || rs.Sim.Tick < rs.Dir.Highlights[0].Last + Time.Minutes(3)); i++) rs.Advance(dt);
+        var hl = rs.Dir.Highlights.FirstOrDefault();
+        long liveHits = rs.Sim.Get<Outside>().RockHits, liveTick = rs.Sim.Tick;
+        int liveHole = Enumerable.Range(0, lay.N).Count(c => c < rs.Sim.Layout.N && rs.Sim.Get<Field>().Hole[c] > 0);
+        bool started = hl != null && rs.StartReplay(hl);
+        long replayHits = 0; int replayHole = 0; bool liveStill = true; int replayFrames = 0;
+        for (int i = 0; i < 60 * 600 && rs.Replaying; i++)
+        {
+            rs.Advance(dt);
+            if (rs.Replaying) { replayHits = rs.World.Get<Outside>().RockHits; replayHole = Enumerable.Range(0, rs.World.Layout.N).Count(c => rs.World.Get<Field>().Hole[c] > 0); replayFrames++; }
+            if (i % 30 == 0) { var lf = rs.Render(); rs.Recycle(lf.Img); }
+            liveStill &= rs.Sim.Tick == liveTick;
+        }
+        Check("관전 화면 다시보기: 하이라이트를 첫 조짐 직전부터 되살려 보여 준다 — 같은 운석이 부딪히고 · 그동안 산 세계는 멈추고 · 끝나면 산 세계로 돌아온다",
+            started && replayHits == liveHits && liveHits > 0 && replayFrames > 60 && liveStill && !rs.Replaying && rs.World == rs.Sim,
+            hl == null ? "하이라이트 없음" : $"'{hl.Title}' · 다시보기 {replayFrames}장 · 충돌 산 세계 {liveHits} / 다시보기 {replayHits} · 산 세계 멈춤 {liveStill} · 돌아옴 {!rs.Replaying}");
+
         Check("관전 화면: 틱이 드물면 걸음 사이를 메운다 — 한 틱에 지나간 칸들을 따라 사람 · 로봇이 칸 사이 자리에 그려진다",
             partial >= 20 && jumps == 0, $"걸은 틱 {moved} · 칸 사이에 그린 횟수 {partial} · 지나간 길보다 멀리 {jumps}");
     }

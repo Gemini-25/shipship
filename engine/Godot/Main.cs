@@ -210,6 +210,12 @@ public partial class Main : Node2D
         DrawRect(new Rect2(0, 38, vp.X, 2), new Color(mood, 0.9f));
         DrawCircle(new Vector2(22, 20), 7, mood);
         DrawString(_bold, new Vector2(38, 27), f.Status, HorizontalAlignment.Left, vp.X - 260, 18, new Color(0.92f, 0.94f, 0.98f));
+        if (f.Replay.Length > 0)
+        {
+            // 다시보기: 가장자리를 옛 필름 빛으로
+            var film = new Color(0.95f, 0.78f, 0.45f, 0.75f);
+            DrawRect(new Rect2(0, 40, vp.X, vp.Y - 40), film, false, 4);
+        }
         string hint = _speedAt == 0 ? "빠르기: 연출" : $"빠르기: ×{GameSecPerSec[_speedAt]:0} (손)";
         DrawString(_font, new Vector2(vp.X - 230, 27), hint + " · H 도움말", HorizontalAlignment.Right, 214, 15, new Color(0.65f, 0.7f, 0.8f));
 
@@ -243,6 +249,7 @@ public partial class Main : Node2D
             "W A S D · 화살표 · 끌기  카메라 옮기기",
             "휠 · + −  확대 / 축소",
             "F  연출을 따라가기      Tab  배 전체",
+            "B  방금 그 장면 다시보기 (한 번 더 누르면 돌아오기)",
             "N  다음 배      R  같은 배 새로",
             "H  도움말      Esc  나가기",
         };
@@ -269,6 +276,7 @@ public partial class Main : Node2D
                     break;
                 }
                 case Key.F: _cmds.Enqueue(s => { s.Follow = true; s.Overview = false; }); break;
+                case Key.B: _cmds.Enqueue(s => { if (s.Replaying) s.StopReplay(); else s.StartReplay(); }); break;
                 case Key.Tab: _cmds.Enqueue(s => s.Overview = !s.Overview); break;
                 case Key.Equal or Key.KpAdd: _cmds.Enqueue(s => s.ZoomBy(0.85)); break;
                 case Key.Minus or Key.KpSubtract: _cmds.Enqueue(s => s.ZoomBy(1 / 0.85)); break;
