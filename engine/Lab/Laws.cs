@@ -283,6 +283,20 @@ public static partial class Program
             snd.Emit(s, a, 100, SoundKind.Bang);
             float dNear = snd.Loudest(near), dOther = snd.Loudest(other);
             Check("소리는 멀수록 작고, 닫힌 차압 문 너머는 더 작다", dNear > dOther + 15 && dOther > 0, $"같은 방 {dNear:0}dB · 문 너머 {dOther:0}dB");
+            // 돌아가는 세계: 닫힌 문 칸에는 기체가 없다 (기압 0) — 그래도 문은 진공이 아니라 단단한 판이다 (막지 않고 줄인다)
+            {
+                var s2 = Worlds.Full(l, 1); s2.Run(50);
+                var f2 = s2.Get<Field>(); var snd2 = s2.Get<Sound>();
+                for (int d = 0; d < l.Doors.Count; d++) f2.SetDoor(d, 1); // 누가 지나가며 열었다 닫았다
+                s2.Run(20);
+                for (int d = 0; d < l.Doors.Count; d++) f2.SetDoor(d, 0);
+                s2.Run(20);
+                snd2.Emit(s2, a, 100, SoundKind.Bang);
+                int front = Worlds.At(l, 9, 3), behind = Worlds.At(l, 11, 3);
+                float fr = snd2.Loudest(front), be = snd2.Loudest(behind);
+                Check("닫힌 문은 막지 않고 줄인다 (돌아가는 세계 · 열었다 닫은 문 칸은 기압 0이어도) — 문 앞뒤 차이가 문 몫(25dB) 남짓 · 벽(45dB)이 아니다", be > 0 && fr - be < 32,
+                    $"문 앞 {fr:0}dB · 문 뒤 {be:0}dB (차이 {fr - be:0}dB) · 문 칸 기압 {f2.Pressure(l.Doors[0].Cell):0.0}kPa");
+            }
             // 왼쪽 방을 진공으로
             foreach (int c in l.Rooms.First(r => r.Cells.Contains(a)).Cells) { for (int g = 0; g < f.G; g++) f.N[c * f.G + g] = 0; f.U[c] = 0; }
             s.Step(); s.Step(); s.Step();

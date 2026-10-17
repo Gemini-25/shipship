@@ -360,7 +360,8 @@ public sealed partial class Mind
                     if (ev == h.Event && sp != a.Id)
                     {
                         float clarity = (float)Math.Clamp((h.Db - 25) / 30, 0.2, 1);
-                        Learn(a, t, b.Kind, b.Cell, b.Subject, b.Conf * 0.8f * clarity, sp == Computer ? BeliefSource.Screen : BeliefSource.Told, b.Cause, b.Size);
+                        float heed = sp != Computer && a.IsPerson && _soc != null ? _soc.Heed(a.Id, sp) : 1; // 말한 이를 믿는 만큼 · 나를 이끄는 이의 말은 더 (⑨)
+                        Learn(a, t, b.Kind, b.Cell, b.Subject, Math.Min(1, b.Conf * 0.8f * clarity * heed), sp == Computer ? BeliefSource.Screen : BeliefSource.Told, b.Cause, b.Size);
                         if (a.IsPerson && Urgent(b.Kind)) a.C.Fear = Math.Max(a.C.Fear, 0.3f * (1 - a.C.Brave));
                     }
                 break;

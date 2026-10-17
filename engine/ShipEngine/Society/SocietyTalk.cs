@@ -10,7 +10,7 @@ public sealed class TalkTable
     public static string TopicName(Topic t) => t switch
     {
         Topic.Small => "잡담", Topic.Work => "일", Topic.Fire => "불", Topic.Breach => "구멍", Topic.Rescue => "구조", Topic.Hurt => "다침",
-        Topic.Death => "죽음", Topic.Blame => "탓", Topic.Gossip => "험담", Topic.Shortage => "걱정", Topic.Fight => "싸움", Topic.Heart => "마음", _ => "잡담",
+        Topic.Death => "죽음", Topic.Blame => "탓", Topic.Gossip => "험담", Topic.Shortage => "걱정", Topic.Fight => "싸움", Topic.Heart => "마음", Topic.Peace => "화해", _ => "잡담",
     };
 
     public static string EndName(TalkEnd e) => e switch
@@ -23,6 +23,7 @@ public sealed class TalkTable
     /// <summary>주제 · 결과의 이야기 한 줄 (기록 · 연출) — "둘이 불 이야기를 했다 → 서로 탓함".</summary>
     public static string Summary(Topic t, TalkEnd e) => e switch
     {
+        TalkEnd.Accept when t == Topic.Peace => "두 무리 사이를 풀기로 했다 · 손을 잡았다", TalkEnd.Argue when t == Topic.Peace => "두 무리 사이를 두고 맞섰다 · 골이 깊어졌다",
         TalkEnd.Agree => $"{TopicName(t)} 이야기를 나눴다", TalkEnd.Laugh => "실컷 웃었다", TalkEnd.Awkward => $"{TopicName(t)} 이야기가 어색하게 끊겼다",
         TalkEnd.Friction => "말끝마다 부딪쳤다 · 사이가 조금 틀어졌다", TalkEnd.Praise => $"{TopicName(t)} 이야기를 하다 고맙다고 했다 · 가까워졌다",
         TalkEnd.Comfort => "슬픔을 나누며 위로했다 · 가까워졌다", TalkEnd.Apology => "그날 일을 사과했다 · 앙금이 풀렸다",
@@ -46,6 +47,12 @@ public sealed partial class Society
     private void Talk(Sim sim, int i, int j)
     {
         var opts = new List<Option>();
+        // 두 무리의 지도자가 만났다: 벌어진 사이가 가장 먼저 꺼낼 이야기다 (다정할수록 크게)
+        if (Rival(i, j) && LeaderOf(i) == i && LeaderOf(j) == j)
+        {
+            int sp0 = C(i).Agree >= C(j).Agree ? i : j;
+            opts.Add(new(Topic.Peace, 4 * (0.4f + C(sp0).Agree), sp0 == i ? j : i, 0, C(sp0).Cell, sp0));
+        }
         foreach (var (a, b) in new[] { (i, j), (j, i) })
         {
             // 원망하는 사람에게 따진다
@@ -148,7 +155,8 @@ public sealed partial class Society
             case Topic.Gossip:
             {
                 int x = o.About;
-                if (BondOf(b, x) > 0.5f && cb.Agree > 0.4f)
+                // 감싸기: 아끼는 사람이거나 같은 무리면 (무리는 덜 다정해도 제 사람을 감싼다)
+                if (BondOf(b, x) > 0.5f && cb.Agree > 0.4f || SameBand(b, x) && !SameBand(a, x) && cb.Agree > 0.2f)
                 {
                     end = TalkEnd.Defend;
                     Warm(sim, b, a, -0.05f);
@@ -159,6 +167,7 @@ public sealed partial class Society
                     // 소문: 듣는 이가 말하는 이를 믿는 만큼 · 덜 다정할수록 같이 미워한다
                     end = TalkEnd.Spread; Rumors++;
                     float w = GrudgeOf(a, x) * TrustIn(b, a) * (1 - cb.Agree * 0.5f);
+                    if (SameBand(a, b) && BandIdOf(x) >= 0 && !SameBand(b, x)) w *= 1.5f; // 다른 무리 험담은 같은 무리 안에서 잘 먹힌다
                     Add(Grudge, b, x, w * 0.4f); Add(TrustOf, b, x, -w * 0.3f);
                     Warm(sim, a, b, 0.02f);
                     Remember(sim, b, Topic.Blame, x, o.Cause, w * 0.6f, o.Cell);
@@ -186,6 +195,41 @@ public sealed partial class Society
                     Attract[a * N + b] *= 0.5f;
                     ca.Sad = Math.Min(1, ca.Sad + 0.3f); ca.Stress = Math.Min(1, ca.Stress + 0.1f);
                     Say(sim, b, a, o, end, Pick(sim, "마음/거절", b));
+                }
+                break;
+            }
+            case Topic.Peace:
+            {
+                // 받아들이나: 둘 다 다정하고 · 듣는 이의 원한이 덜할수록
+                float p = (ca.Agree + cb.Agree) * 0.5f * (1.2f - GrudgeOf(b, a)) * (1 - cb.Neuro * 0.3f);
+                int g1 = BandIdOf(a), g2 = BandIdOf(b);
+                string n1 = BandName(g1), n2 = BandName(g2);
+                if (r < p)
+                {
+                    end = TalkEnd.Accept;
+                    // 두 무리 사람들 사이의 원한이 크게 준다 (지도자가 제 사람들을 달랜다)
+                    for (int x = 0; x < N; x++) for (int y = 0; y < N; y++)
+                        if (BandIdOf(x) == g1 && BandIdOf(y) == g2 || BandIdOf(x) == g2 && BandIdOf(y) == g1) Grudge[x * N + y] *= 0.5f;
+                    Warm(sim, a, b, 0.1f); Warm(sim, b, a, 0.1f); Add(TrustOf, a, b, 0.1f); Add(TrustOf, b, a, 0.1f);
+                    _rift.RemoveAll(k => k == (((long)Math.Min(g1, g2) << 32) | (uint)Math.Max(g1, g2)));
+                    int line = Say(sim, a, b, o, end, Pick(sim, "화해/받아줌", a));
+                    int c = sim.Causes.Add(CauseKind.Person, $"{Ko.Gwa(n1)} {Ko.I(n2)} 화해했다 — {Ko.Gwa(_mind!.NameOf(a))} {Ko.I(_mind.NameOf(b))} 손을 잡았다", sim.Tick, ca.Cell, line, 0, a);
+                    sim.Facts.Emit(sim.Tick, FactKind.Relationship, ca.Cell, 4, c, a, b);
+                    Remember(sim, a, Topic.Peace, b, c, 0.7f, ca.Cell); Remember(sim, b, Topic.Peace, a, c, 0.7f, cb.Cell);
+                }
+                else
+                {
+                    end = TalkEnd.Argue; Arguments++;
+                    // 맞섰다: 지도자 사이 원한이 깊어지고 · 두 무리 사람들에게 번진다
+                    Add(Grudge, a, b, 0.15f); Add(Grudge, b, a, 0.15f);
+                    for (int x = 0; x < N; x++) for (int y = 0; y < N; y++)
+                        if (x != y && (BandIdOf(x) == g1 && BandIdOf(y) == g2 || BandIdOf(x) == g2 && BandIdOf(y) == g1)) Add(Grudge, x, y, 0.05f);
+                    ca.Anger = Math.Min(1, ca.Anger + 0.3f); cb.Anger = Math.Min(1, cb.Anger + 0.3f);
+                    int line = Say(sim, b, a, o, end, Pick(sim, "화해/다툼", b));
+                    int c = sim.Causes.Add(CauseKind.Person, $"{Ko.Gwa(n1)} {Ko.I(n2)} 맞섰다 — {Ko.I(_mind!.NameOf(b))} {_mind.NameOf(a)}의 손을 뿌리쳤다", sim.Tick, cb.Cell, line, 0, b);
+                    sim.Facts.Emit(sim.Tick, FactKind.Relationship, cb.Cell, -4, c, b, a);
+                    Remember(sim, a, Topic.Fight, b, c, 0.6f, ca.Cell); Remember(sim, b, Topic.Fight, a, c, 0.6f, cb.Cell);
+                    Escalate(sim, b, a, 0.5f, line);
                 }
                 break;
             }
@@ -300,6 +344,7 @@ public sealed partial class Society
         float g = GrudgeOf(x, y);
         if (g < 0.5f) return;
         float pressure = (g - 0.5f) * 2 * (1 - cx.Agree) * (1 - cx.Agree) * (0.3f + cx.Neuro) * (0.4f + cx.Stress) * cx.Anger * 1.5f * scale;
+        if (LeaderWatching(x, y)) pressure *= 0.25f;   // 따르는 이가 보는 앞에서는 참는다
         if (Rnd(sim, "덤빈다", x, y) >= pressure) return;
         bool lethal = g > 0.9f && cx.Agree < 0.25f && cx.Neuro > 0.6f && (cx.Stress > 0.6f || DeathBlame(x, y));
         var mind = _mind;
@@ -341,15 +386,25 @@ public sealed partial class Society
                 int room = mind.RoomOf(C(a).Cell);
                 foreach (var ag in mind.Agents)
                     if (!ag.IsPerson && ag.C.Up != 0 && ag.C.Kind == AgentKind.Robot && mind.RoomOf(ag.C.Cell) == room) { stopper = ag.Id; break; }
+                // 사람: 이끄는 이는 겁이 좀 많아도 · 맞는 이의 무리는 제 편을 감싸러 · 아니면 다정하고 용감한 이가
+                float brave = br.Lethal != 0 ? 0.5f : 0.3f;
                 if (stopper < 0)
                     for (int i = 0; i < N; i++)
-                        if (i != a && i != b && Awake(i) && mind.RoomOf(C(i).Cell) == room && C(i).Agree > 0.45f && C(i).Brave > (br.Lethal != 0 ? 0.5f : 0.3f) && GrudgeOf(i, b) < 0.5f) { stopper = i; break; }
+                    {
+                        if (i == a || i == b || !Awake(i) || mind.RoomOf(C(i).Cell) != room || GrudgeOf(i, b) >= 0.5f) continue;
+                        bool lead = Leads(i, a) || Leads(i, b);
+                        if (lead && C(i).Brave > brave * 0.4f || SameBand(i, b) && !SameBand(i, a) && C(i).Brave > brave * 0.7f || C(i).Agree > 0.45f && C(i).Brave > brave) { stopper = i; break; }
+                    }
             }
             if (stopper >= 0)
             {
                 var o = new Option(Topic.Fight, 1, a, br.Cause, C(a).Cell, stopper);
                 Say(sim, stopper, a, o, TalkEnd.Argue, Pick(sim, mind.Agents[stopper].IsPerson ? "싸움/말림" : "싸움/로봇", stopper));
-                if (mind.Agents[stopper].IsPerson) { Warm(sim, b, stopper, 0.1f); Add(Debt, b, stopper, 0.2f); }
+                if (mind.Agents[stopper].IsPerson)
+                {
+                    Warm(sim, b, stopper, 0.1f); Add(Debt, b, stopper, 0.2f);
+                    foreach (int w in Near(C(stopper).Cell, stopper)) if (w != a) Add(TrustOf, w, stopper, 0.05f); // 말린 이를 더 믿게 된다
+                }
                 done = true;
             }
             if (!done)

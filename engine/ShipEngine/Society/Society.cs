@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace ShipEngine;
 
 /// <summary>⑨ 이야깃거리 — 사람이 기억하는 일 · 대화의 주제.</summary>
-public enum Topic : byte { Small, Work, Fire, Breach, Rescue, Hurt, Death, Blame, Gossip, Shortage, Fight, Heart }
+public enum Topic : byte { Small, Work, Fire, Breach, Rescue, Hurt, Death, Blame, Gossip, Shortage, Fight, Heart, Peace }
 
 /// <summary>⑨ 대화의 끝 — 어떻게 흘러갔나.</summary>
 public enum TalkEnd : byte { Agree, Laugh, Awkward, Friction, Praise, Comfort, Apology, Argue, Spread, Defend, Worry, Accept, Reject }
@@ -176,6 +176,7 @@ public sealed partial class Society : IEngine
             BrawlStep(sim);
             if (sim.Tick % (TogetherEvery * 30) == 0) Mischief(sim);
         }
+        if (sim.Tick % Time.TicksPerHour == 0) FormBands(sim);
     }
 
     private bool Person(int i) => i >= 0 && i < N && _mind!.Agents[i].IsPerson && _mind.Agents[i].C.Up != 0 && _life![_mind.Agents[i].C.Body].Alive != 0;
@@ -479,6 +480,7 @@ public sealed partial class Society : IEngine
         w.I64(Friendships); w.I64(Griefs); w.I64(TrustLosses); w.I64(Talks); w.I64(Arguments); w.I64(Apologies); w.I64(Rumors); w.I64(Blames);
         w.I64(Fights); w.I64(Sabotages); w.I64(Killings); w.I64(_cursor);
         w.Arr(Attract); w.Arr(Partner); w.Arr(_near); w.I64(Couples); w.I64(Rejections); w.I64(Breakups);
+        SaveBands(w);
         w.I32(_sealedIn.Count); foreach (var (t, r, c) in _sealedIn) { w.I64(t); w.I32(r); w.I32(c); }
         var keys = _sharedSeen.Keys.OrderBy(k => k).ToList();
         w.I32(keys.Count); foreach (var k in keys) { w.I32(k); w.Arr(_sharedSeen[k]); }
@@ -491,6 +493,7 @@ public sealed partial class Society : IEngine
         Friendships = r.I64(); Griefs = r.I64(); TrustLosses = r.I64(); Talks = r.I64(); Arguments = r.I64(); Apologies = r.I64(); Rumors = r.I64(); Blames = r.I64();
         Fights = r.I64(); Sabotages = r.I64(); Killings = r.I64(); _cursor = r.I64();
         Attract = r.Arr<float>(); Partner = r.Arr<int>(); _near = r.Arr<byte>(); Couples = r.I64(); Rejections = r.I64(); Breakups = r.I64();
+        LoadBands(r);
         _sealedIn.Clear(); int n = r.I32(); for (int i = 0; i < n; i++) { long t = r.I64(); int room = r.I32(); int c = r.I32(); _sealedIn.Add((t, room, c)); }
         _sharedSeen.Clear(); n = r.I32(); for (int i = 0; i < n; i++) { int k = r.I32(); _sharedSeen[k] = r.Arr<int>(); }
     }

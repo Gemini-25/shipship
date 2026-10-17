@@ -378,6 +378,17 @@ public static partial class Program
         foreach (var (tick, text) in sm.Log.TakeLast(rest.Contains("all") ? 300 : 40)) Console.WriteLine($"    주컴 {Time.Clock(tick)} {text}");
         if (rest.Contains("inc")) foreach (var x in sm.Incidents) Console.WriteLine($"    사건 {Time.Clock(x.Since)} {sm.RoomName(x.Room)} {ShipMind.KindName(x.Kind)} 칸 {(x.Cell >= 0 ? s.Layout.X(x.Cell) + "," + s.Layout.Y(x.Cell) : "-")} 원인 {x.Cause}/{s.Causes.Root(x.Cause)} \"{s.Causes.Story(x.Cause)}\"");
         foreach (var (tick, text) in sm.Journal) Console.WriteLine($"    일지 {Time.Clock(tick)}\n      {text.Replace("\n", "\n      ")}");
+        if (rest.Contains("soc"))
+        {
+            // 사회: 관계 사실 · 무리 · 존경 · 정 분포
+            var so = s.Get<Society>(); var mm = s.Get<Mind>();
+            foreach (var f in s.Facts.Since(0).Where(x => x.Kind == FactKind.Relationship)) Console.WriteLine($"    관계 {Time.Clock(f.Tick)} ({f.Size:0.##}) {s.Causes.Text(f.Cause)}");
+            foreach (var b in so.Bands) Console.WriteLine($"    무리 {so.BandName(b.Id)} {b.Size}명 · 이끄는 이 {mm.NameOf(b.Leader)} · {Time.Clock(b.Formed)}부터");
+            var ppl = mm.Agents.Where(a => a.IsPerson).Select(a => a.Id).ToList();
+            var bonds = ppl.SelectMany(i => ppl.Where(j => j > i).Select(j => Math.Min(so.BondOf(i, j), so.BondOf(j, i)))).OrderByDescending(x => x).ToList();
+            Console.WriteLine($"    서로 정 (작은 쪽) 위 5: {string.Join(" ", bonds.Take(5).Select(x => x.ToString("0.00")))} · 0.4 넘는 쌍 {bonds.Count(x => x >= 0.4f)} / {bonds.Count}");
+            Console.WriteLine($"    존경 위 3: {string.Join(" · ", ppl.OrderByDescending(i => so.Respect.Length > i ? so.Respect[i] : 0).Take(3).Select(i => $"{mm.NameOf(i)} {(so.Respect.Length > i ? so.Respect[i] : 0):0.00}"))} · 따르는 이 {(so.Head >= 0 ? mm.NameOf(so.Head) : "없음")}");
+        }
     }
 }
 

@@ -133,6 +133,7 @@ public sealed class Sound : IEngine
     {
         if (!L.IsSpace(c) && L.Kind[c] != CellKind.Wall) return 0;
         if (L.Kind[c] == CellKind.Wall) return 1;
+        if (L.Kind[c] == CellKind.Door && !F.DoorPassable(L.DoorAt[c])) return 1; // 닫힌 문은 단단한 판 (문 칸에 기체가 없어도 진공이 아니다 — 25dB만 줄인다)
         double p = F.Pressure(c);
         return p < 1 ? 0 : Math.Min(1.5, p / 101.3);
     }
