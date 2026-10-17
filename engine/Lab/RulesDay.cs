@@ -63,6 +63,16 @@ public static partial class Program
                 $"수요 {net.Demanded:0.0}kW · 원자로 {net.ReactorKw:0.0}kW · 냉각 {net.CoolingKw:0}kW · 방 온도 {temps.Min():0.0}~{temps.Max():0.0}K (가장 더운 곳 {hottest.Name}) · 장치 {net.Devices.Count} · 급전선 {net.Feeders.Count}");
         }
 
+        // ── 주컴퓨터 일지: 22시 일지 한 장 · 7시 아침 방송 — 평시엔 '큰 일 없이 지나갔다' ──
+        {
+            var sm = day.Get<ShipMind>();
+            string j = sm.Journal.Count > 0 ? sm.Journal[^1].text : "";
+            if (Debug) Console.WriteLine($"    일지:\n      {j.Replace("\n", "\n      ")}\n    아침 방송: {sm.Morning}");
+            Check("평시 하루의 주컴퓨터: 22시 일지 한 장('큰 일 없이 지나갔다' · 배 산소 · 식량 · 물 며칠 치) · 7시 아침 방송",
+                sm.Journal.Count == 1 && Time.HourOfDay(sm.Journal[0].tick) == 22 && j.StartsWith("큰 일 없이 지나갔다") && j.Contains("식량 ") && j.Contains("물 ") && sm.Morning.StartsWith("좋은 아침입니다."),
+                $"일지 {sm.Journal.Count}장 · \"{j.Replace("\n", " / ")}\" · 방송 \"{sm.Morning}\"");
+        }
+
         // ── 관계: 말은 자주 나누고 · 몸싸움은 없다 (갈등은 드물게만 끝까지 간다) ──
         {
             var so = day.Get<Society>();
