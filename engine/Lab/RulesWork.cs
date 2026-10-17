@@ -58,6 +58,24 @@ public static partial class Program
             Check("곰팡이가 짙어지면 일감판이 맡겨 닦아 낸다", life.Mold[c] < 0.05f && w.Cleaned > 0, $"곰팡이 0.6 → {life.Mold[c]:0.00} · 닦은 곳 {w.Cleaned}");
         }
 
+        // ── 일감판은 주컴퓨터가 돌린다: 주컴퓨터가 멈추면 고인 물이 있어도 닦을 일을 올리지 않는다 (켜져 있으면 올린다) — 예전: 멈춰도 실제 값을 보고 올렸다 ──
+        {
+            (int jobs, bool online) Puddle(bool computerOk)
+            {
+                var s = Worlds.Full(lay, 7);
+                var m = s.Get<Mind>(); var w = s.Get<Work>(); var f = s.Get<Field>(); var net = s.Get<Network>();
+                m.AddRobot(s, At(8, 7), AgentKind.Robot, At(8, 7));
+                if (!computerOk) net.Age(net.Devices.First(d => d.Type == "MainComputer").Id, Part.Electric, 1.0);
+                s.Run(5);
+                f.AddStore(At(17, 3), f.T.sWater, 40);
+                s.Run(Work.PlanEvery * 2);
+                return (w.Jobs.Count(j => j.Kind == GoalKind.Clean), s.Get<ShipMind>().Online);
+            }
+            var on = Puddle(true); var off = Puddle(false);
+            Check("일감판은 주컴퓨터가 돌린다: 주컴퓨터가 멈추면 고인 물을 닦을 일을 올리지 않는다 (켜져 있으면 올린다)",
+                on.jobs > 0 && on.online && off.jobs == 0 && !off.online, $"켜짐: 닦을 일 {on.jobs} · 멈춤: {off.jobs}");
+        }
+
         // ── 정제기: 전기를 먹고 원료를 조금씩 만든다 ──
         {
             var s = ShipWorld.Create("Didim", 7);

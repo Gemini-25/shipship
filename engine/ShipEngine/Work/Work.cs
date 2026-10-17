@@ -180,6 +180,9 @@ public sealed class Work : IEngine
         long now = sim.Tick;
         // 끝났거나 기한이 지난 일은 내린다
         Jobs.RemoveAll(j => j.Until < now || Done(j));
+        // 일감판은 주컴퓨터가 센서 · 재고 기록으로 돌린다 — 주컴퓨터가 멈추면 새 일을 올리지 못한다 (맡긴 일은 하던 대로 · 바닥의 물이나 곰팡이를 아무도 모른다)
+        var computer = sim.Find<ShipMind>();
+        if (computer != null && !computer.Online) return;
         // 모자란 물건 만들기
         foreach (var (name, r) in T.People.Recipes)
         {

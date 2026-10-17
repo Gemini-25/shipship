@@ -25,7 +25,7 @@ public static partial class Program
             for (int k = 0; k < Time.Minutes(12) && s.Facts.CountOf(FactKind.Extinguished) == 0; k++)
             {
                 s.Step();
-                if (Debug && k < 60 && k % 3 == 0) Console.WriteLine($"    {k} 불 {ch.BurningCount} · 로봇 {m.Thought(r)} 칸 {m[r].C.Cell} 물 {m[r].C.HoldCharge:0} · 계획 {string.Join(">", m[r].Plan.Select(x => x.Kind + ":" + x.Cell))} [{m[r].C.StepIndex}] · 불 믿음 {string.Join(",", m[r].Beliefs.Where(b => b.Kind == BeliefKind.Fire).Select(b => $"{b.Cell}:{b.Conf:0.0}"))}");
+                if (Debug && !computerOk && k > 200 && k % 6 == 0) Console.WriteLine($"    {k} 불 {ch.BurningCount} · 로봇 {m.Thought(r)} 칸 {m[r].C.Cell} 물 {m[r].C.HoldCharge:0} · 계획 {string.Join(">", m[r].Plan.Select(x => x.Kind + ":" + x.Cell))} [{m[r].C.StepIndex}] · 불 믿음 {string.Join(",", m[r].Beliefs.Where(b => b.Kind == BeliefKind.Fire).Select(b => $"{b.Cell}:{b.Conf:0.0}"))}");
             }
             var ext = s.Facts.Since(0).Where(f => f.Kind == FactKind.Extinguished).ToList();
             return (ext.Count > 0 && ext[0].Actor == r, s.Facts.CountOf(FactKind.ComputerAlarm), s.Facts.CountOf(FactKind.ComputerAssign), ch.BurningCount);

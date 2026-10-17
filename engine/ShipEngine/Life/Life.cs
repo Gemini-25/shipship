@@ -164,6 +164,9 @@ public sealed class Life : IEngine
         var outside = sim.Find<Outside>();
         var chem = sim.Find<Chemistry>();
         _net ??= sim.Find<Network>();
+        _flames.Clear();
+        if (chem != null && chem.BurningCount > 0)
+            for (int i = 0; i < L.N; i++) if (chem.Burning[i] != 0 && chem.Hrr[i] > 0) _flames.Add(i);
         var span = CollectionsMarshal.AsSpan(Bodies);
         for (int b = 0; b < span.Length; b++)
         {
@@ -175,6 +178,48 @@ public sealed class Life : IEngine
         var net = sim.Find<Network>();
         if (net != null) Grow(sim, net, dt);
         if (sim.Tick % 125 == 3) { MoldStep(dt * 25); RotStep(sim, dt * 25); }
+    }
+
+    private readonly List<int> _flames = new(); // 이번 틱 불 붙은 칸 (틱 안에서만 — 찍지 않는다)
+    public const int RadiantReach = 6;
+    public const double RadiantFraction = 0.3; // 불꽃 열의 3할이 복사로 (SFPE — 가구 불 0.2~0.4)
+
+    /// <summary>
+    /// 이 칸이 받는 불의 복사열 (kW/m²): 6칸 안 · 벽 · 닫힌 문에 가리지 않은 불 칸마다 점원 χQ/(4πr²) (r은 칸 가운데 사이 m · 1m 아래는 1m).
+    /// src: 가장 센 열을 보낸 불 칸. 몸이 받는 열은 불 열의 아주 작은 몫이라 장부에 옮기지 않는다 (화상만 잰다).
+    /// </summary>
+    public double RadiantKwM2(int c, Chemistry chem, out int src)
+    {
+        double q = 0, best = 0; src = -1;
+        int cx = L.X(c), cy = L.Y(c);
+        foreach (int j in _flames)
+        {
+            int dx = L.X(j) - cx, dy = L.Y(j) - cy;
+            if (j == c || Math.Abs(dx) > RadiantReach || Math.Abs(dy) > RadiantReach) continue;
+            double r2 = Math.Max(1, dx * dx + dy * dy);
+            if (!Sees(cx, cy, L.X(j), L.Y(j))) continue;
+            double qj = RadiantFraction * chem.Hrr[j] / (4 * Math.PI * r2);
+            q += qj;
+            if (qj > best) { best = qj; src = j; }
+        }
+        return q;
+    }
+
+    /// <summary>두 칸 사이에 벽 · 닫힌 문이 없나 (사이 칸만 — 직선 칸 따라가기).</summary>
+    private bool Sees(int x0, int y0, int x1, int y1)
+    {
+        int dx = Math.Abs(x1 - x0), dy = -Math.Abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1, err = dx + dy;
+        int x = x0, y = y0;
+        while (true)
+        {
+            int e2 = 2 * err;
+            if (e2 >= dy) { err += dy; x += sx; }
+            if (e2 <= dx) { err += dx; y += sy; }
+            if (x == x1 && y == y1) return true;
+            int i = L.Index(x, y);
+            if (L.Kind[i] == CellKind.Wall || L.Kind[i] == CellKind.Outside) return false;
+            if (L.Kind[i] == CellKind.Door && F.DoorOpen[L.DoorAt[i]] < 0.5f) return false;
+        }
     }
 
     private HashSet<int>? _medBedCells; // 치료 침대 칸 (산소통 · 마스크 — 전원이 끊겨도 산소는 나온다)
@@ -321,11 +366,17 @@ public sealed class Life : IEngine
         if (!suit && tair > 330) { b.Burn += (float)((tair - 330) / 100 * dt / 60); harm ??= "뜨거운 공기에 데었다"; env = env == 0 ? EnvCause(sim, c, st, chem) : env; }
         if (chem != null)
         {
+            // 불 속: 불꽃에 닿는다
             double flame = chem.Hrr[c];
-            Span<int> nb = stackalloc int[4];
-            L.Neighbors(c, nb);
-            foreach (int j in nb) if (j >= 0) flame += chem.Hrr[j] * 0.4;
             if (flame > 20) { b.Burn += (float)(flame / 200 * dt / 30 * (suit ? 0.2 : 1)); harm ??= "불길에 데었다"; env = env == 0 ? (chem.FireCause[c] != 0 ? chem.FireCause[c] : EnvCause(sim, c, st, chem)) : env; }
+            // 복사열: 보이는 불 칸마다 받는 열 (kW/m²) — 열량 q^(4/3)·초로 화상 (2.5kW/m²는 1분에 아프고 · 10kW/m²는 30초면 물집 — Eisenberg 열량)
+            int src = -1;
+            double q = _flames.Count > 0 ? RadiantKwM2(c, chem, out src) : 0;
+            if (q > 1.0 && src >= 0)
+            {
+                b.Burn += (float)(Math.Pow(q, 4.0 / 3) * dt / 800 * (suit ? 0.2 : 1));
+                harm ??= "불의 열기에 데었다"; env = env == 0 ? (chem.FireCause[src] != 0 ? chem.FireCause[src] : EnvCause(sim, c, st, chem)) : env;
+            }
         }
         if (!suit && tair < 250 && p > 1) b.Frost += (float)((250 - tair) / 100 * dt / 600);
 

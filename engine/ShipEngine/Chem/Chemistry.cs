@@ -175,7 +175,7 @@ public sealed class Chemistry : IEngine
         Hrr[i] = (float)(heat / dt / 1000);
         // 열 나누기 (보존):
         //   ① 불꽃이 제 겉면을 불꽃 온도 가까이 달군다 (산소가 많을수록 뜨겁다 · 많아야 40%)
-        //   ② 이웃 겉면으로 불꽃 복사 εσF(T불꽃⁴−Tn⁴) (보는 각 F=0.3 — 1m 곁 가구가 받는 15~20kW/m² · 많아야 35%)
+        //   ② 이웃 겉면 · 벽으로 불꽃 복사 εσF(T불꽃⁴−Tn⁴) (보는 각 F=0.3 — 1m 곁 가구가 받는 15~20kW/m² · 많아야 35% · 벽은 고체로 — 불 곁의 벽이 달아오른다)
         //   ③ 나머지: 기체 80% · 바닥 20%
         double left = heat;
         double tFlame = 750 + 550 * Math.Min(1, g);
@@ -188,13 +188,20 @@ public sealed class Chemistry : IEngine
         {
             int j = nb[k];
             rad[k] = 0;
-            if (j < 0 || !F.HasSurface(j)) continue;
-            double tn = F.Tf[j];
+            if (j < 0) continue;
+            bool wall = F.L.Kind[j] == CellKind.Wall;
+            if (!wall && !F.HasSurface(j)) continue;
+            double tn = wall ? F.Ts[j] : F.Tf[j];
             rad[k] = Math.Max(0, 0.9 * Field.Sigma * 0.3 * (tf4 - tn * tn * tn * tn)) * dt;
             radTotal += rad[k];
         }
         double scale = radTotal > heat * 0.35 ? heat * 0.35 / radTotal : 1;
-        for (int k = 0; k < 4; k++) if (rad[k] > 0) { F.AddSurfaceHeat(nb[k], rad[k] * scale); left -= rad[k] * scale; }
+        for (int k = 0; k < 4; k++)
+            if (rad[k] > 0)
+            {
+                if (F.L.Kind[nb[k]] == CellKind.Wall) F.AddSolidHeat(nb[k], rad[k] * scale); else F.AddSurfaceHeat(nb[k], rad[k] * scale);
+                left -= rad[k] * scale;
+            }
         F.AddHeat(i, left * 0.8);
         F.AddSolidHeat(i, left * 0.2);
         // 상승 기류: 불꽃이 둘레 공기를 빨아들이고 뜨거운 연기를 내보낸다 (불이 셀수록 세게)
