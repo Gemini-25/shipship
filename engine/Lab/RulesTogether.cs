@@ -68,6 +68,27 @@ public static partial class Program
                 $"짝: 나감 {mates.left} (위험을 알았나 {mates.knew}) / 남남: 나감 {strangers.left}");
         }
 
+        // ── 되풀이하지 않는다: 따라 나선 걸음이 끊겨도 (막힌 문 · 길) 10분 동안은 다시 따라 나서지 않는다
+        //    (디딤호에서: 넓은 둘레 통로에서 걸음이 거듭 끊겨 한 사람이 같은 지도자를 18분에 13번 따라 나섰다) — 넓은 오른쪽 방 끝에서 · 따라 나설 때마다 걸음을 끊는다 ──
+        {
+            var s = Worlds.Full(lay, 4);
+            var m = s.Get<Mind>(); var so = s.Get<Society>();
+            int a = m.AddPerson(s, At(22, 2)), b = m.AddPerson(s, At(21, 3));
+            s.Run(1);
+            Pair(so, a, b);
+            m.Learn(m[a], s.Tick, BeliefKind.BadAir, At(20, 1), -1, 1f, BeliefSource.Screen);
+            long seen = 0; bool leaderOut = false;
+            for (int k = 0; k < Time.Minutes(2); k++)
+            {
+                s.Step();
+                foreach (int p in new[] { a, b }) { m[p].C.Sleepy = 0; m[p].C.Hunger = 0; m[p].C.Thirst = 0; m[p].C.Bored = 0; }
+                if (m.Followed != seen) { seen = m.Followed; m[b].Plan.Clear(); m[b].Path.Clear(); m[b].C.StepIndex = 0; m[b].C.Goal = GoalKind.Idle; } // 걸음이 끊겼다
+                leaderOut |= m.RoomOf(m[a].C.Cell) != lay.Room[At(22, 2)];
+            }
+            Check("되풀이하지 않는다: 따라 나선 걸음이 끊겨도 10분 동안은 다시 따라 나서지 않는다 (넓은 통로에서 같은 사람을 거듭 따라 나서던 결함)",
+                leaderOut && m.Followed == 1, $"따라 나섬 {m.Followed}번 · 앞사람 나감 {leaderOut}");
+        }
+
         // ── 다친 짝: 산소 없는 방에 쓰러진 이 — 곁의 남이 먼저 구하러 갔어도 짝은 달려간다 · 짝이 아니면 맡은 이에게 맡긴다 ──
         {
             bool Run(bool mates)

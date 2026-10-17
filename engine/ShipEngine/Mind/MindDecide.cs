@@ -89,7 +89,7 @@ public sealed partial class Mind
         c.Failed = 0;
         a.Plan = plan; c.StepIndex = 0; c.StepStart = sim.Tick; a.Path.Clear(); a.PathIdx = 0; c.WaitTicks = 0;
         c.CloseHard = (byte)(o.Goal == GoalKind.Evacuate ? 1 : 0);
-        if (o.Goal == GoalKind.Evacuate && _followScore > 0 && o.Score == _followScore) Followed++; // ⑨ 아는 이를 따라 나갔다
+        if (o.Goal == GoalKind.Evacuate && _followScore > 0 && o.Score == _followScore) { Followed++; c.FollowedAt = sim.Tick; } // ⑨ 아는 이를 따라 나갔다
         if (IsTask(o.Goal)) Claim(a, o.Goal, o.Target, +1);
         return true;
     }
@@ -204,7 +204,8 @@ public sealed partial class Mind
                 && RoomOf(a.Plan[c.StepIndex].Cell) != myRoom && RoomBadness(a, RoomOf(a.Plan[c.StepIndex].Cell)) < 0.3f;
             if (worst > 0 && !committed && !passing) Add(GoalKind.Evacuate, myRoom, cell, worst);
             // ⑨ 따라 나간다: 짝 · 이끄는 이 · 같은 무리가 이 방에서 빠져나가면 위험을 몰라도 함께 나간다
-            if (!committed && !passing && c.Goal != GoalKind.Evacuate && FollowOut(a, myRoom, out int danger) is float follow && follow > worst)
+            bool followedLately = c.FollowedAt > 0 && sim.Tick - c.FollowedAt < Time.Minutes(10);  // 방금 따라 나섰다 (큰 방에서 되풀이해 따라 나서지 않게)
+            if (!committed && !passing && !followedLately && c.Goal != GoalKind.Evacuate && FollowOut(a, myRoom, out int danger) is float follow && follow > worst)
             {
                 Add(GoalKind.Evacuate, myRoom, danger >= 0 ? danger : here, follow);
                 _followScore = follow;

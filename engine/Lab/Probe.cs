@@ -294,7 +294,9 @@ public static partial class Program
         var lay = Layout.Ship(ship, Tables.Default);
         int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
         var s = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0);
+        if (Environment.GetEnvironmentVariable("STORY") == "1") s.Get<Storyteller>().Enabled = true; // 재미 측정처럼 이야기꾼을 켠다
         var m = s.Get<Mind>();
+        long followed = 0;
         var share = new Dictionary<GoalKind, long>();
         double bored = 0, sleepy = 0; long n = 0;
         var prev = new Dictionary<int, (GoalKind g, int step, int plan, long since, int cell)>();
@@ -302,6 +304,11 @@ public static partial class Program
         for (long k = 0; k < Time.Hours(hours); k++)
         {
             s.Step();
+            if (m.Followed != followed)
+            {
+                followed = m.Followed;
+                Console.WriteLine($"    {Time.Clock(s.Tick)} 따라 나감 {followed}: " + string.Join(" · ", m.Agents.Where(a => a.IsPerson && a.C.Goal == GoalKind.Evacuate).Select(a => $"{m.NameOf(a.Id)} 빠져나감({a.C.GoalScore:0.0}) 방 {(a.C.GoalTarget >= 0 ? s.Layout.Rooms[a.C.GoalTarget].Name : "-")} 믿음 {string.Join(",", a.Beliefs.Where(b => b.Conf >= 0.35f).Select(b => b.Kind))}")));
+            }
             foreach (var a in m.Agents.Where(a => a.IsPerson))
             {
                 var now = (a.C.Goal, a.C.StepIndex, a.Plan.Count, a.C.GoalSince, a.C.Cell);

@@ -168,6 +168,8 @@ public struct AgentCore
     // ⑧ 하루의 리듬 · 쉼
     public float Chrono;       // 몸의 시계 (시간 — 음수 아침형 · 양수 저녁형)
     public byte Hobby;         // 쉬는 시간에 하는 일 (Hobby)
+    // ⑨ 함께
+    public long FollowedAt;    // 아는 이를 따라 방을 나선 때 (0: 없음) — 10분 동안은 다시 따라 나서지 않는다
 }
 
 /// <summary>바닥에 떨어진 · 놓인 물건.</summary>
