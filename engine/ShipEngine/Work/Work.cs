@@ -25,6 +25,7 @@ public sealed class Work : IEngine
 
     public const int PlanEvery = 125;          // 5분마다 일감판을 본다
     public const double MaintainAt = 0.8;      // 부품을 표준 수명의 80% 썼으면 미리 간다
+    public const float HarvestAt = 0.3f;       // 작물에 양분이 이만큼(몰 — 1m² 재배대 사흘 치) 쌓이면 거둔다
 
     private readonly Layout L;
     private readonly Tables T;
@@ -34,7 +35,7 @@ public sealed class Work : IEngine
     private Field? _f;
     public List<Job> Jobs = new();
     public float[] MakerProgress = Array.Empty<float>();   // 설비마다 만드는 중 (시간)
-    public long Crafted, Maintained, Cleaned, Made;
+    public long Crafted, Maintained, Cleaned, Made, Harvested;
 
     public Work(Layout layout, Tables tables) { L = layout; T = tables; }
 
@@ -45,6 +46,97 @@ public sealed class Work : IEngine
         if (MakerProgress.Length != L.Furniture.Count) MakerProgress = new float[L.Furniture.Count];
         Makers(sim, dt);
         if (sim.Tick % PlanEvery == Offset) Plan(sim);
+        Ledger(sim);
+    }
+
+    // ───────────────────────── ⑪ 물자 장부 ─────────────────────────
+
+    /// <summary>처음: 지금 재고에서 이미 적힌 흐름을 빼 '흐름 0일 때의 재고'를 처음 재고로 · 그 뒤 한 시간마다 고리에 남긴다.</summary>
+    private void Ledger(Sim sim)
+    {
+        var book = sim.Book;
+        book.EnsureItems(_mind!.ItemCount);
+        if (!book.Started)
+        {
+            for (int k = 0; k < book.Kinds; k++)
+            {
+                double sum = 0;
+                for (int f = 0; f < Book.Flows; f++) sum += k < Book.Bulk ? book.BulkFlow[k * Book.Flows + f] : book.ItemFlow[(k - Book.Bulk) * Book.Flows + f];
+                if (k < Book.Bulk) book.Start[k] = Stock(k) - sum; else book.ItemStart[k - Book.Bulk] = Stock(k) - sum;
+            }
+            book.Started = true; book.StartTick = sim.Tick;
+        }
+        if ((sim.Tick - book.StartTick) % Time.TicksPerHour < Every) book.Snapshot(sim.Tick, Stock);
+    }
+
+    /// <summary>물자 k의 지금 재고 — 덩어리: 식량(창고 · 손 · 바닥의 양분 몰) · 마실 물(물탱크) · 산소(배 공기 + 예비 공기) / 그 뒤로 물건 (개수).</summary>
+    public double Stock(int k)
+    {
+        switch (k)
+        {
+            case (int)Res.Food:
+            {
+                double food = 0;
+                if (_f != null) for (int c = 0; c < L.N; c++) food += _f.Stored(T.sFood, c);
+                if (_mind != null)
+                {
+                    foreach (var a in _mind.Agents) if (a.C.Holding == _mind.iHarvest) food += a.C.HoldCharge;
+                    foreach (var x in _mind.Loose) if (x.Item == _mind.iHarvest) food += x.Charge;
+                }
+                return food;
+            }
+            case (int)Res.Water: return _net?.WaterTank ?? 0;
+            case (int)Res.O2: return (_f?.Total(T.gO2) ?? 0) + (_net?.AirReserve ?? 0) * 0.21;
+            default: return _mind?.CountAll(k - Book.Bulk) ?? 0;
+        }
+    }
+
+    /// <summary>장부에 없는 몫 (지금 재고 − 처음 재고 − 적은 흐름): 불 · 새어 나감 · 그 밖의 길.</summary>
+    public double Other(Sim sim, int k)
+    {
+        var book = sim.Book;
+        if (!book.Started) return 0;
+        var (i, o) = book.Totals(k);
+        double start = k < Book.Bulk ? book.Start[k] : book.ItemStart[k - Book.Bulk];
+        return Stock(k) - start - (i - o);
+    }
+
+    /// <summary>며칠 버티나: (만드는 것까지 친 날 수 · 만들지 못하면 날 수) — 줄지 않으면 무한.</summary>
+    public (double days, double noMake) DaysLeft(Sim sim, int k)
+    {
+        var (use, make) = sim.Book.PerDay(k, sim.Tick);
+        double stock = Stock(k);
+        double net = use - make;
+        return (net > 1e-9 ? stock / net : double.PositiveInfinity, use > 1e-9 ? stock / use : double.PositiveInfinity);
+    }
+
+    /// <summary>장부 한 장 (화면 · 일지 · 실험실) — 재고 · 하루에 쓰는 양 · 만드는 양 · 며칠 버티나.</summary>
+    public List<string> Report(Sim sim)
+    {
+        var lines = new List<string>();
+        string D(double d) => double.IsInfinity(d) ? "줄지 않음" : d > 999 ? "999일 넘게" : $"{d:0.0}일";
+        for (int k = 0; k < Book.Bulk; k++)
+        {
+            var (use, make) = sim.Book.PerDay(k, sim.Tick);
+            var (days, noMake) = DaysLeft(sim, k);
+            double st = Stock(k);
+            string line = k switch
+            {
+                (int)Res.Food => $"식량 {st / Mind.MealMol:0}끼니 · 하루에 먹는 양 {use / Mind.MealMol:0.0}끼니 · 거두는 양 {make / Mind.MealMol:0.0}끼니",
+                (int)Res.Water => $"마실 물 {st * 0.018:0}L · 하루에 쓰는 양 {use * 0.018:0.0}L · 되찾는 양 {make * 0.018:0.0}L",
+                _ => $"산소 {st * 0.032:0}kg · 하루에 숨 쉬는 양 {use * 0.032:0.0}kg · 만드는 양 {make * 0.032:0.0}kg",
+            };
+            lines.Add($"{line} → {D(days)} (만들지 못하면 {D(noMake)})");
+        }
+        foreach (string name in new[] { "수리 꾸러미", "봉합 꾸러미", "소화기", "원료" })
+        {
+            int item = _mind!.ItemIndex(name);
+            if (item < 0) continue;
+            int k = Book.Bulk + item;
+            var (use, make) = sim.Book.PerDay(k, sim.Tick);
+            lines.Add($"{name} {Stock(k):0}개 · 하루에 쓰는 양 {use:0.0} · 만드는 양 {make:0.0}");
+        }
+        return lines;
     }
 
     // ───────────────────────── 저절로 만드는 설비 ─────────────────────────
@@ -64,7 +156,7 @@ public sealed class Work : IEngine
             if (_net.On[dev.Id] == 0 && _net.Demanded + dev.Def.Kw < 0.8 * _net.Capacity()) _net.SetOn(dev.Id, true);
             if (!_net.Working(dev.Id)) continue;
             MakerProgress[fu] += (float)(dt / 3600);
-            if (MakerProgress[fu] >= mk.Hours) { MakerProgress[fu] = 0; _mind.Stock[fu * _mind.ItemCount + item]++; Made++; }
+            if (MakerProgress[fu] >= mk.Hours) { MakerProgress[fu] = 0; _mind.Stock[fu * _mind.ItemCount + item]++; Made++; sim.Book.AddItem(item, Flow.Made, 1); }
         }
     }
 
@@ -98,6 +190,14 @@ public sealed class Work : IEngine
                     if (mind.TotalOf(mind.iRepair) <= 0) continue; // 갈아 끼울 부품(수리 꾸러미)이 없다
                     Post(sim, new Job { Kind = GoalKind.Maintain, Target = k }, dev.Cell, person => person.C.SkRepair >= 0.5f);
                 }
+        // 거두기: 다 자란 작물 (로봇 먼저 · 사람은 기르는 솜씨가 조금이라도 있으면)
+        if (_life != null)
+            for (int k = 0; k < _life.Crops.Count; k++)
+            {
+                var cr = _life.Crops[k];
+                if (cr.Biomass < HarvestAt || Jobs.Any(j => j.Kind == GoalKind.Harvest && j.Target == k)) continue;
+                Post(sim, new Job { Kind = GoalKind.Harvest, Target = k }, cr.Cell, person => person.C.SkFarm >= 0.3f);
+            }
         // 청소: 방마다 가장 지저분한 곳 하나 — 곰팡이 · 고인 물 (물 고인 바닥 밑 전선은 합선된다)
         foreach (var room in L.Rooms)
         {
@@ -117,6 +217,7 @@ public sealed class Work : IEngine
         GoalKind.Craft => _mind!.TotalOf(j.Arg) >= (T.People.Recipes.TryGetValue(_mind.ItemNames[j.Arg], out var r) ? r.Keep : 0),
         GoalKind.Maintain => _net == null || _net.Wear[j.Target] < MaintainAt * _net.Devices[j.Target / 4].Life((Part)(j.Target % 4)) * 0.5,
         GoalKind.Clean => (_life == null || _life.Mold[j.Target] < 0.05f) && (_f == null || _f.Stored(T.sWater, j.Target) < 2),
+        GoalKind.Harvest => _life == null || j.Target >= _life.Crops.Count || _life.Crops[j.Target].Biomass < HarvestAt * 0.5f,
         _ => true,
     };
 
@@ -141,19 +242,19 @@ public sealed class Work : IEngine
     }
 
     private static bool Busy(GoalKind g) => g is GoalKind.FightFire or GoalKind.Rescue or GoalKind.Patch or GoalKind.Brace or GoalKind.Repair
-        or GoalKind.Evacuate or GoalKind.Flee or GoalKind.Panic or GoalKind.Down or GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean;
+        or GoalKind.Evacuate or GoalKind.Flee or GoalKind.Panic or GoalKind.Down or GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest;
 
     // ───────────────────────── 찍기 ─────────────────────────
 
     public void Save(StateWriter w)
     {
         w.List(Jobs); w.Arr(MakerProgress);
-        w.I64(Crafted); w.I64(Maintained); w.I64(Cleaned); w.I64(Made);
+        w.I64(Crafted); w.I64(Maintained); w.I64(Cleaned); w.I64(Made); w.I64(Harvested);
     }
 
     public void Load(StateReader r)
     {
         Jobs = r.List<Job>(); MakerProgress = r.Arr<float>();
-        Crafted = r.I64(); Maintained = r.I64(); Cleaned = r.I64(); Made = r.I64();
+        Crafted = r.I64(); Maintained = r.I64(); Cleaned = r.I64(); Made = r.I64(); Harvested = r.I64();
     }
 }

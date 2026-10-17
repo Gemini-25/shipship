@@ -238,8 +238,8 @@ public sealed class Chemistry : IEngine
         {
             var s = T.Substances[x.S];
             double n = x.Nu * extent;
-            if (s.Gas >= 0) { F.RemoveGas(i, s.Gas, n); if (s.Gas == T.gO2) o2Budget -= n; }
-            else F.TakeStore(i, s.Store, n);
+            if (s.Gas >= 0) { F.RemoveGas(i, s.Gas, n); if (s.Gas == T.gO2) { o2Budget -= n; sim.Book.Add(Res.O2, Flow.Burned, -n); } }
+            else { F.TakeStore(i, s.Store, n); if (s.Store == T.sFood) sim.Book.Add(Res.Food, Flow.Burned, -n); }
         }
         foreach (var x in r.Out)
         {

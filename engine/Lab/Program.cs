@@ -43,6 +43,7 @@ public static partial class Program
             else if (args.Contains("--film")) Film(args);
             else if (args.Contains("--live")) Live(args);
             else if (args.Contains("--listen")) Listen(args);
+            else if (args.Contains("--ledger")) LedgerRun(args);
             else { Console.WriteLine("Lab --law | --rule | --bench | --scene 이름 [폴더] | --ships | --fun [배,…] [날] [시드 수] [성격] [가혹함] | --live 배 시드 초 | --listen 배 시드 초 [건너뛸 시간]"); return 2; }
         }
         catch (Exception e)

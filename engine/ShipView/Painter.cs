@@ -374,6 +374,7 @@ public sealed class Painter
             "수리 꾸러미" => DotHeld.Wrench,
             "봉합 꾸러미" => DotHeld.Box,
             "구급 상자" => DotHeld.MedKit,
+            "수확물" => DotHeld.Plate,
             _ => DotHeld.None,
         };
         if (lying)

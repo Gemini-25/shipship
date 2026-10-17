@@ -110,6 +110,16 @@ public sealed class Network : IEngine
     public double AirReleased;
     public double Coolant;        // 냉각 고리의 암모니아 (몰)
     public double VentedH2;       // 배 밖으로 버린 수소 (몰 · 원소 장부)
+    public double VentedCH4, VentedCO2; // 배 밖으로 버린 메탄(사바티에) · 이산화탄소(모은 것이 넘쳐서) (몰 · 원소 장부)
+    /// <summary>정화기가 걸러 모은 이산화탄소 (몰) — 사바티에가 수소와 섞어 물로 되찾는다 · 넘치면 배 밖으로 (ISS 이산화탄소 제거 장치 → 사바티에).</summary>
+    public double CO2Store;
+    public const double CO2StoreMax = 200;
+    /// <summary>산소 발생기의 일 몫 (0~1) — 배 공기의 산소 분압에 맞춰 스스로 조절한다 (ISS 산소 발생 장치처럼 사람 수에 맞춘 만큼만 · 물을 아낀다).</summary>
+    public float[] Duty;
+    /// <summary>배의 평균 산소 분압 (kPa — 가압된 방 칸 · 25틱마다 잰다).</summary>
+    public double PpO2;
+    public const double CoilK = 283.15;              // 공조 열교환판 온도 (이슬점 — ISS 공조는 4~16℃)
+    public const double O2Target = 21.0, O2Band = 0.5; // 이 분압 아래에서 돌기 시작 · 0.5kPa 아래면 다 돈다 (떠날 때 공기 21.0kPa · ISS 19.5~23.1kPa)
     public double Supplied, Demanded, CoolingKw, ReactorKw, HvacKw;
     public long Trips, Shorts, Failures;
 
@@ -126,7 +136,7 @@ public sealed class Network : IEngine
         }
         int nd = Devices.Count;
         On = Devices.Select(d => (byte)(d.Def.On ? 1 : 0)).ToArray();
-        Supply = new float[nd]; Wear = new float[nd * 4]; Broken = new byte[nd * 4]; SealLeakCause = new int[nd];
+        Supply = new float[nd]; Duty = Enumerable.Repeat(1f, nd).ToArray(); Wear = new float[nd * 4]; Broken = new byte[nd * 4]; SealLeakCause = new int[nd];
         Charge = Devices.Select(d => (float)d.Def.Kwh).ToArray();
         _limit = new float[nd * 4];
         for (int d = 0; d < nd; d++)
@@ -273,6 +283,7 @@ public sealed class Network : IEngine
 
     public void Step(Sim sim, double dt)
     {
+        if (sim.Tick % 25 == 0) MeasureO2();
         Faults(sim);
         Power(sim, dt);
         Effects(sim, dt);
@@ -280,6 +291,18 @@ public sealed class Network : IEngine
         Ducts(sim);
         ReleaseAir(dt);
         if (sim.Tick % 25 == 0) WearStep(sim, 25 * dt);
+    }
+
+    /// <summary>배의 평균 산소 분압 → 산소 발생기 일 몫 (비례 조절).</summary>
+    private void MeasureO2()
+    {
+        double sum = 0; int n = 0;
+        foreach (var room in L.Rooms)
+            foreach (int c in room.Cells)
+                if (F.Pressure(c) > 50) { sum += F.Partial(T.gO2, c); n++; }
+        PpO2 = n > 0 ? sum / n : 0;
+        float duty = n > 0 ? (float)Math.Clamp((O2Target - PpO2) / O2Band, 0, 1) : 1;
+        for (int d = 0; d < Devices.Count; d++) if (Devices[d].Def.Role == "o2gen") Duty[d] = duty;
     }
 
     /// <summary>예비 공기를 생명유지 설비(산소 발생기) 자리로 푼다 — 없으면 첫 방 통풍구로.</summary>
@@ -332,7 +355,7 @@ public sealed class Network : IEngine
             var dev = Devices[d];
             if (dev.Feeder < 0 || On[d] == 0 || Broken[d * 4] != 0) continue;
             if (dev.Def.Role is "reactor" or "aux" or "battery") continue;
-            load[dev.Feeder] += dev.Def.Kw;
+            load[dev.Feeder] += dev.Def.Kw * (dev.Def.Role == "o2gen" ? Math.Max(0.1, Duty[d]) : 1); // 산소 발생기는 일 몫만큼 (팬 · 정화는 늘 10%)
         }
         for (int r = 0; r < L.Rooms.Count; r++)
             if (RoomFeeder[r] >= 0) load[RoomFeeder[r]] += 0.01 * L.Rooms[r].Cells.Length; // 조명 10W/m²
@@ -500,16 +523,31 @@ public sealed class Network : IEngine
                     break;
                 case "o2gen":
                 {
-                    // 물 전기분해: O2 몰/초 = 전력 × 0.7 / 572kJ — 저장된 화학 에너지만큼은 열이 아니다
-                    double o2 = kw * 1000 * 0.7 / 572_000 * dt;
+                    // 물 전기분해: O2 몰/초 = 전력 × 일 몫 × 0.7 / 572kJ — 저장된 화학 에너지만큼은 열이 아니다 (일 몫: 배 산소 분압에 맞춰)
+                    double duty = Duty[d];
+                    double o2 = kw * duty * 1000 * 0.7 / 572_000 * dt;
                     o2 = Math.Min(o2, WaterTank / 2);
+                    double h2 = 0;
                     if (o2 > 0)
                     {
-                        WaterTank -= 2 * o2;
-                        F.AddGas(c, T.gO2, o2, F.Temp(c));
-                        if (sealLeak) F.AddGas(c, T.gH2, 2 * o2, F.Temp(c)); else VentedH2 += 2 * o2;
-                        F.AddHeat(c, kw * 1000 * 0.3 * dt);
+                        WaterTank -= 2 * o2; sim.Book.Add(Res.Water, Flow.Split, -2 * o2);
+                        F.AddGas(c, T.gO2, o2, F.Temp(c)); sim.Book.Add(Res.O2, Flow.Electrolysis, o2);
+                        if (sealLeak) F.AddGas(c, T.gH2, 2 * o2, F.Temp(c)); else h2 = 2 * o2;
                     }
+                    F.AddHeat(c, kw * 1000 * (0.3 * duty + Math.Max(0, 0.1 - duty)) * dt);
+                    // 사바티에 (ISS 2010~): CO₂ + 4H₂ → CH₄ + 2H₂O — 걸러 모은 이산화탄소와 갈라 낸 수소(90%)로 물을 되찾는다 · 메탄은 배 밖으로 · 반응열 165kJ/몰
+                    if (h2 > 0 && mechOk)
+                    {
+                        double xi = Math.Min(0.9 * h2 / 4, CO2Store);
+                        if (xi > 0)
+                        {
+                            CO2Store -= xi; h2 -= 4 * xi;
+                            WaterTank += 2 * xi; sim.Book.Add(Res.Water, Flow.Sabatier, 2 * xi);
+                            VentedCH4 += xi;
+                            F.AddHeat(c, 165e3 * xi);
+                        }
+                    }
+                    VentedH2 += h2;
                     // 이산화탄소 거르기 (공기 재생기 — 옛 배의 '산소 발생기'는 한 대로 둘 다 했다 · 거르개가 닳으면 1/5)
                     if (dev.Def.Mol > 0 && p > 0) ScrubRoom(dev, T.gCO2, dev.Def.Mol * (filterBad ? 0.2 : 1) * dt);
                     // 독한 기체 거름 (활성탄 거르개)
@@ -528,18 +566,18 @@ public sealed class Network : IEngine
                 {
                     double take = dev.Def.Mol * (p > 0 && mechOk ? 1 : 0) * dt;
                     double rh = F.Partial(T.gH2O, c) / Math.Max(1e-6, Water.SatKPa(F.Temp(c)));
-                    if (rh > 0.4) WaterTank += F.RemoveGas(c, T.gH2O, Math.Min(take, F.Gas(T.gH2O, c) * 0.3));
+                    if (rh > 0.4) { double got = F.RemoveGas(c, T.gH2O, Math.Min(take, F.Gas(T.gH2O, c) * 0.3)); WaterTank += got; sim.Book.Add(Res.Water, Flow.Condensed, got); }
                     F.AddHeat(c, kw * 1000 * dt);
                     break;
                 }
                 case "recycler":
                 {
-                    if (sealLeak) { double leak = Math.Min(WaterTank, 0.05 * dt); WaterTank -= leak; F.AddStore(c, T.sWater, leak); }
+                    if (sealLeak) { double leak = Math.Min(WaterTank, 0.05 * dt); WaterTank -= leak; F.AddStore(c, T.sWater, leak); sim.Book.Add(Res.Water, Flow.Leaked, -leak); }
                     // 오수(오줌 · 씻은 물) → 증류 · 걸러 마실 물로 (ISS 물 회수 장치: 오줌 처리 약 85% + 소금물 처리 → 전체 94~98% — 여기는 94%) · 남은 진한 소금물은 버린다
                     if (p > 0 && mechOk && WasteWater > 0)
                     {
                         double n = Math.Min(WasteWater, RecyclerMolPerSec * (filterBad ? 0.3 : 1) * dt);
-                        WasteWater -= n; WaterTank += n * WaterRecovery; Brine += n * (1 - WaterRecovery);
+                        WasteWater -= n; WaterTank += n * WaterRecovery; Brine += n * (1 - WaterRecovery); sim.Book.Add(Res.Water, Flow.Recycled, n * WaterRecovery);
                     }
                     F.AddHeat(c, kw * 1000 * dt);
                     break;
@@ -690,6 +728,17 @@ public sealed class Network : IEngine
             for (int g = 0; g < G; g++) { double t = F.N[v * G + g] * VentFraction; pool[g] += t; F.N[v * G + g] -= t; }
             double du = F.U[v] * VentFraction; poolU += du; F.U[v] -= du;
         }
+        // 응결 열교환기 (ISS 공조 장치처럼): 덕트로 모인 공기가 이슬점 10℃의 차가운 판을 지나며 그보다 많은 습기를 물로 맺어 물탱크로 (방 습도 45% 안팎 · 판을 비껴가는 공기 2할)
+        double nTot = 0, cTot = 0;
+        for (int g = 0; g < G; g++) { nTot += pool[g]; cTot += pool[g] * T.Gases[g].C; }
+        double pH2O = nTot > 0 ? median * pool[T.gH2O] / nTot : 0, pCoil = Water.SatKPa(CoilK);
+        if (pH2O > pCoil && cTot > 0)
+        {
+            double tMix = poolU / cTot;
+            double w = pool[T.gH2O] * (1 - pCoil / pH2O) * 0.8;
+            pool[T.gH2O] -= w; poolU -= w * T.Gases[T.gH2O].C * tMix;
+            WaterTank += w; sim.Book.Add(Res.Water, Flow.Condensed, w);
+        }
         foreach (int v in vents)
         {
             for (int g = 0; g < G; g++) F.N[v * G + g] += pool[g] / vents.Count;
@@ -751,8 +800,13 @@ public sealed class Network : IEngine
         double total = 0;
         foreach (int c in cells) total += F.Gas(gas, c);
         if (total <= 1e-12) return;
-        double frac = Math.Min(0.5, mol / total);
-        foreach (int c in cells) { double g = F.Gas(gas, c); if (g > 0) F.RemoveGas(c, gas, g * frac); }
+        double frac = Math.Min(0.5, mol / total), got = 0;
+        foreach (int c in cells) { double g = F.Gas(gas, c); if (g > 0) got += F.RemoveGas(c, gas, g * frac); }
+        if (gas == T.gCO2)
+        {
+            CO2Store += got;
+            if (CO2Store > CO2StoreMax) { VentedCO2 += CO2Store - CO2StoreMax; CO2Store = CO2StoreMax; }
+        }
     }
 
     private void Fail(Sim sim, int d, Part p)
@@ -784,6 +838,7 @@ public sealed class Network : IEngine
         w.Arr(On); w.Arr(Supply); w.Arr(Wear); w.Arr(Broken); w.Arr(Charge);
         w.Arr(Breaker); w.Arr(OverSec); w.Arr(FaultCell); w.Arr(BreakerStuck); w.Arr(Amps); w.Arr(Damper); w.Arr(Exhaust); w.F64(TraceScrubbed); w.Arr(SealLeakCause);
         w.Bool(ReactorScram); w.I32(ScramCause); w.F64(WaterTank); w.F64(WasteWater); w.F64(Brine); w.F64(Coolant); w.F64(VentedH2); w.F64(AirReserve); w.F64(AirRelease); w.F64(AirReleased);
+        w.F64(VentedCH4); w.F64(VentedCO2); w.F64(CO2Store); w.Arr(Duty); w.F64(PpO2);
         w.F64(Supplied); w.F64(Demanded); w.F64(CoolingKw); w.F64(ReactorKw); w.F64(HvacKw);
         w.I64(Trips); w.I64(Shorts); w.I64(Failures);
         var keys = _faultCause.Keys.OrderBy(k => k).ToList();
@@ -799,6 +854,7 @@ public sealed class Network : IEngine
         r.ArrInto(On); r.ArrInto(Supply); r.ArrInto(Wear); r.ArrInto(Broken); r.ArrInto(Charge);
         r.ArrInto(Breaker); r.ArrInto(OverSec); r.ArrInto(FaultCell); r.ArrInto(BreakerStuck); r.ArrInto(Amps); r.ArrInto(Damper); r.ArrInto(Exhaust); TraceScrubbed = r.F64(); r.ArrInto(SealLeakCause);
         ReactorScram = r.Bool(); ScramCause = r.I32(); WaterTank = r.F64(); WasteWater = r.F64(); Brine = r.F64(); Coolant = r.F64(); VentedH2 = r.F64(); AirReserve = r.F64(); AirRelease = r.F64(); AirReleased = r.F64();
+        VentedCH4 = r.F64(); VentedCO2 = r.F64(); CO2Store = r.F64(); r.ArrInto(Duty); PpO2 = r.F64();
         Supplied = r.F64(); Demanded = r.F64(); CoolingKw = r.F64(); ReactorKw = r.F64(); HvacKw = r.F64();
         Trips = r.I64(); Shorts = r.I64(); Failures = r.I64();
         _faultCause.Clear();

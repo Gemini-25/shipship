@@ -15,6 +15,7 @@ public sealed class Sim
 
     public Causes Causes { get; } = new();
     public Facts Facts { get; } = new();
+    public Book Book { get; } = new();      // ⑪ 물자 장부 — 엔진들이 만들고 쓰는 곳마다 적는다
 
     private readonly List<IEngine> _engines = new();
     private readonly Dictionary<Type, IEngine> _byType = new();
@@ -71,6 +72,7 @@ public sealed class Sim
         w.I64(Tick);
         Causes.Save(w);
         Facts.Save(w);
+        Book.Save(w);
         foreach (var e in _engines) { w.Tag(e.Name); e.Save(w); }
         w.Tag("end");
         return w.ToArray();
@@ -83,6 +85,7 @@ public sealed class Sim
         Tick = r.I64();
         Causes.Load(r);
         Facts.Load(r);
+        Book.Load(r);
         foreach (var e in _engines) { r.Tag(e.Name); e.Load(r); }
         r.Tag("end");
     }

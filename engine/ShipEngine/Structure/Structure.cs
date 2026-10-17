@@ -405,7 +405,7 @@ public sealed class Structure : IEngine
                 double feMol = rust.Def.Rate * 1000 * dt * (rh > 1 ? 2 : 1);
                 double o2 = feMol * 3 / 4;
                 double took = F.RemoveGas(j, T.gO2, o2);
-                RustedO2 += took;
+                RustedO2 += took; sim.Book.Add(Res.O2, Flow.Rusted, -took);
                 Corrode[c] = (float)Math.Min(0.9, Corrode[c] + took * 4 / 3 * 0.0558 / 60.0);
             }
         }

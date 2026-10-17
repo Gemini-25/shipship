@@ -84,6 +84,7 @@ public sealed class Life : IEngine
     public const double NightUrine = 0.5;          // 자는 동안 오줌 빠르기 (낮의 절반)
     public const double Insensible = 83.3 / 86400; // 숨 · 피부로 늘 잃는 물 (몰/초 — 하루 1.5L · 대사로 생긴 물 0.35L와 합쳐 BVAD 1.85kg)
     /// <summary>산소 1몰에서 나오는 에너지 (J · 물이 액체인 열량 — 식품 열량과 같은 기준): 포도당 467kJ · 지방 434kJ.</summary>
+    public const double CropMolPerM2Day = 0.1;     // 작물 1m²가 하루에 내는 양분 (몰 — 밝은 재배등 · 알맞은 온도 · 이산화탄소)
     public const double GlucoseJPerO2 = 2803e3 / 6, FatJPerO2 = 9978e3 / 23;
     /// <summary>탄수화물로 태우는 몫 (산소 기준): 쉴 때 0.3(호흡 몫 0.79) → 힘들수록 → 813W에서 1(호흡 몫 1.0).</summary>
     public static double CarbShare(double w) => Math.Clamp(0.3 + 0.7 * (w - 80) / 730, 0.3, 1.0);
@@ -194,7 +195,7 @@ public sealed class Life : IEngine
             double o2 = 6 * xg + 23 * xf, co2 = 6 * xg + 16 * xf, h2o = 6 * xg + 16 * xf;
             // 반응열은 몸으로 (장부: E(기체, T) = hf + cv(T−298))
             double q = xg * _glucose.Hf * 1000 + xf * _fat.Hf * 1000;
-            if (!suit) { q += o2 * T.Gases[T.gO2].Energy(tair); F.RemoveGas(c, T.gO2, o2); }
+            if (!suit) { q += o2 * T.Gases[T.gO2].Energy(tair); F.RemoveGas(c, T.gO2, o2); sim.Book.Add(Res.O2, Flow.Breathed, -o2); }
             else q += o2 * T.Gases[T.gO2].Energy(BodyTemp);
             q -= co2 * T.Gases[T.gCO2].Energy(BodyTemp) + h2o * T.Gases[T.gH2O].Energy(BodyTemp);
             b.Reserve -= xg; b.Fat -= xf;
@@ -209,7 +210,7 @@ public sealed class Life : IEngine
             if (k > 0)
             {
                 double q = 4 * k * _glucose.Hf * 1000 + k * T.Gases[T.gO2].Energy(tair) - k * _fat.Hf * 1000 - 8 * k * T.Gases[T.gCO2].Energy(BodyTemp) - 8 * k * T.Gases[T.gH2O].Energy(BodyTemp);
-                F.RemoveGas(c, T.gO2, k); F.AddGas(c, T.gCO2, 8 * k, BodyTemp); F.AddGas(c, T.gH2O, 8 * k, BodyTemp);
+                F.RemoveGas(c, T.gO2, k); F.AddGas(c, T.gCO2, 8 * k, BodyTemp); F.AddGas(c, T.gH2O, 8 * k, BodyTemp); sim.Book.Add(Res.O2, Flow.Breathed, -k);
                 b.Reserve -= 4 * k; b.Fat += k;
                 b.CoreK += q / BodyC;
                 O2Used += k; CO2Made += 8 * k;
@@ -390,13 +391,14 @@ public sealed class Life : IEngine
             if (lamp < 0.1) cr.DarkHours += (float)(dt / 3600); else cr.DarkHours = 0;
             if (t < 275 || t > 318 || cr.DarkHours > 48 || water == 0) cr.Health = (float)Math.Max(0, cr.Health - dt / 86400);
             else cr.Health = (float)Math.Min(1, cr.Health + dt / (5 * 86400));
-            double rate = 2.0 / 86400 * lamp * tf * cf * water * cr.Health; // 양분 몰/초 (하루 2몰 — 사람 반 몫)
+            // 양분 몰/초: 재배대 1m²에 하루 0.1몰 (먹는 부분 마른 무게 하루 18g/m² — NASA 생물 재생 실험(BPC)의 밀 · 감자 20g/m² 안팎 · 상추 7g/m²)
+            double rate = CropMolPerM2Day / 86400 * L.Furniture[net.Devices[cr.Device].Furniture].Cells.Length * Field.CellFloor * lamp * tf * cf * water * cr.Health;
             double xi = rate * dt;
             xi = Math.Min(xi, F.Gas(T.gCO2, c) * 0.5 / 6);
             if (xi <= 0) continue;
             F.RemoveGas(c, T.gCO2, 6 * xi);
-            net.WaterTank -= 6 * xi;
-            F.AddGas(c, T.gO2, 6 * xi, t);
+            net.WaterTank -= 6 * xi; sim.Book.Add(Res.Water, Flow.Watered, -6 * xi);
+            F.AddGas(c, T.gO2, 6 * xi, t); sim.Book.Add(Res.O2, Flow.Photosynthesis, 6 * xi);
             cr.Biomass += (float)xi;
             // 빛 에너지가 반응열을 대므로 장부 밖 (재배등 전력이 그 몫) — 장의 열은 바꾸지 않는다
         }
@@ -435,8 +437,8 @@ public sealed class Life : IEngine
             if (xi <= 1e-9) continue;
             double q = r.Heat(T, t) * xi;
             F.TakeStore(c, T.sFood, xi);
-            FoodRotted += xi;
-            foreach (var x in r.In) { var s = T.Substances[x.S]; if (s.Gas >= 0) F.RemoveGas(c, s.Gas, x.Nu * xi); }
+            FoodRotted += xi; sim.Book.Add(Res.Food, Flow.Rotted, -xi);
+            foreach (var x in r.In) { var s = T.Substances[x.S]; if (s.Gas >= 0) { F.RemoveGas(c, s.Gas, x.Nu * xi); if (s.Gas == T.gO2) sim.Book.Add(Res.O2, Flow.Rotted, -x.Nu * xi); } }
             foreach (var x in r.Out) { var s = T.Substances[x.S]; if (s.Gas >= 0) F.AddGas(c, s.Gas, x.Nu * xi, t); }
             F.AddHeat(c, q);
         }

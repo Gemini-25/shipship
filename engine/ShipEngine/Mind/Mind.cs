@@ -38,7 +38,7 @@ public sealed partial class Mind : IEngine
     public readonly string[] ItemNames;
     public readonly string[] RoleNames;
     public readonly int ItemCount;
-    public readonly byte iExt, iRepair, iPatch, iSuit, iMask, iMedkit;
+    public readonly byte iExt, iRepair, iPatch, iSuit, iMask, iMedkit, iHarvest;
     /// <summary>고치기 단계의 '부품' 자리에 넣는 특별 값: 배전반에서 급전선을 손으로 끊기.</summary>
     public const byte PullFeederArg = 254;
 
@@ -67,7 +67,7 @@ public sealed partial class Mind : IEngine
         ItemCount = ItemNames.Length;
         RoleNames = P.Roles.Keys.ToArray();
         byte Item(string n) { int i = Array.IndexOf(ItemNames, n); if (i < 0) throw new InvalidDataException($"사람 표에 물건 '{n}'이 없다"); return (byte)i; }
-        iExt = Item("소화기"); iRepair = Item("수리 꾸러미"); iPatch = Item("봉합 꾸러미"); iSuit = Item("우주복"); iMask = Item("산소 마스크"); iMedkit = Item("구급 상자");
+        iExt = Item("소화기"); iRepair = Item("수리 꾸러미"); iPatch = Item("봉합 꾸러미"); iSuit = Item("우주복"); iMask = Item("산소 마스크"); iMedkit = Item("구급 상자"); iHarvest = Item("수확물");
 
         Stock = new int[L.Furniture.Count * ItemCount];
         foreach (var fu in L.Furniture)
@@ -274,12 +274,21 @@ public sealed partial class Mind : IEngine
     }
 
     /// <summary>가장 가까운 설비에서 하나 꺼내 쓴다 (없으면 거짓).</summary>
-    public bool TakeOne(int from, int item)
+    public bool TakeOne(int from, int item, Sim? sim = null)
     {
         int fu = NearestStock(from, (byte)item);
         if (fu < 0) return false;
         Stock[fu * ItemCount + item]--;
+        sim?.Book.AddItem(item, Flow.Used, -1);
         return true;
+    }
+
+    /// <summary>배에 있는 그 물건 수 — 설비 안 · 손에 든 것 · 바닥에 떨어진 것 (⑪ 장부의 재고).</summary>
+    public int CountAll(int item)
+    {
+        int n = TotalOf(item);
+        foreach (var x in Loose) if (x.Item == item) n++;
+        return n;
     }
 
     public void Assign(Sim sim, int agent, GoalKind goal, int target, Belief b, long until)
@@ -302,7 +311,7 @@ public sealed partial class Mind : IEngine
         GoalKind.Sleep => "잔다", GoalKind.Eat => "먹는다", GoalKind.Drink => "물을 마신다", GoalKind.Work => "일한다", GoalKind.Relax => "쉰다",
         GoalKind.Socialize => "어울린다", GoalKind.FightFire => "불을 끈다", GoalKind.Rescue => "사람을 구한다", GoalKind.Patch => "구멍을 막는다",
         GoalKind.Repair => "고친다", GoalKind.Investigate => "살피러 간다", GoalKind.GetSuit => "우주복을 입는다", GoalKind.Charge => "충전한다", GoalKind.Evacuate => "방을 빠져나간다", GoalKind.Brace => "버티는 문을 받친다",
-        GoalKind.Craft => "물건을 만든다", GoalKind.Maintain => "부품을 미리 간다", GoalKind.Clean => "곰팡이를 닦는다", _ => "",
+        GoalKind.Craft => "물건을 만든다", GoalKind.Maintain => "부품을 미리 간다", GoalKind.Clean => "곰팡이를 닦는다", GoalKind.Harvest => "작물을 거둔다", _ => "",
     };
 
     public static string BeliefName(BeliefKind k) => k switch
@@ -323,7 +332,7 @@ public sealed partial class Mind : IEngine
             var st = a.Plan[a.C.StepIndex];
             string step = st.Kind switch
             {
-                StepKind.GoTo => "가는 중", StepKind.Take => $"{ItemNames[st.Arg]} 꺼내는 중", StepKind.Spray => "물을 뿌리는 중", StepKind.Seal => "막는 중", StepKind.Brace => "덧대는 중", StepKind.Craft => "만드는 중", StepKind.Maintain => "가는 중(정비)", StepKind.Clean => "닦는 중",
+                StepKind.GoTo => "가는 중", StepKind.Take => $"{ItemNames[st.Arg]} 꺼내는 중", StepKind.Spray => "물을 뿌리는 중", StepKind.Seal => "막는 중", StepKind.Brace => "덧대는 중", StepKind.Craft => "만드는 중", StepKind.Maintain => "가는 중(정비)", StepKind.Clean => "닦는 중", StepKind.Harvest => "거두는 중", StepKind.Stow => "갈무리하는 중",
                 StepKind.Fix => "고치는 중", StepKind.PickUp => "업는 중", StepKind.Drop => "내려놓는 중", StepKind.Wear => "입는 중", StepKind.Look => "살펴보는 중", _ => "",
             };
             if (step.Length > 0) s += " — " + step;

@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 namespace ShipEngine;
 
 /// <summary>⑧ 마음 — 계획 단계 하기 · 걷기 · 문 · 길찾기.</summary>
@@ -55,6 +56,8 @@ public sealed partial class Mind
             case StepKind.Craft: CraftStep(sim, a, st); return;
             case StepKind.Maintain: MaintainStep(sim, a, st); return;
             case StepKind.Clean: CleanStep(sim, a, st); return;
+            case StepKind.Harvest: HarvestStep(sim, a, st); return;
+            case StepKind.Stow: StowStep(sim, a, st); return;
             case StepKind.Fix: FixStep(sim, a, st); return;
             case StepKind.PickUp:
             {
@@ -141,6 +144,14 @@ public sealed partial class Mind
         return d.Water > 0 ? d.Water : d.O2;
     }
 
+    /// <summary>손에 든 물건을 써서 없앤다 (막기 · 덧대기 · 고치기 · 빈 소화기) — 장부에 '썼다'.</summary>
+    private void UseHeld(Sim sim, Agent a)
+    {
+        if (a.C.Holding == 255) return;
+        sim.Book.AddItem(a.C.Holding, Flow.Used, -1);
+        a.C.Holding = 255; a.C.HoldCharge = 0;
+    }
+
     private void DropHeld(Agent a)
     {
         if (a.C.Holding == 255) return;
@@ -178,14 +189,14 @@ public sealed partial class Mind
             {
                 double got = 0;
                 foreach (int x in L.Furniture[st.Target].Cells) { got += F.TakeStore(x, T.sFood, Math.Max(0, MealMol - got)); if (got >= MealMol) break; }
-                if (got > 0) { _life!.Eat(c.Body, got); FoodEaten += got; c.Hunger = (float)Math.Max(0, c.Hunger - got); c.Joy = Math.Min(1, c.Joy + 0.1f); c.AteAt = t; Meals++; }
+                if (got > 0) { _life!.Eat(c.Body, got); FoodEaten += got; sim.Book.Add(Res.Food, Flow.Eaten, -got); c.Hunger = (float)Math.Max(0, c.Hunger - got); c.Joy = Math.Min(1, c.Joy + 0.1f); c.AteAt = t; Meals++; }
                 break;
             }
             case UseKind.Drink when a.IsPerson:
             {
                 double want = Math.Max(15, c.Thirst * 0.02 * BodyWater0 + 10);
                 double got = _net != null ? Math.Min(_net.WaterTank, want) : want;
-                if (_net != null) _net.WaterTank -= got;
+                if (_net != null) { _net.WaterTank -= got; sim.Book.Add(Res.Water, Flow.Drunk, -got); }
                 _life!.Drink(c.Body, got);
                 WaterDrunk += got;
                 c.DrankAt = t; Drinks++;
@@ -230,7 +241,7 @@ public sealed partial class Mind
         }
         if (c.Holding != iExt || c.HoldCharge <= 0.5f)
         {
-            if (c.Holding == iExt) { c.Holding = 255; c.HoldCharge = 0; } // 빈 소화기는 버린다
+            if (c.Holding == iExt) UseHeld(sim, a); // 빈 소화기는 버린다
             Fail(sim, a, "소화기가 비었다");
             return;
         }
@@ -259,7 +270,7 @@ public sealed partial class Mind
         if (t - c.StepStart < Time.Minutes(minutes)) return;
         double area = F.Hole[wall], max = kit.MaxArea * (a.IsPerson ? 1 : 2);
         _st!.Patch(wall, (float)Math.Max(0, area - max));
-        if (a.IsPerson) { c.Holding = 255; c.HoldCharge = 0; }
+        if (a.IsPerson) UseHeld(sim, a);
         Patched++;
         int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} {(doorGap ? "문틈" : "구멍")}을 막았다", t, wall,
             doorGap ? _st.LowSideCause(wall) : _st.DamageCause[wall], 0, a.Id);
@@ -293,7 +304,7 @@ public sealed partial class Mind
         {
             _st.FreeDoor(door);
             if (_st.DoorDeltaP(door) > 3) _st.RequestDoor(door, 0); // 바람이 빨려 든다 — 바로잡은 김에 닫는다
-            if (a.IsPerson) { c.Holding = 255; c.HoldCharge = 0; }
+            if (a.IsPerson) UseHeld(sim, a);
             int jc = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} 끼인 문을 비틀어 바로잡았다", t, wall, _st.DamageCause[wall], 0, a.Id);
             sim.Facts.Emit(t, FactKind.Repaired, wall, (float)_st.DoorDeltaP(door), jc, a.Id, -1);
             Forget(a, b => b.Kind == BeliefKind.Strain && Dist(b.Cell, wall) <= 1);
@@ -302,7 +313,7 @@ public sealed partial class Mind
             return;
         }
         _st.Brace(wall);
-        if (a.IsPerson) { c.Holding = 255; c.HoldCharge = 0; }
+        if (a.IsPerson) UseHeld(sim, a);
         string what = L.Kind[wall] == CellKind.Door ? "문" : "벽";
         int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} 끼익거리는 {Ko.Eul(what)} 덧대 받쳤다", t, wall, _st.DamageCause[wall], 0, a.Id);
         sim.Facts.Emit(t, FactKind.Repaired, wall, _st.Stress[wall], cause, a.Id, -1);
@@ -326,8 +337,8 @@ public sealed partial class Mind
         if (t - c.StepStart < Time.Minutes(minutes)) return;
         foreach (var (need, n) in r.Needs)
             for (int k = 0; k < n; k++)
-                if (!TakeOne(c.Cell, ItemIndex(need))) { Fail(sim, a, "재료가 없다"); return; }
-        Stock[bench * ItemCount + item]++;
+                if (!TakeOne(c.Cell, ItemIndex(need), sim)) { Fail(sim, a, "재료가 없다"); return; }
+        Stock[bench * ItemCount + item]++; sim.Book.AddItem(item, Flow.Crafted, 1);
         if (_work != null) _work.Crafted++;
         if (a.IsPerson) c.SkRepair = Math.Min(1, c.SkRepair + 0.005f);
         JobDone(a, t);
@@ -344,8 +355,8 @@ public sealed partial class Mind
         Activity(a, "work");
         double minutes = a.IsPerson ? 20 * (1.6 - c.SkRepair) : 15;
         if (t - c.StepStart < Time.Minutes(minutes)) return;
-        if (a.IsPerson) { c.Holding = 255; c.HoldCharge = 0; }
-        else if (!TakeOne(c.Cell, iRepair)) { Fail(sim, a, "갈아 끼울 부품이 없다"); return; }
+        if (a.IsPerson) UseHeld(sim, a);
+        else if (!TakeOne(c.Cell, iRepair, sim)) { Fail(sim, a, "갈아 끼울 부품이 없다"); return; }
         _net.Repair(dev, (Part)part);
         if (_work != null) _work.Maintained++;
         int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} {_net.Devices[dev].Name}의 {Device.PartName((Part)part)} 부품을 미리 갈았다", t, _net.Devices[dev].Cell, 0, 0, a.Id);
@@ -368,12 +379,48 @@ public sealed partial class Mind
                 {
                     int k = L.Index(x, y);
                     if (_life != null) _life.Mold[k] = 0;
-                    // 고인 물을 닦아 물탱크로 (재생기가 다시 쓴다)
+                    // 고인 물을 닦아 오수 통으로 (재활용 장치가 걸러 다시 쓴다)
                     double w = F.Stored(T.sWater, k);
-                    if (w > 0 && _net != null) _net.WaterTank += F.TakeStore(k, T.sWater, w);
+                    if (w > 0 && _net != null) _net.WasteWater += F.TakeStore(k, T.sWater, w);
                 }
         }
         if (_work != null) _work.Cleaned++;
+        JobDone(a, t);
+    }
+
+    /// <summary>⑪ 작물 거두기: 10분 — 다 자란 몫을 손에 든다 (장부: 식량이 들어왔다 · 들고 있어도 배의 식량).</summary>
+    private void HarvestStep(Sim sim, Agent a, PlanStep st)
+    {
+        ref var c = ref a.C;
+        long t = sim.Tick;
+        if (_life == null || st.Target >= _life.Crops.Count) { JobDone(a, t); return; }
+        ref var crop = ref CollectionsMarshal.AsSpan(_life.Crops)[st.Target];
+        if (Dist(c.Cell, crop.Cell) > 2) { Fail(sim, a, "멀다"); return; }
+        Activity(a, "work");
+        if (t - c.StepStart < Time.Minutes(a.IsPerson ? 10 * (1.5 - c.SkFarm) : 10)) return;
+        float got = crop.Biomass;
+        if (got <= 0) { JobDone(a, t); return; }
+        crop.Biomass = 0;
+        if (c.Holding != 255) DropHeld(a);
+        c.Holding = iHarvest; c.HoldCharge = got;
+        sim.Book.Add(Res.Food, Flow.Harvest, got);
+        if (_work != null) _work.Harvested++;
+        if (a.IsPerson) c.SkFarm = Math.Min(1, c.SkFarm + 0.005f);
+        Next(a, t);
+    }
+
+    /// <summary>든 수확물을 식량 창고에 넣는다 (1분).</summary>
+    private void StowStep(Sim sim, Agent a, PlanStep st)
+    {
+        ref var c = ref a.C;
+        long t = sim.Tick;
+        var fu = L.Furniture[st.Target];
+        if (c.Holding != iHarvest) { JobDone(a, t); return; }
+        if (Dist(c.Cell, fu.Cells[0]) > 2) { Fail(sim, a, "멀다"); return; }
+        Activity(a, "work");
+        if (t - c.StepStart < Time.Minutes(1)) return;
+        F.AddStore(fu.Cells[0], T.sFood, c.HoldCharge);
+        c.Holding = 255; c.HoldCharge = 0;
         JobDone(a, t);
     }
 
@@ -405,7 +452,7 @@ public sealed partial class Mind
         double minutes = a.IsPerson ? P.Items["수리 꾸러미"].Minutes * (1.6 - c.SkRepair) : 15;
         if (t - c.StepStart < Time.Minutes(minutes)) return;
         _net.Repair(dev, (Part)st.Arg);
-        if (a.IsPerson) { c.Holding = 255; c.HoldCharge = 0; c.SkRepair = Math.Min(1, c.SkRepair + 0.01f); }
+        if (a.IsPerson) { UseHeld(sim, a); c.SkRepair = Math.Min(1, c.SkRepair + 0.01f); }
         Repaired++;
         int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} {Ko.Eul(_net.Devices[dev].Name)} 고쳤다", t, _net.Devices[dev].Cell, c.GoalCause, 0, a.Id);
         sim.Facts.Emit(t, FactKind.Repaired, _net.Devices[dev].Cell, st.Arg, cause, a.Id, dev);

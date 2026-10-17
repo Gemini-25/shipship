@@ -55,6 +55,7 @@ public enum GoalKind : byte
     Craft,      // ⑪ 작업대에서 물건을 만든다
     Maintain,   // ⑪ 닳은 부품을 미리 간다
     Clean,      // ⑪ 곰팡이를 닦아 낸다
+    Harvest,    // ⑪ 다 자란 작물을 거둬 식량 창고(냉장고 · 배식기)에 넣는다
 }
 
 /// <summary>계획의 한 단계.</summary>
@@ -75,6 +76,8 @@ public enum StepKind : byte
     Craft,     // 만든다 (Target: 작업대 설비 · Arg: 물건)
     Maintain,  // 부품을 미리 간다 (Target: 장치 · Arg: 부품)
     Clean,     // 닦는다 (Cell)
+    Harvest,   // 작물을 거둔다 (Target: 작물 번호) — 손에 수확물을 든다
+    Stow,      // 든 수확물을 식량 창고에 넣는다 (Target: 설비)
 }
 
 /// <summary>쓰기 단계가 하는 일.</summary>

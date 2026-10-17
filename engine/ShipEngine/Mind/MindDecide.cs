@@ -114,7 +114,7 @@ public sealed partial class Mind
             ref var c = ref _deciding.C;
             if (c.AssignedGoal == g && c.AssignedUntil > _nowTick && (c.AssignedTarget < 0 || c.AssignedTarget == target
                 || g is GoalKind.FightFire or GoalKind.Patch or GoalKind.Brace or GoalKind.Investigate && cell >= 0 && Dist(c.AssignedTarget, cell) <= 3))
-                score += g is GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean && _deciding.IsPerson ? 1 : 3; // 주컴퓨터가 맡긴 일 (사람의 일상 일은 끼니 · 잠보다 앞서지 않게)
+                score += g is GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest && _deciding.IsPerson ? 1 : 3; // 주컴퓨터가 맡긴 일 (사람의 일상 일은 끼니 · 잠보다 앞서지 않게)
         }
         _opts.Add(new Option { Goal = g, Target = target, Cell = cell, Score = score, Cause = cause });
     }
@@ -457,6 +457,23 @@ public sealed partial class Mind
                 plan.Add(new PlanStep { Kind = StepKind.Clean, Cell = o.Target });
                 return true;
             }
+            case GoalKind.Harvest:
+            {
+                // 다 자란 작물 → 손에 들고 → 가까운 식량 창고 (냉장고가 먼저 — 썩지 않게)
+                if (_life == null || o.Target >= _life.Crops.Count || c.Holding != 255 && c.Holding != iHarvest) return false;
+                int crop = _life.Crops[o.Target].Cell;
+                int store = Nearest(crop, _food, fu => L.Furniture[fu].Type == "Fridge");
+                if (store < 0) store = Nearest(crop, _food, _ => true);
+                if (store < 0) return false;
+                if (c.Holding != iHarvest)
+                {
+                    plan.Add(Go(crop, 1));
+                    plan.Add(new PlanStep { Kind = StepKind.Harvest, Target = o.Target });
+                }
+                plan.Add(Go(L.Furniture[store].Cells[0], 1));
+                plan.Add(new PlanStep { Kind = StepKind.Stow, Target = store });
+                return true;
+            }
             case GoalKind.Evacuate:
             {
                 int refuge = FindRefuge(a, here, o.Target, o.Cell);
@@ -630,11 +647,14 @@ public sealed partial class Mind
         if (!a.IsPerson && c.AssignedGoal == GoalKind.Investigate && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0) Add(GoalKind.Investigate, c.AssignedTarget, c.AssignedTarget, 1.2f);
         // 맡긴 끼인 문: 믿음이 바래도 간다
         if (!a.IsPerson && c.AssignedGoal == GoalKind.Brace && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0 && _st != null && _st.JammedAt(c.AssignedTarget)) Add(GoalKind.Brace, c.AssignedTarget, c.AssignedTarget, 1.2f);
-        if (c.AssignedUntil <= _nowTick || c.AssignedGoal is not (GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean)) return;
+        // 거둔 것을 들고 있으면 (하던 일이 끊겼어도) 식량 창고에 넣는다
+        if (c.Holding == iHarvest && _life != null && _life.Crops.Count > 0) Add(GoalKind.Harvest, 0, c.Cell, 1.0f);
+        if (c.AssignedUntil <= _nowTick || c.AssignedGoal is not (GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest)) return;
         int cell = c.AssignedGoal switch
         {
             GoalKind.Craft => L.Furniture[c.AssignedTarget].Cells[0],
             GoalKind.Maintain => _net != null ? _net.Devices[c.AssignedTarget / 4].Cell : -1,
+            GoalKind.Harvest => _life != null && c.AssignedTarget < _life.Crops.Count ? _life.Crops[c.AssignedTarget].Cell : -1,
             _ => c.AssignedTarget,
         };
         if (cell >= 0) Add(c.AssignedGoal, c.AssignedTarget, cell, 1.2f);

@@ -344,13 +344,14 @@ public static partial class Program
             s8.Run(Time.Minutes(2));
             Check("뜨거워진 배터리는 열폭주로 불이 난다", ch8.Ignitions > 0 && n8.IsBroken(bat.Id, Part.Electric), $"발화 {ch8.Ignitions}");
 
-            // 산소 발생기: 사람이 없으면 산소가 는다 · 물탱크가 준다
+            // 산소 발생기: 배 공기의 산소가 모자라면(5% 뺌 → 19.9kPa) 물을 갈라 산소를 낸다 · 물탱크가 준다 (넉넉하면 쉰다 — ⑪ 물자의 산소 조절 시험)
             var s9 = ShipWorld.Create("Kestrel", 5);
             var n9 = s9.Get<Network>(); var f9 = s9.Get<Field>();
+            for (int c = 0; c < f9.Cells; c++) f9.RemoveGas(c, f9.T.gO2, f9.Gas(f9.T.gO2, c) * 0.05);
             double o2a = f9.Total(f9.T.gO2), w0 = n9.WaterTank;
             s9.Run(Time.Hours(2));
-            Check("산소 발생기는 물을 갈라 산소를 낸다 (물탱크가 준다 · 수소는 배 밖으로)", f9.Total(f9.T.gO2) > o2a && n9.WaterTank < w0 && n9.VentedH2 > 0,
-                $"산소 {o2a:0} → {f9.Total(f9.T.gO2):0}몰 · 물 {w0 / 55.5:0}L → {n9.WaterTank / 55.5:0}L");
+            Check("산소가 모자라면 산소 발생기가 물을 갈라 산소를 낸다 (물탱크가 준다 · 수소는 배 밖으로)", f9.Total(f9.T.gO2) > o2a && n9.WaterTank < w0 && n9.VentedH2 > 0,
+                $"산소 {o2a:0} → {f9.Total(f9.T.gO2):0}몰 · 물 {w0 / 55.5:0}L → {n9.WaterTank / 55.5:0}L · 분압 {n9.PpO2:0.00}kPa");
         }
 
         if (Do("생명"))
@@ -446,8 +447,10 @@ public static partial class Program
             n8.SetOn(off, false);
             s8.Run(Time.Hours(12));
             var lit = l8.Crops.Skip(1).Average(c => c.Biomass);
-            Check("재배등이 켜진 재배대는 반나절에 자라고 · 꺼진 것은 거의 안 자란다 (사람이 없으면 이산화탄소가 모자라 느리다)", lit > 0.15 && l8.Crops[0].Biomass < lit * 0.3,
-                $"켜진 것 평균 {lit:0.00}몰 · 꺼진 것 {l8.Crops[0].Biomass:0.00}몰 · 재배대 {l8.Crops.Count}");
+            double ideal = l8.Crops.Skip(1).Average(c => s8.Layout.Furniture[n8.Devices[c.Device].Furniture].Cells.Length * Field.CellFloor) * Life.CropMolPerM2Day / 2;
+            // 실제 수확량: 1m²에 하루 0.1몰 (먹는 부분 18g — NASA BPC) → 반나절에 재배대 넓이 × 0.05몰이 다 자란 몫
+            Check("재배등이 켜진 재배대는 반나절에 자라고(1m²에 하루 0.1몰 — 실제 수확량 · 사람이 없어 이산화탄소가 모자라 그 몇 할) · 꺼진 것은 거의 안 자란다", lit > ideal * 0.25 && lit <= ideal * 1.0001 && l8.Crops[0].Biomass < lit * 0.3,
+                $"켜진 것 평균 {lit:0.000}몰 (다 자라면 {ideal:0.000}) · 꺼진 것 {l8.Crops[0].Biomass:0.000}몰 · 재배대 {l8.Crops.Count}");
 
             // 곰팡이: 습하고 따뜻한 방에서 자란다
             var s9 = World(w => { var f = w.Get<Field>(); f.Adiabatic = true; /* 난방 장치가 없는 글자 도면 — 얼지 않게 */ foreach (int c in lay.Rooms.First(r => r.Cells.Contains(a)).Cells) { f.AddStore(c, f.T.sWater, 80); f.AddGas(c, f.T.gH2O, 1.5, f.Temp(c)); } var net = w.Get<Network>(); for (int d = 0; d < net.Devices.Count; d++) if (net.Devices[d].Def.Role == "dehumid") net.SetOn(d, false); });
@@ -559,6 +562,6 @@ public static partial class Program
         WorkRules();
         ViewRules();
         SoundRules();
-        LifeRules();
+        LifeRules(); LedgerRules();
     }
 }
