@@ -556,5 +556,6 @@ public static partial class Program
         SocietyRules();
         WorkRules();
         ViewRules();
+        SoundRules();
     }
 }

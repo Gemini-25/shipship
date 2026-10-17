@@ -16,6 +16,15 @@ public enum SoundKind : byte
     Creak,      // 끼익 (압력을 버티는 문 · 벽)
 }
 
+/// <summary>낸 소리 하나 (보기용 기록).</summary>
+public struct Emission
+{
+    public long Tick;
+    public SoundKind Kind;
+    public int Cell, Source, Actor, Cause;
+    public float Db;           // 1m에서의 크기
+}
+
 /// <summary>들린 소리 하나.</summary>
 [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, Pack = 1)] // 찍기는 바이트를 그대로 쓴다 — 정렬용 빈 바이트(쓰레기 값)가 없게
 public struct Heard
@@ -56,12 +65,24 @@ public sealed class Sound : IEngine
 
     public Sound(Field f) { F = f; L = f.L; }
 
+    // ── 보기용 기록: 낸 소리 사건 (관전 화면의 소리 엔진이 읽는다 — 세계는 읽지 않고 찍지도 않는다 · 되살린 세계는 빈 기록에서) ──
+    public const int LogSize = 1024;
+    private readonly Emission[] _log = new Emission[LogSize];
+    public long Logged { get; private set; }
+    /// <summary>번호 from(누계) 이후 낸 소리들 (기록에 남은 것만).</summary>
+    public IEnumerable<Emission> LogSince(long from)
+    {
+        for (long i = Math.Max(from, Logged - LogSize); i < Logged; i++) yield return _log[i % LogSize];
+    }
+
     /// <summary>칸 cell에서 크기 db(1m에서의 dB)의 소리가 난다 (source: 들은 이가 아는 소리의 자리 — 없으면 cell).</summary>
     public int Emit(Sim sim, int cell, float db, SoundKind kind, int cause = 0, int actor = -1, int source = -1)
     {
         int src = source >= 0 ? source : cell;
         int ev = ++_nextEvent;
         Emitted++;
+        _log[Logged % LogSize] = new Emission { Tick = sim.Tick, Kind = kind, Cell = cell, Source = src, Db = db, Actor = actor, Cause = cause };
+        Logged++;
         if (Thin(cell) <= 0) return ev; // 진공: 아무도 못 듣는다
         var best = new Dictionary<int, float> { [cell] = db };
         var pq = new PriorityQueue<int, float>();

@@ -29,6 +29,8 @@ public sealed class LiveShow
     public readonly Director Dir;         // 산 세계의 연출 (다시보기 고리: 2분마다 찍기 1시간치)
     public readonly Painter Painter;
     public readonly string ShipName;
+    /// <summary>소리 엔진의 귀 — 화면이 한 장 나아갈 때마다 들은 것을 섞개로 보낸다 (Audio/Acoustics.cs).</summary>
+    public readonly ShipView.Audio.Acoustics Ears = new();
 
     // ── 다시보기: 하이라이트의 첫 조짐 직전 찍기에서 되살린 세계를 따로 돌려 보여 준다 (그동안 산 세계는 멈춘다) ──
     private Sim? _replay;
@@ -139,6 +141,7 @@ public sealed class LiveShow
         else if (Follow && vd.FocusCell >= 0) { tx = L.X(vd.FocusCell) + 0.5; ty = L.Y(vd.FocusCell) + 0.5; tw = Math.Clamp(vd.Zoom, FollowMin, FollowMax); }
         double k = 1 - Math.Exp(-realSec * 2.5);
         CamX += (tx - CamX) * k; CamY += (ty - CamY) * k; ViewW += (tw - ViewW) * k;
+        Ears.Update(this, realSec);
         return n;
     }
 

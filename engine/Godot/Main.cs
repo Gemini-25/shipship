@@ -6,6 +6,7 @@ using System.Threading;
 using Godot;
 using ShipEngine;
 using ShipView;
+using ShipView.Audio;
 using Thread = System.Threading.Thread;
 using Time = ShipEngine.Time;
 
@@ -48,6 +49,13 @@ public partial class Main : Node2D
     private bool _dragging;
     private Vector2 _pressAt; private float _dragDist;
 
+    // ── 소리: 작업 스레드의 귀가 보낸 것을 메인 스레드의 섞개가 받아 그리고, Godot에는 다 섞인 소리만 밀어 넣는다 ──
+    private readonly Mixer _mix = new();
+    private AudioStreamGeneratorPlayback? _playback;
+    private float[] _audio = new float[4096];
+    private Vector2[] _push = Array.Empty<Vector2>();
+    private bool _mute;
+
     // ── 확인용 (명령 줄: --shots=폴더 --every=초 --for=초) — 몇 초마다 화면을 찍고, 끝나면 프레임 시간을 적고 나간다 ──
     private string? _shotDir;
     private double _shotEvery = 10, _runFor, _runT, _nextShot = 3;
@@ -58,6 +66,10 @@ public partial class Main : Node2D
     {
         LoadFonts();
         TextureFilter = TextureFilterEnum.Nearest;
+        var player = new AudioStreamPlayer { Stream = new AudioStreamGenerator { MixRate = Dsp.Rate, BufferLength = 0.2f } };
+        AddChild(player);
+        player.Play();
+        _playback = player.GetStreamPlayback() as AudioStreamGeneratorPlayback;
         _ships = Layout.ShipKeys().ToArray();
         string ship = _ships.Contains("Kestrel") ? "Kestrel" : _ships.FirstOrDefault() ?? "Kestrel";
         foreach (var a in OS.GetCmdlineUserArgs())
@@ -164,12 +176,29 @@ public partial class Main : Node2D
             _shown = f;
             _gotFrames++; _picsTotal++;
         }
+        PumpAudio();
         _fpsFrames++;
         _meterT += delta;
         if (_meterT >= 1) { _picPerSec = _gotFrames; _screenPerSec = _fpsFrames; _gotFrames = _fpsFrames = 0; _meterT = 0; }
         if (_helpLeft > 0) { _helpLeft -= delta; if (_helpLeft <= 0) _help = false; }
         QueueRedraw();
         if (_shotDir != null || _runFor > 0) Check(delta);
+    }
+
+    /// <summary>소리: 귀가 보낸 것을 받고, Godot 소리 버퍼가 빈 만큼 섞어 채운다 (메인 스레드 — 세계가 무거운 순간에도 이어 도는 소리는 끊기지 않는다).</summary>
+    private void PumpAudio()
+    {
+        var show = _show;
+        if (show == null || _playback == null) return;
+        _mix.Take(show.Ears);
+        int frames = Math.Min(_playback.GetFramesAvailable(), 4096);
+        if (frames <= 0) return;
+        if (_audio.Length < frames * 2) _audio = new float[frames * 2];
+        if (_push.Length != frames) _push = new Vector2[frames];
+        _mix.Master = _mute ? 0 : 0.9f;
+        _mix.Render(_audio, frames);
+        for (int i = 0; i < frames; i++) _push[i] = new Vector2(_audio[2 * i], _audio[2 * i + 1]);
+        _playback.PushBuffer(_push);
     }
 
     /// <summary>확인용: 화면을 찍고 · 프레임 시간을 모으고 · 정한 시간이 지나면 적고 나간다.</summary>
@@ -240,7 +269,7 @@ public partial class Main : Node2D
         }
 
         if (f.Card.Length > 0) DrawCard(f, vp);
-        if (_meter) DrawString(_font, new Vector2(vp.X - 300, 60), $"초당 화면 {_screenPerSec}장 · 그림 {_picPerSec}장", HorizontalAlignment.Right, 284, 14, new Color(0.6f, 0.9f, 0.6f));
+        if (_meter) DrawString(_font, new Vector2(vp.X - 340, 60), $"초당 화면 {_screenPerSec}장 · 그림 {_picPerSec}장 · 소리 {_mix.Voices}개", HorizontalAlignment.Right, 324, 14, new Color(0.6f, 0.9f, 0.6f));
         if (_help) DrawHelp(vp);
     }
 
@@ -277,6 +306,7 @@ public partial class Main : Node2D
             "B  방금 그 장면 다시보기 (한 번 더 누르면 돌아오기)",
             "사람 · 로봇 누르기  생각 · 몸 보기 (그를 따라간다)",
             "N  다음 배      R  같은 배 새로",
+            "M  소리 끄기 · 켜기",
             "H  도움말      Esc  나가기",
         };
         float w = 470, h = 26 + lines.Length * 26;
@@ -310,6 +340,7 @@ public partial class Main : Node2D
                 case Key.R: _seed++; _speedAt = 0; Launch(_ships[_shipAt], _seed); break;
                 case Key.H: _help = !_help; _helpLeft = 0; break;
                 case Key.F3: _meter = !_meter; break;
+                case Key.M: _mute = !_mute; break;
                 case Key.Escape: GetTree().Quit(); break;
             }
         }
