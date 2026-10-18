@@ -130,9 +130,13 @@ public static partial class Program
                 var shot = shots[si];
                 int k = shot.Scene;
                 const int vw = 24, vh = 14;
-                int cx = L.X(shot.Cell), cy = L.Y(shot.Cell);
+                // 그 칸이 그려진 자리 (떨어져 나간 조각의 칸이면 그 조각이 있는 곳 — 배 둘레에 붙이지 않는다)
+                var stc = s2.Find<Structure>();
+                var (fx, fy) = stc != null && stc.Bodies.Count > 1 ? stc.ShipFrameOf(shot.Cell) : (L.X(shot.Cell) + 0.5, L.Y(shot.Cell) + 0.5);
+                bool onFragment = stc != null && stc.Bodies.Count > 1 && stc.BodyOf(shot.Cell) > 0;
+                int cx = (int)Math.Floor(fx), cy = (int)Math.Floor(fy);
                 // 배 안쪽으로 붙인다 (배를 둘러싼 칸 ± 2칸 안에서)
-                int x0 = Math.Clamp(cx - vw / 2, bx0 - 2, Math.Max(bx0 - 2, bx1 + 3 - vw)), y0 = Math.Clamp(cy - vh / 2, by0 - 2, Math.Max(by0 - 2, by1 + 3 - vh));
+                int x0 = onFragment ? cx - vw / 2 : Math.Clamp(cx - vw / 2, bx0 - 2, Math.Max(bx0 - 2, bx1 + 3 - vw)), y0 = onFragment ? cy - vh / 2 : Math.Clamp(cy - vh / 2, by0 - 2, Math.Max(by0 - 2, by1 + 3 - vh));
                 var img = painter.Frame(s2, x0, y0, vw, vh, (int)s2.Tick);
                 string name = $"s{k + 1}-{scenes[k].Frames.Count + 1}.png";
                 Png.WriteRgba(Path.Combine(dir, name), img.W, img.H, img.Px);

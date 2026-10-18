@@ -161,7 +161,7 @@ public sealed class LiveShow
         double tx = CamX, ty = CamY, tw = ViewW;
         if (Overview) { var rb = Reach(); tx = (rb.x0 + rb.x1 + 1) / 2.0; ty = (rb.y0 + rb.y1 + 1) / 2.0; tw = Math.Max(rb.x1 - rb.x0 + 1, (rb.y1 - rb.y0 + 1) / Aspect); }
         else if (Selected >= 0 && FollowSelected) { var (sx, sy) = DrawnAt(Selected); if (!double.IsNaN(sx)) { tx = sx; ty = sy; tw = Math.Clamp(ViewW, FollowMin, FollowMax); } }
-        else if (Follow && vd.FocusCell >= 0) { tx = L.X(vd.FocusCell) + 0.5; ty = L.Y(vd.FocusCell) + 0.5; tw = Math.Clamp(vd.Zoom, FollowMin, FollowMax); }
+        else if (Follow && vd.FocusCell >= 0) { (tx, ty) = CellDrawn(vd.FocusCell); tw = Math.Clamp(vd.Zoom, FollowMin, FollowMax); }
         double k = 1 - Math.Exp(-realSec * 2.5);
         CamX += (tx - CamX) * k; CamY += (ty - CamY) * k; ViewW += (tw - ViewW) * k;
         Ears.Update(this, realSec);
@@ -269,6 +269,18 @@ public sealed class LiveShow
         double px = L.X(a.C.Cell) + 0.5 + nx / (double)Painter.T, py = L.Y(a.C.Cell) + 0.5 + ny / (double)Painter.T;
         var st = World.Find<Structure>();
         int b = st != null && st.Bodies.Count > 1 ? st.BodyOf(a.C.Cell) : 0;
+        if (b <= 0) return (px, py);
+        var (cs, sn, tx, ty) = PoseDrawn(st!, b);
+        return (cs * px - sn * py + tx, sn * px + cs * py + ty);
+    }
+
+    /// <summary>칸 가운데가 그려진 자리 (떨어져 나간 조각의 칸이면 그 조각의 그려진 자세로 — 연출이 고른 곳이 조각 안이어도 카메라가 그리로 간다).</summary>
+    public (double x, double y) CellDrawn(int cell)
+    {
+        var L = Sim.Layout;
+        double px = L.X(cell) + 0.5, py = L.Y(cell) + 0.5;
+        var st = World.Find<Structure>();
+        int b = st != null && st.Bodies.Count > 1 ? st.BodyOf(cell) : 0;
         if (b <= 0) return (px, py);
         var (cs, sn, tx, ty) = PoseDrawn(st!, b);
         return (cs * px - sn * py + tx, sn * px + cs * py + ty);
@@ -538,9 +550,8 @@ public sealed class LiveShow
     /// <summary>카메라를 그 칸으로 (손으로 옮긴 것과 같다).</summary>
     public void LookAt(int cell)
     {
-        var L = Sim.Layout;
         Follow = false; Overview = false; FollowSelected = false;
-        CamX = L.X(cell) + 0.5; CamY = L.Y(cell) + 0.5;
+        (CamX, CamY) = CellDrawn(cell);   // 떨어져 나간 조각의 칸이면 그 조각이 그려진 곳
     }
 
     // ── 겹쳐 보기 (O) ──

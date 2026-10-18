@@ -395,14 +395,18 @@ public static partial class Program
                     (tx, ty) = (lx, ly);
                 }
             }
-            s.Run(40);   // 멀리 간 뒤 전체 보기
+            s.Run(40);   // 멀리 간 뒤 — 조각 안 칸을 보라고 하면 그 조각이 그려진 곳으로 · 그다음 전체 보기
+            int inFrag = Worlds.At(lay, 16, 3);
+            show.LookAt(inFrag);
+            var look = show.Camera(); var (gx, gy) = st.ShipFrameOf(inFrag);
+            bool looked = st.BodyOf(inFrag) == 1 && gx >= look.left && gx <= look.left + look.w && gy >= look.top && gy <= look.top + look.h;
             show.Overview = true; show.Paused = true;
             for (int k = 0; k < 60; k++) show.Advance(1.0 / 12);   // 카메라는 부드럽게 옮겨 간다 (멈춘 채 화면 5초)
             var cam = show.Camera(); var (fx, fy) = show.DrawnBody(1);
             bool seen = fx >= cam.left && fx <= cam.left + cam.w && fy >= cam.top && fy <= cam.top + cam.h;
-            Check("관전 화면: 갈라진 조각은 틱 사이에도 미끄러지듯 움직이고 (화면 한 장에 한 틱 움직임의 4분의 1 아래) · 전체 보기 카메라는 도면 밖으로 멀어진 조각까지 담는다",
-                tickMove > 0.5 && jump < 0.25 * tickMove && seen && (fx < 0 || fx > lay.W || fy < 0 || fy > lay.H),
-                $"한 틱에 가장 멀리 {tickMove:0.00}칸 · 화면 한 장에 가장 멀리 {jump:0.00}칸 · 조각 그려진 자리 {fx:0},{fy:0} (도면 {lay.W}×{lay.H}) · 카메라 {cam.left:0},{cam.top:0} {cam.w:0}×{cam.h:0}");
+            Check("관전 화면: 갈라진 조각은 틱 사이에도 미끄러지듯 움직이고 (화면 한 장에 한 틱 움직임의 4분의 1 아래) · 조각 안 칸을 보라고 하면 카메라가 그 조각으로 가고 · 전체 보기 카메라는 도면 밖으로 멀어진 조각까지 담는다",
+                tickMove > 0.5 && jump < 0.25 * tickMove && seen && looked && (fx < 0 || fx > lay.W || fy < 0 || fy > lay.H),
+                $"조각 안 칸 보기 {looked} · 한 틱에 가장 멀리 {tickMove:0.00}칸 · 화면 한 장에 가장 멀리 {jump:0.00}칸 · 조각 그려진 자리 {fx:0},{fy:0} (도면 {lay.W}×{lay.H}) · 카메라 {cam.left:0},{cam.top:0} {cam.w:0}×{cam.h:0}");
         }
 
         // ── 점화: 배가 가속하면 배만 나아가고 떨어진 조각은 뒤에 남는다 — 멀어진 거리 = ½at² · 몸들의 운동량 = 점화가 넣은 운동량 ──
