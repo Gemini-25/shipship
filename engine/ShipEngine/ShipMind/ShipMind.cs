@@ -868,6 +868,16 @@ public sealed partial class ShipMind : IEngine
                     if (!Attempts.Any(a => a.Incident == xid0 && a.Act == 254 && StillBlocked(a))) { int pb = PlanPerson(sim, ref x); if (pb >= 0) Devise(sim, ref x, pb); }
                     return;
                 }
+                // 판단 엔진 (바): 매뉴얼에 이 꼴의 방법이 있고 기본 절차서가 막힐 것이 센서로 보이면 — 해 보지 않고 바로 그 방법으로 궁리한다
+                int xidM = x.Id;
+                if (ManualFor(sim, x) is int mk && mk != 0 && !Attempts.Any(a => a.Incident == xidM && a.Act is 255 or 254))
+                {
+                    int rb = PlanRobot(sim, x, take: true);
+                    bool robots = _mind.Agents.Any(a => !a.IsPerson && a.C.Up != 0 && a.C.Kind != AgentKind.Drone);
+                    if (rb < 0 && !robots) rb = PlanPerson(sim, ref x);   // 사람에게 부탁하는 것은 로봇이 없는 배에서만 (로봇이 있으면 풀려날 때까지 기다린다)
+                    if (rb >= 0) { Devise(sim, ref x, rb, mk); if (HasPlan(x.Id)) return; }
+                    else if (robots) return;
+                }
                 int o = OutsideOf(x.Room);
                 bool outFirst = x.Kind == IncidentKind.Vacuum ? x.Tries % 2 == 0 || EmptyHeld(x.Room) : x.Tries % 2 == 1;
                 byte pick = 0;
@@ -975,18 +985,32 @@ public sealed partial class ShipMind : IEngine
     }
 
     /// <summary>지어낸 계획을 맡을 로봇: 멈추지 않았고 배터리가 있는 로봇 가운데 이 사건에 가 있거나 · 쉬고 있거나 · 일상 일을 하는 가장 가까운 것 (드론은 아니다).</summary>
-    private int PlanRobot(Sim sim, in Incident x)
+    private int PlanRobot(Sim sim, in Incident x, bool take = false)
     {
         if (_mind == null) return -1;
-        int best = -1, bd = int.MaxValue;
+        int best = -1, bd = int.MaxValue, bestFrom = -1;
         foreach (var a in _mind.Agents)
         {
             if (a.IsPerson || a.C.Up == 0 || a.C.Battery < 0.2f || a.C.Kind == AgentKind.Drone) continue;
             bool mine = a.Id == x.RobotA || a.Id == x.RobotB;
-            if (!mine && a.C.AssignedUntil > sim.Tick && a.C.AssignedGoal is not (GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock)) continue;
+            int from = -1;
+            if (!mine && a.C.AssignedUntil > sim.Tick && a.C.AssignedGoal is not (GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock))
+            {
+                // 덜 급한 사건 일을 하던 로봇은 데려올 수 있다 (급한 차례 — 로봇을 맡기는 때와 같은 셈 · take일 때만)
+                from = take && Rank(x.Kind) <= 3 ? OwnerOf(sim, a.Id) : -1;
+                if (from < 0 || Rank(Incidents[from].Kind) <= Rank(x.Kind)) continue;
+            }
             if (PlanSteps.Any(s => s.Robot == a.Id)) continue;
-            int d = _mind.Dist(a.C.Cell, x.Cell >= 0 ? x.Cell : a.C.Cell) - (mine ? 1000 : 0);
-            if (d < bd) { bd = d; best = a.Id; }
+            int d = _mind.Dist(a.C.Cell, x.Cell >= 0 ? x.Cell : a.C.Cell) - (mine ? 1000 : 0) + (from >= 0 ? 100000 : 0);
+            if (d < bd) { bd = d; best = a.Id; bestFrom = from; }
+        }
+        if (best >= 0 && bestFrom >= 0)
+        {
+            var y = Incidents[bestFrom];
+            if (y.RobotA == best) y.RobotA = -1; else y.RobotB = -1;
+            Incidents[bestFrom] = y;
+            Preempts++;
+            Say(sim, $"{_mind.NameOf(best)}: {RoomName(y.Room)} {KindName(y.Kind)} 일은 미루고 → {RoomName(x.Room)} {KindName(x.Kind)} (더 급하다)");
         }
         return best;
     }

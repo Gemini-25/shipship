@@ -15,6 +15,15 @@ public struct Tried
     public long Tick;
 }
 
+/// <summary>주컴퓨터가 지어 본 방법 (판단 엔진 (바)): 사건 종류 · 조건(그때 기본 절차서가 막힌 까닭) · 이름 — 번호는 사건 종류 · 걸음의 꼴 · 조건으로 매긴다 (방 번호와 상관없다).</summary>
+public struct MethodRec
+{
+    public int Key;
+    public byte Kind;          // IncidentKind
+    public SnagKind SnagIn, SnagOut;   // 안에서 막기 · 바깥에서 막기가 막힌 까닭 (None: 해 보지 않았다)
+    public float Lost;         // 마지막으로 지었을 때 셈한 잃을 공기
+}
+
 /// <summary>지어낸 계획의 한 걸음 (구조의 문 · 방 번호로).</summary>
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct PlanStepRec
@@ -29,6 +38,8 @@ public struct PlanStepRec
     public int Robot;
     public float From;         // 시작할 때의 기압 (되돌리기 · 채우기 — 움직이는지 본다)
     public int Side;           // 이 걸음을 시작할 때 몸이 있어야 할 방 + 1 (풀이기의 셈 — 0: 보지 않는다 · -1: 선체 바깥)
+    public int Method;         // 이 계획의 방법 번호 (판단 엔진 (바) — 통하면 회의 안건 · 매뉴얼은 이 번호로 안다)
+    public byte FromManual;    // 1: 매뉴얼의 방법으로 지었다 (틀어지면 '빼자' 안건)
     public int Uid;            // 걸음마다 바뀌지 않는 번호 — 하는 중에 앞에 걸음을 끼워 넣어도(틈 막기 · 받치기) 되쓰기가 제 걸음을 찾는다 (0: 아직 안 매김)
 }
 
@@ -43,6 +54,9 @@ public sealed partial class ShipMind
 {
     public List<Tried> Attempts = new();
     public List<PlanStepRec> PlanSteps = new();
+    public List<MethodRec> Methods = new();
+    public List<string> MethodNames = new();   // Methods와 같은 차례
+    public long ManualPlans, MethodsWorked, ManualFailed;
     public int IncidentSeq;
     public long Devises, DevisesFound, DevisesFailed, PlanFails, PlansDone, Rehearsals, RehearsalVetoes;
     /// <summary>마지막으로 지어낸 계획의 글 (화면 · 시험).</summary>
@@ -279,7 +293,7 @@ public sealed partial class ShipMind
     /// 기본 절차서의 방법이 다 막혔다 → 그림을 그려 풀이기로 지어낸다. 찾으면 계획을 걸음으로 적고 생각 사슬을 일지에 쓴다 ·
     /// 못 찾으면 '방법이 없다 — 닫아 둔 채 기다린다'를 한 번 쓰고 30분 뒤 다시 궁리한다.
     /// </summary>
-    private void Devise(Sim sim, ref Incident x, int robot)
+    private void Devise(Sim sim, ref Incident x, int robot, int manual = 0)
     {
         if (_mind == null || _st == null || robot < 0) return;
         var pic = Picture(x, robot, out var placeOf);
@@ -328,6 +342,8 @@ public sealed partial class ShipMind
             return;
         }
         DevisesFound++;
+        int method = manual != 0 ? manual : NoteMethod(x, res.Steps, id, res.AirLost);   // 매뉴얼로 지었으면 그 방법의 번호 (통하면 그 항목이 '통했다')
+        if (manual != 0) ManualPlans++;
         int body = pic.Body;
         var expanded = Solver.Expand(pic, res.Steps, Know.All, true);   // 봉하기 → 문 닫기 · 문틈 막기 하나씩 (걸음마다 그때의 그림으로 셈한 분)
         var steps = expanded.Select(e => e.step).ToList();
@@ -339,7 +355,7 @@ public sealed partial class ShipMind
             int side = body < 0 ? 0 : body == pic.Out ? -1 : pic.Room[body] >= 0 ? pic.Room[body] + 1 : 0;   // 이 걸음 앞 몸의 자리 (풀이기의 셈)
             if (s.Act == ActKind.Go) { int to = pic.DA[s.Obj] == body ? pic.DB[s.Obj] : pic.DA[s.Obj]; dest = pic.Room[to]; body = to; }
             PlanSteps.Add(new PlanStepRec { Incident = id, Act = (byte)s.Act, Obj = door ? pic.Door[s.Obj] : pic.Room[s.Obj], Dest = dest, Robot = robot, Expect = minutes,
-                From = s.Act == ActKind.Open ? res.AirLost : 0, Side = side });   // 문 열기: 풀이기가 셈한 잃을 공기 (미리 돌려 보기가 견준다)
+                From = s.Act == ActKind.Open ? res.AirLost : 0, Side = side, Method = method, FromManual = (byte)(manual != 0 ? 1 : 0) });   // 문 열기: 풀이기가 셈한 잃을 공기 (미리 돌려 보기가 견준다)
         }
         // 사람을 먼저 내보내고 봉한다: 내보낼 방의 문틈 막기 · 닫기 앞으로 (나가는 사람이 막은 틈을 떼어 내지 않게)
         int first = PlanSteps.FindIndex(s => s.Incident == id);
@@ -355,11 +371,13 @@ public sealed partial class ShipMind
         }
         // 막은 뒤: 비운 방과 그 방을 다시 채운다 (예비 공기)
         foreach (var r in steps.Where(s => s.Act == ActKind.Pump).Select(s => pic.Room[s.Obj]).Append(x.Room).Distinct().ToList())
-            PlanSteps.Add(new PlanStepRec { Incident = id, Act = (byte)ActKind.Fill, Obj = r, Dest = -1, Robot = robot,
+            PlanSteps.Add(new PlanStepRec { Incident = id, Act = (byte)ActKind.Fill, Obj = r, Dest = -1, Robot = robot, Method = method, FromManual = (byte)(manual != 0 ? 1 : 0),
                 Expect = (float)(L.Rooms[r].Cells.Length * ShipEngine.Picture.MolPerCellAtm / (L.Rooms[r].Cells.Length * 0.06) / 60) });   // 빈 방을 다시 채우는 데 드는 분
         string plan = Solver.Describe(pic, steps);
         LastDevised = plan;
-        string chain = (tried.Length > 0 ? tried + " → " : "") + (res.Invented ? "지어낸 안: " : "다른 안: ") + plan;
+        string chain = manual != 0
+            ? $"매뉴얼(회의에서 넣은 방법 '{MethodLabel(manual)}') — 기본 절차서는 해 보지 않는다 (막힐 것이 보인다): {plan}"
+            : (tried.Length > 0 ? tried + " → " : "") + (res.Invented ? "지어낸 안: " : "다른 안: ") + plan;
         int cause = sim.Causes.Add(CauseKind.Computer, $"주컴퓨터가 궁리했다 — {RoomName(x.Room)} 구멍: {chain} (약 {res.Minutes:0}분 · 잃을 공기 약 {res.AirLost:0}몰)", sim.Tick, x.Cell, x.Cause);
         sim.Facts.Emit(sim.Tick, FactKind.Devised, x.Cell, res.Minutes, cause, -1, x.Room);
         _mind?.NoteComputerPlan(sim.Tick, x.Room, sim.Tick + Time.Minutes(res.Minutes * 2 + 30));   // 사람이 그 방 일로 막혀 궁리하면 이 계획을 따를지 정한다
@@ -488,6 +506,7 @@ public sealed partial class ShipMind
                 {
                     // 몸이 풀이기가 셈한 자리에 없다 (그 사이 움직였다) — 이 그림의 계획은 맞지 않는다: 접고 지금 자리로 다시 궁리한다 (막힌 방법이 아니다 — 금지하지 않는다)
                     Say(sim, $"계획: {StepName(st)} — 몸이 셈한 자리({(st.Side < 0 ? "선체 바깥" : RoomName(st.Side - 1))})에 없다 ({RoomName(_mind.RoomOf(ra.C.Cell))}) · 지금 자리로 다시 궁리한다");
+                    _replanWhy = "몸이 움직였다";   // 방법이 틀어진 것이 아니다
                     EndPlan(sim, id, x, done: false);
                     continue;
                 }
@@ -691,6 +710,82 @@ public sealed partial class ShipMind
         }
     }
 
+    private string _replanWhy = "";
+
+    /// <summary>
+    /// 지은 방법에 번호를 매겨 적는다: 사건 종류 · 걸음의 꼴(풀이기의 묶음 걸음) · 그때 기본 절차서가 막힌 까닭 — 방 번호와 상관없다
+    /// (다른 방에서 같은 꼴로 지으면 같은 번호 — 매뉴얼이 '이럴 때는 이렇게'로 쓴다).
+    /// </summary>
+    private int NoteMethod(in Incident x, List<SolveStep> steps, int id, float lost)
+    {
+        SnagKind Last(byte m) => Attempts.Where(a => a.Incident == id && a.Act == 255 && a.Method == m).OrderBy(a => a.Tick).Select(a => a.Snag).LastOrDefault();
+        SnagKind sIn = Last(1), sOut = Last(2);
+        int key;
+        unchecked
+        {
+            key = 17 + (int)x.Kind * 31;
+            foreach (var s in steps) key = key * 31 + (int)s.Act + 1;
+            key = key * 31 + (int)sIn; key = key * 31 + (int)sOut;
+            if (key == 0) key = 1;
+        }
+        int mi = Methods.FindIndex(m => m.Key == key);
+        var rec = new MethodRec { Key = key, Kind = (byte)x.Kind, SnagIn = sIn, SnagOut = sOut, Lost = lost };
+        string name = MethodText(steps, sIn, sOut);
+        if (mi >= 0) { Methods[mi] = rec; MethodNames[mi] = name; }
+        else { Methods.Add(rec); MethodNames.Add(name); }
+        return key;
+    }
+
+    /// <summary>방법의 이름 (방 이름 없이 — 매뉴얼에 적는 말): '임시 에어락 — 앞방을 봉한다 → … (방이 우주로 트이고 · 바깥으로 나갈 문이 없을 때)'.</summary>
+    private static string MethodText(List<SolveStep> steps, SnagKind sIn, SnagKind sOut)
+    {
+        static string Phrase(ActKind a) => a switch
+        {
+            ActKind.Seal => "앞방을 봉한다", ActKind.Pump => "앞방 공기를 예비 탱크로 되돌린다", ActKind.Fill => "다시 채운다", ActKind.Open => "문을 연다", ActKind.Close => "문을 닫는다",
+            ActKind.Go => "들어간다", ActKind.Patch => "구멍을 막는다", ActKind.Tape => "문틈을 막는다", ActKind.Suit => "우주복을 입는다", ActKind.Clear => "사람을 내보낸다",
+            ActKind.Unjam => "끼인 문을 바로잡는다", ActKind.Brace => "벽을 받친다", _ => "",
+        };
+        var acts = steps.Select(s => s.Act).ToList();
+        var seq = new List<string>();
+        foreach (var a in acts) { string p = Phrase(a); if (p.Length > 0 && (seq.Count == 0 || seq[^1] != p)) seq.Add(p); }
+        string label = acts.Contains(ActKind.Pump) && acts.Contains(ActKind.Patch) ? "임시 에어락" : acts.Contains(ActKind.Suit) ? "우주복을 입고 들어가기" : "지어낸 방법";
+        var when = new List<string>();
+        if (sIn is SnagKind.DoorVacuum or SnagKind.DoorPressure) when.Add("방이 우주로 트였고");
+        if (sOut == SnagKind.NoWayOut) when.Add("바깥으로 나갈 문이 없을 때");
+        return $"{label} — {string.Join(" → ", seq)}{(when.Count > 0 ? $" ({string.Join(" · ", when)})" : "")}";
+    }
+
+    private string MethodLabel(int key) { int mi = Methods.FindIndex(m => m.Key == key); return mi >= 0 ? MethodNames[mi] : "?"; }
+
+    /// <summary>
+    /// 매뉴얼에서 이 사건에 맞는 방법 (⑨가 정한 매뉴얼을 읽는다): 사건 종류가 같고 · 그 방법을 짓던 때 기본 절차서가 막힌 까닭이 **지금 센서로 보이면**
+    /// (외판에 구멍 · 방 기압이 바닥 → 안에서 막기는 문이 안 열린다 · 바깥문이 없는 방 → 바깥에서 막기 길이 없다). 센서로 알 수 없는 까닭이면 쓰지 않는다 (해 봐야 안다).
+    /// </summary>
+    private int ManualFor(Sim sim, in Incident x)
+    {
+        var soc = sim.Find<Society>();
+        if (soc == null || soc.Manual.Count == 0) return 0;
+        foreach (var e in soc.Manual)
+        {
+            if (e.Removed != 0) continue;
+            int mi = Methods.FindIndex(m => m.Key == e.Key);
+            if (mi < 0 || Methods[mi].Kind != (byte)x.Kind) continue;
+            if (Foresee(x, 1, Methods[mi].SnagIn) && Foresee(x, 2, Methods[mi].SnagOut)) return e.Key;
+        }
+        return 0;
+    }
+
+    /// <summary>기본 절차서의 방법이 그 까닭으로 막힐 것이 센서로 보이나 (None: 조건 없음).</summary>
+    private bool Foresee(in Incident x, byte method, SnagKind k)
+    {
+        if (k == SnagKind.None) return true;
+        // 안에서 막기: 그 방이 우주로 트였다 (선체 센서가 아는 구멍 · 또는 방 기압이 바닥) — 문 밸브가 기압을 맞출 수 없다
+        if (method == 1 && k is SnagKind.DoorVacuum or SnagKind.DoorPressure) return RoomHoleArea(x.Room, out _) > 0 || RoomSeen[x.Room] != 0 && RoomKPa[x.Room] < 10;
+        // 바깥에서 막기: 배에 바깥문(에어락)이 하나도 없다 — 바깥으로 나갈 길이 없다 (있는데 못 닿는 것은 해 봐야 안다)
+        if (method == 2 && k == SnagKind.NoWayOut) return !L.Doors.Any(d => d.External);
+        return false;
+    }
+
     /// <summary>몸이 하는 걸음 (몸의 자리가 맞아야 한다).</summary>
     private static bool BodyStep(byte act) => (ActKind)act is ActKind.Go or ActKind.Patch or ActKind.Unjam or ActKind.Tape or ActKind.Suit or ActKind.Brace;
 
@@ -815,7 +910,28 @@ public sealed partial class ShipMind
         foreach (var s in PlanSteps.Where(s => s.Incident == id && s.Act == (byte)ActKind.Pump && s.State != 0))
             if (_net != null && !Incidents.Any(y => y.Active != 0 && y.Room == s.Obj && y.Kind is IncidentKind.Fire or IncidentKind.CO or IncidentKind.Toxic or IncidentKind.Vacuum)) _net.SetDamper(s.Obj, true);
         var robots = PlanSteps.Where(s => s.Incident == id).Select(s => s.Robot).Distinct().ToList();
+        int method = PlanSteps.Where(s => s.Incident == id).Select(s => s.Method).FirstOrDefault();
+        bool fromManual = PlanSteps.Any(s => s.Incident == id && s.FromManual != 0);
         PlanSteps.RemoveAll(s => s.Incident == id);
+        if (method != 0 && !Imagining)
+        {
+            // 판단 엔진 (바): 통한 방법 · 틀어진 매뉴얼 방법은 사실로 알린다 (⑨ 회의가 읽어 안건으로)
+            int mi = Methods.FindIndex(m => m.Key == method);
+            string label = MethodLabel(method);
+            if (done)
+            {
+                MethodsWorked++;
+                int wc = sim.Causes.Add(CauseKind.Computer, $"{(fromManual ? "매뉴얼의 방법이" : "주컴퓨터가 지어낸 방법이")} 통했다 — {label}", sim.Tick, x.Cell, x.Cause);
+                sim.Facts.Emit(sim.Tick, FactKind.MethodWorked, x.Cell, mi >= 0 ? Methods[mi].Lost : 0, wc, -1, method);
+            }
+            else if (fromManual && _replanWhy.Length == 0)
+            {
+                ManualFailed++;
+                int fc = sim.Causes.Add(CauseKind.Computer, $"매뉴얼대로 했다가 틀어졌다 — {label}", sim.Tick, x.Cell, x.Cause);
+                sim.Facts.Emit(sim.Tick, FactKind.MethodFailed, x.Cell, 0, fc, -1, method);
+            }
+        }
+        _replanWhy = "";
         if (_mind != null) foreach (int rb in robots) if (rb >= 0 && rb < _mind.Agents.Count) _mind.Agents[rb].C.AssignedUntil = sim.Tick;
         if (!done) return;
         PlansDone++;
@@ -868,10 +984,15 @@ public sealed partial class ShipMind
         return true;
     }
 
-    private void SavePlan(StateWriter w) { w.List(Attempts); w.List(PlanSteps); w.I32(IncidentSeq); w.I64(Devises); w.I64(DevisesFound); w.I64(DevisesFailed); w.I64(PlanFails); w.I64(PlansDone); w.I64(Rehearsals); w.I64(RehearsalVetoes); w.Str(LastDevised); w.I64(Consults); }
+    private void SavePlan(StateWriter w)
+    {
+        w.List(Attempts); w.List(PlanSteps); w.I32(IncidentSeq); w.I64(Devises); w.I64(DevisesFound); w.I64(DevisesFailed); w.I64(PlanFails); w.I64(PlansDone); w.I64(Rehearsals); w.I64(RehearsalVetoes); w.Str(LastDevised); w.I64(Consults);
+        w.List(Methods); w.I32(MethodNames.Count); foreach (var n in MethodNames) w.Str(n); w.I64(ManualPlans); w.I64(MethodsWorked); w.I64(ManualFailed);
+    }
     private void LoadPlan(StateReader r)
     {
         Attempts = r.List<Tried>(); PlanSteps = r.List<PlanStepRec>(); IncidentSeq = r.I32();
         Devises = r.I64(); DevisesFound = r.I64(); DevisesFailed = r.I64(); PlanFails = r.I64(); PlansDone = r.I64(); Rehearsals = r.I64(); RehearsalVetoes = r.I64(); LastDevised = r.Str() ?? ""; Consults = r.I64();
+        Methods = r.List<MethodRec>(); MethodNames.Clear(); int nn = r.I32(); for (int i = 0; i < nn; i++) MethodNames.Add(r.Str() ?? ""); ManualPlans = r.I64(); MethodsWorked = r.I64(); ManualFailed = r.I64();
     }
 }

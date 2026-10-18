@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace ShipEngine;
 
 /// <summary>회의의 안건.</summary>
-public enum CouncilKind : byte { None, Trial, Election, Ration }
+public enum CouncilKind : byte { None, Trial, Election, Ration, Manual }
 
 /// <summary>열린 회의 하나.</summary>
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -53,6 +53,7 @@ public sealed partial class Society
             if (f.Kind is FactKind.Ignition or FactKind.FireSpread or FactKind.WallBreach or FactKind.RegionVented or FactKind.PressureDrop or FactKind.Collapsed or FactKind.Died or FactKind.Panicked
                 || f.Kind == FactKind.Shelter && f.Size > 0) _lastCrisis = f.Tick;
             if (f.Kind == FactKind.LogShown && f.Actor >= 0 && f.Actor < N) _logShownAt[f.Actor] = f.Tick;
+            if (f.Kind is FactKind.MethodWorked or FactKind.MethodFailed) ManualFact(sim, f);   // 판단 엔진 (바): 통한 방법 · 틀어진 매뉴얼 방법이 안건이 된다
         }
         _councilCursor = sim.Facts.Total;
         if (Meeting.Kind != CouncilKind.None) { MeetingStep(sim); return; }
@@ -62,7 +63,7 @@ public sealed partial class Society
         double hour = Time.HourOfDay(sim.Tick);
         if (hour < 8 || hour > 20) return;
         if (People().Count < 3) return;
-        if (!TryTrial(sim) && !TryRation(sim)) TryElection(sim);
+        if (!TryTrial(sim) && !TryRation(sim) && !TryManual(sim)) TryElection(sim);
     }
 
     private void HungerWatch(Sim sim)
@@ -139,6 +140,7 @@ public sealed partial class Society
             {
                 CouncilKind.Trial => GrudgeOf(a, subject) + Math.Max(0, BondOf(a, subject)) + 0.3f * Math.Max(0, BondOf(a, caller)),
                 CouncilKind.Ration => c.Hunger,
+                CouncilKind.Manual => 0.2f + 0.3f * c.Consc,   // 배의 일 — 성실한 이일수록 온다
                 _ => 0.3f,
             };
             if (a == subject || a == caller || a == accuser || interest + 0.3f * c.Extra + 0.3f * c.Consc + 0.2f >= 0.5f) who[a] = 1;
@@ -206,6 +208,9 @@ public sealed partial class Society
             case CouncilKind.Ration:
                 op = c.Hunger + 0.3f * (1 - c.Consc) - 0.4f * Trust(a) - 0.3f;
                 break;
+            case CouncilKind.Manual:
+                op = ManualOpinion(a);
+                break;
             default:
                 return 0;
         }
@@ -231,6 +236,7 @@ public sealed partial class Society
             CouncilKind.Ration when op > 0.4f => "이러다 다 굶어 죽는다 — 배급은 그만두자",
             CouncilKind.Ration when op > 0 => "조금만 더 먹게 하자",
             CouncilKind.Ration => "참아야 한다 — 식량이 바닥나면 끝이다",
+            CouncilKind.Manual => ManualLine(op),
             _ when a < Respect.Length && Candidates().Contains(a) => "제가 맡겠습니다",
             _ => "누가 맡든 따르겠다",
         };
@@ -340,6 +346,9 @@ public sealed partial class Society
                 if (pass) Mutinies++; else MutiniesFailed++;
                 break;
             }
+            case CouncilKind.Manual:
+                ManualDecide(sim, m);
+                break;
         }
         Close(sim, 0, null);
     }
@@ -353,6 +362,7 @@ public sealed partial class Society
             sim.Facts.Emit(sim.Tick, FactKind.Meeting, Meeting.Cell, -1, c, Meeting.Caller, Meeting.Subject);
             if (why == -1) CouncilsFailed++; else CouncilsBroken++;
             if (Meeting.Kind == CouncilKind.Trial && Meeting.Subject >= 0 && Meeting.Subject < _triedAt.Length) _triedAt[Meeting.Subject] = sim.Tick - Time.Hours(24 * 4);   // 열리지 못했으면 하루 뒤 다시
+            if (Meeting.Kind == CouncilKind.Manual && _agendaNow.key != 0) { _manualAgenda.Insert(0, _agendaNow); _agendaNow = default; }   // 매뉴얼 안건은 다음 회의로
         }
         _mind!.Gather(-1, -1, 0, 0, null);
         Meeting = default;
@@ -360,7 +370,7 @@ public sealed partial class Society
     }
 
     /// <summary>시험용: 지금 안건을 찾는다 (하루 한 번 · 시간대 · 위기 미룸 없이 · 선거는 이틀을 기다리지 않는다).</summary>
-    public void CouncilNow(Sim sim) { _lastCouncil = long.MinValue / 2; if (Meeting.Kind == CouncilKind.None) { if (People().Count >= 3 && !TryTrial(sim) && !TryRation(sim)) TryElection(sim, force: true); } }
+    public void CouncilNow(Sim sim) { _lastCouncil = long.MinValue / 2; if (Meeting.Kind == CouncilKind.None) { if (People().Count >= 3 && !TryTrial(sim) && !TryRation(sim) && !TryManual(sim)) TryElection(sim, force: true); } }
     /// <summary>시험용: 배고픔이 그때부터 이어졌다고 친다.</summary>
     public void HungrySince(long tick) => _hungrySince = tick;
 
@@ -372,6 +382,7 @@ public sealed partial class Society
         w.I64(Councils); w.I64(CouncilsFailed); w.I64(CouncilsBroken); w.I64(Trials); w.I64(Convictions); w.I64(Acquittals); w.I64(Elections); w.I64(Mutinies); w.I64(MutiniesFailed);
         w.Arr(_attend.ToArray()); w.Arr(_opinion.ToArray()); w.I32(_spoke); w.F32(_repOp); w.Byte(_repSpoke);
         w.I64(_lastCouncil); w.I64(_hungrySince); w.I64(_councilCursor); w.I64(_lastCrisis); w.Arr(_triedAt); w.Arr(_logShownAt);
+        SaveManual(w);
     }
     private void LoadCouncil(StateReader r)
     {
@@ -380,5 +391,6 @@ public sealed partial class Society
         Councils = r.I64(); CouncilsFailed = r.I64(); CouncilsBroken = r.I64(); Trials = r.I64(); Convictions = r.I64(); Acquittals = r.I64(); Elections = r.I64(); Mutinies = r.I64(); MutiniesFailed = r.I64();
         _attend.Clear(); _attend.AddRange(r.Arr<int>()); _opinion.Clear(); _opinion.AddRange(r.Arr<float>()); _spoke = r.I32(); _repOp = r.F32(); _repSpoke = r.Byte();
         _lastCouncil = r.I64(); _hungrySince = r.I64(); _councilCursor = r.I64(); _lastCrisis = r.I64(); _triedAt = r.Arr<long>(); _logShownAt = r.Arr<long>();
+        LoadManual(r);
     }
 }

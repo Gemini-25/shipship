@@ -105,6 +105,9 @@ public enum FactKind : ushort
     Blocked,           // 일이 막혔다 (Size: SnagKind · Actor: 막힌 이 · Other: 대상 — 문 · 물건)
     Devised,           // 궁리해 다른 방법을 지어냈다 (Size: 걸릴 분 · Actor: 지어낸 이 — −1 주컴퓨터 · Other: 그 방)
     Consulted,         // 사람이 막혀 주컴퓨터에 길을 물었다 (Actor: 물은 이 · Other: 그 방 · Cell: 막으려던 구멍 · Size: 1이면 주컴퓨터가 도우면 된다는 것까지 떠올렸다)
+    MethodWorked,      // 지어낸 방법(또는 매뉴얼의 방법)이 끝까지 통했다 (Other: 방법 번호 · Size: 잃은 공기 몰 · Actor: 지은 이 — −1 주컴퓨터)
+    MethodFailed,      // 매뉴얼대로 한 계획이 틀어졌다 (Other: 방법 번호 · Actor: −1 주컴퓨터)
+    ManualChanged,     // 회의가 매뉴얼을 고쳤다 (Size: 1 넣음 · −1 뺌 · 0 부결 · Other: 방법 번호 · Actor: 연 이)
 }
 
 public static class FactNames
@@ -128,7 +131,8 @@ public static class FactNames
         FactKind.Talk => "이야기", FactKind.Blamed => "탓", FactKind.Fight => "몸싸움", FactKind.Sabotage => "몰래 한 짓", FactKind.Pilfer => "몰래 먹었다", FactKind.Rationed => "배급", FactKind.Treated => "돌봤다", FactKind.Confessed => "털어놓았다", FactKind.Burn => "점화", FactKind.Fell => "넘어졌다", FactKind.Contact => "다른 배", FactKind.Jumper => "연장선", FactKind.Salvaged => "떼어 냈다", FactKind.Aim => "인생 목표",
         FactKind.ShipSplit => "배가 갈라졌다",
         FactKind.Lie => "거짓말", FactKind.LieExposed => "거짓말이 들통났다", FactKind.LogAsked => "기록을 물었다", FactKind.LogShown => "주컴퓨터 기록", FactKind.Shelter => "대피", FactKind.Meeting => "회의", FactKind.Verdict => "판결", FactKind.Elected => "대표를 뽑았다", FactKind.Mutiny => "배급 반란",
-        FactKind.ComputerJournal => "일지", FactKind.ComputerBroadcast => "아침 방송", FactKind.Switched => "껐다", FactKind.Blocked => "막혔다", FactKind.Devised => "궁리했다", FactKind.Consulted => "주컴퓨터에 물었다", _ => "",
+        FactKind.ComputerJournal => "일지", FactKind.ComputerBroadcast => "아침 방송", FactKind.Switched => "껐다", FactKind.Blocked => "막혔다", FactKind.Devised => "궁리했다", FactKind.Consulted => "주컴퓨터에 물었다",
+        FactKind.MethodWorked => "방법이 통했다", FactKind.MethodFailed => "매뉴얼대로 했다가 틀어졌다", FactKind.ManualChanged => "매뉴얼을 고쳤다", _ => "",
     };
 }
 
