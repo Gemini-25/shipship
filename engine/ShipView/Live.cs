@@ -293,6 +293,8 @@ public sealed class LiveShow
                 return lines.ToArray();
             }
             lines.Add("생각: " + (b.Conscious == 0 ? "(의식이 없다)" : b.Asleep != 0 ? "(자는 중)" : mind.Thought(a.Id)));
+            string pondered = mind.RecentThought(a.Id, w.Tick, Time.Hours(1));   // 판단 엔진: 막혀서 한 궁리 (한 시간 안)
+            if (pondered.Length > 0) lines.Add("궁리: " + (pondered.StartsWith("생각: ") ? pondered[4..] : pondered));
             string state = b.Conscious == 0 ? "쓰러짐" : b.Asleep != 0 ? "잠" : "깨어 있음";
             lines.Add($"몸: {state} · 핏속 산소 {b.SpO2 * 100:0}% · 체온 {b.CoreK - 273.15:0.0}℃{(b.Suit != 0 ? " · 우주복" : "")}");
             var hurt = new List<string>();
@@ -565,11 +567,15 @@ public sealed class LiveShow
                     if (x.Sealed != 0) who.Add("봉쇄");
                     if (mind != null) foreach (int r in new[] { x.RobotA, x.RobotB }) if (r >= 0 && r < mind.Agents.Count) who.Add($"{mind.NameOf(r)}에게 맡김");
                     if (x.Person >= 0 && mind != null && x.Person < mind.Agents.Count) who.Add($"{mind.NameOf(x.Person)}이(가) 받아 줌");
+                    string plan = sm.PlanLine(x.Id), chain = plan.Length > 0 ? sm.ChainLine(x) : "";   // 판단 엔진: 지어낸 계획 — 생각 사슬 · 걸음 (✔ 마침 · ▶ 하는 중)
                     rows.Add(new PanelRow($"지금 · {sm.RoomName(x.Room)}: {ShipMind.KindName(x.Kind)} ({Math.Max(0, now - x.Since) / (double)Time.Minutes(1):0}분째)",
-                        who.Count > 0 ? string.Join(" · ", who) : "아직 손을 쓰지 못했다", true));
+                        (who.Count > 0 ? string.Join(" · ", who) : "아직 손을 쓰지 못했다") + (chain.Length > 0 ? "\n궁리: " + chain : "") + (plan.Length > 0 ? "\n계획: " + plan : ""), true));
                 }
                 string blind = sm.BlindLine();
                 rows.Add(new PanelRow("배 형편", sm.ShipLine(Sim, true) + (blind.Length > 0 ? "\n" + blind : "") + (sm.HelmLine.Length > 0 ? "\n항로: " + sm.HelmLine : ""), false));
+                var manual = Sim.Find<Society>()?.Manual.Where(e => e.Removed == 0).ToList();   // 판단 엔진 (바): 회의가 넣은 매뉴얼
+                if (manual != null && manual.Count > 0)
+                    rows.Add(new PanelRow($"매뉴얼 ({manual.Count})", string.Join("\n", manual.Select(e => $"{e.Name} — 찬성 {e.Yes}/{e.Of} · 통한 번 {e.Wins}{(e.Fails > 0 ? $" · 틀어진 번 {e.Fails}" : "")}")), false));
                 int head = rows.Count;
                 for (int i = sm.Journal.Count - 1; i >= 0; i--)
                 {
@@ -629,8 +635,9 @@ public sealed class LiveShow
                         }
                         if (trust >= 0) near.Add($"가장 믿는 이 {mind.NameOf(trust)}"); if (grudge >= 0) near.Add($"앙금 {mind.NameOf(grudge)}");
                     }
+                    string pondered = b.Alive != 0 ? mind.RecentThought(id, w.Tick, Time.Hours(1)) : "";
                     rows.Add(new PanelRow($"{mind.NameOf(id)} — {state}",
-                        $"몸: {string.Join(" · ", body)}{(heart.Count > 0 ? " / 마음: " + string.Join(" · ", heart) : "")}{(near.Count > 0 ? "\n" + string.Join(" · ", near) : "")}", danger));
+                        $"몸: {string.Join(" · ", body)}{(heart.Count > 0 ? " / 마음: " + string.Join(" · ", heart) : "")}{(near.Count > 0 ? "\n" + string.Join(" · ", near) : "")}{(pondered.Length > 0 ? "\n궁리: " + (pondered.StartsWith("생각: ") ? pondered[4..] : pondered) : "")}", danger));
                 }
                 break;
             }

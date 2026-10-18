@@ -1,4 +1,5 @@
 using ShipEngine;
+using ShipView;
 
 namespace Lab;
 
@@ -205,6 +206,17 @@ public static partial class Program
             string thought = m[who].LastThought;
             if (Environment.GetEnvironmentVariable("RULE_DEBUG") == "1") { Console.WriteLine($"    ({sc}) 궁리 {m.Ponders} · 제 궁리 {m.PondersOwn} · 물음 {m.PondersAsked} · 모름 {m.PondersLost} · 배움 {m.PondersLearned} · 해냄 {m.OwnDone} · '{thought}' · 그만둠 '{m[who].LastFail}'"); foreach (var x in sm.Log) Console.WriteLine($"      {Time.Clock(x.tick)} {x.text}"); }
             string state = $"궁리 {m.Ponders} · 제 궁리 {m.PondersOwn} · 물음 {m.PondersAsked}(주컴퓨터 받음 {sm.Consults}) · 모름 {m.PondersLost} · 배움 {m.PondersLearned} · 기압 앎 {kn0:0.00}→{m[who].C.KnPressure:0.00} · 구멍 {f.Hole[hole] * 1e4:0}cm² · 몸 {(b.Alive == 0 ? "숨짐" : b.Conscious == 0 ? "쓰러짐" : "멀쩡")} · '{thought}'";
+            if (sc == '가')
+            {
+                // 화면 (사): 고른 사람의 카드 · 사람 판(P)에 그 궁리 (한 시간 안)
+                var show = new ShipView.LiveShow(s, "시험호") { Selected = who };
+                var card = show.Card();
+                show.TogglePanel(PanelKind.People);
+                var prow = show.PanelRows().FirstOrDefault(r => r.Main.StartsWith(m.NameOf(who)));
+                Check("화면 (사): 막혀 궁리한 사람의 카드 · 사람 판에 '궁리: …' (방을 막지 못한 까닭과 끝 — 방법을 모르겠다)",
+                    card.Any(l => l.StartsWith("궁리: ") && l.Contains("모르겠다")) && prow.Sub != null && prow.Sub.Contains("궁리: "),
+                    $"카드 '{card.FirstOrDefault(l => l.StartsWith("궁리")) ?? "없음"}' · 사람 판 '{prow.Sub?.Split('\n').LastOrDefault()}'");
+            }
             if (sc == '가')
                 Check("사람의 궁리 (가): 기압을 모르는 이는 우주로 트인 방 문 앞에서 막혀 배우고 · 주컴퓨터가 없는 배에서 혼자 길이 없으면 '방법을 모르겠다'",
                     m.PondersLearned >= 1 && m[who].C.KnPressure > kn0 && m.PondersLost >= 1 && thought.Contains("모르겠다") && b.Alive != 0, state);

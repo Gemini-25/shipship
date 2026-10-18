@@ -786,6 +786,22 @@ public sealed partial class ShipMind
         return false;
     }
 
+    /// <summary>화면용: 그 사건 계획의 걸음 — ✔ 마침 · ▶ 하는 중 · · 남음 (계획이 없으면 빈 글).</summary>
+    public string PlanLine(int incident)
+    {
+        var steps = PlanSteps.Where(s => s.Incident == incident).ToList();
+        if (steps.Count == 0) return "";
+        return string.Join(" · ", steps.Select(s => (s.State == 2 ? "✔ " : s.State == 1 ? "▶ " : "") + StepName(s)));
+    }
+
+    /// <summary>화면용: 그 사건 방의 마지막 생각 사슬 (일지의 '생각:' 줄 — '생각:'은 떼고).</summary>
+    public string ChainLine(in Incident x)
+    {
+        string head = $"생각: {RoomName(x.Room)} ";
+        for (int i = Log.Count - 1; i >= 0; i--) if (Log[i].text.StartsWith(head, StringComparison.Ordinal)) return Log[i].text[4..];
+        return "";
+    }
+
     /// <summary>몸이 하는 걸음 (몸의 자리가 맞아야 한다).</summary>
     private static bool BodyStep(byte act) => (ActKind)act is ActKind.Go or ActKind.Patch or ActKind.Unjam or ActKind.Tape or ActKind.Suit or ActKind.Brace;
 

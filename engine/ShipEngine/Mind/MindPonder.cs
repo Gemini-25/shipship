@@ -149,9 +149,12 @@ public sealed partial class Mind
 
     private int Thought(Sim sim, Agent a, string text)
     {
-        a.LastThought = text;
+        a.LastThought = text; a.LastThoughtTick = sim.Tick;
         return sim.Causes.Add(CauseKind.Person, $"{Ko.I(NameOf(a.Id))} {text}", sim.Tick, a.C.Cell, a.C.GoalCause, 0, a.Id);
     }
+
+    /// <summary>화면용: 그 사람의 최근 궁리 (within 안이면 — 아니면 빈 글).</summary>
+    public string RecentThought(int agent, long now, long within) => agent >= 0 && agent < Agents.Count && now - Agents[agent].LastThoughtTick <= within ? Agents[agent].LastThought : "";
 
     private static void AvoidFor(Agent a, GoalKind g, int target, long until)
     {

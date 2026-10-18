@@ -251,5 +251,6 @@ public sealed class Agent
     public int PathIdx;
     public string LastFail = "";   // 관찰용: 마지막으로 그만둔 까닭 (찍지 않는다)
     public string LastThought = "";   // 관찰용: 마지막 궁리 (찍지 않는다)
+    public long LastThoughtTick = long.MinValue / 2;   // 관찰용: 그때 (찍지 않는다)
     public bool IsPerson => C.Kind == AgentKind.Person;
 }

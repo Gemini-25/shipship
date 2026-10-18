@@ -78,7 +78,8 @@ public sealed partial class Director
         FactKind.Woke => 2, FactKind.ComputerAssign => 4, FactKind.Sick => 8,
         FactKind.Relationship => 12, FactKind.Grieved => 30, FactKind.TrustLost => 25, FactKind.WentOutside => 20,
         FactKind.Talk => 2, FactKind.Blamed => 15, FactKind.Fight => 60, FactKind.Sabotage => 40, FactKind.Confessed => 30,
-        FactKind.Burn => 14, FactKind.Fell => 22, FactKind.Contact => 12, FactKind.Jumper => 16, FactKind.Salvaged => 14, FactKind.Aim => 18, FactKind.ShipSplit => 100, FactKind.Lie => 30, FactKind.LieExposed => 50, FactKind.LogShown => 6, FactKind.Shelter => 22, FactKind.Meeting => 25, FactKind.Verdict => 45, FactKind.Elected => 35, FactKind.Mutiny => 60, FactKind.Devised => 30, FactKind.Consulted => 14, _ => 1,
+        FactKind.Burn => 14, FactKind.Fell => 22, FactKind.Contact => 12, FactKind.Jumper => 16, FactKind.Salvaged => 14, FactKind.Aim => 18, FactKind.ShipSplit => 100, FactKind.Lie => 30, FactKind.LieExposed => 50, FactKind.LogShown => 6, FactKind.Shelter => 22, FactKind.Meeting => 25, FactKind.Verdict => 45, FactKind.Elected => 35, FactKind.Mutiny => 60, FactKind.Devised => 30, FactKind.Consulted => 14,
+        FactKind.MethodWorked => 40, FactKind.MethodFailed => 25, FactKind.ManualChanged => 30, _ => 1,   // 궁리 끝에 해낸 일 · 매뉴얼대로 했다가 틀어진 일 · 회의가 매뉴얼을 고친 일
     };
 
     /// <summary>사실 하나의 무게 — 대화는 끝에 따라 (다툼 · 사과 · 위로 · 소문은 볼 만하고 잡담은 거의 0) · 끝장 몸싸움은 더.</summary>
@@ -97,7 +98,7 @@ public sealed partial class Director
     };
 
     /// <summary>사람 이야기 사실인가 (관계 · 대화 · 싸움 · 몰래 한 짓 · 슬픔).</summary>
-    public static bool PeopleFact(FactKind k) => k is FactKind.Talk or FactKind.Blamed or FactKind.Fight or FactKind.Sabotage or FactKind.Relationship or FactKind.Grieved or FactKind.TrustLost or FactKind.Confessed or FactKind.Lie or FactKind.LieExposed or FactKind.Meeting or FactKind.Verdict or FactKind.Elected or FactKind.Mutiny;
+    public static bool PeopleFact(FactKind k) => k is FactKind.Talk or FactKind.Blamed or FactKind.Fight or FactKind.Sabotage or FactKind.Relationship or FactKind.Grieved or FactKind.TrustLost or FactKind.Confessed or FactKind.Lie or FactKind.LieExposed or FactKind.Meeting or FactKind.Verdict or FactKind.Elected or FactKind.Mutiny or FactKind.ManualChanged;
 
     private static bool Critical(FactKind k) => k is FactKind.Died or FactKind.Collapsed or FactKind.WallBreach or FactKind.DoorBlown or FactKind.Panicked or FactKind.Fight or FactKind.ShipSplit;
     private static bool Omen(FactKind k) => k is FactKind.DebrisNear or FactKind.ComputerAlarm or FactKind.StorySeed or FactKind.WallCrack or FactKind.Flare or FactKind.Noticed or FactKind.Warned or FactKind.Blamed;

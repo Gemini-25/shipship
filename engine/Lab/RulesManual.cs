@@ -1,4 +1,5 @@
 using ShipEngine;
+using ShipView;
 
 namespace Lab;
 
@@ -41,11 +42,15 @@ public static partial class Program
         }
         void Keep(Sim s, Mind m, List<int> p) { foreach (int a in p) { ref var c = ref m[a].C; c.Sleepy = 0; c.Hunger = 0; c.Thirst = 0; s.Get<Life>()[c.Body].Asleep = 0; } }
         // 구멍을 내고 막힐 때까지 (많아야 세 시간) — 계획을 지은 데 걸린 틱 · 막은 데 걸린 틱
-        (long devise, long patch) Breach(Sim s, Mind m, ShipMind sm, Field f, List<int> p, int hole)
+        (long devise, long patch) Breach(Sim s, Mind m, ShipMind sm, Field f, List<int> p, int hole, Action? midPlan = null)
         {
             long t0 = s.Tick, dv = -1; long d0 = sm.DevisesFound;
             f.SetHole(hole, 0.02f);
-            for (int k = 0; k < (int)Time.Hours(3) && f.Hole[hole] > 0; k++) { s.Step(); Keep(s, m, p); if (dv < 0 && sm.DevisesFound > d0) dv = s.Tick - t0; }
+            for (int k = 0; k < (int)Time.Hours(3) && f.Hole[hole] > 0; k++)
+            {
+                s.Step(); Keep(s, m, p); if (dv < 0 && sm.DevisesFound > d0) dv = s.Tick - t0;
+                if (midPlan != null && sm.PlanSteps.Any(q => q.Act == (byte)ActKind.Pump && q.State == 1)) { midPlan(); midPlan = null; }   // 공기를 되돌리는 동안 한 번 (화면 시험)
+            }
             long pt = f.Hole[hole] <= 0 ? s.Tick - t0 : -1;
             for (int k = 0; k < (int)Time.Hours(2) && sm.PlanSteps.Count > 0; k++) { s.Step(); Keep(s, m, p); }   // 다시 채우기까지 (계획이 끝나야 '통했다')
             return (dv, pt);
@@ -57,7 +62,8 @@ public static partial class Program
         // ── (바-가) · (바-나): 주컴퓨터를 믿는 배 ──
         {
             var (s, m, soc, sm, f, p) = World(0.65f);
-            var (dv1, pt1) = Breach(s, m, sm, f, p, hole1);
+            PanelRow[] mid = Array.Empty<PanelRow>();
+            var (dv1, pt1) = Breach(s, m, sm, f, p, hole1, () => { var show = new ShipView.LiveShow(s, "시험호"); show.TogglePanel(PanelKind.Journal); mid = show.PanelRows(); });
             long worked = s.Facts.CountOf(FactKind.MethodWorked);
             Meet(s, m, soc, p);
             var changed = s.Facts.Since(0).LastOrDefault(x => x.Kind == FactKind.ManualChanged);
@@ -67,6 +73,16 @@ public static partial class Program
             Check("매뉴얼 (가): 지어낸 계획으로 구멍을 막으면 '통했다'가 회의 안건이 되고 · 모여 한 마디씩 · 과반이면 매뉴얼에 넣는다",
                 pt1 > 0 && worked >= 1 && soc.Manual.Count(e => e.Removed == 0) == 1 && changed.Size > 0 && lines.Any(l => l.Contains("매뉴얼에 넣자")),
                 $"막음 {pt1 / (double)Time.Minutes(1):0}분 · 통했다 {worked} · 매뉴얼 {soc.Manual.Count(e => e.Removed == 0)} · 말 {lines.Count}마디 · {story}");
+
+            // 화면 (사): 주컴퓨터 판(J) — 계획 중인 사건 줄에 생각 사슬 · 걸음(✔ · ▶) / 회의 뒤 '매뉴얼' 줄
+            var after = new ShipView.LiveShow(s, "시험호"); after.TogglePanel(PanelKind.Journal); var rows = after.PanelRows();
+            var planRow = mid.FirstOrDefault(r => r.Main.StartsWith("지금 · ") && r.Sub.Contains("계획: "));
+            var manRow = rows.FirstOrDefault(r => r.Main.StartsWith("매뉴얼"));
+            if (Debug) { Console.WriteLine($"    (사) {planRow.Main}\n      {planRow.Sub?.Replace("\n", "\n      ")}"); Console.WriteLine($"    (사) {manRow.Main}: {manRow.Sub}"); }
+            Check("화면 (사): 주컴퓨터 판에 지어낸 계획의 생각 사슬 · 걸음(✔ 마침 · ▶ 하는 중)이 그 사건 줄에 · 회의 뒤에는 매뉴얼 줄 (찬성 · 통한 번)",
+                planRow.Main != null && planRow.Sub.Contains("궁리: ") && planRow.Sub.Contains("지어낸 안") && planRow.Sub.Contains("▶ ") && planRow.Sub.Contains("✔ ")
+                && manRow.Main == "매뉴얼 (1)" && manRow.Sub.Contains("임시 에어락") && manRow.Sub.Contains("찬성 4/4"),
+                $"사건 줄 '{planRow.Sub?.Split('\n').LastOrDefault()}' · 매뉴얼 줄 '{manRow.Main}: {manRow.Sub}'");
 
             int xs0 = sm.Attempts.Count(a => a.Act == 255);
             var (dv2, pt2) = Breach(s, m, sm, f, p, hole2);
