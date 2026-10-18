@@ -58,6 +58,62 @@ public static partial class Program
                 $"마스크 있음: 씀 {yes.masked} · {yes.why} / 없음: {none.why} · 깨어 있음 {none.up}");
         }
 
+        // ── 갈 곳 없는 나쁜 공기: 배 전체가 54kPa로 고르게 옅다 (산소 11kPa · 예비 공기 없음) — 뛰어다니지 않고 숨을 아낀다 (쉬는 105W) · 마스크가 멀리(22칸) 있으면 가서 쓴다 /
+        //    (고치기 전: 더 나은 칸이 없는데 '피한다'를 되풀이해 열 명이 같은 칸에서 몇 시간 300W로 뛰었다 — 숨이 세 배 · 체온 39℃) ──
+        {
+            (int fleeTicks, double watts, bool masked, string why) Run(bool masks)
+            {
+                var s = Worlds.Full(lay, 6);
+                var m = s.Get<Mind>(); var life = s.Get<Life>(); var f = s.Get<Field>(); var net = s.Get<Network>();
+                net.AirReserve = 0;
+                int p = m.AddPerson(s, At(25, 2));
+                m.SetPersonality(p, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f);
+                if (!masks) for (int fu = 0; fu < s.Layout.Furniture.Count; fu++) m.Stock[fu * m.ItemCount + m.iMask] = 0;
+                s.Run(2);
+                Thin(s, f, Enumerable.Range(0, s.Layout.N).Where(c => s.Layout.IsSpace(c)).ToList(), 0.53);
+                int flee = 0; double w = 0; int n = 0; bool masked = false;
+                for (int k = 0; k < Time.Minutes(25); k++)
+                {
+                    s.Step();
+                    ref var c = ref m[p].C; c.Hunger = 0; c.Thirst = 0; c.Sleepy = 0;
+                    var b = life[c.Body];
+                    if (c.Mode == 1) flee++;
+                    if (k > Time.Minutes(10)) { w += b.ActivityW; n++; }
+                    masked |= b.Mask != 0;
+                }
+                var bb = life[m[p].C.Body];
+                return (flee, w / Math.Max(1, n), masked, $"상태 {m[p].C.Mode} · {m.Thought(p)} · 포화도 {bb.SpO2:0.00} · {f.Pressure(bb.Cell):0}kPa · 산소 {f.Partial(f.T.gO2, bb.Cell):0.0}");
+            }
+            var noneT = Task.Run(() => Run(false)); var yes = Run(true); var none = noneT.Result;
+            Check("갈 곳 없는 나쁜 공기: 배 전체가 고르게 옅으면 뛰어다니지 않고 숨을 아낀다 (쉬는 몸 — 150W 아래) · 마스크가 22칸 밖에 있어도 가서 쓴다",
+                none.fleeTicks < Time.Minutes(2) && none.watts < 150 && !none.masked && yes.masked,
+                $"마스크 없음: 피하기 {Time.ToSeconds(none.fleeTicks) / 60:0.0}분 · 10분 뒤 평균 {none.watts:0}W · {none.why} / 마스크 있음: 씀 {yes.masked} · {yes.why}");
+        }
+
+        // ── 산소 비율 상한: 기압이 낮아진 배에서 산소 분압을 맞추느라 산소 비율이 34%를 넘게 오르지 않는다 (NASA 탐사 대기 56.5kPa · 34% — 불이 붙기 쉬워진다) / 그 아래면 돈다 ──
+        {
+            var gl = new Dictionary<char, string>(legend) { ['o'] = "OxygenGenerator" };
+            var olay = Worlds.Ascii(BreathShip.Replace("#..e.......#.......#.........#\n#####", "#..e.......#..o....#.........#\n#####"), gl);
+            (float duty, double frac) Run(double addO2)
+            {
+                var s = Worlds.Full(olay, 7);
+                var f = s.Get<Field>(); var net = s.Get<Network>();
+                net.AirReserve = 0;
+                s.Run(2);
+                var cells = Enumerable.Range(0, s.Layout.N).Where(c => s.Layout.IsSpace(c)).ToList();
+                Thin(s, f, cells, 0.53);
+                foreach (int c in cells) f.AddGas(c, f.T.gO2, f.Moles(c) * addO2, f.Temp(c));
+                s.Run(Time.Minutes(5));
+                int gen = net.Devices.FindIndex(d => d.Def.Role == "o2gen");
+                double frac = cells.Where(c => f.Pressure(c) > 50).Average(c => f.Partial(f.T.gO2, c) / f.Pressure(c));
+                return (gen >= 0 ? net.Duty[gen] : -1, frac);
+            }
+            var rich = Run(0.25); var lean = Run(0);
+            Check("산소 비율 상한: 54kPa 배에서 산소가 34%를 넘으면 산소 발생기가 멈춘다 (분압이 모자라도) · 21%면 다 돈다",
+                rich.frac > 0.34 && rich.duty == 0 && lean.frac < 0.25 && lean.duty > 0.9f,
+                $"산소 {rich.frac:P0}: 일 몫 {rich.duty:0.00} / 산소 {lean.frac:P0}: 일 몫 {lean.duty:0.00}");
+        }
+
         // ── 긴급 공기: 오른쪽 방이 뚫려 배 전체 예비 공기는 잠겼다 · 문이 닫힌 왼쪽 방이 45kPa로 옅고 (산소 9kPa) 그 방에 사람이 자고 있으면 주컴퓨터가 예비 공기를 그 방에 바로 넣는다 / 사람이 없으면 넣지 않는다 ──
         {
             (float o2, long pumped, double used) Run(bool person)

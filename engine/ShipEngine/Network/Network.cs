@@ -123,6 +123,7 @@ public sealed partial class Network : IEngine
     /// <summary>배의 평균 산소 분압 (kPa — 가압된 방 칸 · 25틱마다 잰다).</summary>
     public double PpO2;
     public const double CoilK = 283.15;              // 공조 열교환판 온도 (이슬점 — ISS 공조는 4~16℃)
+    public const double O2MaxFraction = 0.34;
     public const double O2Target = 21.0, O2Band = 0.5; // 이 분압 아래에서 돌기 시작 · 0.5kPa 아래면 다 돈다 (떠날 때 공기 21.0kPa · ISS 19.5~23.1kPa)
     public double Supplied, Demanded, CoolingKw, ReactorKw, HvacKw;
     /// <summary>지금 돌 수 있는 원자로들의 낼 수 있는 전력 합 (원자로 열을 나눌 때 — 틱마다 다시 센다).</summary>
@@ -361,6 +362,10 @@ public sealed partial class Network : IEngine
                 if (F.Pressure(c) > 50) { sum += F.Partial(T.gO2, c); n++; }
         PpO2 = n > 0 ? sum / n : 0;
         float duty = n > 0 ? (float)Math.Clamp((O2Target - PpO2) / O2Band, 0, 1) : 1;
+        // 산소 비율 상한: 기압이 낮아진 배에서 분압을 맞추느라 산소 비율이 불붙기 쉬운 데까지 오르지 않게 (NASA 탐사 대기 56.5kPa · 34% — 그 위로는 멈춘다)
+        double frac = 0; int m = 0;
+        foreach (var room in L.Rooms) foreach (int c in room.Cells) { double pk = F.Pressure(c); if (pk > 50) { frac += F.Partial(T.gO2, c) / pk; m++; } }
+        if (m > 0 && frac / m > O2MaxFraction) duty = 0;
         for (int d = 0; d < Devices.Count; d++) if (Devices[d].Def.Role == "o2gen") Duty[d] = duty;
     }
 

@@ -114,7 +114,7 @@ public struct AgentCore
     public AgentKind Kind;
     public byte Role;          // 맡은 일 번호 (표 순서 · 255: 없음)
     public byte Up;            // 1: 움직일 수 있다 (사람: 깨어 있고 의식 있음 · 로봇: 멀쩡)
-    public byte Mode;          // 0 보통 · 1 도망 · 2 공황
+    public byte Mode;          // 0 보통 · 1 도망 · 2 공황 · 3 숨을 아낀다 (갈 곳 없는 나쁜 공기)
     public int Name;           // 이름 번호
     public int Body;           // ⑦ 생명의 몸 (-1: 로봇)
     public int Cell;

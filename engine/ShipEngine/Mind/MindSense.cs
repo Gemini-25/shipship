@@ -520,6 +520,14 @@ public sealed partial class Mind
             else if (arrived) StartFlee(sim, a, air);
             return;
         }
+        if (c.Mode == 3)
+        {
+            // 숨을 아낀다: 공기가 나아지면 끝 · 불 · 연기 · 열은 피한다 · 20분마다 다시 살핀다 (그새 좋은 공기가 생겼나)
+            if (!air) { c.Mode = 0; c.Goal = GoalKind.Idle; a.Plan.Clear(); a.Path.Clear(); c.StepIndex = 0; return; }
+            if (heat || smoke || t >= c.ModeUntil) { StartFlee(sim, a, air); return; }
+            if (a.Plan.Count == 0 || c.StepIndex >= a.Plan.Count) { a.Plan.Clear(); a.Plan.Add(Use(UseKind.None, Time.Minutes(5))); c.StepIndex = 0; }
+            return;
+        }
         if (c.Mode == 2)
         {
             if (air || heat || smoke) { StartFlee(sim, a, air); return; }
@@ -543,6 +551,10 @@ public sealed partial class Mind
     {
         ref var c = ref a.C;
         int target = FindSafe(a, c.Cell);
+        // 갈 곳이 없다: 배 전체 공기가 고르게 나쁘다 (안전한 칸이 없고 가장 나은 칸도 산소가 3kPa 넘게 낫지 않다) · 불 · 연기 · 열 때문이 아니다 →
+        // 뛰어다니면 숨만 가쁘다 — 숨을 아낀다 (저산소 환경의 행동 지침: 움직임을 줄이고 산소 공급원을 찾는다)
+        if (air && a.IsPerson && !HeatBad(c.Cell) && !SmokeBad(a, c.Cell) && F.Pressure(c.Cell) >= 25
+            && (target < 0 || !SafeAt(target) && F.Partial(T.gO2, target) - F.Partial(T.gO2, c.Cell) < 3)) { Conserve(sim, a); return; }
         bool first = c.Mode != 1;
         c.Mode = 1; c.Goal = GoalKind.Flee; c.GoalSince = sim.Tick; c.GoalTarget = -1; c.GoalCell = target;
         a.Plan.Clear(); a.Path.Clear(); c.StepIndex = 0;
@@ -569,6 +581,25 @@ public sealed partial class Mind
     }
 
     public const int MaskIfFar = 30, MaskReach = 20;
+    public long Conserves;
+
+    /// <summary>숨을 아낀다 (본능 3): 마스크가 배 어딘가 남았으면 거리와 상관없이 가서 쓰고 · 없으면 그 자리에 앉아 쉰다 (105W — 뛰는 몸은 다섯 배를 쓴다) · 20분마다 다시 살핀다.</summary>
+    private void Conserve(Sim sim, Agent a)
+    {
+        ref var c = ref a.C;
+        bool first = c.Mode != 3;
+        c.Mode = 3; c.Goal = GoalKind.Idle; c.GoalSince = sim.Tick; c.GoalTarget = -1; c.GoalCell = c.Cell; c.ModeUntil = sim.Tick + Time.Minutes(20);
+        a.Plan.Clear(); a.Path.Clear(); c.StepIndex = 0;
+        int box = _life![c.Body].Mask == 0 ? NearestStock(c.Cell, iMask) : -1;
+        if (box >= 0)
+        {
+            a.Plan.Add(new PlanStep { Kind = StepKind.GoTo, Cell = L.Furniture[box].Cells[0] });
+            a.Plan.Add(new PlanStep { Kind = StepKind.Wear, Target = box, Arg = iMask });
+        }
+        a.Plan.Add(Use(UseKind.None, Time.Minutes(5)));
+        c.Fear = Math.Max(c.Fear, 0.6f);
+        if (first) Conserves++;
+    }
 
     private void StartPanic(Sim sim, Agent a)
     {
