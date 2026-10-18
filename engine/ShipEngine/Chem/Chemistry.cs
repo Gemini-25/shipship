@@ -57,7 +57,12 @@ public sealed class Chemistry : IEngine
     private readonly double[] _roarKw;    // 우르릉: 방마다 불의 열 (틱 안에서만)
     private readonly int[] _roarCell, _roarCause;
 
-    private readonly (Reaction full, Reaction? co, Reaction? soot, int store)[] _fuels;
+    /// <summary>탈 것마다: 완전 · 일산화탄소 · 검댕 · 독가스 갈래 (불완전 몫을 나누는 비율) · 저장 · '넉넉한 양' (kg — 이만큼이면 제 빠르기로 탄다).</summary>
+    private readonly (Reaction full, Reaction? co, Reaction? soot, Reaction? tox, double coShare, double sootShare, double toxShare, int store, double kgFull)[] _fuels;
+    private readonly Reaction _pvcPyro, _burnPvc, _burnPoly;
+    /// <summary>달궈진 피복의 탈염화수소 활성화 에너지 (J/몰 — 300℃에서 초당 0.1% · 250℃면 7분의 1 · 430℃면 45배).</summary>
+    public const double PyroEa = 100_000;
+    public double PyroHcl;
     private readonly (Reaction r, int gas, double lfl, double ufl)[] _gasFires;
     private readonly Reaction _ozone;
 
@@ -67,13 +72,18 @@ public sealed class Chemistry : IEngine
         Burning = new byte[Cells]; FireCause = new int[Cells]; HeatCause = new int[Cells]; Hrr = new float[Cells];
         FuelLink = new byte[Cells]; Creep = new float[Cells];
         _spark = new byte[Cells]; _sparkNext = new byte[Cells]; _sparkCause = new int[Cells]; _sparkCauseNext = new int[Cells];
+        // 넉넉한 양: 바퀴 1의 몰 잣대(200몰)를 그대로 질량으로 — 고분자 2.8kg · 섬유 32kg · 음식 36kg · 그을음 2.4kg · 피복 · 폼은 고분자와 같은 2.8kg
         _fuels = new[]
         {
-            (T.R("burn_poly"), (Reaction?)T.R("burn_poly_co"), (Reaction?)T.R("burn_poly_soot"), T.sPoly),
-            (T.R("burn_cell"), T.R("burn_cell_co"), T.R("char_cell"), T.sCell),
-            (T.R("burn_food"), null, null, T.sFood),
-            (T.R("burn_soot"), null, null, T.sSoot),
+            (T.R("burn_poly"), (Reaction?)T.R("burn_poly_co"), (Reaction?)T.R("burn_poly_soot"), (Reaction?)null, 0.6, 0.4, 0.0, T.sPoly, 2.8),
+            (T.R("burn_cell"), T.R("burn_cell_co"), T.R("char_cell"), null, 0.6, 0.4, 0.0, T.sCell, 32.4),
+            (T.R("burn_food"), null, null, null, 0, 0, 0, T.sFood, 36.0),
+            (T.R("burn_soot"), null, null, null, 0, 0, 0, T.sSoot, 2.4),
+            // ② 사고 화학: 피복(PVC)은 어느 갈래든 염소가 염화수소로 · 폼(폴리우레탄)은 산소가 모자라면 질소가 시안화수소로 (불완전 몫의 15% — 폼 불의 HCN 수율 1~2%)
+            (T.R("burn_pvc"), T.R("burn_pvc_co"), T.R("burn_pvc_soot"), null, 0.6, 0.4, 0.0, T.sPvc, 2.8),
+            (T.R("burn_pu"), T.R("burn_pu_co"), T.R("burn_pu_soot"), T.R("burn_pu_hcn"), 0.5, 0.35, 0.15, T.sPu, 2.8),
         };
+        _pvcPyro = T.R("pvc_pyro"); _burnPvc = T.R("burn_pvc"); _burnPoly = T.R("burn_poly");
         // 연소 범위 (공기 중 부피 %): 수소 4~75 · 메탄 5~15 · 일산화탄소 12.5~74 · 암모니아 15~28
         _gasFires = new[]
         {
@@ -126,6 +136,7 @@ public sealed class Chemistry : IEngine
             if (F.RegionOf.Length <= i || F.RegionOf[i] < 0) { if (Burning[i] != 0) Out(sim, i); continue; }
             GasFire(sim, i, dt, nb);
             Quench(i);
+            Pyro(sim, i, dt);
             if (!HasFuel(i)) { if (Burning[i] != 0) Out(sim, i); continue; }
             double tf = F.Tf[i], pO2 = F.Partial(T.gO2, i);
             if (Burning[i] == 0)
@@ -196,15 +207,17 @@ public sealed class Chemistry : IEngine
         {
             double fuel = F.Stored(fu.store, i);
             if (fuel < 1e-6 || F.Tf[i] < fu.full.Def.MinK * 0.8) continue; // 겉면이 식은 연료는 타지 않는다
-            double ff = Math.Min(1, fuel / 200.0) * 0.8 + 0.2 * Math.Min(1, fuel / 20.0);
+            double kg = fuel * T.Substances[T.Stores[fu.store].Index].MolarMass;
+            double ff = Math.Min(1, kg / fu.kgFull) * 0.8 + 0.2 * Math.Min(1, kg * 10 / fu.kgFull);
             double dhFull = -fu.full.DH298; // J/반응몰
             double ext = CellHrr * fu.full.Def.Rate * g * ff / dhFull * dt; // 반응 몰
             if (ext <= 0) continue;
             // 갈래: 완전 · 일산화탄소 · 그을음
             double share = 1 - incomplete;
             heat += React(sim, i, fu.full, ext * share, ref o2Budget);
-            if (fu.co != null) heat += React(sim, i, fu.co, ext * incomplete * 0.6 * (fu.full.In[0].Nu / fu.co.In[0].Nu), ref o2Budget);
-            if (fu.soot != null) heat += React(sim, i, fu.soot, ext * incomplete * 0.4 * (fu.full.In[0].Nu / fu.soot.In[0].Nu), ref o2Budget);
+            if (fu.co != null) heat += React(sim, i, fu.co, ext * incomplete * fu.coShare * (fu.full.In[0].Nu / fu.co.In[0].Nu), ref o2Budget);
+            if (fu.soot != null) heat += React(sim, i, fu.soot, ext * incomplete * fu.sootShare * (fu.full.In[0].Nu / fu.soot.In[0].Nu), ref o2Budget);
+            if (fu.tox != null) heat += React(sim, i, fu.tox, ext * incomplete * fu.toxShare * (fu.full.In[0].Nu / fu.tox.In[0].Nu), ref o2Budget);
         }
         if (FuelLink[i] != 0) heat += CreepFront(sim, i, dt, ref o2Budget, nb);
         if (heat <= 0) return;
@@ -252,18 +265,22 @@ public sealed class Chemistry : IEngine
     /// </summary>
     private double CreepFront(Sim sim, int i, double dt, ref double o2Budget, Span<int> nb)
     {
-        double poly = F.Stored(T.sPoly, i);
-        if (poly < 1e-3) return 0;
+        if (Insul(i) < 1e-3) return 0;
         double v0 = FrontSpeed(i);
-        var full = _fuels[0].full;
-        // 앞머리가 칸 길이(1m)를 지나는 동안 피복을 고르게 먹는다 (남은 것이 적어도 0.5몰 몫의 빠르기 — 꼬리가 길게 끌리지 않게 ·
-        // 다 타기 전에 앞머리가 옆 칸에 닿는다: 불꽃 길이만큼 — 0.8)
-        double heat = v0 > 0 ? React(sim, i, full, Math.Min(poly, Math.Max(poly, 0.5) * v0 * dt * 0.8) / full.In[0].Nu, ref o2Budget) : 0;
+        // 앞머리가 칸 길이(1m)를 지나는 동안 피복을 고르게 먹는다 (남은 것이 적어도 가닥 하나 몫의 빠르기 — 꼬리가 길게 끌리지 않게 ·
+        // 다 타기 전에 앞머리가 옆 칸에 닿는다: 불꽃 길이만큼 — 0.8) · 피복은 PVC와 가소제(고분자) — 둘 다 같은 앞머리에서
+        double heat = 0;
+        if (v0 > 0)
+            foreach (var (store, r, least) in new[] { (T.sPvc, _burnPvc, 0.07), (T.sPoly, _burnPoly, 0.17) })
+            {
+                double amt = F.Stored(store, i);
+                if (amt > 1e-6) heat += React(sim, i, r, Math.Min(amt, Math.Max(amt, least) * v0 * dt * 0.8) / r.In[0].Nu, ref o2Budget);
+            }
         for (int d = 0; d < 4; d++)
         {
             if ((FuelLink[i] & (1 << d)) == 0) continue;
             int j = d switch { 0 => i - F.L.W, 1 => i + 1, 2 => i + F.L.W, _ => i - 1 };
-            if (j < 0 || j >= Cells || Burning[j] != 0 || F.Stored(T.sPoly, j) < 1e-3 || F.RegionOf.Length <= j || F.RegionOf[j] < 0) continue;
+            if (j < 0 || j >= Cells || Burning[j] != 0 || Insul(j) < 1e-3 || F.RegionOf.Length <= j || F.RegionOf[j] < 0) continue;
             double v = v0 + (F.Tf[j] > 420 ? CreepMps * 0.5 : 0);
             if (v <= 0) continue;
             Creep[j] += (float)(v * dt);
@@ -285,7 +302,26 @@ public sealed class Chemistry : IEngine
     }
 
     /// <summary>이어진 피복 위 불꽃 앞머리가 살아 있나 — 그 칸 바닥이 식어도 피복 위 불꽃은 탄다 (산소가 짙을 때).</summary>
-    private bool FrontAlive(int i) => FuelLink[i] != 0 && F.Stored(T.sPoly, i) > 1e-3 && F.Partial(T.gO2, i) >= MinO2kPa && FrontSpeed(i) > 0;
+    private bool FrontAlive(int i) => FuelLink[i] != 0 && Insul(i) > 1e-3 && F.Partial(T.gO2, i) >= MinO2kPa && FrontSpeed(i) > 0;
+
+    /// <summary>칸의 피복 (PVC + 가소제 몫 고분자 — 몰).</summary>
+    private double Insul(int i) => F.Stored(T.sPvc, i) + F.Stored(T.sPoly, i);
+
+    /// <summary>
+    /// 달궈진 피복에서 염화수소가 빠진다 (탈염화수소 — 불꽃 없이 250℃부터: C₂H₃Cl → HCl + 2C + H₂ · 아레니우스) — 타기 전에 매캐하다 ·
+    /// 겉면이 500K 넘는 칸만 (뜨거운 장치 곁 · 불 곁 · 합선 아크).
+    /// </summary>
+    private void Pyro(Sim sim, int i, double dt)
+    {
+        double pvc = F.Stored(T.sPvc, i), tf = F.Tf[i];
+        if (pvc < 1e-6 || tf < _pvcPyro.Def.MinK) return;
+        double k = _pvcPyro.Def.Rate * Math.Exp(-PyroEa / 8.314 * (1 / tf - 1 / 573.0));
+        double ext = pvc * (1 - Math.Exp(-k * dt));
+        double budget = double.MaxValue;
+        double q = React(sim, i, _pvcPyro, ext, ref budget);
+        F.AddSurfaceHeat(i, q);
+        PyroHcl += ext;
+    }
 
     /// <summary>물이 고인 칸: 뜨거운 겉면이 물을 끓여 식는다 (증발열) — 불을 끄는 길.</summary>
     private void Quench(int i)
@@ -427,7 +463,7 @@ public sealed class Chemistry : IEngine
     {
         w.Arr(Burning); w.Arr(FireCause); w.Arr(HeatCause); w.Arr(Hrr); w.Arr(_spark); w.Arr(_sparkCause);
         w.I64(Ignitions); w.I64(GasBursts);
-        w.Arr(FuelLink); w.Arr(Creep); w.I64(Creeps);
+        w.Arr(FuelLink); w.Arr(Creep); w.I64(Creeps); w.F64(PyroHcl);
         w.Tag("폭발 소리"); w.Arr(_boomJ); w.Arr(_boomCell); w.Arr(_boomCause);
     }
 
@@ -435,7 +471,7 @@ public sealed class Chemistry : IEngine
     {
         r.ArrInto(Burning); r.ArrInto(FireCause); r.ArrInto(HeatCause); r.ArrInto(Hrr); r.ArrInto(_spark); r.ArrInto(_sparkCause);
         Ignitions = r.I64(); GasBursts = r.I64();
-        r.ArrInto(FuelLink); r.ArrInto(Creep); Creeps = r.I64();
+        r.ArrInto(FuelLink); r.ArrInto(Creep); Creeps = r.I64(); PyroHcl = r.F64();
         r.Tag("폭발 소리"); r.ArrInto(_boomJ); r.ArrInto(_boomCell); r.ArrInto(_boomCause);
     }
 }

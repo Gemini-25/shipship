@@ -28,8 +28,13 @@ public sealed class Bus
 public sealed partial class Network
 {
     public const double PipeJointK = 603;                 // 관 이음매(납땜 · 패킹)가 풀리는 온도 (330℃)
-    /// <summary>전선 가닥마다 칸에 깔린 피복 (고분자 몰 — 0.5몰 · 7g/m: 우주선 전선은 가늘고 잘 안 타는 피복이지만 달궈지면 탄다 · (다) 불이 피복을 타고 번진다).</summary>
-    public const double InsulMolPerStrand = 0.5;
+    /// <summary>
+    /// 전선 가닥마다 칸에 깔린 피복 (7g/m — 가소 PVC: PVC 65% · 가소제 35%(고분자로 셈) · 합쳐 연소열 26.8MJ/kg): 잘 안 타는 피복이지만 달궈지면 타고 ·
+    /// 타거나 달궈지면 염화수소가 나온다 (② 사고 화학) · (다) 불이 피복을 타고 번진다.
+    /// </summary>
+    public const double InsulPvcMolPerStrand = 7 * 0.65 / 62.5, InsulPlastMolPerStrand = 7 * 0.35 / 14.03;
+    /// <summary>그 칸에 피복을 깐다 (가닥 수만큼).</summary>
+    public void LayInsulation(int c, double strands) { F.AddStore(c, T.sPvc, strands * InsulPvcMolPerStrand); F.AddStore(c, T.sPoly, strands * InsulPlastMolPerStrand); }
     public const double CoolLeakMolPerSec = 0.05, WaterLeakMolPerSec = 0.46;   // 틈 1에서 펌프가 돌 때 (서 있으면 냉각 10분의 1 · 물 20분의 1)
     public static byte Bit(LineKind k) => (byte)(1 << (int)k);
 
@@ -210,7 +215,7 @@ public sealed partial class Network
         foreach (var dp in DataPath) Lay(LineKind.Data, dp);
         _lineCells = Enumerable.Range(0, n).Where(c => LineAt[c] != 0).ToArray();
         // 전선 피복 = 칸 바닥의 탈 것 (③ 장에 요청 — 불이 전선 길을 따라 번진다)
-        foreach (int c in _lineCells) if (Strands[c] > 0) F.AddStore(c, T.sPoly, Strands[c] * InsulMolPerStrand);
+        foreach (int c in _lineCells) if (Strands[c] > 0) LayInsulation(c, Strands[c]);
         _hotBody = new bool[n];
         foreach (var d in Devices) if (d.Def.Role is "reactor" or "engine") foreach (int c in L.Furniture[d.Furniture].Cells) _hotBody[c] = true;
         _lineRoom = new int[n];
@@ -406,8 +411,8 @@ public sealed partial class Network
         if (LineCutAt(cell, LineKind.Power))
         {
             wires.Add("전선"); _insul[cell] = 0; _insulCause[cell] = 0;   // 새 전선으로 이었다 — 새 피복
-            double want = Strands[cell] * InsulMolPerStrand - F.Stored(T.sPoly, cell);
-            if (want > 0) F.AddStore(cell, T.sPoly, want);
+            double want = Strands[cell] * InsulPvcMolPerStrand - F.Stored(T.sPvc, cell);
+            if (want > 0) LayInsulation(cell, want / InsulPvcMolPerStrand);
         }
         bool cool = (LineCut[cell] & Bit(LineKind.Coolant)) != 0 || PipeLeak[cell * 2] > 0, water = (LineCut[cell] & Bit(LineKind.Water)) != 0 || PipeLeak[cell * 2 + 1] > 0;
         if (SpliceData(cell)) wires.Add("센서 선");

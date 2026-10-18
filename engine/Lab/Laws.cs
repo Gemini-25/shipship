@@ -273,6 +273,30 @@ public static partial class Program
             Check("음수가 없다", !f.N.Any(v => v < 0) && !f.Store.Any(v => v < 0) && !f.U.Any(v => v < 0));
         }
 
+        if (Do("독가스"))
+        {
+            Console.WriteLine("\n[② 사고 화학 — 피복 · 폼이 타도 원소 · 에너지 장부 (단열 · 닫힌 방)]");
+            // 한 칸엔 전선 피복(PVC + 가소제)과 폼 · 옆 칸엔 달궈진 피복만 (불꽃 없이 염소가 빠진다)
+            int fire = -1, hot = -1;
+            var s = Worlds.WithChem(Worlds.Ascii(Worlds.Lounge, Worlds.Seats), 1, (f, c) =>
+            {
+                f.Adiabatic = true;
+                fire = Worlds.At(f.L, 3, 3); hot = Worlds.At(f.L, 8, 2);
+                f.AddStore(fire, f.T.sPvc, 30); f.AddStore(fire, f.T.sPu, 20);
+                f.AddStore(hot, f.T.sPvc, 10); f.Tf[hot] = 640;
+                c.Ignite(fire, 3e6, 0);
+            });
+            var f = s.Get<Field>(); var ch = s.Get<Chemistry>();
+            var el0 = f.ElementTotals(); double e0 = f.EnergyLedger();
+            for (int i = 0; i < Time.Minutes(30); i++) s.Step();
+            var el1 = f.ElementTotals(); double e1 = f.EnergyLedger();
+            double worst = el0.Zip(el1).Max(p => Rel(p.First, p.Second));
+            int cl = Array.IndexOf(f.T.ElementSymbols, "Cl"), nIdx = Array.IndexOf(f.T.ElementSymbols, "N");
+            Check("피복 · 폼이 타도 원소 총량이 같다 (염소는 피복 → 염화수소 · 질소는 폼 → 시안화수소 · 질소)", worst < 1e-9 && el0[cl] > 0 && f.Total(f.T.gHCl) > 0 && f.Total(f.T.gHCN) > 0,
+                $"{worst:0.0e0} · 염소 {el0[cl]:0.0}몰 · 염화수소 {f.Total(f.T.gHCl):0.00} · 시안화수소 {f.Total(f.T.gHCN):0.000}몰 · 달궈진 피복이 낸 염화수소 {ch.PyroHcl:0.00}몰");
+            Check("피복 · 폼이 타도 · 달궈진 피복에서 염소가 빠져도 에너지 장부가 같다", Rel(e0, e1) < 1e-9 && ch.PyroHcl > 0, $"{Rel(e0, e1):0.0e0}");
+        }
+
         if (Do("소리"))
         {
             Console.WriteLine("\n[③ 소리]");

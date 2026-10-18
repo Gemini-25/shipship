@@ -556,6 +556,6 @@ public static partial class Program
         WorkRules();
         ViewRules();
         SoundRules();
-        LifeRules(); LedgerRules(); PersonRules(); BondRules(); SeedRules(); ShipRules(); DayRules(); SootRules(); RadiantRules(); FlingRules(); VoyageRules(); SensorRules(); JournalRules(); LeakJudgeRules(); HeartRules(); BandRules(); DoorRequestRules(); CookRules(); RhythmRules(); TogetherRules(); PlaceRules(); AskRules(); SupplyRules(); CareRules(); ArcRules(); BleedRules(); CameraRules(); HearingRules(); MotionRules(); NetRules(); TextRules(); AirlockRules(); AimRules(); CrackRules(); LieRules(); BreathRules(); LessonRules(); WeatherRules(); CouncilRules(); WearyRules(); SnagRules(); ManualRules(); LineRules(); WhyRules(); BodyRules();
+        LifeRules(); LedgerRules(); PersonRules(); BondRules(); SeedRules(); ShipRules(); DayRules(); SootRules(); RadiantRules(); FlingRules(); VoyageRules(); SensorRules(); JournalRules(); LeakJudgeRules(); HeartRules(); BandRules(); DoorRequestRules(); CookRules(); RhythmRules(); TogetherRules(); PlaceRules(); AskRules(); SupplyRules(); CareRules(); ArcRules(); BleedRules(); CameraRules(); HearingRules(); MotionRules(); NetRules(); TextRules(); AirlockRules(); AimRules(); CrackRules(); LieRules(); BreathRules(); LessonRules(); WeatherRules(); CouncilRules(); WearyRules(); SnagRules(); ManualRules(); LineRules(); WhyRules(); BodyRules(); ToxRules();
     }
 }

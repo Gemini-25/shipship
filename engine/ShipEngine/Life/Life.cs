@@ -14,6 +14,7 @@ public struct Body
     public float SpO2;         // 산소 포화도 0~1 (일산화탄소 · 폐 손상 반영)
     public float Hypoxia;      // 산소 부족이 쌓인 것 (0.5 넘으면 쓰러짐 · 3이면 죽음)
     public float COHb;         // 일산화탄소 헤모글로빈 비율
+    public float CN;           // 시안화수소를 마신 양 (Purser FED — 1이면 쓰러지고 3이면 숨진다 · 간이 1시간 반감으로 푼다)
     public float LungDamage;   // 폐 손상 (암모니아 · 오존 · 연기 · 곰팡이 포자)
     public double CoreK;       // 체온 (K)
     public float Burn, Blunt, Barotrauma, Frost;
@@ -292,6 +293,7 @@ public sealed partial class Life : IEngine
         double pO2 = suit ? 21 : F.Partial(T.gO2, c);
         double pCO2 = own ? 0.04 : F.Partial(T.gCO2, c);
         double co = own ? 0 : F.Ppm(T.gCO, c), nh3 = own ? 0 : F.Ppm(T.gNH3, c), o3 = own ? 0 : F.Ppm(T.gO3, c), soot = own ? 0 : F.Ppm(T.gSoot, c);
+        double hcn = own ? 0 : F.Ppm(T.gHCN, c), hcl = own ? 0 : F.Ppm(T.gHCl, c);
         int env = 0; // 이번에 몸을 해친 것의 원인
         string? harm = null;
         if (b.Conscious == 0) b.ActivityW = 80; // 의식 없는 몸은 기초 대사로 (쓰러지기 전 달리던 대사량이 남아 스스로 익지 않게)
@@ -349,16 +351,24 @@ public sealed partial class Life : IEngine
         double eq = 1 - Math.Exp(-co / 1000);
         double tau = 4 * 3600 * 80 / Math.Max(60, b.ActivityW) / (therapy ? 4 : 1); // 순수한 산소는 일산화탄소를 네 배 빨리 밀어낸다
         b.COHb += (float)((eq - b.COHb) * (1 - Math.Exp(-dt / tau)));
+        // 시안화수소 (Purser · ISO 13571): 세포가 산소를 못 쓴다 — 마신 양 FED += ppm^2.36 / 1.2×10⁶ (분마다 · 숨 쉬는 양만큼 — 쉴 때 1 · 힘든 일 2.5배):
+        // 100ppm이면 23분 · 200ppm이면 4.5분에 1 (쓰러짐) · 3이면 숨진다 · 간이 풀어 1시간 반감 (치료 — ⑦)
+        if (hcn > 1) b.CN += (float)(Math.Pow(hcn, 2.36) / 1.2e6 * dt / 60 * Math.Clamp(b.ActivityW / 100, 0.8, 2.5));
+        b.CN = (float)(b.CN * Math.Exp(-0.693 * dt / 3600));
+        if (b.CN > 0.3) { harm ??= "시안화수소에 중독됐다"; env = env == 0 ? EnvCause(sim, c, st, chem) : env; }
         // 이산화탄소 · 독
         if (pCO2 > 7) { b.Hypoxia += (float)((pCO2 - 7) / 5 * dt / 60); harm ??= "이산화탄소가 너무 짙었다"; env = env == 0 ? EnvCause(sim, c, st, chem) : env; }
         if (pCO2 > 3) b.Pain = (float)Math.Min(1, b.Pain + (pCO2 - 3) / 40 * dt / 60);
         double lung = 0;
         // 암모니아: 300ppm은 한 시간 넘게 버티고 · 3000ppm은 30분이면 위태롭고 · 1만ppm은 몇 분 (분마다 폐 손상 0.0167 × (ppm/3000)^1.3)
         if (nh3 > 100) lung += 0.0167 * Math.Pow(nh3 / 3000, 1.3);
+        // 염화수소: 암모니아보다 두 배쯤 독하다 (쥐 LC50 1시간 3100 대 7300ppm) — 50ppm 넘으면 눈 · 목 · 폐를 찌른다
+        if (hcl > 50) lung += 0.0167 * Math.Pow(hcl / 1500, 1.3);
+        if (hcl > 5) b.Pain = (float)Math.Min(1, b.Pain + Math.Min(0.5, hcl / 1000) * dt / 300);   // 눈이 따갑고 기침
         if (o3 > 5) lung += o3 / 200;
         if (soot > 2000) lung += soot / 200_000;
         if (Mold[c] > 0.3f) lung += 0.002;
-        if (lung > 0) { b.LungDamage += (float)(lung * dt / 60); b.Pain = (float)Math.Min(1, b.Pain + lung * dt / 120); harm ??= nh3 > 100 ? "암모니아를 마셨다" : o3 > 5 ? "오존을 마셨다" : "연기를 마셨다"; env = env == 0 ? EnvCause(sim, c, st, chem) : env; }
+        if (lung > 0) { b.LungDamage += (float)(lung * dt / 60); b.Pain = (float)Math.Min(1, b.Pain + lung * dt / 120); harm ??= hcl > 50 ? "염화수소를 마셨다" : nh3 > 100 ? "암모니아를 마셨다" : o3 > 5 ? "오존을 마셨다" : "연기를 마셨다"; env = env == 0 ? EnvCause(sim, c, st, chem) : env; }
         else b.LungDamage = (float)Math.Max(0, b.LungDamage - dt / (14 * 86400));
 
         // ── 체온 ──
@@ -469,7 +479,7 @@ public sealed partial class Life : IEngine
         // ── 의식 · 죽음 ──
         double pain = Math.Min(1, b.Pain + b.Burn * 0.6 + b.Blunt * 0.5 + b.Barotrauma * 0.4);
         b.Pain = (float)Math.Max(0, b.Pain - dt / 1800);
-        bool down = b.Hypoxia > 0.5 || b.COHb > 0.5 || pCO2 > 7 || b.CoreK < 305 || b.CoreK > 313 || b.BloodL < 3.5 || pain > 0.95 || b.RadRecent > 6 || b.Infect > 1;
+        bool down = b.Hypoxia > 0.5 || b.COHb > 0.5 || b.CN > 1 || pCO2 > 7 || b.CoreK < 305 || b.CoreK > 313 || b.BloodL < 3.5 || pain > 0.95 || b.RadRecent > 6 || b.Infect > 1;
         if (down && b.Conscious != 0)
         {
             b.Conscious = 0;
@@ -478,8 +488,8 @@ public sealed partial class Life : IEngine
             b.HurtCause = cause;
             sim.Facts.Emit(sim.Tick, FactKind.Collapsed, c, (float)b.Hypoxia, cause, actor: id);
         }
-        else if (!down && b.Conscious == 0 && b.Hypoxia < 0.3 && b.CoreK < 312.15) b.Conscious = 1; // 열로 쓰러지면 39℃ 아래로 식어야 깬다
-        string? death = b.Hypoxia > 3 ? harm ?? "숨을 못 쉬었다"
+        else if (!down && b.Conscious == 0 && b.Hypoxia < 0.3 && b.CN < 0.7 && b.CoreK < 312.15) b.Conscious = 1; // 열로 쓰러지면 39℃ 아래로 식어야 깬다
+        string? death = b.CN > 3 ? "시안화수소에 중독됐다" : b.Hypoxia > 3 ? harm ?? "숨을 못 쉬었다"
             : b.CoreK < 301 ? "얼어 죽었다" : b.CoreK > 316 ? "열사병" : b.BloodL < 2.5 ? "피를 너무 흘렸다"
             : b.Burn > 1.2 ? "화상" : b.Blunt > 1.5 ? "크게 다쳤다" : b.LungDamage > 1.2 ? "폐가 상했다"
             : b.Infect > 2 ? "패혈증" : b.Water < 42 * 55.5 * 0.82 ? "목이 말라" : b.Reserve <= 0.01 && b.Fat <= 0.01 && b.CoreK < 306 ? "굶어서" : b.RadRecent > 9 ? "방사선" : null;

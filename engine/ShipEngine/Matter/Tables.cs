@@ -263,9 +263,9 @@ public sealed class Tables
     public int StoreCount => Stores.Length;
 
     // 자주 쓰는 기체 칸 번호
-    public int gN2, gO2, gAr, gCO2, gH2O, gCO, gH2, gCH4, gNH3, gO3, gSoot, gAroma;
+    public int gN2, gO2, gAr, gCO2, gH2O, gCO, gH2, gCH4, gNH3, gO3, gSoot, gAroma, gHCl, gHCN;
     // 자주 쓰는 바닥 저장 번호
-    public int sWater, sNH3l, sSoot, sPoly, sCell, sFood;
+    public int sWater, sNH3l, sSoot, sPoly, sCell, sFood, sPvc, sPu;
     /// <summary>바닥 저장 중 염 (말라붙은 소금 · 소금물의 염 — 없으면 -1).</summary>
     public int sSalt = -1;
 
@@ -364,9 +364,9 @@ public sealed class Tables
 
         t.gN2 = t.S("N2").Gas; t.gO2 = t.S("O2").Gas; t.gAr = t.S("Ar").Gas; t.gCO2 = t.S("CO2").Gas; t.gH2O = t.S("H2O").Gas;
         t.gCO = t.S("CO").Gas; t.gH2 = t.S("H2").Gas; t.gCH4 = t.S("CH4").Gas; t.gNH3 = t.S("NH3").Gas; t.gO3 = t.S("O3").Gas;
-        t.gSoot = t.S("Soot").Gas; t.gAroma = t.S("Aroma").Gas;
+        t.gSoot = t.S("Soot").Gas; t.gAroma = t.S("Aroma").Gas; t.gHCl = t.S("HCl").Gas; t.gHCN = t.S("HCN").Gas;
         t.sWater = t.S("H2O_l").Store; t.sNH3l = t.S("NH3_l").Store; t.sSoot = t.S("C").Store; t.sPoly = t.S("CH2").Store;
-        t.sCell = t.S("Cellulose").Store; t.sFood = t.S("Glucose").Store;
+        t.sCell = t.S("Cellulose").Store; t.sFood = t.S("Glucose").Store; t.sPvc = t.S("PVC").Store; t.sPu = t.S("PU").Store;
         t.sSalt = t._subById.TryGetValue("NaCl", out var salt) ? salt.Store : -1;
         return t;
     }

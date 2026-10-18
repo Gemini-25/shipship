@@ -95,7 +95,7 @@ public static partial class Program
         var s = ShipWorld.Create(key, seed);
         var net = s.Get<Network>(); var f = s.Get<Field>(); var ch = s.Get<Chemistry>(); var L = s.Layout;
         s.Run(2);
-        if (nofuel) for (int c = 0; c < L.N; c++) if (net.Strands[c] > 0) f.TakeStore(c, f.T.sPoly, net.Strands[c] * Network.InsulMolPerStrand);
+        if (nofuel) for (int c = 0; c < L.N; c++) if (net.Strands[c] > 0) { f.TakeStore(c, f.T.sPoly, net.Strands[c] * Network.InsulPlastMolPerStrand); f.TakeStore(c, f.T.sPvc, net.Strands[c] * Network.InsulPvcMolPerStrand); }
         double frac = args.Contains("frac") ? double.Parse(args[Array.IndexOf(args, "frac") + 1]) : 0;   // 산소 비율 (질소를 빼서 — 낮은 기압 · 짙은 산소의 탐사 대기)
         if (frac > 0) foreach (var room in L.Rooms) foreach (int c in room.Cells) { double o = f.Gas(f.T.gO2, c), n2 = f.Gas(f.T.gN2, c), tot = f.Moles(c); double want = o / frac - (tot - n2); if (want < n2) f.RemoveGas(c, f.T.gN2, n2 - Math.Max(0, want)); }
         int start = Enumerable.Range(0, L.N).Where(c => net.Strands[c] >= 4 && L.Room[c] >= 0 && L.Furniture.All(fu => Array.IndexOf(fu.Cells, c) < 0)).OrderBy(c => c).First();
