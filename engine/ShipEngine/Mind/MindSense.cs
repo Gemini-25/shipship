@@ -103,7 +103,9 @@ public sealed partial class Mind
         long t = sim.Tick;
         ref var c = ref a.C;
         _fresh.Clear();
+        long lt = Prof != null ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
         if (a.Id == 0) PrepareSenses();
+        lt = Lap("감각:준비", lt);
         bool person = a.IsPerson;
         if (person)
         {
@@ -152,6 +154,7 @@ public sealed partial class Mind
             return;
         }
 
+        lt = Lap("감각:귀", lt);
         // 눈
         int room = RoomOf(cell);
         double radius = SightRadius(a, cell);
@@ -159,14 +162,14 @@ public sealed partial class Mind
         {
             SeeRoom(sim, a, room, radius);
             foreach (int x in _roomDoors[room]) SeeCell(sim, a, x, radius);
-            foreach (int w in _roomWalls[room])
-                if (F.Hole[w] > 0 && Dist(w, cell) <= radius + 1)
+            for (int k = _holeStart[room], end = _holeStart[room + 1]; k < end; k++)
+                if (_holeList[k] is int w && Dist(w, cell) <= radius + 1)
                     Learn(a, t, BeliefKind.Breach, w, -1, 1, BeliefSource.Saw, _st?.DamageCause[w] ?? 0, F.Hole[w]);
             // 휘어 끼익거리는 문 · 벽 (부하가 정격의 60% 넘음) — 가서 보면 안다
             if (_st != null)
             {
-                foreach (int w in _roomWalls[room])
-                    if (_st.Stress[w] >= 0.6f && _st.Braced[w] == 0 && F.Hole[w] <= 0 && Dist(w, cell) <= 3)
+                for (int k = _strainStart[room], end = _strainStart[room + 1]; k < end; k++)
+                    if (_strainList[k] is int w && Dist(w, cell) <= 3)
                         Learn(a, t, BeliefKind.Strain, w, -1, Math.Min(1f, _st.Stress[w]), BeliefSource.Saw, _st.DamageCause[w], _st.Stress[w]);
                 foreach (int x in _roomDoors[room])
                 {
@@ -206,6 +209,7 @@ public sealed partial class Mind
                         Learn(a, t, BeliefKind.Breach, w, -1, 1, BeliefSource.Saw, _st?.DamageCause[w] ?? 0, F.Hole[w]);
                 }
         }
+        lt = Lap("감각:눈", lt);
         // 공기가 빠졌다 (사람은 몸으로 · 로봇은 센서로)
         double kpa = F.Pressure(cell);
         if (kpa < 50) Learn(a, t, BeliefKind.Vacuum, cell, -1, kpa < 20 ? 1f : 0.7f, person ? BeliefSource.Felt : BeliefSource.Saw);
@@ -256,8 +260,11 @@ public sealed partial class Mind
             if (best >= 0 && (person ? c.Up != 0 : true) && t - c.LastShout >= 10 && a.Beliefs[best].Src != BeliefSource.Told)
                 Shout(sim, a, a.Beliefs[best]);
         }
+        lt = Lap("감각:몸 · 알림", lt);
         Disconfirm(a, t, room, radius);
+        lt = Lap("감각:지우기", lt);
         Decay(a, t, dt);
+        Lap("감각:바래기", lt);
     }
 
     /// <summary>매 틱 한 번: 불꽃(합선) 칸 · 장치 칸 표.</summary>
@@ -283,12 +290,28 @@ public sealed partial class Mind
         {
             _seeStart[r] = _seeList.Count;
             foreach (int x in L.Rooms[r].Cells)
-                if (_chem != null && _chem.Burning[x] != 0 || _light != null && _light.Visibility(x) < 8 || F.Stored(T.sWater, x) > 100 || _sparks.Contains(x)
-                    || devs && _devAt[x] >= 0 || bodies && _bodyHead[x] >= 0)
+                if (devs && _devAt[x] >= 0 || bodies && _bodyHead[x] >= 0 || F.Stored(T.sWater, x) > 100 || _chem != null && _chem.Burning[x] != 0
+                    || _light != null && (F.Gas(T.gSoot, x) > 0 || !L.IsSpace(x)) && _light.Visibility(x) < 8 || _sparks.Count > 0 && _sparks.Contains(x))   // 그을음이 없으면 시야는 30m — 셈을 건너뛴다
                     _seeList.Add(x);
         }
         _seeStart[R] = _seeList.Count;
+        // 방 벽 가운데 구멍 난 벽 · 휘는 벽(정격 60% 넘게 · 덧대지 않음 · 구멍 없음)만 — 벽 차례 그대로
+        if (_holeStart.Length != R + 1) { _holeStart = new int[R + 1]; _strainStart = new int[R + 1]; }
+        _holeList.Clear(); _strainList.Clear();
+        for (int r = 0; r < R; r++)
+        {
+            _holeStart[r] = _holeList.Count; _strainStart[r] = _strainList.Count;
+            if (r >= _roomWalls.Length) continue;
+            foreach (int w in _roomWalls[r])
+            {
+                if (F.Hole[w] > 0) _holeList.Add(w);
+                else if (_st != null && _st.Stress[w] >= 0.6f && _st.Braced[w] == 0) _strainList.Add(w);
+            }
+        }
+        _holeStart[R] = _holeList.Count; _strainStart[R] = _strainList.Count;
     }
+    private int[] _holeStart = Array.Empty<int>(), _strainStart = Array.Empty<int>();
+    private readonly List<int> _holeList = new(), _strainList = new();
     private int[] _seeStart = Array.Empty<int>();
     private readonly List<int> _seeList = new();
 
