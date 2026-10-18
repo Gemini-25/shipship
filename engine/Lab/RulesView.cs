@@ -151,13 +151,14 @@ public static partial class Program
         js.Sim.Run((int)(Time.Hours(1) - js.Sim.Tick + 1));
         for (int i = 0; i < 30; i++) js.Advance(dt);
         var jf = js.Render(); js.Recycle(jf.Img);
-        js.TogglePanel(PanelKind.Journal);
+        js.TogglePanel(PanelKind.Journal); js.PanelMove(+1);   // 첫 줄은 배 형편 — 그 아래 일지를 골라 펼친다
         var jp = js.Render(); js.Recycle(jp.Img);
-        bool journalOk = jf.Broadcast.StartsWith("주컴퓨터 방송 — 좋은 아침입니다.") && jf.BroadcastAlpha > 0 && jp.PanelTitle == "주컴퓨터 일지" && jp.PanelRows.Length >= 2
-            && jp.PanelRows[0].Main.Contains("큰 일 없이 지나갔다") && jp.PanelRows[0].Sub.Contains("배: 산소") && jp.PanelRows[^1].Main == "아침 방송";
+        bool journalOk = jf.Broadcast.StartsWith("주컴퓨터 방송 — 좋은 아침입니다.") && jf.BroadcastAlpha > 0 && jp.PanelTitle == "주컴퓨터" && jp.PanelRows.Length >= 3
+            && jp.PanelRows[0].Main == "배 형편" && jp.PanelRows[0].Sub.Contains("산소")
+            && jp.PanelRows[1].Main.Contains("큰 일 없이 지나갔다") && jp.PanelRows[1].Sub.Contains("배: 산소") && jp.PanelRows[^1].Main == "아침 방송";
         Check("관전 화면 판: 하이라이트 목록(가장 새것 위 · 골라 Enter면 그 장면 다시보기) · 이야기꾼 판(성격 여섯 · 한 줄 설명 · 가혹함 막대) · 일지 판 · 아침 방송 자막",
             listOk && pickReplay && tellerOk && journalOk,
-            $"목록 {hlRows.PanelRows.Length}줄 '{(hlRows.PanelRows.Length > 0 ? hlRows.PanelRows[0].Main : "")}' · 골라 다시보기 {pickReplay} · 이야기꾼 {Storyteller.StyleName(st.Style)} 가혹함 {st.Level} · 일지 '{(jp.PanelRows.Length > 0 ? jp.PanelRows[0].Main : "")}' · 자막 '{jf.Broadcast[..Math.Min(40, jf.Broadcast.Length)]}'");
+            $"목록 {hlRows.PanelRows.Length}줄 '{(hlRows.PanelRows.Length > 0 ? hlRows.PanelRows[0].Main : "")}' · 골라 다시보기 {pickReplay} · 이야기꾼 {Storyteller.StyleName(st.Style)} 가혹함 {st.Level} · 일지 '{(jp.PanelRows.Length > 1 ? jp.PanelRows[1].Main : "")}' · 자막 '{jf.Broadcast[..Math.Min(40, jf.Broadcast.Length)]}'");
 
         // 사람 눌러 보기: 그려진 자리를 누르면 그 사람을 고르고 카드(이름 · 생각 · 몸)를 띄우고 카메라가 따라간다 · 빈 곳을 누르면 놓는다
         var pick = new LiveShow(Worlds.Full(lay, 3), "시험호");
@@ -177,5 +178,110 @@ public static partial class Program
 
         Check("관전 화면: 틱이 드물면 걸음 사이를 메운다 — 한 틱에 지나간 칸들을 따라 사람 · 로봇이 칸 사이 자리에 그려진다",
             partial >= 20 && jumps == 0, $"걸은 틱 {moved} · 칸 사이에 그린 횟수 {partial} · 지나간 길보다 멀리 {jumps}");
+        ViewRules2(lay, dt);
+    }
+
+    /// <summary>화면 바퀴 2 — 새 엔진에 맞게: 사슬 판 · 사람 판 · 주컴퓨터 판의 지금 사건 · 겹쳐 보기.</summary>
+    private static void ViewRules2(Layout lay, double dt)
+    {
+        int At(int x, int y) => Worlds.At(lay, x, y);
+
+        // ── 사슬 판 (C) · 사슬 선: 지금 장면의 원인 사슬을 뿌리부터 차례로 · 갈래 이름 · 골라 Enter면 그 자리로 · 사슬 선이 그 자리들을 잇는다 ──
+        {
+            var cs = new LiveShow(Worlds.Full(lay, 3), "시험호");
+            var w = cs.Sim;
+            int a = At(3, 2), b = At(17, 2), c = At(12, 8);
+            int r = w.Causes.Add(CauseKind.Story, "외판 한 곳이 오래 삭았다", w.Tick, a);
+            int c1 = w.Causes.Add(CauseKind.Breach, "외판이 터졌다", w.Tick, a, r);
+            int c2 = w.Causes.Add(CauseKind.Electric, "터진 외판 너머 전선이 끊겼다", w.Tick, b, c1);
+            int c3 = w.Causes.Add(CauseKind.Person, "어둠 속에서 넘어졌다", w.Tick, c, c2);
+            w.Facts.Emit(w.Tick, FactKind.WallBreach, a, 1, c1);
+            cs.Advance(dt);
+            w.Facts.Emit(w.Tick, FactKind.BreakerTrip, b, 1, c2);
+            w.Facts.Emit(w.Tick, FactKind.Hurt, c, 1, c3);
+            for (int i = 0; i < 600; i++) cs.Advance(dt);   // 결정적 순간이라 화면이 느리다 (10초)
+            cs.TogglePanel(PanelKind.Chain);
+            var cf = cs.Render(); cs.Recycle(cf.Img);
+            var rows = cf.PanelRows;
+            bool order = rows.Length == 5 && rows[1].Main.Contains("오래 삭았다") && rows[2].Main.Contains("[선체] 외판이 터졌다") && rows[3].Main.Contains("[전기·장치]") && rows[4].Main.Contains("[사람]");
+            bool spread = rows.Length > 0 && rows[0].Main.Contains("선체 → 전기·장치 → 사람");
+            cs.PanelMove(+3);   // 셋째 마디 (전선이 끊김 — 오른쪽 방)
+            bool moved = cs.PanelEnter() && !cs.Follow && Math.Abs(cs.CamX - (lay.X(b) + 0.5)) < 0.01 && Math.Abs(cs.CamY - (lay.Y(b) + 0.5)) < 0.01;
+            // 사슬 선: 겹쳐 보기를 사슬로 두면 마디 자리(터진 외판)에 선 빛이 든다
+            cs.TogglePanel(PanelKind.Chain);
+            var cells = cs.ChainCellsNow();
+            // 같은 화면을 겹침 없이 · 사슬 선으로 그려 마디 칸 가운데의 빛을 견준다
+            var painter = new Painter(lay);
+            var none = painter.Frame(w, 0, 0, lay.W, lay.H, 0);
+            painter.Show = Overlay.Chain; painter.ChainCells = cells;
+            var line = painter.Frame(w, 0, 0, lay.W, lay.H, 0);
+            int px = lay.X(b) * Painter.T + Painter.T / 2, py = lay.Y(b) * Painter.T + Painter.T / 2;
+            var q0 = none.Get(px, py); var q1 = line.Get(px, py);
+            bool lit = cells.Count == 3 && q1.G > q0.G + 40 && q1.B > q0.B + 40;
+            Check("사슬 판 (C): 지금 장면의 원인 사슬을 뿌리부터 차례로 — 갈래 이름 · 건넌 갈래 한 줄 · 골라 Enter면 그 자리로 · 사슬 선이 마디 자리를 잇는다",
+                order && spread && moved && lit,
+                $"줄 {rows.Length}: {string.Join(" / ", rows.Select(x => x.Main))} · 그 자리로 {moved} ({cs.CamX:0.0}, {cs.CamY:0.0}) · 선 자리 {cells.Count} · 빛 {q0.G},{q0.B} → {q1.G},{q1.B}");
+        }
+
+        // ── 사람 판 (P): 위험한 사람부터 (쓰러진 이가 맨 위 · 붉게) · 몸 · 마음 · 가까운 이 · 골라 Enter면 따라간다 ──
+        {
+            var ps = new LiveShow(Worlds.Full(lay, 4), "시험호");
+            var pm = ps.Sim.Get<Mind>(); var life = ps.Sim.Get<Life>();
+            int ok = pm.AddPerson(ps.Sim, At(15, 2)), down = pm.AddPerson(ps.Sim, At(3, 4));
+            ps.Advance(dt);
+            ref var db = ref life[pm.Agents[down].C.Body];
+            db.Conscious = 0; db.Hypoxia = 0.6f;   // 쓰러져 있다 (상황을 차려 둔다)
+            ps.TogglePanel(PanelKind.People);
+            var pf = ps.Render(); ps.Recycle(pf.Img);
+            var pr = pf.PanelRows;
+            bool first = pr.Length == 2 && pr[0].Main.StartsWith(pm.NameOf(down)) && pr[0].Main.Contains("쓰러져 있다") && pr[0].On && pr[0].Sub.Contains("몸: 산소") && !pr[1].On;
+            bool follow = ps.PanelEnter() && ps.Selected == down && ps.FollowSelected && ps.Panel == PanelKind.None;
+            Check("사람 판 (P): 위험한 사람부터 — 쓰러진 이가 맨 위 · 몸 · 마음 · 가까운 이 · 골라 Enter면 그 사람을 따라간다",
+                first && follow, $"줄: {string.Join(" / ", pr.Select(x => x.Main + (x.On ? " ●" : "")))} · 따라감 {follow}");
+        }
+
+        // ── 주컴퓨터 판 (J): 이어지는 사건이 맨 위 (방 · 종류 · 몇 분째 · 누구에게 맡겼나) · 배 형편 ──
+        {
+            var ms = new LiveShow(Worlds.Full(lay, 5), "시험호");
+            ms.Sim.Get<Mind>().AddRobot(ms.Sim, At(20, 7), AgentKind.Robot, At(20, 7));
+            ms.Sim.Run(5);
+            ms.Sim.Get<Chemistry>().Ignite(At(15, 1), 3e6, ms.Sim.Causes.Add(CauseKind.Story, "의자 밑 불씨", ms.Sim.Tick));
+            var cm = ms.Sim.Get<ShipMind>();
+            for (int i = 0; i < Time.Minutes(2) && !cm.Incidents.Any(x => x.Active != 0 && x.Kind == IncidentKind.Fire); i++) ms.Sim.Step();
+            ms.Advance(dt);
+            ms.TogglePanel(PanelKind.Journal);
+            var mf = ms.Render(); ms.Recycle(mf.Img);
+            var mr = mf.PanelRows;
+            int shipRow = Array.FindIndex(mr, x => x.Main == "배 형편");
+            bool incident = mr.Length >= 2 && mr[0].Main.StartsWith("지금 · ") && mr[0].Main.Contains("불") && mr[0].Main.Contains("분째") && mr[0].On;
+            Check("주컴퓨터 판 (J): 이어지는 사건이 맨 위 (방 · 종류 · 몇 분째 · 맡긴 로봇) · 그 아래 배 형편 (산소 · 전력)",
+                incident && shipRow > 0 && mr[shipRow].Sub.Contains("산소") && mr[shipRow].Sub.Contains("전력"),
+                $"줄: {string.Join(" / ", mr.Take(4).Select(x => x.Main + (x.Sub.Length > 0 ? " (" + x.Sub.Split('\n')[0] + ")" : "")))}");
+        }
+
+        // ── 겹쳐 보기 (O): 공기 — 빠진 방은 파랗게 · 멀쩡한 방은 그대로 · 그려도 세계는 그대로 ──
+        {
+            var s = Worlds.Full(lay, 6);
+            var f = s.Get<Field>();
+            int vac = At(17, 2), fine = At(3, 2);
+            foreach (int c in lay.Rooms[lay.Room[vac]].Cells) for (int g = 0; g < f.G; g++) f.RemoveGas(c, g, f.N[c * f.G + g] * 0.97);
+            var before = s.Save();
+            var painter = new Painter(lay);
+            var none = painter.Frame(s, 0, 0, lay.W, lay.H, 0);
+            painter.Show = Overlay.Air;
+            var air = painter.Frame(s, 0, 0, lay.W, lay.H, 0);
+            bool same = before.AsSpan().SequenceEqual(s.Save());
+            (int, int) Mid(int c) => (lay.X(c) * Painter.T + 5, lay.Y(c) * Painter.T + 5);
+            var (vx, vy) = Mid(vac); var (fx, fy) = Mid(fine);
+            var v0 = none.Get(vx, vy); var v1 = air.Get(vx, vy); var f0 = none.Get(fx, fy); var f1 = air.Get(fx, fy);
+            bool blue = v1.B > v0.B + 20 && v1.B > v1.R;
+            bool untouched = f0.R == f1.R && f0.G == f1.G && f0.B == f1.B;
+            var show = new LiveShow(Worlds.Full(lay, 6), "시험호");
+            var names = new List<string>();
+            for (int i = 0; i < 5; i++) { show.CycleOverlay(); names.Add(show.Show.ToString()); }
+            Check("겹쳐 보기 (O): 공기 — 빠진 방은 파랗게 · 멀쩡한 방은 그대로 · 그려도 세계는 바이트까지 같다 · O로 공기 → 열 → 연기 → 사슬 선 → 끔",
+                blue && untouched && same && string.Join(",", names) == "Air,Heat,Smoke,Chain,None",
+                $"빠진 방 {v0.R},{v0.G},{v0.B} → {v1.R},{v1.G},{v1.B} · 멀쩡한 방 같음 {untouched} · 세계 같음 {same} · 차례 {string.Join(" → ", names)}");
+        }
     }
 }

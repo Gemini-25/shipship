@@ -371,7 +371,9 @@ public partial class Main : Node2D
             "N  다음 배      R  같은 배 새로",
             "L  볼 만했던 장면 (골라서 다시보기)",
             "T  이야기꾼 (성격 · 가혹함)      [ ]  가혹함",
-            "J  주컴퓨터 일지 · 아침 방송",
+            "J  주컴퓨터 (지금 사건 · 배 형편 · 일지)",
+            "C  사슬 (지금 장면은 어디서 시작됐나)      P  사람",
+            "O  겹쳐 보기: 공기 → 열 → 연기 → 사슬 선 → 끔",
             "M  다 켬 → 음악 끔 → 소리 끔",
             "H  도움말      Esc  나가기",
             $"지금 이야기꾼: {_shown?.Storyteller}",
@@ -424,6 +426,9 @@ public partial class Main : Node2D
                 case Key.T: _cmds.Enqueue(s => s.TogglePanel(PanelKind.Storyteller)); break;
                 case Key.L: _cmds.Enqueue(s => s.TogglePanel(PanelKind.Highlights)); break;
                 case Key.J: _cmds.Enqueue(s => s.TogglePanel(PanelKind.Journal)); break;
+                case Key.C: _cmds.Enqueue(s => s.TogglePanel(PanelKind.Chain)); break;
+                case Key.P: _cmds.Enqueue(s => s.TogglePanel(PanelKind.People)); break;
+                case Key.O: _cmds.Enqueue(s => s.CycleOverlay()); break;
                 case Key.Bracketleft: _cmds.Enqueue(s => s.Harsher(-1)); break;
                 case Key.Bracketright: _cmds.Enqueue(s => s.Harsher(+1)); break;
                 case Key.F3: _meter = !_meter; break;

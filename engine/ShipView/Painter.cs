@@ -9,9 +9,17 @@ namespace ShipView;
 /// 세계를 바꾸지 않고 읽기만 한다. 게임(Godot)은 이 그림을 텍스처로 올리고, 실험실은 PNG로 뽑아 눈으로 본다.
 /// 층: 우주 → 바닥 → 벽 · 남쪽 앞면 → 문 → 외판 구멍 → 설비 → 물 · 진공 · 열 · 어둠 → 사람 · 로봇 → 불 · 연기.
 /// </summary>
+/// <summary>겹쳐 보기 (화면 설정 — 기본은 눈에 보이는 것만): 공기(산소 · 진공 · 일산화탄소) · 열 · 연기 · 사슬 선.</summary>
+public enum Overlay : byte { None, Air, Heat, Smoke, Chain }
+
 public sealed class Painter
 {
     public const int T = DotTiles.T;
+
+    /// <summary>겹쳐 보기 — 세계는 그대로 읽기만 한다.</summary>
+    public Overlay Show;
+    /// <summary>사슬 선: 원인 사슬의 마디 자리를 차례로 잇는다 (Show == Chain일 때).</summary>
+    public IReadOnlyList<int>? ChainCells;
 
     private readonly Layout L;
     private readonly DotFloor[] _roomFloor;
@@ -302,6 +310,7 @@ public sealed class Painter
                     img.Draw(puff, Px(x) - 6 + dx, Py(y) - 10, false, al);
                 }
             }
+        if (Show != Overlay.None) DrawOverlay(img, f, x0, y0, w, h);
         return img;
     }
 
@@ -491,6 +500,75 @@ public sealed class Painter
     {
         img.Fill(cx - 1, top, 2, 5, col);
         img.Fill(cx - 1, top + 6, 2, 2, col);
+    }
+
+    // ───────────────────────── 겹쳐 보기 ─────────────────────────
+
+    private void DrawOverlay(Img img, Field f, int x0, int y0, int w, int h)
+    {
+        int Px(int x) => (x - x0) * T;
+        int Py(int y) => (y - y0) * T;
+        var T2 = f.T;
+        if (Show != Overlay.Chain)
+            for (int y = y0; y < y0 + h; y++)
+                for (int x = x0; x < x0 + w; x++)
+                {
+                    if (!L.In(x, y)) continue;
+                    int c = L.Index(x, y);
+                    if (L.Kind[c] == CellKind.Wall) continue;
+                    double kpa = f.Pressure(c);
+                    switch (Show)
+                    {
+                        case Overlay.Air:
+                        {
+                            // 진공은 파랗게 · 산소가 옅을수록 붉게 (19kPa 아래) · 일산화탄소는 보랏빛
+                            if (kpa < 5) { img.Fill(Px(x), Py(y), T, T, Rgba.Hex("#2f55ff"), 0.45f); break; }
+                            double o2 = f.Partial(T2.gO2, c), co = f.Ppm(T2.gCO, c);
+                            if (o2 < 19) img.Fill(Px(x), Py(y), T, T, Rgba.Hex("#ff3b30"), (float)Math.Min(0.55, 0.12 + (19 - o2) / 9 * 0.43));
+                            if (co > 100) img.Fill(Px(x), Py(y), T, T, Rgba.Hex("#b347ff"), (float)Math.Min(0.5, co / 1500));
+                            break;
+                        }
+                        case Overlay.Heat:
+                        {
+                            double tc = f.Temp(c) - 273.15;
+                            if (tc > 30) img.Fill(Px(x), Py(y), T, T, tc > 60 ? Rgba.Hex("#ff2a1a") : Rgba.Hex("#ff9a1f"), (float)Math.Min(0.6, (tc - 30) / 80 + 0.12));
+                            else if (tc < 12) img.Fill(Px(x), Py(y), T, T, Rgba.Hex("#53c8ff"), (float)Math.Min(0.5, (12 - tc) / 30 + 0.1));
+                            break;
+                        }
+                        case Overlay.Smoke:
+                        {
+                            double soot = f.Ppm(T2.gSoot, c);
+                            if (soot > 5) img.Fill(Px(x), Py(y), T, T, Rgba.Hex("#8a8f99"), (float)Math.Min(0.7, 0.1 + soot / 600));
+                            break;
+                        }
+                    }
+                }
+        if (Show == Overlay.Chain && ChainCells != null && ChainCells.Count > 0)
+        {
+            var col = Rgba.Hex("#5ff0ff");
+            (int, int) Mid(int c) => (Px(L.X(c)) + T / 2, Py(L.Y(c)) + T / 2);
+            for (int i = 1; i < ChainCells.Count; i++) Line(img, Mid(ChainCells[i - 1]), Mid(ChainCells[i]), col);
+            for (int i = 0; i < ChainCells.Count; i++)
+            {
+                var (mx, my) = Mid(ChainCells[i]);
+                int r = i == ChainCells.Count - 1 ? 5 : 3;
+                img.Fill(mx - r, my - r, 2 * r, 2 * r, i == ChainCells.Count - 1 ? Rgba.Hex("#ffffff") : col, 0.9f);
+            }
+        }
+    }
+
+    private static void Line(Img img, (int x, int y) a, (int x, int y) b, Rgba col)
+    {
+        int dx = Math.Abs(b.x - a.x), dy = -Math.Abs(b.y - a.y), sx = a.x < b.x ? 1 : -1, sy = a.y < b.y ? 1 : -1, err = dx + dy;
+        int x = a.x, y = a.y;
+        for (int k = 0; k < 20000; k++)
+        {
+            if (x >= 0 && y >= 0 && x < img.W - 1 && y < img.H - 1) { img.Blend(x, y, col, 0.85f); img.Blend(x + 1, y, col, 0.85f); img.Blend(x, y + 1, col, 0.85f); }
+            if (x == b.x && y == b.y) break;
+            int e2 = 2 * err;
+            if (e2 >= dy) { err += dy; x += sx; }
+            if (e2 <= dx) { err += dx; y += sy; }
+        }
     }
 
     // ───────────────────────── 로봇 · 드론 ─────────────────────────

@@ -28,7 +28,7 @@ public sealed class LiveFrame
 public readonly record struct PanelRow(string Main, string Sub, bool On);
 
 /// <summary>관전 화면의 판.</summary>
-public enum PanelKind { None, Highlights, Storyteller, Journal }
+public enum PanelKind { None, Highlights, Storyteller, Journal, Chain, People }
 
 /// <summary>
 /// 관전 화면의 속 (docs/ENGINE.md §새 화면 2단계) — 세계를 돌리고, 연출이 정한 빠르기 · 볼 곳을 따르고, 그린다.
@@ -342,6 +342,7 @@ public sealed class LiveShow
         var keep = new List<Img>();
         while (_spare.TryTake(out var sp)) { if (reuse == null && sp.W == wc * Painter.T && sp.H == hc * Painter.T) reuse = sp; else keep.Add(sp); }
         foreach (var k in keep.Take(2)) _spare.Add(k);
+        Painter.Show = Show; Painter.ChainCells = Show == Overlay.Chain ? ChainCellsNow() : null;
         var img = Painter.Frame(World, x0, y0, wc, hc, (int)(_anim * AnimFps), reuse);
         (double x, double y) sel = Selected >= 0 ? DrawnAt(Selected) : (double.NaN, 0.0);
         return new LiveFrame
@@ -395,7 +396,7 @@ public sealed class LiveShow
     /// <summary>↑ ↓: 판에서 고르기.</summary>
     public void PanelMove(int d)
     {
-        int n = Panel switch { PanelKind.Highlights => Dir.Highlights.Count, PanelKind.Storyteller => Enum.GetValues<StoryStyle>().Length, PanelKind.Journal => Sim.Find<ShipMind>()?.Journal.Count ?? 0, _ => 0 };
+        int n = Panel switch { PanelKind.Highlights => Dir.Highlights.Count, PanelKind.Storyteller => Enum.GetValues<StoryStyle>().Length, PanelKind.None => 0, _ => PanelRows().Length };
         if (n == 0) { PanelPick = 0; return; }
         PanelPick = Math.Clamp(PanelPick + d, 0, n - 1);
     }
@@ -423,8 +424,76 @@ public sealed class LiveShow
                 Notify("이야기꾼: " + StoryLine());
                 return true;
             }
+            case PanelKind.Chain:
+            {
+                // 고른 마디의 자리로 카메라를 옮긴다 (손으로 — F로 다시 연출을 따른다)
+                var chain = ChainNow();
+                int i = PanelPick - 1;   // 첫 줄은 사슬 한 줄 요약
+                if (i < 0 || i >= chain.Count) return false;
+                int cell = World.Causes[chain[i]].Cell;
+                if (cell < 0) { Notify("그 일은 배 한 곳의 일이 아니다"); return false; }
+                LookAt(cell);
+                return true;
+            }
+            case PanelKind.People:
+            {
+                var people = PeopleOrder();
+                if (PanelPick < 0 || PanelPick >= people.Count) return false;
+                Selected = people[PanelPick]; FollowSelected = true; Overview = false;
+                Panel = PanelKind.None;
+                return true;
+            }
         }
         return false;
+    }
+
+    /// <summary>카메라를 그 칸으로 (손으로 옮긴 것과 같다).</summary>
+    public void LookAt(int cell)
+    {
+        var L = Sim.Layout;
+        Follow = false; Overview = false; FollowSelected = false;
+        CamX = L.X(cell) + 0.5; CamY = L.Y(cell) + 0.5;
+    }
+
+    // ── 겹쳐 보기 (O) ──
+    public Overlay Show;
+    public static string OverlayName(Overlay o) => o switch
+    {
+        Overlay.Air => "공기 (붉을수록 산소가 옅다 · 파랑은 진공 · 보라는 일산화탄소)", Overlay.Heat => "열 (주황 · 빨강은 뜨겁고 하늘색은 차다)",
+        Overlay.Smoke => "연기", Overlay.Chain => "사슬 선 (지금 장면의 원인 사슬이 지나간 자리)", _ => "겹쳐 보기 끔",
+    };
+    public void CycleOverlay() { Show = (Overlay)(((int)Show + 1) % 5); Notify(OverlayName(Show)); }
+
+    /// <summary>지금 장면의 원인 사슬 (뿌리 → 끝) — 연출이 보는 사슬 (한 줄로 가장 많이 건넌 끝) · 없으면 가장 최근 하이라이트 (30분 안).</summary>
+    public List<int> ChainNow()
+    {
+        var w = World; var d = View;
+        int cause = 0;
+        if (d.SceneRoot != 0 && d.Chains.TryGetValue(d.SceneRoot, out var rec)) cause = rec.LineCause != 0 ? rec.LineCause : rec.Cause;
+        if (cause == 0 && d.Highlights.Count > 0 && w.Tick - d.Highlights[^1].Last < Time.Minutes(30)) cause = d.Highlights[^1].Cause;
+        return cause != 0 ? w.Causes.Chain(cause) : new List<int>();
+    }
+
+    /// <summary>사슬 선의 자리들 (같은 칸이 잇따르면 한 번).</summary>
+    public List<int> ChainCellsNow()
+    {
+        var cells = new List<int>();
+        foreach (int c in ChainNow()) { int cell = World.Causes[c].Cell; if (cell >= 0 && (cells.Count == 0 || cells[^1] != cell)) cells.Add(cell); }
+        return cells;
+    }
+
+    /// <summary>사람 판의 차례: 위험한 사람부터 (쓰러짐 · 산소 · 다침 · 공황 · 긴장) — 같으면 이름.</summary>
+    public List<int> PeopleOrder()
+    {
+        var w = World; var mind = w.Find<Mind>(); var life = w.Find<Life>();
+        if (mind == null || life == null) return new List<int>();
+        float Concern(Agent a)
+        {
+            var b = life.Bodies[a.C.Body];
+            if (b.Alive == 0) return -1;
+            return (b.Conscious == 0 ? 100 : 0) + (1 - b.SpO2) * 200 + b.Hypoxia * 50 + Math.Max(b.Burn, b.Blunt) * 40 + b.Infect * 20 + (a.C.Mode != 0 ? 30 : 0) + a.C.Stress * 10;
+        }
+        return mind.Agents.Where(a => a.IsPerson).OrderByDescending(Concern).ThenBy(a => mind.NameOf(a.Id)).Select(a => a.Id).ToList();
     }
 
     private List<Highlight> HighlightsNewest() { var l = Dir.Highlights.ToList(); l.Reverse(); return l; }
@@ -438,7 +507,9 @@ public sealed class LiveShow
     {
         PanelKind.Highlights => $"볼 만했던 장면 ({Dir.Highlights.Count})",
         PanelKind.Storyteller => "이야기꾼",
-        PanelKind.Journal => "주컴퓨터 일지",
+        PanelKind.Journal => "주컴퓨터",
+        PanelKind.Chain => "사슬 — 지금 장면은 어디서 시작됐나",
+        PanelKind.People => "사람",
         _ => "",
     };
 
@@ -447,6 +518,8 @@ public sealed class LiveShow
         PanelKind.Highlights => "↑ ↓ 고르기 · Enter 다시보기 · L 닫기",
         PanelKind.Storyteller => "↑ ↓ 성격 · Enter 고르기 · ← → 가혹함 · T 닫기",
         PanelKind.Journal => "↑ ↓ 고르기 · J 닫기",
+        PanelKind.Chain => "↑ ↓ 고르기 · Enter 그 자리 보기 · O 사슬 선 · C 닫기",
+        PanelKind.People => "↑ ↓ 고르기 · Enter 따라가기 · P 닫기",
         _ => "",
     };
 
@@ -482,15 +555,82 @@ public sealed class LiveShow
             {
                 var sm = Sim.Find<ShipMind>();
                 if (sm == null) break;
+                // 지금: 이어지는 사건 · 배 형편 (주컴퓨터가 읽은 것) — 그 아래 일지
+                var now = Sim.Tick;
+                foreach (var x in sm.Incidents.Where(x => x.Active != 0).OrderBy(x => x.Since))
+                {
+                    var who = new List<string>();
+                    var mind = Sim.Find<Mind>();
+                    if (x.Sealed != 0) who.Add("봉쇄");
+                    if (mind != null) foreach (int r in new[] { x.RobotA, x.RobotB }) if (r >= 0 && r < mind.Agents.Count) who.Add($"{mind.NameOf(r)}에게 맡김");
+                    if (x.Person >= 0 && mind != null && x.Person < mind.Agents.Count) who.Add($"{mind.NameOf(x.Person)}이(가) 받아 줌");
+                    rows.Add(new PanelRow($"지금 · {sm.RoomName(x.Room)}: {ShipMind.KindName(x.Kind)} ({Math.Max(0, now - x.Since) / (double)Time.Minutes(1):0}분째)",
+                        who.Count > 0 ? string.Join(" · ", who) : "아직 손을 쓰지 못했다", true));
+                }
+                string blind = sm.BlindLine();
+                rows.Add(new PanelRow("배 형편", sm.ShipLine(Sim, true) + (blind.Length > 0 ? "\n" + blind : ""), false));
+                int head = rows.Count;
                 for (int i = sm.Journal.Count - 1; i >= 0; i--)
                 {
                     var (t, text) = sm.Journal[i];
                     var lines = text.Split('\n');
-                    int row = sm.Journal.Count - 1 - i;
+                    int row = head + sm.Journal.Count - 1 - i;
                     rows.Add(new PanelRow($"{HourMin(t)}  {lines[0]}", row == PanelPick ? string.Join("\n", lines.Skip(1)) : "", false));
                 }
-                if (rows.Count == 0) rows.Add(new PanelRow("아직 일지가 없다", $"주컴퓨터는 {sm.JournalHour}시에 하루를 적는다", false));
+                if (rows.Count == head) rows.Add(new PanelRow("아직 일지가 없다", $"주컴퓨터는 {sm.JournalHour}시에 하루를 적는다", false));
                 if (sm.Morning.Length > 0) rows.Add(new PanelRow("아침 방송", sm.Morning, false));
+                break;
+            }
+            case PanelKind.Chain:
+            {
+                var chain = ChainNow();
+                if (chain.Count == 0) { rows.Add(new PanelRow("지금 이어지는 사슬이 없다", "일이 나면 그 일이 어디서 시작됐는지 여기에 차례로 적힌다", false)); break; }
+                var w = World; var d = View;
+                var root = d.Chains.GetValueOrDefault(chain[0]);
+                string spread = d.SpreadText(chain[0]);
+                rows.Add(new PanelRow(spread.Length > 0 ? $"건넌 갈래: {spread}" : "한 갈래 안의 일",
+                    root != null ? $"이 뿌리에서 난 큰 일 {root.Facts} · 가지 {root.Leaves.Count} · {HourMin(root.First)}부터" : "", false));
+                var cm = w.Find<ShipMind>();
+                foreach (int c in chain)
+                {
+                    var n = w.Causes[c];
+                    string kind = Director.PlainName[Director.EngineOf(n.Kind)];
+                    string where = n.Cell >= 0 && w.Layout.Room[n.Cell] >= 0 ? (cm?.RoomName(w.Layout.Room[n.Cell]) ?? w.Layout.Rooms[w.Layout.Room[n.Cell]].Name) : n.Cell >= 0 ? "통로 · 벽" : "배 바깥 · 배 전체";
+                    rows.Add(new PanelRow((kind.Length > 0 ? $"[{kind}] " : "") + w.Causes.Text(c), $"{HourMin(n.Tick)} · {where}", n.Cell >= 0));
+                }
+                break;
+            }
+            case PanelKind.People:
+            {
+                var w = World; var mind = w.Find<Mind>(); var life = w.Find<Life>(); var so = w.Find<Society>();
+                if (mind == null || life == null) break;
+                foreach (int id in PeopleOrder())
+                {
+                    var a = mind.Agents[id]; var b = life.Bodies[a.C.Body];
+                    bool danger = b.Alive != 0 && (b.Conscious == 0 || b.SpO2 < 0.85f || b.Hypoxia > 0.2f || a.C.Mode != 0);
+                    string state = b.Alive == 0 ? "숨을 거두었다" : b.Conscious == 0 ? "쓰러져 있다" : Mind.GoalName(a.C.Goal);
+                    var body = new List<string> { $"산소 {b.SpO2 * 100:0}%" };
+                    if (b.Burn > 0.05f) body.Add($"화상 {b.Burn:0.0}"); if (b.Blunt > 0.05f) body.Add($"타박 {b.Blunt:0.0}");
+                    if (b.Infect > 0.05f) body.Add("상처가 곪는다"); if (b.Ill == 2) body.Add("앓는다"); if (b.Hypoxia > 0.05f) body.Add("숨이 가쁘다");
+                    var heart = new List<string>();
+                    if (a.C.Stress > 0.3f) heart.Add($"긴장 {a.C.Stress:0.0}"); if (a.C.Sad > 0.3f) heart.Add("슬프다"); if (a.C.Fear > 0.3f) heart.Add("두렵다"); if (a.C.Anger > 0.3f) heart.Add("화가 났다");
+                    var near = new List<string>();
+                    if (so != null)
+                    {
+                        int pt = so.PartnerOf(id); if (pt >= 0) near.Add($"짝 {mind.NameOf(pt)}");
+                        int band = so.BandIdOf(id); if (band >= 0) near.Add(so.BandName(band));
+                        int trust = -1, grudge = -1; float bt = 0.6f, bg = Society.GrudgeAt;
+                        foreach (var o in mind.Agents)
+                        {
+                            if (!o.IsPerson || o.Id == id) continue;
+                            if (so.TrustIn(id, o.Id) > bt) { bt = so.TrustIn(id, o.Id); trust = o.Id; }
+                            if (so.GrudgeOf(id, o.Id) > bg) { bg = so.GrudgeOf(id, o.Id); grudge = o.Id; }
+                        }
+                        if (trust >= 0) near.Add($"가장 믿는 이 {mind.NameOf(trust)}"); if (grudge >= 0) near.Add($"앙금 {mind.NameOf(grudge)}");
+                    }
+                    rows.Add(new PanelRow($"{mind.NameOf(id)} — {state}",
+                        $"몸: {string.Join(" · ", body)}{(heart.Count > 0 ? " / 마음: " + string.Join(" · ", heart) : "")}{(near.Count > 0 ? "\n" + string.Join(" · ", near) : "")}", danger));
+                }
                 break;
             }
         }

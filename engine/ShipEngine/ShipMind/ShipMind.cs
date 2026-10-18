@@ -993,7 +993,7 @@ public sealed partial class ShipMind : IEngine
     private static string DaysText(double d) => double.IsInfinity(d) ? "줄지 않음" : d > 999 ? "999일 넘게" : $"{d:0.#}일 치";
 
     /// <summary>배 상태 한 줄 (주컴퓨터가 읽은 것): 산소 · 전력 · 식량 · 물.</summary>
-    private string ShipLine(Sim sim, bool power)
+    public string ShipLine(Sim sim, bool power)
     {
         var parts = new List<string> { $"산소 {ShipO2():0.0}kPa" };
         if (power && _net != null) parts.Add($"전력 {_net.Supplied:0}kW 내고 {_net.Demanded:0}kW 씀");
@@ -1006,7 +1006,7 @@ public sealed partial class ShipMind : IEngine
     }
 
     /// <summary>못 보는 방 (전원 · 센서 선) — 없으면 빈 줄.</summary>
-    private string BlindLine()
+    public string BlindLine()
     {
         var blind = new List<string>();
         for (int r = 0; r < L.Rooms.Count; r++)
