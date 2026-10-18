@@ -82,6 +82,8 @@ public enum FactKind : ushort
     Burn,              // 점화가 시작됐다 (Other: 점화 종류 BurnKind · Size: g)
     Fell,              // 가속에 넘어졌다 (Actor: 사람 · Size: g)
     Contact,           // 다른 배 (Other: 0 보였다 · 1 조난 신호 · 2 교신 · 3 붙었다 · 4 떠났다 · 5 늦었다 · Size: 그 배 번호)
+    // ④
+    ShipSplit,         // 배가 갈라졌다 — 조각이 떨어져 나갔다 (Size: 조각 질량 톤 · Other: 조각 번호)
 }
 
 public static class FactNames
@@ -103,6 +105,7 @@ public static class FactNames
         FactKind.BreakerReset => "차단기를 올렸다", FactKind.ComputerDown => "주컴퓨터가 멈췄다", FactKind.StorySeed => "조짐",
         FactKind.Grieved => "슬픔", FactKind.TrustLost => "믿음이 깨졌다", FactKind.WentOutside => "선외로 나갔다",
         FactKind.Talk => "이야기", FactKind.Blamed => "탓", FactKind.Fight => "몸싸움", FactKind.Sabotage => "몰래 한 짓", FactKind.Pilfer => "몰래 먹었다", FactKind.Rationed => "배급", FactKind.Treated => "돌봤다", FactKind.Confessed => "털어놓았다", FactKind.Burn => "점화", FactKind.Fell => "넘어졌다", FactKind.Contact => "다른 배",
+        FactKind.ShipSplit => "배가 갈라졌다",
         FactKind.ComputerJournal => "일지", FactKind.ComputerBroadcast => "아침 방송", FactKind.Switched => "껐다", _ => "",
     };
 }

@@ -128,7 +128,7 @@ public sealed partial class Field
                     foreach (var (dx, dy) in Dirs)
                     {
                         int nx = x + dx, ny = y + dy;
-                        if (L.In(nx, ny) && L.Kind[L.Index(nx, ny)] != CellKind.Outside) continue;
+                        if (L.In(nx, ny) && !IsOut(L.Index(nx, ny))) continue;
                         double cos = Math.Max(0, dx * Outside.SunX + dy * Outside.SunY);
                         if (damaged)
                             q += m.Absorb * Outside.Sun * WallFace * cos - m.Emiss * Sigma * WallFace * (t * t * t * t - bg4);
@@ -156,7 +156,7 @@ public sealed partial class Field
         foreach (var (dx, dy) in Dirs)
         {
             int nx = x + dx, ny = y + dy;
-            if (L.In(nx, ny) && L.Kind[L.Index(nx, ny)] != CellKind.Outside) continue;
+            if (L.In(nx, ny) && !IsOut(L.Index(nx, ny))) continue;
             double cos = Math.Max(0, dx * Outside.SunX + dy * Outside.SunY);
             best = Math.Max(best, Math.Pow((0.3 * Outside.Sun * cos + 0.8 * Sigma * bg4) / (0.8 * Sigma), 0.25));
         }
@@ -212,7 +212,7 @@ public sealed partial class Field
         foreach (var (dx, dy) in Dirs)
         {
             int nx = x + dx, ny = y + dy;
-            bool outside = !L.In(nx, ny) || L.Kind[L.Index(nx, ny)] == CellKind.Outside;
+            bool outside = !L.In(nx, ny) || IsOut(L.Index(nx, ny));
             if (!outside) continue;
             s += Math.Max(0, dx * Outside.SunX + dy * Outside.SunY);
         }
@@ -310,7 +310,7 @@ public sealed partial class Field
     }
 
     /// <summary>액체가 흘러갈 수 있는 칸: 바닥 · 열린 문.</summary>
-    private bool Wet(int i) => L.Kind[i] == CellKind.Floor || L.Kind[i] == CellKind.Door && DoorPassable(L.DoorAt[i]);
+    private bool Wet(int i) => Severed[i] == 0 && (L.Kind[i] == CellKind.Floor || L.Kind[i] == CellKind.Door && DoorPassable(L.DoorAt[i]));
 
     /// <summary>칸 하나의 바닥 + 천장 넓이 · 벽면 하나의 넓이 (m² — 칸 1m × 1m · 높이 2.5m).</summary>
     public const double FloorCeilM2 = 2, WallFaceM2 = 2.5;
@@ -334,10 +334,10 @@ public sealed partial class Field
             N[k] -= n; U[i] = Math.Max(0, U[i] - n * _cv[g] * tg);
             L.Neighbors(i, nb);
             int walls = 0;
-            foreach (int j in nb) if (j >= 0 && L.Kind[j] == CellKind.Wall) walls++;
+            foreach (int j in nb) if (j >= 0 && L.Kind[j] == CellKind.Wall && Severed[j] == 0) walls++;
             double onWall = walls * WallFaceM2 / (FloorCeilM2 + walls * WallFaceM2);
             Deposit(i, n * (1 - onWall), tg);
-            if (walls > 0) foreach (int j in nb) if (j >= 0 && L.Kind[j] == CellKind.Wall) Deposit(j, n * onWall / walls, tg);
+            if (walls > 0) foreach (int j in nb) if (j >= 0 && L.Kind[j] == CellKind.Wall && Severed[j] == 0) Deposit(j, n * onWall / walls, tg);
         }
 
         void Deposit(int c, double m, double tg)

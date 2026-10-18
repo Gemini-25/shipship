@@ -352,14 +352,34 @@ public sealed partial class ShipMind : IEngine
         {
             // 이미 아는 샘이 있으면 배 전체가 주는 것은 그 샘 때문이다 — 그 사건을 이어 가고 새로 짚지 않는다
             // (새는 방의 문을 열어 기압을 맞춘 뒤 옆 방이 조금 더 낮아지자 그 방을 또 '샌다'로 짚었다)
+            // — 다 빠진 방(5kPa 아래)의 샘은 더 잃을 공기가 없다: 그래도 배가 준다면 그 방으로 새어 드는 다른 길이 있다 (뚫린 칸막이 · 문틈 — ④ 충돌이 칸막이를 꿰뚫었다)
             bool known = false;
-            foreach (var x in Incidents) if (x.Kind == IncidentKind.Leak && x.Active != 0) { Mark(IncidentKind.Leak, x.Room); known = true; }
+            foreach (var x in Incidents) if (x.Kind == IncidentKind.Leak && x.Active != 0) { Mark(IncidentKind.Leak, x.Room); if (RoomKPa[x.Room] > 5) known = true; }
             int low = -1; float lp = float.MaxValue;
             if (!known)
                 for (int r = 0; r < L.Rooms.Count; r++)
                     if (RoomSeen[r] != 0 && L.Rooms[r].Cells.Length > 0 && RoomKPa[r] > 5 && RoomKPa[r] < lp) { lp = RoomKPa[r]; low = r; }
             if (low >= 0 && Find(IncidentKind.Leak, low) < 0) Raise(sim, IncidentKind.Leak, low, LeakSpot(low), lp, -1, LeakCause(low));
             if (low >= 0) Mark(IncidentKind.Leak, low);
+        }
+        // 다 빠져 봉쇄한 방으로 새어 드는 길 (방마다 단 초음파 샘 찾개 — 쉬익의 자리): 다른 구역에서 그 방으로 공기가 들어오면 높은 쪽 방의 그 틈이 샘이다
+        // (④ 충돌이 칸막이를 꿰뚫었다 — 빠진 방은 봉쇄했는데 옆 통로가 뚫린 칸막이로 하루 내내 새어 배 전체가 숨이 막혔다)
+        foreach (var x in Incidents.ToArray())
+        {
+            if (x.Kind != IncidentKind.Vacuum || x.Active == 0 || x.Room < 0) continue;
+            int v = _roomVent[x.Room];
+            if (v < 0 || F.RegionOf.Length <= v || F.RegionOf[v] < 0) continue;
+            int reg = F.RegionOf[v];
+            foreach (var k in F.Links)
+            {
+                if (k.RB < 0 || k.Via < 0 || k.Kind == LinkKind.DoorAjar || k.RA != reg && k.RB != reg) continue;
+                double inflow = k.RA == reg ? -k.Flow : k.Flow;
+                if (inflow < 0.3) continue;
+                int hi = k.RA == reg ? k.B : k.A, hr = hi >= 0 ? L.Room[hi] : -1;
+                if (hr < 0 || hr == x.Room || RoomSeen[hr] == 0) continue;
+                Raise(sim, IncidentKind.Leak, hr, k.Via, RoomKPa[hr], -1, _st != null && _st.DamageCause[k.Via] != 0 ? _st.DamageCause[k.Via] : x.Cause);   // 이미 있으면 그 자리로 고친다
+                Mark(IncidentKind.Leak, hr);
+            }
         }
         // 사람 표: 의식을 잃은 사람 (방에 전원이 있어야 표가 읽힌다)
         if (_mind != null && _life != null)
@@ -439,6 +459,18 @@ public sealed partial class ShipMind : IEngine
     /// <summary>샌다면 어디로: 닫힌 문 너머 방(또는 바깥)과 기압 차가 20kPa 넘는 문 — 그 문틈. 모르면 방 가운데.</summary>
     private int LeakSpot(int r)
     {
+        // 방마다 단 초음파 샘 찾개 (ISS 휴대용 초음파 샘 찾개처럼 — 쉬익의 자리): 이 방에서 빠져나가는 가장 센 틈 (벽의 금 · 구멍 · 바닥 판)
+        if (RoomSeen[r] != 0 && _roomVent[r] >= 0 && F.RegionOf.Length > _roomVent[r] && F.RegionOf[_roomVent[r]] is int reg && reg >= 0)
+        {
+            int via = -1; double flow = 0.5;
+            foreach (var k in F.Links)
+            {
+                if (k.Kind is LinkKind.DoorGap or LinkKind.DoorAjar || k.Via < 0) continue;
+                double out_ = k.RA == reg ? k.Flow : k.RB == reg ? -k.Flow : 0;   // 이 방에서 나가는 쪽 (몰/초)
+                if (out_ > flow) { flow = out_; via = k.Via; }
+            }
+            if (via >= 0) return via;
+        }
         int best = _roomVent[r]; float bdp = 20;
         Span<int> nb = stackalloc int[4];
         foreach (int d in _roomDoors[r])
@@ -596,6 +628,7 @@ public sealed partial class ShipMind : IEngine
         Span<int> nb = stackalloc int[4];
         foreach (int c in L.Rooms[room].Cells)
         {
+            if (F.Hole[c] > 0 && _st.DamageCause[c] != 0) return _st.DamageCause[c];   // 바닥 · 천장 판이 뚫린 칸 (④)
             L.Neighbors(c, nb);
             foreach (int j in nb) if (j >= 0 && L.Kind[j] == CellKind.Wall && F.Hole[j] > 0 && _st.DamageCause[j] != 0) return _st.DamageCause[j];
         }

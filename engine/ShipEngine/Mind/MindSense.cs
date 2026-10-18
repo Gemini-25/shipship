@@ -291,6 +291,7 @@ public sealed partial class Mind
         if (burning) Learn(a, t, BeliefKind.Fire, x, -1, 1, BeliefSource.Saw, _chem!.FireCause[x]);
         if (_light != null && _light.Visibility(x) < 8) Learn(a, t, BeliefKind.Smoke, x, -1, 0.9f, BeliefSource.Saw);
         if (F.Stored(T.sWater, x) > 100) Learn(a, t, BeliefKind.Water, x, -1, 0.9f, BeliefSource.Saw);
+        if (F.Hole[x] > 0 && L.Kind[x] == CellKind.Floor) Learn(a, t, BeliefKind.Breach, x, -1, 1, BeliefSource.Saw, _st?.DamageCause[x] ?? 0, F.Hole[x]); // ④ 바닥 · 천장 판이 뚫린 칸 (폭발 압력)
         if (_sparks.Contains(x)) Learn(a, t, BeliefKind.Spark, x, -1, 1, BeliefSource.Saw);
         if (d <= 3 && _devAt.Length == L.N && _devAt[x] >= 0 && _net != null)
         {

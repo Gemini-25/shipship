@@ -78,7 +78,7 @@ public sealed partial class Director
         FactKind.Woke => 2, FactKind.ComputerAssign => 4, FactKind.Sick => 8,
         FactKind.Relationship => 12, FactKind.Grieved => 30, FactKind.TrustLost => 25, FactKind.WentOutside => 20,
         FactKind.Talk => 2, FactKind.Blamed => 15, FactKind.Fight => 60, FactKind.Sabotage => 40, FactKind.Confessed => 30,
-        FactKind.Burn => 14, FactKind.Fell => 22, FactKind.Contact => 12, _ => 1,
+        FactKind.Burn => 14, FactKind.Fell => 22, FactKind.Contact => 12, FactKind.ShipSplit => 100, _ => 1,
     };
 
     /// <summary>사실 하나의 무게 — 대화는 끝에 따라 (다툼 · 사과 · 위로 · 소문은 볼 만하고 잡담은 거의 0) · 끝장 몸싸움은 더.</summary>
@@ -99,7 +99,7 @@ public sealed partial class Director
     /// <summary>사람 이야기 사실인가 (관계 · 대화 · 싸움 · 몰래 한 짓 · 슬픔).</summary>
     public static bool PeopleFact(FactKind k) => k is FactKind.Talk or FactKind.Blamed or FactKind.Fight or FactKind.Sabotage or FactKind.Relationship or FactKind.Grieved or FactKind.TrustLost or FactKind.Confessed;
 
-    private static bool Critical(FactKind k) => k is FactKind.Died or FactKind.Collapsed or FactKind.WallBreach or FactKind.DoorBlown or FactKind.Panicked or FactKind.Fight;
+    private static bool Critical(FactKind k) => k is FactKind.Died or FactKind.Collapsed or FactKind.WallBreach or FactKind.DoorBlown or FactKind.Panicked or FactKind.Fight or FactKind.ShipSplit;
     private static bool Omen(FactKind k) => k is FactKind.DebrisNear or FactKind.ComputerAlarm or FactKind.StorySeed or FactKind.WallCrack or FactKind.Flare or FactKind.Noticed or FactKind.Warned or FactKind.Blamed;
     private static bool Omen(in Fact f) => Omen(f.Kind) || f.Kind == FactKind.Talk && (TalkEnd)(int)f.Size is TalkEnd.Argue or TalkEnd.Spread;
 

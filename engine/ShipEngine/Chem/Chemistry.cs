@@ -92,6 +92,13 @@ public sealed class Chemistry : IEngine
 
     public bool IsBurning(int cell) => Burning[cell] != 0;
 
+    /// <summary>배터리 셀이 찌그러졌다 (④ 파편 · 폭발이 배터리를 부쉈다 — 속 합선): 그 칸 셀이 달아오른다 → 열폭주.</summary>
+    public void Abuse(int cell, int cause)
+    {
+        HeatCause[cell] = cause;
+        F.Tf[cell] = Math.Max(F.Tf[cell], 440);
+    }
+
     /// <summary>그 칸이 뜨거운 까닭: 타는 불 · 아직 안 붙은 불씨 · 달군 원인 (없으면 0).</summary>
     public int HeatCauseAt(int cell) => FireCause[cell] != 0 ? FireCause[cell] : _spark[cell] != 0 && _sparkCause[cell] != 0 ? _sparkCause[cell] : HeatCause[cell];
     public int BurningCount { get; private set; }

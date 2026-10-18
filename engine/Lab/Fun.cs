@@ -39,6 +39,32 @@ public static partial class Program
                 s.LastMs.Clear();
             }
             d.Observe(s);
+            if (_funFacts.to > 0 && Environment.GetEnvironmentVariable("FUN_STATE") == "1" && t % (Environment.GetEnvironmentVariable("FUN_EVERY") is string fe ? (long)(double.Parse(fe) * Time.Hours(1)) : Time.Hours(1)) == 0 && t >= Time.Hours(_funFacts.from) && t <= Time.Hours(_funFacts.to))
+            {
+                var fs = s.Get<Field>(); var ns = s.Get<Network>(); var ss = s.Get<Structure>();
+                double kpa = 0; int n = 0; foreach (var r in s.Layout.Rooms) foreach (int c in r.Cells) { kpa += fs.Pressure(c); n++; }
+                double holes = 0; int leaks = 0; for (int c = 0; c < s.Layout.N; c++) if (fs.Hole[c] > 0 && fs.Hole[c] < 2) { holes += fs.Hole[c]; leaks++; }
+                var o2 = ns.Devices.Where(x => x.Def.Role == "o2gen").Select(x => $"{x.Name}{(ns.Working(x.Id) ? "돎" : "섬")}{ns.Duty[x.Id]:0.0}");
+                if (Environment.GetEnvironmentVariable("FUN_HOLES") == "1")
+                    for (int c = 0; c < s.Layout.N; c++)
+                        if (fs.Hole[c] > 0 && fs.Hole[c] < 2)
+                        {
+                            Span<int> nbh = stackalloc int[4]; s.Layout.Neighbors(c, nbh);
+                            string sides = string.Join("/", nbh.ToArray().Where(j => j >= 0).Select(j => s.Layout.Kind[j] == CellKind.Outside ? "밖" : s.Layout.Room[j] >= 0 ? $"{s.Layout.Rooms[s.Layout.Room[j]].Name}:{fs.Pressure(j):0}" : s.Layout.Kind[j].ToString()));
+                            Console.WriteLine($"        구멍 {s.Layout.Kind[c]} ({s.Layout.X(c)},{s.Layout.Y(c)}) {fs.Hole[c] * 1e4:0}cm² {(s.Layout.Room[c] >= 0 ? s.Layout.Rooms[s.Layout.Room[c]].Name : "")} · {sides} · {s.Causes.Story(ss.DamageCause[c])}");
+                        }
+                if (Environment.GetEnvironmentVariable("FUN_INC") == "1" && s.Find<ShipMind>() is { } smi)
+                    foreach (var x in smi.Incidents.Where(x => x.Active != 0))
+                        Console.WriteLine($"        사건 {x.Kind} {(x.Room >= 0 ? s.Layout.Rooms[x.Room].Name : "")} ({s.Layout.X(Math.Max(0, x.Cell))},{s.Layout.Y(Math.Max(0, x.Cell))}) 봉쇄 {x.Sealed} 로봇 {x.RobotA}/{x.RobotB} 번 {x.Tries} 사람 {x.Person}");
+                if (Environment.GetEnvironmentVariable("FUN_AGENTS") == "1")
+                    foreach (var ag in mind.Agents)
+                        Console.WriteLine($"        {mind.NameOf(ag.Id)} ({s.Layout.X(ag.C.Cell)},{s.Layout.Y(ag.C.Cell)}) {(s.Layout.Room[ag.C.Cell] >= 0 ? s.Layout.Rooms[s.Layout.Room[ag.C.Cell]].Name : "")} · {mind.Thought(ag.Id)} · 믿음 {string.Join(",", ag.Beliefs.Where(b => b.Conf >= 0.3f && b.Kind is BeliefKind.Breach or BeliefKind.Leak or BeliefKind.Vacuum).Select(b => $"{Mind.BeliefName(b.Kind)}@({s.Layout.X(b.Cell)},{s.Layout.Y(b.Cell)}):{b.Conf:0.0}"))}");
+                Console.WriteLine($"      ◦ {Time.Clock(t)} 기압 {kpa / Math.Max(1, n):0.0}kPa · 산소 {ns.PpO2:0.0}kPa · 예비 {ns.AirReserve:0} · 구멍 {leaks}곳 {holes * 1e4:0.0}cm² · 금 {Enumerable.Range(0, s.Layout.N).Count(c => ss.Crack[c] > 0)} · 물 {ns.WaterTank / 55.5:0}L · {string.Join(" ", o2)} · 공급 {ns.Supplied:0}/{ns.Demanded:0}kW · 빠짐 {fs.VentedTotal:0}");
+            }
+            if (_funFacts.to > 0)
+                foreach (var f in s.Facts.Since(cursor))
+                    if (f.Tick >= Time.Hours(_funFacts.from) && f.Tick <= Time.Hours(_funFacts.to) && Director.WeightOf(f) >= 12)
+                        Console.WriteLine($"      · {Time.Clock(f.Tick)} {Director.FactText(f.Kind)} {(f.Actor >= 0 && f.Actor < mind.Agents.Count ? mind.NameOf(f.Actor) : "")} {(f.Cell >= 0 && s.Layout.Room[f.Cell] >= 0 ? s.Layout.Rooms[s.Layout.Room[f.Cell]].Name : "")} — {Trim(s.Causes.Story(f.Cause), 220)}");
             foreach (var sd in st.Seeds) seedRoots.Add(sd.Cause);
             foreach (var f in s.Facts.Since(cursor))
             {
@@ -88,6 +114,9 @@ public static partial class Program
             d.ScreenSeconds / 60 / days, score, titles, daily, d.CameraLine(), chainLine, maxE, maxLine, pct(d.SeenBefore, d.Watched), pct(d.MissedStory, d.Watched), pct(d.ChainSeen, d.ChainWatched), wideLines);
     }
 
+    /// <summary>FUN_FACTS=시작시-끝시: 그 사이의 큰 일(무게 12 넘게)을 원인 사슬과 함께 적는다 (재미 측정과 같은 세계 — 연출이 미리 보기로 복제를 만들어도 같다).</summary>
+    private static readonly (double from, double to) _funFacts = Environment.GetEnvironmentVariable("FUN_FACTS") is string ff && ff.Split('-') is { Length: 2 } fp ? (double.Parse(fp[0]), double.Parse(fp[1])) : (0, 0);
+
     private static string Trim(string t, int n) => t.Length <= n ? t : "…" + t[^n..];
 
     /// <summary>⑤ 바깥 한 줄: 점화 · 넘어짐 · 레이더 · 비키기 · 다른 배 · 추진제.</summary>
@@ -112,6 +141,7 @@ public static partial class Program
             for (int k = 0; k < seeds; k++)
             {
                 var sw = System.Diagnostics.Stopwatch.StartNew();
+                if (Environment.GetEnvironmentVariable("FUN_SEED") is string only && only != (11 + k * 7).ToString()) continue;
                 var r = FunRun(ship, (ulong)(11 + k * 7), days, style, level);
                 all.Add(r);
                 Console.WriteLine($"\n  {ship} 시드 {r.Seed} · 사람 {r.Crew} · {sw.Elapsed.TotalSeconds:0}초 → 점수 {r.Score:0}");

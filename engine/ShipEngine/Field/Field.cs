@@ -57,6 +57,13 @@ public sealed partial class Field : IEngine
     public byte[] DoorBleed;    // 1: 닫힌 문의 압력 맞춤 밸브가 열렸다 (양쪽 기압을 맞춰야 문이 열린다 — 구조가 연다)
     /// <summary>벽 칸의 구멍 넓이 (m²). 2 이상이면 벽이 뚫려 칸이 트인다.</summary>
     public float[] Hole;
+    /// <summary>
+    /// 1: 이 칸은 이제 우주다 — 배가 갈라져 떨어져 나간 자리 (④ 구조가 요청한다 · <see cref="Sever"/>). 기체 · 액체가 빠지고 고체 열이 끊기며 이웃 칸에는 우주와의 틈이 된다.
+    /// 바닥 칸의 <see cref="Hole"/>은 바닥 · 천장 판의 구멍 (한 층짜리 배 — 그 너머가 우주다).
+    /// </summary>
+    public byte[] Severed;
+    /// <summary>끊겨 우주로 간 응축상 (저장 종류마다 몰 — 장부) · 끊긴 칸에서 빠진 기체는 <see cref="VentedTotal"/>에.</summary>
+    public double[] SeveredStore;
     /// <summary>바람 (m/s) — 틈으로 빠지는 흐름에서 계산한다.</summary>
     public float[] WindX, WindY;
     /// <summary>
@@ -84,7 +91,7 @@ public sealed partial class Field : IEngine
     {
         L = layout; T = t; Cells = layout.N; G = t.GasCount; S = t.StoreCount;
         N = new double[G * Cells]; U = new double[Cells]; Ts = new double[Cells]; Tf = new double[Cells]; Store = new double[S * Cells];
-        DoorOpen = new float[layout.Doors.Count]; DoorTaped = new byte[layout.Doors.Count]; DoorBleed = new byte[layout.Doors.Count]; Hole = new float[Cells];
+        DoorOpen = new float[layout.Doors.Count]; DoorTaped = new byte[layout.Doors.Count]; DoorBleed = new byte[layout.Doors.Count]; Hole = new float[Cells]; Severed = new byte[Cells]; SeveredStore = new double[t.StoreCount];
         WindX = new float[Cells]; WindY = new float[Cells]; WindPa = new float[Cells];
         _cv = t.Gases.Select(s => s.C).ToArray();
         _molar = t.Gases.Select(s => s.MolarMass).ToArray();
@@ -256,6 +263,26 @@ public sealed partial class Field : IEngine
         if (before != DoorPassable(door) || linkBefore != (open > 0f) || !before) _dirty = true;
     }
 
+    /// <summary>
+    /// 이 칸이 배에서 떨어져 나간다 (④ 구조의 요청 — 배가 갈라진 자리): 기체는 우주로(<see cref="VentedTotal"/>) · 고인 것도 우주로 · 고체 열용량 · 전도가 끊긴다 ·
+    /// 곁의 칸에는 우주로 트인 틈이 된다. 되돌릴 수 없다.
+    /// </summary>
+    public void Sever(int cell)
+    {
+        if (Severed[cell] != 0 || L.Kind[cell] == CellKind.Outside) return;
+        Severed[cell] = 1;
+        double n = 0;
+        for (int g = 0; g < G; g++) { n += N[cell * G + g]; N[cell * G + g] = 0; }
+        U[cell] = 0; VentedTotal += n;
+        for (int s = 0; s < S; s++) { SeveredStore[s] += Store[s * Cells + cell]; Store[s * Cells + cell] = 0; }
+        Cs[cell] = 0; Hole[cell] = 0;
+        SolidLinks(); // 곁의 벽이 우주를 본다 (복사 · 햇빛) · 전도가 끊긴다
+        _dirty = true;
+    }
+
+    /// <summary>바깥(우주 · 행성 대기)인 칸: 도면의 바깥 · 떨어져 나간 자리.</summary>
+    public bool IsOut(int i) => L.Kind[i] == CellKind.Outside || Severed[i] != 0;
+
     public void SetHole(int cell, float area)
     {
         area = Math.Max(0f, area);
@@ -285,7 +312,7 @@ public sealed partial class Field : IEngine
     }
 
     /// <summary>기체가 지나다닐 수 있는 칸: 바닥 · 반 넘게 열린 문 · 뚫린 벽.</summary>
-    public bool Passable(int i) => L.Kind[i] switch
+    public bool Passable(int i) => Severed[i] == 0 && L.Kind[i] switch
     {
         CellKind.Floor => true,
         CellKind.Door => DoorPassable(L.DoorAt[i]),
@@ -364,6 +391,7 @@ public sealed partial class Field : IEngine
         Outside.Save(w);
         // 칸 고체 열용량(설비를 앉히며 늘었다) · 구역별 '아직 고를 차이' · 겉면을 매 틱 다룬 때 · 구역을 지은 때의 문 · 구멍 — 다음 틱의 계산을 바꾸므로 찍는다
         w.Arr(Cs); w.Arr(_imb); w.Arr(_surfTick); w.Bool(_dirty); w.Arr(_topoDoor); w.Arr(_topoHole); w.Arr(DoorTaped); w.Arr(_topoTaped); w.Arr(DoorBleed); w.Arr(_topoBleed);
+        w.Tag("끊김"); w.Arr(Severed); w.Arr(SeveredStore);
     }
 
     public void Load(StateReader r)
@@ -372,6 +400,8 @@ public sealed partial class Field : IEngine
         VentedTotal = r.F64();
         Outside.Load(r);
         r.ArrInto(Cs); var imb = r.Arr<double>(); _surfTick = r.Arr<long>(); bool dirty = r.Bool(); _topoDoor = r.Arr<float>(); _topoHole = r.Arr<float>(); r.ArrInto(DoorTaped); _topoTaped = r.Arr<byte>(); r.ArrInto(DoorBleed); _topoBleed = r.Arr<byte>();
+        r.Tag("끊김"); r.ArrInto(Severed); r.ArrInto(SeveredStore);
+        SolidLinks(); // 끊긴 칸의 전도 · 우주를 보는 면은 도면 + 끊김에서 다시 센다 (찍지 않는다)
         // 구역 · 틈은 찍지 않고 다시 세운다 — 장보다 먼저 도는 엔진(망 · 마음 · 주컴퓨터)이 첫 틱에 구역을 읽는다
         RestoreTopology();
         _dirty = dirty; _imb = imb;

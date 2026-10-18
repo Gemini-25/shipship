@@ -17,7 +17,7 @@ namespace ShipEngine;
 /// </para>
 /// 장(③)에는 구멍 · 문의 열림만 요청한다 (Field.SetHole · SetDoor).
 /// </summary>
-public sealed class Structure : IEngine
+public sealed partial class Structure : IEngine
 {
     public string Name => "구조";
     public Phase Phase => Phase.Structure;
@@ -30,6 +30,8 @@ public sealed class Structure : IEngine
     public const double FatigueK = 1.8e-4;
     public const double BraceFactor = 1.6;   // 덧대 받친 문 · 벽의 정격 배율   // 피로 쌓임 (초당 · 넘친 부하의 세제곱에 곱한다)
     public const double CrackArea = 0.0005;  // 금 (m²)
+    /// <summary>초고속 충돌이 배 안 공기 칸에 남긴 열 가운데 충격파가 되는 몫 (어림 — 파편 구름 · 증기의 팽창).</summary>
+    public const double BlastShare = 0.15, BlastFromJ = 20e6;
 
     private readonly Field F;
     private readonly Layout L;
@@ -64,6 +66,11 @@ public sealed class Structure : IEngine
         DoorPowered = Enumerable.Repeat((byte)1, L.Doors.Count).ToArray();
         ImpactJ = new float[L.N];
         BleedSince = new long[L.Doors.Count]; BleedFrom = new float[L.Doors.Count]; BleedLock = Enumerable.Repeat(long.MinValue / 2, L.Doors.Count).ToArray(); BleedFails = new byte[L.Doors.Count]; BleedLast = Enumerable.Repeat(long.MinValue / 2, L.Doors.Count).ToArray();
+        Crack = new float[L.N]; CrackPatch = new float[L.N]; SigTurn = new float[L.N]; SigRun = new float[L.N]; CrackCause = new int[L.N]; SigDir = new sbyte[L.N];
+        Frag = new int[L.N]; FurnHit = new float[L.Furniture.Count]; FurnBroken = new byte[L.Furniture.Count]; FurnCause = new int[L.Furniture.Count];
+        ThermalJam = new byte[L.Doors.Count]; _pPrev = new float[L.N];
+        BuildCrackGeometry();
+        BuildFrames();
     }
 
     // ───────────────────────── 요청 ─────────────────────────
@@ -76,6 +83,7 @@ public sealed class Structure : IEngine
     {
         if (L.Kind[cell] == CellKind.Door && L.DoorAt[cell] >= 0 && remainingArea <= 0) F.TapeDoor(L.DoorAt[cell]); // 문틈도 막는다
         F.SetHole(cell, Math.Min(F.Hole[cell], Math.Max(0, remainingArea)));
+        if (Crack[cell] > 0 && remainingArea <= 0) CrackPatch[cell] = Crack[cell]; // 금 위에 덧판 — 그 길이까지는 새지 않는다 (더 자라면 다시 샌다)
     }
 
     /// <summary>버티는 문 · 벽에 덧대 받친다 (수리 꾸러미) — 정격 ×1.6 · 피로가 더 쌓이는 것을 늦춘다.</summary>
@@ -129,6 +137,8 @@ public sealed class Structure : IEngine
                 {
                     Fatigue[c] = (float)Math.Min(1, Fatigue[c] + 0.3 * e / pen);
                     DamageCause[c] = cause;
+                    // 뚫지 못한 파편은 흠을 낸다 — 금의 씨앗 (2mm + 40mm × (에너지/관통)^1.5)
+                    if (kind == CellKind.Wall && e > 0.05 * pen) SeedCrack(sim, c, 0.002 + 0.04 * Math.Pow(e / pen, 1.5), sim.Causes.Add(CauseKind.Impact, "파편이 벽에 흠을 냈다", sim.Tick, c, cause));
                     AddHeatTo(c, e);
                     break;
                 }
@@ -143,7 +153,12 @@ public sealed class Structure : IEngine
             {
                 // 공기 칸: 절반은 열 (불덩이 · 파편이 데운다), 절반은 계속
                 ImpactJ[c] += (float)e;
+                // 그 칸의 설비 · 가구가 맞는다 (100J/kg에 부서진다 — 어림)
+                if (L.FurnitureAt[c] >= 0) HitFurniture(sim, L.FurnitureAt[c], e * 0.3 / Math.Max(10, FurnitureKg(L.FurnitureAt[c]) * 100), cause, "파편에");
                 double heat = e * 0.5;
+                // 아주 큰 충돌은 배 안에서 터진다: 그 몫의 15%가 충격파 (초고속 충돌의 파편 구름 · 증기 — 20MJ 넘게 · 어림:
+                //  작은 관통은 파편 구름이 그 방을 휩쓰는 데서 그치고(관통 · 열) · kg급 운석부터 방을 넘어서는 충격파가 된다)
+                if (heat > BlastFromJ) { Blast(sim, c, heat * BlastShare, cause); heat *= 1 - BlastShare; }
                 F.AddSurfaceHeat(c, heat * 0.5);
                 F.AddHeat(c, heat * 0.5);
                 sim.Find<Chemistry>()?.Ignite(c, 0, cause);
@@ -182,8 +197,13 @@ public sealed class Structure : IEngine
         for (int i = 0; i < L.N; i++)
             _p[i] = (L.Kind[i] == CellKind.Floor || L.Kind[i] == CellKind.Door && F.DoorPassable(L.DoorAt[i]) || F.Hole[i] >= 2) ? F.Pressure(i) : -1;
         Doors(sim, dt);
+        HeatJam(sim);
+        Sections(sim);
         Walls(sim, dt);
-        if (sim.Tick % 25 == 0) Rust(sim, 25 * dt);
+        Decks(sim);
+        if (sim.Tick % 25 == 0) { Rust(sim, 25 * dt); StressCorrosion(sim, 25 * dt); }
+        Lattice(sim);
+        Drift(dt);
     }
 
     /// <summary>압력이 빠진 쪽의 원인: 낮은 쪽 구역에 뚫린 틈(벽 구멍 · 날아간 문)이 있으면 그 원인.</summary>
@@ -255,8 +275,15 @@ public sealed class Structure : IEngine
         {
             var kind = L.Kind[c];
             if (kind != CellKind.Wall && !(kind == CellKind.Door && !F.DoorPassable(L.DoorAt[c]))) { Stress[c] = 0; continue; }
-            if (F.Hole[c] >= 2) { Stress[c] = 0; continue; }
+            if (F.Hole[c] >= 2 || F.Severed[c] != 0) { Stress[c] = 0; continue; }
             double dp = DeltaP(c);
+            // 금: 응력 되돌이(반 주기마다 파리스 법칙) · 금 끝의 K가 파괴 인성을 넘으면 찢어진다
+            if (kind == CellKind.Wall && (dp >= 1 || SigRun[c] != 0 || SigTurn[c] != 0 || ThrustG > 0))
+            {
+                double sig = Sigma(c, dp);
+                Cycle(sim, c, sig);
+                if (Crack[c] > 0) { Fracture(sim, c, sig); if (F.Hole[c] >= 2) { Stress[c] = 0; continue; } }
+            }
             if (dp < 1) { Stress[c] = 0; continue; }
             double rating = Math.Max(1e-3, Rating(c));
             double load = dp / rating;
@@ -268,6 +295,7 @@ public sealed class Structure : IEngine
             {
                 double x = (nominal - m.Fatigue) / (1 - m.Fatigue);
                 Fatigue[c] = (float)Math.Min(1, Fatigue[c] + FatigueK * x * x * x * dt);
+                if (Fatigue[c] >= 0.85f && Crack[c] <= 0 && kind == CellKind.Wall) SeedCrack(c, 0.005, DamageCause[c]); // 쌓인 피로가 금이 된다 (S-N 손상 → 큰 금의 시작)
                 if (DamageCause[c] == 0) DamageCause[c] = sim.Causes.Add(CauseKind.Pressure, "압력 차가 벽을 밀었다", sim.Tick, c, LowSideCause(c));
                 // 끼익: 버티는 문 · 벽이 소리를 낸다 (사람 · 컴퓨터가 듣고 알아챈다)
                 if (load >= 0.6 && (sim.Tick + c) % 10 == 0)
@@ -280,7 +308,12 @@ public sealed class Structure : IEngine
             }
             if (load >= 1.6) Open(sim, c, 2.5f, Cause(sim, c, "벽이 압력을 못 이겨 터졌다"), FactKind.WallBreach);
             else if (load >= 1) Open(sim, c, (float)Math.Max(F.Hole[c], Math.Min(2.0, 0.02 + 0.5 * (load - 1))), Cause(sim, c, "벽이 압력을 못 이겨 찢어졌다"), FactKind.WallBreach);
-            else if (load >= 0.85 && F.Hole[c] < CrackArea) Open(sim, c, (float)CrackArea, Cause(sim, c, "벽에 금이 갔다"), FactKind.WallCrack);
+            else if (load >= 0.85 && F.Hole[c] < CrackArea)
+            {
+                int cc = Cause(sim, c, "벽에 금이 갔다");
+                Open(sim, c, (float)CrackArea, cc, FactKind.WallCrack);
+                SeedCrack(c, 0.05 + 0.5 * (load - 0.85), cc);   // 과부하로 난 금 — 자랄 수 있다
+            }
         }
     }
 
@@ -294,22 +327,32 @@ public sealed class Structure : IEngine
     }
 
     /// <summary>벽에 구멍 (금 · 구멍 · 통째로) — 장에 알리고 사실 · 소리.</summary>
-    private void Open(Sim sim, int c, float area, int cause, FactKind fact)
+    private void Open(Sim sim, int c, float area, int cause, FactKind fact, float db = -1)
     {
         if (area <= F.Hole[c]) return;
-        bool first = F.Hole[c] <= 0;
+        bool first = F.Hole[c] <= 0, gone = F.Hole[c] < 2 && area >= 2;
         F.SetHole(c, area);
         DamageCause[c] = cause;
         if (fact == FactKind.WallCrack) Cracks++; else if (first) Breaches++;
-        if (first || area >= 2) sim.Facts.Emit(sim.Tick, fact, c, area, cause);
-        sim.Find<Sound>()?.Emit(sim, NearestAir(c), fact == FactKind.WallCrack ? 85 : 120, fact == FactKind.WallCrack ? SoundKind.Crack : SoundKind.Bang, cause);
+        if (first || gone) sim.Facts.Emit(sim.Tick, fact, c, area, cause);
+        if (gone) _latticeDirty = true;   // 벽이 통째로 나갔다 — 골조 그물이 바뀐다
+        if (db < 0) db = fact == FactKind.WallCrack ? 85 : 120;
+        if (db > 0) sim.Find<Sound>()?.Emit(sim, NearestAir(c), db, fact == FactKind.WallCrack ? SoundKind.Crack : SoundKind.Bang, cause);
     }
 
     private void BlowDoor(Sim sim, int c, double load)
     {
         int d = L.DoorAt[c];
         DoorsBlown++;
-        int cause = sim.Causes.Add(CauseKind.Pressure, "문이 압력을 못 이겨 날아갔다", sim.Tick, c, DamageCause[c]);
+        int why = DamageCause[c];
+        if (why == 0)
+        {
+            // 압력이 갑자기 오른 쪽(폭발)의 원인 — 없으면 빠진 쪽의 틈
+            int x = L.X(c), y = L.Y(c);
+            foreach (var (xx, yy) in new[] { (x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1) })
+                if (why == 0 && L.In(xx, yy) && L.IsSpace(L.Index(xx, yy))) why = PressureCause(sim, L.Index(xx, yy));
+        }
+        int cause = sim.Causes.Add(CauseKind.Pressure, "문이 압력을 못 이겨 날아갔다", sim.Tick, c, why);
         DoorJam[d] = 1;
         DamageCause[c] = cause;
         F.SetDoor(d, load > 1.5 ? 1f : 0.35f);
@@ -483,6 +526,9 @@ public sealed class Structure : IEngine
         w.Arr(Fatigue); w.Arr(Corrode); w.Arr(Stress); w.Arr(DamageCause); w.Arr(DoorTarget); w.Arr(DoorJam); w.Arr(DoorPowered); w.Arr(Braced);
         w.I64(Cracks); w.I64(Breaches); w.I64(Impacts); w.I64(DoorsBlown); w.F64(RustedO2); w.Arr(ImpactJ); w.I64(Bleeds);
         w.Arr(BleedSince); w.Arr(BleedFrom); w.Arr(BleedLock); w.Arr(BleedFails); w.Arr(BleedLast); w.I64(BleedAborts);
+        w.Tag("금"); w.Arr(Crack); w.Arr(CrackPatch); w.Arr(SigTurn); w.Arr(SigRun); w.Arr(CrackCause); w.Arr(SigDir); w.I64(CrackGrowths); w.I64(Tears); w.I64(CrackLeaks);
+        w.Tag("조각"); w.Arr(Frag); w.List(Fragments); w.I32(SplitVersion); w.I64(DeckBursts); w.I64(Smashed); w.I64(Splits); w.I64(DebrisLost); w.I64(SectionFails);
+        w.Arr(FurnHit); w.Arr(FurnBroken); w.Arr(FurnCause); w.Arr(ThermalJam); w.Arr(_pPrev); w.Bool(_latticeDirty);
     }
 
     public void Load(StateReader r)
@@ -490,5 +536,9 @@ public sealed class Structure : IEngine
         r.ArrInto(Fatigue); r.ArrInto(Corrode); r.ArrInto(Stress); r.ArrInto(DamageCause); r.ArrInto(DoorTarget); r.ArrInto(DoorJam); r.ArrInto(DoorPowered); r.ArrInto(Braced);
         Cracks = r.I64(); Breaches = r.I64(); Impacts = r.I64(); DoorsBlown = r.I64(); RustedO2 = r.F64(); r.ArrInto(ImpactJ); Bleeds = r.I64();
         r.ArrInto(BleedSince); r.ArrInto(BleedFrom); r.ArrInto(BleedLock); r.ArrInto(BleedFails); r.ArrInto(BleedLast); BleedAborts = r.I64();
+        r.Tag("금"); r.ArrInto(Crack); r.ArrInto(CrackPatch); r.ArrInto(SigTurn); r.ArrInto(SigRun); r.ArrInto(CrackCause); r.ArrInto(SigDir); CrackGrowths = r.I64(); Tears = r.I64(); CrackLeaks = r.I64();
+        r.Tag("조각"); r.ArrInto(Frag); Fragments.Clear(); Fragments.AddRange(r.List<Fragment>()); SplitVersion = r.I32(); DeckBursts = r.I64(); Smashed = r.I64(); Splits = r.I64(); DebrisLost = r.I64(); SectionFails = r.I64();
+        r.ArrInto(FurnHit); r.ArrInto(FurnBroken); r.ArrInto(FurnCause); r.ArrInto(ThermalJam); r.ArrInto(_pPrev); _latticeDirty = r.Bool();
+        Label(_comp, out _); _latticeVersion++; _thrustAxis = -1; Array.Clear(_thrustSig);   // 덩어리 · 단면은 다시 센다 (찍지 않는다)
     }
 }

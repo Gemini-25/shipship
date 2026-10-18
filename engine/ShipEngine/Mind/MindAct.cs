@@ -715,7 +715,7 @@ public sealed partial class Mind
             L.Neighbors(cur, nb);
             foreach (int j in nb)
             {
-                if (j < 0) continue;
+                if (j < 0 || F.Severed[j] != 0) continue;   // 떨어져 나간 자리는 우주다 (조각 사이를 걸어 건널 수 없다)
                 bool outside = !L.IsSpace(j);
                 if (outside && !(eva && _hullOut[j])) continue;
                 float cost = outside ? 2 : 1; // 외판 바깥은 자석 발로 천천히

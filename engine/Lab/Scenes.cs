@@ -56,6 +56,30 @@ public static partial class Program
                 every = 6; count = 60;
                 break;
             }
+            case "split":
+            {
+                // ④ 배가 갈라진다: 두 방을 잇는 좁은 통로를 큰 운석(20kg · 8km/s — 640MJ)이 위에서 꿰뚫는다
+                var l = Worlds.Ascii(Dumbbell, Worlds.MindLegend);
+                s = Worlds.Full(l, 2);
+                s.Get<Mind>().Crew(s, 2, 0, 0);
+                s.Run(Time.Minutes(1));
+                int seed = s.Causes.Add(CauseKind.Story, "커다란 운석이 배를 향해 온다", s.Tick);
+                s.Get<Structure>().Impact(s, Worlds.At(l, 10, 1), 640e6, 0, 1, seed);
+                every = 2; count = 30;
+                break;
+            }
+            case "crack":
+            {
+                // ④ 차가운 칸막이의 금이 찢어진다 (오른쪽 방이 빠진 뒤 · 200K)
+                var l = Worlds.Ascii(Worlds.TwoRooms);
+                s = Worlds.Full(l, 1);
+                var st = s.Get<Structure>(); var f = s.Get<Field>();
+                st.SeedCrack(Worlds.At(l, 10, 1), 0.06, s.Causes.Add(CauseKind.Impact, "파편이 칸막이에 흠을 냈다", 0));
+                f.SetHole(Worlds.At(l, 24, 2), 0.05f);
+                for (int y = 0; y <= 5; y++) f.Ts[Worlds.At(l, 10, y)] = 200;
+                every = 3; count = 30;
+                break;
+            }
             default: Console.WriteLine($"모르는 장면: {name}"); return;
         }
         var trace = Environment.GetEnvironmentVariable("TRACE");
@@ -100,6 +124,7 @@ public static class Map
     {
         var f = s.Get<Field>();
         var chem = s.Find<Chemistry>();
+        var st = s.Find<Structure>();
         var l = f.L;
         int w = l.W * Px, h = l.H * Px;
         var img = new uint[w * h];
@@ -110,6 +135,7 @@ public static class Map
             switch (l.Kind[i])
             {
                 case CellKind.Outside: c = Png.Rgba(0.02, 0.02, 0.05); break;
+                case var _ when f.Severed[i] != 0: c = Png.Rgba(0.0, 0.0, 0.0); break;   // 떨어져 나간 자리 — 우주
                 case CellKind.Wall:
                     c = f.Hole[i] > 0 ? Png.Rgba(0.9, 0.3, 0.1) : l.Hull[i] ? Png.Rgba(0.45, 0.47, 0.52) : Png.Rgba(0.35, 0.36, 0.4);
                     break;
@@ -131,6 +157,8 @@ public static class Map
                     r = r * (1 - smoke) + 0.05 * smoke; g = g * (1 - smoke) + 0.04 * smoke; b = b * (1 - smoke) + 0.04 * smoke;
                     b += 0.5 * water; g += 0.15 * water;
                     if (l.FurnitureAt[i] >= 0) { r += 0.08; g += 0.08; b += 0.06; }
+                    if (f.Hole[i] > 0) { r += 0.45; g *= 0.6; b *= 0.6; }                       // 바닥 · 천장 판이 뚫렸다
+                    if (st != null && st.FragmentOf(i) > 0) { b += 0.18; }                       // 떨어져 나간 조각
                     if (chem != null && chem.Hrr[i] > 1) { double fl = Math.Min(1, chem.Hrr[i] / 200); r = 0.6 + 0.4 * fl; g = 0.25 + 0.45 * fl; b = 0.05; }
                     double sc = Math.Clamp((f.Tf[i] - 400) / 500, 0, 1);
                     if (sc > 0 && (chem == null || chem.Hrr[i] <= 1)) { r += 0.5 * sc; g += 0.15 * sc; }

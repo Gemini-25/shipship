@@ -277,7 +277,24 @@ public sealed class Network : IEngine
     public bool IsBroken(int device, Part p) => Broken[device * 4 + (int)p] != 0;
     public float WearFraction(int device, Part p) => _limit[device * 4 + (int)p] == float.MaxValue ? 0 : Wear[device * 4 + (int)p] / _limit[device * 4 + (int)p];
     public bool Working(int d) => On[d] != 0 && Broken[d * 4 + (int)Part.Electric] == 0 && Broken[d * 4 + (int)Part.Mechanical] == 0 && Supply[d] > 0.05f;
-    public bool RoomPowered(int room) => room >= 0 && RoomFeeder[room] >= 0 && Breaker[RoomFeeder[room]] != 0 && Supplied > 0;
+    public bool RoomPowered(int room) => room >= 0 && RoomFeeder[room] >= 0 && Breaker[RoomFeeder[room]] != 0 && !Cut(RoomFeeder[room]) && Supplied > 0;
+
+    // ── 배가 갈라지면 (④ 조각): 끊긴 칸을 건너는 급전선 · 떨어진 조각의 배전반 · 원천은 배의 전기에서 빠진다 ──
+    private Structure? _stc;
+    private bool[] _cut = Array.Empty<bool>();
+    private int _cutVersion = -1;
+    /// <summary>이 급전선이 배가 갈라져 끊겼나 (길이 떨어져 나간 칸을 건너거나 배전반이 떨어진 조각에 있다).</summary>
+    public bool Cut(int feeder) => feeder >= 0 && feeder < _cut.Length && _cut[feeder];
+    /// <summary>이 장치가 배(떨어지지 않은 쪽)에 있나.</summary>
+    private bool OnShip(int d) => _stc == null || _stc.Splits == 0 || _stc.InMain(Devices[d].Cell);
+    private void UpdateCuts()
+    {
+        if (_stc == null || _stc.SplitVersion == _cutVersion) return;
+        _cutVersion = _stc.SplitVersion;
+        if (_cut.Length != Feeders.Count) _cut = new bool[Feeders.Count];
+        for (int k = 0; k < Feeders.Count; k++)
+            _cut[k] = !_stc.InMain(Devices[Feeders[k].Panel].Cell) || Feeders[k].Path.Any(c => F.Severed[c] != 0 || !_stc.InMain(c));
+    }
 
     /// <summary>부품을 낡게 한다 (이야기꾼이 '낡은 부품'이라는 원인을 심는다 · 시험) — 숨은 한계의 fraction까지.</summary>
     public void Age(int device, Part p, double fraction, int cause = 0)
@@ -315,6 +332,8 @@ public sealed class Network : IEngine
     public void Step(Sim sim, double dt)
     {
         long t = Prof != null ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+        _stc ??= sim.Find<Structure>();
+        UpdateCuts();
         if (sim.Tick % 25 == 0) MeasureO2();
         Faults(sim);
         t = Lap("고장", t);
@@ -350,7 +369,7 @@ public sealed class Network : IEngine
         if (AirRelease <= 0 || AirReserve <= 0) return;
         double n = Math.Min(AirRelease * dt, AirReserve);
         var at = new List<int>();
-        foreach (var dev in Devices) if (dev.Def.Role == "o2gen" && F.Passable(dev.Cell)) at.Add(dev.Cell);
+        foreach (var dev in Devices) if (dev.Def.Role == "o2gen" && F.Passable(dev.Cell) && OnShip(dev.Id)) at.Add(dev.Cell);
         if (at.Count == 0) for (int r = 0; r < Vent.Length && at.Count == 0; r++) if (Vent[r] >= 0 && F.Passable(Vent[r])) at.Add(Vent[r]);
         if (at.Count == 0) return;
         foreach (int c in at)
@@ -401,13 +420,13 @@ public sealed class Network : IEngine
         for (int r = 0; r < L.Rooms.Count; r++)
             if (RoomFeeder[r] >= 0) load[RoomFeeder[r]] += 0.01 * L.Rooms[r].Cells.Length; // 조명 10W/m²
         double demand = 0;
-        for (int k = 0; k < Feeders.Count; k++) if (Breaker[k] != 0) demand += load[k];
+        for (int k = 0; k < Feeders.Count; k++) if (Breaker[k] != 0 && !Cut(k)) demand += load[k];
         // 공급
         double reactorMax = 0, auxMax = 0, battMax = 0;
         for (int d = 0; d < Devices.Count; d++)
         {
             var dev = Devices[d];
-            bool ok = On[d] != 0 && Broken[d * 4] == 0;
+            bool ok = On[d] != 0 && Broken[d * 4] == 0 && OnShip(d);
             if (dev.Def.Role == "reactor" && ok && !ReactorScram) reactorMax += dev.Def.Gen;
             if (dev.Def.Role == "aux" && ok && Charge[d] > 0) auxMax += dev.Def.Gen;
             if (dev.Def.Role == "battery" && ok && Charge[d] > 0) battMax += dev.Def.Kw;
@@ -416,7 +435,7 @@ public sealed class Network : IEngine
         double avail = reactorMax + auxMax;
         double battCap = 0, battRate = 0;
         for (int d = 0; d < Devices.Count; d++)
-            if (Devices[d].Def.Role == "battery" && On[d] != 0 && Broken[d * 4] == 0)
+            if (Devices[d].Def.Role == "battery" && On[d] != 0 && Broken[d * 4] == 0 && OnShip(d))
             {
                 battCap += Devices[d].Def.Kwh;
                 if (Charge[d] < Devices[d].Def.Kwh - 1e-3) battRate += Devices[d].Def.Kw; // 다 찬 배터리는 충전하지 않는다
@@ -442,7 +461,7 @@ public sealed class Network : IEngine
         for (int d = 0; d < Devices.Count; d++)
         {
             var dev = Devices[d];
-            if (dev.Def.Role == "battery" && battCap > 0 && On[d] != 0 && Broken[d * 4] == 0)
+            if (dev.Def.Role == "battery" && battCap > 0 && On[d] != 0 && Broken[d * 4] == 0 && OnShip(d))
             {
                 double share = dev.Def.Kwh / battCap;
                 double before = Charge[d];
@@ -455,7 +474,7 @@ public sealed class Network : IEngine
         for (int k = 0; k < Feeders.Count; k++)
         {
             var fd = Feeders[k];
-            if (Breaker[k] == 0) { Amps[k] = 0; continue; }
+            if (Breaker[k] == 0 || Cut(k)) { Amps[k] = 0; continue; }
             double amps = load[k] * frac * 1000 / Volts;
             int fc = FaultCell[k];
             if (fc >= 0 && supplied > 0)
@@ -503,7 +522,7 @@ public sealed class Network : IEngine
         for (int d = 0; d < Devices.Count; d++)
         {
             var dev = Devices[d];
-            bool fed = dev.Feeder >= 0 && Breaker[dev.Feeder] != 0;
+            bool fed = dev.Feeder >= 0 && Breaker[dev.Feeder] != 0 && !Cut(dev.Feeder);
             Supply[d] = (float)(On[d] != 0 && Broken[d * 4] == 0 && fed ? frac : 0);
             if (dev.Def.Role is "reactor" or "aux" or "battery") Supply[d] = On[d] != 0 ? 1 : 0;
             else if (dev.Def.Kwh > 0 && On[d] != 0 && Broken[d * 4] == 0)
@@ -518,7 +537,7 @@ public sealed class Network : IEngine
         if (light != null)
             for (int r = 0; r < L.Rooms.Count; r++)
             {
-                bool lit = RoomFeeder[r] >= 0 && Breaker[RoomFeeder[r]] != 0 && frac > 0.05;
+                bool lit = RoomFeeder[r] >= 0 && Breaker[RoomFeeder[r]] != 0 && !Cut(RoomFeeder[r]) && frac > 0.05;
                 float emergency = EmergencyLit(r) ? 30 : 0;
                 light.SetLamp(r, lit ? (float)(300 * Math.Min(1, frac)) : emergency);
             }
@@ -819,7 +838,7 @@ public sealed class Network : IEngine
         for (int r = 0; r < L.Rooms.Count; r++)
         {
             int v = Vent[r];
-            if (v >= 0 && Damper[r] != 0 && Exhaust[r] == 0 && RoomPowered(r) && F.RegionOf[v] >= 0 && F.Moles(v) > 1) vents.Add(v);
+            if (v >= 0 && Damper[r] != 0 && Exhaust[r] == 0 && RoomPowered(r) && F.RegionOf[v] >= 0 && F.Moles(v) > 1 && (_stc == null || _stc.InMain(v))) vents.Add(v);
         }
         if (vents.Count < 2) return;
         // 압력 차단판: 기압이 다른 방들보다 15% 넘게 낮은 방의 통풍구는 저절로 닫힌다 (뚫린 방으로 배 전체 공기가 덕트를 타고 빠지지 않게)
@@ -862,6 +881,8 @@ public sealed class Network : IEngine
         {
             var dev = Devices[d];
             int c = dev.Cell;
+            // ④가 부서졌다고 한 설비 (파편 · 폭발 압력): 회로 · 모터 · 봉함이 한꺼번에 (배터리는 찌그러진 셀이 열폭주로 — ② 화학)
+            if (_stc != null && _stc.FurnBroken[dev.Furniture] != 0 && Broken[d * 4 + (int)Part.Electric] == 0) Smash(sim, d, _stc.FurnCause[dev.Furniture]);
             bool running = On[d] != 0 && Supply[d] > 0.05f;
             double temp = Math.Max(F.Temp(c), F.Ts[c]);
             double rh = F.Partial(T.gH2O, c) / Math.Max(1e-6, Water.SatKPa(Math.Max(250, F.Temp(c))));
@@ -938,6 +959,20 @@ public sealed class Network : IEngine
             CO2Store += got;
             if (CO2Store > CO2StoreMax) { VentedCO2 += CO2Store - CO2StoreMax; CO2Store = CO2StoreMax; }
         }
+    }
+
+    /// <summary>설비가 부서졌다 (④ 구조가 알린 것): 있는 부품이 모두 망가진다 · 그 원인은 부순 것에 잇는다.</summary>
+    private void Smash(Sim sim, int d, int cause)
+    {
+        var dev = Devices[d];
+        for (int p = 0; p < 4; p++) if (dev.Has((Part)p) || p == 0) Broken[d * 4 + p] = 1;
+        Failures++;
+        if (dev.Def.Role is "pump" or "hvac" && Coolant > 0 && dev.Has(Part.Seal))
+        {
+            SealLeakCause[d] = sim.Causes.Add(CauseKind.Leak, $"부서진 {Ko.I(dev.Name)} 틈으로 암모니아가 새어 나온다", sim.Tick, dev.Cell, cause);
+            sim.Facts.Emit(sim.Tick, FactKind.Toxic, dev.Cell, 0, SealLeakCause[d], other: d);
+        }
+        if (dev.Def.Role == "battery" && Charge[d] > 0.5) sim.Find<Chemistry>()?.Abuse(dev.Cell, cause);   // 찌그러진 셀 — 속 합선
     }
 
     private void Fail(Sim sim, int d, Part p)
@@ -1050,7 +1085,12 @@ public sealed class Network : IEngine
         {
             if (!_onData[c] || DataBroken[c] != 0) continue;
             int cause = 0;
-            if (F.Tf[c] > CableBurnK || F.Ts[c] > CableBurnK)
+            if (F.Severed[c] != 0)
+            {
+                st ??= sim.Find<Structure>();
+                cause = st?.FragmentCause(c) is int fc and not 0 ? fc : st != null && st.DamageCause[c] != 0 ? st.DamageCause[c] : sim.Causes.Add(CauseKind.Breach, "선이 지나던 칸이 떨어져 나갔다", sim.Tick, c);
+            }
+            else if (F.Tf[c] > CableBurnK || F.Ts[c] > CableBurnK)
             {
                 chem ??= sim.Find<Chemistry>();
                 cause = HeatSource(chem, c);

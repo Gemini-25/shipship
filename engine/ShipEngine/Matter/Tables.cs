@@ -136,6 +136,19 @@ public sealed class MaterialDef
     public string Id = "", Name = "";
     public Dictionary<string, double> Made = new();
     public double Density, C, K, Strength, Fatigue, MeltK, IgnK, Emiss, Absorb, Penetrate;
+    // ── 파괴 역학 · 부식 (깊이 바퀴 2 — ④ 금 · ② 부식) ──
+    /// <summary>탄성 계수 (GPa).</summary>
+    public double E = 200;
+    /// <summary>파괴 인성 K_c (MPa√m — 얇은 판 · 실온) · 차가울 때 (연성-취성 전이 아래) · 전이 온도 (K · 0이면 전이 없음).</summary>
+    public double Kc = 100, KcLow, DbttK;
+    /// <summary>파리스 법칙 da/dN = C·ΔK^m (m/주기 · MPa√m) · 자라지 않는 문턱 ΔKth.</summary>
+    public double ParisC, ParisM = 3, DKth = 5;
+    /// <summary>응력 부식 균열: 문턱 K_ISCC (MPa√m) · 젖었을 때 자라는 빠르기 (m/s).</summary>
+    public double Kiscc = 1e9, Scc;
+    /// <summary>열팽창 (1/K).</summary>
+    public double Alpha = 12e-6;
+    /// <summary>젖은 곳의 고른 부식 (µm/년 — ISO 9223 C3~C4) · 공식(구멍 부식) 배율 · 전위 (V — 바닷물 속 갈바닉 서열 · 낮을수록 먼저 녹는다).</summary>
+    public double Corr, Pit = 1, Potential;
 }
 
 // ── 실행 중의 모양 ──
@@ -251,6 +264,8 @@ public sealed class Tables
     public int gN2, gO2, gAr, gCO2, gH2O, gCO, gH2, gCH4, gNH3, gO3, gSoot, gAroma;
     // 자주 쓰는 바닥 저장 번호
     public int sWater, sNH3l, sSoot, sPoly, sCell, sFood;
+    /// <summary>바닥 저장 중 염 (말라붙은 소금 · 소금물의 염 — 없으면 -1).</summary>
+    public int sSalt = -1;
 
     public static Tables Load()
     {
@@ -350,6 +365,7 @@ public sealed class Tables
         t.gSoot = t.S("Soot").Gas; t.gAroma = t.S("Aroma").Gas;
         t.sWater = t.S("H2O_l").Store; t.sNH3l = t.S("NH3_l").Store; t.sSoot = t.S("C").Store; t.sPoly = t.S("CH2").Store;
         t.sCell = t.S("Cellulose").Store; t.sFood = t.S("Glucose").Store;
+        t.sSalt = t._subById.TryGetValue("NaCl", out var salt) ? salt.Store : -1;
         return t;
     }
 

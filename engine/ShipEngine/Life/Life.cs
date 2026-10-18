@@ -400,6 +400,7 @@ public sealed partial class Life : IEngine
             }
         }
         if (!suit && tair < 250 && p > 1) b.Frost += (float)((250 - tair) / 100 * dt / 600);
+        if (b.CoreK < 306.5 && b.Alive != 0) { harm ??= "추위에 몸이 식었다"; env = env == 0 ? EnvCause(sim, c, st, chem) : env; }
 
         // ── 압력 · 충격 · 방사선 ──
         double dp = b.LastKPa - p;
@@ -476,6 +477,8 @@ public sealed partial class Life : IEngine
         }
         if (chem != null && r >= 0)
             foreach (int cell in F.Regions[r]) if (chem.Burning[cell] != 0 && chem.FireCause[cell] != 0) return chem.FireCause[cell];
+        // 떨어져 나간 조각 안: 공기 · 전력이 끊겼다 (산소 발생기 · 정화기 · 공조가 배에 남았다)
+        if (st != null && st.FragmentOf(c) > 0) return st.FragmentCutCause(c);
         return 0;
     }
 

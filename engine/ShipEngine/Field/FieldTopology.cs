@@ -45,18 +45,27 @@ public sealed partial class Field
                 _ => 0,
             };
         }
+        SolidLinks();
+    }
+
+    /// <summary>고체끼리 이웃 열전도 · 우주를 보는 외판 면 — 도면과 끊긴 칸(<see cref="Severed"/>)에서 (처음 · 끊길 때 · 되살릴 때).</summary>
+    private void SolidLinks()
+    {
+        var mats = T.Materials;
+        double KOf(int i) => mats[L.Material[i]].Def.K;
         Span<int> nb = stackalloc int[4];
         for (int i = 0; i < Cells; i++)
         {
-            if (L.Kind[i] == CellKind.Outside) continue;
+            _kRight[i] = 0; _kDown[i] = 0; _exposed[i] = 0;
+            if (IsOut(i)) continue;
             int x = L.X(i), y = L.Y(i);
-            if (x + 1 < L.W) _kRight[i] = SolidK(i, i + 1, KOf);
-            if (y + 1 < L.H) _kDown[i] = SolidK(i, i + L.W, KOf);
+            if (x + 1 < L.W && !IsOut(i + 1)) _kRight[i] = SolidK(i, i + 1, KOf);
+            if (y + 1 < L.H && !IsOut(i + L.W)) _kDown[i] = SolidK(i, i + L.W, KOf);
             if (L.Kind[i] == CellKind.Wall)
             {
                 L.Neighbors(i, nb);
                 byte e = 0;
-                foreach (int j in nb) if (j < 0 || L.Kind[j] == CellKind.Outside) e++;
+                foreach (int j in nb) if (j < 0 || IsOut(j)) e++;
                 _exposed[i] = e;
             }
         }
@@ -175,12 +184,14 @@ public sealed partial class Field
                 if (Side(l) && Side(r) && (Gasy(l) || Gasy(r))) AddLink(l, r, i, Hole[i], Hole[i] >= 0.05f ? LinkKind.Breach : LinkKind.Crack);
                 else if (Side(u) && Side(dn) && (Gasy(u) || Gasy(dn))) AddLink(u, dn, i, Hole[i], Hole[i] >= 0.05f ? LinkKind.Breach : LinkKind.Crack);
             }
-            // 트인 칸이 바깥과 바로 맞닿음 (뚫린 외판 · 열린 바깥 문)
+            // 트인 칸이 바깥과 바로 맞닿음 (뚫린 외판 · 열린 바깥 문 · 떨어져 나간 자리)
             if (Passable(i))
             {
                 L.Neighbors(i, nb);
                 foreach (int j in nb)
-                    if (j < 0 || L.Kind[j] == CellKind.Outside) { AddLink(i, -1, i, L.Kind[i] == CellKind.Door ? DoorArea : WallFace, LinkKind.Open); break; }
+                    if (j < 0 || IsOut(j)) { AddLink(i, -1, i, L.Kind[i] == CellKind.Door ? DoorArea : WallFace, LinkKind.Open); break; }
+                // 바닥 · 천장 판의 구멍 (한 층짜리 배 — 그 너머가 우주다 · 폭발 압력에 뚫린다)
+                if (L.Kind[i] == CellKind.Floor && Hole[i] > 0) AddLink(i, -1, i, Hole[i], Hole[i] >= 0.05f ? LinkKind.Breach : LinkKind.Crack);
             }
         }
         foreach (var k in Links)
@@ -192,16 +203,16 @@ public sealed partial class Field
 
     private int Cell(int x, int y) => L.In(x, y) ? L.Index(x, y) : -1;
     /// <summary>틈의 한쪽이 될 수 있나: 트인 칸이거나 바깥.</summary>
-    private bool Side(int c) => c < 0 || L.Kind[c] == CellKind.Outside || Passable(c);
+    private bool Side(int c) => c < 0 || IsOut(c) || Passable(c);
     private bool Gasy(int c) => c >= 0 && Passable(c);
 
     private void AddLink(int a, int b, int via, double area, LinkKind kind)
     {
         // 바깥 쪽은 B로
-        if (a < 0 || L.Kind[a] == CellKind.Outside) (a, b) = (b, a);
+        if (a < 0 || IsOut(a)) (a, b) = (b, a);
         if (a < 0 || !Passable(a)) return;
         int ra = RegionOf[a];
-        int rb = b >= 0 && L.Kind[b] != CellKind.Outside && Passable(b) ? RegionOf[b] : -1;
+        int rb = b >= 0 && !IsOut(b) && Passable(b) ? RegionOf[b] : -1;
         if (rb < 0) b = -1;
         if (ra == rb) return; // 같은 구역 안의 금 — 압력이 같다
         Links.Add(new Link { A = a, B = b, RA = ra, RB = rb, Via = via, Area = area, Kind = kind });

@@ -49,6 +49,7 @@ public static partial class Program
             else if (args.Contains("--probe-flap")) ProbeFlap(args);
             else if (args.Contains("--probe-door")) ProbeDoor(args);
             else if (args.Contains("--probe-fire")) ProbeFire(args);
+            else if (args.Contains("--probe-facts")) ProbeFacts(args);
             else if (args.Contains("--shot")) Shot(args);
             else if (args.Contains("--film")) Film(args);
             else if (args.Contains("--live")) Live(args);

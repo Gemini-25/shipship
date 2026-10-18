@@ -154,7 +154,7 @@ public sealed class Sound : IEngine
             L.Neighbors(c, nb);
             foreach (int j in nb)
             {
-                if (j < 0 || L.Kind[j] == CellKind.Outside) continue;
+                if (j < 0 || F.IsOut(j)) continue;   // 떨어져 나간 자리는 우주다 — 공기도 판도 없다
                 float loss = StepLoss(c, j, cell);
                 float next = lv - loss;
                 if (next < Floor) continue;

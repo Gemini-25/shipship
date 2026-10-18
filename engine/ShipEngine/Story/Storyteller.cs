@@ -274,6 +274,7 @@ public sealed partial class Storyteller : IEngine
                 text = "외판 한 곳에 보이지 않는 금이 자라고 있었다";
                 int c0 = sim.Causes.Add(CauseKind.Wear, text, sim.Tick, c);
                 st.DamageCause[c] = c0;
+                st.SeedCrack(sim, c, 0.02 + 0.025 * g + _rng.Range(0.0, 0.02), c0);   // 진짜 금 (2~10cm) — 판을 뚫으면 가늘게 새고 · 피로가 쌓여 응력이 오르면 어느 날 찢어진다
                 return Record(sim, kind, c0, c, (float)load);
             }
             case SeedKind.Mold:
