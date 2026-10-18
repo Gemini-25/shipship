@@ -132,7 +132,13 @@ public static partial class Program
                 m.AddPerson(s, Worlds.At(ly, 3, 7));
                 foreach (string it in new[] { "원료", "수리 꾸러미" }) { int i = m.ItemIndex(it); for (int fu = 0; fu < ly.Furniture.Count; fu++) m.Stock[fu * m.ItemCount + i] = 0; }
                 int rf = net.Devices.First(d => d.Type == "Refinery").Id;
-                if (broken) net.Age(rf, Part.Mechanical, 1.0);
+                if (broken)
+                {
+                    net.Age(rf, Part.Mechanical, 1.0);
+                    // ⑥ 고칠 길이 없다: 로봇 부품 주머니는 비었고 · 떼어 쓸 모터도 이미 다 떼어 썼다
+                    foreach (var a in m.Agents) a.C.Spares = 0;
+                    foreach (var d in net.Devices) if (Network.DonorRank(d.Def.Role) >= 0 && d.Has(Part.Mechanical)) net.TakePart(d.Id, Part.Mechanical);
+                }
                 if (aux) foreach (var d in net.Devices.Where(d => d.Type is "AuxGenerator" or "GrowRack" or "Autoclave")) net.SetOn(d.Id, true);
                 s.Run(3);
                 float demand = (float)net.Demanded;

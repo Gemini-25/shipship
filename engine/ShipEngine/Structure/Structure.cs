@@ -66,12 +66,29 @@ public sealed partial class Structure : IEngine
         DoorPowered = Enumerable.Repeat((byte)1, L.Doors.Count).ToArray();
         ImpactJ = new float[L.N];
         BleedSince = new long[L.Doors.Count]; BleedFrom = new float[L.Doors.Count]; BleedLock = Enumerable.Repeat(long.MinValue / 2, L.Doors.Count).ToArray(); BleedFails = new byte[L.Doors.Count]; BleedLast = Enumerable.Repeat(long.MinValue / 2, L.Doors.Count).ToArray();
+        // 에어락 벽: 바깥문이 있는 방의 벽은 배의 압력 경계다 — 비운 에어락의 안쪽 벽도 한 기압을 버틴다 (외판과 같은 정격 · ISS 퀘스트 에어락)
+        _lockWall = new bool[L.N];
+        var lockRooms = new HashSet<int>();
+        Span<int> nb = stackalloc int[4];
+        foreach (var d in L.Doors)
+        {
+            if (!d.External) continue;
+            L.Neighbors(d.Cell, nb);
+            foreach (int j in nb) if (j >= 0 && L.Room[j] >= 0) lockRooms.Add(L.Room[j]);
+        }
+        foreach (int r in lockRooms)
+            foreach (int c in L.Rooms[r].Cells)
+            {
+                L.Neighbors(c, nb);
+                foreach (int j in nb) if (j >= 0 && L.Kind[j] == CellKind.Wall) _lockWall[j] = true;
+            }
         Crack = new float[L.N]; CrackPatch = new float[L.N]; SigTurn = new float[L.N]; SigRun = new float[L.N]; CrackCause = new int[L.N]; SigDir = new sbyte[L.N];
         Frag = new int[L.N]; FurnHit = new float[L.Furniture.Count]; FurnBroken = new byte[L.Furniture.Count]; FurnCause = new int[L.Furniture.Count];
         ThermalJam = new byte[L.Doors.Count]; _pPrev = new float[L.N];
         BuildCrackGeometry();
         BuildFrames();
     }
+    private readonly bool[] _lockWall;
 
     // ───────────────────────── 요청 ─────────────────────────
 
@@ -264,7 +281,7 @@ public sealed partial class Structure : IEngine
             var d = L.Doors[L.DoorAt[c]];
             baseKPa = d.Kind switch { "pressure" => 300, "airlock" => 400, _ => NormalDoorKPa };
         }
-        else baseKPa = L.Hull[c] ? HullRatingKPa : WallRatingKPa;
+        else baseKPa = L.Hull[c] || _lockWall[c] ? HullRatingKPa : WallRatingKPa;
         double strength = Math.Sqrt(Math.Max(0.01, m.Strength / 250.0));
         return baseKPa * strength * HeatFactor(c, m) * (1 - Fatigue[c]) * (1 - Corrode[c]) * (Braced[c] != 0 ? BraceFactor : 1);
     }

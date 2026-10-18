@@ -60,6 +60,8 @@ public sealed partial class Mind
             case StepKind.Stow: StowStep(sim, a, st); return;
             case StepKind.TakeFood: TakeFoodStep(sim, a, st); return;
             case StepKind.Fix: FixStep(sim, a, st); return;
+            case StepKind.Salvage: SalvageStep(sim, a, st); return;
+            case StepKind.Rewire: RewireStep(sim, a, st); return;
             case StepKind.PickUp:
             {
                 int vb = st.Target;
@@ -141,6 +143,7 @@ public sealed partial class Mind
     {
         ref var c = ref a.C;
         c.Failed++;
+        a.LastFail = $"{c.Goal}: {why}";
         if (c.Mode == 0) a.Avoid.Add(new AvoidEntry { Goal = c.Goal, Target = c.GoalTarget, Until = sim.Tick + Time.Minutes(5) });
         if (a.Avoid.Count > 16) a.Avoid.RemoveAt(0);
         EndPlan(a);
@@ -374,7 +377,7 @@ public sealed partial class Mind
                 if (!TakeOne(c.Cell, ItemIndex(need), sim)) { Fail(sim, a, "재료가 없다"); return; }
         Stock[bench * ItemCount + item]++; sim.Book.AddItem(item, Flow.Crafted, 1);
         if (_work != null) _work.Crafted++;
-        if (a.IsPerson) c.SkRepair = Math.Min(1, c.SkRepair + 0.005f);
+        if (a.IsPerson) c.SkRepair = Math.Min(1, c.SkRepair + 0.005f * Practice(c, "고치기"));
         JobDone(a, t);
     }
 
@@ -450,7 +453,7 @@ public sealed partial class Mind
         c.Holding = iHarvest; c.HoldCharge = got;
         sim.Book.Add(Res.Food, Flow.Harvest, got);
         if (_work != null) _work.Harvested++;
-        if (a.IsPerson) c.SkFarm = Math.Min(1, c.SkFarm + 0.005f);
+        if (a.IsPerson) c.SkFarm = Math.Min(1, c.SkFarm + 0.005f * Practice(c, "기르기"));
         Next(a, t);
     }
 
@@ -512,17 +515,43 @@ public sealed partial class Mind
         }
         if (_net == null || _net.Broken[dev * 4 + st.Arg] == 0) { Forget(a, b => b.Kind == BeliefKind.Broken && b.Subject == dev); Next(a, t); return; }
         if (Dist(c.Cell, _net.Devices[dev].Cell) > 2) { Fail(sim, a, "멀다"); return; }
-        if (a.IsPerson && c.Holding != iRepair) { Fail(sim, a, "수리 꾸러미가 없다"); return; }
+        if (!HasPart(a)) { Fail(sim, a, a.IsPerson ? "수리 꾸러미가 없다" : "부품이 없다"); return; }
         Activity(a, "work");
         double minutes = a.IsPerson ? P.Items["수리 꾸러미"].Minutes * (1.6 - c.SkRepair) : 15;
         if (t - c.StepStart < Time.Minutes(minutes)) return;
+        float used = c.Holding == iSalvage ? c.HoldCharge : -1;   // ⑥ 떼어 온 헌 부품 (수명을 쓴 몫)
         _net.Repair(dev, (Part)st.Arg);
-        if (a.IsPerson) { UseHeld(sim, a); c.SkRepair = Math.Min(1, c.SkRepair + 0.01f); }
+        if (used >= 0) _net.SetWear(dev, (Part)st.Arg, used);
+        if (c.Holding == iRepair || c.Holding == iSalvage) UseHeld(sim, a);
+        else if (!a.IsPerson && c.Spares > 0) c.Spares--;            // 로봇 부품 주머니
+        if (a.IsPerson) c.SkRepair = Math.Min(1, c.SkRepair + 0.01f * Practice(c, "고치기"));
         Repaired++;
-        int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} {Ko.Eul(_net.Devices[dev].Name)} 고쳤다", t, _net.Devices[dev].Cell, c.GoalCause, 0, a.Id);
+        int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, used >= 0 ? $"{Ko.I(NameOf(a.Id))} 떼어 온 헌 부품으로 {Ko.Eul(_net.Devices[dev].Name)} 고쳤다" : $"{Ko.I(NameOf(a.Id))} {Ko.Eul(_net.Devices[dev].Name)} 고쳤다", t, _net.Devices[dev].Cell, c.GoalCause, 0, a.Id);
         sim.Facts.Emit(t, FactKind.Repaired, _net.Devices[dev].Cell, st.Arg, cause, a.Id, dev);
         Forget(a, b => b.Kind == BeliefKind.Broken && b.Subject == dev);
         Next(a, t);
+    }
+
+    /// <summary>에어락이 쓰이는 중인가: 문 너머 방이 에어락(바깥문이 있는 방)이고 — 그 안에서 남이 나가려고 바깥문 밸브로 비우는 중이거나 바깥문을 기다린다
+    /// (선외에 나간 이가 바깥문을 열어 둔 것은 아니다 — 그때는 우주복을 가지러 들어가는 이를 막지 않는다).</summary>
+    private bool AirlockBusy(Agent a, int d)
+    {
+        if (_st == null || L.Doors[d].External) return false;
+        int mine = RoomOf(a.C.Cell);
+        Span<int> nb = stackalloc int[4];
+        L.Neighbors(L.Doors[d].Cell, nb);
+        foreach (int j in nb)
+        {
+            if (j < 0) continue;
+            int r = L.Room[j];
+            if (r < 0 || r == mine) continue;
+            foreach (int e in _st.RoomDoors(r))
+            {
+                if (e == d || !L.Doors[e].External) continue;
+                foreach (var o in Agents) if (o != a && o.C.Up != 0 && o.C.WaitDoor == e && L.Room[o.C.Cell] == r) return true;   // 안에서 바깥문을 기다린다 (밸브로 비우는 중 포함)
+            }
+        }
+        return false;
     }
 
     /// <summary>업은 사람을 내려놓는다 (구했으면 사실 · 원인).</summary>
@@ -590,6 +619,15 @@ public sealed partial class Mind
                 int d = L.DoorAt[n];
                 if (!F.DoorPassable(d))
                 {
+                    if (AirlockBusy(a, d))
+                    {
+                        // 에어락이 쓰이는 중 — 밖에서 기다린다 (안쪽 밸브를 열면 남이 비우던 에어락이 다시 차고 배 공기가 에어락을 지나 우주로 샌다)
+                        if (c.WaitDoor != d) { ReleaseDoor(a, c.WaitDoor); c.WaitDoor = d; c.WaitTicks = 0; }
+                        if (t % 25 == 0) c.WaitTicks++;
+                        if (c.WaitTicks > 24) { c.WaitTicks = 0; c.WaitDoor = -1; a.Path.Clear(); a.PathIdx = 0; }   // 10분 넘게 쓰인다 — 다시 생각한다
+                        c.MoveBudget = 0;
+                        return;
+                    }
                     _st?.RequestDoor(d, 1);
                     if (c.WaitDoor != d) { ReleaseDoor(a, c.WaitDoor); c.WaitDoor = d; c.WaitTicks = 0; } // 앞서 열어 달라던 다른 문은 거둔다
                     if (F.DoorBleed[d] == 0 || t % 25 == 0) c.WaitTicks++; // 압력 맞춤 밸브가 쉬익거리면 (기압을 맞추는 중) 더 기다린다 — 큰 에어락은 몇 분 걸린다 (12분까지)

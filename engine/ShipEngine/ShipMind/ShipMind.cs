@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace ShipEngine;
 
 /// <summary>주컴퓨터가 알아챈 일의 종류.</summary>
-public enum IncidentKind : byte { None, Fire, Leak, Vacuum, CO, BadAir, PersonDown, DeviceBroken, ElectricFault, PowerShort, ReactorScram, Hot, Strain, Toxic, DoorJam, SensorLost, Injured }
+public enum IncidentKind : byte { None, Fire, Leak, Vacuum, CO, BadAir, PersonDown, DeviceBroken, ElectricFault, PowerShort, ReactorScram, Hot, Strain, Toxic, DoorJam, SensorLost, Injured, PowerLost }
 
 /// <summary>주컴퓨터가 붙잡고 있는 사건 하나.</summary>
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -303,7 +303,7 @@ public sealed partial class ShipMind : IEngine
     {
         IncidentKind.Fire => "불", IncidentKind.Leak => "공기가 샌다", IncidentKind.Vacuum => "공기가 빠졌다", IncidentKind.CO => "일산화탄소",
         IncidentKind.BadAir => "공기가 나쁘다", IncidentKind.PersonDown => "사람이 쓰러졌다", IncidentKind.DeviceBroken => "장치 고장",
-        IncidentKind.ElectricFault => "전기 합선", IncidentKind.PowerShort => "전력이 모자란다", IncidentKind.ReactorScram => "원자로가 멈췄다", IncidentKind.Hot => "너무 덥다", IncidentKind.Strain => "문이 압력에 휜다", IncidentKind.Toxic => "독한 기체", IncidentKind.DoorJam => "문이 끼었다", IncidentKind.SensorLost => "센서가 끊겼다", IncidentKind.Injured => "다친 사람", _ => "",
+        IncidentKind.ElectricFault => "전기 합선", IncidentKind.PowerShort => "전력이 모자란다", IncidentKind.ReactorScram => "원자로가 멈췄다", IncidentKind.Hot => "너무 덥다", IncidentKind.Strain => "문이 압력에 휜다", IncidentKind.Toxic => "독한 기체", IncidentKind.DoorJam => "문이 끼었다", IncidentKind.SensorLost => "센서가 끊겼다", IncidentKind.Injured => "다친 사람", IncidentKind.PowerLost => "생명 설비 정전", _ => "",
     };
 
     private void Detect(Sim sim)
@@ -440,12 +440,14 @@ public sealed partial class ShipMind : IEngine
                 Raise(sim, IncidentKind.DoorJam, r, dc, (float)_st.DoorDeltaP(d), d, _st.DamageCause[dc]);
                 Mark(IncidentKind.DoorJam, r, d);
             }
+        // ⑥ 생명 설비 정전 (급전선을 다시 올릴 수 없다 — 연장선)
+        foreach (var (r, cell, cause) in PowerLostRooms(sim)) { Raise(sim, IncidentKind.PowerLost, r, cell, 1, -1, cause); Mark(IncidentKind.PowerLost, r); }
         // 다시 멀쩡하게 두 번 읽히면 끝
         for (int i = 0; i < Incidents.Count; i++)
         {
             var x = Incidents[i];
             if (x.Active == 0) continue;
-            if (x.Room >= 0 && x.Room < RoomSeen.Length && RoomSeen[x.Room] == 0 && x.Kind is not (IncidentKind.DeviceBroken or IncidentKind.ElectricFault or IncidentKind.DoorJam or IncidentKind.SensorLost)) continue; // 못 보는 방은 그대로 둔다
+            if (x.Room >= 0 && x.Room < RoomSeen.Length && RoomSeen[x.Room] == 0 && x.Kind is not (IncidentKind.DeviceBroken or IncidentKind.ElectricFault or IncidentKind.DoorJam or IncidentKind.SensorLost or IncidentKind.PowerLost)) continue; // 못 보는 방은 그대로 둔다
             long key = ((long)x.Kind << 48) | ((long)(x.Room + 1) << 24) | (uint)((x.Kind is IncidentKind.PersonDown or IncidentKind.DeviceBroken or IncidentKind.ElectricFault or IncidentKind.Strain or IncidentKind.DoorJam ? x.Subject : -1) + 1);
             if (seen.Contains(key)) continue;
             // 끝: 5번(1분) 연속 멀쩡 · 위험한 사건은 적어도 2분은 붙잡는다
@@ -827,6 +829,7 @@ public sealed partial class ShipMind : IEngine
             case IncidentKind.Strain: g = GoalKind.Brace; target = x.Cell; drone = false; break;
             case IncidentKind.DoorJam: g = GoalKind.Brace; target = x.Cell; drone = false; break;
             case IncidentKind.SensorLost: g = GoalKind.Investigate; target = x.Cell; drone = false; break; // 끊긴 자리로 가서 잇는다 (가는 길에 그 방도 본다)
+            case IncidentKind.PowerLost: g = GoalKind.Rewire; target = x.Room; drone = false; break;     // ⑥ 옆 방에서 연장선을 끌어온다
             default: return;
         }
         int need = x.Kind == IncidentKind.Fire ? 2 : 1;
@@ -903,15 +906,16 @@ public sealed partial class ShipMind : IEngine
             int cause = sim.Causes.Add(CauseKind.Computer, peopleIn ? $"주컴퓨터가 {Ko.Eul(RoomName(x.Room))} 봉쇄했다 — 안에 사람이 있었다" : $"주컴퓨터가 {Ko.Eul(RoomName(x.Room))} 봉쇄했다", t, x.Cell, x.Cause);
             sim.Facts.Emit(t, FactKind.ComputerSeal, x.Cell, peopleIn ? 1 : 0, cause, -1, x.Room);
             Say(sim, $"{RoomName(x.Room)} 봉쇄{(peopleIn ? " (사람이 안에 있다)" : "")}");
+            UnplugForSeal(sim, x.Room, cause);   // ⑥ 문틀의 연장선은 뽑는다 (그 방은 다시 어둡다)
         }
-        // 열린 문은 곁에 아무도 없을 때 다시 닫는다 (로봇 · 사람은 지나다닐 수 있다)
+        // 열린 문은 지나는 이가 없을 때 다시 닫는다 (로봇 · 사람은 지나다닐 수 있다) — 문 칸에 선 이 · 문을 기다리는 이 · 곁 2칸에서 걷는 이만 (문 대각선 충전독에서 충전하는 로봇이 봉쇄한 방 문을 내내 열어 두던 결함)
         if (t % 10 != 0) return;
         foreach (int d in _roomDoors[x.Room])
         {
             if (F.DoorOpen[d] <= 0 || _st.DoorTarget[d] <= 0) continue;
             int dc = L.Doors[d].Cell;
             bool near = false;
-            foreach (var a in _mind.Agents) if (a.C.Up != 0 && _mind.Dist(a.C.Cell, dc) <= 2) { near = true; break; }
+            foreach (var a in _mind.Agents) if (a.C.Up != 0 && (a.C.Cell == dc || a.C.WaitDoor == d || _mind.Dist(a.C.Cell, dc) <= 2 && _mind.Walking(a))) { near = true; break; }
             if (!near) _st.RequestDoor(d, 0);
         }
     }

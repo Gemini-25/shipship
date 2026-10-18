@@ -99,7 +99,7 @@ public static partial class Program
             + $" / 막 {st.Arc} · 큰 일로 여파 {st.Aftermaths} · 형편 보고 쉼 {st.Mercies} · 열매 {st.Fruited} · 헛돎 {st.Fizzled} · 털어놓음 {s.Get<Society>().Confessions} · 숨김 {s.Get<Society>().SecretsKept}"
             + $" / 씨앗 {string.Join(" ", st.Seeds.GroupBy(x => x.Kind).Select(g => $"{Storyteller.SeedName(g.Key)} {g.Count()}"))}"
             + $" / 소리: 가려 못 들음 {mind.Masked} · 이상한 기계 소리 알아챔 {mind.GrindHeard} · 듣고 미리 갈기 {mind.EarMaintained} · 낸 소리 {s.Get<Sound>().Emitted} · 큰 소리(100dB 넘게) {s.Facts.CountOf(FactKind.LoudSound)}"
-            + Helm(s, mind);
+            + Helm(s, mind) + Mend(s, mind);
         // 사슬: 건넌 엔진 수 · 가장 넓은 사슬 · 원인 없는 큰 일
         var wide = d.AllChains().OrderByDescending(c => c.Count).ThenByDescending(c => c.Facts).Take(2).ToList();
         var deep = d.AllChains().OrderByDescending(c => c.Line).ThenByDescending(c => c.Depth).FirstOrDefault();
@@ -125,6 +125,13 @@ public static partial class Program
         var o = s.Get<Outside>(); var sm = s.Get<ShipMind>();
         return $" / 바깥: 점화 {o.BurnCount} (미룸 {sm.BurnsDelayed} · 놓침 {o.MissedBurns}) · 넘어짐 {mind.Falls} (붙잡음 {mind.BracedOnBurn}) · 레이더 운석 {sm.RocksSeen} · 비킴 {sm.DodgesAvoided}/{sm.DodgesTried} · 충격 대비 {sm.BraceCalls}"
             + $" · 다른 배 {o.ContactSeq} · 교신 {sm.Hails} · 구함 {sm.Rescued} · 거절 {sm.Declined} · 건짐 {sm.Salvaged} · 추진제 {o.PropellantKg / Math.Max(1, o.PropellantStart):P0} · {o.Distance:0.000}AU";
+    }
+
+    /// <summary>⑥ 고쳐 쓰기 한 줄: 합선 · 연장선 · 떼어 쓰기 · 헌 부품.</summary>
+    private static string Mend(Sim s, Mind mind)
+    {
+        var net = s.Get<Network>(); var sm = s.Get<ShipMind>();
+        return $" / 고쳐 쓰기: 합선 {net.Shorts} · 연장선 {net.JumpersLaid} (합선 {net.JumperShorts} · 봉쇄로 뽑음 {sm.JumpersCut} · 걷음 {net.JumpersPulled}) · 떼어 쓰기 {mind.Salvages} · 고침 {mind.Repaired}";
     }
 
     internal static void Fun(string[] args)

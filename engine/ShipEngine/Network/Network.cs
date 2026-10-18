@@ -52,7 +52,7 @@ public sealed class Feeder
 /// 기계 부품은 한계의 85%를 넘으면 끽끽 소리가 난다 (사람 · 진동 감시기가 알아챌 수 있다).
 /// </para>
 /// </summary>
-public sealed class Network : IEngine
+public sealed partial class Network : IEngine
 {
     public string Name => "망";
     public Phase Phase => Phase.Network;
@@ -277,7 +277,7 @@ public sealed class Network : IEngine
     public bool IsBroken(int device, Part p) => Broken[device * 4 + (int)p] != 0;
     public float WearFraction(int device, Part p) => _limit[device * 4 + (int)p] == float.MaxValue ? 0 : Wear[device * 4 + (int)p] / _limit[device * 4 + (int)p];
     public bool Working(int d) => On[d] != 0 && Broken[d * 4 + (int)Part.Electric] == 0 && Broken[d * 4 + (int)Part.Mechanical] == 0 && Supply[d] > 0.05f;
-    public bool RoomPowered(int room) => room >= 0 && RoomFeeder[room] >= 0 && Breaker[RoomFeeder[room]] != 0 && !Cut(RoomFeeder[room]) && Supplied > 0;
+    public bool RoomPowered(int room) { int f = RoomFeed(room); return f >= 0 && Breaker[f] != 0 && !Cut(f) && Supplied > 0; }
 
     // ── 배가 갈라지면 (④ 조각): 끊긴 칸을 건너는 급전선 · 떨어진 조각의 배전반 · 원천은 배의 전기에서 빠진다 ──
     private Structure? _stc;
@@ -315,7 +315,7 @@ public sealed class Network : IEngine
     private readonly Dictionary<int, int> _wearCause = new(); // 낡게 한 원인 (부품 → 원인 마디) — 고장이 그 뿌리에 이어진다
 
     /// <summary>부품을 고친다 (사람 · 로봇의 수리).</summary>
-    public void Repair(int device, Part p) { Broken[device * 4 + (int)p] = 0; Wear[device * 4 + (int)p] = 0; _wearCause.Remove(device * 4 + (int)p); if (p == Part.Seal) SealLeakCause[device] = 0; }
+    public void Repair(int device, Part p) { Broken[device * 4 + (int)p] = 0; Wear[device * 4 + (int)p] = 0; _wearCause.Remove(device * 4 + (int)p); if (p == Part.Seal) SealLeakCause[device] = 0; if (device < Stripped.Length) Stripped[device] = 0; }
 
     // ───────────────────────── 한 틱 ─────────────────────────
 
@@ -393,7 +393,7 @@ public sealed class Network : IEngine
                 if (!wet && !burnt) continue;
                 FaultCell[fd.Id] = c;
                 Shorts++;
-                int parent = burnt ? sim.Causes.Add(CauseKind.Heat, "전선 피복이 뜨거워 녹았다", sim.Tick, c) : sim.Causes.Add(CauseKind.Leak, "전선이 지나는 바닥이 젖었다", sim.Tick, c);
+                int parent = burnt ? sim.Causes.Add(CauseKind.Heat, "전선 피복이 뜨거워 녹았다", sim.Tick, c) : sim.Causes.Add(CauseKind.Leak, "전선이 지나는 바닥이 젖었다", sim.Tick, c, SpillNear(c));
                 int cause = sim.Causes.Add(CauseKind.Electric, "합선", sim.Tick, c, parent);
                 sim.Facts.Emit(sim.Tick, FactKind.Short, c, 0, cause, other: fd.Id);
                 _faultCause[fd.Id] = cause;
@@ -410,15 +410,19 @@ public sealed class Network : IEngine
         // 수요 (급전선마다)
         if (_load.Length != Feeders.Count) _load = new double[Feeders.Count];
         var load = _load; Array.Clear(load);
+        FeedRooms();   // 방마다 지금 전기를 주는 급전선 (연장선이 있으면 옆 방 것)
         for (int d = 0; d < Devices.Count; d++)
         {
             var dev = Devices[d];
-            if (dev.Feeder < 0 || On[d] == 0 || Broken[d * 4] != 0) continue;
+            int ef = FeedOf(dev);
+            if (ef < 0 || On[d] == 0 || Broken[d * 4] != 0) continue;
             if (dev.Def.Role is "reactor" or "aux" or "battery") continue;
-            load[dev.Feeder] += dev.Def.Kw * (dev.Def.Role == "o2gen" ? Math.Max(0.1, Duty[d]) : 1); // 산소 발생기는 일 몫만큼 (팬 · 정화는 늘 10%)
+            double kw = dev.Def.Kw * (dev.Def.Role == "o2gen" ? Math.Max(0.1, Duty[d]) : 1); // 산소 발생기는 일 몫만큼 (팬 · 정화는 늘 10%)
+            load[ef] += kw;
+            if (dev.Room >= 0) _roomLoad[dev.Room] += kw;
         }
         for (int r = 0; r < L.Rooms.Count; r++)
-            if (RoomFeeder[r] >= 0) load[RoomFeeder[r]] += 0.01 * L.Rooms[r].Cells.Length; // 조명 10W/m²
+            if (_feed[r] >= 0) { double lk = 0.01 * L.Rooms[r].Cells.Length; load[_feed[r]] += lk; _roomLoad[r] += lk; } // 조명 10W/m²
         double demand = 0;
         for (int k = 0; k < Feeders.Count; k++) if (Breaker[k] != 0 && !Cut(k)) demand += load[k];
         // 공급
@@ -518,11 +522,13 @@ public sealed class Network : IEngine
             double w = amps * amps * CableOhmPerM;
             if (w > 1) foreach (int c in fd.Path) F.AddSurfaceHeat(c, w * dt);
         }
+        JumperStep(sim, dt, frac);   // 연장선: 전류 · 열 · 젖은 칸 · 합선 · 문틀
         // 장치마다 받은 비율
         for (int d = 0; d < Devices.Count; d++)
         {
             var dev = Devices[d];
-            bool fed = dev.Feeder >= 0 && Breaker[dev.Feeder] != 0 && !Cut(dev.Feeder);
+            int ef = FeedOf(dev);
+            bool fed = ef >= 0 && Breaker[ef] != 0 && !Cut(ef);
             Supply[d] = (float)(On[d] != 0 && Broken[d * 4] == 0 && fed ? frac : 0);
             if (dev.Def.Role is "reactor" or "aux" or "battery") Supply[d] = On[d] != 0 ? 1 : 0;
             else if (dev.Def.Kwh > 0 && On[d] != 0 && Broken[d * 4] == 0)
@@ -537,7 +543,7 @@ public sealed class Network : IEngine
         if (light != null)
             for (int r = 0; r < L.Rooms.Count; r++)
             {
-                bool lit = RoomFeeder[r] >= 0 && Breaker[RoomFeeder[r]] != 0 && !Cut(RoomFeeder[r]) && frac > 0.05;
+                bool lit = _feed[r] >= 0 && Breaker[_feed[r]] != 0 && !Cut(_feed[r]) && frac > 0.05;
                 float emergency = EmergencyLit(r) ? 30 : 0;
                 light.SetLamp(r, lit ? (float)(300 * Math.Min(1, frac)) : emergency);
             }
@@ -653,7 +659,8 @@ public sealed class Network : IEngine
                 }
                 case "recycler":
                 {
-                    if (sealLeak) { double leak = Math.Min(WaterTank, 0.05 * dt); WaterTank -= leak; F.AddStore(c, T.sWater, leak); sim.Book.Add(Res.Water, Flow.Leaked, -leak); }
+                    // 봉함이 망가지면 오수 관이 샌다: 펌프가 돌면 압력으로 분에 0.5L(0.46몰/초) · 멈추면 스미는 만큼 (0.02몰/초)
+                    if (sealLeak) { double leak = Math.Min(WaterTank, (p > 0 && mechOk ? 0.46 : 0.02) * dt); WaterTank -= leak; F.AddStore(c, T.sWater, leak); sim.Book.Add(Res.Water, Flow.Leaked, -leak); }
                     // 오수(오줌 · 씻은 물) → 증류 · 걸러 마실 물로 (ISS 물 회수 장치: 오줌 처리 약 85% + 소금물 처리 → 전체 94~98% — 여기는 94%) · 남은 진한 소금물은 버린다
                     if (p > 0 && mechOk && WasteWater > 0)
                     {
@@ -997,6 +1004,22 @@ public sealed class Network : IEngine
             sim.Facts.Emit(sim.Tick, FactKind.Toxic, dev.Cell, 0, SealLeakCause[d], other: d);
             sim.Find<Sound>()?.Emit(sim, dev.Cell, 70, SoundKind.Hiss, SealLeakCause[d]);
         }
+        // 물 재생기 봉함: 오수 관이 샌다 (바닥에 고인 물이 급전선 길에 닿으면 합선 — 그 원인이 이 마디에 이어진다)
+        if (p == Part.Seal && dev.Def.Role == "recycler")
+            SealLeakCause[d] = sim.Causes.Add(CauseKind.Leak, $"{dev.Name} 오수 관이 샌다 — 바닥에 물이 고인다", sim.Tick, dev.Cell, cause);
+    }
+
+    /// <summary>젖은 칸의 물이 어디서 왔나: 같은 방 6칸 안에서 새는 물 재생기 (원인 마디 · 0 모름).</summary>
+    public int SpillNear(int cell)
+    {
+        int room = L.Room[cell], best = 0, bd = 7;
+        foreach (var dev in Devices)
+        {
+            if (SealLeakCause[dev.Id] == 0 || dev.Def.Role != "recycler" || dev.Room != room) continue;
+            int d = Math.Abs(L.X(dev.Cell) - L.X(cell)) + Math.Abs(L.Y(dev.Cell) - L.Y(cell));
+            if (d < bd) { bd = d; best = SealLeakCause[dev.Id]; }
+        }
+        return best;
     }
 
     // ───────────────────────── 센서 선 (⑥ 바퀴 1) ─────────────────────────
@@ -1142,6 +1165,7 @@ public sealed class Network : IEngine
         var wk = _wearCause.Keys.OrderBy(k => k).ToList();
         w.I32(wk.Count);
         foreach (var k in wk) { w.I32(k); w.I32(_wearCause[k]); }
+        SaveJumpers(w); w.Arr(Stripped); w.I64(PartsSalvaged);
     }
 
     public void Load(StateReader r)
@@ -1159,5 +1183,6 @@ public sealed class Network : IEngine
         _wearCause.Clear();
         n = r.I32();
         for (int i = 0; i < n; i++) { int k = r.I32(); _wearCause[k] = r.I32(); }
+        LoadJumpers(r); Stripped = r.Arr<byte>(); PartsSalvaged = r.I64();
     }
 }

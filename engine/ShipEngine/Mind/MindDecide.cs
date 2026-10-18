@@ -122,6 +122,7 @@ public sealed partial class Mind
                 || g is GoalKind.FightFire or GoalKind.Patch or GoalKind.Brace or GoalKind.Investigate && cell >= 0 && Dist(c.AssignedTarget, cell) <= 3))
                 score += g is GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock && _deciding.IsPerson ? 1 : 3; // 주컴퓨터가 맡긴 일 (사람의 일상 일은 끼니 · 잠보다 앞서지 않게)
         }
+        if (_deciding != null && _deciding.IsPerson) score *= AimBoost(_deciding.C, g);   // ⑧ 인생 목표
         _opts.Add(new Option { Goal = g, Target = target, Cell = cell, Score = score, Cause = cause });
     }
 
@@ -470,17 +471,25 @@ public sealed partial class Mind
                 for (int p = 0; p < 4; p++) if (_net.Broken[dev * 4 + p] != 0) { part = p; break; }
                 if (part < 0 && _net.Devices[dev].Def.Role == "panel" && _net.StuckFault(dev) >= 0) part = PullFeederArg; // 눌어붙은 차단기: 손으로 끊는다
                 if (part < 0) return false;
-                if (a.IsPerson && c.Holding != iRepair)
+                if (part == PullFeederArg)
                 {
-                    if (c.Holding != 255) return false;
-                    int src = NearestStock(here, iRepair);
-                    if (src < 0) return false;
-                    plan.Add(Go(L.Furniture[src].Cells[0], 1));
-                    plan.Add(new PlanStep { Kind = StepKind.Take, Target = src, Arg = iRepair });
+                    if (a.IsPerson && c.Holding != iRepair)
+                    {
+                        if (c.Holding != 255) return false;
+                        int src = NearestStock(here, iRepair);
+                        if (src < 0) return false;
+                        plan.Add(Go(L.Furniture[src].Cells[0], 1));
+                        plan.Add(new PlanStep { Kind = StepKind.Take, Target = src, Arg = iRepair });
+                    }
                 }
+                else if (!PlanPart(a, dev, part, here, plan)) return false;   // ⑥ 부품: 로봇 주머니 · 수리 꾸러미 · 없으면 덜 중요한 장치에서 떼어 온다
                 plan.Add(Go(_net.Devices[dev].Cell, 1));
                 plan.Add(new PlanStep { Kind = StepKind.Fix, Target = dev, Arg = (byte)part });
                 return true;
+            }
+            case GoalKind.Rewire:
+            {
+                return PlanRewire(a, o.Target, plan);
             }
             case GoalKind.Brace:
             {
@@ -750,6 +759,9 @@ public sealed partial class Mind
     {
         ref var c = ref a.C;
         if (!a.IsPerson && c.AssignedGoal == GoalKind.Investigate && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0) Add(GoalKind.Investigate, c.AssignedTarget, c.AssignedTarget, 1.2f);
+        // ⑥ 맡긴 연장선: 그 방에 아직 전기가 없으면
+        if (c.AssignedGoal == GoalKind.Rewire && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0 && _net != null && !_net.RoomPowered(c.AssignedTarget) && c.AssignedTarget < _net.Vent.Length)
+            Add(GoalKind.Rewire, c.AssignedTarget, _net.Vent[c.AssignedTarget], 1.3f, _net.RoomFeeder[c.AssignedTarget] is int rf && rf >= 0 ? _net.FaultCause(rf) : 0);   // 원인: 그 방 급전선이 죽은 까닭
         // 맡긴 끼인 문: 믿음이 바래도 간다
         if (!a.IsPerson && c.AssignedGoal == GoalKind.Brace && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0 && _st != null && _st.JammedAt(c.AssignedTarget)) Add(GoalKind.Brace, c.AssignedTarget, c.AssignedTarget, 1.2f);
         // ⑦ 맡긴 돌보기: 다친 이 곁으로 (맡김 가산 +3 — 사람이면 끼니보다 앞선다)
