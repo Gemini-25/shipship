@@ -93,6 +93,7 @@ public sealed partial class Structure : IEngine
         ThermalJam = new byte[L.Doors.Count]; _pPrev = new float[L.N];
         BuildCrackGeometry();
         BuildFrames();
+        BuildSub();
     }
     private readonly bool[] _lockWall;
 
@@ -228,6 +229,7 @@ public sealed partial class Structure : IEngine
         Decks(sim); t = Prof.Lap("구조:바닥", t);
         if (sim.Tick % 25 == 0) { Rust(sim, 25 * dt); StressCorrosion(sim, 25 * dt); }
         t = Prof.Lap("구조:녹 · 응력 부식", t);
+        SyncSub();
         Lattice(sim); t = Prof.Lap("구조:격자", t);
         MoveBodies(sim, dt); Prof.Lap("구조:몸", t);
     }

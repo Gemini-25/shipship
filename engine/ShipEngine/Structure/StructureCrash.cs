@@ -84,15 +84,17 @@ public sealed partial class Structure
         foreach (int c in Edge(a))
         {
             double cx = L.X(c), cy = L.Y(c);
-            for (int s = 0; s < 4; s++)
+            ushort ma = Sub[c];
+            for (int s = 0; s < 16; s++)
             {
-                double px = cx + 0.25 + 0.5 * (s & 1), py = cy + 0.25 + 0.5 * (s >> 1);
+                if ((ma >> s & 1) == 0) continue;   // 빈 잔칸은 닿지 않는다
+                double px = cx + (s % SubN + 0.5) / SubN, py = cy + (s / SubN + 0.5) / SubN;
                 var (wx, wy) = WorldOf(a, px, py);
                 var (lx, ly) = LocalOf(b, wx, wy);
                 int bx = (int)Math.Floor(lx), by = (int)Math.Floor(ly);
                 if (!L.In(bx, by)) continue;
                 int cb = L.Index(bx, by);
-                if (!SolidIn(b, cb)) continue;
+                if (!SolidIn(b, cb) || !SubAt(cb, Math.Clamp((int)((lx - bx) * SubN), 0, SubN - 1), Math.Clamp((int)((ly - by) * SubN), 0, SubN - 1))) continue;
                 // b 겉면의 바깥 방향: 이웃 중 b의 구조가 아닌 칸 쪽 (b의 틀) — 다 차 있으면 b의 무게중심에서 그 점 쪽
                 double nx = 0, ny = 0;
                 for (int dy = -1; dy <= 1; dy++)
@@ -161,15 +163,18 @@ public sealed partial class Structure
         int hit = cellsB.Min;
         sim.Facts.Emit(sim.Tick, FactKind.Crash, hit, (float)(lost / 1000), cause, -1, mover);
         sim.Find<Sound>()?.Emit(sim, NearestAir(hit), (float)(90 + 10 * Math.Log10(Math.Max(1, lost / 1000))), SoundKind.Bang, cause);
-        foreach (int c in cellsA) Crush(sim, c, lost / 2 / cellsA.Count, cause);
-        foreach (int c in cellsB) Crush(sim, c, lost / 2 / cellsB.Count, cause);
+        double px = 0, py = 0;
+        foreach (var k in _contacts) { px += k.x; py += k.y; }
+        px /= _contacts.Count; py /= _contacts.Count;
+        foreach (int c in cellsA) Crush(sim, c, lost / 2 / cellsA.Count, cause, a, px, py);
+        foreach (int c in cellsB) Crush(sim, c, lost / 2 / cellsB.Count, cause, b, px, py);
     }
 
     /// <summary>
     /// 칸이 부딪힌 에너지를 받는다 (미노르스키: 강철 1m³를 으스러뜨리는 데 47.2MJ — 칸의 판 부피 · 재질 강도 · 열 · 녹만큼):
     /// 넘으면 통째로 · 15% 넘게면 찢겨 뚫린다 (넓이 ∝ 에너지) · 0.2% 넘게면 찌그러져 금이 간다 · 받은 에너지는 열이 된다.
     /// </summary>
-    private void Crush(Sim sim, int c, double e, int cause)
+    private void Crush(Sim sim, int c, double e, int cause, int body, double wx, double wy)
     {
         if (e <= 0 || !Solid(c)) return;
         var m = T.Materials[L.Material[c]].Def;
@@ -179,6 +184,13 @@ public sealed partial class Structure
         double r = e / crush;
         AddHeatTo(c, e);
         DamageCause[c] = cause;
+        // 맞닿은 쪽에서 잔칸이 으스러진다 (받은 에너지만큼 — 16개가 통째로)
+        int squash = (int)Math.Round(16 * Math.Min(1, r));
+        if (squash > 0)
+        {
+            var (lx, ly) = LocalOf(body, wx, wy);
+            Carve(c, squash, (int)Math.Floor((lx - L.X(c)) * SubN), (int)Math.Floor((ly - L.Y(c)) * SubN));
+        }
         if (r >= 1) { Destroy(sim, c, cause); return; }
         if (r >= 0.15)
         {

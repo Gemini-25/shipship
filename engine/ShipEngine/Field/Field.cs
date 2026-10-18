@@ -293,12 +293,16 @@ public sealed partial class Field : IEngine
     /// <summary>바깥(우주 · 행성 대기)인 칸: 도면의 바깥 · 떨어져 나간 자리.</summary>
     public bool IsOut(int i) => L.Kind[i] == CellKind.Outside || Severed[i] != 0;
 
+    /// <summary>구멍 넓이가 바뀔 때마다 오른다 (위층 캐시용 — ④ 잔칸이 구멍 모양을 맞춘다 · 찍지 않는다).</summary>
+    public int HoleVersion;
+
     public void SetHole(int cell, float area)
     {
         area = Math.Max(0f, area);
         if (Hole[cell] == area) return;
         Hole[cell] = area;
         _dirty = true;
+        HoleVersion++;
     }
 
     public bool DoorPassable(int door) => DoorOpen[door] >= 0.5f;

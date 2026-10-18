@@ -178,6 +178,74 @@ public static partial class Program
                 $"몸 {st.Bodies.Count} · 배 {shipBody} · 가운데 방 {midBody} · 끝 방 {farBody} · \"{story}\"");
         }
 
+        // ── (라) 잔칸: 외판의 구멍은 넓이만큼 잔칸이 바깥 면에서 들쭉날쭉 이어져 파이고 · 통째로 나간 벽은 테두리 두셋만 · 그림의 빈 잔칸은 우주 ──
+        {
+            var lay = Worlds.Ascii(Twins);
+            var s = FieldStructure(lay, 5);
+            var st = s.Get<Structure>(); var f = s.Get<Field>();
+            s.Run(2);
+            int hull = Worlds.At(lay, 2, 0), gone = Worlds.At(lay, 7, 0);
+            st.Impact(s, hull, 3e7, 0, 1, s.Causes.Add(CauseKind.Story, "파편이 외판을 때렸다", s.Tick));
+            st.Destroy(s, gone, 0);
+            s.Run(2);
+            ushort m = st.Sub[hull];
+            int cleared = 16 - Structure.SubCount(m), want = (int)Math.Ceiling(16 * f.Hole[hull] / Field.WallFace);
+            // 빈 잔칸이 한 덩이로 이어지고 바깥(위) 면에 닿는다
+            var holes = Enumerable.Range(0, 16).Where(i => (m >> i & 1) == 0).ToList();
+            var seen = new HashSet<int>(); var q = new Queue<int>();
+            if (holes.Count > 0) { seen.Add(holes[0]); q.Enqueue(holes[0]); }
+            while (q.Count > 0) { int i = q.Dequeue(); foreach (int j in new[] { i - 1, i + 1, i - 4, i + 4 }) if (j >= 0 && j < 16 && holes.Contains(j) && (Math.Abs(j % 4 - i % 4) + Math.Abs(j / 4 - i / 4)) == 1 && seen.Add(j)) q.Enqueue(j); }
+            bool joined = seen.Count == holes.Count, outer = holes.Any(i => i / 4 == 0);
+            int rim = Structure.SubCount(st.Sub[gone]);
+            var p = new Painter(lay);
+            var img = p.Frame(s, 0, 0, lay.W, lay.H, 0);
+            int hi = holes.Count > 0 ? holes[0] : 0;
+            int qx = lay.X(hull) * Painter.T + (hi % 4) * 8 + 4, qy = lay.Y(hull) * Painter.T + (hi / 4) * 8 + 4;
+            var px = img.Get(qx, qy);
+            bool spacePx = px.R < 30 && px.G < 30 && px.B < 40;
+            Check("잔칸: 외판 구멍은 넓이만큼(벽 한 면 2.5m²가 16개) 잔칸이 바깥 면에서 한 덩이로 파이고 · 통째로 나간 벽은 테두리 두셋만 남고 · 그림의 빈 잔칸 자리는 우주",
+                cleared == want && cleared >= 2 && joined && outer && rim >= 2 && rim <= 4 && spacePx,
+                $"구멍 {f.Hole[hull]:0.00}m² · 빈 잔칸 {cleared} (넓이로 {want}) · 이어짐 {joined} · 바깥 면 {outer} · 통째로 나간 벽 테두리 {rim} · 그 자리 도트 {px.R},{px.G},{px.B}");
+        }
+
+        // ── (라) 찢긴 끝: 갈라진 사이 칸은 가운데가 들쭉날쭉 찢겨 · 남은 잔칸이 양쪽 몸에 붙는다 ──
+        {
+            var lay = Worlds.Ascii(Sealed);
+            var s = FieldStructure(lay, 5);
+            var st = s.Get<Structure>();
+            s.Run(3);
+            for (int y = 0; y < 5; y++) st.Destroy(s, Worlds.At(lay, 6, y), 0);
+            s.Run(3);
+            int left = 0, right = 0, total = 0;
+            for (int y = 0; y < 5; y++)
+            {
+                int c = Worlds.At(lay, 6, y);
+                for (int i = 0; i < 16; i++) if (st.SubAt(c, i % 4, i / 4)) { total++; int o = st.TornOwner(c, i % 4, i / 4); if (o == 0) left++; else if (o == 1) right++; }
+            }
+            Check("찢긴 끝: 갈라진 사이 칸(우주가 된 칸)에 남은 잔칸이 양쪽 몸에 붙는다 — 두 몸 다 들쭉날쭉한 찢긴 끝을 가진다",
+                st.Bodies.Count == 2 && left > 0 && right > 0 && total == left + right, $"남은 잔칸 {total} · 왼쪽 몸 {left} · 오른쪽 몸 {right}");
+        }
+
+        // ── (라) 부딪힘은 잔칸으로: 맞은편 벽의 앞쪽 절반이 파여 있으면 50cm를 더 와서야 닿는다 ──
+        {
+            int TicksToHit(bool carved)
+            {
+                var lay = Worlds.Ascii(Sealed);
+                var s = FieldStructure(lay, 5);
+                var st = s.Get<Structure>();
+                s.Run(3);
+                for (int y = 0; y < 5; y++) st.Destroy(s, Worlds.At(lay, 6, y), 0);
+                s.Run(3);
+                if (carved) for (int y = 0; y < 5; y++) st.Sub[Worlds.At(lay, 7, y)] &= unchecked((ushort)~0x3333);   // 앞쪽(왼쪽) 두 줄 잔칸을 비운다
+                st.Push(0, st.Bodies[0].X, st.Bodies[0].Y, st.Bodies[0].Mass * 0.1, 0);
+                for (int k = 1; k <= 40; k++) { s.Step(); if (st.Crashes > 0) return k; }
+                return 99;
+            }
+            int whole = TicksToHit(false), cut = TicksToHit(true);
+            Check("부딪힘은 잔칸으로: 맞은편 벽의 앞쪽 절반(잔칸 두 줄)이 파여 있으면 50cm를 더 와서야 닿는다 (빈 잔칸에는 닿지 않는다)",
+                whole < 99 && cut - whole >= 2 && cut - whole <= 5, $"닿기까지 성한 벽 {whole}틱 · 파인 벽 {cut}틱 (다가오는 빠르기 0.06m/s — 한 틱 14cm)");
+        }
+
         // ── 점화: 배가 가속하면 배만 나아가고 떨어진 조각은 뒤에 남는다 — 멀어진 거리 = ½at² · 몸들의 운동량 = 점화가 넣은 운동량 ──
         {
             var lay = Worlds.Ascii(Sealed);

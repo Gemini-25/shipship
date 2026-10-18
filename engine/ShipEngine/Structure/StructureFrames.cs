@@ -200,7 +200,7 @@ public sealed partial class Structure
         int cause = sim.Causes.Add(CauseKind.Breach, parent > 0 ? $"떨어져 나간 조각이 또 갈라졌다 — {what}" : $"배가 갈라졌다 — {what}", sim.Tick, cutCell, parentCause);
         foreach (int c in cells) Frag[c] = id;
         foreach (int c in own) Frag[c] = id;
-        foreach (int g in gap) { DamageCause[g] = cause; F.Sever(g); Frag[g] = -1; }
+        foreach (int g in gap) { DamageCause[g] = cause; TearGap(g); F.Sever(g); Frag[g] = -1; }
         float speed = (float)Math.Clamp(impulse / massKg, 0.02, 3);
         int cut = rooms.Count > 0 ? sim.Causes.Add(CauseKind.Electric, "조각이 떨어져 나가 공기 · 전력이 끊겼다 — 산소 · 정화 · 난방이 멈췄다", sim.Tick, cutCell, cause) : 0;
         Fragments.Add(new Fragment { Id = id, Cause = cause, Tick = sim.Tick, MassT = (float)(massKg / 1000), Cells = cells.Count, Speed = speed, Rooms = rooms.Count, CutCause = cut });

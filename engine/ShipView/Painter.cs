@@ -188,7 +188,7 @@ public sealed class Painter
                         break;
                     case CellKind.Wall:
                     {
-                        if (F(f, c).hole >= 2f) break; // 통째로 뚫린 벽 — 우주가 보인다
+                        if (F(f, c).hole >= 2f && (st == null || st.Sub[c] == 0)) break; // 통째로 뚫린 벽 — 우주가 보인다 (남은 테두리 잔칸은 아래에서 가린다)
                         var wk = WallOf(c);
                         int mask = (Solid(x, y - 1) ? 1 : 0) | (Solid(x + 1, y) ? 2 : 0) | (Solid(x, y + 1) ? 4 : 0) | (Solid(x - 1, y) ? 8 : 0);
                         img.Draw(Cached(Key(2, (int)wk, mask), () => DotTiles.WallTop(wk, mask)), Px(x), Py(y));
@@ -196,6 +196,24 @@ public sealed class Painter
                     }
                 }
             }
+        // ── 잔칸 (④ 칸 강체 (라)): 판 구멍은 우주 (덧댄 것은 덧판) · 찢긴 가장자리는 밝은 금속 테 · 우주가 된 사이 칸에 남은 잔칸은 붙은 몸과 함께 ──
+        if (st != null && st.Sub.Length == L.N)
+            for (int y = y0; y < y0 + h; y++)
+                for (int x = x0; x < x0 + w; x++)
+                {
+                    if (!L.In(x, y)) continue;
+                    int c = L.Index(x, y);
+                    ushort m = st.Sub[c];
+                    if (m == Structure.SubFull || L.Kind[c] is not (CellKind.Wall or CellKind.Floor or CellKind.Door)) continue;
+                    if (f.Severed[c] != 0)
+                    {
+                        if (m != 0) TornEdge(img, st, c, Px(x), Py(y));
+                        continue;
+                    }
+                    if (!Mine(c)) continue;
+                    SubMask(img, m, Px(x), Py(y), f.Hole[c] < Structure.SubMinArea, part, space);
+                }
+
         // 벽 남쪽 앞면: 아래 칸이 바닥이면 그 칸 위쪽에
         for (int y = y0 - 1; y < y0 + h; y++)
             for (int x = x0; x < x0 + w; x++)
@@ -244,12 +262,15 @@ public sealed class Painter
                 if (a >= 2f) continue;
                 float r = Math.Clamp(MathF.Sqrt(a / 0.01f) * 8f, 2f, 14f);
                 float cx = Px(x) + T / 2 + (DotHash.F(c, 1) - 0.5f) * 8, cy = Py(y) + T / 2 + (DotHash.F(c, 2) - 0.5f) * 8;
-                img.Oval(cx, cy, r + 2, r + 1.5f, Rgba.Hex("#5a6576"), 0.9f);
-                img.Oval(cx, cy, r, r * 0.8f, space);
-                for (int k = 0; k < 4; k++) // 금
+                if (st == null || st.Sub[c] == Structure.SubFull)   // 잔칸이 파였으면 그 모양이 구멍이다
                 {
-                    float ang = DotHash.F(c, 10 + k) * 6.283f, len = r + 3 + DotHash.F(c, 20 + k) * 6;
-                    for (float t = r; t < len; t += 0.7f) img.Set((int)(cx + MathF.Cos(ang) * t), (int)(cy + MathF.Sin(ang) * t), Rgba.Hex("#0c0f14"));
+                    img.Oval(cx, cy, r + 2, r + 1.5f, Rgba.Hex("#5a6576"), 0.9f);
+                    img.Oval(cx, cy, r, r * 0.8f, space);
+                    for (int k = 0; k < 4; k++) // 금
+                    {
+                        float ang = DotHash.F(c, 10 + k) * 6.283f, len = r + 3 + DotHash.F(c, 20 + k) * 6;
+                        for (float t = r; t < len; t += 0.7f) img.Set((int)(cx + MathF.Cos(ang) * t), (int)(cy + MathF.Sin(ang) * t), Rgba.Hex("#0c0f14"));
+                    }
                 }
                 // 아직 공기가 새면: 바깥쪽으로 하얀 줄기 (안쪽 기압이 높을수록 길게)
                 double inside = 0; int ox = 0, oy = 0;
@@ -367,6 +388,51 @@ public sealed class Painter
     }
 
     private static (float hole, int _) F(Field f, int c) => (f.Hole[c], 0);
+
+    private const int SubPx = T / Structure.SubN;
+
+    /// <summary>판의 빈 잔칸: 우주(조각 그림이면 투명) · 덧댔으면 덧판 · 남은 잔칸과 맞닿은 가장자리는 찢긴 금속 테.</summary>
+    private static void SubMask(Img img, ushort m, int px, int py, bool patched, bool part, Rgba space)
+    {
+        var plate = Rgba.Hex("#6e6656"); var rivet = Rgba.Hex("#3b362c"); var rim = Rgba.Hex("#a3adbd");
+        for (int i = 0; i < 16; i++)
+        {
+            if ((m >> i & 1) != 0) continue;
+            int sx = i % Structure.SubN, sy = i / Structure.SubN, qx = px + sx * SubPx, qy = py + sy * SubPx;
+            if (patched) { img.Fill(qx, qy, SubPx, SubPx, plate); img.Set(qx + 1, qy + 1, rivet); img.Set(qx + SubPx - 2, qy + SubPx - 2, rivet); continue; }
+            if (part) { for (int yy = 0; yy < SubPx; yy++) for (int xx = 0; xx < SubPx; xx++) img.Set(qx + xx, qy + yy, new Rgba(0, 0, 0, 0)); }
+            else img.Fill(qx, qy, SubPx, SubPx, space);
+        }
+        if (patched) return;
+        // 찢긴 테: 남은 잔칸의 빈 쪽 가장자리를 밝게
+        for (int i = 0; i < 16; i++)
+        {
+            if ((m >> i & 1) == 0) continue;
+            int sx = i % Structure.SubN, sy = i / Structure.SubN, qx = px + sx * SubPx, qy = py + sy * SubPx;
+            if (sx > 0 && (m >> (i - 1) & 1) == 0) for (int k = 0; k < SubPx; k++) img.Blend(qx, qy + k, rim, 0.85f);
+            if (sx < Structure.SubN - 1 && (m >> (i + 1) & 1) == 0) for (int k = 0; k < SubPx; k++) img.Blend(qx + SubPx - 1, qy + k, rim, 0.85f);
+            if (sy > 0 && (m >> (i - Structure.SubN) & 1) == 0) for (int k = 0; k < SubPx; k++) img.Blend(qx + k, qy, rim, 0.85f);
+            if (sy < Structure.SubN - 1 && (m >> (i + Structure.SubN) & 1) == 0) for (int k = 0; k < SubPx; k++) img.Blend(qx + k, qy + SubPx - 1, rim, 0.85f);
+        }
+    }
+
+    /// <summary>우주가 된 사이 칸에 남은 잔칸: 지금 그리는 몸에 붙은 것만 찢긴 철판 조각으로.</summary>
+    private void TornEdge(Img img, Structure st, int c, int px, int py)
+    {
+        ushort m = st.Sub[c];
+        var plate = Rgba.Hex("#4a5262"); var rim = Rgba.Hex("#a3adbd");
+        for (int i = 0; i < 16; i++)
+        {
+            if ((m >> i & 1) == 0) continue;
+            int sx = i % Structure.SubN, sy = i / Structure.SubN;
+            int owner = st.TornOwner(c, sx, sy);
+            if (owner < 0 || _only >= 0 && owner != _only) continue;
+            int qx = px + sx * SubPx, qy = py + sy * SubPx;
+            img.Fill(qx, qy, SubPx, SubPx, plate);
+            img.Fill(qx, qy, SubPx, 1, rim, 0.7f);
+            img.Fill(qx, qy + SubPx - 1, SubPx, 1, Rgba.Hex("#1a1e26"), 0.8f);
+        }
+    }
 
     /// <summary>바닥 물건 그림 (작은 도트 — 무게만큼 크게): 상자 · 꾸러미 · 소화기 · 우주복 · 원료 덩이.</summary>
     private static Img LooseIcon(string name)

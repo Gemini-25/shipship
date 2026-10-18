@@ -342,12 +342,14 @@ public sealed partial class Structure
     private void SaveBodies(StateWriter w)
     {
         w.Tag("몸"); w.List(Bodies);
+        w.Arr(Sub); w.I64(SubCarved);
         w.F64(GasPx); w.F64(GasPy); w.F64(GasL); w.F64(BurnPx); w.F64(BurnPy); w.F64(BurnL); w.F64(GasAbs); w.I64(BodySteps); w.I64(Spins); w.I64(Crashes);
     }
 
     private void LoadBodies(StateReader r)
     {
         r.Tag("몸"); Bodies.Clear(); Bodies.AddRange(r.List<RigidBody>());
+        r.ArrInto(Sub); SubCarved = r.I64(); _holeSeen = -1; _edgeVersion = -1;
         GasPx = r.F64(); GasPy = r.F64(); GasL = r.F64(); BurnPx = r.F64(); BurnPy = r.F64(); BurnL = r.F64(); GasAbs = r.F64(); BodySteps = r.I64(); Spins = r.I64(); Crashes = r.I64();
     }
 }
