@@ -51,7 +51,9 @@ public struct ShipPolicy
     public byte AskPeople;         // 사람에게 일을 부탁한다 — 0: 하지 않는다 · 1: 로봇이 없을 때만 (1분 기다린 뒤) · 2: 로봇과 함께 곧바로
     public float RationBelow;      // 보통으로 먹으면 이 날 수를 못 버티면 배급 (0이면 하지 않는다) — 1.5배를 넘게 버티면 푼다
     public float RationShare;      // 배급 때 식량 하루 몫 (보통의 몇 몫)
-    public static ShipPolicy Default => new() { AutoSeal = 1, SealWaitMin = 1.5f, ShedLoads = 1, ResetBreakers = 1, AskPeople = 1, RationBelow = 30, RationShare = 0.75f };
+    public byte Dodge;             // ⑤ 1: 레이더에 잡힌 운석을 비킨다 (사람이 넘어질 값과 견준다)
+    public byte AnswerDistress;    // ⑤ 조난 신호 — 0: 가지 않는다 · 1: 추진제가 되면 (도착 몫을 남기고) · 2: 언제나
+    public static ShipPolicy Default => new() { AutoSeal = 1, SealWaitMin = 1.5f, ShedLoads = 1, ResetBreakers = 1, AskPeople = 1, RationBelow = 30, RationShare = 0.75f, Dodge = 1, AnswerDistress = 1 };
 }
 
 /// <summary>
@@ -149,7 +151,7 @@ public sealed partial class ShipMind : IEngine
 
     private void Bind(Sim sim)
     {
-        _mind ??= sim.Find<Mind>(); _net ??= sim.Find<Network>(); _st ??= sim.Find<Structure>(); _life ??= sim.Find<Life>(); _chem ??= sim.Find<Chemistry>();
+        _mind ??= sim.Find<Mind>(); _net ??= sim.Find<Network>(); _out ??= sim.Find<Outside>(); _st ??= sim.Find<Structure>(); _life ??= sim.Find<Life>(); _chem ??= sim.Find<Chemistry>();
         if (_net != null && Shed.Length != _net.Devices.Count) Shed = new byte[_net.Devices.Count];
         if (_net != null && BreakerResetAt.Length != _net.Feeders.Count) BreakerResetAt = Enumerable.Repeat(long.MinValue / 2, _net.Feeders.Count).ToArray();
         if (_computer == -2) _computer = _net?.Devices.FirstOrDefault(d => d.Type == "MainComputer")?.Id ?? -1;
@@ -173,6 +175,7 @@ public sealed partial class ShipMind : IEngine
         Act(sim);
         Power(sim);
         Supply(sim);   // ⑪ 배급 · 보관함 무게
+        Helm(sim);     // ⑤ 조타: 정해진 점화 · 운석 비키기 · 다른 배
         long tod = sim.Tick % Time.TicksPerDay; // 멈춰 있던 때에는 일지도 방송도 없다 (다음 일지가 그 사이를 함께 적는다)
         if (tod == Time.Hours(JournalHour) % Time.TicksPerDay) WriteJournal(sim);
         if (tod == Time.Hours(MorningHour) % Time.TicksPerDay) MorningBroadcast(sim);
@@ -1114,6 +1117,7 @@ public sealed partial class ShipMind : IEngine
         w.I64(Alarms); w.I64(Assignments); w.I64(Seals); w.I64(Sheds); w.I64(Resets); w.I64(Exhausts); w.I64(OuterClosed); w.I64(StovesCut); SaveCrew(w); SaveSupply(w);
         w.I32(Journal.Count); foreach (var (t, s) in Journal) { w.I64(t); w.Str(s); }
         w.I32(JournalHour); w.I32(MorningHour); w.I64(LastJournal); w.I64(_journalAssign); w.Arr(ReportedDead.ToArray()); w.Str(Morning); w.Arr(RoomAirT); w.Arr(GaveAirAt); w.Arr(DoorWasOpen); w.Arr(RoomCO2Hold);
+        SaveHelm(w);
     }
 
     public void Load(StateReader r)
@@ -1127,5 +1131,6 @@ public sealed partial class ShipMind : IEngine
         Alarms = r.I64(); Assignments = r.I64(); Seals = r.I64(); Sheds = r.I64(); Resets = r.I64(); Exhausts = r.I64(); OuterClosed = r.I64(); StovesCut = r.I64(); LoadCrew(r); LoadSupply(r);
         Journal.Clear(); int nj = r.I32(); for (int i = 0; i < nj; i++) { long t = r.I64(); Journal.Add((t, r.Str() ?? "")); }
         JournalHour = r.I32(); MorningHour = r.I32(); LastJournal = r.I64(); _journalAssign = r.I64(); ReportedDead.Clear(); ReportedDead.AddRange(r.Arr<int>()); Morning = r.Str() ?? ""; r.ArrInto(RoomAirT); r.ArrInto(GaveAirAt); r.ArrInto(DoorWasOpen); r.ArrInto(RoomCO2Hold);
+        LoadHelm(r);
     }
 }

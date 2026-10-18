@@ -14,7 +14,7 @@ namespace ShipEngine;
 public sealed partial class Storyteller
 {
     public const byte ActBuild = 0, ActClimax = 1, ActAfter = 2;
-    public const int KindCount = 15;
+    public const int KindCount = 16;
     /// <summary>지금 막 (조짐 · 절정 · 여파).</summary>
     public byte Act;
     /// <summary>여파가 끝나는 때 · 여파가 시작된 때.</summary>

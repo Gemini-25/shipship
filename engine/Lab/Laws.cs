@@ -428,6 +428,8 @@ public static partial class Program
             int wetCells = 0; for (int i = 0; i < f2.Cells; i++) if (f2.Stored(f2.T.sWater, i) > 10) wetCells++;
             Check("쏟아진 물(54kg)이 바닥을 따라 퍼진다", wetCells > 9, $"젖은 칸 {wetCells}");
         }
+
+        MotionLaws();
     }
 
     /// <summary>시험용으로 세계를 흔든다: 압력 차 · 뜨거운 곳 · 이산화탄소 · 물웅덩이 · 반쯤 열린 문 · 그을음.</summary>

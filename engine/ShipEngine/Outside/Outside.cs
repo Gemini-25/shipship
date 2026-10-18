@@ -18,6 +18,7 @@ public struct Rock
     public double X, Y, Vx, Vy, Mass;
     public int Cause;
     public byte Warned;
+    public int Id;
 }
 
 /// <summary>
@@ -33,7 +34,7 @@ public struct Rock
 /// </para>
 /// 이야기꾼은 원인만 심는다: <see cref="AddCloud"/> · <see cref="AddRock"/> · <see cref="ScheduleFlare"/>. 어디에 맞을지는 엔진이 정한다.
 /// </summary>
-public sealed class Outside : IEngine
+public sealed partial class Outside : IEngine
 {
     public string Name => "바깥";
     public Phase Phase => Phase.Outside;
@@ -74,8 +75,9 @@ public sealed class Outside : IEngine
     {
         F = f; L = f.L; T = f.T;
         _debrisKeys = T.Space.Debris.Keys.ToArray();
-        _rng = Rng.Stream(seed, "바깥");
+        _rng = Rng.Stream(seed, "바깥"); _traffic = Rng.Stream(seed, "다른 배"); _route = Rng.Stream(seed, "항로");
         Dose = new float[L.N]; _shield = new float[L.N];
+        InitMotion();
     }
 
     public StarDef StarDef => T.Space.Stars[Star];
@@ -97,7 +99,7 @@ public sealed class Outside : IEngine
         double len = Math.Sqrt(dirX * dirX + dirY * dirY);
         dirX /= len; dirY /= len;
         double px = -dirY, py = dirX; // 비낀 방향
-        Rocks.Add(new Rock { X = -dirX * distance + px * offset, Y = -dirY * distance + py * offset, Vx = dirX * speed, Vy = dirY * speed, Mass = mass, Cause = cause });
+        Rocks.Add(new Rock { X = -dirX * distance + px * offset, Y = -dirY * distance + py * offset, Vx = dirX * speed, Vy = dirY * speed, Mass = mass, Cause = cause, Id = ++RockSeq });
     }
 
     // ───────────────────────── ⑤ 항로 (케플러 — 별 질량 1, 거리 AU, 시간 년) ─────────────────────────
@@ -115,9 +117,9 @@ public sealed class Outside : IEngine
     }
 
     /// <summary>전이 궤도 위 거리: 평균 근점 이각 M = π·(지난 몫) → 케플러 방정식 E − e·sinE = M (뉴턴법) → r = a(1 − e·cosE). 바깥으로 가면 근일점에서, 안으로 가면 원일점에서 출발.</summary>
-    public static double TransferDistance(double from, double to, double fraction)
+    public static double TransferDistance(double from, double to, double fraction, bool wrap = false)
     {
-        fraction = Math.Clamp(fraction, 0, 1);
+        fraction = wrap ? Math.Max(0, fraction) : Math.Clamp(fraction, 0, 1);
         double a = (from + to) / 2, e = Math.Abs(to - from) / (to + from);
         double m = Math.PI * fraction + (to < from ? Math.PI : 0); // 안으로 가면 원일점(M = π)에서
         double ecc = m;
@@ -145,9 +147,14 @@ public sealed class Outside : IEngine
         if (VoyageTicks > 0 && Planet == null)
         {
             double frac = (sim.Tick - VoyageStart) / (double)VoyageTicks;
-            Distance = TransferDistance(VoyageFrom, VoyageTo, frac);
-            if (frac >= 1) { Distance = VoyageTo; VoyageTicks = 0; }
+            // 도착 점화를 해야 그 거리에 머문다 (계획한 항해) — 놓치면 전이 타원을 그대로 돈다
+            Distance = TransferDistance(VoyageFrom, VoyageTo, Missed != 0 ? frac : Math.Min(1, frac), Missed != 0);
+            if (frac >= 1 && (VoyagePlanned == 0 || ArrivalDone != 0)) { Distance = VoyageTo; VoyageTicks = 0; }
         }
+        MotionStep(sim, dt);
+        PlanStep(sim);
+        ZoneStep(sim);
+        ContactsStep(sim, dt);
         Boundary(sim);
         FlareStep(sim, dt);
         CloudsStep(sim, dt);
@@ -394,6 +401,7 @@ public sealed class Outside : IEngine
         w.I64(NextFlare); w.I64(FlareWarnAt); w.I64(FlareStart); w.I64(FlareEnd); w.I32(FlareCause); w.F64(DoseOut); w.F64(FlareScale);
         w.List(Clouds); w.List(Rocks);
         w.I64(DebrisHits); w.I64(RockHits); w.I64(NearMisses); w.I64(Flares);
+        SaveMotion(w); SaveContacts(w);
         _rng.Save(w);
         w.Arr(Dose); w.Arr(_shield); w.F64(_shieldAngle);
     }
@@ -404,6 +412,7 @@ public sealed class Outside : IEngine
         NextFlare = r.I64(); FlareWarnAt = r.I64(); FlareStart = r.I64(); FlareEnd = r.I64(); FlareCause = r.I32(); DoseOut = r.F64(); FlareScale = r.F64();
         Clouds = r.List<Cloud>(); Rocks = r.List<Rock>();
         DebrisHits = r.I64(); RockHits = r.I64(); NearMisses = r.I64(); Flares = r.I64();
+        LoadMotion(r); LoadContacts(r);
         _rng.Load(r);
         r.ArrInto(Dose); r.ArrInto(_shield); _shieldAngle = r.F64();
     }

@@ -78,6 +78,10 @@ public enum FactKind : ushort
     Treated,           // 다친 이를 돌봤다 (Actor: 돌본 이 · Other: 돌봄을 받은 이 · Size: 1 구급 상자 · 0 맨손)
     // ⑨ · ⑫
     Confessed,         // 숨긴 실수를 털어놓았다 (Actor: 털어놓은 이 · Other: 장치)
+    // ⑤ 기동 · 다른 배
+    Burn,              // 점화가 시작됐다 (Other: 점화 종류 BurnKind · Size: g)
+    Fell,              // 가속에 넘어졌다 (Actor: 사람 · Size: g)
+    Contact,           // 다른 배 (Other: 0 보였다 · 1 조난 신호 · 2 교신 · 3 붙었다 · 4 떠났다 · 5 늦었다 · Size: 그 배 번호)
 }
 
 public static class FactNames
@@ -98,7 +102,7 @@ public static class FactNames
         FactKind.ComputerAlarm => "경보", FactKind.ComputerSeal => "봉쇄", FactKind.ComputerAssign => "로봇을 보냈다", FactKind.LoadShed => "장치를 껐다",
         FactKind.BreakerReset => "차단기를 올렸다", FactKind.ComputerDown => "주컴퓨터가 멈췄다", FactKind.StorySeed => "조짐",
         FactKind.Grieved => "슬픔", FactKind.TrustLost => "믿음이 깨졌다", FactKind.WentOutside => "선외로 나갔다",
-        FactKind.Talk => "이야기", FactKind.Blamed => "탓", FactKind.Fight => "몸싸움", FactKind.Sabotage => "몰래 한 짓", FactKind.Pilfer => "몰래 먹었다", FactKind.Rationed => "배급", FactKind.Treated => "돌봤다", FactKind.Confessed => "털어놓았다",
+        FactKind.Talk => "이야기", FactKind.Blamed => "탓", FactKind.Fight => "몸싸움", FactKind.Sabotage => "몰래 한 짓", FactKind.Pilfer => "몰래 먹었다", FactKind.Rationed => "배급", FactKind.Treated => "돌봤다", FactKind.Confessed => "털어놓았다", FactKind.Burn => "점화", FactKind.Fell => "넘어졌다", FactKind.Contact => "다른 배",
         FactKind.ComputerJournal => "일지", FactKind.ComputerBroadcast => "아침 방송", FactKind.Switched => "껐다", _ => "",
     };
 }
@@ -121,7 +125,7 @@ public sealed class Facts : IState
     public const int Capacity = 8192;
     private Fact[] _ring = new Fact[Capacity];
     private long _total;
-    private long[] _byKind = new long[64];
+    private long[] _byKind = new long[128];   // 사실 종류 수보다 넉넉히 (종류가 64를 넘었다)
 
     public long Total => _total;
     public long CountOf(FactKind k) => _byKind[(int)k];

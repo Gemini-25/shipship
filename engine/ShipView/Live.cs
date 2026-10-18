@@ -100,6 +100,7 @@ public sealed class LiveShow
         int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
         var s = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0);
         var st = s.Get<Storyteller>(); st.Enabled = true; st.Style = style; st.Level = level;
+        ShipWorld.Embark(s);   // 항해에 나선다 — 20분 뒤 출발 점화 · 다른 배가 지나간다
         return new LiveShow(s, lay.Name);
     }
 
@@ -568,7 +569,7 @@ public sealed class LiveShow
                         who.Count > 0 ? string.Join(" · ", who) : "아직 손을 쓰지 못했다", true));
                 }
                 string blind = sm.BlindLine();
-                rows.Add(new PanelRow("배 형편", sm.ShipLine(Sim, true) + (blind.Length > 0 ? "\n" + blind : ""), false));
+                rows.Add(new PanelRow("배 형편", sm.ShipLine(Sim, true) + (blind.Length > 0 ? "\n" + blind : "") + (sm.HelmLine.Length > 0 ? "\n항로: " + sm.HelmLine : ""), false));
                 int head = rows.Count;
                 for (int i = sm.Journal.Count - 1; i >= 0; i--)
                 {

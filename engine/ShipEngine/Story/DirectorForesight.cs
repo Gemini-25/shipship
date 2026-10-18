@@ -30,6 +30,8 @@ public sealed partial class Director
         else if (sim.Find<Outside>() is { } o && o.Clouds.Count > 0) why = "구름";
         else if (sim.Find<Outside>() is { } o2 && o2.Rocks.Exists(r => r.Mass > 0 && r.Warned == 1)) why = "운석";
         else if (sim.Find<ShipMind>() is { } cm && cm.Incidents.Exists(x => x.Active != 0)) why = "사건";
+        else if (sim.Find<Outside>() is { } o3 && (o3.Burning != BurnKind.None || o3.Plan.Exists(p => p.Due - t < Time.Minutes(4)))) why = "점화";
+        else if (sim.Find<ShipMind>() is { } cm2 && cm2.GoingTo >= 0) why = "다른 배";
         if (why != null) BrewWhy[why] = BrewWhy.GetValueOrDefault(why) + 1;
         return why != null;
     }

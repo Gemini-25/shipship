@@ -5,7 +5,18 @@
 //   debris: 입자 질량 범위(kg) · 거듭제곱 분포 지수 · 상대 속도(m/s)
 //   system: 지어낸 별계 '한빛계' — 별 · 천체 궤도 반지름(AU · 1AU = 노란 별에서 햇빛 1361W/m²) · gcr: 은하 우주선 (mGy/시 — 거리와 상관없다 · 깊은 우주 약 0.02)
 //     별 입자 방사선(star.baseDose · flareDose)은 1AU 값 — 거리의 제곱에 반비례 · 항해는 호만 전이 궤도 (케플러 제3법칙: 주기 = a^1.5년)
+//   ship: 배의 운동 — 칸마다 마른 질량(t · ISS 420t ≈ 바닥 1m²에 1t 남짓) · 엔진(EngineCore)마다 추력(kN)과 비추력(초 — 핵열 로켓 NERVA 841초) ·
+//     자세 분사기 가속(g)과 비추력 · 처음 추진제 = 마른 질량 × propellantRatio (질량비 2 → Δv = 900 × 9.81 × ln2 = 6.1km/s)
+//     레이더: 단면 1m²를 radarKm에서 잡는다 (R ∝ σ^¼) · 방향 오차 radarMrad
+//   zones: 항로의 위험 구간 — 별에서 from~to AU를 지나는 동안 그 파편 구름 · 운석이 하루 평균 몇 번 온다
+//   traffic: 다른 배 — 하루 평균 · 천체 궤도 곁(nearAu 안)이면 boost배
 {
+  "ship": { "tonsPerCell": 1.0, "engineKN": 2300, "isp": 900, "rcsG": 0.02, "rcsIsp": 300, "propellantRatio": 1.0, "radarKm": 100, "radarMrad": 0.5 },
+  "zones": [
+    { "name": "작은 바위 띠",   "from": 1.12, "to": 1.30, "debris": "rubble", "cloudsPerDay": 0.5, "rocksPerDay": 3 },
+    { "name": "혜성 먼지 꼬리", "from": 0.80, "to": 0.88, "debris": "dust",   "cloudsPerDay": 1.2, "rocksPerDay": 0.5 }
+  ],
+  "traffic": { "perDay": 0.25, "nearAu": 0.04, "boost": 4 },
   "system": {
     "name": "한빛계", "star": "yellow", "gcr": 0.02,
     "bodies": [

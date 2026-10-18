@@ -77,7 +77,8 @@ public sealed partial class Director
         FactKind.MachineFail => 12, FactKind.Short => 15, FactKind.BreakerTrip => 5, FactKind.Flare => 20, FactKind.WallCrack => 15,
         FactKind.Woke => 2, FactKind.ComputerAssign => 4, FactKind.Sick => 8,
         FactKind.Relationship => 12, FactKind.Grieved => 30, FactKind.TrustLost => 25, FactKind.WentOutside => 20,
-        FactKind.Talk => 2, FactKind.Blamed => 15, FactKind.Fight => 60, FactKind.Sabotage => 40, FactKind.Confessed => 30, _ => 1,
+        FactKind.Talk => 2, FactKind.Blamed => 15, FactKind.Fight => 60, FactKind.Sabotage => 40, FactKind.Confessed => 30,
+        FactKind.Burn => 14, FactKind.Fell => 22, FactKind.Contact => 12, _ => 1,
     };
 
     /// <summary>사실 하나의 무게 — 대화는 끝에 따라 (다툼 · 사과 · 위로 · 소문은 볼 만하고 잡담은 거의 0) · 끝장 몸싸움은 더.</summary>
@@ -89,7 +90,9 @@ public sealed partial class Director
             TalkEnd.Friction => 6, TalkEnd.Worry => 6, TalkEnd.Accept => 35, TalkEnd.Reject => 30, _ => 1,   // 고백 — 받아 줌 · 거절
         },
         FactKind.Fight => f.Size >= 2 ? 90 : 60,
-        FactKind.Mistake => f.Size >= 2 ? 25 : 1,   // 숨긴 실수 · 숨겼다 (사람들은 모르지만 관객은 본다)
+        FactKind.Mistake => f.Size >= 2 ? 25 : 1,
+        FactKind.Contact => f.Other switch { 1 => 30, 3 => 35, 5 => 40, _ => 12 },   // 조난 신호 · 붙었다 · 늦었다
+        FactKind.Burn => f.Other == (int)BurnKind.Dodge ? 30 : 14,   // 숨긴 실수 · 숨겼다 (사람들은 모르지만 관객은 본다)
         _ => Weight(f.Kind),
     };
 

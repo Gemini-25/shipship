@@ -23,6 +23,8 @@ public enum CauseKind : byte
     Flare,      // 별 폭발 · 방사선
     Biology,    // 미생물 · 곰팡이 · 작물
     Setup,      // 처음부터 그랬다 (시험 장면)
+    Route,      // ⑤ 항로 — 정해진 점화 · 위험 구간
+    Contact,    // ⑤ 다른 배
 }
 
 /// <summary>원인 마디: 무엇 · 어디 · 언제 · 부모 원인 (둘까지).</summary>

@@ -6,7 +6,7 @@ namespace ShipEngine;
 public enum StoryStyle : byte { Balanced, Gentle, Relentless, SlowBurn, Cosmic, Human }
 
 /// <summary>이야기꾼이 심는 원인의 종류.</summary>
-public enum SeedKind : byte { None, Rock, Cloud, Flare, WornPart, HullFatigue, Mold, ArcRisk, Mistake, OldGrudge, Cold, Injury, Crush, HiddenFault, GoodNews }
+public enum SeedKind : byte { None, Rock, Cloud, Flare, WornPart, HullFatigue, Mold, ArcRisk, Mistake, OldGrudge, Cold, Injury, Crush, HiddenFault, GoodNews, Distress }
 
 /// <summary>심은 원인 하나 (기록).</summary>
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -89,7 +89,7 @@ public sealed partial class Storyteller : IEngine
         FactKind.Died => 10, FactKind.Collapsed => 4, FactKind.Hurt => 1, FactKind.WallBreach => 3, FactKind.Ignition => 2, FactKind.FireSpread => 1,
         FactKind.ComputerAlarm => 1, FactKind.Panicked => 2, FactKind.DoorBlown => 2, FactKind.MachineFail => 1, FactKind.Impact => 1,
         FactKind.Short => 2, FactKind.BreakerTrip => 0.5, FactKind.Flare => 2, FactKind.DebrisNear => 1,
-        FactKind.Fight => 2, FactKind.Blamed => 0.5, FactKind.Grieved => 1, FactKind.Sick => 0.5, FactKind.Rationed => 1, FactKind.Confessed => 0.5, _ => 0,
+        FactKind.Fight => 2, FactKind.Blamed => 0.5, FactKind.Grieved => 1, FactKind.Sick => 0.5, FactKind.Rationed => 1, FactKind.Confessed => 0.5, FactKind.Fell => 1, FactKind.Contact => 1, _ => 0,
     };
 
     /// <summary>성격 · 가혹함에 따른 지금 목표 긴장.</summary>
@@ -127,25 +127,26 @@ public sealed partial class Storyteller : IEngine
     public static double Potential(SeedKind k) => k switch
     {
         SeedKind.Rock => 1.5, SeedKind.Cloud => 2, SeedKind.Flare => 2, SeedKind.WornPart => 1, SeedKind.HullFatigue => 1.5, SeedKind.Mold => 0.5, SeedKind.ArcRisk => 2.5,
-        SeedKind.Mistake => 1.5, SeedKind.OldGrudge => 1, SeedKind.Cold => 1, SeedKind.Injury => 1, SeedKind.Crush => 0.8, SeedKind.HiddenFault => 1, SeedKind.GoodNews => 0, _ => 1,
+        SeedKind.Mistake => 1.5, SeedKind.OldGrudge => 1, SeedKind.Cold => 1, SeedKind.Injury => 1, SeedKind.Crush => 0.8, SeedKind.HiddenFault => 1, SeedKind.GoodNews => 0, SeedKind.Distress => 1.5, _ => 1,
     };
 
     /// <summary>작은 씨앗 (조짐의 막) · 큰 씨앗 (절정의 막).</summary>
-    public static bool Big(SeedKind k) => k is SeedKind.Rock or SeedKind.Cloud or SeedKind.Flare or SeedKind.HullFatigue or SeedKind.ArcRisk;
+    public static bool Big(SeedKind k) => k is SeedKind.Rock or SeedKind.Cloud or SeedKind.Flare or SeedKind.HullFatigue or SeedKind.ArcRisk or SeedKind.Distress;
 
     /// <summary>다음에 심을 원인을 고른다 (심지는 않는다 — 시험이 고르는 버릇만 볼 때도 쓴다). set: 0 모두 · 1 작은 씨앗 · 2 큰 씨앗 ('사람의 이야기'는 사람 사이 씨앗도 절정에 쓴다).</summary>
     public SeedKind Choose(Sim sim, int set = 0)
     {
-        // 성격마다 무게 (없음 · 운석 · 구름 · 폭발 · 낡은 부품 · 외판 피로 · 곰팡이 · 합선 불씨 · 사람의 실수 · 묵은 앙금 · 감기 · 다침 · 짝사랑 · 숨긴 실수 · 반가운 소식)
+        // 성격마다 무게 (없음 · 운석 · 구름 · 폭발 · 낡은 부품 · 외판 피로 · 곰팡이 · 합선 불씨 · 사람의 실수 · 묵은 앙금 · 감기 · 다침 · 짝사랑 · 숨긴 실수 · 반가운 소식 · 조난선)
         double[] w = Style switch
         {
-            StoryStyle.Cosmic => new double[] { 0, 3, 3, 2, 0.3, 0.3, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-            StoryStyle.SlowBurn => new double[] { 0, 0.3, 0.3, 0.3, 3, 2, 2, 2, 1, 1, 1.5, 0.5, 1, 2, 0 },
-            StoryStyle.Gentle => new double[] { 0, 0.5, 1, 1, 2, 1, 1, 0.3, 0.5, 0.5, 0.5, 0.5, 1, 0.5, 0 },
-            StoryStyle.Human => new double[] { 0, 0.3, 0.5, 0.5, 1, 0.5, 1, 0.5, 3, 3, 1, 1, 3, 2.5, 0 },
-            StoryStyle.Relentless => new double[] { 0, 2, 2, 1.5, 1.5, 1.5, 1, 2, 1, 1, 1, 1.5, 0.3, 1, 0 },
-            _ => new double[] { 0, 1.5, 1.5, 1, 2, 1.5, 1, 1.5, 1, 1, 0.8, 1, 0.8, 0.8, 0 },
+            StoryStyle.Cosmic => new double[] { 0, 3, 3, 2, 0.3, 0.3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
+            StoryStyle.SlowBurn => new double[] { 0, 0.3, 0.3, 0.3, 3, 2, 2, 2, 1, 1, 1.5, 0.5, 1, 2, 0, 0.3 },
+            StoryStyle.Gentle => new double[] { 0, 0.5, 1, 1, 2, 1, 1, 0.3, 0.5, 0.5, 0.5, 0.5, 1, 0.5, 0, 0.5 },
+            StoryStyle.Human => new double[] { 0, 0.3, 0.5, 0.5, 1, 0.5, 1, 0.5, 3, 3, 1, 1, 3, 2.5, 0, 1.5 },
+            StoryStyle.Relentless => new double[] { 0, 2, 2, 1.5, 1.5, 1.5, 1, 2, 1, 1, 1, 1.5, 0.3, 1, 0, 1 },
+            _ => new double[] { 0, 1.5, 1.5, 1, 2, 1.5, 1, 1.5, 1, 1, 0.8, 1, 0.8, 0.8, 0, 0.8 },
         };
+        if (sim.Find<Outside>() is not { TrafficOn: true, Planet: null }) w[(int)SeedKind.Distress] = 0;   // 항해 중일 때만 (가만히 떠 있는 배 · 시험은 없다 — 고르는 버릇이 바뀌지 않는다)
         var mindForSeed = sim.Find<Mind>();
         var lifeForSeed = sim.Find<Life>();
         int people = mindForSeed?.Agents.Count(a => a.IsPerson) ?? 0;
@@ -218,6 +219,20 @@ public sealed partial class Storyteller : IEngine
                 int c0 = sim.Causes.Add(CauseKind.Story, text, sim.Tick);
                 outside.AddCloud(k, d.Speed * minutes * 60 + radius, radius, density, Math.Cos(ang), Math.Sin(ang), c0);
                 size = (float)density;
+                return Record(sim, kind, c0, cell, size);
+            }
+            case SeedKind.Distress:
+            {
+                // 조난선: 고장 나 떠도는 배 (공기 · 사람 수 · 옮는 병) — 갈지는 주컴퓨터 · 함장 방침 · 추진제가 정한다
+                if (outside == null) return false;
+                int crew = 1 + (int)(_rng.Unit() * Math.Min(5, 2 + g));
+                double hours = _rng.Range(4, 14), speed = _rng.Range(100, 800), ang = _rng.Range(0, 2 * Math.PI);
+                float air = (float)_rng.Range(8, 30) / (float)Math.Max(0.5, g / 2);
+                byte sick = (byte)(_rng.Unit() < 0.3 ? 1 : 0);
+                text = $"{crew}명이 탄 배가 고장 나 떠돈다 — 공기 {air:0}시간{(sick != 0 ? " · 앓는 이가 있다" : "")}";
+                int c0 = sim.Causes.Add(CauseKind.Story, text, sim.Tick);
+                outside.AddContact(sim, ContactKind.Distress, speed * hours * 3600, Math.Cos(ang), Math.Sin(ang), speed, _rng.Range(-1, 1) * 20_000, crew, air, c0, sick: sick);
+                size = crew;
                 return Record(sim, kind, c0, cell, size);
             }
             case SeedKind.Flare:
@@ -344,7 +359,7 @@ public sealed partial class Storyteller : IEngine
     {
         SeedKind.Rock => "운석", SeedKind.Cloud => "파편 구름", SeedKind.Flare => "별 폭발", SeedKind.WornPart => "낡은 부품",
         SeedKind.HullFatigue => "외판 피로", SeedKind.Mold => "곰팡이", SeedKind.ArcRisk => "합선 불씨", SeedKind.Mistake => "사람의 실수", SeedKind.OldGrudge => "묵은 앙금",
-        SeedKind.Cold => "감기", SeedKind.Injury => "일하다 다침", SeedKind.Crush => "짝사랑", SeedKind.HiddenFault => "숨긴 실수", SeedKind.GoodNews => "반가운 소식", _ => "",
+        SeedKind.Cold => "감기", SeedKind.Injury => "일하다 다침", SeedKind.Crush => "짝사랑", SeedKind.HiddenFault => "숨긴 실수", SeedKind.GoodNews => "반가운 소식", SeedKind.Distress => "조난선", _ => "",
     };
 
     // ───────────────────────── 찍기 ─────────────────────────

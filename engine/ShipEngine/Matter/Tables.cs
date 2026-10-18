@@ -49,8 +49,18 @@ public sealed class BodyDef { public string Name = "", Planet = ""; public doubl
 /// <summary>⑤ 지어낸 별계 (실제 물리): 별 · 천체 궤도 · 은하 우주선(거리와 상관없는 바깥 방사선 mGy/시).</summary>
 public sealed class SystemDef { public string Name = "", Star = "yellow"; public double Gcr; public List<BodyDef> Bodies = new(); }
 
+/// <summary>⑤ 배의 운동 상수 (space.json ship).</summary>
+public sealed class ShipMotionDef { public double TonsPerCell = 1, EngineKN = 2300, Isp = 900, RcsG = 0.02, RcsIsp = 300, PropellantRatio = 1, RadarKm = 100, RadarMrad = 0.5; }
+/// <summary>⑤ 항로의 위험 구간: from~to AU · 파편 종류 · 하루 평균 구름 · 운석.</summary>
+public sealed class ZoneDef { public string Name = "", Debris = "rubble"; public double From, To, CloudsPerDay, RocksPerDay; }
+/// <summary>⑤ 다른 배가 지나가는 빈도.</summary>
+public sealed class TrafficDef { public double PerDay = 0.25, NearAu = 0.04, Boost = 4; }
+
 public sealed class SpaceTable
 {
+    public ShipMotionDef Ship = new();
+    public List<ZoneDef> Zones = new();
+    public TrafficDef Traffic = new();
     public SystemDef System = new();
     public Dictionary<string, StarDef> Stars = new();
     public Dictionary<string, PlanetDef> Planets = new();

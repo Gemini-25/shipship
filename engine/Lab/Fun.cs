@@ -18,6 +18,7 @@ public static partial class Program
         var lay = Layout.Ship(ship, Tables.Default);
         int beds = lay.Furniture.Count(f => f.Type == "Bed"), docks = lay.Furniture.Count(f => f.Type == "RobotDock");
         var s = ShipWorld.Crewed(ship, seed, Math.Max(2, beds), docks, 0); // 침대마다 한 사람 · 충전독마다 로봇 하나
+        if (Environment.GetEnvironmentVariable("FUN_STAY") != "1") ShipWorld.Embark(s);   // 항해에 나선다 (출발 점화 · 지나가는 배)
         var st = s.Get<Storyteller>(); st.Enabled = true; st.Style = style; st.Level = level;
         var d = new Director(s.Layout) { KeepRing = false };
         var mind = s.Get<Mind>(); var life = s.Get<Life>();
@@ -71,7 +72,8 @@ public static partial class Program
             + $" / 돌봄 {mind.Treats}(맨손 {mind.TreatsBare}) · 곪음 {life.Infections} · 패혈증 {life.Sepses} · 감기 {life.Colds}"
             + $" / 막 {st.Arc} · 큰 일로 여파 {st.Aftermaths} · 형편 보고 쉼 {st.Mercies} · 열매 {st.Fruited} · 헛돎 {st.Fizzled} · 털어놓음 {s.Get<Society>().Confessions} · 숨김 {s.Get<Society>().SecretsKept}"
             + $" / 씨앗 {string.Join(" ", st.Seeds.GroupBy(x => x.Kind).Select(g => $"{Storyteller.SeedName(g.Key)} {g.Count()}"))}"
-            + $" / 소리: 가려 못 들음 {mind.Masked} · 이상한 기계 소리 알아챔 {mind.GrindHeard} · 듣고 미리 갈기 {mind.EarMaintained} · 낸 소리 {s.Get<Sound>().Emitted} · 큰 소리(100dB 넘게) {s.Facts.CountOf(FactKind.LoudSound)}";
+            + $" / 소리: 가려 못 들음 {mind.Masked} · 이상한 기계 소리 알아챔 {mind.GrindHeard} · 듣고 미리 갈기 {mind.EarMaintained} · 낸 소리 {s.Get<Sound>().Emitted} · 큰 소리(100dB 넘게) {s.Facts.CountOf(FactKind.LoudSound)}"
+            + Helm(s, mind);
         // 사슬: 건넌 엔진 수 · 가장 넓은 사슬 · 원인 없는 큰 일
         var wide = d.AllChains().OrderByDescending(c => c.Count).ThenByDescending(c => c.Facts).Take(2).ToList();
         var deep = d.AllChains().OrderByDescending(c => c.Line).ThenByDescending(c => c.Depth).FirstOrDefault();
@@ -87,6 +89,14 @@ public static partial class Program
     }
 
     private static string Trim(string t, int n) => t.Length <= n ? t : "…" + t[^n..];
+
+    /// <summary>⑤ 바깥 한 줄: 점화 · 넘어짐 · 레이더 · 비키기 · 다른 배 · 추진제.</summary>
+    private static string Helm(Sim s, Mind mind)
+    {
+        var o = s.Get<Outside>(); var sm = s.Get<ShipMind>();
+        return $" / 바깥: 점화 {o.BurnCount} (미룸 {sm.BurnsDelayed} · 놓침 {o.MissedBurns}) · 넘어짐 {mind.Falls} (붙잡음 {mind.BracedOnBurn}) · 레이더 운석 {sm.RocksSeen} · 비킴 {sm.DodgesAvoided}/{sm.DodgesTried} · 충격 대비 {sm.BraceCalls}"
+            + $" · 다른 배 {o.ContactSeq} · 교신 {sm.Hails} · 구함 {sm.Rescued} · 거절 {sm.Declined} · 건짐 {sm.Salvaged} · 추진제 {o.PropellantKg / Math.Max(1, o.PropellantStart):P0} · {o.Distance:0.000}AU";
+    }
 
     internal static void Fun(string[] args)
     {

@@ -27,6 +27,7 @@ public enum Flow : byte
     Burned,          // 불에 탔다 (식량 · 산소)
     Rusted,          // 젖은 강철 벽이 녹슬며 먹었다 (산소)
     Spaced,          // 감압 바람에 구멍 밖 우주로 날아갔다 (물건)
+    Salvaged,        // (들어옴) 다른 배에서 건졌다 (물건)
     Count
 }
 

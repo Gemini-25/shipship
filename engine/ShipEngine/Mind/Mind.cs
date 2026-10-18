@@ -404,6 +404,7 @@ public sealed partial class Mind : IEngine
         F.RebuildNow();
         IndexBodies();
         foreach (var a in Agents) UpdateUp(sim, a);
+        Inertia(sim);   // ⑤ 점화 — 갑자기 오른 가속에 선 사람이 넘어진다
         foreach (var a in Agents) Sense(sim, a, dt);
         _said.RemoveAll(x => x.tick < sim.Tick - Sound.KeepTicks - 1);
         BuildClaims();
@@ -624,6 +625,7 @@ public sealed partial class Mind : IEngine
         w.I64(Cooked); w.I64(Forgot); w.I64(_learnCursor); w.I64(AteTogether); w.I64(Followed);
         w.Arr(HobbyCount); SavePlaces(w); SaveRation(w);
         w.I64(Masked); w.I64(GrindHeard); w.I64(EarMaintained); w.List(GrindReports);
+        w.F64(_lastG); w.I64(Falls); w.I64(BracedOnBurn);
     }
 
     public void Load(StateReader r)
@@ -644,5 +646,6 @@ public sealed partial class Mind : IEngine
         Cooked = r.I64(); Forgot = r.I64(); _learnCursor = r.I64(); AteTogether = r.I64(); Followed = r.I64();
         HobbyCount = r.Arr<long>(); LoadPlaces(r); LoadRation(r);
         Masked = r.I64(); GrindHeard = r.I64(); EarMaintained = r.I64(); GrindReports.Clear(); GrindReports.AddRange(r.List<GrindReport>());
+        _lastG = r.F64(); Falls = r.I64(); BracedOnBurn = r.I64();
     }
 }

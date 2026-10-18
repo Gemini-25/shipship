@@ -27,6 +27,7 @@ public enum BeliefKind : byte
     Cold,
     Hot,
     Grind,       // 기계 소리가 이상하다 — 끽끽 · 덜컹 (대상 = 장치 · 들어서 안다)
+    Burn,        // 곧 점화한다 — 붙잡아야 한다 (대상 = 점화 틱 · 방송으로 안다)
 }
 
 public enum BeliefSource : byte { Saw, Heard, Smelled, Felt, Told, Screen }

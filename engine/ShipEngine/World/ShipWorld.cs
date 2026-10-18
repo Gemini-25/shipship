@@ -37,6 +37,20 @@ public static class ShipWorld
 
     public static Sim Create(string shipKey, ulong seed) => Create(Layout.Ship(shipKey, Tables.Default), seed);
 
+    /// <summary>
+    /// 항해에 나선다 (관전 · 재미 측정): 붉은 사막(1.52AU)으로 가는 호만 전이 — minutes 뒤 출발 점화 (주컴퓨터가 방송하고 한다) · 다른 배가 지나간다.
+    /// 시험은 부르지 않는다 (가만히 떠 있는 배).
+    /// </summary>
+    public static void Embark(Sim s, double minutes = 20)
+    {
+        var o = s.Find<Outside>();
+        if (o == null) return;
+        o.TrafficOn = true;
+        var to = Tables.Default.Space.System.Bodies.FirstOrDefault(b => b.Au > o.Distance + 0.1) ?? Tables.Default.Space.System.Bodies[^1];
+        int c = s.Causes.Add(CauseKind.Route, $"{Ko.Euro(to.Name)} 가는 항해 ({to.Au:0.##}AU)", s.Tick);
+        o.PlanVoyage(s, to.Au, to.Name, minutes, c);
+    }
+
     /// <summary>사람 · 로봇 · 드론을 태운 배 (사람은 침대마다 · 로봇은 충전독마다 · 많아야 그 수).</summary>
     public static Sim Crewed(string shipKey, ulong seed, int people, int robots = 0, int drones = 0)
     {

@@ -7,13 +7,16 @@ namespace ShipEngine;
 /// </summary>
 public sealed partial class Mind
 {
-    public const double ItemCd = 1.2, ItemMu = 0.3, Gravity = 9.8, ItemDensity = 500; // 상자 끌림 계수 · 금속 바닥 마찰 · 물건은 속이 찬 상자(500kg/m³)로 본다
+    public const double ItemCd = 1.2, ItemMu = 0.3, WetMu = 0.1, Gravity = 9.8, ItemDensity = 500;   // 젖은 바닥 마찰 0.1 // 상자 끌림 계수 · 금속 바닥 마찰 · 물건은 속이 찬 상자(500kg/m³)로 본다
     public const double JamKg = 10;                                       // 이보다 무거운 것은 문틀에 걸린다
     public long Flung, Spaced, ItemHits;
 
     private void Fling(Sim sim, double dt)
     {
         if (Loose.Count == 0) return;
+        _out ??= sim.Find<Outside>();
+        double ix = _out != null ? -_out.Ax : 0, iy = _out != null ? -_out.Ay : 0;   // ⑤ 점화: 배 안의 것은 −a 쪽으로 (관성력 m·a)
+        bool burning = ix != 0 || iy != 0;
         var span = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Loose);
         Span<int> nb = stackalloc int[4];
         for (int k = 0; k < span.Length; k++)
@@ -22,15 +25,22 @@ public sealed partial class Mind
             int c = it.Cell;
             if (c < 0 || c >= L.N || L.Kind[c] == CellKind.Door && _st != null && _st.DoorJam[L.DoorAt[c]] != 0) continue; // 문틀에 걸린 것은 거기 있다
             double wx = F.WindX[c], wy = F.WindY[c], v = Math.Sqrt(wx * wx + wy * wy), pa = F.WindPa[c];
-            if (v < 0.5 || pa < 1) continue;
+            bool windy = v >= 0.5 && pa >= 1;
+            if (!windy && !burning) continue;
             double kg = ItemKg(it.Item), face = Math.Pow(kg / ItemDensity, 2.0 / 3); // 한 면 넓이 (m²)
-            double drag = pa * ItemCd * face, grip = ItemMu * kg * Gravity;
+            double fx = 0, fy = 0;
+            if (windy) { double dr = pa * ItemCd * face; fx = dr * wx / v; fy = dr * wy / v; }
+            if (burning) { fx += kg * ix; fy += kg * iy; }
+            double drag = Math.Sqrt(fx * fx + fy * fy), grip = (F.Stored(T.sWater, c) > 50 ? WetMu : ItemMu) * kg * Gravity;   // 젖은 바닥은 미끄럽다
             if (drag <= grip) continue;
+            wx = fx; wy = fy;
             // 바람 쪽 이웃 칸으로 (센 쪽 축) — 한 틱에 많아야 세 칸 (끌림이 이긴 만큼 빨리 · 1m 미끄러지며 얻는 빠르기)
             double speed = Math.Sqrt(2 * (drag - grip) / kg * 1.0);
             int steps = Math.Clamp((int)(speed * dt / 4), 1, 3);
             int dx = Math.Abs(wx) >= Math.Abs(wy) ? Math.Sign(wx) : 0, dy = dx == 0 ? Math.Sign(wy) : 0;
-            int cause = WindCause(c);
+            int cause = windy ? WindCause(c) : _out!.BurnCause;
+            string by = windy ? "바람에 날린" : "점화에 미끄러진";
+            var ck = windy ? CauseKind.Pressure : CauseKind.Route;
             for (int s = 0; s < steps; s++)
             {
                 int x = L.X(it.Cell) + dx, y = L.Y(it.Cell) + dy;
@@ -41,7 +51,7 @@ public sealed partial class Mind
                 {
                     // 구멍 밖 우주로
                     sim.Book.AddItem(it.Item, Flow.Spaced, -1); Spaced++;
-                    int sc = sim.Causes.Add(CauseKind.Pressure, $"{Ko.I(ItemNames[it.Item])} 바람에 날려 구멍 밖으로 사라졌다", sim.Tick, j, cause);
+                    int sc = sim.Causes.Add(ck, $"{Ko.I(ItemNames[it.Item])} {(windy ? "바람에 날려" : "점화에 미끄러져")} 구멍 밖으로 사라졌다", sim.Tick, j, cause);
                     sim.Facts.Emit(sim.Tick, FactKind.ObjectFlung, j, (float)kg, sc, other: it.Item);
                     it.Cell = -1;
                     break;
@@ -56,14 +66,14 @@ public sealed partial class Mind
                         {
                             double e = 0.5 * kg * speed * speed;
                             if (e < 20) continue;
-                            int hc = sim.Causes.Add(CauseKind.Pressure, $"바람에 날린 {ItemNames[it.Item]}에 맞았다", sim.Tick, j, cause);
+                            int hc = sim.Causes.Add(ck, $"{by} {ItemNames[it.Item]}에 맞았다", sim.Tick, j, cause);
                             _life.Strike(sim, b, (float)Math.Min(1.5, e / 800), 0, hc); ItemHits++;
                         }
                 // 큰 것은 열린 문틀에 걸린다 → 문이 안 닫힌다 (구조에 '끼였다'를 요청)
                 if (kind == CellKind.Door && kg >= JamKg && _st != null)
                 {
                     int d = L.DoorAt[j];
-                    int jc = sim.Causes.Add(CauseKind.Pressure, $"바람에 날린 {Ko.I(ItemNames[it.Item])} 문틀에 끼었다", sim.Tick, j, cause);
+                    int jc = sim.Causes.Add(ck, $"{by} {Ko.I(ItemNames[it.Item])} 문틀에 끼었다", sim.Tick, j, cause);
                     _st.JamDoor(sim, d, jc);
                     break;
                 }
