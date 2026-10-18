@@ -114,6 +114,8 @@ public sealed partial class Mind
                 return;
             }
             case StepKind.Look:
+                // 둘레의 모르는 관 샘을 알아본다 (젖은 바닥 · 쉬익 · 냄새 — 두 칸 안)
+                _net?.SpotLeaks(sim, st.Cell, 2, a.Id);
                 // 끊긴 센서 선 · 전선 · 새는 관: 식었으면 잇고 죈다 (주컴퓨터가 맡긴 자리 — 아직 타면 불부터 · 센서 선 2분 · 전선 3분 · 관 4분 · 사람은 두 배)
                 if (_net != null && _net.NeedsFix(st.Cell) && F.Tf[st.Cell] < 330 && (_chem == null || _chem.Burning[st.Cell] == 0))
                 {

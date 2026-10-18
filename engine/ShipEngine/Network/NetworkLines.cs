@@ -299,7 +299,7 @@ public sealed partial class Network
         var q = new Queue<int>();
         foreach (int s in _lineCells)
         {
-            if ((LineAt[s] & bit) == 0 || (LineCut[s] & bit) != 0 || _pipeComp[s * 2 + slot] >= 0) continue;
+            if ((LineAt[s] & bit) == 0 || (LineCut[s] & bit) != 0 || _pipeComp[s * 2 + slot] >= 0 || ValveShut(s, slot)) continue;
             _pipeComp[s * 2 + slot] = comps;
             q.Enqueue(s);
             while (q.Count > 0)
@@ -310,7 +310,7 @@ public sealed partial class Network
                 {
                     if ((dirs & (1 << d)) == 0) continue;
                     int j = Toward(c, d);
-                    if (j < 0 || j >= L.N || (LineCut[j] & bit) != 0 || _pipeComp[j * 2 + slot] >= 0) continue;
+                    if (j < 0 || j >= L.N || (LineCut[j] & bit) != 0 || _pipeComp[j * 2 + slot] >= 0 || ValveShut(j, slot)) continue;
                     _pipeComp[j * 2 + slot] = comps;
                     q.Enqueue(j);
                 }
@@ -414,6 +414,8 @@ public sealed partial class Network
         if (LineCut[cell] != 0 || cool || water)
         {
             LineCut[cell] = 0; PipeLeak[cell * 2] = 0; PipeLeak[cell * 2 + 1] = 0; LeakKnown[cell * 2] = 0; LeakKnown[cell * 2 + 1] = 0;
+            if (cool) { _rust[cell * 2] = 0; _rustCause[cell * 2] = 0; }
+            if (water) { _rust[cell * 2 + 1] = 0; _rustCause[cell * 2 + 1] = 0; }   // 새 관 토막
             for (int k = 0; k < 3; k++) LineCause[cell * 3 + k] = 0;
             _linesDirty = true;
         }
@@ -506,13 +508,13 @@ public sealed partial class Network
             float lc = PipeLeak[c * 2], lw = PipeLeak[c * 2 + 1];
             if (lc > 0 && Coolant > 0)
             {
-                double n = Math.Min(Coolant, lc * CoolLeakMolPerSec * (Pumping(c, LineKind.Coolant) ? 1 : 0.1) * dt);
+                double n = Math.Min(Coolant, LeakFlow(c, LineKind.Coolant) * dt);
                 Coolant -= n;
                 if (F.Severed[c] != 0 || F.RegionOf.Length <= c || F.RegionOf[c] < 0) VentedNH3 += n; else F.AddGas(c, T.gNH3, n, F.Temp(c));
             }
             if (lw > 0 && WaterTank > 0)
             {
-                double n = Math.Min(WaterTank, lw * WaterLeakMolPerSec * (Pumping(c, LineKind.Water) ? 1 : 0.05) * dt);
+                double n = Math.Min(WaterTank, LeakFlow(c, LineKind.Water) * dt);
                 WaterTank -= n; WaterLeaked += n; sim.Book.Add(Res.Water, Flow.Leaked, -n);
                 if (F.Severed[c] == 0) F.AddStore(c, T.sWater, n);
             }
@@ -523,6 +525,7 @@ public sealed partial class Network
     private bool Pumping(int c, LineKind k)
     {
         int slot = k == LineKind.Water ? 1 : 0;
+        if (ValveShut(c, slot)) return false;   // 밸브를 잠근 방 — 압력이 빠졌다
         string role = k == LineKind.Water ? "recycler" : "pump";
         Span<int> comps = stackalloc int[5];
         int nc = 0;

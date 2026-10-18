@@ -222,6 +222,31 @@ public static partial class Program
                 $"34% 열린 문: 탄 칸 {thick.cells} · 방 {thick.rooms} · 끊긴 전선 칸 {thick.cut} / 닫힌 문: 방 {shut.rooms} / 21%: 탄 칸 {air.cells} · \"{thick.story}\"");
         }
 
+        // ── (라) 녹슨 물관: 젖은 바닥의 관은 스무 배 빨리 녹슬고 · 바늘구멍이 나면 주컴퓨터가 밸브를 잠가 가며 방을 좁히고 로봇이 관을 따라 찾아 죈다 ──
+        {
+            var (s, net) = World(robot: true);
+            var f = s.Get<Field>(); var sm = s.Get<ShipMind>();
+            var pipe = Enumerable.Range(0, lay.N).Where(c => (net.LineAt[c] & wt) != 0 && lay.Room[c] == room4).OrderBy(c => c).ToList();
+            int wetCell = pipe[0], hole = pipe[pipe.Count / 2];
+            int dryCell = Enumerable.Range(0, lay.N).Where(c => (net.LineAt[c] & wt) != 0 && lay.Room[c] >= 0).OrderByDescending(c => Math.Abs(lay.X(c) - lay.X(wetCell)) + Math.Abs(lay.Y(c) - lay.Y(wetCell))).First();
+            double w0 = net.RustFraction(wetCell, LineKind.Water), d0 = net.RustFraction(dryCell, LineKind.Water);
+            for (int k = 0; k < (int)Time.Hours(1); k++) { if (f.Stored(f.T.sWater, wetCell) < 20) f.AddStore(wetCell, f.T.sWater, 30); s.Step(); }   // 늘 물이 고인 바닥
+            double wetRate = net.RustFraction(wetCell, LineKind.Water) - w0, dryRate = net.RustFraction(dryCell, LineKind.Water) - d0;
+            int seed = Story(s, "휴게실 커피 기계 밑에 물이 늘 고여 있었다");
+            net.AgeRust(hole, LineKind.Water, 1.0, seed);
+            long t0 = s.Tick, fixedAt = -1;
+            for (int k = 0; k < (int)Time.Hours(1) && fixedAt < 0; k++) { s.Step(); if (net.LeakAt(hole, LineKind.Water) <= 0 && s.Tick - t0 > 100) fixedAt = s.Tick; }
+            s.Run(30);
+            var log = sm.Log.Where(x => x.tick >= t0).Select(x => x.text).ToList();
+            var leakFact = s.Facts.Since(0).FirstOrDefault(x => x.Kind == FactKind.PipeLeak && x.Cell == hole);
+            string story = leakFact.Kind == FactKind.PipeLeak ? s.Causes.Story(leakFact.Cause) : "";
+            if (Debug) foreach (var l in log) Console.WriteLine($"      {l}");
+            bool valvesOpen = lay.Rooms.All(r => !net.ValveClosed(r.Id, LineKind.Water));
+            Check("(라) 녹슨 물관: 젖은 바닥의 관은 마른 관보다 스무 배 빨리 녹슬고 · 바늘구멍이 나면 주컴퓨터가 '어딘가 샌다'를 알아 밸브를 잠가 가며 방을 좁히고 · 로봇이 그 방 관을 따라 찾아 죈다 · 밸브는 다시 연다",
+                wetRate > dryRate * 15 && fixedAt > 0 && log.Any(l => l.Contains("밸브를 잠가 본다")) && log.Any(l => l.Contains($"샘은 {lay.Rooms[room4].Name}에 있다")) && log.Any(l => l.Contains("새는 자리를 찾았다")) && valvesOpen && story.Contains("물이 늘 고여"),
+                $"녹 빠르기 {wetRate / Math.Max(1e-12, dryRate):0}배 · 죈 때 {(fixedAt > 0 ? $"{(fixedAt - t0) / (double)Time.Minutes(1):0}분" : "못 죔")} · 밸브 열림 {valvesOpen} · 일지 {log.Count}줄 · \"{story}\"");
+        }
+
         // ── 아크가 간선이 함께 지나는 칸을 달구면 간선도 타 원자로가 섬으로 떨어진다 (배터리가 받는다) ──
         {
             var (s, net) = World();

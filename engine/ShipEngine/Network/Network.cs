@@ -165,6 +165,7 @@ public sealed partial class Network : IEngine
         BuildData();
         BuildLines();
         BuildWear();
+        BuildPipes();
         int nf = Feeders.Count;
         Breaker = Enumerable.Repeat((byte)1, nf).ToArray();
         OverSec = new float[nf]; FaultCell = Enumerable.Repeat(-1, nf).ToArray(); BreakerStuck = new byte[nf]; Amps = new float[nf];
@@ -990,6 +991,7 @@ public sealed partial class Network : IEngine
             }
         }
         CablesAge(sim, hours);
+        PipesRust(sim, hours);
         Noise(sim);
     }
 
@@ -1210,7 +1212,7 @@ public sealed partial class Network : IEngine
         w.I32(wk.Count);
         foreach (var k in wk) { w.I32(k); w.I32(_wearCause[k]); }
         SaveJumpers(w); w.Arr(Stripped); w.I64(PartsSalvaged);
-        SaveLines(w); SaveWear(w);
+        SaveLines(w); SaveWear(w); SavePipes(w);
     }
 
     public void Load(StateReader r)
@@ -1229,6 +1231,6 @@ public sealed partial class Network : IEngine
         n = r.I32();
         for (int i = 0; i < n; i++) { int k = r.I32(); _wearCause[k] = r.I32(); }
         LoadJumpers(r); Stripped = r.Arr<byte>(); PartsSalvaged = r.I64();
-        LoadLines(r); LoadWear(r);
+        LoadLines(r); LoadWear(r); LoadPipes(r);
     }
 }

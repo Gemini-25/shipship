@@ -17,7 +17,7 @@ public sealed partial class ShipMind
 
     /// <summary>사람이 할 수 있는 일인가 (드론 · 로봇만의 일 — 차단기 손으로 끊기 · 바깥 둘러보기 — 은 아니다).</summary>
     private static bool PeopleCan(IncidentKind k, GoalKind g) => g is GoalKind.FightFire or GoalKind.Rescue or GoalKind.Repair or GoalKind.Brace or GoalKind.Treat
-        || g == GoalKind.Investigate && k is IncidentKind.Leak or IncidentKind.Vacuum or IncidentKind.SensorLost or IncidentKind.LineCut;
+        || g == GoalKind.Investigate && k is IncidentKind.Leak or IncidentKind.Vacuum or IncidentKind.SensorLost or IncidentKind.LineCut or IncidentKind.PipeHunt;
 
     private void AskPerson(Sim sim, ref Incident x, GoalKind g, int target)
     {
@@ -84,7 +84,7 @@ public sealed partial class ShipMind
     {
         IncidentKind.PersonDown => 0, IncidentKind.Fire => 1, IncidentKind.Vacuum => 2, IncidentKind.Leak => 3, IncidentKind.Injured => 4,
         IncidentKind.ElectricFault => 5, IncidentKind.Strain or IncidentKind.DoorJam => 6, IncidentKind.CO or IncidentKind.Toxic => 7,
-        IncidentKind.PowerLost => 5, IncidentKind.LineCut => 7, IncidentKind.DeviceBroken or IncidentKind.SensorLost => 8, _ => 9,
+        IncidentKind.PowerLost => 5, IncidentKind.LineCut or IncidentKind.PipeHunt => 7, IncidentKind.DeviceBroken or IncidentKind.SensorLost => 8, _ => 9,
     };
 
     private int[] _order = new int[16];
