@@ -9,6 +9,13 @@ set -u
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 REPO=$(git -C "$ROOT" remote get-url origin | sed -E 's#^.*github\.com[:/]##; s#\.git$##')
 BRANCH=$(git -C "$ROOT" rev-parse --abbrev-ref HEAD)
+# 작업 흐름: 이 가지에서 돈 적 있는 것 (새 엔진 가지는 engine.yml · 옛 게임 가지는 tests.yml) — CI_WORKFLOW로 정할 수 있다
+WF=${CI_WORKFLOW:-}
+if [ -z "$WF" ]; then
+  WF=tests.yml
+  n=$(gh api "repos/$REPO/actions/workflows/tests.yml/runs?per_page=1&branch=$BRANCH" --jq '.total_count' 2>/dev/null || echo 0)
+  [ "${n:-0}" = "0" ] && WF=engine.yml
+fi
 MODE=summary RUN="" WAIT=0
 while [ $# -gt 0 ]; do
   case "$1" in --times) MODE=times ;; --run) RUN="$2"; shift ;; --wait) WAIT=1 ;; esac
@@ -17,7 +24,7 @@ done
 if [ "$WAIT" = 1 ] && [ -z "$RUN" ]; then
   SHA=$(git -C "$ROOT" rev-parse HEAD)
   for i in $(seq 1 60); do
-    st=$(gh api "repos/$REPO/actions/workflows/tests.yml/runs?per_page=5&branch=$BRANCH" \
+    st=$(gh api "repos/$REPO/actions/workflows/$WF/runs?per_page=5&branch=$BRANCH" \
          --jq "[.workflow_runs[] | select(.head_sha == \"$SHA\")][0] | \"\(.id) \(.status)\"" 2>/dev/null)
     case "$st" in *" completed") RUN=${st%% *}; break ;; esac
     sleep 60
@@ -25,7 +32,7 @@ if [ "$WAIT" = 1 ] && [ -z "$RUN" ]; then
   [ -n "$RUN" ] || { echo "(한 시간 안에 끝나지 않았다: ${SHA:0:7} · $st)"; exit 1; }
 fi
 if [ -z "$RUN" ]; then
-  RUN=$(gh api "repos/$REPO/actions/workflows/tests.yml/runs?per_page=1&branch=$BRANCH" --jq '.workflow_runs[0].id')
+  RUN=$(gh api "repos/$REPO/actions/workflows/$WF/runs?per_page=1&branch=$BRANCH" --jq '.workflow_runs[0].id')
 fi
 gh api "repos/$REPO/actions/runs/$RUN" > /tmp/last-run.$$.json
 gh api "repos/$REPO/actions/runs/$RUN/jobs?per_page=100" > /tmp/last-jobs.$$.json

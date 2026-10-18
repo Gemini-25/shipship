@@ -51,12 +51,13 @@ for r in runs:
     hl = r['hl']; days = max(1, len(hl))
     ok = sum(1 for h in hl if 3 <= h <= 12)
     if ok / days < 0.7: problems['지루함'].append(f'{tag}: 하이라이트 3~12인 날 {ok}/{days}')
-    if r.get('quietH', 0) > 12: problems['지루함'].append(f'{tag}: {r["quietH"]:.0f}시간 동안 볼 일 없음')
+    gap = r.get('gapH', r.get('quietH', 0))   # 함장 기준 (나): 작은 장면(20~80)도 볼 거리 — 하이라이트 문턱 80은 그대로
+    if gap > 12: problems['지루함'].append(f'{tag}: {gap:.0f}시간 동안 볼 거리 없음 (작은 장면도 없음)')
     if r.get('orphans', 0) > 0: problems['저절로'].append(f'{tag}: 원인 없는 큰 일 {r["orphans"]}')
 
 print()
 for key, title in [('사람', '버팀 ① 사람이 살아남는다 (한꺼번에 다 죽는 판 없음)'), ('순환', '버팀 ② 물자 · 설비가 순환한다'),
-                   ('값', '버팀 ③ 값이 터지거나 굳지 않는다'), ('지루함', '버팀 ④ 지루하지 않다 (하이라이트 3~12인 날 70% · 조용함 12시간 안)'),
+                   ('값', '버팀 ③ 값이 터지거나 굳지 않는다'), ('지루함', '버팀 ④ 지루하지 않다 (하이라이트 3~12인 날 70% · 작은 장면까지 쳐서 볼 거리 없는 시간 12시간 안)'),
                    ('저절로', '저절로 드러남 (원인 없는 큰 일 0)')]:
     p = problems[key]
     print(f'{mark(not p)} {title}' + ('' if not p else ' — ' + ' / '.join(p[:8]) + (f' 외 {len(p) - 8}' if len(p) > 8 else '')))

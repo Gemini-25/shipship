@@ -22,8 +22,14 @@ public static partial class Program
         long cursor = 0, end = (long)(days * Time.Hours(24));
         double logFrom = double.Parse(Environment.GetEnvironmentVariable("LOG_FROM") ?? "9999"), logTo = double.Parse(Environment.GetEnvironmentVariable("LOG_TO") ?? "9999");
         long lastLogTick = -1;
-        for (long t = 0; t < end; t++)
+        // 장면을 되풀이하려고: SAVE_AT=시간이면 그때 세계를 SAVE_FILE에 쓰고 멈춘다 · LOAD=파일이면 거기서 이어 간다
+        long saveAt = Environment.GetEnvironmentVariable("SAVE_AT") is string sa ? (long)(double.Parse(sa) * Time.TicksPerHour) : -1;
+        string saveFile = Environment.GetEnvironmentVariable("SAVE_FILE") ?? "probe.save";
+        long t0 = 0;
+        if (Environment.GetEnvironmentVariable("LOAD") is string lf) { s.Load(File.ReadAllBytes(lf)); t0 = s.Tick; cursor = s.Facts.Total; Console.WriteLine($"  {Time.Clock(s.Tick)}부터 이어 간다 ({lf})"); }
+        for (long t = t0; t < end; t++)
         {
+            if (t == saveAt) { File.WriteAllBytes(saveFile, s.Save()); Console.WriteLine($"  {Time.Clock(s.Tick)} 세계를 {saveFile}에 썼다"); return; }
             s.Step();
             foreach (var f in s.Facts.Since(cursor))
             {
