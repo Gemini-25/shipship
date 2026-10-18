@@ -97,7 +97,7 @@ public sealed partial class Mind
             _net.PanWater[d] = Math.Max(_net.PanWater[d], 55.5f);
         }
         F.AddGas(_net.Devices[d].Cell, T.gAroma, 1e-4, F.Temp(_net.Devices[d].Cell)); // 음식 냄새 (배고픈 이가 끌려온다)
-        if (done) { Cooked++; FinishCook(sim, a, false); }
+        if (done) { Cooked++; if (a.IsPerson) a.C.SkCook = Math.Min(1, a.C.SkCook + 0.003f * Practice(a.C, "조리") * UseSkill(a, 4, sim.Tick)); FinishCook(sim, a, false); }
     }
 
     /// <summary>하던 밥 짓기를 놓았나 (계획이 바뀌었다 · 쓰러졌다) — 놓았으면 조리대를 끄거나 · 잊는다.</summary>
@@ -118,7 +118,7 @@ public sealed partial class Mind
         if (_net == null || d < 0 || _net.On[d] == 0) return;
         bool urgent = interrupted && (c.Up == 0 || c.Mode != 0 || c.Goal is GoalKind.Evacuate or GoalKind.Flee or GoalKind.Panic or GoalKind.FightFire or GoalKind.Rescue or GoalKind.Patch or GoalKind.Investigate or GoalKind.GetSuit or GoalKind.Down);
         float p = interrupted ? (0.35f + 0.4f * (1 - c.Consc)) * (urgent ? 1.3f : 0.6f) : 0.02f * (1.4f - c.Consc) * (0.6f + c.Sleepy + 0.5f * c.Stress);
-        p = Math.Min(0.9f, p * (1 - c.Careful));
+        p = Math.Min(0.9f, p * (1 - c.Careful) * (1 - 0.5f * c.LessonFire));   // 실수에서 배운 조심 · 불을 겪어 본 경계
         if (Rng.Unit(sim.Seed, Rng.Key("깜빡"), a.Id, sim.Tick) >= p) { _net.SetOn(d, false); return; }
         string why = c.Up == 0 ? "쓰러졌다" : urgent ? "급한 소리에 달려 나갔다" : interrupted ? "다른 일에 정신이 팔렸다" : c.Sleepy > 0.6f ? "졸려서 깜빡했다" : "깜빡했다";
         var dev = _net.Devices[d];

@@ -79,7 +79,7 @@ public static partial class Program
             int scared = m.AddPerson(s, At(12, 8)), willing = m.AddPerson(s, At(3, 4));
             m.SetPersonality(scared, 0.5f, 0.05f, 0.5f, 0.05f, 0.9f);
             m.SetPersonality(willing, 0.5f, 0.9f, 0.5f, 0.9f, 0.3f);
-            m[scared].C.SkFire = 0.8f; m[willing].C.SkFire = 0.8f;
+            m[scared].C.SkFire = 0.8f; m[willing].C.SkFire = 0.6f;   // 겁먹은 이가 더 가깝고 솜씨도 낫다 — 주컴퓨터는 먼저 그에게 묻는다 (먼저 나섰다 물러난 이가 막 불을 만져 솜씨가 조금 올라도 차례가 뒤집히지 않게)
             m[scared].C.Brave = 0; m[willing].C.Brave = 0.8f;
             s.Run(5);
             long t0 = s.Tick;
@@ -93,8 +93,8 @@ public static partial class Program
                 if (m[willing].C.Goal == GoalKind.FightFire) willingWent = true;
             }
             string log = Lines(s, t0);
-            if (Debug) Console.WriteLine($"    부탁 {sm.Asked} 받음 {sm.AskAccepted} 거절 {sm.AskDeclined} · {log}");
             string sn = m.NameOf(scared), wn = m.NameOf(willing);
+            if (Debug) Console.WriteLine($"    겁먹은 이 {sn} · 나설 이 {wn} · 부탁 {sm.Asked} 받음 {sm.AskAccepted} 거절 {sm.AskDeclined} · {log}");
             int askScared = log.IndexOf($"{sn}님"), askWilling = log.IndexOf($"{wn}님");
             Check("거절할 수 있다: 겁에 질린 이는 '무서워서 못 가겠어요' — 1분 뒤 다른 이에게 '로봇이 없습니다, 급합니다'로 다시 부탁하고 그 사람이 받아 불로 간다",
                 sm.AskDeclined >= 1 && log.Contains($"{sn}: \"무서워서") && askScared >= 0 && askWilling > askScared && log.IndexOf("급합니다", askWilling) > 0 && willingWent,

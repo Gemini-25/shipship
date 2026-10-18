@@ -180,6 +180,12 @@ public sealed partial class ShipMind : IEngine
         long tod = sim.Tick % Time.TicksPerDay; // 멈춰 있던 때에는 일지도 방송도 없다 (다음 일지가 그 사이를 함께 적는다)
         if (tod == Time.Hours(JournalHour) % Time.TicksPerDay) WriteJournal(sim);
         if (tod == Time.Hours(MorningHour) % Time.TicksPerDay) MorningBroadcast(sim);
+        // 주간 비상 훈련 (이레마다 10시 — ISS 승무원의 정기 비상 훈련처럼): 깨어 있는 이가 불 끄기 · 구멍 막기 · 응급 처치 절차를 되짚는다 (⑧에 요청)
+        if (tod == Time.Hours(10) && sim.Tick / Time.TicksPerDay % 7 == 6 && _mind != null && Incidents.All(x => x.Active == 0))
+        {
+            _mind.Drill(sim);
+            Say(sim, "주간 비상 훈련 — 불 끄기 · 구멍 막기 · 응급 처치 절차를 되짚습니다");
+        }
     }
 
     private void Say(Sim sim, string text)

@@ -47,6 +47,7 @@ public sealed partial class Mind
         _life.Treat(sim, vb, kit);
         if (kit) UseHeld(sim, a); else TreatsBare++;
         Treats++;
+        if (a.IsPerson) c.SkMedic = Math.Min(1, c.SkMedic + 0.004f * Practice(c, "치료") * UseSkill(a, 1, sim.Tick));
         int va = AgentOfBody(vb);
         string who = va >= 0 ? NameOf(va) : "다친 이";
         int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot,

@@ -93,6 +93,12 @@ public sealed partial class Society
         foreach (var o in opts) { r -= o.W; if (r <= 0) { pick = o; break; } }
         int sp = pick.Speaker, li = sp == i ? j : i;
         Outcome(sim, pick, sp, li);
+        // 함께 겪은 불 · 구멍 이야기: 들은 이는 교훈을 조금 얻고 · 말한 이는 되새긴다 (⑧에 요청)
+        if (pick.T is Topic.Fire or Topic.Breach)
+        {
+            var hz = pick.T == Topic.Fire ? Hazard.Fire : Hazard.Breach;
+            _mind!.Teach(li, hz, 0.08f); _mind.Teach(sp, hz, 0.05f);
+        }
         LastTalk[i * N + j] = LastTalk[j * N + i] = sim.Tick;
         // 한 번 꺼낸 이야기는 둘에게 조금 가라앉는다 (같은 말만 되풀이하지 않게)
         if (pick.Cause != 0)

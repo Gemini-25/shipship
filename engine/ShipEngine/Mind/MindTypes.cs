@@ -177,6 +177,7 @@ public struct AgentCore
     public float Chrono;       // 몸의 시계 (시간 — 음수 아침형 · 양수 저녁형)
     public byte Hobby;         // 쉬는 시간에 하는 일 (Hobby)
     public byte Aim, AimMet;   // ⑧ 인생 목표 (Aim) · 이뤘나 (1)
+    public float LessonFire, LessonBreach, LessonAir;   // ⑧ 사고의 교훈 (0~1 · 반감기 3주)
     // ⑨ 함께
     public long FollowedAt;    // 아는 이를 따라 방을 나선 때 (0: 없음) — 10분 동안은 다시 따라 나서지 않는다
     public float SleepNoise;   // ⑦ 자는 동안 들은 가장 큰 소리 (dB — 10분에 걸쳐 흐려진다)

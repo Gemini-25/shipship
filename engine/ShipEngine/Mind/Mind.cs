@@ -422,7 +422,7 @@ public sealed partial class Mind : IEngine
         t = Lap("감각", t);
         _said.RemoveAll(x => x.tick < sim.Tick - Sound.KeepTicks - 1);
         BuildClaims();
-        if (sim.Tick % 25 == 0) { Learn(sim); Places(sim); AimStep(sim); }
+        if (sim.Tick % 25 == 0) { Learn(sim); Places(sim); AimStep(sim); LessonStep(sim); }
         t = Lap("배우기 · 자리", t);
         foreach (var a in Agents)
         {
@@ -647,7 +647,7 @@ public sealed partial class Mind : IEngine
         w.Arr(HobbyCount); SavePlaces(w); SaveRation(w);
         w.I64(Masked); w.I64(GrindHeard); w.I64(EarMaintained); w.I64(MasksWorn); w.List(GrindReports);
         w.F64(_lastG); w.I64(Falls); w.I64(BracedOnBurn);
-        SaveAims(w);
+        SaveAims(w); SaveLessons(w);
     }
 
     public void Load(StateReader r)
@@ -669,6 +669,6 @@ public sealed partial class Mind : IEngine
         HobbyCount = r.Arr<long>(); LoadPlaces(r); LoadRation(r);
         Masked = r.I64(); GrindHeard = r.I64(); EarMaintained = r.I64(); MasksWorn = r.I64(); GrindReports.Clear(); GrindReports.AddRange(r.List<GrindReport>());
         _lastG = r.F64(); Falls = r.I64(); BracedOnBurn = r.I64();
-        LoadAims(r);
+        LoadAims(r); LoadLessons(r);
     }
 }

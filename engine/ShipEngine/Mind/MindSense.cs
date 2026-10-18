@@ -493,7 +493,7 @@ public sealed partial class Mind
         if (a.IsPerson && _life![a.C.Body].Mask != 0 && F.Pressure(cell) >= 25) return false;   // 마스크로 숨 쉰다
         // 몸은 산소가 모자란 것을 바로 느끼지 못한다 (숨이 찬 것은 이산화탄소 때문) — 낮은 기압 · 이산화탄소가 본능을 깨우고 ·
         // 피의 산소가 0.8 아래로 떨어지면 어지럽고 숨이 가빠 알아챈다 (저산소증 증상 — 판단은 흐려져도 몸은 안다)
-        return F.Pressure(cell) < 40 || F.Ppm(T.gCO2, cell) > 50000 || a.IsPerson && _life![a.C.Body].SpO2 < 0.8f;
+        return F.Pressure(cell) < 40 || F.Ppm(T.gCO2, cell) > 50000 || a.IsPerson && _life![a.C.Body].SpO2 < 0.8f + 0.1f * Math.Max(a.C.LessonAir, a.C.LessonBreach);   // 겪어 본 이는 더 일찍 안다
     }
 
     private bool HeatBad(int cell) => F.Temp(cell) > 330 || BurningNear(cell, 1);

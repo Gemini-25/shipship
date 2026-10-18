@@ -258,6 +258,7 @@ public sealed partial class Mind
                 if (t > c.StepStart)
                 {
                     Extinguished++;
+                    if (a.IsPerson) c.SkFire = Math.Min(1, c.SkFire + 0.004f * Practice(c, "불끄기") * UseSkill(a, 2, t));   // 해 볼수록 는다
                     // 불씨가 된 조리대가 곁에 켜져 있으면 전원도 내린다 (안 끄면 다시 눌어 붙는다)
                     bool stove = false;
                     if (_net != null)
@@ -309,6 +310,7 @@ public sealed partial class Mind
         _st!.Patch(wall, (float)Math.Max(0, area - max));
         if (a.IsPerson) UseHeld(sim, a);
         Patched++;
+        if (a.IsPerson) c.SkSeal = Math.Min(1, c.SkSeal + 0.004f * Practice(c, "봉합") * UseSkill(a, 3, t));
         int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} {(doorGap ? "문틈" : "구멍")}을 막았다", t, wall,
             doorGap ? _st.LowSideCause(wall) : _st.DamageCause[wall], 0, a.Id);
         sim.Facts.Emit(t, FactKind.Patched, wall, (float)Math.Min(doorGap ? Field.LeakNormalDoor : area, max), cause, a.Id);
@@ -378,7 +380,7 @@ public sealed partial class Mind
                 if (!TakeOne(c.Cell, ItemIndex(need), sim)) { Fail(sim, a, "재료가 없다"); return; }
         Stock[bench * ItemCount + item]++; sim.Book.AddItem(item, Flow.Crafted, 1);
         if (_work != null) _work.Crafted++;
-        if (a.IsPerson) c.SkRepair = Math.Min(1, c.SkRepair + 0.005f * Practice(c, "고치기"));
+        if (a.IsPerson) c.SkRepair = Math.Min(1, c.SkRepair + 0.005f * Practice(c, "고치기") * UseSkill(a, 0, t));
         JobDone(a, t);
     }
 
@@ -454,7 +456,7 @@ public sealed partial class Mind
         c.Holding = iHarvest; c.HoldCharge = got;
         sim.Book.Add(Res.Food, Flow.Harvest, got);
         if (_work != null) _work.Harvested++;
-        if (a.IsPerson) c.SkFarm = Math.Min(1, c.SkFarm + 0.005f * Practice(c, "기르기"));
+        if (a.IsPerson) c.SkFarm = Math.Min(1, c.SkFarm + 0.005f * Practice(c, "기르기") * UseSkill(a, 6, t));
         Next(a, t);
     }
 
@@ -525,7 +527,7 @@ public sealed partial class Mind
         if (used >= 0) _net.SetWear(dev, (Part)st.Arg, used);
         if (c.Holding == iRepair || c.Holding == iSalvage) UseHeld(sim, a);
         else if (!a.IsPerson && c.Spares > 0) c.Spares--;            // 로봇 부품 주머니
-        if (a.IsPerson) c.SkRepair = Math.Min(1, c.SkRepair + 0.01f * Practice(c, "고치기"));
+        if (a.IsPerson) c.SkRepair = Math.Min(1, c.SkRepair + 0.01f * Practice(c, "고치기") * UseSkill(a, 0, t));
         Repaired++;
         int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, used >= 0 ? $"{Ko.I(NameOf(a.Id))} 떼어 온 헌 부품으로 {Ko.Eul(_net.Devices[dev].Name)} 고쳤다" : $"{Ko.I(NameOf(a.Id))} {Ko.Eul(_net.Devices[dev].Name)} 고쳤다", t, _net.Devices[dev].Cell, c.GoalCause, 0, a.Id);
         sim.Facts.Emit(t, FactKind.Repaired, _net.Devices[dev].Cell, st.Arg, cause, a.Id, dev);
