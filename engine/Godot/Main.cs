@@ -57,6 +57,7 @@ public partial class Main : Node2D
     private int _mute;                                         // M: 0 다 켬 · 1 음악만 끔 · 2 다 끔
 
     // ── 확인용 (명령 줄: --shots=폴더 --every=초 --for=초) — 몇 초마다 화면을 찍고, 끝나면 프레임 시간을 적고 나간다 ──
+    private Overlay _overlay;
     private string? _shotDir;
     private double _shotEvery = 10, _runFor, _runT, _nextShot = 3;
     private int _shotN, _picsTotal, _pick = -1;
@@ -83,7 +84,8 @@ public partial class Main : Node2D
             else if (a.StartsWith("--for=")) _runFor = double.Parse(a[6..], System.Globalization.CultureInfo.InvariantCulture);
             else if (a.StartsWith("--pick=") && int.TryParse(a[7..], out var pk)) _pick = pk;
             else if (a.StartsWith("--skip=")) _skipHours = double.Parse(a[7..], System.Globalization.CultureInfo.InvariantCulture);
-            else if (a.StartsWith("--panel=")) _openPanel = a[8..] switch { "L" => PanelKind.Highlights, "T" => PanelKind.Storyteller, "J" => PanelKind.Journal, _ => PanelKind.None };
+            else if (a.StartsWith("--panel=")) _openPanel = a[8..] switch { "L" => PanelKind.Highlights, "T" => PanelKind.Storyteller, "J" => PanelKind.Journal, "C" => PanelKind.Chain, "P" => PanelKind.People, _ => PanelKind.None };
+            else if (a.StartsWith("--overlay=") && Enum.TryParse<Overlay>(a[10..], out var ov)) _overlay = ov;
         }
         if (_shotDir != null) { System.IO.Directory.CreateDirectory(_shotDir); _help = true; _helpLeft = 4; }
         _shipAt = Math.Max(0, Array.IndexOf(_ships, ship));
@@ -214,6 +216,7 @@ public partial class Main : Node2D
         _runT += delta;
         if (_pick >= 0 && _runT > 3) { int who = _pick; _pick = -1; _cmds.Enqueue(s => { s.Selected = who; s.FollowSelected = true; }); }
         if (_openPanel != PanelKind.None && _runT > 3) { var k = _openPanel; _openPanel = PanelKind.None; _cmds.Enqueue(s => s.TogglePanel(k)); }
+        if (_overlay != Overlay.None && _runT > 2) { var o = _overlay; _overlay = Overlay.None; _cmds.Enqueue(s => s.Show = o); }
         if (_shown != null && _runT > 1) _frameMs.Add(delta * 1000);
         if (_shotDir != null && _shown != null && _runT >= _nextShot)
         {
