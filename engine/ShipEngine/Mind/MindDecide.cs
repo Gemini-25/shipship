@@ -143,6 +143,7 @@ public sealed partial class Mind
         }
         if (_deciding != null && _deciding.IsPerson) score *= AimBoost(_deciding.C, g) * LessonBoost(_deciding.C, g);   // ⑧ 인생 목표 · 사고의 교훈
         if (_deciding != null && Everyday(g) && Sheltering(_deciding) && (cell >= 0 ? RoomOf(cell) != ShelterRoom : g == GoalKind.Eat)) score *= 0.15f; // 대피 중: 대피실 밖의 일상은 미룬다
+        if (_deciding != null) score *= CouncilBoost(_deciding, g, cell);   // ⑨ 회의에 모이기 · 벌 당번 · 근신
         _opts.Add(new Option { Goal = g, Target = target, Cell = cell, Score = score, Cause = cause });
     }
 
@@ -176,6 +177,7 @@ public sealed partial class Mind
             AwaitCare(a, here);      // ⑦ 돌보러 오는 이가 있으면 기다린다
             PilferOption(a, here);   // ⑪ 몫을 다 먹고 몹시 배고프면 — 덜 성실하고 덜 다정한 이는 몰래 한 끼
             ShelterOption(a, here);  // ⑩ 대피 방송을 따르는 이는 대피실로
+            MeetingOption(a, here);  // ⑨ 회의에 갈 이는 식당으로
             if (c.Thirst > 0.3f && WaterAllowed(a.Id) >= 5) Add(GoalKind.Drink, -1, -1, c.Thirst * c.Thirst * 6 + (c.Thirst > 0.85f ? 2 : 0)); // 몹시 마른 목(몸의 물 1.7% 모자람)은 한밤의 잠보다 급하다
             float grief = _soc?.GriefOf(a.Id) ?? 0; // ⑨ 슬픔: 일손을 놓고 사람을 찾는다
             if (InWindow(hour, c.ShiftHour, 8) && c.Station >= 0) Add(GoalKind.Work, c.Station, L.Furniture[c.Station].Cells[0], (1.2f + c.Diligent) * (1 - 0.7f * grief) * WorkFactor(a));
@@ -405,6 +407,13 @@ public sealed partial class Mind
                 return true;
             }
             case GoalKind.Relax: return BuildRelax(sim, a, plan);
+            case GoalKind.Meeting:
+            {
+                if (GatherRoom < 0) return false;
+                plan.Add(Go(SpotIn(a, GatherRoom, o.Cell, GoalKind.Meeting), 1));
+                plan.Add(Use(UseKind.None, Time.Minutes(20)));
+                return true;
+            }
             case GoalKind.Shelter:
             {
                 if (ShelterRoom < 0) return false;

@@ -96,6 +96,11 @@ public enum FactKind : ushort
     LogShown,          // 주컴퓨터 기록 — 장치의 점검 뚜껑을 연 이 (Actor: 연 이 · −1 없음 · Other: 장치 · Size: 몇 시간 전)
     // ⑩ 우주 날씨 대비
     Shelter,           // 주컴퓨터가 대피를 알렸다 (Size: 1 파편 · 2 방사선 · Other: 대피실 · Cell: 대피실 가운데) · −1이면 풀었다
+    // ⑨ 바퀴 3 — 회의 · 재판 · 선거 · 반란
+    Meeting,           // 회의를 열었다 (Size: 안건 1 재판 · 2 선거 · 3 배급 · −1 모이지 않았다 · Actor: 연 이 · Other: 피고)
+    Verdict,           // 판결 (Size: 0 무죄 · 1 사과 · 2 벌 당번 · 3 근신 · Actor: 피고 · Other: 고발한 이)
+    Elected,           // 대표를 뽑았다 (Actor: 뽑힌 이 · Size: 얻은 표 · Other: 앞 대표)
+    Mutiny,            // 배급 반란 (Size: 찬성 수 · −1이면 부결 · Actor: 연 이)
 }
 
 public static class FactNames
@@ -118,7 +123,7 @@ public static class FactNames
         FactKind.Grieved => "슬픔", FactKind.TrustLost => "믿음이 깨졌다", FactKind.WentOutside => "선외로 나갔다",
         FactKind.Talk => "이야기", FactKind.Blamed => "탓", FactKind.Fight => "몸싸움", FactKind.Sabotage => "몰래 한 짓", FactKind.Pilfer => "몰래 먹었다", FactKind.Rationed => "배급", FactKind.Treated => "돌봤다", FactKind.Confessed => "털어놓았다", FactKind.Burn => "점화", FactKind.Fell => "넘어졌다", FactKind.Contact => "다른 배", FactKind.Jumper => "연장선", FactKind.Salvaged => "떼어 냈다", FactKind.Aim => "인생 목표",
         FactKind.ShipSplit => "배가 갈라졌다",
-        FactKind.Lie => "거짓말", FactKind.LieExposed => "거짓말이 들통났다", FactKind.LogAsked => "기록을 물었다", FactKind.LogShown => "주컴퓨터 기록", FactKind.Shelter => "대피",
+        FactKind.Lie => "거짓말", FactKind.LieExposed => "거짓말이 들통났다", FactKind.LogAsked => "기록을 물었다", FactKind.LogShown => "주컴퓨터 기록", FactKind.Shelter => "대피", FactKind.Meeting => "회의", FactKind.Verdict => "판결", FactKind.Elected => "대표를 뽑았다", FactKind.Mutiny => "배급 반란",
         FactKind.ComputerJournal => "일지", FactKind.ComputerBroadcast => "아침 방송", FactKind.Switched => "껐다", _ => "",
     };
 }

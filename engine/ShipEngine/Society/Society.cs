@@ -177,6 +177,7 @@ public sealed partial class Society : IEngine
             Hearts(sim, TogetherEvery * dt);
             BrawlStep(sim);
             if (sim.Tick % (TogetherEvery * 30) == 0) Mischief(sim);
+            CouncilStep(sim);   // ⑨ 회의 · 재판 · 선거 · 반란
         }
         if (sim.Tick % Time.TicksPerHour == 0) FormBands(sim);
     }
@@ -530,6 +531,7 @@ public sealed partial class Society : IEngine
         var keys = _sharedSeen.Keys.OrderBy(k => k).ToList();
         w.I32(keys.Count); foreach (var k in keys) { w.I32(k); w.Arr(_sharedSeen[k]); }
         SaveSecrets(w);
+        SaveCouncil(w);
     }
 
     public void Load(StateReader r)
@@ -543,5 +545,6 @@ public sealed partial class Society : IEngine
         _sealedIn.Clear(); int n = r.I32(); for (int i = 0; i < n; i++) { long t = r.I64(); int room = r.I32(); int c = r.I32(); _sealedIn.Add((t, room, c)); }
         _sharedSeen.Clear(); n = r.I32(); for (int i = 0; i < n; i++) { int k = r.I32(); _sharedSeen[k] = r.Arr<int>(); }
         LoadSecrets(r);
+        LoadCouncil(r);
     }
 }

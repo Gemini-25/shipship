@@ -22,7 +22,7 @@ public sealed partial class Mind
     public void SetRation(double food, double water, int cause) { RationFood = food; RationWater = water; RationCause = cause; }
 
     /// <summary>오늘(0시부터) 더 받을 수 있는 몫 — 배급이 없으면 끝없다.</summary>
-    public double FoodLeft(int agent) => RationFood <= 0 ? double.MaxValue : Math.Max(0, RationFood - (agent < _ateToday.Length ? _ateToday[agent] : 0));
+    public double FoodLeft(int agent) => RationFood <= 0 || Defying(agent, _nowTick) ? double.MaxValue : Math.Max(0, RationFood - (agent < _ateToday.Length ? _ateToday[agent] : 0));   // ⑨ 배급 반란에 찬성한 이는 배식기 몫을 넘는다
     public double WaterLeft(int agent) => RationWater <= 0 ? double.MaxValue : Math.Max(0, RationWater - (agent < _drankToday.Length ? _drankToday[agent] : 0));
     /// <summary>의료 몫: 몸의 물이 3% 넘게 모자란 이(화상 · 열 · 피 흘림)는 배급과 상관없이 모자란 만큼 마신다 (배급의 원칙 — 아픈 이 · 다친 이에게 먼저 · 찾아 고친 결함: 덴 이가 하루 몫에 막혀 목이 말라 죽었다).</summary>
     public double WaterAllowed(int agent)
@@ -62,8 +62,9 @@ public sealed partial class Mind
     private void PilferOption(Agent a, int here)
     {
         ref var c = ref a.C;
-        if (RationFood <= 0 || c.Hunger < 0.65f || FoodLeft(a.Id) >= 0.2) return;
-        float bent = (1 - c.Consc) * (1 - 0.7f * c.Agree);
+        bool defy = Defying(a.Id, _nowTick);   // ⑨ 배급 반란 — 드러내 놓고 연다
+        if (RationFood <= 0 || c.Hunger < 0.65f || !defy && FoodLeft(a.Id) >= 0.2) return;
+        float bent = defy ? 1 : (1 - c.Consc) * (1 - 0.7f * c.Agree);
         if (bent < 0.35f) return;
         int lk = Nearest(here, FoodLockers, fu => FoodAt(fu) >= MealMol);
         if (lk < 0) return;
@@ -71,7 +72,7 @@ public sealed partial class Mind
         bool watched = false;
         foreach (var o in Agents)
             if (o != a && o.IsPerson && o.C.Up != 0 && RoomOf(o.C.Cell) == room && _life![o.C.Body].Asleep == 0 && _life[o.C.Body].Conscious != 0) { watched = true; break; }
-        Add(GoalKind.Pilfer, lk, L.Furniture[lk].Cells[0], (c.Hunger - 0.6f) * 8 * bent * (watched ? 0.25f : 1));
+        Add(GoalKind.Pilfer, lk, L.Furniture[lk].Cells[0], (c.Hunger - 0.6f) * 8 * bent * (watched && !defy ? 0.25f : 1));
     }
 
     /// <summary>보관함에서 한 끼를 몰래 꺼내 먹었다 (3분 — 다 마쳤을 때).</summary>

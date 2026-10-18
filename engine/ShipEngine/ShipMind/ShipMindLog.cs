@@ -37,6 +37,9 @@ public sealed partial class ShipMind
                 case FactKind.LogAsked when device:
                     Answer(sim, f);
                     break;
+                case FactKind.Mutiny when f.Size > 0:   // ⑨ 배급 반란 — 주컴퓨터는 막지 않고 적고 알린다 (도구)
+                    Say(sim, $"승무원 회의가 배급을 따르지 않기로 했습니다 ({f.Size:0}명) — 함장님께 알립니다 · 보관함 무게를 계속 잽니다");
+                    break;
             }
         }
         _logCursor = sim.Facts.Total;

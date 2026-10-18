@@ -66,6 +66,7 @@ public enum GoalKind : byte
     Treat,      // ⑦ 다친 이를 돌본다 (구급 상자 — 없으면 맨손)
     Rewire,     // ⑥ 급전선이 죽은 방에 옆 방에서 연장선을 끌어온다 (대상: 방)
     Shelter,    // ⑩ 대피 방송 — 주컴퓨터가 고른 방으로 모인다 (대상: 방)
+    Meeting,    // ⑨ 회의 — 식당으로 모인다 (대상: 방)
 }
 
 /// <summary>계획의 한 단계.</summary>

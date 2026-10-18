@@ -132,6 +132,7 @@ public sealed partial class Society
         int head = -1; float hr = mean + 0.12f;
         foreach (int i in people) if (Respect[i] > hr) { hr = Respect[i]; head = i; }
         if (Head >= 0 && Alive(Head) && head != Head && Respect[Head] > mean + 0.12f && Respect[Head] > hr - 0.05f) head = Head;
+        if (Rep >= 0 && Alive(Rep) && RepUntil > sim.Tick) head = Rep;   // 뽑힌 대표 (임기 동안)
         if (head != Head && head >= 0)
         {
             int c = sim.Causes.Add(CauseKind.Person, $"배 사람들이 {Ko.Eul(mind.NameOf(head))} 가장 믿고 따른다", sim.Tick, C(head).Cell, 0, 0, head);
