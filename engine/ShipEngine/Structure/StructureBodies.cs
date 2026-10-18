@@ -19,6 +19,10 @@ public struct RigidBody
     /// <summary>이 몸을 마지막으로 크게 민 원인 (뿜는 구멍 · 갈라짐 — 돌기 시작했다는 사실의 원인).</summary>
     public int PushCause;
     public byte Spun;
+    /// <summary>'돌기 시작했다' 원인 마디 (안의 것이 미끄러진 까닭).</summary>
+    public int TumbleCause;
+    /// <summary>지난 틱 끝의 빠르기 · 각속도 (덜컹임을 잰다) · 지난 틱에 받은 가속 (점화는 빼고 · 세상 틀 m/s²) · 각가속도 — 안의 것이 느끼는 힘 (⑧이 읽는다).</summary>
+    public double PVx, PVy, PW, Ax, Ay, Al;
 }
 
 /// <summary>
@@ -97,6 +101,7 @@ public sealed partial class Structure
         var (wx, wy) = WorldOf(b, lx, ly);
         double rx = wx - o.X, ry = wy - o.Y;
         o.Vx -= o.W * ry; o.Vy += o.W * rx;
+        o.PVx -= o.PW * ry; o.PVy += o.PW * rx;
         o.X = wx; o.Y = wy; o.Lx = lx; o.Ly = ly;
         o.Mass = m; o.Inertia = Math.Max(1e-9, sxx - m * (lx * lx + ly * ly));
         o.MinX = x0; o.MinY = y0; o.MaxX = x1; o.MaxY = y1;
@@ -118,6 +123,7 @@ public sealed partial class Structure
         while (Bodies.Count < id) Bodies.Add(new RigidBody { Id = Bodies.Count, Asleep = 1 });
         var p = Bodies[parent];
         var o = new RigidBody { Id = id, Th = p.Th, Vx = p.Vx, Vy = p.Vy, W = p.W, Lx = p.Lx, Ly = p.Ly, X = p.X, Y = p.Y };
+        o.PVx = p.PVx; o.PVy = p.PVy; o.PW = p.PW;
         if (Bodies.Count == id) Bodies.Add(o); else Bodies[id] = o;
         Refit(id);
         Refit(parent);
@@ -162,6 +168,42 @@ public sealed partial class Structure
     }
 
     private readonly List<(int b, double px, double py, double dx, double dy, double imp)> _vents = new();
+    private double _burnDvx, _burnDvy;
+
+    /// <summary>칸 c에서 늘 느끼는 힘 (도면 축 m/s² — 그 몸의 틀): 도는 몸의 원심 ω²r (바깥쪽 · 코리올리는 뺀다). ⑧이 읽는다 — 마찰을 넘으면 고정 안 된 것이 바깥 벽으로 밀린다.</summary>
+    public (double ax, double ay) Felt(int c)
+    {
+        int b = BodyOf(c);
+        if (b < 0 || b >= Bodies.Count || Bodies[b].Mass <= 0) return (0, 0);
+        var o = Bodies[b];
+        double w2 = o.W * o.W;
+        return (w2 * (L.X(c) + 0.5 - o.Lx), w2 * (L.Y(c) + 0.5 - o.Ly));
+    }
+
+    /// <summary>
+    /// 칸 c의 덜컹임 (도면 축 m/s — 그 몸의 틀 · 점화는 빼고): 지난 틱에 그 자리 바닥의 빠르기가 바뀐 만큼의 반대 —
+    /// 고정 안 된 것은 이 빠르기로 미끄러지기 시작하고 (마찰로 v²/2μg만큼) · 선 사람은 이만큼 휘청인다 (뿜는 공기 · 갈라짐 · 부딪힘).
+    /// </summary>
+    public (double vx, double vy) JoltDv(int c)
+    {
+        int b = BodyOf(c);
+        if (b < 0 || b >= Bodies.Count || Bodies[b].Mass <= 0) return (0, 0);
+        var o = Bodies[b];
+        double dt = Time.SecondsPerTick;
+        double cs = Math.Cos(o.Th), sn = Math.Sin(o.Th);
+        double lx = (cs * o.Ax + sn * o.Ay) * dt, ly = (-sn * o.Ax + cs * o.Ay) * dt, dw = o.Al * dt;
+        double rx = L.X(c) + 0.5 - o.Lx, ry = L.Y(c) + 0.5 - o.Ly;
+        return (-lx + dw * ry, -ly - dw * rx);
+    }
+
+    /// <summary>칸 c의 몸을 흔든 원인: 돌기 시작한 마디 → 민 것 → 갈라짐.</summary>
+    public int BodyCause(int c)
+    {
+        int b = BodyOf(c);
+        if (b < 0 || b >= Bodies.Count) return 0;
+        var o = Bodies[b];
+        return o.TumbleCause != 0 ? o.TumbleCause : o.PushCause != 0 ? o.PushCause : b > 0 && b <= Fragments.Count ? Fragments[b - 1].Cause : 0;
+    }
 
     /// <summary>
     /// 몸이 움직인다 (매 틱 — 몸이 있을 때만): ③의 우주로 트인 틈마다 빠진 기체의 운동량을 그 자리에서 반대로 · 배의 점화 —
@@ -185,6 +227,7 @@ public sealed partial class Structure
             if (vc != 0) { o.PushCause = vc; Bodies[b] = o; }
         }
         bool burn = ShipAx != 0 || ShipAy != 0;
+        _burnDvx = _burnDvy = 0;
         Kick(0.5 * dt, burn);
         // 잔걸음 수 (빠르기 · 각속도로) — 힘 없이 곧게 · 돈다
         int steps = 1;
@@ -211,6 +254,9 @@ public sealed partial class Structure
             var o = Bodies[b];
             if (o.Mass <= 0) continue;
             bool pushed = b == 0 && burn || _vents.Exists(v => v.b == b);
+            // 안의 것이 느낄 가속: 지난 틱 끝에서 지금까지 바뀐 빠르기 (뿜는 힘 · 갈라짐 · 부딪힘 — 점화는 ⑤의 길로 따로)
+            o.Ax = (o.Vx - o.PVx - (b == 0 ? _burnDvx : 0)) / dt; o.Ay = (o.Vy - o.PVy - (b == 0 ? _burnDvy : 0)) / dt; o.Al = (o.W - o.PW) / dt;
+            o.PVx = o.Vx; o.PVy = o.Vy; o.PW = o.W;
             o.Asleep = (byte)(!pushed && Math.Abs(o.Vx) + Math.Abs(o.Vy) < 1e-7 && Math.Abs(o.W) < 1e-9 ? 1 : 0);
             // 빠지는 공기에 밀려 돌기 시작했다 (조각 — 한 번)
             if (b > 0 && o.Spun == 0 && Math.Abs(o.W) >= SpinRadS)
@@ -219,6 +265,7 @@ public sealed partial class Structure
                 int fragCause = b <= Fragments.Count ? Fragments[b - 1].Cause : 0;
                 int cause = sim.Causes.Add(CauseKind.Breach, $"떨어져 나간 조각이 {(o.PushCause != 0 ? "빠지는 공기에 밀려 " : "")}돌기 시작했다 (분에 {Math.Abs(o.W) * 60 / (2 * Math.PI):0.0}바퀴)", sim.Tick, CellNear(b), o.PushCause != 0 ? o.PushCause : fragCause);
                 sim.Facts.Emit(sim.Tick, FactKind.Tumble, CellNear(b), (float)(o.Mass / 1000), cause, -1, b);
+                o.TumbleCause = cause;
             }
             Bodies[b] = o;
         }
@@ -252,7 +299,7 @@ public sealed partial class Structure
             var o = Bodies[0];
             double c = Math.Cos(o.Th), s = Math.Sin(o.Th);
             double jx = o.Mass * (c * ShipAx - s * ShipAy) * frac, jy = o.Mass * (s * ShipAx + c * ShipAy) * frac;
-            BurnPx += jx; BurnPy += jy; BurnL += o.X * jy - o.Y * jx;
+            BurnPx += jx; BurnPy += jy; BurnL += o.X * jy - o.Y * jx; _burnDvx += jx / o.Mass; _burnDvy += jy / o.Mass;
             Push(0, o.X, o.Y, jx, jy);
         }
     }

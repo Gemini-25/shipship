@@ -458,6 +458,7 @@ public sealed partial class Mind : IEngine
         IndexBodies();
         foreach (var a in Agents) UpdateUp(sim, a);
         Inertia(sim);   // ⑤ 점화 — 갑자기 오른 가속에 선 사람이 넘어진다
+        BodyJolt(sim);  // ④ 칸 강체 — 몸이 덜컹이면 선 사람이 넘어진다
         t = Lap("준비", t);
         foreach (var a in Agents) Sense(sim, a, dt);
         t = Lap("감각", t);

@@ -17,6 +17,7 @@ public sealed partial class Mind
         _out ??= sim.Find<Outside>();
         double ix = _out != null ? -_out.Ax : 0, iy = _out != null ? -_out.Ay : 0;   // ⑤ 점화: 배 안의 것은 −a 쪽으로 (관성력 m·a)
         bool burning = ix != 0 || iy != 0;
+        bool bodies = _st != null && _st.Bodies.Count > 1;   // ④ 칸 강체: 떨어져 나간 조각 · 덜컹인 배 안의 것이 느끼는 힘
         var span = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Loose);
         Span<int> nb = stackalloc int[4];
         for (int k = 0; k < span.Length; k++)
@@ -26,21 +27,34 @@ public sealed partial class Mind
             if (c < 0 || c >= L.N || L.Kind[c] == CellKind.Door && _st != null && _st.DoorJam[L.DoorAt[c]] != 0) continue; // 문틀에 걸린 것은 거기 있다
             double wx = F.WindX[c], wy = F.WindY[c], v = Math.Sqrt(wx * wx + wy * wy), pa = F.WindPa[c];
             bool windy = v >= 0.5 && pa >= 1;
-            if (!windy && !burning) continue;
+            double sx = 0, sy = 0, jx = 0, jy = 0;
+            if (bodies) { (sx, sy) = _st!.Felt(c); (jx, jy) = _st.JoltDv(c); }
+            double mu = F.Stored(T.sWater, c) > 50 ? WetMu : ItemMu;
+            bool spun = sx * sx + sy * sy > (mu * Gravity) * (mu * Gravity);    // 원심이 마찰을 넘는다
+            double jv = Math.Sqrt(jx * jx + jy * jy);
+            int jolted = jv > 0.3 ? (int)Math.Min(3, Math.Floor(jv * jv / (2 * mu * Gravity) + 0.5)) : 0;   // 덜컹임: 바닥이 움직인 만큼 미끄러져 마찰로 선다 (v²/2μg)
+            bool shaken = spun || jolted > 0;
+            if (!windy && !burning && !shaken) continue;
             double kg = ItemKg(it.Item), face = Math.Pow(kg / ItemDensity, 2.0 / 3); // 한 면 넓이 (m²)
             double fx = 0, fy = 0;
             if (windy) { double dr = pa * ItemCd * face; fx = dr * wx / v; fy = dr * wy / v; }
             if (burning) { fx += kg * ix; fy += kg * iy; }
-            double drag = Math.Sqrt(fx * fx + fy * fy), grip = (F.Stored(T.sWater, c) > 50 ? WetMu : ItemMu) * kg * Gravity;   // 젖은 바닥은 미끄럽다
-            if (drag <= grip) continue;
+            if (spun) { fx += kg * sx; fy += kg * sy; }
+            double kick = jolted > 0 ? kg * jv / dt : 0;   // 덜컹임의 힘 (한 틱에 받은 운동량 — 까닭 · 방향을 가른다)
+            if (jolted > 0) { fx += kick * jx / jv; fy += kick * jy / jv; }
+            double drag = Math.Sqrt(fx * fx + fy * fy), grip = mu * kg * Gravity;   // 젖은 바닥은 미끄럽다
+            if (drag <= grip && jolted == 0) continue;
             wx = fx; wy = fy;
             // 바람 쪽 이웃 칸으로 (센 쪽 축) — 한 틱에 많아야 세 칸 (끌림이 이긴 만큼 빨리 · 1m 미끄러지며 얻는 빠르기)
-            double speed = Math.Sqrt(2 * (drag - grip) / kg * 1.0);
-            int steps = Math.Clamp((int)(speed * dt / 4), 1, 3);
+            double speed = Math.Max(jv, Math.Sqrt(2 * Math.Max(0, drag - grip) / kg * 1.0));
+            int steps = Math.Clamp(Math.Max(jolted, (int)(speed * dt / 4)), 1, 3);
             int dx = Math.Abs(wx) >= Math.Abs(wy) ? Math.Sign(wx) : 0, dy = dx == 0 ? Math.Sign(wy) : 0;
-            int cause = windy ? WindCause(c) : _out!.BurnCause;
-            string by = windy ? "바람에 날린" : "점화에 미끄러진";
-            var ck = windy ? CauseKind.Pressure : CauseKind.Route;
+            // 가장 센 힘이 까닭이다: 바람 · 점화 · 조각의 흔들림 (돌거나 덜컹임)
+            double fw = windy ? pa * ItemCd * face : 0, fb = burning ? kg * Math.Sqrt(ix * ix + iy * iy) : 0, fs = (spun ? kg * Math.Sqrt(sx * sx + sy * sy) : 0) + kick;
+            int src = fw >= fb && fw >= fs ? 0 : fb >= fs ? 1 : 2;
+            int cause = src == 0 ? WindCause(c) : src == 1 ? _out!.BurnCause : _st!.BodyCause(c);
+            string by = src == 0 ? "바람에 날린" : src == 1 ? "점화에 미끄러진" : spun && kick < kg * Math.Sqrt(sx * sx + sy * sy) ? "도는 조각에서 미끄러진" : "덜컹임에 미끄러진";
+            var ck = src == 0 ? CauseKind.Pressure : src == 1 ? CauseKind.Route : CauseKind.Breach;
             for (int s = 0; s < steps; s++)
             {
                 int x = L.X(it.Cell) + dx, y = L.Y(it.Cell) + dy;
@@ -51,7 +65,7 @@ public sealed partial class Mind
                 {
                     // 구멍 밖 우주로
                     sim.Book.AddItem(it.Item, Flow.Spaced, -1); Spaced++;
-                    int sc = sim.Causes.Add(ck, $"{Ko.I(ItemNames[it.Item])} {(windy ? "바람에 날려" : "점화에 미끄러져")} 구멍 밖으로 사라졌다", sim.Tick, j, cause);
+                    int sc = sim.Causes.Add(ck, $"{Ko.I(ItemNames[it.Item])} {(src == 0 ? "바람에 날려" : src == 1 ? "점화에 미끄러져" : "덜컹임에 미끄러져")} 구멍 밖으로 사라졌다", sim.Tick, j, cause);
                     sim.Facts.Emit(sim.Tick, FactKind.ObjectFlung, j, (float)kg, sc, other: it.Item);
                     it.Cell = -1;
                     break;

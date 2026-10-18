@@ -52,6 +52,66 @@ public static partial class Program
                 there > was + 10, $"간 자리 ({fx:0},{fy:0}) 밝기 {there:0} · 있던 자리 ({frag.Lx:0},{frag.Ly:0}) {was:0}");
         }
 
+        // ── (나) 덜컹임: 떨어진 조각을 무언가 세게 밀면 (3m/s) 고정 안 된 상자는 바닥이 움직인 반대쪽으로 미끄러지고 (v²/2μg) · 선 사람은 넘어진다 ──
+        // ── (나) 도는 조각: 분에 14바퀴로 돌면 무게중심에서 먼 상자는 원심(ω²r)이 마찰을 넘어 바깥 벽으로 밀려간다 ──
+        {
+            (Sim s, Structure st, Mind m, int person) Split()
+            {
+                var lay = Worlds.Ascii(Dumbbell, Worlds.MindLegend);
+                var s = Worlds.Full(lay, 2);
+                var m = s.Get<Mind>();
+                m.Crew(s, 2, 0, 0);
+                var st = s.Get<Structure>();
+                s.Run(Time.Minutes(1));
+                int cause = s.Causes.Add(CauseKind.Story, "커다란 운석이 통로를 꿰뚫었다", s.Tick);
+                for (int y = 2; y <= 4; y++) st.Destroy(s, Worlds.At(lay, 10, y), cause);
+                s.Run(3);
+                int p = m.Agents.First(a => a.IsPerson).Id;
+                ref var c = ref m[p].C; c.Cell = Worlds.At(lay, 16, 3); c.Sleepy = 0; s.Get<Life>()[c.Body].Asleep = 0;
+                return (s, st, m, p);
+            }
+            var layD = Worlds.Ascii(Dumbbell, Worlds.MindLegend);
+            {
+                var (s, st, m, p) = Split();
+                byte box = (byte)m.ItemIndex("식량 상자");
+                int start = Worlds.At(layD, 16, 4);
+                m.Loose.Add(new LooseItem { Item = box, Cell = start });
+                var o = st.Bodies[1];
+                int hit = s.Causes.Add(CauseKind.Story, "떠도는 잔해가 조각을 들이받았다", s.Tick);
+                st.Push(1, o.X, o.Y, o.Mass * 3, 0, hit);
+                s.Step();
+                s.Run(2);
+                var it = m.Loose.FirstOrDefault(x => x.Item == box, new LooseItem { Cell = -1 });
+                int moved = it.Cell < 0 ? 0 : layD.X(start) - layD.X(it.Cell);
+                var fell = s.Facts.Since(0).FirstOrDefault(x => x.Kind == FactKind.Fell && x.Actor == p);
+                string story = fell.Kind == FactKind.Fell ? s.Causes.Story(fell.Cause) : "";
+                if (Debug) Console.WriteLine($"    {story}");
+                Check("덜컹임: 떨어진 조각이 3m/s로 밀리면 고정 안 된 상자는 바닥이 움직인 반대쪽으로 미끄러지고 (마찰 0.3 — 1.5m) · 선 사람은 넘어진다 · 원인 사슬이 들이받은 것까지",
+                    moved >= 1 && moved <= 3 && it.Cell >= 0 && layD.Y(it.Cell) == layD.Y(start) && story.Contains("덜컹임에 넘어졌다") && story.StartsWith("떠도는 잔해가 조각을 들이받았다"),
+                    $"상자 {moved}칸 뒤로 · \"{story}\"");
+            }
+            {
+                var (s, st, m, _) = Split();
+                byte box = (byte)m.ItemIndex("식량 상자");
+                int start = Worlds.At(layD, 18, 3);
+                m.Loose.Add(new LooseItem { Item = box, Cell = start });
+                var o = st.Bodies[1];
+                double j = 1.5 * o.Inertia / 2;   // 짝힘 — 분에 14바퀴
+                int spin = s.Causes.Add(CauseKind.Story, "떠도는 잔해가 조각 끝을 스치고 지나갔다", s.Tick);
+                st.Push(1, o.X, o.Y + 1, j, 0, spin); st.Push(1, o.X, o.Y - 1, -j, 0, spin);
+                double R(int c) { var b = st.Bodies[1]; double dx = layD.X(c) + 0.5 - b.Lx, dy = layD.Y(c) + 0.5 - b.Ly; return Math.Sqrt(dx * dx + dy * dy); }
+                double r0 = R(start);
+                s.Run(12);
+                var it = m.Loose.FirstOrDefault(x => x.Item == box, new LooseItem { Cell = -1 });
+                double r1 = it.Cell >= 0 ? R(it.Cell) : 0;
+                Span<int> nb = stackalloc int[4];
+                bool byWall = false;
+                if (it.Cell >= 0) { layD.Neighbors(it.Cell, nb); foreach (int q in nb) if (q >= 0 && layD.Kind[q] == CellKind.Wall) byWall = true; }
+                Check("도는 조각: 분에 14바퀴로 돌면 무게중심에서 1.7m 떨어진 상자는 원심(ω²r 3.8m/s²)이 마찰(2.9m/s²)을 넘어 바깥 벽까지 밀려간다",
+                    Math.Abs(st.Bodies[1].W) > 1.4 && r1 > r0 + 0.9 && byWall, $"분에 {Math.Abs(st.Bodies[1].W) * 60 / (2 * Math.PI):0.0}바퀴 · 상자 무게중심에서 {r0:0.0} → {r1:0.0}m · 벽 곁 {byWall}");
+            }
+        }
+
         // ── 점화: 배가 가속하면 배만 나아가고 떨어진 조각은 뒤에 남는다 — 멀어진 거리 = ½at² · 몸들의 운동량 = 점화가 넣은 운동량 ──
         {
             var lay = Worlds.Ascii(Sealed);

@@ -11,6 +11,7 @@ public sealed partial class Mind
 {
     public long Falls, BracedOnBurn;
     public const double JerkG = 0.3;   // 선 승객이 버티는 저크 (g/s — Hoberock 1977)
+    public const double JoltSec = 1.0; // 덜컹임이 이어지는 때 (초)
     private double _lastG;
     private Outside? _out;
 
@@ -47,7 +48,32 @@ public sealed partial class Mind
             if (F.Stored(T.sWater, a.C.Cell) > 50) p *= 2;                                                 // 젖은 바닥
             if (a.C.Carrying >= 0 || a.C.Holding != 255 && ItemKg(a.C.Holding) >= JamKg) p *= 1.5;
             if (Rng.Unit(sim.Seed, Rng.Key("넘어짐"), t, a.Id) >= Math.Min(0.95, p)) continue;
-            FallDown(sim, a, g);
+            FallDown(sim, a, g, "점화에", _out!.BurnCause);
+        }
+    }
+
+    /// <summary>
+    /// ④ 칸 강체 — 덜컹임: 몸(배 · 떨어져 나간 조각)이 갑자기 밀리거나 돌기 시작하면 (뿜는 공기 · 갈라짐 · 부딪힘) 그 자리에서 느낀 가속만큼 선 사람이 넘어진다
+    /// (점화와 같은 잣대 — 갑자기 오른 가속이라 저크는 끝없이 크다 · 앉았으면 ×0.3 · 젖은 바닥 ×2 · 든 것이 있으면 ×1.5 · 누운 이는 0).
+    /// </summary>
+    private void BodyJolt(Sim sim)
+    {
+        if (_st == null || _st.Bodies.Count < 2 || _life == null) return;
+        long t = sim.Tick;
+        foreach (var a in Agents)
+        {
+            if (!a.IsPerson || a.C.Up == 0 || a.C.Body < 0 || a.C.CarriedBy >= 0) continue;
+            var (jx, jy) = _st.JoltDv(a.C.Cell);
+            double g = Math.Sqrt(jx * jx + jy * jy) / JoltSec / Outside.G0;   // 바닥이 1초 남짓에 그만큼 빠르기를 바꾼 것으로 (감압 · 밀림 — 부딪힘은 더 짧다)
+            double p = FallChance(g);
+            if (p <= 0) continue;
+            var b = _life[a.C.Body];
+            if (b.Alive == 0 || b.Conscious == 0 || b.Asleep != 0) continue;
+            if (Seated(a)) p *= 0.3;
+            if (F.Stored(T.sWater, a.C.Cell) > 50) p *= 2;
+            if (a.C.Carrying >= 0 || a.C.Holding != 255 && ItemKg(a.C.Holding) >= JamKg) p *= 1.5;
+            if (Rng.Unit(sim.Seed, Rng.Key("덜컹 넘어짐"), t, a.Id) >= Math.Min(0.95, p)) continue;
+            FallDown(sim, a, g, "덜컹임에", _st.BodyCause(a.C.Cell));
         }
     }
 
@@ -67,13 +93,13 @@ public sealed partial class Mind
         return false;
     }
 
-    private void FallDown(Sim sim, Agent a, double g)
+    private void FallDown(Sim sim, Agent a, double g, string how, int parent)
     {
         long t = sim.Tick;
         int cell = a.C.Cell;
         double u = Rng.Unit(sim.Seed, Rng.Key("넘어져 다침"), t, a.Id);
         bool bone = Rng.Unit(sim.Seed, Rng.Key("뼈"), t, a.Id) < 0.03 + 0.2 * Math.Max(0, g - 0.2);
-        int cause = sim.Causes.Add(CauseKind.Person, $"{Ko.I(NameOf(a.Id))} 점화에 넘어졌다 ({g:0.00}g){(bone ? " — 뼈를 다쳤다" : "")}", t, cell, _out!.BurnCause, 0, a.Id);
+        int cause = sim.Causes.Add(CauseKind.Person, $"{Ko.I(NameOf(a.Id))} {how} 넘어졌다 ({g:0.00}g){(bone ? " — 뼈를 다쳤다" : "")}", t, cell, parent, 0, a.Id);
         float blunt = (float)(0.05 + 0.2 * g * u + (bone ? 0.35 : 0));
         if (a.C.Carrying >= 0)
         {
