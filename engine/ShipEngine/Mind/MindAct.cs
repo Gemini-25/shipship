@@ -298,12 +298,16 @@ public sealed partial class Mind
         WaterSprayed += amount;
     }
 
+    /// <summary>⑩ 주컴퓨터가 그 문의 틈을 막으라고 맡겼다 (지어낸 계획 — 공기를 빼기 전에 · 아직 기압 차가 없어 새지 않아도).</summary>
+    private bool TapeAssigned(Agent a, int cell) => L.Kind[cell] == CellKind.Door && L.DoorAt[cell] >= 0 && F.DoorGapOpen(L.DoorAt[cell])
+        && a.C.AssignedGoal == GoalKind.Patch && a.C.AssignedTarget == cell && a.C.AssignedUntil > _nowTick;
+
     private void SealStep(Sim sim, Agent a, PlanStep st)
     {
         ref var c = ref a.C;
         long t = sim.Tick;
         int wall = st.Cell;
-        bool doorGap = F.Hole[wall] <= 0 && DoorGapLeaks(wall);
+        bool doorGap = F.Hole[wall] <= 0 && (DoorGapLeaks(wall) || TapeAssigned(a, wall));
         if (F.Hole[wall] <= 0 && !doorGap) { Forget(a, b => b.Kind == BeliefKind.Breach && b.Cell == wall); Next(a, t); return; }
         if (Dist(c.Cell, wall) > 1) { Fail(sim, a, "멀다", SnagKind.Far); return; }
         if (a.IsPerson && c.Holding != iPatch) { Fail(sim, a, "봉합 꾸러미가 없다", SnagKind.NoItem, c.Cell, iPatch); return; }
@@ -319,7 +323,7 @@ public sealed partial class Mind
         int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} {(doorGap ? "문틈" : "구멍")}을 막았다", t, wall,
             doorGap ? _st.LowSideCause(wall) : _st.DamageCause[wall], 0, a.Id);
         sim.Facts.Emit(t, FactKind.Patched, wall, (float)Math.Min(doorGap ? Field.LeakNormalDoor : area, max), cause, a.Id);
-        if (F.Hole[wall] <= 0 && !DoorGapLeaks(wall))
+        if (F.Hole[wall] <= 0 && !DoorGapLeaks(wall) && !TapeAssigned(a, wall))
         {
             Forget(a, b => b.Kind == BeliefKind.Breach && b.Cell == wall || b.Kind is BeliefKind.Leak or BeliefKind.Vacuum && Dist(b.Cell, wall) <= 6);
             a.Doubts.Add(new Doubt { Kind = BeliefKind.Leak, Cell = wall, Until = t + Time.Minutes(10) }); // 내가 막았다 — 한동안 '샌다'는 말을 반신반의
@@ -742,6 +746,8 @@ public sealed partial class Mind
         _dangerFire.Clear(); _dangerVac.Clear();
         bool suit = a.IsPerson && _life![a.C.Body].Suit != 0;
         bool eva = Eva(a);
+        bool keepOut = a.IsPerson && _keepOutUntil.Length > 0;
+        int fromRoom = L.Room[from];
         foreach (var b in a.Beliefs)
         {
             if (b.Conf < 0.3f) continue;
@@ -764,6 +770,7 @@ public sealed partial class Mind
             foreach (int j in nb)
             {
                 if (j < 0 || F.Severed[j] != 0) continue;   // 떨어져 나간 자리는 우주다 (조각 사이를 걸어 건널 수 없다)
+                if (keepOut && L.Room[j] >= 0 && L.Room[j] != fromRoom && KeptOut(a, L.Room[j])) continue;   // ⑩ 출입 금지 방으로는 길을 잡지 않는다 (따르는 이)
                 bool outside = !L.IsSpace(j);
                 if (outside && !(eva && _hullOut[j])) continue;
                 float cost = outside ? 2 : 1; // 외판 바깥은 자석 발로 천천히

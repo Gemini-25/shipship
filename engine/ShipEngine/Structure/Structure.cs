@@ -18,7 +18,7 @@ namespace ShipEngine;
 /// 장(③)에는 구멍 · 문의 열림만 요청한다 (Field.SetHole · SetDoor).
 /// </summary>
 /// <summary>문이 열리지 않는 까닭 (④ — 마음 · 주컴퓨터가 막힘으로 읽는다).</summary>
-public enum DoorShut : byte { None, Jammed, Unpowered, Held, VacuumBeyond, Pressure }
+public enum DoorShut : byte { None, Jammed, Unpowered, Held, VacuumBeyond, Pressure, Locked }
 
 public sealed partial class Structure : IEngine
 {
@@ -54,6 +54,8 @@ public sealed partial class Structure : IEngine
     public long Cracks, Breaches, Impacts, DoorsBlown, Bleeds, BleedAborts;
     /// <summary>바깥문 비우기 감시: 밸브를 연 때 · 그때 방 기압 · 다시 비우지 않을 때까지 (에어락이 비워지지 않으면 멈춘다).</summary>
     public long[] BleedSince; public float[] BleedFrom; public long[] BleedLock; public byte[] BleedFails; public long[] BleedLast;
+    /// <summary>⑩의 요청: 주컴퓨터가 잠근 전동 문 (그때까지 — 닫힌 문은 열리지 않는다 · 열린 문은 닫을 수만 있다). 임시 에어락으로 쓰는 방 · 우주로 트인 방 쪽.</summary>
+    public long[] DoorLock;
     /// <summary>칸마다 들어온 충격 에너지 (J) — ⑦ 생명이 읽고 비운다 (그 칸 몸의 상처).</summary>
     public float[] ImpactJ;
     /// <summary>점화의 관성 하중 (g — 배 가속도 / 9.8): ⑤ 바깥이 틱마다 넣는 요청. 외판 · 뼈대가 받는 하중이 이만큼 는다 (점화 한 번 = 하중 한 주기). 찍지 않는다.</summary>
@@ -69,6 +71,7 @@ public sealed partial class Structure : IEngine
         DoorPowered = Enumerable.Repeat((byte)1, L.Doors.Count).ToArray();
         ImpactJ = new float[L.N];
         BleedSince = new long[L.Doors.Count]; BleedFrom = new float[L.Doors.Count]; BleedLock = Enumerable.Repeat(long.MinValue / 2, L.Doors.Count).ToArray(); BleedFails = new byte[L.Doors.Count]; BleedLast = Enumerable.Repeat(long.MinValue / 2, L.Doors.Count).ToArray();
+        DoorLock = Enumerable.Repeat(long.MinValue / 2, L.Doors.Count).ToArray();
         // 에어락 벽: 바깥문이 있는 방의 벽은 배의 압력 경계다 — 비운 에어락의 안쪽 벽도 한 기압을 버틴다 (외판과 같은 정격 · ISS 퀘스트 에어락)
         _lockWall = new bool[L.N];
         var lockRooms = new HashSet<int>();
@@ -390,6 +393,8 @@ public sealed partial class Structure : IEngine
             if (F.DoorBleed[d] != 0 && !opening) F.SetBleed(d, false);
             if (DoorJam[d] != 0 || Math.Abs(now - target) < 1e-4) continue;
             int c = L.Doors[d].Cell;
+            // 주컴퓨터가 잠근 전동 문: 닫힌 채로 (밸브도 열지 않는다)
+            if (now <= 0.001f && target > now && DoorPowered[d] != 0 && DoorLock[d] > sim.Tick) continue;
             // 닫힌 문을 열 때: 양쪽 압력 차를 이겨야 한다
             if (now <= 0.001f && target > now)
             {
@@ -439,6 +444,7 @@ public sealed partial class Structure : IEngine
     {
         if (d < 0 || d >= L.Doors.Count) return DoorShut.None;
         if (DoorJam[d] != 0) return F.DoorOpen[d] >= 0.5f ? DoorShut.None : DoorShut.Jammed;
+        if (DoorPowered[d] != 0 && DoorLock[d] > _now && F.DoorOpen[d] <= 0.001f) return DoorShut.Locked;
         double limit = DoorPowered[d] != 0 ? (OutsideBleedRoomCell(d) >= 0 ? 5 : 30) : 2;
         if (DoorDeltaP(d) <= limit) return DoorShut.None;
         if (DoorPowered[d] == 0) return DoorShut.Unpowered;
@@ -463,6 +469,11 @@ public sealed partial class Structure : IEngine
 
     /// <summary>⑩의 요청: 그 문의 압력 맞춤 밸브를 until까지 잠근다 (안 열린다 — 비워진 방에 배 공기를 나누지 않게).</summary>
     public void HoldBleed(int d, long until) { if (d >= 0 && d < BleedLock.Length) BleedLock[d] = Math.Max(BleedLock[d], until); }
+
+    /// <summary>⑩의 요청: 전동 문을 until까지 잠근다 (닫힌 문은 열리지 않는다) · Unlock은 바로 푼다.</summary>
+    public void LockDoor(int d, long until) { if (d >= 0 && d < DoorLock.Length) DoorLock[d] = Math.Max(DoorLock[d], until); }
+    public void UnlockDoor(int d) { if (d >= 0 && d < DoorLock.Length) DoorLock[d] = long.MinValue / 2; }
+    public bool Locked(int d) => d >= 0 && d < DoorLock.Length && DoorLock[d] > _now && DoorPowered[d] != 0;
 
     public bool SafeToBleed(int d)
     {
@@ -579,7 +590,7 @@ public sealed partial class Structure : IEngine
     {
         w.Arr(Fatigue); w.Arr(Corrode); w.Arr(Stress); w.Arr(DamageCause); w.Arr(DoorTarget); w.Arr(DoorJam); w.Arr(DoorPowered); w.Arr(Braced);
         w.I64(Cracks); w.I64(Breaches); w.I64(Impacts); w.I64(DoorsBlown); w.F64(RustedO2); w.Arr(ImpactJ); w.I64(Bleeds);
-        w.Arr(BleedSince); w.Arr(BleedFrom); w.Arr(BleedLock); w.Arr(BleedFails); w.Arr(BleedLast); w.I64(BleedAborts);
+        w.Arr(BleedSince); w.Arr(BleedFrom); w.Arr(BleedLock); w.Arr(BleedFails); w.Arr(BleedLast); w.I64(BleedAborts); w.Arr(DoorLock);
         w.Tag("금"); w.Arr(Crack); w.Arr(CrackPatch); w.Arr(SigTurn); w.Arr(SigRun); w.Arr(CrackCause); w.Arr(SigDir); w.I64(CrackGrowths); w.I64(Tears); w.I64(CrackLeaks);
         w.Tag("조각"); w.Arr(Frag); w.List(Fragments); w.I32(SplitVersion); w.I64(DeckBursts); w.I64(Smashed); w.I64(Splits); w.I64(DebrisLost); w.I64(SectionFails);
         w.Arr(FurnHit); w.Arr(FurnBroken); w.Arr(FurnCause); w.Arr(ThermalJam); w.Arr(_pPrev); w.Bool(_latticeDirty);
@@ -589,7 +600,7 @@ public sealed partial class Structure : IEngine
     {
         r.ArrInto(Fatigue); r.ArrInto(Corrode); r.ArrInto(Stress); r.ArrInto(DamageCause); r.ArrInto(DoorTarget); r.ArrInto(DoorJam); r.ArrInto(DoorPowered); r.ArrInto(Braced);
         Cracks = r.I64(); Breaches = r.I64(); Impacts = r.I64(); DoorsBlown = r.I64(); RustedO2 = r.F64(); r.ArrInto(ImpactJ); Bleeds = r.I64();
-        r.ArrInto(BleedSince); r.ArrInto(BleedFrom); r.ArrInto(BleedLock); r.ArrInto(BleedFails); r.ArrInto(BleedLast); BleedAborts = r.I64();
+        r.ArrInto(BleedSince); r.ArrInto(BleedFrom); r.ArrInto(BleedLock); r.ArrInto(BleedFails); r.ArrInto(BleedLast); BleedAborts = r.I64(); r.ArrInto(DoorLock);
         r.Tag("금"); r.ArrInto(Crack); r.ArrInto(CrackPatch); r.ArrInto(SigTurn); r.ArrInto(SigRun); r.ArrInto(CrackCause); r.ArrInto(SigDir); CrackGrowths = r.I64(); Tears = r.I64(); CrackLeaks = r.I64();
         r.Tag("조각"); r.ArrInto(Frag); Fragments.Clear(); Fragments.AddRange(r.List<Fragment>()); SplitVersion = r.I32(); DeckBursts = r.I64(); Smashed = r.I64(); Splits = r.I64(); DebrisLost = r.I64(); SectionFails = r.I64();
         r.ArrInto(FurnHit); r.ArrInto(FurnBroken); r.ArrInto(FurnCause); r.ArrInto(ThermalJam); r.ArrInto(_pPrev); _latticeDirty = r.Bool();

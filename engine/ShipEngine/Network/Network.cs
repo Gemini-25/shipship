@@ -112,6 +112,10 @@ public sealed partial class Network : IEngine
     public double AirRelease;
     public double[] RoomAir = Array.Empty<double>();   // ⑩이 요청한 방마다 긴급 공기 (몰/초 — 그 방 통풍구로)
     public double AirReleased;
+    /// <summary>⑥ 공기 되돌리기 (판단 엔진 — 임시 에어락): RoomAir가 음수인 방은 통풍구 펌프가 그 방 공기를 빨아 예비 탱크로 되돌린다 (칸마다 이 몰/초 · 20kPa 아래로는 못 뺀다 · 공조가 돌고 그 방에 전기가 있어야).
+    /// 질소 · 산소 · 아르곤만 탱크로 — 다른 기체는 거르개가 버린다. ISS 퀘스트 에어락의 감압 펌프처럼 느리다.</summary>
+    public const double PumpMolPerCellSec = 0.05, PumpFloorKPa = 20;
+    public double AirRecovered;
     public double Coolant;        // 냉각 고리의 암모니아 (몰)
     public double VentedH2;       // 배 밖으로 버린 수소 (몰 · 원소 장부)
     public double VentedCH4, VentedCO2; // 배 밖으로 버린 메탄(사바티에) · 이산화탄소(모은 것이 넘쳐서) (몰 · 원소 장부)
@@ -376,6 +380,7 @@ public sealed partial class Network : IEngine
     {
         for (int r = 0; r < RoomAir.Length && r < Vent.Length; r++)
         {
+            if (RoomAir[r] < 0) { DrawAir(r, -RoomAir[r] * dt); continue; }
             if (RoomAir[r] <= 0 || AirReserve <= 0 || Vent[r] < 0 || !F.Passable(Vent[r])) continue;
             double m = Math.Min(RoomAir[r] * dt, AirReserve);
             F.AddGas(Vent[r], T.gN2, m * 0.79, 293.15); F.AddGas(Vent[r], T.gO2, m * 0.21, 293.15);
@@ -393,6 +398,29 @@ public sealed partial class Network : IEngine
             F.AddGas(c, T.gO2, n * 0.21 / at.Count, 293.15);
         }
         AirReserve -= n; AirReleased += n;
+    }
+
+    /// <summary>그 방 공기를 want몰까지 예비 탱크로 되돌린다 (방 칸마다 고르게 · 20kPa에서 멈춘다).</summary>
+    private void DrawAir(int r, double want)
+    {
+        int v = Vent[r];
+        if (v < 0 || HvacKw <= 0 || !RoomPowered(r) || F.RegionOf.Length <= v || F.RegionOf[v] < 0) return;
+        var cells = L.Rooms[r].Cells;
+        double total = 0;
+        foreach (int c in cells) total += F.Moles(c);
+        double kpa = F.Pressure(v);
+        if (total <= 0 || kpa <= PumpFloorKPa) return;
+        want = Math.Min(want, total * (1 - PumpFloorKPa / kpa));
+        double f = want / total, got = 0;
+        foreach (int c in cells)
+            for (int g = 0; g < T.GasCount; g++)
+            {
+                double n = F.Gas(g, c);
+                if (n <= 0) continue;
+                double take = F.RemoveGas(c, g, n * f);
+                if (g == T.gN2 || g == T.gO2 || g == T.gAr) got += take;
+            }
+        AirReserve += got; AirRecovered += got;
     }
 
     /// <summary>합선 찾기: 급전선이 지나는 칸이 젖었거나 겉면이 470K를 넘으면.</summary>
@@ -1170,7 +1198,7 @@ public sealed partial class Network : IEngine
         w.Arr(DataBroken); w.Arr(DataBrokenCause); w.Arr(DataCutCell); w.I64(DataCuts); w.I64(DataSplices);
         w.Arr(On); w.Arr(Supply); w.Arr(Wear); w.Arr(Broken); w.Arr(Charge);
         w.Arr(Breaker); w.Arr(OverSec); w.Arr(FaultCell); w.Arr(BreakerStuck); w.Arr(Amps); w.Arr(Damper); w.Arr(Exhaust); w.F64(TraceScrubbed); w.Arr(SealLeakCause); w.Arr(OnCause); w.Arr(PanK); w.Arr(PanWater);
-        w.Bool(ReactorScram); w.I32(ScramCause); w.F64(WaterTank); w.F64(WasteWater); w.F64(Brine); w.F64(WaterProcessed); w.F64(WaterRecovered); w.F64(Coolant); w.F64(VentedH2); w.F64(AirReserve); w.F64(AirRelease); w.F64(AirReleased); w.Arr(RoomAir);
+        w.Bool(ReactorScram); w.I32(ScramCause); w.F64(WaterTank); w.F64(WasteWater); w.F64(Brine); w.F64(WaterProcessed); w.F64(WaterRecovered); w.F64(Coolant); w.F64(VentedH2); w.F64(AirReserve); w.F64(AirRelease); w.F64(AirReleased); w.Arr(RoomAir); w.F64(AirRecovered);
         w.F64(VentedCH4); w.F64(VentedCO2); w.F64(CO2Store); w.Arr(Duty); w.F64(PpO2);
         w.F64(Supplied); w.F64(Demanded); w.F64(CoolingKw); w.F64(ReactorKw); w.F64(HvacKw);
         w.I64(Trips); w.I64(Shorts); w.I64(Failures);
@@ -1188,7 +1216,7 @@ public sealed partial class Network : IEngine
         r.ArrInto(DataBroken); r.ArrInto(DataBrokenCause); r.ArrInto(DataCutCell); DataCuts = r.I64(); DataSplices = r.I64();
         r.ArrInto(On); r.ArrInto(Supply); r.ArrInto(Wear); r.ArrInto(Broken); r.ArrInto(Charge);
         r.ArrInto(Breaker); r.ArrInto(OverSec); r.ArrInto(FaultCell); r.ArrInto(BreakerStuck); r.ArrInto(Amps); r.ArrInto(Damper); r.ArrInto(Exhaust); TraceScrubbed = r.F64(); r.ArrInto(SealLeakCause); r.ArrInto(OnCause); r.ArrInto(PanK); r.ArrInto(PanWater);
-        ReactorScram = r.Bool(); ScramCause = r.I32(); WaterTank = r.F64(); WasteWater = r.F64(); Brine = r.F64(); WaterProcessed = r.F64(); WaterRecovered = r.F64(); Coolant = r.F64(); VentedH2 = r.F64(); AirReserve = r.F64(); AirRelease = r.F64(); AirReleased = r.F64(); RoomAir = r.Arr<double>();
+        ReactorScram = r.Bool(); ScramCause = r.I32(); WaterTank = r.F64(); WasteWater = r.F64(); Brine = r.F64(); WaterProcessed = r.F64(); WaterRecovered = r.F64(); Coolant = r.F64(); VentedH2 = r.F64(); AirReserve = r.F64(); AirRelease = r.F64(); AirReleased = r.F64(); RoomAir = r.Arr<double>(); AirRecovered = r.F64();
         VentedCH4 = r.F64(); VentedCO2 = r.F64(); CO2Store = r.F64(); r.ArrInto(Duty); PpO2 = r.F64();
         Supplied = r.F64(); Demanded = r.F64(); CoolingKw = r.F64(); ReactorKw = r.F64(); HvacKw = r.F64();
         Trips = r.I64(); Shorts = r.I64(); Failures = r.I64();

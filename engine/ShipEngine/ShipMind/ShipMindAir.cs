@@ -28,6 +28,7 @@ public sealed partial class ShipMind
         float start = _mind.TotalOf(_mind.iMask) > 0 ? MaskO2 : EmergencyO2;
         for (int r = 0; r < L.Rooms.Count; r++)
         {
+            if (_net.RoomAir[r] < 0 || PlanAirRoom(r)) continue;   // 판단 엔진의 계획이 그 방 공기를 다루는 중 (임시 에어락 — 되돌리기 · 채우기)
             double was = _net.RoomAir[r];
             _net.RoomAir[r] = 0;
             if (RoomSeen[r] == 0 || _net.AirReserve <= 0 || _roomVent[r] < 0 || keep) continue;

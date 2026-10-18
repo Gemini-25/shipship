@@ -1,6 +1,6 @@
 // ⑧ 마음 표 — 사람 · 로봇 · 드론
 //   names: 이름 (사람마다 차례로 · 모자라면 숫자를 붙인다)
-//   roles: 맡은 일 → 일하는 방 종류 · 일하는 설비 · 솜씨 (0~1, 처음 값)
+//   roles: 맡은 일 → 일하는 방 종류 · 일하는 설비 · 솜씨 (0~1, 처음 값) · knows: 분야를 아는 정도 (0~1, 처음 값 — 판단 엔진 · knowledge.json)
 //   stock: 설비 안에 처음 들어 있는 물건 (개수)
 //   items: 물건 — 소화기 물(몰) · 우주복 산소(몰) · 쓰는 시간(분)
 //   speed: m/s (칸 1m) · watts: 하는 일의 대사량 (W)
@@ -13,13 +13,13 @@
              "한유진", "오시우", "서다인", "신우진", "권나연", "황도현", "안채원", "송민재", "류하린", "전태윤",
              "홍예린", "고준서", "문소율", "양시온", "손아린", "배정우", "백지민", "허은호", "남궁별", "노윤슬" ],
   "roles": {
-    "기관사": { "rooms": [ "Engine", "Reactor", "Power", "Cooling", "Workshop", "Substation", "BatteryRoom", "PumpRoom", "HvacRoom" ], "devices": [ "Console", "Workbench", "PowerPanel" ], "skills": { "고치기": 0.8, "불끄기": 0.6, "봉합": 0.7 } },
-    "의무관": { "rooms": [ "Medbay", "Triage", "Quarantine" ], "devices": [ "MedBed", "DiagnosticScanner", "Console" ], "skills": { "치료": 0.9, "불끄기": 0.3 } },
-    "조리사": { "rooms": [ "Galley", "Mess", "Freezer" ], "devices": [ "Stove", "Oven", "MealDispenser" ], "skills": { "조리": 0.9, "불끄기": 0.4 } },
-    "조종사": { "rooms": [ "Bridge", "Navigation", "Comms", "BackupBridge" ], "devices": [ "Console", "NavComputer" ], "skills": { "조종": 0.9, "불끄기": 0.4 } },
-    "농부":   { "rooms": [ "Hydroponics", "Garden", "AlgaeLab", "MushroomFarm", "ProteinFarm", "SeedVault" ], "devices": [ "GrowBed", "PlantWall" ], "skills": { "기르기": 0.9 } },
-    "과학자": { "rooms": [ "Lab", "Observatory", "ElectronicsLab", "Comms", "ComputerRoom" ], "devices": [ "Console", "SensorArray", "Workbench" ], "skills": { "연구": 0.9, "고치기": 0.4 } },
-    "정비사": { "rooms": [ "LifeSupport", "WaterPlant", "Workshop", "Recycling" ], "devices": [ "Workbench", "OxygenGenerator", "WaterRecycler", "Console" ], "skills": { "고치기": 0.7, "봉합": 0.8, "불끄기": 0.5 } }
+    "기관사": { "rooms": [ "Engine", "Reactor", "Power", "Cooling", "Workshop", "Substation", "BatteryRoom", "PumpRoom", "HvacRoom" ], "devices": [ "Console", "Workbench", "PowerPanel" ], "skills": { "고치기": 0.8, "불끄기": 0.6, "봉합": 0.7 }, "knows": { "기압": 0.7, "전기": 0.9, "구조": 0.7, "화학": 0.4, "몸": 0.2 } },
+    "의무관": { "rooms": [ "Medbay", "Triage", "Quarantine" ], "devices": [ "MedBed", "DiagnosticScanner", "Console" ], "skills": { "치료": 0.9, "불끄기": 0.3 }, "knows": { "몸": 0.9, "화학": 0.5, "기압": 0.3, "구조": 0.1 } },
+    "조리사": { "rooms": [ "Galley", "Mess", "Freezer" ], "devices": [ "Stove", "Oven", "MealDispenser" ], "skills": { "조리": 0.9, "불끄기": 0.4 }, "knows": { "화학": 0.4, "몸": 0.2, "기압": 0.1, "구조": 0.1 } },
+    "조종사": { "rooms": [ "Bridge", "Navigation", "Comms", "BackupBridge" ], "devices": [ "Console", "NavComputer" ], "skills": { "조종": 0.9, "불끄기": 0.4 }, "knows": { "기압": 0.5, "전기": 0.4, "구조": 0.3, "몸": 0.2 } },
+    "농부":   { "rooms": [ "Hydroponics", "Garden", "AlgaeLab", "MushroomFarm", "ProteinFarm", "SeedVault" ], "devices": [ "GrowBed", "PlantWall" ], "skills": { "기르기": 0.9 }, "knows": { "화학": 0.3, "몸": 0.2, "기압": 0.1, "구조": 0.2 } },
+    "과학자": { "rooms": [ "Lab", "Observatory", "ElectronicsLab", "Comms", "ComputerRoom" ], "devices": [ "Console", "SensorArray", "Workbench" ], "skills": { "연구": 0.9, "고치기": 0.4 }, "knows": { "화학": 0.8, "기압": 0.6, "전기": 0.6, "몸": 0.4, "구조": 0.3 } },
+    "정비사": { "rooms": [ "LifeSupport", "WaterPlant", "Workshop", "Recycling" ], "devices": [ "Workbench", "OxygenGenerator", "WaterRecycler", "Console" ], "skills": { "고치기": 0.7, "봉합": 0.8, "불끄기": 0.5 }, "knows": { "기압": 0.8, "구조": 0.8, "전기": 0.5, "화학": 0.4, "몸": 0.1 } }
   },
   "stock": {
     "SuitLocker":    { "우주복": 2, "소화기": 1 },

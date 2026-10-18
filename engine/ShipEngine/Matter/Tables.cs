@@ -96,6 +96,8 @@ public sealed class RoleDef
 {
     public List<string> Rooms = new(), Devices = new();
     public Dictionary<string, double> Skills = new();
+    /// <summary>⑧ 판단 엔진: 분야를 아는 정도 (0~1, 처음 값 — knowledge.json 분야 이름).</summary>
+    public Dictionary<string, double> Knows = new();
 }
 
 public sealed class ItemDef

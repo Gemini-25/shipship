@@ -190,6 +190,8 @@ public struct AgentCore
     public int SnagCell, SnagSubject, SnagTarget;
     public long SnagTick;
     public GoalKind SnagGoal;
+    // ⑧ 판단 엔진 — 분야를 아는 정도 (0~1 · 상식은 모두 1): 기압 · 전기 · 화학 · 몸 · 구조 (맡은 일의 시작값 ± 사람마다 · 겪고 · 배운다)
+    public float KnPressure, KnElectric, KnChem, KnBody, KnStruct;
 }
 
 /// <summary>바닥에 떨어진 · 놓인 물건.</summary>

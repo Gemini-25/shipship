@@ -180,6 +180,7 @@ public sealed partial class Mind : IEngine
         Derive(ref c, braveNoise);
         c.Chrono = ChronoOf(sim.Seed, people, c.Consc, c.Open);
         c.Aim = (byte)PickAim(sim.Seed, people, c);   // ⑧ 인생 목표
+        SetKnowledge(sim.Seed, people, ref c);          // ⑧ 판단 엔진 — 분야를 아는 정도
         var a = new Agent { Id = id, C = c };
         Agents.Add(a);
         a.C.Station = PickStation(a);
@@ -216,6 +217,7 @@ public sealed partial class Mind : IEngine
                 Kind = kind, Up = 1, Name = n, Body = -1, Cell = cell, Bed = -1, Station = -1, Dock = dock >= 0 ? dock : cell,
                 Role = 255, Brave = 1, Calm = 1, Kindness = 1, Diligent = 1, Curious = 1,
                 SkRepair = 0.7f, SkFire = 0.8f, SkSeal = 0.8f, SkMedic = 0.3f, Spares = RobotSpares,
+                KnPressure = 0.5f, KnElectric = 0.5f, KnChem = 0.3f, KnBody = 0.3f, KnStruct = 0.6f,   // 몸에 든 기본 절차 (주컴퓨터와 끊겼을 때 · 이어져 있으면 주컴퓨터의 지식을 따른다)
                 Battery = 1, Holding = 255, Carrying = -1, CarriedBy = -1, WaitDoor = -1, OpenedDoor = -1, GoalTarget = -1, GoalCell = -1,
                 LastKPa = (float)F.Pressure(cell), HeardUpTo = _snd?.LastEvent ?? 0, LastShout = -1_000_000,
             }
@@ -256,6 +258,25 @@ public sealed partial class Mind : IEngine
             if (d < bd) { bd = d; best = fu.Id; }
         }
         return best;
+    }
+
+    /// <summary>⑧ 판단 엔진: 맡은 일의 분야 시작값(사람 표 roles.knows · 없으면 0.1) ± 사람마다 0.1 + 열림(호기심)에 조금 — 따로 갈래 낸 난수 (다른 난수 흐름은 그대로).</summary>
+    private void SetKnowledge(ulong seed, int person, ref AgentCore c)
+    {
+        var rng = Rng.Stream(seed, "앎", person);
+        var role = c.Role < RoleNames.Length ? P.Roles[RoleNames[c.Role]] : null;
+        float open = c.Open;
+        float K(string d) => (float)Math.Clamp((role != null && role.Knows.TryGetValue(d, out var v) ? v : 0.1) + 0.2 * (rng.Unit() - 0.5) + 0.1 * (open - 0.5), 0, 1);
+        c.KnPressure = K("기압"); c.KnElectric = K("전기"); c.KnChem = K("화학"); c.KnBody = K("몸"); c.KnStruct = K("구조");
+    }
+
+    /// <summary>그 사람(로봇)이 아는 원리 — 로봇은 주컴퓨터와 이어져 있으면 주컴퓨터의 지식(전부).</summary>
+    public Know KnowOf(Agent a, bool computerLinked = false)
+    {
+        if (!a.IsPerson && computerLinked) return Know.All;
+        ref var c = ref a.C;
+        Span<float> lv = stackalloc float[] { 1f, c.KnPressure, c.KnElectric, c.KnChem, c.KnBody, c.KnStruct };
+        return KnowledgeTable.Load().KnowOf(lv);
     }
 
     private static float GetSkill(in AgentCore c, string sk) => sk switch
@@ -339,11 +360,15 @@ public sealed partial class Mind : IEngine
         return n;
     }
 
-    public void Assign(Sim sim, int agent, GoalKind goal, int target, Belief b, long until)
+    /// <summary>⑩ 판단 엔진: 지어낸 계획의 한 걸음으로 맡긴 일 (AssignedArg) — 로봇은 제 판단보다 계획을 따른다 (배터리가 바닥나는 때만 빼고).</summary>
+    public const int PlanBound = -7;
+
+    public void Assign(Sim sim, int agent, GoalKind goal, int target, Belief b, long until, int arg = 0)
     {
         var a = Agents[agent];
         if (b.Kind != BeliefKind.None) Learn(a, sim.Tick, b.Kind, b.Cell, b.Subject, b.Conf, BeliefSource.Screen, b.Cause, b.Size);
         a.C.AssignedGoal = goal; a.C.AssignedTarget = target; a.C.AssignedUntil = until;
+        if (arg != 0 || a.C.AssignedArg == PlanBound) a.C.AssignedArg = arg;
         a.Avoid.RemoveAll(v => v.Goal == goal && v.Target == target); // 새로 맡긴 일: '거기는 봤다'를 접고 다시 간다
     }
 
@@ -648,7 +673,7 @@ public sealed partial class Mind : IEngine
         w.Arr(HobbyCount); SavePlaces(w); SaveRation(w);
         w.I64(Masked); w.I64(GrindHeard); w.I64(EarMaintained); w.I64(MasksWorn); w.List(GrindReports);
         w.F64(_lastG); w.I64(Falls); w.I64(BracedOnBurn);
-        SaveAims(w); SaveLessons(w); SaveShelter(w); SaveCouncil(w); SaveWeary(w);
+        SaveAims(w); SaveLessons(w); SaveShelter(w); SaveCouncil(w); SaveWeary(w); SaveKeepOut(w);
     }
 
     public void Load(StateReader r)
@@ -670,6 +695,6 @@ public sealed partial class Mind : IEngine
         HobbyCount = r.Arr<long>(); LoadPlaces(r); LoadRation(r);
         Masked = r.I64(); GrindHeard = r.I64(); EarMaintained = r.I64(); MasksWorn = r.I64(); GrindReports.Clear(); GrindReports.AddRange(r.List<GrindReport>());
         _lastG = r.F64(); Falls = r.I64(); BracedOnBurn = r.I64();
-        LoadAims(r); LoadLessons(r); LoadShelter(r); LoadCouncil(r); LoadWeary(r);
+        LoadAims(r); LoadLessons(r); LoadShelter(r); LoadCouncil(r); LoadWeary(r); LoadKeepOut(r);
     }
 }

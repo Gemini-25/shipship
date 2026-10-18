@@ -24,6 +24,15 @@ public sealed partial class Mind
         if (a.IsPerson) TakeOffSuit(sim, a);
         Options(sim, a);
         _deciding = null;
+        // ⑩ 판단 엔진: 계획에 묶인 로봇은 맡긴 걸음만 (그 자리의 구멍을 막는 것은 같은 일 · 배터리가 바닥나면 충전) — 제 판단으로 다른 구멍에 가지 않는다
+        if (!a.IsPerson && c.AssignedArg == PlanBound && c.AssignedUntil > t)
+        {
+            int at = c.AssignedTarget; GoalKind ag = c.AssignedGoal; float battery = c.Battery;
+            bool tape = at >= 0 && L.Kind[at] == CellKind.Door;   // 문틈 막기는 그 문만
+            _opts.RemoveAll(o => !(o.Goal == ag && (o.Target == at || !tape && o.Cell >= 0 && at >= 0 && Dist(o.Cell, at) <= 3)
+                || !tape && ag is GoalKind.Investigate or GoalKind.Patch && o.Goal == GoalKind.Patch && o.Cell >= 0 && at >= 0 && Dist(o.Cell, at) <= 10
+                || o.Goal == GoalKind.Charge && battery < 0.15f));
+        }
         if (_opts.Count == 0) return;
         _opts.Sort((x, y) => y.Score.CompareTo(x.Score) is var k && k != 0 ? k : x.Goal.CompareTo(y.Goal));
 
@@ -177,6 +186,7 @@ public sealed partial class Mind
             AwaitCare(a, here);      // ⑦ 돌보러 오는 이가 있으면 기다린다
             PilferOption(a, here);   // ⑪ 몫을 다 먹고 몹시 배고프면 — 덜 성실하고 덜 다정한 이는 몰래 한 끼
             ShelterOption(a, here);  // ⑩ 대피 방송을 따르는 이는 대피실로
+            KeepOutOption(a, here);  // ⑩ 출입 금지 방송을 따르는 이는 그 방을 나온다
             MeetingOption(a, here);  // ⑨ 회의에 갈 이는 식당으로
             if (c.Thirst > 0.3f && WaterAllowed(a.Id) >= 5) Add(GoalKind.Drink, -1, -1, c.Thirst * c.Thirst * 6 + (c.Thirst > 0.85f ? 2 : 0)); // 몹시 마른 목(몸의 물 1.7% 모자람)은 한밤의 잠보다 급하다
             float grief = _soc?.GriefOf(a.Id) ?? 0; // ⑨ 슬픔: 일손을 놓고 사람을 찾는다
@@ -346,6 +356,8 @@ public sealed partial class Mind
         {
             case GoalKind.Idle:
             {
+                // ⑩ 계획에 묶인 로봇: 그 칸까지 가서 기다린다 (지어낸 계획의 '지나 간다' — 그 방 한가운데)
+                if (!a.IsPerson && c.AssignedArg == PlanBound && o.Target >= 0 && o.Target != here && RoomOf(here) != RoomOf(o.Target)) { plan.Add(Go(o.Target)); plan.Add(Use(UseKind.None, 10)); return true; }
                 if (L.Kind[here] == CellKind.Door)
                 {
                     // 문간에 서 있지 않는다
@@ -483,7 +495,7 @@ public sealed partial class Mind
                     plan.Add(new PlanStep { Kind = StepKind.Seal, Cell = wall });
                     return true;
                 }
-                int stand = StandBeside(wall);
+                int stand = TapeAssigned(a, wall) ? StandOnMySide(a, wall) : StandBeside(wall);   // 맡긴 문틈 막기: 제 쪽에서 (임시 에어락 — 비울 방 안에 남는다)
                 if (stand < 0) return false;
                 if (a.IsPerson)
                 {
@@ -706,7 +718,7 @@ public sealed partial class Mind
         while (q.Count > 0 && seen.Count < 3000)
         {
             int c = q.Dequeue();
-            if (L.Kind[c] == CellKind.Floor && L.Room[c] != room && L.Room[c] >= 0 && (danger < 0 || Dist(c, danger) > 4) && SafeAt(c) && !FledFrom(a, L.Room[c])
+            if (L.Kind[c] == CellKind.Floor && L.Room[c] != room && L.Room[c] >= 0 && (danger < 0 || Dist(c, danger) > 4) && SafeAt(c) && !FledFrom(a, L.Room[c]) && !KeptOut(a, L.Room[c])
                 && Believes(a, BeliefKind.Vacuum, c, 3) < 0.3f && Believes(a, BeliefKind.Fire, c, 4) < 0.3f)
             {
                 float bad = RoomBadness(a, L.Room[c]);
@@ -804,6 +816,10 @@ public sealed partial class Mind
     {
         ref var c = ref a.C;
         if (!a.IsPerson && c.AssignedGoal == GoalKind.Investigate && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0) Add(GoalKind.Investigate, c.AssignedTarget, c.AssignedTarget, 1.2f);
+        // ⑩ 판단 엔진: 지어낸 계획이 '이 문틈을 막아라' (아직 기압 차가 없어 새지 않아도 — 공기를 빼기 전에)
+        if (!a.IsPerson && c.AssignedGoal == GoalKind.Patch && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0 && TapeAssigned(a, c.AssignedTarget)) Add(GoalKind.Patch, c.AssignedTarget, c.AssignedTarget, 1.2f);
+        // ⑩ 판단 엔진: 지어낸 계획이 '여기서 기다려라' — 주컴퓨터가 그 방을 비우는 동안 제 판단으로 문에 가지 않는다 (다친 이를 구하는 일은 앞선다)
+        if (!a.IsPerson && c.AssignedGoal == GoalKind.Idle && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0) Add(GoalKind.Idle, c.AssignedTarget, c.AssignedTarget, 2.2f);
         // ⑥ 맡긴 연장선: 그 방에 아직 전기가 없으면
         if (c.AssignedGoal == GoalKind.Rewire && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0 && _net != null && !_net.RoomPowered(c.AssignedTarget) && c.AssignedTarget < _net.Vent.Length)
             Add(GoalKind.Rewire, c.AssignedTarget, _net.Vent[c.AssignedTarget], 1.3f, _net.RoomFeeder[c.AssignedTarget] is int rf && rf >= 0 ? _net.FaultCause(rf) : 0);   // 원인: 그 방 급전선이 죽은 까닭
@@ -901,6 +917,16 @@ public sealed partial class Mind
     private bool DoorGapLeaks(int cell) => L.Kind[cell] == CellKind.Door && L.DoorAt[cell] >= 0 && F.DoorGapOpen(L.DoorAt[cell]) && DoorDeltaKPa(cell) > 5;
 
     /// <summary>구멍 · 문틈 곁 설 자리 — 공기가 있는 쪽(기압이 높은 바닥)을 고른다.</summary>
+    /// <summary>문 곁의 칸 가운데 제가 있는 방 쪽 (없으면 StandBeside).</summary>
+    private int StandOnMySide(Agent a, int wall)
+    {
+        Span<int> nb = stackalloc int[4];
+        L.Neighbors(wall, nb);
+        int room = RoomOf(a.C.Cell);
+        foreach (int j in nb) if (j >= 0 && L.Kind[j] == CellKind.Floor && room >= 0 && RoomOf(j) == room) return j;
+        return StandBeside(wall);
+    }
+
     private int StandBeside(int wall)
     {
         Span<int> nb = stackalloc int[4];

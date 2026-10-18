@@ -31,6 +31,7 @@ public struct Incident
     public int SnagCell, SnagSubject;
     public long SnagTick, SentAt;
     public byte Snagged;         // 막힌 채 다시 보낸 번 (같은 까닭)
+    public int Id;               // 사건 번호 (해 본 방법 · 지어낸 계획이 가리킨다 — 목록에서 지워져도 그대로)
 }
 
 /// <summary>주컴퓨터가 돌려 본 미래 하나 (안 하나의 결과).</summary>
@@ -184,6 +185,7 @@ public sealed partial class ShipMind : IEngine
         foreach (var d in L.Doors) if (F.DoorOpen[d.Id] > 0f || F.DoorBleed[d.Id] != 0) DoorWasOpen[d.Id] = 1;
         if (sim.Tick % _effectiveRead == 0) { _tick = sim.Tick; ReadSensors(); Detect(sim); Refill(sim); EmergencyRefill(sim); KeepEmptyShut(sim); }
         Act(sim);
+        RunPlans(sim);  // ⑩ 판단 엔진: 지어낸 계획을 걸음마다
         Power(sim);
         Supply(sim);   // ⑪ 배급 · 보관함 무게
         Helm(sim);     // ⑤ 조타: 정해진 점화 · 운석 비키기 · 다른 배
@@ -199,8 +201,11 @@ public sealed partial class ShipMind : IEngine
         }
     }
 
+    private static readonly bool PlanLog = Environment.GetEnvironmentVariable("PLAN_LOG") == "1";
+
     private void Say(Sim sim, string text)
     {
+        if (PlanLog && !Imagining && (text.StartsWith("생각") || text.StartsWith("계획") || text.StartsWith("미리"))) Console.WriteLine($"      ({sim.Seed}) {Time.Clock(sim.Tick)} {text}");
         Log.Add((sim.Tick, text));
         if (Log.Count > 300) Log.RemoveRange(0, Log.Count - 300);
     }
@@ -318,7 +323,7 @@ public sealed partial class ShipMind : IEngine
                 return;
             }
         }
-        Incidents.Add(new Incident { Kind = k, Active = 1, Room = room, Cell = cell, Subject = subject, Since = sim.Tick, LastAlarm = long.MinValue / 2, Level = level, Cause = cause, RobotA = -1, RobotB = -1, Person = -1, Decl1 = -1, Decl2 = -1, AskedAt = long.MinValue / 2 });
+        Incidents.Add(new Incident { Id = ++IncidentSeq, Kind = k, Active = 1, Room = room, Cell = cell, Subject = subject, Since = sim.Tick, LastAlarm = long.MinValue / 2, Level = level, Cause = cause, RobotA = -1, RobotB = -1, Person = -1, Decl1 = -1, Decl2 = -1, AskedAt = long.MinValue / 2 });
         Say(sim, $"{RoomName(room)}: {KindName(k)}");
     }
 
@@ -351,10 +356,10 @@ public sealed partial class ShipMind : IEngine
             if (RoomSeen[r] == 0) continue;
             if (Cycling(r)) continue; // 막 순환한 에어락: 비우면 빠지고 채우면 압축열로 달아오른다 — 사고가 아니다
             // 불: 연기가 늘고 있거나 · 불꽃만큼 뜨거우면(420K) — 꺼진 뒤 남은 연기만으로는 아니고, 냉각이 끊겨 더운 방도 아니다
-            if (RoomTemp[r] > 420 || RoomSoot[r] > 15 && RoomSoot[r] > RoomSootPrev[r] * 1.05f + 1) { Raise(sim, IncidentKind.Fire, r, RoomHot[r], RoomTemp[r], -1, FireCause(RoomHot[r]) is int fc && fc != 0 ? fc : NearFireCause(r)); Mark(IncidentKind.Fire, r); }
+            if (RoomTemp[r] > 420 && RoomO2[r] > 5 || RoomSoot[r] > 15 && RoomSoot[r] > RoomSootPrev[r] * 1.05f + 1) { Raise(sim, IncidentKind.Fire, r, RoomHot[r], RoomTemp[r], -1, FireCause(RoomHot[r]) is int fc && fc != 0 ? fc : NearFireCause(r)); Mark(IncidentKind.Fire, r); }
             else if (RoomAirT[r] > 318) { Raise(sim, IncidentKind.Hot, r, RoomHot[r], RoomTemp[r], -1, NearFireCause(r) is int hc && hc != 0 ? hc : _chem?.HeatCauseAt(RoomHot[r]) ?? 0); Mark(IncidentKind.Hot, r); }
             float dp = RoomKPa[r] - RoomKPaPrev[r];
-            if (IsolatedAirlock(r)) { }   // 안쪽 문이 모두 닫힌 에어락은 비어 있어도 된다 (순환 중)
+            if (IsolatedAirlock(r) || Deliberate(r)) { }   // 안쪽 문이 모두 닫힌 에어락은 비어 있어도 된다 (순환 중) · 지어낸 계획이 일부러 비우는 방 (임시 에어락)
             else if (RoomKPa[r] < 40) { Raise(sim, IncidentKind.Vacuum, r, _roomVent[r], RoomKPa[r], -1, LeakCause(r)); Mark(IncidentKind.Vacuum, r); }
             // 샘: 12초에 기체가 2% 넘게 줄거나 · 1분 내내 줄어 4% 넘게 · 80kPa 아래에서 아직 줄고 있으면 — 온도 · 문 여닫이로 흔들리는 기압 · 막고 난 뒤 낮은 기압은 아니다
             else if (Losing(r) || RoomKPa[r] < 80 && RoomKPaPrev[r] - RoomKPa[r] > 0.2f && !Moved(r, 1)) leaking.Add((r, -dp));
@@ -836,17 +841,40 @@ public sealed partial class ShipMind : IEngine
     {
         if (_mind == null) return;
         GoalKind g; int target; bool drone;
+        ReadSnags(sim, ref x);
         switch (x.Kind)
         {
             case IncidentKind.Fire: g = GoalKind.FightFire; target = x.Cell; drone = true; break;
-            case IncidentKind.Vacuum when (x.Tries % 2 == 0 || EmptyHeld(x.Room)) && OutsideOf(x.Room) is int o && o >= 0:   // 닫아 둔 방은 늘 바깥으로
-                // 빠진 방 — 문은 기압 차로 안 열린다 (열면 배 공기까지 빠진다): 로봇이 에어락으로 나가 그 방 외판을 바깥에서 살핀다
-                g = GoalKind.Investigate; target = o; drone = false; break;
-            case IncidentKind.Leak when x.Tries % 2 == 1 && OutsideOf(x.Room) is int o2 && o2 >= 0:
-                // 안에서 살펴도 못 찾았다 (끼인 문 · 기압 차로 못 들어갔거나 구멍이 안 보였다): 번갈아 그 방 외판을 바깥에서 둘러본다
-                g = GoalKind.Investigate; target = o2; drone = false; break;
-            case IncidentKind.Vacuum when EmptyHeld(x.Room): return;   // 비워진 채 닫아 둔 방 — 안으로는 들이지 않는다 (바깥에서 닿을 외판도 없다)
-            case IncidentKind.Leak: case IncidentKind.Vacuum: g = GoalKind.Investigate; target = x.Cell; drone = true; break;
+            case IncidentKind.Leak: case IncidentKind.Vacuum:
+            {
+                // ⑩ 판단 엔진: 기본 절차서 — 안에서 막기 · 바깥에서 막기 (빠진 방은 바깥부터 — 문은 기압 차로 안 열린다 · 열면 배 공기까지 빠진다 · 비워진 채 닫아 둔 방은 바깥만 ·
+                //   샘은 안부터 — 안에서 못 찾으면 번갈아 외판을 바깥에서 둘러본다). 막힌 까닭이 그대로인 방법은 다시 고르지 않는다 — 다 막히면 지어낸다.
+                if (HasPlan(x.Id)) return;   // 지어낸 계획이 맡고 있다
+                int o = OutsideOf(x.Room);
+                bool outFirst = x.Kind == IncidentKind.Vacuum ? x.Tries % 2 == 0 || EmptyHeld(x.Room) : x.Tries % 2 == 1;
+                byte pick = 0;
+                foreach (byte m in outFirst ? new byte[] { 2, 1 } : new byte[] { 1, 2 })
+                {
+                    if (m == 2 && o < 0 || m == 1 && x.Kind == IncidentKind.Vacuum && EmptyHeld(x.Room)) continue;
+                    if (MethodBlocked(x.Id, m, out _)) continue;
+                    pick = m; break;
+                }
+                if (pick == 0)
+                {
+                    int xid = x.Id;
+                    bool any = Attempts.Any(a => a.Incident == xid && a.Act == 255);   // 해 본 방법이 하나도 없으면 (닫아 둔 방에 외판도 없다) — 바로 궁리한다
+                    if (!Attempts.Any(a => a.Incident == xid && a.Act == 254 && StillBlocked(a)))
+                    {
+                        int rb = PlanRobot(sim, x);
+                        if (rb >= 0) Devise(sim, ref x, rb);
+                        else if (!any) return;
+                    }
+                    return;
+                }
+                if (pick == 2) { g = GoalKind.Investigate; target = o; drone = false; }
+                else { g = GoalKind.Investigate; target = x.Cell; drone = true; }
+                break;
+            }
             case IncidentKind.PersonDown: g = GoalKind.Rescue; target = x.Subject; drone = false; break;
             case IncidentKind.Injured: g = GoalKind.Treat; target = x.Subject; drone = false; break;
             case IncidentKind.DeviceBroken: g = GoalKind.Repair; target = x.Subject; drone = false; break;
@@ -860,7 +888,6 @@ public sealed partial class ShipMind : IEngine
             case IncidentKind.PowerLost: g = GoalKind.Rewire; target = x.Room; drone = false; break;     // ⑥ 옆 방에서 연장선을 끌어온다
             default: return;
         }
-        ReadSnags(sim, ref x);
         int need = x.Kind == IncidentKind.Fire ? 2 : 1;
         bool Busy(int rb) => rb >= 0 && _mind.Agents[rb].C.Up != 0 && _mind.Agents[rb].C.AssignedUntil > sim.Tick;
         int have = (Busy(x.RobotA) ? 1 : 0) + (Busy(x.RobotB) ? 1 : 0);
@@ -920,10 +947,29 @@ public sealed partial class ShipMind : IEngine
             if (!Mind.Telling(c.Snag) || c.SnagTick < x.SentAt || c.SnagTick <= x.SnagTick) continue;
             bool again = x.Snag == c.Snag && x.SnagSubject == c.SnagSubject;
             x.Snag = c.Snag; x.SnagGoal = c.SnagGoal; x.SnagCell = c.SnagCell; x.SnagSubject = c.SnagSubject; x.SnagTick = c.SnagTick;
+            if (x.Kind is IncidentKind.Vacuum or IncidentKind.Leak && !HasPlan(x.Id))   // 기본 절차서의 방법(안에서 · 바깥에서)이 막혔다 — 까닭과 함께 적는다 (막힐 때 그 로봇이 하던 목표의 대상으로 가른다)
+                NoteTried(x.Id, (byte)(c.Snag == SnagKind.NoWayOut || c.SnagTarget >= 0 && c.SnagTarget < L.N && L.Kind[c.SnagTarget] == CellKind.Outside ? 2 : 1), 255, -1, c.Snag, c.SnagSubject, c.SnagTick);
             if (again) { if (x.Snagged < 255) x.Snagged++; continue; }
             x.Snagged = 1; SnagsRead++;
             Say(sim, $"{_mind.NameOf(rb)}: {RoomName(x.Room)} {KindName(x.Kind)} 일이 막혔다 — {Mind.SnagText(c.Snag)}");
         }
+    }
+
+    /// <summary>지어낸 계획을 맡을 로봇: 멈추지 않았고 배터리가 있는 로봇 가운데 이 사건에 가 있거나 · 쉬고 있거나 · 일상 일을 하는 가장 가까운 것 (드론은 아니다).</summary>
+    private int PlanRobot(Sim sim, in Incident x)
+    {
+        if (_mind == null) return -1;
+        int best = -1, bd = int.MaxValue;
+        foreach (var a in _mind.Agents)
+        {
+            if (a.IsPerson || a.C.Up == 0 || a.C.Battery < 0.2f || a.C.Kind == AgentKind.Drone) continue;
+            bool mine = a.Id == x.RobotA || a.Id == x.RobotB;
+            if (!mine && a.C.AssignedUntil > sim.Tick && a.C.AssignedGoal is not (GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock)) continue;
+            if (PlanSteps.Any(s => s.Robot == a.Id)) continue;
+            int d = _mind.Dist(a.C.Cell, x.Cell >= 0 ? x.Cell : a.C.Cell) - (mine ? 1000 : 0);
+            if (d < bd) { bd = d; best = a.Id; }
+        }
+        return best;
     }
 
     /// <summary>봉쇄: 그 방의 문을 닫는다 — 안에 사람이 있으면 함장 방침만큼 기다린다 (그래도 남아 있으면 가둔다). 연기 방은 통풍구도 닫는다.</summary>
@@ -1210,7 +1256,7 @@ public sealed partial class ShipMind : IEngine
         w.I64(Alarms); w.I64(Assignments); w.I64(Seals); w.I64(Sheds); w.I64(Resets); w.I64(Exhausts); w.I64(OuterClosed); w.I64(StovesCut); SaveCrew(w); SaveSupply(w);
         w.I32(Journal.Count); foreach (var (t, s) in Journal) { w.I64(t); w.Str(s); }
         w.I32(JournalHour); w.I32(MorningHour); w.I64(LastJournal); w.I64(_journalAssign); w.Arr(ReportedDead.ToArray()); w.Str(Morning); w.Arr(RoomAirT); w.Arr(GaveAirAt); w.Arr(DoorWasOpen); w.Arr(RoomCO2Hold);
-        SaveHelm(w); SaveLog(w); SaveAir(w); SaveWeather(w); SaveEmpty(w);
+        SaveHelm(w); SaveLog(w); SaveAir(w); SaveWeather(w); SaveEmpty(w); SavePlan(w);
     }
 
     public void Load(StateReader r)
@@ -1224,6 +1270,6 @@ public sealed partial class ShipMind : IEngine
         Alarms = r.I64(); Assignments = r.I64(); Seals = r.I64(); Sheds = r.I64(); Resets = r.I64(); Exhausts = r.I64(); OuterClosed = r.I64(); StovesCut = r.I64(); LoadCrew(r); LoadSupply(r);
         Journal.Clear(); int nj = r.I32(); for (int i = 0; i < nj; i++) { long t = r.I64(); Journal.Add((t, r.Str() ?? "")); }
         JournalHour = r.I32(); MorningHour = r.I32(); LastJournal = r.I64(); _journalAssign = r.I64(); ReportedDead.Clear(); ReportedDead.AddRange(r.Arr<int>()); Morning = r.Str() ?? ""; r.ArrInto(RoomAirT); r.ArrInto(GaveAirAt); r.ArrInto(DoorWasOpen); r.ArrInto(RoomCO2Hold);
-        LoadHelm(r); LoadLog(r); LoadAir(r); LoadWeather(r); LoadEmpty(r);
+        LoadHelm(r); LoadLog(r); LoadAir(r); LoadWeather(r); LoadEmpty(r); LoadPlan(r);
     }
 }
