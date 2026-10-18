@@ -422,7 +422,7 @@ public sealed partial class Mind : IEngine
         t = Lap("감각", t);
         _said.RemoveAll(x => x.tick < sim.Tick - Sound.KeepTicks - 1);
         BuildClaims();
-        if (sim.Tick % 25 == 0) { Learn(sim); Places(sim); AimStep(sim); LessonStep(sim); }
+        if (sim.Tick % 25 == 0) { Learn(sim); Places(sim); AimStep(sim); LessonStep(sim); WearyStep(sim); }
         t = Lap("배우기 · 자리", t);
         foreach (var a in Agents)
         {
@@ -538,6 +538,7 @@ public sealed partial class Mind : IEngine
         bool resting = c.Goal is GoalKind.Relax or GoalKind.Socialize && c.StepIndex < a.Plan.Count && a.Plan[c.StepIndex].Kind == StepKind.Use; // 가는 중이 아니라 쉬는 · 어울리는 중
         if (resting) c.Bored = (float)Math.Max(0, c.Bored - h);
         else if (!asleep) c.Bored = (float)Math.Min(1, c.Bored + h / Need("fun", 8) * (c.Goal == GoalKind.Work ? 1.5 - c.Diligent : 1) * (0.6 + 0.8 * c.Open)); // 열린 사람은 새것이 빨리 고프다
+        WearyNeeds(sim, a, h, asleep, others);   // ⑧ 고립의 피로
         if (!asleep && c.Goal != GoalKind.Exercise) c.Unfit = (float)Math.Min(1, c.Unfit + h / 16); // 깨어 있는 하루면 1
         // 감정: 두려움은 몇 분이면 가라앉는다 (침착할수록 빨리) · 긴장은 굶주림 · 졸림 · 두려움에 쌓이고 잠 · 쉼에 풀린다
         c.Fear = (float)Math.Max(0, c.Fear - dt / 600 * (0.5 + c.Calm));
@@ -647,7 +648,7 @@ public sealed partial class Mind : IEngine
         w.Arr(HobbyCount); SavePlaces(w); SaveRation(w);
         w.I64(Masked); w.I64(GrindHeard); w.I64(EarMaintained); w.I64(MasksWorn); w.List(GrindReports);
         w.F64(_lastG); w.I64(Falls); w.I64(BracedOnBurn);
-        SaveAims(w); SaveLessons(w); SaveShelter(w); SaveCouncil(w);
+        SaveAims(w); SaveLessons(w); SaveShelter(w); SaveCouncil(w); SaveWeary(w);
     }
 
     public void Load(StateReader r)
@@ -669,6 +670,6 @@ public sealed partial class Mind : IEngine
         HobbyCount = r.Arr<long>(); LoadPlaces(r); LoadRation(r);
         Masked = r.I64(); GrindHeard = r.I64(); EarMaintained = r.I64(); MasksWorn = r.I64(); GrindReports.Clear(); GrindReports.AddRange(r.List<GrindReport>());
         _lastG = r.F64(); Falls = r.I64(); BracedOnBurn = r.I64();
-        LoadAims(r); LoadLessons(r); LoadShelter(r); LoadCouncil(r);
+        LoadAims(r); LoadLessons(r); LoadShelter(r); LoadCouncil(r); LoadWeary(r);
     }
 }

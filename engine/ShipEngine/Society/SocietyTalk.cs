@@ -56,7 +56,7 @@ public sealed partial class Society
         foreach (var (a, b) in new[] { (i, j), (j, i) })
         {
             // 원망하는 사람에게 따진다
-            if (GrudgeOf(a, b) > 0.25f) opts.Add(new(Topic.Blame, 3 * GrudgeOf(a, b) * (0.6f + C(a).Neuro * 0.6f), b, MemoryCause(a, Topic.Blame, b), MemoryCell(a, Topic.Blame, b), a));
+            if (GrudgeOf(a, b) > 0.25f - 0.1f * C(a).Weary) opts.Add(new(Topic.Blame, 3 * GrudgeOf(a, b) * (0.6f + C(a).Neuro * 0.6f) * (1 + C(a).Weary), b, MemoryCause(a, Topic.Blame, b), MemoryCell(a, Topic.Blame, b), a));   // 지친 이는 묵혀 둔 일을 더 쉽게 꺼낸다 (⑧ 고립의 피로)
             // 슬픔을 꺼낸다
             if (Grief[a] > 0.25f) { int dead = StrongestAbout(sim, a, Topic.Death); if (dead >= 0) opts.Add(new(Topic.Death, 2 * Grief[a], dead, MemoryCause(a, Topic.Death, dead), MemoryCell(a, Topic.Death, dead), a)); }
             // 그 자리에 없는 이의 험담 (덜 다정할수록)
@@ -140,7 +140,7 @@ public sealed partial class Society
                 if (lb >= 0 && b == Lies[lb].Scape) Hear(sim, lb, b, a);   // 누명을 쓴 줄 이제 안다
                 // b가 사과하나: 다정하고 · 덜 불안하고 · a를 아끼고 · 실제로 b의 탓일수록 (아주 다정하고 차분한 이가 제 잘못을 들으면 넷에 셋은 사과한다 · 거친 이는 백에 두셋)
                 bool guilty = o.Cause != 0 && Culprit(sim, o.Cause, -1) == b;
-                float p = cb.Agree * (1 - cb.Neuro * 0.5f) * (0.7f + Math.Max(0, BondOf(b, a)) + DebtOf(b, a)) * (guilty ? 1.2f : 0.5f);
+                float p = cb.Agree * (1 - cb.Neuro * 0.5f) * (0.7f + Math.Max(0, BondOf(b, a)) + DebtOf(b, a)) * (guilty ? 1.2f : 0.5f) * (1 - 0.4f * cb.Weary);   // 지친 이는 덜 숙인다
                 if (r < p)
                 {
                     end = TalkEnd.Apology; Apologies++;
@@ -287,7 +287,8 @@ public sealed partial class Society
             default:
             {
                 // 잡담 · 일: 성격이 맞으면 웃고 · 거친 둘은 부딪친다
-                float fit = 1 - Math.Abs(ca.Extra - cb.Extra) * 0.5f + (ca.Agree + cb.Agree) * 0.25f + Math.Max(0, BondOf(a, b)) * 0.5f;
+                float worn = (ca.Weary + cb.Weary) * 0.5f;   // ⑧ 고립의 피로 — 같은 얼굴 · 같은 말에 지친 둘은 더 부딪친다
+                float fit = 1 - Math.Abs(ca.Extra - cb.Extra) * 0.5f + (ca.Agree + cb.Agree) * 0.25f + Math.Max(0, BondOf(a, b)) * 0.5f - 0.6f * worn;
                 string t = o.T == Topic.Work ? "일" : "잡담";
                 if (fit > r * 1.4f)
                 {
@@ -296,7 +297,7 @@ public sealed partial class Society
                     ca.Joy = Math.Min(1, ca.Joy + 0.05f); cb.Joy = Math.Min(1, cb.Joy + 0.05f);
                     Say(sim, a, b, o, end, Pick(sim, end == TalkEnd.Laugh ? "잡담/웃음" : $"{t}/맞장구", a));
                 }
-                else if (ca.Agree + cb.Agree < 0.7f)
+                else if (ca.Agree + cb.Agree < 0.7f + 0.6f * worn)
                 {
                     end = TalkEnd.Friction;
                     Warm(sim, a, b, -0.02f); Warm(sim, b, a, -0.02f); Add(Grudge, b, a, 0.02f);
@@ -403,7 +404,7 @@ public sealed partial class Society
         ref var cx = ref C(x);
         float g = GrudgeOf(x, y);
         if (g < 0.5f) return;
-        float pressure = (g - 0.5f) * 2 * (1 - cx.Agree) * (1 - cx.Agree) * (0.3f + cx.Neuro) * (0.4f + cx.Stress) * cx.Anger * 1.5f * scale;
+        float pressure = (g - 0.5f) * 2 * (1 - cx.Agree) * (1 - cx.Agree) * (0.3f + cx.Neuro) * (0.4f + cx.Stress) * cx.Anger * 1.5f * scale * (1 + cx.Weary);   // 지친 이는 덜 참는다
         if (LeaderWatching(x, y)) pressure *= 0.25f;   // 따르는 이가 보는 앞에서는 참는다
         if (Rnd(sim, "덤빈다", x, y) >= pressure) return;
         bool lethal = g > 0.9f && cx.Agree < 0.25f && cx.Neuro > 0.6f && (cx.Stress > 0.6f || DeathBlame(x, y));

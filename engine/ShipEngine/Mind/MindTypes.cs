@@ -184,6 +184,7 @@ public struct AgentCore
     public long FollowedAt;    // 아는 이를 따라 방을 나선 때 (0: 없음) — 10분 동안은 다시 따라 나서지 않는다
     public float SleepNoise;   // ⑦ 자는 동안 들은 가장 큰 소리 (dB — 10분에 걸쳐 흐려진다)
     public float SleepLoss;    // ⑦ 잠이 얕은 정도 (0 깊다 · 1 거의 못 잔다 — 1 − 잠의 질)
+    public float Weary;        // ⑧ 고립의 피로 (0~1 — 닫힌 배의 같은 얼굴 · 같은 일과에 몇 주에 걸쳐 쌓인다)
 }
 
 /// <summary>바닥에 떨어진 · 놓인 물건.</summary>
