@@ -145,8 +145,8 @@ public sealed partial class Mind
             case Hobby.Film: c.Bored = Math.Max(0, c.Bored - 0.25f); break;
             case Hobby.Read: c.Bored = Math.Max(0, c.Bored - 0.1f); c.Stress = Math.Max(0, c.Stress - 0.1f); break;
             case Hobby.Music: c.Stress = Math.Max(0, c.Stress - 0.2f); break;
-            case Hobby.Study: c.SkScience += 0.008f * (1 - c.SkScience); c.Bored = Math.Max(0, c.Bored - 0.1f); break;
-            case Hobby.Tinker: c.SkRepair += 0.008f * (1 - c.SkRepair); c.Bored = Math.Max(0, c.Bored - 0.1f); break;
+            case Hobby.Study: c.SkScience += 0.008f * Practice(c, "연구") * (1 - c.SkScience); c.Bored = Math.Max(0, c.Bored - 0.1f); break;
+            case Hobby.Tinker: c.SkRepair += 0.008f * Practice(c, "고치기") * (1 - c.SkRepair); c.Bored = Math.Max(0, c.Bored - 0.1f); break;
         }
     }
 }

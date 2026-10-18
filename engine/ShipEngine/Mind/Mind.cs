@@ -179,6 +179,7 @@ public sealed partial class Mind : IEngine
         c.Unfit = pr.UnitF() * 0.8f;
         Derive(ref c, braveNoise);
         c.Chrono = ChronoOf(sim.Seed, people, c.Consc, c.Open);
+        c.Aim = (byte)PickAim(sim.Seed, people, c);   // ⑧ 인생 목표
         var a = new Agent { Id = id, C = c };
         Agents.Add(a);
         a.C.Station = PickStation(a);
@@ -421,7 +422,7 @@ public sealed partial class Mind : IEngine
         t = Lap("감각", t);
         _said.RemoveAll(x => x.tick < sim.Tick - Sound.KeepTicks - 1);
         BuildClaims();
-        if (sim.Tick % 25 == 0) { Learn(sim); Places(sim); }
+        if (sim.Tick % 25 == 0) { Learn(sim); Places(sim); AimStep(sim); }
         t = Lap("배우기 · 자리", t);
         foreach (var a in Agents)
         {
@@ -646,6 +647,7 @@ public sealed partial class Mind : IEngine
         w.Arr(HobbyCount); SavePlaces(w); SaveRation(w);
         w.I64(Masked); w.I64(GrindHeard); w.I64(EarMaintained); w.List(GrindReports);
         w.F64(_lastG); w.I64(Falls); w.I64(BracedOnBurn);
+        SaveAims(w);
     }
 
     public void Load(StateReader r)
@@ -667,5 +669,6 @@ public sealed partial class Mind : IEngine
         HobbyCount = r.Arr<long>(); LoadPlaces(r); LoadRation(r);
         Masked = r.I64(); GrindHeard = r.I64(); EarMaintained = r.I64(); GrindReports.Clear(); GrindReports.AddRange(r.List<GrindReport>());
         _lastG = r.F64(); Falls = r.I64(); BracedOnBurn = r.I64();
+        LoadAims(r);
     }
 }
