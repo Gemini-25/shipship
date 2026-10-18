@@ -31,7 +31,11 @@ public sealed partial class Mind
                 if (Arrived(c.Cell, st)) { Next(a, t); return; }
                 if (a.Path.Count == 0 || a.PathIdx >= a.Path.Count)
                 {
-                    if (!FindPath(a, c.Cell, st.Cell, st.Arg)) { Fail(sim, a, "길이 없다"); return; }
+                    if (!FindPath(a, c.Cell, st.Cell, st.Arg))
+                    {
+                        var (sk, sc, sd) = WhyNoPath(a, c.Cell, st.Cell, st.Arg);   // ⑧ 판단 엔진: 왜 길이 없나 — 낡은 믿음이었으면 다시 찾는다
+                        if (sk != SnagKind.None || !FindPath(a, c.Cell, st.Cell, st.Arg)) { Fail(sim, a, "길이 없다", sk == SnagKind.None ? SnagKind.NoPath : sk, sc, sd); return; }
+                    }
                 }
                 Walk(sim, a, dt);
                 if (Arrived(c.Cell, a.Plan[c.StepIndex])) Next(a, t);
@@ -40,9 +44,9 @@ public sealed partial class Mind
             case StepKind.Take:
             {
                 var fu = L.Furniture[st.Target];
-                if (Dist(c.Cell, fu.Cells[0]) > 2) { Fail(sim, a, "멀다"); return; }
+                if (Dist(c.Cell, fu.Cells[0]) > 2) { Fail(sim, a, "멀다", SnagKind.Far); return; }
                 int k = st.Target * ItemCount + st.Arg;
-                if (Stock[k] <= 0) { Fail(sim, a, "물건이 없다"); return; }
+                if (Stock[k] <= 0) { Fail(sim, a, "물건이 없다", SnagKind.NoItem, fu.Cells[0], st.Arg); return; }
                 if (c.Holding != 255) DropHeld(a);
                 Stock[k]--;
                 c.Holding = st.Arg; c.HoldCharge = (float)ItemCharge(st.Arg);
@@ -67,7 +71,7 @@ public sealed partial class Mind
                 int vb = st.Target;
                 var body = _life!.Bodies[vb];
                 if (body.Alive == 0 || body.Conscious != 0) { Forget(a, b => b.Kind == BeliefKind.Injured && b.Subject == vb); EndPlan(a); return; }
-                if (Dist(c.Cell, body.Cell) > 1) { Fail(sim, a, "멀다"); return; }
+                if (Dist(c.Cell, body.Cell) > 1) { Fail(sim, a, "멀다", SnagKind.Far); return; }
                 if (SafeAt(body.Cell))
                 {
                     // 이미 안전한 곳 — 옮길 까닭이 없다 (치료는 의무관의 몫)
@@ -76,7 +80,7 @@ public sealed partial class Mind
                     return;
                 }
                 int va = AgentOfBody(vb);
-                foreach (var o in Agents) if (o != a && o.C.Carrying == vb) { Fail(sim, a, "누가 이미 업었다"); return; }
+                foreach (var o in Agents) if (o != a && o.C.Carrying == vb) { Fail(sim, a, "누가 이미 업었다", SnagKind.Taken); return; }
                 c.Carrying = vb;
                 if (va >= 0) Agents[va].C.CarriedBy = a.Id;
                 Move(a, c.Cell);
@@ -140,9 +144,10 @@ public sealed partial class Mind
     private void EndPlan(Agent a) { a.Plan.Clear(); a.Path.Clear(); a.C.StepIndex = 0; }
 
     /// <summary>막혔다: 계획을 버리고 그 목표를 한동안(5분) 고르지 않는다.</summary>
-    private void Fail(Sim sim, Agent a, string why)
+    private void Fail(Sim sim, Agent a, string why, SnagKind snag = SnagKind.Other, int cell = -1, int subject = -1)
     {
         ref var c = ref a.C;
+        NoteSnag(sim, a, snag, cell >= 0 ? cell : c.Cell, subject);   // ⑧ 판단 엔진: 막힌 까닭을 남긴다 (목표를 거두기 전에)
         c.Failed++;
         a.LastFail = $"{c.Goal}: {why}";
         if (c.Mode == 0) a.Avoid.Add(new AvoidEntry { Goal = c.Goal, Target = c.GoalTarget, Until = sim.Tick + Time.Minutes(5) });
@@ -300,8 +305,8 @@ public sealed partial class Mind
         int wall = st.Cell;
         bool doorGap = F.Hole[wall] <= 0 && DoorGapLeaks(wall);
         if (F.Hole[wall] <= 0 && !doorGap) { Forget(a, b => b.Kind == BeliefKind.Breach && b.Cell == wall); Next(a, t); return; }
-        if (Dist(c.Cell, wall) > 1) { Fail(sim, a, "멀다"); return; }
-        if (a.IsPerson && c.Holding != iPatch) { Fail(sim, a, "봉합 꾸러미가 없다"); return; }
+        if (Dist(c.Cell, wall) > 1) { Fail(sim, a, "멀다", SnagKind.Far); return; }
+        if (a.IsPerson && c.Holding != iPatch) { Fail(sim, a, "봉합 꾸러미가 없다", SnagKind.NoItem, c.Cell, iPatch); return; }
         Activity(a, "hard");
         var kit = P.Items["봉합 꾸러미"];
         double minutes = a.IsPerson ? kit.Minutes * (1.5 - c.SkSeal) : kit.Minutes;
@@ -333,8 +338,8 @@ public sealed partial class Mind
         int door = L.Kind[wall] == CellKind.Door ? L.DoorAt[wall] : -1;
         bool jam = door >= 0 && _st != null && _st.DoorJam[door] != 0;
         if (_st == null || _st.Braced[wall] != 0 && !jam) { Forget(a, b => b.Kind == BeliefKind.Strain && Dist(b.Cell, wall) <= 1); Next(a, t); return; }
-        if (Dist(c.Cell, wall) > 1) { Fail(sim, a, "멀다"); return; }
-        if (a.IsPerson && c.Holding != iRepair) { Fail(sim, a, "수리 꾸러미가 없다"); return; }
+        if (Dist(c.Cell, wall) > 1) { Fail(sim, a, "멀다", SnagKind.Far); return; }
+        if (a.IsPerson && c.Holding != iRepair) { Fail(sim, a, "수리 꾸러미가 없다", SnagKind.NoItem, c.Cell, iRepair); return; }
         Activity(a, "hard");
         // 끼인 문: 틀을 비틀어 바로잡는다 (떨어져 나간 문을 다시 끼우는 것은 오래 걸린다)
         double minutes = (a.IsPerson ? 4 * (1.5 - c.SkRepair) : 3) * (jam && F.DoorOpen[door] > 0.5f ? 2.5 : 1);
@@ -342,6 +347,7 @@ public sealed partial class Mind
         if (jam)
         {
             _st.FreeDoor(door);
+            Forget(a, b => b.Kind == BeliefKind.StuckDoor && b.Subject == door); // 제 손으로 바로잡았다 — 이제 열린다
             ClearDoorItems(wall); // 문틀에 걸린 물건을 치운다
             if (_st.DoorDeltaP(door) > 3) _st.RequestDoor(door, 0); // 바람이 빨려 든다 — 바로잡은 김에 닫는다
             if (a.IsPerson) UseHeld(sim, a);
@@ -370,7 +376,7 @@ public sealed partial class Mind
         ref var c = ref a.C;
         long t = sim.Tick;
         int bench = st.Target, item = st.Arg;
-        if (Dist(c.Cell, L.Furniture[bench].Cells[0]) > 2) { Fail(sim, a, "멀다"); return; }
+        if (Dist(c.Cell, L.Furniture[bench].Cells[0]) > 2) { Fail(sim, a, "멀다", SnagKind.Far); return; }
         if (!P.Recipes.TryGetValue(ItemNames[item], out var r)) { JobDone(a, t); return; }
         Activity(a, "work");
         double minutes = a.IsPerson ? r.Minutes * (1.5 - c.SkRepair) : r.Minutes;
@@ -390,13 +396,13 @@ public sealed partial class Mind
         long t = sim.Tick;
         int dev = st.Target, part = st.Arg;
         if (_net == null || _net.Broken[dev * 4 + part] != 0) { JobDone(a, t); return; }
-        if (Dist(c.Cell, _net.Devices[dev].Cell) > 2) { Fail(sim, a, "멀다"); return; }
-        if (a.IsPerson && c.Holding != iRepair) { Fail(sim, a, "수리 꾸러미가 없다"); return; }
+        if (Dist(c.Cell, _net.Devices[dev].Cell) > 2) { Fail(sim, a, "멀다", SnagKind.Far); return; }
+        if (a.IsPerson && c.Holding != iRepair) { Fail(sim, a, "수리 꾸러미가 없다", SnagKind.NoItem, c.Cell, iRepair); return; }
         Activity(a, "work");
         double minutes = a.IsPerson ? 20 * (1.6 - c.SkRepair) : 15;
         if (t - c.StepStart < Time.Minutes(minutes)) return;
         if (a.IsPerson) UseHeld(sim, a);
-        else if (!TakeOne(c.Cell, iRepair, sim)) { Fail(sim, a, "갈아 끼울 부품이 없다"); return; }
+        else if (!TakeOne(c.Cell, iRepair, sim)) { Fail(sim, a, "갈아 끼울 부품이 없다", SnagKind.NoItem, c.Cell, iRepair); return; }
         // 소리로 안 것인가: 제가 들었다 (맡긴 일이 아니다) · 아니면 누가 '소리가 이상하다'고 알린 장치 (세 시간 안)
         bool mech = (Part)part == Part.Mechanical;
         bool heard = mech && a.Beliefs.Any(b => b.Kind == BeliefKind.Grind && b.Subject == dev && b.Conf > 0.05f) && !(c.AssignedGoal == GoalKind.Maintain && c.AssignedUntil > t);
@@ -420,7 +426,7 @@ public sealed partial class Mind
         ref var c = ref a.C;
         long t = sim.Tick;
         int cell = st.Cell;
-        if (Dist(c.Cell, cell) > 2) { Fail(sim, a, "멀다"); return; }
+        if (Dist(c.Cell, cell) > 2) { Fail(sim, a, "멀다", SnagKind.Far); return; }
         Activity(a, "work");
         if (t - c.StepStart < Time.Minutes(10)) return;
         {
@@ -446,7 +452,7 @@ public sealed partial class Mind
         long t = sim.Tick;
         if (_life == null || st.Target >= _life.Crops.Count) { JobDone(a, t); return; }
         ref var crop = ref CollectionsMarshal.AsSpan(_life.Crops)[st.Target];
-        if (Dist(c.Cell, crop.Cell) > 2) { Fail(sim, a, "멀다"); return; }
+        if (Dist(c.Cell, crop.Cell) > 2) { Fail(sim, a, "멀다", SnagKind.Far); return; }
         Activity(a, "work");
         if (t - c.StepStart < Time.Minutes(a.IsPerson ? 10 * (1.5 - c.SkFarm) : 10)) return;
         float got = crop.Biomass;
@@ -467,7 +473,7 @@ public sealed partial class Mind
         long t = sim.Tick;
         var fu = L.Furniture[st.Target];
         if (!IsFood(c.Holding)) { JobDone(a, t); return; }
-        if (Dist(c.Cell, fu.Cells[0]) > 2) { Fail(sim, a, "멀다"); return; }
+        if (Dist(c.Cell, fu.Cells[0]) > 2) { Fail(sim, a, "멀다", SnagKind.Far); return; }
         Activity(a, "work");
         if (t - c.StepStart < Time.Minutes(1)) return;
         F.AddStore(fu.Cells[0], T.sFood, c.HoldCharge);
@@ -483,7 +489,7 @@ public sealed partial class Mind
         ref var c = ref a.C;
         long t = sim.Tick;
         var fu = L.Furniture[st.Target];
-        if (Dist(c.Cell, fu.Cells[0]) > 2) { Fail(sim, a, "멀다"); return; }
+        if (Dist(c.Cell, fu.Cells[0]) > 2) { Fail(sim, a, "멀다", SnagKind.Far); return; }
         Activity(a, "work");
         if (t - c.StepStart < Time.Minutes(2)) return;
         double got = 0;
@@ -505,7 +511,7 @@ public sealed partial class Mind
             // 배전반: 합선 난 급전선을 손으로 끊는다 (1분)
             int fd = _net.StuckFault(dev);
             if (fd < 0) { Forget(a, b => b.Kind == BeliefKind.Broken && b.Subject == dev); Next(a, t); return; }
-            if (Dist(c.Cell, _net.Devices[dev].Cell) > 2) { Fail(sim, a, "멀다"); return; }
+            if (Dist(c.Cell, _net.Devices[dev].Cell) > 2) { Fail(sim, a, "멀다", SnagKind.Far); return; }
             Activity(a, "work");
             if (t - c.StepStart < Time.Minutes(1)) return;
             _net.PullFeeder(fd);
@@ -517,7 +523,7 @@ public sealed partial class Mind
             return;
         }
         if (_net == null || _net.Broken[dev * 4 + st.Arg] == 0) { Forget(a, b => b.Kind == BeliefKind.Broken && b.Subject == dev); Next(a, t); return; }
-        if (Dist(c.Cell, _net.Devices[dev].Cell) > 2) { Fail(sim, a, "멀다"); return; }
+        if (Dist(c.Cell, _net.Devices[dev].Cell) > 2) { Fail(sim, a, "멀다", SnagKind.Far); return; }
         if (!HasPart(a)) { Fail(sim, a, a.IsPerson ? "수리 꾸러미가 없다" : "부품이 없다"); return; }
         Activity(a, "work");
         double minutes = a.IsPerson ? P.Items["수리 꾸러미"].Minutes * (1.6 - c.SkRepair) : 15;
@@ -652,6 +658,7 @@ public sealed partial class Mind
                     }
                     if (c.WaitTicks > 12 || (_st != null && _st.DoorJam[d] != 0 && F.DoorOpen[d] < 0.5f))
                     {
+                        NoteSnag(sim, a, WhyDoor(d) is var why && why != SnagKind.None ? why : SnagKind.DoorPressure, n, d);   // ⑧ 판단 엔진: 왜 안 열렸나 (끼임 · 잠근 밸브 · 너머가 우주 · 기압 차)
                         Learn(a, t, BeliefKind.StuckDoor, n, d, 1, BeliefSource.Felt);
                         _st?.RequestDoor(d, 0); // 안 열리는 문 — 열어 달라던 것을 거둔다 (밸브도 닫힌다)
                         c.WaitTicks = 0; c.WaitDoor = -1;
@@ -728,7 +735,7 @@ public sealed partial class Mind
     public const int MaxExpand = 40000;
 
     /// <summary>4방향 A*: 가구 +0.5 · 닫힌 문 +2 · 안 열린다고 믿는 문은 막힘 · 불이라 믿는 곳 둘레 +15 · 진공이라 믿는 구역 +25.</summary>
-    private bool FindPath(Agent a, int from, int to, int near)
+    private bool FindPath(Agent a, int from, int to, int near, bool throughStuck = false)
     {
         a.Path.Clear(); a.PathIdx = 0;
         if (to < 0) return false;
@@ -766,7 +773,7 @@ public sealed partial class Mind
                     int d = L.DoorAt[j];
                     if (!F.DoorPassable(d))
                     {
-                        if (Believes(a, BeliefKind.StuckDoor, j, 0) > 0.3f) continue;
+                        if (Believes(a, BeliefKind.StuckDoor, j, 0) > 0.3f) { if (!throughStuck) continue; cost += 20; }   // 막힌 까닭을 찾을 때는 지날 수 있다고 친다
                         cost += 2;
                         if (!suit && Believes(a, BeliefKind.Leak, j, 0) > 0.4f) cost += 30; // 쉬익대는 닫힌 문 너머는 빠졌을지 모른다
                     }

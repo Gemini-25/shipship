@@ -43,7 +43,7 @@ public sealed partial class Mind
         long t = sim.Tick;
         int donor = st.Target;
         if (_net == null || _net.Broken[donor * 4 + st.Arg] != 0 || _net.Broken[st.Cell * 4 + st.Arg] == 0) { EndPlan(a); return; }   // 이미 떼었거나 고칠 것이 고쳐졌다
-        if (Dist(c.Cell, _net.Devices[donor].Cell) > 2) { Fail(sim, a, "멀다"); return; }
+        if (Dist(c.Cell, _net.Devices[donor].Cell) > 2) { Fail(sim, a, "멀다", SnagKind.Far); return; }
         Activity(a, "work");
         if (t - c.StepStart < Time.Minutes(a.IsPerson ? 10 : 5)) return;
         float worn = _net.TakePart(donor, (Part)st.Arg);
@@ -80,7 +80,7 @@ public sealed partial class Mind
         if (_net == null || _net.OwnFeederLive(room) || _net.Jumpers.Exists(j => j.To == room)) { EndPlan(a); return; }
         if (!_net.OwnFeederLive(donor)) { Fail(sim, a, "옆 방도 전기가 끊겼다"); return; }
         int at = st.Arg == 0 ? _net.Vent[donor] : _net.Vent[room];
-        if (Dist(c.Cell, at) > 2) { Fail(sim, a, "멀다"); return; }
+        if (Dist(c.Cell, at) > 2) { Fail(sim, a, "멀다", SnagKind.Far); return; }
         Activity(a, "work");
         double minutes = st.Arg == 0 ? 1 : a.IsPerson ? 2 * (1.6 - c.SkRepair) : 1.5;
         if (t - c.StepStart < Time.Minutes(minutes)) return;

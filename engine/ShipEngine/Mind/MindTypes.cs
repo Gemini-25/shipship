@@ -185,6 +185,11 @@ public struct AgentCore
     public float SleepNoise;   // ⑦ 자는 동안 들은 가장 큰 소리 (dB — 10분에 걸쳐 흐려진다)
     public float SleepLoss;    // ⑦ 잠이 얕은 정도 (0 깊다 · 1 거의 못 잔다 — 1 − 잠의 질)
     public float Weary;        // ⑧ 고립의 피로 (0~1 — 닫힌 배의 같은 얼굴 · 같은 일과에 몇 주에 걸쳐 쌓인다)
+    // ⑧ 판단 엔진 — 마지막 막힘: 까닭 · 자리(칸) · 대상(문 · 물건) · 때 · 그때의 목표 (주컴퓨터가 맡긴 로봇의 막힘을 읽는다)
+    public SnagKind Snag;
+    public int SnagCell, SnagSubject, SnagTarget;
+    public long SnagTick;
+    public GoalKind SnagGoal;
 }
 
 /// <summary>바닥에 떨어진 · 놓인 물건.</summary>

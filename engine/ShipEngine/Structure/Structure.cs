@@ -17,6 +17,9 @@ namespace ShipEngine;
 /// </para>
 /// 장(③)에는 구멍 · 문의 열림만 요청한다 (Field.SetHole · SetDoor).
 /// </summary>
+/// <summary>문이 열리지 않는 까닭 (④ — 마음 · 주컴퓨터가 막힘으로 읽는다).</summary>
+public enum DoorShut : byte { None, Jammed, Unpowered, Held, VacuumBeyond, Pressure }
+
 public sealed partial class Structure : IEngine
 {
     public string Name => "구조";
@@ -428,6 +431,36 @@ public sealed partial class Structure : IEngine
     /// 바깥으로 빼는 문(에어락 바깥문)은 그 방의 다른 문이 모두 닫혀 있고(맞물림) 우주복 없이 살아 있는 사람이 없을 때만 —
     /// 안쪽 문은 낮은 쪽 구역이 우주로 트여 있지 않을 때만 (트였으면 높은 쪽 공기까지 우주로 빠진다 — 구멍을 먼저 막아야 한다).
     /// </summary>
+    /// <summary>
+    /// 그 문이 지금 열리지 않는 까닭 (⑧ · ⑩이 막힘을 알 때 — 열 수 있으면 None):
+    /// 끼었다 · 전기가 없다(손으로는 기압 차 2kPa까지) · 주컴퓨터가 밸브를 잠가 두었다 · 낮은 쪽이 우주로 트여 기압을 맞출 수 없다 · 기압을 맞추는 중이거나 맞물림(에어락)을 기다린다.
+    /// </summary>
+    public DoorShut WhyShut(int d)
+    {
+        if (d < 0 || d >= L.Doors.Count) return DoorShut.None;
+        if (DoorJam[d] != 0) return F.DoorOpen[d] >= 0.5f ? DoorShut.None : DoorShut.Jammed;
+        double limit = DoorPowered[d] != 0 ? (OutsideBleedRoomCell(d) >= 0 ? 5 : 30) : 2;
+        if (DoorDeltaP(d) <= limit) return DoorShut.None;
+        if (DoorPowered[d] == 0) return DoorShut.Unpowered;
+        if (BleedLock[d] > _now) return DoorShut.Held;
+        if (LowSideOpen(d)) return DoorShut.VacuumBeyond;
+        return DoorShut.Pressure;
+    }
+
+    /// <summary>문의 낮은 쪽 기체 구역이 우주로 트여 있다 (안쪽 문 — 밸브를 열면 높은 쪽 공기까지 빠진다).</summary>
+    private bool LowSideOpen(int d)
+    {
+        var door = L.Doors[d];
+        int c = door.Cell, x = L.X(c), y = L.Y(c);
+        int a = door.Vertical ? Idx(x, y - 1) : Idx(x - 1, y), b = door.Vertical ? Idx(x, y + 1) : Idx(x + 1, y);
+        int lo = SideKPa(a) < SideKPa(b) ? a : b;
+        if (lo < 0 || L.Kind[lo] == CellKind.Outside) return true;
+        int region = lo < F.RegionOf.Length ? F.RegionOf[lo] : -1;
+        if (region < 0) return false;
+        foreach (var k in F.Links) if (k.RB < 0 && k.RA == region && k.Area > 0) return true;
+        return false;
+    }
+
     /// <summary>⑩의 요청: 그 문의 압력 맞춤 밸브를 until까지 잠근다 (안 열린다 — 비워진 방에 배 공기를 나누지 않게).</summary>
     public void HoldBleed(int d, long until) { if (d >= 0 && d < BleedLock.Length) BleedLock[d] = Math.Max(BleedLock[d], until); }
 

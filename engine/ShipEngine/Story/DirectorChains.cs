@@ -52,7 +52,7 @@ public sealed partial class Director
         FactKind.BreakerTrip or FactKind.Short or FactKind.Overheat or FactKind.PipeLeak or FactKind.MachineFail or FactKind.SensorCut or FactKind.Jumper => 6,
         FactKind.Hurt or FactKind.Collapsed or FactKind.Died or FactKind.Sick or FactKind.Treated => 7,
         FactKind.Noticed or FactKind.Rescue or FactKind.Mistake or FactKind.Warned or FactKind.Panicked or FactKind.Fled or FactKind.Extinguished
-            or FactKind.Patched or FactKind.Repaired or FactKind.DoorSealed or FactKind.Woke or FactKind.WentOutside or FactKind.Switched or FactKind.Fell or FactKind.Salvaged or FactKind.Aim => 8,
+            or FactKind.Patched or FactKind.Repaired or FactKind.Blocked or FactKind.DoorSealed or FactKind.Woke or FactKind.WentOutside or FactKind.Switched or FactKind.Fell or FactKind.Salvaged or FactKind.Aim => 8,
         FactKind.Relationship or FactKind.Grieved or FactKind.TrustLost or FactKind.Talk or FactKind.Blamed or FactKind.Fight or FactKind.Sabotage or FactKind.Confessed or FactKind.Lie or FactKind.LieExposed or FactKind.LogAsked or FactKind.Meeting or FactKind.Verdict or FactKind.Elected or FactKind.Mutiny => 9,
         FactKind.Decision or FactKind.ComputerAlarm or FactKind.ComputerSeal or FactKind.ComputerAssign or FactKind.LoadShed or FactKind.BreakerReset
             or FactKind.ComputerDown or FactKind.ComputerJournal or FactKind.ComputerBroadcast or FactKind.Rationed or FactKind.LogShown or FactKind.Shelter => 10,

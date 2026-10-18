@@ -25,6 +25,12 @@ public struct Incident
     public long AskedAt;         // 마지막으로 사람에게 부탁한 때
     public int Decl1, Decl2;     // 거절한 사람 (최근 둘 · -1)
     public byte Asks;            // 사람에게 부탁한 번
+    // ⑩ 판단 엔진 — 맡긴 로봇이 막힌 까닭 (가장 최근 · 문 · 길 · 물건)과 마지막으로 로봇을 보낸 때
+    public SnagKind Snag;
+    public GoalKind SnagGoal;
+    public int SnagCell, SnagSubject;
+    public long SnagTick, SentAt;
+    public byte Snagged;         // 막힌 채 다시 보낸 번 (같은 까닭)
 }
 
 /// <summary>주컴퓨터가 돌려 본 미래 하나 (안 하나의 결과).</summary>
@@ -159,6 +165,8 @@ public sealed partial class ShipMind : IEngine
         if (_computer == -2) _computer = _net?.Devices.FirstOrDefault(d => d.Type == "MainComputer")?.Id ?? -1;
     }
 
+    /// <summary>맡긴 로봇의 막힘을 새로 읽은 번 (관찰용).</summary>
+    public long SnagsRead;
     public string RoomName(int r) => r >= 0 && r < L.Rooms.Count ? L.Rooms[r].Name : "배";
 
     // ───────────────────────── 한 틱 ─────────────────────────
@@ -852,6 +860,7 @@ public sealed partial class ShipMind : IEngine
             case IncidentKind.PowerLost: g = GoalKind.Rewire; target = x.Room; drone = false; break;     // ⑥ 옆 방에서 연장선을 끌어온다
             default: return;
         }
+        ReadSnags(sim, ref x);
         int need = x.Kind == IncidentKind.Fire ? 2 : 1;
         bool Busy(int rb) => rb >= 0 && _mind.Agents[rb].C.Up != 0 && _mind.Agents[rb].C.AssignedUntil > sim.Tick;
         int have = (Busy(x.RobotA) ? 1 : 0) + (Busy(x.RobotB) ? 1 : 0);
@@ -886,6 +895,7 @@ public sealed partial class ShipMind : IEngine
                 : BeliefOf(x);
             _mind.Assign(sim, best, g, target, belief, sim.Tick + Time.Minutes(30));
             if (!Busy(x.RobotA)) x.RobotA = best; else x.RobotB = best;
+            x.SentAt = sim.Tick;
             have++;
             x.Tries++;
             Assignments++;
@@ -894,6 +904,26 @@ public sealed partial class ShipMind : IEngine
         }
         // 로봇이 모자라면 사람에게 부탁한다 (함장 방침 — 기본은 로봇이 하나도 없을 때 1분 기다린 뒤)
         if (have < need && Policy.AskPeople != 0 && (Policy.AskPeople == 2 || have == 0)) AskPerson(sim, ref x, g, target);
+    }
+
+    /// <summary>
+    /// ⑩ 판단 엔진: 맡긴 로봇이 막혔나 — 로봇이 남긴 막힘(까닭 · 자리 · 대상)을 사건에 옮겨 적고 일지에 쓴다 (보낸 뒤의 문 · 길 · 물건 막힘만).
+    /// 같은 까닭으로 막힌 채 다시 보내면 그 번을 센다 — 대안을 고르는 바탕 (docs/ENGINE.md 판단 엔진).
+    /// </summary>
+    private void ReadSnags(Sim sim, ref Incident x)
+    {
+        if (_mind == null) return;
+        foreach (int rb in new[] { x.RobotA, x.RobotB })
+        {
+            if (rb < 0 || rb >= _mind.Agents.Count) continue;
+            ref var c = ref _mind.Agents[rb].C;
+            if (!Mind.Telling(c.Snag) || c.SnagTick < x.SentAt || c.SnagTick <= x.SnagTick) continue;
+            bool again = x.Snag == c.Snag && x.SnagSubject == c.SnagSubject;
+            x.Snag = c.Snag; x.SnagGoal = c.SnagGoal; x.SnagCell = c.SnagCell; x.SnagSubject = c.SnagSubject; x.SnagTick = c.SnagTick;
+            if (again) { if (x.Snagged < 255) x.Snagged++; continue; }
+            x.Snagged = 1; SnagsRead++;
+            Say(sim, $"{_mind.NameOf(rb)}: {RoomName(x.Room)} {KindName(x.Kind)} 일이 막혔다 — {Mind.SnagText(c.Snag)}");
+        }
     }
 
     /// <summary>봉쇄: 그 방의 문을 닫는다 — 안에 사람이 있으면 함장 방침만큼 기다린다 (그래도 남아 있으면 가둔다). 연기 방은 통풍구도 닫는다.</summary>
