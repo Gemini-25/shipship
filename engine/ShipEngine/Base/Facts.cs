@@ -89,6 +89,11 @@ public enum FactKind : ushort
     Aim,               // 인생 목표 (Actor: 그 사람 · Other: Aim · Size: 1 이뤘다 · −1 흔들렸다)
     // ④
     ShipSplit,         // 배가 갈라졌다 — 조각이 떨어져 나갔다 (Size: 조각 질량 톤 · Other: 조각 번호)
+    // ⑧ · ⑨ 바퀴 3 — 거짓말과 속임
+    Lie,               // 남 탓으로 둘러댔다 (Actor: 둘러댄 이 · Other: 탓한 이 −1 · Size: 1 사람 · 2 로봇 · 0 '원래 낡았다')
+    LieExposed,        // 거짓말이 들통났다 (Actor: 둘러댄 이 · Other: 밝힌 이 · Size: 1 본 이 · 2 주컴퓨터 기록)
+    LogAsked,          // 주컴퓨터에 장치 기록을 물었다 (Actor: 물은 이 · Other: 장치 · Size: 몇 시간 안)
+    LogShown,          // 주컴퓨터 기록 — 장치의 점검 뚜껑을 연 이 (Actor: 연 이 · −1 없음 · Other: 장치 · Size: 몇 시간 전)
 }
 
 public static class FactNames
@@ -111,6 +116,7 @@ public static class FactNames
         FactKind.Grieved => "슬픔", FactKind.TrustLost => "믿음이 깨졌다", FactKind.WentOutside => "선외로 나갔다",
         FactKind.Talk => "이야기", FactKind.Blamed => "탓", FactKind.Fight => "몸싸움", FactKind.Sabotage => "몰래 한 짓", FactKind.Pilfer => "몰래 먹었다", FactKind.Rationed => "배급", FactKind.Treated => "돌봤다", FactKind.Confessed => "털어놓았다", FactKind.Burn => "점화", FactKind.Fell => "넘어졌다", FactKind.Contact => "다른 배", FactKind.Jumper => "연장선", FactKind.Salvaged => "떼어 냈다", FactKind.Aim => "인생 목표",
         FactKind.ShipSplit => "배가 갈라졌다",
+        FactKind.Lie => "거짓말", FactKind.LieExposed => "거짓말이 들통났다", FactKind.LogAsked => "기록을 물었다", FactKind.LogShown => "주컴퓨터 기록",
         FactKind.ComputerJournal => "일지", FactKind.ComputerBroadcast => "아침 방송", FactKind.Switched => "껐다", _ => "",
     };
 }

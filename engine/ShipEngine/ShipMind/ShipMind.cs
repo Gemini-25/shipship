@@ -169,6 +169,7 @@ public sealed partial class ShipMind : IEngine
         if (alive && !Imagining) SelfCheck(sim);                  // 제 몸 온도 — 뜨거우면 느려지고 · 넘으면 멈춘다 (멈춰 있어도 식는 것은 안다)
         Online = alive && HeatStopped == 0;
         if (was && !Online) { Say(sim, "주컴퓨터가 멈췄다"); sim.Facts.Emit(sim.Tick, FactKind.ComputerDown, _computer >= 0 ? _net!.Devices[_computer].Cell : -1); }
+        LogStep(sim, Online);   // 정비 기록 · 물음에 답하기 (멈춰 있으면 적지 못한다)
         if (!Online) return;
         foreach (var d in L.Doors) if (F.DoorOpen[d.Id] > 0f || F.DoorBleed[d.Id] != 0) DoorWasOpen[d.Id] = 1;
         if (sim.Tick % _effectiveRead == 0) { _tick = sim.Tick; ReadSensors(); Detect(sim); Refill(sim); }
@@ -1154,7 +1155,7 @@ public sealed partial class ShipMind : IEngine
         w.I64(Alarms); w.I64(Assignments); w.I64(Seals); w.I64(Sheds); w.I64(Resets); w.I64(Exhausts); w.I64(OuterClosed); w.I64(StovesCut); SaveCrew(w); SaveSupply(w);
         w.I32(Journal.Count); foreach (var (t, s) in Journal) { w.I64(t); w.Str(s); }
         w.I32(JournalHour); w.I32(MorningHour); w.I64(LastJournal); w.I64(_journalAssign); w.Arr(ReportedDead.ToArray()); w.Str(Morning); w.Arr(RoomAirT); w.Arr(GaveAirAt); w.Arr(DoorWasOpen); w.Arr(RoomCO2Hold);
-        SaveHelm(w);
+        SaveHelm(w); SaveLog(w);
     }
 
     public void Load(StateReader r)
@@ -1168,6 +1169,6 @@ public sealed partial class ShipMind : IEngine
         Alarms = r.I64(); Assignments = r.I64(); Seals = r.I64(); Sheds = r.I64(); Resets = r.I64(); Exhausts = r.I64(); OuterClosed = r.I64(); StovesCut = r.I64(); LoadCrew(r); LoadSupply(r);
         Journal.Clear(); int nj = r.I32(); for (int i = 0; i < nj; i++) { long t = r.I64(); Journal.Add((t, r.Str() ?? "")); }
         JournalHour = r.I32(); MorningHour = r.I32(); LastJournal = r.I64(); _journalAssign = r.I64(); ReportedDead.Clear(); ReportedDead.AddRange(r.Arr<int>()); Morning = r.Str() ?? ""; r.ArrInto(RoomAirT); r.ArrInto(GaveAirAt); r.ArrInto(DoorWasOpen); r.ArrInto(RoomCO2Hold);
-        LoadHelm(r);
+        LoadHelm(r); LoadLog(r);
     }
 }

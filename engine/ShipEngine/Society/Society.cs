@@ -159,7 +159,8 @@ public sealed partial class Society : IEngine
         var lt = new long[n * n];
         Array.Fill(lt, -TalkRest);
         for (int i = 0; i < Math.Min(n, N); i++) for (int j = 0; j < Math.Min(n, N); j++) lt[i * n + j] = LastTalk[i * N + j];
-        Bond = b; TrustOf = tr; Grudge = gr; Debt = de; Known = kn; LastTalk = lt; TrustComputer = t; Grief = g; Attract = at; Partner = pa; _near = new byte[n * n]; N = n;
+        var lm = new float[n]; Array.Copy(LiarMark, lm, Math.Min(n, LiarMark.Length));
+        Bond = b; TrustOf = tr; Grudge = gr; Debt = de; Known = kn; LastTalk = lt; TrustComputer = t; Grief = g; Attract = at; Partner = pa; _near = new byte[n * n]; LiarMark = lm; N = n;
     }
 
     public void Step(Sim sim, double dt)
@@ -169,6 +170,7 @@ public sealed partial class Society : IEngine
         _talk ??= TalkTable.Load();
         Resize(_mind.Agents.Count);
         Events(sim);
+        if (Checks.Count > 0) LogChecksStep(sim);
         if (sim.Tick % TogetherEvery == 0)
         {
             Together(sim, TogetherEvery * dt);
@@ -317,13 +319,13 @@ public sealed partial class Society : IEngine
         return false;
     }
 
-    /// <summary>원인 사슬에서 사람의 행동을 찾는다 (뿌리 쪽부터) — 탓할 사람.</summary>
+    /// <summary>원인 사슬에서 사람의 행동을 찾는다 (뿌리 쪽부터) — 탓할 사람. 숨긴 일(숨긴 실수 · 몰래 한 짓 · 거짓말)은 남이 모르니 건너뛴다.</summary>
     public int Culprit(Sim sim, int cause, int except)
     {
         foreach (int id in sim.Causes.Chain(cause))
         {
             var n = sim.Causes[id];
-            if (n.Kind == CauseKind.Person && n.Actor >= 0 && n.Actor < N && n.Actor != except && _mind!.Agents[n.Actor].IsPerson) return n.Actor;
+            if (n.Kind == CauseKind.Person && n.Actor >= 0 && n.Actor < N && n.Actor != except && _mind!.Agents[n.Actor].IsPerson && !_secret.Contains(id)) return n.Actor;
         }
         return -1;
     }
@@ -431,7 +433,23 @@ public sealed partial class Society : IEngine
                     break;
                 }
                 case FactKind.Mistake when f.Size >= 2 && f.Size < 2.5f && f.Actor >= 0 && f.Actor < N:
-                    Hidden.Add(new HiddenMistake { Cause = f.Cause, Who = f.Actor, Device = f.Other, Tick = f.Tick });
+                {
+                    // 곁에서 본 이 (둘까지): 그 사람이 장치를 손보는 것만 봤다 — 상하게 한 줄은 모른다
+                    var saw = Near(f.Cell, f.Actor, 6);
+                    foreach (int w in saw.Take(2)) Remember(sim, w, Topic.Work, f.Actor, f.Cause, 0.3f, f.Cell);
+                    Hidden.Add(new HiddenMistake { Cause = f.Cause, Who = f.Actor, Device = f.Other, Tick = f.Tick, W1 = saw.Count > 0 ? saw[0] : -1, W2 = saw.Count > 1 ? saw[1] : -1 });
+                    _secret.Add(f.Cause);
+                    break;
+                }
+                case FactKind.Sabotage:
+                    _secret.Add(f.Cause);
+                    break;
+                case FactKind.Repaired or FactKind.Salvaged when f.Actor >= 0 && f.Other >= 0:
+                    _hands.Add((f.Other, f.Actor, f.Tick));   // 누가 손봤는지는 배 사람들이 안다 (고친 이 · 떼어 낸 이)
+                    if (_hands.Count > 64) _hands.RemoveAt(0);
+                    break;
+                case FactKind.LogShown when Lies.Count > 0:
+                    LogShown(sim, f);
                     break;
                 case FactKind.MachineFail when Hidden.Count > 0:
                     Reveal(sim, f);

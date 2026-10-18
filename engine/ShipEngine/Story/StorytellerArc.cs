@@ -278,7 +278,9 @@ public sealed partial class Storyteller
                 var running = net.Devices.Where(d => net.On[d.Id] != 0 && Enum.GetValues<Part>().Any(p => d.Life(p) > 0 && !net.IsBroken(d.Id, p))).ToList();
                 var who = PickPerson(mind.Agents.Where(Up), a => 1.3 - 0.6 * a.C.Consc);
                 if (running.Count == 0 || who == null) return false;
-                var dev = running[_rng.Range(0, running.Count)];
+                var here = running.Where(d => d.Room >= 0 && d.Room == mind.RoomOf(who.C.Cell)).ToList();   // 손본 것은 그 사람이 있는 방의 장치 (곁에 있던 이가 본다)
+                var pool = here.Count > 0 ? here : running;
+                var dev = pool[_rng.Range(0, pool.Count)];
                 var parts = Enum.GetValues<Part>().Where(p => dev.Life(p) > 0 && !net.IsBroken(dev.Id, p)).ToList();
                 var part = parts[_rng.Range(0, parts.Count)];
                 int c0 = sim.Causes.Add(CauseKind.Person, $"{Ko.I(mind.NameOf(who.Id))} {Ko.Eul(dev.Name)} 손보다 {Device.PartName(part)} 부품을 상하게 했다 — 아무에게도 말하지 않았다", sim.Tick, dev.Cell, 0, 0, who.Id);

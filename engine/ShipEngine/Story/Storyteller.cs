@@ -89,7 +89,7 @@ public sealed partial class Storyteller : IEngine
         FactKind.Died => 10, FactKind.Collapsed => 4, FactKind.Hurt => 1, FactKind.WallBreach => 3, FactKind.Ignition => 2, FactKind.FireSpread => 1,
         FactKind.ComputerAlarm => 1, FactKind.Panicked => 2, FactKind.DoorBlown => 2, FactKind.MachineFail => 1, FactKind.Impact => 1,
         FactKind.Short => 2, FactKind.BreakerTrip => 0.5, FactKind.Flare => 2, FactKind.DebrisNear => 1,
-        FactKind.Fight => 2, FactKind.Blamed => 0.5, FactKind.Grieved => 1, FactKind.Sick => 0.5, FactKind.Rationed => 1, FactKind.Confessed => 0.5, FactKind.Fell => 1, FactKind.Contact => 1, _ => 0,
+        FactKind.Fight => 2, FactKind.Blamed => 0.5, FactKind.Grieved => 1, FactKind.Sick => 0.5, FactKind.Rationed => 1, FactKind.Confessed => 0.5, FactKind.Lie => 0.5, FactKind.LieExposed => 1.5, FactKind.Fell => 1, FactKind.Contact => 1, _ => 0,
     };
 
     /// <summary>성격 · 가혹함에 따른 지금 목표 긴장.</summary>

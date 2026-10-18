@@ -130,6 +130,8 @@ public sealed partial class Society
         {
             case Topic.Blame:
             {
+                int lb = LieOf(o.Cause);
+                if (lb >= 0 && b == Lies[lb].Scape) Hear(sim, lb, b, a);   // 누명을 쓴 줄 이제 안다
                 // b가 사과하나: 다정하고 · 덜 불안하고 · a를 아끼고 · 실제로 b의 탓일수록 (아주 다정하고 차분한 이가 제 잘못을 들으면 넷에 셋은 사과한다 · 거친 이는 백에 두셋)
                 bool guilty = o.Cause != 0 && Culprit(sim, o.Cause, -1) == b;
                 float p = cb.Agree * (1 - cb.Neuro * 0.5f) * (0.7f + Math.Max(0, BondOf(b, a)) + DebtOf(b, a)) * (guilty ? 1.2f : 0.5f);
@@ -168,6 +170,15 @@ public sealed partial class Society
                 {
                     // 소문: 듣는 이가 말하는 이를 믿는 만큼 · 덜 다정할수록 같이 미워한다
                     end = TalkEnd.Spread; Rumors++;
+                    int lg = LieOf(o.Cause);
+                    if (lg >= 0)
+                    {
+                        // 거짓말이 험담으로 번진다: 믿을지는 듣는 이가 (그때 본 이면 들통난다)
+                        Hear(sim, lg, b, a);
+                        Warm(sim, a, b, 0.02f);
+                        Say(sim, a, b, o, end, Pick(sim, "험담/퍼짐", a));
+                        break;
+                    }
                     float w = GrudgeOf(a, x) * TrustIn(b, a) * (1 - cb.Agree * 0.5f);
                     if (SameBand(a, b) && BandIdOf(x) >= 0 && !SameBand(b, x)) w *= 1.5f; // 다른 무리 험담은 같은 무리 안에서 잘 먹힌다
                     Add(Grudge, b, x, w * 0.4f); Add(TrustOf, b, x, -w * 0.3f);
