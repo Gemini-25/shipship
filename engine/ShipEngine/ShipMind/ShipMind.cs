@@ -182,14 +182,20 @@ public sealed partial class ShipMind : IEngine
         if (was && !Online) { Say(sim, "주컴퓨터가 멈췄다"); if (_net != null) Array.Clear(_net.RoomAir); sim.Facts.Emit(sim.Tick, FactKind.ComputerDown, _computer >= 0 ? _net!.Devices[_computer].Cell : -1); }
         LogStep(sim, Online);   // 정비 기록 · 물음에 답하기 (멈춰 있으면 적지 못한다)
         if (!Online) return;
+        long t = Prof.Start();
         foreach (var d in L.Doors) if (F.DoorOpen[d.Id] > 0f || F.DoorBleed[d.Id] != 0) DoorWasOpen[d.Id] = 1;
-        if (sim.Tick % _effectiveRead == 0) { _tick = sim.Tick; ReadSensors(); Detect(sim); Refill(sim); EmergencyRefill(sim); KeepEmptyShut(sim); }
-        Act(sim);
-        RunPlans(sim);  // ⑩ 판단 엔진: 지어낸 계획을 걸음마다
-        Power(sim);
-        Supply(sim);   // ⑪ 배급 · 보관함 무게
-        Helm(sim);     // ⑤ 조타: 정해진 점화 · 운석 비키기 · 다른 배
-        Weather(sim);  // ⑤ 우주 날씨 대비: 파편 구름 · 양성자 폭풍 — 문을 닫고 대피실로
+        if (sim.Tick % _effectiveRead == 0)
+        {
+            _tick = sim.Tick; ReadSensors(); t = Prof.Lap("주컴퓨터:센서", t);
+            Detect(sim); t = Prof.Lap("주컴퓨터:알아채기", t);
+            Refill(sim); EmergencyRefill(sim); KeepEmptyShut(sim); t = Prof.Lap("주컴퓨터:공기 채우기", t);
+        }
+        Act(sim); t = Prof.Lap("주컴퓨터:대응", t);
+        RunPlans(sim); t = Prof.Lap("주컴퓨터:계획", t);  // ⑩ 판단 엔진: 지어낸 계획을 걸음마다
+        Power(sim); t = Prof.Lap("주컴퓨터:전력", t);
+        Supply(sim); t = Prof.Lap("주컴퓨터:배급", t);   // ⑪ 배급 · 보관함 무게
+        Helm(sim); t = Prof.Lap("주컴퓨터:조타", t);     // ⑤ 조타: 정해진 점화 · 운석 비키기 · 다른 배
+        Weather(sim); t = Prof.Lap("주컴퓨터:날씨", t);  // ⑤ 우주 날씨 대비: 파편 구름 · 양성자 폭풍 — 문을 닫고 대피실로
         long tod = sim.Tick % Time.TicksPerDay; // 멈춰 있던 때에는 일지도 방송도 없다 (다음 일지가 그 사이를 함께 적는다)
         if (tod == Time.Hours(JournalHour) % Time.TicksPerDay) WriteJournal(sim);
         if (tod == Time.Hours(MorningHour) % Time.TicksPerDay) MorningBroadcast(sim);
@@ -251,21 +257,24 @@ public sealed partial class ShipMind : IEngine
             if (!fresh) { RoomMoles[r * 6 + _reads % 6] = RoomMoles[r * 6 + (_reads + 5) % 6]; continue; }
             double p = 0, o2 = double.MaxValue, soot = 0, co = 0, co2 = 0, temp = 0, nh3 = 0, o3 = 0;
             int hot = cells[0], tox = cells[0];
+            double n = 0, nt = 0, na = 0;
             foreach (int c in cells)
             {
-                p += F.Pressure(c);
-                o2 = Math.Min(o2, F.Partial(T.gO2, c));
-                soot = Math.Max(soot, F.Ppm(T.gSoot, c));
-                co = Math.Max(co, F.Ppm(T.gCO, c));
-                co2 += F.Ppm(T.gCO2, c) * F.Moles(c);   // 이산화탄소는 방 평균 (몰 가중) — 벽의 센서는 숨 한 모금의 짙은 칸이 아니라 방 공기를 읽는다
-                double a = F.Ppm(T.gNH3, c);
+                double m = F.Read(c, out double gc, out double pc);   // 칸마다 한 번 (Pressure · Partial · Ppm · Temp와 같은 셈)
+                double Ppm(int g) => m > 1e-9 ? F.Gas(g, c) / m * 1e6 : 0;
+                p += pc;
+                o2 = Math.Min(o2, m > 1e-12 ? pc * F.Gas(T.gO2, c) / m : 0);
+                soot = Math.Max(soot, Ppm(T.gSoot));
+                co = Math.Max(co, Ppm(T.gCO));
+                co2 += Ppm(T.gCO2) * m;   // 이산화탄소는 방 평균 (몰 가중) — 벽의 센서는 숨 한 모금의 짙은 칸이 아니라 방 공기를 읽는다
+                double a = Ppm(T.gNH3);
                 if (a > nh3) { nh3 = a; tox = c; }
-                o3 = Math.Max(o3, F.Ppm(T.gO3, c));
-                double tc = F.Pressure(c) > 5 ? F.Temp(c) : 0; // 거의 진공이면 공기 온도계가 못 잰다
+                o3 = Math.Max(o3, Ppm(T.gO3));
+                double tg = F.Temp(c, gc);
+                double tc = pc > 5 ? tg : 0; // 거의 진공이면 공기 온도계가 못 잰다
                 if (tc > temp) { temp = tc; hot = c; }
+                n += m; if (pc > 5) { nt += m * tg; na += m; }
             }
-            double n = 0, nt = 0, na = 0;
-            foreach (int c in cells) { double m = F.Moles(c); n += m; if (F.Pressure(c) > 5) { nt += m * F.Temp(c); na += m; } }
             RoomMoles[r * 6 + _reads % 6] = (float)n;
             RoomAirT[r] = na > 0 ? (float)(nt / na) : 0;
             RoomKPa[r] = (float)(p / cells.Length); RoomO2[r] = (float)o2; RoomSoot[r] = (float)soot; RoomCO[r] = (float)co; RoomCO2[r] = (float)(n > 0 ? co2 / n : 0); RoomTemp[r] = (float)temp;
@@ -404,7 +413,7 @@ public sealed partial class ShipMind : IEngine
                 double inflow = k.RA == reg ? -k.Flow : k.Flow;
                 if (inflow < 0.3) continue;
                 int hi = k.RA == reg ? k.B : k.A, hr = hi >= 0 ? L.Room[hi] : -1;
-                if (hr < 0 || hr == x.Room || RoomSeen[hr] == 0) continue;
+                if (hr < 0 || hr == x.Room || RoomSeen[hr] == 0 || Deliberate(hr)) continue;   // 계획이 일부러 비우는 방(임시 에어락)은 샘이 아니다
                 Raise(sim, IncidentKind.Leak, hr, k.Via, RoomKPa[hr], -1, _st != null && _st.DamageCause[k.Via] != 0 ? _st.DamageCause[k.Via] : x.Cause);   // 이미 있으면 그 자리로 고친다
                 Mark(IncidentKind.Leak, hr);
             }

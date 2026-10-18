@@ -216,17 +216,20 @@ public sealed partial class Structure : IEngine
     {
         if (_p.Length != L.N) _p = new double[L.N];
         _now = sim.Tick;
+        long t = Prof.Start();
         // 닫힌 문 칸은 벽처럼 (장이 기체를 비워 둔 칸 — 기압 0으로 읽으면 옆 벽이 한쪽이 진공이라고 착각한다)
         for (int i = 0; i < L.N; i++)
             _p[i] = (L.Kind[i] == CellKind.Floor || L.Kind[i] == CellKind.Door && F.DoorPassable(L.DoorAt[i]) || F.Hole[i] >= 2) ? F.Pressure(i) : -1;
-        Doors(sim, dt);
-        HeatJam(sim);
-        Sections(sim);
-        Walls(sim, dt);
-        Decks(sim);
+        t = Prof.Lap("구조:압력 읽기", t);
+        Doors(sim, dt); t = Prof.Lap("구조:문", t);
+        HeatJam(sim); t = Prof.Lap("구조:열 끼임", t);
+        Sections(sim); t = Prof.Lap("구조:구획", t);
+        Walls(sim, dt); t = Prof.Lap("구조:벽", t);
+        Decks(sim); t = Prof.Lap("구조:바닥", t);
         if (sim.Tick % 25 == 0) { Rust(sim, 25 * dt); StressCorrosion(sim, 25 * dt); }
-        Lattice(sim);
-        Drift(dt);
+        t = Prof.Lap("구조:녹 · 응력 부식", t);
+        Lattice(sim); t = Prof.Lap("구조:격자", t);
+        Drift(dt); Prof.Lap("구조:떠돎", t);
     }
 
     /// <summary>압력이 빠진 쪽의 원인: 낮은 쪽 구역에 뚫린 틈(벽 구멍 · 날아간 문)이 있으면 그 원인.</summary>

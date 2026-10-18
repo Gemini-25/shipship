@@ -151,6 +151,115 @@ public static partial class Program
                     $"찢어짐 비율 {k0:0.00} (받쳐도 {k0 / Structure.BraceFactor:0.00}) · 왼쪽 방 {kL:0}kPa · 찢어짐 {st.Tears - tears0} · 닫아 둠 {sm.Wrecks} · 마침 {sm.PlansDone}");
         }
 
+        // ── 사람의 궁리 (판단 엔진 (마-3)): 구멍을 막으러 가다 문 · 길로 막힌 사람이 제 믿음 · 제 지식으로 궁리한다 ──
+        //    가) 기압을 모르는 이 · 주컴퓨터가 없는 배: 우주로 트인 방 문 앞에서 막혀 '기압 차가 큰 문은 안 열린다'를 배우고 — 혼자는 길이 없어 '방법을 모르겠다'
+        //    나) 로봇이 있는 배: 주컴퓨터가 이미 그 방에 계획을 세웠으면 — 막힌 사람은 그 계획을 따른다 (제 판단보다 먼저 · 따를 마음은 믿음 · 성실)
+        //    다) 기압을 아는 이 · 로봇이 없는 배 · 주컴퓨터는 사람에게 부탁하지 않는 방침: 혼자는 길이 없지만 '주컴퓨터가 앞방 공기를 빼 주면 된다'를 떠올려 묻고 · 주컴퓨터가 그 사람을 몸으로 함께 한다
+        foreach (char sc in "가나다")
+        {
+            string ship = sc != '가' ? @"
+##########################
+#..x.......#..s..#...pb..#
+#..........D.....D....h..#
+#..e.......#.k.k.#..c.w..#
+##########################" : @"
+##########################
+#..x.......#..w..#...pb..#
+#..........D.....D....h..#
+#..e.......#..s..#.......#
+##########################";
+            var lay8 = Worlds.Ascii(ship, new Dictionary<char, string>(legend) { ['h'] = "HeatExchanger", ['s'] = "SuitLocker", ['k'] = "Shelf", ['w'] = "Workbench" });
+            int A8(int x, int y) => Worlds.At(lay8, x, y);
+            var s = Worlds.Full(lay8, 5);
+            var f = s.Get<Field>(); var sm = s.Get<ShipMind>(); var m = s.Get<Mind>(); var net = s.Get<Network>(); var st = s.Get<Structure>(); var life = s.Get<Life>();
+            if (sc == '다') sm.Policy.AskPeople = 0;   // 주컴퓨터는 먼저 부탁하지 않는다 — 사람이 물어 와야 한다
+            int who = m.AddPerson(s, sc == '나' ? A8(21, 2) : A8(14, 2));   // (나): 비울 방(방2) 너머 방3에서
+            int robot = sc == '나' ? m.AddRobot(s, A8(22, 3), AgentKind.Robot, A8(22, 3)) : -1;   // (나): 로봇이 임시 에어락을 맡는다
+            m.SetPersonality(who, 0.6f, 0.9f, 0.6f, 0.6f, 0.3f);
+            s.Run(2);
+            net.AirReserve = 2e6;
+            int d1 = lay8.Doors.First(d => d.Cell == A8(11, 2)).Id;
+            int hole = A8(3, 0);
+            ref var c = ref m[who].C;
+            c.KnPressure = sc == '가' ? 0.1f : sc == '나' ? 0.5f : 0.8f; c.KnStruct = 0.6f; c.SkSeal = 0.7f;
+            f.SetHole(hole, 0.02f);
+            if (Environment.GetEnvironmentVariable("RULE_DEBUG") == "1") Console.WriteLine($"    ({sc}) 구멍 놓음 {f.Hole[hole] * 1e4:0.0}cm²");
+            s.Run((int)Time.Minutes(3));
+            if (Environment.GetEnvironmentVariable("RULE_DEBUG") == "1") Console.WriteLine($"    ({sc}) 3분 뒤 {f.Hole[hole] * 1e4:0.0}cm² · 방1 {f.Pressure(A8(3, 2)):0}kPa");
+            m[who].Beliefs.Add(new Belief { Kind = BeliefKind.Breach, Src = BeliefSource.Heard, Cell = hole, Subject = -1, Conf = 1f, Seen = s.Tick });   // 쉬익 소리 · 경보로 구멍을 안다
+            float kn0 = m[who].C.KnPressure;
+            bool personBody = false;
+            long asked0 = -1, own0 = -1;   // (나): 주컴퓨터 계획이 생긴 때의 물음 · 제 궁리 수 — 그 뒤로는 따라야 한다 (생기기 전에 물은 것은 맞다)
+            for (int k = 0; k < 24 && !(sc == '가' && m.PondersLost > 0) && !(sc != '가' && f.Hole[hole] <= 0); k++)
+            {
+                for (int q = 0; q < 10; q++)
+                {
+                    s.Run((int)Time.Minutes(1)); personBody |= sm.PlanSteps.Any(p => p.Robot == who);
+                    if (asked0 < 0 && sm.DevisesFound > 0) { asked0 = m.PondersAsked; own0 = m.PondersOwn; }
+                }
+                if (Environment.GetEnvironmentVariable("RULE_DEBUG") == "1" && k == 0) Console.WriteLine($"    ({sc}) 믿음 {string.Join(" ", m[who].Beliefs.Where(bb => bb.Conf > 0.1f).Select(bb => $"{bb.Kind}@{lay8.X(bb.Cell)},{lay8.Y(bb.Cell)}:{bb.Conf:0.00}"))} · 사람 번호 {who}");
+                if (Environment.GetEnvironmentVariable("RULE_DEBUG") == "1") Console.WriteLine($"    ({sc}) [{Time.Clock(s.Tick)}] 사람 {lay8.X(m[who].C.Cell)},{lay8.Y(m[who].C.Cell)} {m[who].C.Goal}:{m[who].C.GoalTarget} 계획 {m[who].Plan.Count}/{m[who].C.StepIndex} · 구멍 {f.Hole[hole] * 1e4:0}cm² · 방1 {f.Pressure(A8(3, 2)):0} 방2 {f.Pressure(A8(14, 2)):0}kPa · 문 {f.DoorOpen[d1]:0.00} 끼임 {st.DoorJam[d1]} · 그만둠 '{m[who].LastFail}' · 막힘 {m[who].C.Snag}");
+            }
+            if (sc != '가') s.Run((int)Time.Minutes(40));   // 막은 뒤 다시 채우기까지
+            var b = life.Bodies[m[who].C.Body];
+            string thought = m[who].LastThought;
+            if (Environment.GetEnvironmentVariable("RULE_DEBUG") == "1") { Console.WriteLine($"    ({sc}) 궁리 {m.Ponders} · 제 궁리 {m.PondersOwn} · 물음 {m.PondersAsked} · 모름 {m.PondersLost} · 배움 {m.PondersLearned} · 해냄 {m.OwnDone} · '{thought}' · 그만둠 '{m[who].LastFail}'"); foreach (var x in sm.Log) Console.WriteLine($"      {Time.Clock(x.tick)} {x.text}"); }
+            string state = $"궁리 {m.Ponders} · 제 궁리 {m.PondersOwn} · 물음 {m.PondersAsked}(주컴퓨터 받음 {sm.Consults}) · 모름 {m.PondersLost} · 배움 {m.PondersLearned} · 기압 앎 {kn0:0.00}→{m[who].C.KnPressure:0.00} · 구멍 {f.Hole[hole] * 1e4:0}cm² · 몸 {(b.Alive == 0 ? "숨짐" : b.Conscious == 0 ? "쓰러짐" : "멀쩡")} · '{thought}'";
+            if (sc == '가')
+                Check("사람의 궁리 (가): 기압을 모르는 이는 우주로 트인 방 문 앞에서 막혀 배우고 · 주컴퓨터가 없는 배에서 혼자 길이 없으면 '방법을 모르겠다'",
+                    m.PondersLearned >= 1 && m[who].C.KnPressure > kn0 && m.PondersLost >= 1 && thought.Contains("모르겠다") && b.Alive != 0, state);
+            else if (sc == '나')
+                Check("사람의 궁리 (나): 주컴퓨터가 그 방에 계획을 세웠으면 막힌 이는 그 계획을 따른다 (제 판단 · 묻기보다 먼저) — 로봇이 막는다",
+                    m.PondersDeferred >= 1 && asked0 >= 0 && m.PondersAsked == asked0 && m.PondersOwn == own0 && f.Hole[hole] <= 0 && thought.Contains("따른다") && b.Alive != 0 && b.Conscious != 0,
+                    state + $" · 따름 {m.PondersDeferred} · 계획 뒤 물음 {m.PondersAsked - asked0} · 제 궁리 {m.PondersOwn - own0}");
+            else
+                Check("사람의 궁리 (다): 혼자는 길이 없지만 '주컴퓨터가 앞방 공기를 빼 주면 된다'를 떠올려 묻고 · 주컴퓨터가 그 사람과 함께 막는다",
+                    m.PondersAsked >= 1 && sm.Consults >= 1 && personBody && f.Hole[hole] <= 0 && thought.Contains("주컴퓨터") && b.Alive != 0 && b.Conscious != 0, state + $" · 몸이 된 이 {personBody} · 마침 {sm.PlansDone}");
+        }
+
+        // ── 주컴퓨터 계획의 몸 (판단 엔진 · 위험도 시험 · 사람의 궁리 (나)에서 찾은 결함 셋):
+        //    가) 하는 중인 걸음 앞에 걸음을 끼워도(공기를 빼는데 문틈이 다시 열렸다 → 틈 막기) 같은 걸음이 겹으로 생기지 않는다 (예전: 자리 번호로 되써 공기 빼기가 20번 겹치고 틈은 영영 안 막혔다)
+        //    나) 몸이 풀이기가 셈한 자리에 없으면(그 사이 움직였다) 그 계획을 하지 않고 지금 자리로 다시 궁리한다 (예전: 방3에 간 로봇에게 '방2에서 방1로 가기'를 시켰다)
+        //    다) 제 계획의 몸이 아직 지나갈 문은 잠그지 않는다 (예전: 빼낼 방 문을 첫 걸음부터 잠가 '방2로 가기'가 1분마다 막혔다)
+        {
+            var layB = Worlds.Ascii(@"
+##########################
+#..x.......#..s..#...pb..#
+#..........D.....D....h..#
+#..e.......#.k.k.#..c.w..#
+##########################", new Dictionary<char, string>(legend) { ['h'] = "HeatExchanger", ['s'] = "SuitLocker", ['k'] = "Shelf", ['w'] = "Workbench" });
+            int AB(int x, int y) => Worlds.At(layB, x, y);
+            var s = Worlds.Full(layB, 5);
+            var f = s.Get<Field>(); var sm = s.Get<ShipMind>(); var m = s.Get<Mind>(); var net = s.Get<Network>(); var st = s.Get<Structure>();
+            int robot = m.AddRobot(s, AB(22, 3), AgentKind.Robot, AB(22, 3));
+            s.Run(2);
+            net.AirReserve = 2e6;
+            int d23 = layB.Doors.First(d => d.Cell == AB(17, 2)).Id;
+            int hole = AB(3, 0);
+            f.SetHole(hole, 0.02f);
+            int maxDup = 0, lockedGo = 0; bool gapOpened = false, moved = false;
+            for (int t = 0; t < (int)Time.Hours(3) && f.Hole[hole] > 0; t++)
+            {
+                s.Run(1);
+                var live = sm.PlanSteps.Where(p => p.State != 2).ToList();
+                if (live.Count > 0) maxDup = Math.Max(maxDup, live.GroupBy(p => (p.Incident, p.Act, p.Obj)).Max(g => g.Count()));
+                foreach (var p in live) if (p.Act == (byte)ActKind.Go && st.Locked(p.Obj)) lockedGo++;
+                var pump = live.FirstOrDefault(p => p.Act == (byte)ActKind.Pump && p.State == 1);
+                if (pump.Act == (byte)ActKind.Pump && !gapOpened && f.DoorTaped[d23] != 0) { f.DoorTaped[d23] = 0; gapOpened = true; }   // 가) 막은 틈이 떨어졌다
+                if (pump.Act == (byte)ActKind.Pump && gapOpened && !moved && f.DoorTaped[d23] != 0 && sm.PlanSteps.Any(p => p.Act == (byte)ActKind.Go && p.State == 0))
+                {
+                    m[robot].C.Cell = AB(21, 2); m[robot].Path.Clear(); moved = true;   // 나) 공기를 빼는 사이 몸이 방3에 가 있다 (셈한 자리는 방2)
+                }
+            }
+            bool replanned = sm.Log.Any(x => x.text.Contains("셈한 자리"));
+            Check("주컴퓨터 계획의 몸 (가): 공기를 빼다 문틈이 다시 열려 틈 막기를 끼워 넣어도 같은 걸음이 겹으로 생기지 않는다 (걸음마다 바뀌지 않는 번호로 되쓴다)",
+                gapOpened && maxDup <= 1, $"틈 떨어뜨림 {gapOpened} · 같은 걸음 가장 많이 {maxDup}");
+            Check("주컴퓨터 계획의 몸 (나): 몸이 풀이기가 셈한 자리에 없으면 그 계획을 하지 않고 지금 자리로 다시 궁리한다",
+                moved && replanned && sm.DevisesFound >= 2, $"옮김 {moved} · 다시 궁리 {replanned} · 지어낸 계획 {sm.DevisesFound} · 구멍 {f.Hole[hole] * 1e4:0}cm²");
+            Check("주컴퓨터 계획의 몸 (다): 제 계획의 몸이 아직 지나갈 문은 잠그지 않는다 (비울 방 문이라도)",
+                lockedGo == 0, $"지나갈 문이 잠긴 틱 {lockedGo}");
+        }
+
         // ── 주컴퓨터가 잠근 문 (임시 에어락으로 쓸 방): 닫힌 문은 열리지 않고 · 까닭은 '주컴퓨터가 문을 잠가 두었다' · 풀면 연다 ──
         {
             var lay3 = Worlds.Ascii(NoAirlockShip, new Dictionary<char, string>(legend) { ['h'] = "HeatExchanger" });

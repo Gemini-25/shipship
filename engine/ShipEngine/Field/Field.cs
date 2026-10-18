@@ -146,6 +146,16 @@ public sealed partial class Field : IEngine
         return c > 1e-9 ? n * R * (U[i] / c) / CellVolume / 1000.0 : 0;
     }
 
+    /// <summary>몰 · 기체 열용량 · 압력을 한 번에 (Moles · GasC · Pressure와 같은 값 — 칸의 여러 값을 읽는 센서가 쓴다).</summary>
+    public double Read(int i, out double gasC, out double kPa)
+    {
+        double n = 0, c = 0;
+        for (int g = 0; g < G; g++) { double v = N[i * G + g]; n += v; c += v * _cv[g]; }
+        gasC = c;
+        kPa = c > 1e-9 ? n * R * (U[i] / c) / CellVolume / 1000.0 : 0;
+        return n;
+    }
+
     /// <summary>분압 (kPa).</summary>
     public double Partial(int g, int i)
     {

@@ -84,17 +84,40 @@ public static partial class Program
         if (args.Contains("--one")) Par.Threads = 1;
         var make = Stopwatch.StartNew();
         var s = ShipWorld.Crewed(ship, 3, people, robots);
-        Console.WriteLine($"  만들기 {make.Elapsed.TotalMilliseconds:0}ms");
+        Console.WriteLine($"  만들기 {make.Elapsed.TotalMilliseconds:0}ms (처음 — 표 읽기 · JIT 함께)");
+        if (args.Contains("--make"))   // 배 만들기 단계별 (두 번째부터 — 시험이 배를 만들 때 드는 값)
+        {
+            for (int k = 0; k < 3; k++)
+            {
+                var w = Stopwatch.StartNew();
+                var lay = Layout.Ship(ship, Tables.Default); double a = w.Elapsed.TotalMilliseconds;
+                var sim = new Sim(ShipWorld.Setup(lay, 3)); double b = w.Elapsed.TotalMilliseconds;
+                var f = sim.Get<Field>(); f.FillAir(); double c = w.Elapsed.TotalMilliseconds;
+                Furnish.Apply(f); double d = w.Elapsed.TotalMilliseconds;
+                sim.Get<Life>().Plant(sim.Get<Network>()); double e = w.Elapsed.TotalMilliseconds;
+                sim.Get<Mind>().Crew(sim, people, robots, 0); double g = w.Elapsed.TotalMilliseconds;
+                sim.Run(1); double h = w.Elapsed.TotalMilliseconds;
+                Console.WriteLine($"  만들기 {k + 2}번째 {h:0}ms — 도면 {a:0} · 엔진 짜기 {b - a:0} · 공기 {c - b:0} · 꾸미기 {d - c:0} · 심기 {e - d:0} · 사람 {g - e:0} · 첫 틱 {h - g:0}");
+            }
+        }
         s.Run(100);
-        s.Measure = true; s.LastMs.Clear();
-        Field.Prof = new(); Network.Prof = new(); Mind.Prof = new();
+        s.Measure = !args.Contains("--nolap"); s.LastMs.Clear();
+        bool laps = !args.Contains("--nolap");   // --nolap: 단계별 재기를 끈다 (재기 자체가 25%쯤 먹는다 — tools/hot.sh 표본 수집은 끄고 잰다)
+        if (laps) { Field.Prof = new(); Network.Prof = new(); Mind.Prof = new(); Prof.D = new(); }
+        long alloc0 = GC.GetTotalAllocatedBytes(true); int gc0 = GC.CollectionCount(0), gc1 = GC.CollectionCount(1), gc2 = GC.CollectionCount(2);
+        var pause0 = GC.GetTotalPauseDuration();
         var sw = Stopwatch.StartNew();
         s.Run(ticks);
         double ms = sw.Elapsed.TotalMilliseconds / ticks;
+        Console.WriteLine($"  할당 틱마다 {(GC.GetTotalAllocatedBytes(true) - alloc0) / (double)ticks / 1024:0.0}KB · 수거 {GC.CollectionCount(0) - gc0}/{GC.CollectionCount(1) - gc1}/{GC.CollectionCount(2) - gc2} · 멈춤 {(GC.GetTotalPauseDuration() - pause0).TotalMilliseconds / ticks:0.000}ms/틱");
+        if (laps) {
         Console.WriteLine("  장 안: " + string.Join(" · ", Field.Prof.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key} {kv.Value / ticks:0.000}")));
         Console.WriteLine("  망 안: " + string.Join(" · ", Network.Prof.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key} {kv.Value / ticks:0.000}")));
         Console.WriteLine("  마음 안: " + string.Join(" · ", Mind.Prof.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key} {kv.Value / ticks:0.000}")));
-        Field.Prof = null; Network.Prof = null; Mind.Prof = null;
+        foreach (var g in Prof.D.GroupBy(kv => kv.Key.Split(':')[0]))
+            Console.WriteLine($"  {g.Key} 안: " + string.Join(" · ", g.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key.Split(':')[1]} {kv.Value / ticks:0.000}")));
+        }
+        Field.Prof = null; Network.Prof = null; Mind.Prof = null; Prof.D = null;
         Console.WriteLine($"{ship} 사람 {people} · 로봇 {robots} · 코어 {Par.Threads}: 틱마다 {ms:0.000}ms (하루 = {ms * Time.TicksPerDay / 1000:0.0}초)");
         Console.WriteLine("  " + string.Join(" · ", s.LastMs.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key} {kv.Value / ticks:0.000}")));
     }

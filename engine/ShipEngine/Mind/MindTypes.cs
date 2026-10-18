@@ -67,6 +67,7 @@ public enum GoalKind : byte
     Rewire,     // ⑥ 급전선이 죽은 방에 옆 방에서 연장선을 끌어온다 (대상: 방)
     Shelter,    // ⑩ 대피 방송 — 주컴퓨터가 고른 방으로 모인다 (대상: 방)
     Meeting,    // ⑨ 회의 — 식당으로 모인다 (대상: 방)
+    Improvise,  // ⑧ 판단 엔진 — 제 궁리를 한다 (막혀서 지어낸 몸 걸음 · 대상: 막으려던 구멍)
 }
 
 /// <summary>계획의 한 단계.</summary>
@@ -92,6 +93,7 @@ public enum StepKind : byte
     TakeFood,  // 식량 보관함에서 식량 상자를 꺼낸다 (Target: 설비)
     Salvage,   // ⑥ 덜 중요한 장치에서 부품을 떼어 낸다 (Target: 떼어 올 장치 · Arg: 부품 · Cell: 고칠 장치)
     Rewire,    // ⑥ 연장선: Arg 0 옆 방 통풍구에서 꽂는다 · 1 그 방까지 깔고 잇는다 (Target: 방 · Cell: 옆 방)
+    Door,      // ⑧ 문을 연다(Arg 1) · 닫는다(Arg 0) (Cell: 문 — 제 궁리의 걸음)
 }
 
 /// <summary>쓰기 단계가 하는 일.</summary>
@@ -192,6 +194,10 @@ public struct AgentCore
     public GoalKind SnagGoal;
     // ⑧ 판단 엔진 — 분야를 아는 정도 (0~1 · 상식은 모두 1): 기압 · 전기 · 화학 · 몸 · 구조 (맡은 일의 시작값 ± 사람마다 · 겪고 · 배운다)
     public float KnPressure, KnElectric, KnChem, KnBody, KnStruct;
+    // ⑧ 판단 엔진 (마) — 마지막 궁리: 때 · 구멍 · 고른 길(1 제 궁리 · 2 주컴퓨터 계획을 따름 · 3 주컴퓨터에 물음 · 4 모르겠다) · 제 궁리가 살아 있는 때까지
+    public long PonderTick, OwnUntil;
+    public int PonderTarget;
+    public byte PonderWay;
 }
 
 /// <summary>바닥에 떨어진 · 놓인 물건.</summary>
@@ -241,7 +247,9 @@ public sealed class Agent
     public List<int> Path = new();
     public List<AvoidEntry> Avoid = new();
     public List<Doubt> Doubts = new();
+    public List<PlanStep> Own = new();   // ⑧ 판단 엔진: 제 궁리로 지어낸 몸 걸음 ('제 궁리' 목표가 고르면 그대로 계획이 된다)
     public int PathIdx;
     public string LastFail = "";   // 관찰용: 마지막으로 그만둔 까닭 (찍지 않는다)
+    public string LastThought = "";   // 관찰용: 마지막 궁리 (찍지 않는다)
     public bool IsPerson => C.Kind == AgentKind.Person;
 }

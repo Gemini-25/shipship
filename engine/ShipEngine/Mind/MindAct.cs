@@ -66,6 +66,7 @@ public sealed partial class Mind
             case StepKind.Fix: FixStep(sim, a, st); return;
             case StepKind.Salvage: SalvageStep(sim, a, st); return;
             case StepKind.Rewire: RewireStep(sim, a, st); return;
+            case StepKind.Door: DoorStep(sim, a, st); return;
             case StepKind.PickUp:
             {
                 int vb = st.Target;
@@ -148,6 +149,11 @@ public sealed partial class Mind
     {
         ref var c = ref a.C;
         NoteSnag(sim, a, snag, cell >= 0 ? cell : c.Cell, subject);   // ⑧ 판단 엔진: 막힌 까닭을 남긴다 (목표를 거두기 전에)
+        if (a.IsPerson && c.Mode == 0)   // ⑧ 판단 엔진 (마): 막히면 궁리한다 · 제 궁리를 하다 막혔으면 그 계획을 버리고 배워서 다시
+        {
+            if (c.Goal == GoalKind.Improvise) OwnFailed(sim, a, snag, cell >= 0 ? cell : c.Cell, subject);
+            else Ponder(sim, a, snag, cell >= 0 ? cell : c.Cell, subject);
+        }
         c.Failed++;
         a.LastFail = $"{c.Goal}: {why}";
         if (c.Mode == 0) a.Avoid.Add(new AvoidEntry { Goal = c.Goal, Target = c.GoalTarget, Until = sim.Tick + Time.Minutes(5) });
@@ -310,7 +316,7 @@ public sealed partial class Mind
         ref var c = ref a.C;
         long t = sim.Tick;
         int wall = st.Cell;
-        bool doorGap = F.Hole[wall] <= 0 && (DoorGapLeaks(wall) || TapeAssigned(a, wall));
+        bool doorGap = F.Hole[wall] <= 0 && (DoorGapLeaks(wall) || TapeAssigned(a, wall) || OwnTape(a, wall));
         if (F.Hole[wall] <= 0 && !doorGap) { Forget(a, b => b.Kind == BeliefKind.Breach && b.Cell == wall); Next(a, t); return; }
         if (Dist(c.Cell, wall) > 1) { Fail(sim, a, "멀다", SnagKind.Far); return; }
         if (a.IsPerson && c.Holding != iPatch) { Fail(sim, a, "봉합 꾸러미가 없다", SnagKind.NoItem, c.Cell, iPatch); return; }
@@ -326,7 +332,7 @@ public sealed partial class Mind
         int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} {(doorGap ? "문틈" : "구멍")}을 막았다", t, wall,
             doorGap ? _st.LowSideCause(wall) : _st.DamageCause[wall], 0, a.Id);
         sim.Facts.Emit(t, FactKind.Patched, wall, (float)Math.Min(doorGap ? Field.LeakNormalDoor : area, max), cause, a.Id);
-        if (F.Hole[wall] <= 0 && !DoorGapLeaks(wall) && !TapeAssigned(a, wall))
+        if (F.Hole[wall] <= 0 && !DoorGapLeaks(wall) && !TapeAssigned(a, wall) && !OwnTape(a, wall))
         {
             Forget(a, b => b.Kind == BeliefKind.Breach && b.Cell == wall || b.Kind is BeliefKind.Leak or BeliefKind.Vacuum && Dist(b.Cell, wall) <= 6);
             a.Doubts.Add(new Doubt { Kind = BeliefKind.Leak, Cell = wall, Until = t + Time.Minutes(10) }); // 내가 막았다 — 한동안 '샌다'는 말을 반신반의

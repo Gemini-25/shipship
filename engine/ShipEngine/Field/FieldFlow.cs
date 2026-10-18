@@ -402,18 +402,23 @@ public sealed partial class Field
             var avg = new double[G];
             var give = new double[G];
             var p = new double[256];
+            var pn = new double[256];   // 칸의 몰 · 열용량 (압력을 셀 때 한 번 — 넘친 칸에서 다시 세지 않는다)
+            var pc = new double[256];
             for (int r = a; r < b; r++)
             {
                 if (_imb[r] < ImbalanceTolerance) continue;
                 _imb[r] = 0;
                 var cells = Regions[r];
                 if (cells.Length < 2) continue;
-                if (p.Length < cells.Length) p = new double[cells.Length];
+                if (p.Length < cells.Length) { p = new double[cells.Length]; pn = new double[cells.Length]; pc = new double[cells.Length]; }
                 double sum = 0, mx = double.MinValue, mn = double.MaxValue;
                 for (int k = 0; k < cells.Length; k++)
                 {
-                    double v = Pressure(cells[k]);
-                    p[k] = v; sum += v;
+                    int i = cells[k], bi = i * G;
+                    double n0 = 0, c0 = 0;
+                    for (int g = 0; g < G; g++) { double w = N[bi + g]; n0 += w; c0 += w * _cv[g]; }
+                    double v = c0 > 1e-9 ? n0 * R * (U[i] / c0) / CellVolume / 1000.0 : 0;   // Pressure(i)와 같은 셈
+                    p[k] = v; pn[k] = n0; pc[k] = c0; sum += v;
                     if (v > mx) mx = v; if (v < mn) mn = v;
                 }
                 double mean = sum / cells.Length;
@@ -430,8 +435,7 @@ public sealed partial class Field
                 {
                     if (p[k] <= mean) { deficit += mean - p[k]; continue; }
                     int i = cells[k];
-                    double n = 0, c = 0;
-                    for (int g = 0; g < G; g++) { double v = N[i * G + g]; n += v; c += v * _cv[g]; }
+                    double n = pn[k], c = pc[k];   // 위에서 센 값 (그 사이 이 칸은 바뀌지 않았다)
                     if (n <= 0 || c <= 0) continue;
                     double e = n * (p[k] - mean) / p[k];   // 내놓을 몰 수
                     double tc = U[i] / c;                  // 이 칸 온도

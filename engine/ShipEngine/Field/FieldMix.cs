@@ -115,6 +115,15 @@ public sealed partial class Field
         if (Adiabatic) return;
         double bg = Outside.Vacuum ? 2.7 : Outside.Temp;
         double bg4 = bg * bg * bg * bg;
+        // 단열재 겉면 온도는 면의 방향(햇빛과 이루는 각)으로만 정해진다 — 방향 넷을 한 번씩만 센다 (칸마다 Pow를 다시 하지 않는다 · 같은 셈)
+        Span<double> skin = stackalloc double[4];
+        for (int k = 0; k < 4; k++)
+        {
+            var (dx, dy) = Dirs[k];
+            double cos = Math.Max(0, dx * Outside.SunX + dy * Outside.SunY);
+            skin[k] = Math.Pow((0.3 * Outside.Sun * cos + 0.8 * Sigma * bg4) / (0.8 * Sigma), 0.25);
+        }
+        double s0 = skin[0], s1 = skin[1], s2 = skin[2], s3 = skin[3];
         Par.Rows(L.H, (y0, y1) =>
         {
             for (int y = y0; y < y1; y++)
@@ -125,16 +134,19 @@ public sealed partial class Field
                     var m = T.Materials[L.Material[i]].Def;
                     bool damaged = Hole[i] > 0;
                     double t = Ts[i], q = 0;
-                    foreach (var (dx, dy) in Dirs)
+                    for (int k = 0; k < 4; k++)
                     {
+                        var (dx, dy) = Dirs[k];
                         int nx = x + dx, ny = y + dy;
                         if (L.In(nx, ny) && !IsOut(L.Index(nx, ny))) continue;
-                        double cos = Math.Max(0, dx * Outside.SunX + dy * Outside.SunY);
                         if (damaged)
+                        {
+                            double cos = Math.Max(0, dx * Outside.SunX + dy * Outside.SunY);
                             q += m.Absorb * Outside.Sun * WallFace * cos - m.Emiss * Sigma * WallFace * (t * t * t * t - bg4);
+                        }
                         else
                         {
-                            double to = Math.Pow((0.3 * Outside.Sun * cos + 0.8 * Sigma * bg4) / (0.8 * Sigma), 0.25); // 단열재 겉면 온도
+                            double to = k == 0 ? s0 : k == 1 ? s1 : k == 2 ? s2 : s3; // 단열재 겉면 온도
                             q += 0.1 * WallFace * (to - t);
                         }
                     }
@@ -240,11 +252,12 @@ public sealed partial class Field
                     {
                         int i = y * L.W + x;
                         if (RegionOf[i] < 0) continue;
-                        double nTot = CellMoles(i), cg = GasC(i);
+                        int k = i * G + g, ks = s * Cells + i;
+                        if (N[k] <= 0 && Store[ks] <= 0) continue;   // 증기도 고인 것도 없다 — 맺힐 것도 마를 것도 없다 (아래 두 갈래 모두 아니다)
+                        double nTot = Read(i, out double cg, out double pk);   // CellMoles · GasC · Pressure를 한 번에 (같은 셈)
                         double tg = cg > 1e-9 ? U[i] / cg : Ts[i];
                         double pSat = Water.SatKPa(Ts[i], boil, latent);
-                        double pv = nTot > 1e-12 ? Pressure(i) * N[i * G + g] / nTot : 0;
-                        int k = i * G + g, ks = s * Cells + i;
+                        double pv = nTot > 1e-12 ? pk * N[k] / nTot : 0;
                         if (pv > pSat * 1.001 && tg > 0)
                         {
                             // 응결: 넘치는 증기의 30%씩

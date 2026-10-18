@@ -22,6 +22,7 @@ public sealed partial class Mind
         a.Avoid.RemoveAll(v => v.Until <= t);
         _deciding = a; _nowTick = t;
         if (a.IsPerson) TakeOffSuit(sim, a);
+        if (a.IsPerson && c.Goal == GoalKind.Improvise && (a.Plan.Count == 0 || c.StepIndex >= a.Plan.Count)) OwnFinished(sim, a);   // 제 궁리를 다 했다
         Options(sim, a);
         _deciding = null;
         // ⑩ 판단 엔진: 계획에 묶인 로봇은 맡긴 걸음만 (그 자리의 구멍을 막는 것은 같은 일 · 배터리가 바닥나면 충전) — 제 판단으로 다른 구멍에 가지 않는다
@@ -187,6 +188,7 @@ public sealed partial class Mind
             PilferOption(a, here);   // ⑪ 몫을 다 먹고 몹시 배고프면 — 덜 성실하고 덜 다정한 이는 몰래 한 끼
             ShelterOption(a, here);  // ⑩ 대피 방송을 따르는 이는 대피실로
             KeepOutOption(a, here);  // ⑩ 출입 금지 방송을 따르는 이는 그 방을 나온다
+            OwnOption(a);            // ⑧ 판단 엔진 (마): 제 궁리
             MeetingOption(a, here);  // ⑨ 회의에 갈 이는 식당으로
             if (c.Thirst > 0.3f && WaterAllowed(a.Id) >= 5) Add(GoalKind.Drink, -1, -1, c.Thirst * c.Thirst * 6 + (c.Thirst > 0.85f ? 2 : 0)); // 몹시 마른 목(몸의 물 1.7% 모자람)은 한밤의 잠보다 급하다
             float grief = _soc?.GriefOf(a.Id) ?? 0; // ⑨ 슬픔: 일손을 놓고 사람을 찾는다
@@ -557,6 +559,9 @@ public sealed partial class Mind
             {
                 return PlanRewire(a, o.Target, plan);
             }
+            case GoalKind.Improvise:
+                plan.AddRange(a.Own);   // 제 궁리 그대로 (다시 고르면 처음부터 — 이미 된 걸음은 곧 지나간다)
+                return plan.Count > 0;
             case GoalKind.Brace:
             {
                 int wall = o.Target;

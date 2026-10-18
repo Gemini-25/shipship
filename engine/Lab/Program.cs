@@ -23,6 +23,7 @@ public static partial class Program
             // 갈래끼리 이미 코어를 나눠 쓴다 — 갈래 안 장 계산까지 코어를 다 쓰면 서로 빼앗는다 (결정론이라 결과는 같다)
             if (!args.Contains("--threads")) Par.Threads = Math.Max(1, Environment.ProcessorCount / _shards);
         }
+        if (Environment.GetEnvironmentVariable("PROF") == "1") Prof.D = new();   // 어느 시험에서든 단계별 시간 (끝에 찍는다)
         var sw = Stopwatch.StartNew();
         try
         {
@@ -72,6 +73,7 @@ public static partial class Program
         }
         EndGroup();
         if (Environment.GetEnvironmentVariable("RULE_TIMES") == "1") foreach (var (k, t) in _times) Console.WriteLine($"⏱\t{k}\t{t:0.0}");
+        if (Prof.D != null) Console.Write(Prof.Report());
         if (_failedGroups.Count > 0) Console.WriteLine($"\n✘ 실패한 묶음: {string.Join(",", _failedGroups)}");
         if (_pass + _fail > 0)
             Console.WriteLine($"\n{(_fail == 0 ? "✔" : "✘")} 통과 {_pass} · 실패 {_fail} · {sw.Elapsed.TotalSeconds:0.0}초");
