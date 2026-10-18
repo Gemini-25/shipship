@@ -230,5 +230,6 @@ public sealed class Agent
     public List<AvoidEntry> Avoid = new();
     public List<Doubt> Doubts = new();
     public int PathIdx;
+    public string LastFail = "";   // 관찰용: 마지막으로 그만둔 까닭 (찍지 않는다)
     public bool IsPerson => C.Kind == AgentKind.Person;
 }

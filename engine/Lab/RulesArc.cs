@@ -58,9 +58,16 @@ public static partial class Program
                     if (kill && t == Time.Hours(2.1)) life.Strike(s, m[victim].C.Body, 3f, 0.5f, s.Causes.Add(CauseKind.Setup, "시험: 크게 다쳤다", s.Tick));
                     if (death < 0 && life.Deaths > 0) death = s.Tick;
                     st.Tension = 0; st.Pending = 0;
+                    if (Environment.GetEnvironmentVariable("ARC_DEBUG") == "1" && !m.Agents.Any(a => a.IsPerson && life[a.C.Body].Alive != 0)) break;
                     int n = st.Seeds.Count; float before = Sad();
                     s.Step();
                     if (st.Seeds.Count > n && st.Seeds[^1].Kind == SeedKind.GoodNews) { sb = before; sa = Sad(); news = s.Causes.Text(st.Seeds[^1].Cause); }
+                }
+                if (Environment.GetEnvironmentVariable("ARC_DEBUG") == "1")
+                {
+                    foreach (var x in s.Facts.Since(0).Where(x => x.Kind is FactKind.Died or FactKind.Collapsed or FactKind.StorySeed)) Console.WriteLine($"    {kill} {Time.Clock(x.Tick)} {x.Kind} · {s.Causes.Story(x.Cause)}");
+                    foreach (var (tk, tx) in s.Get<ShipMind>().Log.TakeLast(25)) Console.WriteLine($"    {kill} 주컴 {Time.Clock(tk)} {tx}");
+                    foreach (var a in m.Agents) Console.WriteLine($"    {kill} {m.NameOf(a.Id)} 칸 ({s.Layout.X(a.C.Cell)},{s.Layout.Y(a.C.Cell)}) {m.RoomOf(a.C.Cell)} 문대기 {a.C.WaitDoor} · {m.Thought(a.Id)}");
                 }
                 return (st.Seeds, death, sb, sa, news, st.AfterHours);
             }
