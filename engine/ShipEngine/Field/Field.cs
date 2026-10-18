@@ -67,6 +67,8 @@ public sealed partial class Field : IEngine
     /// <summary>틱마다 바깥으로 빠진 몰 수 누계 (시험 · 연출).</summary>
     public double VentedTotal;
     public Exterior Outside = Exterior.Space();
+    /// <summary>배의 가속도 (m/s² · 도면 좌표 — 점화 · 피하는 기동): ⑤ 바깥이 틱마다 넣는 요청. 배 안의 것은 반대쪽(−a)으로 쏠린다 (바닥 물 · 떠다니는 것). 찍지 않는다 — 바깥이 다시 넣는다.</summary>
+    public double AccelX, AccelY;
 
     // ── 도면에서 정해지는 것 ──
     /// <summary>고체 열용량 J/K (바닥판 + 설비 / 벽).</summary>

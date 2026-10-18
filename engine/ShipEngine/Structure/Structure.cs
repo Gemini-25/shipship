@@ -51,6 +51,8 @@ public sealed class Structure : IEngine
     public long[] BleedSince; public float[] BleedFrom; public long[] BleedLock; public byte[] BleedFails; public long[] BleedLast;
     /// <summary>칸마다 들어온 충격 에너지 (J) — ⑦ 생명이 읽고 비운다 (그 칸 몸의 상처).</summary>
     public float[] ImpactJ;
+    /// <summary>점화의 관성 하중 (g — 배 가속도 / 9.8): ⑤ 바깥이 틱마다 넣는 요청. 외판 · 뼈대가 받는 하중이 이만큼 는다 (점화 한 번 = 하중 한 주기). 찍지 않는다.</summary>
+    public double ThrustG;
 
     private double[] _p = Array.Empty<double>();
 
