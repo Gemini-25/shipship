@@ -71,7 +71,7 @@ public sealed partial class Structure
     /// 칸 c에서 떨어져 나간 잔칸들(removed)이 부스러기가 된다: 잔칸 여섯 개마다 알갱이 하나 (그 잔칸들의 가운데) · 그 자리 몸의 빠르기 + 튀는 빠르기 (kx, ky — 제 틀 방향 · 0이면 몸 바깥쪽) ·
     /// 몸은 그 질량을 잃고 튀는 만큼 반대로 밀린다. 몸이 없는 칸(우주가 된 칸)의 잔칸은 붙어 있던 몸(찢긴 끝의 주인)에서 · 그것도 없으면 배의 틀에서.
     /// </summary>
-    private void Shed(Sim sim, int c, ushort removed, int cause, double kx, double ky, double kick = ShardKick, int owner = int.MinValue, bool byGas = false)
+    private void Shed(Sim sim, int c, ushort removed, int cause, double kx, double ky, double kick = ShardKick, int owner = int.MinValue, bool byGas = false, bool away = false)
     {
         int n = SubCount(removed);
         double each = _smass.Length > c ? _smass[c] / 16 : 0;
@@ -100,12 +100,13 @@ public sealed partial class Structure
             var (wx, wy) = WorldOf(frame, px, py);
             double vx = o.Vx - o.W * (wy - o.Y), vy = o.Vy + o.W * (wx - o.X);
             double spin = iOwn * o.W;
-            if (!Debris) { ShardKgLost += kg; ShardPxGone += kg * vx; ShardPyGone += kg * vy; ShardLGone += kg * (wx * vy - wy * vx) + spin; continue; }
+            // 시험용으로 끈 때 · 평면 밖으로 떠난 것 (빠지는 공기가 바닥 판을 아래로 날린다 — 평면 안 빠르기는 그 자리 몸의 빠르기 그대로) → 곧장 장부 '우주로'
+            if (!Debris || away) { ShardKgLost += kg; ShardPxGone += kg * vx; ShardPyGone += kg * vy; ShardLGone += kg * (wx * vy - wy * vx) + spin; if (away) ShardsMade++; continue; }
             // 튀는 쪽: 주어진 방향 (제 틀) · 없으면 몸 무게중심에서 바깥쪽 — 해시로 조금 흩뜨린다
             double cs = Math.Cos(o.Th), sn = Math.Sin(o.Th);
             double dx = kx, dy = ky;
             if (dx == 0 && dy == 0) { dx = px - o.Lx; dy = py - o.Ly; }
-            double ang = ((DotHash(c * 16 + g, 31 + (int)(ShardsMade & 1023)) % 1000) / 1000.0 - 0.5) * 1.2;
+            double ang = ((DotHash(c * 16 + g, 31 + (int)(ShardsMade & 1023)) % 1000) / 1000.0 - 0.5) * (byGas ? 0.6 : 1.2);   // 빠지는 공기가 민 것은 한 쪽으로 (±17°) · 흩어지는 것은 ±34°
             double ca = Math.Cos(ang), sa = Math.Sin(ang), ddx = dx * ca - dy * sa, ddy = dx * sa + dy * ca;
             double dl = Math.Sqrt(ddx * ddx + ddy * ddy);
             if (dl < 1e-9) { ddx = 1; ddy = 0; dl = 1; }

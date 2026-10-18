@@ -89,11 +89,18 @@ public sealed class Painter
         return rooms >= 2 ? DotWall.Partition : DotWall.Panel;
     }
 
+    private double _skyTh, _skyX, _skyY;
+    /// <summary>관전 화면이 틱 사이를 메운 몸마다의 배 틀 자세 (없으면 지금 자세) · 배의 자세 (별 — NaN이면 지금).</summary>
+    public (double cs, double sn, double tx, double ty)[]? Poses;
+    public double SkyTh = double.NaN;
+
     /// <summary>화면 한 장: 칸 (x0, y0)부터 w × h 칸. frame은 불꽃 · 걷기 같은 움직임의 장 번호.
     /// into: 다시 쓸 그림 (크기가 맞으면 — 관전 화면이 매 장 5MB를 새로 만들지 않게. 처음에 통째로 칠한다).</summary>
     public Img Frame(Sim s, int x0, int y0, int w, int h, int frame, Img? into = null)
     {
         var st = s.Find<Structure>();
+        // 배가 돌면 별도 돈다 (화면은 배를 따라 돈다 — 별은 무한히 멀어 배의 자세만큼만 거꾸로 돈다 · 배의 무게중심을 축으로)
+        (_skyTh, _skyX, _skyY) = st != null && st.Bodies.Count > 0 ? (double.IsNaN(SkyTh) ? st.Bodies[0].Th : SkyTh, st.Bodies[0].Lx, st.Bodies[0].Ly) : (0, 0, 0);
         if (st == null || st.Bodies.Count < 2) { _only = -1; _stc = null; var one = Draw(s, x0, y0, w, h, frame, into, false); if (st != null) Shards(one, st, x0, y0); return one; }
         // ④ 칸 강체: 배를 그리고 · 떨어져 나간 조각마다 제 칸만 따로 그려 자세대로 돌려 붙인다 (가까운 도트 — 도트 그림이 뭉개지지 않게)
         _stc = st; _only = 0;
@@ -103,7 +110,7 @@ public sealed class Painter
             var o = st.Bodies[b];
             if (o.Mass <= 0) continue;
             int bx0 = o.MinX - 1, by0 = o.MinY - 2, bw = o.MaxX - o.MinX + 3, bh = o.MaxY - o.MinY + 4;
-            var (cs, sn, tx, ty) = st.ToShipFrame(b);
+            var (cs, sn, tx, ty) = Poses != null && b < Poses.Length ? Poses[b] : st.ToShipFrame(b);
             double qx0 = double.MaxValue, qy0 = double.MaxValue, qx1 = double.MinValue, qy1 = double.MinValue;
             foreach (var (px, py) in new[] { (bx0, by0), (bx0 + bw, by0), (bx0, by0 + bh), (bx0 + bw, by0 + bh) })
             {
@@ -179,15 +186,39 @@ public sealed class Painter
         // ── 우주 ──
         var space = Rgba.Hex("#05070c");
         if (!part) img.Fill(0, 0, img.W, img.H, space);
-        for (int y = y0 - 1; y <= y0 + h && !part; y++)
-            for (int x = x0 - 1; x <= x0 + w; x++)
+        if (!part && _skyTh == 0)
+            for (int y = y0 - 1; y <= y0 + h; y++)
+                for (int x = x0 - 1; x <= x0 + w; x++)
+                {
+                    uint u = DotHash.U(x, y, 7);
+                    if (u % 9 != 0) continue;
+                    int sx = Px(x) + (int)(u >> 8) % T, sy = Py(y) + (int)(u >> 16) % T;
+                    byte v = (byte)(90 + (u >> 24) % 140);
+                    img.Set(sx, sy, new Rgba(v, v, (byte)Math.Min(255, v + 20)));
+                }
+        else if (!part)
+        {
+            // 하늘 틀 = 배 틀을 배의 자세만큼 돌린 것 — 하늘 칸마다 같은 해시의 별을 화면으로 되돌려 찍는다 (자세가 0이면 위와 같은 그림)
+            double cs = Math.Cos(_skyTh), sn = Math.Sin(_skyTh);
+            double qx0 = double.MaxValue, qy0 = double.MaxValue, qx1 = double.MinValue, qy1 = double.MinValue;
+            foreach (var (px, py) in new[] { (x0 - 1.0, y0 - 1.0), (x0 + w + 1.0, y0 - 1.0), (x0 - 1.0, y0 + h + 1.0), (x0 + w + 1.0, y0 + h + 1.0) })
             {
-                uint u = DotHash.U(x, y, 7);
-                if (u % 9 != 0) continue;
-                int sx = Px(x) + (int)(u >> 8) % T, sy = Py(y) + (int)(u >> 16) % T;
-                byte v = (byte)(90 + (u >> 24) % 140);
-                img.Set(sx, sy, new Rgba(v, v, (byte)Math.Min(255, v + 20)));
+                double qx = cs * (px - _skyX) - sn * (py - _skyY) + _skyX, qy = sn * (px - _skyX) + cs * (py - _skyY) + _skyY;
+                qx0 = Math.Min(qx0, qx); qy0 = Math.Min(qy0, qy); qx1 = Math.Max(qx1, qx); qy1 = Math.Max(qy1, qy);
             }
+            for (int y = (int)Math.Floor(qy0); y <= (int)Math.Ceiling(qy1); y++)
+                for (int x = (int)Math.Floor(qx0); x <= (int)Math.Ceiling(qx1); x++)
+                {
+                    uint u = DotHash.U(x, y, 7);
+                    if (u % 9 != 0) continue;
+                    double kx = x + (double)((u >> 8) % T) / T - _skyX, ky = y + (double)((u >> 16) % T) / T - _skyY;
+                    double bx = cs * kx + sn * ky + _skyX, by = -sn * kx + cs * ky + _skyY;
+                    int sx = (int)Math.Floor((bx - x0) * T), sy = (int)Math.Floor((by - y0) * T);
+                    if (sx < 0 || sy < 0 || sx >= img.W || sy >= img.H) continue;
+                    byte v = (byte)(90 + (u >> 24) % 140);
+                    img.Set(sx, sy, new Rgba(v, v, (byte)Math.Min(255, v + 20)));
+                }
+        }
 
         // ── 바닥 · 벽 · 문 ──
         for (int y = y0; y < y0 + h; y++)

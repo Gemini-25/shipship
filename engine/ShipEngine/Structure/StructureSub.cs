@@ -63,7 +63,8 @@ public sealed partial class Structure
             Carve(c, want - have, sx, sy);
             // 파인 잔칸은 부스러기가 되어 구멍 바깥쪽으로 튄다 — 빠지는 공기가 민다 (기압 차만큼 · 없으면 흩어질 뿐)
             double blow = BlowKick(Math.Max(_blow[c], PressureAcross(c)), _smass.Length > c ? _smass[c] / 16 : 0);
-            Shed(sim, c, (ushort)(before & ~Sub[c]), DamageCause[c], sx - 1.5, sy - 1.5, Math.Max(SpallKick, blow), byGas: blow > SpallKick);
+            bool deck = L.Kind[c] == CellKind.Floor;   // 바닥 판은 빠지는 공기가 평면 밖(아래)으로 날린다 — 화면 안으로 튀지 않는다
+            Shed(sim, c, (ushort)(before & ~Sub[c]), DamageCause[c], sx - 1.5, sy - 1.5, Math.Max(SpallKick, blow), byGas: blow > SpallKick, away: deck && blow > SpallKick);
         }
     }
 
@@ -160,7 +161,9 @@ public sealed partial class Structure
                 if (L.In(x + dx, y + dy)) { int j = L.Index(x + dx, y + dy); gp = Math.Max(gp, Math.Max(_p[j], _blow[j])); }
         }
         double blow = BlowKick(gp, _smass.Length > c ? _smass[c] / 16 : 0);
-        Shed(sim, c, (ushort)(before & ~m), cause, 0, 0, Math.Max(SpallKick, blow), byGas: blow > SpallKick);
+        // 튀는 쪽: 우주 쪽 면 (사이 칸의 양옆은 두 몸이라 '몸 바깥쪽'은 상대 몸 쪽이다) · 바닥 판은 평면 밖으로
+        var (ox, oy) = OuterSeed(c);
+        Shed(sim, c, (ushort)(before & ~m), cause, ox - 1.5, oy - 1.5, Math.Max(SpallKick, blow), byGas: blow > SpallKick, away: L.Kind[c] == CellKind.Floor && blow > SpallKick);
     }
 
     /// <summary>찢긴 사이 칸(우주가 된 칸)의 잔칸 (sx, sy)가 붙은 몸 (가까운 면의 이웃 칸의 몸 · 없으면 -1) — 그림이 그 몸과 함께 그린다.</summary>

@@ -1,4 +1,5 @@
 using ShipEngine;
+using ShipView;
 
 namespace Lab;
 
@@ -10,6 +11,7 @@ public static partial class Program
         string dir = Path.Combine(outDir, name);
         Directory.CreateDirectory(dir);
         Sim s; int every, count;
+        (int x, int y, int w, int h)? dots = null;   // 도트 화가로 (배 틀의 이 범위 — 떨어져 나간 조각까지)
         switch (name)
         {
             case "breach":
@@ -80,13 +82,43 @@ public static partial class Program
                 every = 3; count = 30;
                 break;
             }
+            case "breakup":
+            {
+                // ④ 칸 강체: 큰 운석이 통로를 꿰뚫어 배가 둘로 갈라지고 · 오른쪽 방 바깥 벽에도 파편 구멍 —
+                // 그 구멍으로 뿜는 공기가 떨어진 조각을 배 쪽으로 밀어 되돌아와 부딪히고 · 판 조각이 부스러기로 흩어진다 (사람은 덜컹임에 넘어진다)
+                var l = Worlds.Ascii(Dumbbell, Worlds.MindLegend);
+                s = Worlds.Full(l, 2);
+                s.Get<Mind>().Crew(s, 2, 0, 0);
+                s.Run(Time.Minutes(1));
+                var st = s.Get<Structure>();
+                int rock = s.Causes.Add(CauseKind.Story, "커다란 운석이 통로를 꿰뚫었다", s.Tick);
+                for (int y = 2; y <= 4; y++) st.Destroy(s, Worlds.At(l, 10, y), rock);
+                st.Destroy(s, Worlds.At(l, 20, 3), s.Causes.Add(CauseKind.Story, "파편이 오른쪽 방 바깥 벽을 뚫었다", s.Tick));
+                every = 1; count = 40; dots = (-14, -12, l.W + 28, l.H + 24);
+                break;
+            }
             default: Console.WriteLine($"모르는 장면: {name}"); return;
         }
         var trace = Environment.GetEnvironmentVariable("TRACE");
         var tm = s.Find<Mind>();
+        var painter = dots != null ? new Painter(s.Layout) : null;
+        var page = new System.Text.StringBuilder();
+        long seen = 0;
         for (int k = 0; k < count; k++)
         {
-            Map.Save(s, Path.Combine(dir, $"{k:000}.png"));
+            if (painter != null && dots is var (dx, dy, dw, dh))
+            {
+                var img = painter.Frame(s, dx, dy, dw, dh, k);
+                Png.WriteRgba(Path.Combine(dir, $"{k:000}.png"), img.W, img.H, img.Px);
+                // 그 틱의 일 (사실 — 소리 · 깸은 뺀다)
+                var lines = new List<string>();
+                foreach (var f in s.Facts.Since(seen))
+                    if (f.Kind is FactKind.ShipSplit or FactKind.Crash or FactKind.Tumble or FactKind.WallBreach or FactKind.Fell or FactKind.Impact) lines.Add(s.Causes.Text(f.Cause));
+                seen = s.Facts.Total;
+                var stc = s.Get<Structure>();
+                page.Append($"<figure><img src=\"{k:000}.png\"><figcaption>{Time.Clock(s.Tick)} · 몸 {stc.Bodies.Count} · 부딪힘 {stc.Crashes} · 부스러기 날고 {stc.Shards.Count} / 우주로 {stc.ShardKgLost / 1000:0.0}t{string.Concat(lines.Distinct().Take(4).Select(x => "<br>" + System.Net.WebUtility.HtmlEncode(x)))}</figcaption></figure>\n");
+            }
+            else Map.Save(s, Path.Combine(dir, $"{k:000}.png"));
             for (int i = 0; i < every; i++)
             {
                 s.Step();
@@ -98,6 +130,8 @@ public static partial class Program
                 }
             }
         }
+        if (painter != null)
+            File.WriteAllText(Path.Combine(dir, "index.html"), $"<!doctype html><meta charset=utf-8><title>{name}</title><style>body{{background:#0b0d12;color:#cfd6e4;font:13px sans-serif;display:flex;flex-wrap:wrap;gap:8px}}figure{{margin:0;width:420px}}img{{width:420px;image-rendering:pixelated}}</style>\n{page}");
         Console.WriteLine($"  {name}: {count}장 → {dir}");
         if (Environment.GetEnvironmentVariable("FACTS") == "1")
         {

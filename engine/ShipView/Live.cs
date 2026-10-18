@@ -159,7 +159,7 @@ public sealed class LiveShow
         var L = Sim.Layout;
         var vd = View;
         double tx = CamX, ty = CamY, tw = ViewW;
-        if (Overview) { tx = (_bbox.x0 + _bbox.x1 + 1) / 2.0; ty = (_bbox.y0 + _bbox.y1 + 1) / 2.0; tw = Math.Max(_bbox.x1 - _bbox.x0 + 1, (_bbox.y1 - _bbox.y0 + 1) / Aspect); }
+        if (Overview) { var rb = Reach(); tx = (rb.x0 + rb.x1 + 1) / 2.0; ty = (rb.y0 + rb.y1 + 1) / 2.0; tw = Math.Max(rb.x1 - rb.x0 + 1, (rb.y1 - rb.y0 + 1) / Aspect); }
         else if (Selected >= 0 && FollowSelected) { var (sx, sy) = DrawnAt(Selected); if (!double.IsNaN(sx)) { tx = sx; ty = sy; tw = Math.Clamp(ViewW, FollowMin, FollowMax); } }
         else if (Follow && vd.FocusCell >= 0) { tx = L.X(vd.FocusCell) + 0.5; ty = L.Y(vd.FocusCell) + 0.5; tw = Math.Clamp(vd.Zoom, FollowMin, FollowMax); }
         double k = 1 - Math.Exp(-realSec * 2.5);
@@ -169,8 +169,21 @@ public sealed class LiveShow
     }
 
     /// <summary>마지막 틱 앞: 지금 칸과 앞으로 걸을 길(몇 칸)을 적어 둔다.</summary>
+    // ④ 칸 강체: 지난 틱 끝의 몸마다 배 틀 무게중심 자리 · 자세 (틱 사이를 메운다 — 걸음처럼 한 틱 늦게) · 배의 자세
+    private (double qx, double qy, double th)[] _prevPose = Array.Empty<(double, double, double)>();
+    private double _prevSky;
+    private long _prevTick = long.MinValue;
+
     private void Remember()
     {
+        var st = World.Find<Structure>();
+        if (st != null)
+        {
+            _prevPose = new (double, double, double)[st.Bodies.Count];
+            for (int b = 0; b < _prevPose.Length; b++) _prevPose[b] = PoseNow(st, b);
+            _prevSky = st.Bodies.Count > 0 ? st.Bodies[0].Th : 0;
+            _prevTick = World.Tick;
+        }
         var mind = World.Find<Mind>();
         if (mind == null) return;
         if (_trail.Length < mind.Agents.Count)
@@ -245,7 +258,7 @@ public sealed class LiveShow
     public int Selected = -1;
     public bool FollowSelected;
 
-    /// <summary>그 사람 · 로봇이 그려진 자리 (칸 · 가운데 — 걸음 사이 메우기 포함).</summary>
+    /// <summary>그 사람 · 로봇이 그려진 자리 (칸 · 가운데 — 걸음 사이 메우기 포함 · 떨어져 나간 조각 안이면 그 조각의 그려진 자세로).</summary>
     public (double x, double y) DrawnAt(int agent)
     {
         var mind = World.Find<Mind>();
@@ -253,7 +266,67 @@ public sealed class LiveShow
         var a = mind.Agents[agent];
         var L = Sim.Layout;
         var (nx, ny) = Nudge(a);
-        return (L.X(a.C.Cell) + 0.5 + nx / (double)Painter.T, L.Y(a.C.Cell) + 0.5 + ny / (double)Painter.T);
+        double px = L.X(a.C.Cell) + 0.5 + nx / (double)Painter.T, py = L.Y(a.C.Cell) + 0.5 + ny / (double)Painter.T;
+        var st = World.Find<Structure>();
+        int b = st != null && st.Bodies.Count > 1 ? st.BodyOf(a.C.Cell) : 0;
+        if (b <= 0) return (px, py);
+        var (cs, sn, tx, ty) = PoseDrawn(st!, b);
+        return (cs * px - sn * py + tx, sn * px + cs * py + ty);
+    }
+
+    /// <summary>몸 b의 무게중심이 그려진 자리 (배 틀 칸 · 틱 사이 메움 포함).</summary>
+    public (double x, double y) DrawnBody(int b)
+    {
+        var st = World.Find<Structure>();
+        if (st == null || b <= 0 || b >= st.Bodies.Count) return (double.NaN, 0);
+        var o = st.Bodies[b];
+        var (cs, sn, tx, ty) = PoseDrawn(st, b);
+        return (cs * o.Lx - sn * o.Ly + tx, sn * o.Lx + cs * o.Ly + ty);
+    }
+
+    /// <summary>몸 b의 지금 배 틀 무게중심 자리 · 배에 대한 자세.</summary>
+    private static (double qx, double qy, double th) PoseNow(Structure st, int b)
+    {
+        if (b <= 0) return (0, 0, 0);
+        var o = st.Bodies[b];
+        var (cs, sn, tx, ty) = st.ToShipFrame(b);
+        return (cs * o.Lx - sn * o.Ly + tx, sn * o.Lx + cs * o.Ly + ty, Math.Atan2(sn, cs));
+    }
+
+    /// <summary>몸 b를 그릴 배 틀 자세: 지난 틱 끝 → 지금을 틱 사이 비율만큼 (무게중심 자리 · 자세를 따로 — 도는 조각이 흔들리지 않게). 이번 틱에 떨어져 나간 조각은 붙어 있던 자리에서.</summary>
+    private (double cs, double sn, double tx, double ty) PoseDrawn(Structure st, int b)
+    {
+        if (b <= 0 || b >= st.Bodies.Count) return (1, 0, 0, 0);
+        var o = st.Bodies[b];
+        var now = PoseNow(st, b);
+        bool knew = World.Tick == _prevTick + 1 && _prevPose.Length > 0;   // 바로 지난 틱을 안다 (앞으로 감기 · 다시보기로 건너뛰었으면 지금 그대로)
+        (double qx, double qy, double th) was = !knew ? now : b < _prevPose.Length ? _prevPose[b] : (o.Lx, o.Ly, 0.0);
+        double f = Math.Clamp(_carry, 0, 1);
+        double dth = Math.IEEERemainder(now.th - was.th, 2 * Math.PI);
+        double th = was.th + dth * f, qx = was.qx + (now.qx - was.qx) * f, qy = was.qy + (now.qy - was.qy) * f;
+        double cs = Math.Cos(th), sn = Math.Sin(th);
+        return (cs, sn, qx - (cs * o.Lx - sn * o.Ly), qy - (sn * o.Lx + cs * o.Ly));
+    }
+
+    /// <summary>카메라가 갈 수 있는 곳: 배 둘레 + 떨어져 나간 조각들의 그려진 자리 (200칸 안 — 멀리 간 것은 따라가지 않는다).</summary>
+    private (int x0, int y0, int x1, int y1) Reach()
+    {
+        var st = World.Find<Structure>();
+        if (st == null || st.Bodies.Count < 2) return _bbox;
+        var (x0, y0, x1, y1) = _bbox;
+        for (int b = 1; b < st.Bodies.Count; b++)
+        {
+            var o = st.Bodies[b];
+            if (o.Mass <= 0) continue;
+            var (cs, sn, tx, ty) = PoseDrawn(st, b);
+            foreach (var (px, py) in new[] { (o.MinX, o.MinY), (o.MaxX + 1, o.MinY), (o.MinX, o.MaxY + 1), (o.MaxX + 1, o.MaxY + 1) })
+            {
+                double qx = cs * px - sn * py + tx, qy = sn * px + cs * py + ty;
+                if (qx < _bbox.x0 - 200 || qx > _bbox.x1 + 200 || qy < _bbox.y0 - 200 || qy > _bbox.y1 + 200) continue;
+                x0 = Math.Min(x0, (int)Math.Floor(qx) - 2); y0 = Math.Min(y0, (int)Math.Floor(qy) - 2); x1 = Math.Max(x1, (int)Math.Ceiling(qx) + 2); y1 = Math.Max(y1, (int)Math.Ceiling(qy) + 2);
+            }
+        }
+        return (x0, y0, x1, y1);
     }
 
     /// <summary>화면에서 누른 자리(칸 · 소수)에 가장 가까운 사람 · 로봇을 고른다 (한 칸 안) — 없으면 고른 것을 놓는다.</summary>
@@ -328,10 +401,11 @@ public sealed class LiveShow
     public (double left, double top, double w, double h) Camera()
     {
         double w = ViewW, h = ViewW * Aspect;
-        double bw = _bbox.x1 - _bbox.x0 + 1, bh = _bbox.y1 - _bbox.y0 + 1;
+        var bb = Reach();
+        double bw = bb.x1 - bb.x0 + 1, bh = bb.y1 - bb.y0 + 1;
         double left = CamX - w / 2, top = CamY - h / 2;
-        left = w >= bw ? _bbox.x0 - (w - bw) / 2 : Math.Clamp(left, _bbox.x0, _bbox.x1 + 1 - w);
-        top = h >= bh ? _bbox.y0 - (h - bh) / 2 : Math.Clamp(top, _bbox.y0, _bbox.y1 + 1 - h);
+        left = w >= bw ? bb.x0 - (w - bw) / 2 : Math.Clamp(left, bb.x0, bb.x1 + 1 - w);
+        top = h >= bh ? bb.y0 - (h - bh) / 2 : Math.Clamp(top, bb.y0, bb.y1 + 1 - h);
         return (left, top, w, h);
     }
 
@@ -346,6 +420,17 @@ public sealed class LiveShow
         while (_spare.TryTake(out var sp)) { if (reuse == null && sp.W == wc * Painter.T && sp.H == hc * Painter.T) reuse = sp; else keep.Add(sp); }
         foreach (var k in keep.Take(2)) _spare.Add(k);
         Painter.Show = Show; Painter.ChainCells = Show == Overlay.Chain ? ChainCellsNow() : null;
+        // ④ 칸 강체: 틱 사이를 메운 몸의 자세 · 배의 자세(별)
+        var stb = World.Find<Structure>();
+        if (stb != null && stb.Bodies.Count > 1)
+        {
+            var poses = new (double, double, double, double)[stb.Bodies.Count];
+            for (int b = 0; b < poses.Length; b++) poses[b] = PoseDrawn(stb, b);
+            Painter.Poses = poses;
+            double th0 = stb.Bodies[0].Th;
+            Painter.SkyTh = _prevPose.Length > 0 && World.Tick == _prevTick + 1 ? _prevSky + Math.IEEERemainder(th0 - _prevSky, 2 * Math.PI) * Math.Clamp(_carry, 0, 1) : th0;
+        }
+        else { Painter.Poses = null; Painter.SkyTh = double.NaN; }
         var img = Painter.Frame(World, x0, y0, wc, hc, (int)(_anim * AnimFps), reuse);
         (double x, double y) sel = Selected >= 0 ? DrawnAt(Selected) : (double.NaN, 0.0);
         return new LiveFrame
@@ -714,7 +799,7 @@ public sealed class LiveShow
         _replay = w; _replayOf = h;
         _replayDir = new Director(w.Layout) { KeepRing = false };
         _replayEnd = Math.Min(Sim.Tick, h.Last + Time.Minutes(ReplayAfterMin));
-        _carry = 0; ClearTrails();
+        _carry = 0; ClearTrails(); _prevPose = Array.Empty<(double, double, double)>();
         Banner = "다시보기 — " + h.Title; BannerLeft = BannerSec;
         return true;
     }
@@ -724,7 +809,7 @@ public sealed class LiveShow
     {
         if (_replay == null) return;
         _replay = null; _replayDir = null; _replayOf = null;
-        _carry = 0; ClearTrails();
+        _carry = 0; ClearTrails(); _prevPose = Array.Empty<(double, double, double)>();
     }
 
     private void ClearTrails() { Array.Clear(_trailLen); }
