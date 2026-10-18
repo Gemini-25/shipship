@@ -87,13 +87,14 @@ public static partial class Program
         Console.WriteLine($"  만들기 {make.Elapsed.TotalMilliseconds:0}ms");
         s.Run(100);
         s.Measure = true; s.LastMs.Clear();
-        Field.Prof = new(); Network.Prof = new();
+        Field.Prof = new(); Network.Prof = new(); Mind.Prof = new();
         var sw = Stopwatch.StartNew();
         s.Run(ticks);
         double ms = sw.Elapsed.TotalMilliseconds / ticks;
         Console.WriteLine("  장 안: " + string.Join(" · ", Field.Prof.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key} {kv.Value / ticks:0.000}")));
         Console.WriteLine("  망 안: " + string.Join(" · ", Network.Prof.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key} {kv.Value / ticks:0.000}")));
-        Field.Prof = null; Network.Prof = null;
+        Console.WriteLine("  마음 안: " + string.Join(" · ", Mind.Prof.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key} {kv.Value / ticks:0.000}")));
+        Field.Prof = null; Network.Prof = null; Mind.Prof = null;
         Console.WriteLine($"{ship} 사람 {people} · 로봇 {robots} · 코어 {Par.Threads}: 틱마다 {ms:0.000}ms (하루 = {ms * Time.TicksPerDay / 1000:0.0}초)");
         Console.WriteLine("  " + string.Join(" · ", s.LastMs.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key} {kv.Value / ticks:0.000}")));
     }

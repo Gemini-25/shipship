@@ -60,6 +60,8 @@ public sealed partial class Mind
             case StepKind.Stow: StowStep(sim, a, st); return;
             case StepKind.TakeFood: TakeFoodStep(sim, a, st); return;
             case StepKind.Fix: FixStep(sim, a, st); return;
+            case StepKind.Salvage: SalvageStep(sim, a, st); return;
+            case StepKind.Rewire: RewireStep(sim, a, st); return;
             case StepKind.PickUp:
             {
                 int vb = st.Target;
@@ -512,14 +514,18 @@ public sealed partial class Mind
         }
         if (_net == null || _net.Broken[dev * 4 + st.Arg] == 0) { Forget(a, b => b.Kind == BeliefKind.Broken && b.Subject == dev); Next(a, t); return; }
         if (Dist(c.Cell, _net.Devices[dev].Cell) > 2) { Fail(sim, a, "멀다"); return; }
-        if (a.IsPerson && c.Holding != iRepair) { Fail(sim, a, "수리 꾸러미가 없다"); return; }
+        if (!HasPart(a)) { Fail(sim, a, a.IsPerson ? "수리 꾸러미가 없다" : "부품이 없다"); return; }
         Activity(a, "work");
         double minutes = a.IsPerson ? P.Items["수리 꾸러미"].Minutes * (1.6 - c.SkRepair) : 15;
         if (t - c.StepStart < Time.Minutes(minutes)) return;
+        float used = c.Holding == iSalvage ? c.HoldCharge : -1;   // ⑥ 떼어 온 헌 부품 (수명을 쓴 몫)
         _net.Repair(dev, (Part)st.Arg);
-        if (a.IsPerson) { UseHeld(sim, a); c.SkRepair = Math.Min(1, c.SkRepair + 0.01f); }
+        if (used >= 0) _net.SetWear(dev, (Part)st.Arg, used);
+        if (c.Holding == iRepair || c.Holding == iSalvage) UseHeld(sim, a);
+        else if (!a.IsPerson && c.Spares > 0) c.Spares--;            // 로봇 부품 주머니
+        if (a.IsPerson) c.SkRepair = Math.Min(1, c.SkRepair + 0.01f);
         Repaired++;
-        int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} {Ko.Eul(_net.Devices[dev].Name)} 고쳤다", t, _net.Devices[dev].Cell, c.GoalCause, 0, a.Id);
+        int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, used >= 0 ? $"{Ko.I(NameOf(a.Id))} 떼어 온 헌 부품으로 {Ko.Eul(_net.Devices[dev].Name)} 고쳤다" : $"{Ko.I(NameOf(a.Id))} {Ko.Eul(_net.Devices[dev].Name)} 고쳤다", t, _net.Devices[dev].Cell, c.GoalCause, 0, a.Id);
         sim.Facts.Emit(t, FactKind.Repaired, _net.Devices[dev].Cell, st.Arg, cause, a.Id, dev);
         Forget(a, b => b.Kind == BeliefKind.Broken && b.Subject == dev);
         Next(a, t);

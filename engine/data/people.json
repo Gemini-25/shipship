@@ -38,7 +38,8 @@
     "구급 상자":   { "minutes": 5, "kg": 2 },
     "원료":        { "minutes": 0, "kg": 12 },
     "수확물":      { "minutes": 0, "kg": 3 },
-    "식량 상자":   { "minutes": 0, "kg": 13 }
+    "식량 상자":   { "minutes": 0, "kg": 13 },
+    "떼어 낸 부품": { "minutes": 20, "kg": 3 }
   },
   "recipes": {
     "봉합 꾸러미": { "at": "Workbench", "minutes": 20, "needs": { "원료": 1 }, "keep": 4 },

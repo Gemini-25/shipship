@@ -445,6 +445,7 @@ public sealed partial class ShipMind
         w.List(new List<PlannedBurn> { Active }); w.Byte(HasActive);
         w.Arr(_rocksKnown.ToArray()); w.Arr(_contactsKnown.ToArray()); w.Arr(_hailed.ToArray()); w.Arr(_braced.ToArray());
         w.I32(_dodgeRock); w.I64(_dodgeUntil); w.I64(_noEngineSaid); w.Str(HelmLine);
+        w.Arr(RoomDarkSince); w.I64(JumpersCut);
     }
 
     private void LoadHelm(StateReader r)
@@ -454,5 +455,6 @@ public sealed partial class ShipMind
         Active = r.List<PlannedBurn>()[0]; HasActive = r.Byte();
         _rocksKnown.Clear(); _rocksKnown.AddRange(r.Arr<int>()); _contactsKnown.Clear(); _contactsKnown.AddRange(r.Arr<int>()); _hailed.Clear(); _hailed.AddRange(r.Arr<int>()); _braced.Clear(); _braced.AddRange(r.Arr<int>());
         _dodgeRock = r.I32(); _dodgeUntil = r.I64(); _noEngineSaid = r.I64(); HelmLine = r.Str() ?? "";
+        RoomDarkSince = r.Arr<long>(); JumpersCut = r.I64();
     }
 }

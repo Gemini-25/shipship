@@ -64,6 +64,7 @@ public enum GoalKind : byte
     Cook,       // ⑧ 조리대에서 밥을 짓고(켜고 · 끄고) 먹는다
     Pilfer,     // ⑪ 배급 중 몫을 다 먹고 — 재지 않는 식량 보관함에서 몰래 한 끼
     Treat,      // ⑦ 다친 이를 돌본다 (구급 상자 — 없으면 맨손)
+    Rewire,     // ⑥ 급전선이 죽은 방에 옆 방에서 연장선을 끌어온다 (대상: 방)
 }
 
 /// <summary>계획의 한 단계.</summary>
@@ -87,6 +88,8 @@ public enum StepKind : byte
     Harvest,   // 작물을 거둔다 (Target: 작물 번호) — 손에 수확물을 든다
     Stow,      // 든 수확물 · 식량 상자를 식량 창고에 넣는다 (Target: 설비)
     TakeFood,  // 식량 보관함에서 식량 상자를 꺼낸다 (Target: 설비)
+    Salvage,   // ⑥ 덜 중요한 장치에서 부품을 떼어 낸다 (Target: 떼어 올 장치 · Arg: 부품 · Cell: 고칠 장치)
+    Rewire,    // ⑥ 연장선: Arg 0 옆 방 통풍구에서 꽂는다 · 1 그 방까지 깔고 잇는다 (Target: 방 · Cell: 옆 방)
 }
 
 /// <summary>쓰기 단계가 하는 일.</summary>
@@ -130,6 +133,7 @@ public struct AgentCore
     public long ExercisedAt;
     // 솜씨 0~1
     public float SkRepair, SkMedic, SkFire, SkSeal, SkCook, SkPilot, SkFarm, SkScience;
+    public byte Spares;        // ⑥ 로봇의 부품 주머니 (새 부품 · 고칠 때마다 하나)
     // 로봇
     public float Battery, Damage;
 

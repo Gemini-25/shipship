@@ -38,7 +38,7 @@ public sealed partial class Mind : IEngine
     public readonly string[] ItemNames;
     public readonly string[] RoleNames;
     public readonly int ItemCount;
-    public readonly byte iExt, iRepair, iPatch, iSuit, iMask, iMedkit, iHarvest, iRation;
+    public readonly byte iExt, iRepair, iPatch, iSuit, iMask, iMedkit, iHarvest, iRation, iSalvage;
     /// <summary>고치기 단계의 '부품' 자리에 넣는 특별 값: 배전반에서 급전선을 손으로 끊기.</summary>
     public const byte PullFeederArg = 254;
 
@@ -73,7 +73,7 @@ public sealed partial class Mind : IEngine
         ItemCount = ItemNames.Length;
         RoleNames = P.Roles.Keys.ToArray();
         byte Item(string n) { int i = Array.IndexOf(ItemNames, n); if (i < 0) throw new InvalidDataException($"사람 표에 물건 '{n}'이 없다"); return (byte)i; }
-        iExt = Item("소화기"); iRepair = Item("수리 꾸러미"); iPatch = Item("봉합 꾸러미"); iSuit = Item("우주복"); iMask = Item("산소 마스크"); iMedkit = Item("구급 상자"); iHarvest = Item("수확물"); iRation = Item("식량 상자");
+        iExt = Item("소화기"); iRepair = Item("수리 꾸러미"); iPatch = Item("봉합 꾸러미"); iSuit = Item("우주복"); iMask = Item("산소 마스크"); iMedkit = Item("구급 상자"); iHarvest = Item("수확물"); iRation = Item("식량 상자"); iSalvage = Item("떼어 낸 부품");
 
         Stock = new int[L.Furniture.Count * ItemCount];
         foreach (var fu in L.Furniture)
@@ -214,7 +214,7 @@ public sealed partial class Mind : IEngine
             {
                 Kind = kind, Up = 1, Name = n, Body = -1, Cell = cell, Bed = -1, Station = -1, Dock = dock >= 0 ? dock : cell,
                 Role = 255, Brave = 1, Calm = 1, Kindness = 1, Diligent = 1, Curious = 1,
-                SkRepair = 0.7f, SkFire = 0.8f, SkSeal = 0.8f, SkMedic = 0.3f,
+                SkRepair = 0.7f, SkFire = 0.8f, SkSeal = 0.8f, SkMedic = 0.3f, Spares = RobotSpares,
                 Battery = 1, Holding = 255, Carrying = -1, CarriedBy = -1, WaitDoor = -1, OpenedDoor = -1, GoalTarget = -1, GoalCell = -1,
                 LastKPa = (float)F.Pressure(cell), HeardUpTo = _snd?.LastEvent ?? 0, LastShout = -1_000_000,
             }
@@ -341,7 +341,7 @@ public sealed partial class Mind : IEngine
     public void Assign(Sim sim, int agent, GoalKind goal, int target, Belief b, long until)
     {
         var a = Agents[agent];
-        Learn(a, sim.Tick, b.Kind, b.Cell, b.Subject, b.Conf, BeliefSource.Screen, b.Cause, b.Size);
+        if (b.Kind != BeliefKind.None) Learn(a, sim.Tick, b.Kind, b.Cell, b.Subject, b.Conf, BeliefSource.Screen, b.Cause, b.Size);
         a.C.AssignedGoal = goal; a.C.AssignedTarget = target; a.C.AssignedUntil = until;
         a.Avoid.RemoveAll(v => v.Goal == goal && v.Target == target); // 새로 맡긴 일: '거기는 봤다'를 접고 다시 간다
     }
@@ -395,8 +395,19 @@ public sealed partial class Mind : IEngine
         _chem ??= sim.Find<Chemistry>(); _snd ??= sim.Find<Sound>(); _light ??= sim.Find<Light>(); _soc ??= sim.Find<Society>(); _work ??= sim.Find<Work>();
     }
 
+    /// <summary>마음 안 단계별 시간 (실험실 --profile — 켜 두면 잰다 · 생각 · 걸음은 사람 · 로봇마다 모아서).</summary>
+    public static Dictionary<string, double>? Prof;
+    private static long Lap(string name, long t0)
+    {
+        if (Prof == null) return 0;
+        long t1 = System.Diagnostics.Stopwatch.GetTimestamp();
+        Prof[name] = Prof.GetValueOrDefault(name) + (t1 - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+        return t1;
+    }
+
     public void Step(Sim sim, double dt)
     {
+        long t = Prof != null ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
         Bind(sim);
         RationDay(sim.Tick);
         Fling(sim, dt); // 감압 바람에 밀리는 물건 (사람 · 로봇이 없어도)
@@ -405,21 +416,28 @@ public sealed partial class Mind : IEngine
         IndexBodies();
         foreach (var a in Agents) UpdateUp(sim, a);
         Inertia(sim);   // ⑤ 점화 — 갑자기 오른 가속에 선 사람이 넘어진다
+        t = Lap("준비", t);
         foreach (var a in Agents) Sense(sim, a, dt);
+        t = Lap("감각", t);
         _said.RemoveAll(x => x.tick < sim.Tick - Sound.KeepTicks - 1);
         BuildClaims();
         if (sim.Tick % 25 == 0) { Learn(sim); Places(sim); }
+        t = Lap("배우기 · 자리", t);
         foreach (var a in Agents)
         {
             if (a.C.Up != 0 && a.IsPerson) Instinct(sim, a);
             bool think = a.C.Up != 0 && a.C.Mode == 0 && ((sim.Tick + a.Id) % 2 == 0 || a.Plan.Count == 0 || a.C.StepIndex >= a.Plan.Count);
             if (think) Decide(sim, a);
+            t = Lap("본능 · 생각", t);
             WithdrawDoor(a);
             WithdrawCook(sim, a);
             if (a.C.Up != 0 || IsSleeping(a)) Advance(sim, a, dt);
+            t = Lap("걸음 · 일", t);
             Needs(sim, a, dt);
+            t = Lap("몸의 필요", t);
         }
         BlockDoors();
+        Lap("문 붙잡기", t);
     }
 
     /// <summary>열어 달라던 문을 지나가지 않게 됐으면 (계획이 바뀌었다 · 쓰러졌다) 요청을 거둔다 — 남이 그 문을 기다리지 않으면.
@@ -551,6 +569,8 @@ public sealed partial class Mind : IEngine
 
     // ───────────────────────── 칸 도우미 ─────────────────────────
 
+    /// <summary>걷는 중인가 (지금 단계가 칸으로 가기).</summary>
+    public bool Walking(Agent a) => a.C.StepIndex < a.Plan.Count && a.Plan[a.C.StepIndex].Kind == StepKind.GoTo;
     public int Dist(int a, int b) => Math.Max(Math.Abs(L.X(a) - L.X(b)), Math.Abs(L.Y(a) - L.Y(b)));
     private int Manhattan(int a, int b) => Math.Abs(L.X(a) - L.X(b)) + Math.Abs(L.Y(a) - L.Y(b));
 

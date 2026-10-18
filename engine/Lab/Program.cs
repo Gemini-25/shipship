@@ -42,6 +42,7 @@ public static partial class Program
             else if (args.Contains("--probe-daily")) ProbeDaily(args);
             else if (args.Contains("--probe-supply")) ProbeSupply(args);
             else if (args.Contains("--probe-log")) ProbeLog(args);
+            else if (args.Contains("--probe-deaths")) ProbeDeaths(args);
             else if (args.Contains("--probe-holes")) ProbeHoles(args);
             else if (args.Contains("--probe-leak")) ProbeLeak(args);
             else if (args.Contains("--probe-cam")) ProbeCam(args);

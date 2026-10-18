@@ -157,7 +157,7 @@ public sealed partial class Mind
         double radius = SightRadius(a, cell);
         if (room >= 0)
         {
-            foreach (int x in L.Rooms[room].Cells) SeeCell(sim, a, x, radius);
+            SeeRoom(sim, a, room, radius);
             foreach (int x in _roomDoors[room]) SeeCell(sim, a, x, radius);
             foreach (int w in _roomWalls[room])
                 if (F.Hole[w] > 0 && Dist(w, cell) <= radius + 1)
@@ -190,7 +190,7 @@ public sealed partial class Mind
                 L.Neighbors(cell, nb);
                 foreach (int j in nb)
                     if (j >= 0 && L.Room[j] >= 0 && L.Room[j] != room)
-                        foreach (int x in L.Rooms[L.Room[j]].Cells) SeeCell(sim, a, x, radius);
+                        SeeRoom(sim, a, L.Room[j], radius);
             }
         }
         else if (L.Kind[cell] == CellKind.Outside)
@@ -264,13 +264,38 @@ public sealed partial class Mind
     private void PrepareSenses()
     {
         _sparks.Clear();
-        if (_net == null) return;
-        foreach (int fc in _net.FaultCell) if (fc >= 0) _sparks.Add(fc);
-        if (_devAt.Length != L.N)
+        if (_net != null)
         {
-            _devAt = Enumerable.Repeat(-1, L.N).ToArray();
-            foreach (var d in _net.Devices) foreach (int x in L.Furniture[d.Furniture].Cells) _devAt[x] = d.Id;
+            foreach (int fc in _net.FaultCell) if (fc >= 0) _sparks.Add(fc);
+            if (_devAt.Length != L.N)
+            {
+                _devAt = Enumerable.Repeat(-1, L.N).ToArray();
+                foreach (var d in _net.Devices) foreach (int x in L.Furniture[d.Furniture].Cells) _devAt[x] = d.Id;
+            }
         }
+        // ① 눈여겨볼 칸: 방마다 (방 칸 차례 그대로) 불 · 짙은 연기 · 고인 물 · 불꽃 · 장치 · 몸이 있는 칸만 — 그 밖의 칸은 봐도 아무 일이 없다 (SeeCell이 그냥 돌아간다)
+        // 틱마다 칸을 한 번만 훑고 사람마다는 추린 칸만 본다 — 결과는 같다 (지문 같음 · 새뜰호 감각 0.30 → ms)
+        int R = L.Rooms.Count;
+        if (_seeStart.Length != R + 1) _seeStart = new int[R + 1];
+        _seeList.Clear();
+        bool devs = _net != null && _devAt.Length == L.N, bodies = _bodyHead.Length == L.N;
+        for (int r = 0; r < R; r++)
+        {
+            _seeStart[r] = _seeList.Count;
+            foreach (int x in L.Rooms[r].Cells)
+                if (_chem != null && _chem.Burning[x] != 0 || _light != null && _light.Visibility(x) < 8 || F.Stored(T.sWater, x) > 100 || _sparks.Contains(x)
+                    || devs && _devAt[x] >= 0 || bodies && _bodyHead[x] >= 0)
+                    _seeList.Add(x);
+        }
+        _seeStart[R] = _seeList.Count;
+    }
+    private int[] _seeStart = Array.Empty<int>();
+    private readonly List<int> _seeList = new();
+
+    /// <summary>방 하나에서 눈여겨볼 칸들을 본다 (PrepareSenses가 추린 것).</summary>
+    private void SeeRoom(Sim sim, Agent a, int room, double radius)
+    {
+        for (int k = _seeStart[room], end = _seeStart[room + 1]; k < end; k++) SeeCell(sim, a, _seeList[k], radius);
     }
 
     /// <summary>보이는 거리: 사람은 그을음 시야(많아야 30m) · 어두우면 1.5m · 로봇은 12m(열 감지).</summary>

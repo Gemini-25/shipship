@@ -83,7 +83,7 @@ public sealed partial class ShipMind
     {
         IncidentKind.PersonDown => 0, IncidentKind.Fire => 1, IncidentKind.Vacuum => 2, IncidentKind.Leak => 3, IncidentKind.Injured => 4,
         IncidentKind.ElectricFault => 5, IncidentKind.Strain or IncidentKind.DoorJam => 6, IncidentKind.CO or IncidentKind.Toxic => 7,
-        IncidentKind.DeviceBroken or IncidentKind.SensorLost => 8, _ => 9,
+        IncidentKind.PowerLost => 5, IncidentKind.DeviceBroken or IncidentKind.SensorLost => 8, _ => 9,
     };
 
     private int[] _order = new int[16];
