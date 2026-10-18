@@ -165,8 +165,8 @@ public sealed partial class Structure
     {
         var cells = new List<int>();
         for (int c = 0; c < L.N; c++) if (_comp[c] == k) cells.Add(c);
-        // 사이의 부서진 칸들 (구조가 없는 칸 — 이 덩어리와 다른 덩어리에 함께 닿은 무더기)을 찾는다
-        var gap = GapBetween(k);
+        // 사이의 부서진 칸들 (구조가 없는 칸 — 이 덩어리와 다른 덩어리에 함께 닿은 무더기)을 찾는다 · 이 덩어리에만 닿은 무더기(통째로 뚫린 벽 · 다 나간 바닥)는 이 몸에 든다
+        var gap = GapBetween(k, out var own);
         int cutCell = gap.Count > 0 ? gap[0] : cells[0];
         int parent = 0; long newest = long.MinValue;
         foreach (int g in gap) { int dc = DamageCause[g]; if (dc != 0 && sim.Causes[dc].Tick >= newest) { newest = sim.Causes[dc].Tick; parent = dc; } }
@@ -179,6 +179,7 @@ public sealed partial class Structure
             DebrisLost++;
             int dcause = sim.Causes.Add(CauseKind.Breach, "부서진 뼈대 조각이 떨어져 날아갔다", sim.Tick, cells[0], parent);
             foreach (int c in cells) { DamageCause[c] = dcause; F.Sever(c); Frag[c] = -1; }
+            foreach (int c in own) { F.Sever(c); Frag[c] = -1; }
             foreach (int g in gap) F.Sever(g);
             sim.Facts.Emit(sim.Tick, FactKind.ObjectFlung, cells[0], (float)(massKg / 1000), dcause);
             _latticeDirty = true;
@@ -191,20 +192,39 @@ public sealed partial class Structure
         string what = rooms.Count > 0 ? $"{names} 쪽이 떨어져 나갔다" : "뼈대 한쪽이 떨어져 나갔다";
         int cause = sim.Causes.Add(CauseKind.Breach, $"배가 갈라졌다 — {what}", sim.Tick, cutCell, parent);
         foreach (int c in cells) Frag[c] = id;
+        foreach (int c in own) Frag[c] = id;
         foreach (int g in gap) { DamageCause[g] = cause; F.Sever(g); Frag[g] = -1; }
         float speed = (float)Math.Clamp(impulse / massKg, 0.02, 3);
         int cut = rooms.Count > 0 ? sim.Causes.Add(CauseKind.Electric, "조각이 떨어져 나가 공기 · 전력이 끊겼다 — 산소 · 정화 · 난방이 멈췄다", sim.Tick, cutCell, cause) : 0;
         Fragments.Add(new Fragment { Id = id, Cause = cause, Tick = sim.Tick, MassT = (float)(massKg / 1000), Cells = cells.Count, Speed = speed, Rooms = rooms.Count, CutCause = cut });
+        // ④ 칸 강체: 조각이 몸이 된다 — 갈라진 자리에서 배와 조각을 반대로 민다 (운동량 보존 · 사이 칸 기압이 밀어낸 만큼)
+        SpawnBody(id, 0);
+        if (gap.Count > 0)
+        {
+            double gx = 0, gy = 0;
+            foreach (int g in gap) { gx += L.X(g) + 0.5; gy += L.Y(g) + 0.5; }
+            gx /= gap.Count; gy /= gap.Count;
+            var (wx, wy) = WorldOf(0, gx, gy);
+            var fb = Bodies[id];
+            double dx = fb.X - wx, dy = fb.Y - wy, dl = Math.Sqrt(dx * dx + dy * dy);
+            if (dl > 1e-9)
+            {
+                double j = speed * fb.Mass;
+                Push(id, wx, wy, j * dx / dl, j * dy / dl, cause);
+                Push(0, wx, wy, -j * dx / dl, -j * dy / dl, cause);
+            }
+        }
         Splits++; SplitVersion++;
         sim.Facts.Emit(sim.Tick, FactKind.ShipSplit, cutCell, (float)(massKg / 1000), cause, -1, id);
         sim.Find<Sound>()?.Emit(sim, NearestAir(cutCell), 130, SoundKind.Bang, cause);
         _latticeDirty = true; // 끊긴 칸이 늘었다 — 다음 틱에 다시 센다 (더 갈라졌나)
     }
 
-    /// <summary>이 덩어리와 다른 덩어리 사이의 부서진 칸들 (구조 없는 칸의 무더기 중 둘 이상의 덩어리에 닿은 것 · 칸 순서).</summary>
-    private List<int> GapBetween(int k)
+    /// <summary>이 덩어리와 다른 덩어리 사이의 부서진 칸들 (구조 없는 칸의 무더기 중 둘 이상의 덩어리에 닿은 것 · 칸 순서) · 이 덩어리에만 닿은 무더기(own).</summary>
+    private List<int> GapBetween(int k, out List<int> own)
     {
         var result = new List<int>();
+        own = new List<int>();
         var seen = new HashSet<int>();
         var q = new Queue<int>();
         Span<int> nb = stackalloc int[4];
@@ -230,16 +250,10 @@ public sealed partial class Structure
                 }
             }
             if (comps.Count >= 2) result.AddRange(blob);
+            else own.AddRange(blob);
         }
-        result.Sort();
+        result.Sort(); own.Sort();
         return result;
-    }
-
-    /// <summary>조각이 천천히 멀어진다 (매 틱).</summary>
-    private void Drift(double dt)
-    {
-        var span = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Fragments);
-        for (int i = 0; i < span.Length; i++) span[i].Dist += span[i].Speed * (float)dt;
     }
 
     // ───────────── 바닥 · 천장 판 · 설비 · 폭발 압력 ─────────────

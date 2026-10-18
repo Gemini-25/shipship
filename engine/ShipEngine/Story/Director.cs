@@ -80,7 +80,7 @@ public sealed partial class Director
         FactKind.Talk => 2, FactKind.Blamed => 15, FactKind.Fight => 60, FactKind.Sabotage => 40, FactKind.Confessed => 30,
         FactKind.Burn => 14, FactKind.Fell => 22, FactKind.Contact => 12, FactKind.Jumper => 16, FactKind.Salvaged => 14, FactKind.Aim => 18, FactKind.ShipSplit => 100, FactKind.Lie => 30, FactKind.LieExposed => 50, FactKind.LogShown => 6, FactKind.Shelter => 22, FactKind.Meeting => 25, FactKind.Verdict => 45, FactKind.Elected => 35, FactKind.Mutiny => 60, FactKind.Devised => 30, FactKind.Consulted => 14,
         FactKind.MethodWorked => 40, FactKind.MethodFailed => 25, FactKind.ManualChanged => 30,   // 궁리 끝에 해낸 일 · 매뉴얼대로 했다가 틀어진 일 · 회의가 매뉴얼을 고친 일
-        FactKind.CableCut => 8, FactKind.PipeLeak => 10, _ => 1,   // ⑥ 바퀴 3 — 선이 끊겼다 (탔다 · 찢겼다 · 피복이 갈라졌다) · 관이 샌다
+        FactKind.CableCut => 8, FactKind.PipeLeak => 10, FactKind.Tumble => 40, _ => 1,   // ⑥ 바퀴 3 — 선이 끊겼다 (탔다 · 찢겼다 · 피복이 갈라졌다) · 관이 샌다
     };
 
     /// <summary>사실 하나의 무게 — 대화는 끝에 따라 (다툼 · 사과 · 위로 · 소문은 볼 만하고 잡담은 거의 0) · 끝장 몸싸움은 더.</summary>

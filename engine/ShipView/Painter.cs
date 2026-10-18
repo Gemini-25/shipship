@@ -75,8 +75,8 @@ public sealed class Painter
     private static long Key(int kind, int a = 0, int b = 0, int c = 0, int d = 0) =>
         ((long)kind << 56) ^ ((long)(a & 0xFFFF) << 40) ^ ((long)(b & 0xFFFF) << 24) ^ ((long)(c & 0xFFF) << 12) ^ (d & 0xFFF);
 
-    private bool Solid(int x, int y) => L.In(x, y) && L.Kind[L.Index(x, y)] is CellKind.Wall or CellKind.Door;
-    private CellKind KindAt(int x, int y) => L.In(x, y) ? L.Kind[L.Index(x, y)] : CellKind.Outside;
+    private bool Solid(int x, int y) => L.In(x, y) && L.Kind[L.Index(x, y)] is CellKind.Wall or CellKind.Door && Mine(L.Index(x, y));
+    private CellKind KindAt(int x, int y) => L.In(x, y) && Mine(L.Index(x, y)) ? L.Kind[L.Index(x, y)] : CellKind.Outside;
 
     private DotWall WallOf(int c)
     {
@@ -93,6 +93,56 @@ public sealed class Painter
     /// into: 다시 쓸 그림 (크기가 맞으면 — 관전 화면이 매 장 5MB를 새로 만들지 않게. 처음에 통째로 칠한다).</summary>
     public Img Frame(Sim s, int x0, int y0, int w, int h, int frame, Img? into = null)
     {
+        var st = s.Find<Structure>();
+        if (st == null || st.Bodies.Count < 2) { _only = -1; _stc = null; return Draw(s, x0, y0, w, h, frame, into, false); }
+        // ④ 칸 강체: 배를 그리고 · 떨어져 나간 조각마다 제 칸만 따로 그려 자세대로 돌려 붙인다 (가까운 도트 — 도트 그림이 뭉개지지 않게)
+        _stc = st; _only = 0;
+        var img = Draw(s, x0, y0, w, h, frame, into, false);
+        for (int b = 1; b < st.Bodies.Count; b++)
+        {
+            var o = st.Bodies[b];
+            if (o.Mass <= 0) continue;
+            int bx0 = o.MinX - 1, by0 = o.MinY - 2, bw = o.MaxX - o.MinX + 3, bh = o.MaxY - o.MinY + 4;
+            var (cs, sn, tx, ty) = st.ToShipFrame(b);
+            double qx0 = double.MaxValue, qy0 = double.MaxValue, qx1 = double.MinValue, qy1 = double.MinValue;
+            foreach (var (px, py) in new[] { (bx0, by0), (bx0 + bw, by0), (bx0, by0 + bh), (bx0 + bw, by0 + bh) })
+            {
+                double qx = cs * px - sn * py + tx, qy = sn * px + cs * py + ty;
+                qx0 = Math.Min(qx0, qx); qy0 = Math.Min(qy0, qy); qx1 = Math.Max(qx1, qx); qy1 = Math.Max(qy1, qy);
+            }
+            if (qx1 < x0 || qy1 < y0 || qx0 > x0 + w || qy0 > y0 + h) continue;   // 화면 밖
+            _only = b;
+            var part = Draw(s, bx0, by0, bw, bh, frame, null, true);
+            Place(img, part, bx0, by0, x0, y0, cs, sn, tx, ty, qx0, qy0, qx1, qy1);
+        }
+        _only = -1; _stc = null;
+        return img;
+    }
+
+    /// <summary>조각 그림을 배 틀에 붙인다: 화면 도트마다 거꾸로 돌려 조각 그림의 도트를 찾는다 (배 틀 q = R·p + t).</summary>
+    private static void Place(Img img, Img part, int bx0, int by0, int x0, int y0, double cs, double sn, double tx, double ty, double qx0, double qy0, double qx1, double qy1)
+    {
+        int X0 = Math.Max(0, (int)Math.Floor((qx0 - x0) * T)), Y0 = Math.Max(0, (int)Math.Floor((qy0 - y0) * T));
+        int X1 = Math.Min(img.W, (int)Math.Ceiling((qx1 - x0) * T)), Y1 = Math.Min(img.H, (int)Math.Ceiling((qy1 - y0) * T));
+        for (int Y = Y0; Y < Y1; Y++)
+            for (int X = X0; X < X1; X++)
+            {
+                double qx = x0 + (X + 0.5) / T - tx, qy = y0 + (Y + 0.5) / T - ty;
+                double px = cs * qx + sn * qy, py = -sn * qx + cs * qy;
+                int u = (int)Math.Floor((px - bx0) * T), v = (int)Math.Floor((py - by0) * T);
+                if ((uint)u >= (uint)part.W || (uint)v >= (uint)part.H) continue;
+                var c = part.Get(u, v);
+                if (c.A != 0) img.Blend(X, Y, c);
+            }
+    }
+
+    // 지금 그리는 몸 (-1: 몸이 없다 — 다 그린다 · 0: 배 · 1~: 그 조각만)
+    private int _only = -1;
+    private Structure? _stc;
+    private bool Mine(int c) => _only < 0 || _stc!.BodyOf(c) == _only;
+
+    private Img Draw(Sim s, int x0, int y0, int w, int h, int frame, Img? into, bool part)
+    {
         var img = into != null && into.W == w * T && into.H == h * T ? into : new Img(w * T, h * T);
         var f = s.Get<Field>();
         var net = s.Find<Network>();
@@ -106,8 +156,8 @@ public sealed class Painter
 
         // ── 우주 ──
         var space = Rgba.Hex("#05070c");
-        img.Fill(0, 0, img.W, img.H, space);
-        for (int y = y0 - 1; y <= y0 + h; y++)
+        if (!part) img.Fill(0, 0, img.W, img.H, space);
+        for (int y = y0 - 1; y <= y0 + h && !part; y++)
             for (int x = x0 - 1; x <= x0 + w; x++)
             {
                 uint u = DotHash.U(x, y, 7);
@@ -123,6 +173,7 @@ public sealed class Painter
             {
                 if (!L.In(x, y)) continue;
                 int c = L.Index(x, y);
+                if (!Mine(c)) continue;
                 int variant = (int)(DotHash.U(x, y, 41) % DotTiles.Variants);
                 switch (L.Kind[c])
                 {
@@ -151,7 +202,7 @@ public sealed class Painter
             {
                 if (KindAt(x, y) != CellKind.Wall || KindAt(x, y + 1) != CellKind.Floor) continue;
                 int c = L.Index(x, y);
-                if (F(f, c).hole >= 2f) continue;
+                if (F(f, c).hole >= 2f || !Mine(c)) continue;
                 var wk = WallOf(c);
                 bool openW = !Solid(x - 1, y) || KindAt(x - 1, y + 1) != CellKind.Floor;
                 bool openE = !Solid(x + 1, y) || KindAt(x + 1, y + 1) != CellKind.Floor;
@@ -165,14 +216,14 @@ public sealed class Painter
                 if (KindAt(x, y) != CellKind.Wall) continue;
                 int c = L.Index(x, y);
                 double sg = f.SootGPerM2(c);
-                if (sg <= 0.05 || F(f, c).hole >= 2f) continue;
+                if (sg <= 0.05 || F(f, c).hole >= 2f || !Mine(c)) continue;
                 if (y >= y0) SootStain(img, Px(x), Py(y), T, T, sg, c);
                 if (KindAt(x, y + 1) == CellKind.Floor) SootStain(img, Px(x), Py(y + 1), T, DotTiles.Face, sg, c + 7);
             }
         foreach (var d in L.Doors)
         {
             int x = L.X(d.Cell), y = L.Y(d.Cell);
-            if (x < x0 || y < y0 || x >= x0 + w || y >= y0 + h) continue;
+            if (x < x0 || y < y0 || x >= x0 + w || y >= y0 + h || !Mine(d.Cell)) continue;
             float open = f.DoorOpen[d.Id];
             int step = Math.Clamp((int)MathF.Round(open * 6f), 0, 6);
             int kind = d.External ? 1 : d.Kind == "normal" ? 0 : 2;
@@ -188,7 +239,7 @@ public sealed class Painter
             {
                 if (!L.In(x, y)) continue;
                 int c = L.Index(x, y);
-                if (L.Kind[c] != CellKind.Wall || f.Hole[c] <= 0) continue;
+                if (L.Kind[c] != CellKind.Wall || f.Hole[c] <= 0 || !Mine(c)) continue;
                 float a = f.Hole[c];
                 if (a >= 2f) continue;
                 float r = Math.Clamp(MathF.Sqrt(a / 0.01f) * 8f, 2f, 14f);
@@ -228,7 +279,7 @@ public sealed class Painter
         foreach (int i in order)
         {
             var (bx, by, bw, bh) = _fixBox[i];
-            if (bx + bw < x0 || by + bh < y0 || bx > x0 + w || by > y0 + h + 1) continue;
+            if (bx + bw < x0 || by + bh < y0 || bx > x0 + w || by > y0 + h + 1 || !Mine(L.Furniture[i].Cells[0])) continue;
             var ft = _fixType[i] ?? FurnitureType.Shelf;
             int rise = DotMachines.RiseOf(ft);
             var body = Cached(Key(5, (int)ft, bw, bh, i), () => Shadowed(DotMachines.Body(ft, bw, bh, -1, 1, 0, i), rise));
@@ -247,7 +298,7 @@ public sealed class Painter
             foreach (var it in mind.Loose)
             {
                 int c = it.Cell;
-                if (c < 0) continue;
+                if (c < 0 || !Mine(c)) continue;
                 int x = L.X(c), y = L.Y(c);
                 if (x < x0 || y < y0 || x >= x0 + w || y >= y0 + h) continue;
                 int n = count.GetValueOrDefault(c); count[c] = n + 1;
@@ -262,7 +313,7 @@ public sealed class Painter
             {
                 if (!L.In(x, y)) continue;
                 int c = L.Index(x, y);
-                if (L.Kind[c] is not (CellKind.Floor or CellKind.Door)) continue;
+                if (L.Kind[c] is not (CellKind.Floor or CellKind.Door) || !Mine(c)) continue;
                 double sootG = f.SootGPerM2(c);
                 if (sootG > 0.05) SootStain(img, Px(x), Py(y), T, T, sootG, c); // 바닥에 앉은 그을음
                 double water = f.Stored(f.T.sWater, c);
@@ -283,7 +334,7 @@ public sealed class Painter
             {
                 int cell = a.C.Cell;
                 int x = L.X(cell), y = L.Y(cell);
-                if (x < x0 - 1 || y < y0 - 1 || x > x0 + w || y > y0 + h + 1) continue;
+                if (x < x0 - 1 || y < y0 - 1 || x > x0 + w || y > y0 + h + 1 || !Mine(cell)) continue;
                 var (nx, ny) = Nudge?.Invoke(a) ?? (0, 0);
                 if (a.IsPerson) DrawPerson(img, mind, life, a, Px(x) + nx, Py(y) + ny, frame);
                 else DrawBot(img, a, Px(x) + nx, Py(y) + ny, frame);
@@ -296,6 +347,7 @@ public sealed class Painter
             {
                 if (!L.In(x, y)) continue;
                 int c = L.Index(x, y);
+                if (!Mine(c)) continue;
                 if (chem != null && chem.Burning[c] != 0)
                 {
                     float power = Math.Clamp(chem.Hrr[c] / 40f, 0.25f, 1f);
@@ -516,7 +568,7 @@ public sealed class Painter
                 {
                     if (!L.In(x, y)) continue;
                     int c = L.Index(x, y);
-                    if (L.Kind[c] == CellKind.Wall) continue;
+                    if (L.Kind[c] == CellKind.Wall || !Mine(c)) continue;
                     double kpa = f.Pressure(c);
                     switch (Show)
                     {
@@ -568,7 +620,7 @@ public sealed class Painter
             {
                 if (!L.In(x, y)) continue;
                 int c = L.Index(x, y);
-                if (net.LineAt[c] == 0) continue;
+                if (net.LineAt[c] == 0 || !Mine(c)) continue;
                 int px = (x - x0) * T, py = (y - y0) * T;
                 for (int k = 0; k < 4; k++)
                 {

@@ -74,7 +74,7 @@ public sealed partial class Field
         {
             double nMin = k.RB < 0 ? _rn[k.RA] : Math.Min(_rn[k.RA], _rn[k.RB]);
             k.Fast = Math.Abs(k.Flow) * dt > 0.02 * Math.Max(1e-9, nMin);
-            k.Flow = 0;
+            k.Flow = 0; k.Impulse = 0;
         }
         foreach (var k in Links)
         {
@@ -89,6 +89,7 @@ public sealed partial class Field
                 double moved = k.RB < 0 ? FlowExterior(k, h) : FlowInternal(k, h);
                 k.Flow += moved / dt;
             }
+        SplitImpulse();
         long t = Prof != null ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
         foreach (var k in Links)
             if (Math.Abs(k.Flow) > WindMinFlow) Wind(k, dt);
@@ -147,6 +148,7 @@ public sealed partial class Field
             }
             dn = Math.Min(dn, _rn[r]);
             if (dn <= 0) return 0;
+            k.Impulse += dn * molar * ExitSpeed(p, pe, t, molar, gamma);
             Take(r, k.NearA, k.WA, dn);
             double vented = 0;
             for (int g = 0; g < G; g++) vented += _parcel[g];
@@ -169,6 +171,41 @@ public sealed partial class Field
             return -dn;
         }
         return 0;
+    }
+
+    private double[] _impR = Array.Empty<double>(), _areaR = Array.Empty<double>();
+
+    /// <summary>
+    /// 한 구역의 우주로 트인 틈들은 같은 기압을 본다 — 틈을 차례로 셈하며 앞의 틈이 먼저 빼 간 몫(셈 순서의 흔적)을 지우려고
+    /// 구역의 운동량 합을 틈 넓이대로 다시 나눈다 (합은 그대로 · 대칭인 틈은 똑같이 민다).
+    /// </summary>
+    private void SplitImpulse()
+    {
+        int nr = Regions.Count;
+        bool any = false;
+        foreach (var k in Links) if (k.RB < 0 && k.Impulse > 0) { any = true; break; }
+        if (!any) return;
+        if (_impR.Length < nr) { _impR = new double[nr]; _areaR = new double[nr]; }
+        Array.Clear(_impR, 0, nr); Array.Clear(_areaR, 0, nr);
+        foreach (var k in Links) if (k.RB < 0 && k.RA >= 0) { _impR[k.RA] += k.Impulse; _areaR[k.RA] += k.Area; }
+        foreach (var k in Links) if (k.RB < 0 && k.RA >= 0 && _areaR[k.RA] > 0) k.Impulse = _impR[k.RA] * k.Area / _areaR[k.RA];
+    }
+
+    /// <summary>
+    /// 틈으로 빠지는 기체의 실효 분출 속도 (m/s — 운동량 ÷ 질량): 막힘 흐름이면 목의 운동량 흐름 ṁa* + p*A* = ṁa*(1 + 1/γ) (a* = √(2γRT/((γ+1)M)) — 공기 20℃ 537m/s ·
+    /// 노즐 추력 계수 1.27과 같다)에서 바깥 압력이 미는 몫을 뺀다 · 막히지 않으면 등엔트로피 분출 √(2c_pT(1 − (p_e/p)^((γ−1)/γ))).
+    /// </summary>
+    public static double ExitSpeed(double p, double pe, double t, double molar, double gamma)
+    {
+        if (p <= pe || molar <= 0) return 0;
+        double r = pe / p, crit = Math.Pow(2 / (gamma + 1), gamma / (gamma - 1));
+        if (r <= crit)
+        {
+            double aStar = Math.Sqrt(2 * gamma * R * t / ((gamma + 1) * molar));
+            return Math.Max(0, aStar * (1 + 1 / gamma) - aStar / gamma * r / crit);
+        }
+        double cp = gamma / (gamma - 1) * R / molar;
+        return Math.Sqrt(2 * cp * t * (1 - Math.Pow(r, (gamma - 1) / gamma)));
     }
 
     /// <summary>

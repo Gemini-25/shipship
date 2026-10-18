@@ -64,6 +64,7 @@ public static partial class Program
             else if (args.Contains("--lines-facts")) ProbeLinesFacts(args);
             else if (args.Contains("--cable-fire")) ProbeCableFire(args);
             else if (args.Contains("--lines")) ProbeLines(args);
+            else if (args.Contains("--bodies")) ProbeBodies(args);
             else if (args.Contains("--director-check")) DirectorCheck(args);
             else if (args.Contains("--budget")) Budget();
             else if (args.Contains("--music")) MusicDemo(args);

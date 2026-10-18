@@ -229,7 +229,7 @@ public sealed partial class Structure : IEngine
         if (sim.Tick % 25 == 0) { Rust(sim, 25 * dt); StressCorrosion(sim, 25 * dt); }
         t = Prof.Lap("구조:녹 · 응력 부식", t);
         Lattice(sim); t = Prof.Lap("구조:격자", t);
-        Drift(dt); Prof.Lap("구조:떠돎", t);
+        MoveBodies(sim, dt); Prof.Lap("구조:몸", t);
     }
 
     /// <summary>압력이 빠진 쪽의 원인: 낮은 쪽 구역에 뚫린 틈(벽 구멍 · 날아간 문)이 있으면 그 원인.</summary>
@@ -597,6 +597,7 @@ public sealed partial class Structure : IEngine
         w.Tag("금"); w.Arr(Crack); w.Arr(CrackPatch); w.Arr(SigTurn); w.Arr(SigRun); w.Arr(CrackCause); w.Arr(SigDir); w.I64(CrackGrowths); w.I64(Tears); w.I64(CrackLeaks);
         w.Tag("조각"); w.Arr(Frag); w.List(Fragments); w.I32(SplitVersion); w.I64(DeckBursts); w.I64(Smashed); w.I64(Splits); w.I64(DebrisLost); w.I64(SectionFails);
         w.Arr(FurnHit); w.Arr(FurnBroken); w.Arr(FurnCause); w.Arr(ThermalJam); w.Arr(_pPrev); w.Bool(_latticeDirty);
+        SaveBodies(w);
     }
 
     public void Load(StateReader r)
@@ -607,6 +608,7 @@ public sealed partial class Structure : IEngine
         r.Tag("금"); r.ArrInto(Crack); r.ArrInto(CrackPatch); r.ArrInto(SigTurn); r.ArrInto(SigRun); r.ArrInto(CrackCause); r.ArrInto(SigDir); CrackGrowths = r.I64(); Tears = r.I64(); CrackLeaks = r.I64();
         r.Tag("조각"); r.ArrInto(Frag); Fragments.Clear(); Fragments.AddRange(r.List<Fragment>()); SplitVersion = r.I32(); DeckBursts = r.I64(); Smashed = r.I64(); Splits = r.I64(); DebrisLost = r.I64(); SectionFails = r.I64();
         r.ArrInto(FurnHit); r.ArrInto(FurnBroken); r.ArrInto(FurnCause); r.ArrInto(ThermalJam); r.ArrInto(_pPrev); _latticeDirty = r.Bool();
+        LoadBodies(r);
         Label(_comp, out _); _latticeVersion++; _thrustAxis = -1; Array.Clear(_thrustSig);   // 덩어리 · 단면은 다시 센다 (찍지 않는다)
     }
 }

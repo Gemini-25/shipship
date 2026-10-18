@@ -16,6 +16,9 @@ public sealed class Link
     public int[]? DistA, DistB;
     /// <summary>이번 틱에 잘게 나눠 흘릴 틈 (지난 틱에 크게 흘렀다).</summary>
     public bool Fast;
+    /// <summary>우주로 트인 틈: 바깥 쪽 방향 (도면 좌표 단위 벡터 — 바닥 · 천장 구멍은 판 밖이라 0) · 이번 틱에 빠진 기체가 가져간 운동량 (N·s — ④ 몸이 반대로 밀린다).</summary>
+    public float Dx, Dy;
+    public double Impulse;
 }
 
 public enum LinkKind : byte { DoorGap, DoorAjar, Crack, Breach, Open }
@@ -215,7 +218,27 @@ public sealed partial class Field
         int rb = b >= 0 && !IsOut(b) && Passable(b) ? RegionOf[b] : -1;
         if (rb < 0) b = -1;
         if (ra == rb) return; // 같은 구역 안의 금 — 압력이 같다
-        Links.Add(new Link { A = a, B = b, RA = ra, RB = rb, Via = via, Area = area, Kind = kind });
+        var k = new Link { A = a, B = b, RA = ra, RB = rb, Via = via, Area = area, Kind = kind };
+        if (rb < 0) (k.Dx, k.Dy) = OutDir(a, via, kind);
+        Links.Add(k);
+    }
+
+    /// <summary>바깥과의 틈이 트인 쪽 (도면 좌표 단위 벡터): 벽 구멍은 안 칸 → 구멍 칸 · 바깥과 맞닿은 칸은 바깥 이웃 쪽의 합 · 바닥 · 천장 구멍은 0 (위아래가 마주 본다).</summary>
+    private (float, float) OutDir(int a, int via, LinkKind kind)
+    {
+        double dx = 0, dy = 0;
+        if (via != a) { dx = L.X(via) - L.X(a); dy = L.Y(via) - L.Y(a); }
+        else if (kind == LinkKind.Open)
+        {
+            int x = L.X(a), y = L.Y(a);
+            foreach (var (ox, oy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
+            {
+                int j = Cell(x + ox, y + oy);
+                if (j < 0 || IsOut(j)) { dx += ox; dy += oy; }
+            }
+        }
+        double n = Math.Sqrt(dx * dx + dy * dy);
+        return n > 1e-9 ? ((float)(dx / n), (float)(dy / n)) : (0f, 0f);
     }
 
     /// <summary>틈 곁 칸들과 무게 (거리 d에서 e^(−d/2) · 반지름 6).</summary>
