@@ -183,5 +183,29 @@ public static partial class Program
                 seenA >= 20 && seenB >= 20 && minHold >= Director.CrossHoldSec - 1 && d.CrossCuts >= 2,
                 $"왼쪽 {seenA:0}초 · 오른쪽 {seenB:0}초 · 엇갈려 자름 {d.CrossCuts} · 가장 짧게 머문 것 {(minHold == double.MaxValue ? 0 : minHold):0}초 · 화면 {d.ScreenSeconds:0}초");
         }
+
+        // ── 하이라이트 문턱은 그날의 흐름을 따른다: 첫 말다툼은 하이라이트 · 한 시간 뒤 같은 크기의 말다툼은 아니다 · 조용한 일곱 시간 뒤의 말다툼은 하이라이트 (고치기 전: 조용한 날은 하루 0~1개) ──
+        {
+            var s = Worlds.Full(lay, 2);
+            var d = new Director(s.Layout) { KeepRing = false };
+            void Argue(string what)
+            {
+                int r = s.Causes.Add(CauseKind.Person, what, s.Tick, A);
+                int c = s.Causes.Add(CauseKind.Person, "언성이 높아졌다", s.Tick, A, r);
+                s.Facts.Emit(s.Tick, FactKind.Talk, A, (int)TalkEnd.Argue, c);
+                for (int i = 0; i < 5; i++) d.Observe(s);
+            }
+            Argue("배식 순서로 다퉜다");
+            int first = d.Highlights.Count;
+            void Pass(double hours) { for (long k = 0; k < Time.Hours(hours); k++) { s.Step(); d.Observe(s); } }
+            Pass(1); Argue("빨래 당번으로 다퉜다");
+            int soon = d.Highlights.Count;
+            float need1 = d.HighlightNeed(s.Tick);
+            Pass(7); float need7 = d.HighlightNeed(s.Tick); Argue("음악 소리로 다퉜다");
+            int late = d.Highlights.Count;
+            Check("하이라이트 문턱은 그날의 흐름을 따른다: 첫 말다툼은 하이라이트 · 한 시간 뒤 같은 크기의 말다툼은 아니다 · 조용한 일곱 시간 뒤엔 그 말다툼도 하이라이트 (문턱 80 → 44)",
+                first == 1 && soon == 1 && late == 2,
+                $"첫 말다툼 뒤 {first}개 · 한 시간 뒤 {soon}개 (문턱 {need1:0}) · 조용한 일곱 시간 뒤 {late}개 (문턱 {need7:0})");
+        }
     }
 }

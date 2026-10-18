@@ -49,6 +49,7 @@ public static partial class Program
         var clock = System.Diagnostics.Stopwatch.StartNew();
         var tickClock = new System.Diagnostics.Stopwatch();
         int deadCount = 0, splits = 0, aliveAtSplit = -1;
+        int Living() => mind.Agents.Count(a => a.IsPerson && life.Bodies[a.C.Body].Alive != 0);
         for (long t = 0; t < end; t++)
         {
             tickClock.Restart();
@@ -63,12 +64,12 @@ public static partial class Program
             {
                 if (Array.IndexOf(Accidents, f.Kind) >= 0) { acc[day]++; accKinds[f.Kind] = accKinds.GetValueOrDefault(f.Kind) + 1; }
                 else if (f.Kind is FactKind.Hurt or FactKind.Collapsed) hurt[day]++;
-                else if (f.Kind == FactKind.ShipSplit) { splits++; if (aliveAtSplit < 0) aliveAtSplit = crew - deadCount; }
+                else if (f.Kind == FactKind.ShipSplit) { splits++; if (aliveAtSplit < 0) aliveAtSplit = Living(); }
                 else if (f.Kind == FactKind.Died)
                 {
                     died[day]++; deadCount++;
                     if (firstDeath < 0) firstDeath = f.Tick;
-                    if (halfDead < 0 && deadCount * 2 >= crew) halfDead = f.Tick;
+                    if (halfDead < 0 && Living() * 2 <= crew) halfDead = f.Tick;
                     string why = s.Causes.Text(f.Cause);
                     int dash = why.IndexOf("— ", StringComparison.Ordinal);
                     why = dash >= 0 ? why[(dash + 2)..] : why;
@@ -77,7 +78,7 @@ public static partial class Program
             }
             cursor = s.Facts.Total;
             lastTick = t;
-            if (deadCount >= crew) break;   // 아무도 없다 — 버티지 못했다
+            if (deadCount > 0 && died[day] > 0 && Living() == 0) break;   // 아무도 없다 — 버티지 못했다 (태운 생존자의 죽음도 세지만 끝은 산 사람이 없을 때)
         }
         double ran = (lastTick + 1) / (double)dayTicks;
         int alive = mind.Agents.Count(a => a.IsPerson && life.Bodies[a.C.Body].Alive != 0);
@@ -93,6 +94,8 @@ public static partial class Program
         int mixed = Enumerable.Range(0, fullDays).Count(i => hlPeople[i] > 0 && hlPeople[i] < hlDay[i]);
         var wide = d.AllChains().OrderByDescending(c => c.Count).ThenByDescending(c => c.Facts).FirstOrDefault();
         double msTick = clock.Elapsed.TotalMilliseconds / Math.Max(1, ticks);
+        if (Environment.GetEnvironmentVariable("JUDGE_SPOTS") == "1")
+            for (int h = 0; h < d.HourBest.Count; h++) Console.WriteLine($"    {h / 24}일 {h % 24:00}시 가장 높은 후보 {d.HourBest[h].spot:0} {FactNames.Of(d.HourBest[h].kind)}{(d.HourBest[h].spot >= Director.HighlightAt ? " ★" : "")}");
         // 60프레임: 한 프레임 16.7ms 중 그리기 몫(약 4.7ms)을 빼고 12ms를 엔진에 — 한 틱 2.4초
         double maxSpeed = 60 * (12 / Math.Max(1e-6, worstHourMs)) * Time.SecondsPerTick;
         double food = s.Book.DaysLeft((int)Res.Food, s.Tick), water = s.Book.DaysLeft((int)Res.Water, s.Tick);

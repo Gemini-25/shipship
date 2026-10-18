@@ -55,7 +55,7 @@ public sealed partial class Director
             or FactKind.Patched or FactKind.Repaired or FactKind.DoorSealed or FactKind.Woke or FactKind.WentOutside or FactKind.Switched or FactKind.Fell or FactKind.Salvaged or FactKind.Aim => 8,
         FactKind.Relationship or FactKind.Grieved or FactKind.TrustLost or FactKind.Talk or FactKind.Blamed or FactKind.Fight or FactKind.Sabotage or FactKind.Confessed or FactKind.Lie or FactKind.LieExposed or FactKind.LogAsked => 9,
         FactKind.Decision or FactKind.ComputerAlarm or FactKind.ComputerSeal or FactKind.ComputerAssign or FactKind.LoadShed or FactKind.BreakerReset
-            or FactKind.ComputerDown or FactKind.ComputerJournal or FactKind.ComputerBroadcast or FactKind.Rationed or FactKind.LogShown => 10,
+            or FactKind.ComputerDown or FactKind.ComputerJournal or FactKind.ComputerBroadcast or FactKind.Rationed or FactKind.LogShown or FactKind.Shelter => 10,
         FactKind.Pilfer => 11,
         FactKind.StorySeed => 12,
         _ => 0,

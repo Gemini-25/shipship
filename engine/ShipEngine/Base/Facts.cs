@@ -94,6 +94,8 @@ public enum FactKind : ushort
     LieExposed,        // 거짓말이 들통났다 (Actor: 둘러댄 이 · Other: 밝힌 이 · Size: 1 본 이 · 2 주컴퓨터 기록)
     LogAsked,          // 주컴퓨터에 장치 기록을 물었다 (Actor: 물은 이 · Other: 장치 · Size: 몇 시간 안)
     LogShown,          // 주컴퓨터 기록 — 장치의 점검 뚜껑을 연 이 (Actor: 연 이 · −1 없음 · Other: 장치 · Size: 몇 시간 전)
+    // ⑩ 우주 날씨 대비
+    Shelter,           // 주컴퓨터가 대피를 알렸다 (Size: 1 파편 · 2 방사선 · Other: 대피실 · Cell: 대피실 가운데) · −1이면 풀었다
 }
 
 public static class FactNames
@@ -116,7 +118,7 @@ public static class FactNames
         FactKind.Grieved => "슬픔", FactKind.TrustLost => "믿음이 깨졌다", FactKind.WentOutside => "선외로 나갔다",
         FactKind.Talk => "이야기", FactKind.Blamed => "탓", FactKind.Fight => "몸싸움", FactKind.Sabotage => "몰래 한 짓", FactKind.Pilfer => "몰래 먹었다", FactKind.Rationed => "배급", FactKind.Treated => "돌봤다", FactKind.Confessed => "털어놓았다", FactKind.Burn => "점화", FactKind.Fell => "넘어졌다", FactKind.Contact => "다른 배", FactKind.Jumper => "연장선", FactKind.Salvaged => "떼어 냈다", FactKind.Aim => "인생 목표",
         FactKind.ShipSplit => "배가 갈라졌다",
-        FactKind.Lie => "거짓말", FactKind.LieExposed => "거짓말이 들통났다", FactKind.LogAsked => "기록을 물었다", FactKind.LogShown => "주컴퓨터 기록",
+        FactKind.Lie => "거짓말", FactKind.LieExposed => "거짓말이 들통났다", FactKind.LogAsked => "기록을 물었다", FactKind.LogShown => "주컴퓨터 기록", FactKind.Shelter => "대피",
         FactKind.ComputerJournal => "일지", FactKind.ComputerBroadcast => "아침 방송", FactKind.Switched => "껐다", _ => "",
     };
 }

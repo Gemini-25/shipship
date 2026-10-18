@@ -142,6 +142,7 @@ public sealed partial class Mind
                 score += g is GoalKind.Craft or GoalKind.Maintain or GoalKind.Clean or GoalKind.Harvest or GoalKind.Restock && _deciding.IsPerson ? 1 : 3; // 주컴퓨터가 맡긴 일 (사람의 일상 일은 끼니 · 잠보다 앞서지 않게)
         }
         if (_deciding != null && _deciding.IsPerson) score *= AimBoost(_deciding.C, g) * LessonBoost(_deciding.C, g);   // ⑧ 인생 목표 · 사고의 교훈
+        if (_deciding != null && Everyday(g) && Sheltering(_deciding) && (cell >= 0 ? RoomOf(cell) != ShelterRoom : g == GoalKind.Eat)) score *= 0.15f; // 대피 중: 대피실 밖의 일상은 미룬다
         _opts.Add(new Option { Goal = g, Target = target, Cell = cell, Score = score, Cause = cause });
     }
 
@@ -158,8 +159,10 @@ public sealed partial class Mind
             // 졸림이 0.6을 넘거나, 잠잘 시간대에 0.4를 넘으면 잔다 (덜 졸린데 누우면 짧게 깬다) — 잘 시간대는 몸의 시계만큼 옮겨 간다 (아침형 · 저녁형)
             bool night = InWindow(hour - c.Chrono, c.ShiftHour + 16, 8);
             int bedRoom = RoomOf(c.Bed >= 0 ? c.Bed : here);
+            int bedCell = c.Bed >= 0 ? c.Bed : here;
+            if (Sheltering(a) && RoomOf(bedCell) != ShelterRoom) { bedCell = RoomOf(here) == ShelterRoom ? here : ShelterCell; bedRoom = ShelterRoom; } // 대피 중에는 대피실 바닥에서 잔다
             if ((c.Sleepy > 0.6f || night && c.Sleepy > 0.4f) && !BelievedRoomBad(a, bedRoom)) // 위험하다고 믿는 방에서는 자지 않는다
-                Add(GoalKind.Sleep, c.Bed, c.Bed >= 0 ? c.Bed : here, c.Sleepy * c.Sleepy * 5 + (night ? 1.5f : 0)); // 몸의 시계는 '언제 눕나'만 옮긴다 (얼마나 간절한지는 쌓인 졸림)
+                Add(GoalKind.Sleep, c.Bed, bedCell, c.Sleepy * c.Sleepy * 5 + (night ? 1.5f : 0)); // 몸의 시계는 '언제 눕나'만 옮긴다 (얼마나 간절한지는 쌓인 졸림)
             // 욕구는 어느 만큼 차야 움직인다 (배가 조금 고프다고 바로 먹으러 가지 않는다)
             int kinMeal = c.Hunger > 0.35f && c.Hunger <= 0.55f ? KinMeal(a) : -1; // ⑨ 가까운 이가 먹으러 가면 조금 배고파도 따라간다
             if ((c.Hunger > 0.55f || kinMeal >= 0) && FoodLeft(a.Id) >= 0.2) // ⑪ 배급: 오늘 몫을 다 받았으면 배식기가 주지 않는다 (참는다)
@@ -172,6 +175,7 @@ public sealed partial class Mind
             SickOptions(a, here);    // ⑦ 앓는 이는 눕는다 (덜 성실할수록)
             AwaitCare(a, here);      // ⑦ 돌보러 오는 이가 있으면 기다린다
             PilferOption(a, here);   // ⑪ 몫을 다 먹고 몹시 배고프면 — 덜 성실하고 덜 다정한 이는 몰래 한 끼
+            ShelterOption(a, here);  // ⑩ 대피 방송을 따르는 이는 대피실로
             if (c.Thirst > 0.3f && WaterAllowed(a.Id) >= 5) Add(GoalKind.Drink, -1, -1, c.Thirst * c.Thirst * 6 + (c.Thirst > 0.85f ? 2 : 0)); // 몹시 마른 목(몸의 물 1.7% 모자람)은 한밤의 잠보다 급하다
             float grief = _soc?.GriefOf(a.Id) ?? 0; // ⑨ 슬픔: 일손을 놓고 사람을 찾는다
             if (InWindow(hour, c.ShiftHour, 8) && c.Station >= 0) Add(GoalKind.Work, c.Station, L.Furniture[c.Station].Cells[0], (1.2f + c.Diligent) * (1 - 0.7f * grief) * WorkFactor(a));
@@ -352,6 +356,12 @@ public sealed partial class Mind
             }
             case GoalKind.Sleep:
             {
+                if (Sheltering(a) && (c.Bed < 0 || RoomOf(c.Bed) != ShelterRoom))
+                {
+                    if (RoomOf(here) != ShelterRoom) plan.Add(Go(ShelterSpot(a, ShelterCell), 1));
+                    plan.Add(Use(UseKind.Sleep, Time.Hours(10)));
+                    return true;
+                }
                 int bed = c.Bed >= 0 && !Taken(a, c.Bed) ? c.Bed : NearestFree(a, _beds);
                 if (bed >= 0) plan.Add(Go(bed));
                 plan.Add(Use(UseKind.Sleep, Time.Hours(10)));
@@ -395,6 +405,13 @@ public sealed partial class Mind
                 return true;
             }
             case GoalKind.Relax: return BuildRelax(sim, a, plan);
+            case GoalKind.Shelter:
+            {
+                if (ShelterRoom < 0) return false;
+                plan.Add(Go(ShelterSpot(a, o.Cell), 1));
+                plan.Add(Use(UseKind.None, Time.Minutes(5)));
+                return true;
+            }
             case GoalKind.Exercise:
             {
                 // 달리기틀이 비어 있으면 거기서 · 없으면 침대 곁 맨몸 운동

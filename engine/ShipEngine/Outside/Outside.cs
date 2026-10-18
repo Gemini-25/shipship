@@ -85,6 +85,10 @@ public sealed partial class Outside : IEngine
     // ───────────────────────── 이야기꾼 · 시험이 심는 원인 ─────────────────────────
 
     /// <summary>파편 구름을 놓는다: 방향 (dirX, dirY)에서 다가온다 · 앞 거리(m) · 반지름 · 밀도(개/m³).</summary>
+    /// <summary>파편 구름 갈래의 이름 · 가장 무거운 입자 (위에서 읽는다 — 대피할지 정할 때).</summary>
+    public string DebrisName(int kind) => kind >= 0 && kind < _debrisKeys.Length ? T.Space.Debris[_debrisKeys[kind]].Name : "";
+    public double DebrisMaxKg(int kind) => kind >= 0 && kind < _debrisKeys.Length ? T.Space.Debris[_debrisKeys[kind]].MaxKg : 0;
+
     public void AddCloud(string kind, double ahead, double radius, double density, double dirX, double dirY, int cause)
     {
         var d = T.Space.Debris[kind];

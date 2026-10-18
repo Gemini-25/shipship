@@ -78,7 +78,7 @@ public sealed partial class Director
         FactKind.Woke => 2, FactKind.ComputerAssign => 4, FactKind.Sick => 8,
         FactKind.Relationship => 12, FactKind.Grieved => 30, FactKind.TrustLost => 25, FactKind.WentOutside => 20,
         FactKind.Talk => 2, FactKind.Blamed => 15, FactKind.Fight => 60, FactKind.Sabotage => 40, FactKind.Confessed => 30,
-        FactKind.Burn => 14, FactKind.Fell => 22, FactKind.Contact => 12, FactKind.Jumper => 16, FactKind.Salvaged => 14, FactKind.Aim => 18, FactKind.ShipSplit => 100, FactKind.Lie => 30, FactKind.LieExposed => 50, FactKind.LogShown => 6, _ => 1,
+        FactKind.Burn => 14, FactKind.Fell => 22, FactKind.Contact => 12, FactKind.Jumper => 16, FactKind.Salvaged => 14, FactKind.Aim => 18, FactKind.ShipSplit => 100, FactKind.Lie => 30, FactKind.LieExposed => 50, FactKind.LogShown => 6, FactKind.Shelter => 22, _ => 1,
     };
 
     /// <summary>사실 하나의 무게 — 대화는 끝에 따라 (다툼 · 사과 · 위로 · 소문은 볼 만하고 잡담은 거의 0) · 끝장 몸싸움은 더.</summary>
@@ -288,10 +288,36 @@ public sealed partial class Director
 
     // ───────────────────────── 하이라이트 ─────────────────────────
 
+    /// <summary>
+    /// 하이라이트 문턱은 그날의 흐름을 따른다 (하이라이트 편집처럼): 두 시간 넘게 하이라이트가 없으면 여섯 시간에 걸쳐 0.55배까지 내려
+    /// 조용한 날의 작은 이야기(사이가 달라졌다 · 금이 갔다 · 인생 목표)도 담고 · 하루에 열 개를 넘으면 1.5배로 올려 몰린 날엔 큰 것만.
+    /// </summary>
+    public float HighlightNeed(long t)
+    {
+        long last = long.MinValue / 2; int day = 0;
+        for (int i = Highlights.Count - 1; i >= 0; i--)
+        {
+            var h = Highlights[i];
+            if (h.Tick > last) last = h.Tick;
+            if (t - h.Tick < Time.TicksPerDay) day++; else break;
+        }
+        double quietH = Highlights.Count == 0 ? (t - 0) / (double)Time.TicksPerHour : (t - last) / (double)Time.TicksPerHour;
+        double k = quietH <= 2 ? 1 : Math.Max(QuietFloor, 1 - (1 - QuietFloor) * (quietH - 2) / 4);
+        if (day >= 10) k *= 1.5;
+        return (float)(HighlightAt * k);
+    }
+    public const double QuietFloor = 0.55;
+
+    /// <summary>관찰용: 시간마다 가장 높았던 하이라이트 후보 (문턱에 못 미친 것도) — 평가 도구가 읽는다.</summary>
+    public readonly List<(float spot, FactKind kind)> HourBest = new();
+
     private void MaybeHighlight(Sim sim, in Fact f, long t)
     {
         float spot = SpotScore(f.Cell);
-        if (spot < HighlightAt) return;
+        int hour = (int)(t / Time.TicksPerHour);
+        while (HourBest.Count <= hour) HourBest.Add((0, FactKind.None));
+        if (spot > HourBest[hour].spot) HourBest[hour] = (spot, f.Kind);
+        if (spot < HighlightNeed(t)) return;
         int root = 0;
         if (f.Cause != 0) { var ch = sim.Causes.Chain(f.Cause); root = ch.Count > 0 ? ch[0] : 0; }
         // 하나로 묶는다: 같은 뿌리에서 나온 일(30분 안) · 같은 곳 2분 안 · 한 소동(마지막 일에서 15분 안에 그 소동 동안 새로 시작된 일 — 잔해 폭풍 뒤 봉쇄 · 경보) — 더 크면 고친다 (정점 · 제목 · 시작은 더 이른 쪽)
