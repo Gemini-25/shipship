@@ -46,6 +46,34 @@ public static partial class Program
                 bad.Count == 0 && Layout.ShipKeys().Count() == 7, bad.Count == 0 ? $"{Layout.ShipKeys().Count()}척 모두 맞다" : string.Join(" · ", bad));
         }
 
+        // ── 비상 호흡기: 배마다 산소 마스크가 사람 수보다 많고 · 어느 침대에서든 마스크함이 걸어서 25칸 안 (ISS — 모듈마다 휴대용 호흡기)
+        //    (기준 평가가 찾은 결함 — 살핌호에는 마스크함이 없었고 새터호는 40명에 마스크 6개: 큰 구멍 뒤 옅은 공기에 쓸 마스크가 없어 모두 숨졌다) ──
+        {
+            var bad = new List<string>(); var note = new List<string>();
+            foreach (var key in Layout.ShipKeys())
+            {
+                var L = Layout.Ship(key, Tables.Default);
+                var boxes = L.Furniture.Where(f => f.Type == "OxygenMaskBox" && f.Cells.Length > 0).ToList();
+                int beds = L.Furniture.Count(f => f.Type == "Bed");
+                var dist = Enumerable.Repeat(-1, L.N).ToArray(); var q = new Queue<int>();
+                foreach (var b in boxes) foreach (int c in b.Cells) { Span<int> nb0 = stackalloc int[4]; L.Neighbors(c, nb0); foreach (int j in nb0) if (j >= 0 && L.IsSpace(j) && dist[j] < 0) { dist[j] = 0; q.Enqueue(j); } }
+                Span<int> nb = stackalloc int[4];
+                while (q.Count > 0) { int c = q.Dequeue(); L.Neighbors(c, nb); foreach (int j in nb) if (j >= 0 && L.IsSpace(j) && dist[j] < 0) { dist[j] = dist[c] + 1; q.Enqueue(j); } }
+                int far = 0;
+                foreach (var b in L.Furniture.Where(f => f.Type == "Bed"))
+                {
+                    int best = int.MaxValue;
+                    foreach (int c in b.Cells) { L.Neighbors(c, nb); foreach (int j in nb) if (j >= 0 && dist[j] >= 0) best = Math.Min(best, dist[j]); }
+                    far = Math.Max(far, best);
+                }
+                int masks = boxes.Count * ShipPlan.MasksPerBox;
+                note.Add($"{L.Name} 마스크 {masks}/{beds}명 · 가장 먼 침대 {far}칸");
+                if (masks < beds || far > 25) bad.Add($"{L.Name}: 마스크 {masks} · 사람 {beds} · 가장 먼 침대 {far}칸");
+            }
+            Check("비상 호흡기: 배마다 산소 마스크가 사람 수보다 많고 · 어느 침대에서든 마스크함이 걸어서 25칸 안",
+                bad.Count == 0, bad.Count == 0 ? string.Join(" · ", note) : string.Join(" · ", bad));
+        }
+
         // ── 내장된 도면 = 생성기가 지금 만드는 도면 (손으로 고치지 않았다 · 생성기는 결정론) ──
         {
             var diff = new List<string>();

@@ -357,6 +357,25 @@ public sealed class ShipPlan
         return l;
     }
 
+    /// <summary>사람이 머물거나 일하는 방 — 산소 마스크함을 하나씩 둔다 (ISS: 모듈마다 휴대용 호흡기 · 소화기).</summary>
+    private static readonly HashSet<string> MaskRooms = new()
+    {
+        "Quarters", "Mess", "Galley", "Medbay", "Lounge", "LifeSupport", "Hydroponics", "Workshop", "Reactor", "Power", "Gym",
+        "Cooling", "ComputerRoom", "Comms", "School", "Chapel", "Bridge", "Lab", "Storage", "Hangar",
+    };
+    public const int MasksPerBox = 6;
+
+    /// <summary>방의 칸 · 비워 둘 문 앞 칸 (드나드는 길).</summary>
+    private (HashSet<(int, int)> set, HashSet<(int, int)> keep) RoomSpace(int r, HashSet<(int, int)> doorCells)
+    {
+        var cells = CellsOf(r);
+        var set = cells.ToHashSet();
+        var keep = new HashSet<(int, int)>();
+        foreach (var (x, y) in cells) foreach (var (dx, dy) in Four) if (doorCells.Contains((x + dx, y + dy))) keep.Add((x, y));
+        foreach (var (x, y) in keep.ToList()) foreach (var (dx, dy) in Four) if (set.Contains((x + dx, y + dy))) keep.Add((x + dx, y + dy));
+        return (set, keep);
+    }
+
     private void PlaceFurniture()
     {
         var doorCells = Doors.Select(d => (d.X, d.Y)).ToHashSet();
@@ -364,12 +383,7 @@ public sealed class ShipPlan
         {
             var room = Rooms[r];
             if (room.Furn.Length == 0) continue;
-            var cells = CellsOf(r);
-            var set = cells.ToHashSet();
-            // 문 앞 칸과 그 옆은 비워 둔다 (드나드는 길)
-            var keep = new HashSet<(int, int)>();
-            foreach (var (x, y) in cells) foreach (var (dx, dy) in Four) if (doorCells.Contains((x + dx, y + dy))) keep.Add((x, y));
-            foreach (var (x, y) in keep.ToList()) foreach (var (dx, dy) in Four) if (set.Contains((x + dx, y + dy))) keep.Add((x + dx, y + dy));
+            var (set, keep) = RoomSpace(r, doorCells);
             foreach (var (type, n0) in room.Furn)
                 for (int k = 0, n = Math.Abs(n0); k < n; k++)
                     if (!(Rows.Contains(type) ? PutRow(type, set, keep) : PutOne(type, set, keep)))
@@ -378,6 +392,24 @@ public sealed class ShipPlan
                         Fail($"{room.Name}에 {type} {k + 1}/{n}번째 자리가 없다 (칸 {set.Count} · 문 앞 {keep.Count} · 이미 놓은 {set.Count(c => _occ.ContainsKey(c))} · 빈 칸이 이어져 있나 {FreeOk(set, keep, new())})");
                     }
         }
+        // 비상 호흡기: 사람이 머무는 방마다 산소 마스크함 하나 (자리가 없으면 건너뛴다) · 다 합쳐 사람 수보다 마스크가 많게 (넓은 방부터 더 놓는다)
+        //   (기준 평가가 찾은 결함 — 살핌호에는 마스크함이 없었고 · 새터호는 40명에 마스크 6개였다: 큰 구멍 뒤 옅은 공기에 쓸 마스크가 없었다)
+        int boxes = Furniture.Count(f => f.Type == "OxygenMaskBox");
+        for (int r = 0; r < Rooms.Count; r++)
+        {
+            if (!MaskRooms.Contains(Rooms[r].Type) || Rooms[r].Furn.Any(f => f.Type == "OxygenMaskBox")) continue;
+            var (set, keep) = RoomSpace(r, doorCells);
+            if (PutOne("OxygenMaskBox", set, keep)) boxes++;
+        }
+        var big = Enumerable.Range(0, Rooms.Count).Where(r => MaskRooms.Contains(Rooms[r].Type) || Rooms[r].Type == "Corridor").OrderByDescending(r => CellsOf(r).Count).ThenBy(r => r).ToList();
+        for (int pass = 0; pass < 4 && boxes * MasksPerBox < Crew + 2; pass++)
+            foreach (int r in big)
+            {
+                if (boxes * MasksPerBox >= Crew + 2) break;
+                var (set, keep) = RoomSpace(r, doorCells);
+                if (PutOne("OxygenMaskBox", set, keep)) boxes++;
+            }
+        if (boxes * MasksPerBox < Crew) Fail($"산소 마스크 {boxes * MasksPerBox}개 < 사람 {Crew}");
     }
 
     /// <summary>방의 빈 칸(설비 없는)이 한 덩어리이고 문 앞 칸을 다 품나.</summary>
