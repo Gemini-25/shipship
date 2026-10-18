@@ -50,6 +50,15 @@ public static partial class Program
         var tickClock = new System.Diagnostics.Stopwatch();
         int deadCount = 0, splits = 0, aliveAtSplit = -1;
         int Living() => mind.Agents.Count(a => a.IsPerson && life.Bodies[a.C.Body].Alive != 0);
+        // 다시 세운 기준 (docs/DEPTH.md): 버팀 ② 물자 · 설비 순환 · ③ 값이 터지거나 굳지 않는다 · 얽힘 = 엔진 사이의 반응
+        var f0 = s.Get<Field>();
+        var holeSince = new long[s.Layout.N];
+        var dFood = new double[nDays]; var dWater = new double[nDays]; var dAir = new double[nDays]; var dPatch = new int[nDays]; var dRepair = new int[nDays];
+        var dBroken = new int[nDays]; var dHoleAge = new double[nDays]; var dHoleCm2 = new double[nDays]; var dO2 = new double[nDays]; var dStuck = new int[nDays];
+        for (int i = 0; i < nDays; i++) dO2[i] = 99;
+        int nan = 0;
+        var pairs = new int[14, 14];
+        var linkSeen = new HashSet<int>();
         for (long t = 0; t < end; t++)
         {
             tickClock.Restart();
@@ -62,6 +71,18 @@ public static partial class Program
             int day = (int)Math.Min(nDays - 1, t / dayTicks);
             foreach (var f in s.Facts.Since(cursor))
             {
+                if (f.Cause != 0 && linkSeen.Add(f.Cause))
+                {
+                    // 엔진 사이의 반응: 원인 사슬에서 이웃한 두 마디의 엔진이 다르면 (마디마다 한 번)
+                    var ch = s.Causes.Chain(f.Cause);
+                    for (int i = 1; i < ch.Count; i++)
+                    {
+                        int e1 = Director.EngineOf(s.Causes[ch[i - 1]].Kind), e2 = Director.EngineOf(s.Causes[ch[i]].Kind);
+                        if (e1 > 0 && e2 > 0 && e1 != e2) pairs[e1, e2]++;
+                    }
+                    int ef = Director.EngineOf(f.Kind), el = ch.Count > 0 ? Director.EngineOf(s.Causes[ch[^1]].Kind) : 0;
+                    if (ef > 0 && el > 0 && ef != el) pairs[el, ef]++;
+                }
                 if (Array.IndexOf(Accidents, f.Kind) >= 0) { acc[day]++; accKinds[f.Kind] = accKinds.GetValueOrDefault(f.Kind) + 1; }
                 else if (f.Kind is FactKind.Hurt or FactKind.Collapsed) hurt[day]++;
                 else if (f.Kind == FactKind.ShipSplit) { splits++; if (aliveAtSplit < 0) aliveAtSplit = Living(); }
@@ -78,6 +99,31 @@ public static partial class Program
             }
             cursor = s.Facts.Total;
             lastTick = t;
+            if (t % Time.TicksPerHour == 0)
+            {
+                double cm2 = 0, age = 0;
+                for (int c = 0; c < s.Layout.N; c++)
+                {
+                    if (f0.Hole[c] > 0) { if (holeSince[c] == 0) holeSince[c] = t + 1; cm2 += f0.Hole[c] * 1e4; age = Math.Max(age, (t + 1 - holeSince[c]) / (double)Time.TicksPerHour); }
+                    else holeSince[c] = 0;
+                }
+                int broken = 0;
+                foreach (var dv in net.Devices) for (int pp = 0; pp < 4; pp++) if (net.Broken[dv.Id * 4 + pp] != 0) { broken++; break; }
+                int stuck = 0; double o2 = 99;
+                foreach (var a in mind.Agents)
+                {
+                    if (!a.IsPerson) continue;
+                    var b = life.Bodies[a.C.Body];
+                    if (b.Alive == 0) continue;
+                    double po2 = f0.Partial(s.Tables.gO2, b.Cell), pk = f0.Pressure(b.Cell);
+                    if (double.IsNaN(po2) || double.IsNaN(pk) || double.IsNaN(b.SpO2) || double.IsNaN(b.CoreK)) nan++;
+                    if (b.Mask == 0 && b.Suit == 0) o2 = Math.Min(o2, po2);
+                    if (b.Asleep == 0 && b.Conscious != 0 && a.C.Goal is not (GoalKind.Sleep or GoalKind.Work or GoalKind.Down) && t - a.C.GoalSince > Time.Hours(8)) stuck++;
+                }
+                dFood[day] = s.Book.DaysLeft((int)Res.Food, s.Tick); dWater[day] = s.Book.DaysLeft((int)Res.Water, s.Tick); dAir[day] = net.AirReserve;
+                dPatch[day] = mind.TotalOf(mind.iPatch); dRepair[day] = mind.TotalOf(mind.iRepair); dBroken[day] = Math.Max(dBroken[day], broken);
+                dHoleAge[day] = Math.Max(dHoleAge[day], age); dHoleCm2[day] = Math.Max(dHoleCm2[day], cm2); dO2[day] = Math.Min(dO2[day], o2); dStuck[day] = Math.Max(dStuck[day], stuck);
+            }
             if (deadCount > 0 && died[day] > 0 && Living() == 0) break;   // 아무도 없다 — 버티지 못했다 (태운 생존자의 죽음도 세지만 끝은 산 사람이 없을 때)
         }
         double ran = (lastTick + 1) / (double)dayTicks;
@@ -100,6 +146,15 @@ public static partial class Program
         double maxSpeed = 60 * (12 / Math.Max(1e-6, worstHourMs)) * Time.SecondsPerTick;
         double food = s.Book.DaysLeft((int)Res.Food, s.Tick), water = s.Book.DaysLeft((int)Res.Water, s.Tick);
         string J(IEnumerable<int> xs) => "[" + string.Join(",", xs) + "]";
+        string JD(IEnumerable<double> xs, double cap = 9999) => "[" + string.Join(",", xs.Select(x => double.IsInfinity(x) || x > cap ? cap.ToString(System.Globalization.CultureInfo.InvariantCulture) : x.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture))) + "]";
+        // 하이라이트: 가장 긴 조용한 시간 · 주마다 갈래 수
+        var hts = d.Highlights.Select(h => h.Tick).OrderBy(x => x).ToList();
+        double quiet = 0; long prevH = 0;
+        foreach (long ht in hts) { quiet = Math.Max(quiet, (ht - prevH) / (double)Time.TicksPerHour); prevH = ht; }
+        quiet = Math.Max(quiet, (lastTick - prevH) / (double)Time.TicksPerHour);
+        var weekKinds = Enumerable.Range(0, Math.Max(1, fullDays / 7)).Select(w => d.Highlights.Where(h => h.Tick / (7 * dayTicks) == w).Select(h => h.Kind).Distinct().Count()).ToList();
+        var pairList = new List<string>();
+        for (int a = 1; a < 14; a++) for (int b = 1; b < 14; b++) if (pairs[a, b] > 0) pairList.Add($"\"{a}>{b}\":{pairs[a, b]}");
         string Esc(string x) => x.Replace("\\", "\\\\").Replace("\"", "\\\"");
         Console.WriteLine($"\n  {ship} 시드 {seed} · 사람 {crew} · {ran:0.0}일 · {clock.Elapsed.TotalSeconds:0}초 — 산 사람 {alive}/{crew} · 죽음 {deadCount} ({string.Join(" · ", causes.Select(kv => $"{kv.Key} {kv.Value}"))})");
         Console.WriteLine($"    하이라이트 날마다 {string.Join(" ", hlDay.Take(fullDays))} (3~12인 날 {inRange}/{fullDays} · 사건과 사람이 섞인 날 {mixed}) · 가장 넓은 사슬 {wide?.Count ?? 0}개 엔진 ({wide?.Path}) · 여섯 개 넘게 {d.ChainsWith(6)} · 원인 없는 큰 일 {d.Orphans.Values.Sum()} · 배 갈라짐 {splits}{(splits > 0 ? $" (그때 산 사람 {aliveAtSplit} → 끝에 {alive})" : "")}");
@@ -109,6 +164,9 @@ public static partial class Program
             + $"\"causes\":{{{string.Join(",", causes.Select(kv => $"\"{Esc(kv.Key)}\":{kv.Value}"))}}},"
             + $"\"hl\":{J(hlDay.Take(fullDays))},\"hlPeople\":{J(hlPeople.Take(fullDays))},\"acc\":{J(acc.Take(fullDays))},\"hurt\":{J(hurt.Take(fullDays))},\"died\":{J(died.Take(fullDays))},"
             + $"\"maxEngines\":{wide?.Count ?? 0},\"six\":{d.ChainsWith(6)},\"five\":{d.ChainsWith(5)},\"orphans\":{d.Orphans.Values.Sum()},\"splits\":{splits},\"aliveAtSplit\":{aliveAtSplit},"
-            + $"\"food\":{Math.Min(9999, food):0},\"water\":{Math.Min(9999, water):0},\"air\":{net.AirReserve:0},\"msTick\":{msTick:0.000},\"worstMs\":{worstHourMs:0.000},\"speed\":{maxSpeed:0}}}");
+            + $"\"food\":{Math.Min(9999, food):0},\"water\":{Math.Min(9999, water):0},\"air\":{net.AirReserve:0},\"msTick\":{msTick:0.000},\"worstMs\":{worstHourMs:0.000},\"speed\":{maxSpeed:0},"
+            + $"\"dFood\":{JD(dFood.Take(fullDays))},\"dWater\":{JD(dWater.Take(fullDays))},\"dAir\":{JD(dAir.Take(fullDays), 1e9)},\"dPatch\":{J(dPatch.Take(fullDays))},\"dRepair\":{J(dRepair.Take(fullDays))},"
+            + $"\"dBroken\":{J(dBroken.Take(fullDays))},\"dHoleAge\":{JD(dHoleAge.Take(fullDays))},\"dHoleCm2\":{JD(dHoleCm2.Take(fullDays))},\"dO2\":{JD(dO2.Take(fullDays))},\"dStuck\":{J(dStuck.Take(fullDays))},"
+            + $"\"nan\":{nan},\"quietH\":{quiet:0.0},\"weekKinds\":{J(weekKinds)},\"pairs\":{{{string.Join(",", pairList)}}}}}");
     }
 }

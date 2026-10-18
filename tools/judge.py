@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
-"""Lab --judge 결과(JUDGE 줄)를 묶어 '최상' 기준에 견준다 (docs/DEPTH.md 끝).
+"""Lab --judge 결과(JUDGE 줄)를 묶어 다시 세운 '최상' 기준에 견준다 (docs/DEPTH.md '다시 세운 최상 기준').
+버팀 넷 (① 사람 ② 물자 · 설비 순환 ③ 값이 터지거나 굳지 않음 ④ 지루하지 않음) · 저절로 드러남 · 얽힘(엔진 사이의 반응) · 60프레임.
+엔진 층마다의 깊이 · 사실성(더 무거운 쪽)은 법칙 시험 · 깊이 표로 따로 본다 — 여기는 돌렸을 때의 결과.
 쓰기: python3 tools/judge.py 출력파일...  (여러 프로세스로 나눠 돌린 것을 함께 읽는다)"""
 import json, sys
-from collections import Counter, defaultdict
+from collections import defaultdict
+
+ENG = ["", "기반", "물질", "장", "구조", "바깥", "망", "생명", "마음", "사회", "주컴퓨터", "일·물자", "이야기꾼", "연출"]
+WORLD = range(2, 12)   # 세계 · 마음 엔진 (기반 · 이야기꾼 · 연출은 반응을 주고받는 쪽이 아니다)
 
 runs = []
 for path in sys.argv[1:]:
@@ -13,53 +18,64 @@ if not runs:
     print('JUDGE 줄이 없다'); sys.exit(1)
 
 def mark(ok): return '✔' if ok else '✘'
+def mn(xs, d=0): return min(xs) if xs else d
 
 print(f'판 {len(runs)}개 · 배 {len({r["ship"] for r in runs})}척')
-print('\n배 · 시드 · 날      산 사람   첫 죽음   반이 죽음   하이라이트(3~12인 날)   사고/날   가장 넓은 사슬   틱 ms(느린 시간) → 60프레임 배속')
+print('\n배 · 시드 · 날      산 사람   죽음  하루 하이라이트   가장 긴 조용함   구멍 최장   예비 공기 최저   방 산소 최저   멈춘 사람   틱 ms → 60프레임 배속')
 for r in sorted(runs, key=lambda r: (r['ship'], r['seed'], r['days'])):
     days = max(1, len(r['hl']))
-    ok = sum(1 for h in r['hl'] if 3 <= h <= 12)
-    acc = sum(r['acc']) / days
-    print(f'{r["ship"]:9} {r["seed"]:3} {r["ran"]:5.1f}/{r["days"]:<4g} {r["alive"]:3}/{r["crew"]:<3} '
-          f'{(str(r["firstDeath"]) + "일") if r["firstDeath"] >= 0 else "-":>8} {(str(r["halfDead"]) + "일") if r["halfDead"] >= 0 else "-":>9}   '
-          f'{sum(r["hl"]) / days:4.1f}/날 ({ok}/{days})        {acc:7.1f}   {r["maxEngines"]:2}개 (6개 넘게 {r["six"]})    {r["msTick"]:.2f}({r["worstMs"]:.2f}) → {r["speed"]}배')
+    print(f'{r["ship"]:9} {r["seed"]:3} {r["ran"]:5.1f}/{r["days"]:<4g} {r["alive"]:3}/{r["crew"]:<3} {r["deaths"]:4}  {sum(r["hl"]) / days:5.1f}/날          '
+          f'{r.get("quietH", 0):5.0f}시간      {max(r.get("dHoleAge", [0]) or [0]):5.0f}시간   {mn(r.get("dAir", [])):9.0f}몰    {mn(r.get("dO2", []), 99):6.1f}kPa   {max(r.get("dStuck", [0]) or [0]):3}명    {r["worstMs"]:.2f} → {r["speed"]}배')
 
-# 1. 버팀: 끝까지 간 판 · 산 사람이 남은 판
-full = [r for r in runs if r['ran'] >= r['days'] - 0.01]
-survived = [r for r in full if r['alive'] > 0]
-long_ = [r for r in runs if r['days'] >= 30]
-long_ok = [r for r in long_ if r['ran'] >= r['days'] - 0.01 and r['alive'] * 2 >= r['crew']]
-print(f'\n{mark(len(long_ok) == len(long_) and long_)} 버팀 (30~90일): 긴 항해 {len(long_)}판 중 끝까지 반 넘게 산 판 {len(long_ok)} · '
-      + ' / '.join(f'{r["ship"]} {r["seed"]} {r["ran"]:.1f}일 산 {r["alive"]}/{r["crew"]}' for r in long_))
-# 2. 죽음 원인 갈래
-causes = Counter()
+problems = defaultdict(list)
 for r in runs:
-    for k, v in r['causes'].items(): causes[k] += v
-print(f'{mark(len(causes) >= 5)} 죽음 원인 다섯 갈래 이상: {len(causes)}갈래 — ' + ' · '.join(f'{k} {v}' for k, v in causes.most_common()))
-# 3. 하루 하이라이트 3~12 · 사건과 사람 섞임
-days_all = sum(len(r['hl']) for r in runs)
-in_range = sum(1 for r in runs for h in r['hl'] if 3 <= h <= 12)
-mixed = sum(1 for r in runs for h, p in zip(r['hl'], r['hlPeople']) if 0 < p < h)
-print(f'{mark(days_all and in_range / days_all >= 0.7)} 하루 하이라이트 3~12: {in_range}/{days_all}일 ({in_range / max(1, days_all):.0%}) · 평균 {sum(sum(r["hl"]) for r in runs) / max(1, days_all):.1f}개 · 사건과 사람이 섞인 날 {mixed / max(1, days_all):.0%}')
-# 4. 엔진 여섯 개를 건넌 사슬
-six = [r for r in runs if r['six'] > 0]
-print(f'{mark(bool(six))} 엔진 여섯 개 넘게 건넌 사슬: {len(six)}/{len(runs)}판 · 가장 넓은 것 {max(r["maxEngines"] for r in runs)}개')
-# 5. 배가 갈라져도 조각마다 산 사람
-splits = [r for r in runs if r.get('splits', 0) > 0]
-saved = [r for r in splits if r['alive'] > 0]
-print(f'{mark(bool(saved))} 배가 갈라져도 산 사람: 갈라진 판 {len(splits)} · 그중 산 사람이 남은 판 {len(saved)}'
-      + (' — ' + ' / '.join(f'{r["ship"]} {r["seed"]}: 갈라질 때 {r["aliveAtSplit"]} → 끝 {r["alive"]}' for r in splits) if splits else ''))
-# 6. 사고의 잦기와 크기 (가혹함 = 잦기 · 크기)
-acc_day = sum(sum(r['acc']) for r in runs) / max(1, days_all)
-hurt_day = sum(sum(r['hurt']) for r in runs) / max(1, days_all)
-deaths = sum(r['deaths'] for r in runs)
-print(f'  사고 하루 {acc_day:.1f}건 · 다침/쓰러짐 하루 {hurt_day:.2f} · 죽음 {deaths} (사람 {sum(r["crew"] for r in runs)}명 중)')
-# 7. 60프레임
-by_ship = defaultdict(list)
-for r in runs: by_ship[r['ship']].append(r)
+    tag = f'{r["ship"]} {r["seed"]}'
+    died = r.get('died', [])
+    # ① 사람: 한꺼번에 다 죽거나 · 하루에 반 넘게 (몇 명이 죽는지는 난이도에 달렸다)
+    if r['alive'] == 0: problems['사람'].append(f'{tag}: {r["ran"]:.1f}일에 모두 숨짐')
+    elif died and max(died) * 2 >= r['crew']: problems['사람'].append(f'{tag}: 하루에 {max(died)}명')
+    # ② 물자 · 설비 순환
+    if mn(r.get('dFood', []), 99) < 3: problems['순환'].append(f'{tag}: 식량 {mn(r["dFood"]):.0f}일치')
+    if mn(r.get('dWater', []), 99) < 3: problems['순환'].append(f'{tag}: 물 {mn(r["dWater"]):.0f}일치')
+    air, o2 = r.get('dAir', []), r.get('dO2', [])
+    if any(a <= 0 and o < 16 for a, o in zip(air, o2)): problems['순환'].append(f'{tag}: 예비 공기 바닥 · 사람 있는 곳 산소 {mn(o2, 99):.1f}kPa')
+    if max(r.get('dHoleAge', [0]) or [0]) > 12: problems['순환'].append(f'{tag}: 구멍이 {max(r["dHoleAge"]):.0f}시간 막히지 않음')
+    patch, hole = r.get('dPatch', []), r.get('dHoleAge', [])
+    if sum(1 for p, h in zip(patch, hole) if p == 0 and h > 6) >= 2: problems['순환'].append(f'{tag}: 봉합 꾸러미 0인 채 구멍 (이틀 넘게)')
+    br = r.get('dBroken', [])
+    if len(br) >= 4 and br[-1] >= max(3, 2 * max(1, br[0])) and br[-1] >= br[-2] >= br[-3]: problems['순환'].append(f'{tag}: 고장 장치가 쌓임 {br[0]} → {br[-1]}')
+    # ③ 값이 터지거나 굳지 않는다
+    if r.get('nan', 0) > 0: problems['값'].append(f'{tag}: 숫자가 아닌 값 {r["nan"]}')
+    if max(r.get('dStuck', [0]) or [0]) >= 2: problems['값'].append(f'{tag}: 여덟 시간 넘게 같은 일에 멈춘 사람 {max(r["dStuck"])}명')
+    # ④ 지루하지 않다 (고정 문턱 — 볼 만한 일은 세계가 만든다)
+    hl = r['hl']; days = max(1, len(hl))
+    ok = sum(1 for h in hl if 3 <= h <= 12)
+    if ok / days < 0.7: problems['지루함'].append(f'{tag}: 하이라이트 3~12인 날 {ok}/{days}')
+    if r.get('quietH', 0) > 12: problems['지루함'].append(f'{tag}: {r["quietH"]:.0f}시간 동안 볼 일 없음')
+    if r.get('orphans', 0) > 0: problems['저절로'].append(f'{tag}: 원인 없는 큰 일 {r["orphans"]}')
+
+print()
+for key, title in [('사람', '버팀 ① 사람이 살아남는다 (한꺼번에 다 죽는 판 없음)'), ('순환', '버팀 ② 물자 · 설비가 순환한다'),
+                   ('값', '버팀 ③ 값이 터지거나 굳지 않는다'), ('지루함', '버팀 ④ 지루하지 않다 (하이라이트 3~12인 날 70% · 조용함 12시간 안)'),
+                   ('저절로', '저절로 드러남 (원인 없는 큰 일 0)')]:
+    p = problems[key]
+    print(f'{mark(not p)} {title}' + ('' if not p else ' — ' + ' / '.join(p[:8]) + (f' 외 {len(p) - 8}' if len(p) > 8 else '')))
+
+# 얽힘: 엔진 쌍마다 반응 (모든 판 합)
+pairs = defaultdict(int)
+for r in runs:
+    for k, v in r.get('pairs', {}).items():
+        a, b = map(int, k.split('>')); pairs[(a, b)] += v
+outs = {e: {b for (a, b), v in pairs.items() if a == e and v >= 3 and b != e} for e in range(1, 14)}
+ins = {e: {a for (a, b), v in pairs.items() if b == e and v >= 3 and a != e} for e in range(1, 14)}
+weak = [ENG[e] for e in WORLD if len(outs[e]) < 2 or len(ins[e]) < 2]
+live = sum(1 for (a, b), v in pairs.items() if v >= 3 and a in WORLD and b in WORLD)
+print(f'{mark(not weak)} 얽힘 (엔진마다 다른 엔진 둘 넘게에 반응하고 · 둘 넘게를 움직인다): 세계 엔진 사이 반응하는 쌍 {live}/{len(WORLD) * (len(WORLD) - 1)}'
+      + (f' · 덜 얽힌 엔진: {", ".join(weak)}' if weak else ''))
+for e in WORLD:
+    print(f'    {ENG[e]:5} ← {", ".join(ENG[a] for a in sorted(ins[e])) or "-"}  |  → {", ".join(ENG[b] for b in sorted(outs[e])) or "-"}')
+
 worst = max(runs, key=lambda r: r['worstMs'])
-print(f'{mark(worst["speed"] >= 60)} 60프레임: 가장 느린 배 {worst["ship"]} 틱 {worst["worstMs"]:.2f}ms → 60프레임을 지키며 {worst["speed"]}배속 · '
-      + ' · '.join(f'{s} {max(x["worstMs"] for x in v):.2f}ms' for s, v in sorted(by_ship.items())))
-# 8. 원인 없는 큰 일 (저절로 드러남)
-orph = sum(r['orphans'] for r in runs)
-print(f'{mark(orph == 0)} 원인 없는 큰 일: {orph}')
+print(f'{mark(worst["speed"] >= 60)} 60프레임: 가장 느린 배 {worst["ship"]} 틱 {worst["worstMs"]:.2f}ms → {worst["speed"]}배속')
+deaths = sum(r['deaths'] for r in runs)
+print(f'  (참고 · 난이도에 따라 다름) 죽음 {deaths}명 / {sum(r["crew"] for r in runs)}명 · 배 갈라짐 {sum(r.get("splits", 0) for r in runs)}번')
