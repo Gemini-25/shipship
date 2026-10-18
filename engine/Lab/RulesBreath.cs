@@ -172,5 +172,60 @@ public static partial class Program
             Check("원인: 구멍으로 공기를 잃고 막은 뒤에도 옅은 공기에 쓰러진 이의 원인 사슬이 그 구멍에 잇는다",
                 linked, down.Kind != FactKind.None ? s.Causes.Story(down.Cause) : "쓰러지지 않음");
         }
+
+        // ── 긴급 공기는 아껴 쓴다 (살핌호 시드 11 — 배 전체가 옅은 채 방마다 바로 넣다 껐다 하며 예비를 다 썼다):
+        //    오른쪽 방이 뚫려 봉쇄했고 · 배 전체 산소가 14.5kPa (기압은 93kPa — 배 전체 예비를 풀 만큼 낮지 않다) · 왼쪽 닫힌 방에 사람 —
+        //    배에 마스크가 있으면 넣지 않는다 (13kPa까지는 마스크로) / 마스크가 없으면 넣는다 / 예비가 배 한 번 채울 양의 10% 밑이면 진공이 남은 동안은 넣지 않는다 ──
+        {
+            (long pumped, double used, string why) Run(bool masks, double reserve)
+            {
+                var s = Worlds.Full(lay, 4);
+                var m = s.Get<Mind>(); var f = s.Get<Field>(); var net = s.Get<Network>(); var sm = s.Get<ShipMind>();
+                int p = m.AddPerson(s, At(3, 3));
+                if (!masks) for (int fu = 0; fu < s.Layout.Furniture.Count; fu++) m.Stock[fu * m.ItemCount + m.iMask] = 0;
+                int door = s.Layout.DoorAt[At(11, 2)];
+                f.SetDoor(door, 0); s.Get<Structure>().RequestDoor(door, 0);
+                s.Run(30);
+                net.AirReserve = reserve;
+                f.SetHole(At(29, 2), 0.01f);
+                double r0 = net.AirReserve;
+                var space = Enumerable.Range(0, s.Layout.N).Where(c => s.Layout.IsSpace(c)).ToList();
+                for (int t = 0; t < 25; t++) { foreach (int c in space) { double o = f.Partial(f.T.gO2, c); if (o > 14.5) f.RemoveGas(c, f.T.gO2, f.Gas(f.T.gO2, c) * (1 - 14.5 / o) * 0.2); } s.Step(); }
+                s.Run((int)Time.Minutes(15));
+                string why = $"사람 방 {m.RoomOf(m[p].C.Cell)}/{s.Layout.Room[At(6, 2)]} · 왼쪽 {Room(s, 6, 2).Average(c => f.Pressure(c)):0}kPa · 산소 {Room(s, 6, 2).Average(c => f.Partial(f.T.gO2, c)):0.0}";
+                if (Debug) Console.WriteLine($"    마스크 {masks} 예비 {reserve}: {why} · 넣음 {sm.EmergencyAir} · 사건 {string.Join(",", sm.Incidents.Where(x => x.Active != 0).Select(x => $"{x.Kind}@{x.Room}/{x.Sealed}"))}");
+                return (sm.EmergencyAir, r0 - net.AirReserve, why);
+            }
+            var noMaskT = Task.Run(() => Run(false, 20000)); var lowT = Task.Run(() => Run(false, 500)); var mask = Run(true, 20000);
+            var noMask = noMaskT.Result; var low = lowT.Result;
+            Check("긴급 공기는 아껴 쓴다: 옆 방이 뚫려 봉쇄했고 배 전체 산소가 14.5kPa — 배에 마스크가 있으면 넣지 않는다 (13kPa까지는 마스크로) / 마스크가 없으면 넣는다 / 예비가 배 한 번 채울 양의 10% 밑이면 진공이 남은 동안은 넣지 않는다 (막은 뒤 다시 채울 몫)",
+                mask.pumped == 0 && noMask.pumped >= 1 && noMask.used > 20 && low.pumped == 0 && low.used < 1,
+                $"마스크 있음: 넣음 {mask.pumped} · {mask.used:0}몰 / 없음: {noMask.pumped} · {noMask.used:0}몰 ({noMask.why}) / 예비 500몰: {low.pumped} · {low.used:0}몰");
+        }
+
+        // ── 비워진 방은 닫아 둔다: 왼쪽 방이 비워졌고(구멍은 없다) 누가 그 문을 열려 한다 — 예비 공기가 그 방을 채울 만큼 없으면
+        //    주컴퓨터가 문 밸브를 잠가 오른쪽 방의 공기를 나누지 않는다 / 예비가 넉넉하면 연다 (주컴퓨터가 다시 채운다) ──
+        {
+            var small = Worlds.Ascii(BreathShipSmall, legend);
+            int SAt(int x, int y) => Worlds.At(small, x, y);
+            int left = small.Room[SAt(3, 2)], right = small.Room[SAt(15, 2)];
+            int door = small.Doors.First(d => d.Cell == SAt(11, 2)).Id;
+            (double right, double left, long holds, bool said, float opened) Run(double reserve)
+            {
+                var s = Worlds.Full(small, 3);
+                var f = s.Get<Field>(); var net = s.Get<Network>(); var st = s.Get<Structure>(); var sm = s.Get<ShipMind>();
+                s.Run(2);
+                net.AirReserve = reserve;
+                Thin(s, f, small.Rooms[left].Cells.ToList(), 0.01);
+                s.Run((int)Time.Minutes(1));
+                float opened = 0;
+                for (int k = 0; k < Time.Minutes(4); k++) { st.RequestDoor(door, 1); s.Step(); opened = Math.Max(opened, f.DoorOpen[door]); }   // 누가 그 방으로 가려 한다 (문을 열어 달라고 한다)
+                return (f.Pressure(SAt(15, 2)), f.Pressure(SAt(3, 2)), sm.EmptyHolds, sm.Log.Any(x => x.text.Contains("비워진 채 닫아")), opened);
+            }
+            var poorT = Task.Run(() => Run(0)); var rich = Run(2e6); var poor = poorT.Result;
+            Check("비워진 방은 닫아 둔다: 예비 공기가 그 방을 채울 만큼 없으면 주컴퓨터가 문 밸브를 잠가 문이 열리지 않는다 — 배 공기는 문틈으로만 조금 (틈은 로봇이 봉합 꾸러미로 막는다) / 예비가 넉넉하면 밸브가 맞추고 문이 열린다",
+                poor.holds >= 1 && poor.said && poor.opened == 0 && poor.right > rich.right + 15 && rich.holds == 0 && rich.opened > 0.5f,
+                $"예비 0: 닫아 둔 번 {poor.holds} · 문 {poor.opened:0.0} · 4분 뒤 오른쪽 {poor.right:0}kPa · 왼쪽 {poor.left:0}kPa / 예비 넉넉: 닫아 둔 번 {rich.holds} · 문 {rich.opened:0.0} · 오른쪽 {rich.right:0} · 왼쪽 {rich.left:0}kPa");
+        }
     }
 }

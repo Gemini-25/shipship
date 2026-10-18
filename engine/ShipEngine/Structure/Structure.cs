@@ -428,6 +428,9 @@ public sealed partial class Structure : IEngine
     /// 바깥으로 빼는 문(에어락 바깥문)은 그 방의 다른 문이 모두 닫혀 있고(맞물림) 우주복 없이 살아 있는 사람이 없을 때만 —
     /// 안쪽 문은 낮은 쪽 구역이 우주로 트여 있지 않을 때만 (트였으면 높은 쪽 공기까지 우주로 빠진다 — 구멍을 먼저 막아야 한다).
     /// </summary>
+    /// <summary>⑩의 요청: 그 문의 압력 맞춤 밸브를 until까지 잠근다 (안 열린다 — 비워진 방에 배 공기를 나누지 않게).</summary>
+    public void HoldBleed(int d, long until) { if (d >= 0 && d < BleedLock.Length) BleedLock[d] = Math.Max(BleedLock[d], until); }
+
     public bool SafeToBleed(int d)
     {
         var door = L.Doors[d];
@@ -450,6 +453,7 @@ public sealed partial class Structure : IEngine
                     if (body.Alive != 0 && body.Suit == 0 && body.Cell >= 0 && L.Room[body.Cell] == room) return false;
             return true;
         }
+        if (BleedLock[d] > _now) return false;   // 주컴퓨터가 잠가 두었다 (비워진 방 — 채울 예비가 모자라다 · ⑩)
         int region = lo < F.RegionOf.Length ? F.RegionOf[lo] : -1;
         if (region < 0) return false;
         foreach (var k in F.Links) if (k.RB < 0 && k.RA == region && k.Area > 0) return false;
