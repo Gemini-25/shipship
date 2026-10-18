@@ -164,6 +164,7 @@ public sealed partial class Network : IEngine
         BuildFeeders();
         BuildData();
         BuildLines();
+        BuildWear();
         int nf = Feeders.Count;
         Breaker = Enumerable.Repeat((byte)1, nf).ToArray();
         OverSec = new float[nf]; FaultCell = Enumerable.Repeat(-1, nf).ToArray(); BreakerStuck = new byte[nf]; Amps = new float[nf];
@@ -325,7 +326,7 @@ public sealed partial class Network : IEngine
     public int PartCause(int device, Part p) => _wearCause.GetValueOrDefault(device * 4 + (int)p);
 
     /// <summary>부품을 고친다 (사람 · 로봇의 수리).</summary>
-    public void Repair(int device, Part p) { Broken[device * 4 + (int)p] = 0; Wear[device * 4 + (int)p] = 0; _wearCause.Remove(device * 4 + (int)p); if (p == Part.Seal) SealLeakCause[device] = 0; if (device < Stripped.Length) Stripped[device] = 0; }
+    public void Repair(int device, Part p) { Broken[device * 4 + (int)p] = 0; Wear[device * 4 + (int)p] = 0; _wearCause.Remove(device * 4 + (int)p); ClearWear(device * 4 + (int)p); if (p == Part.Seal) SealLeakCause[device] = 0; if (device < Stripped.Length) Stripped[device] = 0; }
 
     // ───────────────────────── 한 틱 ─────────────────────────
 
@@ -442,7 +443,7 @@ public sealed partial class Network : IEngine
                 FaultCell[fd.Id] = c;
                 Shorts++;
                 int parent = burnt ? sim.Causes.Add(CauseKind.Heat, "전선 피복이 뜨거워 녹았다", sim.Tick, c, HeatSource(sim.Find<Chemistry>(), c)) : wet ? sim.Causes.Add(CauseKind.Leak, "전선이 지나는 바닥이 젖었다", sim.Tick, c, SpillNear(c))
-                    : sim.Causes.Add(CauseKind.Electric, "타 버린 전선에 전기가 들어갔다", sim.Tick, c, LineCause[c * 3]);
+                    : sim.Causes.Add(CauseKind.Electric, "상한 전선에 전기가 들어갔다", sim.Tick, c, LineCause[c * 3]);
                 int cause = sim.Causes.Add(CauseKind.Electric, "합선", sim.Tick, c, parent);
                 sim.Facts.Emit(sim.Tick, FactKind.Short, c, 0, cause, other: fd.Id);
                 _faultCause[fd.Id] = cause;
@@ -969,6 +970,7 @@ public sealed partial class Network : IEngine
     private void WearStep(Sim sim, double dt)
     {
         double hours = dt / 3600;
+        NoteFires(sim);
         for (int d = 0; d < Devices.Count; d++)
         {
             var dev = Devices[d];
@@ -978,23 +980,15 @@ public sealed partial class Network : IEngine
             bool running = On[d] != 0 && Supply[d] > 0.05f;
             double temp = Math.Max(F.Temp(c), F.Ts[c]);
             double rh = F.Partial(T.gH2O, c) / Math.Max(1e-6, Water.SatKPa(Math.Max(250, F.Temp(c))));
+            double soot = F.Ppm(T.gSoot, c);
             for (int p = 0; p < 4; p++)
             {
                 int k = d * 4 + p;
                 if (_limit[k] == float.MaxValue || Broken[k] != 0) continue;
-                double stress = running ? 1 : 0.15;
-                stress *= (Part)p switch
-                {
-                    Part.Electric => Math.Pow(2, Math.Clamp((temp - 298) / 10, -2, 8)),
-                    Part.Mechanical => 1 + Math.Max(0, temp - 298) / 50,
-                    Part.Seal => (1 + Math.Max(0, rh)) * (1 + Math.Max(0, temp - 298) / 80),
-                    _ => 1,
-                };
-                Wear[k] += (float)(hours * stress);
-                double frac = Wear[k] / _limit[k];
-                if (frac >= 1) Fail(sim, d, (Part)p);
+                WearPart(sim, d, p, hours, running, temp, rh, soot);
             }
         }
+        CablesAge(sim, hours);
         Noise(sim);
     }
 
@@ -1057,7 +1051,7 @@ public sealed partial class Network : IEngine
     private void Smash(Sim sim, int d, int cause)
     {
         var dev = Devices[d];
-        for (int p = 0; p < 4; p++) if (dev.Has((Part)p) || p == 0) Broken[d * 4 + p] = 1;
+        for (int p = 0; p < 4; p++) if (dev.Has((Part)p) || p == 0) { Broken[d * 4 + p] = 1; _brokeCause[d * 4 + p] = cause; }
         Failures++;
         if (dev.Def.Role is "pump" or "hvac" && Coolant > 0 && dev.Has(Part.Seal))
         {
@@ -1072,8 +1066,9 @@ public sealed partial class Network : IEngine
         var dev = Devices[d];
         Broken[d * 4 + (int)p] = 1;
         Failures++;
-        string what = p switch { Part.Electric => "회로", Part.Mechanical => "모터", Part.Seal => "봉함", _ => "거르개" };
-        int cause = sim.Causes.Add(CauseKind.Wear, $"{dev.Name}의 {Ko.I(what)} 낡아 망가졌다", sim.Tick, dev.Cell, _wearCause.GetValueOrDefault(d * 4 + (int)p));
+        var (why, parent) = WhyFailed(dev, p);   // 닳음의 까닭 (⑥ 바퀴 3 (나)) — 열 · 습기 · 그을음 · 기름 마름 · 기록된 까닭
+        int cause = sim.Causes.Add(CauseKind.Wear, why, sim.Tick, dev.Cell, parent);
+        _brokeCause[d * 4 + (int)p] = cause;
         sim.Facts.Emit(sim.Tick, FactKind.MachineFail, dev.Cell, (int)p, cause, other: d);
         if (p == Part.Electric && dev.Feeder >= 0 && Rng.Unit(_seed, Rng.Key("회로 고장 합선"), sim.Tick, d) < 0.25)
         {
@@ -1214,7 +1209,7 @@ public sealed partial class Network : IEngine
         w.I32(wk.Count);
         foreach (var k in wk) { w.I32(k); w.I32(_wearCause[k]); }
         SaveJumpers(w); w.Arr(Stripped); w.I64(PartsSalvaged);
-        SaveLines(w);
+        SaveLines(w); SaveWear(w);
     }
 
     public void Load(StateReader r)
@@ -1233,6 +1228,6 @@ public sealed partial class Network : IEngine
         n = r.I32();
         for (int i = 0; i < n; i++) { int k = r.I32(); _wearCause[k] = r.I32(); }
         LoadJumpers(r); Stripped = r.Arr<byte>(); PartsSalvaged = r.I64();
-        LoadLines(r);
+        LoadLines(r); LoadWear(r);
     }
 }

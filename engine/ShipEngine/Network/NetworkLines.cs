@@ -399,7 +399,7 @@ public sealed partial class Network
     public string FixLines(int cell)
     {
         var wires = new List<string>();
-        if (LineCutAt(cell, LineKind.Power)) wires.Add("전선");
+        if (LineCutAt(cell, LineKind.Power)) { wires.Add("전선"); _insul[cell] = 0; _insulCause[cell] = 0; }   // 새 전선으로 이었다
         bool cool = (LineCut[cell] & Bit(LineKind.Coolant)) != 0 || PipeLeak[cell * 2] > 0, water = (LineCut[cell] & Bit(LineKind.Water)) != 0 || PipeLeak[cell * 2 + 1] > 0;
         if (SpliceData(cell)) wires.Add("센서 선");
         if (LineCut[cell] != 0 || cool || water)
