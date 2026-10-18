@@ -18,10 +18,20 @@ public sealed partial class Structure
     public ushort[] Sub = Array.Empty<ushort>();
     private int _holeSeen = -1;
     public long SubCarved;
+    /// <summary>구멍이 커진 순간 그 칸 양쪽의 기압 차 (kPa — 장이 다음 틱에 비우기 전): 파인 잔칸 · 찢긴 조각을 미는 기압. 격자를 본 뒤 비운다.</summary>
+    private float[] _blow = Array.Empty<float>();
+
+    /// <summary>구멍 넓이를 바꾼다 (④가 내는 구멍은 모두 이리로): 커지면 그 순간의 기압 차를 적어 둔다.</summary>
+    private void SetHole(int c, float area)
+    {
+        if (area > F.Hole[c] && _blow.Length == L.N) _blow[c] = Math.Max(_blow[c], (float)PressureAcross(c));
+        F.SetHole(c, area);
+    }
 
     private void BuildSub()
     {
         Sub = new ushort[L.N];
+        _blow = new float[L.N];
         for (int c = 0; c < L.N; c++) Sub[c] = L.Kind[c] is CellKind.Wall or CellKind.Floor or CellKind.Door ? SubFull : (ushort)0;
     }
 
@@ -39,7 +49,7 @@ public sealed partial class Structure
     }
 
     /// <summary>구멍이 바뀌었으면 (③의 구멍 판이 바뀔 때만 — 칸 순서) 잔칸을 구멍 넓이만큼 판다. 메운(덧댄) 구멍은 잔칸을 되돌리지 않는다 (그림이 덧댄 판으로 그린다).</summary>
-    private void SyncSub()
+    private void SyncSub(Sim sim)
     {
         if (_holeSeen == F.HoleVersion) return;
         _holeSeen = F.HoleVersion;
@@ -49,8 +59,28 @@ public sealed partial class Structure
             int want = SubHoles(c), have = 16 - SubCount(Sub[c]);
             if (want <= have) continue;
             var (sx, sy) = L.Kind[c] == CellKind.Floor ? (1 + (int)(DotHash(c, 3) & 1), 1 + (int)(DotHash(c, 4) & 1)) : OuterSeed(c);
+            ushort before = Sub[c];
             Carve(c, want - have, sx, sy);
+            // 파인 잔칸은 부스러기가 되어 구멍 바깥쪽으로 튄다 — 빠지는 공기가 민다 (기압 차만큼 · 없으면 흩어질 뿐)
+            double blow = BlowKick(Math.Max(_blow[c], PressureAcross(c)), _smass.Length > c ? _smass[c] / 16 : 0);
+            Shed(sim, c, (ushort)(before & ~Sub[c]), DamageCause[c], sx - 1.5, sy - 1.5, Math.Max(SpallKick, blow), byGas: blow > SpallKick);
         }
+    }
+
+    /// <summary>칸 c 양쪽의 기압 차 (kPa — 벽 · 문: 네 이웃 중 공기 칸의 가장 높은 것과 가장 낮은 것 · 우주는 0 · 바닥 판: 그 칸의 기압).</summary>
+    private double PressureAcross(int c)
+    {
+        if (L.Kind[c] == CellKind.Floor) return F.IsOut(c) ? 0 : F.Pressure(c);
+        int x = L.X(c), y = L.Y(c);
+        double hi = 0, lo = double.MaxValue;
+        foreach (var (dx, dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
+        {
+            int j = L.In(x + dx, y + dy) ? L.Index(x + dx, y + dy) : -1;
+            double p = j < 0 || F.IsOut(j) ? 0 : L.Kind[j] is CellKind.Floor or CellKind.Door ? F.Pressure(j) : double.NaN;
+            if (double.IsNaN(p)) continue;
+            hi = Math.Max(hi, p); lo = Math.Min(lo, p);
+        }
+        return lo == double.MaxValue ? 0 : hi - lo;
     }
 
     /// <summary>벽 구멍이 파이기 시작하는 잔칸: 우주 · 기압이 낮은 이웃 쪽 면의 가운데 (바깥에서 뚫렸다).</summary>
@@ -73,6 +103,7 @@ public sealed partial class Structure
     public int Carve(int c, int n, int sx, int sy)
     {
         if (c < 0 || c >= Sub.Length || n <= 0 || Sub[c] == 0) return 0;
+        EnsureShip();   // 몸의 질량은 파기 전의 잔칸으로 센다 (판 잔칸은 부스러기로 몸에서 뗀다 — 두 번 빼지 않게)
         int done = 0;
         ushort m = Sub[c];
         sx = Math.Clamp(sx, 0, SubN - 1); sy = Math.Clamp(sy, 0, SubN - 1);
@@ -101,9 +132,11 @@ public sealed partial class Structure
     }
 
     /// <summary>갈라진 사이 칸을 찢는다: 양쪽 몸 사이를 가로지르는 들쭉날쭉한 줄을 비운다 — 남은 잔칸은 가까운 쪽 몸의 찢긴 끝 (그림).</summary>
-    private void TearGap(int c)
+    private void TearGap(Sim sim, int c, int cause)
     {
         if (Sub[c] == 0) return;
+        EnsureShip();
+        ushort before = Sub[c];
         int x = L.X(c), y = L.Y(c);
         bool Body(int xx, int yy) => L.In(xx, yy) && Frag[L.Index(xx, yy)] >= 0 && F.Severed[L.Index(xx, yy)] == 0 && L.Kind[L.Index(xx, yy)] != CellKind.Outside;
         bool vertical = Body(x - 1, y) && Body(x + 1, y) || !(Body(x, y - 1) && Body(x, y + 1));   // 좌우가 몸이면 세로로 찢는다
@@ -118,6 +151,16 @@ public sealed partial class Structure
         }
         SubCarved += SubCount(Sub[c]) - SubCount(m);
         Sub[c] = m;
+        // 찢긴 조각: 사이 칸이나 그 곁에 공기가 있었으면 (갈라지기 전 기압) 그 기압이 밀어내고 (기체가 준 운동량) · 없으면 흩어질 뿐
+        double gp = 0;
+        if (_p.Length == L.N)
+        {
+            gp = Math.Max(Math.Max(0, _p[c]), _blow[c]);
+            foreach (var (dx, dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
+                if (L.In(x + dx, y + dy)) { int j = L.Index(x + dx, y + dy); gp = Math.Max(gp, Math.Max(_p[j], _blow[j])); }
+        }
+        double blow = BlowKick(gp, _smass.Length > c ? _smass[c] / 16 : 0);
+        Shed(sim, c, (ushort)(before & ~m), cause, 0, 0, Math.Max(SpallKick, blow), byGas: blow > SpallKick);
     }
 
     /// <summary>찢긴 사이 칸(우주가 된 칸)의 잔칸 (sx, sy)가 붙은 몸 (가까운 면의 이웃 칸의 몸 · 없으면 -1) — 그림이 그 몸과 함께 그린다.</summary>

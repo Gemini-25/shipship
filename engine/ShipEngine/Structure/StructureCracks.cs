@@ -199,7 +199,7 @@ public sealed partial class Structure
             DamageCause[c] = cause;
             Open(sim, c, (float)area, cause, FactKind.WallCrack, 60);
         }
-        else if (area > F.Hole[c] * 1.25 && F.Hole[c] < 2) F.SetHole(c, (float)area);
+        else if (area > F.Hole[c] * 1.25 && F.Hole[c] < 2) SetHole(c, (float)area);
     }
 
     /// <summary>금이 있는 칸 (매 틱): 금 끝의 K가 파괴 인성을 넘으면 찢어진다.</summary>

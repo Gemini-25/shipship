@@ -133,11 +133,12 @@ public static partial class Program
             var crash = s.Facts.Since(0).FirstOrDefault(x => x.Kind == FactKind.Crash);
             string story = crash.Kind == FactKind.Crash ? s.Causes.Story(crash.Cause) : "";
             var a = st.Bodies[0]; var b = st.Bodies.Count > 1 ? st.Bodies[1] : default;
-            var (sx, _) = st.LocalOf(0, b.X, b.Y);
-            if (Debug) Console.WriteLine($"    {story}");
+            // 세상 틀로 잰다 (부딪혀 배도 돌면 배 틀에서는 조각이 배 둘레를 도는 것처럼 보인다)
+            double gap0 = Math.Sqrt((b.Lx - a.Lx) * (b.Lx - a.Lx) + (b.Ly - a.Ly) * (b.Ly - a.Ly)), gap1 = Math.Sqrt((b.X - a.X) * (b.X - a.X) + (b.Y - a.Y) * (b.Y - a.Y));
+            double apart = (b.Vx - a.Vx) * (b.X - a.X) + (b.Vy - a.Vy) * (b.Y - a.Y);
             Check("되돌아와 부딪힌다: 떨어진 조각의 먼 쪽 벽이 뚫리면 뿜는 공기가 조각을 배 쪽으로 밀어 부딪히고 · 배도 밀려 움직이며 · 둘은 튕겨 떨어진다 · 원인 사슬이 그 구멍까지",
-                st.Crashes >= 1 && story.StartsWith("파편이 오른쪽 방 바깥 벽을 뚫었다") && story.Contains("배에 부딪혔다") && Math.Sqrt(a.Vx * a.Vx + a.Vy * a.Vy) > 0.5 && sx > b.Lx - 1,
-                $"부딪힘 {st.Crashes} · 배 빠르기 {Math.Sqrt(a.Vx * a.Vx + a.Vy * a.Vy):0.00}m/s · 조각 무게중심 배 틀 x {sx:0.0} (처음 {b.Lx:0.0}) · \"{story}\"");
+                st.Crashes >= 1 && story.StartsWith("파편이 오른쪽 방 바깥 벽을 뚫었다") && story.Contains("배에 부딪혔다") && Math.Sqrt(a.Vx * a.Vx + a.Vy * a.Vy) > 0.5 && gap1 > gap0 && apart > 0,
+                $"부딪힘 {st.Crashes} · 배 빠르기 {Math.Sqrt(a.Vx * a.Vx + a.Vy * a.Vy):0.00}m/s · 무게중심 사이 {gap0:0.0} → {gap1:0.0}m · 멀어지는 중 {apart > 0} · \"{story}\"");
         }
 
         // ── (다) 세게 부딪히면: 50m/s로 들이받은 조각은 맞닿은 벽을 찢어 뚫고 (미노르스키 — 칸마다 으스러지는 에너지의 15% 넘게) · 방 공기가 샌다 ──
@@ -233,6 +234,7 @@ public static partial class Program
                 var lay = Worlds.Ascii(Sealed);
                 var s = FieldStructure(lay, 5);
                 var st = s.Get<Structure>();
+                st.Debris = false;   // 몸만 (갈라질 때 튄 부스러기가 두 몸을 밀지 않게)
                 s.Run(3);
                 for (int y = 0; y < 5; y++) st.Destroy(s, Worlds.At(lay, 6, y), 0);
                 s.Run(3);
@@ -246,11 +248,118 @@ public static partial class Program
                 whole < 99 && cut - whole >= 2 && cut - whole <= 5, $"닿기까지 성한 벽 {whole}틱 · 파인 벽 {cut}틱 (다가오는 빠르기 0.06m/s — 한 틱 14cm)");
         }
 
+        // ── (마) 부스러기: 바깥에서 날아온 20kg 부스러기(300m/s · 900kJ)가 외판을 뚫는다 — 원인 사슬에 그 부스러기 ──
+        {
+            var lay = Worlds.Ascii(Sealed);
+            var s = FieldStructure(lay, 5);
+            var st = s.Get<Structure>(); var f = s.Get<Field>();
+            s.Run(2);
+            int wall = Worlds.At(lay, 2, 0);
+            int src = s.Causes.Add(CauseKind.Story, "이웃 배에서 떨어져 나온 철판 조각이 날아왔다", s.Tick);
+            st.Throw(s, lay.X(wall) + 0.5, lay.Y(wall) - 6, 0, 300, 20, src);
+            s.Run(1);
+            var breach = s.Facts.Since(0).FirstOrDefault(x => x.Kind == FactKind.WallBreach);
+            string story = breach.Kind == FactKind.WallBreach ? s.Causes.Story(breach.Cause) : "";
+            s.Run(20);
+            double p = f.Pressure(Worlds.At(lay, 2, 2));
+            if (Debug) Console.WriteLine($"    {story}");
+            Check("부스러기: 바깥에서 날아온 20kg 부스러기(300m/s · 900kJ)가 외판을 뚫고 방 공기가 샌다 · 원인 사슬 '철판 조각이 날아왔다 → 날아온 부스러기가 부딪혔다 → 벽이 뚫렸다'",
+                st.ShardHits == 1 && story.StartsWith("이웃 배에서") && story.Contains("부스러기") && f.Hole[wall] > 0 && p < 95,
+                $"맞음 {st.ShardHits} · 구멍 {f.Hole[wall]:0.000}m² · 방 {p:0.0}kPa · \"{story}\"");
+        }
+
+        // ── (마) 뭉툭한 덩어리: 200kg 철판 덩어리가 12m/s(14kJ)로 외판에 부딪히면 찌그러뜨릴 뿐 뚫지 못한다 — 같은 에너지라도 2cm 파편(재질 표의 관통 값 9kJ)과 달리 (드 마르: 지름^1.5) ──
+        {
+            var lay = Worlds.Ascii(Sealed);
+            var s = FieldStructure(lay, 5);
+            var st = s.Get<Structure>(); var f = s.Get<Field>();
+            s.Run(2);
+            int wall = Worlds.At(lay, 2, 0);
+            st.Throw(s, lay.X(wall) + 0.5, lay.Y(wall) - 6, 0, 12, 200, s.Causes.Add(CauseKind.Story, "떨어져 나간 판 덩어리가 천천히 다가왔다", s.Tick));
+            s.Run(3);
+            double p = f.Pressure(Worlds.At(lay, 2, 2));
+            Check("뭉툭한 덩어리: 200kg 철판 덩어리가 12m/s(14kJ — 2cm 파편이면 외판을 뚫는 에너지)로 외판에 부딪혀도 뚫지 못한다 · 방 공기는 그대로",
+                st.ShardHits == 1 && f.Hole[wall] == 0 && p > 100, $"맞음 {st.ShardHits} · 구멍 {f.Hole[wall]:0.000}m² · 방 {p:0.0}kPa");
+        }
+
+        // ── (마) 끊기만 한 벽 조각은 몸을 돌리지 않는다: 공기 없는 세 겹 벽의 가운데를 끊으면 부스러기는 천천히 흩어질 뿐 (0.3m/s) — 그 반동으로 조각이 돌지 않는다 ──
+        //    공기가 있던 통로를 끊으면 빠지는 공기가 부스러기를 세게 민다 (기압 차 × 잔칸 면 × 0.05초 — 1기압이면 20m/s) · 그 운동량은 기체가 준 것이라 몸을 밀지 않는다
+        {
+            var lay = Worlds.Ascii(Sealed);
+            var s = FieldStructure(lay, 5);
+            var st = s.Get<Structure>();
+            s.Run(3);
+            for (int y = 0; y < 5; y++) st.Destroy(s, Worlds.At(lay, 6, y), 0);
+            s.Run(3);
+            double w = st.Bodies.Count > 1 ? Math.Abs(st.Bodies[1].W) : 1, slow = 0;
+            foreach (var sh in st.Shards) slow = Math.Max(slow, Math.Sqrt((sh.Vx - st.Bodies[1].Vx) * (sh.Vx - st.Bodies[1].Vx) + (sh.Vy - st.Bodies[1].Vy) * (sh.Vy - st.Bodies[1].Vy)));
+            long made = st.ShardsMade;
+            var lay2 = Worlds.Ascii(Dumbbell, Worlds.MindLegend);
+            var s2 = FieldStructure(lay2, 2);
+            var st2 = s2.Get<Structure>();
+            s2.Run(3);
+            for (int y = 2; y <= 4; y++) st2.Destroy(s2, Worlds.At(lay2, 10, y), 0);
+            s2.Run(1);
+            double fast = 0; int n2 = 0;
+            foreach (var sh in st2.Shards) { var o = st2.Bodies[0]; fast += Math.Sqrt((sh.Vx - o.Vx) * (sh.Vx - o.Vx) + (sh.Vy - o.Vy) * (sh.Vy - o.Vy)); n2++; }
+            fast /= Math.Max(1, n2);
+            Check("부스러기의 반동: 공기 없는 벽을 끊으면 부스러기는 천천히 흩어지고 (1m/s 아래) 떨어진 조각은 돌지 않는다 · 공기 찬 통로를 끊으면 빠지는 공기가 부스러기를 세게 민다 (평균 10m/s 넘게)",
+                made > 0 && slow < 1 && w < Structure.SpinRadS && st.Spins == 0 && n2 > 0 && fast > 10,
+                $"끊은 벽 부스러기 {made} · 가장 빠른 {slow:0.00}m/s · 조각 각속도 {w:0.0000}rad/s · 통로 부스러기 {n2} · 평균 {fast:0.0}m/s");
+        }
+
+        // ── (마) 부스러기는 몸을 민다: 떨어진 조각에 100kg 부스러기가 50m/s로 박히면 그 운동량만큼 (조각 12.5t — 0.4m/s) 밀린다 ──
+        {
+            var lay = Worlds.Ascii(Sealed);
+            var s = FieldStructure(lay, 5);
+            var st = s.Get<Structure>();
+            st.Debris = false;
+            s.Run(3);
+            for (int y = 0; y < 5; y++) st.Destroy(s, Worlds.At(lay, 6, y), 0);
+            s.Run(3);
+            var f0 = st.Bodies[1];
+            st.Throw(s, f0.X + 12, f0.Y, -10 + f0.Vx, f0.Vy, 100, 0);
+            s.Run(3);
+            var f1 = st.Bodies[1];
+            double expect = 100 * 10 / (f0.Mass + 0.0);
+            Check("부스러기는 몸을 민다: 떨어진 조각에 100kg 부스러기가 10m/s로 박히면 그 운동량만큼 밀린다 (5kJ — 벽은 찌그러지기만 · 조각 12.5t면 8cm/s)",
+                st.ShardHits == 1 && Math.Abs((f0.Vx - f1.Vx) - expect) < 0.02 * expect, $"맞음 {st.ShardHits} · 조각 빠르기 {f0.Vx:0.000} → {f1.Vx:0.000} (바뀜 {f0.Vx - f1.Vx:0.000} · 셈 {expect:0.000}m/s)");
+        }
+
+        // ── (마) 갈라질 때 부스러기가 튀고 화면에 보인다 · 멀리 가면 장부 '우주로' ──
+        {
+            var lay = Worlds.Ascii(Dumbbell, Worlds.MindLegend);
+            var s = FieldStructure(lay, 2);
+            var st = s.Get<Structure>();
+            s.Run(3);
+            for (int y = 2; y <= 4; y++) st.Destroy(s, Worlds.At(lay, 10, y), 0);
+            s.Run(1);
+            int made = (int)st.ShardsMade, flying = st.Shards.Count;
+            // 빠지는 공기에 밀린 부스러기는 한 틱(2.4초)에 수십 m — 부스러기마다 그 둘레를 그려 본다
+            var p = new Painter(lay);
+            int seen = 0;
+            foreach (var sh in st.Shards)
+            {
+                var (sx, sy) = st.LocalOf(0, sh.X, sh.Y);
+                int x0 = (int)Math.Floor(sx) - 3, y0 = (int)Math.Floor(sy) - 3;
+                var img = p.Frame(s, x0, y0, 7, 7, 0);
+                int px = (int)Math.Round((sx - x0) * Painter.T), py = (int)Math.Round((sy - y0) * Painter.T);
+                if (px < 0 || py < 0 || px >= img.W || py >= img.H) continue;
+                var c = img.Get(px, py);
+                if (c.R == 0x9a && c.G == 0xa2 && c.B == 0xb0) seen++;
+            }
+            s.Run(150);
+            Check("갈라질 때 부스러기: 끊긴 통로의 부서진 판이 알갱이로 튀어 날고 화면에 보인다 · 300m 넘게 멀어지면 장부 '우주로'",
+                made >= 3 && flying >= 3 && seen >= 1 && st.ShardKgLost > 0 && st.Shards.Count < flying,
+                $"부스러기 {made} · 날고 있는 {flying} · 화면에 보인 {seen} · 150틱 뒤 날고 있는 {st.Shards.Count} · 우주로 {st.ShardKgLost:0}kg");
+        }
+
         // ── 점화: 배가 가속하면 배만 나아가고 떨어진 조각은 뒤에 남는다 — 멀어진 거리 = ½at² · 몸들의 운동량 = 점화가 넣은 운동량 ──
         {
             var lay = Worlds.Ascii(Sealed);
             var s = FieldStructure(lay, 5);
             var st = s.Get<Structure>();
+            st.Debris = false;   // 몸만 (갈라질 때 튄 부스러기가 두 몸을 밀지 않게)
             s.Run(3);
             for (int y = 0; y < 5; y++) st.Destroy(s, Worlds.At(lay, 6, y), 0);
             s.Run(3);
@@ -264,7 +373,7 @@ public static partial class Program
             double shipGone = -(s1.X - s0.X - s0.Vx * t), expect = 0.5 * a * t * t;
             var (px, py, _, _) = st.BodyMomentum();
             Check("점화: 배가 0.05g로 24초 가속하면 배만 ½at²만큼 나아가고 떨어진 조각은 제 빠르기 그대로 뒤에 남는다 · 몸들의 운동량 = 점화가 넣은 운동량",
-                st.Bodies.Count == 2 && Rel(shipGone, expect) < 1e-6 && f1.Vx == f0.Vx && Rel(px, st.BurnPx) < 1e-9 && Rel(s0.Vx - s1.Vx, a * t) < 1e-9 && st.Crashes == 0,
+                st.Bodies.Count == 2 && Rel(shipGone, expect) < 1e-6 && f1.Vx == f0.Vx && Rel(px, st.BurnPx) < 1e-9 && Rel(Math.Sqrt((s0.Vx - s1.Vx) * (s0.Vx - s1.Vx) + (s0.Vy - s1.Vy) * (s0.Vy - s1.Vy)), a * t) < 1e-7 && st.Crashes == 0,   // 배 틀로 켠다 (갈라질 때 조금 돌았으면 켜는 동안 방향이 0.02° 돌아 크기가 10⁻⁸쯤 준다)
                 $"배가 더 간 거리 {shipGone:0.0}m (½at² {expect:0.0}m) · 조각 빠르기 {f0.Vx:0.000} → {f1.Vx:0.000} · 떨어진 거리 {d0:0.0} → {(st.Fragments.Count > 0 ? st.Fragments[0].Dist : 0):0.0}m · 운동량 {px:0} / 점화 {st.BurnPx:0}N·s");
         }
     }

@@ -94,7 +94,7 @@ public sealed class Painter
     public Img Frame(Sim s, int x0, int y0, int w, int h, int frame, Img? into = null)
     {
         var st = s.Find<Structure>();
-        if (st == null || st.Bodies.Count < 2) { _only = -1; _stc = null; return Draw(s, x0, y0, w, h, frame, into, false); }
+        if (st == null || st.Bodies.Count < 2) { _only = -1; _stc = null; var one = Draw(s, x0, y0, w, h, frame, into, false); if (st != null) Shards(one, st, x0, y0); return one; }
         // ④ 칸 강체: 배를 그리고 · 떨어져 나간 조각마다 제 칸만 따로 그려 자세대로 돌려 붙인다 (가까운 도트 — 도트 그림이 뭉개지지 않게)
         _stc = st; _only = 0;
         var img = Draw(s, x0, y0, w, h, frame, into, false);
@@ -116,7 +116,29 @@ public sealed class Painter
             Place(img, part, bx0, by0, x0, y0, cs, sn, tx, ty, qx0, qy0, qx1, qy1);
         }
         _only = -1; _stc = null;
+        Shards(img, st, x0, y0);
         return img;
+    }
+
+    /// <summary>부스러기 알갱이 (배 틀 자리 · 무게만큼 2~6도트 · 날아가는 쪽 반대로 짧은 꼬리).</summary>
+    private static void Shards(Img img, Structure st, int x0, int y0)
+    {
+        if (st.Shards.Count == 0) return;
+        var body = Rgba.Hex("#9aa2b0"); var dark = Rgba.Hex("#3a404c");
+        var b0 = st.Bodies.Count > 0 ? st.Bodies[0] : default;
+        double cs = Math.Cos(-b0.Th), sn = Math.Sin(-b0.Th);
+        foreach (var sh in st.Shards)
+        {
+            var (sx, sy) = st.LocalOf(0, sh.X, sh.Y);
+            int px = (int)Math.Round((sx - x0) * T), py = (int)Math.Round((sy - y0) * T);
+            if (px < -8 || py < -8 || px > img.W + 8 || py > img.H + 8) continue;
+            int size = Math.Clamp((int)Math.Round(Math.Sqrt(sh.Kg) / 3), 2, 6);
+            // 배에서 본 빠르기 쪽 반대로 꼬리
+            double vx = sh.Vx - b0.Vx, vy = sh.Vy - b0.Vy, lvx = cs * vx - sn * vy, lvy = sn * vx + cs * vy, vl = Math.Sqrt(lvx * lvx + lvy * lvy);
+            if (vl > 0.5) for (int k = 1; k <= 4; k++) img.Blend(px - (int)(lvx / vl * k * 2), py - (int)(lvy / vl * k * 2), body, 0.5f - k * 0.1f);
+            img.Fill(px - size / 2 + 1, py - size / 2 + 1, size, size, dark, 0.6f);
+            img.Fill(px - size / 2, py - size / 2, size, size, body);
+        }
     }
 
     /// <summary>조각 그림을 배 틀에 붙인다: 화면 도트마다 거꾸로 돌려 조각 그림의 도트를 찾는다 (배 틀 q = R·p + t).</summary>

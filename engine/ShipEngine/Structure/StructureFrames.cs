@@ -52,7 +52,8 @@ public sealed partial class Structure
     private bool _latticeDirty;
 
     // ── 도면에서 (찍지 않는다) ──
-    private float[] _mass = Array.Empty<float>(), _area = Array.Empty<float>();
+    private float[] _mass = Array.Empty<float>(), _area = Array.Empty<float>(), _smass = Array.Empty<float>();
+    private double _smassTotal;
     private int[] _comp = Array.Empty<int>(), _initComp = Array.Empty<int>();
     private int _mainInit = -1;
     private float[] _thrustSig = Array.Empty<float>();   // 칸마다 점화 1g의 단면 응력 (MPa)
@@ -69,6 +70,8 @@ public sealed partial class Structure
             (double vol, double area) = L.Kind[c] switch { CellKind.Wall => (0.075, 0.03), CellKind.Floor => (0.02, 0.02), CellKind.Door => (0.015, 0.006), _ => (0, 0) };
             _mass[c] = (float)(m.Density * vol); _area[c] = (float)area;
         }
+        _smass = (float[])_mass.Clone();   // 판 · 골조만 (잔칸이 나눠 가진다) — 설비는 칸 가운데
+        _smassTotal = 0; foreach (float x in _smass) _smassTotal += x;
         foreach (var fu in L.Furniture)
         {
             if (fu.Cells.Length == 0) continue;
@@ -100,7 +103,7 @@ public sealed partial class Structure
     public void Destroy(Sim sim, int c, int cause)
     {
         if (!Solid(c)) return;
-        if (L.Kind[c] == CellKind.Floor) { F.SetHole(c, 2f); DamageCause[c] = cause; _latticeDirty = true; }
+        if (L.Kind[c] == CellKind.Floor) { SetHole(c, 2f); DamageCause[c] = cause; _latticeDirty = true; }
         else Open(sim, c, 2.5f, cause, FactKind.WallBreach, 0);
         _latticeDirty = true;
     }
@@ -109,7 +112,7 @@ public sealed partial class Structure
     public double FragmentMass(int k)
     {
         double m = 0;
-        for (int c = 0; c < L.N; c++) if (Frag[c] == k && Solid(c)) m += _mass[c];
+        for (int c = 0; c < L.N; c++) if (Frag[c] == k && Solid(c)) m += CellMass(c);
         return m;
     }
 
@@ -127,7 +130,7 @@ public sealed partial class Structure
             comp[s] = id; q.Enqueue(s);
             while (q.Count > 0)
             {
-                int c = q.Dequeue(); m += _mass[c];
+                int c = q.Dequeue(); m += CellMass(c);
                 L.Neighbors(c, nb);
                 foreach (int j in nb) if (j >= 0 && comp[j] < 0 && Solid(j)) { comp[j] = id; q.Enqueue(j); }
             }
@@ -184,10 +187,20 @@ public sealed partial class Structure
             // 작은 덩어리는 날아가는 파편이 된다 (그 칸들도 우주로)
             DebrisLost++;
             int dcause = sim.Causes.Add(CauseKind.Breach, "부서진 뼈대 조각이 떨어져 날아갔다", sim.Tick, cells[0], parentCause);
+            // 그 덩어리는 부스러기 알갱이들이 된다 (몸에서 떼어 · 몸 바깥쪽으로 갈라질 때의 빠르기만큼)
+            {
+                double gx = 0, gy = 0;
+                foreach (int c in cells) { gx += L.X(c) + 0.5; gy += L.Y(c) + 0.5; }
+                gx /= cells.Count; gy /= cells.Count;
+                var po = parent < Bodies.Count ? Bodies[parent] : default;
+                double kick = Math.Clamp(impulse / Math.Max(1, massKg), 0.5, 10);
+                foreach (int c in cells.Concat(own)) ShedLump(sim, c, dcause, gx - po.Lx, gy - po.Ly, kick);
+            }
             foreach (int c in cells) { DamageCause[c] = dcause; F.Sever(c); Frag[c] = -1; }
             foreach (int c in own) { F.Sever(c); Frag[c] = -1; }
+            foreach (int g in gap) { TearGap(sim, g, dcause); F.Sever(g); }
+            foreach (int g in gap) ShedOrphans(sim, g, parent, dcause);
             if (parent < Bodies.Count) Refit(parent);
-            foreach (int g in gap) F.Sever(g);
             sim.Facts.Emit(sim.Tick, FactKind.ObjectFlung, cells[0], (float)(massKg / 1000), dcause);
             _latticeDirty = true;
             return;
@@ -200,7 +213,8 @@ public sealed partial class Structure
         int cause = sim.Causes.Add(CauseKind.Breach, parent > 0 ? $"떨어져 나간 조각이 또 갈라졌다 — {what}" : $"배가 갈라졌다 — {what}", sim.Tick, cutCell, parentCause);
         foreach (int c in cells) Frag[c] = id;
         foreach (int c in own) Frag[c] = id;
-        foreach (int g in gap) { DamageCause[g] = cause; TearGap(g); F.Sever(g); Frag[g] = -1; }
+        foreach (int g in gap) { DamageCause[g] = cause; TearGap(sim, g, cause); F.Sever(g); Frag[g] = -1; }
+        foreach (int g in gap) ShedOrphans(sim, g, parent, cause);
         float speed = (float)Math.Clamp(impulse / massKg, 0.02, 3);
         int cut = rooms.Count > 0 ? sim.Causes.Add(CauseKind.Electric, "조각이 떨어져 나가 공기 · 전력이 끊겼다 — 산소 · 정화 · 난방이 멈췄다", sim.Tick, cutCell, cause) : 0;
         Fragments.Add(new Fragment { Id = id, Cause = cause, Tick = sim.Tick, MassT = (float)(massKg / 1000), Cells = cells.Count, Speed = speed, Rooms = rooms.Count, CutCause = cut });
@@ -294,7 +308,7 @@ public sealed partial class Structure
             bool first = F.Hole[c] <= 0;
             int bc = BlastCause(sim, c);
             int cause2 = sim.Causes.Add(CauseKind.Breach, area >= DeckGone ? "폭발 압력에 바닥 · 천장 판이 통째로 날아갔다" : "폭발 압력에 바닥 · 천장 판이 뚫렸다", sim.Tick, c, bc);
-            F.SetHole(c, area);
+            SetHole(c, area);
             DamageCause[c] = cause2;
             DeckBursts++;
             if (area >= DeckGone) _latticeDirty = true;
@@ -415,7 +429,7 @@ public sealed partial class Structure
                 if (load >= 1)
                 {
                     float area = load >= 1.6 ? 2f : (float)(0.3 + 0.7 * (load - 1) / 0.6);
-                    if (area > F.Hole[c]) { if (F.Hole[c] <= 0) DeckBursts++; F.SetHole(c, area); DamageCause[c] = bc; if (area >= DeckGone) _latticeDirty = true; }
+                    if (area > F.Hole[c]) { if (F.Hole[c] <= 0) DeckBursts++; SetHole(c, area); DamageCause[c] = bc; if (area >= DeckGone) _latticeDirty = true; }
                 }
                 if (L.FurnitureAt[c] >= 0 && kpa > BlastHarmKPa) HitFurniture(sim, L.FurnitureAt[c], (kpa - BlastHarmKPa) / 70, bc, "충격파에");
                 // ⑦ 몸이 읽는 충격: 넘친 압력 × 충격파의 길이 (작은 폭발은 짧아 덜 다친다 — 지속 시간 ∝ W^(1/3) · 브라운 곡선의 경향) — TNT 15kg 넘게면 100kPa에 3.9kJ
@@ -519,7 +533,7 @@ public sealed partial class Structure
         {
             if (axis == 1 && L.Y(c) != weakest) break;
             if (!InMain(c) || !Solid(c)) continue;
-            if (L.Kind[c] == CellKind.Floor) { F.SetHole(c, 2f); DamageCause[c] = cause; }
+            if (L.Kind[c] == CellKind.Floor) { SetHole(c, 2f); DamageCause[c] = cause; }
             else Open(sim, c, 2.5f, cause, FactKind.WallBreach, 0);
         }
         _latticeDirty = true;

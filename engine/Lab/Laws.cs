@@ -63,7 +63,7 @@ public static partial class Program
             Console.WriteLine("\n[① 찍기 구조체에 빈 바이트가 없다 (쓰레기 값이 지문을 흔들지 않게)]");
             int Fields(Type ty) => ty.GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)
                 .Sum(f => f.FieldType.IsEnum ? System.Runtime.InteropServices.Marshal.SizeOf(Enum.GetUnderlyingType(f.FieldType)) : System.Runtime.InteropServices.Marshal.SizeOf(f.FieldType));
-            foreach (var ty in new[] { typeof(CauseNode), typeof(Fact), typeof(Heard), typeof(Cloud), typeof(Rock), typeof(Fragment), typeof(RigidBody) })
+            foreach (var ty in new[] { typeof(CauseNode), typeof(Fact), typeof(Heard), typeof(Cloud), typeof(Rock), typeof(Fragment), typeof(RigidBody), typeof(Shard) })
             {
                 int size = (int)typeof(System.Runtime.CompilerServices.Unsafe).GetMethod("SizeOf")!.MakeGenericMethod(ty).Invoke(null, null)!;
                 Check($"{ty.Name}: 크기 {size} = 필드 합 {Fields(ty)}", size == Fields(ty));

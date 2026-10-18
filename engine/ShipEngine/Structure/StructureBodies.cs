@@ -25,6 +25,8 @@ public struct RigidBody
     public double PVx, PVy, PW, Ax, Ay, Al;
     /// <summary>이번 틱에 부딪혀 바뀐 빠르기 (m/s — 가장 큰 것: 부딪힘은 짧아 덜컹임보다 세게 휘청인다).</summary>
     public float Bump;
+    /// <summary>원인(PushCause)이 된 밂의 크기 (N·s — 틱마다 반으로 준다: 더 큰 밂이 와야 원인이 바뀐다).</summary>
+    public float PushImp;
 }
 
 /// <summary>
@@ -43,7 +45,7 @@ public sealed partial class Structure
     public double ShipAx, ShipAy;
     public long BodySteps, Spins;
     public const double SubStepM = 0.25, SubStepRad = 0.1, SpinRadS = 0.05;
-    public const int MaxSubSteps = 64;
+    public const int MaxSubSteps = 1024;   // 100m/s 넘는 몸도 한 걸음에 25cm 아래 (빠른 몸이 벽을 건너뛰지 않게)
 
     /// <summary>칸이 속한 몸 (-1: 몸이 없다 — 날아간 파편 · 우주가 된 칸).</summary>
     public int BodyOf(int c) => c < 0 || c >= L.N || F.Severed[c] != 0 ? -1 : Frag[c] < 0 ? -1 : Frag[c];
@@ -85,18 +87,51 @@ public sealed partial class Structure
         return (c, s, ox, oy);
     }
 
+    /// <summary>칸의 질량 (판 · 골조는 남은 잔칸만큼 + 설비).</summary>
+    public double CellMass(int c) => Sub.Length == 0 || Sub[c] == SubFull ? _mass[c] : _mass[c] - _smass[c] * (1 - SubCount(Sub[c]) / 16.0);
+
+    /// <summary>몸 b의 질량 모멘트 (제 틀 원점에 대해): 몸의 칸(구조가 남았든 아니든 — 통째로 나간 벽의 테두리 · 설비도 몸에 붙어 있다)은 잔칸마다 그 가운데에 (한 변 25cm 판 — 1/96) · 설비는 칸 가운데에 (1/6) ·
+    /// 우주가 된 사이 칸에 남은 잔칸은 붙은 몸에 (찢긴 끝).</summary>
+    private void Moments(int b, out double m, out double sx, out double sy, out double sxx, out (int x0, int y0, int x1, int y1) box)
+    {
+        m = sx = sy = sxx = 0;
+        int x0 = int.MaxValue, y0 = int.MaxValue, x1 = int.MinValue, y1 = int.MinValue;
+        const double kSub = 1.0 / 96, kCell = 1.0 / 6;
+        for (int c = 0; c < L.N; c++)
+        {
+            bool mine = Frag[c] == b && F.Severed[c] == 0;
+            bool torn = !mine && F.Severed[c] != 0 && Sub[c] != 0 && _smass[c] > 0;
+            if (!mine && !torn) continue;
+            double cx = L.X(c) + 0.5, cy = L.Y(c) + 0.5;
+            ushort mk = Sub.Length == 0 ? SubFull : Sub[c];
+            if (mine)
+            {
+                double fur = _mass[c] - _smass[c];
+                if (fur > 0) { m += fur; sx += fur * cx; sy += fur * cy; sxx += fur * (cx * cx + cy * cy + kCell); }
+                if (mk == SubFull) { double ms = _smass[c]; m += ms; sx += ms * cx; sy += ms * cy; sxx += ms * (cx * cx + cy * cy + kCell); }
+            }
+            if (mk != SubFull || torn)
+            {
+                double each = _smass[c] / 16;
+                for (int i = 0; i < 16; i++)
+                {
+                    if ((mk >> i & 1) == 0) continue;
+                    if (torn && TornOwner(c, i % SubN, i / SubN) != b) continue;
+                    double px = L.X(c) + (i % SubN + 0.5) / SubN, py = L.Y(c) + (i / SubN + 0.5) / SubN;
+                    m += each; sx += each * px; sy += each * py; sxx += each * (px * px + py * py + kSub);
+                }
+            }
+            if (mine && Solid(c)) { x0 = Math.Min(x0, L.X(c)); y0 = Math.Min(y0, L.Y(c)); x1 = Math.Max(x1, L.X(c)); y1 = Math.Max(y1, L.Y(c)); }
+        }
+        box = (x0, y0, x1, y1);
+    }
+
     /// <summary>몸의 질량 · 무게중심 · 회전관성 · 상자를 칸에서 다시 센다 (갈라지면) — 움직임은 그대로 이어진다 (새 무게중심의 빠르기 = v + ω × r).</summary>
     private void Refit(int b)
     {
-        double m = 0, sx = 0, sy = 0, sxx = 0;
-        int x0 = int.MaxValue, y0 = int.MaxValue, x1 = int.MinValue, y1 = int.MinValue;
-        for (int c = 0; c < L.N; c++)
-        {
-            if (Frag[c] != b || F.Severed[c] != 0 || !Solid(c)) continue;
-            double mc = _mass[c], px = L.X(c) + 0.5, py = L.Y(c) + 0.5;
-            m += mc; sx += mc * px; sy += mc * py; sxx += mc * (px * px + py * py + 1.0 / 6);
-            x0 = Math.Min(x0, L.X(c)); y0 = Math.Min(y0, L.Y(c)); x1 = Math.Max(x1, L.X(c)); y1 = Math.Max(y1, L.Y(c));
-        }
+        Moments(b, out double m, out double sx, out double sy, out double sxx, out var bx);
+        var (x0, y0, x1, y1) = bx;
+        if (x0 == int.MaxValue) { x0 = y0 = 0; x1 = y1 = -1; }
         var o = Bodies[b];
         if (m <= 0) { o.Mass = 0; o.Inertia = 0; o.Asleep = 1; Bodies[b] = o; return; }
         double lx = sx / m, ly = sy / m;
@@ -134,8 +169,7 @@ public sealed partial class Structure
     /// <summary>배의 몸을 처음 세운다: 제자리 (세상 틀 = 도면 틀).</summary>
     private void Refit0()
     {
-        double m = 0, sx = 0, sy = 0;
-        for (int c = 0; c < L.N; c++) if (Frag[c] == 0 && F.Severed[c] == 0 && Solid(c)) { m += _mass[c]; sx += _mass[c] * (L.X(c) + 0.5); sy += _mass[c] * (L.Y(c) + 0.5); }
+        Moments(0, out double m, out double sx, out double sy, out _, out _);
         var o = Bodies[0];
         if (m > 0) { o.Lx = o.X = sx / m; o.Ly = o.Y = sy / m; }
         Bodies[0] = o;
@@ -151,7 +185,8 @@ public sealed partial class Structure
         o.Vx += jx / o.Mass; o.Vy += jy / o.Mass;
         o.W += ((wx - o.X) * jy - (wy - o.Y) * jx) / o.Inertia;
         o.Asleep = 0;
-        if (cause != 0) o.PushCause = cause;
+        double imp = Math.Sqrt(jx * jx + jy * jy);
+        if (cause != 0 && imp >= o.PushImp) { o.PushCause = cause; o.PushImp = (float)imp; }
         Bodies[b] = o;
     }
 
@@ -220,7 +255,7 @@ public sealed partial class Structure
         int n = Bodies.Count;
         if (n == 0) return;
         _vents.Clear();
-        for (int b = 0; b < n; b++) { var o = Bodies[b]; if (o.Bump != 0) { o.Bump = 0; Bodies[b] = o; } }
+        for (int b = 0; b < n; b++) { var o = Bodies[b]; if (o.Bump != 0 || o.PushImp != 0) { o.Bump = 0; o.PushImp *= 0.5f; Bodies[b] = o; } }
         foreach (var k in F.Links)
         {
             if (k.RB >= 0 || k.Impulse <= 0 || k.Dx == 0 && k.Dy == 0) continue;
@@ -230,7 +265,7 @@ public sealed partial class Structure
             _vents.Add((b, px, py, k.Dx, k.Dy, k.Impulse));
             var o = Bodies[b];
             int vc = VentCause(k);
-            if (vc != 0) { o.PushCause = vc; Bodies[b] = o; }
+            if (vc != 0 && k.Impulse >= o.PushImp) { o.PushCause = vc; o.PushImp = (float)k.Impulse; Bodies[b] = o; }
         }
         bool burn = ShipAx != 0 || ShipAy != 0;
         _burnDvx = _burnDvy = 0;
@@ -257,6 +292,7 @@ public sealed partial class Structure
                 Bodies[b] = o;
             }
             if (n > 1) Contacts(sim);   // (다) 부딪힘 — 잔걸음마다
+            MoveShards(sim, h);         // (마) 부스러기 알갱이
         }
         Kick(0.5 * dt, burn);
         for (int b = 0; b < n; b++)
@@ -275,7 +311,7 @@ public sealed partial class Structure
                 int fragCause = b <= Fragments.Count ? Fragments[b - 1].Cause : 0;
                 int cause = sim.Causes.Add(CauseKind.Breach, $"떨어져 나간 조각이 {(o.PushCause != 0 ? "빠지는 공기에 밀려 " : "")}돌기 시작했다 (분에 {Math.Abs(o.W) * 60 / (2 * Math.PI):0.0}바퀴)", sim.Tick, CellNear(b), o.PushCause != 0 ? o.PushCause : fragCause);
                 sim.Facts.Emit(sim.Tick, FactKind.Tumble, CellNear(b), (float)(o.Mass / 1000), cause, -1, b);
-                o.TumbleCause = cause; o.PushCause = cause;   // 가장 나중에 흔든 것이 안의 것의 까닭
+                o.TumbleCause = cause; o.PushCause = cause;   // 돌기 시작한 것이 안의 것의 까닭 (그 밂의 크기는 그대로 — 더 큰 밂이 오면 바뀐다)
             }
             Bodies[b] = o;
         }
@@ -342,14 +378,16 @@ public sealed partial class Structure
     private void SaveBodies(StateWriter w)
     {
         w.Tag("몸"); w.List(Bodies);
-        w.Arr(Sub); w.I64(SubCarved);
+        w.Arr(Sub); w.Arr(_blow); w.I64(SubCarved);
+        SaveShards(w);
         w.F64(GasPx); w.F64(GasPy); w.F64(GasL); w.F64(BurnPx); w.F64(BurnPy); w.F64(BurnL); w.F64(GasAbs); w.I64(BodySteps); w.I64(Spins); w.I64(Crashes);
     }
 
     private void LoadBodies(StateReader r)
     {
         r.Tag("몸"); Bodies.Clear(); Bodies.AddRange(r.List<RigidBody>());
-        r.ArrInto(Sub); SubCarved = r.I64(); _holeSeen = -1; _edgeVersion = -1;
+        r.ArrInto(Sub); r.ArrInto(_blow); SubCarved = r.I64(); _holeSeen = -1; _edgeVersion = -1;
+        LoadShards(r);
         GasPx = r.F64(); GasPy = r.F64(); GasL = r.F64(); BurnPx = r.F64(); BurnPy = r.F64(); BurnL = r.F64(); GasAbs = r.F64(); BodySteps = r.I64(); Spins = r.I64(); Crashes = r.I64();
     }
 }

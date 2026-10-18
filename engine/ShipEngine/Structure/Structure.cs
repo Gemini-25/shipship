@@ -106,7 +106,7 @@ public sealed partial class Structure : IEngine
     public void Patch(int cell, float remainingArea)
     {
         if (L.Kind[cell] == CellKind.Door && L.DoorAt[cell] >= 0 && remainingArea <= 0) F.TapeDoor(L.DoorAt[cell]); // 문틈도 막는다
-        F.SetHole(cell, Math.Min(F.Hole[cell], Math.Max(0, remainingArea)));
+        SetHole(cell, Math.Min(F.Hole[cell], Math.Max(0, remainingArea)));
         if (Crack[cell] > 0 && remainingArea <= 0) CrackPatch[cell] = Crack[cell]; // 금 위에 덧판 — 그 길이까지는 새지 않는다 (더 자라면 다시 샌다)
     }
 
@@ -139,8 +139,13 @@ public sealed partial class Structure : IEngine
     /// <summary>그 칸이 끼인 문인가.</summary>
     public bool JammedAt(int cell) => L.DoorAt[cell] >= 0 && DoorJam[L.DoorAt[cell]] != 0;
 
-    /// <summary>충돌: 칸 cell에 에너지 joules가 (dx, dy) 방향으로 들어온다.</summary>
-    public void Impact(Sim sim, int cell, double joules, int dx, int dy, int cause)
+    /// <summary>관통 값(재질 표)을 잰 파편의 크기 (2cm — 운석 · 작은 파편).</summary>
+    public const double ImpactSizeM = 0.02;
+    /// <summary>뭉툭한 것은 덜 뚫는다 (드 마르: 뚫는 에너지 ∝ 지름^1.5 — 같은 두께) — 200kg 덩어리가 7m/s로 부딪히면 찌그러뜨릴 뿐.</summary>
+    public static double Blunt(double sizeM) => Math.Pow(Math.Max(1, sizeM / ImpactSizeM), 1.5);
+
+    /// <summary>충돌: 칸 cell에 에너지 joules가 (dx, dy) 방향으로 들어온다 (부딪힌 것의 크기 sizeM — 클수록 뭉툭해 덜 뚫는다).</summary>
+    public void Impact(Sim sim, int cell, double joules, int dx, int dy, int cause, double sizeM = ImpactSizeM)
     {
         Impacts++;
         var snd = sim.Find<Sound>();
@@ -156,7 +161,7 @@ public sealed partial class Structure : IEngine
             {
                 var m = T.Materials[L.Material[c]].Def;
                 double mm = kind == CellKind.Door ? 3 : L.Hull[c] ? 10 : 4;
-                double pen = m.Penetrate * 1000 * mm * Math.Max(0.2, HeatFactor(c, m)) * (1 - Corrode[c]);
+                double pen = m.Penetrate * 1000 * mm * Math.Max(0.2, HeatFactor(c, m)) * (1 - Corrode[c]) * Blunt(sizeM);
                 if (e < pen)
                 {
                     Fatigue[c] = (float)Math.Min(1, Fatigue[c] + 0.3 * e / pen);
@@ -229,8 +234,10 @@ public sealed partial class Structure : IEngine
         Decks(sim); t = Prof.Lap("구조:바닥", t);
         if (sim.Tick % 25 == 0) { Rust(sim, 25 * dt); StressCorrosion(sim, 25 * dt); }
         t = Prof.Lap("구조:녹 · 응력 부식", t);
-        SyncSub();
-        Lattice(sim); t = Prof.Lap("구조:격자", t);
+        SyncSub(sim);
+        Lattice(sim);
+        Array.Clear(_blow);   // 이번 구멍들의 기압은 다 썼다 (뒤에 부딪혀 난 구멍은 다음 틱에)
+        t = Prof.Lap("구조:격자", t);
         MoveBodies(sim, dt); Prof.Lap("구조:몸", t);
     }
 
@@ -359,7 +366,7 @@ public sealed partial class Structure : IEngine
     {
         if (area <= F.Hole[c]) return;
         bool first = F.Hole[c] <= 0, gone = F.Hole[c] < 2 && area >= 2;
-        F.SetHole(c, area);
+        SetHole(c, area);
         DamageCause[c] = cause;
         if (fact == FactKind.WallCrack) Cracks++; else if (first) Breaches++;
         if (first || gone) sim.Facts.Emit(sim.Tick, fact, c, area, cause);

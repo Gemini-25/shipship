@@ -189,13 +189,15 @@ public sealed partial class Structure
         if (squash > 0)
         {
             var (lx, ly) = LocalOf(body, wx, wy);
+            ushort before = Sub[c];
             Carve(c, squash, (int)Math.Floor((lx - L.X(c)) * SubN), (int)Math.Floor((ly - L.Y(c)) * SubN));
+            Shed(sim, c, (ushort)(before & ~Sub[c]), cause, 0, 0, ShardKick);
         }
         if (r >= 1) { Destroy(sim, c, cause); return; }
         if (r >= 0.15)
         {
             float area = (float)Math.Min(2.4, 2.5 * r);
-            if (L.Kind[c] == CellKind.Floor) { if (area > F.Hole[c]) { F.SetHole(c, area); if (area >= DeckGone) _latticeDirty = true; } }
+            if (L.Kind[c] == CellKind.Floor) { if (area > F.Hole[c]) { SetHole(c, area); if (area >= DeckGone) _latticeDirty = true; } }
             else Open(sim, c, Math.Max(F.Hole[c], area), sim.Causes.Add(CauseKind.Impact, "부딪힌 자리가 찢겨 뚫렸다", sim.Tick, c, cause), FactKind.WallBreach);
             return;
         }
