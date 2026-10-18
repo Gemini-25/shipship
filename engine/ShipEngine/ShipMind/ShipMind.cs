@@ -541,6 +541,10 @@ public sealed partial class ShipMind : IEngine
         double sum = 0; int n = 0;
         for (int r = 0; r < L.Rooms.Count; r++)
             if (RoomSeen[r] != 0 && RoomKPa[r] > 40 && !IsolatedAirlock(r)) { sum += RoomKPa[r]; n++; }
+        // 배 전체가 40kPa 아래로 옅어졌다 (진공은 아니다): 그 방들로 잰다 — 고치기 전에는 잴 방이 없어 예비가 넉넉해도 다시 채우지 않았다
+        if (n == 0)
+            for (int r = 0; r < L.Rooms.Count; r++)
+                if (RoomSeen[r] != 0 && RoomKPa[r] > 5 && !IsolatedAirlock(r)) { sum += RoomKPa[r]; n++; }
         bool leaking = Incidents.Any(x => x.Active != 0 && x.Kind == IncidentKind.Leak);
         // 배 전체 기체의 흐름: 10분 넘게 풀었는데 푼 만큼의 30%도 늘지 않았다 — 어딘가 샌다 (모르는 샘에 예비를 버리지 않는다 · 한 시간 잠근다) /
         // 풀기 전: 지난 2분에 0.1% 넘게 줄고 있으면 이번에는 풀지 않는다 (사고 직후 · 아직 새는 중)
@@ -827,12 +831,13 @@ public sealed partial class ShipMind : IEngine
         switch (x.Kind)
         {
             case IncidentKind.Fire: g = GoalKind.FightFire; target = x.Cell; drone = true; break;
-            case IncidentKind.Vacuum when x.Tries % 2 == 0 && OutsideOf(x.Room) is int o && o >= 0:
+            case IncidentKind.Vacuum when (x.Tries % 2 == 0 || EmptyHeld(x.Room)) && OutsideOf(x.Room) is int o && o >= 0:   // 닫아 둔 방은 늘 바깥으로
                 // 빠진 방 — 문은 기압 차로 안 열린다 (열면 배 공기까지 빠진다): 로봇이 에어락으로 나가 그 방 외판을 바깥에서 살핀다
                 g = GoalKind.Investigate; target = o; drone = false; break;
             case IncidentKind.Leak when x.Tries % 2 == 1 && OutsideOf(x.Room) is int o2 && o2 >= 0:
                 // 안에서 살펴도 못 찾았다 (끼인 문 · 기압 차로 못 들어갔거나 구멍이 안 보였다): 번갈아 그 방 외판을 바깥에서 둘러본다
                 g = GoalKind.Investigate; target = o2; drone = false; break;
+            case IncidentKind.Vacuum when EmptyHeld(x.Room): return;   // 비워진 채 닫아 둔 방 — 안으로는 들이지 않는다 (바깥에서 닿을 외판도 없다)
             case IncidentKind.Leak: case IncidentKind.Vacuum: g = GoalKind.Investigate; target = x.Cell; drone = true; break;
             case IncidentKind.PersonDown: g = GoalKind.Rescue; target = x.Subject; drone = false; break;
             case IncidentKind.Injured: g = GoalKind.Treat; target = x.Subject; drone = false; break;

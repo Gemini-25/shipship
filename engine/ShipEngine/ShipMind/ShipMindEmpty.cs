@@ -5,7 +5,7 @@ namespace ShipEngine;
 /// 압력 맞춤 밸브로 배 공기를 그 방에 흘려 넣는다 — 예비 공기가 남아 있으면 주컴퓨터가 곧 다시 채우니 괜찮지만,
 /// 예비가 그 방을 채울 만큼(1.5배)도 없으면 배의 숨 쉴 공기를 나눠 버리는 것이다 (76kPa이던 배가 방 하나를 열자 68kPa로).
 /// → 그런 방은 문 밸브를 잠가 둔다 (2분마다 다시 본다 · 사람이든 로봇이든 안에 있으면 내보내야 하니 잠그지 않는다 · 바깥문이 있는 에어락은 빼고).
-/// 들어가려던 이는 문이 안 열리는 것을 알고 다른 길을 찾는다 (⑧). 예비가 다시 넉넉해지면 푼다.
+/// 들어가려던 이는 문이 안 열리는 것을 알고 다른 길을 찾는다 (⑧) · 그 방의 '공기가 빠졌다'에는 로봇을 안으로 보내지 않고 에어락으로 나가 외판을 바깥에서 살피게 한다. 예비가 다시 넉넉해지면 푼다.
 /// 실제: 1997년 미르의 스펙트르 모듈은 충돌로 뚫린 뒤 해치를 닫은 채 다시 채우지 않았다 (전선은 특별한 해치 덮개로 빼냈다).
 /// </summary>
 public sealed partial class ShipMind
@@ -51,6 +51,9 @@ public sealed partial class ShipMind
             Say(sim, $"{Ko.Eun(RoomName(r))} 비워진 채 닫아 둡니다 — 다시 채울 예비 공기가 모자랍니다 · 문을 열면 배 공기가 그리로 나뉩니다");
         }
     }
+
+    /// <summary>그 방을 비워진 채 닫아 두었나.</summary>
+    private bool EmptyHeld(int r) => r >= 0 && r < _emptyHeld.Length && _emptyHeld[r] != 0;
 
     private void SaveEmpty(StateWriter w) { w.I64(EmptyHolds); w.Arr(_emptyHeld); }
     private void LoadEmpty(StateReader r) { EmptyHolds = r.I64(); _emptyHeld = r.Arr<byte>(); }

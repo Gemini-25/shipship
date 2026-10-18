@@ -210,22 +210,23 @@ public static partial class Program
             int SAt(int x, int y) => Worlds.At(small, x, y);
             int left = small.Room[SAt(3, 2)], right = small.Room[SAt(15, 2)];
             int door = small.Doors.First(d => d.Cell == SAt(11, 2)).Id;
-            (double right, double left, long holds, bool said, float opened) Run(double reserve)
+            (double right, double left, long holds, bool said, float opened, bool robotIn, bool taped, bool refill) Run(double reserve)
             {
                 var s = Worlds.Full(small, 3);
-                var f = s.Get<Field>(); var net = s.Get<Network>(); var st = s.Get<Structure>(); var sm = s.Get<ShipMind>();
+                var f = s.Get<Field>(); var net = s.Get<Network>(); var st = s.Get<Structure>(); var sm = s.Get<ShipMind>(); var mm = s.Get<Mind>();
+                int robot = mm.AddRobot(s, SAt(17, 3), AgentKind.Robot, SAt(17, 3));   // 주컴퓨터가 '공기가 빠졌다'에 보낼 로봇
                 s.Run(2);
                 net.AirReserve = reserve;
                 Thin(s, f, small.Rooms[left].Cells.ToList(), 0.01);
                 s.Run((int)Time.Minutes(1));
-                float opened = 0;
-                for (int k = 0; k < Time.Minutes(4); k++) { st.RequestDoor(door, 1); s.Step(); opened = Math.Max(opened, f.DoorOpen[door]); }   // 누가 그 방으로 가려 한다 (문을 열어 달라고 한다)
-                return (f.Pressure(SAt(15, 2)), f.Pressure(SAt(3, 2)), sm.EmptyHolds, sm.Log.Any(x => x.text.Contains("비워진 채 닫아")), opened);
+                float opened = 0; bool robotIn = false;
+                for (int k = 0; k < Time.Minutes(8); k++) { st.RequestDoor(door, 1); s.Step(); opened = Math.Max(opened, f.DoorOpen[door]); robotIn |= small.Room[mm[robot].C.Cell] == left; }   // 누가 그 방으로 가려 한다 (문을 열어 달라고 한다)
+                return (f.Pressure(SAt(15, 2)), f.Pressure(SAt(3, 2)), sm.EmptyHolds, sm.Log.Any(x => x.text.Contains("비워진 채 닫아")), opened, robotIn, f.DoorTaped[door] != 0, net.AirRelease > 0);
             }
             var poorT = Task.Run(() => Run(0)); var rich = Run(2e6); var poor = poorT.Result;
-            Check("비워진 방은 닫아 둔다: 예비 공기가 그 방을 채울 만큼 없으면 주컴퓨터가 문 밸브를 잠가 문이 열리지 않는다 — 배 공기는 문틈으로만 조금 (틈은 로봇이 봉합 꾸러미로 막는다) / 예비가 넉넉하면 밸브가 맞추고 문이 열린다",
-                poor.holds >= 1 && poor.said && poor.opened == 0 && poor.right > rich.right + 15 && rich.holds == 0 && rich.opened > 0.5f,
-                $"예비 0: 닫아 둔 번 {poor.holds} · 문 {poor.opened:0.0} · 4분 뒤 오른쪽 {poor.right:0}kPa · 왼쪽 {poor.left:0}kPa / 예비 넉넉: 닫아 둔 번 {rich.holds} · 문 {rich.opened:0.0} · 오른쪽 {rich.right:0} · 왼쪽 {rich.left:0}kPa");
+            Check("비워진 방은 닫아 둔다: 예비 공기가 그 방을 채울 만큼 없으면 주컴퓨터가 문 밸브를 잠가 문이 열리지 않는다 — 배 공기는 문틈으로만 조금 (틈은 로봇이 봉합 꾸러미로 막는다) · 로봇도 안으로 보내지 않는다 / 예비가 넉넉하면 밸브가 맞추고 문이 열린다 (주컴퓨터가 예비를 푼다 — 배 전체가 40kPa 아래여도)",
+                poor.holds >= 1 && poor.said && poor.opened == 0 && !poor.robotIn && poor.taped && poor.right > rich.right + 15 && rich.holds == 0 && rich.opened > 0.5f && rich.refill,
+                $"예비 0: 닫아 둔 번 {poor.holds} · 문 {poor.opened:0.0} · 로봇이 들어감 {poor.robotIn} · 문틈 막음 {poor.taped} · 8분 뒤 오른쪽 {poor.right:0}kPa · 왼쪽 {poor.left:0}kPa / 예비 넉넉: 닫아 둔 번 {rich.holds} · 문 {rich.opened:0.0} · 오른쪽 {rich.right:0} · 왼쪽 {rich.left:0}kPa · 예비를 풂 {rich.refill}");
         }
     }
 }

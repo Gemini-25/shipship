@@ -102,9 +102,11 @@ public static partial class Program
             if (t % Time.TicksPerHour == 0)
             {
                 double cm2 = 0, age = 0;
+                var hnb = new int[4];
+                bool Leaky(int c) { s.Layout.Neighbors(c, hnb); foreach (int j in hnb) if (j >= 0 && s.Layout.IsSpace(j) && f0.Severed[j] == 0) return true; return false; }   // 배 안 공기에 닿은 구멍만 (벽 속 · 바깥에만 닿은 구멍은 새지 않는다)
                 for (int c = 0; c < s.Layout.N; c++)
                 {
-                    if (f0.Hole[c] > 0) { if (holeSince[c] == 0) holeSince[c] = t + 1; cm2 += f0.Hole[c] * 1e4; age = Math.Max(age, (t + 1 - holeSince[c]) / (double)Time.TicksPerHour); }
+                    if (f0.Hole[c] > 0 && Leaky(c)) { if (holeSince[c] == 0) holeSince[c] = t + 1; cm2 += f0.Hole[c] * 1e4; age = Math.Max(age, (t + 1 - holeSince[c]) / (double)Time.TicksPerHour); }
                     else holeSince[c] = 0;
                 }
                 int broken = 0;
