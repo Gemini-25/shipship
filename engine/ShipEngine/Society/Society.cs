@@ -258,7 +258,7 @@ public sealed partial class Society : IEngine
         Partner[i] = Partner[j] = -1; Breakups++;
         Attract[i * N + j] *= 0.3f; Attract[j * N + i] *= 0.3f;
         foreach (int x in new[] { i, j }) { ref var c = ref C(x); c.Sad = Math.Min(1, c.Sad + 0.35f); c.Stress = Math.Min(1, c.Stress + 0.15f); }
-        int cause = sim.Causes.Add(CauseKind.Person, $"{Ko.Gwa(_mind!.NameOf(i))} {Ko.I(_mind.NameOf(j))} 헤어졌다 — {(Math.Max(GrudgeOf(i, j), GrudgeOf(j, i)) > 0.45f ? "쌓인 원망을 넘지 못했다" : "마음이 식었다")}", sim.Tick, C(i).Cell, 0, 0, i);
+        int cause = sim.Causes.Add(CauseKind.Society, $"{Ko.Gwa(_mind!.NameOf(i))} {Ko.I(_mind.NameOf(j))} 헤어졌다 — {(Math.Max(GrudgeOf(i, j), GrudgeOf(j, i)) > 0.45f ? "쌓인 원망을 넘지 못했다" : "마음이 식었다")}", sim.Tick, C(i).Cell, 0, 0, i);
         sim.Facts.Emit(sim.Tick, FactKind.Relationship, C(i).Cell, -1, cause, i, j);
         Remember(sim, i, Topic.Heart, j, cause, 0.8f, C(i).Cell); Remember(sim, j, Topic.Heart, i, cause, 0.8f, C(j).Cell);
     }
@@ -282,7 +282,7 @@ public sealed partial class Society : IEngine
         if (before < FriendAt && Bond[k] >= FriendAt && BondOf(b, a) >= FriendAt * 0.8f)
         {
             Friendships++;
-            int c = sim.Causes.Add(CauseKind.Person, $"{Ko.Gwa(_mind!.NameOf(a))} {Ko.I(_mind.NameOf(b))} 가까워졌다 — {why}", sim.Tick, _mind.Agents[a].C.Cell, cause, 0, a);
+            int c = sim.Causes.Add(CauseKind.Society, $"{Ko.Gwa(_mind!.NameOf(a))} {Ko.I(_mind.NameOf(b))} 가까워졌다 — {why}", sim.Tick, _mind.Agents[a].C.Cell, cause, 0, a);
             sim.Facts.Emit(sim.Tick, FactKind.Relationship, _mind.Agents[a].C.Cell, Bond[k], c, a, b);
         }
     }
@@ -343,7 +343,7 @@ public sealed partial class Society : IEngine
         if (before < GrudgeAt && GrudgeOf(a, x) >= GrudgeAt)
         {
             Blames++;
-            int c = sim.Causes.Add(CauseKind.Person, $"{Ko.I(_mind!.NameOf(a))} {_mind.NameOf(x)} 탓을 한다", sim.Tick, cell, cause, 0, a);
+            int c = sim.Causes.Add(CauseKind.Society, $"{Ko.I(_mind!.NameOf(a))} {_mind.NameOf(x)} 탓을 한다", sim.Tick, cell, cause, 0, a);
             sim.Facts.Emit(sim.Tick, FactKind.Blamed, cell, GrudgeOf(a, x), c, a, x);
         }
     }
@@ -378,7 +378,7 @@ public sealed partial class Society : IEngine
                     if (mind.Agents[r].IsPerson) Remember(sim, r, Topic.Rescue, r, f.Cause, 0.7f, f.Cell);
                     foreach (int o in Near(f.Cell, v))
                         if (o != r) { Warm(sim, o, r, 0.1f); Add(TrustOf, o, r, 0.1f); Remember(sim, o, Topic.Rescue, r, f.Cause, 0.5f, f.Cell); }
-                    int c = sim.Causes.Add(CauseKind.Person, $"{Ko.I(mind.NameOf(v))} {mind.NameOf(r)}에게 목숨을 빚졌다", sim.Tick, f.Cell, f.Cause, 0, v);
+                    int c = sim.Causes.Add(CauseKind.Society, $"{Ko.I(mind.NameOf(v))} {mind.NameOf(r)}에게 목숨을 빚졌다", sim.Tick, f.Cell, f.Cause, 0, v);
                     sim.Facts.Emit(sim.Tick, FactKind.Relationship, f.Cell, BondOf(v, r), c, v, r);
                     break;
                 }
@@ -480,7 +480,7 @@ public sealed partial class Society : IEngine
                         if (BondOf(i, dead) >= FriendAt * 0.6f)
                         {
                             Griefs++;
-                            int c = sim.Causes.Add(CauseKind.Person, $"{Ko.I(mind.NameOf(i))} {Ko.Eul(mind.NameOf(dead))} 잃었다", sim.Tick, p.C.Cell, f.Cause, 0, i);
+                            int c = sim.Causes.Add(CauseKind.Society, $"{Ko.I(mind.NameOf(i))} {Ko.Eul(mind.NameOf(dead))} 잃었다", sim.Tick, p.C.Cell, f.Cause, 0, i);
                             sim.Facts.Emit(sim.Tick, FactKind.Grieved, p.C.Cell, g, c, i, dead);
                         }
                     }
@@ -496,7 +496,7 @@ public sealed partial class Society : IEngine
                             TrustComputer[i] = Math.Clamp(TrustComputer[i] - 0.25f - 0.4f * Math.Max(0, BondOf(i, dead)), 0, 1);
                         }
                         TrustLosses++;
-                        int c = sim.Causes.Add(CauseKind.Person, $"주컴퓨터가 닫은 문 안에서 {Ko.I(mind.NameOf(dead))} 죽었다 — 사람들이 주컴퓨터를 덜 믿는다", sim.Tick, f.Cell, scause, f.Cause);
+                        int c = sim.Causes.Add(CauseKind.Society, $"주컴퓨터가 닫은 문 안에서 {Ko.I(mind.NameOf(dead))} 죽었다 — 사람들이 주컴퓨터를 덜 믿는다", sim.Tick, f.Cell, scause, f.Cause);
                         sim.Facts.Emit(sim.Tick, FactKind.TrustLost, f.Cell, 0, c, dead, -2);
                         break;
                     }

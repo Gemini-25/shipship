@@ -9,12 +9,22 @@ namespace ShipEngine;
 public sealed partial class Work
 {
     public readonly List<string> Blocks = new();
+    public readonly List<int> BlockCauses = new();        // 막힌 곳마다 원인 마디 (⑪ — 같은 막힘이면 같은 마디 · 망가진 설비 때문이면 그 고장의 원인에 잇는다)
+    private int _why;                                      // 지금 적는 막힌 곳의 까닭에 닿는 원인 (망가진 부품의 원인)
     private readonly HashSet<int> _powerFirst = new();   // 막힌 곳이 전력 여유인 설비 (95%까지 켠다)
 
     private void FindBlocks(Sim sim)
     {
         var mind = _mind!;
-        Blocks.Clear(); _powerFirst.Clear();
+        var had = new Dictionary<string, int>();
+        for (int i = 0; i < Blocks.Count && i < BlockCauses.Count; i++) had[ShipMind.BlockKey(Blocks[i])] = BlockCauses[i];
+        Blocks.Clear(); BlockCauses.Clear(); _powerFirst.Clear();
+        void Add(string line)
+        {
+            Blocks.Add(line);
+            BlockCauses.Add(had.TryGetValue(ShipMind.BlockKey(line), out int c) ? c : sim.Causes.Add(CauseKind.Supply, $"막혔다: {line}", sim.Tick, -1, _why));
+            _why = 0;
+        }
         // 만들 물건: 둘 수만큼 없는데 맡은 이도 없다
         foreach (var (name, r) in T.People.Recipes)
         {
@@ -24,7 +34,7 @@ public sealed partial class Work
             int bench = L.Furniture.FindIndex(f => f.Type == r.At && f.Cells.Length > 0);
             int bdev = bench >= 0 && _net != null ? _net.Devices.FindIndex(d => d.Furniture == bench) : -1;
             if (bench < 0) why = $"{T.Equip(r.At).Name}가 없다";
-            else if (bdev >= 0 && (_net!.IsBroken(bdev, Part.Electric) || _net.IsBroken(bdev, Part.Mechanical))) why = $"{_net.Devices[bdev].Name}가 망가졌다";
+            else if (bdev >= 0 && (_net!.IsBroken(bdev, Part.Electric) || _net.IsBroken(bdev, Part.Mechanical))) { why = $"{_net.Devices[bdev].Name}가 망가졌다"; _why = BrokenCause(bdev); }
             else
                 foreach (var (need, amount) in r.Needs)
                 {
@@ -34,16 +44,16 @@ public sealed partial class Work
                     break;
                 }
             if (why == null && !mind.Agents.Any(a => a.C.Up != 0 && (!a.IsPerson && a.C.Kind != AgentKind.Drone || a.IsPerson && a.C.SkRepair >= 0.4f))) why = "만들 솜씨가 있는 이가 없다";
-            if (why != null) Blocks.Add($"{name} ← {why}");
+            if (why != null) Add($"{name} ← {why}");
         }
         // 마실 물 · 식량 · 산소: 만드는 것까지 쳐서 30일을 못 버틴다
         var (wd, _) = DaysLeft(sim, (int)Res.Water);
-        if (wd < 30) Blocks.Add($"마실 물 {wd:0}일 치 ← {WaterWhy()}");
+        if (wd < 30) Add($"마실 물 {wd:0}일 치 ← {WaterWhy()}");
         var (fd, _) = DaysLeft(sim, (int)Res.Food);
-        if (fd < 30) Blocks.Add($"식량 {fd:0}일 치 ← {FoodWhy(sim)}");
+        if (fd < 30) Add($"식량 {fd:0}일 치 ← {FoodWhy(sim)}");
         var (od, _) = DaysLeft(sim, (int)Res.O2);
-        if (od < 30) Blocks.Add($"산소 {od:0}일 치 ← {O2Why()}");
-        sim.Find<ShipMind>()?.ReportBlocks(sim, Blocks);
+        if (od < 30) Add($"산소 {od:0}일 치 ← {O2Why()}");
+        sim.Find<ShipMind>()?.ReportBlocks(sim, Blocks, BlockCauses);
     }
 
     /// <summary>재료를 만드는 설비 쪽의 까닭: 없다 · 망가졌다 · 꺼 두었다(전력 여유) · 만드는 중.</summary>
@@ -54,11 +64,12 @@ public sealed partial class Work
         foreach (var dev in _net.Devices)
         {
             if (!T.People.Makers.TryGetValue(dev.Type, out var mk) || mk.Item != item) continue;
-            if (_net.IsBroken(dev.Id, Part.Electric) || _net.IsBroken(dev.Id, Part.Mechanical)) { broken ??= $"{dev.Name}가 망가졌다"; continue; }
+            if (_net.IsBroken(dev.Id, Part.Electric) || _net.IsBroken(dev.Id, Part.Mechanical)) { if (broken == null) { broken = $"{dev.Name}가 망가졌다"; _why = BrokenCause(dev.Id); } continue; }
             if (_net.On[dev.Id] == 0) { off ??= $"{dev.Name}를 꺼 두었다 (전력 여유가 없다)"; _powerFirst.Add(dev.Id); continue; }
             int fu = dev.Furniture;
             making ??= $"{dev.Name}가 만드는 중 ({(fu >= 0 && fu < MakerProgress.Length ? MakerProgress[fu] : 0):0.0}/{mk.Hours:0}시간)";
         }
+        if (making != null || off != null) _why = 0;   // 까닭이 고장이 아니면 고장의 원인에 잇지 않는다
         return making ?? off ?? broken ?? $"{item}를 만드는 설비가 없다";
     }
 
@@ -71,14 +82,17 @@ public sealed partial class Work
         {
             if (dev.Def.Role != "recycler") continue;
             any = true;
-            if (_net.IsBroken(dev.Id, Part.Mechanical) || _net.IsBroken(dev.Id, Part.Electric)) { broken ??= $"{dev.Name}가 망가졌다"; continue; }
-            if (_net.IsBroken(dev.Id, Part.Filter)) { broken ??= $"{dev.Name}의 거르개가 망가졌다"; continue; }
+            if (_net.IsBroken(dev.Id, Part.Mechanical) || _net.IsBroken(dev.Id, Part.Electric)) { if (broken == null) { broken = $"{dev.Name}가 망가졌다"; _why = BrokenCause(dev.Id); } continue; }
+            if (_net.IsBroken(dev.Id, Part.Filter)) { if (broken == null) { broken = $"{dev.Name}의 거르개가 망가졌다"; _why = _net.PartCause(dev.Id, Part.Filter); } continue; }
             if (_net.On[dev.Id] == 0) { off ??= $"{dev.Name}를 꺼 두었다"; continue; }
             double w = _net.WearFraction(dev.Id, Part.Filter);
             if (w > 0.6) worn ??= $"{dev.Name}의 거르개가 낡았다 (회수율 {(Network.WaterRecovery - 0.09 * Math.Min(1, w)) * 100:0}%)";
         }
         return !any ? "물을 되찾는 장치가 없다" : broken ?? off ?? worn ?? "마시는 양이 되찾는 양보다 많다";
     }
+
+    /// <summary>망가진 설비의 원인 (전기 쪽 · 기계 쪽 중 망가진 것).</summary>
+    private int BrokenCause(int dev) => _net!.IsBroken(dev, Part.Electric) && _net.PartCause(dev, Part.Electric) != 0 ? _net.PartCause(dev, Part.Electric) : _net.PartCause(dev, Part.Mechanical);
 
     private string FoodWhy(Sim sim)
     {
@@ -95,10 +109,11 @@ public sealed partial class Work
         {
             if (dev.Def.Role != "o2gen") continue;
             any = true;
-            if (_net.IsBroken(dev.Id, Part.Electric) || _net.IsBroken(dev.Id, Part.Mechanical)) { broken ??= $"{dev.Name}가 망가졌다"; continue; }
+            if (_net.IsBroken(dev.Id, Part.Electric) || _net.IsBroken(dev.Id, Part.Mechanical)) { if (broken == null) { broken = $"{dev.Name}가 망가졌다"; _why = BrokenCause(dev.Id); } continue; }
             if (_net.On[dev.Id] == 0) off ??= $"{dev.Name}를 꺼 두었다";
         }
         if (!any) return "산소 발생기가 없다";
+        if (broken == null) _why = 0;
         if (broken != null || off != null) return broken ?? off!;
         return _net.WaterTank < 50 ? "산소 발생기에 넣을 물이 없다" : "쓰는 산소가 만드는 산소보다 많다";
     }

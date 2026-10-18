@@ -66,7 +66,7 @@ public sealed partial class Director
     {
         CauseKind.Story => 12, CauseKind.Corrosion or CauseKind.Fire or CauseKind.Reaction => 2, CauseKind.Pressure or CauseKind.Heat => 3,
         CauseKind.Breach => 4, CauseKind.Impact or CauseKind.Weather or CauseKind.Flare or CauseKind.Route or CauseKind.Contact => 5, CauseKind.Electric or CauseKind.Machine => 6,
-        CauseKind.Biology => 7, CauseKind.Person or CauseKind.Robot => 8, CauseKind.Computer => 10, _ => 0,
+        CauseKind.Biology => 7, CauseKind.Person or CauseKind.Robot => 8, CauseKind.Society => 9, CauseKind.Computer => 10, CauseKind.Supply => 11, _ => 0,
     };
 
     public const float ChainFactAt = 5;          // 사슬에 세는 일의 무게

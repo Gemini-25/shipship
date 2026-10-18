@@ -108,12 +108,12 @@ public sealed partial class Society
             {
                 BandsFormed++;
                 string who = string.Join(" · ", g.Where(i => i != band.Center).Take(4).Select(mind.NameOf));
-                int c = sim.Causes.Add(CauseKind.Person, $"{name}가 생겼다 — {Ko.Gwa(mind.NameOf(band.Center))} {who}{(g.Count > 5 ? " 들" : "")} · {Ko.I(mind.NameOf(leader))} 이끈다", sim.Tick, C(band.Center).Cell, 0, 0, band.Center);
+                int c = sim.Causes.Add(CauseKind.Society, $"{name}가 생겼다 — {Ko.Gwa(mind.NameOf(band.Center))} {who}{(g.Count > 5 ? " 들" : "")} · {Ko.I(mind.NameOf(leader))} 이끈다", sim.Tick, C(band.Center).Cell, 0, 0, band.Center);
                 sim.Facts.Emit(sim.Tick, FactKind.Relationship, C(band.Center).Cell, 2, c, band.Center, leader);
             }
             else if (prevLeader != leader)
             {
-                int c = sim.Causes.Add(CauseKind.Person, $"{name}는 이제 {Ko.Eul(mind.NameOf(leader))} 따른다{(prevLeader >= 0 && Alive(prevLeader) ? $" — {mind.NameOf(prevLeader)}보다 더 믿는다" : "")}", sim.Tick, C(leader).Cell, 0, 0, leader);
+                int c = sim.Causes.Add(CauseKind.Society, $"{name}는 이제 {Ko.Eul(mind.NameOf(leader))} 따른다{(prevLeader >= 0 && Alive(prevLeader) ? $" — {mind.NameOf(prevLeader)}보다 더 믿는다" : "")}", sim.Tick, C(leader).Cell, 0, 0, leader);
                 sim.Facts.Emit(sim.Tick, FactKind.Relationship, C(leader).Cell, 3, c, leader, prevLeader);
             }
         }
@@ -122,7 +122,7 @@ public sealed partial class Society
             {
                 BandsBroken++;
                 int who = ob.Center >= 0 && ob.Center < N ? ob.Center : 0;
-                int c = sim.Causes.Add(CauseKind.Person, $"{_mind!.NameOf(who)}네가 흩어졌다", sim.Tick, C(who).Cell, 0, 0, who);
+                int c = sim.Causes.Add(CauseKind.Society, $"{_mind!.NameOf(who)}네가 흩어졌다", sim.Tick, C(who).Cell, 0, 0, who);
                 sim.Facts.Emit(sim.Tick, FactKind.Relationship, C(who).Cell, -2, c, who, -1);
                 _rift.RemoveAll(k => (int)(k >> 32) == ob.Id || (int)(k & 0xffffffff) == ob.Id);
             }
@@ -135,7 +135,7 @@ public sealed partial class Society
         if (Rep >= 0 && Alive(Rep) && RepUntil > sim.Tick) head = Rep;   // 뽑힌 대표 (임기 동안)
         if (head != Head && head >= 0)
         {
-            int c = sim.Causes.Add(CauseKind.Person, $"배 사람들이 {Ko.Eul(mind.NameOf(head))} 가장 믿고 따른다", sim.Tick, C(head).Cell, 0, 0, head);
+            int c = sim.Causes.Add(CauseKind.Society, $"배 사람들이 {Ko.Eul(mind.NameOf(head))} 가장 믿고 따른다", sim.Tick, C(head).Cell, 0, 0, head);
             sim.Facts.Emit(sim.Tick, FactKind.Relationship, C(head).Cell, 3, c, head, Head);
         }
         Head = head;
@@ -204,7 +204,7 @@ public sealed partial class Society
                 if (!had && r > RiftAt)
                 {
                     _rift.Add(key); Rifts++;
-                    int c = sim.Causes.Add(CauseKind.Person, $"{BandName(g1)}와 {BandName(g2)} 사이가 벌어졌다 — 서로 탓하고 미워한다", sim.Tick, C(Bands[x].Center).Cell, 0, 0, Bands[x].Center);
+                    int c = sim.Causes.Add(CauseKind.Society, $"{BandName(g1)}와 {BandName(g2)} 사이가 벌어졌다 — 서로 탓하고 미워한다", sim.Tick, C(Bands[x].Center).Cell, 0, 0, Bands[x].Center);
                     sim.Facts.Emit(sim.Tick, FactKind.Relationship, C(Bands[x].Center).Cell, -3, c, Bands[x].Center, Bands[y].Center);
                 }
                 else if (had && r < 0.15f) _rift.Remove(key);

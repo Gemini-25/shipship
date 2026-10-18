@@ -60,6 +60,11 @@ public static partial class Program
                 gathered >= 4 && verdict.Kind == FactKind.Verdict && (int)verdict.Size == 2 && m.Penanced(x, s.Tick) && soc.GrudgeOf(acc, x) < 0.35f && soc.GrudgeOf(x, acc) >= 0.25f
                 && lines.Any(l => l.Contains("벌을 받아야")) && lines.Any(l => l.Contains("믿는다")) && story.Contains("고발했다"),
                 $"모임 {gathered}/5 · 판결 {verdict.Size} · 벌 당번 {m.Penanced(x, s.Tick)} · 고발한 이의 원망 0.60 → {soc.GrudgeOf(acc, x):0.00} · 피고의 원망 {soc.GrudgeOf(x, acc):0.00} · 말 {lines.Count}마디 · {story}");
+            var vc = s.Causes[verdict.Cause];
+            int culprit = soc.Culprit(s, verdict.Cause, -1);
+            Check("회의의 판결 · 회의를 연 일은 사람 사이의 마디(⑨ 사회) — 한 사람이 저지른 일이 아니라서 판결의 사슬에서 '누구 탓'을 찾아도 회의를 연 이가 나오지 않는다",
+                vc.Kind == CauseKind.Society && Director.EngineOf(vc.Kind) == 9 && culprit < 0,
+                $"판결 마디 {vc.Kind} → 엔진 {Director.EngineOf(vc.Kind)} · 사슬에서 찾은 탓할 이 {(culprit >= 0 ? m.NameOf(culprit) : "없음")}");
         }
 
         // ── 동조 (Asch 1951): 대표가 먼저 '벌을 받아야 한다'고 하면 · 그를 믿는 이들은 그 쪽으로 기울어 유죄 (4명 중 4) / 대표를 믿지 않으면 둘만 — 무죄 ──

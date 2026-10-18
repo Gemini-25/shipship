@@ -27,7 +27,7 @@ public static partial class Program
 
         // ── 배급: 식량이 30일을 못 버티면 주컴퓨터가 배급을 열고 · 배식기는 사람마다 하루 몫을 넘게 주지 않는다(장부가 여섯 시간 쌓인 뒤 판단) · 몫을 다 먹고 배고프면 짜증 ──
         {
-            (double maxAte, double meanAte, double ration, float anger, long opened, string log) Run(bool ration)
+            (double maxAte, double meanAte, double ration, float anger, long opened, string log, string root, bool supply) Run(bool ration)
             {
                 var s = Worlds.Full(lay, 3);
                 var m = s.Get<Mind>(); var sm = s.Get<ShipMind>();
@@ -44,18 +44,23 @@ public static partial class Program
                 double[] ate = ps.Select(p => m.AteToday(p)).ToArray();
                 // 배급을 연 뒤로는 하루 몫을 넘게 받지 않는다 (연 때 이미 몫보다 먹었으면 그 뒤로는 아무것도)
                 bool kept = openedAt < 0 || ps.Select((p, i) => ate[i] <= Math.Max(m.RationFood, atOpen[i]) + 1e-6).All(x => x);
-                if (ration && !kept) return (99, 0, m.RationFood, 0, sm.RationsOpened, Lines(s));
+                var rf = s.Facts.Since(0).FirstOrDefault(f => f.Kind == FactKind.Rationed && f.Cause != 0);
+                string root = rf.Kind == FactKind.Rationed ? s.Causes.Story(rf.Cause) : "";
+                bool supply = rf.Kind == FactKind.Rationed && s.Causes.Chain(rf.Cause).Any(id => s.Causes[id].Kind == CauseKind.Supply);
+                if (ration && !kept) return (99, 0, m.RationFood, 0, sm.RationsOpened, Lines(s), root, supply);
                 if (Debug) Console.WriteLine($"    배급 연 때 {(openedAt >= 0 ? Time.Clock(openedAt) : "-")} · 그때 먹은 양 {string.Join(",", atOpen.Select(x => x.ToString("0.00")))}");
                 float anger = ps.Average(p => m[p].C.Anger);
                 if (Debug) Console.WriteLine($"    배급 {(ration ? "있음" : "없음")}: 몫 {m.RationFood:0.00} · 먹은 양 {string.Join(",", ate.Select(x => x.ToString("0.00")))} · 짜증 {anger:0.00} · 못 받음 {m.Refused} · {Lines(s)}");
                 long shedSays = sm.Log.Count(l => l.text.StartsWith("전력이 모자라")), sheds = s.Facts.CountOf(FactKind.LoadShed);
-                if (shedSays > sheds) return (ate.Max(), ate.Average(), m.RationFood, anger, -shedSays, Lines(s));   // 끌 것이 없는데 되풀이해 말했다
-                return (ate.Max(), ate.Average(), m.RationFood, anger, sm.RationsOpened, Lines(s));
+                if (shedSays > sheds) return (ate.Max(), ate.Average(), m.RationFood, anger, -shedSays, Lines(s), root, supply);   // 끌 것이 없는데 되풀이해 말했다
+                return (ate.Max(), ate.Average(), m.RationFood, anger, sm.RationsOpened, Lines(s), root, supply);
             }
             var on = Run(true); var off = Run(false);
             Check("배급: 식량이 30일을 못 버티면 주컴퓨터가 배급을 열고(방송) · 배식기는 사람마다 하루 몫을 넘게 주지 않는다(장부가 여섯 시간 쌓인 뒤 판단) · 몫을 다 먹고 배고프면 짜증 — 배급이 없던 같은 배는 더 먹는다 (전지가 바닥나도 끌 것이 없으면 '껐다'를 되풀이하지 않는다 · 막힌 곳 '식량'은 날 수가 바뀌어도 한 번만 방송)",
                 on.opened == 1 && on.log.Contains("배급합니다") && on.log.Split(" / ").Count(l => l.StartsWith("막힌 곳: 식량")) == 1 && on.ration > 0 && on.maxAte < 99 && off.opened == 0 && off.meanAte > on.meanAte * 1.3 && on.anger > off.anger + 0.05f,
                 $"배급 연 번 {on.opened} (음수면 '껐다'를 되풀이) · 몫 {on.ration:0.00}몰 · 가장 많이 먹은 이 {on.maxAte:0.00} · 평균 {on.meanAte:0.00} (배급 없음 {off.meanAte:0.00}) · 짜증 {on.anger:0.00} / {off.anger:0.00}");
+            Check("배급의 뿌리는 일감판이 찾은 막힌 곳 (⑪ → ⑩): 배급을 연 원인 사슬이 '막혔다: 식량 … ← 까닭'(물자의 마디)에 잇는다",
+                on.supply && on.root.Contains("막혔다: 식량") && on.root.Contains("배급을 열었다"), $"\"{on.root}\"");
         }
 
         // ── 의료 몫: 물 배급 중에도 덴 이(몸의 물 6% 모자람)는 하루 몫을 넘겨 모자란 만큼 마신다 (고치기 전: 몫에 막혀 목이 말라 죽었다) ──

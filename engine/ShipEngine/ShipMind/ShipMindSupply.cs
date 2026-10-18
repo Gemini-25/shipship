@@ -17,22 +17,31 @@ public sealed partial class ShipMind
     public long RationsOpened, MissingFound;
     public double MissingMol;
     public readonly List<string> Blocked = new();           // 지금 막힌 곳 (일감판이 알려 준 것)
+    public readonly List<int> BlockedCause = new();         // 그 원인 마디 (⑪ — 배급을 열면 그 뿌리가 된다)
     private double[] _lkSeen = Array.Empty<double>(), _lkLogged = Array.Empty<double>();
     private double _missingPending;
     private long _missingSaidAt = long.MinValue / 2;
     private double _jMissing, _jProcessed, _jRecovered;      // 지난 일지 때의 셈
 
     /// <summary>일감판(⑪)의 요청: 지금 막힌 곳 — 새로 막힌 것(무엇이 · 왜가 달라진 것 — 날 수 · 끼니 같은 숫자는 빼고 견준다)만 방송한다.</summary>
-    public void ReportBlocks(Sim sim, IReadOnlyList<string> lines)
+    public void ReportBlocks(Sim sim, IReadOnlyList<string> lines, IReadOnlyList<int> causes)
     {
         if (!Online) return;
         var before = Blocked.Select(BlockKey).ToHashSet();
         foreach (var l in lines) if (!before.Contains(BlockKey(l))) Say(sim, $"막힌 곳: {l}");
         Blocked.Clear(); Blocked.AddRange(lines);
+        BlockedCause.Clear(); BlockedCause.AddRange(causes);
+    }
+
+    /// <summary>그 말로 시작하는 막힌 곳의 원인 (없으면 0).</summary>
+    private int BlockCause(string head)
+    {
+        for (int i = 0; i < Blocked.Count && i < BlockedCause.Count; i++) if (Blocked[i].StartsWith(head)) return BlockedCause[i];
+        return 0;
     }
 
     /// <summary>막힌 곳 줄의 뼈대: 숫자를 지운 글 ("식량 13일 치 ← 거두는 양(하루 0.0끼)…" → "식량 일 치 ← 거두는 양(하루 끼)…").</summary>
-    private static string BlockKey(string line) => new string(line.Where(ch => !char.IsDigit(ch) && ch != '.').ToArray());
+    internal static string BlockKey(string line) => new string(line.Where(ch => !char.IsDigit(ch) && ch != '.').ToArray());
 
     /// <summary>한 시간마다: 보통으로 먹고 마시면 며칠 버티나 → 배급을 열고 푼다 · 10초마다 보관함 무게.</summary>
     private void Supply(Sim sim)
@@ -55,7 +64,9 @@ public sealed partial class ShipMind
         if (fOn != 0 || wOn != 0)
         {
             if (opening) RationsOpened++;
-            cause = sim.Causes.Add(CauseKind.Computer, $"주컴퓨터가 배급을 열었다 — {what}", sim.Tick, _net != null && _computer >= 0 ? _net.Devices[_computer].Cell : -1);
+            int why = fOn != 0 ? BlockCause("식량") : 0;
+            if (why == 0 && wOn != 0) why = BlockCause("마실 물");
+            cause = sim.Causes.Add(CauseKind.Computer, $"주컴퓨터가 배급을 열었다 — {what}", sim.Tick, _net != null && _computer >= 0 ? _net.Devices[_computer].Cell : -1, why);   // 뿌리: 일감판이 찾은 막힌 곳 (⑪)
             Say(sim, opening ? $"알립니다. 보통으로 먹으면 {(fOn != 0 ? $"식량이 {food:0}일" : $"물이 {water:0}일")} 치밖에 남지 않았습니다 — 오늘부터 배급합니다: {what}" : $"배급을 고칩니다: {what}");
         }
         else Say(sim, $"배급을 풉니다 — 식량 {food:0}일 · 물 {water:0}일 치");
@@ -123,13 +134,13 @@ public sealed partial class ShipMind
     private void SaveSupply(StateWriter w)
     {
         w.Arr(new[] { RationFoodOn, RationWaterOn }); w.I64(RationsOpened); w.I64(MissingFound); w.F64(MissingMol);
-        w.I32(Blocked.Count); foreach (var b in Blocked) w.Str(b);
+        w.I32(Blocked.Count); foreach (var b in Blocked) w.Str(b); w.Arr(BlockedCause.ToArray());
         w.Arr(_lkSeen); w.Arr(_lkLogged); w.F64(_missingPending); w.I64(_missingSaidAt); w.F64(_jMissing); w.F64(_jProcessed); w.F64(_jRecovered);
     }
     private void LoadSupply(StateReader r)
     {
         var on = r.Arr<byte>(); RationFoodOn = on[0]; RationWaterOn = on[1]; RationsOpened = r.I64(); MissingFound = r.I64(); MissingMol = r.F64();
-        Blocked.Clear(); int n = r.I32(); for (int i = 0; i < n; i++) Blocked.Add(r.Str() ?? "");
+        Blocked.Clear(); int n = r.I32(); for (int i = 0; i < n; i++) Blocked.Add(r.Str() ?? ""); BlockedCause.Clear(); BlockedCause.AddRange(r.Arr<int>());
         _lkSeen = r.Arr<double>(); _lkLogged = r.Arr<double>(); _missingPending = r.F64(); _missingSaidAt = r.I64(); _jMissing = r.F64(); _jProcessed = r.F64(); _jRecovered = r.F64();
     }
 }

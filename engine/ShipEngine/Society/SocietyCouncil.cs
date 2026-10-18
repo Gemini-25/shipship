@@ -130,7 +130,7 @@ public sealed partial class Society
         int room = _mind!.MessRoom();
         if (room < 0) return false;
         int cell = RoomMiddle(room);
-        int cause = sim.Causes.Add(CauseKind.Person, text, sim.Tick, C(caller).Cell, parent, 0, caller);
+        int cause = sim.Causes.Add(CauseKind.Society, text, sim.Tick, C(caller).Cell, parent, 0, caller);
         var who = new byte[N];
         foreach (int a in People())
         {
@@ -234,7 +234,7 @@ public sealed partial class Society
             _ when a < Respect.Length && Candidates().Contains(a) => "제가 맡겠습니다",
             _ => "누가 맡든 따르겠다",
         };
-        int said = sim.Causes.Add(CauseKind.Person, $"{name}: \"{line}\"", sim.Tick, C(a).Cell, m.Cause, 0, a);
+        int said = sim.Causes.Add(CauseKind.Society, $"{name}: \"{line}\"", sim.Tick, C(a).Cell, m.Cause, 0, a);
         Sayings.Add(new Saying { Tick = sim.Tick, Speaker = a, Listener = m.Caller, Topic = m.Kind == CouncilKind.Ration ? Topic.Shortage : m.Kind == CouncilKind.Trial ? Topic.Blame : Topic.Work, End = op > 0 ? TalkEnd.Argue : TalkEnd.Defend, Line = said, Cell = C(a).Cell });
         if (Sayings.Count > 128) Sayings.RemoveAt(0);
     }
@@ -258,7 +258,7 @@ public sealed partial class Society
                 bool conv = guilty * 2 > voters;
                 int sentence = !conv ? 0 : g >= 2.5f ? 3 : g >= 1.5f ? 2 : 1;
                 string what = sentence switch { 1 => "모두 앞에서 사과하게 했다", 2 => "사흘 벌 당번을 정했다", 3 => "하루 근신 · 사흘 벌 당번을 정했다", _ => "잘못을 묻지 않기로 했다" };
-                int c = sim.Causes.Add(CauseKind.Person, $"회의가 {names.NameOf(x)}에게 {what} — {voters}명 중 {guilty}명이 잘못이라 했다", sim.Tick, m.Cell, m.Cause, 0, x);
+                int c = sim.Causes.Add(CauseKind.Society, $"회의가 {names.NameOf(x)}에게 {what} — {voters}명 중 {guilty}명이 잘못이라 했다", sim.Tick, m.Cell, m.Cause, 0, x);
                 sim.Facts.Emit(sim.Tick, FactKind.Verdict, m.Cell, sentence, c, x, acc);
                 foreach (int j in People())
                 {
@@ -317,7 +317,7 @@ public sealed partial class Society
                 int win = votes.OrderByDescending(kv => kv.Value).ThenByDescending(kv => kv.Key < Respect.Length ? Respect[kv.Key] : 0).ThenBy(kv => kv.Key).First().Key;
                 int old = Rep;
                 Rep = win; RepUntil = sim.Tick + Time.Hours(24 * RepTermDays); Head = win; Elections++;
-                int c2 = sim.Causes.Add(CauseKind.Person, $"{Ko.I(names.NameOf(win))} 대표로 뽑혔다 — {_attend.Count}명 중 {votes[win]}표", sim.Tick, m.Cell, m.Cause, 0, win);
+                int c2 = sim.Causes.Add(CauseKind.Society, $"{Ko.I(names.NameOf(win))} 대표로 뽑혔다 — {_attend.Count}명 중 {votes[win]}표", sim.Tick, m.Cell, m.Cause, 0, win);
                 sim.Facts.Emit(sim.Tick, FactKind.Elected, m.Cell, votes[win], c2, win, old);
                 foreach (var (a, pick) in choice) if (pick != win && a != win) Add(Grudge, a, win, 0.03f);   // 떨어진 후보를 민 이들의 앙금 조금
                 if (old >= 0 && old != win && Alive(old)) { ref var co = ref C(old); co.Sad = Math.Min(1, co.Sad + 0.2f); }
@@ -328,7 +328,7 @@ public sealed partial class Society
                 int yes = 0;
                 for (int k = 0; k < _attend.Count; k++) if (_opinion[k] > 0) yes++;
                 bool pass = yes * 2 > _attend.Count;
-                int c3 = sim.Causes.Add(CauseKind.Person, pass ? $"회의가 배급을 따르지 않기로 했다 — {_attend.Count}명 중 {yes}명 찬성" : $"회의가 배급을 지키기로 했다 — {_attend.Count}명 중 {yes}명만 찬성", sim.Tick, m.Cell, m.Cause, 0, m.Caller);
+                int c3 = sim.Causes.Add(CauseKind.Society, pass ? $"회의가 배급을 따르지 않기로 했다 — {_attend.Count}명 중 {yes}명 찬성" : $"회의가 배급을 지키기로 했다 — {_attend.Count}명 중 {yes}명만 찬성", sim.Tick, m.Cell, m.Cause, 0, m.Caller);
                 sim.Facts.Emit(sim.Tick, FactKind.Mutiny, m.Cell, pass ? yes : -1, c3, m.Caller, -1);
                 for (int k = 0; k < _attend.Count; k++)
                 {
@@ -349,7 +349,7 @@ public sealed partial class Society
     {
         if (why < 0 && text != null)
         {
-            int c = sim.Causes.Add(CauseKind.Person, text, sim.Tick, Meeting.Cell, Meeting.Cause, 0, Meeting.Caller);
+            int c = sim.Causes.Add(CauseKind.Society, text, sim.Tick, Meeting.Cell, Meeting.Cause, 0, Meeting.Caller);
             sim.Facts.Emit(sim.Tick, FactKind.Meeting, Meeting.Cell, -1, c, Meeting.Caller, Meeting.Subject);
             if (why == -1) CouncilsFailed++; else CouncilsBroken++;
             if (Meeting.Kind == CouncilKind.Trial && Meeting.Subject >= 0 && Meeting.Subject < _triedAt.Length) _triedAt[Meeting.Subject] = sim.Tick - Time.Hours(24 * 4);   // 열리지 못했으면 하루 뒤 다시

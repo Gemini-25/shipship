@@ -315,6 +315,8 @@ public sealed partial class Network : IEngine
         if (cause != 0) _wearCause[k] = cause;
     }
     private readonly Dictionary<int, int> _wearCause = new(); // 낡게 한 원인 (부품 → 원인 마디) — 고장이 그 뿌리에 이어진다
+    /// <summary>그 부품을 낡게 · 망가지게 한 원인 마디 (없으면 0).</summary>
+    public int PartCause(int device, Part p) => _wearCause.GetValueOrDefault(device * 4 + (int)p);
 
     /// <summary>부품을 고친다 (사람 · 로봇의 수리).</summary>
     public void Repair(int device, Part p) { Broken[device * 4 + (int)p] = 0; Wear[device * 4 + (int)p] = 0; _wearCause.Remove(device * 4 + (int)p); if (p == Part.Seal) SealLeakCause[device] = 0; if (device < Stripped.Length) Stripped[device] = 0; }

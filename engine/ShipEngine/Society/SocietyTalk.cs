@@ -204,7 +204,7 @@ public sealed partial class Society
                     Warm(sim, a, b, 0.15f); Warm(sim, b, a, 0.15f); Add(TrustOf, a, b, 0.1f); Add(TrustOf, b, a, 0.1f);
                     ca.Joy = Math.Min(1, ca.Joy + 0.5f); cb.Joy = Math.Min(1, cb.Joy + 0.4f);
                     int line = Say(sim, a, b, o, end, Pick(sim, "마음/받아줌", a));
-                    int c = sim.Causes.Add(CauseKind.Person, $"{Ko.Gwa(_mind!.NameOf(a))} {Ko.I(_mind.NameOf(b))} 짝이 되었다", sim.Tick, ca.Cell, line, 0, a);
+                    int c = sim.Causes.Add(CauseKind.Society, $"{Ko.Gwa(_mind!.NameOf(a))} {Ko.I(_mind.NameOf(b))} 짝이 되었다", sim.Tick, ca.Cell, line, 0, a);
                     sim.Facts.Emit(sim.Tick, FactKind.Relationship, ca.Cell, 1, c, a, b);
                     Remember(sim, a, Topic.Heart, b, c, 0.9f, ca.Cell); Remember(sim, b, Topic.Heart, a, c, 0.9f, cb.Cell);
                 }
@@ -232,7 +232,7 @@ public sealed partial class Society
                     Warm(sim, a, b, 0.1f); Warm(sim, b, a, 0.1f); Add(TrustOf, a, b, 0.1f); Add(TrustOf, b, a, 0.1f);
                     _rift.RemoveAll(k => k == (((long)Math.Min(g1, g2) << 32) | (uint)Math.Max(g1, g2)));
                     int line = Say(sim, a, b, o, end, Pick(sim, "화해/받아줌", a));
-                    int c = sim.Causes.Add(CauseKind.Person, $"{Ko.Gwa(n1)} {Ko.I(n2)} 화해했다 — {Ko.Gwa(_mind!.NameOf(a))} {Ko.I(_mind.NameOf(b))} 손을 잡았다", sim.Tick, ca.Cell, line, 0, a);
+                    int c = sim.Causes.Add(CauseKind.Society, $"{Ko.Gwa(n1)} {Ko.I(n2)} 화해했다 — {Ko.Gwa(_mind!.NameOf(a))} {Ko.I(_mind.NameOf(b))} 손을 잡았다", sim.Tick, ca.Cell, line, 0, a);
                     sim.Facts.Emit(sim.Tick, FactKind.Relationship, ca.Cell, 4, c, a, b);
                     Remember(sim, a, Topic.Peace, b, c, 0.7f, ca.Cell); Remember(sim, b, Topic.Peace, a, c, 0.7f, cb.Cell);
                 }
@@ -245,7 +245,7 @@ public sealed partial class Society
                         if (x != y && (BandIdOf(x) == g1 && BandIdOf(y) == g2 || BandIdOf(x) == g2 && BandIdOf(y) == g1)) Add(Grudge, x, y, 0.05f);
                     ca.Anger = Math.Min(1, ca.Anger + 0.3f); cb.Anger = Math.Min(1, cb.Anger + 0.3f);
                     int line = Say(sim, b, a, o, end, Pick(sim, "화해/다툼", b));
-                    int c = sim.Causes.Add(CauseKind.Person, $"{Ko.Gwa(n1)} {Ko.I(n2)} 맞섰다 — {Ko.I(_mind!.NameOf(b))} {_mind.NameOf(a)}의 손을 뿌리쳤다", sim.Tick, cb.Cell, line, 0, b);
+                    int c = sim.Causes.Add(CauseKind.Society, $"{Ko.Gwa(n1)} {Ko.I(n2)} 맞섰다 — {Ko.I(_mind!.NameOf(b))} {_mind.NameOf(a)}의 손을 뿌리쳤다", sim.Tick, cb.Cell, line, 0, b);
                     sim.Facts.Emit(sim.Tick, FactKind.Relationship, cb.Cell, -4, c, b, a);
                     Remember(sim, a, Topic.Fight, b, c, 0.6f, ca.Cell); Remember(sim, b, Topic.Fight, a, c, 0.6f, cb.Cell);
                     Escalate(sim, b, a, 0.5f, line);
@@ -325,8 +325,8 @@ public sealed partial class Society
         string text = line.Replace("{상대아}", Ko.A(Given(other))).Replace("{상대}", other)
             .Replace("{그이}", Ko.I(about)).Replace("{그을}", Ko.Eul(about)).Replace("{그은}", Ko.Eun(about)).Replace("{그와}", Ko.Gwa(about)).Replace("{그}", about)
             .Replace("{곳에서}", room + "에서").Replace("{곳을}", Ko.Eul(room)).Replace("{곳}", room);
-        int summary = sim.Causes.Add(CauseKind.Person, $"{Ko.Gwa(mind.NameOf(speaker))} {Ko.I(other)} {TalkTable.Summary(o.T, end)}", sim.Tick, C(speaker).Cell, o.Cause, 0, speaker);
-        int said = sim.Causes.Add(CauseKind.Person, text, sim.Tick, C(speaker).Cell, summary, 0, speaker);
+        int summary = sim.Causes.Add(CauseKind.Society, $"{Ko.Gwa(mind.NameOf(speaker))} {Ko.I(other)} {TalkTable.Summary(o.T, end)}", sim.Tick, C(speaker).Cell, o.Cause, 0, speaker);
+        int said = sim.Causes.Add(CauseKind.Society, text, sim.Tick, C(speaker).Cell, summary, 0, speaker);
         Sayings.Add(new Saying { Tick = sim.Tick, Speaker = speaker, Listener = listener, Topic = o.T, End = end, Line = said, Cell = C(speaker).Cell });
         if (Sayings.Count > 128) Sayings.RemoveAt(0);
         sim.Facts.Emit(sim.Tick, FactKind.Talk, C(speaker).Cell, (float)end, summary, speaker, listener);

@@ -288,13 +288,13 @@ public sealed partial class Work : IEngine
     {
         w.List(Jobs); w.Arr(MakerProgress);
         w.I64(Crafted); w.I64(Maintained); w.I64(Cleaned); w.I64(Made); w.I64(Harvested);
-        w.I32(Blocks.Count); foreach (var b in Blocks) w.Str(b); w.Arr(_powerFirst.OrderBy(x => x).ToArray());
+        w.I32(Blocks.Count); foreach (var b in Blocks) w.Str(b); w.Arr(BlockCauses.ToArray()); w.Arr(_powerFirst.OrderBy(x => x).ToArray());
     }
 
     public void Load(StateReader r)
     {
         Jobs = r.List<Job>(); MakerProgress = r.Arr<float>();
         Crafted = r.I64(); Maintained = r.I64(); Cleaned = r.I64(); Made = r.I64(); Harvested = r.I64();
-        Blocks.Clear(); int nb = r.I32(); for (int i = 0; i < nb; i++) Blocks.Add(r.Str() ?? ""); _powerFirst.Clear(); foreach (int x in r.Arr<int>()) _powerFirst.Add(x);
+        Blocks.Clear(); int nb = r.I32(); for (int i = 0; i < nb; i++) Blocks.Add(r.Str() ?? ""); BlockCauses.Clear(); BlockCauses.AddRange(r.Arr<int>()); _powerFirst.Clear(); foreach (int x in r.Arr<int>()) _powerFirst.Add(x);
     }
 }
