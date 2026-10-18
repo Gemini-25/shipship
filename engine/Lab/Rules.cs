@@ -289,7 +289,8 @@ public static partial class Program
             var s4 = ShipWorld.Create("Didim", 5);
             var n4 = s4.Get<Network>(); var f4 = s4.Get<Field>(); var ch4 = s4.Get<Chemistry>();
             var fd4 = n4.Feeders.First(x => x.Path.Length > 4);
-            int wet = fd4.Path[fd4.Path.Length / 2];
+            // 간선이 함께 지나지 않는 칸 (간선이 지나는 칸이면 아크가 간선까지 태워 원자로가 떨어져 나간다 — 그것은 '선과 관' 묶음에서)
+            int wet = fd4.Path.Skip(fd4.Path.Length / 2).Concat(fd4.Path).First(c => !n4.Buses.Any(b => Array.IndexOf(b.Path, c) >= 0));
             n4.BreakerStuck[fd4.Id] = 1;
             f4.AddStore(wet, f4.T.sPoly, 300); // 전선 피복 · 짐
             f4.AddStore(wet, f4.T.sWater, 30);
@@ -555,6 +556,6 @@ public static partial class Program
         WorkRules();
         ViewRules();
         SoundRules();
-        LifeRules(); LedgerRules(); PersonRules(); BondRules(); SeedRules(); ShipRules(); DayRules(); SootRules(); RadiantRules(); FlingRules(); VoyageRules(); SensorRules(); JournalRules(); LeakJudgeRules(); HeartRules(); BandRules(); DoorRequestRules(); CookRules(); RhythmRules(); TogetherRules(); PlaceRules(); AskRules(); SupplyRules(); CareRules(); ArcRules(); BleedRules(); CameraRules(); HearingRules(); MotionRules(); NetRules(); TextRules(); AirlockRules(); AimRules(); CrackRules(); LieRules(); BreathRules(); LessonRules(); WeatherRules(); CouncilRules(); WearyRules(); SnagRules(); ManualRules();
+        LifeRules(); LedgerRules(); PersonRules(); BondRules(); SeedRules(); ShipRules(); DayRules(); SootRules(); RadiantRules(); FlingRules(); VoyageRules(); SensorRules(); JournalRules(); LeakJudgeRules(); HeartRules(); BandRules(); DoorRequestRules(); CookRules(); RhythmRules(); TogetherRules(); PlaceRules(); AskRules(); SupplyRules(); CareRules(); ArcRules(); BleedRules(); CameraRules(); HearingRules(); MotionRules(); NetRules(); TextRules(); AirlockRules(); AimRules(); CrackRules(); LieRules(); BreathRules(); LessonRules(); WeatherRules(); CouncilRules(); WearyRules(); SnagRules(); ManualRules(); LineRules();
     }
 }

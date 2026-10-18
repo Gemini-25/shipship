@@ -20,12 +20,14 @@ public static partial class Program
         int x = rest.Length > 6 ? int.Parse(rest[3]) : 0, y = rest.Length > 6 ? int.Parse(rest[4]) : 0;
         int w = rest.Length > 6 ? int.Parse(rest[5]) : lay.W, h = rest.Length > 6 ? int.Parse(rest[6]) : lay.H;
         var p = new Painter(lay);
+        bool lines = args.Contains("--overlay-lines");   // 겹쳐 보기 '선과 관'
+        if (lines) p.Show = Overlay.Lines;
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var img = p.Frame(s, x, y, w, h, (int)s.Tick);
         double ms = sw.Elapsed.TotalMilliseconds;
         sw.Restart();
         p.Frame(s, x, y, w, h, (int)s.Tick + 1);
-        string path = $"build/shots/{ship.ToLowerInvariant()}.png";
+        string path = $"build/shots/{ship.ToLowerInvariant()}{(lines ? "-lines" : "")}.png";
         Png.WriteRgba(path, img.W, img.H, img.Px);
         Console.WriteLine($"{path} · {img.W}×{img.H} · 처음 {ms:0}ms · 다음 장 {sw.Elapsed.TotalMilliseconds:0}ms");
     }

@@ -163,6 +163,7 @@ public sealed partial class Network : IEngine
         Vent = new int[L.Rooms.Count];
         BuildFeeders();
         BuildData();
+        BuildLines();
         int nf = Feeders.Count;
         Breaker = Enumerable.Repeat((byte)1, nf).ToArray();
         OverSec = new float[nf]; FaultCell = Enumerable.Repeat(-1, nf).ToArray(); BreakerStuck = new byte[nf]; Amps = new float[nf];
@@ -256,6 +257,7 @@ public sealed partial class Network : IEngine
     /// <summary>급전선 길에 젖은(물 5몰 — 합선 문턱 20몰보다 넉넉히: 번지는 물이 문턱을 오르내린다) · 뜨거운(430K) 칸이 있나 — 다시 올려도 또 합선된다.</summary>
     public bool PathFaulty(int feeder)
     {
+        if (FeederLineCut(feeder)) return true;   // 탄 · 찢긴 전선은 식어도 다시 쓸 수 없다 — 이어야 한다
         foreach (int c in Feeders[feeder].Path) if (F.Stored(T.sWater, c) > 5 || F.Tf[c] > 430) return true;
         return false;
     }
@@ -283,13 +285,13 @@ public sealed partial class Network : IEngine
     public bool IsBroken(int device, Part p) => Broken[device * 4 + (int)p] != 0;
     public float WearFraction(int device, Part p) => _limit[device * 4 + (int)p] == float.MaxValue ? 0 : Wear[device * 4 + (int)p] / _limit[device * 4 + (int)p];
     public bool Working(int d) => On[d] != 0 && Broken[d * 4 + (int)Part.Electric] == 0 && Broken[d * 4 + (int)Part.Mechanical] == 0 && Supply[d] > 0.05f;
-    public bool RoomPowered(int room) { int f = RoomFeed(room); return f >= 0 && Breaker[f] != 0 && !Cut(f) && Supplied > 0; }
+    public bool RoomPowered(int room) { int f = RoomFeed(room); return f >= 0 && Breaker[f] != 0 && !Cut(f) && FeederSupplied(f) > 0; }
 
     // ── 배가 갈라지면 (④ 조각): 끊긴 칸을 건너는 급전선 · 떨어진 조각의 배전반 · 원천은 배의 전기에서 빠진다 ──
     private Structure? _stc;
     private bool[] _cut = Array.Empty<bool>();
     private int _cutVersion = -1;
-    /// <summary>이 급전선이 배가 갈라져 끊겼나 (길이 떨어져 나간 칸을 건너거나 배전반이 떨어진 조각에 있다).</summary>
+    /// <summary>이 급전선이 배가 갈라져 끊겼나 (길이 떨어져 나간 칸을 건너거나 배전반이 떨어진 조각에 있다 — 탄 · 찢긴 전선은 끊김이 아니라 합선: Faults).</summary>
     public bool Cut(int feeder) => feeder >= 0 && feeder < _cut.Length && _cut[feeder];
     /// <summary>이 장치가 배(떨어지지 않은 쪽)에 있나.</summary>
     private bool OnShip(int d) => _stc == null || _stc.Splits == 0 || _stc.InMain(Devices[d].Cell);
@@ -342,6 +344,7 @@ public sealed partial class Network : IEngine
         long t = Prof != null ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
         _stc ??= sim.Find<Structure>();
         UpdateCuts();
+        EnsureLines();
         if (sim.Tick % 25 == 0) MeasureO2();
         Faults(sim);
         t = Lap("고장", t);
@@ -354,8 +357,9 @@ public sealed partial class Network : IEngine
         Ducts(sim);
         t = Lap("덕트", t);
         ReleaseAir(dt);
+        LeakStep(sim, dt);
         if (sim.Tick % 25 == 0) WearStep(sim, 25 * dt);
-        if (sim.Tick % 5 == 0) DataStep(sim);
+        if (sim.Tick % 5 == 0) LineStep(sim);
         Lap("마모", t);
     }
 
@@ -433,10 +437,12 @@ public sealed partial class Network : IEngine
             {
                 bool wet = F.Stored(T.sWater, c) > 20;
                 bool burnt = F.Tf[c] > 470;
-                if (!wet && !burnt) continue;
+                bool spent = (LineCut[c] & 1) != 0;   // 타 버리거나 찢긴 전선 (⑥ 바퀴 3) — 전기를 넣으면 드러난 구리끼리 닿아 합선
+                if (!wet && !burnt && !spent) continue;
                 FaultCell[fd.Id] = c;
                 Shorts++;
-                int parent = burnt ? sim.Causes.Add(CauseKind.Heat, "전선 피복이 뜨거워 녹았다", sim.Tick, c) : sim.Causes.Add(CauseKind.Leak, "전선이 지나는 바닥이 젖었다", sim.Tick, c, SpillNear(c));
+                int parent = burnt ? sim.Causes.Add(CauseKind.Heat, "전선 피복이 뜨거워 녹았다", sim.Tick, c, HeatSource(sim.Find<Chemistry>(), c)) : wet ? sim.Causes.Add(CauseKind.Leak, "전선이 지나는 바닥이 젖었다", sim.Tick, c, SpillNear(c))
+                    : sim.Causes.Add(CauseKind.Electric, "타 버린 전선에 전기가 들어갔다", sim.Tick, c, LineCause[c * 3]);
                 int cause = sim.Causes.Add(CauseKind.Electric, "합선", sim.Tick, c, parent);
                 sim.Facts.Emit(sim.Tick, FactKind.Short, c, 0, cause, other: fd.Id);
                 _faultCause[fd.Id] = cause;
@@ -460,74 +466,87 @@ public sealed partial class Network : IEngine
             int ef = FeedOf(dev);
             if (ef < 0 || On[d] == 0 || Broken[d * 4] != 0) continue;
             if (dev.Def.Role is "reactor" or "aux" or "battery") continue;
+            if (_dropCut[d]) continue;   // 가지선이 끊겼다 — 그 장치로는 전류가 흐르지 않는다
             double kw = dev.Def.Kw * (dev.Def.Role == "o2gen" ? Math.Max(0.1, Duty[d]) : 1); // 산소 발생기는 일 몫만큼 (팬 · 정화는 늘 10%)
             load[ef] += kw;
             if (dev.Room >= 0) _roomLoad[dev.Room] += kw;
         }
         for (int r = 0; r < L.Rooms.Count; r++)
             if (_feed[r] >= 0) { double lk = 0.01 * L.Rooms[r].Cells.Length; load[_feed[r]] += lk; _roomLoad[r] += lk; } // 조명 10W/m²
-        double demand = 0;
-        for (int k = 0; k < Feeders.Count; k++) if (Breaker[k] != 0 && !Cut(k)) demand += load[k];
+        // 섬마다 (간선이 끊기면 배전반 · 원천이 갈린다 — 아무것도 안 끊기면 섬 하나)
+        int ni = _nIsl;
+        var dem = _iDemand; Array.Clear(dem);
+        for (int k = 0; k < Feeders.Count; k++) if (Breaker[k] != 0 && !Cut(k)) dem[FeederIsland(k)] += load[k];
         // 공급
-        double reactorMax = 0, auxMax = 0, battMax = 0;
+        var rMax = _iReactorMax; var aMax = _iAuxMax; var bMax = _iBattMax; var bCap = _iBattCap; var bRate = _iBattRate;
+        Array.Clear(rMax); Array.Clear(aMax); Array.Clear(bMax); Array.Clear(bCap); Array.Clear(bRate);
         for (int d = 0; d < Devices.Count; d++)
         {
             var dev = Devices[d];
+            int i = _isl[d];
+            if (i < 0) continue;
             bool ok = On[d] != 0 && Broken[d * 4] == 0 && OnShip(d);
-            if (dev.Def.Role == "reactor" && ok && !ReactorScram) reactorMax += dev.Def.Gen;
-            if (dev.Def.Role == "aux" && ok && Charge[d] > 0) auxMax += dev.Def.Gen;
-            if (dev.Def.Role == "battery" && ok && Charge[d] > 0) battMax += dev.Def.Kw;
+            if (dev.Def.Role == "reactor" && ok && !ReactorScram) rMax[i] += dev.Def.Gen;
+            if (dev.Def.Role == "aux" && ok && Charge[d] > 0) aMax[i] += dev.Def.Gen;
+            if (dev.Def.Role == "battery" && ok && Charge[d] > 0) bMax[i] += dev.Def.Kw;
         }
-        ReactorMaxKw = reactorMax;
-        double avail = reactorMax + auxMax;
-        double battCap = 0, battRate = 0;
         for (int d = 0; d < Devices.Count; d++)
-            if (Devices[d].Def.Role == "battery" && On[d] != 0 && Broken[d * 4] == 0 && OnShip(d))
+            if (Devices[d].Def.Role == "battery" && _isl[d] >= 0 && On[d] != 0 && Broken[d * 4] == 0 && OnShip(d))
             {
-                battCap += Devices[d].Def.Kwh;
-                if (Charge[d] < Devices[d].Def.Kwh - 1e-3) battRate += Devices[d].Def.Kw; // 다 찬 배터리는 충전하지 않는다
+                bCap[_isl[d]] += Devices[d].Def.Kwh;
+                if (Charge[d] < Devices[d].Def.Kwh - 1e-3) bRate[_isl[d]] += Devices[d].Def.Kw; // 다 찬 배터리는 충전하지 않는다
             }
-        double gen, fromBatt = 0, charging = 0;
-        if (demand <= avail)
+        Supplied = 0; Demanded = 0; ReactorKw = 0; ReactorMaxKw = 0;
+        for (int i = 0; i < ni; i++)
         {
-            gen = demand;
-            charging = Math.Min(avail - demand, battRate); // 남는 것으로 충전
+            double avail = rMax[i] + aMax[i], demand = dem[i];
+            double gen, fromBatt = 0, charging = 0;
+            if (demand <= avail)
+            {
+                gen = demand;
+                charging = Math.Min(avail - demand, bRate[i]); // 남는 것으로 충전
+            }
+            else
+            {
+                gen = avail;
+                fromBatt = Math.Min(bMax[i], demand - avail);
+            }
+            double supplied = gen + fromBatt;
+            _iSupplied[i] = supplied;
+            _iFrac[i] = demand > 1e-9 ? Math.Min(1, supplied / demand) : 1;
+            // 원자로가 먼저, 모자라면 보조 발전기
+            _iReactorKw[i] = Math.Min(rMax[i], gen + charging);
+            _iAuxKw[i] = Math.Max(0, gen + charging - _iReactorKw[i]);
+            _iBattDelta[i] = fromBatt > 0 ? -fromBatt : charging; // kW (+ 충전)
+            Supplied += supplied; Demanded += demand; ReactorKw += _iReactorKw[i]; ReactorMaxKw += rMax[i];
         }
-        else
-        {
-            gen = avail;
-            fromBatt = Math.Min(battMax, demand - avail);
-        }
-        double supplied = gen + fromBatt;
-        double frac = demand > 1e-9 ? Math.Min(1, supplied / demand) : 1;
-        Supplied = supplied; Demanded = demand;
-        // 원자로가 먼저, 모자라면 보조 발전기
-        ReactorKw = Math.Min(reactorMax, gen + charging);
-        double auxKw = Math.Max(0, gen + charging - ReactorKw);
-        double battDelta = fromBatt > 0 ? -fromBatt : charging; // kW (+ 충전)
         for (int d = 0; d < Devices.Count; d++)
         {
             var dev = Devices[d];
-            if (dev.Def.Role == "battery" && battCap > 0 && On[d] != 0 && Broken[d * 4] == 0 && OnShip(d))
+            int i = _isl[d];
+            if (i < 0) continue;
+            if (dev.Def.Role == "battery" && bCap[i] > 0 && On[d] != 0 && Broken[d * 4] == 0 && OnShip(d))
             {
-                double share = dev.Def.Kwh / battCap;
+                double share = dev.Def.Kwh / bCap[i];
                 double before = Charge[d];
-                Charge[d] = (float)Math.Clamp(Charge[d] + battDelta * share * dt / 3600, 0, dev.Def.Kwh);
-                if (Charge[d] != before) F.AddHeat(dev.Cell, Math.Abs(battDelta * share) * 1000 * 0.05 * dt); // 충방전 손실
+                Charge[d] = (float)Math.Clamp(Charge[d] + _iBattDelta[i] * share * dt / 3600, 0, dev.Def.Kwh);
+                if (Charge[d] != before) F.AddHeat(dev.Cell, Math.Abs(_iBattDelta[i] * share) * 1000 * 0.05 * dt); // 충방전 손실
             }
-            if (dev.Def.Role == "aux" && auxMax > 0) Charge[d] = (float)Math.Max(0, Charge[d] - auxKw * dev.Def.Gen / auxMax * dt / 3600);
+            if (dev.Def.Role == "aux" && aMax[i] > 0) Charge[d] = (float)Math.Max(0, Charge[d] - _iAuxKw[i] * dev.Def.Gen / aMax[i] * dt / 3600);
         }
         // 급전선 전류 · 차단기 · 전선 열 · 합선 아크
         for (int k = 0; k < Feeders.Count; k++)
         {
             var fd = Feeders[k];
             if (Breaker[k] == 0 || Cut(k)) { Amps[k] = 0; continue; }
+            int isl = FeederIsland(k);
+            double frac = _iFrac[isl], supplied = _iSupplied[isl];
             double amps = load[k] * frac * 1000 / Volts;
             int fc = FaultCell[k];
             if (fc >= 0 && supplied > 0)
             {
                 // 합선: 차단기가 곧장 떨어진다 — 낡아 붙어 있으면 아크가 계속된다
-                double arcKw = Math.Min(200, Math.Max(0, reactorMax + auxMax + battMax - supplied) + 20);
+                double arcKw = Math.Min(200, Math.Max(0, rMax[isl] + aMax[isl] + bMax[isl] - supplied) + 20);
                 var chem = (Chemistry?)null;
                 chem = sim.Find<Chemistry>();
                 int cause = _faultCause.GetValueOrDefault(k);
@@ -565,14 +584,14 @@ public sealed partial class Network : IEngine
             double w = amps * amps * CableOhmPerM;
             if (w > 1) foreach (int c in fd.Path) F.AddSurfaceHeat(c, w * dt);
         }
-        JumperStep(sim, dt, frac);   // 연장선: 전류 · 열 · 젖은 칸 · 합선 · 문틀
+        JumperStep(sim, dt);   // 연장선: 전류 · 열 · 젖은 칸 · 합선 · 문틀
         // 장치마다 받은 비율
         for (int d = 0; d < Devices.Count; d++)
         {
             var dev = Devices[d];
             int ef = FeedOf(dev);
-            bool fed = ef >= 0 && Breaker[ef] != 0 && !Cut(ef);
-            Supply[d] = (float)(On[d] != 0 && Broken[d * 4] == 0 && fed ? frac : 0);
+            bool fed = ef >= 0 && Breaker[ef] != 0 && !Cut(ef) && !_dropCut[d];
+            Supply[d] = (float)(On[d] != 0 && Broken[d * 4] == 0 && fed ? _iFrac[FeederIsland(ef)] : 0);
             if (dev.Def.Role is "reactor" or "aux" or "battery") Supply[d] = On[d] != 0 ? 1 : 0;
             else if (dev.Def.Kwh > 0 && On[d] != 0 && Broken[d * 4] == 0)
             {
@@ -586,6 +605,7 @@ public sealed partial class Network : IEngine
         if (light != null)
             for (int r = 0; r < L.Rooms.Count; r++)
             {
+                double frac = _feed[r] >= 0 ? _iFrac[FeederIsland(_feed[r])] : 0;
                 bool lit = _feed[r] >= 0 && Breaker[_feed[r]] != 0 && !Cut(_feed[r]) && frac > 0.05;
                 float emergency = EmergencyLit(r) ? 30 : 0;
                 light.SetLamp(r, lit ? (float)(300 * Math.Min(1, frac)) : emergency);
@@ -623,7 +643,7 @@ public sealed partial class Network : IEngine
     }
 
     /// <summary>장치의 일: 열 · 산소 · 이산화탄소 · 물 · 조리대 · 배터리 열폭주 · 샘.</summary>
-    private readonly List<(int cell, double kw)> _jacket = new(); // 이번 틱 냉각수 재킷으로 간 열 (틱 안에서만 — 찍지 않는다)
+    private readonly List<(int cell, double kw, int comp)> _jacket = new(); // 이번 틱 냉각수 재킷으로 간 열 (틱 안에서만 — 찍지 않는다)
 
     /// <summary>장치 열을 그 장치가 차지한 칸에 고루 (긴 선반 · 큰 펌프의 열이 한 칸에 몰리지 않게).</summary>
     private void HeatInto(Device dev, double joules)
@@ -648,8 +668,8 @@ public sealed partial class Network : IEngine
             {
                 case "reactor":
                     // 열효율 1/3 — 낸 전력의 두 배가 노심 열. 원자로가 여럿이면 저마다 맡은 몫만큼 (다 합쳐 한 번)
-                    if (ReactorKw > 0 && ReactorMaxKw > 0 && On[d] != 0 && Broken[d * 4] == 0 && !ReactorScram)
-                        F.AddSolidHeat(c, ReactorKw * dev.Def.Gen / ReactorMaxKw * 2 * 1000 * dt);
+                    if (_isl[d] is int ri && ri >= 0 && _iReactorKw[ri] > 0 && _iReactorMax[ri] > 0 && On[d] != 0 && Broken[d * 4] == 0 && !ReactorScram)
+                        F.AddSolidHeat(c, _iReactorKw[ri] * dev.Def.Gen / _iReactorMax[ri] * 2 * 1000 * dt);
                     break;
                 case "o2gen":
                 {
@@ -657,6 +677,7 @@ public sealed partial class Network : IEngine
                     double duty = Duty[d];
                     double o2 = kw * duty * 1000 * 0.7 / 572_000 * dt;
                     o2 = Math.Min(o2, WaterTank / 2);
+                    if (!WaterAtDevice(d)) o2 = 0;   // 물관이 끊겼다 — 가를 물이 오지 않는다
                     double h2 = 0;
                     if (o2 > 0)
                     {
@@ -729,7 +750,7 @@ public sealed partial class Network : IEngine
                     break;
                 case "computer":
                     // 주컴퓨터 · 항법 컴퓨터: 열의 80%는 냉각판으로 냉각 고리에 (우주선 전자 장비 — 방 공기만으로 식히면 그 칸이 45℃를 넘는다)
-                    if (kw > 0) { HeatInto(dev, kw * 0.2 * 1000 * dt); _jacket.Add((c, kw * 0.8)); }
+                    if (kw > 0) { HeatInto(dev, kw * 0.2 * 1000 * dt); _jacket.Add((c, kw * 0.8, CoolComp(d))); }
                     break;
                 case "stove":
                 {
@@ -782,7 +803,7 @@ public sealed partial class Network : IEngine
                     break;
                 case "industry":
                     // 냉각수 재킷: 열의 80%는 냉각 고리로 (모자라면 냉각에서 방으로 돌려준다)
-                    if (kw > 0) { HeatInto(dev, kw * 0.2 * 1000 * dt); _jacket.Add((c, kw * 0.8)); }
+                    if (kw > 0) { HeatInto(dev, kw * 0.2 * 1000 * dt); _jacket.Add((c, kw * 0.8, CoolComp(d))); }
                     break;
                 default:
                     // 전기는 결국 열 — 장치가 차지한 칸에 고루 (긴 재배 선반의 전등 열이 한 칸에 몰리지 않게)
@@ -796,13 +817,23 @@ public sealed partial class Network : IEngine
     private int[] _live = Array.Empty<int>();
     private bool[] _air = Array.Empty<bool>();
     private double[] _gc = Array.Empty<double>(); // 칸 기체 열용량 (이 틱 — 방 공조가 열을 넣고 빼도 기체는 그대로)
+    private double[] _cCap = Array.Empty<double>(), _cUsed = Array.Empty<double>(), _cJk = Array.Empty<double>(), _cRest = Array.Empty<double>(); // 냉각관 조각마다 (틱 안에서만)
 
     /// <summary>냉각: 펌프 용량만큼 원자로 칸 · 공조의 열을 우주로. 모자라면 원자로가 뜨거워진다 → 스크램.</summary>
     private void Cooling(Sim sim, double dt)
     {
+        // 냉각관 조각마다 이어진 펌프 용량 (끊긴 관 너머의 원자로 · 냉각판은 그 조각의 펌프만큼 — 펌프가 없는 조각은 식지 않는다)
+        int nc = Math.Max(1, _coolComps);
+        if (_cCap.Length < nc) { _cCap = new double[nc]; _cUsed = new double[nc]; _cJk = new double[nc]; _cRest = new double[nc]; }
+        Array.Clear(_cCap); Array.Clear(_cUsed); Array.Clear(_cJk);
         double cap = 0;
         for (int d = 0; d < Devices.Count; d++)
-            if (Devices[d].Def.Role == "pump" && Working(d) && Coolant > 1000) cap += Devices[d].Def.HeatKw * Supply[d];
+            if (Devices[d].Def.Role == "pump" && Working(d) && Coolant > 1000)
+            {
+                double v = Devices[d].Def.HeatKw * Supply[d];
+                cap += v;
+                if (CoolComp(d) is int pc && pc >= 0) _cCap[pc] += v;
+            }
         // 공조: 냉각 고리에 딸린 방 열교환 · 팬 (펌프마다 30kW) + 따로 단 열교환기
         double hvacCap = 0;
         for (int d = 0; d < Devices.Count; d++)
@@ -815,26 +846,37 @@ public sealed partial class Network : IEngine
         // 원자로 칸: 정상 온도(330K) 위의 열을 냉각 용량까지 뺀다
         double used = 0;
         // 공장 설비 재킷 열 (원자로 다음) — 냉각이 모자라면 남은 만큼 그 방으로
-        double jacketKw = _jacket.Sum(j => j.kw);
-        if (jacketKw > 0)
+        if (_jacket.Count > 0)
         {
-            double take = Math.Min(jacketKw, Math.Max(0, cap - used));
-            used += take;
-            double rest = 1 - take / jacketKw;
-            if (rest > 1e-6) foreach (var (jc, jk) in _jacket) F.AddHeat(jc, jk * rest * 1000 * dt);
+            foreach (var j in _jacket) if (j.comp >= 0) _cJk[j.comp] += j.kw;
+            for (int k = 0; k < nc; k++)
+            {
+                _cRest[k] = 1;
+                if (_cJk[k] <= 0) continue;
+                double take = Math.Min(_cJk[k], Math.Max(0, _cCap[k] - _cUsed[k]));
+                _cUsed[k] += take; used += take;
+                _cRest[k] = 1 - take / _cJk[k];
+            }
+            foreach (var (jc, jk, comp) in _jacket)
+            {
+                double rest = comp >= 0 ? _cRest[comp] : 1;
+                if (rest > 1e-6) F.AddHeat(jc, jk * rest * 1000 * dt);
+            }
         }
         foreach (var dev in Devices)
         {
             if (dev.Def.Role != "reactor") continue;
-            int c = dev.Cell;
+            int c = dev.Cell, rc = CoolComp(dev.Id);
             double excessJ = Math.Max(0, F.Ts[c] - 330) * F.Cs[c];
-            double take = Math.Min(excessJ, Math.Max(0, cap - used) * 1000 * dt);
+            double take = rc >= 0 ? Math.Min(excessJ, Math.Max(0, _cCap[rc] - _cUsed[rc]) * 1000 * dt) : 0;
             F.AddSolidHeat(c, -take);
+            if (rc >= 0) _cUsed[rc] += take / 1000 / dt;
             used += take / 1000 / dt;
             if (!ReactorScram && F.Ts[c] > 700)
             {
                 ReactorScram = true;
-                ScramCause = sim.Causes.Add(CauseKind.Heat, "냉각이 모자라 원자로가 스스로 멈췄다", sim.Tick, c);
+                int cut = rc < 0 || _cCap[rc] <= 0 ? CoolCutCause(dev.Id) : 0;
+                ScramCause = cut != 0 ? sim.Causes.Add(CauseKind.Heat, "냉각관이 끊겨 원자로가 식지 못해 스스로 멈췄다", sim.Tick, c, cut) : sim.Causes.Add(CauseKind.Heat, "냉각이 모자라 원자로가 스스로 멈췄다", sim.Tick, c);
                 sim.Facts.Emit(sim.Tick, FactKind.Overheat, c, (float)F.Ts[c], ScramCause);
                 sim.Find<Sound>()?.Emit(sim, c, 100, SoundKind.Alarm, ScramCause);
             }
@@ -1141,43 +1183,6 @@ public sealed partial class Network : IEngine
         }
     }
 
-    /// <summary>5틱마다: 선이 지나는 칸이 불에 250℃를 넘거나 곁 외판이 뚫렸으면 그 칸의 선이 상한다.</summary>
-    private void DataStep(Sim sim)
-    {
-        if (DataPath.Length == 0) return;
-        Chemistry? chem = null; Structure? st = null;
-        Span<int> nb = stackalloc int[4];
-        for (int c = 0; c < L.N; c++)
-        {
-            if (!_onData[c] || DataBroken[c] != 0) continue;
-            int cause = 0;
-            if (F.Severed[c] != 0)
-            {
-                st ??= sim.Find<Structure>();
-                cause = st?.FragmentCause(c) is int fc and not 0 ? fc : st != null && st.DamageCause[c] != 0 ? st.DamageCause[c] : sim.Causes.Add(CauseKind.Breach, "선이 지나던 칸이 떨어져 나갔다", sim.Tick, c);
-            }
-            else if (F.Tf[c] > CableBurnK || F.Ts[c] > CableBurnK)
-            {
-                chem ??= sim.Find<Chemistry>();
-                cause = HeatSource(chem, c);
-                if (cause == 0) cause = sim.Causes.Add(CauseKind.Heat, "선이 지나는 바닥이 달아올랐다", sim.Tick, c);
-            }
-            else
-            {
-                L.Neighbors(c, nb);
-                foreach (int j in nb)
-                    if (j >= 0 && L.Kind[j] == CellKind.Wall && F.Hole[j] >= 0.05f)
-                    {
-                        st ??= sim.Find<Structure>();
-                        cause = st != null && st.DamageCause[j] != 0 ? st.DamageCause[j] : sim.Causes.Add(CauseKind.Pressure, "곁 외판이 뚫리며 선이 찢겼다", sim.Tick, c);
-                        break;
-                    }
-                if (cause == 0) continue;
-            }
-            CutData(sim, c, sim.Causes.Add(CauseKind.Electric, "센서 선이 끊겼다", sim.Tick, c, cause));
-        }
-    }
-
     /// <summary>그 칸을 달군 불: 그 칸 또는 두 칸 안의 불 · 불씨 · 달군 원인 (가까운 것부터 · 없으면 0).</summary>
     private int HeatSource(Chemistry? chem, int c)
     {
@@ -1209,6 +1214,7 @@ public sealed partial class Network : IEngine
         w.I32(wk.Count);
         foreach (var k in wk) { w.I32(k); w.I32(_wearCause[k]); }
         SaveJumpers(w); w.Arr(Stripped); w.I64(PartsSalvaged);
+        SaveLines(w);
     }
 
     public void Load(StateReader r)
@@ -1227,5 +1233,6 @@ public sealed partial class Network : IEngine
         n = r.I32();
         for (int i = 0; i < n; i++) { int k = r.I32(); _wearCause[k] = r.I32(); }
         LoadJumpers(r); Stripped = r.Arr<byte>(); PartsSalvaged = r.I64();
+        LoadLines(r);
     }
 }

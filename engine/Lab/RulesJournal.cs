@@ -43,9 +43,9 @@ public static partial class Program
             $"일지 {seen.count}장 · 첫 줄 \"{seen.journal.Split('\n')[0]}\"");
         Check("한 불에서 온 사건(그 방 · 옆 방의 연기 · 열기 · 일산화탄소 · 나쁜 공기)은 모두 원인 사슬이 첫 불씨까지 — 일지에는 한 사건으로",
             seen.fromFire >= 3 && seen.orphan == 0 && seen.journal.StartsWith("사건 1건"), $"불 쪽 사건 {seen.fromFire} · 첫 불씨에 안 닿는 것 {seen.orphan}");
-        Check($"일지는 주컴퓨터가 안 것만: 센서 선이 끊기고 무선도 닿지 않는 방의 불은 못 적고 · '센서가 끊겼다' · '못 보는 방: … {farName}(센서 선)' · 무선으로 닿는 옆 방은 따로",
+        Check($"일지는 주컴퓨터가 안 것만: 센서 선이 끊기고 무선도 닿지 않는 방의 불은 못 적고 · '센서가 끊겼다' · '못 보는 방: … {farName}(센서 선 · 불이 급전선을 태웠으면 전원)' · 무선으로 닿는 옆 방은 따로",
             blind.count == 1 && !blind.journal.Split('\n').Any(l => l.Contains(farName) && l.Contains("불")) && blind.journal.Split('\n').Any(l => l.Contains(farName) && l.Contains("센서가 끊겼다"))
-            && blind.journal.Contains("못 보는 방: ") && blind.journal.Contains($"{farName}(센서 선)") && blind.journal.Contains("무선으로만 보는 방: "),
+            && blind.journal.Contains("못 보는 방: ") && (blind.journal.Contains($"{farName}(센서 선)") || blind.journal.Contains($"{farName}(전원)")) && blind.journal.Contains("무선으로만 보는 방: "),   // 그 방 불이 급전선도 태우면 전원이 먼저 (⑥ 바퀴 3)
             $"첫 줄 \"{blind.journal.Split('\n')[0]}\"");
     }
 }

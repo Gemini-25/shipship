@@ -405,7 +405,7 @@ public sealed partial class Mind
             case GoalKind.Drink:
             {
                 if (_net != null && _net.WaterTank < 30) return false;
-                int src = Nearest(here, _water, _ => true);
+                int src = Nearest(here, _water, f => _net == null || _net.WaterAt(f));   // 물관이 끊긴 자리에선 물이 안 나온다
                 if (src < 0) return false;
                 int cell = L.Furniture[src].Cells[0];
                 plan.Add(Go(cell, 1));

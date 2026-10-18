@@ -463,9 +463,10 @@ public sealed class LiveShow
     public static string OverlayName(Overlay o) => o switch
     {
         Overlay.Air => "공기 (붉을수록 산소가 옅다 · 파랑은 진공 · 보라는 일산화탄소)", Overlay.Heat => "열 (주황 · 빨강은 뜨겁고 하늘색은 차다)",
-        Overlay.Smoke => "연기", Overlay.Chain => "사슬 선 (지금 장면의 원인 사슬이 지나간 자리)", _ => "겹쳐 보기 끔",
+        Overlay.Smoke => "연기", Overlay.Chain => "사슬 선 (지금 장면의 원인 사슬이 지나간 자리)",
+        Overlay.Lines => "선과 관 (전선 노랑 · 냉각관 하늘 · 물관 파랑 · 센서 선 초록 · 끊긴 곳 빨간 X · 새는 곳 보라)", _ => "겹쳐 보기 끔",
     };
-    public void CycleOverlay() { Show = (Overlay)(((int)Show + 1) % 5); Notify(OverlayName(Show)); }
+    public void CycleOverlay() { Show = (Overlay)(((int)Show + 1) % 6); Notify(OverlayName(Show)); }
 
     /// <summary>지금 장면의 원인 사슬 (뿌리 → 끝) — 연출이 보는 사슬 (한 줄로 가장 많이 건넌 끝) · 없으면 가장 최근 하이라이트 (30분 안).</summary>
     public List<int> ChainNow()

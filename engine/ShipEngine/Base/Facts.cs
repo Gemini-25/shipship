@@ -108,6 +108,8 @@ public enum FactKind : ushort
     MethodWorked,      // 지어낸 방법(또는 매뉴얼의 방법)이 끝까지 통했다 (Other: 방법 번호 · Size: 잃은 공기 몰 · Actor: 지은 이 — −1 주컴퓨터)
     MethodFailed,      // 매뉴얼대로 한 계획이 틀어졌다 (Other: 방법 번호 · Actor: −1 주컴퓨터)
     ManualChanged,     // 회의가 매뉴얼을 고쳤다 (Size: 1 넣음 · −1 뺌 · 0 부결 · Other: 방법 번호 · Actor: 연 이)
+    // ⑥ 바퀴 3 — 칸마다 선 · 관
+    CableCut,          // 전선이 끊겼다 (Cell: 끊긴 칸 · Other: 끊긴 선 갈래 비트 — 전기 1 · 냉각관 2 · 물관 4)
 }
 
 public static class FactNames
@@ -132,7 +134,7 @@ public static class FactNames
         FactKind.ShipSplit => "배가 갈라졌다",
         FactKind.Lie => "거짓말", FactKind.LieExposed => "거짓말이 들통났다", FactKind.LogAsked => "기록을 물었다", FactKind.LogShown => "주컴퓨터 기록", FactKind.Shelter => "대피", FactKind.Meeting => "회의", FactKind.Verdict => "판결", FactKind.Elected => "대표를 뽑았다", FactKind.Mutiny => "배급 반란",
         FactKind.ComputerJournal => "일지", FactKind.ComputerBroadcast => "아침 방송", FactKind.Switched => "껐다", FactKind.Blocked => "막혔다", FactKind.Devised => "궁리했다", FactKind.Consulted => "주컴퓨터에 물었다",
-        FactKind.MethodWorked => "방법이 통했다", FactKind.MethodFailed => "매뉴얼대로 했다가 틀어졌다", FactKind.ManualChanged => "매뉴얼을 고쳤다", _ => "",
+        FactKind.MethodWorked => "방법이 통했다", FactKind.MethodFailed => "매뉴얼대로 했다가 틀어졌다", FactKind.ManualChanged => "매뉴얼을 고쳤다", FactKind.CableCut => "선이 끊겼다", _ => "",
     };
 }
 

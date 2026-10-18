@@ -114,12 +114,12 @@ public sealed partial class Mind
                 return;
             }
             case StepKind.Look:
-                // 끊긴 센서 선: 식었으면 잇는다 (주컴퓨터가 맡긴 자리 — 아직 타면 불부터)
-                if (_net != null && _net.DataCutAt(st.Cell) && F.Tf[st.Cell] < 330 && (_chem == null || _chem.Burning[st.Cell] == 0))
+                // 끊긴 센서 선 · 전선 · 새는 관: 식었으면 잇고 죈다 (주컴퓨터가 맡긴 자리 — 아직 타면 불부터 · 센서 선 2분 · 전선 3분 · 관 4분 · 사람은 두 배)
+                if (_net != null && _net.NeedsFix(st.Cell) && F.Tf[st.Cell] < 330 && (_chem == null || _chem.Burning[st.Cell] == 0))
                 {
-                    if (t - c.StepStart < Time.Minutes(a.IsPerson ? 4 : 2)) return;
-                    _net.SpliceData(st.Cell);
-                    int sc = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} 끊긴 센서 선을 이었다", t, st.Cell, c.GoalCause, 0, a.Id);
+                    if (t - c.StepStart < Time.Minutes(_net.FixMinutes(st.Cell) * (a.IsPerson ? 2 : 1))) return;
+                    string did = _net.FixLines(st.Cell);
+                    int sc = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, $"{Ko.I(NameOf(a.Id))} {did}", t, st.Cell, c.GoalCause, 0, a.Id);
                     sim.Facts.Emit(t, FactKind.Repaired, st.Cell, 0, sc, a.Id, -1);
                     if (c.AssignedGoal == GoalKind.Investigate && c.AssignedTarget == st.Cell) c.AssignedUntil = t;
                 }

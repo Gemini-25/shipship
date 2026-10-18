@@ -532,7 +532,7 @@ public sealed partial class Life : IEngine
             double tf = Math.Max(0, 1 - Math.Pow((t - 296) / 12, 2));
             double pco2 = F.Partial(T.gCO2, c);
             double cf = pco2 / (pco2 + 0.03);
-            double water = net.WaterTank > 100 ? 1 : 0;
+            double water = net.WaterTank > 100 && net.WaterAtDevice(cr.Device) ? 1 : 0;   // 물관이 끊긴 선반은 물을 못 받는다
             if (lamp < 0.1) cr.DarkHours += (float)(dt / 3600); else cr.DarkHours = 0;
             if (t < 275 || t > 318 || cr.DarkHours > 48 || water == 0) cr.Health = (float)Math.Max(0, cr.Health - dt / 86400);
             else cr.Health = (float)Math.Min(1, cr.Health + dt / (5 * 86400));

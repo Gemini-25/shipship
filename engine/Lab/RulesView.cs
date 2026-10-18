@@ -1,5 +1,6 @@
 using ShipEngine;
 using ShipView;
+using ShipSim.Art;
 
 namespace Lab;
 
@@ -278,10 +279,26 @@ public static partial class Program
             bool untouched = f0.R == f1.R && f0.G == f1.G && f0.B == f1.B;
             var show = new LiveShow(Worlds.Full(lay, 6), "시험호");
             var names = new List<string>();
-            for (int i = 0; i < 5; i++) { show.CycleOverlay(); names.Add(show.Show.ToString()); }
-            Check("겹쳐 보기 (O): 공기 — 빠진 방은 파랗게 · 멀쩡한 방은 그대로 · 그려도 세계는 바이트까지 같다 · O로 공기 → 열 → 연기 → 사슬 선 → 끔",
-                blue && untouched && same && string.Join(",", names) == "Air,Heat,Smoke,Chain,None",
+            for (int i = 0; i < 6; i++) { show.CycleOverlay(); names.Add(show.Show.ToString()); }
+            Check("겹쳐 보기 (O): 공기 — 빠진 방은 파랗게 · 멀쩡한 방은 그대로 · 그려도 세계는 바이트까지 같다 · O로 공기 → 열 → 연기 → 사슬 선 → 선과 관 → 끔",
+                blue && untouched && same && string.Join(",", names) == "Air,Heat,Smoke,Chain,Lines,None",
                 $"빠진 방 {v0.R},{v0.G},{v0.B} → {v1.R},{v1.G},{v1.B} · 멀쩡한 방 같음 {untouched} · 세계 같음 {same} · 차례 {string.Join(" → ", names)}");
+
+            // 선과 관 (⑥ 바퀴 3): 평소 화면엔 안 보이고 겹쳐 보기에서만 — 선이 지나는 칸은 칠하고 선이 없는 칸은 그대로
+            var ls = Worlds.Full(lay, 6); ls.Run(2);
+            var lnet = ls.Get<Network>();
+            int onLine = Enumerable.Range(0, lay.N).First(c => lnet.Strands[c] > 0 && lnet.Strands[c] < 255);
+            int offLine = Enumerable.Range(0, lay.N).First(c => lay.Kind[c] == CellKind.Floor && lnet.LineAt[c] == 0);
+            var lp = new Painter(lay);
+            var plain = lp.Frame(ls, 0, 0, lay.W, lay.H, 0);
+            var plainOn = Copy(plain);
+            lp.Show = Overlay.Lines;
+            var drawn = lp.Frame(ls, 0, 0, lay.W, lay.H, 0);
+            bool Diff(Img a, Img b, int c) { int x0 = lay.X(c) * Painter.T, y0 = lay.Y(c) * Painter.T; for (int y = y0; y < y0 + Painter.T; y++) for (int x = x0; x < x0 + Painter.T; x++) for (int k = 0; k < 4; k++) if (a.Px[(y * a.W + x) * 4 + k] != b.Px[(y * b.W + x) * 4 + k]) return true; return false; }
+            Check("겹쳐 보기 '선과 관': 평소 화면에는 선이 안 보이고 · O로 켜면 선이 지나는 칸만 칠한다 (전선 · 냉각관 · 물관 · 센서 선)",
+                Diff(plainOn, drawn, onLine) && !Diff(plainOn, drawn, offLine), $"선 칸 {onLine} · 빈 칸 {offLine}");
         }
     }
+
+    private static Img Copy(Img a) { var b = new Img(a.W, a.H); Array.Copy(a.Px, b.Px, a.Px.Length); return b; }
 }

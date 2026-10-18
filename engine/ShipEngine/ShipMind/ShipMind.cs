@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace ShipEngine;
 
 /// <summary>주컴퓨터가 알아챈 일의 종류.</summary>
-public enum IncidentKind : byte { None, Fire, Leak, Vacuum, CO, BadAir, PersonDown, DeviceBroken, ElectricFault, PowerShort, ReactorScram, Hot, Strain, Toxic, DoorJam, SensorLost, Injured, PowerLost }
+public enum IncidentKind : byte { None, Fire, Leak, Vacuum, CO, BadAir, PersonDown, DeviceBroken, ElectricFault, PowerShort, ReactorScram, Hot, Strain, Toxic, DoorJam, SensorLost, Injured, PowerLost, LineCut }
 
 /// <summary>주컴퓨터가 붙잡고 있는 사건 하나.</summary>
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -340,7 +340,7 @@ public sealed partial class ShipMind : IEngine
     {
         IncidentKind.Fire => "불", IncidentKind.Leak => "공기가 샌다", IncidentKind.Vacuum => "공기가 빠졌다", IncidentKind.CO => "일산화탄소",
         IncidentKind.BadAir => "공기가 나쁘다", IncidentKind.PersonDown => "사람이 쓰러졌다", IncidentKind.DeviceBroken => "장치 고장",
-        IncidentKind.ElectricFault => "전기 합선", IncidentKind.PowerShort => "전력이 모자란다", IncidentKind.ReactorScram => "원자로가 멈췄다", IncidentKind.Hot => "너무 덥다", IncidentKind.Strain => "문이 압력에 휜다", IncidentKind.Toxic => "독한 기체", IncidentKind.DoorJam => "문이 끼었다", IncidentKind.SensorLost => "센서가 끊겼다", IncidentKind.Injured => "다친 사람", IncidentKind.PowerLost => "생명 설비 정전", _ => "",
+        IncidentKind.ElectricFault => "전기 합선", IncidentKind.PowerShort => "전력이 모자란다", IncidentKind.ReactorScram => "원자로가 멈췄다", IncidentKind.Hot => "너무 덥다", IncidentKind.Strain => "문이 압력에 휜다", IncidentKind.Toxic => "독한 기체", IncidentKind.DoorJam => "문이 끼었다", IncidentKind.SensorLost => "센서가 끊겼다", IncidentKind.Injured => "다친 사람", IncidentKind.PowerLost => "생명 설비 정전", IncidentKind.LineCut => "선이 끊겼다", _ => "",
     };
 
     private void Detect(Sim sim)
@@ -358,6 +358,14 @@ public sealed partial class ShipMind : IEngine
                     int cut = _net.DataCutCell[r];
                     Raise(sim, IncidentKind.SensorLost, r, cut, RoomSeen[r] == 2 ? 0.5f : 1, -1, _net.DataBrokenCause[cut]);   // 무선으로 보이면 0.5 (느리게라도 본다 — 덜 급하다)
                     Mark(IncidentKind.SensorLost, r);
+                }
+        // 끊긴 전선 · 관 (⑥ 바퀴 3 — 반사 측정으로 자리를 안다 · 불 · 구멍 자리의 샘도): 방마다 주컴퓨터에서 가장 가까운 끊긴 칸으로 로봇을 보내 잇는다
+        if (_net != null)
+            for (int r = 0; r < L.Rooms.Count; r++)
+                if (_net.LineFixCell(r, _computer >= 0 ? _net.Devices[_computer].Cell : -1) is int lc && lc >= 0)
+                {
+                    Raise(sim, IncidentKind.LineCut, r, lc, 1, -1, _net.LineCauseAt(lc));
+                    Mark(IncidentKind.LineCut, r);
                 }
         var leaking = new List<(int room, float drop)>();
         for (int r = 0; r < L.Rooms.Count; r++)
@@ -484,7 +492,7 @@ public sealed partial class ShipMind : IEngine
         {
             var x = Incidents[i];
             if (x.Active == 0) continue;
-            if (x.Room >= 0 && x.Room < RoomSeen.Length && (RoomSeen[x.Room] == 0 || _stale[x.Room] != 0) && x.Kind is not (IncidentKind.DeviceBroken or IncidentKind.ElectricFault or IncidentKind.DoorJam or IncidentKind.SensorLost or IncidentKind.PowerLost)) continue; // 못 보는 방은 그대로 둔다
+            if (x.Room >= 0 && x.Room < RoomSeen.Length && (RoomSeen[x.Room] == 0 || _stale[x.Room] != 0) && x.Kind is not (IncidentKind.DeviceBroken or IncidentKind.ElectricFault or IncidentKind.DoorJam or IncidentKind.SensorLost or IncidentKind.PowerLost or IncidentKind.LineCut)) continue; // 못 보는 방은 그대로 둔다
             long key = ((long)x.Kind << 48) | ((long)(x.Room + 1) << 24) | (uint)((x.Kind is IncidentKind.PersonDown or IncidentKind.DeviceBroken or IncidentKind.ElectricFault or IncidentKind.Strain or IncidentKind.DoorJam ? x.Subject : -1) + 1);
             if (seen.Contains(key)) continue;
             // 끝: 5번(1분) 연속 멀쩡 · 위험한 사건은 적어도 2분은 붙잡는다
@@ -914,6 +922,7 @@ public sealed partial class ShipMind : IEngine
             case IncidentKind.Strain: g = GoalKind.Brace; target = x.Cell; drone = false; break;
             case IncidentKind.DoorJam: g = GoalKind.Brace; target = x.Cell; drone = false; break;
             case IncidentKind.SensorLost: g = GoalKind.Investigate; target = x.Cell; drone = false; break; // 끊긴 자리로 가서 잇는다 (가는 길에 그 방도 본다)
+            case IncidentKind.LineCut: g = GoalKind.Investigate; target = x.Cell; drone = false; break;    // 끊긴 전선 · 관 자리로 가서 잇고 죈다
             case IncidentKind.PowerLost: g = GoalKind.Rewire; target = x.Room; drone = false; break;     // ⑥ 옆 방에서 연장선을 끌어온다
             default: return;
         }

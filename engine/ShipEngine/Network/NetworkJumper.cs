@@ -102,7 +102,7 @@ public sealed partial class Network
     }
 
     /// <summary>연장선마다: 흐르는 전류 · 전선 열 · 젖은 칸 · 뜨거운 칸 · 정격 넘김 → 합선 · 문틀을 막는다 · 제 급전선이 살아나면 걷는다.</summary>
-    private void JumperStep(Sim sim, double dt, double frac)
+    private void JumperStep(Sim sim, double dt)
     {
         if (Jumpers.Count == 0) return;
         var st = sim.Find<Structure>();
@@ -115,7 +115,7 @@ public sealed partial class Network
             else j.OwnOkSince = 0;
             if (j.OwnOkSince != 0 && sim.Tick - j.OwnOkSince > Time.Minutes(1)) { Jumpers[k] = j; Unplug(sim, k, "제 급전선이 살아나 걷었다", 0); continue; }
             bool carrying = !OwnFeederLive(j.To) && OwnFeederLive(j.From);
-            double amps = carrying ? _roomLoad[j.To] * frac * 1000 / Volts : 0;
+            double amps = carrying ? _roomLoad[j.To] * FeederFrac(RoomFeeder[j.From]) * 1000 / Volts : 0;
             j.Amps = (float)amps;
             // 문틀에 깔린 연장선 — 그 문은 닫히지 않는다
             if (st != null) foreach (int c in path) if (L.Kind[c] == CellKind.Door) st.RequestDoor(L.DoorAt[c], 1);

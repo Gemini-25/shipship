@@ -10,7 +10,7 @@ namespace ShipView;
 /// 층: 우주 → 바닥 → 벽 · 남쪽 앞면 → 문 → 외판 구멍 → 설비 → 물 · 진공 · 열 · 어둠 → 사람 · 로봇 → 불 · 연기.
 /// </summary>
 /// <summary>겹쳐 보기 (화면 설정 — 기본은 눈에 보이는 것만): 공기(산소 · 진공 · 일산화탄소) · 열 · 연기 · 사슬 선.</summary>
-public enum Overlay : byte { None, Air, Heat, Smoke, Chain }
+public enum Overlay : byte { None, Air, Heat, Smoke, Chain, Lines }
 
 public sealed class Painter
 {
@@ -310,7 +310,7 @@ public sealed class Painter
                     img.Draw(puff, Px(x) - 6 + dx, Py(y) - 10, false, al);
                 }
             }
-        if (Show != Overlay.None) DrawOverlay(img, f, x0, y0, w, h);
+        if (Show != Overlay.None) DrawOverlay(img, f, net, x0, y0, w, h);
         return img;
     }
 
@@ -504,11 +504,12 @@ public sealed class Painter
 
     // ───────────────────────── 겹쳐 보기 ─────────────────────────
 
-    private void DrawOverlay(Img img, Field f, int x0, int y0, int w, int h)
+    private void DrawOverlay(Img img, Field f, Network? net, int x0, int y0, int w, int h)
     {
         int Px(int x) => (x - x0) * T;
         int Py(int y) => (y - y0) * T;
         var T2 = f.T;
+        if (Show == Overlay.Lines) { if (net != null) DrawLines(img, net, x0, y0, w, h); return; }
         if (Show != Overlay.Chain)
             for (int y = y0; y < y0 + h; y++)
                 for (int x = x0; x < x0 + w; x++)
@@ -555,6 +556,41 @@ public sealed class Painter
                 img.Fill(mx - r, my - r, 2 * r, 2 * r, i == ChainCells.Count - 1 ? Rgba.Hex("#ffffff") : col, 0.9f);
             }
         }
+    }
+
+    /// <summary>겹쳐 보기 '선과 관' (⑥ 바퀴 3): 전선 노랑 · 냉각관 하늘 · 물관 파랑 · 센서 선 초록 — 갈래마다 칸 안에서 조금씩 비켜 나란히 · 끊긴 칸 빨간 X · 새는 칸 보라.</summary>
+    private void DrawLines(Img img, Network net, int x0, int y0, int w, int h)
+    {
+        var cols = new[] { Rgba.Hex("#ffd23f"), Rgba.Hex("#6fe3ff"), Rgba.Hex("#3a7bff"), Rgba.Hex("#4fd17a") };
+        var red = Rgba.Hex("#ff3b30"); var leak = Rgba.Hex("#c04dff");
+        for (int y = y0; y < y0 + h; y++)
+            for (int x = x0; x < x0 + w; x++)
+            {
+                if (!L.In(x, y)) continue;
+                int c = L.Index(x, y);
+                if (net.LineAt[c] == 0) continue;
+                int px = (x - x0) * T, py = (y - y0) * T;
+                for (int k = 0; k < 4; k++)
+                {
+                    if ((net.LineAt[c] & (1 << k)) == 0) continue;
+                    int off = (int)((k - 1.5) * T / 8), mx = px + T / 2 + off, my = py + T / 2 + off;
+                    int dirs = net.LineDir[c * 4 + k];
+                    var col = cols[k];
+                    if (dirs == 0) img.Fill(mx - 2, my - 2, 4, 4, col, 0.9f);
+                    if ((dirs & 1) != 0) img.Fill(mx - 1, py, 3, my - py + 1, col, 0.85f);
+                    if ((dirs & 4) != 0) img.Fill(mx - 1, my, 3, py + T - my, col, 0.85f);
+                    if ((dirs & 8) != 0) img.Fill(px, my - 1, mx - px + 1, 3, col, 0.85f);
+                    if ((dirs & 2) != 0) img.Fill(mx, my - 1, px + T - mx, 3, col, 0.85f);
+                }
+                bool cut = net.LineCut[c] != 0 || net.DataCutAt(c);
+                if (cut)
+                {
+                    int a = T / 4;
+                    Line(img, (px + a, py + a), (px + T - a, py + T - a), red);
+                    Line(img, (px + T - a, py + a), (px + a, py + T - a), red);
+                }
+                if (net.LeakAt(c, LineKind.Coolant) > 0 || net.LeakAt(c, LineKind.Water) > 0) img.Fill(px + T / 2 - 5, py + T / 2 - 5, 10, 10, leak, 0.8f);
+            }
     }
 
     private static void Line(Img img, (int x, int y) a, (int x, int y) b, Rgba col)
