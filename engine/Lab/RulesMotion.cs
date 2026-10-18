@@ -161,6 +161,32 @@ public static partial class Program
                 $"구함: 사람 {go.people} · 넘어옴 {go.rescued} · \"{go.story}\" / 안 감: 사람 {no.people} · 거절 {no.declined}");
         }
 
+        // ── 공기 없는 에어락: 붙었어도 에어락이 진공이면 생존자는 그 배에서 기다린다 · 공기가 돌아오면 넘어와 산다 (고치기 전: 진공 에어락으로 넘어와 그대로 숨졌다) ──
+        {
+            var (s, o, m, sm) = Ship(11);
+            sm.Policy.AnswerDistress = 1;
+            int c = s.Causes.Add(CauseKind.Story, "고장 난 배", s.Tick);
+            o.AddContact(s, ContactKind.Distress, 40_000, 1, 0, 30, 3000, 2, 8, c);
+            var f = s.Get<Field>(); var life = s.Get<Life>();
+            var lockRoom = s.Layout.Rooms[s.Layout.Room[At(24, 7)]].Cells;
+            long waitedWhileVacuum = 0; long rescuedInVacuum = 0;
+            for (int k = 0; k < Time.Hours(6) && sm.Rescued < 2; k++)
+            {
+                bool docked = o.Contacts.Any(x => x.State == ContactState.Docked);
+                if (docked && waitedWhileVacuum < Time.Minutes(40))
+                {
+                    foreach (int x in lockRoom) for (int g = 0; g < f.G; g++) f.RemoveGas(x, g, f.N[x * f.G + g] * 0.5);   // 에어락이 진공이다 (바깥문이 끼었다)
+                    waitedWhileVacuum++;
+                    rescuedInVacuum = sm.Rescued;
+                }
+                s.Step();
+            }
+            int dead = m.Agents.Count(a => a.IsPerson && life.Bodies[a.C.Body].Alive == 0);
+            Check("공기 없는 에어락: 붙었어도 에어락이 진공이면 생존자는 그 배에서 기다리고 · 공기가 돌아오면 넘어와 산다",
+                waitedWhileVacuum >= Time.Minutes(40) && rescuedInVacuum == 0 && sm.Rescued == 2 && dead == 0,
+                $"진공 동안 넘어옴 {rescuedInVacuum} ({waitedWhileVacuum * 60.0 / Time.TicksPerHour:0}분) · 끝에 넘어옴 {sm.Rescued} · 죽음 {dead} · \"{sm.Log.LastOrDefault(x => x.text.Contains("에어락에 공기가 없다")).text}\"");
+        }
+
         // ── 난파선(불이 났던 배): 붙어서 해치를 열면 매연(일산화탄소)이 에어락으로 들고 · 수리 꾸러미를 건진다 ──
         {
             var (s, o, m, sm) = Ship(13);

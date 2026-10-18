@@ -400,6 +400,14 @@ public sealed partial class ShipMind
         int cell = -1;
         if (lockRoom >= 0) foreach (int x in L.Rooms[lockRoom].Cells) if (L.Kind[x] == CellKind.Floor && L.FurnitureAt[x] < 0) { cell = x; break; }
         if (cell < 0) { o.Undock(sim, c.Id); GoingTo = -1; GoPhase = 0; return; }
+        // 에어락에 공기가 없으면 (바깥문이 끼었다 · 새는 중) 넘어오지 않고 기다린다 — 진공으로 사람을 들이지 않는다 (찾아 고친 결함: 문이 낀 에어락으로 생존자 셋이 넘어와 그대로 숨졌다)
+        double lockKPa = 0; foreach (int x in L.Rooms[lockRoom].Cells) lockKPa += F.Pressure(x); lockKPa /= Math.Max(1, L.Rooms[lockRoom].Cells.Length);
+        if (lockKPa < 70)
+        {
+            if (t % Time.Minutes(10) < Time.Minutes(1)) Say(sim, $"{name}에 붙었지만 에어락에 공기가 없다 ({lockKPa:0}kPa) — 생존자는 그 배에서 기다린다");
+            GoAt = t + Time.Minutes(1);
+            return;
+        }
         if (c.Kind == ContactKind.Distress && c.Crew > 0 && _life != null)
         {
             int id = _mind!.AddPerson(sim, cell);

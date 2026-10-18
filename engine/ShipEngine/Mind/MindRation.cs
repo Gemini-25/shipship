@@ -24,6 +24,14 @@ public sealed partial class Mind
     /// <summary>오늘(0시부터) 더 받을 수 있는 몫 — 배급이 없으면 끝없다.</summary>
     public double FoodLeft(int agent) => RationFood <= 0 ? double.MaxValue : Math.Max(0, RationFood - (agent < _ateToday.Length ? _ateToday[agent] : 0));
     public double WaterLeft(int agent) => RationWater <= 0 ? double.MaxValue : Math.Max(0, RationWater - (agent < _drankToday.Length ? _drankToday[agent] : 0));
+    /// <summary>의료 몫: 몸의 물이 3% 넘게 모자란 이(화상 · 열 · 피 흘림)는 배급과 상관없이 모자란 만큼 마신다 (배급의 원칙 — 아픈 이 · 다친 이에게 먼저 · 찾아 고친 결함: 덴 이가 하루 몫에 막혀 목이 말라 죽었다).</summary>
+    public double WaterAllowed(int agent)
+    {
+        double left = WaterLeft(agent);
+        if (left == double.MaxValue || _life == null || agent >= Agents.Count || !Agents[agent].IsPerson) return left;
+        double deficit = BodyWater0 - _life.Bodies[Agents[agent].C.Body].Water;
+        return deficit > 0.03 * BodyWater0 ? Math.Max(left, deficit) : left;
+    }
     public double AteToday(int agent) => agent < _ateToday.Length ? _ateToday[agent] : 0;
     public double DrankToday(int agent) => agent < _drankToday.Length ? _drankToday[agent] : 0;
 

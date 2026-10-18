@@ -58,6 +58,22 @@ public static partial class Program
                 $"배급 연 번 {on.opened} (음수면 '껐다'를 되풀이) · 몫 {on.ration:0.00}몰 · 가장 많이 먹은 이 {on.maxAte:0.00} · 평균 {on.meanAte:0.00} (배급 없음 {off.meanAte:0.00}) · 짜증 {on.anger:0.00} / {off.anger:0.00}");
         }
 
+        // ── 의료 몫: 물 배급 중에도 덴 이(몸의 물 6% 모자람)는 하루 몫을 넘겨 모자란 만큼 마신다 (고치기 전: 몫에 막혀 목이 말라 죽었다) ──
+        {
+            var s = Worlds.Full(lay, 8);
+            var m = s.Get<Mind>(); var life = s.Get<Life>();
+            int p = m.AddPerson(s, At(3, 2));
+            s.Run(2);
+            m.SetRation(0, 20, 0);                                    // 물 배급: 하루 20몰 (0.36L)
+            ref var b = ref life[m[p].C.Body];
+            b.Water = Mind.BodyWater0 * 0.94; b.Burn = 0.35f;          // 덴 팔 — 몸의 물 6% 모자람 · 화상으로 물을 잃는다
+            s.Run(Time.Hours(2));
+            double drank = m.DrankToday(p);
+            float water = (float)(life.Bodies[m[p].C.Body].Water / Mind.BodyWater0);
+            Check("의료 몫: 물 배급 중에도 덴 이(몸의 물 6% 모자람)는 하루 몫(20몰)을 넘겨 모자란 만큼 마신다",
+                drank > 60 && water > 0.96f, $"두 시간에 마신 물 {drank:0}몰 (몫 20) · 몸의 물 {water:P0}");
+        }
+
         // ── 물도 같은 길: 물 재생기가 망가지고 물탱크가 이틀 치면 물 배급(보통의 85% — 목숨 몫 밑으로는 줄이지 않는다) · 마시는 곳은 몫을 넘게 주지 않는다 ──
         {
             var s = Worlds.Full(lay, 7);

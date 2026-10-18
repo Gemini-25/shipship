@@ -50,6 +50,11 @@ public static partial class Program
                     Console.WriteLine($"      문{dd} 바깥문 {s.Layout.Doors[dd].External} 목표 {stc.DoorTarget[dd]:0.0} 열림 {fl.DoorOpen[dd]:0.00} 밸브 {fl.DoorBleed[dd]} 전기 {stc.DoorPowered[dd]} 끼임 {stc.DoorJam[dd]} · {string.Join(" / ", sides)} · 봉쇄 {string.Join(",", sm.Incidents.Where(x => x.Active != 0 && x.Sealed != 0).Select(x => s.Layout.Rooms[x.Room].Name))} · 문 칸 사람 {m.Agents.Where(o => o.C.Cell == s.Layout.Doors[dd].Cell).Select(o => m.NameOf(o.Id)).DefaultIfEmpty("-").First()} · 기다림 {string.Join(",", m.Agents.Where(o => o.C.WaitDoor == dd).Select(o => m.NameOf(o.Id)))} · 물건 {m.Loose.Count(x => x.Cell == s.Layout.Doors[dd].Cell)}");
                 }
             }
+            if (Environment.GetEnvironmentVariable("WATCH_BODY") is string wb && t % Time.Minutes(30) == 0 && m.Agents.FirstOrDefault(x => x.IsPerson && m.NameOf(x.Id) == wb) is { } wa)
+            {
+                var bb = life.Bodies[wa.C.Body];
+                Console.WriteLine($"    ◆ {Time.Clock(s.Tick)} {wb} {Where(wa.C.Cell)} 목표 {wa.C.Goal} · 몸의 물 {bb.Water / (42 * 55.5):P0} · 목마름 {wa.C.Thirst:0.00} · 화상 {bb.Burn:0.00} · 아픔 {bb.Pain:0.00} · 의식 {bb.Conscious} · 잠 {bb.Asleep} · 일어섬 {wa.C.Up} · 돌봄 {bb.Dressed}");
+            }
             if (t % Time.Minutes(30) == 0 && s.Tick >= Time.Hours(double.Parse(Environment.GetEnvironmentVariable("WATCH_FROM") ?? "9999")))
             {
                 var f = s.Get<Field>(); var net = s.Get<Network>();
