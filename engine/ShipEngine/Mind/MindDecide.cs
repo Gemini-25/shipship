@@ -57,10 +57,29 @@ public sealed partial class Mind
     {
         ref var c = ref a.C;
         ref var b = ref _life![c.Body];
-        if (b.Suit == 0 || b.Alive == 0 || b.Conscious == 0) return;
+        if (b.Suit == 0 && b.Mask == 0 || b.Alive == 0 || b.Conscious == 0) return;
         int here = c.Cell;
         bool air = F.Pressure(here) > 80 && F.Partial(T.gO2, here) > 18 && F.Ppm(T.gCO, here) < 50 && F.Ppm(T.gNH3, here) < 25 && F.Ppm(T.gSoot, here) < 30;
         if (!air) return;
+        if (b.Mask != 0)
+        {
+            // 좋은 공기 — 마스크를 벗어 가장 가까운 마스크함에 돌려놓는다 (병이 반 넘게 남았으면)
+            if (BelievedRoomBad(a, RoomOf(here))) return;
+            bool keep = b.MaskO2 >= 0.5 * ItemCharge(iMask);
+            b.Mask = 0; b.MaskO2 = 0;
+            if (keep)
+            {
+                int box = -1, bestD = int.MaxValue;
+                for (int fu = 0; fu < L.Furniture.Count; fu++)
+                {
+                    if (L.Furniture[fu].Type != "OxygenMaskBox" || L.Furniture[fu].Cells.Length == 0) continue;
+                    int dm = Manhattan(here, L.Furniture[fu].Cells[0]);
+                    if (dm < bestD) { bestD = dm; box = fu; }
+                }
+                if (box >= 0) Stock[box * ItemCount + iMask]++;
+            }
+            if (b.Suit == 0) return;
+        }
         bool empty = b.SuitO2 < 0.1 * ItemCharge(iSuit);
         bool task = c.Goal is GoalKind.Patch or GoalKind.Rescue or GoalKind.FightFire or GoalKind.Evacuate or GoalKind.GetSuit && a.Plan.Count > 0 && c.StepIndex < a.Plan.Count;
         if (!empty && (task || BelievedRoomBad(a, RoomOf(here)))) return;

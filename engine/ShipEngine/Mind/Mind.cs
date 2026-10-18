@@ -59,7 +59,7 @@ public sealed partial class Mind : IEngine
 
     public long Shouts, Panics, Extinguished, Rescued, Patched, Repaired, FledCount, Meals, Drinks, Exercised;
     /// <summary>소리 (바퀴 2): 바탕 소음에 가려 못 들은 소리 · '기계 소리가 이상하다'를 알아챈 수 · 그 소리를 듣고 부품을 미리 간 수.</summary>
-    public long Masked, GrindHeard, EarMaintained;
+    public long Masked, GrindHeard, EarMaintained, MasksWorn;
     /// <summary>이상한 기계 소리 알림 (최근 16개 · 찍는다) — 일감판이 읽는다.</summary>
     public readonly List<GrindReport> GrindReports = new();
     /// <summary>스스로 갈 솜씨 (이보다 덜하면 듣고도 알리기만 한다).</summary>
@@ -645,7 +645,7 @@ public sealed partial class Mind : IEngine
         w.I64(Shouts); w.I64(Panics); w.I64(Extinguished); w.I64(Rescued); w.I64(Patched); w.I64(Repaired); w.I64(FledCount); w.I64(Meals); w.I64(Drinks); w.I64(Exercised); w.F64(FoodEaten); w.F64(WaterDrunk); w.F64(WaterSprayed);
         w.I64(Cooked); w.I64(Forgot); w.I64(_learnCursor); w.I64(AteTogether); w.I64(Followed);
         w.Arr(HobbyCount); SavePlaces(w); SaveRation(w);
-        w.I64(Masked); w.I64(GrindHeard); w.I64(EarMaintained); w.List(GrindReports);
+        w.I64(Masked); w.I64(GrindHeard); w.I64(EarMaintained); w.I64(MasksWorn); w.List(GrindReports);
         w.F64(_lastG); w.I64(Falls); w.I64(BracedOnBurn);
         SaveAims(w);
     }
@@ -667,7 +667,7 @@ public sealed partial class Mind : IEngine
         Shouts = r.I64(); Panics = r.I64(); Extinguished = r.I64(); Rescued = r.I64(); Patched = r.I64(); Repaired = r.I64(); FledCount = r.I64(); Meals = r.I64(); Drinks = r.I64(); Exercised = r.I64(); FoodEaten = r.F64(); WaterDrunk = r.F64(); WaterSprayed = r.F64();
         Cooked = r.I64(); Forgot = r.I64(); _learnCursor = r.I64(); AteTogether = r.I64(); Followed = r.I64();
         HobbyCount = r.Arr<long>(); LoadPlaces(r); LoadRation(r);
-        Masked = r.I64(); GrindHeard = r.I64(); EarMaintained = r.I64(); GrindReports.Clear(); GrindReports.AddRange(r.List<GrindReport>());
+        Masked = r.I64(); GrindHeard = r.I64(); EarMaintained = r.I64(); MasksWorn = r.I64(); GrindReports.Clear(); GrindReports.AddRange(r.List<GrindReport>());
         _lastG = r.F64(); Falls = r.I64(); BracedOnBurn = r.I64();
         LoadAims(r);
     }

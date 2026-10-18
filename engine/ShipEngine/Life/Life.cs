@@ -22,6 +22,8 @@ public struct Body
     public float RadGy, RadRecent;
     public float Pain;
     public float SuitO2;       // 우주복 산소 (몰)
+    public float MaskO2;       // 산소 마스크 병의 산소 (몰 — 기압이 남은 곳에서만 쓸모가 있다)
+    public byte Mask;          // 산소 마스크를 썼다
     public float LastKPa;
     public int DeathCause;
     public long DiedAt;
@@ -198,6 +200,33 @@ public sealed partial class Life : IEngine
         if (net != null) Grow(sim, net, dt);
         if (sim.Tick % 125 == 3) { MoldStep(dt * 25); RotStep(sim, dt * 25); }
         if (sim.Tick % 25 == 3) Spread(sim, dt * 5);   // 옮는 병 (1분마다)
+        if (st != null) StampAirLoss(sim, st, sim.Tick % 25 == 7);
+    }
+
+    // 방마다 공기를 앗아 간 원인 (구멍 · 찢어짐 — 그 구역이 바깥에 열렸던 마지막 원인 · 구역이 이어지면 함께 번진다):
+    // 구멍을 막은 뒤에도 옅은 공기에 쓰러지고 죽은 이의 원인 사슬이 그 구멍에 잇는다 (찾아 고친 결함: '산소가 모자랐다 → 죽었다'에 뿌리가 없었다)
+    public int[] AirLostCause = Array.Empty<int>();
+    public long[] AirLostTick = Array.Empty<long>();
+    private void StampAirLoss(Sim sim, Structure st, bool spread)
+    {
+        if (AirLostCause.Length != L.Rooms.Count) { AirLostCause = new int[L.Rooms.Count]; AirLostTick = new long[L.Rooms.Count]; }
+        Dictionary<int, int>? open = null;   // 틱마다: 바깥에 열린 구역만 (드물다) · 1분마다: 이어진 구역으로 번진다
+        foreach (var k in F.Links) if (k.RA >= 0 && k.RB < 0 && st.DamageCause[k.Via] != 0) (open ??= new())[k.RA] = st.DamageCause[k.Via];
+        if (open == null && !spread) return;
+        for (int r = 0; r < F.Regions.Count; r++)
+        {
+            if (!spread && !open!.ContainsKey(r)) continue;
+            int cause = open?.GetValueOrDefault(r) ?? 0; long at = sim.Tick;
+            if (cause == 0)
+            {
+                // 바깥에 열려 있지 않은 구역: 그 구역에 이어진 방 가운데 가장 최근에 공기를 잃은 원인 (12시간 안)
+                at = 0;
+                foreach (int c in F.Regions[r]) { int rm = L.Room[c]; if (rm >= 0 && AirLostCause[rm] != 0 && AirLostTick[rm] > at && sim.Tick - AirLostTick[rm] < Time.Hours(12)) { at = AirLostTick[rm]; cause = AirLostCause[rm]; } }
+                if (cause == 0 || F.ZoneKPa(r) > 80) continue;   // 공기가 돌아왔다
+            }
+            int last = -1;
+            foreach (int c in F.Regions[r]) { int rm = L.Room[c]; if (rm < 0 || rm == last) continue; last = rm; if (AirLostTick[rm] <= at || AirLostCause[rm] == 0) { AirLostCause[rm] = cause; AirLostTick[rm] = at; } }
+        }
     }
 
     private readonly List<int> _flames = new(); // 이번 틱 불 붙은 칸 (틱 안에서만 — 찍지 않는다)
@@ -257,9 +286,12 @@ public sealed partial class Life : IEngine
         if (c < 0 || c >= L.N) return;
         double p = F.Pressure(c), tair = F.Temp(c);
         bool suit = b.Suit != 0;
+        // 산소 마스크: 기압이 남아 있으면 병의 산소를 마신다 (얼굴을 덮어 연기 · 독도 덜 들이쉰다 — 진공에는 소용없다 · 날숨은 밸브로: 장부는 우주복과 같다)
+        bool mask = !suit && b.Mask != 0 && b.MaskO2 > 0 && p > 6.3;
+        bool own = suit || mask;   // 제 병의 숨
         double pO2 = suit ? 21 : F.Partial(T.gO2, c);
-        double pCO2 = suit ? 0.04 : F.Partial(T.gCO2, c);
-        double co = suit ? 0 : F.Ppm(T.gCO, c), nh3 = suit ? 0 : F.Ppm(T.gNH3, c), o3 = suit ? 0 : F.Ppm(T.gO3, c), soot = suit ? 0 : F.Ppm(T.gSoot, c);
+        double pCO2 = own ? 0.04 : F.Partial(T.gCO2, c);
+        double co = own ? 0 : F.Ppm(T.gCO, c), nh3 = own ? 0 : F.Ppm(T.gNH3, c), o3 = own ? 0 : F.Ppm(T.gO3, c), soot = own ? 0 : F.Ppm(T.gSoot, c);
         int env = 0; // 이번에 몸을 해친 것의 원인
         string? harm = null;
         if (b.Conscious == 0) b.ActivityW = 80; // 의식 없는 몸은 기초 대사로 (쓰러지기 전 달리던 대사량이 남아 스스로 익지 않게)
@@ -272,12 +304,13 @@ public sealed partial class Life : IEngine
         double vo2 = watts / (fc * GlucoseJPerO2 + (1 - fc) * FatJPerO2) * dt; // 필요한 산소 (몰)
         double hill(double x) => Math.Pow(x, 2.7) / (Math.Pow(x, 2.7) + Math.Pow(7, 2.7));
         // 산소 요법: 치료 침대에 누우면 마스크로 거의 순수한 산소를 마신다 — 상한 폐로도 피에 산소가 들어간다
-        bool therapy = !suit && p > 30 && OnTherapy(sim, c);
-        double pO2e = therapy ? Math.Max(pO2, 0.9 * Math.Min(p, 101.3)) : pO2;
+        bool therapy = !own && p > 30 && OnTherapy(sim, c);
+        double pO2e = therapy ? Math.Max(pO2, 0.9 * Math.Min(p, 101.3)) : mask ? Math.Max(pO2, 0.95 * Math.Min(p, 101.3)) : pO2;
         double sat = hill(pO2e) * (1 - b.COHb) * (1 - Math.Min(0.9, b.LungDamage * (therapy ? 0.5 : 1)));
         b.SpO2 = (float)sat;
         double o2Got;
         if (suit) { o2Got = Math.Min(vo2, b.SuitO2); b.SuitO2 -= (float)o2Got; if (b.SuitO2 <= 0) b.SpO2 = 0; }
+        else if (mask) { o2Got = Math.Min(vo2 * Math.Min(1, sat / 0.95), b.MaskO2); b.MaskO2 -= (float)o2Got; if (b.MaskO2 <= 0) b.Mask = 0; }
         else o2Got = p > 1 ? Math.Min(vo2 * Math.Min(1, sat / 0.95), F.Gas(T.gO2, c) * 0.5) : 0;
         // 숨: 포도당 + 6O₂ → 6CO₂ + 6H₂O · 지방(팔미트산) + 23O₂ → 16CO₂ + 16H₂O — 섞어 태운다 (호흡 몫 0.79 ~ 1.0)
         double xg = Math.Min(o2Got * fc / 6, b.Reserve), xf = Math.Min(o2Got * (1 - fc) / 23, b.Fat);
@@ -286,16 +319,16 @@ public sealed partial class Life : IEngine
             double o2 = 6 * xg + 23 * xf, co2 = 6 * xg + 16 * xf, h2o = 6 * xg + 16 * xf;
             // 반응열은 몸으로 (장부: E(기체, T) = hf + cv(T−298))
             double q = xg * _glucose.Hf * 1000 + xf * _fat.Hf * 1000;
-            if (!suit) { q += o2 * T.Gases[T.gO2].Energy(tair); F.RemoveGas(c, T.gO2, o2); sim.Book.Add(Res.O2, Flow.Breathed, -o2); }
+            if (!own) { q += o2 * T.Gases[T.gO2].Energy(tair); F.RemoveGas(c, T.gO2, o2); sim.Book.Add(Res.O2, Flow.Breathed, -o2); }
             else q += o2 * T.Gases[T.gO2].Energy(BodyTemp);
             q -= co2 * T.Gases[T.gCO2].Energy(BodyTemp) + h2o * T.Gases[T.gH2O].Energy(BodyTemp);
             b.Reserve -= xg; b.Fat -= xf;
-            if (!suit && p > 1) { F.AddGas(c, T.gCO2, co2, BodyTemp); F.AddGas(c, T.gH2O, h2o, BodyTemp); }
+            if (!own && p > 1) { F.AddGas(c, T.gCO2, co2, BodyTemp); F.AddGas(c, T.gH2O, h2o, BodyTemp); }
             b.CoreK += q / BodyC;
             O2Used += o2; CO2Made += co2; MetabolicJ += xg * GlucoseJPerO2 * 6 + xf * FatJPerO2 * 23;
         }
         // 남는 탄수화물은 지방으로 (4 포도당 + O₂ → 팔미트산 + 8CO₂ + 8H₂O · 3시간에 걸쳐 — 열이 조금 난다)
-        if (b.Reserve > GlycogenMax && !suit && p > 1)
+        if (b.Reserve > GlycogenMax && !own && p > 1)
         {
             double k = Math.Min((b.Reserve - GlycogenMax) / 4 * dt / (3 * 3600), F.Gas(T.gO2, c) * 0.1);
             if (k > 0)
@@ -479,6 +512,9 @@ public sealed partial class Life : IEngine
             foreach (int cell in F.Regions[r]) if (chem.Burning[cell] != 0 && chem.FireCause[cell] != 0) return chem.FireCause[cell];
         // 떨어져 나간 조각 안: 공기 · 전력이 끊겼다 (산소 발생기 · 정화기 · 공조가 배에 남았다)
         if (st != null && st.FragmentOf(c) > 0) return st.FragmentCutCause(c);
+        // 그 방의 공기를 앗아 간 마지막 구멍 (막은 뒤에도 옅은 공기)
+        int room = L.Room[c];
+        if (room >= 0 && room < AirLostCause.Length && AirLostCause[room] != 0 && sim.Tick - AirLostTick[room] < Time.Hours(12)) return AirLostCause[room];
         return 0;
     }
 
@@ -569,6 +605,6 @@ public sealed partial class Life : IEngine
         return (g, w, f);
     }
 
-    public void Save(StateWriter w) { SaveCare(w); w.List(Bodies); w.List(Crops); w.Arr(Mold); w.I64(Deaths); w.F64(FoodRotted); w.F64(O2Used); w.F64(CO2Made); w.F64(MetabolicJ); w.F64(UrineMade); }
-    public void Load(StateReader r) { LoadCare(r); Bodies = r.List<Body>(); Crops = r.List<Crop>(); r.ArrInto(Mold); Deaths = r.I64(); FoodRotted = r.F64(); O2Used = r.F64(); CO2Made = r.F64(); MetabolicJ = r.F64(); UrineMade = r.F64(); }
+    public void Save(StateWriter w) { SaveCare(w); w.List(Bodies); w.List(Crops); w.Arr(Mold); w.I64(Deaths); w.F64(FoodRotted); w.F64(O2Used); w.F64(CO2Made); w.F64(MetabolicJ); w.F64(UrineMade); w.Arr(AirLostCause); w.Arr(AirLostTick); }
+    public void Load(StateReader r) { LoadCare(r); Bodies = r.List<Body>(); Crops = r.List<Crop>(); r.ArrInto(Mold); Deaths = r.I64(); FoodRotted = r.F64(); O2Used = r.F64(); CO2Made = r.F64(); MetabolicJ = r.F64(); UrineMade = r.F64(); AirLostCause = r.Arr<int>(); AirLostTick = r.Arr<long>(); }
 }

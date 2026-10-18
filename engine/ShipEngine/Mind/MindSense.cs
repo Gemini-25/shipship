@@ -490,8 +490,10 @@ public sealed partial class Mind
     private bool AirBad(Agent a, int cell)
     {
         if (a.IsPerson && _life![a.C.Body].Suit != 0) return false;
-        // 몸은 산소가 모자란 것을 직접 느끼지 못한다 (숨이 찬 것은 이산화탄소 때문) — 낮은 기압 · 이산화탄소만 본능을 깨운다
-        return F.Pressure(cell) < 40 || F.Ppm(T.gCO2, cell) > 50000;
+        if (a.IsPerson && _life![a.C.Body].Mask != 0 && F.Pressure(cell) >= 25) return false;   // 마스크로 숨 쉰다
+        // 몸은 산소가 모자란 것을 바로 느끼지 못한다 (숨이 찬 것은 이산화탄소 때문) — 낮은 기압 · 이산화탄소가 본능을 깨우고 ·
+        // 피의 산소가 0.8 아래로 떨어지면 어지럽고 숨이 가빠 알아챈다 (저산소증 증상 — 판단은 흐려져도 몸은 안다)
+        return F.Pressure(cell) < 40 || F.Ppm(T.gCO2, cell) > 50000 || a.IsPerson && _life![a.C.Body].SpO2 < 0.8f;
     }
 
     private bool HeatBad(int cell) => F.Temp(cell) > 330 || BurningNear(cell, 1);
@@ -545,6 +547,17 @@ public sealed partial class Mind
         c.Mode = 1; c.Goal = GoalKind.Flee; c.GoalSince = sim.Tick; c.GoalTarget = -1; c.GoalCell = target;
         a.Plan.Clear(); a.Path.Clear(); c.StepIndex = 0;
         if (target >= 0) a.Plan.Add(new PlanStep { Kind = StepKind.GoTo, Cell = target });
+        // 숨 쉴 공기가 멀거나 없다: 가까운 산소 마스크함부터 들른다 (좋은 공기가 30칸 넘게 · 마스크함이 20칸 안)
+        if (air && a.IsPerson && _life![c.Body].Suit == 0 && _life[c.Body].Mask == 0 && F.Pressure(c.Cell) >= 15)
+        {
+            bool near = target >= 0 && SafeAt(target) && Dist(c.Cell, target) <= MaskIfFar;
+            int box = near ? -1 : NearestStock(c.Cell, iMask);
+            if (box >= 0 && Manhattan(c.Cell, L.Furniture[box].Cells[0]) <= MaskReach)
+            {
+                a.Plan.Insert(0, new PlanStep { Kind = StepKind.Wear, Target = box, Arg = iMask });
+                a.Plan.Insert(0, new PlanStep { Kind = StepKind.GoTo, Cell = L.Furniture[box].Cells[0] });
+            }
+        }
         c.CloseHard = (byte)(air ? 1 : 0);
         c.Fear = Math.Max(c.Fear, air ? 0.9f : 0.7f);
         if (c.Carrying >= 0 && c.Brave < 0.25f) DropCarried(sim, a, false); // 겁에 질려 업던 사람을 내려놓는다
@@ -554,6 +567,8 @@ public sealed partial class Mind
             sim.Facts.Emit(sim.Tick, FactKind.Fled, c.Cell, 0, 0, a.Id, air ? 1 : 0);
         }
     }
+
+    public const int MaskIfFar = 30, MaskReach = 20;
 
     private void StartPanic(Sim sim, Agent a)
     {

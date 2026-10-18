@@ -98,10 +98,11 @@ public sealed partial class Mind
                 if (t == c.StepStart)
                 {
                     int k = st.Target * ItemCount + st.Arg;
-                    if (Stock[k] <= 0 || !a.IsPerson) { Fail(sim, a, "우주복이 없다"); return; }
+                    if (Stock[k] <= 0 || !a.IsPerson) { Fail(sim, a, st.Arg == iMask ? "마스크가 없다" : "우주복이 없다"); return; }
                     Stock[k]--;
                     ref var body = ref _life![c.Body];
-                    body.Suit = 1; body.SuitO2 = (float)ItemCharge(st.Arg);
+                    if (st.Arg == iMask) { body.Mask = 1; body.MaskO2 = (float)ItemCharge(st.Arg); MasksWorn++; }
+                    else { body.Suit = 1; body.SuitO2 = (float)ItemCharge(st.Arg); }
                 }
                 Activity(a, "work");
                 if (t - c.StepStart >= Time.Minutes(P.Items[ItemNames[st.Arg]].Minutes)) Next(a, t);

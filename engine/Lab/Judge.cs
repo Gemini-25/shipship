@@ -43,6 +43,7 @@ public static partial class Program
         int nDays = (int)Math.Ceiling(days);
         var acc = new int[nDays]; var hurt = new int[nDays]; var died = new int[nDays];
         var causes = new SortedDictionary<string, int>();
+        var accKinds = new Dictionary<FactKind, int>();
         long cursor = 0, firstDeath = -1, halfDead = -1, lastTick = 0;
         double worstHourMs = 0, hourMs = 0; long ticks = 0;
         var clock = System.Diagnostics.Stopwatch.StartNew();
@@ -60,7 +61,7 @@ public static partial class Program
             int day = (int)Math.Min(nDays - 1, t / dayTicks);
             foreach (var f in s.Facts.Since(cursor))
             {
-                if (Array.IndexOf(Accidents, f.Kind) >= 0) acc[day]++;
+                if (Array.IndexOf(Accidents, f.Kind) >= 0) { acc[day]++; accKinds[f.Kind] = accKinds.GetValueOrDefault(f.Kind) + 1; }
                 else if (f.Kind is FactKind.Hurt or FactKind.Collapsed) hurt[day]++;
                 else if (f.Kind == FactKind.ShipSplit) { splits++; if (aliveAtSplit < 0) aliveAtSplit = crew - deadCount; }
                 else if (f.Kind == FactKind.Died)
@@ -99,7 +100,7 @@ public static partial class Program
         string Esc(string x) => x.Replace("\\", "\\\\").Replace("\"", "\\\"");
         Console.WriteLine($"\n  {ship} 시드 {seed} · 사람 {crew} · {ran:0.0}일 · {clock.Elapsed.TotalSeconds:0}초 — 산 사람 {alive}/{crew} · 죽음 {deadCount} ({string.Join(" · ", causes.Select(kv => $"{kv.Key} {kv.Value}"))})");
         Console.WriteLine($"    하이라이트 날마다 {string.Join(" ", hlDay.Take(fullDays))} (3~12인 날 {inRange}/{fullDays} · 사건과 사람이 섞인 날 {mixed}) · 가장 넓은 사슬 {wide?.Count ?? 0}개 엔진 ({wide?.Path}) · 여섯 개 넘게 {d.ChainsWith(6)} · 원인 없는 큰 일 {d.Orphans.Values.Sum()} · 배 갈라짐 {splits}{(splits > 0 ? $" (그때 산 사람 {aliveAtSplit} → 끝에 {alive})" : "")}");
-        Console.WriteLine($"    사고 날마다 {string.Join(" ", acc.Take(fullDays))} · 다침/쓰러짐 {string.Join(" ", hurt.Take(fullDays))} · 식량 {food:0}일 · 물 {water:0}일 · 예비 공기 {net.AirReserve:0}몰 · 한 틱 {msTick:0.00}ms (가장 느린 시간 {worstHourMs:0.00}ms → 60프레임 배속 {maxSpeed:0}배)");
+        Console.WriteLine($"    사고 날마다 {string.Join(" ", acc.Take(fullDays))} ({string.Join(" ", accKinds.OrderByDescending(kv => kv.Value).Take(6).Select(kv => $"{FactNames.Of(kv.Key)} {kv.Value}"))}) · 다침/쓰러짐 {string.Join(" ", hurt.Take(fullDays))} · 식량 {food:0}일 · 물 {water:0}일 · 예비 공기 {net.AirReserve:0}몰 · 마스크 {mind.MasksWorn} · 긴급 공기 {s.Get<ShipMind>().EmergencyAir} · 거짓말 {s.Get<Society>().LiesTold}(들통 {s.Get<Society>().LiesExposed}) · 한 틱 {msTick:0.00}ms (가장 느린 시간 {worstHourMs:0.00}ms → 60프레임 배속 {maxSpeed:0}배)");
         Console.WriteLine($"JUDGE {{\"ship\":\"{ship}\",\"seed\":{seed},\"crew\":{crew},\"days\":{days},\"ran\":{ran:0.00},\"alive\":{alive},\"deaths\":{deadCount},"
             + $"\"firstDeath\":{(firstDeath < 0 ? -1 : firstDeath / (double)dayTicks):0.00},\"halfDead\":{(halfDead < 0 ? -1 : halfDead / (double)dayTicks):0.00},"
             + $"\"causes\":{{{string.Join(",", causes.Select(kv => $"\"{Esc(kv.Key)}\":{kv.Value}"))}}},"
