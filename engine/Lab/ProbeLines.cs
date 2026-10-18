@@ -84,3 +84,35 @@ public static partial class Program
         return sb.ToString();
     }
 }
+
+public static partial class Program
+{
+    /// <summary>Lab --cable-fire 배 시드 분 [nofuel] — 전선 칸 하나에 불을 붙이고 불이 전선 길을 따라 몇 칸 · 몇 방까지 가나 (피복을 걷어 낸 배와 견준다).</summary>
+    private static void ProbeCableFire(string[] args)
+    {
+        int at = Array.IndexOf(args, "--cable-fire");
+        string key = args[at + 1]; ulong seed = ulong.Parse(args[at + 2]); double min = double.Parse(args[at + 3]); bool nofuel = args.Contains("nofuel");
+        var s = ShipWorld.Create(key, seed);
+        var net = s.Get<Network>(); var f = s.Get<Field>(); var ch = s.Get<Chemistry>(); var L = s.Layout;
+        s.Run(2);
+        if (nofuel) for (int c = 0; c < L.N; c++) if (net.Strands[c] > 0) f.TakeStore(c, f.T.sPoly, net.Strands[c] * Network.InsulMolPerStrand);
+        double frac = args.Contains("frac") ? double.Parse(args[Array.IndexOf(args, "frac") + 1]) : 0;   // 산소 비율 (질소를 빼서 — 낮은 기압 · 짙은 산소의 탐사 대기)
+        if (frac > 0) foreach (var room in L.Rooms) foreach (int c in room.Cells) { double o = f.Gas(f.T.gO2, c), n2 = f.Gas(f.T.gN2, c), tot = f.Moles(c); double want = o / frac - (tot - n2); if (want < n2) f.RemoveGas(c, f.T.gN2, n2 - Math.Max(0, want)); }
+        int start = Enumerable.Range(0, L.N).Where(c => net.Strands[c] >= 4 && L.Room[c] >= 0 && L.Furniture.All(fu => Array.IndexOf(fu.Cells, c) < 0)).OrderBy(c => c).First();
+        ch.Ignite(start, 3e6, s.Causes.Add(CauseKind.Story, "전선 묶음 곁에서 불씨", s.Tick));
+        var ever = new HashSet<int>();
+        for (int i = 0; i < (int)Time.Minutes(min); i++)
+        {
+            s.Step();
+            for (int c = 0; c < L.N; c++) if (ch.Burning[c] != 0) ever.Add(c);
+            if (args.Contains("trace2") && i < 80) Console.WriteLine($"    틱 {s.Tick} " + string.Join(" ", Enumerable.Range(0, L.N).Where(c => ch.Burning[c] != 0 || ch.Creep[c] > 0).Select(c => $"[{c}{(ch.Burning[c] != 0 ? "불" : "")} {f.Tf[c]:0}K 피복{f.Stored(f.T.sPoly, c):0.0} 기어옴{ch.Creep[c]:0.0} 열{ch.Hrr[c]:0}]")));
+            if (args.Contains("trace") && i < 40)
+            {
+                var nbs = Enumerable.Range(0, 4).Where(d => (net.LineDir[start * 4] & (1 << d)) != 0).Select(d => d switch { 0 => start - L.W, 1 => start + 1, 2 => start + L.W, _ => start - 1 }).ToList();
+                Console.WriteLine($"    틱 {s.Tick} 불 {ch.Burning[start]} 겉 {f.Tf[start]:0}K 피복 {f.Stored(f.T.sPoly, start):0.00} 산소 {f.Partial(f.T.gO2, start) / Math.Max(1, f.Pressure(start)):0.00} 열 {ch.Hrr[start]:0}kW | 이웃 " + string.Join(" ", nbs.Select(j => $"{f.Tf[j]:0}K/{f.Stored(f.T.sPoly, j):0.0}/{ch.Burning[j]}")));
+            }
+            if (i % 50 == 0) Console.WriteLine($"  {Time.Clock(s.Tick)} 타는 칸 {ch.BurningCount} · 탄 칸 {ever.Count} · 방 {ever.Select(c => L.Room[c]).Where(r => r >= 0).Distinct().Count()} · 끊긴 전선 칸 {Enumerable.Range(0, L.N).Count(c => (net.LineCut[c] & 1) != 0)} · 공급 {net.Supplied:0}/{net.Demanded:0}kW");
+        }
+        Console.WriteLine($"시작 칸 {start} ({L.Rooms[L.Room[start]].Name}) · 탄 칸 {ever.Count} · 전선 칸이 아닌 곳 {ever.Count(c => net.Strands[c] == 0)} · 방 {string.Join(", ", ever.Select(c => L.Room[c]).Where(r => r >= 0).Distinct().Select(r => L.Rooms[r].Name))}");
+    }
+}

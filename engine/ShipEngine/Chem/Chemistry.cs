@@ -41,6 +41,13 @@ public sealed class Chemistry : IEngine
     private byte[] _spark, _sparkNext;
     private int[] _sparkCause, _sparkCauseNext;
     public long Ignitions, GasBursts;
+    /// <summary>[칸] 이웃과 이어진 탈 것 (위 1 · 오른쪽 2 · 아래 4 · 왼쪽 8) — 위 층이 요청한다 (전선 묶음): 불꽃 앞머리가 그 탈 것을 따라 기어간다.</summary>
+    public byte[] FuelLink;
+    /// <summary>[칸] 옆 칸에서 기어 온 불꽃 앞머리 (m — 1이면 그 칸에 닿아 붙는다).</summary>
+    public float[] Creep;
+    /// <summary>이어진 고분자(전선 피복)를 따라 기는 불꽃 앞머리의 빠르기 (m/s · 산소 33%에서 — 잘 안 타는 피복은 25% 아래에서 스스로 꺼진다 · 이미 달궈진 피복은 보통 공기에서도 반쯤).</summary>
+    public const double CreepMps = 0.03;
+    public long Creeps;
 
     // ── 소리 (바퀴 2 소리 — ③ 소리 장에 요청만) ──
     /// <summary>방마다 아직 소리를 내지 않은 기체 불의 열 (J) · 가장 센 칸 · 원인 — 기체 불이 그친 틱에 쾅 하나 (찍는다).</summary>
@@ -58,6 +65,7 @@ public sealed class Chemistry : IEngine
     {
         F = f; T = f.T; Cells = f.Cells;
         Burning = new byte[Cells]; FireCause = new int[Cells]; HeatCause = new int[Cells]; Hrr = new float[Cells];
+        FuelLink = new byte[Cells]; Creep = new float[Cells];
         _spark = new byte[Cells]; _sparkNext = new byte[Cells]; _sparkCause = new int[Cells]; _sparkCauseNext = new int[Cells];
         _fuels = new[]
         {
@@ -91,6 +99,9 @@ public sealed class Chemistry : IEngine
     }
 
     public bool IsBurning(int cell) => Burning[cell] != 0;
+
+    /// <summary>이 칸의 탈 것이 그 쪽 이웃의 탈 것과 이어져 있다 (전선 묶음 — ⑥이 요청).</summary>
+    public void LinkFuel(int cell, byte dirs) { if (cell >= 0 && cell < Cells) FuelLink[cell] |= dirs; }
 
     /// <summary>배터리 셀이 찌그러졌다 (④ 파편 · 폭발이 배터리를 부쉈다 — 속 합선): 그 칸 셀이 달아오른다 → 열폭주.</summary>
     public void Abuse(int cell, int cause)
@@ -131,7 +142,7 @@ public sealed class Chemistry : IEngine
                 }
                 if (Burning[i] == 0) continue;
             }
-            if (tf < SustainK || pO2 < MinO2kPa * 0.6) { Out(sim, i); continue; }
+            if ((tf < SustainK || pO2 < MinO2kPa * 0.6) && !FrontAlive(i)) { Out(sim, i); continue; }
             Burn(sim, i, dt, pO2, nb);
             if (Burning[i] != 0) burning++;
         }
@@ -195,6 +206,7 @@ public sealed class Chemistry : IEngine
             if (fu.co != null) heat += React(sim, i, fu.co, ext * incomplete * 0.6 * (fu.full.In[0].Nu / fu.co.In[0].Nu), ref o2Budget);
             if (fu.soot != null) heat += React(sim, i, fu.soot, ext * incomplete * 0.4 * (fu.full.In[0].Nu / fu.soot.In[0].Nu), ref o2Budget);
         }
+        if (FuelLink[i] != 0) heat += CreepFront(sim, i, dt, ref o2Budget, nb);
         if (heat <= 0) return;
         Hrr[i] = (float)(heat / dt / 1000);
         // 열 나누기 (보존):
@@ -233,6 +245,47 @@ public sealed class Chemistry : IEngine
         foreach (int j in nb)
             if (j >= 0 && F.RegionOf[j] == F.RegionOf[i]) F.Exchange(i, j, pull);
     }
+
+    /// <summary>
+    /// 이어진 탈 것을 따라 기는 불꽃 앞머리: 앞머리가 지나는 만큼 그 칸 고분자가 탄다 (빠르기 × 피복 양 — 앞머리의 불이 칸 전체의 느린 불보다 세다) ·
+    /// 이웃으로 1m를 기면 그 칸 피복 일부가 앞머리에서 타 그 열로 겉면을 달군다 → 불이 붙는다 (보존 — 열은 그 피복이 낸 만큼).
+    /// </summary>
+    private double CreepFront(Sim sim, int i, double dt, ref double o2Budget, Span<int> nb)
+    {
+        double poly = F.Stored(T.sPoly, i);
+        if (poly < 1e-3) return 0;
+        double v0 = FrontSpeed(i);
+        var full = _fuels[0].full;
+        // 앞머리가 칸 길이(1m)를 지나는 동안 피복을 고르게 먹는다 (남은 것이 적어도 0.5몰 몫의 빠르기 — 꼬리가 길게 끌리지 않게 ·
+        // 다 타기 전에 앞머리가 옆 칸에 닿는다: 불꽃 길이만큼 — 0.8)
+        double heat = v0 > 0 ? React(sim, i, full, Math.Min(poly, Math.Max(poly, 0.5) * v0 * dt * 0.8) / full.In[0].Nu, ref o2Budget) : 0;
+        for (int d = 0; d < 4; d++)
+        {
+            if ((FuelLink[i] & (1 << d)) == 0) continue;
+            int j = d switch { 0 => i - F.L.W, 1 => i + 1, 2 => i + F.L.W, _ => i - 1 };
+            if (j < 0 || j >= Cells || Burning[j] != 0 || F.Stored(T.sPoly, j) < 1e-3 || F.RegionOf.Length <= j || F.RegionOf[j] < 0) continue;
+            double v = v0 + (F.Tf[j] > 420 ? CreepMps * 0.5 : 0);
+            if (v <= 0) continue;
+            Creep[j] += (float)(v * dt);
+            if (Creep[j] < 1) continue;
+            Creep[j] = 0;
+            if (F.Partial(T.gO2, j) < MinO2kPa) continue;
+            Creeps++;
+            Light(sim, j, nb);   // 앞머리가 닿았다 — 피복 위의 불꽃 (그 칸 바닥까지 달굴 것은 없다 · 산소가 옅으면 다음 틱에 꺼진다)
+        }
+        return heat;
+    }
+
+    /// <summary>이어진 피복 위 앞머리의 빠르기 (m/s): 산소 비율 25% 아래 0 · 33%에서 CreepMps · 많아야 1.5배.</summary>
+    private double FrontSpeed(int i)
+    {
+        double kpa = F.Pressure(i);
+        double x = kpa > 1 ? F.Partial(T.gO2, i) / kpa : 0;
+        return CreepMps * Math.Clamp((x - 0.25) / 0.08, 0, 1.5);
+    }
+
+    /// <summary>이어진 피복 위 불꽃 앞머리가 살아 있나 — 그 칸 바닥이 식어도 피복 위 불꽃은 탄다 (산소가 짙을 때).</summary>
+    private bool FrontAlive(int i) => FuelLink[i] != 0 && F.Stored(T.sPoly, i) > 1e-3 && F.Partial(T.gO2, i) >= MinO2kPa && FrontSpeed(i) > 0;
 
     /// <summary>물이 고인 칸: 뜨거운 겉면이 물을 끓여 식는다 (증발열) — 불을 끄는 길.</summary>
     private void Quench(int i)
@@ -374,6 +427,7 @@ public sealed class Chemistry : IEngine
     {
         w.Arr(Burning); w.Arr(FireCause); w.Arr(HeatCause); w.Arr(Hrr); w.Arr(_spark); w.Arr(_sparkCause);
         w.I64(Ignitions); w.I64(GasBursts);
+        w.Arr(FuelLink); w.Arr(Creep); w.I64(Creeps);
         w.Tag("폭발 소리"); w.Arr(_boomJ); w.Arr(_boomCell); w.Arr(_boomCause);
     }
 
@@ -381,6 +435,7 @@ public sealed class Chemistry : IEngine
     {
         r.ArrInto(Burning); r.ArrInto(FireCause); r.ArrInto(HeatCause); r.ArrInto(Hrr); r.ArrInto(_spark); r.ArrInto(_sparkCause);
         Ignitions = r.I64(); GasBursts = r.I64();
+        r.ArrInto(FuelLink); r.ArrInto(Creep); Creeps = r.I64();
         r.Tag("폭발 소리"); r.ArrInto(_boomJ); r.ArrInto(_boomCell); r.ArrInto(_boomCause);
     }
 }

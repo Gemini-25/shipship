@@ -346,6 +346,7 @@ public sealed partial class Network : IEngine
         _stc ??= sim.Find<Structure>();
         UpdateCuts();
         EnsureLines();
+        LinkInsulation(sim);
         if (sim.Tick % 25 == 0) MeasureO2();
         Faults(sim);
         t = Lap("고장", t);

@@ -62,6 +62,7 @@ public static partial class Program
             else if (args.Contains("--profile")) ProfileShip(args);
             else if (args.Contains("--fingerprint")) Fingerprints();
             else if (args.Contains("--lines-facts")) ProbeLinesFacts(args);
+            else if (args.Contains("--cable-fire")) ProbeCableFire(args);
             else if (args.Contains("--lines")) ProbeLines(args);
             else if (args.Contains("--director-check")) DirectorCheck(args);
             else if (args.Contains("--budget")) Budget();

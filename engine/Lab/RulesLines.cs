@@ -15,6 +15,15 @@ public static partial class Program
 #b.......#..c.r#..v....g..#.....#
 #################################";
 
+    private static int _lineRoomOf(Layout lay, int c)
+    {
+        if (lay.Room[c] >= 0) return lay.Room[c];
+        Span<int> nb = stackalloc int[4];
+        lay.Neighbors(c, nb);
+        foreach (int j in nb) if (j >= 0 && lay.Room[j] >= 0) return lay.Room[j];
+        return -1;
+    }
+
     private static void LineRules()
     {
         if (!Do("선과 관")) return;
@@ -176,6 +185,41 @@ public static partial class Program
             Check("찢긴 냉각관: 곁 외판이 뚫리면 지나던 냉각관이 찢겨 냉매가 뿜어 나간다 (끊김 · 틈 1 · 원인은 그 구멍)",
                 net.LineCutAt(pipe, LineKind.Coolant) && net.LeakAt(pipe, LineKind.Coolant) >= 1 && c0 - net.Coolant > 3 && leak.Kind == FactKind.PipeLeak,
                 $"끊김 {net.LineCutAt(pipe, LineKind.Coolant)} · 틈 {net.LeakAt(pipe, LineKind.Coolant):0.0} · 냉매 {c0:0} → {net.Coolant:0}몰 · {(leak.Kind == FactKind.PipeLeak ? s.Causes.Story(leak.Cause) : "-")}");
+        }
+
+        // ── (다) 피복을 타고 번지는 불: 산소가 짙은 낮은 기압 대기(탐사 대기 34%)에서는 전선 칸 하나의 불이 전선 길을 따라 옆 방까지 · 보통 공기(21%)에서는 그 칸에서 꺼진다 ──
+        {
+            (int cells, int rooms, string story, int cut) Burn(double frac, bool open = true)
+            {
+                var (s, net) = World();
+                var f = s.Get<Field>(); var ch = s.Get<Chemistry>();
+                net.AirReserve = 0;   // 낮은 기압으로 사는 배 — 예비 공기로 다시 채우지 않는다
+                // 질소를 빼서 산소 비율을 맞춘다 (NASA 탐사 대기 56.5kPa · 산소 34% 처럼)
+                foreach (var room in lay.Rooms) foreach (int c in room.Cells) { double o = f.Gas(f.T.gO2, c), n2 = f.Gas(f.T.gN2, c); double want = o / frac - (f.Moles(c) - n2); if (want < n2) f.RemoveGas(c, f.T.gN2, n2 - Math.Max(0, want)); }
+                // 생명유지실 복도 쪽 전선 묶음 (곁에 설비가 없는 칸 — 큰 불이 산소를 먹지 않게)
+                bool Bare(int c) { Span<int> nb = stackalloc int[4]; lay.Neighbors(c, nb); foreach (int j in nb) if (j >= 0 && lay.Furniture.Any(fu => Array.IndexOf(fu.Cells, j) >= 0)) return false; return lay.Furniture.All(fu => Array.IndexOf(fu.Cells, c) < 0); }
+                int start = net.Feeders[net.RoomFeeder[room4]].Path.Last(c => lay.Room[c] == room3 && Bare(c));   // 휴게실 문 앞 전선
+                int seed = Story(s, "생명유지실 문 앞 바닥 밑 전선에 불씨");
+                ch.Ignite(start, 3e6, seed);
+                var ever = new HashSet<int>();
+                var st = s.Get<Structure>();
+                int door = lay.DoorAt[At(26, 2)];
+                for (int k = 0; k < (int)Time.Minutes(12); k++)
+                {
+                    if (open) st.RequestDoor(door, 1);   // 생명유지실 ↔ 휴게실 문을 열어 둔다
+                    s.Step();
+                    for (int c = 0; c < lay.N; c++) if (ch.Burning[c] != 0 && ever.Add(c) && Debug) Console.WriteLine($"      {Time.Clock(s.Tick)} 불 ({lay.X(c)},{lay.Y(c)}) 가닥 {net.Strands[c]} 피복 {f.Stored(f.T.sPoly, c):0.0} 산소 {f.Partial(f.T.gO2, c):0.0}/{f.Pressure(c):0.0}kPa");
+                }
+                if (Debug) Console.WriteLine(LinesMap(net, lay));
+                int far = ever.Where(c => c != start).OrderByDescending(c => Math.Abs(lay.X(c) - lay.X(start)) + Math.Abs(lay.Y(c) - lay.Y(start))).FirstOrDefault(-1);
+                return (ever.Count, ever.Select(c => _lineRoomOf(lay, c)).Where(r => r >= 0).Distinct().Count(), far >= 0 ? s.Causes.Story(ch.FireCause[far] != 0 ? ch.FireCause[far] : s.Facts.Since(0).Where(x => x.Kind is FactKind.FireSpread && x.Cell == far).Select(x => x.Cause).FirstOrDefault()) : "",
+                    Enumerable.Range(0, lay.N).Count(c => net.LineCutAt(c, LineKind.Power)));
+            }
+            var thick = Burn(0.34); var shut = Burn(0.34, open: false); var air = Burn(0.21);
+            if (Debug) Console.WriteLine($"    {thick.story}");
+            Check("(다) 피복을 타고 번지는 불: 산소 34%의 낮은 기압 대기에서는 전선 칸 하나의 불꽃이 전선 묶음을 따라 기어 열린 문 너머 옆 방까지 번지고 그 길의 전선이 끊긴다 · 닫힌 문(관통부)에서는 멈춘다 · 보통 공기(21%)에서는 그 칸에서 꺼진다 (잘 안 타는 피복)",
+                thick.cells >= 8 && thick.rooms >= 2 && thick.story.Contains("불씨") && thick.cut >= 5 && shut.rooms == 1 && air.cells <= 2,
+                $"34% 열린 문: 탄 칸 {thick.cells} · 방 {thick.rooms} · 끊긴 전선 칸 {thick.cut} / 닫힌 문: 방 {shut.rooms} / 21%: 탄 칸 {air.cells} · \"{thick.story}\"");
         }
 
         // ── 아크가 간선이 함께 지나는 칸을 달구면 간선도 타 원자로가 섬으로 떨어진다 (배터리가 받는다) ──
