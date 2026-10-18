@@ -70,6 +70,7 @@ public sealed partial class ShipMind : IEngine
     public int Offset => 0;
 
     public const int ReadEvery = 5;            // 센서 읽기 (12초)
+    public const int RadioEvery = 3;           // 무선으로만 닿는 방은 읽기 세 번에 한 번 (36초)
     public const float AlarmDb = 85;
 
     private readonly Field F;
@@ -102,6 +103,7 @@ public sealed partial class ShipMind : IEngine
     public int[] GaveAirAt;                     // 방마다: 열린 문 · 밸브로 더 낮은 기압의 방에 공기를 주던 마지막 읽기 번호 (그동안 줄어든 것은 샘이 아니다)
     public float[] RoomMoles;                   // [방 × 6]: 지난 1분(읽기 6번)의 기체량 — 새는지는 기체량이 줄어드는 것으로 (온도 · 문 여닫이로 기압이 흔들리는 것과 가른다)
     private int _reads;
+    private byte[] _stale = Array.Empty<byte>();   // 이번 읽기에 무선 방의 새 값이 오지 않았다 (그 틱에 다시 정한다 — 찍지 않는다)
     /// <summary>배 전체 기체량 — 1분마다 10개 (느린 샘: 10분에 0.5% 넘게 줄면).</summary>
     public float[] ShipMolesHist = new float[10];
     public byte[] RoomSeen;                     // 1: 이번에 센서가 읽혔다 (전원)
@@ -132,7 +134,7 @@ public sealed partial class ShipMind : IEngine
         F = f; L = f.L; T = f.T;
         int nr = L.Rooms.Count;
         RoomKPa = new float[nr]; RoomKPaPrev = new float[nr]; RoomO2 = new float[nr]; RoomSoot = new float[nr]; RoomSootPrev = new float[nr]; RoomCO = new float[nr]; RoomCO2 = new float[nr]; RoomTemp = new float[nr]; RoomCO2Hold = new byte[nr];
-        RoomHot = new int[nr]; RoomAirT = new float[nr]; GaveAirAt = Enumerable.Repeat(-100, nr).ToArray(); DoorWasOpen = new byte[L.Doors.Count]; RoomNH3 = new float[nr]; RoomO3 = new float[nr]; RoomToxCell = new int[nr]; RoomSeen = new byte[nr]; RoomMoles = new float[nr * 6];
+        RoomHot = new int[nr]; RoomAirT = new float[nr]; GaveAirAt = Enumerable.Repeat(-100, nr).ToArray(); DoorWasOpen = new byte[L.Doors.Count]; RoomNH3 = new float[nr]; RoomO3 = new float[nr]; RoomToxCell = new int[nr]; RoomSeen = new byte[nr]; _stale = new byte[nr]; RoomMoles = new float[nr * 6];
         _roomDoors = new int[nr][];
         _roomVent = new int[nr];
         Span<int> nb = stackalloc int[4];
@@ -227,8 +229,13 @@ public sealed partial class ShipMind : IEngine
         {
             RoomKPaPrev[r] = RoomKPa[r]; RoomSootPrev[r] = RoomSoot[r];
             var cells = L.Rooms[r].Cells;
-            if (cells.Length == 0 || _net == null || !_net.RoomPowered(r) || !_net.RoomLinked(r)) { RoomSeen[r] = 0; continue; } // 전원이 없거나 센서 선이 끊긴 방은 못 본다
-            RoomSeen[r] = 1;
+            byte link = cells.Length == 0 || _net == null ? (byte)0 : _net.SensorLink(_tick, r);
+            if (link == 0) { RoomSeen[r] = 0; continue; } // 전원이 없거나 · 센서 선이 끊기고 무선도 닿지 않는 방은 못 본다
+            // 무선으로만 닿는 방: 읽기 세 번에 한 번 새 값 (그 사이는 지난 값 그대로 — 기압 변화는 그만큼 늦게 · 한꺼번에 보인다)
+            bool fresh = link == 1 || RoomSeen[r] != 2 || (_reads + r) % RadioEvery == 0;
+            RoomSeen[r] = link;
+            _stale[r] = (byte)(fresh ? 0 : 1);
+            if (!fresh) { RoomMoles[r * 6 + _reads % 6] = RoomMoles[r * 6 + (_reads + 5) % 6]; continue; }
             double p = 0, o2 = double.MaxValue, soot = 0, co = 0, co2 = 0, temp = 0, nh3 = 0, o3 = 0;
             int hot = cells[0], tox = cells[0];
             foreach (int c in cells)
@@ -327,7 +334,7 @@ public sealed partial class ShipMind : IEngine
                 if (!_net.RoomLinked(r) && _net.RoomPowered(r))
                 {
                     int cut = _net.DataCutCell[r];
-                    Raise(sim, IncidentKind.SensorLost, r, cut, 1, -1, _net.DataBrokenCause[cut]);
+                    Raise(sim, IncidentKind.SensorLost, r, cut, RoomSeen[r] == 2 ? 0.5f : 1, -1, _net.DataBrokenCause[cut]);   // 무선으로 보이면 0.5 (느리게라도 본다 — 덜 급하다)
                     Mark(IncidentKind.SensorLost, r);
                 }
         var leaking = new List<(int room, float drop)>();
@@ -455,7 +462,7 @@ public sealed partial class ShipMind : IEngine
         {
             var x = Incidents[i];
             if (x.Active == 0) continue;
-            if (x.Room >= 0 && x.Room < RoomSeen.Length && RoomSeen[x.Room] == 0 && x.Kind is not (IncidentKind.DeviceBroken or IncidentKind.ElectricFault or IncidentKind.DoorJam or IncidentKind.SensorLost or IncidentKind.PowerLost)) continue; // 못 보는 방은 그대로 둔다
+            if (x.Room >= 0 && x.Room < RoomSeen.Length && (RoomSeen[x.Room] == 0 || _stale[x.Room] != 0) && x.Kind is not (IncidentKind.DeviceBroken or IncidentKind.ElectricFault or IncidentKind.DoorJam or IncidentKind.SensorLost or IncidentKind.PowerLost)) continue; // 못 보는 방은 그대로 둔다
             long key = ((long)x.Kind << 48) | ((long)(x.Room + 1) << 24) | (uint)((x.Kind is IncidentKind.PersonDown or IncidentKind.DeviceBroken or IncidentKind.ElectricFault or IncidentKind.Strain or IncidentKind.DoorJam ? x.Subject : -1) + 1);
             if (seen.Contains(key)) continue;
             // 끝: 5번(1분) 연속 멀쩡 · 위험한 사건은 적어도 2분은 붙잡는다
@@ -1053,14 +1060,20 @@ public sealed partial class ShipMind : IEngine
         return string.Join(" · ", parts);
     }
 
-    /// <summary>못 보는 방 (전원 · 센서 선) — 없으면 빈 줄.</summary>
+    /// <summary>못 보는 방 (전원 · 센서 선) · 무선으로만 보는 방 (선이 끊겨 느리게) — 없으면 빈 줄.</summary>
     public string BlindLine()
     {
-        var blind = new List<string>();
+        var blind = new List<string>(); var radio = new List<string>();
         for (int r = 0; r < L.Rooms.Count; r++)
-            if (L.Rooms[r].Cells.Length > 0 && RoomSeen[r] == 0)
-                blind.Add($"{RoomName(r)}({(_net != null && !_net.RoomPowered(r) ? "전원" : "센서 선")})");
-        return blind.Count == 0 ? "" : "못 보는 방: " + string.Join(" · ", blind);
+        {
+            if (L.Rooms[r].Cells.Length == 0) continue;
+            if (RoomSeen[r] == 0) blind.Add($"{RoomName(r)}({(_net != null && !_net.RoomPowered(r) ? "전원" : "센서 선")})");
+            else if (RoomSeen[r] == 2) radio.Add(RoomName(r));
+        }
+        var parts = new List<string>();
+        if (blind.Count > 0) parts.Add("못 보는 방: " + string.Join(" · ", blind));
+        if (radio.Count > 0) parts.Add("무선으로만 보는 방: " + string.Join(" · ", radio));
+        return string.Join(" / ", parts);
     }
 
     /// <summary>
