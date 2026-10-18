@@ -145,31 +145,37 @@ public sealed partial class Structure
         _latticeVersion++;
         int n = Label(_comp, out var masses);
         if (n <= 1) return;
-        // 배 = 처음에 배였던 칸이 있는 덩어리 중 가장 무거운 것
-        int main = -1;
-        for (int k = 0; k < n; k++)
-            if (main < 0 || masses[k] > masses[main]) main = k;
-        // 덩어리마다: 배였던(Frag 0 · 처음 배 덩어리) 칸이 있는데 지금 배 덩어리가 아니면 새로 떨어졌다
-        var fresh = new SortedSet<int>();
+        // 덩어리마다 주인 몸 (그 칸의 조각 번호 — 배는 처음 배 덩어리였던 칸만 · 처음부터 따로 떨어진 것은 없다)
+        var owner = new int[n];
+        Array.Fill(owner, -2);
         for (int c = 0; c < L.N; c++)
         {
             int k = _comp[c];
-            if (k < 0 || k == main || Frag[c] != 0) continue;
-            if (_initComp[c] == _mainInit) fresh.Add(k);
+            if (k < 0 || owner[k] != -2) continue;
+            int f = Frag[c];
+            owner[k] = f < 0 || f == 0 && _initComp[c] != _mainInit ? -1 : f;
         }
-        if (fresh.Count == 0) return;
-        foreach (int k in fresh) Detach(sim, k, masses[k], main);
+        // 몸마다 가장 무거운 덩어리가 그 몸으로 남고 · 나머지는 그 몸에서 떨어져 나간 새 조각 (배도 조각도 — 부딪혀 또 갈라진다)
+        var keep = new Dictionary<int, int>();
+        for (int k = 0; k < n; k++)
+        {
+            int o = owner[k];
+            if (o < 0) continue;
+            if (!keep.TryGetValue(o, out int best) || masses[k] > masses[best]) keep[o] = k;
+        }
+        for (int k = 0; k < n; k++)
+            if (owner[k] >= 0 && keep[owner[k]] != k) Detach(sim, k, masses[k], owner[k]);
     }
 
-    private void Detach(Sim sim, int k, double massKg, int main)
+    private void Detach(Sim sim, int k, double massKg, int parent)
     {
         var cells = new List<int>();
         for (int c = 0; c < L.N; c++) if (_comp[c] == k) cells.Add(c);
         // 사이의 부서진 칸들 (구조가 없는 칸 — 이 덩어리와 다른 덩어리에 함께 닿은 무더기)을 찾는다 · 이 덩어리에만 닿은 무더기(통째로 뚫린 벽 · 다 나간 바닥)는 이 몸에 든다
         var gap = GapBetween(k, out var own);
         int cutCell = gap.Count > 0 ? gap[0] : cells[0];
-        int parent = 0; long newest = long.MinValue;
-        foreach (int g in gap) { int dc = DamageCause[g]; if (dc != 0 && sim.Causes[dc].Tick >= newest) { newest = sim.Causes[dc].Tick; parent = dc; } }
+        int parentCause = 0; long newest = long.MinValue;
+        foreach (int g in gap) { int dc = DamageCause[g]; if (dc != 0 && sim.Causes[dc].Tick >= newest) { newest = sim.Causes[dc].Tick; parentCause = dc; } }
         // 갈라질 때의 충격량: 사이 칸들의 기압 × 면 × 0.05초 (폭발이 밀어낸다 · 어림) → 조각이 멀어지는 빠르기
         double impulse = 0;
         foreach (int g in gap) impulse += Math.Max(0, _p.Length > g ? _p[g] : 0) * 1000 * Field.WallFace * 0.05;
@@ -177,9 +183,10 @@ public sealed partial class Structure
         {
             // 작은 덩어리는 날아가는 파편이 된다 (그 칸들도 우주로)
             DebrisLost++;
-            int dcause = sim.Causes.Add(CauseKind.Breach, "부서진 뼈대 조각이 떨어져 날아갔다", sim.Tick, cells[0], parent);
+            int dcause = sim.Causes.Add(CauseKind.Breach, "부서진 뼈대 조각이 떨어져 날아갔다", sim.Tick, cells[0], parentCause);
             foreach (int c in cells) { DamageCause[c] = dcause; F.Sever(c); Frag[c] = -1; }
             foreach (int c in own) { F.Sever(c); Frag[c] = -1; }
+            if (parent < Bodies.Count) Refit(parent);
             foreach (int g in gap) F.Sever(g);
             sim.Facts.Emit(sim.Tick, FactKind.ObjectFlung, cells[0], (float)(massKg / 1000), dcause);
             _latticeDirty = true;
@@ -190,7 +197,7 @@ public sealed partial class Structure
         foreach (int c in cells) if (L.Room[c] >= 0) rooms.Add(L.Room[c]);
         string names = string.Join(" · ", rooms.Take(2).Select(r => L.Rooms[r].Name)) + (rooms.Count > 2 ? " …" : "");
         string what = rooms.Count > 0 ? $"{names} 쪽이 떨어져 나갔다" : "뼈대 한쪽이 떨어져 나갔다";
-        int cause = sim.Causes.Add(CauseKind.Breach, $"배가 갈라졌다 — {what}", sim.Tick, cutCell, parent);
+        int cause = sim.Causes.Add(CauseKind.Breach, parent > 0 ? $"떨어져 나간 조각이 또 갈라졌다 — {what}" : $"배가 갈라졌다 — {what}", sim.Tick, cutCell, parentCause);
         foreach (int c in cells) Frag[c] = id;
         foreach (int c in own) Frag[c] = id;
         foreach (int g in gap) { DamageCause[g] = cause; F.Sever(g); Frag[g] = -1; }
@@ -198,20 +205,20 @@ public sealed partial class Structure
         int cut = rooms.Count > 0 ? sim.Causes.Add(CauseKind.Electric, "조각이 떨어져 나가 공기 · 전력이 끊겼다 — 산소 · 정화 · 난방이 멈췄다", sim.Tick, cutCell, cause) : 0;
         Fragments.Add(new Fragment { Id = id, Cause = cause, Tick = sim.Tick, MassT = (float)(massKg / 1000), Cells = cells.Count, Speed = speed, Rooms = rooms.Count, CutCause = cut });
         // ④ 칸 강체: 조각이 몸이 된다 — 갈라진 자리에서 배와 조각을 반대로 민다 (운동량 보존 · 사이 칸 기압이 밀어낸 만큼)
-        SpawnBody(id, 0);
+        SpawnBody(id, parent);
         if (gap.Count > 0)
         {
             double gx = 0, gy = 0;
             foreach (int g in gap) { gx += L.X(g) + 0.5; gy += L.Y(g) + 0.5; }
             gx /= gap.Count; gy /= gap.Count;
-            var (wx, wy) = WorldOf(0, gx, gy);
+            var (wx, wy) = WorldOf(parent, gx, gy);
             var fb = Bodies[id];
             double dx = fb.X - wx, dy = fb.Y - wy, dl = Math.Sqrt(dx * dx + dy * dy);
             if (dl > 1e-9)
             {
                 double j = speed * fb.Mass;
                 Push(id, wx, wy, j * dx / dl, j * dy / dl, cause);
-                Push(0, wx, wy, -j * dx / dl, -j * dy / dl, cause);
+                Push(parent, wx, wy, -j * dx / dl, -j * dy / dl, cause);
             }
         }
         Splits++; SplitVersion++;

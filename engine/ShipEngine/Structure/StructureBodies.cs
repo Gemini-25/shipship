@@ -23,6 +23,8 @@ public struct RigidBody
     public int TumbleCause;
     /// <summary>지난 틱 끝의 빠르기 · 각속도 (덜컹임을 잰다) · 지난 틱에 받은 가속 (점화는 빼고 · 세상 틀 m/s²) · 각가속도 — 안의 것이 느끼는 힘 (⑧이 읽는다).</summary>
     public double PVx, PVy, PW, Ax, Ay, Al;
+    /// <summary>이번 틱에 부딪혀 바뀐 빠르기 (m/s — 가장 큰 것: 부딪힘은 짧아 덜컹임보다 세게 휘청인다).</summary>
+    public float Bump;
 }
 
 /// <summary>
@@ -196,13 +198,16 @@ public sealed partial class Structure
         return (-lx + dw * ry, -ly - dw * rx);
     }
 
+    /// <summary>칸 c의 몸이 이번 틱에 부딪혀 바뀐 빠르기 (m/s).</summary>
+    public double BumpAt(int c) { int b = BodyOf(c); return b >= 0 && b < Bodies.Count ? Bodies[b].Bump : 0; }
+
     /// <summary>칸 c의 몸을 흔든 원인: 돌기 시작한 마디 → 민 것 → 갈라짐.</summary>
     public int BodyCause(int c)
     {
         int b = BodyOf(c);
         if (b < 0 || b >= Bodies.Count) return 0;
         var o = Bodies[b];
-        return o.TumbleCause != 0 ? o.TumbleCause : o.PushCause != 0 ? o.PushCause : b > 0 && b <= Fragments.Count ? Fragments[b - 1].Cause : 0;
+        return o.PushCause != 0 ? o.PushCause : o.TumbleCause != 0 ? o.TumbleCause : b > 0 && b <= Fragments.Count ? Fragments[b - 1].Cause : 0;
     }
 
     /// <summary>
@@ -215,6 +220,7 @@ public sealed partial class Structure
         int n = Bodies.Count;
         if (n == 0) return;
         _vents.Clear();
+        for (int b = 0; b < n; b++) { var o = Bodies[b]; if (o.Bump != 0) { o.Bump = 0; Bodies[b] = o; } }
         foreach (var k in F.Links)
         {
             if (k.RB >= 0 || k.Impulse <= 0 || k.Dx == 0 && k.Dy == 0) continue;
@@ -240,13 +246,17 @@ public sealed partial class Structure
         }
         steps = Math.Clamp(steps, 1, MaxSubSteps);
         double h = dt / steps;
-        for (int b = 0; b < n; b++)
+        for (int k = 0; k < steps; k++)
         {
-            var o = Bodies[b];
-            if (o.Mass <= 0 || o.Asleep != 0) continue;
-            for (int k = 0; k < steps; k++) { o.X += o.Vx * h; o.Y += o.Vy * h; o.Th += o.W * h; }
-            BodySteps += steps;
-            Bodies[b] = o;
+            for (int b = 0; b < n; b++)
+            {
+                var o = Bodies[b];
+                if (o.Mass <= 0 || o.Asleep != 0) continue;
+                o.X += o.Vx * h; o.Y += o.Vy * h; o.Th += o.W * h;
+                BodySteps++;
+                Bodies[b] = o;
+            }
+            if (n > 1) Contacts(sim);   // (다) 부딪힘 — 잔걸음마다
         }
         Kick(0.5 * dt, burn);
         for (int b = 0; b < n; b++)
@@ -265,7 +275,7 @@ public sealed partial class Structure
                 int fragCause = b <= Fragments.Count ? Fragments[b - 1].Cause : 0;
                 int cause = sim.Causes.Add(CauseKind.Breach, $"떨어져 나간 조각이 {(o.PushCause != 0 ? "빠지는 공기에 밀려 " : "")}돌기 시작했다 (분에 {Math.Abs(o.W) * 60 / (2 * Math.PI):0.0}바퀴)", sim.Tick, CellNear(b), o.PushCause != 0 ? o.PushCause : fragCause);
                 sim.Facts.Emit(sim.Tick, FactKind.Tumble, CellNear(b), (float)(o.Mass / 1000), cause, -1, b);
-                o.TumbleCause = cause;
+                o.TumbleCause = cause; o.PushCause = cause;   // 가장 나중에 흔든 것이 안의 것의 까닭
             }
             Bodies[b] = o;
         }
@@ -332,12 +342,12 @@ public sealed partial class Structure
     private void SaveBodies(StateWriter w)
     {
         w.Tag("몸"); w.List(Bodies);
-        w.F64(GasPx); w.F64(GasPy); w.F64(GasL); w.F64(BurnPx); w.F64(BurnPy); w.F64(BurnL); w.F64(GasAbs); w.I64(BodySteps); w.I64(Spins);
+        w.F64(GasPx); w.F64(GasPy); w.F64(GasL); w.F64(BurnPx); w.F64(BurnPy); w.F64(BurnL); w.F64(GasAbs); w.I64(BodySteps); w.I64(Spins); w.I64(Crashes);
     }
 
     private void LoadBodies(StateReader r)
     {
         r.Tag("몸"); Bodies.Clear(); Bodies.AddRange(r.List<RigidBody>());
-        GasPx = r.F64(); GasPy = r.F64(); GasL = r.F64(); BurnPx = r.F64(); BurnPy = r.F64(); BurnL = r.F64(); GasAbs = r.F64(); BodySteps = r.I64(); Spins = r.I64();
+        GasPx = r.F64(); GasPy = r.F64(); GasL = r.F64(); BurnPx = r.F64(); BurnPy = r.F64(); BurnL = r.F64(); GasAbs = r.F64(); BodySteps = r.I64(); Spins = r.I64(); Crashes = r.I64();
     }
 }

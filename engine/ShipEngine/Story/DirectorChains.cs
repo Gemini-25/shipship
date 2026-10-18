@@ -47,7 +47,7 @@ public sealed partial class Director
     {
         FactKind.Ignition or FactKind.FireOut or FactKind.FireSpread or FactKind.SmokeThick or FactKind.Toxic => 2,
         FactKind.RegionVented or FactKind.PressureDrop or FactKind.Condensation or FactKind.Flood or FactKind.LoudSound => 3,
-        FactKind.WallCrack or FactKind.WallBreach or FactKind.Impact or FactKind.DoorJammed or FactKind.DoorBlown or FactKind.ObjectFlung or FactKind.ShipSplit or FactKind.Tumble => 4,
+        FactKind.WallCrack or FactKind.WallBreach or FactKind.Impact or FactKind.DoorJammed or FactKind.DoorBlown or FactKind.ObjectFlung or FactKind.ShipSplit or FactKind.Tumble or FactKind.Crash => 4,
         FactKind.DebrisNear or FactKind.Flare or FactKind.Burn or FactKind.Contact => 5,
         FactKind.BreakerTrip or FactKind.Short or FactKind.Overheat or FactKind.PipeLeak or FactKind.MachineFail or FactKind.SensorCut or FactKind.Jumper or FactKind.CableCut => 6,
         FactKind.Hurt or FactKind.Collapsed or FactKind.Died or FactKind.Sick or FactKind.Treated => 7,

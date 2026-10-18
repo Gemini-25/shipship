@@ -61,6 +61,25 @@ public static partial class Program
                 $"기체 {gas / 1000:0.0}kN·s · 남는 운동량 {Math.Sqrt(ex * ex + ey * ey):0.0e0} · 남는 각운동량 {el:0.0e0} · 오른쪽 방 각속도 {st.Bodies[1].W:0.000}rad/s");
         }
 
+        // ── 부딪힘: 닫힌 두 방을 갈라 서로 마주 밀면 부딪혀 튕긴다 — 앞뒤 운동량 · 각운동량이 같고 · 운동 에너지는 늘지 않는다 ──
+        {
+            var lay = Worlds.Ascii(Sealed);
+            var s = FieldStructure(lay, 5);
+            var st = s.Get<Structure>();
+            s.Run(3);
+            for (int y = 0; y < 5; y++) st.Destroy(s, Worlds.At(lay, 6, y), 0);
+            s.Run(3);
+            st.Push(0, st.Bodies[0].X, st.Bodies[0].Y + 0.8, st.Bodies[0].Mass * 0.4, 0);
+            st.Push(1, st.Bodies[1].X, st.Bodies[1].Y - 0.3, -st.Bodies[1].Mass * 0.3, 0);
+            var e0 = st.BodyMomentum();
+            s.Run(15);
+            var e1 = st.BodyMomentum();
+            double scale = st.Bodies[0].Mass * 0.4;
+            Check("부딪힘: 닫힌 두 방을 마주 밀면 부딪혀 튕긴다 — 앞뒤 운동량 · 원점에 대한 각운동량이 같고 (1e-9) · 운동 에너지는 줄었다 · 다가오던 빠르기(0.7m/s)가 작게 뒤집혀 멀어진다 (반발 0.1 — 찌그러짐)",
+                st.Crashes >= 1 && Math.Abs(e1.px - e0.px) < 1e-9 * scale && Math.Abs(e1.py - e0.py) < 1e-9 * scale && Math.Abs(e1.l - e0.l) < 1e-9 * scale * 10 && e1.ke < e0.ke && st.Bodies[1].Vx - st.Bodies[0].Vx > 0 && st.Bodies[1].Vx - st.Bodies[0].Vx < 0.3 * 0.7 && st.GasAbs == 0,
+                $"부딪힘 {st.Crashes} · 운동량 {e0.px:0.000} → {e1.px:0.000} · 각운동량 차 {e1.l - e0.l:0.0e0} · 에너지 {e0.ke / 1000:0.00} → {e1.ke / 1000:0.00}kJ · 멀어지는 빠르기 {st.Bodies[1].Vx - st.Bodies[0].Vx:0.000}m/s");
+        }
+
         // ── 대칭: 닫힌 두 방을 갈라 서로 마주 보는 벽 가운데를 똑같이 뚫으면 같은 빠르기로 반대로 뿜으며 멀어지고 · 돌지 않는다 ──
         {
             var lay = Worlds.Ascii(Sealed);

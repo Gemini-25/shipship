@@ -64,7 +64,7 @@ public sealed partial class Mind
         {
             if (!a.IsPerson || a.C.Up == 0 || a.C.Body < 0 || a.C.CarriedBy >= 0) continue;
             var (jx, jy) = _st.JoltDv(a.C.Cell);
-            double g = Math.Sqrt(jx * jx + jy * jy) / JoltSec / Outside.G0;   // 바닥이 1초 남짓에 그만큼 빠르기를 바꾼 것으로 (감압 · 밀림 — 부딪힘은 더 짧다)
+            double g = Math.Max(Math.Sqrt(jx * jx + jy * jy) / JoltSec, _st.BumpAt(a.C.Cell) / Structure.BumpSec) / Outside.G0;   // 바닥이 1초 남짓에 그만큼 빠르기를 바꾼 것으로 (감압 · 밀림) · 부딪힘은 0.2초에
             double p = FallChance(g);
             if (p <= 0) continue;
             var b = _life[a.C.Body];

@@ -20,7 +20,10 @@ public static partial class Program
         s.Run(Time.Minutes(1));
         int cause = s.Causes.Add(CauseKind.Story, "커다란 운석이 통로를 꿰뚫었다", s.Tick);
         for (int y = 2; y <= 4; y++) st.Destroy(s, Worlds.At(lay, 10, y), cause);
-        if (hole) st.Destroy(s, Worlds.At(lay, 18, 0), s.Causes.Add(CauseKind.Story, "파편이 오른쪽 방 윗벽을 뚫었다", s.Tick));
+        int hx = 18, hy = 0;
+        if (rest.Contains("hole")) { int i0 = Array.IndexOf(rest, "hole"); hx = int.Parse(rest[i0 + 1]); hy = int.Parse(rest[i0 + 2]); }
+        if (hole) st.Destroy(s, Worlds.At(lay, hx, hy), s.Causes.Add(CauseKind.Story, "파편이 오른쪽 방 벽을 뚫었다", s.Tick));
+        if (rest.Contains("push")) { s.Step(); double v = double.Parse(rest[Array.IndexOf(rest, "push") + 1]); var o = st.Bodies[1]; st.Push(1, o.X, o.Y, o.Mass * v, 0, s.Causes.Add(CauseKind.Story, "떠도는 잔해가 조각을 밀었다", s.Tick)); }
         var p = new Painter(lay);
         Directory.CreateDirectory("build/shots");
         void Shot(string name)
@@ -42,10 +45,10 @@ public static partial class Program
             var b = st.Bodies[1]; var b0 = st.Bodies[0];
             var (mp, _, l, ke) = st.BodyMomentum();
             Console.WriteLine($"{s.Tick * Time.SecondsPerTick / 60,5:0.0}분 · 조각 {b.Mass / 1000:0.0}t 거리 {st.Fragments[0].Dist:0.0}m 빠르기 {Math.Sqrt(b.Vx * b.Vx + b.Vy * b.Vy):0.00}m/s · 자세 {b.Th * 180 / Math.PI:0}° 돎 {b.W * 60 / (2 * Math.PI):0.00}바퀴/분 · " +
-                $"배 {b0.Mass / 1000:0.0}t v {Math.Sqrt(b0.Vx * b0.Vx + b0.Vy * b0.Vy):0.000} · 방 {f.Pressure(lay.Rooms[room].Cells[0]):0.0}kPa · 기체 운동량 {Math.Sqrt(st.GasPx * st.GasPx + st.GasPy * st.GasPy) / 1000:0.0}kN·s · 몸 운동량+기체 {(mp + st.GasPx - st.BurnPx):0.000} · 잔걸음 {st.BodySteps}");
+                $"배 {b0.Mass / 1000:0.0}t v {Math.Sqrt(b0.Vx * b0.Vx + b0.Vy * b0.Vy):0.000} · 방 {f.Pressure(lay.Rooms[room].Cells[0]):0.0}kPa · 기체 운동량 {Math.Sqrt(st.GasPx * st.GasPx + st.GasPy * st.GasPy) / 1000:0.0}kN·s · 몸 운동량+기체 {(mp + st.GasPx - st.BurnPx):0.000} · 잔걸음 {st.BodySteps} · 부딪힘 {st.Crashes}");
             if (k == 2 || k == minutes || k == minutes * 2) Shot($"{k}");
         }
-        foreach (var x in s.Facts.Since(0).Where(x => x.Kind is FactKind.Tumble or FactKind.ShipSplit)) Console.WriteLine($"  [{FactNames.Of(x.Kind)}] {s.Causes.Story(x.Cause)}");
+        foreach (var x in s.Facts.Since(0).Where(x => x.Kind is FactKind.Tumble or FactKind.ShipSplit or FactKind.Crash or FactKind.WallBreach or FactKind.WallCrack or FactKind.Fell)) Console.WriteLine($"  [{FactNames.Of(x.Kind)}] {s.Causes.Story(x.Cause)}");
         var people = s.Get<Mind>().Agents.Where(a => a.IsPerson).Select(a => $"{a.Id}: 몸 {st.BodyOf(a.C.Cell)} · 배 틀 {st.ShipFrameOf(a.C.Cell).x:0.0},{st.ShipFrameOf(a.C.Cell).y:0.0}");
         Console.WriteLine("  사람 " + string.Join(" / ", people));
     }
