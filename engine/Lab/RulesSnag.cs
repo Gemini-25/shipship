@@ -84,6 +84,73 @@ public static partial class Program
                 $"궁리 {sm.Devises}(찾음 {sm.DevisesFound}) · 마침 {sm.PlansDone} · 막힌 걸음 {sm.PlanFails} · 미리 보기 {sm.Rehearsals} · 되돌린 공기 {net.AirRecovered - back0:0}몰 · 왼쪽 {kL:0} · 가운데 {kM:0} · 오른쪽 {kR:0}kPa · 주컴퓨터 {(brainSafe ? "멀쩡" : "과열")} · 로봇 보냄 {sm.Assignments - assigns0} · \"{sm.LastDevised}\"");
         }
 
+        // ── 큰 구멍 (0.35㎡ · 외판 두 칸): 로봇은 한 번에 0.1㎡씩 여러 번 덧댄다 — 주컴퓨터는 넓이로 걸음 시간을 셈하고 · 줄어드는 동안은 막힌 것으로 보지 않는다 ──
+        {
+            var lay5 = Worlds.Ascii(NoAirlockShip, new Dictionary<char, string>(legend) { ['h'] = "HeatExchanger" });
+            int A5(int x, int y) => Worlds.At(lay5, x, y);
+            var s = Worlds.Full(lay5, 3);
+            var f = s.Get<Field>(); var sm = s.Get<ShipMind>(); var m = s.Get<Mind>(); var net = s.Get<Network>();
+            int robot = m.AddRobot(s, A5(22, 3), AgentKind.Robot, A5(22, 3));
+            s.Run(2);
+            net.AirReserve = 2e6;
+            m[robot].C.Cell = A5(23, 3); f.SetHole(A5(3, 0), 0.2f); f.SetHole(A5(6, 0), 0.15f);
+            long doneAt = -1;
+            for (int k = 0; k < 24 && doneAt < 0; k++) { s.Run((int)Time.Minutes(10)); if (sm.PlansDone > 0) doneAt = s.Tick; }
+            float hole = f.Hole[A5(3, 0)] + f.Hole[A5(6, 0)];
+            if (Environment.GetEnvironmentVariable("RULE_DEBUG") == "1") foreach (var x in sm.Log) Console.WriteLine($"    {Time.Clock(x.tick)} {x.text}");
+            Check("큰 구멍: 로봇이 여러 번 덧대는 동안은 막힌 것이 아니다 (넓이로 걸음 시간을 셈하고 · 줄어들면 다시 잰다) — 한 계획으로 다 막는다",
+                sm.PlansDone >= 1 && sm.PlanFails == 0 && hole <= 0 && sm.LastDevised.Contains("막는다"),
+                $"마침 {sm.PlansDone} · 막힌 걸음 {sm.PlanFails} · 남은 구멍 {hole * 1e4:0}cm² · {(doneAt >= 0 ? Time.Clock(doneAt) : "못 마침")} · \"{sm.LastDevised}\"");
+        }
+
+        // ── 벽이 버틸까 (살핌호 6일): 구멍을 막은 뒤 다시 채우기 전에 둘레 벽의 금을 본다 —
+        //    가) 금 하나 (받치면 버틴다): 로봇이 그 벽을 덧대 받친 뒤 채운다 · 다시 찢어지지 않는다
+        //    나) 벽을 따라 길게 찢긴 금 (받쳐도 못 버틴다): 채우지 않고 비워진 채 닫아 둔다 · 예비 공기를 그 방에 쓰지 않는다 ──
+        foreach (bool longTear in new[] { false, true })
+        {
+            var lay6 = Worlds.Ascii(NoAirlockShip, new Dictionary<char, string>(legend) { ['h'] = "HeatExchanger" });
+            int A6(int x, int y) => Worlds.At(lay6, x, y);
+            var s = Worlds.Full(lay6, 3);
+            var f = s.Get<Field>(); var sm = s.Get<ShipMind>(); var m = s.Get<Mind>(); var net = s.Get<Network>(); var st = s.Get<Structure>();
+            int robot = m.AddRobot(s, A6(22, 3), AgentKind.Robot, A6(22, 3));
+            s.Run(2);
+            net.AirReserve = 2e6;
+            m[robot].C.Cell = A6(23, 3);
+            f.SetHole(A6(3, 0), 0.02f);
+            s.Run((int)Time.Minutes(6));   // 왼쪽 방이 다 빠진 뒤에 금을 본다 (찢긴 벽 — 기압이 없어 지금은 멀쩡하다)
+            // 금: 받치면 버티는 길이를 찾아 심는다 (가) · 벽 줄 다섯 칸에 반 칸씩 (나)
+            var cracked = new List<int>();
+            if (!longTear)
+            {
+                int c = A6(7, 4);
+                foreach (double a in new[] { 0.01, 0.02, 0.03, 0.05, 0.08, 0.12, 0.18, 0.25, 0.32, 0.4, 0.5 })
+                {
+                    st.Crack[c] = 0; st.SeedCrack(c, a, 0);
+                    double k = st.TearRatio(c, 101.3);
+                    if (k >= ShipMind.BraceAt + 0.05 && k / Structure.BraceFactor < ShipMind.WreckAt - 0.1) break;
+                }
+                cracked.Add(c);
+            }
+            else for (int x = 5; x <= 9; x++) { st.SeedCrack(A6(x, 4), 0.5, 0); cracked.Add(A6(x, 4)); }
+            double k0 = cracked.Max(c => st.TearRatio(c, 101.3));
+            long tears0 = st.Tears;
+            if (Environment.GetEnvironmentVariable("RULE_DEBUG") == "1") Console.WriteLine($"    금 심은 때 왼쪽 방 {f.Pressure(A6(3, 2)):0.0}kPa · 비율 {k0:0.00} · 찢어짐 {st.Tears}");
+            for (int k = 0; k < 30 && sm.PlansDone == 0; k++) { s.Run((int)Time.Minutes(10)); if (Environment.GetEnvironmentVariable("RULE_DEBUG") == "1") Console.WriteLine($"    [{Time.Clock(s.Tick)}] 왼쪽 {f.Pressure(A6(3, 2)):0} 가운데 {f.Pressure(A6(14, 2)):0} · 찢어짐 {st.Tears - tears0} · 계획 {string.Join(",", sm.PlanSteps.Select(p => $"{(ActKind)p.Act}{p.State}"))}"); }
+            s.Run((int)Time.Minutes(20));
+            float kL = (float)f.Pressure(A6(3, 2));
+            bool braced = cracked.All(c => st.Braced[c] != 0);
+            var log = sm.Log.Select(x => $"{Time.Clock(x.tick)} {x.text}").ToList();
+            if (Environment.GetEnvironmentVariable("RULE_DEBUG") == "1") foreach (var l in log.Where(l => l.Contains("생각") || l.Contains("계획") || l.Contains("닫아"))) Console.WriteLine("    " + l);
+            if (!longTear)
+                Check("벽이 버틸까 (가): 다시 채우기 전에 금 간 벽을 덧대 받치고 채운다 — 다시 찢어지지 않는다",
+                    sm.PlansDone >= 1 && braced && kL > 80 && st.Tears == tears0 && sm.Wrecks == 0 && log.Any(l => l.Contains("받치고")),
+                    $"찢어짐 비율 {k0:0.00} · 받침 {braced} · 왼쪽 방 {kL:0}kPa · 찢어짐 {st.Tears - tears0} · 마침 {sm.PlansDone} · 닫아 둠 {sm.Wrecks}");
+            else
+                Check("벽이 버틸까 (나): 벽을 따라 길게 찢긴 방은 받쳐도 못 버틴다 — 다시 채우지 않고 닫아 두며 그 방 일에 로봇을 더 보내지 않는다",
+                    sm.Wrecks >= 1 && kL < 30 && st.Tears == tears0 && log.Any(l => l.Contains("닫아 둡니다")),
+                    $"찢어짐 비율 {k0:0.00} (받쳐도 {k0 / Structure.BraceFactor:0.00}) · 왼쪽 방 {kL:0}kPa · 찢어짐 {st.Tears - tears0} · 닫아 둠 {sm.Wrecks} · 마침 {sm.PlansDone}");
+        }
+
         // ── 주컴퓨터가 잠근 문 (임시 에어락으로 쓸 방): 닫힌 문은 열리지 않고 · 까닭은 '주컴퓨터가 문을 잠가 두었다' · 풀면 연다 ──
         {
             var lay3 = Worlds.Ascii(NoAirlockShip, new Dictionary<char, string>(legend) { ['h'] = "HeatExchanger" });

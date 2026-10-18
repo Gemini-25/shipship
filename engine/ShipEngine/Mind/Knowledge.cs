@@ -4,10 +4,10 @@ namespace ShipEngine;
 public enum Domain : byte { Common, Pressure, Electric, Chemistry, Body, Structure }
 
 /// <summary>원리 — 풀이 법칙 하나씩 (Solver의 뜻 · knowledge.json principles의 이름과 짝).</summary>
-public enum Principle : byte { OpenDoor, SpaceZero, Breath, Jammed, DoorLimit, Valve, PumpBack, Fill, Unjam, Patch, AirCool, DoorGap }
+public enum Principle : byte { OpenDoor, SpaceZero, Breath, Jammed, DoorLimit, Valve, PumpBack, Fill, Unjam, Patch, AirCool, DoorGap, BraceCrack }
 
 /// <summary>행동 — 그림 위의 한 걸음 (knowledge.json actions의 이름과 짝).</summary>
-public enum ActKind : byte { Open, Close, Go, Unjam, Pump, Fill, Clear, Patch, Tape, Seal, Suit }
+public enum ActKind : byte { Open, Close, Go, Unjam, Pump, Fill, Clear, Patch, Tape, Seal, Suit, Brace }
 
 public sealed class PrincipleDef { public string Domain = ""; public double Need; public string Text = ""; }
 public sealed class ActionDef { public string Who = "any"; public string Domain = ""; public List<string> Needs = new(), Limits = new(); public double Minutes; public string Text = ""; }
@@ -20,8 +20,8 @@ public sealed class ManualDef { public string Text = ""; public List<string> Met
 public sealed class KnowledgeTable
 {
     public static readonly string[] DomainNames = { "상식", "기압", "전기", "화학", "몸", "구조" };
-    public static readonly string[] PrincipleNames = { "열린문", "트인방", "숨", "끼인문", "기압차문", "밸브", "되돌리기", "채우기", "바로잡기", "구멍막기", "공기냉각", "문틈" };
-    public static readonly string[] ActionNames = { "open", "close", "go", "unjam", "pump", "fill", "clear", "patch", "tape", "seal", "suit" };
+    public static readonly string[] PrincipleNames = { "열린문", "트인방", "숨", "끼인문", "기압차문", "밸브", "되돌리기", "채우기", "바로잡기", "구멍막기", "공기냉각", "문틈", "금받치기" };
+    public static readonly string[] ActionNames = { "open", "close", "go", "unjam", "pump", "fill", "clear", "patch", "tape", "seal", "suit", "brace" };
 
     public List<string> Domains = new();
     public Dictionary<string, PrincipleDef> Principles = new();

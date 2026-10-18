@@ -90,6 +90,18 @@ public sealed partial class Structure
         return Bulge(c, a) * kt * sigma * Math.Sqrt(Math.PI * a);
     }
 
+    /// <summary>
+    /// 그 벽이 기압 차 dpKPa를 받으면 찢어짐에 얼마나 가까운가 (금 끝 K ÷ 파괴 인성 — 1이면 찢어진다 · 덧대 받친 벽은 정격이 높아 그만큼 낮다).
+    /// 주컴퓨터의 판단용 (하중 센서 + 금 센서 — 비워진 방을 다시 채워도 되나). 금이 없으면 0.
+    /// </summary>
+    public double TearRatio(int c, double dpKPa)
+    {
+        if (c < 0 || c >= L.N || L.Kind[c] != CellKind.Wall || Crack[c] <= 0 && !(F.Hole[c] >= 2)) return 0;
+        var m = T.Materials[L.Material[c]].Def;
+        double k = StressIntensity(c, Sigma(c, dpKPa));
+        return k / Math.Max(1e-6, Toughness(m, F.Ts[c]));
+    }
+
     /// <summary>금을 심는다 (파편의 흠 · 과부하 · 이야기꾼의 숨은 금 · 부식 구멍) — 이미 더 크면 그대로.</summary>
     public void SeedCrack(int c, double a, int cause) => SeedCrack(null, c, a, cause);
 

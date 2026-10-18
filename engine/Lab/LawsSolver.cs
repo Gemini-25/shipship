@@ -50,6 +50,26 @@ public static partial class Program
         return p;
     }
 
+    /// <summary>살핌호 6일(파편 폭풍 뒤): 우주로 트인 관측실 — 관측 돛대(로봇) — 함교(주컴퓨터) — 중앙 통로(사람 둘) · 곁방 스물(틈 있는 보통 문 · 몇은 사람) · 에어락 · 배 전체 82kPa.</summary>
+    internal static Picture HubPicture()
+    {
+        var p = new Picture();
+        int obs = p.AddPlace(0, "관측실", 20, 0, vent: true, hull: true, hole: true, holeArea: 0.3f);
+        int mast = p.AddPlace(1, "관측 돛대", 30, 83, vent: true, hull: true);
+        int bridge = p.AddPlace(2, "함교", 40, 82, vent: true, hull: true); p.Brain[bridge] = true;
+        int hall = p.AddPlace(3, "중앙 통로", 60, 81, vent: true, people: 2);
+        int lockR = p.AddPlace(4, "에어락", 8, 83, vent: true, hull: true);
+        int o = p.AddOut();
+        p.AddDoor(mast, obs, 0); p.AddDoor(bridge, mast, 1, leaky: true); p.AddDoor(hall, bridge, 2, leaky: true); p.AddDoor(hall, lockR, 3); p.AddDoor(lockR, o, 4);
+        for (int k = 0; k < 20; k++)
+        {
+            int sr = p.AddPlace(5 + k, $"곁방 {k + 1}", 16, 82, vent: true, hull: true, people: (byte)(k % 4 == 0 ? 1 : 0));
+            p.AddDoor(sr, hall, 5 + k, open: k == 12, leaky: k != 12);
+        }
+        p.Body = mast; p.Goal = obs;
+        return p;
+    }
+
     private static void SolverLaws()
     {
         if (!Do("판단 엔진")) return;
@@ -79,12 +99,13 @@ public static partial class Program
         // 사람이 있는 방의 공기는 빼지 않는다 — 먼저 옆 방으로 내보낸다
         var c = NoAirlockPicture(peopleRight: 2, sideRoom: true);
         var rc = Solver.Solve(c, all, true);
-        int iClear = rc.Steps.FindIndex(s => s.Act == ActKind.Clear), iPump = rc.Steps.FindIndex(s => s.Act == ActKind.Pump);
+        var xc = rc.Found ? Solver.Expand(c, rc.Steps, all, true).Select(x => x.step).ToList() : new List<SolveStep>();   // 내보내기는 되돌리기 묶음 안에
+        int iClear = xc.FindIndex(s => s.Act == ActKind.Clear), iPump = xc.FindIndex(s => s.Act == ActKind.Pump);
         var c0 = NoAirlockPicture(peopleRight: 2);
         var rc0 = Solver.Solve(c0, all, true);
         Check("사람이 있는 방의 공기는 빼지 않는다: 옆 방이 있으면 먼저 내보내고 · 갈 곳이 없으면 그 길은 없다",
             rc.Found && rc.Risk == 0 && iClear >= 0 && iClear < iPump && (!rc0.Found || rc0.Risk == 0 && !rc0.Steps.Any(s => s.Act == ActKind.Pump)),
-            $"{(rc.Found ? Solver.Describe(c, rc.Steps) : "못 찾음")} / 갈 곳 없음: {(rc0.Found ? Solver.Describe(c0, rc0.Steps) : "못 찾음")}");
+            $"{(rc.Found ? Solver.Describe(c, xc) : "못 찾음")} / 갈 곳 없음: {(rc0.Found ? Solver.Describe(c0, rc0.Steps) : "못 찾음")}");
 
         // 끼인 문 → 먼저 바로잡는다 (하위 목표)
         var j = NoAirlockPicture(jam: true);
@@ -154,6 +175,19 @@ public static partial class Program
             Check("봉합 꾸러미는 틈 막기 · 구멍 막기에 하나씩 든다 — 가진 것보다 많이 쓰는 계획은 없다", kitOk, kitNote.TrimEnd(' ', '/'));
         }
 
+        // 큰 구멍: 막는 번 = 넓이 ÷ 한 번에 막는 넓이 (로봇 0.1㎡ · 사람 0.05㎡) — 시간도 꾸러미도 그만큼 · 꾸러미가 모자라면 그 몸으로는 못 막는다
+        {
+            var big = NoAirlockPicture(); big.HoleArea[big.Goal] = 0.35f;
+            var rbig = Solver.Solve(big, all, true);
+            var small = NoAirlockPicture(); var rsmall = Solver.Solve(small, all, true);
+            var pbig = NoAirlockPicture(); pbig.HoleArea[pbig.Goal] = 0.35f; pbig.PatchArea = 0.05f; pbig.Kits = 3;
+            var rp = Solver.Solve(pbig, all, true);
+            float pm = (float)KnowledgeTable.Load().A[(int)ActKind.Patch].Minutes;
+            Check("큰 구멍은 여러 번 덧댄다: 막는 번 = 넓이 ÷ 한 번에 막는 넓이 (시간 · 꾸러미 모두) — 꾸러미가 모자란 몸으로는 못 막는다",
+                big.Patches(big.Goal) == 4 && rbig.Found && Math.Abs(rbig.Minutes - rsmall.Minutes - 3 * pm) < 0.5f && pbig.Patches(pbig.Goal) == 7 && !rp.Found,
+                $"로봇 0.35㎡ → {big.Patches(big.Goal)}번 · {rbig.Minutes:0}분 (0.05㎡ {rsmall.Minutes:0}분) / 사람 0.35㎡ → {pbig.Patches(pbig.Goal)}번 · 꾸러미 3: {(rp.Found ? "찾음" : "못 찾음")}");
+        }
+
         // 공기 되돌리기 (⑥ 망): 닫힌 방에서 빨아 낸 질소 · 산소 · 아르곤은 예비 탱크로 (보존) · 20kPa 아래로는 못 뺀다
         {
             var lay = Worlds.Ascii(NoAirlockShip, new Dictionary<char, string> { ['x'] = "OxygenMaskBox", ['p'] = "PowerPanel", ['b'] = "Battery", ['c'] = "MainComputer", ['e'] = "Bed", ['h'] = "HeatExchanger" });
@@ -170,6 +204,18 @@ public static partial class Program
             Check("공기 되돌리기: 닫힌 방에서 빨아 낸 공기는 예비 탱크로 (배 + 탱크의 공기는 그대로) · 20kPa 아래로는 못 뺀다",
                 took > 500 && got >= took * 0.98 && Math.Abs(ship - ship0) < ship0 * 0.002 && kpa >= Network.PumpFloorKPa - 0.5 && kpa < Network.PumpFloorKPa + 2,
                 $"방이 잃은 {took:0}몰 · 탱크로 되돌린 {got:0}몰 · 배 + 탱크 {ship0:0} → {ship:0}몰 · 남은 기압 {kpa:0.0}kPa");
+        }
+
+        // 큰 배: 곁방이 스물인 통로 · 사람 있는 방 — 쓸데없는 내보내기 · 채우기를 펼치지 않아 예산 안에서 찾는다 (한 판단은 몇십 ms)
+        {
+            var hp = HubPicture();
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var rh = Solver.Solve(hp, all, true, banned: s => s.Act == ActKind.Open && s.Obj == 4);   // 바깥에서 막기는 막혔다 (밸브를 잠가 두었다 — 살핌호 6일)
+            sw.Stop();
+            if (Environment.GetEnvironmentVariable("SNAG_DEBUG") == "1") { Solver.CountActs = new int[16]; Solver.Solve(hp, all, true, banned: s => s.Act == ActKind.Open && s.Obj == 4); Console.WriteLine("    " + string.Join(" ", Enum.GetValues<ActKind>().Select(a => $"{a}{Solver.CountActs[(int)a]}"))); Solver.CountActs = null; }
+            Check("큰 배 그림(자리 26 · 문 25 · 사람 있는 통로)에서도 펼침 1500 안에 찾는다 — 사람이 있는 방은 그 방 공기를 뺄 때만 내보낸다",
+                rh.Found && rh.Risk == 0 && rh.Expanded <= 1500 && rh.Steps.Any(s => s.Act == ActKind.Pump),
+                $"{(rh.Found ? Solver.Describe(hp, rh.Steps) : "못 찾음")} · 펼침 {rh.Expanded} · {sw.ElapsedMilliseconds}ms");
         }
 
         // 펼침 예산

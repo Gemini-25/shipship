@@ -298,6 +298,9 @@ public sealed partial class Mind
         WaterSprayed += amount;
     }
 
+    /// <summary>봉합 꾸러미 하나가 막는 넓이 (㎡ — 사람 몫 · 로봇은 두 배).</summary>
+    public double PatchKitArea => P.Items["봉합 꾸러미"].MaxArea;
+
     /// <summary>⑩ 주컴퓨터가 그 문의 틈을 막으라고 맡겼다 (지어낸 계획 — 공기를 빼기 전에 · 아직 기압 차가 없어 새지 않아도).</summary>
     private bool TapeAssigned(Agent a, int cell) => L.Kind[cell] == CellKind.Door && L.DoorAt[cell] >= 0 && F.DoorGapOpen(L.DoorAt[cell])
         && a.C.AssignedGoal == GoalKind.Patch && a.C.AssignedTarget == cell && a.C.AssignedUntil > _nowTick;

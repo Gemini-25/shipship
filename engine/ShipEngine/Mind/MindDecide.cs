@@ -835,7 +835,8 @@ public sealed partial class Mind
         if (c.AssignedGoal == GoalKind.Rewire && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0 && _net != null && !_net.RoomPowered(c.AssignedTarget) && c.AssignedTarget < _net.Vent.Length)
             Add(GoalKind.Rewire, c.AssignedTarget, _net.Vent[c.AssignedTarget], 1.3f, _net.RoomFeeder[c.AssignedTarget] is int rf && rf >= 0 ? _net.FaultCause(rf) : 0);   // 원인: 그 방 급전선이 죽은 까닭
         // 맡긴 끼인 문: 믿음이 바래도 간다
-        if (!a.IsPerson && c.AssignedGoal == GoalKind.Brace && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0 && _st != null && _st.JammedAt(c.AssignedTarget)) Add(GoalKind.Brace, c.AssignedTarget, c.AssignedTarget, 1.2f);
+        if (!a.IsPerson && c.AssignedGoal == GoalKind.Brace && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0 && _st != null
+            && (_st.JammedAt(c.AssignedTarget) || L.Kind[c.AssignedTarget] == CellKind.Wall && _st.Braced[c.AssignedTarget] == 0)) Add(GoalKind.Brace, c.AssignedTarget, c.AssignedTarget, 1.2f);   // 끼인 문 · 주컴퓨터가 받치라고 한 금 간 벽 (금 센서 — 휘는 소리가 없어도)
         // ⑦ 맡긴 돌보기: 다친 이 곁으로 (맡김 가산 +3 — 사람이면 끼니보다 앞선다)
         if (c.AssignedGoal == GoalKind.Treat && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0 && c.AssignedTarget < _life!.Bodies.Count && _life.Bodies[c.AssignedTarget].Alive != 0)
             Add(GoalKind.Treat, c.AssignedTarget, _life.Bodies[c.AssignedTarget].Cell, 1.2f);

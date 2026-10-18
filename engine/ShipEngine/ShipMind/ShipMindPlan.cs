@@ -124,14 +124,83 @@ public sealed partial class ShipMind
         return res;
     }
 
-    /// <summary>그 방이 우주로 트인 외판 구멍 칸 (선체 센서 — 없으면 −1).</summary>
-    private int HoleCell(int r)
+    // ───────────────────────── 벽이 버틸까 ─────────────────────────
+
+    private List<int>[]? _roomWalls;
+    public const double BraceAt = 0.7, WreckAt = 0.9;   // 찢어짐 비율: 이만큼이면 받친다 · 받친 뒤에도 이만큼이면 채우지 않는다
+
+    /// <summary>그 방 둘레 벽 칸 (그 방 바닥과 맞닿거나 모서리로 닿는 벽 — 도면에서).</summary>
+    private List<int> RoomWalls(int r)
     {
-        int v = r >= 0 && r < _roomVent.Length ? _roomVent[r] : -1;
-        if (v < 0 || F.RegionOf.Length <= v || F.RegionOf[v] < 0) return -1;
-        int reg = F.RegionOf[v], best = -1; float area = 0;
-        foreach (var k in F.Links) if (k.RB < 0 && k.RA == reg && k.Area > area && k.Via >= 0 && L.Kind[k.Via] == CellKind.Wall) { area = (float)k.Area; best = k.Via; }
-        return best;
+        if (_roomWalls == null)
+        {
+            _roomWalls = new List<int>[L.Rooms.Count];
+            for (int i = 0; i < L.Rooms.Count; i++) _roomWalls[i] = new List<int>();
+            for (int c = 0; c < L.N; c++)
+            {
+                if (L.Kind[c] != CellKind.Wall) continue;
+                int x0 = L.X(c), y0 = L.Y(c);
+                for (int dy = -1; dy <= 1; dy++)
+                    for (int dx = -1; dx <= 1; dx++)
+                    {
+                        if (!L.In(x0 + dx, y0 + dy)) continue;
+                        int j = L.Index(x0 + dx, y0 + dy), rr = L.Room[j];
+                        if (rr >= 0 && L.Kind[j] == CellKind.Floor && !_roomWalls[rr].Contains(c)) _roomWalls[rr].Add(c);
+                    }
+            }
+        }
+        return r >= 0 && r < _roomWalls.Length ? _roomWalls[r] : new List<int>();
+    }
+
+    /// <summary>
+    /// 그 방을 다시 채우면 둘레 벽이 버틸까 (하중 · 금 센서 — 배 기압 101kPa를 다시 받으면 금 끝이 파괴 인성에 얼마나 다가가나 · ④ Structure.TearRatio):
+    /// 받친 뒤에도 가장 위험한 벽의 비율을 돌려주고 · 받쳐야 할 벽(아직 안 받쳤고 비율이 BraceAt 넘는)을 brace에 담는다.
+    /// </summary>
+    private double WallRisk(int r, List<int>? brace)
+    {
+        if (_st == null || r < 0) return 0;
+        double worst = 0;
+        foreach (int c in RoomWalls(r))
+        {
+            double k = _st.TearRatio(c, 101.3);
+            if (k <= 0) continue;
+            bool braced = _st.Braced[c] != 0;
+            worst = Math.Max(worst, braced ? k : k / Structure.BraceFactor);
+            if (!braced && k >= BraceAt) brace?.Add(c);
+        }
+        return worst;
+    }
+
+    /// <summary>몸이 봉합 꾸러미 하나로 막는 넓이 (㎡ — 사람은 꾸러미 넓이 · 로봇은 두 배 · ⑧ SealStep과 같다).</summary>
+    private float PatchAreaOf(Agent a) => (float)(_mind!.PatchKitArea * (a.IsPerson ? 1 : 2));
+    private double PatchMinutes => KnowledgeTable.Load().A[(int)ActKind.Patch].Minutes;
+
+    /// <summary>그 방이 우주로 트인 외판 구멍 칸 — 가장 큰 것 (선체 센서 — 없으면 −1).</summary>
+    private int HoleCell(int r) { RoomHoleArea(r, out int best); return best; }
+
+    /// <summary>
+    /// 그 방 자체의 구멍 넓이 합 (㎡ — 선체 센서): 그 방 칸에 맞닿아 우주로 뚫린 벽 · 그 방의 뚫린 바닥 판.
+    /// 문이 열려 이어진 옆 방의 구멍은 그 방 몫이 아니다 (기체 구역은 이어져도 막을 자리는 방마다) · 열린 바깥문은 구멍이 아니다.
+    /// </summary>
+    private float RoomHoleArea(int r, out int biggest)
+    {
+        biggest = -1; float sum = 0, best = 0;
+        if (r < 0) return 0;
+        Span<int> nb = stackalloc int[4];
+        foreach (var k in F.Links)
+        {
+            if (k.RB >= 0 || k.Area <= 0 || k.Via < 0 || k.A < 0) continue;
+            int c = k.Via;
+            if (L.Kind[c] is not (CellKind.Wall or CellKind.Floor) || F.Hole[c] <= 0) continue;
+            // 이 방의 구멍인가: 안쪽 칸이 이 방 · 통째로 날아간 벽(트인 칸 — 방이 없다)은 곁의 바닥이 이 방
+            bool mine = L.Room[k.A] == r;
+            if (!mine && L.Kind[c] == CellKind.Wall) { L.Neighbors(c, nb); foreach (int j in nb) if (j >= 0 && L.Kind[j] == CellKind.Floor && L.Room[j] == r) { mine = true; break; } }
+            if (!mine) continue;
+            float area = Math.Min(2f, F.Hole[c]);
+            sum += area;
+            if (area > best) { best = area; biggest = c; }
+        }
+        return sum;
     }
 
     /// <summary>그 방 기체 구역이 우주로 트였나 (외판 구멍 · 열린 바깥문 — 선체 센서).</summary>
@@ -305,7 +374,7 @@ public sealed partial class ShipMind
             bool vac = Incidents.Any(y => y.Active != 0 && y.Room == r && y.Kind == IncidentKind.Vacuum);
             placeOf[r] = pic.AddPlace(r, RoomName(r), L.Rooms[r].Cells.Length, RoomSeen[r] != 0 ? RoomKPa[r] : 101.3f,
                 vent: _roomVent[r] >= 0 && _net.RoomPowered(r) && _net.HvacKw > 0, hull: OutsideOf(r) >= 0,
-                hole: r == x.Room || vac && OpenToSpace(r), people: people);
+                hole: r == x.Room || vac && OpenToSpace(r), people: people, holeArea: RoomHoleArea(r, out _));
         }
         bool anyExt = keep.Any(r => _roomDoors[r].Any(d => L.Doors[d].External));
         if (anyExt || robotOut) pic.AddOut();
@@ -333,6 +402,7 @@ public sealed partial class ShipMind
             int kits = bodyAgent.C.Holding == _mind.iPatch ? 1 : 0;
             foreach (int r in placeOf.Keys) kits += _mind.CountIn(r, _mind.iPatch);
             pic.Kits = kits;
+            pic.PatchArea = PatchAreaOf(bodyAgent);
         }
         // 몸이 된 사람은 그 방 사람 수에서 뺀다 (그 사람은 계획을 안다)
         if (bodyAgent.IsPerson && robotRoom >= 0 && placeOf.TryGetValue(robotRoom, out int sp) && pic.People[sp] > 0 && _life!.Bodies[bodyAgent.C.Body].Suit == 0) pic.People[sp]--;
@@ -370,20 +440,55 @@ public sealed partial class ShipMind
                 PlanSteps[si] = st;
             }
             // 로봇의 막힘 (이 걸음을 시작한 뒤)
-            if (ra.C.SnagTick >= st.Start && Mind.Telling(ra.C.Snag) && ra.C.SnagGoal == ra.C.AssignedGoal && st.Act is (byte)ActKind.Go or (byte)ActKind.Patch or (byte)ActKind.Unjam or (byte)ActKind.Tape or (byte)ActKind.Suit)   // 맡긴 걸음의 막힘만
+            if (ra.C.SnagTick >= st.Start && Mind.Telling(ra.C.Snag) && ra.C.SnagGoal == ra.C.AssignedGoal && st.Act is (byte)ActKind.Go or (byte)ActKind.Patch or (byte)ActKind.Unjam or (byte)ActKind.Tape or (byte)ActKind.Suit or (byte)ActKind.Brace)   // 맡긴 걸음의 막힘만
             { FailStep(sim, id, st, ra.C.Snag, ra.C.SnagSubject, Mind.SnagText(ra.C.Snag)); continue; }
             if (StepDone(x, ref st, ra))
             {
+                if (PlanLog) Console.WriteLine($"      ({sim.Seed}) [걸음 끝] {Time.Clock(t)} {StepName(st)} · 남은 구멍 {(st.Act == (byte)ActKind.Patch ? RoomHoleArea(st.Obj, out _) * 1e4 : -1):0}cm² · 몸 {RoomName(_mind!.RoomOf(ra.C.Cell))}");
                 st.State = 2;
                 PlanSteps[si] = st;
                 StopStep(st);
+                if (st.Act == (byte)ActKind.Patch) AfterPatch(sim, x, si, st);
                 continue;
             }
             KeepStep(sim, x, st, ra);
+            // 진척: 막는 걸음은 남은 구멍이 줄면 그때부터 다시 잰다 (큰 구멍은 여러 번 덧댄다 — 줄어드는 동안은 막힌 것이 아니다)
+            if (st.Act == (byte)ActKind.Patch && RoomHoleArea(st.Obj, out _) is float left && left < st.From - 1e-4f)
+            {
+                st.From = left; st.Start = t;
+                st.Expect = Math.Max(1, (float)Math.Ceiling(left / Math.Max(1e-3f, PatchAreaOf(ra)))) * (float)PatchMinutes;
+            }
             PlanSteps[si] = st;
             double limit = Time.Minutes(st.Expect * 3 + 8);
             if (t - st.Start > limit) FailStep(sim, id, st, StepSnag(st), st.Act <= (byte)ActKind.Unjam ? st.Obj : -1, "시간이 넘었다");
         }
+    }
+
+    /// <summary>
+    /// 구멍을 다 막았다 — 다시 채우기 전에 그 방 벽을 본다: 덧대 받쳐도 못 버티면 그 방은 비워진 채 닫아 두고
+    /// 몸을 데리고 들어온 문으로 나와 그 문을 닫는다 (열린 문으로 옆 방과 함께 채우면 그 방도 채워져 찢어진다).
+    /// </summary>
+    private void AfterPatch(Sim sim, in Incident x, int si, in PlanStepRec patch)
+    {
+        int r = patch.Obj;
+        double risk = WallRisk(r, null);
+        if (risk < WreckAt) return;
+        HoldWreck(sim, r, risk, x.Cause);
+        int xid = x.Id;
+        // 들어온 문: 이 방으로 간 걸음
+        int k = PlanSteps.FindLastIndex(si, s => s.Incident == xid && s.Act == (byte)ActKind.Go && s.Dest == r);
+        if (k < 0) return;
+        int door = PlanSteps[k].Obj;
+        int back = DoorRooms(door).FirstOrDefault(q => q != r, -1);
+        if (back < 0) return;
+        var add = new List<PlanStepRec>
+        {
+            new() { Incident = xid, Act = (byte)ActKind.Go, Obj = door, Dest = back, Robot = patch.Robot, Expect = 1 },
+            new() { Incident = xid, Act = (byte)ActKind.Close, Obj = door, Dest = -1, Robot = patch.Robot, Expect = 0.5f },
+        };
+        if (L.Doors[door].Kind == "normal")   // 보통 문은 닫혀도 틈으로 샌다 — 옆 방을 채우면 그 틈으로 이 방도 차 찢어진다: 틈을 막는다
+            add.Add(new() { Incident = xid, Act = (byte)ActKind.Tape, Obj = door, Dest = -1, Robot = patch.Robot, Expect = 3 });
+        PlanSteps.InsertRange(si + 1, add);
     }
 
     private bool BeginStep(Sim sim, in Incident x, ref PlanStepRec st, Agent ra)
@@ -404,7 +509,40 @@ public sealed partial class ShipMind
                 st.From = RoomKPa[st.Obj];
                 Say(sim, $"계획: {RoomName(st.Obj)} 공기를 예비 탱크로 되돌린다 ({RoomKPa[st.Obj]:0}kPa → {Network.PumpFloorKPa:0}kPa) · 그 방 문은 잠근다");
                 return true;
-            case ActKind.Fill: st.From = RoomKPa[st.Obj]; return true;
+            case ActKind.Fill:
+            {
+                // 채우기 전에 벽을 본다: 금이 간 벽은 먼저 받치고 · 받쳐도 못 버티면 채우지 않고 비워 둔다 (기압을 넣으면 찢어져 공기만 잃는다)
+                int fr = st.Obj;
+                foreach (int d in _roomDoors[fr])
+                    if ((F.DoorOpen[d] > 0.02f || F.DoorGapOpen(d)) && DoorRooms(d).Any(q => q != fr && Wrecked(q)))
+                    {
+                        if (F.DoorOpen[d] <= 0.02f)
+                        {
+                            // 닫혔지만 틈이 열린 보통 문 — 몸이 틈을 막고 채운다 (그 방은 못 버틴다)
+                            int xid2 = x.Id, body2 = st.Robot, dd = d;
+                            if (!PlanSteps.Any(s => s.Incident == xid2 && s.Act == (byte)ActKind.Tape && s.Obj == dd && s.State != 2))
+                                PlanSteps.Insert(Math.Max(0, PlanSteps.FindIndex(s => s.Incident == xid2 && s.State != 2)), new PlanStepRec { Incident = xid2, Act = (byte)ActKind.Tape, Obj = dd, Dest = -1, Robot = body2, Expect = 3 });
+                            return false;
+                        }
+                        // 열린 문 너머가 비워 두기로 한 방 — 닫고 채운다 (함께 채우면 그 방이 찢어진다) · 문 칸에 누가 있으면 기다린다
+                        if (!_mind!.Agents.Any(o => o.C.Up != 0 && o.C.Cell == L.Doors[d].Cell)) { _st!.UnlockDoor(d); _st.RequestDoor(d, 0); }
+                        return false;
+                    }
+                var brace = new List<int>();
+                double risk = WallRisk(st.Obj, brace);
+                if (risk >= WreckAt) { HoldWreck(sim, st.Obj, risk, x.Cause); st.From = RoomKPa[st.Obj]; return true; }   // 걸음은 끝난 것으로 (StepDone — 닫아 둔 방)
+                if (brace.Count > 0)
+                {
+                    int xid = x.Id, body = st.Robot;
+                    int si = PlanSteps.FindIndex(s => s.Incident == xid && s.State != 2);
+                    var bs = brace.Select(c => new PlanStepRec { Incident = xid, Act = (byte)ActKind.Brace, Obj = c, Dest = -1, Robot = body, Expect = 4 }).ToList();
+                    PlanSteps.InsertRange(Math.Max(0, si), bs);
+                    Say(sim, $"생각: {RoomName(st.Obj)} 벽에 금이 났다 — 기압을 다시 넣으면 찢어질 수 있다 (찢어짐에 {risk * Structure.BraceFactor:P0}까지) → 먼저 금 간 벽 {brace.Count}곳을 덧대 받치고 채운다");
+                    return false;   // 다음 차례에 받치기부터
+                }
+                st.From = RoomKPa[st.Obj];
+                return true;
+            }
             case ActKind.Clear:
                 // 출입 금지 명령 — 따르는 이는 그 방을 나와 그리로 길을 잡지 않는다 ('곧 뺀다'는 믿음은 눈으로 멀쩡한 공기를 보면 지워진다)
                 {
@@ -414,7 +552,10 @@ public sealed partial class ShipMind
                 }
                 Say(sim, $"계획: {RoomName(st.Obj)}의 공기를 곧 뺍니다 — 나가 주세요 · 들어오지 마세요");
                 return true;
-            case ActKind.Go: case ActKind.Patch: case ActKind.Unjam: case ActKind.Tape: case ActKind.Suit:
+            case ActKind.Patch:
+                st.From = RoomHoleArea(st.Obj, out _);   // 남은 구멍 넓이 — 줄어드는 동안은 막는 중이다 (시간을 다시 잰다)
+                return true;
+            case ActKind.Go: case ActKind.Unjam: case ActKind.Tape: case ActKind.Suit: case ActKind.Brace:
                 return true;
         }
         return true;
@@ -452,6 +593,7 @@ public sealed partial class ShipMind
             case ActKind.Unjam: goal = L.Doors[st.Obj].Cell; g = GoalKind.Brace; break;
             case ActKind.Tape: goal = L.Doors[st.Obj].Cell; g = GoalKind.Patch; break;   // 문틈을 봉합 꾸러미로
             case ActKind.Suit: goal = _mind!.StockIn(st.Obj, _mind.iSuit); g = GoalKind.GetSuit; break;   // 그 방 보관함에서 우주복을
+            case ActKind.Brace: goal = st.Obj; g = GoalKind.Brace; break;   // 금 간 벽을 덧대 받친다
             default: goal = ra.C.Cell; g = GoalKind.Idle; break;   // 주컴퓨터 일을 하는 동안 제자리에서 기다린다
         }
         if (goal >= 0 && (ra.C.AssignedGoal != g || ra.C.AssignedTarget != goal || ra.C.AssignedUntil < t + Time.Minutes(5)))
@@ -492,9 +634,10 @@ public sealed partial class ShipMind
             case ActKind.Go: return st.Dest >= 0 ? _mind!.RoomOf(ra.C.Cell) == st.Dest : L.Kind[ra.C.Cell] == CellKind.Outside;
             case ActKind.Unjam: return _st!.DoorJam[st.Obj] == 0;
             case ActKind.Pump: return RoomKPa[st.Obj] <= Network.PumpFloorKPa + 2;
-            case ActKind.Fill: return RoomKPa[st.Obj] >= 90;
+            case ActKind.Fill: return RoomKPa[st.Obj] >= 90 || EmptyHeld(st.Obj);   // 다 채웠다 · 또는 채우지 않고 닫아 두기로 했다
+            case ActKind.Brace: return _st!.Braced[st.Obj] != 0;
             case ActKind.Clear: return People(st.Obj) == 0;
-            case ActKind.Patch: return !OpenToSpace(st.Obj);
+            case ActKind.Patch: return RoomHoleArea(st.Obj, out _) <= 0;   // 그 방 구멍을 다 막았다 (이어진 옆 방의 구멍은 그 방 걸음의 몫)
             case ActKind.Tape: return F.DoorTaped[st.Obj] != 0;
             case ActKind.Suit: return ra.IsPerson && _life!.Bodies[ra.C.Body].Suit != 0;
         }
@@ -543,7 +686,7 @@ public sealed partial class ShipMind
     {
         ActKind.Open => $"{DoorName(st.Obj)} 열기", ActKind.Close => $"{DoorName(st.Obj)} 닫기", ActKind.Go => $"{(st.Dest >= 0 ? RoomName(st.Dest) : "선체 바깥")}으로 가기",
         ActKind.Unjam => $"{DoorName(st.Obj)} 바로잡기", ActKind.Pump => $"{RoomName(st.Obj)} 공기 되돌리기", ActKind.Fill => $"{RoomName(st.Obj)} 채우기",
-        ActKind.Clear => $"{RoomName(st.Obj)} 사람 내보내기", ActKind.Patch => $"{RoomName(st.Obj)} 구멍 막기", ActKind.Tape => $"{DoorName(st.Obj)} 틈 막기", ActKind.Suit => "우주복 입기", _ => "",
+        ActKind.Clear => $"{RoomName(st.Obj)} 사람 내보내기", ActKind.Patch => $"{RoomName(st.Obj)} 구멍 막기", ActKind.Tape => $"{DoorName(st.Obj)} 틈 막기", ActKind.Suit => "우주복 입기", ActKind.Brace => $"{RoomName(WallRoom(st.Obj))} 금 간 벽 받치기", _ => "",
     };
 
     private void EndPlan(Sim sim, int id, in Incident x, bool done)

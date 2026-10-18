@@ -850,6 +850,8 @@ public sealed partial class ShipMind : IEngine
                 // ⑩ 판단 엔진: 기본 절차서 — 안에서 막기 · 바깥에서 막기 (빠진 방은 바깥부터 — 문은 기압 차로 안 열린다 · 열면 배 공기까지 빠진다 · 비워진 채 닫아 둔 방은 바깥만 ·
                 //   샘은 안부터 — 안에서 못 찾으면 번갈아 외판을 바깥에서 둘러본다). 막힌 까닭이 그대로인 방법은 다시 고르지 않는다 — 다 막히면 지어낸다.
                 if (HasPlan(x.Id)) return;   // 지어낸 계획이 맡고 있다
+                if (x.Kind == IncidentKind.Vacuum && Wrecked(x.Room)) return;   // 벽이 못 버텨 닫아 둔 방 — 막아도 채울 수 없다 (제대로 고칠 때까지)
+                if (x.Kind == IncidentKind.Vacuum && WallRisk(x.Room, null) is double wr && wr >= WreckAt) { HoldWreck(sim, x.Room, wr, x.Cause); return; }   // 막기 전에 본다 — 막아도 채울 수 없으면 막지 않는다
                 if (x.Kind == IncidentKind.Vacuum && PlanRobot(sim, x) < 0 && _mind.Agents.Any(a => !a.IsPerson && a.C.Up != 0 && a.C.Kind != AgentKind.Drone) == false)
                 {
                     // 로봇이 없는 배: 기본 절차서의 방법을 해 볼 몸이 없다 — 사람에게 부탁해 그 사람과 함께 궁리한다 (풀이기는 안에서 막을 수 있으면 그것을 고른다)
