@@ -157,6 +157,7 @@ public sealed partial class Society
                     ca.Stress = Math.Min(1, ca.Stress + 0.05f); cb.Stress = Math.Min(1, cb.Stress + 0.05f);
                     int line = Say(sim, a, b, o, end, Pick(sim, "탓/다툼", a));
                     Remember(sim, a, Topic.Fight, b, line, 0.5f, ca.Cell); Remember(sim, b, Topic.Fight, a, line, 0.5f, cb.Cell);
+                    Onlookers(sim, a, b, line);
                     Escalate(sim, a, b, 1, line);
                     Escalate(sim, b, a, 0.7f, line);
                 }
@@ -248,6 +249,7 @@ public sealed partial class Society
                     int c = sim.Causes.Add(CauseKind.Society, $"{Ko.Gwa(n1)} {Ko.I(n2)} 맞섰다 — {Ko.I(_mind!.NameOf(b))} {_mind.NameOf(a)}의 손을 뿌리쳤다", sim.Tick, cb.Cell, line, 0, b);
                     sim.Facts.Emit(sim.Tick, FactKind.Relationship, cb.Cell, -4, c, b, a);
                     Remember(sim, a, Topic.Fight, b, c, 0.6f, ca.Cell); Remember(sim, b, Topic.Fight, a, c, 0.6f, cb.Cell);
+                    Onlookers(sim, b, a, c);
                     Escalate(sim, b, a, 0.5f, line);
                 }
                 break;
@@ -316,7 +318,7 @@ public sealed partial class Society
     }
 
     /// <summary>한 마디를 남긴다: 자리를 채워 원인 마디의 글로 · 대화 사실 (연출 · 화면) · 말소리 (③ 소리 — 들은 이의 귀에).</summary>
-    private int Say(Sim sim, int speaker, int listener, Option o, TalkEnd end, string line)
+    private int Say(Sim sim, int speaker, int listener, Option o, TalkEnd end, string line, string? summaryText = null)
     {
         var mind = _mind!;
         string Name(int x) => x >= 0 && x < N ? mind.NameOf(x) : "그 사람";
@@ -325,7 +327,7 @@ public sealed partial class Society
         string text = line.Replace("{상대아}", Ko.A(Given(other))).Replace("{상대}", other)
             .Replace("{그이}", Ko.I(about)).Replace("{그을}", Ko.Eul(about)).Replace("{그은}", Ko.Eun(about)).Replace("{그와}", Ko.Gwa(about)).Replace("{그}", about)
             .Replace("{곳에서}", room + "에서").Replace("{곳을}", Ko.Eul(room)).Replace("{곳}", room);
-        int summary = sim.Causes.Add(CauseKind.Society, $"{Ko.Gwa(mind.NameOf(speaker))} {Ko.I(other)} {TalkTable.Summary(o.T, end)}", sim.Tick, C(speaker).Cell, o.Cause, 0, speaker);
+        int summary = sim.Causes.Add(CauseKind.Society, summaryText ?? $"{Ko.Gwa(mind.NameOf(speaker))} {Ko.I(other)} {TalkTable.Summary(o.T, end)}", sim.Tick, C(speaker).Cell, o.Cause, 0, speaker);
         int said = sim.Causes.Add(CauseKind.Society, text, sim.Tick, C(speaker).Cell, summary, 0, speaker);
         Sayings.Add(new Saying { Tick = sim.Tick, Speaker = speaker, Listener = listener, Topic = o.T, End = end, Line = said, Cell = C(speaker).Cell });
         if (Sayings.Count > 128) Sayings.RemoveAt(0);
@@ -350,6 +352,45 @@ public sealed partial class Society
         L.Neighbors(cell, nb);
         foreach (int j in nb) if (j >= 0 && L.Room[j] >= 0) return L.Rooms[L.Room[j]].Name;
         return "거기";
+    }
+
+    // ───────────────────────── 곁에서 본 다툼 ─────────────────────────
+
+    /// <summary>
+    /// 다툼을 곁에서 본 이들 (같은 방이거나 6칸 안 · 깨어 있는 사람 · 많아야 둘이 입을 연다 — 작은 승무원 사회의 다툼은 곁사람이 끼어들며 커지거나 가라앉는다):
+    /// 한쪽을 훨씬 아끼면 (정 · 같은 무리 − 원망) 편을 든다 — 덜 다정할수록 쉽게 · 상대는 나를 원망하고 더 화가 난다 (덤빌 수 있다) ·
+    /// 둘 다 미워하지 않는 다정하고 용감한 이는 말린다 — 둘의 화가 반으로 (몸싸움이 덜 난다) · 둘이 말린 이를 조금 더 믿는다. 나머지는 모른 척한다.
+    /// </summary>
+    private void Onlookers(Sim sim, int a, int b, int cause)
+    {
+        var mind = _mind!;
+        int spoke = 0;
+        foreach (int i in Near(C(a).Cell, a, 6))
+        {
+            if (i == b || !mind.Agents[i].IsPerson || spoke >= 2) continue;
+            ref var ci = ref C(i);
+            float fa = BondOf(i, a) - GrudgeOf(i, a) + (SameBand(i, a) ? 0.3f : 0), fb = BondOf(i, b) - GrudgeOf(i, b) + (SameBand(i, b) ? 0.3f : 0);
+            int side = fa - fb > 0.3f && fa > 0.3f ? a : fb - fa > 0.3f && fb > 0.3f ? b : -1;
+            float r = Rnd(sim, "곁에서 본 다툼", i, a * N + b);
+            if (side >= 0 && r < 0.4f + 0.4f * (1 - ci.Agree))
+            {
+                int foe = side == a ? b : a;
+                Add(Grudge, foe, i, 0.06f); Warm(sim, side, i, 0.05f); Warm(sim, foe, i, -0.05f);
+                C(foe).Anger = Math.Min(1, C(foe).Anger + 0.1f);
+                Sides++; spoke++;
+                Say(sim, i, foe, new Option(Topic.Fight, 1, side, cause, ci.Cell, i), TalkEnd.Defend, Pick(sim, side == a ? "다툼/편듦" : "다툼/감쌈", i),
+                    $"{Ko.I(mind.NameOf(i))} {Ko.Gwa(mind.NameOf(foe))} {mind.NameOf(side)}의 다툼에 끼어들어 {mind.NameOf(side)} 편을 들었다");
+                Remember(sim, foe, Topic.Blame, i, cause, 0.3f, C(foe).Cell);
+            }
+            else if (side < 0 && ci.Agree > 0.55f && GrudgeOf(i, a) < 0.3f && GrudgeOf(i, b) < 0.3f && r < ci.Agree * (0.5f + 0.5f * ci.Brave))
+            {
+                C(a).Anger *= 0.5f; C(b).Anger *= 0.5f;
+                Add(TrustOf, a, i, 0.03f); Add(TrustOf, b, i, 0.03f);
+                Mediations++; spoke++;
+                Say(sim, i, a, new Option(Topic.Fight, 1, b, cause, ci.Cell, i), TalkEnd.Comfort, Pick(sim, "다툼/말림", i),
+                    $"{Ko.I(mind.NameOf(i))} 다투던 {Ko.Gwa(mind.NameOf(a))} {mind.NameOf(b)} 사이에 끼어 말렸다");
+            }
+        }
     }
 
     // ───────────────────────── 갈등 사다리 ─────────────────────────

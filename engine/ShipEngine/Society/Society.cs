@@ -96,7 +96,7 @@ public sealed partial class Society : IEngine
     public List<Saying> Sayings = new();         // 최근 128마디
     public List<Brawl> Brawls = new();           // 지금 벌어지는 몸싸움
     public int N;                                  // 배열이 다루는 에이전트 수
-    public long Friendships, Griefs, TrustLosses, Talks, Arguments, Apologies, Rumors, Blames, Fights, Sabotages, Killings, Couples, Rejections, Breakups, PilferSeen, NightWakes;
+    public long Friendships, Griefs, TrustLosses, Talks, Arguments, Apologies, Rumors, Blames, Fights, Sabotages, Killings, Couples, Rejections, Breakups, PilferSeen, NightWakes, Sides, Mediations;
     private long _cursor;
     private readonly List<(long tick, int room, int cause)> _sealedIn = new(); // 사람이 안에 있는데 봉쇄된 방 (그 뒤 죽음을 컴퓨터 탓으로)
 
@@ -532,7 +532,7 @@ public sealed partial class Society : IEngine
         w.I32(N); w.Arr(Bond); w.Arr(TrustOf); w.Arr(Grudge); w.Arr(Debt); w.Arr(Known); w.Arr(LastTalk); w.Arr(TrustComputer); w.Arr(Grief);
         w.List(Memories); w.List(Sayings); w.List(Brawls);
         w.I64(Friendships); w.I64(Griefs); w.I64(TrustLosses); w.I64(Talks); w.I64(Arguments); w.I64(Apologies); w.I64(Rumors); w.I64(Blames);
-        w.I64(Fights); w.I64(Sabotages); w.I64(Killings); w.I64(_cursor); w.I64(PilferSeen); w.I64(NightWakes);
+        w.I64(Fights); w.I64(Sabotages); w.I64(Killings); w.I64(_cursor); w.I64(PilferSeen); w.I64(NightWakes); w.I64(Sides); w.I64(Mediations);
         w.Arr(Attract); w.Arr(Partner); w.Arr(_near); w.I64(Couples); w.I64(Rejections); w.I64(Breakups);
         SaveBands(w);
         w.I32(_sealedIn.Count); foreach (var (t, r, c) in _sealedIn) { w.I64(t); w.I32(r); w.I32(c); }
@@ -547,7 +547,7 @@ public sealed partial class Society : IEngine
         N = r.I32(); Bond = r.Arr<float>(); TrustOf = r.Arr<float>(); Grudge = r.Arr<float>(); Debt = r.Arr<float>(); Known = r.Arr<float>(); LastTalk = r.Arr<long>(); TrustComputer = r.Arr<float>(); Grief = r.Arr<float>();
         Memories = r.List<Memory>(); Sayings = r.List<Saying>(); Brawls = r.List<Brawl>();
         Friendships = r.I64(); Griefs = r.I64(); TrustLosses = r.I64(); Talks = r.I64(); Arguments = r.I64(); Apologies = r.I64(); Rumors = r.I64(); Blames = r.I64();
-        Fights = r.I64(); Sabotages = r.I64(); Killings = r.I64(); _cursor = r.I64(); PilferSeen = r.I64(); NightWakes = r.I64();
+        Fights = r.I64(); Sabotages = r.I64(); Killings = r.I64(); _cursor = r.I64(); PilferSeen = r.I64(); NightWakes = r.I64(); Sides = r.I64(); Mediations = r.I64();
         Attract = r.Arr<float>(); Partner = r.Arr<int>(); _near = r.Arr<byte>(); Couples = r.I64(); Rejections = r.I64(); Breakups = r.I64();
         LoadBands(r);
         _sealedIn.Clear(); int n = r.I32(); for (int i = 0; i < n; i++) { long t = r.I64(); int room = r.I32(); int c = r.I32(); _sealedIn.Add((t, room, c)); }

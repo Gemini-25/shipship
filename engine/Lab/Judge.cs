@@ -59,6 +59,9 @@ public static partial class Program
         int nan = 0;
         var pairs = new int[14, 14];
         var linkSeen = new HashSet<int>();
+        // 관찰 (JUDGE_SEEDS=1): 씨앗마다 그 뿌리에서 난 일의 가장 높은 하이라이트 점수 — 어떤 씨앗이 볼 만한 일을 낳나
+        bool seedWatch = Environment.GetEnvironmentVariable("JUDGE_SEEDS") == "1";
+        var seedBest = new Dictionary<int, (float spot, FactKind kind, long tick, int n)>();
         for (long t = 0; t < end; t++)
         {
             tickClock.Restart();
@@ -71,6 +74,16 @@ public static partial class Program
             int day = (int)Math.Min(nDays - 1, t / dayTicks);
             foreach (var f in s.Facts.Since(cursor))
             {
+                if (seedWatch && f.Cause != 0 && f.Kind != FactKind.StorySeed)
+                {
+                    var rc = s.Causes.Chain(f.Cause);
+                    if (rc.Count > 0 && st.Seeds.Exists(x => x.Cause == rc[0]))
+                    {
+                        float sp = d.SpotScore(f.Cell);
+                        var o = seedBest.GetValueOrDefault(rc[0]);
+                        seedBest[rc[0]] = sp > o.spot ? (sp, f.Kind, f.Tick, o.n + 1) : (o.spot, o.kind, o.tick, o.n + 1);
+                    }
+                }
                 if (f.Cause != 0 && linkSeen.Add(f.Cause))
                 {
                     // 엔진 사이의 반응: 원인 사슬에서 이웃한 두 마디의 엔진이 다르면 (마디마다 한 번)
@@ -142,6 +155,12 @@ public static partial class Program
         int mixed = Enumerable.Range(0, fullDays).Count(i => hlPeople[i] > 0 && hlPeople[i] < hlDay[i]);
         var wide = d.AllChains().OrderByDescending(c => c.Count).ThenByDescending(c => c.Facts).FirstOrDefault();
         double msTick = clock.Elapsed.TotalMilliseconds / Math.Max(1, ticks);
+        if (seedWatch)
+            foreach (var sd in st.Seeds)
+            {
+                var b = seedBest.GetValueOrDefault(sd.Cause);
+                Console.WriteLine($"    씨앗 {Time.Clock(sd.Tick)} {sd.Kind} ({Storyteller.ActName(sd.Act)}) → 사실 {b.n} · 가장 높은 {b.spot:0} {(b.n > 0 ? FactNames.Of(b.kind) + " " + Time.Clock(b.tick) : "")}{(b.spot >= Director.HighlightAt ? " ★" : "")} · {s.Causes.Text(sd.Cause)}");
+            }
         if (Environment.GetEnvironmentVariable("JUDGE_SPOTS") == "1")
             for (int h = 0; h < d.HourBest.Count; h++) Console.WriteLine($"    {h / 24}일 {h % 24:00}시 가장 높은 후보 {d.HourBest[h].spot:0} {FactNames.Of(d.HourBest[h].kind)}{(d.HourBest[h].spot >= Director.HighlightAt ? " ★" : "")}");
         // 60프레임: 한 프레임 16.7ms 중 그리기 몫(약 4.7ms)을 빼고 12ms를 엔진에 — 한 틱 2.4초
@@ -160,7 +179,7 @@ public static partial class Program
         string Esc(string x) => x.Replace("\\", "\\\\").Replace("\"", "\\\"");
         Console.WriteLine($"\n  {ship} 시드 {seed} · 사람 {crew} · {ran:0.0}일 · {clock.Elapsed.TotalSeconds:0}초 — 산 사람 {alive}/{crew} · 죽음 {deadCount} ({string.Join(" · ", causes.Select(kv => $"{kv.Key} {kv.Value}"))})");
         Console.WriteLine($"    하이라이트 날마다 {string.Join(" ", hlDay.Take(fullDays))} (3~12인 날 {inRange}/{fullDays} · 사건과 사람이 섞인 날 {mixed}) · 가장 넓은 사슬 {wide?.Count ?? 0}개 엔진 ({wide?.Path}) · 여섯 개 넘게 {d.ChainsWith(6)} · 원인 없는 큰 일 {d.Orphans.Values.Sum()}{(d.Orphans.Count > 0 ? " (" + string.Join(" ", d.Orphans.OrderByDescending(kv => kv.Value).Take(5).Select(kv => $"{Director.FactText(kv.Key)} {kv.Value}")) + ")" : "")} · 배 갈라짐 {splits}{(splits > 0 ? $" (그때 산 사람 {aliveAtSplit} → 끝에 {alive})" : "")}");
-        Console.WriteLine($"    사고 날마다 {string.Join(" ", acc.Take(fullDays))} ({string.Join(" ", accKinds.OrderByDescending(kv => kv.Value).Take(6).Select(kv => $"{FactNames.Of(kv.Key)} {kv.Value}"))}) · 다침/쓰러짐 {string.Join(" ", hurt.Take(fullDays))} · 식량 {food:0}일 · 물 {water:0}일 · 예비 공기 {net.AirReserve:0}몰 · 마스크 {mind.MasksWorn} · 긴급 공기 {s.Get<ShipMind>().EmergencyAir} · 거짓말 {s.Get<Society>().LiesTold}(들통 {s.Get<Society>().LiesExposed}) · 회의 {s.Get<Society>().Councils}(재판 {s.Get<Society>().Trials} 유죄 {s.Get<Society>().Convictions} · 선거 {s.Get<Society>().Elections} · 반란 {s.Get<Society>().Mutinies} · 못 열림 {s.Get<Society>().CouncilsFailed} · 흩어짐 {s.Get<Society>().CouncilsBroken}) · 대피 {s.Get<ShipMind>().Shelters} · 한 틱 {msTick:0.00}ms (가장 느린 시간 {worstHourMs:0.00}ms → 60프레임 배속 {maxSpeed:0}배)");
+        Console.WriteLine($"    사고 날마다 {string.Join(" ", acc.Take(fullDays))} ({string.Join(" ", accKinds.OrderByDescending(kv => kv.Value).Take(6).Select(kv => $"{FactNames.Of(kv.Key)} {kv.Value}"))}) · 다침/쓰러짐 {string.Join(" ", hurt.Take(fullDays))} · 식량 {food:0}일 · 물 {water:0}일 · 예비 공기 {net.AirReserve:0}몰 · 마스크 {mind.MasksWorn} · 긴급 공기 {s.Get<ShipMind>().EmergencyAir} · 거짓말 {s.Get<Society>().LiesTold}(들통 {s.Get<Society>().LiesExposed}) · 회의 {s.Get<Society>().Councils}(재판 {s.Get<Society>().Trials} 유죄 {s.Get<Society>().Convictions} · 선거 {s.Get<Society>().Elections} · 반란 {s.Get<Society>().Mutinies} · 못 열림 {s.Get<Society>().CouncilsFailed} · 흩어짐 {s.Get<Society>().CouncilsBroken}) · 대화 {s.Get<Society>().Talks}(다툼 {s.Get<Society>().Arguments} · 사과 {s.Get<Society>().Apologies} · 소문 {s.Get<Society>().Rumors} · 편듦 {s.Get<Society>().Sides} · 말림 {s.Get<Society>().Mediations} · 몸싸움 {s.Get<Society>().Fights} · 밤 깸 {s.Get<Society>().NightWakes}) · 대피 {s.Get<ShipMind>().Shelters} · 한 틱 {msTick:0.00}ms (가장 느린 시간 {worstHourMs:0.00}ms → 60프레임 배속 {maxSpeed:0}배)");
         Console.WriteLine($"JUDGE {{\"ship\":\"{ship}\",\"seed\":{seed},\"crew\":{crew},\"days\":{days},\"ran\":{ran:0.00},\"alive\":{alive},\"deaths\":{deadCount},"
             + $"\"firstDeath\":{(firstDeath < 0 ? -1 : firstDeath / (double)dayTicks):0.00},\"halfDead\":{(halfDead < 0 ? -1 : halfDead / (double)dayTicks):0.00},"
             + $"\"causes\":{{{string.Join(",", causes.Select(kv => $"\"{Esc(kv.Key)}\":{kv.Value}"))}}},"

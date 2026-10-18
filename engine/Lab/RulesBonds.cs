@@ -92,6 +92,44 @@ public static partial class Program
                 $"거친 이: 다툼 {rough.argue} · 사과 {rough.sorry} · 정 {rough.bond:0.00} · 원한 {rough.grudge:0.00} / 다정한 이: 다툼 {kind.argue} · 사과 {kind.sorry} · 원한 {kind.grudge:0.00}");
         }
 
+        // ── 곁에서 본 다툼: 따지다 다투면 곁의 사람이 끼어든다 — 한쪽을 아끼는 이는 그 편을 들고(상대가 그를 원망한다) · 다정하고 용감한 이는 말린다(둘의 화가 가라앉는다) ──
+        {
+            (long argue, long sides, long calms, float foeGrudge, float anger, string line) Watch1(bool friend, ulong seed)
+            {
+                var s = Worlds.Full(lay, seed);
+                var m = s.Get<Mind>(); var so = s.Get<Society>();
+                int x = m.AddPerson(s, At(14, 2)), y = m.AddPerson(s, At(15, 3)), z = m.AddPerson(s, At(16, 2));
+                m.SetPersonality(x, 0.5f, 0.5f, 0.6f, 0.05f, 0.8f);   // 따짐을 받는 거친 이 (맞선다)
+                m.SetPersonality(y, 0.5f, 0.5f, 0.6f, 0.4f, 0.6f);
+                if (friend) m.SetPersonality(z, 0.5f, 0.5f, 0.6f, 0.3f, 0.5f); else { m.SetPersonality(z, 0.5f, 0.5f, 0.6f, 0.95f, 0.2f); m[z].C.Brave = 0.9f; }
+                s.Run(2);
+                so.Grudge[y * so.N + x] = 0.6f;
+                if (friend) so.Bond[z * so.N + y] = 0.8f;
+                int c0 = s.Causes.Add(CauseKind.Person, $"{Ko.I(m.NameOf(x))} 거르개를 거꾸로 끼웠다", s.Tick, At(14, 2), 0, 0, x);
+                so.Remember(s, y, Topic.Blame, x, c0, 0.8f, At(14, 2));
+                float anger = 0; string line = "";
+                for (int k = 0; k < Time.Hours(4); k++)
+                {
+                    long before = so.Mediations;
+                    s.Step();
+                    foreach (int p in new[] { x, y, z }) { m[p].C.Hunger = 0; m[p].C.Sleepy = 0; m[p].C.Lonely = 0.5f; }
+                    if (so.Mediations > before) anger = Math.Max(m[x].C.Anger, m[y].C.Anger);
+                }
+                var w = so.Sayings.FirstOrDefault(q => q.Speaker == z && q.End is TalkEnd.Defend or TalkEnd.Comfort);
+                if (w.Line != 0) line = s.Causes.Story(w.Line);
+                return (so.Arguments, so.Sides, so.Mediations, so.GrudgeOf(x, z), anger, line);
+            }
+            (long argue, long sides, long calms, float foeGrudge, float anger, string line) Watch(bool friend)
+            {
+                var r = new ulong[] { 4, 5, 6, 7, 8, 9 }.Select(sd => Task.Run(() => Watch1(friend, sd))).ToArray().Select(t => t.Result).ToList();
+                return (r.Sum(q => q.argue), r.Sum(q => q.sides), r.Sum(q => q.calms), r.Max(q => q.foeGrudge), r.Where(q => q.calms > 0).Select(q => q.anger).DefaultIfEmpty(1).Max(), r.Select(q => q.line).FirstOrDefault(l => l != "") ?? "");
+            }
+            var pal = Watch(true); var peace = Watch(false);
+            Check("곁에서 본 다툼: 따지다 다투면 곁의 사람이 끼어든다 — 한쪽을 아끼는 이는 그 편을 들어 상대의 원망을 사고 · 다정하고 용감한 이는 말려 둘의 화가 가라앉는다",
+                pal.argue >= 1 && pal.sides >= 1 && pal.calms == 0 && pal.foeGrudge > 0.03f && peace.argue >= 1 && peace.calms >= 1 && peace.sides == 0 && peace.anger < 0.3f && pal.line.Contains("편을 들었다"),
+                $"아끼는 이: 다툼 {pal.argue} · 편듦 {pal.sides} · 말림 {pal.calms} · 상대의 원망 {pal.foeGrudge:0.00} · \"{pal.line}\" / 다정한 이: 다툼 {peace.argue} · 말림 {peace.calms} · 편듦 {peace.sides} · 말린 뒤 화 {peace.anger:0.00}");
+        }
+
         // ── 갈등 사다리 끝: 깊은 원한 · 거친 성격 · 불안 · 긴장 · 화가 겹치면 끝장을 보려 덤빈다 — 아무도 없으면 크게 다치거나 죽고 · 로봇이 곁에 있으면 먼저 말린다 ──
         {
             (float blunt, bool alive, long fights, bool stopped, string said) Feud(bool robot)
