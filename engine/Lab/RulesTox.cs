@@ -62,5 +62,118 @@ public static partial class Program
             Check("염화수소 1500ppm 속 30분: 폐가 상하고 아프다 (암모니아의 두 배쯤 독하다)", life[b].LungDamage > 0.2 && life[b].Pain > 0.3,
                 $"폐 손상 {life[b].LungDamage:0.00} · 아픔 {life[b].Pain:0.00}");
         }
+
+        // ── (나) 냄새 · 증상 · 센서 ──
+        var mlay = Worlds.Ascii(Worlds.MindShip, Worlds.MindLegend);
+        int MAt(int x, int y) => Worlds.At(mlay, x, y);
+        int right = mlay.Room[MAt(12, 2)];
+        void Fill(Sim w, int gas, int room, double ppm) { var f = w.Get<Field>(); foreach (int c in w.Layout.Rooms[room].Cells) f.AddGas(c, gas, f.Moles(c) * ppm * 1e-6, f.Temp(c)); }
+        BeliefSource? Knows(Mind m, int a, int room)
+        {
+            BeliefSource? got = null;   // 제 코 · 몸으로 안 것이 있으면 그것 (말로 들은 믿음은 외친 사람 자리에 따로 생긴다)
+            foreach (var b in m[a].Beliefs)
+                if (b.Kind == BeliefKind.BadAir && b.Conf >= 0.3f && mlay.Room[b.Cell] == room && (got == null || b.Src is BeliefSource.Smelled or BeliefSource.Felt)) got = b.Src;
+            return got;
+        }
+
+        // 쓴 아몬드 냄새는 맡는 사람만 맡는다 → 맡은 사람이 외쳐 못 맡는 사람도 말로 안다 · 염화수소는 누구나 맡는다
+        {
+            int[] spots = { MAt(12, 2), MAt(13, 3), MAt(17, 2), MAt(18, 3), MAt(12, 4), MAt(17, 4) };
+            ulong seed = 1;
+            while (spots.Select((_, i) => Mind.SmellsAlmond(seed, i)).Distinct().Count() < 2) seed++;   // 맡는 사람 · 못 맡는 사람이 다 있는 세계
+            (int smelled, int told, int wrong, int n, string why) Run(int gas, double ppm)
+            {
+                var s = Worlds.Full(mlay, seed); var m = s.Get<Mind>();
+                var ids = spots.Select(c => m.AddPerson(s, c)).ToArray();
+                Fill(s, gas, right, ppm);   // 다 같은 방에 있을 때 (몇 틱만 지나도 밥 먹으러 나간다)
+                s.Run(Time.Minutes(40 / 60.0));
+                int sm = 0, tl = 0, wr = 0, n = 0;
+                foreach (int a in ids)
+                {
+                    bool can = gas == s.Get<Field>().T.gHCl || Mind.SmellsAlmond(s.Seed, a);
+                    var src = Knows(m, a, right);
+                    if (can) { n++; if (src == BeliefSource.Smelled) sm++; else wr++; }
+                    else if (src == BeliefSource.Smelled) wr++;
+                    else if (src is BeliefSource.Told) tl++;
+                }
+                var note = s.Causes.Text(m[ids.First(a => gas == s.Get<Field>().T.gHCl || Mind.SmellsAlmond(s.Seed, a))].Beliefs.FirstOrDefault(b => b.Kind == BeliefKind.BadAir).Cause);
+                return (sm, tl, wr, n, note);
+            }
+            var probe = Worlds.Full(mlay, seed).Get<Field>().T;
+            var cn = Run(probe.gHCN, 5);
+            var cl = Run(probe.gHCl, 3);
+            int deaf = spots.Length - cn.n;
+            Check("시안화수소 5ppm: 쓴 아몬드 냄새는 맡는 사람만 맡는다 (유전 — 사람마다 다르다) → 그 사람이 외쳐 못 맡는 사람도 말로 안다 · 염화수소 3ppm은 누구나 맡는다",
+                cn.wrong == 0 && cn.smelled == cn.n && cn.told == deaf && cl.wrong == 0 && cl.smelled == spots.Length && cn.why.Contains("아몬드") && cl.why.Contains("매캐한"),
+                $"시안화수소: 맡음 {cn.smelled}/{cn.n} · 못 맡는 {deaf}명 중 말로 앎 {cn.told} · 어긋남 {cn.wrong} (\"{cn.why}\") / 염화수소: 맡음 {cl.smelled}/{spots.Length} (\"{cl.why}\")");
+        }
+
+        // 못 맡는 사람은 늦게 안다 — 몸에 쌓여 어지러울 때 (100ppm: 맡는 사람은 바로 나가고 · 못 맡는 사람은 몇 분 뒤 · 쓰러지기 전에)
+        {
+            (double leftMin, bool felt, bool up) Alone(bool smeller)
+            {
+                ulong seed = 1;
+                while (Mind.SmellsAlmond(seed, 0) != smeller) seed++;
+                var s = Worlds.Full(mlay, seed); var m = s.Get<Mind>(); var life = s.Get<Life>();
+                int a = m.AddPerson(s, MAt(16, 3));
+                s.Run(5);
+                Fill(s, s.Get<Field>().T.gHCN, right, 100);
+                long t0 = s.Tick, left = -1;
+                for (int k = 0; k < Time.Minutes(15) && left < 0; k++) { s.Step(); if (mlay.Room[m[a].C.Cell] != right) left = s.Tick; }
+                return (left > 0 ? Time.ToSeconds(left - t0) / 60 : -1, m[a].Beliefs.Any(b => b.Kind == BeliefKind.BadAir && b.Src == BeliefSource.Felt), life[m[a].C.Body].Conscious != 0);
+            }
+            var yes = Alone(true); var no = Alone(false);
+            Check("시안화수소 100ppm에 혼자: 냄새를 맡는 사람은 1분 안에 나가고 · 못 맡는 사람은 어지러워진 뒤에야 (몇 분 늦게) 나간다 — 둘 다 쓰러지기 전에",
+                yes.leftMin > 0 && yes.leftMin < 1 && no.felt && no.leftMin > yes.leftMin + 1 && no.leftMin < 12 && yes.up && no.up,
+                $"맡는 사람 {yes.leftMin:0.0}분 · 못 맡는 사람 {no.leftMin:0.0}분 (어지러움 {no.felt}) · 깨어 있음 {yes.up}/{no.up}");
+        }
+
+        // 자던 사람: 염화수소 30ppm은 코와 목을 찔러 깨우지만 · 시안화수소 30ppm은 깨우지 못한다 (불난 밤에 잠든 채 숨지는 까닭)
+        {
+            bool Woke(Func<Field, int> gas)
+            {
+                var s = Worlds.Full(mlay, 1); var m = s.Get<Mind>(); var life = s.Get<Life>();
+                int bed = MAt(3, 5);
+                int p = m.AddPerson(s, bed, -1, bed);
+                life[m[p].C.Body].Asleep = 1; m[p].C.Sleepy = 1;
+                m[p].Plan.Add(new PlanStep { Kind = StepKind.Use, Arg = (byte)UseKind.Sleep, Value = Time.Hours(8) });
+                m[p].C.Goal = GoalKind.Sleep;
+                s.Run(5);
+                Fill(s, gas(s.Get<Field>()), mlay.Room[bed], 30);
+                for (int k = 0; k < Time.Minutes(5); k++) { s.Step(); if (life[m[p].C.Body].Asleep == 0) return true; }
+                return false;
+            }
+            bool hcl = Woke(f => f.T.gHCl), hcn = Woke(f => f.T.gHCN);
+            Check("자던 사람: 염화수소 30ppm에는 깬다 · 시안화수소 30ppm에는 깨지 않는다 (찌르지 않는다)", hcl && !hcn, $"염화수소 {(hcl ? "깸" : "안 깸")} · 시안화수소 {(hcn ? "깸" : "안 깸")}");
+        }
+
+        // 주컴퓨터 공기 센서: 시안화수소를 재 기체 이름 · 짙기와 할 일을 방송한다
+        {
+            var clay = Worlds.Ascii(Worlds.MindShipComputer, Worlds.MindLegend);
+            int room = clay.Room[Worlds.At(clay, 12, 2)];
+            var s = Worlds.Full(clay, 1); var cm = s.Get<ShipMind>();
+            s.Run(Time.Minutes(10 / 60.0));
+            Fill(s, s.Get<Field>().T.gHCN, room, 80);
+            long at = -1;
+            for (int k = 0; k < Time.Minutes(1) && at < 0; k++) { s.Step(); if (cm.Incidents.Any(x => x.Active != 0 && x.Kind == IncidentKind.Toxic && x.Room == room)) at = k; }
+            var said = cm.Log.Select(x => x.text).LastOrDefault(t => t.Contains("독한 기체")) ?? "";
+            Check("주컴퓨터 공기 센서: 시안화수소 80ppm을 1분 안에 잡아 '시안화수소 · 짙기 · 숨을 참고 나오세요'를 방송한다",
+                at >= 0 && said.Contains("시안화수소") && said.Contains("숨을 참고"), $"{(at >= 0 ? $"{Time.ToSeconds(at):0}초" : "못 잡음")} · \"{said}\"");
+        }
+
+        // 불보다 먼저: 달아오른 PVC 물건 — 불꽃이 없어도 염화수소를 공기 센서가 잡는다 (ISS CSA-CP의 염화수소는 불의 이른 신호)
+        {
+            var clay = Worlds.Ascii(Worlds.MindShipComputer, Worlds.MindLegend);
+            int room = clay.Room[Worlds.At(clay, 17, 3)];
+            var s = Worlds.Full(clay, 1); var cm = s.Get<ShipMind>(); var f = s.Get<Field>(); var ch = s.Get<Chemistry>(); var net = s.Get<Network>();
+            int hot = clay.Rooms[room].Cells.First(c => net.Strands[c] == 0 && clay.Furniture.All(fu => Array.IndexOf(fu.Cells, c) < 0));   // 선이 지나지 않는 칸 (달군 선은 끊겨 센서가 먼저 죽는다)
+            f.AddStore(hot, f.T.sPvc, 1.0);
+            long at = -1;
+            for (int k = 0; k < Time.Minutes(15) && at < 0; k++) { f.Tf[hot] = 560; s.Step(); if (cm.Incidents.Any(x => x.Active != 0 && x.Kind == IncidentKind.Toxic && x.Room == room)) at = k; }
+            var said = cm.Log.Select(x => x.text).LastOrDefault(t => t.Contains("독한 기체")) ?? "";
+            if (Debug) foreach (var (tk, tx) in cm.Log.TakeLast(10)) Console.WriteLine($"    주컴 {Time.Clock(tk)} {tx}");
+            Check("불보다 먼저: 287℃로 달아오른 PVC는 불꽃 없이도 염화수소를 내고 · 주컴퓨터 공기 센서가 그것으로 먼저 안다 ('염화수소 · 입을 가리고')",
+                at >= 0 && ch.BurningCount == 0 && said.Contains("염화수소"), $"{(at >= 0 ? $"{Time.ToSeconds(at) / 60:0.0}분" : "15분 동안 못 잡음")} · 불 {ch.BurningCount} · 남은 피복 {f.Stored(f.T.sPvc, hot):0.00}몰 · 방 염화수소 {s.Layout.Rooms[room].Cells.Max(c => f.Ppm(f.T.gHCl, c)):0.0}ppm (센서 {cm.RoomHCl[room]:0.0}) · \"{said}\"");
+        }
     }
 }

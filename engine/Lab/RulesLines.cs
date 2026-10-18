@@ -204,13 +204,16 @@ public static partial class Program
                 var ever = new HashSet<int>();
                 var st = s.Get<Structure>();
                 int door = lay.DoorAt[At(26, 2)];
+                // 열어 둔 문: 함장이 자동 봉쇄를 꺼 둔 배 — 켜 두면 피복이 타며 내는 염화수소를 주컴퓨터가 곧바로 잡아 그 방을 봉쇄하고 문을 닫는다 (② 사고 화학 (나) · 그것은 '사고 화학' 묶음이 본다)
+                if (open && s.Find<ShipMind>() is ShipMind cmo) cmo.Policy.AutoSeal = 0;
                 for (int k = 0; k < (int)Time.Minutes(12); k++)
                 {
                     if (open) st.RequestDoor(door, 1);   // 생명유지실 ↔ 휴게실 문을 열어 둔다
                     s.Step();
-                    for (int c = 0; c < lay.N; c++) if (ch.Burning[c] != 0 && ever.Add(c) && Debug) Console.WriteLine($"      {Time.Clock(s.Tick)} 불 ({lay.X(c)},{lay.Y(c)}) 가닥 {net.Strands[c]} 피복 {f.Stored(f.T.sPoly, c):0.0} 산소 {f.Partial(f.T.gO2, c):0.0}/{f.Pressure(c):0.0}kPa");
+                    for (int c = 0; c < lay.N; c++) if (ch.Burning[c] != 0 && ever.Add(c) && Debug) Console.WriteLine($"      {Time.Clock(s.Tick)} 불 ({lay.X(c)},{lay.Y(c)}) 방 {lay.Room[c]} 가닥 {net.Strands[c]} 피복 {f.Stored(f.T.sPoly, c):0.0} 산소 {f.Partial(f.T.gO2, c):0.0}/{f.Pressure(c):0.0}kPa · 문 {f.DoorOpen[door]:0.0}");
                 }
                 if (Debug) Console.WriteLine(LinesMap(net, lay));
+                if (Debug && s.Find<ShipMind>() is ShipMind cm) foreach (var (tk, tx) in cm.Log.TakeLast(12)) Console.WriteLine($"      주컴 {Time.Clock(tk)} {tx}");
                 int far = ever.Where(c => c != start).OrderByDescending(c => Math.Abs(lay.X(c) - lay.X(start)) + Math.Abs(lay.Y(c) - lay.Y(start))).FirstOrDefault(-1);
                 return (ever.Count, ever.Select(c => _lineRoomOf(lay, c)).Where(r => r >= 0).Distinct().Count(), far >= 0 ? s.Causes.Story(ch.FireCause[far] != 0 ? ch.FireCause[far] : s.Facts.Since(0).Where(x => x.Kind is FactKind.FireSpread && x.Cell == far).Select(x => x.Cause).FirstOrDefault()) : "",
                     Enumerable.Range(0, lay.N).Count(c => net.LineCutAt(c, LineKind.Power)));

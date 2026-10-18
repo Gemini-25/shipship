@@ -98,6 +98,7 @@ public sealed partial class ShipMind : IEngine
     public int[] RoomHot;                       // 방에서 가장 뜨거운 칸
     public float[] RoomAirT;                    // 방 공기 온도 (몰 가중 평균 — 벽의 온도계가 읽는 값 · '너무 덥다'는 이것으로. 가장 뜨거운 칸은 불을 찾는 데)
     public float[] RoomNH3, RoomO3;             // 방에서 가장 짙은 암모니아 · 오존 (ppm)
+    public float[] RoomHCN, RoomHCl;            // ② 사고 화학: 방에서 가장 짙은 시안화수소 · 염화수소 (ppm — ISS의 CSA-CP처럼 공기 센서 묶음이 잰다)
     public int[] RoomToxCell;                   // 독한 기체가 가장 짙은 칸
     private long _tick;
     public long LastCycle = long.MinValue / 2;
@@ -141,7 +142,7 @@ public sealed partial class ShipMind : IEngine
         F = f; L = f.L; T = f.T;
         int nr = L.Rooms.Count;
         RoomKPa = new float[nr]; RoomKPaPrev = new float[nr]; RoomO2 = new float[nr]; RoomSoot = new float[nr]; RoomSootPrev = new float[nr]; RoomCO = new float[nr]; RoomCO2 = new float[nr]; RoomTemp = new float[nr]; RoomCO2Hold = new byte[nr];
-        RoomHot = new int[nr]; RoomAirT = new float[nr]; GaveAirAt = Enumerable.Repeat(-100, nr).ToArray(); DoorWasOpen = new byte[L.Doors.Count]; RoomNH3 = new float[nr]; RoomO3 = new float[nr]; RoomToxCell = new int[nr]; RoomSeen = new byte[nr]; _stale = new byte[nr]; RoomMoles = new float[nr * 6];
+        RoomHot = new int[nr]; RoomAirT = new float[nr]; GaveAirAt = Enumerable.Repeat(-100, nr).ToArray(); DoorWasOpen = new byte[L.Doors.Count]; RoomNH3 = new float[nr]; RoomO3 = new float[nr]; RoomHCN = new float[nr]; RoomHCl = new float[nr]; RoomToxCell = new int[nr]; RoomSeen = new byte[nr]; _stale = new byte[nr]; RoomMoles = new float[nr * 6];
         _roomDoors = new int[nr][];
         _roomVent = new int[nr];
         Span<int> nb = stackalloc int[4];
@@ -255,7 +256,7 @@ public sealed partial class ShipMind : IEngine
             RoomSeen[r] = link;
             _stale[r] = (byte)(fresh ? 0 : 1);
             if (!fresh) { RoomMoles[r * 6 + _reads % 6] = RoomMoles[r * 6 + (_reads + 5) % 6]; continue; }
-            double p = 0, o2 = double.MaxValue, soot = 0, co = 0, co2 = 0, temp = 0, nh3 = 0, o3 = 0;
+            double p = 0, o2 = double.MaxValue, soot = 0, co = 0, co2 = 0, temp = 0, nh3 = 0, o3 = 0, hcn = 0, hcl = 0, worst = 0;
             int hot = cells[0], tox = cells[0];
             double n = 0, nt = 0, na = 0;
             foreach (int c in cells)
@@ -267,9 +268,10 @@ public sealed partial class ShipMind : IEngine
                 soot = Math.Max(soot, Ppm(T.gSoot));
                 co = Math.Max(co, Ppm(T.gCO));
                 co2 += Ppm(T.gCO2) * m;   // 이산화탄소는 방 평균 (몰 가중) — 벽의 센서는 숨 한 모금의 짙은 칸이 아니라 방 공기를 읽는다
-                double a = Ppm(T.gNH3);
-                if (a > nh3) { nh3 = a; tox = c; }
-                o3 = Math.Max(o3, Ppm(T.gO3));
+                double a = Ppm(T.gNH3), oz = Ppm(T.gO3), cn = Ppm(T.gHCN), cl = Ppm(T.gHCl);
+                nh3 = Math.Max(nh3, a); o3 = Math.Max(o3, oz); hcn = Math.Max(hcn, cn); hcl = Math.Max(hcl, cl);
+                double bad = Tox(a, oz, cn, cl);
+                if (bad > worst) { worst = bad; tox = c; }
                 double tg = F.Temp(c, gc);
                 double tc = pc > 5 ? tg : 0; // 거의 진공이면 공기 온도계가 못 잰다
                 if (tc > temp) { temp = tc; hot = c; }
@@ -280,7 +282,7 @@ public sealed partial class ShipMind : IEngine
             RoomKPa[r] = (float)(p / cells.Length); RoomO2[r] = (float)o2; RoomSoot[r] = (float)soot; RoomCO[r] = (float)co; RoomCO2[r] = (float)(n > 0 ? co2 / n : 0); RoomTemp[r] = (float)temp;
             // 이산화탄소가 5000ppm(ISS 행동 한계 약 4mmHg)을 넘어 머문 읽기 수 — 4000 아래로 내려가야 풀린다 (달리는 사람 곁에서 잠깐 짙어졌다 옅어지는 것으로 경보가 깜빡이지 않게)
             if (RoomCO2[r] > 5000) { if (RoomCO2Hold[r] < 255) RoomCO2Hold[r]++; } else if (RoomCO2[r] < 4000) RoomCO2Hold[r] = 0;
-            RoomHot[r] = hot; RoomNH3[r] = (float)nh3; RoomO3[r] = (float)o3; RoomToxCell[r] = tox;
+            RoomHot[r] = hot; RoomNH3[r] = (float)nh3; RoomO3[r] = (float)o3; RoomHCN[r] = (float)hcn; RoomHCl[r] = (float)hcl; RoomToxCell[r] = tox;
         }
         // 열린 문 · 압력 맞춤 밸브로 더 낮은 방과 이어진 방: 공기를 그리로 주는 중 (새는 방의 문을 열면 옆 방 기압이 한꺼번에 떨어진다 — 그 방의 구멍이 아니다)
         Span<int> nb = stackalloc int[4];
@@ -311,7 +313,7 @@ public sealed partial class ShipMind : IEngine
         return -1;
     }
 
-    private void Raise(Sim sim, IncidentKind k, int room, int cell, float level, int subject = -1, int cause = 0)
+    private void Raise(Sim sim, IncidentKind k, int room, int cell, float level, int subject = -1, int cause = 0, string? detail = null)
     {
         int i = Find(k, room, subject);
         if (i >= 0)
@@ -333,7 +335,20 @@ public sealed partial class ShipMind : IEngine
             }
         }
         Incidents.Add(new Incident { Id = ++IncidentSeq, Kind = k, Active = 1, Room = room, Cell = cell, Subject = subject, Since = sim.Tick, LastAlarm = long.MinValue / 2, Level = level, Cause = cause, RobotA = -1, RobotB = -1, Person = -1, Decl1 = -1, Decl2 = -1, AskedAt = long.MinValue / 2 });
-        Say(sim, $"{RoomName(room)}: {KindName(k)}");
+        Say(sim, detail == null ? $"{RoomName(room)}: {KindName(k)}" : $"{RoomName(room)}: {KindName(k)} — {detail}");
+    }
+
+    /// <summary>독한 정도 (암모니아 ppm에 견준 값): 오존 ×100 · 시안화수소 ×10 · 염화수소 ×7 (각 기체의 해로운 문턱 — 암모니아 35 · 오존 0.3 · 시안화수소 4.7 · 염화수소 5 — 에 맞춘 무게).</summary>
+    private static double Tox(double nh3, double o3, double hcn, double hcl) => Math.Max(Math.Max(nh3, o3 * 100), Math.Max(hcn * 10, hcl * 7));
+
+    /// <summary>방송에 붙일 기체 이름과 짙기 — 가장 독한 것 하나 ('시안화수소 80ppm — 숨을 참고 나오세요').</summary>
+    private string ToxDetail(int r)
+    {
+        double nh3 = RoomNH3[r], o3 = RoomO3[r] * 100, hcn = RoomHCN[r] * 10, hcl = RoomHCl[r] * 7;
+        if (hcn >= nh3 && hcn >= o3 && hcn >= hcl) return $"시안화수소 {RoomHCN[r]:0}ppm — 숨을 참고 나오세요";
+        if (hcl >= nh3 && hcl >= o3) return $"염화수소 {RoomHCl[r]:0}ppm — 입을 가리고 나오세요";
+        if (o3 > nh3) return $"오존 {RoomO3[r]:0.0}ppm";
+        return $"암모니아 {RoomNH3[r]:0}ppm";
     }
 
     public static string KindName(IncidentKind k) => k switch
@@ -384,7 +399,12 @@ public sealed partial class ShipMind : IEngine
             else if (Losing(r) || RoomKPa[r] < 80 && RoomKPaPrev[r] - RoomKPa[r] > 0.2f && !Moved(r, 1)) leaking.Add((r, -dp));
             if (RoomCO[r] > 150) { Raise(sim, IncidentKind.CO, r, _roomVent[r], RoomCO[r], -1, NearFireCause(r)); Mark(IncidentKind.CO, r); }
             // 독한 기체: 암모니아 35ppm(15분 노출 한계) · 오존 0.3ppm 넘으면 — 그 방 안에 새는 냉매 고리가 있으면 그 샘이 원인
-            if (RoomNH3[r] > 35 || RoomO3[r] > 0.3f) { Raise(sim, IncidentKind.Toxic, r, RoomToxCell[r], Math.Max(RoomNH3[r], RoomO3[r] * 100), -1, ToxicCause(r)); Mark(IncidentKind.Toxic, r); }
+            if (RoomNH3[r] > 35 || RoomO3[r] > 0.3f || RoomHCN[r] > 10 || RoomHCl[r] > 5)
+            {
+                int tc = ToxicCause(r);
+                Raise(sim, IncidentKind.Toxic, r, RoomToxCell[r], (float)Tox(RoomNH3[r], RoomO3[r], RoomHCN[r], RoomHCl[r]), -1, tc != 0 ? tc : NearFireCause(r), ToxDetail(r));
+                Mark(IncidentKind.Toxic, r);
+            }
             if (RoomCO2Hold[r] >= 6 || RoomO2[r] < 15 && RoomKPa[r] > 40 && RoomO2[r] < shipO2 - 1.5f) { Raise(sim, IncidentKind.BadAir, r, _roomVent[r], RoomO2[r], -1, NearFireCause(r)); Mark(IncidentKind.BadAir, r); }
         }
         // 샘: 문(열렸거나 · 닫힌 문의 틈)으로 이어진 새는 방들은 한 구멍으로 함께 빠지는 것 — 그중 기압이 가장 낮은 방(구멍에 가장 가깝다) 하나만 사건으로 (방마다 봉쇄 · 로봇을 보내지 않게)
@@ -1306,7 +1326,7 @@ public sealed partial class ShipMind : IEngine
         w.List(Incidents);
         w.I32(Log.Count); foreach (var (t, s) in Log) { w.I64(t); w.Str(s); }
         w.Bool(Online);
-        w.Arr(RoomKPa); w.Arr(RoomKPaPrev); w.Arr(RoomO2); w.Arr(RoomSoot); w.Arr(RoomSootPrev); w.Arr(RoomCO); w.Arr(RoomCO2); w.Arr(RoomTemp); w.Arr(RoomHot); w.Arr(RoomNH3); w.Arr(RoomO3); w.Arr(RoomToxCell); w.Arr(RoomSeen); w.Arr(RoomMoles); w.I32(_reads); w.Arr(ShipMolesHist); w.Arr(DoorMoles); w.I64(LastCycle); w.I64(_refillHold); w.I64(RefillHeld); w.I64(_refillSince); w.Arr(_extOpenSince);
+        w.Arr(RoomKPa); w.Arr(RoomKPaPrev); w.Arr(RoomO2); w.Arr(RoomSoot); w.Arr(RoomSootPrev); w.Arr(RoomCO); w.Arr(RoomCO2); w.Arr(RoomTemp); w.Arr(RoomHot); w.Arr(RoomNH3); w.Arr(RoomO3); w.Arr(RoomHCN); w.Arr(RoomHCl); w.Arr(RoomToxCell); w.Arr(RoomSeen); w.Arr(RoomMoles); w.I32(_reads); w.Arr(ShipMolesHist); w.Arr(DoorMoles); w.I64(LastCycle); w.I64(_refillHold); w.I64(RefillHeld); w.I64(_refillSince); w.Arr(_extOpenSince);
         w.Arr(Shed); w.Arr(BreakerResetAt); w.List(Imaginations);
         w.I64(Alarms); w.I64(Assignments); w.I64(Seals); w.I64(Sheds); w.I64(Resets); w.I64(Exhausts); w.I64(OuterClosed); w.I64(StovesCut); SaveCrew(w); SaveSupply(w);
         w.I32(Journal.Count); foreach (var (t, s) in Journal) { w.I64(t); w.Str(s); }
@@ -1320,7 +1340,7 @@ public sealed partial class ShipMind : IEngine
         Incidents = r.List<Incident>();
         Log.Clear(); int n = r.I32(); for (int i = 0; i < n; i++) { long t = r.I64(); Log.Add((t, r.Str() ?? "")); }
         Online = r.Bool();
-        r.ArrInto(RoomKPa); r.ArrInto(RoomKPaPrev); r.ArrInto(RoomO2); r.ArrInto(RoomSoot); r.ArrInto(RoomSootPrev); r.ArrInto(RoomCO); r.ArrInto(RoomCO2); r.ArrInto(RoomTemp); r.ArrInto(RoomHot); r.ArrInto(RoomNH3); r.ArrInto(RoomO3); r.ArrInto(RoomToxCell); r.ArrInto(RoomSeen); r.ArrInto(RoomMoles); _reads = r.I32(); r.ArrInto(ShipMolesHist); r.ArrInto(DoorMoles); LastCycle = r.I64(); _refillHold = r.I64(); RefillHeld = r.I64(); _refillSince = r.I64(); _extOpenSince = r.Arr<long>();
+        r.ArrInto(RoomKPa); r.ArrInto(RoomKPaPrev); r.ArrInto(RoomO2); r.ArrInto(RoomSoot); r.ArrInto(RoomSootPrev); r.ArrInto(RoomCO); r.ArrInto(RoomCO2); r.ArrInto(RoomTemp); r.ArrInto(RoomHot); r.ArrInto(RoomNH3); r.ArrInto(RoomO3); r.ArrInto(RoomHCN); r.ArrInto(RoomHCl); r.ArrInto(RoomToxCell); r.ArrInto(RoomSeen); r.ArrInto(RoomMoles); _reads = r.I32(); r.ArrInto(ShipMolesHist); r.ArrInto(DoorMoles); LastCycle = r.I64(); _refillHold = r.I64(); RefillHeld = r.I64(); _refillSince = r.I64(); _extOpenSince = r.Arr<long>();
         Shed = r.Arr<byte>(); BreakerResetAt = r.Arr<long>(); Imaginations.Clear(); Imaginations.AddRange(r.List<Imagined>());
         Alarms = r.I64(); Assignments = r.I64(); Seals = r.I64(); Sheds = r.I64(); Resets = r.I64(); Exhausts = r.I64(); OuterClosed = r.I64(); StovesCut = r.I64(); LoadCrew(r); LoadSupply(r);
         Journal.Clear(); int nj = r.I32(); for (int i = 0; i < nj; i++) { long t = r.I64(); Journal.Add((t, r.Str() ?? "")); }

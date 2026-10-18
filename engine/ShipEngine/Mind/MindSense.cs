@@ -82,6 +82,41 @@ public sealed partial class Mind
         return true;
     }
 
+    /// <summary>② 사고 화학: 냄새 · 증상으로 '여기 공기가 이상하다'를 처음 알았을 때만 원인 마디를 남긴다 ('…냄새를 맡았다' — 근원은 그 방의 불 · 달궈진 곳).
+    /// 그 믿음의 원인을 이 마디로 바꿔 둔다 — 외치면 들은 사람에게도 이 사슬이 이어진다 (나쁜 공기는 본디 급한 믿음이 아니지만 독한 냄새 · 증상은 알린다).</summary>
+    private void Noticed(Sim sim, Agent a, long t, int cell, float conf, BeliefSource src, string what)
+    {
+        if (!Learn(a, t, BeliefKind.BadAir, cell, -1, conf, src)) return;
+        int cause = sim.Causes.Add(CauseKind.Person, $"{Ko.I(NameOf(a.Id))} {what}", t, cell, GasSource(cell), 0, a.Id);
+        a.LastThought = what; a.LastThoughtTick = t;
+        var list = a.Beliefs;
+        for (int i = 0; i < list.Count; i++)
+            if (list[i].Kind == BeliefKind.BadAir && list[i].Subject < 0 && Dist(list[i].Cell, cell) <= 3)
+            {
+                var b = list[i]; b.Cause = cause; list[i] = b;
+                if (!_fresh.Contains(i)) _fresh.Add(i);   // 독한 냄새는 외친다 ("가스 냄새야!") — 못 맡는 사람은 이 말로 안다
+                break;
+            }
+    }
+
+    /// <summary>독한 기체의 근원: 그 방에서 타는 곳 → 없으면 달궈진 곳의 원인.</summary>
+    private int GasSource(int cell)
+    {
+        if (_chem == null) return 0;
+        int room = RoomOf(cell);
+        if (room < 0) return _chem.HeatCauseAt(cell);
+        int heat = 0;
+        foreach (int c in L.Rooms[room].Cells)
+        {
+            if (_chem.Burning[c] != 0 && _chem.FireCause[c] != 0) return _chem.FireCause[c];
+            if (heat == 0) heat = _chem.HeatCauseAt(c);
+        }
+        return heat;
+    }
+
+    /// <summary>시안화수소의 쓴 아몬드 냄새를 맡는 사람인가 — 열에 여섯 (유전: 못 맡는 사람이 20~40% · 세계 시드와 사람 번호로 정해져 저장이 필요 없다).</summary>
+    public static bool SmellsAlmond(ulong seed, int person) => Rng.Mix(Rng.Mix(seed ^ Rng.Key("아몬드")) ^ (ulong)person) % 10 < 6;
+
     /// <summary>이 사람이 그 종류를 그 칸 근처(r칸)에 믿나 — 가장 확신하는 것.</summary>
     public float Believes(Agent a, BeliefKind kind, int cell, int r = 3)
     {
@@ -143,12 +178,12 @@ public sealed partial class Mind
 
         if (person && asleep)
         {
-            // 몸이 깨운다: 숨참(산소 분압 · 이산화탄소 — 일산화탄소는 아니다) · 추위 · 더위 · 귀 먹먹 · 코와 목을 찌르는 기체(암모니아 50ppm · 오존 1ppm) · 아픔
+            // 몸이 깨운다: 숨참(산소 분압 · 이산화탄소 — 일산화탄소는 아니다) · 추위 · 더위 · 귀 먹먹 · 코와 목을 찌르는 기체(암모니아 50ppm · 오존 1ppm · 염화수소 20ppm — 시안화수소는 아니다) · 아픔
             // 연기 냄새로는 잘 깨지 않는다 (그래서 경보가 있다)
             double p = F.Pressure(cell);
             ref var sb = ref _life![c.Body];
             if (F.Partial(T.gO2, cell) < 15 || F.Ppm(T.gCO2, cell) > 30000 || F.Temp(cell) < 283 || F.Temp(cell) > 315 || Math.Abs(p - c.LastKPa) > 3
-                || F.Ppm(T.gNH3, cell) > 50 || F.Ppm(T.gO3, cell) > 1 || sb.Pain > 0.5f)
+                || F.Ppm(T.gNH3, cell) > 50 || F.Ppm(T.gO3, cell) > 1 || F.Ppm(T.gHCl, cell) > 20 || sb.Pain > 0.5f)
                 Wake(sim, a, "몸이 깨웠다");
             c.LastKPa = (float)p;
             Decay(a, t, dt);
@@ -222,11 +257,18 @@ public sealed partial class Mind
             double soot = F.Ppm(T.gSoot, cell);
             if (soot > 30) Learn(a, t, BeliefKind.SmokeSmell, cell, -1, (float)Math.Min(1, soot / 300), BeliefSource.Smelled);
             if (F.Ppm(T.gNH3, cell) > 25 || F.Ppm(T.gO3, cell) > 0.1) Learn(a, t, BeliefKind.BadAir, cell, -1, 0.8f, BeliefSource.Smelled);
+            // ② 사고 화학: 염화수소는 1ppm부터 누구나 맡는다 (코를 찌르는 매캐한 냄새) · 시안화수소는 쓴 아몬드 냄새 — 맡는 사람만 (유전 · 열에 넷은 못 맡는다)
+            double hcl = F.Ppm(T.gHCl, cell), hcn = F.Ppm(T.gHCN, cell);
+            if (hcl >= 1) Noticed(sim, a, t, cell, (float)Math.Min(1, 0.5 + hcl / 40), BeliefSource.Smelled, "코를 찌르는 매캐한 냄새를 맡았다");
+            if (hcn >= 1 && SmellsAlmond(sim.Seed, a.Id)) Noticed(sim, a, t, cell, (float)Math.Min(1, 0.5 + hcn / 20), BeliefSource.Smelled, "쓴 아몬드 냄새를 맡았다");
             // 몸
             if (F.Partial(T.gO2, cell) < 16 || F.Ppm(T.gCO2, cell) > 20000) Learn(a, t, BeliefKind.BadAir, cell, -1, 0.7f, BeliefSource.Felt);
             // 두통 — 냄새는 없다. 머리가 점점 아파질 때(일산화탄소 헤모글로빈이 오를 때)만 '여기 공기가 이상하다'
             if (body.COHb > 0.08f && body.COHb > c.LastCOHb + 1e-4f) Learn(a, t, BeliefKind.BadAir, cell, -1, 0.5f, BeliefSource.Felt);
             c.LastCOHb = body.COHb;
+            // 증상: 염화수소 5ppm 넘게면 눈이 따갑고 기침 · 시안화수소가 몸에 쌓이면 어지럽고 머리가 아프다 (냄새를 못 맡는 사람도 이걸로 안다 — 늦게)
+            if (hcl > 5) Noticed(sim, a, t, cell, 0.8f, BeliefSource.Felt, "눈이 따갑고 기침이 난다");
+            if (body.CN > 0.1f && hcn > 10) Noticed(sim, a, t, cell, 0.7f, BeliefSource.Felt, "어지럽고 머리가 아프다");
             double temp = F.Temp(cell);
             if (temp < 285) Learn(a, t, BeliefKind.Cold, cell, -1, 0.6f, BeliefSource.Felt);
             else if (temp > 312) Learn(a, t, BeliefKind.Hot, cell, -1, 0.6f, BeliefSource.Felt);
@@ -250,7 +292,7 @@ public sealed partial class Mind
             {
                 if (i >= a.Beliefs.Count) continue;
                 var b = a.Beliefs[i];
-                if (b.Src is BeliefSource.Saw or BeliefSource.Felt)
+                if (b.Src is BeliefSource.Saw or BeliefSource.Felt or BeliefSource.Smelled)
                 {
                     sim.Facts.Emit(t, FactKind.Noticed, b.Cell, b.Conf, b.Cause, a.Id, (int)b.Kind);
                     if (b.Kind is BeliefKind.Fire or BeliefKind.Vacuum or BeliefKind.Breach) c.Fear = Math.Max(c.Fear, person ? 0.5f + 0.4f * (1 - c.Brave) : 0);
