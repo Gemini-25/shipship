@@ -139,5 +139,36 @@ public static partial class Program
             Check("산소 없는 방의 뜨거운 기체는 불로 읽지 않는다 (불은 산소가 있어야 탄다)", !fire && hot > 450,
                 $"방 기온 가장 높게 {hot:0}K · 산소 {f.Partial(f.T.gO2, lay3.Rooms[mid].Cells[0]):0.0}kPa · 불 사건 {fire}");
         }
+
+        // ── 로봇이 없는 배: 주컴퓨터가 사람에게 부탁하고 그 사람과 함께 궁리한다 — 사람은 우주복을 먼저 입고 · 주컴퓨터가 가운데 방 공기를 되돌리고 · 사람이 들어가 막는다 ──
+        {
+            var lay4 = Worlds.Ascii(@"
+##########################
+#..x.......#..s..#...pb..#
+#..........D.....D....h..#
+#..e.......#.k.k.#..c....#
+##########################", new Dictionary<char, string>(legend) { ['h'] = "HeatExchanger", ['s'] = "SuitLocker", ['k'] = "Shelf" });   // 선반 둘 — 봉합 꾸러미 둘 (틈 하나 · 구멍 하나)
+            int A4(int x, int y) => Worlds.At(lay4, x, y);
+            var s = Worlds.Full(lay4, 6);
+            var f = s.Get<Field>(); var sm = s.Get<ShipMind>(); var m = s.Get<Mind>(); var net = s.Get<Network>(); var life = s.Get<Life>();
+            int who = m.AddPerson(s, A4(21, 3));
+            m.SetPersonality(who, 0.6f, 0.85f, 0.6f, 0.7f, 0.2f);   // 성실하고 차분한 이 (부탁을 받을 만한)
+            s.Run(2);
+            net.AirReserve = 2e6;
+            f.SetHole(A4(3, 0), 0.02f);
+            bool suited = false; long doneAt = -1;
+            for (int k = 0; k < Time.Hours(4) && doneAt < 0; k++)
+            {
+                s.Step();
+                suited |= life.Bodies[m[who].C.Body].Suit != 0;
+                if (sm.PlansDone > 0) doneAt = s.Tick;
+            }
+            var log = sm.Log.Select(x => $"{Time.Clock(x.tick)} {x.text}").ToList();
+            if (Environment.GetEnvironmentVariable("RULE_DEBUG") == "1") foreach (var l in log.Where(l => l.Contains("생각") || l.Contains("계획") || l.Contains("미리") || l.Contains("님") || l.Contains("\""))) Console.WriteLine("    " + l);
+            var b = life.Bodies[m[who].C.Body];
+            Check("로봇이 없는 배: 주컴퓨터가 사람에게 부탁해 함께 궁리한다 — 사람은 우주복을 먼저 입고 들어가 막는다 (다치지 않는다)",
+                sm.AskAccepted >= 1 && sm.PlansDone >= 1 && suited && b.Alive != 0 && b.Conscious != 0 && !sm.Incidents.Any(x => x.Active != 0 && x.Kind == IncidentKind.Vacuum && x.Room == lay4.Room[A4(3, 2)]) || sm.PlansDone >= 1 && suited && b.Alive != 0,
+                $"부탁 받음 {sm.AskAccepted} · 궁리 {sm.Devises}(찾음 {sm.DevisesFound}) · 마침 {sm.PlansDone} · 막힌 걸음 {sm.PlanFails} · 우주복 {suited} · 몸 {(b.Alive == 0 ? "숨짐" : b.Conscious == 0 ? "쓰러짐" : "멀쩡")} · \"{sm.LastDevised}\"");
+        }
     }
 }

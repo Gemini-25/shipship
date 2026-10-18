@@ -29,7 +29,9 @@ public sealed class Picture
     public bool[] Leaky = Array.Empty<bool>();    // 닫혀도 틈으로 새는 보통 문 (틈을 막지 않았다)
     public bool[] Normal = Array.Empty<bool>();   // 보통 문 (압력 문 · 에어락 문이 아니다 — 열면 막은 틈이 떨어진다)
     public int Body = -1;                 // 일할 몸이 있는 자리 (-1: 없다)
-    public bool BodyBreathes;             // 그 몸이 우주복 없는 사람이다
+    public bool BodyBreathes;             // 그 몸이 우주복 없는 사람이다 (보관함에서 입을 수 있다)
+    public bool[] Lockers = Array.Empty<bool>();  // 우주복 보관함이 있고 우주복이 남았다
+    public int Kits = 99;                 // 몸이 쓸 수 있는 봉합 꾸러미 (사람 — 든 것 + 그림 안 보관함 · 로봇은 제 것이 있다)
     public int Goal = -1;                 // 이 자리의 구멍을 막는다
     public float AirValue = 0.02f;        // 잃는 공기 1몰의 값 (분)
 
@@ -40,7 +42,7 @@ public sealed class Picture
     {
         int p = P++;
         Room = Room.Append(room).ToArray(); Name = Name.Append(name).ToArray(); Cells = Cells.Append(cells).ToArray();
-        Cap = Cap.Append(cells * MolPerCellAtm).ToArray(); Vent = Vent.Append(vent).ToArray(); Hull = Hull.Append(hull).ToArray(); Brain = Brain.Append(false).ToArray();
+        Cap = Cap.Append(cells * MolPerCellAtm).ToArray(); Vent = Vent.Append(vent).ToArray(); Hull = Hull.Append(hull).ToArray(); Brain = Brain.Append(false).ToArray(); Lockers = Lockers.Append(false).ToArray();
         KPa = KPa.Append(kpa).ToArray(); Hole = Hole.Append(hole).ToArray(); People = People.Append(people).ToArray();
         return p;
     }
@@ -102,13 +104,15 @@ public static class Solver
         public byte[] People = Array.Empty<byte>();
         public bool[] Open = Array.Empty<bool>(), Jam = Array.Empty<bool>(), Leaky = Array.Empty<bool>();
         public int Body, Parent = -1, Depth;
+        public bool Suited;
+        public int Kits;
         public SolveStep Via;
         public float Cost, Min, Lost, Back, Risk;
 
         public Node Copy() => new()
         {
             KPa = (float[])KPa.Clone(), Hole = (bool[])Hole.Clone(), People = (byte[])People.Clone(), Open = (bool[])Open.Clone(), Jam = (bool[])Jam.Clone(), Leaky = (bool[])Leaky.Clone(),
-            Body = Body, Cost = Cost, Min = Min, Lost = Lost, Back = Back, Risk = Risk, Depth = Depth,
+            Body = Body, Suited = Suited, Kits = Kits, Cost = Cost, Min = Min, Lost = Lost, Back = Back, Risk = Risk, Depth = Depth,
         };
 
         public string Key()
@@ -116,7 +120,7 @@ public static class Solver
             var sb = new System.Text.StringBuilder(KPa.Length * 3 + Open.Length + 4);
             for (int p = 0; p < KPa.Length; p++) { sb.Append((char)(Math.Clamp((int)MathF.Round(KPa[p]), 0, 200) + 32)); sb.Append(Hole[p] ? 'h' : '-'); sb.Append((char)(People[p] + 32)); }
             for (int d = 0; d < Open.Length; d++) sb.Append(Open[d] ? (Jam[d] ? 'J' : 'o') : (Jam[d] ? 'j' : Leaky[d] ? 'l' : 'c'));
-            sb.Append((char)(Body + 64));
+            sb.Append((char)(Body + 64)); sb.Append(Suited ? 's' : '-'); sb.Append((char)(Math.Min(Kits, 60) + 48));
             return sb.ToString();
         }
     }
@@ -140,7 +144,7 @@ public static class Solver
         var root = new Node
         {
             KPa = (float[])pic.KPa.Clone(), Hole = (bool[])pic.Hole.Clone(), People = (byte[])pic.People.Clone(),
-            Open = (bool[])pic.Open.Clone(), Jam = (bool[])pic.Jam.Clone(), Leaky = (bool[])pic.Leaky.Clone(), Body = pic.Body,
+            Open = (bool[])pic.Open.Clone(), Jam = (bool[])pic.Jam.Clone(), Leaky = (bool[])pic.Leaky.Clone(), Body = pic.Body, Kits = pic.Kits,
         };
         Settle(pic, root, know);
         root.Lost = 0; root.Back = 0; root.Risk = 0; root.Cost = 0;   // 지금 형편은 값에 넣지 않는다
@@ -246,6 +250,7 @@ public static class Solver
             ActKind.Fill => computer && on[o] && o != pic.Out && pic.Vent[o] && n.People[o] > 0 && n.KPa[o] < 95,   // 계획 중의 채우기는 사람이 있는 방을 지킬 때만 (막은 뒤의 채우기는 실행이 붙인다)
             ActKind.Clear => computer && on[o] && n.People[o] > 0,
             ActKind.Patch => n.Hole[o] && n.Body >= 0 && (n.Body == o || n.Body == pic.Out),
+            ActKind.Suit => o == n.Body && pic.BodyBreathes && !n.Suited && o >= 0 && o != pic.Out && pic.Lockers[o],
             _ => true,
         };
     }
@@ -268,7 +273,7 @@ public static class Solver
     public static List<(SolveStep step, float minutes)> Expand(Picture pic, IReadOnlyList<SolveStep> steps, Know know, bool computer)
     {
         var kt = KnowledgeTable.Load();
-        var n = new Node { KPa = (float[])pic.KPa.Clone(), Hole = (bool[])pic.Hole.Clone(), People = (byte[])pic.People.Clone(), Open = (bool[])pic.Open.Clone(), Jam = (bool[])pic.Jam.Clone(), Leaky = (bool[])pic.Leaky.Clone(), Body = pic.Body };
+        var n = new Node { KPa = (float[])pic.KPa.Clone(), Hole = (bool[])pic.Hole.Clone(), People = (byte[])pic.People.Clone(), Open = (bool[])pic.Open.Clone(), Jam = (bool[])pic.Jam.Clone(), Leaky = (bool[])pic.Leaky.Clone(), Body = pic.Body, Kits = pic.Kits };
         Settle(pic, n, know);
         var res = new List<(SolveStep, float)>();
         foreach (var s in steps)
@@ -290,7 +295,7 @@ public static class Solver
 
     /// <summary>그 방은 공기를 되돌릴 만한가 (길에 놓였고 · 통풍구 · 사람 없음 · 구멍 없음 · 아직 공기가 있다) — 그 방 문틈을 막는 것이 쓸모 있다.</summary>
     private static bool PumpWants(Picture pic, Node n, int p, bool[] on) =>
-        p != pic.Out && on[p] && pic.Vent[p] && n.People[p] == 0 && !(pic.BodyBreathes && n.Body == p) && !n.Hole[p] && n.KPa[p] > (float)Network.PumpFloorKPa + 1;
+        p != pic.Out && on[p] && pic.Vent[p] && n.People[p] == 0 && !(Breathes(pic, n) && n.Body == p) && !n.Hole[p] && n.KPa[p] > (float)Network.PumpFloorKPa + 1;
 
     /// <summary>자리마다 목표까지 (안에서 — 또는 바깥에서 외판에 닿으면 바깥까지) 지나야 할 문 수의 하한 (문 상태와 상관없이).</summary>
     private static int[] Hops(Picture pic)
@@ -319,7 +324,7 @@ public static class Solver
     public static bool Replay(Picture pic, IReadOnlyList<SolveStep> steps, Know know, bool computer)
     {
         var kt = KnowledgeTable.Load();
-        var n = new Node { KPa = (float[])pic.KPa.Clone(), Hole = (bool[])pic.Hole.Clone(), People = (byte[])pic.People.Clone(), Open = (bool[])pic.Open.Clone(), Jam = (bool[])pic.Jam.Clone(), Leaky = (bool[])pic.Leaky.Clone(), Body = pic.Body };
+        var n = new Node { KPa = (float[])pic.KPa.Clone(), Hole = (bool[])pic.Hole.Clone(), People = (byte[])pic.People.Clone(), Open = (bool[])pic.Open.Clone(), Jam = (bool[])pic.Jam.Clone(), Leaky = (bool[])pic.Leaky.Clone(), Body = pic.Body, Kits = pic.Kits };
         Settle(pic, n, know);
         foreach (var s in steps) if (!kt.CanThink(s.Act, know) || !Apply(pic, n, s, know, computer, kt)) return false;
         return pic.Goal < 0 || !n.Hole[pic.Goal];
@@ -389,13 +394,16 @@ public static class Solver
             if (now < BreatheKPa && was >= BreatheKPa - 0.5f && know.Has(Principle.Breath))
             {
                 n.Risk += n.People[p];
-                if (pic.BodyBreathes && n.Body == p) n.Risk += 1;
+                if (Breathes(pic, n) && n.Body == p) n.Risk += 1;
             }
             if (now < CoolKPa && was >= CoolKPa - 0.5f && pic.Brain[p] && know.Has(Principle.AirCool)) n.Risk += 1.5f;   // 주컴퓨터가 식지 못해 멈춘다
             n.KPa[p] = now;
         }
         return space;
     }
+
+    /// <summary>몸이 숨을 쉬어야 하나 (우주복 없는 사람).</summary>
+    private static bool Breathes(Picture pic, Node n) => pic.BodyBreathes && !n.Suited;
 
     private static bool AllClosed(Picture pic, Node n, int p)
     {
@@ -429,7 +437,7 @@ public static class Solver
                     if (pic.Ext[o])
                     {
                         // 바깥문 밸브: 방 쪽이 닫혀 있고 사람이 없을 때만 그 방 공기를 우주로 뺀다 (맞물림)
-                        if (!AllClosedBut(pic, n, hi, o) || n.People[hi] > 0 || pic.BodyBreathes && n.Body == hi) return false;
+                        if (!AllClosedBut(pic, n, hi, o) || n.People[hi] > 0 || Breathes(pic, n) && n.Body == hi) return false;
                         n.Lost += pic.Cap[hi] * n.KPa[hi] / 101.325f;
                         n.KPa[hi] = 0;
                     }
@@ -461,7 +469,7 @@ public static class Solver
             {
                 if (!byBody || !n.Open[o] || n.Body != pic.DA[o] && n.Body != pic.DB[o]) return false;
                 int to = n.Body == pic.DA[o] ? pic.DB[o] : pic.DA[o];
-                if (pic.BodyBreathes && know.Has(Principle.Breath) && (to == pic.Out || n.KPa[to] < BreatheKPa)) n.Risk += 1;
+                if (Breathes(pic, n) && know.Has(Principle.Breath) && (to == pic.Out || n.KPa[to] < BreatheKPa)) n.Risk += 1;
                 n.Body = to;
                 n.Min += (float)def.Minutes;
                 return true;
@@ -476,7 +484,7 @@ public static class Solver
             case ActKind.Pump:
             {
                 // 되돌리기: 닫힌 방 · 사람 없음 · 통풍구 · 전기 → 20kPa까지 예비 탱크로 (주컴퓨터는 사람이 있는 방의 공기를 빼지 않는다)
-                if (!byComputer || o == pic.Out || !pic.Vent[o] || space[o] || !AllClosed(pic, n, o) || n.People[o] > 0 || pic.BodyBreathes && n.Body == o) return false;
+                if (!byComputer || o == pic.Out || !pic.Vent[o] || space[o] || !AllClosed(pic, n, o) || n.People[o] > 0 || Breathes(pic, n) && n.Body == o) return false;
                 float floor = (float)Network.PumpFloorKPa;
                 // 문틈: 닫혀도 새는 보통 문 너머에 공기가 있으면 빼는 만큼 그리로 들어온다 — 먼저 틈을 막아야 한다
                 if (know.Has(Principle.DoorGap))
@@ -522,8 +530,15 @@ public static class Solver
             }
             case ActKind.Tape:
             {
-                if (!byBody || n.Open[o] || !n.Leaky[o] || n.Body != pic.DA[o] && n.Body != pic.DB[o]) return false;
-                n.Leaky[o] = false;
+                if (!byBody || n.Open[o] || !n.Leaky[o] || n.Body != pic.DA[o] && n.Body != pic.DB[o] || n.Kits <= 0) return false;
+                n.Kits--; n.Leaky[o] = false;
+                n.Min += (float)def.Minutes;
+                return true;
+            }
+            case ActKind.Suit:
+            {
+                if (!byBody || n.Suited || !pic.BodyBreathes || n.Body < 0 || n.Body == pic.Out || !pic.Lockers[n.Body]) return false;
+                n.Suited = true;
                 n.Min += (float)def.Minutes;
                 return true;
             }
@@ -537,7 +552,11 @@ public static class Solver
                     if (pic.DA[d] != o && pic.DB[d] != o) continue;
                     if (n.Open[d]) { if (n.Jam[d]) return false; n.Open[d] = false; n.Min += (float)close.Minutes; }
                     int other = pic.DA[d] == o ? pic.DB[d] : pic.DA[d];
-                    if (n.Leaky[d] && other != pic.Out && n.KPa[other] > (float)Network.PumpFloorKPa + 5) { n.Leaky[d] = false; n.Min += (float)tape.Minutes; }
+                    if (n.Leaky[d] && other != pic.Out && n.KPa[other] > (float)Network.PumpFloorKPa + 5)
+                    {
+                        if (n.Kits <= 0) return false;   // 봉합 꾸러미가 모자란다
+                        n.Kits--; n.Leaky[d] = false; n.Min += (float)tape.Minutes;
+                    }
                 }
                 return true;
             }
@@ -546,7 +565,9 @@ public static class Solver
                 if (!byBody || o == pic.Out || !n.Hole[o]) return false;
                 bool inside = n.Body == o, outside = n.Body == pic.Out && pic.Hull[o];
                 if (!inside && !outside) return false;
-                if (pic.BodyBreathes && know.Has(Principle.Breath) && (outside || n.KPa[o] < BreatheKPa)) n.Risk += 1;
+                if (n.Kits <= 0) return false;   // 봉합 꾸러미가 있어야 막는다 (사람 몸 — 틈을 막느라 다 썼으면 못 막는다)
+                n.Kits--;
+                if (Breathes(pic, n) && know.Has(Principle.Breath) && (outside || n.KPa[o] < BreatheKPa)) n.Risk += 1;
                 n.Hole[o] = false;
                 n.Min += (float)def.Minutes;
                 Settle(pic, n, know);

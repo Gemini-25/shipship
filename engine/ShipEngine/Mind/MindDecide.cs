@@ -357,7 +357,7 @@ public sealed partial class Mind
             case GoalKind.Idle:
             {
                 // ⑩ 계획에 묶인 로봇: 그 칸까지 가서 기다린다 (지어낸 계획의 '지나 간다' — 그 방 한가운데)
-                if (!a.IsPerson && c.AssignedArg == PlanBound && o.Target >= 0 && o.Target != here && RoomOf(here) != RoomOf(o.Target)) { plan.Add(Go(o.Target)); plan.Add(Use(UseKind.None, 10)); return true; }
+                if (c.AssignedArg == PlanBound && o.Target >= 0 && o.Target != here && RoomOf(here) != RoomOf(o.Target)) { plan.Add(Go(o.Target)); plan.Add(Use(UseKind.None, 10)); return true; }
                 if (L.Kind[here] == CellKind.Door)
                 {
                     // 문간에 서 있지 않는다
@@ -472,6 +472,15 @@ public sealed partial class Mind
                 }
                 plan.Add(Go(o.Cell, 2));
                 plan.Add(new PlanStep { Kind = StepKind.Spray, Cell = o.Cell });
+                return true;
+            }
+            case GoalKind.GetSuit:
+            {
+                // 맡긴 우주복 입기: 그 보관함으로 가서 입는다 (손에 든 것은 든 채로)
+                int locker = o.Target;
+                if (locker < 0 || locker >= L.Furniture.Count || _life![c.Body].Suit != 0) return false;
+                plan.Add(Go(L.Furniture[locker].Cells[0], 1));
+                plan.Add(new PlanStep { Kind = StepKind.Wear, Target = locker, Arg = iSuit });
                 return true;
             }
             case GoalKind.Rescue:
@@ -817,9 +826,11 @@ public sealed partial class Mind
         ref var c = ref a.C;
         if (!a.IsPerson && c.AssignedGoal == GoalKind.Investigate && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0) Add(GoalKind.Investigate, c.AssignedTarget, c.AssignedTarget, 1.2f);
         // ⑩ 판단 엔진: 지어낸 계획이 '이 문틈을 막아라' (아직 기압 차가 없어 새지 않아도 — 공기를 빼기 전에)
-        if (!a.IsPerson && c.AssignedGoal == GoalKind.Patch && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0 && TapeAssigned(a, c.AssignedTarget)) Add(GoalKind.Patch, c.AssignedTarget, c.AssignedTarget, 1.2f);
+        if (c.AssignedGoal == GoalKind.Patch && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0 && TapeAssigned(a, c.AssignedTarget)) Add(GoalKind.Patch, c.AssignedTarget, c.AssignedTarget, a.IsPerson ? 2.2f : 1.2f);
         // ⑩ 판단 엔진: 지어낸 계획이 '여기서 기다려라' — 주컴퓨터가 그 방을 비우는 동안 제 판단으로 문에 가지 않는다 (다친 이를 구하는 일은 앞선다)
-        if (!a.IsPerson && c.AssignedGoal == GoalKind.Idle && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0) Add(GoalKind.Idle, c.AssignedTarget, c.AssignedTarget, 2.2f);
+        if (c.AssignedGoal == GoalKind.Idle && c.AssignedArg == PlanBound && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0) Add(GoalKind.Idle, c.AssignedTarget, c.AssignedTarget, 2.2f);
+        // ⑩ 판단 엔진: 지어낸 계획이 '우주복을 입어라' (사람 — 그 보관함에서)
+        if (a.IsPerson && c.AssignedGoal == GoalKind.GetSuit && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0 && _life![c.Body].Suit == 0) Add(GoalKind.GetSuit, c.AssignedTarget, L.Furniture[c.AssignedTarget].Cells[0], 2.2f);
         // ⑥ 맡긴 연장선: 그 방에 아직 전기가 없으면
         if (c.AssignedGoal == GoalKind.Rewire && c.AssignedUntil > _nowTick && c.AssignedTarget >= 0 && _net != null && !_net.RoomPowered(c.AssignedTarget) && c.AssignedTarget < _net.Vent.Length)
             Add(GoalKind.Rewire, c.AssignedTarget, _net.Vent[c.AssignedTarget], 1.3f, _net.RoomFeeder[c.AssignedTarget] is int rf && rf >= 0 ? _net.FaultCause(rf) : 0);   // 원인: 그 방 급전선이 죽은 까닭

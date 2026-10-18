@@ -127,6 +127,33 @@ public static partial class Program
             rj2.Found && rj2.FromOutside && rj2.Steps.Any(s => s.Act == ActKind.Unjam) && rj2.Risk == 0 && rj2.Expanded < 1500,
             rj2.Found ? $"{Solver.Describe(jl, rj2.Steps)} · {rj2.Minutes:0}분 · 펼침 {rj2.Expanded}" : $"못 찾음 · 펼침 {rj2.Expanded}");
 
+        // 사람이 몸이면: 우주복 보관함이 있으면 입고 들어가 막는다 · 없으면 사람을 둔 채 그 방 공기를 빼지 않는다
+        var ps = NoAirlockPicture(); ps.BodyBreathes = true; ps.Lockers[ps.Body] = true;
+        var rps = Solver.Solve(ps, all, true);
+        var pn = NoAirlockPicture(); pn.BodyBreathes = true;
+        var rpn = Solver.Solve(pn, all, true);
+        int iSuit = rps.Steps.FindIndex(s => s.Act == ActKind.Suit), iP = rps.Steps.FindIndex(s => s.Act == ActKind.Pump);
+        Check("사람이 몸이면 우주복을 먼저 입고 (공기를 빼기 전에) 들어가 막는다 · 우주복이 없으면 사람이 있는 채 공기를 빼지 않는다",
+            rps.Found && rps.Risk == 0 && iSuit >= 0 && iSuit < iP && (!rpn.Found || rpn.Risk > 0 || !rpn.Steps.Any(s => s.Act == ActKind.Pump)),
+            $"{(rps.Found ? Solver.Describe(ps, rps.Steps) : "못 찾음")} / 우주복 없음: {(rpn.Found ? Solver.Describe(pn, rpn.Steps) + $" · 위험 {rpn.Risk}" : "못 찾음")}");
+
+        // 봉합 꾸러미 셈: 틈 막기 · 구멍 막기는 꾸러미를 하나씩 쓴다 — 가진 것보다 많이 쓰는 계획은 없다 (사람 몸 · 틈 있는 보통 문 곁방)
+        {
+            string kitNote = "";
+            bool kitOk = true;
+            foreach (int kits in new[] { 1, 2 })
+            {
+                var kp = NoAirlockPicture(sideRoom: true); kp.Kits = kits;
+                for (int d = 0; d < kp.D; d++) if (kp.DA[d] == kp.Body && kp.DB[d] != 0 || kp.DB[d] == kp.Body && kp.DA[d] != 0) { kp.Leaky[d] = true; kp.Normal[d] = true; }
+                var kr = Solver.Solve(kp, all, true);
+                int used = kr.Found ? Solver.Expand(kp, kr.Steps, all, true).Count(x => x.step.Act is ActKind.Tape or ActKind.Patch) : 0;
+                kitOk &= !kr.Found || used <= kits && Solver.Replay(kp, kr.Steps, all, true);
+                if (kits == 2) kitOk &= kr.Found && used == 2;   // 둘이면 틈을 막고 공기를 되돌린 뒤 들어가 막는다
+                kitNote += $"꾸러미 {kits}: {(kr.Found ? Solver.Describe(kp, kr.Steps) + $" (씀 {used})" : "못 찾음")} / ";
+            }
+            Check("봉합 꾸러미는 틈 막기 · 구멍 막기에 하나씩 든다 — 가진 것보다 많이 쓰는 계획은 없다", kitOk, kitNote.TrimEnd(' ', '/'));
+        }
+
         // 공기 되돌리기 (⑥ 망): 닫힌 방에서 빨아 낸 질소 · 산소 · 아르곤은 예비 탱크로 (보존) · 20kPa 아래로는 못 뺀다
         {
             var lay = Worlds.Ascii(NoAirlockShip, new Dictionary<char, string> { ['x'] = "OxygenMaskBox", ['p'] = "PowerPanel", ['b'] = "Battery", ['c'] = "MainComputer", ['e'] = "Bed", ['h'] = "HeatExchanger" });

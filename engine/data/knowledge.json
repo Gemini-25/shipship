@@ -30,7 +30,8 @@
     "clear":  { "who": "computer", "domain": "상식", "needs": [], "limits": [], "minutes": 3, "text": "{방}의 사람을 옆 방으로 내보낸다" },
     "patch":  { "who": "body",     "domain": "구조", "needs": [ "구멍막기" ], "limits": [ "숨" ], "minutes": 4, "text": "{방} 외판 구멍을 막는다" },
     "tape":   { "who": "body",     "domain": "구조", "needs": [ "문틈" ], "limits": [], "minutes": 3, "text": "{문} 틈을 봉합 꾸러미로 막는다" },
-    "seal":   { "who": "body",     "domain": "구조", "needs": [ "문틈" ], "limits": [], "minutes": 0, "text": "{방} 문을 모두 닫고 틈을 막는다" }
+    "seal":   { "who": "body",     "domain": "구조", "needs": [ "문틈" ], "limits": [], "minutes": 0, "text": "{방} 문을 모두 닫고 틈을 막는다" },
+    "suit":   { "who": "body",     "domain": "상식", "needs": [ "숨" ], "limits": [], "minutes": 2, "text": "{방}에서 우주복을 입는다" }
   },
   "manual": {
     "구멍": { "text": "외판 구멍 막기", "methods": [ "안에서", "바깥에서" ] },

@@ -144,6 +144,37 @@ public sealed partial class ShipMind
         return false;
     }
 
+    /// <summary>
+    /// 로봇이 없을 때 지어낸 계획의 몸이 되어 줄 사람: 함장 방침이 허락하면 가장 가까운 깨어 있는 사람에게 부탁한다 (받을지는 사람마다 — 두려움 · 믿음 · 성실).
+    /// 1분에 한 번 · 거절한 이는 다음에 건너뛴다.
+    /// </summary>
+    private int PlanPerson(Sim sim, ref Incident x)
+    {
+        if (_mind == null || _life == null || Policy.AskPeople == 0) return -1;
+        long t = sim.Tick;
+        int helper = x.Person;
+        if (helper >= 0 && _mind.Agents[helper].C.AssignedUntil > t && _life.Bodies[_mind.Agents[helper].C.Body].Alive != 0 && !PlanSteps.Any(s => s.Robot == helper)) return helper;   // 받아 준 이
+        if (t - x.AskedAt < Time.Minutes(1)) return -1;
+        int best = -1, bd = int.MaxValue;
+        foreach (var a in _mind.Agents)
+        {
+            if (!a.IsPerson || a.Id == x.Decl1 || a.Id == x.Decl2 || PlanSteps.Any(s => s.Robot == a.Id)) continue;
+            var b = _life.Bodies[a.C.Body];
+            if (b.Alive == 0 || b.Conscious == 0 || a.C.AssignedUntil > t && a.C.AssignedGoal != GoalKind.Idle) continue;
+            int d = _mind.Dist(a.C.Cell, x.Cell >= 0 ? x.Cell : a.C.Cell) + (b.Asleep != 0 ? 30 : 0);
+            if (d < bd) { bd = d; best = a.Id; }
+        }
+        if (best < 0) return -1;
+        string name = _mind.NameOf(best);
+        Say(sim, $"{name}님, {RoomName(x.Room)} {KindName(x.Kind)} — 로봇이 없습니다 · 구멍 막는 일을 같이 해 주시겠어요? (제가 문과 공기를 맡겠습니다)");
+        bool yes = _mind.Ask(sim, best, GoalKind.Patch, x.Cell, BeliefOf(x), t + Time.Minutes(60), true, out string reply);
+        x.AskedAt = t; x.Asks++; Asked++;
+        if (reply.Length > 0) Say(sim, $"{name}: \"{reply}\"");
+        if (!yes) { AskDeclined++; x.Decl2 = x.Decl1; x.Decl1 = best; return -1; }
+        AskAccepted++; x.Person = best;
+        return best;
+    }
+
     // ───────────────────────── 지어내기 ─────────────────────────
 
     /// <summary>
@@ -158,7 +189,13 @@ public sealed partial class ShipMind
         var banned = new Func<SolveStep, bool>(s =>
         {
             int obj = Solver.DoorAct(s.Act) ? pic.Door[s.Obj] : pic.Room[s.Obj];
-            foreach (var a in Attempts) if (a.Incident == id && a.Act == (byte)s.Act && a.Obj == obj && StillBlocked(a)) return true;
+            foreach (var a in Attempts)
+            {
+                if (a.Incident != id || !StillBlocked(a)) continue;
+                if (a.Act == (byte)s.Act && a.Obj == obj) return true;
+                // 봉하기는 그 방 문의 '문틈 막기 · 닫기'로 푼다 — 그 가운데 하나가 막혔으면 봉하기도 막혔다
+                if (s.Act == ActKind.Seal && a.Act is (byte)ActKind.Tape or (byte)ActKind.Close && DoorRooms(a.Obj).Contains(obj)) return true;
+            }
             return false;
         });
         // 같은 그림으로 이미 궁리해 못 찾았으면 다시 하지 않는다 (같은 실패를 되풀이하지 않는다 — 문 · 구멍 · 사람 · 몸이 바뀌면 다시)
@@ -169,7 +206,7 @@ public sealed partial class ShipMind
         var res = Solver.Solve(pic, Know.All, computer: true, maxDepth: 12, budget: 4000, banned: banned);
         if (Environment.GetEnvironmentVariable("SNAG_DEBUG") == "1")
         {
-            Console.WriteLine($"      [궁리] {Time.Clock(sim.Tick)} {RoomName(x.Room)} 자리 {pic.P} 문 {pic.D} · 펼침 {res.Expanded} · {sw.ElapsedMilliseconds}ms · {(res.Found ? "찾음" : "없음")} · 몸 {pic.Body}");
+            Console.WriteLine($"      [궁리] {Time.Clock(sim.Tick)} {RoomName(x.Room)} 자리 {pic.P} 문 {pic.D} · 펼침 {res.Expanded} · {sw.ElapsedMilliseconds}ms · {(res.Found ? "찾음" : "없음")} · 몸 {pic.Body} · 꾸러미 {pic.Kits} · 숨 {pic.BodyBreathes}");
             for (int p = 0; p < pic.P; p++) Console.WriteLine($"        {p} {pic.Name[p]} {pic.KPa[p]:0}kPa{(pic.Hole[p] ? " 구멍" : "")}{(pic.Vent[p] ? " 통풍" : "")}{(pic.Hull[p] ? " 외판" : "")}{(pic.Brain[p] ? " 주컴" : "")} 사람 {pic.People[p]}");
             for (int k = 0; k < pic.D; k++) Console.WriteLine($"        문 {k}: {pic.DA[k]}–{pic.DB[k]}{(pic.Open[k] ? " 열림" : "")}{(pic.Jam[k] ? " 끼임" : "")}{(pic.Leaky[k] ? " 틈" : "")}{(pic.Powered[k] ? "" : " 전기없음")} 칸 {pic.Cap[pic.DA[k]]:0}/{(pic.DB[k] == pic.Out ? 0 : pic.Cap[pic.DB[k]]):0}");
             if (!res.Found) { Solver.CountActs = new int[16]; var big = Solver.Solve(pic, Know.All, true, 14, 100000); Console.WriteLine($"        큰 예산: {(big.Found ? Solver.Describe(pic, big.Steps) + $" · 위험 {big.Risk} · {big.Cost:0}" : "없음")} · 펼침 {big.Expanded} · {string.Join(" ", Enum.GetValues<ActKind>().Select(a => $"{a}{Solver.CountActs[(int)a]}"))}"); Solver.CountActs = null; }
@@ -188,7 +225,7 @@ public sealed partial class ShipMind
             NoteTried(id, 0, 254, sig, SnagKind.Other, -1, _tick);
             int fc = sim.Causes.Add(CauseKind.Computer, $"주컴퓨터가 {RoomName(x.Room)} 구멍을 막을 방법을 찾지 못했다 — {tried} · 닫아 둔 채 기다린다", sim.Tick, x.Cell, x.Cause);
             sim.Facts.Emit(sim.Tick, FactKind.Decision, x.Cell, 0, fc, -1, x.Room);
-            Say(sim, $"생각: {RoomName(x.Room)} {KindName(x.Kind)} — {tried} → 다른 방법을 찾지 못했다 (펼침 {res.Expanded}) · 닫아 둔 채 기다린다");
+            Say(sim, $"생각: {RoomName(x.Room)} {KindName(x.Kind)} — {(tried.Length > 0 ? tried + " → " : "")}다른 방법을 찾지 못했다 (펼침 {res.Expanded}) · 닫아 둔 채 기다린다");
             return;
         }
         DevisesFound++;
@@ -287,7 +324,18 @@ public sealed partial class ShipMind
             }
         if (_computer >= 0 && _net.Devices[_computer].Room is int cr && cr >= 0 && placeOf.TryGetValue(cr, out int cp)) pic.Brain[cp] = true;   // 제 몸이 있는 방
         pic.Body = robotOut ? pic.Out : robotRoom >= 0 && placeOf.TryGetValue(robotRoom, out int bp) ? bp : -1;
-        pic.BodyBreathes = false;
+        var bodyAgent = _mind.Agents[robot];
+        pic.BodyBreathes = bodyAgent.IsPerson && _life!.Bodies[bodyAgent.C.Body].Suit == 0;   // 사람이 몸이면 우주복이 있어야 옅은 공기에 든다
+        if (pic.BodyBreathes) foreach (var (r, p) in placeOf) pic.Lockers[p] = _mind.StockIn(r, _mind.iSuit) >= 0;
+        if (bodyAgent.IsPerson)
+        {
+            // 사람은 봉합 꾸러미가 있어야 틈 · 구멍을 막는다 — 든 것 + 그림 안 보관함 (로봇은 제 것이 있다)
+            int kits = bodyAgent.C.Holding == _mind.iPatch ? 1 : 0;
+            foreach (int r in placeOf.Keys) kits += _mind.CountIn(r, _mind.iPatch);
+            pic.Kits = kits;
+        }
+        // 몸이 된 사람은 그 방 사람 수에서 뺀다 (그 사람은 계획을 안다)
+        if (bodyAgent.IsPerson && robotRoom >= 0 && placeOf.TryGetValue(robotRoom, out int sp) && pic.People[sp] > 0 && _life!.Bodies[bodyAgent.C.Body].Suit == 0) pic.People[sp]--;
         pic.Goal = placeOf[x.Room];
         return pic;
     }
@@ -313,7 +361,7 @@ public sealed partial class ShipMind
             var st = PlanSteps[si];
             int robot = st.Robot;
             var ra = robot >= 0 && robot < _mind.Agents.Count ? _mind.Agents[robot] : null;
-            if (ra == null || ra.C.Up == 0) { FailStep(sim, id, st, SnagKind.Other, -1, "로봇이 멈췄다"); continue; }
+            if (ra == null || ra.C.Up == 0) { FailStep(sim, id, st, SnagKind.Other, -1, ra != null && ra.IsPerson ? $"{_mind.NameOf(ra.Id)}이 움직이지 못한다" : "로봇이 멈췄다"); continue; }
             long t = sim.Tick;
             if (st.State == 0)
             {
@@ -322,7 +370,7 @@ public sealed partial class ShipMind
                 PlanSteps[si] = st;
             }
             // 로봇의 막힘 (이 걸음을 시작한 뒤)
-            if (ra.C.SnagTick >= st.Start && Mind.Telling(ra.C.Snag) && ra.C.SnagGoal == ra.C.AssignedGoal && st.Act is (byte)ActKind.Go or (byte)ActKind.Patch or (byte)ActKind.Unjam or (byte)ActKind.Tape)   // 맡긴 걸음의 막힘만
+            if (ra.C.SnagTick >= st.Start && Mind.Telling(ra.C.Snag) && ra.C.SnagGoal == ra.C.AssignedGoal && st.Act is (byte)ActKind.Go or (byte)ActKind.Patch or (byte)ActKind.Unjam or (byte)ActKind.Tape or (byte)ActKind.Suit)   // 맡긴 걸음의 막힘만
             { FailStep(sim, id, st, ra.C.Snag, ra.C.SnagSubject, Mind.SnagText(ra.C.Snag)); continue; }
             if (StepDone(x, ref st, ra))
             {
@@ -361,12 +409,12 @@ public sealed partial class ShipMind
                 // 출입 금지 명령 — 따르는 이는 그 방을 나와 그리로 길을 잡지 않는다 ('곧 뺀다'는 믿음은 눈으로 멀쩡한 공기를 보면 지워진다)
                 {
                     int kc = sim.Causes.Add(CauseKind.Computer, $"주컴퓨터가 {RoomName(st.Obj)} 출입을 막았다 — 그 방 공기를 뺀다 (임시 에어락)", sim.Tick, _roomVent[st.Obj], x.Cause);
-                    _mind!.KeepOut(sim, st.Obj, sim.Tick + Time.Minutes(90), kc);
+                    _mind!.KeepOut(sim, st.Obj, sim.Tick + Time.Minutes(90), kc, st.Robot);
                     _mind.Announce(sim, _roomVent[st.Obj], AlarmDb, new Belief { Kind = BeliefKind.Leak, Cell = _roomVent[st.Obj], Subject = -1, Conf = 0.6f, Cause = kc });
                 }
                 Say(sim, $"계획: {RoomName(st.Obj)}의 공기를 곧 뺍니다 — 나가 주세요 · 들어오지 마세요");
                 return true;
-            case ActKind.Go: case ActKind.Patch: case ActKind.Unjam: case ActKind.Tape:
+            case ActKind.Go: case ActKind.Patch: case ActKind.Unjam: case ActKind.Tape: case ActKind.Suit:
                 return true;
         }
         return true;
@@ -403,6 +451,7 @@ public sealed partial class ShipMind
             case ActKind.Patch: goal = HoleCell(st.Obj); g = GoalKind.Patch; if (goal < 0) { goal = x.Cell; g = GoalKind.Investigate; } break;   // 선체 센서가 아는 구멍 칸
             case ActKind.Unjam: goal = L.Doors[st.Obj].Cell; g = GoalKind.Brace; break;
             case ActKind.Tape: goal = L.Doors[st.Obj].Cell; g = GoalKind.Patch; break;   // 문틈을 봉합 꾸러미로
+            case ActKind.Suit: goal = _mind!.StockIn(st.Obj, _mind.iSuit); g = GoalKind.GetSuit; break;   // 그 방 보관함에서 우주복을
             default: goal = ra.C.Cell; g = GoalKind.Idle; break;   // 주컴퓨터 일을 하는 동안 제자리에서 기다린다
         }
         if (goal >= 0 && (ra.C.AssignedGoal != g || ra.C.AssignedTarget != goal || ra.C.AssignedUntil < t + Time.Minutes(5)))
@@ -425,7 +474,7 @@ public sealed partial class ShipMind
             if (PlanSteps.Any(c => c.Incident == id && c.Act == (byte)ActKind.Clear && c.Obj == r && c.State != 2) || People(r) > 0) continue;
             foreach (int d in _roomDoors[r])
                 if (!PlanSteps.Any(o => o.Incident == id && o.Act == (byte)ActKind.Open && o.Obj == d && o.State != 0)) _st.LockDoor(d, t + Time.Minutes(3));
-            _mind?.KeepOut(_simRef!, r, t + Time.Minutes(10), 0);
+            _mind?.KeepOut(_simRef!, r, t + Time.Minutes(10), 0, s.Robot);
         }
     }
 
@@ -447,6 +496,7 @@ public sealed partial class ShipMind
             case ActKind.Clear: return People(st.Obj) == 0;
             case ActKind.Patch: return !OpenToSpace(st.Obj);
             case ActKind.Tape: return F.DoorTaped[st.Obj] != 0;
+            case ActKind.Suit: return ra.IsPerson && _life!.Bodies[ra.C.Body].Suit != 0;
         }
         return false;
     }
@@ -493,7 +543,7 @@ public sealed partial class ShipMind
     {
         ActKind.Open => $"{DoorName(st.Obj)} 열기", ActKind.Close => $"{DoorName(st.Obj)} 닫기", ActKind.Go => $"{(st.Dest >= 0 ? RoomName(st.Dest) : "선체 바깥")}으로 가기",
         ActKind.Unjam => $"{DoorName(st.Obj)} 바로잡기", ActKind.Pump => $"{RoomName(st.Obj)} 공기 되돌리기", ActKind.Fill => $"{RoomName(st.Obj)} 채우기",
-        ActKind.Clear => $"{RoomName(st.Obj)} 사람 내보내기", ActKind.Patch => $"{RoomName(st.Obj)} 구멍 막기", ActKind.Tape => $"{DoorName(st.Obj)} 틈 막기", _ => "",
+        ActKind.Clear => $"{RoomName(st.Obj)} 사람 내보내기", ActKind.Patch => $"{RoomName(st.Obj)} 구멍 막기", ActKind.Tape => $"{DoorName(st.Obj)} 틈 막기", ActKind.Suit => "우주복 입기", _ => "",
     };
 
     private void EndPlan(Sim sim, int id, in Incident x, bool done)

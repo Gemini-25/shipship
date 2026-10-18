@@ -360,6 +360,22 @@ public sealed partial class Mind : IEngine
         return n;
     }
 
+    /// <summary>그 방 설비에 그 물건이 남아 있나 (우주복 보관함 · 작업대 …) — 가장 가까운 그 설비 (없으면 −1).</summary>
+    public int StockIn(int room, byte item)
+    {
+        for (int fu = 0; fu < L.Furniture.Count; fu++)
+            if (L.Furniture[fu].Room == room && L.Furniture[fu].Cells.Length > 0 && Stock[fu * ItemCount + item] > 0) return fu;
+        return -1;
+    }
+
+    /// <summary>그 방 설비들에 든 그 물건 수.</summary>
+    public int CountIn(int room, byte item)
+    {
+        int n = 0;
+        for (int fu = 0; fu < L.Furniture.Count; fu++) if (L.Furniture[fu].Room == room) n += Stock[fu * ItemCount + item];
+        return n;
+    }
+
     /// <summary>⑩ 판단 엔진: 지어낸 계획의 한 걸음으로 맡긴 일 (AssignedArg) — 로봇은 제 판단보다 계획을 따른다 (배터리가 바닥나는 때만 빼고).</summary>
     public const int PlanBound = -7;
 

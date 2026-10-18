@@ -34,7 +34,8 @@ public sealed partial class ShipMind
             if (!a.IsPerson || a.Id == x.Decl1 || a.Id == x.Decl2) continue;
             ref var b = ref life[a.C.Body];
             if (b.Alive == 0 || b.Conscious == 0 || x.Kind == IncidentKind.PersonDown && a.C.Body == x.Subject) continue;
-            if (a.C.AssignedUntil > t && a.C.AssignedGoal != GoalKind.Idle) continue;   // 이미 다른 일을 맡았다
+            if (a.C.AssignedUntil > t && (a.C.AssignedGoal != GoalKind.Idle || a.C.AssignedArg == Mind.PlanBound)) continue;   // 이미 다른 일을 맡았다 (지어낸 계획의 몸이 되어 기다리는 이도)
+            if (PlanSteps.Any(s => s.Robot == a.Id)) continue;
             if (g == GoalKind.Treat && a.C.Body == x.Subject) continue;   // 다친 이에게 저를 돌보라 하지 않는다
             float skill = g switch { GoalKind.FightFire => a.C.SkFire, GoalKind.Rescue or GoalKind.Treat => a.C.SkMedic, GoalKind.Repair or GoalKind.Brace => a.C.SkRepair, _ => a.C.SkSeal };
             double cost = _mind.Dist(a.C.Cell, x.Cell >= 0 ? x.Cell : a.C.Cell) * (1.5 - skill) + (b.Asleep != 0 ? 30 : 0);

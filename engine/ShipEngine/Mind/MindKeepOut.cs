@@ -9,21 +9,22 @@ namespace ShipEngine;
 public sealed partial class Mind
 {
     private long[] _keepOutUntil = Array.Empty<long>(), _keepOutSince = Array.Empty<long>();
-    private int[] _keepOutCause = Array.Empty<int>();
+    private int[] _keepOutCause = Array.Empty<int>(), _keepOutExempt = Array.Empty<int>();
     private ulong _keepSeed;
     public long KeepOutsHeeded, KeepOutsIgnored;
 
     private void EnsureKeepOut()
     {
         if (_keepOutUntil.Length == L.Rooms.Count) return;
-        _keepOutUntil = new long[L.Rooms.Count]; _keepOutSince = new long[L.Rooms.Count]; _keepOutCause = new int[L.Rooms.Count];
+        _keepOutUntil = new long[L.Rooms.Count]; _keepOutSince = new long[L.Rooms.Count]; _keepOutCause = new int[L.Rooms.Count]; _keepOutExempt = Enumerable.Repeat(-1, L.Rooms.Count).ToArray();
     }
 
     /// <summary>⑩이 요청: 그 방에서 나가고 들어가지 말라 (until까지 — 이어서 부르면 늘린다). 새 명령이면 그 방 사람마다 따를지 정한다.</summary>
-    public void KeepOut(Sim sim, int room, long until, int cause)
+    public void KeepOut(Sim sim, int room, long until, int cause, int exempt = -1)
     {
         if (room < 0 || room >= L.Rooms.Count) return;
         EnsureKeepOut();
+        _keepOutExempt[room] = exempt;   // 계획의 몸으로 그 방에 남을 사람 (우주복을 입고)
         _keepSeed = sim.Seed;
         bool fresh = _keepOutUntil[room] <= sim.Tick;
         _keepOutUntil[room] = Math.Max(_keepOutUntil[room], until); _keepOutCause[room] = cause;
@@ -31,7 +32,7 @@ public sealed partial class Mind
         _keepOutSince[room] = sim.Tick;
         foreach (var a in Agents)
         {
-            if (!a.IsPerson || _life == null || _life[a.C.Body].Alive == 0 || RoomOf(a.C.Cell) != room) continue;
+            if (!a.IsPerson || _life == null || _life[a.C.Body].Alive == 0 || RoomOf(a.C.Cell) != room || a.Id == exempt) continue;
             if (Heeds(a, room)) { KeepOutsHeeded++; continue; }
             KeepOutsIgnored++;
             int c = sim.Causes.Add(CauseKind.Person, $"{Ko.I(NameOf(a.Id))} 나가 달라는 방송을 흘려들었다", sim.Tick, a.C.Cell, cause, 0, a.Id);
@@ -53,7 +54,7 @@ public sealed partial class Mind
     }
 
     /// <summary>이 사람에게 그 방은 출입 금지다 (명령을 따르는 이).</summary>
-    private bool KeptOut(Agent a, int room) => a.IsPerson && KeepingOut(room) && Heeds(a, room);
+    private bool KeptOut(Agent a, int room) => a.IsPerson && KeepingOut(room) && a.Id != _keepOutExempt[room] && Heeds(a, room);
 
     /// <summary>출입 금지 방 안에 있으면 나간다 (따르는 이).</summary>
     private void KeepOutOption(Agent a, int here)
@@ -62,6 +63,6 @@ public sealed partial class Mind
         if (room >= 0 && KeptOut(a, room)) Add(GoalKind.Evacuate, room, here, 6f, _keepOutCause[room]);
     }
 
-    private void SaveKeepOut(StateWriter w) { w.Arr(_keepOutUntil); w.Arr(_keepOutSince); w.Arr(_keepOutCause); w.U64(_keepSeed); w.I64(KeepOutsHeeded); w.I64(KeepOutsIgnored); }
-    private void LoadKeepOut(StateReader r) { _keepOutUntil = r.Arr<long>(); _keepOutSince = r.Arr<long>(); _keepOutCause = r.Arr<int>(); _keepSeed = r.U64(); KeepOutsHeeded = r.I64(); KeepOutsIgnored = r.I64(); }
+    private void SaveKeepOut(StateWriter w) { w.Arr(_keepOutUntil); w.Arr(_keepOutSince); w.Arr(_keepOutCause); w.Arr(_keepOutExempt); w.U64(_keepSeed); w.I64(KeepOutsHeeded); w.I64(KeepOutsIgnored); }
+    private void LoadKeepOut(StateReader r) { _keepOutUntil = r.Arr<long>(); _keepOutSince = r.Arr<long>(); _keepOutCause = r.Arr<int>(); _keepOutExempt = r.Arr<int>(); _keepSeed = r.U64(); KeepOutsHeeded = r.I64(); KeepOutsIgnored = r.I64(); }
 }
