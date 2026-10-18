@@ -339,5 +339,30 @@ public static partial class Program
             Check("소리(화면): 낡은 베어링 — 낡은 펌프 소리는 2~3kHz 띠(하우징을 두드리는 결함 박자)가 네 배 넘게 세다",
                 worn.band > fresh.band * 4, $"띠 세기 새것 {10 * Math.Log10(fresh.band + 1e-12):0}dB · 낡음 {10 * Math.Log10(worn.band + 1e-12):0}dB");
         }
-    }
+    
+        // ── 잠을 깨운 말소리: 조용한 방에서 자는 이 곁에서 누가 크게 떠들면 깨고 · 그 사람을 조금 원망한다 (원인 사슬 '…의 말소리에 …이 깼다') /
+        //    같은 크기의 기계 소리(낸 사람 없음)에 깨면 원망할 사람이 없다 (화성-500 — 갈등은 소음 · 잠 같은 작은 마찰이 쌓여 생겼다) ──
+        {
+            (bool woke, float grudge, bool kept, string story) Run(bool person)
+            {
+                var s = Worlds.Full(lay, 9);
+                var m = s.Get<Mind>(); var soc = s.Get<Society>(); var snd = s.Get<Sound>(); var life = s.Get<Life>();
+                int sleeper = m.AddPerson(s, At(16, 5)), talker = m.AddPerson(s, At(14, 3));
+                m.SetPersonality(sleeper, 0.5f, 0.5f, 0.4f, 0.5f, 0.7f);   // 예민한 편
+                life[m[sleeper].C.Body].Asleep = 1; m[sleeper].C.Sleepy = 1;
+                s.Run(5);
+                life[m[sleeper].C.Body].Asleep = 1;
+                int said = s.Causes.Add(CauseKind.Person, "한밤에 큰 소리로 떠들었다", s.Tick, At(14, 3), 0, 0, talker);
+                long f0 = s.Facts.Total;
+                snd.Emit(s, At(14, 3), 78, SoundKind.Voice, said, person ? talker : -1);
+                s.Run(60);
+                var w = s.Facts.Since(f0).FirstOrDefault(f => f.Kind == FactKind.Woke && f.Actor == sleeper);
+                return (w.Kind == FactKind.Woke, soc.GrudgeOf(sleeper, talker), soc.Memories.Exists(x => x.Owner == sleeper && x.Topic == Topic.Blame && x.About == talker), w.Kind == FactKind.Woke && w.Cause != 0 ? s.Causes.Story(w.Cause) : "-");
+            }
+            var voice = Run(true); var noOne = Run(false);
+            Check("잠을 깨운 말소리: 자는 이 곁에서 누가 크게 떠들면 깨고 그 사람을 조금 원망하고 기억한다 (원인 사슬에 누구 소리였는지) / 낸 사람이 없는 소리에 깨면 원망하지 않는다",
+                voice.woke && voice.grudge > 0.02f && voice.kept && voice.story.Contains("말소리에") && noOne.woke && noOne.grudge == 0,
+                $"말소리: 깸 {voice.woke} · 원망 {voice.grudge:0.000} · 기억 {voice.kept} · \"{voice.story}\" / 낸 사람 없는 소리: 깸 {noOne.woke} · 원망 {noOne.grudge:0.000}");
+        }
+}
 }

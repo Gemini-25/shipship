@@ -121,6 +121,7 @@ public sealed partial class Mind
         if (_snd != null)
         {
             float loudest = 0, mask = 0, ambient = 0;
+            Heard loudH = default; loudH.Actor = -1;
             bool any = false;
             foreach (var h in _snd.At(cell))
             {
@@ -131,13 +132,13 @@ public sealed partial class Mind
                 heard.Db = h.Db - mask;
                 if (heard.Db < HearFloor) { Masked++; continue; }
                 Hear(sim, a, heard);
-                loudest = Math.Max(loudest, h.Db);
+                if (h.Db > loudest) { loudest = h.Db; loudH = h; }
             }
             if (_shoutAfter is Belief say) { _shoutAfter = null; Shout(sim, a, say); }
             c.HeardUpTo = _snd.LastEvent;
             if (asleep) c.SleepNoise = Math.Max(c.SleepNoise, Math.Max(loudest, _snd.Ambient(cell)));   // ⑦ 잠의 질 — 이어지는 바탕 소음도 잠자리 소리다
             // 깨우는 소리: 귀에 60dB 넘게 · 이어지는 바탕 소음보다 10dB 넘게 솟아야 (시끄러운 잠자리에서는 익숙해진 소음 위로 — NFPA 72 잠자리 경보는 바탕 소음 + 15dB)
-            if (asleep && loudest >= 60 && loudest >= ambient + 10) Wake(sim, a, "소리에 깼다");
+            if (asleep && loudest >= 60 && loudest >= ambient + 10) WokenBy(sim, a, loudH);
         }
 
         if (person && asleep)
@@ -465,14 +466,25 @@ public sealed partial class Mind
         sim.Facts.Emit(sim.Tick, FactKind.Warned, b.Cell, b.Conf, b.Cause, a.Id, (int)b.Kind);
     }
 
-    private void Wake(Sim sim, Agent a, string why)
+    private void Wake(Sim sim, Agent a, string why, int cause = 0, int by = -1)
     {
         ref var body = ref _life![a.C.Body];
         if (body.Asleep == 0) return;
         body.Asleep = 0;
         a.C.WokeAt = sim.Tick;
         a.C.Goal = GoalKind.Idle; a.Plan.Clear(); a.Path.Clear(); a.C.StepIndex = 0;
-        sim.Facts.Emit(sim.Tick, FactKind.Woke, a.C.Cell, 0, 0, a.Id);
+        sim.Facts.Emit(sim.Tick, FactKind.Woke, a.C.Cell, 0, cause, a.Id, by);
+    }
+
+    /// <summary>소리에 깼다 — 남의 말소리면 (위급해서 외친 말이 아니면) 누구 소리였는지 원인에 남긴다 (⑨가 듣는다 — 잠을 설치게 한 이를 조금 원망한다).
+    /// 실제: 화성-500 · 남극 월동대의 갈등은 큰일보다 소음 · 잠 · 일 분담 같은 작은 마찰이 쌓여 생겼다.</summary>
+    private void WokenBy(Sim sim, Agent a, in Heard h)
+    {
+        int by = h.Actor, ev = h.Event;
+        bool annoying = h.Kind == SoundKind.Voice && by >= 0 && by < Agents.Count && by != a.Id && Agents[by].IsPerson && !_said.Exists(x => x.ev == ev);
+        if (!annoying || _life![a.C.Body].Asleep == 0) { Wake(sim, a, "소리에 깼다"); return; }
+        int cause = sim.Causes.Add(CauseKind.Person, $"{NameOf(by)}의 말소리에 {Ko.I(NameOf(a.Id))} 깼다", sim.Tick, a.C.Cell, h.Cause, 0, by);
+        Wake(sim, a, "소리에 깼다", cause, by);
     }
 
     // ───────────────────────── 본능 (사람) ─────────────────────────
