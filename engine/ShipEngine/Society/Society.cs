@@ -225,12 +225,7 @@ public sealed partial class Society : IEngine
                     float talk = a.C.Goal == GoalKind.Socialize || b.C.Goal == GoalKind.Socialize ? 1.5f : 0.7f;
                     Raise(sim, i, j, (float)(0.05 * fit * talk * dt / 3600), 0, "함께 지낸 시간");
                 }
-                // 말을 건다 (한 쌍에 한 번 — 앞 번호가 센다): 분당 약 3% × 외향 × 아는 정도
-                if (i < j && Awake(i) && Awake(j) && sim.Tick - LastTalk[i * N + j] >= TalkRest)
-                {
-                    float p = 0.03f * (0.5f + Math.Max(a.C.Extra, b.C.Extra)) * (a.C.Goal == GoalKind.Socialize || b.C.Goal == GoalKind.Socialize ? 1.6f : 1) * (0.4f + KnownOf(i, j));
-                    if (Rnd(sim, "말 걸기", i, j) < p && !KeepsQuiet(sim, i, j)) { Talk(sim, i, j); NickInTalk(sim, i, j); }   // ⑨ 조용한 밤의 규칙 · 이야기하다 별명이 붙는다
-                }
+                // 말을 거는 것 · 이야기 · 대답은 사람의 판단이다 (MindTalk — 사회는 그 행동의 결과를 TakeActs에서 계산한다)
                 // 원한이 깊은 둘이 마주쳤다 — 화가 난 쪽이 먼저 덤빌 수 있다
                 if (GrudgeOf(i, j) > 0.5f && C(i).Anger > 0.5f) Escalate(sim, i, j, 0.2f, 0);
             }
@@ -266,7 +261,7 @@ public sealed partial class Society : IEngine
     }
 
     /// <summary>함께 쉬는 때 (어울림 · 쉼 · 밥 · 빈둥거림) — 일하거나 자거나 위급할 때는 정이 쌓이지 않는다.</summary>
-    private static bool Leisure(GoalKind g) => g is GoalKind.Socialize or GoalKind.Relax or GoalKind.Eat or GoalKind.Idle or GoalKind.Exercise;
+    public static bool Leisure(GoalKind g) => g is GoalKind.Socialize or GoalKind.Relax or GoalKind.Eat or GoalKind.Idle or GoalKind.Exercise;
 
     /// <summary>정을 바꾼다 — 오를 때는 문턱을 넘으면 '가까워졌다'가 남는다.</summary>
     private void Warm(Sim sim, int a, int b, float delta, string why = "함께 겪은 일")

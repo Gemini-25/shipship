@@ -491,6 +491,7 @@ public sealed partial class Mind : IEngine
         }
         BlockDoors();
         Lap("문 붙잡기", t);
+        TalkStep(sim);     // 판단 이관 (나): 말 걸기 · 이야기 · 대답 · 별명
         GatherStep(sim);   // 판단 이관 (가): 부르기 · 말하기 · 미루기 (사회가 같은 틱에 결과를 계산한다)
     }
 

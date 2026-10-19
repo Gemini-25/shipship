@@ -84,5 +84,34 @@ public static partial class Program
                 sleeper >= 0 && !sleeperSpoke && verdict.Kind == FactKind.Verdict && text.Contains("3명 중"),
                 $"잠든 이 {(sleeper >= 0 ? m.NameOf(sleeper) : "-")} · 그의 말 {sleeperSpoke} · '{text}'");
         }
+
+        // ── (나) 대화: 말 걸기 · 이야기 · 대답은 사람의 행동 — 대화 사실마다 같은 틱에 그 둘의 '대화' 행동이 있고 · 밤의 규칙으로 삼킨 말도 그 사람의 행동이다 ──
+        {
+            var (s, m, soc, p) = World(4, 7);
+            int N = soc.N;
+            foreach (int a in p) foreach (int b in p) if (a != b) soc.Known[a * N + b] = 0.6f;
+            soc.Grudge[p[1] * N + p[0]] = 0.3f;   // 따질 거리 하나 (덤빌 만큼은 아니다)
+            foreach (int a in p) m.SetPersonality(a, 0.5f, 0.8f, 0.6f, 0.5f, 0.4f);
+            var acts = new List<SocialAct>();
+            long f0 = s.Facts.Total;
+            for (int k = 0; k < Time.Hours(2); k++) { Step(s, m, acts, p); foreach (int a in p) m[a].C.Bored = 0; }
+            var talks = s.Facts.Since(f0).Where(f => f.Kind == FactKind.Talk).ToList();
+            var tActs = acts.Where(a => a.Kind == SocialActKind.Talk).ToList();
+            int matched = talks.Count(f => tActs.Any(a => a.Tick == f.Tick && (a.Actor == f.Actor && a.Target == f.Other || a.Actor == f.Other && a.Target == f.Actor)));
+            // 밤의 규칙: 한 사람이 식당에서 잠들었고 · 성실한 셋 — 말을 삼킨 수 = '말을 삼켰다' 행동의 수
+            var (s2, m2, soc2, p2) = World(4, 7);
+            int N2 = soc2.N;
+            foreach (int a in p2) foreach (int b in p2) if (a != b) soc2.Known[a * N2 + b] = 0.6f;
+            foreach (int a in p2) m2.SetPersonality(a, 0.5f, 0.8f, 0.6f, 0.95f, 0.4f);
+            soc2.SetRuleNow(1);
+            var acts2 = new List<SocialAct>();
+            long q0 = soc2.QuietKept;
+            for (int k = 0; k < Time.Hours(2); k++) { Step(s2, m2, acts2, p2, p2[3]); foreach (int a in p2) m2[a].C.Bored = 0; }
+            int keeps = acts2.Count(a => a.Kind == SocialActKind.KeepQuiet);
+            if (Debug) foreach (var f in talks) Console.WriteLine($"    {Time.Clock(f.Tick)} {m.NameOf(f.Actor)}→{m.NameOf(f.Other)} {s.Causes.Text(f.Cause)}");
+            Check("(나) 대화는 사람이 한다: 대화 사실마다 같은 틱에 그 둘의 '대화' 행동(말을 꺼낸 이 · 이야기 · 듣는 이의 대답)이 있다 / 밤의 규칙으로 삼킨 말은 그 사람의 '말을 삼켰다' 행동이다",
+                talks.Count >= 3 && matched == talks.Count && tActs.Count == talks.Count && keeps > 0 && soc2.QuietKept - q0 == keeps,
+                $"대화 사실 {talks.Count} · 행동 {tActs.Count} · 맞음 {matched} / 삼킨 말 {soc2.QuietKept - q0} · 행동 {keeps}");
+        }
     }
 }

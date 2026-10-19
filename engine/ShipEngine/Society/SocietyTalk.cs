@@ -44,117 +44,69 @@ public sealed partial class Society
         public Option(Topic t, float w, int about, int cause, int cell, int speaker) { T = t; W = w; About = about; Cause = cause; Cell = cell; Speaker = speaker; }
     }
 
-    /// <summary>두 사람이 말을 나눈다: 기억 · 관계 · 성격에서 주제를 고르고 → 결과 → 관계가 바뀐다 · 한 마디가 남는다.</summary>
-    private void Talk(Sim sim, int i, int j)
+    /// <summary>
+    /// 두 사람이 말을 나눴다 (마음의 행동 '대화' — 무슨 이야기를 누가 꺼냈고 듣는 이가 어떻게 받았는지는 판단 엔진이 정했다):
+    /// 결과만 계산한다 — 관계가 바뀌고 · 한 마디가 남고 · 함께 겪은 불 · 구멍 이야기는 교훈이 되고 · 꺼낸 기억은 조금 가라앉는다.
+    /// </summary>
+    private void Talk(Sim sim, SocialAct act)
     {
-        var opts = new List<Option>();
-        // 두 무리의 지도자가 만났다: 벌어진 사이가 가장 먼저 꺼낼 이야기다 (다정할수록 크게)
-        if (Rival(i, j) && LeaderOf(i) == i && LeaderOf(j) == j)
-        {
-            int sp0 = C(i).Agree >= C(j).Agree ? i : j;
-            opts.Add(new(Topic.Peace, 4 * (0.4f + C(sp0).Agree), sp0 == i ? j : i, 0, C(sp0).Cell, sp0));
-        }
-        foreach (var (a, b) in new[] { (i, j), (j, i) })
-        {
-            // 원망하는 사람에게 따진다
-            if (GrudgeOf(a, b) > 0.25f - 0.1f * C(a).Weary) opts.Add(new(Topic.Blame, 3 * GrudgeOf(a, b) * (0.6f + C(a).Neuro * 0.6f) * (1 + C(a).Weary), b, MemoryCause(a, Topic.Blame, b), MemoryCell(a, Topic.Blame, b), a));   // 지친 이는 묵혀 둔 일을 더 쉽게 꺼낸다 (⑧ 고립의 피로)
-            // 슬픔을 꺼낸다
-            if (Grief[a] > 0.25f) { int dead = StrongestAbout(sim, a, Topic.Death); if (dead >= 0) opts.Add(new(Topic.Death, 2 * Grief[a], dead, MemoryCause(a, Topic.Death, dead), MemoryCell(a, Topic.Death, dead), a)); }
-            // 그 자리에 없는 이의 험담 (덜 다정할수록)
-            int c3 = -1; float g3 = 0.3f;
-            for (int x = 0; x < N; x++) if (x != a && x != b && GrudgeOf(a, x) > g3 && _mind!.RoomOf(C(x).Cell) != _mind.RoomOf(C(a).Cell)) { g3 = GrudgeOf(a, x); c3 = x; }
-            if (c3 >= 0) opts.Add(new(Topic.Gossip, 1.5f * g3 * (1.2f - C(a).Agree), c3, MemoryCause(a, Topic.Blame, c3), MemoryCell(a, Topic.Blame, c3), a));
-            // ⑧ 마음이 힘든 친구에게 '요즘 어때' — 아끼는 이(정 0.5 넘게)가 먼저 묻는다 (다정할수록)
-            float low = Math.Max(C(a).Depress, Math.Max(C(a).Trauma, C(a).Anxiety));
-            if (low > 0.3f && BondOf(b, a) > 0.5f) opts.Add(new(Topic.Troubled, 5 * low * (0.5f + C(b).Agree), a, C(a).ShockCause, C(b).Cell, b));   // 가까운 이의 처진 얼굴은 먼저 눈에 띈다
-        }
-        // 마음을 고백한다: 짝이 없는 둘 · 끌림이 깊고 정도 쌓였다 (끌림이 클수록 · 외향일수록 먼저 꺼낸다)
-        foreach (var (a, b) in new[] { (i, j), (j, i) })
-            if (Partner[a] < 0 && Partner[b] < 0 && AttractOf(a, b) >= ConfessAt && BondOf(a, b) >= 0.45f)
-                opts.Add(new(Topic.Heart, 6 * (AttractOf(a, b) - 0.5f) * (0.5f + C(a).Extra), b, MemoryCause(a, Topic.Heart, b), C(a).Cell, a));   // 남몰래 품은 마음(⑫ 짝사랑)이 있으면 그 원인에 잇는다
-        // 함께 겪은 일 (같은 원인을 둘 다 기억한다 — 가장 큰 것) · 무서웠던 일일수록 (그 자리를 꺼릴수록) 더 꺼낸다 (감정 나눔 연구 — 강한 일은 함께 겪은 이와 되새긴다)
-        int best = -1; float bw = 0.15f;
-        for (int k = 0; k < Memories.Count; k++)
-        {
-            var m = Memories[k];
-            if (m.Owner != i || m.Topic is Topic.Blame or Topic.Gossip or Topic.Small) continue;
-            int mr = _mind!.RoomOf(m.Cell);
-            float w = Weight(m, sim.Tick) * (1 + _mind.Dread(i, mr) + _mind.Dread(j, mr));
-            if (w <= bw) continue;
-            for (int q = 0; q < Memories.Count; q++) if (Memories[q].Owner == j && Memories[q].Cause == m.Cause && Memories[q].Topic == m.Topic) { best = k; bw = w; break; }
-        }
-        if (best >= 0) { var m = Memories[best]; opts.Add(new(m.Topic, 2.2f * bw, m.About, m.Cause, m.Cell, C(i).Extra >= C(j).Extra ? i : j)); }
-        // 식량 · 물이 열흘을 못 버틴다
-        double food = sim.Book.DaysLeft((int)Res.Food, sim.Tick), water = sim.Book.DaysLeft((int)Res.Water, sim.Tick);
-        bool rationed = _mind!.RationFood > 0 || _mind.RationWater > 0;   // ⑪ 배급 중이면 먹을 것 이야기가 잦다 (미네소타 굶주림 실험: 먹을 것 생각)
-        if (food < 10 || water < 10 || rationed) opts.Add(new(Topic.Shortage, rationed ? 2f + C(i).Hunger + C(j).Hunger : 1.2f, -1, 0, C(i).Cell, C(i).Neuro >= C(j).Neuro ? i : j));
-        int talker = C(i).Extra >= C(j).Extra ? i : j;
-        opts.Add(new(Topic.Small, 1, -1, 0, C(i).Cell, talker));
-        if (C(i).Goal == GoalKind.Idle || C(j).Goal == GoalKind.Idle) opts.Add(new(Topic.Work, 0.5f, -1, 0, C(i).Cell, talker));
-
-        float sum = opts.Sum(o => o.W), r = Rnd(sim, "주제", i, j) * sum;
-        var pick = opts[^1];
-        foreach (var o in opts) { r -= o.W; if (r <= 0) { pick = o; break; } }
-        int sp = pick.Speaker, li = sp == i ? j : i;
-        Outcome(sim, pick, sp, li);
+        int sp = act.Actor, li = act.Target;
+        if (!Awake(sp) || !Awake(li)) return;   // 그 틱에 쓰러졌다 — 말이 끊겼다
+        var o = new Option(act.Topic, 1, act.Other, act.Cause, act.Cell, sp);
+        Outcome(sim, o, sp, li, act.End);
         // 함께 겪은 불 · 구멍 이야기: 들은 이는 교훈을 조금 얻고 · 말한 이는 되새긴다 (⑧에 요청)
-        if (pick.T is Topic.Fire or Topic.Breach)
+        if (o.T is Topic.Fire or Topic.Breach)
         {
-            var hz = pick.T == Topic.Fire ? Hazard.Fire : Hazard.Breach;
+            var hz = o.T == Topic.Fire ? Hazard.Fire : Hazard.Breach;
             _mind!.Teach(li, hz, 0.08f); _mind.Teach(sp, hz, 0.05f);
         }
-        LastTalk[i * N + j] = LastTalk[j * N + i] = sim.Tick;
+        LastTalk[sp * N + li] = LastTalk[li * N + sp] = sim.Tick;
         // 한 번 꺼낸 이야기는 둘에게 조금 가라앉는다 (같은 말만 되풀이하지 않게)
-        if (pick.Cause != 0)
+        if (o.Cause != 0)
             for (int k = 0; k < Memories.Count; k++)
             {
                 var m = Memories[k];
-                if ((m.Owner == i || m.Owner == j) && m.Cause == pick.Cause) { m.Weight *= 0.5f; Memories[k] = m; }
+                if ((m.Owner == sp || m.Owner == li) && m.Cause == o.Cause) { m.Weight *= 0.5f; Memories[k] = m; }
             }
     }
 
-    private int MemoryCause(int owner, Topic t, int about)
+    public int MemoryCause(int owner, Topic t, int about)
     {
         foreach (var m in Memories) if (m.Owner == owner && m.Topic == t && m.About == about) return m.Cause;
         return 0;
     }
-    private int MemoryCell(int owner, Topic t, int about)
+    public int MemoryCell(int owner, Topic t, int about)
     {
         foreach (var m in Memories) if (m.Owner == owner && m.Topic == t && m.About == about) return m.Cell;
         return C(owner).Cell;
     }
-    private int StrongestAbout(Sim sim, int owner, Topic t)
+    public int StrongestAbout(Sim sim, int owner, Topic t)
     {
         int about = -1; float bw = 0;
         foreach (var m in Memories) if (m.Owner == owner && m.Topic == t && Weight(m, sim.Tick) > bw) { bw = Weight(m, sim.Tick); about = m.About; }
         return about;
     }
 
-    /// <summary>주제에 따라 대화가 흘러간 끝 — 관계를 바꾸고 한 마디를 남긴다.</summary>
-    private void Outcome(Sim sim, Option o, int a, int b)
+    /// <summary>대화가 흘러간 끝(듣는 이가 받은 것 — 마음이 정했다)의 결과 — 관계를 바꾸고 한 마디를 남긴다.</summary>
+    private void Outcome(Sim sim, Option o, int a, int b, TalkEnd end)
     {
         ref var ca = ref C(a); ref var cb = ref C(b);
-        float r = Rnd(sim, "대화 끝", a, b);
-        TalkEnd end;
         switch (o.T)
         {
             case Topic.Blame:
             {
                 int lb = LieOf(o.Cause);
                 if (lb >= 0 && b == Lies[lb].Scape) Hear(sim, lb, b, a);   // 누명을 쓴 줄 이제 안다
-                // b가 사과하나: 다정하고 · 덜 불안하고 · a를 아끼고 · 실제로 b의 탓일수록 (아주 다정하고 차분한 이가 제 잘못을 들으면 넷에 셋은 사과한다 · 거친 이는 백에 두셋)
-                bool guilty = o.Cause != 0 && Culprit(sim, o.Cause, -1) == b;
-                float p = cb.Agree * (1 - cb.Neuro * 0.5f) * (0.7f + Math.Max(0, BondOf(b, a)) + DebtOf(b, a)) * (guilty ? 1.2f : 0.5f) * (1 - 0.4f * cb.Weary);   // 지친 이는 덜 숙인다
-                if (r < p)
+                if (end == TalkEnd.Apology)   // b가 사과했다
                 {
-                    end = TalkEnd.Apology; Apologies++;
+                    Apologies++;
                     int k = a * N + b; Grudge[k] *= 0.5f;
                     Warm(sim, a, b, 0.05f); Warm(sim, b, a, 0.03f); Add(TrustOf, a, b, 0.05f);
                     Say(sim, b, a, o, end, Pick(sim, "탓/사과", b));
                 }
                 else
                 {
-                    end = TalkEnd.Argue; Arguments++;
+                    Arguments++;
                     Add(Grudge, a, b, 0.15f); Add(Grudge, b, a, 0.1f);
                     Warm(sim, a, b, -0.1f); Warm(sim, b, a, -0.1f);
                     ca.Anger = Math.Min(1, ca.Anger + 0.3f * (0.5f + ca.Neuro)); cb.Anger = Math.Min(1, cb.Anger + 0.25f * (0.5f + cb.Neuro));
@@ -170,17 +122,15 @@ public sealed partial class Society
             case Topic.Gossip:
             {
                 int x = o.About;
-                // 감싸기: 아끼는 사람이거나 같은 무리면 (무리는 덜 다정해도 제 사람을 감싼다)
-                if (BondOf(b, x) > 0.5f && cb.Agree > 0.4f || SameBand(b, x) && !SameBand(a, x) && cb.Agree > 0.2f)
+                if (end == TalkEnd.Defend)   // 감쌌다
                 {
-                    end = TalkEnd.Defend;
                     Warm(sim, b, a, -0.05f);
                     Say(sim, b, a, o, end, Pick(sim, "험담/감쌈", b));
                 }
                 else
                 {
                     // 소문: 듣는 이가 말하는 이를 믿는 만큼 · 덜 다정할수록 같이 미워한다
-                    end = TalkEnd.Spread; Rumors++;
+                    Rumors++;
                     int lg = LieOf(o.Cause);
                     if (lg >= 0)
                     {
@@ -201,10 +151,9 @@ public sealed partial class Society
             }
             case Topic.Heart:
             {
-                // 받아 주나: 듣는 이도 끌리고 · 정이 있고 · 앙금이 없다 (짝이 이미 있으면 아니다)
-                if (Partner[b] < 0 && AttractOf(b, a) >= AcceptAt && BondOf(b, a) >= 0.35f && GrudgeOf(b, a) < 0.2f)
+                if (end == TalkEnd.Accept && Partner[a] < 0 && Partner[b] < 0)   // 받아 주었다
                 {
-                    end = TalkEnd.Accept; Couples++;
+                    Couples++;
                     Partner[a] = b; Partner[b] = a;
                     Warm(sim, a, b, 0.15f); Warm(sim, b, a, 0.15f); Add(TrustOf, a, b, 0.1f); Add(TrustOf, b, a, 0.1f);
                     ca.Joy = Math.Min(1, ca.Joy + 0.5f); cb.Joy = Math.Min(1, cb.Joy + 0.4f);
@@ -224,13 +173,10 @@ public sealed partial class Society
             }
             case Topic.Peace:
             {
-                // 받아들이나: 둘 다 다정하고 · 듣는 이의 원한이 덜할수록
-                float p = (ca.Agree + cb.Agree) * 0.5f * (1.2f - GrudgeOf(b, a)) * (1 - cb.Neuro * 0.3f);
                 int g1 = BandIdOf(a), g2 = BandIdOf(b);
                 string n1 = BandName(g1), n2 = BandName(g2);
-                if (r < p)
+                if (end == TalkEnd.Accept)   // 받아들였다
                 {
-                    end = TalkEnd.Accept;
                     // 두 무리 사람들 사이의 원한이 크게 준다 (지도자가 제 사람들을 달랜다)
                     for (int x = 0; x < N; x++) for (int y = 0; y < N; y++)
                         if (BandIdOf(x) == g1 && BandIdOf(y) == g2 || BandIdOf(x) == g2 && BandIdOf(y) == g1) Grudge[x * N + y] *= 0.5f;
@@ -243,7 +189,7 @@ public sealed partial class Society
                 }
                 else
                 {
-                    end = TalkEnd.Argue; Arguments++;
+                    Arguments++;
                     // 맞섰다: 지도자 사이 원한이 깊어지고 · 두 무리 사람들에게 번진다
                     Add(Grudge, a, b, 0.15f); Add(Grudge, b, a, 0.15f);
                     for (int x = 0; x < N; x++) for (int y = 0; y < N; y++)
@@ -260,35 +206,32 @@ public sealed partial class Society
             }
             case Topic.Troubled:
             {
-                // a가 묻고 b가 털어놓나: b가 a를 아낄수록 · 외향일수록 — 털어놓으면 마음이 가벼워진다 (우울 −0.05 · 외상 −0.03 · 불안 −0.05)
-                if (r < 0.45f + 0.5f * Math.Max(0, BondOf(b, a)) + 0.2f * cb.Extra)
+                // a가 묻고 b가 털어놓았다 — 털어놓으면 마음이 가벼워진다 (우울 −0.05 · 외상 −0.03 · 불안 −0.05)
+                if (end == TalkEnd.Comfort)
                 {
-                    end = TalkEnd.Comfort;
                     _mind!.Eased(b, 0.05f, 0.03f, 0.05f);
                     Warm(sim, b, a, 0.05f); Warm(sim, a, b, 0.03f);
                     Say(sim, a, b, o, end, Pick(sim, "속마음/위로", a));
                 }
-                else { end = TalkEnd.Awkward; Say(sim, b, a, o, end, Pick(sim, "속마음/어색", b)); }
+                else Say(sim, b, a, o, end, Pick(sim, "속마음/어색", b));
                 break;
             }
             case Topic.Death:
             {
-                if (r < 0.4f + cb.Agree * 0.6f)
+                if (end == TalkEnd.Comfort)
                 {
-                    end = TalkEnd.Comfort;
                     Grief[a] = Math.Max(0, Grief[a] - 0.08f); ca.Sad = Math.Max(0, ca.Sad - 0.1f);
                     Warm(sim, a, b, 0.06f); Warm(sim, b, a, 0.04f);
                     Say(sim, a, b, o, end, Pick(sim, "죽음/위로", a));
                 }
-                else { end = TalkEnd.Awkward; Say(sim, b, a, o, end, Pick(sim, "죽음/어색", b)); }
+                else Say(sim, b, a, o, end, Pick(sim, "죽음/어색", b));
                 break;
             }
             case Topic.Fire or Topic.Breach or Topic.Rescue or Topic.Hurt or Topic.Fight:
             {
-                // 함께 겪은 일: 그때 자기를 구한 · 위기를 넘긴 상대에게 고맙다 · 아니면 맞장구
-                bool hero = o.About == b && o.T is Topic.Fire or Topic.Breach or Topic.Rescue;
-                if (o.T == Topic.Hurt) { end = TalkEnd.Comfort; Warm(sim, a, b, 0.03f); Say(sim, b, a, o, end, Pick(sim, "다침/위로", b)); break; }
-                end = hero ? TalkEnd.Praise : TalkEnd.Agree;
+                // 함께 겪은 일: 그때 자기를 구한 · 위기를 넘긴 상대에게 고마워했다 · 아니면 맞장구
+                bool hero = end == TalkEnd.Praise;
+                if (o.T == Topic.Hurt) { Warm(sim, a, b, 0.03f); Say(sim, b, a, o, end, Pick(sim, "다침/위로", b)); break; }
                 Warm(sim, a, b, hero ? 0.06f : 0.04f); Warm(sim, b, a, 0.04f);
                 if (hero) Add(TrustOf, a, b, 0.05f);
                 string key = $"{TalkTable.TopicName(o.T)}/{(hero ? "칭찬" : "맞장구")}";
@@ -296,32 +239,27 @@ public sealed partial class Society
                 break;
             }
             case Topic.Shortage:
-                end = TalkEnd.Worry;
                 ca.Stress = Math.Min(1, ca.Stress + 0.05f); cb.Stress = Math.Min(1, cb.Stress + 0.05f);
                 Warm(sim, a, b, 0.01f);
                 Say(sim, a, b, o, end, Pick(sim, "걱정/걱정", a));
                 break;
             default:
             {
-                // 잡담 · 일: 성격이 맞으면 웃고 · 거친 둘은 부딪친다
-                float worn = (ca.Weary + cb.Weary) * 0.5f;   // ⑧ 고립의 피로 — 같은 얼굴 · 같은 말에 지친 둘은 더 부딪친다
-                float fit = 1 - Math.Abs(ca.Extra - cb.Extra) * 0.5f + (ca.Agree + cb.Agree) * 0.25f + Math.Max(0, BondOf(a, b)) * 0.5f - 0.6f * worn;
+                // 잡담 · 일: 맞으면 웃고 · 거친 둘은 부딪친다
                 string t = o.T == Topic.Work ? "일" : "잡담";
-                if (fit > r * 1.4f)
+                if (end is TalkEnd.Laugh or TalkEnd.Agree)
                 {
-                    end = r < 0.25f && o.T == Topic.Small ? TalkEnd.Laugh : TalkEnd.Agree;
                     Warm(sim, a, b, 0.03f); Warm(sim, b, a, 0.03f);
                     ca.Joy = Math.Min(1, ca.Joy + 0.05f); cb.Joy = Math.Min(1, cb.Joy + 0.05f);
                     Say(sim, a, b, o, end, Pick(sim, end == TalkEnd.Laugh ? "잡담/웃음" : $"{t}/맞장구", a));
                 }
-                else if (ca.Agree + cb.Agree < 0.7f + 0.6f * worn)
+                else if (end == TalkEnd.Friction)
                 {
-                    end = TalkEnd.Friction;
                     Warm(sim, a, b, -0.02f); Warm(sim, b, a, -0.02f); Add(Grudge, b, a, 0.02f);
                     ca.Anger = Math.Min(1, ca.Anger + 0.05f); cb.Anger = Math.Min(1, cb.Anger + 0.08f);
                     Say(sim, b, a, o, end, Pick(sim, $"{t}/다툼", b));
                 }
-                else { end = TalkEnd.Awkward; Say(sim, b, a, o, end, Pick(sim, "잡담/어색", b)); }
+                else Say(sim, b, a, o, end, Pick(sim, "잡담/어색", b));
                 break;
             }
         }

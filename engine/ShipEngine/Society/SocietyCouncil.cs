@@ -91,7 +91,8 @@ public sealed partial class Society
         _mind ??= sim.Find<Mind>(); _life ??= sim.Find<Life>();
         if (_mind == null || _life == null) return;
         Resize(_mind.Agents.Count);
-        CouncilArrays();
+        CouncilArrays(); CultureArrays();
+        _talk ??= TalkTable.Load();
         foreach (var act in _mind.ActsSince(_actCursor))
         {
             switch (act.Kind)
@@ -100,6 +101,14 @@ public sealed partial class Society
                 case SocialActKind.Speak: Spoke(sim, act); break;
                 case SocialActKind.CallOff when Meeting.Kind != CouncilKind.None && act.Meet == Meeting.Kind:
                     Close(sim, -2, null, act.Cause, act.Actor);
+                    break;
+                case SocialActKind.Talk: Talk(sim, act); break;
+                case SocialActKind.KeepQuiet when act.Actor < N && act.Target < N:   // 밤의 규칙 — 말을 삼켰다: 한동안 다시 꺼내지 않는다
+                    QuietKept++;
+                    LastTalk[act.Actor * N + act.Target] = sim.Tick;
+                    break;
+                case SocialActKind.Nickname when act.Target >= 0 && act.Target < Nick.Length && Nick[act.Target] == 0:
+                    Coin(sim, act.Target, act.Actor, (Nickname)act.Arg);
                     break;
                 case SocialActKind.DeferMemorial when _mournDeferred.Add(act.Target):
                     MemorialsDeferred++;

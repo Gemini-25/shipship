@@ -42,7 +42,7 @@ public sealed partial class Society
     private readonly List<(long t, int who, int cause)> _stoveLog = new();
     private long _askQuiet = long.MinValue / 2, _askStove = long.MinValue / 2, _cultureCursor;
 
-    private static readonly int[] DeedsFor = { 0, 3, 3, 3, 5, 2 };
+    public static readonly int[] DeedsFor = { 0, 3, 3, 3, 5, 2 };
     public static string NickText(Nickname n) => n switch
     {
         Nickname.Rescuer => "구조대장", Nickname.FireChief => "불끄기 반장", Nickname.Patcher => "땜장이", Nickname.Handy => "손재주꾼", Nickname.Forgetful => "깜빡이", _ => "",
@@ -165,40 +165,13 @@ public sealed partial class Society
     private void Deed(Sim sim, int a, Nickname kind, int cause, int cell)
     {
         int k = a * 6 + (int)kind;
-        _deeds[k]++; _deedCause[k] = cause;   // 별명은 여기서 붙지 않는다 — 그 일을 아는 동료가 이야기하다 부르기 시작한다 (NickInTalk)
+        _deeds[k]++; _deedCause[k] = cause;   // 별명은 여기서 붙지 않는다 — 그 일을 아는 동료가 이야기하다 부르기 시작한다 (마음 NickInTalk)
     }
 
-    /// <summary>그 사람이 x의 그 일을 아나: 함께 겪었거나 들어서 기억한다 (x에 대한 기억) · 함께 지내 잘 안다 (아는 정도 0.3 넘게) ·
-    /// 고친 일 · 켜 둔 조리대는 배 사람이 다 안다 (일감판 · 주컴퓨터가 끈 조리대).</summary>
-    private bool KnowsDeeds(int by, int x, Nickname kind)
-    {
-        if (kind is Nickname.Handy or Nickname.Forgetful || KnownOf(by, x) > 0.3f) return true;
-        foreach (var m in Memories) if (m.Owner == by && m.About == x && m.Topic is Topic.Rescue or Topic.Fire or Topic.Breach) return true;
-        return false;
-    }
+    /// <summary>x가 그 일을 한 번 (별명 셈).</summary>
+    public int DeedCount(int x, Nickname kind) => x >= 0 && x * 6 + (int)kind < _deeds.Length ? _deeds[x * 6 + (int)kind] : 0;
 
-    /// <summary>
-    /// 이야기를 나눈 둘 — 한쪽이 별명이 붙을 만큼 일을 쌓았고 · 다른 쪽이 그 일을 알면 그렇게 부르기 시작한다 (말한 이의 판단):
-    /// 기리는 별명은 그를 아끼거나 (정 0.2 넘게) 외향인 이 (0.5 넘게)가 · 놀리는 별명은 덜 다정한 이 (친화 0.6 아래)가 꺼낸다.
-    /// </summary>
-    private void NickInTalk(Sim sim, int i, int j)
-    {
-        CultureArrays();
-        foreach (var (x, by) in new[] { (i, j), (j, i) })
-        {
-            if (Nick[x] != 0 || !Alive(x) || !Awake(by)) continue;
-            for (int kind = 1; kind <= 5; kind++)
-            {
-                if (_deeds[x * 6 + kind] < DeedsFor[kind] || !KnowsDeeds(by, x, (Nickname)kind)) continue;
-                ref var cb = ref C(by);
-                bool tease = kind == (int)Nickname.Forgetful;
-                if (tease ? cb.Agree >= 0.6f : BondOf(by, x) <= 0.2f && cb.Extra <= 0.5f) continue;
-                Coin(sim, x, by, (Nickname)kind);
-                return;
-            }
-        }
-    }
-
+    /// <summary>by가 a를 그 별명으로 부르기 시작했다 (마음의 행동 '별명') — 결과: 기림은 기쁨과 모두의 믿음 · 놀림은 서운함 (예민하면 원망).</summary>
     private void Coin(Sim sim, int a, int by, Nickname kind)
     {
         int k = a * 6 + (int)kind;
@@ -392,23 +365,6 @@ public sealed partial class Society
             RulesRejected++;
             Culture(sim, CultureEvent.RuleRejected, $"규칙은 정하지 않기로 했다 — '{RuleText(m.Arg)}' ({_attend.Count}명 가운데 {yes}명만 찬성)", m.Cell, m.Cause, m.Caller, m.Arg);
         }
-    }
-
-    /// <summary>조용한 밤: 22~6시에 자는 이가 곁(같은 방 6칸 안)에 있으면 — 성실한 이일수록 말을 걸지 않는다 (덜 성실한 이는 어긴다).</summary>
-    private bool KeepsQuiet(Sim sim, int i, int j)
-    {
-        if (!QuietRule) return false;
-        double hour = Time.HourOfDay(sim.Tick);
-        if (hour < 22 && hour >= 6) return false;
-        bool sleeper = false;
-        int room = _mind!.RoomOf(C(i).Cell);
-        for (int k = 0; k < N && !sleeper; k++)
-            if (k != i && k != j && Alive(k) && _life![C(k).Body].Asleep != 0 && _mind.RoomOf(C(k).Cell) == room && _mind.Dist(C(k).Cell, C(i).Cell) <= TalkReach) sleeper = true;
-        if (!sleeper) return false;
-        if (Rnd(sim, "밤의 규칙", i, j) >= 0.2f + 0.8f * Math.Min(C(i).Consc, C(j).Consc)) return false;   // 어긴다
-        QuietKept++;
-        LastTalk[i * N + j] = sim.Tick;   // 말을 삼켰다 — 한동안 다시 꺼내지 않는다
-        return true;
     }
 
     /// <summary>시험용: 지난 며칠 그 시각에 함께 먹었다고 친다 (오늘은 빼고).</summary>
