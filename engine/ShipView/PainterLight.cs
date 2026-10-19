@@ -152,6 +152,7 @@ public sealed partial class Painter
                     }
                 }
         }
+        FxLight(s, net, frame);   // 합선 아크 · 폭발 섬광
     }
 
     /// <summary>벽 칸의 제 빛 (빈 칸이 맞닿지 않은 모서리 벽용): 맞닿은 빈 칸 → 대각선 빈 칸 → 이웃 벽의 고른 값.</summary>

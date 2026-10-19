@@ -233,6 +233,7 @@ public sealed partial class Painter
         int Px(int x) => (x - x0) * T;
         int Py(int y) => (y - y0) * T;
         _emissive.Clear();
+        GatherFacts(s);
 
         // ── 우주 ──
         var space = Rgba.Hex("#05070c");
@@ -507,7 +508,9 @@ public sealed partial class Painter
                 }
             }
 
-        // ── 연기 (빛을 받는다 — 불 곁은 붉게 · 정전된 방은 어둡게) ──
+        // ── 새는 공기 줄기 (칸 바람이 빠른 칸만) ──
+        AirJets(img, f, x0, y0, w, h, frame);
+        // ── 연기 (빛을 받는다 — 불 곁은 붉게 · 정전된 방은 어둡게): 뭉게 연기는 아랫층 · 천장 아래 짙은 층은 엷은 막 ──
         for (int y = y0; y < y0 + h + 1; y++)
             for (int x = x0; x < x0 + w; x++)
             {
@@ -515,7 +518,7 @@ public sealed partial class Painter
                 int c = L.Index(x, y);
                 if (!Mine(c)) continue;
                 if (!Lighting && chem != null && chem.Burning[c] != 0) FireAt(img, chem, c, Px(x), Py(y), frame);
-                double soot = f.Ppm(f.T.gSoot, c);
+                double soot = PuffPpm(f, c);
                 if (soot > 20)
                 {
                     float al = (float)Math.Min(0.8, soot / 500);
@@ -524,6 +527,7 @@ public sealed partial class Painter
                     Put(img, puff, Px(x) - 6 + dx, Py(y) - 10, false, al);
                 }
             }
+        SmokeVeil(img, f, x0, y0, w, h, frame);
         // ── 빛: 곱하고 · 스스로 빛나는 것 · 불꽃 (맨 앞) ──
         if (Lighting)
         {
@@ -540,6 +544,7 @@ public sealed partial class Painter
                         if (Mine(c) && chem.Burning[c] != 0) FireAt(img, chem, c, Px(x), Py(y), frame);
                     }
         }
+        FxEmissive(img, s, net, x0, y0, w, h, frame);   // 합선 불꽃 · 충격파 · 방사선 잡음
         if (Show != Overlay.None) DrawOverlay(img, f, net, x0, y0, w, h);
         return img;
     }

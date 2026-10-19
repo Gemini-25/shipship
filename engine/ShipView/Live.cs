@@ -469,12 +469,16 @@ public sealed class LiveShow
             Painter.SkyTh = _prevPose.Length > 0 && World.Tick == _prevTick + 1 ? _prevSky + Math.IEEERemainder(th0 - _prevSky, 2 * Math.PI) * Math.Clamp(_carry, 0, 1) : th0;
         }
         else { Painter.Poses = null; Painter.SkyTh = double.NaN; }
+        Painter.Sub = Math.Clamp(_carry, 0, 1);
         var img = Painter.Frame(World, x0, y0, wc, hc, (int)(_anim * AnimFps), reuse);
         (double x, double y) sel = Selected >= 0 ? DrawnAt(Selected) : (double.NaN, 0.0);
+        var (shx, shy) = Shake();
+        float srcX = Math.Clamp((float)((left - x0) * Painter.T) + shx, 0, Math.Max(0, img.W - (float)(w * Painter.T)));
+        float srcY = Math.Clamp((float)((top - y0) * Painter.T) + shy, 0, Math.Max(0, img.H - (float)(h * Painter.T)));
         return new LiveFrame
         {
             Img = img,
-            SrcX = (float)((left - x0) * Painter.T), SrcY = (float)((top - y0) * Painter.T),
+            SrcX = srcX, SrcY = srcY,
             SrcW = (float)(w * Painter.T), SrcH = (float)(h * Painter.T),
             Ship = ShipName, Status = Status(), Story = Story(), Mood = View.Mood,
             Banner = BannerLeft > 0 ? Banner : "", BannerAlpha = (float)Math.Clamp(Math.Min(BannerLeft, BannerSec - BannerLeft) / 0.5, 0, 1),
@@ -486,6 +490,24 @@ public sealed class LiveShow
             PanelTitle = Panel == PanelKind.None ? "" : PanelTitleOf(Panel), PanelRows = Panel == PanelKind.None ? Array.Empty<PanelRow>() : PanelRows(), PanelPick = Panel == PanelKind.None ? -1 : PanelPick,
             PanelFoot = Panel == PanelKind.None ? "" : PanelFootOf(),
         };
+    }
+
+    /// <summary>화면 흔들림 (그래픽 결정 11 · 적당히): ④ 폭발의 큰 소리 · 충격 · 벽이 터진 사실이 2틱 안이면 잘라 낼 곳을 흔든다 — 클수록 세게 · 잦아든다 (도트).</summary>
+    public (float dx, float dy) Shake()
+    {
+        double amp = 0, sub = Math.Clamp(_carry, 0, 1);
+        foreach (var f in World.Facts.Recent(256))
+        {
+            double age = World.Tick - f.Tick + sub;
+            if (age > 2) continue;
+            double a = Painter.IsBlast(f) ? Math.Min(10, 3 + (f.Size - 120) / 4)
+                : f.Kind == FactKind.Impact && f.Size > 20 ? Math.Min(6, 2 * Math.Log10(f.Size))
+                : f.Kind == FactKind.WallBreach ? 3 : 0;
+            amp = Math.Max(amp, a * Math.Max(0, 1 - age / 2));
+        }
+        if (amp < 0.5) return (0, 0);
+        int k = (int)(_anim * 30);
+        return ((float)((DotHash.F(k, 1) - 0.5) * 2 * amp), (float)((DotHash.F(k, 2) - 0.5) * 2 * amp));
     }
 
     /// <summary>다 쓴 그림을 돌려준다 (화면이 텍스처로 옮긴 뒤 — 다음 장에 다시 쓴다).</summary>
