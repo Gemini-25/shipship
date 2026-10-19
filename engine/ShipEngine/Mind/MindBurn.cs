@@ -156,4 +156,24 @@ public sealed partial class Mind
         Stock[best * ItemCount + iChip] += chips;
         sim.Book.AddItem(iChip, Flow.Salvaged, chips);
     }
+
+    /// <summary>⑪ 보급: 다른 배 · 정거장에서 받은 것을 에어락 곁 작업대에 둔다 (보급 물건 차례 — <see cref="Outside.SupplyItems"/> · 장부 '보급').</summary>
+    public void Supplied(Sim sim, int nearCell, int[] counts)
+    {
+        int best = -1, bd = int.MaxValue;
+        foreach (var fu in L.Furniture)
+        {
+            if (fu.Type != "Workbench" || fu.Cells.Length == 0) continue;
+            int d = Dist(fu.Cells[0], nearCell);
+            if (d < bd) { bd = d; best = fu.Id; }
+        }
+        if (best < 0) return;
+        for (int i = 0; i < counts.Length && i < Outside.SupplyItems.Length; i++)
+        {
+            int item = ItemIndex(Outside.SupplyItems[i]);
+            if (item < 0 || counts[i] <= 0) continue;
+            Stock[best * ItemCount + item] += counts[i];
+            sim.Book.AddItem(item, Flow.Supplied, counts[i]);
+        }
+    }
 }

@@ -120,6 +120,64 @@ public sealed partial class ShipMind
             }
     }
 
-    private void SaveParts(StateWriter w) { w.Str(SupplyNote); w.I32(SupplyCause); w.I64(SupplyDeferred); }
-    private void LoadParts(StateReader r) { SupplyNote = r.Str() ?? ""; SupplyCause = r.I32(); SupplyDeferred = r.I64(); }
+    // ───────────────────────── (마) 보급 ─────────────────────────
+
+    /// <summary>보급 물건마다 모자란 수 (원료 넷 · 전자 소자 둘 · 갈래 부품은 둘 수만큼에 못 미친 것).</summary>
+    private int[] SupplyWants()
+    {
+        var mind = _mind!;
+        var want = new int[Outside.SupplyItems.Length];
+        for (int i = 0; i < want.Length; i++)
+        {
+            string name = Outside.SupplyItems[i];
+            int target = name == "원료" ? 4 : name == "전자 소자" ? 2 : T.People.Recipes.TryGetValue(name, out var r) ? r.Keep : 0;
+            want[i] = Math.Max(0, target - mind.TotalOf(mind.ItemIndex(name)));
+        }
+        return want;
+    }
+
+    private static string GiftLine(int[] n) => string.Join(" · ", Enumerable.Range(0, n.Length).Where(i => n[i] > 0).Select(i => $"{Outside.SupplyItems[i]} {n[i]}"));
+
+    /// <summary>교신한 배 · 정거장에 모자란 것을 부탁한다 (판단 — 무엇이 모자란지는 재고 기록으로) · 그 배의 대답은 세상.</summary>
+    private void AskSupplies(Sim sim, in Contact c, string name, int hail)
+    {
+        if (_out == null) return;
+        var want = SupplyWants();
+        if (want.All(x => x == 0)) return;
+        string need = string.Join(" · ", Enumerable.Range(0, want.Length).Where(i => want[i] > 0).Select(i => Outside.SupplyItems[i]));
+        int ask = sim.Causes.Add(CauseKind.Computer, $"주컴퓨터가 {name}에 부탁했다 — {Ko.I(need)} 모자란다", sim.Tick, -1, hail);
+        Say(sim, $"{name}에 부탁 — {Ko.I(need)} 모자란다");
+        var (yes, give) = _out.AskSupply(sim, c.Id, want);
+        if (!yes)
+        {
+            sim.Causes.Add(CauseKind.Contact, $"{name}는 나눠 줄 것이 없다고 했다", sim.Tick, -1, ask);
+            Say(sim, $"{name} — 나눠 줄 것이 없다고 한다");
+            return;
+        }
+        int k = _out.ContactIndex(c.Id);
+        if (k >= 0) { var cc = _out.Contacts[k]; cc.Cause = sim.Causes.Add(CauseKind.Contact, $"{name}가 나눠 주기로 했다 — {GiftLine(give)} · 맞춰 와서 붙는다", sim.Tick, -1, ask); _out.SetContact(cc); }
+        Say(sim, $"{name} — 나눠 주겠다고 한다 ({GiftLine(give)}) · 맞춰 와서 붙는다");
+    }
+
+    /// <summary>붙은 배에서 받는다: 에어락 곁 작업대로 (장부 '보급') · 그 배를 놓는다.</summary>
+    private void Receive(Sim sim, Contact c, string name)
+    {
+        var give = new int[Outside.SupplyItems.Length];
+        for (int i = 0; i < give.Length; i++) give[i] = Outside.GiftOf(c.Gift, i);
+        int lockCell = -1;
+        for (int r = 0; r < L.Rooms.Count && lockCell < 0; r++) foreach (int d in _roomDoors[r]) if (L.Doors[d].External) { lockCell = L.Doors[d].Cell; break; }
+        _mind!.Supplied(sim, lockCell >= 0 ? lockCell : 0, give);
+        int cause = sim.Causes.Add(CauseKind.Contact, $"{name}에서 받았다 — {GiftLine(give)}", sim.Tick, lockCell, c.Cause);
+        sim.Facts.Emit(sim.Tick, FactKind.Contact, lockCell, c.Id, cause, other: 8);
+        Say(sim, $"{name}에서 받았다 — {GiftLine(give)}");
+        SuppliesIn += give.Sum();
+        _out!.Undock(sim, c.Id);
+        int k = _out.ContactIndex(c.Id);
+        if (k >= 0) { var cc = _out.Contacts[k]; cc.Meet = 0; cc.Gift = 0; _out.SetContact(cc); }
+    }
+
+    public long SuppliesIn;
+
+    private void SaveParts(StateWriter w) { w.Str(SupplyNote); w.I32(SupplyCause); w.I64(SupplyDeferred); w.I64(SuppliesIn); }
+    private void LoadParts(StateReader r) { SupplyNote = r.Str() ?? ""; SupplyCause = r.I32(); SupplyDeferred = r.I64(); SuppliesIn = r.I64(); }
 }

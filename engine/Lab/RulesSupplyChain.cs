@@ -92,9 +92,9 @@ public static partial class Program
             int far = ly.Furniture.Where(f => f.Type == "OxygenGenerator" || f.Type == "WaterRecycler").Select(f => f.Id).First();
             m.Stock[far * m.ItemCount + m.iScrap] = 2;
             m.Stock[refinery * m.ItemCount + m.ItemIndex("원료")] = 0;
-            for (int k = 0; k < 6; k++)
+            for (int k = 0; k < 12 && w.Recycled < 2; k++)
             {
-                s.Run(Time.Minutes(30));
+                s.Run(Time.Minutes(15));
                 if (Environment.GetEnvironmentVariable("RULE_DEBUG") == "1")
                     Console.WriteLine($"    {Time.Clock(s.Tick)} 일 [{string.Join(", ", sm.Jobs.Select(j => $"{j.Kind}:{j.Agent}"))}] 로봇 [{string.Join(", ", m.Agents.Where(a => !a.IsPerson).Select(a => $"{a.Id} {a.C.Goal} 맡음 {a.C.AssignedGoal} 듦 {a.C.Holding}"))}]");
             }
@@ -114,12 +114,50 @@ public static partial class Program
                 m.Stock[refinery * m.ItemCount + m.iScrapElec] = 4;
                 m.Stock[refinery * m.ItemCount + m.ItemIndex("원료")] = 0;
                 int before = m.TotalOf(m.iChip);
-                s.Run(Time.Hours(2.5));
+                for (int k = 0; k < 15 && w.Recycled < 4; k++) s.Run(Time.Minutes(10));
                 return (m.TotalOf(m.iChip) - before, w.Recycled);
             }
             var all = Melt(1); var no = Melt(0);
             Check("헌 전기 부품을 녹이면 원료 + 전자 소자를 건질 수도 — 건질 확률 1: 넷 다 · 0: 하나도 (녹이는 것은 같다)",
                 all.chips == 4 && no.chips == 0 && all.recycled == 4 && no.recycled == 4, $"확률 1: 전자 소자 +{all.chips} · 녹임 {all.recycled} / 확률 0: +{no.chips} · 녹임 {no.recycled}");
+        }
+        // ── (마) 보급: 교신한 상선에 모자란 것을 부탁 — 그 배의 형편(세상의 확률)으로 나눠 주면 맞춰 와서 붙고 · 받은 것은 작업대로 (장부 '보급') · 형편이 없으면 거절 ──
+        {
+            (long got, int chips, string log, double flow, bool undocked) Trade(double share)
+            {
+                var hl = Worlds.Ascii(HelmShip, HelmLegend);
+                var s = Worlds.Full(hl, 21);
+                var m = s.Get<Mind>(); var o = s.Get<Outside>(); var sm = s.Get<ShipMind>();
+                o.ShareTrader = share;
+                foreach (string it in parts.Concat(new[] { "원료", "전자 소자" })) for (int fu = 0; fu < hl.Furniture.Count; fu++) m.Stock[fu * m.ItemCount + m.ItemIndex(it)] = 0;
+                s.Run(5);
+                int before = m.TotalOf(m.iChip);
+                int c0 = s.Causes.Add(CauseKind.Contact, "다른 배가 항로를 지난다", s.Tick);
+                int id = o.AddContact(s, ContactKind.Trader, 1e7, 1, 0, 3000, 2e5, 0, 0, c0);
+                for (int k = 0; k < 24 && sm.SuppliesIn == 0 && !sm.Log.Any(l => l.text.Contains("나눠 줄 것이 없다")); k++) s.Run(Time.Minutes(15));
+                int ci = o.ContactIndex(id);
+                return (sm.SuppliesIn, m.TotalOf(m.iChip) - before, string.Join(" / ", sm.Log.Select(l => l.text).Where(t => t.Contains("부탁") || t.Contains("나눠") || t.Contains("받았다"))),
+                    s.Book.ItemFlow[(Book.Bulk + m.iChip - Book.Bulk) * Book.Flows + (int)Flow.Supplied], ci < 0 || o.Contacts[ci].State == ContactState.Gone);
+            }
+            var yes = Trade(1); var no = Trade(0);
+            Check("보급: 교신한 상선에 모자란 것을 부탁하고 · 나눠 주면 그 배가 맞춰 와 붙어 넘겨준다 (작업대 · 장부 '보급') · 형편이 없으면 거절",
+                yes.got > 0 && yes.chips > 0 && yes.flow > 0 && yes.undocked && yes.log.Contains("부탁") && yes.log.Contains("받았다") && no.got == 0 && no.log.Contains("나눠 줄 것이 없다"),
+                $"받음 {yes.got} · 전자 소자 +{yes.chips} · 붙었다 놓음 {yes.undocked} · \"{yes.log}\" / 거절: 받음 {no.got} · \"{no.log}\"");
+        }
+
+        // ── (마) 정거장: 띠 보급소(1.21AU)는 황도면 가까운 항로(보통 길)만 곁을 지난다 — 높은 고요 길은 지나치지 못한다 ──
+        {
+            (bool met, int contacts) Pass(int route)
+            {
+                var s = Worlds.Full(lay, 23);
+                var o = s.Get<Outside>();
+                o.Route = route; o.TrafficOn = true; o.Distance = 1.21;
+                s.Run(3);
+                return ((o.StationsMet & 1) != 0, o.Contacts.Count(c => c.Kind == ContactKind.Station));
+            }
+            var low = Pass(4); var high = Pass(1);
+            Check("정거장: 띠 보급소(1.21AU)는 황도면 가까운 항로(4 보통 길 · 0.6°)만 곁을 지나 교신 거리에 든다 · 높은 고요 길(2°)은 지나치지 못한다",
+                low.met && low.contacts == 1 && !high.met && high.contacts == 0, $"보통 길: 지남 {low.met} · 정거장 {low.contacts} / 높은 고요 길: 지남 {high.met} · {high.contacts}");
         }
     }
 }

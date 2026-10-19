@@ -61,6 +61,8 @@ public sealed class RouteDef { public string Name = "", Line = ""; public double
 public sealed class DeepDef { public string Debris = "rubble"; public double CloudsPerDay, RocksPerDay; }
 /// <summary>⑤ 다른 배가 지나가는 빈도.</summary>
 public sealed class TrafficDef { public double PerDay = 0.25, NearAu = 0.04, Boost = 4; }
+/// <summary>⑪ 공급 사슬 (마) — 항로 위 보급 정거장: 이름 · 자리(AU) · 이 기울기 아래의 항로만 곁을 지난다 (°) · 설명.</summary>
+public sealed class StationDef { public string Name = "", Line = ""; public double Au, MaxIncline = 0.6; }
 
 public sealed class SpaceTable
 {
@@ -69,6 +71,7 @@ public sealed class SpaceTable
     public List<RouteDef> Routes = new();
     public DeepDef Deep = new();
     public TrafficDef Traffic = new();
+    public List<StationDef> Stations = new();
     public SystemDef System = new();
     public Dictionary<string, StarDef> Stars = new();
     public Dictionary<string, PlanetDef> Planets = new();

@@ -274,14 +274,16 @@ public sealed partial class ShipMind
                 Say(sim, what);
                 if (c.Kind == ContactKind.Distress && c.Crew > 0 || c.Kind == ContactKind.Derelict) Decide(sim, c, cause);
             }
-            if (c.Kind is ContactKind.Trader or ContactKind.Patrol && !_hailed.Contains(c.Id) && c.Range < 2e8)
+            if (c.Kind is ContactKind.Trader or ContactKind.Patrol or ContactKind.Station && !_hailed.Contains(c.Id) && c.Range < 2e8)
             {
                 _hailed.Add(c.Id); if (_hailed.Count > 64) _hailed.RemoveAt(0); Hails++;
                 int cause = sim.Causes.Add(CauseKind.Computer, $"{Ko.Gwa(name)} 교신했다 — 소식을 나눴다", t, -1, c.Cause);
                 sim.Facts.Emit(t, FactKind.Contact, -1, c.Id, cause, other: 2);
                 Say(sim, $"{Ko.Gwa(name)} 교신 — 소식을 나눴다");
                 _mind!.Cheer(sim, 0.15f, cause);
+                AskSupplies(sim, c, name, cause);   // ⑪ 공급 사슬 (마): 모자란 것이 있으면 부탁한다
             }
+            if (c.State == ContactState.Docked && c.Meet != 0) Receive(sim, c, name);
         }
     }
 

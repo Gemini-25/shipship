@@ -10,6 +10,7 @@
 //     레이더: 단면 1m²를 radarKm에서 잡는다 (R ∝ σ^¼) · 방향 오차 radarMrad
 //   zones: 항로의 위험 구간 — 별에서 from~to AU를 지나는 동안 그 파편 구름 · 운석이 하루 평균 몇 번 온다
 //   traffic: 다른 배 — 하루 평균 · 천체 궤도 곁(nearAu 안)이면 boost배
+//   stations: ⑪ 공급 사슬 (마) 보급 정거장 — 그 거리(au)를 지날 때 기울기 maxIncline(°) 아래의 항로면 곁을 지나 교신 · 부탁할 수 있다
 //   ship.cloudKm: 센서 배열이 넓게 퍼진 파편 구름을 잡는 거리 · beaconKm: 신호기를 켠 배를 교신으로 아는 거리
 //   ⑫ 자연 사건 (docs/ENGINE.md ⑫): routes — 항로 1~8 (함장이 출항 때 고른다 · 위험도 = 항로만)
 //     incline: 황도면에서 기울인 각(°) — 출발 · 도착 점화에 면 바꾸기 Δv가 더 든다 · zones: 구간 파편 배율 · deep: 깊은 우주 바탕 배율 · traffic: 지나는 배 배율 · extra: 이 항로만 지나는 구간(only)
@@ -33,6 +34,9 @@
     { "name": "옛 정거장 곁 길", "incline": 0,  "zones": 3.0,  "deep": 2.5, "traffic": 2.5, "extra": ["옛 정거장 파편 지대"], "line": "부서진 옛 정거장의 파편 지대까지 지난다 — 가장 거칠다" }
   ],
   "traffic": { "perDay": 0.25, "nearAu": 0.04, "boost": 4 },
+  "stations": [
+    { "name": "띠 보급소", "au": 1.21, "maxIncline": 0.6, "line": "바위 띠 한가운데의 채굴 보급소 — 곁을 지나는 배에 부품을 나눈다 (황도면 가까운 항로만 곁을 지난다)" }
+  ],
   "system": {
     "name": "한빛계", "star": "yellow", "gcr": 0.02,
     "bodies": [
