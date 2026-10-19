@@ -189,6 +189,7 @@ public static partial class Program
             case "local": LocalScene(dir); return;
             case "lights": LightsScene(dir); return;
             case "fx": FxScene(dir); return;
+            case "people": PeopleScene(dir); return;
             default: Console.WriteLine($"모르는 장면: {name}"); return;
         }
         var trace = Environment.GetEnvironmentVariable("TRACE");

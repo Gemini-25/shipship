@@ -713,6 +713,7 @@ public sealed partial class Painter
             Stubble = !female && (u >> 23) % 4 == 0,
             Seed = seed,
         };
+        Diversify(l, u);
         _looks[a.Id] = l;
         return l;
     }
@@ -739,6 +740,8 @@ public sealed partial class Painter
         l.Dead = b.Alive == 0;
         bool lying = b.Alive == 0 || b.Conscious == 0 || b.Asleep != 0;
         l.EyesClosed = lying;
+        l.Hurt = HurtOf(b);
+        l.Face = lying ? DotFace.Calm : FaceOf(c, b);
         l.Held = c.Holding == 255 ? DotHeld.None : mind.ItemNames[c.Holding] switch
         {
             "소화기" => DotHeld.Extinguisher,
@@ -760,8 +763,20 @@ public sealed partial class Painter
         if (lying)
         {
             // 누운 사람: 옆으로 돌린 그림 (머리가 왼쪽)
-            var lie = DotPeople.Draw(l, DotFacing.S, DotPose.Stand, 0).Rotate(cw: false).ToImg();
-            Put(img, lie, px + T / 2 - lie.W / 2, py + T / 2 - lie.H / 2 - lift);
+            l.Motion = DotMotion.None;
+            var lie = PersonImg(a.Id, l, DotFacing.S, DotPose.Stand, 0, true, false);
+            int breathe = b.Alive != 0 && ((frame + a.Id) & 7) >= 5 ? 1 : 0;   // 자는 사람은 숨을 쉰다 (가슴이 오르내린다)
+            Put(img, lie, px + T / 2 - lie.W / 2, py + T / 2 - lie.H / 2 - lift - breathe);
+            return;
+        }
+        if (b.Low != 0 && c.Floated == 0 && c.Carrying < 0)
+        {
+            // 기는 사람 (③ 낮은 머리 — 연기 · 열 아래로 몸을 낮췄다): 엎드려 가는 쪽으로 · 걸으면 팔다리가 번갈아
+            bool goes = a.PathIdx < a.Path.Count;
+            var face0 = FacingOf(L, a);
+            l.Cycle8 = true; l.Motion = DotMotion.None;
+            var crawl = PersonImg(a.Id, l, face0 == DotFacing.W ? DotFacing.W : DotFacing.E, goes ? DotPose.Walk : DotPose.Stand, goes ? (frame + a.Id) & 7 : 0, false, true);
+            Put(img, crawl, px + T / 2 - crawl.W / 2, py + T / 2 - crawl.H / 2 + 4);
             return;
         }
         var step = c.StepIndex < a.Plan.Count ? a.Plan[c.StepIndex].Kind : StepKind.None;
@@ -777,7 +792,14 @@ public sealed partial class Painter
             : DotPose.Stand;
         var face = FacingOf(L, a);
         if (c.Floated != 0 && pose is DotPose.Walk or DotPose.Sit) pose = DotPose.Stand;   // 떠서는 걷지도 앉지도 않는다 (손잡이를 잡고 민다)
-        var dot = DotPeople.Draw(l, face, pose, pose == DotPose.Walk ? (frame + a.Id) & 3 : 0).ToImg();
+        // 생활 동작 (그래픽 결정 10 — 하는 일에서): 먹고 마시면 손이 입으로 · 고치면 공구를 돌리고 · 말하면 손짓 · 앉아서 졸면 고개를 떨군다
+        l.Cycle8 = true;
+        l.Motion = MotionOf(c, step, pose);
+        if (l.Motion == DotMotion.Drink && c.Goal == GoalKind.Drink && l.Held == DotHeld.None) l.Held = DotHeld.Cup;
+        if (l.Motion == DotMotion.Tool && l.Held == DotHeld.None) l.Held = DotHeld.Wrench;
+        if (l.Motion == DotMotion.Doze) { l.EyesClosed = true; l.Face = DotFace.Calm; }
+        int fr = pose == DotPose.Walk || l.Motion != DotMotion.None ? (frame + a.Id) & 7 : 0;
+        var dot = PersonImg(a.Id, l, face, pose, fr, false, false);
         int ox = px + T / 2 - DotPeople.Cx, oy = py + T - DotPeople.Foot - 2 - lift + (pressing ? (frame + a.Id) & 1 : 0);
         Put(img, dot, ox, oy);
         if (c.Carrying >= 0)
@@ -789,7 +811,8 @@ public sealed partial class Painter
             {
                 var vl = LookOf(mind, va);
                 vl.EyesClosed = true; vl.Dead = life.Bodies[vb].Alive == 0; vl.Suit = life.Bodies[vb].Suit != 0;
-                var lie = DotPeople.Draw(vl, DotFacing.S, DotPose.Stand, 0).Rotate(cw: false).ToImg();
+                vl.Hurt = HurtOf(life.Bodies[vb]); vl.Face = DotFace.Calm;
+                var lie = PersonImg(va.Id, vl, DotFacing.S, DotPose.Stand, 0, true, false);
                 Put(img, lie, px + T / 2 - lie.W / 2, oy + 6);
             }
         }

@@ -14,6 +14,10 @@ public enum DotHair : byte { Buzz, Crop, Side, Curly, Bob, Long, Ponytail, Bun, 
 public enum DotFacing : byte { S, E, N, W }
 public enum DotPose : byte { Stand, Walk, Sit, Work, Carry, Cower, Kneel }
 public enum DotHeld : byte { None, Wrench, Welder, Tablet, Cup, Box, Extinguisher, Mop, MedKit, Plate, Cable }
+/// <summary>표정 (그래픽 결정 6): 덤덤 · 웃음 · 겁 · 아픔 · 슬픔 — 마음(감정) · 몸(통증)에서 고른다.</summary>
+public enum DotFace : byte { Calm, Smile, Fear, Pain, Sad }
+/// <summary>생활 동작 (그래픽 결정 10): 손을 입으로(먹고 마시기) · 공구 돌리기 · 말하며 손짓 · 졸며 고개 끄덕임.</summary>
+public enum DotMotion : byte { None, Drink, Tool, Talk, Doze }
 
 [Flags]
 public enum DotHurt : uint
@@ -44,6 +48,10 @@ public sealed class PersonLook
     public bool Suit, EyesClosed, Dead;
     public DotHurt Hurt;
     public DotHeld Held;
+    public DotFace Face;
+    public DotMotion Motion;
+    /// <summary>여덟 장 동작 (그래픽 결정 9 — 걷기 한 걸음씩 · 손 · 고개가 장마다) — 끄면 예전 네 장.</summary>
+    public bool Cycle8;
     public int Seed;
 }
 
@@ -60,6 +68,22 @@ public static class DotPeople
         public int SkinRamp;
         public int[] Head = Array.Empty<int>();
     }
+
+    /// <summary>걷기 한 장: 보폭 (옆) · 몸이 내려앉음 · 팔 흔들기 · 앞에서 본 두 발 들기. 네 장(옛)은 1 · 3장에 한 발씩 · 여덟 장은 보폭이 0 → 2 → 0 → −2로 이어진다.</summary>
+    private static (int stride, int bob, int liftL, int liftR) Gait(PersonLook l, int frame)
+    {
+        if (!l.Cycle8) return (frame == 1 ? 2 : frame == 3 ? -2 : 0, (frame & 1) == 1 ? 1 : 0, frame == 1 ? 1 : 0, frame == 3 ? 1 : 0);
+        int f = frame & 7;
+        int stride = f switch { 1 => 1, 2 => 2, 3 => 1, 5 => -1, 6 => -2, 7 => -1, _ => 0 };
+        int bob = f is 1 or 2 or 5 or 6 ? 1 : 0;
+        return (stride, bob, f is 1 or 2 or 3 ? 1 : 0, f is 5 or 6 or 7 ? 1 : 0);
+    }
+
+    /// <summary>생활 동작의 이 장: 손이 입에 (마시기 · 먹기 — 여덟 장 중 3~6) · 공구 손 높낮이 · 손짓 (0~3) · 고개 떨굼 (4~7).</summary>
+    private static bool ToMouth(PersonLook l, int frame) => l.Motion == DotMotion.Drink && (frame & 7) is >= 3 and <= 6;
+    private static int ToolBob(PersonLook l, int frame) => l.Motion == DotMotion.Tool ? (frame & 3) switch { 1 => -1, 2 => -2, 3 => -1, _ => 0 } : 0;
+    private static bool Gesture(PersonLook l, int frame) => l.Motion == DotMotion.Talk && (frame & 7) < 4;
+    private static bool Nod(PersonLook l, int frame) => l.Motion == DotMotion.Doze && (frame & 7) >= 4;
 
     private static Body Measure(PersonLook l, DotPose pose, int frame)
     {
@@ -90,7 +114,7 @@ public static class DotPeople
         }
         if (l.Age == DotAge.Middle && l.Build != DotBuild.Thin) b.Waist = Math.Max(b.Waist, b.Shoulder - 1 + (l.Build == DotBuild.Heavy ? 1 : 0));
         b.LegW = b.Hip - b.Gap / 2;
-        if (pose == DotPose.Walk && (frame & 1) == 1) b.Bob = 1;
+        if (pose == DotPose.Walk) b.Bob = Gait(l, frame).bob;
         if (pose == DotPose.Cower) b.Bob = 2;
         if (pose == DotPose.Sit) b.Bob = 0;
         b.SkinRamp = l.Dead ? Ramps.DeadSkin : (l.Hurt & DotHurt.Sick) != 0 ? Ramps.SickSkin : Ramps.Skin[Math.Clamp(l.Skin, 0, Ramps.Skin.Length - 1)];
@@ -99,6 +123,7 @@ public static class DotPeople
         b.TorsoTop = b.LegTop - b.Torso + (pose == DotPose.Cower ? 0 : 0);
         b.HeadTop = b.TorsoTop - 1 - b.HeadRows;
         b.LegTop += b.Bob; b.TorsoTop += b.Bob; b.HeadTop += b.Bob;
+        if (Nod(l, frame)) b.HeadTop += 1;   // 졸며 고개가 떨어진다
         return b;
     }
 
@@ -173,7 +198,8 @@ public static class DotPeople
         bool noVL = Has(back ? DotHurt.NoLegL : DotHurt.NoLegR), noVR = Has(back ? DotHurt.NoLegR : DotHurt.NoLegL);
         bool castVL = Has(back ? DotHurt.CastLegL : DotHurt.CastLegR), castVR = Has(back ? DotHurt.CastLegR : DotHurt.CastLegL);
         bool metalVL = Has(back ? DotHurt.MetalLegL : DotHurt.MetalLegR), metalVR = Has(back ? DotHurt.MetalLegR : DotHurt.MetalLegL);
-        int lift = pose == DotPose.Walk ? (frame == 1 ? 1 : 0) : 0, liftR = pose == DotPose.Walk ? (frame == 3 ? 1 : 0) : 0;
+        var gait = Gait(l, frame);
+        int lift = pose == DotPose.Walk ? gait.liftL : 0, liftR = pose == DotPose.Walk ? gait.liftR : 0;
         if (back) (lift, liftR) = (liftR, lift);
         int legRows = Foot - b.Shoe + 1 - b.LegTop;
         int lx = Cx - b.Hip, rx = Cx + b.Hip - b.LegW;
@@ -323,7 +349,23 @@ public static class DotPeople
                 continue;
             }
             int swing = 0;
-            if (pose == DotPose.Walk) swing = (frame == 1 ? (left ? -1 : 1) : frame == 3 ? (left ? 1 : -1) : 0);
+            if (pose == DotPose.Walk) { int st = Gait(l, frame).stride; swing = st == 0 ? 0 : (st > 0) == left ? -1 : 1; }
+            if (!back && !left && ToMouth(l, frame) && !sling && !cast)
+            {
+                // 손을 입으로 (마시기 · 먹기): 위팔은 내리고 아래팔을 들어 손이 턱 앞에
+                d.Rect(x0, top, aw, 3, sleeveCol, 2);
+                d.Rect(Cx + 1, b.HeadTop + b.HeadRows - 2, 2, top - (b.HeadTop + b.HeadRows - 2) + 1, sleeveCol, 2);
+                d.Rect(Cx + 1, b.HeadTop + b.HeadRows - 3, 2, 2, handRamp, 3);
+                continue;
+            }
+            if (!back && left && Gesture(l, frame) && !sling && !cast && pose is DotPose.Stand or DotPose.Sit)
+            {
+                // 말하며 손짓: 아래팔을 들어 손바닥이 어깨 높이
+                d.Rect(x0, top, aw, 3, sleeveCol, 2);
+                d.Rect(x0 - 1, top - 3, 2, 4, sleeveCol, 2);
+                d.Rect(x0 - 2, top - 5, 2, 2, handRamp, 3);
+                continue;
+            }
             if (pose == DotPose.Cower)
             {
                 // 팔을 머리 위로 (얼굴 가리기)
@@ -349,12 +391,13 @@ public static class DotPeople
                     for (int i = 0; i < 6; i++) d.Set(left ? Cx + 2 - i / 2 : Cx - 3 + i / 2, b.TorsoTop + i, Ramps.Bandage, 3);
                     continue;
                 }
-                // 두 손을 몸 앞으로 (들기 · 일하기)
+                // 두 손을 몸 앞으로 (들기 · 일하기 — 공구를 돌리면 손이 오르내린다)
+                int tb = pose == DotPose.Work ? ToolBob(l, frame) * (left ? 1 : -1) : 0;
                 d.Rect(x0, top, aw, 4, sleeveCol, 2);
                 d.Part = 26;
                 int fx = left ? Cx - 4 : Cx + 1;
-                d.Rect(left ? x0 + 1 : fx, top + 3, Math.Abs(fx - x0) + 1, 2, sleeveCol, 2);
-                d.Rect(fx + (left ? 0 : 1), top + 3, 2, 2, handRamp, 3);
+                d.Rect(left ? x0 + 1 : fx, top + 3 + tb, Math.Abs(fx - x0) + 1, 2, sleeveCol, 2);
+                d.Rect(fx + (left ? 0 : 1), top + 3 + tb, 2, 2, handRamp, 3);
                 continue;
             }
             int sl = len - 2 + (swing < 0 ? -1 : 0);
@@ -558,7 +601,7 @@ public static class DotPeople
         int legRows = Foot - b.Shoe + 1 - b.LegTop;
         int tw = Math.Max(3, b.Waist); // 옆 몸통 반폭
         // 걷기: 앞다리 · 뒷다리
-        int stride = pose == DotPose.Walk ? (frame == 1 ? 2 : frame == 3 ? -2 : 0) : 0;
+        int stride = pose == DotPose.Walk ? Gait(l, frame).stride : 0;
         int legW = Math.Max(3, b.LegW);
         int lx = Cx - legW / 2 - 1;
         bool sit = pose == DotPose.Sit;
@@ -605,7 +648,7 @@ public static class DotPeople
         d.Part = 6; d.Rect(Cx - 1 + hh, b.TorsoTop - 1, 3, 1, skin, 2);
         // 팔 (가까운 팔 하나, 걸으면 흔든다)
         d.Part = 9;
-        int swing = pose == DotPose.Walk ? (frame == 1 ? -2 : frame == 3 ? 2 : 0) : 0;
+        int swing = pose == DotPose.Walk ? -Gait(l, frame).stride : 0;
         int at = b.TorsoTop + 1;
         bool metal = (l.Hurt & DotHurt.MetalArmR) != 0, noArm = (l.Hurt & DotHurt.NoArmR) != 0;
         bool armCast = (l.Hurt & DotHurt.CastArmR) != 0, armSling = (l.Hurt & DotHurt.SlingR) != 0;
@@ -625,11 +668,26 @@ public static class DotPeople
             d.Rect(Cx + 4 + hh, at + 3, 2, 2, handRamp, 3);
             d.Part = 27; d.Rect(Cx - 1 + hh, at + 5, 6, 1, Ramps.Bandage, 3);
         }
+        else if (ToMouth(l, frame))
+        {
+            // 손을 입으로: 아래팔을 얼굴 앞으로 올린다
+            d.Rect(Cx - 1 + hh, at, 3, 3, sleeve, 2);
+            d.Rect(Cx + 2 + hh, b.HeadTop + b.HeadRows - 1, 2, at - (b.HeadTop + b.HeadRows - 1) + 2, sleeve, 2);
+            d.Rect(Cx + 3 + hh, b.HeadTop + b.HeadRows - 2, 2, 2, handRamp, 3);
+        }
+        else if (Gesture(l, frame) && pose is DotPose.Stand or DotPose.Sit)
+        {
+            // 말하며 손짓: 손을 앞으로 내민다
+            d.Rect(Cx - 1 + hh, at, 3, 3, sleeve, 2);
+            d.Rect(Cx + 1 + hh, at + 1, 5, 2, sleeve, 2);
+            d.Rect(Cx + 6 + hh, at, 2, 2, handRamp, 3);
+        }
         else if (pose is DotPose.Work or DotPose.Carry or DotPose.Kneel)
         {
+            int tb = pose == DotPose.Work ? ToolBob(l, frame) : 0;
             d.Rect(Cx - 1 + hh, at, 3, 4, sleeve, 2);
-            d.Rect(Cx + 1 + hh, at + 3, 5, 2, sleeve, 2);
-            d.Rect(Cx + 6 + hh, at + 3, 2, 2, handRamp, 3);
+            d.Rect(Cx + 1 + hh, at + 3 + tb, 5, 2, sleeve, 2);
+            d.Rect(Cx + 6 + hh, at + 3 + tb, 2, 2, handRamp, 3);
         }
         else if (pose == DotPose.Cower)
         {
@@ -784,8 +842,8 @@ public static class DotPeople
         {
             bool patch = (hurt & DotHurt.EyePatch) != 0;
             int ey = t + 5;
-            // 눈
-            if (l.EyesClosed)
+            // 눈 (아프면 찡그려 감는다)
+            if (l.EyesClosed || l.Face == DotFace.Pain)
             {
                 if (!patch) { d.Mark(Cx - 5, ey + 1, Ramps.Ink, 1); d.Mark(Cx - 4, ey + 1, Ramps.Ink, 1); }
                 d.Mark(Cx + 3, ey + 1, Ramps.Ink, 1); d.Mark(Cx + 4, ey + 1, Ramps.Ink, 1);
@@ -806,6 +864,7 @@ public static class DotPeople
             // 코 · 입
             d.Mark(Cx, ey + 2, skin, 2);
             if (!l.Beard) { d.Mark(Cx - 1, t + 8, skin, 1); d.Mark(Cx, t + 8, skin, 1); }
+            FaceFront(d, l, t, ey, skin, brow);
             if (pose == DotPose.Cower && !l.Beard) { d.Mark(Cx - 1, t + 9, Ramps.Ink, 1); d.Mark(Cx, t + 9, Ramps.Ink, 1); }
             // 볼 (아이 · 여자)
             if (l.Age == DotAge.Child || (l.Female && l.Age is DotAge.Teen or DotAge.Adult)) { d.Mark(Cx - 5, ey + 2, Ramps.ClothRed, 4); d.Mark(Cx + 4, ey + 2, Ramps.ClothRed, 4); }
@@ -837,12 +896,13 @@ public static class DotPeople
         {
             int hx = Cx + b.Hunch * 2;
             int ex = hx + b.Head[5] - 3;
-            if (l.EyesClosed) { d.Mark(ex, t + 6, Ramps.Ink, 1); d.Mark(ex - 1, t + 6, Ramps.Ink, 1); }
+            if (l.EyesClosed || l.Face == DotFace.Pain) { d.Mark(ex, t + 6, Ramps.Ink, 1); d.Mark(ex - 1, t + 6, Ramps.Ink, 1); }
             else { d.Mark(ex, t + 5, Ramps.Ink, 1); d.Mark(ex, t + 6, Ramps.Ink, 0); }
             if (l.Female && l.Age >= DotAge.Teen) d.Mark(ex + 1, t + 5, Ramps.Ink, 1);
             int brow = HairBase(l);
             if (d.RampAt(ex, t + 4) == skin) { d.Mark(ex, t + 4, brow, 1); d.Mark(ex + 1, t + 4, brow, 1); }
             if (!l.Beard) d.Mark(hx + b.Head[8] - 1, t + 8, skin, 1);
+            FaceSide(d, l, t, ex, hx + b.Head[8] - 1, skin, brow);
             if (l.Glasses) { d.Mark(ex - 1, t + 5, Ramps.Ink, 1); d.Mark(ex + 1, t + 5, Ramps.Glass, 4); d.Mark(ex + 1, t + 6, Ramps.Glass, 3); for (int x = hx - 2; x < ex - 1; x++) d.Mark(x, t + 5, Ramps.Ink, 1); }
             if (l.Age == DotAge.Elder) d.Mark(ex - 1, t + 7, skin, 2);
             if (l.Age == DotAge.Child || (l.Female && l.Age is DotAge.Teen or DotAge.Adult)) d.Mark(ex - 1, t + 7, Ramps.ClothRed, 4);
@@ -870,6 +930,50 @@ public static class DotPeople
         }
     }
 
+    /// <summary>앞모습 표정: 웃음(입꼬리가 올라간다) · 겁(눈썹이 올라가고 입이 벌어진다) · 아픔(눈썹이 모이고 이를 문다) · 슬픔(입꼬리 · 눈썹 바깥이 처진다).</summary>
+    private static void FaceFront(Dot d, PersonLook l, int t, int ey, int skin, int brow)
+    {
+        if (l.EyesClosed && l.Face != DotFace.Pain) return;
+        bool mouth = !l.Beard;
+        switch (l.Face)
+        {
+            case DotFace.Smile:
+                if (mouth) { d.Mark(Cx - 2, t + 7, skin, 1); d.Mark(Cx + 1, t + 7, skin, 1); }
+                break;
+            case DotFace.Fear:
+                if (d.RampAt(Cx - 4, ey - 2) == skin) { d.Mark(Cx - 5, ey - 2, brow, 1); d.Mark(Cx - 4, ey - 2, brow, 1); }
+                if (d.RampAt(Cx + 3, ey - 2) == skin) { d.Mark(Cx + 3, ey - 2, brow, 1); d.Mark(Cx + 4, ey - 2, brow, 1); }
+                if (mouth) { d.Mark(Cx - 1, t + 8, Ramps.Ink, 1); d.Mark(Cx, t + 8, Ramps.Ink, 1); d.Mark(Cx - 1, t + 9, Ramps.Ink, 0); d.Mark(Cx, t + 9, Ramps.Ink, 0); }
+                break;
+            case DotFace.Pain:
+                d.Mark(Cx - 3, ey, brow, 1); d.Mark(Cx + 2, ey, brow, 1);
+                if (mouth) for (int x = Cx - 2; x <= Cx + 1; x++) d.Mark(x, t + 8, Ramps.Ink, 1);
+                break;
+            case DotFace.Sad:
+                if (mouth) { d.Mark(Cx - 2, t + 9, skin, 1); d.Mark(Cx + 1, t + 9, skin, 1); }
+                if (d.RampAt(Cx - 5, ey) == skin) d.Mark(Cx - 5, ey, brow, 1);
+                if (d.RampAt(Cx + 4, ey) == skin) d.Mark(Cx + 4, ey, brow, 1);
+                break;
+        }
+    }
+
+    /// <summary>옆모습 표정 (입 하나 · 눈 하나).</summary>
+    private static void FaceSide(Dot d, PersonLook l, int t, int ex, int mx, int skin, int brow)
+    {
+        if (l.EyesClosed && l.Face != DotFace.Pain) return;
+        bool mouth = !l.Beard;
+        switch (l.Face)
+        {
+            case DotFace.Smile: if (mouth) d.Mark(mx - 1, t + 7, skin, 1); break;
+            case DotFace.Fear:
+                if (d.RampAt(ex, t + 3) == skin) d.Mark(ex, t + 3, brow, 1);
+                if (mouth) { d.Mark(mx, t + 8, Ramps.Ink, 1); d.Mark(mx, t + 9, Ramps.Ink, 0); }
+                break;
+            case DotFace.Pain: d.Mark(ex - 1, t + 5, brow, 1); if (mouth) { d.Mark(mx, t + 8, Ramps.Ink, 1); d.Mark(mx - 1, t + 8, Ramps.Ink, 1); } break;
+            case DotFace.Sad: if (mouth) d.Mark(mx - 1, t + 9, skin, 1); break;
+        }
+    }
+
     // ───────────────────────────── 손에 든 것 ─────────────────────────────
 
     private static void Held(Dot d, PersonLook l, Body b, DotPose pose, int frame, DotFacing face)
@@ -883,8 +987,9 @@ public static class DotPeople
             hx = Cx + 7 + b.Hunch; hy = b.TorsoTop + 4;
             if (pose is not (DotPose.Work or DotPose.Carry)) { hx = Cx - 1; hy = b.TorsoTop + b.Torso; }
         }
-        else if (pose is DotPose.Work or DotPose.Carry) { hx = Cx; hy = b.TorsoTop + 4; }
+        else if (pose is DotPose.Work or DotPose.Carry) { hx = Cx; hy = b.TorsoTop + 4 - ToolBob(l, frame); }
         else { hx = Cx + b.Shoulder + 1; hy = b.TorsoTop + b.Torso + 1; }
+        if (ToMouth(l, frame)) { hx = side ? Cx + 5 + b.Hunch : Cx + 2; hy = b.HeadTop + b.HeadRows - 1; }   // 잔이 입에
         switch (l.Held)
         {
             case DotHeld.Wrench:
