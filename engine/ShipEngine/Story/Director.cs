@@ -16,6 +16,7 @@ public sealed class Highlight
     /// <summary>사람 이야기 (다툼 · 사과 · 위로 · 소문 · 몸싸움 · 몰래 한 짓) — 하이라이트 목록에서 사건과 나눠 보인다.</summary>
     public bool People;
     public string Line = "";   // 그 장면의 한 마디 (있으면)
+    public List<Beat>? Beats;  // ⑬ 그 소동의 박자들 (원인 사슬의 기록과 같은 목록 — 컷 목록이 읽는다)
 }
 
 /// <summary>
@@ -137,6 +138,7 @@ public sealed partial class Director
                 if (score > _pullScore || ScreenSeconds - _pullAt > CaughtSec) { _pullCell = cell; _pullAt = ScreenSeconds; _pullScore = score; _pullRoot = root; _pullActor = AgentOf(mind, f); }
             }
             Watch(cell, w, rec != null && rec.Count >= 2, f.Kind, root);
+            DayNote(sim, f, w, cell, AgentOf(mind, f), rec);   // ⑬ 이야기 편집 — 오늘의 장
             if (w >= ChainFactAt && cell >= 0) Recent(cell, root, AgentOf(mind, f), score, t);
             if (cell >= 0 && cell < Heat.Length) Heat[cell] += score;
             if (Omen(f)) _lastOmen = t;
@@ -171,8 +173,9 @@ public sealed partial class Director
         Grade(sim, screen, _top, _max);
         Pace(t, screen);
         if (bestScore > 0) MaybeHighlight(sim, best, t);
-        // 다시보기 고리
-        if (KeepRing && t % RingEvery == 0)
+        DayTick(sim, t);
+        // 다시보기 고리 (처음 본 틱에도 한 장 — 첫 2분 안에 시작한 일도 첫 조짐부터 되살린다)
+        if (KeepRing && (t % RingEvery == 0 || Ring.Count == 0))
         {
             Ring.Add((t, sim.Save()));
             if (Ring.Count > RingSize) Ring.RemoveAt(0);
@@ -319,11 +322,12 @@ public sealed partial class Director
                 if (WeightOf(f) > Weight(h.Kind)) { h.Kind = f.Kind; h.Cause = f.Cause; h.Actor = f.Actor; h.Title = TitleOf(sim, f); h.People = PeopleFact(f.Kind); h.Line = LineOf(sim, f); }
                 h.StartTick = Math.Min(h.StartTick, RootTick(sim, f, t));
                 if (h.Root == 0) h.Root = root;
+                if (h.Beats == null && root != 0 && Chains.TryGetValue(root, out var hc)) h.Beats = hc.Beats;
                 h.Last = Math.Max(h.Last, t);
                 return;
             }
         Highlights.Add(new Highlight { Tick = t, Cell = f.Cell, Score = spot, Kind = f.Kind, Cause = f.Cause, Actor = f.Actor, Root = root, Title = TitleOf(sim, f), StartTick = RootTick(sim, f, t), Last = t,
-            People = PeopleFact(f.Kind), Line = LineOf(sim, f) });
+            People = PeopleFact(f.Kind), Line = LineOf(sim, f), Beats = root != 0 && Chains.TryGetValue(root, out var nc) ? nc.Beats : null });
         Caption = Highlights[^1].Title;
     }
 

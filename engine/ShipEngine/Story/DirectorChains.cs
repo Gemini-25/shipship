@@ -16,6 +16,7 @@ public sealed class CauseChain
     public int Line;               // 한 줄(뿌리 → 한 일)로 건넌 엔진 수의 최대 — 넓게(파편이 여러 곳)가 아니라 깊게(불 → 연기 → 쓰러짐 → 구함)
     public int LineCause;          // 그 한 줄의 끝 원인
     public string LinePath = "";
+    public readonly List<Beat> Beats = new();   // ⑬ 이야기 편집: 무게 있는 일들 (컷 목록)
     public int Count => System.Numerics.BitOperations.PopCount((uint)Engines);
     public string Path => string.Join(" → ", Order.Select(e => Director.EngineName[e]));
 }

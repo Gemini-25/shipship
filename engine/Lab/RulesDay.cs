@@ -31,9 +31,12 @@ public static partial class Program
         long actCur = m.ActsTotal, factCur = day.Facts.Total;
         static bool Deed(in Fact f) => f.Kind is FactKind.Talk or FactKind.Fight or FactKind.Sabotage or FactKind.Lie or FactKind.Confessed
             || f.Kind == FactKind.Meeting && f.Size >= 0 || f.Kind == FactKind.Relationship && f.Size == -1 || f.Kind == FactKind.Culture && (int)f.Size == (int)CultureEvent.Nickname;
+        var dir = new Director(day.Layout) { KeepRing = false };   // ⑬ 이야기 편집: 날이 바뀌면 지난 하루가 한 장이 된다
+        long startTick = day.Tick;
         for (int k = 0; k < Time.Hours(24); k++)
         {
             day.Step();
+            dir.Observe(day);
             acts.AddRange(m.ActsSince(actCur)); actCur = m.ActsTotal;
             foreach (var f in day.Facts.Since(factCur)) if (Deed(f)) deeds.Add(f);
             factCur = day.Facts.Total;
@@ -156,6 +159,14 @@ public static partial class Program
             double rh = Rh(day), cond = day.Book.Of(Res.Water, Flow.Condensed);
             Check("공조 응결: 제습기 없는 디딤호 — 열교환기가 하루 몇 L의 습기를 물탱크로 되찾고 · 방 습도는 60% 아래",
                 cond * 0.018 > 3 && rh < 0.6, $"모은 물 {cond * 0.018:0.0}L/일 · 평균 습도 {rh * 100:0}%");
+        }
+
+        // ── ⑬ 이야기 편집: 날이 바뀌는 순간 지난 하루가 한 장이 된다 (제목 · 하루의 결 · 그 날의 때) ──
+        {
+            var ch = dir.Chapters.FirstOrDefault(c => !c.Week);
+            Check("하루의 장: 날이 바뀌면 지난 하루를 한 장으로 묶는다 — '1일째 — …' 제목 · 하루의 결 · 그 날의 처음부터 날이 바뀐 때까지",
+                ch != null && ch.Title.StartsWith("1일째 — ") && ch.Arc.Length > 0 && ch.From == startTick + 1 && ch.To == Time.TicksPerDay && dir.Chapters.Count(c => !c.Week) == 1,
+                ch == null ? $"장 없음 (시작 {startTick} · 끝 {day.Tick})" : $"\"{ch.Title}\" · {Time.Clock(ch.From)}~{Time.Clock(ch.To)} · 장면 {ch.Scenes.Count} · {string.Join(" / ", ch.Lines)}");
         }
     }
 }

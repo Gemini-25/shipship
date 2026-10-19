@@ -35,7 +35,7 @@ public static partial class Program
     private sealed record FilmFrame(long Tick, string Png, string Mood, string Main, List<string> Lines);
     private sealed record FilmShot(long Tick, int Scene, int Cell, string Main);
     private sealed record FilmScene(Highlight H, List<FilmFrame> Frames);
-    private sealed record FilmShip(string Name, string Key, ulong Seed, string Dir, List<FilmScene> Scenes, int AllHighlights, int Crew, long Deaths);
+    private sealed record FilmShip(string Name, string Key, ulong Seed, string Dir, List<FilmScene> Scenes, int AllHighlights, int Crew, long Deaths, List<Chapter> Chapters);
 
     /// <summary>
     /// 하이라이트 필름 (--film 배[:시드][,배:시드…] [날] [장면 수]): 재미 측정기처럼 출항해 돌려 하이라이트(한 소동 = 한 장면)를 찾은 뒤,
@@ -72,41 +72,23 @@ public static partial class Program
             ShipWorld.Embark(w, RouteEnv());
             return w;
         }
-        // 1회차: 하이라이트 · 큰 일 찾기
+        // 1회차: 하이라이트 · 장 · 컷 목록 찾기
         var s1 = Make();
         var d1 = new Director(s1.Layout) { KeepRing = false };
-        var big = new List<(long tick, int cell, FactKind kind, int cause)>();
-        long cur1 = 0;
-        for (long t = 0; t < end; t++)
-        {
-            s1.Step(); d1.Observe(s1);
-            foreach (var f in s1.Facts.Since(cur1))
-                if (f.Cell >= 0 && Director.Weight(f.Kind) >= 8 && f.Kind != FactKind.Impact) big.Add((f.Tick, f.Cell, f.Kind, f.Cause));
-            cur1 = s1.Facts.Total;
-        }
+        for (long t = 0; t < end; t++) { s1.Step(); d1.Observe(s1); }
         var picks = d1.Highlights.OrderByDescending(h => h.Score).Take(maxScenes).OrderBy(h => h.Tick).ToList();
         Console.WriteLine($"{ship} {seed}: 하이라이트 {d1.Highlights.Count} → 장면 {picks.Count}");
-        // 장면마다 찍을 때: 첫 조짐 · 큰 일이 난 순간들(갈래마다 먼저 · 1분 넘게 떨어진 것 · 그 자리에서) · 끝
+        // 장면마다 찍을 때: 연출의 컷 목록 (⑬ 이야기 편집 — 첫 조짐 → 일이 난 순간들(정점) → 사람마다의 시점 → 뒤) · 컷마다 그 한가운데 순간
         var shots = new List<FilmShot>();
+        var mind = s1.Get<Mind>();
         for (int k = 0; k < picks.Count; k++)
-        {
-            var h = picks[k];
-            long S = Math.Max(h.StartTick, h.Tick - Time.Minutes(30)), E = Math.Min(end - 1, h.Last + Time.Minutes(5));
-            var cands = big.Where(b => b.tick >= S && b.tick <= E).ToList();
-            var chosen = new List<(long tick, int cell, FactKind kind, int cause)>();
-            bool Free(long t) => chosen.All(c => Math.Abs(c.tick - t) > 25) && Math.Abs(t - S) > 25 && Math.Abs(E - t) > 25;
-            foreach (var g in cands.GroupBy(b => b.kind).OrderByDescending(g => Director.Weight(g.Key)))
-            {
-                var b = g.OrderBy(x => x.tick).First();
-                if (chosen.Count < 7 && Free(b.tick)) chosen.Add(b);
-            }
-            foreach (var b in cands.OrderByDescending(b => Director.Weight(b.kind)).ThenBy(b => b.tick))
-                if (chosen.Count < 7 && Free(b.tick)) chosen.Add(b);
-            string Say(FactKind kind, int cause) => $"[{FactNames.Of(kind)}] {(cause != 0 ? s1.Causes.Text(cause) : "")}";
-            shots.Add(new FilmShot(S, k, h.Cell, "첫 조짐"));
-            foreach (var b in chosen) shots.Add(new FilmShot(b.tick, k, b.cell, Say(b.kind, b.cause)));
-            shots.Add(new FilmShot(E, k, h.Cell, "뒤"));
-        }
+            foreach (var c in d1.Shots(s1, picks[k]))
+                shots.Add(new FilmShot(Math.Min(c.At, end - 1), k, c.Cell >= 0 ? c.Cell : picks[k].Cell,
+                    $"[{c.Kind}{(c.Actor >= 0 && c.Kind != "시점" ? " · " + mind.NameOf(c.Actor) : "")}] {c.Caption}"));
+        if (Environment.GetEnvironmentVariable("FILM_DEBUG") == "1")
+            foreach (var x in shots) Console.WriteLine($"  컷 {x.Scene} {Time.Clock(x.Tick)} 칸 {x.Cell} {x.Main}");
+        var chapters = d1.Chapters.ToList();
+        chapters.Add(d1.ChapterNow(s1));
         shots = shots.Where(x => x.Tick >= 0 && x.Tick < end).OrderBy(x => x.Tick).ThenBy(x => x.Scene).ToList();
         string dir = $"build/film/{ship.ToLowerInvariant()}-{seed}";
         Directory.CreateDirectory(dir);
@@ -125,7 +107,7 @@ public static partial class Program
         for (long t = 0; t <= last && si < shots.Count; t++)
         {
             s2.Step(); d2.Observe(s2);
-            while (si < shots.Count && shots[si].Tick == s2.Tick)
+            while (si < shots.Count && shots[si].Tick <= s2.Tick)   // 첫 틱 앞의 컷(뿌리가 출항 때)은 첫 틱에
             {
                 var shot = shots[si];
                 int k = shot.Scene;
@@ -151,7 +133,7 @@ public static partial class Program
             }
         }
         var mind1 = s1.Get<Mind>();
-        return new FilmShip(L.Name, ship, seed, dir, scenes, d1.Highlights.Count, mind1.Agents.Count(a => a.IsPerson), s1.Get<Life>().Deaths);
+        return new FilmShip(L.Name, ship, seed, dir, scenes, d1.Highlights.Count, mind1.Agents.Count(a => a.IsPerson), s1.Get<Life>().Deaths, chapters);
     }
 
     private static string FilmHtml(List<FilmShip> ships, double days)
@@ -182,14 +164,25 @@ figcaption .mood.d{color:var(--warn)}
 figcaption .main{overflow-wrap:anywhere;font-weight:600}
 figcaption .ev{overflow-wrap:anywhere;color:var(--dim)}
 footer{color:var(--dim);font-size:.8rem;line-height:1.6}
+.chapter{border-left:3px solid var(--accent);padding:4px 0 4px 14px;display:grid;gap:6px}
+.chapter.week{border-left-color:var(--ship)}
+.chapter h3{margin:0;font-size:1.05rem;text-wrap:balance}
+.chapter ul{margin:0;padding-left:18px;color:var(--dim);font-size:.86rem;line-height:1.6;display:grid;gap:2px}
+.chapter li{overflow-wrap:anywhere}
 code{font-size:.85em}
 </style>
 
 """);
-        html.Append($"<main><header><h1>새 엔진 하이라이트 필름</h1><p>새 엔진이 배마다 {days}일 동안 저절로 만든 일 가운데 연출이 고른 장면입니다. 짜 넣은 줄거리는 없습니다 — 일의 시작(운석 · 파편 구름 · 낡은 부품 · 외판 피로 …)은 고른 항로와 세상의 확률에서 오고, 그 뒤는 물리 · 사람 · 로봇 · 주컴퓨터가 서로 부딪혀 생깁니다. 한 소동은 한 장면으로 묶고, 첫 조짐부터 뒤처리까지 큰 일이 난 순간을 그 자리에서 그렸습니다. 같은 시드로 다시 돌려 그렸으니(결정론) 1회차와 똑같은 일이 일어납니다. 그림은 옛 게임의 도트 화가 그대로입니다.</p></header>\n");
+        html.Append($"<main><header><h1>새 엔진 하이라이트 필름</h1><p>새 엔진이 배마다 {days}일 동안 저절로 만든 일 가운데 연출이 고른 장면입니다. 짜 넣은 줄거리는 없습니다 — 일의 시작(운석 · 파편 구름 · 낡은 부품 · 외판 피로 …)은 고른 항로와 세상의 확률에서 오고, 그 뒤는 물리 · 사람 · 로봇 · 주컴퓨터가 서로 부딪혀 생깁니다. 하루는 한 장(제목 · 큰 사슬 · 사람 · 판단 · 항해 · 하루의 결 · 주인공)으로 묶고, 한 소동은 한 장면으로 묶어 연출의 컷 목록(첫 조짐 → 일이 난 순간들 · 정점 → 사람마다의 시점 → 뒤)대로 그렸습니다. 같은 시드로 다시 돌려 그렸으니(결정론) 1회차와 똑같은 일이 일어납니다. 그림은 옛 게임의 도트 화가 그대로입니다.</p></header>\n");
         foreach (var sh in ships)
         {
             html.Append($"<div class=\"ship\"><h2>{E(sh.Name)}<small>사람 {sh.Crew} · 시드 {sh.Seed} · 하이라이트 {sh.AllHighlights} · 죽음 {sh.Deaths}</small></h2>\n");
+            foreach (var ch in sh.Chapters)
+            {
+                html.Append($"<div class=\"chapter{(ch.Week ? " week" : "")}\"><h3>{E(ch.Title)}</h3><ul>");
+                foreach (var l in ch.Lines) html.Append($"<li>{E(l)}</li>");
+                html.Append("</ul></div>\n");
+            }
             if (sh.Scenes.Count == 0) html.Append("<p class=\"ev\">이 배에는 이틀 동안 하이라이트가 될 만한 일이 없었습니다.</p>");
             foreach (var sc in sh.Scenes)
             {

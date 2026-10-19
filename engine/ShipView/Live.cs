@@ -49,6 +49,11 @@ public sealed class LiveShow
     private Director? _replayDir;
     private Highlight? _replayOf;
     private long _replayEnd;
+    private List<Shot> _shots = new();      // ⑬ 이야기 편집: 다시보기는 연출의 컷 목록을 따른다 (조짐 → 순간 · 정점 → 사람마다의 시점 → 뒤 · 컷 사이는 건너뛴다)
+    public IReadOnlyList<Shot> Shots => _shots;
+    /// <summary>다시보기에서 지금 걸린 컷 (컷 사이 · 다시보기가 아니면 null).</summary>
+    public Shot? ShotNow => _replay == null ? null : _shots.LastOrDefault(c => c.From <= _replay.Tick && _replay.Tick < c.To);
+    public const double JumpSpeed = MaxTicksPerCall * 60;   // 컷 사이를 건너뛰는 빠르기 (한 장에 돌릴 수 있는 만큼)
     public bool Replaying => _replay != null;
     public Highlight? ReplayOf => _replayOf;
     /// <summary>지금 화면에 보이는 세계 · 연출 (다시보기 중이면 되살린 세계).</summary>
@@ -103,18 +108,16 @@ public sealed class LiveShow
         return new LiveShow(s, lay.Name);
     }
 
-    /// <summary>화면 1초에 틱: 함장이 고른 빠르기 · 아니면 연출의 빠르기 (다시보기에선 정점 1분 전까지 조용함 · 조짐을 세 배로 — 이미 본 장면이다).</summary>
+    /// <summary>화면 1초에 틱: 함장이 고른 빠르기 · 아니면 연출의 빠르기 (다시보기에선 컷의 빠르기 · 컷 사이는 건너뛴다 — 이미 본 장면이다).</summary>
     public double Speed
     {
         get
         {
             if (SpeedOverride > 0) return SpeedOverride;
-            double v = View.Speed;
-            if (_replayOf != null && _replay != null && v >= Director.OmenSpeed && _replay.Tick < _replayOf.Tick - Time.Minutes(1)) v *= ReplayFast;
-            return v;
+            if (_replay != null && _shots.Count > 0) return ShotNow?.Speed ?? JumpSpeed;
+            return View.Speed;
         }
     }
-    public const double ReplayFast = 3;
     public (int x0, int y0, int x1, int y1) Bounds => _bbox;
 
     /// <summary>화면 없이 앞으로 감기 (연출은 함께 본다 — 하이라이트 · 다시보기 고리가 쌓인다). 확인 · 화면 사진용.</summary>
@@ -133,6 +136,9 @@ public sealed class LiveShow
             _carry += Speed * realSec;
             n = (int)Math.Min(_carry, MaxTicksPerCall);
             _carry -= n;
+            // 다시보기에서 컷 사이를 건너뛸 때는 다음 컷의 첫 틱에서 멈춘다 (건너뛰다 정점을 지나치지 않게)
+            if (_replay != null && ShotNow == null && _shots.FirstOrDefault(c => c.From > _replay.Tick) is { } next)
+                n = (int)Math.Min(n, next.From - _replay.Tick);
             if (_carry >= 1) _carry -= Math.Floor(_carry);   // 밀린 것은 버린다 (다음 장에 몰아 돌리지 않는다)
             var w = World; var d = View;
             d.Foresee = Speed <= Director.CalmSpeed;   // 함장이 빨리 감는 동안은 미리 보지 않는다 (복제가 1초에 수십 번 — 볼 틈도 없다)
@@ -160,6 +166,13 @@ public sealed class LiveShow
         double tx = CamX, ty = CamY, tw = ViewW;
         if (Overview) { var rb = Reach(); tx = (rb.x0 + rb.x1 + 1) / 2.0; ty = (rb.y0 + rb.y1 + 1) / 2.0; tw = Math.Max(rb.x1 - rb.x0 + 1, (rb.y1 - rb.y0 + 1) / Aspect); }
         else if (Selected >= 0 && FollowSelected) { var (sx, sy) = DrawnAt(Selected); if (!double.IsNaN(sx)) { tx = sx; ty = sy; tw = Math.Clamp(ViewW, FollowMin, FollowMax); } }
+        else if (Follow && ShotNow is { } shot)
+        {
+            // 다시보기의 컷: 시점 · 순간의 사람을 따라 · 아니면 그 컷의 자리
+            var (ax, ay) = shot.Actor >= 0 && World.Find<Mind>() is { } wm && shot.Actor < wm.Agents.Count ? DrawnAt(shot.Actor) : (double.NaN, 0.0);
+            (tx, ty) = !double.IsNaN(ax) ? (ax, ay) : shot.Cell >= 0 ? CellDrawn(shot.Cell) : (tx, ty);
+            tw = Math.Clamp(vd.Zoom, FollowMin, FollowMax);
+        }
         else if (Follow && vd.FocusCell >= 0) { (tx, ty) = CellDrawn(vd.FocusCell); tw = Math.Clamp(vd.Zoom, FollowMin, FollowMax); }
         double k = 1 - Math.Exp(-realSec * 2.5);
         CamX += (tx - CamX) * k; CamY += (ty - CamY) * k; ViewW += (tw - ViewW) * k;
@@ -465,7 +478,7 @@ public sealed class LiveShow
             SrcW = (float)(w * Painter.T), SrcH = (float)(h * Painter.T),
             Ship = ShipName, Status = Status(), Story = Story(), Mood = View.Mood,
             Banner = BannerLeft > 0 ? Banner : "", BannerAlpha = (float)Math.Clamp(Math.Min(BannerLeft, BannerSec - BannerLeft) / 0.5, 0, 1),
-            Tick = World.Tick, Replay = _replayOf?.Title ?? "",
+            Tick = World.Tick, Replay = _replayOf == null ? "" : ShotNow is { } sn ? $"{_replayOf.Title} · 컷 {_shots.IndexOf(sn) + 1}/{_shots.Count} {sn.Kind}" : _replayOf.Title,
             CamLeft = left, CamTop = top, CamW = w, CamH = h,
             Card = Card(), SelX = sel.x, SelY = sel.y,
             Notice = Notice, Route = RouteLine(),
@@ -805,6 +818,7 @@ public sealed class LiveShow
     public string Story()
     {
         var w = World; var d = View;
+        if (ShotNow is { } shot) return $"[{shot.Kind}] {shot.Caption}";
         if (d.Highlights.Count > 0)
         {
             var h = d.Highlights[^1];
@@ -826,7 +840,8 @@ public sealed class LiveShow
         if (w == null) return false;
         _replay = w; _replayOf = h;
         _replayDir = new Director(w.Layout) { KeepRing = false };
-        _replayEnd = Math.Min(Sim.Tick, h.Last + Time.Minutes(ReplayAfterMin));
+        _shots = Dir.Shots(Sim, h);
+        _replayEnd = Math.Min(Sim.Tick, Math.Max(h.Last + Time.Minutes(ReplayAfterMin), _shots.Count > 0 ? _shots[^1].To : 0));
         _carry = 0; ClearTrails(); _prevPose = Array.Empty<(double, double, double)>();
         Banner = "다시보기 — " + h.Title; BannerLeft = BannerSec;
         return true;
@@ -836,7 +851,7 @@ public sealed class LiveShow
     public void StopReplay()
     {
         if (_replay == null) return;
-        _replay = null; _replayDir = null; _replayOf = null;
+        _replay = null; _replayDir = null; _replayOf = null; _shots = new();
         _carry = 0; ClearTrails(); _prevPose = Array.Empty<(double, double, double)>();
     }
 
