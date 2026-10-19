@@ -1,7 +1,7 @@
 // ⑥ 망 · 장치 표 — 설비가 하는 일 (재질은 equipment.json). 옛 설비 이름 → 역할 · 숫자.
 //   role: panel(배전반) reactor(원자로) aux(보조 발전기) battery pump(냉각 펌프) hvac(공조 열교환기)
 //         o2gen(산소 발생기 — 물 전기분해) scrubber(이산화탄소 제거) dehumid(제습 — 물을 걷는다) recycler(물 재생)
-//         computer console sensor stove fridge grow charger industry appliance lamp engine
+//         computer console sensor stove fridge grow charger industry appliance lamp engine gravity(인공 중력 발생기 — 몸마다 바닥 중력)
 //   kw: 켜져 있을 때 쓰는 전력 · gen: 내는 전력 · kwh: 저장 · heatKw: 옮기는 열 (펌프 · 공조)
 //   tiers: 재배 선반의 단 수 (재배 넓이 = 칸 × 단)
 //   on: 처음에 켜져 있나 (조리대 · 공장 기계는 꺼져 있다가 사람이 켠다)
@@ -25,6 +25,7 @@
   "Dehumidifier":    { "role": "dehumid",  "kw": 0.2,   "mol": 0.004, "on": true, "db": 50, "parts": { "기계": 15000 } },
   "WaterRecycler":   { "role": "recycler", "kw": 0.9,   "on": true, "db": 60, "parts": { "기계": 12000, "봉함": 15000, "거르개": 4000 } },
   "GreywaterFilter": { "role": "recycler", "kw": 0.1,   "on": true, "db": 40, "parts": { "거르개": 3000 } },
+  "GravityGenerator":{ "role": "gravity",  "kw": 2,     "on": true, "db": 50, "parts": { "전기": 40000, "기계": 30000 } },
   "MainComputer":    { "role": "computer", "kw": 2.5,   "kwh": 3, "on": true, "db": 58, "parts": { "전기": 50000 } },
   "NavComputer":     { "role": "computer", "kw": 0.3,   "on": true, "db": 45, "parts": { "전기": 50000 } },
   "Console":         { "role": "console",  "kw": 0.12,  "on": true, "db": 32, "parts": { "전기": 40000 } },

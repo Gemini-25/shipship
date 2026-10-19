@@ -384,6 +384,7 @@ public sealed partial class Network : IEngine
         Power(sim, dt);
         t = Lap("전력", t);
         Effects(sim, dt);
+        GravityStep(sim, dt);   // 인공 중력 — 몸마다 바닥 중력 (③ 장에 요청)
         t = Lap("장치 일", t);
         Cooling(sim, dt);
         t = Lap("냉각 · 공조", t);
@@ -1253,7 +1254,7 @@ public sealed partial class Network : IEngine
         w.I32(wk.Count);
         foreach (var k in wk) { w.I32(k); w.I32(_wearCause[k]); }
         SaveJumpers(w); w.Arr(Stripped); w.I64(PartsSalvaged);
-        SaveLines(w); SaveWear(w); SavePipes(w); SaveCells(w); SaveO2(w);
+        SaveLines(w); SaveWear(w); SavePipes(w); SaveCells(w); SaveO2(w); SaveGravity(w);
     }
 
     public void Load(StateReader r)
@@ -1272,6 +1273,6 @@ public sealed partial class Network : IEngine
         n = r.I32();
         for (int i = 0; i < n; i++) { int k = r.I32(); _wearCause[k] = r.I32(); }
         LoadJumpers(r); Stripped = r.Arr<byte>(); PartsSalvaged = r.I64();
-        LoadLines(r); LoadWear(r); LoadPipes(r); LoadCells(r); LoadO2(r);
+        LoadLines(r); LoadWear(r); LoadPipes(r); LoadCells(r); LoadO2(r); LoadGravity(r);
     }
 }

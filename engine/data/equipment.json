@@ -14,6 +14,7 @@
   "Bookshelf":       { "name": "책장",         "parts": { "steel": 20, "fabric": 25 } },
   "Console":         { "name": "조종대",       "parts": { "steel": 15, "polymer": 8, "copper": 3, "glass": 2 }, "heat": 120 },
   "NavComputer":     { "name": "항법 컴퓨터",  "parts": { "steel": 20, "polymer": 6, "copper": 5, "glass": 2 }, "heat": 300 },
+  "GravityGenerator":{ "name": "인공 중력 발생기", "parts": { "steel": 200, "copper": 60, "polymer": 10 }, "heat": 2000 },
   "MainComputer":    { "name": "주컴퓨터",     "parts": { "steel": 80, "polymer": 20, "copper": 20, "glass": 5 }, "heat": 2500 },
   "RecorderVault":   { "name": "기록 보관함",  "parts": { "steel": 60, "titanium": 20, "polymer": 3 }, "heat": 50 },
   "SensorArray":     { "name": "센서 묶음",    "parts": { "aluminum": 30, "copper": 5, "glass": 5 }, "heat": 80 },

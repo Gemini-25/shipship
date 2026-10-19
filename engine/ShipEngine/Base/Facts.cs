@@ -112,6 +112,8 @@ public enum FactKind : ushort
     CableCut,          // 전선이 끊겼다 (Cell: 끊긴 칸 · Other: 끊긴 선 갈래 비트 — 전기 1 · 냉각관 2 · 물관 4)
     Tumble,            // 떨어져 나간 조각이 돌기 시작했다 (Cell: 무게중심 곁 칸 · Size: 질량 톤 · Other: 몸 번호)
     Crash,             // 몸끼리 부딪혔다 (Cell: 맞은 칸 · Size: 잃은 에너지 kJ · Other: 부딪혀 온 몸 번호)
+    // 인공 중력 · 무중력 (바퀴 3)
+    Gravity,           // 몸의 바닥 중력이 바뀌었다 (Cell: 발생기 칸 · Size: 0 사라졌다 · 1 돌아왔다 · Other: 몸 번호)
 }
 
 public static class FactNames
@@ -136,7 +138,7 @@ public static class FactNames
         FactKind.ShipSplit => "배가 갈라졌다",
         FactKind.Lie => "거짓말", FactKind.LieExposed => "거짓말이 들통났다", FactKind.LogAsked => "기록을 물었다", FactKind.LogShown => "주컴퓨터 기록", FactKind.Shelter => "대피", FactKind.Meeting => "회의", FactKind.Verdict => "판결", FactKind.Elected => "대표를 뽑았다", FactKind.Mutiny => "배급 반란",
         FactKind.ComputerJournal => "일지", FactKind.ComputerBroadcast => "아침 방송", FactKind.Switched => "껐다", FactKind.Blocked => "막혔다", FactKind.Devised => "궁리했다", FactKind.Consulted => "주컴퓨터에 물었다",
-        FactKind.MethodWorked => "방법이 통했다", FactKind.MethodFailed => "매뉴얼대로 했다가 틀어졌다", FactKind.ManualChanged => "매뉴얼을 고쳤다", FactKind.CableCut => "선이 끊겼다", FactKind.Tumble => "조각이 돈다", FactKind.Crash => "부딪혔다", _ => "",
+        FactKind.MethodWorked => "방법이 통했다", FactKind.MethodFailed => "매뉴얼대로 했다가 틀어졌다", FactKind.ManualChanged => "매뉴얼을 고쳤다", FactKind.CableCut => "선이 끊겼다", FactKind.Tumble => "조각이 돈다", FactKind.Crash => "부딪혔다", FactKind.Gravity => "중력이 바뀌었다", _ => "",
     };
 }
 

@@ -62,6 +62,8 @@ public sealed partial class Field : IEngine
     /// 바닥 칸의 <see cref="Hole"/>은 바닥 · 천장 판의 구멍 (한 층짜리 배 — 그 너머가 우주다).
     /// </summary>
     public byte[] Severed;
+    /// <summary>칸의 바닥 쪽 중력 (g — 1이면 지구 · 0이면 무중력). ⑥ 인공 중력 발생기가 몸마다 정해 요청한다 (발생기가 없는 배 · 시험 배는 바탕 1g 그대로).</summary>
+    public float[] Grav;
     /// <summary>끊겨 우주로 간 응축상 (저장 종류마다 몰 — 장부) · 끊긴 칸에서 빠진 기체는 <see cref="VentedTotal"/>에.</summary>
     public double[] SeveredStore;
     /// <summary>바람 (m/s) — 틈으로 빠지는 흐름에서 계산한다.</summary>
@@ -91,7 +93,7 @@ public sealed partial class Field : IEngine
     {
         L = layout; T = t; Cells = layout.N; G = t.GasCount; S = t.StoreCount;
         N = new double[G * Cells]; U = new double[Cells]; Ts = new double[Cells]; Tf = new double[Cells]; Store = new double[S * Cells];
-        DoorOpen = new float[layout.Doors.Count]; DoorTaped = new byte[layout.Doors.Count]; DoorBleed = new byte[layout.Doors.Count]; Hole = new float[Cells]; Severed = new byte[Cells]; SeveredStore = new double[t.StoreCount];
+        DoorOpen = new float[layout.Doors.Count]; DoorTaped = new byte[layout.Doors.Count]; DoorBleed = new byte[layout.Doors.Count]; Hole = new float[Cells]; Severed = new byte[Cells]; Grav = new float[Cells]; Array.Fill(Grav, 1f); SeveredStore = new double[t.StoreCount];
         WindX = new float[Cells]; WindY = new float[Cells]; WindPa = new float[Cells];
         _cv = t.Gases.Select(s => s.C).ToArray();
         _molar = t.Gases.Select(s => s.MolarMass).ToArray();
@@ -416,6 +418,7 @@ public sealed partial class Field : IEngine
         // 칸 고체 열용량(설비를 앉히며 늘었다) · 구역별 '아직 고를 차이' · 겉면을 매 틱 다룬 때 · 구역을 지은 때의 문 · 구멍 — 다음 틱의 계산을 바꾸므로 찍는다
         w.Arr(Cs); w.Arr(_imb); w.Arr(_surfTick); w.Bool(_dirty); w.Arr(_topoDoor); w.Arr(_topoHole); w.Arr(DoorTaped); w.Arr(_topoTaped); w.Arr(DoorBleed); w.Arr(_topoBleed);
         w.Tag("끊김"); w.Arr(Severed); w.Arr(SeveredStore);
+        w.Tag("중력"); w.Arr(Grav);
     }
 
     public void Load(StateReader r)
@@ -425,6 +428,7 @@ public sealed partial class Field : IEngine
         Outside.Load(r);
         r.ArrInto(Cs); var imb = r.Arr<double>(); _surfTick = r.Arr<long>(); bool dirty = r.Bool(); _topoDoor = r.Arr<float>(); _topoHole = r.Arr<float>(); r.ArrInto(DoorTaped); _topoTaped = r.Arr<byte>(); r.ArrInto(DoorBleed); _topoBleed = r.Arr<byte>();
         r.Tag("끊김"); r.ArrInto(Severed); r.ArrInto(SeveredStore);
+        r.Tag("중력"); r.ArrInto(Grav);
         SolidLinks(); // 끊긴 칸의 전도 · 우주를 보는 면은 도면 + 끊김에서 다시 센다 (찍지 않는다)
         // 구역 · 틈은 찍지 않고 다시 세운다 — 장보다 먼저 도는 엔진(망 · 마음 · 주컴퓨터)이 첫 틱에 구역을 읽는다
         RestoreTopology();

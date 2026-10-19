@@ -345,7 +345,7 @@ public sealed class Tables
         t.Space = DataFiles.Load<SpaceTable>("space.json");
         t.Devices = DataFiles.Load<Dictionary<string, DeviceDef>>("devices.json");
         var roles = new HashSet<string> { "panel", "reactor", "aux", "battery", "pump", "hvac", "o2gen", "scrubber", "dehumid", "recycler",
-                                          "computer", "console", "sensor", "stove", "fridge", "grow", "charger", "industry", "appliance", "lamp", "engine" };
+                                          "computer", "console", "sensor", "stove", "fridge", "grow", "charger", "industry", "appliance", "lamp", "engine", "gravity" };
         var parts = new HashSet<string> { "전기", "기계", "봉함", "거르개" };
         foreach (var (k, d) in t.Devices)
         {

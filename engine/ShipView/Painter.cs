@@ -27,7 +27,7 @@ public sealed class Painter
     private static readonly Dictionary<string, string> Look = new()
     {
         ["FoodLocker"] = "SupplyCache", ["GrowRack"] = "PlantRack", ["LargeReactorCore"] = "ReactorCore", ["LargeCoolantPump"] = "CoolantPump",
-        ["Shuttle"] = "DockClampPanel", ["Rover"] = "MaintCart", ["CargoCrate"] = "SupplyCache", ["OreBin"] = "Compactor",
+        ["Shuttle"] = "DockClampPanel", ["Rover"] = "MaintCart", ["CargoCrate"] = "SupplyCache", ["OreBin"] = "Compactor", ["GravityGenerator"] = "AuxGenerator",
     };
     private readonly FurnitureType?[] _fixType;
     private readonly (int x, int y, int w, int h)[] _fixBox;

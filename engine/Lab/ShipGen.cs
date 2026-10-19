@@ -57,7 +57,7 @@ public sealed class ShipPlan
         ["Refinery"] = (2, 2), ["Compactor"] = (1, 1), ["Collector"] = (2, 1), ["Autoclave"] = (1, 1), ["DiagnosticScanner"] = (1, 1),
         ["SuitLocker"] = (1, 1), ["OxygenMaskBox"] = (1, 1), ["RobotDock"] = (1, 1), ["DroneDock"] = (1, 1), ["Treadmill"] = (1, 2),
         ["Projector"] = (1, 1), ["MemorialWall"] = (2, 1), ["Aquarium"] = (2, 1), ["WashingMachine"] = (1, 1), ["SuitDryer"] = (1, 1),
-        ["FoodLocker"] = (1, 1), ["CargoCrate"] = (2, 2), ["CargoNet"] = (1, 1), ["OreBin"] = (2, 2), ["Rover"] = (3, 2), ["Shuttle"] = (7, 3),
+        ["FoodLocker"] = (1, 1), ["CargoCrate"] = (2, 2), ["CargoNet"] = (1, 1), ["OreBin"] = (2, 2), ["Rover"] = (3, 2), ["Shuttle"] = (7, 3), ["GravityGenerator"] = (2, 1),
         ["MeetingBoard"] = (2, 1), ["Fermenter"] = (1, 1), ["LedPanel"] = (1, 1), ["EmergencyLight"] = (1, 1),
     };
 
@@ -410,6 +410,19 @@ public sealed class ShipPlan
                 if (PutOne("OxygenMaskBox", set, keep)) boxes++;
             }
         if (boxes * MasksPerBox < Crew) Fail($"산소 마스크 {boxes * MasksPerBox}개 < 사람 {Crew}");
+        // 인공 중력 발생기 (바퀴 3): 배마다 하나 — 엔진실 · 원자로실 · 배전실 차례로 자리가 나는 곳 · 다른 설비를 다 놓은 뒤에 (설비 번호가 밀리지 않게)
+        bool grav = false;
+        foreach (string type in new[] { "Engine", "Reactor", "Power" })
+        {
+            for (int r = 0; r < Rooms.Count && !grav; r++)
+            {
+                if (Rooms[r].Type != type) continue;
+                var (set, keep) = RoomSpace(r, doorCells);
+                grav = PutOne("GravityGenerator", set, keep);
+            }
+            if (grav) break;
+        }
+        if (!grav) Fail("인공 중력 발생기 자리가 없다 (엔진실 · 원자로실 · 배전실)");
     }
 
     /// <summary>방의 빈 칸(설비 없는)이 한 덩어리이고 문 앞 칸을 다 품나.</summary>
@@ -572,7 +585,7 @@ public sealed class ShipPlan
         ["Dehumidifier"] = 'd', ["WaterRecycler"] = 'W', ["GrowRack"] = 'G', ["GrowBed"] = 'G', ["Fridge"] = 'F', ["Stove"] = 'S', ["Oven"] = 'v',
         ["MealDispenser"] = 'e', ["Workbench"] = 'w', ["Lathe"] = 'l', ["Refinery"] = 'r', ["Collector"] = 'q', ["SuitLocker"] = 'u',
         ["RobotDock"] = 'z', ["DroneDock"] = 'y', ["Treadmill"] = 'T', ["FoodLocker"] = 'f', ["CargoCrate"] = 'X', ["OreBin"] = 'K',
-        ["Rover"] = 'V', ["Shuttle"] = 'Z', ["MemorialWall"] = 'j', ["Projector"] = 'i',
+        ["Rover"] = 'V', ["Shuttle"] = 'Z', ["MemorialWall"] = 'j', ["Projector"] = 'i', ["GravityGenerator"] = 'H',
     };
 
     /// <summary>글자 그림 (설비는 글자로).</summary>
