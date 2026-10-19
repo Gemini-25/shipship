@@ -1,6 +1,6 @@
 namespace ShipEngine;
 
-public enum ContactKind : byte { Trader, Patrol, Distress, Derelict, Station }
+public enum ContactKind : byte { Trader, Patrol, Distress, Derelict, Station, Mine }
 public enum ContactState : byte { Far, Coming, Docked, Gone }   // Coming: 주컴퓨터가 가겠다고 했다 (가까이 느리면 붙는다)
 
 /// <summary>다른 배 하나: 배에 대한 상대 위치 · 속도 (m · m/s) · 탄 사람 · 남은 공기 · 그 배의 형편.</summary>
@@ -19,6 +19,7 @@ public struct Contact
     public long Since, DockedAt;
     public byte Meet;         // ⑪ 보급: 나눠 주기로 하고 맞춰 오는 중 (그 배가 다가온다)
     public long Gift;         // ⑪ 보급: 넘겨줄 것 (보급 물건 차례마다 8비트 — <see cref="Outside.SupplyItems"/>)
+    public float Fuel;        // ⑤ 별계 지도: 정거장이 채워 줄 추진제 (kg)
     public double Range => Math.Sqrt(X * X + Y * Y);
     public double Speed => Math.Sqrt(Vx * Vx + Vy * Vy);
 }
@@ -30,7 +31,7 @@ public struct Contact
 public sealed partial class Outside
 {
     public static readonly string[] ShipNames = { "푸른솔호", "은하수호", "갈매기호", "새벽별호", "너울호", "미리내호", "한울호", "바람꽃호", "늘봄호", "다솜호", "별누리호", "물결호" };
-    public static string KindName(ContactKind k) => k switch { ContactKind.Trader => "상선", ContactKind.Patrol => "순찰선", ContactKind.Distress => "조난선", ContactKind.Station => "정거장", _ => "난파선" };
+    public static string KindName(ContactKind k) => k switch { ContactKind.Trader => "상선", ContactKind.Patrol => "순찰선", ContactKind.Distress => "조난선", ContactKind.Station => "정거장", ContactKind.Mine => "광산", _ => "난파선" };
     public const double DockRange = 300, DockSpeed = 3;   // 이만큼 가까이 · 이만큼 느리면 붙는다 (m · m/s)
 
     public bool TrafficOn;
@@ -42,7 +43,7 @@ public sealed partial class Outside
     public long Docked, LateArrivals;
     private RngStream _traffic, _route;
 
-    public string ContactName(in Contact c) => c.Kind == ContactKind.Station && c.NameNo < T.Space.Stations.Count ? T.Space.Stations[c.NameNo].Name : $"{KindName(c.Kind)} {ShipNames[c.NameNo % ShipNames.Length]}";
+    public string ContactName(in Contact c) => c.Kind is ContactKind.Station or ContactKind.Mine && c.NameNo < T.Space.Stations.Count ? T.Space.Stations[c.NameNo].Name : $"{KindName(c.Kind)} {ShipNames[c.NameNo % ShipNames.Length]}";
 
     /// <summary>다른 배 하나를 놓는다 (교통량 · 시험): 종류 · 지금 거리(m) · 오는 쪽 · 상대 속도(m/s) · 비낀 거리(m).</summary>
     public int AddContact(Sim sim, ContactKind kind, double distance, double dirX, double dirY, double speed, double offset, int crew, float airHours, int cause, byte fire = 0, byte sick = 0)

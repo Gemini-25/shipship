@@ -58,7 +58,15 @@ public static class ShipWorld
         var to = Tables.Default.Space.System.Bodies.FirstOrDefault(b => b.Au > o.Distance + 0.1) ?? Tables.Default.Space.System.Bodies[^1];
         string rn = o.Rt != null ? $" · 항로 {o.Route} '{o.Rt.Name}'" : "";
         int c = s.Causes.Add(CauseKind.Route, $"{Ko.Euro(to.Name)} 가는 항해 ({to.Au:0.##}AU{rn})", s.Tick);
-        o.PlanVoyage(s, to.Au, to.Name, minutes, c);
+        int place = o.PlaceOf(to.Name);
+        if (place >= 0)
+        {
+            // ⑤ 별계 지도: 임무는 발사 창에 맞춰 나선다 (처음 구간) · 다음부터는 주컴퓨터가 고른다
+            o.AlignWindow(place, s.Tick + Time.Minutes(minutes));
+            o.PlanVoyageTo(s, place, minutes, c);
+            s.Find<ShipMind>()?.SetMission(new[] { place });
+        }
+        else o.PlanVoyage(s, to.Au, to.Name, minutes, c);
         s.Find<Life>()?.Boarding(s);   // ⑫ 고향에서 옮은 감기가 잠복한 채 탄 이 (시드에서)
     }
 

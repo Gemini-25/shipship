@@ -274,7 +274,7 @@ public sealed partial class ShipMind
                 Say(sim, what);
                 if (c.Kind == ContactKind.Distress && c.Crew > 0 || c.Kind == ContactKind.Derelict) Decide(sim, c, cause);
             }
-            if (c.Kind is ContactKind.Trader or ContactKind.Patrol or ContactKind.Station && !_hailed.Contains(c.Id) && c.Range < 2e8)
+            if (c.Kind is ContactKind.Trader or ContactKind.Patrol or ContactKind.Station or ContactKind.Mine && !_hailed.Contains(c.Id) && c.Range < 2e8)
             {
                 _hailed.Add(c.Id); if (_hailed.Count > 64) _hailed.RemoveAt(0); Hails++;
                 int cause = sim.Causes.Add(CauseKind.Computer, $"{Ko.Gwa(name)} 교신했다 — 소식을 나눴다", t, -1, c.Cause);

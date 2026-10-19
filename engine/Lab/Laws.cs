@@ -497,6 +497,7 @@ public static partial class Program
         MotionLaws();
         DepthLaws();
         HeatVibLaws();
+        MapLaws();
         SolverLaws();
         LineLaws();
         BodyLaws();

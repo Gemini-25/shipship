@@ -62,7 +62,8 @@ public sealed class DeepDef { public string Debris = "rubble"; public double Clo
 /// <summary>⑤ 다른 배가 지나가는 빈도.</summary>
 public sealed class TrafficDef { public double PerDay = 0.25, NearAu = 0.04, Boost = 4; }
 /// <summary>⑪ 공급 사슬 (마) — 항로 위 보급 정거장: 이름 · 자리(AU) · 이 기울기 아래의 항로만 곁을 지난다 (°) · 설명.</summary>
-public sealed class StationDef { public string Name = "", Line = ""; public double Au, MaxIncline = 0.6; }
+/// <summary>⑤ · ⑪ 정거장 · 광산 (space.json stations): 거리 · 곁을 지나는 항로 기울기 · 갈래 ("station" 부품 · 추진제 / "mine" 원료).</summary>
+public sealed class StationDef { public string Name = "", Line = "", Kind = "station"; public double Au, MaxIncline = 0.6; public bool Mine => Kind == "mine"; }
 
 public sealed class SpaceTable
 {

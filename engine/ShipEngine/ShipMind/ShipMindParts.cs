@@ -151,11 +151,14 @@ public sealed partial class ShipMind
     {
         if (_out == null) return;
         var want = SupplyWants();
-        if (want.All(x => x == 0)) return;
-        string need = string.Join(" · ", Enumerable.Range(0, want.Length).Where(i => want[i] > 0).Select(i => Outside.SupplyItems[i]));
+        if (c.Kind == ContactKind.Mine) for (int i = 1; i < want.Length; i++) want[i] = 0;   // 광산에는 원료만 부탁한다
+        // ⑤ 별계 지도: 정거장에는 모자란 추진제도 (탱크의 2% 넘게 비었으면)
+        double fuel = c.Kind == ContactKind.Station && _out.PropellantKg < 0.98 * _out.PropellantStart ? _out.PropellantStart - _out.PropellantKg : 0;
+        if (want.All(x => x == 0) && fuel <= 0) return;
+        string need = string.Join(" · ", Enumerable.Range(0, want.Length).Where(i => want[i] > 0).Select(i => Outside.SupplyItems[i]).Concat(fuel > 0 ? new[] { "추진제" } : Array.Empty<string>()));
         int ask = sim.Causes.Add(CauseKind.Computer, $"주컴퓨터가 {name}에 부탁했다 — {Ko.I(need)} 모자란다", sim.Tick, -1, hail);
         Say(sim, $"{name}에 부탁 — {Ko.I(need)} 모자란다");
-        var (yes, give) = _out.AskSupply(sim, c.Id, want);
+        var (yes, give) = _out.AskSupply(sim, c.Id, want, fuel);
         if (!yes)
         {
             sim.Causes.Add(CauseKind.Contact, $"{name}는 나눠 줄 것이 없다고 했다", sim.Tick, -1, ask);
@@ -163,8 +166,9 @@ public sealed partial class ShipMind
             return;
         }
         int k = _out.ContactIndex(c.Id);
-        if (k >= 0) { var cc = _out.Contacts[k]; cc.Cause = sim.Causes.Add(CauseKind.Contact, $"{name}가 나눠 주기로 했다 — {GiftLine(give)} · 맞춰 와서 붙는다", sim.Tick, -1, ask); _out.SetContact(cc); }
-        Say(sim, $"{name} — 나눠 주겠다고 한다 ({GiftLine(give)}) · 맞춰 와서 붙는다");
+        string what = GiftLine(give) + (k >= 0 && _out.Contacts[k].Fuel > 0 ? (give.Sum() > 0 ? " · " : "") + $"추진제 {_out.Contacts[k].Fuel / 1000:0.#}t" : "");
+        if (k >= 0) { var cc = _out.Contacts[k]; cc.Cause = sim.Causes.Add(CauseKind.Contact, $"{name}가 나눠 주기로 했다 — {what} · 맞춰 와서 붙는다", sim.Tick, -1, ask); _out.SetContact(cc); }
+        Say(sim, $"{name} — 나눠 주겠다고 한다 ({what}) · 맞춰 와서 붙는다");
     }
 
     /// <summary>붙은 배에서 받는다: 에어락 곁 작업대로 (장부 '보급') · 그 배를 놓는다.</summary>
@@ -179,6 +183,11 @@ public sealed partial class ShipMind
         sim.Facts.Emit(sim.Tick, FactKind.Contact, lockCell, c.Id, cause, other: 8);
         Say(sim, $"{name}에서 받았다 — {GiftLine(give)}");
         SuppliesIn += give.Sum();
+        if (c.Fuel > 0)
+        {
+            double kg = _out!.TakeFuel(sim, c.Id, cause);   // ⑤ 별계 지도: 정거장의 추진제 (탱크를 넘지 않게)
+            if (kg > 0) { sim.Causes.Add(CauseKind.Contact, $"{name}에서 추진제 {kg / 1000:0.#}t을 채웠다 — 남은 Δv {_out.DvLeft / 1000:0.0}km/s", sim.Tick, lockCell, cause); Say(sim, $"{name}에서 추진제 {kg / 1000:0.#}t을 채웠다 — 남은 Δv {_out.DvLeft / 1000:0.0}km/s"); }
+        }
         _out!.Undock(sim, c.Id);
         int k = _out.ContactIndex(c.Id);
         if (k >= 0) { var cc = _out.Contacts[k]; cc.Meet = 0; cc.Gift = 0; _out.SetContact(cc); }

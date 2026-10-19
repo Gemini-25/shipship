@@ -116,7 +116,7 @@ public sealed partial class Outside
     public void PlanVoyage(Sim sim, double toAu, string name, double minutes, int cause)
     {
         var (dv1, _) = HohmannDv(Distance, toAu, Rt?.Incline ?? 0);
-        PendingTo = toAu; PendingName = name; VoyagePlanned = 1; ArrivalDone = 0; Missed = 0; ArriveExtraDv = 0;
+        PendingTo = toAu; PendingName = name; VoyagePlanned = 1; ArrivalDone = 0; Missed = 0; ArriveExtraDv = 0; PendingPlace = -1;
         Plan.RemoveAll(p => p.Kind is BurnKind.Depart or BurnKind.Correct or BurnKind.Arrive or BurnKind.Capture);
         long due = sim.Tick + Time.Minutes(minutes);
         Plan.Add(new PlannedBurn { Kind = BurnKind.Depart, Due = due, Deadline = due + Time.Hours(6), Dv = dv1, Cause = cause });
@@ -174,7 +174,7 @@ public sealed partial class Outside
         if (kind == BurnKind.Depart && !double.IsNaN(PendingTo) && LastBurnDv >= 0.95 * LastBurnWanted)
         {
             // 전이 궤도에 올랐다 — 고침 둘 · 도착이 정해진다
-            double to = PendingTo; PendingTo = double.NaN; VoyageName = PendingName;
+            double to = PendingTo; PendingTo = double.NaN; VoyageName = PendingName; VoyagePlace = PendingPlace; PendingPlace = -1;
             var (_, dv2) = HohmannDv(Distance, to, Rt?.Incline ?? 0);
             StartVoyage(sim, to);
             int c = sim.Causes.Add(CauseKind.Route, $"{Ko.Euro(VoyageName)} 가는 전이 궤도에 올랐다 — {VoyageDays(VoyageFrom, to):0}일", sim.Tick, -1, BurnCause);
@@ -314,14 +314,9 @@ public sealed partial class Outside
     /// <summary>고향 · 배의 자리: 고향 궤도 반지름 · 배까지 별에서 거리 (AU) · 별에서 본 둘 사이 각 (라디안).</summary>
     private (double home, double r, double ang) HomeGeometry(long tick)
     {
-        double home = VoyageFrom > 0 ? VoyageFrom : 1, r = Distance;
-        double a = (VoyageFrom + VoyageTo) / 2, e = Math.Abs(VoyageTo - VoyageFrom) / Math.Max(1e-9, VoyageTo + VoyageFrom);
-        double nu = 0;
-        if (e > 1e-9) nu = Math.Acos(Math.Clamp((a * (1 - e * e) / r - 1) / e, -1, 1));
-        if (VoyageTo < VoyageFrom) nu = Math.PI - nu;   // 안으로 가면 원일점에서
-        double years = (tick - VoyageStart) / (double)Time.TicksPerDay / DaysPerYear;
-        double th = 2 * Math.PI * years / Math.Pow(home, 1.5);
-        return (home, r, nu - th);
+        // ⑤ 별계 지도: 고향 · 배가 제 궤도를 돈다 (예전: 닿은 배가 멈춰 서 있었다)
+        if (Places.Count == 0) return (1, Distance, 0);
+        return (Places[Home].Au, Distance, ShipTheta(tick) - PlaceTheta(Home, tick));
     }
 
     /// <summary>

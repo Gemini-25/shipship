@@ -18,7 +18,8 @@ public static partial class Program
             var s = Worlds.Full(lay, seed);
             var m = s.Get<Mind>(); var o = s.Get<Outside>(); var life = s.Get<Life>();
             s.Run(5);
-            o.Route = 4; o.VoyageFrom = 1; o.VoyageTo = 1.52; o.Distance = dist; o.VoyageTicks = arrived ? 0 : Time.Days(259); o.VoyageStart = s.Tick - (long)(days * Time.TicksPerDay);
+            // 닿은 배도 전이 궤도를 지나 닿게 한다 (⑤ 별계 지도 — 닿은 자리에서 다시 돈다: 첫 틱에 닿는다)
+            o.Route = 4; o.VoyageFrom = 1; o.VoyageTo = 1.52; o.Distance = dist; o.VoyageTicks = (long)(Outside.VoyageDays(1, 1.52) * Time.TicksPerDay); o.VoyageStart = s.Tick - (long)(days * Time.TicksPerDay);
             return (s, m, s.Get<ShipMind>(), o, life);
         }
         // 가슴이 아픈 사람 (상한 심장) — 배에서는 체한 것으로 보았다 (닮은 병)
@@ -63,11 +64,14 @@ public static partial class Program
                 s.Run(Time.Hours(1));
                 return (o.Conjunction(s.Tick), sm.TeleSent, sm.Log.Select(l => l.text).FirstOrDefault(t => t.StartsWith("태양 합")) ?? "", s.Get<Society>().Letters);
             }
-            var behind = Run(1.52, 365.25, true);   // 붉은 사막에 닿아 머문 지 — 떠난 지 한 해: 고향이 한 바퀴 돌아 배는 별 건너편
+            // 붉은 사막에 닿아 머문 배가 별 건너편에 드는 날: 닿을 때 반 바퀴(π) 건너 · 그 뒤 고향이 앞서 돌아 둘 사이가 다시 π가 되는 때 (실제 화성 합처럼 닿은 지 일곱 달 남짓)
+            double n1 = 2 * Math.PI / Outside.PeriodDays(1), n2 = 2 * Math.PI / Outside.PeriodDays(1.52), T = Outside.VoyageDays(1, 1.52);
+            double conjDay = (n2 * T - 2 * Math.PI) / (n2 - n1);
+            var behind = Run(1.52, conjDay, true);
             var open = Run(1.30, 120, false);
             Check("태양 합: 고향에서 본 배가 별 곁 2° 안이면 통신이 끊긴다 — 진료 기록을 보내지 못하고 방송 '태양 합' · 합이 아니면 보낸다",
                 behind.conj && behind.sentTele == 0 && behind.said.Contains("통신이 끊긴다") && !open.conj && open.sentTele > 0,
-                $"한 해째 별 건너편: 합 {behind.conj} · 보냄 {behind.sentTele} · \"{behind.said}\" / 120일째 1.3AU: 합 {open.conj} · 보냄 {open.sentTele}");
+                $"떠난 지 {conjDay:0}일 (닿은 지 {conjDay - T:0}일) 별 건너편: 합 {behind.conj} · 보냄 {behind.sentTele} · \"{behind.said}\" / 120일째 1.3AU: 합 {open.conj} · 보냄 {open.sentTele}");
         }
     }
 }

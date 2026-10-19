@@ -81,6 +81,7 @@ public sealed partial class Outside : IEngine
         _rng = Rng.Stream(seed, "바깥"); _traffic = Rng.Stream(seed, "다른 배"); _route = Rng.Stream(seed, "항로");
         Dose = new float[L.N]; _shield = new float[L.N];
         InitMotion();
+        InitMap(seed);
     }
 
     public StarDef StarDef => T.Space.Stars[Star];
@@ -119,6 +120,7 @@ public sealed partial class Outside : IEngine
     /// <summary>항해를 시작한다: 지금 거리에서 목표 거리(AU)로 호만 전이 (도착하면 그 거리에 머문다).</summary>
     public void StartVoyage(Sim sim, double to)
     {
+        if (VoyageTicks <= 0) LeavePark(sim.Tick);   // ⑤ 별계 지도: 떠난 자리
         VoyageFrom = Distance; VoyageTo = to; VoyageStart = sim.Tick;
         VoyageTicks = Math.Max(1, (long)(VoyageDays(Distance, to) * Time.TicksPerDay));
     }
@@ -155,7 +157,7 @@ public sealed partial class Outside : IEngine
             double frac = (sim.Tick - VoyageStart) / (double)VoyageTicks;
             // 도착 점화를 해야 그 거리에 머문다 (계획한 항해) — 놓치면 전이 타원을 그대로 돈다
             Distance = TransferDistance(VoyageFrom, VoyageTo, Missed != 0 ? frac : Math.Min(1, frac), Missed != 0);
-            if (frac >= 1 && (VoyagePlanned == 0 || ArrivalDone != 0)) { Distance = VoyageTo; VoyageTicks = 0; }
+            if (frac >= 1 && (VoyagePlanned == 0 || ArrivalDone != 0)) { Distance = VoyageTo; Arrive(sim, sim.Tick); VoyageTicks = 0; }
         }
         MotionStep(sim, dt);
         PlanStep(sim);
@@ -409,7 +411,7 @@ public sealed partial class Outside : IEngine
         w.I64(NextFlare); w.I64(FlareWarnAt); w.I64(FlareStart); w.I64(FlareEnd); w.I32(FlareCause); w.F64(DoseOut); w.F64(CalmDose); w.F64(FlareScale);
         w.List(Clouds); w.List(Rocks);
         w.I64(DebrisHits); w.I64(RockHits); w.I64(NearMisses); w.I64(Flares);
-        SaveMotion(w); SaveContacts(w);
+        SaveMotion(w); SaveContacts(w); SaveMap(w);
         _rng.Save(w);
         w.Arr(Dose); w.Arr(_shield); w.F64(_shieldAngle);
     }
@@ -420,7 +422,7 @@ public sealed partial class Outside : IEngine
         NextFlare = r.I64(); FlareWarnAt = r.I64(); FlareStart = r.I64(); FlareEnd = r.I64(); FlareCause = r.I32(); DoseOut = r.F64(); CalmDose = r.F64(); FlareScale = r.F64();
         Clouds = r.List<Cloud>(); Rocks = r.List<Rock>();
         DebrisHits = r.I64(); RockHits = r.I64(); NearMisses = r.I64(); Flares = r.I64();
-        LoadMotion(r); LoadContacts(r);
+        LoadMotion(r); LoadContacts(r); LoadMap(r);
         _rng.Load(r);
         r.ArrInto(Dose); r.ArrInto(_shield); _shieldAngle = r.F64();
     }

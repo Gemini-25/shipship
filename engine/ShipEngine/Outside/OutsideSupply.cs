@@ -11,7 +11,7 @@ public sealed partial class Outside
     /// <summary>보급 물건의 차례 (선물 비트 자리).</summary>
     public static readonly string[] SupplyItems = { "원료", "전자 소자", "전기 부품", "기계 부품", "봉함재", "거르개" };
     public const double MeetTau = 600, MeetMaxSpeed = 6000, MeetSlow = 2;
-    public double ShareTrader = 0.7, SharePatrol = 0.4, ShareStation = 0.95;   // 나눠 줄 몫 (시험이 바꾼다)
+    public double ShareTrader = 0.7, SharePatrol = 0.4, ShareStation = 0.95, ShareMine = 0.95;   // 나눠 줄 몫 (시험이 바꾼다)
 
     public int StationsMet;              // 지난 정거장 (비트)
     public long SupplyAsked, SupplyGiven;
@@ -26,9 +26,10 @@ public sealed partial class Outside
         {
             if ((StationsMet >> i & 1) != 0 || Math.Abs(Distance - st[i].Au) > 0.005) continue;
             if (Rt != null && Rt.Incline > st[i].MaxIncline) continue;   // 높은 항로는 곁을 지나지 않는다
+            if (VoyagePlace >= 0 && Places[VoyagePlace].Kind != 0 && Places[VoyagePlace].Ref == i) continue;   // ⑤ 별계 지도: 그곳으로 가는 길 — 닿아서 만난다
             StationsMet |= 1 << i;
             int cause = sim.Causes.Add(CauseKind.Contact, $"{st[i].Name} 곁을 지난다 — {st[i].Line}", sim.Tick);
-            int id = AddContact(sim, ContactKind.Station, 5e6, 1, 0, 300, 2e5, 0, 0, cause);
+            int id = AddContact(sim, st[i].Mine ? ContactKind.Mine : ContactKind.Station, 5e6, 1, 0, 300, 2e5, 0, 0, cause);
             int k = ContactIndex(id); var c = Contacts[k]; c.NameNo = i; c.Beacon = 1; Contacts[k] = c;
         }
     }
@@ -47,25 +48,28 @@ public sealed partial class Outside
     /// 주컴퓨터의 부탁 (want: 보급 물건 차례마다 모자란 수 — 0이면 부탁하지 않는다): 그 배의 형편으로 나눠 줄지 · 무엇을 몇 개 — 주면 맞춰 온다.
     /// 돌려주는 것: 나눠 주나 · 줄 것 (차례마다).
     /// </summary>
-    public (bool yes, int[] give) AskSupply(Sim sim, int id, int[] want)
+    /// <param name="fuelKg">⑤ 별계 지도: 모자란 추진제 (정거장만 채워 준다 — 광산 · 배는 없다).</param>
+    public (bool yes, int[] give) AskSupply(Sim sim, int id, int[] want, double fuelKg = 0)
     {
         var give = new int[SupplyItems.Length];
         int k = ContactIndex(id);
         if (k < 0) return (false, give);
         var c = Contacts[k];
         SupplyAsked++;
-        double share = c.Kind switch { ContactKind.Station => ShareStation, ContactKind.Trader => ShareTrader, ContactKind.Patrol => SharePatrol, _ => 0 };
+        double share = c.Kind switch { ContactKind.Station => ShareStation, ContactKind.Mine => ShareMine, ContactKind.Trader => ShareTrader, ContactKind.Patrol => SharePatrol, _ => 0 };
         if (Rng.Unit(sim.Seed, Rng.Key("보급"), sim.Tick, c.Id) >= share) return (false, give);
         long gift = 0;
         for (int i = 0; i < give.Length && i < want.Length; i++)
         {
             if (want[i] <= 0) continue;
+            if (c.Kind == ContactKind.Mine && i != 0) continue;   // 광산은 캐낸 원료만
             double u = Rng.Unit(sim.Seed, Rng.Key("보급 물건"), sim.Tick, c.Id * 8 + i);
-            give[i] = c.Kind switch { ContactKind.Station => 2 + (int)(3 * u), ContactKind.Trader => 1 + (int)(2 * u), _ => 1 };
+            give[i] = c.Kind switch { ContactKind.Mine => 10 + (int)(11 * u), ContactKind.Station => 2 + (int)(3 * u), ContactKind.Trader => 1 + (int)(2 * u), _ => 1 };
             gift |= (long)Math.Min(255, give[i]) << (8 * i);
         }
-        if (gift == 0) return (false, give);
-        c.Gift = gift; c.Meet = 1;
+        float fuel = c.Kind == ContactKind.Station ? (float)Math.Max(0, fuelKg) : 0;
+        if (gift == 0 && fuel <= 0) return (false, give);
+        c.Gift = gift; c.Fuel = fuel; c.Meet = 1;
         Contacts[k] = c;
         SupplyGiven++;
         return (true, give);

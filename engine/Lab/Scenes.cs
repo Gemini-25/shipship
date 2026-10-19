@@ -184,6 +184,7 @@ public static partial class Program
             case "culture": CultureScene(dir); return;
             case "supply": SupplyScene(dir); return;
             case "vibration": VibrationScene(dir); return;
+            case "map": MapScene(dir); return;
             default: Console.WriteLine($"모르는 장면: {name}"); return;
         }
         var trace = Environment.GetEnvironmentVariable("TRACE");
