@@ -281,6 +281,68 @@ public static partial class Program
                 $"무중력: 깸 {zeroWakes}번 · 얼굴 앞 {zero.face:0.0}kPa · \"{zero.why}\" · 두 시간 뒤 통풍구 앞에서 잠 {zeroAtVent} / 공조 바람: 깸 {fan.woke} · {fan.face:0.00}kPa / 1g: 깸 {one.woke}");
         }
 
+        // ── (마) 뼈 · 근육: 무중력 한 달이면 근육 6% · 뼈 1.25%를 잃고 · 하루 45분 운동하면 반쯤 늦추고 · 1g로 돌아오면 근육은 두 주에 돌아오지만 뼈는 더디다 ──
+        {
+            var idle = new Body(); var fit = new Body();
+            for (int d = 0; d < 30; d++)
+                for (int q = 0; q < 96; q++)   // 15분씩
+                {
+                    idle.ActivityW = 105; Life.Decondition(ref idle, 0, 900);
+                    fit.ActivityW = q < 3 ? 487 : 105; Life.Decondition(ref fit, 0, 900);
+                }
+            var back = idle;
+            for (int q = 0; q < 14 * 96; q++) { back.ActivityW = 186; Life.Decondition(ref back, 1, 900); }
+            Check("뼈 · 근육: 무중력 한 달이면 근육 6% · 뼈 1.25%를 잃고 · 하루 45분 운동하면 반쯤 늦추고 · 1g로 돌아와 두 주면 근육은 거의 돌아오지만 뼈는 더디다",
+                idle.MuscleLoss is > 0.055f and < 0.07f && idle.BoneLoss is > 0.011f and < 0.014f && fit.MuscleLoss < idle.MuscleLoss * 0.65f && fit.MuscleLoss > idle.MuscleLoss * 0.3f
+                    && back.MuscleLoss < idle.MuscleLoss * 0.2f && back.BoneLoss > idle.BoneLoss * 0.8f,
+                $"한 달: 근육 {idle.MuscleLoss:P1} · 뼈 {idle.BoneLoss:P2} / 운동한 이 근육 {fit.MuscleLoss:P1} · 뼈 {fit.BoneLoss:P2} / 1g 두 주 뒤 근육 {back.MuscleLoss:P1} · 뼈 {back.BoneLoss:P2}");
+        }
+
+        // ── (마) 우주 멀미: 무중력 처음 며칠은 속이 울렁거린다 (사람마다) · 가끔 토하고 — 토한 것은 방울로 떠다닌다 (원인: 무너진 중력) · 사흘 넘게 지낸 이는 멀쩡하다 ──
+        {
+            var s = Worlds.Full(lay, 8); var net = s.Get<Network>(); var m = s.Get<Mind>(); var life = s.Get<Life>(); var f = s.Get<Field>();
+            var novices = Enumerable.Range(0, 8).Select(i => m.AddPerson(s, At(12 + i % 6 * 2, i < 6 ? (i % 2 == 0 ? 2 : 4) : 3))).ToArray();
+            int vet = m.AddPerson(s, At(13, 3));
+            foreach (int n in novices) m[n].C.ZeroGH = 5;   // 무중력 다섯 시간째 (멀미가 한창)
+            m[vet].C.ZeroGH = 80;
+            s.Run(2);
+            long f0 = s.Facts.Total;
+            net.SetOn(net.Devices.First(d => d.Type == "GravityGenerator").Id, false);
+            double peakDrops = 0;
+            for (int k = 0; k < Time.Hours(3); k++) { s.Step(); peakDrops = Math.Max(peakDrops, f.Drops.Sum()); }   // 여덟 명 세 시간 — 토함 기대값 3번 남짓
+            var vomits = s.Facts.Since(f0).Where(x => x.Kind == FactKind.Vomit).ToList();
+            string why = vomits.Count > 0 ? s.Causes.Story(vomits[0].Cause) : "";
+            double sick = novices.Average(n => life[m[n].C.Body].Nausea), sickMax = novices.Max(n => life[m[n].C.Body].Nausea);
+            float vetSick = life[m[vet].C.Body].Nausea;
+            if (Debug) Console.WriteLine($"    멀미: 토함 셈 {m.Vomits} · 사람마다 " + string.Join(" ", novices.Select(n => $"{life[m[n].C.Body].Nausea:0.00}/{m[n].C.ZeroGH:0.0}h/의식{life[m[n].C.Body].Conscious}")));
+            Check("우주 멀미: 무중력 처음 며칠은 속이 울렁거리고 (사람마다 다르다) · 가끔 토한다 — 토한 것은 방울로 떠다닌다 (원인: 무너진 중력) · 사흘 넘게 지낸 이는 멀쩡하다",
+                sick > 0.3 && sickMax > 0.6 && vomits.Count >= 1 && why.Contains("멀미") && why.Contains("중력") && peakDrops > 5 && vetSick == 0,
+                $"처음인 이 멀미 평균 {sick:0.00} (가장 심한 이 {sickMax:0.00}) · 토함 {vomits.Count}번 · 떠다닌 방울 {peakDrops:0}몰 · \"{why}\" · 사흘 넘은 이 {vetSick:0.00}");
+        }
+
+        // ── (마) 무중력에 오래 있어 근육 · 뼈가 약해진 이는 중력이 돌아올 때 떠다니기에 익숙해도 넘어지고 · 뼈가 잘 부러지고 · 1g에서 걸음이 느리다 ──
+        {
+            (int falls, int fractures, double pace) Land(bool weak, ulong seed)
+            {
+                var s = Worlds.Full(lay, seed); var net = s.Get<Network>(); var m = s.Get<Mind>(); var life = s.Get<Life>();
+                int gen = net.Devices.First(d => d.Type == "GravityGenerator").Id;
+                var crew = Enumerable.Range(0, 10).Select(i => m.AddPerson(s, At(12 + i % 10, i % 2 == 0 ? 2 : 4))).ToArray();
+                foreach (int p in crew) { m[p].C.ZeroGH = 10; if (weak) { life[m[p].C.Body].MuscleLoss = 0.15f; life[m[p].C.Body].BoneLoss = 0.08f; } }
+                double pace = m.Pace(crew[0]);
+                s.Run(2);
+                net.SetOn(gen, false); s.Run(Time.Minutes(0.5));
+                long f0 = s.Facts.Total;
+                net.SetOn(gen, true); s.Run(Time.Minutes(1.5));
+                var fell = s.Facts.Since(f0).Where(x => x.Kind == FactKind.Fell && crew.Contains(x.Actor)).ToList();
+                return (fell.Count, fell.Count(x => s.Causes.Text(x.Cause).Contains("부러졌다")), pace);
+            }
+            int wf = 0, wb = 0, sf = 0; double wp = 0, sp = 0;
+            for (ulong sd = 1; sd <= 3; sd++) { var w = Land(true, sd); var st = Land(false, sd); wf += w.falls; wb += w.fractures; sf += st.falls; wp = w.pace; sp = st.pace; }
+            Check("근육 · 뼈가 약해진 이: 떠다니기에 익숙해도 중력이 돌아올 때 넘어지고 · 무중력에 약해진 뼈가 부러지기도 한다 · 1g 걸음이 느리다 (튼튼한 이는 넘어지지 않는다)",
+                wf >= 6 && wb >= 1 && sf == 0 && wp < sp * 0.8,
+                $"약한 이 30명: 넘어짐 {wf} · 뼈 부러짐 {wb} / 튼튼한 이 30명 넘어짐 {sf} · 걸음 {wp:0.00} 대 {sp:0.00}m/s");
+        }
+
         // ── 배가 갈라지면: 발생기가 있는 쪽은 1g · 떨어져 나간 조각은 무중력 (사실 · '발생기가 없는 조각') ──
         {
             var dl = Worlds.Ascii(Dumbbell.Replace("#.......#####.......#\n#....e..#", "#..G....#####.......#\n#....e..#"), legend);

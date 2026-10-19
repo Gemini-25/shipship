@@ -9,7 +9,11 @@ public sealed partial class Mind
 {
     public const float FloatG = Field.LowG;
     public const double FloatSlow = 0.4, FloatFast = 1.0, FloatLearnH = 8, LandFall = 0.45;
-    public long Floats, Landings, LandFalls, Braced, StaleWakes;
+    public long Floats, Landings, LandFalls, Braced, StaleWakes, Vomits;
+    /// <summary>우주 멀미 (전정 기관이 무중력에 맞추는 동안): 6시간쯤에 가장 심하고 사흘(72시간)이면 사라진다 · 사람마다 타고난 정도 0.3 ~ 1.</summary>
+    public const double SickPeakH = 6, SickGoneH = 72;
+    private double SickProne(Sim sim, int id) => 0.3 + 0.7 * Rng.Unit(sim.Seed, Rng.Key("우주 멀미"), 0, id);
+    private static double SickCurve(double h) => h < SickPeakH ? h / SickPeakH : Math.Max(0, 1 - (h - SickPeakH) / (SickGoneH - SickPeakH));
 
     /// <summary>떠 가는 빠르기 (m/s) — 떠서 지낸 시간만큼 손잡이를 잘 탄다.</summary>
     private static double FloatPace(in AgentCore c) => FloatSlow + (FloatFast - FloatSlow) * Math.Clamp(c.ZeroGH / FloatLearnH, 0, 1);
@@ -28,6 +32,17 @@ public sealed partial class Mind
             if (g < FloatG)
             {
                 c.ZeroGH += (float)(dt / 3600);
+                // 우주 멀미: 덜 먹고 (⑧ 먹기 문턱) · 가끔 토한다 — 무중력이면 토한 것이 방울로 떠다닌다
+                b.Nausea = (float)(SickProne(sim, a.Id) * SickCurve(c.ZeroGH));
+                if (b.Nausea > 0.4f && b.Conscious != 0 && Rng.Unit(sim.Seed, Rng.Key("토함"), t, a.Id) < 0.25 * b.Nausea * dt / 3600)
+                {
+                    Vomits++;
+                    double mol = Math.Min(15, Math.Max(0, b.Water * 0.01));   // 0.27L
+                    b.Water -= mol;
+                    F.AddDrops(c.Cell, T.sWater, mol);
+                    c.Hunger = Math.Min(1, c.Hunger + 0.15f); c.Stress = Math.Min(1, c.Stress + 0.1f);
+                    sim.Facts.Emit(t, FactKind.Vomit, c.Cell, (float)mol, sim.Causes.Add(CauseKind.Biology, $"{Ko.I(NameOf(a.Id))} 우주 멀미로 토했다", t, c.Cell, _net.GravityCauses(c.Cell).lost, 0, a.Id), a.Id);
+                }
                 if (c.Floated == 0)
                 {
                     c.Floated = 1; Floats++;
@@ -46,11 +61,12 @@ public sealed partial class Mind
                     if (spot >= 0) c.ZeroGBed = spot + 1;
                 }
             }
-            else if (c.Floated != 0 && g >= 0.5f)
+            else if (b.Nausea > 0) b.Nausea = (float)(b.Nausea * Math.Exp(-dt / 1800));   // 땅을 디디면 반 시간에 가라앉는다
+            if (c.Floated != 0 && g >= 0.5f)
             {
                 c.Floated = 0; Landings++;
                 if (c.Up == 0 || c.CarriedBy >= 0 || b.Asleep != 0 && InBed(a)) continue;
-                double p = LandFall * (1 - Math.Clamp(c.ZeroGH / FloatLearnH, 0, 1));
+                double p = Math.Min(0.9, LandFall * (1 - Math.Clamp(c.ZeroGH / FloatLearnH, 0, 1)) + 0.6 * Life.Weakness(b));   // 서툰 이 · 근육이 약해진 이 (오래 떠 지낸 이는 떠다니기엔 익숙해도 다리가 버티지 못한다)
                 if (Seated(a)) p *= 0.3;
                 foreach (var bl in a.Beliefs)   // 주컴퓨터 방송을 듣고 바닥 쪽을 잡았다
                     if (bl.Kind == BeliefKind.GravityBack && bl.Conf >= 0.3f && t - bl.Seen < Time.Minutes(5)) { p *= 0.25; Braced++; break; }

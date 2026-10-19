@@ -176,7 +176,8 @@ public sealed partial class Mind
                 Add(GoalKind.Sleep, c.Bed, bedCell, c.Sleepy * c.Sleepy * 5 + (night ? 1.5f : 0)); // 몸의 시계는 '언제 눕나'만 옮긴다 (얼마나 간절한지는 쌓인 졸림)
             // 욕구는 어느 만큼 차야 움직인다 (배가 조금 고프다고 바로 먹으러 가지 않는다)
             int kinMeal = c.Hunger > 0.35f && c.Hunger <= 0.55f ? KinMeal(a) : -1; // ⑨ 가까운 이가 먹으러 가면 조금 배고파도 따라간다
-            if ((c.Hunger > 0.55f || kinMeal >= 0) && FoodLeft(a.Id) >= 0.2) // ⑪ 배급: 오늘 몫을 다 받았으면 배식기가 주지 않는다 (참는다)
+            float sick = _life != null && c.Body >= 0 ? _life[c.Body].Nausea : 0;   // 우주 멀미: 속이 울렁거려 덜 먹는다
+            if ((c.Hunger > 0.55f + 0.3f * sick || kinMeal >= 0 && sick < 0.3f) && FoodLeft(a.Id) >= 0.2) // ⑪ 배급: 오늘 몫을 다 받았으면 배식기가 주지 않는다 (참는다)
             {
                 float eat = c.Hunger * c.Hunger * 5 + (F.Ppm(T.gAroma, here) > 5 ? 0.5f : 0) + (kinMeal >= 0 ? 0.6f : 0);
                 Add(GoalKind.Eat, -1, -1, eat);

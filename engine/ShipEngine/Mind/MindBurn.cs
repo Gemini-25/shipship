@@ -98,8 +98,9 @@ public sealed partial class Mind
         long t = sim.Tick;
         int cell = a.C.Cell;
         double u = Rng.Unit(sim.Seed, Rng.Key("넘어져 다침"), t, a.Id);
-        bool bone = Rng.Unit(sim.Seed, Rng.Key("뼈"), t, a.Id) < 0.03 + 0.2 * Math.Max(0, g - 0.2);
-        int cause = sim.Causes.Add(CauseKind.Person, $"{Ko.I(NameOf(a.Id))} {how} 넘어졌다{(showG ? $" ({g:0.00}g)" : "")}{(bone ? " — 뼈를 다쳤다" : "")}", t, cell, parent, 0, a.Id);
+        float boneLoss = a.IsPerson && a.C.Body >= 0 ? _life![a.C.Body].BoneLoss : 0;   // 무중력에서 약해진 뼈는 잘 부러진다 (4%를 잃으면 두 배)
+        bool bone = Rng.Unit(sim.Seed, Rng.Key("뼈"), t, a.Id) < (0.03 + 0.2 * Math.Max(0, g - 0.2)) * (boneLoss > 0 ? 1 + boneLoss / 0.04 : 1);
+        int cause = sim.Causes.Add(CauseKind.Person, $"{Ko.I(NameOf(a.Id))} {how} 넘어졌다{(showG ? $" ({g:0.00}g)" : "")}{(bone ? boneLoss > 0.02f ? " — 무중력에 약해진 뼈가 부러졌다" : " — 뼈를 다쳤다" : "")}", t, cell, parent, 0, a.Id);
         float blunt = (float)(0.05 + 0.2 * g * u + (bone ? 0.35 : 0));
         if (a.C.Carrying >= 0)
         {

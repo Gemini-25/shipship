@@ -417,6 +417,9 @@ public sealed partial class Field
         _dropsAny = any;
     }
 
+    /// <summary>칸에 액체 방울을 띄운다 (위 층의 요청 — 무중력에서 토한 것 · 쏟은 것).</summary>
+    public void AddDrops(int i, int s, double mol) { if (mol <= 0) return; Drops[s * Cells + i] += mol; _dropsAny = true; }
+
     /// <summary>칸에 떠 있는 액체 (몰 — 저장 종류 하나 · 그림 · 시험).</summary>
     public double Floating(int s, int i) => Drops[s * Cells + i];
 

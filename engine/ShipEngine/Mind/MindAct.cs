@@ -655,6 +655,7 @@ public sealed partial class Mind
         double v = c.Mode == 1 || c.Goal == GoalKind.Evacuate ? P.Speed["run"] : c.Carrying >= 0 ? P.Speed["carry"] : P.Speed["walk"];
         if (g < FloatG) v = Math.Min(v, FloatPace(c));                       // 손잡이를 잡고 밀어 떠 간다 (기어갈 바닥이 없다)
         else if (g < 0.9) v *= 0.6 + 0.4 * g;                                // 옅은 중력: 겅중겅중 — 걸음이 서툴다
+        if (g >= FloatG && _life != null && c.Body >= 0 && _life[c.Body].MuscleLoss > 0) v *= 1 - 0.4 * Life.Weakness(_life[c.Body]);   // 무중력에서 근육을 잃은 이는 중력에서 다리가 무겁다
         if (g >= FloatG && SmokeBad(a, c.Cell)) v = Math.Min(v, P.Speed["crawl"]);
         if (b.Suit != 0) v *= 0.7;
         if (b.CoreK > 312.15) v = Math.Min(v, P.Speed["walk"]); // 더위에 지쳐 뛰지 못한다

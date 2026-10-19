@@ -23,6 +23,8 @@ public struct Body
     public float RadGy, RadRecent;
     public float Pain;
     public float FaceCO2;      // 무중력에서 얼굴 앞에 고인 날숨 (이산화탄소 kPa — 방 공기 위에 더한다 · 공조 바람 · 움직임이 걷는다)
+    public float BoneLoss, MuscleLoss;   // 무중력에서 잃은 뼈 · 근육 (몫 — 0 그대로 · 뼈 달마다 1.25% · 근육 주마다 1.5%)
+    public float Nausea;       // 우주 멀미 (0 ~ 1 — ⑧이 무중력에서 지낸 시간으로 정한다)
     public float SuitO2;       // 우주복 산소 (몰)
     public float MaskO2;       // 산소 마스크 병의 산소 (몰 — 기압이 남은 곳에서만 쓸모가 있다)
     public byte Mask;          // 산소 마스크를 썼다
@@ -82,6 +84,30 @@ public sealed partial class Life : IEngine
     public const double BodyTemp = 310.15;
     /// <summary>무중력에서 가만히 있는 이의 얼굴 앞에 고이는 날숨 (이산화탄소 kPa · 많아야) · 두통이 나는 들이쉬는 이산화탄소 (kPa — 1.5%).</summary>
     public const double FacePocketKPa = 2.0, HeadacheKPa = 1.5;
+    /// <summary>무중력의 몸 (NASA 장기 체류 자료): 근육은 주마다 1.5% · 뼈(엉덩이 · 다리)는 달마다 1.25% 준다 · 운동(달리기틀 · 맨몸 — 힘든 일 대사) 한 시간은 그 15배를 되찾는다 (하루 45분이면 반쯤 늦춘다).</summary>
+    public const double MuscleLossPerWeek = 0.015, BoneLossPerMonth = 0.0125, ExerciseGain = 15;
+
+    /// <summary>
+    /// 무중력의 몸 (바퀴 3 인공 중력 (마)): 0.3g 아래에서 근육 · 뼈를 잃고 운동하는 동안 되찾는다 · 중력이 있으면 천천히 돌아온다 (근육 두 배 빠르기 · 뼈는 잃은 것보다 훨씬 더디게).
+    /// </summary>
+    public static void Decondition(ref Body b, float g, double dt)
+    {
+        double h = dt / 3600, mr = MuscleLossPerWeek / 168, br = BoneLossPerMonth / 720;
+        bool loading = b.ActivityW >= 400;   // 힘든 운동 (운동 걸음 487W)
+        if (g < Field.LowG)
+        {
+            b.MuscleLoss = (float)Math.Clamp(b.MuscleLoss + (loading ? -ExerciseGain : 1) * mr * h, 0, 0.4);
+            b.BoneLoss = (float)Math.Clamp(b.BoneLoss + (loading ? -ExerciseGain : 1) * br * h, 0, 0.3);
+        }
+        else if (b.MuscleLoss > 0 || b.BoneLoss > 0)
+        {
+            b.MuscleLoss = (float)Math.Max(0, b.MuscleLoss - 2 * mr * Math.Min(1, g) * h * (loading ? ExerciseGain : 1));
+            b.BoneLoss = (float)Math.Max(0, b.BoneLoss - 0.3 * br * Math.Min(1, g) * h * (loading ? ExerciseGain : 1));
+        }
+    }
+
+    /// <summary>근육이 약해진 정도 (0 ~ 1 — 근육 20%를 잃으면 1): 중력에서 걸음 · 내려앉음이 서툴다.</summary>
+    public static double Weakness(in Body b) => Math.Clamp(b.MuscleLoss / 0.2, 0, 1);
 
     private readonly Field F;
     private readonly Layout L;
@@ -497,6 +523,7 @@ public sealed partial class Life : IEngine
         // ── 의식 · 죽음 ──
         double pain = Math.Min(1, b.Pain + b.Burn * 0.6 + b.Blunt * 0.5 + b.Barotrauma * 0.4);
         b.Pain = (float)Math.Max(0, b.Pain - dt / 1800);
+        if (b.Cell >= 0 && b.Cell < L.N) Decondition(ref b, F.Grav[b.Cell], dt);   // 무중력의 뼈 · 근육
         bool down = b.Hypoxia > 0.5 || b.COHb > 0.5 || b.CN > 1 || pCO2 > 7 || b.CoreK < 305 || b.CoreK > 313 || b.BloodL < 3.5 || pain > 0.95 || b.RadRecent > 6 || b.Infect > 1;
         if (down && b.Conscious != 0)
         {
