@@ -212,3 +212,67 @@ public sealed partial class Painter
             }
     }
 }
+
+public sealed partial class Painter
+{
+    public const double HazeK = 340;   // 이보다 뜨거운 기체 칸은 아지랑이 (공기가 일렁여 뒤가 흔들려 보인다)
+
+    /// <summary>아지랑이 (결정 11): ③ 칸의 기체 온도가 340K를 넘으면 그 칸의 도트 줄을 장마다 좌우로 1~2도트 흔든다 (뜨거울수록 크게).</summary>
+    private void HeatHaze(Img img, Field f, int x0, int y0, int w, int h, int frame)
+    {
+        var row = new byte[T * 4 + 8];
+        for (int y = y0; y < y0 + h; y++)
+            for (int x = x0; x < x0 + w; x++)
+            {
+                if (!L.In(x, y)) continue;
+                int c = L.Index(x, y);
+                if (!Mine(c) || L.Kind[c] is not (CellKind.Floor or CellKind.Door) || f.Pressure(c) < 5) continue;
+                double tk = f.Temp(c);
+                if (tk < HazeK) continue;
+                int amp = tk > 450 ? 2 : 1;
+                int px = (x - x0) * T, py = (y - y0) * T;
+                for (int yy = 0; yy < T; yy++)
+                {
+                    int sh = (int)Math.Round(amp * Math.Sin((py + yy) * 0.55 + frame * 1.3 + c));
+                    if (sh == 0) continue;
+                    int at = ((py + yy) * img.W + px) * 4;
+                    if (at < 0 || at + T * 4 > img.Px.Length) continue;
+                    Buffer.BlockCopy(img.Px, at, row, 0, T * 4);
+                    for (int xx = 0; xx < T; xx++)
+                    {
+                        int sx = Math.Clamp(xx - sh, 0, T - 1);
+                        Buffer.BlockCopy(row, sx * 4, img.Px, at + xx * 4, 4);
+                    }
+                }
+            }
+    }
+
+    /// <summary>연기 속 빛 (결정 11 · 빛 번짐 · 빛줄기): 그을음이 빛을 흩뜨린다 — 연기가 짙고 그 칸의 빛(빛 지도)이 셀수록 연기가 그 빛깔로 밝아진다 (불 곁은 주황 · 비상등 곁은 붉게). 곱한 뒤에 더한다.</summary>
+    private void SmokeScatter(Img img, Field f, int x0, int y0, int w, int h, int frame)
+    {
+        if (_lr.Length == 0) return;
+        for (int y = y0; y < y0 + h; y++)
+            for (int x = x0; x < x0 + w; x++)
+            {
+                if (!L.In(x, y)) continue;
+                int c = L.Index(x, y);
+                if (!Mine(c) || L.Kind[c] is not (CellKind.Floor or CellKind.Door)) continue;
+                double soot = f.Ppm(f.T.gSoot, c);
+                if (soot < 60) continue;
+                int mi = (y - _my0) * _mw + (x - _mx0);
+                if ((uint)mi >= (uint)_lr.Length) continue;
+                float lr = _lr[mi], lg = _lg[mi], lb = _lb[mi], lv = Math.Max(lr, Math.Max(lg, lb));
+                if (lv < 0.25f) continue;
+                float k = (float)Math.Min(0.2, soot / 4000) * Math.Min(1.3f, lv);
+                var col = new Rgba((byte)Math.Min(255, 255 * lr / lv), (byte)Math.Min(255, 255 * lg / lv), (byte)Math.Min(255, 255 * lb / lv));
+                int px = (x - x0) * T, py = (y - y0) * T, drift = frame / 2;
+                // 4×4 덩이마다 조금씩 (연기 결 따라) · 천천히 흐른다
+                for (int by = 0; by < T; by += 4)
+                    for (int bx = 0; bx < T; bx += 4)
+                    {
+                        float kk = k * (0.6f + 0.8f * DotHash.F(c * 17 + (bx + drift * 4) % T, by, 11));
+                        for (int yy = 0; yy < 4; yy++) for (int xx = 0; xx < 4; xx++) img.Add(px + bx + xx, py + by + yy, col, kk);
+                    }
+            }
+    }
+}

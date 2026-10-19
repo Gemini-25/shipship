@@ -56,6 +56,27 @@ public static partial class Program
                 $"{bl.Size:0}dB · {Painter.BlastKg(bl.Size):0.00}kg · {reach:0.0}칸 · 띠 도트 {ring} · 흔들림 조용 {calmShake} · 폭발 {blastShake} · 뒤 {afterShake}");
         }
 
+        // ── 아지랑이: 기체가 340K를 넘는 칸만 장마다 도트 줄이 흔들린다 · 식은 칸은 두 장이 같다 ──
+        {
+            var s = ShipWorld.Create("Didim", 3);
+            s.Run(3);
+            var L = s.Layout; var f = s.Get<Field>(); var p = new Painter(L) { Lighting = false };
+            var nb = new int[4];
+            bool Open(int c) { if (L.FurnitureAt[c] >= 0 || L.Kind[c] != CellKind.Floor) return false; L.Neighbors(c, nb); return nb.All(j => j >= 0 && L.FurnitureAt[j] < 0); }
+            var room = L.Rooms.Where(r => r.Cells.Count(Open) >= 2).OrderByDescending(r => r.Cells.Length).First();
+            var open = room.Cells.Where(Open).ToList();
+            int hot = open[0], cool = open[^1];
+            for (int i = 0; i < 40 && f.Temp(hot) < 420; i++) f.AddHeat(hot, 2e5);
+            int x0 = Math.Max(0, Math.Min(L.X(hot), L.X(cool)) - 1), y0 = Math.Max(0, Math.Min(L.Y(hot), L.Y(cool)) - 1);
+            int w = Math.Abs(L.X(hot) - L.X(cool)) + 3, h = Math.Abs(L.Y(hot) - L.Y(cool)) + 3;
+            Img Shot(int fr) { var im = p.Frame(s, x0, y0, w, h, fr); var copy = new Img(im.W, im.H); Array.Copy(im.Px, copy.Px, im.Px.Length); return copy; }
+            var a0 = Shot(0); var a1 = Shot(1);
+            int Diff(int c) { int n = 0; for (int yy = 0; yy < Painter.T; yy++) for (int xx = 0; xx < Painter.T; xx++) { int px = (L.X(c) - x0) * Painter.T + xx, py = (L.Y(c) - y0) * Painter.T + yy; if (a0.Get(px, py) != a1.Get(px, py)) n++; } return n; }
+            int dHot = Diff(hot), dCool = Diff(cool);
+            Check("아지랑이: 340K 넘는 칸은 장마다 도트가 흔들리고 · 식은 칸은 두 장이 같다",
+                f.Temp(hot) > Painter.HazeK && dHot > 20 && dCool == 0, $"뜨거운 칸 {f.Temp(hot):0}K · 바뀐 도트 {dHot} · 식은 칸 {f.Temp(cool):0}K · {dCool}");
+        }
+
         // ── 카메라 연출 (결정 13): 먼 곳의 폭발 → 카메라가 미끄러지지 않고 끊어 넘긴다 (컷) · 결정적 순간엔 가까이 ──
         {
             var s = ShipWorld.Create("Didim", 3);

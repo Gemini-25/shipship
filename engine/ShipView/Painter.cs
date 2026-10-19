@@ -536,6 +536,7 @@ public sealed partial class Painter
             BuildLight(s, f, net, light, chem, st, x0, y0, w, h, frame);
             WallLight();
             ApplyLight(img, w, h);
+            SmokeScatter(img, f, x0, y0, w, h, frame);   // 연기가 빛을 받아 빛난다
             foreach (var e in _emissive) e(img);
             if (chem != null)
                 for (int y = y0; y < y0 + h + 1; y++)
@@ -546,6 +547,7 @@ public sealed partial class Painter
                         if (Mine(c) && chem.Burning[c] != 0) FireAt(img, chem, c, Px(x), Py(y), frame);
                     }
         }
+        HeatHaze(img, f, x0, y0, w, h, frame);          // 아지랑이 (불꽃까지 함께 일렁인다)
         FxEmissive(img, s, net, x0, y0, w, h, frame);   // 합선 불꽃 · 충격파 · 방사선 잡음
         if (Show != Overlay.None) DrawOverlay(img, f, net, x0, y0, w, h);
         return img;
