@@ -1,7 +1,7 @@
 namespace ShipEngine;
 
 /// <summary>⑦ (라) 수술의 종류.</summary>
-public enum Op : byte { None, Bleed, Appendix, Explore }
+public enum Op : byte { None, Bleed, Appendix, Explore, ArtHeart, ArtLung, TxHeart, TxLiver, TxLung }
 
 /// <summary>
 /// ⑦ 숨은 병 둘 · 수술 (깊이 바퀴 3 (라-1) — docs/ENGINE.md '장기 · 약 · 수술').
@@ -12,7 +12,44 @@ public enum Op : byte { None, Bleed, Appendix, Explore }
 public sealed partial class Life
 {
     public const float BleedInSelfStop = 0.05f;
+    public const double RegenDays = 4, RegenHours = 72, DonorHours = 6;
     public long InsideBleeds, Appendicitis, Ruptures, Operations, OpComplications;
+
+    public static string OpName(Op op) => op switch
+    {
+        Op.Bleed => "속 출혈 수술", Op.Appendix => "맹장 수술", Op.ArtHeart => "인공 심장", Op.ArtLung => "인공 폐",
+        Op.TxHeart => "심장 이식", Op.TxLiver => "간 이식", Op.TxLung => "폐 이식", _ => "수술",
+    };
+
+    /// <summary>남은 손상 (낫지 않는 바닥 가운데 가장 큰 것): 뇌 40% · 심장 50% · 폐 흉터.</summary>
+    public static double LastingDamage(in Body b) => Math.Max(BrainKeep * b.BrainPeak, Math.Max(HeartKeep * b.HeartPeak, b.LungScar));
+
+    /// <summary>재생 젤이 드는 몸 (남은 손상 0.15 넘게 · 젤이 없다).</summary>
+    public static bool NeedsRegen(in Body b) => b.Alive != 0 && b.Regen <= 0 && LastingDamage(b) > 0.15;
+
+    /// <summary>재생 젤 (순수 — 시험이 바로 돌린다): 치료 침대에 누운 동안만 — 낫지 않던 바닥(가장 컸던 것 · 흉터)이 나흘에 e배로 준다 · 젤은 누운 시간만큼 닳는다.</summary>
+    public static void RegenKinetics(ref Body b, double dt, bool onBed)
+    {
+        if (b.Regen <= 0 || !onBed || b.Alive == 0) return;
+        double k = Math.Exp(-dt / (RegenDays * 86400));
+        b.BrainPeak = (float)(b.BrainPeak * k); b.HeartPeak = (float)(b.HeartPeak * k); b.LungScar = (float)(b.LungScar * k);
+        b.Regen = (float)Math.Max(0, b.Regen - dt / 3600);
+    }
+
+    /// <summary>내줄 수 있는 장기 (여섯 시간 안에 숨진 이 · 상한 정도 0.2 아래 · 아직 내주지 않았다) — 없으면 −1.</summary>
+    public int FindDonor(long now, Op op)
+    {
+        byte flag = op switch { Op.TxHeart => 32, Op.TxLiver => 64, Op.TxLung => 128, _ => 0 };
+        if (flag == 0) return -1;
+        for (int i = 0; i < Bodies.Count; i++)
+        {
+            var d = Bodies[i];
+            if (d.Alive != 0 || (d.Implant & flag) != 0 || now - d.DiedAt > Time.Hours(DonorHours) || now < d.DiedAt) continue;
+            float organ = op switch { Op.TxHeart => d.Heart, Op.TxLiver => d.Liver, _ => Math.Max(d.LungDamage, d.LungScar) };
+            if (organ < 0.2f) return i;
+        }
+        return -1;
+    }
 
     /// <summary>맹장염의 배 아픔.</summary>
     public static double AppendixPain(in Body b) => b.Appendix > 0 ? 0.3 + 0.4 * b.Appendix : 0;
@@ -63,16 +100,27 @@ public sealed partial class Life
     /// 마음의 요청: 수술 — 잘되면 속 출혈이 멎고 · 맹장을 떼어 낸다 / 못 되면 합병증 (bleed 참이면 출혈 · 아니면 감염).
     /// 꿰매어 덮은 수술 상처 (타박 0.3 · 덮개 10일) · 수술 뒤 곪을 몫 (소독기가 없으면 세 배).
     /// </summary>
-    public void Operate(Sim sim, int id, Op op, bool ok, bool bleed, bool sterile, int cause)
+    public void Operate(Sim sim, int id, Op op, bool ok, bool bleed, bool sterile, int cause, int donor = -1)
     {
         if (id < 0 || id >= Bodies.Count) return;
         ref var b = ref this[id];
         if (b.Alive == 0) return;
         Operations++;
+        if (donor >= 0 && donor < Bodies.Count && op is Op.TxHeart or Op.TxLiver or Op.TxLung)
+            this[donor].Implant |= (byte)(op == Op.TxHeart ? 32 : op == Op.TxLiver ? 64 : 128);   // 잘되든 못 되든 그 장기는 쓰였다
         if (ok)
         {
-            if (op == Op.Bleed) b.BleedIn = 0;
-            if (op == Op.Appendix) b.Appendix = -1;
+            var d = donor >= 0 && donor < Bodies.Count ? Bodies[donor] : default;
+            switch (op)
+            {
+                case Op.Bleed: b.BleedIn = 0; break;
+                case Op.Appendix: b.Appendix = -1; break;
+                case Op.ArtHeart: b.Heart = 0; b.HeartPeak = 0; b.Implant |= 1; break;
+                case Op.ArtLung: b.LungDamage = 0; b.LungScar = 0; b.Implant |= 2; break;
+                case Op.TxHeart: b.Heart = d.Heart; b.HeartPeak = d.Heart; b.Implant |= 4; break;
+                case Op.TxLiver: b.Liver = d.Liver; b.LiverPeak = d.Liver; b.Implant |= 8; break;
+                case Op.TxLung: b.LungDamage = d.LungDamage; b.LungScar = d.LungScar; b.Implant |= 16; break;
+            }
         }
         else
         {

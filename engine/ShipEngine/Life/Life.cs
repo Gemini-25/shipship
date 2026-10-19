@@ -62,6 +62,9 @@ public struct Body
     public float BleedIn;                        // 속 출혈 (L/시 — 겉으로 안 보인다 · 0.05 아래면 저절로 멎는다)
     public float Appendix;                       // 맹장염 (0 없음 · 1이면 터진다 · −1 떼어 냈다)
     public int AppendixCause;                    // 맹장염의 원인 마디
+    // ⑦ (라-2) 재생 · 인공 장기 · 이식
+    public float Regen;                          // 재생 젤이 남은 시간 (치료 침대에 누운 시간만 줄어든다)
+    public byte Implant;                         // 1 인공 심장 · 2 인공 폐 · 4 이식한 심장 · 8 이식한 간 · 16 이식한 폐 / 숨진 이: 32 심장 · 64 간 · 128 폐를 내주었다
 }
 
 /// <summary>재배대의 작물.</summary>
@@ -567,6 +570,7 @@ public sealed partial class Life : IEngine
         if (b.Cell >= 0 && b.Cell < L.N) Decondition(ref b, F.Grav[b.Cell], dt);   // 무중력의 뼈 · 근육
         DrugStep(sim, id, ref b, dt);              // ⑦ 약
         ArrestTriggers(sim, id, ref b, dt, env);   // ⑦ 심정지
+        RegenKinetics(ref b, dt, OnTherapy(sim, c));   // ⑦ (라-2) 재생 젤 — 치료 침대에 누운 동안
         HealOrgans(ref b, dt);
         bool down = b.Arrest != 0 || b.Brain >= 0.5f || b.Hypoxia > 0.5 || b.COHb > 0.5 || b.CN > 1 || pCO2 > 7 || b.CoreK < 305 || b.CoreK > 313 || b.BloodL < 3.5 || pain > 0.95 || b.RadRecent > 6 || b.Infect > 1;
         if (down && b.Conscious != 0)

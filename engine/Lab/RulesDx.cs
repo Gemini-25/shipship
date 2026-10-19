@@ -163,5 +163,60 @@ public static partial class Program
                 w.done && w.byRobot && w.anes && w.bleedIn == 0 && w.alive && w.blood > 3 && w.log.Contains("수술") && n.done && !n.anes && n.why.Contains("마취 없이") && n.painMax >= 0.99f,
                 $"마취: 수술 {w.done} (로봇 {w.byRobot}) · 마취 {w.anes} · 속 출혈 {w.bleedIn:0.000} · 피 {w.blood:0.00}L · '{w.why}' · '{w.log}' / 진통제 없음: 수술 {n.done} · 마취 {n.anes} · 아픔 {n.painMax:0.00} · '{n.why}'");
         }
+
+        // ── (라-2) 재생 젤: 뇌 0.5 · 심장 0.6 · 폐 흉터 0.3이 남은 몸 — 치료 침대에서 젤 72시간이면 낫지 않던 바닥이 반 아래로 (한 달 뒤 뇌 0.1 · 심장 0.15 · 폐 0.15 남짓) ·
+        //    젤 없이는 뇌 0.2 · 심장 0.3 · 폐 0.3 그대로 · 젤을 발라도 침대에 눕지 않으면 듣지 않는다 ──
+        {
+            Body Run(bool gel, bool bed)
+            {
+                var b = new Body { Alive = 1, Brain = 0.2f, BrainPeak = 0.5f, Heart = 0.3f, HeartPeak = 0.6f, LungScar = 0.3f, LungDamage = 0.3f, Regen = gel ? 72 : 0 };
+                for (int h = 0; h < 33 * 24; h++) { Life.RegenKinetics(ref b, 3600, bed && h < 24 * 6); Life.HealOrgans(ref b, 3600); Life.LungHeal(ref b, 3600); }
+                return b;
+            }
+            var g = Run(true, true); var n = Run(false, true); var off = Run(true, false);
+            Check("수술 (라-2) — 재생 젤: 뇌 0.5 · 심장 0.6 · 폐 흉터 0.3이 남은 몸 — 치료 침대에서 젤 72시간이면 한 달 뒤 뇌 · 심장 · 폐가 바닥 반 아래로 · 젤 없이는 그대로 · 침대에 눕지 않으면 듣지 않는다",
+                g.Brain < 0.12f && g.Heart < 0.17f && g.LungDamage < 0.16f && g.Regen <= 0 && Math.Abs(n.Brain - 0.2f) < 0.01f && Math.Abs(n.Heart - 0.3f) < 0.01f && Math.Abs(n.LungDamage - 0.3f) < 0.01f
+                && off.Regen == 72 && Math.Abs(off.Heart - 0.3f) < 0.01f,
+                $"젤: 뇌 {g.Brain:0.000} · 심장 {g.Heart:0.000} · 폐 {g.LungDamage:0.000} (젤 남음 {g.Regen:0}) / 없이: {n.Brain:0.00} · {n.Heart:0.00} · {n.LungDamage:0.00} / 침대 밖: 심장 {off.Heart:0.00} · 젤 {off.Regen:0}");
+        }
+
+        // ── (라-2) 인공 심장 · 간 이식: 심장 바닥 0.4인 이 — 주컴퓨터가 '인공 심장' 수술을 잡고 로봇이 치료 침대에서 넣는다 /
+        //    간이 0.7 상한 이 — 한 시간 전에 숨진 동료의 성한 간을 이식한다 (원인 사슬: 그 죽음) · 일곱 시간 전에 숨졌으면 이식하지 않는다 ──
+        {
+            (string why, float organ, byte implant, byte donated, string chain, bool planned) Run(bool liver, double diedHoursAgo)
+            {
+                var lay = SurgShip();
+                int At(int x, int y) => Worlds.At(lay, x, y);
+                var s = Worlds.Full(lay, 25);
+                var m = s.Get<Mind>(); var life = s.Get<Life>(); var sm = s.Get<ShipMind>();
+                sm.Policy.AskPeople = 0;
+                int p = m.AddPerson(s, At(14, 2));
+                int robot = m.AddRobot(s, At(22, 4), AgentKind.Robot, At(22, 4));
+                int donor = liver ? m.AddPerson(s, At(20, 2)) : -1;
+                s.Run(Time.Hours(diedHoursAgo) + 5);
+                int vb = m[p].C.Body;
+                if (liver)
+                {
+                    ref var d = ref life[m[donor].C.Body];
+                    d.Alive = 0; d.Conscious = 0; d.DiedAt = s.Tick - Time.Hours(diedHoursAgo);
+                    d.DeathCause = s.Causes.Add(CauseKind.Biology, "죽었다 — 감압 사고", d.DiedAt, d.Cell);
+                    life[vb].Liver = 0.7f; life[vb].LiverPeak = 0.7f;
+                }
+                else { life[vb].Heart = 0.4f; life[vb].HeartPeak = 0.8f; }
+                bool planned = m.PlannedOp(s.Tick, m[p], life).op != Op.None;
+                for (long k = 0; k < Time.Hours(3); k++) { s.Step(); foreach (var ag in m.Agents) if (ag.IsPerson && life[ag.C.Body].Alive != 0) { ag.C.Hunger = 0; ag.C.Thirst = 0; } }
+                var op = s.Facts.Since(0).FirstOrDefault(f => f.Kind == FactKind.Surgery);
+                string why = op.Kind == FactKind.Surgery ? s.Causes.Text(op.Cause) : "";
+                string chain = op.Kind == FactKind.Surgery ? s.Causes.Text(s.Causes[op.Cause].Parent) : "";
+                if (Debug) Console.WriteLine($"    {(liver ? $"간 이식 ({diedHoursAgo}시간 전)" : "인공 심장")}: 잡음 {planned} · '{why}' ← '{chain}' · 심장 {life[vb].Heart:0.00} · 간 {life[vb].Liver:0.00} · 붙인 것 {life[vb].Implant} · {string.Join(" / ", sm.Log.Select(l => l.text).Where(t => t.Contains("수술")).Take(2))}");
+                return (why, liver ? life[vb].Liver : life[vb].Heart, life[vb].Implant, liver ? life[m[donor].C.Body].Implant : (byte)0, chain, planned);
+            }
+            var h = Run(false, 0); var l = Run(true, 1); var late = Run(true, 7);
+            bool hOk = h.why.Contains("인공 심장") && (h.why.Contains("잘됐다") ? h.organ == 0 && (h.implant & 1) != 0 : h.organ > 0.3f);
+            bool lOk = l.why.Contains("간을") && l.why.Contains("이식") && l.chain.Contains("감압") && (l.donated & 64) != 0 && (l.why.Contains("잘됐다") ? l.organ < 0.05f && (l.implant & 8) != 0 : true);
+            Check("수술 (라-2) — 인공 심장 · 간 이식: 심장 바닥 0.4 — 주컴퓨터가 '인공 심장'을 잡고 로봇이 치료 침대에서 넣는다 / 간 0.7 — 한 시간 전에 숨진 동료의 간을 이식 (원인 사슬: 그 죽음) · 일곱 시간 전이면 잡지 않는다",
+                hOk && lOk && !late.planned && late.why == "",
+                $"인공 심장: '{h.why}' · 심장 {h.organ:0.00} · 붙인 것 {h.implant} / 간 이식: '{l.why}' ← '{l.chain}' · 간 {l.organ:0.00} · 내준 것 {l.donated} / 일곱 시간 전: 잡음 {late.planned}");
+        }
     }
 }

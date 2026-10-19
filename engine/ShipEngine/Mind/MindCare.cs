@@ -65,7 +65,7 @@ public sealed partial class Mind
     public long PainDoses, DoubleDoses, MissedHours, FeverDoses, OverDay, AbxCourses, AbxShort, Antidotes, EpiDoses;
 
     /// <summary>그 몸에 줄 약이 약품고에 있나 (주컴퓨터가 '다친 사람'을 알릴지 — 없는 약 때문에 되풀이해 부르지 않는다).</summary>
-    public bool HasDrugFor(in Body b) => Life.NeedsAntidote(b) && TotalOf(iAntidote) > 0 || Life.NeedsPainkiller(b) && TotalOf(iOpioid) > 0;
+    public bool HasDrugFor(in Body b) => Life.NeedsAntidote(b) && TotalOf(iAntidote) > 0 || Life.NeedsPainkiller(b) && TotalOf(iOpioid) > 0 || Life.NeedsRegen(b) && TotalOf(iRegen) > 0;
 
     /// <summary>
     /// 돌보며 약을 준다 (약품고 — 가장 가까운 의료 침대에서). 솜씨 0.5 넘는 이 · 로봇은 셈을 하고 · 서툰 이는 실수한다:
@@ -115,6 +115,12 @@ public sealed partial class Mind
                     sim.Tick, c.Cell, parent, 0, a.Id);
                 _life.Give(sim, vb, Drug.Abx, 24.0 * pills, k); AbxCourses++;
             }
+        }
+        // ⑦ (라-2) 재생 젤 — 남은 장기 손상이 크면 바른다 (치료 침대에 누운 동안 듣는다)
+        if (Life.NeedsRegen(_life.Bodies[vb]) && TakeOne(c.Cell, iRegen, sim))
+        {
+            int k = sim.Causes.Add(kind, $"{me} {who}에게 재생 젤을 발랐다 — 치료 침대에 누운 동안 상한 장기가 되살아난다", sim.Tick, c.Cell, parent, 0, a.Id);
+            _life.Give(sim, vb, Drug.Regen, Life.RegenHours, k);
         }
         // 해독제 — 시안화수소 중독으로 보았으면
         if (seen == Ail.Cyanide && _life.Bodies[vb].Antidote <= 0 && TakeOne(c.Cell, iAntidote, sim))

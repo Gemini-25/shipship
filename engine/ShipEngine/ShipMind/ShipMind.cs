@@ -511,10 +511,11 @@ public sealed partial class ShipMind : IEngine
                         b.InfectCause != 0 && b.Infect > 0 ? b.InfectCause : a.C.DxCause != 0 ? a.C.DxCause : b.HurtCause, exam ? $"{_mind.NameOf(a.Id)} — 몸이 좋지 않다 ({Life.SymText(Life.Symptoms(b))})" : null);
                     Mark(IncidentKind.Injured, r, a.C.Body);
                 }
-                // ⑦ (라) 진료 기록이 속 출혈 · 맹장염이면 수술을 잡는다 (로봇이 먼저 · 없으면 사람에게 부탁)
-                if (a.C.DxAil is Ail.InternalBleed or Ail.Appendicitis && a.C.DxAt > 0)
+                // ⑦ (라) 수술을 잡는다 — 진료 기록이 속 출혈 · 맹장염 · 크게 상한 장기에 인공 장기 · 이식 (로봇이 먼저 · 없으면 사람에게 부탁)
+                if (_mind.PlannedOp(sim.Tick, a, _life) is var (op, donor) && op != Op.None)
                 {
-                    Raise(sim, IncidentKind.Surgery, r, b.Cell, 1, a.C.Body, a.C.DxCause, $"{_mind.NameOf(a.Id)} — {Life.AilName(a.C.DxAil)} · 치료 침대로");
+                    int why = donor >= 0 ? _life.Bodies[donor].DeathCause : a.C.DxCause != 0 ? a.C.DxCause : b.HurtCause;
+                    Raise(sim, IncidentKind.Surgery, r, b.Cell, 1, a.C.Body, why, $"{_mind.NameOf(a.Id)} — {(op is Op.Bleed or Op.Appendix ? Life.AilName(a.C.DxAil) : Life.OpName(op))} · 치료 침대로");
                     Mark(IncidentKind.Surgery, r, a.C.Body);
                 }
                 // ⑦ (다) 진료 기록이 일산화탄소 중독이면 그 방을 알린다 (센서가 알림 아래거나 못 읽어도) — 로봇이 살피고 통풍구를 닫는다

@@ -17,6 +17,32 @@ public sealed partial class Mind
         return false;
     }
 
+    /// <summary>
+    /// 그 사람에게 잡을 수술 (주컴퓨터가 읽는다 · 집도의가 마칠 때 다시 본다) — 차례: 속 출혈 · 맹장염 (진료 기록) > 간 이식 (간 0.6 넘게) >
+    /// 인공 심장 (심장 바닥 0.25 넘게 · 진단 장치 곁에 있으면) > 심장 이식 > 인공 폐 (폐 흉터 0.3 넘게) > 폐 이식. 이식은 여섯 시간 안에 숨진 이의 성한 장기.
+    /// </summary>
+    public (Op op, int donor) PlannedOp(long now, Agent a, Life life)
+    {
+        if (!a.IsPerson) return (Op.None, -1);
+        var b = life[a.C.Body];
+        if (b.Alive == 0) return (Op.None, -1);
+        if (a.C.DxAt > 0 && a.C.DxAil == Ail.InternalBleed) return (Op.Bleed, -1);
+        if (a.C.DxAt > 0 && a.C.DxAil == Ail.Appendicitis) return (Op.Appendix, -1);
+        int d;
+        if (b.Liver > 0.6f && (b.Implant & 8) == 0 && (d = life.FindDonor(now, Op.TxLiver)) >= 0) return (Op.TxLiver, d);
+        if (Life.HeartKeep * b.HeartPeak > 0.25f && (b.Implant & (1 | 4)) == 0)
+        {
+            if (TotalOf(iArtHeart) > 0) return (Op.ArtHeart, -1);
+            if ((d = life.FindDonor(now, Op.TxHeart)) >= 0) return (Op.TxHeart, d);
+        }
+        if (b.LungScar > 0.3f && (b.Implant & (2 | 16)) == 0)
+        {
+            if (TotalOf(iArtLung) > 0) return (Op.ArtLung, -1);
+            if ((d = life.FindDonor(now, Op.TxLung)) >= 0) return (Op.TxLung, d);
+        }
+        return (Op.None, -1);
+    }
+
     /// <summary>수술 솜씨: 로봇은 주컴퓨터의 수술 절차 (0.6) · 사람은 의료 솜씨.</summary>
     public static float SurgeonSkill(Agent a) => a.IsPerson ? a.C.SkMedic : 0.6f;
 
@@ -109,20 +135,31 @@ public sealed partial class Mind
         int pa = AgentOfBody(vb);
         string who = pa >= 0 ? NameOf(pa) : "다친 이";
         Ail seen = pa >= 0 ? Agents[pa].C.DxAil : Life.Ailment(body);
-        Op op = seen == Ail.InternalBleed && body.BleedIn > 0 ? Op.Bleed : seen == Ail.Appendicitis && body.Appendix > 0 ? Op.Appendix : Op.Explore;
+        var (op, donor) = pa >= 0 ? PlannedOp(sim.Tick, Agents[pa], _life) : (Op.Explore, -1);
+        if (op == Op.Bleed && body.BleedIn <= 0 || op == Op.Appendix && body.Appendix <= 0 || op == Op.None) op = Op.Explore;   // 잘못 보고 열었다
+        if (op == Op.ArtHeart && !TakeOne(c.Cell, iArtHeart, sim) || op == Op.ArtLung && !TakeOne(c.Cell, iArtLung, sim)) op = Op.Explore;
         float skill = SurgeonSkill(a);
         int room = RoomOf(body.Cell);
         bool scan = room >= 0 && (_roomScan ??= RoomsWith("DiagnosticScanner"))[room];
-        double p = 0.45 + 0.5 * skill + (scan ? 0.1 : 0) - (body.BloodL < 3.5f ? 0.2 : 0);
+        bool tx = op is Op.TxHeart or Op.TxLiver or Op.TxLung;
+        double p = 0.45 + 0.5 * skill + (scan ? 0.1 : 0) - (body.BloodL < 3.5f ? 0.2 : 0) - (tx ? 0.1 : 0);
         double u = Rng.Unit(sim.Seed, Rng.Key("수술"), sim.Tick, vb * 64 + a.Id);
         bool ok = op != Op.Explore && u < p, bleed = Rng.Unit(sim.Seed, Rng.Key("합병증"), sim.Tick, vb) < 0.5;
-        string name = op == Op.Bleed ? "속 출혈" : op == Op.Appendix ? "맹장" : Life.AilName(seen);
         string me = Ko.I(NameOf(a.Id));
+        int da = donor >= 0 ? AgentOfBody(donor) : -1;
+        string dn = da >= 0 ? NameOf(da) : "숨진 이";
+        string what = op switch
+        {
+            Op.Bleed => $"{who}의 속 출혈 수술을 했다", Op.Appendix => $"{who}의 맹장을 떼어 냈다",
+            Op.ArtHeart => $"{who}에게 인공 심장을 넣었다", Op.ArtLung => $"{who}에게 인공 폐를 넣었다",
+            Op.TxHeart => $"숨진 {dn}의 심장을 {who}에게 이식했다", Op.TxLiver => $"숨진 {dn}의 간을 {who}에게 이식했다", Op.TxLung => $"숨진 {dn}의 폐를 {who}에게 이식했다", _ => "",
+        };
         string text = op == Op.Explore ? $"{me} {who}의 배를 열어 보았다 — {Ko.Euro(Life.AilName(seen))} 보았으나 고칠 것이 없었다"
-            : ok ? $"{me} {who}의 {name} 수술을 했다 — 잘됐다"
-            : $"{me} {who}의 {name} 수술을 했다 — {(bleed ? "피를 많이 흘렸다" : "수술 자리가 곪았다")}{(skill < 0.5f ? " (솜씨가 모자랐다)" : "")}";
-        int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, text, sim.Tick, body.Cell, pa >= 0 ? Agents[pa].C.DxCause : body.HurtCause, body.HurtCause, a.Id);
-        _life.Operate(sim, vb, op, ok, bleed, Sterile, cause);
+            : ok ? $"{me} {what} — 잘됐다"
+            : $"{me} {what} — {(bleed ? "피를 많이 흘렸다" : "수술 자리가 곪았다")}{(tx ? " · 이식한 장기를 잃었다" : "")}{(skill < 0.5f ? " (솜씨가 모자랐다)" : "")}";
+        int parent = tx ? _life.Bodies[donor].DeathCause : pa >= 0 && Agents[pa].C.DxCause != 0 ? Agents[pa].C.DxCause : body.HurtCause;   // 이식: 한 사람의 죽음이 다른 이를 살린다
+        int cause = sim.Causes.Add(a.IsPerson ? CauseKind.Person : CauseKind.Robot, text, sim.Tick, body.Cell, parent, pa >= 0 ? Agents[pa].C.DxCause : body.HurtCause, a.Id);
+        _life.Operate(sim, vb, op, ok, bleed, Sterile, cause, donor);
         Surgeries++; if (ok) SurgeryOk++; else if (op != Op.Explore) SurgeryBad++;
         if (_life.Bodies[vb].Abx <= 0 && TakeOne(c.Cell, iAbx, sim)) _life.Give(sim, vb, Drug.Abx, 24, cause);   // 수술 뒤 항생제 하루
         if (pa >= 0)

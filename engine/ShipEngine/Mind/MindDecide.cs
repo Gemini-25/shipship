@@ -173,7 +173,11 @@ public sealed partial class Mind
             int bedCell = c.Bed >= 0 ? c.Bed : here;
             if (Sheltering(a) && RoomOf(bedCell) != ShelterRoom) { bedCell = RoomOf(here) == ShelterRoom ? here : ShelterCell; bedRoom = ShelterRoom; } // 대피 중에는 대피실 바닥에서 잔다
             if ((c.Sleepy > 0.6f || night && c.Sleepy > 0.4f) && !BelievedRoomBad(a, bedRoom)) // 위험하다고 믿는 방에서는 자지 않는다
-                Add(GoalKind.Sleep, c.Bed, bedCell, c.Sleepy * c.Sleepy * 5 + (night ? 1.5f : 0)); // 몸의 시계는 '언제 눕나'만 옮긴다 (얼마나 간절한지는 쌓인 졸림)
+            {
+                int regenBed = _life![c.Body].Regen > 0 ? (IsMedBedCell(here) ? here : NearestFree(a, _medBeds)) : -1;   // ⑦ (라-2) 재생 젤이 든 동안은 치료 침대에서 잔다
+                if (regenBed >= 0) Add(GoalKind.Sleep, regenBed, regenBed, c.Sleepy * c.Sleepy * 5 + (night ? 1.5f : 0) + 0.2f);
+                else Add(GoalKind.Sleep, c.Bed, bedCell, c.Sleepy * c.Sleepy * 5 + (night ? 1.5f : 0)); // 몸의 시계는 '언제 눕나'만 옮긴다 (얼마나 간절한지는 쌓인 졸림)
+            }
             // 욕구는 어느 만큼 차야 움직인다 (배가 조금 고프다고 바로 먹으러 가지 않는다)
             int kinMeal = c.Hunger > 0.35f && c.Hunger <= 0.55f ? KinMeal(a) : -1; // ⑨ 가까운 이가 먹으러 가면 조금 배고파도 따라간다
             float sick = _life != null && c.Body >= 0 ? _life[c.Body].Nausea : 0;   // 우주 멀미: 속이 울렁거려 덜 먹는다
@@ -382,10 +386,10 @@ public sealed partial class Mind
             }
             case GoalKind.Sleep:
             {
-                if (o.Target >= 0 && o.Target < L.N && IsMedBedCell(o.Target))   // ⑦ (다) 진료 기록: 치료 침대에 누워 산소를 마신다
+                if (o.Target >= 0 && o.Target < L.N && IsMedBedCell(o.Target))   // ⑦ (다) 진료 기록: 치료 침대에 누워 산소를 마신다 · (라-2) 재생 젤
                 {
                     plan.Add(Go(o.Target));
-                    plan.Add(Use(UseKind.Sleep, Time.Hours(4)));
+                    plan.Add(Use(UseKind.Sleep, Time.Hours(_life![c.Body].Regen > 0 ? 8 : 4)));
                     return true;
                 }
                 if (Sheltering(a) && (c.Bed < 0 || RoomOf(c.Bed) != ShelterRoom))

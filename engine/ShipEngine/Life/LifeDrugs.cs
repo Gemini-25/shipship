@@ -1,7 +1,7 @@
 namespace ShipEngine;
 
 /// <summary>약 (주는 단위): 진통제 mg · 해열 진통제 mg · 항생제 시간 · 해독제 · 아드레날린 (한 번).</summary>
-public enum Drug : byte { Opioid, Apap, Abx, Antidote, Epi }
+public enum Drug : byte { Opioid, Apap, Abx, Antidote, Epi, Regen }
 
 /// <summary>
 /// ⑦ 약 (깊이 바퀴 3 (나) — docs/ENGINE.md '장기 · 약 · 수술'). 한 칸 모형: 몸에 남은 양이 반감기마다 반으로 (간이 상하면 더디게) · 효과는 양 ÷ (1 + 내성).
@@ -30,6 +30,7 @@ public sealed partial class Life
             case Drug.Abx: if (b.Abx <= 0) b.AbxCourse = 0; b.Abx = (float)Math.Max(b.Abx, amount); break;
             case Drug.Antidote: b.Antidote = (float)AntidoteHours; break;
             case Drug.Epi: b.EpiAt = sim.Tick; break;
+            case Drug.Regen: b.Regen = (float)Math.Max(b.Regen, amount); break;   // ⑦ (라-2) 재생 젤 (시간)
         }
         b.DrugCause = cause; Doses++;
         sim.Facts.Emit(sim.Tick, FactKind.Dosed, b.Cell, (float)amount, cause, actor: id, other: (int)d);

@@ -81,6 +81,13 @@ public sealed partial class Mind
         return age > (fits ? Time.Hours(24) : Time.Hours(4));
     }
 
+    /// <summary>그 몸을 수술하러 맡은 이가 있나.</summary>
+    private bool SurgeonComing(int body)
+    {
+        foreach (var o in Agents) if (o.C.Up != 0 && o.C.AssignedGoal == GoalKind.Surgery && o.C.AssignedTarget == body && o.C.AssignedUntil > _nowTick) return true;
+        return false;
+    }
+
     /// <summary>
     /// 진료 기록대로 (여섯 시간): 일산화탄소 · 시안화수소 · 과용으로 보았으면 치료 침대에 눕는다 (산소 — 깨어 있으면 제 발로 · 다 찼으면 그 방을 나온다) ·
     /// 감기 · 체함 · 잠 · 심장으로 보았으면 제 침대에서 쉰다 (그 방이 독해도 — 틀린 진단의 값).
@@ -88,6 +95,11 @@ public sealed partial class Mind
     private void ChartOptions(Agent a, int here)
     {
         ref var c = ref a.C;
+        if (SurgeonComing(c.Body))   // ⑦ (라) 수술하러 온다 — 치료 침대에 눕는다 (인공 장기 · 이식처럼 진료 기록 없이 잡은 수술도)
+        {
+            int sb = IsMedBedCell(here) ? here : NearestFree(a, _medBeds);
+            if (sb >= 0) { Add(GoalKind.Sleep, sb, sb, 3.0f, c.DxCause); return; }
+        }
         if (c.DxAt <= 0 || _nowTick - c.DxAt > Time.Hours(6)) return;
         if (c.DxAil is Ail.CO or Ail.Cyanide or Ail.Overdose or Ail.InternalBleed or Ail.Appendicitis)   // 수술할 병도 치료 침대에서 기다린다
         {
