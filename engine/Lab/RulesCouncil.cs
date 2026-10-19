@@ -48,7 +48,7 @@ public static partial class Program
             soc.Grudge[acc * N + x] = 0.6f; soc.Grudge[b * N + x] = 0.6f; soc.Grudge[c2 * N + x] = 0.4f;
             soc.Bond[friend * N + x] = 0.8f; soc.Bond[x * N + friend] = 0.8f;
             long f0 = s.Facts.Total;
-            soc.CouncilNow(s);
+            m.CallCouncilNow(s);
             Run(s, m, p, 14);
             int gathered = p.Count(a => m.RoomOf(m[a].C.Cell) == mess);
             Run(s, m, p, 12);
@@ -78,7 +78,7 @@ public static partial class Program
                 foreach (int j in new[] { n1, n2 }) soc.TrustOf[j * N + rep] = trustRep;
                 soc.Rep = rep; soc.RepUntil = s.Tick + Time.Hours(240);
                 long f0 = s.Facts.Total;
-                soc.CouncilNow(s);
+                m.CallCouncilNow(s);
                 Run(s, m, p, 26);
                 var v = s.Facts.Since(f0).FirstOrDefault(f => f.Kind == FactKind.Verdict);
                 return (v.Kind == FactKind.Verdict ? (int)v.Size : -1, soc.TrustIn(n1, rep));
@@ -96,7 +96,7 @@ public static partial class Program
             foreach (int j in p) if (j != w) { soc.TrustOf[j * N + w] = 0.9f; soc.Bond[j * N + w] = 0.3f; }
             soc.Regroup(s);
             long f0 = s.Facts.Total;
-            soc.CouncilNow(s);
+            m.CallCouncilNow(s);
             Run(s, m, p, 26);
             var e = s.Facts.Since(f0).FirstOrDefault(f => f.Kind == FactKind.Elected);
             soc.Regroup(s);
@@ -117,7 +117,7 @@ public static partial class Program
                 m.SetRation(ration, 1000, s.Causes.Add(CauseKind.Computer, "식량이 모자라 주컴퓨터가 배급을 시작했다", s.Tick));
                 soc.HungrySince(s.Tick - Time.Hours(49));
                 long f0 = s.Facts.Total;
-                soc.CouncilNow(s);
+                m.CallCouncilNow(s);
                 Run(s, m, p, 25, hunger: false);
                 var mu = s.Facts.Since(f0).FirstOrDefault(f => f.Kind == FactKind.Mutiny);
                 if (Debug) Console.WriteLine($"    반란 {angry}: 회의 {string.Join(" / ", s.Facts.Since(f0).Where(f => f.Kind == FactKind.Meeting).Select(f => s.Causes.Story(f.Cause)))} · 배급 {m.RationFood} · 사람 {string.Join(",", p.Select(a => $"{m[a].C.Goal}@{m.RoomOf(m[a].C.Cell)}"))}");
@@ -138,7 +138,7 @@ public static partial class Program
             int x = p[0], N = soc.N;
             soc.Grudge[p[1] * N + x] = 0.6f; soc.Grudge[p[2] * N + x] = 0.6f;
             long f0 = s.Facts.Total;
-            soc.CouncilNow(s);
+            m.CallCouncilNow(s);
             Run(s, m, p, 5);
             s.Get<Chemistry>().Ignite(At(3, 1), 3e6, s.Causes.Add(CauseKind.Story, "침실 콘센트에서 불꽃이 튀었다", s.Tick));
             Run(s, m, p, 20);

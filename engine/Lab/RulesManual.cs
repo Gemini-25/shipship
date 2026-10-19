@@ -55,7 +55,7 @@ public static partial class Program
             for (int k = 0; k < (int)Time.Hours(2) && sm.PlanSteps.Count > 0; k++) { s.Step(); Keep(s, m, p); }   // 다시 채우기까지 (계획이 끝나야 '통했다')
             return (dv, pt);
         }
-        void Meet(Sim s, Mind m, Society soc, List<int> p) { s.Run((int)Time.Minutes(35)); soc.CouncilNow(s); for (int k = 0; k < (int)Time.Minutes(45) && soc.Meeting.Kind != CouncilKind.None; k++) { s.Step(); Keep(s, m, p); } }
+        void Meet(Sim s, Mind m, Society soc, List<int> p) { s.Run((int)Time.Minutes(35)); m.CallCouncilNow(s); for (int k = 0; k < (int)Time.Minutes(45) && soc.Meeting.Kind != CouncilKind.None; k++) { s.Step(); Keep(s, m, p); } }
 
         int hole1 = At(3, 0), hole2 = At(37, 0);
 

@@ -2,15 +2,13 @@ namespace ShipEngine;
 
 /// <summary>
 /// ⑨ → ⑧ 회의 · 판결이 마음에 닿는 곳 (깊이 바퀴 3). 사회(⑨)가 정하고 마음은 지킨다:
-/// <para><b>모이기</b>: 회의에 갈 마음이 있는 이(⑨가 고른다)는 식당으로 간다 — 그 방 밖의 일상은 0.3배로 미룬다 · 위기는 그대로 앞선다 · 자는 이는 깨우지 않는다.</para>
+/// <para><b>모이기</b>: 부름을 듣고 갈 마음이 든 이(제 판단 — MindGatherings)는 식당으로 간다 — 그 방 밖의 일상은 0.3배로 미룬다 · 위기는 그대로 앞선다 · 자는 이는 깨우지 않는다.</para>
 /// <para><b>벌 당번</b> (사흘): 쉬기 · 어울리기 · 운동 0.3배 · 일 · 만들기 · 정비 · 청소 · 거두기 · 나르기 1.4배.
 /// <b>근신</b> (하루): 제 침실 밖 공용 방의 일상 0.3배 (먹고 마시기는 그대로).
 /// <b>배급 거부</b> (사흘 — 반란에 찬성한 이): 배식기 몫을 넘어 먹고 · 보관함을 드러내 놓고 연다 (몰래가 아니다 — 본 이를 꺼리지 않는다).</para>
 /// </summary>
 public sealed partial class Mind
 {
-    public int GatherRoom = -1, GatherCell = -1, GatherCause;
-    public long GatherUntil;
     private byte[] _gatherWho = Array.Empty<byte>();
     private long[] _penance = Array.Empty<long>(), _confine = Array.Empty<long>(), _defy = Array.Empty<long>();
     public long Penances, Confinements, Defiances;
@@ -22,14 +20,6 @@ public sealed partial class Mind
         Array.Resize(ref _penance, n); Array.Resize(ref _confine, n); Array.Resize(ref _defy, n); Array.Resize(ref _gatherWho, n);
     }
 
-    /// <summary>⑨가 요청: 그 방으로 모인다 (who[a] = 1인 이만 · room −1이면 푼다).</summary>
-    public void Gather(int room, int cell, long until, int cause, byte[]? who)
-    {
-        CouncilArrays();
-        GatherRoom = room; GatherCell = cell; GatherUntil = until; GatherCause = cause;
-        Array.Clear(_gatherWho);
-        if (room >= 0 && who != null) Array.Copy(who, _gatherWho, Math.Min(who.Length, _gatherWho.Length));
-    }
     /// <summary>⑨가 요청: 벌 당번 · 근신 · 배급 거부 (그때까지).</summary>
     public void Penance(int agent, long until) { CouncilArrays(); if (agent >= 0 && agent < _penance.Length) { _penance[agent] = until; Penances++; } }
     public void Confine(int agent, long until) { CouncilArrays(); if (agent >= 0 && agent < _confine.Length) { _confine[agent] = until; Confinements++; } }
@@ -92,12 +82,12 @@ public sealed partial class Mind
 
     private void SaveCouncil(StateWriter w)
     {
-        w.I32(GatherRoom); w.I32(GatherCell); w.I32(GatherCause); w.I64(GatherUntil); w.Arr(_gatherWho);
+        w.I64(_meetSeen); w.Arr(_gatherWho);
         w.Arr(_penance); w.Arr(_confine); w.Arr(_defy); w.I64(Penances); w.I64(Confinements); w.I64(Defiances);
     }
     private void LoadCouncil(StateReader r)
     {
-        GatherRoom = r.I32(); GatherCell = r.I32(); GatherCause = r.I32(); GatherUntil = r.I64(); _gatherWho = r.Arr<byte>();
+        _meetSeen = r.I64(); _gatherWho = r.Arr<byte>();
         _penance = r.Arr<long>(); _confine = r.Arr<long>(); _defy = r.Arr<long>(); Penances = r.I64(); Confinements = r.I64(); Defiances = r.I64();
     }
 }

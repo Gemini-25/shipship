@@ -51,25 +51,8 @@ public sealed partial class Society
         }
     }
 
-    private bool TryManual(Sim sim)
-    {
-        if (_manualAgenda.Count == 0) return false;
-        var a = _manualAgenda[0];
-        var people = People();
-        int caller = a.proposer >= 0 && a.proposer < N && Alive(a.proposer) ? a.proposer
-            : Rep >= 0 && Alive(Rep) ? Rep : people.OrderByDescending(i => Trust(i)).ThenBy(i => i).First();
-        string name = MethodName(sim, a.key, a.cause);
-        string text = a.add == 1
-            ? $"{Ko.I(_mind!.NameOf(caller))} 회의를 열었다 — 지난 사고에 통한 방법을 매뉴얼에 넣자: {name}"
-            : $"{Ko.I(_mind!.NameOf(caller))} 회의를 열었다 — 매뉴얼의 방법이 두 번이나 틀어졌다 · 빼자: {name}";
-        if (!Open(sim, CouncilKind.Manual, -1, caller, -1, text, a.cause)) return false;
-        _manualAgenda.RemoveAt(0);
-        _agendaNow = a;
-        return true;
-    }
-
     /// <summary>방법의 이름: 그 방법이 통했다는 원인 마디의 말 ('… — 이름') · 매뉴얼에 있으면 그 이름.</summary>
-    private string MethodName(Sim sim, int key, int cause)
+    public string MethodName(Sim sim, int key, int cause)
     {
         var e = Manual.FirstOrDefault(x => x.Key == key);
         if (e != null && e.Name.Length > 0) return e.Name;
@@ -77,24 +60,6 @@ public sealed partial class Society
         int k = t.IndexOf(" — ", StringComparison.Ordinal);
         return k >= 0 ? t[(k + 3)..] : t;
     }
-
-    /// <summary>안건에 대한 생각: 넣자 — 지은 이를 믿는 정도 · 성실 · 그 분야 앎 · 잃은 공기 / 빼자 — 틀어진 몫 · 성실 · 지은 이를 믿는 정도.</summary>
-    private float ManualOpinion(int a)
-    {
-        var g = _agendaNow;
-        ref var c = ref C(a);
-        if (g.add == 1 && a == g.proposer) return 0.8f;
-        float trust = g.proposer < 0 ? Trust(a) : TrustIn(a, g.proposer);
-        if (g.add == 1)
-            return 0.8f * (trust - 0.45f) + 0.3f * (c.Consc - 0.5f) + 0.4f * (c.KnPressure - 0.3f) - Math.Min(0.3f, g.lost / 3000f);
-        var e = Manual.FirstOrDefault(x => x.Key == g.key);
-        float failShare = e == null ? 0 : e.Fails / (float)Math.Max(1, e.Fails + e.Wins);
-        return 0.5f * failShare + 0.3f * (c.Consc - 0.5f) - 0.3f * (trust - 0.5f);
-    }
-
-    private string ManualLine(float op) => _agendaNow.add == 1
-        ? op > 0.15f ? "통했던 방법이다 — 매뉴얼에 넣자" : op > 0 ? "조건을 붙여 매뉴얼에 넣자" : _agendaNow.proposer < 0 ? "주컴퓨터가 지어낸 것을 어떻게 믿나 — 그때그때 정하자" : "한 번 통했다고 매뉴얼에 넣기는 이르다"
-        : op > 0 ? "두 번이나 틀어졌다 — 빼자" : "운이 나빴을 뿐이다 — 그대로 두자";
 
     private void ManualDecide(Sim sim, in Council m)
     {

@@ -457,11 +457,13 @@ public sealed partial class Mind : IEngine
     {
         long t = Prof != null ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
         Bind(sim);
+        ClearOldActs(sim.Tick);   // 지난 틱의 사회적 행동은 사회가 읽었다
         RationDay(sim.Tick);
         Fling(sim, dt); // 감압 바람에 밀리는 물건 (사람 · 로봇이 없어도)
         if (Agents.Count == 0) { HoldDoorsByItems(); return; }
         F.RebuildNow();
         IndexBodies();
+        HearCall();     // 판단 이관 (가): 새 모임의 부름을 듣고 저마다 갈지 정한다
         foreach (var a in Agents) UpdateUp(sim, a);
         Inertia(sim);   // ⑤ 점화 — 갑자기 오른 가속에 선 사람이 넘어진다
         BodyJolt(sim);  // ④ 칸 강체 — 몸이 덜컹이면 선 사람이 넘어진다
@@ -489,6 +491,7 @@ public sealed partial class Mind : IEngine
         }
         BlockDoors();
         Lap("문 붙잡기", t);
+        GatherStep(sim);   // 판단 이관 (가): 부르기 · 말하기 · 미루기 (사회가 같은 틱에 결과를 계산한다)
     }
 
     /// <summary>열어 달라던 문을 지나가지 않게 됐으면 (계획이 바뀌었다 · 쓰러졌다) 요청을 거둔다 — 남이 그 문을 기다리지 않으면.
@@ -699,7 +702,7 @@ public sealed partial class Mind : IEngine
         w.Arr(HobbyCount); SavePlaces(w); SaveRation(w);
         w.I64(Masked); w.I64(GrindHeard); w.I64(EarMaintained); w.I64(MasksWorn); w.List(GrindReports);
         w.F64(_lastG); w.I64(Falls); w.I64(BracedOnBurn);
-        SaveAims(w); SaveLessons(w); SaveShelter(w); SaveCouncil(w); SaveWeary(w); SaveKeepOut(w); SavePonder(w); SaveHeart(w); SaveCustoms(w);
+        SaveAims(w); SaveLessons(w); SaveShelter(w); SaveCouncil(w); SaveActs(w); SaveWeary(w); SaveKeepOut(w); SavePonder(w); SaveHeart(w); SaveCustoms(w);
     }
 
     public void Load(StateReader r)
@@ -721,6 +724,6 @@ public sealed partial class Mind : IEngine
         HobbyCount = r.Arr<long>(); LoadPlaces(r); LoadRation(r);
         Masked = r.I64(); GrindHeard = r.I64(); EarMaintained = r.I64(); MasksWorn = r.I64(); GrindReports.Clear(); GrindReports.AddRange(r.List<GrindReport>());
         _lastG = r.F64(); Falls = r.I64(); BracedOnBurn = r.I64();
-        LoadAims(r); LoadLessons(r); LoadShelter(r); LoadCouncil(r); LoadWeary(r); LoadKeepOut(r); LoadPonder(r); LoadHeart(r); LoadCustoms(r);
+        LoadAims(r); LoadLessons(r); LoadShelter(r); LoadCouncil(r); LoadActs(r); LoadWeary(r); LoadKeepOut(r); LoadPonder(r); LoadHeart(r); LoadCustoms(r);
     }
 }

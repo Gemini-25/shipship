@@ -13,7 +13,7 @@ public enum Nickname : byte { None, Rescuer, FireChief, Patcher, Handy, Forgetfu
 /// <para><b>금기</b>: 살아 있는 이의 반 넘게 꺼리는 방 (장소의 기억 0.4 넘게) → 아무도 그 방에서 쉬지 않는다 · 다섯에 하나 아래로 줄면 풀린다 /
 /// 숨진 이의 침대는 이레 동안 아무도 눕지 않는다.</para>
 /// <para><b>별명</b>: 구조 셋 '구조대장' · 불 끄기 셋 '불끄기 반장' · 구멍 막기 셋 '땜장이' · 고치기 다섯 '손재주꾼' / 켜 둔 조리대 둘 '깜빡이' — 가장 외향인 동료가 부르기 시작한다.</para>
-/// <para><b>추모 · 축하</b>는 회의처럼 식당으로 모인다 (SocietyCouncil — 모이기 · 한 마디씩 · 끝). <b>배의 규칙</b>은 되풀이되는 마찰(밤 말소리 · 켜 둔 조리대)이 회의 안건이 되어 표결로 정한다.</para>
+/// <para><b>추모 · 축하</b>는 회의처럼 식당으로 모인다 (부르고 · 말하는 것은 사람 — MindGatherings · 모임의 차례와 결과는 SocietyCouncil). <b>배의 규칙</b>은 되풀이되는 마찰(밤 말소리 · 켜 둔 조리대)이 회의 안건이 되어 표결로 정한다.</para>
 /// 실제: 남극 월동대 · 잠수함 · 국제우주정거장의 함께 먹는 저녁 · 기념일 · 별명 · 공동 규칙 (Stuster 1996 'Bold Endeavors').
 /// </summary>
 public sealed partial class Society
@@ -322,84 +322,21 @@ public sealed partial class Society
 
     // ───────────────────────── 추모 · 축하 (모임) ─────────────────────────
 
-    /// <summary>
-    /// 숨진 이를 기린다 — 부르는 사람이 정한다: 깨어 있는 이 가운데 그와 가장 가까웠던 이 (정 0.2 넘게 — 없으면 대표 · 가장 외향인 이)가
-    /// 하루는 지나야 한다고 여기고 (여섯 시간) · 제 판단으로 아직 때가 아니면 (수습 중 · 아는 위험 · 겁 · 다들 잔다) 미룬다 —
-    /// 수습 때문에 미룬 것은 한 번 '추모를 미뤘다'로 남긴다. 사흘이 지나면 그만둔다.
-    /// </summary>
-    private bool TryMemorial(Sim sim)
-    {
-        for (int k = 0; k < _mourn.Count; k++)
-        {
-            var (dead, at, cause) = _mourn[k];
-            if (sim.Tick - at > Time.Days(3)) { _mourn.RemoveAt(k); _mournDeferred.Remove(dead); k--; continue; }
-            if (sim.Tick - at < Time.Hours(MournAfterHours) && !_cultureNow) continue;
-            var people = People().Where(Awake).ToList();
-            if (people.Count < 2) continue;
-            int caller = -1; float bb = 0.2f;
-            foreach (int j in people) if (BondOf(j, dead) > bb) { bb = BondOf(j, dead); caller = j; }
-            if (caller < 0) caller = Rep >= 0 && people.Contains(Rep) ? Rep : people.OrderByDescending(j => C(j).Extra).ThenBy(j => j).First();
-            _notYet = default;
-            if (Open(sim, CouncilKind.Memorial, dead, caller, -1, $"{Ko.I(_mind!.NameOf(caller))} 사람들을 식당으로 불렀다 — {Ko.Eul(_mind.NameOf(dead))} 기리자", cause))
-            {
-                _mourn.RemoveAt(k); _mournDeferred.Remove(dead);
-                return true;
-            }
-            if (_notYet.why != null && !_notYet.why.Contains("자고") && _mournDeferred.Add(dead))
-            {
-                MemorialsDeferred++;
-                Culture(sim, CultureEvent.MemorialDeferred, $"{Ko.I(_mind!.NameOf(caller))} {_mind.NameOf(dead)}의 추모를 미뤘다 — {_notYet.why}", C(caller).Cell, cause, caller, dead);
-            }
-        }
-        return false;
-    }
+    // ───────────────────────── 판단 엔진이 읽는 것 (안건이 될 사실) ─────────────────────────
 
-    /// <summary>
-    /// 위기를 넘기고 (여섯 시간 — 모두 무사한지 보고) · 반가운 소식이면 바로 — 가장 외향인 깬 이가 정한다:
-    /// 제 판단으로 아직 때가 아니거나 (수습 · 위험 · 겁 · 다들 잔다) · 깬 이의 반 넘게 아직 일하는 중이면 기다린다. 하루 한 번 · 이틀이 지나면 그만둔다.
-    /// </summary>
-    private bool TryCelebrate(Sim sim)
-    {
-        if (_feastFrom < 0 || _feastWeight < 2) return false;
-        if (sim.Tick - _feastFrom > Time.Hours(48)) { _feastFrom = -1; return false; }
-        if (!_cultureNow && (_feastNews == 0 && sim.Tick - _lastCrisis < Time.Hours(FeastAfterHours) || sim.Tick - _feastLast < Time.Hours(20))) return false;
-        var people = People().Where(Awake).ToList();
-        if (people.Count < 2) return false;
-        if (people.Count(j => C(j).Goal == GoalKind.Work) * 2 > people.Count) return false;   // 아직 다들 일한다 — 일을 마친 저녁 · 쉬는 때에
-        int caller = people.OrderByDescending(j => C(j).Extra).ThenBy(j => j).First();
-        string why = _feastNews != 0 ? "반가운 소식이다 — 한잔하자" : "모두 무사했다 — 한잔하자";
-        int hero = _feastHero;
-        if (!Open(sim, CouncilKind.Celebration, -1, caller, -1, $"{Ko.I(_mind!.NameOf(caller))} 사람들을 불렀다 — {why}", _feastCause, hero)) return false;
-        _feastFrom = -1; _feastLast = sim.Tick;
-        return true;
-    }
-
-    private string MemorialLine(Sim sim, int a, int dead)
-    {
-        string x = _mind!.NameOf(dead);
-        if (DebtOf(a, dead) > 0.2f) return $"{Ko.I(x)} 나를 살렸다 — 갚을 길이 없다";
-        int k = (int)(Rng.Unit(sim.Seed, Rng.Key("추모"), Meeting.Cause, dead) * 5) + _spoke;   // 앞사람과 다른 말 (한 모임에서 차례로 돈다)
-        if (GrudgeOf(a, dead) > GrudgeAt) return "서운한 것도 있었지만 — 이제 다 내려놓는다";
-        if (BondOf(a, dead) > FriendAt)
-            return (k % 5) switch { 0 => $"{Ko.Eun(x)} 늘 먼저 웃던 사람이었다", 1 => "같이 늦게까지 이야기하던 밤이 생각난다", 2 => "아직도 식당에서 그 목소리가 들리는 것 같다",
-                3 => $"{x}에게 못 한 말이 많다", _ => "그 자리가 빈 식탁이 아직 낯설다" };
-        string? nick = NickOf(dead);
-        if (nick != null && k % 2 == 0) return $"우리 {Ko.Eul(nick)} 잊지 않겠다";
-        return (k % 3) switch { 0 => "좋은 동료였다", 1 => $"{x}의 몫까지 해내겠다", _ => "잊지 않겠다" };
-    }
-
-    private string FeastLine(Sim sim, int a, in Council m)
-    {
-        if (a == m.Caller) return Meeting.Arg >= 0 && Meeting.Arg != a && Alive(Meeting.Arg) ? $"{NickOf(Meeting.Arg) ?? _mind!.NameOf(Meeting.Arg)}에게 한잔!" : "살아 있으니 됐다 — 한잔하자";
-        if (a == Meeting.Arg) return "다들 함께해서 넘긴 거다";
-        int k = (int)(Rng.Unit(sim.Seed, Rng.Key("축하"), Meeting.Cause, m.Caller) * 4) + _spoke;   // 앞사람과 다른 말
-        int hero = Meeting.Arg;
-        return (k % 4) switch
-        {
-            0 when hero >= 0 && hero != a && Alive(hero) => $"{NickOf(hero) ?? _mind!.NameOf(hero)} 아니었으면 큰일 날 뻔했다",
-            0 or 1 => "살아 있으니 됐다", 2 => "오늘 밥은 맛있다", _ => "다음엔 덜 무섭기를",
-        };
-    }
+    /// <summary>기릴 숨진 이 (숨진 이 · 때 · 원인) — 사흘이 지나면 지운다.</summary>
+    public IReadOnlyList<(int dead, long at, int cause)> Mourning => _mourn;
+    /// <summary>그 숨진 이의 추모를 미뤘다고 이미 말했나.</summary>
+    public bool MournDeferred(int dead) => _mournDeferred.Contains(dead);
+    /// <summary>넘긴 위기 · 반가운 소식 (때 −1 없음 · 원인 · 무게 · 소식인가 · 앞장선 이).</summary>
+    public (long from, int cause, int weight, bool news, int hero) Feast => (_feastFrom, _feastCause, _feastWeight, _feastNews != 0, _feastHero);
+    public long LastFeast => _feastLast;
+    /// <summary>사흘 안에 말소리에 깬 일 (때 · 깬 이 · 깨운 이 · 원인) · 켜 둔 조리대 (때 · 켜 둔 이 · 원인).</summary>
+    public IReadOnlyList<(long t, int woken, int by, int cause)> WakeLog => _wakeLog;
+    public IReadOnlyList<(long t, int who, int cause)> StoveLog => _stoveLog;
+    /// <summary>그 규칙을 마지막으로 안건에 올린 때.</summary>
+    public long AskedQuiet => _askQuiet;
+    public long AskedStove => _askStove;
 
     /// <summary>모임을 마친다 — 추모: 슬픔이 반으로 · 곁에서 본 죽음의 충격이 덜어지고 · 함께 슬퍼한 이들끼리 가까워진다 / 축하: 기쁨 · 피로가 풀리고 · 가까워진다.</summary>
     private void GatheringDone(Sim sim, in Council m)
@@ -437,44 +374,7 @@ public sealed partial class Society
 
     // ───────────────────────── 배의 규칙 ─────────────────────────
 
-    /// <summary>되풀이되는 마찰이 안건이 된다: 사흘에 말소리에 깬 일 셋 → 조용한 밤 / 사흘에 켜 둔 조리대 둘 → 조리대 규칙 (부결되면 사흘 뒤 다시).</summary>
-    private bool TryRule(Sim sim)
-    {
-        var people = People();
-        if (!QuietRule && _wakeLog.Count >= 3 && sim.Tick - _askQuiet > Time.Days(RuleWindowDays))
-        {
-            int caller = people.OrderByDescending(j => _wakeLog.Count(x => x.woken == j)).ThenBy(j => j).First();
-            if (Open(sim, CouncilKind.Rule, -1, caller, -1, $"{Ko.I(_mind!.NameOf(caller))} 회의를 열었다 — 밤마다 말소리에 잠을 깬다, 규칙을 정하자", _wakeLog[^1].cause, 1)) { _askQuiet = sim.Tick; return true; }
-        }
-        if (!StoveRule && _stoveLog.Count >= 2 && sim.Tick - _askStove > Time.Days(RuleWindowDays))
-        {
-            bool Forgot(int j) => _stoveLog.Exists(x => x.who == j);
-            int caller = Rep >= 0 && Alive(Rep) && !Forgot(Rep) ? Rep : people.OrderBy(j => Forgot(j) ? 1 : 0).ThenByDescending(j => C(j).Consc).ThenBy(j => j).First();   // 켜 둔 적 없는 성실한 이가 꺼낸다
-            if (!Open(sim, CouncilKind.Rule, -1, caller, -1, $"{Ko.I(_mind!.NameOf(caller))} 회의를 열었다 — 조리대를 켜 둔 채 떠나는 일이 잦다, 규칙을 정하자", _stoveLog[^1].cause, 2)) return false;
-            _askStove = sim.Tick;
-            return true;
-        }
-        return false;
-    }
-
     public static string RuleText(int rule) => rule == 1 ? "밤 10시부터 아침 6시까지 자는 이 곁에서는 말하지 않는다" : "조리대를 떠날 땐 끄고 간다";
-
-    /// <summary>규칙에 대한 의견: 그 일을 겪은 만큼 + 성실 − 말하기 좋아하는 만큼 (밤 규칙) · 제가 일을 낸 이는 덜 반긴다.</summary>
-    private float RuleOpinion(int a, int rule)
-    {
-        ref var c = ref C(a);
-        if (rule == 1)
-        {
-            int woken = _wakeLog.Count(x => x.woken == a), waker = _wakeLog.Count(x => x.by == a);
-            return 0.5f * Math.Min(1, woken / 2f) - 0.4f * Math.Min(1, waker / 2f) + 0.5f * (c.Consc - 0.5f) - 0.6f * (c.Extra - 0.5f) + 0.05f;
-        }
-        int forgot = _stoveLog.Count(x => x.who == a);
-        return 0.15f + 0.5f * (c.Consc - 0.5f) - 0.3f * Math.Min(1, forgot) + 0.2f * c.LessonFire;
-    }
-
-    private static string RuleLine(int rule, float op) => rule == 1
-        ? (op > 0.3f ? "밤엔 조용히 하자 — 잠 좀 자자" : op > 0 ? "자는 사람 곁에서만이라도 말을 아끼자" : "말 한마디도 못 하면 숨이 막힌다")
-        : (op > 0.3f ? "조리대 켜 둔 채 떠나는 일, 이제 그만하자" : op > 0 ? "끄고 가는 것쯤은 지킬 수 있다" : "규칙까지 만들 일은 아니다");
 
     private void RuleDecide(Sim sim, in Council m)
     {
@@ -511,15 +411,6 @@ public sealed partial class Society
         return true;
     }
 
-    private bool _cultureNow;
-    /// <summary>시험용: 지금 추모 · 축하를 찾는다 (여섯 시간 · 하루 한 번을 기다리지 않는다 — 부르는 사람의 판단은 그대로 거친다).</summary>
-    public void CultureNow(Sim sim)
-    {
-        if (Meeting.Kind != CouncilKind.None) return;
-        _cultureNow = true;
-        try { if (!TryMemorial(sim)) TryCelebrate(sim); }
-        finally { _cultureNow = false; }
-    }
     /// <summary>시험용: 지난 며칠 그 시각에 함께 먹었다고 친다 (오늘은 빼고).</summary>
     public void SeedMealDays(long today, int hour, int days)
     {

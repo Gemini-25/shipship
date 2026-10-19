@@ -169,6 +169,7 @@ public sealed partial class Society : IEngine
         if (_mind == null || _life == null) return;
         _talk ??= TalkTable.Load();
         Resize(_mind.Agents.Count);
+        TakeActs(sim);   // 판단 이관: 마음이 이번 틱에 한 사회적 행동의 결과를 계산한다
         Events(sim);
         if (Checks.Count > 0) LogChecksStep(sim);
         if (sim.Tick % TogetherEvery == 0)

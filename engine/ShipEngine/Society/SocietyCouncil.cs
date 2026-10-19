@@ -38,17 +38,16 @@ public sealed partial class Society
     private readonly List<float> _opinion = new();
     private int _spoke = -1;
     private float _repOp; private byte _repSpoke;
-    private const long NoHunger = long.MinValue;
+    public const long NoHunger = long.MinValue;
     private long _lastCouncil = long.MinValue / 2, _hungrySince = NoHunger, _councilCursor, _lastCrisis = long.MinValue / 2;
     private long[] _triedAt = Array.Empty<long>(), _logShownAt = Array.Empty<long>();
 
     private List<int> People() { var l = new List<int>(); for (int i = 0; i < N; i++) if (Alive(i)) l.Add(i); return l; }
-    private float MeanTrustIn(int who) { float s = 0; int n = 0; foreach (int j in People()) if (j != who) { s += TrustIn(j, who); n++; } return n > 0 ? s / n : 1; }
 
-    /// <summary>1분마다: 위기 사실을 보고 · 열린 회의를 잇고 · 한 시간마다 안건을 찾는다.</summary>
+    /// <summary>1분마다: 위기 사실을 보고 · 열린 모임을 잇고 · 한 시간마다 배고픔 · 지난 안건을 정리한다 (부르는 것은 사람 — MindGatherings).</summary>
     private void CouncilStep(Sim sim)
     {
-        if (_triedAt.Length < N) { Array.Resize(ref _triedAt, N); Array.Resize(ref _logShownAt, N); for (int i = 0; i < N; i++) if (_triedAt[i] == 0) { _triedAt[i] = long.MinValue / 2; _logShownAt[i] = long.MinValue / 2; } }
+        CouncilArrays();
         foreach (var f in sim.Facts.Since(_councilCursor))
         {
             if (f.Kind is FactKind.Ignition or FactKind.FireSpread or FactKind.WallBreach or FactKind.RegionVented or FactKind.PressureDrop or FactKind.Collapsed or FactKind.Died or FactKind.Panicked
@@ -57,14 +56,14 @@ public sealed partial class Society
             if (f.Kind is FactKind.MethodWorked or FactKind.MethodFailed) ManualFact(sim, f);   // 판단 엔진 (바): 통한 방법 · 틀어진 매뉴얼 방법이 안건이 된다
         }
         _councilCursor = sim.Facts.Total;
-        if (Meeting.Kind != CouncilKind.None) { MeetingStep(sim); return; }
-        if (sim.Tick % Time.TicksPerHour != 0) return;
-        HungerWatch(sim);
-        // 언제 모일지는 부르는 사람이 정한다 (시계 규칙이 아니다 — Open이 그 사람의 판단 NotYet을 묻는다: 깨어 있나 · 제가 아직 수습 중인가 · 겁이 가셨나 · 아는 위험이 남았나 · 동료가 아직 수습 중인가 · 다들 자나)
-        if (TryMemorial(sim) || TryCelebrate(sim)) return;   // ⑨ 문화: 추모 · 축하 (회의와 따로 — 하루 한 번 제한이 없다)
-        if (sim.Tick - _lastCouncil < Time.Hours(20)) return;   // 회의는 하루 한 번까지
-        if (People().Count < 3) return;
-        if (!TryTrial(sim) && !TryRation(sim) && !TryManual(sim) && !TryRule(sim)) TryElection(sim);
+        if (sim.Tick % Time.TicksPerHour == 0)
+        {
+            HungerWatch(sim);
+            // 지난 안건: 사흘 지난 숨진 이 · 이틀 지난 위기는 더 모일 일이 아니다
+            for (int k = _mourn.Count - 1; k >= 0; k--) if (sim.Tick - _mourn[k].at > Time.Days(3)) { _mournDeferred.Remove(_mourn[k].dead); _mourn.RemoveAt(k); }
+            if (_feastFrom >= 0 && sim.Tick - _feastFrom > Time.Hours(48)) _feastFrom = -1;
+        }
+        if (Meeting.Kind != CouncilKind.None) MeetingStep(sim);
     }
 
     private void HungerWatch(Sim sim)
@@ -77,134 +76,157 @@ public sealed partial class Society
         else if (_hungrySince == NoHunger) _hungrySince = sim.Tick;
     }
 
-    // ───────────────────────── 안건 ─────────────────────────
+    // ───────────────────────── 판단 엔진의 행동 ─────────────────────────
 
-    private bool TryTrial(Sim sim)
-    {
-        var people = People();
-        int best = -1, accuser = -1; float bs = 0;
-        foreach (int x in people)
-        {
-            if (sim.Tick - _triedAt[x] < Time.Hours(24 * 5)) continue;   // 닷새 안에 다시 세우지 않는다
-            float sum = 0, am = 0; int n = 0, acc = -1;
-            foreach (int j in people)
-            {
-                if (j == x) continue;
-                float g = GrudgeOf(j, x);
-                sum += g; if (g >= GrudgeAt) n++;
-                if (g > am) { am = g; acc = j; }
-            }
-            if (sum >= 1.0f && n >= 2 && sum > bs) { bs = sum; best = x; accuser = acc; }
-        }
-        if (best < 0) return false;
-        int root = 0; long rt = long.MinValue;
-        foreach (var m in Memories)
-            if (m.Owner == accuser && m.About == best && m.Topic is Topic.Blame or Topic.Fight or Topic.Gossip or Topic.Hurt or Topic.Death && m.Tick > rt) { rt = m.Tick; root = m.Cause; }
-        int caller = Rep >= 0 && Alive(Rep) && Rep != best ? Rep : accuser;
-        if (!Open(sim, CouncilKind.Trial, best, caller, accuser,
-            $"{Ko.I(_mind!.NameOf(caller))} 회의를 열었다 — {Ko.I(_mind.NameOf(accuser))} {Ko.Eul(_mind.NameOf(best))} 고발했다 (모두의 원망 {bs:0.0})", root)) return false;
-        _triedAt[best] = sim.Tick;
-        return true;
-    }
-
-    private bool TryRation(Sim sim)
-    {
-        if (_mind!.RationFood <= 0 || _hungrySince == NoHunger || sim.Tick - _hungrySince < Time.Hours(48)) return false;
-        foreach (int i in People()) if (_mind.Defying(i, sim.Tick)) return false;
-        var people = People();
-        int hungriest = people.OrderByDescending(i => C(i).Hunger).ThenBy(i => i).First();
-        int caller = Rep >= 0 && Alive(Rep) ? Rep : hungriest;
-        if (!Open(sim, CouncilKind.Ration, -1, caller, -1, $"{Ko.I(_mind.NameOf(caller))} 회의를 열었다 — 배고픈 지 이틀째, 배급을 이대로 따를 수 없다", _mind.RationCause)) return false;
-        _hungrySince = NoHunger;
-        return true;
-    }
-
-    private bool TryElection(Sim sim, bool force = false)
-    {
-        bool need = force || (Rep < 0 ? sim.Tick > Time.Hours(48) : !Alive(Rep) || RepUntil <= sim.Tick || MeanTrustIn(Rep) < 0.35f);
-        if (!need) return false;
-        var people = People();
-        int caller = people.OrderByDescending(i => i < Respect.Length ? Respect[i] : 0).ThenBy(i => i).First();
-        string why = Rep < 0 ? "대표를 뽑자" : !Alive(Rep) ? $"{_mind!.NameOf(Rep)}의 자리를 이을 대표를 뽑자" : RepUntil <= sim.Tick ? "대표의 임기가 끝났다" : $"{Ko.Eul(_mind!.NameOf(Rep))} 더는 믿지 못한다 — 대표를 다시 뽑자";
-        return Open(sim, CouncilKind.Election, -1, caller, -1, $"{Ko.I(_mind!.NameOf(caller))} 회의를 열었다 — {why}", 0);
-    }
-
-    private static bool CrisisWork(GoalKind g) => g is GoalKind.FightFire or GoalKind.Rescue or GoalKind.Patch or GoalKind.Evacuate or GoalKind.Cpr or GoalKind.Treat
-        or GoalKind.Surgery or GoalKind.Brace or GoalKind.GetSuit or GoalKind.Shelter or GoalKind.Flee or GoalKind.Panic or GoalKind.Rewire or GoalKind.Improvise;
-
-    private static string DangerName(BeliefKind k) => k switch
-    {
-        BeliefKind.Fire => "불", BeliefKind.Smoke => "연기", BeliefKind.Breach => "구멍", BeliefKind.Vacuum => "공기가 빠진 방", BeliefKind.Injured => "쓰러진 사람", _ => "이상한 공기",
-    };
+    private long _actCursor;
+    private long _spokeAt = long.MinValue / 2, _speakSince;
+    private readonly List<int> _votes = new();
 
     /// <summary>
-    /// 그 사람이 보기에 아직 모일 때가 아닌가 (까닭 — 아니면 null). 엔진이 정하지 않는다 — 부르는 사람의 판단이다:
-    /// 자고 있다 · 제가 아직 위기의 일을 한다 · 겁이 가시지 않았다 · 제가 아는 위험(두 시간 안에 확인한 불 · 연기 · 구멍 · 공기가 빠진 방 · 쓰러진 사람 · 이상한 공기)이 남았다 ·
-    /// 동료(사람 · 로봇)가 아직 불 끄기 · 구하기 · 막기 · 돌보기 같은 수습을 한다 (배 안의 일은 외침 · 방송으로 다 안다) · 다들 자고 있다 (깬 이가 반이 안 된다).
-    /// 모임 중에는 (meeting) 자는 이를 세지 않는다 — 부른 이가 일이 난 것을 알면 모임을 미룬다.
+    /// 마음(판단 엔진)이 이번 틱에 한 사회적 행동을 읽어 결과를 계산한다 — 부름 → 모임이 열린다 (안건의 사실을 지운다) · 말 → 의견과 표가 적힌다 ·
+    /// 미룸 → 모임이 흩어진다 · 추모를 미룸 → 한 번 남긴다. 사회는 행동을 정하지 않는다 (docs/ENGINE.md §3 9).
     /// </summary>
-    public string? NotYet(Sim sim, int who, bool meeting = false)
+    public void TakeActs(Sim sim)
     {
-        if (!Alive(who)) return "숨졌다";
-        if (!Awake(who)) return "자고 있다";
-        ref var c = ref C(who);
-        if (CrisisWork(c.Goal)) return $"제가 아직 {Mind.GoalName(c.Goal)}";
-        if (c.Fear > 0.3f) return "아직 겁이 가시지 않았다";
-        foreach (var b in _mind!.Agents[who].Beliefs)
+        _mind ??= sim.Find<Mind>(); _life ??= sim.Find<Life>();
+        if (_mind == null || _life == null) return;
+        Resize(_mind.Agents.Count);
+        CouncilArrays();
+        foreach (var act in _mind.ActsSince(_actCursor))
         {
-            if (b.Conf < 0.3f || sim.Tick - b.Seen > Time.Hours(2)) continue;
-            if (b.Kind is BeliefKind.Fire or BeliefKind.Smoke or BeliefKind.Vacuum or BeliefKind.Injured
-                || b.Kind == BeliefKind.Breach && b.Cell >= 0 && L.Kind[b.Cell] != CellKind.Door || b.Kind == BeliefKind.BadAir && b.Conf >= 0.5f)
-                return $"아직 {Ko.I(DangerName(b.Kind))} 있다고 여긴다";
+            switch (act.Kind)
+            {
+                case SocialActKind.CallMeeting: Open(sim, act); break;
+                case SocialActKind.Speak: Spoke(sim, act); break;
+                case SocialActKind.CallOff when Meeting.Kind != CouncilKind.None && act.Meet == Meeting.Kind:
+                    Close(sim, -2, null, act.Cause, act.Actor);
+                    break;
+                case SocialActKind.DeferMemorial when _mournDeferred.Add(act.Target):
+                    MemorialsDeferred++;
+                    sim.Facts.Emit(sim.Tick, FactKind.Culture, act.Cell, (int)CultureEvent.MemorialDeferred, act.Cause, act.Actor, act.Target);
+                    break;
+            }
         }
-        foreach (var a in _mind.Agents)
-            if (a.Id != who && a.C.Up != 0 && CrisisWork(a.C.Goal) && (!a.IsPerson || Alive(a.Id))) return $"{Ko.I(_mind.NameOf(a.Id))} 아직 {Mind.GoalName(a.C.Goal)}";
-        if (!meeting)
-        {
-            int alive = 0, awake = 0;
-            for (int i = 0; i < N; i++) if (Alive(i)) { alive++; if (Awake(i)) awake++; }
-            if (awake * 2 < alive || awake < 2) return "다들 자고 있다";
-        }
-        return null;
+        _actCursor = _mind.ActsTotal;
     }
 
-    private static bool IsGathering(CouncilKind k) => k is CouncilKind.Memorial or CouncilKind.Celebration;
-    private static string MeetName(CouncilKind k) => k == CouncilKind.Memorial ? "추모 모임" : k == CouncilKind.Celebration ? "축하 자리" : "회의";
-
-    /// <summary>방금 부르지 않은 까닭 (부르려던 이 · 까닭) — 추모는 이것을 원인 마디로 한 번 남긴다.</summary>
-    private (int who, string why) _notYet;
-
-    private bool Open(Sim sim, CouncilKind kind, int subject, int caller, int accuser, string text, int parent, int arg = 0)
+    private void CouncilArrays()
     {
-        int room = _mind!.MessRoom();
-        if (room < 0) return false;
-        if (NotYet(sim, caller) is string notYet) { _notYet = (caller, notYet); return false; }   // 부르는 사람이 아직 때가 아니라고 여긴다
-        int cell = RoomMiddle(room);
-        int cause = sim.Causes.Add(CauseKind.Society, text, sim.Tick, C(caller).Cell, parent, 0, caller);
-        var who = new byte[N];
-        foreach (int a in People())
-        {
-            ref var c = ref C(a);
-            float interest = kind switch
-            {
-                CouncilKind.Trial => GrudgeOf(a, subject) + Math.Max(0, BondOf(a, subject)) + 0.3f * Math.Max(0, BondOf(a, caller)),
-                CouncilKind.Ration => c.Hunger,
-                CouncilKind.Manual => 0.2f + 0.3f * c.Consc,   // 배의 일 — 성실한 이일수록 온다
-                CouncilKind.Memorial => 0.15f + Math.Max(0, BondOf(a, subject)),   // 그와의 정만큼
-                CouncilKind.Celebration => 0.1f + 0.2f * c.Extra - 0.3f * c.Depress,
-                CouncilKind.Rule => 0.2f + Math.Abs(RuleOpinion(a, arg)),   // 그 일을 겪은 이 · 반대하는 이도 온다
-                _ => 0.3f,
-            };
-            if (a == caller || a == accuser || (a == subject && !IsGathering(kind)) || interest + 0.3f * c.Extra + 0.3f * c.Consc + 0.2f >= 0.5f) who[a] = 1;
-        }
-        _mind.Gather(room, cell, sim.Tick + Time.Minutes(CouncilGatherMin + 40), cause, who);
-        Meeting = new Council { Kind = kind, Subject = subject, Caller = caller, Accuser = accuser, Room = room, Cell = cell, Called = sim.Tick, OpenAt = sim.Tick + Time.Minutes(CouncilGatherMin), Cause = cause, Arg = arg };
-        _attend.Clear(); _opinion.Clear(); _spoke = -1; _repSpoke = 0;
+        if (_triedAt.Length >= N) return;
+        int old = _triedAt.Length;
+        Array.Resize(ref _triedAt, N); Array.Resize(ref _logShownAt, N);
+        for (int i = old; i < N; i++) { _triedAt[i] = long.MinValue / 2; _logShownAt[i] = long.MinValue / 2; }
+    }
+
+    public static bool IsGathering(CouncilKind k) => k is CouncilKind.Memorial or CouncilKind.Celebration;
+    public static string MeetName(CouncilKind k) => k == CouncilKind.Memorial ? "추모 모임" : k == CouncilKind.Celebration ? "축하 자리" : "회의";
+
+    /// <summary>누가 불렀다 — 모임이 열린다 (이미 열린 모임이 있으면 부름이 묻힌다) · 그 안건의 사실을 지운다.</summary>
+    private void Open(Sim sim, SocialAct act)
+    {
+        if (Meeting.Kind != CouncilKind.None || !Alive(act.Actor) || act.Room < 0) return;
+        var kind = act.Meet;
+        Meeting = new Council { Kind = kind, Subject = act.Target, Caller = act.Actor, Accuser = act.Other, Room = act.Room, Cell = act.Cell, Called = sim.Tick, OpenAt = sim.Tick + Time.Minutes(CouncilGatherMin), Cause = act.Cause, Arg = act.Arg };
+        _attend.Clear(); _opinion.Clear(); _votes.Clear(); _spoke = -1; _repSpoke = 0;
         if (IsGathering(kind)) Gatherings++;
         else { Councils++; _lastCouncil = sim.Tick; }
-        if (kind == CouncilKind.Trial) Trials++;
-        sim.Facts.Emit(sim.Tick, FactKind.Meeting, cell, (int)kind, cause, caller, subject);
-        return true;
+        switch (kind)
+        {
+            case CouncilKind.Trial:
+                Trials++;
+                if (act.Target >= 0 && act.Target < _triedAt.Length) _triedAt[act.Target] = sim.Tick;
+                break;
+            case CouncilKind.Ration: _hungrySince = NoHunger; break;
+            case CouncilKind.Manual:
+            {
+                int k = _manualAgenda.FindIndex(x => x.key == act.Arg);
+                if (k >= 0) { _agendaNow = _manualAgenda[k]; _manualAgenda.RemoveAt(k); }
+                break;
+            }
+            case CouncilKind.Rule:
+                if (act.Arg == 1) _askQuiet = sim.Tick; else _askStove = sim.Tick;
+                break;
+            case CouncilKind.Memorial:
+                _mourn.RemoveAll(x => x.dead == act.Target); _mournDeferred.Remove(act.Target);
+                break;
+            case CouncilKind.Celebration:
+                _feastFrom = -1; _feastLast = sim.Tick;
+                break;
+        }
+        sim.Facts.Emit(sim.Tick, FactKind.Meeting, act.Cell, (int)kind, act.Cause, act.Actor, act.Target);
+    }
+
+    /// <summary>차례인 이가 말했다 — 의견 · 표를 적고 말을 남긴다 (차례가 아닌 이의 말은 모임의 것이 아니다).</summary>
+    private void Spoke(Sim sim, SocialAct act)
+    {
+        if (Meeting.Kind == CouncilKind.None || Meeting.Phase != 1 || SpeakerNow != act.Actor) return;
+        var m = Meeting;
+        int a = act.Actor;
+        float op = act.Value;
+        _opinion.Add(op); _votes.Add(act.Arg);
+        if (a == Rep) { _repOp = op; _repSpoke = 1; }
+        Sayings.Add(new Saying { Tick = sim.Tick, Speaker = a, Listener = m.Caller, Topic = m.Kind switch { CouncilKind.Ration => Topic.Shortage, CouncilKind.Trial => Topic.Blame, CouncilKind.Memorial => Topic.Death, CouncilKind.Celebration => Topic.Peace, _ => Topic.Work },
+            End = m.Kind == CouncilKind.Memorial ? TalkEnd.Comfort : m.Kind == CouncilKind.Celebration ? TalkEnd.Laugh : op > 0 ? TalkEnd.Argue : TalkEnd.Defend, Line = act.Cause, Cell = act.Cell });
+        if (Sayings.Count > 128) Sayings.RemoveAt(0);
+        _spoke++; _spokeAt = sim.Tick; _speakSince = sim.Tick;
+    }
+
+    // ───────────────────────── 판단 엔진이 읽는 것 ─────────────────────────
+
+    /// <summary>지금 말할 차례인 이 (−1 없음).</summary>
+    public int SpeakerNow => Meeting.Kind != CouncilKind.None && Meeting.Phase == 1 && _spoke >= 0 && _spoke < _attend.Count ? _attend[_spoke] : -1;
+    /// <summary>이 모임에서 이미 말한 수 (앞사람과 다른 말을 고르는 데).</summary>
+    public int SpokenCount => Math.Max(0, _spoke);
+    /// <summary>대표가 이 모임에서 먼저 말한 의견 (없으면 null) — 동조.</summary>
+    public float? RepSaid => _repSpoke != 0 ? _repOp : null;
+    public long LastCouncil => _lastCouncil;
+    /// <summary>마지막 위기(불 · 뚫림 · 무너짐 · 죽음 · 공황 · 대피)의 때.</summary>
+    public long LastCrisis => _lastCrisis;
+    /// <summary>배급 중 다들 배고프기 시작한 때 (NoHunger 아니다).</summary>
+    public long HungerFrom => _hungrySince;
+    public long TriedAt(int x) => x >= 0 && x < _triedAt.Length ? _triedAt[x] : long.MinValue / 2;
+    public long LogShownAt(int x) => x >= 0 && x < _logShownAt.Length ? _logShownAt[x] : long.MinValue / 2;
+    public float MemoryWeight(in Memory m, long now) => Weight(m, now);
+    public float GrudgeSum(int x) { float s = 0; foreach (int j in People()) if (j != x) s += GrudgeOf(j, x); return s; }
+    public float MeanTrustIn(int who) { float s = 0; int n = 0; foreach (int j in People()) if (j != who) { s += TrustIn(j, who); n++; } return n > 0 ? s / n : 1; }
+    /// <summary>선거의 후보: 존경 셋.</summary>
+    public List<int> Candidates() => People().OrderByDescending(i => i < Respect.Length ? Respect[i] : 0).ThenBy(i => i).Take(3).ToList();
+    /// <summary>다음 매뉴얼 안건 (없으면 null) · 지금 모임의 매뉴얼 안건.</summary>
+    public (int key, byte add, int proposer, float lost, int cause)? ManualAgendaHead => _manualAgenda.Count > 0 ? _manualAgenda[0] : null;
+    public (int key, byte add, int proposer, float lost, int cause) AgendaNow => _agendaNow;
+
+    // ───────────────────────── 회의 ─────────────────────────
+
+    /// <summary>
+    /// 모임의 차례 (모임의 관습 — 월드 엔진): 부른 뒤 15분에 그 방에 깬 채 있는 이로 연다 (모자라면 열리지 못한다) · 차례: 부른 이 → 대표 → 존경 순 · 피고는 마지막 ·
+    /// 1분에 한 사람씩 — 차례인 이가 말하면 (마음의 행동) 다음 차례로 · 깨어 있지 않거나 3분 넘게 말이 없으면 그를 빼고 넘긴다 · 다 말하면 표를 센다.
+    /// 일이 나서 미루는 것은 부른 이의 판단이다 (마음의 행동 '미루기' — TakeActs).
+    /// </summary>
+    private void MeetingStep(Sim sim)
+    {
+        var m = Meeting;
+        if (sim.Tick < m.OpenAt) return;
+        if (m.Phase == 0)
+        {
+            var here = People().Where(a => Awake(a) && _mind!.RoomOf(C(a).Cell) == m.Room).ToList();
+            if (TooFew(m, here)) { Close(sim, -1, $"{Ko.I(MeetName(m.Kind))} 열리지 못했다 — 모인 이가 {here.Count}명"); return; }
+            var order = here.OrderByDescending(a => a == m.Caller ? 2 : a == Rep ? 1 : 0).ThenByDescending(a => a < Respect.Length ? Respect[a] : 0).ThenBy(a => a).ToList();
+            if (m.Subject >= 0 && order.Remove(m.Subject)) order.Add(m.Subject);
+            _attend.Clear(); _attend.AddRange(order);
+            _opinion.Clear(); _votes.Clear(); _spoke = 0; _speakSince = sim.Tick;
+            Meeting.Phase = 1;
+            return;
+        }
+        if (_spokeAt == sim.Tick) return;   // 방금 한 마디 — 다음 차례는 다음 분에
+        if (_spoke < _attend.Count)
+        {
+            int a = _attend[_spoke];
+            if (Awake(a) && sim.Tick - _speakSince < Time.Minutes(3)) return;   // 그의 말을 기다린다
+            _attend.RemoveAt(_spoke); _speakSince = sim.Tick;   // 깨어 있지 않다 · 말이 없다 — 빼고 넘긴다
+            if (TooFew(m, _attend)) Close(sim, -1, $"{Ko.I(MeetName(m.Kind))} 흐지부지됐다 — 남은 이가 {_attend.Count}명");
+            return;
+        }
+        Decide(sim);
     }
 
     private int RoomMiddle(int room)
@@ -216,105 +238,7 @@ public sealed partial class Society
         return best;
     }
 
-    // ───────────────────────── 회의 ─────────────────────────
-
-    private void MeetingStep(Sim sim)
-    {
-        var m = Meeting;
-        // 일이 나면 부른 이가 보고 미룬다 (엔진이 흩지 않는다 — 부른 이가 일을 알아야 한다 · 부른 이가 자리를 떴으면 남은 이 가운데 그 일을 아는 이가)
-        if (_lastCrisis > m.Called)
-        {
-            int judge = Alive(m.Caller) ? m.Caller : -1;
-            string? why = judge >= 0 ? NotYet(sim, judge, meeting: true) : "부른 이가 없다";
-            if (why != null) { Close(sim, -2, $"{Ko.I(judge >= 0 ? _mind!.NameOf(judge) : "모인 이들")} {Ko.Eul(MeetName(m.Kind))} 미뤘다 — {why}"); return; }
-        }
-        if (sim.Tick < m.OpenAt) return;
-        if (m.Phase == 0)
-        {
-            var here = People().Where(a => Awake(a) && _mind!.RoomOf(C(a).Cell) == m.Room).ToList();
-            bool few = IsGathering(m.Kind) ? here.Count < 2 : here.Count(a => a != m.Subject) < 2 || here.Count < 3;   // 추모 · 축하는 둘이라도
-            if (few) { Close(sim, -1, $"{Ko.I(MeetName(m.Kind))} 열리지 못했다 — 모인 이가 {here.Count}명"); return; }
-            // 차례: 연 이 → 대표 → 존경 순 · 피고는 마지막 (스스로 변호)
-            var order = here.OrderByDescending(a => a == m.Caller ? 2 : a == Rep ? 1 : 0).ThenByDescending(a => a < Respect.Length ? Respect[a] : 0).ThenBy(a => a).ToList();
-            if (m.Subject >= 0 && order.Remove(m.Subject)) order.Add(m.Subject);
-            _attend.Clear(); _attend.AddRange(order);
-            _opinion.Clear(); _spoke = 0;
-            Meeting.Phase = 1;
-            return;
-        }
-        if (_spoke < _attend.Count) { Speak(sim, _attend[_spoke]); _spoke++; return; }
-        Decide(sim);
-    }
-
-    private float Opinion(Sim sim, int a)
-    {
-        var m = Meeting;
-        ref var c = ref C(a);
-        float op;
-        switch (m.Kind)
-        {
-            case CouncilKind.Trial:
-            {
-                int x = m.Subject;
-                if (a == x) return -1;
-                float ev = 0;
-                foreach (var mem in Memories)
-                    if (mem.Owner == a && mem.About == x && mem.Topic is Topic.Blame or Topic.Fight or Topic.Gossip or Topic.Hurt or Topic.Death) ev = Math.Max(ev, 0.6f * Weight(mem, sim.Tick));
-                if (x < LiarMark.Length && LiarMark[x] > 0) ev += 0.2f;                    // 거짓말이 들킨 적이 있다
-                if (sim.Tick - _logShownAt[x] < Time.Hours(72)) ev += 0.3f;              // 주컴퓨터 정비 기록에 그가 나왔다
-                op = 1.2f * GrudgeOf(a, x) + 0.5f * (c.Consc - 0.5f) - 0.4f * (c.Agree - 0.5f) - 0.6f * Math.Max(0, BondOf(a, x)) - (SameBand(a, x) ? 0.4f : 0) + ev - 0.15f;
-                break;
-            }
-            case CouncilKind.Ration:
-                op = c.Hunger + 0.3f * (1 - c.Consc) - 0.4f * Trust(a) - 0.3f;
-                break;
-            case CouncilKind.Manual:
-                op = ManualOpinion(a);
-                break;
-            case CouncilKind.Rule:
-                op = RuleOpinion(a, m.Arg);
-                break;
-            default:
-                return 0;
-        }
-        // 동조 (Asch 1951): 대표가 먼저 말했으면 그를 믿는 만큼 그 의견 쪽으로
-        if (_repSpoke != 0 && Rep >= 0 && a != Rep) op += 0.3f * TrustIn(a, Rep) * (_repOp - op);
-        return Math.Clamp(op, -1, 1);
-    }
-
-    private void Speak(Sim sim, int a)
-    {
-        var m = Meeting;
-        float op = Opinion(sim, a);
-        _opinion.Add(op);
-        if (a == Rep) { _repOp = op; _repSpoke = 1; }
-        string name = _mind!.NameOf(a), x = m.Subject >= 0 ? _mind.NameOf(m.Subject) : "";
-        string line = m.Kind switch
-        {
-            CouncilKind.Trial when a == m.Subject => C(a).Consc > 0.6f && GrudgeSum(m.Subject) > 1.5f ? "제 잘못입니다 — 벌을 받겠습니다" : "억울합니다 — 제 말도 들어 주세요",
-            CouncilKind.Trial when op > 0.5f => $"{Ko.Eun(x)} 벌을 받아야 한다",
-            CouncilKind.Trial when op > 0 => $"잘못은 했다 — 그래도 가볍게 하자",
-            CouncilKind.Trial when op > -0.4f => "증거가 모자라다",
-            CouncilKind.Trial => $"나는 {Ko.Eul(x)} 믿는다",
-            CouncilKind.Ration when op > 0.4f => "이러다 다 굶어 죽는다 — 배급은 그만두자",
-            CouncilKind.Ration when op > 0 => "조금만 더 먹게 하자",
-            CouncilKind.Ration => "참아야 한다 — 식량이 바닥나면 끝이다",
-            CouncilKind.Manual => ManualLine(op),
-            CouncilKind.Memorial => MemorialLine(sim, a, m.Subject),
-            CouncilKind.Celebration => FeastLine(sim, a, m),
-            CouncilKind.Rule => RuleLine(m.Arg, op),
-            _ when a < Respect.Length && Candidates().Contains(a) => "제가 맡겠습니다",
-            _ => "누가 맡든 따르겠다",
-        };
-        int said = sim.Causes.Add(CauseKind.Society, $"{name}: \"{line}\"", sim.Tick, C(a).Cell, m.Cause, 0, a);
-        Sayings.Add(new Saying { Tick = sim.Tick, Speaker = a, Listener = m.Caller, Topic = m.Kind switch { CouncilKind.Ration => Topic.Shortage, CouncilKind.Trial => Topic.Blame, CouncilKind.Memorial => Topic.Death, CouncilKind.Celebration => Topic.Peace, _ => Topic.Work },
-            End = m.Kind == CouncilKind.Memorial ? TalkEnd.Comfort : m.Kind == CouncilKind.Celebration ? TalkEnd.Laugh : op > 0 ? TalkEnd.Argue : TalkEnd.Defend, Line = said, Cell = C(a).Cell });
-        if (Sayings.Count > 128) Sayings.RemoveAt(0);
-    }
-
-    private float GrudgeSum(int x) { float s = 0; foreach (int j in People()) if (j != x) s += GrudgeOf(j, x); return s; }
-
-    private List<int> Candidates() => People().OrderByDescending(i => i < Respect.Length ? Respect[i] : 0).ThenBy(i => i).Take(3).ToList();
+    private static bool TooFew(Council m, List<int> here) => IsGathering(m.Kind) ? here.Count < 2 : here.Count(a => a != m.Subject) < 2 || here.Count < 3;   // 추모 · 축하는 둘이라도
 
     private void Decide(Sim sim)
     {
@@ -373,20 +297,15 @@ public sealed partial class Society
             }
             case CouncilKind.Election:
             {
-                var cand = Candidates();
                 var votes = new Dictionary<int, int>();
                 var choice = new Dictionary<int, int>();
-                foreach (int a in _attend)
+                for (int k = 0; k < _attend.Count; k++)
                 {
-                    int pick = -1; float ps = float.MinValue;
-                    foreach (int c in cand)
-                    {
-                        float s = c == a ? 0.6f + 0.3f * C(a).Extra : TrustIn(a, c) + BondOf(a, c) - GrudgeOf(a, c) + (SameBand(a, c) ? 0.2f : 0);
-                        if (s > ps) { ps = s; pick = c; }
-                    }
-                    if (pick < 0) continue;
+                    int a = _attend[k], pick = _votes[k];   // 저마다 말하며 고른 후보 (마음의 행동)
+                    if (pick < 0 || !Alive(pick)) continue;
                     votes[pick] = votes.GetValueOrDefault(pick) + 1; choice[a] = pick;
                 }
+                if (votes.Count == 0) break;   // 아무도 고르지 않았다
                 int win = votes.OrderByDescending(kv => kv.Value).ThenByDescending(kv => kv.Key < Respect.Length ? Respect[kv.Key] : 0).ThenBy(kv => kv.Key).First().Key;
                 int old = Rep;
                 Rep = win; RepUntil = sim.Tick + Time.Hours(24 * RepTermDays); Head = win; Elections++;
@@ -426,25 +345,22 @@ public sealed partial class Society
         Close(sim, 0, null);
     }
 
-    /// <summary>회의를 닫는다 (why: −1 열리지 못함 · −2 흩어짐 · 0 마침).</summary>
-    private void Close(Sim sim, int why, string? text)
+    /// <summary>회의를 닫는다 (why: −1 열리지 못함 · −2 흩어짐 · 0 마침) — 흩어짐은 미룬 이의 원인 마디(cause)로.</summary>
+    private void Close(Sim sim, int why, string? text, int cause = 0, int actor = -1)
     {
-        if (why < 0 && text != null)
+        if (why < 0 && (text != null || cause != 0))
         {
-            int c = sim.Causes.Add(CauseKind.Society, text, sim.Tick, Meeting.Cell, Meeting.Cause, 0, Meeting.Caller);
-            sim.Facts.Emit(sim.Tick, FactKind.Meeting, Meeting.Cell, -1, c, Meeting.Caller, Meeting.Subject);
+            int c = cause != 0 ? cause : sim.Causes.Add(CauseKind.Society, text!, sim.Tick, Meeting.Cell, Meeting.Cause, 0, Meeting.Caller);
+            sim.Facts.Emit(sim.Tick, FactKind.Meeting, Meeting.Cell, -1, c, actor >= 0 ? actor : Meeting.Caller, Meeting.Subject);
             if (IsGathering(Meeting.Kind)) GatheringsFailed++;
             else if (why == -1) CouncilsFailed++; else CouncilsBroken++;
             if (Meeting.Kind == CouncilKind.Trial && Meeting.Subject >= 0 && Meeting.Subject < _triedAt.Length) _triedAt[Meeting.Subject] = sim.Tick - Time.Hours(24 * 4);   // 열리지 못했으면 하루 뒤 다시
             if (Meeting.Kind == CouncilKind.Manual && _agendaNow.key != 0) { _manualAgenda.Insert(0, _agendaNow); _agendaNow = default; }   // 매뉴얼 안건은 다음 회의로
         }
-        _mind!.Gather(-1, -1, 0, 0, null);
         Meeting = default;
-        _attend.Clear(); _opinion.Clear(); _spoke = -1; _repSpoke = 0;
+        _attend.Clear(); _opinion.Clear(); _votes.Clear(); _spoke = -1; _repSpoke = 0;
     }
 
-    /// <summary>시험용: 지금 안건을 찾는다 (하루 한 번 · 시간대 · 위기 미룸 없이 · 선거는 이틀을 기다리지 않는다).</summary>
-    public void CouncilNow(Sim sim) { _lastCouncil = long.MinValue / 2; if (Meeting.Kind == CouncilKind.None) { if (People().Count >= 3 && !TryTrial(sim) && !TryRation(sim) && !TryManual(sim) && !TryRule(sim)) TryElection(sim, force: true); } }
     /// <summary>시험용: 배고픔이 그때부터 이어졌다고 친다.</summary>
     public void HungrySince(long tick) => _hungrySince = tick;
 
@@ -454,7 +370,7 @@ public sealed partial class Society
         w.I64(Meeting.Called); w.I64(Meeting.OpenAt); w.I32(Meeting.Cause); w.Byte(Meeting.Phase); w.I32(Meeting.Arg);
         w.I32(Rep); w.I64(RepUntil);
         w.I64(Councils); w.I64(CouncilsFailed); w.I64(CouncilsBroken); w.I64(Trials); w.I64(Convictions); w.I64(Acquittals); w.I64(Elections); w.I64(Mutinies); w.I64(MutiniesFailed);
-        w.Arr(_attend.ToArray()); w.Arr(_opinion.ToArray()); w.I32(_spoke); w.F32(_repOp); w.Byte(_repSpoke);
+        w.Arr(_attend.ToArray()); w.Arr(_opinion.ToArray()); w.Arr(_votes.ToArray()); w.I32(_spoke); w.I64(_spokeAt); w.I64(_speakSince); w.I64(_actCursor); w.F32(_repOp); w.Byte(_repSpoke);
         w.I64(_lastCouncil); w.I64(_hungrySince); w.I64(_councilCursor); w.I64(_lastCrisis); w.Arr(_triedAt); w.Arr(_logShownAt);
         SaveManual(w);
         SaveCulture(w);
@@ -464,7 +380,7 @@ public sealed partial class Society
         Meeting = new Council { Kind = (CouncilKind)r.Byte(), Subject = r.I32(), Caller = r.I32(), Accuser = r.I32(), Room = r.I32(), Cell = r.I32(), Called = r.I64(), OpenAt = r.I64(), Cause = r.I32(), Phase = r.Byte(), Arg = r.I32() };
         Rep = r.I32(); RepUntil = r.I64();
         Councils = r.I64(); CouncilsFailed = r.I64(); CouncilsBroken = r.I64(); Trials = r.I64(); Convictions = r.I64(); Acquittals = r.I64(); Elections = r.I64(); Mutinies = r.I64(); MutiniesFailed = r.I64();
-        _attend.Clear(); _attend.AddRange(r.Arr<int>()); _opinion.Clear(); _opinion.AddRange(r.Arr<float>()); _spoke = r.I32(); _repOp = r.F32(); _repSpoke = r.Byte();
+        _attend.Clear(); _attend.AddRange(r.Arr<int>()); _opinion.Clear(); _opinion.AddRange(r.Arr<float>()); _votes.Clear(); _votes.AddRange(r.Arr<int>()); _spoke = r.I32(); _spokeAt = r.I64(); _speakSince = r.I64(); _actCursor = r.I64(); _repOp = r.F32(); _repSpoke = r.Byte();
         _lastCouncil = r.I64(); _hungrySince = r.I64(); _councilCursor = r.I64(); _lastCrisis = r.I64(); _triedAt = r.Arr<long>(); _logShownAt = r.Arr<long>();
         LoadManual(r);
         LoadCulture(r);

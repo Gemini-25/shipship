@@ -195,11 +195,11 @@ public static partial class Program
             life[m[dead].C.Body].Blunt = 2f;
             s.Run(Time.Minutes(2));
             var alive = p.Take(4).ToList();
-            for (int k = 0; k < Time.Hours(1) && soc.NotYet(s, friend) != null; k++) { s.Step(); Keep(s, m, alive); }   // 마음이 가라앉을 때까지 (부르는 이의 판단)
+            for (int k = 0; k < Time.Hours(1) && m.NotYet(s, friend) != null; k++) { s.Step(); Keep(s, m, alive); }   // 마음이 가라앉을 때까지 (부르는 이의 판단)
             float grief0 = soc.GriefOf(friend), shock0 = m[friend].C.Shock;
             float bond0 = soc.BondOf(p[1], p[2]);
             long f0 = s.Facts.Total;
-            soc.CultureNow(s);
+            m.CallGatheringNow(s);
             Run(s, m, alive, 14);
             int gathered = alive.Count(a => m.RoomOf(m[a].C.Cell) == mess);
             Run(s, m, alive, 10);
@@ -229,22 +229,22 @@ public static partial class Program
             life[m[dead].C.Body].Blunt = 2f;
             s.Run(Time.Minutes(1));
             s.Get<Chemistry>().Ignite(At(26, 2), 3e6, s.Causes.Add(CauseKind.Story, "휴게실 의자 곁 충전기에서 불꽃이 튀었다", s.Tick, At(26, 2)));   // 휴게실에 있던 이가 보고 외친다
-            for (int k = 0; k < Time.Minutes(10) && soc.NotYet(s, friend) == null; k++) s.Step();   // 불을 알게 될 때까지 (모르는 위험으로는 미루지 않는다)
+            for (int k = 0; k < Time.Minutes(10) && m.NotYet(s, friend) == null; k++) s.Step();   // 불을 알게 될 때까지 (모르는 위험으로는 미루지 않는다)
             long f0 = s.Facts.Total;
-            string? why = soc.NotYet(s, friend);
-            soc.CultureNow(s);
+            string? why = m.NotYet(s, friend);
+            m.CallGatheringNow(s);
             bool early = s.Facts.Since(f0).Any(x => x.Kind == FactKind.Meeting);
             long settled = -1;
             for (int k = 0; k < Time.Minutes(90) && settled < 0; k++)
             {
                 s.Step();
                 foreach (int a in p.Take(4)) { ref var c = ref m[a].C; c.Hunger = 0; c.Thirst = 0; c.Sleepy = 0; }
-                if (k % 25 == 0) { if (soc.NotYet(s, friend) == null) settled = s.Tick; else soc.CultureNow(s); }
-                if (Debug && k % Time.Minutes(10) == 0) Console.WriteLine($"    {Time.Clock(s.Tick)} {m.NameOf(friend)}: {soc.NotYet(s, friend) ?? "때가 됐다"} · 타는 칸 {s.Get<Chemistry>().BurningCount}");
+                if (k % 25 == 0) { if (m.NotYet(s, friend) == null) settled = s.Tick; else m.CallGatheringNow(s); }
+                if (Debug && k % Time.Minutes(10) == 0) Console.WriteLine($"    {Time.Clock(s.Tick)} {m.NameOf(friend)}: {m.NotYet(s, friend) ?? "때가 됐다"} · 타는 칸 {s.Get<Chemistry>().BurningCount}");
             }
             bool openedWhileBusy = s.Facts.Since(f0).Any(x => x.Kind == FactKind.Meeting && x.Tick < settled);
             var deferred = s.Facts.Since(f0).FirstOrDefault(x => x.Kind == FactKind.Culture && (int)x.Size == (int)CultureEvent.MemorialDeferred);
-            soc.CultureNow(s);
+            m.CallGatheringNow(s);
             var open = s.Facts.Since(f0).LastOrDefault(x => x.Kind == FactKind.Meeting);
             Check("추모는 부르는 사람이 정한다: 동료가 숨진 직후 불이 붙으면 — 가장 가까웠던 이는 불을 안 뒤로 불이 타고 동료가 끄는 동안 '추모를 미뤘다'를 남기고 기다리고 · 불이 꺼지고 모두 손을 놓은 뒤에야 부른다",
                 why != null && !early && !openedWhileBusy && settled > 0 && deferred.Kind == FactKind.Culture && deferred.Actor == friend && soc.MemorialsDeferred == 1
@@ -270,7 +270,7 @@ public static partial class Program
                 s.Run(Time.Minutes(2));
                 var alive = death ? p.Take(4).ToList() : p;
                 long f0 = s.Facts.Total;
-                soc.CultureNow(s);
+                m.CallGatheringNow(s);
                 var open = s.Facts.Since(f0).FirstOrDefault(x => x.Kind == FactKind.Meeting);
                 Run(s, m, alive, 26);
                 return (soc.Celebrations, open.Kind == FactKind.Meeting ? s.Causes.Text(open.Cause) : "-", Lines(s, soc, 15), m[p[0]].C.Joy, m[p[0]].C.Weary);
@@ -296,7 +296,7 @@ public static partial class Program
                 s.Facts.Emit(s.Tick, FactKind.Woke, At(3, 2), 0, said, p[1 + i], talker);
                 s.Run(30);
             }
-            soc.CouncilNow(s);
+            m.CallCouncilNow(s);
             Run(s, m, p, 26);
             var quiet = LastCulture(s, f0, CultureEvent.Rule);
             var lines = Lines(s, soc, 15);
@@ -307,7 +307,7 @@ public static partial class Program
                 s.Facts.Emit(s.Tick, FactKind.Mistake, At(14, 2), 0.1f, c, p[4], 0);
                 s.Run(30);
             }
-            soc.CouncilNow(s);
+            m.CallCouncilNow(s);
             var stoveOpen = s.Facts.Since(f1).FirstOrDefault(x => x.Kind == FactKind.Meeting);
             Run(s, m, p, 26);
             var stove = LastCulture(s, f1, CultureEvent.Rule);
