@@ -12,7 +12,7 @@ namespace ShipView;
 /// <summary>겹쳐 보기 (화면 설정 — 기본은 눈에 보이는 것만): 공기(산소 · 진공 · 일산화탄소) · 열 · 연기 · 사슬 선.</summary>
 public enum Overlay : byte { None, Air, Heat, Smoke, Chain, Lines }
 
-public sealed class Painter
+public sealed partial class Painter
 {
     public const int T = DotTiles.T;
 
@@ -231,6 +231,7 @@ public sealed class Painter
         var life = s.Find<Life>();
         int Px(int x) => (x - x0) * T;
         int Py(int y) => (y - y0) * T;
+        _emissive.Clear();
 
         // ── 우주 ──
         var space = Rgba.Hex("#05070c");
@@ -328,6 +329,7 @@ public sealed class Painter
                 bool openE = !Solid(x + 1, y) || KindAt(x + 1, y + 1) != CellKind.Floor;
                 bool lamp = DotHash.U(x, y, 5) % 7 == 0;
                 img.Draw(Cached(Key(3, (int)wk, openW ? 1 : 0, openE ? 1 : 0, lamp ? 1 : 0), () => DotTiles.WallFace(wk, openW, openE, lamp)), Px(x), Py(y + 1));
+                if (lamp && Lighting && wk != DotWall.Hull && wk != DotWall.Partition) FaceLamp(Px(x), Py(y + 1), L.Room[L.Index(x, y + 1)], net, light);
             }
         // 벽에 묻은 그을음 (② — 불 곁의 벽이 검게): 윗면 · 남쪽 앞면
         for (int y = y0 - 1; y < y0 + h; y++)
@@ -410,7 +412,8 @@ public sealed class Painter
                 float field = gdev >= 0 && net!.GravField.Length > gdev ? net.GravField[gdev] : 1f;
                 int gx = Px(bx), gy = Py(by) - GravRise;
                 img.Draw(Cached(Key(5, 9001, bw, bh, 0), () => Shadowed(GravBody(bw, bh), GravRise)), gx, gy);
-                GravGlow(img, gx, gy, bw, bh, field, gs, frame);
+                if (Lighting) _emissive.Add(im => GravGlow(im, gx, gy, bw, bh, field, gs, frame));
+                else GravGlow(img, gx, gy, bw, bh, field, gs, frame);
                 continue;
             }
             var ft = _fixType[i] ?? FurnitureType.Shelf;
@@ -420,7 +423,12 @@ public sealed class Painter
             img.Draw(body, px, py);
             var dev = DeviceOf(net, i);
             var state = dev < 0 ? FixState.On : net!.IsBroken(dev, Part.Electric) || net.IsBroken(dev, Part.Mechanical) ? FixState.Broken : net.Working(dev) ? FixState.On : FixState.Off;
-            if (state != FixState.Off) img.Draw(DotMachines.Life(ft, bw, bh, state, frame & 7, 1f), px, py);
+            if (state != FixState.Off)
+            {
+                var glow = DotMachines.Life(ft, bw, bh, state, frame & 7, 1f);
+                if (Lighting) _emissive.Add(im => im.Draw(glow, px, py));   // 화면 · 불빛은 스스로 빛난다
+                else img.Draw(glow, px, py);
+            }
             else img.Fill(px, py, bw * T, bh * T + rise, Rgba.Hex("#000308"), 0.3f);
         }
 
@@ -456,7 +464,7 @@ public sealed class Painter
                 double temp = f.Temp(c);
                 if (temp > 330 && kpa > 5) img.Fill(Px(x), Py(y), T, T, Rgba.Hex("#ff5a1e"), (float)Math.Min(0.35, (temp - 330) / 400));
                 float dark = 0;
-                if (light != null) { float lux = light.Lux[c]; dark = lux >= 60 ? 0 : (float)Math.Min(0.72, 0.72 * (1 - lux / 60)); }
+                if (light != null && !Lighting) { float lux = light.Lux[c]; dark = lux >= 60 ? 0 : (float)Math.Min(0.72, 0.72 * (1 - lux / 60)); }
                 if (dark > 0.02f) img.Fill(Px(x), Py(y), T, T, Rgba.Hex("#02040a"), dark);
             }
 
@@ -498,18 +506,14 @@ public sealed class Painter
                 }
             }
 
-        // ── 불 · 연기 (맨 앞) ──
+        // ── 연기 (빛을 받는다 — 불 곁은 붉게 · 정전된 방은 어둡게) ──
         for (int y = y0; y < y0 + h + 1; y++)
             for (int x = x0; x < x0 + w; x++)
             {
                 if (!L.In(x, y)) continue;
                 int c = L.Index(x, y);
                 if (!Mine(c)) continue;
-                if (chem != null && chem.Burning[c] != 0)
-                {
-                    float power = Math.Clamp(chem.Hrr[c] / 40f, 0.25f, 1f);
-                    img.Draw(DotFx.FireTile(frame + c, power, c), Px(x), Py(y) + T - 40);
-                }
+                if (!Lighting && chem != null && chem.Burning[c] != 0) FireAt(img, chem, c, Px(x), Py(y), frame);
                 double soot = f.Ppm(f.T.gSoot, c);
                 if (soot > 20)
                 {
@@ -519,8 +523,32 @@ public sealed class Painter
                     img.Draw(puff, Px(x) - 6 + dx, Py(y) - 10, false, al);
                 }
             }
+        // ── 빛: 곱하고 · 스스로 빛나는 것 · 불꽃 (맨 앞) ──
+        if (Lighting)
+        {
+            BuildLight(s, f, net, light, chem, st, x0, y0, w, h, frame);
+            WallLight();
+            ApplyLight(img, w, h);
+            foreach (var e in _emissive) e(img);
+            if (chem != null)
+                for (int y = y0; y < y0 + h + 1; y++)
+                    for (int x = x0; x < x0 + w; x++)
+                    {
+                        if (!L.In(x, y)) continue;
+                        int c = L.Index(x, y);
+                        if (Mine(c) && chem.Burning[c] != 0) FireAt(img, chem, c, Px(x), Py(y), frame);
+                    }
+        }
         if (Show != Overlay.None) DrawOverlay(img, f, net, x0, y0, w, h);
         return img;
+    }
+
+    /// <summary>불꽃 한 칸 (세기만큼 크게) — 조명을 켰으면 둘레에 빛 번짐.</summary>
+    private void FireAt(Img img, Chemistry chem, int c, int px, int py, int frame)
+    {
+        float power = Math.Clamp(chem.Hrr[c] / 40f, 0.25f, 1f);
+        if (Lighting) img.Glow(px + T / 2, py + T / 2, 10 + power * 10, Ramps.Get(Ramps.Fire, 5), 0.10f + 0.12f * power);
+        img.Draw(DotFx.FireTile(frame + c, power, c), px, py + T - 40);
     }
 
     private static (float hole, int _) F(Field f, int c) => (f.Hole[c], 0);
@@ -759,7 +787,12 @@ public sealed class Painter
                 img.Draw(lie, px + T / 2 - lie.W / 2, oy + 6);
             }
         }
-        if (c.Mode == 2) Mark(img, px + T / 2, oy - 4, Rgba.Hex("#ffd146")); // 공황: 머리 위 느낌표
+        if (c.Mode == 2)   // 공황: 머리 위 느낌표 (표시 — 빛을 받지 않는다)
+        {
+            int mx = px + T / 2, my = oy - 4;
+            if (Lighting) _emissive.Add(im => Mark(im, mx, my, Rgba.Hex("#ffd146")));
+            else Mark(img, mx, my, Rgba.Hex("#ffd146"));
+        }
     }
 
     private static void Mark(Img img, int cx, int top, Rgba col)

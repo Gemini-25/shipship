@@ -37,7 +37,15 @@ public static partial class Program
             int x0 = room.Cells.Min(L.X) - 1, y0 = room.Cells.Min(L.Y) - 1, w = room.Cells.Max(L.X) - x0 + 2, h = room.Cells.Max(L.Y) - y0 + 2;
             var clean = s.Clone(); var cf = clean.Get<Field>();
             for (int i = 0; i < cf.Cells; i++) cf.TakeStore(i, cf.T.sSoot, cf.Stored(cf.T.sSoot, i));
-            double Bright(Sim w0) { var img = new Painter(L).Frame(w0, x0, y0, w, h, 0); double sum = 0; for (int y = 0; y < img.H; y++) for (int x = 0; x < img.W; x++) { var p = img.Get(x, y); sum += p.R + p.G + p.B; } return sum / (3.0 * img.W * img.H); }
+            // 그 방의 바닥 · 벽 칸만 잰다 (우주 별빛 · 다른 방은 빼고 — 밤에 낮춘 조명이어도 견줄 수 있게)
+            var mine = room.Cells.Concat(near).ToList();
+            double Bright(Sim w0)
+            {
+                var img = new Painter(L).Frame(w0, x0, y0, w, h, 0); double sum = 0; long n = 0;
+                foreach (int c in mine)
+                    for (int y = 0; y < Painter.T; y++) for (int x = 0; x < Painter.T; x++) { var p = img.Get((L.X(c) - x0) * Painter.T + x, (L.Y(c) - y0) * Painter.T + y); sum += p.R + p.G + p.B; n++; }
+                return sum / (3.0 * n);
+            }
             double sooty = Bright(s), bare = Bright(clean);
             if (Debug) Console.WriteLine($"    {room.Name}: 벽 {near.Count}칸 · 바닥 {floorG:0.00} · 벽 {nearG:0.00} · 먼 방({far.Name}) 벽 {farG:0.000} g/m² · 밝기 {sooty:0.0} / {bare:0.0}");
             Check("불 뒤 그을음이 남는다: 휴게실 의자에 불 → 한 시간 뒤 그 방 벽 · 바닥에 그을음 (먼 방 벽보다 다섯 배 넘게) · 그림에서 그을린 방이 어둡다",

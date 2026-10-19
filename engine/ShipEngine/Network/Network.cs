@@ -82,6 +82,9 @@ public sealed partial class Network : IEngine
     /// <summary>방마다 조명 몫 (0~1 · 주컴퓨터가 밤에 낮춰 달라고 요청한다 — 그래픽 결정 8 '밤엔 복도 조명을 낮추고 아침엔 밝게') · 비상등은 따로.</summary>
     public float[] LampDim = Array.Empty<float>();
     public void SetLampDim(int room, float dim) { if (room >= 0 && room < LampDim.Length) LampDim[room] = Math.Clamp(dim, 0f, 1f); }
+    /// <summary>방마다 조명 기구에 딸린 비상 전지 (남은 분): 정전되면 30럭스 붉은 비상등으로 버티고 (3시간 — 여객선 비상 조명 기준) · 전기가 돌아오면 다시 찬다 (6배 느리게).</summary>
+    public float[] EmergencyMin = Array.Empty<float>();
+    public const float EmergencyCapMin = 180, EmergencyLux = 30;
     public float[] Wear;          // [장치 × 4 + 부품] 시간
     public byte[] Broken;         // [장치 × 4 + 부품]
     public int[] SealLeakCause;   // [장치] 봉함이 망가져 냉매가 새기 시작한 원인 마디 (고치면 0)
@@ -157,6 +160,7 @@ public sealed partial class Network : IEngine
         int nd = Devices.Count;
         On = Devices.Select(d => (byte)(d.Def.On ? 1 : 0)).ToArray();
         LampDim = Enumerable.Repeat(1f, Math.Max(1, L.Rooms.Count)).ToArray();
+        EmergencyMin = Enumerable.Repeat(EmergencyCapMin, Math.Max(1, L.Rooms.Count)).ToArray();
         Supply = new float[nd]; Duty = Enumerable.Repeat(1f, nd).ToArray(); Wear = new float[nd * 4]; Broken = new byte[nd * 4]; SealLeakCause = new int[nd]; OnCause = new int[nd]; PanK = Enumerable.Repeat(293.15f, nd).ToArray(); PanWater = new float[nd];
         Charge = Devices.Select(d => (float)d.Def.Kwh).ToArray();
         _limit = new float[nd * 4];
@@ -654,7 +658,10 @@ public sealed partial class Network : IEngine
             {
                 double frac = _feed[r] >= 0 ? _iFrac[FeederIsland(_feed[r])] : 0;
                 bool lit = _feed[r] >= 0 && Breaker[_feed[r]] != 0 && !Cut(_feed[r]) && frac > 0.05;
-                float emergency = EmergencyLit(r) ? 30 : 0;
+                // 비상등: 비상등 장치가 있거나 · 조명 기구의 비상 전지가 남았으면 (정전 동안 닳고 · 켜지면 찬다)
+                if (r < EmergencyMin.Length)
+                    EmergencyMin[r] = lit ? Math.Min(EmergencyCapMin, EmergencyMin[r] + (float)(dt / 60 / 6)) : Math.Max(0, EmergencyMin[r] - (float)(dt / 60));
+                float emergency = EmergencyLit(r) || r < EmergencyMin.Length && EmergencyMin[r] > 0 ? EmergencyLux : 0;
                 light.SetLamp(r, lit ? (float)(300 * Math.Min(1, frac) * (r < LampDim.Length ? LampDim[r] : 1)) : emergency);
             }
         var st = sim.Find<Structure>();
@@ -668,6 +675,16 @@ public sealed partial class Network : IEngine
                 foreach (int j in nb) if (j >= 0 && L.Room[j] >= 0 && RoomPowered(L.Room[j])) powered = true;
                 st.DoorPowered[dr] = (byte)(powered ? 1 : 0);
             }
+    }
+
+    /// <summary>방 조명의 지금 상태 (읽기만 — 화면이 빛의 색을 고른다): 0 꺼짐 · 1 켜짐 · 2 비상등만.</summary>
+    public byte LampState(int r)
+    {
+        if (r < 0 || r >= L.Rooms.Count || r >= _feed.Length) return 0;
+        int isl = _feed[r] >= 0 ? FeederIsland(_feed[r]) : -1;
+        double frac = isl >= 0 && isl < _iFrac.Length ? _iFrac[isl] : 0;
+        bool lit = _feed[r] >= 0 && Breaker[_feed[r]] != 0 && !Cut(_feed[r]) && frac > 0.05;
+        return lit ? (byte)1 : EmergencyLit(r) || r < EmergencyMin.Length && EmergencyMin[r] > 0 ? (byte)2 : (byte)0;
     }
 
     private bool[]? _emergency; // 방마다 비상등이 있나 (장치는 만들 때 정해진다)
@@ -1282,7 +1299,7 @@ public sealed partial class Network : IEngine
         foreach (var k in wk) { w.I32(k); w.I32(_wearCause[k]); }
         SaveJumpers(w); w.Arr(Stripped); w.I64(PartsSalvaged);
         SaveLines(w); SaveWear(w); SavePipes(w); SaveCells(w); SaveO2(w); SaveGravity(w); SaveChips(w); SaveRobots(w); SaveVibration(w);
-        w.Tag("조명"); w.Arr(LampDim);
+        w.Tag("조명"); w.Arr(LampDim); w.Arr(EmergencyMin);
     }
 
     public void Load(StateReader r)
@@ -1303,6 +1320,6 @@ public sealed partial class Network : IEngine
         for (int i = 0; i < n; i++) { int k = r.I32(); _wearCause[k] = r.I32(); }
         LoadJumpers(r); Stripped = r.Arr<byte>(); PartsSalvaged = r.I64();
         LoadLines(r); LoadWear(r); LoadPipes(r); LoadCells(r); LoadO2(r); LoadGravity(r); LoadChips(r); LoadRobots(r); LoadVibration(r);
-        r.Tag("조명"); LampDim = r.Arr<float>();
+        r.Tag("조명"); LampDim = r.Arr<float>(); EmergencyMin = r.Arr<float>();
     }
 }
