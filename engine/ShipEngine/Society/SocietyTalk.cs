@@ -113,9 +113,7 @@ public sealed partial class Society
                     ca.Stress = Math.Min(1, ca.Stress + 0.05f); cb.Stress = Math.Min(1, cb.Stress + 0.05f);
                     int line = Say(sim, a, b, o, end, Pick(sim, "탓/다툼", a));
                     Remember(sim, a, Topic.Fight, b, line, 0.5f, ca.Cell); Remember(sim, b, Topic.Fight, a, line, 0.5f, cb.Cell);
-                    Onlookers(sim, a, b, line);
-                    Escalate(sim, a, b, 1, line);
-                    Escalate(sim, b, a, 0.7f, line);
+                    // 곁사람이 끼어들지 · 둘이 덤빌지는 그 사람들의 판단이다 (MindFeud)
                 }
                 break;
             }
@@ -199,8 +197,6 @@ public sealed partial class Society
                     int c = sim.Causes.Add(CauseKind.Society, $"{Ko.Gwa(n1)} {Ko.I(n2)} 맞섰다 — {Ko.I(_mind!.NameOf(b))} {_mind.NameOf(a)}의 손을 뿌리쳤다", sim.Tick, cb.Cell, line, 0, b);
                     sim.Facts.Emit(sim.Tick, FactKind.Relationship, cb.Cell, -4, c, b, a);
                     Remember(sim, a, Topic.Fight, b, c, 0.6f, ca.Cell); Remember(sim, b, Topic.Fight, a, c, 0.6f, cb.Cell);
-                    Onlookers(sim, b, a, c);
-                    Escalate(sim, b, a, 0.5f, line);
                 }
                 break;
             }
@@ -312,76 +308,65 @@ public sealed partial class Society
 
     // ───────────────────────── 곁에서 본 다툼 ─────────────────────────
 
-    /// <summary>
-    /// 다툼을 곁에서 본 이들 (같은 방이거나 6칸 안 · 깨어 있는 사람 · 많아야 둘이 입을 연다 — 작은 승무원 사회의 다툼은 곁사람이 끼어들며 커지거나 가라앉는다):
-    /// 한쪽을 훨씬 아끼면 (정 · 같은 무리 − 원망) 편을 든다 — 덜 다정할수록 쉽게 · 상대는 나를 원망하고 더 화가 난다 (덤빌 수 있다) ·
-    /// 둘 다 미워하지 않는 다정하고 용감한 이는 말린다 — 둘의 화가 반으로 (몸싸움이 덜 난다) · 둘이 말린 이를 조금 더 믿는다. 나머지는 모른 척한다.
-    /// </summary>
-    private void Onlookers(Sim sim, int a, int b, int cause)
+    /// <summary>곁에서 본 이가 한쪽 편을 들었다 (마음의 행동) — 상대는 그를 원망하고 더 화가 난다 · 편든 쪽과는 가까워진다.</summary>
+    private void SideWith(Sim sim, SocialAct act)
     {
+        int i = act.Actor, foe = act.Target, side = act.Other;
+        if (!Awake(i) || foe < 0 || side < 0) return;
         var mind = _mind!;
-        int spoke = 0;
-        foreach (int i in Near(C(a).Cell, a, 6))
-        {
-            if (i == b || !mind.Agents[i].IsPerson || spoke >= 2) continue;
-            ref var ci = ref C(i);
-            float fa = BondOf(i, a) - GrudgeOf(i, a) + (SameBand(i, a) ? 0.3f : 0), fb = BondOf(i, b) - GrudgeOf(i, b) + (SameBand(i, b) ? 0.3f : 0);
-            int side = fa - fb > 0.3f && fa > 0.3f ? a : fb - fa > 0.3f && fb > 0.3f ? b : -1;
-            float r = Rnd(sim, "곁에서 본 다툼", i, a * N + b);
-            if (side >= 0 && r < 0.4f + 0.4f * (1 - ci.Agree))
-            {
-                int foe = side == a ? b : a;
-                Add(Grudge, foe, i, 0.06f); Warm(sim, side, i, 0.05f); Warm(sim, foe, i, -0.05f);
-                C(foe).Anger = Math.Min(1, C(foe).Anger + 0.1f);
-                Sides++; spoke++;
-                Say(sim, i, foe, new Option(Topic.Fight, 1, side, cause, ci.Cell, i), TalkEnd.Defend, Pick(sim, side == a ? "다툼/편듦" : "다툼/감쌈", i),
-                    $"{Ko.I(mind.NameOf(i))} {Ko.Gwa(mind.NameOf(foe))} {mind.NameOf(side)}의 다툼에 끼어들어 {mind.NameOf(side)} 편을 들었다");
-                Remember(sim, foe, Topic.Blame, i, cause, 0.3f, C(foe).Cell);
-            }
-            else if (side < 0 && ci.Agree > 0.55f && GrudgeOf(i, a) < 0.3f && GrudgeOf(i, b) < 0.3f && r < ci.Agree * (0.5f + 0.5f * ci.Brave))
-            {
-                C(a).Anger *= 0.5f; C(b).Anger *= 0.5f;
-                Add(TrustOf, a, i, 0.03f); Add(TrustOf, b, i, 0.03f);
-                Mediations++; spoke++;
-                Say(sim, i, a, new Option(Topic.Fight, 1, b, cause, ci.Cell, i), TalkEnd.Comfort, Pick(sim, "다툼/말림", i),
-                    $"{Ko.I(mind.NameOf(i))} 다투던 {Ko.Gwa(mind.NameOf(a))} {mind.NameOf(b)} 사이에 끼어 말렸다");
-            }
-        }
+        Add(Grudge, foe, i, 0.06f); Warm(sim, side, i, 0.05f); Warm(sim, foe, i, -0.05f);
+        C(foe).Anger = Math.Min(1, C(foe).Anger + 0.1f);
+        Sides++;
+        Say(sim, i, foe, new Option(Topic.Fight, 1, side, act.Cause, C(i).Cell, i), TalkEnd.Defend, Pick(sim, act.Arg == 1 ? "다툼/편듦" : "다툼/감쌈", i),
+            $"{Ko.I(mind.NameOf(i))} {Ko.Gwa(mind.NameOf(foe))} {mind.NameOf(side)}의 다툼에 끼어들어 {mind.NameOf(side)} 편을 들었다");
+        Remember(sim, foe, Topic.Blame, i, act.Cause, 0.3f, C(foe).Cell);
+    }
+
+    /// <summary>곁에서 본 이가 말렸다 (마음의 행동) — 둘의 화가 반으로 (몸싸움이 덜 난다) · 둘이 말린 이를 조금 더 믿는다.</summary>
+    private void Mediated(Sim sim, SocialAct act)
+    {
+        int i = act.Actor, a = act.Target, b = act.Other;
+        if (!Awake(i) || a < 0 || b < 0) return;
+        var mind = _mind!;
+        C(a).Anger *= 0.5f; C(b).Anger *= 0.5f;
+        Add(TrustOf, a, i, 0.03f); Add(TrustOf, b, i, 0.03f);
+        Mediations++;
+        Say(sim, i, a, new Option(Topic.Fight, 1, b, act.Cause, C(i).Cell, i), TalkEnd.Comfort, Pick(sim, "다툼/말림", i),
+            $"{Ko.I(mind.NameOf(i))} 다투던 {Ko.Gwa(mind.NameOf(a))} {mind.NameOf(b)} 사이에 끼어 말렸다");
     }
 
     // ───────────────────────── 갈등 사다리 ─────────────────────────
 
-    /// <summary>x가 y에게 덤비나: 원한 · 거친 성격 · 불안 · 긴장 · 화가 모두 겹쳐야 (드물게). 끝장을 보려는 것은 더 드물다.</summary>
-    private void Escalate(Sim sim, int x, int y, float scale, int cause)
+    /// <summary>x가 y에게 덤볐다 (마음의 행동 — 끝장을 보려는가도 그가 정했다): 몸싸움이 시작된다 · 맞는 이는 겁에 질린다.</summary>
+    private void Attacked(Sim sim, SocialAct act)
     {
+        int x = act.Actor, y = act.Target;
         if (!Awake(x) || !Awake(y) || InBrawl(x, out _, out _) || InBrawl(y, out _, out _)) return;
-        if (_mind!.RoomOf(C(x).Cell) != _mind.RoomOf(C(y).Cell) || _mind.Dist(C(x).Cell, C(y).Cell) > 4) return;
-        ref var cx = ref C(x);
-        float g = GrudgeOf(x, y);
-        if (g < 0.5f) return;
-        float pressure = (g - 0.5f) * 2 * (1 - cx.Agree) * (1 - cx.Agree) * (0.3f + cx.Neuro) * (0.4f + cx.Stress) * cx.Anger * 1.5f * scale * (1 + cx.Weary);   // 지친 이는 덜 참는다
-        if (LeaderWatching(x, y)) pressure *= 0.25f;   // 따르는 이가 보는 앞에서는 참는다
-        if (Rnd(sim, "덤빈다", x, y) >= pressure) return;
-        bool lethal = g > 0.9f && cx.Agree < 0.25f && cx.Neuro > 0.6f && (cx.Stress > 0.6f || DeathBlame(x, y));
-        var mind = _mind;
-        int c = sim.Causes.Add(CauseKind.Person, lethal ? $"{Ko.I(mind.NameOf(x))} {Ko.Eul(mind.NameOf(y))} 죽일 듯이 덤볐다" : $"{Ko.I(mind.NameOf(x))} {mind.NameOf(y)}에게 주먹을 휘둘렀다",
-            sim.Tick, cx.Cell, cause != 0 ? cause : MemoryCause(x, Topic.Blame, y), 0, x);
-        Brawls.Add(new Brawl { A = x, B = y, Start = sim.Tick, Until = sim.Tick + Time.Minutes(lethal ? 12 : 4), Lethal = (byte)(lethal ? 1 : 0), Cause = c });
+        bool lethal = act.Arg != 0;
+        Brawls.Add(new Brawl { A = x, B = y, Start = sim.Tick, Until = sim.Tick + Time.Minutes(lethal ? 12 : 4), Lethal = (byte)(lethal ? 1 : 0), Cause = act.Cause });
         Fights++;
-        sim.Facts.Emit(sim.Tick, FactKind.Fight, cx.Cell, lethal ? 2 : 1, c, x, y);
-        var o = new Option(Topic.Fight, 1, y, c, cx.Cell, x);
+        sim.Facts.Emit(sim.Tick, FactKind.Fight, C(x).Cell, lethal ? 2 : 1, act.Cause, x, y);
+        var o = new Option(Topic.Fight, 1, y, act.Cause, C(x).Cell, x);
         Say(sim, x, y, o, TalkEnd.Argue, Pick(sim, lethal ? "싸움/끝장" : "싸움/시작", x));
         C(y).Fear = Math.Max(C(y).Fear, 0.6f + 0.3f * (1 - C(y).Brave));
     }
 
     /// <summary>x가 원망하는 y의 탓으로 x의 가까운 이가 죽었나.</summary>
-    private bool DeathBlame(int x, int y)
+    public bool DeathBlame(int x, int y)
     {
         foreach (var m in Memories) if (m.Owner == x && m.Topic == Topic.Death && m.About >= 0 && BondOf(x, m.About) > 0.4f && MemoryCause(x, Topic.Blame, y) == m.Cause) return true;
         return false;
     }
 
-    /// <summary>1분마다: 벌어진 몸싸움 — 떨어지면 끝 · 로봇이 먼저 말리고 · 다정하고 용감한 사람이 말린다 · 아니면 주먹이 오간다 (⑦ 몸에 타박 · 출혈).</summary>
+    // 이번 분의 주먹 · 맞받아침 · 말린 이 (마음의 행동 — BrawlStep이 읽고 비운다)
+    private readonly HashSet<int> _struck = new(), _hitBack = new();
+    private readonly Dictionary<int, int> _stopper = new();
+
+    /// <summary>
+    /// 1분마다: 벌어진 몸싸움의 결과 — 떨어졌으면 (깨어 있지 않다 · 맞는 이가 숨졌다 · 다른 방 · 3칸 넘게) 끝 · 누가 말렸으면 끝 ·
+    /// 때린 이가 또 쳤으면 한 대 (⑦ 몸에 타박 · 출혈 · 비명) · 맞받아쳤으면 반쯤 · 손을 거뒀으면 끝. 끝난 뒤: 맞은 이는 두려워하고 미워한다 · 본 사람들은 때린 이를 덜 믿는다.
+    /// 칠지 · 맞받아칠지 · 말릴지는 그 사람(로봇)의 판단이다 (MindFeud).
+    /// </summary>
     private void BrawlStep(Sim sim)
     {
         var mind = _mind!;
@@ -389,30 +374,12 @@ public sealed partial class Society
         {
             var br = Brawls[k];
             int a = br.A, b = br.B;
+            if (br.Start == sim.Tick) continue;   // 방금 덤볐다 — 주먹은 다음 분부터
             ref var vb = ref _life![C(b).Body];
             bool apart = !Awake(a) || vb.Alive == 0 || mind.RoomOf(C(a).Cell) != mind.RoomOf(C(b).Cell) || mind.Dist(C(a).Cell, C(b).Cell) > 3;
-            // 쓰러지면 주먹다짐은 끝난다 · 끝장을 보려는 이는 쓰러진 뒤에도 두 번 더 (끔찍하게도)
-            bool down = vb.Conscious == 0;
-            if (down && br.Lethal != 0 && br.Until > sim.Tick + Time.Minutes(2)) { br.Until = sim.Tick + Time.Minutes(2); Brawls[k] = br; }
-            bool done = apart || sim.Tick >= br.Until || down && br.Lethal == 0;
-            // 말리는 이: 같은 방의 로봇 (먼저) · 다정하고 용감한 사람
-            int stopper = -1;
-            if (!done)
-            {
-                int room = mind.RoomOf(C(a).Cell);
-                foreach (var ag in mind.Agents)
-                    if (!ag.IsPerson && ag.C.Up != 0 && ag.C.Kind == AgentKind.Robot && mind.RoomOf(ag.C.Cell) == room) { stopper = ag.Id; break; }
-                // 사람: 이끄는 이는 겁이 좀 많아도 · 맞는 이의 무리는 제 편을 감싸러 · 아니면 다정하고 용감한 이가
-                float brave = br.Lethal != 0 ? 0.5f : 0.3f;
-                if (stopper < 0)
-                    for (int i = 0; i < N; i++)
-                    {
-                        if (i == a || i == b || !Awake(i) || mind.RoomOf(C(i).Cell) != room || GrudgeOf(i, b) >= 0.5f) continue;
-                        bool lead = Leads(i, a) || Leads(i, b);
-                        if (lead && C(i).Brave > brave * 0.4f || SameBand(i, b) && !SameBand(i, a) && C(i).Brave > brave * 0.7f || C(i).Agree > 0.45f && C(i).Brave > brave) { stopper = i; break; }
-                    }
-            }
-            if (stopper >= 0)
+            if (vb.Conscious == 0 && br.DownAt == 0) { br.DownAt = sim.Tick; Brawls[k] = br; }
+            bool done = apart;
+            if (!done && _stopper.TryGetValue(a, out int stopper) && stopper >= 0)
             {
                 var o = new Option(Topic.Fight, 1, a, br.Cause, C(a).Cell, stopper);
                 Say(sim, stopper, a, o, TalkEnd.Argue, Pick(sim, mind.Agents[stopper].IsPerson ? "싸움/말림" : "싸움/로봇", stopper));
@@ -423,22 +390,21 @@ public sealed partial class Society
                 }
                 done = true;
             }
-            if (!done)
+            else if (!done && _struck.Contains(a))
             {
                 // 한 대: 끝장을 보려는 이는 손에 잡히는 것을 휘두른다
                 float r1 = Rnd(sim, "주먹", a, br.Blows), r2 = Rnd(sim, "피", a, br.Blows);
                 float blunt = br.Lethal != 0 ? 0.25f + 0.3f * r1 : 0.06f + 0.1f * r1, bleed = br.Lethal != 0 ? 1.0f + 2.0f * r2 : 0.15f * r2;
                 _life!.Strike(sim, C(b).Body, blunt, bleed, br.Cause);
                 if (_life[C(b).Body].Conscious != 0) sim.Find<Sound>()?.Emit(sim, C(b).Cell, 85, SoundKind.Scream, br.Cause, b); // 맞는 이의 비명 — 옆 방에서도 들린다 (로봇 · 사람이 온다)
-                // 맞는 이가 거칠면 맞받아친다
-                if (C(b).Agree < 0.4f && C(b).Anger > 0.4f && C(b).Brave > 0.4f) _life.Strike(sim, C(a).Body, blunt * 0.5f, bleed * 0.3f, br.Cause);
+                if (_hitBack.Contains(b)) _life.Strike(sim, C(a).Body, blunt * 0.5f, bleed * 0.3f, br.Cause);   // 맞받아쳤다
                 br.Blows++; Brawls[k] = br;
                 if (_life[C(b).Body].Alive == 0) { Killings++; done = true; }
             }
+            else done = true;   // 손을 거뒀다
             if (done)
             {
                 Brawls.RemoveAt(k);
-                // 끝난 뒤: 맞은 이는 때린 이를 두려워하고 미워한다 · 본 사람들은 때린 이를 덜 믿는다
                 Add(Grudge, b, a, 0.3f); Add(TrustOf, b, a, -0.5f); Warm(sim, b, a, -0.3f);
                 C(a).Anger *= 0.4f;
                 foreach (int w in Near(C(a).Cell, a))
@@ -451,34 +417,17 @@ public sealed partial class Society
                 Remember(sim, a, Topic.Fight, b, br.Cause, 0.6f, C(a).Cell);
             }
         }
+        _struck.Clear(); _hitBack.Clear(); _stopper.Clear();
     }
 
-    /// <summary>30분마다: 몰래 방해 — 깊이 원망하고 · 성실하지 않고 · 거친 사람이, 아무도 없을 때 상대가 일하는 장치에 몰래 손을 댄다 (나중에 고장 난다 · 아무도 모른다).</summary>
-    private void Mischief(Sim sim)
+    /// <summary>x가 y의 장치에 몰래 손을 댔다 (마음의 행동) — 그 장치의 기계(없으면 전기) 수명이 몇 시간으로 줄어든다 (나중에 고장 난다 · 아무도 모른다).</summary>
+    private void Sabotaged(Sim sim, SocialAct act)
     {
-        if (_net == null) return;
-        var mind = _mind!;
-        for (int x = 0; x < N; x++)
-        {
-            if (!Awake(x)) continue;
-            ref var cx = ref C(x);
-            if (cx.Consc > 0.35f || cx.Agree > 0.3f) continue;
-            for (int y = 0; y < N; y++)
-            {
-                if (y == x || GrudgeOf(x, y) < 0.7f || !Person(y) || C(y).Station < 0) continue;
-                int fu = C(y).Station;
-                int dev = _net.Devices.FindIndex(d => d.Furniture == fu);
-                if (dev < 0 || mind.RoomOf(cx.Cell) != L.Furniture[fu].Room) continue;
-                bool alone = true;
-                for (int i = 0; i < N; i++) if (i != x && Awake(i) && mind.RoomOf(C(i).Cell) == L.Furniture[fu].Room) { alone = false; break; }
-                if (!alone || Rnd(sim, "몰래", x, y) > (GrudgeOf(x, y) - 0.7f) * 1.5f) continue;
-                var part = _net.Devices[dev].Life(Part.Mechanical) > 0 ? Part.Mechanical : Part.Electric;
-                int c = sim.Causes.Add(CauseKind.Person, $"{Ko.I(mind.NameOf(x))} {mind.NameOf(y)}의 {_net.Devices[dev].Name}에 몰래 손을 댔다", sim.Tick, cx.Cell, MemoryCause(x, Topic.Blame, y), 0, x);
-                _net.AgeLeft(dev, part, 1 + 3 * Rnd(sim, "몇 시간", x, y), c);
-                Sabotages++;
-                sim.Facts.Emit(sim.Tick, FactKind.Sabotage, cx.Cell, 0, c, x, dev);
-                break;
-            }
-        }
+        if (_net == null || act.Arg < 0 || act.Arg >= _net.Devices.Count) return;
+        int x = act.Actor, y = act.Target, dev = act.Arg;
+        var part = _net.Devices[dev].Life(Part.Mechanical) > 0 ? Part.Mechanical : Part.Electric;
+        _net.AgeLeft(dev, part, 1 + 3 * Rnd(sim, "몇 시간", x, y), act.Cause);
+        Sabotages++;
+        sim.Facts.Emit(sim.Tick, FactKind.Sabotage, act.Cell, 0, act.Cause, x, dev);
     }
 }

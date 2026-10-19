@@ -42,6 +42,7 @@ public struct Brawl
     public byte Lethal;
     public int Cause;
     public int Blows;
+    public long DownAt;    // 맞는 이가 쓰러진 때 (0 아직)
 }
 
 /// <summary>
@@ -177,7 +178,6 @@ public sealed partial class Society : IEngine
             Together(sim, TogetherEvery * dt);
             Hearts(sim, TogetherEvery * dt);
             BrawlStep(sim);
-            if (sim.Tick % (TogetherEvery * 30) == 0) Mischief(sim);
             CultureStep(sim);   // ⑨ 문화 · 관습 (추모 · 축하를 회의보다 먼저 안다)
             CouncilStep(sim);   // ⑨ 회의 · 재판 · 선거 · 반란
         }
@@ -226,8 +226,6 @@ public sealed partial class Society : IEngine
                     Raise(sim, i, j, (float)(0.05 * fit * talk * dt / 3600), 0, "함께 지낸 시간");
                 }
                 // 말을 거는 것 · 이야기 · 대답은 사람의 판단이다 (MindTalk — 사회는 그 행동의 결과를 TakeActs에서 계산한다)
-                // 원한이 깊은 둘이 마주쳤다 — 화가 난 쪽이 먼저 덤빌 수 있다
-                if (GrudgeOf(i, j) > 0.5f && C(i).Anger > 0.5f) Escalate(sim, i, j, 0.2f, 0);
             }
         }
     }
@@ -244,7 +242,7 @@ public sealed partial class Society : IEngine
             int j = Partner[i];
             if (j < 0 || j < i) continue;
             if (!Person(i) || !Person(j)) { if (!Person(i) && !Person(j) || !Alive(i) || !Alive(j)) { Partner[i] = Partner[j] = -1; } continue; }
-            if (Math.Max(GrudgeOf(i, j), GrudgeOf(j, i)) > 0.45f || Math.Min(BondOf(i, j), BondOf(j, i)) < 0.15f) BreakUp(sim, i, j);
+            // 헤어질지는 둘의 판단이다 (MindFeud — 행동 '헤어짐')
         }
     }
 
@@ -359,7 +357,7 @@ public sealed partial class Society : IEngine
     }
 
     /// <summary>그 칸 곁(같은 방 · 깨어 있는)의 사람들.</summary>
-    private List<int> Near(int cell, int except = -1, int dist = 8)
+    public List<int> Near(int cell, int except = -1, int dist = 8)
     {
         var list = new List<int>();
         int room = _mind!.RoomOf(cell);

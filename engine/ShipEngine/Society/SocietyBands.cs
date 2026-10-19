@@ -220,7 +220,7 @@ public sealed partial class Society
     }
 
     /// <summary>방에 x · y 말고 깨어 있는 '이끄는 이'가 있나 (x를 이끄는 사람).</summary>
-    private bool LeaderWatching(int x, int y)
+    public bool LeaderWatching(int x, int y)
     {
         int room = _mind!.RoomOf(C(x).Cell);
         foreach (int l in new[] { LeaderOf(x), Head })

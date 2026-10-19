@@ -457,7 +457,7 @@ public sealed partial class Mind : IEngine
     {
         long t = Prof != null ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
         Bind(sim);
-        ClearOldActs(sim.Tick);   // 지난 틱의 사회적 행동은 사회가 읽었다
+        ClearOldActs(sim.Tick);   // 오랜 사회적 행동은 사회가 읽었다
         RationDay(sim.Tick);
         Fling(sim, dt); // 감압 바람에 밀리는 물건 (사람 · 로봇이 없어도)
         if (Agents.Count == 0) { HoldDoorsByItems(); return; }
@@ -492,6 +492,7 @@ public sealed partial class Mind : IEngine
         BlockDoors();
         Lap("문 붙잡기", t);
         TalkStep(sim);     // 판단 이관 (나): 말 걸기 · 이야기 · 대답 · 별명
+        FeudStep(sim);     // 판단 이관 (다): 편들기 · 말리기 · 덤비기 · 주먹 · 헤어지기 · 몰래 방해
         GatherStep(sim);   // 판단 이관 (가): 부르기 · 말하기 · 미루기 (사회가 같은 틱에 결과를 계산한다)
     }
 

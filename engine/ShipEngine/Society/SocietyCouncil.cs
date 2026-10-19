@@ -88,7 +88,7 @@ public sealed partial class Society
     /// </summary>
     public void TakeActs(Sim sim)
     {
-        _mind ??= sim.Find<Mind>(); _life ??= sim.Find<Life>();
+        _mind ??= sim.Find<Mind>(); _life ??= sim.Find<Life>(); _net ??= sim.Find<Network>();
         if (_mind == null || _life == null) return;
         Resize(_mind.Agents.Count);
         CouncilArrays(); CultureArrays();
@@ -110,6 +110,14 @@ public sealed partial class Society
                 case SocialActKind.Nickname when act.Target >= 0 && act.Target < Nick.Length && Nick[act.Target] == 0:
                     Coin(sim, act.Target, act.Actor, (Nickname)act.Arg);
                     break;
+                case SocialActKind.TakeSide: SideWith(sim, act); break;
+                case SocialActKind.Mediate: Mediated(sim, act); break;
+                case SocialActKind.Attack: Attacked(sim, act); break;
+                case SocialActKind.Strike: _struck.Add(act.Actor); break;
+                case SocialActKind.HitBack: _hitBack.Add(act.Actor); break;
+                case SocialActKind.StopFight: _stopper.TryAdd(act.Target, act.Actor); break;
+                case SocialActKind.BreakUp when Partner[act.Actor] == act.Target: BreakUp(sim, act.Actor, act.Target); break;
+                case SocialActKind.Sabotage: Sabotaged(sim, act); break;
                 case SocialActKind.DeferMemorial when _mournDeferred.Add(act.Target):
                     MemorialsDeferred++;
                     sim.Facts.Emit(sim.Tick, FactKind.Culture, act.Cell, (int)CultureEvent.MemorialDeferred, act.Cause, act.Actor, act.Target);

@@ -27,10 +27,12 @@ public static partial class Program
             return (s, m, soc, p);
         }
         // 틱마다 그 틱의 행동을 모은다 (마음은 다음 틱 처음에 지난 행동을 비운다)
+        var seen = new Dictionary<Mind, long>();   // 마음마다 어디까지 모았나 (행동은 세 틱 남는다)
         void Step(Sim s, Mind m, List<SocialAct> acts, List<int> keep, int asleep = -1)
         {
             s.Step();
-            acts.AddRange(m.Acts);
+            acts.AddRange(m.ActsSince(seen.GetValueOrDefault(m, m.ActBase)));
+            seen[m] = m.ActsTotal;
             var life = s.Get<Life>();
             foreach (int a in keep) { ref var c = ref m[a].C; c.Thirst = 0; c.Hunger = 0; c.Sleepy = a == asleep ? 1 : 0; life[c.Body].Asleep = (byte)(a == asleep ? 1 : 0); }
         }
@@ -47,7 +49,7 @@ public static partial class Program
             var acts = new List<SocialAct>();
             long f0 = s.Facts.Total;
             m.CallCouncilNow(s);
-            acts.AddRange(m.Acts);
+            acts.AddRange(m.Acts); seen[m] = m.ActsTotal;
             for (int k = 0; k < Time.Minutes(30); k++) Step(s, m, acts, p);
             var opened = s.Facts.Since(f0).Where(f => f.Kind == FactKind.Meeting && f.Size > 0).ToList();
             var meetCause = opened.Count > 0 ? opened[0].Cause : -1;
@@ -112,6 +114,42 @@ public static partial class Program
             Check("(나) 대화는 사람이 한다: 대화 사실마다 같은 틱에 그 둘의 '대화' 행동(말을 꺼낸 이 · 이야기 · 듣는 이의 대답)이 있다 / 밤의 규칙으로 삼킨 말은 그 사람의 '말을 삼켰다' 행동이다",
                 talks.Count >= 3 && matched == talks.Count && tActs.Count == talks.Count && keeps > 0 && soc2.QuietKept - q0 == keeps,
                 $"대화 사실 {talks.Count} · 행동 {tActs.Count} · 맞음 {matched} / 삼킨 말 {soc2.QuietKept - q0} · 행동 {keeps}");
+        }
+
+        // ── (다) 다툼: 덤비기 · 주먹 · 말리기 · 편들기는 사람(로봇)의 행동 — 몸싸움 사실마다 같은 틱에 '덤빔' · 주먹 한 대마다 '친다' · 말린 로봇의 '말림' · 편든 수 = 행동 수 ──
+        {
+            var mlay = Worlds.Ascii(Worlds.MindShip, Worlds.MindLegend);
+            int MAt(int x, int y) => Worlds.At(mlay, x, y);
+            (long fights, int attacks, int blows, int strikes, bool robotStopped, long sides, int sideActs) Feud(bool robot)
+            {
+                var s = Worlds.Full(mlay, 5);
+                var m = s.Get<Mind>(); var so = s.Get<Society>();
+                int x = m.AddPerson(s, MAt(12, 8)), y = m.AddPerson(s, MAt(15, 8)), z = m.AddPerson(s, MAt(14, 8));
+                int r = robot ? m.AddRobot(s, MAt(17, 8), AgentKind.Robot, MAt(17, 8)) : -1;
+                m.SetPersonality(x, 0.5f, 0.3f, 0.6f, 0.05f, 0.95f);
+                m.SetPersonality(y, 0.5f, 0.5f, 0.6f, 0.05f, 0.8f);
+                m.SetPersonality(z, 0.5f, 0.5f, 0.6f, 0.3f, 0.5f);
+                s.Run(2);
+                so.Grudge[x * so.N + y] = 0.95f; so.Grudge[y * so.N + x] = 0.6f; so.Bond[z * so.N + y] = 0.8f;
+                m[x].C.Stress = 0.9f; m[x].C.Anger = 0.9f;
+                var acts = new List<SocialAct>();
+                long f0 = s.Facts.Total;
+                var blowsOf = new Dictionary<long, int>();
+                for (int k = 0; k < Time.Hours(1); k++)
+                {
+                    Step(s, m, acts, new List<int> { x, y, z });
+                    foreach (var br in so.Brawls) blowsOf[br.Start * 64 + br.A] = br.Blows;
+                }
+                var fights = s.Facts.Since(f0).Where(f => f.Kind == FactKind.Fight).ToList();
+                int attacks = fights.Count(f => acts.Any(a => a.Kind == SocialActKind.Attack && a.Tick == f.Tick && a.Actor == f.Actor && a.Target == f.Other && a.Cause == f.Cause));
+                bool stopped = robot && acts.Any(a => a.Kind == SocialActKind.StopFight && a.Actor == r);
+                return (fights.Count, attacks, blowsOf.Values.Sum(), acts.Count(a => a.Kind == SocialActKind.Strike), stopped, so.Sides, acts.Count(a => a.Kind == SocialActKind.TakeSide));
+            }
+            var alone = Feud(false); var watched = Feud(true);
+            Check("(다) 다툼은 사람이 한다: 몸싸움 사실마다 같은 틱에 때린 이의 '덤빔' 행동 · 주먹 한 대마다 '친다' 행동 · 곁의 로봇은 '말림' 행동으로 멈춘다 · 편든 수 = '편듦' 행동 수",
+                alone.fights > 0 && alone.attacks == alone.fights && alone.blows > 0 && alone.blows == alone.strikes && alone.sides == alone.sideActs
+                && watched.fights > 0 && watched.attacks == watched.fights && watched.robotStopped && watched.blows == watched.strikes,
+                $"홀로: 싸움 {alone.fights} (덤빔 맞음 {alone.attacks}) · 주먹 {alone.blows} / 친다 {alone.strikes} · 편듦 {alone.sides}/{alone.sideActs} / 로봇 곁: 싸움 {watched.fights} (덤빔 {watched.attacks}) · 말림 {watched.robotStopped} · 주먹 {watched.blows}/{watched.strikes}");
         }
     }
 }
